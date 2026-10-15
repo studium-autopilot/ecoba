@@ -8,9 +8,9 @@ Handy, Tablet und Computer.
 
 <br>
 
-<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-herunterladen.svg" alt="Jetzt herunterladen" width="280"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-iphone.svg" alt="Für iPhone und iPad" width="280"></a>
+<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-iphone.svg" alt="Für iPhone und iPad – mit Kurzbefehl" width="300"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-herunterladen.svg" alt="Für Mac, Windows und Android – ZIP-Datei herunterladen" width="300"></a>
 
-<sub>Kostenlos · ohne Konto · ZIP-Datei für Android, Windows und Mac · Kurzbefehl für iPhone und iPad</sub>
+<sub>Kostenlos · ohne Konto · nimm den Knopf für dein Gerät</sub>
 
 <br>
 
@@ -19,8 +19,9 @@ Handy, Tablet und Computer.
 </div>
 
 > [!TIP]
-> **Zum ersten Mal auf GitHub?** Du brauchst kein Konto und musst hier nichts verstehen. Der grüne Knopf oben lädt die
-> Vorlage herunter, auf iPhone und iPad nimmst du den schwarzen. Die drei Schritte darunter erklären den Rest.
+> **Zum ersten Mal auf GitHub?** Du brauchst kein Konto und musst hier nichts verstehen. Nimm oben den Knopf für dein
+> Gerät: **iPhone oder iPad** → schwarzer Knopf. **Mac, Windows oder Android** → grüner Knopf. Die drei Schritte darunter
+> erklären den Rest.
 
 ## In 3 Schritten starten
 
@@ -29,8 +30,8 @@ Handy, Tablet und Computer.
 [Android](https://play.google.com/store/apps/details?id=md.obsidian),
 [Windows und Mac](https://obsidian.md/download).
 
-**2. Vorlage herunterladen** – mit dem grünen Knopf oben. Du bekommst eine ZIP-Datei; daraus wird beim Öffnen der Ordner
-`Studium Autopilot`. Auf iPhone und iPad geht es mit dem schwarzen Knopf noch einfacher: Ein Kurzbefehl lädt die neueste
+**2. Vorlage herunterladen** – mit dem Knopf für dein Gerät oben. Auf Mac, Windows und Android bekommst du eine
+ZIP-Datei; daraus wird beim Öffnen der Ordner `Studium Autopilot`. Auf iPhone und iPad geht es mit dem schwarzen Knopf noch einfacher: Ein Kurzbefehl lädt die neueste
 Version und legt sie gleich in Obsidian ab (siehe unten).
 
 **3. In Obsidian öffnen** – den Ordner `Studium Autopilot` als Tresor öffnen und auf **Vertrauen und Plugins aktivieren**
