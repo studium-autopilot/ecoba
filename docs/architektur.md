@@ -528,7 +528,6 @@ Timer auf einmal pro Minute.
 - Ein Codeblock in einer Notiz, die in der Leseansicht offen ist, existiert zweimal (Leseansicht und versteckter Editor);
   `griff.neu()` zeichnet beide.
 - `menue.js` liest noch den Schalter `window.ebaMenueKopfImmer` (Symbol in der Kopfleiste auch am PC, nur zum Ausprobieren).
-- Datenkanal: Die Standardadresse `studium-autopilot.github.io` gehört erst dem Projekt, wenn die Organisation angelegt ist. Bis dahin
-  liefert sie 404 (Anzeige „Fehler beim letzten Abruf“). Die Organisation vor dem ersten Release anlegen, damit niemand anderes
-  unter dieser Adresse Daten ausliefern kann (das Plugin prüft zwar streng, würde gültige Termine aber übernehmen).
+- Datenkanal: Die Daten kommen von `studium-autopilot.github.io/ecoba-daten` (Organisation `studium-autopilot`). Ohne Netz
+  oder bei einem Fehler bleibt der letzte Stand; die Übersicht „Verbindungen“ zeigt dann „Fehler beim letzten Abruf“.
 - Datenkanal: Eine gelöschte zentrale Notiz kommt zurück, sobald sich ihr Termin in den Daten ändert (oder `abruf.json` fehlt).
