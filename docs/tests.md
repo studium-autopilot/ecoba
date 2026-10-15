@@ -47,6 +47,7 @@ Bei jedem Push und Pull Request:
 2. **`node --test tests/*.test.js`**
 3. **Safari 16** (iPhone/iPad mit iOS 16): esbuild gibt jedes Skript einmal mit Ziel `safari16` und einmal mit Ziel `esnext`
    aus. Sind die Ausgaben gleich, musste nichts umgeschrieben werden, das Skript läuft also auf Safari 16. Ein Selbsttest
-   stellt sicher, dass die Methode Syntax erkennt, die erst Safari 16.4 kann.
+   stellt sicher, dass die Methode Syntax erkennt, die erst Safari 16.4 kann. Unicode-Eigenschaften in Regex (`\p{L}`)
+   gelten als unterstützt (Safari kann sie seit 11.1; esbuild stuft sie nur wegen neuerer Unicode-Tabellen strenger ein).
 
 Lokal: `python werkzeuge/pruefen.py .` läuft auch ohne Node (dann ohne `node --check`, mit Hinweis).
