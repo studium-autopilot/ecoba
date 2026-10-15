@@ -104,11 +104,11 @@ Termine, Fristen und Semesterdaten pflegt nicht jede:r selbst. Ein Server führt
 
 - **Freigabeliste:** Nur bestimmte Arten von Terminen aus öffentlichen Quellen und nur bestimmte Felder gehen raus, nie Notiztexte.
 - **Scan auf persönliche Daten:** Namen, Mailadressen, Telefonnummern und Ähnliches halten einen Eintrag zurück.
-- **KI-Prüfung:** Ein zweiter, getrennter KI-Aufruf prüft geänderte Einträge auf persönliche Angaben und Plausibilität. Zweifelhaftes wird nicht veröffentlicht, sondern von Hand geprüft.
+- **KI-Prüfung:** Ein zweiter, getrennter KI-Aufruf prüft geänderte Einträge auf persönliche Angaben und Plausibilität. Nur was alle Prüfungen besteht, wird veröffentlicht.
 
 Was die Prüfung besteht, landet als einfache Datendatei im öffentlichen Repo [`studium-autopilot/ecoba-daten`](https://github.com/studium-autopilot/ecoba-daten). Das Plugin im Vault holt sie dort ab, prüft sie noch einmal und legt daraus Termin-Notizen an.
 
-<img src="docs/bilder/datenfluss.png" width="100%" alt="Datenfluss: öffentliche Uni-Quellen → KI-Abgleich stündlich → automatische Prüfung (Freigabeliste, Scan auf persönliche Daten, KI-Prüfung) → ecoba-daten auf GitHub Pages → Plugin im Vault; zweifelhafte Einträge werden zurückgehalten und von Hand geprüft">
+<img src="docs/bilder/datenfluss.png" width="100%" alt="Datenfluss: öffentliche Uni-Quellen → KI-Abgleich stündlich → automatische Prüfung (Freigabeliste, Scan auf persönliche Daten, KI-Prüfung) → ecoba-daten auf GitHub Pages → Plugin im Vault">
 
 Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der letzten Prüfung; Angaben, die die Uni noch nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
 
