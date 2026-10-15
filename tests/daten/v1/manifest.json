@@ -1,0 +1,17 @@
+{
+ "schema": 1,
+ "erstellt": "2026-10-15T09:40:12Z",
+ "dateien": {
+  "termine.json": {
+   "sha256": "171841cd2634e6be4cf8e0739ee765b0d559572a7473d9fdce2398e78d5c981f",
+   "groesse": 54872
+  },
+  "semester.json": {
+   "sha256": "f0a0a39740783883ecdac1358b0c2fff807996a77aa882fd1b3fb276ef7afb5f",
+   "groesse": 9641
+  }
+ },
+ "plugin_aktuell": "0.1.0",
+ "hinweis": "",
+ "pause": false
+}

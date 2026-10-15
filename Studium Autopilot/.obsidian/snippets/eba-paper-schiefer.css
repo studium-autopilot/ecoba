@@ -1,0 +1,106 @@
+/* ==========================================================================
+   EBA · Farbschema PAPER SCHIEFER (Variante von Paper)
+   Kühles Hellgrau, weiße Karten, Haarlinien, moderne serifenlose Überschriften, Akzent Petrol.
+   Wirkt nur im hellen Grundschema (Einstellungen → Darstellung → Grundfarbschema: Hell).
+   Immer nur EIN Farbschema-Snippet einschalten.
+   ========================================================================== */
+
+.theme-light {
+  --color-base-00: #f5f7f9;
+  --color-base-05: #f2f4f7;
+  --color-base-10: #eef1f4;
+  --color-base-20: #e9edf1;
+  --color-base-25: #e1e6eb;
+  --color-base-30: #d6dce3;
+  --color-base-35: #c7cfd8;
+  --color-base-40: #a9b3be;
+  --color-base-50: #7d8793;
+  --color-base-60: #5e6772;
+  --color-base-70: #434b55;
+  --color-base-100: #0f1722;
+
+  --accent-h: 190;
+  --accent-s: 76%;
+  --accent-l: 25%;
+  --text-accent: #0f5e6e;
+  --text-accent-hover: #16788c;
+  --interactive-accent: #0f5e6e;
+  --interactive-accent-hover: #16788c;
+  --text-selection: rgba(15, 94, 110, 0.15);
+  --text-highlight-bg: rgba(250, 204, 21, 0.30);
+
+  --titlebar-background: #e9edf1;
+  --titlebar-background-focused: #e9edf1;
+  --tab-container-background: #e9edf1;
+  --ribbon-background: #e9edf1;
+
+  --eba-bg: #f5f7f9;
+  --eba-surface: #ffffff;
+  --eba-card-bg: #ffffff;
+  --eba-surface-2: #eef1f4;
+  --eba-border: #dde3e9;
+  --eba-border-strong: #c3ccd6;
+  --eba-text: #0f1722;
+  --eba-muted: #525c68;
+  --eba-faint: #7d8793;
+  --eba-accent: #0f5e6e;
+  --eba-accent-text: #0f5e6e;
+  --eba-accent-soft: rgba(15, 94, 110, 0.08);
+  --eba-good: #1f7a4d;
+  --eba-warn: #a8660b;
+  --eba-bad: #b42318;
+  --eba-info: #2563a8;
+  --eba-radius: 3px;
+  --eba-radius-s: 2px;
+  --eba-shadow: none;
+  --eba-font-display: -apple-system, "Segoe UI Variable Display", "Segoe UI", Inter, system-ui, sans-serif;
+  --eba-display-weight: 640;
+  --eba-display-tracking: -0.02em;
+}
+
+/* Kopf wie ein Geschäftsbericht: doppelte Linie, Serifen-Titel */
+.theme-light .eba .eba-kopf { border-bottom: 2px solid var(--eba-text); padding-bottom: 1.2rem; }
+.theme-light .eba .eba-kopf h1,
+.theme-light .eba-kz-gruss { font-size: 2.5em; }
+.theme-light .eba .eba-meta span { border-radius: 2px; }
+
+/* Abschnitte: Serifen-Überschrift statt Label, Linie darüber */
+.theme-light .eba h2 {
+  display: block;
+  margin: 2.6em 0 0.8em;
+  padding-top: 10px;
+  border-top: 1px solid var(--eba-text);
+  font-family: var(--eba-font-display);
+  font-size: 1.35em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--eba-text);
+}
+.theme-light .eba h2::after { display: none; }
+
+/* Karten: weiß, Haarlinie, keine Rundung */
+.theme-light .callout[data-callout^="eba-"] > .callout-title { color: var(--eba-text); }
+.theme-light .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent); }
+.theme-light .eba-kachel { border-top: 2px solid var(--eba-text); }
+.theme-light .eba-kachel.akzent::before { display: none; }
+.theme-light .eba-kachel.akzent { border-top-color: var(--eba-accent); }
+.theme-light .eba-kachel .v { font-weight: 500; }
+.theme-light .eba-kachel .v:not(.text) { font-size: 2em; }
+.theme-light .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }
+
+/* Semester-Zeitleiste: kantige Wochenfelder */
+.theme-light .eba-wochen i { border-radius: 1px; }
+
+/* Tabellen wie im Finanzteil: kräftige Kopf- und Fußlinie */
+.theme-light .markdown-rendered th { border-bottom: 1px solid var(--eba-text); color: var(--eba-text); }
+.theme-light .markdown-rendered table { border-bottom: 1px solid var(--eba-text); }
+.theme-light .callout[data-callout^="eba-"] .bases-view { --bases-table-header-color: var(--eba-text); }
+
+/* Normale Notizen: Serifen-Überschriften */
+.theme-light .markdown-rendered h1,
+.theme-light .markdown-rendered h2,
+.theme-light .cm-header-1,
+.theme-light .cm-header-2 { font-family: var(--eba-font-display); font-weight: 500; }
+.theme-light .inline-title { font-family: var(--eba-font-display); font-weight: 500; }
+

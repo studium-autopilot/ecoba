@@ -1,0 +1,39 @@
+name: Termin falsch oder fehlt
+description: Ein Datum, eine Frist oder ein Ort stimmt nicht, oder ein Termin für EcoBA fehlt.
+title: "Termin: "
+labels: ["termin"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Termine kommen aus öffentlichen Uni-Quellen. Mit einem Link auf die offizielle Quelle lässt sich ein Fehler schnell beheben.
+  - type: dropdown
+    id: art
+    attributes:
+      label: Was ist los?
+      options:
+        - Termin ist falsch
+        - Termin fehlt
+        - Termin ist entfallen, steht aber noch da
+    validations:
+      required: true
+  - type: input
+    id: titel
+    attributes:
+      label: Welcher Termin?
+      placeholder: "z. B. Klausur S100 Mathe am 08.02.2027"
+    validations:
+      required: true
+  - type: textarea
+    id: richtig
+    attributes:
+      label: Was ist richtig?
+      placeholder: "Datum, Uhrzeit, Ort oder Frist laut Quelle"
+    validations:
+      required: true
+  - type: input
+    id: quelle
+    attributes:
+      label: Offizielle Quelle (Link)
+      description: Seite der Uni, des Prüfungsamts, der Fachschaft oder Alma. Bitte keine Dateien aus ILIAS hochladen.
+      placeholder: "https://uni-tuebingen.de/…"

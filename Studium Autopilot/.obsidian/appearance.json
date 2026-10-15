@@ -1,0 +1,9 @@
+{
+  "theme": "moonstone",
+  "accentColor": "",
+  "baseFontSize": 16,
+  "enabledCssSnippets": [
+    "eba-core",
+    "eba-paper-elfenbein"
+  ]
+}

@@ -1,0 +1,67 @@
+name: Prüfen
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  pruefen:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      ESBUILD_VERSION: "0.25.0"
+    steps:
+      - uses: actions/checkout@v4.2.2
+
+      - uses: actions/setup-python@v5.6.0
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22"
+
+      - name: Datenschutz- und Qualitätsprüfung (inkl. node --check und iOS-Regeln)
+        run: python werkzeuge/pruefen.py .
+
+      - name: Tests (node --test, ohne Abhängigkeiten)
+        run: node --test tests/*.test.js
+
+      - name: Safari-16-Verträglichkeit (esbuild)
+        # Jedes Skript wird zweimal von esbuild ausgegeben: mit Ziel safari16 und mit Ziel esnext. Nutzt ein Skript Syntax,
+        # die Safari 16 (iOS 16) nicht kann, muss esbuild sie umschreiben (oder bricht ab) – dann unterscheiden sich die
+        # Ausgaben. Gleiche Ausgabe = nichts umgeschrieben = verträglich. Laufzeit-APIs (.at(), findLast, structuredClone)
+        # sieht esbuild nicht; die prüft pruefen.py.
+        run: |
+          set -u
+          npm install --no-save --no-audit --no-fund --prefix "$RUNNER_TEMP/esb" "esbuild@$ESBUILD_VERSION" > /dev/null
+          ESB="$RUNNER_TEMP/esb/node_modules/.bin/esbuild"
+          vergleich() {
+            "$ESB" "$1" --target=safari16 --log-level=error > "$RUNNER_TEMP/s16.js" || return 2
+            "$ESB" "$1" --target=esnext --log-level=error > "$RUNNER_TEMP/esn.js" || return 2
+            cmp -s "$RUNNER_TEMP/s16.js" "$RUNNER_TEMP/esn.js" || return 1
+          }
+          # Selbsttest: Die Methode muss Syntax erkennen, die erst Safari 16.4 kann (static-Block in Klassen).
+          printf 'class A { static { this.x = 1; } }\nmodule.exports = A;\n' > "$RUNNER_TEMP/probe.js"
+          if vergleich "$RUNNER_TEMP/probe.js"; then echo "::error::Selbsttest: esbuild erkennt Safari-16-Probleme nicht"; exit 1; fi
+          printf 'module.exports = /(?<=a)b/;\n' > "$RUNNER_TEMP/probe2.js"
+          if vergleich "$RUNNER_TEMP/probe2.js"; then echo "Hinweis: esbuild schreibt Lookbehind nicht um (prüft pruefen.py)."; fi
+          fehler=0; anzahl=0
+          while IFS= read -r -d '' f; do
+            anzahl=$((anzahl + 1))
+            if vergleich "$f"; then continue; fi
+            fehler=1
+            echo "::error file=$f::Syntax, die Safari 16 nicht kann (esbuild schreibt sie um oder bricht ab)"
+            diff "$RUNNER_TEMP/esn.js" "$RUNNER_TEMP/s16.js" | head -20 || true
+          done < <(find "Studium Autopilot/System/Skripte" "Studium Autopilot/.obsidian/plugins/studium-autopilot" -name '*.js' -print0 | sort -z)
+          echo "Safari 16: $anzahl Skripte geprüft."
+          exit $fehler
+
+      - name: Aktuelle zentrale Daten (nur Hinweis)
+        continue-on-error: true
+        env:
+          ECOBA_LIVE: "1"
+        run: node --test --test-name-pattern="Live" tests/zentral.test.js

@@ -1,0 +1,17 @@
+{
+  "promptDelete": false,
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "root",
+  "newFileFolderPath": "Vorlesungen",
+  "attachmentFolderPath": "Anhänge",
+  "showUnsupportedFiles": true,
+  "readableLineLength": true,
+  "showInlineTitle": true,
+  "propertiesInDocument": "visible",
+  "defaultViewMode": "preview",
+  "livePreview": true,
+  "userIgnoreFilters": [
+    "System/Skripte/",
+    "System/Gerüste/"
+  ]
+}

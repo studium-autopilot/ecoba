@@ -1,0 +1,9 @@
+# Gerätelokal oder vom Sync erzeugt – nie einchecken
+Studium Autopilot/.obsidian/workspace*.json
+Studium Autopilot/.obsidian/plugins/*/data.json
+Studium Autopilot/.trash/
+Studium Autopilot/System/Daten/abruf.json
+.DS_Store
+Thumbs.db
+node_modules/
+__pycache__/

@@ -1,0 +1,231 @@
+---
+typ: "modul"
+code: "BA302"
+titel: "Bachelorarbeit Economics and Business Administration"
+titel_en: "Bachelor Thesis Economics and Business Administration"
+ects: 12
+fachsemester: 6
+fs_empfohlen: "6"
+gruppe: "Abschluss"
+rolle_economics: "Abschlussmodul"
+rolle_ba: "Abschlussmodul"
+rolle_ohne: "Abschlussmodul"
+bereiche: []
+pruefung: "Schriftliche Arbeit + Präsentation"
+benotet: true
+notenblock: "66 %"
+sprache: "Deutsch/Englisch"
+turnus: "WS, SS"
+verantwortlich: "je nach gewähltem Lehrstuhl"
+op_modul: false
+status: "offen"
+ergebnis:
+versuch:
+klausur:
+semester_geplant: ""
+zusatz: false
+uebersicht: "[[Noten & ECTS]]"
+aliases:
+  - "BA302"
+  - "Bachelorarbeit Economics and Business Administration"
+tags:
+  - "modul"
+cssclasses:
+  - "eba"
+  - "eba-s-modul"
+---
+
+<div class="eba-kopf">
+<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Abschluss</span></div>
+<h1>BA302 · Bachelorarbeit Economics and Business Administration</h1>
+<p class="eba-lead">Bachelorarbeit im Bachelorseminar eines Lehrstuhls; schriftliche Arbeit und Präsentation · Bachelor Thesis Economics and Business Administration</p>
+<div class="eba-meta"><span><b>12</b> ECTS</span><span>FS 6</span><span>WS, SS</span><span>Schriftliche Arbeit + Präsentation</span><span>Deutsch/Englisch</span><span>Notenblock 66 %</span></div>
+</div>
+
+
+> [!eba-tabelle|schlicht] Mein Stand
+> ```base
+> filters:
+>   and:
+>     - file == this.file
+> formulas:
+>   mpid: 'file("System/Daten/Musterplan.md").properties.plaene.filter(value.name == file("System/Einstellungen.md").properties.variante).map(value.id).join("")'
+>   mpfs: 'file("System/Daten/Musterplan.md").properties.eintraege.filter(value.plan == formula.mpid && value.code == code).map(number(value.fs)).sort()'
+>   fsplan: 'if(gruppe == "Schwerpunkt", 0, if(formula.mpid == "", if(fachsemester, number(fachsemester), 0), if(formula.mpfs.length > 0, formula.mpfs[0], if(gewaehlt == true && fachsemester, number(fachsemester), 0))))'
+>   semester: 'if(semester_geplant, semester_geplant, if(formula.fsplan > 0, file("System/Einstellungen.md").properties.semesterliste.filter(number(value.split("|")[0]) == formula.fsplan).map(value.split("|")[1]).join(""), ""))'
+> properties:
+>   note.status:
+>     displayName: Status
+>   note.ergebnis:
+>     displayName: Note
+>   note.versuch:
+>     displayName: Versuch
+>   note.klausur:
+>     displayName: Prüfungstermin
+>   note.semester_geplant:
+>     displayName: Eigene Planung
+>   formula.semester:
+>     displayName: Semester
+> views:
+>   - type: table
+>     name: Mein Stand
+>     order:
+>       - status
+>       - ergebnis
+>       - versuch
+>       - klausur
+>       - formula.semester
+>       - semester_geplant
+> ```
+
+
+> [!eba-neu] Neu zu diesem Modul
+> - [Vorlesung](obsidian://studium-autopilot?aktion=vorlesung&code=BA302)
+> - [Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt&code=BA302)
+
+
+> [!eba-raster|2]
+> > [!eba-karte|handy-zu]+ Lehrveranstaltung
+> > - **Lehrform:** Seminar (2 SWS) / Mitarbeit, Gruppendiskussion, Selbststudium, Literaturstudium
+> > - **Workload:** Kontaktzeit 30 h + Selbststudium 330 h = 360 h
+> > - **Verantwortlich:** je nach gewähltem Lehrstuhl
+> > - **Voraussetzungen:** Zulassung zur Bachelorarbeit, teilweise wird eine Einführung in das wissenschaftliche Arbeiten vorausgesetzt; Details sind dem Almasystem zu entnehmen.
+> > - **Dauer:** 1 Semester
+>
+> > [!eba-regel|handy-zu]+ Prüfung
+> > - **Form:** Im allg. schriftliche Arbeit und Präsentation (Gewichtung je nach gewähltem Lehrstuhl verschieden) (12 CP) – 100 % der Modulnote
+> > - **Gesamtnote:** zählt im 66 %-Block (Schwerpunkte und Bachelorarbeit), gewichtet nach ECTS
+> > - **Versuche:** Bachelorarbeit einmal wiederholbar, Thema einmal in den ersten 4 Wochen zurückgebbar
+
+
+> [!eba-info|handy-zu]+ Hinweise
+> - Zulassung: CP aller Module bis einschl. FS 3 laut Modultabelle (§ 10 BT); Bearbeitungszeit 9 Wochen (§ 28 Abs. 3 BRPO); 1 Wiederholung (§ 31 BRPO).
+
+
+## Unterlagen
+
+> [!eba-neu|ohne-titel]
+> - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen&code=BA302)
+> - [In BA302 suchen](obsidian://studium-autopilot?aktion=suchen&q=path%3ABA302%20)
+
+> [!eba-tabelle] Folien, Skripte, Übungen, Altklausuren
+> ```base
+> formulas:
+>   was: 'file.asLink(if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art) + if(titel, " · " + titel, ""))'
+>   oeffnen: 'html("<a class=\"eba-oeffnen\" href=\"obsidian://studium-autopilot?aktion=oeffnen&notiz=" + file.basename.replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B") + "\">Öffnen ↗</a>")'
+>   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
+> properties:
+>   formula.was:
+>     displayName: Unterlage
+>   note.seiten:
+>     displayName: Seiten
+>   note.status:
+>     displayName: Status
+>   formula.oeffnen:
+>     displayName: Datei
+>   file.name:
+>     displayName: Datei
+>   file.ext:
+>     displayName: Typ
+>   formula.groesse:
+>     displayName: Größe
+> views:
+>   - type: table
+>     name: Nach Art
+>     filters:
+>       and:
+>         - 'typ == "unterlage"'
+>         - 'code == "BA302"'
+>     groupBy:
+>       property: note.art
+>       direction: ASC
+>     order:
+>       - formula.was
+>       - seiten
+>       - status
+>       - formula.oeffnen
+>     sort:
+>       - property: nummer
+>         direction: ASC
+>     columnSize:
+>       formula.was: 330
+>       note.seiten: 80
+>       note.status: 100
+>       formula.oeffnen: 90
+>   - type: table
+>     name: Noch nicht gelesen
+>     filters:
+>       and:
+>         - 'typ == "unterlage"'
+>         - 'code == "BA302"'
+>         - 'status == "neu" || !status'
+>     order:
+>       - formula.was
+>       - seiten
+>       - formula.oeffnen
+>     sort:
+>       - property: art
+>         direction: ASC
+>       - property: nummer
+>         direction: ASC
+>   - type: table
+>     name: Dateien im Ordner
+>     filters:
+>       and:
+>         - (file.folder == "Unterlagen/BA302" || file.folder.startsWith("Unterlagen/BA302 "))
+>         - 'file.ext != "md"'
+>     order:
+>       - file.name
+>       - file.ext
+>       - formula.groesse
+>     sort:
+>       - property: file.name
+>         direction: ASC
+> ```
+
+## Meine Notizen
+
+> [!eba-tabelle|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
+> ```base
+> filters:
+>   and:
+>     - 'code == "BA302"'
+>     - 'typ != "modul"'
+>     - 'typ != "unterlage"'
+> formulas:
+>   wann: 'if(faellig, faellig, datum)'
+>   art: 'if(typ == "vorlesung", "Vorlesung", if(typ == "übungsblatt", "Übungsblatt", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termin", typ))))'
+> properties:
+>   file.name:
+>     displayName: Notiz
+>   formula.wann:
+>     displayName: Datum
+>   formula.art:
+>     displayName: Art
+>   note.status:
+>     displayName: Status
+>   note.nachgearbeitet:
+>     displayName: Nachgearbeitet
+> views:
+>   - type: table
+>     name: Meine Notizen
+>     groupBy:
+>       property: formula.art
+>       direction: ASC
+>     order:
+>       - file.name
+>       - formula.wann
+>       - status
+>       - nachgearbeitet
+>     sort:
+>       - property: formula.wann
+>         direction: DESC
+>     columnSize:
+>       file.name: 330
+>       formula.wann: 120
+>       note.status: 110
+>       note.nachgearbeitet: 120
+> ```
+
+
+<p class="eba-fuss">Quelle: MHB B.Sc. Wiwi (Datei 2026-3-24_Modulhandbuch_B.Sc.Wiwi.pdf), S. 92; PO 2023 BT EcoBA (AmtlBekUT 24/2023, S. 310-317), § 4 · Stand der Recherche 30.09.2026 · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Alle Quellen</a></p>

@@ -1,0 +1,46 @@
+name: Fehler
+description: Etwas funktioniert nicht oder sieht kaputt aus.
+title: "Fehler: "
+labels: ["fehler"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Danke fürs Melden! Bitte keine persönlichen Daten eintragen (Matrikelnummer, Noten, Alma-Link).
+  - type: textarea
+    id: was
+    attributes:
+      label: Was ist passiert?
+      description: Was hast du gemacht, und was hast du stattdessen erwartet?
+      placeholder: "Ich habe auf „Vorlesung“ getippt, aber es ist nichts passiert."
+    validations:
+      required: true
+  - type: input
+    id: seite
+    attributes:
+      label: Auf welcher Seite?
+      placeholder: "z. B. Dashboard, Studienverlauf, Termine & Anmeldungen"
+  - type: dropdown
+    id: geraet
+    attributes:
+      label: Gerät
+      multiple: true
+      options:
+        - iPhone
+        - iPad
+        - Android
+        - Windows
+        - Mac
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version von Studium Autopilot
+      description: Steht in Obsidian unter Einstellungen → Community-Plugins → Studium Autopilot.
+      placeholder: "0.1.0"
+  - type: textarea
+    id: bild
+    attributes:
+      label: Bildschirmfoto (optional)
+      description: Hilft sehr. Bitte vorher persönliche Angaben abdecken.

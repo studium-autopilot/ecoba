@@ -1,0 +1,106 @@
+/* ==========================================================================
+   EBA · Farbschema PAPER TÜBINGEN (Variante von Paper)
+   Reinweißes Papier, Haarlinien, Serifen-Überschriften, Akzent Tübinger Rot.
+   Wirkt nur im hellen Grundschema (Einstellungen → Darstellung → Grundfarbschema: Hell).
+   Immer nur EIN Farbschema-Snippet einschalten.
+   ========================================================================== */
+
+.theme-light {
+  --color-base-00: #ffffff;
+  --color-base-05: #fcfcfb;
+  --color-base-10: #f8f8f6;
+  --color-base-20: #f4f4f1;
+  --color-base-25: #ededea;
+  --color-base-30: #e3e3df;
+  --color-base-35: #d6d6d1;
+  --color-base-40: #bdbdb7;
+  --color-base-50: #8d8f94;
+  --color-base-60: #6a6d73;
+  --color-base-70: #4b4e54;
+  --color-base-100: #121316;
+
+  --accent-h: 350;
+  --accent-s: 69%;
+  --accent-l: 38%;
+  --text-accent: #a51e37;
+  --text-accent-hover: #c02a45;
+  --interactive-accent: #a51e37;
+  --interactive-accent-hover: #c02a45;
+  --text-selection: rgba(165, 30, 55, 0.14);
+  --text-highlight-bg: rgba(214, 180, 90, 0.32);
+
+  --titlebar-background: #f4f4f1;
+  --titlebar-background-focused: #f4f4f1;
+  --tab-container-background: #f4f4f1;
+  --ribbon-background: #f4f4f1;
+
+  --eba-bg: #ffffff;
+  --eba-surface: #ffffff;
+  --eba-card-bg: #ffffff;
+  --eba-surface-2: #f7f7f5;
+  --eba-border: #e6e6e2;
+  --eba-border-strong: #cdcdc8;
+  --eba-text: #121316;
+  --eba-muted: #5c5f65;
+  --eba-faint: #8d8f94;
+  --eba-accent: #a51e37;
+  --eba-accent-text: #a51e37;
+  --eba-accent-soft: rgba(165, 30, 55, 0.08);
+  --eba-good: #1f7a4d;
+  --eba-warn: #a8660b;
+  --eba-bad: #b42318;
+  --eba-info: #1d4f91;
+  --eba-radius: 3px;
+  --eba-radius-s: 2px;
+  --eba-shadow: none;
+  --eba-font-display: ui-serif, "New York", "Iowan Old Style", Charter, Georgia, serif;
+  --eba-display-weight: 500;
+  --eba-display-tracking: -0.012em;
+}
+
+/* Kopf wie ein Geschäftsbericht: doppelte Linie, Serifen-Titel */
+.theme-light .eba .eba-kopf { border-bottom: 3px double var(--eba-text); padding-bottom: 1.2rem; }
+.theme-light .eba .eba-kopf h1,
+.theme-light .eba-kz-gruss { font-size: 2.5em; }
+.theme-light .eba .eba-meta span { border-radius: 2px; }
+
+/* Abschnitte: Serifen-Überschrift statt Label, Linie darüber */
+.theme-light .eba h2 {
+  display: block;
+  margin: 2.6em 0 0.8em;
+  padding-top: 10px;
+  border-top: 1px solid var(--eba-text);
+  font-family: var(--eba-font-display);
+  font-size: 1.35em;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--eba-text);
+}
+.theme-light .eba h2::after { display: none; }
+
+/* Karten: weiß, Haarlinie, keine Rundung */
+.theme-light .callout[data-callout^="eba-"] > .callout-title { color: var(--eba-text); }
+.theme-light .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent); }
+.theme-light .eba-kachel { border-top: 2px solid var(--eba-text); }
+.theme-light .eba-kachel.akzent::before { display: none; }
+.theme-light .eba-kachel.akzent { border-top-color: var(--eba-accent); border-top-width: 3px; }
+.theme-light .eba-kachel .v { font-weight: 500; }
+.theme-light .eba-kachel .v:not(.text) { font-size: 2em; }
+.theme-light .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }
+
+/* Semester-Zeitleiste: kantige Wochenfelder */
+.theme-light .eba-wochen i { border-radius: 1px; }
+
+/* Tabellen wie im Finanzteil: kräftige Kopf- und Fußlinie */
+.theme-light .markdown-rendered th { border-bottom: 1px solid var(--eba-text); color: var(--eba-text); }
+.theme-light .markdown-rendered table { border-bottom: 1px solid var(--eba-text); }
+.theme-light .callout[data-callout^="eba-"] .bases-view { --bases-table-header-color: var(--eba-text); }
+
+/* Normale Notizen: Serifen-Überschriften */
+.theme-light .markdown-rendered h1,
+.theme-light .markdown-rendered h2,
+.theme-light .cm-header-1,
+.theme-light .cm-header-2 { font-family: var(--eba-font-display); font-weight: 500; }
+.theme-light .inline-title { font-family: var(--eba-font-display); font-weight: 500; }
+

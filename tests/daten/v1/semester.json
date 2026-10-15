@@ -1,0 +1,410 @@
+{
+ "schema": 1,
+ "stand": "2026-10-14",
+ "quellen": {
+  "semestertermine": "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/",
+  "rueckmeldung": "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/rueckmeldung-zum-naechsten-semester/",
+  "pruefungen": "https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/"
+ },
+ "semester": [
+  {
+   "name": "WS 2026/27",
+   "beginn": "2026-10-01",
+   "ende": "2027-03-31",
+   "vorlesung_beginn": "2026-10-12",
+   "vorlesung_ende": "2027-02-06",
+   "status": "offiziell"
+  },
+  {
+   "name": "SS 2027",
+   "beginn": "2027-04-01",
+   "ende": "2027-09-30",
+   "vorlesung_beginn": "2027-04-12",
+   "vorlesung_ende": "2027-07-24",
+   "status": "offiziell"
+  },
+  {
+   "name": "WS 2027/28",
+   "beginn": "2027-10-01",
+   "ende": "2028-03-31",
+   "vorlesung_beginn": "2027-10-11",
+   "vorlesung_ende": "2028-02-05",
+   "status": "offiziell"
+  },
+  {
+   "name": "SS 2028",
+   "beginn": "2028-04-01",
+   "ende": "2028-09-30",
+   "vorlesung_beginn": "2028-04-10",
+   "vorlesung_ende": "2028-07-22",
+   "status": "offiziell"
+  },
+  {
+   "name": "WS 2028/29",
+   "beginn": "2028-10-01",
+   "ende": "2029-03-31",
+   "vorlesung_beginn": "2028-10-16",
+   "vorlesung_ende": "2029-02-10",
+   "status": "offiziell"
+  },
+  {
+   "name": "SS 2029",
+   "beginn": "2029-04-01",
+   "ende": "2029-09-30",
+   "vorlesung_beginn": "2029-04-16",
+   "vorlesung_ende": "2029-07-28",
+   "status": "offiziell"
+  },
+  {
+   "name": "WS 2029/30",
+   "beginn": "2029-10-01",
+   "ende": "2030-03-31",
+   "vorlesung_beginn": "2029-10-15",
+   "vorlesung_ende": "2030-02-09",
+   "status": "geschätzt",
+   "hinweis": "Noch nicht veröffentlicht (Liste reicht bis SS 2029). Vorlesungszeit nach dem Muster der Vorjahre: Montag Mitte Oktober, 17 Wochen bis Samstag."
+  },
+  {
+   "name": "SS 2030",
+   "beginn": "2030-04-01",
+   "ende": "2030-09-30",
+   "vorlesung_beginn": "2030-04-15",
+   "vorlesung_ende": "2030-07-27",
+   "status": "geschätzt",
+   "hinweis": "Noch nicht veröffentlicht. Vorlesungszeit nach dem Muster der Vorjahre: Montag Mitte April, 15 Wochen bis Samstag."
+  }
+ ],
+ "pausen": [
+  {
+   "name": "Weihnachtspause",
+   "von": "2026-12-23",
+   "bis": "2027-01-06",
+   "status": "offiziell"
+  },
+  {
+   "name": "Pfingstferien",
+   "von": "2027-05-17",
+   "bis": "2027-05-22",
+   "status": "offiziell"
+  },
+  {
+   "name": "Weihnachtspause",
+   "von": "2027-12-23",
+   "bis": "2028-01-06",
+   "status": "offiziell"
+  },
+  {
+   "name": "Pfingstpause",
+   "von": "2028-06-05",
+   "bis": "2028-06-10",
+   "status": "offiziell"
+  },
+  {
+   "name": "Weihnachtspause",
+   "von": "2028-12-23",
+   "bis": "2029-01-06",
+   "status": "offiziell"
+  },
+  {
+   "name": "Pfingstpause",
+   "von": "2029-05-21",
+   "bis": "2029-05-26",
+   "status": "offiziell"
+  },
+  {
+   "name": "Weihnachtspause",
+   "von": "2029-12-23",
+   "bis": "2030-01-06",
+   "status": "geschätzt",
+   "hinweis": "Seit 2026 jedes Jahr 23.12.–6.1."
+  },
+  {
+   "name": "Pfingstpause",
+   "von": "2030-06-10",
+   "bis": "2030-06-15",
+   "status": "geschätzt",
+   "hinweis": "Wie jedes Jahr Montag bis Samstag nach Pfingsten (Pfingstsonntag 9.6.2030)"
+  }
+ ],
+ "freie_tage": [
+  {
+   "name": "Christi Himmelfahrt",
+   "datum": "2027-05-06",
+   "status": "offiziell"
+  },
+  {
+   "name": "Fronleichnam",
+   "datum": "2027-05-27",
+   "status": "offiziell"
+  },
+  {
+   "name": "Allerheiligen",
+   "datum": "2027-11-01",
+   "status": "offiziell"
+  },
+  {
+   "name": "Karfreitag",
+   "datum": "2028-04-14",
+   "status": "offiziell"
+  },
+  {
+   "name": "Ostermontag",
+   "datum": "2028-04-17",
+   "status": "offiziell"
+  },
+  {
+   "name": "Tag der Arbeit",
+   "datum": "2028-05-01",
+   "status": "offiziell"
+  },
+  {
+   "name": "Christi Himmelfahrt",
+   "datum": "2028-05-25",
+   "status": "offiziell"
+  },
+  {
+   "name": "Fronleichnam",
+   "datum": "2028-06-15",
+   "status": "offiziell"
+  },
+  {
+   "name": "Allerheiligen",
+   "datum": "2028-11-01",
+   "status": "offiziell"
+  },
+  {
+   "name": "Tag der Arbeit",
+   "datum": "2029-05-01",
+   "status": "offiziell"
+  },
+  {
+   "name": "Christi Himmelfahrt",
+   "datum": "2029-05-10",
+   "status": "offiziell"
+  },
+  {
+   "name": "Fronleichnam",
+   "datum": "2029-05-31",
+   "status": "offiziell"
+  },
+  {
+   "name": "Allerheiligen",
+   "datum": "2029-11-01",
+   "status": "geschätzt",
+   "hinweis": "Gesetzlicher Feiertag in Baden-Württemberg; Liste der Uni noch nicht veröffentlicht"
+  },
+  {
+   "name": "Karfreitag",
+   "datum": "2030-04-19",
+   "status": "geschätzt",
+   "hinweis": "Gesetzlicher Feiertag (Ostern 21.4.2030)"
+  },
+  {
+   "name": "Ostermontag",
+   "datum": "2030-04-22",
+   "status": "geschätzt",
+   "hinweis": "Gesetzlicher Feiertag"
+  },
+  {
+   "name": "Tag der Arbeit",
+   "datum": "2030-05-01",
+   "status": "geschätzt",
+   "hinweis": "Gesetzlicher Feiertag"
+  },
+  {
+   "name": "Christi Himmelfahrt",
+   "datum": "2030-05-30",
+   "status": "geschätzt",
+   "hinweis": "Gesetzlicher Feiertag"
+  },
+  {
+   "name": "Fronleichnam",
+   "datum": "2030-06-20",
+   "status": "geschätzt",
+   "hinweis": "Gesetzlicher Feiertag in Baden-Württemberg"
+  }
+ ],
+ "pruefungsphasen": [
+  {
+   "art": "Haupttermin",
+   "semester": "WS 2026/27",
+   "von": "2027-01-29",
+   "bis": "2027-02-13",
+   "status": "offiziell",
+   "hinweis": "Prüfungsamt, Prüfungstermine Pflicht- und Profilbildungsmodule WS 2026/27 (Stand 14.10.2026)"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "WS 2026/27",
+   "von": "2027-03-30",
+   "bis": "2027-04-10",
+   "status": "geschätzt",
+   "hinweis": "Aus früheren Semestern abgeleitet; laut Fachschaft im April"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "SS 2027",
+   "von": "2027-07-16",
+   "bis": "2027-07-30",
+   "status": "geschätzt",
+   "hinweis": "Aus früheren Semestern abgeleitet"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "SS 2027",
+   "von": "2027-09-27",
+   "bis": "2027-10-08",
+   "status": "geschätzt",
+   "hinweis": "Aus früheren Semestern abgeleitet"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "WS 2027/28",
+   "von": "2028-01-28",
+   "bis": "2028-02-12",
+   "status": "geschätzt",
+   "hinweis": "Abstand zum Vorlesungsende wie im WS 2026/27 (8 Tage davor bis 7 Tage danach)"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "WS 2027/28",
+   "von": "2028-03-30",
+   "bis": "2028-04-10",
+   "status": "geschätzt",
+   "hinweis": "Wie im WS 2026/27 (30.3.–10.4.)"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "SS 2028",
+   "von": "2028-07-14",
+   "bis": "2028-07-28",
+   "status": "geschätzt",
+   "hinweis": "Abstand zum Vorlesungsende wie im SS 2027 (8 Tage davor bis 6 Tage danach)"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "SS 2028",
+   "von": "2028-09-27",
+   "bis": "2028-10-08",
+   "status": "geschätzt",
+   "hinweis": "Wie im SS 2027 (27.9.–8.10.)"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "WS 2028/29",
+   "von": "2029-02-02",
+   "bis": "2029-02-17",
+   "status": "geschätzt",
+   "hinweis": "Abstand zum Vorlesungsende wie im WS 2026/27"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "WS 2028/29",
+   "von": "2029-03-30",
+   "bis": "2029-04-10",
+   "status": "geschätzt",
+   "hinweis": "Wie im WS 2026/27"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "SS 2029",
+   "von": "2029-07-20",
+   "bis": "2029-08-03",
+   "status": "geschätzt",
+   "hinweis": "Abstand zum Vorlesungsende wie im SS 2027"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "SS 2029",
+   "von": "2029-09-27",
+   "bis": "2029-10-08",
+   "status": "geschätzt",
+   "hinweis": "Wie im SS 2027"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "WS 2029/30",
+   "von": "2030-02-01",
+   "bis": "2030-02-16",
+   "status": "geschätzt",
+   "hinweis": "Abstand zur geschätzten Vorlesungszeit wie im WS 2026/27"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "WS 2029/30",
+   "von": "2030-03-30",
+   "bis": "2030-04-10",
+   "status": "geschätzt",
+   "hinweis": "Wie im WS 2026/27"
+  },
+  {
+   "art": "Haupttermin",
+   "semester": "SS 2030",
+   "von": "2030-07-19",
+   "bis": "2030-08-02",
+   "status": "geschätzt",
+   "hinweis": "Abstand zur geschätzten Vorlesungszeit wie im SS 2027"
+  },
+  {
+   "art": "Nachholtermin",
+   "semester": "SS 2030",
+   "von": "2030-09-27",
+   "bis": "2030-10-08",
+   "status": "geschätzt",
+   "hinweis": "Wie im SS 2027"
+  }
+ ],
+ "rueckmeldung": [
+  {
+   "fuer": "SS 2027",
+   "von": "2027-01-15",
+   "bis": "2027-02-15",
+   "status": "offiziell"
+  },
+  {
+   "fuer": "WS 2027/28",
+   "von": "2027-06-01",
+   "bis": "2027-08-15",
+   "status": "offiziell"
+  },
+  {
+   "fuer": "SS 2028",
+   "von": "2028-01-15",
+   "bis": "2028-02-15",
+   "status": "offiziell"
+  },
+  {
+   "fuer": "WS 2028/29",
+   "von": "2028-06-01",
+   "bis": "2028-08-15",
+   "status": "offiziell"
+  },
+  {
+   "fuer": "SS 2029",
+   "von": "2029-01-15",
+   "bis": "2029-02-15",
+   "status": "offiziell"
+  },
+  {
+   "fuer": "WS 2029/30",
+   "von": "2029-06-01",
+   "bis": "2029-08-15",
+   "status": "geschätzt",
+   "hinweis": "Regelmäßige Frist (1.6.–15.8.) fortgeschrieben"
+  },
+  {
+   "fuer": "SS 2030",
+   "von": "2030-01-15",
+   "bis": "2030-02-15",
+   "status": "geschätzt",
+   "hinweis": "Regelmäßige Frist (15.1.–15.2.) fortgeschrieben"
+  },
+  {
+   "fuer": "WS 2030/31",
+   "von": "2030-06-01",
+   "bis": "2030-08-15",
+   "status": "geschätzt",
+   "hinweis": "Regelmäßige Frist (1.6.–15.8.) fortgeschrieben"
+  }
+ ]
+}

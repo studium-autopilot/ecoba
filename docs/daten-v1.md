@@ -1,0 +1,229 @@
+# Datenformat v1: Zentrale Daten
+
+Stand: 15.10.2026. Vertrag zwischen dem Export (Seite des Autors, später `export-daten.py`) und dem Plugin (Nutzerseite,
+`System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
+ändert.
+
+Adresse: `https://studium-autopilot.github.io/ecoba-daten/v1/` (GitHub Pages, öffentliches Repo `studium-autopilot/ecoba-daten`,
+Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Schema-Version im Pfad: Ältere Plugins lesen weiter
+`v1/`, wenn es einmal `v2/` gibt.
+
+## Dateien
+
+| Datei | Pflicht | Höchstgröße | Inhalt |
+|---|---|---|---|
+| `manifest.json` | ja | 16 KB | Zeitstempel, Prüfsummen, Plugin-Version, Hinweis, Notbremse |
+| `termine.json` | nein | 1 000 000 Byte | Termine, Fristen, Veranstaltungen (max. 2000 Einträge) |
+| `semester.json` | nein | 256 KB | Semesterdaten, entspricht `System/Daten/Semester.md` |
+| `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); Plugin 0.1 liest ihn noch nicht |
+| `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; Plugin 0.1 liest ihn noch nicht |
+
+Alle Dateien: UTF-8 ohne BOM, gültiges JSON. Die Formatierung (Einrückung) ist frei, die Prüfsumme gilt für die Bytes, wie
+sie ausgeliefert werden.
+
+## manifest.json
+
+```json
+{
+ "schema": 1,
+ "erstellt": "2026-10-15T07:53:49Z",
+ "dateien": {
+  "termine.json": { "sha256": "27f55ab3…717c", "groesse": 51790 },
+  "semester.json": { "sha256": "f0a0a397…fb5f", "groesse": 9641 }
+ },
+ "plugin_aktuell": "0.1.0",
+ "hinweis": "",
+ "pause": false
+}
+```
+
+| Feld | Regel |
+|---|---|
+| `schema` | genau `1`, sonst Fehler (nichts übernommen) |
+| `erstellt` | ISO-Zeit (`JJJJ-MM-TT` oder mit Uhrzeit und Zone), 2020–2040 |
+| `dateien` | je bekannter Datei `sha256` (64 Zeichen hex, klein) über die ausgelieferten Bytes und `groesse` (Bytes, ganze Zahl). Unbekannte Namen werden ignoriert. Fehlt eine Datei hier, bleibt auf den Geräten ihr letzter Stand. |
+| `plugin_aktuell` | optional, `X.Y.Z`. Ist sie größer als die Version im Plugin-Manifest, zeigt die Übersicht „Neue Version verfügbar“ mit Link auf `https://github.com/studium-autopilot/ecoba/releases`. |
+| `hinweis` | optional, reiner Text ≤ 200 Zeichen (gesäubert wie `info`), erscheint in der Übersicht „Verbindungen“ |
+| `pause` | optional. `true` = **Notbremse**: Kein Gerät übernimmt etwas, Anzeige „Pausiert“. Rücknahme: `false` (oder Git-Revert). |
+
+Das Plugin holt zuerst nur das Manifest. Eine Datei lädt es nur, wenn ihre Prüfsumme sich gegenüber dem letzten übernommenen
+Stand dieses Geräts geändert hat (oder beim Knopf „Jetzt aktualisieren“). Stimmt Größe oder SHA-256 nicht, wird **in diesem Lauf
+nichts** übernommen (auch nicht die anderen Dateien); der nächste Lauf versucht es wieder. Das fängt auch einen kurzzeitig
+gemischten Stand im CDN ab.
+
+## termine.json
+
+```json
+{
+ "schema": 1,
+ "termine": [
+  {
+   "id": "2027-02-08-klausur-s100-mathe",
+   "titel": "Klausur S100 Mathe",
+   "datum": "2027-02-08",
+   "bis": "",
+   "uhrzeit": "",
+   "ort": "12:00–13:30 · Raum folgt",
+   "kategorie": "Prüfung",
+   "status": "offiziell",
+   "code": "S100",
+   "quelle_url": "",
+   "quelle_text": "Prüfungsamt: Prüfungstermine Pflicht- und Profilbildungsmodule WS 2026/27 Haupttermin (PDF, Stand 09.10.2026)",
+   "info": "",
+   "geprueft": "2026-10-14"
+  }
+ ]
+}
+```
+
+| Feld | Pflicht | Regel |
+|---|---|---|
+| `id` | ja | `^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$`, stabil (siehe id-Regel), eindeutig. Doppelte id: der erste Eintrag gilt, jeder weitere wird verworfen. |
+| `titel` | ja | 1–120 Zeichen, eine Zeile. **Abgelehnt** (Eintrag verworfen) bei HTML (`<b>`, `<script` …), spitzen, eckigen oder geschweiften Klammern, senkrechtem Strich, Backslash, Backticks, `<%`/`%>`, `obsidian://`, `javascript:`, Zeilenumbruch. Wird Dateiname und Überschrift. |
+| `datum` | ja | `JJJJ-MM-TT`, echtes Kalenderdatum, 2020-01-01 bis 2040-12-31 |
+| `bis` | nein | leer oder Datum ≥ `datum`, höchstens 400 Tage danach (gleich `datum` = eintägig) |
+| `uhrzeit` | nein | leer, `HH:MM` oder `HH:MM–HH:MM` (auch `-`). Das Plugin schreibt sie vor den Ort („12:00–13:30 · Raum folgt“), weil Agenda und Kalender die Zeit im Ort suchen. Steht die Zeit schon im `ort`, bleibt `uhrzeit` leer. |
+| `ort` | nein | ≤ 120 Zeichen nach dem Säubern |
+| `kategorie` | ja | genau eine aus der Freigabeliste unten |
+| `status` | ja | `offiziell` oder `geschätzt` (geschätzt = noch nicht veröffentlicht; die Notiz zeigt dann einen Hinweis) |
+| `code` | nein | leer oder Modulcode `^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$` (wie `eba.js`), z. B. `B110`, `SQ888`, `E371A` |
+| `bereich` | nein | seit 15.10.2026. Fehlt oder ein Wert aus der Freigabeliste „Bereiche“ unten. Ein **unbekannter Wert wird ignoriert** (der Eintrag bleibt, ohne Bereich). Der Export schreibt das Feld nur, wenn es gesetzt ist. |
+| `quelle_url` | nein | leer oder `https://` auf einer erlaubten Domain (siehe unten), ≤ 500 Zeichen, ohne Leerzeichen, Anführungszeichen, `<>`, Backslash, Benutzer, Port |
+| `quelle_text` | nein | ≤ 200 Zeichen, reiner Text. Für Quellen ohne öffentliche Adresse (Rundmail an alle, PDF, Folie). Wird nur gezeigt, wenn `quelle_url` leer ist. |
+| `info` | nein | ≤ 200 Zeichen, reiner Text **für alle** (nie der Notiztext aus dem Vault des Autors) |
+| `geprueft` | nein | ISO-Datum oder -Zeit der letzten Prüfung durch den Abgleich; die Notiz zeigt „geprüft am TT.MM.JJJJ“ |
+
+**Säubern** (für `ort`, `info`, `quelle_text`, `hinweis`, Namen in `semester.json`): HTML-Tags, `<% … %>`, `obsidian://…`,
+`javascript:`, `[[`/`]]`, Backticks, Steuer- und unsichtbare Richtungszeichen werden entfernt, Leerraum zusammengefasst. Ist der
+Text danach zu lang, wird der **Eintrag verworfen** (nicht gekürzt). Im Notiztext werden Markdown-Zeichen zusätzlich maskiert.
+
+Ungültige Einträge werden **einzeln** verworfen; der Rest wird übernommen. Ein verworfener Eintrag mit gültiger id gilt nicht als
+„entfallen“ (seine Notiz bleibt unverändert).
+
+**Unbekannte Felder werden ignoriert, nicht abgelehnt** – in `manifest.json`, in jedem Eintrag von `termine.json` und in
+`semester.json` (geprüft 15.10.2026: `manifestPruefen`, `termineNormal` und `semesterPruefen` in `zentral.js` übernehmen nur die
+bekannten Felder). Darum dürfen in `v1` neue **optionale** Felder dazukommen, ohne dass ältere Plugins Einträge verwerfen; sie
+sehen das neue Feld einfach nicht. Ein neuer Wert in einer Freigabeliste mit Pflichtfeld (z. B. eine neue Kategorie) würde dagegen
+den Eintrag verwerfen – so etwas gehört nach `v2/`.
+
+### Freigabeliste Bereiche (`bereich`)
+
+| Wert | Bedeutung | Wirkung im Plugin |
+|---|---|---|
+| `schluesselqualifikation` | Termin zu den Schlüsselqualifikationen (SQ100: TCP-Kurse, Sprachkurse …). **Freiwillig, keine Pflicht.** | gilt für alle wie ein Termin ohne `code`; Notiz bekommt `bereich: schluesselqualifikation` und den Tag `schlüsselqualifikation`; ruhige Pille „Schlüsselqualifikation · freiwillig“ im Notizkopf, in der Agenda und in der Kalender-Tagesliste, im Dashboard (Fristen/Termine) „Frist · freiwillig“ |
+
+Export: Termine, deren Code mit `SQ1` beginnt (SQ100), gehen **ohne** `code` und mit diesem Bereich; der Titel bleibt
+unverändert (kein Zusatz). `SQ888` (Mathematisches Propädeutikum, Mathe-Vorkurs) ist kein SQ-Kurs und behält seinen Code.
+Erweitern nur mit Eintrag in dieser Tabelle **und** in `BEREICHE` in `zentral.js` und `export-daten.py`.
+
+### Freigabeliste Kategorien
+
+Genau die im Vault verwendeten: `Semester`, `Vorlesungsfrei`, `Prüfung`, `Frist`, `Einführung`, `Lehre`, `Fachschaft`,
+`Veranstaltung`. `Fachschaft` und `Veranstaltung` blendet der Schalter „Fachschaft & Veranstaltungen“ aus.
+
+### Freigabeliste Domains (`quelle_url`, `quellen` in semester.json)
+
+| Domain (inkl. Subdomains) | Warum |
+|---|---|
+| `uni-tuebingen.de` | Uni-Seiten, Prüfungsamt, Fachbereich; Subdomains `alma.` (Vorlesungsverzeichnis) und `ovidius.` (ILIAS) |
+| `ffwtuebingen.de` | Fachschaft Wirtschaftswissenschaft (`www.ffwtuebingen.de`) |
+
+Erweitern nur mit Begründung in dieser Tabelle **und** in `DOMAINS` in `zentral.js` (beide gleich halten). Nur `https`.
+
+## id-Regel (Export und Migration erzeugen dieselben ids)
+
+1. **Hat die Termin-Notiz ein Feld `zentral_id`, gilt es.** Einmal vergeben, ändert sich die id nie – auch nicht, wenn Datum
+   oder Titel sich ändern (das Plugin benennt die Notiz dann um).
+2. Sonst wird sie **einmal** aus dem Dateinamen der Notiz im Vault des Autors abgeleitet (ohne `.md`, Form `JJJJ-MM-TT Titel`):
+   1. klein schreiben;
+   2. `ä`→`ae`, `ö`→`oe`, `ü`→`ue`, `ß`→`ss`;
+   3. Unicode NFKD, dann Zeichen U+0300–U+036F entfernen (Akzente);
+   4. jede Folge von Zeichen außer `a–z`, `0–9` → `-`; `-` am Anfang/Ende weg;
+   5. höchstens 80 Zeichen (danach abschneiden, `-` am Ende weg).
+3. Ergibt das eine id, die es schon gibt (anderer Termin), hängt der Export `-2`, `-3` … an.
+4. Eine id wird nie für einen anderen Termin wiederverwendet.
+
+Prüfwerte:
+
+| Dateiname | id |
+|---|---|
+| `2026-10-08 Kneipentour 😍 und Semester Opening` | `2026-10-08-kneipentour-und-semester-opening` |
+| `2027-01-29 Klausurphase Haupttermin WS 2026-27` | `2027-01-29-klausurphase-haupttermin-ws-2026-27` |
+| `2026-10-06 Neu an der Uni – wie geht’s nun weiter` | `2026-10-06-neu-an-der-uni-wie-geht-s-nun-weiter` |
+| `2026-10-05 Alma-Einführung für neue Studierende` | `2026-10-05-alma-einfuehrung-fuer-neue-studierende` |
+| `2026-11-02 Tutorien starten – B110 BWL` | `2026-11-02-tutorien-starten-b110-bwl` |
+
+Python (gleich wie `idAusName` in `zentral.js`):
+
+```python
+import re, unicodedata
+def zentral_id(dateiname: str) -> str:
+    s = re.sub(r"\.md$", "", dateiname, flags=re.I).lower()
+    s = s.replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
+    s = re.sub("[̀-ͯ]", "", unicodedata.normalize("NFKD", s))
+    s = re.sub(r"[^a-z0-9]+", "-", s).strip("-")
+    return s[:80].rstrip("-") if len(s) > 80 else s
+```
+
+**Damit die id fest bleibt**, muss der Export sie sich merken, sobald er sie das erste Mal veröffentlicht. Empfehlung: Der Export
+schreibt `zentral_id` in die Termin-Notiz im Vault des Autors (braucht dessen Okay). Alternative ohne Eingriff:
+eine Zuordnungsdatei im Export (`Pfad → id`, bei Umbenennung über Titel + Kategorie + Code nachgeführt).
+Die 109 Termin-Notizen der Vorlage tragen bereits `zentral_id` nach Regel 2 (Migration 15.10.2026), aus den heutigen
+Dateinamen – der Export erzeugt also für sie dieselben ids.
+
+## semester.json
+
+Gleiche Felder wie das Frontmatter von `System/Daten/Semester.md` (siehe `docs/architektur.md`, „Zentrale Daten“):
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-10-14",
+ "quellen": { "semestertermine": "https://uni-tuebingen.de/…" },
+ "semester": [ { "name": "WS 2026/27", "beginn": "2026-10-01", "ende": "2027-03-31", "vorlesung_beginn": "2026-10-12", "vorlesung_ende": "2027-02-06", "status": "offiziell" } ],
+ "pausen": [ { "name": "Weihnachtspause", "von": "2026-12-23", "bis": "2027-01-06", "status": "offiziell" } ],
+ "freie_tage": [ { "name": "Fronleichnam", "datum": "2027-05-27", "status": "offiziell" } ],
+ "pruefungsphasen": [ { "art": "Haupttermin", "semester": "WS 2026/27", "von": "2027-01-29", "bis": "2027-02-13", "status": "offiziell", "hinweis": "…" } ],
+ "rueckmeldung": [ { "fuer": "SS 2027", "von": "2027-01-15", "bis": "2027-02-15", "status": "offiziell" } ]
+}
+```
+
+Regeln: Semesternamen `WS JJJJ/JJ` oder `SS JJJJ`; alle Daten wie oben (2020–2040, `ende > beginn`, `bis ≥ von`); `status`
+`offiziell`/`geschätzt`; `hinweis` optional ≤ 200 Zeichen; `name`/`art` ≤ 60 Zeichen; je Liste höchstens 100 Einträge;
+`quellen` höchstens 10, Schlüssel `[a-z_]{1,30}`, Werte wie `quelle_url`. Ungültige Listeneinträge werden einzeln verworfen;
+ohne ein einziges gültiges Semester wird die Datei abgelehnt. Das Plugin schreibt `Semester.md` nur, wenn der Inhalt sich
+unterscheidet (Vergleich der Felder, nicht der Formatierung); den Text unter dem Frontmatter lässt es stehen. `modell.js` leitet
+daraus wie bisher Semesterliste, Pausen und Prüfungsphasen in `System/Einstellungen.md` ab.
+
+## Was das Plugin daraus macht (Kurzfassung)
+
+- **Abruf:** beim Start (20 s + Zufallsversatz 0–10 Min.), dann stündlich, plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
+  der letzte Stand; es wird nichts geschrieben.
+- **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (`geraet`, `seit`, `zuletzt`, `angewendet`). Ein anderes Gerät übernimmt
+  erst, wenn `zuletzt` älter als 3 h ist.
+- **Notizen:** `Termine/JJJJ-MM-TT Titel.md` mit `herkunft: zentral` und `zentral_id`. Felder aus den Daten werden aktualisiert;
+  `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie.
+- **Filter:** Termine ohne `code` oder mit `bereich` für alle; mit `code` nur, wenn das Modul im eigenen Plan ist (gewählt,
+  selbst geplant, läuft, angemeldet) oder laut Musterplan der gewählten Variante im aktuellen oder nächsten Fachsemester liegt.
+- **Wegfall:** Fehlt eine id, wird die Notiz „(entfällt)“ (`entfaellt: true`), oder – wenn unberührt (nicht erledigt, „Meine
+  Notizen“ leer) – in den Papierkorb gelegt. Nicht angefasst werden Termine, deren Ende mehr als 30 Tage zurückliegt.
+  **Schutz:** Fehlen auf einmal mehr als die Hälfte (und mehr als 10) der zentralen Termine, behandelt das Plugin keinen als
+  entfallen.
+
+## Pflichten des Exports (Seite des Autors, `export-daten.py` im Uni-Abgleich)
+
+1. Nur Einträge nach Freigabeliste (Kategorie, öffentliche Quelle oder Rundmail an alle, nichts mit `persoenlich: true`,
+   Persönliches nur mit `teilen: true`); nur die Felder oben; **nie** den Notiztext. `semester.json` kommt aus dem Frontmatter
+   von `System/Daten/Semester.md` im Vault des Autors; fehlt die Datei, fehlt `semester.json` (Geräte behalten ihren Stand).
+2. Vor dem Veröffentlichen dieselben Prüfungen wie das Plugin (Schema, Grenzen, Domains), dazu Scan auf persönliche Daten und
+   eine Höchstzahl an Änderungen je Lauf. Ein **Scan-Treffer hält nur diesen Eintrag zurück** (wie das KI-Urteil
+   „persönlich“; eine schon veröffentlichte Fassung bleibt) und steht im Protokoll unter „Termine nicht an alle geteilt“.
+   **Nichts** veröffentlicht wird bei: Änderungsgrenze überschritten, Schema- oder Prüfsummenfehler, `Semester.md` ohne gültiges
+   Semester, Ausfall der KI-Prüfung; Hinweis ins Protokoll.
+3. ids nach der id-Regel vergeben und merken.
+4. Termine erst entfernen, wenn ihr Ende mindestens 30 Tage zurückliegt – oder wenn sie wirklich entfallen.
+5. Prüfsummen über die geschriebenen Bytes; Manifest, Dateien und `plugin_aktuell` in einem Commit.
+6. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
+   falsch verstehen würden, kommt nach `v2/`.
+
+Testquelle mit allen Fällen: lokal beim Autor (nicht im Repo). Öffentliche Tests: `tests/` (siehe `docs/tests.md`).
