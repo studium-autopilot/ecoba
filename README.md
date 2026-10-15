@@ -6,29 +6,25 @@
 Termine und Fristen, die sich selbst aktualisieren, Studienplan, Noten und ECTS – in der kostenlosen App Obsidian, auf
 Handy, Tablet und Computer.
 
-<br>
-
-<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-ios.svg" alt="Für iPhone und iPad – mit Kurzbefehl" width="300"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-zip.svg" alt="Für Mac, Windows und Android – ZIP-Datei herunterladen" width="300"></a>
-
-<br>
-
-![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
-
 </div>
 
 ## In 3 Schritten starten
 
-**1. Obsidian installieren** – kostenlos für
-[iPhone und iPad](https://apps.apple.com/app/obsidian-connected-notes/id1557175442),
-[Android](https://play.google.com/store/apps/details?id=md.obsidian),
-[Windows und Mac](https://obsidian.md/download).
+### 1. Obsidian installieren
 
-**2. Vorlage herunterladen** – mit dem Knopf oben. Auf Mac, Windows und Android bekommst du eine
-ZIP-Datei; daraus wird beim Öffnen der Ordner `Studium Autopilot`. Auf iPhone und iPad geht es mit dem Knopf „Für iPhone und iPad“ noch einfacher: Ein Kurzbefehl lädt die neueste
-Version und legt sie gleich in Obsidian ab (siehe unten).
+<a href="https://apps.apple.com/app/obsidian-connected-notes/id1557175442"><img src="docs/bilder/badge-app-store.svg" alt="Laden im App Store" height="48"></a>&nbsp;&nbsp;<a href="https://play.google.com/store/apps/details?id=md.obsidian"><img src="docs/bilder/badge-google-play.png" alt="Jetzt bei Google Play" height="48"></a>&nbsp;&nbsp;<a href="https://obsidian.md/download"><img src="docs/bilder/badge-obsidian-desktop.svg" alt="Obsidian für Windows und Mac herunterladen" height="48"></a>
 
-**3. In Obsidian öffnen** – den Ordner `Studium Autopilot` als Tresor öffnen und auf **Vertrauen und Plugins aktivieren**
-tippen. Fertig: Das Dashboard öffnet sich, Termine und Fristen kommen von selbst.
+### 2. Vorlage laden
+
+<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/badge-vorlage-ios.svg" alt="Vorlage für iPhone und iPad – mit Kurzbefehl" height="48"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/badge-vorlage-zip.svg" alt="Vorlage als ZIP-Datei für Mac, Windows und Android" height="48"></a>
+
+Auf iPhone und iPad legt der Kurzbefehl die neueste Version direkt in Obsidian ab. Auf den anderen Geräten wird aus der
+ZIP-Datei der Ordner `Studium Autopilot`.
+
+### 3. In Obsidian öffnen
+
+Den Ordner `Studium Autopilot` als Tresor öffnen und auf **Vertrauen und Plugins aktivieren** tippen. Fertig: Das
+Dashboard öffnet sich, Termine und Fristen kommen von selbst.
 
 <details>
 <summary><b>iPhone und iPad</b> – Schritt für Schritt</summary>
@@ -36,7 +32,7 @@ tippen. Fertig: Das Dashboard öffnet sich, Termine und Fristen kommen von selbs
 **Mit Kurzbefehl (am einfachsten)**
 
 1. Obsidian einmal öffnen und wieder schließen. Dann gibt es in der Dateien-App den Ordner **Obsidian**.
-2. In Safari auf [**Für iPhone und iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) tippen → **Laden**. Dann oben auf das Download-Symbol und auf die Datei
+2. In Safari auf [**Kurzbefehl für iPhone & iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) tippen → **Laden**. Dann oben auf das Download-Symbol und auf die Datei
    tippen → **Kurzbefehl hinzufügen**.
 3. In der App **Kurzbefehle** auf **Studium Autopilot installieren** tippen. Fragt er nach Zugriff auf github.com:
    **Erlauben**.
@@ -77,6 +73,8 @@ Der Kurzbefehl lädt immer die neueste Version von dieser Seite und sendet nicht
 </details>
 
 Mehrere Geräte, Alma-Stundenplan verbinden, Updates: [ausführliche Anleitung](docs/installation.md).
+
+![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
 
 ## Was drin ist
 
@@ -122,6 +120,8 @@ Mehr dazu: [docs/datenschutz.md](docs/datenschutz.md).
 **Kein offizielles Angebot der Universität Tübingen. Keine Gewähr – maßgeblich sind Alma, Prüfungsamt und Prüfungsordnung.**
 
 Der Vault enthält keine Lehrmaterialien (Folien, Skripte, Altklausuren). Modul- und Prüfungsordnungs-Angaben sind in eigenen Worten zusammengefasst und auf die öffentlichen Dokumente der Universität verlinkt.
+
+Apple und App Store sind Marken der Apple Inc. Google Play und das Google Play-Logo sind Marken der Google LLC.
 
 ## Fehler melden
 

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="248.15" height="48" viewBox="0 0 206.79 40" role="img" aria-label="Vorlage als ZIP-Datei für Mac, Windows und Android">
+  <title>Vorlage als ZIP-Datei für Mac, Windows und Android</title>
+  <rect x="0" y="0" width="206.79" height="40" rx="6.5" fill="#a6a6a6"/>
+  <rect x="0.8" y="0.8" width="205.19" height="38.4" rx="5.8" fill="#000"/>
+  <g fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 9v14M14.5 17.5 20 23l5.5-5.5"/><path d="M10 24v5.5h20V24"/></g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" fill="#fff">
+    <text x="39" y="15" font-size="8.4" textLength="47.12" lengthAdjust="spacingAndGlyphs">ZIP-Datei für</text>
+    <text x="39" y="31" font-size="14.8" font-weight="500" textLength="156.79" lengthAdjust="spacingAndGlyphs">Mac, Windows, Android</text>
+  </g>
+</svg>

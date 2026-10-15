@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="188.27" height="48" viewBox="0 0 156.89 40" role="img" aria-label="Obsidian für Windows und Mac herunterladen">
+  <title>Obsidian für Windows und Mac herunterladen</title>
+  <rect x="0" y="0" width="156.89" height="40" rx="6.5" fill="#a6a6a6"/>
+  <rect x="0.8" y="0.8" width="155.29" height="38.4" rx="5.8" fill="#000"/>
+  <g fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="10.5" y="11" width="19" height="13" rx="1.6"/><path d="M7.5 28h25"/></g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" fill="#fff">
+    <text x="39" y="15" font-size="8.4" textLength="66.02" lengthAdjust="spacingAndGlyphs">Herunterladen für</text>
+    <text x="39" y="31" font-size="14.8" font-weight="500" textLength="106.89" lengthAdjust="spacingAndGlyphs">Windows &amp; Mac</text>
+  </g>
+</svg>

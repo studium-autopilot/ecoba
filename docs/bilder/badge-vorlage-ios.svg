@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="170.51" height="48" viewBox="0 0 142.09 40" role="img" aria-label="Vorlage für iPhone und iPad – mit Kurzbefehl">
+  <title>Vorlage für iPhone und iPad – mit Kurzbefehl</title>
+  <rect x="0" y="0" width="142.09" height="40" rx="6.5" fill="#a6a6a6"/>
+  <rect x="0.8" y="0.8" width="140.49" height="38.4" rx="5.8" fill="#000"/>
+  <g fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9.5" y="9.5" width="16" height="21" rx="2"/><rect x="21" y="15" width="10" height="17" rx="1.8" fill="#000"/><path d="M24.5 29h3"/></g>
+  <g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Helvetica, Arial, sans-serif" fill="#fff">
+    <text x="39" y="15" font-size="8.4" textLength="52.08" lengthAdjust="spacingAndGlyphs">Kurzbefehl für</text>
+    <text x="39" y="31" font-size="14.8" font-weight="500" textLength="92.09" lengthAdjust="spacingAndGlyphs">iPhone &amp; iPad</text>
+  </g>
+</svg>
