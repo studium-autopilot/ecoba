@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="400" height="76" viewBox="0 0 400 76" role="img" aria-label="Für iPhone und iPad – mit Kurzbefehl">
   <title>Für iPhone und iPad – mit Kurzbefehl</title>
-  <rect x="0" y="0" width="400" height="76" rx="16" fill="#202322"/>
-  <rect x="1" y="1" width="398" height="74" rx="15" fill="none" stroke="#ffffff" stroke-opacity="0.16"/>
+  <rect x="0" y="0" width="400" height="76" rx="16" fill="#2f5d4a"/>
+  <rect x="1" y="1" width="398" height="74" rx="15" fill="none" stroke="#ffffff" stroke-opacity="0.12"/>
   <g transform="translate(30 22)" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
     <rect x="2" y="0" width="19" height="32" rx="4"/>
     <path d="M9 27h5"/>
   </g>
   <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" fill="#ffffff">
     <text x="80" y="35" font-size="22" font-weight="600">Für iPhone und iPad</text>
-    <text x="80" y="56" font-size="14" fill-opacity="0.72">mit Kurzbefehl, ein Tipp</text>
+    <text x="80" y="56" font-size="14" fill-opacity="0.75">mit Kurzbefehl, ein Tipp</text>
   </g>
 </svg>
