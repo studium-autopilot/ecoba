@@ -93,7 +93,7 @@ Mehrere Geräte, Alma-Stundenplan verbinden, Updates: [ausführliche Anleitung](
   dazu ein Schwerpunkt-Planer.
 - **Alltag:** Stundenplan aus Alma (optional), Vorlesungsnotizen mit einem Klick, Unterlagen einordnen.
 
-![Kalender mit Terminen und Anmeldefristen am Computer, Studienverlauf auf dem iPhone](docs/bilder/vorschau-2-termine.png)
+![Monatskalender mit Terminen der Uni, Fachschaft und Prüfungen am Computer, Studienverlauf auf dem iPhone](docs/bilder/vorschau-2-termine.png)
 
 ## Woher die Daten kommen
 
