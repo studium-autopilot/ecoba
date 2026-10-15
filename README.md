@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/bilder/beta.svg" alt="Beta" height="22">&nbsp; Noch im Aufbau – noch nicht dabei: ILIAS-Sync, KI-Assistent für Mails, Einrichtung mit Claude Code
+
 # Studium Autopilot – EcoBA
 
 **Dein EcoBA-Studium an der Uni Tübingen an einem Ort.**<br>
