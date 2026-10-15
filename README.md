@@ -110,10 +110,10 @@ Termin falsch, Frist fehlt oder etwas sieht kaputt aus? Bitte ein [Issue](https:
 
 1. **Obsidian** einmal öffnen und wieder schließen.
 2. [**Kurzbefehl für iPhone & iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) antippen → **Laden** → Datei öffnen → **Kurzbefehl hinzufügen**.
-3. Den Kurzbefehl starten → **Erlauben** → als Ort **Auf meinem iPhone → Obsidian** wählen.
+3. Den Kurzbefehl starten → **Erlauben** → als Ort **iCloud Drive → Obsidian** wählen (kein iCloud: **Auf meinem iPhone → Obsidian**).
 4. Obsidian öffnen → **Studium Autopilot** → **Vertrauen und Plugins aktivieren**.
 
-Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **Auf meinem iPhone → Obsidian** bewegen.
+Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **iCloud Drive → Obsidian** (kein iCloud: **Auf meinem iPhone → Obsidian**) bewegen.
 
 </details>
 
