@@ -108,14 +108,7 @@ Termine, Fristen und Semesterdaten pflegt nicht jede:r selbst. Ein Server führt
 
 Was die Prüfung besteht, landet als einfache Datendatei im öffentlichen Repo [`studium-autopilot/ecoba-daten`](https://github.com/studium-autopilot/ecoba-daten). Das Plugin im Vault holt sie dort ab, prüft sie noch einmal und legt daraus Termin-Notizen an.
 
-```mermaid
-flowchart LR
-  Q["Öffentliche Uni-Quellen<br/>Webseiten · Kalender · PDFs"] --> A["KI-gestützter Abgleich<br/>stündlich"]
-  A --> P{"Automatische Prüfung<br/>Freigabeliste · Scan auf<br/>persönliche Daten · KI-Prüfung"}
-  P -- besteht --> D[("ecoba-daten<br/>GitHub Pages")]
-  P -- zweifelhaft --> H["zurückgehalten,<br/>Prüfung von Hand"]
-  D --> V["Plugin im Vault<br/>prüft erneut, legt Termine an"]
-```
+<img src="docs/bilder/datenfluss.png" width="100%" alt="Datenfluss: öffentliche Uni-Quellen → KI-Abgleich stündlich → automatische Prüfung (Freigabeliste, Scan auf persönliche Daten, KI-Prüfung) → ecoba-daten auf GitHub Pages → Plugin im Vault; zweifelhafte Einträge werden zurückgehalten und von Hand geprüft">
 
 Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der letzten Prüfung; Angaben, die die Uni noch nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
 
