@@ -8,13 +8,15 @@ Handy, Tablet und Computer.
 
 <br>
 
-<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-iphone.svg" alt="Für iPhone und iPad – mit Kurzbefehl" width="300"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-herunterladen.svg" alt="Für Mac, Windows und Android – ZIP-Datei herunterladen" width="300"></a>
+<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-ios.svg" alt="Für iPhone und iPad – mit Kurzbefehl" width="300"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-zip.svg" alt="Für Mac, Windows und Android – ZIP-Datei herunterladen" width="300"></a>
 
 <sub>Kostenlos · ohne Konto</sub>
 
 <br>
 
-![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt und Semesterverlauf](docs/bilder/vorschau-dashboard.png)
+![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
+
+<sub>Beispiel mit erfundenen Daten: 3. Semester, Alma verbunden</sub>
 
 </div>
 
@@ -91,7 +93,7 @@ Mehrere Geräte, Alma-Stundenplan verbinden, Updates: [ausführliche Anleitung](
   dazu ein Schwerpunkt-Planer.
 - **Alltag:** Stundenplan aus Alma (optional), Vorlesungsnotizen mit einem Klick, Unterlagen einordnen.
 
-![Kalender mit Terminen und Anmeldefristen am Computer, Studienverlauf auf dem iPhone](docs/bilder/vorschau-termine.png)
+![Kalender mit Terminen und Anmeldefristen am Computer, Studienverlauf auf dem iPhone](docs/bilder/vorschau-2-termine.png)
 
 ## Woher die Daten kommen
 
