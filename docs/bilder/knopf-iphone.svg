@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="64" viewBox="0 0 360 64" role="img" aria-label="Für iPhone und iPad">
+  <title>Für iPhone und iPad</title>
+  <rect x="0" y="0" width="360" height="64" rx="14" fill="#202322"/>
+  <rect x="1" y="1" width="358" height="62" rx="13" fill="none" stroke="#ffffff" stroke-opacity="0.16"/>
+  <g transform="translate(40 16)" fill="none" stroke="#ffffff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="1" width="18" height="30" rx="4"/>
+    <path d="M11 26h4"/>
+  </g>
+  <text x="200" y="40.5" text-anchor="middle" fill="#ffffff" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="22" font-weight="600">Für iPhone und iPad</text>
+</svg>

@@ -8,9 +8,9 @@ Handy, Tablet und Computer.
 
 <br>
 
-<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-herunterladen.svg" alt="Jetzt herunterladen" width="300"></a>
+<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-herunterladen.svg" alt="Jetzt herunterladen" width="280"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-iphone.svg" alt="Für iPhone und iPad" width="280"></a>
 
-<sub>Kostenlos · ohne Konto · für iPhone, iPad, Android, Windows und Mac</sub>
+<sub>Kostenlos · ohne Konto · ZIP-Datei für Android, Windows und Mac · Kurzbefehl für iPhone und iPad</sub>
 
 <br>
 
@@ -20,7 +20,7 @@ Handy, Tablet und Computer.
 
 > [!TIP]
 > **Zum ersten Mal auf GitHub?** Du brauchst kein Konto und musst hier nichts verstehen. Der grüne Knopf oben lädt die
-> Vorlage herunter, die drei Schritte darunter erklären den Rest.
+> Vorlage herunter, auf iPhone und iPad nimmst du den schwarzen. Die drei Schritte darunter erklären den Rest.
 
 ## In 3 Schritten starten
 
@@ -30,13 +30,28 @@ Handy, Tablet und Computer.
 [Windows und Mac](https://obsidian.md/download).
 
 **2. Vorlage herunterladen** – mit dem grünen Knopf oben. Du bekommst eine ZIP-Datei; daraus wird beim Öffnen der Ordner
-`Studium Autopilot`.
+`Studium Autopilot`. Auf iPhone und iPad geht es mit dem schwarzen Knopf noch einfacher: Ein Kurzbefehl lädt die neueste
+Version und legt sie gleich in Obsidian ab (siehe unten).
 
 **3. In Obsidian öffnen** – den Ordner `Studium Autopilot` als Tresor öffnen und auf **Vertrauen und Plugins aktivieren**
 tippen. Fertig: Das Dashboard öffnet sich, Termine und Fristen kommen von selbst.
 
 <details>
 <summary><b>iPhone und iPad</b> – Schritt für Schritt</summary>
+
+**Mit Kurzbefehl (am einfachsten)**
+
+1. Obsidian einmal öffnen und wieder schließen. Dann gibt es in der Dateien-App den Ordner **Obsidian**.
+2. In Safari auf [**Für iPhone und iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) tippen → **Laden**. Dann oben auf das Download-Symbol und auf die Datei
+   tippen → **Kurzbefehl hinzufügen**.
+3. In der App **Kurzbefehle** auf **Studium Autopilot installieren** tippen. Fragt er nach Zugriff auf github.com:
+   **Erlauben**.
+4. Beim Speichern **Auf meinem iPhone** (bzw. **Auf meinem iPad**) → **Obsidian** wählen und bestätigen.
+5. Obsidian öffnen → **Tresor wechseln** → **Studium Autopilot** → **Vertrauen und Plugins aktivieren**.
+
+Der Kurzbefehl lädt immer die neueste Version von dieser Seite und sendet nichts. Du kannst ihn danach wieder löschen.
+
+**Ohne Kurzbefehl**
 
 1. Obsidian einmal öffnen und wieder schließen. Dann gibt es in der Dateien-App den Ordner **Obsidian**.
 2. App **Dateien** öffnen → **Downloads** → die ZIP-Datei antippen. Sie wird zu einem Ordner `Studium Autopilot`.

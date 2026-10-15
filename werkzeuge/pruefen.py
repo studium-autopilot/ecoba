@@ -22,8 +22,10 @@ Ausgabe: eine lesbare Liste; Exit-Code 1 bei mindestens einem Fund, sonst 0.
 import argparse
 import json
 import os
+import plistlib
 import re
 import shutil
+import struct
 import subprocess
 import sys
 
@@ -441,6 +443,21 @@ def pfad_pruefen(rel, groesse, max_bytes, funde):
         funde.append(Fund(rel, 0, "Datei zu groß", f"{groesse / 1048576:.1f} MB > {max_bytes / 1048576:.1f} MB"))
 
 
+def kurzbefehl_signiert(rel, roh):
+    """Ein von Apple signierter iOS-Kurzbefehl (docs/kurzbefehl/*.shortcut) ist binär, aber erlaubt: AEA-Archiv, dessen
+    Signatur nur Apples Zertifikatskette trägt (Modus „jeder“, ohne Kontaktdaten des Signierenden)."""
+    if not (rel.startswith("docs/kurzbefehl/") and rel.endswith(".shortcut") and roh[:4] == b"AEA1"):
+        return False
+    try:
+        laenge = struct.unpack("<I", roh[8:12])[0]
+        kontext = plistlib.loads(roh[12:12 + laenge])
+    except Exception:
+        return False
+    kette = kontext.get("SigningCertificateChain") if isinstance(kontext, dict) else None
+    return set(kontext) == {"SigningCertificateChain"} and bool(kette) and all(
+        isinstance(z, bytes) and b"Apple Certification Authority" in z for z in kette)
+
+
 def dateien_sammeln(wurzel):
     alle = []
     for ordner, unter, namen in os.walk(wurzel):
@@ -471,7 +488,7 @@ def pruefen(wurzel, sperre, max_bytes, ohne_node=False):
         with open(pfad, "rb") as f:
             roh = f.read()
         if b"\x00" in roh:
-            if endung not in BILD_ENDUNGEN:
+            if endung not in BILD_ENDUNGEN and not kurzbefehl_signiert(rel, roh):
                 funde.append(Fund(rel, 0, "Binärdatei", "unbekannter Inhalt"))
             continue
         text = roh.decode("utf-8", errors="replace")
