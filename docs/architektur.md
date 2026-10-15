@@ -1,6 +1,6 @@
 # Architektur: Plugin „Studium Autopilot“
 
-Stand: 0.3.0, Einrichtung beim ersten Start (15.10.2026; davor Phase 2c, Datenkanal und Update-Knopf in 0.2.0). Ersetzt Templater vollständig. Zielgruppe: Entwickler, die den Vault weiterbauen.
+Stand: 0.3.1, Update-Hinweis auf dem Dashboard (15.10.2026; davor 0.3.0 Einrichtung beim ersten Start, Phase 2c, Datenkanal und Update-Knopf in 0.2.0). Ersetzt Templater vollständig. Zielgruppe: Entwickler, die den Vault weiterbauen.
 Getestet mit Obsidian 1.14.4 (API-Version); `manifest.json` verlangt darum `minAppVersion` 1.14.4. Erst senken, wenn ältere
 Versionen getestet sind.
 
@@ -122,7 +122,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `personalisieren.js` | Formular (Aktion `personalisieren`), „Deine Angaben“ (`eba-personalisieren angaben`); die Karte auf dem Dashboard entfällt seit 0.3.0 |
 | `musterplan.js` | Musterstudienpläne als eigene Darstellung, Codeblock `eba-musterplan` |
 | `zentral.js` | Datenkanal „Zentrale Daten“: Abruf, Prüfung, Übernahme als Termin-Notizen, Semesterdaten, Abrufer-Sperre (`ctx.zentral`), Aktionen `zentral-aktualisieren`, `zentral-schalter` |
-| `update.js` | Update der Vorlage mit einem Knopf (seit 0.2.0, `ctx.update`): Zeile „Studium Autopilot“ in `eba-verbindungen`, Aktionen `vorlage-aktualisieren`, `vorlage-neu-laden`; siehe „Update“ |
+| `update.js` | Update der Vorlage mit einem Knopf (seit 0.2.0, `ctx.update`): Zeile „Studium Autopilot“ in `eba-verbindungen`, Hinweis `eba-update-hinweis` auf dem Dashboard (seit 0.3.1), Aktionen `vorlage-aktualisieren`, `vorlage-neu-laden`; siehe „Update“ |
 
 Beim Start schreibt das Plugin keine Datei. Die Agenda (`eba-agenda`) wird live gerendert, wie der Kalender. Einzige
 Ausnahme seit 2b: Weichen die abgeleiteten Felder in `System/Einstellungen.md` vom berechneten Inhalt ab (siehe „Zentrale
@@ -416,9 +416,16 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   (Beta-)Version X verfügbar.“ + Notiz + Knopf „Aktualisieren“, Rückfall „Neue Version X verfügbar“ als Link auf die Releases
   (nur `plugin_aktuell`, kein `release`), „Version X. Du hast die neueste Version.“ oder nur „Version X.“ (ohne Angaben im
   Manifest, z. B. zentrale Daten aus). Die Zeile „Zentrale Daten“ zeigt den Hinweis nicht mehr.
+- **Hinweis auf dem Dashboard (seit 0.3.1):** Codeblock `eba-update-hinweis` ganz oben in `Dashboard.md` (nach der Pfadzeile,
+  vor den Kennzahlen). `ctx.update.hinweis()` nutzt dieselbe Logik wie `anzeige()` (Neu laden, Angebot je Kanal, Rückfall
+  `plugin_aktuell` → Link „Ansehen“ auf die Releases) und liefert sonst `null`: Dann ist der Block leer (`.eba-uh-aus`) und
+  samt Hülle unsichtbar. Knöpfe **Aktualisieren** (gleicher Ablauf mit Bestätigung) bzw. **Neu laden**, dazu **Später**:
+  merkt die Version gerätelokal (`app.saveLocalStorage("eba-update-spaeter", version)`), bei einer anderen Version erscheint
+  die Zeile wieder. Neu gezeichnet über `ctx.update.hinweisNeu()`, das `ctx.verbindungen.neuZeichnen()` mit aufruft (nach
+  Abruf der zentralen Daten, Update, Kanalwechsel). CSS: Abschnitt 46 in `eba-core.css`.
 - **Für Tests und andere Skripte:** `ctx.update` = `{ klasseVon, pfadOk, neuName, listePruefen, teilen, ohneHaken, seiteHaken,
   fmMischen, modulMischen, jsonMischenText, planen, aktualisierenMit(io, o), angebot, neuer, kanal, kanalSetzen, io, anzeige,
-  status, aktualisieren, installiertAnlegen, pluginNeuLaden, letzterBericht, fenster }`. `aktualisierenMit` bekommt den
+  hinweis, hinweisNeu, status, aktualisieren, installiertAnlegen, pluginNeuLaden, letzterBericht, fenster }`. `aktualisierenMit` bekommt den
   Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`) und ist darum ohne Obsidian testbar
   (`tests/update.test.js`).
 

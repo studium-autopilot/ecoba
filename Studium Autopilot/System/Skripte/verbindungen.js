@@ -138,7 +138,8 @@ module.exports = function (ctx) {
 
   // ---------- Anzeige aktualisieren ----------
   const bloecke = []; // Codeblock-Griffe (ctx.codeblock), gesetzt in registrieren()
-  const neuZeichnen = () => { for (const b of bloecke) b.neu(); };
+  // auch den Update-Hinweis auf dem Dashboard (update.js, ```eba-update-hinweis```): gleicher Anlass (Abruf, Update, Kanal)
+  const neuZeichnen = () => { for (const b of bloecke) b.neu(); try { if (ctx.update && ctx.update.hinweisNeu) ctx.update.hinweisNeu(); } catch (e) { /* egal */ } };
 
   // ---------- Fenster ----------
   // Ja/Nein-Frage → Promise<boolean>

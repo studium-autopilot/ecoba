@@ -21,8 +21,8 @@ Am besten fängst du hier an.
 1. **Obsidian** aus dem App Store laden und einmal öffnen.
 2. In Safari [**Kurzbefehl laden**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) antippen → **Laden**. Dann oben auf das
    Download-Symbol, die Datei antippen → **Kurzbefehl hinzufügen**.
-3. In der App **Kurzbefehle** auf **Studium Autopilot installieren** tippen und den Zugriff erlauben. Als Ort **Auf meinem iPhone**
-   (bzw. **iPad**) → **Obsidian** wählen.
+3. In der App **Kurzbefehle** auf **Studium Autopilot installieren** tippen und den Zugriff erlauben. Als Ort **iCloud Drive** → **Obsidian**
+   wählen (kein iCloud: **Auf meinem iPhone** → **Obsidian**).
 4. In Obsidian **Tresor wechseln** tippen → **Studium Autopilot** wählen → [**Vertrauen und Plugins aktivieren**](#vertrauen).
 
 <details>
@@ -37,7 +37,7 @@ Er überschreibt nichts und sendet nichts. Du kannst ihn danach wieder löschen.
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) antippen → **Laden**.
 2. App **Dateien** → **Downloads** → die ZIP-Datei antippen. Sie wird zum Ordner `Studium Autopilot`.
-3. Den Ordner gedrückt halten → **Bewegen** → **Auf meinem iPhone** → **Obsidian** → **Bewegen**.
+3. Den Ordner gedrückt halten → **Bewegen** → **iCloud Drive** → **Obsidian** → **Bewegen** (kein iCloud: **Auf meinem iPhone** → **Obsidian**).
 4. Obsidian öffnen → **Studium Autopilot** → [**Vertrauen und Plugins aktivieren**](#vertrauen).
 
 ## Mac

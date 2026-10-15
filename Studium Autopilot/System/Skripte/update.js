@@ -1,5 +1,6 @@
 // Update der Vorlage mit einem Knopf (seit 0.2.0). Zeile „Studium Autopilot“ in ```eba-verbindungen``` (verbindungen.js):
-// Version, „Neue Version X verfügbar“ und Knopf „Aktualisieren“. Doku: docs/architektur.md, „Update“.
+// Version, „Neue Version X verfügbar“ und Knopf „Aktualisieren“. Seit 0.3.1 zusätzlich ```eba-update-hinweis``` oben auf dem
+// Dashboard: schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Doku: docs/architektur.md, „Update“.
 //
 // Woher: Das Manifest der zentralen Daten (zentral.js, docs/daten-v1.md) nennt im optionalen Feld „release“ die neue Version,
 // die Basisadresse der Dateien (raw.githubusercontent.com, Tag v<version> im Haupt-Repo) und die SHA-256 der Dateiliste
@@ -549,7 +550,56 @@ module.exports = function (ctx) {
     return { html: esc(`Version ${inst}.${zusatz}`), pille: "", symbol: "haken", ton: "leise", knopf: null };
   };
   const status = () => ({ verbunden: true, version: installiertVersion(), laufend: laufendeVersion(), release: release(), kanal: kanal(), laeuft: !!zustand.laeuft });
-  const neuZeichnen = () => { try { if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen(); } catch (e) { /* egal */ } };
+  // verbindungen.neuZeichnen() zeichnet auch den Hinweis auf dem Dashboard neu (ctx.update.hinweisNeu)
+  const neuZeichnen = () => { try { if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen(); else hinweisNeu(); } catch (e) { /* egal */ } };
+
+  // ---------- Hinweis oben auf dem Dashboard (```eba-update-hinweis```, seit 0.3.1) ----------
+  // Gleiche Logik wie anzeige(): „Neu laden“ nach einem Update, sonst die angebotene Version (Kanal stabil/beta), sonst der
+  // Rückfall plugin_aktuell ohne release (Link auf die Releases). Kein Update → Block leer und unsichtbar (eba-uh-aus).
+  // „Später“ blendet die Zeile für DIESE Version auf diesem Gerät aus (app.saveLocalStorage eba-update-spaeter = Version).
+  const SPAETER = "eba-update-spaeter";
+  const spaeter = () => { try { return app.loadLocalStorage(SPAETER) || ""; } catch (e) { return ""; } };
+  const hinweis = () => {
+    if (zustand.laeuft) return null;
+    const inst = installiertVersion(), lauf = laufendeVersion(), s = stand();
+    if (neuer(inst, lauf)) return { art: "laden", version: inst, text: `Version ${inst} ist da. Einmal neu laden.`, knopf: "Neu laden", symbol: "neu-laden" };
+    const neu = angebot(s.release, s.beta, kanal(), inst);
+    let h = null;
+    if (neu) h = { art: "update", version: neu.version, text: `Neue ${istBeta(neu.version) ? "Beta-Version" : "Version"} ${neu.version} verfügbar.`, notiz: neu.notiz || "", knopf: "Aktualisieren", symbol: "laden" };
+    else if (s.aktuell && neuer(s.aktuell, inst)) h = { art: "link", version: s.aktuell, text: `Neue Version ${s.aktuell} verfügbar.`, knopf: "Ansehen", symbol: "laden",
+      url: (ctx.zentral && ctx.zentral.RELEASES) || "https://github.com/studium-autopilot/ecoba/releases" };
+    return h && spaeter() !== h.version ? h : null;
+  };
+  const svg = (n) => (ctx.verbindungen && ctx.verbindungen.svg ? ctx.verbindungen.svg(n) : "");
+  const hinweisZeichnen = (el) => {
+    el.empty();
+    const h = hinweis();
+    el.toggleClass("eba-uh-aus", !h);
+    if (!h) return;
+    const z = el.createDiv({ cls: "eba-uh", attr: { role: "status", "data-art": h.art } });
+    z.createSpan({ cls: "eba-uh-symbol", attr: { "aria-hidden": "true" } }).innerHTML = svg(h.symbol);
+    const t = z.createSpan({ cls: "eba-uh-text" });
+    t.createEl("b", { text: h.text });
+    // Kurznotiz auf eine Zeile (CSS kürzt mit „…“; hier nur die erste Zeile, höchstens 140 Zeichen)
+    const n = String(h.notiz || "").split(/\r?\n/)[0].trim();
+    if (n) t.createSpan({ cls: "eba-uh-notiz", text: n.length > 140 ? n.slice(0, 139) + "…" : n, attr: { title: n } });
+    const k = z.createSpan({ cls: "eba-uh-knoepfe" });
+    if (h.art === "link") {
+      k.createEl("a", { cls: "eba-vb-knopf cta eba-uh-knopf", text: h.knopf, href: h.url, attr: { target: "_blank", rel: "noopener" } });
+    } else {
+      const b = k.createEl("button", { cls: "eba-vb-knopf cta eba-uh-knopf", text: h.knopf, attr: { type: "button" } });
+      b.addEventListener("click", () => {
+        if (h.art === "laden") AKTIONEN["vorlage-neu-laden"].ausfuehren().catch((e) => console.error("update: neu laden", e));
+        else aktualisieren().catch((e) => console.error("update", e));
+      });
+    }
+    if (h.art !== "laden") {
+      const sp = k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-spaeter", text: "Später", attr: { type: "button" } });
+      sp.addEventListener("click", () => { try { app.saveLocalStorage(SPAETER, h.version); } catch (e) { /* egal */ } hinweisNeu(); });
+    }
+  };
+  let hinweisGriff = null; // gesetzt in registrieren()
+  const hinweisNeu = () => { try { if (hinweisGriff) hinweisGriff.neu(); } catch (e) { /* egal */ } };
 
   // ---------- Fenster ----------
   const Modal = obs.Modal;
@@ -689,12 +739,16 @@ module.exports = function (ctx) {
     klasseVon, pfadOk, neuName, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
     jsonMischenText, planen, aktualisierenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     // Obsidian
-    io, anzeige, status, aktualisieren, installiertAnlegen, pluginNeuLaden, ergebnisZeigen,
+    io, anzeige, status, aktualisieren, installiertAnlegen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER,
     get letzterBericht() { return zustand.bericht; },
     get fenster() { return zustand.fenster; },
   };
 
   const registrieren = () => {
+    // Hinweis oben auf dem Dashboard; neu gezeichnet über hinweisNeu() (nach Abruf, Update, Kanalwechsel, „Später“)
+    hinweisGriff = ctx.codeblock("eba-update-hinweis", (quelle, el) => {
+      try { hinweisZeichnen(el); } catch (e) { console.error("eba-update-hinweis", e); el.empty(); el.addClass("eba-uh-aus"); }
+    });
     // installiert.json: beim Start (nach 20 s, damit ein Sync sie vorher liefern kann) anlegen bzw. lesen; Änderungen per Sync
     // Timer nur, wenn es etwas anzulegen gibt (Liste da, installiert.json fehlt) – sonst kein Timer
     if (app.vault.getAbstractFileByPath(LISTE) && !app.vault.getAbstractFileByPath(INSTALLIERT)) {

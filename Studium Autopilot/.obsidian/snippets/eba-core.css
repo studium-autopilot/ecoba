@@ -3940,3 +3940,40 @@ body.is-phone .eba-ei.willkommen .eba-ei-knopf { max-width: none; }
 body.is-phone .eba-ei.willkommen .eba-ei-knopf.haupt { flex: none; order: 0; }
 body.is-phone .eba-ei-liste-zeile { padding: 12px 14px; }
 /* ---------- Ende Abschnitt 45 ---------- */
+
+/* ---------- 46. Update-Hinweis oben auf dem Dashboard (update.js, ```eba-update-hinweis```, seit 0.3.1) ----------
+   Schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Sonst ist der Block leer (.eba-uh-aus) und
+   nimmt keinen Platz ein, auch nicht die Hülle (Leseansicht .el-pre, Live Preview .cm-embed-block). Nur --eba-*-Variablen. */
+.block-language-eba-update-hinweis.eba-uh-aus,
+.el-pre:has(> .block-language-eba-update-hinweis.eba-uh-aus),
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-update-hinweis.eba-uh-aus) { display: none !important; }
+.block-language-eba-update-hinweis { margin: 0; }
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-update-hinweis) { padding: 0; }
+.eba-uh {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 var(--eba-gap, 12px); padding: 6px 8px 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--eba-accent) 28%, var(--eba-border)); border-radius: var(--eba-radius);
+  background: color-mix(in srgb, var(--eba-accent) 5%, var(--eba-card-bg)); color: var(--eba-text);
+  font-size: 13.5px; line-height: 1.4;
+}
+.eba-uh-symbol {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--eba-accent-soft); color: var(--eba-accent-text);
+}
+.eba-uh-symbol .eba-sym { width: 14px; height: 14px; }
+.eba-uh-text { flex: 1 1 220px; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.eba-uh-text b { flex: none; font-weight: 600; }
+.eba-uh-notiz { flex: 0 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--eba-muted); }
+.eba-uh-knoepfe { flex: none; display: flex; align-items: center; gap: 4px; margin-left: auto; }
+/* Knöpfe wie .eba-vb-knopf (Abschnitt 43), als <button> ohne Obsidians Knopf-Schatten und feste Höhe */
+.eba-uh .eba-uh-knopf { height: auto; min-height: 30px; box-shadow: none; font-family: inherit; }
+.eba-uh .eba-uh-knopf.leise { padding: 5px 10px !important; }
+/* iPhone: Text oben (Notiz eine Zeile mit „…“), Knöpfe darunter mit 44 px Tippfläche */
+body.is-phone .eba-uh { gap: 6px 10px; padding: 10px 10px 8px 12px; }
+body.is-phone .eba-uh-text { flex: 1 1 0; flex-direction: column; align-items: flex-start; gap: 1px; }
+body.is-phone .eba-uh-text b { flex: none; white-space: normal; }
+body.is-phone .eba-uh-notiz { max-width: 100%; }
+body.is-phone .eba-uh-knoepfe { flex: 1 0 100%; margin-left: 0; gap: 6px; }
+body.is-phone .eba-uh .eba-uh-knopf { min-height: 44px; font-size: 14.5px; padding: 0 16px !important; }
+body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
+/* ---------- Ende Abschnitt 46 ---------- */

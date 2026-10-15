@@ -10,6 +10,9 @@ cssclasses:
 
 <div class="eba-pfad eba-pfad-start"><span>Economics and Business Administration (B.Sc.)</span><span>Universität Tübingen</span><span>PO 2023</span></div>
 
+```eba-update-hinweis
+```
+
 > [!eba-kennzahlen]
 > ```base
 > filters:

@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.3.1 – Update-Hinweis auf dem Dashboard
+
+- Gibt es eine neue Version, steht oben auf dem Dashboard eine schmale Zeile mit **Aktualisieren** und **Später** (blendet
+  sie für diese Version auf diesem Gerät aus). Ist nach einem Update „Neu laden“ nötig, steht es dort ebenso.
+
 ## 0.3.0 – Einrichtung beim ersten Start
 
 - Beim ersten Öffnen führt eine kurze Einrichtung durch Studienbeginn, Variante, Name und Zielnote und das Verbinden von
