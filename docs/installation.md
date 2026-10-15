@@ -11,8 +11,9 @@ Du brauchst nur die kostenlose App [Obsidian](https://obsidian.md) (Version 1.14
 
 ## 1. Herunterladen
 
-1. [Releases](https://github.com/studium-autopilot/ecoba/releases) öffnen.
-2. Bei der neuesten Version unter **Assets** die ZIP-Datei von Studium Autopilot antippen. Nicht „Source code“ – das ist der Quelltext.
+[**Neueste Version herunterladen**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) – du bekommst die ZIP-Datei `Studium-Autopilot.zip`. Ein GitHub-Konto brauchst du nicht.
+
+Ältere Versionen findest du unter [Releases](https://github.com/studium-autopilot/ecoba/releases): bei der Version unter **Assets** die ZIP-Datei von Studium Autopilot antippen, nicht „Source code“ – das ist der Quelltext.
 
 ## 2. Auf dein Gerät legen
 
