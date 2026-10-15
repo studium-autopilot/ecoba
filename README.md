@@ -10,18 +10,13 @@ Handy, Tablet und Computer.
 
 <a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-iphone.svg" alt="Für iPhone und iPad – mit Kurzbefehl" width="300"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-herunterladen.svg" alt="Für Mac, Windows und Android – ZIP-Datei herunterladen" width="300"></a>
 
-<sub>Kostenlos · ohne Konto · nimm den Knopf für dein Gerät</sub>
+<sub>Kostenlos · ohne Konto</sub>
 
 <br>
 
 ![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt und Semesterverlauf](docs/bilder/vorschau-dashboard.png)
 
 </div>
-
-> [!TIP]
-> **Zum ersten Mal auf GitHub?** Du brauchst kein Konto und musst hier nichts verstehen. Nimm oben den Knopf für dein
-> Gerät: **iPhone oder iPad** → schwarzer Knopf. **Mac, Windows oder Android** → grüner Knopf. Die drei Schritte darunter
-> erklären den Rest.
 
 ## In 3 Schritten starten
 
@@ -30,7 +25,7 @@ Handy, Tablet und Computer.
 [Android](https://play.google.com/store/apps/details?id=md.obsidian),
 [Windows und Mac](https://obsidian.md/download).
 
-**2. Vorlage herunterladen** – mit dem Knopf für dein Gerät oben. Auf Mac, Windows und Android bekommst du eine
+**2. Vorlage herunterladen** – mit dem Knopf oben. Auf Mac, Windows und Android bekommst du eine
 ZIP-Datei; daraus wird beim Öffnen der Ordner `Studium Autopilot`. Auf iPhone und iPad geht es mit dem schwarzen Knopf noch einfacher: Ein Kurzbefehl lädt die neueste
 Version und legt sie gleich in Obsidian ab (siehe unten).
 
