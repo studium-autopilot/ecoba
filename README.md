@@ -27,48 +27,32 @@ Den Ordner `Studium Autopilot` als Tresor öffnen und auf **Vertrauen und Plugin
 Dashboard öffnet sich, Termine und Fristen kommen von selbst.
 
 <details>
-<summary><b>iPhone und iPad</b> – Schritt für Schritt</summary>
+<summary><b>Hilfe für iPhone & iPad</b></summary>
 
-**Mit Kurzbefehl (am einfachsten)**
+1. **Obsidian** einmal öffnen und wieder schließen.
+2. [**Kurzbefehl für iPhone & iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) antippen → **Laden** → Datei öffnen → **Kurzbefehl hinzufügen**.
+3. Den Kurzbefehl starten → **Erlauben** → als Ort **Auf meinem iPhone/iPad → Obsidian** wählen.
+4. Obsidian öffnen → **Studium Autopilot** → **Vertrauen und Plugins aktivieren**.
 
-1. Obsidian einmal öffnen und wieder schließen. Dann gibt es in der Dateien-App den Ordner **Obsidian**.
-2. In Safari auf [**Kurzbefehl für iPhone & iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) tippen → **Laden**. Dann oben auf das Download-Symbol und auf die Datei
-   tippen → **Kurzbefehl hinzufügen**.
-3. In der App **Kurzbefehle** auf **Studium Autopilot installieren** tippen. Fragt er nach Zugriff auf github.com:
-   **Erlauben**.
-4. Beim Speichern **Auf meinem iPhone** (bzw. **Auf meinem iPad**) → **Obsidian** wählen und bestätigen.
-5. Obsidian öffnen → **Tresor wechseln** → **Studium Autopilot** → **Vertrauen und Plugins aktivieren**.
-
-Der Kurzbefehl lädt immer die neueste Version von dieser Seite und sendet nichts. Du kannst ihn danach wieder löschen.
-
-**Ohne Kurzbefehl**
-
-1. Obsidian einmal öffnen und wieder schließen. Dann gibt es in der Dateien-App den Ordner **Obsidian**.
-2. App **Dateien** öffnen → **Downloads** → die ZIP-Datei antippen. Sie wird zu einem Ordner `Studium Autopilot`.
-3. Den Ordner gedrückt halten → **Bewegen** → **Auf meinem iPhone** (bzw. **Auf meinem iPad**) → **Obsidian** →
-   **Bewegen**.
-4. Obsidian öffnen, **Studium Autopilot** antippen und **Vertrauen und Plugins aktivieren** wählen.
+Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **Obsidian** bewegen.
 
 </details>
 
 <details>
-<summary><b>Windows und Mac</b> – Schritt für Schritt</summary>
+<summary><b>Hilfe für Mac & Windows</b></summary>
 
-1. ZIP-Datei entpacken: Windows: Rechtsklick → **Alle extrahieren**. Mac: Doppelklick (Safari entpackt oft schon selbst).
-2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. in **Dokumente**.
-3. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner `Studium Autopilot` wählen.
-4. **Vertrauen und Plugins aktivieren** wählen.
+1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden und entpacken (Mac: Doppelklick, Windows: Rechtsklick → **Alle extrahieren**).
+2. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner `Studium Autopilot` wählen.
+3. **Vertrauen und Plugins aktivieren**.
 
 </details>
 
 <details>
-<summary><b>Android</b> – Schritt für Schritt</summary>
+<summary><b>Hilfe für Android</b></summary>
 
-1. ZIP-Datei in der App **Dateien** (oder deinem Dateimanager) antippen → **Entpacken**.
-2. Den Ordner `Studium Autopilot` z. B. nach **Documents** verschieben.
-3. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner wählen. Falls Obsidian nach Zugriff auf Dateien fragt:
-   erlauben.
-4. **Vertrauen und Plugins aktivieren** wählen.
+1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen → **Entpacken**.
+2. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner `Studium Autopilot` wählen → Zugriff **Erlauben**.
+3. **Vertrauen und Plugins aktivieren**.
 
 </details>
 
