@@ -139,8 +139,6 @@ Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ec
 ## Für Fortgeschrittene
 
 - **Weiteres Gerät verbinden:** nur Apple-Geräte über iCloud, sonst Obsidian Sync oder Syncthing – [Anleitung](docs/installation.md#weiteres-gerät-verbinden)
-- **Alma-Stundenplan verbinden:** dein Stundenplan per Link aus Alma, ohne Passwort – [Anleitung](docs/installation.md#alma-verbinden-stundenplan)
-- **Updates:** neue Versionen der Vorlage einspielen – [Anleitung](docs/installation.md#update-auf-eine-neue-version)
 - **Mit Claude-Abo:** alles mit einem Befehl in Claude Code einrichten (kommt bald) – [Mit Claude Code](docs/installation.md#mit-claude-code)
 
 ## In English
