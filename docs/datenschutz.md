@@ -8,9 +8,11 @@ Kurz: Studium Autopilot holt Daten, sendet aber keine. Es gibt kein Konto, keine
 |---|---|---|
 | Zentrale Daten (Termine, Fristen, Semesterdaten) | `studium-autopilot.github.io` (GitHub Pages) | beim Start, dann etwa stündlich, solange Obsidian offen ist |
 | Dein Stundenplan | direkt von Alma (`alma.uni-tuebingen.de`) | nur wenn du Alma verbunden hast, beim Verbinden und auf Knopfdruck |
+| Neue Version der Vorlage | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du bei „Studium Autopilot“ auf **Aktualisieren** tippst |
 
 - Das sind normale Abrufe wie beim Öffnen einer Webseite. Dabei sieht GitHub (bzw. Alma) deine IP-Adresse. Philip als Autor sieht davon nichts.
-- Abgerufen werden nur Daten (JSON bzw. Kalenderdaten), nie Programmcode.
+- Von selbst werden nur Daten abgerufen (JSON bzw. Kalenderdaten), nie Programmcode. Programmteile einer neuen Version lädt das
+  Plugin nur nach deinem Tipp auf **Aktualisieren**, aus diesem Repo, und prüft jede Datei mit einer Prüfsumme.
 - Mit dem Abruf werden keine Angaben über dich mitgeschickt: kein Name, keine Module, keine Noten.
 
 ## Was auf deinem Gerät bleibt

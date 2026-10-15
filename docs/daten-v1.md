@@ -31,7 +31,13 @@ sie ausgeliefert werden.
   "termine.json": { "sha256": "27f55ab3…717c", "groesse": 51790 },
   "semester.json": { "sha256": "f0a0a397…fb5f", "groesse": 9641 }
  },
- "plugin_aktuell": "0.1.0",
+ "plugin_aktuell": "0.2.0",
+ "release": {
+  "version": "0.2.0",
+  "url_basis": "https://raw.githubusercontent.com/studium-autopilot/ecoba/v0.2.0/",
+  "sha256": "5c432130…1ed2",
+  "notiz": "Neu: Update mit einem Tipp."
+ },
  "hinweis": "",
  "pause": false
 }
@@ -42,7 +48,9 @@ sie ausgeliefert werden.
 | `schema` | genau `1`, sonst Fehler (nichts übernommen) |
 | `erstellt` | ISO-Zeit (`JJJJ-MM-TT` oder mit Uhrzeit und Zone), 2020–2040 |
 | `dateien` | je bekannter Datei `sha256` (64 Zeichen hex, klein) über die ausgelieferten Bytes und `groesse` (Bytes, ganze Zahl). Unbekannte Namen werden ignoriert. Fehlt eine Datei hier, bleibt auf den Geräten ihr letzter Stand. |
-| `plugin_aktuell` | optional, `X.Y.Z`. Ist sie größer als die Version im Plugin-Manifest, zeigt die Übersicht „Neue Version verfügbar“ mit Link auf `https://github.com/studium-autopilot/ecoba/releases`. |
+| `plugin_aktuell` | optional, `X.Y.Z`. Ist sie größer als die installierte Version und fehlt ein passendes `release`, zeigt die Übersicht „Neue Version verfügbar“ mit Link auf `https://github.com/studium-autopilot/ecoba/releases` (Plugin 0.1: immer). |
+| `release` | optional, seit Plugin 0.2.0 (ältere ignorieren es). Neueste **fertige** Version für den Knopf „Aktualisieren“, siehe [Update-Angaben](#update-angaben-release-und-beta). Ungültig → wird ignoriert, das Manifest gilt trotzdem. |
+| `beta` | optional, seit Plugin 0.2.0. Neueste **Beta** (gleiches Schema), nur für Tresore mit Kanal „Beta“. |
 | `hinweis` | optional, reiner Text ≤ 200 Zeichen (gesäubert wie `info`), erscheint in der Übersicht „Verbindungen“ |
 | `pause` | optional. `true` = **Notbremse**: Kein Gerät übernimmt etwas, Anzeige „Pausiert“. Rücknahme: `false` (oder Git-Revert). |
 
@@ -50,6 +58,33 @@ Das Plugin holt zuerst nur das Manifest. Eine Datei lädt es nur, wenn ihre Prü
 Stand dieses Geräts geändert hat (oder beim Knopf „Jetzt aktualisieren“). Stimmt Größe oder SHA-256 nicht, wird **in diesem Lauf
 nichts** übernommen (auch nicht die anderen Dateien); der nächste Lauf versucht es wieder. Das fängt auch einen kurzzeitig
 gemischten Stand im CDN ab.
+
+### Update-Angaben (`release` und `beta`)
+
+Beide Felder haben dasselbe Schema. Das Plugin (`update.js`) lädt danach **nur nach einem Tipp auf „Aktualisieren“** die Dateien
+der neuen Version aus dem Haupt-Repo; die zentralen Daten selbst bleiben reine Daten.
+
+| Feld | Regel |
+|---|---|
+| `version` | `release`: `X.Y.Z`; `beta`: `X.Y.Z-beta.N`. Vergleich wie SemVer: `0.3.0-beta.2` < `0.3.0` < `0.3.1-beta.1`. |
+| `url_basis` | genau `https://raw.githubusercontent.com/studium-autopilot/ecoba/v<version>/` (Tag im Haupt-Repo), sonst wird das Feld ignoriert |
+| `sha256` | SHA-256 (64 Zeichen hex, klein) von `Studium Autopilot/System/Daten/system-dateien.json` dieser Version, wie `werkzeuge/release.py` sie druckt |
+| `notiz` | optional, reiner Text ≤ 200 Zeichen (gesäubert wie `hinweis`): was neu ist, erscheint neben „Neue Version … verfügbar“ |
+
+Angeboten wird: Kanal „stabil“ (Standard) → `release`; Kanal „beta“ (`update_kanal: beta` in `System/Einstellungen.md`) → die
+höhere von `beta` und `release`. Nur wenn sie neuer ist als die installierte Version (`System/Daten/installiert.json`), nie
+zurück. Beim Tipp holt das Plugin das Manifest frisch.
+
+**Reihenfolge beim Veröffentlichen:** `release` bzw. `beta` erst setzen, wenn der Tag gepusht und das GitHub-Release (bei einer
+Beta: Vorab-Release) mit `Studium-Autopilot.zip` veröffentlicht ist – sonst bekommt jemand eine Version angeboten, deren Dateien
+es noch nicht gibt (das Update scheitert dann ohne Schaden mit „Keine Verbindung“). `plugin_aktuell` gleichzeitig mit `release`
+setzen.
+
+**system-dateien.json** (im Release-Baum, Pfad oben): `{ "schema": 1, "version", "ordner": "Studium Autopilot", "erstellt",
+"dateien": [{ "pfad", "klasse", "groesse", "sha256", "koerper"?, "ohne_haken"? }] }`. `klasse` ist `system`, `einstellung`,
+`seite` oder `modul` (Regeln: `klasseVon` in `update.js` = `klasse_von` in `werkzeuge/pruefen.py`); `koerper` = SHA-256 des
+Textes nach dem Frontmatter (Module), `ohne_haken` = SHA-256 der Seite mit allen `- [x]` als `- [ ]` (Seiten mit Aufgaben).
+Eine Liste mit einem einzigen unzulässigen Eintrag lehnt das Plugin ganz ab.
 
 ## termine.json
 
@@ -222,7 +257,8 @@ daraus wie bisher Semesterliste, Pausen und Prüfungsphasen in `System/Einstellu
    Semester, Ausfall der KI-Prüfung; Hinweis ins Protokoll.
 3. ids nach der id-Regel vergeben und merken.
 4. Termine erst entfernen, wenn ihr Ende mindestens 30 Tage zurückliegt – oder wenn sie wirklich entfallen.
-5. Prüfsummen über die geschriebenen Bytes; Manifest, Dateien und `plugin_aktuell` in einem Commit.
+5. Prüfsummen über die geschriebenen Bytes; Manifest, Dateien und `plugin_aktuell` in einem Commit. `release`/`beta` kommen
+   aus der Konfiguration des Exports und werden unverändert übernommen (nach derselben Prüfung wie im Plugin).
 6. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 

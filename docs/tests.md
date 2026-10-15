@@ -16,6 +16,7 @@ beim Laden gebraucht wird).
 |---|---|
 | `zentral.test.js` | id-Regel (Prüfwerte aus `docs/daten-v1.md`), Dateinamen der Termin-Notizen, Prüfung von Manifest, Terminen und Semesterdaten (gültige und ungültige Einträge, Säubern von Text, Grenzen), Schnappschuss der öffentlichen zentralen Daten mit SHA-256 |
 | `modell.test.js` | Semestername aus dem Datum, Semesterliste aus Studienbeginn, Regel für Semester ohne Daten, Vorlesungswochen (WS 2026/27: 16, Weihnachtswoche zählt nicht), Wochenanzeige an typischen Tagen, abgeleitete Felder der Einstellungen |
+| `update.test.js` | Update-Knopf (`update.js`): Dateiklassen (was ein Update ersetzen darf, was nie), Prüfung der Update-Liste, Entscheidung je Datei (ersetzen, deine Fassung + „(neu X)“, Haken übernehmen, Modulfelder mischen, `.obsidian`-Einstellungen ergänzen, gelöscht bleibt gelöscht), ganzer Ablauf mit Sicherung, alles oder nichts (falsche Prüfsumme, kein Netz, Schreibfehler → alter Stand), Kanal stabil/beta, Feld `release`/`beta` im Manifest; im veröffentlichten Repo die Update-Liste `system-dateien.json` gegen die Dateien |
 
 `tests/daten/v1/` ist ein Schnappschuss der öffentlichen zentralen Daten
 (`https://studium-autopilot.github.io/ecoba-daten/v1/`). Ändert sich das Datenformat, wird er neu geholt.
@@ -25,7 +26,8 @@ In GitHub Actions läuft er als eigener Schritt, der den Lauf nicht rot macht.
 
 ## In Obsidian
 
-Oberfläche, Knöpfe, Hot-Reload, der Datenkanal mit einer Testquelle und die Bases-Formeln lassen sich nur in Obsidian testen.
+Oberfläche, Knöpfe, Hot-Reload, der Datenkanal mit einer Testquelle, das Update mit einem lokalen Fake-Release (gültig und mit
+falscher Prüfsumme, Neuladen des Plugins) und die Bases-Formeln lassen sich nur in Obsidian testen.
 Diese Tests laufen auf dem Entwickler-PC über die Obsidian-Kommandozeile und sind nicht im Repo. Die Testeinstiege (z. B.
 `plugin.testDatum`, `plugin.testQuelle`) beschreibt `docs/architektur.md` im Abschnitt „Tests“. Vor einem Release gehört dazu
 ein Durchgang auf iPhone, iPad, Android, Windows und Mac, jeweils hell und dunkel.

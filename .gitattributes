@@ -1,0 +1,3 @@
+# Byte-genau einchecken (keine Zeilenende-Umwandlung): Die Update-Liste System/Daten/system-dateien.json enthält
+# SHA-256 je Datei, und das Plugin lädt die Dateien über raw.githubusercontent.com.
+* -text

@@ -25,6 +25,7 @@ module.exports = function (ctx) {
   // ---------- Konstanten ----------
   const BASIS = "https://studium-autopilot.github.io/ecoba-daten/v1/";
   const RELEASES = "https://github.com/studium-autopilot/ecoba/releases";
+  const RELEASE_ROH = "https://raw.githubusercontent.com/studium-autopilot/ecoba/"; // Dateien eines Releases (update.js)
   const ABRUF = "System/Daten/abruf.json";
   const SEMESTER = "System/Daten/Semester.md";
   const EINSTELLUNGEN = "System/Einstellungen.md";
@@ -144,8 +145,22 @@ module.exports = function (ctx) {
         erstellt: m.erstellt, dateien, pause: m.pause === true,
         plugin_aktuell: semver(m.plugin_aktuell) ? m.plugin_aktuell : "",
         hinweis: h.fehler ? "" : h.wert,
+        release: releasePruefen(m.release, false),
+        beta: releasePruefen(m.beta, true),
       },
     };
+  };
+  // Optionale Felder „release“ (stabil) und „beta“ (seit 0.2.0, docs/daten-v1.md): neue Version der Vorlage für den Knopf
+  // „Aktualisieren“ (update.js). Ungültig → null (kein Fehler, das Manifest gilt trotzdem). release.version ist X.Y.Z,
+  // beta.version X.Y.Z-beta.N. url_basis muss genau auf den Tag v<version> im Haupt-Repo zeigen; sha256 ist die Prüfsumme
+  // von system-dateien.json dieser Version.
+  const releasePruefen = (r, beta) => {
+    if (!r || typeof r !== "object" || Array.isArray(r)) return null;
+    const form = beta ? /^\d{1,4}\.\d{1,4}\.\d{1,4}-beta\.\d{1,4}$/ : /^\d{1,4}\.\d{1,4}\.\d{1,4}$/;
+    if (typeof r.version !== "string" || !form.test(r.version) || typeof r.sha256 !== "string" || !/^[0-9a-f]{64}$/.test(r.sha256)) return null;
+    if (r.url_basis !== RELEASE_ROH + "v" + r.version + "/") return null;
+    const n = textFeld(r.notiz, G.hinweis, false);
+    return { version: r.version, url_basis: r.url_basis, sha256: r.sha256, notiz: n.fehler ? "" : n.wert };
   };
 
   // ---------- Prüfen: Termine ----------
@@ -546,7 +561,7 @@ module.exports = function (ctx) {
   };
 
   // ---------- Status (gerätelokal) ----------
-  const stand = () => Object.assign({ geprueft: "", fehler: "", fehlerZeit: "", pause: false, hinweis: "", plugin_aktuell: "", hashes: {}, filter: "", abrufer: false }, lokal(L.stand) || {});
+  const stand = () => Object.assign({ geprueft: "", fehler: "", fehlerZeit: "", pause: false, hinweis: "", plugin_aktuell: "", release: null, beta: null, hashes: {}, filter: "", abrufer: false }, lokal(L.stand) || {});
   const standSetzen = (aend) => lokal(L.stand, Object.assign(stand(), aend));
   const protokoll = ctx.bleibend("protokoll", () => []); // Läufe (für Tests), überlebt den Hot-Reload
 
@@ -582,7 +597,7 @@ module.exports = function (ctx) {
       const mp = manifestPruefen(m);
       if (mp.fehler) return fehler(mp.fehler);
       manifest = mp.wert;
-      standSetzen({ geprueft: new Date().toISOString(), hinweis: manifest.hinweis, plugin_aktuell: manifest.plugin_aktuell, pause: manifest.pause });
+      standSetzen({ geprueft: new Date().toISOString(), hinweis: manifest.hinweis, plugin_aktuell: manifest.plugin_aktuell, release: manifest.release, beta: manifest.beta, pause: manifest.pause });
       if (manifest.pause) { b.art = "pausiert"; standSetzen({ fehler: "" }); melden("Zentrale Daten sind gerade pausiert. Dein letzter Stand bleibt."); return b; }
     }
     // 2. Abrufer-Sperre
@@ -682,8 +697,21 @@ module.exports = function (ctx) {
     else { text = "Noch nicht abgerufen."; pille = `<span class="eba-pill ok">an</span>`; }
     let html = esc(text.replace(/\.\./g, ".")); // „vor 17 Min.“ + Satzpunkt: nur ein Punkt
     if (s.an && s.hinweis) html += " " + esc(s.hinweis);
-    if (s.neueVersion) html += ` <a class="eba-vb-neu external-link" href="${esc(RELEASES)}" target="_blank" rel="noopener">Neue Version verfügbar</a>`;
+    // Mit update.js (seit 0.2.0) steht die neue Version in der eigenen Zeile „Studium Autopilot“ mit Knopf
+    if (s.neueVersion && !ctx.update) html += ` <a class="eba-vb-neu external-link" href="${esc(RELEASES)}" target="_blank" rel="noopener">Neue Version verfügbar</a>`;
     return { html, pille, an: s.an, veranstaltungen: s.veranstaltungen };
+  };
+  // Nur das Manifest holen und prüfen (für den Knopf „Aktualisieren“ in update.js: frische Angaben zum Release). Merkt sich
+  // release und plugin_aktuell im Status; schreibt keine Datei. Wirft bei Fehler.
+  const manifestHolen = async () => {
+    const roh = await holen("manifest.json");
+    if (roh.bytes.length > G.manifest) throw new Error("Manifest zu groß");
+    let m;
+    try { m = JSON.parse(roh.text); } catch (e) { throw new Error("Manifest unlesbar"); }
+    const mp = manifestPruefen(m);
+    if (mp.fehler) throw new Error(mp.fehler);
+    standSetzen({ plugin_aktuell: mp.wert.plugin_aktuell, release: mp.wert.release, beta: mp.wert.beta });
+    return mp.wert;
   };
   const neuZeichnen = () => { try { if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen(); } catch (e) { /* egal */ } };
 
@@ -722,7 +750,7 @@ module.exports = function (ctx) {
 
   ctx.zentral = {
     abrufen, status, anzeige, stand, geraetId, idAusName, notizText, dateiName, terminePruefen, semesterPruefen, manifestPruefen,
-    semKanon, sha256, protokoll, filterBauen, modulLinkFuer: (code) => modulLink(filterBauen(), code), BASIS, RELEASES, ABRUF, MEINE,
+    semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, RELEASE_ROH, modulLinkFuer: (code) => modulLink(filterBauen(), code), BASIS, RELEASES, ABRUF, MEINE,
     get laeuft() { return !!laeuft; },
   };
 

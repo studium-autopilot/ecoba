@@ -41,6 +41,8 @@ Ordner <b>Studium Autopilot</b> als Tresor öffnen → <b>Vertrauen und Plugins 
 
 <br>
 
+Das richtet die Vorlage auf einem Gerät ein. Mehrere Geräte? → [Weiteres Gerät verbinden](docs/installation.md#weiteres-gerät-verbinden)
+
 Hängt es irgendwo? → [Hilfe zur Installation](#hilfe-zur-installation)
 
 </div>
@@ -76,7 +78,8 @@ Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der
 
 Der Vault bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du musst nichts weiter installieren.
 
-- **Lädt nur Daten, nie Code.** Neue Versionen der Vorlage lädst du selbst herunter; das Plugin zeigt nur einen Hinweis.
+- **Lädt von selbst nur Daten, nie Code.** Eine neue Version der Vorlage kommt nur, wenn du auf **Aktualisieren** tippst –
+  direkt aus diesem Repo, jede Datei mit Prüfsumme geprüft, vorher mit Sicherung. Deine Einträge bleiben.
 - **Sendet nichts.** Kein Konto, keine Statistik, keine Telemetrie. GitHub sieht beim Abruf deine IP-Adresse, wie bei jeder Webseite.
 - **Speichert keine Passwörter**, auch nicht für Alma, ILIAS oder Mail.
 - **Dein Alma-Link bleibt auf dem Gerät.** Er wird nicht synchronisiert und nirgends hin geschickt.
@@ -103,10 +106,10 @@ Termin falsch, Frist fehlt oder etwas sieht kaputt aus? Bitte ein [Issue](https:
 
 1. **Obsidian** einmal öffnen und wieder schließen.
 2. [**Kurzbefehl für iPhone & iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) antippen → **Laden** → Datei öffnen → **Kurzbefehl hinzufügen**.
-3. Den Kurzbefehl starten → **Erlauben** → als Ort **Auf meinem iPhone/iPad → Obsidian** wählen.
+3. Den Kurzbefehl starten → **Erlauben** → als Ort **Auf meinem iPhone → Obsidian** wählen.
 4. Obsidian öffnen → **Studium Autopilot** → **Vertrauen und Plugins aktivieren**.
 
-Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **Obsidian** bewegen.
+Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **Auf meinem iPhone → Obsidian** bewegen.
 
 </details>
 
@@ -114,8 +117,9 @@ Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ec
 <summary><b>Hilfe für Mac & Windows</b></summary>
 
 1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden und entpacken (Mac: Doppelklick, Windows: Rechtsklick → **Alle extrahieren**).
-2. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner `Studium Autopilot` wählen.
-3. **Vertrauen und Plugins aktivieren**.
+2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
+3. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner `Studium Autopilot` wählen.
+4. **Vertrauen und Plugins aktivieren**.
 
 </details>
 
@@ -130,14 +134,14 @@ Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ec
 
 ## Für Fortgeschrittene
 
-- **Mehrere Geräte:** denselben Tresor auf Handy, Tablet und Computer – [Anleitung](docs/installation.md#auf-mehreren-geräten)
+- **Weiteres Gerät verbinden:** nur Apple-Geräte über iCloud, sonst Obsidian Sync oder Syncthing – [Anleitung](docs/installation.md#weiteres-gerät-verbinden)
 - **Alma-Stundenplan verbinden:** dein Stundenplan per Link aus Alma, ohne Passwort – [Anleitung](docs/installation.md#alma-verbinden-stundenplan)
 - **Updates:** neue Versionen der Vorlage einspielen – [Anleitung](docs/installation.md#update-auf-eine-neue-version)
 - **Mit Claude-Abo:** alles mit einem Befehl in Claude Code einrichten (kommt bald) – [Mit Claude Code](docs/installation.md#mit-claude-code)
 
 ## In English
 
-Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business Administration at the University of Tübingen. It combines a module catalogue, study plan, grade tracking and a calendar in one place. Dates and deadlines are kept up to date automatically: a server runs an hourly AI-assisted comparison of public university sources, checks the results automatically (allowlist, scan for personal data, AI review) and publishes them as plain JSON on GitHub Pages. A small Obsidian plugin bundled with the vault fetches only that data, never code, and sends nothing back. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip). Architecture notes are in [docs/architektur.md](docs/architektur.md) and [docs/daten-v1.md](docs/daten-v1.md).
+Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business Administration at the University of Tübingen. It combines a module catalogue, study plan, grade tracking and a calendar in one place. Dates and deadlines are kept up to date automatically: a server runs an hourly AI-assisted comparison of public university sources, checks the results automatically (allowlist, scan for personal data, AI review) and publishes them as plain JSON on GitHub Pages. A small Obsidian plugin bundled with the vault fetches only that data, never code, and sends nothing back; a new version of the vault itself is installed only when the user taps “Update”, straight from this repo, with every file checked against a SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip). Architecture notes are in [docs/architektur.md](docs/architektur.md) and [docs/daten-v1.md](docs/daten-v1.md).
 
 ## Lizenz
 

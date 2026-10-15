@@ -2731,64 +2731,124 @@ body .eba-s-termine .cm-line .cm-hmd-internal-link .cm-underline:hover { color: 
 body .eba-s-termine .callout[data-callout="eba-achtung"][data-callout-metadata~="ohne-titel"] > .callout-content > p { margin: 0; }
 body .eba-s-termine .callout[data-callout="eba-achtung"][data-callout-metadata~="ohne-titel"] { padding-top: 9px; padding-bottom: 9px; }
 
-/* ---- Kalender  ```eba-kalender```  (kalender.js) ---- */
+/* ---- Kalender  ```eba-kalender```  (kalender.js) ----
+   Monatsansicht nach gängigem Muster (Google/Apple Kalender): Raster mit Haarlinien, Tageszahl oben links, darunter bis zu
+   SPUREN (kalender.js) beschriftete Terminzeilen. Mehrtägig = getönter Balken, rund an Anfang und Ende, gerade abgeschnitten,
+   wo er in die Vor- oder Folgewoche weiterläuft; eintägig = Farbpunkt + Uhrzeit + Titel. Farbe je Art über --kal (Prüfung rot,
+   Uni blau, Veranstaltung grün; Fristen stehen nicht im Kalender). Freiwilliges gestrichelt. Termine sind reine Anzeige
+   (pointer-events: none), ein Tipp trifft den Tag-Knopf darunter. Schmal (Container unter 560 px, iPhone): eintägige als
+   getönte Blöcke ohne Uhrzeit, kleinere Schrift, Zahlen mittig. Alle Geräte. */
 .eba-kalender {
+  container: eba-kal / inline-size;
   margin: 0 0 18px;
-  padding: 16px 18px 14px;
+  padding: 18px 20px 16px;
   background: var(--eba-card-bg);
   border: 1px solid var(--eba-border);
   border-radius: var(--eba-radius);
   font-family: var(--font-interface);
   color: var(--eba-text);
 }
-.eba-kal-kopf { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.eba-kal-monat { font-family: var(--eba-font-display); font-size: 1.45em; font-weight: var(--eba-display-weight, 500); line-height: 1.15; }
-.eba-kal-nav { display: flex; gap: 6px; }
+.eba-kalender .pruefung { --kal: var(--eba-bad); }
+.eba-kalender .frist { --kal: var(--eba-warn); }
+.eba-kalender .uni { --kal: var(--eba-info); }
+.eba-kalender .event { --kal: var(--eba-accent); }
+.eba-kalender .erledigt { --kal: var(--eba-faint); }
+
+/* Kopf: Monat links, „Heute“ und ‹ › als Gruppe rechts */
+.eba-kal-kopf { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.eba-kal-monat { font-family: var(--eba-font-display); font-size: 1.5em; font-weight: var(--eba-display-weight, 500); line-height: 1.15; }
+.eba-kal-nav { display: flex; align-items: center; gap: 8px; }
+.eba-kal-pfeile { display: flex; }
 .eba-kalender button { font-family: inherit; box-shadow: none; -webkit-appearance: none; appearance: none; cursor: pointer; }
 .eba-kalender .eba-kal-nav button {
-  height: 30px; min-width: 32px; padding: 0 11px;
-  background: transparent; border: 1px solid var(--eba-border); border-radius: 999px;
-  color: var(--eba-muted); font-size: 13px; font-weight: 500;
+  height: 32px; min-width: 32px; margin: 0; padding: 0 14px;
+  background: transparent; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s, 6px);
+  color: var(--eba-text); font-size: 13px; font-weight: 550;
 }
-.eba-kal-nav button:hover { color: var(--eba-text); border-color: var(--eba-border-strong); }
-.eba-kal-raster { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 2px; }
+.eba-kalender .eba-kal-pfeile button { width: 34px; padding: 0; font-size: 19px; line-height: 1; font-weight: 400; color: var(--eba-muted); }
+.eba-kalender .eba-kal-pfeile button:first-child { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.eba-kalender .eba-kal-pfeile button:last-child { margin-left: -1px; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.eba-kalender .eba-kal-nav button:hover { background: color-mix(in srgb, var(--eba-text) 5%, transparent); color: var(--eba-text); }
+
+/* Raster: Wochentage, dann je Woche ein Grid (Zeile 1 Tageszahl, Zeilen 2–5 Termine = SPUREN, Zeile 6 Luft) */
+.eba-kal-raster { border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s, 6px); overflow: hidden; }
+.eba-kal-wtage, .eba-kal-woche { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.eba-kal-wtage { border-bottom: 1px solid var(--eba-border); }
 .eba-kal-wt {
-  padding-bottom: 6px; text-align: center;
+  padding: 8px 10px 7px;
   font-size: var(--eba-label-size, 10.5px); font-weight: var(--eba-label-weight, 600);
-  letter-spacing: var(--eba-label-tracking, 0.09em); text-transform: uppercase; color: var(--eba-faint);
+  letter-spacing: var(--eba-label-tracking, 0.09em); text-transform: uppercase; color: var(--eba-muted);
 }
+.eba-kal-wt.is-we { color: var(--eba-faint); }
+.eba-kal-woche { grid-template-rows: 32px repeat(4, 21px) 7px; }
+.eba-kal-woche + .eba-kal-woche { border-top: 1px solid var(--eba-border); }
 .eba-kalender button.eba-kal-tag {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 4px;
-  height: 54px; margin: 0; padding: 6px 0 0;
-  background: transparent; border: 0; border-radius: var(--eba-radius-s, 6px);
-  color: var(--eba-text); font-size: 14.5px;
+  grid-row: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
+  height: auto; min-width: 0; margin: 0; padding: 5px 6px 0;
+  background: transparent; border: 0; border-radius: 0; text-align: left;
+  color: var(--eba-text); font-size: 13.5px;
 }
+.eba-kalender button.eba-kal-tag + button.eba-kal-tag { border-left: 1px solid color-mix(in srgb, var(--eba-border) 75%, transparent); }
+.eba-kalender button.eba-kal-tag.is-we { background: color-mix(in srgb, var(--eba-text) 2.5%, transparent); }
 .eba-kalender button.eba-kal-tag:hover { background: color-mix(in srgb, var(--eba-text) 5%, transparent); }
-.eba-kal-tag.is-we .eba-kal-zahl { color: var(--eba-muted); }
-.eba-kal-tag.is-fremd { opacity: 0.4; }
-.eba-kal-zahl { width: 28px; height: 28px; line-height: 28px; border-radius: 50%; text-align: center; font-variant-numeric: tabular-nums; }
 .eba-kalender button.eba-kal-tag.is-gewaehlt { background: var(--eba-accent-soft); }
+.eba-kalender button.eba-kal-tag:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: -2px; }
+.eba-kal-zahl {
+  display: inline-block; min-width: 24px; height: 24px; padding: 0 5px; border-radius: 12px;
+  line-height: 24px; text-align: center; font-weight: 500; font-variant-numeric: tabular-nums;
+}
+.eba-kal-tag.is-fremd .eba-kal-zahl { color: var(--eba-faint); font-weight: 400; }
+.eba-kal-tag.is-gewaehlt .eba-kal-zahl { color: var(--eba-accent-text); font-weight: 650; box-shadow: inset 0 0 0 1.5px var(--eba-accent); }
 .eba-kal-tag.is-heute .eba-kal-zahl { background: var(--eba-accent); color: var(--eba-card-bg); font-weight: 650; }
-.eba-kal-punkte { display: flex; align-items: center; gap: 3px; height: 6px; }
-.eba-kal-punkte i, .eba-kal-balken i { display: block; background: var(--eba-info); }
-.eba-kal-punkte i { width: 6px; height: 6px; border-radius: 50%; }
-.eba-kal-mehr { font-size: 9px; line-height: 6px; color: var(--eba-muted); }
-.eba-kal-balken { position: absolute; left: 0; right: 0; bottom: 4px; display: flex; flex-direction: column; gap: 2px; }
-.eba-kal-balken i { height: 3px; opacity: 0.6; }
-.eba-kal-balken i.anfang { margin-left: 7px; border-top-left-radius: 2px; border-bottom-left-radius: 2px; }
-.eba-kal-balken i.ende { margin-right: 7px; border-top-right-radius: 2px; border-bottom-right-radius: 2px; }
-.eba-kalender i.frist { background: var(--eba-warn); }
-.eba-kalender i.pruefung { background: var(--eba-bad); }
-.eba-kalender i.event { background: var(--eba-accent); }
-.eba-kalender i.uni { background: var(--eba-info); }
-.eba-kalender i.erledigt { background: var(--eba-border-strong); }
-.eba-kal-liste { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--eba-border); }
+
+/* Termine im Raster */
+.eba-kal-ev, .eba-kal-mehr { position: relative; z-index: 1; pointer-events: none; min-width: 0; overflow: hidden; white-space: nowrap; }
+.eba-kal-ev {
+  display: flex; align-items: center; gap: 5px;
+  height: 19px; margin: 1px 6px; padding: 0 4px; border-radius: 4px;
+  font-size: 12px; line-height: 19px; color: var(--eba-text);
+}
+.eba-kal-ev-titel { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.eba-kal-ev-zeit { flex: none; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-kal-ev.is-kurz > i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--kal); }
+.eba-kal-ev.is-lang {
+  margin-left: 0; margin-right: 0; padding: 0 8px; border-radius: 0;
+  background: color-mix(in srgb, var(--kal) 14%, var(--eba-card-bg));
+  color: color-mix(in srgb, var(--kal) 72%, var(--eba-text)); font-weight: 550;
+}
+.eba-kal-ev.is-lang.anfang { margin-left: 6px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+.eba-kal-ev.is-lang.ende { margin-right: 6px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
+.eba-kal-ev.is-vorbei { opacity: 0.55; }
+.eba-kal-ev.is-fremd { opacity: 0.4; }
+.eba-kal-ev.erledigt .eba-kal-ev-titel { text-decoration: line-through; }
+/* Freiwillig (bereich: schluesselqualifikation): gestrichelter Rahmen statt Farbfläche, Punkt hohl, Text gedämpft */
+.eba-kal-ev.is-freiwillig { color: var(--eba-muted); font-weight: 400; }
+.eba-kal-ev.is-lang.is-freiwillig {
+  background: var(--eba-card-bg); box-shadow: none;
+  outline: 1px dashed color-mix(in srgb, var(--kal) 60%, transparent); outline-offset: -1px;
+}
+.eba-kal-ev.is-kurz.is-freiwillig > i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--kal); }
+.eba-kal-mehr { margin: 1px 6px; padding: 0 4px; font-size: 11.5px; line-height: 19px; font-weight: 600; color: var(--eba-muted); }
+
+/* Legende: Farbe = Art, Balken = mehrtägig, gestrichelt = freiwillig */
+.eba-kal-legende { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); }
+.eba-kal-legende span { display: inline-flex; align-items: center; gap: 6px; }
+.eba-kal-legende i { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--kal); }
+.eba-kalender .eba-kal-legende .eba-kal-leg-rechts { margin-left: auto; gap: 16px; }
+.eba-kal-legende .eba-kal-leg-lang i {
+  width: 20px; height: 9px; border-radius: 2px;
+  background: color-mix(in srgb, var(--eba-muted) 22%, var(--eba-card-bg));
+}
+.eba-kal-legende .eba-kal-leg-frei i { width: 20px; height: 9px; border-radius: 2px; background: transparent; outline: 1px dashed var(--eba-muted); outline-offset: -1px; }
+
+/* Termine des gewählten Tags */
+.eba-kal-liste { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--eba-border); }
 .eba-kal-datum {
   margin-bottom: 6px;
   font-size: var(--eba-label-size, 10.5px); font-weight: var(--eba-label-weight, 600);
   letter-spacing: var(--eba-label-tracking, 0.09em); text-transform: uppercase; color: var(--eba-accent-text);
 }
-.eba-kal-eintrag { display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 10px; padding: 4px 0; font-size: 14.5px; line-height: 1.4; }
+.eba-kal-eintrag { display: grid; grid-template-columns: 84px minmax(0, 1fr); column-gap: 10px; padding: 6px 0; font-size: 14.5px; line-height: 1.4; }
 .eba-kal-eintrag + .eba-kal-eintrag { border-top: 1px solid color-mix(in srgb, var(--eba-border) 60%, transparent); }
 .eba-kal-eintrag.erledigt { opacity: 0.7; }
 .eba-kal-zeit { padding-top: 1px; font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
@@ -2796,39 +2856,58 @@ body .eba-s-termine .callout[data-callout="eba-achtung"][data-callout-metadata~=
 .eba-kalender a.eba-kal-link { color: var(--eba-text); text-decoration: none; }
 .eba-kalender a.eba-kal-link:hover { color: var(--eba-accent-text); text-decoration: underline; }
 .eba-kal-text .eba-pill { gap: 4px; padding: 0 6px; font-size: 10.5px; line-height: 1.55; vertical-align: 1px; }
-.eba-kal-leer { font-size: 13.5px; color: var(--eba-faint); }
+.eba-kal-leer { padding: 4px 0; font-size: 13.5px; color: var(--eba-faint); }
+/* Sammelzeile „läuft“: mehrtägige Termine, die am gewählten Tag weder beginnen noch enden – je Termin eine Zeile */
+.eba-kal-laufend .eba-kal-text { font-size: 13px; line-height: 1.6; }
+.eba-kalender .eba-kal-laufend a.eba-kal-link { color: var(--eba-muted); }
+.eba-kal-lauf { display: block; }
+.eba-kal-lauf > i { display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; vertical-align: 1px; background: var(--kal); }
+.eba-kal-lauf.erledigt { opacity: 0.6; }
+.eba-kal-lauf.is-freiwillig > i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--kal); }
+.eba-kal-lauf.is-freiwillig::after { content: " · freiwillig"; color: var(--eba-faint); }
 /* Live Preview: Codeblock-Rahmen von Obsidian nicht zusätzlich zeigen */
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-kalender) { padding: 0; }
 
-/* iPhone: Kalender über die volle Breite, kompaktere Zellen */
-body.is-phone .eba-s-termine .eba-kalender { margin-bottom: 10px; padding: 11px 8px 10px; }
-body.is-phone .eba-s-termine .eba-kal-kopf { margin: 0 4px 8px; }
+/* Schmal (iPhone, schmale Spalte): wie Kalender-Apps auf dem Handy – Zahlen mittig, alle Termine als getönte Blöcke */
+/* Mittel (Spalten unter ~110 px): Uhrzeit nur in der Tagesliste, damit der Titel Platz hat */
+@container eba-kal (max-width: 780px) { .eba-kal-ev-zeit { display: none; } }
+@container eba-kal (max-width: 560px) {
+  .eba-kal-wt { padding: 6px 0 5px; text-align: center; letter-spacing: 0.04em; }
+  .eba-kal-woche { grid-template-rows: 27px repeat(4, 16px) 5px; }
+  .eba-kalender button.eba-kal-tag { align-items: center; padding: 3px 0 0; font-size: 13px; }
+  .eba-kal-zahl { min-width: 22px; height: 22px; padding: 0 4px; line-height: 22px; }
+  .eba-kal-ev { height: 14px; margin: 1px 2px; padding: 0 3px; gap: 0; border-radius: 3px; font-size: 9.5px; line-height: 14px; }
+  .eba-kal-ev.is-kurz {
+    background: color-mix(in srgb, var(--kal) 14%, var(--eba-card-bg));
+    color: color-mix(in srgb, var(--kal) 72%, var(--eba-text)); font-weight: 550;
+  }
+  .eba-kal-ev.is-kurz > i, .eba-kal-ev-zeit { display: none; }
+  .eba-kal-ev.is-kurz.is-freiwillig {
+    background: var(--eba-card-bg); color: var(--eba-muted); font-weight: 400;
+    outline: 1px dashed color-mix(in srgb, var(--kal) 60%, transparent); outline-offset: -1px;
+  }
+  .eba-kal-ev-titel { text-overflow: clip; }
+  .eba-kal-ev.is-lang { padding: 0 3px; }
+  .eba-kal-ev.is-lang.anfang { margin-left: 2px; border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
+  .eba-kal-ev.is-lang.ende { margin-right: 2px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; }
+  .eba-kal-mehr { margin: 1px 2px; padding: 0; font-size: 9.5px; line-height: 14px; text-align: center; }
+  .eba-kal-mehr-wort { display: none; }
+  .eba-kal-legende { gap: 4px 12px; font-size: 11.5px; }
+  .eba-kalender .eba-kal-legende .eba-kal-leg-rechts { margin-left: 0; gap: 12px; }
+  .eba-kal-eintrag { grid-template-columns: 74px minmax(0, 1fr); column-gap: 8px; }
+}
+
+/* iPhone: Kalender über die volle Breite */
+body.is-phone .eba-s-termine .eba-kalender { margin-bottom: 10px; padding: 12px 8px 10px; }
+body.is-phone .eba-s-termine .eba-kal-kopf { margin: 0 4px 10px; }
 body.is-phone .eba-s-termine .eba-kal-monat { font-size: 1.3em; }
-body.is-phone .eba-s-termine .eba-kalender .eba-kal-nav button { height: 28px; padding: 0 9px; font-size: 12.5px; }
-body.is-phone .eba-s-termine .eba-kalender button.eba-kal-tag { height: 46px; padding-top: 4px; gap: 3px; font-size: 14px; }
-body.is-phone .eba-s-termine .eba-kal-zahl { width: 26px; height: 26px; line-height: 26px; }
-body.is-phone .eba-s-termine .eba-kal-punkte i { width: 5px; height: 5px; }
-body.is-phone .eba-s-termine .eba-kal-balken { bottom: 3px; }
-body.is-phone .eba-s-termine .eba-kal-liste { margin: 10px 4px 0; }
-body.is-phone .eba-s-termine .eba-kal-eintrag { grid-template-columns: 74px minmax(0, 1fr); column-gap: 8px; }
+body.is-phone .eba-s-termine .eba-kalender .eba-kal-nav button { height: 30px; padding: 0 11px; font-size: 12.5px; }
+body.is-phone .eba-s-termine .eba-kalender .eba-kal-pfeile button { width: 32px; padding: 0; font-size: 18px; }
+body.is-phone .eba-s-termine .eba-kal-legende { margin: 8px 4px 0; }
+body.is-phone .eba-s-termine .eba-kal-liste { margin: 12px 4px 0; }
 /* Tagesliste unter dem Kalender: übrige Arten wie in der Wochenliste nur als Punkt */
 body.is-phone .eba-s-termine .eba-kal-text .eba-pill:is(.info, .akzent) { gap: 0; padding: 0; margin-left: 2px; font-size: 0; background: none; vertical-align: 2px; }
 body.is-phone .eba-s-termine .eba-kal-text .eba-pill:is(.info, .akzent)::before { width: 7px; height: 7px; opacity: 0.8; }
-
-/* Kalender: Legende der Punktfarben und Sammelzeile „läuft“ (mehrtägige Termine, die am gewählten Tag weder beginnen
-   noch enden; kalender.js). Alle Geräte, wie die übrigen Kalender-Regeln. */
-.eba-kal-legende { display: flex; flex-wrap: wrap; gap: 3px 12px; margin-top: 8px; font-size: 11px; line-height: 1.3; color: var(--eba-faint); }
-.eba-kal-legende span { display: inline-flex; align-items: center; gap: 5px; }
-.eba-kal-legende i { display: block; width: 6px; height: 6px; border-radius: 50%; background: var(--eba-info); }
-.eba-kal-laufend .eba-kal-text { font-size: 13px; line-height: 1.45; }
-.eba-kalender .eba-kal-laufend a.eba-kal-link { color: var(--eba-muted); }
-.eba-kal-lauf > i { display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; vertical-align: 1px; background: var(--eba-info); }
-.eba-kal-lauf.frist > i { background: var(--eba-warn); }
-.eba-kal-lauf.pruefung > i { background: var(--eba-bad); }
-.eba-kal-lauf.event > i { background: var(--eba-accent); }
-.eba-kal-lauf.erledigt { opacity: 0.6; }
-.eba-kal-lauf.erledigt > i { background: var(--eba-border-strong); }
-body.is-phone .eba-s-termine .eba-kal-legende { margin: 6px 4px 0; }
 
 /* Leseansicht: ##-Überschrift vor einer pc-flach-Karte (Nächste Woche, Fristen danach) nicht mit display:none
    (eba-core.css Abschnitt 36) weglassen, sondern 0 px hoch. Grund: Obsidian misst die Höhe eines ausgeblendeten
@@ -3180,166 +3259,176 @@ body:not(.is-phone) .markdown-preview-view.eba-s-vorlesung .markdown-preview-siz
 
 /* ---------- 38. Studienverlauf-Visualisierung „Studienreise“ ----------
    Codeblock ```eba-verlauf``` auf Studium/Studienverlauf.md, gezeichnet von System/Skripte/verlauf.js.
-   Oben die dunkle Reise-Karte (Akzentfarbe des Farbschemas, Gold für Weg und Ziel), darunter die Lupe des gewählten
-   Semesters. Breit/schmal per Container-Query (eba-vl, Grenze 560 px): breit = Welle, schmal = Schlange (iPhone).
+   Eine helle Karte wie die Dashboard-Kennzahlen (Kartenfläche, Haarlinie, Radius und Schrift des Farbschemas): oben die Reise,
+   darunter die Lupe des gewählten Semesters. Farben nur aus den --eba-*-Variablen: Akzent für Weg, „Du bist hier“ und
+   Bestandenes; Salbeigrün, Ocker, Graublau wie die Semesterleiste des Dashboards (Abschnitt 8: Vorlesungszeit = Akzent 48 %,
+   Prüfungen = warn 62 %, Ferien/Pausen = info 30 %, vorlesungsfrei = Text 7 %, vorbei blass, diese Woche mit Ring);
+   Ocker auch für Meilensteine und Ziel. Seit 15.10.2026 hell statt dunkelgrüner Karte mit Gold.
+   Breit/schmal per Container-Query (eba-vl, Grenze 560 px): breit = Welle, schmal = Schlange (iPhone).
    Animationen nur beim ersten Zeichnen (.eba-vl-anim), Puls dauerhaft; nie bei prefers-reduced-motion.
-   Ohne color-mix (iOS < 16.2) gelten die einfachen Ersatzfarben davor. Kein min-height, keine ausgeblendeten Editorzeilen. */
+   Ohne color-mix (iOS < 16.2) gelten die einfachen Ersatzfarben (Variablen ohne color-mix, @supports darunter).
+   Kein min-height, keine ausgeblendeten Editorzeilen. */
 .block-language-eba-verlauf { margin: 0; }
 .el-pre:has(> .block-language-eba-verlauf) { margin: 0 0 var(--eba-gap, 12px); }
 .markdown-source-view.is-live-preview .cm-embed-block.cm-lang-eba-verlauf { margin: 0 0 var(--eba-gap, 12px); box-shadow: none !important; }
-.markdown-source-view.is-live-preview .cm-embed-block.cm-lang-eba-verlauf > .edit-block-button { top: 6px; right: 6px; color: #fbf5e7; z-index: 5; }
+.markdown-source-view.is-live-preview .cm-embed-block.cm-lang-eba-verlauf > .edit-block-button { top: 6px; right: 6px; color: var(--eba-muted); z-index: 5; }
 
 .eba-vl {
   --vl-ak: var(--eba-accent);
   --vl-ak-t: var(--eba-accent-text);
-  --vl-gold: #e9c06a;
-  --vl-creme: #fbf5e7;
-  --vl-creme2: rgba(251, 245, 231, 0.76);
-  --vl-creme3: rgba(251, 245, 231, 0.42);
-  --vl-creme4: rgba(251, 245, 231, 0.14);
-  --vl-tief: #183326;
-  --vl-tief: color-mix(in srgb, var(--eba-accent) 58%, #000);
-  --vl-spur: rgba(127, 127, 127, 0.14);
-  --vl-spur: color-mix(in srgb, var(--eba-text) 8%, transparent);
-  --vl-vl: color-mix(in srgb, var(--eba-accent) 21%, var(--eba-card-bg));
-  --vl-frei: color-mix(in srgb, var(--eba-text) 5%, var(--eba-card-bg));
-  --vl-pr: color-mix(in srgb, var(--eba-warn) 42%, var(--eba-card-bg));
-  --vl-tint: color-mix(in srgb, var(--eba-accent) 6%, transparent);
+  /* Ersatzfarben ohne color-mix */
+  --vl-salbei: var(--eba-border-strong);
+  --vl-ocker: var(--eba-warn);
+  --vl-ocker-t: var(--eba-warn);
+  --vl-ocker2: var(--eba-border);
+  --vl-ferien: var(--eba-border);
+  --vl-frei: var(--eba-surface-2);
+  --vl-spur: var(--eba-border);
+  --vl-soft: var(--eba-accent-soft);
+  --vl-oSoft: var(--eba-surface-2);
+  --vl-mast: var(--eba-faint);
+  --vl-rad: 2px;
   container: eba-vl / inline-size;
   position: relative;
   overflow: hidden;
   border: 1px solid var(--eba-border);
-  border-radius: calc(var(--eba-radius) + 4px);
+  border-radius: var(--eba-radius);
   background: var(--eba-card-bg);
   box-shadow: var(--eba-shadow);
+  backdrop-filter: var(--eba-backdrop);
+  -webkit-backdrop-filter: var(--eba-backdrop);
   color: var(--eba-text);
   font-size: 14px;
   line-height: 1.4;
   font-variant-numeric: tabular-nums;
 }
+@supports (color: color-mix(in srgb, red 50%, blue)) {
+  .eba-vl {
+    /* gleiche Mischungen wie .eba-wochen (Abschnitt 8), deckend auf der Kartenfläche, damit sich Bänder nicht mischen */
+    --vl-salbei: color-mix(in srgb, var(--eba-accent-text) 48%, var(--eba-card-bg));
+    --vl-ocker: color-mix(in srgb, var(--eba-warn) 62%, var(--eba-card-bg));
+    --vl-ocker2: color-mix(in srgb, var(--eba-warn) 22%, var(--eba-card-bg));
+    --vl-ocker-t: color-mix(in srgb, var(--eba-warn) 80%, var(--eba-text));
+    --vl-ferien: color-mix(in srgb, var(--eba-info) 30%, var(--eba-card-bg));
+    --vl-frei: color-mix(in srgb, var(--eba-text) 7%, var(--eba-card-bg));
+    --vl-spur: color-mix(in srgb, var(--eba-text) 9%, var(--eba-card-bg));
+    --vl-soft: color-mix(in srgb, var(--eba-accent) 9%, var(--eba-card-bg));
+    --vl-oSoft: color-mix(in srgb, var(--eba-warn) 14%, var(--eba-card-bg));
+    --vl-mast: color-mix(in srgb, var(--eba-text) 45%, transparent);
+  }
+}
 .eba-vl b { font-weight: 600; }
 .eba-vl .k { font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--eba-muted); white-space: nowrap; }
 .eba-vl-fehlt { color: var(--eba-muted); padding: 10px 0; }
 
-/* ---- Reise-Karte ---- */
-.eba-vl-reise {
-  position: relative;
-  padding: 18px 22px 16px;
-  color: var(--vl-creme);
-  background-color: #1f4433;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1.4px), linear-gradient(155deg, #2f5d46 0%, #132a1f 100%);
-  background-image: radial-gradient(rgba(255, 255, 255, 0.065) 1px, transparent 1.4px), radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--eba-accent) 70%, #fff 30%) 0%, transparent 60%), radial-gradient(80% 60% at 100% 100%, color-mix(in srgb, var(--vl-gold) 16%, transparent) 0%, transparent 70%), linear-gradient(155deg, var(--eba-accent) 0%, color-mix(in srgb, var(--eba-accent) 55%, #000) 100%);
-  background-size: 15px 15px, auto, auto, auto;
-}
-/* Dunkles Grundschema: Akzent ist dort oft hell (z. B. Violett) – Karte tiefer, damit Creme und Gold lesbar bleiben */
-.theme-dark .eba-vl-reise {
-  background-image: radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1.4px), radial-gradient(120% 90% at 0% 0%, color-mix(in srgb, var(--eba-accent) 55%, transparent) 0%, transparent 60%), linear-gradient(155deg, color-mix(in srgb, var(--eba-accent) 45%, #111) 0%, color-mix(in srgb, var(--eba-accent) 22%, #0b0b0e) 100%);
-}
-.theme-dark .eba-vl { --vl-tief: color-mix(in srgb, var(--eba-accent) 30%, #0d0d10); }
-.eba-vl-reise .k { color: var(--vl-creme2); }
+/* ---- Reise (Kopf der Karte) ---- */
+.eba-vl-reise { position: relative; padding: 18px 22px 18px; color: var(--eba-text); border-bottom: 1px solid var(--eba-border); }
 .eba-vl-oben { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; }
-.eba-vl-hier { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 8px; border-radius: 99px; background: rgba(233, 192, 106, 0.16); border: 1px solid rgba(233, 192, 106, 0.42); font-size: var(--eba-label-size); font-weight: 700; letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--vl-gold); }
-.eba-vl-hier i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--vl-gold); flex: none; }
-.eba-vl-hier i::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 1.5px solid var(--vl-gold); opacity: 0; animation: eba-vl-puls 2.4s ease-out infinite; }
-.eba-vl-ort { font-size: 13px; color: var(--vl-creme2); }
-.eba-vl-tag { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin-top: 8px; }
-.eba-vl-tag .gross { font-family: var(--eba-font-display); font-weight: var(--eba-display-weight); letter-spacing: var(--eba-display-tracking); font-size: 2.5em; line-height: 1.05; color: var(--vl-creme); }
-.eba-vl-tag .gross b { font-weight: inherit; color: var(--vl-gold); }
-.eba-vl-tag .unter { font-size: 13.5px; color: var(--vl-creme2); }
-.eba-vl-spruch { margin: 4px 0 0; font-family: var(--eba-font-display); font-style: italic; font-size: 15px; color: var(--vl-creme2); }
+.eba-vl-hier { display: inline-flex; align-items: center; gap: 8px; padding: 3px 10px 3px 8px; border-radius: var(--eba-radius-s); background: var(--vl-soft); border: 1px solid var(--eba-border-strong); font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--vl-ak-t); }
+.eba-vl-hier i { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--vl-ak); flex: none; }
+.eba-vl-hier i::after { content: ""; position: absolute; inset: -2px; border-radius: 50%; border: 1.5px solid var(--vl-ak); opacity: 0; animation: eba-vl-puls 2.4s ease-out infinite; }
+.eba-vl-ort { font-size: 13px; color: var(--eba-muted); }
+.eba-vl-tag { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin-top: 10px; }
+.eba-vl-tag .gross { font-family: var(--eba-font-display); font-weight: var(--eba-display-weight); letter-spacing: var(--eba-display-tracking); font-size: 2.5em; line-height: 1.05; color: var(--eba-text); }
+.eba-vl-tag .gross b { font-weight: inherit; color: var(--vl-ak-t); }
+.eba-vl-tag .unter { font-size: 13.5px; color: var(--eba-muted); }
+.eba-vl-spruch { margin: 4px 0 0; font-family: var(--eba-font-display); font-style: italic; font-size: 15px; color: var(--eba-muted); }
 
 /* Bahn (SVG) */
 .eba-vl-bahn { margin: 6px -6px 2px; }
 .eba-vl-svg { display: block; width: 100%; height: auto; overflow: visible; font-family: var(--font-interface); -webkit-tap-highlight-color: transparent; }
 .eba-vl-svg.schmal { display: none; }
 .eba-vl-svg text { text-anchor: middle; }
-.eba-vl-rest { fill: none; stroke: var(--vl-creme3); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 0.1 7.5; }
-.eba-vl-glut, .eba-vl-strich { fill: none; stroke: var(--vl-gold); stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1000 1000; }
-.eba-vl-glut { stroke-width: 13; opacity: 0.2; }
-.eba-vl-strich { stroke-width: 4.5; }
+.eba-vl-rest { fill: none; stroke: var(--eba-border-strong); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 0.1 7.5; }
+.eba-vl-glut, .eba-vl-strich { fill: none; stroke: var(--vl-ak); stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1000 1000; }
+.eba-vl-glut { stroke: var(--vl-salbei); stroke-width: 10; opacity: 0.45; }
+.eba-vl-strich { stroke-width: 3.5; }
 .eba-vl-st { cursor: pointer; outline: none; }
 .eba-vl-st .wahl { fill: transparent; stroke: none; }
-.eba-vl-st.gewaehlt .wahl { fill: rgba(233, 192, 106, 0.1); stroke: var(--vl-gold); stroke-width: 1.4; stroke-dasharray: 3 3.2; }
-.eba-vl-st:focus-visible .wahl { stroke: var(--vl-creme); stroke-width: 2; }
-.eba-vl-st .grund { fill: var(--vl-tief); stroke: var(--vl-creme3); stroke-width: 1.3; }
-.eba-vl-st .spur { fill: none; stroke: var(--vl-creme4); stroke-width: 3.4; }
+.eba-vl-st.gewaehlt .wahl { fill: var(--vl-soft); stroke: var(--vl-ak); stroke-width: 1.2; stroke-dasharray: 3 3.2; }
+.eba-vl-st:focus-visible .wahl { stroke: var(--eba-text); stroke-width: 2; }
+.eba-vl-st .grund { fill: var(--eba-card-bg); stroke: var(--eba-border-strong); stroke-width: 1.3; }
+.eba-vl-st .spur { fill: none; stroke: var(--vl-spur); stroke-width: 3.4; }
 .eba-vl-st .plan, .eba-vl-st .ist { fill: none; stroke-width: 3.4; stroke-linecap: butt; transform: rotate(-90deg); }
-.eba-vl-st .plan { stroke: rgba(233, 192, 106, 0.42); }
-.eba-vl-st .ist { stroke: var(--vl-gold); }
-.eba-vl-st .nr { fill: var(--vl-creme); font-size: 12px; font-weight: 700; }
-.eba-vl-st.jetzt .grund { stroke: var(--vl-gold); stroke-width: 2; }
-.eba-vl-st.vorbei .grund { fill: var(--vl-gold); stroke: var(--vl-gold); }
-.eba-vl-st.vorbei .nr { fill: var(--vl-tief); }
-.eba-vl-st.spaeter .nr { fill: var(--vl-creme2); }
-.eba-vl-stname { fill: var(--vl-creme); font-size: 13px; font-weight: 600; }
-.eba-vl-stects { fill: var(--vl-creme2); font-size: 11px; }
-.eba-vl-st.gewaehlt .eba-vl-stname { fill: var(--vl-gold); }
-.eba-vl-ms rect { fill: var(--vl-tief); stroke: var(--vl-gold); stroke-width: 1.6; }
-.eba-vl-ms.ok rect { fill: var(--vl-gold); }
-.eba-vl-ms.option rect { stroke: var(--vl-creme2); stroke-dasharray: 2 2; }
-.eba-vl-ms text { fill: var(--vl-gold); font-weight: 600; letter-spacing: 0.02em; }
-.eba-vl-ms.option text { fill: var(--vl-creme2); font-weight: 500; }
+.eba-vl-st .plan { stroke: var(--vl-salbei); }
+.eba-vl-st .ist { stroke: var(--vl-ak); }
+.eba-vl-st .nr { fill: var(--eba-text); font-size: 12px; font-weight: 700; }
+.eba-vl-st.jetzt .grund { stroke: var(--vl-ak); stroke-width: 2; }
+.eba-vl-st.vorbei .grund { fill: var(--vl-ak); stroke: var(--vl-ak); }
+.eba-vl-st.vorbei .nr { fill: var(--eba-card-bg); }
+.eba-vl-st.spaeter .nr { fill: var(--eba-muted); }
+.eba-vl-stname { fill: var(--eba-text); font-size: 13px; font-weight: 600; }
+.eba-vl-stects { fill: var(--eba-muted); font-size: 11px; }
+.eba-vl-st.gewaehlt .eba-vl-stname { fill: var(--vl-ak-t); }
+.eba-vl-ms rect { fill: var(--eba-card-bg); stroke: var(--eba-warn); stroke-width: 1.6; }
+.eba-vl-ms.ok rect { fill: var(--eba-warn); }
+.eba-vl-ms.option rect { stroke: var(--eba-muted); stroke-dasharray: 2 2; }
+.eba-vl-ms text { fill: var(--vl-ocker-t); font-weight: 600; letter-spacing: 0.02em; }
+.eba-vl-ms.option text { fill: var(--eba-muted); font-weight: 500; }
 .eba-vl-ms[data-pfad] { cursor: pointer; }
-.eba-vl-ziel .hof { fill: rgba(233, 192, 106, 0.16); }
-.eba-vl-ziel .grund { fill: var(--vl-tief); stroke: var(--vl-gold); stroke-width: 2; }
-.eba-vl-ziel.ok .grund { fill: var(--vl-gold); }
-.eba-vl-ziel .hut { fill: var(--vl-gold); }
-.eba-vl-ziel.ok .hut { fill: var(--vl-tief); }
-.eba-vl-ziel .quaste { fill: none; stroke: var(--vl-gold); stroke-width: 1.4; stroke-linecap: round; }
-.eba-vl-ziel .eba-vl-stname { fill: var(--vl-gold); }
+.eba-vl-ziel .hof { fill: var(--vl-oSoft); }
+.eba-vl-ziel .grund { fill: var(--eba-card-bg); stroke: var(--eba-warn); stroke-width: 2; }
+.eba-vl-ziel.ok .grund { fill: var(--eba-warn); }
+.eba-vl-ziel .hut { fill: var(--eba-warn); }
+.eba-vl-ziel.ok .hut { fill: var(--eba-card-bg); }
+.eba-vl-ziel .quaste { fill: none; stroke: var(--eba-warn); stroke-width: 1.4; stroke-linecap: round; }
+.eba-vl-ziel .eba-vl-stname { fill: var(--vl-ocker-t); }
 .eba-vl .eba-vl-ziel .hof { transform-box: fill-box; transform-origin: center; animation: eba-vl-atmen 3.2s ease-in-out infinite; }
-.eba-vl-nadel .kopf { fill: var(--vl-gold); stroke: var(--vl-creme); stroke-width: 1.2; }
-.eba-vl-nadel .auge { fill: var(--vl-tief); }
-.eba-vl-nadel .welle { fill: none; stroke: var(--vl-gold); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; animation: eba-vl-welle 2.4s ease-out infinite; }
+.eba-vl-nadel .kopf { fill: var(--vl-ak); stroke: var(--eba-card-bg); stroke-width: 1.2; }
+.eba-vl-nadel .auge { fill: var(--eba-card-bg); }
+.eba-vl-nadel .welle { fill: none; stroke: var(--vl-ak); stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: center; animation: eba-vl-welle 2.4s ease-out infinite; }
 .eba-vl-nadel .welle.w2 { animation-delay: 1.2s; }
-.eba-vl-nadel .schild rect { fill: var(--vl-creme); }
-.eba-vl-nadel .schild text { fill: var(--vl-tief); font-size: 11px; font-weight: 700; }
-@keyframes eba-vl-welle { 0% { transform: scale(0.6); opacity: 0.9; } 100% { transform: scale(2.6); opacity: 0; } }
+.eba-vl-nadel .schild rect { fill: var(--vl-ak); }
+.eba-vl-nadel .schild text { fill: var(--eba-card-bg); font-size: 11px; font-weight: 600; }
+@keyframes eba-vl-welle { 0% { transform: scale(0.6); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }
 @keyframes eba-vl-atmen { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.18); opacity: 0.55; } }
 @keyframes eba-vl-puls { 0% { transform: scale(0.8); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
 
-/* Semester-Puls: eine Perle je Woche */
-.eba-vl-pulskopf { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-top: 8px; font-size: 12.5px; color: var(--vl-creme2); }
-.eba-vl-pulskopf b { color: var(--vl-creme); }
-.eba-vl-puls { display: flex; gap: 3px; margin-top: 6px; padding-bottom: 15px; }
-.eba-vl-perle { position: relative; flex: 1 1 0; min-width: 0; height: 12px; border-radius: 3px; background: var(--vl-creme4); }
-.eba-vl-perle.vl { background: rgba(251, 245, 231, 0.3); }
-.eba-vl-perle.pause { background: repeating-linear-gradient(135deg, rgba(251, 245, 231, 0.26) 0 2px, transparent 2px 4px); }
-.eba-vl-perle.pruef { background: rgba(233, 192, 106, 0.5); }
-.eba-vl-perle.pruef.geschaetzt { background: repeating-linear-gradient(135deg, rgba(233, 192, 106, 0.6) 0 2.5px, rgba(233, 192, 106, 0.2) 2.5px 5px); }
-.eba-vl-perle.vorbei { background: var(--vl-gold); }
-.eba-vl-perle.jetzt { background: var(--vl-gold); box-shadow: 0 0 0 2px var(--vl-tief), 0 0 0 3.5px var(--vl-gold); animation: eba-vl-perle 1.8s ease-in-out infinite; }
-@keyframes eba-vl-perle { 50% { box-shadow: 0 0 0 2px var(--vl-tief), 0 0 0 3.5px rgba(233, 192, 106, 0.25), 0 0 12px 3px rgba(233, 192, 106, 0.45); } }
-.eba-vl-perle em { position: absolute; top: 14px; left: 0; font-style: normal; font-size: 9.5px; line-height: 1; color: var(--vl-creme3); white-space: nowrap; }
+/* Semester-Puls: eine Perle je Woche, Farben wie die Semesterleiste des Dashboards */
+.eba-vl-pulskopf { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; margin-top: 10px; font-size: 12px; color: var(--eba-muted); }
+.eba-vl-pulskopf b { color: var(--eba-text); }
+.eba-vl-puls { display: flex; gap: 3px; margin-top: 8px; padding-bottom: 15px; }
+/* Füllung als ::before, damit „vorbei“ blass wird, die Monatsnamen darunter aber gut lesbar bleiben */
+.eba-vl-perle { position: relative; flex: 1 1 0; min-width: 0; height: 14px; border-radius: var(--vl-rad); --pf: var(--vl-frei); }
+.eba-vl-perle::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--pf); }
+.eba-vl-perle.vl { --pf: var(--vl-salbei); }
+.eba-vl-perle.pause { --pf: var(--vl-ferien); }
+.eba-vl-perle.pruef { --pf: var(--vl-ocker); }
+.eba-vl-perle.pruef.geschaetzt { --pf: repeating-linear-gradient(135deg, var(--vl-ocker) 0 2.5px, var(--vl-ocker2) 2.5px 5px); }
+.eba-vl-perle.vorbei::before { opacity: 0.38; }
+.eba-vl-perle.jetzt { box-shadow: 0 0 0 1.5px var(--eba-card-bg), 0 0 0 3px var(--eba-text); animation: eba-vl-perle 1.8s ease-in-out infinite; }
+@keyframes eba-vl-perle { 50% { box-shadow: 0 0 0 1.5px var(--eba-card-bg), 0 0 0 3px var(--eba-text), 0 0 0 6px var(--vl-spur); } }
+.eba-vl-perle em { position: absolute; top: 17px; left: 0; font-style: normal; font-size: 10px; line-height: 1; color: var(--eba-muted); white-space: nowrap; }
 
-/* Kacheln */
+/* Kacheln wie die Kennzahlen des Dashboards (.eba-kachel) */
 /* zwei Kacheln (ECTS, Orientierungsprüfung) nebeneinander, auch schmal; Nächste Prüfung und Note stehen auf dem Dashboard */
-.eba-vl-kacheln { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
-.eba-vl-kachel { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 9px 12px 10px; border-radius: calc(var(--eba-radius) + 4px); background: rgba(255, 255, 255, 0.07); border: 1px solid rgba(255, 255, 255, 0.13); }
+.eba-vl-kacheln { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--eba-gap, 12px); margin-top: 8px; }
+.eba-vl-kachel { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 14px 16px 14px; border-radius: var(--eba-radius); background: var(--eba-card-bg); border: 1px solid var(--eba-border); }
+.theme-light .eba-vl-kachel { border-top: 2px solid var(--eba-text); }
 .eba-vl-kachel .k { overflow: hidden; text-overflow: ellipsis; }
 .eba-vl-kachel[data-pfad] { cursor: pointer; transition: background-color 0.2s; }
-.eba-vl-kachel[data-pfad]:hover { background: rgba(255, 255, 255, 0.13); }
-.eba-vl-kachel .v { font-family: var(--eba-font-display); font-weight: var(--eba-display-weight); font-size: 1.75em; line-height: 1.1; color: var(--vl-creme); white-space: nowrap; }
-.eba-vl-kachel .v b { font-weight: inherit; color: var(--vl-gold); }
-.eba-vl-kachel .v small { font-size: 0.55em; color: var(--vl-creme2); letter-spacing: 0; }
-.eba-vl-kachel .s { font-size: 12px; color: var(--vl-creme2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eba-vl-mini { position: relative; display: block; height: 4px; margin: 3px 0 2px; border-radius: 99px; background: var(--vl-creme4); overflow: hidden; }
+.eba-vl-kachel[data-pfad]:hover { background: var(--vl-soft); }
+.eba-vl-kachel .v { font-family: var(--eba-font-display); font-weight: var(--eba-display-weight); font-size: 1.85em; line-height: 1.15; letter-spacing: -0.02em; color: var(--eba-text); white-space: nowrap; }
+.eba-vl-kachel .v b { font-weight: inherit; color: inherit; }
+.eba-vl-kachel .v small { font-size: 0.5em; font-weight: 500; color: var(--eba-muted); letter-spacing: 0; margin-left: 2px; }
+.eba-vl-kachel .s { font-size: 12px; color: var(--eba-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eba-vl-mini { position: relative; display: block; height: var(--eba-bar-h, 4px); margin: 4px 0 2px; border-radius: 99px; background: var(--vl-spur); overflow: hidden; }
 .eba-vl-mini i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 99px; }
-.eba-vl-mini i.plan { background: rgba(233, 192, 106, 0.4); }
-.eba-vl-mini i.ist { background: var(--vl-gold); }
+.eba-vl-mini i.plan { background: var(--vl-salbei); }
+.eba-vl-mini i.ist { background: var(--vl-ak); }
 .eba-vl-op { display: flex; gap: 5px; margin: 4px 0 2px; }
-.eba-vl-op i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--vl-gold); }
-.eba-vl-op i.ok { background: var(--vl-gold); }
+.eba-vl-op i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--vl-ak); }
+.eba-vl-op i.ok { background: var(--vl-ak); }
 
 /* Fuß der Reise */
-.eba-vl-fuss { display: flex; flex-wrap: wrap; gap: 3px 18px; margin-top: 10px; font-size: 12.5px; color: var(--vl-creme2); }
-.eba-vl-fuss b { color: var(--vl-creme); font-weight: 600; }
+.eba-vl-fuss { display: flex; flex-wrap: wrap; gap: 3px 18px; margin-top: 12px; font-size: 12.5px; color: var(--eba-muted); }
+.eba-vl-fuss b { color: var(--eba-text); font-weight: 600; }
 .eba-vl-fuss i { display: inline-block; margin-right: 7px; vertical-align: 1px; }
-.eba-vl-fuss i.raute { width: 7px; height: 7px; transform: rotate(45deg); border: 1.5px solid var(--vl-gold); }
-.eba-vl-fuss i.flagge { width: 8px; height: 8px; border-radius: 50%; background: var(--vl-gold); }
+.eba-vl-fuss i.raute { width: 7px; height: 7px; transform: rotate(45deg); border: 1.5px solid var(--eba-warn); }
+.eba-vl-fuss i.flagge { width: 8px; height: 8px; border-radius: 50%; background: var(--vl-ak); }
 
 /* ---- Lupe: gewähltes Semester ---- */
-.eba-vl-lupe { padding: 14px 20px 8px; }
+.eba-vl-lupe { padding: 14px 22px 8px; }
 .eba-vl-lupe.neu { animation: eba-vl-auf 0.35s ease-out; }
 .eba-vl-lkopf { display: flex; flex-direction: column; gap: 3px; }
 .eba-vl-ltitel { display: flex; flex-direction: column; gap: 1px; font-family: var(--eba-font-display); font-weight: var(--eba-display-weight); font-size: 1.2em; }
@@ -3348,39 +3437,39 @@ body:not(.is-phone) .markdown-preview-view.eba-s-vorlesung .markdown-preview-siz
 .eba-vl-lects b { color: var(--eba-text); }
 .eba-vl-ldaten { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 2px 14px; font-size: 12px; color: var(--eba-muted); }
 .eba-vl-leg { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
-.eba-vl-leg > i { position: static; display: inline-block; width: 12px; height: 8px; border-radius: 1px; background: var(--vl-frei); }
+.eba-vl-leg > i { position: static; display: inline-block; width: 10px; height: 10px; border-radius: var(--vl-rad); background: var(--vl-frei); }
 .eba-vl-b { position: absolute; top: 0; bottom: 0; display: block; overflow: hidden; }
-.eba-vl-b.vl { background: var(--vl-vl); }
-.eba-vl-b.pause { background: repeating-linear-gradient(135deg, var(--vl-frei) 0 2px, color-mix(in srgb, var(--eba-text) 10%, var(--eba-card-bg)) 2px 4px); }
-.eba-vl-b.pruef { background: var(--vl-pr); }
-.eba-vl-b.pruef.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-pr) 0 3px, color-mix(in srgb, var(--eba-warn) 18%, var(--eba-card-bg)) 3px 6px); }
+.eba-vl-b.vl { background: var(--vl-salbei); }
+.eba-vl-b.pause { background: var(--vl-ferien); }
+.eba-vl-b.pruef { background: var(--vl-ocker); }
+.eba-vl-b.pruef.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-ocker) 0 3px, var(--vl-ocker2) 3px 6px); }
 .eba-vl-weg { position: absolute; left: 0; top: 0; bottom: 0; width: var(--w); background: var(--vl-ak); border-radius: inherit; }
 .eba-vl-hierpunkt { position: absolute; top: 50%; z-index: 3; width: 0; height: 0; }
 .eba-vl-hierpunkt i { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: var(--vl-ak); border: 2.5px solid var(--eba-card-bg); box-shadow: 0 0 0 1px var(--vl-ak); }
 .eba-vl-hierpunkt i::after { content: ""; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--vl-ak); opacity: 0; animation: eba-vl-puls 2.6s ease-out infinite; }
 .eba-vl-fahnen { position: relative; height: 30px; margin-top: 8px; }
 .eba-vl-fahne { position: absolute; bottom: 0; --stufe: 0; height: calc(13px + var(--stufe) * 19px + 5px); width: 0; cursor: pointer; }
-.eba-vl-fahne .mast { position: absolute; z-index: 0; left: -0.5px; bottom: 0; top: 0; width: 1px; background: color-mix(in srgb, var(--eba-text) 45%, transparent); }
-.eba-vl-fahne .tuch { position: absolute; z-index: 1; top: 0; left: 0; padding: 1px 6px 1px 5px; font-size: 11px; font-weight: 600; line-height: 14px; white-space: nowrap; color: var(--eba-text); background: var(--eba-card-bg); border: 1px solid color-mix(in srgb, var(--eba-text) 30%, transparent); border-left-width: 2px; border-left-color: var(--eba-text); border-radius: 0 2px 2px 0; }
-.eba-vl-fahne.links .tuch { left: auto; right: 0; border-left-width: 1px; border-left-color: color-mix(in srgb, var(--eba-text) 30%, transparent); border-right-width: 2px; border-right-color: var(--eba-text); border-radius: 2px 0 0 2px; }
+.eba-vl-fahne .mast { position: absolute; z-index: 0; left: -0.5px; bottom: 0; top: 0; width: 1px; background: var(--vl-mast); }
+.eba-vl-fahne .tuch { position: absolute; z-index: 1; top: 0; left: 0; padding: 1px 6px 1px 5px; font-size: 11px; font-weight: 600; line-height: 14px; white-space: nowrap; color: var(--eba-text); background: var(--eba-card-bg); border: 1px solid var(--eba-border-strong); border-left-width: 2px; border-left-color: var(--eba-text); border-radius: 0 var(--vl-rad) var(--vl-rad) 0; }
+.eba-vl-fahne.links .tuch { left: auto; right: 0; border-left-width: 1px; border-left-color: var(--eba-border-strong); border-right-width: 2px; border-right-color: var(--eba-text); border-radius: var(--vl-rad) 0 0 var(--vl-rad); }
 .eba-vl-fahne.test .tuch { font-weight: 500; color: var(--eba-muted); }
-.eba-vl-fahne.naechste .tuch { color: var(--eba-warn); border-color: color-mix(in srgb, var(--eba-warn) 45%, transparent); border-left-color: var(--eba-warn); }
-.eba-vl-fahne.naechste.links .tuch { border-left-color: color-mix(in srgb, var(--eba-warn) 45%, transparent); border-right-color: var(--eba-warn); }
+.eba-vl-fahne.naechste .tuch { color: var(--vl-ocker-t); border-color: var(--vl-ocker); border-left-color: var(--eba-warn); }
+.eba-vl-fahne.naechste.links .tuch { border-left-color: var(--vl-ocker); border-right-color: var(--eba-warn); }
 .eba-vl-fahne.naechste .mast { background: var(--eba-warn); }
 .eba-vl-fahne.vorbei { opacity: 0.55; }
 .eba-vl-fahne.erledigt .tuch { color: var(--eba-good); border-left-color: var(--eba-good); }
 .eba-vl-fahne.hier { cursor: default; }
-.eba-vl-fahne.hier .tuch { z-index: 2; color: var(--eba-bg); background: var(--vl-ak); border-color: var(--vl-ak); }
+.eba-vl-fahne.hier .tuch { z-index: 2; color: var(--eba-card-bg); background: var(--vl-ak); border-color: var(--vl-ak); }
 .eba-vl-fahne.hier .mast { background: var(--vl-ak); width: 2px; left: -1px; }
-.eba-vl-lband { position: relative; height: 18px; border-radius: 2px; background: var(--vl-frei); }
+.eba-vl-lband { position: relative; height: 18px; border-radius: var(--vl-rad); background: var(--vl-frei); }
 .eba-vl-lband .eba-vl-weg { height: 3px; }
 .eba-vl-lband .eba-vl-hierpunkt { top: 1.5px; }
 .eba-vl-monate { position: relative; height: 18px; margin-bottom: 4px; }
-.eba-vl-monate span { position: absolute; top: 0; padding-left: 4px; border-left: 1px solid color-mix(in srgb, var(--eba-text) 18%, transparent); font-size: 10.5px; line-height: 16px; color: var(--eba-faint); white-space: nowrap; }
+.eba-vl-monate span { position: absolute; top: 0; padding-left: 4px; border-left: 1px solid var(--eba-border-strong); font-size: 10.5px; line-height: 16px; color: var(--eba-muted); white-space: nowrap; }
 
 /* Module des gewählten Semesters */
-.eba-vl-module { margin-top: 6px; border-top: 1px solid color-mix(in srgb, var(--eba-accent) 16%, var(--eba-border)); }
-.eba-vl-mz { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid color-mix(in srgb, var(--eba-text) 7%, transparent); cursor: pointer; }
+.eba-vl-module { margin-top: 6px; border-top: 1px solid var(--eba-border-strong); }
+.eba-vl-mz { display: grid; grid-template-columns: 58px minmax(0, 1fr) auto; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--eba-border); cursor: pointer; }
 .eba-vl-mz:last-child, .eba-vl-mehr:last-child .eba-vl-mz:last-child { border-bottom: 0; }
 .eba-vl-mz:hover .eba-vl-mtitel { color: var(--vl-ak-t); }
 .eba-vl-mcode { font-weight: 600; font-size: 13px; }
@@ -3389,23 +3478,23 @@ body:not(.is-phone) .markdown-preview-view.eba-s-vorlesung .markdown-preview-siz
 .eba-vl-mmeta .eba-pill { font-size: 11px; }
 .eba-vl-mpr b { font-weight: 600; color: var(--eba-text); }
 .eba-vl-mpr { min-width: 150px; text-align: right; }
-.eba-vl-offen { color: var(--eba-faint); }
+.eba-vl-offen { color: var(--eba-muted); }
 .eba-vl-mz.fertig .eba-vl-mcode { color: var(--eba-good); }
 .eba-vl-mz.zusatz { opacity: 0.6; }
-.eba-vl-mehr > summary { list-style: none; padding: 7px 0; font-size: 12.5px; color: var(--eba-muted); cursor: pointer; border-bottom: 1px solid color-mix(in srgb, var(--eba-text) 7%, transparent); }
+.eba-vl-mehr > summary { list-style: none; padding: 7px 0; font-size: 12.5px; color: var(--eba-muted); cursor: pointer; border-bottom: 1px solid var(--eba-border); }
 .eba-vl-mehr > summary::-webkit-details-marker { display: none; }
 .eba-vl-mehr > summary::before { content: ""; display: inline-block; width: 5px; height: 5px; margin: 0 9px 2px 2px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform 0.15s; }
 .eba-vl-mehr[open] > summary::before { transform: rotate(45deg); }
 .eba-vl-mehr .eba-vl-mz { opacity: 0.8; }
 .eba-vl-leer { padding: 8px 0 4px; color: var(--eba-muted); font-size: 13px; }
-.eba-vl-link { color: var(--vl-ak-t); cursor: pointer; text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--eba-accent) 35%, transparent); text-underline-offset: 2px; }
+.eba-vl-link { color: var(--vl-ak-t); cursor: pointer; text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-underline-offset: 2px; }
 
 /* ---- Schmal (iPhone, geteiltes iPad) ---- */
 @container eba-vl (max-width: 560px) {
-  .eba-vl-reise { padding: 14px 14px 12px; }
+  .eba-vl-reise { padding: 14px 14px 14px; }
   .eba-vl-oben { gap: 6px 10px; }
   .eba-vl-ort { font-size: 12.5px; }
-  .eba-vl-tag { margin-top: 7px; gap: 0 10px; }
+  .eba-vl-tag { margin-top: 8px; gap: 0 10px; }
   .eba-vl-tag .gross { font-size: 2.15em; }
   .eba-vl-tag .unter { font-size: 12.5px; }
   .eba-vl-spruch { font-size: 14px; }
@@ -3415,18 +3504,22 @@ body:not(.is-phone) .markdown-preview-view.eba-s-vorlesung .markdown-preview-siz
   .eba-vl-stname { font-size: 11px; }
   .eba-vl-stects { font-size: 9.5px; }
   .eba-vl-nadel .schild text { font-size: 10px; }
-  .eba-vl-pulskopf { margin-top: 4px; font-size: 12px; }
-  .eba-vl-puls { gap: 2.5px; }
-  .eba-vl-perle { height: 11px; border-radius: 2.5px; }
-  .eba-vl-kacheln { gap: 7px; margin-top: 8px; }
-  .eba-vl-kachel { padding: 8px 10px 9px; }
-  .eba-vl-kachel .v { font-size: 1.55em; }
+  .eba-vl-pulskopf { margin-top: 6px; font-size: 12px; }
+  .eba-vl-puls { gap: 2px; }
+  .eba-vl-perle { height: 13px; }
+  .eba-vl-kacheln { gap: 8px; margin-top: 6px; }
+  .eba-vl-kachel { padding: 10px 11px 11px; }
+  /* „Orientierungsprüfung“ ganz zeigen: Label wie auf dem Dashboard-iPhone 10 px, etwas weniger gesperrt; reicht es trotzdem
+     nicht (sehr schmal), Silbentrennung statt „…“ */
+  .eba-vl-kachel .k { font-size: 10px; letter-spacing: 0.03em; white-space: normal; overflow: visible; overflow-wrap: normal; -webkit-hyphens: auto; hyphens: auto; }
+  .eba-vl-kachel .v { font-size: 1.6em; }
   .eba-vl-kachel .s { font-size: 11.5px; }
-  .eba-vl-fuss { flex-direction: column; gap: 3px; font-size: 12px; margin-top: 9px; }
-  .eba-vl-lupe { padding: 12px 12px 4px; }
+  .eba-vl-fuss { flex-direction: column; gap: 3px; font-size: 12px; margin-top: 10px; }
+  .eba-vl-lupe { padding: 12px 14px 4px; }
   .eba-vl-ltitel { font-size: 1.1em; }
   .eba-vl-ldaten { gap: 1px 10px; font-size: 11.5px; }
   .eba-vl-mz { grid-template-columns: 50px minmax(0, 1fr); gap: 2px 8px; padding: 6px 0; }
+  .eba-vl-mtitel { white-space: normal; overflow: visible; line-height: 1.3; } /* lange Modultitel umbrechen statt „…“ */
   .eba-vl-mmeta { grid-column: 2; justify-content: flex-start; gap: 8px; font-size: 12px; }
   .eba-vl-mpr { min-width: 0; text-align: left; }
   .eba-vl-mmeta .eba-vl-mects { order: 3; margin-left: auto; }

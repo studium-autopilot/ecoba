@@ -209,7 +209,7 @@ Kurze Anleitungen zum Nachschlagen: Karte antippen, dann klappt sie auf.
 > > > 1. Ordner in Obsidian **als Vault öffnen** (Name egal).
 > > > 2. **Vertrauen und Plugins aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
 > > > 3. Unter [[#Verbindungen]] Alma verbinden. Der Link gilt nur für dieses Gerät.
-> > > 4. **Mehrere Geräte (optional):** z. B. Obsidian Sync einrichten, Einstellungen und Plugins mit abgleichen.
+> > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Vertrauen** tippen.
 > >
 > > > [!eba-info] Unterschiede je Gerät
 > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>. Schriften: Segoe UI, bei Paper Georgia.

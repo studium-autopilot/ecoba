@@ -10,16 +10,20 @@ Geprüft wird jede Datei unter BAUM (Standard: aktueller Ordner), außer .git/ u
 * Pfade: keine privaten Ordner, keine gerätelokalen Obsidian-Dateien, nur das Plugin „studium-autopilot“.
 * Dateitypen: keine PDF-, Office-, Anki-, Archiv- oder Mediendateien; Bilder nur in docs/bilder/ (png, jpg, svg, webp);
   höchstens --max-mb je Datei.
+* Markdown: keine Mermaid-Codeblöcke (die GitHub-App zeigt nur den Code; Diagramme als PNG unter docs/bilder/).
 * Inhalte: persönliche Pfade, Server-Hinweise, IP-Adressen, E-Mail-Adressen (außer Funktionsadressen der Uni und
   GitHub-noreply), Telefonnummern, geteilte Lehrmaterial-Links, Zugangsdaten und Token, Sync-Konfiguration, der Name des
   Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur lokal).
 * Vorlage leer: persönliche Felder der Module und Einstellungen leer, persönliche Ordner leer.
+* Update-Liste: System/Daten/system-dateien.json (falls vorhanden) passt zu den Dateien (Klasse, Größe, SHA-256) und
+  enthält jede Datei, die ein Update ersetzen darf (Regeln wie update.js, klasse_von unten).
 * JavaScript: Syntax mit „node --check“ (wenn node da ist) und iOS-Regeln (kein Regex-Lookbehind, kein .at(), findLast,
   structuredClone, keine Node-Module) für die Skripte des Vaults.
 
 Ausgabe: eine lesbare Liste; Exit-Code 1 bei mindestens einem Fund, sonst 0.
 """
 import argparse
+import hashlib
 import json
 import os
 import plistlib
@@ -28,6 +32,7 @@ import shutil
 import struct
 import subprocess
 import sys
+import unicodedata
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Regeln. Einige Muster sind absichtlich zerlegt geschrieben, damit diese Datei sich selbst nicht meldet.
@@ -85,6 +90,9 @@ BILD_ERLAUBT = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
 BILD_ORDNER = "docs/bilder/"
 
 IGNORIERTE_ORDNER = {".git", "node_modules"}
+MERMAID = re.compile(r"^ {0,3}(?:`{3,}|~{3,})[ \t]*mermaid(?![\w-])", re.I)  # Codeblock ```mermaid in Markdown
+SVG_ZAHLEN = re.compile(r"""(\b(?:d|points|viewBox|transform)\s*=\s*)(?:"[^"]*"|'[^']*')""")  # Pfaddaten in .svg
+HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 
 # Persönliche Ordner der Vorlage (müssen leer sein, höchstens .gitkeep)
 LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen"]
@@ -193,6 +201,8 @@ def text_pruefen(rel, text, sperre, funde):
     for nr, zeile in enumerate(text.splitlines(), 1):
         if md and zeile.startswith("#"):
             abschnitt = zeile
+        if md and MERMAID.match(zeile):
+            funde.append(Fund(rel, nr, "Mermaid-Diagramm (GitHub-App zeigt nur den Code; Bild unter docs/bilder/)", kuerzen(zeile)))
         if len(zeile) > 20000:
             zeile = zeile[:20000]
         for regel, rx in INHALT_REGELN:
@@ -411,6 +421,106 @@ def vorlage_pruefen(wurzel, alle, funde):
 
 
 # ---------------------------------------------------------------------------------------------------------------------
+# Update-Liste (system-dateien.json): Dateiklassen wie System/Skripte/update.js (klasseVon) – beide gleich halten!
+# ---------------------------------------------------------------------------------------------------------------------
+
+LISTE = "System/Daten/system-dateien.json"
+KERN = ".obsidian/plugins/studium-autopilot/"
+KERN_DATEIEN = ("main.js", "manifest.json", "styles.css")
+EINSTELLUNG = (".obsidian/app.json", ".obsidian/bookmarks.json", ".obsidian/community-plugins.json",
+               ".obsidian/core-plugins.json", ".obsidian/hotkeys.json", ".obsidian/types.json")
+_PFAD_VERBOTEN = re.compile(r'[\x00-\x1f\x7f\\:*?"<>|]')
+_FM = re.compile(r"^(---\r?\n)([\s\S]*?)(\r?\n---[ \t]*(?:\r?\n|\Z))")
+_HAKEN = re.compile(r"^([ \t>]*[-*+] \[)[xX](\])", re.M)
+_AUFGABE = re.compile(r"^[ \t>]*[-*+] \[[ xX]\]", re.M)
+
+
+def pfad_ok(p):
+    if not p or len(p) > 300 or _PFAD_VERBOTEN.search(p) or p.startswith("/"):
+        return False
+    return all(t and t not in (".", "..", ".trash") and not t.endswith((" ", ".")) for t in p.split("/"))
+
+
+def klasse_von(pfad):
+    """Pfad im Vault → "system" | "einstellung" | "seite" | "modul" | "" (nie im Update)."""
+    p = unicodedata.normalize("NFC", pfad)
+    if not pfad_ok(p):
+        return ""
+    if p.startswith(KERN):
+        return "system" if p[len(KERN):] in KERN_DATEIEN else ""
+    if re.fullmatch(r"System/Skripte/[^/]+\.js", p) or re.fullmatch(r"System/Gerüste/[^/]+\.md", p):
+        return "system"
+    if re.fullmatch(r"\.obsidian/snippets/eba-[^/]+\.css", p):
+        return "system"
+    if p in EINSTELLUNG:
+        return "einstellung"
+    if p in ("Dashboard.md", "System/Daten/Musterplan.md") or re.fullmatch(r"Studium/[^/]+\.md", p):
+        return "seite"
+    if re.fullmatch(r"Module/.+\.md", p, re.S):
+        return "modul"
+    return ""
+
+
+def _sha(b):
+    return hashlib.sha256(b).hexdigest()
+
+
+def listen_eintrag(rel, daten):
+    """Eintrag der Update-Liste für eine Datei (rel im Vault, daten = Bytes)."""
+    k = klasse_von(rel)
+    e = {"pfad": unicodedata.normalize("NFC", rel), "klasse": k, "groesse": len(daten), "sha256": _sha(daten)}
+    if k == "modul":
+        text = daten.decode("utf-8")
+        m = _FM.match(text)
+        e["koerper"] = _sha((text[m.end():] if m else text).encode("utf-8"))
+    elif k == "seite":
+        text = daten.decode("utf-8")
+        if _AUFGABE.search(text):
+            e["ohne_haken"] = _sha(_HAKEN.sub(r"\1 \2", text).encode("utf-8"))
+    return e
+
+
+def liste_pruefen(wurzel, alle, vault, funde):
+    """vault = Präfix des Vaults im Baum (z. B. "Studium Autopilot/")."""
+    rel_liste = vault + LISTE
+    if rel_liste not in alle:
+        return
+    try:
+        with open(os.path.join(wurzel, rel_liste), encoding="utf-8") as f:
+            d = json.load(f)
+    except (OSError, ValueError) as e:
+        funde.append(Fund(rel_liste, 0, "Update-Liste unlesbar", kuerzen(str(e))))
+        return
+    gelistet = set()
+    for e in d.get("dateien", []):
+        innen = str(e.get("pfad", ""))
+        if not e.get("klasse") or klasse_von(innen) != e.get("klasse"):
+            funde.append(Fund(rel_liste, 0, "Update-Liste: Klasse falsch", f"{innen}: {e.get('klasse')}"))
+            continue
+        pfad = os.path.join(wurzel, *(vault + innen).split("/"))
+        if not os.path.isfile(pfad):
+            funde.append(Fund(rel_liste, 0, "Update-Liste: Datei fehlt", innen))
+            continue
+        with open(pfad, "rb") as f:
+            soll = listen_eintrag(innen, f.read())
+        if {k: e.get(k) for k in soll} != soll or set(e) - set(soll):
+            funde.append(Fund(rel_liste, 0, "Update-Liste: Prüfsumme/Größe falsch", innen))
+        gelistet.add(unicodedata.normalize("NFC", innen))
+    for r in alle:
+        if r.startswith(vault):
+            innen = unicodedata.normalize("NFC", r[len(vault):])
+            if klasse_von(innen) and innen not in gelistet:
+                funde.append(Fund(rel_liste, 0, "Update-Liste: Datei fehlt in der Liste", innen))
+    try:
+        with open(os.path.join(wurzel, vault + KERN + "manifest.json"), encoding="utf-8") as f:
+            v = json.load(f)["version"]
+        if d.get("version") != v:
+            funde.append(Fund(rel_liste, 0, "Update-Liste: Version passt nicht zum Plugin", f"{d.get('version')} ≠ {v}"))
+    except (OSError, ValueError, KeyError):
+        pass
+
+
+# ---------------------------------------------------------------------------------------------------------------------
 # Pfade und Dateitypen
 # ---------------------------------------------------------------------------------------------------------------------
 
@@ -433,6 +543,8 @@ def pfad_pruefen(rel, groesse, max_bytes, funde):
                 funde.append(Fund(rel, 0, "Plugin-Einstellungen (gerätelokal)", name))
     if rel.endswith("System/Daten/abruf.json"):
         funde.append(Fund(rel, 0, "gerätelokale Datei", "abruf.json"))
+    if rel.endswith("System/Daten/installiert.json"):
+        funde.append(Fund(rel, 0, "vaultlokale Datei (Update-Stand)", "installiert.json"))
     if name in (".DS_Store", "Thumbs.db", "desktop.ini") or name.startswith("~$"):
         funde.append(Fund(rel, 0, "Systemdatei", name))
     if endung in VERBOTENE_ENDUNGEN:
@@ -492,7 +604,12 @@ def pruefen(wurzel, sperre, max_bytes, ohne_node=False):
                 funde.append(Fund(rel, 0, "Binärdatei", "unbekannter Inhalt"))
             continue
         text = roh.decode("utf-8", errors="replace")
-        text_pruefen(rel, text, sperre, funde)
+        # SHA-256-Werte (z. B. in system-dateien.json) sind keine Telefonnummern o. ä.
+        geprueft = HEX64.sub("#" * 64, text)
+        if endung == ".svg":
+            # Zahlenreihen in Pfaddaten (d, points, viewBox, transform) sind keine Telefonnummern o. Ä.
+            geprueft = SVG_ZAHLEN.sub(lambda m: m.group(1) + '""', geprueft)
+        text_pruefen(rel, geprueft, sperre, funde)
         if endung == ".json":
             try:
                 json.loads(text)
@@ -503,6 +620,8 @@ def pruefen(wurzel, sperre, max_bytes, ohne_node=False):
             if ist_vault_js(rel):
                 ios_pruefen(rel, text, funde)
     vaults = vorlage_pruefen(wurzel, alle, funde)
+    for v in vaults:
+        liste_pruefen(wurzel, alle, v, funde)
     node_pruefen(js, wurzel, funde, hinweise, ohne_node)
     return alle, funde, hinweise, vaults, js
 

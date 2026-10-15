@@ -22,6 +22,9 @@ Willkommen für:
 
 **Nicht** für zentrale Daten (Termine, Fristen, Semesterdaten): Die kommen aus dem automatischen Abgleich und liegen in `studium-autopilot/ecoba-daten`. Änderungen dort würden beim nächsten Lauf überschrieben. Melde falsche Termine stattdessen per Issue.
 
+Für Texte und Doku gilt: Keine Mermaid-Diagramme in Markdown, das auf GitHub gelesen wird – die GitHub-App zeigt nur den Code.
+Diagramme als PNG unter `docs/bilder/`. `werkzeuge/pruefen.py` meldet einen ```` ```mermaid ````-Block als Fund.
+
 Für Code gilt: Er muss auf iPhone und iPad laufen. Die Regeln für Skripte stehen in [docs/architektur.md](docs/architektur.md) („Regeln für Skript-Autoren“).
 
 ## Keine Lehrmaterialien

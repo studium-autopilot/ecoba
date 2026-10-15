@@ -1,6 +1,6 @@
 # Architektur: Plugin „Studium Autopilot“
 
-Stand: Phase 2c und Datenkanal (15.10.2026). Ersetzt Templater vollständig. Zielgruppe: Entwickler, die den Vault weiterbauen.
+Stand: Phase 2c, Datenkanal und Update-Knopf (0.2.0, 15.10.2026). Ersetzt Templater vollständig. Zielgruppe: Entwickler, die den Vault weiterbauen.
 Getestet mit Obsidian 1.14.4 (API-Version); `manifest.json` verlangt darum `minAppVersion` 1.14.4. Erst senken, wenn ältere
 Versionen getestet sind.
 
@@ -121,12 +121,14 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `personalisieren.js` | Karte `eba-personalisieren`, Formular (Aktion `personalisieren`) |
 | `musterplan.js` | Musterstudienpläne als eigene Darstellung, Codeblock `eba-musterplan` |
 | `zentral.js` | Datenkanal „Zentrale Daten“: Abruf, Prüfung, Übernahme als Termin-Notizen, Semesterdaten, Abrufer-Sperre (`ctx.zentral`), Aktionen `zentral-aktualisieren`, `zentral-schalter` |
+| `update.js` | Update der Vorlage mit einem Knopf (seit 0.2.0, `ctx.update`): Zeile „Studium Autopilot“ in `eba-verbindungen`, Aktionen `vorlage-aktualisieren`, `vorlage-neu-laden`; siehe „Update“ |
 
 Beim Start schreibt das Plugin keine Datei. Die Agenda (`eba-agenda`) wird live gerendert, wie der Kalender. Einzige
 Ausnahme seit 2b: Weichen die abgeleiteten Felder in `System/Einstellungen.md` vom berechneten Inhalt ab (siehe „Zentrale
 Daten“), werden sie einmal nachgezogen. Im Normalfall sind sie gleich, dann wird nichts geschrieben. Der Datenkanal
 (`zentral.js`) ruft frühestens 20 s nach dem Einlesen ab und schreibt nur nach einem erfolgreichen Abruf mit geänderten Daten
-(siehe „Datenkanal“).
+(siehe „Datenkanal“). `update.js` legt 20 s nach dem Einlesen einmal `System/Daten/installiert.json` an, wenn sie fehlt
+(Erstinstallation, siehe „Update“); sonst schreibt es nur nach dem Tipp auf „Aktualisieren“.
 
 **Codeblock-Argumente:** Obsidian übergibt einem Codeblock-Prozessor nur den Inhalt. Das Argument in der Kopfzeile
 (z. B. `eba-schloss alma`) liest `ctx.modell.blockArgument(el, c, sprache, erlaubt, vorgabe)` aus dem Abschnitt. Der Inhalt
@@ -355,6 +357,69 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   erzeugt; zwei Dateien mit falschem Datum im Namen umbenannt). Der alte Notiztext ist dabei entfallen (er stand nie in den
   Daten; Inhalte „für alle“ kommen künftig über `info`). Der erste Abruf schreibt darum keine dieser Notizen neu.
 
+## Update (seit 0.2.0, `update.js`)
+
+Zwei Kanäle bleiben getrennt: Die zentralen Daten kommen von selbst und sind nur Daten. **Programmteile kommen nur nach einem
+Tipp auf „Aktualisieren“** und Bestätigung, aus dem Haupt-Repo am Tag der Version.
+
+```
+manifest.json (ecoba-daten) ── release / beta: version, url_basis, sha256 der Liste
+        │ Tipp „Aktualisieren“ → Manifest frisch holen → Bestätigung
+        ▼
+url_basis + Studium Autopilot/System/Daten/system-dateien.json ── SHA-256 = release.sha256? Liste streng prüfen
+        ▼
+Ist-Stand lesen, Plan je Datei (gegen installiert.json) → nur geänderte Dateien laden, Größe + SHA-256 prüfen
+        ▼  (alles geladen und geprüft – vorher wird nichts geschrieben)
+Sicherung → .trash/Studium Autopilot Sicherung <alt> <Zeit>/ → schreiben (Fehler: alles zurück) → Kern zuletzt
+        ▼
+system-dateien.json + installiert.json = neue Liste → Kern geändert? Plugin neu laden (disable/loadManifests/enable)
+```
+
+**Dateiklassen** (`klasseVon` in `update.js` = `klasse_von` in `werkzeuge/pruefen.py`, beide gleich halten). Was keine Klasse
+hat, fasst ein Update nie an, auch wenn die Liste es nennt (dann lehnt das Plugin die ganze Liste ab).
+
+| Klasse | Dateien | Unverändert | Von dir geändert |
+|---|---|---|---|
+| `system` | `.obsidian/plugins/studium-autopilot/{main.js,manifest.json,styles.css}`, `System/Skripte/*.js`, `System/Gerüste/*.md`, `.obsidian/snippets/eba-*.css` | ersetzen | deine bleibt, neue daneben `Name (neu X).js.txt` (`.txt`, damit der Kern sie nie lädt) |
+| `einstellung` | `.obsidian/{app,bookmarks,community-plugins,core-plugins,hotkeys,types}.json` | ersetzen | mischen: deine Werte bleiben, fehlende Schlüssel kommen dazu, Textlisten vereinigt |
+| `seite` | `Dashboard.md`, `Studium/*.md`, `System/Daten/Musterplan.md` | ersetzen | nur abgehakt (`ohne_haken` gleich) → neue Seite mit deinen Haken; sonst deine bleibt, neue daneben `Name (neu X).md` |
+| `modul` | `Module/**/*.md` | ersetzen | Frontmatter: Reihenfolge und Katalogfelder neu, persönliche Felder (`status`, `ergebnis`, `versuch`, `klausur`, `semester_geplant`, `gewaehlt`, `anrechnung`, `zusatz`) und eigene Felder bleiben, `tags`/`aliases`/`cssclasses` vereinigt; Text neu, wenn `koerper` gleich, sonst deiner |
+
+Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal), `abruf.json`, `installiert.json`,
+`.obsidian/appearance.json` (Farbschema wählst du selbst), `workspace*.json`, Plugin-`data.json`, `Termine/`, `Stundenplan/`,
+`Vorlesungen/`, `Übungsblätter/`, `Unterlagen/`, `Eingang/`, `Schlüsselqualifikationen/`, `Anhänge/` und alles andere ohne Klasse.
+
+- **„Geändert“** heißt: SHA-256 der Datei ≠ Eintrag in `installiert.json` (Liste der zuletzt installierten Version). Fehlt eine
+  Seite oder ein Modul, das installiert war, hast du es gelöscht → nicht wieder anlegen. Neue Dateien werden angelegt.
+  Dateien, die es in der neuen Version nicht mehr gibt: unverändert → in die Sicherung verschoben, geändert → bleiben.
+- **installiert.json** (`System/Daten/`, synchronisiert, nicht im Repo): fehlt sie beim Start, legt `installiertAnlegen()` sie
+  20 s nach dem Einlesen einmal als Kopie von `system-dateien.json` an (Erstinstallation; sonst keine Datei). Ohne beide Listen
+  gilt jede abweichende Datei als geändert (nichts wird überschrieben).
+- **Andere Geräte:** Das Update kommt per Sync. Dort zeigt `installiert.json` schon die neue Version → kein zweites Update.
+  Läuft dort noch der alte Kern im Speicher (`installiert` > `plugin.manifest.version`), zeigt die Zeile „Neu laden“
+  (Aktion `vorlage-neu-laden`). Skripte lädt der Hot-Reload ohnehin nach.
+- **Neustart:** Hat sich `main.js`/`manifest.json` geändert, lädt `pluginNeuLaden()` das Plugin neu
+  (`app.plugins.disablePlugin` → `loadManifests` → `enablePlugin`, nicht gespeichert, also bleibt es in
+  `community-plugins.json` aktiv). Danach zeichnet nur die neue Instanz. Klappt das nicht, sagt das Ergebnisfenster „Obsidian
+  einmal schließen und wieder öffnen“. Während des Updates zeigt der Kern beim Hot-Reload keine Hinweise (`plugin.stillBis`).
+- **Sicherung** in `.trash/` (wie Obsidians Papierkorb; Obsidian zeigt ihn nicht an, Sync-Dienste gleichen ihn meist nicht ab,
+  steht in `.gitignore`). Bewusst nicht in einem sichtbaren Ordner: Kopien von Modulen würden sonst in Bases als Module zählen.
+  In der Dateien-App von iOS sind versteckte Ordner nicht sichtbar; wiederherstellen geht am PC/Mac.
+- **Fehler:** kein Netz, falsche Prüfsumme oder Liste → nichts geschrieben, keine Sicherung; Schreibfehler → alles schon
+  Geschriebene aus der Sicherung zurück. Das Ergebnisfenster sagt es in einem Satz, Einzelheiten unter „Mehr erfahren“.
+- **Kanal:** `update_kanal: beta` in `System/Einstellungen.md` (Schalter „Beta-Versionen“ im Fenster „Studium Autopilot“ unter
+  „Mehr erfahren“; Standard stabil). Angeboten wird `release`, auf Kanal beta die höhere von `beta` und `release`, nie eine
+  ältere als die installierte. Versionen `X.Y.Z` und `X.Y.Z-beta.N` (Beta vor der fertigen Version).
+- **Anzeige:** `ctx.update.anzeige()` → `{ html, pille, symbol, ton, knopf }`: „Wird aktualisiert …“, „Neu laden“, „Neue
+  (Beta-)Version X verfügbar.“ + Notiz + Knopf „Aktualisieren“, Rückfall „Neue Version X verfügbar“ als Link auf die Releases
+  (nur `plugin_aktuell`, kein `release`), „Version X. Du hast die neueste Version.“ oder nur „Version X.“ (ohne Angaben im
+  Manifest, z. B. zentrale Daten aus). Die Zeile „Zentrale Daten“ zeigt den Hinweis nicht mehr.
+- **Für Tests und andere Skripte:** `ctx.update` = `{ klasseVon, pfadOk, neuName, listePruefen, teilen, ohneHaken, seiteHaken,
+  fmMischen, modulMischen, jsonMischenText, planen, aktualisierenMit(io, o), angebot, neuer, kanal, kanalSetzen, io, anzeige,
+  status, aktualisieren, installiertAnlegen, pluginNeuLaden, letzterBericht, fenster }`. `aktualisierenMit` bekommt den
+  Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`) und ist darum ohne Obsidian testbar
+  (`tests/update.test.js`).
+
 ## Verbindungen und Schloss
 
 `verbindungen.js` hält eine Registry. Eine Verbindung ist `{ id, name, art ("link" | "bald" | "claude"), satz, kurz?, erklaerung,
@@ -371,6 +436,7 @@ Hintergrund, nur eingeklappt unter „Mehr erfahren“ (`<details class="eba-mod
 | `ilias` | bald | immer (Erklärung, kein Eingabefeld) |
 | `zentral` | Zentrale Daten (`zentral.js`), Knopf Jetzt aktualisieren (aus: Einschalten); die Schalter Zentrale Daten und Fachschaft & Veranstaltungen stehen im Fenster „Mehr erfahren“ | nie (Standard an) |
 | `assistent` | „KI-Assistent“, Pille „für Fortgeschrittene“, nur Claude Code | immer (Erklärung: keine Passwörter in Obsidian, auch kein IMAP) |
+| `vorlage` | „Studium Autopilot“ (`update.js`): Version, Knopf Aktualisieren bzw. Neu laden, sonst Mehr erfahren; Schalter „Beta-Versionen“ im Fenster unter „Mehr erfahren“ | nie |
 
 - Symbole (seit 15.10.2026, iPad-Test): ruhige Lucide-Linien als inline-SVG in `currentColor` (`SYMBOLE`, `ctx.verbindungen.svg(name)`:
   schloss, haken, uhr, extern, warnung, pause, aus), keine Emojis; `setIcon` blieb auf dem iPad leer (wie in `menue.js`).
@@ -492,8 +558,9 @@ Regeln für Skript-Autoren:
 
 - **Ohne Obsidian** (`tests/`, `node --test tests/*.test.js`, keine Abhängigkeiten): reine Logik aus `zentral.js` (id-Regel,
   Dateinamen, Prüfung von Manifest, Terminen und Semesterdaten, Schnappschuss der öffentlichen Daten mit Prüfsummen) und
-  `modell.js` (Semesterliste, Semesterregel, Vorlesungswochen, Wochenanzeige). `tests/laden.js` lädt die Skripte mit einem
-  kleinen Ersatz für Obsidian.
+  `modell.js` (Semesterliste, Semesterregel, Vorlesungswochen, Wochenanzeige) sowie `update.js` (Dateiklassen, Liste, Plan je
+  Datei, Mischen, alles oder nichts, Kanal; im veröffentlichten Repo zusätzlich die Update-Liste gegen die Dateien).
+  `tests/laden.js` lädt die Skripte mit einem kleinen Ersatz für Obsidian.
 - **In Obsidian** (Entwickler-PC, nicht im Repo): Oberfläche, Knöpfe, Hot-Reload, Datenkanal mit Testquelle, Bases-Formeln.
   Die Testeinstiege unten machen das möglich.
 - **GitHub Actions** (`.github/workflows/pruefen.yml`): `werkzeuge/pruefen.py` (Datenschutz-Scan, Dateitypen, `node --check`,
@@ -512,6 +579,10 @@ Datenkanal: `plugin.testZentralAus = true` schaltet den automatischen Abruf ab (
 `plugin.testQuelle = async (name) => text` ersetzt den Abruf (`null` = nicht gefunden, Ausnahme = kein Netz),
 `plugin.testZentralBasis = "http://127.0.0.1:8765/v1/"` lenkt `requestUrl` auf eine andere Basis, `plugin.testPapierkorbLokal`
 legt Gelöschtes in `.trash/` des Vaults statt in den Papierkorb des Systems.
+
+Update: `plugin.testUpdateAntwort = true/false` beantwortet das Bestätigungsfenster, `plugin.testUpdateBasis =
+"http://127.0.0.1:8766/v0.3.0/"` lädt die Dateien von einer anderen Basis (lokaler Server mit Fake-Release); das Manifest mit
+`release` liefert `plugin.testQuelle`. `ctx.update.aktualisieren()` gibt den Bericht zurück.
 
 Tests in Obsidian laufen am besten in einem sichtbaren Popout-Fenster. Im verdeckten Hauptfenster drosselt Chromium verkettete
 Timer auf einmal pro Minute.

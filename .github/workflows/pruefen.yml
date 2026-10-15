@@ -15,6 +15,21 @@ jobs:
       ESBUILD_VERSION: "0.25.0"
     steps:
       - uses: actions/checkout@v5.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Commit-Identität (nur anonyme GitHub-Adresse erlaubt)
+        run: |
+          erlaubt='^342926485\+pdotwalt@users\.noreply\.github\.com$|^noreply@anthropic\.com$|^noreply@github\.com$'
+          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            bereich="${{ github.event.before }}..${{ github.sha }}"
+          else
+            bereich="${{ github.sha }}~1..${{ github.sha }}"
+          fi
+          falsch=$(git log --format='%h %ae %ce' "$bereich" | while read h a c; do
+            for m in "$a" "$c"; do echo "$m" | grep -Eq "$erlaubt" || echo "$h $m"; done; done)
+          if [ -n "$falsch" ]; then echo "Commits mit nicht erlaubter E-Mail-Adresse:"; echo "$falsch"; exit 1; fi
+          echo "Alle Commits mit erlaubter Identität."
 
       - uses: actions/setup-python@v6.0.0
         with:

@@ -5,7 +5,7 @@
 // Links (z. B. der Alma-Kalenderlink) liegen NUR gerätelokal (app.saveLocalStorage), nie in einer Datei des Vaults.
 // Passwörter speichert der Vault nie (auch kein IMAP); was ein Login braucht, geht nur über den Claude-Code-Weg.
 //
-// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "bald" | "claude"), status(), gesperrt(),
+// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "zentral" | "vorlage" | "bald" | "claude"), status(), gesperrt(),
 //   vorschau? ("woche": Schloss liegt auf einem ausgegrauten Beispiel-Stundenplan), anreiz? (Überschrift dazu), pruefen(link)?, verbinden(link)?, trennen()?, aktualisieren()? }
 // Texte (auch für Nicht-Techniker): satz = ein Satz Nutzen (Schloss-Karte); kurz = höchstens ein Satz im Fenster;
 //   schritte = kurze Schritte, Verb vorn, **fett** = Bedienelement genau wie in Alma/Obsidian; erklaerung = Hintergrund,
@@ -14,7 +14,8 @@
 //   ```eba-schloss <id>```  Solange gesperrt: Karte mit Schloss-Symbol, einem Satz und Knopf „Verbinden“ (mit vorschau: über dem Beispielraster). Steht der Block in einer Karte
 //                           (Callout), blendet CSS den übrigen Inhalt der Karte aus (z. B. das Wochenraster). Sonst leer.
 //   ```eba-verbindungen```  Übersicht (Einstellungen): je Verbindung Symbol, Status und höchstens EIN Knopf (Verbinden,
-//                           Aktualisieren, Jetzt aktualisieren, Einschalten oder Mehr erfahren). Alles Weitere (Trennen, neuer
+//                           Aktualisieren, Jetzt aktualisieren, Einschalten, Neu laden oder Mehr erfahren). Zeile „Studium
+//                           Autopilot“ (art vorlage): Version und Update, Text und Knopf aus ctx.update.anzeige() (update.js). Alles Weitere (Trennen, neuer
 //                           Link, Schalter der zentralen Daten) steht im Fenster hinter dem Textlink „Mehr erfahren“.
 // Aktionen (Knöpfe obsidian://studium-autopilot?aktion=…&id=alma): verbinden, verbindung-aktualisieren, trennen.
 // Hilfsfunktion für andere Skripte: ctx.verbindungen.schlossKarte(el, id) zeichnet die Schloss-Karte, gesperrt(id).
@@ -44,6 +45,8 @@ module.exports = function (ctx) {
     warnung: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
     pause: '<rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/>',
     aus: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
+    laden: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
+    "neu-laden": '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
   };
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
@@ -91,6 +94,19 @@ module.exports = function (ctx) {
       status() { return ctx.zentral ? ctx.zentral.status() : { verbunden: false }; },
       gesperrt() { return false; },
       async aktualisieren() { if (ctx.zentral) await ctx.zentral.abrufen({ manuell: true }); },
+    },
+    // Die Vorlage selbst (update.js, seit 0.2.0): Version und Knopf „Aktualisieren“, wenn eine neue Version da ist
+    vorlage: {
+      id: "vorlage", name: "Studium Autopilot", art: "vorlage",
+      satz: "Neue Versionen holst du mit einem Tipp.",
+      kurz: "Gibt es eine neue Version, steht hier **Aktualisieren**. Ein Tipp holt sie, deine Einträge bleiben.",
+      schritte: [
+        "**Aktualisieren** tippen und bestätigen.",
+        "Auf deinen anderen Geräten kommt das Update über deinen Sync. Dort nicht noch einmal tippen.",
+      ],
+      erklaerung: "Neue Programmteile lädt Studium Autopilot nur nach deinem Tipp, direkt aus dem öffentlichen Projekt auf GitHub. Jede Datei wird mit einer Prüfsumme geprüft; passt etwas nicht, wird nichts geändert. Vorher legt das Update eine Sicherung an.",
+      status() { return ctx.update ? ctx.update.status() : { verbunden: true }; },
+      gesperrt() { return false; },
     },
     ilias: {
       id: "ilias", name: "ILIAS-Kalender", art: "bald",
@@ -147,6 +163,7 @@ module.exports = function (ctx) {
     const d = c.createEl("details", { cls: "eba-modal-mehr" });
     d.createEl("summary", { text: "Mehr erfahren" });
     d.createEl("p", { text });
+    return d;
   };
 
   // Schalter der zentralen Daten (im Fenster statt in der Zeile): schreiben den Wert direkt (Parameter wert), damit zweimal
@@ -180,7 +197,9 @@ module.exports = function (ctx) {
       if (v.kurz) fett(this.contentEl.createEl("p", { cls: "eba-modal-text" }), v.kurz);
       schritteZeigen(this.contentEl, v);
       if (v.art === "zentral") zentralSchalter(this.contentEl);
-      mehrZeigen(this.contentEl, v.erklaerung);
+      const mehr = mehrZeigen(this.contentEl, v.erklaerung);
+      // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js)
+      if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
       const k = this.contentEl.createDiv({ cls: "modal-button-container" });
       k.createEl("button", { text: v.art === "zentral" ? "Fertig" : "Verstanden", cls: "mod-cta" }).addEventListener("click", () => this.close());
     }
@@ -316,6 +335,11 @@ module.exports = function (ctx) {
       const symbol = !a.an ? "aus" : s.pause ? "pause" : s.fehler ? "warnung" : "haken";
       return { zu: false, html: a.html, pille: a.pille, an: a.an, veranstaltungen: a.veranstaltungen, symbol, ton: symbol === "haken" ? "ok" : symbol === "warnung" ? "warn" : "leise" };
     }
+    if (v.art === "vorlage") {
+      if (!ctx.update) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise" };
+      const a = ctx.update.anzeige();
+      return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: a.knopf };
+    }
     if (v.art === "bald") return { zu: true, text: "Kommt bald.", pille: `<span class="eba-pill info">bald</span>`, symbol: "uhr", ton: "leise" };
     if (v.art === "claude") return { zu: true, text: "Braucht Claude Code auf deinem Rechner.", pille: `<span class="eba-pill leer">für Fortgeschrittene</span>`, symbol: "extern", ton: "leise" };
     const s = v.status();
@@ -339,6 +363,9 @@ module.exports = function (ctx) {
         knoepfe = st.an ? knopf("zentral-aktualisieren", "", "Jetzt aktualisieren", "cta")
           : `<a class="eba-vb-knopf cta" href="${ctx.link("zentral-schalter", { was: "daten", wert: "1" })}">Einschalten</a>`;
         mehr = true;
+      } else if (v.art === "vorlage") {
+        if (st.knopf) { knoepfe = `<a class="eba-vb-knopf cta" href="${ctx.link(st.knopf.aktion, {})}">${esc(st.knopf.text)}</a>`; mehr = true; }
+        else knoepfe = knopf("verbinden", v.id, "Mehr erfahren", "");
       } else if (v.art === "link" && s.verbunden) { knoepfe = knopf("verbindung-aktualisieren", v.id, "Aktualisieren", "cta"); mehr = true; }
       else knoepfe = knopf("verbinden", v.id, v.art === "link" ? "Verbinden" : "Mehr erfahren", v.art === "link" ? "cta" : "");
       const zeile = liste.createDiv({ cls: "eba-vb" + (st.zu ? " zu" : "") });

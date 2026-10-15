@@ -89,6 +89,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     this.laufend = new Set(); // gerade laufende Aktionen (Doppelklick-Schutz)
     this.testAntworten = [];  // Nur für Tests: vorbereitete Antworten für Eingabe/Auswahl (siehe docs/architektur.md)
     this.testProtokoll = [];
+    this.stillBis = 0;        // bis zu diesem Zeitpunkt (ms) keine Hinweise beim Hot-Reload (setzt update.js während des Updates)
     this.testDatum = null;    // Nur für Tests: "YYYY-MM-DD" ersetzt das heutige Datum in ctx.date (Uhrzeit bleibt)
     // Aufräumen je Skript (Helfer in ctx, siehe skriptKontext)
     this.kontexte = {};      // Skript → eigener Kontext (Proxy auf ctx mit den Helfern)
@@ -126,6 +127,10 @@ module.exports = class StudiumAutopilot extends Plugin {
   }
 
   onunload() {
+    // Ab jetzt nichts mehr anmelden: ein noch laufendes await (Hot-Reload, Start) darf nach dem Entladen keinen Codeblock-
+    // Prozessor o. Ä. registrieren – der bliebe sonst für immer angemeldet, und die nächste Instanz (Plugin neu laden,
+    // Update) bekäme „already registered“.
+    this.entladen = true;
     // Je Skript: abmelden() der Erweiterung, dann alles, was über die Helfer in ctx angemeldet wurde.
     // Codeblock-Prozessoren, Post-Processor, Editor-Array und Befehle meldet Obsidian beim Entladen des Plugins selbst ab.
     for (const name of Object.keys(this.erweiterungen).concat(Object.keys(this.aufraeumer))) this.skriptAbmelden(name);
@@ -210,6 +215,7 @@ module.exports = class StudiumAutopilot extends Plugin {
 
   // ---------- Codeblöcke: ein Prozessor je Sprache, ruft immer die aktuelle Fassung ----------
   codeblockAnmelden(skript, sprache, fn, merken) {
+    if (this.entladen) return { sprache, instanzen: () => [], neu: () => {} };
     let b = this.bloecke[sprache];
     if (!b) {
       b = this.bloecke[sprache] = { sprache, fn: null, skript: null, instanzen: new Set() };
@@ -311,6 +317,7 @@ module.exports = class StudiumAutopilot extends Plugin {
   // ---------- Start ----------
   async starten() {
     await this.skripteLaden(true);
+    if (this.entladen) return;
     // Hot-Reload: geänderte/neue Skripte nach kurzer Pause neu laden (Sync schreibt evtl. in mehreren Schritten)
     const warten = {};
     const geaendert = (f) => {
@@ -357,11 +364,13 @@ module.exports = class StudiumAutopilot extends Plugin {
     for (const f of dateien) {
       try {
         const code = await this.app.vault.read(f);
+        if (this.entladen) return fehler;
         this.skripte[f.basename] = this.auswerten(code, f.path);
         this.quellen[f.basename] = code;
       } catch (e) { console.error("Studium Autopilot: Skript " + f.path, e); fehler.push(`${f.basename} (${(e && e.message) || e})`); }
     }
     for (const f of dateien) {
+      if (this.entladen) return fehler;
       if (!this.quellen[f.basename] || !this.istErweiterung(this.quellen[f.basename])) continue;
       try { await this.erweiterungStarten(f.basename, start); } catch (e) {
         console.error("Studium Autopilot: Erweiterung " + f.basename, e); fehler.push(`${f.basename} (${(e && e.message) || e})`);
@@ -376,6 +385,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     const fabrik = this.skripte[name];
     if (typeof fabrik !== "function") throw new Error("kein module.exports = function (ctx) {…}");
     const m = await fabrik(this.skriptKontext(name));
+    if (this.entladen) return;
     if (!m) throw new Error("Fabrik liefert nichts");
     this.erweiterungen[name] = m;
     if (m.aktionen) this.aktionenUebernehmen(name, m.aktionen);
@@ -389,7 +399,7 @@ module.exports = class StudiumAutopilot extends Plugin {
   async skriptNeuLaden(f) {
     try {
       const code = await this.app.vault.read(f);
-      if (code === this.quellen[f.basename]) return;
+      if (this.entladen || code === this.quellen[f.basename]) return;
       const neu = this.auswerten(code, f.path); // Syntaxfehler: alte Fassung läuft weiter
       // Alte Fassung vollständig abmelden (abmelden(), Helfer, Timer, Aktionen, Befehle), dann die neue starten
       this.skriptAbmelden(f.basename);
@@ -397,7 +407,7 @@ module.exports = class StudiumAutopilot extends Plugin {
       this.quellen[f.basename] = code;
       if (this.istErweiterung(code)) await this.erweiterungStarten(f.basename, false);
       this.neuZeichnen();
-      new Notice("Aktualisiert: " + f.basename, 2000);
+      if (!(this.stillBis > Date.now())) new Notice("Aktualisiert: " + f.basename, 2000); // still während eines Updates (update.js)
     } catch (e) {
       console.error("Studium Autopilot: neu laden " + f.path, e);
       new Notice(`Studium Autopilot – ${f.basename} nicht geladen: ${(e && e.message) || e}`, 8000);
