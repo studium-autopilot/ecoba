@@ -28,7 +28,7 @@ Handy, Tablet und Computer.
 [Windows und Mac](https://obsidian.md/download).
 
 **2. Vorlage herunterladen** – mit dem Knopf oben. Auf Mac, Windows und Android bekommst du eine
-ZIP-Datei; daraus wird beim Öffnen der Ordner `Studium Autopilot`. Auf iPhone und iPad geht es mit dem schwarzen Knopf noch einfacher: Ein Kurzbefehl lädt die neueste
+ZIP-Datei; daraus wird beim Öffnen der Ordner `Studium Autopilot`. Auf iPhone und iPad geht es mit dem Knopf „Für iPhone und iPad“ noch einfacher: Ein Kurzbefehl lädt die neueste
 Version und legt sie gleich in Obsidian ab (siehe unten).
 
 **3. In Obsidian öffnen** – den Ordner `Studium Autopilot` als Tresor öffnen und auf **Vertrauen und Plugins aktivieren**
