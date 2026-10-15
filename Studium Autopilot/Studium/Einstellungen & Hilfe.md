@@ -78,7 +78,7 @@ Das rechnet sich aus deinem Studienbeginn, du trägst nichts ein. Die Termine st
 Kurze Anleitungen zum Nachschlagen: Karte antippen, dann klappt sie auf.
 
 > [!eba-karte|hilfe|liste|handy-zu]+ Checkliste fürs erste Semester
-> - [ ] Oben auf **Personalisieren** tippen
+> - [ ] Die Einrichtung abschließen (oben bei **Deine Angaben**)
 > - [ ] Uni-Account aktivieren und die Uni-Mail lesen
 > - [ ] Zur Erstsemester-Info gehen, Infos unter [[Kontakte & Links]]
 > - [ ] In Alma die Kurse des 1. Semesters belegen, Plan im [[Studienverlauf]]

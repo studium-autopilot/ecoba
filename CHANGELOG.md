@@ -2,6 +2,18 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.3.0 – Einrichtung beim ersten Start
+
+- Beim ersten Öffnen führt eine kurze Einrichtung durch Studienbeginn, Variante, Name und Zielnote und das Verbinden von
+  Alma. Jeder Schritt lässt sich überspringen; „Später“ setzt beim nächsten Start am selben Schritt fort. Auf weiteren
+  Geräten erscheint sie nicht noch einmal, ein schon eingerichteter Tresor (Update von 0.2.0) sieht sie nicht.
+- Schlösser nur noch für Übersprungenes: Das Schloss im Wochenplan erscheint nur, wenn Alma übersprungen wurde (oder die
+  Einrichtung noch offen ist) und kein Stundenplan da ist.
+- Die Karte „Personalisieren“ auf dem Dashboard entfällt. In **Einstellungen & Hilfe** gibt es **Einrichtung erneut starten**.
+- Behoben: Auf der Seite Stundenplan standen auch bei verbundenem Alma „Alma verbinden“ und der Hinweis dazu. Jetzt
+  erscheint verbunden nur **Stundenplan aus Alma holen**.
+- Behoben: In **Unterlagen** wurde das Datum in der Spalte „Fällig“ abgeschnitten („20.10.202…“), am PC und auf dem iPhone.
+
 ## 0.2.0 – Update mit einem Tipp
 
 - Neue Versionen holst du in Obsidian: **Einstellungen & Hilfe** → **Verbindungen** → **Studium Autopilot** → **Aktualisieren**.

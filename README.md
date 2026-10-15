@@ -49,16 +49,20 @@ Hängt es irgendwo? → [Hilfe zur Installation](#hilfe-zur-installation)
 
 ## Was drin ist
 
-- **Dashboard:** nächste Prüfung, aktuelles Semester, ECTS, Notenschnitt, Fristen der nächsten 30 Tage und deine To-dos.
-- **Termine und Fristen, die sich selbst aktualisieren:** Semesterdaten, Prüfungsphasen, Anmeldefristen und
-  Veranstaltungen für EcoBA-Studierende kommen etwa stündlich von selbst.
-- **Studienverlauf:** Musterstudienplan je Variante (Economics, Business Administration, ohne Spezialisierung),
-  Orientierungsprüfung, Meilensteine.
-- **Module und Noten:** 86 Module nach PO 2023 plus Mathe-Vorkurs, Gesamtnote und ECTS rechnen sich aus deinen Einträgen,
-  dazu ein Schwerpunkt-Planer.
-- **Alltag:** Stundenplan aus Alma (optional), Vorlesungsnotizen mit einem Klick, Unterlagen einordnen.
-
-![Monatskalender mit Terminen der Uni, Fachschaft und Prüfungen am Computer, Studienverlauf auf dem iPhone](docs/bilder/vorschau-2-termine.png)
+<table>
+<tr>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-dashboard.png" alt="Dashboard: Nächste Prüfung, Semester, ECTS und Notenschnitt auf einen Blick" width="100%"><br><b>Dashboard</b><br>Nächste Prüfung, Semester, ECTS und Notenschnitt auf einen Blick</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-termine.png" alt="Termine & Anmeldungen: Monatskalender, der sich von selbst aktualisiert" width="100%"><br><b>Termine & Anmeldungen</b><br>Monatskalender, der sich von selbst aktualisiert</td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-studienverlauf.png" alt="Studienverlauf: Musterplan je Variante, Orientierungsprüfung, Meilensteine" width="100%"><br><b>Studienverlauf</b><br>Musterplan je Variante, Orientierungsprüfung, Meilensteine</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-module.png" alt="Module & Noten: 86 Module nach PO 2023, Gesamtnote und ECTS rechnen sich selbst" width="100%"><br><b>Module & Noten</b><br>86 Module nach PO 2023, Gesamtnote und ECTS rechnen sich selbst</td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan.png" alt="Stundenplan: Deine Woche aus Alma, mit einem Link verbunden" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma, mit einem Link verbunden</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen.png" alt="Unterlagen: Vorlesungsnotizen mit einem Klick, Unterlagen je Modul" width="100%"><br><b>Unterlagen</b><br>Vorlesungsnotizen mit einem Klick, Unterlagen je Modul</td>
+</tr>
+</table>
 
 ## Woher die Daten kommen
 

@@ -10,7 +10,7 @@ Die Installation richtet die Vorlage auf **einem** Gerät ein. Weitere Geräte v
 - [Windows](#windows)
 - [Android](#android)
 - [Vertrauen](#vertrauen)
-- [Personalisieren und Alma verbinden](#personalisieren-und-alma-verbinden-optional)
+- [Einrichtung beim ersten Start](#einrichtung-beim-ersten-start)
 - [Weiteres Gerät verbinden](#weiteres-gerät-verbinden)
 - [Update auf eine neue Version](#update-auf-eine-neue-version)
 
@@ -74,27 +74,22 @@ Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Ke
 
 Termine und Fristen kommen danach von selbst, beim ersten Mal nach einigen Minuten. Nicht warten? Seite **Einstellungen & Hilfe** → **Verbindungen** → bei „Zentrale Daten“ **Jetzt aktualisieren**.
 
-## Personalisieren und Alma verbinden (optional)
+## Einrichtung beim ersten Start
 
-Alles läuft auch ohne Angaben. Dann gilt das aktuelle Semester als dein erstes.
+Nach dem [Vertrauen](#vertrauen) begrüßt dich eine kurze Einrichtung: **Studienbeginn**, **Variante**, Name und Zielnote,
+dann **Alma verbinden**. Jeden Schritt kannst du überspringen; mit **Später** geht es beim nächsten Start dort weiter. Ohne
+Angaben gilt das aktuelle Semester als dein erstes.
 
-### Personalisieren
-
-1. Auf dem Dashboard bei **Personalisieren** auf **Jetzt eintragen** tippen.
-2. Name (freiwillig), **Studienbeginn**, **Variante** und **Zielnote** wählen.
-3. **Speichern**. Semester und Musterplan passen sich an.
-
-Ändern kannst du alles später unter **Einstellungen & Hilfe** → **Deine Angaben**.
+Ändern kannst du alles unter **Einstellungen & Hilfe** → **Deine Angaben** (**Ändern** oder **Einrichtung erneut starten**).
 
 ### Alma verbinden (Stundenplan)
 
-1. Auf dem Dashboard **Alma verbinden** tippen (oder **Einstellungen & Hilfe** → **Verbindungen** → **Verbinden**).
-2. **Alma** im Browser öffnen und anmelden.
-3. **Mein Studium** → **Stundenplan** öffnen.
-4. **Daten für iCalendar (ics) exportieren** wählen.
-5. **Link kopieren**, in Obsidian einfügen und **Verbinden** tippen.
+1. In der Einrichtung bei **Stundenplan aus Alma** (später: **Einstellungen & Hilfe** → **Verbindungen** → **Verbinden**).
+2. **Alma** im Browser öffnen und anmelden, dann **Mein Studium** → **Stundenplan**.
+3. **Daten für iCalendar (ics) exportieren** → **Link kopieren**.
+4. Link in Obsidian einfügen und **Verbinden** tippen.
 
-Dein Stundenplan erscheint sofort. Der Link enthält kein Passwort und bleibt nur auf diesem Gerät. Auf einem zweiten Gerät verbindest du Alma noch einmal – oder der Stundenplan kommt per Sync mit.
+Dein Stundenplan erscheint sofort. Der Link enthält kein Passwort und bleibt nur auf diesem Gerät. Auf einem zweiten Gerät verbindest du Alma noch einmal – oder der Stundenplan kommt per Sync mit. Die Einrichtung selbst erscheint dort nicht noch einmal.
 
 ## Weiteres Gerät verbinden
 

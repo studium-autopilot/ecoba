@@ -7,6 +7,9 @@ studienbeginn:
 po: "PO 2023 (Alma: H-2023-1)"
 zentrale_daten: true
 zentrale_veranstaltungen: true
+einrichtung: offen
+einrichtung_schritt:
+einrichtung_uebersprungen: []
 semesterliste:
   - 1|WS 2026/27|2026-10-01|2027-03-31|2026-10-12|2027-02-06
   - 2|SS 2027|2027-04-01|2027-09-30|2027-04-12|2027-07-24
@@ -47,4 +50,4 @@ cssclasses:
 
 Diese Datei speichert deine Angaben für Skripte und Tabellen. Ansehen und ändern: [[Einstellungen & Hilfe]].
 
-<details class="eba-mehr"><summary>Mehr erfahren</summary>Die Felder oben schreibt das Formular „Personalisieren“; <code>semesterliste</code>, <code>pausen</code> und <code>pruefungsphasen</code> rechnet Studium Autopilot aus den <a class="internal-link" data-href="System/Daten/Semester" href="System/Daten/Semester">Semesterterminen</a>. Bitte die Datei nicht umbenennen oder verschieben.</details>
+<details class="eba-mehr"><summary>Mehr erfahren</summary>Die Felder oben schreiben die Einrichtung und das Formular „Ändern“ (<code>einrichtung</code>: offen, laeuft oder fertig; <code>einrichtung_uebersprungen</code>: was du dort übersprungen hast); <code>semesterliste</code>, <code>pausen</code> und <code>pruefungsphasen</code> rechnet Studium Autopilot aus den <a class="internal-link" data-href="System/Daten/Semester" href="System/Daten/Semester">Semesterterminen</a>. Bitte die Datei nicht umbenennen oder verschieben.</details>

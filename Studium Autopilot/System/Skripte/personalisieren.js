@@ -1,11 +1,11 @@
-// Personalisieren (Phase 2b): der Vault ist ohne Onboarding sofort nutzbar; Angaben kommen nach und nach.
+// Personalisieren (Phase 2b): der Vault ist ohne Angaben sofort nutzbar. Seit 0.3.0 fragt die Einrichtung (einrichtung.js)
+// beim ersten Start; dieses Formular bleibt für „Ändern“.
 // Standard ohne Angaben: Studienbeginn = aktuelles Semester (1. FS), Variante „offen“, neutrale Begrüßung.
-//   ```eba-personalisieren```  dezente Karte (Dashboard oben): verschwindet, sobald Name UND Studienbeginn gesetzt sind
-//                              oder „Ausblenden“ geklickt wurde (gerätelokal, app.saveLocalStorage).
+//   ```eba-personalisieren```  früher die Karte oben auf dem Dashboard; seit 0.3.0 leer (die Einrichtung ersetzt sie). Der
+//                              Block zeichnet nichts, damit ältere, selbst geänderte Dashboards keine Lücke zeigen.
 //   ```eba-personalisieren angaben```  „Deine Angaben“ (Einstellungen & Hilfe): solange Name UND Studienbeginn leer sind, eine
-//                              kleine Karte „Noch nichts eingetragen.“ + Knopf „Personalisieren“; sonst Name, Zielnote,
-//                              Studienbeginn (leere Werte „–“) + Knopf „Ändern“. Ersetzt seit 15.10.2026 die Bases-Tabelle,
-//                              die leer nur Spaltenköpfe zeigte.
+//                              kleine Karte „Noch nichts eingetragen.“ + Knopf „Einrichtung starten“; sonst Name, Zielnote,
+//                              Studienbeginn (leere Werte „–“) + Knöpfe „Ändern“ und „Einrichtung erneut starten“.
 //   Aktion „personalisieren“   EIN Formular-Fenster (Name, Studienbeginn als Semester-Auswahl, Variante, Zielnote 1,0–4,0),
 //                              speichert nach System/Einstellungen.md. Auch als Befehl und Knopf in den Einstellungen.
 // Nach dem Speichern zieht das Datenmodell (modell.js) Semesterliste, Pausen und Prüfungsphasen in den Einstellungen nach.
@@ -14,7 +14,6 @@ module.exports = function (ctx) {
   const app = window.app;
   const { Modal, Notice } = ctx.obsidian;
   const EINSTELLUNGEN = "System/Einstellungen.md";
-  const AUS = "eba-personalisieren-aus"; // gerätelokal: Karte ausgeblendet
   const VARIANTEN = ["offen", "Economics", "Business Administration", "ohne Spezialisierung"];
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -31,6 +30,42 @@ module.exports = function (ctx) {
     const n = Number(m[1] + "." + (m[2] || "0"));
     if (n < 1 || n > 4) return { ok: false, fehler: "Die Note muss zwischen 1,0 und 4,0 liegen." };
     return { ok: true, wert: `${m[1]},${m[2] || "0"}` };
+  };
+
+  // Semester-Auswahl für den Studienbeginn füllen (auch für die Einrichtung). leer: Text der Option „Aktuelles Semester“
+  // (Wert "") oder null = ohne diese Option. Rückgabe: Liste der Semester ({ name, beginn, … }).
+  const semesterOptionen = (sel, gesetzt, leer) => {
+    const d = D();
+    const auswahl = d ? ctx.modell.semesterAuswahl() : [];
+    gesetzt = String(gesetzt == null ? "" : gesetzt).slice(0, 10);
+    if (gesetzt && d && !auswahl.some((s) => s.beginn === gesetzt)) {
+      const s = ctx.modell.semesterNachName(ctx.modell.semesterAusDatum(gesetzt));
+      if (s) auswahl.unshift(Object.assign({}, s, { beginn: gesetzt }));
+    }
+    if (leer != null) sel.createEl("option", { value: "", text: leer });
+    for (const s of auswahl) sel.createEl("option", { value: s.beginn, text: `${s.name} (ab ${dmy(s.beginn)})` });
+    return auswahl;
+  };
+  // Vorschau zum Studienbeginn als Liste der Teile: „1. Fachsemester: WS 2026/27“, „heute 1. FS“, Hinweis bei Beginn im
+  // Sommersemester (Formular und Einrichtung)
+  const vorschauTeile = (beginn) => {
+    const d = D();
+    if (!d) return { erstes: "", heute: "", hinweis: "" };
+    const liste = ctx.modell.vorschau(beginn || "");
+    const heute = d.heute, akt = liste.find((s) => s.beginn <= heute && heute <= s.ende);
+    return {
+      erstes: liste.length ? liste[0].name : "",
+      fs: akt ? akt.fs : 0,
+      heute: akt ? `heute ${akt.fs}. FS` : liste.length && heute < liste[0].beginn ? "Studium hat noch nicht begonnen" : "",
+      hinweis: liste.length && /^SS/.test(liste[0].name) ? "Der Musterplan ist für einen Start im Wintersemester gedacht." : "",
+    };
+  };
+  const vorschauText = (beginn) => {
+    const v = vorschauTeile(beginn);
+    let t = v.erstes ? `1. Fachsemester: ${v.erstes}` : "";
+    if (v.heute) t += ` · ${v.heute}`;
+    if (v.hinweis) t += `. ${v.hinweis}`;
+    return t;
   };
 
   // ---------- Formular ----------
@@ -57,25 +92,11 @@ module.exports = function (ctx) {
       const zs = zeile("Studienbeginn", "");
       const sem = zs.feld.createEl("select", { cls: "dropdown eba-form-auswahl", attr: { "aria-label": "Studienbeginn" } });
       const jetzt = d ? ctx.modell.semesterAusDatum(d.heute) : "";
-      sem.createEl("option", { value: "", text: `Aktuelles Semester${jetzt ? ` (${jetzt})` : ""}` });
-      const auswahl = d ? ctx.modell.semesterAuswahl() : [];
       const gesetzt = String(fm.studienbeginn == null ? "" : fm.studienbeginn).slice(0, 10);
-      if (gesetzt && d && !auswahl.some((s) => s.beginn === gesetzt)) {
-        const s = ctx.modell.semesterNachName(ctx.modell.semesterAusDatum(gesetzt));
-        if (s) auswahl.unshift(Object.assign({}, s, { beginn: gesetzt }));
-      }
-      for (const s of auswahl) sem.createEl("option", { value: s.beginn, text: `${s.name} (ab ${dmy(s.beginn)})` });
+      semesterOptionen(sem, gesetzt, `Aktuelles Semester${jetzt ? ` (${jetzt})` : ""}`);
       sem.value = gesetzt && Array.from(sem.options).some((o) => o.value === gesetzt) ? gesetzt : "";
       const vorschau = zs.h || zs.z.createEl("div", { cls: "eba-form-hilfe" });
-      const vorschauZeigen = () => {
-        if (!d) { vorschau.setText(""); return; }
-        const liste = ctx.modell.vorschau(sem.value);
-        const heute = d.heute, akt = liste.find((s) => s.beginn <= heute && heute <= s.ende);
-        let t = liste.length ? `1. Fachsemester: ${liste[0].name}` : "";
-        t += akt ? ` · heute ${akt.fs}. FS` : liste.length && heute < liste[0].beginn ? " · Studium hat noch nicht begonnen" : "";
-        if (liste.length && /^SS/.test(liste[0].name)) t += ". Der Musterplan ist für einen Start im Wintersemester gedacht.";
-        vorschau.setText(t);
-      };
+      const vorschauZeigen = () => vorschau.setText(vorschauText(sem.value));
       sem.addEventListener("change", vorschauZeigen);
       vorschauZeigen();
       // Variante
@@ -117,23 +138,9 @@ module.exports = function (ctx) {
   }
   let fenster = null; // offenes Formular (für Tests: ctx.personalisieren.fenster)
 
-  // ---------- Karte ----------
-  const ausgeblendet = () => !!app.loadLocalStorage(AUS);
+  // ---------- Karte (seit 0.3.0 leer: die Einrichtung ersetzt sie) ----------
   let block = null; // Codeblock-Griff (ctx.codeblock), gesetzt in registrieren()
-  const karte = (el) => {
-    el.empty();
-    const d = D(), fm = fmVon();
-    const fertig = String(fm.name == null ? "" : fm.name).trim() && String(fm.studienbeginn == null ? "" : fm.studienbeginn).trim();
-    const zeigen = !fertig && !ausgeblendet();
-    el.toggleClass("eba-perso-aus", !zeigen);
-    if (!zeigen) return;
-    const k = el.createDiv({ cls: "eba-perso" });
-    const sem = d ? d.startSemester : "dem aktuellen Semester";
-    k.innerHTML = `<span class="eba-perso-symbol" aria-hidden="true">✦</span>`
-      + `<span class="eba-perso-text"><b>Personalisieren</b><span>Trag Name und Studienbeginn ein, dann passt alles zu dir.</span></span>`
-      + `<span class="eba-perso-knoepfe"><a class="eba-vb-knopf cta" href="${ctx.link("personalisieren", {})}">Jetzt eintragen</a>`
-      + `<a class="eba-vb-knopf leise" href="${ctx.link("personalisieren-ausblenden", {})}">Ausblenden</a></span>`;
-  };
+  const karte = (el) => { el.empty(); el.addClass("eba-perso-aus"); };
   // „Deine Angaben“ (Einstellungen & Hilfe)
   const angaben = (el) => {
     el.empty();
@@ -141,9 +148,10 @@ module.exports = function (ctx) {
     const txt = (x) => String(x == null ? "" : x).trim();
     const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote);
     const link = ctx.link("personalisieren", {});
+    const einrichtung = ctx.link("einrichtung", { ab: "2" });
     if (!name && !beginn) {
       el.createDiv({ cls: "eba-angaben leer" }).innerHTML = `<span class="eba-angaben-leer">Noch nichts eingetragen.</span>`
-        + `<a class="eba-vb-knopf cta" href="${link}">Personalisieren</a>`;
+        + `<a class="eba-vb-knopf cta" href="${einrichtung}">Einrichtung starten</a>`;
       return;
     }
     let sem = "";
@@ -151,7 +159,8 @@ module.exports = function (ctx) {
     const beginnText = beginn ? (sem ? `${sem} (ab ${dmy(beginn)})` : dmy(beginn)) : "";
     const feld = (titel, wert) => `<div class="eba-angaben-feld"><span>${titel}</span><b${wert ? "" : ' class="leer"'}>${wert ? esc(wert) : "–"}</b></div>`;
     el.createDiv({ cls: "eba-angaben" }).innerHTML = `<div class="eba-angaben-liste">${feld("Name", name)}${feld("Zielnote", ziel)}${feld("Studienbeginn", beginnText)}</div>`
-      + `<a class="eba-vb-knopf" href="${link}">Ändern</a>`;
+      + `<span class="eba-angaben-knoepfe"><a class="eba-vb-knopf" href="${link}">Ändern</a>`
+      + `<a class="eba-vb-knopf leise" href="${einrichtung}">Einrichtung erneut starten</a></span>`;
   };
   const neuZeichnen = () => { if (block) block.neu(); };
 
@@ -160,16 +169,10 @@ module.exports = function (ctx) {
       titel: "Personalisieren (Name, Studienbeginn, Variante, Zielnote)",
       ausfuehren: async () => { const m = new Formular(); fenster = m; m.open(); },
     },
-    "personalisieren-ausblenden": {
-      ausfuehren: async () => { app.saveLocalStorage(AUS, "1"); neuZeichnen(); new Notice("Ausgeblendet. Du findest es weiter in den Einstellungen.", 4000); },
-    },
-    "personalisieren-zeigen": {
-      titel: "Personalisieren-Karte wieder anzeigen (dieses Gerät)",
-      ausfuehren: async () => { app.saveLocalStorage(AUS, null); neuZeichnen(); },
-    },
   };
 
-  ctx.personalisieren = { zielnotePruefen, Formular, angaben, get fenster() { return fenster; } };
+  ctx.personalisieren = { zielnotePruefen, semesterOptionen, vorschauTeile, vorschauText, VARIANTEN, Formular, angaben, neuZeichnen,
+    get fenster() { return fenster; } };
 
   const registrieren = () => {
     block = ctx.codeblock("eba-personalisieren", (quelle, el, c, inst) => {

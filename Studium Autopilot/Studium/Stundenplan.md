@@ -13,11 +13,9 @@ cssclasses:
 <h1>Stundenplan</h1>
 </div>
 
-> [!eba-neu|ohne-titel]
-> - [Stundenplan aus Alma holen](obsidian://studium-autopilot?aktion=stundenplan)
-> - [Alma verbinden](obsidian://studium-autopilot?aktion=verbinden&id=alma)
-
-Einmal **Alma verbinden**, danach mit **Stundenplan aus Alma holen** aktualisieren.
+```eba-alma-knoepfe
+Alma verbinden: Einstellungen & Hilfe → Verbindungen.
+```
 
 > [!eba-kennzahlen|woche]
 > ```eba-schloss alma

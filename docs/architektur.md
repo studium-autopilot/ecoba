@@ -1,6 +1,6 @@
 # Architektur: Plugin „Studium Autopilot“
 
-Stand: Phase 2c, Datenkanal und Update-Knopf (0.2.0, 15.10.2026). Ersetzt Templater vollständig. Zielgruppe: Entwickler, die den Vault weiterbauen.
+Stand: 0.3.0, Einrichtung beim ersten Start (15.10.2026; davor Phase 2c, Datenkanal und Update-Knopf in 0.2.0). Ersetzt Templater vollständig. Zielgruppe: Entwickler, die den Vault weiterbauen.
 Getestet mit Obsidian 1.14.4 (API-Version); `manifest.json` verlangt darum `minAppVersion` 1.14.4. Erst senken, wenn ältere
 Versionen getestet sind.
 
@@ -118,7 +118,8 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `eba.js`, `alma.js`, `unterlagen.js` | Helfer: Semester, Module, Datumseingabe, `ablegen()`; Alma-Stundenplan; Eingang einordnen |
 | `modell.js` | Datenmodell `ctx.modell`, Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
 | `verbindungen.js` | Verbindungen und Schloss: Codeblöcke `eba-schloss`, `eba-verbindungen`; Aktionen `verbinden`, `verbindung-aktualisieren`, `trennen` |
-| `personalisieren.js` | Karte `eba-personalisieren`, Formular (Aktion `personalisieren`) |
+| `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit sechs Bildschirmen, Zustand in den Einstellungen, Aktion `einrichtung`; siehe „Einrichtung“ |
+| `personalisieren.js` | Formular (Aktion `personalisieren`), „Deine Angaben“ (`eba-personalisieren angaben`); die Karte auf dem Dashboard entfällt seit 0.3.0 |
 | `musterplan.js` | Musterstudienpläne als eigene Darstellung, Codeblock `eba-musterplan` |
 | `zentral.js` | Datenkanal „Zentrale Daten“: Abruf, Prüfung, Übernahme als Termin-Notizen, Semesterdaten, Abrufer-Sperre (`ctx.zentral`), Aktionen `zentral-aktualisieren`, `zentral-schalter` |
 | `update.js` | Update der Vorlage mit einem Knopf (seit 0.2.0, `ctx.update`): Zeile „Studium Autopilot“ in `eba-verbindungen`, Aktionen `vorlage-aktualisieren`, `vorlage-neu-laden`; siehe „Update“ |
@@ -128,7 +129,8 @@ Ausnahme seit 2b: Weichen die abgeleiteten Felder in `System/Einstellungen.md` v
 Daten“), werden sie einmal nachgezogen. Im Normalfall sind sie gleich, dann wird nichts geschrieben. Der Datenkanal
 (`zentral.js`) ruft frühestens 20 s nach dem Einlesen ab und schreibt nur nach einem erfolgreichen Abruf mit geänderten Daten
 (siehe „Datenkanal“). `update.js` legt 20 s nach dem Einlesen einmal `System/Daten/installiert.json` an, wenn sie fehlt
-(Erstinstallation, siehe „Update“); sonst schreibt es nur nach dem Tipp auf „Aktualisieren“.
+(Erstinstallation, siehe „Update“); sonst schreibt es nur nach dem Tipp auf „Aktualisieren“. `einrichtung.js` öffnet beim
+ersten Start höchstens ein Fenster und schreibt dabei nichts; geschrieben wird erst nach einem Tipp in der Einrichtung.
 
 **Codeblock-Argumente:** Obsidian übergibt einem Codeblock-Prozessor nur den Inhalt. Das Argument in der Kopfzeile
 (z. B. `eba-schloss alma`) liest `ctx.modell.blockArgument(el, c, sprache, erlaubt, vorgabe)` aus dem Abschnitt. Der Inhalt
@@ -177,7 +179,7 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `verbindung-aktualisieren` | `id` | Verbindung jetzt abrufen | ja |
 | `trennen` | `id` | Link auf diesem Gerät löschen (mit Rückfrage) | ja |
 | `personalisieren` | – | Formular Name, Studienbeginn, Variante, Zielnote | ja |
-| `personalisieren-ausblenden` / `-zeigen` | – | Karte auf dem Dashboard gerätelokal aus/ein | nur „zeigen“ |
+| `einrichtung` | `ab` (optional, `2` = ab Studienbeginn, vorausgefüllt) | Einrichtung öffnen (Knopf „Einrichtung erneut starten“ in den Einstellungen) | ja |
 | `alma-link` | – | Alma-Link neu eingeben | ja |
 | `suchen` | `q` | Obsidian-Suche öffnen | – |
 | `zeigen` | `notiz` | Notiz öffnen (Stundenplan-Raster in Bases) | – |
@@ -432,7 +434,7 @@ Hintergrund, nur eingeklappt unter „Mehr erfahren“ (`<details class="eba-mod
 
 | id | Art | Gesperrt, solange … |
 |---|---|---|
-| `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`) | kein Link auf diesem Gerät **und** keine Notiz in `Stundenplan/` |
+| `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`) | kein Link auf diesem Gerät **und** keine Notiz in `Stundenplan/` **und** Alma in der Einrichtung offen (übersprungen oder Einrichtung nicht fertig, `ctx.einrichtung.almaOffen()`; seit 0.3.0) |
 | `ilias` | bald | immer (Erklärung, kein Eingabefeld) |
 | `zentral` | Zentrale Daten (`zentral.js`), Knopf Jetzt aktualisieren (aus: Einschalten); die Schalter Zentrale Daten und Fachschaft & Veranstaltungen stehen im Fenster „Mehr erfahren“ | nie (Standard an) |
 | `assistent` | „KI-Assistent“, Pille „für Fortgeschrittene“, nur Claude Code | immer (Erklärung: keine Passwörter in Obsidian, auch kein IMAP) |
@@ -452,22 +454,71 @@ Hintergrund, nur eingeklappt unter „Mehr erfahren“ (`<details class="eba-mod
   kopieren“), Eingabe mit Prüfung (https/webcal, Server alma.uni-tuebingen.de, nicht nur die Startseite), sofortiger Import, Ergebnis mit
   Anzahl. Scheitert der Abruf, bleibt kein Link gespeichert (vorheriger Zustand gilt wieder).
 - Gespeichert wird nur gerätelokal (`app.saveLocalStorage`): `eba-alma-ics`, `eba-alma-stand`, `eba-alma-seit`.
+- Codeblock `eba-alma-knoepfe` (Seite Stundenplan, seit 0.3.0): verbunden → nur „Stundenplan aus Alma holen“, sonst
+  „Alma verbinden“ und ein Satz dazu. Gezeichnet als Knopf-Karte `callout[data-callout=eba-neu]` (gleiche Gestalt wie
+  `> [!eba-neu|ohne-titel]`). Vorher standen beide Knöpfe fest in der Notiz, auch bei verbundenem Alma.
 - Für andere Skripte: `ctx.verbindungen.gesperrt(id)`, `ctx.verbindungen.schlossKarte(el, id)`.
+
+## Einrichtung (seit 0.3.0)
+
+`einrichtung.js` ersetzt die Personalisieren-Karte. Ein Obsidian-Modal (`eba-modal eba-modal-einrichtung`) mit sechs
+Bildschirmen: 1 Willkommen (ein Satz, **Los geht’s** / *Später*), 2 Studienbeginn (Semester-Auswahl aus
+`ctx.modell.semesterAuswahl()`, vorausgewählt das aktuelle Semester; Hinweis „Heute bist du im n. Fachsemester.“),
+3 Variante (vier Optionen, „Weiß ich noch nicht“ = `offen` vorausgewählt), 4 Über dich (Name, Zielnote; Prüfung
+`ctx.personalisieren.zielnotePruefen`), 5 Alma (drei Schritte, Feld, Prüfung und Verbinden über `ctx.verbindungen.holen("alma")`,
+also `alma.js` `linkPruefen`/`verbinden(link, { nurBeiErfolg })`), 6 Fertig (Zusammenfassung, „Später nachholen“ mit Knopf zum
+Bildschirm). Ab Bildschirm 2 „Schritt n von 5“ und Punkte; Zurück jederzeit, Überspringen auf 2–5.
+
+Regeln: je Bildschirm ein Satz und eine Hauptaktion, keine Fachwörter; kein Autofokus (sonst springt auf dem iPhone die Tastatur
+auf); Tippflächen ≥ 44 px, Eingaben 16 px; auf dem iPhone bildschirmfüllend (`eba-core.css` Abschnitt 45). Esc, × und
+„Später“ schließen ohne zu schreiben. Eingaben ohne Weiter bleiben im Speicher (`ctx.bleibend("entwurf")`).
+
+**Zustand** in `System/Einstellungen.md` (synchronisiert, gilt für alle Geräte):
+
+| Feld | Werte |
+|---|---|
+| `einrichtung` | `offen` (oder leer) · `laeuft` · `fertig` |
+| `einrichtung_schritt` | Bildschirm 1–6, an dem es beim nächsten Start weitergeht |
+| `einrichtung_uebersprungen` | Liste aus `studienbeginn`, `variante`, `angaben`, `alma` |
+
+Geschrieben wird nur nach einem Tipp auf **Los geht’s**, **Weiter** oder **Überspringen**: Antworten des Bildschirms und Stand
+zusammen in einem `processFrontMatter` (Studienbeginn als festes Datum, nicht leer, damit er nicht mit dem Semester wandert).
+Bildschirm 6 setzt `fertig`. „Erneut starten“ (Aktion `einrichtung`, `ab=2`) beginnt bei 2, vorausgefüllt, ohne Zurück zum
+Willkommen; der Status bleibt `fertig`.
+
+**Automatisch** (`start()`, nur beim App-Start): wenn der metadataCache eingelesen ist (`initialized`, sonst `resolved`) und das
+Dashboard steht, höchstens einmal je App-Sitzung (`sessionStorage`, damit ein Neuladen des Plugins, z. B. nach einem Update,
+sie nicht erneut öffnet). Gezeigt wird, wenn `einrichtung` ≠ `fertig` und (`laeuft` oder der Vault ist nicht eingerichtet:
+kein Name, kein Studienbeginn, keine Notiz in `Stundenplan/`). Ein Vault aus 0.2.0 mit Angaben sieht sie also nicht, und es
+wird nichts geschrieben. Weitere Geräte: Der Stand kommt per Sync; trifft `fertig` oder ein Name ein, während dort nur das
+Willkommen offen ist, schließt es sich von selbst.
+
+**Schloss:** `ctx.einrichtung.almaOffen()` = `einrichtung` ≠ `fertig` oder `alma` übersprungen. Das Alma-Schloss
+(`eba-schloss alma`, Wochenraster auf Dashboard und Stundenplan) erscheint nur, wenn das gilt **und** kein Stundenplan da ist
+**und** dieses Gerät nicht verbunden ist. Der KI-Assistent ist kein Einrichtungsschritt: kein Schloss auf Seiten, nur seine
+Zeile in den Verbindungen.
+
+Für Tests: `ctx.einrichtung = { zustand(), eingerichtet(), sollZeigen(), almaOffen(), oeffnen({ ab }), automatisch({ immer }),
+sitzungMerken(an), fenster }`; das Fenster hat `schritt`, `felder`, `weiter()`, `ueberspringen()`, `zurueck()`, `gehe(n)`
+(ohne zu schreiben).
 
 ## Personalisieren
 
-Codeblock `eba-personalisieren` (Dashboard oben) zeigt eine dezente Karte, bis Name **und** Studienbeginn gesetzt sind oder
-„Ausblenden“ geklickt wurde (gerätelokal `eba-personalisieren-aus`). Das Formular (Aktion und Befehl `personalisieren`, Knopf in
-den Einstellungen) hat Name, Studienbeginn als Semester-Auswahl (mit Vorschau „1. Fachsemester … · heute n. FS“ und Hinweis bei
-Beginn im Sommersemester), Variante und Zielnote (1,0–4,0, Komma oder Punkt, gespeichert als „2,3“). Speichern schreibt nach
-`System/Einstellungen.md`; leere Felder werden leer (`name:`), nicht `""`. Danach zieht `abgleichen()` die Semesterliste nach.
+Das Formular (Aktion und Befehl `personalisieren`, Knopf „Ändern“ in den Einstellungen) hat Name, Studienbeginn als
+Semester-Auswahl (mit Vorschau „1. Fachsemester … · heute n. FS“ und Hinweis bei Beginn im Sommersemester), Variante und
+Zielnote (1,0–4,0, Komma oder Punkt, gespeichert als „2,3“). Speichern schreibt nach `System/Einstellungen.md`; leere Felder
+werden leer (`name:`), nicht `""`. Danach zieht `abgleichen()` die Semesterliste nach. Semester-Auswahl, Vorschau und
+Zielnoten-Prüfung nutzt auch die Einrichtung (`ctx.personalisieren.semesterOptionen`, `vorschauTeile`, `zielnotePruefen`).
 
-Codeblock `eba-personalisieren angaben` (Einstellungen & Hilfe, „Deine Angaben“, ersetzt seit 15.10.2026 die Bases-Tabelle, die
-leer nur Spaltenköpfe zeigte): solange Name und Studienbeginn leer sind „Noch nichts eingetragen.“ + Knopf „Personalisieren“,
-sonst Name, Zielnote, Studienbeginn (Semester, leere Werte „–“) + Knopf „Ändern“. Für Tests: `ctx.personalisieren.angaben(el)`.
+Codeblock `eba-personalisieren` (früher die Karte oben auf dem Dashboard) zeichnet seit 0.3.0 nichts mehr; er bleibt, damit
+selbst geänderte ältere Dashboards keine Lücke zeigen.
 
-Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, Verbindungen, Fenster, Semestertermine) und
-44 (Musterpläne), nur mit `--eba-*`-Farbtokens (hell/dunkel, alle Farbschemata).
+Codeblock `eba-personalisieren angaben` (Einstellungen & Hilfe, „Deine Angaben“): solange Name und Studienbeginn leer sind
+„Noch nichts eingetragen.“ + Knopf „Einrichtung starten“, sonst Name, Zielnote, Studienbeginn (Semester, leere Werte „–“) +
+Knöpfe „Ändern“ und „Einrichtung erneut starten“. Für Tests: `ctx.personalisieren.angaben(el)`.
+
+Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, Verbindungen, Fenster, Semestertermine),
+44 (Musterpläne) und 45 (Einrichtung), nur mit `--eba-*`-Farbtokens (hell/dunkel, alle Farbschemata).
 
 ## Bereiche (seit 15.10.2026: 9 statt 13)
 
@@ -569,7 +620,7 @@ Regeln für Skript-Autoren:
 Testeinstiege: `plugin.testDatum = "2026-12-29"` setzt „heute“ für `ctx.date` (und damit Modell, Studienverlauf,
 Vorlesungsnotiz, Agenda, Kalender, To-dos); `null` = echtes Datum. Bases-Formeln kennen kein Testdatum; Tests zeichnen
 die Dashboard-Formeln darum in einer Testnotiz mit `date("…")` statt `today()`. Offene Fenster für Tests:
-`ctx.personalisieren.fenster`, `ctx.verbindungen.fenster`.
+`ctx.personalisieren.fenster`, `ctx.verbindungen.fenster`, `ctx.einrichtung.fenster`.
 
 Antworten auf Eingabefenster setzt du vorab in `plugin.testAntworten` (Liste; `null` = Esc). Den Alma-Abruf ersetzt
 `plugin.testAbruf = async ({ url }) => ({ status, text })` (kein Netz, kein echter Link nötig). Danach lassen sich Aktionen auch

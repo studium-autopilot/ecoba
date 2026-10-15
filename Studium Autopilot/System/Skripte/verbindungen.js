@@ -17,6 +17,10 @@
 //                           Aktualisieren, Jetzt aktualisieren, Einschalten, Neu laden oder Mehr erfahren). Zeile „Studium
 //                           Autopilot“ (art vorlage): Version und Update, Text und Knopf aus ctx.update.anzeige() (update.js). Alles Weitere (Trennen, neuer
 //                           Link, Schalter der zentralen Daten) steht im Fenster hinter dem Textlink „Mehr erfahren“.
+//   ```eba-alma-knoepfe```  Knopf auf der Seite Stundenplan (seit 0.3.0): verbunden → „Stundenplan aus Alma holen“, sonst
+//                           „Alma verbinden“ mit einem Satz dazu.
+// Schloss (seit 0.3.0): nur, wenn Alma in der Einrichtung übersprungen wurde oder die Einrichtung nicht fertig ist
+//   (ctx.einrichtung.almaOffen()), kein Stundenplan da ist und dieses Gerät nicht verbunden ist.
 // Aktionen (Knöpfe obsidian://studium-autopilot?aktion=…&id=alma): verbinden, verbindung-aktualisieren, trennen.
 // Hilfsfunktion für andere Skripte: ctx.verbindungen.schlossKarte(el, id) zeichnet die Schloss-Karte, gesperrt(id).
 // Erweiterung: Das Plugin ruft registrieren() auf (Codeblöcke über ctx.codeblock) und übernimmt die aktionen.
@@ -30,6 +34,8 @@ module.exports = function (ctx) {
   const zeitText = (iso) => (iso ? moment(iso).format("DD.MM.YYYY, HH:mm") : "");
   const tagText = (iso) => (iso ? moment(iso).format("DD.MM.YYYY") : "");
   const alma = () => ctx.user.alma(Object.create(ctx));
+  // Schloss nur für Schritte, die in der Einrichtung übersprungen wurden (einrichtung.js); ohne einrichtung.js wie früher
+  const almaOffen = () => (ctx.einrichtung && ctx.einrichtung.almaOffen ? ctx.einrichtung.almaOffen() : true);
   const stundenplanAnzahl = () => app.vault.getMarkdownFiles().filter((f) => {
     if (!f.path.startsWith("Stundenplan/")) return false;
     const c = app.metadataCache.getFileCache(f);
@@ -68,8 +74,9 @@ module.exports = function (ctx) {
         const s = alma().status();
         return { verbunden: !!s.verbunden, seit: s.seit, stand: s.stand, daten: stundenplanAnzahl() };
       },
-      // Gesperrt nur, wenn weder ein Link auf diesem Gerät noch Stundenplan-Notizen (z. B. per Sync) da sind
-      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten; },
+      // Gesperrt nur, wenn weder ein Link auf diesem Gerät noch Stundenplan-Notizen (z. B. per Sync) da sind UND Alma in der
+      // Einrichtung offen blieb (übersprungen, „Später“ oder Einrichtung nicht fertig; einrichtung.js, seit 0.3.0)
+      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && almaOffen(); },
       pruefen(link) { return alma().linkPruefen(link); },
       async verbinden(link) {
         const a = alma();
@@ -377,7 +384,26 @@ module.exports = function (ctx) {
     }
   };
 
-  const zeichnen = (inst) => { if (inst.art === "uebersicht") uebersicht(inst.el); else schlossKarte(inst.el, inst.id); };
+  // Knöpfe der Seite Stundenplan (```eba-alma-knoepfe```, seit 0.3.0): verbunden → nur „Stundenplan aus Alma holen“, sonst nur
+  // „Alma verbinden“ und ein Satz dazu. Gleiche Gestalt wie eine Knopf-Karte > [!eba-neu|ohne-titel] (eba-core.css 6).
+  const almaKnoepfe = (el) => {
+    el.empty();
+    const verbunden = !!VERBINDUNGEN.alma.status().verbunden;
+    el.toggleClass("eba-alma-verbunden", verbunden);
+    const karte = el.createDiv({ cls: "callout eba-alma-knoepfe", attr: { "data-callout": "eba-neu", "data-callout-metadata": "ohne-titel" } });
+    const li = karte.createDiv({ cls: "callout-content" }).createEl("ul").createEl("li");
+    if (verbunden) li.createEl("a", { text: "Stundenplan aus Alma holen", href: ctx.link("stundenplan", {}) });
+    else {
+      li.createEl("a", { text: "Alma verbinden", href: ctx.link("verbinden", { id: "alma" }) });
+      fett(el.createEl("p", { cls: "eba-alma-hinweis" }), "Einmal **Alma verbinden**, dann holst du deinen Stundenplan hier mit einem Tipp.");
+    }
+  };
+
+  const zeichnen = (inst) => {
+    if (inst.art === "uebersicht") uebersicht(inst.el);
+    else if (inst.art === "alma-knoepfe") almaKnoepfe(inst.el);
+    else schlossKarte(inst.el, inst.id);
+  };
 
   // ---------- Aktionen ----------
   const waehlen = async (c, frage) => {
@@ -432,6 +458,10 @@ module.exports = function (ctx) {
     bloecke.push(ctx.codeblock("eba-verbindungen", (quelle, el, c, inst) => {
       inst.art = "uebersicht";
       try { zeichnen(inst); } catch (e) { console.error("eba-verbindungen", e); el.setText(String(quelle)); }
+    }));
+    bloecke.push(ctx.codeblock("eba-alma-knoepfe", (quelle, el, c, inst) => {
+      inst.art = "alma-knoepfe";
+      try { zeichnen(inst); } catch (e) { console.error("eba-alma-knoepfe", e); el.setText(String(quelle)); }
     }));
     // Neu zeichnen, wenn sich der Stundenplan ändert (Import, Sync) – über das Datenmodell, sonst direkt
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(() => neuZeichnen()));
