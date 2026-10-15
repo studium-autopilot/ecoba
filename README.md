@@ -6,6 +6,10 @@
 Termine und Fristen, die sich selbst aktualisieren, Studienplan, Noten und ECTS – in der kostenlosen App Obsidian, auf
 Handy, Tablet und Computer.
 
+<br>
+
+![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
+
 </div>
 
 ## In 3 Schritten starten
@@ -57,8 +61,6 @@ Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ec
 </details>
 
 Mehrere Geräte, Alma-Stundenplan verbinden, Updates: [ausführliche Anleitung](docs/installation.md).
-
-![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
 
 ## Was drin ist
 
