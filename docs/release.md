@@ -88,3 +88,6 @@ Für Tests vor dem Release (zum Beispiel im eigenen Test-Tresor mit Kanal „Bet
 Nur Tresore mit `update_kanal: beta` in `System/Einstellungen.md` (Schalter **Beta-Versionen** im Fenster „Studium Autopilot“
 unter „Mehr erfahren“) bekommen die Beta angeboten. Nach dem fertigen Release `X.Y.Z` ist `release` wieder höher als die Beta;
 die Beta-Tresore bekommen dann die fertige Version. `beta` kann stehen bleiben oder entfernt werden.
+
+**Zwei Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen) und `Studium-Autopilot-iOS.zip`
+(gleicher Inhalt, eine Ebene tiefer verschachtelt) für den iOS-Kurzbefehl `docs/kurzbefehl/`. Beide Namen sind fest; `release.py --zip` erzeugt beide.
