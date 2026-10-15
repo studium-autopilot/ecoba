@@ -10,13 +10,9 @@ Handy, Tablet und Computer.
 
 <a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/knopf-ios.svg" alt="Für iPhone und iPad – mit Kurzbefehl" width="300"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/knopf-zip.svg" alt="Für Mac, Windows und Android – ZIP-Datei herunterladen" width="300"></a>
 
-<sub>Kostenlos · ohne Konto</sub>
-
 <br>
 
 ![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
-
-<sub>Beispiel mit erfundenen Daten: 3. Semester, Alma verbunden</sub>
 
 </div>
 
