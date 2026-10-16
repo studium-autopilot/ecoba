@@ -6,7 +6,8 @@
 
 **Dein EcoBA-Studium an der Uni Tübingen an einem Ort.**<br>
 Termine und Fristen, die sich selbst aktualisieren, Studienplan, Noten und ECTS – in der kostenlosen App Obsidian, auf
-Handy, Tablet und Computer.
+Handy, Tablet und Computer.<br>
+<sub>🇬🇧 <a href="#in-english">English summary</a></sub>
 
 <br>
 

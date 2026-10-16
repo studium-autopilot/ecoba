@@ -1,0 +1,12 @@
+# Updates für die Werkzeuge in GitHub Actions.
+# Achtung: Dieses Repo entsteht aus einem Export (docs/release.md). Einen gemergten Dependabot-PR in der Arbeitskopie
+# nachziehen, sonst überschreibt ihn der nächste Release.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]

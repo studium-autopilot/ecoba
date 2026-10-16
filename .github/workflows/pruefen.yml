@@ -14,14 +14,16 @@ jobs:
     env:
       ESBUILD_VERSION: "0.25.0"
     steps:
-      - uses: actions/checkout@v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
           fetch-depth: 0
 
-      - name: Commit-Identität (nur anonyme GitHub-Adresse erlaubt)
+      - name: Commit-Identität (nur anonyme GitHub-Adressen erlaubt)
         run: |
-          erlaubt='^342926485\+pdotwalt@users\.noreply\.github\.com$|^noreply@anthropic\.com$|^noreply@github\.com$'
-          if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+          erlaubt='^342926485\+pdotwalt@users\.noreply\.github\.com$|^noreply@anthropic\.com$|^noreply@github\.com$|^49699333\+dependabot\[bot\]@users\.noreply\.github\.com$'
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            bereich="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             bereich="${{ github.event.before }}..${{ github.sha }}"
           else
             bereich="${{ github.sha }}~1..${{ github.sha }}"
@@ -31,11 +33,11 @@ jobs:
           if [ -n "$falsch" ]; then echo "Commits mit nicht erlaubter E-Mail-Adresse:"; echo "$falsch"; exit 1; fi
           echo "Alle Commits mit erlaubter Identität."
 
-      - uses: actions/setup-python@v6.0.0
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
         with:
           python-version: "3.12"
 
-      - uses: actions/setup-node@v5.0.0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
 
