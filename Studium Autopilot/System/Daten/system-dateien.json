@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "version": "0.4.2",
+ "version": "0.4.3",
  "ordner": "Studium Autopilot",
- "erstellt": "2026-10-17T20:37:27Z",
+ "erstellt": "2026-10-17T21:28:50Z",
  "dateien": [
   {"pfad": ".obsidian/app.json", "klasse": "einstellung", "groesse": 418, "sha256": "ea409a2af1ff7abc93ea13f5ac5dcfc80723d5e6b7f048a896961aa72325e465"},
   {"pfad": ".obsidian/bookmarks.json", "klasse": "einstellung", "groesse": 687, "sha256": "4fbd26addbc4e2b9f00777864b16782f95f2b04bc61b48941c1c3918da0bc63c"},
@@ -10,8 +10,8 @@
   {"pfad": ".obsidian/core-plugins.json", "klasse": "einstellung", "groesse": 698, "sha256": "b06ab63f09578efd584bb3d57c57aca6b6052d6861284919ef2f53f579318a14"},
   {"pfad": ".obsidian/hotkeys.json", "klasse": "einstellung", "groesse": 110, "sha256": "33864b03da9bc6edf5a5f669961f2e041ee92b9d87213057ced8c479296aca69"},
   {"pfad": ".obsidian/plugins/studium-autopilot/main.js", "klasse": "system", "groesse": 32437, "sha256": "7706974e1285a821a69ecf086e18b2b6de88237504fd17528b95cd4ecaa911e2"},
-  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 375, "sha256": "d317ede0057ce97f00c72213177be8879b712d6d72fa1e4efe1798f4762aad48"},
-  {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 385702, "sha256": "757bd90a36f686daae7c5af416e9406c66209dc233c8e5f63c0c51891e67980b"},
+  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 375, "sha256": "5e7a03fca3706632f0cb20bc89268f7edbc0efe3a5cae805215b5506636aec1e"},
+  {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 388567, "sha256": "c817baa0150a64363dcd4eb3873ef32dc18dbb71cbe999e833b7bbee1a14ce0b"},
   {"pfad": ".obsidian/snippets/eba-paper-elfenbein.css", "klasse": "system", "groesse": 6387, "sha256": "3f98c8106e6642ba7654cc3f0e54f3a0abbad6668dd82cc9c5fcd40246165e4a"},
   {"pfad": ".obsidian/types.json", "klasse": "einstellung", "groesse": 2233, "sha256": "0fb9899ec224a338f112fe7e1e295eb4b0ae20b1ae732c634a79f4add7143de3"},
   {"pfad": "Dashboard.md", "klasse": "seite", "groesse": 22887, "sha256": "6b038297d2d832734b6120cb7a6c53b77692940274233991db2c81ce718acb63"},
@@ -112,7 +112,7 @@
   {"pfad": "Studium/Termine & Anmeldungen.md", "klasse": "seite", "groesse": 2875, "sha256": "451af1e04d23ce65f581056285d5e61c9a44cc9dbb1ae6b7513995f8d397a0f5"},
   {"pfad": "Studium/Unterlagen.md", "klasse": "seite", "groesse": 12123, "sha256": "8207ee617b578e493e401bfe92dd3afd090ab1e5fe664cd344dbca79e484927f"},
   {"pfad": "System/Daten/Musterplan.md", "klasse": "seite", "groesse": 8213, "sha256": "6f78f0a7f7f04a11da846f6867b26b57d30519e89798a80e96a7df2182d2a25f"},
-  {"pfad": "System/Gerüste/Karteikarten.md", "klasse": "system", "groesse": 997, "sha256": "e8ebf9800ce21f529f5a4d80413d05707dcdfc41a1b33e9a8b9e6cc5b9e84d7a"},
+  {"pfad": "System/Gerüste/Karteikarten.md", "klasse": "system", "groesse": 1058, "sha256": "e71c1bc682894469cf501a9d0a99796cf1772d2590cc403b2173446d7ce23592"},
   {"pfad": "System/Gerüste/Modul.md", "klasse": "system", "groesse": 5918, "sha256": "11b3c602a5e024a6b61205bda500cd359b978490f36a274f6140fc37333f16d2"},
   {"pfad": "System/Skripte/aktionen.js", "klasse": "system", "groesse": 9195, "sha256": "a9c2e29ec5324d1a295a688f695cfbec92417221659cddc16a3c33c224023808"},
   {"pfad": "System/Skripte/alma.js", "klasse": "system", "groesse": 28792, "sha256": "8f793241c79350deb544ba68d68d7fb1f45ef9666881789c54b4a02fc7312cca"},
@@ -127,7 +127,7 @@
   {"pfad": "System/Skripte/ilias-netz.js", "klasse": "system", "groesse": 35188, "sha256": "35229bf421d7ab728a0795afb037f2f6e51e2a09cc1821590587db9c93e2e49c"},
   {"pfad": "System/Skripte/ilias.js", "klasse": "system", "groesse": 110792, "sha256": "c13ed3ae7e6daf96cfa5c793be055f91be880b2b11045456c63e2f974e711a62"},
   {"pfad": "System/Skripte/kalender.js", "klasse": "system", "groesse": 18287, "sha256": "5760ea44d2d9bdad53ae12edccd15809d2b224d71d6c129cd7808ab3aa07b8b4"},
-  {"pfad": "System/Skripte/karten.js", "klasse": "system", "groesse": 92394, "sha256": "813b3eeff9454e65d5a0b958a6472f8c4832dc2dd26939ed614fe3fc91f2a802"},
+  {"pfad": "System/Skripte/karten.js", "klasse": "system", "groesse": 101245, "sha256": "68e3afeefa680db47ffc80e6e81f447743c620fa47783808933c947835ee4eaf"},
   {"pfad": "System/Skripte/klausurzeit.js", "klasse": "system", "groesse": 16165, "sha256": "ba3928998e7b661fb119bec5d4561825625d5df62def0d8d489ca157e0af13f1"},
   {"pfad": "System/Skripte/leer.js", "klasse": "system", "groesse": 4432, "sha256": "3ab4438cd3fdff6a3974a43f7182470fba5044a1276bd6d682554cc034479d01"},
   {"pfad": "System/Skripte/meine-gruppe.js", "klasse": "system", "groesse": 28120, "sha256": "000634d48e6fef669ec24fcce773034fb6273873ca5205c44018d6d5dbd1f6cb"},
@@ -144,9 +144,9 @@
   {"pfad": "System/Skripte/unterlagen.js", "klasse": "system", "groesse": 68786, "sha256": "23ee1f4c6d836c24bda04f53c9067422fb2be5768ffcd0898d0b00f4804653a1"},
   {"pfad": "System/Skripte/update.js", "klasse": "system", "groesse": 66456, "sha256": "db4dd6cc132fe66fdc21aa9855b3460dd65f0638e963c36fa98324c21f2c0c11"},
   {"pfad": "System/Skripte/verbindungen.js", "klasse": "system", "groesse": 55433, "sha256": "812410704dab1b8293ec2201234e1cfad9927e1c55b28e71ea27f5285a85fe92"},
-  {"pfad": "System/Skripte/verlauf.js", "klasse": "system", "groesse": 48247, "sha256": "2eaf19f63e9e48b72ef60ab562964cd9af9099189fe385ac6a978c667ab18688"},
+  {"pfad": "System/Skripte/verlauf.js", "klasse": "system", "groesse": 48467, "sha256": "b8638c477bd129e5177b5ab5038fa5ee70f75b78973bc62df25b17726a679a5f"},
   {"pfad": "System/Skripte/vorlesung.js", "klasse": "system", "groesse": 22391, "sha256": "a4eecefabce0e6b764ad155116d41c29eae97fdcaa0ed55b5418cca68ab72d2a"},
-  {"pfad": "System/Skripte/woche.js", "klasse": "system", "groesse": 19625, "sha256": "a8f5cf9724ba5a50719ce9bea8a7ee75b5524fc116140f6d74c99427db5e8c56"},
+  {"pfad": "System/Skripte/woche.js", "klasse": "system", "groesse": 20080, "sha256": "04fa124818e18dcd0ef04232543d69b162f466d6038f547910cbb61ea104fb6f"},
   {"pfad": "System/Skripte/zentral.js", "klasse": "system", "groesse": 100138, "sha256": "17bc5a81457c2c2a95da66aef779f068e2062afe75b8732f75642d0533ed6698"}
  ]
 }

@@ -3912,10 +3912,11 @@ body.is-phone .eba-ei-liste-zeile { padding: 12px 14px; }
 
 /* ---------- 46. Update-Hinweis oben auf dem Dashboard (update.js, ```eba-update-hinweis```, seit 0.3.1) ----------
    Schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Sonst ist der Block leer (.eba-uh-aus) und
-   nimmt keinen Platz ein, auch nicht die Hülle (Leseansicht .el-pre, Live Preview .cm-embed-block). Nur --eba-*-Variablen. */
+   nimmt keinen Platz ein, auch nicht die Hülle (Leseansicht .el-pre auf Höhe 0 gefaltet, nie display:none, siehe Abschnitt 36;
+   Live Preview .cm-embed-block). Nur --eba-*-Variablen. */
 .block-language-eba-update-hinweis.eba-uh-aus,
-.el-pre:has(> .block-language-eba-update-hinweis.eba-uh-aus),
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-update-hinweis.eba-uh-aus) { display: none !important; }
+.el-pre:has(> .block-language-eba-update-hinweis.eba-uh-aus) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden; }
 .block-language-eba-update-hinweis { margin: 0; }
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-update-hinweis) { padding: 0; }
 .eba-uh {
@@ -4084,7 +4085,7 @@ body.is-mobile .eba-modal-update .eba-modal-mehr > summary { padding: 12px 0; }
    Übersicht der Stapel (.eba-lk-tabelle), Block in der Kartennotiz (.eba-lk-stapel), Dashboard-Zeile (.eba-lk-heute; nichts
    fällig: .eba-lk-aus, samt Hülle unsichtbar), Statistik (.eba-lk-kacheln, Prognose als eine Reihe in einem Farbton), Kartenliste
    (.eba-lk-liste), Lernfenster (.eba-lk-fenster; iPhone: ganzer Bildschirm, Knöpfe unten, ≥ 44 px), „Karte hinzufügen“
-   (.eba-lk-neu) und Leseansicht der Kartennotizen (Trenner, Lücken). Nur --eba-*-Variablen. */
+   (.eba-lk-neu) und Leseansicht der Kartennotizen (.eba-lk-k, eine Zeile je Karte). Nur --eba-*-Variablen. */
 
 /* Symbole: Bereich im Menü, Knöpfe auf der Seite Karteikarten („Karte hinzufügen“ behält das Plus) */
 li:has(> a[data-href$="Karteikarten"])         { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='14' height='14' rx='2'/%3E%3Cpath d='M7 3h12a2 2 0 0 1 2 2v12'/%3E%3C/svg%3E"); }
@@ -4149,10 +4150,10 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
 .eba-lk-zahlen { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--eba-muted); }
 .eba-lk-zahl b { color: var(--eba-text); font-weight: 650; font-variant-numeric: tabular-nums; }
 
-/* Dashboard: Zeile „Karteikarten · 12 fällig“, sonst samt Hülle unsichtbar (wie Abschnitt 46) */
+/* Dashboard: Zeile „Karteikarten · 12 fällig“, sonst samt Hülle unsichtbar (wie Abschnitt 46, Hülle auf Höhe 0 gefaltet) */
 .block-language-eba-karten.eba-lk-aus,
-.el-pre:has(> .block-language-eba-karten.eba-lk-aus),
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-karten.eba-lk-aus) { display: none !important; }
+.el-pre:has(> .block-language-eba-karten.eba-lk-aus) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden; }
 .eba-lk-heute {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 var(--eba-gap, 12px); padding: 6px 8px 6px 12px;
   border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); color: var(--eba-text);
@@ -4254,7 +4255,7 @@ body.is-phone .eba-lk-name > span:not(.eba-lk-slot):not(.eba-lk-anz) { white-spa
 .eba-lk-neu .eba-form-label { padding-top: 6px; }
 .eba-lk-neu .eba-lk-hilfe { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
 
-/* Leseansicht einer Kartennotiz: Trenner als Pfeil, Lücken markiert */
+/* Rückfall, wo es keinen Abschnitt gibt: Trenner als Pfeil, Lücken markiert (Zeilen der Leseansicht: weiter unten) */
 .eba-lk-trenner { padding: 0 2px; font-weight: 600; color: var(--eba-accent-text); }
 .eba-lk-trenner.zeile { display: inline-block; padding: 0; font-size: 0.95em; }
 .eba-lk-l { padding: 0 3px; border-radius: 4px; color: var(--eba-accent-text); background: var(--eba-accent-soft); }
@@ -4297,6 +4298,30 @@ details.eba-lk-ruhig[open] > summary { margin-bottom: 8px; }
 body.is-phone .eba-lk-filter .eba-lk-suche { flex-basis: 100%; }
 body.is-phone .eba-lk-filter select { flex: 1 1 30%; }
 body.is-phone .eba-lk-summe-text b { font-size: 1.2em; }
+/* Leseansicht einer Kartennotiz: jede Karte eine Zeile mit der Vorderseite, die Antwort (Lücken: die Lösung) erst beim
+   Antippen oder mit „Antworten zeigen“ (.eba-lk-k-alle an der Ansicht). Abschnitte mit Karten setzt karten.js
+   (.eba-lk-k-abschnitt); der Rest einer Karte, die Obsidian in zwei Abschnitte teilt, ist leer (.eba-lk-k-weiter). */
+.eba-lk-k-abschnitt { display: flex; flex-direction: column; gap: 6px; margin: 0 0 6px; }
+.eba-lk-k-abschnitt.eba-lk-k-weiter { display: none; }
+.eba-lk-k {
+  display: flex; align-items: flex-start; gap: 8px; box-sizing: border-box; padding: 10px 10px 10px 14px;
+  border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s); background: var(--eba-card-bg); color: var(--eba-text);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.eba-lk-k:hover { border-color: color-mix(in srgb, var(--eba-accent) 35%, var(--eba-border)); }
+.eba-lk-k:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
+.eba-lk-k-inhalt { flex: 1 1 auto; min-width: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
+.eba-lk-k-seite :is(p, ul, ol) { margin: 0; }
+.eba-lk-k-seite :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 4px; }
+.eba-lk-k-seite img { max-width: 100%; height: auto; }
+.eba-lk-k-hinten { display: none; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--eba-border); color: var(--eba-muted); }
+.eba-lk-k-l .eba-lk-loesung { display: none; }
+.eba-lk-k-pfeil { flex: none; width: 20px; text-align: center; font-size: 18px; line-height: 21px; color: var(--eba-faint); transition: transform 120ms ease; }
+.eba-lk-k-beide { flex: none; font-size: 13px; line-height: 22px; color: var(--eba-faint); }
+:is(.eba-lk-k.offen, .eba-lk-k-alle .eba-lk-k) .eba-lk-k-hinten { display: block; }
+:is(.eba-lk-k.offen, .eba-lk-k-alle .eba-lk-k) .eba-lk-k-l .eba-lk-luecke { display: none; }
+:is(.eba-lk-k.offen, .eba-lk-k-alle .eba-lk-k) .eba-lk-k-l .eba-lk-loesung { display: inline; }
+:is(.eba-lk-k.offen, .eba-lk-k-alle .eba-lk-k) .eba-lk-k-pfeil { transform: rotate(90deg); }
 /* ---------- Ende Abschnitt 52 ---------- */
 
 /* ---------- 53. Angebote der Uni (angebote.js, Codeblock eba-angebote; seit 17.10.2026) ----------
@@ -4497,15 +4522,19 @@ body.is-phone .eba-woche a.eba-wpfeil:last-child::after { left: 0; right: -6px; 
    (unter den Zahlen) in denselben Spalten wie die Balken (--sp-spalten). Nicht relevant (vor dem 2. Fachsemester ohne Plan): Block leer
    (.eba-sp-aus), dann samt Hülle und Überschrift „Schwerpunkte“ unsichtbar. Leseansicht: Die Überschrift steht nur da, wenn
    direkt danach der gezeichnete Block folgt (Obsidian zeichnet Abschnitte erst nahe am Bildschirm; wer auf .eba-sp-aus
-   wartet, lässt sie kurz stehen). Live Preview: .cm-embed-block und die Zeile der Überschrift. Zugeklappt darunter die
+   wartet, lässt sie kurz stehen). Hülle und Überschrift der Leseansicht auf Höhe 0 falten, nie display:none (Abschnitt 36):
+   Sonst misst Obsidian den Abschnitt so hoch wie alles darüber, und die Semestertermine darunter blieben leer. Live Preview:
+   .cm-embed-block und die Zeile der Überschrift. Zugeklappt darunter die
    Module je Bereich als Chips: im Plan und hier gezählt = Akzent, im Plan, aber woanders gezählt = gestrichelt.
    Nur --eba-*-Variablen. */
 .block-language-eba-schwerpunkte { container-type: inline-size; margin: 0; }
 .block-language-eba-schwerpunkte.eba-sp-aus,
-.el-pre:has(> .block-language-eba-schwerpunkte.eba-sp-aus),
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-schwerpunkte.eba-sp-aus),
 .markdown-source-view.is-live-preview .cm-content > .cm-line.HyperMD-header-2:has(+ .cm-line + .cm-embed-block > .block-language-eba-schwerpunkte.eba-sp-aus) { display: none !important; }
-.eba-s-studienverlauf .markdown-preview-sizer > .el-h2:has(> h2[data-heading="Schwerpunkte"]):not(:has(+ .el-pre > .block-language-eba-schwerpunkte:not(.eba-sp-aus))) { display: none !important; }
+.el-pre:has(> .block-language-eba-schwerpunkte.eba-sp-aus),
+.eba-s-studienverlauf .markdown-preview-sizer > .el-h2:has(> h2[data-heading="Schwerpunkte"]):not(:has(+ .el-pre > .block-language-eba-schwerpunkte:not(.eba-sp-aus))) {
+  display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden;
+}
 .eba-sp {
   --sp-spalten: minmax(0, 1fr) 84px minmax(0, 0.9fr) 34px; --sp-luecke: 10px;
   display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: var(--eba-gap, 12px); align-items: start;

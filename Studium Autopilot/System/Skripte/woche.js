@@ -115,9 +115,9 @@ module.exports = function (ctx) {
   };
 
   // ---------- Woche berechnen (reine Logik, ohne DOM) ----------
-  // notizen: [{ pfad, fm }] mit typ lehrveranstaltung; kurzVonCode: { Code: Kurzname }; einst: Frontmatter von
-  // System/Einstellungen.md; montag: Date; jetzt: Date
-  const wocheBauen = ({ notizen, kurzVonCode, einst, montag, jetzt }) => {
+  // notizen: [{ pfad, fm }] mit typ lehrveranstaltung; kurzVonCode: { Code: Kurzname }; modulPfad: { Name der Modulnotiz: Pfad };
+  // einst: Frontmatter von System/Einstellungen.md; montag: Date; jetzt: Date
+  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, einst, montag, jetzt }) => {
     const E = einst || {};
     const tage = [0, 1, 2, 3, 4].map((i) => iso(plus(montag, i)));
     const heute = iso(jetzt), wt = jetzt.getDay() || 7;
@@ -173,12 +173,14 @@ module.exports = function (ctx) {
       if (aen) klassen.push("geaendert");
       if (aus) klassen.push("ausfall");
       else if (ht && tag === wt) { klassen.push("heute"); if (jetztHm >= String(fm.beginn) && jetztHm <= String(fm.ende)) klassen.push("jetzt"); }
-      const modul = String(fm.modul || "").replace(/^\[\[|\]\]$/g, "").split("|")[0];
+      // Antippen öffnet das Modul über seinen vollen Pfad, nie über den Namen (den könnte eine andere Notiz auch tragen)
+      const modul = String(fm.modul || "").replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
+      const ziel = (modulPfad && (modulPfad[modul] || modulPfad[modul.replace(/\.md$/, "").split("/").pop()])) || pfad;
       return {
         tag, pfad, klassen,
         von: Math.max(2, Math.min(rows + 1, zeileVon(b, h0))), bis: Math.max(3, Math.min(rows + 2, zeileBis(e, h0))),
         titel: String(fm.titel || pfad) + " · " + zeitText + " · " + raum + (fm.konflikt ? " · überschneidet sich mit " + fm.konflikt : ""),
-        notiz: modul || pfad,
+        notiz: ziel,
         kurz: kurzname(fm, kurzVonCode), art: artText(fm),
         // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.), bei einer Änderung die neue Zeit
         zeit: aen ? zeitText : String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
@@ -191,16 +193,20 @@ module.exports = function (ctx) {
 
   // ---------- Lesen (metadataCache) ----------
   const lesen = () => {
-    const notizen = [], kurzVonCode = {};
+    const notizen = [], kurzVonCode = {}, modulPfad = {};
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
       if (!fm) continue;
       if (fm.typ === "lehrveranstaltung") notizen.push({ pfad: f.path, fm });
-      else if (fm.typ === "modul" && fm.code && fm.kurz) kurzVonCode[String(fm.code)] = String(fm.kurz);
+      else if (fm.typ === "modul") {
+        modulPfad[f.basename] = f.path;
+        modulPfad[f.path.replace(/\.md$/, "")] = f.path;
+        if (fm.code && fm.kurz) kurzVonCode[String(fm.code)] = String(fm.kurz);
+      }
     }
     const ef = app.vault.getAbstractFileByPath("System/Einstellungen.md");
     const einst = ef ? (app.metadataCache.getFileCache(ef) || {}).frontmatter || {} : {};
-    return { notizen, kurzVonCode, einst };
+    return { notizen, kurzVonCode, modulPfad, einst };
   };
 
   // ---------- Zeichnen ----------

@@ -75,7 +75,9 @@ const NOTIZEN = [
   lv("Stundenplan/Fr X901.md", { titel: "Entfällt", code: "X901", wochentag: 5, beginn: "10:00", ende: "12:00", entfaellt: true }),
   lv("Stundenplan/Fr X902.md", { titel: "Anderes Semester", code: "X902", wochentag: 5, beginn: "10:00", ende: "12:00", semester: "SoSe 2027" }),
 ];
-const woche = (montag, jetzt = "2026-10-17T12:00:00") => W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: { X110: "Daten", X101: "Ökonomik" }, einst: EINST, montag: tag(montag), jetzt: new Date(jetzt) });
+// Modulnotizen nach Name und Pfad (wie lesen()); ein gleichnamiger Karteikarten-Stapel darf nie das Ziel sein
+const MODULPFAD = { "X110 Beispieldatenanalyse": "Module/1 Grundstudium/X110 Beispieldatenanalyse.md", "Module/1 Grundstudium/X110 Beispieldatenanalyse": "Module/1 Grundstudium/X110 Beispieldatenanalyse.md" };
+const woche = (montag, jetzt = "2026-10-17T12:00:00", modulPfad = MODULPFAD) => W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: { X110: "Daten", X101: "Ökonomik" }, modulPfad, einst: EINST, montag: tag(montag), jetzt: new Date(jetzt) });
 const kasten = (w, pfad) => w.kaesten.find((k) => k.pfad === pfad);
 
 test("Woche 19.10.: nur, was zwischen von und bis liegt; Ausgeblendetes, Entfallenes und andere Semester fehlen", () => {
@@ -96,7 +98,9 @@ test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Begi
   const w = woche("2026-10-26");
   const mo = kasten(w, "Stundenplan/Mo X110.md");
   assert.deepEqual([mo.kurz, mo.art, mo.zeit, mo.von, mo.bis, mo.klassen.join(" ")], ["Daten", "", "", 2, 10, "eba-ev vl"]);
-  assert.equal(mo.notiz, "X110 Beispieldatenanalyse");
+  assert.equal(mo.notiz, "Module/1 Grundstudium/X110 Beispieldatenanalyse.md", "Modul über den vollen Pfad, nicht über den Namen");
+  assert.equal(kasten(w, "Stundenplan/Mi X101.md").notiz, "Stundenplan/Mi X101.md", "ohne Modul-Link die Notiz selbst");
+  assert.equal(kasten(woche("2026-10-26", undefined, {}), "Stundenplan/Mo X110.md").notiz, "Stundenplan/Mo X110.md", "Modulnotiz fehlt: nie nur der Name");
   const ue = kasten(w, "Stundenplan/Mi X101 Übung.md");
   assert.deepEqual([ue.kurz, ue.art, ue.zeit, ue.von, ue.bis, ue.klassen[1]], ["Ökonomik", "Übung Gruppe 2", "08:15", 3, 9, "ue"]);
   assert.equal(kasten(w, "Stundenplan/Di X180 Tutorium.md").art, "Tutorium 1");
@@ -104,6 +108,12 @@ test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Begi
   assert.equal(kasten(w, "Stundenplan/Di X100.md").kurz, "X100"); // ohne Kurznamen der Code
   assert.equal(W.kurzname({ titel: "Ohne Code · Vorlesung" }, {}), "Ohne Code");
   assert.equal(W.artText({ art: "Veranstaltung", gruppe: "3" }), "");
+});
+
+test("Antippen öffnet das Modul über den Pfad, auch bei Link mit Pfad, Alias oder Abschnitt", () => {
+  const n = [lv("Stundenplan/Mo X110.md", Object.assign({}, NOTIZEN[0].fm, { modul: "[[Module/1 Grundstudium/X110 Beispieldatenanalyse#Prüfung|X110]]" }))];
+  const w = W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: MODULPFAD, einst: EINST, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });
+  assert.equal(w.kaesten[0].notiz, "Module/1 Grundstudium/X110 Beispieldatenanalyse.md");
 });
 
 test("Überschneidung: nebeneinander, konflikt mit Warnung im Tooltip", () => {

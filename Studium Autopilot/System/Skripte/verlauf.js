@@ -429,7 +429,7 @@ module.exports = function (ctx) {
       const next = R.naechste === p;
       const txt = esc(p.label) + (next ? ` · ${d === 0 ? "heute" : d === 1 ? "morgen" : `${d} T.`}` : "");
       const cls = `eba-vl-fahne ${p.art}${p.erledigt ? " erledigt" : ""}${p.datum < R.t ? " vorbei" : ""}${next ? " naechste" : ""}${p.geschaetzt ? " geschaetzt" : ""}`;
-      return { x: b.x(new Date(+p.datum + 864e5 / 2)), html: `<span class="${cls}" data-pfad="${esc(p.pfad)}" data-tag="${dm(p.datum)}" data-art="${klausur(p) ? "klausur" : "test"}" title="${esc(p.titel)} · ${wdm(p.datum)}${p.datum.getFullYear()} · ${relativ(d)}"><span class="mast"></span><span class="tuch">${p.modul && p.modul.fertig ? "✓ " : ""}${txt}</span></span>` };
+      return { x: b.x(new Date(+p.datum + 864e5 / 2)), html: `<span class="${cls}" data-pfad="${esc(p.pfad)}" data-tag="${dm(p.datum)}" data-art="${klausur(p) ? "klausur" : "test"}"${p.test ? ' data-zt="1"' : ""} title="${esc(p.titel)} · ${wdm(p.datum)}${p.datum.getFullYear()} · ${relativ(d)}"><span class="mast"></span><span class="tuch">${p.modul && p.modul.fertig ? "✓ " : ""}${txt}</span></span>` };
     });
     if (s.jetzt) fl.push({ x: b.x(new Date(+R.t + 864e5 / 2)), heute: true, html: `<span class="eba-vl-fahne hier" title="Heute, ${wdm(R.t)}"><span class="mast"></span><span class="tuch">heute</span></span>` });
     fl.sort((a, c) => a.x - c.x || (a.heute ? -1 : 1));
@@ -534,8 +534,10 @@ module.exports = function (ctx) {
     const gruppen = [];
     for (const f of alle.filter((e) => !e.classList.contains("hier")).sort((a, b) => x(a) - x(b))) {
       const g = gruppen[gruppen.length - 1];
-      if (g && x(f) < g.ende + LUFT) { g.liste.push(f); g.ende = Math.max(g.ende, x(f) + w(f)); }
-      else gruppen.push({ liste: [f], ende: x(f) + w(f) });
+      // Zwischentests nie mit Klausuren zusammenfassen (sonst „6 Prüfungen“ mit einem Zwischentest darin)
+      const zt = !!f.dataset.zt;
+      if (g && g.zt === zt && x(f) < g.ende + LUFT) { g.liste.push(f); g.ende = Math.max(g.ende, x(f) + w(f)); }
+      else gruppen.push({ liste: [f], ende: x(f) + w(f), zt });
     }
     const sichtbar = alle.filter((e) => e.classList.contains("hier"));
     for (const g of gruppen) {
@@ -547,7 +549,7 @@ module.exports = function (ctx) {
         + (l.every((f) => f.classList.contains("vorbei")) ? " vorbei" : "") + (l.every((f) => f.classList.contains("erledigt")) ? " erledigt" : "");
       e.style.left = l[0].style.left;
       e.title = l.map((f) => f.title).join("\n");
-      e.innerHTML = `<span class="mast"></span><span class="tuch">${n} ${l.every((f) => f.dataset.art === "klausur") ? "Klausuren" : "Prüfungen"} ${esc(l[0].dataset.tag)}–${esc(l[n - 1].dataset.tag)}</span>`;
+      e.innerHTML = `<span class="mast"></span><span class="tuch">${n} ${g.zt ? "Zwischentests" : l.every((f) => f.dataset.art === "klausur") ? "Klausuren" : "Prüfungen"} ${esc(l[0].dataset.tag)}–${esc(l[n - 1].dataset.tag)}</span>`;
       lane.appendChild(e);
       sichtbar.push(e);
     }

@@ -1,7 +1,7 @@
 {
   "id": "studium-autopilot",
   "name": "Studium Autopilot",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "minAppVersion": "1.14.4",
   "description": "Kern des Tresors „Studium Autopilot“: lädt die Erweiterungen aus System/Skripte, führt Knöpfe (obsidian://studium-autopilot?aktion=…) und Notiz-Aktionen aus. Ersetzt Templater.",
   "author": "Philip Walter",

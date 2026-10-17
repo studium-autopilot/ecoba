@@ -2,6 +2,17 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.3 – Studienverlauf und Karteikarten behoben
+
+- **Behoben:** Im **Studienverlauf** blieb unter **Semestertermine** die Seite leer, vor allem im ersten Semester auf dem iPad.
+  Die Tabelle und die **Regeln** darunter erscheinen wieder.
+- **Behoben:** Im **Studienverlauf** zählte ein Fähnchen Zwischentests zu den Klausuren mit, etwa bei „6 Prüfungen“.
+  Zwischentests haben jetzt ein eigenes Fähnchen.
+- **Behoben:** Ein Tipp auf eine Veranstaltung im **Stundenplan** öffnete manchmal den Karteikarten-Stapel statt des Moduls.
+  Stapel heißen darum nicht mehr genau wie ihr Modul, vorhandene benennt die App einmal um.
+- **Übersichtlicher:** In einem Karteikarten-Stapel steht jede Karte als eigene Zeile, die Antwort erscheint erst beim
+  Antippen. Mit **Antworten zeigen** siehst du alle auf einmal.
+
 ## 0.4.2 – Karteikarten, Uni-Angebote und Dunkelmodus
 
 - **Neu:** **Karteikarten** als eigener Bereich: Stapel je Modul, gelernt wird direkt in Obsidian, auch auf iPhone und iPad. Wann

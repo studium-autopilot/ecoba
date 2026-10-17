@@ -232,3 +232,66 @@ test("Lerntag beginnt um 4 Uhr", () => {
   // Zeitumstellung (25.10.2026): Tage zählen weiter am Stück
   assert.equal(K.tagVon(new Date(2026, 9, 26, 12).getTime(), 4) - K.tagVon(new Date(2026, 9, 24, 12).getTime(), 4), 2);
 });
+
+test("Name eines neuen Stapels: nie gleich dem einer anderen Notiz (Modulnotiz)", () => {
+  const vergeben = (n) => ({ "s100 mathematische methoden": "modul", vokabeln: "notiz" })[n.toLowerCase()] || "";
+  assert.equal(K.stapelName("S100", "", vergeben), "S100 Karteikarten");
+  assert.equal(K.stapelName("S100", " Kapitel 2 ", vergeben), "S100 Kapitel 2");
+  assert.equal(K.stapelName("S100", "Mathematische Methoden", vergeben), "S100 Mathematische Methoden (Karteikarten)");
+  assert.equal(K.stapelName("", "Latein", vergeben), "Latein");
+  assert.equal(K.stapelName("", "Vokabeln", vergeben), "Vokabeln (Karteikarten)");
+});
+
+test("Umbenennen älterer Stapel: wie die Modulnotiz → „<Code> Karteikarten“, sonst Zusatz, nie auf einen vergebenen Namen", () => {
+  const vergeben = (n) => ({ "s100 mathematische methoden": "modul", "b110 begriffe": "vorlesung", notizen: "notiz" })[n.toLowerCase()] || "";
+  const frei = () => true;
+  assert.equal(K.stapelUmbenennung("S100 Mathematische Methoden", "S100", vergeben, frei), "S100 Karteikarten");
+  assert.equal(K.stapelUmbenennung("S100 Mathematische Methoden", "S100", vergeben, (n) => n !== "S100 Karteikarten"), "S100 Mathematische Methoden (Karteikarten)");
+  assert.equal(K.stapelUmbenennung("B110 Begriffe", "B110", vergeben, frei), "B110 Begriffe (Karteikarten)", "keine Modulnotiz: Kapitelname bleibt");
+  assert.equal(K.stapelUmbenennung("Notizen", "", vergeben, frei), "Notizen (Karteikarten)");
+  assert.equal(K.stapelUmbenennung("E101 Kapitel 1", "E101", vergeben, frei), null, "eindeutig: bleibt");
+  assert.equal(K.stapelUmbenennung("S100 Mathematische Methoden", "S100", vergeben, () => false), null, "kein freier Name: bleibt");
+});
+
+test("Beim Start: nur der Abrufer benennt Stapel um, die wie eine Modulnotiz heißen; Links ziehen über den fileManager mit", async () => {
+  const datei = (p) => ({ path: p, basename: p.split("/").pop().replace(/\.md$/, ""), parent: { path: p.split("/").slice(0, -1).join("/") }, stat: { mtime: 1, size: 1 } });
+  const MODUL = "Module/1 Grundstudium/S100 Mathematische Methoden.md";
+  const fm = { [MODUL]: { typ: "modul", code: "S100" }, "Karteikarten/S100 Mathematische Methoden.md": { typ: "karteikarten", code: "S100" }, "Karteikarten/E101 Kapitel 1.md": { typ: "karteikarten", code: "E101" } };
+  const lauf = async (abrufer) => {
+    const L = laden("karten", { frontmatter: fm, kontext: { user: { fsrs: () => FSRS }, zentral: { abruferHier: async () => abrufer } } });
+    const umbenannt = [];
+    L.ctx.app.vault.getMarkdownFiles = () => Object.keys(fm).map(datei);
+    L.ctx.app.fileManager = { renameFile: async (f, ziel) => umbenannt.push([f.path, ziel]) };
+    return [await L.ctx.karten.namenPruefen(), umbenannt];
+  };
+  assert.deepEqual(await lauf(true), [1, [["Karteikarten/S100 Mathematische Methoden.md", "Karteikarten/S100 Karteikarten.md"]]]);
+  assert.deepEqual(await lauf(false), [0, []]);
+});
+
+test("Leseansicht: Karten je Abschnitt, Fortsetzung einer Karte, gemischte Abschnitte bleiben", () => {
+  const text = [
+    "---", "code: S100", "---", "", "## Ableitungen", "",                           // 0–5
+    "Ableitung von $x^n$ :: $n x^{n-1}$ ^k1", "",                                     // 6
+    "Produktregel", "?", "$(uv)' = u'v + uv'$ ^k2", "",                               // 8–10
+    "Lange Frage", "?", "Antwort", "- mit Liste ^k3", "",                             // 12–15 (Obsidian: Absatz 12–14, Liste 15)
+    "- A :: B ^k4", "- C ::: D ^k5", "",                                              // 17–18
+    "Ein Satz ohne Karte.", "",                                                        // 20
+    "Ist $f'' < 0$, liegt ein {{c1::Maximum}} vor. ^k6",                               // 22
+  ].join("\n");
+  const n = K.parsen(text, "Karteikarten/S100.md"), z = text.split("\n");
+  const ids = (a) => a && { karten: a.karten.map((x) => x.id), weiter: a.weiter };
+  assert.equal(K.abschnittKarten(n, z, 4, 4), null, "Überschrift");
+  assert.deepEqual(ids(K.abschnittKarten(n, z, 6, 6)), { karten: ["k1"], weiter: false });
+  assert.deepEqual(ids(K.abschnittKarten(n, z, 8, 10)), { karten: ["k2"], weiter: false });
+  assert.deepEqual(ids(K.abschnittKarten(n, z, 12, 14)), { karten: ["k3"], weiter: false });
+  assert.deepEqual(ids(K.abschnittKarten(n, z, 15, 15)), { karten: [], weiter: true }, "Liste gehört zur Karte darüber");
+  assert.deepEqual(ids(K.abschnittKarten(n, z, 17, 18)), { karten: ["k4", "k5"], weiter: false });
+  assert.equal(K.abschnittKarten(n, z, 20, 20), null, "Text ohne Karte bleibt");
+  assert.equal(K.abschnittKarten(n, z, 18, 20), null, "Abschnitt mit Karte und anderem Text bleibt");
+  const l = K.zeilenSeiten(n.find((x) => x.id === "k6"));
+  assert.equal(l.hinten, "");
+  assert.ok(l.vorne.includes('<span class="eba-lk-k-l"><span class="eba-lk-luecke">[…]</span><span class="eba-lk-loesung">Maximum</span></span>'));
+  assert.ok(l.vorne.startsWith("Ist $f'' < 0$, liegt ein "), "Formeln bleiben Markdown");
+  assert.ok(K.zeilenSeiten(K.parsen("Die {{c1::x::<Tipp>}} ^k7", "K/a.md")[0]).vorne.includes("[&lt;Tipp&gt;]"), "Hinweis maskiert");
+  assert.deepEqual(K.zeilenSeiten(n.find((x) => x.id === "k1")), { vorne: "Ableitung von $x^n$", hinten: "$n x^{n-1}$" });
+});

@@ -15,7 +15,9 @@
 // Optionen: System/Einstellungen.md, Felder karten_* (Fenster „Optionen“); ohne Feld gelten die Werte wie in Anki.
 // Codeblock ```eba-karten``` mit Argument: (ohne) Übersicht der Stapel · stapel (in einer Kartennotiz) · statistik · liste ·
 // heute (Dashboard: Zeile nur, wenn etwas fällig ist). Aktionen: karten-lernen (code, stapel), karte-neu (stapel),
-// kartenstapel (auch Ordner-Automatik in Karteikarten/), karten-optionen. Schreibt beim Start nichts.
+// kartenstapel (auch Ordner-Automatik in Karteikarten/), karten-optionen. Leseansicht einer Kartennotiz: jede Karte eine
+// Zeile, die Antwort erst beim Antippen. Dateinamen der Stapel nie gleich dem einer anderen Notiz („S100 Karteikarten“, nicht
+// wie die Modulnotiz); beim Start benennt nur der Abrufer ältere Stapel einmal um (namenPruefen), sonst schreibt er nichts.
 // Stil: eba-core.css Abschnitt 52 (eba-lk-*). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -394,6 +396,55 @@ module.exports = function (ctx) {
     return "";
   };
 
+  // ---------- Dateinamen der Stapel: nie gleich dem einer anderen Notiz ----------
+  // Hieße der Stapel wie die Modulnotiz („S100 Mathematische …“), wäre jeder Link [[S100 Mathematische …]] mehrdeutig und
+  // Obsidian öffnete womöglich den Stapel statt des Moduls. Darum heißt der Stapel eines Moduls „S100 Karteikarten“, weitere
+  // „S100 Kapitel 2“; ist ein Name außerhalb von Karteikarten/ schon vergeben, kommt „ (Karteikarten)“ dazu.
+  const ZUSATZ = " (Karteikarten)";
+  // Rein (Tests): vergeben(name) → Typ der Notiz außerhalb von Karteikarten/, die so heißt („modul“, sonst etwas), oder ""
+  const stapelName = (code, zusatz, vergeben) => {
+    const z = String(zusatz || "").trim();
+    const basis = code ? (z ? `${code} ${z}` : `${code} Karteikarten`) : z;
+    return vergeben(basis) ? basis + ZUSATZ : basis;
+  };
+  // Rein (Tests): neuer Name eines vorhandenen Stapels, dessen Name außerhalb von Karteikarten/ vergeben ist, sonst null.
+  // Heißt er wie die Modulnotiz, wird er „<Code> Karteikarten“; frei(name): keine andere Notiz im Tresor heißt so.
+  const stapelUmbenennung = (name, code, vergeben, frei) => {
+    const typ = vergeben(name);
+    if (!typ) return null;
+    const wahl = (typ === "modul" && code ? [`${code} Karteikarten`] : []).concat([name + ZUSATZ]);
+    for (const n of wahl) if (!vergeben(n) && frei(n)) return n;
+    return null;
+  };
+  // Namen aller Notizen außerhalb von Karteikarten/ (klein geschrieben, wie Obsidian Links auflöst) → Typ („modul“ gewinnt)
+  const fremdeNamen = () => {
+    const m = new Map();
+    for (const f of app.vault.getMarkdownFiles()) {
+      if (f.path.startsWith(ORDNER + "/")) continue;
+      const k = f.basename.toLowerCase(), typ = String(fmVon(f).typ || "") || "notiz";
+      if (!m.has(k) || typ === "modul") m.set(k, typ);
+    }
+    return (name) => m.get(String(name).toLowerCase()) || "";
+  };
+  // Einmal beim Start: ältere Stapel, die wie eine andere Notiz heißen, umbenennen (Links ziehen mit, Lernstände hängen an der
+  // Kennung und bleiben). Nur der Abrufer der zentralen Daten, damit nicht zwei Geräte zugleich umbenennen.
+  const namenPruefen = async () => {
+    if (ctx.zentral && typeof ctx.zentral.abruferHier === "function" && !(await ctx.zentral.abruferHier())) return 0;
+    const vergeben = fremdeNamen();
+    const alle = new Set(app.vault.getMarkdownFiles().map((f) => f.basename.toLowerCase()));
+    let n = 0;
+    for (const f of stapelDateien()) {
+      const neu = stapelUmbenennung(f.basename, codeVon(f), vergeben, (x) => !alle.has(x.toLowerCase()));
+      if (!neu) continue;
+      const ziel = (f.parent && f.parent.path && f.parent.path !== "/" ? f.parent.path + "/" : "") + neu + ".md";
+      await app.fileManager.renameFile(f, ziel);
+      alle.add(neu.toLowerCase());
+      indexAlt = true;
+      n++;
+    }
+    return n;
+  };
+
   const texte = new Map(); // Pfad → { mtime, size, notizen }
   let index = null, indexAlt = true, indexLaeuft = null;
   const indexLaden = () => {
@@ -631,11 +682,13 @@ module.exports = function (ctx) {
     const m = await eba.modulWaehlen("Für welches Modul ist der Stapel? ● = aktuelles Semester", true);
     if (m === undefined) { eba.abbrechen(); return null; }
     const code = m ? String(m.fm.code || "") : "";
-    let titel = m ? String(m.fm.titel || "") : "", name = code ? `${code} ${titel}`.trim() : "";
+    const vergeben = fremdeNamen();
+    let titel = m ? String(m.fm.titel || "") : "", name = code ? stapelName(code, "", vergeben) : "";
     if (!code) {
       const t = await ctx.system.prompt("Name des Stapels", "");
       if (!t || !t.trim()) { eba.abbrechen(); return null; }
-      name = titel = t.trim();
+      titel = t.trim();
+      name = stapelName("", titel, vergeben);
     } else if (!c.datei) {
       const da = stapelDateien().filter((f) => codeVon(f) === code);
       if (da.length) {
@@ -644,7 +697,7 @@ module.exports = function (ctx) {
         if (wahl === "oeffnen") { if (oeffnen) await ctx.oeffnen(da[0], { modus: "preview" }); return da[0]; }
         const zusatz = await ctx.system.prompt("Name des weiteren Stapels, z. B. Kapitel 2", "");
         if (!zusatz || !zusatz.trim()) return null;
-        name = `${code} ${zusatz.trim()}`;
+        name = stapelName(code, zusatz, vergeben);
         titel = `${titel} · ${zusatz.trim()}`;
       }
     }
@@ -662,6 +715,13 @@ module.exports = function (ctx) {
   };
 
   // ---------- Anzeige: Hilfen ----------
+  // Markdown einer Kartenseite zeichnen (Formeln, Bilder, Links); komp = Component, an dem das Gezeichnete hängt
+  const mdRendern = async (md, el, pfad, komp) => {
+    if (O.MarkdownRenderer && komp) {
+      if (typeof O.MarkdownRenderer.render === "function") await O.MarkdownRenderer.render(app, md, el, pfad, komp);
+      else await O.MarkdownRenderer.renderMarkdown(md, el, pfad, komp);
+    } else el.setText(md);
+  };
   const knopf = (el, fn) => {
     el.addEventListener("mousedown", (e) => e.preventDefault()); // Fokus bleibt im Fenster (Tastenkürzel)
     el.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); fn(e); });
@@ -757,12 +817,7 @@ module.exports = function (ctx) {
         a ? { titel: "In der Notiz zeigen", symbol: "file-text", tun: () => { const k = a.karte; this.close(); notizZeigen(k); } } : null,
       ].filter(Boolean));
     }
-    async rendern(md, el, pfad) {
-      if (O.MarkdownRenderer && this.kind) {
-        if (typeof O.MarkdownRenderer.render === "function") await O.MarkdownRenderer.render(app, md, el, pfad, this.kind);
-        else await O.MarkdownRenderer.renderMarkdown(md, el, pfad, this.kind);
-      } else el.setText(md);
-    }
+    rendern(md, el, pfad) { return mdRendern(md, el, pfad, this.kind); }
     async frageZeigen() {
       const a = this.aktuell, k = a.karte;
       if (this.komp && O.Component) { if (this.kind) this.komp.removeChild(this.kind); this.kind = this.komp.addChild(new O.Component()); }
@@ -1211,6 +1266,18 @@ module.exports = function (ctx) {
     knoepfe.createEl("a", { cls: "eba-vb-knopf cta", text: "Lernen", href: ctx.link("karten-lernen", { stapel: st.pfad }) });
     knoepfe.createEl("a", { cls: "eba-vb-knopf", text: "Neue Karte", href: ctx.link("karte-neu", { stapel: st.pfad }) });
     if (st.code && d.idx.stapel.filter((s) => s.gruppe === st.gruppe).length > 1) knoepfe.createEl("a", { cls: "eba-vb-knopf leise", text: "Ganzes Modul lernen", href: ctx.link("karten-lernen", { code: st.code }) });
+    if (!st.karten.length) return;
+    // Alle Antworten der Leseansicht auf einmal zeigen (Klasse an der Ansicht, gilt auch für Zeilen, die erst beim Scrollen kommen)
+    const schalter = knoepfe.createEl("a", { cls: "eba-vb-knopf leise", href: "#", attr: { role: "button" } });
+    const ansicht = () => el.closest(".markdown-preview-view");
+    const beschriften = () => { const an = !!(ansicht() && ansicht().hasClass("eba-lk-k-alle")); schalter.setText(an ? "Antworten verbergen" : "Antworten zeigen"); schalter.setAttr("aria-pressed", String(an)); };
+    schalter.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const v = ansicht();
+      if (v) v.toggleClass("eba-lk-k-alle", !v.hasClass("eba-lk-k-alle"));
+      beschriften();
+    });
+    beschriften();
   };
 
   const heuteZeigen = (el, d) => {
@@ -1394,7 +1461,59 @@ module.exports = function (ctx) {
     zeichnenListe();
   };
 
-  // Leseansicht einer Kartennotiz: Trenner und Lücken sichtbar machen (nur Text, Code und Formeln bleiben)
+  // ---------- Leseansicht einer Kartennotiz: jede Karte eine ruhige Zeile, die Antwort erst beim Antippen ----------
+  // Rein (Tests): Karten eines Abschnitts der Leseansicht (Zeilen von–bis). notizen = parsen(ganzer Text), zeilen = alle Zeilen.
+  // → { karten: Notizen, die hier beginnen; weiter: nur der Rest einer Karte von weiter oben } oder null, wenn im Abschnitt
+  // auch anderer Text steht (dann bleibt er, wie Obsidian ihn zeichnet).
+  const abschnittKarten = (notizen, zeilen, von, bis) => {
+    const drin = notizen.filter((n) => n.bis >= von && n.von <= bis);
+    if (!drin.length) return null;
+    for (let i = von; i <= bis; i++) if (String(zeilen[i] || "").trim() && !drin.some((n) => n.von <= i && i <= n.bis)) return null;
+    const karten = drin.filter((n) => n.von >= von);
+    return { karten, weiter: !karten.length };
+  };
+  // Rein (Tests): Markdown der Zeile. Lückentext: jede Lücke als „[…]“ (oder Hinweis) und daneben die Lösung, das CSS zeigt
+  // je nach Zustand eins von beiden. Sonst Vorder- und Rückseite wie geschrieben.
+  const zeilenSeiten = (n) => (n.art === "luecke"
+    ? { vorne: String(n.vorne).replace(LUECKE, (m, x, inhalt, hinweis) => `<span class="eba-lk-k-l"><span class="eba-lk-luecke">[${hinweis ? esc(hinweis) : "…"}]</span><span class="eba-lk-loesung">${inhalt}</span></span>`), hinten: "" }
+    : { vorne: n.vorne, hinten: n.hinten });
+  const karteZeile = (eltern, n, pfad, komp) => {
+    const s = zeilenSeiten(n);
+    const z = eltern.createDiv({ cls: "eba-lk-k" + (n.art === "luecke" ? " luecke" : ""), attr: { role: "button", tabindex: "0", "aria-expanded": "false" } });
+    const inhalt = z.createDiv({ cls: "eba-lk-k-inhalt" });
+    const vorne = inhalt.createDiv({ cls: "eba-lk-k-seite eba-lk-k-vorne" });
+    const hinten = s.hinten ? inhalt.createDiv({ cls: "eba-lk-k-seite eba-lk-k-hinten" }) : null;
+    if (n.art === "umgekehrt") z.createSpan({ cls: "eba-lk-k-beide", text: "⇄", attr: { title: "Wird auch umgekehrt gelernt", "aria-label": "auch umgekehrt" } });
+    z.createSpan({ cls: "eba-lk-k-pfeil", text: "›", attr: { "aria-hidden": "true" } });
+    const fehler = (e) => console.error(SPRACHE, e);
+    mdRendern(s.vorne, vorne, pfad, komp).catch(fehler);
+    if (hinten) mdRendern(s.hinten, hinten, pfad, komp).catch(fehler);
+    const umschalten = () => { const auf = !z.hasClass("offen"); z.toggleClass("offen", auf); z.setAttr("aria-expanded", String(auf)); };
+    z.addEventListener("click", (e) => {
+      const sel = z.win && z.win.getSelection ? z.win.getSelection() : null;
+      if (e.target.closest("a, button, input, textarea") || (sel && !sel.isCollapsed)) return; // Links öffnen, Text markieren
+      umschalten();
+    });
+    z.addEventListener("keydown", (e) => { if (e.target === z && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); umschalten(); } });
+  };
+  // Der ganze Text wird einmal je Fassung gelesen, nicht für jeden Abschnitt neu
+  let gelesen = { text: null, notizen: [], zeilen: [] };
+  const kartenZeilen = (el, c) => {
+    const info = c.getSectionInfo ? c.getSectionInfo(el) : null;
+    if (!info || typeof info.text !== "string") return false;
+    if (gelesen.text !== info.text) gelesen = { text: info.text, notizen: parsen(info.text, c.sourcePath), zeilen: info.text.replace(/\r\n?/g, "\n").split("\n") };
+    const a = abschnittKarten(gelesen.notizen, gelesen.zeilen, info.lineStart, info.lineEnd);
+    if (!a) return false;
+    el.empty();
+    el.addClass("eba-lk-k-abschnitt");
+    if (a.weiter) { el.addClass("eba-lk-k-weiter"); return true; }
+    let komp = null;
+    if (O.MarkdownRenderChild && c.addChild) { komp = new O.MarkdownRenderChild(el); c.addChild(komp); }
+    for (const n of a.karten) karteZeile(el, n, c.sourcePath, komp);
+    return true;
+  };
+
+  // Rückfall ohne Abschnitt (z. B. Lernfenster): Trenner und Lücken sichtbar machen (nur Text, Code und Formeln bleiben)
   const SCHMUCK = /\{\{c\d+::([\s\S]*?)(?:::[\s\S]*?)?\}\}|\s*(:{2,3})(?!:)\s*/g;
   const schmuecken = (el) => {
     const doc = el.ownerDocument;
@@ -1503,15 +1622,29 @@ module.exports = function (ctx) {
     });
     // Lernschritte werden fällig und um 4 Uhr beginnt ein neuer Tag: Zahlen alle 5 Minuten neu (die Kartenliste nicht)
     ctx.intervall(() => block.neu((i) => i.art !== "liste"), 5 * MIN);
-    ctx.postprozessor((el, c) => { if (c && c.sourcePath && c.sourcePath.startsWith(ORDNER + "/")) schmuecken(el); });
+    ctx.postprozessor((el, c) => {
+      if (!c || !c.sourcePath || !c.sourcePath.startsWith(ORDNER + "/") || el.closest(".eba-lk-k-seite")) return; // nie in den eigenen Zeilen
+      if (!kartenZeilen(el, c)) schmuecken(el);
+    });
   };
 
-  ctx.karten = { lernen, neuOeffnen, datenLaden, get fenster() { return fenster; }, get neuFenster() { return neuFenster; } };
+  ctx.karten = { lernen, neuOeffnen, datenLaden, namenPruefen, get fenster() { return fenster; }, get neuFenster() { return neuFenster; } };
+
+  // Einmal beim App-Start, wenn der metadataCache fertig ist: Stapel mit dem Namen einer anderen Notiz umbenennen
+  const start = () => {
+    const los = () => ctx.zeit(() => {
+      namenPruefen().then((n) => { if (n) { anzeigeNeu(); new Notice(`${n} Karteikarten-Stapel umbenannt, damit Links aufs Modul eindeutig sind.`, 6000); } })
+        .catch((e) => console.error(SPRACHE + ": namenPruefen", e));
+    }, 5000);
+    if (app.metadataCache.resolved) los();
+    else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); los(); }); }
+  };
 
   return {
-    registrieren, aktionen: AKTIONEN,
+    registrieren, start, aktionen: AKTIONEN,
     // rein, für Tests (tests/karten.test.js)
     parsen, trenner, seiten, luecke, klartext, kennungenEinfuegen, karteText, zeileLesen, zeilenLesen, nachspielen, tagesplan,
     sitzungBauen, naechsteKarte, sitzungNehmen, sitzungZurueck, statistik, optionenAus, tagVon, tagBeginnVon, planerFuer, statusVon,
+    stapelName, stapelUmbenennung, abschnittKarten, zeilenSeiten,
   };
 };
