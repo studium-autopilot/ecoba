@@ -38,7 +38,6 @@ module.exports = function (ctx) {
 
   const VARIANTEN = ["Economics", "Business Administration", "ohne Spezialisierung", "offen"];
   const varianteText = (v) => (v === "offen" ? "noch offen" : v); // gespeichert bleibt „offen“
-  const SCHEMATA = { "graphite": "Graphite", "paper": "Paper", "paper-tuebingen": "Paper Tübingen", "paper-elfenbein": "Paper Elfenbein", "paper-schiefer": "Paper Schiefer" };
 
   const AKTIONEN = {
     // Knopf „Öffnen ↗“ (Unterlagen-Notizen und -Tabellen): Datei aus „datei“ (mit original=1: aus „original“) extern öffnen
@@ -79,7 +78,7 @@ module.exports = function (ctx) {
       },
     },
 
-    // Knopf „+ Planen“ / „✓ Im Plan“ (Schwerpunkt-Planer, Modulseiten): „gewaehlt“ des Moduls umschalten.
+    // Knopf „+ Planen“ / „✓ Im Plan“ (Modulseiten): „gewaehlt“ des Moduls umschalten.
     // modul = Modulcode (stabil, z. B. modul=B110) oder Notizname (nur in Bases-Formeln, dort bei jedem Zeichnen neu berechnet);
     // ohne modul: die Modulseite, auf der der Knopf steht.
     plan: {
@@ -107,22 +106,6 @@ module.exports = function (ctx) {
         if (!einstellungen) { new Notice("System/Einstellungen.md fehlt.", 3000); return; }
         await app.fileManager.processFrontMatter(einstellungen, (fm) => { fm.variante = wahl; });
         new Notice("Variante: " + varianteText(wahl), 3000);
-      },
-    },
-
-    // Farbschema und Grundfarbe umschalten (Snippets eba-<schema>), z. B. …?aktion=design&wert=paper-tuebingen
-    design: {
-      titel: "Design wechseln",
-      ausfuehren: async (c) => {
-        let wert = String(c.parameter.wert || "").toLowerCase().trim()
-          .replace(/^design\s+/, "").replace(/ü/g, "ue").replace(/ä/g, "ae").replace(/ö/g, "oe").replace(/\s+/g, "-");
-        if (!wert) wert = (await ctx.system.suggester(Object.values(SCHEMATA), Object.keys(SCHEMATA), false, "Design")) || "";
-        if (!wert) return;
-        const wahl = wert in SCHEMATA ? wert : "graphite";
-        for (const n of Object.keys(SCHEMATA)) app.customCss.setCssEnabledStatus("eba-" + n, n === wahl);
-        app.customCss.setCssEnabledStatus("eba-core", true);
-        app.changeTheme(wahl.startsWith("paper") ? "moonstone" : "obsidian");
-        new Notice("Design: " + SCHEMATA[wahl], 3000);
       },
     },
 

@@ -1,14 +1,16 @@
-// Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit sieben Bildschirmen:
+// Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit acht Bildschirmen:
 //   1 Willkommen · 2 Studienbeginn · 3 Variante · 4 Über dich (Name, Zielnote) · 5 Alma verbinden · 6 ILIAS verbinden
-//   (seit 0.4.0, freiwillig) · 7 Fertig
-// Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 6“ mit Punkten (ab Bildschirm 2);
-// Zurück jederzeit, Überspringen auf 2–6; Esc, „Später“ oder × beenden ohne Verlust (Gespeichertes bleibt, nichts wird
-// geschrieben); kein Autofokus (auf dem iPhone spränge sonst die Tastatur auf); Tippflächen mindestens 44 px; auf dem iPhone
-// bildschirmfüllend (eba-core.css Abschnitt 45).
+//   (seit 0.4.0, freiwillig) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch; darstellung.js) · 8 Fertig
+// Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 7“ mit Punkten (ab Bildschirm 2);
+// Zurück jederzeit, Überspringen auf 2–6 (die Darstellung hat immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
+// beenden ohne Verlust (Gespeichertes bleibt, nichts wird geschrieben; eine angetippte Darstellung gilt sofort und bleibt,
+// sie steht nur auf diesem Gerät, nicht in den Einstellungen); kein Autofokus (auf dem iPhone spränge sonst die Tastatur
+// auf); Tippflächen mindestens 44 px; auf dem iPhone bildschirmfüllend (eba-core.css Abschnitt 45).
 //
 // Zustand im synchronisierten System/Einstellungen.md (gilt für alle Geräte):
 //   einrichtung: offen | laeuft | fertig      (leer = offen)
-//   einrichtung_schritt: 1–7                  Bildschirm, an dem es beim nächsten Start weitergeht (0.3.x: Fertig war 6)
+//   einrichtung_schritt: 1–8                  Bildschirm, an dem es beim nächsten Start weitergeht (0.3.x: Fertig war 6,
+//                                             0.4.x: Fertig war 7; beides ist mit „fertig“ gespeichert)
 //   einrichtung_uebersprungen: [studienbeginn, variante, angaben, alma, ilias]   was übersprungen wurde (Fertig: „Später nachholen“)
 // Geschrieben wird nur nach einem Tipp auf Weiter/Überspringen/Los geht’s (Antworten sofort, kein Verlust beim Abbrechen).
 //
@@ -30,8 +32,9 @@ module.exports = function (ctx) {
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const DASHBOARD = "Dashboard.md";
   const SITZUNG = "eba-einrichtung-gezeigt"; // sessionStorage: in dieser App-Sitzung schon automatisch gezeigt
-  const LETZTER = 7;
+  const LETZTER = 8;
   const ILIAS = 6; // Bildschirm ILIAS verbinden
+  const DARSTELLUNG = 7; // Bildschirm Darstellung
   const PUNKT = { 2: "studienbeginn", 3: "variante", 4: "angaben", 5: "alma", 6: "ilias" }; // Schlüssel für einrichtung_uebersprungen
   const VARIANTEN = [
     { wert: "Economics", titel: "Economics", text: "Mehr Volkswirtschaftslehre" },
@@ -310,7 +313,10 @@ module.exports = function (ctx) {
           knopf("Weiter", "haupt", () => this.weiter());
           return;
         }
-        titel("Stundenplan aus Alma", "Verbinde Alma, dann siehst du hier deine Woche.");
+        // Mit zentralem Stundenplan (zentral.js) ist Alma freiwillig: anderer Satz, „Ohne Alma weiter“ statt „Überspringen“
+        let zentral = false;
+        try { zentral = !!(ctx.zentral && ctx.zentral.stundenplan && ctx.zentral.stundenplan().verfuegbar); } catch (e) { zentral = false; }
+        titel("Stundenplan aus Alma", zentral ? "Deine Vorlesungen kommen von selbst, deine Übungsgruppe meist aus ILIAS, sobald du es verbindest. Alma brauchst du nur für Extras." : "Verbinde Alma, dann siehst du hier deine Woche.");
         const ol = haupt.createEl("ol", { cls: "eba-ei-schritte" });
         // Links wie im Fenster unter Verbindungen (ctx.verbindungen.ALMA); ohne verbindungen.js der Weg durchs Menü
         const A = ctx.verbindungen && ctx.verbindungen.ALMA;
@@ -318,11 +324,7 @@ module.exports = function (ctx) {
         for (const t of [erst, "**Daten für iCalendar (ics) exportieren** → **Link kopieren**.", "Link hier einfügen."]) fett(ol.createEl("li"), t);
         const feld = haupt.createEl("input", { type: "text", cls: "eba-ei-eingabe", attr: { inputmode: "url", placeholder: "Link hier einfügen", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Alma-Link", enterkeyhint: "go" } });
         const meldung = haupt.createEl("p", { cls: "eba-ei-meldung" });
-        if (v && v.erklaerung) {
-          const d = haupt.createEl("details", { cls: "eba-modal-mehr" });
-          d.createEl("summary", { text: "Mehr erfahren" });
-          d.createEl("p", { text: v.erklaerung });
-        }
+        if (v && v.erklaerung) haupt.createEl("p", { cls: "eba-ei-hilfe", text: v.erklaerung });
         feld.addEventListener("input", () => { if (meldung.hasClass("fehler")) { meldung.setText(""); meldung.removeClass("fehler"); } });
         this.felder.link = feld; this.felder.meldung = meldung;
         let los = null;
@@ -344,7 +346,7 @@ module.exports = function (ctx) {
         };
         feld.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); this.weiter(); } });
         unten();
-        knopf("Überspringen", "leise", () => this.ueberspringen());
+        knopf(zentral ? "Ohne Alma weiter" : "Überspringen", "leise", () => this.ueberspringen());
         los = knopf("Verbinden", "haupt", () => this.weiter());
         return;
       }
@@ -412,18 +414,25 @@ module.exports = function (ctx) {
         };
         benutzer.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); geheimFeld.focus(); } });
         geheimFeld.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); this.weiter(); } });
-        if (v.erklaerung) {
-          const d = haupt.createEl("details", { cls: "eba-modal-mehr" });
-          d.createEl("summary", { text: "Mehr erfahren" });
-          d.createEl("p", { text: v.erklaerung });
-        }
+        if (v.erklaerung) haupt.createEl("p", { cls: "eba-ei-hilfe", text: v.erklaerung });
         unten();
         knopf("Überspringen", "leise", () => this.ueberspringen());
         los = knopf("Verbinden", "haupt", () => this.weiter());
         return;
       }
 
-      // 7 Fertig
+      if (s === DARSTELLUNG) {
+        // Derselbe Umschalter wie in Einstellungen & Hilfe (darstellung.js): Antippen schaltet sofort um; Weiter speichert nur
+        // den Stand der Einrichtung
+        titel("Wie soll es aussehen?", "Tipp an, was dir gefällt, du siehst es sofort.");
+        if (ctx.darstellung) this.felder.darstellung = ctx.darstellung.schalter(haupt.createDiv({ cls: "eba-ei-feld" }));
+        this.aktion = () => this.speichernUndWeiter(null, false);
+        unten();
+        knopf("Weiter", "haupt", () => this.weiter());
+        return;
+      }
+
+      // 8 Fertig
       bild("haken");
       titel("Alles bereit", "Ändern kannst du alles unter **Einstellungen & Hilfe**.");
       const fm = fmVon();
@@ -440,12 +449,17 @@ module.exports = function (ctx) {
       if (w("name")) zeile("Name", w("name"));
       if (w("zielnote")) zeile("Zielnote", w("zielnote"));
       const v = V(), st = v ? v.status() : { verbunden: false, daten: 0 };
+      let zentral = false;
+      try { zentral = !!(ctx.zentral && ctx.zentral.stundenplan && ctx.zentral.stundenplan().verfuegbar); } catch (e) { zentral = false; }
       if (st.verbunden || st.daten) zeile("Stundenplan", st.verbunden ? "Alma verbunden" : "liegt vor");
+      else if (zentral) zeile("Stundenplan", "kommt von selbst");
       const vi = V("ilias"), si = vi ? vi.status() : { verbunden: false, extern: false };
       if (si.verbunden || si.extern) zeile("Unterlagen", "ILIAS verbunden");
+      const dm = ctx.darstellung ? ctx.darstellung.MODI.find((m) => m.wert === ctx.darstellung.modus()) : null;
+      if (dm) zeile("Darstellung", dm.titel);
       // Übersprungenes: „Später nachholen“ mit Knopf (springt zu dem Bildschirm)
       const NACH = { studienbeginn: [2, "Studienbeginn"], variante: [3, "Variante"], angaben: [4, "Über dich"], alma: [5, "Alma-Stundenplan"], ilias: [ILIAS, "ILIAS-Unterlagen"] };
-      const erledigt = (p) => (p === "alma" && (st.verbunden || st.daten)) || (p === "ilias" && (si.verbunden || si.extern));
+      const erledigt = (p) => (p === "alma" && (st.verbunden || st.daten || zentral)) || (p === "ilias" && (si.verbunden || si.extern));
       const offen = PUNKT_REIHE.filter((p) => this.uebersprungen.indexOf(p) >= 0 && !erledigt(p));
       if (offen.length) {
         const box = haupt.createDiv({ cls: "eba-ei-nachholen" });

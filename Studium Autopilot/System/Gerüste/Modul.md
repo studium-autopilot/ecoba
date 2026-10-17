@@ -1,7 +1,7 @@
 <!-- Gerüst für die Aktion „modul“ (System/Skripte/notizen.js): Text der Modulseite unter den Eigenschaften. Platzhalter: {{code}}, {{titel}}, {{gruppe}}, {{ects}}, {{code_url}}, {{datum}}, {{plan_eigenschaft}}, {{plan_spalte}}. Diese Zeile wird nicht übernommen. -->
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Weitere Module</span></div>
-<h1>{{code}} · {{titel}}</h1>
+<h1><span class="eba-code">{{code}}</span> {{titel}}</h1>
 <div class="eba-meta"><span><b>{{ects}}</b> ECTS</span><span>{{gruppe}}</span><span>eigenes Modul</span></div>
 </div>
 
@@ -36,7 +36,7 @@
 > ```
 
 
-> [!eba-neu] Neu zu diesem Modul
+> [!eba-neu|ohne-titel] Neu zu diesem Modul
 > - [Vorlesung](obsidian://studium-autopilot?aktion=vorlesung&code={{code_url}})
 > - [Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt&code={{code_url}})
 
@@ -64,12 +64,15 @@
 > [!eba-tabelle] Folien, Skripte, Übungen, Altklausuren
 > ```base
 > formulas:
->   was: 'file.asLink(if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art) + if(titel, " · " + titel, ""))'
+>   was: 'file.asLink(if(titel, titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art)))'
+>   artnr: 'if(titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art), "")'
 >   oeffnen: 'html("<a class=\"eba-oeffnen\" href=\"obsidian://studium-autopilot?aktion=oeffnen&notiz=" + file.basename.replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B") + "\">Öffnen ↗</a>")'
 >   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
 > properties:
 >   formula.was:
 >     displayName: Unterlage
+>   formula.artnr:
+>     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
 >   note.status:
@@ -94,6 +97,7 @@
 >       direction: ASC
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - status
 >       - formula.oeffnen
@@ -101,7 +105,8 @@
 >       - property: nummer
 >         direction: ASC
 >     columnSize:
->       formula.was: 330
+>       formula.was: 250
+>       formula.artnr: 80
 >       note.seiten: 80
 >       note.status: 100
 >       formula.oeffnen: 90
@@ -114,6 +119,7 @@
 >         - 'status == "neu" || !status'
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - formula.oeffnen
 >     sort:
@@ -138,7 +144,7 @@
 
 ## Meine Notizen
 
-> [!eba-tabelle|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
+> [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
 > filters:
 >   and:
@@ -147,9 +153,10 @@
 >     - 'typ != "unterlage"'
 > formulas:
 >   wann: 'if(faellig, faellig, datum)'
->   art: 'if(typ == "vorlesung", "Vorlesung", if(typ == "übungsblatt", "Übungsblatt", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termin", typ))))'
+>   art: 'if(typ == "vorlesung", "Vorlesungen", if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ)))))'
+>   notiz: 'file.asLink(file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(code + " ", ""))'
 > properties:
->   file.name:
+>   formula.notiz:
 >     displayName: Notiz
 >   formula.wann:
 >     displayName: Datum
@@ -166,7 +173,7 @@
 >       property: formula.art
 >       direction: ASC
 >     order:
->       - file.name
+>       - formula.notiz
 >       - formula.wann
 >       - status
 >       - nachgearbeitet
@@ -174,7 +181,7 @@
 >       - property: formula.wann
 >         direction: DESC
 >     columnSize:
->       file.name: 330
+>       formula.notiz: 330
 >       formula.wann: 120
 >       note.status: 110
 >       note.nachgearbeitet: 120

@@ -146,7 +146,9 @@ test("Meine Kurse und Gruppen: nur crs als Kurse, Modulcode aus dem Titel, doppe
   assert.deepEqual(m.kurse.map((k) => [k.refId, k.code, k.typ]), [["2000001", "B110", "crs"], ["2000002", "S100", "crs"], ["2000003", "", "crs"]]);
   assert.equal(m.kurse[0].titel, "B110 Beispielkurs Betriebswirtschaft");
   assert.equal(m.kurse[0].url, "https://ovidius.uni-tuebingen.de/goto.php/crs/2000001");
-  assert.deepEqual(m.gruppen.map((g) => g.refId), ["2000044"]);
+  assert.deepEqual(m.gruppen.map((g) => g.refId), ["2000044", "2000045"]);
+  assert.equal(m.gruppen[1].titel, "Gruppe 4");
+  assert.equal(m.gruppen[1].beschreibung, "Gruppe 4 - Mi. 8:00 - 10:00 - Hörsaal 1 (Beispielhaus 2)", "Zeit steht oft nur in der Beschreibung");
   assert.deepEqual(H.kurse(seite("mitgliedschaften")), m.kurse);
   assert.deepEqual(H.gruppen(seite("mitgliedschaften")), m.gruppen);
 });
@@ -315,4 +317,15 @@ test("Typerkennung aus URL und Symbol", () => {
     ["ilias.php?baseClass=ilrepositorygui&ref_id=3", "", "", ""],
   ];
   for (const [url, src, alt, typ] of f) assert.equal(H.typVon(url, src, alt), typ, url);
+});
+
+test("Gruppen in einem Ordner: Mitglied über das Menü (Mitgliedschaft beenden), Beschreibung, Brotkrumen zum Kurs", () => {
+  const e = H.inhalt(seite("gruppenordner"), BASIS);
+  assert.deepEqual(e.map((x) => [x.typ, x.art, x.refId, x.mitglied]), [["grp", "ordner", "3000021", false], ["grp", "ordner", "3000024", true],
+    ["grp", "ordner", "3000025", null]], "Beitreten = false, Mitgliedschaft beenden = true, ohne Menü = unbekannt");
+  assert.equal(e[1].beschreibung, "Gruppe 4 - Mi. 8:00 - 10:00 - Hörsaal 1 (Beispielhaus 2)");
+  const b = H.brotkrumen(seite("gruppenordner"), BASIS);
+  assert.deepEqual(b.map((x) => x.typ + ":" + x.refId), ["fold:3000010", "crs:3000001", "cat:3000900", "root:1"]);
+  assert.equal(b[1].titel, "X101 Beispielökonomik - WS26/27");
+  assert.deepEqual(H.brotkrumen(seite("dashboard"), BASIS), [], "ohne Brotkrumen leer");
 });

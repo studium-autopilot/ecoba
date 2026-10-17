@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 17.10.2026 (`gruppen.json`). Vertrag zwischen dem Export (Seite des Autors, später `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 17.10.2026 (`gruppen.json`, `angebote.json`, `veranstaltungen.json` noch nicht veröffentlicht). Vertrag zwischen dem Export (Seite des Autors, später `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -16,6 +16,8 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `termine.json` | nein | 1 000 000 Byte | Termine, Fristen, Veranstaltungen (max. 2000 Einträge) |
 | `semester.json` | nein | 256 KB | Semesterdaten, entspricht `System/Daten/Semester.md` |
 | `gruppen.json` | nein | 512 KB | Übungs- und Tutoriengruppen (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#gruppenjson) |
+| `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, noch nicht veröffentlicht, siehe [unten](#veranstaltungenjson) |
+| `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, UB-Kurse, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); Plugin 0.1 liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; Plugin 0.1 liest ihn noch nicht |
 
@@ -294,12 +296,172 @@ ohne Anmeldung, Seite des Lehrstuhls), mit `quelle_url` auf genau diese Seite. N
 eigene Gruppe des Autors. Wer nicht genannt werden möchte, meldet das per Issue im Haupt-Repo; der Export entfernt den Namen dann
 über eine Sperrliste.
 
+## angebote.json
+
+Seit 17.10.2026 (Plan 27.1 Punkt 6). Optional. Offene Angebote der Uni für alle: Vorträge (Studium Generale, Vortragsreihen der
+Fakultät), Kurse der Universitätsbibliothek, Hochschulsport und Welcome Center. Nur Fakten und nur etwa die nächsten acht Wochen;
+keine Beschreibungen, keine Namen von Personen. Plugins vor dieser Fassung kennen den Namen nicht und ignorieren ihn.
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-10-17",
+ "angebote": [
+  {
+   "id": "2026-10-19-studium-generale-beispielvortrag",
+   "kategorie": "vortrag",
+   "reihe": "Studium Generale",
+   "titel": "Beispielvortrag über Beispiele",
+   "datum": "2026-10-19",
+   "von": "18:15",
+   "bis": "19:45",
+   "ort": "Hörsaal 9 (Beispielbau)",
+   "online": true,
+   "url": "https://uni-tuebingen.de/…",
+   "anmeldung": { "ab": "2026-10-12", "bis": "2026-10-18T23:59" }
+  }
+ ]
+}
+```
+
+| Feld | Pflicht | Regel |
+|---|---|---|
+| `schema` | ja | genau `1`; sonst, ohne Liste `angebote` oder mit mehr als 1000 Einträgen wird die **ganze Datei** abgelehnt |
+| `stand` | nein | Datum `JJJJ-MM-TT` (oder ISO-Zeit) der letzten Pflege; das Plugin zeigt es im Fuß an |
+| `id` | ja | wie bei Terminen (`^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$`), eindeutig, stabil; doppelte: der erste Eintrag gilt. Der Export vergibt `<kategorie>-<Nummer>` (Nummer des Eintrags im Veranstaltungskalender der Uni) bzw. `<kategorie>-<Prüfsumme aus Titel, Datum, Uhrzeit und Link>`; Reihen ausblenden hängt nicht an der `id` |
+| `kategorie` | ja | genau ein Wert aus der Freigabeliste unten |
+| `reihe` | ja | 1–80 Zeichen, reiner Text (abgelehnt wie `titel`), z. B. „Studium Generale“. Bei `vortrag` wählen Nutzer:innen je Reihe, ob sie sie sehen: „Studium Generale“ und „Wirtschafts- und Sozialwissenschaftliche Fakultät“ (auch „WiSo“) erkennt die App am Namen, jede andere Reihe ist zunächst aus. Den Namen darum nicht ohne Grund ändern |
+| `titel` | ja | wie bei Terminen: 1–120 Zeichen, eine Zeile, abgelehnt bei HTML, spitzen, eckigen oder geschweiften Klammern, senkrechtem Strich, Backslash, Backticks, `<%`/`%>`, `obsidian://`, `javascript:` |
+| `datum` | ja | `JJJJ-MM-TT` wie bei Terminen; beim Hochschulsport der erste Kurstermin. Ist nur der Buchungsbeginn bekannt, ist `datum` der Buchungstag (Uhrzeit in `von`) und `anmeldung` fehlt, damit die App den Tag nicht doppelt zeigt |
+| `von` | nein | `HH:MM` |
+| `bis` | nein | `HH:MM`, nur zusammen mit `von` und nach `von` |
+| `ort` | nein | ≤ 120 Zeichen nach dem Säubern |
+| `online` | nein | `true` = (auch) online; alles andere gilt als nicht gesetzt |
+| `url` | ja | `https` auf `uni-tuebingen.de` oder einer Subdomain (z. B. `hochschulsport.`, `ub.`), sonst wie `quelle_url`. Strenger als die Domain-Liste der Termine: keine anderen Domains |
+| `anmeldung` | nein | `{ "ab", "bis" }`, beide optional: `JJJJ-MM-TT` oder `JJJJ-MM-TTTHH:MM` (Ortszeit, ohne Zone), `bis` nicht vor `ab`. Kein Objekt oder ungültig → Eintrag verworfen; `{}` = keine Angabe. Beim Hochschulsport ist `ab` der Buchungsbeginn |
+
+### Freigabeliste Kategorien der Angebote (`kategorie`)
+
+| Wert | Chip in der App | Inhalt |
+|---|---|---|
+| `vortrag` | Vorträge | Studium Generale, Vortragsreihen der Fakultät |
+| `ub` | UB-Kurse | Kurse und Führungen der Universitätsbibliothek |
+| `sport` | Hochschulsport | Kurse; `anmeldung.ab` erscheint als eigene Zeile „ab 17:00 · Buchungsstart“ am Tag der Buchung |
+| `welcome` | Welcome Center | Veranstaltungen des Welcome Centers; laut Uni vor allem für internationale Promovierende und Postdocs (darum steht das in `reihe`) |
+
+Erweitern nur mit Eintrag in dieser Tabelle **und** in `ANGEBOT_KATEGORIEN` (`zentral.js`) und `ARTEN` (`angebote.js`). Ältere
+Plugins verwerfen Einträge mit einem neuen Wert einzeln; sie fehlen dort nur.
+
+Gesäubert wie `info`; ungültige Einträge werden **einzeln** verworfen, unbekannte Felder ignoriert. Das Plugin schreibt aus
+`angebote.json` **keine Notizen**: Jedes Gerät holt die Datei selbst (auch wenn ein anderes Gerät die Termine schreibt), prüft sie
+gegen das Manifest und speichert nur die gültigen Einträge gerätelokal (`eba-zentral-angebote`). Stimmen Prüfsumme oder Schema
+nicht, bleibt der letzte Stand (Warnung im Bericht); Termine, Semesterdaten und Gruppen laufen weiter. **Fehlt `angebote.json`
+in einem gültigen Manifest** (ohne `pause`), gelten die Angebote als zurückgezogen: Jedes Gerät löscht seinen Stand. Anzeige:
+Codeblock `eba-angebote` (`System/Skripte/angebote.js`): beim ersten Mal eine Auswahl (Kategorien, Vortragsreihen), danach Chips
+je gewählter Kategorie mit Anzahl, nach Tagen die nächsten 14 Tage, der Rest unter „Mehr anzeigen“. Vergangenes (Tage vor heute, heutige Angebote nach `bis`) blendet das Plugin
+selbst aus.
+
+## veranstaltungen.json
+
+Vertrag seit 17.10.2026 (Plan Abschnitt 27.1, Punkte 1 und 2). **Noch nicht im Manifest:** Der Export veröffentlicht die Datei
+erst nach einer Woche Trockenlauf und wenn ein Plugin sie liest (Schalter `veranstaltungen.veroeffentlichen` im Export). Optional
+wie `gruppen.json`: Fehlt sie im Manifest, bleibt auf jedem Gerät der letzte Stand; ältere Plugins kennen den Namen nicht und
+ignorieren ihn.
+
+**Herkunft:** das öffentliche Vorlesungsverzeichnis in Alma, ohne Anmeldung gelesen, höchstens einmal am Tag, nacheinander mit
+mindestens einer Sekunde Abstand und dem User-Agent `StudiumAutopilot-Abgleich/1.0 (+https://github.com/studium-autopilot/ecoba)`.
+Gelesen werden nur die Detailseiten der Veranstaltungen zu den Modulen im Modulkatalog, für das laufende und das nächste Semester.
+Bei Fehlern oder einer Überlastungsantwort ruht der Abruf bis zum nächsten Tag. Übernommen werden nur Fakten: Titel, Art,
+Parallelgruppe, Rhythmus, Wochentag, Zeit, Zeitraum, Ausfalltermine, Raum und Raum- oder Zeitänderungen je Datum. **Keine
+Namen und kein Freitext:** Verantwortliche, Durchführende, Vertretungen, Bemerkungen und Teilnehmerzahlen werden nie gespeichert.
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-10-17",
+ "veranstaltungen": [
+  {
+   "id": "ws-2026-27-x100-vorlesung-1-mi-1000",
+   "code": "X100",
+   "art": "Vorlesung",
+   "titel": "Einführung in die Beispielökonomik",
+   "gruppe": "1",
+   "tag": "Mi",
+   "von": "10:00",
+   "bis": "12:00",
+   "ct": true,
+   "rhythmus": "wöchentlich",
+   "zeitraum": { "von": "2026-10-14", "bis": "2027-02-03" },
+   "raum": "Hörsaal 1 (Beispielbau)",
+   "ausfall": ["2026-12-23", "2026-12-30"],
+   "aenderungen": [
+    { "datum": "2026-11-11", "raum": "Hörsaal 2 (Beispielbau)" },
+    { "datum": "2026-11-18", "von": "14:00", "bis": "16:00" }
+   ],
+   "semester": "WS 2026/27",
+   "quelle_url": "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=…&periodId=…"
+  }
+ ]
+}
+```
+
+Ein Eintrag ist eine **Termin-Serie** (eine Zeile der Alma-Terminliste), nicht ein einzelnes Datum.
+
+| Feld | Pflicht | Regel |
+|---|---|---|
+| `schema` | ja | genau `1`; sonst, ohne Liste `veranstaltungen` oder mit mehr als 3000 Einträgen wird die **ganze Datei** abgelehnt |
+| `stand` | ja | Datum `JJJJ-MM-TT` der letzten inhaltlichen Änderung (nicht des letzten Abrufs; ohne Änderung bleibt die Datei byte-gleich) |
+| `id` | ja | wie bei Terminen (`^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$`), eindeutig; doppelte: der erste Eintrag gilt. Aufbau siehe [id-Regel](#id-regel-für-veranstaltungen) |
+| `code` | ja | Modulcode wie bei Terminen |
+| `art` | ja | `Vorlesung`, `Übung`, `Tutorium`, `Seminar`, `Kolloquium`, `Praktikum`, `Kurs` oder `Sonstige`. Übungsgruppen heißen `Tutorium`, wenn der Kurs sie so nennt (Alma sagt meist „Übung“). Ein unbekannter Wert gilt im Plugin als `Sonstige` (der Eintrag bleibt). |
+| `titel` | ja | 1–120 Zeichen, Regeln wie `titel` bei Terminen; der offizielle Titel aus Alma, sonst `<code> <art>` |
+| `gruppe` | nein | Nummer der Parallelgruppe in Alma, ≤ 20 Zeichen, reiner Text; bei Vorlesungen meist `1`. Nicht dieselbe Nummer wie in ILIAS. |
+| `tag` | ja | `Mo` bis `So`; immer der Wochentag von `zeitraum.von` (sonst wird der Eintrag verworfen) |
+| `von`, `bis` | ja | `HH:MM`, `bis` nach `von`, wie in Alma (meist volle Stunden) |
+| `ct` | nein | `true` = c.t. (beginnt 15 Min. später, endet 15 Min. früher), wie in `gruppen.json` |
+| `rhythmus` | ja | `wöchentlich`, `14-täglich` (alle zwei Wochen ab `zeitraum.von`) oder `Einzeltermin` (`zeitraum.von` = `zeitraum.bis`). Blockveranstaltungen, tägliche und 3- oder 4-wöchentliche Serien schreibt der Export als Einzeltermine aus. Unbekannter Wert: Eintrag verworfen. |
+| `zeitraum` | ja | `{ "von", "bis" }`: erster und letzter Termin der Serie; Daten wie bei Terminen, `bis ≥ von`, höchstens 400 Tage; höchstens 31 Tage vor Beginn oder nach Ende des Semesters (WS 01.10.–31.03., SS 01.04.–30.09.) |
+| `raum` | nein | ≤ 120 Zeichen nach dem Säubern; mehrere Räume mit „ / “ getrennt, eine zu lange Liste als „<erster Raum> und N weitere Räume“; leer = noch kein Raum. Nennt Alma für eine Serie mehrere Räume und findet die Mehrheit der Termine in einem davon statt, steht dieser hier und die übrigen Daten stehen in `aenderungen`. |
+| `ausfall` | nein | aufsteigende Liste verschiedener Daten (höchstens 100) innerhalb von `zeitraum`, an denen die Serie entfällt |
+| `aenderungen` | nein | Liste (höchstens 100) von `{ "datum", "raum"?, "von"?, "bis"?, "zusatz"? }`, nur heute und künftig: an diesem Datum anderer Raum und/oder andere Zeit (`von` und `bis` nur zusammen, Regeln wie oben). `zusatz: true` = zusätzlicher Termin außerhalb des Rhythmus (mit Zeit und Raum). Datum höchstens 31 Tage außerhalb von `zeitraum`. Ein Ausfall steht in `ausfall`, nie hier. Unbekannte Schlüssel werden ignoriert. |
+| `semester` | ja | `WS JJJJ/JJ` oder `SS JJJJ` |
+| `quelle_url` | ja | die Alma-Detailseite der Veranstaltung, Regeln wie `quelle_url` bei Terminen |
+
+Gesäubert wie `info` (siehe oben); ungültige Einträge werden **einzeln** verworfen, unbekannte Felder ignoriert. Die Datei
+enthält das laufende und das nächste Semester; Serien, deren Ende mehr als 30 Tage zurückliegt, fallen weg.
+
+### id-Regel für Veranstaltungen
+
+`<semester>-<code>-<art>-<gruppe>-<termin>`, alles klein: Semester wie bei Gruppen (`ws-2026-27`), `art` ohne Umlaute
+(`vorlesung`, `uebung`, `tutorium`, `seminar`, `kolloquium`, `praktikum`, `kurs`, `sonstige`), `termin` = Wochentag und Beginn
+(`mi-1000`) bei regelmäßigen Serien, Datum und Beginn (`20261107-0900`) bei Einzelterminen. Haben zwei Alma-Veranstaltungen
+eines Moduls dieselbe Art, bekommt die zweite ihre Alma-Nummer (`unitId`) nach der Art; gleiche ids sonst `-2`, `-3` ….
+Die id bleibt, solange Wochentag und Beginn (bei Einzelterminen Datum und Beginn) bleiben: Raum, Ausfälle und Änderungen ändern
+sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine neue id (die alte fällt weg).
+
+### Was das Plugin daraus machen soll (Entscheidungen 17.10.2026)
+
+- **Filter:** nur das aktuelle Fachsemester (Pflichtmodule laut Musterplan der Variante) und alles mit `gewaehlt`,
+  `semester_geplant` oder Status „läuft“/„angemeldet“; bestandene Module nicht. Variante „noch offen“: nur Module, die alle
+  Varianten gemeinsam haben. Nur Einträge mit `semester` = aktuelles Semester.
+- **Übungen und Tutorien:** Die eigene Gruppe ist eine persönliche Wahl und kommt nie zentral. Zuordnung über Code, Wochentag
+  und Beginn (c.t. wie in `alma.js`), bei gleichem Zeitfenster über den Raum, nie über die Nummer. Gruppen, die man nicht
+  besucht, werden keine Notizen.
+- **Notizen:** eine Notiz je id (je Serie, nicht je Datum) in `Stundenplan/` mit `herkunft: zentral` und `zentral_id`; nur der
+  Abrufer schreibt (wie bei Terminen), nicht jedes Gerät.
+- **Alma gewinnt:** Steht dieselbe Veranstaltung im eigenen Alma-Kalender (gleicher Code, Art, Wochentag, Beginn), ersetzt die
+  Alma-Notiz die zentrale; fehlt sie dort, bleibt die zentrale.
+- **„Besuche ich nicht“** je id: bleibt auf den Geräten des Nutzers, auch wenn sich der Eintrag später ändert.
+- **Ausfälle und Raumänderungen** nur im Wochenraster und in der Notiz, keine eigenen `Lehre`-Termine.
+- **Wegfall** wie bei Terminen, mit Schutz: Fehlen auf einmal mehr als die Hälfte der zentralen Veranstaltungen, gilt keine als
+  entfallen.
+
 ## Was das Plugin daraus macht (Kurzfassung)
 
-- **Abruf:** beim Start (20 s + Zufallsversatz 0–2 Min.), dann stündlich, beim Zurückkehren in die App (letzter Versuch über 30 Min. her), plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
+- **Abruf:** beim Start (20 s + Zufallsversatz 0–2 Min.), dann alle 15 Min. (ohne Änderung nur das Manifest), beim Zurückkehren in die App (letzter Versuch über 10 Min. her), plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
   der letzte Stand; es wird nichts geschrieben.
 - **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (`geraet`, `seit`, `zuletzt`, `angewendet`). Ein anderes Gerät übernimmt
-  erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei stündlichen Läufen
+  erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei Läufen alle 15 Min.
   also etwa stündlich.
 - **Notizen:** `Termine/JJJJ-MM-TT Titel.md` mit `herkunft: zentral` und `zentral_id`. Felder aus den Daten werden aktualisiert;
   `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie.
@@ -309,6 +471,11 @@ eigene Gruppe des Autors. Wer nicht genannt werden möchte, meldet das per Issue
   Notizen“ leer) – in den Papierkorb gelegt. Nicht angefasst werden Termine, deren Ende mehr als 30 Tage zurückliegt.
   **Schutz:** Fehlen auf einmal mehr als die Hälfte (und mehr als 10) der zentralen Termine, behandelt das Plugin keinen als
   entfallen.
+- **Stundenplan** (`veranstaltungen.json`, Plugin seit 17.10.2026): nur der Abrufer; eine Notiz je id in `Stundenplan/`
+  für das aktuelle Fachsemester, ohne Parallelgruppen und ohne „Besuche ich nicht“ (`stundenplan_ausgeblendet` in den
+  Einstellungen). Eine eigene Notiz (Alma oder von Hand) mit gleichem Code, Art, Wochentag und Beginn (±15 Min., c.t.) gewinnt.
+  `ausfall` und `aenderungen` landen im Wochenraster. Wegfall mit Schutz (mehr als die Hälfte und mehr als 2 laufende Serien).
+  Einzelheiten: `docs/architektur.md`, „Datenkanal“ → „Zentraler Stundenplan“.
 
 ## Pflichten des Exports (Seite des Autors, `export-daten.py` im Uni-Abgleich)
 
@@ -328,7 +495,17 @@ eigene Gruppe des Autors. Wer nicht genannt werden möchte, meldet das per Issue
    persönliche Angaben in allen Feldern; Personennamen nur in `leitung`, und nur, wenn der Name auf der Seite unter `quelle_url`
    steht (Abruf ohne Anmeldung) und die Seite nicht ILIAS ist; Namen auf der Sperrliste fallen weg. Ein Fehler hält nur
    `gruppen.json` an (der zuletzt veröffentlichte Stand bleibt), nie die Termine.
-7. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
+7. `angebote.json` (seit 17.10.2026): nur von öffentlichen Seiten der Uni (Abruf ohne Anmeldung), nur die Felder oben, keine
+   Beschreibungen und keine Personennamen; dieselben Prüfungen wie das Plugin und der Scan auf persönliche Angaben in allen Feldern.
+   Nur etwa die nächsten acht Wochen; Vergangenes fällt beim nächsten Lauf weg. Ein Fehler hält nur `angebote.json` an, nie die
+   Termine: Die zuletzt veröffentlichte Datei bleibt **im Manifest** (fehlt sie dort, löschen die Geräte ihre Angebote).
+8. `veranstaltungen.json` (Vertrag seit 17.10.2026): aus dem täglichen Abruf des Vorlesungsverzeichnisses; dieselben Prüfungen
+   wie das Plugin, Scan auf persönliche Angaben in jedem Feld (ein Treffer hält nur diesen Eintrag zurück; eine saubere, schon
+   veröffentlichte Fassung bleibt). Eigene Änderungsgrenze (neu oder geändert, entfernt) und Schutz gegen Massenwegfall (mehr als
+   die Hälfte und mehr als 20 Einträge); ist der letzte Abruf älter als drei Tage, bleibt der Stand. Eine leere oder fehlende
+   Alma-Seite gilt erst beim zweiten Abruf hintereinander als „entfällt“. Ein Fehler hält nur `veranstaltungen.json` an, nie
+   Termine, Semesterdaten, Gruppen oder Angebote. Vor der ersten Veröffentlichung eine Woche Trockenlauf mit privater Vorschau.
+9. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 
 Testquelle mit allen Fällen: lokal beim Autor (nicht im Repo). Öffentliche Tests: `tests/` (siehe `docs/tests.md`).

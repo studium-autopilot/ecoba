@@ -13,7 +13,10 @@
 // Index (System/Daten/ilias.json, synchronisiert): welche ILIAS-Datei wo im Tresor liegt, damit kein Gerät doppelt lädt.
 //   { version: 1, kurse: { <refId>: { titel, code, aktiv, zuletzt, t } }, dateien: { <ILIAS-id>: { pfad, sha256, groesse,
 //   geaendert, iliasGroesse, original, iliasPfad, kurs, seit, wie, aktualisiert?, geloescht?, fassungen?, t } },
-//   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, t } } }. Jeder Eintrag trägt „t“ (letzte
+//   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, t } }, gruppen: { <ref_id der Gruppe>:
+//   { code, kurs, tag, beginn, ende, raum, mitglied, status, zentral, kandidaten, t } } }. Kurstitel und ILIAS-Pfade nur ohne
+//   Kurspasswort (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von Gruppen nie Titel oder Beschreibung (dort
+//   stehen Namen), nur Code, Zeitfenster und Raumnummer. Jeder Eintrag trägt „t“ (letzte
 //   Änderung). Vor jedem Schreiben wird mit dem Stand auf der Platte gemischt (je Eintrag gewinnt der neuere), so
 //   überstehen Änderungen anderer Geräte (Kurswahl, Umbenennen) einen laufenden Abruf. Einträge werden nie gelöscht.
 // Abrufer-Sperre (System/Daten/ilias-abruf.json, synchronisiert): nur ein Gerät lädt, Regeln wie zentral.js (UEBERNAHME,
@@ -22,22 +25,28 @@
 //   durchsuchen (Ordner, Sitzungen, Gruppen; eine Anfrage nach der anderen, ABSTAND_MS dazwischen, höchstens ANFRAGEN je
 //   Lauf) → geänderte, dann neue Dateien laden (neueste zuerst, höchstens NEU_MOBIL bzw. NEU_PC je Lauf). Der Index wird
 //   nach jedem Schritt geschrieben; ein Fehler beendet den Lauf sauber, der nächste macht weiter. Abgelaufene Sitzung:
-//   einmal neu anmelden, dann für diesen Lauf aufgeben.
+//   einmal neu anmelden, dann für diesen Lauf aufgeben. Was das Durchsuchen findet, merkt sich das Gerät nach jedem Kurs
+//   (Funde); ein abgebrochener Lauf (iPhone/iPad halten Obsidian im Hintergrund an) fängt so nicht von vorn an.
 // Neue Datei: SHA-256 → gleiche Datei schon unter Unterlagen/ (erst Größe, dann Prüfsumme)? Dann nur merken. Sonst Name über
 //   den Einordner, Ordner wie unterlagen.js, freier Name (nie überschreiben, sonst „ (2)“), Datei + Begleitnotiz
 //   (typ: unterlage, original, quelle „ILIAS: Kurs / Ordner“, ilias_id).
 // Geänderte Datei auf ILIAS: Datei im Tresor unverändert → ersetzen, die Notiz bekommt „aktualisiert“. Von dir verändert
 //   (Anmerkungen!) → deine bleibt, die neue kommt daneben als „<Name> neue Fassung JJJJ-MM-TT.<endung>“ mit eigener Notiz.
 // Gelöscht bleibt gelöscht: Eine Datei, die du gelöscht hast, kommt nie wieder, auch nicht in neuer Fassung.
-// Eigener Uni-Abgleich: Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“ in den
-//   Einstellungen, lädt dieses Skript nichts (Status „über deinen Uni-Abgleich“).
+// Übungs- und Tutoriengruppen (seit 17.10.2026): Die Seite „Meine Kurse und Gruppen“ (dieselbe Anfrage wie die Kursliste) nennt
+//   die Gruppen, in denen du Mitglied bist. Je Gruppe: Modulcode aus dem durchsuchten Kurs bzw. den Brotkrumen der Gruppenseite,
+//   Zeitfenster aus Titel und Beschreibung, Zuordnung zu gruppen.json und eine Notiz in Stundenplan/ (meine-gruppe.js,
+//   herkunft: ilias-gruppe). Nur das Gerät mit der Abrufer-Sperre schreibt; ein Fehler dabei hält die Unterlagen nicht an.
+// Eigener Uni-Abgleich (eba.eigenerAbgleich): Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“
+//   in den Einstellungen, lädt dieses Skript nichts (Status „über deinen Uni-Abgleich“).
 // Für andere Skripte: ctx.ilias (siehe unten, api). Testeinstiege: plugin.testIliasAus (kein automatischer Lauf);
 //   ctx.ilias.erzeugen(abh) baut den ganzen Ablauf mit falschem ILIAS und Tresor im Speicher (tests/ilias.test.js);
 //   in Obsidian ersetzen ctx.ilias.anmeldungSetzen(fn) und ctx.ilias.quelleSetzen(fn) Anmeldung bzw. ILIAS (Oberfläche
 //   testen ohne Passwort und ohne Netz; null = wieder echt).
 // Gerätelokal (app.saveLocalStorage): eba-ilias-benutzer, eba-ilias-stand, eba-ilias-protokoll (letzte 20 Läufe), eba-geraet,
 //   eba-ilias-auftrag (offener Abruf, den du gestartet hast: geht nach Fehler, Stapelgrenze, Neustart oder Rückkehr in die App
-//   von selbst weiter, siehe naechsterSchritt), eba-ilias-schreibt (Datei, die gerade geschrieben wird; siehe nachAbbruch).
+//   von selbst weiter, siehe naechsterSchritt), eba-ilias-schreibt (Datei, die gerade geschrieben wird; siehe nachAbbruch),
+//   eba-ilias-funde (gefundene Dateien, die noch nicht geladen sind; siehe fundAus).
 // Fortschritt: ein Hinweis mit Balken (fortschrittHinweis) für Läufe, die du gestartet hast; automatische bleiben still.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
@@ -47,7 +56,6 @@ module.exports = function (ctx) {
   // ---------- Konstanten ----------
   const INDEX = "System/Daten/ilias.json";
   const ABRUF = "System/Daten/ilias-abruf.json";
-  const EIGENER_ABGLEICH = "System/Skripte/abgleich.js";
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const ZIEL = "Unterlagen";
   const MIN = 60e3, STUNDE = 60 * MIN;
@@ -66,6 +74,9 @@ module.exports = function (ctx) {
   const TIEFE_MAX = 12;          // Ordnertiefe in einem Kurs
   const KURS_ZULETZT = 24 * STUNDE; // „zuletzt“ eines Kurses im Index ohne andere Änderung höchstens so oft schreiben
   const KURS_PAUSE = 3 * STUNDE;   // automatische Läufe durchsuchen einen Kurs höchstens so oft (Knopf: immer alle)
+  const GRUPPEN_SEITEN = 5;
+  const KURS_WIEDER = 7 * 24 * STUNDE; // Gruppenseite ohne Kurscode: höchstens so oft neu versuchen
+  const MIGRATION = 1;               // Stand der einmaligen Säuberung (eba-ilias-migration)         // höchstens so viele Gruppenseiten je Lauf (Modulcode aus den Brotkrumen, danach gemerkt)
   const SITZUNG_VORAUS_TAGE = 7;   // Sitzungen weiter in der Zukunft nicht holen (noch leer; spart je Sitzung 2–3 Anfragen)
   const PROTOKOLL_MAX = 20;
   const BEHAELTER = ["ordner", "sitzung", "gruppe"];
@@ -78,12 +89,15 @@ module.exports = function (ctx) {
   const STAPEL_MAX = 10;          // höchstens so viele Stapel je Auftrag (schont ILIAS), danach nur noch stündlich
   const STILL = 2 * MIN;          // so lange ohne Regung gilt ein Lauf als tot (iPhone/iPad halten Skripte im Hintergrund an)
   const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet",
-    auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt" };
+    auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt", funde: "eba-ilias-funde",
+    migration: "eba-ilias-migration" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
   const TEXT_ANMELDUNG_FOLGT = "ILIAS-Anmeldung folgt in einer späteren Version";
   const MODULCODE = (ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE) || "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?"; // wie eba.js
   const CODE_ANFANG = new RegExp("^\\s*(" + MODULCODE + ")(?=[\\s_\\-.:,/]|$)");
   const CODE_GANZ = new RegExp("^" + MODULCODE + "$");
+  // Eigener Uni-Abgleich: eine Regel für alle Skripte (eba.js); ohne eba.js keiner
+  const eigenerAbgleich = (existiert, einstellungen) => { const f = ctx.user && ctx.user.eba && ctx.user.eba.eigenerAbgleich; return !!f && f(existiert, einstellungen); };
 
   // ---------- Kleine Helfer ----------
   const pad = (n) => String(n).padStart(2, "0");
@@ -91,7 +105,9 @@ module.exports = function (ctx) {
   const hat = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
   const nfc = (s) => { try { return String(s).normalize("NFC"); } catch (e) { return String(s); } };
   // Fremdtext aus ILIAS: ohne Steuer- und Richtungszeichen, ohne Wikilink-Klammern, eine Zeile
-  const textRein = (s) => nfc(s == null ? "" : s).replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, " ")
+  // Unsichtbare Zeichen (weiches Trennzeichen, Verbinder) fallen ganz weg, damit ein getrenntes Passwort-Wort zusammenbleibt
+  const textRein = (s) => nfc(s == null ? "" : s).split("\u034f").join("").replace(/[\u00ad\u180e\u2060-\u2064]/g, "")
+    .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, " ")
     .replace(/\[\[|\]\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
   // Datei- und Ordnernamen: Windows-tauglich und linkfest (wie eba.sauber), kein Punkt/Leerzeichen/Strich an den Enden
   const sauber = (s) => textRein(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim().replace(/^[.\s-]+|[.\s-]+$/g, "");
@@ -99,6 +115,92 @@ module.exports = function (ctx) {
   // Füllwörter an den Enden weg („Mathematische Methoden der“ → „Mathematische Methoden“), wie unterlagen.js
   const FUELL = /^(zu|zur|zum|vom|von|the|of|for|and|und|der|die|das|am|im|on|in|an|to|für|fuer)$/i;
   const fuellWeg = (s) => { const w = String(s).split(" ").filter(Boolean); while (w.length && FUELL.test(w[0])) w.shift(); while (w.length && FUELL.test(w[w.length - 1])) w.pop(); return w.join(" "); };
+  // Kurspasswörter (nach bestem Bemühen): Manche Kurstitel tragen das Beitrittspasswort („… (Passwort: …)“). Erkannt wird auf
+  // einer gefalteten Fassung: Entitäten aufgelöst (auch doppelt kodiert), unsichtbare Zeichen weg (textRein), NFKC, kyrillische
+  // und griechische Doppelgänger lateinisch. Starke Marken (Passwort, Password, Kennwort in jeder Schreibweise und als Wortende
+  // wie „Kurspasswort“, Passwd, Pwd, Passw., Kennw., Zugangscode, Einschreibeschlüssel, Schlüsselwort, Mot de passe, Enrolment
+  // key, Zugangsdaten) zählen immer, aber nicht als Wortanfang („Passwortsicherheit“). PW-Formen (PW, P/W, P.W., KursPW) zählen
+  // mit Ziffer dahinter, mit „:“/„=“ oder nach einem Trenner. Schwache Wörter (Key, Code, PIN, Pass, Zugang, Login, Secret,
+  // Schlüssel, KW) nur mit „:“/„=“ und einem Wert, der wie ein Passwort aussieht (Ziffer, Sonderzeichen, Großbuchstabe mitten im
+  // Wort). Der Titel endet vor der Marke, wenn davor ein Trenner steht („(“, „-“, „|“, „,“ …) oder „:“ folgt; sonst (Passwort
+  // mitten im Satz, „<Wert> ist das Passwort“) bleibt nichts, und der Aufrufer nimmt Code oder „Kurs <Nummer>“.
+  const ENT = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", colon: ":", period: ".", lowbar: "_", hyphen: "-", sol: "/", num: "#", shy: "" };
+  const entitaeten = (s) => {
+    let t = String(s);
+    for (let i = 0; i < 3 && t.indexOf("&") >= 0; i++) {
+      t = t.replace(/&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z]{2,8});/g, (m, e) => {
+        if (e.charAt(0) !== "#") return hat(ENT, e.toLowerCase()) ? ENT[e.toLowerCase()] : m;
+        const n = e.charAt(1) === "x" || e.charAt(1) === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+        return n > 0 && n < 0x110000 && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : "";
+      });
+    }
+    return t;
+  };
+  const HOMOGLYPHE = { "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "к": "k", "м": "m", "т": "t", "н": "h", "в": "b",
+    "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ԝ": "w", "ԛ": "q", "ӏ": "l", "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H",
+    "О": "O", "Р": "P", "С": "C", "Т": "T", "Х": "X", "У": "Y", "І": "I", "Ј": "J", "Ѕ": "S", "Ԝ": "W", "α": "a", "ο": "o", "ρ": "p",
+    "ε": "e", "κ": "k", "ν": "v", "τ": "t", "υ": "u", "ι": "i", "ω": "w", "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
+    "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X" };
+  const falten = (t) => t.replace(/[Ͱ-ϿЀ-ԯ]/g, (c) => HOMOGLYPHE[c] || c); // je Zeichen eins: Stellen bleiben
+  const LUECKE = "[\\s._\\-]?";
+  const zeichenweise = (w) => w.split("").join(LUECKE);
+  const BUCHSTABE = /[A-Za-zÄÖÜäöüß]/;
+  const STARK = new RegExp("(?:" + [
+    zeichenweise("passw") + LUECKE + "(?:o|ö|oe)" + LUECKE + "r" + LUECKE + "[td](?:e?r|e?s|e)?",
+    zeichenweise("kennw") + LUECKE + "(?:o|ö|oe)" + LUECKE + "r" + LUECKE + "t(?:e?r|e?s|e)?",
+    "(?:pass|kenn|zugangs|einschreibe|beitritts)" + LUECKE + "code", "passwd", "pwd", "passw\\.", "kennw\\.", "mot de passe",
+    "enrol+ment" + LUECKE + "key", "zugangsdaten", "(?:einschreibe|beitritts|zugangs|kurs)" + LUECKE + "schl(?:ü|ue|u)ssel",
+    "schl(?:ü|ue|u)sselwort",
+  ].join("|") + ")(?![A-Za-zÄÖÜäöüß])", "gi");
+  const PW = /p[\s./_-]?w\.?(?![A-Za-zÄÖÜäöüß])/gi;
+  const SCHWACH = /(?:key|code|pin|pass|zugang|login|secret|kw|schl(?:ü|ue|u)ssel)(?=\s*[:=])/gi;
+  const TRENNER = /[([{|,;:–—\-/·]$/;
+  const wertWiePasswort = (rest) => {
+    const w = (/^\s*[:=]\s*([^\s)\]}]+)/.exec(rest) || [])[1] || "";
+    return !!w && (/\d/.test(w) || /[^A-Za-zÄÖÜäöüß]/.test(w) || /[a-zäöüß][A-ZÄÖÜ]/.test(w));
+  };
+  // Erste Marke in d (gefaltete Fassung) → { start, ende, behalten (Teil davor darf bleiben) } oder null
+  const markeFinden = (d) => {
+    let best = null;
+    const nimm = (start, ende) => { if (!best || start < best.start) best = { start, ende }; };
+    const wortAnfang = (i) => { while (i > 0 && BUCHSTABE.test(d.charAt(i - 1))) i--; return i; };
+    let m;
+    STARK.lastIndex = 0;
+    while ((m = STARK.exec(d))) nimm(wortAnfang(m.index), m.index + m[0].length);
+    PW.lastIndex = 0;
+    while ((m = PW.exec(d))) {
+      const vor = d.slice(0, m.index), nach = d.slice(m.index + m[0].length);
+      const kompositum = /(?:kurs|beitritts)[\s._-]?$/i.test(vor);
+      if (!kompositum && vor && BUCHSTABE.test(vor.charAt(vor.length - 1))) continue; // mitten im Wort
+      if (/^\d/.test(nach) || /^\s*[:=]/.test(nach) || kompositum || TRENNER.test(vor.replace(/\s+$/, "")) || !vor.trim()) {
+        nimm(kompositum ? wortAnfang(m.index) : m.index, m.index + m[0].length);
+      }
+    }
+    SCHWACH.lastIndex = 0;
+    while ((m = SCHWACH.exec(d))) {
+      if (m.index > 0 && BUCHSTABE.test(d.charAt(m.index - 1))) continue;
+      if (wertWiePasswort(d.slice(m.index + m[0].length))) nimm(m.index, m.index + m[0].length);
+    }
+    if (!best) return null;
+    const vor = d.slice(0, best.start).replace(/\s+$/, "");
+    best.behalten = !!vor && (TRENNER.test(vor) || /^\s*[:=]/.test(d.slice(best.ende)));
+    return best;
+  };
+  // → Titel ohne Passwort; "" heißt: nichts davon ist sicher zu zeigen (Aufrufer: Code oder „Kurs <Nummer>“)
+  const vorbereiten = (s) => {
+    let t = textRein(entitaeten(textRein(s)));
+    try { t = t.normalize("NFKC"); } catch (e) { /* bleibt NFC */ }
+    return t;
+  };
+  const hatKennwort = (s) => !!markeFinden(falten(vorbereiten(s)));
+  const ohneKennwort = (s) => {
+    const t = vorbereiten(s);
+    const m = markeFinden(falten(t));
+    if (!m) return t;
+    return m.behalten ? t.slice(0, m.start).replace(/[\s([{<\-–—:;,|/·.]+$/, "").trim() : "";
+  };
+  // ILIAS-Pfad „Kurs / Ordner / …“: jedes Stück einzeln; ein leerer Kurs wird zu ersatz (Code bzw. „Kurs“)
+  const pfadOhneKennwort = (p, ersatz) => String(p == null ? "" : p).split(" / ").map((x, i) => ohneKennwort(x) || (i ? "" : ersatz || "Kurs")).filter(Boolean).join(" / ");
   const mdText = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&");
   const endungVon = (name) => { const m = String(name || "").match(/\.([A-Za-z0-9]{1,8})$/); return m ? m[1].toLowerCase() : ""; };
   const ohneEndung = (name) => String(name).replace(/\.[A-Za-z0-9]{1,8}$/, "");
@@ -184,15 +286,24 @@ module.exports = function (ctx) {
   };
 
   // ---------- Index: lesen, prüfen, mischen ----------
-  const BEREICHE = ["kurse", "dateien", "ignoriert"];
-  const leererIndex = () => ({ version: 1, kurse: {}, dateien: {}, ignoriert: {} });
+  const BEREICHE = ["kurse", "dateien", "ignoriert", "gruppen"];
+  const leererIndex = () => ({ version: 1, kurse: {}, dateien: {}, ignoriert: {}, gruppen: {} });
+  // Titel ohne Kurspasswort (auch alte Einträge: beim Lesen gesäubert, beim nächsten Schreiben ersetzt)
+  const saeubern = (b, e, id) => {
+    if (b === "kurse" && hat(e, "titel")) { const t = ohneKennwort(e.titel) || e.code || "Kurs " + id; if (t !== e.titel) return Object.assign({}, e, { titel: t }); }
+    if ((b === "dateien" || b === "ignoriert") && typeof e.iliasPfad === "string") {
+      const p = pfadOhneKennwort(e.iliasPfad);
+      if (p !== e.iliasPfad) return Object.assign({}, e, { iliasPfad: p });
+    }
+    return e;
+  };
   const indexPruefen = (o) => {
     const x = leererIndex();
     if (!o || typeof o !== "object" || Array.isArray(o)) return x;
     for (const b of BEREICHE) {
       const q = o[b];
       if (!q || typeof q !== "object" || Array.isArray(q)) continue;
-      for (const id of Object.keys(q)) if (q[id] && typeof q[id] === "object" && !Array.isArray(q[id])) x[b][id] = q[id];
+      for (const id of Object.keys(q)) if (q[id] && typeof q[id] === "object" && !Array.isArray(q[id])) x[b][id] = saeubern(b, q[id], id);
     }
     return x;
   };
@@ -200,10 +311,11 @@ module.exports = function (ctx) {
   const mischen = (platte, mein) => {
     const aus = leererIndex();
     for (const b of BEREICHE) {
-      for (const id of Object.keys(platte[b])) aus[b][id] = platte[b][id];
-      for (const id of Object.keys(mein[b])) {
+      const p = platte[b] || {}, m = mein[b] || {};
+      for (const id of Object.keys(p)) aus[b][id] = p[id];
+      for (const id of Object.keys(m)) {
         const x = aus[b][id];
-        if (!x || String(mein[b][id].t || "") >= String(x.t || "")) aus[b][id] = mein[b][id];
+        if (!x || String(m[id].t || "") >= String(x.t || "")) aus[b][id] = m[id];
       }
     }
     return aus;
@@ -305,9 +417,10 @@ module.exports = function (ctx) {
     const geheimLesen = () => { try { const v = abh.geheim.lesen(abh.geheimId()); return typeof v === "string" && v ? v : ""; } catch (e) { return ""; } };
     const anmeldung = () => { try { const f = abh.anmeldung ? abh.anmeldung() : null; return typeof f === "function" ? f : null; } catch (e) { return null; } };
     const extern = () => {
-      try { return io.existiert(EIGENER_ABGLEICH) || String(((abh.einstellungen && abh.einstellungen()) || {}).ilias_unterlagen || "").trim().toLowerCase() === "extern"; } catch (e) { return false; }
+      try { return eigenerAbgleich(io.existiert, abh.einstellungen && abh.einstellungen()); } catch (e) { return false; }
     };
-    const bereit = () => !extern() && !!anmeldung() && hatZugang() && !stand().gesperrt;
+    // Eigener Uni-Abgleich: trotzdem bereit, dann nur für die Übungsgruppen (lauf: nurGruppen, keine Downloads)
+    const bereit = () => !!anmeldung() && hatZugang() && !stand().gesperrt;
     // Fehlertext ohne Kennwort (auch URL-kodiert), höchstens 300 Zeichen
     const fehlerText = (e, wert) => {
       let t = String((e && e.message) || e || "Fehler");
@@ -352,6 +465,7 @@ module.exports = function (ctx) {
       stoppen("trennen");
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       lokal(L.benutzer, null);
+      lokal(L.funde, null);
       standSetzen({ fehler: "", fehlerZeit: "", gesperrt: false, abrufer: false });
       melden({ art: "zugang" });
     };
@@ -483,8 +597,8 @@ module.exports = function (ctx) {
       for (const k of roh) {
         const refId = k && k.refId != null ? String(k.refId) : "";
         if (!refId || !k.url) continue;
-        const titel = textRein(k.titel) || "Kurs " + refId;
-        const code = (k.code && CODE_GANZ.test(String(k.code)) ? String(k.code) : codeAm(titel)) || "";
+        const code = (k.code && CODE_GANZ.test(String(k.code)) ? String(k.code) : codeAm(textRein(k.titel))) || "";
+        const titel = ohneKennwort(k.titel) || code || "Kurs " + refId;
         const alt = mem.kurse[refId];
         // Vorgabe beim ersten Sehen: an, wenn der Titel mit einem Modulcode beginnt, zu dem es eine Modulnotiz gibt
         if (!alt) setzen("kurse", refId, { titel, code, aktiv: !!(code && abh.modul(code)), zuletzt: "" });
@@ -497,7 +611,7 @@ module.exports = function (ctx) {
       const k = mem ? mem.kurse : {}, d = mem ? mem.dateien : {};
       const zahl = {};
       for (const id of Object.keys(d)) if (!d[id].geloescht) zahl[d[id].kurs] = (zahl[d[id].kurs] || 0) + 1;
-      return Object.keys(k).map((id) => ({ refId: id, titel: k[id].titel || "", code: k[id].code || "", aktiv: !!k[id].aktiv, zuletzt: k[id].zuletzt || "", dateien: zahl[id] || 0 }))
+      return Object.keys(k).map((id) => ({ refId: id, titel: ohneKennwort(k[id].titel || ""), code: k[id].code || "", aktiv: !!k[id].aktiv, zuletzt: k[id].zuletzt || "", dateien: zahl[id] || 0 }))
         .sort((a, b) => a.titel.localeCompare(b.titel, "de"));
     };
     const kurse = async () => { await indexLesen(); return kurseListe(); };
@@ -511,7 +625,151 @@ module.exports = function (ctx) {
       return true;
     };
 
+    // ----- Übungs- und Tutoriengruppen (meine-gruppe.js): Mitgliedschaften → Notizen in Stundenplan/ -----
+    // Mitglied heißt: Die Gruppe steht auf „Meine Kurse und Gruppen“. Den Modulcode liefert der Kurs (oder Unterordner mit Code),
+    // in dem die Durchsuchung die Gruppe sah, sonst die Brotkrumen der Gruppenseite (höchstens GRUPPEN_SEITEN je Lauf; mit Code
+    // gemerkt, ohne Code erst nach KURS_WIEDER neu versucht); nie die Uhrzeit. Zeitfenster und Name („Gruppe 4“) aus Titel und
+    // Beschreibung der Mitgliederseite (sonst aus der Durchsuchung). Verlassen gilt erst, wenn die Gruppe zwei Läufe in Folge
+    // fehlt (fehlt ≥ 2); eine ganz leere Gruppenliste entfernt nie etwas.
+    const gruppenLib = () => { try { return abh.gruppen ? abh.gruppen() : null; } catch (e) { return null; } };
+    const gruppenSlot = (e) => { const G = gruppenLib(); return G ? G.zeitfenster(String(e.titel || "") + " · " + String(e.beschreibung || "")) : null; };
+    const gruppenNameAus = (titel) => { const G = gruppenLib(); return G && G.gruppenName ? G.gruppenName(titel) : ""; };
+    const GRUPPE_FELDER = ["code", "kurs", "name", "tag", "beginn", "ende", "raum", "mitglied", "fehlt", "kursVersucht", "status", "zentral", "kandidaten"];
+    const gruppeMerken = (id, felder) => {
+      const alt = mem.gruppen[id] || {}, neu = Object.assign({}, alt, felder);
+      const anders = GRUPPE_FELDER.some((k) => JSON.stringify(alt[k] == null ? null : alt[k]) !== JSON.stringify(neu[k] == null ? null : neu[k]));
+      if (anders) setzen("gruppen", id, felder);
+    };
+    const slotFelder = (s) => (s ? { tag: s.tag, beginn: s.beginn, ende: s.ende || "", raum: s.raum || "" } : {});
+    // roh = [{ refId, url, slot, name }] von der Mitgliederseite (null: Quelle ohne Gruppen → nichts tun, auch nichts entfernen)
+    const gruppenAbgleichen = async (b, r, q, roh, darf) => {
+      const G = gruppenLib();
+      if (!G || !roh) return;
+      const warnen = (t) => { b.warnung = (b.warnung ? b.warnung + " " : "") + t; };
+      for (const id of Object.keys(r.gruppenGesehen)) {
+        const x = r.gruppenGesehen[id];
+        gruppeMerken(id, Object.assign({ code: x.code || (mem.gruppen[id] || {}).code || "", kurs: x.kurs }, slotFelder(x.slot), x.name ? { name: x.name } : {}));
+      }
+      const zentral = abh.zentraleGruppen ? abh.zentraleGruppen() : null;
+      const semester = abh.semester ? abh.semester() : "";
+      const mitglieder = new Set(), soll = [];
+      let seiten = 0;
+      for (const g of roh) {
+        const id = String(g.refId);
+        mitglieder.add(id);
+        const vorher = mem.gruppen[id] || {};
+        if (!vorher.code && q.gruppeKurs && seiten < GRUPPEN_SEITEN && darf() && alter(vorher.kursVersucht) >= KURS_WIEDER) {
+          seiten++;
+          let k = null;
+          try { k = await anfrage(b, r, () => q.gruppeKurs({ refId: id, url: g.url })); } catch (x) { if (!einzeln(x)) throw x; }
+          const kc = k && k.refId ? mem.kurse[String(k.refId)] : null;
+          const code = k && k.refId ? (kc && kc.code) || (CODE_GANZ.test(String(k.code || "")) ? String(k.code) : "") : "";
+          gruppeMerken(id, Object.assign({ kursVersucht: iso() }, k && k.refId ? { kurs: String(k.refId), code } : {}));
+        }
+        const e = mem.gruppen[id] || {};
+        const slot = g.slot || (e.tag ? { tag: e.tag, beginn: e.beginn, ende: e.ende, raum: e.raum } : null);
+        const z = zentral ? G.zuordnen(slot, e.code || "", zentral, semester) : { status: e.code ? "ohne-daten" : "ohne-code" };
+        gruppeMerken(id, Object.assign(slotFelder(g.slot), g.name ? { name: g.name } : {}, { mitglied: true, fehlt: 0, status: z.status, zentral: z.id || "", kandidaten: z.kandidaten || [] }));
+        const zg = z.id ? zentral.find((x) => x.id === z.id) : null;
+        if (zg) soll.push({ refId: id, g: zg, name: (mem.gruppen[id] || {}).name || "" });
+      }
+      // Fehlende Gruppen (bekannt aus dem Index oder einer Notiz): je Lauf hochzählen; eine leere Liste zählt nicht
+      const sp = abh.stundenplan ? abh.stundenplan() : null;
+      const ausNotizen = sp ? sp.notizen().filter((x) => x.fm && x.fm.herkunft === "ilias-gruppe").map((x) => String(x.fm.ilias_gruppe || "")).filter(Boolean) : [];
+      const bekannt = Object.keys(mem.gruppen).filter((id) => mem.gruppen[id].mitglied).concat(ausNotizen).filter((id, i, a) => a.indexOf(id) === i);
+      const leer = !mitglieder.size && bekannt.length > 0;
+      if (leer) warnen("ILIAS nennt keine deiner Gruppen mehr – nichts entfernt.");
+      else for (const id of bekannt) if (!mitglieder.has(id)) gruppeMerken(id, { fehlt: ((mem.gruppen[id] || {}).fehlt || 0) + 1 });
+      const verlassen = (id) => !leer && ((mem.gruppen[id] || {}).fehlt || 0) >= 2;
+      b.gruppen = { mitglied: mitglieder.size, zugeordnet: soll.length, neu: 0 };
+      if (zentral && sp) { // ohne Gruppenliste keine Notizen (und keine entfernt)
+        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen });
+        b.gruppen.neu = n.angelegt.length + n.uebernommen.length;
+        b.gruppen.notizen = n;
+        if (n.warnung) warnen(n.warnung);
+        else for (const id of bekannt) if (verlassen(id)) gruppeMerken(id, { mitglied: false, status: "", zentral: "", kandidaten: [] });
+      }
+      await speichern();
+      melden({ art: "gruppen" });
+    };
+    // Mitgliedschaften für die Anzeige (gruppen.js): [{ refId, code, name, status, zentral, kandidaten }], nur aktuelle
+    const gruppenListe = () => {
+      const g = mem ? mem.gruppen : {};
+      return Object.keys(g).filter((id) => g[id].mitglied).map((id) => ({ refId: id, code: g[id].code || "", name: g[id].name || "", status: g[id].status || "",
+        zentral: g[id].zentral || "", kandidaten: Array.isArray(g[id].kandidaten) ? g[id].kandidaten.slice() : [] }));
+    };
+
+    // ----- Einmal je Gerät (mit der Abrufer-Sperre): Kurspasswörter aus älteren Fassungen im Tresor -----
+    // Begleitnotizen (quelle, Zeile „Aus ILIAS:“) aus dem Index und Ordner unter Unterlagen/, deren Name eine Passwort-Marke trägt
+    // (Kurse ohne Code hießen wie ihr Titel). Ordner werden umbenannt (Links ziehen mit, der Index über umbenannt).
+    const notizSaeubern = (text) => String(text)
+      .replace(/^quelle: (".*")[ \t]*$/m, (z, q) => {
+        let v = "";
+        try { v = JSON.parse(q); } catch (e) { return z; }
+        return typeof v === "string" && v.indexOf("ILIAS: ") === 0 && hatKennwort(v.slice(7)) ? "quelle: " + J("ILIAS: " + pfadOhneKennwort(v.slice(7))) : z;
+      })
+      .replace(/^> \*\*Aus ILIAS:\*\* (.*)$/m, (z, h) => { const roh = h.replace(/\\(.)/g, "$1"); return hatKennwort(roh) ? "> **Aus ILIAS:** " + mdText(pfadOhneKennwort(roh)) : z; });
+    const tresorSaeubern = async (b) => {
+      if ((lokal(L.migration) || 0) >= MIGRATION) return;
+      let n = 0;
+      for (const name of io.unterordner(ZIEL)) {
+        if (!hatKennwort(name) || !io.umbenennen) continue;
+        const basisName = sauber(ohneKennwort(name)) || "ILIAS";
+        let neu = basisName, i = 2;
+        while (io.existiert(ZIEL + "/" + neu)) neu = basisName + " " + i++;
+        await io.umbenennen(ZIEL + "/" + name, ZIEL + "/" + neu);
+        await umbenannt(ZIEL + "/" + neu, ZIEL + "/" + name);
+        n++;
+      }
+      const notizen = {};
+      for (const id of Object.keys(mem.dateien)) {
+        const d = mem.dateien[id];
+        for (const p of [d.pfad].concat(Array.isArray(d.fassungen) ? d.fassungen : [])) if (p) notizen[notizPfad(p)] = true;
+      }
+      for (const p of Object.keys(notizen)) {
+        const alt = io.existiert(p) ? await io.lesenText(p) : null;
+        if (alt == null) continue;
+        const neu = notizSaeubern(alt);
+        if (neu !== alt) { await io.schreibenText(p, neu); n++; }
+      }
+      await speichern();
+      lokal(L.migration, MIGRATION);
+      if (n) b.gesaeubert = n;
+    };
+
     // ----- Durchsuchen: Tiefensuche durch Ordner, Sitzungen, Gruppen → Kandidaten (neu, geändert) -----
+    // Was mit einer gefundenen Datei zu tun ist: "geaendert", "neu" oder "" (da und unverändert, von dir gelöscht, schon als zu
+    // groß gemerkt). Gilt auch für Funde eines früheren Laufs: inzwischen geladene fallen so weg.
+    const artFuer = (c) => {
+      const d = mem.dateien[c.id];
+      if (d) {
+        if (d.geloescht) return ""; // gelöscht bleibt gelöscht
+        const anders = (c.geaendert && d.geaendert && c.geaendert !== d.geaendert) || (c.lg != null && d.iliasGroesse != null && c.lg !== d.iliasGroesse);
+        return anders ? "geaendert" : "";
+      }
+      const x = mem.ignoriert[c.id];
+      return x && x.geaendert === c.geaendert && x.iliasGroesse === c.lg ? "" : "neu"; // schon geprüft, unverändert
+    };
+    // Funde (gerätelokal, eba-ilias-funde): Kandidaten, die noch nicht geladen sind, nach jedem durchsuchten Kurs gespeichert.
+    // Ein Lauf, der abbricht (iPhone/iPad halten Obsidian im Hintergrund an), muss die fertigen Kurse so nicht noch einmal
+    // durchsuchen. Vom ILIAS-Eintrag nur, was der Download braucht. Ein gestoppter oder verworfener Lauf schreibt keine.
+    // Leer heißt [] (alles geladen); null heißt unbekannt (Trennen, ältere Fassung), siehe lauf.
+    const fundAus = (c) => {
+      const e = c.eintrag || {};
+      return { id: c.id, eintrag: { art: e.art, typ: e.typ, refId: e.refId, id: e.id, url: e.url, endung: e.endung }, kurs: c.kurs, code: c.code,
+        ordner: c.ordner, original: c.original, endung: c.endung, geaendert: c.geaendert, lg: c.lg, iliasPfad: c.iliasPfad, art: c.art };
+    };
+    const fundeSpeichern = (r, liste) => { if (!r.stopp.an) lokal(L.funde, liste.map(fundAus)); };
+    const fundeLesen = () => {
+      const f = lokal(L.funde);
+      // Funde aus einer älteren Fassung tragen den rohen Kurstitel: beim Lesen säubern (Kurs, Ordner, ILIAS-Pfad)
+      return (Array.isArray(f) ? f.filter((c) => c && typeof c.id === "string" && c.kurs && c.kurs.refId != null && c.eintrag && Array.isArray(c.ordner)) : [])
+        .map((c) => {
+          const ersatz = c.kurs.code || "Kurs " + c.kurs.refId;
+          return Object.assign({}, c, { kurs: Object.assign({}, c.kurs, { titel: ohneKennwort(c.kurs.titel) || ersatz }),
+            ordner: c.ordner.map((o) => ohneKennwort(o) || "Ordner"), iliasPfad: pfadOhneKennwort(c.iliasPfad, ersatz) });
+        });
+    };
     const dateiPruefen = (q, e, k, kurs, kandidaten, b, r) => {
       // Kennung: ref_id; Dateilisten in Inhaltsseiten haben nur eine file_id (eigener Zahlenraum → „f“ davor)
       const id = e.refId != null && e.refId !== "" ? String(e.refId) : e.id != null && e.id !== "" ? "f" + e.id : "";
@@ -527,21 +785,14 @@ module.exports = function (ctx) {
       const lg = typeof e.groesse === "number" && isFinite(e.groesse) && e.groesse >= 0 ? Math.round(e.groesse) : null;
       if (r.imLauf[id]) return; // dieselbe Datei an zwei Stellen im Kurs
       const c = { id, eintrag: e, kurs, code: k.code, ordner: k.pfad, original, endung, geaendert, lg, reihe: kandidaten.length, iliasPfad: [kurs.titel].concat(k.anzeige).join(" / ") };
-      const d = mem.dateien[id];
-      if (d) {
-        if (d.geloescht) return; // gelöscht bleibt gelöscht
-        const anders = (geaendert && d.geaendert && geaendert !== d.geaendert) || (lg != null && d.iliasGroesse != null && lg !== d.iliasGroesse);
-        if (anders) { c.art = "geaendert"; kandidaten.push(c); r.imLauf[id] = true; }
-        return;
-      }
-      const x = mem.ignoriert[id];
-      if (x && x.geaendert === geaendert && x.iliasGroesse === lg) return; // schon geprüft, unverändert
-      if (lg != null && lg > MAX_MB * 1048576) {
+      c.art = artFuer(c);
+      if (!c.art) return;
+      if (c.art === "neu" && lg != null && lg > MAX_MB * 1048576) {
         setzen("ignoriert", id, { grund: "zu groß", groesse: lg, geaendert, iliasGroesse: lg, original, iliasPfad: c.iliasPfad });
         plus(b, kurs.refId, "zuGross");
         return;
       }
-      c.art = "neu"; kandidaten.push(c); r.imLauf[id] = true;
+      kandidaten.push(c); r.imLauf[id] = true;
     };
     // → true, wenn der Kurs ganz durchsucht ist; false, wenn das Anfragen-Budget vorher endete (nächster Lauf beginnt mit ihm)
     const durchsuchen = async (q, kurs, kandidaten, b, r, o, darf) => {
@@ -569,7 +820,7 @@ module.exports = function (ctx) {
         // einzeln geholt (spart je Sitzung eine Anfrage); die Dateien bekommen den Sitzungsnamen als Ordner. Sitzungen ohne
         // aufgeklappte Materialien werden geholt (sie könnten eingeklappt sein).
         // Ordnername zweimal: für den Einordner dateinamentauglich (pfad), für Notiz und Index lesbar (anzeige)
-        const lesbar = (e) => textRein((e.sitzung && e.sitzung.name) || e.titel) || "Ordner";
+        const lesbar = (e) => ohneKennwort((e.sitzung && e.sitzung.name) || e.titel) || "Ordner";
         // für den Einordner: Name wie in ILIAS (unterlagen.js erkennt z. B. „2026-10-12, 10:15 …“ als Sitzung), nur ohne „/“
         const segment = (t) => t.replace(/\//g, "-");
         const grenze = tagIso(ms() + SITZUNG_VORAUS_TAGE * 864e5);
@@ -579,6 +830,8 @@ module.exports = function (ctx) {
         const unter = [];
         for (const e of liste) {
           const art = String(e.art || "");
+          // Gruppe in Kurs oder Ordner: Code des Behälters und Zeitfenster merken (Titel und Beschreibung nur hier im Speicher)
+          if (e.typ === "grp" && e.refId && r.gruppenGesehen) r.gruppenGesehen[String(e.refId)] = { code: k.code || "", kurs: kurs.refId, slot: gruppenSlot(e), name: gruppenNameAus(e.titel) };
           if (BEHAELTER.indexOf(art) >= 0) {
             if (!e.url || k.tiefe >= TIEFE_MAX || (art === "sitzung" && aufgeklappt[String(e.refId)])) continue;
             const tag = art === "sitzung" && e.sitzung && e.sitzung.datum ? String(e.sitzung.datum).slice(0, 10) : "";
@@ -749,9 +1002,11 @@ module.exports = function (ctx) {
     };
 
     // ----- Ein Lauf -----
-    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null });
+    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null, gruppen: null });
     const lauf = async (o, b, stopp) => {
-      if (extern()) { b.art = "extern"; return; }
+      // Eigener Uni-Abgleich (Dateien kommen von dort): mit ILIAS-Zugang nur Mitgliedschaften und Gruppen-Notizen, nie Downloads
+      const nurGruppen = extern();
+      if (nurGruppen && !(anmeldung() && hatZugang())) { b.art = "extern"; return; }
       const f = anmeldung();
       if (!f) { b.art = "ohne-anmeldung"; return; }
       if (!hatZugang()) { b.art = "ohne-zugang"; return; }
@@ -775,17 +1030,25 @@ module.exports = function (ctx) {
       const geheimId = abh.geheimId();
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
-      const r = { letzte: 0, hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp };
+      const r = { letzte: 0, hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, gruppenGesehen: {} };
       await indexLesen();
-      if (!o.nurKurse) { await nachAbbruch(r); await nachziehen(b, r); }
+      if (!o.nurKurse && !nurGruppen) {
+        await nachAbbruch(r); await nachziehen(b, r);
+        try { await tresorSaeubern(b); } catch (e) { b.warnung = (b.warnung ? b.warnung + " " : "") + "Säubern: " + fehlerText(e); }
+      }
       fort(o, { phase: "anmelden" });
       const q = await anfrage(b, r, () => abh.quelle(zugang, anmeldenMit(f)));
       fort(o, { phase: "kurse" });
-      const roh = await anfrage(b, r, () => q.kurse());
+      // Eine Anfrage für Kurse und Gruppen (Seite „Meine Kurse und Gruppen“); von Gruppen bleibt nur das Zeitfenster
+      const seite = await anfrage(b, r, () => (q.mitgliedschaften ? q.mitgliedschaften() : q.kurse()));
+      const roh = Array.isArray(seite) ? seite : (seite && seite.kurse) || [];
+      const gruppenRoh = seite && !Array.isArray(seite) && Array.isArray(seite.gruppen)
+        ? seite.gruppen.filter((g) => g && g.refId).map((g) => ({ refId: String(g.refId), url: g.url, slot: gruppenSlot(g), name: gruppenNameAus(g.titel) })) : null;
       if (!Array.isArray(roh) || !roh.length) throw fehlerArt("kurse", "Keine Kurse gefunden. Hat sich die ILIAS-Seite geändert?");
       const liste = kurseUebernehmen(roh);
       await speichern();
-      if (o.nurKurse) { b.art = "kurse"; b.kurse = kurseListe(); return; }
+      if (o.nurKurse && !nurGruppen) { b.art = "kurse"; b.kurse = kurseListe(); return; }
+      if (nurGruppen) { await gruppenAbgleichen(b, r, q, gruppenRoh, () => b.anfragen < ANFRAGEN); b.art = "nur-gruppen"; return; }
 
       // 1. Durchsuchen (älteste zuerst; das Budget für Downloads bleibt frei)
       const E = abh.einordner();
@@ -793,10 +1056,22 @@ module.exports = function (ctx) {
       const G = abh.grenzen || {};
       const kappe = G.neu || (abh.mobil ? NEU_MOBIL : NEU_PC), budget = G.anfragen || ANFRAGEN;
       const kursZeit = Object.assign({}, stand().kursZeit), kursFertig = Object.assign({}, stand().kursFertig);
-      // automatische Läufe ohne Kurse, die vor kurzem ganz durchsucht wurden
-      const aktive = liste.filter((k) => kursAn(k.refId) && (o.manuell || alter(kursFertig[k.refId]) >= KURS_PAUSE))
+      // Der Knopf durchsucht alle Kurse; automatische und fortgesetzte Läufe nur die, die nicht vor kurzem ganz durchsucht wurden.
+      // Fortgesetzte ohne gemerkte Funde (Update mitten im Abruf) durchsuchen alle, sonst fehlten deren Dateien.
+      const alle = !!o.manuell && (!o.weiter || !Array.isArray(lokal(L.funde)));
+      const aktive = liste.filter((k) => kursAn(k.refId) && (alle || alter(kursFertig[k.refId]) >= KURS_PAUSE))
         .sort((x, y) => vergleich(String(kursZeit[x.refId] || ""), String(kursZeit[y.refId] || "")));
+      // Funde früherer Läufe aus den übrigen Kursen, soweit noch zu laden; die neu durchsuchten Kurse liefern frische
+      const frisch = {}, bekannt = {};
+      for (const k of aktive) frisch[k.refId] = true;
+      for (const k of liste) bekannt[k.refId] = true;
       const kandidaten = [], fertig = [];
+      for (const c of fundeLesen()) {
+        const kurs = String(c.kurs.refId);
+        if (!bekannt[kurs] || frisch[kurs] || !kursAn(kurs) || r.imLauf[c.id]) continue;
+        c.art = artFuer(c);
+        if (c.art) { c.reihe = kandidaten.length; kandidaten.push(c); r.imLauf[c.id] = true; }
+      }
       const darf = () => b.anfragen < budget - kappe;
       r.kurseGesamt = aktive.length;
       for (let i = 0; i < aktive.length; i++) {
@@ -807,9 +1082,20 @@ module.exports = function (ctx) {
         if (!(await durchsuchen(q, k, kandidaten, b, r, o, darf))) break;
         fertig.push(k.refId);
         kursFertig[k.refId] = iso();
+        // nach jedem Kurs: bricht der Lauf ab, durchsucht der nächste diesen Kurs nicht noch einmal
+        standSetzen({ kursZeit, kursFertig });
+        fundeSpeichern(r, kandidaten);
       }
       standSetzen({ kursZeit, kursFertig });
+      fundeSpeichern(r, kandidaten);
       await speichern(); // ignoriert (zu groß)
+
+      // 1b. Gruppen in den Stundenplan; ein Fehler hier hält die Unterlagen nicht an
+      try { await gruppenAbgleichen(b, r, q, gruppenRoh, darf); }
+      catch (e) {
+        if (e && e.art === "abbruch") throw e;
+        b.warnung = (b.warnung ? b.warnung + " " : "") + "Gruppen: " + fehlerText(e);
+      }
 
       // 2. Laden: geänderte zuerst, dann neue, je neueste zuerst; der Rest im nächsten Lauf
       kandidaten.sort((x, y) => (x.art === y.art ? 0 : x.art === "geaendert" ? -1 : 1) || vergleich(y.geaendert, x.geaendert) || x.reihe - y.reihe);
@@ -841,6 +1127,8 @@ module.exports = function (ctx) {
         if (c.art === "neu") await neuAblegen(c, bytes, b, r, E); else await aktualisieren(c, bytes, b, r, E);
         geaenderteKurse[c.kurs.refId] = true;
       }
+      // was noch fehlt (Grenze je Lauf, einzelne Fehler), lädt der nächste Lauf ohne neues Durchsuchen
+      fundeSpeichern(r, kandidaten.filter((c) => kursAn(c.kurs.refId) && artFuer(c)));
       // „zuletzt“ je Kurs (synchronisiert) nur bei Änderungen oder spätestens nach einem Tag schreiben (Sync-Verkehr)
       for (const id of fertig) { const k = mem.kurse[id]; if (k && (geaenderteKurse[id] || alter(k.zuletzt) > KURS_ZULETZT)) setzen("kurse", id, { zuletzt: iso() }); }
       await speichern();
@@ -853,6 +1141,10 @@ module.exports = function (ctx) {
       const gleich = weiterIn != null;
       switch (b.art) {
         case "extern": return "ILIAS-Unterlagen kommen über deinen Uni-Abgleich.";
+        case "nur-gruppen": {
+          const g = b.gruppen ? b.gruppen.neu : 0;
+          return "ILIAS: Übungsgruppen geprüft." + (g ? g === 1 ? " Deine Übungsgruppe steht jetzt im Stundenplan." : ` ${g} Übungsgruppen stehen jetzt im Stundenplan.` : "");
+        }
         case "ohne-anmeldung": return TEXT_ANMELDUNG_FOLGT + ".";
         case "ohne-zugang": return "ILIAS ist auf diesem Gerät nicht verbunden.";
         case "anderes-geraet": return "Ein anderes Gerät lädt gerade deine ILIAS-Unterlagen. Sie kommen über deinen Sync.";
@@ -864,12 +1156,15 @@ module.exports = function (ctx) {
           const t = [n ? `ILIAS: ${n} neue ${n === 1 ? "Datei" : "Dateien"} in Unterlagen.` : b.ersetzt ? "ILIAS:" : "ILIAS: keine neuen Dateien."];
           if (b.ersetzt) t.push(`${b.ersetzt} ${b.ersetzt === 1 ? "Datei" : "Dateien"} aktualisiert.`);
           if (b.rest) t.push(gleich ? `${b.rest} weitere folgen gleich.` : `${b.rest} weitere beim nächsten Abruf.`);
+          const g = b.gruppen ? b.gruppen.neu : 0;
+          if (g) t.push(g === 1 ? "Deine Übungsgruppe steht jetzt im Stundenplan." : `${g} Übungsgruppen stehen jetzt im Stundenplan.`);
           return t.join(" ");
         }
       }
     };
     const nachLauf = (b, beginn, t0) => {
       if (b.art === "fehler" || b.art === "zugang") standSetzen({ fehler: b.fehler, fehlerZeit: iso(), gesperrt: b.art === "zugang" ? true : stand().gesperrt });
+      else if (b.art === "nur-gruppen") standSetzen({ zuletzt: iso(), fehler: "", fehlerZeit: "" });
       else if (b.art === "ok" || b.art === "unveraendert") standSetzen(Object.assign({ zuletzt: iso(), fehler: "", fehlerZeit: "", neu: b.neu + b.fassungen, rest: b.rest }, zaehlen()));
       if (["extern", "ohne-anmeldung", "ohne-zugang", "gesperrt"].indexOf(b.art) < 0) {
         const e = { zeit: beginn, art: b.art, dauer: Math.round((ms() - t0) / 1000), anfragen: b.anfragen, neu: b.neu, vorhanden: b.vorhanden, ersetzt: b.ersetzt, fassungen: b.fassungen, zuGross: b.zuGross, rest: b.rest };
@@ -942,7 +1237,10 @@ module.exports = function (ctx) {
     const status = () => {
       const s = stand(), ex = extern(), z = zaehlen(), da = !!anmeldung(), verbunden = da && hatZugang();
       let text, anderes = false; // anderes: ein anderes Gerät lädt (Oberfläche bietet „Hier laden“ an)
-      if (ex) text = "über deinen Uni-Abgleich";
+      if (ex && verbunden && laeuft) text = "Übungsgruppen werden geprüft …";
+      else if (ex && verbunden && s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
+      else if (ex && verbunden) text = "Unterlagen über deinen Uni-Abgleich, Übungsgruppen aus ILIAS" + (s.zuletzt ? ` (geprüft ${vorText(s.zuletzt, ms())})` : "") + ".";
+      else if (ex) text = "über deinen Uni-Abgleich";
       else if (!da) text = TEXT_ANMELDUNG_FOLGT;
       else if (!hatZugang()) text = "Nicht verbunden.";
       else if (laeuft) text = fortschrittAnzeige(letzter).text;
@@ -953,7 +1251,7 @@ module.exports = function (ctx) {
       else text = "Noch nicht abgerufen.";
       if (verbunden && !ex && z.zuGross && !laeuft) text += ` ${z.zuGross} ${z.zuGross === 1 ? "Datei" : "Dateien"} über ${MAX_MB} MB nicht geladen.`;
       return {
-        verbunden: !ex && verbunden, bereit: bereit(), extern: ex, laeuft: !!laeuft, zuletzt: s.zuletzt, versucht: s.versucht,
+        verbunden: !ex && verbunden, bereit: bereit(), extern: ex, gruppenZugang: ex && verbunden, laeuft: !!laeuft, zuletzt: s.zuletzt, versucht: s.versucht,
         fehler: s.fehler, gesperrt: !!s.gesperrt, neu: s.neu, rest: s.rest, dateien: z.dateien, kurse: z.kurse, zuGross: z.zuGross,
         grenzeMb: MAX_MB, abrufer: !!s.abrufer, anderes, benutzer: benutzer(), text: text.replace(/\.\./g, "."),
         fortschritt: laeuft ? fortschrittAnzeige(letzter) : null,
@@ -962,7 +1260,18 @@ module.exports = function (ctx) {
 
     return {
       jetztHolen, kurseAbrufen, status, stand, protokoll, zugangSpeichern, zugangLoeschen, hatZugang, bereit, kurse, kursSetzen,
-      umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen,
+      umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen, gruppenListe,
+      // Alte Einträge mit Kurspasswort im Titel: nur schreiben, wenn das Säubern wirklich einen Eintrag ändert (sonst schrieben
+      // nach dem Update alle Geräte die Datei gleichzeitig)
+      saeubern: async () => {
+        if (!io.existiert(INDEX)) return false;
+        let o = null;
+        try { o = JSON.parse(await io.lesenText(INDEX)); } catch (e) { return false; }
+        const x = indexPruefen(o);
+        if (!["kurse", "dateien", "ignoriert"].some((k) => o && o[k] && JSON.stringify(o[k]) !== JSON.stringify(x[k]))) return false;
+        await indexLesen(); await speichern();
+        return true;
+      },
       abbrechen: () => { if (stopp) { stopp.an = true; stopp.grund = "neu-geladen"; } },
       still: () => !!laeuft && abgestorben(regung, ms()),
       get index() { return mem; },
@@ -1030,6 +1339,8 @@ module.exports = function (ctx) {
       anlegenText: async (p, t) => { await V.create(p, t); },
       ersetzenBinaer: async (p, b) => { const f = datei(p); if (!f) throw new Error("Datei fehlt: " + p); await V.modifyBinary(f, puffer(b)); },
       loeschen: async (p) => { const f = datei(p); if (f) await V.delete(f); },
+      // Ordner oder Datei umbenennen; Links im Tresor ziehen mit (fileManager)
+      umbenennen: async (alt, neu) => { const f = V.getAbstractFileByPath(alt); if (f) await app.fileManager.renameFile(f, neu); },
       existiert,
       dateien: (unter) => V.getFiles().filter((f) => (!unter || f.path.indexOf(unter + "/") === 0) && String(f.extension).toLowerCase() !== "md").map((f) => ({ pfad: f.path, groesse: f.stat.size })),
       unterordner: (p) => { const o = ordner(p); return o ? o.children.filter((k) => !!k.children).map((k) => k.name) : []; },
@@ -1095,6 +1406,14 @@ module.exports = function (ctx) {
     const istHtml = (r) => /text\/html/i.test(String(r.typ || (r.kopf && r.kopf["content-type"]) || ""));
     return {
       kurse: async () => { const r = await seite(KURSE); return H.kurse(r.text, basis(r)); },
+      // Kurse und Gruppen aus einer Seite; Gruppen mit Titel und Beschreibung (nur im Speicher, ilias.js liest das Zeitfenster)
+      mitgliedschaften: async () => { const r = await seite(KURSE); return H.mitgliedschaften(r.text, basis(r)); },
+      // Kurs einer Gruppe aus den Brotkrumen ihrer Seite → { refId, code } | null
+      gruppeKurs: async (g) => {
+        const r = await seite(direkt(g.url || WURZEL + "/goto.php/grp/" + g.refId));
+        const k = typeof H.brotkrumen === "function" ? H.brotkrumen(r.text, basis(r)).filter((x) => x.typ === "crs")[0] : null;
+        return k ? { refId: k.refId, code: codeAm(k.titel) } : null;
+      },
       inhalt: async (k) => { const r = await behaelter(k.url); return H.inhalt(r.text, basis(r)); },
       laden: async (e) => {
         const url = H.downloadUrl(e, e.url);
@@ -1175,6 +1494,10 @@ module.exports = function (ctx) {
     einordner: () => einordnerAus(modulVon("unterlagen")),
     modul: (code) => { const e = eba(), m = e && e.modulNachCode(code); return m ? { name: m.f.basename, titel: String(m.fm.titel || "") } : null; },
     semester: () => { const e = eba(); try { return e ? e.aktuellesSemester().name : ""; } catch (x) { return ""; } },
+    // Gruppen: Bibliothek meine-gruppe.js, geprüfte Gruppenliste der zentralen Daten (null = noch keine), Stundenplan-Notizen
+    gruppen: () => modulVon("meine-gruppe"),
+    zentraleGruppen: () => { const g = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null; return g && Array.isArray(g.gruppen) ? g.gruppen : null; },
+    stundenplan: () => { const G = modulVon("meine-gruppe"); return G && G.obsidianIo ? G.obsidianIo() : null; },
     einstellungen: () => { const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN), c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; },
     jetzt: () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date()),
     warten: (n) => new Promise((fertig) => ctx.zeit(fertig, n)),
@@ -1185,6 +1508,7 @@ module.exports = function (ctx) {
       for (const h of Array.from(hoerer)) { try { h(x); } catch (e) { /* Hörer egal */ } }
       hinweis.ereignis(x);
       if (x && x.art === "fertig" && x.weiterIn != null) weiterPlanen(x.weiterIn);
+      if (x && x.art === "gruppen") { try { if (ctx.gruppenAnzeige) ctx.gruppenAnzeige.neu(); } catch (e) { /* egal */ } }
       if (x && x.art === "fortschritt") standZeigen(); else neuZeichnen();
     },
   });
@@ -1203,6 +1527,7 @@ module.exports = function (ctx) {
   };
   const weiterPlanen = (ms) => { if (weiterZeit) ctx.stopp(weiterZeit); weiterZeit = ctx.zeit(fortsetzen, ms); };
 
+  let gruppenLesen = false;
   // ---------- Für andere Skripte (Oberfläche) und Tests ----------
   // status() → { verbunden, bereit, extern, laeuft, zuletzt, versucht, fehler, gesperrt, neu, rest, dateien, kurse, zuGross,
   //   grenzeMb, abrufer, anderes (ein anderes Gerät lädt), benutzer, text }; jetztHolen(o) → Bericht (Knopf; o.uebernehmen
@@ -1223,6 +1548,16 @@ module.exports = function (ctx) {
     kurse: () => motor().kurse(),
     kursSetzen: (id, an) => motor().kursSetzen(id, an),
     kurseAbrufen: () => motor().kurseAbrufen(),
+    // Deine ILIAS-Gruppen (gruppen.js): [{ refId, code, status, zentral, kandidaten }]; liest den Index beim ersten Mal nach und
+    // zeichnet dann die Gruppen neu
+    gruppen: () => {
+      const m = motor();
+      if (!m.index && !gruppenLesen) {
+        gruppenLesen = true;
+        m.indexLesen().then(() => { try { if (ctx.gruppenAnzeige) ctx.gruppenAnzeige.neu(); } catch (e) { /* egal */ } }, () => {});
+      }
+      return m.index ? m.gruppenListe() : [];
+    },
     protokoll: () => motor().protokoll(),
     beobachten,
     anmeldungSetzen: (fn) => { anmeldungSlot.fn = typeof fn === "function" ? fn : null; neuZeichnen(); },
@@ -1235,7 +1570,7 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz,
+    erzeugen, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, ohneKennwort, pfadOhneKennwort, indexPruefen,
     K: { INDEX, ABRUF, MAX_MB, NEU_MOBIL, NEU_PC, ANFRAGEN, ABSTAND_MS, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL },
   };
   ctx.ilias = api;
@@ -1245,7 +1580,9 @@ module.exports = function (ctx) {
     // Automatischer Lauf: 20 s + Zufall 0–2 Min. nach dem Einlesen, dann stündlich, zurück in der App nach über 60 Min.
     // Jeder Takt prüft erst bereit() (Anmeldung vorhanden, Zugang gespeichert, nicht abgelehnt, kein eigener Uni-Abgleich).
     const lauf = () => { const m = motor(); if (!plugin().testIliasAus && m.bereit() && !m.laeuft) m.jetztHolen({}); };
-    const planen = () => ctx.zeit(() => { lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
+    // Einmal je Start, mit dem Zufallsversatz: Kurspasswörter aus alten Index-Einträgen (synchronisiert, auch ohne Zugang)
+    const saeubern = () => { if (!plugin().testIliasAus) motor().saeubern().catch((e) => console.warn("ilias: Index " + ((e && e.message) || e))); };
+    const planen = () => ctx.zeit(() => { saeubern(); lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
     ctx.dom(document, "visibilitychange", () => {
       if (document.visibilityState !== "visible" || !motor().bereit()) return;
       const m = motor();
@@ -1256,6 +1593,7 @@ module.exports = function (ctx) {
     });
     // Offener Auftrag nach dem Start (App oder Plugin neu): nach 20–60 s weiter, mit Hinweis
     if (motor().auftrag()) weiterPlanen(20000 + Math.floor(Math.random() * 40000));
+    // Einmal je Start: Kurspasswörter aus alten Titeln im Index entfernen (synchronisierte Datei, auch ohne ILIAS-Zugang)
     if (app.metadataCache.initialized || app.metadataCache.resolved) planen();
     else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); planen(); }); }
     // Umbenennen im Tresor: Index sofort im Speicher, geschrieben entprellt (ganze Ordner melden viele Dateien)

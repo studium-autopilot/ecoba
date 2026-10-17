@@ -1,7 +1,7 @@
 // Start des Vaults (früher Templater-Startskript System/Vorlagen/Start.md). Geladen vom Plugin „Studium Autopilot“ auf
 // jedem Gerät, ohne Schalter. Schreibt keine Notizen. Punkte:
 //  1. Dashboard als ersten, angepinnten Tab in der Leseansicht öffnen (nur beim App-Start: start()).
-//  2. Dashboard bleibt in der Leseansicht.
+//  2. Übersichtsseiten bleiben in der Leseansicht (Dashboard, Seiten in Studium/, Einstellungen, Daten; seit 17.10.2026).
 //  3. Seitenklasse aus dem Feld `typ` an die Ansicht hängen (Gestaltung auch für Notizen ohne `cssclasses`).
 //  4. Optional, nur iPhone: Kapitel der Folien-Notizen beim ersten Öffnen zuklappen.
 //  5. Experimentell: Höhenmessung der Leseansicht korrigieren (Leerraum am Seitenende).
@@ -12,7 +12,7 @@
 // Kein Node-API, keine Lookbehind-Regex (iOS).
 module.exports = function (ctx) {
   const app = window.app;
-  const { Platform } = ctx.obsidian;
+  const { Platform, Notice } = ctx.obsidian;
 
   // Schalter für die optionalen Teile (false = aus).
   const FOLIEN_VORFALTEN = true; // Punkt 4
@@ -50,14 +50,47 @@ module.exports = function (ctx) {
     setTimeout(() => { try { blatt.view.previewMode.rerender(true); } catch (e) { /* Ansicht weg */ } }, 2500);
   };
 
-  // 2. Dashboard bleibt in der Leseansicht.
-  const dashboardLesen = () => {
+  // 2. Übersichtsseiten bleiben in der Leseansicht: Sie zeigen nur, was Skripte und Tabellen zeichnen; getippt wird dort nichts.
+  //    Gesperrt sind Notizen mit `typ` dashboard, übersicht, einstellungen oder daten (auch Termine & Anmeldungen: die
+  //    Anmeldungen füllen sich seit 17.10.2026 selbst). Das Feld `ansicht` geht vor: `lesen` sperrt jede Notiz,
+  //    `bearbeiten` gibt sie frei (in der Seitenleiste „Eigenschaften“ änderbar, auch wenn die Notiz gesperrt ist).
+  //    Gesperrt: Der Knopf zum Bearbeiten im Kopf der Ansicht ist ausgeblendet; wer trotzdem umschaltet (Strg/⌘ E, Befehl),
+  //    landet sofort wieder in der Leseansicht, mit Hinweis. Kam ein Tab aus der Bearbeitung einer anderen Notiz (Link), geht
+  //    er beim Weiterklicken auf eine freie Notiz wieder in die Bearbeitung.
+  const GESPERRT = ["dashboard", "übersicht", "einstellungen", "daten"];
+  const nurLesen = (f) => {
+    if (!f || !/\.md$/.test(f.path)) return false;
+    const c = app.metadataCache.getFileCache(f);
+    const fm = (c && c.frontmatter) || {};
+    const a = String(fm.ansicht == null ? "" : fm.ansicht).trim().toLowerCase();
+    if (a === "lesen") return true;
+    if (a === "bearbeiten") return false;
+    return f.path === DASHBOARD || (GESPERRT.indexOf(String(fm.typ || "").trim().toLowerCase()) >= 0);
+  };
+  const modusSetzen = (l, mode) => { const vs = l.getViewState(); vs.state = Object.assign({}, vs.state, { mode }); return l.setViewState(vs); };
+  const gelesen = new WeakMap();   // Ansicht → Pfad, der zuletzt gesperrt in der Leseansicht stand (Umschalten erkennen)
+  const umgestellt = new WeakSet(); // Ansichten, die beim Öffnen einer gesperrten Seite aus der Bearbeitung kamen
+  const knopf = (v, aus) => { if (v.modeButtonEl) v.modeButtonEl.style.display = aus ? "none" : ""; };
+  const leseansicht = () => {
     for (const l of app.workspace.getLeavesOfType("markdown")) {
-      if (l.view && l.view.file && l.view.file.path === DASHBOARD && l.view.getMode && l.view.getMode() === "source") {
-        const vs = l.getViewState(); vs.state = Object.assign({}, vs.state, { mode: "preview" }); l.setViewState(vs);
+      const v = l.view, f = v && v.file;
+      if (!f || !v.getMode) continue;
+      const sperre = nurLesen(f);
+      knopf(v, sperre);
+      if (!sperre) {
+        gelesen.delete(v);
+        if (umgestellt.has(v)) { umgestellt.delete(v); if (v.getMode() === "preview") modusSetzen(l, "source"); }
+        continue;
       }
+      if (v.getMode() !== "source") { gelesen.set(v, f.path); continue; }
+      if (gelesen.get(v) === f.path) new Notice("Diese Seite bleibt in der Leseansicht. Bearbeiten kannst du deine Notizen.", 3000);
+      else umgestellt.add(v);
+      modusSetzen(l, "preview");
     }
   };
+  ctx.leseansicht = { nurLesen }; // für Tests (tests/leseansicht.test.js)
+  // Beim Entladen (Hot-Reload, Plugin aus): Knöpfe wieder zeigen
+  const knoepfeZeigen = () => { for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view) knopf(l.view, false); };
 
   // 3. Seitenklasse aus dem Feld `typ` (mehrere Klassen mit Leerzeichen). Schreibt keine Datei.
   const TYP = { termin: "eba-s-termin", unterlage: "eba-s-begleitnotiz", lehrveranstaltung: "eba-s-notizen", vorlesung: "eba-s-notizen eba-s-vorlesung" };
@@ -145,12 +178,14 @@ module.exports = function (ctx) {
 
   const registrieren = () => {
     const ws = app.workspace;
-    an(ws, "layout-change", dashboardLesen);
+    an(ws, "layout-change", leseansicht);
+    an(app.metadataCache, "changed", ctx.entprellen(leseansicht, 300)); // Feld `ansicht` oder `typ` geändert (ILIAS schreibt viele Dateien: entprellt)
     an(ws, "layout-change", klassen);
     an(ws, "file-open", () => ctx.zeit(klassen, 50));
     if (FOLIEN_VORFALTEN && Platform.isPhone && app.foldManager) an(ws, "file-open", vorfaltenBeimOeffnen);
     if (MESSKORREKTUR) { an(ws, "layout-change", flicken); ctx.zeit(flicken, 1000); }
     ctx.zeit(klassen, 500);
+    ctx.zeit(leseansicht, 500);
   };
 
   // Nur beim App-Start (nicht beim Hot-Reload)
@@ -161,5 +196,5 @@ module.exports = function (ctx) {
     }
   };
 
-  return { registrieren, start, abmelden: entflicken };
+  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); } };
 };

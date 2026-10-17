@@ -29,7 +29,7 @@
 //   N.keksDose({ jetzt? }) → { aufnehmen(setCookie | [setCookie], url), kopfFuer(url), namen() → { host: [Namen] }, leeren() }
 //   N.formulare(html, basisUrl) → [{ action, methode, enctype, id, name, felder, namen, knoepfe }]
 //   N.istLoginSeite(html), N.entitaeten(text), N.aufloesen(location, basisUrl), N.formularKodieren(felder)
-//   N.transportDesktop({ version?, zeitlimit? }), N.transportMobil({ requestUrl? })
+//   N.transportDesktop({ version?, zeitlimit? }), N.transportMobil({ requestUrl?, zeitlimit?, zeitlimitDatei? })
 // Tests: tests/ilias-netz.test.js (Attrappen als Transport, kein Netz).
 // iOS-sicher: Node-Module nur hinter Platform.isDesktopApp (oder unter reinem Node für Tests); kein Lookbehind, kein
 // .at()/findLast/structuredClone.
@@ -46,6 +46,10 @@ module.exports = function (ctx) {
   const UNI = UNIS.tuebingen;
   const MAX_SPRUENGE = 12;
   const ZEITLIMIT = 30000;      // ms ohne Daten auf der Leitung (auch beim Verbinden)
+  // iPhone/iPad: requestUrl meldet keinen Fortschritt, darum Grenzen für die ganze Antwort. Ohne sie bliebe ein Abruf hängen,
+  // wenn iOS eine Anfrage beim Wechsel in den Hintergrund liegen lässt und sie nie zurückkommt.
+  const ZEITLIMIT_MOBIL = 60000;         // ms für eine Seite
+  const ZEITLIMIT_MOBIL_DATEI = 300000;  // ms für eine Datei (bis 50 MB auch über langsames Mobilfunknetz)
   const MAX_KEKSE = 300;        // je Keksdose; darüber fällt der älteste weg
   const WEITERLEITUNG = { 301: 1, 302: 1, 303: 1, 307: 1, 308: 1 };
   const ACCEPT_TEXT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
@@ -538,8 +542,10 @@ module.exports = function (ctx) {
       const p = { url: ohneFragment(a.url), method: a.methode || "GET", headers: kopf, throw: false };
       if (typ) p.contentType = typ;
       if (a.body != null) p.body = String(a.body);
-      let r;
-      try { r = await requestUrl(p); } catch (e) { throw netzFehler(e, u.host); }
+      const grenze = a.binaer ? (opt.zeitlimitDatei > 0 ? opt.zeitlimitDatei : ZEITLIMIT_MOBIL_DATEI) : (opt.zeitlimit > 0 ? opt.zeitlimit : ZEITLIMIT_MOBIL);
+      let r, uhr = null;
+      const abgelaufen = new Promise((_, nein) => { uhr = setTimeout(() => nein(fehler("zeitueberschreitung", { host: u.host })), grenze); });
+      try { r = await Promise.race([requestUrl(p), abgelaufen]); } catch (e) { throw netzFehler(e, u.host); } finally { clearTimeout(uhr); }
       const aus = { status: r.status, kopf: kopfKlein(r.headers), folgtSelbst: true };
       if (a.binaer) aus.daten = r.arrayBuffer;
       else { try { aus.text = r.text; } catch (e) { aus.text = ""; } }

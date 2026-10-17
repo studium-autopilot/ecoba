@@ -1,9 +1,21 @@
 /* ==========================================================================
-   EBA · Farbschema PAPER ELFENBEIN (Variante von Paper)
-   Warmes, cremefarbenes Papier wie in einem Buch, dunkelbraune Schrift, Akzent Tannengrün.
-   Wirkt nur im hellen Grundschema (Einstellungen → Darstellung → Grundfarbschema: Hell).
-   Immer nur EIN Farbschema-Snippet einschalten.
+   EBA · Farbschema PAPER ELFENBEIN (das einzige; seit 17.10.2026 hell und dunkel)
+   Hell: warmes, cremefarbenes Papier wie in einem Buch, dunkelbraune Schrift, Akzent Tannengrün.
+   Dunkel: dieselbe Seite bei Nacht, dunkles Braun, elfenbeinfarbene Schrift, Akzent Salbeigrün.
+   Hell, Dunkel oder Automatisch wählt man unter Einstellungen & Hilfe → Darstellung (Obsidians Grundfarbschema);
+   Form und Schrift gelten in beiden, nur die Farben wechseln. Bis 17.10.2026 gab es dazu Paper, Paper Tübingen,
+   Paper Schiefer (hell) und Graphite (dunkel) mit dem Befehl „Design wechseln“.
    ========================================================================== */
+
+.theme-light,
+.theme-dark {
+  --eba-radius: 3px;
+  --eba-radius-s: 2px;
+  --eba-shadow: none;
+  --eba-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --eba-display-weight: 500;
+  --eba-display-tracking: -0.012em;
+}
 
 .theme-light {
   --color-base-00: #faf6ee;
@@ -50,22 +62,68 @@
   --eba-warn: #a8660b;
   --eba-bad: #b42318;
   --eba-info: #3b5f86;
-  --eba-radius: 3px;
-  --eba-radius-s: 2px;
-  --eba-shadow: none;
-  --eba-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-  --eba-display-weight: 500;
-  --eba-display-tracking: -0.012em;
+}
+
+/* Dunkel: Flächen von hinten nach vorn heller (Leisten < Seite < Karte), Schrift Elfenbein statt Weiß. Der Akzent hat zwei
+   Stufen: --eba-accent als Fläche mit weißer Schrift (Knöpfe, Balken), --eba-accent-text hell für Links und Text. */
+.theme-dark {
+  --color-base-00: #1b1813;
+  --color-base-05: #1e1b16;
+  --color-base-10: #211d18;
+  --color-base-20: #16130f;
+  --color-base-25: #29251e;
+  --color-base-30: #332e26;
+  --color-base-35: #3d372d;
+  --color-base-40: #504839;
+  --color-base-50: #7d7362;
+  --color-base-60: #a0957f;
+  --color-base-70: #c3b9a5;
+  --color-base-100: #ece4d4;
+
+  --accent-h: 147;
+  --accent-s: 32%;
+  --accent-l: 37%;
+  --text-accent: #8cbf9f;
+  --text-accent-hover: #a7d1b6;
+  --interactive-accent: #417d5f;
+  --interactive-accent-hover: #4b8b6a;
+  --text-on-accent: #ffffff;
+  --text-selection: rgba(140, 191, 159, 0.24);
+  --text-highlight-bg: rgba(222, 184, 92, 0.30);
+
+  --background-modifier-hover: rgba(236, 228, 212, 0.05);
+  --background-modifier-border: #332e26;
+  --titlebar-background: #16130f;
+  --titlebar-background-focused: #16130f;
+  --tab-container-background: #16130f;
+  --ribbon-background: #16130f;
+
+  --eba-bg: #1b1813;
+  --eba-surface: #221e18;
+  --eba-card-bg: #221e18;
+  --eba-surface-2: #29251e;
+  --eba-border: #373027;
+  --eba-border-strong: #4f4637;
+  --eba-text: #ece4d4;
+  --eba-muted: #b3a892;
+  --eba-faint: #867c6a;
+  --eba-accent: #417d5f;
+  --eba-accent-text: #8cbf9f;
+  --eba-accent-soft: rgba(140, 191, 159, 0.12);
+  --eba-good: #62bf8c;
+  --eba-warn: #dea64a;
+  --eba-bad: #ec7468;
+  --eba-info: #8aa9d0;
 }
 
 /* Kopf wie ein Geschäftsbericht: doppelte Linie, Serifen-Titel */
-.theme-light .eba .eba-kopf { border-bottom: 3px double var(--eba-text); padding-bottom: 1.2rem; }
-.theme-light .eba .eba-kopf h1,
-.theme-light .eba-kz-gruss { font-size: 2.5em; }
-.theme-light .eba .eba-meta span { border-radius: 2px; }
+:is(.theme-light, .theme-dark) .eba .eba-kopf { border-bottom: 3px double var(--eba-text); padding-bottom: 1.2rem; }
+:is(.theme-light, .theme-dark) .eba .eba-kopf h1,
+:is(.theme-light, .theme-dark) .eba-kz-gruss { font-size: 2.5em; }
+:is(.theme-light, .theme-dark) .eba .eba-meta span { border-radius: 2px; }
 
 /* Abschnitte: Serifen-Überschrift statt Label, Linie darüber */
-.theme-light .eba h2 {
+:is(.theme-light, .theme-dark) .eba h2 {
   display: block;
   margin: 2.6em 0 0.8em;
   padding-top: 10px;
@@ -77,30 +135,29 @@
   text-transform: none;
   color: var(--eba-text);
 }
-.theme-light .eba h2::after { display: none; }
+:is(.theme-light, .theme-dark) .eba h2::after { display: none; }
 
-/* Karten: weiß, Haarlinie, keine Rundung */
-.theme-light .callout[data-callout^="eba-"] > .callout-title { color: var(--eba-text); }
-.theme-light .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent); }
-.theme-light .eba-kachel { border-top: 2px solid var(--eba-text); }
-.theme-light .eba-kachel.akzent::before { display: none; }
-.theme-light .eba-kachel.akzent { border-top-color: var(--eba-accent); }
-.theme-light .eba-kachel .v { font-weight: 500; }
-.theme-light .eba-kachel .v:not(.text) { font-size: 2em; }
-.theme-light .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }
+/* Karten: Kartenfläche, Haarlinie, keine Rundung */
+:is(.theme-light, .theme-dark) .callout[data-callout^="eba-"] > .callout-title { color: var(--eba-text); }
+:is(.theme-light, .theme-dark) .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent-text); }
+:is(.theme-light, .theme-dark) .eba-kachel { border-top: 2px solid var(--eba-text); }
+:is(.theme-light, .theme-dark) .eba-kachel.akzent::before { display: none; }
+:is(.theme-light, .theme-dark) .eba-kachel.akzent { border-top-color: var(--eba-accent); }
+:is(.theme-light, .theme-dark) .eba-kachel .v { font-weight: 500; }
+:is(.theme-light, .theme-dark) .eba-kachel .v:not(.text) { font-size: 2em; }
+:is(.theme-light, .theme-dark) .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }
 
 /* Semester-Zeitleiste: kantige Wochenfelder */
-.theme-light .eba-wochen i { border-radius: 1px; }
+:is(.theme-light, .theme-dark) .eba-wochen i { border-radius: 1px; }
 
 /* Tabellen wie im Finanzteil: kräftige Kopf- und Fußlinie */
-.theme-light .markdown-rendered th { border-bottom: 1px solid var(--eba-text); color: var(--eba-text); }
-.theme-light .markdown-rendered table { border-bottom: 1px solid var(--eba-text); }
-.theme-light .callout[data-callout^="eba-"] .bases-view { --bases-table-header-color: var(--eba-text); }
+:is(.theme-light, .theme-dark) .markdown-rendered th { border-bottom: 1px solid var(--eba-text); color: var(--eba-text); }
+:is(.theme-light, .theme-dark) .markdown-rendered table { border-bottom: 1px solid var(--eba-text); }
+:is(.theme-light, .theme-dark) .callout[data-callout^="eba-"] .bases-view { --bases-table-header-color: var(--eba-text); }
 
 /* Normale Notizen: Serifen-Überschriften */
-.theme-light .markdown-rendered h1,
-.theme-light .markdown-rendered h2,
-.theme-light .cm-header-1,
-.theme-light .cm-header-2 { font-family: var(--eba-font-display); font-weight: 500; }
-.theme-light .inline-title { font-family: var(--eba-font-display); font-weight: 500; }
-
+:is(.theme-light, .theme-dark) .markdown-rendered h1,
+:is(.theme-light, .theme-dark) .markdown-rendered h2,
+:is(.theme-light, .theme-dark) .cm-header-1,
+:is(.theme-light, .theme-dark) .cm-header-2 { font-family: var(--eba-font-display); font-weight: 500; }
+:is(.theme-light, .theme-dark) .inline-title { font-family: var(--eba-font-display); font-weight: 500; }

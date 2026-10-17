@@ -27,7 +27,7 @@ Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 >   was: 'file.asLink(titel)'
 >   tage: '((date(datum) - today()).days).round()'
 >   wann: 'if(date(if(bis, bis, datum)) < today(), "vorbei", if(formula.tage <= 0, if(bis, "läuft", "heute"), if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen")))'
->   stand: 'if(status == "geschätzt", html("<span class=\"eba-pill leer\">geschätzt</span>"), "")'
+>   stand: 'if(status == "geschätzt", html("<span class=\"eba-pill leer\">geschätzt</span>"), if(file.name.lower().contains("zwischentest"), html("<span class=\"eba-pill info\">Zwischentest</span>"), ""))'
 > properties:
 >   formula.zeitraum:
 >     displayName: Datum

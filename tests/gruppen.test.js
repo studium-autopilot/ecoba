@@ -48,3 +48,39 @@ test("Markierung: Gruppe steht im eigenen Stundenplan (Code, Semester, Wochentag
   const k = G.auswaehlen([g({ id: "m", tag: "Mi", von: "12:00", bis: "14:00" }), g({ id: "n" })], { stundenplan: sp });
   assert.deepEqual(k[0].gruppen.map((x) => [x.id, x.dein]), [["n", false], ["m", true]]);
 });
+
+test("Markierung: eine Vorlesung zur selben Zeit markiert keine Übungsgruppe (Art zählt)", () => {
+  const vl = [{ fm: { code: "X100", semester: "WS 2026/27", wochentag: 2, beginn: "08:15", art: "Vorlesung", herkunft: "zentral" } }];
+  assert.equal(G.imStundenplan(g({ tag: "Di", von: "08:00" }), vl), false);
+  const ue = [{ fm: { code: "X100", semester: "WS 2026/27", wochentag: 2, beginn: "08:15", art: "Übung" } }];
+  assert.equal(G.imStundenplan(g({ tag: "Di", von: "08:00" }), ue), true);
+  const unbestimmt = [{ fm: { code: "X100", semester: "WS 2026/27", wochentag: 2, beginn: "08:00", art: "Veranstaltung" } }];
+  assert.equal(G.imStundenplan(g({ tag: "Di", von: "08:00" }), unbestimmt), true, "Alma erkennt die Art nicht immer");
+});
+
+test("Meine Gruppe: Herkunft der Markierung, ILIAS zugeordnet, mehrdeutig mit Kandidaten, Knopf nur ohne andere Quelle", () => {
+  const liste = [g({ id: "a1", gruppe: "1" }), g({ id: "a2", gruppe: "2", tag: "Mi", von: "12:00", bis: "14:00" }), g({ id: "a3", gruppe: "3", tag: "Do" })];
+  const gew = [{ fm: { code: "X100", semester: "WS 2026/27", herkunft: "gruppe-gewaehlt", gruppe_id: "a2", wochentag: 3, beginn: "12:15", art: "Übung" } }];
+  let k = G.auswaehlen(liste, { stundenplan: gew })[0];
+  assert.deepEqual(k.gruppen.map((x) => [x.id, x.woher]), [["a1", ""], ["a2", "gewaehlt"], ["a3", ""]]);
+  assert.equal(k.waehlbar, true, "gewählte Gruppe lässt sich ändern");
+  k = G.auswaehlen(liste, { ilias: [{ code: "X100", status: "zugeordnet", zentral: "a3", kandidaten: [] }] })[0];
+  assert.deepEqual([k.gruppen.find((x) => x.id === "a3").woher, k.waehlbar, k.iliasOffen], ["ilias", false, ""]);
+  k = G.auswaehlen(liste, { ilias: [{ code: "X100", status: "mehrdeutig", zentral: "", kandidaten: ["a1", "a3"] }] })[0];
+  assert.deepEqual([k.gruppen.map((x) => x.kandidat), k.waehlbar, k.iliasOffen], [[true, false, true], true, "mehrdeutig"]);
+  const alma = [{ fm: { code: "X100", semester: "WS 2026/27", wochentag: 2, beginn: "08:15", art: "Übung" } }];
+  assert.equal(G.auswaehlen(liste, { stundenplan: alma })[0].waehlbar, false, "Alma liefert die Gruppe schon");
+});
+
+test("Meine Gruppe: Abwählen bleibt neben ILIAS, ILIAS-Name für die Anzeige", () => {
+  const liste = [g({ id: "a1", gruppe: "1" }), g({ id: "a5", gruppe: "5", tag: "Mi", von: "12:00", bis: "14:00" })];
+  const sp = [
+    { fm: { code: "X100", semester: "WS 2026/27", herkunft: "ilias-gruppe", gruppe_id: "a5", gruppe: "Gruppe 4", wochentag: 3, beginn: "12:15", art: "Übung" } },
+    { fm: { code: "X100", semester: "WS 2026/27", herkunft: "gruppe-gewaehlt", gruppe_id: "a1", wochentag: 2, beginn: "08:15", art: "Übung" } },
+  ];
+  const k = G.auswaehlen(liste, { stundenplan: sp })[0];
+  assert.deepEqual(k.gruppen.map((x) => [x.id, x.woher, x.gewaehlt, x.iliasName]), [["a1", "gewaehlt", true, ""], ["a5", "ilias", false, "Gruppe 4"]]);
+  assert.deepEqual([k.waehlbar, k.knoepfe], [false, true], "„Meine“ weg, „Abwählen“ bleibt");
+  const k2 = G.auswaehlen(liste, { ilias: [{ code: "X100", status: "zugeordnet", zentral: "a5", name: "Gruppe 4", kandidaten: [] }] })[0];
+  assert.equal(k2.gruppen.find((x) => x.id === "a5").iliasName, "Gruppe 4", "Name aus ILIAS, bevor die Notiz da ist");
+});

@@ -256,17 +256,22 @@ test("Abrufer-Sperre: anderes Gerät aktiv → nichts; still → übernehmen; oh
   assert.equal(x.m.status().verbunden, false);
 });
 
-test("Eigener Uni-Abgleich (abgleich.js oder Einstellung): nie laden", async () => {
+test("Eigener Uni-Abgleich (abgleich.js oder Einstellung): nie laden; mit Zugang nur Mitgliedschaften für die Übungsgruppen", async () => {
   for (const o of [{ dateien: { "System/Skripte/abgleich.js": "// privat" } }, { einstellungen: { ilias_unterlagen: "extern" } }]) {
     const x = aufbau(o);
+    const s0 = x.m.status();
+    assert.deepEqual([s0.extern, s0.text, s0.bereit], [true, "über deinen Uni-Abgleich", false]);
+    assert.equal((await lauf(x)).art, "extern", "ohne Zugang nichts");
+    assert.equal(x.il.log.length, 0);
     await verbinden(x);
     const s = x.m.status();
-    assert.equal(s.extern, true); assert.equal(s.text, "über deinen Uni-Abgleich"); assert.equal(s.bereit, false);
+    assert.deepEqual([s.extern, s.gruppenZugang, s.bereit, s.verbunden], [true, true, true, false]);
     const b = await lauf(x);
-    assert.equal(b.art, "extern");
-    assert.equal(x.il.log.length, 0);
+    assert.equal(b.art, "nur-gruppen", b.fehler);
+    assert.deepEqual(x.il.log.map((e) => e.was), ["anmelden", "kurse"], "Anmeldung und Kursliste, sonst nichts");
     assert.deepEqual(x.t.pfade("Unterlagen/"), []);
-    assert.equal(x.t.text(I.K.INDEX), null);
+    assert.deepEqual(x.il.geladen(), []);
+    assert.match(x.m.status().text, /^Unterlagen über deinen Uni-Abgleich, Übungsgruppen aus ILIAS/);
   }
 });
 

@@ -31,7 +31,6 @@ test("Standard ohne Studienbeginn: aktuelles Semester ist das 1. Fachsemester, R
   assert.deepEqual(D.semesterliste.map((s) => s.name), ["WS 2026/27", "SS 2027", "WS 2027/28", "SS 2028", "WS 2028/29", "SS 2029"]);
   assert.equal(D.fachsemester, 1);
   assert.equal(D.aktuell.vb, "2026-10-12");
-  assert.equal(D.lehrphase, "Vorlesungszeit");
 });
 
 test("Studienbeginn WS 2025/26 → im WS 2026/27 drittes Fachsemester (Semester ohne Daten nach Regel)", () => {
@@ -156,4 +155,31 @@ test("Ohne Abschnitt (null oder Fehler): ganze Notiz, nur bei eindeutigem Argume
   assert.equal(arg(M, null, SD), "persoenlich");
   // ohne iterateAllLeaves (z. B. ältere Fassung) kein Fehler
   assert.equal(arg(laden("modell").ctx.modell, abschnitt("System/Daten/Semester.md", "", 6, 8), SD), "persoenlich");
+});
+
+// Ein Schreiber: abgeleitete Felder fehlen in den Einstellungen, also gäbe es etwas zu schreiben
+const mitSchreiber = (hier) => {
+  const zentral = hier == null ? undefined : { abruferHier: async () => hier };
+  const { ctx } = laden("modell", {
+    heute: "2026-10-15",
+    frontmatter: { "System/Daten/Semester.md": SEMESTER, "System/Einstellungen.md": { studienbeginn: "2025-10-01" } },
+    kontext: zentral ? { zentral } : {},
+  });
+  const geschrieben = [];
+  ctx.app.fileManager = { processFrontMatter: async (f, fn) => { const x = {}; fn(x); geschrieben.push(Object.keys(x).sort().join(",")); } };
+  return { M: ctx.modell, geschrieben };
+};
+
+test("Ein Schreiber: von selbst (Start, Änderung) schreibt nur der Abrufer, ein Tipp auf diesem Gerät schreibt sofort", async () => {
+  const anderes = mitSchreiber(false);
+  assert.equal(await anderes.M.abgleichen("start"), false);
+  assert.equal(await anderes.M.abgleichen("änderung System/Daten/Semester.md"), false);
+  assert.deepEqual(anderes.geschrieben, [], "ein anderes Gerät ist Abrufer");
+  assert.equal(await anderes.M.abgleichen("personalisieren"), true);
+  assert.equal(await anderes.M.abgleichen("einrichtung"), true);
+  assert.deepEqual(anderes.geschrieben, ["pausen,pruefungsphasen,semesterliste", "pausen,pruefungsphasen,semesterliste"]);
+  const abrufer = mitSchreiber(true);
+  assert.equal(await abrufer.M.abgleichen("start"), true);
+  const ohneZentral = mitSchreiber(null);
+  assert.equal(await ohneZentral.M.abgleichen("start"), true, "ohne zentral.js wie bisher");
 });

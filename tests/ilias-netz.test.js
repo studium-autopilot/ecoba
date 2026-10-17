@@ -476,6 +476,21 @@ test("mobil: requestUrl folgt selbst, url null, kein eigenes Folgen", async () =
   assert.equal(aufrufe.length, 3, "fremde Hosts nie an requestUrl");
 });
 
+test("mobil: Antwort, die nie kommt (App im Hintergrund), endet mit Zeitüberschreitung; Dateien dürfen länger dauern", async () => {
+  const nie = () => new Promise(() => {});
+  const M = laden("ilias-netz", { kontext: { obsidian: { Platform: { isDesktopApp: false, isMobile: true }, requestUrl: nie } } }).ergebnis;
+  const t = M.transportMobil({ zeitlimit: 20, zeitlimitDatei: 200 });
+  const reihe = [];
+  const merken = (art) => (e) => { reihe.push(art); throw e; };
+  await Promise.all([
+    assert.rejects(t({ url: I + "/datei", methode: "GET", binaer: true }).catch(merken("datei")), (e) => e.grund === "zeitueberschreitung"),
+    assert.rejects(t({ url: I + "/seite", methode: "GET" }).catch(merken("seite")), (e) => e.grund === "zeitueberschreitung" && e.host === "ovidius.uni-tuebingen.de" && e.status === undefined),
+  ]);
+  assert.deepEqual(reihe, ["seite", "datei"], "Dateien haben eine eigene, längere Grenze");
+  const schnell = M.transportMobil({ requestUrl: async () => ({ status: 200, headers: {}, text: "ok" }), zeitlimit: 20 });
+  assert.equal((await schnell({ url: I + "/seite", methode: "GET" })).text, "ok");
+});
+
 // ---------- PC-Transport ----------
 
 test("PC: ohne Node-Zugang kein Transport (Obsidian-Ersatz ohne window.require)", () => {

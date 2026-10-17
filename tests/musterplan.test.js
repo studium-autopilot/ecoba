@@ -42,3 +42,32 @@ test("lesen: Hinweise aus der Datennotiz, ohne Hinweise leere Listen", () => {
   assert.deepEqual(M.hinweise, HINWEISE);
   assert.deepEqual(MP.hinweiseOrdnen([], PLAENE), { gemeinsam: [], jePlan: [] });
 });
+
+// Gemeinsamer Stamm (seit 17.10.2026): bis zu welchem Fachsemester alle gezeigten Pläne dieselben Einträge haben
+const E = (plan, fs, code, ects, extra) => Object.assign({ plan, fs, code, titel: `${code} Titel`, ects, op: false, art: "modul" }, extra);
+const STAMM = [
+  E("economics", 1, "A1", 6), E("economics", 2, "A2", 6), E("economics", 3, "E3", 6),
+  E("ba", 1, "A1", 6), E("ba", 2, "A2", 6), E("ba", 3, "B3", 6),
+  E("ohne", 1, "A1", 6), E("ohne", 2, "A2", 6), E("ohne", 3, "O3", 6),
+];
+
+test("stamm: die ersten Semester sind in allen Plänen gleich, danach trennen sie sich", () => {
+  assert.equal(MP.stamm(STAMM, PLAENE), 2);
+  assert.equal(MP.stamm(STAMM, PLAENE.slice(0, 2)), 2);
+  assert.equal(MP.stamm(STAMM.filter((e) => e.fs <= 2), PLAENE), 2, "leere Semester zählen nicht als gemeinsam");
+});
+
+test("stamm: Unterschiede in ECTS, Code, Reihenfolge oder OP beenden den Stamm", () => {
+  const ohne = (pl, fs) => STAMM.filter((e) => !(e.plan === pl && e.fs === fs));
+  assert.equal(MP.stamm(ohne("ba", 2).concat([E("ba", 2, "A2", 9)]), PLAENE), 1);
+  assert.equal(MP.stamm(ohne("ohne", 1).concat([E("ohne", 1, "X1", 6)]), PLAENE), 0);
+  assert.equal(MP.stamm(ohne("ba", 1).concat([E("ba", 1, "A1", 6, { op: true })]), PLAENE), 0);
+  const zwei = STAMM.concat([E("economics", 1, "Z1", 3), E("ba", 1, "Z1", 3), E("ohne", 1, "Z1", 3)]);
+  assert.equal(MP.stamm(zwei, PLAENE), 2, "gleiche Einträge in gleicher Reihenfolge");
+  assert.equal(MP.stamm(zwei.filter((e) => !(e.plan === "ba" && e.code === "Z1")).concat([E("ba", 1, "Z1", 3)]), PLAENE), 2, "Reihenfolge der Liste zählt nur je Semester");
+});
+
+test("stamm: ein Plan oder keine Einträge haben keinen Stamm", () => {
+  assert.equal(MP.stamm(STAMM, [PLAENE[0]]), 0);
+  assert.equal(MP.stamm([], PLAENE), 0);
+});

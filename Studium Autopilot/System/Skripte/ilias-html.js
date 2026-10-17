@@ -33,6 +33,7 @@
 //   angemeldet(html) → true/false               seitenArt(html, url) → „ilias“, „ilias-anmeldung“, „kein-zugriff“, „idp-anmeldung“ …
 //   meldungen(html) → [{ art, text }]           permalink(html) → { url, typ, refId } | null
 //   mitgliedschaften(html, url) → { kurse, gruppen }   kurse(html, url)   gruppen(html, url)
+//   brotkrumen(html, url) → [{ typ, refId, titel, url }] (die Seite selbst zuerst, dann ihre Eltern)
 //   inhalt(html, url, { heute }) → [Eintrag]    folgeUrl(html, url) → URL, die statt dieser Seite zu holen ist, sonst ""
 //   uebungen(html, url, { heute }) → [Aufgabe]  formulare(html, url) → [{ id, name, method, action, felder, knoepfe }]
 //   dateiName(eintrag) → Dateiname              downloadUrl(eintrag, basis) → URL | ""
@@ -528,6 +529,20 @@ function sitzung(titel, heute) {
 }
 
 // ----------------------------------------------------------------------------------------------------- Container-Inhalt
+// Mitglied einer Gruppe? Menü-Einträge des Eintrags (Knopf mit data-action oder Link): cmd=leave → true, cmd=join → false
+function mitgliedVon(teile, refId) {
+  if (!refId) return null;
+  let aus = null;
+  for (const el of teile) {
+    const ziel = (attr(el, "data-action") + " " + attr(el, "href")).replace(/&amp;/g, "&");
+    const m = /[?&]cmd=(leave|join)&(?:[^"\s]*&)?ref_id=(\d+)/.exec(ziel);
+    if (!m || m[2] !== refId) continue;
+    if (m[1] === "leave") return true;
+    aus = false;
+  }
+  return aus;
+}
+
 // Gruppenblock (Objektgruppe / eigener Block) über einem Eintrag, wie PFERD _find_upwards_folder_hierarchy
 function gruppeVon(el) {
   const titel = [];
@@ -576,7 +591,8 @@ function eintragKopf(aussen, a, url) {
 }
 
 // Einträge einer Container-Seite (Kurs, Ordner, Sitzung/Info-Seite, Gruppe, Kategorie, Inhaltsseite) →
-// [{ art, typ, titel, refId, id, url, endung, groesse, geaendert, eigenschaften, beschreibung, gruppe, inSitzung, sitzung }]
+// [{ art, typ, titel, refId, id, url, endung, groesse, geaendert, eigenschaften, beschreibung, gruppe, inSitzung, sitzung,
+//    mitglied }]
 //   art          "datei" | "ordner" (fold, grp, copa, itgr) | "sitzung" | "uebung" | "link" | "video" (xvid, mcst, xoct,
 //                mob) | "forum" | "test" | "sonstiges" (lti, mep, cat, crs …: bekannt, aber nichts zum Ablegen)
 //   typ          ILIAS-Kurztyp (file, fold, grp, sess, exc, webr, xvid, mob, frm, tst, copa, mep, lti, cat, crs …;
@@ -589,6 +605,8 @@ function eintragKopf(aussen, a, url) {
 //   gruppe       Titel des Objektgruppen-Blocks („00 - Vorlesung“), sonst ""
 //   inSitzung    refId der Sitzung, wenn der Eintrag aufgeklappt unter einer Sitzung steht (Kursseite), sonst ""
 //   sitzung      nur Sitzungen: { datum, von, bis, bisDatum, titel, name } (name wie PFERDs Ordnername)
+//   mitglied     nur Gruppen (grp): true, wenn das Menü des Eintrags „Mitgliedschaft beenden“ anbietet (cmd=leave&ref_id=<ref>),
+//                false bei „Beitreten“ (cmd=join), sonst null (gemessen an Kurs- und Ordnerseiten, Oktober 2026)
 // Einträge ohne Link (offline, noch nicht freigegeben) fehlen, wie bei PFERD.
 function inhalt(html, basisUrl, optionen) {
   const w = parsen(html);
@@ -635,6 +653,7 @@ function inhalt(html, basisUrl, optionen) {
     const e = { art, typ, titel, refId, id: refId, url, endung, groesse: gr, geaendert, eigenschaften: alleProps,
       beschreibung: text(beschrBox), gruppe: gruppeVon(a), inSitzung };
     if (typ === "sess") e.sitzung = sitzung(titel, heute);
+    if (typ === "grp") e.mitglied = mitgliedVon(block ? eigene(block, () => true) : [], refId);
     aus.push(e);
   }
   // Dateilisten in Inhaltsseiten (copa) und Seiteninhalten (PFERD _find_copa_entries)
@@ -689,8 +708,10 @@ function folgeUrl(html, basisUrl) {
 
 // -------------------------------------------------------------------------------------------------- Meine Kurse/Gruppen
 // Seite „Meine Kurse und Gruppen“ (ilias.php?baseClass=ilmembershipoverviewgui) → { kurse, gruppen }
-//   je [{ refId, titel, code, url, typ }]; code = Modulcode am Titelanfang (B110, SQ888), sonst "".
-const CODE = /^\s*([A-Z]{1,3}\d{3})\b/;
+//   je [{ refId, titel, code, url, typ, beschreibung }]; code = Modulcode am Titelanfang (B110, SQ888, Muster wie MODULCODE in
+//   eba.js), sonst "". Gruppen stehen hier flach ohne ihren Kurs. Titel und Beschreibung nennen oft Tag, Zeit und Raum, aber
+//   auch Namen und (bei Kursen) Beitrittspasswörter: nur im Speicher lesen, nie ablegen.
+const CODE = /^\s*([A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?)\b/;
 function mitgliedschaften(html, basisUrl) {
   const w = parsen(html);
   const kurse = [], gruppen = [], gesehen = {};
@@ -710,9 +731,27 @@ function mitgliedschaften(html, basisUrl) {
     gesehen[refId] = true;
     const titel = text(a);
     const m = CODE.exec(titel);
-    (typ === "crs" ? kurse : gruppen).push({ refId, titel, code: m ? m[1] : "", url, typ });
+    const beschr = item ? erstes(item, (e) => hatKlasse(e, "il-item-description") || hatKlasse(e, "il_Description")) : null;
+    (typ === "crs" ? kurse : gruppen).push({ refId, titel, code: m ? m[1] : "", url, typ, beschreibung: text(beschr) });
   }
   return { kurse, gruppen };
+}
+// Brotkrumen einer Seite (ILIAS 10: nav „Brotkrumen“, .breadcrumb-wrapper) → [{ typ, refId, titel, url }], die Seite selbst
+// zuerst, dann ihre Eltern bis zum Magazin (Reihenfolge wie auf der Seite). Nur Permalinks goto.php/<typ>/<ref>.
+function brotkrumen(html, basisUrl) {
+  const w = parsen(html);
+  const box = erstes(w, (e) => hatKlasse(e, "breadcrumb-wrapper")) || erstes(w, (e) => hatKlasse(e, "breadcrumb")) ||
+    erstes(w, (e) => hatKlasse(e, "breadcrumbs"));
+  if (!box) return [];
+  const aus = [], gesehen = {};
+  for (const a of alle(box, (e) => e.name === "a")) {
+    const url = absolut(attr(a, "href"), basisUrl);
+    const m = /\/goto\.php\/([a-z]+)\/(\d+)/.exec(url);
+    if (!m || gesehen[m[1] + m[2]]) continue;
+    gesehen[m[1] + m[2]] = true;
+    aus.push({ typ: m[1], refId: m[2], titel: text(a), url });
+  }
+  return aus;
 }
 const kurse = (html, basisUrl) => mitgliedschaften(html, basisUrl).kurse;
 const gruppen = (html, basisUrl) => mitgliedschaften(html, basisUrl).gruppen;
@@ -865,7 +904,7 @@ function downloadUrl(eintrag, basisUrl) {
 
 // ---------------------------------------------------------------------------------------------------------------- Export
 const API = { parsen, alle, erstes, vorfahr, text, attr, hatKlasse, naechstesGeschwister, vorigesGeschwister, entitaeten,
-  angemeldet, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, inhalt, folgeUrl, uebungen,
+  angemeldet, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl, uebungen,
   formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
 
 // Aufruf mit ctx: „heute“ für Heute/Gestern/Morgen kommt aus ctx.date (Testdatum des Plugins), sonst wie ohne Aufruf.

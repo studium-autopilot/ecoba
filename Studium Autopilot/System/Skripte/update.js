@@ -20,7 +20,8 @@
 //   (Skripte und CSS mit .txt am Ende, damit nichts davon geladen wird); Seite nur abgehakt → neue Seite, Haken übernommen;
 //   modul → Katalogfelder neu, persönliche Felder (PERSOENLICH) und eigene Felder bleiben, Text bleibt, wenn du ihn geändert
 //   hast; einstellung (.obsidian/*.json) → fehlende Einträge ergänzen, deine Werte bleiben. Gelöschte Seiten/Module kommen nicht
-//   wieder. Dateien, die es nicht mehr gibt, wandern unverändert in die Sicherung, geändert bleiben sie.
+//   wieder. Dateien, die es nicht mehr gibt, wandern unverändert in die Sicherung, geändert bleiben sie; Lesezeichen auf so
+//   entfernte Dateien fallen auch aus deiner bookmarks.json weg.
 // Nie angefasst: alles, was klasseVon nicht kennt (Einstellungen, Termine, Stundenplan, Vorlesungen, Unterlagen, Eingang,
 //   Anhänge, Semester.md, abruf.json, appearance.json …).
 // Kanal: update_kanal in System/Einstellungen.md („stabil“ Standard, „beta“). Das Manifest nennt release (stabil) und optional
@@ -254,6 +255,25 @@ module.exports = function (ctx) {
     const r = jsonMischen(u, n);
     return JSON.stringify(r) === JSON.stringify(u) ? null : JSON.stringify(r, null, 2);
   };
+  // Lesezeichen (.obsidian/bookmarks.json) auf Dateien, die das Update entfernt, fallen weg, auch in Gruppen. Beim Mischen
+  // bliebe deine Liste sonst unverändert und zeigte auf eine Seite, die es nicht mehr gibt. → Text oder null (nichts zu tun)
+  const LESEZEICHEN = ".obsidian/bookmarks.json";
+  const lesezeichenOhne = (text, pfade) => {
+    let d;
+    try { d = JSON.parse(text); } catch (e) { return null; }
+    if (!istObj(d) || !Array.isArray(d.items) || !pfade.length) return null;
+    const weg = pfade.map(nfc);
+    let n = 0;
+    const filtern = (items) => items.filter((x) => {
+      if (!istObj(x)) return true;
+      if (Array.isArray(x.items)) x.items = filtern(x.items);
+      const raus = x.type === "file" && typeof x.path === "string" && weg.indexOf(nfc(x.path)) >= 0;
+      if (raus) n++;
+      return !raus;
+    });
+    d.items = filtern(d.items);
+    return n ? JSON.stringify(d, null, 2) : null;
+  };
 
   // ---------- Plan (rein, ohne Dateien) ----------
   // neu, alt: geprüfte Listen (alt darf null sein); ist: pfad → { sha, koerper?, ohneHaken? } (fehlt = Datei fehlt)
@@ -376,6 +396,7 @@ module.exports = function (ctx) {
     // 5. Inhalte berechnen
     const schreiben = [], loeschen = [];
     const alsText = (p) => dec(istBytes[p]);
+    const weg = schritte.filter((s) => s.art === "entfernen").map((s) => s.pfad);
     for (const s of schritte) {
       const p = s.pfad, n = geladen[p], c = istBytes[p] || null;
       if (s.art === "anlegen") { schreiben.push({ pfad: p, bytes: n, alt: null }); b.angelegt.push(p); }
@@ -390,7 +411,8 @@ module.exports = function (ctx) {
         const t = seiteHaken(alsText(p), dec(n));
         if (t !== alsText(p)) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.haken.push(p); }
       } else if (s.art === "json-mischen") {
-        const t = jsonMischenText(alsText(p), dec(n));
+        let t = jsonMischenText(alsText(p), dec(n));
+        if (p === LESEZEICHEN) { const o = lesezeichenOhne(t != null ? t : alsText(p), weg); if (o != null) t = o; }
         if (t != null) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.einstellungen.push(p); }
       } else if (s.art === "uebersprungen") b.uebersprungen.push(p);
       else if (s.art === "entfernen") { loeschen.push({ pfad: p, alt: c }); b.entfernt.push(p); }
@@ -411,7 +433,7 @@ module.exports = function (ctx) {
     }
 
     // 7. Schreiben; bei einem Fehler alles zurücksetzen
-    melden("Schreibe die neue Version …");
+    melden("Speichere die neue Version …");
     const erledigt = [];
     try {
       for (const w of reihe) { await io.schreiben(w.pfad, w.bytes); erledigt.push(w); }
@@ -585,9 +607,7 @@ module.exports = function (ctx) {
     z.createSpan({ cls: "eba-uh-symbol", attr: { "aria-hidden": "true" } }).innerHTML = svg(h.symbol);
     const t = z.createSpan({ cls: "eba-uh-text" });
     t.createEl("b", { text: h.text });
-    // Kurznotiz auf eine Zeile (CSS kürzt mit „…“; hier nur die erste Zeile, höchstens 140 Zeichen)
-    const n = String(h.notiz || "").split(/\r?\n/)[0].trim();
-    if (n) t.createSpan({ cls: "eba-uh-notiz", text: n.length > 140 ? n.slice(0, 139) + "…" : n, attr: { title: n } });
+    // Nur der Titel; was neu ist, steht unter „Was ist neu“ (seit 17.10.2026 kein Satz im Hinweis).
     const k = z.createSpan({ cls: "eba-uh-knoepfe" });
     if (h.art === "link") {
       k.createEl("a", { cls: "eba-vb-knopf cta eba-uh-knopf", text: h.knopf, href: h.url, attr: { target: "_blank", rel: "noopener" } });
@@ -624,24 +644,33 @@ module.exports = function (ctx) {
     let erledigt = false;
     m.modalEl.addClass("eba-modal", "eba-modal-update");
     m.titleEl.setText(`Auf Version ${rel.version} aktualisieren?`);
-    if (rel.notiz) m.contentEl.createEl("p", { cls: "eba-modal-text", text: "Neu: " + rel.notiz });
-    const ul = m.contentEl.createEl("ul", { cls: "eba-modal-schritte" });
-    ul.createEl("li", { text: "Neue Seiten, Module und Programmteile kommen von GitHub. Jede Datei wird geprüft." });
-    ul.createEl("li", { text: "Deine Noten, Termine, Notizen und Angaben bleiben. Hast du eine Seite geändert, bleibt deine Fassung." });
-    ul.createEl("li", { text: "Vorher wird eine Sicherung angelegt. Deine anderen Geräte bekommen das Update über deinen Sync." });
-    const k = m.contentEl.createDiv({ cls: "modal-button-container" });
+    const c = m.contentEl;
+    if (rel.notiz) c.createEl("p", { cls: "eba-modal-text eba-modal-notiz", text: rel.notiz });
+    // „Was ist neu“: dasselbe Fenster wie sonst; dort beantworten „Aktualisieren“ / „Später“ diese Frage (kein zweites Fragen)
+    c.createEl("button", { cls: "eba-modal-link", text: "Was ist neu", attr: { type: "button" } }).addEventListener("click", () => {
+      erledigt = true;
+      m.close();
+      neuigkeitenZeigen({ von: installiertVersion(), bis: rel.version, angebot: rel, antwort: fertig });
+    });
+    c.createEl("p", { cls: "eba-modal-text", text: "Deine Noten, Termine und Notizen bleiben. Vorher wird eine Sicherung angelegt." });
+    const d = c.createEl("details", { cls: "eba-modal-mehr" });
+    d.createEl("summary", { text: "Mehr erfahren" });
+    d.createEl("p", { text: "Hast du eine Seite selbst geändert, bleibt deine Fassung. Die neue legen wir daneben." });
+    d.createEl("p", { text: "Auf deinen anderen Geräten kommt das Update von selbst. Dort musst du nichts tun." });
+    // Knöpfe wie im Fenster „Was ist neu“: PC und iPad nebeneinander, „Aktualisieren“ rechts; iPhone untereinander, oben
+    const k = c.createDiv({ cls: "modal-button-container" });
+    const ab = k.createEl("button", { text: "Später" });
     const ok = k.createEl("button", { text: "Aktualisieren", cls: "mod-cta" });
-    const ab = k.createEl("button", { text: "Abbrechen" });
     ok.addEventListener("click", () => { erledigt = true; m.close(); fertig(true); });
     ab.addEventListener("click", () => m.close());
-    m.onClose = () => { m.contentEl.empty(); if (!erledigt) fertig(false); };
+    m.onClose = () => { c.empty(); if (!erledigt) fertig(false); };
     m.open();
   });
   const name = (p) => p.split("/").pop().replace(/\.md$/, "");
   const FEHLERTEXT = {
-    netz: "Keine Verbindung zu GitHub. Es wurde nichts geändert. Versuch es später noch einmal.",
+    netz: "Die neue Version ließ sich gerade nicht laden. Es wurde nichts geändert. Versuch es später noch einmal.",
     pruefsumme: "Die neue Version kam nicht vollständig an. Es wurde nichts geändert. Versuch es später noch einmal.",
-    liste: "Die neue Version passt nicht. Es wurde nichts geändert.",
+    liste: "Mit der neuen Version stimmt etwas nicht. Es wurde nichts geändert. Versuch es später noch einmal.",
     sicherung: "Die Sicherung ließ sich nicht anlegen. Es wurde nichts geändert.",
     schreiben: "Beim Speichern ging etwas schief. Alles wurde auf den alten Stand zurückgesetzt.",
   };
@@ -655,9 +684,7 @@ module.exports = function (ctx) {
     if (!b.ok) {
       m.titleEl.setText("Nicht aktualisiert");
       text(FEHLERTEXT[b.art] || FEHLERTEXT.netz);
-      const d = c.createEl("details", { cls: "eba-modal-mehr" });
-      d.createEl("summary", { text: "Mehr erfahren" });
-      d.createEl("p", { text: b.fehler });
+      if (b.fehler) text(b.fehler, "eba-modal-hinweis");
     } else {
       m.titleEl.setText(`Fertig: Version ${b.version}`);
       const n = b.geaendert.length + b.angelegt.length + b.gemischt.length + b.haken.length + b.einstellungen.length;
@@ -667,19 +694,16 @@ module.exports = function (ctx) {
         const ul = c.createEl("ul", { cls: "eba-modal-schritte" });
         for (const x of b.neuKopien) ul.createEl("li", { text: name(x.pfad) });
       }
-      if (b.behalten.length) text("Nicht mehr Teil der Vorlage, weil von dir geändert behalten: " + b.behalten.map(name).join(", ") + ".");
+      if (b.behalten.length) text("Diese Seiten gibt es in der neuen Version nicht mehr. Du hattest sie geändert, darum bleiben sie: " + b.behalten.map(name).join(", ") + ".");
       if (b.plugin && !b.neuGeladen) text("Bitte Obsidian einmal schließen und wieder öffnen.");
       else if (b.einstellungen.length) text("Einstellungen wurden ergänzt. Sie wirken nach dem nächsten Öffnen von Obsidian.");
-      text("Auf deinen anderen Geräten kommt das Update über deinen Sync. Dort nicht noch einmal aktualisieren.", "eba-modal-hinweis");
-      if (b.sicherung) {
-        const d = c.createEl("details", { cls: "eba-modal-mehr" });
-        d.createEl("summary", { text: "Mehr erfahren" });
-        d.createEl("p", { text: `Die alten Fassungen liegen im versteckten Ordner „${b.sicherung}“ in deinem Tresor (am PC oder Mac sichtbar).` });
-      }
+      text("Auf deinen anderen Geräten kommt das Update von selbst. Dort musst du nichts tun.", "eba-modal-hinweis");
+      if (b.sicherung) text(`Die Sicherung liegt im versteckten Ordner „${b.sicherung}“ in deinem Tresor. Am PC oder Mac kannst du ihn öffnen.`, "eba-modal-hinweis");
     }
+    // Reihenfolge wie im Fenster vor dem Update: Hauptknopf zuletzt (PC/iPad rechts, iPhone oben)
     const k = c.createDiv({ cls: "modal-button-container" });
-    k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
     if (b.ok && b.vorher) k.createEl("button", { text: "Was ist neu" }).addEventListener("click", () => { m.close(); neuigkeitenZeigen({ von: b.vorher, bis: b.version }); });
+    k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
     m.onClose = () => { c.empty(); if (zustand.fenster === m) zustand.fenster = null; };
     m.open();
   };
@@ -951,10 +975,13 @@ module.exports = function (ctx) {
     }
     return liste.length;
   };
-  // o = { von, bis, angebot } – angebot (aus dem Manifest) → Knöpfe „Aktualisieren“ und „Später“, sonst „Fertig“
+  // o = { von, bis, angebot, antwort } – angebot (aus dem Manifest) → Knöpfe „Später“ und „Aktualisieren“, sonst „Fertig“.
+  // antwort(ja): aus dem Fenster vor dem Update geöffnet; „Aktualisieren“ → antwort(true), sonst beim Schließen antwort(false)
   const neuigkeitenZeigen = (o) => {
-    if (!Modal) return null;
+    if (!Modal) { if (o.antwort) o.antwort(false); return null; }
     if (neuigkeit.fenster) neuigkeit.fenster.close();
+    let geantwortet = false;
+    const antworten = (ja) => { if (o.antwort && !geantwortet) { geantwortet = true; o.antwort(ja); } };
     const m = new Modal(app);
     neuigkeit.fenster = m;
     const comp = obs.Component ? new obs.Component() : null;
@@ -967,10 +994,13 @@ module.exports = function (ctx) {
     liste.createEl("p", { cls: "eba-modal-text", text: "Lädt …" });
     const k = c.createDiv({ cls: "modal-button-container" });
     if (o.angebot) {
-      k.createEl("button", { text: "Aktualisieren", cls: "mod-cta" }).addEventListener("click", () => { m.close(); aktualisieren().catch((e) => console.error("update", e)); });
       k.createEl("button", { text: "Später" }).addEventListener("click", () => m.close());
+      k.createEl("button", { text: "Aktualisieren", cls: "mod-cta" }).addEventListener("click", () => {
+        if (o.antwort) { antworten(true); m.close(); return; }
+        m.close(); aktualisieren().catch((e) => console.error("update", e));
+      });
     } else k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
-    m.onClose = () => { if (comp) comp.unload(); c.empty(); if (neuigkeit.fenster === m) neuigkeit.fenster = null; };
+    m.onClose = () => { if (comp) comp.unload(); c.empty(); if (neuigkeit.fenster === m) neuigkeit.fenster = null; antworten(false); };
     m.open();
     m.geladen = abschnitteZeichnen(liste, o, comp).catch((e) => { console.error("update: Was ist neu", e); return 0; });
     return m;
@@ -979,7 +1009,7 @@ module.exports = function (ctx) {
   ctx.update = {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, planen, aktualisierenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    jsonMischenText, lesezeichenOhne, planen, aktualisierenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     // Obsidian
     io, anzeige, status, aktualisieren, installiertAnlegen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER,
     // Neuigkeiten (reine Logik zuerst)

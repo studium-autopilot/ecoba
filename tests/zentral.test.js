@@ -148,7 +148,8 @@ test("Live: aktuelle zentrale Daten sind gültig", { skip: process.env.ECOBA_LIV
     const b = await holen(name);
     assert.equal(await Z.sha256(b), m.wert.dateien[name].sha256, name + ": SHA-256");
     const d = JSON.parse(new TextDecoder().decode(b));
-    const r = name === "termine.json" ? Z.terminePruefen(d) : name === "gruppen.json" ? Z.gruppenPruefen(d) : Z.semesterPruefen(d);
+    const pruefen = { "termine.json": Z.terminePruefen, "gruppen.json": Z.gruppenPruefen, "angebote.json": Z.angebotePruefen };
+    const r = (pruefen[name] || Z.semesterPruefen)(d);
     assert.equal(r.fehler, undefined, r.fehler);
     assert.deepEqual(r.verworfen, [], name + ": verworfen");
   }
@@ -296,4 +297,172 @@ test("Abruf: Fehler in gruppen.json → Termine werden trotzdem übernommen", as
   assert.match(b2.warnung, /^Gruppen: Prüfsumme von gruppen\.json/);
   assert.deepEqual(b2.verworfen.map((v) => v.id), ["kaputt"]);
   assert.equal(ZZ.gruppen().gruppen.length, 1);
+});
+
+// ---------- Angebote der Uni (angebote.json, docs/daten-v1.md) – nur ausgedachte Daten ----------
+
+const angebot = (anders = {}) => Object.assign({
+  id: "2026-10-19-vortrag-beispiel", kategorie: "vortrag", reihe: "Studium Generale", titel: "Beispielvortrag über Beispiele",
+  datum: "2026-10-19", von: "18:15", bis: "19:45", ort: "Hörsaal 9 (Beispielbau)", online: true,
+  url: "https://uni-tuebingen.de/studium-generale/beispiel", anmeldung: { ab: "2026-10-12", bis: "2026-10-18T23:59" },
+}, anders);
+const angebotePruefe = (...e) => Z.angebotePruefen({ schema: 1, stand: "2026-10-17", angebote: e });
+
+test("Angebote: gültiger Eintrag wird übernommen, unbekannte Felder ignoriert", () => {
+  const r = angebotePruefe(angebot({ beschreibung: "wird nicht übernommen" }));
+  assert.deepEqual(r.verworfen, []);
+  assert.equal(r.stand, "2026-10-17");
+  assert.deepEqual(r.angebote[0], {
+    id: "2026-10-19-vortrag-beispiel", kategorie: "vortrag", reihe: "Studium Generale", titel: "Beispielvortrag über Beispiele",
+    datum: "2026-10-19", von: "18:15", bis: "19:45", ort: "Hörsaal 9 (Beispielbau)", online: true,
+    url: "https://uni-tuebingen.de/studium-generale/beispiel", anmeldung: { ab: "2026-10-12", bis: "2026-10-18T23:59" },
+  });
+  const knapp = angebotePruefe(angebot({ kategorie: "sport", von: undefined, bis: "", ort: "", online: "ja", anmeldung: { ab: "2026-10-19T17:00" },
+    url: "https://hochschulsport.uni-tuebingen.de/kurse" })).angebote[0];
+  assert.equal(knapp.von, "");
+  assert.equal(knapp.online, false, "online nur bei true");
+  assert.deepEqual(knapp.anmeldung, { ab: "2026-10-19T17:00", bis: "" });
+  assert.equal(angebotePruefe(angebot({ anmeldung: null })).angebote[0].anmeldung, null);
+  assert.equal(angebotePruefe(angebot({ anmeldung: {} })).angebote[0].anmeldung, null, "leere Anmeldung = keine");
+});
+
+test("Angebote: ungültige Einträge werden einzeln verworfen", () => {
+  const schlecht = {
+    "id ungültig": { id: "Gross" },
+    "kategorie unbekannt": { kategorie: "party" },
+    "kategorie gross": { kategorie: "Vortrag" },
+    "reihe fehlt": { reihe: "" },
+    "reihe mit strich": { reihe: "A | B" },
+    "reihe zu lang": { reihe: "x".repeat(81) },
+    "titel html": { titel: "<b>fett</b>" },
+    "titel wikilink": { titel: "Siehe [[Notiz]]" },
+    "titel zu lang": { titel: "x".repeat(121) },
+    "datum ungültig": { datum: "2026-02-30" },
+    "von kaputt": { von: "8:00" },
+    "bis ohne von": { von: "", bis: "10:00" },
+    "bis vor von": { von: "10:00", bis: "09:00" },
+    "ort zu lang": { ort: "x".repeat(121) },
+    "url fehlt": { url: "" },
+    "url http": { url: "http://uni-tuebingen.de/x" },
+    "url fremd": { url: "https://example.org/x" },
+    "url fachschaft": { url: "https://www.ffwtuebingen.de/x" },
+    "anmeldung kein objekt": { anmeldung: "ab Montag" },
+    "anmeldung liste": { anmeldung: ["2026-10-12"] },
+    "anmeldung zeit kaputt": { anmeldung: { ab: "2026-10-12 17:00" } },
+    "anmeldung verkehrt": { anmeldung: { ab: "2026-10-18", bis: "2026-10-12" } },
+  };
+  let i = 0;
+  for (const [fall, anders] of Object.entries(schlecht)) {
+    const r = angebotePruefe(angebot(Object.assign({ id: anders.id || "fall-" + i++ }, anders)));
+    assert.equal(r.angebote.length, 0, fall);
+    assert.equal(r.verworfen.length, 1, fall);
+  }
+});
+
+test("Angebote: doppelte id, Säubern, ganze Datei abgelehnt", () => {
+  const r = angebotePruefe(angebot({ ort: "<i>Hörsaal 9</i> obsidian://open?x" }), angebot());
+  assert.deepEqual(r.verworfen, [{ id: "2026-10-19-vortrag-beispiel", grund: "doppelte id" }]);
+  assert.equal(r.angebote[0].ort, "Hörsaal 9");
+  assert.equal(Z.angebotePruefen({ schema: 1, stand: "2026-10-17T06:00:00Z", angebote: [] }).stand, "2026-10-17");
+  assert.ok(Z.angebotePruefen({ schema: 2, angebote: [] }).fehler);
+  assert.ok(Z.angebotePruefen({ schema: 1 }).fehler);
+  assert.ok(Z.angebotePruefen({ schema: 1, angebote: new Array(1001).fill(angebot()) }).fehler);
+});
+
+test("Manifest: angebote.json ist bekannt (Prüfsumme, Höchstgröße)", () => {
+  const m = { schema: 1, erstellt: "2026-10-17T09:00:00Z", dateien: { "angebote.json": { sha256: "c".repeat(64), groesse: 900 } } };
+  assert.deepEqual(Z.manifestPruefen(m).wert.dateien, { "angebote.json": { sha256: "c".repeat(64), groesse: 900 } });
+  assert.ok(Z.manifestPruefen(Object.assign({}, m, { dateien: { "angebote.json": { sha256: "c".repeat(64), groesse: 600000 } } })).fehler);
+});
+
+// Abruf mit Testquelle: Angebote holt jedes Gerät selbst; Fehler → alter Stand und Warnung; aus dem Manifest entfernt → gelöscht
+test("Abruf: angebote.json gerätelokal, Fehler halten nichts an, ohne Eintrag im Manifest wird der Stand gelöscht", async () => {
+  const crypto = require("node:crypto");
+  const speicher = {};
+  const quelle = {};
+  const fremd = JSON.stringify({ geraet: "g-anderes", seit: new Date().toISOString(), zuletzt: new Date().toISOString(), angewendet: {} });
+  const L = laden("zentral", {
+    frontmatter: { "System/Einstellungen.md": {}, "System/Daten/abruf.json": {} },
+    kontext: { plugin: { testZentralAus: true, testQuelle: async (n) => quelle[n] }, modell: { daten: () => ({ module: [], fachsemester: 1 }) } },
+  });
+  const app = L.ctx.app;
+  app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
+  app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = JSON.stringify(v); };
+  app.vault.read = async () => fremd;
+  let gezeichnet = 0;
+  L.ctx.angeboteAnzeige = { neu: () => { gezeichnet++; } };
+  const ZZ = L.ctx.zentral;
+  const datei = (name, daten, falsch) => {
+    quelle[name] = JSON.stringify(daten);
+    const b = Buffer.from(quelle[name], "utf8");
+    return { sha256: falsch ? "0".repeat(64) : crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length };
+  };
+  const manifest = (dateien, pause) => { quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-17T09:00:00Z", dateien, pause: !!pause }); };
+  assert.equal(ZZ.angebote(), null);
+  manifest({ "angebote.json": datei("angebote.json", { schema: 1, stand: "2026-10-17", angebote: [angebot(), angebot({ id: "kaputt", kategorie: "party" })] }) });
+  const b1 = await ZZ.abrufen({});
+  assert.equal(b1.art, "anderes-geraet", "Angebote auch ohne Abrufer-Rolle");
+  assert.equal(ZZ.angebote().angebote.length, 1);
+  assert.equal(ZZ.angebote().stand, "2026-10-17");
+  assert.deepEqual(b1.verworfen, [{ id: "angebot kaputt", grund: "kategorie nicht erlaubt" }]);
+  assert.equal(gezeichnet, 1);
+  // gleiche Prüfsumme: nicht neu zeichnen
+  await ZZ.abrufen({});
+  assert.equal(gezeichnet, 1);
+  // falsche Prüfsumme und kaputte Gruppen: alter Stand bleibt, je eine Warnung
+  manifest({
+    "angebote.json": datei("angebote.json", { schema: 1, angebote: [] }, true),
+    "gruppen.json": datei("gruppen.json", { schema: 2, gruppen: [] }),
+  });
+  const b3 = await ZZ.abrufen({});
+  assert.equal(b3.fehler, "");
+  assert.match(b3.warnung, /Gruppen: gruppen\.json: Format ungültig/);
+  assert.match(b3.warnung, /Angebote: Prüfsumme von angebote\.json/);
+  assert.equal(ZZ.angebote().angebote.length, 1);
+  // Pause: nichts anfassen, auch wenn die Datei fehlt
+  manifest({}, true);
+  await ZZ.abrufen({});
+  assert.equal(ZZ.angebote().angebote.length, 1, "pausiert: Stand bleibt");
+  // aus dem Manifest entfernt: zurückgezogen → Stand gelöscht, Anzeige neu
+  manifest({});
+  await ZZ.abrufen({});
+  assert.equal(ZZ.angebote(), null);
+  assert.equal(speicher["eba-zentral-angebote"], undefined);
+  assert.equal(gezeichnet, 2);
+});
+
+// Eine kaputte angebote.json hält Termine nicht an
+test("Abruf: Fehler in angebote.json → Termine werden trotzdem übernommen", async () => {
+  const crypto = require("node:crypto");
+  const speicher = {};
+  const quelle = {};
+  const geschrieben = {};
+  const L = laden("zentral", {
+    frontmatter: { "System/Einstellungen.md": {} },
+    kontext: { plugin: { testZentralAus: true, testQuelle: async (n) => quelle[n] }, modell: { daten: () => ({ module: [], fachsemester: 1 }) } },
+  });
+  const app = L.ctx.app;
+  app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
+  app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = JSON.stringify(v); };
+  app.vault.create = async (p, t) => { geschrieben[p] = t; return { path: p }; };
+  const ZZ = L.ctx.zentral;
+  const datei = (name, text) => { quelle[name] = text; const b = Buffer.from(text, "utf8"); return { sha256: crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length }; };
+  const termine = datei("termine.json", JSON.stringify({ schema: 1, termine: [{ id: "frist-1", titel: "Frist", datum: "2026-11-02", kategorie: "Frist", status: "offiziell" }] }));
+  quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-17T09:00:00Z",
+    dateien: { "termine.json": termine, "angebote.json": datei("angebote.json", "{ kaputt") } });
+  const b = await ZZ.abrufen({});
+  assert.equal(b.art, "ok");
+  assert.match(b.warnung, /^Angebote: angebote\.json unlesbar/);
+  assert.ok(Object.keys(geschrieben).some((p) => p.startsWith("Termine/2026-11-02 Frist")), "Termin-Notiz angelegt");
+  assert.equal(ZZ.angebote(), null);
+});
+
+test("Ein Schreiber: dieses Gerät schreibt für alle, wenn es Abrufer ist, es noch keinen gibt oder der Abrufer seit 80 Min. still ist", () => {
+  const jetzt = Date.parse("2026-10-17T20:00:00Z"), vor = (min) => new Date(jetzt - min * 60e3).toISOString();
+  assert.equal(Z.abruferHierAus(null, "g-a", jetzt), true, "noch kein Abrufer");
+  assert.equal(Z.abruferHierAus({ geraet: "g-a", zuletzt: vor(500) }, "g-a", jetzt), true, "dieses Gerät");
+  assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: vor(10) }, "g-a", jetzt), false, "anderes Gerät ist aktiv");
+  assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: vor(79) }, "g-a", jetzt), false);
+  assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: vor(81) }, "g-a", jetzt), true, "Abrufer still: dieses Gerät springt ein");
+  assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: "" }, "g-a", jetzt), true, "ohne Zeit gilt der Abrufer als still");
 });

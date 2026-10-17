@@ -2,6 +2,33 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.2 – Karteikarten, Uni-Angebote und Dunkelmodus
+
+- **Neu:** **Karteikarten** als eigener Bereich: Stapel je Modul, gelernt wird direkt in Obsidian, auch auf iPhone und iPad. Wann
+  eine Karte wiederkommt, plant das Verfahren aus Anki, damit du mit wenig Wiederholen viel behältst.
+- **Neu:** Auf **Termine & Anmeldungen** siehst du Hochschulsport mit Buchungsstart, UB-Kurse und Vorträge der Uni. Was dich
+  interessiert, wählst du beim ersten Mal selbst und änderst es jederzeit unter **Auswahl ändern**.
+- **Neu:** Deine Übungsgruppe aus ILIAS steht von selbst im **Stundenplan**; ohne ILIAS wählst du sie mit **Meine**. Bald
+  kommen auch deine Vorlesungen von selbst dazu, mit Ausfällen und Raumänderungen.
+- **Neu:** Alles gibt es jetzt auch dunkel, angenehm am Abend. Unter **Einstellungen & Hilfe** stellst du auf jedem Gerät
+  **Hell**, **Dunkel** oder **Automatisch** ein, und die Einrichtung fragt beim ersten Start danach.
+- **Schneller:** Neue Uni-Termine erscheinen jetzt spätestens eine Viertelstunde, nachdem sie veröffentlicht sind, solange
+  Obsidian offen ist.
+- **Zuverlässiger:** Schließt du Obsidian, während Dateien aus ILIAS laden, geht es beim nächsten Öffnen dort weiter, wo es
+  aufgehört hat, statt alle Kurse noch einmal zu durchsuchen.
+- **Übersichtlicher:** Das Fenster vor einem Update ist kürzer und sagt in einfachen Worten, was neu ist. Der Hinweis
+  oben auf dem Dashboard hört nicht mehr mitten im Wort auf.
+- **Übersichtlicher:** Der Schwerpunkt-Planer ist im **Studienverlauf** aufgegangen: Dort prüft die App, ob deine Schwerpunkte
+  die Regeln der Prüfungsordnung erfüllen. Die Reise zeigt er ohne Sprüche, nahe Prüfungen teilen sich ein Fähnchen.
+- **Übersichtlicher:** **Einstellungen & Hilfe** zeigt alles in gleichen Zeilen, und Übersichten bleiben in der Leseansicht.
+  Ist deine Variante offen, zeigt der **Musterstudienplan**, wie sich die drei ab dem dritten Semester unterscheiden.
+- **Zuverlässiger:** Geschätzte Semestertermine erkennst du überall an Streifen, „ca.“ oder „geschätzt“. Warum eine Angabe
+  geschätzt ist, steht als Hinweis dabei und unter der Tabelle **Semestertermine**.
+- **Übersichtlicher:** Auf **Termine & Anmeldungen** steht jeder Tag mit großer Ziffer am Rand, die Anmeldungen kommen von selbst,
+  mit deiner Gruppe. Zwischentests sind dort, auf **Prüfungen** und dem **Dashboard** blau und beschriftet.
+- **Übersichtlicher:** Auf iPhone und iPad steht das Symbol für alle Bereiche nur noch einmal, oben in der Leiste jeder Notiz.
+  Im **Stundenplan** zeigt jeder Kasten kurz Fach und Raum, und mit ‹ › oder Wischen siehst du andere Wochen.
+
 ## 0.4.1 – ILIAS lädt im Hintergrund weiter
 
 - **Neu:** Gibt es eine neue Version, sagt dir Obsidian das gleich beim Öffnen. Unter **Was ist neu** steht in einfachen Worten,

@@ -41,8 +41,7 @@ cssclasses:
 
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Schwerpunkt</span></div>
-<h1>S311 · Topics in Applied Econometrics and Statistics</h1>
-<p class="eba-lead">Themen der angewandten Ökonometrie und statistischen Datenanalyse</p>
+<h1><span class="eba-code">S311</span> Topics in Applied Econometrics and Statistics</h1>
 <div class="eba-meta"><span><b>6</b> ECTS</span><span>FS 4.–6.</span><span>SS</span><span>Klausur 60 min oder mündlich</span><span>Englisch</span><span>Notenblock 66 %</span></div>
 </div>
 
@@ -83,13 +82,14 @@ cssclasses:
 > ```
 
 
-> [!eba-neu] Neu zu diesem Modul
+> [!eba-neu|ohne-titel] Neu zu diesem Modul
 > - [Vorlesung](obsidian://studium-autopilot?aktion=vorlesung&code=S311)
 > - [Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt&code=S311)
 
 
 > [!eba-raster|2]
 > > [!eba-karte|handy-zu]+ Lehrveranstaltung
+> > - **Inhalte:** Themen der angewandten Ökonometrie und statistischen Datenanalyse
 > > - **Lehrform:** lecture and tutorial (3 SWS) / oral participation, group discussion, self study
 > > - **Workload:** Kontaktzeit 45 h + Selbststudium 135 h = 180 h
 > > - **Verantwortlich:** Prof. Dr. Joachim Grammig
@@ -116,12 +116,15 @@ cssclasses:
 > [!eba-tabelle] Folien, Skripte, Übungen, Altklausuren
 > ```base
 > formulas:
->   was: 'file.asLink(if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art) + if(titel, " · " + titel, ""))'
+>   was: 'file.asLink(if(titel, titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art)))'
+>   artnr: 'if(titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art), "")'
 >   oeffnen: 'html("<a class=\"eba-oeffnen\" href=\"obsidian://studium-autopilot?aktion=oeffnen&notiz=" + file.basename.replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B") + "\">Öffnen ↗</a>")'
 >   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
 > properties:
 >   formula.was:
 >     displayName: Unterlage
+>   formula.artnr:
+>     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
 >   note.status:
@@ -146,6 +149,7 @@ cssclasses:
 >       direction: ASC
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - status
 >       - formula.oeffnen
@@ -153,7 +157,8 @@ cssclasses:
 >       - property: nummer
 >         direction: ASC
 >     columnSize:
->       formula.was: 330
+>       formula.was: 250
+>       formula.artnr: 80
 >       note.seiten: 80
 >       note.status: 100
 >       formula.oeffnen: 90
@@ -166,6 +171,7 @@ cssclasses:
 >         - 'status == "neu" || !status'
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - formula.oeffnen
 >     sort:
@@ -190,7 +196,7 @@ cssclasses:
 
 ## Meine Notizen
 
-> [!eba-tabelle|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
+> [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
 > filters:
 >   and:
@@ -199,9 +205,10 @@ cssclasses:
 >     - 'typ != "unterlage"'
 > formulas:
 >   wann: 'if(faellig, faellig, datum)'
->   art: 'if(typ == "vorlesung", "Vorlesung", if(typ == "übungsblatt", "Übungsblatt", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termin", typ))))'
+>   art: 'if(typ == "vorlesung", "Vorlesungen", if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ)))))'
+>   notiz: 'file.asLink(file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(code + " ", ""))'
 > properties:
->   file.name:
+>   formula.notiz:
 >     displayName: Notiz
 >   formula.wann:
 >     displayName: Datum
@@ -218,7 +225,7 @@ cssclasses:
 >       property: formula.art
 >       direction: ASC
 >     order:
->       - file.name
+>       - formula.notiz
 >       - formula.wann
 >       - status
 >       - nachgearbeitet
@@ -226,7 +233,7 @@ cssclasses:
 >       - property: formula.wann
 >         direction: DESC
 >     columnSize:
->       file.name: 330
+>       formula.notiz: 330
 >       formula.wann: 120
 >       note.status: 110
 >       note.nachgearbeitet: 120

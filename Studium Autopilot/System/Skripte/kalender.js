@@ -5,8 +5,10 @@
 // Fristen (kategorie: Frist) stehen NICHT im Kalender (Entscheidung 15.10.2026: Anmeldezeiträume verdeckten die Termine), sondern
 // nur in der Liste darunter (termine.js: Diese Woche, Nächste Woche, Fristen danach).
 // Je Woche Spuren wie bei Google/Apple, nach Relevanz (gewicht), höchstens SPUREN Zeilen je Tag, Rest als „+n weitere“.
-// Ein Tipp auf einen Tag zeigt darunter dessen Termine (Uhrzeit, Titel als Link, Art). Schmale Ansicht (iPhone): Container-Query
-// in eba-core.css, dann auch eintägige als getönte Blöcke ohne Uhrzeit.
+// Ein Tipp auf einen Tag zeigt darunter dessen Termine (Farbpunkt aus dem CSS, Uhrzeit, Titel als Link; Text-Pillen nur für
+// Prüfung, freiwillig, geschätzt, erledigt). Im Kopf neben „Heute“ der Knopf „+ Termin“ (Aktion termin aus notizen.js, seit
+// 17.10.2026; vorher eine eigene Knopf-Karte auf der Seite). Schmale Ansicht (iPhone): Container-Query in eba-core.css, dann
+// auch eintägige als getönte Blöcke ohne Uhrzeit.
 // Daten live aus den Termin-Notizen (metadataCache, typ: termin), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
 // Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft).
 // Erweiterung: Das Plugin ruft registrieren() beim Start und nach jeder Änderung dieser Datei auf (Hot-Reload); Codeblock und
@@ -21,8 +23,8 @@ module.exports = function (ctx) {
   const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   const EVENT = ["Fachschaft", "Veranstaltung"];
   const ZEIT = /(?:^|\D)((?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[–-]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?)(?!\d)/; // wie termine.js, ohne Lookbehind (iOS < 16.4); Uhrzeit = Gruppe 1
-  const RANG = { pruefung: 0, frist: 1, uni: 2, event: 3 };
-  const PILLE = { pruefung: "bad", frist: "warn", uni: "info", event: "akzent" };
+  const RANG = { pruefung: 0, zwischentest: 1, frist: 1, uni: 2, event: 3 };
+  const PILLE = { pruefung: "bad", zwischentest: "info", frist: "warn", uni: "info", event: "akzent" };
 
   const pad = (n) => String(n).padStart(2, "0");
   const datum = (v) => { const m = String(v ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
@@ -32,7 +34,8 @@ module.exports = function (ctx) {
   const gleich = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
   const kurz = (d) => `${KURZTAG[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`;
   const lang = (d) => `${LANGTAG[d.getDay()]}, ${d.getDate()}. ${MONATE[d.getMonth()]}`;
-  const art = (k) => (k === "Prüfung" ? "pruefung" : k === "Frist" ? "frist" : EVENT.includes(k) ? "event" : "uni");
+  // Zwischentests (Titel enthält „Zwischentest“, wie termine.js und klausurzeit.js) sind keine Prüfung: eigene Farbe
+  const art = (k, titel = "") => (k === "Prüfung" ? (/zwischentest/i.test(titel) ? "zwischentest" : "pruefung") : k === "Frist" ? "frist" : EVENT.includes(k) ? "event" : "uni");
   const tage = (g) => Array.from({ length: g.e - g.s + 1 }, (_, i) => g.s + i);
 
   const lesen = () => {
@@ -47,10 +50,11 @@ module.exports = function (ctx) {
       const bis = datum(fm.bis);
       const ort = String(fm.ort ?? "").replace(/\s+/g, " ");
       const kat = String(fm.kategorie ?? "").trim() || "Termin";
+      const titel = String(fm.titel || f.basename).replace(/\s+/g, " ").trim();
       aus.push({
-        f, von, bis: bis && bis > von ? bis : null, kat, art: art(kat), erledigt: fm.erledigt === true, sq: fm.bereich === "schluesselqualifikation",
+        f, von, bis: bis && bis > von ? bis : null, kat, art: art(kat, titel), erledigt: fm.erledigt === true, sq: fm.bereich === "schluesselqualifikation",
         geschaetzt: fm.status === "geschätzt", zeit: (ort.match(ZEIT) || ["", ""])[1],
-        titel: String(fm.titel || f.basename).replace(/\s+/g, " ").trim(),
+        titel,
       });
     }
     return aus.sort((a, b) => a.von - b.von || a.zeit.localeCompare(b.zeit) || a.titel.localeCompare(b.titel));
@@ -123,6 +127,12 @@ module.exports = function (ctx) {
       return mo;
     };
     const knopf = (ort, text, label, fn) => klick(ort.createEl("button", { text, attr: { type: "button", "aria-label": label, title: label } }), () => { fn(); neu(); });
+    // „+ Termin“: dieselbe Aktion wie der Link obsidian://studium-autopilot?aktion=termin (fragt Titel und Datum ab);
+    // auf dem iPhone nur das Plus (eba-core.css). Kein neu(): die neue Notiz löst das Neuzeichnen über den metadataCache aus.
+    const neuKnopf = nav.createEl("button", { cls: "eba-kal-neu", attr: { type: "button", "aria-label": "Termin anlegen", title: "Termin anlegen" } });
+    neuKnopf.createSpan({ cls: "eba-kal-neu-zeichen", text: "+" });
+    neuKnopf.createSpan({ cls: "eba-kal-neu-wort", text: "Termin" });
+    klick(neuKnopf, () => basis.aktion("termin", {}, { quelle: app.workspace.getActiveFile() }));
     knopf(nav, "Heute", "Heute", () => { zustand.monat = new Date(heute.getFullYear(), heute.getMonth(), 1); zustand.tag = heute; });
     const pfeile = nav.createDiv({ cls: "eba-kal-pfeile" });
     knopf(pfeile, "‹", "Voriger Monat", () => { zustand.monat = new Date(y, m - 1, 1); zustand.tag = ersterTag(zustand.monat); });
@@ -184,7 +194,7 @@ module.exports = function (ctx) {
     // damit die Farbe bekannt ist).
     const imRaster = alle.filter((t) => t.von <= new Date(y, m + 1, 0) && (t.bis || t.von) >= new Date(y, m, 1));
     const legende = el.createDiv({ cls: "eba-kal-legende" });
-    for (const [k, t] of [["pruefung", "Prüfung"], ["uni", "Uni"], ["event", "Veranstaltung"]]) {
+    for (const [k, t] of [["pruefung", "Prüfung"], ["zwischentest", "Zwischentest"], ["uni", "Uni"], ["event", "Veranstaltung"]]) {
       if (k !== "pruefung" && !imRaster.some((x) => x.art === k)) continue;
       const s = legende.createSpan({ cls: k }); s.createEl("i"); s.appendText(t);
     }
@@ -212,10 +222,11 @@ module.exports = function (ctx) {
       const text = z.createSpan({ cls: "eba-kal-text" });
       link(text, t);
       if (t.bis) text.appendText(gleich(t.von, tag) ? ` · bis ${kurz(t.bis)}` : ` · seit ${kurz(t.von)}`);
-      text.appendText(" ");
-      text.createSpan({ cls: `eba-pill ${PILLE[t.art]}`, text: t.kat });
+      // Art als Farbpunkt (CSS, --kal); Text nur für Prüfung und Frist (Fristen stehen nicht im Kalender, der Fall bleibt für die Vollständigkeit)
+      if (t.art === "pruefung" || t.art === "frist") { text.appendText(" "); text.createSpan({ cls: `eba-pill ${PILLE[t.art]}`, text: t.kat }); }
+      if (t.art === "zwischentest") { text.appendText(" "); text.createSpan({ cls: "eba-pill info", text: "Zwischentest" }); }
       // Schlüsselqualifikation (zentral.js, bereich): ruhige Pille, keine Pflicht
-      if (t.sq) { text.appendText(" "); text.createSpan({ cls: "eba-pill leer", text: "Schlüsselqualifikation · freiwillig" }); }
+      if (t.sq) { text.appendText(" "); text.createSpan({ cls: "eba-pill leer", text: "freiwillig" }); }
       if (t.geschaetzt) { text.appendText(" "); text.createSpan({ cls: "eba-pill leer", text: "geschätzt" }); }
       if (t.erledigt) { text.appendText(" "); text.createSpan({ cls: "eba-pill ok", text: "erledigt" }); }
     }
@@ -250,5 +261,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
-  return { registrieren, zeichnen };
+  return { registrieren, zeichnen, art }; // art für tests/kalender.test.js
 };

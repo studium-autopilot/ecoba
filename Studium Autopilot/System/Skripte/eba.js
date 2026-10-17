@@ -1,6 +1,7 @@
 // Gemeinsame Helfer für die Aktionen und Skripte des Vaults.
 // Aufruf in einer Aktion:  const eba = ctx.user.eba(ctx);   (ctx = Kontext des Plugins „Studium Autopilot“)
-// Ohne Aufruf nutzbar (z. B. in Erweiterungen):  ctx.user.eba.MODULCODE, ctx.user.eba.codeImText(text)
+// Ohne Aufruf nutzbar (z. B. in Erweiterungen):  ctx.user.eba.MODULCODE, ctx.user.eba.codeImText(text),
+//   ctx.user.eba.eigenerAbgleich(existiert, einstellungen)
 // Je Aktionsaufruf liefert ctx: ctx.datei (leere Notiz, die befüllt wird – Ordner-Automatik – sonst null),
 // ctx.parameter (Werte aus dem Knopf, z. B. { code: "B110" }) und ctx.quelle (Notiz, in der der Knopf steht).
 
@@ -12,6 +13,13 @@ const MODULCODE = "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?";
 // Erster Modulcode in einem freien Text („Klausur B110“, „SQ100-Kurs“), sonst null.
 const MODULCODE_IM_TEXT = new RegExp("(?:^|[^A-Z0-9])(" + MODULCODE + ")(?=[^A-Z0-9]|$)");
 const codeImText = (text) => { const m = String(text ?? "").match(MODULCODE_IM_TEXT); return m ? m[1] : null; };
+// Eigener Uni-Abgleich: Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“ in den Einstellungen,
+// bringt ein eigener Abgleich ILIAS-Unterlagen und Stundenplan. Dann lädt ilias.js keine Unterlagen und zentral.js wendet den
+// zentralen Stundenplan nicht an. existiert(pfad) → bool, einstellungen = Frontmatter von System/Einstellungen.md.
+const EIGENER_ABGLEICH = "System/Skripte/abgleich.js";
+const eigenerAbgleich = (existiert, einstellungen) => {
+  try { return !!existiert(EIGENER_ABGLEICH) || String((einstellungen || {}).ilias_unterlagen ?? "").trim().toLowerCase() === "extern"; } catch (e) { return false; }
+};
 
 module.exports = function (ctx) {
   const app = window.app;
@@ -275,3 +283,4 @@ module.exports = function (ctx) {
 };
 module.exports.MODULCODE = MODULCODE;
 module.exports.codeImText = codeImText;
+module.exports.eigenerAbgleich = eigenerAbgleich;

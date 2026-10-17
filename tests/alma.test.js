@@ -97,3 +97,56 @@ test("Verbinden: scheitert der erste Abruf, gilt wieder der vorherige Link", asy
   assert.equal(b.neu, 1);
   assert.equal(t.speicher["eba-alma-ics"], neu);
 });
+
+test("Zentrale Stundenplan-Notizen übernimmt, ändert und löscht Alma nie (eigene Notiz daneben)", async () => {
+  const t = tresor();
+  const zentral = "Stundenplan/Mo 10.15 B110 Vorlesung.md";
+  const vorher = { typ: "lehrveranstaltung", code: "B110", art: "Vorlesung", wochentag: 1, beginn: "10:15", ende: "11:45", semester: SEM,
+    herkunft: "zentral", zentral_id: "ws-2026-27-b110-vorlesung-1-mo-1000" };
+  t.fm[zentral] = Object.assign({}, vorher);
+  t.text[zentral] = "---\n---\n\n# B110 · Vorlesung\n\n## Notizen\n- \n";
+  const b1 = await t.A.aktualisieren({ text: kalender(B110), still: true });
+  assert.equal(b1.neu, 1, "Alma legt ihre eigene Notiz an (den Rest erledigt der Abrufer der zentralen Daten)");
+  assert.deepEqual(t.fm[zentral], vorher, "zentrale Notiz unverändert");
+  // B110 fehlt in Alma: die zentrale Notiz bleibt trotzdem, wie sie war
+  await t.A.aktualisieren({ text: kalender(S100), still: true });
+  assert.deepEqual(t.fm[zentral], vorher);
+  assert.equal(t.papierkorb.indexOf(zentral), -1);
+});
+
+test("Notizen zu deiner Gruppe (aus ILIAS oder gewählt) übernimmt, ändert und löscht Alma nie", async () => {
+  const t = tresor();
+  const il = "Stundenplan/Di 14.15 B130 Übung.md", gw = "Stundenplan/Di 14.15 B130 Übung 2.md";
+  const v1 = { typ: "lehrveranstaltung", code: "B130", art: "Übung", wochentag: 2, beginn: "14:15", ende: "15:45", semester: SEM,
+    herkunft: "ilias-gruppe", ilias_gruppe: "9001", gruppe_id: "ws-2026-27-b130-uebung-2" };
+  const v2 = { typ: "lehrveranstaltung", code: "B130", art: "Übung", wochentag: 2, beginn: "14:15", ende: "15:45", semester: SEM,
+    herkunft: "gruppe-gewaehlt", gruppe_id: "ws-2026-27-b130-uebung-2" };
+  t.fm[il] = Object.assign({}, v1); t.fm[gw] = Object.assign({}, v2);
+  t.text[il] = t.text[gw] = "---\n---\n\n# B130 · Übung\n\n> [!info]- Aus ILIAS\n\n## Notizen\n- \n";
+  const b1 = await t.A.aktualisieren({ text: kalender(B130), still: true });
+  assert.equal(b1.neu, 1, "Alma legt ihre eigene Notiz an; die Gruppen-Notiz räumt ihr Schreiber weg");
+  assert.deepEqual([t.fm[il], t.fm[gw]], [v1, v2]);
+  await t.A.aktualisieren({ text: kalender(S100), still: true });
+  assert.deepEqual([t.fm[il], t.fm[gw]], [v1, v2]);
+  assert.deepEqual(t.papierkorb.filter((p) => p === il || p === gw), []);
+});
+
+test("Kurztitel: nie nach einem Füllwort abgeschnitten, Modultitel zuerst, kaputte Titel werden repariert", async () => {
+  const t = tresor();
+  const titel = (p) => (String(t.text[p]).match(/^titel: "(.*)"$/m) || [])[1];
+  // ohne Modulnotiz: langer Alma-Titel, an einer Wortgrenze gekürzt, ohne „und“ am Ende
+  await t.A.aktualisieren({ text: kalender(ereignis("9", "Einführung in die Betriebswirtschaftslehre und Unternehmensführung", "20261022T100000", "20261022T120000")), still: true });
+  const neu1 = Object.keys(t.text).find((p) => /^Stundenplan\/Do 10\.00/.test(p));
+  assert.equal(titel(neu1), "Einführung in die Betriebswirtschaftslehre · Veranstaltung");
+  // mit Modulnotiz: deren Titel, ganz (kein „Einführung in“)
+  const u = tresor();
+  u.fm["Module/B110.md"] = { typ: "modul", code: "B110", titel: "Einführung in die Betriebswirtschaftslehre" };
+  const alt = "Stundenplan/Mo 10.00 B110 Vorlesung.md";
+  u.fm[alt] = { typ: "lehrveranstaltung", code: "B110", art: "Vorlesung", wochentag: 1, beginn: "10:00", ende: "12:00", semester: SEM,
+    titel: "Einführung in · Vorlesung", quelle: "alma", alma_schluessel: `${SEM}|B110 Einführung in die BWL Vorlesung|1|10:00|12:00` };
+  u.text[alt] = "---\n---\n\n# B110 · Vorlesung\n\n> [!info]- Aus Alma\n\n## Notizen\n- \n";
+  await u.A.aktualisieren({ text: kalender(B110, ereignis("8", "B110 Einführung in die BWL Übung", "20261023T080000", "20261023T100000")), still: true });
+  assert.equal(u.fm[alt].titel, "Einführung in die Betriebswirtschaftslehre · Vorlesung", "kaputter Titel repariert");
+  const neu2 = Object.keys(u.text).find((p) => /^Stundenplan\/Fr 08\.00/.test(p));
+  assert.equal((String(u.text[neu2]).match(/^titel: "(.*)"$/m) || [])[1], "Einführung in die Betriebswirtschaftslehre · Übung");
+});

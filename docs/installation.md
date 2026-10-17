@@ -106,8 +106,8 @@ Dein Tresor läuft schon auf einem Gerät? So kommt er auf weitere.
 **Mit Windows-PC:** iCloud für Windows aus dem Microsoft Store, **iCloud Drive** einschalten, den Ordner
 `iCloudDrive\iCloud~md~obsidian` rechts anklicken → **Immer auf diesem Gerät behalten**, dann dort `Studium Autopilot` als Tresor öffnen.
 
-**Mit Android:** **Obsidian Sync** (kostenpflichtig, alle Geräte; Einstellungen → Sync, Plugins und CSS-Snippets mit
-abgleichen) oder **Syncthing** (kostenlos, Android und PC, nicht iPhone/iPad; Ordner samt `.obsidian` teilen).
+**Mit Android:** **Obsidian Sync** (kostenpflichtig, alle Geräte; Einstellungen → Sync, Plugins, CSS-Snippets und andere
+Dateitypen mit abgleichen, sonst fehlen z. B. die Lernstände der Karteikarten) oder **Syncthing** (kostenlos, Android und PC, nicht iPhone/iPad; Ordner samt `.obsidian` teilen).
 
 Ist der iCloud-Speicher voll, stockt der Abgleich – dann erst Platz schaffen.
 

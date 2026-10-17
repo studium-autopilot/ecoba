@@ -96,7 +96,8 @@ SVG_ZAHLEN = re.compile(r"""(\b(?:d|points|viewBox|transform)\s*=\s*)(?:"[^"]*"|
 HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 
 # Persönliche Ordner der Vorlage (müssen leer sein, höchstens .gitkeep)
-LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen"]
+LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen",
+                "Karteikarten"]
 MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant"]
 EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn"]
 
@@ -567,6 +568,8 @@ def pfad_pruefen(rel, groesse, max_bytes, funde):
         funde.append(Fund(rel, 0, "vaultlokale Datei (ILIAS-Index)", "ilias.json"))
     if rel.endswith("System/Daten/ilias-abruf.json"):
         funde.append(Fund(rel, 0, "gerätelokale Datei", "ilias-abruf.json"))
+    if "/System/Daten/Karteikarten/" in "/" + rel:
+        funde.append(Fund(rel, 0, "persönliche Lernstände (Karteikarten)", name))
     if name in (".DS_Store", "Thumbs.db", "desktop.ini") or name.startswith("~$"):
         funde.append(Fund(rel, 0, "Systemdatei", name))
     if endung in VERBOTENE_ENDUNGEN:

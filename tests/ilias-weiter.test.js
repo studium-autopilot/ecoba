@@ -1,6 +1,7 @@
 // ILIAS-Unterlagen (ilias.js): Fortschritt im Hintergrund und Weitermachen. Texte des Fortschritts (ohne Kurstitel), Ereignisse,
 // offener Auftrag (nächster Stapel, Fehler mit Wartezeit, nie nach abgelehnter Anmeldung, Trennen, Stoppen, anderem Gerät),
-// toter Lauf (verwerfen), Absturz mitten im Schreiben. Attrappen aus tests/ilias-attrappen.js. Läuft ohne Obsidian.
+// toter Lauf (verwerfen), Funde (Fortsetzung ohne neues Durchsuchen), Absturz mitten im Schreiben. Attrappen aus
+// tests/ilias-attrappen.js. Läuft ohne Obsidian.
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -105,9 +106,10 @@ test("Stapel: Grenze je Lauf erreicht → Auftrag bleibt, nächster Lauf zählt 
   assert.equal(x.meldungen[0], "ILIAS: 25 neue Dateien in Unterlagen. 5 weitere folgen gleich.");
   const laden1 = ereignisse(x, "fortschritt").filter((e) => e.phase === "laden");
   assert.deepEqual([laden1[0].erledigt, laden1[0].gesamt], [0, 30], "gesamt = alle, die fehlen");
-  x.u.vor(I.K.STAPEL_PAUSE); x.hoerer.length = 0;
+  x.u.vor(I.K.STAPEL_PAUSE); x.hoerer.length = 0; x.il.leeren();
   b = await knopf(x, { weiter: true });
   assert.equal(b.neu, 5); assert.equal(b.rest, 0);
+  assert.deepEqual(x.il.geholt(), [], "zweiter Stapel durchsucht nicht noch einmal");
   assert.equal(ereignisse(x, "start")[0].weiter, true);
   const laden2 = ereignisse(x, "fortschritt").filter((e) => e.phase === "laden");
   assert.equal(I.fortschrittAnzeige(laden2[0], true).kurz, "ILIAS · weiter: 26 von 30");
@@ -212,13 +214,104 @@ test("Toter Lauf (im Hintergrund gestorben): verwerfen, neu starten; wacht er au
   assert.equal(x.m.still(), true);
   x.m.verwerfen();
   assert.equal(x.m.laeuft, false); assert.ok(x.m.auftrag(), "Auftrag bleibt");
+  x.il.leeren();
   const b2 = await knopf(x, { weiter: true });
   assert.equal(b2.neu, 5, b2.fehler);
+  assert.deepEqual(x.il.geholt(), [], "fertig durchsucht: gleich laden");
   haenger();
   const b1 = await p1;
   assert.equal(b1.art, "abgebrochen");
   assert.equal(x.t.pfade("Unterlagen/").length, 10, "5 Dateien + 5 Notizen, nichts doppelt");
   assert.equal(x.m.auftrag(), null);
+});
+
+test("Obsidian beim Durchsuchen geschlossen: Fortsetzung durchsucht fertige Kurse nicht noch einmal", async () => {
+  let haenger = null, gerufen = false;
+  const x = aufbau({ quelle: async (zugang, anmelden) => {
+    const q = await x.il.quelle(zugang, anmelden);
+    const inhalt = q.inhalt;
+    q.inhalt = (k) => { if (!gerufen && k.url === B + "kurs/300") { gerufen = true; return new Promise((r) => { haenger = () => r(inhalt(k)); }); } return inhalt(k); };
+    return q;
+  } });
+  await verbinden(x);
+  const p1 = knopf(x);
+  assert.ok(await ticks(() => gerufen), "zweiter Kurs hängt");
+  const funde = x.lok.lokal("eba-ilias-funde");
+  assert.deepEqual(funde.map((c) => c.id).sort(), ["1001", "1101", "1201"], "Funde des ersten Kurses gemerkt");
+  for (const c of funde) assert.deepEqual(Object.keys(c.eintrag).sort(), ["art", "endung", "id", "refId", "typ", "url"], "vom Eintrag nur, was der Download braucht");
+  x.u.vor(I.K.STILL + 1);
+  x.m.verwerfen();
+  x.il.leeren();
+  const b2 = await knopf(x, { weiter: true });
+  assert.equal(b2.neu, 5, b2.fehler);
+  assert.deepEqual(x.il.geholt(), [B + "kurs/300", B + "ordner/310"], "nur der Kurs, der noch fehlte");
+  assert.deepEqual(x.lok.lokal("eba-ilias-funde"), [], "alles geladen: keine Funde mehr");
+  haenger();
+  assert.equal((await p1).art, "abgebrochen");
+  assert.equal(x.t.pfade("Unterlagen/").length, 10, "5 Dateien + 5 Notizen, nichts doppelt");
+});
+
+test("Automatischer Lauf bricht beim Laden ab: der nächste lädt den Rest, ohne neu zu durchsuchen", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  let n = 0;
+  x.il.stoerung.laden = () => (++n === 3 ? new Error("offline") : null);
+  let b = await x.m.jetztHolen({});
+  assert.equal(b.art, "fehler"); assert.equal(b.neu, 2);
+  x.il.stoerung.laden = null;
+  x.u.vor(60 * MIN); x.il.leeren();
+  b = await x.m.jetztHolen({});
+  assert.equal(b.neu, 3, b.fehler);
+  assert.deepEqual(x.il.geholt(), [], "Kurse vor kurzem durchsucht");
+  assert.equal(x.t.pfade("Unterlagen/").filter((p) => / \(2\)\./.test(p)).length, 0);
+  // gestoppt: der Fund bleibt; abgewählter Kurs: nichts geladen, der Fund fällt weg
+  x.il.def.dateien["3002"] = "%PDF Nachtrag";
+  x.il.def.seiten[B + "kurs/300"].push(datei("3002", "Nachtrag", "pdf", "2026-10-16T09:00"));
+  await knopf(x, { fortschritt: (f) => { if (f.phase === "laden") x.m.stoppen(); } });
+  assert.deepEqual(x.lok.lokal("eba-ilias-funde").map((c) => c.id), ["3002"]);
+  await x.m.kursSetzen("300", false);
+  x.u.vor(60 * MIN); x.il.leeren();
+  await x.m.jetztHolen({});
+  assert.deepEqual(x.il.geladen(), []);
+  assert.deepEqual(x.lok.lokal("eba-ilias-funde"), []);
+});
+
+test("Fortsetzung ohne gemerkte Funde (Update mitten im Abruf): alle Kurse durchsuchen, nichts fehlt", async () => {
+  const x = aufbau({ ilias: dreissig(), mobil: true });
+  await verbinden(x);
+  await knopf(x);
+  x.lok.lokal("eba-ilias-funde", null); // wie eine ältere Fassung, die keine Funde kannte
+  x.u.vor(I.K.STAPEL_PAUSE); x.il.leeren();
+  const b = await knopf(x, { weiter: true });
+  assert.equal(b.neu, 5, b.fehler);
+  assert.deepEqual(x.il.geholt(), [B + "kurs/100"]);
+  assert.equal(x.m.auftrag(), null);
+});
+
+test("Trennen räumt die Funde weg; ein verworfener Lauf, der aufwacht, schreibt keine", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await knopf(x, { fortschritt: (f) => { if (f.phase === "laden") x.m.stoppen(); } });
+  assert.equal(x.lok.lokal("eba-ilias-funde").length, 5);
+  await x.m.zugangLoeschen();
+  assert.equal(x.lok.lokal("eba-ilias-funde"), null);
+  // verworfen, während er den letzten Kurs durchsucht
+  let haenger = null, gerufen = false;
+  const y = aufbau({ quelle: async (zugang, anmelden) => {
+    const q = await y.il.quelle(zugang, anmelden);
+    const inhalt = q.inhalt;
+    q.inhalt = (k) => { if (!gerufen && k.url === B + "ordner/310") { gerufen = true; return new Promise((r) => { haenger = () => r(inhalt(k)); }); } return inhalt(k); };
+    return q;
+  } });
+  await verbinden(y);
+  const p = knopf(y);
+  assert.ok(await ticks(() => gerufen));
+  y.u.vor(I.K.STILL + 1);
+  y.m.verwerfen();
+  y.lok.lokal("eba-ilias-funde", null);
+  haenger();
+  assert.equal((await p).art, "abgebrochen");
+  assert.equal(y.lok.lokal("eba-ilias-funde"), null);
 });
 
 test("Absturz beim Schreiben einer neuen Datei: halbe Datei wird ersetzt, kein „ (2)“", async () => {

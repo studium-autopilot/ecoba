@@ -339,7 +339,7 @@ cssclasses:
 
 > [!eba-info]- Wie Studium Autopilot rechnet
 > - Module aus Profil & Vertiefung wechseln je nach Variante: in Economics zählen **B220**, **B250**, **B290** und **J200** als Elective Studies (66 %), in Business Administration **E230**.
-> - Profilmodul als Elective Studies genutzt: im [[Schwerpunkt-Planer]] bei „Zählt als“ `Elective Studies` eintragen.
+> - Profilmodul als Elective Studies genutzt: in seiner Modulnotiz bei „Zählt als“ `Elective Studies` eintragen.
 > - Feld `zusatz: true` nimmt ein Modul aus der Rechnung; die Zielnote stellst du in den [[Einstellungen & Hilfe#Deine Angaben|Einstellungen]] ein.
 
 ## Regeln

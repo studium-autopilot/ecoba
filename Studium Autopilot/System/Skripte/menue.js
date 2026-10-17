@@ -1,10 +1,11 @@
 // Bereiche-Menü: ein Symbol oben auf der Seite öffnet eine Tafel mit allen Bereichen, statt bis ans Seitenende scrollen
 // zu müssen. Die Ziele stehen nur hier (ZIELE, einzige Quelle).
-// Symbol „layout-grid“ an zwei Stellen, beide öffnen dieselbe Kachel-Tafel (Dashboard + alle Bereiche):
-//  1. im Kopf jeder eba-Seite: rechts im Pfad der Unterseiten (.eba-pfad) und in der Gruß-Zeile des Dashboards (.eba-kz-kopf);
-//     kostet keine Höhe (Symbol in vorhandener Zeile).
-//  2. auf iPhone/iPad zusätzlich in Obsidians Kopfleiste jeder Notiz (view-actions, leaf.view.addAction): immer oben sichtbar,
-//     auch weit unten auf der Seite und auf Notizen ohne Pfad (Termin-Notizen, Begleitnotizen, Mitschriften).
+// Symbol „layout-grid“ an genau einer Stelle je Gerät, es öffnet die Kachel-Tafel (Dashboard + alle Bereiche):
+//  - am PC im Kopf jeder eba-Seite: rechts im Pfad der Unterseiten (.eba-pfad) und in der Gruß-Zeile des Dashboards
+//    (.eba-kz-kopf); kostet keine Höhe (Symbol in vorhandener Zeile).
+//  - auf iPhone/iPad nur in Obsidians Kopfleiste jeder Notiz (view-actions, leaf.view.addAction): immer oben sichtbar,
+//    auch weit unten auf der Seite und auf Notizen ohne Pfad (Termin-Notizen, Begleitnotizen, Mitschriften). Nicht zusätzlich
+//    im Seitenkopf, sonst steht es dort zweimal untereinander.
 // Antippen öffnet, erneutes Tippen, ein Tipp daneben, Esc, Scrollen der Seite oder Tab-/Dateiwechsel schließt. Schreibt keine Datei.
 // Icons der Kacheln kommen aus eba-core.css (Kacheln > [!eba-nav], li:has(> a[data-href$=…])), deshalb ist die Tafel ein eba-nav-Callout.
 // Lese- und Bearbeitungsansicht, alle Geräte: Post-Processor (Leseansicht) + MutationObserver je Fenster (Bases-HTML im
@@ -16,9 +17,10 @@ module.exports = function (ctx) {
   const { Platform } = ctx.obsidian;
   // Einzige Liste der Bereiche (Reihenfolge = Kacheln, zwei je Reihe). Neuer Bereich: Notizname hier eintragen.
   const ZIELE = ["Dashboard", "Studienverlauf", "Termine & Anmeldungen", "Prüfungen", "Noten & ECTS", "Unterlagen",
-    "Schwerpunkt-Planer", "Kontakte & Links", "Einstellungen & Hilfe"];
+    "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
   const ZIELE_SEL = ".eba-pfad:not(.eba-pfad-start), .eba-kz-kopf";
-  const KOPF = Platform.isMobile; // Symbol in Obsidians Kopfleiste: iPhone und iPad (am PC reicht das Symbol im Seitenkopf)
+  // Symbol in Obsidians Kopfleiste statt im Seitenkopf: iPhone und iPad (am PC zum Ausprobieren über window.ebaMenueKopfImmer)
+  const imKopf = () => Platform.isMobile || window.ebaMenueKopfImmer === true;
 
   // Symbol als eigenes SVG (Lucide „layout-grid“), nicht über setIcon: auf dem iPad blieb der Knopf damit ein leerer
   // Kasten. Farbe/Strich als Attribute (currentColor), damit es ohne Obsidians .svg-icon-Regeln sichtbar ist.
@@ -52,7 +54,7 @@ button.eba-menue-knopf { position: relative; z-index: 3; }
 .eba-kz-kopf > .eba-kz-datum { margin-left: auto; }
 .eba-kz-kopf > button.eba-menue-knopf { margin: 0 0 0 4px; align-self: center; }
 @container eba-kz (max-width: 760px) {
-  .eba-kz-kopf { position: relative; padding-right: 42px; }
+  .eba-kz-kopf:has(> button.eba-menue-knopf) { position: relative; padding-right: 42px; }
   .eba-kz-kopf > .eba-kz-datum { margin-left: 0; }
   .eba-kz-kopf > button.eba-menue-knopf { position: absolute; top: 2px; right: 0; width: 36px; height: 32px; }
 }
@@ -132,7 +134,7 @@ button.eba-menue-knopf { position: relative; z-index: 3; }
   };
 
   const einsetzen = (wurzel) => {
-    if (!wurzel?.querySelectorAll) return;
+    if (imKopf() || !wurzel?.querySelectorAll) return;
     if (wurzel.matches?.(ZIELE_SEL)) knopfFuer(wurzel);
     for (const z of wurzel.querySelectorAll(ZIELE_SEL)) knopfFuer(z);
   };
@@ -147,8 +149,8 @@ button.eba-menue-knopf { position: relative; z-index: 3; }
     symbol(el); // gleiches SVG wie im Seitenkopf, unabhängig von Obsidians Icon-Satz
     el.setAttribute("aria-haspopup", "menu"); el.setAttribute("aria-expanded", "false");
   };
-  const aktionen = (zwingen) => {
-    if (!(KOPF || zwingen === true || window.ebaMenueKopfImmer)) return;
+  const aktionen = () => {
+    if (!imKopf()) return;
     app.workspace.iterateAllLeaves((l) => { try { aktionFuer(l); } catch (e) { /* nächste Ansicht */ } });
   };
 

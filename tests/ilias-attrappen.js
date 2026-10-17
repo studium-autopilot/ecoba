@@ -1,13 +1,16 @@
 // Attrappen für tests/ilias.test.js: Tresor im Speicher, ein erfundenes ILIAS (Kurse, Ordner, Dateien), eine Uhr, die nur
 // beim Warten weiterläuft, gerätelokaler Speicher und Schlüsselbund. Keine echten Namen, kein Netz.
 "use strict";
+const path = require("node:path");
 const { laden } = require("./laden.js");
 
 const enc = (s) => new TextEncoder().encode(s);
 const dec = (b) => new TextDecoder("utf-8").decode(b);
 const elternVon = (p) => { const i = p.lastIndexOf("/"); return i < 0 ? "" : p.slice(0, i); };
 
-const I = laden("ilias").ctx.ilias;
+// eba.js wie in Obsidian (ctx.user.eba): eigener Uni-Abgleich
+const EBA = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "eba.js"));
+const I = laden("ilias", { kontext: { user: { eba: EBA } } }).ctx.ilias;
 
 // Kennwort-Attrappe: darf nirgends auftauchen (Status, Protokoll, Fehler, Dateien)
 const GEHEIM = "Sentinel-Kw/7Q x&ü";

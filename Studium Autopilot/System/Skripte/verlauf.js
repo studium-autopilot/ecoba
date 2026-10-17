@@ -1,24 +1,31 @@
 // Studienverlauf-Visualisierung „Studienreise“.
 // Codeblock ```eba-verlauf``` auf Studium/Studienverlauf.md. Zeichnet live per JavaScript (schreibt keine Datei, kein Sync-Verkehr):
-//   Reise     dunkle Kopfkarte: „Du bist hier“ (Fachsemester), Tag x von y des Studiums (zählt hoch), Satz zur Lage,
-//             die Bahn als SVG – PC/iPad eine Welle, iPhone eine Schlange (ein Studienjahr je Zeile) – mit 6 Stationen
-//             (Semesteranfang, kleiner ECTS-Ring: blass geplant, voll bestanden), zurückgelegtem Weg (zeichnet sich ein),
-//             Meilensteinen (Rauten), Nadel „Du bist hier“ mit Puls und Doktorhut als Ziel; Semester-Puls (eine Perle je
-//             Woche: Vorlesung, Pause, Prüfungsphase, vorbei, jetzt); Kacheln ECTS (ist/geplant) und Orientierungsprüfung
-//             (4 Punkte); Fuß: nächster Meilenstein, Prognose Abschluss. Nächste Prüfung und Notenschnitt stehen auf dem
-//             Dashboard (seit 15.10.2026 hier nicht mehr doppelt); die nächste Prüfung ist in der Lupe hervorgehoben.
-//   Lupe      das gewählte Semester (Station antippen): Band mit Monaten, Prüfungen als Fähnchen, Module mit Countdown.
+//   Reise     Kopfkarte: Fachsemester, Tag x von y des Studiums (zählt hoch), die Bahn als SVG – PC/iPad eine
+//             Welle, iPhone eine Schlange (ein Studienjahr je Zeile) – mit 6 Stationen (Semesteranfang, kleiner ECTS-Ring:
+//             blass geplant, voll bestanden; Beschriftung vorbei/jetzt „x / 30 ECTS“, später nur „n geplant“), zurückgelegtem
+//             Weg (zeichnet sich ein), Meilensteinen (Rauten), Nadel „Du bist hier“ mit Puls und Doktorhut als Ziel; darunter
+//             die Bilanz in einer Zeile (ECTS ist/geplant, Orientierungsprüfung als 4 Punkte) und der Fuß (nächster
+//             Meilenstein, Prognose Abschluss). Nächste Prüfung, Notenschnitt und die Wochenleiste stehen auf dem Dashboard
+//             und hier nicht doppelt (die Wochenleiste „Semester-Puls“ entfiel am 17.10.2026: die Lupe zeigt dasselbe Semester).
+//   Lupe      das gewählte Semester (Station antippen): Titel, ECTS, im laufenden Semester Vorlesungswoche und
+//             Resttage der Vorlesungszeit, Meilensteine des Semesters, Band mit Monaten, Prüfungen als Fähnchen (dicht
+//             liegende werden zu einem Fähnchen „n Klausuren 30.01.–12.02.“ zusammengefasst, Einzelheiten in der Liste),
+//             Module mit Countdown.
 // Daten: System/Einstellungen.md (semesterliste, pausen, pruefungsphasen, variante), Modulnotizen (typ: modul,
 // semester_geplant, ects, status, ergebnis, klausur, op_modul, rolle_*, gewaehlt, zusatz),
 // Termine mit kategorie „Prüfung“ (eintägig, ohne Nachholtermine, z. B. Zwischentests), SQ-Kurse (typ: sq_kurs).
 // Rechenregeln wie auf der Seite Noten & ECTS: ECTS = bestandene/anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange
 // SQ100 offen). Fehlendes erscheint als „offen“.
+// Nur richtige Daten (Vorgabe vom 17.10.2026): Semester, Pausen und Prüfungsphasen tragen aus den zentralen Daten status
+// (offiziell | geschätzt) und hinweis. Geschätztes ist überall markiert – „ca.“ vor Daten und Zahlen, die daraus folgen
+// (Abschluss, Resttage, Vorlesungswochen, Frist der Orientierungsprüfung), Streifen und „(geschätzt)“ in Band und Legende
+// der Lupe, der Hinweis als Tooltip und als Zeile in der Lupe (auch ohne Maus lesbar). Offizielles bleibt unmarkiert.
 // iOS: Das Plugin lädt jedes Skript einzeln; ein Syntaxfehler legt trotzdem dieses Skript lahm. Daher keine Syntax neuer als Safari 16.0
 // (kein Lookbehind, kein .at()/findLast/structuredClone). Die Bahn rechnet ihre Geometrie selbst (misst nichts im DOM).
 // Jeder Fehler beim Zeichnen zeigt den Text des Codeblocks (Fallback), die Seite läuft weiter.
 // Erweiterung: registrieren() meldet Codeblock, Ereignisse und Uhr über die Helfer in ctx an. Das Plugin hat je Sprache
 // einen Prozessor, der immer die aktuell geladene Fassung ruft; neuer Code gilt also sofort nach dem Hot-Reload.
-// Wochen: „Vorlesungswoche X von Y“ und die Lage außerhalb der Vorlesungszeit kommen aus ctx.modell.woche() (eine Regel
+// Wochen: „Vorlesungswoche X von Y“ kommt aus ctx.modell.woche() (eine Regel
 // für Dashboard, Studienverlauf und Vorlesungsnotiz). Stil: eba-core.css Abschnitt 38 (Klassen eba-vl-*).
 module.exports = function (ctx) {
   const app = window.app;
@@ -26,7 +33,6 @@ module.exports = function (ctx) {
   const ROLLE = { "Economics": "rolle_economics", "Business Administration": "rolle_ba", "ohne Spezialisierung": "rolle_ohne" };
   const WT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-  const MONLANG = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
 
   // ---------- Hilfen ----------
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -48,6 +54,9 @@ module.exports = function (ctx) {
   const kurzSem = (n) => String(n).replace(/(\d{2})(\d{2})\/(\d{2})$/, "$2/$3").replace(/SS (\d{2})(\d{2})$/, "SS $2");
   const plural = (n, a, b) => `${n} ${n === 1 ? a : b}`;
   const ruhig = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  // Unsicherheit zeigen: „ca. “ vor einem Datum oder einer Zahl aus geschätzten Semesterdaten; Zusatz für Tooltips
+  const ca = (o) => (o && o.geschaetzt ? "ca. " : "");
+  const unsicher = (o) => (o && o.geschaetzt ? ` (geschätzt${o.hinweis ? `: ${o.hinweis}` : ""})` : "");
 
   // ---------- Daten lesen ----------
   const lesen = () => {
@@ -57,16 +66,21 @@ module.exports = function (ctx) {
     // Datenmodell (modell.js): Semesterliste aus Studienbeginn + zentralen Semesterdaten, Musterplan-Semester der Module.
     // Ohne Modell wie bisher aus System/Einstellungen.md.
     const md = ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null;
+    const g = (o) => ({ geschaetzt: o.status === "geschätzt", hinweis: String(o.hinweis || "") });
+    let sems, pausen, phasen;
     if (md) {
-      c.semesterliste = md.semesterliste.map((s) => [s.fs, s.name, s.beginn, s.ende, s.vb, s.ve].join("|"));
-      c.pausen = md.pausen.map((p) => [p.von, p.bis, p.name].join("|"));
-      c.pruefungsphasen = md.pruefungsphasen.map((p) => [p.von, p.bis, p.art, p.status].join("|"));
+      // Datenmodell: mit Status (offiziell | geschätzt) und Hinweis der zentralen Daten (Semester nach Regel: geschätzt)
+      sems = md.semesterliste.map((s) => Object.assign({ fs: s.fs, name: s.name, sb: tag(s.beginn), se: tag(s.ende), vb: tag(s.vb), ve: tag(s.ve) }, g(s)));
+      pausen = md.pausen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), name: p.name || "Pause" }, g(p)));
+      phasen = md.pruefungsphasen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), art: p.art || "Prüfungen" }, g(p)));
+    } else {
+      sems = zerlege(c.semesterliste).filter((p) => p.length >= 6).map((p) => ({ fs: +p[0], name: p[1], sb: tag(p[2]), se: tag(p[3]), vb: tag(p[4]), ve: tag(p[5]), geschaetzt: false, hinweis: "" }));
+      pausen = zerlege(c.pausen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), name: p[2] || "Pause", geschaetzt: false, hinweis: "" }));
+      phasen = zerlege(c.pruefungsphasen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), art: p[2] || "Prüfungen", geschaetzt: /gesch/i.test(p[3] || ""), hinweis: "" }));
     }
-    const sems = zerlege(c.semesterliste).filter((p) => p.length >= 6)
-      .map((p) => ({ fs: +p[0], name: p[1], sb: tag(p[2]), se: tag(p[3]), vb: tag(p[4]), ve: tag(p[5]) }))
-      .filter((s) => s.sb && s.se && s.se > s.sb);
-    const pausen = zerlege(c.pausen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), name: p[2] || "Pause" })).filter((p) => p.von && p.bis);
-    const phasen = zerlege(c.pruefungsphasen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), art: p[2] || "Prüfungen", geschaetzt: /gesch/i.test(p[3] || "") })).filter((p) => p.von && p.bis);
+    sems = sems.filter((s) => s.sb && s.se && s.se > s.sb);
+    pausen = pausen.filter((p) => p.von && p.bis);
+    phasen = phasen.filter((p) => p.von && p.bis);
     const variante = String(c.variante ?? "").trim() || "offen";
     const module = [], termine = [];
     let sq = 0;
@@ -130,14 +144,16 @@ module.exports = function (ctx) {
     // Prüfungen (Fähnchen): eintägige Prüfungs-Termine (z. B. Zwischentests) und Klausurtermine der Module. Kürzel + Tag nur
     // einmal; die Termin-Notiz gewinnt, „bestanden“ kommt vom Modul (docs/architektur.md „Nächste Prüfung“)
     const pruef = [];
-    const gleicherTag = (code, d) => pruef.find((p) => p.code && p.code === code && +p.datum === +d);
+    // Zwischentests (Titel enthält „Zwischentest“, wie klausurzeit.js) sind nie die nächste Prüfung und verdecken keine Klausur
+    const gleicherTag = (code, d, test = false) => pruef.find((p) => p.code && p.code === code && +p.datum === +d && !!p.test === test);
     for (const x of D.termine) {
-      if (gleicherTag(x.code, x.datum)) continue;
+      const test = /zwischentest/i.test(x.titel);
+      if (gleicherTag(x.code, x.datum, test)) continue;
       const n = x.titel.match(/Zwischentest\s*(\d+)/i);
-      const label = (x.code ? x.code + " " : "") + (n ? `Test ${n[1]}` : x.code ? "Prüfung" : x.titel.slice(0, 16));
+      const label = (x.code ? x.code + " " : "") + (n ? `Zwischentest ${n[1]}` : test ? "Zwischentest" : x.code ? "Prüfung" : x.titel.slice(0, 16));
       const m = D.module.find((mm) => mm.code === x.code);
       // haupt: Klausur des Moduls aus einer Termin-Notiz (kein Zwischentest) – gilt in der Modulliste der Lupe als Prüfungstermin
-      pruef.push({ datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.datum < t, art: "test", geschaetzt: x.geschaetzt, modul: m, haupt: !!m && !n });
+      pruef.push({ datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.datum < t, art: "test", geschaetzt: x.geschaetzt, modul: m, haupt: !!m && !test, test });
     }
     for (const m of D.module) if (m.klausur && !m.zusatz) {
       const p = gleicherTag(m.code, m.klausur);
@@ -145,64 +161,32 @@ module.exports = function (ctx) {
       else pruef.push({ datum: m.klausur, code: m.code, label: m.code, titel: `${m.code} ${m.titel}`, pfad: m.pfad, erledigt: m.fertig, art: "klausur", modul: m });
     }
     pruef.sort((a, b) => a.datum - b.datum);
-    const naechste = pruef.find((p) => p.datum >= t && !p.erledigt);
+    const naechste = pruef.find((p) => p.datum >= t && !p.erledigt && !p.test);
     // Meilensteine (Quelle: Regeln auf der Seite Studienverlauf)
     const ms = [];
     const sFS = (n) => sems.find((s) => s.fs === n);
     if (sFS(3)) ms.push({ datum: sFS(3).sb, fs: 3, titel: "Variante wählen", info: v === "offen" ? "noch offen · vor dem 3. Fachsemester wählen" : v, ok: v !== "offen", art: "wahl" });
-    if (sFS(4)) ms.push({ datum: sFS(4).se, fs: 4, titel: "Orientierungsprüfung", info: `${op} / 4 · bis ${dmy(sFS(4).se)}`, ok: op >= 4, art: "frist" });
+    if (sFS(4)) ms.push({ datum: sFS(4).se, fs: 4, titel: "Orientierungsprüfung", info: `${op} / 4 · bis ${ca(sFS(4))}${dmy(sFS(4).se)}`, ok: op >= 4, art: "frist" });
     if (sFS(5)) ms.push({ datum: new Date((+sFS(5).sb + +sFS(5).se) / 2), fs: 5, titel: "Auslandssemester", info: "empfohlen", ok: null, art: "option" });
     const ba = D.module.find((m) => m.code === "BA302");
     const sBA = sems.find((s) => ba && s.name === ba.sem) || sFS(6);
     if (sBA) ms.push({ datum: sBA.vb || sBA.sb, fs: sBA.fs, titel: "Bachelorarbeit", info: ba?.fertig ? (ba.ergebnis ? `Note ${ba.ergebnis}` : "bestanden") : `${ba?.ects || 12} ECTS`, ok: !!ba?.fertig, art: "ba", pfad: ba?.pfad });
     const sl = sems[sems.length - 1];
-    if (sl) ms.push({ datum: sl.se, fs: sl.fs, titel: "Abschluss B.Sc.", info: `${dmy(sl.se)} · 180 ECTS`, ok: ects >= 180, art: "ziel" });
+    if (sl) ms.push({ datum: sl.se, fs: sl.fs, titel: "Abschluss B.Sc.", info: `${ca(sl)}${dmy(sl.se)} · 180 ECTS`, ok: ects >= 180, art: "ziel" });
     for (const m of ms) m.vorbei = m.datum < t;
     return { t, sems, cur, vorStart, nachEnde, ects, op, opModule, pruef, naechste, ms, variante: v };
   };
 
-  // Lage heute innerhalb des Semesters
-  const lage = (D, R) => {
+  // Vorlesungswoche heute („Vorlesungswoche 1 von 16“), nur in der Vorlesungszeit. Eine Regel für alle Seiten:
+  // ctx.modell.woche() (Vorlesungswochen ohne Pausenwochen); ohne Modell die alte Rechnung
+  const vorlesungswoche = (D, R) => {
     const t = R.t, s = R.sems[R.cur];
-    if (!s) return R.vorStart ? { titel: "Vor dem Studium", text: `Studienbeginn ${relativ(tage(t, R.sems[0].sb))}` } : { titel: "Regelstudienzeit vorbei", text: "" };
-    const pause = D.pausen.find((p) => p.von <= t && t <= p.bis);
-    const phase = D.phasen.find((p) => p.von <= t && t <= p.bis);
-    const teile = [];
-    let phaseText;
-    // Eine Regel für alle Seiten: ctx.modell.woche() (Vorlesungswochen ohne Pausenwochen); ohne Modell die alte Rechnung
+    if (!s) return "";
     const W = M() ? M().woche(isoVon(t)) : null;
-    if (W && W.art) {
-      if (W.art === "vorlesung") {
-        phaseText = `Vorlesungswoche ${W.nr} von ${W.gesamt}`;
-        teile.push(`Vorlesungswoche <b data-zahl="${W.nr}">${W.nr}</b> von ${W.gesamt}` + (W.phase ? " · Prüfungsphase" : ""));
-        teile.push(`noch <b data-zahl="${tage(t, s.ve)}">${tage(t, s.ve)}</b> Tage Vorlesungszeit`);
-      } else if (W.art === "pause") { phaseText = W.pause.name; teile.push(esc(W.text)); }
-      else if (W.art === "pruefung") { phaseText = `Prüfungsphase (${W.phase.art})`; teile.push(esc(W.text) + (W.phase.status === "geschätzt" ? " (geschätzt)" : "")); }
-      else if (W.art === "vor") { phaseText = "vor der Vorlesungszeit"; teile.push(esc(W.text)); }
-      else { phaseText = "vorlesungsfrei"; const n = R.sems[R.cur + 1]; teile.push(n?.vb ? `vorlesungsfrei · nächste Vorlesungen ab ${dm(n.vb)}` : "vorlesungsfrei"); }
-    }
-    else if (pause) { phaseText = pause.name; teile.push(`${pause.name} bis ${dm(pause.bis)}`); }
-    else if (phase) { phaseText = `Prüfungsphase (${phase.art})`; teile.push(`Prüfungsphase bis ${dm(phase.bis)}${phase.geschaetzt ? " (geschätzt)" : ""}`); }
-    else if (s.vb && s.ve && t >= s.vb && t <= s.ve) {
-      const w = Math.floor(tage(s.vb, t) / 7) + 1, W = Math.ceil((tage(s.vb, s.ve) + 1) / 7);
-      phaseText = `Vorlesungswoche ${w} von ${W}`;
-      teile.push(`Vorlesungswoche <b data-zahl="${w}">${w}</b> von ${W}`);
-      teile.push(`noch <b data-zahl="${tage(t, s.ve)}">${tage(t, s.ve)}</b> Tage Vorlesungszeit`);
-    } else if (s.vb && t < s.vb) { phaseText = "vor der Vorlesungszeit"; teile.push(`Vorlesungen beginnen ${relativ(tage(t, s.vb))}`); }
-    else { phaseText = "vorlesungsfrei"; const n = R.sems[R.cur + 1]; if (n?.vb) teile.push(`vorlesungsfrei · nächste Vorlesungen ab ${dm(n.vb)}`); else teile.push("vorlesungsfrei"); }
-    const offen = s.fest.filter((m) => !m.fertig);
-    if (offen.length) {
-      const klausuren = offen.every((m) => /klausur/i.test(m.pruefung));
-      const wort = klausuren ? ["Klausur", "Klausuren"] : ["Prüfung", "Prüfungen"];
-      const dat = offen.filter((m) => m.klausur && m.klausur >= t).sort((a, b) => a.klausur - b.klausur);
-      const monate = new Set(offen.map((m) => (m.klausur ? m.klausur.getMonth() : -1)));
-      let txt = `<b data-zahl="${offen.length}">${offen.length}</b> ${offen.length === 1 ? wort[0] : wort[1]}`;
-      if (dat.length === offen.length && monate.size === 1) txt += ` im ${MONLANG[dat[0].klausur.getMonth()]}`;
-      else if (dat.length) txt += `, die erste am ${dm(dat[0].klausur)}`;
-      else txt += ", Termine folgen";
-      teile.push(txt);
-    } else if (s.fest.length) teile.push("alle Prüfungen dieses Semesters bestanden");
-    return { titel: `${s.fs}. Fachsemester`, sem: s.name, text: teile.join(" · "), phase: phaseText, woche: W };
+    if (W && W.art) return W.art === "vorlesung" ? `Vorlesungswoche ${W.nr} von ${ca(s)}${W.gesamt}` : "";
+    if (D.pausen.some((p) => p.von <= t && t <= p.bis) || D.phasen.some((p) => p.von <= t && t <= p.bis)) return "";
+    if (!s.vb || !s.ve || t < s.vb || t > s.ve) return "";
+    return `Vorlesungswoche ${Math.floor(tage(s.vb, t) / 7) + 1} von ${ca(s)}${Math.ceil((tage(s.vb, s.ve) + 1) / 7)}`;
   };
   // Band eines Semesters: Vorlesungszeit, vorlesungsfrei, Pausen, Prüfungsphasen (mit Beschriftung, wenn Platz ist)
   const band = (D, s, R, beschriftet) => {
@@ -214,9 +198,10 @@ module.exports = function (ctx) {
       return `<span class="eba-vl-b ${cls}" style="left:${pct(l)};width:${pct(r - l)}" title="${esc(title)}">${beschriftet && label ? `<i>${esc(label)}</i>` : ""}</span>`;
     };
     let h = "";
-    if (s.vb && s.ve) h += teil(s.vb, s.ve, "vl", "Vorlesungszeit", `Vorlesungszeit ${dmy(s.vb)} – ${dmy(s.ve)}`);
-    for (const p of D.pausen) if (p.bis >= s.sb && p.von <= s.se) h += teil(p.von < s.sb ? s.sb : p.von, p.bis > s.se ? s.se : p.bis, "pause", p.name, `${p.name} ${dm(p.von)} – ${dm(p.bis)}`);
-    for (const p of D.phasen) if (p.bis >= s.sb && p.von <= s.se) h += teil(p.von < s.sb ? s.sb : p.von, p.bis > s.se ? s.se : p.bis, "pruef" + (p.geschaetzt ? " geschaetzt" : ""), "Prüfungen", `${p.art} ${dm(p.von)} – ${dm(p.bis)}${p.geschaetzt ? " (geschätzt)" : ""}`);
+    const gk = (o) => (o.geschaetzt ? " geschaetzt" : "");
+    if (s.vb && s.ve) h += teil(s.vb, s.ve, "vl" + gk(s), "Vorlesungszeit", `Vorlesungszeit ${dmy(s.vb)} – ${dmy(s.ve)}${unsicher(s)}`);
+    for (const p of D.pausen) if (p.bis >= s.sb && p.von <= s.se) h += teil(p.von < s.sb ? s.sb : p.von, p.bis > s.se ? s.se : p.bis, "pause" + gk(p), p.name, `${p.name} ${dm(p.von)} – ${dm(p.bis)}${unsicher(p)}`);
+    for (const p of D.phasen) if (p.bis >= s.sb && p.von <= s.se) h += teil(p.von < s.sb ? s.sb : p.von, p.bis > s.se ? s.se : p.bis, "pruef" + gk(p), "Prüfungen", `${p.art} ${dm(p.von)} – ${dm(p.bis)}${unsicher(p)}`);
     const t = R.t;
     const weg = s.se < t ? 1 : s.sb > t ? 0 : x(new Date(+t + 864e5 / 2));
     if (weg > 0) h += `<span class="eba-vl-weg" style="--w:${pct(weg)};--v:${(s.i * 0.18).toFixed(2)}s"></span>`;
@@ -224,7 +209,7 @@ module.exports = function (ctx) {
   };
 
   // ---------- Reise: Kennzahlen für den Kopf ----------
-  const reiseDaten = (D, R, L) => {
+  const reiseDaten = (R) => {
     const t = R.t, s0 = R.sems[0], sn = R.sems[R.sems.length - 1];
     const gesamt = tage(s0.sb, sn.se) + 1;
     const tagNr = Math.max(0, Math.min(gesamt, tage(s0.sb, t) + 1));
@@ -235,28 +220,9 @@ module.exports = function (ctx) {
     if (R.ects > 0 && fertigSem > 0) {
       const tempo = R.ects / fertigSem, n = Math.ceil(180 / tempo);
       prognose = n <= R.sems.length ? `im Plan · Abschluss ${esc(sn.name)}` : `bei ${Math.round(tempo)} ECTS je Semester ca. ${n} Semester`;
-    } else prognose = `Regelstudienzeit · Abschluss ${dmy(sn.se)}`;
+    } else prognose = `Regelstudienzeit · Abschluss ${ca(sn)}${dmy(sn.se)}`;
     const naechsterMs = R.ms.find((m) => m.datum >= t && !m.ok && m.art !== "ziel");
-    // Motivierender Satz aus der Lage (nur echte Daten)
-    const s = R.sems[R.cur];
-    let spruch = "";
-    if (R.vorStart) spruch = "Bald geht es los.";
-    else if (R.nachEnde) spruch = "Regelstudienzeit vorbei.";
-    else if (s) {
-      const ph = L.phase || "";
-      const m = ph.match(/Vorlesungswoche (\d+) von (\d+)/);
-      if (m) {
-        const w = +m[1], W = +m[2];
-        spruch = w <= 2 ? "der Anfang ist gemacht." : w >= W - 1 ? "Endspurt der Vorlesungszeit." : Math.abs(w - W / 2) <= 1 ? "Halbzeit im Semester." : "Schritt für Schritt zum Ziel.";
-        spruch = `Vorlesungswoche ${w} von ${W} – ${spruch}`;
-      } else if (L.woche && L.woche.text) {
-        // Außerhalb der Vorlesungszeit derselbe Text wie auf dem Dashboard („Weihnachtspause bis 06.01.“ …)
-        const t = L.woche.text.charAt(0).toUpperCase() + L.woche.text.slice(1);
-        spruch = `${t} – ${L.woche.art === "pruefung" ? "Schritt für Schritt." : L.woche.art === "vor" ? "bald geht es los." : "Zeit zum Durchatmen."}`;
-      } else if (/Prüfungsphase/.test(ph)) spruch = "Prüfungsphase – Schritt für Schritt.";
-      else if (ph) spruch = ph.charAt(0).toUpperCase() + ph.slice(1) + " – Zeit zum Durchatmen.";
-    }
-    return { gesamt, tagNr, rest, plan, prognose, naechsterMs, spruch };
+    return { gesamt, tagNr, rest, plan, prognose, naechsterMs };
   };
 
   // ---------- Reise: Bahn (eigene Geometrie, misst nichts im DOM, daher auch in versteckten Ansichten) ----------
@@ -314,6 +280,9 @@ module.exports = function (ctx) {
   };
 
   const MSKURZ = { "Variante wählen": "Variante", "Orientierungsprüfung": "Orientierung", "Auslandssemester": "Ausland", "Bachelorarbeit": "Bachelorarbeit", "Abschluss B.Sc.": "B.Sc." };
+  // Beschriftung unter der Station: vorbei und jetzt „x / 30 ECTS“ (jetzt, breit: dazu „· n geplant“), später nur „n geplant“
+  // oder „offen“ – der Ring zeigt den Plan ohnehin, und sechsmal „0 / 30 ECTS“ sagt nichts
+  const stEcts = (s, schmal) => (s.vorbei || s.jetzt ? `${s.ist} / 30 ECTS${!schmal && s.jetzt && s.plan && s.plan !== s.ist ? ` · ${s.plan} geplant` : ""}` : s.plan ? `${s.plan} geplant` : "offen");
   const strasse = (D, R, B, sel) => {
     const f = (v) => v.toFixed(1);
     const n = R.sems.length;
@@ -331,7 +300,7 @@ module.exports = function (ctx) {
     const fz = B.schmal ? 9.5 : 11;
     R.sems.forEach((s, i) => {
       const q = B.at(B.K[i]), unten = B.schmal || i % 2 === 1;
-      const lang = s.plan && s.plan !== s.ist && !B.schmal ? 24 : 11;
+      const lang = Math.max(kurzSem(s.name).length, stEcts(s, B.schmal).length);
       belegt.push([q[0], unten ? q[1] + 38 : q[1] - 34, Math.max(50, lang * fz * 0.56), 26]);
       belegt.push([q[0], q[1], 30, 30]);
     });
@@ -384,18 +353,18 @@ module.exports = function (ctx) {
         + (ist ? `<circle class="ist" r="11" pathLength="100" style="stroke-dasharray:${f(ist)} 100"/>` : "")
         + `<text class="nr" y="4">${s.fs}</text></g>`
         + `<text class="eba-vl-stname" x="${f(x)}" y="${f(ly)}">${esc(kurzSem(s.name))}</text>`
-        + `<text class="eba-vl-stects" x="${f(x)}" y="${f(ly + (B.schmal ? 12 : 14))}">${s.ist} / 30 ECTS${!B.schmal && s.plan && s.plan !== s.ist ? ` · ${s.plan} geplant` : ""}</text>`
+        + `<text class="eba-vl-stects" x="${f(x)}" y="${f(ly + (B.schmal ? 12 : 14))}">${stEcts(s, B.schmal)}</text>`
         + `</g>`;
     });
     // Ziel: Doktorhut
     const [gx, gy] = B.at(B.L);
     const sn = R.sems[n - 1];
     const gunten = B.schmal || n % 2 === 1;
-    h += `<g class="eba-vl-ziel${R.ects >= 180 ? " ok" : ""}"><title>Abschluss B.Sc. · ${dmy(sn.se)} · 180 ECTS</title><g class="eba-vl-knoten" style="--v:${(0.3 + n * 0.16).toFixed(2)}s" transform="translate(${f(gx)} ${f(gy)})">`
+    h += `<g class="eba-vl-ziel${R.ects >= 180 ? " ok" : ""}"><title>Abschluss B.Sc. · ${ca(sn)}${dmy(sn.se)} · 180 ECTS${unsicher(sn)}</title><g class="eba-vl-knoten" style="--v:${(0.3 + n * 0.16).toFixed(2)}s" transform="translate(${f(gx)} ${f(gy)})">`
       + `<circle class="hof" r="21"/><circle class="grund" r="16"/>`
       + `<path class="hut" d="M-10 -3L0 -8L10 -3L0 2Z"/><path class="hut" d="M-5.5 0V4.5Q0 8 5.5 4.5V0L0 2.5Z"/><path class="quaste" d="M10 -3V4"/></g>`
       + `<text class="eba-vl-stname" x="${f(gx)}" y="${f(gunten ? gy + 35 : gy - 39)}">B.Sc.</text>`
-      + `<text class="eba-vl-stects" x="${f(gx)}" y="${f(gunten ? gy + 35 + (B.schmal ? 12 : 14) : gy - 25)}">${dmy(sn.se)}</text></g>`;
+      + `<text class="eba-vl-stects" x="${f(gx)}" y="${f(gunten ? gy + 35 + (B.schmal ? 12 : 14) : gy - 25)}">${ca(sn)}${dmy(sn.se)}</text></g>`;
     // Du bist hier: Nadel mit Puls
     if (!R.nachEnde) {
       const [px, py] = B.at(heuteS);
@@ -411,63 +380,31 @@ module.exports = function (ctx) {
     return h + `</svg>`;
   };
 
-  // Semester-Puls: jede Woche des laufenden Semesters eine Perle
-  const perlen = (D, R) => {
-    const s = R.sems[R.cur];
-    if (!s) return "";
-    const t = R.t;
-    const mo = new Date(s.sb); mo.setDate(mo.getDate() - ((mo.getDay() + 6) % 7));
-    const im = (a, b, von, bis) => von && bis && a <= bis && b >= von;
-    // Nummern der Vorlesungswochen aus dem Datenmodell (dieselbe Regel wie „Vorlesungswoche X von Y“)
-    const nummer = {};
-    if (M() && s.vb && s.ve) for (const w of M().vorlesungswochen({ vb: isoVon(s.vb), ve: isoVon(s.ve) }).wochen) nummer[w.mo] = w.nr;
-    let h = "", i = 0, W = 0;
-    for (let a = new Date(mo); a <= s.se; a = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 7), i++) {
-      const b = new Date(a.getFullYear(), a.getMonth(), a.getDate() + 6);
-      const pause = D.pausen.find((p) => p.von <= a && p.bis >= new Date(+b - 2 * 864e5));
-      const phase = D.phasen.find((p) => im(a, b, p.von, p.bis));
-      let art = "frei";
-      if (phase) art = "pruef" + (phase.geschaetzt ? " geschaetzt" : "");
-      else if (pause) art = "pause";
-      else if (im(a, b, s.vb, s.ve)) { art = "vl"; W++; }
-      const zeit = b < t ? " vorbei" : a <= t ? " jetzt" : "";
-      const nr = isoVon(a) in nummer ? nummer[isoVon(a)] : art === "vl" ? W : 0;
-      const vw = nr ? ` · Vorlesungswoche ${nr}` : "";
-      const titel = `${dm(a)} – ${dm(b)} · ${art === "vl" ? `Vorlesungswoche ${nr}` : art === "pause" ? pause.name : /pruef/.test(art) ? phase.art + (phase.geschaetzt ? " (geschätzt)" : "") + vw : "vorlesungsfrei"}`;
-      const mon = a.getDate() <= 7 ? `<em>${MON[a.getMonth()]}</em>` : "";
-      h += `<span class="eba-vl-perle ${art}${zeit}" style="--i:${i}" title="${esc(titel)}">${mon}</span>`;
-    }
-    return `<div class="eba-vl-puls" aria-hidden="true">${h}</div>`;
-  };
+  // Posten der Bilanz: Zahl im Satz („60 von 180 ECTS“), kleine Grafik, Zeile darunter – keine Kästen in der Karte
+  const posten = (z, s, p, grafik) => `<div class="eba-vl-posten"${p ? ` data-pfad="${esc(p)}" role="link" tabindex="0"` : ""}><span class="z">${z}</span>${grafik || ""}<span class="s">${s}</span></div>`;
 
-  const kachel = (k, v, s, p, balken) => `<div class="eba-vl-kachel"${p ? ` data-pfad="${esc(p)}" role="link" tabindex="0"` : ""}><span class="k">${k}</span><span class="v">${v}</span>${balken || ""}<span class="s">${s}</span></div>`;
-
-  const reise = (D, R, L, sel) => {
-    const Z = reiseDaten(D, R, L);
+  const reise = (D, R, sel) => {
+    const Z = reiseDaten(R);
     const s = R.sems[R.cur];
     // Kopfzeile
     const ort = s ? `${s.fs}. Fachsemester · ${esc(s.name)}` : R.vorStart ? "Vor dem Studium" : "Nach der Regelstudienzeit";
     let gross, unter;
     if (R.vorStart) { const d = tage(R.t, R.sems[0].sb); gross = `Noch <b data-zahl="${d}">${d}</b> Tage`; unter = `bis zum Studienbeginn am ${dmy(R.sems[0].sb)}`; }
     else if (R.nachEnde) { gross = `<b data-zahl="${R.ects}">${R.ects}</b> ECTS`; unter = "Regelstudienzeit abgeschlossen"; }
-    else { gross = `Tag <b data-zahl="${Z.tagNr}">${Z.tagNr}</b>`; unter = `von ${Z.gesamt} · noch ${Z.rest} Tage bis zum B.Sc.`; }
+    else { const sn = R.sems[R.sems.length - 1]; gross = `Tag <b data-zahl="${Z.tagNr}">${Z.tagNr}</b>`; unter = `von ${ca(sn)}${Z.gesamt} · noch ${ca(sn)}${Z.rest} Tage bis zum B.Sc.`; }
+    // Kopf ohne Kennzeichen „Du bist hier“: das sagt die Nadel auf der Bahn
     let h = `<div class="eba-vl-reise">`
-      + `<div class="eba-vl-oben"><span class="eba-vl-hier"><i></i>Du bist hier</span><span class="eba-vl-ort">${ort}</span></div>`
+      + `<div class="eba-vl-ort">${ort}</div>`
       + `<div class="eba-vl-tag"><span class="gross">${gross}</span><span class="unter">${unter}</span></div>`
-      + (Z.spruch ? `<p class="eba-vl-spruch">${esc(Z.spruch)}</p>` : "")
       + `<div class="eba-vl-bahn">${strasse(D, R, bahnBreit(R.sems.length), sel)}${strasse(D, R, bahnSchmal(R.sems.length), sel)}</div>`;
-    // Semester-Puls
-    if (s) {
-      const vlText = s.vb && s.ve && R.t <= s.ve ? (R.t < s.vb ? `Vorlesungen ab ${dm(s.vb)}` : `noch <b>${tage(R.t, s.ve)}</b> Tage Vorlesungszeit`) : "Vorlesungszeit vorbei";
-      h += `<div class="eba-vl-pulskopf"><span class="k">Semester-Puls · ${esc(s.name)}</span><span>${vlText}</span></div>${perlen(D, R)}`;
-    }
-    // Kacheln (Nächste Prüfung und Notenschnitt stehen auf dem Dashboard)
+    // Bilanz: ECTS und Orientierungsprüfung in einer Zeile (Nächste Prüfung und Notenschnitt stehen auf dem Dashboard)
     const ectsBalken = `<span class="eba-vl-mini"><i class="plan" style="width:${pct(Math.min(1, Z.plan / 180))}"></i><i class="ist" style="width:${pct(Math.min(1, R.ects / 180))}"></i></span>`;
-    let k = kachel("ECTS", `<b data-zahl="${R.ects}">${R.ects}</b><small> / 180</small>`, `${Z.plan} eingeplant`, null, ectsBalken);
     const s4 = R.sems.find((x) => x.fs === 4);
     const op = `<span class="eba-vl-op">${[0, 1, 2, 3].map((i) => `<i class="${i < R.op ? "ok" : ""}"></i>`).join("")}</span>`;
-    k += kachel("Orientierungsprüfung", `<b>${R.op}</b><small> / 4</small>`, s4 ? `bis ${dmy(s4.se)}` : "Frist offen", null, op);
-    h += `<div class="eba-vl-kacheln">${k}</div>`;
+    h += `<div class="eba-vl-bilanz">`
+      + posten(`<b data-zahl="${R.ects}">${R.ects}</b> von 180 ECTS`, `${Z.plan} eingeplant`, "Studium/Noten & ECTS.md", ectsBalken)
+      + posten(`<b>${R.op}</b> von 4 bestanden`, `Orientierungsprüfung${s4 ? ` bis ${ca(s4)}${dmy(s4.se)}` : ""}`, null, op)
+      + `</div>`;
     // Fuß: nächster Meilenstein, Prognose
     const m = Z.naechsterMs;
     h += `<div class="eba-vl-fuss">`
@@ -485,27 +422,47 @@ module.exports = function (ctx) {
       mon += `<span style="left:${pct(b.x(d))}">${MON[d.getMonth()]}${d.getMonth() === 0 ? ` ${String(d.getFullYear()).slice(2)}` : ""}</span>`;
     }
     const f = R.pruef.filter((p) => p.datum >= s.sb && p.datum <= s.se);
+    // Klausur (für „n Klausuren“ im Gruppen-Fähnchen): Modulprüfung, deren Prüfungsform keine andere nennt; Zwischentests nicht
+    const klausur = (p) => (p.art === "klausur" || !!p.haupt) && !(p.modul && p.modul.pruefung && !/klausur/i.test(p.modul.pruefung));
     const fl = f.map((p) => {
       const d = tage(R.t, p.datum);
       const next = R.naechste === p;
       const txt = esc(p.label) + (next ? ` · ${d === 0 ? "heute" : d === 1 ? "morgen" : `${d} T.`}` : "");
       const cls = `eba-vl-fahne ${p.art}${p.erledigt ? " erledigt" : ""}${p.datum < R.t ? " vorbei" : ""}${next ? " naechste" : ""}${p.geschaetzt ? " geschaetzt" : ""}`;
-      return { x: b.x(new Date(+p.datum + 864e5 / 2)), html: `<span class="${cls}" data-pfad="${esc(p.pfad)}" title="${esc(p.titel)} · ${wdm(p.datum)}${p.datum.getFullYear()} · ${relativ(d)}"><span class="mast"></span><span class="tuch">${p.modul && p.modul.fertig ? "✓ " : ""}${txt}</span></span>` };
+      return { x: b.x(new Date(+p.datum + 864e5 / 2)), html: `<span class="${cls}" data-pfad="${esc(p.pfad)}" data-tag="${dm(p.datum)}" data-art="${klausur(p) ? "klausur" : "test"}" title="${esc(p.titel)} · ${wdm(p.datum)}${p.datum.getFullYear()} · ${relativ(d)}"><span class="mast"></span><span class="tuch">${p.modul && p.modul.fertig ? "✓ " : ""}${txt}</span></span>` };
     });
     if (s.jetzt) fl.push({ x: b.x(new Date(+R.t + 864e5 / 2)), heute: true, html: `<span class="eba-vl-fahne hier" title="Heute, ${wdm(R.t)}"><span class="mast"></span><span class="tuch">heute</span></span>` });
     fl.sort((a, c) => a.x - c.x || (a.heute ? -1 : 1));
     const fahnen = fl.map((q) => q.html.replace("<span class=\"eba-vl-fahne", `<span style="left:${pct(q.x)}" class="eba-vl-fahne`)).join("");
     const punkt = s.jetzt ? `<span class="eba-vl-hierpunkt" style="left:${pct(b.weg)}"><i></i></span>` : "";
-    const leg = (cls, txt) => `<span class="eba-vl-leg"><i class="eba-vl-b ${cls}"></i>${txt}</span>`;
-    let legende = s.vb && s.ve ? leg("vl", `Vorlesungen ${dm(s.vb)} – ${dm(s.ve)}`) : leg("", "Vorlesungszeit offen");
-    for (const p of D.pausen) if (p.bis >= s.sb && p.von <= s.se) legende += leg("pause", `${esc(p.name)} ${dm(p.von)} – ${dm(p.bis)}`);
+    // Legende: Geschätztes mit Streifen und „(geschätzt)“, der Hinweis als Tooltip; darunter die Hinweise als Zeile (auch auf Touch)
+    const leg = (cls, txt, o) => `<span class="eba-vl-leg"${o && o.geschaetzt && o.hinweis ? ` title="${esc(o.hinweis)}"` : ""}><i class="eba-vl-b ${cls}${o && o.geschaetzt ? " geschaetzt" : ""}"></i>${txt}${o && o.geschaetzt ? " (geschätzt)" : ""}</span>`;
+    let legende = s.vb && s.ve ? leg("vl", `Vorlesungen ${dm(s.vb)} – ${dm(s.ve)}`, s) : leg("", "Vorlesungszeit offen");
+    const pa = D.pausen.filter((p) => p.bis >= s.sb && p.von <= s.se);
+    for (const p of pa) legende += leg("pause", `${esc(p.name)} ${dm(p.von)} – ${dm(p.bis)}`, p);
     const ph = D.phasen.filter((p) => p.bis >= s.sb && p.von <= s.se);
-    for (const p of ph) legende += leg("pruef" + (p.geschaetzt ? " geschaetzt" : ""), `${esc(p.art)} ${dm(p.von)} – ${dm(p.bis)}${p.geschaetzt ? " (geschätzt)" : ""}`);
+    for (const p of ph) legende += leg("pruef", `${esc(p.art)} ${dm(p.von)} – ${dm(p.bis)}`, p);
     if (!ph.some((p) => /haupt/i.test(p.art) && p.von >= s.sb)) legende += leg("pruef geschaetzt", "Prüfungsphase noch offen");
+    const hinweise = []; // { text, was: [...] }: gleicher Hinweis nur einmal, davor alle Einträge, für die er gilt
+    for (const o of [s].concat(pa, ph)) {
+      if (!o.geschaetzt || !o.hinweis) continue;
+      let h = hinweise.find((x) => x.text === o.hinweis);
+      if (!h) { h = { text: o.hinweis, was: [] }; hinweise.push(h); }
+      const was = o.art ? `${o.art} ${dm(o.von)} – ${dm(o.bis)}` : o.von ? `${o.name} ${dm(o.von)} – ${dm(o.bis)}` : o.name; // wie in der Legende
+      if (h.was.indexOf(was) < 0) h.was.push(was);
+    }
     const hinweis = !s.module.length ? "noch nichts geplant" : s.plan < 30 && s.variante.length ? `${s.plan} geplant · Rest je nach Variante` : s.plan < 30 ? `${s.plan} geplant · Rest offen` : `${s.plan} geplant`;
+    // Laufendes Semester: Vorlesungswoche und Resttage der Vorlesungszeit (die Woche stand bis 17.10.2026 als Satz im Kopf)
+    const woche = s.jetzt ? vorlesungswoche(D, R) : "";
+    const rest = !s.jetzt ? "" : s.vb && s.ve && R.t <= s.ve ? (R.t < s.vb ? ` · Vorlesungen ab ${ca(s)}${dm(s.vb)}` : `${woche ? ` · ${woche}` : ""} · noch ${ca(s)}<b>${tage(R.t, s.ve)}</b> Tage Vorlesungszeit`) : " · Vorlesungszeit vorbei";
+    // Meilensteine dieses Semesters als Zeile: auf der Bahn tragen die Rauten ihre Erklärung nur als Tooltip (nicht auf Touch)
+    const ms = R.ms.filter((m) => m.fs === s.fs).map((m) => `<span${m.pfad ? ` data-pfad="${esc(m.pfad)}" role="link" tabindex="0"` : ""}><i class="raute${m.ok ? " ok" : ""}${m.art === "option" ? " option" : ""}"></i><b>${esc(m.titel)}</b>: ${esc(m.info)}</span>`).join("");
     return `<div class="eba-vl-lupe" data-sem="${s.i}">`
-      + `<div class="eba-vl-lkopf"><span class="eba-vl-ltitel"><span class="k">${s.jetzt ? "Dieses Semester" : s.vorbei ? "Zurückliegend" : "Vorschau"}</span>${s.fs}. Fachsemester · ${esc(s.name)}</span>`
-      + `<span class="eba-vl-lects"><b>${s.ist}</b> / 30 ECTS · ${hinweis}</span><span class="eba-vl-ldaten">${legende}</span></div>`
+      + `<div class="eba-vl-lkopf"><div class="eba-vl-ltitel"><span class="t">${s.fs}. Fachsemester · ${esc(s.name)}</span></div>`
+      + `<div class="eba-vl-lects"><b>${s.ist}</b> / 30 ECTS · ${hinweis}${rest}</div>`
+      + (ms ? `<div class="eba-vl-lms">${ms}</div>` : "")
+      + `<div class="eba-vl-ldaten">${legende}</div>`
+      + (hinweise.length ? `<div class="eba-vl-lhinweis">${hinweise.map((h) => `<span><b>${esc(h.was.join(", "))}</b> (geschätzt): ${esc(h.text)}</span>`).join("")}</div>` : "") + `</div>`
       + `<div class="eba-vl-fahnen" data-anzahl="${fl.length}">${fahnen}</div>`
       + `<div class="eba-vl-lband">${b.html}${punkt}</div>`
       + `<div class="eba-vl-monate">${mon}</div>`
@@ -545,7 +502,9 @@ module.exports = function (ctx) {
     const zus = s.module.filter((m) => m.art === "zusatz");
     const varr = s.variante;
     let h = `<div class="eba-vl-module">`;
-    if (!fest.length && !varr.length && !zus.length) h += `<div class="eba-vl-leer">Noch keine Module für ${esc(s.name)} geplant (offen). Schwerpunktmodule wählst du im <span class="eba-vl-link" data-pfad="Studium/Schwerpunkt-Planer.md">Schwerpunkt-Planer</span>.</div>`;
+    // Verweis auf den Abschnitt „Schwerpunkte“ (schwerpunkte.js) nur, wenn er zu sehen ist (ab dem 2. Fachsemester oder mit Plan)
+    const sp = ctx.schwerpunkte && ctx.schwerpunkte.sichtbar && ctx.schwerpunkte.sichtbar();
+    if (!fest.length && !varr.length && !zus.length) h += `<div class="eba-vl-leer">Noch keine Module für ${esc(s.name)} geplant (offen).${sp ? ` Schwerpunktmodule findest du unter <span class="eba-vl-link" data-pfad="Studium/Studienverlauf.md#Schwerpunkte">Schwerpunkte</span>.` : ""}</div>`;
     h += fest.map((m) => modulZeile(R, m)).join("");
     if (varr.length) {
       const e = varr.reduce((a, m) => a + m.ects, 0);
@@ -555,18 +514,50 @@ module.exports = function (ctx) {
     h += zus.map((m) => modulZeile(R, m)).join("");
     return h + `</div>`;
   };
+  // Fähnchen der Lupe ohne Überlappung. Prüfungen, deren Beschriftungen sich überschneiden würden (typisch die fünf Klausuren
+  // der Prüfungsphase), werden zu einem Fähnchen „n Klausuren 30.01.–12.02.“ zusammengefasst statt zu einem Turm gestapelt;
+  // Einzelheiten stehen im Tooltip und in der Modulliste. „heute“ bleibt eigen. Was dann noch kollidiert, rückt eine Stufe
+  // höher. Braucht echte Pixelbreite (ResizeObserver), läuft bei jeder Größenänderung neu und räumt vorher auf.
+  const aufdecken = (lane) => { for (const g of lane.querySelectorAll(".eba-vl-fahne.gruppe")) g.remove(); for (const f of lane.querySelectorAll(".eba-vl-fahne")) f.classList.remove("verdeckt"); };
   const stapeln = (lane) => {
+    // Fehler hier wären stumm (ResizeObserver): dann lieber alle Fähnchen einzeln zeigen als gar keine
+    try { stapelnRoh(lane); } catch (e) { console.error("Verlauf: Fähnchen", e); aufdecken(lane); }
+  };
+  const stapelnRoh = (lane) => {
     const W = lane.clientWidth;
     if (!W) return;
     const STUFE = 19, LUFT = 6;
+    aufdecken(lane);
+    const alle = [...lane.querySelectorAll(".eba-vl-fahne")];
+    const x = (f) => (parseFloat(f.style.left) / 100) * W;
+    const w = (f) => f.querySelector(".tuch").offsetWidth;
+    const gruppen = [];
+    for (const f of alle.filter((e) => !e.classList.contains("hier")).sort((a, b) => x(a) - x(b))) {
+      const g = gruppen[gruppen.length - 1];
+      if (g && x(f) < g.ende + LUFT) { g.liste.push(f); g.ende = Math.max(g.ende, x(f) + w(f)); }
+      else gruppen.push({ liste: [f], ende: x(f) + w(f) });
+    }
+    const sichtbar = alle.filter((e) => e.classList.contains("hier"));
+    for (const g of gruppen) {
+      if (g.liste.length < 2) { sichtbar.push(g.liste[0]); continue; }
+      const l = g.liste, n = l.length;
+      for (const f of l) f.classList.add("verdeckt");
+      const e = lane.ownerDocument.createElement("span");
+      e.className = "eba-vl-fahne gruppe" + (l.some((f) => f.classList.contains("naechste")) ? " naechste" : "")
+        + (l.every((f) => f.classList.contains("vorbei")) ? " vorbei" : "") + (l.every((f) => f.classList.contains("erledigt")) ? " erledigt" : "");
+      e.style.left = l[0].style.left;
+      e.title = l.map((f) => f.title).join("\n");
+      e.innerHTML = `<span class="mast"></span><span class="tuch">${n} ${l.every((f) => f.dataset.art === "klausur") ? "Klausuren" : "Prüfungen"} ${esc(l[0].dataset.tag)}–${esc(l[n - 1].dataset.tag)}</span>`;
+      lane.appendChild(e);
+      sichtbar.push(e);
+    }
+    sichtbar.sort((a, b) => x(a) - x(b) || (a.classList.contains("hier") ? -1 : 1));
     const enden = [];
     let max = 0;
-    for (const f of lane.querySelectorAll(".eba-vl-fahne")) {
-      const tuch = f.querySelector(".tuch");
-      const w = tuch.offsetWidth;
-      const x = (parseFloat(f.style.left) / 100) * W;
-      const links = x + w > W - 2;
-      const a = links ? x - w : x, b = links ? x : x + w;
+    for (const f of sichtbar) {
+      const tw = w(f), fx = x(f);
+      const links = fx + tw > W - 2;
+      const a = links ? fx - tw : fx, b = links ? fx : fx + tw;
       let st = 0;
       while (st < enden.length && enden[st] > a - LUFT) st++;
       enden[st] = b;
@@ -574,7 +565,7 @@ module.exports = function (ctx) {
       f.style.setProperty("--stufe", st);
       max = Math.max(max, st);
     }
-    lane.style.height = lane.querySelector(".eba-vl-fahne") ? `${(max + 1) * STUFE + 8}px` : "4px";
+    lane.style.height = sichtbar.length ? `${(max + 1) * STUFE + 8}px` : "4px";
   };
 
   const zaehlen = (root) => {
@@ -613,12 +604,11 @@ module.exports = function (ctx) {
     const el = inst.el;
     if (!D.sems.length) { el.innerHTML = `<div class="eba-vl eba-vl-fehlt">Studienverlauf: In System/Einstellungen.md fehlt die semesterliste.</div>`; return; }
     const R = rechnen(D);
-    const L = lage(D, R);
     const z = inst.zustand;
     const std = R.cur >= 0 ? R.cur : R.vorStart ? 0 : R.sems.length - 1;
     const sel = z.sel === undefined || z.sel === null || !R.sems[z.sel] ? std : z.sel;
     const anim2 = anim && !ruhig();
-    el.innerHTML = `<div class="eba-vl${anim2 ? " eba-vl-anim" : ""}" lang="de">${reise(D, R, L, sel)}${lupe(D, R, R.sems[sel])}</div>`;
+    el.innerHTML = `<div class="eba-vl${anim2 ? " eba-vl-anim" : ""}" lang="de">${reise(D, R, sel)}${lupe(D, R, R.sems[sel])}</div>`;
     const root = el.firstElementChild;
     inst.tag = +R.t;
     // Bedienung: Station wählt das Semester der Lupe, Module/Prüfungen öffnen die Notiz
@@ -682,5 +672,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alleNeu(true); });
   };
 
-  return { registrieren, rendern, alleNeu };
+  return { registrieren, rendern, alleNeu, rechnen }; // rechnen für tests/verlauf.test.js
 };

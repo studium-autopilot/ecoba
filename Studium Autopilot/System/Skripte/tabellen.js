@@ -7,7 +7,8 @@
 // Ein/aus nur per CSS: die Liste entsteht nur, wo die Variable --eba-tliste: 1 gilt (eba-core.css
 // Abschnitt 37: body.is-phone .callout[data-callout="eba-tabelle"]); dort blendet das CSS Tabellenkopf, Zeilen und
 // Summenzeile aus. PC/iPad: Variable fehlt, nichts geändert. Ausnahme per Karte: [!eba-tabelle|handy-tabelle].
-// Werte nur lesen; Kontrollkästchen (z. B. Nachgearbeitet) bleiben antippbar und schreiben ins Frontmatter.
+// Werte nur lesen; Kontrollkästchen (z. B. Nachgearbeitet) bleiben antippbar und schreiben ins Frontmatter, erscheinen aber
+// nur bei Notizen, die das Feld haben. Modulseiten zeigen die Liste auch auf iPad/PC (eba-core.css Abschnitt 58).
 // Erweiterung: registrieren() erweitert die Tabellenansicht (Fabrik und Prototyp, Merker __ebaTl/__ebaTlPatch), abmelden()
 // nimmt das beim Hot-Reload und beim Entladen des Plugins vollständig zurück. Post-Processor über ctx.postprozessor.
 // Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“), sonst
@@ -164,6 +165,9 @@ module.exports = function (ctx) {
             let art = null;
             try { const ti = app.metadataTypeManager.getTypeInfo(feld, e.getRawProperty?.(feld)); art = ti?.expected?.type || ti?.inferred?.type; } catch (x) {}
             if (art === "checkbox") {
+              // Nur bei Notizen, die das Feld haben (z. B. „Nachgearbeitet“ bei Vorlesungen, nicht bei Terminen in derselben Liste)
+              const fmDa = app.metadataCache.getFileCache(e.file)?.frontmatter;
+              if (!fmDa || !Object.prototype.hasOwnProperty.call(fmDa, feld)) continue;
               const w = meta.createEl("label", { cls: "eba-tl-w eba-tl-check" });
               const cb = w.createEl("input", { type: "checkbox" });
               cb.checked = String(v?.toString?.()) === "true";

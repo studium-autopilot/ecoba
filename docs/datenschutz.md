@@ -8,7 +8,7 @@ deinem Gerät bei der Uni.
 
 | Was | Woher | Wann |
 |---|---|---|
-| Zentrale Daten (Termine, Fristen, Semesterdaten) | `studium-autopilot.github.io` (GitHub Pages) | beim Start, dann etwa stündlich, solange Obsidian offen ist |
+| Zentrale Daten (Termine, Fristen, Semesterdaten) | `studium-autopilot.github.io` (GitHub Pages) | beim Start, dann alle 15 Minuten, solange Obsidian offen ist (meist nur eine kleine Datei) |
 | Dein Stundenplan | direkt von Alma (`alma.uni-tuebingen.de`) | nur wenn du Alma verbunden hast, beim Verbinden und auf Knopfdruck |
 | Deine Kursdateien | direkt von ILIAS (`ovidius.uni-tuebingen.de`), Anmeldung bei der Uni (`idp.uni-tuebingen.de`) | nur wenn du ILIAS verbunden hast: beim Start, dann etwa stündlich, solange Obsidian offen ist, und auf Knopfdruck |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Aktualisieren** oder **Was ist neu** tippst |
@@ -25,6 +25,8 @@ deinem Gerät bei der Uni.
 - **Dein ILIAS-Passwort** liegt nur im Schlüsselbund von Obsidian auf diesem Gerät, vom Betriebssystem verschlüsselt. Es
   steht in keiner Notiz, wird nicht synchronisiert und erscheint in keinem Protokoll und keiner Fehlermeldung. Auf jedem
   Gerät gibst du es selbst ein. Deinen ILIAS-Benutzernamen speichert Obsidian wie den Alma-Link nur auf diesem Gerät.
+- **Deine Karteikarten und Lernstände** sind normale Dateien in deinem Tresor (`Karteikarten/` und
+  `System/Daten/Karteikarten/`). Sie gehen nirgends hin; mit einem Sync-Dienst kommen sie auf deine anderen Geräte.
 - **Deine Angaben, Noten und Notizen** sind normale Dateien in deinem Tresor. Sie verlassen das Gerät nur, wenn du selbst einen Sync-Dienst einrichtest (dann gelten dessen Regeln).
 - **Andere Passwörter** werden nie gespeichert, auch nicht für Alma oder Mail.
 

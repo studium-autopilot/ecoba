@@ -162,9 +162,6 @@ cssclasses:
 
 ## Fürs Tutorium
 - [ ]
-
-> [!tip]- Handschriftliche Lösung
-> Auf Papier oder im PDF gerechnet? Als PDF in den \`Eingang\` legen (Name z. B. „${code} Eigene Lösung ${nn}“) und **Unterlagen einordnen**: Sie wird hier unter „eigene_loesung“ verknüpft.
 `;
     return await eba.ablegen("Übungsblätter", `${code} Blatt ${nn}`, inhalt);
   };
@@ -368,11 +365,13 @@ tags:
     const geruest = app.vault.getAbstractFileByPath("System/Gerüste/Modul.md");
     if (!geruest) throw new Error("System/Gerüste/Modul.md fehlt");
     const mitPlan = gruppe === "Schwerpunkt" || gruppe === "Profil & Vertiefung";
+    // Spalte für das Feld „anrechnung“: Schwerpunkt „Anrechnung in“ (Bereich), Profil & Vertiefung „Zählt als“ (Elective Studies)
+    const anrechnung = gruppe === "Schwerpunkt" ? "Anrechnung in" : gruppe === "Profil & Vertiefung" ? "Zählt als" : "";
     const werte = {
       code, titel, gruppe, ects: String(ects).replace(".", ","), code_url: encodeURIComponent(code),
       datum: ctx.date.now("DD.MM.YYYY"),
-      plan_eigenschaft: (mitPlan ? "\n>   formula.plan:\n>     displayName: Im Plan" : "") + (gruppe === "Schwerpunkt" ? "\n>   note.anrechnung:\n>     displayName: Anrechnung in" : ""),
-      plan_spalte: (mitPlan ? "\n>       - formula.plan" : "") + (gruppe === "Schwerpunkt" ? "\n>       - anrechnung" : ""),
+      plan_eigenschaft: (mitPlan ? "\n>   formula.plan:\n>     displayName: Im Plan" : "") + (anrechnung ? "\n>   note.anrechnung:\n>     displayName: " + anrechnung : ""),
+      plan_spalte: (mitPlan ? "\n>       - formula.plan" : "") + (anrechnung ? "\n>       - anrechnung" : ""),
     };
     const koerper = (await app.vault.read(geruest)).replace(/^<!--[\s\S]*?-->\r?\n?/, "").replace(/\{\{([a-z_]+)\}\}/g, (x, k) => (k in werte ? werte[k] : x));
     const kopf = `---

@@ -38,7 +38,7 @@ cssclasses:
 
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Weitere Module</span></div>
-<h1>SQ888 · Mathe-Vorkurs</h1>
+<h1><span class="eba-code">SQ888</span> Mathe-Vorkurs</h1>
 <p class="eba-lead">Mathematisches Propädeutikum vor Semesterbeginn: frischt die Schulmathematik auf, die S100 voraussetzt.</p>
 <div class="eba-meta"><span><b>0</b> ECTS</span><span>05.–07.10.2026</span><span>keine Prüfung</span><span>keine Anmeldung</span><span>Deutsch</span></div>
 </div>
@@ -64,12 +64,15 @@ cssclasses:
 > [!eba-tabelle] Folien, Skripte, Übungen, Altklausuren
 > ```base
 > formulas:
->   was: 'file.asLink(if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art) + if(titel, " · " + titel, ""))'
+>   was: 'file.asLink(if(titel, titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art)))'
+>   artnr: 'if(titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art), "")'
 >   oeffnen: 'html("<a class=\"eba-oeffnen\" href=\"obsidian://studium-autopilot?aktion=oeffnen&notiz=" + file.basename.replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B") + "\">Öffnen ↗</a>")'
 >   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
 > properties:
 >   formula.was:
 >     displayName: Unterlage
+>   formula.artnr:
+>     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
 >   note.status:
@@ -94,6 +97,7 @@ cssclasses:
 >       direction: ASC
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - status
 >       - formula.oeffnen
@@ -101,7 +105,8 @@ cssclasses:
 >       - property: nummer
 >         direction: ASC
 >     columnSize:
->       formula.was: 330
+>       formula.was: 250
+>       formula.artnr: 80
 >       note.seiten: 80
 >       note.status: 100
 >       formula.oeffnen: 90
@@ -114,6 +119,7 @@ cssclasses:
 >         - 'status == "neu" || !status'
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - formula.oeffnen
 >     sort:
@@ -138,7 +144,7 @@ cssclasses:
 
 ## Meine Notizen
 
-> [!eba-tabelle|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
+> [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
 > filters:
 >   and:
@@ -147,9 +153,10 @@ cssclasses:
 >     - 'typ != "unterlage"'
 > formulas:
 >   wann: 'if(faellig, faellig, datum)'
->   art: 'if(typ == "vorlesung", "Vorlesung", if(typ == "übungsblatt", "Übungsblatt", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termin", typ))))'
+>   art: 'if(typ == "vorlesung", "Vorlesungen", if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ)))))'
+>   notiz: 'file.asLink(file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(code + " ", ""))'
 > properties:
->   file.name:
+>   formula.notiz:
 >     displayName: Notiz
 >   formula.wann:
 >     displayName: Datum
@@ -166,7 +173,7 @@ cssclasses:
 >       property: formula.art
 >       direction: ASC
 >     order:
->       - file.name
+>       - formula.notiz
 >       - formula.wann
 >       - status
 >       - nachgearbeitet
@@ -174,7 +181,7 @@ cssclasses:
 >       - property: formula.wann
 >         direction: DESC
 >     columnSize:
->       file.name: 330
+>       formula.notiz: 330
 >       formula.wann: 120
 >       note.status: 110
 >       note.nachgearbeitet: 120

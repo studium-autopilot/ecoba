@@ -13,7 +13,7 @@ test("Text in Teile: fett, Links nur mit https, sonst Text", () => {
   assert.deepEqual(V.textTeile(""), []);
 });
 
-test("Alma verbinden: erst Alma, dann der Stundenplan als Link; Menüweg unter „Mehr erfahren“", () => {
+test("Alma verbinden: erst Alma, dann der Stundenplan als Link; Menüweg im Hinweis darunter", () => {
   const a = V.liste.alma;
   const links = a.schritte.map(V.textTeile).map((t) => t.filter((x) => x.art === "link").map((x) => x.href));
   assert.deepEqual(links.slice(0, 2), [[V.ALMA.start], [V.ALMA.stundenplan]]);

@@ -25,7 +25,12 @@ Studienverlauf: erscheint, sobald Studium Autopilot läuft.
 > Musterplan: erscheint, sobald Studium Autopilot läuft.
 > ```
 
-<details class="eba-mehr"><summary>Mehr erfahren</summary>Deine Reise oben legt Grund- und Profilmodule in das empfohlene Semester. Trägst du im Modul eine eigene Planung ein, gilt diese.</details>
+
+## Schwerpunkte
+
+```eba-schwerpunkte
+Schwerpunkte: erscheinen, sobald Studium Autopilot läuft.
+```
 
 
 ## Semestertermine
@@ -51,6 +56,8 @@ Studienverlauf: erscheint, sobald Studium Autopilot läuft.
 > | **Summe ECTS** | **180** | **180** | **180** |
 >
 > **Variante** (Economics, Business Administration oder ohne Spezialisierung) vor dem 3. Fachsemester wählen: Ab dann unterscheiden sich die Musterpläne. Einen Zeitpunkt legt die PO nicht fest. Festlegen unter [[Einstellungen & Hilfe#Variante|Variante]].
+>
+> **Containermodule** (z. B. E313–E315, B3X1–B3X7) haben jedes Semester ein anderes Thema; jedes zählt nur einmal.
 >
 > > [!eba-raster|2]
 > > > [!eba-regel] Orientierungsprüfung (§§ 8, 11 BT)

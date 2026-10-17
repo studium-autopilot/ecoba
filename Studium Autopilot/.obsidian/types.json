@@ -7,6 +7,7 @@
     "code": "text",
     "titel": "text",
     "titel_en": "text",
+    "kurz": "text",
     "ects": "number",
     "fachsemester": "number",
     "fs_empfohlen": "text",
@@ -44,6 +45,8 @@
     "entfaellt": "checkbox",
     "zentrale_daten": "checkbox",
     "zentrale_veranstaltungen": "checkbox",
+    "angebote_auswahl": "multitext",
+    "angebote_gewaehlt": "checkbox",
     "wochentag": "number",
     "tag": "text",
     "beginn": "text",
@@ -80,6 +83,8 @@
     "eigene_loesung": "text",
     "anbieter": "text",
     "nachweis": "text",
-    "veranstaltung": "text"
+    "veranstaltung": "text",
+    "aenderungen": "multitext",
+    "stundenplan_ausgeblendet": "multitext"
   }
 }

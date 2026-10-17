@@ -84,7 +84,7 @@ cssclasses:
 >   t: |-
 >     file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.erledigt != true)
 >   pt: |-
->     formula.t.filter(value.properties.kategorie == "Prüfung" && value.properties.datum && !value.properties.bis.isTruthy() && !(value.properties.titel && value.properties.titel.toString().lower().contains("nachhol")) && date(value.properties.datum) >= today())
+>     formula.t.filter(value.properties.kategorie == "Prüfung" && value.properties.datum && !value.properties.bis.isTruthy() && !(value.properties.titel && value.properties.titel.toString().lower().contains("nachhol")) && !(value.properties.titel && value.properties.titel.toString().lower().contains("zwischentest")) && !value.name.lower().contains("zwischentest") && date(value.properties.datum) >= today())
 >   ptk: |-
 >     formula.pt.map(value.properties.code + "|" + date(value.properties.datum).format("YYYY-MM-DD"))
 >   kl: |-
@@ -180,80 +180,7 @@ cssclasses:
 > [!eba-kennzahlen|woche kurz]
 > ```eba-schloss alma
 > ```
-> ```base
-> filters:
->   and:
->     - file.name == "Dashboard"
-> formulas:
->   c: |-
->     file("System/Einstellungen.md").properties
->   sems: |-
->     formula.c.semesterliste
->   jetzt: |-
->     formula.sems.filter(date(value.split("|")[2]) <= today() && date(value.split("|")[3]) >= today())
->   vorstart: |-
->     today() < date(formula.sems[0].split("|")[2])
->   sem: |-
->     if(formula.jetzt.length > 0, formula.jetzt[0], if(formula.vorstart, formula.sems[0], formula.sems[formula.sems.length - 1]))
->   semname: |-
->     formula.sem.split("|")[1]
->   vb: |-
->     date(formula.sem.split("|")[4])
->   ve: |-
->     date(formula.sem.split("|")[5])
->   wt: |-
->     number(today().format("E"))
->   mo: |-
->     if(formula.wt >= 6, today() + duration((8 - formula.wt) + "d"), today() - duration((formula.wt - 1) + "d"))
->   tage: |-
->     [0, 1, 2, 3, 4].map((formula.mo + duration(value + "d")).format("YYYY-MM-DD"))
->   ht: |-
->     formula.wt <= 5 && formula.tage[formula.wt - 1] == today().format("YYYY-MM-DD")
->   pz: |-
->     if(formula.c.pausen.isTruthy(), formula.c.pausen, [])
->   f0: |-
->     formula.pz.filter(date(value.split("|")[0]) <= date(formula.tage[0]) && date(value.split("|")[1]) >= date(formula.tage[0])).length > 0
->   f1: |-
->     formula.pz.filter(date(value.split("|")[0]) <= date(formula.tage[1]) && date(value.split("|")[1]) >= date(formula.tage[1])).length > 0
->   f2: |-
->     formula.pz.filter(date(value.split("|")[0]) <= date(formula.tage[2]) && date(value.split("|")[1]) >= date(formula.tage[2])).length > 0
->   f3: |-
->     formula.pz.filter(date(value.split("|")[0]) <= date(formula.tage[3]) && date(value.split("|")[1]) >= date(formula.tage[3])).length > 0
->   f4: |-
->     formula.pz.filter(date(value.split("|")[0]) <= date(formula.tage[4]) && date(value.split("|")[1]) >= date(formula.tage[4])).length > 0
->   frei: |-
->     [formula.f0, formula.f1, formula.f2, formula.f3, formula.f4]
->   pw: |-
->     formula.pz.filter(date(value.split("|")[0]) <= date(formula.tage[4]) && date(value.split("|")[1]) >= date(formula.tage[0]))
->   lv: |-
->     file("Studium/Stundenplan.md").backlinks.map(value.asFile()).filter(value.properties.typ == "lehrveranstaltung" && value.properties.semester == formula.semname && value.properties.einzeltermin != true)
->   wl: |-
->     formula.lv.filter(number(value.properties.wochentag) >= 1 && number(value.properties.wochentag) <= 5 && (!value.properties.von.isTruthy() || date(value.properties.von) <= date(formula.tage[number(value.properties.wochentag) - 1])) && (!value.properties.bis.isTruthy() || date(value.properties.bis) >= date(formula.tage[number(value.properties.wochentag) - 1])))
->   wh: |-
->     formula.wl.filter(!((value.properties.ausfall.isTruthy() && value.properties.ausfall.contains(formula.tage[number(value.properties.wochentag) - 1])) || formula.frei[number(value.properties.wochentag) - 1]))
->   leer: |-
->     if(formula.wh.length > 0, "", if(formula.pw.length > 0, formula.pw[0].split("|")[2], if(date(formula.tage[4]) < formula.vb, "Vorlesungsbeginn " + formula.vb.format("DD.MM."), if(date(formula.tage[0]) > formula.ve, "Vorlesungsfrei", "Keine Veranstaltungen"))))
->   h0: |-
->     if(formula.lv.length > 0, formula.lv.map(number(value.properties.beginn.split(":")[0])).sort()[0], 8)
->   h1: |-
->     if(formula.lv.length > 0, formula.lv.map(number(value.properties.ende.split(":")[0]) + if(number(value.properties.ende.split(":")[1]) > 0, 1, 0)).sort().reverse()[0], 18)
->   rows: |-
->     (formula.h1 - formula.h0) * 4
->   zeile: |-
->     ((497 / (formula.rows + 1)) * 100).round() / 100
->   stunden: |-
->     [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22].filter(value >= formula.h0 && value <= formula.h1).map("<span class='eba-zeit' style='grid-row:" + ((value - formula.h0) * 4 + 2) + "'>" + if(value < 10, "0", "") + value + "</span><i class='eba-linie' style='grid-row:" + ((value - formula.h0) * 4 + 2) + "'></i>").join("")
->   kopf: |-
->     ["Mo", "Di", "Mi", "Do", "Fr"].map("<div class='eba-tagkopf" + if(formula.ht && formula.wt == index + 1, " heute", "") + "' style='grid-column:" + (index + 2) + "'>" + value + "<span class='eba-tagdatum'>" + date(formula.tage[index]).format("D.M.") + "</span></div>").join("")
->   ev: |-
->     if(formula.wh.length == 0, "", formula.wl.map("<a class='eba-ev " + if(value.properties.art == "Vorlesung", "vl", "ue") + if((value.properties.ausfall.isTruthy() && value.properties.ausfall.contains(formula.tage[number(value.properties.wochentag) - 1])) || formula.frei[number(value.properties.wochentag) - 1], " ausfall", if(formula.ht && number(value.properties.wochentag) == formula.wt, " heute" + if(now().format("HH:mm") >= value.properties.beginn && now().format("HH:mm") <= value.properties.ende, " jetzt", ""), "")) + "' href='obsidian://studium-autopilot?aktion=zeigen&notiz=" + value.properties.modul.toString().replace(/^\[\[|\]\]$/g, "").replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B").replace(/ /g, "%20") + "' style='grid-column:" + (number(value.properties.wochentag) + 1) + ";grid-row:" + ((number(value.properties.beginn.split(":")[0]) - formula.h0) * 4 + (number(value.properties.beginn.split(":")[1]) / 15).floor() + 2) + " / " + ((number(value.properties.ende.split(":")[0]) - formula.h0) * 4 + (number(value.properties.ende.split(":")[1]) / 15).ceil() + 2) + "'><b>" + value.properties.titel + "</b><span>" + value.properties.beginn + "–" + value.properties.ende + " · " + value.properties.raum + "</span><em class='eba-ev-kurz'>" + value.properties.titel.split(" · ")[0] + "</em><small class='eba-ev-raum'>" + value.properties.raum + "</small></a>").join(""))
->   karte: |-
->     html("<div class='eba-woche' lang='de' style='grid-template-rows:34px repeat(" + (formula.rows + 1) + ", " + formula.zeile + "px)'>" + if(formula.ht, "<i class='eba-tagspalte' style='grid-column:" + (formula.wt + 1) + "'></i>", "") + "<div class='eba-tagkopf eba-ecke eba-kw' style='grid-column:1'>KW " + date(formula.tage[0]).format("W") + "</div>" + formula.kopf + formula.stunden + formula.ev + if(formula.leer != "", "<div class='eba-woche-leer' style='grid-row:2 / span " + formula.rows + "'><span>" + formula.leer + "</span></div>", "") + "</div>")
-> views:
->   - type: list
->     name: Kennzahlen
->     order:
->       - formula.karte
+> ```eba-woche
 > ```
 
 > [!eba-raster|2]
@@ -277,7 +204,7 @@ cssclasses:
 > >         - 'klausur'
 > >         - 'date(klausur) >= today()'
 > >         - 'date(klausur) <= today() + duration("30d")'
-> >         - '!file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.datum).map(value.properties.code + "|" + date(value.properties.datum).format("YYYY-MM-DD")).contains(code + "|" + date(klausur).format("YYYY-MM-DD"))'
+> >         - '!file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.datum && !(value.properties.titel && value.properties.titel.toString().lower().contains("zwischentest")) && !value.name.lower().contains("zwischentest")).map(value.properties.code + "|" + date(value.properties.datum).format("YYYY-MM-DD")).contains(code + "|" + date(klausur).format("YYYY-MM-DD"))'
 > > formulas:
 > >   wann: 'date(if(typ == "übungsblatt", faellig, if(typ == "modul", klausur, datum)))'
 > >   was: 'file.asLink(if(typ == "modul", "Prüfung " + code, if(typ == "übungsblatt", code + " · Blatt " + nummer, titel.toString().replace(" (ILIAS)", ""))))'
@@ -286,7 +213,8 @@ cssclasses:
 > >   tagText: 'if(typ == "übungsblatt" && formula.tage < 0, "überfällig", if(formula.tage < 0, "läuft bis " + ["So","Mo","Di","Mi","Do","Fr","Sa"][number(date(bis).format("d"))] + " " + date(bis).format("DD.MM."), if(formula.tage == 0, "Heute", if(formula.tage == 1, "Morgen", ["So","Mo","Di","Mi","Do","Fr","Sa"][number(formula.wann.format("d"))] + " " + formula.wann.format("DD.MM.")))))'
 > >   wannText: 'html("<span class=\"eba-wann" + if(formula.tage == 0 || formula.tage == 1, " eba-bald", "") + "\">" + formula.tagText + if(formula.zeit, "<span class=\"eba-uhr\"> · " + formula.zeit + "</span>", "") + "</span>")'
 > >   wie: 'if(typ == "übungsblatt" && formula.tage < 0, "überfällig", if(formula.tage < 0, "läuft bis " + date(bis).format("DD.MM."), if(formula.tage == 0, "heute", if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen"))))'
-> >   art: 'html("<span class=\"eba-pill " + if(typ == "modul" || kategorie == "Prüfung", "bad", if(typ == "übungsblatt" || kategorie == "Frist", "warn", if(kategorie == "Fachschaft", "akzent", "info"))) + if(status == "geschätzt", " leer", "") + "\">" + if(typ == "modul", "Prüfung", if(typ == "übungsblatt", "Abgabe", kategorie)) + if(bereich == "schluesselqualifikation", " · freiwillig", "") + if(status == "geschätzt", " · geschätzt", "") + "</span>")'
+> >   zt: 'typ == "termin" && kategorie == "Prüfung" && (file.name.lower().contains("zwischentest") || (titel && titel.toString().lower().contains("zwischentest")))'
+> >   art: 'html("<span class=\"eba-pill " + if(formula.zt, "info", if(typ == "modul" || kategorie == "Prüfung", "bad", if(typ == "übungsblatt" || kategorie == "Frist", "warn", if(kategorie == "Fachschaft", "akzent", "info")))) + if(status == "geschätzt", " leer", "") + "\">" + if(formula.zt, "Zwischentest", if(typ == "modul", "Prüfung", if(typ == "übungsblatt", "Abgabe", kategorie))) + if(bereich == "schluesselqualifikation", " · freiwillig", "") + if(status == "geschätzt", " · geschätzt", "") + "</span>")'
 > > properties:
 > >   formula.wannText:
 > >     displayName: Wann
@@ -366,6 +294,10 @@ cssclasses:
 
 
 ## Zu erledigen
+
+```eba-karten heute
+Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
+```
 
 > [!eba-tabelle|schlicht|handy-zu]+ Nachzuarbeiten
 > ```base

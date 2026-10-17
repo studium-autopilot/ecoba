@@ -11,7 +11,7 @@ Handy, Tablet und Computer.<br>
 
 <br>
 
-![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-1-dashboard.png)
+![Dashboard am Computer und auf dem iPhone: nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan aus Alma](docs/bilder/vorschau-dashboard-042.png)
 
 </div>
 
@@ -52,15 +52,15 @@ Hängt es irgendwo? → [Hilfe zur Installation](#hilfe-zur-installation)
 
 <table>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-dashboard.png" alt="Dashboard: Nächste Prüfung, Semester, ECTS und Notenschnitt auf einen Blick" width="100%"><br><b>Dashboard</b><br>Nächste Prüfung, Semester, ECTS und Notenschnitt auf einen Blick</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-termine.png" alt="Termine & Anmeldungen: Monatskalender, der sich von selbst aktualisiert" width="100%"><br><b>Termine & Anmeldungen</b><br>Monatskalender, der sich von selbst aktualisiert</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-dashboard-042.png" alt="Dashboard: Nächste Prüfung, Semester, ECTS und Notenschnitt auf einen Blick" width="100%"><br><b>Dashboard</b><br>Nächste Prüfung, Semester, ECTS und Notenschnitt auf einen Blick</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-termine-042.png" alt="Termine & Anmeldungen: Woche für Woche mit Fristen, Anmeldungen und Angeboten der Uni" width="100%"><br><b>Termine & Anmeldungen</b><br>Woche für Woche mit Fristen, Anmeldungen und Angeboten der Uni</td>
 </tr>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-studienverlauf.png" alt="Studienverlauf: Musterplan je Variante, Orientierungsprüfung, Meilensteine" width="100%"><br><b>Studienverlauf</b><br>Musterplan je Variante, Orientierungsprüfung, Meilensteine</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-studienverlauf-042.png" alt="Studienverlauf: Semester bis zum Abschluss, Orientierungsprüfung, Schwerpunkte nach den Regeln der PO" width="100%"><br><b>Studienverlauf</b><br>Semester bis zum Abschluss, Orientierungsprüfung, Schwerpunkte nach den Regeln der PO</td>
 <td width="50%" align="center" valign="top"><img src="docs/bilder/seite-module.png" alt="Module & Noten: 86 Module nach PO 2023, Gesamtnote und ECTS rechnen sich selbst" width="100%"><br><b>Module & Noten</b><br>86 Module nach PO 2023, Gesamtnote und ECTS rechnen sich selbst</td>
 </tr>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan.png" alt="Stundenplan: Deine Woche aus Alma, mit einem Link verbunden" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma, mit einem Link verbunden</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan-042.png" alt="Stundenplan: Deine Woche aus Alma, mit ‹ › durch alle Kalenderwochen" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma, mit ‹ › durch alle Kalenderwochen</td>
 <td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen.png" alt="Unterlagen: Vorlesungsnotizen mit einem Klick, Kursdateien aus ILIAS je Modul" width="100%"><br><b>Unterlagen</b><br>Vorlesungsnotizen mit einem Klick, Kursdateien aus ILIAS je Modul</td>
 </tr>
 </table>

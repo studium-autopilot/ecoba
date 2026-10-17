@@ -28,7 +28,7 @@
 // Schloss (seit 0.3.0): nur, wenn der Schritt in der Einrichtung übersprungen wurde oder die Einrichtung nicht fertig ist
 //   (ctx.einrichtung.almaOffen() bzw. iliasOffen(); ILIAS auch, wenn die Einrichtung aus 0.3.x ohne ILIAS-Schritt stammt), keine
 //   Daten da sind (Stundenplan bzw. Unterlagen aus ILIAS, z. B. per Sync) und dieses Gerät nicht verbunden ist. ILIAS im
-//   eigenen Uni-Abgleich (ilias.js „extern“): nie ein Schloss, Zeile ohne Knopf.
+//   eigenen Uni-Abgleich (ilias.js „extern“): nie ein Schloss; „Mehr erfahren“ führt zum Verbinden nur für die Übungsgruppen.
 // Aktionen (Knöpfe obsidian://studium-autopilot?aktion=…&id=alma): verbinden, verbindung-aktualisieren (ILIAS: uebernehmen=1
 //   lädt hier, auch wenn ein anderes Gerät gerade lädt), trennen, ilias-holen (Knopf „Aus ILIAS holen“ auf der Seite Unterlagen).
 // Hilfsfunktion für andere Skripte: ctx.verbindungen.schlossKarte(el, id) zeichnet die Schloss-Karte, gesperrt(id).
@@ -45,11 +45,20 @@ module.exports = function (ctx) {
   const alma = () => ctx.user.alma(Object.create(ctx));
   // Schloss nur für Schritte, die in der Einrichtung übersprungen wurden (einrichtung.js); ohne einrichtung.js wie früher
   const almaOffen = () => (ctx.einrichtung && ctx.einrichtung.almaOffen ? ctx.einrichtung.almaOffen() : true);
+  // Eigene Stundenplan-Notizen (Alma oder von Hand); zentrale (herkunft: zentral) und Notizen zu deiner Gruppe (ilias-gruppe,
+  // gruppe-gewaehlt) zählen nicht als „Alma-Daten“
   const stundenplanAnzahl = () => app.vault.getMarkdownFiles().filter((f) => {
     if (!f.path.startsWith("Stundenplan/")) return false;
     const c = app.metadataCache.getFileCache(f);
-    return !!(c && c.frontmatter && c.frontmatter.typ === "lehrveranstaltung");
+    return !!(c && c.frontmatter && c.frontmatter.typ === "lehrveranstaltung" && ["zentral", "ilias-gruppe", "gruppe-gewaehlt"].indexOf(String(c.frontmatter.herkunft || "")) < 0);
   }).length;
+  // Zentraler Stundenplan (zentral.js): { verfuegbar, anzahl, ohneBeginn, ausgeblendet }. Mit zentralen Vorlesungen ist Alma
+  // freiwillig: kein Schloss mehr, andere Texte.
+  const zentralerPlan = () => {
+    try { if (ctx.zentral && ctx.zentral.stundenplan) return ctx.zentral.stundenplan(); } catch (e) { /* noch nicht geladen */ }
+    return { verfuegbar: false, anzahl: 0, ohneBeginn: false, ausgeblendet: [] };
+  };
+  const ALMA_FREIWILLIG = "Deine Vorlesungen kommen von selbst, deine Übungsgruppe meist aus ILIAS, sobald du es verbindest. Alma brauchst du nur für Extras.";
   // ILIAS (ilias.js, seit 0.4.0): Schloss wie bei Alma nur für Übersprungenes (einrichtung.js); Daten = Begleitnotizen mit ilias_id
   const iliasOffen = () => (ctx.einrichtung && ctx.einrichtung.iliasOffen ? ctx.einrichtung.iliasOffen() : true);
   const iliasAnzahl = () => app.vault.getMarkdownFiles().filter((f) => {
@@ -82,8 +91,10 @@ module.exports = function (ctx) {
     alma: {
       id: "alma", name: "Alma-Stundenplan", art: "link",
       satz: "Verbinde Alma, dann siehst du hier deine Woche.",
+      // Fenster „Alma-Stundenplan verbinden“: mit zentralem Stundenplan freiwillig
+      get kurz() { return zentralerPlan().verfuegbar ? "Deine Vorlesungen kommen von selbst, deine Übungsgruppe meist aus ILIAS. Mit Alma kommen Kurse dazu, die du dort belegt hast." : ""; },
       vorschau: "woche", anreiz: "Deine Woche auf einen Blick",
-      erklaerung: "Der Link enthält kein Passwort und zeigt nur deinen Stundenplan. Er bleibt nur auf diesem Gerät, und in Alma kannst du ihn jederzeit erneuern. Den Stundenplan findest du in Alma auch unter Mein Studium → Stundenplan.",
+      erklaerung: "Der Link enthält kein Passwort und bleibt nur auf diesem Gerät; in Alma findest du ihn unter Mein Studium → Stundenplan und kannst ihn dort jederzeit erneuern.",
       // Links geprüft am 17.10.2026 (angemeldet: Seite „Stundenplan für …“ mit „Daten für iCalendar (ics) exportieren“). Ohne
       // Anmeldung zeigt der Stundenplan-Link die Anmeldung, danach aber die Startseite; darum zuerst Alma, dann der Stundenplan.
       schritte: [
@@ -98,9 +109,9 @@ module.exports = function (ctx) {
         const s = alma().status();
         return { verbunden: !!s.verbunden, seit: s.seit, stand: s.stand, daten: stundenplanAnzahl() };
       },
-      // Gesperrt nur, wenn weder ein Link auf diesem Gerät noch Stundenplan-Notizen (z. B. per Sync) da sind UND Alma in der
-      // Einrichtung offen blieb (übersprungen, „Später“ oder Einrichtung nicht fertig; einrichtung.js, seit 0.3.0)
-      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && almaOffen(); },
+      // Gesperrt nur, wenn weder ein Link auf diesem Gerät noch eigene Stundenplan-Notizen (z. B. per Sync) noch zentrale
+      // Vorlesungen da sind UND Alma in der Einrichtung offen blieb (übersprungen, „Später“ oder Einrichtung nicht fertig)
+      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && !zentralerPlan().anzahl && almaOffen(); },
       pruefen(link) { return alma().linkPruefen(link); },
       async verbinden(link) {
         const a = alma();
@@ -112,7 +123,7 @@ module.exports = function (ctx) {
       trennen() { alma().trennen(); },
     },
     // ILIAS-Unterlagen (ilias.js, seit 0.4.0): Benutzername + Passwort, Kurswahl, Dateien nach Unterlagen/. Eigenes Fenster
-    // (IliasFenster). Im eigenen Uni-Abgleich nur eine Zeile ohne Knopf, nie ein Schloss.
+    // (IliasFenster). Im eigenen Uni-Abgleich nie ein Schloss; Verbinden dort nur für die Übungsgruppen (keine Dateien).
     ilias: {
       id: "ilias", name: "ILIAS-Unterlagen", art: "anmeldung",
       satz: "Verbinde ILIAS, dann landen deine Kursdateien von selbst hier.",
@@ -124,7 +135,7 @@ module.exports = function (ctx) {
         "Kurse wählen. Kurse mit Modulcode sind schon an.",
       ],
       datenschutz: "Dein Passwort bleibt verschlüsselt auf diesem Gerät und geht nur an die Uni.",
-      erklaerung: "Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Videos und Dateien über 50 MB bleiben in ILIAS. Umbenennen ist sicher, und was du löschst, kommt nicht wieder.",
+      erklaerung: "Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen; Videos und Dateien über 50 MB bleiben in ILIAS.",
       trennenText: "Passwort und Benutzername werden auf diesem Gerät gelöscht. Deine Dateien bleiben.",
       // ctx.ilias.status() + daten (Unterlagen aus ILIAS im Vault, auch per Sync von einem anderen Gerät)
       status() {
@@ -146,7 +157,7 @@ module.exports = function (ctx) {
         "Nicht warten? **Jetzt aktualisieren** tippen.",
         "Keine Partys und Vorträge? Unten **Fachschaft & Veranstaltungen** ausschalten.",
       ],
-      erklaerung: "Studium Autopilot holt nur Daten (keine Programme) von einer öffentlichen Seite auf GitHub. Von dir wird nichts gesendet; GitHub sieht nur deine IP-Adresse, wie bei jeder Webseite. Dein Häkchen „erledigt“ und alles unter „Meine Notizen“ bleiben immer erhalten.",
+      erklaerung: "Studium Autopilot holt nur Daten von einer öffentlichen Seite auf GitHub und sendet nichts von dir; GitHub sieht nur deine IP-Adresse, wie bei jeder Webseite. „erledigt“ und alles unter „Meine Notizen“ bleiben immer erhalten.",
       status() { return ctx.zentral ? ctx.zentral.status() : { verbunden: false }; },
       gesperrt() { return false; },
       async aktualisieren() { if (ctx.zentral) await ctx.zentral.abrufen({ manuell: true }); },
@@ -160,7 +171,7 @@ module.exports = function (ctx) {
         "**Aktualisieren** tippen und bestätigen.",
         "Auf deinen anderen Geräten kommt das Update über deinen Sync. Dort nicht noch einmal tippen.",
       ],
-      erklaerung: "Neue Programmteile lädt Studium Autopilot nur nach deinem Tipp, direkt aus dem öffentlichen Projekt auf GitHub. Jede Datei wird mit einer Prüfsumme geprüft; passt etwas nicht, wird nichts geändert. Vorher legt das Update eine Sicherung an.",
+      erklaerung: "Neue Programmteile kommen nur nach deinem Tipp; jede Datei wird geprüft, und vorher entsteht eine Sicherung.",
       status() { return ctx.update ? ctx.update.status() : { verbunden: true }; },
       gesperrt() { return false; },
     },
@@ -170,7 +181,7 @@ module.exports = function (ctx) {
       satz: "Soll bald Termine in deinen Uni-Mails finden. Braucht dann Claude Code auf deinem Rechner.",
       kurz: "Der KI-Assistent soll Termine in deinen Uni-Mails finden. Er kommt bald und läuft dann mit Claude Code auf deinem Rechner, nicht in Obsidian.",
       schritte: [],
-      erklaerung: "In Obsidian gibt es dafür nichts zu verbinden. Hier wird kein Passwort gespeichert, auch nicht für deine Mails.",
+      erklaerung: "Hier wird kein Passwort gespeichert, auch nicht für deine Mails.",
       status() { return { verbunden: false }; },
       gesperrt() { return true; },
     },
@@ -222,9 +233,11 @@ module.exports = function (ctx) {
     const ol = c.createEl("ol", { cls: "eba-modal-schritte" });
     for (const s of v.schritte) fett(ol.createEl("li"), s);
   };
-  // „Mehr erfahren“: Hintergrund eingeklappt
-  const mehrZeigen = (c, text) => {
-    if (!text) return;
+  // Hintergrund in einem Satz, direkt sichtbar. Eingeklappt („Mehr erfahren“) nur, wenn darin noch etwas steht (gefaltet: der
+  // Schalter „Beta-Versionen“ bei Studium Autopilot)
+  const mehrZeigen = (c, text, gefaltet) => {
+    if (!text) return null;
+    if (!gefaltet) { c.createEl("p", { cls: "eba-modal-hinweis", text }); return null; }
     const d = c.createEl("details", { cls: "eba-modal-mehr" });
     d.createEl("summary", { text: "Mehr erfahren" });
     d.createEl("p", { text });
@@ -248,6 +261,22 @@ module.exports = function (ctx) {
     zeile("Zentrale Daten", "Aus: Es kommen keine neuen Termine. Vorhandene bleiben.", st.an, "daten", (neu) => { if (tVer) tVer.setDisabled(!neu); });
     zeile("Fachschaft & Veranstaltungen", "Partys, Vorträge und Infoabende.", st.veranstaltungen, "veranstaltungen");
     if (tVer) tVer.setDisabled(!st.an);
+    ausgeblendetZeigen(c);
+  };
+  // „Besuche ich nicht“ zurücknehmen (zentraler Stundenplan): nur, wenn etwas ausgeblendet ist
+  const ausgeblendetZeigen = (c) => {
+    const ids = zentralerPlan().ausgeblendet;
+    if (!ids.length || !ctx.zentral) return;
+    c.createEl("p", { cls: "eba-modal-abschnitt", text: "Nicht in deinem Stundenplan" });
+    const box = c.createDiv({ cls: "eba-modal-schalter eba-modal-ausgeblendet" });
+    for (const id of ids) {
+      const zeile = new ctx.obsidian.Setting(box).setName(ctx.zentral.lehreName(id));
+      zeile.addButton((k) => k.setButtonText("Wieder zeigen").onClick(async () => {
+        k.setDisabled(true);
+        await ctx.aktion("wieder-zeigen", { id });
+        zeile.settingEl.remove();
+      }));
+    }
   };
 
   // Erklärung ohne Eingabe (KI-Assistent, zentrale Daten mit Schaltern, Studium Autopilot)
@@ -262,7 +291,7 @@ module.exports = function (ctx) {
       if (v.kurz) fett(this.contentEl.createEl("p", { cls: "eba-modal-text" }), v.kurz);
       schritteZeigen(this.contentEl, v);
       if (v.art === "zentral") zentralSchalter(this.contentEl);
-      const mehr = mehrZeigen(this.contentEl, v.erklaerung);
+      const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
       // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
       const k = this.contentEl.createDiv({ cls: "modal-button-container" });
@@ -343,7 +372,8 @@ module.exports = function (ctx) {
   // ILIAS-Unterlagen (seit 0.4.0): ein Fenster für alles; zeigen() zeichnet es je nach Stand neu.
   //   Nicht verbunden oder Anmeldung abgelehnt: Satz, Schritte, Benutzername, Passwort, Datenschutz-Zeile, Meldung, Verbinden.
   //   Verbunden: Stand, Kurse mit Schaltern, Jetzt holen (bzw. Hier laden), Trennen. Während eines Abrufs statt dessen der
-  //   Fortschritt („Lädt 12 von 40“), ein Satz, dass er im Hintergrund weiterläuft, Schließen und Stoppen.
+  //   Fortschritt („Lädt 12 von 40“), ein Satz, dass das Fenster zu darf, Obsidian aber offen bleiben muss (iPhone/iPad halten
+  //   es im Hintergrund an; beim nächsten Öffnen geht es weiter), Schließen und Stoppen.
   //   Nach dem ersten Verbinden startet der erste Abruf gleich (wie Jetzt holen), wenn ein Kurs an ist.
   //   Eigener Uni-Abgleich, Obsidian zu alt (kein Schlüsselbund) oder Anmeldebaustein fehlt: nur ein Satz.
   // Passwort – steht nur im Feld (type=password). zugangSpeichern bekommt eine Funktion, die das Feld beim Senden liest, prüft
@@ -379,10 +409,19 @@ module.exports = function (ctx) {
     infoZeigen(s) {
       this.ansicht = "info";
       this.titleEl.setText(this.v.name);
-      const text = s.extern ? "Deine ILIAS-Unterlagen kommen über deinen Uni-Abgleich."
+      const text = s.extern ? (s.gruppenZugang ? s.text : "Deine ILIAS-Unterlagen kommen über deinen Uni-Abgleich. Verbindest du ILIAS hier trotzdem, kommt deine Übungsgruppe in den Stundenplan; Dateien lädt Obsidian dann keine.")
         : iliasOhneAnmeldung(s) ? (/[.…]$/.test(s.text) ? s.text : `${s.text}.`) : "Dafür braucht Obsidian Version 1.11.4 oder neuer. Bitte Obsidian aktualisieren.";
       this.contentEl.createEl("p", { cls: "eba-modal-text", text });
-      this.knoepfe().createEl("button", { text: "Verstanden", cls: "mod-cta" }).addEventListener("click", () => this.close());
+      const k = this.knoepfe();
+      // Eigener Uni-Abgleich mit Anmeldebaustein: Verbinden nur für die Übungsgruppen (ilias.js lädt dort nie Dateien)
+      if (s.extern && !iliasOhneAnmeldung(s) && ctx.ilias.kannSpeichern()) {
+        if (!s.gruppenZugang) k.createEl("button", { text: "Für Übungsgruppen verbinden", cls: "mod-cta" }).addEventListener("click", () => { this.contentEl.empty(); this.anmeldenZeigen(s); });
+        else {
+          k.createEl("button", { text: "Jetzt prüfen", cls: "mod-cta" }).addEventListener("click", () => { this.close(); ctx.ilias.jetztHolen().catch(() => null); });
+          k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: this.v.id }); });
+        }
+      }
+      k.createEl("button", { text: "Verstanden", cls: s.extern && !s.gruppenZugang && !iliasOhneAnmeldung(s) ? "" : "mod-cta" }).addEventListener("click", () => this.close());
     }
     anmeldenZeigen(s) {
       const v = this.v, c = this.contentEl;
@@ -433,6 +472,15 @@ module.exports = function (ctx) {
         if (!mobil && this.felder === f) f.geheimFeld.focus();
         return;
       }
+      // Eigener Uni-Abgleich: keine Kursliste, gleich die Gruppen prüfen
+      if (this.v.status().extern) {
+        this.verbindet = false;
+        new Notice(`${this.v.name} für deine Übungsgruppen verbunden.`, 5000);
+        ctx.ilias.jetztHolen().catch(() => null);
+        neuZeichnen();
+        if (this.offen()) this.zeigen();
+        return;
+      }
       this.melden("Lese deine Kurse …", "");
       let liste = null;
       try { liste = await ctx.ilias.kurseAbrufen(); } catch (e) { liste = null; }
@@ -460,7 +508,7 @@ module.exports = function (ctx) {
       this.meldung = c.createEl("p", { cls: "eba-modal-meldung" });
       if (s.laeuft) {
         this.melden(s.text, "");
-        c.createEl("p", { cls: "eba-modal-hinweis", text: "Läuft im Hintergrund weiter. Du kannst das Fenster schließen." });
+        c.createEl("p", { cls: "eba-modal-hinweis", text: `Du kannst das Fenster schließen. Lass Obsidian dabei ${mobil ? "im Vordergrund" : "offen"}, sonst pausiert der Abruf bis zum nächsten Öffnen.` });
       }
       c.createEl("p", { cls: "eba-modal-abschnitt", text: "Deine Kurse" });
       const box = c.createDiv({ cls: "eba-modal-schalter eba-modal-kurse" });
@@ -566,6 +614,7 @@ module.exports = function (ctx) {
       return { zu: false, text: teile.join(" · "), pille: `<span class="eba-pill ok">verbunden</span>`, symbol: "haken", ton: "ok" };
     }
     if (s.daten) return { zu: false, text: `Auf diesem Gerät nicht verbunden. Dein Stundenplan liegt vor (${s.daten} Einträge).`, pille: `<span class="eba-pill leer">nicht verbunden</span>`, symbol: "haken", ton: "leise" };
+    if (v.id === "alma" && zentralerPlan().verfuegbar) return { zu: false, text: "Nicht nötig: " + ALMA_FREIWILLIG, pille: `<span class="eba-pill leer">nicht verbunden</span>`, symbol: "haken", ton: "leise" };
     return { zu: true, text: "Nicht verbunden.", pille: `<span class="eba-pill leer">nicht verbunden</span>`, symbol: "schloss", ton: "leise" };
   };
 
@@ -601,7 +650,8 @@ module.exports = function (ctx) {
         else knoepfe = knopf("verbinden", v.id, "Mehr erfahren", "");
       } else if (v.art === "anmeldung") {
         // Eigener Uni-Abgleich oder Anmeldebaustein fehlt: kein Knopf. Verbunden: Jetzt holen (bzw. Hier laden), Rest im Fenster.
-        if (s.extern || iliasOhneAnmeldung(s)) knoepfe = "";
+        if (iliasOhneAnmeldung(s)) knoepfe = "";
+        else if (s.extern) knoepfe = knopf("verbinden", v.id, "Mehr erfahren", "");
         else if (s.verbunden && !s.gesperrt) {
           knoepfe = s.anderes ? `<a class="eba-vb-knopf cta" href="${ctx.link("verbindung-aktualisieren", { id: v.id, uebernehmen: "1" })}">Hier laden</a>`
             : knopf("verbindung-aktualisieren", v.id, "Jetzt holen", "cta");
@@ -630,7 +680,15 @@ module.exports = function (ctx) {
     if (verbunden) li.createEl("a", { text: "Stundenplan aus Alma holen", href: ctx.link("stundenplan", {}) });
     else {
       li.createEl("a", { text: "Alma verbinden", href: ctx.link("verbinden", { id: "alma" }) });
-      if (!VERBINDUNGEN.alma.gesperrt()) fett(el.createEl("p", { cls: "eba-alma-hinweis" }), "Einmal **Alma verbinden**, dann holst du deinen Stundenplan hier mit einem Tipp.");
+      const z = zentralerPlan();
+      if (z.verfuegbar && z.ohneBeginn) {
+        // Ohne Studienbeginn ist das Fachsemester geraten: dann keine Vorlesungen aus dem Musterplan, sondern dieser Satz
+        const p = el.createEl("p", { cls: "eba-alma-hinweis" });
+        p.appendText("Deine Vorlesungen kommen von selbst, sobald du deinen ");
+        p.createEl("a", { text: "Studienbeginn", href: ctx.link("personalisieren", {}) });
+        p.appendText(" eingetragen hast.");
+      } else if (z.verfuegbar) fett(el.createEl("p", { cls: "eba-alma-hinweis" }), ALMA_FREIWILLIG);
+      else if (!VERBINDUNGEN.alma.gesperrt()) fett(el.createEl("p", { cls: "eba-alma-hinweis" }), "Einmal **Alma verbinden**, dann holst du deinen Stundenplan hier mit einem Tipp.");
     }
   };
 

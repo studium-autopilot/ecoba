@@ -15,7 +15,6 @@ module.exports = function (ctx) {
   const EINGANG = "Eingang";
   const ZIEL = "Unterlagen";
   const OHNE = "Ohne Modul";
-  const HUB = "Studium/Unterlagen";
   const LESEN_MAX_MB_PC = 80, LESEN_MAX_MB_MOBIL = 40; // größere PDFs nicht öffnen (Arbeitsspeicher auf iPhone/iPad)
   const LESEN_MAX_MB = Platform.isMobile ? LESEN_MAX_MB_MOBIL : LESEN_MAX_MB_PC;
   const GROSS_MB = 50;           // ab dieser Größe in der Zusammenfassung warnen
@@ -170,8 +169,6 @@ module.exports = function (ctx) {
     if (BILDER.includes(endung)) return { art: "Scan", quelle: "rest", schwach: false };
     return { art: "Sonstiges", quelle: "rest", schwach: false };
   };
-  const artAusPfad = (rel, endung, basis) => artBestimmen(rel, endung, basis).art;
-  const artErkennen = (st) => artAusPfad(relPfad(st.haupt).replace(/\.[^.]+$/, ""), ext(st.haupt), st.haupt.basename.normalize("NFC"));
   // gültige Datumsangaben durch „§“ gleicher Länge ersetzen (Positionen bleiben gleich)
   const datumOk = (mo, t) => +mo >= 1 && +mo <= 12 && +t >= 1 && +t <= 31;
   const ohneDatum = (s) => s
@@ -503,22 +500,6 @@ module.exports = function (ctx) {
     v.name = zielName(v.code, v.art, v.nr, v.titel);
     return v;
   };
-
-  // Fremdtext so entschärfen, dass er in einer eingeklappten Karte steht, nichts auslöst und trotzdem suchbar bleibt:
-  // keine Templater-Befehle (<%), kein HTML, keine Tags, Links, Aufgaben, Formeln, Kommentare, Codeblöcke.
-  // „x > 0“ und „f(x) = [a, b]“ bleiben wörtlich stehen.
-  const entschaerfen = (text) => text.replace(/\r/g, "")
-    .replace(/(\p{Ll})-\n(\p{Ll})/gu, "$1$2")
-    .replace(/\\/g, "\\\\")
-    .replace(/<(?=[\p{L}\/!%?])/gu, "&lt;")        // HTML, Kommentare, Templater „<%“
-    .replace(/[`$]/g, "\\$&")                        // Code, Formeln
-    .replace(/%%/g, "\\%\\%")                        // Kommentare
-    .replace(/\[\[/g, "\\[\\[").replace(/\]\(/g, "]\\(") // Wiki- und Markdown-Links
-    .replace(/#(?=[\p{L}_]|\d+[\p{L}_\/-])/gu, "\\#") // Tags
-    .split("\n").map((z) => z.trim()).filter(Boolean)
-    .map((z) => "> " + z.replace(/^>/, "\\>").replace(/^(#+\s)/, "\\$1").replace(/^(\d+)\. /, "$1\\. ")
-      .replace(/^([-+*]) /, "\\$1 ").replace(/\s\^([\w-]+)$/, " \\^$1"))
-    .join("\n");
 
   // ---------- Begleitnotiz ----------
   const originalZeile = (f) => `> **Original:** [[${f.name}]] (am PC öffnet es die passende App; auf iPad und iPhone über die Dateien-App)`;
@@ -987,7 +968,7 @@ module.exports = function (ctx) {
   };
 
   return {
-    einordnen, artErkennen, nummerErkennen, titelErkennen, zielName, codeAusName, entschaerfen, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL, HUB,
+    einordnen, nummerErkennen, titelErkennen, zielName, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL,
     // für die ILIAS-Ablage (ilias.js) und Tests
     schwacherTitel, titelAusPdf, pdfTitelWaehlen, titelMitPdf, vorschlagMitPdf, begleitnotiz, ARTEN,
   };

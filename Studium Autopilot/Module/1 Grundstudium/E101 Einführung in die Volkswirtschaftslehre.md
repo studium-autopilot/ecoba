@@ -2,6 +2,7 @@
 typ: modul
 code: E101
 titel: Einführung in die Volkswirtschaftslehre
+kurz: "VWL"
 titel_en: Introduction to Economics
 ects: 6
 fachsemester: 1
@@ -37,8 +38,8 @@ cssclasses:
 
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Grundstudium</span></div>
-<h1>E101 · Einführung in die Volkswirtschaftslehre</h1>
-<p class="eba-lead">Wachstum, Ungleichheit, Stabilität; Wirtschaftsakteure, Märkte, Marktversagen, Fiskal-/Geldpolitik · Introduction to Economics</p>
+<h1><span class="eba-code">E101</span> Einführung in die Volkswirtschaftslehre</h1>
+<p class="eba-untertitel">Introduction to Economics</p>
 <div class="eba-meta"><span><b>6</b> ECTS</span><span>FS 1</span><span>WS</span><span>Klausur 60 min</span><span>Deutsch</span><span class="eba-akzent">Orientierungsprüfung</span><span>Notenblock 34 %</span></div>
 </div>
 
@@ -79,13 +80,14 @@ cssclasses:
 > ```
 
 
-> [!eba-neu] Neu zu diesem Modul
+> [!eba-neu|ohne-titel] Neu zu diesem Modul
 > - [Vorlesung](obsidian://studium-autopilot?aktion=vorlesung&code=E101)
 > - [Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt&code=E101)
 
 
 > [!eba-raster|2]
 > > [!eba-karte|handy-zu]+ Lehrveranstaltung
+> > - **Inhalte:** Wachstum, Ungleichheit, Stabilität; Wirtschaftsakteure, Märkte, Marktversagen, Fiskal-/Geldpolitik
 > > - **Lehrform:** Vorlesung (4 SWS) Übung (2 SWS) / Mitarbeit, Selbststudium, Literaturstudium
 > > - **Workload:** Kontaktzeit 90 h + Selbststudium 90 h = 180 h
 > > - **Verantwortlich:** Prof. Dr. Ralph Lütticke
@@ -107,12 +109,15 @@ cssclasses:
 > [!eba-tabelle] Folien, Skripte, Übungen, Altklausuren
 > ```base
 > formulas:
->   was: 'file.asLink(if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art) + if(titel, " · " + titel, ""))'
+>   was: 'file.asLink(if(titel, titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art)))'
+>   artnr: 'if(titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art), "")'
 >   oeffnen: 'html("<a class=\"eba-oeffnen\" href=\"obsidian://studium-autopilot?aktion=oeffnen&notiz=" + file.basename.replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B") + "\">Öffnen ↗</a>")'
 >   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
 > properties:
 >   formula.was:
 >     displayName: Unterlage
+>   formula.artnr:
+>     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
 >   note.status:
@@ -137,6 +142,7 @@ cssclasses:
 >       direction: ASC
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - status
 >       - formula.oeffnen
@@ -144,7 +150,8 @@ cssclasses:
 >       - property: nummer
 >         direction: ASC
 >     columnSize:
->       formula.was: 330
+>       formula.was: 250
+>       formula.artnr: 80
 >       note.seiten: 80
 >       note.status: 100
 >       formula.oeffnen: 90
@@ -157,6 +164,7 @@ cssclasses:
 >         - 'status == "neu" || !status'
 >     order:
 >       - formula.was
+>       - formula.artnr
 >       - seiten
 >       - formula.oeffnen
 >     sort:
@@ -181,7 +189,7 @@ cssclasses:
 
 ## Meine Notizen
 
-> [!eba-tabelle|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
+> [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
 > filters:
 >   and:
@@ -190,9 +198,10 @@ cssclasses:
 >     - 'typ != "unterlage"'
 > formulas:
 >   wann: 'if(faellig, faellig, datum)'
->   art: 'if(typ == "vorlesung", "Vorlesung", if(typ == "übungsblatt", "Übungsblatt", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termin", typ))))'
+>   art: 'if(typ == "vorlesung", "Vorlesungen", if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ)))))'
+>   notiz: 'file.asLink(file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(code + " ", ""))'
 > properties:
->   file.name:
+>   formula.notiz:
 >     displayName: Notiz
 >   formula.wann:
 >     displayName: Datum
@@ -209,7 +218,7 @@ cssclasses:
 >       property: formula.art
 >       direction: ASC
 >     order:
->       - file.name
+>       - formula.notiz
 >       - formula.wann
 >       - status
 >       - nachgearbeitet
@@ -217,7 +226,7 @@ cssclasses:
 >       - property: formula.wann
 >         direction: DESC
 >     columnSize:
->       file.name: 330
+>       formula.notiz: 330
 >       formula.wann: 120
 >       note.status: 110
 >       note.nachgearbeitet: 120

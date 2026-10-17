@@ -1,9 +1,10 @@
 // Zeitleiste der Prüfungszeit oben auf der Seite Prüfungen: Codeblock ```eba-klausurzeit``` (zurückhaltende Visualisierung
 // der Prüfungstermine). Oben eine Übersicht von heute bis zum Ende der nächsten zwei Prüfungsphasen (Anmeldung als Band, Phasen als Band,
-// gestrichelt = geschätzt, Klausuren und Zwischentests als Punkte, heute als Linie). Darunter je Phase ein Tagesstreifen
-// mit den Klausuren am Datum (Kürzel, Wochentag, Datum, Countdown bis 30 Tage, bestanden mit Note), Anmeldezeitraum und
-// „Termin folgt“ (nur Module ohne Klausurtermin im Modul und ohne Prüfungs-Termin-Notiz in einer Phase). Ersetzt die Chip-Reihe
-// „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet seine Notiz (Termin-Notiz, sonst das Modul).
+// gestrichelt = geschätzt, Klausuren als Punkte, Zwischentests als Punkte in eigener Farbe (keine Prüfung), heute als Linie).
+// Darunter je Phase ein Tagesstreifen mit den Klausuren am Datum (Kürzel, Wochentag, Datum, Countdown bis 30 Tage, bestanden
+// mit Note), Anmeldezeitraum und „Termin folgt“ (nur Module ohne Klausurtermin im Modul und ohne Prüfungs-Termin-Notiz in einer
+// Phase). Ersetzt die Chip-Reihe „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet seine Notiz
+// (Termin-Notiz, sonst das Modul).
 // Daten live (metadataCache, schreibt nichts): Module des aktuellen Fachsemesters wie die Chips (Feld `klausur`),
 // Termin-Notizen (Kategorie Prüfung mit `code`; Frist „Prüfungsanmeldung …“), Phasen und Semester aus dem Datenmodell
 // (modell.js, sonst Einstellungen), `variante`. Neu gezeichnet bei Änderungen, Löschen, Umbenennen und an einem neuen Tag.
@@ -16,6 +17,9 @@ module.exports = function (ctx) {
   const KURZTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const MONAT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   const TAG = 86400000;
+  // Zwischentests (freiwillig, unbenotet) tragen kategorie „Prüfung“ und das Kürzel des Moduls, sind aber keine Prüfung:
+  // eigene Farbe, eigener Eintrag in der Legende, zählen nicht für „Termin folgt“. Erkannt am Titel wie in verlauf.js.
+  const ZWISCHENTEST = /zwischentest/i;
 
   const pad = (n) => String(n).padStart(2, "0");
   const datum = (v) => { const m = String(v ?? "").match(/(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
@@ -51,8 +55,9 @@ module.exports = function (ctx) {
         if (pflicht && (empf === fs || ["läuft", "angemeldet"].includes(st(m.status))))
           module.push({ f, code: String(m.code || f.basename.split(" ")[0]), datum: datum(m.klausur), fertig: fertig(m.status), ergebnis: String(m.ergebnis ?? "").trim() });
       } else if (m.typ === "termin" && m.erledigt !== true) {
-        termine.push({ f, titel: String(m.titel || f.basename), kat: String(m.kategorie ?? ""), code: String(m.code ?? "").trim(),
-          von: datum(m.datum), bis: datum(m.bis), geschaetzt: st(m.status) === "geschätzt" });
+        const titel = String(m.titel || f.basename);
+        termine.push({ f, titel, kat: String(m.kategorie ?? ""), code: String(m.code ?? "").trim(),
+          von: datum(m.datum), bis: datum(m.bis), geschaetzt: st(m.status) === "geschätzt", test: ZWISCHENTEST.test(titel) });
       }
     }
     module.sort((a, b) => a.code.localeCompare(b.code));
@@ -65,9 +70,11 @@ module.exports = function (ctx) {
     // Termin-Notiz gewinnt (Ort, „geschätzt“), „bestanden“ und Ergebnis kommen vom Modul (docs/architektur.md „Nächste Prüfung“)
     const pruef = [], nachTag = new Map();
     for (const t of termine) {
-      if (t.kat !== "Prüfung" || !t.code || !t.von || t.bis || nachTag.has(t.code + tmj(t.von))) continue;
-      const k = { code: t.code, d: t.von, f: t.f, fertig: false, ergebnis: "", geschaetzt: t.geschaetzt, termin: true, titel: t.titel };
-      nachTag.set(t.code + tmj(t.von), k);
+      // Zwischentests eigener Schlüssel: Sie verdecken nie die Klausur des Moduls am selben Tag
+      const schluessel = t.code + (t.von ? tmj(t.von) : "") + (t.test ? "|test" : "");
+      if (t.kat !== "Prüfung" || !t.code || !t.von || t.bis || nachTag.has(schluessel)) continue;
+      const k = { code: t.code, d: t.von, f: t.f, fertig: false, ergebnis: "", geschaetzt: t.geschaetzt, termin: true, titel: t.titel, test: t.test };
+      nachTag.set(schluessel, k);
       pruef.push(k);
     }
     for (const m of module) if (m.datum) {
@@ -117,9 +124,12 @@ module.exports = function (ctx) {
         const b = bahnP.createEl("i", { cls: p.geschaetzt ? "geschaetzt" : "", attr: { title: `${p.art}: ${tm(p.von)} – ${tmj(p.bis)}${p.geschaetzt ? " (geschätzt)" : ""}` } });
         b.style.left = x(p.von) + "%"; b.style.width = breite(p.von, p.bis) + "%";
       }
+      let tests = 0;
       for (const k of pruef) {
         if (k.d < a || k.d > e) continue;
-        const p = bahnP.createEl("b", { cls: k.fertig ? "ok" : k.d < heute ? "vorbei" : inPhase(k.d) ? "" : "einzeln", attr: { title: `${k.code} ${wt(k.d)}` } });
+        if (k.test) tests++;
+        const p = bahnP.createEl("b", { cls: (k.fertig ? "ok" : k.d < heute ? "vorbei" : inPhase(k.d) ? "" : "einzeln") + (k.test ? " test" : ""),
+          attr: { title: `${k.test ? k.titel : k.code} · ${wt(k.d)}` } });
         p.style.left = x(k.d) + "%";
       }
       const h = ue.createDiv({ cls: "eba-kzt-heute" });
@@ -132,6 +142,7 @@ module.exports = function (ctx) {
       if (gs < phasen.length) leg.createSpan({ cls: "pr", text: "Prüfungsphase" });
       if (gs) leg.createSpan({ cls: "gs", text: gs === phasen.length ? "Prüfungsphase (geschätzt)" : "geschätzt" });
       leg.createSpan({ cls: "pk", text: "Prüfung" });
+      if (tests) leg.createSpan({ cls: "zt", text: "Zwischentest" });
     }
 
     // --- Je Phase ein Tagesstreifen mit den Klausuren am Datum ---
@@ -159,7 +170,7 @@ module.exports = function (ctx) {
         let r = reihen.findIndex((letzter) => i - letzter >= abstand);
         if (r < 0) { r = reihen.length; reihen.push(i); } else reihen[r] = i;
         const pos = ((i + 0.5) / n) * 100;
-        const m = link(marken, k.f, "eba-kzt-marke" + (k.fertig ? " ok" : k.d < heute ? " vorbei" : "") + (k.geschaetzt ? " geschaetzt" : "") + (k.termin && p.art.startsWith("Nachhol") ? " nachhol" : ""), "");
+        const m = link(marken, k.f, "eba-kzt-marke" + (k.fertig ? " ok" : k.d < heute ? " vorbei" : "") + (k.geschaetzt ? " geschaetzt" : "") + (k.termin && p.art.startsWith("Nachhol") ? " nachhol" : "") + (k.test ? " test" : ""), "");
         m.style.left = pos + "%";
         m.style.setProperty("--reihe", r);
         if (pos < 12) m.addClass("links"); else if (pos > 88) m.addClass("rechts");
@@ -175,15 +186,17 @@ module.exports = function (ctx) {
         const d = new Date(p.von.getFullYear(), p.von.getMonth(), p.von.getDate() + i);
         const c = streifen.createSpan({ text: String(d.getDate()) });
         if (d.getDay() === 0 || d.getDay() === 6) c.addClass("we");
-        if (drin.some((k) => tage(k.d, d) === 0)) c.addClass("pk");
+        const amTag = drin.filter((k) => tage(k.d, d) === 0);
+        if (amTag.some((k) => !k.test)) c.addClass("pk");
+        else if (amTag.length) c.addClass("zt");
         if (tage(heute, d) === 0) c.addClass("heute");
       }
     }
 
     // --- Ohne Termin, außerhalb der Phasen, bestanden ohne Datum ---
     // „Termin folgt“ nur ohne Datum im Modul UND ohne Prüfungs-Termin-Notiz mit diesem Kürzel in einer Prüfungsphase (zentrale
-    // Klausurtermine stehen in Termin-Notizen; Zwischentests liegen außerhalb der Phasen und zählen hier nicht)
-    const folgt = module.filter((m) => !m.datum && !m.fertig && !pruef.some((k) => k.termin && k.code === m.code && inPhase(k.d)));
+    // Klausurtermine stehen in Termin-Notizen; Zwischentests zählen hier nie, auch nicht innerhalb einer Phase)
+    const folgt = module.filter((m) => !m.datum && !m.fertig && !pruef.some((k) => k.termin && !k.test && k.code === m.code && inPhase(k.d)));
     const ausser = pruef.filter((k) => k.modul && !inPhase(k.d));
     const fertigOhne = module.filter((m) => !m.datum && m.fertig);
     if (folgt.length || ausser.length || fertigOhne.length) {
@@ -220,5 +233,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
-  return { registrieren, zeichnen };
+  return { registrieren, zeichnen, lesen };
 };

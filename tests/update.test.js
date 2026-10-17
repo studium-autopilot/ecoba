@@ -281,6 +281,39 @@ test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
   assert.equal(sp.stand(), vorher);
 });
 
+test("Weggefallene Seite: unverändert in die Sicherung, Lesezeichen darauf fallen weg; selbst geändert bleibt sie", async () => {
+  const PLANER = "Studium/Schwerpunkt-Planer.md", LZ = ".obsidian/bookmarks.json";
+  const lz = (pfade) => JSON.stringify({ items: pfade.map((p, i) => ({ type: "file", ctime: i, path: p, title: p })) }, null, 2);
+  const alt = Object.assign({}, ALT, { [PLANER]: "# Planer\n", [LZ]: lz(["Dashboard.md", PLANER]) });
+  const neu = Object.assign({}, NEU, { [LZ]: lz(["Dashboard.md"]) });
+  // Lesezeichen selbst ergänzt (mit Gruppe): Die Datei wird gemischt, deine Lesezeichen bleiben, die auf den Planer fallen weg
+  const deine = JSON.stringify({ items: [{ type: "file", ctime: 0, path: "Dashboard.md", title: "Dashboard" },
+    { type: "group", ctime: 5, title: "Meins", items: [{ type: "file", ctime: 6, path: PLANER }, { type: "file", ctime: 7, path: "Termine/X.md" }] },
+    { type: "file", ctime: 1, path: PLANER, title: "Planer" }] }, null, 2);
+  let r = await update(alt, neu, Object.assign({}, alt, { [LZ]: deine }));
+  assert.equal(r.b.ok, true, r.b.fehler);
+  assert.equal(r.sp.text(PLANER), null);
+  assert.equal(r.sp.text(r.b.sicherung + "/" + PLANER), "# Planer\n");
+  assert.equal(r.sp.text(r.b.sicherung + "/" + LZ), deine);
+  const L = JSON.parse(r.sp.text(LZ));
+  assert.deepEqual(L.items.map((x) => x.path || x.title), ["Dashboard.md", "Meins"]);
+  assert.deepEqual(L.items[1].items.map((x) => x.path), ["Termine/X.md"]);
+  assert.ok(r.b.einstellungen.indexOf(LZ) >= 0);
+  // Planer selbst geändert: bleibt samt Lesezeichen, das Ergebnisfenster nennt ihn
+  r = await update(alt, neu, Object.assign({}, alt, { [PLANER]: "# Mein Planer\n", [LZ]: deine }));
+  assert.equal(r.b.ok, true, r.b.fehler);
+  assert.equal(r.sp.text(PLANER), "# Mein Planer\n");
+  assert.deepEqual(r.b.behalten, [PLANER]);
+  assert.equal(r.sp.text(LZ), deine);
+  // Lesezeichen unverändert: Die neue Fassung ersetzt sie
+  r = await update(alt, neu, alt);
+  assert.equal(r.sp.text(LZ), neu[LZ]);
+  // Hilfe allein: nichts zu tun ohne Treffer, kaputter Text, keine Liste
+  assert.equal(U.lesezeichenOhne(lz(["Dashboard.md"]), [PLANER]), null);
+  assert.equal(U.lesezeichenOhne("{kaputt", [PLANER]), null);
+  assert.equal(U.lesezeichenOhne(lz([PLANER]), []), null);
+});
+
 test("Alles oder nichts: falsche Prüfsumme, kein Netz, Schreibfehler", async () => {
   let r = await update(ALT, NEU, ALT, { falscheListe: true });
   assert.equal(r.b.ok, false); assert.equal(r.b.art, "pruefsumme"); assert.equal(r.sp.schreibvorgaenge, 0); assert.equal(r.sp.stand(), r.vorher);

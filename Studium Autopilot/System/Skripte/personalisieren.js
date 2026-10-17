@@ -3,19 +3,45 @@
 // Standard ohne Angaben: Studienbeginn = aktuelles Semester (1. FS), Variante „offen“, neutrale Begrüßung.
 //   ```eba-personalisieren```  früher die Karte oben auf dem Dashboard; seit 0.3.0 leer (die Einrichtung ersetzt sie). Der
 //                              Block zeichnet nichts, damit ältere, selbst geänderte Dashboards keine Lücke zeigen.
-//   ```eba-personalisieren angaben```  „Deine Angaben“ (Einstellungen & Hilfe): solange Name UND Studienbeginn leer sind, eine
-//                              kleine Karte „Noch nichts eingetragen.“ + Knopf „Einrichtung starten“; sonst Name, Zielnote,
-//                              Studienbeginn (leere Werte „–“) + Knöpfe „Ändern“ und „Einrichtung erneut starten“.
+//   ```eba-personalisieren angaben```   „Deine Angaben“ (Einstellungen & Hilfe): Zeilen Name, Studienbeginn, Zielnote und
+//                              Einrichtung, je mit einem Knopf („Ändern“ öffnet das Formular am passenden Feld; Einrichtung:
+//                              Starten, Fortsetzen oder Erneut starten).
+//   ```eba-personalisieren variante```  „Variante“: je Variante eine Zeile mit dem, was daraus folgt; die gewählte mit Haken,
+//                              die übrigen mit „Wählen“ (Aktion „variante“ in aktionen.js).
+//   Beide in derselben Zeilenliste wie die Verbindungen (.eba-vb-*, verbindungen.js): Symbol, Titel, gedämpfte Zeile, ein Knopf.
+//   Inhalt der Zeilen: angabenZeilen() und varianteZeilen() (rein, getestet in tests/personalisieren.test.js).
 //   Aktion „personalisieren“   EIN Formular-Fenster (Name, Studienbeginn als Semester-Auswahl, Variante, Zielnote 1,0–4,0),
-//                              speichert nach System/Einstellungen.md. Auch als Befehl und Knopf in den Einstellungen.
+//                              speichert nach System/Einstellungen.md. Auch als Befehl. Parameter feld=name|studienbeginn|
+//                              zielnote setzt den Cursor in dieses Feld.
 // Nach dem Speichern zieht das Datenmodell (modell.js) Semesterliste, Pausen und Prüfungsphasen in den Einstellungen nach.
 // Erweiterung: Das Plugin ruft registrieren() auf (Codeblock über ctx.codeblock) und übernimmt die aktionen. Stil: eba-core.css Abschnitt 43
-// (eba-angaben*, eba-modal-personalisieren; die Karten-Klassen eba-perso* sind seit der Aufräumrunde 16.10.2026 entfernt).
+// (eba-vb-*, eba-modal-personalisieren; die Karten-Klassen eba-perso* sind seit der Aufräumrunde 16.10.2026 entfernt). Bis
+// 17.10.2026 standen die Angaben in einem eigenen Kasten und die Variante als Chips mit Tabelle.
 module.exports = function (ctx) {
   const app = window.app;
   const { Modal, Notice } = ctx.obsidian;
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const VARIANTEN = ["offen", "Economics", "Business Administration", "ohne Spezialisierung"];
+  // Was aus der Variante folgt (PO 2023, Modulhandbuch); Reihenfolge der Zeilen unter „Variante“
+  const FOLGE = {
+    "Economics": "Pflicht: E230, E210, S220, B240 · Schwerpunkte 75 ECTS, mind. 2 VWL-Bereiche",
+    "Business Administration": "Pflicht: B220, J200, B250, B240 · Profil 12 ECTS · Schwerpunkte 63 ECTS, mind. 2 BWL-Bereiche",
+    "ohne Spezialisierung": "Profil 18 ECTS VWL + 18 ECTS BWL · Schwerpunkte 63 ECTS, je mind. 1 VWL- und BWL-Bereich",
+    "offen": "Vor dem 3. Fachsemester wählen; bis dahin rechnet Studium Autopilot ohne Variante",
+  };
+  // Übersprungene Schritte der Einrichtung (einrichtung_uebersprungen) in Worten
+  const SCHRITTE = { studienbeginn: "Studienbeginn", variante: "Variante", angaben: "Name und Zielnote", alma: "Alma", ilias: "ILIAS" };
+  // Symbole der Zeilen (Lucide, 24er-Raster, Strich in currentColor; wie verbindungen.js)
+  const SYMBOLE = {
+    person: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
+    kalender: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    ziel: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    hut: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
+    wegweiser: '<path d="M12 3v3"/><path d="M18.5 13h-13L2 9.5 5.5 6h13L22 9.5Z"/><path d="M12 13v8"/>',
+    haken: '<path d="M20 6 9 17l-5-5"/>',
+    uhr: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  };
+  const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const dmy = (s) => (s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : "");
@@ -71,7 +97,7 @@ module.exports = function (ctx) {
 
   // ---------- Formular ----------
   class Formular extends Modal {
-    constructor() { super(app); }
+    constructor(feld) { super(app); this.feld = feld || "name"; }
     onOpen() {
       const c = this.contentEl, d = D(), fm = fmVon();
       this.modalEl.addClass("eba-modal", "eba-modal-personalisieren");
@@ -133,57 +159,99 @@ module.exports = function (ctx) {
       speichern.addEventListener("click", senden);
       ab.addEventListener("click", () => this.close());
       for (const el of [name, ziel]) el.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); senden(); } });
-      setTimeout(() => name.focus(), 30);
+      const fokus = { studienbeginn: sem, zielnote: ziel }[this.feld] || name;
+      setTimeout(() => fokus.focus(), 30);
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
   let fenster = null; // offenes Formular (für Tests: ctx.personalisieren.fenster)
 
-  // ---------- Karte (seit 0.3.0 leer: die Einrichtung ersetzt sie) ----------
-  let block = null; // Codeblock-Griff (ctx.codeblock), gesetzt in registrieren()
-  const karte = (el) => { el.empty(); el.addClass("eba-perso-aus"); };
-  // „Deine Angaben“ (Einstellungen & Hilfe). eba-perso-aus entfernen: Wurde derselbe Block vorher als leere Karte gezeichnet
-  // (Argument nicht erkannt, siehe registrieren), blieb die Klasse sonst hängen und die Karte unsichtbar.
-  const angaben = (el) => {
-    el.empty();
-    el.removeClass("eba-perso-aus");
-    const fm = fmVon();
-    const txt = (x) => String(x == null ? "" : x).trim();
-    const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote);
-    const link = ctx.link("personalisieren", {});
-    const einrichtung = ctx.link("einrichtung", { ab: "2" });
-    if (!name && !beginn) {
-      el.createDiv({ cls: "eba-angaben leer" }).innerHTML = `<span class="eba-angaben-leer">Noch nichts eingetragen.</span>`
-        + `<a class="eba-vb-knopf cta" href="${einrichtung}">Einrichtung starten</a>`;
-      return;
-    }
-    let sem = "";
-    try { sem = beginn && ctx.modell && ctx.modell.semesterAusDatum ? ctx.modell.semesterAusDatum(beginn) : ""; } catch (e) { sem = ""; }
-    const beginnText = beginn ? (sem ? `${sem} (ab ${dmy(beginn)})` : dmy(beginn)) : "";
-    const feld = (titel, wert) => `<div class="eba-angaben-feld"><span>${titel}</span><b${wert ? "" : ' class="leer"'}>${wert ? esc(wert) : "–"}</b></div>`;
-    el.createDiv({ cls: "eba-angaben" }).innerHTML = `<div class="eba-angaben-liste">${feld("Name", name)}${feld("Zielnote", ziel)}${feld("Studienbeginn", beginnText)}</div>`
-      + `<span class="eba-angaben-knoepfe"><a class="eba-vb-knopf" href="${link}">Ändern</a>`
-      + `<a class="eba-vb-knopf leise" href="${einrichtung}">Einrichtung erneut starten</a></span>`;
+  // ---------- Zeilen (Einstellungen & Hilfe) ----------
+  const txt = (x) => String(x == null ? "" : x).trim();
+  const varianteVon = (fm) => { const v = txt(fm.variante); return VARIANTEN.indexOf(v) >= 0 ? v : "offen"; };
+  const einrichtungVon = (fm) => {
+    if (ctx.einrichtung && ctx.einrichtung.zustand) return ctx.einrichtung.zustand();
+    const e = txt(fm.einrichtung).toLowerCase();
+    return { status: e === "fertig" || e === "laeuft" ? e : "offen", uebersprungen: [] };
   };
+  // Eine Zeile: { id, symbol, ton ("akzent" | "ok" | "leise"), titel, pille? ({ text, art }), wert (Angabe, in Textfarbe),
+  //   text (Ergänzung, gedämpft), knopf? ({ text, aktion, parameter, cta }) }. Leere Angabe: wert "", text „Nicht eingetragen.“
+  const angabenZeilen = (fm, ez) => {
+    fm = fm || {};
+    ez = ez || einrichtungVon(fm);
+    const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote);
+    const aendern = (feld) => ({ text: "Ändern", aktion: "personalisieren", parameter: { feld } });
+    const v = vorschauTeile(beginn);
+    const heute = v.fs ? `heute ${v.fs}. Fachsemester` : v.heute;
+    const zeilen = [
+      { id: "name", symbol: "person", ton: name ? "akzent" : "leise", titel: "Name", wert: name, text: name ? "" : "Nicht eingetragen.", knopf: aendern("name") },
+      { id: "studienbeginn", symbol: "kalender", ton: beginn ? "akzent" : "leise", titel: "Studienbeginn",
+        wert: beginn ? v.erstes || dmy(beginn) : "",
+        text: beginn ? heute : v.erstes ? `Nicht eingetragen, es gilt ${v.erstes}.` : "Nicht eingetragen.", knopf: aendern("studienbeginn") },
+      { id: "zielnote", symbol: "ziel", ton: ziel ? "akzent" : "leise", titel: "Zielnote", wert: ziel, text: ziel ? "" : "Nicht eingetragen.", knopf: aendern("zielnote") },
+    ];
+    const ueber = (ez.uebersprungen || []).map((p) => SCHRITTE[p]).filter(Boolean);
+    const e = { id: "einrichtung", symbol: "hut", titel: "Einrichtung", wert: "" };
+    if (ez.status === "fertig") Object.assign(e, { ton: "ok", pille: { text: "fertig", art: "ok" }, text: ueber.length ? `Übersprungen: ${ueber.join(", ")}.` : "Alle Schritte erledigt.",
+      knopf: { text: "Erneut starten", aktion: "einrichtung", parameter: { ab: "2" } } });
+    else if (ez.status === "laeuft") Object.assign(e, { ton: "leise", pille: { text: "angefangen", art: "warn" }, text: "Noch nicht abgeschlossen.",
+      knopf: { text: "Fortsetzen", aktion: "einrichtung", parameter: {}, cta: true } });
+    else Object.assign(e, { ton: "leise", pille: { text: "offen", art: "leer" }, text: "Führt durch Studienbeginn, Variante, Name, Alma, ILIAS und Darstellung.",
+      knopf: { text: "Starten", aktion: "einrichtung", parameter: { ab: "2" }, cta: true } });
+    zeilen.push(e);
+    return zeilen;
+  };
+  // Je Variante eine Zeile; die gewählte ohne Knopf (bei „noch offen“ mit Uhr statt Haken)
+  const varianteZeilen = (fm) => {
+    const ist = varianteVon(fm || {});
+    return ["Economics", "Business Administration", "ohne Spezialisierung", "offen"].map((v) => {
+      const gewaehlt = v === ist, titel = v === "offen" ? "Noch offen" : v === "ohne Spezialisierung" ? "Ohne Spezialisierung" : v;
+      if (!gewaehlt) return { id: v, symbol: "wegweiser", ton: "leise", titel, wert: "", text: FOLGE[v], knopf: { text: "Wählen", aktion: "variante", parameter: { wert: v } } };
+      return v === "offen" ? { id: v, symbol: "uhr", ton: "leise", titel, pille: { text: "aktuell", art: "leer" }, wert: "", text: FOLGE[v] }
+        : { id: v, symbol: "haken", ton: "ok", titel, pille: { text: "gewählt", art: "ok" }, wert: "", text: FOLGE[v] };
+    });
+  };
+  // Zeilenliste wie die Übersicht der Verbindungen (verbindungen.js, uebersicht)
+  const liste = (el, zeilen) => {
+    const l = el.createDiv({ cls: "eba-vb-liste" });
+    for (const z of zeilen) {
+      const pille = z.pille ? ` <span class="eba-pill ${z.pille.art}">${esc(z.pille.text)}</span>` : "";
+      const stand = (z.wert ? `<span class="eba-vb-wert">${esc(z.wert)}</span>` : "") + (z.wert && z.text ? " · " : "") + esc(z.text);
+      const knopf = z.knopf ? `<a class="eba-vb-knopf${z.knopf.cta ? " cta" : ""}" href="${ctx.link(z.knopf.aktion, z.knopf.parameter)}">${esc(z.knopf.text)}</a>` : "";
+      const zeile = l.createDiv({ cls: "eba-vb" });
+      zeile.setAttr("data-id", z.id);
+      zeile.innerHTML = `<span class="eba-vb-symbol ${z.ton}" aria-hidden="true">${svg(z.symbol)}</span>`
+        + `<span class="eba-vb-text"><b>${esc(z.titel)}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${stand}</span></span></span>`
+        + `<span class="eba-vb-knoepfe">${knopf}</span>`;
+    }
+  };
+
+  let block = null; // Codeblock-Griff (ctx.codeblock), gesetzt in registrieren()
+  // Ohne Argument (früher die Karte auf dem Dashboard, seit 0.3.0 leer): nichts zeichnen. Bei den übrigen eba-perso-aus entfernen:
+  // Wurde derselbe Block vorher leer gezeichnet (Argument nicht erkannt, siehe registrieren), bliebe die Klasse sonst hängen.
+  const karte = (el) => { el.empty(); el.addClass("eba-perso-aus"); };
+  const angaben = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, angabenZeilen(fmVon())); };
+  const variante = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, varianteZeilen(fmVon())); };
   const neuZeichnen = () => { if (block) block.neu(); };
 
   const AKTIONEN = {
     personalisieren: {
       titel: "Personalisieren (Name, Studienbeginn, Variante, Zielnote)",
-      ausfuehren: async () => { const m = new Formular(); fenster = m; m.open(); },
+      ausfuehren: async (c) => { const m = new Formular(c && c.parameter ? c.parameter.feld : ""); fenster = m; m.open(); },
     },
   };
 
-  ctx.personalisieren = { zielnotePruefen, semesterOptionen, vorschauTeile, vorschauText, VARIANTEN, Formular, angaben, neuZeichnen,
-    get fenster() { return fenster; } };
+  ctx.personalisieren = { zielnotePruefen, semesterOptionen, vorschauTeile, vorschauText, VARIANTEN, FOLGE, Formular, angabenZeilen, varianteZeilen,
+    angaben, variante, neuZeichnen, get fenster() { return fenster; } };
 
   const registrieren = () => {
     block = ctx.codeblock("eba-personalisieren", (quelle, el, c, inst) => {
-      inst.art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-personalisieren", ["karte", "angaben"], "karte") : "karte";
+      inst.art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-personalisieren", ["karte", "angaben", "variante"], "karte") : "karte";
       // Beim Neuzeichnen der Leseansicht (rerender) liefert getSectionInfo oft nichts, dann käme „karte“ (leer, unsichtbar).
-      // Rückfall wie todos.js über den Text im Block: Der Angaben-Block enthält „Deine Angaben: …“, der alte Dashboard-Block nichts.
-      if (inst.art === "karte" && /angaben/i.test(String(quelle || ""))) inst.art = "angaben";
-      try { if (inst.art === "angaben") angaben(el); else karte(el); } catch (e) { console.error("eba-personalisieren", e); }
+      // Rückfall wie todos.js über den Text im Block: „Variante: …“ bzw. „Deine Angaben: …“, der alte Dashboard-Block hat keinen.
+      const q = String(quelle || "");
+      if (inst.art === "karte") inst.art = /variante/i.test(q) ? "variante" : /angaben/i.test(q) ? "angaben" : "karte";
+      try { if (inst.art === "angaben") angaben(el); else if (inst.art === "variante") variante(el); else karte(el); } catch (e) { console.error("eba-personalisieren", e); }
     });
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(() => neuZeichnen()));
   };

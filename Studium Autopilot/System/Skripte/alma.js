@@ -166,7 +166,20 @@ module.exports = function (ctx) {
   // Art passt, wenn gleich oder eine Seite keine konkrete Art hat („Veranstaltung“ bzw. leer)
   const unbestimmt = (a) => !a || a === "Veranstaltung";
   const artPasst = (a, b) => unbestimmt(a) || unbestimmt(b) || a === b;
-  const kuerzen = (s, n = 40) => { s = String(s).trim(); if (s.length <= n) return s; const k = s.slice(0, n + 1); return (k.slice(0, k.lastIndexOf(" ")) || s.slice(0, n)).replace(/[\s,;:–-]+(für|und|in|der|die|das|zu|zur|zum|von|mit)?$/i, ""); };
+  // Kurztitel: bis 48 Zeichen ganz („Einführung in die Betriebswirtschaftslehre“), sonst an einer Wortgrenze gekürzt und ohne
+  // Füllwörter am Ende (nie „Einführung in“)
+  const FUELL = /^(für|und|in|im|der|die|das|des|dem|den|zu|zur|zum|von|vom|mit|am|an|auf|of|and|the|for|to)[,;:–-]*$/i;
+  const kuerzen = (s, n = 48) => {
+    s = String(s).trim();
+    if (s.length <= n) return s;
+    let aus = "";
+    for (const w of s.split(/\s+/)) { const t = aus ? aus + " " + w : w; if (t.length > n) break; aus = t; }
+    const teile = aus.split(" ");
+    while (teile.length > 1 && FUELL.test(teile[teile.length - 1])) teile.pop();
+    return teile.join(" ").replace(/[\s,;:–-]+$/, "") || s.slice(0, n);
+  };
+  // Titel, die die alte Kürzung kaputt gemacht hat („Einführung in · Veranstaltung“): Teil vor „ · “ endet auf ein Füllwort
+  const titelKaputt = (t) => { const v = String(t || "").split(" · ")[0].trim().split(" "); return v.length > 1 && FUELL.test(v[v.length - 1]); };
   const sauber = (s) => String(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim();
 
   // Einzeltermine gleicher Art (Titel, Wochentag, Uhrzeit, Semester) zu einem Eintrag zusammenfassen
@@ -200,8 +213,13 @@ module.exports = function (ctx) {
     });
   };
 
+  // Automatische Stundenplan-Notizen gehören nicht dazu: zentrale Vorlesungen (herkunft: zentral, zentral.js) und deine Gruppe
+  // (herkunft: ilias-gruppe aus ilias.js, gruppe-gewaehlt aus gruppen.js, beide über meine-gruppe.js). Alma übernimmt, ändert und
+  // löscht sie nie. Steht dieselbe Veranstaltung oder Gruppe in Alma, legt Alma ihre eigene Notiz an; wer die andere schreibt,
+  // erkennt das und räumt sie weg (eigener Text darin wandert in die Alma-Notiz). So schreibt nie mehr als ein Skript in eine Notiz.
+  const AUTOMATISCH = ["zentral", "ilias-gruppe", "gruppe-gewaehlt"];
   const vorhandene = (ordner) => app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(ordner + "/"))
-    .map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} })).filter((x) => x.fm.typ === "lehrveranstaltung");
+    .map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} })).filter((x) => x.fm.typ === "lehrveranstaltung" && AUTOMATISCH.indexOf(String(x.fm.herkunft || "")) < 0);
   const gleich = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const liste = (v) => (Array.isArray(v) ? v : v ? [v] : []).map(String).sort();
 
@@ -293,11 +311,12 @@ module.exports = function (ctx) {
     for (const g of gruppen) {
       const { m, code, art } = info.get(g.schluessel);
       const treffer = zuordnung.get(g.schluessel);
-      // Kurztitel für neue Notizen: aus einer vorhandenen Notiz gleichen Codes, nie aus einer mit anderer Art
-      const vorbild = alt.filter((x) => code && x.fm.code === code && x.fm.titel && artPasst(x.fm.art, art))
+      // Kurztitel für neue Notizen: Titel der Modulnotiz, sonst aus einer vorhandenen Notiz gleichen Codes (nie aus einer mit
+      // anderer Art oder einem kaputt gekürzten Titel), sonst aus dem Alma-Titel
+      const vorbild = alt.filter((x) => code && x.fm.code === code && x.fm.titel && !titelKaputt(x.fm.titel) && artPasst(x.fm.art, art))
         .sort((a, b) => (a.fm.art === art ? 0 : 1) - (b.fm.art === art ? 0 : 1))[0];
-      const kurz = vorbild ? String(vorbild.fm.titel).split(" · ")[0]
-        : kuerzen(m ? String(m.fm.titel) : g.titel.replace(code, "").replace(/^[\s\-–:·]+/, ""));
+      const kurz = m && m.fm.titel ? kuerzen(String(m.fm.titel)) : vorbild ? String(vorbild.fm.titel).split(" · ")[0]
+        : kuerzen(g.titel.replace(code, "").replace(/^[\s\-–:·]+/, ""));
       const felder = {
         wochentag: g.wt, tag: TAGE[g.wt - 1], beginn: g.beginn, ende: g.ende, semester: g.semester,
         von: g.von, bis: g.bis, ausfall: g.ausfall, einzeltermin: g.einzeln,
@@ -318,6 +337,9 @@ module.exports = function (ctx) {
         }
         // Raum: leer -> aus Alma füllen; sonst nur überschreiben, wenn er sich in Alma seit dem letzten Abruf geändert hat
         if (g.raum && (!fm.raum || (fm.alma_raum && fm.alma_raum !== g.raum))) neu.raum = g.raum;
+        // kaputt gekürzter Titel einer Notiz, die Alma selbst angelegt hat (Kasten „Aus Alma“; alte Fassung): neu aus dem Kurztitel.
+        // Von Hand angelegte Notizen behalten ihren Titel.
+        if (fm.alma_schluessel && titelKaputt(fm.titel) && AUS_ALMA.test(await app.vault.cachedRead(treffer.f))) neu.titel = `${kurz} · ${fm.art || art}`;
         const aenderung = Object.entries(neu).some(([k, v]) => k === "ausfall" ? !gleich(liste(fm[k]), liste(v)) : !gleich(fm[k] == null ? null : String(fm[k]), v == null ? null : String(v)));
         if (!aenderung) { bericht.gleich++; continue; }
         await app.fileManager.processFrontMatter(treffer.f, (x) => { Object.assign(x, neu); });
@@ -338,7 +360,7 @@ module.exports = function (ctx) {
         : `${k}: ${typeof v === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? JSON.stringify(v) : v}`).join("\n");
       const wann = g.einzeln ? `${TAGE_LANG[g.wt - 1]}, ${deutsch(g.von)}` : `${TAGE_LANG[g.wt - 1]}s`;
       const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${code || kurz} · ${art}\n\n${wann}, ${g.beginn}–${g.ende}${g.raum ? " · " + g.raum : ""}\n\n`
-        + `> [!info]- Aus Alma\n> ${g.titel}\n> Aktualisiert sich mit „Stundenplan aus Alma holen“ auf der Seite [[Stundenplan]]. Deine Notizen unten bleiben.\n\n## Notizen\n- \n`;
+        + `> [!info] Aus Alma (${g.titel}), aktualisiert mit „Stundenplan aus Alma holen“ auf [[Stundenplan]].\n\n## Notizen\n- \n`;
       await app.vault.create(`${ordner}/${name}.md`, inhalt);
       bericht.neu++;
     }

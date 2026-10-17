@@ -6,6 +6,7 @@ Studium Autopilot/System/Daten/abruf.json
 Studium Autopilot/System/Daten/installiert.json
 Studium Autopilot/System/Daten/ilias.json
 Studium Autopilot/System/Daten/ilias-abruf.json
+Studium Autopilot/System/Daten/Karteikarten/
 .DS_Store
 Thumbs.db
 node_modules/

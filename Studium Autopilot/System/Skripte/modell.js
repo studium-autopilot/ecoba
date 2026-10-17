@@ -11,6 +11,12 @@
 // pruefungsphasen (altes Format „a|b|c“) nach System/Einstellungen.md – aber nur, wenn sich der berechnete Inhalt vom
 // vorhandenen unterscheidet. Ausgelöst wird das, wenn sich Einstellungen.md oder Semester.md ändern, und einmal beim
 // App-Start (nach dem Einlesen); im Normalfall ist dann alles gleich und es wird nichts geschrieben.
+// Ein Schreiber (seit 17.10.2026): Von selbst (Start, Änderung) schreibt nur das Gerät, das die zentralen Daten abruft
+// (ctx.zentral.abruferHier(): Abrufer, noch keiner oder der Abrufer seit 80 Min. still). So schreiben nicht mehrere Geräte
+// zugleich dieselbe Datei, in der auch deine Angaben stehen (iCloud: zuletzt gespeichert gewinnt; LiveSync: Konflikt).
+// Änderst du den Studienbeginn (Personalisieren, Einrichtung), schreibt das Gerät, auf dem du tippst, sofort. Der Abrufer
+// wartet nach einer Änderung an Einstellungen.md darum 20 s, bis dessen Ableitung per Sync da ist, und schreibt dann
+// meist nichts. Alle Geräte rechnen in daten() weiter selbst; nur Bases-Tabellen lesen die geschriebenen Felder.
 //
 // Musterplan (seit 2c variantengenau): Das empfohlene Fachsemester eines Moduls kommt aus System/Daten/Musterplan.md, Plan der
 // gewählten Variante (kleinstes fs des Eintrags mit diesem Code). Steht das Modul nicht im Plan, gilt es nur, wenn du es
@@ -134,7 +140,6 @@ module.exports = function (ctx) {
     const aktuellIndex = liste.findIndex((s) => s.beginn <= heute && heute <= s.ende);
     const vorStart = liste.length > 0 && heute < liste[0].beginn;
     const aktuell = liste[aktuellIndex >= 0 ? aktuellIndex : vorStart ? 0 : liste.length - 1] || null;
-    const lehrphase = !aktuell ? "" : vorStart ? "vor Studienbeginn" : heute < aktuell.vb ? "vor der Vorlesungszeit" : heute <= aktuell.ve ? "Vorlesungszeit" : "vorlesungsfreie Zeit";
     const variante = String(ein.variante == null ? "" : ein.variante).trim() || "offen";
     // Musterplan der Variante: Code → kleinstes Fachsemester (SQ100 steht in zwei Semestern)
     const mp = fmVon(MUSTERPLAN);
@@ -176,7 +181,7 @@ module.exports = function (ctx) {
       heute, zentral: Z, einstellungen: ein,
       name: String(ein.name == null ? "" : ein.name).trim(), variante, zielnote: String(ein.zielnote == null ? "" : ein.zielnote).trim(),
       studienbeginn, studienbeginnStandard: !studienbeginn, startSemester: liste.length ? liste[0].name : semesterAusDatum(heute),
-      semesterliste: liste, aktuell, fachsemester: aktuell ? aktuell.fs : 1, vorStart, lehrphase,
+      semesterliste: liste, aktuell, fachsemester: aktuell ? aktuell.fs : 1, vorStart,
       pausen: Z.pausen, freieTage: Z.freieTage, pruefungsphasen: Z.phasen, rueckmeldung: Z.rueckmeldung,
       module, termine, stundenplan, musterSemester, musterFs, musterplanVariante: plan ? plan.id : "",
       abgeleitet: zeilen(Z, liste),
@@ -262,6 +267,8 @@ module.exports = function (ctx) {
 
   // ---------- Abgleich mit System/Einstellungen.md ----------
   const protokoll = ctx.bleibend("protokoll", () => []); // Schreibvorgänge (für Tests), überlebt den Hot-Reload
+  // grund: „start“ und „änderung …“ = von selbst (nur der Abrufer schreibt), sonst ein Tipp auf diesem Gerät (schreibt sofort)
+  const vonSelbst = (grund) => /^(start|änderung)/.test(String(grund || ""));
   const abgleichen = async (grund) => {
     const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
     if (!f) return false;
@@ -271,6 +278,7 @@ module.exports = function (ctx) {
     const ist = D.einstellungen, soll = D.abgeleitet;
     const gleich = (a, b) => JSON.stringify((Array.isArray(a) ? a : []).map((x) => String(x))) === JSON.stringify(b);
     if (gleich(ist.semesterliste, soll.semesterliste) && gleich(ist.pausen, soll.pausen) && gleich(ist.pruefungsphasen, soll.pruefungsphasen)) return false;
+    if (vonSelbst(grund) && ctx.zentral && ctx.zentral.abruferHier && !(await ctx.zentral.abruferHier())) return false;
     await app.fileManager.processFrontMatter(f, (x) => { x.semesterliste = soll.semesterliste; x.pausen = soll.pausen; x.pruefungsphasen = soll.pruefungsphasen; });
     protokoll.push({ zeit: new Date().toISOString(), grund: String(grund || "") });
     ungueltig();
@@ -290,34 +298,62 @@ module.exports = function (ctx) {
   const dmy = (s) => `${dm(s)}${s.slice(0, 4)}`;
   const spanne = (a, b) => (a.slice(0, 4) === b.slice(0, 4) ? `${dm(a)} – ${dmy(b)}` : `${dmy(a)} – ${dmy(b)}`);
   const kurzSpanne = (a, b) => (a === b ? dm(a) : a.slice(0, 7) === b.slice(0, 7) ? `${a.slice(8, 10)}.–${dm(b)}` : `${dm(a)} – ${dm(b)}`);
-  const pille = (status, hinweis) => (status === "geschätzt" ? ` <span class="eba-pill warn" title="${esc(hinweis)}">geschätzt</span>` : "");
+  // Nur richtige Daten (Vorgabe vom 17.10.2026): Geschätztes ist markiert – das Semester mit einer ruhigen Pille, einzelne Angaben
+  // mit „*“ –, der Hinweis der zentralen Daten steht als Tooltip am Wert und, damit er auch ohne Maus lesbar ist, unter der
+  // Tabelle (gleiche Hinweise zusammengefasst; einer direkt, mehrere aufklappbar). Offizielles bleibt unmarkiert; die Fußnote erscheint nur, wenn etwas
+  // geschätzt ist.
+  const istGeschaetzt = (o) => o.status === "geschätzt";
+  const pille = (o) => (istGeschaetzt(o) ? ` <span class="eba-pill warn"${o.hinweis ? ` title="${esc(o.hinweis)}"` : ""}>geschätzt</span>` : "");
+  const stern = (text, o) => (istGeschaetzt(o) ? `<span class="eba-sd-g" title="geschätzt${o.hinweis ? `: ${esc(o.hinweis)}` : ""}">${text}*</span>` : text);
   const semesterTabelle = (D, persoenlich) => {
     const sems = persoenlich ? D.semesterliste : D.zentral.semester.map((s) => Object.assign({ fs: null }, s));
     const kopf = `<tr><th>Semester</th><th>Vorlesungszeit</th><th>Vorlesungsfrei</th><th>Prüfungsphasen</th><th>Rückmeldung fürs nächste</th></tr>`;
+    const hinweise = []; // { text, was: [...] } je Hinweis geschätzter Einträge, in Zeilenfolge; gleicher Text = ein Eintrag
+    let sterne = false;
+    const merken = (was, o) => {
+      if (!istGeschaetzt(o)) return;
+      sterne = true;
+      if (!o.hinweis) return;
+      let h = hinweise.find((x) => x.text === o.hinweis);
+      if (!h) { h = { text: o.hinweis, was: [] }; hinweise.push(h); }
+      if (h.was.indexOf(was) < 0) h.was.push(was);
+    };
     const reihen = sems.map((s) => {
       const frei = [].concat(
-        D.zentral.pausen.filter((p) => p.bis >= s.beginn && p.von <= s.ende).map((p) => ({ von: p.von, t: kurzSpanne(p.von, p.bis), g: p.status === "geschätzt" })),
-        D.zentral.freieTage.filter((t) => t.datum >= s.vb && t.datum <= s.ve).map((t) => ({ von: t.datum, t: dm(t.datum), g: t.status === "geschätzt" })),
+        D.zentral.pausen.filter((p) => p.bis >= s.beginn && p.von <= s.ende).map((p) => ({ von: p.von, t: kurzSpanne(p.von, p.bis), o: p, was: p.name })),
+        D.zentral.freieTage.filter((t) => t.datum >= s.vb && t.datum <= s.ve).map((t) => ({ von: t.datum, t: dm(t.datum), o: t, was: t.name })),
       ).sort((a, b) => a.von.localeCompare(b.von));
       const phasen = D.zentral.phasen.filter((p) => p.semester === s.name);
       const rm = D.zentral.rueckmeldung.find((r) => r.fuer === naechster(s.name));
       const jetzt = D.aktuell && D.aktuell.name === s.name && !D.vorStart;
-      return `<tr${jetzt ? ' class="eba-sd-jetzt"' : ""}><td><b>${esc(s.name)}</b>${s.fs ? ` · FS ${s.fs}` : ""}${pille(s.status, s.hinweis)}</td>`
+      merken(s.name, s);
+      for (const x of frei) merken(`${x.was} ${s.name}`, x.o);
+      for (const p of phasen) merken(`${p.art} ${s.name}`, p);
+      if (rm) merken(`Rückmeldung fürs ${rm.fuer}`, rm);
+      return `<tr${jetzt ? ' class="eba-sd-jetzt"' : ""}><td><b>${esc(s.name)}</b>${s.fs ? ` · FS ${s.fs}` : ""}${pille(s)}</td>`
         + `<td>${s.vb && s.ve ? spanne(s.vb, s.ve) : "–"}</td>`
-        + `<td>${frei.length ? frei.map((x) => esc(x.t) + (x.g ? "*" : "")).join(", ") : "–"}</td>`
-        + `<td>${phasen.length ? phasen.map((p) => `${esc(p.art)} ${kurzSpanne(p.von, p.bis)}${p.status === "geschätzt" ? "*" : ""}`).join("<br>") : "–"}</td>`
-        + `<td>${rm ? `${kurzSpanne(rm.von, rm.bis)}${rm.bis.slice(0, 4)}${rm.status === "geschätzt" ? "*" : ""}` : "–"}</td></tr>`;
+        + `<td>${frei.length ? frei.map((x) => stern(esc(x.t), x.o)).join(", ") : "–"}</td>`
+        + `<td>${phasen.length ? phasen.map((p) => stern(`${esc(p.art)} ${kurzSpanne(p.von, p.bis)}`, p)).join("<br>") : "–"}</td>`
+        + `<td>${rm ? stern(`${kurzSpanne(rm.von, rm.bis)}${rm.bis.slice(0, 4)}`, rm) : "–"}</td></tr>`;
     }).join("");
-    return `<table class="eba-sd-tabelle">${kopf}${reihen}</table>`;
+    return { tabelle: `<table class="eba-sd-tabelle">${kopf}${reihen}</table>`, sterne, hinweise };
   };
   const zeichnen = (el, art) => {
     const D = daten();
     if (!D.zentral.vorhanden) { el.innerHTML = `<div class="eba-sd-fehlt">System/Daten/Semester.md fehlt oder ist leer.</div>`; return; }
     const persoenlich = art !== "zentral";
-    let fuss = `* geschätzt (noch nicht veröffentlicht)`;
-    if (persoenlich) fuss += ` · Studienbeginn ${esc(D.startSemester)}${D.studienbeginnStandard ? " (änderbar unter Personalisieren)" : ""}`;
-    else fuss += D.zentral.stand ? ` · Stand ${dmy(D.zentral.stand)}` : "";
-    el.innerHTML = `<div class="eba-sd">${semesterTabelle(D, persoenlich)}<p class="eba-sd-fuss">${fuss}</p></div>`;
+    const T = semesterTabelle(D, persoenlich);
+    const fuss = [];
+    if (T.sterne) fuss.push("* geschätzt, noch nicht offiziell");
+    if (persoenlich) fuss.push(`Studienbeginn ${esc(D.startSemester)}${D.studienbeginnStandard ? " (änderbar unter Personalisieren)" : ""}`);
+    else if (D.zentral.stand) fuss.push(`Stand ${dmy(D.zentral.stand)}`);
+    const n = T.hinweise.length;
+    // Ein Hinweis steht direkt da, erst mehrere klappen sich ein
+    const zeile = (h) => `<b>${esc(h.was.join(", "))}</b>: ${esc(h.text)}`;
+    const hinweise = n === 1 ? `<p class="eba-sd-fuss">${zeile(T.hinweise[0])}</p>`
+      : n ? `<details class="eba-mehr eba-sd-mehr"><summary>${n} Hinweise zu den Schätzungen</summary>`
+      + `<ul class="eba-sd-hinweise">${T.hinweise.map((h) => `<li>${zeile(h)}</li>`).join("")}</ul></details>` : "";
+    el.innerHTML = `<div class="eba-sd">${T.tabelle}${fuss.length ? `<p class="eba-sd-fuss">${fuss.join(" · ")}</p>` : ""}${hinweise}</div>`;
   };
 
   // Argument eines Codeblocks aus der Kopfzeile (```eba-x <argument>```): Obsidian übergibt nur den Inhalt, darum die
@@ -373,12 +409,17 @@ module.exports = function (ctx) {
       inst.art = blockArgument(el, c, "eba-semesterdaten", ["zentral", "persoenlich"], "persoenlich");
       try { zeichnen(el, inst.art); } catch (e) { console.error("eba-semesterdaten", e); el.setText(String(quelle)); }
     });
-    const abgleichBald = ctx.entprellen((pfad) => { abgleichen("änderung " + pfad).catch((e) => console.error("modell: abgleichen", e)); }, 1500);
+    // Semesterdaten neu: bald abgleichen. Einstellungen geändert: 20 s warten, denn das Gerät, auf dem du getippt hast, schreibt
+    // die Ableitung selbst (Personalisieren, Einrichtung); kommt sie per Sync, ist danach alles gleich.
+    const abgleich = (pfad) => { abgleichen("änderung " + pfad).catch((e) => console.error("modell: abgleichen", e)); };
+    const abgleichBald = ctx.entprellen(abgleich, 1500);
+    const abgleichSpaeter = ctx.entprellen(abgleich, 20000);
     const geaendert = (pfad) => {
       ungueltig();
       if (!RELEVANT.test(pfad)) return;
       melden();
-      if (pfad === EINSTELLUNGEN || pfad === ZENTRAL) abgleichBald(pfad);
+      if (pfad === ZENTRAL) abgleichBald(pfad);
+      else if (pfad === EINSTELLUNGEN) abgleichSpaeter(pfad);
     };
     ctx.an(app.metadataCache, "changed", (f) => geaendert(f.path));
     ctx.an(app.metadataCache, "deleted", (f) => geaendert(f.path));
