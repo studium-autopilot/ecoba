@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://www.ffwtuebingen.de/blank-3"
+info: "Kneipentour der Freien Fachschaft Wiwi für Erstsemester mit anschließendem Semester Opening. Vorherige Anmeldung bei der Fachschaft erforderlich."
 herkunft: zentral
 zentral_id: 2026-10-08-kneipentour-und-semester-opening
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Kneipentour und Semester Opening
 
 **08.10.2026** · Anmeldung Pflicht · Opening im Kuckuck
+
+Kneipentour der Freien Fachschaft Wiwi für Erstsemester mit anschließendem Semester Opening. Vorherige Anmeldung bei der Fachschaft erforderlich.
 
 Quelle: [www.ffwtuebingen.de](https://www.ffwtuebingen.de/blank-3)
 

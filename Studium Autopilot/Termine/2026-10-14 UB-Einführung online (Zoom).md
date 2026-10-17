@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "Rundmail der Universitätsbibliothek vom 23.09.2026 („Führungen in der Universitätsbibliothek“)"
+info: "Online-Einführung der Universitätsbibliothek zu Ausleihe, Drucken, Raumbuchung und Katalog. Teilnahme ohne Anmeldung über Zoom."
 herkunft: zentral
 zentral_id: 2026-10-14-ub-einfuehrung-online-zoom
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # UB-Einführung online (Zoom)
 
 **14.10.2026** · 10:00 · online (Zoom), ca. 45 Min.
+
+Online-Einführung der Universitätsbibliothek zu Ausleihe, Drucken, Raumbuchung und Katalog. Teilnahme ohne Anmeldung über Zoom.
 
 Quelle: Rundmail der Universitätsbibliothek vom 23.09.2026 („Führungen in der Universitätsbibliothek“)
 

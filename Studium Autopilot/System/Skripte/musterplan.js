@@ -3,14 +3,14 @@
 // Raster Fachsemester × Module: je Semester eine Spalte mit Kopf (Fachsemester + dein Semester aus dem Datenmodell),
 // Modul-Chips (verlinkt auf die Modulnotiz, ✓ wenn bestanden/anerkannt, „OP“ = Orientierungsprüfung), Platzhalter für
 // Schwerpunkt- und Profilbildungsbereiche, ECTS-Summe je Semester; auf schmalen Bildschirmen untereinander.
-// Ohne Argument: die Variante aus den Einstellungen (bei „offen“ alle drei). Schreibt keine Datei.
+// Ohne Argument: die Variante aus den Einstellungen (bei „offen“ alle drei), mit gewählter Variante darunter der Link
+// „Andere Varianten ansehen →“ (System/Daten/Musterplan). Schreibt keine Datei.
 // Erweiterung: Das Plugin ruft registrieren() auf (Codeblock über ctx.codeblock). Stil: eba-core.css Abschnitt 44 (Klassen eba-mp-*).
 module.exports = function (ctx) {
   const app = window.app;
   const DATEN = "System/Daten/Musterplan.md";
   const VARIANTE = { "Economics": "economics", "Business Administration": "ba", "ohne Spezialisierung": "ohne" };
 
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const fmVon = (pfad) => { const f = app.vault.getAbstractFileByPath(pfad); const c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
   const md = () => (ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null);
 
@@ -71,6 +71,7 @@ module.exports = function (ctx) {
     const M = lesen();
     if (!M.eintraege.length) { el.createDiv({ cls: "eba-sd-fehlt", text: "System/Daten/Musterplan.md fehlt oder ist leer." }); return; }
     let ids = [];
+    let andere = false; // Link „Andere Varianten ansehen“: nur ohne Argument und mit gewählter Variante
     const a = String(arg || "").trim().toLowerCase();
     if (a === "alle") ids = M.plaene.map((p) => p.id);
     else if (a === "andere") {
@@ -79,7 +80,7 @@ module.exports = function (ctx) {
       if (!v) { el.createDiv({ cls: "eba-mp-quelle", text: "Deine Variante ist noch offen – alle drei Pläne stehen oben." }); return; }
       ids = M.plaene.map((p) => p.id).filter((id) => id !== v);
     } else if (a) ids = [a];
-    else { const d = md(); const v = d ? VARIANTE[d.variante] : null; ids = v ? [v] : M.plaene.map((p) => p.id); }
+    else { const d = md(); const v = d ? VARIANTE[d.variante] : null; ids = v ? [v] : M.plaene.map((p) => p.id); andere = !!v && quellePfad !== DATEN; }
     const plaene = M.plaene.filter((p) => ids.indexOf(p.id) >= 0);
     const M2 = Object.assign({}, M, { plaene });
     for (const p of plaene) planZeichnen(el, M2, p, quellePfad);
@@ -87,6 +88,11 @@ module.exports = function (ctx) {
     const dmy = M.stand ? `${M.stand.slice(8, 10)}.${M.stand.slice(5, 7)}.${M.stand.slice(0, 4)}` : "";
     fuss.appendText(`Quelle: Musterstudienplan des Fachbereichs${dmy ? ` (Stand ${dmy})` : ""}, eigene Darstellung · `);
     fuss.createEl("a", { text: "Studienverlaufspläne PO 2023", href: M.quelle, cls: "external-link", attr: { target: "_blank", rel: "noopener" } });
+    if (andere) {
+      const ziel = DATEN.replace(/\.md$/, "");
+      const link = el.createEl("p", { cls: "eba-hinweis eba-mp-andere" }).createEl("a", { text: "Andere Varianten ansehen →", href: ziel, cls: "internal-link", attr: { "data-href": ziel } });
+      link.addEventListener("click", (ev) => { ev.preventDefault(); app.workspace.openLinkText(ziel, quellePfad || "", ev.ctrlKey || ev.metaKey); });
+    }
   };
 
   const registrieren = () => {

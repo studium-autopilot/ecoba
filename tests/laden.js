@@ -44,7 +44,6 @@ function laden(name, { heute = "2026-10-15", frontmatter = {}, kontext = {} } = 
     codeblock: () => ({ instanzen: () => [], neu: () => {} }),
   }, kontext);
   const modul = { exports: {} };
-  // eslint-disable-next-line no-new-func
   new Function("module", "exports", "window", code)(modul, modul.exports, { app });
   const ergebnis = modul.exports(ctx);
   return { ctx, ergebnis };

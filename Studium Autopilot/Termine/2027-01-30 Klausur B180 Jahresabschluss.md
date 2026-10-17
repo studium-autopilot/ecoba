@@ -10,6 +10,7 @@ modul: "[[B180 Jahresabschluss]]"
 code: "B180"
 erledigt: false
 quelle: "Prüfungsamt: Prüfungstermine Pflicht- und Profilbildungsmodule WS 2026/27 Haupttermin (PDF, Stand 09.10.2026)"
+info: "Klausur im Haupttermin zum Modul B180 Jahresabschluss, 60 Minuten. Anmeldung im Prüfungsanmeldezeitraum in Alma, keine automatische Anmeldung."
 herkunft: zentral
 zentral_id: 2027-01-30-klausur-b180-jahresabschluss
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Klausur B180 Jahresabschluss
 
 **30.01.2027** · 10:00–11:00 · Raum folgt
+
+Klausur im Haupttermin zum Modul B180 Jahresabschluss, 60 Minuten. Anmeldung im Prüfungsanmeldezeitraum in Alma, keine automatische Anmeldung.
 
 Quelle: Prüfungsamt: Prüfungstermine Pflicht- und Profilbildungsmodule WS 2026/27 Haupttermin (PDF, Stand 09.10.2026)
 

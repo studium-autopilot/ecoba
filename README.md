@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/bilder/beta.svg" alt="Beta" height="22">&nbsp; Noch im Aufbau – noch nicht dabei: ILIAS-Sync, KI-Assistent für Mails, Einrichtung mit Claude Code
+<img src="docs/bilder/beta.svg" alt="Beta" height="22">&nbsp; Noch im Aufbau – noch nicht dabei: Abgabefristen aus ILIAS, KI-Assistent für Mails, Einrichtung mit Claude Code
 
 # Studium Autopilot – EcoBA
 
@@ -61,7 +61,7 @@ Hängt es irgendwo? → [Hilfe zur Installation](#hilfe-zur-installation)
 </tr>
 <tr>
 <td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan.png" alt="Stundenplan: Deine Woche aus Alma, mit einem Link verbunden" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma, mit einem Link verbunden</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen.png" alt="Unterlagen: Vorlesungsnotizen mit einem Klick, Unterlagen je Modul" width="100%"><br><b>Unterlagen</b><br>Vorlesungsnotizen mit einem Klick, Unterlagen je Modul</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen.png" alt="Unterlagen: Vorlesungsnotizen mit einem Klick, Kursdateien aus ILIAS je Modul" width="100%"><br><b>Unterlagen</b><br>Vorlesungsnotizen mit einem Klick, Kursdateien aus ILIAS je Modul</td>
 </tr>
 </table>
 
@@ -73,20 +73,21 @@ Termine, Fristen und Semesterdaten pflegt nicht jede:r selbst. Ein Server führt
 - **Scan auf persönliche Daten:** Namen, Mailadressen, Telefonnummern und Ähnliches halten einen Eintrag zurück.
 - **KI-Prüfung:** Ein zweiter, getrennter KI-Aufruf prüft geänderte Einträge auf persönliche Angaben und Plausibilität. Nur was alle Prüfungen besteht, wird veröffentlicht.
 
-Was die Prüfung besteht, landet als einfache Datendatei im öffentlichen Repo [`studium-autopilot/ecoba-daten`](https://github.com/studium-autopilot/ecoba-daten). Das Plugin im Vault holt sie dort ab, prüft sie noch einmal und legt daraus Termin-Notizen an.
+Was die Prüfung besteht, landet als einfache Datendatei im öffentlichen Repo [`studium-autopilot/ecoba-daten`](https://github.com/studium-autopilot/ecoba-daten). Das Plugin im Tresor holt sie dort ab, prüft sie noch einmal und legt daraus Termin-Notizen an.
 
-<img src="docs/bilder/datenfluss.png" width="100%" alt="Datenfluss: öffentliche Uni-Quellen → KI-Abgleich stündlich → automatische Prüfung (Freigabeliste, Scan auf persönliche Daten, KI-Prüfung) → ecoba-daten auf GitHub Pages → Plugin im Vault">
+<img src="docs/bilder/datenfluss.png" width="100%" alt="Datenfluss: öffentliche Uni-Quellen → KI-Abgleich stündlich → automatische Prüfung (Freigabeliste, Scan auf persönliche Daten, KI-Prüfung) → ecoba-daten auf GitHub Pages → Plugin im Tresor">
 
 Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der letzten Prüfung; Angaben, die die Uni noch nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
 
 ## Was das Plugin tut und nicht tut
 
-Der Vault bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du musst nichts weiter installieren.
+Der Tresor bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du musst nichts weiter installieren.
 
 - **Lädt von selbst nur Daten, nie Code.** Eine neue Version der Vorlage kommt nur, wenn du auf **Aktualisieren** tippst –
   direkt aus diesem Repo, jede Datei mit Prüfsumme geprüft, vorher mit Sicherung. Deine Einträge bleiben.
-- **Sendet nichts.** Kein Konto, keine Statistik, keine Telemetrie. GitHub sieht beim Abruf deine IP-Adresse, wie bei jeder Webseite.
-- **Speichert keine Passwörter**, auch nicht für Alma, ILIAS oder Mail.
+- **Kein Konto, keine Statistik, keine Telemetrie.** Nichts über dich geht an den Autor oder an Dritte. GitHub sieht beim Abruf deine IP-Adresse, wie bei jeder Webseite.
+- **ILIAS nur, wenn du es verbindest.** Dann meldet sich das Plugin von deinem Gerät aus bei der Uni an und lädt deine
+  Kursdateien, nur von den Servern der Uni. Das Passwort bleibt verschlüsselt im Schlüsselbund des Geräts und wird nie synchronisiert.
 - **Dein Alma-Link bleibt auf dem Gerät.** Er wird nicht synchronisiert und nirgends hin geschickt.
 - Deine Häkchen und alles unter „Meine Notizen“ in einem Termin werden nie überschrieben.
 
@@ -96,7 +97,7 @@ Mehr dazu: [docs/datenschutz.md](docs/datenschutz.md).
 
 **Kein offizielles Angebot der Universität Tübingen. Keine Gewähr – maßgeblich sind Alma, Prüfungsamt und Prüfungsordnung.**
 
-Der Vault enthält keine Lehrmaterialien (Folien, Skripte, Altklausuren). Modul- und Prüfungsordnungs-Angaben sind in eigenen Worten zusammengefasst und auf die öffentlichen Dokumente der Universität verlinkt.
+Der Tresor enthält keine Lehrmaterialien (Folien, Skripte, Altklausuren); Dateien aus ILIAS lädt das Plugin nur für dich in deinen eigenen Tresor. Modul- und Prüfungsordnungs-Angaben sind in eigenen Worten zusammengefasst und auf die öffentlichen Dokumente der Universität verlinkt.
 
 Apple und App Store sind Marken der Apple Inc. Google Play und das Google Play-Logo sind Marken der Google LLC.
 
@@ -144,12 +145,13 @@ Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ec
 
 ## In English
 
-Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business Administration at the University of Tübingen. It combines a module catalogue, study plan, grade tracking and a calendar in one place. Dates and deadlines are kept up to date automatically: a server runs an hourly AI-assisted comparison of public university sources, checks the results automatically (allowlist, scan for personal data, AI review) and publishes them as plain JSON on GitHub Pages. A small Obsidian plugin bundled with the vault fetches only that data, never code, and sends nothing back; a new version of the vault itself is installed only when the user taps “Update”, straight from this repo, with every file checked against a SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip). Architecture notes are in [docs/architektur.md](docs/architektur.md) and [docs/daten-v1.md](docs/daten-v1.md).
+Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business Administration at the University of Tübingen. It combines a module catalogue, study plan, grade tracking and a calendar in one place. Dates and deadlines are kept up to date automatically: a server runs an hourly AI-assisted comparison of public university sources, checks the results automatically (allowlist, scan for personal data, AI review) and publishes them as plain JSON on GitHub Pages. A small Obsidian plugin bundled with the vault fetches only that data, never code, and sends nothing back. Only if you connect your university's ILIAS does it also sign in there from your device and download your own course files, contacting nothing but the university's servers; the password stays in the device's keychain and is never synced. A new version of the vault itself is installed only when the user taps “Update”, straight from this repo, with every file checked against a SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip). Architecture notes are in [docs/architektur.md](docs/architektur.md) and [docs/daten-v1.md](docs/daten-v1.md).
 
 ## Lizenz
 
 - Code (Plugin, Skripte, Design): [MIT](LICENSE)
 - Eigene Inhalte, Texte und Daten: [CC BY 4.0](LICENSE-INHALTE.md)
+- Fremder Code (ILIAS-Anmeldung und Seiten lesen nach PFERD, MIT): [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
 
 ## Autor
 

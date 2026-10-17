@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/"
+info: "Vorlesungsfreie Zeit über Weihnachten und den Jahreswechsel laut den Semesterterminen der Universität."
 herkunft: zentral
 zentral_id: 2026-12-23-weihnachtspause
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Weihnachtspause
 
 **23.12.2026 – 06.01.2027**
+
+Vorlesungsfreie Zeit über Weihnachten und den Jahreswechsel laut den Semesterterminen der Universität.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/)
 

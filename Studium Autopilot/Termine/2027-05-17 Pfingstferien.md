@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/"
+info: "Vorlesungsfreie Woche über Pfingsten laut den Semesterterminen der Universität."
 herkunft: zentral
 zentral_id: 2027-05-17-pfingstferien
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Pfingstferien
 
 **17.05.2027 – 22.05.2027**
+
+Vorlesungsfreie Woche über Pfingsten laut den Semesterterminen der Universität.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/)
 

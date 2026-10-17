@@ -11,7 +11,6 @@ cssclasses:
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Studienverlauf</h1>
-<div class="eba-meta"><span>Regelstudienzeit 6 Semester</span><span>180 ECTS</span><span>PO 2023</span></div>
 </div>
 
 ```eba-verlauf
@@ -26,10 +25,6 @@ Studienverlauf: erscheint, sobald Studium Autopilot läuft.
 > Musterplan: erscheint, sobald Studium Autopilot läuft.
 > ```
 
-<p class="eba-hinweis"><a class="internal-link" data-href="System/Daten/Musterplan" href="System/Daten/Musterplan">Andere Varianten ansehen →</a></p>
-
-Oben steht der Plan deiner Variante (bei „offen“ alle drei).
-
 <details class="eba-mehr"><summary>Mehr erfahren</summary>Deine Reise oben legt Grund- und Profilmodule in das empfohlene Semester. Trägst du im Modul eine eigene Planung ein, gilt diese.</details>
 
 
@@ -39,8 +34,6 @@ Oben steht der Plan deiner Variante (bei „offen“ alle drei).
 > ```eba-semesterdaten
 > Semestertermine: erscheinen, sobald Studium Autopilot läuft.
 > ```
->
-> Rückmeldung nur per Überweisung des Semesterbeitrags (Betrag steht in Alma).
 
 
 ## Regeln
@@ -88,8 +81,6 @@ Oben steht der Plan deiner Variante (bei „offen“ alle drei).
 > > > [!eba-achtung]- Verwechslungsgefahr IBA / IEco
 > > > - **IBA** (International Business Administration): 7 Semester, 210 ECTS, Pflicht-Ausland.
 > > > - **IEco** (International Economics): andere Pflichtmodule, International Profile.
-> > > - Gleiche Modulcodes, andere Pläne. Dieser Vault nutzt nur die **EcoBA**-Tabellen.
+> > > - Gleiche Modulcodes, andere Pläne. Studium Autopilot nutzt nur die **EcoBA**-Tabellen.
 >
 > Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Stand 30.09.2026 · Prüfungen und Noten: [[Prüfungen#Regeln|Prüfungen]], [[Noten & ECTS#Regeln|Noten & ECTS]]
-
-<p class="eba-fuss">Stand 30.09.2026 · <a href="https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/downloads/">PO 2023 BT</a> · <a href="https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/">Semestertermine bis 2029</a> · <a href="https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienorganisation/studienplaene-und-stundenplaene/pruefungsordnungsaenderungen-2023/">Studienverlaufspläne PO 2023</a> (Stand 27.09.2023) · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Offizielle Dokumente</a></p>

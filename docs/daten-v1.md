@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 15.10.2026. Vertrag zwischen dem Export (Seite des Autors, später `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 17.10.2026 (`gruppen.json`). Vertrag zwischen dem Export (Seite des Autors, später `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -15,6 +15,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `manifest.json` | ja | 16 KB | Zeitstempel, Prüfsummen, Plugin-Version, Hinweis, Notbremse |
 | `termine.json` | nein | 1 000 000 Byte | Termine, Fristen, Veranstaltungen (max. 2000 Einträge) |
 | `semester.json` | nein | 256 KB | Semesterdaten, entspricht `System/Daten/Semester.md` |
+| `gruppen.json` | nein | 512 KB | Übungs- und Tutoriengruppen (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#gruppenjson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); Plugin 0.1 liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; Plugin 0.1 liest ihn noch nicht |
 
@@ -125,7 +126,7 @@ Eine Liste mit einem einzigen unzulässigen Eintrag lehnt das Plugin ganz ab.
 | `bereich` | nein | seit 15.10.2026. Fehlt oder ein Wert aus der Freigabeliste „Bereiche“ unten. Ein **unbekannter Wert wird ignoriert** (der Eintrag bleibt, ohne Bereich). Der Export schreibt das Feld nur, wenn es gesetzt ist. |
 | `quelle_url` | nein | leer oder `https://` auf einer erlaubten Domain (siehe unten), ≤ 500 Zeichen, ohne Leerzeichen, Anführungszeichen, `<>`, Backslash, Benutzer, Port |
 | `quelle_text` | nein | ≤ 200 Zeichen, reiner Text. Für Quellen ohne öffentliche Adresse (Rundmail an alle, PDF, Folie). Wird nur gezeigt, wenn `quelle_url` leer ist. |
-| `info` | nein | ≤ 200 Zeichen, reiner Text **für alle** (nie der Notiztext aus dem Vault des Autors) |
+| `info` | nein | ≤ 200 Zeichen, reiner Text **für alle** (nie der Notiztext aus dem Tresor des Autors) |
 | `geprueft` | nein | ISO-Datum oder -Zeit der letzten Prüfung durch den Abgleich; die Notiz zeigt „geprüft am TT.MM.JJJJ“ |
 
 **Säubern** (für `ort`, `info`, `quelle_text`, `hinweis`, Namen in `semester.json`): HTML-Tags, `<% … %>`, `obsidian://…`,
@@ -153,7 +154,7 @@ Erweitern nur mit Eintrag in dieser Tabelle **und** in `BEREICHE` in `zentral.js
 
 ### Freigabeliste Kategorien
 
-Genau die im Vault verwendeten: `Semester`, `Vorlesungsfrei`, `Prüfung`, `Frist`, `Einführung`, `Lehre`, `Fachschaft`,
+Genau die im Tresor verwendeten: `Semester`, `Vorlesungsfrei`, `Prüfung`, `Frist`, `Einführung`, `Lehre`, `Fachschaft`,
 `Veranstaltung`. `Fachschaft` und `Veranstaltung` blendet der Schalter „Fachschaft & Veranstaltungen“ aus.
 
 ### Freigabeliste Domains (`quelle_url`, `quellen` in semester.json)
@@ -169,7 +170,7 @@ Erweitern nur mit Begründung in dieser Tabelle **und** in `DOMAINS` in `zentral
 
 1. **Hat die Termin-Notiz ein Feld `zentral_id`, gilt es.** Einmal vergeben, ändert sich die id nie – auch nicht, wenn Datum
    oder Titel sich ändern (das Plugin benennt die Notiz dann um).
-2. Sonst wird sie **einmal** aus dem Dateinamen der Notiz im Vault des Autors abgeleitet (ohne `.md`, Form `JJJJ-MM-TT Titel`):
+2. Sonst wird sie **einmal** aus dem Dateinamen der Notiz im Tresor des Autors abgeleitet (ohne `.md`, Form `JJJJ-MM-TT Titel`):
    1. klein schreiben;
    2. `ä`→`ae`, `ö`→`oe`, `ü`→`ue`, `ß`→`ss`;
    3. Unicode NFKD, dann Zeichen U+0300–U+036F entfernen (Akzente);
@@ -201,7 +202,7 @@ def zentral_id(dateiname: str) -> str:
 ```
 
 **Damit die id fest bleibt**, muss der Export sie sich merken, sobald er sie das erste Mal veröffentlicht. Empfehlung: Der Export
-schreibt `zentral_id` in die Termin-Notiz im Vault des Autors (braucht dessen Okay). Alternative ohne Eingriff:
+schreibt `zentral_id` in die Termin-Notiz im Tresor des Autors (braucht dessen Okay). Alternative ohne Eingriff:
 eine Zuordnungsdatei im Export (`Pfad → id`, bei Umbenennung über Titel + Kategorie + Code nachgeführt).
 Die 109 Termin-Notizen der Vorlage tragen bereits `zentral_id` nach Regel 2 (Migration 15.10.2026), aus den heutigen
 Dateinamen – der Export erzeugt also für sie dieselben ids.
@@ -230,9 +231,71 @@ ohne ein einziges gültiges Semester wird die Datei abgelehnt. Das Plugin schrei
 unterscheidet (Vergleich der Felder, nicht der Formatierung); den Text unter dem Frontmatter lässt es stehen. `modell.js` leitet
 daraus wie bisher Semesterliste, Pausen und Prüfungsphasen in `System/Einstellungen.md` ab.
 
+## gruppen.json
+
+Seit 17.10.2026 (Plan Abschnitt 20). Optional: Fehlt die Datei im Manifest, bleibt auf jedem Gerät der letzte Stand. Plugins vor
+dieser Fassung kennen den Namen nicht und ignorieren ihn.
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-10-17",
+ "gruppen": [
+  {
+   "id": "ws-2026-27-x100-uebung-1",
+   "code": "X100",
+   "art": "Übung",
+   "gruppe": "1",
+   "tag": "Di",
+   "von": "08:00",
+   "bis": "10:00",
+   "ct": true,
+   "raum": "Hörsaal 1 (Beispielbau)",
+   "anmeldung": "Über den ILIAS-Kurs X100, ab Mo 19.10., 12:00; nur eine Gruppe.",
+   "quelle_url": "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=…&periodId=…",
+   "semester": "WS 2026/27",
+   "zeitraum": { "von": "2026-10-20", "bis": "2027-02-02" },
+   "geprueft": "2026-10-17"
+  }
+ ]
+}
+```
+
+| Feld | Pflicht | Regel |
+|---|---|---|
+| `schema` | ja | genau `1`; sonst, ohne Liste `gruppen` oder mit mehr als 1000 Einträgen wird die **ganze Datei** abgelehnt |
+| `stand` | nein | Datum `JJJJ-MM-TT` der letzten Pflege; das Plugin zeigt es im Fuß an |
+| `id` | ja | wie bei Terminen (`^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$`), eindeutig; doppelte: der erste Eintrag gilt. Empfohlen: `<semester>-<code>-<art>-<gruppe>` klein, z. B. `ws-2026-27-x100-uebung-1` |
+| `code` | ja | Modulcode wie bei Terminen |
+| `art` | ja | `Übung` oder `Tutorium` |
+| `gruppe` | nein | Nummer oder Name, wie die Quelle ihn nennt, ≤ 20 Zeichen, reiner Text (abgelehnt wie `titel`: HTML, Klammern, senkrechter Strich …); leer = ohne Nummer |
+| `tag` | ja | `Mo`, `Di`, `Mi`, `Do` oder `Fr` |
+| `von`, `bis` | ja | `HH:MM`, `bis` nach `von`. Zeiten wie in der Quelle (Alma: volle Stunden). |
+| `ct` | nein | `true` = c.t. (beginnt 15 Min. später, endet 15 Min. früher); alles andere gilt als nicht gesetzt. Das Plugin zeigt „8–10 c.t.“. |
+| `raum` | nein | ≤ 120 Zeichen nach dem Säubern; mehrere Räume mit „ / “ getrennt |
+| `leitung` | nein | ≤ 120 Zeichen. **Einziges Feld mit Personennamen**, und nur, wenn die Uni den Namen selbst öffentlich nennt (siehe unten). |
+| `anmeldung` | nein | ≤ 200 Zeichen, reiner Text für alle: wo und ab wann man sich anmeldet |
+| `quelle_url` | ja | wie bei Terminen (`https`, erlaubte Domain) |
+| `semester` | ja | `WS JJJJ/JJ` oder `SS JJJJ` |
+| `zeitraum` | nein | `{ "von", "bis" }`, Daten wie bei Terminen, `bis ≥ von`, höchstens 400 Tage: erster und letzter Termin der Gruppe |
+| `geprueft` | nein | ISO-Datum oder -Zeit der letzten Prüfung |
+
+Gesäubert wie `info` (siehe oben); ungültige Einträge werden **einzeln** verworfen, unbekannte Felder ignoriert. Das Plugin
+schreibt aus `gruppen.json` **keine Notizen**: Jedes Gerät holt die Datei selbst (auch wenn ein anderes Gerät die Termine
+schreibt), prüft sie wie die anderen Dateien gegen das Manifest und speichert nur die gültigen Einträge gerätelokal
+(`eba-zentral-gruppen`). Stimmt die Prüfsumme nicht, wird in diesem Lauf nichts übernommen. Anzeige: Codeblock `eba-gruppen`
+(`System/Skripte/gruppen.js`), gefiltert wie die Termine mit `code` und auf das aktuelle und das nächste Semester; mit Argument
+`alle` (```` ```eba-gruppen alle ```` ) ohne Filter. Gruppen, die im eigenen Stundenplan stehen (gleicher Code, Semester,
+Wochentag, Beginn höchstens 15 Min. daneben), sind markiert; ein eigener „Stand“ wird nicht gespeichert.
+
+**Namen (Plan Abschnitt 20):** `leitung` nur, wenn die Universität den Namen selbst öffentlich nennt (Alma-Vorlesungsverzeichnis
+ohne Anmeldung, Seite des Lehrstuhls), mit `quelle_url` auf genau diese Seite. Nie aus Fotos, Folien, Mails oder ILIAS, nie die
+eigene Gruppe des Autors. Wer nicht genannt werden möchte, meldet das per Issue im Haupt-Repo; der Export entfernt den Namen dann
+über eine Sperrliste.
+
 ## Was das Plugin daraus macht (Kurzfassung)
 
-- **Abruf:** beim Start (20 s + Zufallsversatz 0–10 Min.), dann stündlich, plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
+- **Abruf:** beim Start (20 s + Zufallsversatz 0–2 Min.), dann stündlich, beim Zurückkehren in die App (letzter Versuch über 30 Min. her), plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
   der letzte Stand; es wird nichts geschrieben.
 - **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (`geraet`, `seit`, `zuletzt`, `angewendet`). Ein anderes Gerät übernimmt
   erst, wenn `zuletzt` älter als 3 h ist.
@@ -249,7 +312,7 @@ daraus wie bisher Semesterliste, Pausen und Prüfungsphasen in `System/Einstellu
 
 1. Nur Einträge nach Freigabeliste (Kategorie, öffentliche Quelle oder Rundmail an alle, nichts mit `persoenlich: true`,
    Persönliches nur mit `teilen: true`); nur die Felder oben; **nie** den Notiztext. `semester.json` kommt aus dem Frontmatter
-   von `System/Daten/Semester.md` im Vault des Autors; fehlt die Datei, fehlt `semester.json` (Geräte behalten ihren Stand).
+   von `System/Daten/Semester.md` im Tresor des Autors; fehlt die Datei, fehlt `semester.json` (Geräte behalten ihren Stand).
 2. Vor dem Veröffentlichen dieselben Prüfungen wie das Plugin (Schema, Grenzen, Domains), dazu Scan auf persönliche Daten und
    eine Höchstzahl an Änderungen je Lauf. Ein **Scan-Treffer hält nur diesen Eintrag zurück** (wie das KI-Urteil
    „persönlich“; eine schon veröffentlichte Fassung bleibt) und steht im Protokoll unter „Termine nicht an alle geteilt“.
@@ -259,7 +322,11 @@ daraus wie bisher Semesterliste, Pausen und Prüfungsphasen in `System/Einstellu
 4. Termine erst entfernen, wenn ihr Ende mindestens 30 Tage zurückliegt – oder wenn sie wirklich entfallen.
 5. Prüfsummen über die geschriebenen Bytes; Manifest, Dateien und `plugin_aktuell` in einem Commit. `release`/`beta` kommen
    aus der Konfiguration des Exports und werden unverändert übernommen (nach derselben Prüfung wie im Plugin).
-6. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
+6. `gruppen.json` (seit 17.10.2026): aus der Gruppen-Masterliste des Abgleichs; dieselben Prüfungen wie das Plugin, dazu Scan auf
+   persönliche Angaben in allen Feldern; Personennamen nur in `leitung`, und nur, wenn der Name auf der Seite unter `quelle_url`
+   steht (Abruf ohne Anmeldung) und die Seite nicht ILIAS ist; Namen auf der Sperrliste fallen weg. Ein Fehler hält nur
+   `gruppen.json` an (der zuletzt veröffentlichte Stand bleibt), nie die Termine.
+7. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 
 Testquelle mit allen Fällen: lokal beim Autor (nicht im Repo). Öffentliche Tests: `tests/` (siehe `docs/tests.md`).

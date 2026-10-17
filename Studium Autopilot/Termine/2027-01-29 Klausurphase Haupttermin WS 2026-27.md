@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/"
+info: "Prüfungszeitraum des Haupttermins für die Pflicht- und Profilbildungsmodule des Fachbereichs Wirtschaftswissenschaft. Prüfungen vorher im Anmeldezeitraum in Alma anmelden."
 herkunft: zentral
 zentral_id: 2027-01-29-klausurphase-haupttermin-ws-2026-27
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Klausurphase Haupttermin WS 2026/27
 
 **29.01.2027 – 13.02.2027** · Kupferbau HS 21–25 und Mohlstraße 36
+
+Prüfungszeitraum des Haupttermins für die Pflicht- und Profilbildungsmodule des Fachbereichs Wirtschaftswissenschaft. Prüfungen vorher im Anmeldezeitraum in Alma anmelden.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/)
 

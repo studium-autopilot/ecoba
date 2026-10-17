@@ -36,7 +36,8 @@ Update-Liste, `notiz`), siehe Schritt 6.
 
 ```
 python werkzeuge/pruefen.py .
-node --test tests/*.test.js
+npm ci && npm test && npm run lint
+python -m ruff check werkzeuge/
 ```
 
 `tests/update.test.js` prüft dabei auch die Update-Liste im Baum (Klassen, Größen, Prüfsummen, keine Datei vergessen).
@@ -47,18 +48,25 @@ Android, Windows, Mac, hell und dunkel.
 
 Den Baum in einen Klon dieses Repos kopieren (vorher alles außer `.git/` löschen, damit entfernte Dateien auch hier
 verschwinden), prüfen, was sich geändert hat (`git status`, `git diff --stat`), und **einen** Commit mit einer kurzen
-Beschreibung anlegen. Kein Force-Push. GitHub Actions (`.github/workflows/pruefen.yml`) muss grün sein.
+Beschreibung anlegen. Kein Force-Push (auf GitHub ohnehin gesperrt). GitHub Actions (`.github/workflows/pruefen.yml`) muss
+grün sein. Commits und Tags sind signiert (SSH-Schlüssel, „Verified“ auf GitHub).
+
+Dependabot schlägt monatlich neuere Versionen der Actions und von ESLint vor. Einen gemergten Dependabot-PR in der
+Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst überschreibt ihn der nächste Export.
 
 ## 4. Version und Tag
 
 - Version in `manifest.json` des Plugins (`version`) und `CHANGELOG.md` erhöhen – in der Arbeitskopie, vor dem Export.
-- Tag auf den Release-Commit: `git tag v0.2.0` und `git push origin v0.2.0`. Die Update-Liste und alle Dateien werden über
-  `raw.githubusercontent.com/studium-autopilot/ecoba/v<version>/` geladen; der Tag darf danach nie verschoben werden.
+- Tag auf den Release-Commit: `git tag -m "Studium Autopilot EcoBA 0.2.0" v0.2.0` und `git push origin v0.2.0`. Die
+  Update-Liste und alle Dateien werden über `raw.githubusercontent.com/studium-autopilot/ecoba/v<version>/` geladen; der Tag
+  darf danach nie verschoben werden. GitHub erzwingt das: Ein Ruleset sperrt `v*`-Tags gegen Ändern und Löschen.
 
 ## 5. GitHub-Release
 
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
-**`Studium-Autopilot.zip`** anhängen (genau dieser Name). Als **Latest release** veröffentlichen. Das ZIP enthält nur den
+**`Studium-Autopilot.zip`** anhängen (genau dieser Name). Titel wie die Überschrift im Changelog:
+`0.3.1 – Update-Hinweis auf dem Dashboard`. Als **Latest release** veröffentlichen. Releases sind unveränderlich (Immutable
+Releases): Nach dem Veröffentlichen lassen sich Assets nicht mehr tauschen, also erst als Entwurf vollständig machen. Das ZIP enthält nur den
 Tresor-Ordner, so wie Nutzer:innen ihn brauchen (siehe `docs/installation.md`).
 
 ## 6. Erst jetzt: Update anbieten (Daten-Repo)

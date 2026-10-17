@@ -6,17 +6,21 @@
 //   1. manifest.json holen (klein). Fehler/kein Netz → letzter Stand bleibt, Status merkt den Fehler, nichts wird geschrieben.
 //      pause: true → nichts übernehmen, Status „pausiert“.
 //   2. Abrufer-Sperre (System/Daten/abruf.json, synchronisiert): Nur EIN Gerät schreibt. Ein anderes Gerät übernimmt erst,
-//      wenn „zuletzt“ älter als 3 h ist. abruf.json wird nur bei Wechsel oder spätestens alle 2 h (Puls) geschrieben.
+//      wenn „zuletzt“ älter als 80 Min. ist. abruf.json wird nur bei Wechsel oder spätestens alle 50 Min. (Puls) geschrieben.
 //   3. Dateien nur bei geänderter Prüfsumme holen (Prüfsummen gerätelokal), SHA-256 gegen das Manifest prüfen (Web Crypto).
 //      Ein Prüfsummenfehler → in diesem Lauf wird gar nichts übernommen.
 //   4. Strenge Prüfung je Eintrag (Schema, Grenzen, Kategorien, Domains, reiner Text). Ungültige Einträge einzeln verwerfen.
 //   5. Übernehmen: Termine → Notizen in Termine/ (herkunft: zentral, zentral_id); Semesterdaten → System/Daten/Semester.md.
 //      Geschrieben wird nur bei inhaltlicher Änderung. Nie angefasst: Notizen ohne herkunft: zentral, das Feld erledigt,
 //      alles unter „## Meine Notizen“, eigene Felder und Tags.
-// Wann: beim Start (nach 20 s + Zufallsversatz 0–10 Min.), dann stündlich, plus Aktion „Zentrale Daten jetzt aktualisieren“.
+//   Übungs- und Tutoriengruppen (gruppen.json, optional, Plan Abschnitt 20): holt JEDES Gerät selbst (vor der Abrufer-Sperre),
+//      geprüft wie oben, nur gerätelokal gespeichert (eba-zentral-gruppen), keine Notizen. Anzeige: gruppen.js (eba-gruppen).
+// Wann: beim Start (nach 20 s + Zufallsversatz 0–2 Min.), dann stündlich, beim Zurückkehren in die App (iPhone/iPad: Obsidian
+//   bleibt im Hintergrund geladen, Zeitgeber ruhen dort), wenn der letzte Versuch über 30 Min. her ist, plus Aktion
+//   „Zentrale Daten jetzt aktualisieren“.
 // Testeinstiege (docs/architektur.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
 // plugin.testZentralBasis (andere Basis-URL, z. B. lokaler Server). Gerätelokal (app.saveLocalStorage): eba-geraet,
-// eba-zentral-stand, eba-zentral-daten.
+// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -32,8 +36,10 @@ module.exports = function (ctx) {
   const ORDNER = "Termine";
   const MEINE = "## Meine Notizen";
   const MIN = 60e3, STUNDE = 60 * MIN;
-  const UEBERNAHME = 3 * STUNDE; // anderes Gerät übernimmt, wenn der Abrufer so lange still war
-  const PULS = 2 * STUNDE;       // Abrufer erneuert abruf.json höchstens so oft (unter UEBERNAHME, sonst Wechsel trotz Betrieb)
+  // Abrufer-Wechsel: Ist das abrufende Gerät aus (PC im Ruhezustand), übernimmt ein anderes nach UEBERNAHME. Der Abrufer erneuert
+  // abruf.json bei jedem stündlichen Lauf (PULS unter einer Stunde), daher liegt UEBERNAHME knapp über einer Stunde (0.3.2).
+  const UEBERNAHME = 80 * MIN; // anderes Gerät übernimmt, wenn der Abrufer so lange still war
+  const PULS = 50 * MIN;       // Abrufer erneuert abruf.json höchstens so oft (unter UEBERNAHME, sonst Wechsel trotz Betrieb)
   const KATEGORIEN = ["Semester", "Vorlesungsfrei", "Prüfung", "Frist", "Einführung", "Lehre", "Fachschaft", "Veranstaltung"];
   const VERANSTALTUNG = ["Fachschaft", "Veranstaltung"];
   const STATUS = ["offiziell", "geschätzt"];
@@ -44,14 +50,15 @@ module.exports = function (ctx) {
   const bereichOk = (b) => typeof b === "string" && Object.prototype.hasOwnProperty.call(BEREICHE, b);
   // Erlaubte Domains für Links (inkl. Subdomains wie alma., ovidius., www.). Erweitern nur mit Begründung in docs/daten-v1.md.
   const DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de"];
-  const DATEIEN = { "termine.json": 1000000, "semester.json": 262144 }; // bekannte Dateien und Höchstgröße (Bytes)
-  const G = { manifest: 16384, id: 80, titel: 120, ort: 120, uhrzeit: 11, info: 200, quelleText: 200, url: 500, hinweis: 200, termine: 2000, name: 60, liste: 100 };
+  const DATEIEN = { "termine.json": 1000000, "semester.json": 262144, "gruppen.json": 524288 }; // bekannte Dateien und Höchstgröße (Bytes)
+  const GRUPPEN = "gruppen.json"; // optional, gerätelokal (nicht an die Abrufer-Sperre gebunden)
+  const G = { manifest: 16384, id: 80, titel: 120, ort: 120, uhrzeit: 11, info: 200, quelleText: 200, url: 500, hinweis: 200, termine: 2000, name: 60, liste: 100,
+    gruppen: 1000, gruppe: 20, raum: 120, leitung: 120, anmeldung: 200 };
   const DATUM_MIN = "2020-01-01", DATUM_MAX = "2040-12-31";
   const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
-  const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten" };
+  const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten", gruppen: "eba-zentral-gruppen" };
 
   // ---------- Kleine Helfer ----------
-  const pad = (n) => String(n).padStart(2, "0");
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
   const dmy = (s) => `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}`;
   const jetztMs = () => Date.now();
@@ -258,6 +265,59 @@ module.exports = function (ctx) {
     }
     if (!aus.semester.length) return { fehler: "semester.json: keine gültigen Semester" };
     return { wert: aus, verworfen };
+  };
+
+  // ---------- Prüfen: Übungs- und Tutoriengruppen (gruppen.json, docs/daten-v1.md) ----------
+  // → { stand, gruppen: [gültig], verworfen: [{ id, grund }] } oder { fehler } (ganze Datei abgelehnt)
+  const ARTEN = ["Übung", "Tutorium"];
+  const TAGE = ["Mo", "Di", "Mi", "Do", "Fr"];
+  const UHR = /^([01]\d|2[0-3]):([0-5]\d)$/;
+  const gruppeNormal = (e) => {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return { fehler: "kein Objekt" };
+    if (typeof e.id !== "string" || !ID.test(e.id)) return { fehler: "id ungültig" };
+    if (typeof e.code !== "string" || !MODULCODE.test(e.code)) return { fehler: "code ungültig" };
+    if (ARTEN.indexOf(e.art) < 0) return { fehler: "art nicht erlaubt" };
+    if (TAGE.indexOf(e.tag) < 0) return { fehler: "tag ungültig" };
+    if (typeof e.von !== "string" || !UHR.test(e.von) || typeof e.bis !== "string" || !UHR.test(e.bis) || e.bis <= e.von) return { fehler: "von/bis ungültig" };
+    if (typeof e.semester !== "string" || !SEMNAME.test(e.semester)) return { fehler: "semester ungültig" };
+    if (e.gruppe != null && e.gruppe !== "" && (typeof e.gruppe !== "string" || GEFAEHRLICH.test(e.gruppe) || /[\[\]<>{}|\\]/.test(e.gruppe))) return { fehler: "gruppe unzulässig" };
+    const gruppe = textFeld(e.gruppe, G.gruppe, false);
+    if (gruppe.fehler) return { fehler: "gruppe " + gruppe.fehler };
+    const raum = textFeld(e.raum, G.raum, false);
+    if (raum.fehler) return { fehler: "raum " + raum.fehler };
+    const leitung = textFeld(e.leitung, G.leitung, false);
+    if (leitung.fehler) return { fehler: "leitung " + leitung.fehler };
+    const anmeldung = textFeld(e.anmeldung, G.anmeldung, false);
+    if (anmeldung.fehler) return { fehler: "anmeldung " + anmeldung.fehler };
+    if (e.quelle_url == null || e.quelle_url === "") return { fehler: "quelle_url fehlt" };
+    const url = urlPruefen(e.quelle_url);
+    if (url.fehler) return { fehler: "quelle_url: " + url.fehler };
+    let zeitraum = null;
+    if (e.zeitraum != null && e.zeitraum !== "") {
+      const z = e.zeitraum;
+      if (!z || typeof z !== "object" || !datumOk(z.von) || !datumOk(z.bis) || z.bis < z.von || tageZwischen(z.von, z.bis) > 400) return { fehler: "zeitraum ungültig" };
+      zeitraum = { von: z.von, bis: z.bis };
+    }
+    let geprueft = "";
+    if (e.geprueft != null && e.geprueft !== "") { if (!isoZeitOk(e.geprueft)) return { fehler: "geprueft ungültig" }; geprueft = e.geprueft.slice(0, 10); }
+    // Nur bekannte Felder; unbekannte (neuere optionale) werden ignoriert
+    return { wert: { id: e.id, code: e.code, art: e.art, gruppe: gruppe.wert, tag: e.tag, von: e.von, bis: e.bis, ct: e.ct === true, raum: raum.wert,
+      leitung: leitung.wert, anmeldung: anmeldung.wert, quelle_url: url.wert, semester: e.semester, zeitraum, geprueft } };
+  };
+  const gruppenPruefen = (daten) => {
+    if (!daten || typeof daten !== "object" || daten.schema !== 1 || !Array.isArray(daten.gruppen)) return { fehler: "gruppen.json: Format ungültig" };
+    if (daten.gruppen.length > G.gruppen) return { fehler: "gruppen.json: zu viele Einträge" };
+    const aus = { stand: datumOk(daten.stand) ? daten.stand : "", gruppen: [], verworfen: [] };
+    const gesehen = new Set();
+    for (const roh of daten.gruppen) {
+      const id = roh && typeof roh.id === "string" && ID.test(roh.id) ? roh.id : "";
+      if (id && gesehen.has(id)) { aus.verworfen.push({ id, grund: "doppelte id" }); continue; }
+      if (id) gesehen.add(id);
+      const r = gruppeNormal(roh);
+      if (r.fehler) aus.verworfen.push({ id: id || "?", grund: r.fehler });
+      else aus.gruppen.push(r.wert);
+    }
+    return aus;
   };
 
   // ---------- Abruf (Netz oder Testquelle) ----------
@@ -600,6 +660,12 @@ module.exports = function (ctx) {
       standSetzen({ geprueft: new Date().toISOString(), hinweis: manifest.hinweis, plugin_aktuell: manifest.plugin_aktuell, release: manifest.release, beta: manifest.beta, pause: manifest.pause });
       if (manifest.pause) { b.art = "pausiert"; standSetzen({ fehler: "" }); melden("Zentrale Daten sind gerade pausiert. Dein letzter Stand bleibt."); return b; }
     }
+    // 1b. Gruppen (gruppen.json): jedes Gerät selbst, nur gerätelokal; Fehler → in diesem Lauf nichts übernehmen
+    if (manifest && manifest.dateien[GRUPPEN]) {
+      const g = await gruppenHolen(manifest.dateien[GRUPPEN], o.manuell);
+      if (g.fehler) return fehler(g.fehler);
+      if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
+    }
     // 2. Abrufer-Sperre
     const a = await abrufLesen();
     const frisch = a && alterMs(a.zuletzt) <= UEBERNAHME;
@@ -616,6 +682,7 @@ module.exports = function (ctx) {
     const hashes = Object.assign({}, S0.hashes);
     if (manifest) {
       for (const name of Object.keys(manifest.dateien)) {
+        if (name === GRUPPEN) continue; // oben schon geholt (gerätelokal)
         const soll = manifest.dateien[name];
         if (!o.manuell && S0.hashes[name] === soll.sha256 && cache[name]) continue;
         let r;
@@ -666,6 +733,27 @@ module.exports = function (ctx) {
     return b;
   };
 
+  // ---------- Gruppen holen (gerätelokal) ----------
+  // soll = { sha256, groesse } aus dem Manifest. Unveränderte Prüfsumme und vorhandener Stand → nichts holen (außer manuell).
+  // → {} | { verworfen: [...] } | { fehler }
+  const gruppenStand = () => { const g = lokal(L.gruppen); return g && typeof g === "object" && Array.isArray(g.gruppen) ? g : null; };
+  const gruppenHolen = async (soll, manuell) => {
+    const alt = gruppenStand();
+    if (!manuell && alt && alt.sha256 === soll.sha256) return {};
+    let r;
+    try { r = await holen(GRUPPEN); } catch (e) { return { fehler: "keine Verbindung (" + ((e && e.message) || e) + ")" }; }
+    if (r.bytes.length !== soll.groesse || (await sha256(r.bytes)) !== soll.sha256) return { fehler: "Prüfsumme von " + GRUPPEN + " stimmt nicht – nichts übernommen" };
+    let d;
+    try { d = JSON.parse(r.text); } catch (e) { return { fehler: GRUPPEN + " unlesbar" }; }
+    const p = gruppenPruefen(d);
+    if (p.fehler) return { fehler: p.fehler };
+    lokal(L.gruppen, { sha256: soll.sha256, geholt: new Date().toISOString(), stand: p.stand, gruppen: p.gruppen });
+    if (!alt || alt.sha256 !== soll.sha256) gruppenNeuZeichnen();
+    return { verworfen: p.verworfen.map((x) => ({ id: "gruppe " + x.id, grund: x.grund })) };
+  };
+  // gruppen.js meldet sich als ctx.gruppenAnzeige an (lädt vor diesem Skript, darum kein Abonnement)
+  const gruppenNeuZeichnen = () => { try { if (ctx.gruppenAnzeige && ctx.gruppenAnzeige.neu) ctx.gruppenAnzeige.neu(); } catch (e) { /* egal */ } };
+
   // ---------- Anzeige (für eba-verbindungen) ----------
   const vorText = (iso) => {
     const ms = alterMs(iso);
@@ -707,7 +795,7 @@ module.exports = function (ctx) {
     const roh = await holen("manifest.json");
     if (roh.bytes.length > G.manifest) throw new Error("Manifest zu groß");
     let m;
-    try { m = JSON.parse(roh.text); } catch (e) { throw new Error("Manifest unlesbar"); }
+    try { m = JSON.parse(roh.text); } catch (e) { throw new Error("Manifest unlesbar", { cause: e }); }
     const mp = manifestPruefen(m);
     if (mp.fehler) throw new Error(mp.fehler);
     standSetzen({ plugin_aktuell: mp.wert.plugin_aktuell, release: mp.wert.release, beta: mp.wert.beta });
@@ -749,15 +837,22 @@ module.exports = function (ctx) {
   };
 
   ctx.zentral = {
-    abrufen, status, anzeige, stand, geraetId, idAusName, notizText, dateiName, terminePruefen, semesterPruefen, manifestPruefen,
+    abrufen, status, anzeige, stand, geraetId, idAusName, notizText, dateiName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
+    // gerätelokaler Stand der Gruppen (gruppen.js): { stand, geholt, gruppen } oder null (noch nie geholt)
+    gruppen: () => { const g = gruppenStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), gruppen: g.gruppen } : null; },
     semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, RELEASE_ROH, modulLinkFuer: (code) => modulLink(filterBauen(), code), BASIS, RELEASES, ABRUF, MEINE,
     get laeuft() { return !!laeuft; },
   };
 
   const registrieren = () => {
-    // Automatischer Abruf: nach dem Einlesen 20 s + Zufallsversatz 0–10 Min., dann stündlich (solange Obsidian offen ist)
-    const lauf = () => { if (!plugin().testZentralAus && eingeschaltet()) abrufen({}); };
-    const planen = () => ctx.zeit(() => { lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 10 * MIN));
+    // Automatischer Abruf: nach dem Einlesen 20 s + Zufallsversatz 0–2 Min., dann stündlich (solange Obsidian offen ist)
+    let versucht = 0;
+    const lauf = () => { if (!plugin().testZentralAus && eingeschaltet()) { versucht = Date.now(); abrufen({}); } };
+    const planen = () => ctx.zeit(() => { lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
+    // Zurück in der App (iPhone/iPad holen Obsidian aus dem Hintergrund, ohne neu zu starten): nachholen, wenn lange her
+    ctx.dom(document, "visibilitychange", () => {
+      if (document.visibilityState === "visible" && versucht && Date.now() - versucht > 30 * MIN && !laeuft) ctx.zeit(lauf, 5000);
+    });
     if (app.metadataCache.initialized || app.metadataCache.resolved) planen();
     else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); planen(); }); }
     // Filter geändert (Variante, Plan, Schalter)? Dann aus dem letzten Stand neu anwenden – nur auf dem Abrufer-Gerät, ohne Netz

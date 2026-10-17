@@ -247,9 +247,8 @@ body {
 .callout[data-callout="eba-ziel"]      { --callout-icon: lucide-target; }
 .callout[data-callout="eba-rechner"]   { --callout-icon: lucide-calculator; }
 /* Hilfe-Karten (Einstellungen & Hilfe, > [!eba-karte|hilfe]): das Quadrat wirkte wie ein Kästchen zum Abhaken. Buch für
-   Anleitungen, Liste mit Haken für die Checkliste (|hilfe|liste), Blatt für Karten darin. */
+   Anleitungen, Blatt für Karten darin. (Die Checkliste |hilfe|liste ist seit 16.10.2026 entfernt.) */
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe"] { --callout-icon: lucide-book-open; }
-.callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|liste"] { --callout-icon: lucide-list-checks; }
 .callout[data-callout-metadata*="hilfe"] .callout[data-callout="eba-karte"] { --callout-icon: lucide-file-text; }
 
 /* Aufgaben „- [ ]“ in Karten: Obsidian zieht das Kästchen um 1,5 × --checkbox-size nach links (margin-inline-start), und
@@ -1454,7 +1453,7 @@ body.is-phone .workspace .workspace-leaf .markdown-source-view.is-live-preview .
    (body.is-phone), einzelne Blöcke gelten auf allen Geräten (steht dann im Kopf des Blocks). Reihenfolge alphabetisch. */
 /* --- 37.anleitung --- */
 /* Hilfe auf „Einstellungen & Hilfe“ (Studium/Einstellungen & Hilfe.md, cssclasses eba-s-einstellungen + eba-s-anleitung), nur iPhone.
-   Abschnitt „Hilfe“: je Thema eine Karte [!eba-karte|hilfe]- (Checkliste: |hilfe|handy-zu]+), zugeklappt. Auf dem iPhone steht ihr
+   Abschnitt „Hilfe“: je Thema eine Karte [!eba-karte|hilfe]-, zugeklappt. Auf dem iPhone steht ihr
    Titel eine Ebene über den Kartentiteln darin (Serif statt Label). Geöffnet: innere Karten ohne eigenen Rahmen, getrennt durch
    eine Haarlinie; breite Tabellen (Knöpfe, Aufbau) als Zeilenblöcke statt seitlich zu wischen.
    (Früher eigene Seite Anleitung mit |handy-zu|pc-flach und ausgeblendeten ##; die ##-Abschnitte der Einstellungen bleiben sichtbar.) */
@@ -1502,13 +1501,13 @@ body.is-phone .eba-s-anleitung .callout table:is(:has(th:nth-child(4)), :has(td:
 body.is-phone .eba-s-anleitung .callout table:is(:has(th:nth-child(4)), :has(td:first-child > strong)) tr:first-child { border-top: 0; padding-top: 0; }
 body.is-phone .eba-s-anleitung .callout table:is(:has(th:nth-child(4)), :has(td:first-child > strong)) td { padding: 0; border: 0; line-height: 1.45; }
 body.is-phone .eba-s-anleitung .callout table:is(:has(th:nth-child(4)), :has(td:first-child > strong)) td:first-child { font-weight: 600; margin-bottom: 1px; }
-body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) td:nth-child(2)::before { content: "Fragt nach: "; color: var(--eba-muted); }
-body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) td:nth-child(3)::before { content: "Landet in: "; color: var(--eba-muted); }
-body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) td:nth-child(4)::before { content: "Erscheint auf: "; color: var(--eba-muted); }
+/* Beschriftung = Spaltenkopf der Knopf-Tabelle (Knopf | Wo | Fragt nach | Landet in); bis 16.10.2026 um eine Spalte verschoben */
+body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) td:nth-child(2)::before { content: "Wo: "; color: var(--eba-muted); }
+body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) td:nth-child(3)::before { content: "Fragt nach: "; color: var(--eba-muted); }
+body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) td:nth-child(4)::before { content: "Landet in: "; color: var(--eba-muted); }
 body.is-phone .eba-s-anleitung .callout table:has(th:nth-child(4)) + p,
 body.is-phone .eba-s-anleitung .callout .table-wrapper:has(th:nth-child(4)) + p { margin-top: 10px; }
 
-/* Erste Schritte: Kästchen ganz in der Karte – seit 15.10.2026 für alle Geräte in Abschnitt 5 (ul.contains-task-list) */
 body.is-phone .eba-s-anleitung .callout table:is(:has(th:nth-child(4)), :has(td:first-child > strong)) { border: 0; }
 body.is-phone .eba-s-anleitung .callout table:is(:has(th:nth-child(4)), :has(td:first-child > strong)) tr:last-child { padding-bottom: 0; }
 
@@ -1519,20 +1518,21 @@ body.is-phone .eba-s-anleitung .callout[data-callout-metadata*="hilfe"] ol { pad
 /* Anmeldungen (Abschnitt auf Studium/Termine & Anmeldungen.md, cssclasses eba-s-termine + eba-s-anmeldungen), nur iPhone.
    Die Tabellen „Auf einen Blick“ und „Später“ (4 Spalten Was/Wann/Wo/Stand) liefen seitlich aus dem Bild: Wo und Stand
    (z. B. „angemeldet“) waren nur durch Wischen sichtbar. Auf dem iPhone wird jede Zeile ein kleiner Eintrag:
-   Was (Zeilentitel) / Wann / Wo · Stand (gedämpft). Die Gruppentabellen (3 Spalten Gr./Zeit/Raum) bleiben Tabellen. */
+   Was (Zeilentitel) / Wann / Wo · Stand (gedämpft). Die Gruppentabellen (eba-gruppen, Abschnitt 50) bleiben
+   Tabellen. */
 body.is-phone .eba-s-anmeldungen .table-wrapper:has(> table th:nth-child(4)) { overflow: visible; width: 100%; }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) { display: block; width: 100% !important; min-width: 0 !important; margin: 0; border: 0; }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > thead { display: none; }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody { display: block; }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr {
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) { display: block; width: 100% !important; min-width: 0 !important; margin: 0; border: 0; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > thead { display: none; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody { display: block; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr {
   display: block;
   padding: 6px 0 7px;
   border: 0;
   border-top: 1px solid var(--eba-border);
   background: transparent !important;
 }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr:first-child { border-top: 0; padding-top: 2px; }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td {
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr:first-child { border-top: 0; padding-top: 2px; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td {
   padding: 0;
   border: 0;
   background: transparent !important;
@@ -1540,15 +1540,15 @@ body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td {
   overflow-wrap: anywhere;
 }
 /* Was: Zeilentitel in Inhaltsgröße */
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(1) { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.35; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(1) { display: block; font-size: 14.5px; font-weight: 600; line-height: 1.35; }
 /* Wann: direkt darunter, gleiche Größe wie der Fließtext der Karten */
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(2) { display: block; margin-top: 1px; font-size: 13.5px; line-height: 1.4; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(2) { display: block; margin-top: 1px; font-size: 13.5px; line-height: 1.4; }
 /* Fett gesetzte Daten nur halbfett, damit „Was“ der Zeilentitel bleibt */
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(2) strong { font-weight: 500; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(2) strong { font-weight: 500; }
 /* Wo · Stand: eine gedämpfte Zeile */
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3) { display: inline; font-size: 12.5px; line-height: 1.45; color: var(--eba-muted); }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(3)::before { content: ""; display: block; height: 1px; }
-body.is-phone .eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(4)::before { content: "·"; margin: 0 5px 0 0; color: var(--eba-faint); }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3) { display: inline; font-size: 12.5px; line-height: 1.45; color: var(--eba-muted); }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(3)::before { content: ""; display: block; height: 1px; }
+body.is-phone .eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(4)::before { content: "·"; margin: 0 5px 0 0; color: var(--eba-faint); }
 
 /* Einleitungssatz unter „Übungen und Tutorien“: Inhaltsgröße wie die Karten */
 body.is-phone .eba-s-anmeldungen .el-p > p:not(.eba-fuss) { font-size: 14.5px; line-height: 1.5; }
@@ -1557,10 +1557,10 @@ body.is-phone .eba-s-anmeldungen .el-p > p:not(.eba-fuss) { font-size: 14.5px; l
    jede Zelle als td > .table-cell-wrapper. Obsidian gibt den Zellen height: 1px (Trick für Tabellenzellen); als Block
    würden die Zeilen sonst übereinander liegen. Die Regeln oben greifen auch dort (Seitenklasse sitzt an
    .markdown-source-view), hier nur die Unterschiede. */
-body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr { height: auto !important; min-height: 0 !important; contain: none !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td { height: auto !important; min-height: 0 !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:has(th:nth-child(4)) .table-cell-wrapper { height: auto !important; min-height: 0 !important; padding: 0 !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3) > .table-cell-wrapper { display: inline; }
+body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr { height: auto !important; min-height: 0 !important; contain: none !important; }
+body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td { height: auto !important; min-height: 0 !important; }
+body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) .table-cell-wrapper { height: auto !important; min-height: 0 !important; padding: 0 !important; }
+body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:not(.eba-gr-tabelle):has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3) > .table-cell-wrapper { display: inline; }
 body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:has(th:nth-child(4)) .table-row-drag-handle,
 body.is-phone .markdown-source-view.is-live-preview.eba-s-anmeldungen table:has(th:nth-child(4)) .table-col-drag-handle { display: none; }
 /* Einleitungssatz unter „Übungen und Tutorien“ (Textzeile im Editor) wie in der Leseansicht; Leerzeilen (nur <br>)
@@ -3587,7 +3587,8 @@ body.is-phone .eba-s-stundenplan .eba-woche { --eba-wz: 20px; --eba-wg: 4px; --e
 
 /* ---------- 40. Fußzeilen ausblenden ----------
    Die `eba-fuss`-Zeilen enthielten fast nur Verweise (ersetzt durch das Bereiche-Menü) und Quellenangaben (heute Kontakte & Links → Offizielle Dokumente).
-   Echte Hinweise stehen in den Karten. Im Markdown bleiben die Zeilen als Herkunftsnachweis.
+   Echte Hinweise stehen in den Karten. Die Übersichtsseiten haben seit 17.10.2026 keine mehr; in Modulnotizen, System/Daten
+   und im Modul-Gerüst bleiben sie als Herkunftsnachweis (darum bleiben diese Regeln).
    Leseansicht: Abschnitt auf Höhe 0 falten statt display:none (sonst misst Obsidian ihn falsch → Leerraum). */
 .markdown-preview-view.eba .markdown-preview-sizer > div:has(> p.eba-fuss) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; }
 .markdown-source-view.is-live-preview.eba .cm-content > .cm-html-embed:has(p.eba-fuss) { display: none; }
@@ -3628,7 +3629,7 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
 /* ---------- Ende Abschnitt 42 ---------- */
 
 /* ---------- 43. Personalisieren, Schloss, Verbindungen, Semesterdaten (Phase 2b, Plugin-Skripte) ----------
-   personalisieren.js: ```eba-personalisieren``` (Karte .eba-perso) und Formular (.eba-modal-personalisieren)
+   personalisieren.js: ```eba-personalisieren angaben``` (.eba-angaben*) und Formular (.eba-modal-personalisieren)
    verbindungen.js:    ```eba-schloss <id>``` (.eba-schloss; in einer Karte blendet :has() den übrigen Inhalt aus),
                        ```eba-verbindungen``` (.eba-vb-*), Verbinden-Fenster (.eba-modal-verbinden)
    modell.js:          ```eba-semesterdaten``` (.eba-sd-*)
@@ -3649,20 +3650,10 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
 .eba-vb-knopf.leise { border-color: transparent; background: transparent; color: var(--eba-muted) !important; font-weight: 500; }
 .eba-vb-knopf.leise:hover { color: var(--eba-text) !important; background: color-mix(in srgb, var(--eba-text) 6%, transparent); }
 
-/* Personalisieren-Karte (Dashboard oben): dezent, Akzentkante links */
+/* Leere Blöcke: ```eba-personalisieren``` ohne Argument (früher die Personalisieren-Karte, seit 0.3.0 leer; ihre Klassen
+   eba-perso* sind seit 16.10.2026 entfernt) und ein offenes Schloss */
 .block-language-eba-personalisieren.eba-perso-aus,
 .block-language-eba-schloss:not(.eba-schloss-zu) { display: none; }
-.eba-perso {
-  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  margin: 0 0 var(--eba-gap, 12px); padding: 12px 16px;
-  border: 1px solid var(--eba-border); border-left: 2px solid var(--eba-accent);
-  border-radius: var(--eba-radius); background: var(--eba-card-bg); color: var(--eba-text);
-}
-.eba-perso-symbol { flex: none; font-size: 18px; line-height: 1; color: var(--eba-accent-text); }
-.eba-perso-text { flex: 1 1 260px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.eba-perso-text b { font-weight: 600; }
-.eba-perso-text span { font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
-.eba-perso-knoepfe { display: flex; gap: 6px; flex-wrap: wrap; }
 
 /* Schloss-Karte: steht statt des gesperrten Inhalts (z. B. Wochenraster) */
 .eba-schloss {
@@ -3779,8 +3770,6 @@ body.is-phone .eba-form-hilfe { grid-column: 1; }
 .eba-sd-fuss { margin: 8px 0 0 !important; font-size: 12px; color: var(--eba-muted); }
 .eba-sd-fehlt { color: var(--eba-muted); font-size: 13px; }
 /* ---------- Ende Abschnitt 43 ---------- */
-/* Nachtrag 43: iPhone – Personalisieren-Karte ohne Symbol (spart eine Spalte), Knöpfe unter dem Text */
-body.is-phone .eba-perso-symbol { display: none; }
 
 /* ---------- 44. Musterstudienpläne (musterplan.js, ```eba-musterplan```) ----------
    Eigene Darstellung: Spalten je Fachsemester, Modul-Chips (Rand), Platzhalter gestrichelt, Bachelorarbeit Akzent.
@@ -3977,3 +3966,84 @@ body.is-phone .eba-uh-knoepfe { flex: 1 0 100%; margin-left: 0; gap: 6px; }
 body.is-phone .eba-uh .eba-uh-knopf { min-height: 44px; font-size: 14.5px; padding: 0 16px !important; }
 body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 /* ---------- Ende Abschnitt 46 ---------- */
+
+/* ---------- 47. Wochenraster nach Kalenderwoche (Dashboard, Stundenplan; seit 0.3.2) ----------
+   Das Raster zeigt eine echte Woche, am Wochenende die nächste: Datum im Kopf jedes Tages, links oben „KW n“, Kästen nur
+   zwischen von und bis, Ausfälle (ausfall, Pausen) der ganzen Woche durchgestrichen. Findet in der Woche nichts statt, steht
+   in der Mitte ein Satz (Name der Pause, „Vorlesungsbeginn …“, „Vorlesungsfrei“, „Keine Veranstaltungen“). */
+.eba-tagkopf { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eba-tagdatum { margin-left: 0.4em; font-weight: 500; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; color: var(--eba-faint); }
+.eba-tagkopf.heute .eba-tagdatum { color: inherit; }
+.eba-tagkopf.eba-ecke.eba-kw { visibility: visible; overflow: visible; text-align: right; padding-right: 8px; }
+.eba-ev.ausfall .eba-ev-kurz { text-decoration: line-through; }
+.eba-woche-leer { grid-column: 2 / -1; align-self: center; justify-self: center; position: relative; z-index: 1; text-align: center; }
+.eba-woche-leer span { display: inline-block; padding: 5px 12px; border-radius: var(--eba-radius-s); background: var(--eba-card-bg); font-size: 13px; color: var(--eba-muted); }
+/* schmale Karte (iPhone): Zeitspalte zu schmal für „KW n“, Datum kleiner */
+@container eba-kz (max-width: 480px) {
+  .eba-tagkopf.eba-ecke.eba-kw { visibility: hidden; }
+  .eba-tagdatum { margin-left: 0.3em; font-size: 9px; }
+}
+/* Karte „Woche danach“ (Stundenplan, eingeklappt): nur der Kartenrahmen, das Raster darin ohne eigenen Rahmen und Rand */
+.callout[data-callout-metadata~="woche-danach"] .callout[data-callout="eba-kennzahlen"] { margin: 0; padding: 0 !important; background: none; border: 0; box-shadow: none; }
+.callout[data-callout-metadata~="woche-danach"] .eba-woche { border: 0; box-shadow: none; background-color: transparent; padding-left: 0; padding-right: 0; }
+/* ---------- Ende Abschnitt 47 ---------- */
+
+/* ---------- 48. Leere Tabellen ohne Summenzeile (seit 17.10.2026) ----------
+   Ohne Zeilen zeigt Bases in der Summenzeile „Kein Wert“ (Beschriftung „Sum“ blendet Abschnitt 23 aus). In schmalen Spalten
+   (ECTS, 56–60 px) schnitt Obsidian den Text links ab: „ein Wert“ (Schwerpunkt-Planer „Mein Plan“, SQ100 „Meine SQ-Kurse“).
+   37.planer tat das nur auf dem iPhone im Planer; hier für alle Geräte und alle Tabellen in eba-Karten. */
+.callout[data-callout^="eba-"] .bases-view:not(:has(.bases-table-container .bases-tr)) > .bases-table-footer { display: none !important; }
+/* ---------- Ende Abschnitt 48 ---------- */
+
+/* ---------- 49. ILIAS-Unterlagen (verbindungen.js, einrichtung.js; seit 0.4.0) ----------
+   Seite Unterlagen: Der Knopf „Aus ILIAS holen“ steht fest in der Knopf-Karte und ist nur sichtbar, wenn der leere Block
+   ```eba-ilias-knopf``` in derselben Karte die Klasse eba-ilias-an trägt (ILIAS auf diesem Gerät verbunden). Der Block
+   selbst zeichnet nichts. Fenster „ILIAS-Unterlagen“ (.eba-modal-ilias) und Bildschirm 6 der Einrichtung: zwei Felder,
+   Datenschutz-Zeile, Kursliste. Felder 16 px (sonst zoomt iOS beim Tippen), Tippflächen mindestens 44 px. */
+.block-language-eba-ilias-knopf { display: none; }
+.callout[data-callout="eba-neu"]:not(:has(.eba-ilias-an)) > .callout-content > ul > li:has(a[href*="aktion=ilias-holen"]) { display: none; }
+.eba-modal .eba-modal-zugang { display: flex; flex-direction: column; gap: 12px; margin: 0 0 10px; }
+.eba-modal .eba-modal-zeile { display: flex; flex-direction: column; gap: 5px; }
+.eba-modal .eba-modal-label { font-size: 13px; font-weight: 600; }
+.eba-modal-ilias .eba-modal-feld { min-height: 44px; font-size: 16px; }
+.eba-modal-datenschutz, .eba-ei-datenschutz { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+.eba-modal-datenschutz .eba-sym, .eba-ei-datenschutz .eba-sym { flex: none; width: 15px; height: 15px; margin-top: 2px; }
+.eba-ei-datenschutz { margin-top: 14px; }
+.eba-modal .eba-modal-abschnitt { margin: 14px 0 4px; font-size: 13px; font-weight: 600; }
+.eba-modal .eba-modal-kurse { max-height: min(40vh, 320px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.eba-modal .eba-modal-kurse .setting-item-name { line-height: 1.35; }
+.eba-modal .eba-modal-leer { margin: 10px 0; font-size: 13px; color: var(--eba-muted); }
+.eba-modal-ilias .modal-button-container button { min-height: 44px; }
+/* Einrichtung: hier nicht möglich (Obsidian zu alt, Anmeldung fehlt) – derselbe Kasten, aber ohne Grün */
+/* Hilfe-Karte Unterlagen: Schritte direkt in der Karte (sonst stehen Listen dort nur in Unterkarten) mit sichtbaren Nummern */
+.eba-s-anleitung .callout[data-callout-metadata*="hilfe"] > .callout-content > ol { padding-left: 1.6em; }
+/* Schloss auf Unterlagen steht allein (nicht in einer Karte): Abstand zur Kennzahlen-Karte darunter */
+.eba-s-unterlagen .block-language-eba-schloss.eba-schloss-zu { margin-bottom: 16px; }
+.eba-ei-erfolg.leise { background: var(--eba-card-bg); color: var(--eba-muted); font-weight: 400; border: 1px solid var(--eba-border); }
+/* ---------- Ende Abschnitt 49 ---------- */
+
+/* ---------- 50. Übungs- und Tutoriengruppen (gruppen.js, Codeblock eba-gruppen; seit 17.10.2026) ----------
+   Je Modul und Art eine aufklappbare Karte (details.eba-gr-modul): Kopf mit Code, Titel und Anzahl bzw. „im Stundenplan“,
+   darin Anmeldung, kompakte Tabelle und Quellenzeile. Zeilen deiner Gruppen (.eba-gr-dein) fett mit Akzentstrich. */
+.eba-gr { display: flex; flex-direction: column; gap: 6px; }
+.eba-gr-modul { border: 1px solid var(--background-modifier-border); border-radius: 8px; }
+.eba-gr-modul > summary { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; cursor: pointer; list-style: none; font-size: 14px; }
+.eba-gr-modul > summary::-webkit-details-marker { display: none; }
+.eba-gr-zahl { color: var(--eba-muted); font-size: 12.5px; white-space: nowrap; }
+.eba-gr-inhalt { padding: 0 12px 10px; }
+.eba-gr-anmeldung { margin: 0 0 6px !important; font-size: 13px; }
+.eba-gr-tabelle { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 !important; }
+.eba-gr-tabelle th { text-align: left; font-weight: 500; color: var(--eba-muted); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--background-modifier-border); }
+.eba-gr-tabelle td { padding: 4px 8px 4px 0; border: 0; vertical-align: top; }
+.eba-gr-tabelle td:first-child { white-space: nowrap; }
+.eba-gr-dein td { font-weight: 500; }
+.eba-gr-dein td:first-child { box-shadow: inset 2px 0 0 var(--eba-accent); padding-left: 6px; }
+.eba-gr-pille { margin-left: 6px; }
+.eba-gr-quelle, .eba-gr-fuss { margin: 6px 0 0 !important; font-size: 12px; color: var(--eba-muted); }
+.eba-gr-leer { color: var(--eba-muted); font-size: 13px; }
+/* Lange Raumnamen umbrechen statt seitlich auslaufen; die Zeit bleibt in einer Zeile */
+.eba-gr-tabelle td { overflow-wrap: anywhere; }
+.eba-gr-tabelle td:nth-child(3) { white-space: nowrap; }
+/* iPhone: ohne Pille, sonst wird die Spalte Gr. zu breit; Akzentstrich und Kopf („im Stundenplan: Gr. 2“) bleiben */
+body.is-phone .eba-gr-pille { display: none; }
+/* ---------- Ende Abschnitt 50 ---------- */

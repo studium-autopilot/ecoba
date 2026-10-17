@@ -2,7 +2,6 @@
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Weitere Module</span></div>
 <h1>{{code}} · {{titel}}</h1>
-<p class="eba-lead">Eigenes Modul, z. B. ein Import aus einem anderen Fach oder aus dem Ausland. Status und Note trägst du in <a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Noten &amp; ECTS</a> ein.</p>
 <div class="eba-meta"><span><b>{{ects}}</b> ECTS</span><span>{{gruppe}}</span><span>eigenes Modul</span></div>
 </div>
 

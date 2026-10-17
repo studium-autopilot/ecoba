@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://www.ffwtuebingen.de/blank-3"
+info: "Alkoholfreier Brettspielabend der Fachschaft. Voranmeldung über den Link, den die Fachschaft in ihren WhatsApp-Gruppen teilt."
 herkunft: zentral
 zentral_id: 2026-10-18-spieleabend-der-fachschaft
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Spieleabend der Fachschaft
 
 **18.10.2026** · 17:00–21:00 · Mohlstraße
+
+Alkoholfreier Brettspielabend der Fachschaft. Voranmeldung über den Link, den die Fachschaft in ihren WhatsApp-Gruppen teilt.
 
 Quelle: [www.ffwtuebingen.de](https://www.ffwtuebingen.de/blank-3)
 

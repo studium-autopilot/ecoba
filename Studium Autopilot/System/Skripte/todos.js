@@ -21,9 +21,7 @@ module.exports = function (ctx) {
   const MODULCODE = ctx && ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE;
   const CODE_NAME = MODULCODE ? new RegExp("^(" + MODULCODE + ")\\s+(.+)$") : null;
   const KURZTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
-  const WT = { so: 0, mo: 1, di: 2, mi: 3, do: 4, fr: 5, sa: 6 };
   const AUFGABE = /^([\s>]*[-*+] )\[ \] +(\S.*)$/; // offene Aufgabe mit Text (auch in Zitat/Callout)
-  const ERLEDIGT = /^([\s>]*[-*+] )\[x\] +(\S.*)$/i;
   const LEER = { todos: "Nichts zu tun.", fragen: "Keine offenen Fragen." };
   const WARTEN = 1500; // ms bis zum Schreiben nach dem Abhaken (zweiter Tipp nimmt es zurück)
 

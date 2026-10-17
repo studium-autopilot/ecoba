@@ -1,0 +1,6 @@
+# Ruff für die Python-Werkzeuge (werkzeuge/). Nur die Standardstufe: echte Fehler, keine Stilfragen.
+target-version = "py312"
+line-length = 130
+
+[lint]
+select = ["E9", "F", "B"]  # Syntax, Pyflakes, Bugbear; der kompakte Stil (mehrere Anweisungen je Zeile) ist Absicht

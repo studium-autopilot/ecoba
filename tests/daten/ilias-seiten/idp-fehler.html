@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite: IdP-Formular mit Fehlermeldung (falsches Passwort). Nachgebaut nach der Vorlage des
+     Shibboleth-IdP, nicht erfasst (falsches Passwort wurde bewusst nicht ausprobiert). -->
+<html>
+<head><meta charset="UTF-8" /><title>Shibboleth IdP</title></head>
+<body>
+<div class="wrapper"><div class="container"><main class="main">
+<form action="/idp/profile/SAML2/Redirect/SSO?execution=e1s2" class="column left" method="post">
+	<section>
+		<p class="form-element form-error">The password you entered was incorrect.</p>
+	</section>
+	<div class="form-login-element-wrapper">
+		<input class="form-element form-field" id="username" name="j_username" type="text" value="beispiel">
+		<label class="label-login" for="username">Username</label>
+	</div>
+	<div class="form-login-element-wrapper">
+		<input class="form-element form-field" id="password" name="j_password" type="password" value="">
+		<label class="label-login" for="password">Password</label>
+	</div>
+	<div class="form-element-wrapper">
+		<button class="form-element form-button" name="_eventId_proceed" type="submit">Login</button>
+	</div>
+</form>
+</main></div></div>
+</body>
+</html>

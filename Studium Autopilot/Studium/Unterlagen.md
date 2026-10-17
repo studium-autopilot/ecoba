@@ -17,6 +17,13 @@ cssclasses:
 > - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen)
 > - [Übungsblatt anlegen](obsidian://studium-autopilot?aktion=uebungsblatt)
 > - [In Unterlagen suchen](obsidian://studium-autopilot?aktion=suchen&q=path%3AUnterlagen%20)
+> - [Aus ILIAS holen](obsidian://studium-autopilot?aktion=ilias-holen)
+>
+> ```eba-ilias-knopf
+> ```
+
+```eba-schloss ilias
+```
 
 > [!eba-kennzahlen|kz-unterlagen]
 > ```base
@@ -404,4 +411,4 @@ cssclasses:
 >       file.mtime: 134
 > ```
 
-<p class="eba-hinweis">Einordnen, benennen, annotieren und Volltextsuche: <a class="internal-link" data-href="Einstellungen & Hilfe#Hilfe" href="Einstellungen & Hilfe#Hilfe">Hilfe</a></p>
+<p class="eba-hinweis">ILIAS, einordnen und annotieren: <a class="internal-link" data-href="Einstellungen & Hilfe#Hilfe" href="Einstellungen & Hilfe#Hilfe">Hilfe</a></p>

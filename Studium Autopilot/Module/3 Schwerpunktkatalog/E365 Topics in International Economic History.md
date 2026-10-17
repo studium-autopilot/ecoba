@@ -100,8 +100,6 @@ cssclasses:
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** Hausarbeit (term paper) (6 CP) – 100 % der Modulnote
 > > - **Studienleistung:** Presentation
-> > - **Gesamtnote:** zählt im 66 %-Block (Schwerpunkte und Bachelorarbeit), gewichtet nach ECTS
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in

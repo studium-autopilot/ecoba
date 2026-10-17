@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/"
+info: "Online-Einstieg der Universitätsbibliothek in LaTeX ohne Vorkenntnisse (Gliederung, Formeln, Tabellen, Zitate), zählt als *-Kurs für den TCP-Punkt der UB. Anmeldung über Alma."
 herkunft: zentral
 zentral_id: 2026-11-20-ub-kurs-latex
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # UB-Kurs: LaTeX
 
 **20.11.2026** · 10:00–12:00 · online · Anmeldung über Alma
+
+Online-Einstieg der Universitätsbibliothek in LaTeX ohne Vorkenntnisse (Gliederung, Formeln, Tabellen, Zitate), zählt als \*-Kurs für den TCP-Punkt der UB. Anmeldung über Alma.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/)
 

@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/rueckmeldung-zum-naechsten-semester/"
+info: "Rückmeldung für das Sommersemester durch Zahlung des Semesterbeitrags, Ausschlussfrist. Semesterbeitrag fristgerecht überweisen."
 herkunft: zentral
 zentral_id: 2029-01-15-rueckmeldung-fuer-das-ss-2029
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Rückmeldung für das SS 2029
 
 **15.01.2029 – 15.02.2029**
+
+Rückmeldung für das Sommersemester durch Zahlung des Semesterbeitrags, Ausschlussfrist. Semesterbeitrag fristgerecht überweisen.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/rueckmeldung-zum-naechsten-semester/)
 

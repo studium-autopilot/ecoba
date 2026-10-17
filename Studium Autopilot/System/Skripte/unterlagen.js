@@ -27,16 +27,20 @@ module.exports = function (ctx) {
   const ORIGINALE = ["pptx", "ppt", "pptm", "key", "odp", "docx", "doc", "odt", "xlsx", "xls", "ods"];
   const BILDER = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif", "heic", "heif"];
   const ARCHIVE = ["zip", "rar", "7z"];
+  const LESEFORMATE = ["", "pdf", "epub", "djvu", "doc", "docx", "odt", "rtf", "txt", "htm", "html"];
   const AUSLASSEN = ["md", "base", "canvas", ...ARCHIVE];
   const ARTEN = ["Folien", "Skript", "Übung", "Lösung", "Eigene Lösung", "Mitschrift", "Altklausur", "Literatur", "Scan", "Sonstiges"];
 
-  // Reihenfolge zählt: spezifische Begriffe zuerst („Klausur Lösung“ → Altklausur, „Skript zur Vorlesung“ → Skript).
+  // Reihenfolge zählt: spezifische Begriffe zuerst („Formelsammlung zur Klausur“ → Sonstiges, „Skript zur Vorlesung“ → Skript).
   // „(^|[^a-zäöüß])“ statt \b, weil „_“ in Dateinamen wie „Kurs_VL03“ sonst als Buchstabe zählt. Kein Lookbehind (ältere iOS-Versionen).
   const W = "(^|[^a-zäöüß])";
   const E = "([^a-zäöüß]|$)";
   const REGELN = [
-    // „Klausur“ nur als ganze Klausur („Klausur_WS2324“, „Probeklausur“, „Klausuraufgaben“), nicht „Klausurinfos“ oder „Klausurvorbereitung“
-    ["Altklausur", new RegExp(`klausur(en)?(?![a-zäöüß])|klausur(aufgaben?|fragen?|sammlung|l(ö|oe)sung(en)?)|${W}exams?${E}|midterm`, "i")],
+    // Dokumenttypen, die keine Lernunterlage im engeren Sinn sind, gewinnen gegen jedes Art-Wort („FAQ zur Klausur“, „Vorlage Übungsblatt“)
+    ["Sonstiges", new RegExp(`formelsammlung|formelbl(a|ä|ae)tt|${W}faq${E}|${W}(vorlagen?|templates?)${E}|merkblatt|leitfaden|syllabus|modulbeschreibung|cheat.?sheet|(infos?|informationen|hinweise)[\\s._-]*(zur|zu|zum|for|about)?[\\s._-]*(klausur|pr(ü|ue)fung|exam)`, "i")],
+    // „Klausur“ nur als ganze Klausur („Klausur_WS2324“, „Probeklausur“, „Klausuraufgaben“), nicht „Klausurinfos“ oder „Klausurvorbereitung“.
+    // Lösungen zu Klausuren sind Lösungen („Klausurlösung“, „Klausur Lösung“; Umschalten in artBestimmen), „Klausur mit Lösungen“ bleibt Altklausur.
+    ["Altklausur", new RegExp(`klausur(en)?(?![a-zäöüß])|klausur(aufgaben?|fragen?|sammlung)|${W}exams?${E}|midterm`, "i")],
     ["Eigene Lösung", new RegExp(`(meine|eigene)[\\s._-]*l(ö|oe)sung|${W}my[\\s._-]*solution|mitschrift[\\s._-]*(zu[\\s._-]*)?(blatt|(ü|ue)bung)`, "i")],
     ["Lösung", new RegExp(`l(ö|oe)sung|solution|musterl|${W}lsg${E}`, "i")],
     ["Übung", new RegExp(`(ü|ue)bung|exercise|aufgaben|hausaufgabe|${W}ha[\\s._-]?\\d|${W}(ü|ue)[\\s._-]?\\d|${W}blatt([^a-zäöüß]|$)|sheet|tutori|problem.?set|${W}ps\\s?\\d`, "i")],
@@ -44,14 +48,31 @@ module.exports = function (ctx) {
     ["Skript", new RegExp(`${W}([a-zäöüß]*s)?skript|${W}script|${W}reader${E}|lecture.?notes|vorlesungsunterlagen`, "i")],
     ["Mitschrift", new RegExp(`mitschrift|annotiert|annotated|handschrift|${W}notizen${E}`, "i")],
     ["Folien", new RegExp(`folie|slide|vorlesung|lecture|${W}vl([^a-z]|$)|kapitel|chapter|${W}kap([^a-z]|$)|session|${W}sitzung(en)?${E}|einheit|lektion|${W}(week|woche)${E}|pr(ä|ae)sentation|handout`, "i")],
-    ["Literatur", new RegExp(`paper|artikel|article|journal|aufsatz|literatur|reading|${W}book([^a-z]|$)|${W}buch([^a-zäöüß]|$)`, "i")],
+    // Zusatzmaterial ist Lesestoff („Übungsmaterialien/Zusatzmaterial/Quantile.pdf“), ebenso Autor-Jahr-Namen (siehe AUTOR_JAHR)
+    ["Literatur", new RegExp(`paper|artikel|article|journal|aufsatz|literatur|reading|${W}book([^a-z]|$)|${W}buch([^a-zäöüß]|$)|zusatzmaterial|weiterf(ü|ue)hrend|lekt(ü|ue)re|${W}et[\\s._]?al${E}`, "i")],
+    // schwacher Hinweis (drittes Feld): nur wenn sonst nichts passt („Organisatorisches.pdf“, aber „VL0 Organisatorisches“ → Folien),
+    // eine Nummer im Namen macht daraus Folien wie bei Namen ohne Art („01_Organisatorisches“)
+    ["Sonstiges", new RegExp(`organisatori|${W}orga${E}|${W}infos?${E}|informationen|ank(ü|ue)ndigung`, "i"), true],
     ["Scan", /scan|gescannt/i],
   ];
+  // „DimpflSoenksen2022“, „MuellerSchmidt_2019“: zwei bis fünf zusammengeschriebene Namen und ein Jahr (Groß-/Kleinschreibung zählt)
+  const AUTOR_JAHR = /^(?:[A-ZÄÖÜ][a-zäöüß]+){2,5}[_-]?(?:19|20)\d{2}[a-z]?$/;
+  // „…_KL“ (Klausurlösung) am Ende, nur groß geschrieben („BAMatheWS1819A_KL“)
+  const KL_ENDE = /(^|[\s._-])KL([\s._-]+(v?\d{1,2}|final|neu))?$/;
+  const MIT_LOESUNG = /(mit|inkl\.?|inklusive|samt|with|incl\.?|und|and|\+)[\s._-]*(muster)?(l(ö|oe)sung|solution)/i;
   const SCAN_ANFANG = /^scan(ned|s)?([^a-z]|$)/i; // „Scan …“ ist immer ein Scan (auch „Scan Buchkapitel“)
-  const NR_WORTE = "vl|vorlesung|lecture|folien?|slides?|handout|kapitel|chapter|kap|session|sitzung|einheit|lektion|week|woche|(?:ü|ue)bung(?:sblatt)?|pr(?:ä|ae)senz(?:ü|ue)bung(?:sblatt)?|aufgabenblatt|aufgaben|hausaufgaben?|ha|ü|ue|blatt|sheet|exercise|tutoriums?blatt|tutorium|tutorial|problem[\\s._-]?sets?|l(?:ö|oe)sung(?:en)?|solutions?|ps|nr|no";
+  const NR_WORTE = "vl|vorlesung|lecture|folien?|slides?|handout|kapitel|chapter|kap|session|sitzung|einheit|lektion|week|woche|tag|(?:ü|ue)bung(?:sblatt)?|pr(?:ä|ae)senz(?:ü|ue)bung(?:sblatt)?|aufgabenblatt|aufgaben|hausaufgaben?|ha|ü|ue|blatt|sheet|exercise|tutoriums?blatt|tutorium|tutorial|problem[\\s._-]?sets?|l(?:ö|oe)sung(?:en)?|solutions?|ps|nr|no";
   // Nummer nach einem Art-Wort; ein Bereich „VL5-6“ / „Kap 1 bis 3“ gehört mit zum Treffer (Ende in Gruppe 2)
   const NUMMER = new RegExp(`(?:^|[^a-zäöüß])(?:${NR_WORTE})\\.?[\\s._\\-]*(\\d{1,2})(?!\\d)(?:(?:\\s?[-–]\\s?|[\\s._]+bis[\\s._]+)(\\d{1,2})(?!\\d))?`, "i");
   const NUMMER_ANFANG = /^(\d{1,2})(?!\d)(?:\s?[-–]\s?(\d{1,2})(?!\d))?[\s._\-]/;
+  // Kürzel und Nummer als ganzer Name („EBWL_0“, „Mikro 05“); „Teil 2“, „Kopie 2“ zählen nicht
+  const NUMMER_KURZ = /^([A-Za-zÄÖÜäöü]{2,6})[\s._-]+(\d{1,2})$/;
+  const KEINE_NR = /^(teil|part|kopie|copy|version|stand|seite|page|anhang|bild|foto|img|scan|dokument|document)$/i;
+  // Ordner einer ILIAS-Sitzung („2026-10-12, 10:15 - 11:45: Vorlesung 1“): Nummer nur für Folien
+  const SITZUNGSORDNER = /^((19|20)\d{2}-\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}\.(\d{4}|\d{2})?),?\s+\d{1,2}[:.]\d{2}/;
+  // Gliederungsnummer eines Sammelordners („00 - Vorlesung“, „01 - Übungsmaterialien“) ist keine Nummer der Unterlage;
+  // „1. Übung“ (Ordinalzahl) und „03_Kostenrechnung“ (Thema) schon
+  const ORDNER_ALLGEMEIN = /^(unterlagen|materiali?en|material|allgemeines|allgemein|dokumente|dateien|downloads?|sonstiges|archiv|lab|labor)$/i;
   // Datumsangaben („12.10.2026“, „12.10.“, „2026-10-12“) zählen nicht als Nummer
   const DATUM_ISO = /(^|\D)((?:19|20)\d{2})[-_.](\d{1,2})[-_.](\d{1,2})(?!\d)/g;
   const DATUM_DE = /(^|[^\d.])(\d{1,2})\.(\d{1,2})\.(\d{4}(?!\d)|\d{2}(?!\d))?/g;
@@ -69,7 +90,7 @@ module.exports = function (ctx) {
     Folien: WF,
     Skript: "lecture notes|([a-zäöüß]*s)?skript(um|e|en)?|script|reader|vorlesungsunterlagen",
     Übung: WU,
-    Lösung: `${WL}|${WU}`,
+    Lösung: `${WL}|${WU}|kl`, // „…_KL“ (Klausurlösung)
     "Eigene Lösung": `(meine|eigene) (${WL})|my solutions?|mitschrift|${WL}|${WU}`,
     Mitschrift: `mitschrift|annotiert|annotated|handschrift|notizen|${WF}`,
     Altklausur: "(alt)?klausur(en)?|exams?", // „Probeklausur“ bleibt wie „Musterklausur“ im Titel
@@ -128,21 +149,28 @@ module.exports = function (ctx) {
 
   // ---------- Erkennen: Art, Nummer, Titel, Code ----------
   const relPfad = (f) => f.path.slice(EINGANG.length + 1).normalize("NFC");
+  const regelFinden = (s) => REGELN.find(([, re]) => re.test(s)) || null;
   // Art zuerst aus dem Dateinamen, Unterordner (der tiefste zuerst) nur als Rückfall:
-  // „Vorlesung und Übung …/VL01“ → Folien. Ausnahmen: „Lösungen/Blatt_05“ → Lösung,
-  // „Altklausuren/Lösung 2023“ → Altklausur (Lösungen zu Klausuren heißen „Altklausur … Lösung“).
-  const artAusPfad = (rel, endung, basis) => {
-    if (SCAN_ANFANG.test(basis)) return "Scan";
-    const regel = (s) => (REGELN.find(([, re]) => re.test(s)) || [null])[0];
-    const name = regel(basis);
-    const ordner = rel.split("/").slice(0, -1).reverse().map(regel).find(Boolean) || null;
-    if (name === "Übung" && ["Lösung", "Eigene Lösung"].includes(ordner)) return ordner;
-    if (name === "Lösung" && ordner === "Altklausur") return ordner;
-    if (name) return name;
-    if (ordner) return ordner;
-    if (BILDER.includes(endung)) return "Scan";
-    return "Sonstiges";
+  // „Vorlesung und Übung …/VL01“ → Folien. Ausnahmen: „Lösungen/Blatt_05“ → Lösung, „Altklausuren/Aufgaben 2019“ → Altklausur.
+  // Lösungen zu Klausuren sind Lösungen („Altklausuren/Lösung 2023“, „Klausur_2023_Loesung“, „BAMatheWS1819A_KL“),
+  // die Klausur selbst („…_Korrektur“, „Klausur mit Lösungen“) bleibt Altklausur.
+  // Ergebnis: { art, quelle: "name" | "ordner" | "rest", schwach } (schwach = nur ein schwacher Hinweis wie „Organisatorisches“)
+  const artBestimmen = (rel, endung, basis) => {
+    if (SCAN_ANFANG.test(basis)) return { art: "Scan", quelle: "name", schwach: false };
+    let r = KL_ENDE.test(basis) ? ["Lösung"] : regelFinden(basis);
+    if (r && r[0] === "Altklausur" && !MIT_LOESUNG.test(basis)) r = REGELN.find(([a, re]) => (a === "Eigene Lösung" || a === "Lösung") && re.test(basis)) || r;
+    if (!r && AUTOR_JAHR.test(basis)) r = ["Literatur"];
+    const name = r ? r[0] : null, nameSchwach = !!(r && r[2]);
+    const o = rel.split("/").slice(0, -1).reverse().map(regelFinden).find(Boolean) || null;
+    const ordner = o ? o[0] : null;
+    if (name === "Übung" && ["Lösung", "Eigene Lösung", "Altklausur"].includes(ordner)) return { art: ordner, quelle: "ordner", schwach: false };
+    if (name && !(nameSchwach && ordner)) return { art: name, quelle: "name", schwach: nameSchwach };
+    // Lesestoff aus einem Ordner („Zusatzmaterial/“) nur für Dokumente, nicht für Daten, Code oder Videos
+    if (ordner && !(ordner === "Literatur" && !LESEFORMATE.includes(endung))) return { art: ordner, quelle: "ordner", schwach: !!o[2] };
+    if (BILDER.includes(endung)) return { art: "Scan", quelle: "rest", schwach: false };
+    return { art: "Sonstiges", quelle: "rest", schwach: false };
   };
+  const artAusPfad = (rel, endung, basis) => artBestimmen(rel, endung, basis).art;
   const artErkennen = (st) => artAusPfad(relPfad(st.haupt).replace(/\.[^.]+$/, ""), ext(st.haupt), st.haupt.basename.normalize("NFC"));
   // gültige Datumsangaben durch „§“ gleicher Länge ersetzen (Positionen bleiben gleich)
   const datumOk = (mo, t) => +mo >= 1 && +mo <= 12 && +t >= 1 && +t <= 31;
@@ -153,35 +181,84 @@ module.exports = function (ctx) {
   const nummerErkennen = (basis) => {
     const s = basis.normalize("NFC"), o = ohneDatum(s);
     const m = o.match(NUMMER) || o.match(NUMMER_ANFANG);
-    if (!m) return { nr: null, bis: null, treffer: "", idx: -1 };
-    const nr = Number(m[1]);
-    return { nr, bis: m[2] != null && Number(m[2]) > nr ? Number(m[2]) : null, treffer: s.substr(m.index, m[0].length), idx: m.index };
+    if (m) {
+      const nr = Number(m[1]);
+      return { nr, bis: m[2] != null && Number(m[2]) > nr ? Number(m[2]) : null, treffer: s.substr(m.index, m[0].length), idx: m.index };
+    }
+    const k = o.match(NUMMER_KURZ); // „EBWL_0“: Treffer ist „_0“, das Kürzel davor fällt im Titel weg
+    if (k && !KEINE_NR.test(k[1])) return { nr: Number(k[2]), bis: null, treffer: s.slice(k[1].length), idx: k[1].length };
+    return { nr: null, bis: null, treffer: "", idx: -1 };
+  };
+  // Nummer eines Ordners, die keine Nummer der Unterlage ist: Gliederung eines Sammelordners („00 - Vorlesung“,
+  // „01 - Übungsmaterialien“, „02 Unterlagen zur Vorlesung“). „1. Übung“ (Ordinalzahl) und „03_Kostenrechnung“ (Thema) zählen.
+  const gliederungsNummer = (name, n) => {
+    if (n.idx !== 0 || !/^\d/.test(n.treffer)) return false;
+    const m = name.match(/^\d{1,2}(\.?)[\s._\-–)]*(.*)$/);
+    if (!m || m[1]) return false;
+    const woerter = m[2].split(/[\s._\-–&,+]+/).filter(Boolean);
+    return woerter.length > 0 && woerter.every((w) => FUELL.test(w) || ORDNER_ALLGEMEIN.test(w) || !!regelFinden(w));
   };
   const codeAusName = (basis) => { const m = basis.normalize("NFC").match(CODE); return m ? m[1] : null; };
+  // Semester einheitlich: „WS2627“, „WS26_27“, „WiSe 2026/27“ → „WS 2026-27“, „WS1819“ → „WS 2018-19“, „SoSe26“ → „SS 2026“.
+  // Ein einzelnes Jahr bei WS bleibt („WS2024“ heißt je nach Lehrstuhl WS 2023/24 oder 2024/25).
+  const SEM_IM_TEXT = /(^|[^a-zäöüß0-9])(ws|wise|wintersemester|ss|sose|sommersemester)[\s.]?(\d{4}|\d{2})([\s\/_-]{1,2}(\d{4}|\d{2}))?(?![0-9])/gi;
+  const semesterSchreiben = (s) => s.replace(SEM_IM_TEXT, (m, vor, wort, a, rest, b) => {
+    const jahr = (x) => (x.length === 2 ? 2000 + Number(x) : Number(x));
+    const folgt = (x, y) => (jahr(x) + 1) % 100 === jahr(y) % 100;
+    if (!/^w/i.test(wort)) return `${vor}SS ${jahr(a)}${rest || ""}`;
+    if (b && folgt(a, b)) return `${vor}WS ${jahr(a)}-${pad(jahr(b) % 100)}`;
+    if (a.length === 4 && folgt(a.slice(0, 2), a.slice(2))) return `${vor}WS ${jahr(a.slice(0, 2))}-${a.slice(2)}`;
+    return `${vor}WS ${jahr(a)}${rest || ""}`;
+  });
+  // lange zusammengeschriebene Wörter trennen („DimpflSoenksen2022“ → „Dimpfl Soenksen 2022“, „BAMatheWS1819A“ → „BA Mathe WS 1819 A“);
+  // kurze wie „PowerPoint“, „1Var“, „Part1“ bleiben
+  const wortTrennen = (s) => s.split(" ").map((w) => {
+    if (w.length < 12) return w;
+    const t = w.replace(/([a-zäöüß])([A-ZÄÖÜ])/g, "$1 $2").replace(/([A-ZÄÖÜ]+)([A-ZÄÖÜ][a-zäöüß])/g, "$1 $2")
+      .replace(/([A-Za-zÄÖÜäöüß])(\d)/g, "$1 $2").replace(/(\d)([A-Za-zÄÖÜäöüß])/g, "$1 $2");
+    return t.split(" ").length >= 3 ? t : w;
+  }).join(" ");
   const titelErkennen = (basis, code, treffer, art, idx = -1) => {
     let s = basis.normalize("NFC").replace(/_/g, " ");
-    // Nummer-Treffer herausnehmen; ein Kurskürzel oder Semester direkt davor („JA VL 1“, „WS2627_VL1“) fällt mit weg
+    // Nummer-Treffer herausnehmen; ein Kurskürzel oder Semester direkt davor („JA VL 1“, „WS2627_VL1“, „1_JA_Kap 1“) fällt mit weg
     const tr = (treffer || "").replace(/_/g, " ");
     const i = !tr ? -1 : idx >= 0 && s.substr(idx, tr.length) === tr ? idx : s.indexOf(tr);
     if (i >= 0) {
       let vor = s.slice(0, i).trim();
       if (code && vor.startsWith(code)) vor = vor.slice(code.length).trim();
+      vor = vor.replace(/^\d{1,2}\s+(?=\S)/, ""); // Gliederungsnummer vor dem Kürzel („1 JA“)
       if (KUERZEL.test(vor) || SEMESTER.test(vor)) vor = "";
       s = `${vor} ${s.slice(i + tr.length)}`;
     }
     s = s.replace(/\s+/g, " ").trim();
     if (code && s.startsWith(code)) s = s.slice(code.length);
+    if (code) s = wortWeg(s, code); // Modulcode mitten im Namen („FAQ_B110_WS2627“)
     // Versionszusätze: „(1)“, „_v2“, „_final“, „Kopie“, „copy“
     s = s.replace(/\((\d{1,2}|neu|new|kopie|copy)\)/gi, " ");
     s = wortWeg(s, "v\\d{1,2}|final|kopie( von)?|copy( of)?");
     const rein = (x) => x.replace(/^[\s\-–.:,;+&]+|[\s\-–.:,;+&]+$/g, "").replace(/\s+/g, " ").trim();
     if (GENERISCH.test(rein(s))) return "";
+    s = semesterSchreiben(wortTrennen(rein(s)));
     // Art-Wörter und Füllwörter entfernen
     s = wortWeg(s, ARTWORTE[art] || "");
     s = s.replace(/(^|\s)(von|of|\/)\s?\d{1,3}(?=\s|$)/gi, " "); // „Folie 3 von 12“
     s = rein(fuellWeg(rein(s)));
     // wie jeder Fremdtext bereinigt: kein „<%“ (Templater), keine Link- und Tag-Zeichen in Überschrift und Eigenschaft
     return GENERISCH.test(s) ? "" : sauber(s);
+  };
+  // Titel, der wenig sagt (dann lohnt der Blick in die PDF): leer, weniger als 4 Buchstaben Inhalt, überwiegend Kürzel und
+  // Ziffern („Opt 1Var“, „OPT u NB“, „Fkt mehrerer Var“, „komp stat“), nur allgemeine Wörter („post“, „erste“) oder nur der
+  // Kurzname des Kurses („EBWL“). Semesterangaben, Zahlen und Füllwörter zählen nicht mit.
+  const ALLGEMEIN_WORT = /^(post|pre|erste[rsnm]?|zweite[rsnm]?|dritte[rsnm]?|letzte[rsnm]?|neu|new|alt|old|live|final|druck|print|handout|version|teil|part|datei|file|dokument|document|unterlagen?|materiali?en|material|folien?|slides?|vorlesung|lecture|session|sitzung|leer|blanko?|unbeschrieben|beschrieben|annotiert|annotated|anmerkungen|notes|mit|ohne|with|without)$/i;
+  const schwacherTitel = (titel, kurz = "") => {
+    const t = semesterSchreiben(String(titel || "").normalize("NFC")).replace(/(^|\s)(WS|SS) \d{4}(-\d{2})?(?=\s|$)/g, " ").replace(/\s+/g, " ").trim();
+    if (kurz && t.toLowerCase() === String(kurz).normalize("NFC").trim().toLowerCase()) return true;
+    const woerter = t.split(/[\s_.,;:()\-–+&]+/).filter((w) => w && !FUELL.test(w) && !/^\d+$/.test(w));
+    if (!woerter.length) return true;
+    const kuerzel = (w) => /\d/.test(w) || w.length <= 3 || /^[A-ZÄÖÜ]{2,6}$/.test(w) || (w.length <= 4 && w === w.toLowerCase());
+    const inhalt = woerter.filter((w) => !kuerzel(w));
+    if (inhalt.join("").length < 4 || (woerter.length - inhalt.length) * 2 > woerter.length) return true;
+    return inhalt.every((w) => ALLGEMEIN_WORT.test(w));
   };
   const zielName = (code, art, nr, titel) => {
     const kopf = [code, art, nr != null ? pad(nr) : ""].filter(Boolean).join(" ");
@@ -191,23 +268,35 @@ module.exports = function (ctx) {
     if (name.length > NAME_MAX) name = sauber(kuerzen(name, NAME_MAX));
     return name || sauber(`${code || "Unterlage"} ${eba.heute}`);
   };
-  // Vorschlag für eine Datei aus Pfad und Name (auch für Tests ohne Datei)
+  // Vorschlag für eine Datei aus Pfad und Name (auch für Tests ohne Datei). „rel“ ist der Pfad unterhalb des Eingangs bzw.
+  // des ILIAS-Kurses. Ergebnis: art, nr, titel, eigenerCode (Modulcode am Anfang des Dateinamens), code (Code aus dem
+  // Dateinamen, sonst aus dem tiefsten Ordner mit Code, sonst der übergebene; ob es das Modul gibt, prüft der Aufrufer),
+  // schwach (Titel aus dem Namen taugt wenig, siehe schwacherTitel) und name (Schema mit diesem code).
   const vorschlag = (rel, endung, code) => {
     const pfad = rel.normalize("NFC").replace(/\.[^.]+$/, "");
     const ordner = pfad.split("/");
     const basis = ordner.pop();
     const eigenerCode = codeAusName(basis);
-    let art = artAusPfad(pfad, endung, basis);
+    const ordnerCode = ordner.slice().reverse().map(codeAusName).find(Boolean) || null; // „SQ888 Mathematisches Propädeutikum/…“ im S100-Kurs
+    const codeNeu = eigenerCode || ordnerCode || code || "";
+    const a = artBestimmen(pfad, endung, basis);
+    let art = a.art;
     let { nr, bis, treffer, idx } = nummerErkennen(basis);
     const ausName = nr != null;
-    // ohne Nummer im Namen: Nummer aus dem Unterordner („Woche 3/slides.pdf“, „03_Kostenrechnung/Folien.pdf“), der tiefste zuerst
-    if (!ausName) for (const o of ordner.reverse()) { const n = nummerErkennen(o); if (n.nr != null) { nr = n.nr; bis = n.bis; break; } }
-    // nummerierte Dateien ohne erkannte Art („01_Einfuehrung“) sind meist Folien
-    if (art === "Sonstiges" && ausName && !BILDER.includes(endung)) art = "Folien";
-    let titel = titelErkennen(basis, eigenerCode || code, treffer, art, idx);
+    // nummerierte Dateien ohne erkannte Art („01_Einfuehrung“, „01_Organisatorisches“) sind meist Folien
+    if (art === "Sonstiges" && ausName && (a.quelle === "rest" || a.schwach) && !BILDER.includes(endung)) art = "Folien";
+    // ohne Nummer im Namen: Nummer aus dem Unterordner („Woche 3/slides.pdf“, „03_Kostenrechnung/Folien.pdf“), der tiefste zuerst;
+    // nicht aus der Gliederung eines Sammelordners, aus einem Sitzungsordner nur für Folien
+    if (!ausName) for (const o of ordner.slice().reverse()) {
+      const n = nummerErkennen(o);
+      if (n.nr == null || gliederungsNummer(o, n) || (SITZUNGSORDNER.test(o) && art !== "Folien")) continue;
+      nr = n.nr; bis = n.bis; break;
+    }
+    let titel = titelErkennen(basis, eigenerCode || codeNeu, treffer, art, idx);
     if (ausName && /^\d$/.test(titel)) titel = ""; // Anhängsel einer Kopie („VL03 2.pdf“ auf iOS) ist kein Titel
+    if (!ausName && nr != null) titel = titel.replace(new RegExp(`\\s0*${nr}$`), ""); // „1. Übung/Kurzlösung_1“ → „Kurzlösung“
     if (bis != null) titel = sauber(`bis ${pad(bis)} ${titel}`); // Bereich „VL3-4“ → „Folien 03 bis 04“
-    return { art, nr, titel, eigenerCode, name: zielName(code, art, nr, titel) };
+    return { art, nr, titel, eigenerCode, code: codeNeu, schwach: bis == null && schwacherTitel(titel), name: zielName(codeNeu, art, nr, titel) };
   };
 
   // ---------- PDF lesen (Seitenzahl, optional Text mit Seitenlinks) ----------
@@ -253,6 +342,168 @@ module.exports = function (ctx) {
     }
   };
 
+  // ---------- Titel aus der ersten PDF-Seite ----------
+  // Für Dateien, deren Name nur einen schwachen Titel hergibt („EBWL_1“, „VL_3_Opt_1Var“). Kandidaten sind die Zeilen der ersten
+  // Seite mit größerer Schrift als der Fließtext (größte zuerst, darin die oberste); gleich große Zeilen direkt untereinander
+  // bilden einen Block („Mathematische Methoden der / Wirtschaftswissenschaft“). Es fallen weg: Uni, Fakultät, Lehrstuhl, Namen
+  // („Prof. Dr.“), Datum, Semester, Seitenzahlen, Formeln, Modulcode, Modultitel und reine Art-Wörter („Übung 1“, „Klausur zur
+  // Vorlesung“, „Tag 1“); „Kapitel 3: Optimierung“ → „Optimierung“. Der Metadaten-Titel (PDF-Eigenschaft „Title“) zählt nur, wenn
+  // er auf der Seite steht (Vorlagen tragen oft einen alten Titel), dann gilt seine Schreibweise (keine verlorenen Ligaturen wie
+  // „Dierentiation“). Im Zweifel null: dann bleibt der Titel aus dem Dateinamen.
+  const TITEL_MAX = 60;
+  const PDF_TITEL_MUELL = /^(microsoft\s+(word|powerpoint|excel)|powerpoint|pr(ä|ae)sentation\s*\d*$|presentation\s*\d*$|folie\s*\d*$|slide\s*\d*$|untitled|unbenannt|new document|neues dokument|dokument\s*\d*$|document\s*\d*$|titel$|title$|vorlage|template)/i;
+  const ZEILE_INSTITUTION = /universit(ä|ae)t|university|fakult(ä|ae)t|faculty|lehrstuhl|chair (of|for)|abteilung|department|institut|school of|fachbereich|dezernat|hochschule|international office/i;
+  const ZEILE_PERSON = /(^|[\s,(])(prof|professor|professorin|dr|pd|dipl|jun)\.?(\s|-|$)|m\.\s?sc\.|b\.\s?sc\.|ph\.\s?d/i;
+  const ZEILE_INHALT = /^(aufgabe|exercise|problem|frage|question)\s*\d/i; // Überschrift einer Aufgabe, nicht des Dokuments
+  const ZEIT_WORT = /^(am|den|vom|von|bis|um|uhr|im|zum|on|at|from|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|monday|tuesday|wednesday|thursday|friday|saturday|sunday|januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|january|february|march|may|june|july|october|december|wintersemester|sommersemester|wise|sose|ws|ss|semester)$/i;
+  const FORMULAR_WORT = /^(name|vorname|nachname|matrikelnummer|matrikelnr|datum|unterschrift|punkte|note|seite|page|gruppe)$/i;
+  const ART_ALLGEMEIN = /^(vorlesungs?|(ü|ue)bungs?|tutoriums?|klausur|kurz|muster|probe|zusatz)?(folien?|slides?|vorlesung(en)?|lecture|(ü|ue)bung(en)?|aufgaben?|aufgabenbl(a|ä|ae)tt(er)?|bl(a|ä|ae)tt(er)?|tutorium|tutorial|klausur(en)?|pr(ü|ue)fung|exam|l(ö|oe)sung(en)?|solutions?|skript|script|handout|agenda|inhalt|inhaltsverzeichnis|gliederung|outline|contents|teil|part|tag|woche|week|kapitel|chapter|einheit|unit|lektion|session|sitzung|nr|no)$/i;
+  const KLEIN_IM_TITEL = /^(ein|eine|einer|eines|einem|einen|unter|mit|über|ueber|bei|aus|nach|vor|ohne|als|ihre?|ihrer|seine?|a|an|by|with)$/i;
+  // „GRUNDLEGENDE KONZEPTE DER VOLKSWIRTSCHAFT“ → „Grundlegende Konzepte der Volkswirtschaft“ (nur bei durchgehender Großschrift)
+  const titelSchreibung = (s) => {
+    const b = s.replace(/[^A-Za-zÄÖÜäöüß]/g, "");
+    if (b.length < 4 || b.replace(/[^a-zäöüß]/g, "").length > b.length * 0.2) return s;
+    return s.split(" ").map((w, i) => {
+      const k = w.toLowerCase();
+      if (FUELL.test(k) || KLEIN_IM_TITEL.test(k)) return i === 0 ? k.charAt(0).toUpperCase() + k.slice(1) : k;
+      if (/^[A-ZÄÖÜ]{2,3}$/.test(w)) return w; // Abkürzung („BIP“, „IAS“)
+      return k.charAt(0).toUpperCase() + k.slice(1);
+    }).join(" ");
+  };
+  // Aufzählung vorn („Kapitel 3:“, „Übung 1 –“, „2.“, „Tag 1“), Semester und Anführungszeichen weg
+  const segmentReinigen = (s) => String(s).replace(/[„“”"«»‚‘’]/g, " ").replace(/\s+/g, " ").trim()
+    .replace(/^((kapitel|chapter|kap\.?|teil|part|lektion|lecture|vorlesung|session|sitzung|einheit|unit|thema|topic|(ü|ue)bung(sblatt)?|aufgabenblatt|tutorium|tag|woche|week|blatt|sheet|nr\.?)\s*)?\d{1,2}(\.\d{1,2})*[.:)]?(\s*[-–:|]\s*|\s+|$)/i, "")
+    .replace(/(^|\s)(im\s+)?(wintersemester|sommersemester|wise|sose|ws|ss)\s*\d{2,4}([\/-]\d{2,4})?(?=\s|$)/gi, " ")
+    .replace(/^[\s\-–:,;.|/]+|[\s\-–:,;|/]+$/g, "").replace(/\s+/g, " ").trim();
+  const worte = (s) => String(s).normalize("NFC").toLowerCase().split(/[^a-zäöüß0-9]+/).filter(Boolean);
+  // Taugt ein (gereinigtes) Stück als Titel? kurs: Inhaltswörter des Modultitels, code: Modulcode
+  const segmentTaugt = (t, kurs, code) => {
+    if (!t || ZEILE_INSTITUTION.test(t) || ZEILE_PERSON.test(t) || ZEILE_INHALT.test(t)) return false;
+    if (/[=≤≥<>∑∫√±×÷∈∀∃→]|\(\s?[a-z]\s?\)|^\d+\s*(\/|von|of)\s*\d+$/.test(t)) return false; // Formeln, „(a)“, Seitenzahl
+    const w = worte(t);
+    const inhalt = w.filter((x) => !FUELL.test(x) && !ZEIT_WORT.test(x) && !/^\d+$/.test(x) && !ART_ALLGEMEIN.test(x) && !FORMULAR_WORT.test(x) && x !== code);
+    const kurzwort = inhalt.length === 1 && /^[A-ZÄÖÜ]{3,5}$/.test(t); // „FAQ“
+    if (!kurzwort && inhalt.join("").replace(/[0-9]/g, "").length < 4) return false;
+    // Modultitel oder ein Teil davon („Mathematische Methoden der“); ein einzelnes Wort aus einem längeren Titel („Einführung“) zählt
+    if (kurs.length && inhalt.every((x) => kurs.includes(x)) && (inhalt.length >= 2 || kurs.length === 1)) return false;
+    return t.length <= 120 && !(/[.!?]$/.test(t) && w.length > 8); // ein Satz ist kein Titel
+  };
+  const ligaturFrei = (s) => worte(s).join("").replace(/ff|fi|fl/g, "");
+  // Reine Auswahl aus Metadaten-Titel und Textstücken der ersten Seite ({ s: Text, x, y, g: Schriftgröße, w: Breite, b: Drehung }),
+  // ohne pdf.js: so auch in Node testbar. opt: { code, modulTitel }. Ergebnis: Titel (höchstens TITEL_MAX Zeichen) oder null.
+  const pdfTitelWaehlen = ({ titel = "", stuecke = [] } = {}, opt = {}) => {
+    const code = String(opt.code || "").toLowerCase();
+    const kurs = worte(opt.modulTitel || "").filter((x) => !FUELL.test(x));
+    // Stücke → Zeilen (gleiche Höhe, gleiche Größe) → Blöcke (gleiche Größe, direkt untereinander)
+    const zeilen = [];
+    for (const st of stuecke) {
+      if (!st || !String(st.s || "").trim() || !(st.g > 0) || Math.abs(st.b || 0) > 0.01) continue;
+      let z = zeilen.find((q) => Math.abs(q.y - st.y) <= st.g * 0.3 && Math.abs(q.g - st.g) <= 0.6);
+      if (!z) { z = { y: st.y, g: st.g, teile: [] }; zeilen.push(z); }
+      z.teile.push(st);
+    }
+    for (const z of zeilen) {
+      z.teile.sort((a, b) => a.x - b.x);
+      let t = "", ende = null;
+      for (const st of z.teile) {
+        const luecke = ende == null || st.w == null || st.x - ende > z.g * 0.15;
+        t += (t && luecke && !/\s$/.test(t) ? " " : "") + st.s;
+        ende = st.w == null ? null : st.x + st.w;
+      }
+      z.text = akzenteReparieren(t.replace(/\s+/g, " ").trim());
+      z.klasse = Math.round(z.g * 2) / 2;
+    }
+    const zeichen = {};
+    for (const z of zeilen) zeichen[z.klasse] = (zeichen[z.klasse] || 0) + z.text.replace(/\s/g, "").length;
+    const groessen = Object.keys(zeichen).map(Number).sort((a, b) => b - a);
+    const fliess = groessen.slice().sort((a, b) => zeichen[b] - zeichen[a])[0];
+    const gesamt = groessen.reduce((n, g) => n + zeichen[g], 0);
+    // Modultitel als zusammenhängende Wortfolge herausnehmen („Mathematische Methoden der Wirtschaftswissenschaft Formelsammlung“)
+    const mt = worte(opt.modulTitel || "");
+    const kursFolge = mt.length >= 2 ? new RegExp(mt.join("[^a-zäöüß0-9]+"), "i") : null; // worte() liefert nur Buchstaben und Ziffern
+    const teile = (s) => (kursFolge ? s.replace(kursFolge, " - ") : s).split(/\s+[-–—|]\s+|\s*\[[\d.]+\s?(?:cm|mm|pt|em|ex)\]\s*|:\s+/i).filter(Boolean);
+    // gültige Stücke eines Textes, gereinigt und wieder verbunden („KAPITEL 1 – GRUNDLAGEN“ → „GRUNDLAGEN“)
+    const auswerten = (s) => {
+      if (ZEILE_INSTITUTION.test(s) || ZEILE_PERSON.test(s) || ZEILE_INHALT.test(s)) return "";
+      return teile(s).map(segmentReinigen).filter((t) => segmentTaugt(t, kurs, code)).join(" - ");
+    };
+    let kandidat = "";
+    for (const k of groessen.filter((g) => g > fliess + 0.4 || g === groessen[0]).slice(0, 3)) {
+      const reihe = zeilen.filter((z) => z.klasse === k).sort((a, b) => b.y - a.y);
+      const bloecke = [];
+      for (const z of reihe) {
+        const v = bloecke[bloecke.length - 1];
+        if (v && v.y - z.y <= z.g * 1.6) { v.text += " " + z.text; v.y = z.y; } else bloecke.push({ y: z.y, text: z.text });
+      }
+      // keine größere Schrift als der Fließtext: nur ein Deckblatt mit wenig Text taugt
+      if (k === fliess && bloecke.length > 2 && gesamt > 400) break;
+      for (const b of bloecke) { kandidat = auswerten(b.text); if (kandidat) break; }
+      if (kandidat) break;
+    }
+    // Metadaten-Titel: nur, wenn er auf der Seite steht; dann in seiner Schreibweise
+    const meta = PDF_TITEL_MUELL.test(String(titel).trim()) || /\.(pdf|docx?|pptx?|tex|indd)$|^\S+_\S+$/i.test(String(titel).trim()) ? "" : auswerten(akzenteReparieren(String(titel)));
+    const seite = ligaturFrei(zeilen.map((z) => z.text).join(" "));
+    if (meta && kandidat && (ligaturFrei(meta).includes(ligaturFrei(kandidat)) || ligaturFrei(kandidat).includes(ligaturFrei(meta)))) kandidat = meta;
+    else if (meta && !kandidat && ligaturFrei(meta).length >= 4 && seite.includes(ligaturFrei(meta))) kandidat = meta;
+    if (!kandidat) return null;
+    let t = titelSchreibung(kandidat);
+    if (t.length > TITEL_MAX) {
+      const i = t.search(/\s-\s/);
+      t = i >= 15 && i <= TITEL_MAX ? t.slice(0, i) : kuerzen(t, TITEL_MAX);
+    }
+    t = sauber(t);
+    return t.replace(/[^A-Za-zÄÖÜäöüß]/g, "").length >= 3 ? t : null;
+  };
+  // Titel aus einer PDF (TFile, ArrayBuffer oder Uint8Array); opt: { code, modulTitel } (Modultitel sonst aus dem Modul zum Code).
+  // Liest nur Metadaten und die erste Seite; zu große oder unlesbare PDFs → null. Der übergebene Puffer bleibt unverändert.
+  const titelAusPdf = async (quelle, opt = {}) => {
+    let doc = null;
+    try {
+      let daten = quelle;
+      if (quelle && typeof quelle.path === "string" && quelle.stat) {
+        if (quelle.stat.size > LESEN_MAX_MB * 1048576) return null;
+        daten = await app.vault.readBinary(quelle);
+      }
+      if (!daten || !(daten.byteLength > 0) || daten.byteLength > LESEN_MAX_MB * 1048576) return null;
+      const bytes = daten instanceof Uint8Array ? daten.slice() : new Uint8Array(daten.slice(0)); // pdf.js übernimmt den Puffer
+      const pdfjs = await ctx.obsidian.loadPdfJs();
+      doc = await pdfjs.getDocument({ data: bytes }).promise;
+      const meta = await doc.getMetadata().catch(() => null);
+      const seite = await doc.getPage(1);
+      const tc = await seite.getTextContent();
+      const stuecke = tc.items.filter((i) => i && typeof i.str === "string" && i.transform).slice(0, 3000)
+        .map((i) => ({ s: i.str, x: i.transform[4], y: i.transform[5], g: Math.hypot(i.transform[2], i.transform[3]), w: i.width, b: i.transform[1] }));
+      const code = opt.code || "";
+      const modulTitel = opt.modulTitel != null ? opt.modulTitel : (code && eba.modulNachCode(code)?.fm.titel) || "";
+      return pdfTitelWaehlen({ titel: (meta && meta.info && meta.info.Title) || "", stuecke }, { code, modulTitel });
+    } catch (e) {
+      console.warn("Unterlagen: Titel aus der PDF nicht lesbar", quelle?.path || "", e);
+      return null;
+    } finally {
+      try { await doc?.destroy(); } catch (e) {}
+    }
+  };
+  // Titel aus der PDF statt des schwachen Titels aus dem Namen; dessen Semester („WS 2018-19“) bleibt, wenn die PDF keine Jahreszahl nennt
+  const titelMitPdf = (titelName, titelPdf) => {
+    if (!titelPdf) return titelName;
+    const sem = (String(titelName || "").match(/(^|\s)((WS|SS) \d{4}(-\d{2})?)(?=\s|$)/) || [])[2];
+    return sauber(sem && !/(19|20)\d{2}/.test(titelPdf) ? `${titelPdf} ${sem}` : titelPdf);
+  };
+  // Vorschlag wie oben, bei schwachem Titel ergänzt um den Titel aus der PDF (daten: TFile, ArrayBuffer oder Uint8Array).
+  // Eine Semesterangabe aus dem Dateinamen bleibt erhalten, wenn der PDF-Titel keine Jahreszahl hat. Feld titelQuelle: "name" | "pdf".
+  const vorschlagMitPdf = async (rel, endung, code, daten, opt = {}) => {
+    const v = vorschlag(rel, endung, code);
+    v.titelQuelle = "name";
+    if (!v.schwach || String(endung).toLowerCase() !== "pdf" || !daten) return v;
+    const t = await titelAusPdf(daten, { code: v.code, ...opt });
+    if (!t) return v;
+    v.titel = titelMitPdf(v.titel, t);
+    v.titelQuelle = "pdf";
+    v.schwach = false;
+    v.name = zielName(v.code, v.art, v.nr, v.titel);
+    return v;
+  };
+
   // Fremdtext so entschärfen, dass er in einer eingeklappten Karte steht, nichts auslöst und trotzdem suchbar bleibt:
   // keine Templater-Befehle (<%), kein HTML, keine Tags, Links, Aufgaben, Formeln, Kommentare, Codeblöcke.
   // „x > 0“ und „f(x) = [a, b]“ bleiben wörtlich stehen.
@@ -276,9 +527,9 @@ module.exports = function (ctx) {
   // Kein Vault-Name, kein Notizname im Link: der Knopf wirkt auf die Notiz, in der er steht.
   const oeffnenUrl = (notizName, original = false) => `obsidian://studium-autopilot?aktion=oeffnen${original ? "&original=1" : ""}`;
   // Knopf „Größe ⇅“: PDF-Ansicht klein ↔ groß (Aktion „pdf“ in System/Skripte/aktionen.js, eba-core.css Abschnitt 29)
-  const groesseUrl = (notizName) => "obsidian://studium-autopilot?aktion=pdf";
+  const groesseUrl = () => "obsidian://studium-autopilot?aktion=pdf";
   const oeffnenZeile = (notizName, original) =>
-    `> [Öffnen ↗](${oeffnenUrl(notizName)})${original ? ` · [Original öffnen ↗](${oeffnenUrl(notizName, true)})` : ""} · [Größe ⇅](${groesseUrl(notizName)})`;
+    `> [Öffnen ↗](${oeffnenUrl(notizName)})${original ? ` · [Original öffnen ↗](${oeffnenUrl(notizName, true)})` : ""} · [Größe ⇅](${groesseUrl()})`;
   // Ansicht der Hauptdatei: eingebettet, verlinkt oder mit Hinweis
   const ansichtText = (h, zuGross) => {
     const e = ext(h);
@@ -291,30 +542,47 @@ module.exports = function (ctx) {
     if (zuGross) ansicht += `\n\n> [!eba-info] Zu groß zum Auslesen\n> Die Datei hat ${mb(h.stat.size)}, auf diesem Gerät werden PDFs bis ${LESEN_MAX_MB} MB ausgelesen (PC ${LESEN_MAX_MB_PC} MB, iPhone/iPad ${LESEN_MAX_MB_MOBIL} MB). Sie ist vollständig eingeordnet, nur Seitenzahl und Text fehlen in dieser Notiz.`;
     return ansicht;
   };
-  const notizInhalt = (u) => {
-    const h = u.haupt;
-    const titelZeile = [u.code, [u.art, u.nr != null ? pad(u.nr) : ""].filter(Boolean).join(" "), u.titel].filter(Boolean).join(" · ");
-    const eck = [`**Modul:** ${u.modul ? `[[${u.modul.f.basename}|${u.code}]]` : "–"}`, `**Art:** ${u.art}`,
-      u.seiten ? `**Seiten:** ${u.seiten}` : "", `**Semester:** ${u.semester}`].filter(Boolean).join(" · ");
-    const orig = u.original ? `\n${originalZeile(u.original)}` : "";
-    const weitere = u.weitere.length ? `\n> **Weitere Dateien:** ${u.weitere.map((f) => `[[${f.name}]]`).join(", ")}` : "";
-    const ansicht = ansichtText(h, u.zuGross);
+  // Begleitnotiz als Markdown, gleiches Format für „Einordnen“ und die ILIAS-Ablage (ilias.js). Felder:
+  // code, modul (Modul-Objekt aus eba.modulNachCode oder Notizname), art, nummer, titel, datei (TFile oder Dateiname; Größe dann
+  // aus „groesse“ in Byte), original (TFile oder Dateiname, z. B. die PPTX zur PDF), format („pdf, pptx“; Standard: Endungen
+  // von datei, original und weitere), seiten, semester, quelle (Text oder Link, Standard leer), extra (weitere Eigenschaften
+  // nach „quelle“, z. B. { ilias_id: "…" }; Standardfelder lassen sich nicht überschreiben), weitere (Dateien), zuGross.
+  const STANDARDFELDER = ["typ", "code", "modul", "art", "nummer", "titel", "datei", "original", "format", "seiten", "semester", "status", "datum", "quelle", "uebersicht", "cssclasses", "tags"];
+  const alsDatei = (f, groesse = 0) => {
+    if (!f || typeof f !== "string") return f || null;
+    const name = f.split("/").pop(), i = name.lastIndexOf(".");
+    return { name, basename: i > 0 ? name.slice(0, i) : name, extension: i > 0 ? name.slice(i + 1) : "", stat: { size: groesse || 0 } };
+  };
+  const yamlWert = (v) => (v == null ? "" : typeof v === "number" || typeof v === "boolean" ? String(v) : typeof v === "string" ? J(v) : JSON.stringify(v));
+  const begleitnotiz = ({ code = "", modul = null, art = "Sonstiges", nummer = null, titel = "", datei, original = null, format, seiten = null,
+    semester = "", quelle = "", extra = null, weitere = [], zuGross = false, groesse = 0 } = {}) => {
+    const h = alsDatei(datei, groesse), orig = alsDatei(original), mehr = (weitere || []).map((f) => alsDatei(f));
+    const modulName = !modul ? "" : typeof modul === "string" ? modul.replace(/^\[\[|\]\]$/g, "") : modul.f?.basename || "";
+    const titelZeile = [code, [art, nummer != null ? pad(nummer) : ""].filter(Boolean).join(" "), titel].filter(Boolean).join(" · ");
+    const eck = [`**Modul:** ${modulName ? `[[${modulName}|${code}]]` : "–"}`, `**Art:** ${art}`,
+      seiten ? `**Seiten:** ${seiten}` : "", `**Semester:** ${semester}`].filter(Boolean).join(" · ");
+    const origZeile = orig ? `\n${originalZeile(orig)}` : "";
+    const weitereZeile = mehr.length ? `\n> **Weitere Dateien:** ${mehr.map((f) => `[[${f.name}]]`).join(", ")}` : "";
+    const ansicht = ansichtText(h, zuGross);
+    const fmt = format != null ? format : [h, orig, ...mehr].filter(Boolean).map(ext).join(", ");
+    const zusatz = Object.keys(extra || {}).filter((k) => /^[A-Za-z_][A-Za-z0-9_-]*$/.test(k) && !STANDARDFELDER.includes(k)).map((k) => `${k}: ${yamlWert(extra[k])}`);
     return [
       "---",
       "typ: unterlage",
-      `code: ${J(u.code)}`,
-      `modul: ${J(u.modul ? `[[${u.modul.f.basename}]]` : "")}`,
-      `art: ${J(u.art)}`,
-      `nummer: ${u.nr ?? ""}`,
-      `titel: ${J(u.titel)}`,
+      `code: ${J(code)}`,
+      `modul: ${J(modulName ? `[[${modulName}]]` : "")}`,
+      `art: ${J(art)}`,
+      `nummer: ${nummer ?? ""}`,
+      `titel: ${J(titel)}`,
       `datei: ${J(`[[${h.name}]]`)}`,
-      `original: ${J(u.original ? `[[${u.original.name}]]` : "")}`,
-      `format: ${J(u.dateien.map((f) => ext(f)).join(", "))}`,
-      `seiten: ${u.seiten ?? ""}`,
-      `semester: ${J(u.semester)}`,
+      `original: ${J(orig ? `[[${orig.name}]]` : "")}`,
+      `format: ${J(fmt)}`,
+      `seiten: ${seiten ?? ""}`,
+      `semester: ${J(semester)}`,
       "status: neu",
       `datum: ${eba.heute}`,
-      'quelle: ""',
+      `quelle: ${J(quelle)}`,
+      ...zusatz,
       'uebersicht: "[[Unterlagen]]"',
       // iPhone-Ansicht (eba-core.css Abschnitt 37, Seitenklasse begleitnotiz): kompakter Kopf, PDF auf dem ersten Bildschirm
       "cssclasses:",
@@ -326,8 +594,8 @@ module.exports = function (ctx) {
       `# ${titelZeile}`,
       "",
       `> [!eba-regel] Eckdaten`,
-      `> ${eck}${orig}${weitere}`,
-      oeffnenZeile(h.basename, u.original),
+      `> ${eck}${origZeile}${weitereZeile}`,
+      oeffnenZeile(h.basename, orig),
       "",
       // Reihenfolge: „Das Wichtigste“ und „Offene Fragen“ vor der Datei, PDF-Kasten eingeklappt darunter
       "## Das Wichtigste",
@@ -340,6 +608,10 @@ module.exports = function (ctx) {
       "",
     ].join("\n");
   };
+  const notizInhalt = (u) => begleitnotiz({
+    code: u.code, modul: u.modul, art: u.art, nummer: u.nr, titel: u.titel, datei: u.haupt, original: u.original,
+    format: u.dateien.map((f) => ext(f)).join(", "), seiten: u.seiten, semester: u.semester, weitere: u.weitere, zuGross: u.zuGross,
+  });
 
   // PDF zu einer schon eingeordneten PPTX (gleicher Name, Begleitnotiz zeigt noch auf die PPTX, keine PDF daneben):
   // Die PDF kommt mit gleichem Namen dazu, die vorhandene Notiz wird wie bei einem Paar ergänzt (eigene Einträge bleiben).
@@ -387,7 +659,6 @@ module.exports = function (ctx) {
     await app.fileManager.processFrontMatter(blatt, (fm) => { if (!fm[feld]) { fm[feld] = `[[${datei.name}]]`; gesetzt = true; } });
     return gesetzt;
   };
-  const uebungsblattVerknuepfen = (code, nr, datei) => blattVerknuepfen(code, nr, datei, "datei");
 
   // freier Name im Ordner; „vergeben“ enthält Namen, die im selben Lauf schon verplant sind
   const freierName = (ordner, basis, exts, vergeben = null) => {
@@ -591,21 +862,32 @@ module.exports = function (ctx) {
     // 2. Plan: Modul, Art, Nummer, Titel, Zielordner je Datei (noch ohne Änderungen im Vault)
     const bericht = { eingeordnet: 0, uebersprungen: 0, gross: [], duplikate: [], fremd: [], blaetter: 0, ohneSeiten: 0, zuGross: [], nachgetragen: 0, zipPapierkorb: 0, loesungen: 0, ergaenzt: 0 };
     const plan = [];
-    for (const st of stapel) {
-      const h = st.haupt;
-      let modul = blockModul;
-      const eigenerCode = codeAusName(h.basename);
-      if (modus === "code") modul = (eigenerCode && eba.modulNachCode(eigenerCode)) || null;
-      if (modus === "einzeln" || (modus === "code" && !modul)) {
-        modul = await modulFragen(`${h.name}: Modul? (Esc = Datei im Eingang lassen)`);
-        if (!modul) { bericht.uebersprungen++; continue; }
+    let lesen = null; // Hinweis, solange Titel aus PDFs gelesen werden
+    try {
+      for (const st of stapel) {
+        const h = st.haupt;
+        let modul = blockModul;
+        const eigenerCode = codeAusName(h.basename);
+        if (modus === "code") modul = (eigenerCode && eba.modulNachCode(eigenerCode)) || null;
+        if (modus === "einzeln" || (modus === "code" && !modul)) {
+          modul = await modulFragen(`${h.name}: Modul? (Esc = Datei im Eingang lassen)`);
+          if (!modul) { bericht.uebersprungen++; continue; }
+        }
+        const code = modul?.fm.code ?? "";
+        const v = vorschlag(relPfad(h), ext(h), code);
+        // schwacher Titel im Dateinamen („EBWL_1“, „VL_3_Opt_1Var“): Titel von der ersten PDF-Seite, wenn er eindeutig ist
+        let titel = v.titel;
+        if (v.schwach && ext(h) === "pdf") {
+          if (!lesen) lesen = new Notice("Lese Titel aus den PDFs …", 0);
+          titel = titelMitPdf(v.titel, await titelAusPdf(h, { code }));
+        }
+        const mo = modulOrdnerPlan(modul, code);
+        const p = { st, modul, code, art: v.art, nr: v.nr, titel, ordner: mo.pfad, vergleich: mo.alt?.path ?? mo.pfad, eigenerCode };
+        if (modus === "einzeln") await korrigieren(p);
+        plan.push(p);
       }
-      const code = modul?.fm.code ?? "";
-      const v = vorschlag(relPfad(h), ext(h), code);
-      const mo = modulOrdnerPlan(modul, code);
-      const p = { st, modul, code, art: v.art, nr: v.nr, titel: v.titel, ordner: mo.pfad, vergleich: mo.alt?.path ?? mo.pfad, eigenerCode };
-      if (modus === "einzeln") await korrigieren(p);
-      plan.push(p);
+    } finally {
+      lesen?.hide();
     }
 
     // 4. Duplikate (im Zielordner und im Stapel): einmal fragen
@@ -704,5 +986,9 @@ module.exports = function (ctx) {
     return { ...bericht, erste };
   };
 
-  return { einordnen, artErkennen, nummerErkennen, titelErkennen, zielName, codeAusName, entschaerfen, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL, HUB };
+  return {
+    einordnen, artErkennen, nummerErkennen, titelErkennen, zielName, codeAusName, entschaerfen, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL, HUB,
+    // für die ILIAS-Ablage (ilias.js) und Tests
+    schwacherTitel, titelAusPdf, pdfTitelWaehlen, titelMitPdf, vorschlagMitPdf, begleitnotiz, ARTEN,
+  };
 };

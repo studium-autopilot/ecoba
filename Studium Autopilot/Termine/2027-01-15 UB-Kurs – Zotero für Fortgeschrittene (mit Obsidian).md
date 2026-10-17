@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/"
+info: "Online-Kurs der Universitätsbibliothek für Fortgeschrittene zur Literaturverwaltung mit Zotero und Obsidian."
 herkunft: zentral
 zentral_id: 2027-01-15-ub-kurs-zotero-fuer-fortgeschrittene-mit-obsidian
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # UB-Kurs: Zotero für Fortgeschrittene (mit Obsidian)
 
 **15.01.2027** · 10:00–12:00 · online
+
+Online-Kurs der Universitätsbibliothek für Fortgeschrittene zur Literaturverwaltung mit Zotero und Obsidian.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/)
 

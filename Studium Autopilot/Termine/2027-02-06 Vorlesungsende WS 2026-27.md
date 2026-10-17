@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/"
+info: "Letzter Vorlesungstag des Wintersemesters laut den Semesterterminen der Universität."
 herkunft: zentral
 zentral_id: 2027-02-06-vorlesungsende-ws-2026-27
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Vorlesungsende WS 2026/27
 
 **06.02.2027**
+
+Letzter Vorlesungstag des Wintersemesters laut den Semesterterminen der Universität.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/)
 

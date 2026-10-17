@@ -93,8 +93,6 @@ cssclasses:
 >
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** nicht im MHB beschrieben
-> > - **Gesamtnote:** zählt im 66 %-Block (Schwerpunkte und Bachelorarbeit), gewichtet nach ECTS
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in

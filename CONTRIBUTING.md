@@ -26,6 +26,7 @@ Für Texte und Doku gilt: Keine Mermaid-Diagramme in Markdown, das auf GitHub ge
 Diagramme als PNG unter `docs/bilder/`. `werkzeuge/pruefen.py` meldet einen ```` ```mermaid ````-Block als Fund.
 
 Für Code gilt: Er muss auf iPhone und iPad laufen. Die Regeln für Skripte stehen in [docs/architektur.md](docs/architektur.md) („Regeln für Skript-Autoren“).
+Vor dem Pull Request: `npm ci`, dann `npm test` und `npm run lint` (Node 22 oder neuer). GitHub Actions prüft dasselbe.
 
 ## Keine Lehrmaterialien
 

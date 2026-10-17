@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/fristen/"
+info: "Anmeldezeitraum des Prüfungsamts für die Prüfungen des Nachholtermins. An- und Abmeldung online in Alma, Abmeldung bis einen Tag vor der jeweiligen Prüfung."
 herkunft: zentral
 zentral_id: 2027-03-08-pruefungsanmeldung-nachholtermin-ws-2026-27
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Prüfungsanmeldung Nachholtermin WS 2026/27
 
 **08.03.2027 – 15.03.2027** · in Alma
+
+Anmeldezeitraum des Prüfungsamts für die Prüfungen des Nachholtermins. An- und Abmeldung online in Alma, Abmeldung bis einen Tag vor der jeweiligen Prüfung.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/fristen/)
 

@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/"
+info: "Prüfungszeitraum des Haupttermins für die Pflicht- und Profilbildungsmodule, bisher nur geschätzt. Prüfungen vorher im Anmeldezeitraum in Alma anmelden."
 herkunft: zentral
 zentral_id: 2027-07-16-klausurphase-haupttermin-ss-2027
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Klausurphase Haupttermin SS 2027
 
 **16.07.2027 – 30.07.2027**
+
+Prüfungszeitraum des Haupttermins für die Pflicht- und Profilbildungsmodule, bisher nur geschätzt. Prüfungen vorher im Anmeldezeitraum in Alma anmelden.
 
 > [!warning] Geschätzt
 > Dieses Datum ist noch nicht offiziell. Sobald die Uni es veröffentlicht, wird es hier automatisch aktualisiert.

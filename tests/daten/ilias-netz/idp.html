@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1.0">
+        <title>Shibboleth IdP</title>
+        <link rel="stylesheet" type="text/css" href="/idp/css/main.css" media="all">
+    </head>
+    <body>
+    <div class="wrapper">
+      <div class="container">
+        <header>
+          <img src="/idp/images/logo.png" alt="Universität Tübingen">
+        </header>
+
+        <div class="header">
+            Login <span class="header-at">@</span> Uni-Tuebingen
+            <div class="header-shib">shibboleth &middot; identity provider</div>
+        </div>
+        <div class="content">
+          <div class="ssoInfo">
+            <p>Dies ist die zentrale Anmeldeseite für das Single Sign-On der Universität Tübingen.</p>
+          </div>
+
+          <div class="row">
+
+            <p>
+The service ILIAS Lernplattform
+ has requested that you log in using your personal user account at the University of Tübingen.            </p>
+
+            <form action="/idp/profile/SAML2/Redirect/SSO?execution=TEST-e1s1" method="post" class="column left">
+
+              <div class="form-login-element-wrapper">
+                <input class="form-element form-field" id="username" name="j_username" type="text"
+                	value="">
+                <label for="username" class="label-login">Username</label>
+              </div>
+
+              <div class="form-login-element-wrapper">
+                <input class="form-element form-field" id="password" name="j_password" type="password" value="" >
+                <label for="password" class="label-login">Password</label>
+              </div>
+
+
+
+              <div class="form-element-wrapper">
+                <input type="checkbox" name="donotcache" value="1" id="donotcache" >
+                <label for="donotcache">Don't Remember Login</label>
+               </div>
+
+            <div class="form-element-wrapper">
+                <input id="_shib_idp_revokeConsent" type="checkbox" name="_shib_idp_revokeConsent" value="true">
+                <label for="_shib_idp_revokeConsent">Clear prior granting of permission for release of your information to this service.</label>
+            </div>
+
+              <div class="form-element-wrapper">
+                <button class="form-element form-button" type="submit" name="_eventId_proceed"
+                    onClick="this.childNodes[0].nodeValue='Logging in, please wait...'"
+                    >Login</button>
+              </div>
+
+            </form>
+
+            <div class="column right">
+              <ul>
+                <li><a href="https://passwort.uni-tuebingen.de/">Forgot your password?</a></li>
+                <li><a href="https://uni-tuebingen.de/en/2607">Need Help?</a></li>
+                <li><a href="">Nutzungsbedingungen</a></li>
+              </ul>
+            </div>
+
+
+			
+
+
+          </div>
+
+            <div class="generalHints">
+                <h4>Hinweise</h4>
+                <ul>
+                <li>Die Anmeldung ist <b>ausschließlich</b> mit Ihrer persönlichen Login-ID möglich (bei Beschäftigten in der Regel mit 01 endend, bei Studierenden in der Regel mit zx beginnend).</li>
+
+                <li class="list-help-item">Um sich abzumelden, müssen Sie alle Fenster des Webbrowsers schließen, damit keine anderen Personen unter Ihrer Benutzerkennung weiterarbeiten können. Eine Abmeldung bei einer einzelnen Anwendung oder eine zentrale Abmeldung beim Single Sign-On sind derzeit nicht möglich.</li>
+
+                <li class="list-help-item">Haben Sie denselben Dienst bereits einmal genutzt, werden Sie nur dann erneut nach einer Bestätigung gefragt, wenn sich der Datenumfang oder der Name des Dienstanbieters geändert hat. Wenn Sie in jedem Fall erneut angezeigt bekommen möchten, welche Daten zur Übermittlung vorgesehen sind, aktivieren Sie bitte oben stehende Option.</li>
+
+                <li class="list-help-item">Bitte setzen Sie Ihre Bookmarks immer auf die <b>Ziel-Webseite</b> des Dienstes, den Sie nutzen wollen, das heißt die Webseite von der aus Sie zu dieser Anmeldeseite weitergeleitet wurden. Der direkte Aufruf dieser Anmeldeseite ohne Angabe des Dienstes funktioniert in einem Single Sign-On System nicht.</li>
+
+                </ul>
+            </div>
+        </div>
+      </div>
+
+<footer>
+    <div class="container container-footer">
+        <p class="footer-text">Powered by <a href="http://shibboleth.net" title="Öffnet die Shibboleth Homepage in einem neuen Fenster" target="_blank">Shibboleth ™</a></p>
+        <p class="footer-text">
+            &copy; Universität Tübingen &nbsp;
+            | &nbsp; Stand 2.6.2017 
+(83) &nbsp;
+            | &nbsp; <a target="_blank" title="Öffnet das Impressum in einem neuen Fenster" href="https://uni-tuebingen.de/de/334">Impressum</a> &nbsp;
+            | &nbsp; <a target="_blank" title="Öffnet die Kontaktseite in einem neuen Fenster" href="https://uni-tuebingen.de/de/35575">Kontakt</a> &nbsp;
+        </p>
+    </div>
+</footer>
+    </div>
+ 	</body>
+</html>

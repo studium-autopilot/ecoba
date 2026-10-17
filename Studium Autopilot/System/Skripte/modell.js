@@ -322,16 +322,45 @@ module.exports = function (ctx) {
 
   // Argument eines Codeblocks aus der Kopfzeile (```eba-x <argument>```): Obsidian übergibt nur den Inhalt, darum die
   // Kopfzeile aus dem Abschnitt lesen (auch in Karten, dort mit „> “ davor). erlaubt = gültige Werte, sonst vorgabe.
+  // Beim Neuzeichnen der Leseansicht (rerender) liefert getSectionInfo zwar die Zeilen, aber leeren Text, solange Obsidian
+  // die Notiz neu einliest (ab 10240 Zeichen asynchron; so fiel „Deine Angaben“ auf die leere Karte zurück). Rückfall: der
+  // Text der Notiz aus ihrer geöffneten Ansicht, sonst das zuletzt an derselben Stelle gelesene Argument. Ganz ohne Zeilen
+  // (Karte in der Bearbeitungsansicht) gilt das Argument, wenn alle Blöcke dieser Sprache in der Notiz dasselbe haben.
+  const blockArgMerk = {}; // „pfad|sprache|zeile“ → zuletzt gelesenes Argument
+  const ansichtText = (pfad) => {
+    let text = "";
+    if (!pfad) return text;
+    try {
+      app.workspace.iterateAllLeaves((leaf) => {
+        const v = leaf && leaf.view;
+        if (text || !v || !v.file || v.file.path !== pfad) return;
+        const t = typeof v.getViewData === "function" ? v.getViewData() : v.data;
+        if (typeof t === "string") text = t;
+      });
+    } catch (e) { text = ""; }
+    return text;
+  };
   const blockArgument = (el, c, sprache, erlaubt, vorgabe) => {
+    const muster = new RegExp("^[>\\s]*(?:```|~~~)\\s*" + sprache + "(?:\\s+(\\S+))?\\s*$");
+    const pruefen = (a) => { a = String(a || "").toLowerCase(); return !erlaubt || erlaubt.indexOf(a) >= 0 ? (a || vorgabe) : vorgabe; };
+    const kopfzeilen = (zeilen) => { const r = []; for (const z of zeilen) { const m = z.match(muster); if (m) r.push(String(m[1] || "").toLowerCase()); } return r; };
     let info = null;
     try { info = c && c.getSectionInfo ? c.getSectionInfo(el) : null; } catch (e) { info = null; }
-    if (info && info.text) {
-      const zeilen = info.text.split("\n").slice(info.lineStart, info.lineEnd + 1);
-      for (const z of zeilen) {
-        const m = z.match(new RegExp("^[>\\s]*(?:```|~~~)\\s*" + sprache + "(?:\\s+(\\S+))?\\s*$"));
-        if (m) { const a = String(m[1] || "").toLowerCase(); return !erlaubt || erlaubt.indexOf(a) >= 0 ? (a || vorgabe) : vorgabe; }
+    const pfad = (c && c.sourcePath) || "";
+    const mitZeilen = !!info && typeof info.lineStart === "number" && typeof info.lineEnd === "number";
+    const merk = pfad + "|" + sprache + "|" + (mitZeilen ? info.lineStart : "");
+    const text = (info && info.text) || ansichtText(pfad);
+    if (text) {
+      const alle = text.split("\n");
+      if (mitZeilen) {
+        const r = kopfzeilen(alle.slice(info.lineStart, info.lineEnd + 1));
+        if (r.length) { blockArgMerk[merk] = r[0]; return pruefen(r[0]); }
       }
+      // Zeilen fehlen oder passen nicht (mehr): eindeutig nur, wenn alle Blöcke dieser Sprache dasselbe Argument haben
+      const r = kopfzeilen(alle);
+      if (r.length && r.every((a) => a === r[0])) return pruefen(r[0]);
     }
+    if (mitZeilen && Object.prototype.hasOwnProperty.call(blockArgMerk, merk)) return pruefen(blockArgMerk[merk]);
     return vorgabe;
   };
 

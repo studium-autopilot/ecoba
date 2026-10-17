@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/universitaet/campusleben/veranstaltungen/zentrale-veranstaltungen/dies-universitatis/"
+info: "Offizielle Eröffnung des akademischen Jahres der Universität Tübingen."
 herkunft: zentral
 zentral_id: 2026-10-14-dies-universitatis
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Dies Universitatis – Semestereröffnung der Uni
 
 **14.10.2026** · 18:00 · Festsaal Neue Aula
+
+Offizielle Eröffnung des akademischen Jahres der Universität Tübingen.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/universitaet/campusleben/veranstaltungen/zentrale-veranstaltungen/dies-universitatis/)
 

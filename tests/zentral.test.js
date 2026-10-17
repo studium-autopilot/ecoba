@@ -148,8 +148,117 @@ test("Live: aktuelle zentrale Daten sind gültig", { skip: process.env.ECOBA_LIV
     const b = await holen(name);
     assert.equal(await Z.sha256(b), m.wert.dateien[name].sha256, name + ": SHA-256");
     const d = JSON.parse(new TextDecoder().decode(b));
-    const r = name === "termine.json" ? Z.terminePruefen(d) : Z.semesterPruefen(d);
+    const r = name === "termine.json" ? Z.terminePruefen(d) : name === "gruppen.json" ? Z.gruppenPruefen(d) : Z.semesterPruefen(d);
     assert.equal(r.fehler, undefined, r.fehler);
     assert.deepEqual(r.verworfen, [], name + ": verworfen");
   }
+});
+
+// ---------- Übungs- und Tutoriengruppen (gruppen.json, docs/daten-v1.md) – nur ausgedachte Daten ----------
+
+const gruppe = (anders = {}) => Object.assign({
+  id: "ws-2026-27-x100-uebung-1", code: "X100", art: "Übung", gruppe: "1", tag: "Di", von: "08:00", bis: "10:00", ct: true,
+  raum: "Hörsaal 1 (Beispielbau)", leitung: "", anmeldung: "Über den ILIAS-Kurs, ab Mo 19.10., 12:00.",
+  quelle_url: "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=1&periodId=1",
+  semester: "WS 2026/27", zeitraum: { von: "2026-10-20", bis: "2027-02-02" }, geprueft: "2026-10-17",
+}, anders);
+const gruppenPruefe = (...g) => Z.gruppenPruefen({ schema: 1, stand: "2026-10-17", gruppen: g });
+
+test("Gruppen: gültiger Eintrag wird übernommen, unbekannte Felder ignoriert", () => {
+  const r = gruppenPruefe(gruppe({ neu_in_v1_2: "x", leitung: "Dr. Erika Beispiel" }));
+  assert.deepEqual(r.verworfen, []);
+  assert.equal(r.stand, "2026-10-17");
+  assert.deepEqual(r.gruppen[0], {
+    id: "ws-2026-27-x100-uebung-1", code: "X100", art: "Übung", gruppe: "1", tag: "Di", von: "08:00", bis: "10:00", ct: true,
+    raum: "Hörsaal 1 (Beispielbau)", leitung: "Dr. Erika Beispiel", anmeldung: "Über den ILIAS-Kurs, ab Mo 19.10., 12:00.",
+    quelle_url: gruppe().quelle_url, semester: "WS 2026/27", zeitraum: { von: "2026-10-20", bis: "2027-02-02" }, geprueft: "2026-10-17",
+  });
+  const ohne = gruppenPruefe(gruppe({ gruppe: "", ct: "ja", zeitraum: undefined, geprueft: "" })).gruppen[0];
+  assert.equal(ohne.ct, false, "ct nur bei true");
+  assert.equal(ohne.zeitraum, null);
+  assert.equal(ohne.gruppe, "");
+});
+
+test("Gruppen: ungültige Einträge werden einzeln verworfen", () => {
+  const schlecht = {
+    "id ungültig": { id: "Gross" },
+    "code ungültig": { code: "x100" },
+    "art nicht erlaubt": { art: "Vorlesung" },
+    "samstag": { tag: "Sa" },
+    "bis vor von": { von: "10:00", bis: "08:00" },
+    "uhrzeit kaputt": { von: "8:00" },
+    "semester ungültig": { semester: "Winter 26" },
+    "ohne quelle": { quelle_url: "" },
+    "fremde domain": { quelle_url: "https://example.org/x" },
+    "nicht https": { quelle_url: "http://alma.uni-tuebingen.de/x" },
+    "zeitraum verkehrt": { zeitraum: { von: "2027-02-02", bis: "2026-10-20" } },
+    "zeitraum kein objekt": { zeitraum: "WS" },
+    "wikilink in gruppe": { gruppe: "[[1]]" },
+    "gruppe zu lang": { gruppe: "Gruppe mit sehr langem Namen" },
+    "leitung zu lang": { leitung: "x".repeat(121) },
+    "anmeldung zu lang": { anmeldung: "x".repeat(201) },
+  };
+  let i = 0;
+  for (const [fall, anders] of Object.entries(schlecht)) {
+    const r = gruppenPruefe(gruppe(Object.assign({ id: anders.id || "fall-" + i++ }, anders)));
+    assert.equal(r.gruppen.length, 0, fall);
+    assert.equal(r.verworfen.length, 1, fall);
+  }
+});
+
+test("Gruppen: doppelte id, Säubern, ganze Datei abgelehnt", () => {
+  const r = gruppenPruefe(gruppe({ raum: "<b>HS 1</b> obsidian://open?x" }), gruppe());
+  assert.deepEqual(r.verworfen, [{ id: "ws-2026-27-x100-uebung-1", grund: "doppelte id" }]);
+  assert.equal(r.gruppen[0].raum, "HS 1");
+  assert.ok(Z.gruppenPruefen({ schema: 2, gruppen: [] }).fehler);
+  assert.ok(Z.gruppenPruefen({ schema: 1 }).fehler);
+  assert.ok(Z.gruppenPruefen({ schema: 1, gruppen: new Array(1001).fill(gruppe()) }).fehler);
+});
+
+test("Manifest: gruppen.json ist bekannt (Prüfsumme, Höchstgröße)", () => {
+  const m = { schema: 1, erstellt: "2026-10-17T09:00:00Z", dateien: { "gruppen.json": { sha256: "b".repeat(64), groesse: 900 } } };
+  assert.deepEqual(Z.manifestPruefen(m).wert.dateien, { "gruppen.json": { sha256: "b".repeat(64), groesse: 900 } });
+  assert.ok(Z.manifestPruefen(Object.assign({}, m, { dateien: { "gruppen.json": { sha256: "b".repeat(64), groesse: 600000 } } })).fehler);
+});
+
+// Abruf mit Testquelle: Gruppen holt jedes Gerät selbst, auch wenn ein anderes Gerät die Termine schreibt
+test("Abruf: gruppen.json wird gerätelokal übernommen, auch ohne Abrufer-Rolle; falsche Prüfsumme → nichts", async () => {
+  const crypto = require("node:crypto");
+  const speicher = {};
+  const quelle = {};
+  const fremd = JSON.stringify({ geraet: "g-anderes", seit: new Date().toISOString(), zuletzt: new Date().toISOString(), angewendet: {} });
+  const L = laden("zentral", {
+    frontmatter: { "System/Einstellungen.md": {}, "System/Daten/abruf.json": {} },
+    kontext: { plugin: { testZentralAus: true, testQuelle: async (n) => quelle[n] }, modell: { daten: () => ({ module: [], fachsemester: 1 }) } },
+  });
+  const app = L.ctx.app;
+  app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
+  app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = JSON.stringify(v); };
+  app.vault.read = async () => fremd;
+  let gezeichnet = 0;
+  L.ctx.gruppenAnzeige = { neu: () => { gezeichnet++; } };
+  const ZZ = L.ctx.zentral;
+  const setzen = (daten, falsch) => {
+    quelle["gruppen.json"] = JSON.stringify(daten);
+    const b = Buffer.from(quelle["gruppen.json"], "utf8");
+    quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-17T09:00:00Z",
+      dateien: { "gruppen.json": { sha256: falsch ? "0".repeat(64) : crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length } } });
+  };
+  assert.equal(ZZ.gruppen(), null);
+  setzen({ schema: 1, stand: "2026-10-17", gruppen: [gruppe(), gruppe({ id: "kaputt", tag: "So" })] });
+  const b1 = await ZZ.abrufen({});
+  assert.equal(b1.art, "anderes-geraet");
+  assert.equal(ZZ.gruppen().gruppen.length, 1);
+  assert.equal(ZZ.gruppen().stand, "2026-10-17");
+  assert.deepEqual(b1.verworfen, [{ id: "gruppe kaputt", grund: "tag ungültig" }]);
+  assert.equal(gezeichnet, 1);
+  // gleiche Prüfsumme: nicht neu holen, nicht neu zeichnen
+  await ZZ.abrufen({});
+  assert.equal(gezeichnet, 1);
+  // falsche Prüfsumme: Fehler, alter Stand bleibt
+  setzen({ schema: 1, gruppen: [] }, true);
+  const b3 = await ZZ.abrufen({});
+  assert.equal(b3.art, "fehler");
+  assert.match(b3.fehler, /Prüfsumme von gruppen\.json/);
+  assert.equal(ZZ.gruppen().gruppen.length, 1);
 });

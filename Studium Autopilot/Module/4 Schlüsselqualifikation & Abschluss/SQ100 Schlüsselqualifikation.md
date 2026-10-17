@@ -183,7 +183,6 @@ cssclasses:
 > > - **Form:** unbenotet
 > > - **Studienleistung:** je nach gewählten Lehrveranstaltungen
 > > - **Gesamtnote:** zählt nicht, weil unbenotet
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 > [!eba-info|handy-zu]+ Hinweise

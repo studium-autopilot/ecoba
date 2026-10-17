@@ -100,7 +100,6 @@ cssclasses:
 > > - **Form:** unbenotet
 > > - **Studienleistung:** Assignments
 > > - **Gesamtnote:** zählt nicht, weil unbenotet
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite: Antwort des IdP nach der Anmeldung (Schritt 4): Formular mit RelayState und SAMLResponse, das der
+     Browser selbst abschickt. Feldnamen und Ziel wie gemessen, Werte erfunden. Die Action ist wie beim Shibboleth-IdP
+     mit Zeichenreferenzen kodiert. -->
+<html>
+<head><meta charset="UTF-8" /></head>
+<body onload="document.forms[0].submit()">
+<noscript><p><strong>Note:</strong> Since your browser does not support JavaScript, you must press the Continue button once to proceed.</p></noscript>
+<form action="https&#x3a;&#x2f;&#x2f;ovidius.uni-tuebingen.de&#x2f;Shibboleth.sso&#x2f;SAML2&#x2f;POST" method="post">
+	<div>
+		<input type="hidden" name="RelayState" value="ss&#x3a;mem&#x3a;0000000000000000000000000000000000000000000000000000000000000000"/>
+		<input type="hidden" name="SAMLResponse" value="QkVJU1BJRUwtQU5UV09SVA&#x3d;&#x3d;"/>
+	</div>
+	<noscript><div><input type="submit" value="Continue"/></div></noscript>
+</form>
+</body>
+</html>

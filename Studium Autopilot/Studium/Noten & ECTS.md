@@ -86,9 +86,9 @@ cssclasses:
 >   zieltxt: |-
 >     if(((formula.ziel * 10).round() - formula.ziel * 10).abs() < 0.000001, formula.ziel.toFixed(1), formula.ziel.toFixed(2)).replace(".", ",")
 >   rechner: |-
->     if(!formula.zielok, "Keine gültige Zielnote eingetragen. Du stellst sie in den Einstellungen ein.", if(formula.rest <= 0, if(formula.ist <= formula.ziel + 0.000001, "Die Zielnote <b>" + formula.zieltxt + "</b> ist erreicht: Gesamtnote <b>" + formula.note + "</b>.", "Die Zielnote " + formula.zieltxt + " ist nicht erreicht: Gesamtnote <b>" + formula.note + "</b>."), if(formula.noetig < 1, "Mit dem bisherigen Stand ist die Zielnote " + formula.zieltxt + " rechnerisch nicht mehr erreichbar.", if(formula.noetig >= 4, "Die Zielnote " + formula.zieltxt + " ist sicher, solange du die restlichen Module bestehst.", "Für die Zielnote <b>" + formula.zieltxt + "</b> brauchst du in den restlichen Modulen im Schnitt <b>" + formula.noetigtxt + "</b>."))))
+>     if(!formula.zielok, if(formula.c.zielnote, "Keine gültige Zielnote eingetragen. Du stellst sie in den Einstellungen ein.", "Noch keine Zielnote eingetragen. Du stellst sie in den Einstellungen ein."), if(formula.rest <= 0, if(formula.ist <= formula.ziel + 0.000001, "Die Zielnote <b>" + formula.zieltxt + "</b> ist erreicht: Gesamtnote <b>" + formula.note + "</b>.", "Die Zielnote " + formula.zieltxt + " ist nicht erreicht: Gesamtnote <b>" + formula.note + "</b>."), if(formula.noetig < 1, "Mit dem bisherigen Stand ist die Zielnote " + formula.zieltxt + " rechnerisch nicht mehr erreichbar.", if(formula.noetig >= 4, "Die Zielnote " + formula.zieltxt + " ist sicher, solange du die restlichen Module bestehst.", "Für die Zielnote <b>" + formula.zieltxt + "</b> brauchst du in den restlichen Modulen im Schnitt <b>" + formula.noetigtxt + "</b>."))))
 >   annahme: |-
->     "Annahme: Variante " + formula.var + ", restliche Module benotet"
+>     "Annahme: Variante " + if(formula.var == "offen", "noch offen", formula.var) + ", restliche Module benotet"
 >   karte: |-
 >     html("<div class='eba-kz'><div class='eba-kz-reihe vier'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Gesamtnote" + "</span><span class='v'>" + formula.note + "</span><span class='s'>" + formula.notesub + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Ø 34 %-Block" + "</span><span class='v'>" + formula.n34 + "</span><span class='s'>" + formula.w34 + " ECTS gewichtet" + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Ø 66 %-Block" + "</span><span class='v'>" + formula.n66 + "</span><span class='s'>" + formula.w66 + " ECTS gewichtet" + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "ECTS" + "</span><span class='v'>" + formula.ects + "<small>/ 180</small>" + "</span><span class='s'>" + "Orientierungsprüfung " + formula.op + " / 4" + "</span>" + "<progress max='180' value='" + formula.ects + "'></progress>" + "</div>" + "</div><div class='eba-leiste eba-rechner'><div class='eba-leiste-kopf'><span class='k'>Zielnote</span><span class='s'>" + formula.annahme + "</span></div><p>" + formula.rechner + "</p></div></div>")
 > views:
@@ -111,6 +111,9 @@ cssclasses:
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
 >   imPlan: 'gruppe == "Grundstudium" || gruppe == "Abschluss" || gewaehlt == true || (formula.var == "Economics" && rolle_economics == "Pflicht") || (formula.var == "Business Administration" && rolle_ba == "Pflicht")'
+>   kt: 'file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.code == code && value.properties.datum && !value.properties.bis.isTruthy() && !value.properties.titel.toString().lower().contains("zwischentest") && !value.properties.titel.toString().lower().contains("nachhol")).map(date(value.properties.datum)).sort()'
+>   kn: 'formula.kt.filter(value >= today())'
+>   termin: 'if(klausur, date(klausur).format("DD.MM.YYYY"), if(formula.kn.length > 0, formula.kn[0].format("DD.MM.YYYY"), if(formula.kt.length > 0, formula.kt[formula.kt.length - 1].format("DD.MM.YYYY"), "")))'
 > properties:
 >   file.name:
 >     displayName: Modul
@@ -124,7 +127,7 @@ cssclasses:
 >     displayName: Note
 >   note.versuch:
 >     displayName: Versuch
->   note.klausur:
+>   formula.termin:
 >     displayName: Termin
 >   formula.block:
 >     displayName: Block
@@ -154,14 +157,14 @@ cssclasses:
 >       - ects
 >       - status
 >       - ergebnis
->       - klausur
+>       - formula.termin
 >       - formula.block
 >     columnSize:
 >       file.name: 235
 >       note.ects: 56
 >       note.status: 104
 >       note.ergebnis: 60
->       note.klausur: 82
+>       formula.termin: 100
 >       formula.block: 60
 > ```
 
@@ -236,6 +239,9 @@ cssclasses:
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
 >   imPlan: 'gruppe == "Grundstudium" || gruppe == "Abschluss" || gewaehlt == true || (formula.var == "Economics" && rolle_economics == "Pflicht") || (formula.var == "Business Administration" && rolle_ba == "Pflicht")'
+>   kt: 'file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.code == code && value.properties.datum && !value.properties.bis.isTruthy() && !value.properties.titel.toString().lower().contains("zwischentest") && !value.properties.titel.toString().lower().contains("nachhol")).map(date(value.properties.datum)).sort()'
+>   kn: 'formula.kt.filter(value >= today())'
+>   termin: 'if(klausur, date(klausur).format("DD.MM.YYYY"), if(formula.kn.length > 0, formula.kn[0].format("DD.MM.YYYY"), if(formula.kt.length > 0, formula.kt[formula.kt.length - 1].format("DD.MM.YYYY"), "")))'
 > properties:
 >   file.name:
 >     displayName: Modul
@@ -249,7 +255,7 @@ cssclasses:
 >     displayName: Note
 >   note.versuch:
 >     displayName: Versuch
->   note.klausur:
+>   formula.termin:
 >     displayName: Termin
 >   formula.block:
 >     displayName: Block
@@ -269,13 +275,13 @@ cssclasses:
 >       - formula.stand
 >       - ergebnis
 >       - versuch
->       - klausur
+>       - formula.termin
 >     columnSize:
 >       file.name: 253
 >       formula.stand: 103
 >       note.ergebnis: 65
 >       note.versuch: 84
->       note.klausur: 93
+>       formula.termin: 100
 > ```
 
 > [!eba-tabelle|schlicht|umbruch]- Alle Module
@@ -331,8 +337,7 @@ cssclasses:
 > ```
 
 
-> [!eba-info]- Wie der Vault rechnet
-> - Grundstudium und Pflicht zählen im **34 %**-Block, Schwerpunkte, Elective Studies und Bachelorarbeit im **66 %**-Block, **SQ100** gar nicht.
+> [!eba-info]- Wie Studium Autopilot rechnet
 > - Module aus Profil & Vertiefung wechseln je nach Variante: in Economics zählen **B220**, **B250**, **B290** und **J200** als Elective Studies (66 %), in Business Administration **E230**.
 > - Profilmodul als Elective Studies genutzt: im [[Schwerpunkt-Planer]] bei „Zählt als“ `Elective Studies` eintragen.
 > - Feld `zusatz: true` nimmt ein Modul aus der Rechnung; die Zielnote stellst du in den [[Einstellungen & Hilfe#Deine Angaben|Einstellungen]] ein.
@@ -358,5 +363,3 @@ cssclasses:
 > > > - So lassen sich schwächere Wahlmodule durch bessere ersetzen.
 >
 > Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Stand 30.09.2026
-
-<p class="eba-fuss">Notenregeln (§ 13 BT, § 19 BRPO): <a class="internal-link" data-href="Noten & ECTS#Regeln" href="Noten & ECTS#Regeln">Regeln</a> · Stand 30.09.2026 · <a href="https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/downloads/">PO 2023 BT § 13 / BRPO</a> · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Offizielle Dokumente</a></p>

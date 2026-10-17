@@ -18,7 +18,8 @@ Geprüft wird jede Datei unter BAUM (Standard: aktueller Ordner), außer .git/ u
 * Update-Liste: System/Daten/system-dateien.json (falls vorhanden) passt zu den Dateien (Klasse, Größe, SHA-256) und
   enthält jede Datei, die ein Update ersetzen darf (Regeln wie update.js, klasse_von unten).
 * JavaScript: Syntax mit „node --check“ (wenn node da ist) und iOS-Regeln (kein Regex-Lookbehind, kein .at(), findLast,
-  structuredClone, keine Node-Module) für die Skripte des Vaults.
+  structuredClone, keine Node-Module; einzige Ausnahme: http/https/zlib in ilias-netz.js hinter Platform.isDesktopApp)
+  für die Skripte des Vaults.
 
 Ausgabe: eine lesbare Liste; Exit-Code 1 bei mindestens einem Fund, sonst 0.
 """
@@ -99,13 +100,20 @@ LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "
 MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant"]
 EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn"]
 
-NODE_MODULE = r"(?:node:)?(?:fs|path|child_process|os|crypto|http|https|net|electron)(?:/[\w/]+)?"
+NODE_MODULE = r"(?:node:)?(?:fs|path|child_process|os|crypto|http|https|net|zlib|electron)(?:/[\w/]+)?"
 IOS_REGELN = [
     ("Regex-Lookbehind", re.compile(r"\(\?<[=!]")),
     ("findLast", re.compile(r"\.findLast(?:Index)?\s*\(")),
     ("structuredClone", re.compile(r"\bstructuredClone\s*\(")),
     ("Node-Modul", re.compile(r"\brequire\s*\(\s*[\"']" + NODE_MODULE + r"[\"']\s*\)")),
 ]
+# Einzige Ausnahme von „Node-Modul“: ilias-netz.js lädt am PC Node-https (requestUrl verliert dort Kekse aus
+# Weiterleitungen), nur die Module http, https, zlib und nur, wenn die Datei im Code (nicht nur im Kommentar)
+# Platform.isDesktopApp prüft. iPhone/iPad nutzen dort requestUrl. Alle anderen Regeln gelten auch für diese Datei.
+NODE_AUSNAHME_DATEI = "Studium Autopilot/System/Skripte/ilias-netz.js"
+NODE_AUSNAHME_MODULE = {"http", "https", "zlib"}
+NODE_AUSNAHME_WACHE = re.compile(r"\bPlatform\.isDesktopApp\b")
+_NODE_NAME = re.compile(r"[\"'](?:node:)?([\w/]+)[\"']")
 AT_AUFRUF = re.compile(r"(\b[A-Za-z_$][\w$]*|[\])])\s*\.\s*at\s*\(")
 EIGENES_AT = re.compile(r"\b(?:const|let|var|function)\s+at\b|\bat\s*:|[{,]\s*at\s*[,}]|^\s*at\s*\([^)]*\)\s*\{", re.M)
 
@@ -334,11 +342,21 @@ def js_ohne_kommentare(code):
     return "".join(aus)
 
 
+def node_ausnahme(rel, ohne_kommentare, zeile):
+    """True, wenn jede Node-Modul-Fundstelle der Zeile durch die Ausnahme für ilias-netz.js gedeckt ist."""
+    if rel != NODE_AUSNAHME_DATEI or not NODE_AUSNAHME_WACHE.search(ohne_kommentare):
+        return False
+    rx = dict(IOS_REGELN)["Node-Modul"]
+    return all(_NODE_NAME.search(m.group(0)).group(1) in NODE_AUSNAHME_MODULE for m in rx.finditer(zeile))
+
+
 def ios_pruefen(rel, code, funde):
     ohne = js_ohne_kommentare(code)
     eigenes_at = bool(EIGENES_AT.search(ohne))
     for nr, zeile in enumerate(ohne.splitlines(), 1):
         for regel, rx in IOS_REGELN:
+            if regel == "Node-Modul" and node_ausnahme(rel, ohne, zeile):
+                continue
             if rx.search(zeile):
                 funde.append(Fund(rel, nr, "iOS: " + regel, kuerzen(zeile)))
         for m in AT_AUFRUF.finditer(zeile):
@@ -545,6 +563,10 @@ def pfad_pruefen(rel, groesse, max_bytes, funde):
         funde.append(Fund(rel, 0, "gerätelokale Datei", "abruf.json"))
     if rel.endswith("System/Daten/installiert.json"):
         funde.append(Fund(rel, 0, "vaultlokale Datei (Update-Stand)", "installiert.json"))
+    if rel.endswith("System/Daten/ilias.json"):
+        funde.append(Fund(rel, 0, "vaultlokale Datei (ILIAS-Index)", "ilias.json"))
+    if rel.endswith("System/Daten/ilias-abruf.json"):
+        funde.append(Fund(rel, 0, "gerätelokale Datei", "ilias-abruf.json"))
     if name in (".DS_Store", "Thumbs.db", "desktop.ini") or name.startswith("~$"):
         funde.append(Fund(rel, 0, "Systemdatei", name))
     if endung in VERBOTENE_ENDUNGEN:

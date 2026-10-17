@@ -83,3 +83,77 @@ test("Abgeleitete Felder für die Einstellungen (Format fs|name|beginn|ende|vb|v
   assert.ok(D.abgeleitet.pausen.includes("2026-12-23|2027-01-06|Weihnachtspause"));
   assert.ok(D.abgeleitet.pruefungsphasen.includes("2027-01-29|2027-02-13|Haupttermin|offiziell"));
 });
+
+// ---------- Codeblock-Argument (blockArgument) ----------
+// Nachgestellt, was Obsidian liefert: getSectionInfo(el) → { text, lineStart, lineEnd } (Zeilen ab 0). Beim Neuzeichnen
+// der Leseansicht (rerender) einer Notiz ab 10240 Zeichen ist text leer, die Zeilen stimmen; in Karten der
+// Bearbeitungsansicht kommt null. Geöffnete Ansichten: app.workspace.iterateAllLeaves → view.file.path, view.getViewData().
+const SEMESTER_MD = [
+  "---", "stand: 2026-10-14", "---", "", "<h1>Semestertermine</h1>", "",
+  "```eba-semesterdaten zentral", "Semestertermine: erscheinen, sobald Studium Autopilot läuft.", "```", "", "Fuß",
+].join("\n"); // Block in den Zeilen 6–8
+const VERLAUF_MD = [
+  "## Musterstudienplan", "", "> [!eba-karte|handy-zu]+ Dein Musterplan", "> ```eba-musterplan",
+  "> Musterplan: erscheint, sobald Studium Autopilot läuft.", "> ```", "", "## Semestertermine", "",
+  "> [!eba-tabelle|handy-zu|pc-flach]+ Semestertermine", "> ```eba-semesterdaten",
+  "> Semestertermine: erscheinen, sobald Studium Autopilot läuft.", "> ```",
+].join("\n"); // Karten in den Zeilen 2–5 und 9–12
+const SD = ["eba-semesterdaten", ["zentral", "persoenlich"], "persoenlich"];
+const MP = ["eba-musterplan", ["economics", "ba", "ohne", "alle", "andere"], ""];
+
+// ansichten: { pfad: text } der geöffneten Notizen (änderbar, die Ansicht liest bei jedem Aufruf neu)
+const mitAnsichten = (ansichten) => {
+  const { ctx } = laden("modell");
+  ctx.app.workspace.iterateAllLeaves = (fn) => {
+    fn({ view: {} }); // Ansicht ohne Datei (z. B. Seitenleiste)
+    for (const pfad of Object.keys(ansichten)) fn({ view: { file: { path: pfad }, getViewData: () => ansichten[pfad] } });
+  };
+  return ctx.modell;
+};
+const abschnitt = (pfad, text, von, bis) => ({ sourcePath: pfad, getSectionInfo: () => ({ text, lineStart: von, lineEnd: bis }) });
+const ohneAbschnitt = (pfad) => ({ sourcePath: pfad, getSectionInfo: () => null });
+const arg = (M, c, [sprache, erlaubt, vorgabe]) => M.blockArgument({}, c, sprache, erlaubt, vorgabe);
+
+test("Codeblock-Argument aus der Kopfzeile, auch in Karten; ungültig oder ohne Argument → Vorgabe", () => {
+  const M = mitAnsichten({});
+  assert.equal(arg(M, abschnitt("System/Daten/Semester.md", SEMESTER_MD, 6, 8), SD), "zentral");
+  assert.equal(arg(M, abschnitt("Studium/Studienverlauf.md", VERLAUF_MD, 9, 12), SD), "persoenlich");
+  assert.equal(arg(M, abschnitt("Studium/Studienverlauf.md", VERLAUF_MD, 2, 5), MP), "");
+  const alle = "```eba-musterplan alle\nMusterpläne: …\n```";
+  assert.equal(arg(M, abschnitt("System/Daten/Musterplan.md", alle, 0, 2), MP), "alle");
+  assert.equal(arg(M, abschnitt("x.md", "~~~ eba-musterplan ALLE\n~~~", 0, 1), MP), "alle", "~~~ und Großschreibung");
+  assert.equal(arg(M, abschnitt("x.md", "```eba-semesterdaten quatsch\n```", 0, 1), SD), "persoenlich");
+});
+
+test("Neuzeichnen (Abschnittstext leer): Argument aus dem Text der geöffneten Ansicht", () => {
+  const M = mitAnsichten({ "System/Daten/Semester.md": SEMESTER_MD, "Studium/Studienverlauf.md": VERLAUF_MD });
+  assert.equal(arg(M, abschnitt("System/Daten/Semester.md", "", 6, 8), SD), "zentral");
+  assert.equal(arg(M, abschnitt("Studium/Studienverlauf.md", "", 9, 12), SD), "persoenlich");
+  // „Deine Angaben“ (Einstellungen & Hilfe, > 10240 Zeichen): fiel vorher auf „karte“ zurück
+  const hilfe = "# Einstellungen\n\n```eba-personalisieren angaben\nDeine Angaben: …\n```\n" + "x\n".repeat(6000);
+  const M2 = mitAnsichten({ "Studium/Einstellungen & Hilfe.md": hilfe });
+  assert.equal(M2.blockArgument({}, abschnitt("Studium/Einstellungen & Hilfe.md", "", 2, 4), "eba-personalisieren", ["karte", "angaben"], "karte"), "angaben");
+});
+
+test("Neuzeichnen ohne geöffnete Ansicht: zuletzt an derselben Stelle gelesenes Argument, sonst Vorgabe", () => {
+  const M = mitAnsichten({});
+  const leer = abschnitt("System/Daten/Semester.md", "", 6, 8);
+  assert.equal(arg(M, leer, SD), "persoenlich", "noch nie gelesen");
+  assert.equal(arg(M, abschnitt("System/Daten/Semester.md", SEMESTER_MD, 6, 8), SD), "zentral");
+  assert.equal(arg(M, leer, SD), "zentral", "gemerkt");
+  assert.equal(arg(M, abschnitt("System/Daten/Semester.md", "", 20, 22), SD), "persoenlich", "andere Stelle");
+  assert.equal(arg(M, abschnitt("Studium/Studienverlauf.md", "", 6, 8), SD), "persoenlich", "andere Notiz");
+});
+
+test("Ohne Abschnitt (null oder Fehler): ganze Notiz, nur bei eindeutigem Argument", () => {
+  const zwei = "```eba-musterplan\n```\n\n```eba-musterplan andere\n```";
+  const M = mitAnsichten({ "System/Daten/Semester.md": SEMESTER_MD, "System/Daten/Musterplan.md": "> ```eba-musterplan alle\n> ```", "zwei.md": zwei });
+  assert.equal(arg(M, ohneAbschnitt("System/Daten/Semester.md"), SD), "zentral");
+  assert.equal(arg(M, ohneAbschnitt("System/Daten/Musterplan.md"), MP), "alle");
+  assert.equal(arg(M, { sourcePath: "System/Daten/Semester.md", getSectionInfo: () => { throw new Error("weg"); } }, SD), "zentral");
+  assert.equal(arg(M, ohneAbschnitt("zwei.md"), MP), "", "mehrdeutig");
+  assert.equal(arg(M, ohneAbschnitt("nicht-offen.md"), SD), "persoenlich");
+  assert.equal(arg(M, null, SD), "persoenlich");
+  // ohne iterateAllLeaves (z. B. ältere Fassung) kein Fehler
+  assert.equal(arg(laden("modell").ctx.modell, abschnitt("System/Daten/Semester.md", "", 6, 8), SD), "persoenlich");
+});

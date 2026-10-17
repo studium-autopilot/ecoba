@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/studium/studienorganisation/studienanfang/neu-an-der-uni-wie-gehts-weiter/"
+info: "Einführung der Zentralen Studienberatung zu Stundenplan, Prüfungsordnung und Studienorganisation. Einen der angebotenen Termine wählen."
 herkunft: zentral
 zentral_id: 2026-10-06-neu-an-der-uni-wie-geht-s-nun-weiter
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Neu an der Uni – wie geht’s nun weiter?
 
 **06.10.2026 – 07.10.2026** · Di 10–12 oder 14–16, Mi 12–14 · HS 25 Kupferbau · einen Termin wählen
+
+Einführung der Zentralen Studienberatung zu Stundenplan, Prüfungsordnung und Studienorganisation. Einen der angebotenen Termine wählen.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/studium/studienorganisation/studienanfang/neu-an-der-uni-wie-gehts-weiter/)
 

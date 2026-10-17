@@ -15,21 +15,18 @@ cssclasses:
 <h1>Termine & Anmeldungen</h1>
 </div>
 
-```eba-kalender
-Der Kalender erscheint nach dem nächsten Start von Obsidian (System/Skripte/kalender.js). Die Liste steht darunter.
-```
-
-```eba-agenda
-Die Termin-Liste erscheint, sobald das Plugin „Studium Autopilot“ geladen ist (System/Skripte/termine.js).
-```
-
-
-<p class="eba-hinweis">Wochenplan → <a class="internal-link" data-href="Stundenplan" href="Stundenplan">Stundenplan</a></p>
-
 > [!eba-neu|ohne-titel]
 > - [Termin anlegen](obsidian://studium-autopilot?aktion=termin)
 
-Neue Fristen und Termine trägst du selbst ein: Knopf antippen, Titel und Datum eingeben. Termine aus Modulen und Stundenplan erscheinen von allein.
+```eba-kalender
+Kalender: erscheint, sobald Studium Autopilot läuft.
+```
+
+```eba-agenda
+Termine: erscheinen, sobald Studium Autopilot läuft.
+```
+
+<p class="eba-hinweis">Wochenplan → <a class="internal-link" data-href="Stundenplan" href="Stundenplan">Stundenplan</a></p>
 
 ## Anmeldungen
 
@@ -50,86 +47,35 @@ Hier hältst du fest, wo du dich angemeldet hast: Spalte **Stand**, z. B. `angem
 
 ### Übungen und Tutorien
 
-Alle Gruppen wöchentlich und c.t.; keine überschneidet sich mit den Vorlesungen (Mo 8–12 und 14–16, Di 14–16, Mi 10–12, Do 10–12 und 14–16). Überall gilt **nur eine Gruppe**, Doppelanmeldungen werden gelöscht.
+Gruppen deiner Module im aktuellen und nächsten Semester. Doppelanmeldungen werden überall gelöscht.
 
-> [!eba-regel]- E101 VWL · Übungsgruppen
-> - Anmeldung **über ILIAS, nicht über Alma**, first come, first served; 7 Gruppen, gleicher Stoff in allen
+```eba-gruppen
+Gruppen: erscheinen, sobald Studium Autopilot läuft.
+```
+
+> [!eba-regel]- E101 VWL
+> - Gleicher Stoff in allen Übungsgruppen
 > - Klausur: **60 Min.**, Multiple Choice, closed book; ein handschriftliches A4-Cheat-Sheet und nicht programmierbarer Taschenrechner erlaubt; Haupttermin **10.02.2027, 10:00–11:00**
->
-> | Gr. | Zeit | Raum |
-> | --- | --- | --- |
-> | 1 | Di 8–10 | HS 06, Neue Aula |
-> | 2 | Di 12–14 | HS 06, Neue Aula |
-> | 3 | Di 16–18 | E 03, Mohlstraße |
-> | 4 | Mi 8–10 | OSA Keplerstraße 001 |
-> | 5 | Mi 12–14 | H404, Geographie |
-> | 6 | Mi 14–16 | HS 11, Universitätskasse |
-> | 7 | Do 12–14 | HS 7, Alte Archäologie |
 
-> [!eba-regel]- S100 Mathe · Tutorien
-> - Anmeldung im ILIAS-Kurs S100, Abschnitt „Tutoriengruppen“; 10 Gruppen à 60 Plätze, nur Mitglieder dürfen ins Tutorium
+> [!eba-regel]- S100 Mathe
+> - Tutorien mit je 60 Plätzen; ins Tutorium dürfen nur Mitglieder der Gruppe
 > - Erstes Tutorium: Übungsblatt 1 (Stoff des Vorkurses)
 > - Zwischentests **13.11., 04.12. und 15.01.**, jeweils 17–18 Uhr online
->
-> | Gr. | Zeit | Raum |
-> | --- | --- | --- |
-> | 1 | Mo 16–18 | HS 036, Neuphilologicum |
-> | 2 | Mo 16–18 | H404, Geographie |
-> | 3 | Di 8–10 | HS 7, Alte Archäologie |
-> | 4 | Di 10–12 | HS 11 |
-> | 5 | Di 12–14 | S320, Hölderlinstraße |
-> | 6 | Di 16–18 | HS 11 |
-> | 7 | Mi 8–10 | OSA Keplerstraße 002 |
-> | 8 | Mi 14–16 | OSA Keplerstraße 001 |
-> | 9 | Mi 14–16 | E02, Mohlstraße |
-> | 10 | Mi 16–18 | HS 7, Alte Archäologie |
 
-> [!eba-regel]- B180 Jahresabschluss · Tutorien
-> - 6 Tutorien à 50 Plätze im ILIAS-Kurs, first come, first served; nur in **ein** Tutorium eintragen (mehrere Eintragungen → alle gelöscht). Start KW 44 (27.–30.10.), 10 Tutorien bis 22.01.2027 (Quelle: Einführungsfolien B180)
-> - Achtung: Zeiten in ILIAS weichen teils von Alma ab (dort z. B. Di 8–10), maßgeblich ist ILIAS
->
-> | Gr. | Zeit | Raum |
-> | --- | --- | --- |
-> | 1 | Mo 12:15–13:45 | OSA Keplerstraße 001 |
-> | 2 | Di 16:15–17:45 | HS 7 |
-> | 3 | Mi 14:15–15:45 | HS 7 |
-> | 4 | Do 12:15–13:45 | OSA Keplerstraße 001 |
-> | 5 | Do 16:15–17:45 | HS 7 |
-> | 6 | Fr 8:30–10:00 | – |
+> [!eba-regel]- B180 Jahresabschluss
+> - Tutorien mit je 50 Plätzen; wer sich in mehrere einträgt, wird aus allen gelöscht. Start KW 44 (27.–30.10.), 10 Termine bis 22.01.2027 (Quelle: Einführungsfolien B180)
+> - Zeiten laut ILIAS (maßgeblich): Gr. 1 Mo 12:15–13:45, OSA Keplerstraße 001 · Gr. 2 Di 16:15–17:45, HS 7 · Gr. 3 Mi 14:15–15:45, HS 7 · Gr. 4 Do 12:15–13:45, OSA Keplerstraße 001 · Gr. 5 Do 16:15–17:45, HS 7 · Gr. 6 Fr 8:30–10:00
 
-> [!eba-regel]- B110 BWL · Tutorien
-> - Anmeldung über ILIAS **19.10.–25.10.** (Einführungsfolien vom 12.10.), verbindlich, nur ein Tutorium; 7 Gruppen à 60 Plätze; Gruppenarbeit im Tutorium
+> [!eba-regel]- B110 BWL
+> - Tutorien mit je 60 Plätzen, darin Gruppenarbeit (Quelle: Einführungsfolien vom 12.10.)
 > - Bonus: pro bearbeitetem Arbeitsblatt ein Zusatzpunkt für die Klausur, plus einer, wenn alle bearbeitet sind
 > - Vorlesung und Übung (Mo 10–12 und 14–16) ohne Anmeldung
 > - Klausur: **90 Min.**, open book, Taschenrechner; Haupttermin **06.02.2027, 10:00–11:30**
->
-> | Gr. | Zeit | Raum |
-> | --- | --- | --- |
-> | – | Di 10–12 | E 02, Mohlstraße |
-> | – | Di 12–14 | HS 11 |
-> | – | Di 16–18 | S320 |
-> | – | Mi 12–14 | HS 11 |
-> | – | Mi 14–16 | S320 |
-> | – | Mi 16–18 | E 02 |
-> | – | Do 8–10 | – |
-> | – | Do 8–10 | E 02 |
 
-> [!eba-regel]- S110 Datenanalyse · Tutorien
-> - Anmeldung im ILIAS-Kurs S110, Abschnitt „02 - Tutorien“; 7 Gruppen à 45 Plätze, nur Mitglieder dürfen ins Tutorium
+> [!eba-regel]- S110 Datenanalyse
+> - Tutorien mit je 45 Plätzen; ins Tutorium dürfen nur Mitglieder der Gruppe
 > - Übungsblätter wöchentlich in ILIAS, je eine Woche Bearbeitungszeit; Fragen ins Forum statt per Mail
->
-> | Gr. | Zeit | Raum |
-> | --- | --- | --- |
-> | – | Mo 16–18 | S320 |
-> | – | Di 12–14 | H404 |
-> | – | Mi 12–14 | OSA Keplerstraße 001 |
-> | – | Mi 16–18 | S320 |
-> | – | Do 8–10 | HS 23, Kupferbau |
-> | – | Do 16–18 | HS 23 |
-> | – | Fr 10–12 | H404 |
 
 > [!eba-regel]- Schlüsselqualifikationen (SQ100) · 9 ECTS im Lauf des Studiums
 > Kurse aus TCP, Fremdsprachenzentrum, Weltethos-Institut oder ausgewählten Fachbereichskursen; außerdem Auslandssemester (6 ECTS), Praktikum über den Career Service oder Engagement in Hochschulgruppen.
 > Alle Kurse und Fristen: [[SQ100 Schlüsselqualifikation|SQ100]].
-
-<p class="eba-fuss">Anmeldungen: Angaben zum WS 2026/27 · Quellen: ILIAS-Kurse und Alma · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Offizielle Dokumente</a></p>

@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://www.ffwtuebingen.de/blank-3"
+info: "Stadtrallye der Freien Fachschaft Wiwi für Bachelor-Erstsemester zum Kennenlernen der Stadt. Vorherige Anmeldung bei der Fachschaft erforderlich."
 herkunft: zentral
 zentral_id: 2026-10-10-bachelor-stadtrallye
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Bachelor-Stadtrallye
 
 **10.10.2026** · Alter Botanischer Garten · Anmeldung Pflicht
+
+Stadtrallye der Freien Fachschaft Wiwi für Bachelor-Erstsemester zum Kennenlernen der Stadt. Vorherige Anmeldung bei der Fachschaft erforderlich.
 
 Quelle: [www.ffwtuebingen.de](https://www.ffwtuebingen.de/blank-3)
 

@@ -15,7 +15,7 @@ Bitte schick keine echten Zugangsdaten, Matrikelnummern oder Noten mit, auch nic
 - Das Update über den Knopf **Aktualisieren** (Prüfsummen, Update-Liste, Sicherung).
 - Die Prüfung der zentralen Daten im Plugin (alles, was eine manipulierte Datendatei in den Tresor schreiben oder ausführen
   könnte).
-- Ab Version 0.4.0 die Anmeldung bei ILIAS und der Umgang mit Zugangsdaten: Das Passwort darf nur im Schlüsselbund des Geräts liegen und nur
+- Die Anmeldung bei ILIAS und der Umgang mit Zugangsdaten: Das Passwort darf nur im Schlüsselbund des Geräts liegen und nur
   an die Anmeldeseite der Uni gehen.
 
 Nicht dazu gehören Obsidian selbst, Alma, ILIAS und andere Systeme der Universität. Lücken dort bitte an die jeweiligen

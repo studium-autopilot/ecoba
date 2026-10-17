@@ -2,7 +2,8 @@
 // der Prüfungstermine). Oben eine Übersicht von heute bis zum Ende der nächsten zwei Prüfungsphasen (Anmeldung als Band, Phasen als Band,
 // gestrichelt = geschätzt, Klausuren und Zwischentests als Punkte, heute als Linie). Darunter je Phase ein Tagesstreifen
 // mit den Klausuren am Datum (Kürzel, Wochentag, Datum, Countdown bis 30 Tage, bestanden mit Note), Anmeldezeitraum und
-// „Termin folgt“. Ersetzt die Chip-Reihe „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet sein Modul.
+// „Termin folgt“ (nur Module ohne Klausurtermin im Modul und ohne Prüfungs-Termin-Notiz in einer Phase). Ersetzt die Chip-Reihe
+// „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet sein Modul.
 // Daten live (metadataCache, schreibt nichts): Module des aktuellen Fachsemesters wie die Chips (Feld `klausur`),
 // Termin-Notizen (Kategorie Prüfung mit `code`; Frist „Prüfungsanmeldung …“), Einstellungen (`pruefungsphasen`,
 // `semesterliste`, `variante`). Erweiterung: Codeblock und Ereignisse über ctx.codeblock/ctx.an (Hot-Reload ohne Neustart).
@@ -11,7 +12,6 @@ module.exports = function (ctx) {
   const app = window.app;
   const basis = ctx; // zeichnen(el, ctx) überdeckt ctx mit dem Markdown-Kontext
   const SPRACHE = "eba-klausurzeit";
-  const SEITE = "Studium/Prüfungen.md";
   const KURZTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const MONAT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   const TAG = 86400000;
@@ -174,7 +174,9 @@ module.exports = function (ctx) {
     }
 
     // --- Ohne Termin, außerhalb der Phasen, bestanden ohne Datum ---
-    const folgt = module.filter((m) => !m.datum && !m.fertig);
+    // „Termin folgt“ nur ohne Datum im Modul UND ohne Prüfungs-Termin-Notiz mit diesem Kürzel in einer Prüfungsphase (zentrale
+    // Klausurtermine stehen in Termin-Notizen; Zwischentests liegen außerhalb der Phasen und zählen hier nicht)
+    const folgt = module.filter((m) => !m.datum && !m.fertig && !pruef.some((k) => k.termin && k.code === m.code && inPhase(k.d)));
     const ausser = pruef.filter((k) => !k.termin && !inPhase(k.d));
     const fertigOhne = module.filter((m) => !m.datum && m.fertig);
     if (folgt.length || ausser.length || fertigOhne.length) {

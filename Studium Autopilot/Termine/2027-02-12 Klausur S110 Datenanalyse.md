@@ -10,6 +10,7 @@ modul: "[[S110 Explorative Datenanalyse]]"
 code: "S110"
 erledigt: false
 quelle: "Prüfungsamt: Prüfungstermine Pflicht- und Profilbildungsmodule WS 2026/27 Haupttermin (PDF, Stand 14.10.2026)"
+info: "Klausur im Haupttermin zum Modul S110 Explorative Datenanalyse, 60 Minuten. Anmeldung im Prüfungsanmeldezeitraum in Alma, keine automatische Anmeldung."
 herkunft: zentral
 zentral_id: 2027-02-12-klausur-s110-datenanalyse
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Klausur S110 Datenanalyse
 
 **12.02.2027** · 10:00–11:00 · Raum folgt
+
+Klausur im Haupttermin zum Modul S110 Explorative Datenanalyse, 60 Minuten. Anmeldung im Prüfungsanmeldezeitraum in Alma, keine automatische Anmeldung.
 
 Quelle: Prüfungsamt: Prüfungstermine Pflicht- und Profilbildungsmodule WS 2026/27 Haupttermin (PDF, Stand 14.10.2026)
 

@@ -1,4 +1,4 @@
-# Updates für die Werkzeuge in GitHub Actions.
+# Updates für die Werkzeuge in GitHub Actions und für ESLint (nur Entwicklung, nicht im Tresor).
 # Achtung: Dieses Repo entsteht aus einem Export (docs/release.md). Einen gemergten Dependabot-PR in der Arbeitskopie
 # nachziehen, sonst überschreibt ihn der nächste Release.
 version: 2
@@ -9,4 +9,11 @@ updates:
       interval: monthly
     groups:
       actions:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      eslint:
         patterns: ["*"]

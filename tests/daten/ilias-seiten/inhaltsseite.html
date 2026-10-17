@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite: Inhaltsseite (copa) mit Dateiliste im Seiteninhalt. NACHGEBAUT nach den Klassen des
+     ILIAS-Seiteneditors und PFERD (_find_copa_entries); nicht erfasst. Inhalte und Nummern frei erfunden. -->
+<html lang="de" dir="ltr">
+<head><meta charset="utf-8" /><title>Wichtige Informationen - ILIAS</title></head>
+<body>
+<div class="il-layout-page">
+<header><ul class="il-maincontrols-metabar" role="menubar" style="visibility: hidden" aria-label="Metaleiste" id="il_ui_fw_100000000901_1">
+	<li role="none"><button class="btn btn-bulky" id="il_ui_fw_100000000902_1" role="menuitem" aria-haspopup="true"><span class="bulky-label">Benutzermenü</span></button></li>
+</ul></header>
+<main class="il-layout-page-content"><div id="ilContentContainer"><div class="row"><div id="il_center_col" class="col-sm-12">
+<div class="ilc_Paragraph ilc_text_block_Standard">Bitte vor der ersten Sitzung lesen.</div>
+<div class="ilc_flist_FileList">
+	<ul class="ilc_flist_FileList">
+		<li class="ilc_flist_li_FileListItem"><a class="ilc_flist_a_FileListItemLink" href="ilias.php?baseClass=ilrepositorygui&amp;cmdNode=yt:pq&amp;cmdClass=ilObjContentPageGUI&amp;cmd=downloadFile&amp;ref_id=2000900&amp;file_id=il__file_2000901" target="_blank">Hinweise zur Klausur.pdf (12.3 KB)</a></li>
+		<li class="ilc_flist_li_FileListItem"><a class="ilc_flist_a_FileListItemLink" href="ilias.php?baseClass=ilrepositorygui&amp;cmdNode=yt:pq&amp;cmdClass=ilObjContentPageGUI&amp;cmd=downloadFile&amp;ref_id=2000900&amp;file_id=il__file_2000902" target="_blank">Literaturliste.docx (1.2 MB)</a></li>
+	</ul>
+</div>
+</div></div></div></main>
+</div>
+<script>
+il.Util.addOnLoad(function() {
+document.getElementById("il_ui_fw_100000000999_1").addEventListener('click', e => il.Footer.permalink.copyText("https:\/\/ovidius.uni-tuebingen.de\/goto.php\/copa\/2000900").then(() => il.Footer.permalink.showTooltip(e.target.nextElementSibling, 5000)));
+});
+</script>
+</body>
+</html>

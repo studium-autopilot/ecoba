@@ -94,7 +94,6 @@ cssclasses:
 >
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** Im allg. schriftliche Arbeit und Präsentation (Gewichtung je nach gewähltem Lehrstuhl verschieden) (12 CP) – 100 % der Modulnote
-> > - **Gesamtnote:** zählt im 66 %-Block (Schwerpunkte und Bachelorarbeit), gewichtet nach ECTS
 > > - **Versuche:** Bachelorarbeit einmal wiederholbar, Thema einmal in den ersten 4 Wochen zurückgebbar
 
 

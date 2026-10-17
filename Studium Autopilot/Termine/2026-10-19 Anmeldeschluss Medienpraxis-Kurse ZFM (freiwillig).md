@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "Rundmail Zentrum für Medienkompetenz vom 14.10.2026"
+info: "Praxiskurse des Zentrums für Medienkompetenz (Redaktionen, Radio, CampusTV, Blockkurse), anrechenbar für TRACS-Zertifikate. Anmeldung in Alma."
 herkunft: zentral
 zentral_id: 2026-10-19-anmeldeschluss-medienpraxis-kurse-zfm-freiwillig
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Anmeldeschluss Medienpraxis-Kurse ZFM (freiwillig)
 
 **19.10.2026** · Alma · Zentrum für Medienkompetenz, Brechtbau, Wilhelmstraße 50, Raum 128d
+
+Praxiskurse des Zentrums für Medienkompetenz (Redaktionen, Radio, CampusTV, Blockkurse), anrechenbar für TRACS-Zertifikate. Anmeldung in Alma.
 
 Quelle: Rundmail Zentrum für Medienkompetenz vom 14.10.2026
 

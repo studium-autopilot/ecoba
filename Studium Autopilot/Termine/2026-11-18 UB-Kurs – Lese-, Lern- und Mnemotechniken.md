@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/"
+info: "Kurs der Universitätsbibliothek zu Lesetechniken sowie Gedächtnis-, Merk- und Konzentrationstechniken, auch für Prüfungen; zählt als *-Kurs für den TCP-Punkt der UB. Anmeldung über Alma."
 herkunft: zentral
 zentral_id: 2026-11-18-ub-kurs-lese-lern-und-mnemotechniken
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # UB-Kurs: Lese-, Lern- und Mnemotechniken
 
 **18.11.2026** · 10:00–11:30 · Schulungsraum im Ammerbau · Anmeldung über Alma
+
+Kurs der Universitätsbibliothek zu Lesetechniken sowie Gedächtnis-, Merk- und Konzentrationstechniken, auch für Prüfungen; zählt als \*-Kurs für den TCP-Punkt der UB. Anmeldung über Alma.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/)
 

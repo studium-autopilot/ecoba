@@ -37,6 +37,7 @@ module.exports = function (ctx) {
   };
 
   const VARIANTEN = ["Economics", "Business Administration", "ohne Spezialisierung", "offen"];
+  const varianteText = (v) => (v === "offen" ? "noch offen" : v); // gespeichert bleibt „offen“
   const SCHEMATA = { "graphite": "Graphite", "paper": "Paper", "paper-tuebingen": "Paper Tübingen", "paper-elfenbein": "Paper Elfenbein", "paper-schiefer": "Paper Schiefer" };
 
   const AKTIONEN = {
@@ -98,14 +99,14 @@ module.exports = function (ctx) {
       titel: "Variante wechseln",
       ausfuehren: async (c) => {
         let wert = String(c.parameter.wert || "").trim();
-        if (!wert) wert = (await ctx.system.suggester(VARIANTEN, VARIANTEN, false, "Variante")) || "";
+        if (!wert) wert = (await ctx.system.suggester(VARIANTEN.map(varianteText), VARIANTEN, false, "Variante")) || "";
         if (!wert) return;
         const wahl = VARIANTEN.find((v) => v.toLowerCase() === wert.toLowerCase()) || null;
         const einstellungen = app.vault.getAbstractFileByPath("System/Einstellungen.md");
         if (!wahl) { new Notice("Unbekannte Variante: " + wert, 3000); return; }
         if (!einstellungen) { new Notice("System/Einstellungen.md fehlt.", 3000); return; }
         await app.fileManager.processFrontMatter(einstellungen, (fm) => { fm.variante = wahl; });
-        new Notice("Variante: " + wahl, 3000);
+        new Notice("Variante: " + varianteText(wahl), 3000);
       },
     },
 
@@ -164,7 +165,7 @@ module.exports = function (ctx) {
     seitenlink: {
       titel: "Seitenlink auf die Folien einfügen",
       editor: true,
-      ausfuehren: async (c) => {
+      ausfuehren: async () => {
         const view = app.workspace.getActiveViewOfType(MarkdownView);
         const f = view && view.file;
         const folien = String(fmVon(f).folien || "").replace(/^\[\[|\]\]$/g, "");

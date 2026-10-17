@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "Flyer „Veranstaltungen Wintersemester 2026/27“ der WiSo-Fakultät; Veranstaltungsseite Fachbereich Wirtschaftswissenschaft (abgerufen 12.10.2026)"
+info: "Anmeldeschluss für den Vortrag „Steuern verstehen – clever fürs Studium sparen“ der Kanzlei RWT. Anmeldung per Online-Formular."
 herkunft: zentral
 zentral_id: 2026-11-23-anmeldefrist-steuern-verstehen-rwt
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Anmeldefrist Steuern verstehen (RWT)
 
 **23.11.2026** · Online-Formular
+
+Anmeldeschluss für den Vortrag „Steuern verstehen – clever fürs Studium sparen“ der Kanzlei RWT. Anmeldung per Online-Formular.
 
 Quelle: Flyer „Veranstaltungen Wintersemester 2026/27“ der WiSo-Fakultät; Veranstaltungsseite Fachbereich Wirtschaftswissenschaft (abgerufen 12.10.2026)
 

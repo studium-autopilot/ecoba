@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "Rundmail Career Service vom 14.10.2026"
+info: "Kostenfreier dreitägiger Workshop des Career Service für Studentinnen zu Souveränität und Selbstmarketing. Anmeldung über die Workshop-Seite des Career Service."
 herkunft: zentral
 zentral_id: 2027-01-09-career-service-workshop-souveraenitaetstraining-und-selbstmarketing-f
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Career-Service-Workshop: Souveränitätstraining und Selbstmarketing für Studentinnen
 
 **09.01.2027 – 16.01.2027** · 09:00–16:00 · Sa 09.01., So 10.01. und Sa 16.01. · Career Service, Anmeldung über die Workshop-Seite
+
+Kostenfreier dreitägiger Workshop des Career Service für Studentinnen zu Souveränität und Selbstmarketing. Anmeldung über die Workshop-Seite des Career Service.
 
 Quelle: Rundmail Career Service vom 14.10.2026
 

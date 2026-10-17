@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://www.ffwtuebingen.de/blank-3"
+info: "Grillfest der Freien Fachschaft Wiwi zum Semesterstart."
 herkunft: zentral
 zentral_id: 2026-10-09-grillfest-der-fachschaft
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Grillfest der Fachschaft
 
 **09.10.2026** · Parkplatz an der Bibliothek Mohlstraße
+
+Grillfest der Freien Fachschaft Wiwi zum Semesterstart.
 
 Quelle: [www.ffwtuebingen.de](https://www.ffwtuebingen.de/blank-3)
 

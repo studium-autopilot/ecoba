@@ -1,0 +1,20 @@
+{
+  "name": "studium-autopilot-ecoba",
+  "private": true,
+  "description": "Obsidian-Vorlage für das B.Sc. Economics and Business Administration (Uni Tübingen)",
+  "license": "MIT",
+  "repository": "github:studium-autopilot/ecoba",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "lint": "eslint .",
+    "pruefen": "python werkzeuge/pruefen.py ."
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.13.0",
+    "globals": "17.13.0"
+  }
+}

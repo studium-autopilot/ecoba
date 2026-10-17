@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "Rundmail des Startup Centers der Universität vom 06.10.2026 („Herzliche Einladung zur Startup:con Tübingen!“)"
+info: "Abend des Startup Centers der Universität mit Panel zu Zukunftskompetenzen, Kurzpitches und Networking. Anmeldung über die Rundmail des Startup Centers."
 herkunft: zentral
 zentral_id: 2026-10-14-startup-con-tuebingen
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Startup:con Tübingen
 
 **14.10.2026** · ab 17:00 (Einlass) · Neckawa, Wöhrdstr. 25
+
+Abend des Startup Centers der Universität mit Panel zu Zukunftskompetenzen, Kurzpitches und Networking. Anmeldung über die Rundmail des Startup Centers.
 
 Quelle: Rundmail des Startup Centers der Universität vom 06.10.2026 („Herzliche Einladung zur Startup:con Tübingen\!“)
 

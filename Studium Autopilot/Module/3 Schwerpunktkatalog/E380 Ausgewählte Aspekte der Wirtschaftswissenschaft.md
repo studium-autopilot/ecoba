@@ -98,8 +98,6 @@ cssclasses:
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** Klausur (60 Minuten) oder Seminararbeit oder Präsentation (6 CP) – 100 % der Modulnote
 > > - **Studienleistung:** Depending on the specific choices
-> > - **Gesamtnote:** zählt im 66 %-Block (Schwerpunkte und Bachelorarbeit), gewichtet nach ECTS
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in

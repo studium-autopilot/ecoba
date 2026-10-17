@@ -99,7 +99,6 @@ cssclasses:
 > > - **Form:** unbenotet
 > > - **Studienleistung:** Praktikumsbericht
 > > - **Gesamtnote:** zählt nicht, weil unbenotet
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in

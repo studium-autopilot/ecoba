@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/zentrale-einrichtungen/hochschulsport/home/newsfullview-aktuelles/article/mental-health-days-2026/"
+info: "Aktionstage der Universität zu mentaler Gesundheit mit Workshops, Vorträgen, Bewegungsangeboten und Beratungen. Zeiten und Anmeldung im Programm von BeTaBalance."
 herkunft: zentral
 zentral_id: 2026-11-23-mental-health-days
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Mental Health Days
 
 **23.11.2026 – 02.12.2026** · verschiedene Termine · Programm bei BeTaBalance
+
+Aktionstage der Universität zu mentaler Gesundheit mit Workshops, Vorträgen, Bewegungsangeboten und Beratungen. Zeiten und Anmeldung im Programm von BeTaBalance.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/zentrale-einrichtungen/hochschulsport/home/newsfullview-aktuelles/article/mental-health-days-2026/)
 

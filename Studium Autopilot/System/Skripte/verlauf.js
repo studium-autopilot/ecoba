@@ -135,14 +135,15 @@ module.exports = function (ctx) {
       const n = x.titel.match(/Zwischentest\s*(\d+)/i);
       const label = (x.code ? x.code + " " : "") + (n ? `Test ${n[1]}` : x.code ? "Prüfung" : x.titel.slice(0, 16));
       const m = D.module.find((mm) => mm.code === x.code);
-      pruef.push({ datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.datum < t, art: "test", geschaetzt: x.geschaetzt, modul: m });
+      // haupt: Klausur des Moduls aus einer Termin-Notiz (kein Zwischentest) – gilt in der Modulliste der Lupe als Prüfungstermin
+      pruef.push({ datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.datum < t, art: "test", geschaetzt: x.geschaetzt, modul: m, haupt: !!m && !n });
     }
     pruef.sort((a, b) => a.datum - b.datum);
     const naechste = pruef.find((p) => p.datum >= t && !p.erledigt);
     // Meilensteine (Quelle: Regeln auf der Seite Studienverlauf)
     const ms = [];
     const sFS = (n) => sems.find((s) => s.fs === n);
-    if (sFS(3)) ms.push({ datum: sFS(3).sb, fs: 3, titel: "Variante wählen", info: v === "offen" ? "offen · vor dem 3. Fachsemester wählen" : v, ok: v !== "offen", art: "wahl" });
+    if (sFS(3)) ms.push({ datum: sFS(3).sb, fs: 3, titel: "Variante wählen", info: v === "offen" ? "noch offen · vor dem 3. Fachsemester wählen" : v, ok: v !== "offen", art: "wahl" });
     if (sFS(4)) ms.push({ datum: sFS(4).se, fs: 4, titel: "Orientierungsprüfung", info: `${op} / 4 · bis ${dmy(sFS(4).se)}`, ok: op >= 4, art: "frist" });
     if (sFS(5)) ms.push({ datum: new Date((+sFS(5).sb + +sFS(5).se) / 2), fs: 5, titel: "Auslandssemester", info: "empfohlen", ok: null, art: "option" });
     const ba = D.module.find((m) => m.code === "BA302");
@@ -307,7 +308,7 @@ module.exports = function (ctx) {
   };
 
   const MSKURZ = { "Variante wählen": "Variante", "Orientierungsprüfung": "Orientierung", "Auslandssemester": "Ausland", "Bachelorarbeit": "Bachelorarbeit", "Abschluss B.Sc.": "B.Sc." };
-  const strasse = (D, R, B, sel, anim) => {
+  const strasse = (D, R, B, sel) => {
     const f = (v) => v.toFixed(1);
     const n = R.sems.length;
     const heuteS = R.vorStart ? 0 : R.nachEnde ? B.L : stelle(R, B, new Date(+R.t + 864e5 / 2));
@@ -435,7 +436,7 @@ module.exports = function (ctx) {
 
   const kachel = (k, v, s, p, balken) => `<div class="eba-vl-kachel"${p ? ` data-pfad="${esc(p)}" role="link" tabindex="0"` : ""}><span class="k">${k}</span><span class="v">${v}</span>${balken || ""}<span class="s">${s}</span></div>`;
 
-  const reise = (D, R, L, sel, anim) => {
+  const reise = (D, R, L, sel) => {
     const Z = reiseDaten(D, R, L);
     const s = R.sems[R.cur];
     // Kopfzeile
@@ -448,7 +449,7 @@ module.exports = function (ctx) {
       + `<div class="eba-vl-oben"><span class="eba-vl-hier"><i></i>Du bist hier</span><span class="eba-vl-ort">${ort}</span></div>`
       + `<div class="eba-vl-tag"><span class="gross">${gross}</span><span class="unter">${unter}</span></div>`
       + (Z.spruch ? `<p class="eba-vl-spruch">${esc(Z.spruch)}</p>` : "")
-      + `<div class="eba-vl-bahn">${strasse(D, R, bahnBreit(R.sems.length), sel, anim)}${strasse(D, R, bahnSchmal(R.sems.length), sel, anim)}</div>`;
+      + `<div class="eba-vl-bahn">${strasse(D, R, bahnBreit(R.sems.length), sel)}${strasse(D, R, bahnSchmal(R.sems.length), sel)}</div>`;
     // Semester-Puls
     if (s) {
       const vlText = s.vb && s.ve && R.t <= s.ve ? (R.t < s.vb ? `Vorlesungen ab ${dm(s.vb)}` : `noch <b>${tage(R.t, s.ve)}</b> Tage Vorlesungszeit`) : "Vorlesungszeit vorbei";
@@ -513,11 +514,20 @@ module.exports = function (ctx) {
     return `<span class="eba-vl-offen">${esc(st || "offen")}</span>`;
   };
 
+  // Prüfungstermin eines Moduls: Feld klausur, sonst die Klausur aus einer Termin-Notiz (nächste, sonst letzte; „eine Regel“ wie
+  // klausurzeit.js und das Dashboard, docs/architektur.md „Nächste Prüfung“). Ohne beides: null → „Termin folgt“.
+  const klausurVon = (R, m) => {
+    if (m.klausur) return m.klausur;
+    const l = R.pruef.filter((p) => p.haupt && p.modul === m);
+    const k = l.find((p) => p.datum >= R.t) || l[l.length - 1];
+    return k ? k.datum : null;
+  };
   const modulZeile = (R, m) => {
     let pr;
+    const kl = klausurVon(R, m);
     if (m.zusatz) pr = "Zusatz, zählt nicht";
-    else if (m.fertig) pr = m.klausur ? `${wdm(m.klausur)}${String(m.klausur.getFullYear()).slice(2)}` : "";
-    else if (m.klausur) { const d = tage(R.t, m.klausur); pr = `${wdm(m.klausur)} · <b>${relativ(d)}</b>`; }
+    else if (m.fertig) pr = kl ? `${wdm(kl)}${String(kl.getFullYear()).slice(2)}` : "";
+    else if (kl) { const d = tage(R.t, kl); pr = `${wdm(kl)} · <b>${relativ(d)}</b>`; }
     else pr = /^\s*klausur/i.test(m.pruefung) || !m.pruefung ? "Termin folgt" : esc(m.pruefung.length > 34 ? m.pruefung.slice(0, 32) + " …" : m.pruefung);
     return `<div class="eba-vl-mz${m.fertig ? " fertig" : ""}${m.zusatz ? " zusatz" : ""}" data-pfad="${esc(m.pfad)}" role="link" tabindex="0">`
       + `<span class="eba-vl-mcode">${esc(m.code)}</span><span class="eba-vl-mtitel">${esc(m.titel)}</span>`
@@ -525,7 +535,7 @@ module.exports = function (ctx) {
   };
 
   const modulListe = (R, s) => {
-    const fest = s.module.filter((m) => m.art === "fest").sort((a, b) => (a.klausur || 9e15) - (b.klausur || 9e15) || a.code.localeCompare(b.code));
+    const fest = s.module.filter((m) => m.art === "fest").sort((a, b) => (klausurVon(R, a) || 9e15) - (klausurVon(R, b) || 9e15) || a.code.localeCompare(b.code));
     const zus = s.module.filter((m) => m.art === "zusatz");
     const varr = s.variante;
     let h = `<div class="eba-vl-module">`;
@@ -602,7 +612,7 @@ module.exports = function (ctx) {
     const std = R.cur >= 0 ? R.cur : R.vorStart ? 0 : R.sems.length - 1;
     const sel = z.sel === undefined || z.sel === null || !R.sems[z.sel] ? std : z.sel;
     const anim2 = anim && !ruhig();
-    el.innerHTML = `<div class="eba-vl${anim2 ? " eba-vl-anim" : ""}" lang="de">${reise(D, R, L, sel, anim2)}${lupe(D, R, R.sems[sel])}</div>`;
+    el.innerHTML = `<div class="eba-vl${anim2 ? " eba-vl-anim" : ""}" lang="de">${reise(D, R, L, sel)}${lupe(D, R, R.sems[sel])}</div>`;
     const root = el.firstElementChild;
     inst.tag = +R.t;
     // Bedienung: Station wählt das Semester der Lupe, Module/Prüfungen öffnen die Notiz

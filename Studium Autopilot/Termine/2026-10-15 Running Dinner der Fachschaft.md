@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://www.ffwtuebingen.de/blank-3"
+info: "Running Dinner der Fachschaft Wirtschaftswissenschaft. Vorher bei der Fachschaft anmelden."
 herkunft: zentral
 zentral_id: 2026-10-15-running-dinner-der-fachschaft
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Running Dinner der Fachschaft
 
 **15.10.2026** · Anmeldung nötig
+
+Running Dinner der Fachschaft Wirtschaftswissenschaft. Vorher bei der Fachschaft anmelden.
 
 Quelle: [www.ffwtuebingen.de](https://www.ffwtuebingen.de/blank-3)
 

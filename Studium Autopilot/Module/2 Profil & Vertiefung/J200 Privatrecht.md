@@ -101,7 +101,6 @@ cssclasses:
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** Klausur (120 Minuten) (6 CP) – 100 % der Modulnote
 > > - **Gesamtnote:** zählt im 34 %-Block (Pflicht- und Profilbildungsmodule), als Elective Studies im 66 %-Block (in der Variante Economics immer), gewichtet nach ECTS
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 
 
 ## Rolle je Variante

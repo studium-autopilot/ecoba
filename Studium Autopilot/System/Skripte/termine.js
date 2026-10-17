@@ -29,7 +29,6 @@ module.exports = function (ctx) {
   const montag = (d) => { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m; };
   const einzeilig = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 
-  const art = (k) => (k === "Prüfung" ? "pruefung" : k === "Frist" ? "frist" : EVENT.includes(k) ? "event" : "uni");
   const pill = (k) => `<span class="eba-pill ${k === "Prüfung" ? "bad" : k === "Frist" ? "warn" : EVENT.includes(k) ? "akzent" : "info"}">${k}</span>`;
   // Uhrzeit aus dem Feld „ort“ (dort steht sie bisher mit dem Ort zusammen), z. B. „Mo 12:15–14:00 · HS N06“.
   // Nur Doppelpunkt-Zeiten mit gültigen Stunden und Minuten, damit Datumsangaben wie „06.11.“ nicht als Uhrzeit gelten.
@@ -71,20 +70,6 @@ module.exports = function (ctx) {
   };
 
   const link = (t, text) => `[[${t.f.path.replace(/\.md$/, "")}|${text}]]`;
-
-  const kasten = (t, heute) => {
-    const titel = [t.zeit ? `**${t.zeit}**` : "", t.titel, pill(t.kategorie),
-      t.sq ? SQ_PILLE : "", t.geschaetzt ? '<span class="eba-pill leer">geschätzt</span>' : "", t.erledigt ? '<span class="eba-pill ok">erledigt</span>' : ""]
-      .filter(Boolean).join(" ");
-    const wann = t.bis ? `**${kurz(t.von)} – ${kurz(t.bis)}**` : `**${kurz(t.von)}**`;
-    const zeilen = [`> [!eba-t|${t.erledigt ? "erledigt" : art(t.kategorie)}]- ${titel}`, `> ${[wann, t.ort].filter(Boolean).join(" · ")}`];
-    if (t.text) zeilen.push(`> ${t.text}`);
-    const q = /^https?:\/\//.test(t.quelle) ? `[Quelle](${t.quelle.replace(/ /g, "%20")})` : t.quelle ? `Quelle: ${t.quelle}` : "";
-    // „geprüft am“ (zentrale Termine) dezent hinter der Quelle, nur im aufgeklappten Kasten
-    const gp = /^\d{4}-\d{2}-\d{2}$/.test(t.geprueft) ? `geprüft am ${t.geprueft.slice(8, 10)}.${t.geprueft.slice(5, 7)}.${t.geprueft.slice(0, 4)}` : "";
-    zeilen.push(`> ${[link(t, "Notiz öffnen"), q, gp].filter(Boolean).join(" · ")}`);
-    return zeilen.join("\n");
-  };
 
   const erzeugen = (alle, heute) => {
     const ende = (t) => t.bis || t.von;

@@ -10,6 +10,7 @@ modul: "[[S110 Explorative Datenanalyse]]"
 code: "S110"
 erledigt: false
 quelle: "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=46222&periodId=237"
+info: "Beginn des Übungsbetriebs in S110; Übungsblatt 1 wird bearbeitet und im ersten Präsenztutorium der Folgewoche besprochen. Tutoriumsgruppe über ILIAS wählen."
 herkunft: zentral
 zentral_id: 2026-10-19-uebungen-starten-s110-explorative-datenanalyse
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Übungen starten: S110 Explorative Datenanalyse
 
 **19.10.2026** · Tutorien ab Woche 26.10. · Gruppen über ILIAS-Kurs S110 (nicht Alma)
+
+Beginn des Übungsbetriebs in S110; Übungsblatt 1 wird bearbeitet und im ersten Präsenztutorium der Folgewoche besprochen. Tutoriumsgruppe über ILIAS wählen.
 
 Quelle: [alma.uni-tuebingen.de](https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=46222&periodId=237)
 

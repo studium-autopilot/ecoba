@@ -9,7 +9,8 @@
 //   Aktion „personalisieren“   EIN Formular-Fenster (Name, Studienbeginn als Semester-Auswahl, Variante, Zielnote 1,0–4,0),
 //                              speichert nach System/Einstellungen.md. Auch als Befehl und Knopf in den Einstellungen.
 // Nach dem Speichern zieht das Datenmodell (modell.js) Semesterliste, Pausen und Prüfungsphasen in den Einstellungen nach.
-// Erweiterung: Das Plugin ruft registrieren() auf (Codeblock über ctx.codeblock) und übernimmt die aktionen. Stil: eba-core.css Abschnitt 43.
+// Erweiterung: Das Plugin ruft registrieren() auf (Codeblock über ctx.codeblock) und übernimmt die aktionen. Stil: eba-core.css Abschnitt 43
+// (eba-angaben*, eba-modal-personalisieren; die Karten-Klassen eba-perso* sind seit der Aufräumrunde 16.10.2026 entfernt).
 module.exports = function (ctx) {
   const app = window.app;
   const { Modal, Notice } = ctx.obsidian;
@@ -102,7 +103,7 @@ module.exports = function (ctx) {
       // Variante
       const zv = zeile("Variante", "Wähle sie vor dem 3. Fachsemester.");
       const vari = zv.feld.createEl("select", { cls: "dropdown eba-form-auswahl", attr: { "aria-label": "Variante" } });
-      for (const v of VARIANTEN) vari.createEl("option", { value: v, text: v });
+      for (const v of VARIANTEN) vari.createEl("option", { value: v, text: v === "offen" ? "noch offen" : v });
       const vist = String(fm.variante == null ? "" : fm.variante).trim();
       vari.value = VARIANTEN.indexOf(vist) >= 0 ? vist : "offen";
       // Zielnote
@@ -141,9 +142,11 @@ module.exports = function (ctx) {
   // ---------- Karte (seit 0.3.0 leer: die Einrichtung ersetzt sie) ----------
   let block = null; // Codeblock-Griff (ctx.codeblock), gesetzt in registrieren()
   const karte = (el) => { el.empty(); el.addClass("eba-perso-aus"); };
-  // „Deine Angaben“ (Einstellungen & Hilfe)
+  // „Deine Angaben“ (Einstellungen & Hilfe). eba-perso-aus entfernen: Wurde derselbe Block vorher als leere Karte gezeichnet
+  // (Argument nicht erkannt, siehe registrieren), blieb die Klasse sonst hängen und die Karte unsichtbar.
   const angaben = (el) => {
     el.empty();
+    el.removeClass("eba-perso-aus");
     const fm = fmVon();
     const txt = (x) => String(x == null ? "" : x).trim();
     const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote);
@@ -177,6 +180,9 @@ module.exports = function (ctx) {
   const registrieren = () => {
     block = ctx.codeblock("eba-personalisieren", (quelle, el, c, inst) => {
       inst.art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-personalisieren", ["karte", "angaben"], "karte") : "karte";
+      // Beim Neuzeichnen der Leseansicht (rerender) liefert getSectionInfo oft nichts, dann käme „karte“ (leer, unsichtbar).
+      // Rückfall wie todos.js über den Text im Block: Der Angaben-Block enthält „Deine Angaben: …“, der alte Dashboard-Block nichts.
+      if (inst.art === "karte" && /angaben/i.test(String(quelle || ""))) inst.art = "angaben";
       try { if (inst.art === "angaben") angaben(el); else karte(el); } catch (e) { console.error("eba-personalisieren", e); }
     });
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(() => neuZeichnen()));

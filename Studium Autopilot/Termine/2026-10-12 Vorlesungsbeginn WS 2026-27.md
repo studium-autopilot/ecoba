@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/"
+info: "Beginn der Vorlesungszeit im Wintersemester 2026/27."
 herkunft: zentral
 zentral_id: 2026-10-12-vorlesungsbeginn-ws-2026-27
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Vorlesungsbeginn WS 2026/27
 
 **12.10.2026**
+
+Beginn der Vorlesungszeit im Wintersemester 2026/27.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/studium/studienorganisation/semester-und-studienplanung/semestertermine/semestertermine-bis-2029/)
 

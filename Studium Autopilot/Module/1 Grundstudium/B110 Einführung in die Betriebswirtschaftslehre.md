@@ -94,8 +94,6 @@ cssclasses:
 >
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** Klausur (90 Minuten) (6 CP) – 100 % der Modulnote
-> > - **Gesamtnote:** zählt im 34 %-Block (Pflicht- und Profilbildungsmodule), gewichtet nach ECTS
-> > - **Versuche:** 3 (zwei Wiederholungen), jeweils eigene Anmeldung in Alma
 > > - **Orientierungsprüfung:** 4 der 6 OP-Module bis Ende FS 4 bestehen
 > > - **Hilfsmittel:** nicht-programmierbarer Taschenrechner, Wörterbuch ohne Notizen (FAQ)
 

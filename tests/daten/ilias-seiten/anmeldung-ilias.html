@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite: ILIAS-Anmeldeseite nach abgelaufener Sitzung (302 auf login.php?cmd=force_login).
+     Aufbau wie ILIAS 10 (Ovidius): Metaleiste mit Sprach-Links auf login.php, Link #shib_login_link, Formular formlogin. -->
+<html lang="de" dir="ltr">
+<head><meta charset="utf-8" /><title>Anmelden - ILIAS</title></head>
+<body>
+<div class="il-layout-page">
+<header><ul class="il-maincontrols-metabar" role="menubar" style="visibility: hidden" aria-label="Metaleiste" id="il_ui_fw_100000000501_1">
+	<li role="none"><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de" id="il_ui_fw_100000000502_1"><span class="bulky-label">Hilfe</span></a></li>
+	<li role="none"><button class="btn btn-bulky" id="il_ui_fw_100000000503_1" role="menuitem" aria-haspopup="true"><span class="bulky-label">Sprache</span></button>
+	<div class="il-metabar-slates"><div class="il-maincontrols-slate disengaged" id="il_ui_fw_100000000504_1"><div class="il-maincontrols-slate-content" data-replace-marker="content"><ul>
+		<li><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de/login.php?cmd=force_login&amp;lang=de"><span class="bulky-label">Deutsch</span></a></li>
+		<li><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de/login.php?cmd=force_login&amp;lang=en"><span class="bulky-label">English</span></a></li>
+	</ul></div></div></div></li>
+</ul></header>
+<main class="il-layout-page-content"><div id="ilContentContainer"><div class="row"><div id="il_center_col" class="col-sm-12">
+<div class="alert alert-danger" role="alert"><div class="ilAccHeadingHidden">Fehlermeldung</div>Die von Ihnen gewählte Seite steht nur angemeldeten Benutzern zur Verfügung.</div>
+<form name="formlogin" method="post" action="https://ovidius.uni-tuebingen.de/shib_login.php">
+	<input type="hidden" name="sendLogin" value="1" />
+	<a href="shib_login.php?target=" id="shib_login_link">&gt;&gt; Login mit zentraler Universitäts-Kennung &lt;&lt;</a>
+</form>
+</div></div></div></main>
+</div>
+</body>
+</html>

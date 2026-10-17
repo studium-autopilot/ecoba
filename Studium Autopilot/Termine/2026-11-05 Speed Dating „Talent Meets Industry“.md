@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "wiwinews Band 95 und 96 (25.09. und 02.10.2026)"
+info: "Speed Dating des Career Service mit regionalen Arbeitgebern, dazu ein Vorbereitungsworkshop. Anmeldung per Online-Formular, danach Lebenslauf und kurzes Motivationsschreiben per Mail."
 herkunft: zentral
 zentral_id: 2026-11-05-speed-dating-talent-meets-industry
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Speed Dating „Talent Meets Industry“
 
 **05.11.2026** · 14:00–16:30 · Neckawa · Anmeldung bis 12.10.
+
+Speed Dating des Career Service mit regionalen Arbeitgebern, dazu ein Vorbereitungsworkshop. Anmeldung per Online-Formular, danach Lebenslauf und kurzes Motivationsschreiben per Mail.
 
 Quelle: wiwinews Band 95 und 96 (25.09. und 02.10.2026)
 

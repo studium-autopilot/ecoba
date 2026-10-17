@@ -86,13 +86,13 @@ cssclasses:
 
 > [!eba-raster|3]
 > > [!eba-ort|handy-zu]+ Kupferbau
-> > Hölderlinstraße 5 · große Vorlesungen · Hörsäle 21–25: Klausuren
+> > Hölderlinstraße 5 · große Vorlesungen · Hörsäle 21–25: Klausuren, Hörsaal je Nachname einige Tage vorher
 >
 > > [!eba-ort|handy-zu]+ Neue Aula
 > > Geschwister-Scholl-Platz · Audimax · Hörsäle 10 und 06
 >
 > > [!eba-ort|handy-zu]+ Mohlstraße 36
-> > Wirtschaftswissenschaftliches Seminar · Übungsräume · **Fachbibliothek** 1. OG, Mo–Fr 9–20 Uhr
+> > Wirtschaftswissenschaftliches Seminar · Übungsräume, auch Klausuren · **Fachbibliothek** 1. OG, Mo–Fr 9–20 Uhr
 >
 > > [!eba-ort|handy-zu]+ Nauklerstraße 47
 > > Fachbereich · Studienfachberatung · Fachschaft · Auslandsbüro
@@ -106,9 +106,9 @@ cssclasses:
 ## Offizielle Dokumente
 
 > [!eba-tabelle]- Offizielle Dokumente
-> Ordnungen, Modulhandbuch und Termine, auf die sich die Angaben im Vault stützen.
+> Ordnungen, Modulhandbuch und Termine, auf die sich die Angaben im Tresor stützen.
 >
-> | Dokument | Stand | Wofür im Vault |
+> | Dokument | Stand | Wofür im Tresor |
 > | --- | --- | --- |
 > | [Studien- und Prüfungsordnung EcoBA, Besonderer Teil (PO 2023)](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/downloads/) | AmtlBek 24/2023, 05.10.2023 | Varianten, Module, Orientierungsprüfung, Gesamtnote, Bachelorarbeit |
 > | [Allgemeiner Teil Ein-Fach-Bachelor (BRPO 2021)](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/downloads/) | AmtlBek 4/2021, Änderung 21/2021 | Anmeldung, Rücktritt, Wiederholung, Noten, Bachelorarbeit |
@@ -125,7 +125,3 @@ cssclasses:
 > | [Studienfachberatung, Prüfungsamt, Gremien](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienfachberatung/ansprechpartner/) | 18.09. / 30.07. / 23.09.2026 | Ansprechpersonen |
 > | [Freie Fachschaft Wirtschaftswissenschaft](https://www.ffwtuebingen.de/blank-3) | abgerufen 30.09.2026 | Ersti-Woche 2026 |
 > | [Merkblatt Ausland und Learning Agreement](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/downloads/) | April 2026 | Anrechnung bis 45 ECTS |
->
-> Die Download-Links des Prüfungsamts sind zeitlich begrenzt; die Links führen deshalb auf die Download-Seiten.
-
-<p class="eba-fuss">Stand 30.09.2026 · Namen und Zuständigkeiten können sich ändern · <a href="https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienfachberatung/ansprechpartner/">Studienfachberatung</a></p>

@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/"
+info: "Vortrag über das Universitätsarchiv und seine Bestände mit Führung durch die Archivräume; kein *-Kurs für den TCP-Punkt der UB. Anmeldung über Alma."
 herkunft: zentral
 zentral_id: 2026-10-28-ub-kurs-einfuehrung-in-das-universitaetsarchiv
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # UB-Kurs: Einführung in das Universitätsarchiv
 
 **28.10.2026** · 10:00–11:30 · Schulungsraum B004, Bonatzbau UB · Anmeldung über Alma
+
+Vortrag über das Universitätsarchiv und seine Bestände mit Führung durch die Archivräume; kein \*-Kurs für den TCP-Punkt der UB. Anmeldung über Alma.
 
 Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/lernen-arbeiten/schulungen-beratungen-fuehrungen/gesamtes-schulungsangebot/)
 

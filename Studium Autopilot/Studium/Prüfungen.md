@@ -13,10 +13,8 @@ cssclasses:
 <h1>Prüfungen</h1>
 </div>
 
-## Prüfungen
-
 ```eba-klausurzeit
-Zeitleiste erscheint, sobald Obsidian nach dem Start klausurzeit.js geladen hat (sonst Obsidian neu starten).
+Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 ```
 
 > [!eba-tabelle|schlicht|umbruch] Prüfungstermine
@@ -64,6 +62,8 @@ Zeitleiste erscheint, sobald Obsidian nach dem Start klausurzeit.js geladen hat 
 >       formula.stand: 92
 > ```
 
+<p class="eba-hinweis">Klausurräume → <a class="internal-link" data-href="Kontakte & Links#Orte" href="Kontakte & Links#Orte">Kontakte & Links</a></p>
+
 
 ## Regeln
 
@@ -91,10 +91,5 @@ Zeitleiste erscheint, sobald Obsidian nach dem Start klausurzeit.js geladen hat 
 > > > [!eba-regel] Einsicht und Überdenkung (§§ 19, 25 BRPO)
 > > > - Ergebnisse in **Alma**. Einsicht in die korrigierte Prüfung in der Regel **innerhalb von 4 Wochen** nach Bekanntgabe, organisiert vom Lehrstuhl.
 > > > - Antrag auf **Überdenkung** der Bewertung möglich (§ 19 Abs. 5 BRPO).
-> > > - Klausuren meist im **Kupferbau** (Hörsäle 21–25) und in der **Mohlstraße 36**; Hörsäle einige Tage vorher nach Nachnamen.
-> > > - 1. Semester: **nicht-programmierbarer Taschenrechner** und Wörterbuch ohne Notizen erlaubt.
 >
 > Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Stand 30.09.2026
-
-
-<p class="eba-fuss">Fristen und alle Termine: <a class="internal-link" data-href="Termine & Anmeldungen" href="Termine & Anmeldungen">Termine & Anmeldungen</a> · Hörsäle: <a class="internal-link" data-href="Kontakte & Links" href="Kontakte & Links">Kontakte & Links</a> · Stand 30.09.2026 · <a href="https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/fristen/">Fristen Prüfungsamt</a> · <a href="https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/">Prüfungstermine Pflichtmodule</a> · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Offizielle Dokumente</a></p>

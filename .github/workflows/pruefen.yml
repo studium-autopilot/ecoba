@@ -13,6 +13,7 @@ jobs:
     timeout-minutes: 10
     env:
       ESBUILD_VERSION: "0.25.0"
+      RUFF_VERSION: "0.17.1"
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -40,12 +41,20 @@ jobs:
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: "22"
+          cache: npm
 
       - name: Datenschutz- und Qualitätsprüfung (inkl. node --check und iOS-Regeln)
         run: python werkzeuge/pruefen.py .
 
       - name: Tests (node --test, ohne Abhängigkeiten)
         run: node --test tests/*.test.js
+
+      - name: Lint (ESLint für JavaScript, Ruff für Python)
+        run: |
+          npm ci --no-audit --no-fund
+          npx eslint .
+          pip install --quiet "ruff==$RUFF_VERSION"
+          ruff check werkzeuge/
 
       - name: Safari-16-Verträglichkeit (esbuild)
         # Jedes Skript wird zweimal von esbuild ausgegeben: mit Ziel safari16 und mit Ziel esnext. Nutzt ein Skript Syntax,

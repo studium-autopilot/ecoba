@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite: Startseite (goto.php/root/1), auf die ILIAS bei fehlender Berechtigung oder nicht vorhandenem
+     Objekt umleitet, mit Fehlermeldung. Aufbau wie ILIAS 10 (Ovidius), Kategorien erfunden. -->
+<html lang="de" dir="ltr">
+<head><meta charset="utf-8" /><title>Magazin - ILIAS</title></head>
+<body>
+<div class="il-layout-page">
+<header><ul class="il-maincontrols-metabar" role="menubar" style="visibility: hidden" aria-label="Metaleiste" id="il_ui_fw_100000000601_1">
+	<li role="none"><button class="btn btn-bulky" id="il_ui_fw_100000000602_1" role="menuitem" aria-haspopup="true"><span class="bulky-label">Benutzermenü</span></button></li>
+</ul></header>
+<main class="il-layout-page-content"><div id="ilContentContainer"><div class="row"><div id="il_center_col" class="col-sm-12">
+<div class="alert alert-danger" role="alert">
+	<div class="ilAccHeadingHidden">Fehlermeldung</div>Sie haben keine Berechtigung, auf das Objekt zuzugreifen.</div>
+<div  id="bl_cntr_1" class="ilContainerBlock form-inline"  data-behaviour="0" >
+	<ul class="ilContainerItemsContainer ">
+		<li id="item_row_cat-2000601" class="ilCLI ilObjListRow">
+			<div class="ilContainerListItemOuter" data-list-item-id="lg_div_2000601_pref_1" id = "lg_div_2000601_pref_1">
+<div class="ilContainerListItemIcon "><img alt="Kategorie" title="Kategorie" src="./Customizing/skin/ovidius_ilias10.10/ovidius_ilias10/images/standard/icon_cat.svg" class="ilListItemIcon" /></div>
+<div class="ilContainerListItemContent "><div class="il_ContainerListItem"><div class="il_ContainerItemTitle form-inline"><h3 class="il_ContainerItemTitle">
+			<a href="https://ovidius.uni-tuebingen.de/goto.php/cat/2000601" class="il_ContainerItemTitle"  >Wintersemester 2026-27</a></h3></div></div></div>
+</div>
+		</li>
+	</ul>
+</div>
+</div></div></div></main>
+</div>
+<script>
+il.Util.addOnLoad(function() {
+document.getElementById("il_ui_fw_100000000699_1").addEventListener('click', e => il.Footer.permalink.copyText("https:\/\/ovidius.uni-tuebingen.de\/goto.php\/root\/1").then(() => il.Footer.permalink.showTooltip(e.target.nextElementSibling, 5000)));
+});
+</script>
+</body>
+</html>

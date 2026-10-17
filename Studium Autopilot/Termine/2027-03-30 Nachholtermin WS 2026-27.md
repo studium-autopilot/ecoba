@@ -10,6 +10,7 @@ modul:
 code: ""
 erledigt: false
 quelle: "https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/"
+info: "Zeitraum der Nachholprüfungen für die Pflicht- und Profilbildungsmodule, bisher nur geschätzt. Prüfungen vorher im Anmeldezeitraum des Nachholtermins in Alma anmelden."
 herkunft: zentral
 zentral_id: 2027-03-30-nachholtermin-ws-2026-27
 uebersicht: "[[Prüfungen]]"
@@ -22,6 +23,8 @@ tags:
 # Nachholtermin WS 2026/27
 
 **30.03.2027 – 10.04.2027**
+
+Zeitraum der Nachholprüfungen für die Pflicht- und Profilbildungsmodule, bisher nur geschätzt. Prüfungen vorher im Anmeldezeitraum des Nachholtermins in Alma anmelden.
 
 > [!warning] Geschätzt
 > Dieses Datum ist noch nicht offiziell. Sobald die Uni es veröffentlicht, wird es hier automatisch aktualisiert.
