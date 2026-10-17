@@ -13,6 +13,7 @@ module.exports = function (ctx) {
   const STAND = "eba-alma-stand";         // letzter erfolgreicher Abruf (gerätelokal)
   const SEIT = "eba-alma-seit";           // verbunden seit (gerätelokal)
   const ORDNER = "Stundenplan";
+  const AUS_ALMA = /^> \[!info\]-? Aus Alma/m; // Kasten in jeder Notiz, die Alma selbst angelegt hat
   const TAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
@@ -235,7 +236,7 @@ module.exports = function (ctx) {
     const schluesselImFeed = new Set(gruppen.map((g) => g.schluessel));
     const ms = alleModule();
     const alt = vorhandene(ordner);
-    const bericht = { neu: 0, geaendert: 0, entfernt: 0, gleich: 0, termine: gruppen.length };
+    const bericht = { neu: 0, geaendert: 0, entfernt: 0, behalten: 0, gleich: 0, termine: gruppen.length };
     const benutzt = new Set();
 
     // Modul, Code und Art je Termin einmal bestimmen
@@ -342,30 +343,43 @@ module.exports = function (ctx) {
       bericht.neu++;
     }
 
-    // In Alma nicht mehr vorhanden: nur Einträge, die aus Alma stammen, und nur für Semester, die Alma geliefert hat
+    // In Alma nicht mehr vorhanden: nur Einträge, die aus Alma stammen, und nur für Semester, die Alma geliefert hat.
+    // Von Hand angelegte Notizen (ohne den Kasten „Aus Alma“; Alma hat sie über Schritt 2 übernommen) löscht Alma nie:
+    // Sie verlieren nur die Verknüpfung zu Alma und bleiben, wie du sie angelegt hast.
     if (gruppen.length) for (const x of alt) {
       if (!x.fm.alma_schluessel || benutzt.has(x.f.path) || !semesterImFeed.has(x.fm.semester)) continue;
+      if (!AUS_ALMA.test(await app.vault.cachedRead(x.f))) {
+        await app.fileManager.processFrontMatter(x.f, (fm) => {
+          for (const k of ["alma_schluessel", "alma_titel", "alma_raum"]) delete fm[k];
+          if (fm.quelle === "alma") delete fm.quelle;
+        });
+        bericht.behalten++;
+        continue;
+      }
       await app.vault.trash(x.f, false); // Obsidian-Papierkorb (.trash), wiederherstellbar
       bericht.entfernt++;
     }
 
     app.saveLocalStorage(STAND, new Date().toISOString());
-    const geaendert = bericht.neu + bericht.geaendert + bericht.entfernt;
-    if (!still || geaendert) new Notice(`Fertig – ${bericht.termine} Termine aus Alma${geaendert ? ` (${bericht.neu} neu, ${bericht.geaendert} geändert, ${bericht.entfernt} entfernt)` : ""}.`, 6000);
+    const geaendert = bericht.neu + bericht.geaendert + bericht.entfernt + bericht.behalten;
+    const behalten = bericht.behalten ? `, ${bericht.behalten} eigene behalten` : "";
+    if (!still || geaendert) new Notice(`Fertig – ${bericht.termine} Termine aus Alma${geaendert ? ` (${bericht.neu} neu, ${bericht.geaendert} geändert, ${bericht.entfernt} entfernt${behalten})` : ""}.`, 6000);
     return bericht;
   };
 
   // ---------- Verbindung (wiederverwendbar, z. B. für eine „Verbinden“-Karte mit Schloss) ----------
   // Status auf diesem Gerät: verbunden (Link gespeichert) und Zeitpunkt des letzten erfolgreichen Abrufs (ISO) oder null.
   const status = () => ({ verbunden: hatLink(), stand: app.loadLocalStorage(STAND) || null, seit: app.loadLocalStorage(SEIT) || null });
-  // Link abfragen (oder übergeben) und sofort importieren. Rückgabe: Bericht von aktualisieren() oder null (abgebrochen).
-  // optionen.nurBeiErfolg (Verbinden-Fenster): Scheitert der erste Abruf, gilt wieder der vorherige Zustand (alter Link
-  // bzw. keiner), damit kein unbrauchbarer Link gespeichert bleibt. Grund dann in fehler().
+  // Link abfragen (oder übergeben) und sofort importieren. Rückgabe: Bericht von aktualisieren() oder null (abgebrochen
+  // oder gescheitert). Scheitert der erste Abruf, gilt wieder der vorherige Zustand (alter Link bzw. keiner), damit kein
+  // unbrauchbarer Link gespeichert bleibt; Grund in fehler(). optionen.nurBeiErfolg (Verbinden-Fenster): keine Hinweise,
+  // das Fenster zeigt das Ergebnis selbst.
   const verbinden = async (vorgabe, optionen = {}) => {
     const vorher = link(), vorherSeit = app.loadLocalStorage(SEIT) || null;
-    if (!(await linkSetzen(vorgabe, !!optionen.nurBeiErfolg))) return null;
+    letzterFehler = "";
+    if (!(await linkSetzen(vorgabe, true))) return null;
     const bericht = await aktualisieren({ still: !!optionen.nurBeiErfolg });
-    if (!bericht && optionen.nurBeiErfolg) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); return null; }
+    if (!bericht) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); return null; }
     if (bericht && (!vorher || vorher !== link() || !vorherSeit)) app.saveLocalStorage(SEIT, new Date().toISOString());
     return bericht;
   };
@@ -377,7 +391,8 @@ module.exports = function (ctx) {
   const aktualisierenOderVerbinden = async ({ neuerLink = false } = {}) => {
     if (hatLink() && !neuerLink) return await aktualisieren({ still: false });
     const bericht = await verbinden();
-    if (!bericht && !hatLink()) new Notice("Kein Stundenplan geholt: Alma ist noch nicht verbunden. Tippe auf „Alma verbinden“.", 10000);
+    // abgebrochen ohne Link: erklären; gescheitert: aktualisieren() hat den Grund schon gemeldet
+    if (!bericht && !hatLink() && !letzterFehler) new Notice("Kein Stundenplan geholt: Alma ist noch nicht verbunden. Tippe auf „Alma verbinden“.", 10000);
     return bericht;
   };
 

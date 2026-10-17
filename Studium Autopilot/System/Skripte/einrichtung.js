@@ -87,7 +87,11 @@ module.exports = function (ctx) {
   const entwurf = ctx.bleibend("entwurf", () => ({}));
 
   // Texte mit **fett**, ohne innerHTML
-  const fett = (el, s) => { String(s || "").split("**").forEach((t, i) => { if (t) { if (i % 2) el.createEl("b", { text: t }); else el.appendText(t); } }); };
+  // Text mit **fett** und [Link](https://…) wie in verbindungen.js; ohne verbindungen.js nur **fett**
+  const fett = (el, s) => {
+    if (ctx.verbindungen && ctx.verbindungen.fett) { ctx.verbindungen.fett(el, s); return; }
+    String(s || "").split("**").forEach((t, i) => { if (t) { if (i % 2) el.createEl("b", { text: t }); else el.appendText(t); } });
+  };
   const dmy = (s) => (s ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : "");
   const semesterName = (beginn) => { try { return beginn && ctx.modell ? ctx.modell.semesterAusDatum(beginn) : ""; } catch (e) { return ""; } };
 
@@ -111,7 +115,7 @@ module.exports = function (ctx) {
       };
       this.gespeichert = {}; // in diesem Fenster geschriebene Antworten (der metadataCache kommt kurz danach)
       this.alma = null; // Ergebnis des Verbindens in diesem Fenster ({ text })
-      this.ilias = null; // ebenso für ILIAS ({ kurse })
+      this.ilias = null; // ebenso für ILIAS ({ kurse, laedt: erster Abruf gestartet })
       this.felder = {};
       this.laeuft = false;
     }
@@ -308,7 +312,10 @@ module.exports = function (ctx) {
         }
         titel("Stundenplan aus Alma", "Verbinde Alma, dann siehst du hier deine Woche.");
         const ol = haupt.createEl("ol", { cls: "eba-ei-schritte" });
-        for (const t of ["In **Alma** anmelden, dann **Mein Studium** → **Stundenplan**.", "**Daten für iCalendar (ics) exportieren** → **Link kopieren**.", "Link hier einfügen."]) fett(ol.createEl("li"), t);
+        // Links wie im Fenster unter Verbindungen (ctx.verbindungen.ALMA); ohne verbindungen.js der Weg durchs Menü
+        const A = ctx.verbindungen && ctx.verbindungen.ALMA;
+        const erst = A ? `[Alma](${A.start}) öffnen und anmelden, dann [deinen Stundenplan](${A.stundenplan}) öffnen.` : "In **Alma** anmelden, dann **Mein Studium** → **Stundenplan**.";
+        for (const t of [erst, "**Daten für iCalendar (ics) exportieren** → **Link kopieren**.", "Link hier einfügen."]) fett(ol.createEl("li"), t);
         const feld = haupt.createEl("input", { type: "text", cls: "eba-ei-eingabe", attr: { inputmode: "url", placeholder: "Link hier einfügen", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Alma-Link", enterkeyhint: "go" } });
         const meldung = haupt.createEl("p", { cls: "eba-ei-meldung" });
         if (v && v.erklaerung) {
@@ -351,7 +358,7 @@ module.exports = function (ctx) {
           // Verbunden oder hier nicht möglich (eigener Uni-Abgleich, Obsidian zu alt, Anmeldebaustein fehlt): ein Satz, Weiter
           const n = this.ilias ? this.ilias.kurse : 0;
           const gut = !!(this.ilias || st.verbunden || st.extern);
-          const text = this.ilias ? `Verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden` : ""}. Deine Dateien kommen von selbst.`
+          const text = this.ilias ? `Verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden` : ""}. ${this.ilias.laedt ? "Deine Dateien werden jetzt geladen." : "Deine Dateien kommen von selbst."}`
             : st.verbunden ? "ILIAS ist auf diesem Gerät verbunden."
               : st.extern ? "Deine ILIAS-Unterlagen kommen über deinen Uni-Abgleich."
                 : !I || !v || st.text === I.K.TEXT_ANMELDUNG_FOLGT ? "Das geht in dieser Version noch nicht."
@@ -395,7 +402,10 @@ module.exports = function (ctx) {
           let liste = null;
           try { liste = await I.kurseAbrufen(); } catch (e) { liste = null; }
           this.laeuft = false;
-          this.ilias = { kurse: Array.isArray(liste) ? liste.length : 0 };
+          // erster Abruf gleich, im Hintergrund (Hinweis mit Fortschritt, wie Jetzt holen), wenn ein Kurs an ist
+          const laedt = Array.isArray(liste) && liste.some((k) => k.aktiv);
+          this.ilias = { kurse: Array.isArray(liste) ? liste.length : 0, laedt };
+          if (laedt) I.jetztHolen().catch(() => null);
           if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen();
           if (fenster === this && this.schritt === ILIAS) this.zeigen();
           return true;

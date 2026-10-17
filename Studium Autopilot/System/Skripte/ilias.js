@@ -35,7 +35,10 @@
 //   ctx.ilias.erzeugen(abh) baut den ganzen Ablauf mit falschem ILIAS und Tresor im Speicher (tests/ilias.test.js);
 //   in Obsidian ersetzen ctx.ilias.anmeldungSetzen(fn) und ctx.ilias.quelleSetzen(fn) Anmeldung bzw. ILIAS (Oberfläche
 //   testen ohne Passwort und ohne Netz; null = wieder echt).
-// Gerätelokal (app.saveLocalStorage): eba-ilias-benutzer, eba-ilias-stand, eba-ilias-protokoll (letzte 20 Läufe), eba-geraet.
+// Gerätelokal (app.saveLocalStorage): eba-ilias-benutzer, eba-ilias-stand, eba-ilias-protokoll (letzte 20 Läufe), eba-geraet,
+//   eba-ilias-auftrag (offener Abruf, den du gestartet hast: geht nach Fehler, Stapelgrenze, Neustart oder Rückkehr in die App
+//   von selbst weiter, siehe naechsterSchritt), eba-ilias-schreibt (Datei, die gerade geschrieben wird; siehe nachAbbruch).
+// Fortschritt: ein Hinweis mit Balken (fortschrittHinweis) für Läufe, die du gestartet hast; automatische bleiben still.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
   const app = window.app;
@@ -70,7 +73,12 @@ module.exports = function (ctx) {
   const NIE = ["md", "base", "canvas"];     // würden in Obsidian zu Notizen oder Ansichten
   const BILDER = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
   const SPERRGRUENDE = ["zugang-falsch", "zustimmung", "zwei-faktor"]; // ohne dein Zutun keine automatischen Versuche mehr
-  const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet" };
+  const WIEDER_MIN = [1, 5, 15];  // offener Auftrag nach einem Fehler (z. B. kein Netz): neuer Versuch nach so vielen Minuten
+  const STAPEL_PAUSE = 45e3;      // Download-Grenze je Lauf erreicht, Dateien übrig: nächster Stapel nach dieser Pause
+  const STAPEL_MAX = 10;          // höchstens so viele Stapel je Auftrag (schont ILIAS), danach nur noch stündlich
+  const STILL = 2 * MIN;          // so lange ohne Regung gilt ein Lauf als tot (iPhone/iPad halten Skripte im Hintergrund an)
+  const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet",
+    auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
   const TEXT_ANMELDUNG_FOLGT = "ILIAS-Anmeldung folgt in einer späteren Version";
   const MODULCODE = (ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE) || "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?"; // wie eba.js
@@ -122,6 +130,49 @@ module.exports = function (ctx) {
     if (r.arrayBuffer && typeof r.arrayBuffer !== "function") return bytesAus(r.arrayBuffer);
     return null;
   };
+  // Fortschritt eines Laufs für die Anzeige: x = { phase, erledigt?, gesamt?, code? }, weiter (fortgesetzter Auftrag) → { text
+  // (Fenster, Zeile), kurz (Hinweis mit Balken: „ILIAS · 12 von 40“, „ILIAS · weiter: 26 von 40“), knopf (Knopf auf Unterlagen), anteil (0–1; null = noch unbekannt) }. Nie Kurstitel (können
+  // Einschreibepasswörter enthalten), höchstens der Modulcode.
+  const fortschrittAnzeige = (x, weiter) => {
+    x = x || {};
+    const g = Math.max(0, Math.floor(Number(x.gesamt) || 0));
+    const e = Math.min(g, Math.max(0, Math.floor(Number(x.erledigt) || 0)));
+    const code = CODE_GANZ.test(String(x.code || "")) ? String(x.code) : "";
+    const laden = x.phase === "laden" && g > 0;
+    const kurz = laden ? `${Math.min(e + 1, g)} von ${g}`
+      : x.phase === "durchsuchen" ? (code ? `${code} wird durchsucht` : "Kurse werden durchsucht")
+        : x.phase === "kurse" ? "Kurse werden gelesen"
+          : x.phase === "anmelden" ? "Anmeldung" : "Wird vorbereitet";
+    return {
+      text: laden ? `Lädt ${kurz}` : `${kurz} …`,
+      kurz: `ILIAS · ${weiter ? "weiter: " : ""}${kurz}`,
+      knopf: laden ? `Lädt ${kurz}` : "Lädt …",
+      anteil: (laden || x.phase === "durchsuchen") && g > 0 ? e / g : null,
+    };
+  };
+  // Offener Auftrag nach einem Lauf: a = { seit, versuche, stapel, geladen } (gerätelokal), b = Bericht → { auftrag (neuer
+  // Stand, null = erledigt), inMs (nächster Versuch; null = keiner, z. B. nach Neustart oder stündlich) }. Nie weiter nach
+  // abgelehnter Anmeldung, Zustimmung, zweitem Faktor, Trennen, Stoppen oder wenn ein anderes Gerät lädt.
+  const naechsterSchritt = (a, b) => {
+    const aus = { auftrag: null, inMs: null };
+    if (!a || !b) return aus;
+    const geladen = (a.geladen || 0) + (b.geladen || 0);
+    if (b.art === "ok" || b.art === "unveraendert") {
+      const stapel = (a.stapel || 0) + 1;
+      if (!((b.rest || 0) + (b.kurseOffen || 0)) || stapel >= STAPEL_MAX) return aus;
+      return { auftrag: Object.assign({}, a, { versuche: 0, stapel, geladen }), inMs: STAPEL_PAUSE };
+    }
+    if (b.art === "fehler") {
+      const versuche = (a.versuche || 0) + 1;
+      if (versuche > WIEDER_MIN.length) return aus;
+      return { auftrag: Object.assign({}, a, { versuche, geladen }), inMs: WIEDER_MIN[versuche - 1] * MIN };
+    }
+    if (b.art === "abgebrochen") return { auftrag: Object.assign({}, a, { geladen }), inMs: null }; // Plugin neu geladen: beim Start weiter
+    if (b.art === "kurse") return { auftrag: a, inMs: 1000 }; // Knopf während des Kurse-Lesens: gleich danach laden
+    return aus;
+  };
+  // Lauf ohne Regung (Anfrage, Fortschritt) seit STILL: auf iPhone/iPad meist im Hintergrund gestorben
+  const abgestorben = (regungMs, jetztMs) => regungMs > 0 && jetztMs - regungMs > STILL;
   const vorText = (iso, jetztMs) => {
     const t = Date.parse(iso || "");
     if (isNaN(t)) return "";
@@ -245,6 +296,8 @@ module.exports = function (ctx) {
     const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {} }, lokal(L.stand) || {});
     const standSetzen = (x) => lokal(L.stand, Object.assign(stand(), x));
     const protokoll = () => { const p = lokal(L.protokoll); return Array.isArray(p) ? p.slice() : []; };
+    // Offener Auftrag (ein Abruf, den du gestartet hast und der noch nicht fertig ist), nur auf diesem Gerät
+    const auftrag = () => { const a = lokal(L.auftrag); return a && typeof a === "object" && !Array.isArray(a) ? a : null; };
 
     // ----- Zugang -----
     const benutzer = () => { const b = lokal(L.benutzer); return typeof b === "string" ? b : ""; };
@@ -296,6 +349,7 @@ module.exports = function (ctx) {
       return { ok: true };
     };
     const zugangLoeschen = async () => {
+      stoppen("trennen");
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       lokal(L.benutzer, null);
       standSetzen({ fehler: "", fehlerZeit: "", gesperrt: false, abrufer: false });
@@ -393,12 +447,14 @@ module.exports = function (ctx) {
     };
 
     // ----- Anfragen an ILIAS: eine nach der anderen, mit Abstand -----
-    let abbrechen = false;
+    // Je Lauf ein Stopp-Zeichen (r.stopp): ein verworfener Lauf, der später aufwacht, schreibt nichts mehr
+    let regung = 0; // letzte Anfrage oder letzter Fortschritt (ms), für abgestorben()
+    const halt = (r) => { if (r.stopp.an) throw fehlerArt("abbruch", "abgebrochen"); };
     const anfrage = async (b, r, fn) => {
       if (r.letzte) { const seit = ms() - r.letzte; if (seit < ABSTAND_MS) await abh.warten(ABSTAND_MS - seit); }
-      if (abbrechen) throw fehlerArt("abbruch", "abgebrochen");
+      halt(r);
       b.anfragen++;
-      try { return await fn(); } finally { r.letzte = ms(); }
+      try { return await fn(); } finally { r.letzte = ms(); regung = r.letzte; }
     };
     // Fehler, der nur diese eine Datei oder diesen Ordner betrifft (HTTP-Status, z. B. 403, 404, 500 eines einzelnen Objekts);
     // ohne Status (kein Netz, Zeitüberschreitung, Sitzung) endet der Lauf sofort
@@ -410,7 +466,16 @@ module.exports = function (ctx) {
       const k = b.jeKurs[refId] || (b.jeKurs[refId] = {});
       k[feld] = (k[feld] || 0) + 1;
     };
-    const fort = (o, x) => { if (typeof o.fortschritt === "function") { try { o.fortschritt(x); } catch (e) { /* egal */ } } melden(Object.assign({ art: "fortschritt" }, x)); };
+    // Fortschritt: { phase, text, erledigt?, gesamt?, code? } (fortschrittAnzeige; nie Kurs- oder Dateinamen); letzter = Stand für
+    // Anzeigen, die mitten im Lauf dazukommen
+    let letzter = null;
+    const fort = (o, x) => {
+      const y = Object.assign({}, x, { text: fortschrittAnzeige(x).text });
+      letzter = y; regung = ms();
+      if (typeof o.fortschritt === "function") { try { o.fortschritt(y); } catch (e) { /* egal */ } }
+      melden(Object.assign({ art: "fortschritt" }, y));
+    };
+    const kursAn = (refId) => !!(mem && mem.kurse[refId] && mem.kurse[refId].aktiv);
 
     // ----- Kurse -----
     const kurseUebernehmen = (roh) => {
@@ -483,13 +548,13 @@ module.exports = function (ctx) {
       const stapel = [{ url: kurs.url, refId: kurs.refId, titel: kurs.titel, pfad: [], anzeige: [], code: kurs.code, tiefe: 0 }];
       const gesehen = {};
       while (stapel.length) {
-        if (abbrechen) throw fehlerArt("abbruch", "abgebrochen");
+        halt(r);
         if (!darf()) return false;
         const k = stapel.pop();
         const sch = String(k.refId || k.url || "");
         if (!sch || gesehen[sch]) continue;
         gesehen[sch] = true;
-        fort(o, { phase: "durchsuchen", text: "Durchsuche " + [kurs.titel].concat(k.anzeige).join(" / ") + " …", kurs: kurs.titel });
+        fort(o, { phase: "durchsuchen", code: kurs.code || "", erledigt: r.kursNr || 0, gesamt: r.kurseGesamt || 0 });
         let liste;
         try { liste = await anfrage(b, r, () => q.inhalt({ url: k.url, refId: k.refId, titel: k.titel })); }
         catch (e) {
@@ -588,6 +653,26 @@ module.exports = function (ctx) {
         semester: abh.semester ? abh.semester() : "", datum: heute(), hinweis: hinweis || "",
       };
     };
+    // Schreiben über einen Absturz hinweg (iPhone/iPad beenden Obsidian im Hintergrund jederzeit): Vor dem Schreiben merkt sich
+    // das Gerät { id, pfad, art } (eba-ilias-schreibt), nach dem Index ist es wieder leer. Steht beim nächsten Lauf noch etwas da,
+    // räumt nachAbbruch auf: eine neue Datei (und ihre Notiz), die nicht im Index steht, war unfertig und wird gelöscht und neu
+    // geladen (sonst bliebe sie halb und daneben käme „ (2)“); eine halb ersetzte gilt als unverändert (Prüfsumme im Index), damit
+    // der nächste Abruf sie ersetzt statt sie für deine Änderung zu halten.
+    const schreibtSetzen = (x) => lokal(L.schreibt, x);
+    const nachAbbruch = async (r) => {
+      const s = lokal(L.schreibt);
+      if (!s || typeof s.pfad !== "string" || !s.pfad) { if (s) schreibtSetzen(null); return; }
+      const d = s.id ? mem.dateien[s.id] : null;
+      if (s.art === "neu" && !(d && d.pfad === s.pfad)) {
+        for (const p of [s.pfad, notizPfad(s.pfad)]) if (io.existiert(p)) await io.loeschen(p);
+      } else if (s.art === "ersetzen" && d && d.pfad === s.pfad && io.existiert(s.pfad)) {
+        const by = await io.lesenBinaer(s.pfad);
+        const h = by ? await sha256(by) : "";
+        if (h && h !== d.sha256) { setzen("dateien", s.id, { sha256: h, groesse: by.length }); await speichern(); }
+        r.hashes[s.pfad] = h;
+      }
+      schreibtSetzen(null);
+    };
     // Datei + Notiz anlegen; scheitert die Notiz, wird die Datei wieder entfernt (keine Datei ohne Notiz und Index)
     const mitNotiz = async (pfad, bytes, notiz) => {
       await io.ordnerAnlegen(elternVon(pfad));
@@ -607,12 +692,14 @@ module.exports = function (ctx) {
       const ordner = zielOrdner(plan.code, c.kurs, plan.art);
       const stem = freierName(ordner, plan.name, c.endung);
       const pfad = `${ordner}/${stem}.${c.endung}`;
+      schreibtSetzen({ id: c.id, pfad, art: "neu" });
       await mitNotiz(pfad, bytes, notizBauen(E, notizDaten(c, plan, `${stem}.${c.endung}`, bytes.length)));
       unterlagen(r).push({ pfad, groesse: bytes.length });
       r.hashes[pfad] = sha;
       setzen("dateien", c.id, Object.assign(basis, { pfad, wie: "neu" }));
       plus(b, c.kurs.refId, "neu"); b.angelegt.push(pfad);
       await speichern();
+      schreibtSetzen(null);
     };
 
     const aktualisieren = async (c, bytes, b, r, E) => {
@@ -632,11 +719,13 @@ module.exports = function (ctx) {
       const datum = heute();
       if (ist === d0.sha256) {
         // unverändert im Tresor → ersetzen; Index sofort, die Markierung der Notiz ist Nebensache
+        schreibtSetzen({ id: c.id, pfad, art: "ersetzen" });
         await io.ersetzenBinaer(pfad, bytes);
         r.hashes[pfad] = sha;
         merken({ pfad, sha256: sha, groesse: bytes.length, aktualisiert: datum });
         plus(b, c.kurs.refId, "ersetzt"); b.ersetztePfade.push(pfad);
         await speichern();
+        schreibtSetzen(null);
         try { await io.notizMarkieren(notizPfad(pfad), { aktualisiert: datum }); } catch (e) { /* Notiz fehlt oder ist nicht unsere */ }
         return;
       }
@@ -649,17 +738,19 @@ module.exports = function (ctx) {
       while (io.existiert(`${vorne}${name}.${endung}`) || io.existiert(`${vorne}${name}.md`)) name = `${basisName} (${i++})`;
       const neuPfad = `${vorne}${name}.${endung}`;
       const plan = await benennen(c, bytes, E, false);
+      schreibtSetzen({ id: c.id, pfad: neuPfad, art: "neu" });
       const hinweis = `Deine veränderte Datei [[${nameVon(pfad)}]] bleibt, wie sie ist. Dies ist die neue Fassung aus ILIAS vom ${datum.slice(8, 10)}.${datum.slice(5, 7)}.${datum.slice(0, 4)}.`;
       await mitNotiz(neuPfad, bytes, notizBauen(E, notizDaten(c, plan, `${name}.${endung}`, bytes.length, hinweis)));
       r.hashes[neuPfad] = sha;
       merken({ pfad, sha256: sha, groesse: bytes.length, aktualisiert: datum, fassungen: (Array.isArray(d0.fassungen) ? d0.fassungen : []).concat([neuPfad]) });
       plus(b, c.kurs.refId, "fassungen"); b.angelegt.push(neuPfad);
       await speichern();
+      schreibtSetzen(null);
     };
 
     // ----- Ein Lauf -----
-    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, anfragen: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null });
-    const lauf = async (o, b) => {
+    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null });
+    const lauf = async (o, b, stopp) => {
       if (extern()) { b.art = "extern"; return; }
       const f = anmeldung();
       if (!f) { b.art = "ohne-anmeldung"; return; }
@@ -684,12 +775,12 @@ module.exports = function (ctx) {
       const geheimId = abh.geheimId();
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
-      const r = { letzte: 0, hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0 };
+      const r = { letzte: 0, hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp };
       await indexLesen();
-      if (!o.nurKurse) await nachziehen(b, r);
-      fort(o, { phase: "anmelden", text: "Melde mich bei ILIAS an …" });
+      if (!o.nurKurse) { await nachAbbruch(r); await nachziehen(b, r); }
+      fort(o, { phase: "anmelden" });
       const q = await anfrage(b, r, () => abh.quelle(zugang, anmeldenMit(f)));
-      fort(o, { phase: "kurse", text: "Lese deine Kurse …" });
+      fort(o, { phase: "kurse" });
       const roh = await anfrage(b, r, () => q.kurse());
       if (!Array.isArray(roh) || !roh.length) throw fehlerArt("kurse", "Keine Kurse gefunden. Hat sich die ILIAS-Seite geändert?");
       const liste = kurseUebernehmen(roh);
@@ -702,12 +793,16 @@ module.exports = function (ctx) {
       const G = abh.grenzen || {};
       const kappe = G.neu || (abh.mobil ? NEU_MOBIL : NEU_PC), budget = G.anfragen || ANFRAGEN;
       const kursZeit = Object.assign({}, stand().kursZeit), kursFertig = Object.assign({}, stand().kursFertig);
-      const aktive = liste.filter((k) => mem.kurse[k.refId] && mem.kurse[k.refId].aktiv)
+      // automatische Läufe ohne Kurse, die vor kurzem ganz durchsucht wurden
+      const aktive = liste.filter((k) => kursAn(k.refId) && (o.manuell || alter(kursFertig[k.refId]) >= KURS_PAUSE))
         .sort((x, y) => vergleich(String(kursZeit[x.refId] || ""), String(kursZeit[y.refId] || "")));
       const kandidaten = [], fertig = [];
       const darf = () => b.anfragen < budget - kappe;
-      for (const k of aktive) {
-        if (!o.manuell && alter(kursFertig[k.refId]) < KURS_PAUSE) continue; // vor kurzem ganz durchsucht
+      r.kurseGesamt = aktive.length;
+      for (let i = 0; i < aktive.length; i++) {
+        const k = aktive[i];
+        r.kursNr = i;
+        if (!kursAn(k.refId)) continue; // während des Laufs abgewählt
         kursZeit[k.refId] = iso(); // auch angefangene: der nächste Lauf beginnt mit den anderen (keiner verhungert)
         if (!(await durchsuchen(q, k, kandidaten, b, r, o, darf))) break;
         fertig.push(k.refId);
@@ -718,17 +813,22 @@ module.exports = function (ctx) {
 
       // 2. Laden: geänderte zuerst, dann neue, je neueste zuerst; der Rest im nächsten Lauf
       kandidaten.sort((x, y) => (x.art === y.art ? 0 : x.art === "geaendert" ? -1 : 1) || vergleich(y.geaendert, x.geaendert) || x.reihe - y.reihe);
+      b.kurseOffen = aktive.filter((k) => kursAn(k.refId) && fertig.indexOf(k.refId) < 0).length;
       const geaenderteKurse = {};
       let n = 0, fehlerN = 0;
-      const gesamt = Math.min(kandidaten.length, kappe);
+      // Zähler über die Stapel eines Auftrags: schon geladene + alle, die jetzt noch fehlen (auch über der Grenze)
+      const vorher = o.weiter ? ((auftrag() || {}).geladen || 0) : 0;
+      const gesamt = vorher + kandidaten.length;
       for (const c of kandidaten) {
-        if (abbrechen) throw fehlerArt("abbruch", "abgebrochen");
+        halt(r);
+        if (!kursAn(c.kurs.refId)) continue; // während des Laufs abgewählt
         if (n >= kappe || b.anfragen >= budget) { plus(b, c.kurs.refId, "rest"); continue; }
-        n++;
-        fort(o, { phase: "laden", text: `Lade ${n} von ${gesamt}: ${c.original}`, kurs: c.kurs.titel, datei: c.original, nr: n, von: gesamt });
+        fort(o, { phase: "laden", code: c.code || "", erledigt: vorher + n, gesamt });
+        n++; b.geladen = n;
         let bytes = null;
         try {
           bytes = bytesAus(await anfrage(b, r, () => q.laden(c.eintrag)));
+          halt(r); // verworfen, während die Datei kam
           if (!bytes) throw fehlerArt("datei", "leere Antwort");
         } catch (e) {
           if (!einzeln(e)) throw e;
@@ -747,26 +847,28 @@ module.exports = function (ctx) {
       if (!b.neu && !b.ersetzt && !b.fassungen) b.art = "unveraendert";
     };
 
-    const meldungText = (b) => {
+    // weiterIn: offener Auftrag geht von selbst weiter (naechsterSchritt)
+    const meldungText = (b, weiterIn) => {
       const n = b.neu + b.fassungen;
+      const gleich = weiterIn != null;
       switch (b.art) {
         case "extern": return "ILIAS-Unterlagen kommen über deinen Uni-Abgleich.";
         case "ohne-anmeldung": return TEXT_ANMELDUNG_FOLGT + ".";
         case "ohne-zugang": return "ILIAS ist auf diesem Gerät nicht verbunden.";
         case "anderes-geraet": return "Ein anderes Gerät lädt gerade deine ILIAS-Unterlagen. Sie kommen über deinen Sync.";
         case "zugang": return "ILIAS: " + b.fehler;
-        case "fehler": return "ILIAS: Fehler beim Abruf. " + b.fehler;
-        case "abgebrochen": return "ILIAS: Abruf abgebrochen.";
+        case "fehler": return "ILIAS: Fehler beim Abruf. " + b.fehler + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : "");
+        case "abgebrochen": return b.grund === "stopp" ? "ILIAS: gestoppt." : "ILIAS: Abruf abgebrochen.";
         case "kurse": return "ILIAS: Kursliste aktualisiert.";
         default: {
-          const t = [n ? `ILIAS: ${n} neue ${n === 1 ? "Datei" : "Dateien"} abgelegt.` : b.ersetzt ? "ILIAS:" : "ILIAS: alles aktuell."];
+          const t = [n ? `ILIAS: ${n} neue ${n === 1 ? "Datei" : "Dateien"} in Unterlagen.` : b.ersetzt ? "ILIAS:" : "ILIAS: keine neuen Dateien."];
           if (b.ersetzt) t.push(`${b.ersetzt} ${b.ersetzt === 1 ? "Datei" : "Dateien"} aktualisiert.`);
-          if (b.rest) t.push(`${b.rest} weitere beim nächsten Abruf.`);
+          if (b.rest) t.push(gleich ? `${b.rest} weitere folgen gleich.` : `${b.rest} weitere beim nächsten Abruf.`);
           return t.join(" ");
         }
       }
     };
-    const nachLauf = (b, beginn, t0, o) => {
+    const nachLauf = (b, beginn, t0) => {
       if (b.art === "fehler" || b.art === "zugang") standSetzen({ fehler: b.fehler, fehlerZeit: iso(), gesperrt: b.art === "zugang" ? true : stand().gesperrt });
       else if (b.art === "ok" || b.art === "unveraendert") standSetzen(Object.assign({ zuletzt: iso(), fehler: "", fehlerZeit: "", neu: b.neu + b.fassungen, rest: b.rest }, zaehlen()));
       if (["extern", "ohne-anmeldung", "ohne-zugang", "gesperrt"].indexOf(b.art) < 0) {
@@ -776,33 +878,64 @@ module.exports = function (ctx) {
         if (b.warnung) e.warnung = b.warnung;
         lokal(L.protokoll, protokoll().concat([e]).slice(-PROTOKOLL_MAX));
       }
-      if (o.manuell && abh.melden) { try { abh.melden(meldungText(b)); } catch (e) { /* egal */ } }
     };
 
-    // o: { manuell (Knopf: Hinweis, auch nach abgelehnter Anmeldung), uebernehmen (Abrufer-Sperre übergehen),
-    //      nurKurse (nur anmelden und Kursliste holen), fortschritt(x) }
-    let laeuft = null;
+    // o: { manuell (Knopf: Hinweis zum Ergebnis, auch nach abgelehnter Anmeldung), uebernehmen (Abrufer-Sperre übergehen),
+    //      nurKurse (nur anmelden und Kursliste holen), weiter (setzt einen offenen Auftrag fort), fortschritt(x) }
+    // Ereignisse: start { manuell, weiter }, fortschritt (fort), fertig { manuell, ergebnis (b.art), text (Hinweis), weiterIn }.
+    // Ein Knopf während eines automatischen Laufs macht ihn zu seinem (Fortschritt, Hinweis, Auftrag) und meldet start erneut.
+    // Auftrag: Ein Knopf (manuell, nicht weiter) legt ihn neu an; nach dem Lauf entscheidet naechsterSchritt, ob und wann es
+    // weitergeht (die Oberfläche plant das über weiterIn). stoppen() beendet ihn, verwerfen() gibt einen toten Lauf auf.
+    let laeuft = null, laufO = null, stopp = null;
+    const auftragNeu = () => lokal(L.auftrag, { seit: iso(), versuche: 0, stapel: 0, geladen: 0 });
     const jetztHolen = (o) => {
-      if (laeuft) return laeuft;
       o = o || {};
-      abbrechen = false;
+      if (laeuft) {
+        if (o.manuell) {
+          if (!auftrag()) auftragNeu();
+          laufO.manuell = true;
+          melden({ art: "start", manuell: true, weiter: !!laufO.weiter });
+        }
+        return laeuft;
+      }
+      if (o.manuell && (!o.weiter || !auftrag())) auftragNeu();
+      const meins = stopp = { an: false, grund: "" };
+      laufO = o;
+      letzter = null; regung = ms();
       laeuft = (async () => {
         const b = neuerBericht(), t0 = ms(), beginn = iso();
-        melden({ art: "start" });
-        try { await lauf(o, b); }
+        try { await lauf(o, b, meins); }
         catch (e) {
           const art = (e && e.art) || "";
           b.art = art === "zugang" ? "zugang" : art === "abbruch" ? "abgebrochen" : "fehler";
-          b.grund = (e && e.grund) || "";
+          b.grund = art === "abbruch" ? meins.grund : (e && e.grund) || "";
           b.fehler = fehlerText(e);
           try { console.warn("ilias: " + b.fehler); } catch (x) { /* egal */ }
         }
-        try { nachLauf(b, beginn, t0, o); } catch (e) { /* Stand ist Nebensache */ }
-        laeuft = null;
-        melden({ art: "fertig" });
+        if (stopp !== meins) return b; // verworfen: ein neuer Lauf hat übernommen
+        try { nachLauf(b, beginn, t0); } catch (e) { /* Stand ist Nebensache */ }
+        let weiterIn = null;
+        const a = auftrag();
+        if (a) { const n = naechsterSchritt(a, b); lokal(L.auftrag, n.auftrag); weiterIn = n.inMs; }
+        laeuft = null; letzter = null; stopp = null;
+        // erst fertig (Fortschritt weg), dann der Hinweis zum Ergebnis
+        const text = meldungText(b, weiterIn);
+        melden({ art: "fertig", manuell: !!o.manuell, ergebnis: b.art, text, weiterIn });
+        if (o.manuell && meins.grund !== "trennen" && abh.melden) { try { abh.melden(text); } catch (e) { /* egal */ } }
         return b;
       })();
+      // erst jetzt: Hörer sehen status().laeuft (der Lauf meldet vor seinem ersten await nichts)
+      melden({ art: "start", manuell: !!o.manuell, weiter: !!o.weiter });
       return laeuft;
+    };
+    // Stoppen (Knopf im Hinweis oder Fenster) und Trennen: Auftrag weg, der Lauf endet beim nächsten Schritt
+    const stoppen = (grund) => { lokal(L.auftrag, null); if (stopp) { stopp.an = true; stopp.grund = grund || "stopp"; } };
+    // Toter Lauf (abgestorben): aufgeben, ohne auf ihn zu warten; wacht er auf, schreibt er nichts mehr. Der Auftrag bleibt.
+    const verwerfen = () => {
+      if (!laeuft) return;
+      stopp.an = true; stopp.grund = "verworfen";
+      stopp = null; laeuft = null; letzter = null;
+      melden({ art: "fertig", manuell: false, ergebnis: "verworfen", text: "", weiterIn: null });
     };
     const kurseAbrufen = async () => { const b = await jetztHolen({ nurKurse: true, manuell: false }); return b.kurse || (await kurse()); };
 
@@ -812,25 +945,29 @@ module.exports = function (ctx) {
       if (ex) text = "über deinen Uni-Abgleich";
       else if (!da) text = TEXT_ANMELDUNG_FOLGT;
       else if (!hatZugang()) text = "Nicht verbunden.";
-      else if (laeuft) text = "Lädt Unterlagen aus ILIAS …";
+      else if (laeuft) text = fortschrittAnzeige(letzter).text;
       else if (s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
       else if (s.fehler) text = "Fehler beim letzten Abruf." + (s.zuletzt ? ` Zuletzt erfolgreich ${vorText(s.zuletzt, ms())}.` : "");
       else if (s.anderes && !s.abrufer) { text = "Ein anderes Gerät lädt deine ILIAS-Unterlagen. Sie kommen über deinen Sync."; anderes = true; }
       else if (s.zuletzt) text = `Aktualisiert ${vorText(s.zuletzt, ms())}.`;
       else text = "Noch nicht abgerufen.";
-      if (verbunden && !ex && z.zuGross) text += ` ${z.zuGross} ${z.zuGross === 1 ? "Datei" : "Dateien"} über ${MAX_MB} MB nicht geladen.`;
+      if (verbunden && !ex && z.zuGross && !laeuft) text += ` ${z.zuGross} ${z.zuGross === 1 ? "Datei" : "Dateien"} über ${MAX_MB} MB nicht geladen.`;
       return {
         verbunden: !ex && verbunden, bereit: bereit(), extern: ex, laeuft: !!laeuft, zuletzt: s.zuletzt, versucht: s.versucht,
         fehler: s.fehler, gesperrt: !!s.gesperrt, neu: s.neu, rest: s.rest, dateien: z.dateien, kurse: z.kurse, zuGross: z.zuGross,
         grenzeMb: MAX_MB, abrufer: !!s.abrufer, anderes, benutzer: benutzer(), text: text.replace(/\.\./g, "."),
+        fortschritt: laeuft ? fortschrittAnzeige(letzter) : null,
       };
     };
 
     return {
       jetztHolen, kurseAbrufen, status, stand, protokoll, zugangSpeichern, zugangLoeschen, hatZugang, bereit, kurse, kursSetzen,
-      umbenannt, speichern, indexLesen, abbrechen: () => { abbrechen = true; },
+      umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen,
+      abbrechen: () => { if (stopp) { stopp.an = true; stopp.grund = "neu-geladen"; } },
+      still: () => !!laeuft && abgestorben(regung, ms()),
       get index() { return mem; },
       get laeuft() { return !!laeuft; },
+      get fortschritt() { return laeuft ? letzter : null; },
     };
   };
 
@@ -988,6 +1125,50 @@ module.exports = function (ctx) {
   const hoerer = ctx.bleibend("hoerer", () => new Set());
   const beobachten = (fn) => { if (typeof fn === "function") hoerer.add(fn); return () => hoerer.delete(fn); };
   const neuZeichnen = () => { try { if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen(); } catch (e) { /* egal */ } };
+  // Zeile unter Verbindungen und Knopf auf Unterlagen: nur den Stand ändern, nicht alles neu zeichnen
+  const standZeigen = () => { try { if (ctx.verbindungen && ctx.verbindungen.iliasStand) ctx.verbindungen.iliasStand(); } catch (e) { /* egal */ } };
+
+  // Fortschritt eines Laufs, den du gestartet hast (Knopf, Fenster, Einrichtung): EIN Hinweis ohne Ablaufzeit (Notice, 0) mit
+  // kurzem Text und dünnem Balken, der sich an Ort und Stelle ändert. Obsidian zeigt Hinweise auf iPhone und iPad oben, am PC
+  // oben rechts; nichts verdeckt Eingabefelder oder die Leiste unten, und es geht auch ohne Statusleiste. Antippen blendet ihn
+  // aus, der Abruf läuft weiter; ein weiterer Knopfdruck zeigt ihn wieder. Am Ende verschwindet er, danach kommt der Hinweis
+  // zum Ergebnis (melden). Automatische Läufe bleiben still. Er hängt am Motor, nicht an einem Fenster: einer für alle Ansichten.
+  // „Stoppen“ beendet den Abruf samt Auftrag (wie im Fenster); Wegtippen beendet nichts.
+  const fortschrittHinweis = () => {
+    let notiz = null, text = null, balken = null, aktiv = false, aus = false, weiter = false;
+    const schliessen = () => { if (notiz) { try { notiz.hide(); } catch (e) { /* schon weg */ } } notiz = null; text = null; balken = null; };
+    const weggetippt = () => !!notiz && !(text && text.isConnected);
+    const zeichnen = (x) => {
+      if (weggetippt()) { aktiv = false; schliessen(); return; } // ausgeblendet: still bis zum nächsten Knopfdruck
+      if (!notiz) {
+        if (!obs.Notice) return;
+        const f = document.createDocumentFragment();
+        const box = f.createDiv({ cls: "eba-ilias-fortschritt" });
+        const zeile = box.createDiv({ cls: "eba-ilias-fortschritt-zeile" });
+        text = zeile.createDiv({ cls: "eba-ilias-fortschritt-text" });
+        zeile.createEl("button", { text: "Stoppen", cls: "eba-ilias-fortschritt-stopp" }).addEventListener("click", () => { if (motorInst) motorInst.stoppen(); });
+        balken = box.createDiv({ cls: "eba-ilias-fortschritt-spur" }).createDiv({ cls: "eba-ilias-fortschritt-balken" });
+        notiz = new obs.Notice(f, 0);
+      }
+      const a = fortschrittAnzeige(x, weiter);
+      text.setText(a.kurz);
+      balken.toggleClass("unbestimmt", a.anteil == null);
+      balken.style.width = a.anteil == null ? "" : Math.round(Math.max(0.04, a.anteil) * 100) + "%";
+    };
+    return {
+      ereignis(x) {
+        if (aus || !x) return;
+        if (x.art === "start" && x.manuell) {
+          if (weggetippt()) schliessen();
+          aktiv = true; weiter = !!x.weiter;
+          zeichnen(motorInst ? motorInst.fortschritt : null);
+        } else if (x.art === "fortschritt" && aktiv) zeichnen(x);
+        else if (x.art === "fertig") { aktiv = false; schliessen(); }
+      },
+      weg() { aus = true; aktiv = false; schliessen(); },
+    };
+  };
+  const hinweis = fortschrittHinweis();
   const eba = () => { try { return ctx.user.eba(ctx); } catch (e) { return null; } };
   const obsidianAbh = () => ({
     io: obsidianIo(), lokal: lokalObs, geheim: geheimObs, geheimId, anmeldung: anmeldungFinden, quelle: quelleFinden,
@@ -1002,11 +1183,25 @@ module.exports = function (ctx) {
     melden: (t) => { if (obs.Notice) new obs.Notice(t, 6000); },
     geaendert: (x) => {
       for (const h of Array.from(hoerer)) { try { h(x); } catch (e) { /* Hörer egal */ } }
-      if (!x || x.art !== "fortschritt") neuZeichnen();
+      hinweis.ereignis(x);
+      if (x && x.art === "fertig" && x.weiterIn != null) weiterPlanen(x.weiterIn);
+      if (x && x.art === "fortschritt") standZeigen(); else neuZeichnen();
     },
   });
   let motorInst = null;
   const motor = () => motorInst || (motorInst = erzeugen(obsidianAbh()));
+
+  // Offenen Auftrag fortsetzen (Fehler, nächster Stapel, Start, zurück in der App): wie dein Knopf, mit Hinweis. Nur wenn bereit
+  // (Zugang da, Anmeldung nicht abgelehnt, kein eigener Uni-Abgleich); ein toter Lauf (still) wird vorher verworfen.
+  let weiterZeit = null;
+  const fortsetzen = () => {
+    weiterZeit = null;
+    const m = motor();
+    if (!m.auftrag() || !m.bereit()) return;
+    if (m.laeuft) { if (!m.still()) return; m.verwerfen(); }
+    m.jetztHolen({ manuell: true, weiter: true });
+  };
+  const weiterPlanen = (ms) => { if (weiterZeit) ctx.stopp(weiterZeit); weiterZeit = ctx.zeit(fortsetzen, ms); };
 
   // ---------- Für andere Skripte (Oberfläche) und Tests ----------
   // status() → { verbunden, bereit, extern, laeuft, zuletzt, versucht, fehler, gesperrt, neu, rest, dateien, kurse, zuGross,
@@ -1014,7 +1209,9 @@ module.exports = function (ctx) {
   //   holt die Abrufer-Sperre her);
   // zugangSpeichern(benutzer, geber, { pruefen }) → { ok, fehler? }; kurse() → [{ refId, titel, code, aktiv, zuletzt,
   // dateien }]; kursSetzen(refId, an); kurseAbrufen() (anmelden + Kursliste, ohne Downloads); beobachten(fn) → abmelden
-  // (fn({ art: start | fortschritt | fertig | zugang | kurse, text? })).
+  // (fn({ art: start | fortschritt | fertig | zugang | kurse, … }), Felder siehe jetztHolen und fort); fortschritt (letzter
+  // Fortschritt des laufenden Abrufs oder null); fortschrittAnzeige(x) → Texte und Anteil dazu. status().fortschritt =
+  // fortschrittAnzeige des laufenden Abrufs (sonst null).
   const api = {
     status: () => motor().status(),
     jetztHolen: (o) => motor().jetztHolen(Object.assign({ manuell: true }, o || {})),
@@ -1032,23 +1229,33 @@ module.exports = function (ctx) {
     quelleSetzen: (fn) => { quelleSlot.fn = typeof fn === "function" ? fn : null; },
     get UNI() { const n = modulVon("ilias-netz"); return (n && n.UNI) || null; },
     get laeuft() { return !!(motorInst && motorInst.laeuft); },
+    get fortschritt() { return motorInst ? motorInst.fortschritt : null; },
+    stoppen: () => motor().stoppen(),
+    auftrag: () => motor().auftrag(),
+    fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
     erzeugen, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz,
-    K: { INDEX, ABRUF, MAX_MB, NEU_MOBIL, NEU_PC, ANFRAGEN, ABSTAND_MS, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT },
+    K: { INDEX, ABRUF, MAX_MB, NEU_MOBIL, NEU_PC, ANFRAGEN, ABSTAND_MS, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL },
   };
   ctx.ilias = api;
 
   const registrieren = () => {
+    ctx.aufraeumen(() => hinweis.weg());
     // Automatischer Lauf: 20 s + Zufall 0–2 Min. nach dem Einlesen, dann stündlich, zurück in der App nach über 60 Min.
     // Jeder Takt prüft erst bereit() (Anmeldung vorhanden, Zugang gespeichert, nicht abgelehnt, kein eigener Uni-Abgleich).
     const lauf = () => { const m = motor(); if (!plugin().testIliasAus && m.bereit() && !m.laeuft) m.jetztHolen({}); };
     const planen = () => ctx.zeit(() => { lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
     ctx.dom(document, "visibilitychange", () => {
       if (document.visibilityState !== "visible" || !motor().bereit()) return;
-      const v = Date.parse(motor().stand().versucht || "");
+      const m = motor();
+      // offener Auftrag: toter Lauf (im Hintergrund gestorben) oder keiner geplant → gleich weiter
+      if (m.auftrag() && (m.laeuft ? m.still() : !weiterZeit)) { weiterPlanen(3000); return; }
+      const v = Date.parse(m.stand().versucht || "");
       if (!isNaN(v) && Date.now() - v > NACHHOLEN) ctx.zeit(lauf, 5000);
     });
+    // Offener Auftrag nach dem Start (App oder Plugin neu): nach 20–60 s weiter, mit Hinweis
+    if (motor().auftrag()) weiterPlanen(20000 + Math.floor(Math.random() * 40000));
     if (app.metadataCache.initialized || app.metadataCache.resolved) planen();
     else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); planen(); }); }
     // Umbenennen im Tresor: Index sofort im Speicher, geschrieben entprellt (ganze Ordner melden viele Dateien)

@@ -98,6 +98,8 @@ Alma verbinden: Einstellungen & Hilfe → Verbindungen.
 
 > [!eba-karte|woche-danach]- Woche danach
 > > [!eba-kennzahlen|woche]
+> > ```eba-schloss alma
+> > ```
 > > ```base
 > > filters:
 > >   and:

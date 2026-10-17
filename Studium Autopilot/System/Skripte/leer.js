@@ -2,7 +2,8 @@
 // außer dem Gerüst der Vorlage nichts steht (Überschriften, leere Aufzählungspunkte, Beschriftungen wie „Ansatz:“ oder
 // „Kernaussagen:“, der Kopf-Codeblock, Callouts der Vorlage), wandert sie in den Vault-Papierkorb (`.trash/`, wiederherstellbar).
 // Termine, Module, Stundenplan-Einträge, Begleitnotizen sind ausgenommen: ihr Inhalt steht in den Eigenschaften.
-// „Verlassen“ = eine andere Notiz wird aktiv oder der Tab schließt (Ereignis file-open). Geprüft wird 2,5 s später, und nur,
+// „Verlassen“ = eine andere Notiz wird aktiv oder der Tab schließt (Ereignis file-open; der Wechsel zu Folien, PDFs oder
+// Bildern zählt nicht). Geprüft wird 2,5 s später, und nur,
 // wenn die Notiz in keinem Tab mehr sichtbar ist (geteilte Ansicht, Seitenleiste am PC: nichts passiert). Text aus einem noch
 // offenen Editor, sonst von der Platte (Obsidian schreibt verzögert). Alle Geräte, kein Node-API, keine Lookbehind-Regex.
 // Erweiterung: registrieren() meldet das Ereignis über ctx.an an; beim Hot-Reload meldet das Plugin die alte Fassung ab.
@@ -26,7 +27,7 @@ module.exports = function (ctx) {
       if (callout && /^\s*>/.test(s)) continue;
       callout = false;
       if (!s.trim() || /^\s*#{1,6}\s/.test(s)) continue;
-      let r = s.replace(/^\s*(?:[-*+]|\d+[.)])\s+/, "").replace(/^\[[ xX]\]\s*/, "");
+      let r = s.replace(/^\s*(?:[-*+]|\d+[.)])(?:\s+|$)/, "").replace(/^\[[ xX]\]\s*/, ""); // auch „-“ ohne Leerzeichen
       r = r.replace(/<%[\s\S]*?%>/g, "").replace(/%%[\s\S]*?%%/g, "").trim();
       if (/^\*\*[^*\n]{1,40}\*\*:?$/.test(r) || /^[\wÄÖÜäöüß-]{1,30}:$/.test(r)) r = "";
       if (r) return false;
@@ -45,7 +46,7 @@ module.exports = function (ctx) {
   const pruefen = async (f) => {
     try {
       if (!f || f.extension !== "md" || app.vault.getAbstractFileByPath(f.path) !== f) return false;
-      if (/Unbenannt/.test(f.basename)) return false;                      // Vorlage läuft noch (Knopf); die räumt selbst auf
+      if (/Unbenannt|Untitled/.test(f.basename)) return false;             // Vorlage läuft noch (Knopf); die räumt selbst auf
       if (TYPEN.indexOf(String(typVon(f) || "").toLowerCase()) < 0) return false;
       if (app.workspace.getActiveFile() === f) return false;               // doch wieder offen
       if (blaetter(f).some((l) => l.view.containerEl && l.view.containerEl.isShown && l.view.containerEl.isShown())) return false;
@@ -60,7 +61,9 @@ module.exports = function (ctx) {
     let letzte = app.workspace.getActiveFile();
     ctx.an(app.workspace, "file-open", (f) => {
       const alt = letzte; letzte = f;
-      if (alt && alt !== f) ctx.zeit(() => pruefen(alt), WARTEN);
+      // Wechsel zu Folien oder Bildern (PDF, PNG …) zählt nicht als Verlassen: Wer vor der Mitschrift die Folien öffnet,
+      // kommt zurück. Geprüft wird nur beim Wechsel zu einer anderen Notiz oder beim Schließen.
+      if (alt && alt !== f && (!f || f.extension === "md")) ctx.zeit(() => pruefen(alt), WARTEN);
     });
   };
 

@@ -3773,9 +3773,10 @@ body.is-phone .eba-form-hilfe { grid-column: 1; }
 
 /* ---------- 44. Musterstudienpläne (musterplan.js, ```eba-musterplan```) ----------
    Eigene Darstellung: Spalten je Fachsemester, Modul-Chips (Rand), Platzhalter gestrichelt, Bachelorarbeit Akzent.
-   Breit: sechs Spalten; schmal (iPhone, schmale Karte): untereinander. */
-.eba-mp + .eba-mp { margin-top: 22px; }
-.eba-mp-titel { margin: 0 0 8px; font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--eba-muted); }
+   Breit: sechs Spalten; schmal (iPhone, schmale Karte): untereinander. Variantentitel als Zwischenüberschrift (kleiner als ##),
+   Hinweise einmal unter allen Plänen: gemeinsame als Liste, darunter je Variante eine Spalte. */
+.eba-mp + .eba-mp { margin-top: 28px; }
+.eba-mp-titel { margin: 0 0 10px; font-family: var(--eba-font-display); font-size: 1.15em; font-weight: var(--eba-display-weight); letter-spacing: -0.01em; line-height: 1.25; color: var(--eba-text); }
 .eba-mp { container-type: inline-size; }
 .eba-mp-raster { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
 @container (max-width: 1080px) { .eba-mp-raster { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -3805,10 +3806,14 @@ a.eba-mp-chip:hover { border-color: color-mix(in srgb, var(--eba-accent) 55%, va
 .eba-mp-chip.abschluss { background: var(--eba-accent-soft); border-color: color-mix(in srgb, var(--eba-accent) 45%, transparent); }
 .eba-mp-summe { margin-top: 2px; padding-top: 5px; border-top: 1px solid var(--eba-border); text-align: right; font-size: 11.5px; font-weight: 600; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
 .eba-mp-gesamt { margin: 8px 2px 0; text-align: right; font-size: 12px; font-weight: 650; }
-.eba-mp-hinweise { margin: 10px 0 0; padding-left: 1.1em; font-size: 12.5px; line-height: 1.5; color: var(--eba-muted); }
+.eba-mp-hinweisbox { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--eba-border); font-size: 12.5px; line-height: 1.5; color: var(--eba-muted); }
+.eba-mp-hinweisbox .eba-mp-hinweise { margin: 0; padding-left: 1.1em; } /* zwei Klassen: schlägt den Listenabstand von .markdown-rendered ul */
+.eba-mp-je-variante { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 24px; margin-top: 16px; }
+.eba-mp-je-variante-titel { margin: 0 0 3px; font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--eba-muted); }
 .eba-mp-quelle { margin: 12px 0 0 !important; font-size: 12px; color: var(--eba-muted); }
 body.is-phone .eba-mp-raster { grid-template-columns: minmax(0, 1fr); }
 body.is-phone .eba-mp-liste { flex: none; }
+body.is-phone .eba-mp-titel { font-size: 1.05em; } /* kleiner als das ## auf dem iPhone (1,2em) */
 /* ---------- Ende Abschnitt 44 ---------- */
 
 /* ---------- 45. Einrichtung beim ersten Start (einrichtung.js, seit 0.3.0) ----------
@@ -4020,6 +4025,19 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 /* Schloss auf Unterlagen steht allein (nicht in einer Karte): Abstand zur Kennzahlen-Karte darunter */
 .eba-s-unterlagen .block-language-eba-schloss.eba-schloss-zu { margin-bottom: 16px; }
 .eba-ei-erfolg.leise { background: var(--eba-card-bg); color: var(--eba-muted); font-weight: 400; border: 1px solid var(--eba-border); }
+/* Fortschritt eines Abrufs, den du gestartet hast (ilias.js, fortschrittHinweis): Hinweis von Obsidian (oben, auf iPhone/iPad
+   über die volle Breite) mit kurzem Text, Stoppen und dünnem Balken. Antippen blendet ihn aus; Stoppen mindestens 44 px. Ohne
+   bekannte Zahl wandert ein kurzes Stück hin und her (nicht bei „Bewegung reduzieren“). */
+.notice:has(.eba-ilias-fortschritt) > .notice-message { align-self: stretch; flex: 1 1 auto; width: 100%; }
+.eba-ilias-fortschritt { display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: min(260px, 70vw); }
+.eba-ilias-fortschritt-zeile { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.eba-ilias-fortschritt-text { font-variant-numeric: tabular-nums; }
+.eba-ilias-fortschritt-stopp { flex: none; min-height: 44px; padding: 0 14px; }
+.eba-ilias-fortschritt-spur { height: 4px; border-radius: 2px; background: var(--background-modifier-border); overflow: hidden; }
+.eba-ilias-fortschritt-balken { height: 100%; width: 0; border-radius: 2px; background: var(--interactive-accent); transition: width .3s ease; }
+.eba-ilias-fortschritt-balken.unbestimmt { width: 30%; animation: eba-ilias-hin 1.4s ease-in-out infinite alternate; }
+@keyframes eba-ilias-hin { from { transform: translateX(-100%); } to { transform: translateX(333%); } }
+@media (prefers-reduced-motion: reduce) { .eba-ilias-fortschritt-balken.unbestimmt { animation: none; transform: none; } }
 /* ---------- Ende Abschnitt 49 ---------- */
 
 /* ---------- 50. Übungs- und Tutoriengruppen (gruppen.js, Codeblock eba-gruppen; seit 17.10.2026) ----------
@@ -4047,3 +4065,23 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 /* iPhone: ohne Pille, sonst wird die Spalte Gr. zu breit; Akzentstrich und Kopf („im Stundenplan: Gr. 2“) bleiben */
 body.is-phone .eba-gr-pille { display: none; }
 /* ---------- Ende Abschnitt 50 ---------- */
+
+/* ---------- 51. Neuigkeiten zum Update (update.js: Hinweis beim Öffnen, Fenster „Was ist neu“; seit 0.4.1) ----------
+   Hinweis von Obsidian (Notice, oben; iPhone/iPad volle Breite) mit einem Satz und den Knöpfen „Aktualisieren“ und
+   „Was ist neu“ (iPhone/iPad mindestens 44 px). Fenster: Abschnitte aus dem Changelog, neueste zuerst, eigener Bildlauf. */
+.eba-toast { display: flex; flex-direction: column; gap: 8px; min-width: min(280px, 72vw); }
+.eba-toast-text { font-weight: 600; line-height: 1.4; }
+.eba-toast-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
+.eba-toast .eba-toast-knopf { flex: 1 1 auto; height: auto; min-height: 34px; padding: 0 14px; font-family: inherit; white-space: nowrap; }
+body.is-mobile .eba-toast .eba-toast-knopf { min-height: 44px; font-size: 14.5px; }
+.modal.eba-modal-neu .eba-neu-liste { max-height: min(56vh, 520px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.eba-modal-neu .eba-neu-version + .eba-neu-version { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--eba-border); }
+.eba-modal-neu .eba-neu-titel { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
+.eba-modal-neu .eba-neu-text { font-size: 14px; line-height: 1.5; }
+.eba-modal-neu .eba-neu-text p { margin: 6px 0; }
+.eba-modal-neu .eba-neu-text ul { margin: 4px 0; padding-left: 1.3em; }
+.eba-modal-neu .eba-neu-text li { margin: 3px 0; }
+body.is-mobile .eba-modal-neu .modal-button-container button { min-height: 44px; }
+/* Dashboard-Zeile (Abschnitt 46) mit drei Knöpfen: auf dem iPhone in einer Reihe, jeder ≥ 44 px, etwas schmaler gepolstert */
+body.is-phone .eba-uh .eba-uh-knopf { flex: 1 1 auto; padding: 0 10px !important; white-space: nowrap; }
+/* ---------- Ende Abschnitt 51 ---------- */

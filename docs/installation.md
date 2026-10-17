@@ -85,7 +85,7 @@ Angaben gilt das aktuelle Semester als dein erstes.
 ### Alma verbinden (Stundenplan)
 
 1. In der Einrichtung bei **Stundenplan aus Alma** (später: **Einstellungen & Hilfe** → **Verbindungen** → **Verbinden**).
-2. **Alma** im Browser öffnen und anmelden, dann **Mein Studium** → **Stundenplan**.
+2. Im Fenster auf **Alma** tippen und anmelden, dann auf **Deinen Stundenplan** (in Alma: **Mein Studium** → **Stundenplan**).
 3. **Daten für iCalendar (ics) exportieren** → **Link kopieren**.
 4. Link in Obsidian einfügen und **Verbinden** tippen.
 

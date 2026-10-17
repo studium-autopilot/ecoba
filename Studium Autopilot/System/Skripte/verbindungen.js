@@ -76,15 +76,19 @@ module.exports = function (ctx) {
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
   // ---------- Registry ----------
+  const ALMA_START = "https://alma.uni-tuebingen.de/alma/pages/cs/sys/portal/hisinoneStartPage.faces";
+  const ALMA_STUNDENPLAN = "https://alma.uni-tuebingen.de/alma/pages/plan/individualTimetable.xhtml?_flowId=individualTimetableSchedule-flow";
   const VERBINDUNGEN = {
     alma: {
       id: "alma", name: "Alma-Stundenplan", art: "link",
       satz: "Verbinde Alma, dann siehst du hier deine Woche.",
       vorschau: "woche", anreiz: "Deine Woche auf einen Blick",
-      erklaerung: "Der Link enthält kein Passwort und zeigt nur deinen Stundenplan. Er bleibt nur auf diesem Gerät. In Alma kannst du ihn jederzeit erneuern.",
+      erklaerung: "Der Link enthält kein Passwort und zeigt nur deinen Stundenplan. Er bleibt nur auf diesem Gerät, und in Alma kannst du ihn jederzeit erneuern. Den Stundenplan findest du in Alma auch unter Mein Studium → Stundenplan.",
+      // Links geprüft am 17.10.2026 (angemeldet: Seite „Stundenplan für …“ mit „Daten für iCalendar (ics) exportieren“). Ohne
+      // Anmeldung zeigt der Stundenplan-Link die Anmeldung, danach aber die Startseite; darum zuerst Alma, dann der Stundenplan.
       schritte: [
-        "**Alma** öffnen und anmelden.",
-        "**Mein Studium** → **Stundenplan** öffnen.",
+        `[Alma](${ALMA_START}) öffnen und anmelden.`,
+        `[Deinen Stundenplan](${ALMA_STUNDENPLAN}) öffnen.`,
         "**Daten für iCalendar (ics) exportieren** wählen.",
         "**Link kopieren** und unten einfügen.",
       ],
@@ -116,9 +120,8 @@ module.exports = function (ctx) {
       kurz: "Deine Kursdateien aus ILIAS landen automatisch in Unterlagen.",
       schritte: [
         "Benutzername und Passwort von ILIAS eingeben.",
-        "**Verbinden** tippen.",
+        "**Verbinden** tippen. Deine Dateien kommen gleich danach, neue später von selbst.",
         "Kurse wählen. Kurse mit Modulcode sind schon an.",
-        "**Jetzt holen** tippen. Danach kommen neue Dateien von selbst.",
       ],
       datenschutz: "Dein Passwort bleibt verschlüsselt auf diesem Gerät und geht nur an die Uni.",
       erklaerung: "Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Videos und Dateien über 50 MB bleiben in ILIAS. Umbenennen ist sicher, und was du löschst, kommt nicht wieder.",
@@ -196,8 +199,24 @@ module.exports = function (ctx) {
     m.open();
   });
 
-  // Text mit **fett** (Bedienelemente), ohne innerHTML
-  const fett = (el, s) => { String(s || "").split("**").forEach((t, i) => { if (t) { if (i % 2) el.createEl("b", { text: t }); else el.appendText(t); } }); };
+  // Text mit **fett** (Bedienelemente) und [Link](https://…) → [{ art: text | fett | link, text, href? }]; nur https-Links
+  const textTeile = (s) => {
+    const aus = [];
+    for (const teil of String(s || "").split(/(\[[^\]]+\]\(https:\/\/[^)\s]+\))/)) {
+      const m = teil.match(/^\[([^\]]+)\]\((https:\/\/[^)\s]+)\)$/);
+      if (m) { aus.push({ art: "link", text: m[1], href: m[2] }); continue; }
+      teil.split("**").forEach((t, i) => { if (t) aus.push({ art: i % 2 ? "fett" : "text", text: t }); });
+    }
+    return aus;
+  };
+  // … ohne innerHTML ins Element; Links öffnen im Browser (wie die anderen externen Links: external-link, _blank)
+  const fett = (el, s) => {
+    for (const t of textTeile(s)) {
+      if (t.art === "link") el.createEl("a", { text: t.text, href: t.href, cls: "external-link", attr: { target: "_blank", rel: "noopener" } });
+      else if (t.art === "fett") el.createEl("b", { text: t.text });
+      else el.appendText(t.text);
+    }
+  };
   const schritteZeigen = (c, v) => {
     if (!v.schritte || !v.schritte.length) return;
     const ol = c.createEl("ol", { cls: "eba-modal-schritte" });
@@ -323,7 +342,9 @@ module.exports = function (ctx) {
 
   // ILIAS-Unterlagen (seit 0.4.0): ein Fenster für alles; zeigen() zeichnet es je nach Stand neu.
   //   Nicht verbunden oder Anmeldung abgelehnt: Satz, Schritte, Benutzername, Passwort, Datenschutz-Zeile, Meldung, Verbinden.
-  //   Verbunden: Stand, Fortschritt eines laufenden Abrufs, Kurse mit Schaltern, Jetzt holen (bzw. Hier laden), Trennen.
+  //   Verbunden: Stand, Kurse mit Schaltern, Jetzt holen (bzw. Hier laden), Trennen. Während eines Abrufs statt dessen der
+  //   Fortschritt („Lädt 12 von 40“), ein Satz, dass er im Hintergrund weiterläuft, Schließen und Stoppen.
+  //   Nach dem ersten Verbinden startet der erste Abruf gleich (wie Jetzt holen), wenn ein Kurs an ist.
   //   Eigener Uni-Abgleich, Obsidian zu alt (kein Schlüsselbund) oder Anmeldebaustein fehlt: nur ein Satz.
   // Passwort – steht nur im Feld (type=password). zugangSpeichern bekommt eine Funktion, die das Feld beim Senden liest, prüft
   // den Zugang mit einer Anmeldung und speichert nur bei Erfolg; danach wird das Feld geleert (auch bei Fehler). Die Hinweise
@@ -331,7 +352,7 @@ module.exports = function (ctx) {
   // iPhone/iPad (sonst springt die Tastatur auf). Kurstitel (können Einschreibepasswörter enthalten) nur hier und in der Zeile,
   // nie in Hinweisen oder in der Konsole.
   class IliasFenster extends Modal {
-    constructor(v) { super(app); this.v = v; this.verbindet = false; this.ansicht = ""; this.meldung = null; this.felder = null; this.weg = null; }
+    constructor(v) { super(app); this.v = v; this.verbindet = false; this.ansicht = ""; this.meldung = null; this.felder = null; this.weg = null; this.gefunden = null; }
     onOpen() {
       this.modalEl.addClass("eba-modal", "eba-modal-verbinden", "eba-modal-ilias");
       // Abruf (auch ein automatischer), während das Fenster offen ist: Fortschritt zeigen, an Start und Ende neu zeichnen
@@ -417,24 +438,30 @@ module.exports = function (ctx) {
       try { liste = await ctx.ilias.kurseAbrufen(); } catch (e) { liste = null; }
       this.verbindet = false;
       new Notice(`${this.v.name} verbunden.`, 5000);
+      this.gefunden = Array.isArray(liste) ? liste.length : 0;
+      // erster Abruf gleich, im Hintergrund (Hinweis mit Fortschritt; das Fenster darf zu)
+      if (Array.isArray(liste) && liste.some((k) => k.aktiv)) ctx.ilias.jetztHolen().catch(() => null);
       neuZeichnen();
       if (!this.offen()) return;
       this.contentEl.empty();
       this.meldung = null; this.felder = null;
-      this.verwaltenZeigen(this.v.status(), Array.isArray(liste) ? liste : null, true);
+      this.verwaltenZeigen(this.v.status(), Array.isArray(liste) ? liste : null);
     }
-    verwaltenZeigen(s, liste, neu) {
+    verwaltenZeigen(s, liste) {
       const v = this.v, c = this.contentEl;
       this.ansicht = "verwalten";
       this.titleEl.setText(v.name);
       c.createEl("p", { cls: "eba-modal-marke" }).innerHTML = `<span class="eba-pill ok">verbunden</span>`;
-      if (neu) {
-        const n = liste ? liste.length : 0;
+      if (this.gefunden != null) {
+        const n = this.gefunden;
         c.createEl("p", { cls: "eba-modal-erfolg", text: `✓ Verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden.` : "."}` });
       }
       c.createEl("p", { cls: "eba-modal-text", text: [s.laeuft ? "" : s.text, s.benutzer ? `Angemeldet als ${s.benutzer}.` : ""].filter(Boolean).join(" ") });
       this.meldung = c.createEl("p", { cls: "eba-modal-meldung" });
-      if (s.laeuft) this.melden(s.text, "");
+      if (s.laeuft) {
+        this.melden(s.text, "");
+        c.createEl("p", { cls: "eba-modal-hinweis", text: "Läuft im Hintergrund weiter. Du kannst das Fenster schließen." });
+      }
       c.createEl("p", { cls: "eba-modal-abschnitt", text: "Deine Kurse" });
       const box = c.createDiv({ cls: "eba-modal-schalter eba-modal-kurse" });
       const kurseZeigen = (l) => {
@@ -452,15 +479,16 @@ module.exports = function (ctx) {
       else ctx.ilias.kurse().then((l) => { if (this.offen()) kurseZeigen(l); }, () => kurseZeigen([]));
       mehrZeigen(c, v.erklaerung);
       const k = this.knoepfe();
+      // Läuft ein Abruf: Schließen und Stoppen (das Ende zeichnet das Fenster über ereignis() neu, den Hinweis zeigt ilias.js)
+      if (s.laeuft) {
+        k.createEl("button", { text: "Schließen", cls: "mod-cta" }).addEventListener("click", () => this.close());
+        k.createEl("button", { text: "Stoppen" }).addEventListener("click", () => ctx.ilias.stoppen());
+        return;
+      }
       const los = k.createEl("button", { text: s.anderes ? "Hier laden" : "Jetzt holen", cls: "mod-cta" });
-      if (s.laeuft) { los.disabled = true; los.setText("Lädt …"); }
       k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: v.id }); });
-      // Start und Ende des Abrufs zeichnen das Fenster über ereignis() neu; den Hinweis zum Ergebnis zeigt ilias.js
-      los.addEventListener("click", () => {
-        if (los.disabled) return;
-        los.disabled = true; los.setText("Lädt …");
-        ctx.ilias.jetztHolen({ uebernehmen: !!s.anderes }).catch(() => null).then(() => { neuZeichnen(); if (this.offen() && this.ansicht === "verwalten") this.zeigen(); });
-      });
+      // Start zeichnet das Fenster über ereignis() neu (Fortschritt, Schließen, Stoppen)
+      los.addEventListener("click", () => { ctx.ilias.jetztHolen({ uebernehmen: !!s.anderes }).catch(() => null); });
     }
   }
 
@@ -584,7 +612,7 @@ module.exports = function (ctx) {
       const zeile = liste.createDiv({ cls: "eba-vb" + (st.zu ? " zu" : "") });
       zeile.setAttr("data-id", v.id);
       zeile.innerHTML = `<span class="eba-vb-symbol ${st.ton || "leise"}" aria-hidden="true">${svg(st.symbol)}</span>`
-        + `<span class="eba-vb-text"><b>${esc(v.name)} ${st.pille}</b><span class="eba-vb-status">${st.html != null ? st.html : esc(st.text)}`
+        + `<span class="eba-vb-text"><b>${esc(v.name)} ${st.pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${st.html != null ? st.html : esc(st.text)}</span>`
         + (mehr ? ` <a class="eba-vb-mehr" href="${ctx.link("verbinden", { id: v.id })}">Mehr erfahren</a>` : "") + `</span></span>`
         + `<span class="eba-vb-knoepfe">${knoepfe}</span>`;
     }
@@ -606,10 +634,39 @@ module.exports = function (ctx) {
     }
   };
 
+  // Knopf „Aus ILIAS holen“ auf Unterlagen (Link in derselben Karte): sichtbar, wenn verbunden (CSS über eba-ilias-an); während
+  // eines Abrufs heißt er „Lädt 12 von 40“ bzw. „Lädt …“. Ist der Block noch nicht im Dokument, einmal kurz danach.
+  const iliasKnopf = (inst) => {
+    const s = VERBINDUNGEN.ilias.status();
+    inst.el.toggleClass("eba-ilias-an", !!s.verbunden);
+    const karte = inst.el.closest(".callout-content");
+    const a = karte && karte.querySelector('a[href*="aktion=ilias-holen"]');
+    if (!a) {
+      if (s.laeuft && !inst.spaeter) { inst.spaeter = true; ctx.zeit(() => { inst.spaeter = false; if (inst.el.isConnected) iliasKnopf(inst); }, 150); }
+      return;
+    }
+    if (!a.hasAttribute("data-eba-text")) a.setAttribute("data-eba-text", a.textContent);
+    a.setText(s.laeuft && s.fortschritt ? s.fortschritt.knopf : a.getAttribute("data-eba-text"));
+  };
+  // Fortschritt eines Abrufs (ilias.js, je Schritt): nur Zeile und Knopf ändern, nicht alles neu zeichnen
+  const iliasStand = () => {
+    const s = ctx.ilias ? ctx.ilias.status() : null;
+    if (!s || !s.verbunden || !s.laeuft) return;
+    for (const b of bloecke) {
+      for (const inst of b.instanzen()) {
+        if (inst.art === "ilias-knopf") iliasKnopf(inst);
+        else if (inst.art === "uebersicht") {
+          const el = inst.el.querySelector('.eba-vb[data-id="ilias"] .eba-vb-stand');
+          if (el) el.setText(s.text);
+        }
+      }
+    }
+  };
+
   const zeichnen = (inst) => {
     if (inst.art === "uebersicht") uebersicht(inst.el);
     else if (inst.art === "alma-knoepfe") almaKnoepfe(inst.el);
-    else if (inst.art === "ilias-knopf") inst.el.toggleClass("eba-ilias-an", !!VERBINDUNGEN.ilias.status().verbunden);
+    else if (inst.art === "ilias-knopf") iliasKnopf(inst);
     else schlossKarte(inst.el, inst.id);
   };
 
@@ -664,7 +721,8 @@ module.exports = function (ctx) {
   };
 
   // Für andere Skripte (z. B. ein Raster, das selbst zeichnet)
-  ctx.verbindungen = { liste: VERBINDUNGEN, holen, svg, gesperrt: (id) => { const v = holen(id); return v ? v.gesperrt() : false; }, schlossKarte, fensterOeffnen, neuZeichnen,
+  ctx.verbindungen = { liste: VERBINDUNGEN, holen, svg, gesperrt: (id) => { const v = holen(id); return v ? v.gesperrt() : false; }, schlossKarte, fensterOeffnen, neuZeichnen, iliasStand, fett, textTeile,
+    ALMA: { start: ALMA_START, stundenplan: ALMA_STUNDENPLAN },
     get fenster() { return fenster; } }; // offenes Verbinden-/Info-Fenster (für Tests)
 
   const registrieren = () => {

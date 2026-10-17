@@ -222,7 +222,7 @@ test("Manifest: gruppen.json ist bekannt (Prüfsumme, Höchstgröße)", () => {
 });
 
 // Abruf mit Testquelle: Gruppen holt jedes Gerät selbst, auch wenn ein anderes Gerät die Termine schreibt
-test("Abruf: gruppen.json wird gerätelokal übernommen, auch ohne Abrufer-Rolle; falsche Prüfsumme → nichts", async () => {
+test("Abruf: gruppen.json wird gerätelokal übernommen, auch ohne Abrufer-Rolle; falsche Prüfsumme → alter Stand, Warnung", async () => {
   const crypto = require("node:crypto");
   const speicher = {};
   const quelle = {};
@@ -255,10 +255,45 @@ test("Abruf: gruppen.json wird gerätelokal übernommen, auch ohne Abrufer-Rolle
   // gleiche Prüfsumme: nicht neu holen, nicht neu zeichnen
   await ZZ.abrufen({});
   assert.equal(gezeichnet, 1);
-  // falsche Prüfsumme: Fehler, alter Stand bleibt
+  // falsche Prüfsumme: alter Stand bleibt, nur eine Warnung (der Lauf geht weiter)
   setzen({ schema: 1, gruppen: [] }, true);
   const b3 = await ZZ.abrufen({});
-  assert.equal(b3.art, "fehler");
-  assert.match(b3.fehler, /Prüfsumme von gruppen\.json/);
+  assert.equal(b3.art, "anderes-geraet");
+  assert.equal(b3.fehler, "");
+  assert.match(b3.warnung, /Prüfsumme von gruppen\.json/);
+  assert.equal(ZZ.gruppen().gruppen.length, 1);
+});
+
+// Kaputte gruppen.json hält Termine und Semesterdaten nicht an; verworfene Gruppen bleiben im Bericht
+test("Abruf: Fehler in gruppen.json → Termine werden trotzdem übernommen", async () => {
+  const crypto = require("node:crypto");
+  const speicher = {};
+  const quelle = {};
+  const geschrieben = {};
+  const L = laden("zentral", {
+    frontmatter: { "System/Einstellungen.md": {} },
+    kontext: { plugin: { testZentralAus: true, testQuelle: async (n) => quelle[n] }, modell: { daten: () => ({ module: [], fachsemester: 1 }) } },
+  });
+  const app = L.ctx.app;
+  app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
+  app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = JSON.stringify(v); };
+  app.vault.create = async (p, t) => { geschrieben[p] = t; return { path: p }; };
+  const ZZ = L.ctx.zentral;
+  const datei = (name, daten) => { quelle[name] = JSON.stringify(daten); const b = Buffer.from(quelle[name], "utf8"); return { sha256: crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length }; };
+  const termine = datei("termine.json", { schema: 1, termine: [{ id: "kaputt", titel: "<b>x</b>", datum: "2026-11-02", kategorie: "Frist", status: "offiziell" }] });
+  const gruppen = datei("gruppen.json", { schema: 1, gruppen: [gruppe(), gruppe({ id: "kaputt-g", tag: "So" })] });
+  quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-17T09:00:00Z", dateien: { "termine.json": termine, "gruppen.json": gruppen } });
+  // gültige Gruppen: verworfene Gruppe und verworfener Termin stehen beide im Bericht
+  const b1 = await ZZ.abrufen({});
+  assert.equal(b1.art, "ok");
+  assert.deepEqual(b1.verworfen.map((v) => v.id).sort(), ["gruppe kaputt-g", "kaputt"]);
+  assert.ok(geschrieben["System/Daten/abruf.json"], "abruf.json geschrieben (Abrufer)");
+  // falsche Prüfsumme der Gruppen: Termine laufen weiter, nur Warnung
+  quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-17T10:00:00Z",
+    dateien: { "termine.json": termine, "gruppen.json": Object.assign({}, gruppen, { sha256: "0".repeat(64) }) } });
+  const b2 = await ZZ.abrufen({ manuell: true });
+  assert.notEqual(b2.art, "fehler");
+  assert.match(b2.warnung, /^Gruppen: Prüfsumme von gruppen\.json/);
+  assert.deepEqual(b2.verworfen.map((v) => v.id), ["kaputt"]);
   assert.equal(ZZ.gruppen().gruppen.length, 1);
 });

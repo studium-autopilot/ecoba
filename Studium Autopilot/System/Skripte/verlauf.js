@@ -127,16 +127,22 @@ module.exports = function (ctx) {
     let cur = sems.findIndex((s) => s.jetzt);
     const vorStart = sems.length && t < sems[0].sb;
     const nachEnde = sems.length && t > sems[sems.length - 1].se;
-    // Prüfungen (Fähnchen): Klausurtermine der Module + eintägige Prüfungs-Termine (z. B. Zwischentests), ohne Dubletten
+    // Prüfungen (Fähnchen): eintägige Prüfungs-Termine (z. B. Zwischentests) und Klausurtermine der Module. Kürzel + Tag nur
+    // einmal; die Termin-Notiz gewinnt, „bestanden“ kommt vom Modul (docs/architektur.md „Nächste Prüfung“)
     const pruef = [];
-    for (const m of D.module) if (m.klausur && !m.zusatz) pruef.push({ datum: m.klausur, code: m.code, label: m.code, titel: `${m.code} ${m.titel}`, pfad: m.pfad, erledigt: m.fertig, art: "klausur", modul: m });
+    const gleicherTag = (code, d) => pruef.find((p) => p.code && p.code === code && +p.datum === +d);
     for (const x of D.termine) {
-      if (pruef.some((p) => p.code && p.code === x.code && +p.datum === +x.datum)) continue;
+      if (gleicherTag(x.code, x.datum)) continue;
       const n = x.titel.match(/Zwischentest\s*(\d+)/i);
       const label = (x.code ? x.code + " " : "") + (n ? `Test ${n[1]}` : x.code ? "Prüfung" : x.titel.slice(0, 16));
       const m = D.module.find((mm) => mm.code === x.code);
       // haupt: Klausur des Moduls aus einer Termin-Notiz (kein Zwischentest) – gilt in der Modulliste der Lupe als Prüfungstermin
       pruef.push({ datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.datum < t, art: "test", geschaetzt: x.geschaetzt, modul: m, haupt: !!m && !n });
+    }
+    for (const m of D.module) if (m.klausur && !m.zusatz) {
+      const p = gleicherTag(m.code, m.klausur);
+      if (p) Object.assign(p, { label: m.code, art: "klausur", erledigt: m.fertig, modul: m });
+      else pruef.push({ datum: m.klausur, code: m.code, label: m.code, titel: `${m.code} ${m.titel}`, pfad: m.pfad, erledigt: m.fertig, art: "klausur", modul: m });
     }
     pruef.sort((a, b) => a.datum - b.datum);
     const naechste = pruef.find((p) => p.datum >= t && !p.erledigt);

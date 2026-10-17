@@ -3,10 +3,11 @@
 // gestrichelt = geschätzt, Klausuren und Zwischentests als Punkte, heute als Linie). Darunter je Phase ein Tagesstreifen
 // mit den Klausuren am Datum (Kürzel, Wochentag, Datum, Countdown bis 30 Tage, bestanden mit Note), Anmeldezeitraum und
 // „Termin folgt“ (nur Module ohne Klausurtermin im Modul und ohne Prüfungs-Termin-Notiz in einer Phase). Ersetzt die Chip-Reihe
-// „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet sein Modul.
+// „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet seine Notiz (Termin-Notiz, sonst das Modul).
 // Daten live (metadataCache, schreibt nichts): Module des aktuellen Fachsemesters wie die Chips (Feld `klausur`),
-// Termin-Notizen (Kategorie Prüfung mit `code`; Frist „Prüfungsanmeldung …“), Einstellungen (`pruefungsphasen`,
-// `semesterliste`, `variante`). Erweiterung: Codeblock und Ereignisse über ctx.codeblock/ctx.an (Hot-Reload ohne Neustart).
+// Termin-Notizen (Kategorie Prüfung mit `code`; Frist „Prüfungsanmeldung …“), Phasen und Semester aus dem Datenmodell
+// (modell.js, sonst Einstellungen), `variante`. Neu gezeichnet bei Änderungen, Löschen, Umbenennen und an einem neuen Tag.
+// Erweiterung: Codeblock und Ereignisse über ctx.codeblock/ctx.an (Hot-Reload ohne Neustart).
 // Stil: eba-core.css Abschnitt 37, Klassen eba-kzt-*.
 module.exports = function (ctx) {
   const app = window.app;
@@ -60,13 +61,19 @@ module.exports = function (ctx) {
     const phasen = phasenRoh.map((t) => ({ von: datum(t[0]), bis: datum(t[1]), art: (t[2] || "Prüfungsphase").trim(), geschaetzt: st(t[3]) === "geschätzt" }))
       .filter((p) => p.von && p.bis && p.bis >= heute).sort((a, b) => a.von - b.von).slice(0, 2);
     const anmeldungen = termine.filter((t) => t.von && /Prüfungsanmeldung/.test(t.titel) && (t.bis || t.von) >= heute).sort((a, b) => a.von - b.von);
-    // Prüfungen: Modulklausuren, dazu Termin-Notizen (Prüfung mit Kürzel, eintägig), doppelte (Kürzel + Tag) nur einmal
-    const pruef = [], schon = new Set();
-    for (const m of module) if (m.datum) { schon.add(m.code + tm(m.datum)); pruef.push({ code: m.code, d: m.datum, f: m.f, fertig: m.fertig, ergebnis: m.ergebnis, geschaetzt: false }); }
+    // Prüfungen: Termin-Notizen (Prüfung mit Kürzel, eintägig) und Modulklausuren. Kürzel + Tag zählen nur einmal; die
+    // Termin-Notiz gewinnt (Ort, „geschätzt“), „bestanden“ und Ergebnis kommen vom Modul (docs/architektur.md „Nächste Prüfung“)
+    const pruef = [], nachTag = new Map();
     for (const t of termine) {
-      if (t.kat !== "Prüfung" || !t.code || !t.von || t.bis || schon.has(t.code + tm(t.von))) continue;
-      schon.add(t.code + tm(t.von));
-      pruef.push({ code: t.code, d: t.von, f: t.f, fertig: false, ergebnis: "", geschaetzt: t.geschaetzt, termin: true, titel: t.titel });
+      if (t.kat !== "Prüfung" || !t.code || !t.von || t.bis || nachTag.has(t.code + tmj(t.von))) continue;
+      const k = { code: t.code, d: t.von, f: t.f, fertig: false, ergebnis: "", geschaetzt: t.geschaetzt, termin: true, titel: t.titel };
+      nachTag.set(t.code + tmj(t.von), k);
+      pruef.push(k);
+    }
+    for (const m of module) if (m.datum) {
+      const k = nachTag.get(m.code + tmj(m.datum));
+      if (k) Object.assign(k, { fertig: m.fertig, ergebnis: m.ergebnis, modul: true });
+      else pruef.push({ code: m.code, d: m.datum, f: m.f, fertig: m.fertig, ergebnis: m.ergebnis, geschaetzt: false, modul: true });
     }
     pruef.sort((a, b) => a.d - b.d || a.code.localeCompare(b.code));
     return { module, phasen, anmeldungen, pruef };
@@ -177,7 +184,7 @@ module.exports = function (ctx) {
     // „Termin folgt“ nur ohne Datum im Modul UND ohne Prüfungs-Termin-Notiz mit diesem Kürzel in einer Prüfungsphase (zentrale
     // Klausurtermine stehen in Termin-Notizen; Zwischentests liegen außerhalb der Phasen und zählen hier nicht)
     const folgt = module.filter((m) => !m.datum && !m.fertig && !pruef.some((k) => k.termin && k.code === m.code && inPhase(k.d)));
-    const ausser = pruef.filter((k) => !k.termin && !inPhase(k.d));
+    const ausser = pruef.filter((k) => k.modul && !inPhase(k.d));
     const fertigOhne = module.filter((m) => !m.datum && m.fertig);
     if (folgt.length || ausser.length || fertigOhne.length) {
       const fuss = el.createDiv({ cls: "eba-kzt-rest" });
@@ -199,10 +206,18 @@ module.exports = function (ctx) {
       try { zeichnen(el, c); } catch (e) { el.setText("Klausurzeit: Fehler – " + e.message); console.error("Klausurzeit", e); }
     });
     const bald = ctx.entprellen(() => block.neu(), 1500);
-    ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
+    const relevant = (f, cache) => {
       const typ = cache?.frontmatter?.typ;
-      if (typ === "termin" || typ === "modul" || f.path === "System/Einstellungen.md" || f.path.startsWith("System/Daten/")) bald();
-    });
+      return typ === "termin" || typ === "modul" || f.path === "System/Einstellungen.md" || f.path.startsWith("System/Daten/");
+    };
+    ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (relevant(f, cache)) bald(); });
+    ctx.an(app.metadataCache, "deleted", (f, vorher) => { if (relevant(f, vorher)) bald(); });
+    ctx.an(app.vault, "rename", (f) => { if (relevant(f, app.metadataCache.getFileCache(f))) bald(); });
+    // Tageswechsel (Countdown, „heute“-Linie): alle 30 Minuten und beim Zurückkommen in die App, nur wenn ein neuer Tag ist
+    let gezeichnetAm = ctx.date.now("YYYY-MM-DD");
+    const tagNeu = () => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== gezeichnetAm) { gezeichnetAm = h; block.neu(); } };
+    ctx.intervall(tagNeu, 30 * 60 * 1000);
+    ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
   return { registrieren, zeichnen };

@@ -29,8 +29,13 @@
 // Erstinstallation: Fehlt installiert.json, legt das Plugin sie einmal aus system-dateien.json an (sonst keine Datei).
 // Andere Geräte: Das Update kommt über den Sync. installiert.json zeigt dort die neue Version → kein zweites Update; läuft
 //   noch der alte Kern im Speicher, zeigt die Zeile „Neu laden“.
+// Neuigkeiten (seit 0.4.1): Beim Öffnen von Obsidian (und nach über 6 h im Hintergrund) holt update.js nach wenigen Sekunden
+//   nur das kleine Manifest, wenn die letzte Prüfung über 30 Min. her ist. Gibt es ein Angebot, erscheint einmal je App-Start
+//   ein Hinweis (Notice) mit „Aktualisieren“ und „Was ist neu“, für dieselbe Version höchstens alle 12 h. Läuft eine neue
+//   Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“. „Was ist neu“ zeigt die Abschnitte aus CHANGELOG.md
+//   am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt Bestätigungsfenster), plugin.testUpdateBasis (andere Basis-URL,
-//   z. B. lokaler Server), ctx.update.letzterBericht, ctx.update.fenster.
+//   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.neuigkeiten.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
   const app = window.app;
@@ -593,13 +598,22 @@ module.exports = function (ctx) {
         else aktualisieren().catch((e) => console.error("update", e));
       });
     }
+    if (h.art === "update") {
+      k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-neu", text: "Was ist neu", attr: { type: "button" } })
+        .addEventListener("click", () => { neuigkeitenZeigen({ von: installiertVersion(), bis: h.version, angebot: { version: h.version, notiz: h.notiz } }); });
+    }
     if (h.art !== "laden") {
       const sp = k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-spaeter", text: "Später", attr: { type: "button" } });
-      sp.addEventListener("click", () => { try { app.saveLocalStorage(SPAETER, h.version); } catch (e) { /* egal */ } hinweisNeu(); });
+      // „Später“ zählt auch als Antwort auf den Hinweis beim Öffnen (sonst käme er gleich danach, weil die Zeile weg ist)
+      sp.addEventListener("click", () => { try { app.saveLocalStorage(SPAETER, h.version); } catch (e) { /* egal */ } sitzungMerken(true); hinweisNeu(); });
     }
   };
   let hinweisGriff = null; // gesetzt in registrieren()
-  const hinweisNeu = () => { try { if (hinweisGriff) hinweisGriff.neu(); } catch (e) { /* egal */ } };
+  // Kurz nach Start oder Rückkehr (START_FENSTER) darf ein später eintreffendes Angebot (voller Abruf) noch den Hinweis zeigen
+  const hinweisNeu = () => {
+    try { if (hinweisGriff) hinweisGriff.neu(); } catch (e) { /* egal */ }
+    if (neuigkeit.start && Date.now() - neuigkeit.start < START_FENSTER) { try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); } }
+  };
 
   // ---------- Fenster ----------
   const Modal = obs.Modal;
@@ -665,6 +679,7 @@ module.exports = function (ctx) {
     }
     const k = c.createDiv({ cls: "modal-button-container" });
     k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
+    if (b.ok && b.vorher) k.createEl("button", { text: "Was ist neu" }).addEventListener("click", () => { m.close(); neuigkeitenZeigen({ von: b.vorher, bis: b.version }); });
     m.onClose = () => { c.empty(); if (zustand.fenster === m) zustand.fenster = null; };
     m.open();
   };
@@ -717,6 +732,8 @@ module.exports = function (ctx) {
         fortschritt: (t) => { try { hinweis.setMessage(t); } catch (e) { /* egal */ } } });
       if (b.ok) {
         zustand.installiert = rel.version;
+        b.vorher = inst;
+        lokal(L_GESEHEN, rel.version); // dieses Gerät sieht das Ergebnisfenster, also kein „Aktualisiert auf …“ danach
         if (b.plugin) b.neuGeladen = await pluginNeuLaden();
       }
     } catch (e) {
@@ -734,14 +751,243 @@ module.exports = function (ctx) {
     return b;
   };
 
+  // ---------- Neuigkeiten: frische Prüfung beim Start, Hinweis (Notice) und „Was ist neu“ (seit 0.4.1) ----------
+  // Die frische Prüfung holt nur das Manifest (ctx.zentral.manifestHolen, ohne Abrufer-Sperre, schreibt keine Datei). Der volle
+  // Abruf von zentral.js bleibt unverändert; ruft er kurz nach dem Start, kommt das Manifest einmal mehr (wenige KB).
+  const MIN = 60e3, STUNDE = 60 * MIN;
+  const PRUEFEN_NACH = 30 * MIN;      // Manifest frisch holen, wenn die letzte Prüfung länger her ist
+  const PAUSE_NEUSTART = 6 * STUNDE;  // so lange im Hintergrund zählt die Rückkehr wie ein App-Start
+  const TOAST_ABSTAND = 12 * STUNDE;  // Hinweis für dieselbe Version höchstens so oft
+  const START_FENSTER = 10 * MIN;     // so lange nach Start/Rückkehr darf ein später eintreffendes Angebot den Hinweis zeigen
+  const CHANGELOG_MAX = 262144;       // Bytes
+  const ABSCHNITTE_MAX = 8;
+  const L_GEPRUEFT = "eba-update-geprueft", L_TOAST = "eba-update-toast", L_GESEHEN = "eba-update-gesehen";
+  const S_TOAST = "eba-update-toast-sitzung"; // sessionStorage: Hinweis in dieser App-Sitzung schon gezeigt
+
+  // CHANGELOG.md → [{ version, titel, text }] in Dateireihenfolge. Nur Überschriften „## X.Y.Z – Titel“ (auch X.Y.Z-beta.N);
+  // andere Überschriften (z. B. „## Unveröffentlicht“) beenden den Abschnitt davor und zählen nicht.
+  const KOPF = /^## +(\d{1,4}\.\d{1,4}\.\d{1,4}(?:-beta\.\d{1,4})?)(?: +[–-] +(.*?))? *$/;
+  const changelogAbschnitte = (text) => {
+    const aus = [];
+    let akt = null;
+    for (const z of String(text || "").split(/\r?\n/)) {
+      if (/^#{1,2} /.test(z)) {
+        const m = z.match(KOPF);
+        akt = m ? { version: m[1], titel: (m[2] || "").trim(), zeilen: [] } : null;
+        if (akt) aus.push(akt);
+      } else if (akt) akt.zeilen.push(z);
+    }
+    return aus.map((a) => ({ version: a.version, titel: a.titel, text: a.zeilen.join("\n").trim() }));
+  };
+  // Abschnitte nach „von“ (ausschließlich) bis „bis“ (einschließlich), neueste zuerst, höchstens ABSCHNITTE_MAX.
+  // „von“ leer oder ungültig → nur der Abschnitt von „bis“.
+  const abschnitteZwischen = (liste, von, bis) => {
+    if (!semver(bis)) return [];
+    const gesehen = {};
+    return (liste || []).filter((a) => {
+      if (!a || hat(gesehen, a.version) || neuer(a.version, bis)) return false;
+      gesehen[a.version] = true;
+      return semver(von) ? neuer(a.version, von) : a.version === bis;
+    }).sort((a, b) => (neuer(a.version, b.version) ? -1 : neuer(b.version, a.version) ? 1 : 0)).slice(0, ABSCHNITTE_MAX);
+  };
+  // Changelog-Text entschärfen, bevor MarkdownRenderer ihn zeichnet: kein HTML, keine Einbettungen, Wikilinks oder Kommentare,
+  // keine Codeblöcke (```eba-… würde Codeblöcke des Plugins starten). Links prüft linksSaeubern danach (nur https).
+  // Umbrochene Zeilen (Changelog auf 120 Zeichen) werden verbunden, sonst zeigt Obsidian dort einen Zeilenumbruch.
+  const zeilenVerbinden = (zeilen) => {
+    const aus = [];
+    for (const z of zeilen) {
+      const fortsetzung = /\S/.test(z) && !/^\s*([-*+]|\d+[.)]) /.test(z) && !/^\s*[#>|]/.test(z);
+      if (fortsetzung && aus.length && /\S/.test(aus[aus.length - 1])) aus[aus.length - 1] += " " + z.trim();
+      else aus.push(z);
+    }
+    return aus;
+  };
+  const markdownSicher = (text) => zeilenVerbinden(String(text || "").split(/\r?\n/).filter((z) => !/^\s*(```|~~~)/.test(z))).join("\n")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/!\[/g, "\\![").replace(/\[\[/g, "\\[\\[").replace(/\]\]/g, "\\]\\]").replace(/%%/g, "\\%\\%");
+  // Hinweis für diese Version zeigen? merk = { version, zeit } vom letzten Hinweis auf diesem Gerät
+  const toastFaellig = (merk, version, jetzt) => !merk || merk.version !== version || !(jetzt - Number(merk.zeit) < TOAST_ABSTAND);
+  // Nach einem Update. gesehen = zuletzt auf diesem Gerät gelaufene Version. → { von, bis } (einmal „Aktualisiert auf bis“),
+  // "merken" (erster Lauf auf diesem Gerät oder ältere Version: still merken) oder null (nichts zu tun; auch solange
+  // „Neu laden“ aussteht, weil installiert.json schon eine neuere Version zeigt als der laufende Kern)
+  const nachUpdate = (gesehen, laufend, installiert) => {
+    if (!semver(laufend) || neuer(installiert, laufend)) return null;
+    if (!semver(gesehen)) return "merken";
+    if (neuer(laufend, gesehen)) return { von: gesehen, bis: laufend };
+    return gesehen === laufend ? null : "merken";
+  };
+  // Manifest frisch holen? geprueftIso = letzter voller Abruf (zentral.js), eigeneMs = letzte eigene Prüfung
+  const pruefungFaellig = (geprueftIso, eigeneMs, jetzt) => !(jetzt - Math.max(Date.parse(geprueftIso || "") || 0, Number(eigeneMs) || 0) < PRUEFEN_NACH);
+
+  // Zustand (überlebt den Hot-Reload): Start des Fensters, Zeit des Verbergens, offenes Fenster, geladene Changelogs je Version
+  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, fenster: null, changelog: {} }));
+  const lokal = (k, v) => {
+    if (v === undefined) { try { return app.loadLocalStorage(k); } catch (e) { return null; } }
+    try { app.saveLocalStorage(k, v); } catch (e) { /* egal */ }
+    return v;
+  };
+  const sitzungGezeigt = () => { try { return !!window.sessionStorage.getItem(S_TOAST); } catch (e) { return false; } };
+  const sitzungMerken = (an) => { try { if (an) window.sessionStorage.setItem(S_TOAST, "1"); else window.sessionStorage.removeItem(S_TOAST); } catch (e) { /* egal */ } };
+  const zentralAn = () => { try { return !!(ctx.zentral && ctx.zentral.status().an); } catch (e) { return false; } };
+  const einrichtungOffen = () => { try { const e = ctx.einrichtung; return !!(e && (e.fenster || e.sollZeigen())); } catch (e) { return false; } };
+  const releasesUrl = () => (ctx.zentral && ctx.zentral.RELEASES) || "https://github.com/studium-autopilot/ecoba/releases";
+
+  // Nur das Manifest, und nur wenn die letzte Prüfung über PRUEFEN_NACH her ist. Zentrale Daten aus → nie (dann ruft das Plugin
+  // laut docs/datenschutz.md nichts bei GitHub ab). → true, wenn geholt
+  const frischPruefen = async () => {
+    if (plugin().testZentralAus || !zentralAn() || !ctx.zentral.manifestHolen || ctx.zentral.laeuft) return false;
+    let s = null;
+    try { s = ctx.zentral.stand(); } catch (e) { s = null; }
+    if (!pruefungFaellig(s && s.geprueft, lokal(L_GEPRUEFT), Date.now())) return false;
+    lokal(L_GEPRUEFT, Date.now());
+    try { await ctx.zentral.manifestHolen(); } catch (e) { return false; } // kein Netz: letzter Stand bleibt
+    neuZeichnen();
+    return true;
+  };
+
+  // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | null
+  // Entscheidung (rein). o = { angebot, neuLaden, merk, jetzt, nach, bannerSichtbar } → "angebot" | "aktualisiert" | "verdeckt"
+  // (die Zeile oben auf dem Dashboard zeigt das Angebot gerade sichtbar: kein Hinweis, zählt nicht gegen den Abstand) | null
+  const toastEntscheiden = (o) => {
+    if (o.angebot && !o.neuLaden) {
+      if (!toastFaellig(o.merk, o.angebot.version, o.jetzt)) return null;
+      return o.bannerSichtbar ? "verdeckt" : "angebot";
+    }
+    return o.nach && o.nach !== "merken" ? "aktualisiert" : null;
+  };
+  // Zeile ```eba-update-hinweis``` mit Angebot gerade sichtbar? Nur gezeichnete Blöcke im DOM mit Fläche (Tabs im Hintergrund,
+  // die versteckte Editor-Kopie der Leseansicht und verborgene Fenster haben keine), in einem sichtbaren Fenster.
+  const bannerSichtbar = () => {
+    let liste = [];
+    try { liste = hinweisGriff ? hinweisGriff.instanzen() : []; } catch (e) { liste = []; }
+    return liste.some((i) => {
+      const z = i && i.el && i.el.isConnected ? i.el.querySelector('.eba-uh[data-art="update"]') : null;
+      if (!z || z.getClientRects().length === 0) return false;
+      const d = z.ownerDocument;
+      return !d || d.visibilityState !== "hidden";
+    });
+  };
+  // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | "verdeckt" | null
+  const toastPruefen = () => {
+    if (!Notice || sitzungGezeigt() || zustand.laeuft || zustand.fenster || neuigkeit.fenster || einrichtungOffen()) return null;
+    if (!(app.metadataCache.initialized || app.metadataCache.resolved)) return null; // Kanal und Einrichtung stehen im Frontmatter
+    const inst = installiertVersion(), lauf = laufendeVersion(), s = stand();
+    const n = nachUpdate(lokal(L_GESEHEN), lauf, inst);
+    if (n) lokal(L_GESEHEN, lauf);
+    const a = angebot(s.release, s.beta, kanal(), inst);
+    const e = toastEntscheiden({ angebot: a, neuLaden: neuer(inst, lauf), merk: lokal(L_TOAST), jetzt: Date.now(), nach: n,
+      bannerSichtbar: !!a && bannerSichtbar() });
+    neuigkeit.verdeckt = e === "verdeckt"; // beim nächsten Wechsel der Ansicht noch einmal prüfen (registrieren)
+    if (e === "angebot") {
+      sitzungMerken(true);
+      lokal(L_TOAST, { version: a.version, zeit: Date.now() });
+      toastZeigen({ text: `Neue ${istBeta(a.version) ? "Beta-Version" : "Version"} ${a.version} ist da.`, angebot: a, von: inst, bis: a.version });
+    } else if (e === "aktualisiert") {
+      sitzungMerken(true);
+      toastZeigen({ text: `Aktualisiert auf Version ${n.bis}.`, angebot: null, von: n.von, bis: n.bis });
+    }
+    return e;
+  };
+  // Notice mit eigenem Inhalt: Text und Knöpfe (≥ 44 px, CSS Abschnitt „Neuigkeiten“). Antippen irgendwo blendet ihn aus.
+  const toastZeigen = (t) => {
+    const f = document.createDocumentFragment();
+    const box = f.createDiv({ cls: "eba-toast" });
+    box.createDiv({ cls: "eba-toast-text", text: t.text });
+    const k = box.createDiv({ cls: "eba-toast-knoepfe" });
+    const knopf = (text, cls, fn) => {
+      k.createEl("button", { text, cls: "eba-toast-knopf" + (cls ? " " + cls : ""), attr: { type: "button" } })
+        .addEventListener("click", () => { try { fn(); } catch (e) { console.error("update: Hinweis", e); } });
+    };
+    if (t.angebot) knopf("Aktualisieren", "mod-cta", () => { aktualisieren().catch((e) => console.error("update", e)); });
+    knopf("Was ist neu", "", () => { neuigkeitenZeigen({ von: t.von, bis: t.bis, angebot: t.angebot }); });
+    return new Notice(f, t.angebot ? 30000 : 15000);
+  };
+
+  // ---------- Fenster „Was ist neu“ ----------
+  // CHANGELOG.md am Tag v<version> (gleiche Adresse wie die Dateien des Updates, siehe releasePruefen in zentral.js)
+  const changelogUrl = (version) => {
+    const p = plugin();
+    if (p.testUpdateBasis) return String(p.testUpdateBasis).replace(/\/?$/, "/") + "CHANGELOG.md";
+    const roh = (ctx.zentral && ctx.zentral.RELEASE_ROH) || "https://raw.githubusercontent.com/studium-autopilot/ecoba/";
+    return semver(version) ? roh + "v" + version + "/CHANGELOG.md" : "";
+  };
+  const changelogHolen = async (version) => {
+    if (hat(neuigkeit.changelog, version)) return neuigkeit.changelog[version];
+    const url = changelogUrl(version);
+    if (!url) throw new Error("Version ungültig");
+    const by = await io.holen(url);
+    if (by.length > CHANGELOG_MAX) throw new Error("CHANGELOG.md zu groß");
+    const liste = changelogAbschnitte(dec(by));
+    neuigkeit.changelog[version] = liste;
+    return liste;
+  };
+  // Nach dem Zeichnen: nur https-Links (in neuem Fenster), alles andere wird Text; keine Bilder oder eingebetteten Inhalte
+  const linksSaeubern = (el) => {
+    for (const x of Array.from(el.querySelectorAll("img, iframe, video, audio, object, embed, script, style"))) x.remove();
+    for (const a of Array.from(el.querySelectorAll("a"))) {
+      const href = a.getAttribute("href") || "";
+      if (/^https:\/\//i.test(href) && !a.classList.contains("internal-link")) { a.setAttribute("target", "_blank"); a.setAttribute("rel", "noopener"); a.classList.add("external-link"); }
+      else a.replaceWith(a.ownerDocument.createTextNode(a.textContent || ""));
+    }
+  };
+  const abschnitteZeichnen = async (el, o, comp) => {
+    let liste = [];
+    try { liste = abschnitteZwischen(await changelogHolen(o.bis), o.von, o.bis); } catch (e) { liste = []; }
+    if (!el.isConnected) return 0; // Fenster schon zu
+    el.empty();
+    for (const a of liste) {
+      const sek = el.createDiv({ cls: "eba-neu-version" });
+      sek.createEl("h3", { cls: "eba-neu-titel", text: a.version + (a.titel ? " – " + a.titel : "") });
+      const t = sek.createDiv({ cls: "eba-neu-text" });
+      if (obs.MarkdownRenderer && comp) await obs.MarkdownRenderer.render(app, markdownSicher(a.text), t, "", comp);
+      else t.setText(a.text);
+      linksSaeubern(t);
+    }
+    if (!liste.length) {
+      // Rückfall: Notiz aus dem Manifest und Link auf das Release
+      el.createEl("p", { cls: "eba-modal-text", text: o.angebot && o.angebot.notiz ? o.angebot.notiz : "Die Liste der Änderungen lässt sich gerade nicht laden." });
+      el.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Auf GitHub ansehen", href: releasesUrl() + "/tag/v" + o.bis,
+        cls: "external-link", attr: { target: "_blank", rel: "noopener" } });
+    }
+    return liste.length;
+  };
+  // o = { von, bis, angebot } – angebot (aus dem Manifest) → Knöpfe „Aktualisieren“ und „Später“, sonst „Fertig“
+  const neuigkeitenZeigen = (o) => {
+    if (!Modal) return null;
+    if (neuigkeit.fenster) neuigkeit.fenster.close();
+    const m = new Modal(app);
+    neuigkeit.fenster = m;
+    const comp = obs.Component ? new obs.Component() : null;
+    if (comp) comp.load();
+    m.modalEl.addClass("eba-modal", "eba-modal-neu");
+    m.titleEl.setText("Was ist neu");
+    const c = m.contentEl;
+    c.createEl("p", { cls: "eba-modal-text", text: o.angebot ? `Version ${o.bis} ist da. Du hast Version ${o.von}.` : `Du hast jetzt Version ${o.bis}.` });
+    const liste = c.createDiv({ cls: "eba-neu-liste" });
+    liste.createEl("p", { cls: "eba-modal-text", text: "Lädt …" });
+    const k = c.createDiv({ cls: "modal-button-container" });
+    if (o.angebot) {
+      k.createEl("button", { text: "Aktualisieren", cls: "mod-cta" }).addEventListener("click", () => { m.close(); aktualisieren().catch((e) => console.error("update", e)); });
+      k.createEl("button", { text: "Später" }).addEventListener("click", () => m.close());
+    } else k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
+    m.onClose = () => { if (comp) comp.unload(); c.empty(); if (neuigkeit.fenster === m) neuigkeit.fenster = null; };
+    m.open();
+    m.geladen = abschnitteZeichnen(liste, o, comp).catch((e) => { console.error("update: Was ist neu", e); return 0; });
+    return m;
+  };
+
   ctx.update = {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
     jsonMischenText, planen, aktualisierenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     // Obsidian
     io, anzeige, status, aktualisieren, installiertAnlegen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER,
+    // Neuigkeiten (reine Logik zuerst)
+    changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
+    frischPruefen, toastPruefen, neuigkeitenZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
     get letzterBericht() { return zustand.bericht; },
     get fenster() { return zustand.fenster; },
+    get neuigkeiten() { return neuigkeit.fenster; },
   };
 
   const registrieren = () => {
@@ -757,6 +1003,25 @@ module.exports = function (ctx) {
     installiertNeu().catch(() => {});
     const bald = ctx.entprellen(() => { installiertNeu().catch(() => {}); }, 1500);
     for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => { if (f && f.path === INSTALLIERT) bald(); });
+    // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
+    // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund
+    // zählt wie ein neuer App-Start (Hinweis darf wieder erscheinen; der Abstand von 12 h je Version gilt weiter).
+    const startLauf = () => {
+      neuigkeit.start = Date.now();
+      frischPruefen().catch(() => false).then(() => { try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); } });
+    };
+    if (app.metadataCache.initialized || app.metadataCache.resolved) ctx.zeit(startLauf, 4000);
+    else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); ctx.zeit(startLauf, 4000); }); }
+    // Zeigte die Dashboard-Zeile das Angebot, als der Hinweis fällig war: beim Wechsel auf eine andere Seite noch einmal prüfen
+    const nachWechsel = ctx.entprellen(() => { if (neuigkeit.verdeckt) { try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); } } }, 800);
+    for (const ev of ["active-leaf-change", "file-open"]) ctx.an(app.workspace, ev, () => { if (neuigkeit.verdeckt) nachWechsel(); });
+    ctx.dom(document, "visibilitychange", () => {
+      if (document.visibilityState === "hidden") { neuigkeit.versteckt = Date.now(); return; }
+      if (document.visibilityState !== "visible" || !neuigkeit.versteckt) return;
+      if (Date.now() - neuigkeit.versteckt >= PAUSE_NEUSTART) sitzungMerken(false);
+      neuigkeit.versteckt = 0;
+      ctx.zeit(startLauf, 15000);
+    });
   };
 
   const AKTIONEN = {

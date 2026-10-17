@@ -3,6 +3,7 @@
 // Raster Fachsemester × Module: je Semester eine Spalte mit Kopf (Fachsemester + dein Semester aus dem Datenmodell),
 // Modul-Chips (verlinkt auf die Modulnotiz, ✓ wenn bestanden/anerkannt, „OP“ = Orientierungsprüfung), Platzhalter für
 // Schwerpunkt- und Profilbildungsbereiche, ECTS-Summe je Semester; auf schmalen Bildschirmen untereinander.
+// Hinweise stehen einmal unter allen Plänen: erst die für alle, dann je Variante ihre eigenen.
 // Ohne Argument: die Variante aus den Einstellungen (bei „offen“ alle drei), mit gewählter Variante darunter der Link
 // „Andere Varianten ansehen →“ (System/Daten/Musterplan). Schreibt keine Datei.
 // Erweiterung: Das Plugin ruft registrieren() auf (Codeblock über ctx.codeblock). Stil: eba-core.css Abschnitt 44 (Klassen eba-mp-*).
@@ -62,8 +63,30 @@ module.exports = function (ctx) {
       spalte.createDiv({ cls: "eba-mp-summe", text: `${summe} ECTS` });
     }
     box.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${gesamt} ECTS` });
-    const hs = M.hinweise.filter((h) => h.plan === "alle" || h.plan === plan.id);
-    if (hs.length) { const ul = box.createEl("ul", { cls: "eba-mp-hinweise" }); for (const h of hs) ul.createEl("li", { text: h.text }); }
+  };
+
+  // Hinweise der gezeigten Pläne, damit nichts unter jedem Plan wiederholt wird: gemeinsam = plan „alle“, jePlan = je Variante
+  // in Planreihenfolge (ohne leere). Bei einem Plan gehören seine Hinweise mit in die eine Liste.
+  const hinweiseOrdnen = (hinweise, plaene) => {
+    const texte = (plan) => hinweise.filter((h) => h.plan === plan && h.text).map((h) => h.text);
+    const jePlan = plaene.map((p) => ({ id: p.id, name: p.name, texte: texte(p.id) })).filter((g) => g.texte.length);
+    if (plaene.length === 1) return { gemeinsam: texte("alle").concat(jePlan.length ? jePlan[0].texte : []), jePlan: [] };
+    return { gemeinsam: texte("alle"), jePlan };
+  };
+
+  const hinweiseZeichnen = (el, M, plaene) => {
+    const { gemeinsam, jePlan } = hinweiseOrdnen(M.hinweise, plaene);
+    if (!gemeinsam.length && !jePlan.length) return;
+    const box = el.createDiv({ cls: "eba-mp-hinweisbox" });
+    const liste = (ziel, texte) => { const ul = ziel.createEl("ul", { cls: "eba-mp-hinweise" }); for (const t of texte) ul.createEl("li", { text: t }); };
+    if (gemeinsam.length) liste(box, gemeinsam);
+    if (!jePlan.length) return;
+    const raster = box.createDiv({ cls: "eba-mp-je-variante" });
+    for (const g of jePlan) {
+      const spalte = raster.createDiv();
+      spalte.createDiv({ cls: "eba-mp-je-variante-titel", text: g.name });
+      liste(spalte, g.texte);
+    }
   };
 
   const zeichnen = (el, arg, quellePfad) => {
@@ -84,6 +107,7 @@ module.exports = function (ctx) {
     const plaene = M.plaene.filter((p) => ids.indexOf(p.id) >= 0);
     const M2 = Object.assign({}, M, { plaene });
     for (const p of plaene) planZeichnen(el, M2, p, quellePfad);
+    hinweiseZeichnen(el, M, plaene);
     const fuss = el.createEl("p", { cls: "eba-mp-quelle" });
     const dmy = M.stand ? `${M.stand.slice(8, 10)}.${M.stand.slice(5, 7)}.${M.stand.slice(0, 4)}` : "";
     fuss.appendText(`Quelle: Musterstudienplan des Fachbereichs${dmy ? ` (Stand ${dmy})` : ""}, eigene Darstellung · `);
@@ -103,5 +127,5 @@ module.exports = function (ctx) {
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(() => block.neu()));
   };
 
-  return { registrieren, lesen };
+  return { registrieren, lesen, hinweiseOrdnen };
 };

@@ -7,7 +7,8 @@
 // Je Woche Spuren wie bei Google/Apple, nach Relevanz (gewicht), höchstens SPUREN Zeilen je Tag, Rest als „+n weitere“.
 // Ein Tipp auf einen Tag zeigt darunter dessen Termine (Uhrzeit, Titel als Link, Art). Schmale Ansicht (iPhone): Container-Query
 // in eba-core.css, dann auch eintägige als getönte Blöcke ohne Uhrzeit.
-// Daten live aus den Termin-Notizen (metadataCache, typ: termin), schreibt keine Datei; zeichnet bei Änderungen neu.
+// Daten live aus den Termin-Notizen (metadataCache, typ: termin), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
+// Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft).
 // Erweiterung: Das Plugin ruft registrieren() beim Start und nach jeder Änderung dieser Datei auf (Hot-Reload); Codeblock und
 // Ereignisse laufen über ctx.codeblock/ctx.an, das Plugin meldet die alte Fassung vorher ab. Stil: eba-core.css Abschnitt 37, Klassen eba-kal-*.
 module.exports = function (ctx) {
@@ -238,9 +239,15 @@ module.exports = function (ctx) {
       try { zeichnen(el, c); } catch (e) { el.setText("Kalender: Fehler – " + e.message); console.error("Kalender", e); }
     });
     const bald = ctx.entprellen(() => block.neu(), 1500);
-    ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
-      if (cache?.frontmatter?.typ === "termin" || f.path.startsWith("Termine/")) bald();
-    });
+    const termin = (f, cache) => cache?.frontmatter?.typ === "termin" || f.path.startsWith("Termine/");
+    ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (termin(f, cache)) bald(); });
+    ctx.an(app.metadataCache, "deleted", (f, vorher) => { if (termin(f, vorher)) bald(); });
+    ctx.an(app.vault, "rename", (f, alt) => { if (termin(f, app.metadataCache.getFileCache(f)) || String(alt).startsWith("Termine/")) bald(); });
+    // Tageswechsel (Markierung „heute“): alle 30 Minuten und beim Zurückkommen in die App, nur wenn ein neuer Tag ist
+    let gezeichnetAm = ctx.date.now("YYYY-MM-DD");
+    const tagNeu = () => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== gezeichnetAm) { gezeichnetAm = h; block.neu(); } };
+    ctx.intervall(tagNeu, 30 * 60 * 1000);
+    ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
   return { registrieren, zeichnen };

@@ -219,13 +219,13 @@ cssclasses:
 >       - file.name
 >       - ects
 >       - ergebnis
->       - notenblock
+>       - formula.block
 >       - formula.semester
 >     columnSize:
 >       file.name: 268
 >       note.ects: 63
 >       note.ergebnis: 69
->       note.notenblock: 79
+>       formula.block: 79
 >       formula.semester: 119
 > ```
 

@@ -2,6 +2,27 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.1 – ILIAS lädt im Hintergrund weiter
+
+- **Neu:** Gibt es eine neue Version, sagt dir Obsidian das gleich beim Öffnen. Unter **Was ist neu** steht in einfachen Worten,
+  was sich für dich ändert.
+- **Neu:** Deine Kursdateien aus ILIAS laden weiter, auch wenn du das Fenster schließt. Oben siehst du, wie weit es ist, und
+  bricht es ab, macht es später von selbst weiter.
+- **Einfacher:** Beim Verbinden mit Alma bringt dich ein Tipp direkt zu deinem Stundenplan, du musst ihn nicht mehr im Menü
+  suchen.
+- **Übersichtlicher:** Im Musterstudienplan stehen die Hinweise nur noch einmal, und die Varianten sind leichter zu
+  unterscheiden.
+- **Behoben:** Neue Uni-Termine kamen manchmal nicht an, wenn bei den Übungsgruppen etwas nicht stimmte. Jetzt kommen die
+  Termine trotzdem.
+- **Behoben:** Stundenplan-Einträge, die du selbst angelegt hast, landeten manchmal im Papierkorb. Sie bleiben jetzt, und ein
+  falsch kopierter Alma-Link wird nicht mehr gespeichert.
+- **Behoben:** Steht deine Klausur schon als Termin fest, zeigen Studienverlauf und Prüfungen jetzt dasselbe Datum wie das
+  Dashboard.
+- **Behoben:** Leere Vorlesungsnotizen blieben liegen. Jetzt verschwinden sie, wenn du nichts hineinschreibst.
+- **Behoben:** Kalender und Prüfungen zeigten nach dem Löschen oder Umbenennen eines Termins manchmal noch den alten Stand.
+- **Behoben:** Ohne Alma war „Woche danach“ auf **Stundenplan** leer, jetzt steht dort, wie du Alma verbindest. In
+  **Noten & ECTS** siehst du bei „Bestanden“, wie stark ein Modul in deine Note zählt.
+
 ## 0.4.0 – Unterlagen aus ILIAS
 
 - Neu: **ILIAS verbinden** (Einstellungen & Hilfe → Verbindungen, freiwillig auch in der Einrichtung). Einmal Benutzername

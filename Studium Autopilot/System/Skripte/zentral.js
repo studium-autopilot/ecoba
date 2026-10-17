@@ -563,7 +563,7 @@ module.exports = function (ctx) {
     // Schutz gegen kaputte Exporte: würde mehr als die Hälfte (und mehr als 10) wegfallen, nichts als entfallen behandeln
     const fehlend = Object.keys(vorhanden).filter((id) => !imDatensatz.has(id) && !ids.has(id));
     const wegfallSperre = fehlend.length > 10 && fehlend.length > Object.keys(vorhanden).length / 2;
-    if (wegfallSperre) bericht.warnung = `${fehlend.length} Termine fehlen in den Daten – nicht als entfallen behandelt.`;
+    if (wegfallSperre) warnen(bericht, `${fehlend.length} Termine fehlen in den Daten – nicht als entfallen behandelt.`);
     if (!datei(ORDNER)) { try { await app.vault.createFolder(ORDNER); } catch (e) { /* da */ } }
     for (const e of T) {
       const f = vorhanden[e.id] || null;
@@ -626,6 +626,7 @@ module.exports = function (ctx) {
   const protokoll = ctx.bleibend("protokoll", () => []); // Läufe (für Tests), überlebt den Hot-Reload
 
   const neuerBericht = (art) => ({ art, geschrieben: [], angelegt: [], aktualisiert: [], umbenannt: [], entfaellt: [], papierkorb: [], ausgeblendet: [], verworfen: [], warnung: "", fehler: "" });
+  const warnen = (b, text) => { b.warnung = b.warnung ? b.warnung + " " + text : text; };
 
   // ---------- Ein Abruf ----------
   // optionen: { manuell } (Notice mit Ergebnis), { nurCache } (ohne Netz aus dem letzten Stand neu anwenden, z. B. nach einer
@@ -660,10 +661,11 @@ module.exports = function (ctx) {
       standSetzen({ geprueft: new Date().toISOString(), hinweis: manifest.hinweis, plugin_aktuell: manifest.plugin_aktuell, release: manifest.release, beta: manifest.beta, pause: manifest.pause });
       if (manifest.pause) { b.art = "pausiert"; standSetzen({ fehler: "" }); melden("Zentrale Daten sind gerade pausiert. Dein letzter Stand bleibt."); return b; }
     }
-    // 1b. Gruppen (gruppen.json): jedes Gerät selbst, nur gerätelokal; Fehler → in diesem Lauf nichts übernehmen
+    // 1b. Gruppen (gruppen.json): jedes Gerät selbst, nur gerätelokal. Ein Fehler hält nur die Gruppen an (ihr letzter
+    // Stand bleibt), nie Termine und Semesterdaten – wie beim Export (docs/daten-v1.md).
     if (manifest && manifest.dateien[GRUPPEN]) {
       const g = await gruppenHolen(manifest.dateien[GRUPPEN], o.manuell);
-      if (g.fehler) return fehler(g.fehler);
+      if (g.fehler) warnen(b, "Gruppen: " + g.fehler);
       if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
     }
     // 2. Abrufer-Sperre
@@ -699,7 +701,7 @@ module.exports = function (ctx) {
     if (tRoh) {
       const tp = terminePruefen(tRoh);
       if (tp.fehler) return fehler(tp.fehler);
-      T = tp.termine; ids = tp.ids; b.verworfen = tp.verworfen;
+      T = tp.termine; ids = tp.ids; b.verworfen = b.verworfen.concat(tp.verworfen);
     }
     const sRoh = neu["semester.json"] ? neu["semester.json"].d : cache["semester.json"];
     if (sRoh) {
@@ -728,7 +730,7 @@ module.exports = function (ctx) {
     if (b.art === "ok" && !b.geschrieben.length) b.art = "unveraendert";
     if (o.manuell) {
       const n = b.angelegt.length + b.aktualisiert.length + b.entfaellt.length + b.papierkorb.length;
-      melden(n ? `Zentrale Daten aktualisiert: ${n} ${n === 1 ? "Termin" : "Termine"} geändert.` : "Zentrale Daten: alles aktuell.");
+      melden((n ? `Zentrale Daten aktualisiert: ${n} ${n === 1 ? "Termin" : "Termine"} geändert.` : "Zentrale Daten: alles aktuell.") + (b.warnung ? " " + b.warnung : ""));
     }
     return b;
   };

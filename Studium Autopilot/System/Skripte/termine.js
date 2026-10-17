@@ -34,23 +34,7 @@ module.exports = function (ctx) {
   // Nur Doppelpunkt-Zeiten mit gültigen Stunden und Minuten, damit Datumsangaben wie „06.11.“ nicht als Uhrzeit gelten.
   const ZEIT = /(?:^|\D)((?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[–-]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?)(?!\d)/; // ohne Lookbehind (iOS < 16.4); Uhrzeit = Gruppe 1
 
-  const beschreibung = (text) => {
-    const ohneKopf = text.replace(/\r/g, "").replace(/^---\n[\s\S]*?\n---\n?/, "");
-    const absaetze = [];
-    let callout = false;
-    for (const z of ohneKopf.split("\n")) {
-      const t = z.trim();
-      if (/^## Meine Notizen\s*$/.test(t)) break; // eigene Notizen zentraler Termine gehören nicht in die Agenda
-      if (t.startsWith(">")) { callout = true; continue; }
-      if (callout && !t) { callout = false; continue; }
-      if (!t || /^#{1,6}\s/.test(t) || /^\*\*\d{2}\.\d{2}\.\d{4}/.test(t) || /^(Quelle:|Geprüft am )/i.test(t)) continue;
-      absaetze.push(t);
-    }
-    const s = einzeilig(absaetze.join(" "));
-    return s.length > 420 ? s.slice(0, 417).replace(/\s+\S*$/, "") + " …" : s;
-  };
-
-  const lesen = async () => {
+  const lesen = () => {
     const aus = [];
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = app.metadataCache.getFileCache(f)?.frontmatter;
@@ -63,7 +47,7 @@ module.exports = function (ctx) {
       aus.push({
         f, von, bis: bis && bis > von ? bis : null, titel: einzeilig(fm.titel || f.basename), kategorie: einzeilig(fm.kategorie) || "Termin",
         geschaetzt: fm.status === "geschätzt", erledigt: fm.erledigt === true, sq: fm.bereich === "schluesselqualifikation", ort, zeit: (ort.match(ZEIT) || ["", ""])[1],
-        quelle, geprueft: String(fm.geprueft ?? "").slice(0, 10), text: beschreibung(await app.vault.cachedRead(f)),
+        quelle, geprueft: String(fm.geprueft ?? "").slice(0, 10),
       });
     }
     return aus.sort((a, b) => a.von - b.von || a.zeit.localeCompare(b.zeit) || a.titel.localeCompare(b.titel));
@@ -145,7 +129,7 @@ module.exports = function (ctx) {
     const quelle = (inst.ctx && inst.ctx.sourcePath) || SEITE;
     const jetzt = ctx.date.jetzt();
     const heute = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
-    const md = erzeugen(await lesen(), heute);
+    const md = erzeugen(lesen(), heute);
     if (md === inst.zuletzt && el.childElementCount) return;
     inst.zuletzt = md;
     // Je Zeichnung ein eigenes Kind-Objekt (räumt Links/Unterelemente der vorigen Zeichnung auf)

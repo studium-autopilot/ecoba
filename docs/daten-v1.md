@@ -283,7 +283,8 @@ dieser Fassung kennen den Namen nicht und ignorieren ihn.
 Gesäubert wie `info` (siehe oben); ungültige Einträge werden **einzeln** verworfen, unbekannte Felder ignoriert. Das Plugin
 schreibt aus `gruppen.json` **keine Notizen**: Jedes Gerät holt die Datei selbst (auch wenn ein anderes Gerät die Termine
 schreibt), prüft sie wie die anderen Dateien gegen das Manifest und speichert nur die gültigen Einträge gerätelokal
-(`eba-zentral-gruppen`). Stimmt die Prüfsumme nicht, wird in diesem Lauf nichts übernommen. Anzeige: Codeblock `eba-gruppen`
+(`eba-zentral-gruppen`). Stimmen Prüfsumme oder Schema nicht, bleiben die Gruppen beim letzten Stand (Warnung im Bericht);
+Termine und Semesterdaten werden trotzdem übernommen, wie beim Export (Pflicht 6). Anzeige: Codeblock `eba-gruppen`
 (`System/Skripte/gruppen.js`), gefiltert wie die Termine mit `code` und auf das aktuelle und das nächste Semester; mit Argument
 `alle` (```` ```eba-gruppen alle ```` ) ohne Filter. Gruppen, die im eigenen Stundenplan stehen (gleicher Code, Semester,
 Wochentag, Beginn höchstens 15 Min. daneben), sind markiert; ein eigener „Stand“ wird nicht gespeichert.
@@ -298,7 +299,8 @@ eigene Gruppe des Autors. Wer nicht genannt werden möchte, meldet das per Issue
 - **Abruf:** beim Start (20 s + Zufallsversatz 0–2 Min.), dann stündlich, beim Zurückkehren in die App (letzter Versuch über 30 Min. her), plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
   der letzte Stand; es wird nichts geschrieben.
 - **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (`geraet`, `seit`, `zuletzt`, `angewendet`). Ein anderes Gerät übernimmt
-  erst, wenn `zuletzt` älter als 3 h ist.
+  erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei stündlichen Läufen
+  also etwa stündlich.
 - **Notizen:** `Termine/JJJJ-MM-TT Titel.md` mit `herkunft: zentral` und `zentral_id`. Felder aus den Daten werden aktualisiert;
   `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie.
 - **Filter:** Termine ohne `code` oder mit `bereich` für alle; mit `code` nur, wenn das Modul im eigenen Plan ist (gewählt,

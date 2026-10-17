@@ -20,7 +20,7 @@ Studienverlauf: erscheint, sobald Studium Autopilot läuft.
 
 ## Musterstudienplan
 
-> [!eba-karte|handy-zu]+ Dein Musterplan
+> [!eba-karte|handy-zu|ohne-titel]+ Dein Musterplan
 > ```eba-musterplan
 > Musterplan: erscheint, sobald Studium Autopilot läuft.
 > ```
