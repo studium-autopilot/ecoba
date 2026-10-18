@@ -257,3 +257,22 @@ test("Freigeben auf einem Gerät, Aufräumen auf dem anderen, solange die Umbene
   assert.deepEqual(await M.gewaehltAufraeumen(c.io, "2026-10-18"), ["Stundenplan/Di 08.15 X100 Tutorium.md"]);
   assert.match(c.text(P), /- meine Frage/);
 });
+
+test("Eine Regel „ist das deine Gruppe?“ (gehoertZu) für ILIAS, „Meine“ und „angemeldet · Gruppe 4“", () => {
+  const G = g(); // Di 10:00–12:00 c.t. → echt 10:15–11:45
+  const fm = (x) => Object.assign({ code: "X100", semester: "WS 2026/27", art: "Tutorium", wochentag: 2, beginn: "10:15", ende: "11:45" }, x);
+  assert.equal(M.gehoertZu(fm(), G), true);
+  assert.equal(M.gehoertZu(fm({ beginn: "10:00", ende: "12:00" }), G), true, "s.t.-Zeit der Liste");
+  assert.equal(M.gehoertZu(fm({ beginn: "10:45" }), G), false, "Beginn mehr als 15 Min. daneben");
+  assert.equal(M.gehoertZu(fm({ art: "Vorlesung" }), G), false, "nie eine Vorlesung");
+  assert.equal(M.gehoertZu(fm({ art: "Veranstaltung" }), G), true, "unbestimmte Art zählt");
+  assert.equal(M.gehoertZu(fm({ art: "Veranstaltung" }), G, { arten: ["Übung", "Tutorium"] }), false, "nur Übung und Tutorium");
+  assert.equal(M.gehoertZu(fm({ ende: "13:00" }), G), true);
+  assert.equal(M.gehoertZu(fm({ ende: "13:00" }), G, { ende: true }), false, "mit Ende");
+  assert.equal(M.gehoertZu(fm({ entfaellt: true }), G), false);
+  assert.equal(M.gehoertZu(fm({ wochentag: 3 }), G), false);
+  // Gruppen-Notizen über ihre gruppe_id, nie über die Zeit
+  assert.equal(M.gehoertZu(fm({ herkunft: "ilias-gruppe", gruppe_id: "anders", beginn: "10:15" }), G, { ueberId: true }), false);
+  assert.equal(M.gehoertZu(fm({ herkunft: "gruppe-gewaehlt", gruppe_id: G.id, wochentag: 5 }), G, { ueberId: true }), true);
+  assert.equal(M.deckt(fm(), G), M.gehoertZu(fm(), G));
+});

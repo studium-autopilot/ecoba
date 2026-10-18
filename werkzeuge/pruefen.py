@@ -7,13 +7,18 @@ Läuft lokal (vor jedem Release) und in GitHub Actions, nur mit der Python-Stand
 
 Geprüft wird jede Datei unter BAUM (Standard: aktueller Ordner), außer .git/ und node_modules/:
 
-* Pfade: keine privaten Ordner, keine gerätelokalen Obsidian-Dateien, nur das Plugin „studium-autopilot“.
+* Pfade: keine privaten Ordner, keine gerätelokalen Obsidian-Dateien, nur das Plugin „studium-autopilot“, keine Dateien, die
+  ein Tresor selbst anlegt (Abrufer-Sperren, Indizes, Lernstände, Noten aus Alma, Textfassungen der PDFs).
 * Dateitypen: keine PDF-, Office-, Anki-, Archiv- oder Mediendateien; Bilder nur in docs/bilder/ (png, jpg, svg, webp);
   höchstens --max-mb je Datei.
 * Markdown: keine Mermaid-Codeblöcke (die GitHub-App zeigt nur den Code; Diagramme als PNG unter docs/bilder/).
 * Inhalte: persönliche Pfade, Server-Hinweise, IP-Adressen, E-Mail-Adressen (außer Funktionsadressen der Uni und
-  GitHub-noreply), Telefonnummern, geteilte Lehrmaterial-Links, Zugangsdaten und Token, Sync-Konfiguration, der Name des
-  Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur lokal).
+  GitHub-noreply), Telefonnummern, Matrikelnummern und Geburtsdaten mit Wert, geteilte Lehrmaterial-Links, Zugangsdaten und
+  Token, Sync-Konfiguration, der Name des Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur
+  lokal).
+* Testseiten: jede HTML-Datei unter tests/daten/ beginnt mit dem Kopf „<!-- Erfundene Testseite“ (Werte erfunden, Aufbau
+  höchstens nachgebaut) oder „<!-- Öffentliche Seite ohne Anmeldung“ (was jeder ohne Konto sieht). Seiten nach einer
+  Anmeldung kommen nie roh in den Baum.
 * Vorlage leer: persönliche Felder der Module und Einstellungen leer, persönliche Ordner leer.
 * Update-Liste: System/Daten/system-dateien.json (falls vorhanden) passt zu den Dateien (Klasse, Größe, SHA-256) und
   enthält jede Datei, die ein Update ersetzen darf (Regeln wie update.js, klasse_von unten).
@@ -64,6 +69,13 @@ INHALT_REGELN = [
         r"\b(?:kurs)?pass(?:wort|word)\b[^\n]{0,20}?\b(?:ist|lautet|heißt|is)\b\s*:?\s*"
         r"(?:[\"'`„*]+[^\s\"'`“*]{3,}|[^\s\"'`“*,.;)?!]*\d[^\s\"'`“*,.;)?!]*)", re.I)),
     ("Verweis auf privaten Ordner", re.compile(r"(?<![\w-])_priv" + r"at[/\\]")),
+    # Persönliches aus Alma (Kopfzeile, Leistungen): Bezeichnung und Wert, auch über Tabellenzellen und Tags hinweg
+    ("Matrikelnummer mit Wert", re.compile(
+        r"\b(?:matrikel(?:nummer|-?nr\b\.?)?|matr\.?\s?-?\s?nr\b\.?|matriculation\s+(?:number|no\b\.?)|student\s+id)"
+        r"(?:[\s:=|*#.\-–]|&nbsp;|<[^<>]{0,120}>){0,15}\d{6,8}(?!\d)", re.I)),
+    ("Geburtsdatum mit Wert", re.compile(
+        r"\b(?:geburtsdatum|geboren\s+am|geb\.(?:\s*am)?|date\s+of\s+birth|birth\s*date)"
+        r"(?:[\s:=|*#\-–]|&nbsp;|<[^<>]{0,120}>){0,15}(?:\d{1,2}\.\s?\d{1,2}\.\s?(?:19|20)?\d{2}|(?:19|20)\d{2}-\d{2}-\d{2})", re.I)),
     ("LiveSync/CouchDB-Konfiguration", re.compile(
         r"couchDB_(?:URI|USER|PASSWORD|DBNAME)|setupliv" + r"esync|\bpassphrase\b\s*[\"']?\s*[=:]\s*[\"']?\S{3,}|:598" + r"4\b",
         re.I)),
@@ -95,6 +107,19 @@ BILD_ENDUNGEN = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif
 BILD_ERLAUBT = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
 BILD_ORDNER = "docs/bilder/"
 
+# Dateien, die ein Tresor selbst anlegt (Noten aus Alma samt Konfliktkopien, Sperren, Marker, Zustände, Textfassungen der PDFs);
+# gleiche Liste wie die .gitignore und vault_auslassen in werkzeuge/release.py
+TRESOR_DATEIEN = [
+    (re.compile(r"/System/Daten/alma-konto[^/]*\.json$"), "persönliche Daten (Noten aus Alma)"),
+    (re.compile(r"/System/Daten/uni-zugang\.json$"), "vaultlokale Datei (Uni-Zugang)"),
+    (re.compile(r"/System/Daten/volltext-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
+    (re.compile(r"/System/Daten/alma-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
+    (re.compile(r"/System/Daten/ilias-kalender[^/]*\.json$"), "vaultlokale Datei (ILIAS-Kalender)"),
+    (re.compile(r"/Unterlagen/_Volltext/"), "persönliche Textfassung einer PDF (Volltext)"),
+]
+TESTSEITE = re.compile(r"^tests/daten/.+\.html?$", re.I)
+TESTSEITE_KOPF = re.compile(r"<!--\s*(?:Erfundene Testseite|Öffentliche Seite ohne Anmeldung)\b")
+
 IGNORIERTE_ORDNER = {".git", "node_modules"}
 MERMAID = re.compile(r"^ {0,3}(?:`{3,}|~{3,})[ \t]*mermaid(?![\w-])", re.I)  # Codeblock ```mermaid in Markdown
 SVG_ZAHLEN = re.compile(r"""(\b(?:d|points|viewBox|transform)\s*=\s*)(?:"[^"]*"|'[^']*')""")  # Pfaddaten in .svg
@@ -102,8 +127,8 @@ HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 
 # Persönliche Ordner der Vorlage (müssen leer sein, höchstens .gitkeep)
 LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen",
-                "Karteikarten"]
-MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant"]
+                "Karteikarten", "Lernplan"]
+MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht"]
 EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn"]
 
 NODE_MODULE = r"(?:node:)?(?:fs|path|child_process|os|crypto|http|https|net|zlib|electron)(?:/[\w/]+)?"
@@ -141,7 +166,8 @@ def kuerzen(s, n=110):
 def maskieren(regel, s):
     """Zugangsdaten nie vollständig ausgeben."""
     if regel in ("GitHub-Token", "API-Schlüssel (sk-)", "AWS-Schlüssel", "Google-API-Schlüssel", "Slack-Token",
-                 "Passwort mit Wert", "Kurspasswort", "Zugangsdaten in URL", "LiveSync/CouchDB-Konfiguration"):
+                 "Passwort mit Wert", "Kurspasswort", "Zugangsdaten in URL", "LiveSync/CouchDB-Konfiguration",
+                 "Matrikelnummer mit Wert", "Geburtsdatum mit Wert"):
         return s[:6] + "…(" + str(len(s)) + " Zeichen)"
     return s
 
@@ -401,10 +427,17 @@ def frontmatter(text):
     felder = {}
     if not m:
         return felder
+    schluessel = None
     for z in m.group(1).splitlines():
         km = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", z)
         if km:
-            felder[km.group(1)] = km.group(2).strip()
+            schluessel = km.group(1)
+            felder[schluessel] = km.group(2).strip()
+        elif schluessel and re.match(r"^\s*-\s", z):
+            # Liste in Blockform (so schreibt Obsidian Listen-Eigenschaften): Einträge als „[a, b]“
+            alt = felder[schluessel]
+            eintrag = z.strip()[1:].strip()
+            felder[schluessel] = "[" + eintrag + "]" if leer(alt) else alt[:-1] + ", " + eintrag + "]"
     return felder
 
 
@@ -577,6 +610,9 @@ def pfad_pruefen(rel, groesse, max_bytes, funde):
         funde.append(Fund(rel, 0, "gerätelokale Datei", "ilias-abruf.json"))
     if "/System/Daten/Karteikarten/" in "/" + rel:
         funde.append(Fund(rel, 0, "persönliche Lernstände (Karteikarten)", name))
+    for rx, regel in TRESOR_DATEIEN:
+        if rx.search("/" + rel):
+            funde.append(Fund(rel, 0, regel, name))
     if name in (".DS_Store", "Thumbs.db", "desktop.ini") or name.startswith("~$"):
         funde.append(Fund(rel, 0, "Systemdatei", name))
     if endung in VERBOTENE_ENDUNGEN:
@@ -636,6 +672,8 @@ def pruefen(wurzel, sperre, max_bytes, ohne_node=False):
                 funde.append(Fund(rel, 0, "Binärdatei", "unbekannter Inhalt"))
             continue
         text = roh.decode("utf-8", errors="replace")
+        if TESTSEITE.match(rel) and not TESTSEITE_KOPF.search(text[:2000]):
+            funde.append(Fund(rel, 1, "Testseite ohne Kopf", "„<!-- Erfundene Testseite: …“ bzw. „<!-- Öffentliche Seite ohne Anmeldung: …“ fehlt"))
         # SHA-256-Werte (z. B. in system-dateien.json) sind keine Telefonnummern o. ä.
         geprueft = HEX64.sub("#" * 64, text)
         if endung == ".svg":

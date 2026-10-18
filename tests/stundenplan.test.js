@@ -441,7 +441,19 @@ test("Notizen zu deiner Gruppe (aus ILIAS oder gewählt) fasst der Abrufer nie a
 const EIGENER = [
   ["abgleich.js im Tresor", (t, an) => { if (an) t.text["System/Skripte/abgleich.js"] = "// eigener Abgleich"; else delete t.text["System/Skripte/abgleich.js"]; }],
   ["Einstellung extern", (t, an) => { t.nurFm["System/Einstellungen.md"].ilias_unterlagen = an ? " Extern " : ""; }],
+  ["Liste quellen_extern mit stundenplan", (t, an) => { if (an) t.nurFm["System/Einstellungen.md"].quellen_extern = ["stundenplan"]; else delete t.nurFm["System/Einstellungen.md"].quellen_extern; }],
 ];
+
+test("Liste quellen_extern ohne stundenplan: zentrale Vorlesungen trotz abgleich.js", async () => {
+  const t = tresor(daten());
+  t.text["System/Skripte/abgleich.js"] = "// eigener Abgleich";
+  t.nurFm["System/Einstellungen.md"].quellen_extern = ["ilias-dateien", "volltext"];
+  t.veroeffentlichen(FIXTURE());
+  const b = await t.abrufen();
+  assert.equal(b.fehler + b.warnung, "");
+  assert.equal(t.zentral().length, 3);
+  assert.equal(t.Z.stundenplan().verfuegbar, true);
+});
 
 test("Eigener Uni-Abgleich: keine zentralen Vorlesungen, eigene Notizen unberührt, Texte versprechen nichts", async () => {
   for (const [fall, eigener] of EIGENER) {

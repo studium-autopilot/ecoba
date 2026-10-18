@@ -20,7 +20,7 @@ Studienverlauf: erscheint, sobald Studium Autopilot läuft.
 
 ## Musterstudienplan
 
-> [!eba-karte|handy-zu|ohne-titel]+ Dein Musterplan
+> [!eba-karte|handy-zu|ohne-titel]+ Module je Semester
 > ```eba-musterplan
 > Musterplan: erscheint, sobald Studium Autopilot läuft.
 > ```
@@ -35,7 +35,7 @@ Schwerpunkte: erscheinen, sobald Studium Autopilot läuft.
 
 ## Regeln
 
-> [!eba-karte|regeln]- Regeln
+> [!eba-karte|regeln]- Orientierungsprüfung, Fristen, Bachelorarbeit, Ausland
 > Wie das Studium aufgebaut ist und welche Fristen fürs ganze Studium gelten.
 >
 > | Bereich (ECTS) | Economics | Business Administration | ohne Spezialisierung |

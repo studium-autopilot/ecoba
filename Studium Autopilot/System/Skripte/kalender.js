@@ -9,7 +9,8 @@
 // Prüfung, freiwillig, geschätzt, erledigt). Im Kopf neben „Heute“ der Knopf „+ Termin“ (Aktion termin aus notizen.js, seit
 // 17.10.2026; vorher eine eigene Knopf-Karte auf der Seite). Schmale Ansicht (iPhone): Container-Query in eba-core.css, dann
 // auch eintägige als getönte Blöcke ohne Uhrzeit.
-// Daten live aus den Termin-Notizen (metadataCache, typ: termin), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
+// Daten live aus dem Fachmodell (ctx.modell.termine(): Termin-Notizen ohne Entfallenes, Uhrzeit als Zahl sortiert, Art wie in
+// Agenda und Dashboard), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
 // Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft).
 // Erweiterung: Das Plugin ruft registrieren() beim Start und nach jeder Änderung dieser Datei auf (Hot-Reload); Codeblock und
 // Ereignisse laufen über ctx.codeblock/ctx.an, das Plugin meldet die alte Fassung vorher ab. Stil: eba-core.css Abschnitt 37, Klassen eba-kal-*.
@@ -18,47 +19,26 @@ module.exports = function (ctx) {
   const SPRACHE = "eba-kalender";
   const SPUREN = 4; // sichtbare Terminzeilen je Tag (eba-core.css: grid-template-rows der .eba-kal-woche)
   const WTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-  const KURZTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const LANGTAG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
-  const EVENT = ["Fachschaft", "Veranstaltung"];
-  const ZEIT = /(?:^|\D)((?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[–-]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?)(?!\d)/; // wie termine.js, ohne Lookbehind (iOS < 16.4); Uhrzeit = Gruppe 1
   const RANG = { pruefung: 0, zwischentest: 1, frist: 1, uni: 2, event: 3 };
   const PILLE = { pruefung: "bad", zwischentest: "info", frist: "warn", uni: "info", event: "akzent" };
 
-  const pad = (n) => String(n).padStart(2, "0");
-  const datum = (v) => { const m = String(v ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+  const M = () => ctx.modell; // Fachmodell (modell.js), beim Zeichnen nachgeschlagen
   const tag0 = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const plus = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
   const abstand = (a, b) => Math.round((a - b) / 86400000); // ganze Tage, auch über die Zeitumstellung
   const gleich = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
-  const kurz = (d) => `${KURZTAG[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`;
+  const kurz = (d) => M().zeit.datum(d); // „Mo 19.10.“, Jahr nur außerhalb des Studienjahrs
   const lang = (d) => `${LANGTAG[d.getDay()]}, ${d.getDate()}. ${MONATE[d.getMonth()]}`;
-  // Zwischentests (Titel enthält „Zwischentest“, wie termine.js und klausurzeit.js) sind keine Prüfung: eigene Farbe
-  const art = (k, titel = "") => (k === "Prüfung" ? (/zwischentest/i.test(titel) ? "zwischentest" : "pruefung") : k === "Frist" ? "frist" : EVENT.includes(k) ? "event" : "uni");
+  // Art (Farbe) nach der einen Regel des Fachmodells; Zwischentests (Titel enthält „Zwischentest“) sind keine Prüfung
+  const art = (k, titel = "") => M().terminArt(k, k === "Prüfung" && M().istZwischentest(titel));
   const tage = (g) => Array.from({ length: g.e - g.s + 1 }, (_, i) => g.s + i);
 
-  const lesen = () => {
-    const aus = [];
-    // Termin-Notizen aus dem Datenmodell (modell.js, einmal berechnet), sonst alle Notizen durchsuchen
-    const dateien = ctx.modell && ctx.modell.daten ? ctx.modell.daten().termine.map((x) => x.f) : app.vault.getMarkdownFiles();
-    for (const f of dateien) {
-      const fm = app.metadataCache.getFileCache(f)?.frontmatter;
-      if (fm?.typ !== "termin") continue;
-      const von = datum(fm.datum);
-      if (!von) continue;
-      const bis = datum(fm.bis);
-      const ort = String(fm.ort ?? "").replace(/\s+/g, " ");
-      const kat = String(fm.kategorie ?? "").trim() || "Termin";
-      const titel = String(fm.titel || f.basename).replace(/\s+/g, " ").trim();
-      aus.push({
-        f, von, bis: bis && bis > von ? bis : null, kat, art: art(kat, titel), erledigt: fm.erledigt === true, sq: fm.bereich === "schluesselqualifikation",
-        geschaetzt: fm.status === "geschätzt", zeit: (ort.match(ZEIT) || ["", ""])[1],
-        titel,
-      });
-    }
-    return aus.sort((a, b) => a.von - b.von || a.zeit.localeCompare(b.zeit) || a.titel.localeCompare(b.titel));
-  };
+  const lesen = () => M().termine().map((t) => ({
+    f: t.f, von: M().zeit.tag(t.datum), bis: t.bis ? M().zeit.tag(t.bis) : null, kat: t.kategorie, art: t.art, erledigt: t.erledigt,
+    sq: t.freiwillig, geschaetzt: t.geschaetzt, zeit: t.zeit, minuten: t.minuten == null ? -1 : t.minuten, titel: t.titel,
+  }));
 
   // Relevanz für die Reihenfolge im Raster: Pflicht vor Kür. Freiwilliges (bereich: schluesselqualifikation, z. B. TCP-Belegung)
   // und Erledigtes rücken nach hinten und landen bei Platzmangel zuerst in „+n weitere“; die Tagesliste zeigt immer alles.
@@ -72,7 +52,7 @@ module.exports = function (ctx) {
     const segs = alle.filter((t) => t.von <= ende && (t.bis || t.von) >= start).map((t) => ({
       t, s: Math.max(0, abstand(t.von, start)), e: Math.min(6, abstand(t.bis || t.von, start)),
     }));
-    const zeitfolge = (a, b) => a.s - b.s || (!!a.t.zeit - !!b.t.zeit) || a.t.zeit.localeCompare(b.t.zeit);
+    const zeitfolge = (a, b) => a.s - b.s || (!!a.t.zeit - !!b.t.zeit) || a.t.minuten - b.t.minuten;
     segs.sort((a, b) => gewicht(a.t) - gewicht(b.t) || (!!b.t.bis - !!a.t.bis)
       || (a.t.bis ? a.s - b.s || (b.e - b.s) - (a.e - a.s) : zeitfolge(a, b))
       || a.t.titel.localeCompare(b.t.titel));

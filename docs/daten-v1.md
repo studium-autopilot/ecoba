@@ -58,7 +58,7 @@ sie ausgeliefert werden.
 | `pause` | optional. `true` = **Notbremse**: Kein Gerät übernimmt etwas, Anzeige „Pausiert“. Rücknahme: `false` (oder Git-Revert). |
 
 Das Plugin holt zuerst nur das Manifest. Eine Datei lädt es nur, wenn ihre Prüfsumme sich gegenüber dem letzten übernommenen
-Stand dieses Geräts geändert hat (oder beim Knopf „Jetzt aktualisieren“). Stimmt Größe oder SHA-256 nicht, wird **in diesem Lauf
+Stand dieses Geräts geändert hat (oder beim Knopf **Aktualisieren**). Stimmt Größe oder SHA-256 nicht, wird **in diesem Lauf
 nichts** übernommen (auch nicht die anderen Dateien); der nächste Lauf versucht es wieder. Das fängt auch einen kurzzeitig
 gemischten Stand im CDN ab.
 
@@ -463,9 +463,11 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
 
 - **Abruf:** beim Start (20 s + Zufallsversatz 0–2 Min.), dann alle 15 Min. (ohne Änderung nur das Manifest), beim Zurückkehren in die App (letzter Versuch über 10 Min. her), plus Knopf „Jetzt aktualisieren“. Ohne Netz bleibt
   der letzte Stand; es wird nichts geschrieben.
-- **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (`geraet`, `seit`, `zuletzt`, `angewendet`). Ein anderes Gerät übernimmt
-  erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei Läufen alle 15 Min.
-  also etwa stündlich.
+- **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (`geraet`, `seit`, `zuletzt`, `mobil`, `angewendet`). Ein anderes Gerät
+  übernimmt erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei Läufen alle
+  15 Min. also etwa stündlich. Der Knopf **Aktualisieren** übernimmt sofort, außer der Abrufer hat vor weniger als 2 Min.
+  abgerufen. Wer übernimmt, schreibt `abruf.json` vor den Notizen; jeder Lauf liest sie direkt vor dem Schreiben neu und schreibt
+  nichts, wenn inzwischen ein anderes Gerät übernommen hat.
 - **Notizen:** `Termine/JJJJ-MM-TT Titel.md` mit `herkunft: zentral` und `zentral_id`. Felder aus den Daten werden aktualisiert;
   `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie, außer bei der
   Übergabe nach id (nächster Punkt).

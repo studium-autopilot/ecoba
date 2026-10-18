@@ -6,7 +6,8 @@ Alle Bildschirme sollen aussehen, als wären sie zusammen entstanden. Neue und g
 Stellen werden Schritt für Schritt angeglichen. Wo etwas noch nicht umgesetzt ist, steht **(geplant)**.
 
 Dateien: `Studium Autopilot/.obsidian/snippets/eba-core.css` (Form und Bausteine, Abschnitte mit Nummern),
-`eba-paper-elfenbein.css` (Farben hell und dunkel), `eba-flieder.css` und `eba-klar.css` (nur hell). Wie die Designs gewählt
+`eba-paper-elfenbein.css` (Farben hell und dunkel), `eba-flieder.css` und `eba-klar.css` (Form und Schrift hell und dunkel,
+Farben nur hell; dunkel gelten die dunklen Farben von Elfenbein, bis beide eigene haben). Wie die Designs gewählt
 werden: [architektur.md](architektur.md), „Darstellung“. Regeln für Skripte und iPhone: dort, „Regeln für Skript-Autoren“.
 
 ## Grundsätze
@@ -23,7 +24,9 @@ werden: [architektur.md](architektur.md), „Darstellung“. Regeln für Skripte
 6. **Farbe hat eine Bedeutung.** Statusfarben nur für Zustände (Tabelle unten), der Akzent für Auswahl, „jetzt“, Links und die
    eine Haupthandlung.
 7. **Nur Variablen.** Keine festen Farben im CSS. Sonst passen dunkel, Flieder und Klar nicht.
-8. **Linien-Symbole.** Lucide (24er-Raster, Strich 2, `currentColor`), keine Emojis.
+8. **Symbole nur mit Bedeutung.** Ein Symbol steht nur, wo es etwas sagt, das der Titel nicht sagt (Ort, Kontakt, Achtung,
+   ein Zustand, verschiedene Themen in einer Zeilenliste). Schmückende Symbole entfallen. Wenn, dann Lucide (24er-Raster,
+   Strich 2, `currentColor`), keine Emojis.
 9. **Tippen geht immer.** Tippflächen auf iPhone und iPad mindestens 44 px, Eingabefelder 16 px Schrift.
 10. **Kurze Texte.** Du-Form, ohne Fachwörter, wie im Changelog (siehe [CONTRIBUTING.md](../CONTRIBUTING.md)).
 
@@ -49,7 +52,7 @@ Nur diese Variablen verwenden. Die Werte setzen die Farbschemata; `eba-core.css`
 | `--eba-bad` | Prüfung, Fehler | `#b42318` | `#ec7468` | `#b4234a` | `#c0262d` |
 | `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#4a5ba6` | `#2a5bd7` |
 
-Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel).
+Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel `#d98bab`).
 
 **Bedeutung der Statusfarben**, überall gleich:
 
@@ -107,8 +110,12 @@ darunter wiederholt den Abschnittsnamen nicht als Titel.
 
 ### Karte
 `> [!eba-karte]` und Verwandte (`eba-tabelle`, `eba-termin`, `eba-regel` …): Rahmen `--eba-border`, `--eba-radius`,
-`--eba-card-bg`, kein Schatten. Titel als Label mit Symbol (14 px). Klappbare Karten haben den Pfeil rechts **(geplant:
-überall; bisher nicht auf allen Seiten)**. Für einen abgeschlossenen Block, nicht für einzelne Listeneinträge.
+`--eba-card-bg`, kein Schatten. Titel als Label, ohne Symbol; Symbol (14 px) nur bei `eba-ort`, `eba-kontakt`,
+`eba-achtung` und den Themen der Hilfe (`eba-core.css` Abschnitt 5). Klappbare Karten haben den Pfeil rechts in der
+Titelzeile, auf allen Geräten (`eba-core.css` Abschnitt 5). Für einen abgeschlossenen Block, nicht für einzelne
+Listeneinträge. Obsidians eigene Callouts in Notizen (`> [!info]`, `> [!warning]` …) haben Rahmen und Fläche in der
+Statusfarbe ihres Typs: info, note, tip, question → `--eba-info`, warning → `--eba-warn`, danger, error, bug → `--eba-bad`,
+success → `--eba-good`, quote → `--eba-muted` (`eba-core.css` Abschnitt 2).
 
 ### Zeilenliste
 Der wichtigste Baustein. Code: `.eba-vb-liste` mit `.eba-vb` (Skripte), `> [!eba-zeilen]` (Markdown).
@@ -126,7 +133,8 @@ Der wichtigste Baustein. Code: `.eba-vb-liste` mit `.eba-vb` (Skripte), `> [!eba
   wenn es einen Zustand zeigt). Kein Symbol, wenn alle Zeilen dasselbe hätten.
 - Titel in 600, dahinter höchstens eine Pille. Darunter höchstens eine Metazeile.
 - Rechts genau eins: ein Knopf, ein Pfeil (öffnet etwas), ein Wert (Note, Datum) oder ein Haken (gewählt).
-- **Mit Rahmen** für Listen, in denen man etwas tut (Einstellungen, Verbindungen, Variante, Hilfe, Gruppen). **Ohne Rahmen**,
+- **Mit Rahmen** für Listen, in denen man etwas tut (Einstellungen, Verbindungen, Variante, Hilfe, Übungsgruppen, Karten
+  eines Stapels). **Ohne Rahmen**,
   nur mit Haarlinien, für Leselisten unter einem Gruppenlabel (Unterlagen, „Als Nächstes“, Agenda).
 - Gruppen: Label in `--eba-accent-text` über der Gruppe (ohne Rahmen) oder als Band in `--eba-surface-2` (mit Rahmen).
 - iPhone: Der Knopf bleibt rechts, solange der Titel zwei Zeilen hat; erst danach rutscht er unter den Text.
@@ -185,9 +193,14 @@ Obsidians Hinweis (`Notice`): nur als Antwort auf eine Handlung oder bei einem F
 ### Tabellen
 Markdown-Tabellen nur für Nachschlage-Inhalt (Regeln, Steckbrief): Spaltenköpfe als Label, nur waagerechte Haarlinien, Zahlen
 tabellarisch. Bases-Tabellen sind Datenquelle: `tabellen.js` zeichnet sie als Zeilenliste (`--eba-tliste: 1`), Spaltenköpfe
-ohne Symbole, keine Werkzeugleiste. **(geplant)** Als Liste auf allen Geräten, nicht nur auf dem iPhone und auf Modulseiten.
+ohne Symbole, keine Werkzeugleiste. Auf iPad und PC seitenweise eingeschaltet (`eba-core.css` 37.tabellen): Modulseite,
+Noten & ECTS, Unterlagen, Stundenplan. Die Listen „Fristen“, „Termine“ (Dashboard) und „Prüfungstermine“ zeichnet
+`dashboard.js` als Zeilen (```` ```eba-liste ````, eba-core.css Abschnitt 63), übrige Listenansichten von Bases Obsidian selbst.
 
 ## Daten, Zahlen und Links
+
+Im Code setzen `ctx.modell.zeit` (`datum`, `kurz`, `spanne`, `abstand`, `plural`) und `ctx.modell.statusArt` diese Regeln und
+die Statusfarben oben um (architektur.md, „Fachmodell“); kein Skript formatiert ein Datum oder wählt eine Statusfarbe selbst.
 
 - **Datum in Zeilen:** „Mo 19.10.“. Jahr nur, wenn es nicht im laufenden Studienjahr liegt: „06.02.2028“.
 - **Spannen:** im selben Monat „19.–25.10.“, sonst „12.10. – 06.02.“; Uhrzeit „10:00–12:00“.

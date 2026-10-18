@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/alma-konto-html.test.js und tests/alma-konto.test.js. Erfundene Seite für einen zweiten Faktor (Aufbau nicht erfasst): ein Feld für den
+     Code aus der App. -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head><meta charset="utf-8"><title>Alma</title></head>
+<body>
+<form id="otpForm" name="otpForm" method="post" action="https://alma.uni-tuebingen.de:443/alma/rds?state=user&amp;type=1&amp;category=auth.otp">
+  <h1>Zweiter Faktor</h1>
+  <label for="otp">Einmalcode</label><input type="text" id="otp" name="otp" autocomplete="one-time-code" inputmode="numeric">
+  <button type="submit" id="otpForm:pruefen" name="otpForm:pruefen"><span>Bestätigen</span></button>
+</form>
+</body>
+</html>

@@ -6,12 +6,13 @@
    Form und Schrift gelten in beiden, nur die Farben wechseln. Bis 17.10.2026 gab es dazu Paper, Paper Tübingen,
    Paper Schiefer (hell) und Graphite (dunkel) mit dem Befehl „Design wechseln“.
    Seit 18.10.2026 gibt es dort auch die Designs Flieder und Klar (eba-flieder.css, eba-klar.css), je Gerät über eine Klasse
-   am body (eba-design-…, darstellung.js). Sie gelten nur hell: Die hellen Regeln hier greifen dann nicht
-   (.theme-light:where(:not([class*="eba-design-"])), :where hält die Spezifität wie .theme-light), dunkel bleibt Elfenbein.
+   am body (eba-design-…, darstellung.js). Form und Schrift von Elfenbein gelten dann weder hell noch dunkel
+   (:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])), :where hält die Spezifität wie .theme-light); die Designs
+   behalten ihre Form auch dunkel. Die dunklen Farben unten (.theme-dark) gelten für alle drei, bis Flieder und Klar eigene
+   dunkle Farben haben.
    ========================================================================== */
 
-.theme-light:where(:not([class*="eba-design-"])),
-.theme-dark {
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) {
   --eba-radius: 3px;
   --eba-radius-s: 2px;
   --eba-shadow: none;
@@ -120,13 +121,13 @@
 }
 
 /* Kopf wie ein Geschäftsbericht: doppelte Linie, Serifen-Titel */
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba .eba-kopf { border-bottom: 3px double var(--eba-text); padding-bottom: 1.2rem; }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba .eba-kopf h1,
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kz-gruss { font-size: 2.5em; }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba .eba-meta span { border-radius: 2px; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-kopf { border-bottom: 3px double var(--eba-text); padding-bottom: 1.2rem; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-kopf h1,
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kz-gruss { font-size: 2.5em; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-meta span { border-radius: 2px; }
 
 /* Abschnitte: Serifen-Überschrift statt Label, Linie darüber */
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba h2 {
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba h2 {
   display: block;
   margin: 2.6em 0 0.8em;
   padding-top: 10px;
@@ -138,29 +139,29 @@
   text-transform: none;
   color: var(--eba-text);
 }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba h2::after { display: none; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba h2::after { display: none; }
 
 /* Karten: Kartenfläche, Haarlinie, keine Rundung */
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .callout[data-callout^="eba-"] > .callout-title { color: var(--eba-text); }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent-text); }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kachel { border-top: 2px solid var(--eba-text); }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kachel.akzent::before { display: none; }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kachel.akzent { border-top-color: var(--eba-accent); }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kachel .v { font-weight: 500; }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kachel .v:not(.text) { font-size: 2em; }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .callout[data-callout^="eba-"] > .callout-title { color: var(--eba-text); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent-text); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel { border-top: 2px solid var(--eba-text); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel.akzent::before { display: none; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel.akzent { border-top-color: var(--eba-accent); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel .v { font-weight: 500; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel .v:not(.text) { font-size: 2em; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }
 
 /* Semester-Zeitleiste: kantige Wochenfelder */
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .eba-wochen i { border-radius: 1px; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-wochen i { border-radius: 1px; }
 
 /* Tabellen wie im Finanzteil: kräftige Kopf- und Fußlinie */
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .markdown-rendered th { border-bottom: 1px solid var(--eba-text); color: var(--eba-text); }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .markdown-rendered table { border-bottom: 1px solid var(--eba-text); }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .callout[data-callout^="eba-"] .bases-view { --bases-table-header-color: var(--eba-text); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .markdown-rendered th { border-bottom: 1px solid var(--eba-text); color: var(--eba-text); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .markdown-rendered table { border-bottom: 1px solid var(--eba-text); }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .callout[data-callout^="eba-"] .bases-view { --bases-table-header-color: var(--eba-text); }
 
 /* Normale Notizen: Serifen-Überschriften */
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .markdown-rendered h1,
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .markdown-rendered h2,
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .cm-header-1,
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .cm-header-2 { font-family: var(--eba-font-display); font-weight: 500; }
-:is(.theme-light:where(:not([class*="eba-design-"])), .theme-dark) .inline-title { font-family: var(--eba-font-display); font-weight: 500; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .markdown-rendered h1,
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .markdown-rendered h2,
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .cm-header-1,
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .cm-header-2 { font-family: var(--eba-font-display); font-weight: 500; }
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .inline-title { font-family: var(--eba-font-display); font-weight: 500; }

@@ -3,10 +3,11 @@
    Zartes Lila wie Briefpapier: fliederfarbene Seite, Schrift in dunkler Aubergine, Akzent Violett, Rosé als einzige zweite
    Farbe (Markierungen, hervorgehobene Kachel). Weiche Formen: große Rundungen, runde Überschriften (SF Pro Rounded auf
    iPhone, iPad und Mac, sonst die Schrift des Geräts).
-   Gilt mit body.eba-design-flieder (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Dunkel sieht wie
-   Paper Elfenbein aus (eba-paper-elfenbein.css), dessen helle Regeln bei diesem Design nicht greifen.
-   Regeln stehen unter .eba-design-flieder:where(.theme-light) und sind damit so spezifisch wie die von Elfenbein: Die
-   Ausnahmen in eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
+   Gilt mit body.eba-design-flieder (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Form und Schrift
+   gelten hell und dunkel (seit 18.10.2026; vorher war Flieder nachts ganz Elfenbein), die Farben nur hell: Dunkel gelten die
+   dunklen Farben von Elfenbein (eba-paper-elfenbein.css, .theme-dark), bis Flieder eigene hat.
+   Regeln stehen unter .eba-design-flieder:where(.theme-light, .theme-dark) und sind damit so spezifisch wie die von Elfenbein:
+   Die Ausnahmen in eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
    ========================================================================== */
 
 .eba-design-flieder.theme-light {
@@ -55,7 +56,10 @@
   --eba-warn: #a3600a;
   --eba-bad: #b4234a;
   --eba-info: #4a5ba6;
+}
 
+/* Form und Schrift: hell und dunkel */
+.eba-design-flieder:is(.theme-light, .theme-dark) {
   --eba-radius: 12px;
   --eba-radius-s: 8px;
   --eba-radius-l: 16px;
@@ -63,12 +67,13 @@
   --eba-display-weight: 650;
   --eba-display-tracking: -0.012em;
 }
+.eba-design-flieder.theme-dark { --eba-rose: #d98bab; } /* Streifen der hervorgehobenen Kachel, auf dunklem Grund heller */
 
 /* Seitenkopf: weiche Linie in Flieder */
-.eba-design-flieder:where(.theme-light) .eba .eba-kopf { border-bottom: 2px solid var(--eba-border); }
+.eba-design-flieder:where(.theme-light, .theme-dark) .eba .eba-kopf { border-bottom: 2px solid var(--eba-border); }
 
 /* Abschnitte: runde Überschrift in normaler Schreibweise, darüber eine Linie in Flieder wie auf Briefpapier */
-.eba-design-flieder:where(.theme-light) .eba h2 {
+.eba-design-flieder:where(.theme-light, .theme-dark) .eba h2 {
   display: block;
   margin: 2.4em 0 0.75em;
   padding-top: 10px;
@@ -81,7 +86,7 @@
   text-transform: none;
   color: var(--eba-text);
 }
-.eba-design-flieder:where(.theme-light) .eba h2::after { display: none; }
+.eba-design-flieder:where(.theme-light, .theme-dark) .eba h2::after { display: none; }
 
 /* Hervorgehobene Kachel: Streifen in Rosé */
-.eba-design-flieder:where(.theme-light) .eba-kachel.akzent::before { background: var(--eba-rose); }
+.eba-design-flieder:where(.theme-light, .theme-dark) .eba-kachel.akzent::before { background: var(--eba-rose); }

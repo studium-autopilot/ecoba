@@ -8,14 +8,19 @@ hochgeladen.
 
 ## 1. Release-Baum bauen
 
-In der Arbeitskopie (nicht in diesem Repo) baut ein Export-Skript den Baum in einen leeren Ordner:
+In der Arbeitskopie (nicht in diesem Repo) baut ein Export-Skript den Baum in einen leeren Ordner, **alles aus dem letzten
+Commit** der Arbeitskopie (`git archive`):
 
-- `Studium Autopilot/` aus dem letzten Commit der Arbeitskopie (nichts Ungetracktes), ohne Papierkorb, gerätelokale
-  Obsidian-Dateien, Abrufer-Datei, `installiert.json` und fremde Plugins;
-- `docs/`, `tests/` (ohne die Tests für `server/`, das noch nicht im Release ist), `.github/`, `README.md`, `LICENSE`,
+- `Studium Autopilot/` ohne Papierkorb, gerätelokale Obsidian-Dateien, fremde Plugins und ohne die Dateien, die ein Tresor
+  selbst anlegt (Abrufer-Sperren, `installiert.json`, ILIAS-Index, Lernstände, Noten aus Alma, Textfassungen der PDFs);
+- `docs/`, `tests/` (ohne die Tests für Teile, die nicht im Release sind, etwa `server/`), `.github/`, `README.md`, `LICENSE`,
   `LICENSE-INHALTE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`;
 - `werkzeuge/pruefen.py`, eine eigene `.gitignore` und eine `.gitattributes` (`* -text`: Dateien byte-genau, sonst stimmen die
   Prüfsummen der Update-Liste nicht).
+
+Geänderte, aber nicht committete und neue, ungetrackte Dateien kommen nie in den Baum, auch nicht unter `docs/` oder
+`tests/`. Der Export nennt sie als **WARNUNG** („nicht committet“); vor einem Release darf sie nicht erscheinen. Nur zum
+Testen nimmt `--arbeitsstand` den Arbeitsordner statt des Commits; so gebaut wird nie veröffentlicht.
 
 Dann schreibt der Export die **Update-Liste** `Studium Autopilot/System/Daten/system-dateien.json`: Version, und je Datei, die
 ein Update ersetzen darf, Pfad, Klasse, Größe und SHA-256 (Regeln in `werkzeuge/pruefen.py`, `klasse_von`, gleich wie
@@ -88,6 +93,24 @@ also der der *installierten* Version. Was der alte Planer anders macht, gleicht 
 ersten Laden aus, nur mit Dateien, die schon im Tresor liegen (`docs/architektur.md`, „Update“ → „Reparatur nach dem
 Update“; erster Fall 0.4.4: von Hand geänderte Darstellung). Ändert ein Release die Update-Regeln, darum auch den Weg „alter
 Planer, dann Reparatur“ prüfen, etwa mit dem Test-Tresor der Vorversion.
+
+## Nur README und Bilder veröffentlichen (ohne Version)
+
+Zwischen zwei Releases darf die README samt Bildern auf `main` aktualisiert werden, ohne Version, Tag und Release. Nur mit
+Freigabe des Autors und nur so:
+
+1. Frischer Klon dieses Repos (`main`) in einen leeren Ordner.
+2. Nur `README.md` und Dateien unter `docs/bilder/` aus einem Commit der Arbeitskopie übernehmen (`git show <commit>:README.md`).
+   Bilder, die danach nichts im Baum mehr verwendet, löschen; vorher im ganzen Baum nach dem Dateinamen suchen.
+3. `git status` zeigt nur `README.md` und `docs/bilder/`: nie Dateien des Tresors, `system-dateien.json`, andere Doku, Tests
+   oder `.github/`. Die README verlinkt nur auf Dateien und Anker, die es in `main` gibt, und die Bilder zeigen keine
+   Funktion, die die veröffentlichte Version nicht hat.
+4. `python werkzeuge/pruefen.py .` im Klon, lokal mit der privaten Sperrliste (`--sperrliste`), ohne Funde.
+5. Ein signierter Commit (Identität wie oben), Push auf `main`. Kein Tag, kein Release, das Manifest der zentralen Daten
+   bleibt, wie es ist. GitHub Actions muss grün sein.
+
+Der nächste Export ersetzt `main` ohnehin durch den ganzen Stand; README und Bilder müssen darum auch in der Arbeitskopie
+committet sein.
 
 ## Beta
 

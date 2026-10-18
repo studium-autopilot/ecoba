@@ -584,3 +584,45 @@ test("PC-Transport unter Node: fremde Hosts und http gehen nie hinaus", async ()
   await assert.rejects(t({ url: "http://ovidius.uni-tuebingen.de/", methode: "GET", kopf: {} }), fremd);
   await assert.rejects(t({ url: "https://ovidius.uni-tuebingen.de:444/", methode: "POST", kopf: {}, body: "x=1" }), fremd);
 });
+
+// ---------- Dienste (seit 0.4.5): Alma-Sitzungen erreichen nur Alma, ILIAS-Sitzungen nie Alma ----------
+
+test("Dienst alma: nur alma.uni-tuebingen.de, Kennung mit Link auf den Code; ILIAS und Alma springen nie hinüber", async () => {
+  const A = "https://alma.uni-tuebingen.de";
+  assert.deepEqual(Array.from(N.hostsFuer("alma")), ["alma.uni-tuebingen.de"]);
+  assert.deepEqual(Array.from(N.hostsFuer("ilias")), ["ovidius.uni-tuebingen.de", "idp.uni-tuebingen.de"]);
+  assert.deepEqual(Array.from(N.hostsFuer("mail")), []);
+  assert.equal(N.kennung("0.4.5"), "Studium-Autopilot/0.4.5 (+https://github.com/studium-autopilot/ecoba)");
+  const t = attrappe([{ status: 200, kopf: {}, text: "ok" }]);
+  const s = N.sitzung({ transport: t, dienst: "alma" });
+  assert.equal(s.dienst, "alma");
+  await s.anfrage({ url: A + "/alma/pages/cs/sys/portal/hisinoneStartPage.faces" });
+  assert.match(t.anfragen[0].kopf["user-agent"], /^Studium-Autopilot\/\S+ \(\+https:\/\/github\.com\/studium-autopilot\/ecoba\)$/);
+  // Alma → Weiterleitung zu ILIAS: blockiert, bevor etwas hinausgeht
+  const t2 = attrappe([weiter(I + "/ilias.php")]);
+  await assert.rejects(N.sitzung({ transport: t2, dienst: "alma" }).anfrage({ url: A + "/alma/rds", methode: "POST", formular: { a: "b" } }), fremd);
+  assert.equal(t2.anfragen.length, 1);
+  // ILIAS → Weiterleitung zu Alma: ebenso
+  const t3 = attrappe([weiter(A + "/alma/rds")]);
+  await assert.rejects(N.sitzung({ transport: t3 }).anfrage({ url: I + "/login.php" }), fremd);
+  assert.equal(t3.anfragen.length, 1);
+  // ILIAS-Sitzung, Alma-Adresse direkt: nichts gesendet; ILIAS-Sitzungen bekommen keine eigene Kennung (die setzt der Transport)
+  const t4 = attrappe([{ status: 200, kopf: {}, text: "" }]);
+  const il = N.sitzung({ transport: t4 });
+  await assert.rejects(il.anfrage({ url: A + "/alma/x" }), fremd);
+  assert.equal(t4.anfragen.length, 0);
+  await il.anfrage({ url: I + "/x" });
+  assert.equal(t4.anfragen[0].kopf["user-agent"], undefined);
+  assert.throws(() => N.sitzung({ transport: t4, dienst: "mail" }), /Dienst/);
+});
+
+test("Dienst alma auf iPhone/iPad: requestUrl folgt selbst; geprüft wird die Startadresse", async () => {
+  const gesehen = [];
+  const requestUrl = async (p) => { gesehen.push(p); return { status: 200, headers: {}, text: "<html></html>" }; };
+  const s = N.sitzung({ transport: N.transportMobil({ requestUrl, version: "0.4.5" }), dienst: "alma" });
+  assert.equal(s.mobil, true);
+  await s.anfrage({ url: "https://alma.uni-tuebingen.de/alma/rds", methode: "POST", formular: { asdf: "x" } });
+  assert.match(gesehen[0].headers["user-agent"], /^Studium-Autopilot\/\S+ \(\+https:\/\/github\.com\/studium-autopilot\/ecoba\)$/);
+  await assert.rejects(s.anfrage({ url: I + "/x" }), fremd);
+  assert.equal(gesehen.length, 1);
+});

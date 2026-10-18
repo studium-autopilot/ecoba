@@ -22,9 +22,12 @@
 // Tagen vorbei ist. Wann aus datum/bis und den Zeiten im Feld ort („ab 15:00“, „bis 30.10. 15:00“), Wo aus dem Rest von ort, sonst
 // die Quelle. Hast du für das Modul eine Gruppe (Stundenplan/, herkunft ilias-gruppe oder gruppe-gewaehlt, aktuelles Semester;
 // seit 18.10.2026 auch jede andere Notiz außer zentralen, die zur Zeit einer Gruppe aus gruppen.json passt, Regel aus
-// meine-gruppe.js), steht „angemeldet · Gruppe 4“ dabei: Feld gruppe der Notiz, nie gruppe_alma. Neu gezeichnet bei Änderungen im
+// meine-gruppe.js), steht eine grüne Pille „Gruppe 4“ dabei (ohne Namen „angemeldet“): Feld gruppe der Notiz, nie gruppe_alma.
+// Bis 18.10.2026 „angemeldet · Gruppe 4“ (Entscheidung E7: grün sagt schon „angemeldet“). Neu gezeichnet bei Änderungen im
 // Datenmodell (Termine, Stundenplan, Module, Einstellungen) und wie die Agenda. Stil: eba-core.css Abschnitt 57.
 // Erweiterung: registrieren() meldet Codeblöcke, Ereignisse und Uhr über die Helfer in ctx an (Hot-Reload ohne Neustart).
+// Termine, Uhrzeit, Art und Woche kommen aus dem Fachmodell (ctx.modell, docs/architektur.md „Fachmodell“): Entfallenes fehlt,
+// Uhrzeiten sind als Zahl sortiert (9:15 vor 12:15), „Diese Woche“ ist am Samstag und Sonntag schon die kommende (ab heute).
 // iOS-sicher: keine Node-APIs, keine Lookbehind-Regex.
 module.exports = function (ctx) {
   const app = window.app;
@@ -33,52 +36,35 @@ module.exports = function (ctx) {
   const TAGE = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   const MONATE_KURZ = ["Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."];
-  const EVENT = ["Fachschaft", "Veranstaltung"];
 
-  const pad = (n) => String(n).padStart(2, "0");
-  const datum = (v) => {
-    const m = String(v ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
-  };
-  const kurz = (d) => `${TAGE[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`;
+  const M = () => ctx.modell; // Fachmodell (modell.js), beim Zeichnen nachgeschlagen
+  const datum = (v) => M().zeit.tag(v);
+  const iso = (d) => M().zeit.iso(d);
+  // „Mo 19.10.“, das Jahr nur außerhalb des Studienjahrs (eine Schreibweise, ctx.modell.zeit)
+  const kurz = (d) => M().zeit.datum(d);
   const tage = (a, b) => Math.round((b - a) / 86400000);
   const relativ = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : n < 0 ? "läuft" : `in ${n} Tagen`);
-  const montag = (d) => { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return m; };
+  const minutenSort = (z) => { const n = M().zeit.minuten(z); return n == null ? -1 : n; }; // ohne Uhrzeit zuerst
   const einzeilig = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 
-  // Art wie in kalender.js (Farbe des Punkts): Erledigtes gedämpft, Prüfung rot, Zwischentest (Titel, keine Prüfung) blau, Frist
+  // Art wie in kalender.js (Farbe des Punkts, ctx.modell.terminArt): Erledigtes gedämpft, Prüfung rot, Zwischentest blau, Frist
   // ocker, Veranstaltung/Fachschaft Akzent, Rest Uni
-  const art = (t) => (t.erledigt ? "erledigt" : t.kategorie === "Prüfung" ? (/zwischentest/i.test(t.titel) ? "zwischentest" : "pruefung") : t.kategorie === "Frist" ? "frist" : EVENT.includes(t.kategorie) ? "event" : "uni");
+  const zwischentest = (t) => t.kategorie === "Prüfung" && M().istZwischentest(t.titel);
+  const art = (t) => (t.erledigt ? "erledigt" : M().terminArt(t.kategorie, zwischentest(t)));
   // Zentrale Termine mit bereich: schluesselqualifikation (zentral.js): ruhige Pille, damit klar ist: keine Pflicht
   const pillen = (t) => [
-    t.kategorie === "Prüfung" ? (/zwischentest/i.test(t.titel) ? '<span class="eba-pill info">Zwischentest</span>' : '<span class="eba-pill bad">Prüfung</span>') : t.kategorie === "Frist" ? '<span class="eba-pill warn">Frist</span>' : "",
+    t.kategorie === "Prüfung" ? (zwischentest(t) ? '<span class="eba-pill info">Zwischentest</span>' : '<span class="eba-pill bad">Prüfung</span>') : t.kategorie === "Frist" ? '<span class="eba-pill warn">Frist</span>' : "",
     t.sq ? '<span class="eba-pill leer">freiwillig</span>' : "",
     t.geschaetzt ? '<span class="eba-pill leer">geschätzt</span>' : "",
     t.erledigt ? '<span class="eba-pill ok">erledigt</span>' : "",
   ].filter(Boolean).join(" ");
-  // Uhrzeit aus dem Feld „ort“ (dort steht sie bisher mit dem Ort zusammen), z. B. „Mo 12:15–14:00 · HS N06“.
-  // Nur Doppelpunkt-Zeiten mit gültigen Stunden und Minuten, damit Datumsangaben wie „06.11.“ nicht als Uhrzeit gelten.
-  const ZEIT = /(?:^|\D)((?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[–-]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?)(?!\d)/; // ohne Lookbehind (iOS < 16.4); Uhrzeit = Gruppe 1
-
-  const lesen = () => {
-    const aus = [];
-    for (const f of app.vault.getMarkdownFiles()) {
-      const fm = app.metadataCache.getFileCache(f)?.frontmatter;
-      if (fm?.typ !== "termin") continue;
-      const von = datum(fm.datum);
-      if (!von) continue;
-      const bis = datum(fm.bis);
-      const ort = einzeilig(fm.ort);
-      const quelle = einzeilig(fm.quelle);
-      aus.push({
-        f, von, bis: bis && bis > von ? bis : null, titel: einzeilig(fm.titel || f.basename), kategorie: einzeilig(fm.kategorie) || "Termin",
-        geschaetzt: fm.status === "geschätzt", erledigt: fm.erledigt === true, sq: fm.bereich === "schluesselqualifikation", ort, zeit: (ort.match(ZEIT) || ["", ""])[1],
-        quelle, geprueft: String(fm.geprueft ?? "").slice(0, 10),
-        code: einzeilig(fm.code), bereich: einzeilig(fm.bereich), zentral: fm.herkunft === "zentral", entfaellt: fm.entfaellt === true,
-      });
-    }
-    return aus.sort((a, b) => a.von - b.von || a.zeit.localeCompare(b.zeit) || a.titel.localeCompare(b.titel));
-  };
+  // Termin-Notizen aus dem Fachmodell (ctx.modell.termine(): ohne Entfallenes, nach Tag und Uhrzeit als Zahl), als Einträge der
+  // Agenda mit Date-Werten. Uhrzeit: Feld „uhrzeit“, sonst wie bisher aus „ort“ (z. B. „Mo 12:15–14:00 · HS N06“).
+  const lesen = () => M().termine().map((t) => ({
+    f: t.f, von: datum(t.datum), bis: t.bis ? datum(t.bis) : null, titel: t.titel, kategorie: t.kategorie,
+    geschaetzt: t.geschaetzt, erledigt: t.erledigt, sq: t.freiwillig, ort: t.ort, zeit: t.zeit, quelle: t.quelle,
+    geprueft: String(t.fm.geprueft ?? "").slice(0, 10), code: t.code, bereich: t.bereich, zentral: t.zentral, entfaellt: t.entfaellt,
+  }));
 
   const link = (t, text) => `[[${t.f.path.replace(/\.md$/, "")}|${text}]]`;
 
@@ -116,10 +102,11 @@ module.exports = function (ctx) {
     const teile = [];
 
     // Kompakt: sichtbar nur diese und nächste Woche, je Termin eine Zeile (mehrtägige mit „bis …“); alles danach und
-    // Vergangenes in eingeklappten Karten. Details stehen in der Termin-Notiz.
-    const wo = montag(heute), naechste = new Date(wo); naechste.setDate(wo.getDate() + 7);
-    const uebernaechste = new Date(wo); uebernaechste.setDate(wo.getDate() + 14);
-    const spanne = (a) => { const e = new Date(a); e.setDate(a.getDate() + 6); return `${pad(a.getDate())}.${pad(a.getMonth() + 1)}. – ${pad(e.getDate())}.${pad(e.getMonth() + 1)}.`; };
+    // Vergangenes in eingeklappten Karten. Details stehen in der Termin-Notiz. Diese Woche = Planwoche (ctx.modell.planwoche):
+    // am Samstag und Sonntag schon die kommende, dann ab heute („Diese Woche · 17.–25.10.“).
+    const Z = M().zeit, pw = M().planwoche(iso(heute));
+    const wo = datum(pw.mo), naechste = datum(Z.plus(pw.mo, 7)), uebernaechste = datum(Z.plus(pw.mo, 14));
+    const spanne = (a) => Z.spanne(a, Z.plus(iso(a), 6));
 
     // Diese Woche: erst, was läuft (begonnen, noch nicht vorbei), dann die Marke „Heute“, dann alles ab heute bis Sonntag
     const dieseWoche = kommend.filter((t) => t.von < naechste);
@@ -127,7 +114,7 @@ module.exports = function (ctx) {
     const abHeute = dieseWoche.filter((t) => t.von >= heute);
     const zeilen = laufend.map((t, i) => zeile(t, tagHtml(t.von, { art: art(t), laeuft: true, gleich: i > 0 })));
     if (abHeute.length) zeilen.push(`- <span class="eba-jetzt">Heute · ${kurz(heute)}</span>`, liste(abHeute, heute, { heuteOhneSpalte: true }));
-    teile.push(`## Diese Woche · ${spanne(wo)}`, "", zeilen.length ? zeilen.join("\n") : "- Keine Termine diese Woche.");
+    teile.push(`## Diese Woche · ${pw.vorgezogen ? Z.spanne(heute, pw.so) : spanne(wo)}`, "", zeilen.length ? zeilen.join("\n") : "- Keine Termine diese Woche.");
 
     // „Nächste Woche“ und „Fristen danach“: Inhalt in einer Karte |handy-zu|pc-flach (eba-core.css vor 36b): am PC/iPad
     // ohne Rahmen und Titel unter der Überschrift, auf dem iPhone eine zugeklappte Karte.
@@ -153,7 +140,7 @@ module.exports = function (ctx) {
     // Später: nach Monaten, eingeklappt (|sammel: ruhige Karte ohne Farbkante)
     const spaeter = kommend.filter((t) => t.von >= uebernaechste);
     if (spaeter.length) {
-      teile.push("", `> [!eba-t|sammel]- Später · ${spaeter.length} Termine`);
+      teile.push("", `> [!eba-t|sammel]- Später · ${anzahl(spaeter.length)}`);
       let monat = null;
       const stand = { tag: null };
       for (const t of spaeter) {
@@ -165,7 +152,7 @@ module.exports = function (ctx) {
     }
 
     if (vergangen.length) {
-      teile.push("", `> [!eba-t|sammel]- Vergangen · ${vergangen.length} Termine`);
+      teile.push("", `> [!eba-t|sammel]- Vergangen · ${anzahl(vergangen.length)}`);
       const stand = { tag: null };
       for (const t of vergangen) teile.push(liste([t], heute, { prefix: "> ", monat: true, stand }));
     }
@@ -177,35 +164,10 @@ module.exports = function (ctx) {
   const SCHLUSS = /schluss|frist/i; // Anmeldeschluss, Belegfrist, Anmeldefrist → „bis …“
   const START = /start|beginn/i;    // Anmeldestart → „ab …“
   const NACHLAUF = 7;               // so viele Tage bleibt eine Anmeldung nach ihrem Ende stehen
-  const UHR = "(?:[01]?\\d|2[0-3]):[0-5]\\d";
-  const TAG = "\\d{1,2}\\.\\d{1,2}\\.(?:\\d{2,4})?";
-  const AB_ZEIT = new RegExp(`^ab\\s+(${UHR})(?:\\s*Uhr)?$`, "i");
-  const BIS_ZEIT = new RegExp(`^bis\\s+(?:${TAG}(?:,?\\s*(${UHR}))?|(${UHR}))(?:\\s*Uhr)?$`, "i");
-  const NUR_ZEIT = new RegExp(`^(${UHR}(?:\\s*[–-]\\s*${UHR})?)(?:\\s*Uhr)?$`);
-  const BIS_AM_ENDE = new RegExp(`\\s+bis\\s+${TAG}(?:,?\\s*${UHR})?(?:\\s*Uhr)?$`, "i");
   const GRUPPE = ["ilias-gruppe", "gruppe-gewaehlt"];
 
-  // Feld „ort“ („ab 15:00 · bis 30.10. 15:00 · ILIAS-Kurs E101 → Übungen“) → { ab, bis (Uhrzeit), schluss (ein „bis …“ kam
-  // vor), zeit, wo (der Rest, ohne angehängtes „bis 18.10.“) }
-  const ortTeilen = (ort) => {
-    const aus = { ab: "", bis: "", schluss: false, zeit: "", wo: "" };
-    const wo = [];
-    for (const roh of String(ort || "").split(" · ")) {
-      const teil = roh.trim();
-      let m;
-      if (!teil) continue;
-      if ((m = teil.match(AB_ZEIT))) aus.ab = m[1];
-      else if ((m = teil.match(BIS_ZEIT))) { aus.schluss = true; aus.bis = m[1] || m[2] || ""; }
-      else if ((m = teil.match(NUR_ZEIT))) aus.zeit = m[1];
-      else {
-        const w = teil.replace(BIS_AM_ENDE, "").trim();
-        if (w !== teil) aus.schluss = true;
-        if (w) wo.push(w);
-      }
-    }
-    aus.wo = wo.join(" · ");
-    return aus;
-  };
+  // Feld „ort“ („ab 15:00 · bis 30.10. 15:00 · ILIAS-Kurs E101 → Übungen“) → { ab, bis, schluss, zeit, wo }: ctx.modell.ortTeilen
+  const ortTeilen = (ort) => M().ortTeilen(ort);
   const amUm = (d, z) => kurz(d) + (z ? `, ${z}` : "");
   // Art des Datums: "spanne" (datum bis bis), "ab" (Anmeldung öffnet), "bis" (Anmeldeschluss), "tag" (nur ein Datum)
   const datumArt = (t, o) => {
@@ -221,17 +183,12 @@ module.exports = function (ctx) {
     return amUm(t.von, o.zeit);
   };
   // Andere Stundenplan-Notiz (Alma, von Hand, eigener Uni-Abgleich, ohne herkunft; nie zentral) zur Zeit einer Gruppe aus
-  // gruppen.json? Regel aus meine-gruppe.js (deckt: gleicher Code, gleiches Semester, gleicher Wochentag, Beginn höchstens 15 Min.
-  // daneben, c.t. und s.t.), dazu das Ende ebenso und Art Übung oder Tutorium. Nie über die Nummer der Gruppe.
+  // gruppen.json? Die eine Regel aus meine-gruppe.js (gehoertZu: gleicher Code, gleiches Semester, gleicher Wochentag, Beginn
+  // höchstens 15 Min. daneben, c.t. und s.t.), dazu das Ende ebenso und Art Übung oder Tutorium. Nie über die Nummer der Gruppe.
   const SLOT_ARTEN = ["Übung", "Tutorium"];
-  const minuten = (hm) => { const m = String(hm ?? "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
-  const meineGruppe = () => { const L = ctx.user && ctx.user["meine-gruppe"]; return L && L.deckt && L.echteZeit ? L : null; };
-  const slotPasst = (fm, g, L) => {
-    if (SLOT_ARTEN.indexOf(String(fm.art || "")) < 0 || !L.deckt(fm, g)) return false;
-    const e = minuten(fm.ende), b = minuten(g.bis), echt = minuten(L.echteZeit(g).ende);
-    return e != null && ((b != null && Math.abs(e - b) <= 15) || (!!g.ct && echt != null && Math.abs(e - echt) <= 15));
-  };
-  // „angemeldet · Gruppe 4“, wenn du für das Modul eine Gruppe hast (gruppen = Stundenplan-Notizen [{ fm }]): eine Gruppen-Notiz
+  const meineGruppe = () => { const L = ctx.user && ctx.user["meine-gruppe"]; return L && L.gehoertZu ? L : null; };
+  const slotPasst = (fm, g, L) => L.gehoertZu(fm, g, { arten: SLOT_ARTEN, ende: true });
+  // „Gruppe 4“ (ohne Namen „angemeldet“), wenn du für das Modul eine Gruppe hast (gruppen = Stundenplan-Notizen [{ fm }]): eine Gruppen-Notiz
   // (ILIAS oder gewählt) oder eine andere Notiz zur Zeit einer Gruppe dieses Moduls (zentrale = geprüfte Gruppen aus gruppen.json,
   // slotPasst). Nennt der Titel die Art (Übung, Tutorium) und gibt es Gruppen dieser Art, zählen nur sie. Der Name kommt nur aus
   // dem Feld gruppe der Notiz.
@@ -254,7 +211,7 @@ module.exports = function (ctx) {
     if (!g.length) return "";
     const namen = [];
     for (const fm of g) { const n = einzeilig(fm.gruppe); if (n && namen.indexOf(n) < 0) namen.push(n); }
-    return "angemeldet" + (namen.length ? " · " + namen.join(", ") : "");
+    return namen.length ? namen.join(", ") : "angemeldet";
   };
   // Fürs Studium: mit Modul (code), Schlüsselqualifikation (bereich), TCP, Übungs- und Tutoriengruppen, Prüfungsanmeldung.
   // Alles andere steht nur in der Agenda.
@@ -282,7 +239,7 @@ module.exports = function (ctx) {
       };
       (z.vorbei ? vorbei : offen).push(z);
     }
-    const reihe = (a, b) => a.t.von - b.t.von || a.t.zeit.localeCompare(b.t.zeit) || a.t.titel.localeCompare(b.t.titel);
+    const reihe = (a, b) => a.t.von - b.t.von || minutenSort(a.t.zeit) - minutenSort(b.t.zeit) || a.t.titel.localeCompare(b.t.titel);
     return offen.sort(reihe).concat(vorbei.sort(reihe));
   };
 

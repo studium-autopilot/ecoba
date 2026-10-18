@@ -1,7 +1,8 @@
 // Leere Notizen automatisch löschen, wenn man sie leer verlässt. Verlässt man eine Vorlesungs- oder Übungsblatt-Notiz (typ: vorlesung | übungsblatt), in der
 // außer dem Gerüst der Vorlage nichts steht (Überschriften, leere Aufzählungspunkte, Beschriftungen wie „Ansatz:“ oder
 // „Kernaussagen:“, der Kopf-Codeblock, Callouts der Vorlage), wandert sie in den Vault-Papierkorb (`.trash/`, wiederherstellbar).
-// Termine, Module, Stundenplan-Einträge, Begleitnotizen sind ausgenommen: ihr Inhalt steht in den Eigenschaften.
+// Termine, Module, Stundenplan-Einträge, Begleitnotizen sind ausgenommen: ihr Inhalt steht in den Eigenschaften. Ebenso ein
+// Übungsblatt mit Abgabedatum (oder verknüpften Aufgaben bzw. eigener Lösung): Seine Abgabe zählt in Fristen und Unterlagen.
 // „Verlassen“ = eine andere Notiz wird aktiv oder der Tab schließt (Ereignis file-open; der Wechsel zu Folien, PDFs oder
 // Bildern zählt nicht). Geprüft wird 2,5 s später, und nur,
 // wenn die Notiz in keinem Tab mehr sichtbar ist (geteilte Ansicht, Seitenleiste am PC: nichts passiert). Text aus einem noch
@@ -35,7 +36,11 @@ module.exports = function (ctx) {
     return true;
   };
 
-  const typVon = (f) => { const fm = app.metadataCache.getFileCache(f); return fm && fm.frontmatter ? fm.frontmatter.typ : undefined; };
+  // Übungsblatt mit Angaben in den Eigenschaften (Abgabe, Aufgaben, eigene Lösung): bleibt, auch ohne Text darunter
+  const hatAngaben = (fm) => !!fm && String(fm.typ || "").toLowerCase() === "übungsblatt"
+    && ["faellig", "datei", "eigene_loesung"].some((k) => fm[k] != null && String(fm[k]).trim() !== "");
+
+  const fmVon = (f) => { const c = app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
   const blaetter = (f) => app.workspace.getLeavesOfType("markdown").filter((l) => l.view && l.view.file === f);
   const textVon = async (f) => {
     const l = blaetter(f).find((x) => x.view.editor);
@@ -47,7 +52,8 @@ module.exports = function (ctx) {
     try {
       if (!f || f.extension !== "md" || app.vault.getAbstractFileByPath(f.path) !== f) return false;
       if (/Unbenannt|Untitled/.test(f.basename)) return false;             // Vorlage läuft noch (Knopf); die räumt selbst auf
-      if (TYPEN.indexOf(String(typVon(f) || "").toLowerCase()) < 0) return false;
+      const fm = fmVon(f);
+      if (TYPEN.indexOf(String(fm.typ || "").toLowerCase()) < 0 || hatAngaben(fm)) return false;
       if (app.workspace.getActiveFile() === f) return false;               // doch wieder offen
       if (blaetter(f).some((l) => l.view.containerEl && l.view.containerEl.isShown && l.view.containerEl.isShown())) return false;
       if (!istLeer(await textVon(f))) return false;
@@ -67,5 +73,5 @@ module.exports = function (ctx) {
     });
   };
 
-  return { registrieren, istLeer, pruefen };
+  return { registrieren, istLeer, hatAngaben, pruefen };
 };

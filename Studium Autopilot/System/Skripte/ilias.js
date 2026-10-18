@@ -14,10 +14,10 @@
 //   { version: 1, kurse: { <refId>: { titel, code, aktiv, zuletzt, t } }, dateien: { <ILIAS-id>: { pfad, sha256, groesse,
 //   geaendert, iliasGroesse, original, iliasPfad, kurs, seit, wie, aktualisiert?, geloescht?, fassungen?, t } },
 //   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, t } }, gruppen: { <ref_id der Gruppe>:
-//   { code, kurs, tag, beginn, ende, raum, mitglied, status, zentral, kandidaten, t } } }. Kurstitel und ILIAS-Pfade nur ohne
-//   Kurspasswort (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von Gruppen nie Titel oder Beschreibung (dort
-//   stehen Namen), nur Code, Zeitfenster und Raumnummer. Jeder Eintrag trägt „t“ (letzte
-//   Änderung). Vor jedem Schreiben wird mit dem Stand auf der Platte gemischt (je Eintrag gewinnt der neuere), so
+//   { code, kurs, tag, beginn, ende, raum, mitglied, status, zentral, kandidaten, notiz (Grabstein, siehe gruppenAbgleichen),
+//   t } } }. Kurstitel und ILIAS-Pfade nur ohne Kurspasswort (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von
+//   Gruppen nie Titel oder Beschreibung (dort stehen Namen), nur Code, Zeitfenster und Raumnummer. Jeder Eintrag trägt „t“
+//   (letzte Änderung). Vor jedem Schreiben wird mit dem Stand auf der Platte gemischt (je Eintrag gewinnt der neuere), so
 //   überstehen Änderungen anderer Geräte (Kurswahl, Umbenennen) einen laufenden Abruf. Einträge werden nie gelöscht.
 // Abrufer-Sperre (System/Daten/ilias-abruf.json, synchronisiert): nur ein Gerät lädt, Regeln wie zentral.js (UEBERNAHME,
 //   PULS). Nur Geräte mit gespeichertem Zugang nehmen teil. „frei: true“ setzt ein Gerät, das seine Gruppen-Notizen
@@ -41,9 +41,16 @@
 //   Zeitfenster aus Titel und Beschreibung, Zuordnung zu gruppen.json und eine Notiz in Stundenplan/ (meine-gruppe.js,
 //   herkunft: ilias-gruppe). Nur das Gerät mit der Abrufer-Sperre schreibt; ein Fehler dabei hält die Unterlagen nicht an.
 //   Trennen, abgelehnte Anmeldung oder verwaist (gruppenFreigeben): Die Notizen werden zu gewählten, deine Gruppe bleibt.
-// Eigener Uni-Abgleich (eba.eigenerAbgleich): Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“
-//   in den Einstellungen, lädt dieses Skript nie Dateien (Status TEXT_EXTERN). Mit ILIAS-Zugang prüft es dort nur die
-//   Übungsgruppen: kurze Läufe ohne Auftrag (kein Weitermachen, keine Stapel), ein Hinweis zum Ergebnis nur nach deinem Tipp.
+// Quellen außerhalb des Plugins (eba.quelleExtern, Schlüssel „ilias-dateien“ und „ilias-gruppen“; ohne Liste in den
+//   Einstellungen gilt beim eigenen Uni-Abgleich nur „ilias-dateien“): Dateien extern → dieses Skript lädt nie Dateien (Status
+//   TEXT_EXTERN); mit ILIAS-Zugang prüft es dann nur die Übungsgruppen: kurze Läufe ohne Auftrag (kein Weitermachen, keine
+//   Stapel), ein Hinweis zum Ergebnis nur nach deinem Tipp. Gruppen extern → kein Gruppenabgleich. Beides → kein Lauf.
+// Uni-Zugang (seit 0.4.5, auch für Noten & Anmeldungen aus Alma, alma-konto.js): Lehnt die Uni ein gespeichertes Passwort
+//   eindeutig ab (zugang-falsch), schreibt das Gerät die synchronisierte Datei System/Daten/uni-zugang.json { abgelehnt, dienst,
+//   geraet } (ohne Benutzername, ohne Passwort). Jedes Gerät, dessen Passwort älter ist (gerätelokal eba-uni-zugang-seit), meldet
+//   sich dann nirgends mehr an, auch nicht per Knopf, bis man das Passwort dort neu eingibt (eine prüfende Anmeldung). So scheitert
+//   nach einem Passwortwechsel im Normalfall höchstens ein Gerät. eba-uni-zugang-ok = letzte erfolgreiche ILIAS-Anmeldung mit
+//   diesem Passwort; Alma meldet sich nur an, wenn ILIAS es bestätigt hat (uniZugang().bestaetigt), nie als Erste.
 // Für andere Skripte: ctx.ilias (siehe unten, api). Testeinstiege: plugin.testIliasAus (kein automatischer Lauf);
 //   ctx.ilias.erzeugen(abh) baut den ganzen Ablauf mit falschem ILIAS und Tresor im Speicher (tests/ilias.test.js);
 //   in Obsidian ersetzen ctx.ilias.anmeldungSetzen(fn) und ctx.ilias.quelleSetzen(fn) Anmeldung bzw. ILIAS (Oberfläche
@@ -61,6 +68,7 @@ module.exports = function (ctx) {
   // ---------- Konstanten ----------
   const INDEX = "System/Daten/ilias.json";
   const ABRUF = "System/Daten/ilias-abruf.json";
+  const UNI_ZUGANG = "System/Daten/uni-zugang.json"; // Ablehnungs-Marker (synchronisiert, ohne Geheimnis)
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const ZIEL = "Unterlagen";
   const MIN = 60e3, STUNDE = 60 * MIN;
@@ -102,15 +110,16 @@ module.exports = function (ctx) {
   const ZURUECK_PRUEFEN = 10e3;
   const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet",
     auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt", funde: "eba-ilias-funde",
-    migration: "eba-ilias-migration" };
+    migration: "eba-ilias-migration", zugangSeit: "eba-uni-zugang-seit", zugangOk: "eba-uni-zugang-ok" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
   const TEXT_ANMELDUNG_FOLGT = "ILIAS-Anmeldung folgt in einer späteren Version";
   const TEXT_EXTERN = "Deine Unterlagen kommen über deinen Uni-Abgleich."; // auch Zeile und Einrichtung (verbindungen.js, einrichtung.js)
+  const TEXT_ABGELEHNT = "Anmeldung abgelehnt. Bitte dein Passwort neu eingeben."; // Uni-Zugang abgelehnt (auf einem deiner Geräte)
   const MODULCODE = (ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE) || "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?"; // wie eba.js
   const CODE_ANFANG = new RegExp("^\\s*(" + MODULCODE + ")(?=[\\s_\\-.:,/]|$)");
   const CODE_GANZ = new RegExp("^" + MODULCODE + "$");
-  // Eigener Uni-Abgleich: eine Regel für alle Skripte (eba.js); ohne eba.js keiner
-  const eigenerAbgleich = (existiert, einstellungen) => { const f = ctx.user && ctx.user.eba && ctx.user.eba.eigenerAbgleich; return !!f && f(existiert, einstellungen); };
+  // Quellen außerhalb des Plugins (eigener Uni-Abgleich): eine Regel für alle Skripte (eba.quelleExtern); ohne eba.js keine
+  const quelleExtern = (schluessel, existiert, einstellungen) => { const f = ctx.user && ctx.user.eba && ctx.user.eba.quelleExtern; return !!f && f(schluessel, existiert, einstellungen); };
 
   // ---------- Kleine Helfer ----------
   const pad = (n) => String(n).padStart(2, "0");
@@ -288,15 +297,8 @@ module.exports = function (ctx) {
   };
   // Lauf ohne Regung (Anfrage, Fortschritt) seit STILL: auf iPhone/iPad meist im Hintergrund gestorben
   const abgestorben = (regungMs, jetztMs) => regungMs > 0 && jetztMs - regungMs > STILL;
-  const vorText = (iso, jetztMs) => {
-    const t = Date.parse(iso || "");
-    if (isNaN(t)) return "";
-    const min = Math.max(0, Math.round((jetztMs - t) / MIN));
-    if (min < 1) return "gerade eben";
-    if (min < 60) return `vor ${min} Min.`;
-    const h = Math.round(min / 60);
-    return h < 48 ? `vor ${h} Std.` : `vor ${Math.round(h / 24)} Tagen`;
-  };
+  // „vor 5 Min.“: dieselben Zeitwörter wie jede Quelle (quellen.js)
+  const vorText = (iso, jetztMs) => { const Q = ctx.user && ctx.user.quellen; return Q ? Q.vorText(iso, jetztMs) : ""; };
 
   // ---------- Index: lesen, prüfen, mischen ----------
   const BEREICHE = ["kurse", "dateien", "ignoriert", "gruppen"];
@@ -419,7 +421,8 @@ module.exports = function (ctx) {
     const melden = (x) => { try { if (abh.geaendert) abh.geaendert(x || null); } catch (e) { /* egal */ } };
 
     // ----- Stand (gerätelokal) -----
-    const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {} }, lokal(L.stand) || {});
+    // warnung: Sätze aus dem letzten fertigen Lauf (fehlende Dateien, Übungsgruppen …), stehen in Zeile und Fenster unter Verbindungen
+    const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", warnung: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {} }, lokal(L.stand) || {});
     const standSetzen = (x) => lokal(L.stand, Object.assign(stand(), x));
     const protokoll = () => { const p = lokal(L.protokoll); return Array.isArray(p) ? p.slice() : []; };
     // Offener Auftrag (ein Abruf, den du gestartet hast und der noch nicht fertig ist), nur auf diesem Gerät
@@ -430,17 +433,47 @@ module.exports = function (ctx) {
     const hatZugang = () => !!benutzer();
     const geheimLesen = () => { try { const v = abh.geheim.lesen(abh.geheimId()); return typeof v === "string" && v ? v : ""; } catch (e) { return ""; } };
     const anmeldung = () => { try { const f = abh.anmeldung ? abh.anmeldung() : null; return typeof f === "function" ? f : null; } catch (e) { return null; } };
-    const extern = () => {
-      try { return eigenerAbgleich(io.existiert, abh.einstellungen && abh.einstellungen()); } catch (e) { return false; }
+    const quelleAussen = (schluessel) => {
+      try { return quelleExtern(schluessel, io.existiert, abh.einstellungen && abh.einstellungen()); } catch (e) { return false; }
+    };
+    // Dateien extern (eigener Uni-Abgleich): keine Downloads, mit Zugang nur die Übungsgruppen (lauf: nurGruppen). Gruppen extern:
+    // kein Gruppenabgleich. Beides extern: kein ILIAS-Lauf.
+    const extern = () => quelleAussen("ilias-dateien");
+    const gruppenExtern = () => quelleAussen("ilias-gruppen");
+    // ----- Uni-Zugang: synchronisierter Ablehnungs-Marker (uni-zugang.json), gerätelokal seit/ok (Kopf) -----
+    let marker = null; // { abgelehnt, dienst, geraet } | null; markerLesen() hält ihn aktuell (Start, Lauf, Sync)
+    const zeitVon = (s) => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
+    const markerLesen = async () => {
+      let o = null;
+      try { o = JSON.parse((await io.lesenText(UNI_ZUGANG)) || "null"); } catch (e) { o = null; }
+      marker = o && typeof o === "object" && zeitVon(o.abgelehnt) ? { abgelehnt: String(o.abgelehnt), dienst: String(o.dienst || ""), geraet: String(o.geraet || "") } : null;
+      return marker;
+    };
+    // Abgelehnt, nachdem das Passwort hier gespeichert wurde: keine Anmeldung, auch nicht per Knopf
+    const abgelehnt = () => !!marker && hatZugang() && zeitVon(marker.abgelehnt) > zeitVon(lokal(L.zugangSeit));
+    const markerSchreiben = async (dienst) => {
+      const m = { abgelehnt: iso(), dienst: dienst === "alma" ? "alma" : "ilias", geraet: abh.geraetId() };
+      try { await io.schreibenText(UNI_ZUGANG, JSON.stringify(m, null, 1) + "\n"); marker = m; } catch (e) { try { console.warn("ilias: Uni-Zugang nicht vermerkt"); } catch (x) { /* egal */ } }
+      melden({ art: "zugang" });
+    };
+    const uniZugang = () => {
+      const seit = lokal(L.zugangSeit), ok = lokal(L.zugangOk);
+      return { benutzer: benutzer(), seit: typeof seit === "string" ? seit : "", ok: typeof ok === "string" ? ok : "", abgelehnt: marker ? marker.abgelehnt : "",
+        dienst: marker ? marker.dienst : "", gesperrt: abgelehnt(), bestaetigt: hatZugang() && !abgelehnt() && !!zeitVon(ok) && zeitVon(ok) >= zeitVon(seit) };
     };
     // Eigener Uni-Abgleich: trotzdem bereit, dann nur für die Übungsgruppen (lauf: nurGruppen, keine Downloads)
-    const bereit = () => !!anmeldung() && hatZugang() && !stand().gesperrt;
+    const bereit = () => !!anmeldung() && hatZugang() && !stand().gesperrt && !abgelehnt() && !(extern() && gruppenExtern());
     // Fehlertext ohne Kennwort (auch URL-kodiert), höchstens 300 Zeichen
     const fehlerText = (e, wert) => {
       let t = String((e && e.message) || e || "Fehler");
       const w = wert || geheimLesen();
       if (w) for (const g of [w, encodeURIComponent(w)]) t = t.split(g).join("•••");
       return t.slice(0, 300);
+    };
+    // Warnung eines Laufs: klar = Satz für Zeile, Fenster und Hinweis (Stand „warnung“); technik = Einzelheiten nur fürs Protokoll
+    const warnen = (b, klar, technik) => {
+      b.warnung = (b.warnung ? b.warnung + " " : "") + klar;
+      if (technik) b.technik = (b.technik ? b.technik + " " : "") + technik;
     };
     // Anmeldung mit Ergebnisobjekt → wirft bei Misserfolg (e.art „zugang“ = ohne dein Zutun nicht mehr automatisch versuchen)
     const anmeldenMit = (f) => async (sitzung, zugang, optionen) => {
@@ -471,6 +504,9 @@ module.exports = function (ctx) {
         catch (e) { return { ok: false, art: "schluesselbund", fehler: "Der Schlüsselbund von Obsidian ist auf diesem Gerät nicht verfügbar." }; }
       } finally { wert = ""; }
       lokal(L.benutzer, name);
+      // Passwort hier neu: seit jetzt; mit Prüfung hat ILIAS es gerade bestätigt (Alma darf es dann nutzen)
+      lokal(L.zugangSeit, iso());
+      if (o.pruefen) lokal(L.zugangOk, iso());
       standSetzen({ gesperrt: false, fehler: "", fehlerZeit: "" });
       melden({ art: "zugang" });
       return { ok: true };
@@ -483,6 +519,8 @@ module.exports = function (ctx) {
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       lokal(L.benutzer, null);
       lokal(L.funde, null);
+      lokal(L.zugangSeit, null);
+      lokal(L.zugangOk, null);
       standSetzen({ fehler: "", fehlerZeit: "", gesperrt: false, abrufer: false });
       melden({ art: "zugang" });
       const freigeben = () => gruppenFreigeben(UEBERNAHME).catch((e) => { try { console.warn("ilias: Gruppen " + fehlerText(e)); } catch (x) { /* egal */ } });
@@ -532,16 +570,11 @@ module.exports = function (ctx) {
       return n > 0;
     };
 
-    // ----- Abrufer-Sperre (frei: das Gerät hat seine Gruppen-Notizen freigegeben, ein anderes darf sofort übernehmen) -----
-    const sperreLesen = async () => {
-      const t = await io.lesenText(ABRUF);
-      if (t == null) return null;
-      try {
-        const o = JSON.parse(t);
-        return o && typeof o.geraet === "string" ? { geraet: o.geraet, seit: String(o.seit || ""), zuletzt: String(o.zuletzt || ""), frei: o.frei === true } : null;
-      } catch (e) { return null; }
-    };
-    const sperreSchreiben = (a) => io.schreibenText(ABRUF, JSON.stringify(Object.assign({ geraet: a.geraet, seit: a.seit, zuletzt: a.zuletzt }, a.frei ? { frei: true } : {}), null, 1) + "\n");
+    // ----- Abrufer-Sperre: die gemeinsame der Quellen (sperre.js), Datei ilias-abruf.json wie bisher (ältere Fassungen lesen sie
+    // weiter: geraet, seit, zuletzt, frei; dazu mobil). frei: das Gerät hat seine Gruppen-Notizen freigegeben, ein anderes darf
+    // sofort übernehmen.
+    const sperre = () => (abh.sperre || (ctx.user && ctx.user.sperre)).erzeugen({ io: { lesen: (p) => io.lesenText(p), schreiben: (p, t) => io.schreibenText(p, t) },
+      pfad: ABRUF, geraetId: abh.geraetId, jetzt, mobil: !!abh.mobil, uebernahme: UEBERNAHME, puls: PULS });
 
     // ----- Dateien im Tresor: Prüfsummen (je Lauf zwischengespeichert) -----
     const hashVon = async (r, pfad) => {
@@ -569,7 +602,7 @@ module.exports = function (ctx) {
       const fehlend = Object.keys(d).filter((id) => d[id].pfad && !d[id].geloescht && !io.existiert(d[id].pfad));
       if (!fehlend.length) return;
       const alle = Object.keys(d).filter((id) => !d[id].geloescht).length;
-      if (fehlend.length > 10 && fehlend.length > alle / 2) { b.warnung = `${fehlend.length} Dateien fehlen im Tresor, vermutlich läuft der Sync noch. Nichts als gelöscht gemerkt.`; return; }
+      if (fehlend.length > 10 && fehlend.length > alle / 2) { warnen(b, `${fehlend.length} Dateien fehlen gerade in Unterlagen, vermutlich kommen sie noch über deinen Sync.`, "Nichts als gelöscht gemerkt."); return; }
       const vorrat = io.dateien("");
       const belegt = {};
       for (const id of Object.keys(d)) if (!d[id].geloescht && d[id].pfad && io.existiert(d[id].pfad)) belegt[d[id].pfad] = true;
@@ -623,7 +656,8 @@ module.exports = function (ctx) {
     const kursAn = (refId) => !!(mem && mem.kurse[refId] && mem.kurse[refId].aktiv);
 
     // ----- Kurse -----
-    const kurseUebernehmen = (roh) => {
+    // alleAus: neue Kurse sind aus (Verbinden aus der Zeile „Noten & Anmeldungen“: erst einmal keine Dateien)
+    const kurseUebernehmen = (roh, alleAus) => {
       const aus = [];
       for (const k of roh) {
         const refId = k && k.refId != null ? String(k.refId) : "";
@@ -632,7 +666,7 @@ module.exports = function (ctx) {
         const titel = ohneKennwort(k.titel) || code || "Kurs " + refId;
         const alt = mem.kurse[refId];
         // Vorgabe beim ersten Sehen: an, wenn der Titel mit einem Modulcode beginnt, zu dem es eine Modulnotiz gibt
-        if (!alt) setzen("kurse", refId, { titel, code, aktiv: !!(code && abh.modul(code)), zuletzt: "" });
+        if (!alt) setzen("kurse", refId, { titel, code, aktiv: !alleAus && !!(code && abh.modul(code)), zuletzt: "" });
         else if (alt.titel !== titel || alt.code !== code) setzen("kurse", refId, { titel, code });
         aus.push({ refId, titel, code, url: k.url });
       }
@@ -665,7 +699,7 @@ module.exports = function (ctx) {
     const gruppenLib = () => { try { return abh.gruppen ? abh.gruppen() : null; } catch (e) { return null; } };
     const gruppenSlot = (e) => { const G = gruppenLib(); return G ? G.zeitfenster(String(e.titel || "") + " · " + String(e.beschreibung || "")) : null; };
     const gruppenNameAus = (titel) => { const G = gruppenLib(); return G && G.gruppenName ? G.gruppenName(titel) : ""; };
-    const GRUPPE_FELDER = ["code", "kurs", "name", "tag", "beginn", "ende", "raum", "mitglied", "fehlt", "kursVersucht", "status", "zentral", "kandidaten"];
+    const GRUPPE_FELDER = ["code", "kurs", "name", "tag", "beginn", "ende", "raum", "mitglied", "fehlt", "kursVersucht", "status", "zentral", "kandidaten", "notiz"];
     const gruppeMerken = (id, felder) => {
       const alt = mem.gruppen[id] || {}, neu = Object.assign({}, alt, felder);
       const anders = GRUPPE_FELDER.some((k) => JSON.stringify(alt[k] == null ? null : alt[k]) !== JSON.stringify(neu[k] == null ? null : neu[k]));
@@ -676,7 +710,6 @@ module.exports = function (ctx) {
     const gruppenAbgleichen = async (b, r, q, roh, darf) => {
       const G = gruppenLib();
       if (!G || !roh) return;
-      const warnen = (t) => { b.warnung = (b.warnung ? b.warnung + " " : "") + t; };
       for (const id of Object.keys(r.gruppenGesehen)) {
         const x = r.gruppenGesehen[id];
         gruppeMerken(id, Object.assign({ code: x.code || (mem.gruppen[id] || {}).code || "", kurs: x.kurs }, slotFelder(x.slot), x.name ? { name: x.name } : {}));
@@ -710,16 +743,20 @@ module.exports = function (ctx) {
       const ausNotizen = sp ? sp.notizen().filter((x) => x.fm && x.fm.herkunft === "ilias-gruppe" && x.fm.entfaellt !== true).map((x) => String(x.fm.ilias_gruppe || "")).filter(Boolean) : [];
       const bekannt = Object.keys(mem.gruppen).filter((id) => mem.gruppen[id].mitglied).concat(ausNotizen).filter((id, i, a) => a.indexOf(id) === i);
       const leer = !mitglieder.size && bekannt.length > 0;
-      if (leer) warnen("ILIAS nennt keine deiner Gruppen mehr – nichts entfernt.");
+      if (leer) warnen(b, "ILIAS nennt gerade keine deiner Übungsgruppen. Dein Stundenplan bleibt, wie er ist.");
       else for (const id of bekannt) if (!mitglieder.has(id)) gruppeMerken(id, { fehlt: Math.min(2, ((mem.gruppen[id] || {}).fehlt || 0) + 1) });
       const verlassen = (id) => !leer && ((mem.gruppen[id] || {}).fehlt || 0) >= 2;
       b.gruppen = { mitglied: mitglieder.size, zugeordnet: soll.length, neu: 0 };
       if (zentral && sp) { // ohne Gruppenliste keine Notizen (und keine entfernt)
-        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen });
+        // Grabstein (Lebenslauf der Quellen): „notiz“ im Index = Gruppe aus gruppen.json, für die schon eine ILIAS-Notiz da war.
+        // Fehlt sie jetzt, hast du sie gelöscht: nicht wieder anlegen, bis die Zuordnung wechselt oder du die Gruppe verlässt.
+        const geloescht = (id, zid) => !!zid && (mem.gruppen[id] || {}).notiz === zid;
+        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen, geloescht });
         b.gruppen.neu = n.angelegt.length + n.uebernommen.length;
         b.gruppen.notizen = n;
-        if (n.warnung) warnen(n.warnung);
-        else for (const id of bekannt) if (verlassen(id)) gruppeMerken(id, { mitglied: false, status: "", zentral: "", kandidaten: [] });
+        for (const s of soll) if (n.notizen && n.notizen[s.refId] && (mem.gruppen[s.refId] || {}).notiz !== s.g.id) gruppeMerken(s.refId, { notiz: s.g.id });
+        if (n.warnung) warnen(b, n.warnung);
+        else for (const id of bekannt) if (verlassen(id)) gruppeMerken(id, { mitglied: false, status: "", zentral: "", kandidaten: [], notiz: "" });
       }
       await speichern();
       melden({ art: "gruppen" });
@@ -744,9 +781,9 @@ module.exports = function (ctx) {
       const notizen = G && G.iliasFreigeben && sp ? sp.notizen().filter((x) => x.fm && x.fm.herkunft === "ilias-gruppe" && x.fm.entfaellt !== true) : [];
       const mitglieder = mem ? Object.keys(mem.gruppen).filter((id) => mem.gruppen[id].mitglied) : [];
       if (!notizen.length && !mitglieder.length) return null;
-      const ich = abh.geraetId(), a = await sperreLesen();
-      if (a ? a.geraet !== ich && alter(a.zuletzt) <= grenze : verwaist) return null; // ein anderes Gerät schreibt sie
-      await sperreSchreiben({ geraet: ich, seit: iso(), zuletzt: iso(), frei: true });
+      const S = sperre(), a = (await S.pruefen()).sperre;
+      if (a ? a.geraet !== abh.geraetId() && alter(a.zuletzt) <= grenze : verwaist) return null; // ein anderes Gerät schreibt sie
+      await S.freigeben({ erzwingen: true });
       const pfade = notizen.length ? await G.iliasFreigeben(sp) : [];
       for (const id of mitglieder) gruppeMerken(id, { mitglied: false, fehlt: 0, status: "", zentral: "", kandidaten: [] });
       if (mitglieder.length) await speichern();
@@ -1091,25 +1128,26 @@ module.exports = function (ctx) {
     const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, seiten: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null, gruppen: null });
     const lauf = async (o, b, stopp) => {
       // Eigener Uni-Abgleich (Dateien kommen von dort): mit ILIAS-Zugang nur Mitgliedschaften und Gruppen-Notizen, nie Downloads
-      const nurGruppen = extern();
-      if (nurGruppen && !(anmeldung() && hatZugang())) { b.art = "extern"; return; }
+      const nurGruppen = extern(), ohneGruppen = gruppenExtern();
+      if (nurGruppen && (ohneGruppen || !(anmeldung() && hatZugang()))) { b.art = "extern"; return; }
       const f = anmeldung();
       if (!f) { b.art = "ohne-anmeldung"; return; }
       if (!hatZugang()) { b.art = "ohne-zugang"; return; }
       if (stand().gesperrt && !o.manuell) { b.art = "gesperrt"; return; }
       // vor der Sperre: ein Gerät ohne nutzbares Kennwort darf die anderen nicht aufhalten
       if (!geheimLesen()) throw fehlerArt("zugang", "Das Kennwort fehlt auf diesem Gerät. Bitte ILIAS neu verbinden.");
+      // Auf einem deiner Geräte abgelehnt (uni-zugang.json): kein Versuch mit diesem Passwort, auch nicht per Knopf
+      await markerLesen();
+      if (abgelehnt()) { b.art = "abgelehnt"; return; }
       if (!o.nurKurse) {
-        // Abrufer-Sperre: ein anderes Gerät war vor kurzem aktiv → nichts tun (außer du übernimmst ausdrücklich)
-        const ich = abh.geraetId();
-        const a = await sperreLesen();
-        if (a && a.geraet !== ich && !a.frei && alter(a.zuletzt) <= UEBERNAHME && !o.uebernehmen) {
+        // Abrufer-Sperre (sperre.js): ein anderes Gerät war vor kurzem aktiv → nichts tun (außer du übernimmst ausdrücklich,
+        // „Hier aktualisieren“); sonst nehmen (geschrieben nur bei Wechsel, nach frei, nach dem Puls oder anderer Geräteart)
+        if (!(await sperre().nehmen({ erzwingen: !!o.uebernehmen }))) {
           b.art = "anderes-geraet";
           standSetzen({ abrufer: false, anderes: iso() });
           try { await indexLesen(); } catch (e) { /* nur für die Anzeige (Zahl der Dateien) */ }
           return;
         }
-        if (!a || a.geraet !== ich || a.frei || alter(a.zuletzt) >= PULS) await sperreSchreiben({ geraet: ich, seit: a && a.geraet === ich && !a.frei && a.seit ? a.seit : iso(), zuletzt: iso() });
         standSetzen({ abrufer: true, anderes: "" });
       }
       standSetzen({ versucht: iso() });
@@ -1120,7 +1158,7 @@ module.exports = function (ctx) {
       await indexLesen();
       if (!o.nurKurse && !nurGruppen) {
         await nachAbbruch(r); await nachziehen(b, r);
-        try { await tresorSaeubern(b); } catch (e) { b.warnung = (b.warnung ? b.warnung + " " : "") + "Säubern: " + fehlerText(e); }
+        try { await tresorSaeubern(b); } catch (e) { warnen(b, "Ein paar alte Ordner in Unterlagen ließen sich nicht umbenennen.", "Säubern: " + fehlerText(e)); }
       }
       fort(o, { phase: "anmelden" });
       // Die Sitzung des letzten Laufs gilt meist noch: dann keine neue Anmeldung (die Quelle merkt es an der ersten Seite)
@@ -1132,7 +1170,7 @@ module.exports = function (ctx) {
       const gruppenRoh = seite && !Array.isArray(seite) && Array.isArray(seite.gruppen)
         ? seite.gruppen.filter((g) => g && g.refId).map((g) => ({ refId: String(g.refId), url: g.url, slot: gruppenSlot(g), name: gruppenNameAus(g.titel) })) : null;
       if (!Array.isArray(roh) || !roh.length) throw fehlerArt("kurse", "Keine Kurse gefunden. Hat sich die ILIAS-Seite geändert?");
-      const liste = kurseUebernehmen(roh);
+      const liste = kurseUebernehmen(roh, !!o.alleAus);
       await speichern();
       if (o.nurKurse && !nurGruppen) { b.art = "kurse"; b.kurse = kurseListe(); return; }
       if (nurGruppen) { await gruppenAbgleichen(b, r, q, gruppenRoh, () => b.seiten < SEITEN); b.art = "nur-gruppen"; return; }
@@ -1178,11 +1216,13 @@ module.exports = function (ctx) {
       fundeSpeichern(r, kandidaten);
       await speichern(); // ignoriert (zu groß)
 
-      // 1b. Gruppen in den Stundenplan; ein Fehler hier hält die Unterlagen nicht an
-      try { await gruppenAbgleichen(b, r, q, gruppenRoh, darf); }
-      catch (e) {
-        if (e && e.art === "abbruch") throw e;
-        b.warnung = (b.warnung ? b.warnung + " " : "") + "Gruppen: " + fehlerText(e);
+      // 1b. Gruppen in den Stundenplan (nicht, wenn sie von außen kommen); ein Fehler hier hält die Unterlagen nicht an
+      if (!ohneGruppen) {
+        try { await gruppenAbgleichen(b, r, q, gruppenRoh, darf); }
+        catch (e) {
+          if (e && e.art === "abbruch") throw e;
+          warnen(b, "Deine Übungsgruppen ließen sich diesmal nicht prüfen.", "Gruppen: " + fehlerText(e));
+        }
       }
 
       // 2. Laden: geänderte zuerst, dann neue, je neueste zuerst; der Rest im nächsten Lauf
@@ -1243,12 +1283,13 @@ module.exports = function (ctx) {
         case "extern": return TEXT_EXTERN;
         case "nur-gruppen": {
           const g = b.gruppen ? b.gruppen.neu : 0;
-          return "ILIAS: Übungsgruppen geprüft." + (g ? g === 1 ? " Deine Übungsgruppe steht jetzt im Stundenplan." : ` ${g} Übungsgruppen stehen jetzt im Stundenplan.` : "");
+          return "ILIAS: Übungsgruppen geprüft." + (g ? g === 1 ? " Deine Übungsgruppe steht jetzt im Stundenplan." : ` ${g} Übungsgruppen stehen jetzt im Stundenplan.` : "") + (b.warnung ? " " + b.warnung : "");
         }
         case "ohne-anmeldung": return TEXT_ANMELDUNG_FOLGT + ".";
         case "ohne-zugang": return "ILIAS ist auf diesem Gerät nicht verbunden.";
         case "anderes-geraet": return "Ein anderes Gerät lädt gerade deine ILIAS-Unterlagen. Sie kommen über deinen Sync.";
         case "zugang": return "ILIAS: " + b.fehler;
+        case "abgelehnt": return "ILIAS: " + TEXT_ABGELEHNT;
         case "fehler": return "ILIAS: Fehler beim Abruf. " + b.fehler + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : "");
         case "abgebrochen": return b.grund === "stopp" ? "ILIAS: gestoppt." : "ILIAS: Abruf abgebrochen.";
         case "kurse": return "ILIAS: Kursliste aktualisiert.";
@@ -1258,19 +1299,23 @@ module.exports = function (ctx) {
           if (b.rest) t.push(gleich ? `${b.rest} weitere folgen gleich.` : `${b.rest} weitere beim nächsten Abruf.`);
           const g = b.gruppen ? b.gruppen.neu : 0;
           if (g) t.push(g === 1 ? "Deine Übungsgruppe steht jetzt im Stundenplan." : `${g} Übungsgruppen stehen jetzt im Stundenplan.`);
+          if (b.warnung) t.push(b.warnung);
           return t.join(" ");
         }
       }
     };
     const nachLauf = (b, beginn, t0) => {
       if (b.art === "fehler" || b.art === "zugang") standSetzen({ fehler: b.fehler, fehlerZeit: iso(), gesperrt: b.art === "zugang" ? true : stand().gesperrt });
-      else if (b.art === "nur-gruppen") standSetzen({ zuletzt: iso(), fehler: "", fehlerZeit: "" });
-      else if (b.art === "ok" || b.art === "unveraendert") standSetzen(Object.assign({ zuletzt: iso(), fehler: "", fehlerZeit: "", neu: b.neu + b.fassungen, rest: b.rest }, zaehlen()));
-      if (["extern", "ohne-anmeldung", "ohne-zugang", "gesperrt"].indexOf(b.art) < 0) {
+      else if (b.art === "nur-gruppen") standSetzen({ zuletzt: iso(), fehler: "", fehlerZeit: "", warnung: b.warnung });
+      else if (b.art === "ok" || b.art === "unveraendert") standSetzen(Object.assign({ zuletzt: iso(), fehler: "", fehlerZeit: "", warnung: b.warnung, neu: b.neu + b.fassungen, rest: b.rest }, zaehlen()));
+      // Angemeldet und gelesen: dieses Passwort hat ILIAS bestätigt (Alma darf es nutzen)
+      if (["ok", "unveraendert", "nur-gruppen", "kurse"].indexOf(b.art) >= 0 && hatZugang()) lokal(L.zugangOk, iso());
+      if (["extern", "ohne-anmeldung", "ohne-zugang", "gesperrt", "abgelehnt"].indexOf(b.art) < 0) {
         const e = { zeit: beginn, art: b.art, dauer: Math.round((ms() - t0) / 1000), anfragen: b.anfragen, neu: b.neu, vorhanden: b.vorhanden, ersetzt: b.ersetzt, fassungen: b.fassungen, zuGross: b.zuGross, rest: b.rest };
         if (b.geloescht) e.geloescht = b.geloescht;
         if (b.fehler) e.fehler = b.fehler;
         if (b.warnung) e.warnung = b.warnung;
+        if (b.technik) e.technik = b.technik;
         lokal(L.protokoll, protokoll().concat([e]).slice(-PROTOKOLL_MAX));
       }
     };
@@ -1316,6 +1361,8 @@ module.exports = function (ctx) {
         }
         if (stopp !== meins) return b; // verworfen: ein neuer Lauf hat übernommen
         try { nachLauf(b, beginn, t0); } catch (e) { /* Stand ist Nebensache */ }
+        // Gespeichertes Passwort eindeutig abgelehnt: alle Geräte mit diesem Passwort halten an (uni-zugang.json)
+        if (b.art === "zugang" && b.grund === "zugang-falsch") await markerSchreiben("ilias");
         // Anmeldung abgelehnt (ohne dein Zutun kein Versuch mehr): dieses Gerät prüft deine Gruppen nicht mehr
         if (b.art === "zugang") { try { await gruppenFreigeben(UEBERNAHME); } catch (e) { /* beim nächsten Start (verwaisteGruppen) */ } }
         let weiterIn = null;
@@ -1341,35 +1388,45 @@ module.exports = function (ctx) {
       stopp = null; laeuft = null; letzter = null;
       melden({ art: "fertig", manuell: false, ergebnis: "verworfen", text: "", weiterIn: null });
     };
-    const kurseAbrufen = async () => { const b = await jetztHolen({ nurKurse: true, manuell: false }); return b.kurse || (await kurse()); };
+    const kurseAbrufen = async (x) => { const b = await jetztHolen({ nurKurse: true, manuell: false, alleAus: !!(x && x.alleAus) }); return b.kurse || (await kurse()); };
 
     const status = () => {
-      const s = stand(), ex = extern(), z = zaehlen(), da = !!anmeldung(), verbunden = da && hatZugang();
+      const s = stand(), ex = extern(), gx = gruppenExtern(), z = zaehlen(), da = !!anmeldung(), verbunden = da && hatZugang();
+      const gruppenHier = ex && verbunden && !gx; // Dateien kommen von außen, die Übungsgruppen prüft dieses Gerät
       let text, anderes = false; // anderes: ein anderes Gerät lädt (Oberfläche bietet „Hier laden“ an)
-      if (ex && verbunden && laeuft) text = "Übungsgruppen werden geprüft …";
-      else if (ex && verbunden && s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
-      else if (ex && verbunden && s.fehler) text = "Fehler beim Prüfen deiner Übungsgruppen." + (s.zuletzt ? ` Zuletzt geklappt ${vorText(s.zuletzt, ms())}.` : "");
-      else if (ex && verbunden) text = "Prüft deine Übungsgruppen" + (s.zuletzt ? `, zuletzt ${vorText(s.zuletzt, ms())}` : "") + ". " + TEXT_EXTERN;
+      let warnung = ""; // Sätze aus dem letzten Lauf (Stand), nur nach einem Lauf, der geklappt hat
+      if (gruppenHier && laeuft) text = "Übungsgruppen werden geprüft …";
+      else if (gruppenHier && s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
+      else if (gruppenHier && abgelehnt()) text = TEXT_ABGELEHNT;
+      else if (gruppenHier && s.fehler) text = "Fehler beim Prüfen deiner Übungsgruppen." + (s.zuletzt ? ` Zuletzt geklappt ${vorText(s.zuletzt, ms())}.` : "");
+      else if (gruppenHier) { warnung = s.warnung; text = "Prüft deine Übungsgruppen" + (s.zuletzt ? `, zuletzt ${vorText(s.zuletzt, ms())}` : "") + ". " + (warnung ? warnung + " " : "") + TEXT_EXTERN; }
       else if (ex) text = TEXT_EXTERN;
       else if (!da) text = TEXT_ANMELDUNG_FOLGT;
       else if (!hatZugang()) text = "Nicht verbunden.";
       else if (laeuft) text = fortschrittAnzeige(letzter).text;
       else if (s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
-      else if (s.fehler) text = "Fehler beim letzten Abruf." + (s.zuletzt ? ` Zuletzt erfolgreich ${vorText(s.zuletzt, ms())}.` : "");
+      else if (abgelehnt()) text = TEXT_ABGELEHNT;
+      else if (s.fehler) text = "Fehler beim letzten Abruf." + (s.zuletzt ? ` Zuletzt aktualisiert ${vorText(s.zuletzt, ms())}.` : "");
       else if (s.anderes && !s.abrufer) { text = "Ein anderes Gerät lädt deine ILIAS-Unterlagen. Sie kommen über deinen Sync."; anderes = true; }
-      else if (s.zuletzt) text = `Aktualisiert ${vorText(s.zuletzt, ms())}.`;
+      else if (s.zuletzt) { warnung = s.warnung; text = `Aktualisiert ${vorText(s.zuletzt, ms())}.` + (warnung ? " " + warnung : ""); }
       else text = "Noch nicht abgerufen.";
       if (verbunden && !ex && z.zuGross && !laeuft) text += ` ${z.zuGross} ${z.zuGross === 1 ? "Datei" : "Dateien"} über ${MAX_MB} MB nicht geladen.`;
+      // Gemeinsame Form der Quellen (quellen.js): zustand, geprueft (letzter Erfolg), fehler, fehlerZeit, warnungen
+      const gesperrt = !!s.gesperrt || abgelehnt();
+      const zustand = ex && !gruppenHier ? "extern" : !da ? "ohne-anmeldung" : !verbunden ? "nicht-verbunden" : laeuft ? "laeuft"
+        : gesperrt ? "abgelehnt" : s.fehler ? "fehler" : anderes ? "anderes-geraet" : "an";
       return {
-        verbunden: !ex && verbunden, bereit: bereit(), extern: ex, gruppenZugang: ex && verbunden, laeuft: !!laeuft, zuletzt: s.zuletzt, versucht: s.versucht,
-        fehler: s.fehler, gesperrt: !!s.gesperrt, neu: s.neu, rest: s.rest, dateien: z.dateien, kurse: z.kurse, zuGross: z.zuGross,
-        grenzeMb: MAX_MB, abrufer: !!s.abrufer, anderes, benutzer: benutzer(), text: text.replace(/\.\./g, "."),
+        zustand, geprueft: s.zuletzt, fehlerZeit: s.fehler ? s.fehlerZeit : "", warnungen: warnung ? [warnung] : [], grund: s.fehler,
+        verbunden: !ex && verbunden, bereit: bereit(), extern: ex, gruppenZugang: gruppenHier, gruppenExtern: gx, laeuft: !!laeuft, zuletzt: s.zuletzt, versucht: s.versucht,
+        fehler: s.fehler ? (gruppenHier ? "Fehler beim Prüfen deiner Übungsgruppen." : "Fehler beim letzten Abruf.") : "", gesperrt, abgelehnt: abgelehnt(), neu: s.neu, rest: s.rest, dateien: z.dateien, kurse: z.kurse, zuGross: z.zuGross,
+        grenzeMb: MAX_MB, abrufer: !!s.abrufer, anderes, benutzer: benutzer(), warnung, text: text.replace(/\.\./g, "."),
         fortschritt: laeuft ? fortschrittAnzeige(letzter) : null,
       };
     };
 
     return {
       jetztHolen, kurseAbrufen, status, stand, protokoll, zugangSpeichern, zugangLoeschen, hatZugang, bereit, kurse, kursSetzen,
+      uniZugang, markerLesen, markerSchreiben,
       umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen, gruppenListe, verwaisteGruppen,
       // Alte Einträge mit Kurspasswort im Titel: nur schreiben, wenn das Säubern wirklich einen Eintrag ändert (sonst schrieben
       // nach dem Update alle Geräte die Datei gleichzeitig)
@@ -1668,6 +1725,7 @@ module.exports = function (ctx) {
       if (x && x.art === "fertig" && x.weiterIn != null) weiterPlanen(x.weiterIn);
       if (x && x.art === "gruppen") { try { if (ctx.gruppenAnzeige) ctx.gruppenAnzeige.neu(); } catch (e) { /* egal */ } }
       if (x && x.art === "fortschritt") standZeigen(); else neuZeichnen();
+      if (x && (x.art === "fertig" || x.art === "zugang")) { const Q = ctx.user && ctx.user.quellen; if (Q) Q.meldenNeu(ctx); }
     },
   });
   let motorInst = null;
@@ -1686,13 +1744,23 @@ module.exports = function (ctx) {
   };
   const weiterPlanen = (ms) => { if (weiterZeit) ctx.stopp(weiterZeit); weiterZeit = ctx.zeit(fortsetzen, ms); };
 
+  // Punkte für „Bitte prüfen“ (quellen.js, Meldekanal): nur, wo du weiterhilfst – abgelehnte Anmeldung und Warnungen des letzten
+  // Laufs (fehlende Dateien, Übungsgruppen); nie Kurs- oder Dateinamen. s = status()
+  const hinweiseAus = (s) => {
+    const ziel = { pfad: "Studium/Einstellungen & Hilfe.md", anker: "Verbindungen" };
+    if (s.zustand === "abgelehnt") return [Object.assign({ text: "**ILIAS** · " + s.text }, ziel)];
+    return s.zustand === "an" || s.zustand === "anderes-geraet" || s.gruppenZugang ? s.warnungen.map((w) => Object.assign({ text: "**ILIAS** · " + w }, ziel)) : [];
+  };
+
   let gruppenLesen = false;
   // ---------- Für andere Skripte (Oberfläche) und Tests ----------
   // status() → { verbunden, bereit, extern, laeuft, zuletzt, versucht, fehler, gesperrt, neu, rest, dateien, kurse, zuGross,
-  //   grenzeMb, abrufer, anderes (ein anderes Gerät lädt), benutzer, text }; jetztHolen(o) → Bericht (Knopf; o.uebernehmen
+  //   grenzeMb, abrufer, anderes (ein anderes Gerät lädt), benutzer, warnung (Sätze des letzten Laufs, auch im text), text };
+  //   jetztHolen(o) → Bericht (Knopf; o.uebernehmen
   //   holt die Abrufer-Sperre her);
   // zugangSpeichern(benutzer, geber, { pruefen }) → { ok, fehler? }; kurse() → [{ refId, titel, code, aktiv, zuletzt,
-  // dateien }]; kursSetzen(refId, an); kurseAbrufen() (anmelden + Kursliste, ohne Downloads); beobachten(fn) → abmelden
+  // dateien }]; kursSetzen(refId, an); kurseAbrufen({ alleAus }?) (anmelden + Kursliste, ohne Downloads; alleAus: neue Kurse aus);
+// beobachten(fn) → abmelden
   // (fn({ art: start | fortschritt | fertig | zugang | kurse, … }), Felder siehe jetztHolen und fort); fortschritt (letzter
   // Fortschritt des laufenden Abrufs oder null); fortschrittAnzeige(x) → Texte und Anteil dazu. status().fortschritt =
   // fortschrittAnzeige des laufenden Abrufs (sonst null).
@@ -1702,11 +1770,15 @@ module.exports = function (ctx) {
     zugangSpeichern: (b, g, o) => motor().zugangSpeichern(b, g, o),
     zugangLoeschen: () => motor().zugangLoeschen(),
     hatZugang: () => motor().hatZugang(),
+    // Uni-Zugang für Noten & Anmeldungen (alma-konto.js): { benutzer, seit, ok, abgelehnt, dienst, gesperrt, bestaetigt };
+    // zugangAbgelehnt(dienst) schreibt den Marker (nur nach eindeutiger Ablehnung eines gespeicherten Passworts)
+    uniZugang: () => motor().uniZugang(),
+    zugangAbgelehnt: (dienst) => motor().markerSchreiben(dienst),
     bereit: () => motor().bereit(),
     kannSpeichern: () => !!(app && app.secretStorage && typeof app.secretStorage.setSecret === "function"),
     kurse: () => motor().kurse(),
     kursSetzen: (id, an) => motor().kursSetzen(id, an),
-    kurseAbrufen: () => motor().kurseAbrufen(),
+    kurseAbrufen: (o) => motor().kurseAbrufen(o),
     // Deine ILIAS-Gruppen (gruppen.js): [{ refId, code, status, zentral, kandidaten }]; liest den Index beim ersten Mal nach und
     // zeichnet dann die Gruppen neu
     gruppen: () => {
@@ -1729,22 +1801,39 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
-    K: { INDEX, ABRUF, MAX_MB, NEU_MOBIL, NEU_PC, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
+    erzeugen, hinweiseAus, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
+    K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, MAX_MB, NEU_MOBIL, NEU_PC, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;
 
   const registrieren = () => {
     ctx.aufraeumen(() => hinweis.weg());
-    // Automatischer Lauf: 20 s + Zufall 0–2 Min. nach dem Einlesen, dann stündlich, zurück in der App nach über 60 Min.
-    // Jeder Takt prüft erst bereit() (Anmeldung vorhanden, Zugang gespeichert, nicht abgelehnt); im eigenen Uni-Abgleich prüft
-    // er nur die Übungsgruppen. Automatische Läufe zeigen keinen Hinweis.
-    const lauf = () => { const m = motor(); if (!plugin().testIliasAus && m.bereit() && !m.laeuft) m.jetztHolen({}); };
-    // Einmal je Start, mit dem Zufallsversatz: Kurspasswörter aus alten Index-Einträgen (synchronisiert, auch ohne Zugang)
-    const saeubern = () => { if (!plugin().testIliasAus) motor().saeubern().catch((e) => console.warn("ilias: Index " + ((e && e.message) || e))); };
-    // Einmal je Start, ohne Zugang: verwaiste Gruppen-Notizen freigeben (gruppenFreigeben)
-    const verwaist = () => { if (!plugin().testIliasAus) motor().verwaisteGruppen().catch((e) => console.warn("ilias: Gruppen " + ((e && e.message) || e))); };
-    const planen = () => ctx.zeit(() => { saeubern(); verwaist(); lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
+    // Automatischer Lauf über den gemeinsamen Zeitplan der Quellen (quellen.js planen): 20 s + Zufall 0–2 Min. nach dem Einlesen,
+    // dann stündlich, zurück in der App nach über 60 Min. seit dem letzten Versuch (gerätelokal). Jeder Takt prüft erst bereit()
+    // (Anmeldung vorhanden, Zugang gespeichert, nicht abgelehnt); im eigenen Uni-Abgleich prüft er nur die Übungsgruppen.
+    // Automatische Läufe zeigen keinen Hinweis; nach einem Fehler kommt der nächste im Takt (ein Abruf, den du gestartet hast,
+    // macht über seinen Auftrag früher weiter).
+    // Beim ersten Takt je Start: Kurspasswörter aus alten Index-Einträgen (synchronisiert, auch ohne Zugang) und, ohne Zugang,
+    // verwaiste Gruppen-Notizen freigeben (gruppenFreigeben)
+    let erster = true;
+    const einmal = () => {
+      if (!erster || plugin().testIliasAus) return;
+      erster = false;
+      motor().saeubern().catch((e) => console.warn("ilias: Index " + ((e && e.message) || e)));
+      motor().verwaisteGruppen().catch((e) => console.warn("ilias: Gruppen " + ((e && e.message) || e)));
+    };
+    const Q = ctx.user && ctx.user.quellen;
+    const zeitplan = Q ? Q.planen(ctx, { takt: STUNDE, zurueck: NACHHOLEN, versucht: () => Date.parse(motor().stand().versucht || "") || 0,
+      lauf: async () => {
+        einmal();
+        const m = motor();
+        if (plugin().testIliasAus || !m.bereit() || m.laeuft) return null;
+        const b = await m.jetztHolen({});
+        return !b || ["anderes-geraet", "extern", "ohne-anmeldung", "ohne-zugang", "gesperrt", "abgelehnt"].indexOf(b.art) >= 0 ? null
+          : ["ok", "unveraendert", "nur-gruppen", "kurse"].indexOf(b.art) >= 0;
+      } }) : null;
+    // „Bitte prüfen“ (Meldekanal der Quellen): Anmeldung abgelehnt und Warnungen des letzten Laufs
+    if (Q) Q.melden(ctx, "ilias", () => hinweiseAus(motor().status()));
     let weg = null; // iPhone/iPad: seit wann im Hintergrund, und die letzte Regung des Laufs davor
     ctx.dom(document, "visibilitychange", () => {
       const m = motor();
@@ -1758,14 +1847,10 @@ module.exports = function (ctx) {
       if (obs.Platform && obs.Platform.isMobile && war && m.laeuft && m.auftrag() && Date.now() - war.seit > ZURUECK_PRUEFEN) {
         ctx.zeit(() => { if (m.laeuft && m.auftrag() && m.regung === war.regung) { m.verwerfen(); fortsetzen(); } }, ZURUECK_PRUEFEN);
       }
-      const v = Date.parse(m.stand().versucht || "");
-      if (!isNaN(v) && Date.now() - v > NACHHOLEN) ctx.zeit(lauf, 5000);
     });
     // Offener Auftrag nach dem Start (App oder Plugin neu): nach 20–60 s weiter, mit Hinweis
     if (motor().auftrag()) weiterPlanen(20000 + Math.floor(Math.random() * 40000));
-    // Einmal je Start: Kurspasswörter aus alten Titeln im Index entfernen (synchronisierte Datei, auch ohne ILIAS-Zugang)
-    if (app.metadataCache.initialized || app.metadataCache.resolved) planen();
-    else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); planen(); }); }
+    if (!zeitplan) console.warn("ilias: quellen.js fehlt, kein automatischer Lauf");
     // Umbenennen im Tresor: Index sofort im Speicher, geschrieben entprellt (ganze Ordner melden viele Dateien)
     const bald = ctx.entprellen(() => { motor().speichern().catch((e) => console.warn("ilias: Index " + ((e && e.message) || e))); }, 2000);
     ctx.an(app.vault, "rename", (f, alt) => {
@@ -1780,6 +1865,10 @@ module.exports = function (ctx) {
       m.indexLesen().then(() => { try { if (ctx.gruppenAnzeige) ctx.gruppenAnzeige.neu(); } catch (e) { /* egal */ } }, () => {});
     }, 2000);
     ctx.an(app.vault, "modify", (f) => { if (f && f.path === INDEX) frisch(); });
+    // Uni-Zugang: Marker beim Start und bei jeder Änderung (Sync von einem anderen Gerät) lesen, dann Zeilen neu zeichnen
+    const markerNeu = ctx.entprellen(() => { motor().markerLesen().then(neuZeichnen, () => {}); }, 1000);
+    for (const art of ["create", "modify", "delete"]) ctx.an(app.vault, art, (f) => { if (f && f.path === UNI_ZUGANG) markerNeu(); });
+    markerNeu();
   };
   // Hot-Reload oder Entladen: laufenden Abruf beim nächsten Schritt beenden, Sitzung vergessen
   const abmelden = () => { if (motorInst) motorInst.abbrechen(); sitzungVergessen(); };

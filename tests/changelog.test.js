@@ -51,7 +51,8 @@ test("Changelog: Regeln für jeden Punkt ab 0.4.1", () => {
     if (a.titel) assert.ok(a.titel.split(/\s+/).length <= MAX_TITELWOERTER, `${a.name}: Titel höchstens ${MAX_TITELWOERTER} Wörter`);
     for (const p of a.punkte) {
       const kurz = `${a.name}: „${p.slice(0, 60)}…“`;
-      assert.ok(ARTEN.some((x) => p.startsWith(`**${x}:**`)), `${kurz} beginnt nicht mit **Neu:**, **Behoben:** …`);
+      // Beta-Funktionen tragen „ (Beta)“ hinter der Art: **Neu (Beta):**
+      assert.ok(ARTEN.some((x) => p.startsWith(`**${x}:**`) || p.startsWith(`**${x} (Beta):**`)), `${kurz} beginnt nicht mit **Neu:**, **Behoben:** …`);
       assert.ok(p.length <= MAX_ZEICHEN, `${kurz} hat ${p.length} Zeichen (höchstens ${MAX_ZEICHEN})`);
       assert.ok(saetze(p) <= MAX_SAETZE, `${kurz} hat mehr als ${MAX_SAETZE} Sätze`);
       assert.ok(!p.includes("`"), `${kurz} enthält Code in Backticks`);

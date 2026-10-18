@@ -3,6 +3,8 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { laden } = require("./laden.js");
 
 // body mit classList (contains, toggle) wie im Browser
@@ -97,7 +99,7 @@ test("Design: ohne Wahl Elfenbein, Unbekanntes im Speicher zählt nicht", () => 
   assert.equal(mitObsidian("system", [], { design: "graphite" }).D.design(), "elfenbein");
 });
 
-test("Design-Zeilen: Elfenbein, Flieder, Klar, genau eines gewählt; die hellen Designs sagen, dass dunkel Elfenbein gilt", () => {
+test("Design-Zeilen: Elfenbein, Flieder, Klar, genau eines gewählt; Flieder und Klar sagen, dass dunkel die Farben von Elfenbein gelten", () => {
   const z = mitObsidian("system", []).D.designZeilen("klar");
   assert.deepEqual(z.map((x) => [x.wert, x.titel, x.gewaehlt]), [
     ["elfenbein", "Elfenbein", false],
@@ -105,7 +107,7 @@ test("Design-Zeilen: Elfenbein, Flieder, Klar, genau eines gewählt; die hellen 
     ["klar", "Klar", true],
   ]);
   assert.ok(z.every((x) => x.text), "jede Zeile hat eine gedämpfte Zeile");
-  assert.deepEqual(z.filter((x) => /Dunkelmodus Elfenbein/.test(x.text)).map((x) => x.wert), ["flieder", "klar"]);
+  assert.deepEqual(z.filter((x) => /dunkel mit den Farben von Elfenbein/.test(x.text)).map((x) => x.wert), ["flieder", "klar"]);
 });
 
 test("Design wählen: nur auf diesem Gerät, Klasse am body sofort, hell oder dunkel bleibt, alle Designs eingeschaltet", () => {
@@ -136,4 +138,14 @@ test("Design: Unbekanntes ändert nichts; beim Durchsetzen gilt das gespeicherte
   assert.equal(g.D.anwenden(), true);
   assert.deepEqual(g.klassen(), ["theme-dark", "eba-design-klar"], "dunkel entscheidet weiter Obsidian");
   assert.equal(g.D.anwenden(), false, "schon richtig: kein zweites css-change");
+});
+
+test("Snippets: kein „tnum“ aus in font-feature-settings (vererbt hebt es jedes tabular-nums auf, Spalten stünden nicht bündig)", () => {
+  const ordner = path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets");
+  for (const datei of fs.readdirSync(ordner).filter((d) => d.endsWith(".css"))) {
+    const css = fs.readFileSync(path.join(ordner, datei), "utf8");
+    for (const m of css.matchAll(/font-feature-settings:([^;}]*)/g)) {
+      assert.doesNotMatch(m[1], /"tnum"\s+(0|off)/, datei);
+    }
+  }
 });

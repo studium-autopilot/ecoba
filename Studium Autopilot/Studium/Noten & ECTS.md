@@ -107,13 +107,18 @@ cssclasses:
 >   and:
 >     - 'typ == "modul"'
 > formulas:
->   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "warn", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
+>   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "ok", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
->   imPlan: 'gruppe == "Grundstudium" || gruppe == "Abschluss" || gewaehlt == true || (formula.var == "Economics" && rolle_economics == "Pflicht") || (formula.var == "Business Administration" && rolle_ba == "Pflicht")'
->   kt: 'file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.code == code && value.properties.datum && !value.properties.bis.isTruthy() && !value.properties.titel.toString().lower().contains("zwischentest") && !value.properties.titel.toString().lower().contains("nachhol")).map(date(value.properties.datum)).sort()'
->   kn: 'formula.kt.filter(value >= today())'
->   termin: 'if(klausur, date(klausur).format("DD.MM.YYYY"), if(formula.kn.length > 0, formula.kn[0].format("DD.MM.YYYY"), if(formula.kt.length > 0, formula.kt[formula.kt.length - 1].format("DD.MM.YYYY"), "")))'
+>   imPlan: 'zusatz != true && (gewaehlt == true || semester_geplant.isTruthy() || (status.isTruthy() && status.toString().lower().trim() != "offen") || gruppe == "Grundstudium" || gruppe == "Abschluss" || (gruppe == "Profil & Vertiefung" && if(formula.var == "Economics", rolle_economics == "Pflicht", if(formula.var == "Business Administration", rolle_ba == "Pflicht", if(formula.var == "ohne Spezialisierung", rolle_ohne == "Pflicht", rolle_economics == "Pflicht" && rolle_ba == "Pflicht" && rolle_ohne == "Pflicht")))))'
+>   fertig: '["bestanden", "anerkannt"].contains(status.toString().lower().trim())'
+>   nb: 'status.toString().lower().trim() == "nicht bestanden"'
+>   kq: 'file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.code == code && value.properties.datum && !value.properties.bis.isTruthy() && value.properties.entfaellt != true && !value.properties.titel.toString().lower().contains("zwischentest") && !value.name.lower().contains("zwischentest") && (formula.nb || (!value.properties.titel.toString().lower().contains("nachhol") && !value.name.lower().contains("nachhol"))))'
+>   kt: 'formula.kq.map(date(value.properties.datum)).sort()'
+>   ko: '[formula.kq.filter(value.properties.erledigt != true).map(date(value.properties.datum)), if(klausur, [date(klausur)], [])].flat().filter(value >= today()).sort()'
+>   ka: '[formula.kt, if(klausur, [date(klausur)], [])].flat().sort()'
+>   kv: 'formula.ka.filter(value <= today())'
+>   termin: 'if(formula.fertig, if(formula.kv.length > 0, formula.kv[formula.kv.length - 1].format("DD.MM.YYYY"), ""), if(formula.ko.length > 0, formula.ko[0].format("DD.MM.YYYY"), if(formula.ka.length > 0, formula.ka[formula.ka.length - 1].format("DD.MM.YYYY"), "")))'
 > properties:
 >   file.name:
 >     displayName: Modul
@@ -174,14 +179,14 @@ cssclasses:
 >   and:
 >     - 'typ == "modul"'
 > formulas:
->   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "warn", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
+>   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "ok", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
 >   mpid: 'file("System/Daten/Musterplan.md").properties.plaene.filter(value.name == file("System/Einstellungen.md").properties.variante).map(value.id).join("")'
 >   mpfs: 'file("System/Daten/Musterplan.md").properties.eintraege.filter(value.plan == formula.mpid && value.code == code).map(number(value.fs)).sort()'
 >   fsplan: 'if(gruppe == "Schwerpunkt", 0, if(formula.mpid == "", if(fachsemester, number(fachsemester), 0), if(formula.mpfs.length > 0, formula.mpfs[0], if(gewaehlt == true && fachsemester, number(fachsemester), 0))))'
 >   semester: 'if(semester_geplant, semester_geplant, if(formula.fsplan > 0, file("System/Einstellungen.md").properties.semesterliste.filter(number(value.split("|")[0]) == formula.fsplan).map(value.split("|")[1]).join(""), ""))'
->   imPlan: 'gruppe == "Grundstudium" || gruppe == "Abschluss" || gewaehlt == true || (formula.var == "Economics" && rolle_economics == "Pflicht") || (formula.var == "Business Administration" && rolle_ba == "Pflicht")'
+>   imPlan: 'zusatz != true && (gewaehlt == true || semester_geplant.isTruthy() || (status.isTruthy() && status.toString().lower().trim() != "offen") || gruppe == "Grundstudium" || gruppe == "Abschluss" || (gruppe == "Profil & Vertiefung" && if(formula.var == "Economics", rolle_economics == "Pflicht", if(formula.var == "Business Administration", rolle_ba == "Pflicht", if(formula.var == "ohne Spezialisierung", rolle_ohne == "Pflicht", rolle_economics == "Pflicht" && rolle_ba == "Pflicht" && rolle_ohne == "Pflicht")))))'
 > properties:
 >   file.name:
 >     displayName: Modul
@@ -235,13 +240,18 @@ cssclasses:
 >   and:
 >     - 'typ == "modul"'
 > formulas:
->   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "warn", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
+>   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "ok", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
->   imPlan: 'gruppe == "Grundstudium" || gruppe == "Abschluss" || gewaehlt == true || (formula.var == "Economics" && rolle_economics == "Pflicht") || (formula.var == "Business Administration" && rolle_ba == "Pflicht")'
->   kt: 'file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.code == code && value.properties.datum && !value.properties.bis.isTruthy() && !value.properties.titel.toString().lower().contains("zwischentest") && !value.properties.titel.toString().lower().contains("nachhol")).map(date(value.properties.datum)).sort()'
->   kn: 'formula.kt.filter(value >= today())'
->   termin: 'if(klausur, date(klausur).format("DD.MM.YYYY"), if(formula.kn.length > 0, formula.kn[0].format("DD.MM.YYYY"), if(formula.kt.length > 0, formula.kt[formula.kt.length - 1].format("DD.MM.YYYY"), "")))'
+>   imPlan: 'zusatz != true && (gewaehlt == true || semester_geplant.isTruthy() || (status.isTruthy() && status.toString().lower().trim() != "offen") || gruppe == "Grundstudium" || gruppe == "Abschluss" || (gruppe == "Profil & Vertiefung" && if(formula.var == "Economics", rolle_economics == "Pflicht", if(formula.var == "Business Administration", rolle_ba == "Pflicht", if(formula.var == "ohne Spezialisierung", rolle_ohne == "Pflicht", rolle_economics == "Pflicht" && rolle_ba == "Pflicht" && rolle_ohne == "Pflicht")))))'
+>   fertig: '["bestanden", "anerkannt"].contains(status.toString().lower().trim())'
+>   nb: 'status.toString().lower().trim() == "nicht bestanden"'
+>   kq: 'file("Studium/Prüfungen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "termin" && value.properties.kategorie == "Prüfung" && value.properties.code == code && value.properties.datum && !value.properties.bis.isTruthy() && value.properties.entfaellt != true && !value.properties.titel.toString().lower().contains("zwischentest") && !value.name.lower().contains("zwischentest") && (formula.nb || (!value.properties.titel.toString().lower().contains("nachhol") && !value.name.lower().contains("nachhol"))))'
+>   kt: 'formula.kq.map(date(value.properties.datum)).sort()'
+>   ko: '[formula.kq.filter(value.properties.erledigt != true).map(date(value.properties.datum)), if(klausur, [date(klausur)], [])].flat().filter(value >= today()).sort()'
+>   ka: '[formula.kt, if(klausur, [date(klausur)], [])].flat().sort()'
+>   kv: 'formula.ka.filter(value <= today())'
+>   termin: 'if(formula.fertig, if(formula.kv.length > 0, formula.kv[formula.kv.length - 1].format("DD.MM.YYYY"), ""), if(formula.ko.length > 0, formula.ko[0].format("DD.MM.YYYY"), if(formula.ka.length > 0, formula.ka[formula.ka.length - 1].format("DD.MM.YYYY"), "")))'
 > properties:
 >   file.name:
 >     displayName: Modul
@@ -290,10 +300,10 @@ cssclasses:
 >   and:
 >     - 'typ == "modul"'
 > formulas:
->   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "warn", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
+>   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "ok", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
->   imPlan: 'gruppe == "Grundstudium" || gruppe == "Abschluss" || gewaehlt == true || (formula.var == "Economics" && rolle_economics == "Pflicht") || (formula.var == "Business Administration" && rolle_ba == "Pflicht")'
+>   imPlan: 'zusatz != true && (gewaehlt == true || semester_geplant.isTruthy() || (status.isTruthy() && status.toString().lower().trim() != "offen") || gruppe == "Grundstudium" || gruppe == "Abschluss" || (gruppe == "Profil & Vertiefung" && if(formula.var == "Economics", rolle_economics == "Pflicht", if(formula.var == "Business Administration", rolle_ba == "Pflicht", if(formula.var == "ohne Spezialisierung", rolle_ohne == "Pflicht", rolle_economics == "Pflicht" && rolle_ba == "Pflicht" && rolle_ohne == "Pflicht")))))'
 > properties:
 >   file.name:
 >     displayName: Modul
@@ -344,7 +354,7 @@ cssclasses:
 
 ## Regeln
 
-> [!eba-karte|regeln]- Regeln
+> [!eba-karte|regeln]- Gesamtnote, Notenstufen, Zusatzleistungen
 > Wie sich die Gesamtnote zusammensetzt und was zusätzlich zählen darf.
 >
 > > [!eba-raster|2]

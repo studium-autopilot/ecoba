@@ -21,7 +21,8 @@ Erweiterungen und stellt drei Dinge bereit:
 2. **Aktionen**: Knöpfe, Befehle und die Ordner-Automatik für neue Notizen.
 3. **Hot-Reload**: Wird eine Skriptdatei geändert oder per Sync geliefert, lädt der Kern sie nach 1,5 s neu. Vorher meldet er
    die alte Fassung vollständig ab (siehe „Aufräumen je Skript“). Gelöschte oder umbenannte Skriptdateien werden ebenso
-   abgemeldet.
+   abgemeldet. Der Hinweis „Aktualisiert: …“ kommt 3 s nach dem letzten Skript und nur, wenn es genau eines war; mehrere auf
+   einmal (ein Update über den Sync) bleiben still, eine Minute lang auch Nachzügler (`hinweisSammeln`, `plugin.stillBis`).
 
 Fehler einer Erweiterung oder Aktion stoppen nie den Rest. Sie erscheinen als Hinweis (Notice) und in der Konsole.
 
@@ -128,9 +129,10 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `aktionen.js` | Knopf-Aktionen (siehe Liste) |
 | `notizen.js` | Notiz-Aktionen mit Ordner-Automatik |
 | `kalender.js`, `termine.js`, `klausurzeit.js`, `verlauf.js`, `todos.js`, `vorlesung.js`, `gruppen.js`, `angebote.js` | Codeblöcke `eba-kalender`, `eba-agenda`, `eba-anmeldungen`, `eba-klausurzeit`, `eba-verlauf`, `eba-todos`, `eba-vorlesung` und `eba-uebungsblatt`, `eba-gruppen`, `eba-angebote` |
-| `menue.js`, `tabellen.js`, `leer.js` | Bereiche-Menü, Bases als Liste auf dem iPhone (experimentell), leere Mitschriften und Übungsblätter beim Verlassen in den Papierkorb (nicht beim Wechsel zu Folien/PDF) |
-| `eba.js`, `alma.js`, `unterlagen.js`, `meine-gruppe.js` | Helfer: Semester, Module, Datumseingabe, `ablegen()`; Alma-Stundenplan; Eingang einordnen; deine Übungsgruppe im Stundenplan |
-| `modell.js` | Datenmodell `ctx.modell`, Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
+| `menue.js`, `tabellen.js`, `leer.js` | Bereiche-Menü, Bases-Tabellen als Liste (iPhone; iPad und PC auf Modulseite, Noten & ECTS, Unterlagen und Stundenplan, `eba-core.css` 37.tabellen), leere Mitschriften und Übungsblätter beim Verlassen in den Papierkorb (nicht beim Wechsel zu Folien/PDF; ein Übungsblatt mit Abgabedatum, Aufgaben oder eigener Lösung bleibt) |
+| `eba.js`, `alma.js`, `unterlagen.js`, `meine-gruppe.js` | Helfer: Semester, Module, Datumseingabe, `ablegen()`; Alma-Stundenplan (seit 0.4.5 auch Erweiterung mit Zeitplan, siehe „Alma-Stundenplan“); Eingang einordnen; deine Übungsgruppe im Stundenplan |
+| `modell.js` | Datenmodell und Fachmodell `ctx.modell` (siehe „Fachmodell“), Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
+| `dashboard.js` | Kacheln und Listen aus dem Fachmodell: Codeblöcke `eba-kacheln` (Dashboard) und `eba-liste fristen\|termine\|pruefungen` (Dashboard, Prüfungen) |
 | `verbindungen.js` | Verbindungen und Schloss: Codeblöcke `eba-schloss`, `eba-verbindungen`; Aktionen `verbinden`, `verbindung-aktualisieren`, `trennen` |
 | `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit acht Bildschirmen, Zustand in den Einstellungen, Aktion `einrichtung`; siehe „Einrichtung“ |
 | `darstellung.js` | Hell, dunkel oder automatisch (seit 17.10.2026) und Design Elfenbein, Flieder oder Klar (seit 18.10.2026), je Gerät (`ctx.darstellung`): Umschalter und Design-Zeilen `eba-darstellung`, Aktionen `darstellung` und `design`; siehe „Darstellung“ |
@@ -141,7 +143,13 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `fsrs.js` | Helfer: FSRS-6 und Lernschritte wie in Anki (`ctx.user.fsrs(ctx).planer`), siehe „Karteikarten“ |
 | `karten.js` | Karteikarten: Codeblock `eba-karten` (Übersicht, `stapel`, `statistik`, `liste`, `heute`), Lernfenster, Fenster „Neue Karte“ und „Optionen“, Lernstände je Gerät (`ctx.karten`); siehe „Karteikarten“ |
 | `schwerpunkte.js` | Abschnitt „Schwerpunkte“ im Studienverlauf (seit 17.10.2026, vorher Seite „Schwerpunkt-Planer“): Codeblock `eba-schwerpunkte`, Regeln der PO für die Schwerpunktbereiche, `ctx.schwerpunkte` (`rechnen`, `sichtbar`); siehe „Bereiche“ |
-| `bitte-pruefen.js` | „Bitte prüfen“ auf dem Dashboard (seit 18.10.2026), nur im eigenen Uni-Abgleich: Codeblock `eba-bitte-pruefen`; siehe „Dashboard“ |
+| `lernplan.js` | Lernplan (seit 18.10.2026): Codeblock `eba-lernplan` (Bereich, Argument `modul` in der Lernplan-Notiz), Abhaken der Kapitel, `ctx.lernplan` (`kapitelLesen`, `planen`, `zielVon`, `stand`, `kapazitaet`, `sichtbar`); siehe „Lernplan“ |
+| `bitte-pruefen.js` | „Bitte prüfen“ auf dem Dashboard (seit 18.10.2026): Protokoll des eigenen Uni-Abgleichs und (seit 0.4.5) die Punkte aller Quellen aus dem Meldekanal (Quellen-Vertrag); Codeblock `eba-bitte-pruefen`; siehe „Dashboard“ |
+| `alma-konto.js`, `alma-konto-html.js` | Noten & Anmeldungen aus Alma (seit 0.4.5, Beta, `ctx.almaKonto`): Ablauf, Zustand, Zeile und Fenster bzw. reiner Leser der Seiten; siehe „Noten & Anmeldungen (Alma)“ |
+| `sperre.js` | Helfer: Abrufer-Sperre, der gemeinsame Schreiber-Lock aller Quellen (`ctx.user.sperre.erzeugen`); siehe „Abrufer-Sperre“ |
+| `felder.js` | Helfer: Feld-Register der Eingaben (Variante, Studienbeginn, Note, Zielnote; `ctx.user.felder`); siehe „Personalisieren“ |
+| `quellen.js` | Helfer: Quellen-Vertrag (`ctx.user.quellen`): Statusform, ein Zeitplan, Besitzmarke, Lebenslauf erzeugter Notizen, Meldekanal „Bitte prüfen“; siehe „Quellen-Vertrag“ |
+| `volltext.js` | Volltext der PDFs (seit 0.4.5): Textfassungen unter `Unterlagen/_Volltext/` für die Suche, `ctx.volltext`; siehe „Volltext der PDFs“ |
 
 Beim Start schreibt das Plugin keine Datei. Die Agenda (`eba-agenda`) wird live gerendert, wie der Kalender. Einzige
 Ausnahme seit 2b: Weichen die abgeleiteten Felder in `System/Einstellungen.md` vom berechneten Inhalt ab (siehe „Zentrale
@@ -196,7 +204,7 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `einordnen` | `code` | Eingang einordnen | ja |
 | `stundenplan` | `link=neu` | Alma-Stundenplan aktualisieren, ohne Link verbinden | ja |
 | `verbinden` | `id` (alma, ilias, zentral, vorlage) | Verbinden-Fenster bzw. Erklärung | ja (mit Auswahl) |
-| `verbindung-aktualisieren` | `id`, `uebernehmen=1` (nur ILIAS: hier laden, obwohl ein anderes Gerät lädt) | Verbindung jetzt abrufen | ja |
+| `verbindung-aktualisieren` | `id`, `uebernehmen=1` (ILIAS) bzw. `hier=1` (Volltext): hier aktualisieren, obwohl ein anderes Gerät gerade aktualisiert | Verbindung jetzt abrufen | ja |
 | `trennen` | `id` | Link bzw. ILIAS-Zugang auf diesem Gerät löschen (mit Rückfrage) | ja |
 | `ilias-holen` | – | Unterlagen aus ILIAS holen (Knopf auf Unterlagen); nicht verbunden: Fenster ILIAS-Unterlagen | ja |
 | `personalisieren` | – | Formular Name, Studienbeginn, Variante, Zielnote | ja |
@@ -223,20 +231,48 @@ unverändert.
 **Ordner-Automatik:** Aktionen mit `ordner: ["Vorlesungen"]` befüllen eine neue, leere Notiz in diesem Ordner oder einem
 Unterordner. Bei mehreren Treffern gilt der längste Ordner. Voraussetzung: Die Notiz wurde auf diesem Gerät angelegt und ist in
 den ersten etwa 1,5 s die aktive Datei. Per Sync ankommende Dateien werden darum nie befüllt. Eine „Unbenannt“-Notiz wird
-umbenannt und verschoben. Bei Esc in der ersten Frage wird die leere Notiz gelöscht.
+umbenannt und verschoben. Esc in irgendeiner Frage bricht das Anlegen ganz ab (`eba.abbrechen`), die leere Notiz wird
+gelöscht; `eba.datumFragen` und `eba.zeitraumFragen` geben bei Esc `null` zurück, leer bestätigt den Vorschlag.
 
-**Alma-Verbindung:** `ctx.user.alma(c)` bietet (seit 2b auch `linkPruefen(link)`, `fehler()`, `status().seit`):
+**Alma-Stundenplan** (`alma.js`, seit 0.4.5 eine Quelle nach dem Quellen-Vertrag): `ctx.user.alma(c)` bietet
 
-- `status()` → `{ verbunden, stand }`
-- `verbinden(link?)`
-- `trennen()`
-- `aktualisieren()`
-- `aktualisierenOderVerbinden({ neuerLink })`
+- `status()` → gemeinsame Form `{ zustand, geprueft, fehler, fehlerZeit, warnungen }` (`zustand`: extern, nicht-verbunden,
+  laeuft, fehler, anderes-geraet, an), dazu `verbunden`, `stand` (= `geprueft`), `seit`, `anderes`, `laeuft`, `extern`
+- `verbinden(link?, { nurBeiErfolg })`, `trennen()`, `aktualisieren({ still, automatisch, text })`,
+  `aktualisierenOderVerbinden({ neuerLink })`, `linkPruefen(link)`, `fehler()`, `hinweise()`
 
 Der Link liegt nur gerätelokal (`app.saveLocalStorage`). Scheitert der erste Abruf nach dem Eingeben (Fenster oder
-Eingabefeld), gilt wieder der vorherige Link. Fehlt ein Termin in Alma, kommen nur Notizen, die Alma selbst angelegt hat
-(Kasten „Aus Alma“), in den Papierkorb; eine von Hand angelegte Notiz, die Alma übernommen hatte, verliert nur die
-Alma-Felder (`quelle`, `alma_schluessel`, `alma_titel`, `alma_raum`) und bleibt (`tests/alma.test.js`).
+Eingabefeld), gilt wieder der vorherige Link.
+
+- **Zeitplan** (`Q.planen`, vorher nur Knopf): 30 s bis 2 Min. nach dem Einlesen, dann stündlich; nach einem Fehler nach 5, 15,
+  30 Min.; zurück in der App nach über einer Stunde seit dem letzten Versuch. Nur mit Link auf diesem Gerät, nie mit
+  `quelleExtern("stundenplan")`, nie ein Hinweis. Testeinstieg: `plugin.testStundenplanAus = true`.
+- **Status** gerätelokal (`eba-alma-status`; `eba-alma-stand` bleibt die Zeit des letzten Erfolgs): Ein Fehler (Link falsch,
+  Alma antwortet nicht, kein Netz) bleibt mit Zeit stehen, bis ein Abruf klappt. Vorher stand er nur im Speicher, und die Zeile
+  blieb grün „verbunden“ mit alter Zeit.
+- **Ein Schreiber:** `sperre.js`, Quelle `alma` (`System/Daten/alma-abruf.json`, in `.gitignore`, `release.py`, `pruefen.py`).
+  Der Zeitplan wartet, solange ein anderes Gerät mit Link schreibt (Zeile „anderes-geraet“); jeder Knopf übernimmt. `trennen`
+  gibt die Sperre frei.
+- **Besitz:** Alma-Notizen tragen `herkunft: alma` + `alma_schluessel` (Id-Feld; ältere Alma-Notizen erkennt der nächste Abruf am
+  Kasten „Aus Alma“ und trägt die Marke nach). Von Hand angelegte Notizen, die Alma verknüpft (`quelle: alma`,
+  `alma_schluessel`, `alma_titel`, `alma_raum`), bleiben deine (keine `herkunft`). Notizen mit fremder `herkunft` (zentral,
+  ilias-gruppe, gruppe-gewaehlt, claude …) fasst Alma nie an.
+- **Lebenslauf:** *Von dir gelöscht* → Grabstein `angewendet` (`alma_schluessel` → `kurzHash` aus Schlüssel, Zeitraum, Raum) in
+  `alma-abruf.json`: Die Notiz kommt erst wieder, wenn sich der Termin in Alma ändert. *In Alma weg* (nur Semester, die Alma
+  geliefert hat; Ende vor mehr als 30 Tagen bleibt unverändert): Alma-Notiz unberührt → Papierkorb (`.trash`), mit deinem Text
+  unter `## Notizen` → „(entfällt)“ und `entfaellt: true` (kommt sie zurück, ist sie wieder normal); deine eigene Notiz → nie
+  löschen, nie entkoppeln, sondern `alma_fehlt: <Datum>` und ein Punkt „**Stundenplan** · … steht nicht mehr in Alma“ in „Bitte
+  prüfen“ (höchstens 14 Tage, nicht nach `bis`; synchronisiert, darum auf jedem Gerät). Fehlen auf einmal mehr als die Hälfte (und
+  mehr als 2), bleibt alles stehen (Warnung). *Doppel* einer Alma-Notiz werden zusammengeführt (`Q.dubletten`).
+- **Aus dem Uni-Abgleich übernommen** (Regeln der Hülle `stundenplan-sync.mjs`): nie löschen oder entkoppeln, was du angelegt
+  hast (oben); bei der ersten Verknüpfung (noch kein `alma_raum`) gilt Almas Raum, wenn er mehr als in der Schreibweise abweicht
+  (`raumNorm`: „Kupferbau HS 25“ = „Hörsaal 25 Kupferbau“), auch in der Kopfzeile unter der Überschrift; keine neue Notiz für
+  Veranstaltungen, die schon vorbei sind.
+- **Außerhalb des Plugins** (eine Hülle, die `aktualisieren({ text })` mit `window.app` aus Dateien und ohne `ctx.user.sperre`/
+  `quellen` aufruft): dieselben Regeln, aber keine Sperre, keine Grabsteine, kein Meldekanal; geschrieben wird nur über
+  `vault.create`, `vault.trash` und `fileManager.processFrontMatter` (die Kopfzeile ändert dort die Hülle).
+- Tests: `tests/alma.test.js` (Wegfall, „(entfällt)“ und zurück, Grabstein, vorbei, Raum, Doppel, Fehler im Status, Sperre,
+  ohne Bibliotheken, quellen_extern).
 
 ## Datenmodell `ctx.modell` (Phase 2b)
 
@@ -291,8 +327,8 @@ dem Montag des Vorlesungsbeginns; eine Woche, deren Montag bis Freitag ganz in e
 zählt nicht (WS 2026/27: 16 Vorlesungswochen). Außerhalb: Pause → „Weihnachtspause bis 06.01.“, Prüfungsphase außerhalb der
 Vorlesungszeit → „Prüfungsphase bis 13.02.“ (in der Vorlesungszeit: „Vorlesungswoche 16 von 16 · Prüfungsphase“), vor dem
 Vorlesungsbeginn → „noch N Tage bis Vorlesungsbeginn“ (heute/morgen), danach → „vorlesungsfrei“. Quelle ist
-`ctx.modell.woche()`; dieselbe Regel steht als Bases-Formel `wochetext` (mit `vw0`, `vti`, `vnw`, `pwa`, `pwb`, `vnr`, `vges`,
-`inph`, `phbis`) im Dashboard. Nutzer: Dashboard (Kopf des Semesterverlaufs), `verlauf.js` (Vorlesungswoche und Resttage in der
+`ctx.modell.woche()` (Woche nach der Planwoche: am Samstag und Sonntag zählt schon die kommende; bis 18.10.2026 stand
+dieselbe Regel als Bases-Formel `wochetext` im Dashboard). Nutzer: Dashboard (Kopf des Semesterverlaufs, `dashboard.js`), `verlauf.js` (Vorlesungswoche und Resttage in der
 Lupe), `vorlesung.js` (Kopf der Vorlesungsnotiz: Woche des Notizdatums, Perlen mit Vorlesungswochen). Die Leiste
 „Semesterverlauf“ im Dashboard zeigt alle Kalenderwochen des Semesters als Grafik; der Studienverlauf wiederholt sie seit
 17.10.2026 nicht mehr (seine Lupe zeigt dasselbe Semester als Band).
@@ -322,15 +358,17 @@ Hinweis „Nach Regel berechnet“.
 
 **Wochenraster (seit 0.4.0, seit 17.10.2026 `woche.js`):** Codeblock ```` ```eba-woche ```` in der Karte
 `> [!eba-kennzahlen|woche …]` auf Dashboard und Stundenplan (vorher eine Bases-Formel; Bases liest keinen gerätelokalen
-Speicher, darum jetzt Code). Das Raster zeigt eine echte Kalenderwoche, Montag bis Freitag, am Samstag und Sonntag schon die
-nächste; im Kopf das Datum jedes Tages, rechts oben „‹ KW n ›“. Daten aus dem metadataCache: alle Notizen mit `typ:
-lehrveranstaltung` (jede Herkunft), Kurznamen aus Modulnotizen (`kurz`), `semesterliste`, `pausen`, `stundenplan_ausgeblendet`
-aus `System/Einstellungen.md`. Gezeichnet wird nur die gezeigte Woche; neu (entprellt, 0,4 s) bei Änderungen an
+Speicher, darum jetzt Code). Das Raster zeigt eine echte Kalenderwoche, Montag bis Freitag, die Planwoche des Fachmodells (am
+Samstag und Sonntag schon die nächste); im Kopf das Datum jedes Tages, rechts oben „‹ KW n ›“. Daten: alle Notizen mit `typ:
+lehrveranstaltung` (jede Herkunft) und Kurznamen aus Modulnotizen (`kurz`) aus dem metadataCache, Semester, Pausen, freie Tage
+und „Besuche ich nicht“ aus dem Fachmodell (`ctx.modell.findetStatt`, seit 18.10.2026; vorher die Kopien `semesterliste`,
+`pausen` in `System/Einstellungen.md`, ohne freie Tage). Gezeichnet wird nur die gezeigte Woche; neu (entprellt, 0,4 s) bei Änderungen an
 Stundenplan-, Modul- und Einstellungsnotizen, beim Zurückkommen in die App und alle 10 Minuten. Schreibt keine Datei.
 Ein Kasten erscheint nur, wenn das Datum seines Wochentags zwischen `von` und `bis` liegt (leer = unbegrenzt), Tutorien und
 Übungen also erst ab ihrer ersten Woche; ohne `semester` des gezeigten Semesters (nach dem Freitag der Woche), mit
-`entfaellt: true` oder ausgeblendet (`herkunft: zentral`, `zentral_id` in `stundenplan_ausgeblendet`) gar nicht. Liegt der
-Tag in `ausfall` oder in einer Pause, ist der Kasten durchgestrichen (`ausfall`); `aenderungen` („Datum|Beginn|Ende|Raum“) in
+`entfaellt: true` oder ausgeblendet (`herkunft: zentral`, `zentral_id` in `stundenplan_ausgeblendet`) gar nicht, ein
+Einzeltermin nur an seinem Tag. Liegt der Tag in `ausfall`, in einer Pause oder auf einem vorlesungsfreien Tag, ist der Kasten
+durchgestrichen (`ausfall`, Tooltip „fällt aus (Christi Himmelfahrt)“); `aenderungen` („Datum|Beginn|Ende|Raum“) in
 der Woche: gestrichelt (`geaendert`), an der neuen Zeit, mit neuer Zeit und neuem Raum. Findet nichts statt, steht ein Satz
 (Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Veranstaltungen“). Stunden von–bis aus allen Serien des
 Semesters (dazu Einzeltermine und geänderte Zeiten der Woche), damit das Raster von Woche zu Woche gleich bleibt; Höhe am
@@ -360,6 +398,38 @@ mit der Art („Tutorium 1“), steht nur sie da, eine bloße Zahl wird „Grupp
 und Raum im `title`, ein Tipp öffnet das Modul (Aktion `zeigen`, immer mit dem vollen Pfad der Modulnotiz aus `modulPfad`, nie
 über den Namen; ohne Modulnotiz die Stundenplan-Notiz selbst). Jeder Kasten ist ein CSS-Größen-Container; was nicht in
 seine Höhe passt, entfällt (Abschnitt 55).
+
+## Fachmodell (seit 18.10.2026, `modell.js`)
+
+Regel für jede neue Funktion: Was Prüfung, Frist, „diese Woche“, Sitzung, ECTS, Note, „im Plan“, Statusfarbe oder Datum
+heißt, fragt sie `ctx.modell`, statt es selbst abzuleiten. Bis zum 18.10.2026 rechnete jeder Bildschirm selbst, und Dashboard,
+Modulseite, Zeitleiste und Studienverlauf widersprachen sich (Konsistenz-Audit). Eine neue Regel kommt ins Modell, mit Test in
+`tests/fachmodell.test.js`; Bases-Formeln, die eine Regel nachbilden müssen, bekommen einen Vergleich in
+`tests/bases-regeln.test.js`.
+
+| Aufruf | Ergebnis und Regel |
+|---|---|
+| `zeit` | Datum und Text in einer Schreibweise (docs/design.md): `datum(iso)` „Mo 19.10.“, Jahr nur außerhalb des laufenden Studienjahrs (1.10. bis 30.9.) „06.02.2028“; `kurz`, `spanne` („19.–25.10.“, „12.10. – 06.02.“), `abstand` („heute“, „in 5 Tagen“), `uhr`, `minuten`, `uhrzeitIn(text)`, `kw`, `montag`, `plus`, `tage`, `jahrRaten(tag, monat, { bezug, ab })` (höchstens 60 Tage zurück, sonst das nächste Jahr; `ab`: erstes Vorkommen ab dem Beginn eines Zeitraums), `plural(n, einzahl, mehrzahl)`, `esc`, `heute()` (aus `ctx.date`, also mit `plugin.testDatum`). `ctx.zeit(fn, ms)` bleibt der Timer-Helfer des Kerns. |
+| `termine({ alle })` | Termin-Notizen normiert (`datum`, `bis`, `ende`, `kategorie`, `art`, `zeit`, `minuten`, `ab`, `bisZeit`, `wo`, `geschaetzt`, `erledigt`, `zwischentest`, `nachhol`, `freiwillig`, `zentral`), nach Tag und Uhrzeit als Zahl (9:15 vor 12:15, ohne Uhrzeit zuerst). Entfallene (`entfaellt: true`) und die Frist der Orientierungsprüfung eines anderen Jahrgangs zählen nirgends (`alle: true` liefert sie). Uhrzeit: Feld `uhrzeit` (neue eigene Termine), sonst aus `ort`. |
+| `pruefungen({ heute, ab, bis, code, zwischentests })` | Termin-Notizen `kategorie: Prüfung` (eintägig; ein Zeitraum ist eine Prüfungsphase) und Modulfeld `klausur`; Kürzel + Tag einmal, die Notiz gewinnt, ein Zwischentest verdeckt keine Klausur. Je Prüfung `erledigt` (Haken an der Notiz oder Modul bestanden/anerkannt), `fertig`, `ergebnis`, `offen` (kommt noch, nicht erledigt). |
+| `pruefungVon(code)` | Die Prüfung eines Moduls: ohne Zwischentests, Nachholtermin nur nach „nicht bestanden“; die nächste offene, sonst die letzte. Modul bestanden/anerkannt: nur eine, die schon war, sonst `null`. Lernplan, Modulseite, Studienverlauf und die Spalte „Termin“ auf Noten & ECTS nutzen sie. |
+| `naechstePruefung()` | Kachel „Nächste Prüfung“: früheste offene Klausur ohne Zwischentests und Nachholtermine. |
+| `fristen({ tage })`, `abgaben({ tage })` | Fristen (`kategorie: Frist`, offen, laufen noch oder kommen), sortiert nach dem nächsten Stichtag (`stichtag`: läuft der Zeitraum schon, sein Ende, sonst sein Beginn); offene Übungsblätter mit Fälligkeit (überfällige bleiben bis zur Abgabe). |
+| `kalenderwoche(iso)`, `planwoche(iso)` | Montag bis Sonntag des Tages bzw. die Woche, um die es geht: **am Samstag und Sonntag schon die kommende** (`vorgezogen`). Die eine Wochenend-Regel für alles, was „diese Woche“ zeigt: Wochenraster, Leiste „Semesterverlauf“, Semesterband der Modulseite, Agenda („Diese Woche · 17.–25.10.“ ab heute) und `woche().text` („Vorlesungswoche 2 von 16“ am Sonntag vor Woche 2). Tagesangaben (heute, morgen, Countdown, „Vorlesungsbeginn morgen“) bleiben am Tag. |
+| `findetStatt(fm, tag)` | Findet eine Sitzung (`typ: lehrveranstaltung`) an dem Tag statt? `{ statt, grund, name, beginn, ende, raum, geaendert }`; `grund`: `entfaellt`, `ausgeblendet` (Besuche ich nicht), `anderer Tag` (auch Einzeltermin), `ausserhalb` (`von`/`bis`), `ausfall`, `pause`, `frei` (vorlesungsfreier Tag wie Christi Himmelfahrt); `aenderungen` setzen Zeit und Raum. Wochenraster und `naechsteSitzung(fm, jetzt)` („Als Nächstes“) nutzen sie. |
+| `imPlan(modul)` | Gehört zu deinem Studium: gewählt, selbst geplant, begonnen (Status nicht „offen“), Grundstudium und Abschluss, in Profil & Vertiefung Pflicht deiner Variante (offen: Pflicht in allen); Schwerpunkt nur gewählt oder begonnen; Zusatzleistungen nie. |
+| `ects()`, `noten()`, `blockVon(fm, variante)` | ECTS = bestandene und anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange SQ100 offen), `op` (höchstens 4), `opFrist` (Ende des 4. Fachsemesters); Gesamtnote nach § 13 BT wie Noten & ECTS. |
+| `statusArt(typ, wert)` | Ton einer Pille nach docs/design.md: ok (bestanden, anerkannt, angemeldet, erledigt, gelesen …), warn (Frist, in Arbeit, Abgabe), bad (Prüfung, nicht bestanden, überfällig), info (läuft, Lehre, Zwischentest), akzent (Fachschaft, Veranstaltung), sonst leer (offen, neu, geschätzt). |
+| `istZwischentest(x)`, `istNachhol(x)`, `terminArt(kategorie, zt)`, `ortTeilen(ort)`, `modul(code)`, `opFrist()` | Einzelregeln; Zwischentest = „Zwischentest“ (auch „Zwischen-Test“) im Titel oder Dateinamen. |
+
+Prüfungsphasen kommen nur aus den Semesterdaten (`daten().pruefungsphasen`); Termin-Notizen wie „Klausurphase Haupttermin“
+sind Kalendereinträge und zählen für keine Regel. Die Frist der Orientierungsprüfung aus den zentralen Daten (30.09.2028)
+übernimmt `zentral.js` nur, wenn ihr Datum das Ende deines 4. Fachsemesters ist (`opFrist`). Nutzer: `dashboard.js`
+(Kacheln und Listen), `termine.js`, `kalender.js`, `woche.js`, `modul.js`, `klausurzeit.js`, `verlauf.js`, `lernplan.js`,
+`tabellen.js` (Datum, Chip-Farbe), `notizen.js` (Zwischentest ist eine Prüfung), `eba.js` und `todos.js` (Jahr zu „TT.MM.“),
+`zentral.js` (Jahrgang der Orientierungsprüfung). Die Bases-Formeln auf Noten & ECTS (Termin, „im Plan“, Stand, Block,
+Kennzahlen) folgen denselben Regeln; `tests/bases-regeln.test.js` rechnet sie mit einem kleinen Auswerter
+(`tests/bases-formel.js`) auf ausgedachten Notizen aus und vergleicht sie mit dem Modell.
 
 ## Zentrale Daten (Paket B)
 
@@ -414,9 +484,9 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
  Status (gerätelokal)                Termine/*.md (herkunft: zentral)  +  System/Daten/Semester.md (nur bei Änderung)
 ```
 
-- **Wann:** `registrieren()` plant den ersten Lauf 20 s + Zufall 0–2 Min. nach dem Einlesen (auch nach einem Hot-Reload), dann
-  alle 15 Min. über `ctx.intervall` (seit 0.4.2; ohne Änderung nur das Manifest, Dateien nur bei neuer Prüfsumme, Notizen nur
-  bei geänderten Daten), beim Zurückkehren in die App nach über 10 Min.; dazu Aktion/Befehl „Zentrale Daten jetzt aktualisieren“. Ändert sich der Filter (Variante,
+- **Wann:** über den gemeinsamen Zeitplan der Quellen (`Q.planen`, seit 0.4.5): erster Lauf 20 s + Zufall 0–2 Min. nach dem
+  Einlesen (auch nach einem Hot-Reload), dann alle 15 Min. (seit 0.4.2; ohne Änderung nur das Manifest, Dateien nur bei neuer
+  Prüfsumme, Notizen nur bei geänderten Daten), beim Zurückkehren in die App nach über 10 Min.; dazu Aktion/Befehl „Zentrale Daten aktualisieren“. Ändert sich der Filter (Variante,
   Plan, Schalter), wendet das Abrufer-Gerät den letzten Stand ohne Netz neu an (`abrufen({ nurCache: true })`, 5 s entprellt über
   `ctx.modell.beiAenderung`). Hinweise (Notice) nur beim Knopf, nie beim automatischen Lauf.
 - **Gerätelokal** (`app.saveLocalStorage`): `eba-geraet` (zufällige Geräte-ID), `eba-darstellung` (Hell, Dunkel, Automatisch),
@@ -424,10 +494,15 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   `eba-zentral-stand` (letzter Abruf, Fehler,
   Pause, Hinweis, `plugin_aktuell`, Prüfsummen, Filter-Schlüssel, Abrufer ja/nein), `eba-zentral-daten` (letzter geprüfter
   Stand, für Filteränderungen ohne Netz).
-- **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (synchronisiert) = `{ geraet, seit, zuletzt, angewendet }`. Schreiben
-  darf das Gerät, das dort steht, oder jedes andere, wenn `zuletzt` älter als 80 Min. ist (dann übernimmt es). Die Datei wird nur
-  bei Wechsel, bei geänderten Notizen (`angewendet`) oder höchstens alle 50 Min. (bei Läufen alle 15 Min. also etwa stündlich)
-  geschrieben, auch ohne geänderte Daten – der Puls muss unter der
+- **Nur ein Gerät schreibt:** `System/Daten/abruf.json` (synchronisiert) = `{ geraet, seit, zuletzt, mobil, angewendet }`.
+  Schreiben darf das Gerät, das dort steht, oder jedes andere, wenn `zuletzt` älter als 80 Min. ist (dann übernimmt es).
+  **Aktualisieren** (`abrufen({ manuell: true })`, seit 0.4.5) übernimmt sofort wie „Hier aktualisieren“ bei ILIAS, außer der
+  Abrufer hat vor weniger als 2 Min. abgerufen (Hinweis „gerade auf einem anderen Gerät aktualisiert“). Wer übernimmt, schreibt
+  `abruf.json` zuerst (`sperre.js`, `nehmen({ erzwingen: true })`, `angewendet` bleibt), dann die Notizen. Jeder Lauf liest
+  `abruf.json` direkt vor dem Schreiben neu und schreibt nichts, wenn inzwischen ein anderes Gerät übernommen oder abgerufen
+  hat (eine Übernahme von Hand gilt nur gegen den Stand, den sie gesehen hat). Die Datei wird nur
+  bei Wechsel, bei geänderten Notizen (`angewendet`, die Felder der Sperre bleiben dabei) oder höchstens alle 50 Min. (Puls über
+  `sperre.js`; bei Läufen alle 15 Min. also etwa stündlich) geschrieben, auch ohne geänderte Daten – der Puls muss unter der
   Übernahmegrenze liegen, sonst übernähme ein zweites Gerät, obwohl der Abrufer läuft (Läufe + Timer-Drosselung).
   `angewendet` (id → Kurz-Prüfsumme des Eintrags) merkt sich, was als Notiz geschrieben wurde: Löschst du eine zentrale Notiz,
   kommt sie erst wieder, wenn sich der Termin in den Daten ändert. Liegt eine Notiz deines eigenen Uni-Abgleichs mit dieser id
@@ -438,7 +513,9 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   zentral_id, entfaellt?, uebersicht, cssclasses, tags`), danach eigene Felder der Nutzer unverändert. Text: `# Titel`,
   `**Datum** · Ort`, `info`, Hinweis „Geschätzt“ bzw. „Entfällt“, `Quelle: [host](url) · geprüft am TT.MM.JJJJ`, dann
   `## Meine Notizen` (beim Anlegen leer erzeugt). Alles ab `## Meine Notizen`, `erledigt`, eigene Tags (`cssclasses`/`tags`
-  werden vereinigt) und eigene Felder bleiben. Datum geändert → `fileManager.renameFile` (Links ziehen mit). Geschrieben wird
+  werden vereinigt) und eigene Felder bleiben. Datum geändert → `fileManager.renameFile` nach Datum und Titel (Links ziehen
+  mit); folgt der Name selbst nicht der Regel `eba.dateiTitel` (etwa ein Emoji aus einer älteren Fassung), wird er nur gesäubert
+  (`neuerName`), ein bewusst kürzerer Name bleibt. Geschrieben wird
   nur, wenn der erzeugte Text vom vorhandenen abweicht. Notizen ohne `herkunft: zentral` fasst das Plugin nie an, mit einer
   Ausnahme, der **Übergabe nach id** (seit 0.4.4, Vertrag in `docs/daten-v1.md`): Ein eigener Uni-Abgleich schreibt Termine,
   die nicht in den Daten stehen, selbst, als Notiz mit `abgleich_id` = id und ohne `herkunft`. Steht die id später in den
@@ -449,7 +526,12 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
 - **Wegfall/Filter:** Fehlt eine id: unberührt (nicht erledigt, „Meine Notizen“ leer) → Papierkorb (`vault.trash`, nie
   endgültig), sonst Titel „(entfällt)“ + `entfaellt: true`. Ende > 30 Tage vorbei → unverändert. Fällt mehr als die Hälfte (und
   mehr als 10) auf einmal weg → keiner als entfallen (Schutz gegen kaputte Exporte). Passt ein Termin nicht mehr zum Filter
-  (Modul nicht im Plan, Schalter aus): unberührt → Papierkorb, sonst stehen lassen.
+  (Modul nicht im Plan, Schalter aus): unberührt → Papierkorb, sonst stehen lassen. Unberührt und Grabstein nach den Regeln des
+  Quellen-Vertrags (`Q.unberuehrt`, `Q.kurzHash`, gleiche Rechnung wie bis 0.4.4).
+- **Doppel** (seit 0.4.5): Tragen mehrere Notizen dieselbe `zentral_id` (Sync-Verzug, Konfliktkopie), führt der Abrufer sie vor
+  dem Übernehmen zusammen wie `termine-sync.py` des Uni-Abgleichs (`Q.dubletten`): Der kürzeste Dateiname bleibt,
+  `erledigt: true` gewinnt, deine Zeilen unter „Meine Notizen“ (Stundenplan: „Notizen“) kommen dazu, die anderen in den
+  Papierkorb (Bericht `doppel`). Vorher blieben die anderen unangetastet liegen.
 - **Bereich** (`bereich`, optional, Freigabeliste in `docs/daten-v1.md`): `schluesselqualifikation` → Feld `bereich` und Tag
   `schlüsselqualifikation` (verwaltet: verschwindet, wenn der Bereich wegfällt; eigene Tags bleiben), Pille „Schlüsselqualifikation
   · freiwillig“ in der Datumszeile des Notizkopfs, kurz „freiwillig“ in der Agenda (`termine.js`) und der Kalender-Tagesliste
@@ -479,9 +561,11 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Anmeldeschluss/-frist im Titel = Schluss), Wo aus dem Rest von `ort`, sonst die Quelle. Gibt es für das Modul eine
   Gruppen-Notiz (`herkunft: ilias-gruppe` oder `gruppe-gewaehlt`, aktuelles Semester, nicht entfallen; nennt der Titel Übung
   oder Tutorium, zählt diese Art) oder seit 18.10.2026 eine andere Stundenplan-Notiz (Alma, von Hand, eigener Uni-Abgleich, ohne
-  `herkunft`; nie zentral), die zur Zeit einer Gruppe dieses Moduls aus `gruppen.json` passt (`deckt` aus `meine-gruppe.js`:
-  Code, Semester, Wochentag, Beginn ±15 Min. c.t./s.t.; dazu das Ende ebenso und Art Übung oder Tutorium; nie über die Nummer),
-  steht „angemeldet · Gruppe 4“ dabei (Name nur aus dem Feld `gruppe` der Notiz, sonst nur „angemeldet“; nie `gruppe_alma`).
+  `herkunft`; nie zentral), die zur Zeit einer Gruppe dieses Moduls aus `gruppen.json` passt (`gehoertZu` aus `meine-gruppe.js`,
+  die eine Regel: Code, Semester, Wochentag, Beginn ±15 Min. c.t./s.t.; hier mit `ende` und `arten` Übung oder Tutorium; nie
+  über die Nummer),
+  steht eine grüne Pille „Gruppe 4“ dabei (Name nur aus dem Feld `gruppe` der Notiz, sonst nur „angemeldet“; nie `gruppe_alma`;
+  bis 18.10.2026 „angemeldet · Gruppe 4“).
   Vorher blieben die Notizen eines eigenen Abgleichs ohne `herkunft` bei „offen“. Neu gezeichnet bei
   `ctx.modell.beiAenderung` und wie die Agenda. Reine Logik (`anmeldungen`, `ortTeilen`, `anmeldeStand`) in
   `tests/termine.test.js`. CSS: Abschnitt 57.
@@ -556,8 +640,12 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   EcoBA meldet man sich in ILIAS für Gruppen an, Almas Kalender kennt sie meist nicht), kein Schloss, solange zentrale Notizen
   da sind; `stundenplanAnzahl()` in `verbindungen.js` zählt zentrale und Gruppen-Notizen nicht als Alma-Daten.
   `gruppen.js` markiert eine Gruppe nur mit einer Notiz, die eine Übung sein kann (nie Art Vorlesung oder Seminar; Befund 18).
-  *Eigener Uni-Abgleich* (`eigenerAbgleich` in `eba.js`, dieselbe Regel wie bei ILIAS: `System/Skripte/abgleich.js` im Tresor
-  oder `ilias_unterlagen: extern`): Der zentrale Stundenplan wird weder geholt noch angewendet, vorhandene zentrale Notizen
+  *Eine Regel „ist das deine Gruppe?“* (seit 0.4.5): `gehoertZu(fm, g, { arten, ende, ueberId })` in `meine-gruppe.js` gilt für
+  ILIAS und „Meine“ (`deckt`), die Markierung in `eba-gruppen` (`gruppen.js`, Gruppen-Notizen über ihre `gruppe_id`) und
+  die Pille „Gruppe 4“ (`termine.js`); vorher prüfte jede Stelle selbst (dort ohne c.t.).
+  *Stundenplan von außen* (`eba.quelleExtern("stundenplan")`, siehe „Quellen außerhalb des Plugins“; ohne Liste beim eigenen
+  Uni-Abgleich: `System/Skripte/abgleich.js` im Tresor oder `ilias_unterlagen: extern`): Der zentrale Stundenplan wird weder
+  geholt noch angewendet, vorhandene zentrale Notizen
   bleiben unberührt und `verfuegbar` ist `false`, die Texte versprechen also keine Vorlesungen; Gruppen-Notizen aus ILIAS
   weichen den Notizen des eigenen Abgleichs wie jeder anderen Notiz ohne `herkunft`. Alma verbindet man dort nicht (`alma.js`
   schriebe dieselben Veranstaltungen ein zweites Mal): Zeile unter Verbindungen und Einrichtung sagen nur „Dein Stundenplan
@@ -616,14 +704,20 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Läufe in Folge fehlt (`fehlt`, zählt höchstens bis 2; Notizen, die schon „entfällt“ tragen, zählen nicht mit, so schreibt ein
   unveränderter Lauf den Index nicht neu); eine ganz leere Gruppenliste entfernt nie etwas (Warnung). Dann Papierkorb, mit
   eigenem Text „(entfällt)“; fehlen auf einmal mindestens zwei und mehr als die Hälfte, bleibt alles stehen (Warnung).
+  *Von dir gelöscht* (seit 0.4.5, Lebenslauf des Quellen-Vertrags): Der Index merkt je Gruppe, für welche Gruppe aus
+  `gruppen.json` schon eine ILIAS-Notiz da war (`notiz`). Fehlt sie dann (und keine gewählte Notiz desselben Moduls), hast du sie
+  gelöscht: Sie kommt nicht wieder, bis die Zuordnung wechselt oder du die Gruppe verlässt (`notiz` wird leer).
   Tests: `tests/meine-gruppe.test.js`, `tests/ilias-gruppen.test.js`, `tests/gruppen.test.js`.
 - **Anzeige:** Zeile „Zentrale Daten“ im Codeblock `eba-verbindungen` ohne Schloss: „Aktualisiert vor X Min.“ / „Pausiert“ /
-  „Fehler beim letzten Abruf“, `hinweis` aus dem Manifest. „Neue Version verfügbar“ steht seit 0.2.0 in der Zeile „Studium
+  „Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert …“, `hinweis` aus dem Manifest. `status()` hat die gemeinsame
+  Form der Quellen (`zustand`: aus, laeuft, pause, fehler, an; `geprueft` = letzter Lauf ohne Fehler, gerätelokal `erfolg`;
+  `fehler` ein Satz, `grund` der technische Text; `warnungen` = Warnung des letzten Laufs); `stand().geprueft` bleibt das
+  zuletzt geprüfte Manifest (für `update.js`). „Neue Version verfügbar“ steht seit 0.2.0 in der Zeile „Studium
   Autopilot“ (`update.js`); nur ohne `ctx.update` zeigt diese Zeile den Link `RELEASES`. „Mehr erfahren“ öffnet das
   Info-Fenster (Datenschutz-Hinweis). Der Termin-Notiz-Kopf zeigt „geprüft am …“ aus `geprueft`; die Agenda liest nur das
   Frontmatter, nie den Notiztext.
-- **Für andere Skripte/Tests:** `ctx.zentral` = `{ abrufen(opt), status(), anzeige(), stand(), geraetId(), idAusName(name),
-  notizText(alt, eintrag, opt), dateiName(datum, titel), terminePruefen(d), semesterPruefen(d), manifestPruefen(m),
+- **Für andere Skripte/Tests:** `ctx.zentral` = `{ abrufen(opt), status(), stand(), geraetId(), idAusName(name),
+  notizText(alt, eintrag, opt), dateiName(datum, titel), neuerName(name, datum, titel), terminePruefen(d), semesterPruefen(d), manifestPruefen(m),
   gruppenPruefen(d), gruppen(), angebotePruefen(d), angebote(), filterBauen(), protokoll, … }`. `abrufen()` liefert einen Bericht
   (`art`: ok | unveraendert | fehler | pausiert | aus | anderes-geraet; `geschrieben`, `angelegt`, `aktualisiert`, `umbenannt`,
   `entfaellt`, `papierkorb`, `verworfen`).
@@ -658,7 +752,7 @@ hat, fasst ein Update nie an, auch wenn die Liste es nennt (dann lehnt das Plugi
 | `system` | `.obsidian/plugins/studium-autopilot/{main.js,manifest.json,styles.css}`, `System/Skripte/*.js`, `System/Gerüste/*.md`, `.obsidian/snippets/eba-*.css` | ersetzen | seit 0.4.4 immer die neue Fassung; deine kommt vorher als `Name (deine Fassung vor X).ext.txt` daneben (`.txt`: nie geladen), das Ergebnisfenster sagt es in einer Zeile. Bis 0.4.3 blieb deine aktiv und die neue lag als `Name (neu X).ext.txt` daneben, darum fehlten neue Teile |
 | `einstellung` | `.obsidian/{app,bookmarks,community-plugins,core-plugins,hotkeys,types}.json` | ersetzen | mischen: deine Werte bleiben, fehlende Schlüssel kommen dazu, Textlisten vereinigt |
 | `seite` | `Dashboard.md`, `Studium/*.md`, `System/Daten/Musterplan.md` | ersetzen | Vorlage seit der installierten Version gleich → deine bleibt, keine Kopie (seit 0.4.4); nur abgehakt (`ohne_haken` gleich) → neue Seite mit deinen Haken; sonst deine bleibt, neue daneben `Name (neu X).md` |
-| `modul` | `Module/**/*.md` | ersetzen | Vorlage seit der installierten Version gleich → deines bleibt unverändert (seit 0.4.4); sonst Frontmatter: Reihenfolge und Katalogfelder neu, persönliche Felder (`status`, `ergebnis`, `versuch`, `klausur`, `semester_geplant`, `gewaehlt`, `anrechnung`, `zusatz`) und eigene Felder bleiben, `tags`/`aliases`/`cssclasses` vereinigt; Text neu, wenn `koerper` gleich, sonst deiner |
+| `modul` | `Module/**/*.md` | ersetzen | Vorlage seit der installierten Version gleich → deines bleibt unverändert (seit 0.4.4); sonst Frontmatter: Reihenfolge und Katalogfelder neu, persönliche Felder (`status`, `ergebnis`, `versuch`, `klausur`, `semester_geplant`, `gewaehlt`, `anrechnung`, `zusatz`, `alma_ausgeblendet`, `anmeldung_verzicht`) und eigene Felder bleiben, `tags`/`aliases`/`cssclasses` vereinigt; Text neu, wenn `koerper` gleich, sonst deiner |
 
 Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal), `abruf.json`, `installiert.json`,
 `.obsidian/appearance.json` (Obsidians Grundfarbschema; Hell, Dunkel, Automatisch speichert jedes Gerät selbst), `workspace*.json`, Plugin-`data.json`, `Termine/`, `Stundenplan/`,
@@ -700,7 +794,9 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   als Sicherung daneben).
 - **Andere Geräte:** Das Update kommt per Sync. Dort zeigt `installiert.json` schon die neue Version → kein zweites Update.
   Läuft dort noch der alte Kern im Speicher (`installiert` > `plugin.manifest.version`), zeigt die Zeile „Neu laden“
-  (Aktion `vorlage-neu-laden`). Skripte lädt der Hot-Reload ohnehin nach.
+  (Aktion `vorlage-neu-laden`). Skripte lädt der Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
+  `installiert.json` an, setzt `update.js` `plugin.stillBis` für eine Minute; mehrere Skripte auf einmal schweigen ohnehin.
+  Die Fenster vor und nach dem Update sagen darum „Dort einmal auf ‚Neu laden‘ … tippen“ (ohne neuen Kern: „nichts tun“).
 - **Neustart:** Hat sich `main.js`/`manifest.json` geändert, lädt `pluginNeuLaden()` das Plugin neu
   (`app.plugins.disablePlugin` → `loadManifests` → `enablePlugin`, nicht gespeichert, also bleibt es in
   `community-plugins.json` aktiv). Danach zeichnet nur die neue Instanz. Klappt das nicht, sagt das Ergebnisfenster „Obsidian
@@ -770,9 +866,137 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   und sind darum ohne Obsidian testbar (`tests/update.test.js`, Neuigkeiten: `tests/update-neuigkeiten.test.js`).
   `heilen(true)` startet die Reparatur sofort, ohne den Merker des Geräts.
 
+## Quellen außerhalb des Plugins (`quellen_extern`, seit 0.4.5)
+
+Was ein eigener Uni-Abgleich oder ein eigener Server schon in den Tresor bringt, holt das Plugin nicht noch einmal: nie zwei
+Schreiber je Quelle. Eine Regel für alle Skripte in `eba.js`:
+
+```
+ctx.user.eba.quelleExtern(schluessel, existiert, einstellungen) → true | false
+ctx.user.eba.quellenExtern(existiert, einstellungen) → [Schlüssel]      ctx.user.eba.QUELLEN (alle Schlüssel)
+```
+
+`existiert(pfad)` → ob die Datei im Tresor liegt, `einstellungen` = Frontmatter von `System/Einstellungen.md`. Jede Funktion
+fragt bei **jedem** Lauf, nicht nur beim Start.
+
+| Schlüssel | Quelle | Wirkung, wenn extern |
+|---|---|---|
+| `stundenplan` | zentraler Stundenplan, Alma-Stundenplan | `zentral.js` holt und wendet den zentralen Stundenplan nicht an; `alma.js` holt und schreibt nie (`aktualisieren`, `verbinden`, damit auch Befehle, Knöpfe und Verbindungen) und sagt nur „Dein Stundenplan kommt über deinen Uni-Abgleich.“ |
+| `ilias-dateien` | Downloads aus ILIAS | `ilias.js` lädt nie Dateien, mit Zugang nur die Übungsgruppen (siehe „ILIAS-Unterlagen“) |
+| `ilias-gruppen` | Übungsgruppen aus ILIAS | kein Gruppenabgleich; mit `ilias-dateien` zusammen gar kein ILIAS-Lauf |
+| `ilias-kalender`, `alma-konto`, `volltext` | Abgaben aus dem ILIAS-Kalender, Noten und Prüfungsanmeldungen aus Alma, Textfassungen der PDFs | die Funktion bleibt aus (für die kommenden Funktionen) |
+
+Regel: Steht `quellen_extern` (Liste, `types.json`: multitext) in `System/Einstellungen.md`, entscheidet sie, auch leer;
+Schreibweise egal, unbekannte Einträge zählen nicht, `quellen_extern:` ohne Wert gilt als nicht gesetzt. Ohne Liste gilt beim
+eigenen Uni-Abgleich (`eigenerAbgleich`: `System/Skripte/abgleich.js` im Tresor oder `ilias_unterlagen: extern`) alles außer
+`ilias-gruppen` als extern: Die Übungsgruppen prüft dort das Plugin selbst, der eigene Abgleich legt keine Gruppen-Notizen an.
+Ohne eigenen Abgleich ist nichts extern. Fehler beim Lesen gelten als „nichts extern“ (wie bisher `eigenerAbgleich`).
+`eigenerAbgleich` selbst entscheidet nur noch, ob es einen eigenen Abgleich gibt (z. B. „Bitte prüfen“ mit seinem Protokoll).
+Tests: `tests/quellen-extern.test.js`, dazu die Fälle in `ilias.test.js`, `ilias-gruppen.test.js`, `stundenplan.test.js` und
+`verbindungen.test.js`.
+
+## Abrufer-Sperre (`sperre.js`, seit 0.4.5): ein Schreiber für alle Quellen
+
+Was eine Quelle in den Tresor schreibt, schreibt nur ein Gerät. `sperre.js` ist der gemeinsame Lock dafür (Bibliothek, kein
+Netz, keine Zeitgeber). Noten & Anmeldungen, ILIAS (`ilias-abruf.json`, Dateiname wie bisher), Alma-Stundenplan
+(`alma-abruf.json`) und Volltext (`volltext-abruf.json`, mit Computer-Vorrang) nutzen ihn; die zentralen Daten ihre ältere
+Fassung mit denselben Regeln und Werten (nur für die Übernahme).
+
+```
+ctx.user.sperre.erzeugen({ io: { lesen(pfad), schreiben(pfad, text) }, quelle | pfad, geraetId(), jetzt(), mobil,
+                           uebernahme = 80 Min., puls = 50 Min., computerVorrang = false })
+  → { pruefen() → { hier, anderes, darf, sperre }, nehmen({ erzwingen }) → bool, puls() → bool, freigeben() → bool, pfad }
+ctx.user.sperre.pfadVon(quelle) → "System/Daten/<quelle>-abruf.json"     ctx.user.sperre.K → { UEBERNAHME, PULS, ORDNER }
+```
+
+- **Datei** (synchronisiert, in `.gitignore`, `release.py` und `pruefen.py`): `{ geraet, seit, zuletzt, mobil, frei? }`. Weitere
+  Felder einer Quelle in derselben Datei (z. B. `angewendet` in `abruf.json` der zentralen Daten) bleiben beim Schreiben
+  erhalten. Unlesbar = keine Sperre.
+- **Regeln:** `hier` = dieses Gerät hält sie; `anderes` = ein anderes Gerät hält sie und war vor höchstens `uebernahme` aktiv
+  (Stille-Grenze, danach darf jedes Gerät übernehmen); `darf = !anderes`. `nehmen` schreibt nur bei Wechsel, nach `frei`, bei
+  anderer Geräteart oder wenn `zuletzt` älter als `puls` ist (nicht bei jedem Lauf). `nehmen({ erzwingen: true })` ist der Knopf
+  „Hier aktualisieren“. `puls()` während langer Läufe; `false` heißt: ein anderes Gerät hat übernommen, nichts mehr
+  schreiben. `freigeben()` setzt `frei: true` (Trennen, Ausschalten, Löschen), ein anderes Gerät übernimmt sofort;
+  `freigeben({ erzwingen: true })` auch eine fremde Sperre, deren Halter laut Aufrufer schweigt (ILIAS: verwaiste
+  Gruppen-Notizen), danach steht sie frei auf diesem Gerät. `computerVorrang` (Volltext): Ein Computer löst ein iPhone/iPad sofort
+  ab, nie umgekehrt.
+- **Weiche Sperre:** Über einen langsamen Sync können sich zwei Geräte kurz überschneiden. Darum schreibt jede Quelle nur, was
+  aus denselben Eingaben gleich herauskommt.
+- **Tests:** `tests/sperre.test.js` (auch: Vorgaben gleich `ilias.js`, damit die Werte nicht auseinanderlaufen).
+
+## Quellen-Vertrag (`quellen.js`, seit 0.4.5): Pflicht für jede Quelle
+
+Jede Quelle, die Daten in den Tresor bringt (zentrale Daten, ILIAS, Alma-Stundenplan, Noten & Anmeldungen, Volltext; künftig
+ILIAS-Kalender und eigener Server), hält sich an dieselben sieben Regeln. Eine neue Quelle baut nichts davon selbst; was fehlt,
+kommt in `quellen.js` (Bibliothek, `ctx.user.quellen`, startet nichts außer den Zeitgebern von `planen`). Tests:
+`tests/quellen.test.js`.
+
+```
+Q = ctx.user.quellen
+Q.statusForm(x) / Q.nachLauf(stand, { ok, fehler, warnungen }, jetztIso) / Q.vorText(iso, jetztMs)
+Q.planen(ctx, { takt, zurueck, backoff, start, lauf, versucht? }) → { jetzt(grund), spaeter(ms), stand() }   Q.zeitplan(o) (rein)
+Q.besitz(fm) → { quelle, id } | null      Q.idFeld(quelle)      Q.marke(quelle, id)
+Q.meineNotizen(text) / Q.unberuehrt(fm, text) / Q.wegfall(fm, text) / Q.zuViel(weg, alle, min) / Q.kurzHash(x) /
+  Q.geloescht(angewendet, id, hash) / Q.dubletten(gruppe) / Q.doppelGruppen(liste, idVon) / Q.meineMischen(text, weitere)
+Q.melden(ctx, quelle, fn) / Q.meldungen(ctx) / Q.meldenNeu(ctx) / Q.beiMeldung(ctx, fn)
+```
+
+1. **Status** in einer Form: `status()` liefert `{ zustand, geprueft, fehler, fehlerZeit, warnungen }` (dazu Eigenes der
+   Quelle). `geprueft` = letzter erfolgreicher Lauf, `fehler` = ein Satz für Nutzer:innen, der stehen bleibt (gerätelokal), bis
+   ein Lauf klappt (`nachLauf`), `warnungen` = Sätze des letzten Laufs. Nie Noten, Kurs- oder Dateinamen, nie Passwörter. Die Zeile
+   unter Verbindungen formatiert `verbindungen.js` an einer Stelle; Zeitwörter („gerade eben“, „vor 5 Min.“, „vor 3 Std.“) nur aus
+   `vorText`. Wortwahl nach Entscheidung E1 des Konsistenz-Audits: Daten holt man mit **Aktualisieren**.
+2. **Ein Zeitplan:** `planen(ctx, { takt, zurueck, backoff, start, lauf })` legt die Zeitgeber über die Helfer des aufrufenden
+   Skripts an. Erster Lauf, wenn der metadataCache eingelesen ist, nach `start` (Vorgabe 20 s + Zufall bis 2 Min.), danach je
+   Lauf neu geplant: Erfolg → `takt`; Fehler → `backoff[n − 1]` beim n-ten Fehler in Folge (der letzte Wert gilt weiter, keiner
+   länger als `takt`); zurück in der App (`visibilitychange`) und letzter Versuch länger als `zurueck` her → in 5 s. `lauf`
+   liefert `true` (geklappt), `false` (Fehler) oder `null` (nichts zu tun); eine Ausnahme zählt als Fehler. Nie zwei Läufe
+   zugleich. Testschalter je Quelle (`plugin.test…Aus`) prüft `lauf` selbst.
+3. **Ein Schreiber:** `sperre.js` (siehe „Abrufer-Sperre“). Ein Knopf, den du tippst, übernimmt (`nehmen({ erzwingen: true })`,
+   in der Zeile „Hier aktualisieren“, wenn gerade ein anderes Gerät schreibt).
+4. **Quellen außerhalb des Plugins:** `eba.quelleExtern(schluessel, …)` fragt die Abruf-Funktion selbst bei jedem Lauf, nicht
+   nur die Oberfläche (Befehle, Knöpfe und Zeitplan laufen alle durch sie).
+5. **Besitzmarke:** Eine erzeugte Notiz trägt `herkunft: <quelle>` und das Id-Feld der Quelle (`Q.idFeld`: neue Quellen
+   `<quelle>_id`; ältere Namen bleiben gültig: `zentral_id`, `alma_schluessel`, `ilias_gruppe`, `gruppe_id`; ohne `herkunft`
+   `abgleich_id` des eigenen Uni-Abgleichs und `volltext_von: plugin` der Textfassungen; der eigene Server `herkunft: claude` +
+   `claude_id`). Eine Quelle schreibt, benennt um oder löscht nur Notizen mit ihrer Marke (Ausnahmen, die die Quelle dokumentiert:
+   Übergabe nach id, Alma verknüpft eigene Stundenplan-Notizen). Das Feld `quelle` ist nur zum Lesen da, nie Besitz.
+6. **Ein Lebenslauf erzeugter Notizen:** *Von dir gelöscht* → Grabstein: `angewendet` (id → `kurzHash` des Eintrags, in der
+   synchronisierten Sperr-Datei der Quelle, nur der Schreiber schreibt) merkt, was als Notiz geschrieben wurde; fehlt die Notiz
+   und ist der Eintrag unverändert, kommt sie nicht wieder (`geloescht`). *In der Quelle weg* → `wegfall`: unberührt (nicht
+   erledigt, kein eigener Text) in den Papierkorb, sonst „(entfällt)“ mit `entfaellt: true`; fällt auf einmal mehr als die
+   Hälfte weg, gilt keiner als weggefallen (`zuViel`). *Dein Text* steht unter `## Meine Notizen` (Stundenplan-Notizen bis zur
+   Wortliste noch `## Notizen`; `meineNotizen` kennt beide) und bleibt bei jedem Schreiben. *Doppel* einer id (Sync-Verzug,
+   Konfliktkopie) führt der Schreiber zusammen wie `termine-sync.py` des Uni-Abgleichs: Der kürzeste Dateiname bleibt,
+   `erledigt: true` gewinnt, eigene Zeilen der anderen kommen dazu, die anderen in den Papierkorb (`dubletten`).
+7. **Meldekanal „Bitte prüfen“:** Was nur du lösen kannst (Anmeldung abgelehnt, Warnungen eines Laufs, Stundenplan-Notiz fehlt in
+   Alma), meldet die Quelle mit `Q.melden(ctx, quelle, fn)`, `fn()` → `[{ text: "**Titel** · Rest", pfad, anker? }]` ohne
+   persönliche Werte; nach einem Lauf `Q.meldenNeu(ctx)`. `bitte-pruefen.js` zeigt alle Punkte auf dem Dashboard (Reihenfolge
+   `K.REIHE`), ein Tipp öffnet `pfad`. Hinweise (Notice) nur nach deinem Tipp, nie vom Zeitplan.
+
+**Stand der Quellen (18.10.2026):**
+
+| Quelle | Zeitplan (`Q.planen`) | Sperre (`sperre.js`) | Status | Besitzmarke | Lebenslauf | „Bitte prüfen“ |
+|---|---|---|---|---|---|---|
+| Zentrale Daten (`zentral.js`) | 20 s + 0–2 Min., alle 15 Min., zurück > 10 Min. | `abruf.json` (Datei wie bisher; Übernahme und Puls über `sperre.js`, `angewendet` daneben) | gemeinsame Form, `geprueft` = letzter Erfolg | `herkunft: zentral` + `zentral_id` | Grabstein, Wegfall, Massenschutz, Doppel | – (Warnungen in der Zeile) |
+| ILIAS-Unterlagen und Übungsgruppen (`ilias.js`) | 20 s + 0–2 Min., stündlich, zurück > 60 Min.; Auftrag für deine Läufe | `ilias-abruf.json` (wie bisher) | gemeinsame Form | Begleitnotizen `ilias_id`; Gruppen `herkunft: ilias-gruppe` + `ilias_gruppe` | Dateien: gelöscht bleibt gelöscht; Gruppen: Grabstein `notiz`, Wegfall nach zwei Läufen | abgelehnte Anmeldung, Warnungen |
+| Alma-Stundenplan (`alma.js`) | 30 s + 0–2 Min., stündlich, Backoff 5/15/30 Min., zurück > 60 Min. | `alma-abruf.json` (neu, mit `angewendet`) | gemeinsame Form, Fehler bleibt | `herkunft: alma` + `alma_schluessel` | Grabstein, Wegfall, Doppel, eigene Notizen nie löschen | eigene Notiz fehlt in Alma |
+| Noten & Anmeldungen (`alma-konto.js`, Beta) | Blick 60–180 s, alle 30 Min., zurück > 60 Min. (fällig nach 12 bzw. 3 Std.) | `alma-konto-abruf.json` | gemeinsame Form | keine Notizen (Modulfeld nach Tipp) | Grabstein `alma-konto-aus.json` fürs Löschen | Vorschläge, fehlende Anmeldung, abgelehnt |
+| Volltext der PDFs (`volltext.js`) | nach 5 Min. Ruhe, alle 30 Min., zurück > 30 Min., Stapel | `volltext-abruf.json` mit Computer-Vorrang | gemeinsame Form | `volltext_von: plugin` (+ `quelle`) | Notiz ohne PDF nach 2 Std. in den Papierkorb, Massenschutz, Doppel | – |
+
+**Was eine neue Quelle (z. B. der ILIAS-Kalender, `ilias-kalender.js`) nutzt:** `Q.planen` für alle automatischen Läufe;
+`ctx.user.sperre.erzeugen({ quelle: "ilias-kalender", … })` mit Grabsteinen `angewendet` in derselben Datei
+(`ilias-kalender-abruf.json`; `.gitignore`, `release.py`, `pruefen.py` und `spiegel.py` kennen das Muster schon); bei jedem Lauf
+`eba.quelleExtern("ilias-kalender", …)`; `status()` in der gemeinsamen Form mit `Q.nachLauf` für den gerätelokalen Stand; Zeile
+über `standText`/`quelleZeile` in `verbindungen.js` (Knopf „Aktualisieren“, bei einem anderen Gerät „Hier aktualisieren“);
+Notizen mit `Q.marke("ilias-kalender", id)` (`herkunft: ilias-kalender` + `ilias_kalender_id`), Wegfall über `Q.wegfall`,
+`Q.zuViel`, Doppel über `Q.dubletten`, eigener Text unter `## Meine Notizen`; Punkte, die nur du lösen kannst (Link abgelaufen),
+mit `Q.melden(ctx, "ilias-kalender", …)`. Eine Quelle außerhalb des Plugins (eigener Server) setzt `quellen_extern` und schreibt
+Notizen mit `herkunft: claude` + `claude_id`.
+
 ## Verbindungen und Schloss
 
-`verbindungen.js` hält eine Registry. Eine Verbindung ist `{ id, name, art ("link" | "anmeldung" | "zentral" |
+`verbindungen.js` hält eine Registry. Eine Verbindung ist `{ id, name, art ("link" | "anmeldung" | "konto" | "volltext" | "zentral" |
 "vorlage"), satz, kurz?, erklaerung, schritte, status(), gesperrt(), schlossKnopf?, trennenText?, pruefen(link)?, verbinden(link)?,
 aktualisieren(parameter)?, trennen()? }`.
 
@@ -785,9 +1009,11 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
 
 | id | Art | Gesperrt, solange … |
 |---|---|---|
-| `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`); im eigenen Uni-Abgleich nur der Satz „Dein Stundenplan kommt über deinen Uni-Abgleich.“ ohne Knopf (Aktion `verbinden` zeigt ihn als Hinweis); ist dort doch ein Link gespeichert, bleibt er nutzbar, die Zeile warnt vor doppelten Einträgen und bietet Trennen | kein Link auf diesem Gerät **und** keine eigene Notiz in `Stundenplan/` **und** keine zentrale Stundenplan-Notiz **und** kein eigener Uni-Abgleich **und** Alma in der Einrichtung offen (übersprungen oder Einrichtung nicht fertig, `ctx.einrichtung.almaOffen()`; seit 0.3.0) |
-| `ilias` | „ILIAS-Unterlagen“ (seit 0.4.0), Anmeldung mit Benutzername und Passwort über `ctx.ilias` (siehe „ILIAS-Unterlagen“); eigenes Fenster `IliasFenster`; Knopf Verbinden, verbunden Jetzt holen (lädt gerade ein anderes Gerät: Hier laden). Im eigenen Uni-Abgleich heißt sie „ILIAS“: nicht verbunden der Satz „Deine Unterlagen kommen über deinen Uni-Abgleich.“ und leise **Für Übungsgruppen verbinden** (öffnet gleich die Anmeldung, eigene Texte ohne Schritte, danach schließt das Fenster); verbunden Stand der Prüfung, Knopf **Jetzt prüfen**, Textlink **Trennen** | nicht verbunden **und** keine Begleitnotiz mit `ilias_id` unter `Unterlagen/` **und** ILIAS in der Einrichtung offen (`ctx.einrichtung.iliasOffen()`); nie im eigenen Uni-Abgleich oder ohne Anmeldebaustein |
-| `zentral` | Zentrale Daten (`zentral.js`), Knopf Jetzt aktualisieren (aus: Einschalten); die Schalter Zentrale Daten und Fachschaft & Veranstaltungen stehen im Fenster „Mehr erfahren“ | nie (Standard an) |
+| `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`); im eigenen Uni-Abgleich nur der Satz „Dein Stundenplan kommt über deinen Uni-Abgleich.“ ohne Knopf (Aktion `verbinden` zeigt ihn als Hinweis); ist dort doch ein Link gespeichert, holt Alma trotzdem nichts, die Zeile sagt „Der Alma-Link auf diesem Gerät wird nicht genutzt.“ und bietet Trennen als Textlink | kein Link auf diesem Gerät **und** keine eigene Notiz in `Stundenplan/` **und** keine zentrale Stundenplan-Notiz **und** kein eigener Uni-Abgleich **und** Alma in der Einrichtung offen (übersprungen oder Einrichtung nicht fertig, `ctx.einrichtung.almaOffen()`; seit 0.3.0) |
+| `ilias` | „ILIAS-Unterlagen“ (seit 0.4.0), Anmeldung mit Benutzername und Passwort über `ctx.ilias` (siehe „ILIAS-Unterlagen“); eigenes Fenster `IliasFenster`; Knopf Verbinden, verbunden Aktualisieren (lädt gerade ein anderes Gerät: Hier aktualisieren). Im eigenen Uni-Abgleich heißt sie „ILIAS“: nicht verbunden der Satz „Deine Unterlagen kommen über deinen Uni-Abgleich.“ und leise **Für Übungsgruppen verbinden** (öffnet gleich die Anmeldung, eigene Texte ohne Schritte, danach schließt das Fenster); verbunden Stand der Prüfung, Knopf **Aktualisieren**, Textlink **Trennen** | nicht verbunden **und** keine Begleitnotiz mit `ilias_id` unter `Unterlagen/` **und** ILIAS in der Einrichtung offen (`ctx.einrichtung.iliasOffen()`); nie im eigenen Uni-Abgleich oder ohne Anmeldebaustein |
+| `alma-konto` | „Noten & Anmeldungen (Alma)“ (seit 0.4.5, Beta), Art `konto`: Zeile (`ctx.almaKonto.zeile()`) und Fenster (`fensterOeffnen()`) kommen aus `alma-konto.js`; ohne Beta, Zustimmung und Daten keine Zeile (`sichtbar()`). „ILIAS verbinden“ aus dieser Zeile öffnet das ILIAS-Fenster mit `fuer=alma`: danach sind alle neuen Kurse aus (`kurseAbrufen({ alleAus: true })`), kein erster Abruf | nie |
+| `volltext` | „Volltext der PDFs“ (seit 0.4.5, `volltext.js`): Text mit den Zahlen aus `ctx.volltext.status()` („58 PDFs durchsuchbar, 2 ohne Text.“), Knopf Aktualisieren (`nachholen`; liest gerade ein anderes Gerät: Hier aktualisieren, `hier=1`); aus: Einschalten öffnet das Fenster mit dem Schalter „Textfassungen anlegen“ (`setzen`, für alle Geräte); extern oder fremde Textfassungen: nur der Satz | nie |
+| `zentral` | Zentrale Daten (`zentral.js`), Knopf Aktualisieren (aus: Einschalten); die Schalter Zentrale Daten und Fachschaft & Veranstaltungen stehen im Fenster „Mehr erfahren“ | nie (Standard an) |
 | `vorlage` | „Studium Autopilot“ (`update.js`): Version, Knopf Aktualisieren bzw. Neu laden, sonst Mehr erfahren; Schalter „Beta-Versionen“ im Fenster unter „Mehr erfahren“ | nie |
 
 - Symbole (seit 15.10.2026, iPad-Test): ruhige Lucide-Linien als inline-SVG in `currentColor` (`SYMBOLE`, `ctx.verbindungen.svg(name)`:
@@ -797,8 +1023,8 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   Stundenplan-Notizen da (etwa per Sync), gibt es kein Schloss; die Übersicht sagt dann „Dein Stundenplan liegt vor (n
   Einträge).“ mit leisem Verbinden.
 - Codeblock `eba-verbindungen`: Übersicht in den Einstellungen (Stand, zuletzt aktualisiert), ohne Satz darüber. Je Zeile
-  höchstens **ein** Knopf (Verbinden, Aktualisieren, Jetzt holen, Jetzt prüfen, Jetzt aktualisieren, Einschalten oder Mehr
-  erfahren); führt er nicht ins Fenster, steht „Mehr erfahren“ als Textlink im Status. Das Fenster enthält den Rest: bei Alma
+  höchstens **ein** Knopf (Verbinden, Aktualisieren, Hier aktualisieren, Einschalten, Neu laden oder Mehr erfahren; Wörter
+  nach Entscheidung E1 in `WORT`); führt er nicht ins Fenster, steht „Mehr erfahren“ als Textlink im Status. Das Fenster enthält den Rest: bei Alma
   (verbunden) „Neuen Link eingeben“ und „Trennen“, bei den zentralen Daten die beiden Schalter (Obsidian-`Setting` mit
   Umschalter). Hätte das Fenster nur einen Knopf, steht er selbst als Textlink da (ILIAS nur für Übungsgruppen: „Trennen“).
   Inhalt je Zeile: `zeile(id)` (`statusZeile`) → `{ text | html, pille, symbol, ton, knopf, link }`. Seit 18.10.2026
@@ -806,6 +1032,14 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   wenn nichts da ist und Verbinden der Weg ist, „Anmeldung prüfen“ mit Warnung). Kommt etwas ohnehin (Stundenplan oder
   Unterlagen per Sync, zentraler Stundenplan, eigener Uni-Abgleich), steht ein Haken ohne Pille da und Verbinden ist leise.
   Fenster haben keinen Knopf, der nur schließt (dafür ist das ×), und höchstens einen Hauptknopf.
+- **Stand einer Quelle, eine Formatierung** (Quellen-Vertrag, seit 0.4.5): `standText(s)` macht aus der gemeinsamen Form
+  `{ zustand, geprueft, fehler, fehlerZeit, warnungen }` den Satz und das Symbol jeder Zeile: „Aktualisiert vor 5 Min.“ bzw.
+  „Noch nicht aktualisiert.“ (Haken), Warnungen des letzten Laufs dahinter (Warnsymbol), ein Fehler als Satz der Quelle mit
+  „Zuletzt aktualisiert …“ (Warnsymbol, bleibt bis zum nächsten Erfolg), „Ein anderes Gerät aktualisiert, alles kommt über deinen
+  Sync.“ mit dem Knopf **Hier aktualisieren**, „Aktualisiert gerade …“ (Uhr). Zeitwörter aus `quellen.js` (`vorText`). So zeigen
+  Alma-Stundenplan, ILIAS, Zentrale Daten, Volltext und Noten & Anmeldungen (über `ctx.verbindungen.standText`) dieselben
+  Wörter; Sonderfälle (nicht verbunden, abgelehnt, extern, Fortschritt) formuliert die Quelle selbst. Liefert eine Quelle ihre
+  Zeile selbst (`zeile()`, Noten & Anmeldungen, eigener Server), baut `quelleZeile(z)` daraus das HTML.
 - Verbinden-Fenster: vier Schritte (Link zu Alma, Link zum Stundenplan → „Daten für iCalendar (ics) exportieren“ → „Link
   kopieren“; Einrichtung ebenso). Die Links (`ctx.verbindungen.ALMA`) sind am 17.10.2026 mit Anmeldung geprüft; ohne Anmeldung
   führt der Stundenplan-Link zur Anmeldung und danach zur Startseite, darum zuerst Alma. Der Weg durchs Menü (Mein Studium →
@@ -814,7 +1048,7 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
 - Gespeichert wird nur gerätelokal (`app.saveLocalStorage`): `eba-alma-ics`, `eba-alma-stand`, `eba-alma-seit`.
 - Codeblock `eba-alma-knoepfe` (Seite Stundenplan, seit 0.3.0): verbunden → nur „Stundenplan aus Alma holen“, sonst
   „Alma verbinden“ und ein Satz dazu; den Satz nicht, solange das Schloss gilt (die Schloss-Karte darunter sagt dasselbe,
-  seit 16.10.2026); im eigenen Uni-Abgleich ohne Link nichts. Gezeichnet als Knopf-Karte `callout[data-callout=eba-neu]` (gleiche Gestalt wie
+  seit 16.10.2026); im eigenen Uni-Abgleich nichts (auch mit Link). Gezeichnet als Knopf-Karte `callout[data-callout=eba-neu]` (gleiche Gestalt wie
   `> [!eba-neu|ohne-titel]`). Vorher standen beide Knöpfe fest in der Notiz, auch bei verbundenem Alma.
 - Codeblock `eba-ilias-knopf` (Seite Unterlagen, seit 0.4.0): steht leer in der Knopf-Karte und trägt die Klasse `eba-ilias-an`,
   solange ILIAS auf diesem Gerät verbunden ist. Dann zeigt CSS (Abschnitt 49, `:has`) den festen Knopf **Aus ILIAS holen**
@@ -837,14 +1071,15 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
 - **Ablauf:** Sperre → Index lesen, Umbenennungen und Löschungen nachziehen → anmelden (gilt die Sitzung des letzten Laufs
   noch, entfällt das) → Kursliste → aktive Kurse durchsuchen (zwei Seiten zugleich, der älteste Kurs zuerst, Kurs für Kurs)
   → geänderte, dann neue Dateien laden (am PC zwei zugleich, auf iPhone/iPad eine; abgelegt wird eine nach der anderen).
-  Automatisch 20 s bis gut 2 Min. nach dem Start, dann stündlich, und zurück in der App nach über 60 Min.; dazu der Knopf.
+  Automatisch über den gemeinsamen Zeitplan der Quellen (`Q.planen`): 20 s bis gut 2 Min. nach dem Start, dann stündlich, und
+  zurück in der App nach über 60 Min. seit dem letzten Versuch; dazu der Knopf.
   Kurse mit Modulcode und Modulnotiz sind beim ersten Mal an, die anderen aus. Nach dem ersten Verbinden (Fenster,
   Einrichtung) startet der erste Abruf gleich, wenn ein Kurs an ist. Ein während des Laufs abgewählter Kurs wird nicht
   mehr durchsucht (eine Seite, die schon unterwegs ist, kommt noch) und nichts mehr aus ihm geladen.
 - **Dateien im Tresor (synchronisiert):** `System/Daten/ilias.json` (Index: Kurse mit Wahl, welche ILIAS-Datei wo liegt, je
-  Eintrag mit Zeitstempel, vor jedem Schreiben mit der Platte gemischt) und `System/Daten/ilias-abruf.json` (Abrufer-Sperre:
-  nur ein Gerät lädt, Übernahme nach 80 Min. Stille wie bei den zentralen Daten, sofort bei `frei: true` nach dem Freigeben
-  der Gruppen, siehe „Deine Übungs- oder Tutoriengruppe“).
+  Eintrag mit Zeitstempel, vor jedem Schreiben mit der Platte gemischt) und `System/Daten/ilias-abruf.json` (Abrufer-Sperre
+  über `sperre.js`: nur ein Gerät lädt, Übernahme nach 80 Min. Stille wie bei den zentralen Daten, sofort bei `frei: true` nach
+  dem Freigeben der Gruppen, siehe „Deine Übungs- oder Tutoriengruppe“; ältere Fassungen lesen die Datei weiter, `mobil` ist neu).
 - **Kurspasswörter (nach bestem Bemühen):** Manche Kurstitel tragen das Beitrittspasswort. `ohneKennwort` prüft eine
   gefaltete Fassung (Entitäten aufgelöst, auch doppelt; unsichtbare Zeichen wie das weiche Trennzeichen weg; NFKC; kyrillische
   und griechische Doppelgänger lateinisch). Starke Marken zählen immer, außer als Wortanfang („Passwortsicherheit“):
@@ -866,6 +1101,13 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   `studium-autopilot-ilias-<Prüfsumme des Tresornamens>` (iOS teilt den Schlüsselbund zwischen Tresoren). Die Oberfläche
   gibt das Passwort nur als Funktion an `zugangSpeichern(benutzer, geber, { pruefen: true })` weiter und leert das Feld danach;
   es steht nie in Status, Protokoll, Hinweisen oder Konsole.
+- **Warnungen eines Laufs** (seit 0.4.5): fehlende Dateien (Sync läuft noch), keine Übungsgruppen mehr in ILIAS, Gruppen oder
+  Ordner, die sich nicht prüfen bzw. umbenennen ließen. Klar formuliert im Stand (`warnung`), bis ein Lauf ohne Warnung kommt:
+  `status().text` hängt sie an „Aktualisiert …“ bzw. „Prüft deine Übungsgruppen …“ (Zeile und Fenster unter Verbindungen, die
+  Zeile mit Warnsymbol), der Hinweis nach **Aktualisieren** ebenso, dazu ein Punkt „**ILIAS** · …“ in „Bitte prüfen“ auf dem
+  Dashboard (Meldekanal, `hinweiseAus`; ebenso eine abgelehnte Anmeldung). Technische Einzelheiten nur im Geräte-Protokoll
+  (`technik`). `status()` hat die gemeinsame Form der Quellen (`zustand`: an, laeuft, fehler, abgelehnt, anderes-geraet,
+  nicht-verbunden, ohne-anmeldung, extern; `geprueft` = letzter Erfolg, `warnungen`).
 - **Ablage:** Byte-gleiche Datei schon da → nur merken. Nie überschreiben (sonst „ (2)“). In ILIAS geändert und im Tresor
   unverändert → ersetzen; von dir verändert → deine bleibt, die neue kommt daneben als „… neue Fassung JJJJ-MM-TT“. Gelöscht
   bleibt gelöscht. Umbenennen und Verschieben folgt der Index.
@@ -892,9 +1134,12 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   Ergebnis: erster Abruf am PC 64 s statt 181 s (173 statt 329 Anfragen, 16 Weiterleitungen), auf iPhone/iPad (nachgebildet)
   1 Lauf in 64 s statt 3 Läufen in 274 s samt Stapelpausen; erneutes Durchsuchen ohne Neues 38 s statt 135 s (98 statt 269
   Anfragen, keine Anmeldung).
-- **Eigener Uni-Abgleich:** Liegt `System/Skripte/abgleich.js` im Tresor oder steht `ilias_unterlagen: extern` in den
-  Einstellungen, lädt `ilias.js` nie Dateien (Status `K.TEXT_EXTERN` „Deine Unterlagen kommen über deinen Uni-Abgleich.“),
-  kein Schloss. Mit ILIAS-Zugang prüft es nur die Übungsgruppen (Lauf `nur-gruppen`, Status „Prüft deine Übungsgruppen,
+- **Eigener Uni-Abgleich** (`eba.quelleExtern`, Schlüssel `ilias-dateien` und `ilias-gruppen`, siehe „Quellen außerhalb des
+  Plugins“): Kommen die Dateien von außen (ohne Liste: `System/Skripte/abgleich.js` im Tresor oder `ilias_unterlagen: extern`),
+  lädt `ilias.js` nie Dateien (Status `K.TEXT_EXTERN` „Deine Unterlagen kommen über deinen Uni-Abgleich.“), kein Schloss.
+  Kommen auch die Übungsgruppen von außen, läuft ILIAS gar nicht (nicht `bereit`, `status().gruppenExtern`; die Zeile zeigt nur
+  den Satz, mit gespeichertem Zugang den Textlink Trennen); nur die Übungsgruppen von außen: Dateien wie immer, kein
+  Gruppenabgleich. Mit ILIAS-Zugang prüft es sonst nur die Übungsgruppen (Lauf `nur-gruppen`, Status „Prüft deine Übungsgruppen,
   zuletzt vor 5 Min. …“), ohne Auftrag: kein Weitermachen nach Fehlern, keine Stapel; ein Auftrag von früher wird verworfen
   und sein Weitermachen läuft still. Der Hinweis „ILIAS: Übungsgruppen geprüft.“ kommt so nur nach deinem Tipp (Jetzt
   prüfen, Verbinden), nie vom stündlichen Prüfen.
@@ -942,8 +1187,16 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   das Fenster schließen. Lass Obsidian dabei offen, sonst pausiert der Abruf bis zum nächsten Öffnen.“ (iPhone/iPad: „im
   Vordergrund“ statt „offen“) und die Knöpfe Schließen und Stoppen. Das Fenster zeigt nicht verbunden Schritte, zwei Felder (kein Autofokus auf
   iPhone/iPad), die Datenschutz-Zeile und die Hinweise der Anmeldung wörtlich; verbunden Stand, Kurse mit Schaltern
-  (`kursSetzen`), Jetzt holen und Trennen (`zugangLoeschen`; Dateien bleiben, deine Übungsgruppe bleibt als gewählte Notiz).
+  (`kursSetzen`), Aktualisieren und Trennen (`zugangLoeschen`; Dateien bleiben, deine Übungsgruppe bleibt als gewählte Notiz).
   Kurstitel nur dort und nie in Hinweisen.
+- **Uni-Zugang** (seit 0.4.5, gilt auch für Noten & Anmeldungen): Lehnt die Uni ein **gespeichertes** Passwort eindeutig ab
+  (`zugang-falsch`), schreibt das Gerät `System/Daten/uni-zugang.json` `{ abgelehnt, dienst, geraet }` (synchronisiert, ohne
+  Benutzername und Passwort). Jedes Gerät, dessen Passwort älter ist (gerätelokal `eba-uni-zugang-seit`), meldet sich danach
+  nirgends mehr an, auch nicht per Knopf (`abgelehnt`, Text „Anmeldung abgelehnt. Bitte dein Passwort neu eingeben.“), bis man
+  es dort neu eingibt; die Neueingabe prüft genau einmal. Ein im Fenster vertipptes Passwort schreibt keinen Marker. So scheitert
+  nach einem Passwortwechsel im Normalfall nur ein Gerät, sobald der Marker per Sync da ist. `eba-uni-zugang-ok` = letzte
+  erfolgreiche ILIAS-Anmeldung mit diesem Passwort (auch nach dem Update gesetzt, sobald ein Lauf klappt). `ctx.ilias.uniZugang()`
+  → `{ benutzer, seit, ok, abgelehnt, dienst, gesperrt, bestaetigt }`, `ctx.ilias.zugangAbgelehnt(dienst)` schreibt den Marker.
 - **Tests:** `tests/ilias.test.js` (ganzer Ablauf mit erfundenem ILIAS und Tresor im Speicher, `tests/ilias-attrappen.js`;
   dazu Gleichzeitigkeit, nicht geholte Sitzungen und Gruppen, Sitzung über Läufe, gelernte Adressen),
   `ilias-weiter.test.js` (Fortschrittstexte, Ereignisse, Auftrag und Weitermachen, toter Lauf, Funde, Absturz beim Schreiben),
@@ -951,12 +1204,182 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   `ctx.ilias.anmeldungSetzen(fn)` und `ctx.ilias.quelleSetzen(fn)` Anmeldung und ILIAS (`null` = wieder echt);
   `plugin.testIliasAus = true` schaltet den stündlichen Lauf ab (das Weitermachen eines offenen Auftrags nicht).
 
+## Noten & Anmeldungen (Alma, seit 0.4.5, Beta)
+
+Auf einem deiner Geräte meldet sich das Plugin mit deinem Uni-Zugang bei Alma an, liest „Leistungen“ und „Belegungen“ und
+schlägt neue Noten auf der Modulseite zum Übernehmen vor. In der Anmeldephase zeigt „Bitte prüfen“ auf dem Dashboard, wenn laut
+Alma eine Prüfungsanmeldung fehlt. Es schreibt nie selbst in Modulnotizen und nie etwas in Alma.
+
+| Skript | Aufgabe |
+|---|---|
+| `alma-konto-html.js` | reiner Leser (CommonJS ohne Obsidian, Zerleger aus `ilias-html.js`; auch für einen eigenen Server): `seite`, `anmeldeFormular`, `fehler`, `leistungen`, `belegungen`, `zuordnen`, `zusammenfassen`, `pruefungenZuordnen`, `fingerabdruck`, `semesterName` |
+| `alma-konto.js` | Ablauf, Zeitplan, Zustand, Vorschläge, Erinnerung, Zeile und Fenster (`ctx.almaKonto`), Aktion `alma-konto-pruefen` |
+| `sperre.js` | Abrufer-Sperre der Quelle `alma-konto` (siehe „Abrufer-Sperre“) |
+| `ilias-netz.js` | Sitzung mit Dienst `alma`: nur `alma.uni-tuebingen.de`, Kennung `Studium-Autopilot/<Version> (+https://github.com/studium-autopilot/ecoba)` |
+| `ilias.js` | Uni-Zugang (`uniZugang`, Marker), siehe „ILIAS-Unterlagen“ |
+
+- **Beta:** läuft nur mit `update_kanal: beta` in `System/Einstellungen.md` (der Schalter „Beta-Versionen“) bzw. mit
+  `ALMA_KONTO_STABIL = true` in `alma-konto.js`. Diese Konstante setzt erst ein eigener Commit, wenn echte gefüllte Seiten
+  (Prüfungsanmeldungen ab 07.12.2026, erste Noten) mit dem Leser abgeglichen sind. Ohne Beta keine Anfrage; die Zeile mit
+  **Ausschalten** und **Daten aus Alma löschen** bleibt, solange es eine Zustimmung oder Daten gibt.
+- **Zustimmung je Gerät:** Fenster „Noten & Anmeldungen einschalten“ mit dem Benutzernamen (fett), einem Hauptknopf
+  **Einschalten** (gerätelokal `eba-alma-konto-an`); erst danach liest das Skript das Passwort aus dem Schlüsselbund von ILIAS,
+  und nur unmittelbar vor dem Absenden. Ohne gespeicherten Uni-Zugang: „Braucht deinen Uni-Zugang.“ und **ILIAS verbinden**.
+- **Anmelden nur nach ILIAS:** `ctx.ilias.uniZugang()` muss `bestaetigt` sein (ILIAS hat genau dieses Passwort angenommen) und
+  nicht `gesperrt` (Marker). Alma macht nie den ersten Versuch mit einem Passwort. Lehnt Alma ein bestätigtes Passwort mit der
+  bekannten Meldung ab („Ihre Anmeldung war leider nicht erfolgreich …“), schreibt das Gerät den Marker (`dienst: alma`).
+  Unklare Antwort (Formular ohne bekannte Meldung), zweiter Faktor, Zustimmungsseite: nur Alma auf diesem Gerät pausiert
+  (**Erneut versuchen**), kein Marker. Höchstens eine Anmeldung je Lauf.
+- **Ablauf** (Drossel 1 Anfrage zugleich, 2 s Abstand; ganzer Lauf ≤ 3 Min.): Startseite (zeigt sie schon den Abmelde-Link, weil
+  iOS den letzten Lauf vor dem Abmelden beendet hat: keine zweite Anmeldung) → Formular `#mobileLoginForm` prüfen (https, Host
+  `alma.uni-tuebingen.de`, Port leer/443, Pfad `/alma/rds`, `category=auth.login`; sonst geht kein Passwort hinaus) → POST mit
+  den versteckten Feldern, `asdf`, `fdsa`, `submit` → angemeldet nur mit Link `category=auth.logout` (jede Seite trägt das
+  versteckte `#sessionTimeoutLoginForm`) → Leistungen (zugeklappt: einmal **Alle aufklappen** mit allen versteckten Feldern,
+  bleibt es zu: unsicher) → Belegungen → Abmelden (`type=4`) in jedem Ausgang nach der Anmeldung.
+- **Leser fail-closed:** „leer“ nur bei bekanntem Text **und** Aufbau (Leistungen: Bereich `overviewAsTreeReadonly` ohne Baum mit
+  „Es wurden keine Datensätze gefunden.“; Belegungen: gewählte Semesteroption, keine Einträge, „Sie haben bisher keine
+  Veranstaltungen belegt und keine Prüfungen angemeldet.“). Jeder andere Hinweis, fehlender Bereich, unbekannter Status, „AN“
+  ohne Langform, ungültige Note, abgeschlossen ohne Note → `unsicher`: alte Werte dieser Seite bleiben, `geprueft` bleibt, keine
+  Erinnerung, eine leise Zeile mit **In Alma öffnen** und unter „Mehr erfahren“ **Aufbau kopieren (ohne deine Daten)**
+  (`fingerabdruck`: Pfade, bekannte Spaltenköpfe, Ebenen, Status aus der bekannten Liste, geschwärzte Hinweise). Gefüllte
+  Tabellen: Spalten nach Kopftext (deutsch/englisch), sonst nach id-Endung (`:elementnr`, `:grade`, `:attempt`, `:workstatus`),
+  nie nach Position; Ebene aus `treeTableCellLevelN`, Art aus `img[alt]`; Belegungen je Überschrift „Prüfung: <Nummer> …“ mit
+  Tabelle. Echte gefüllte Seiten und englische Texte sind noch nicht gesehen (Testseiten nachgebaut).
+- **Zuordnung:** Nummer beginnt mit einem Modulcode des Tresors (längster Treffer, danach keine Ziffer; öffentlicher Katalog am
+  18.10.2026: Veranstaltungen heißen wie das Modul oder hängen Buchstaben an, z. B. `B110UE`), sonst die Modulzeile darüber,
+  sonst kein Vorschlag. Belegungen: Nummer, sonst Code im Titel; Unzugeordnetes zählt (`unzugeordnet`) und schaltet die
+  Erinnerung auf „selbst prüfen“.
+- **Zustand** `System/Daten/alma-konto.json` (synchronisiert, nur der Abrufer schreibt): `{ version: 1, geprueft, stand, geraet,
+  leistungen: { art, module: { <Code>: { status, note, unbenotet, versuch, semester, datum, eindeutig, stati } } }, belegungen:
+  { art, semester, pruefungen: { <Code>: { status } }, unzugeordnet } }`. `geprueft` = letzte vollständige Prüfung, `stand` =
+  letzte inhaltliche Änderung. Kein Titel, kein Name, keine Matrikelnummer, keine Prüfer:innen, kein Vermerk. Unlesbar → wie
+  nicht da, der nächste Lauf schreibt neu. Konfliktkopien (`alma-konto*.json` außer `-abruf`/`-aus`) löscht jeder Lauf endgültig.
+- **Fällig** (nur Geräte mit Zustimmung, Beta, bestätigtem Zugang, nicht extern): `geprueft` älter als 12 Std., in der
+  Anmeldephase (zentrale Frist „Prüfungsanmeldung … Haupttermin“ heute offen) älter als 3 Std.; ein Lauf, der den Anmelde-POST
+  erreicht hat, zählt als Versuch (der nächste automatische frühestens nach 12 bzw. 3 Std.); Fehler vor dem POST → nach 30 Min.
+  Blick über den gemeinsamen Zeitplan (`Q.planen`): 60–180 s nach dem Start, dann alle 30 Min., zurück in der App nach über
+  60 Min. **Aktualisieren** jederzeit (≥ 2 Min.).
+  429/403 oder zweimal 5xx in Folge: bis Mitternacht Pause; drei unerwartete Antworten in Folge: 24 Std.
+- **Ein Schreiber:** `sperre.js` mit der Quelle `alma-konto` (`alma-konto-abruf.json`, siehe „Abrufer-Sperre“). Prüft gerade ein
+  anderes Gerät: „Ein anderes Gerät aktualisiert …“ mit **Hier aktualisieren** (`erzwingen`). Ausschalten und Löschen geben sie frei.
+- **Löschen** (jedes Gerät, **Daten aus Alma löschen**): Sperre her, Grabstein `System/Daten/alma-konto-aus.json` `{ geloescht,
+  geraet }`, `alma-konto.json` und Kopien mit `vault.delete` (nicht Papierkorb), hier aus, Sperre frei. Jedes Gerät, dessen
+  Zustimmung älter ist als der Grabstein, schaltet sich aus („Auf einem anderen Gerät ausgeschaltet.“); eine neue Zustimmung gilt
+  wieder. Verläufe der Sync-Dienste kann das Plugin nicht löschen (`docs/datenschutz.md`).
+- **Vorschläge** (`vorschlagAus`, Modulfeld unter dem Stand, `modul.js` → `ctx.almaKonto.modulFeld`): nur eindeutige Aussagen
+  (Modulzeile oder genau eine Prüfung), nur Abweichungen; bestanden/nicht bestanden mit Note und Versuch, endgültig nicht
+  bestanden → „nicht bestanden“ mit dem Satz „Endgültig: bitte mit dem Prüfungsamt sprechen.“, anerkannt, angemeldet (nur bei
+  offen/läuft; auch aus den Belegungen). **Übernehmen** = ein `processFrontMatter`; **Ausblenden** schreibt
+  `alma_ausgeblendet: ["<8 Zeichen SHA-256 von Code|Status|Note|Versuch>"]` (keine lesbare Note im Frontmatter; eine neue Note
+  ist ein neuer Vorschlag).
+- **Erinnerung** (`fehlendeAnmeldungen`): nur bei offener Haupttermin-Frist, beiden Seiten `ok`/`leer`, Belegungen im aktuellen
+  Semester, `geprueft` höchstens 26 Std. alt und nichts unzugeordnet; Kandidaten: Status „läuft“ oder im aktuellen Semester
+  geplant, nicht bestanden/anerkannt, kein `anmeldung_verzicht` für dieses Semester, Prüfung (Termin `Prüfung`, kein
+  Zwischentest, kein Nachholtermin, oder `klausur`) nach Beginn der Frist; angemeldet = Belegung angemeldet/zugelassen oder
+  Leistungen mit angemeldet (Semester passt oder fehlt) bzw. abgeschlossen in diesem Semester. Sonst nur „Bitte deine
+  Prüfungsanmeldungen selbst in Alma prüfen.“ in der Zeile. Nie „alles angemeldet“.
+- **Dashboard** (`bitte-pruefen.js`, Karte „Bitte prüfen“, auch ohne eigenen Abgleich; gemeldet über den Meldekanal der Quellen,
+  `Q.melden(ctx, "alma-konto", hinweise)`): höchstens zwei Zeiger ohne Notenwert,
+  „**Aus Alma** · neue Angaben zu B110, S100, auf den Modulseiten übernehmen“ (ein Modul: dessen Seite, mehrere: Noten & ECTS) und
+  „**Prüfungsanmeldung** · laut Alma fehlen B180, S110“ (Termine & Anmeldungen). Kein neuer Block, keine Änderung an
+  `Dashboard.md`.
+- **Datenschutz:** Noten nur in `alma-konto.json` und im Modulfeld; nie in Hinweisen, Konsole (nur Grund-Codes), Protokoll
+  (`eba-alma-konto-protokoll`: Zeit, Art, Grund, Dauer, Anfragen), Fehlern, im Datenkanal oder im Release (`.gitignore`,
+  `release.py`, `pruefen.py`). Weiterleitungen: am PC prüft die Sitzung jeden Sprung; auf iPhone/iPad folgt `requestUrl` selbst,
+  geprüft werden Startadresse und Formularadresse, ob die Antwort von Alma kommt, am Inhalt (Abmelde-Link). Einen 307/308 des
+  Servers auf einen anderen Host würde iOS samt Formular weiterschicken (`tests/alma-konto.test.js` hält das fest).
+- **Quellen außerhalb des Plugins:** `eba.quelleExtern("alma-konto")` (bei jedem Lauf): kein Lauf, keine Vorschläge, Zeile „Kommt
+  über deinen eigenen Abgleich.“.
+- **Status** in der gemeinsamen Form der Quellen: `status()` → `{ zustand, geprueft, fehler, fehlerZeit, warnungen }` (Sätze ohne
+  Noten; `zustand` z. B. `an`, `aus`, `ohne-zugang`, `wartet-ilias`, `abgelehnt`, `unsicher`, `anderes-geraet`, `pause`), dazu
+  `an`, `benutzer`, `laeuft`, `daten`, `aufbau`. Zustände, in denen nur du weiterhilfst (abgelehnt, zweiter Faktor, Zustimmung,
+  unklare Antwort), meldet zusätzlich „Bitte prüfen“ („**Alma** · …“).
+- **Für die Oberfläche:** `ctx.almaKonto = { status(), zeile(), sichtbar(), einschalten(), ausschalten(), jetztPruefen({ hier }),
+  loeschen(), zustand(), vorschlag(fm), uebernehmen(f, v), ausblenden(f, v), modulFeld(box, f, fm), fehlendeAnmeldungen(),
+  hinweise(), fingerabdruck(), beobachten(fn), fensterOeffnen() }`.
+- **Tests:** `tests/alma-konto-html.test.js` (erfundene Testseiten `tests/daten/alma-konto/`, Aufbau aus echten Seiten bzw.
+  nachgebaut), `tests/alma-konto.test.js` (erfundenes Alma, PC-Transport und `requestUrlWieIOS`: Ablauf, Passwort nur im POST an
+  Alma, Abmelden, Drossel, Uni-Zugang, Zeitplan, Sperre, Grabstein, Kopien, Beta, Vorschläge, Erinnerung, Datenschutz-Spione),
+  `tests/sperre.test.js`. In Obsidian: `plugin.testAlmaAus = true` (kein automatischer Lauf), `ctx.almaKonto.testSetzen({ beta,
+  zugang, zustand })` ersetzt diese Werte nur im Speicher (`null` = wieder echt).
+
+## Volltext der PDFs (seit 0.4.5, `volltext.js`)
+
+Zu jeder PDF unter `Unterlagen/` legt das Plugin eine Textfassung an, damit die Suche von Obsidian Wörter aus den PDFs findet,
+auch auf iPhone und iPad. pdf.js von Obsidian (`loadPdfJs`) liest die Textebene auf dem Gerät; nichts geht ins Netz, keine
+Texterkennung.
+
+- **Notiz** `Unterlagen/_Volltext/<Name> (Volltext).md`, bei gleichem Namen aus einem anderen Modulordner
+  `<Name> (Volltext, <Code>).md` (dann `<Code> 2` …). Frontmatter `typ: volltext`, **`volltext_von: plugin`** (Besitzmarke),
+  `fassung`, `datei`, `unterlage` (nur mit Begleitnotiz), `quelle` (Pfad der PDF), `seiten`, `groesse`, `pdf_sha256`,
+  `ergebnis` (`text`, `gekuerzt`, `kein-text`, `geschuetzt`, `nicht-lesbar`, `zu-gross`), `cssclasses: [eba-s-begleitnotiz,
+  eba-s-volltext]`. Darunter je Seite mit Text eine eingeklappte Karte `> [!eba-quelle]- [[X.pdf#page=N|S. N]]` (Links über
+  `generateMarkdownLink` bzw. `fileToLinktext`). Kein Zeitstempel: Dieselbe PDF ergibt auf jedem Gerät dieselbe Notiz. Scans,
+  geschützte und kaputte PDFs bekommen eine kurze Notiz mit Hinweis (`eba-info`), damit sie nicht bei jedem Lauf neu versucht
+  werden.
+- **Entschärfen** (`entschaerfen`): wörtlich wie der Volltext eines eigenen Uni-Abgleichs (keine Templater-Befehle, kein HTML,
+  keine Tags, Links, Aufgaben, Formeln, Kommentare, Codeblöcke, Überschriften, Listen, Block-ids; Trennungen am Zeilenende
+  zusammengefügt), dazu `obsidian://` → `obsidian\://` (kein Knopf des Plugins aus einer PDF) und `::` → `:\:` (keine
+  Inline-Felder). Aus Volltext-Notizen entstehen darum keine To-dos.
+- **Nur eigene Notizen:** Geschrieben, umbenannt oder gelöscht wird nur eine Notiz mit Besitzmarke, geprüft im Text der Datei
+  (nicht nur im metadataCache). Liegt unter `Unterlagen/` eine Notiz `typ: volltext` ohne Marke (z. B. vom eigenen
+  Uni-Abgleich) oder in `_Volltext/` eine andere Datei, bleibt Volltext für diesen Tresor aus („Kommt über einen anderen Weg
+  (andere Textfassungen im Tresor).“). Kommt so eine Notiz mitten im Lauf per Sync, hört er vor der nächsten PDF auf; eigene
+  Notizen bleiben stehen, die fremden gewinnen.
+- **Wann:** Einstellung `volltext` in `System/Einstellungen.md` (fehlt oder `an` = an, `aus` = aus; `ctx.volltext.setzen`),
+  `eba.quelleExtern("volltext")` falsch (siehe „Quellen außerhalb des Plugins“) und keine fremde Textfassung, geprüft bei jedem
+  Lauf. Der erste Lauf kommt, wenn der metadataCache eingelesen ist und 5 Min. keine neue Datei im Tresor ankam (Erstabgleich
+  eines neuen Geräts, ILIAS-Downloads); danach bei neuen, geänderten, umbenannten oder gelöschten PDFs (nach 60 s Ruhe; eine
+  PDF, die jünger als 60 s ist, wartet), alle 30 Min., zurück in der App nach über 30 Min. und mit `nachholen()`. Erreicht ein
+  Lauf sein Budget, folgt der nächste nach 60 s (höchstens 10 hintereinander). Alles über den gemeinsamen Zeitplan der Quellen
+  (`Q.planen`; die Ruhezeit und den nächsten Stapel gibt der Lauf selbst als `naechster` zurück).
+- **Ein Schreiber** (`System/Daten/volltext-abruf.json`, `{ geraet, seit, zuletzt, mobil }`): die gemeinsame Abrufer-Sperre
+  (`sperre.js`; Übernahme nach 80 Min. Stille, Puls höchstens alle 50 Min.), dazu Computer-Vorrang: Ein Computer löst ein
+  iPhone oder iPad sofort ab, das nach der aktuellen PDF aufhört. Die Sperre entsteht nur in Tresoren mit PDFs oder eigenen
+  Textfassungen; die leere Vorlage bleibt unberührt.
+- **Neu oder aktuell** (`planen`): Notiz fehlt, Größe anders oder bekannte Prüfsumme anders → neu lesen; gleiche Größe ohne
+  bekannte Prüfsumme → aktuell (ein neues Gerät liest keine PDF neu). Prüfsummen aus `ilias.json` (bei gleicher Größe) oder
+  aus dem Gerätespeicher (Größe und Änderungszeit gleich); eine auf diesem Gerät geänderte PDF gleicher Größe wird einmal
+  gehasht. Notiz ohne PDF: PDF gleicher Größe und Prüfsumme ohne Notiz → Notiz umbenennen (Name, Quelle, Links; Text bleibt,
+  die PDF wird nicht neu gelesen), sonst nach 2 Std. ohne PDF in den Papierkorb; mehr als 10 und mehr als die Hälfte auf einmal
+  → nichts löschen. Doppel derselben PDF (Konfliktkopien) gehen sofort. Neue `fassung` → nach und nach neu, nach allem Neuen.
+- **Grenzen** (`K.GRENZEN`): iPhone/iPad PDFs bis 25 MB, 300 Seiten und 500 000 Zeichen, Lauf 45 s, eine PDF höchstens 120 s;
+  was darüber liegt, wartet auf einen Computer („2 warten auf einen Computer.“, auf diesem Gerät gemerkt bis zur nächsten
+  Plugin-Version). Computer: 80 MB (größer: Notiz „Zu groß“), 600 Seiten und 1 000 000 Zeichen (mehr: Notiz „Gekürzt“), Lauf
+  120 s, eine PDF höchstens 300 s. Je Seite höchstens 20 000 Zeichen. Alle 20 Seiten 30 ms Luft für die Oberfläche; jede
+  Anfrage an pdf.js hat eine Frist (ein Versprechen, das nie zurückkommt, hält den Lauf nicht fest). `getDocument` mit
+  `isEvalSupported: false` und `disableFontFace: true`, `page.cleanup()` je Seite, `destroy()` im `finally`.
+- **Absturz-Schutz:** Vor dem Öffnen merkt sich das Gerät `eba-volltext-in-arbeit = { pfad, groesse, version }`, danach ist es
+  leer. Steht es beim nächsten Start noch da (iOS beendet Obsidian z. B. bei Speichermangel), kommt die PDF in
+  `eba-volltext-zu-schwer`: iPhone/iPad lassen sie ab dem ersten, ein Computer ab dem zweiten Abbruch aus, bis eine neue
+  Plugin-Version kommt; andere Geräte versuchen sie weiter. Lief die App dabei im Hintergrund (`visibilitychange`), wurde sie
+  beendet (`beforeunload`) oder liest ein Lauf nach einem Hot-Reload noch (`ctx.bleibend`), zählt es nicht. Ein Lesefehler der
+  Datei (z. B. noch nicht ganz geladen) zählt auch nicht: nächster Lauf.
+- **Gerätelokal:** `eba-volltext-cache` (je PDF Größe, Änderungszeit, SHA-256), `-in-arbeit`, `-zu-schwer`, `-waisen` (seit
+  wann eine Notiz ohne PDF ist), `-stand`. Synchronisiert nur die Notizen und die Sperre (beide in `.gitignore`, von
+  `release.py` ausgelassen, von `pruefen.py` gemeldet).
+- **Für die Oberfläche:** `ctx.volltext.status()` → gemeinsame Form der Quellen (`zustand`: an, laeuft, fehler,
+  anderes-geraet, aus, extern, fremd; `geprueft`, `fehler` bis zum nächsten Durchgang ohne Abbruch, `fehlerZeit`, `warnungen`)
+  und `{ an, extern, fremd, laeuft, anderes, pdfs, durchsuchbar, ohneText, offen, warten, zuletzt, fortschritt, text }` mit fertigem Satz („58 PDFs durchsuchbar, 2 ohne Text.“, „Liest 12 von 40 PDFs …“,
+  „Kommt über deinen eigenen Abgleich.“); `setzen(an)`, `nachholen({ hier })` (`hier`: Sperre von einem anderen Gerät holen),
+  `beobachten(fn)` mit `start`, `fortschritt` und `fertig` (nie Dateinamen; `fertig` ohne Lauf nur, wenn sich der Stand ändert).
+- **Gemessen** (18.10.2026, PC, Obsidian 1.14.4, pdf.js 5.3): 58 echte Kurs-PDFs im Dev-Tresor in 42 s; die größte (9,5 MB,
+  164 Seiten) in 1,0 s mit +18 bis +56 MB Speicher; erfundene 600 Seiten mit 24 MB bis zur Zeichengrenze in 1,6 s, +28 MB,
+  längste Pause der Oberfläche 88 ms. Mit den Grenzen eines iPhones endet dieselbe PDF nach 0,2 s (Seitenzahl) und wartet auf
+  einen Computer. Auf iPhone und iPad noch nicht gemessen (Schätzung: zwei- bis viermal langsamer, Speicher etwa doppelte
+  Dateigröße).
+- **Grenzen:** Suchtreffer erscheinen doppelt (Begleitnotiz und Textfassung), die Schnellauswahl zeigt `_Volltext` (keine API
+  zum Ausblenden). Platzhalter von iCloud beim Lesen sind ungeprüft.
+- **Tests:** `tests/volltext.test.js` (Tresor im Speicher, erfundene PDFs über ein falsches pdf.js: Entschärfen, Seitentext,
+  Format, Namen, `planen`, fremde Notizen, Sperre, Inkrementell, Umbenennen, Löschen, Grenzen, Budget, Fristen, Absturz-Merker,
+  Status). Testeinstieg in Obsidian: `plugin.testVolltextAus = true` schaltet die automatischen Läufe ab.
+
 ## Einrichtung (seit 0.3.0)
 
 `einrichtung.js` ersetzt die Personalisieren-Karte. Ein Obsidian-Modal (`eba-modal eba-modal-einrichtung`) mit acht
 Bildschirmen: 1 Willkommen (ein Satz, **Los geht’s** / *Später*), 2 Studienbeginn (Semester-Auswahl aus
 `ctx.modell.semesterAuswahl()`, vorausgewählt das aktuelle Semester; Hinweis „Heute bist du im n. Fachsemester.“),
-3 Variante (vier Optionen, „Weiß ich noch nicht“ = `offen` vorausgewählt), 4 Über dich (Name, Zielnote; Prüfung
+3 Variante (vier Optionen aus dem Feld-Register, „Noch offen“ = `offen` vorausgewählt), 4 Über dich (Name, Zielnote; Prüfung
 `ctx.personalisieren.zielnotePruefen`), 5 Alma (drei Schritte, Feld, Prüfung und Verbinden über `ctx.verbindungen.holen("alma")`,
 also `alma.js` `linkPruefen`/`verbinden(link, { nurBeiErfolg })`; im eigenen Uni-Abgleich nur „Dein Stundenplan kommt über
 deinen Uni-Abgleich.“ und **Weiter**), 6 ILIAS (seit 0.4.0, freiwillig: ein Satz, Benutzername,
@@ -1009,11 +1432,13 @@ wechseln. Bis dahin gab es dazu Paper, Paper Tübingen, Paper Schiefer und Graph
 
 **Designs (seit 18.10.2026):** Elfenbein (Vorgabe), Flieder (`eba-flieder.css`: Lila, Akzent Violett, Rosé als zweite Farbe,
 große Rundungen, runde Überschriften) und Klar (`eba-klar.css`: weiß, kühle Grautöne, Akzent Blau, Formen aus den Grundwerten
-von `eba-core.css`). Flieder und Klar gelten nur hell; dunkel sieht immer aus wie Elfenbein. Gewählt wird über eine Klasse am
+von `eba-core.css`). Form und Schrift von Flieder und Klar gelten hell und dunkel (seit 18.10.2026; vorher sah dunkel immer
+aus wie Elfenbein), ihre Farben nur hell: dunkel gelten die dunklen Farben von Elfenbein, bis beide eigene haben. Gewählt wird über eine Klasse am
 `body` (`eba-design-flieder`, `eba-design-klar`; Elfenbein ohne Klasse), nicht über das Ein- und Ausschalten der Bausteine:
 Die eingeschalteten Bausteine stehen in `appearance.json` und kämen auf alle Geräte. Alle drei sind immer an. Die hellen
-Regeln von Elfenbein stehen darum unter `.theme-light:where(:not([class*="eba-design-"]))`, die der Designs unter
-`.eba-design-…:where(.theme-light)`. Beide sind so spezifisch wie `.theme-light`: Die Ausnahmen in `eba-core.css` (Folien,
+Regeln von Elfenbein (Form und Schrift) stehen darum unter `:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"]))`,
+die der Designs unter `.eba-design-…:where(.theme-light, .theme-dark)`, ihre Farben unter `.eba-design-….theme-light`. Alle
+sind so spezifisch wie `.theme-light`: Die Ausnahmen in `eba-core.css` (Folien,
 erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter, und die Reihenfolge der Bausteine spielt keine Rolle. Ohne
 geladene Skripte gilt Elfenbein; damit ein gewähltes Design beim Start nicht erst nach den Skripten erscheint, steht seine
 Klasse zusätzlich in `eba-start-klassen`, und `main.js` setzt sie schon in `onload` (und nimmt sie in `onunload` wieder weg).
@@ -1034,7 +1459,8 @@ schrieb die Wahl `appearance.json` und schaltete damit alle Geräte mit um. `app
   `config-changed` `theme`). Bis zur Rückmeldung am 17.10.2026 waren es drei Zeilen mit „Wählen“ und Erklärsätzen.
 - Darunter (seit 18.10.2026) je Design eine Zeile wie bei der Variante (`.eba-vb`, Farbmuster `.eba-dz-muster` mit Seite und
   Akzent des Designs): die gewählte mit Pille „gewählt“, die übrigen mit „Wählen“ (Aktion `design`). Flieder und Klar sagen in
-  ihrer Zeile „im Dunkelmodus Elfenbein“, sonst wirkte ein Wählen im Dunkeln wie ohne Folge.
+  ihrer Zeile „dunkel mit den Farben von Elfenbein“ (bis 18.10.2026 „im Dunkelmodus Elfenbein“, damals galt auch die Form
+  von Elfenbein).
 - Aktion und Befehl `darstellung` (`wert` = `hell`, `dunkel`, `automatisch`; ohne Wert eine Auswahl), ohne Hinweis.
 - Aktion und Befehl `design` (`wert` = `elfenbein`, `flieder`, `klar`; ohne Wert eine Auswahl), ohne Hinweis.
 - Beim Wählen und einmal beim Start (nur wenn `eba-core` an ist) schaltet `schemaSichern()` `eba-core` und
@@ -1053,6 +1479,16 @@ Semester-Auswahl (mit Vorschau „1. Fachsemester … · heute n. FS“ und Hinw
 Zielnote (1,0–4,0, Komma oder Punkt, gespeichert als „2,3“). Speichern schreibt nach `System/Einstellungen.md`; leere Felder
 werden leer (`name:`), nicht `""`. Danach zieht `abgleichen()` die Semesterliste nach. Semester-Auswahl, Vorschau und
 Zielnoten-Prüfung nutzt auch die Einrichtung (`ctx.personalisieren.semesterOptionen`, `vorschauTeile`, `zielnotePruefen`).
+
+**Feld-Register** (`felder.js`, seit 0.4.5, Konsistenz-Audit Schritt 3): Angaben, die an mehreren Stellen eingegeben werden,
+sind einmal beschrieben (`ctx.user.felder`, Bibliothek ohne Obsidian): `VARIANTE` (gespeicherte Werte in einer Reihenfolge
+Economics, Business Administration, ohne Spezialisierung, offen; Titel „Noch offen“, im Satz „noch offen“; `varianteLesen`,
+`varianteFinden`, `varianteTitel`, `varianteImSatz`), `STUDIENBEGINN` (Datum oder leer = „Aktuelles Semester“, wandert mit; die
+Einrichtung trägt bewusst ein festes Datum ein; `studienbeginnLesen`, `studienbeginnLeerTitel`), `NOTE` (Modulnote 1,0–4,0 in
+Zehnteln oder 5,0, mit Komma; `notePruefen`) und `ZIELNOTE` (1,0–4,0, höchstens zwei Nachkommastellen; `zielnotePruefen`).
+Einrichtung, Formular, Zeilen „Variante“, Befehl „Variante wechseln“ (`aktionen.js`) und Modulfeld (`modul.js`) nutzen nur das
+Register; vorher hatte jede Stelle eigene Reihenfolgen und Wörter („Weiß ich noch nicht“, „noch offen“, „Noch offen“). Eine
+neue Eingabe, die an mehr als einer Stelle vorkommt, kommt dorthin. Tests: `tests/felder.test.js`.
 
 Codeblock `eba-personalisieren` (früher die Karte oben auf dem Dashboard) zeichnet seit 0.3.0 nichts mehr; er bleibt, damit
 selbst geänderte ältere Dashboards keine Lücke zeigen.
@@ -1080,16 +1516,22 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 
 ## Dashboard (Regeln seit 18.10.2026)
 
-- **Kacheln:** Die erste ist immer „Nächste Frist“ (Klassen `akzent frist`: breiter, getönt, Titel groß; eba-core.css
-  Abschnitt 60), danach Nächste Prüfung, Semester, ECTS, Notenschnitt. Formeln `tf` bis `ftext`: Termin-Notizen mit
-  `kategorie: Frist` (Rückverweise auf Prüfungen, nicht erledigt), die noch laufen oder kommen, sortiert nach dem nächsten
-  Stichtag (läuft schon: `bis`, sonst `datum`); Unterzeile „läuft · bis 25.10.“ bzw. „19.10. · morgen“, dazu „geschätzt“.
+- **Kacheln** (seit 18.10.2026 Codeblock ```` ```eba-kacheln ```` aus `dashboard.js` auf dem Fachmodell, vorher eine
+  Bases-Formel; gleiche Klassen und Gestalt): Gruß und Datum (ohne „KW n“, die steht im Wochenraster), dann immer zuerst
+  „Nächste Frist“ (Klassen `akzent frist`: breiter, getönt, Titel groß; eba-core.css Abschnitt 60), danach Nächste Prüfung
+  (`naechstePruefung`), Semester, ECTS (`ects`), Notenschnitt (`noten`) und die Leiste „Semesterverlauf“ (Woche „jetzt“ =
+  Planwoche). Nächste Frist = `ctx.modell.fristen()[0]`: offene Fristen, die noch laufen oder kommen, nach dem nächsten
+  Stichtag (läuft schon: Ende, sonst Beginn); Unterzeile „läuft · bis 25.10.“ bzw. „19.10. · morgen“, dazu „geschätzt“.
   Prüfungen zeigt die Kachel daneben, darum hier nur Fristen. Breit eine Reihe; bis 980 px die Frist über die ganze Breite
   und die vier darunter (zu fünft wären sie auf dem iPad hochkant nur 123 px breit), bis 760 px 2 × 2. Vom 15. bis
   18.10.2026 fehlte die Kachel („Keine Dopplungen“). Tests: `tests/dashboard.test.js`.
-- **Termine · 14 Tage:** alle Kategorien außer Frist, Prüfung, Fachschaft und Veranstaltung für 14 Tage, dazu Fachschaft und
-  Veranstaltung von heute und morgen (zweiter `or`-Zweig; ohne ihn fehlte die Semestereröffnung am selben Abend), sortiert
-  nach Tag und Uhrzeit (`formula.uhr` vom Anfang von `ort`), höchstens 8.
+- **Fristen · 30 Tage** und **Termine · 14 Tage** (seit 18.10.2026 ```` ```eba-liste fristen ```` bzw. `termine` aus
+  `dashboard.js`, vorher Bases; Zeilen „Wann · Was · Art“, eba-core.css Abschnitt 63): Fristen, Prüfungen samt Zwischentests
+  und Abgaben der nächsten 30 Tage nach dem Tag, den die Zeile zeigt (läuft: Ende), höchstens 6; Termine aller Kategorien
+  außer Frist und Prüfung für 14 Tage, Fachschaft und Veranstaltung nur heute und morgen (sonst fehlte die
+  Semestereröffnung am selben Abend), nach Tag und Uhrzeit, höchstens 8. Welche Liste ein Block zeigt, sagt zuerst sein
+  Ersatztext („Fristen erscheinen …“): In verschachtelten Karten liefert Obsidian den Abschnitt der äußeren Karte mit beiden
+  Kopfzeilen. Die Seite Prüfungen zeigt ```` ```eba-liste pruefungen ```` (kommende Prüfungen, auch aus dem Modulfeld).
 - **Bitte prüfen** (`bitte-pruefen.js`, Codeblock `eba-bitte-pruefen`, erster Block unter „Zu erledigen“, ohne Karte im
   Markdown): nur im eigenen Uni-Abgleich (`eba.eigenerAbgleich`) und nur, wenn `System/Abgleich/Protokoll.md` einen Abschnitt
   „Bitte prüfen“ (Überschrift beliebiger Ebene) mit Listenpunkten hat. Dann zeichnet der Block selbst eine Karte im Aufbau
@@ -1097,7 +1539,10 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   n offen“, Knopf „Protokoll“ und „Jetzt abgleichen“ nur, wenn der eigene Abgleich die Aktion `abgleich` anmeldet (dieses
   Skript startet keinen Abgleich). Darunter je Punkt eine Zeile wie bei den To-dos: Das Kästchen schreibt `[x]` bzw. `[ ]`
   genau in diese Zeile des Protokolls (Text vorher geprüft), „**Titel** · Rest“ wird Titel und Metazeile, Unterpunkte stehen
-  gedämpft darunter, Links gehen vom Protokoll aus, fehlende Notizen werden nicht angelegt. Sonst bleibt der Block leer
+  gedämpft darunter, Links gehen vom Protokoll aus, fehlende Notizen werden nicht angelegt. Seit 0.4.5 kommen für alle
+  Nutzer:innen die Punkte der Quellen dazu (Meldekanal, `Q.meldungen(ctx)`, siehe „Quellen-Vertrag“: Noten & Anmeldungen,
+  ILIAS, Alma-Stundenplan …), ohne Kästchen und ohne persönliche Werte; ein Tipp öffnet ihr Ziel, ohne Protokoll keine Knöpfe;
+  neu gezeichnet nach `Q.meldenNeu`. Sonst bleibt der Block leer
   (`.eba-bp-aus`) und samt Hülle auf Höhe 0 gefaltet (Abschnitt 59, Regel „Einen leeren Block samt Hülle ausblenden“):
   Normale Nutzer:innen sehen nichts, auch keine leere Karte. Geprüft in Obsidian (18.10.2026): Lese- und Bearbeitungsansicht,
   iPad- und iPhone-Breite, mit und ohne eigenen Abgleich; Obsidians gemessene Abschnittshöhen stimmen, „Im Eingang“ darunter
@@ -1106,7 +1551,9 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 ## Bereiche (seit 15.10.2026: 9 statt 13)
 
 Das Bereiche-Menü (`menue.js`, `ZIELE`, einzige Quelle) zeigt neun Kacheln (seit 17.10.2026 mit Karteikarten, ohne Schwerpunkt-Planer): Dashboard,
-Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe. Die Icons hängen
+Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
+Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`NUR_WENN`, `ctx.lernplan.sichtbar()`;
+die schreibt nur eine KI, siehe „Lernplan“). Ohne KI bleibt es bei neun. Die Icons hängen
 an `li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6). Stundenplan bleibt eine Seite ohne Kachel (Dashboard).
 Das Symbol, das die Tafel öffnet, steht je Gerät genau einmal: am PC im Seitenkopf (Pfad bzw. Gruß-Zeile des Dashboards),
 auf iPhone und iPad nur in Obsidians Kopfleiste jeder Notiz.
@@ -1120,7 +1567,8 @@ auf iPhone und iPad nur in Obsidians Kopfleiste jeder Notiz.
 | `Studium/Kontakte & Links.md` | Abschnitt „Offizielle Dokumente“ (Quellen) |
 | `Studium/Einstellungen & Hilfe.md` | Eine Gestalt für die ganze Seite (seit 17.10.2026): jeder Abschnitt ist eine Zeilenliste wie die Verbindungen (Rahmen, Zeilen mit Haarlinie, rundes Symbol, Titel, gedämpfte Zeile, rechts ein Knopf oder der Klapp-Pfeil). Deine Angaben (Name, Studienbeginn, Zielnote, Einrichtung), Verbindungen, Variante (je Variante eine Zeile mit Pflichtmodulen und „Wählen“); Abschnitt „Hilfe“ als `> [!eba-zeilen]` mit je Thema einer klappbaren Karte `> > [!eba-karte\|hilfe\|<thema>]- Titel <span class="eba-zeile-unter">…</span>` (Symbol je Thema in eba-core.css Abschnitt 5), zuletzt „Stand der Angaben“ (offene Punkte). Bis dahin Kasten, Chips mit Tabelle und einzelne Karten |
 
-- **Regeln:** Die Prüfungsordnung steht nach Thema in Karten `> [!eba-karte|regeln]- Regeln` unter `## Regeln` (Links
+- **Regeln:** Die Prüfungsordnung steht nach Thema in Karten `> [!eba-karte|regeln]- <Themen>` unter `## Regeln` (Titel nennt
+  die Themen statt „Regeln“ zu wiederholen, seit 18.10.2026; Links
   `[[Prüfungen#Regeln]]` usw.). An-/Abmeldung, Rücktritt, Wiederholung, Bestehen, Einsicht → Prüfungen; Gesamtnote,
   Notenstufen und Schnitte, Zusatzleistungen → Noten & ECTS; Aufbau (ECTS je Variante), Orientierungsprüfung, Fristen,
   Bachelorarbeit, Ausland, IBA/IEco, Containermodule → Studienverlauf. Stil: eba-core.css 37.regeln.
@@ -1209,6 +1657,61 @@ Bilder, Links), darunter ein Fortschrittsbalken der Runde; Tasten Leertaste/Ente
 Lernständen anderer Geräte und an den Einstellungen, außerdem alle 5 Minuten (Lernschritte, Tageswechsel; die Kartenliste nicht).
 Beim Start wird nichts geschrieben außer der einmaligen Umbenennung oben. CSS: Abschnitt 52 in `eba-core.css`.
 
+## Lernplan (seit 18.10.2026, `lernplan.js`)
+
+Regel „70/100“: Nach 70 % der Zeit von Vorlesungsbeginn bis zur Klausur ist jedes Kapitel *verstanden* (nicht beherrscht); die
+restliche Zeit gehört der Klausurvorbereitung (Übungen, Altklausuren auf Zeit, Karteikarten). Der Plan verteilt die Kapitel so, dass
+jede Woche gleich viel zu tun ist, und sagt je Modul, welches Kapitel bis Sonntag dran ist.
+
+**Nur mit KI.** Die Kapitelliste eines Moduls steht in den ersten Folien (Gliederung, Inhalte, Road Map), aber in jeder Vorlesung
+anders (1.–7., I.–VI., E und I–VI, eine PDF für alle Teile). Baut ein Modul auf einem Lehrbuch auf und nennt jede Vorlesung erst ihre
+Einheiten, sind die Kapitel die Einheiten des Lehrbuchs (Inhaltsverzeichnis), die noch nicht genannten nach der Modulbeschreibung
+geschätzt (`vorlaeufig: true`); jede neue Vorlesung berichtigt die Liste. Lesen kann das nur eine KI: dein Uni-Abgleich bzw. Claude auf deinem
+eigenen Server (Plan „Zwei Stufen“). Das Plugin legt nie selbst Lernplan-Notizen an. Gibt es keine, fehlt der Bereich im Menü, und
+die Seite zeigt den Leerzustand „Noch kein Lernplan für deine Module.“ (ohne Zusage, woher er käme).
+
+**Lernplan-Notiz** `Lernplan/<Code> Lernplan.md` (Gerüst `System/Gerüste/Lernplan.md`; Name nie wie die Modulnotiz):
+
+| Teil | Inhalt |
+|---|---|
+| Frontmatter | `typ: lernplan`, `code`, `quelle` (woher die Liste stammt), `stand`; optional `seit` (Plan beginnt in dieser Woche, z. B. bei spätem Einstieg), `verstanden_bis` (Ziel statt 70 %), `vorlaeufig: true` (Liste teils geschätzt; Stand zeigt „(Liste vorläufig)“) |
+| Block | ```` ```eba-lernplan modul ```` – eine Zeile mit Stand wie im Bereich |
+| `## Kapitel` | je Kapitel `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Folien (`[[X100 Folien 01 …]]`, bei einer PDF für alles `[[….pdf#page=30\|S. 30–52]]`) und die Seitenzahl (`23 S.`); bei einem frei zugänglichen Lehrbuch ein https-Link (`[online](https://…)`); eingerückte Aufgaben = Unterkapitel |
+
+`kapitelLesen` liest nur Aufgaben außerhalb von Frontmatter und Codeblöcken; Nummer = erstes Wort, wenn es eine Zahl (auch `1.2`),
+eine römische Zahl oder ein einzelner Großbuchstabe ist. Abgehakt = verstanden, bei Unterkapiteln anteilig. Häkchen setzt nur die
+Studentin oder der Student (in der Notiz oder mit einem Tipp im Bereich); die KI ergänzt Links und Seiten, wenn Folien dazukommen,
+und lässt Häkchen stehen.
+
+**Rechnen** (rein, getestet in `tests/lernplan.test.js`):
+- *Gewicht* eines Kapitels (`gewichte`): Seiten aus der Zeile, sonst Feld `seiten` der verlinkten Notiz, sonst der Folien mit gleicher
+  Nummer (`typ: unterlage`, `art: Folien`, `nummer`; Varianten „mit Anmerkungen“, „unbeschrieben“, „zum Video“ zählen nicht), sonst der
+  Mittelwert der bekannten. Hat kein Kapitel des Moduls Seiten (Lehrbuch online), zählt die Zahl der Unterkapitel. *Da* = ein Link
+  zeigt auf eine vorhandene Datei, ein https-Link steht in der Zeile oder Folien mit dieser Nummer existieren.
+- *Klausur*: `ctx.modell.pruefungVon(code)` (die eine Regel des Datenmodells); ohne Prüfungstermin der Beginn der nächsten
+  Prüfungsphase („geschätzt“), damit der Plan ein Ende hat. *Beginn*: Vorlesungsbeginn des Semesters, frühestens `seit`.
+- *Ziel* (`zielVon`): Sonntag der Woche, in der 70 % der Tage von Beginn bis Klausur vorbei sind, höchstens der Sonntag vor der
+  Klausurwoche.
+- *Wochen* (`kapazitaet`): Anteil der Tage Montag bis Freitag ohne Pausen und freie Tage aus dem Datenmodell; eine Woche ganz in
+  einer Pause zählt 30 %. `planen`: Bis Ende der Woche w ist der Anteil der Kapazität bis w am Gesamtgewicht fällig; jedes Kapitel
+  bekommt den Sonntag der Woche, in der der Plan es erreicht.
+- *Stand* (`stand`, Pille in der Statusfarbe ihrer Bedeutung, docs/design.md): im Plan (Normalfall, keine Pille), **n Kapitel
+  voraus** und **alles verstanden** (`ok`), **n Kapitel hinterher** (`warn`: vor dieser Woche fällig, da und offen), **wartet auf
+  Kapitel n** (`info`: alle überfälligen sind noch nicht hochgeladen, kein eigenes Versäumnis, wenn man nicht vorlernen kann), nach
+  dem Ziel **n Kapitel offen** (`warn`) bzw. **Klausurvorbereitung** (`leer`), nach der Klausur **Klausur vorbei** (`leer`).
+
+**Oberfläche:** Bereich `Studium/Lernplan.md` mit ```` ```eba-lernplan ````: je Modul eine Zeile der Zeilenliste ohne Symbol (Titel,
+Pille nur bei einem Zustand, „2 von 7 Kapiteln · diese Woche Kapitel 3 · verstanden bis So 3.1. · Klausur Sa 6.2.“), sortiert nach
+Klausur, Vorbereitung und Vorbei ans Ende. Tipp klappt die Kapitel auf (gerätelokal über den Hot-Reload, `ctx.bleibend`): Kästchen
+wie bei den To-dos (`.eba-td-haken`, ganze Zeilenhöhe als Tippfläche, auf iPhone und iPad 44 px; halb verstanden = unbestimmt und
+„1/3“ hinter dem Titel), Nummer, Titel (Tipp öffnet die Folien bzw. das Lehrbuch), rechts „bis So 25.10.“ bzw. „· noch nicht da“,
+darunter der Link auf die Notiz. Abhaken schreibt genau diese Zeile (`- [ ]` ↔ `- [x]`), nur wenn ihr Text noch stimmt, sonst ein Hinweis (wie `todos.js`).
+Neu gezeichnet bei Änderungen in `Lernplan/`, `Unterlagen/`, `Termine/`, `Module/`, am Datenmodell und an einem neuen Tag. CSS:
+Abschnitt 61 in `eba-core.css`. Beim Start schreibt `lernplan.js` nichts.
+
+**Persönlich:** Lernplan-Notizen nennen die Kapitel deiner Kurse. `Lernplan/` ist in der Vorlage leer (`pruefen.py`, `LEERE_ORDNER`)
+und kommt nie in den Datenkanal.
+
 ## Modulseite (seit 17.10.2026, `modul.js`)
 
 Jede Modulnotiz (und das Gerüst `System/Gerüste/Modul.md`) hat den Aufbau Kopf (HTML: Pfad, Kürzel als eigene Zeile
@@ -1239,8 +1742,10 @@ Frontmatter dieser Modulnotiz:
   Unterlagen einordnen, Suchen.
 
 Neu gezeichnet wird bei Änderungen an Modul-, Stundenplan-, Termin-, Vorlesungs- und Kartennotizen, an den Einstellungen und
-`System/Daten/`, beim Zurückkommen in die App und alle 10 Minuten. Reine Logik (`sitzung`, `naechstes`, `pruefungVon`, `band`,
-`noteOk`, `statusArt`, `titelOhne`, `spanne`) in `tests/modul.test.js`. Die Tabelle „Meine Notizen“ zeichnet
+`System/Daten/`, beim Zurückkommen in die App und alle 10 Minuten. Prüfung, nächste Sitzung, Termine und Statusfarbe kommen
+seit 18.10.2026 aus dem Fachmodell (`pruefungVon`, `naechsteSitzung`, `termine`, `statusArt`): Eine abgehakte Klausur steht ohne
+Countdown mit „erledigt“, ein bestandenes oder anerkanntes Modul hat keine kommende Prüfung mehr. Reine Logik (`naechstes`,
+`band`, `noteOk`, `titelOhne`, `spanne`) in `tests/modul.test.js`. Die Tabelle „Meine Notizen“ zeichnet
 `tabellen.js` auf Modulseiten auf allen Geräten als Liste (`--eba-tliste: 1`); Kontrollkästchen dort nur bei Notizen, die das
 Feld haben, „offiziell“ ohne Chip. CSS: `eba-core.css` Abschnitt 58.
 
@@ -1271,21 +1776,14 @@ Orientierungsprüfung), andere Musterplan-Varianten nur auf `System/Daten/Muster
 nutzbar). Die Variante wählst du „vor dem 3. Fachsemester“ (ab dann unterscheiden sich die Musterpläne; die PO legt keinen
 Zeitpunkt fest), überall in diesem Wortlaut.
 
-**Nächste Prüfung, eine Regel:** Quellen sind Termin-Notizen mit `kategorie: Prüfung` (eintägig, also ohne `bis`; ohne
-„Nachhol…“, ohne Zwischentests) und das Modulfeld `klausur`. Zwischentest heißt: Titel oder Dateiname enthält
-„Zwischentest“, Groß- und Kleinschreibung egal (seit 17.10.2026; vorher zählten sie mit, und die Kachel „Nächste Prüfung“
-zeigte einen Zwischentest). Ein Zwischentest ist nie die nächste Prüfung und verdeckt keine Klausur am selben Tag; wo er
-erscheint, heißt er „Zwischentest“ (Pille `eba-pill info` in der Fristen-Liste des Dashboards, Formel `zt`, in der Agenda
-von `termine.js` und im Kalender von `kalender.js`, dort mit Art `zwischentest`: Punkt in `--eba-info`, eigener
-Legendeneintrag; im Studienverlauf ein Fähnchen „Zwischentest n“ ohne Countdown). Kürzel + Tag zählen nur einmal; die
-Termin-Notiz gewinnt (Link, „geschätzt“), „bestanden“ und Ergebnis kommen vom Modul (seit 17.10.2026 auch in `klausurzeit.js` und `verlauf.js`,
-die vorher das Modul vorzogen). So rechnen
-`verlauf.js`, `klausurzeit.js`, die Dashboard-Formeln `pt`/`ptk`/`kl` und die Fristen-Liste (Zweig `typ == "modul"` nur,
-wenn keine Prüfungs-Termin-Notiz mit gleichem Kürzel am selben Tag existiert; nur gleiches Kürzel reicht nicht, weil die
-Zwischentests das Kürzel des Moduls tragen). Die Liste „Prüfungstermine“ auf Prüfungen blendet Phasen-Notizen
-(`bis` gesetzt) aus. Seit 16.10.2026 auch für die Modulzeilen: „Termin folgt“ steht in der Zeitleiste (`klausurzeit.js`) nur,
-wenn es weder `klausur` noch eine Prüfungs-Termin-Notiz mit diesem Kürzel in einer Prüfungsphase gibt; die Lupe im
-Studienverlauf (`verlauf.js`, `klausurVon`) zeigt das Datum der Klausur aus der Termin-Notiz (ohne Zwischentests).
+**Nächste Prüfung, eine Regel:** seit 18.10.2026 `ctx.modell.pruefungen`, `pruefungVon` und `naechstePruefung` (siehe
+„Fachmodell“): Termin-Notizen mit `kategorie: Prüfung` (eintägig) und das Modulfeld `klausur`; Kürzel + Tag zählen einmal, die
+Termin-Notiz gewinnt (Link, „geschätzt“), „bestanden“, „anerkannt“ und Ergebnis kommen vom Modul, ein Haken an der Notiz macht
+die Prüfung erledigt, entfallene zählen nicht. Zwischentest heißt: Titel oder Dateiname enthält „Zwischentest“, Groß- und
+Kleinschreibung egal (seit 17.10.2026); er ist nie die nächste Prüfung, verdeckt keine Klausur am selben Tag und heißt, wo er
+erscheint, „Zwischentest“ (Pille `eba-pill info`, im Kalender Art `zwischentest`, im Studienverlauf ein Fähnchen
+„Zwischentest n“ ohne Countdown). „Termin folgt“ steht in der Zeitleiste (`klausurzeit.js`) nur, wenn es weder `klausur` noch
+eine Prüfungs-Termin-Notiz mit diesem Kürzel in einer Prüfungsphase gibt (auch eine abgehakte zählt).
 
 **Zwischentests auf Prüfungen (seit 17.10.2026):** Termin-Notizen, deren Titel „Zwischentest“ enthält (`klausurzeit.js`:
 Titel, sonst Dateiname; Liste: Dateiname), sind freiwillige, unbenotete Tests und auf dieser Seite keine Prüfung. Die
@@ -1323,7 +1821,9 @@ Für „Feld leer“ `!feld.isTruthy()` schreiben (bzw. `!value.properties.feld.
 Regeln für Skript-Autoren:
 
 - iOS-sicher bleiben: keine Node-APIs, kein Regex-Lookbehind, kein `.at()`, `findLast` oder `structuredClone`.
-- Neue Notizen mit `eba.ablegen(ordner, name, inhalt)` anlegen. `eba.CURSOR` im Inhalt markiert die Cursorposition.
+- Neue Notizen mit `eba.ablegen(ordner, name, inhalt)` anlegen. `eba.CURSOR` im Inhalt markiert die Cursorposition. Den Namen
+  macht `eba.dateiTitel` (eine Regel für alle Notizen, auch die zentralen Termine): ohne Emojis, „: “ → „ – “, keine
+  Zeichen, die Windows, iOS oder Links stören, keine Punkte am Ende.
 - Alles, was über das Zeichnen hinaus bleibt, **nur über die Helfer** anmelden: `ctx.an`, `ctx.dom`, `ctx.intervall`, `ctx.zeit`,
   `ctx.entprellen`, `ctx.codeblock`, `ctx.postprozessor`, `ctx.editor`, `ctx.aufraeumen`. Nie direkt
   `plugin.register…`, `app.workspace.on`, `setInterval` oder `document.addEventListener`; dann bleibt nach einem Hot-Reload
@@ -1335,6 +1835,8 @@ Regeln für Skript-Autoren:
 - Wer etwas außerhalb der Helfer verändert (Prototypen, fremde Objekte), liefert `abmelden()` und nimmt es dort zurück.
 - Datum: `ctx.date.jetzt()` bzw. `ctx.date.now()` statt `new Date()`, wenn es um „heute“ geht (Tests mit `plugin.testDatum`).
 - Wochen und Semesterlage nur über `ctx.modell.woche()` anzeigen, nicht selbst zählen.
+- Prüfungen, Fristen, „diese Woche“, Sitzungen, ECTS, Noten, „im Plan“, Statusfarben und Datumstexte nur über das Fachmodell
+  (`ctx.modell`, Abschnitt „Fachmodell“), nie eine eigene Regel; fehlt etwas, kommt es mit Test ins Modell.
 - `registrieren()` darf annehmen, dass die alte Fassung abgemeldet ist; offene Seiten zeichnet der Kern danach selbst neu.
 - Einen leeren Block samt Hülle ausblenden: in der Leseansicht den Abschnitt (`.el-*`) per CSS auf Höhe 0 falten, nie
   `display: none`. Obsidian misst einen unsichtbaren Abschnitt sonst so hoch wie alles darüber, und was darunter steht,
@@ -1350,10 +1852,12 @@ Regeln für Skript-Autoren:
   Dateinamen, Prüfung von Manifest, Terminen und Semesterdaten, Schnappschuss der öffentlichen Daten mit Prüfsummen) und
   `modell.js` (Semesterliste, Semesterregel, Vorlesungswochen, Wochenanzeige) sowie `update.js` (Dateiklassen, Liste, Plan je
   Datei, Mischen, alles oder nichts, Kanal; im veröffentlichten Repo zusätzlich die Update-Liste gegen die Dateien), die
-  ILIAS-Skripte (siehe „ILIAS-Unterlagen“), `alma.js` (Wegfall eigener Notizen, Verbinden ohne Erfolg), `leer.js`
+  ILIAS-Skripte (siehe „ILIAS-Unterlagen“), Noten & Anmeldungen und `sperre.js` (siehe „Noten & Anmeldungen (Alma)“), `quellen.js` (siehe „Quellen-Vertrag“),
+  `alma.js` (Lebenslauf der Notizen, Grabstein, Sperre, Fehler im Status, Verbinden ohne Erfolg), `leer.js`
   (`istLeer`), `fsrs.js` und `karten.js` (siehe „Karteikarten“), `woche.js` (Wochenraster), `todos.js` (Auswahl,
-  leere Blöcke) sowie `bitte-pruefen.js` (Protokoll lesen, abhaken) und `Dashboard.md` (Regeln der Kacheln und Listen).
-  `tests/laden.js` lädt die Skripte mit einem kleinen Ersatz für Obsidian.
+  leere Blöcke) sowie `bitte-pruefen.js` (Protokoll lesen, abhaken), `volltext.js` (siehe „Volltext der PDFs“) und
+  `Dashboard.md` mit `dashboard.js` (Kacheln und Listen), das Fachmodell (`tests/fachmodell.test.js`) und die Bases-Formeln auf
+  Noten & ECTS gegen das Modell (`tests/bases-regeln.test.js`, Auswerter `tests/bases-formel.js`). `tests/laden.js` lädt die Skripte mit einem kleinen Ersatz für Obsidian.
 - **In Obsidian** (Entwickler-PC, nicht im Repo): Oberfläche, Knöpfe, Hot-Reload, Datenkanal mit Testquelle, Bases-Formeln.
   Die Testeinstiege unten machen das möglich.
 - **GitHub Actions** (`.github/workflows/pruefen.yml`): `werkzeuge/pruefen.py` (Datenschutz-Scan, Dateitypen, `node --check`,

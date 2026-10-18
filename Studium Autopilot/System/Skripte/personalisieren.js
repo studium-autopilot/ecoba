@@ -21,7 +21,9 @@ module.exports = function (ctx) {
   const app = window.app;
   const { Modal, Notice } = ctx.obsidian;
   const EINSTELLUNGEN = "System/Einstellungen.md";
-  const VARIANTEN = ["offen", "Economics", "Business Administration", "ohne Spezialisierung"];
+  // Variante, Studienbeginn und Zielnote: eine Beschreibung für alle Stellen (felder.js, Feld-Register)
+  const F = () => ctx.user.felder;
+  const VARIANTEN = F().VARIANTE.werte;
   // Was aus der Variante folgt (PO 2023, Modulhandbuch); Reihenfolge der Zeilen unter „Variante“
   const FOLGE = {
     "Economics": "Pflicht: E230, E210, S220, B240 · Schwerpunkte 75 ECTS, mind. 2 VWL-Bereiche",
@@ -48,16 +50,8 @@ module.exports = function (ctx) {
   const D = () => (ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null);
   const fmVon = () => { const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN); const c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
 
-  // Zielnote: leer erlaubt; sonst 1,0–4,0 mit höchstens zwei Nachkommastellen → Text mit Komma („2“ → „2,0“).
-  const zielnotePruefen = (s) => {
-    const v = String(s == null ? "" : s).trim();
-    if (!v) return { ok: true, wert: "" };
-    const m = v.match(/^([1-4])(?:[.,](\d{1,2}))?$/);
-    if (!m) return { ok: false, fehler: "Das ist keine Note. Bitte eine Zahl von 1,0 bis 4,0 eingeben." };
-    const n = Number(m[1] + "." + (m[2] || "0"));
-    if (n < 1 || n > 4) return { ok: false, fehler: "Die Note muss zwischen 1,0 und 4,0 liegen." };
-    return { ok: true, wert: `${m[1]},${m[2] || "0"}` };
-  };
+  // Zielnote: leer erlaubt; sonst 1,0–4,0 mit höchstens zwei Nachkommastellen → Text mit Komma („2“ → „2,0“) (felder.js)
+  const zielnotePruefen = (s) => F().zielnotePruefen(s);
 
   // Semester-Auswahl für den Studienbeginn füllen (auch für die Einrichtung). leer: Text der Option „Aktuelles Semester“
   // (Wert "") oder null = ohne diese Option. Rückgabe: Liste der Semester ({ name, beginn, … }).
@@ -120,7 +114,7 @@ module.exports = function (ctx) {
       const sem = zs.feld.createEl("select", { cls: "dropdown eba-form-auswahl", attr: { "aria-label": "Studienbeginn" } });
       const jetzt = d ? ctx.modell.semesterAusDatum(d.heute) : "";
       const gesetzt = String(fm.studienbeginn == null ? "" : fm.studienbeginn).slice(0, 10);
-      semesterOptionen(sem, gesetzt, `Aktuelles Semester${jetzt ? ` (${jetzt})` : ""}`);
+      semesterOptionen(sem, gesetzt, F().studienbeginnLeerTitel(jetzt));
       sem.value = gesetzt && Array.from(sem.options).some((o) => o.value === gesetzt) ? gesetzt : "";
       const vorschau = zs.h || zs.z.createEl("div", { cls: "eba-form-hilfe" });
       const vorschauZeigen = () => vorschau.setText(vorschauText(sem.value));
@@ -129,12 +123,11 @@ module.exports = function (ctx) {
       // Variante
       const zv = zeile("Variante", "Wähle sie vor dem 3. Fachsemester.");
       const vari = zv.feld.createEl("select", { cls: "dropdown eba-form-auswahl", attr: { "aria-label": "Variante" } });
-      for (const v of VARIANTEN) vari.createEl("option", { value: v, text: v === "offen" ? "noch offen" : v });
-      const vist = String(fm.variante == null ? "" : fm.variante).trim();
-      vari.value = VARIANTEN.indexOf(vist) >= 0 ? vist : "offen";
+      for (const v of VARIANTEN) vari.createEl("option", { value: v, text: F().varianteTitel(v) });
+      vari.value = F().varianteLesen(fm);
       // Zielnote
-      const zz = zeile("Zielnote", "Dein Wunsch-Notenschnitt (1,0 bis 4,0).");
-      const ziel = zz.feld.createEl("input", { type: "text", cls: "eba-modal-feld eba-form-kurz", attr: { placeholder: "z. B. 2,0", inputmode: "decimal", "aria-label": "Zielnote" } });
+      const zz = zeile("Zielnote", F().ZIELNOTE.hilfe);
+      const ziel = zz.feld.createEl("input", { type: "text", cls: "eba-modal-feld eba-form-kurz", attr: { placeholder: F().ZIELNOTE.beispiel, inputmode: "decimal", "aria-label": "Zielnote" } });
       ziel.value = String(fm.zielnote == null ? "" : fm.zielnote);
       const meldung = c.createEl("p", { cls: "eba-modal-meldung" });
       const k = c.createDiv({ cls: "modal-button-container" });
@@ -168,7 +161,7 @@ module.exports = function (ctx) {
 
   // ---------- Zeilen (Einstellungen & Hilfe) ----------
   const txt = (x) => String(x == null ? "" : x).trim();
-  const varianteVon = (fm) => { const v = txt(fm.variante); return VARIANTEN.indexOf(v) >= 0 ? v : "offen"; };
+  const varianteVon = (fm) => F().varianteLesen(fm);
   const einrichtungVon = (fm) => {
     if (ctx.einrichtung && ctx.einrichtung.zustand) return ctx.einrichtung.zustand();
     const e = txt(fm.einrichtung).toLowerCase();
@@ -204,8 +197,8 @@ module.exports = function (ctx) {
   // Je Variante eine Zeile; die gewählte ohne Knopf (bei „noch offen“ mit Uhr statt Haken)
   const varianteZeilen = (fm) => {
     const ist = varianteVon(fm || {});
-    return ["Economics", "Business Administration", "ohne Spezialisierung", "offen"].map((v) => {
-      const gewaehlt = v === ist, titel = v === "offen" ? "Noch offen" : v === "ohne Spezialisierung" ? "Ohne Spezialisierung" : v;
+    return VARIANTEN.map((v) => {
+      const gewaehlt = v === ist, titel = F().varianteTitel(v);
       if (!gewaehlt) return { id: v, symbol: "wegweiser", ton: "leise", titel, wert: "", text: FOLGE[v], knopf: { text: "Wählen", aktion: "variante", parameter: { wert: v } } };
       return v === "offen" ? { id: v, symbol: "uhr", ton: "leise", titel, pille: { text: "aktuell", art: "leer" }, wert: "", text: FOLGE[v] }
         : { id: v, symbol: "haken", ton: "ok", titel, pille: { text: "gewählt", art: "ok" }, wert: "", text: FOLGE[v] };

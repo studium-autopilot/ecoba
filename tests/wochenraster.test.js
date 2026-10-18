@@ -1,15 +1,19 @@
 // Wochenraster auf Dashboard und Stundenplan (woche.js, Codeblock eba-woche): welche Woche (nur aus dem Gerätespeicher, nach
 // 30 Minuten und nach einem Neustart wieder die aktuelle), Kästen der Woche (von/bis, Ausfälle, Pausen, Änderungen, c.t.,
-// Kurzname, Art und Gruppe, Überschneidungen), leere Wochen, Wischen. Nur ausgedachte Daten (Codes X100 …).
+// Kurzname, Art und Gruppe, Überschneidungen), leere Wochen, Wischen. Semester, Pausen, freie Tage und „findet statt“ kommen
+// aus dem Fachmodell (Semesterdaten tests/daten/v1). Nur ausgedachte Stundenplan-Daten (Codes X100 …).
 // Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const { laden } = require("./laden.js");
+const { laden, json } = require("./laden.js");
 
-const W = laden("woche").ergebnis;
+// Ausgedachte Einstellungen: eine zentrale Vorlesung ist ausgeblendet („Besuche ich nicht“)
+const EINST = { stundenplan_ausgeblendet: ["ws-2026-27-x900-vorlesung-1-fr-1000"] };
+const MODELL = laden("modell", { heute: "2026-10-17", frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": EINST } }).ctx.modell;
+const W = laden("woche", { kontext: { modell: MODELL } }).ergebnis;
 const tag = (s, uhr = "12:00:00") => new Date(s + "T" + uhr);
 
 test("Aktuelle Woche: Montag bis Freitag diese, Samstag und Sonntag die nächste; Kalenderwoche nach ISO", () => {
@@ -56,12 +60,7 @@ test("Versatz kommt nur aus dem Gerätespeicher; ein Wechsel schreibt keine Date
   assert.deepEqual(geschrieben, []);
 });
 
-// Ausgedachter Stundenplan (WS 2026/27, Vorlesungen ab 12.10., Weihnachtspause 23.12.–6.1.)
-const EINST = {
-  semesterliste: ["1|WS 2026/27|2026-10-01|2027-03-31|2026-10-12|2027-02-12"],
-  pausen: ["2026-12-23|2027-01-06|Weihnachtspause"],
-  stundenplan_ausgeblendet: ["ws-2026-27-x900-vorlesung-1-fr-1000"],
-};
+// Ausgedachter Stundenplan im WS 2026/27 (Semesterdaten: Vorlesungen ab 12.10., Weihnachtspause 23.12.–6.1.)
 const lv = (pfad, fm) => ({ pfad, fm: Object.assign({ typ: "lehrveranstaltung", semester: "WS 2026/27", raum: "Hörsaal 1" }, fm) });
 const NOTIZEN = [
   lv("Stundenplan/Mo X110.md", { titel: "Beispieldatenanalyse · Veranstaltung", code: "X110", art: "Veranstaltung", wochentag: 1, beginn: "08:00", ende: "10:00", von: "2026-10-12", bis: "2027-02-01", modul: "[[X110 Beispieldatenanalyse]]" }),
@@ -77,7 +76,7 @@ const NOTIZEN = [
 ];
 // Modulnotizen nach Name und Pfad (wie lesen()); ein gleichnamiger Karteikarten-Stapel darf nie das Ziel sein
 const MODULPFAD = { "X110 Beispieldatenanalyse": "Module/1 Grundstudium/X110 Beispieldatenanalyse.md", "Module/1 Grundstudium/X110 Beispieldatenanalyse": "Module/1 Grundstudium/X110 Beispieldatenanalyse.md" };
-const woche = (montag, jetzt = "2026-10-17T12:00:00", modulPfad = MODULPFAD) => W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: { X110: "Daten", X101: "Ökonomik" }, modulPfad, einst: EINST, montag: tag(montag), jetzt: new Date(jetzt) });
+const woche = (montag, jetzt = "2026-10-17T12:00:00", modulPfad = MODULPFAD) => W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: { X110: "Daten", X101: "Ökonomik" }, modulPfad, modell: MODELL, montag: tag(montag), jetzt: new Date(jetzt) });
 const kasten = (w, pfad) => w.kaesten.find((k) => k.pfad === pfad);
 
 test("Woche 19.10.: nur, was zwischen von und bis liegt; Ausgeblendetes, Entfallenes und andere Semester fehlen", () => {
@@ -112,7 +111,7 @@ test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Begi
 
 test("Antippen öffnet das Modul über den Pfad, auch bei Link mit Pfad, Alias oder Abschnitt", () => {
   const n = [lv("Stundenplan/Mo X110.md", Object.assign({}, NOTIZEN[0].fm, { modul: "[[Module/1 Grundstudium/X110 Beispieldatenanalyse#Prüfung|X110]]" }))];
-  const w = W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: MODULPFAD, einst: EINST, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });
+  const w = W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: MODULPFAD, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });
   assert.equal(w.kaesten[0].notiz, "Module/1 Grundstudium/X110 Beispieldatenanalyse.md");
 });
 
@@ -144,6 +143,23 @@ test("Ausfall und Pause durchgestrichen; ganze Woche frei → Satz statt Kästen
   assert.deepEqual([frei.kaesten.length, frei.leer], [0, "Weihnachtspause"]);
   assert.equal(woche("2026-10-05").leer, "Vorlesungsbeginn 12.10.");
   assert.equal(woche("2027-02-22").leer, "Vorlesungsfrei");
+});
+
+test("Vorlesungsfreier Tag (Christi Himmelfahrt) durchgestrichen, Einzeltermin nur an seinem Tag (Fehler 8)", () => {
+  const ss = (pfad, fm) => lv(pfad, Object.assign({ semester: "SS 2027", von: "2027-04-12", bis: "2027-07-24" }, fm));
+  const n = [
+    ss("Stundenplan/Do X300 Tutorium.md", { titel: "Beispiel · Tutorium", code: "X300", art: "Tutorium", wochentag: 4, beginn: "10:15", ende: "11:45" }),
+    ss("Stundenplan/Mo X300.md", { titel: "Beispiel · Vorlesung", code: "X300", art: "Vorlesung", wochentag: 1, beginn: "10:00", ende: "12:00" }),
+    ss("Stundenplan/Mi X300 Einzel.md", { titel: "Beispiel · Sondertermin", code: "X300", art: "Vorlesung", wochentag: 3, beginn: "14:00", ende: "16:00", einzeltermin: true, von: "2027-05-12", bis: "2027-05-12" }),
+  ];
+  const w = (montag) => W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag(montag), jetzt: new Date("2027-05-03T12:00:00") });
+  const k = w("2027-05-03").kaesten;
+  assert.deepEqual(k.map((x) => x.pfad).sort(), ["Stundenplan/Do X300 Tutorium.md", "Stundenplan/Mo X300.md"], "Einzeltermin erst in seiner Woche");
+  const d = k.find((x) => x.pfad === "Stundenplan/Do X300 Tutorium.md");
+  assert.ok(d.klassen.includes("ausfall"));
+  assert.match(d.titel, /fällt aus \(Christi Himmelfahrt\)$/);
+  assert.deepEqual(w("2027-05-10").kaesten.map((x) => x.pfad + (x.klassen.includes("ausfall") ? " aus" : "")).sort(),
+    ["Stundenplan/Do X300 Tutorium.md", "Stundenplan/Mi X300 Einzel.md", "Stundenplan/Mo X300.md"]);
 });
 
 test("Heute und jetzt nur in der aktuellen Woche", () => {

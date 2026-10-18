@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/alma-konto-html.test.js und tests/alma-konto.test.js. Aufbau wie die Seite „Belegungen“ (Mein Studium → Belegungen und
+     Prüfungsanmeldungen) eines Kontos ohne Belegungen (Oktober 2026), verkleinertes Gerüst, alle Werte erfunden:
+     Semesterauswahl mit einer gewählten Option, Hinweis von Alma im Bereich der Ergebnisse, keine Tabelle. -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head><meta charset="utf-8"><title>Alma</title></head>
+<body>
+<div id="header">
+  <a class="topMenuLink mainnavLink link_simple flexdropdownmenu capitalizeFirstLetter" href="/alma/rds?state=user&amp;type=3&amp;category=auth.logout" id="widgetRender:1:burgerNavi:logoutLink">Abmelden</a>
+  <form id="widgetRender:22:collapsibleHeaderActionFrom" name="widgetRender:22:collapsibleHeaderActionFrom" method="post" action="/alma/pages/cs/sys/portal/hisinoneStartPage.faces">
+    <div class="widgetPanel" id="widgetRender:22:collapsibleHeaderActionFrom:avatarInfobox">
+      <button class="submit_image portalInfoBoxLink short-waiting-behavior submit" id="widgetRender:22:collapsibleHeaderActionFrom:avatarInfobox:open" name="widgetRender:22:collapsibleHeaderActionFrom:avatarInfobox:open" type="button" title="Erika Musterfrau">
+        <div class="avatar"><div class="initials-circle" id="avatar">EM</div></div>
+      </button>
+    </div>
+    <a class="sLink waiting-behavior" href="/alma/rds?state=user&amp;type=3&amp;category=auth.logout" id="widgetRender:22:collapsibleHeaderActionFrom:logoutLink"><span class="iconfont-exit"></span></a>
+  </form>
+</div>
+<form id="sessionTimeoutLoginForm" name="loginform" class="formular full-screen-waiting-behavior" method="post"
+      action="https://alma.uni-tuebingen.de:443/alma/rds?state=user&amp;type=1&amp;category=auth.login&amp;re=last">
+  <div class="box_content"><fieldset role="presentation">
+    <legend class="noDisplay">Anmelden</legend>
+    <p>Ihre Sitzung ist aus Sicherheitsgründen abgelaufen. Bitte melden Sie sich erneut an.</p>
+    <label for="asdf">Benutzerkennung</label><input class="input_standard autofocus-behavior" id="asdf" name="asdf" type="text">
+    <label for="fdsa">Passwort</label><input class="input_standard" id="fdsa" name="fdsa" type="password">
+    <button class="submit_login" id="sessionTimeoutLoginForm:login" name="submit" type="submit"><span>Anmelden</span></button>
+  </fieldset></div>
+</form>
+<form id="studentOverviewForm" name="studentOverviewForm" method="post" action="/alma/pages/cm/exa/enrollment/info/start.xhtml?_flowId=searchOwnEnrollmentInfo-flow&amp;_flowExecutionKey=e1s1">
+  <input type="hidden" name="activePageElementId" value="">
+  <input type="hidden" name="authenticity_token" value="ZXJmdW5kZW4tYmVsZWd1bmdlbg==">
+  <div id="studentOverviewForm:enrollmentsDiv"><div class="box_content">
+    <fieldset class="fieldsetNoBorder" id="studentOverviewForm:enrollmentsDiv:enrollmentsDiv_innerFieldset" role="presentation">
+      <div class="columnOneQuarterLeft"><div id="studentOverviewForm:enrollmentsDiv:termSelector"><div class="boxStandard">
+        <div class="box_title "><h2>Semesterauswahl</h2></div>
+        <div class="box_content"><fieldset class="fieldsetNoBorder" id="studentOverviewForm:enrollmentsDiv:termSelector:termSelector_innerFieldset" role="presentation">
+          <label class="labelInLine form-label" for="studentOverviewForm:enrollmentsDiv:termSelector:termPeriodDropDownList_focus">Semester</label>
+          <div class="ui-selectonemenu ui-widget ui-state-default ui-corner-all dropdown_autoWidth" id="studentOverviewForm:enrollmentsDiv:termSelector:termPeriodDropDownList">
+            <div class="ui-helper-hidden-accessible ui-helper-hidden-select">
+              <select id="studentOverviewForm:enrollmentsDiv:termSelector:termPeriodDropDownList_input" name="studentOverviewForm:enrollmentsDiv:termSelector:termPeriodDropDownList_input">
+                <option value="237" selected="selected">Wintersemester 2026/27</option>
+              </select>
+            </div>
+          </div>
+        </fieldset></div>
+      </div></div></div>
+      <div class="columnThreeQuarterRight floatRight">
+        <div id="studentOverviewForm:enrollmentsDiv:infoBoxDiv"><ul class="job-configuration-buttons horizontal"><li class="job-configuration-buttons-item job">
+          <button class="submit_linkLook job-configuration-buttons-button" id="studentOverviewForm:enrollmentsDiv:infoBoxDiv:enrollStudentListJobConfigurationButtons:jobConfigurationButtons:0:job1" name="studentOverviewForm:enrollmentsDiv:infoBoxDiv:enrollStudentListJobConfigurationButtons:jobConfigurationButtons:0:job1" type="submit"><span class="jobname">Belegungen und Prüfungsanmeldungen</span></button>
+        </li></ul></div>
+        <div id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv"><div class="boxStandard" id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:fieldset">
+          <div class=" box_title"><h2 class="withMarginLeft ">Belegungen im gewählten Semester</h2></div>
+          <div class="box_content"><fieldset class="fieldsetNoBorder" id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:termEnrollmentDiv_innerFieldset" role="presentation">
+            <div id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:globalActions">
+              <button class="submit_book_open_empty_vis" id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:globalActions:lectureHideButton" name="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:globalActions:lectureHideButton" type="submit"><span>Veranstaltungen ausblenden</span></button>
+              <button class="submit_award_vis" id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:globalActions:examinationHideButton" name="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:globalActions:examinationHideButton" type="submit"><span>Prüfungen ausblenden</span></button>
+            </div>
+            <div id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:termResult"><div class="fieldsetNoBorder"><div class="box_content">
+              <fieldset class="fieldsetNoBorder" id="studentOverviewForm:enrollmentsDiv:termEnrollmentDiv:termResult:termResult_innerFieldset" role="presentation">
+                <div id="j_id_4w_ao_a_1"><div class="helptext"><div class="clearer"></div><img class="fieldsetMessageImage imagebottom" alt="">
+                  <div class="fieldsetMessageText infoBox">Sie haben bisher keine Veranstaltungen belegt und keine Prüfungen angemeldet.</div>
+                </div></div>
+              </fieldset>
+            </div></div></div>
+          </fieldset></div>
+        </div></div>
+      </div>
+    </fieldset>
+  </div></div>
+  <input type="hidden" name="studentOverviewForm_SUBMIT" value="1">
+  <input type="hidden" id="javax.faces.ViewState" name="javax.faces.ViewState" value="ZXJmdW5kZW4tdmlldw==">
+</form>
+</body>
+</html>

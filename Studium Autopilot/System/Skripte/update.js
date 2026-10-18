@@ -38,7 +38,8 @@
 //   Schalter „Beta-Versionen“ im Fenster „Studium Autopilot“ unter „Mehr erfahren“.
 // Erstinstallation: Fehlt installiert.json, legt das Plugin sie einmal aus system-dateien.json an (sonst keine Datei).
 // Andere Geräte: Das Update kommt über den Sync. installiert.json zeigt dort die neue Version → kein zweites Update; läuft
-//   noch der alte Kern im Speicher, zeigt die Zeile „Neu laden“.
+//   noch der alte Kern im Speicher, zeigt die Zeile „Neu laden“. Die Skripte, die dabei ankommen, lädt der Kern ohne
+//   „Aktualisiert: …“-Hinweise neu (mehrere auf einmal oder nach einer neuen installiert.json: stillBis).
 // Neuigkeiten (seit 0.4.1): Beim Öffnen von Obsidian (und nach über 6 h im Hintergrund) holt update.js nach wenigen Sekunden
 //   nur das kleine Manifest, wenn die letzte Prüfung über 30 Min. her ist. Gibt es ein Angebot, erscheint einmal je App-Start
 //   ein Hinweis (Notice) mit „Aktualisieren“ und „Was ist neu“, für dieselbe Version höchstens alle 12 h. Läuft eine neue
@@ -63,7 +64,8 @@ module.exports = function (ctx) {
   const EINSTELLUNG = [".obsidian/app.json", ".obsidian/bookmarks.json", ".obsidian/community-plugins.json",
     ".obsidian/core-plugins.json", ".obsidian/hotkeys.json", ".obsidian/types.json"];
   // Persönliche Felder der Modulnotizen (bleiben beim Update immer): wie pruefen.py (Vorlage leer) und docs/architektur.md
-  const PERSOENLICH = ["status", "ergebnis", "versuch", "klausur", "semester_geplant", "gewaehlt", "anrechnung", "zusatz"];
+  const PERSOENLICH = ["status", "ergebnis", "versuch", "klausur", "semester_geplant", "gewaehlt", "anrechnung", "zusatz",
+    "alma_ausgeblendet", "anmeldung_verzicht"];
   const VEREINIGEN = ["tags", "aliases", "cssclasses"]; // Listen: neue Einträge + deine zusätzlichen
   const G = { dateien: 3000, datei: 4194304, gesamt: 41943040, liste: 2097152, pfad: 300, parallel: 4 };
   const HEX = /^[0-9a-f]{64}$/;
@@ -472,7 +474,8 @@ module.exports = function (ctx) {
     const brauchen = schritte.filter((s) => LADEN[s.art]);
     const geladen = {};
     let fertig = 0;
-    melden(`Lade 0 von ${brauchen.length} Dateien …`);
+    const dateien = brauchen.length === 1 ? "Datei" : "Dateien";
+    melden(`Lade 0 von ${brauchen.length} ${dateien} …`);
     try {
       await parallel(brauchen, G.parallel, async (s) => {
         let by;
@@ -480,7 +483,7 @@ module.exports = function (ctx) {
         if (by.length !== s.eintrag.groesse || (await sha256(by)) !== s.eintrag.sha256) throw fehlerArt("pruefsumme", "Prüfsumme stimmt nicht: " + s.pfad);
         geladen[s.pfad] = by;
         fertig++;
-        melden(`Lade ${fertig} von ${brauchen.length} Dateien …`);
+        melden(`Lade ${fertig} von ${brauchen.length} ${dateien} …`);
       });
     } catch (e) { return fehler(e.art || "netz", (e && e.message) || String(e)); }
 
@@ -854,7 +857,7 @@ module.exports = function (ctx) {
     d.createEl("summary", { text: "Mehr erfahren" });
     d.createEl("p", { text: "Hast du eine Seite selbst geändert, bleibt deine Fassung. Hat sich die Seite geändert, liegt die neue daneben." });
     d.createEl("p", { text: "Darstellung und Programmteile kommen immer neu. Hattest du sie geändert, liegt deine Fassung als Sicherung daneben." });
-    d.createEl("p", { text: "Auf deinen anderen Geräten kommt das Update von selbst. Dort musst du nichts tun." });
+    d.createEl("p", { text: "Auf deinen anderen Geräten kommt das Update von selbst. Dort tippst du höchstens einmal auf „Neu laden“ oben auf dem Dashboard." });
     // Knöpfe wie im Fenster „Was ist neu“: PC und iPad nebeneinander, „Aktualisieren“ rechts; iPhone untereinander, oben
     const k = c.createDiv({ cls: "modal-button-container" });
     const ab = k.createEl("button", { text: "Später" });
@@ -896,7 +899,7 @@ module.exports = function (ctx) {
       if (b.behalten.length) text("Diese Seiten gibt es in der neuen Version nicht mehr. Du hattest sie geändert, darum bleiben sie: " + b.behalten.map(name).join(", ") + ".");
       if (b.plugin && !b.neuGeladen) text("Bitte Obsidian einmal schließen und wieder öffnen.");
       else if (b.einstellungen.length) text("Einstellungen wurden ergänzt. Sie wirken nach dem nächsten Öffnen von Obsidian.");
-      text("Auf deinen anderen Geräten kommt das Update von selbst. Dort musst du nichts tun.", "eba-modal-hinweis");
+      text("Auf deinen anderen Geräten kommt das Update von selbst. " + (b.plugin ? "Dort einmal auf „Neu laden“ oben auf dem Dashboard tippen." : "Dort musst du nichts tun."), "eba-modal-hinweis");
       if (b.sicherung) text(`Die Sicherung liegt im versteckten Ordner „${b.sicherung}“ in deinem Tresor. Am PC oder Mac kannst du ihn öffnen.`, "eba-modal-hinweis");
     }
     // Reihenfolge wie im Fenster vor dem Update: Hauptknopf zuletzt (PC/iPad rechts, iPhone oben)
@@ -1234,7 +1237,10 @@ module.exports = function (ctx) {
     // Reparatur nach einem Update (heilen): 30 s nach dem Laden (Sync und Hot-Reload zuerst) und nach jeder neuen installiert.json
     const reparatur = ctx.entprellen(() => { heilen(false).catch((e) => console.error("update: Reparatur", e)); }, 30000);
     reparatur();
-    for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => { if (f && f.path === INSTALLIERT) { bald(); reparatur(); } });
+    // Neue installiert.json über den Sync (Update auf einem anderen Gerät): eine Minute keine „Aktualisiert: …“-Hinweise für die
+    // Skripte, die mit ihr kommen; die Zeile „Version … ist da. Einmal neu laden.“ sagt es einmal (Kern: stillBis)
+    const syncStill = () => { if (!zustand.laeuft) { const p = plugin(); p.stillBis = Math.max(Number(p.stillBis) || 0, Date.now() + 60000); } };
+    for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => { if (f && f.path === INSTALLIERT) { syncStill(); bald(); reparatur(); } });
     // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
     // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund
     // zählt wie ein neuer App-Start (Hinweis darf wieder erscheinen; der Abstand von 12 h je Version gilt weiter).

@@ -55,7 +55,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > >
 > > - **Bereiche-Menü:** Raster-Symbol (vier Kästchen) tippen: am PC rechts im Seitenkopf, auf iPhone und iPad oben in der Leiste jeder Notiz.
 > > - **Vorlagen:** Jeder Knopf legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
-> > - <kbd>Esc</kbd> überspringt eine Frage; in der ersten bricht es ab. Datum als „15.10.“ oder „15.10.2026“, gern mit Uhrzeit.
+> > - <kbd>Esc</kbd> bricht das Anlegen ab, es entsteht nichts. Leer bestätigen nimmt den Vorschlag. Datum als „15.10.“ oder „15.10.2026“, gern mit Uhrzeit.
 >
 > > [!eba-karte|hilfe|vorlesung]- Vorlesung <span class="eba-zeile-unter">Mitschreiben, nacharbeiten</span>
 > > > [!eba-raster|2]
@@ -67,16 +67,16 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > >
 > > > > [!eba-regel] Nacharbeiten
 > > > > - Abends **Kernaussagen** ergänzen und offene Fragen klären.
-> > > > - Dann **nachgearbeitet** anhaken (Eigenschaft oder Tabelle „Nachzuarbeiten“ auf dem Dashboard).
+> > > > - Dann oben in der Notiz auf **Nacharbeit offen** tippen, daraus wird **Nachgearbeitet**. Oder das Kästchen unter „Nachzuarbeiten“ auf dem Dashboard anhaken.
 > > > > - Handschrift auf den Folien: Abschnitt „Unterlagen“ unten, „Mit dem Stift annotieren“.
 > > > > - **Seitenlink aufs iPad legen (einmal):** Einstellungen → *Werkzeugleiste für Mobilgeräte* → „Studium Autopilot: Seitenlink auf die Folien einfügen“ hinzufügen.
 >
-> > [!eba-karte|hilfe|alltag]- Im Alltag <span class="eba-zeile-unter">Tabellen, Fragen, Markieren</span>
+> > [!eba-karte|hilfe|alltag]- Im Alltag <span class="eba-zeile-unter">Modulstatus, Fragen, Markieren</span>
 > > > [!eba-raster|2]
-> > > > [!eba-tabelle] Tabellen bearbeiten
-> > > > - **Doppelklick** auf eine Zelle, Wert eingeben, <kbd>Enter</kbd>. Ein einfacher Klick setzt nur den Cursor. Auf iPad und iPhone: Zelle antippen.
-> > > > - **Status:** offen · läuft · angemeldet · bestanden · nicht bestanden · anerkannt. **Note** mit Komma, z. B. `1,7`.
-> > > > - Oben links in einer Tabelle wechselst du die **Ansicht**.
+> > > > [!eba-karte] Status und Note eines Moduls
+> > > > - Auf der Modulseite unter **Status** auf den Knopf tippen (z. B. **Offen**) und wählen: offen · läuft · angemeldet · bestanden · nicht bestanden · anerkannt.
+> > > > - Bei **bestanden** und **nicht bestanden** fragt ein Fenster nach der Note (mit Komma, z. B. `1,7`). Im selben Menü: **Note eintragen …**, Versuch und **Semester planen …**.
+> > > > - Tabellen und Listen zeigen nur an. Ändern geht in der Notiz selbst, Kästchen wie „Nachgearbeitet“ kannst du direkt anhaken.
 > > >
 > > > > [!eba-fragen] Fragen und To-dos
 > > > > - Zeile schreiben, <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>L</kbd> macht daraus eine Aufgabe (iPhone/iPad: Kästchen-Symbol in der Leiste über der Tastatur).
@@ -160,7 +160,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > >
 > > > > [!eba-info] Unterschiede je Gerät
 > > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>.
-> > > > - **iPad/iPhone:** Tabellenzellen **antippen** statt Doppelklick, Aufgaben über das Kästchen-Symbol über der Tastatur, breite Tabellen seitlich wischen.
+> > > > - **iPad/iPhone:** Aufgaben über das Kästchen-Symbol über der Tastatur. Tabellen stehen auf dem iPhone als Liste untereinander, auf dem iPad breite Tabellen seitlich wischen.
 > >
 > > > [!eba-achtung] Bitte nicht umbenennen
 > > > `System/Einstellungen.md` und die Seiten in `Studium/` (vor allem Noten & ECTS, Prüfungen, Stundenplan, Unterlagen) nicht umbenennen. Das Feld **uebersicht** in Notizen bitte stehen lassen.

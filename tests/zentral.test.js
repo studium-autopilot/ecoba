@@ -470,12 +470,19 @@ test("Ein Schreiber: dieses Gerät schreibt für alle, wenn es Abrufer ist, es n
 // ---------- Übergabe nach id: Notizen eines eigenen Uni-Abgleichs (abgleich_id, docs/daten-v1.md) – nur ausgedachte Daten ----------
 
 // Tresor im Speicher für einen ganzen Abruf: Pfad → Datei, Frontmatter wie der metadataCache (stundenplan-attrappe.js)
-function tresorAbruf(start) {
+function tresorAbruf(start, mehr) {
   const crypto = require("node:crypto");
   const { frontmatter } = require("./stundenplan-attrappe.js");
   const speicher = {}, quelle = {};
+  // haken.holen(name): vor jeder geholten Datei (z. B. ein anderes Gerät übernimmt mitten im Abruf); hinweise: Texte der Notices
+  const haken = {}, hinweise = [], geschrieben = [];
   const L = laden("zentral", {
-    kontext: { plugin: { testZentralAus: true, testQuelle: async (n) => quelle[n] }, modell: { daten: () => ({ module: [], fachsemester: 1 }) } },
+    kontext: {
+      plugin: { testZentralAus: true, testQuelle: async (n) => { if (haken.holen) haken.holen(n); return quelle[n]; } },
+      modell: { daten: () => ({ module: [], fachsemester: 1 }) },
+      obsidian: { Notice: class { constructor(t) { hinweise.push(String(t)); } } },
+      ...mehr,
+    },
   });
   const app = L.ctx.app;
   app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
@@ -486,14 +493,16 @@ function tresorAbruf(start) {
   app.vault.getAbstractFileByPath = (p) => dateien.get(p) || (ordner.has(p) ? { path: p } : null);
   app.vault.getMarkdownFiles = () => Array.from(dateien.values()).filter((f) => f.path.endsWith(".md"));
   app.vault.read = async (f) => f.text;
-  app.vault.modify = async (f, t) => { f.text = t; };
-  app.vault.create = async (p, t) => { if (dateien.has(p)) throw new Error("gibt es schon: " + p); return neueDatei(p, t); };
+  app.vault.modify = async (f, t) => { geschrieben.push(f.path); f.text = t; };
+  app.vault.create = async (p, t) => { if (dateien.has(p)) throw new Error("gibt es schon: " + p); geschrieben.push(p); return neueDatei(p, t); };
   app.vault.createFolder = async (p) => { ordner.add(p); };
   app.vault.trash = async (f) => { dateien.delete(f.path); papierkorb.push(f.path); };
   app.fileManager = { renameFile: async (f, ziel) => {
     if (dateien.has(ziel)) throw new Error("gibt es schon: " + ziel);
     dateien.delete(f.path); f.path = ziel; f.basename = ziel.split("/").pop().replace(/\.md$/, ""); dateien.set(ziel, f);
-  } };
+  },
+  // nur „erledigt“ (Doppel zusammenführen)
+  processFrontMatter: async (f, fn) => { const fm = frontmatter(f.text); fn(fm); geschrieben.push(f.path); f.text = f.text.replace(/^erledigt: .*$/m, "erledigt: " + fm.erledigt); } };
   app.metadataCache.getFileCache = (f) => {
     const x = f && dateien.get(f.path);
     const fm = x && x.path.endsWith(".md") ? frontmatter(x.text) : null;
@@ -506,7 +515,7 @@ function tresorAbruf(start) {
       dateien: { "termine.json": { sha256: crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length } } });
   };
   return {
-    Z: L.ctx.zentral, daten, papierkorb,
+    Z: L.ctx.zentral, daten, papierkorb, haken, hinweise, geschrieben,
     text: (p) => (dateien.get(p) ? dateien.get(p).text : null),
     fm: (p) => frontmatter(dateien.get(p).text),
     pfade: () => Array.from(dateien.keys()).filter((p) => p.startsWith("Termine/")).sort(),
@@ -524,6 +533,31 @@ const abgleichNotiz = (id, datum, titel, o = {}) => [
 ].concat(o.eigen ? [o.eigen] : []).concat(["---", "", `# ${titel}`, "", "Text aus dem eigenen Abgleich.", ""])
   .concat(o.meine ? ["## Meine Notizen", "", o.meine, ""] : []).join("\n");
 const zentraleNotiz = (id, datum, titel) => Z.notizText("", termin({ id, datum, titel, kategorie: "Veranstaltung" }), {});
+
+test("Doppel einer id (Konfliktkopie, Sync-Verzug): zusammengeführt wie termine-sync.py, erledigt gewinnt, deine Zeilen bleiben", async () => {
+  const id = "2026-11-03-bewerbungsfrist-stipendium";
+  const T = tresorAbruf();
+  T.daten([termin({ id, titel: "Bewerbungsfrist Stipendium", datum: "2026-11-03", kategorie: "Frist" })]);
+  await T.Z.abrufen({});
+  const pfad = "Termine/2026-11-03 Bewerbungsfrist Stipendium.md", kopie = "Termine/2026-11-03 Bewerbungsfrist Stipendium 2.md";
+  assert.match(T.text(pfad), /^erledigt: false$/m);
+  T.schreiben(kopie, T.text(pfad).replace("erledigt: false", "erledigt: true").replace("## Meine Notizen\n", "## Meine Notizen\n\nUnterlagen bis Freitag.\n"));
+  const b = await T.Z.abrufen({ manuell: true });
+  assert.equal(b.doppel, 1);
+  assert.deepEqual(T.papierkorb, [kopie]);
+  assert.deepEqual(T.pfade(), [pfad]);
+  assert.equal(T.fm(pfad).erledigt, true, "erledigt gewinnt");
+  assert.match(T.text(pfad), /## Meine Notizen\n\nUnterlagen bis Freitag\.\n/);
+  // Quellen-Vertrag: gemeinsame Form; ein Fehler bleibt mit Satz und Zeit, geprueft ist der letzte Erfolg
+  const ok = T.Z.status();
+  assert.deepEqual([ok.zustand, ok.fehler, ok.warnungen], ["an", "", []]);
+  assert.ok(ok.geprueft);
+  T.haken.holen = () => { throw new Error("offline"); };
+  await T.Z.abrufen({});
+  const s = T.Z.status();
+  assert.deepEqual([s.zustand, s.fehler, s.geprueft], ["fehler", "Keine Verbindung zu den zentralen Daten.", ok.geprueft]);
+  assert.ok(s.fehlerZeit);
+});
 
 test("Übergabe nach id: eine Notiz des eigenen Abgleichs wird übernommen, nicht verdoppelt und nicht als gelöscht gewertet", async () => {
   const id = "2026-11-03-bewerbungsfrist-stipendium";
@@ -593,4 +627,113 @@ test("Übergabe nach id: neues Datum benennt um; gefilterte, nicht veröffentlic
   assert.equal(T.fm("Termine/2026-11-07 Vortrag.md").herkunft, "zentral");
   assert.deepEqual(T.papierkorb, []);
   assert.equal(T.pfade().length, 5, "keine neue Notiz");
+});
+
+// ---------- Abrufer-Wechsel: „Jetzt aktualisieren“ übernimmt auf jedem Gerät (wie „Hier laden“ bei ILIAS) ----------
+
+const ABRUF = "System/Daten/abruf.json";
+const MIN = 60e3;
+// abruf.json eines anderen Geräts, das vor min Minuten zuletzt abgerufen hat
+const fremdeSperre = (T, min, angewendet) => T.schreiben(ABRUF, JSON.stringify({ geraet: "g-anderes", seit: new Date(Date.now() - 180 * MIN).toISOString(),
+  zuletzt: new Date(Date.now() - min * MIN).toISOString(), angewendet: angewendet || {} }, null, 1) + "\n");
+const sperreVon = (T) => JSON.parse(T.text(ABRUF));
+const fristA = termin({ id: "2026-11-02-frist-a", titel: "Frist A", datum: "2026-11-02", kategorie: "Frist" });
+const fristB = termin({ id: "2026-11-03-frist-b", titel: "Frist B", datum: "2026-11-03", kategorie: "Frist" });
+const fristC = termin({ id: "2026-11-04-frist-c", titel: "Frist C", datum: "2026-11-04", kategorie: "Frist" });
+const GERADE_ANDERS = "Zentrale Daten: gerade auf einem anderen Gerät aktualisiert, deine Notizen kommen per Sync.";
+
+test("Abrufer-Wechsel: „Jetzt aktualisieren“ übernimmt nach 54 Min., schreibt abruf.json vor den Notizen, „angewendet“ bleibt", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA, fristB]);
+  await T.Z.abrufen({});
+  const angewendet = T.angewendet();
+  T.loeschen("Termine/2026-11-03 Frist B.md"); // von dir gelöscht
+  fremdeSperre(T, 54, angewendet); // das andere Gerät war zuletzt Abrufer
+  T.daten([fristA, fristB, fristC]);
+  T.geschrieben.length = 0;
+  // automatisch wie bisher: das andere Gerät bleibt Abrufer
+  assert.equal((await T.Z.abrufen({})).art, "anderes-geraet");
+  assert.deepEqual(T.geschrieben, []);
+  // von Hand: dieses Gerät übernimmt
+  const b = await T.Z.abrufen({ manuell: true });
+  assert.equal(b.art, "ok");
+  assert.equal(T.geschrieben[0], ABRUF, "abruf.json mit diesem Gerät vor der ersten Notiz");
+  assert.deepEqual(b.angelegt, ["Termine/2026-11-04 Frist C.md"]);
+  assert.deepEqual(b.ausgeblendet, [fristB.id], "gelöschte Notiz kommt nicht zurück: „angewendet“ übernommen");
+  const s = sperreVon(T);
+  assert.equal(s.geraet, T.Z.geraetId());
+  assert.ok(Date.now() - Date.parse(s.zuletzt) < MIN);
+  assert.deepEqual(Object.keys(s.angewendet).sort(), [fristA.id, fristB.id, fristC.id]);
+  assert.deepEqual(T.hinweise, ["Zentrale Daten aktualisiert: 1 Eintrag geändert."]);
+  assert.equal(T.Z.stand().abrufer, true);
+});
+
+test("Abrufer-Wechsel: unter 2 Min. nach dem anderen Gerät übernimmt auch „Jetzt aktualisieren“ nicht", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA]);
+  fremdeSperre(T, 1);
+  const vorher = T.text(ABRUF);
+  assert.equal((await T.Z.abrufen({ manuell: true })).art, "anderes-geraet");
+  assert.deepEqual(T.geschrieben, []);
+  assert.equal(T.text(ABRUF), vorher);
+  assert.deepEqual(T.hinweise, [GERADE_ANDERS]);
+  fremdeSperre(T, 3);
+  assert.equal((await T.Z.abrufen({ manuell: true })).art, "ok");
+  assert.equal(sperreVon(T).geraet, T.Z.geraetId());
+});
+
+test("Abrufer-Wechsel: automatisch wie bisher erst nach 80 Min. Stille, ohne Hinweis", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA]);
+  fremdeSperre(T, 79);
+  assert.equal((await T.Z.abrufen({})).art, "anderes-geraet");
+  assert.deepEqual(T.geschrieben, []);
+  fremdeSperre(T, 81);
+  assert.equal((await T.Z.abrufen({})).art, "ok");
+  assert.equal(sperreVon(T).geraet, T.Z.geraetId());
+  assert.deepEqual(T.hinweise, []);
+});
+
+test("Abrufer-Wechsel: wer schreiben will, liest abruf.json direkt davor neu und weicht einem Gerät, das inzwischen übernommen hat", async () => {
+  // bisheriger Abrufer, automatischer Lauf: ein anderes Gerät übernimmt, während dieses die Termine holt
+  const T = tresorAbruf();
+  T.daten([fristA]);
+  await T.Z.abrufen({});
+  T.daten([fristA, fristC]);
+  T.haken.holen = (n) => { if (n === "termine.json") fremdeSperre(T, 0, T.angewendet()); };
+  T.geschrieben.length = 0;
+  assert.equal((await T.Z.abrufen({})).art, "anderes-geraet");
+  assert.deepEqual(T.geschrieben, [], "keine Notiz, abruf.json bleibt beim anderen Gerät");
+  assert.equal(sperreVon(T).geraet, "g-anderes");
+  assert.equal(T.Z.stand().abrufer, false);
+  // von Hand: Ruft das andere Gerät ab, während dieses übernehmen will, weicht dieses
+  const U = tresorAbruf();
+  U.daten([fristA]);
+  fremdeSperre(U, 30);
+  U.haken.holen = (n) => { if (n === "termine.json") fremdeSperre(U, 0); };
+  assert.equal((await U.Z.abrufen({ manuell: true })).art, "anderes-geraet");
+  assert.deepEqual(U.geschrieben, []);
+  assert.deepEqual(U.hinweise, [GERADE_ANDERS]);
+});
+
+test("Dateinamen nach einer Regel (eba.dateiTitel): Emojis weg, auch in alten Namen ohne neues Datum; kürzere Namen bleiben", async () => {
+  const EBA = require("../Studium Autopilot/System/Skripte/eba.js");
+  const ZE = laden("zentral", { kontext: { user: { eba: EBA } } }).ctx.zentral;
+  assert.equal(EBA.dateiTitel("Lerngruppe 👨‍👩‍👧 ☕️ heute 🇩🇪 1️⃣"), "Lerngruppe heute 1");
+  assert.equal(EBA.dateiTitel("UB-Kurs: Zotero. "), "UB-Kurs – Zotero", "gleiche Regel wie bisher für Termine");
+  assert.equal(ZE.dateiName("2026-11-08", "Kneipentour 😍 und Semester Opening"), "2026-11-08 Kneipentour und Semester Opening");
+  assert.equal(ZE.neuerName("2026-11-08 Kneipentour 😍 und Semester Opening", "2026-11-08", "Kneipentour und Semester Opening"), "2026-11-08 Kneipentour und Semester Opening");
+  assert.equal(ZE.neuerName("2026-11-08 Dies Universitatis", "2026-11-08", "Dies Universitatis – Semestereröffnung der Uni"), "", "bewusst kürzerer Name bleibt");
+  assert.equal(ZE.neuerName("2026-11-08 Vortrag 2", "2026-11-08", "Vortrag"), "", "Zähler bleibt");
+  assert.equal(ZE.neuerName("2026-11-08 Vortrag", "2026-11-09", "Vortrag"), "2026-11-09 Vortrag", "neues Datum: nach Datum und Titel");
+
+  const id = "2026-11-08-kneipentour-und-semester-opening";
+  const alt = "Termine/2026-11-08 Kneipentour 😍 und Semester Opening.md";
+  const T = tresorAbruf({ [alt]: zentraleNotiz(id, "2026-11-08", "Kneipentour und Semester Opening") }, { user: { eba: EBA } });
+  T.daten([termin({ id, titel: "Kneipentour und Semester Opening", datum: "2026-11-08", kategorie: "Veranstaltung" })]);
+  const b = await T.Z.abrufen({});
+  assert.deepEqual(b.umbenannt, [alt + " → Termine/2026-11-08 Kneipentour und Semester Opening.md"]);
+  assert.deepEqual(T.pfade(), ["Termine/2026-11-08 Kneipentour und Semester Opening.md"]);
+  const b2 = await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(b2.umbenannt, [], "danach kein Umbenennen mehr");
 });

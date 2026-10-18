@@ -105,9 +105,7 @@ cssclasses:
 
 ## Offizielle Dokumente
 
-> [!eba-tabelle]- Offizielle Dokumente
-> Ordnungen, Modulhandbuch und Termine, auf die sich die Angaben im Tresor stützen.
->
+> [!eba-tabelle]- Ordnungen, Modulhandbücher und Termine
 > | Dokument | Stand | Wofür im Tresor |
 > | --- | --- | --- |
 > | [Studien- und Prüfungsordnung EcoBA, Besonderer Teil (PO 2023)](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/downloads/) | AmtlBek 24/2023, 05.10.2023 | Varianten, Module, Orientierungsprüfung, Gesamtnote, Bachelorarbeit |

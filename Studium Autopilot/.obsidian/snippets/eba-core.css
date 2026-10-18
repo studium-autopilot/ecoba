@@ -44,7 +44,7 @@ body {
 /* ---------- 2. Typografie im ganzen Vault ---------- */
 .markdown-rendered,
 .markdown-source-view.mod-cm6 {
-  font-feature-settings: "cv11", "ss01", "tnum" 0;
+  font-feature-settings: "cv11", "ss01"; /* nie "tnum" 0 hier: vererbt hebt es jedes tabular-nums auf */
   --h1-weight: var(--eba-display-weight);
   --h2-weight: var(--eba-display-weight);
   --h3-weight: 600;
@@ -95,15 +95,26 @@ body {
 }
 .markdown-rendered tbody tr:hover td { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
 
-/* Standard-Callouts in normalen Notizen: flach und einheitlich */
+/* Standard-Callouts in normalen Notizen: flach und einheitlich, in den Statusfarben des Designs (docs/design.md „Farben“)
+   statt Obsidians Blau und Orange. Obsidian (ab 1.14) führt --callout-color als ganze Farbe (#ec7500), nicht mehr als
+   „r, g, b“: rgb(var(--callout-color)) war ungültig, Rahmen und Fläche fehlten bis 18.10.2026. Eigene Typen (Snippets der
+   Nutzer:innen) behalten ihre Farbe. */
 .callout {
   --callout-radius: var(--eba-radius);
   --callout-padding: 12px 16px;
   --callout-title-weight: 600;
   mix-blend-mode: normal;
-  border: 1px solid color-mix(in srgb, rgb(var(--callout-color)) 26%, transparent);
-  background: color-mix(in srgb, rgb(var(--callout-color)) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--callout-color) 26%, transparent);
+  background: color-mix(in srgb, var(--callout-color) 6%, transparent);
 }
+.callout:is([data-callout="note"], [data-callout="info"], [data-callout="todo"], [data-callout="abstract"], [data-callout="summary"],
+  [data-callout="tldr"], [data-callout="tip"], [data-callout="hint"], [data-callout="important"], [data-callout="question"],
+  [data-callout="help"], [data-callout="faq"], [data-callout="example"]) { --callout-color: var(--eba-info); }
+.callout:is([data-callout="success"], [data-callout="check"], [data-callout="done"]) { --callout-color: var(--eba-good); }
+.callout:is([data-callout="warning"], [data-callout="caution"], [data-callout="attention"]) { --callout-color: var(--eba-warn); }
+.callout:is([data-callout="failure"], [data-callout="fail"], [data-callout="missing"], [data-callout="danger"], [data-callout="error"],
+  [data-callout="bug"]) { --callout-color: var(--eba-bad); }
+.callout:is([data-callout="quote"], [data-callout="cite"]) { --callout-color: var(--eba-muted); }
 
 /* ---------- 3. Dashboard-Seiten (cssclasses: eba) ---------- */
 .eba {
@@ -223,6 +234,10 @@ body {
 .callout[data-callout^="eba-"] > .callout-title .callout-icon { color: var(--eba-accent-text); }
 .callout[data-callout^="eba-"] > .callout-title .callout-icon .svg-icon { width: 14px; height: 14px; stroke-width: 2; }
 .callout[data-callout^="eba-"] > .callout-title .callout-fold { color: var(--eba-faint); }
+/* Klapp-Pfeil rechts in der Titelzeile, auf allen Geräten und in allen Notizen (Designsprache: wie Verbindungen und Hilfe;
+   seit 18.10.2026, vorher nur auf dem iPhone, am iPad und PC direkt hinter dem Label „REGELN ›“). */
+.callout[data-callout^="eba-"] > .callout-title .callout-fold,
+.callout.is-collapsible > .callout-title .callout-fold { margin-left: auto; }
 .callout[data-callout^="eba-"] > .callout-content { padding: 0; }
 .callout[data-callout^="eba-"] > .callout-content > :first-child { margin-top: 0; }
 .callout[data-callout^="eba-"] > .callout-content > :last-child { margin-bottom: 0; }
@@ -231,25 +246,16 @@ body {
 .callout[data-callout^="eba-"] li { margin: 0.2em 0; }
 .callout[data-callout^="eba-"] strong { color: var(--eba-text); font-weight: 600; }
 
-/* Symbole je Kartentyp (Obsidian-eigene Lucide-Icons) */
-.callout[data-callout="eba-karte"]     { --callout-icon: lucide-square; }
-.callout[data-callout="eba-info"]      { --callout-icon: lucide-info; }
-.callout[data-callout="eba-regel"]     { --callout-icon: lucide-scale; }
+/* Symbole nur, wo sie etwas sagen, das der Titel nicht sagt (18.10.2026: ein Symbol, das nur schmückt, „sieht aus wie von
+   der Stange und bedeutet nichts“). Typ-Marken, die beim Überfliegen helfen, bleiben: Ort und Kontakt (Titel sind Namen),
+   Achtung, und die Themen der Hilfe (je Zeile ein eigenes rundes Symbol, Abschnitt 43). Alle übrigen Karten zeigen nur ihren
+   Titel, bündig wie ohne Symbol (vorher Blatt, Tabelle, Waage, Kalender, Fragezeichen … und bis 18.10.2026 ein Quadrat).
+   Auch Karten, die ein Skript zeichnet (Bitte prüfen), folgen der Regel. */
+.callout[data-callout^="eba-"]:not([data-callout="eba-ort"], [data-callout="eba-kontakt"], [data-callout="eba-achtung"], [data-callout-metadata*="hilfe"]) > .callout-title > .callout-icon { display: none; }
 .callout[data-callout="eba-achtung"]   { --callout-icon: lucide-triangle-alert; }
-.callout[data-callout="eba-termin"]    { --callout-icon: lucide-calendar; }
 .callout[data-callout="eba-kontakt"]   { --callout-icon: lucide-user-round; }
 .callout[data-callout="eba-ort"]       { --callout-icon: lucide-map-pin; }
-.callout[data-callout="eba-quelle"]    { --callout-icon: lucide-file-text; }
-.callout[data-callout="eba-tabelle"]   { --callout-icon: lucide-table-2; }
-.callout[data-callout="eba-fragen"]    { --callout-icon: lucide-circle-help; }
-.callout[data-callout="eba-todo"]      { --callout-icon: lucide-list-checks; }
-.callout[data-callout="eba-neu"]       { --callout-icon: lucide-plus; }
-.callout[data-callout="eba-links"]     { --callout-icon: lucide-link; }
-.callout[data-callout="eba-ziel"]      { --callout-icon: lucide-target; }
-.callout[data-callout="eba-rechner"]   { --callout-icon: lucide-calculator; }
-/* Hilfe-Karten (Einstellungen & Hilfe, > [!eba-karte|hilfe|<thema>]): das Quadrat wirkte wie ein Kästchen zum Abhaken. Buch für
-   Anleitungen, seit 17.10.2026 je Thema ein eigenes Symbol (Zeilen wie die Verbindungen, Abschnitt 43); Blatt für Karten darin.
-   (Die Checkliste |hilfe|liste ist seit 16.10.2026 entfernt.) */
+/* Hilfe (Einstellungen & Hilfe, > [!eba-zeilen] mit > > [!eba-karte|hilfe|<thema>]): je Thema ein eigenes Symbol */
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe"] { --callout-icon: lucide-book-open; }
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|bedienung"] { --callout-icon: lucide-mouse-pointer-click; }
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|vorlesung"] { --callout-icon: lucide-presentation; }
@@ -259,7 +265,6 @@ body {
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|aufbau"] { --callout-icon: lucide-folder-tree; }
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|geraete"] { --callout-icon: lucide-monitor-smartphone; }
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|stand"] { --callout-icon: lucide-info; }
-.callout[data-callout-metadata*="hilfe"] .callout[data-callout="eba-karte"] { --callout-icon: lucide-file-text; }
 
 /* Aufgaben „- [ ]“ in Karten: Obsidian zieht das Kästchen um 1,5 × --checkbox-size nach links (margin-inline-start), und
    .callout-content schneidet mit overflow:auto alles links von sich ab. Mit dem Karten-Einzug von 1,1em (17,6 px) blieb auf
@@ -957,7 +962,7 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
    In Begleitnotizen steht die eingebettete PDF in einem Callout mit „+“: beim Öffnen ausgeklappt, ein Tipp auf „PDF“
    klappt sie ein (z. B. wenn die PDF gerade in einer anderen App offen ist und man in Obsidian nur Notizen schreibt).
    Schlank gehalten, damit die PDF die Breite behält: kein Innenabstand, Titel als kleine Zeile mit Klapppfeil. */
-.callout[data-callout="eba-pdf"] { --callout-icon: lucide-file-text; padding: 8px 10px 10px; }
+.callout[data-callout="eba-pdf"] { padding: 8px 10px 10px; }
 .callout[data-callout="eba-pdf"] > .callout-title { margin: 0 0 8px; cursor: pointer; }
 .callout[data-callout="eba-pdf"].is-collapsed { padding-bottom: 8px; }
 .callout[data-callout="eba-pdf"].is-collapsed > .callout-title { margin-bottom: 0; }
@@ -1033,11 +1038,9 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   font-weight: 500;
   line-height: 1.4;
 }
-.callout[data-callout="eba-t"] > .callout-title > .callout-icon { display: none; }
 .callout[data-callout="eba-t"] > .callout-title .callout-title-inner { color: var(--eba-text); font-weight: 500; }
 .callout[data-callout="eba-t"] > .callout-title .callout-title-inner strong { font-variant-numeric: tabular-nums; margin-right: 4px; }
 .callout[data-callout="eba-t"] > .callout-title .eba-pill { margin-left: 6px; vertical-align: 1px; }
-.callout[data-callout="eba-t"] > .callout-title .callout-fold { margin-left: auto; color: var(--eba-faint); }
 .callout[data-callout="eba-t"] > .callout-content {
   padding: 0 12px 10px;
   color: var(--eba-muted);
@@ -1131,7 +1134,7 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 .callout[data-callout-metadata~="spalten"] ul { columns: 2; column-gap: 28px; }
 .callout[data-callout-metadata~="spalten"] li { break-inside: avoid; }
 @container (max-width: 420px) { .callout[data-callout-metadata~="spalten"] ul { columns: 1; } }
-.callout[data-callout="eba-bild"] { --callout-icon: lucide-image; padding: 12px; text-align: center; container-type: inline-size; }
+.callout[data-callout="eba-bild"] { padding: 12px; text-align: center; container-type: inline-size; }
 .callout[data-callout="eba-bild"] > .callout-title { display: none; }
 .callout[data-callout="eba-bild"] img { width: auto; max-width: 100%; max-height: 62vh; border-radius: 6px; }
 .callout[data-callout="eba-bild"] > .callout-content p { margin: 8px 0 0; font-size: 0.85em; line-height: 1.45; color: var(--eba-muted); }
@@ -1149,7 +1152,6 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 .eba .callout[data-callout="eba-termin"] .bases-view { --bases-table-row-height: 30px; }
 .eba .callout[data-callout="eba-termin"] .bases-tbody .bases-table-cell { align-items: center; }
 /* Formelsammlung in Folien-Notizen: > [!eba-formeln]- Formelsammlung, je Kapitel eine eingeklappte Karte */
-.callout[data-callout="eba-formeln"] { --callout-icon: lucide-sigma; }
 .callout[data-callout="eba-formeln"] > .callout-title { cursor: pointer; margin-bottom: 0; }
 .callout[data-callout="eba-formeln"]:not(.is-collapsed) > .callout-title { margin-bottom: 12px; }
 .callout[data-callout="eba-formeln"] .callout[data-callout="eba-karte"] { margin: 0 0 8px; padding: 10px 14px; }
@@ -1309,7 +1311,6 @@ body.is-phone .callout[data-callout-metadata*="handy-zu"]:not(.is-collapsed) > .
 body.is-phone .callout[data-callout-metadata*="handy-zu"].is-collapsed > .callout-content { display: block !important; height: auto !important; }
 body.is-phone .callout[data-callout-metadata*="handy-zu"]:not(.is-collapsed) > .callout-title { margin-bottom: 0 !important; }
 body.is-phone .callout[data-callout-metadata*="handy-zu"] > .callout-title { min-height: 22px; }
-body.is-phone .callout[data-callout-metadata*="handy-zu"] > .callout-title .callout-fold { margin-left: auto; }
 body.is-phone .callout[data-callout-metadata*="handy-zu"]:not(.is-collapsed) > .callout-title .callout-fold .svg-icon { transform: rotate(-90deg); }
 body.is-phone .callout[data-callout-metadata*="handy-zu"].is-collapsed > .callout-title .callout-fold .svg-icon { transform: none; }
 
@@ -1339,7 +1340,6 @@ body.is-phone .eba .callout[data-callout="eba-kennzahlen"] .bases-view { overflo
 body.is-phone .eba .eba-kachel .k { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; } /* Kachel-Titel umbrechen statt „…“ */
 /* Startseite: Programm-Zeile über dem Gruß ist reine Info und kostet auf dem iPhone zwei Zeilen */
 body.is-phone .eba .eba-pfad-start { display: none; }
-body.is-phone .eba .callout.is-collapsible > .callout-title .callout-fold { margin-left: auto; } /* Klapp-Pfeil immer rechts */
 /* Zugeklappte Karten schlank: nur Titelzeile (zu = „-“ mit .is-collapsed, oder handy-zu ohne .is-collapsed) */
 body.is-phone .eba .callout[data-callout^="eba-"].is-collapsed:not([data-callout-metadata*="handy-zu"]),
 body.is-phone .eba .callout[data-callout^="eba-"][data-callout-metadata*="handy-zu"]:not(.is-collapsed) { padding-top: 9px; padding-bottom: 9px; }
@@ -1392,9 +1392,6 @@ body.is-phone .markdown-source-view.is-live-preview.eba .cm-scroller { padding-b
    auf dem echten iPhone größer als alles andere, im Testfenster nicht. Feste Größen wie definiert. */
 body.is-phone, body.is-phone * { -webkit-text-size-adjust: 100% !important; text-size-adjust: 100% !important; }
 
-/* iPhone: das Quadrat-Symbol der Karten (eba-karte) wirkte wie ein leeres Kästchen zum Abhaken */
-body.is-phone .callout[data-callout="eba-karte"]:not([data-callout-metadata*="hilfe"]) { --callout-icon: lucide-file-text; } /* Hilfe: Symbol je Thema (Abschnitt 5) */
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-karte"] { --callout-icon: lucide-image; }
 
 /* Zugeklappte Karten (alle Geräte): kein Abstand unter dem Titel, nur die Titelzeile */
 .callout[data-callout^="eba-"].is-collapsed:not([data-callout-metadata*="handy-zu"]) > .callout-title { margin-bottom: 0; }
@@ -1572,7 +1569,6 @@ body.is-phone .eba-s-dashboard .eba-pfad-start { display: none; }
 
 /* Fristen · 30 Tage: klappbar und offen (> [!eba-termin|…]+), wie die Termine. Pfeil rechts und Titel ohne Abstand im zugeklappten Zustand wie bei Termine (handy-zu). */
 body.is-phone .eba-s-dashboard .callout[data-callout="eba-termin"].is-collapsible:not([data-callout-metadata*="handy-zu"]) > .callout-title { min-height: 22px; }
-body.is-phone .eba-s-dashboard .callout[data-callout="eba-termin"].is-collapsible:not([data-callout-metadata*="handy-zu"]) > .callout-title .callout-fold { margin-left: auto; }
 body.is-phone .eba-s-dashboard .callout[data-callout="eba-termin"].is-collapsible.is-collapsed:not([data-callout-metadata*="handy-zu"]) > .callout-title { margin-bottom: 0 !important; }
 
 /* Kopf der Kennzahlen: Gruß einzeilig in Titelgröße, Datum direkt darunter */
@@ -2081,9 +2077,6 @@ body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="re
 body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"] td { line-height: 1.35; vertical-align: top; }
 body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"] li > ol { margin: 0; padding-left: 0; list-style-position: inside; }
 body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"] li > ol::before { display: none; }
-/* Klapp-Pfeil der mit „-“ eingeklappten Karten (Regeln und Regeln darin) rechts wie bei handy-zu-Karten */
-body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"].is-collapsible > .callout-title .callout-fold,
-body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"] .callout.is-collapsible > .callout-title .callout-fold { margin-left: auto; }
 /* Bearbeitungsansicht (Live Preview): dort steht über „1. Wiederholung …“ eine leere Zeile (Aufzählungspunkt der äußeren
    Zeile bekommt eine eigene Zeile vor der Block-Liste). Innere Liste als inline-block in die erste Zeile holen, in beiden
    Ansichten gleich. */
@@ -2167,14 +2160,14 @@ body.is-phone .eba-s-stundenplan .eba-woche .eba-ev { padding: 4px 5px; }
    cssclasses auch an .markdown-source-view, daher gelten sie unverändert in der Bearbeitungsansicht (Live Preview). */
 
 /* --- 37.tabellen --- */
-/* Tabellen (alle Karten [!eba-tabelle] mit Bases-Tabellenansicht), nur iPhone.
+/* Tabellen (alle Karten [!eba-tabelle] mit Bases-Tabellenansicht) auf dem iPhone, auf iPad und PC seitenweise (unten).
    Seitliches Wischen fühlt sich auf dem iPhone nicht nativ an. Die Erweiterung System/Skripte/tabellen.js
    (Start.md Punkt 13) zeichnet jede Tabellenansicht als gestapelte Liste nach: Titel (14,5 px), darunter eine Metazeile
    („6 ECTS · offen · 06.02.27“), „Öffnen ↗“ rechts, Gruppen als kleines Label mit Summe, leere Tabellen nur „Leer.“.
    Die Daten kommen aus der Bases-Ansicht, nicht aus den Zellen (Obsidian zeichnet nur Spalten/Zeilen im Ausschnitt).
    Schalter ist die Variable --eba-tliste: nur wo sie 1 ist, legt das Skript die Liste an; dann blendet die Regel unten
-   Spaltenkopf, Zeilen und Summenzeile der Tabelle aus. Am PC/iPad (Variable nicht gesetzt) bleibt
-   die Tabelle. Gilt in Lese- und Bearbeitungsansicht (die Karte ist in beiden dieselbe Bases-Einbettung).
+   Spaltenkopf, Zeilen und Summenzeile der Tabelle aus. Am PC/iPad gilt sie nur auf den Seiten
+   unten, sonst bleibt die Tabelle. Gilt in Lese- und Bearbeitungsansicht (die Karte ist in beiden dieselbe Bases-Einbettung).
    Ausnahmen (eigene Lösung der Seite): Einstellungen (bearbeitbare Angaben), Modulseite „Mein Stand“; sonst per Karte
    [!eba-tabelle|…|handy-tabelle].
    Wie iOS-Listen: rechts Note („1,7“) bzw. Status-Chip (Spalte „Status“/„Stand“, Farbe aus dem Text),
@@ -2268,6 +2261,76 @@ body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .ca
 body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .callout) table:has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3)[data-eba-k]::before { content: attr(data-eba-k) " "; color: var(--eba-faint); }
 body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .callout) table:has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3):not(:empty) ~ td:nth-child(n+3):not(:empty)::before { content: "\00B7  " attr(data-eba-k) " "; }
 body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .callout) table:has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3):not(:empty) ~ td:nth-child(n+3):not(:empty) { margin-left: 5px; }
+
+/* iPad und PC (Designsprache: Zeilen statt Kästen, docs/design.md „Tabellen“): dieselbe Liste. Bis 18.10.2026 nur auf der
+   Modulseite (Abschnitt 58.6), seither Seite für Seite eingeschaltet (erste Regel): Noten & ECTS, Unterlagen, Stundenplan. Das Aussehen hängt nur an den Klassen der
+   Liste (.eba-tl…), die tabellen.js nur zeichnet, wo --eba-tliste: 1 gilt. Ausnahme: „Mein Stand“ der Modulseite. */
+body:not(.is-phone) :is(.eba-s-modul, .eba-s-noten, .eba-s-unterlagen, .eba-s-stundenplan) .callout[data-callout="eba-tabelle"] { --eba-tliste: 1; }
+body:not(.is-phone) .eba-s-modul .bases-view[data-view-name="Mein Stand"] { --eba-tliste: 0; }
+body:not(.is-phone) .bases-view:has(> .eba-tl) > :not(.eba-tl) { display: none !important; }
+body:not(.is-phone) .bases-view:has(> .eba-tl) { overflow: visible !important; height: auto !important; }
+body:not(.is-phone) .eba-tl { display: block; margin-top: 2px; font-size: 15px; line-height: 1.4; color: var(--eba-text); }
+body:not(.is-phone) .eba-tl-gruppe {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 8px;
+  margin: 20px 0 0;
+  padding: 0 0 7px;
+  border-bottom: 1px solid var(--eba-border-strong);
+  font-family: var(--font-interface);
+  font-size: var(--eba-label-size);
+  font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking);
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--eba-accent-text);
+}
+body:not(.is-phone) .eba-tl-gruppe:first-child { margin-top: 6px; }
+body:not(.is-phone) .eba-tl-gruppe :is(.eba-tl-gwert, .eba-tl-summe) { color: var(--eba-muted); }
+body:not(.is-phone) .eba-tl-gruppe .eba-tl-gwert::before { content: "·"; margin-right: 8px; color: var(--eba-faint); }
+body:not(.is-phone) .eba-tl-gruppe .eba-tl-gwert .eba-tl-k { color: inherit; margin-right: 4px; }
+body:not(.is-phone) .eba-tl-gruppe > :not(.eba-tl-summe) + .eba-tl-summe { margin-left: auto; }
+body:not(.is-phone) .eba-tl-gruppe .internal-link { color: inherit; text-decoration: none; }
+body:not(.is-phone) .eba-tl-zeile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 6px 10px 0;
+  cursor: pointer;
+}
+body:not(.is-phone) .eba-tl-zeile + .eba-tl-zeile { border-top: 1px solid var(--eba-border); }
+body:not(.is-phone) .eba-tl > .eba-tl-zeile:first-child { padding-top: 4px; }
+body:not(.is-phone) .eba-tl-zeile:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
+body:not(.is-phone) .eba-tl-text { flex: 1 1 auto; min-width: 0; }
+body:not(.is-phone) .eba-tl-titel { font-size: 15.5px; font-weight: 500; line-height: 1.35; color: var(--eba-text); overflow-wrap: anywhere; }
+body:not(.is-phone) .eba-tl-titel .internal-link { color: inherit; text-decoration: none; }
+body:not(.is-phone) .eba-tl-meta { display: flex; flex-wrap: wrap; align-items: baseline; margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
+body:not(.is-phone) .eba-tl-w { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+body:not(.is-phone) .eba-tl-w + .eba-tl-w::before { content: "·"; margin: 0 4px 0 8px; color: var(--eba-faint); }
+body:not(.is-phone) .eba-tl-k { color: var(--eba-faint); }
+body:not(.is-phone) .eba-tl-meta .internal-link { color: var(--eba-muted); text-decoration: none; }
+body:not(.is-phone) .eba-tl-meta .eba-pill { font-size: 11.5px; padding: 0 8px; line-height: 1.55; }
+body:not(.is-phone) .eba-tl-check { gap: 6px; align-items: center; cursor: pointer; }
+body:not(.is-phone) .eba-tl-check input { width: 15px; height: 15px; margin: 0; flex: none; }
+body:not(.is-phone) .eba-tl-ende { flex: none; display: flex; align-items: center; gap: 12px; max-width: 45%; }
+body:not(.is-phone) .eba-tl-ende .eba-pill { font-size: 12px; padding: 1px 9px; line-height: 1.5; white-space: nowrap; }
+body:not(.is-phone) .eba-tl-note { font-size: 18px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--eba-text); }
+body:not(.is-phone) .eba-tl-aktion { flex: none; font-size: 13.5px; white-space: nowrap; }
+body:not(.is-phone) .eba-tl-aktion a { color: var(--eba-muted); text-decoration: none; }
+body:not(.is-phone) .eba-tl-zeile:hover .eba-tl-aktion a { color: var(--eba-accent-text); }
+body:not(.is-phone) .eba-tl-nav::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin: 0 4px 0 -2px;
+  border-top: 1.5px solid var(--eba-faint);
+  border-right: 1.5px solid var(--eba-faint);
+  transform: rotate(45deg);
+}
+body:not(.is-phone) .eba-tl-leer { font-size: 14px; color: var(--eba-muted); }
+body:not(.is-phone) .eba-tl-fuss { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--eba-border); font-size: 12.5px; color: var(--eba-muted); }
 
 /* --- 37.tablet --- */
 /* iPad und PC (body:not(.is-phone)): Startseite so ruhig wie auf dem iPhone – kein breiter weißer Rand an den Seiten,
@@ -2538,8 +2601,7 @@ body .eba-s-termine .callout[data-callout="eba-regel"] {
   background: var(--eba-card-bg);
 }
 body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-title { margin: 0; gap: 6px; font-family: var(--font-interface); font-size: 14.5px; font-weight: 500; letter-spacing: normal; text-transform: none; color: var(--eba-text); }
-body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-title .callout-icon { display: none; }
-body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-title .callout-fold { margin-left: auto; color: var(--eba-muted); }
+body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-title .callout-fold { color: var(--eba-muted); }
 body .eba-s-termine .callout[data-callout="eba-regel"]:not(.is-collapsed) > .callout-title { margin-bottom: 8px; }
 body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-content { font-size: 13.5px; line-height: 1.5; color: var(--eba-muted); }
 body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-content strong { color: var(--eba-text); }
@@ -3596,6 +3658,9 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
 .eba-vb-symbol.ok { color: var(--eba-good); background: color-mix(in srgb, var(--eba-good) 13%, transparent); }
 .eba-vb-symbol.warn { color: var(--eba-warn); background: color-mix(in srgb, var(--eba-warn) 16%, transparent); }
 .eba-vb-symbol.akzent { color: var(--eba-accent-text); background: var(--eba-accent-soft); } /* Angabe eingetragen (personalisieren.js) */
+/* Variante: ohne Symbol (jede nicht gewählte Zeile hatte denselben Wegweiser; „gewählt“/„aktuell“ sagt die Pille). Regel: ein
+   Symbol nur, wo es etwas sagt, das der Titel nicht sagt (Abschnitt 5, seit 18.10.2026). */
+.eba-vb-liste:has(> .eba-vb[data-id="Economics"]) > .eba-vb > .eba-vb-symbol { display: none; }
 .eba-vb-text { flex: 1 1 240px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .eba-vb-text b { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .eba-vb-status { font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
@@ -3632,7 +3697,7 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
   flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-weight: 600;
 }
 .callout[data-callout="eba-zeilen"] .eba-zeile-unter { font-size: 13px; line-height: 1.45; font-weight: 400; color: var(--eba-muted); }
-.callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title .callout-fold { flex: none; margin-left: auto; padding: 0; color: var(--eba-faint); }
+.callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title .callout-fold { flex: none; padding: 0; color: var(--eba-faint); }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-content { padding: 2px 14px 16px 56px; }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-content .callout[data-callout="eba-raster"] { margin: 0; }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-content .callout[data-callout^="eba-"]:not([data-callout="eba-raster"]) {
@@ -4025,13 +4090,15 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 /* ---------- 50. Übungs- und Tutoriengruppen (gruppen.js, Codeblock eba-gruppen; seit 17.10.2026) ----------
    Je Modul und Art eine aufklappbare Karte (details.eba-gr-modul): Kopf mit Code, Titel und Anzahl bzw. „im Stundenplan“,
    darin Anmeldung, kompakte Tabelle und Quellenzeile. Zeilen deiner Gruppen (.eba-gr-dein) fett mit Akzentstrich. */
-.eba-gr { display: flex; flex-direction: column; gap: 6px; }
-.eba-gr-modul { border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); }
-.eba-gr-modul > summary { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; cursor: pointer; list-style: none; font-size: 14.5px; }
+/* Zeilenliste mit Rahmen (Designsprache „Zeilen statt Kästen“, seit 18.10.2026; vorher je Modul ein eigener Kasten mit Lücke) */
+.eba-gr { display: flex; flex-direction: column; }
+.eba-gr:has(> .eba-gr-modul) { border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); overflow: hidden; }
+.eba-gr-modul + .eba-gr-modul { border-top: 1px solid var(--eba-border); }
+.eba-gr-modul > summary { display: flex; justify-content: space-between; gap: 8px; padding: 12px 14px; cursor: pointer; list-style: none; font-size: 14.5px; }
 .eba-gr-modul > summary:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: -2px; border-radius: var(--eba-radius); }
 .eba-gr-modul > summary::-webkit-details-marker { display: none; }
 .eba-gr-zahl { color: var(--eba-muted); font-size: 12.5px; white-space: nowrap; }
-.eba-gr-inhalt { padding: 0 12px 10px; }
+.eba-gr-inhalt { padding: 0 14px 12px; }
 .eba-gr-anmeldung { margin: 0 0 6px !important; font-size: 13px; }
 .eba-gr-tabelle { width: 100%; border-collapse: collapse; font-size: 13px; margin: 0 !important; }
 .eba-gr-tabelle th { text-align: left; font-weight: 500; color: var(--eba-muted); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--eba-border); }
@@ -4313,16 +4380,24 @@ body.is-phone .eba-lk-filter select { flex: 1 1 30%; }
 body.is-phone .eba-lk-summe-text b { font-size: 1.2em; }
 /* Leseansicht einer Kartennotiz: jede Karte eine Zeile mit der Vorderseite, die Antwort (Lücken: die Lösung) erst beim
    Antippen oder mit „Antworten zeigen“ (.eba-lk-k-alle an der Ansicht). Abschnitte mit Karten setzt karten.js
-   (.eba-lk-k-abschnitt); der Rest einer Karte, die Obsidian in zwei Abschnitte teilt, ist leer (.eba-lk-k-weiter). */
-.eba-lk-k-abschnitt { display: flex; flex-direction: column; gap: 6px; margin: 0 0 6px; }
-.eba-lk-k-abschnitt.eba-lk-k-weiter { display: none; }
+   (.eba-lk-k-abschnitt); der Rest einer Karte, die Obsidian in zwei Abschnitte teilt, ist leer (.eba-lk-k-weiter) und auf
+   Höhe 0 gefaltet, nie display:none (Abschnitt der Leseansicht, sonst bleibt darunter alles leer; architektur.md).
+   Seit 18.10.2026 eine Zeilenliste mit Rahmen wie die Kartenliste (vorher je Karte ein Kasten mit Lücke): Jede Karte steht in
+   einem eigenen Abschnitt, darum Rahmen je Karte, um 1 px überlappend, Rundung nur oben an der ersten und unten an der
+   letzten Karte einer Folge. */
+.eba-lk-k-abschnitt { display: flex; flex-direction: column; margin: 0; }
+.eba-lk-k-abschnitt.eba-lk-k-weiter { display: block; height: 0; margin: 0; padding: 0; overflow: hidden; }
+.eba-lk-k + .eba-lk-k,
+.eba-lk-k-abschnitt + .eba-lk-k-abschnitt > .eba-lk-k:first-child { margin-top: -1px; }
+.eba-lk-k-abschnitt:not(.eba-lk-k-abschnitt + .eba-lk-k-abschnitt) > .eba-lk-k:first-child { border-top-left-radius: var(--eba-radius); border-top-right-radius: var(--eba-radius); }
+.eba-lk-k-abschnitt:not(:has(+ .eba-lk-k-abschnitt:not(.eba-lk-k-weiter))):not(:has(+ .eba-lk-k-weiter + .eba-lk-k-abschnitt)) > .eba-lk-k:last-child { border-bottom-left-radius: var(--eba-radius); border-bottom-right-radius: var(--eba-radius); }
 .eba-lk-k {
-  display: flex; align-items: flex-start; gap: 8px; box-sizing: border-box; padding: 10px 10px 10px 14px;
-  border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s); background: var(--eba-card-bg); color: var(--eba-text);
+  display: flex; align-items: flex-start; gap: 8px; box-sizing: border-box; padding: 12px 12px 12px 14px;
+  border: 1px solid var(--eba-border); border-radius: 0; background: var(--eba-card-bg); color: var(--eba-text);
   cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
-.eba-lk-k:hover { border-color: color-mix(in srgb, var(--eba-accent) 35%, var(--eba-border)); }
-.eba-lk-k:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
+.eba-lk-k:hover { background: color-mix(in srgb, var(--eba-text) 3%, var(--eba-card-bg)); }
+.eba-lk-k:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--eba-accent); outline-offset: 1px; }
 .eba-lk-k-inhalt { flex: 1 1 auto; min-width: 0; font-size: 15px; line-height: 1.5; overflow-wrap: anywhere; }
 .eba-lk-k-seite :is(p, ul, ol) { margin: 0; }
 .eba-lk-k-seite :is(p, ul, ol) + :is(p, ul, ol) { margin-top: 4px; }
@@ -4603,7 +4678,7 @@ body.is-phone .eba-sp-chip { min-height: 32px; padding: 0 10px; font-size: 13px;
 
 /* ---------- 57. Anmeldungen (termine.js, Codeblock eba-anmeldungen; seit 17.10.2026) ----------
    Seite Termine & Anmeldungen, Abschnitt „Anmeldungen“: Tabelle Was · Wann · Wo aus den zentralen Fristen, ohne Einzug.
-   Rangfolge Was (Link zur Termin-Notiz, halbfett) > Wann (Textfarbe) > Wo (gedämpft); „angemeldet · Gruppe 4“ als grüne Pille
+   Rangfolge Was (Link zur Termin-Notiz, halbfett) > Wann (Textfarbe) > Wo (gedämpft); „Gruppe 4“ als grüne Pille
    hinter Was. Seit höchstens 7 Tagen vorbei: gedämpft. Spaltenbreiten nur als Richtwert (kein festes Layout: im schmalen
    iPad-Fenster brächen sonst Wörter mitten durch). iPhone: jede Zeile ein kleiner Eintrag Was / Wann / Wo. */
 .eba-an-tabelle { width: 100%; margin: 0 !important; }
@@ -4855,72 +4930,7 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-h
 }
 body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-header-2 .cm-header-2 { font-size: inherit; font-family: inherit; font-weight: inherit; }
 
-/* --- 6. Tabellen als Liste (tabellen.js) auf iPad/PC --- */
-body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"] { --eba-tliste: 1; }
-body:not(.is-phone) .eba-s-modul .bases-view[data-view-name="Mein Stand"] { --eba-tliste: 0; }
-body:not(.is-phone) .eba-s-modul .bases-view:has(> .eba-tl) > :not(.eba-tl) { display: none !important; }
-body:not(.is-phone) .eba-s-modul .bases-view:has(> .eba-tl) { overflow: visible !important; height: auto !important; }
-body:not(.is-phone) .eba-s-modul .eba-tl { display: block; margin-top: 2px; font-size: 15px; line-height: 1.4; color: var(--eba-text); }
-body:not(.is-phone) .eba-s-modul .eba-tl-gruppe {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 8px;
-  margin: 20px 0 0;
-  padding: 0 0 7px;
-  border-bottom: 1px solid var(--eba-border-strong);
-  font-family: var(--font-interface);
-  font-size: var(--eba-label-size);
-  font-weight: var(--eba-label-weight);
-  letter-spacing: var(--eba-label-tracking);
-  text-transform: uppercase;
-  line-height: 1.3;
-  color: var(--eba-accent-text);
-}
-body:not(.is-phone) .eba-s-modul .eba-tl-gruppe:first-child { margin-top: 6px; }
-body:not(.is-phone) .eba-s-modul .eba-tl-gruppe :is(.eba-tl-gwert, .eba-tl-summe) { color: var(--eba-muted); }
-body:not(.is-phone) .eba-s-modul .eba-tl-gruppe .eba-tl-gwert::before { content: "·"; margin-right: 8px; color: var(--eba-faint); }
-body:not(.is-phone) .eba-s-modul .eba-tl-gruppe > :not(.eba-tl-summe) + .eba-tl-summe { margin-left: auto; }
-body:not(.is-phone) .eba-s-modul .eba-tl-gruppe .internal-link { color: inherit; text-decoration: none; }
-body:not(.is-phone) .eba-s-modul .eba-tl-zeile {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 10px 6px 10px 0;
-  cursor: pointer;
-}
-body:not(.is-phone) .eba-s-modul .eba-tl-zeile + .eba-tl-zeile { border-top: 1px solid var(--eba-border); }
-body:not(.is-phone) .eba-s-modul .eba-tl > .eba-tl-zeile:first-child { padding-top: 4px; }
-body:not(.is-phone) .eba-s-modul .eba-tl-zeile:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
-body:not(.is-phone) .eba-s-modul .eba-tl-text { flex: 1 1 auto; min-width: 0; }
-body:not(.is-phone) .eba-s-modul .eba-tl-titel { font-size: 15.5px; font-weight: 500; line-height: 1.35; color: var(--eba-text); overflow-wrap: anywhere; }
-body:not(.is-phone) .eba-s-modul .eba-tl-titel .internal-link { color: inherit; text-decoration: none; }
-body:not(.is-phone) .eba-s-modul .eba-tl-meta { display: flex; flex-wrap: wrap; align-items: baseline; margin-top: 2px; font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
-body:not(.is-phone) .eba-s-modul .eba-tl-w { display: inline-flex; align-items: baseline; gap: 4px; white-space: nowrap; }
-body:not(.is-phone) .eba-s-modul .eba-tl-w + .eba-tl-w::before { content: "·"; margin: 0 4px 0 8px; color: var(--eba-faint); }
-body:not(.is-phone) .eba-s-modul .eba-tl-k { color: var(--eba-faint); }
-body:not(.is-phone) .eba-s-modul .eba-tl-meta .internal-link { color: var(--eba-muted); text-decoration: none; }
-body:not(.is-phone) .eba-s-modul .eba-tl-meta .eba-pill { font-size: 11.5px; padding: 0 8px; line-height: 1.55; }
-body:not(.is-phone) .eba-s-modul .eba-tl-check { gap: 6px; align-items: center; cursor: pointer; }
-body:not(.is-phone) .eba-s-modul .eba-tl-check input { width: 15px; height: 15px; margin: 0; flex: none; }
-body:not(.is-phone) .eba-s-modul .eba-tl-ende { flex: none; display: flex; align-items: center; gap: 12px; max-width: 45%; }
-body:not(.is-phone) .eba-s-modul .eba-tl-ende .eba-pill { font-size: 12px; padding: 1px 9px; line-height: 1.5; white-space: nowrap; }
-body:not(.is-phone) .eba-s-modul .eba-tl-note { font-size: 18px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--eba-text); }
-body:not(.is-phone) .eba-s-modul .eba-tl-aktion { flex: none; font-size: 13.5px; white-space: nowrap; }
-body:not(.is-phone) .eba-s-modul .eba-tl-aktion a { color: var(--eba-muted); text-decoration: none; }
-body:not(.is-phone) .eba-s-modul .eba-tl-zeile:hover .eba-tl-aktion a { color: var(--eba-accent-text); }
-body:not(.is-phone) .eba-s-modul .eba-tl-nav::after {
-  content: "";
-  flex: none;
-  width: 7px;
-  height: 7px;
-  margin: 0 4px 0 -2px;
-  border-top: 1.5px solid var(--eba-faint);
-  border-right: 1.5px solid var(--eba-faint);
-  transform: rotate(45deg);
-}
-body:not(.is-phone) .eba-s-modul .eba-tl-leer { font-size: 14px; color: var(--eba-muted); }
-body:not(.is-phone) .eba-s-modul .eba-tl-fuss { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--eba-border); font-size: 12.5px; color: var(--eba-muted); }
+/* --- 6. Tabellen als Liste (tabellen.js) auf iPad/PC: seit 18.10.2026 in 37.tabellen (gilt dort für mehrere Seiten) --- */
 
 /* --- 7. Modulfeld (modul.js) --- */
 .block-language-eba-modul { margin: 0; padding: 0; background: none; border: 0; }
@@ -4999,7 +5009,8 @@ body:not(.is-phone) .eba-s-modul .eba-tl-fuss { display: flex; flex-wrap: wrap; 
 .eba-mod-naechstes { margin-top: 22px; }
 .eba-mod-zeile {
   display: grid;
-  grid-template-columns: 6.6em 7.6em minmax(0, 1fr) auto;
+  grid-template-columns: 6.6em 7.6em minmax(10em, max-content) minmax(8em, 1fr); /* „Was“ so breit wie nötig, der Ort bricht um: ein
+     langer Ort („ILIAS-Kurs E101 → Übungen → …“) drückte „Was“ sonst auf einen Buchstaben je Zeile (18.10.2026) */
   column-gap: 14px;
   align-items: baseline;
   padding: 8px 0;
@@ -5014,7 +5025,7 @@ body:not(.is-phone) .eba-s-modul .eba-tl-fuss { display: flex; flex-wrap: wrap; 
 .eba-mod-zeit { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--eba-muted); }
 .eba-mod-was { min-width: 0; overflow-wrap: anywhere; }
 .eba-mod-was .eba-pill { margin-left: 8px; font-size: 11px; padding: 0 7px; line-height: 1.5; vertical-align: 1px; }
-.eba-mod-wo { font-size: 13.5px; text-align: right; color: var(--eba-muted); }
+.eba-mod-wo { min-width: 0; font-size: 13.5px; text-align: right; color: var(--eba-muted); overflow-wrap: anywhere; }
 
 /* Knöpfe */
 .eba-mod-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
@@ -5173,3 +5184,100 @@ body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-t
   .eba-s-dashboard .eba-kz-reihe > .eba-kachel.frist .s { font-size: 12px; }
 }
 /* ---------- Ende Abschnitt 60 ---------- */
+
+/* ---------- 61. Lernplan (lernplan.js, ```eba-lernplan```; seit 18.10.2026) ----------
+   Bereich Lernplan: je Modul eine Zeile der Zeilenliste (.eba-vb-liste, ohne Symbol, Pille nur bei einem Zustand), Tipp klappt
+   die Kapitel auf (.eba-lp-unten): Kästchen wie bei den To-dos (.eba-td-haken, ganze Zeilenhöhe als Tippfläche, auf iPhone und
+   iPad mindestens 44 px), Nummer, Titel (Link auf die Folien), rechts „bis So 25.10.“. In der Lernplan-Notiz nur die Zeile
+   (.eba-lp-eine). Ohne Lernplan-Notizen ein Satz (.eba-lp-leer). Nur --eba-*-Variablen. */
+li:has(> a[data-href$="Lernplan"]) { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cpath d='m3 7 2 2 4-4'/%3E%3Cpath d='M13 6h8'/%3E%3Cpath d='M13 12h8'/%3E%3Cpath d='M13 18h8'/%3E%3C/svg%3E"); }
+.eba-lp-leer { padding: 14px 16px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); color: var(--eba-muted); font-size: 14px; line-height: 1.5; }
+.eba-lp-modul.is-klappbar { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.eba-lp-modul.is-klappbar::after {
+  content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px 0 auto; border-right: 1.75px solid var(--eba-faint);
+  border-bottom: 1.75px solid var(--eba-faint); transform: rotate(-45deg); transition: transform 0.15s ease;
+}
+.eba-lp-modul.is-klappbar.is-offen::after { transform: rotate(45deg); }
+.eba-lp-modul.is-klappbar:hover .eba-vb-text b { color: var(--eba-accent-text); }
+.eba-lp-unten { border-top: 1px solid var(--eba-border); padding: 0 14px 10px; }
+.eba-lp-unten.is-zu { display: none; }
+.eba-lp-unten + .eba-vb { border-top: 1px solid var(--eba-border); }
+.eba-lp-kapitel { display: flex; flex-direction: column; }
+.eba-lp-k { display: flex; align-items: center; gap: 10px; min-height: 40px; }
+.eba-lp-k + .eba-lp-k { border-top: 1px solid var(--eba-border); }
+.eba-lp-k > .eba-td-haken { align-self: stretch; align-items: center; margin: 0 0 0 -14px; padding: 0 10px 0 14px; }
+.eba-lp-k-text { flex: 1 1 auto; display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14px; line-height: 1.4; }
+.eba-lp-k-nr { flex: none; min-width: 1.6em; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-lp-k-titel { min-width: 0; overflow-wrap: anywhere; color: var(--eba-text); }
+.eba-lp-k-titel.is-link { cursor: pointer; }
+.eba-lp-k-titel.is-link:hover { color: var(--eba-accent-text); text-decoration: underline; text-underline-offset: 2px; }
+.eba-lp-k-teil { color: var(--eba-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.eba-lp-k.is-fertig .eba-lp-k-titel { color: var(--eba-muted); }
+.eba-lp-k-bis { flex: none; color: var(--eba-muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.eba-lp-fuss { padding-top: 8px; font-size: 13px; }
+.eba-lp-fuss a.internal-link { color: var(--eba-muted); text-decoration: none; }
+.eba-lp-fuss a.internal-link:hover { color: var(--eba-accent-text); text-decoration: underline; }
+.eba-lp-eine { margin: 0 0 18px; }
+/* iPhone und iPad: Zeilen mindestens 44 px (das Kästchen nimmt die ganze Höhe); iPhone: Fälligkeit unter den Titel */
+body.is-mobile .eba-lp-k { min-height: 44px; }
+body.is-mobile .eba-lp-k > .eba-td-haken { box-sizing: border-box; width: 44px; padding-right: 0; }
+body.is-phone .eba-lp-k { flex-wrap: wrap; row-gap: 0; padding: 4px 0; }
+body.is-phone .eba-lp-k-text { flex: 1 1 calc(100% - 40px); }
+body.is-phone .eba-lp-k-bis { flex: 1 1 100%; padding: 0 0 6px 40px; margin-top: -6px; }
+/* ---------- Ende Abschnitt 61 ---------- */
+
+/* ---------- 62. Noten & Anmeldungen aus Alma (alma-konto.js; seit 0.4.5, Beta) ----------
+   1. Zeile unter Verbindungen: Bausteine aus Abschnitt 43 (.eba-vb), nichts Eigenes. Fenster (.eba-modal-alma): Knöpfe unter
+      „Mehr erfahren“ (Daten aus Alma löschen, Aufbau kopieren) als Reihe, auf iPhone/iPad 44 px hoch.
+   2. Modulfeld (modul.js, Abschnitt 58.7): ein offener Vorschlag unter dem Stand als ruhige Zeile mit Haarlinie: Text (Status,
+      Note, Stand), darunter gedämpft ein Satz (endgültig nicht bestanden), rechts „Übernehmen“ (normal) und „Ausblenden“ (leise).
+      Schmal (Container unter 480 px) rutschen die Knöpfe unter den Text. Auf iPhone/iPad 44 px hoch.
+   3. „Bitte prüfen“ (Abschnitt 59): Zeiger aus Alma ohne Kästchen, ganze Zeile antippbar. Nur --eba-*-Variablen. */
+.eba-modal-alma .eba-modal-mehr-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.eba-modal-alma .eba-modal-mehr-knoepfe button { margin: 0; }
+body.is-mobile .eba-modal-alma .eba-modal-mehr-knoepfe button { min-height: 44px; }
+.eba-mod-alma {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; margin-top: 16px; padding-top: 12px;
+  border-top: 1px solid var(--eba-border);
+}
+.eba-mod-alma-text { flex: 1 1 220px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.eba-mod-alma-wert { font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--eba-text); font-variant-numeric: tabular-nums; }
+.eba-mod-alma-satz { font-size: 13px; line-height: 1.35; color: var(--eba-muted); }
+.eba-mod-alma-knoepfe { flex: none; display: flex; align-items: center; gap: 6px; }
+.eba-mod .eba-mod-alma button.eba-mod-alma-knopf {
+  height: 30px; margin: 0; padding: 0 12px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s, 4px);
+  background: var(--eba-bg); box-shadow: none; font-family: var(--font-interface); font-size: 13px; font-weight: 600;
+  color: var(--eba-text); cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.eba-mod .eba-mod-alma button.eba-mod-alma-knopf:hover { border-color: var(--eba-border-strong); }
+.eba-mod .eba-mod-alma button.eba-mod-alma-knopf.leise { border-color: transparent; background: transparent; font-weight: 500; color: var(--eba-muted); }
+.eba-mod .eba-mod-alma button.eba-mod-alma-knopf.leise:hover { color: var(--eba-text); }
+.eba-mod .eba-mod-alma button.eba-mod-alma-knopf:disabled { opacity: 0.55; cursor: default; }
+@container eba-mod (max-width: 480px) {
+  .eba-mod-alma-knoepfe { flex: 1 1 100%; }
+}
+body.is-mobile .eba-mod .eba-mod-alma button.eba-mod-alma-knopf { height: 44px; padding: 0 16px; font-size: 15px; }
+.eba-bp-quelle .eba-td-inhalt { cursor: pointer; }
+/* ---------- Ende Abschnitt 62 ---------- */
+
+/* ---------- 63. Listen aus dem Fachmodell (dashboard.js, ```eba-liste fristen|termine|pruefungen```; seit 18.10.2026) ----------
+   Dashboard „Fristen · 30 Tage“ und „Termine · 14 Tage“, Seite Prüfungen „Prüfungstermine“; vorher Bases-Listen mit derselben
+   Gestalt (Abschnitte 32 und 37): je Zeile Wann · Was · Art mit Haarlinie oben, Wann gedämpft (heute, morgen und Uhrzeit in
+   Textfarbe), Titel als Link in Textfarbe, Art als Pille rechts. Karte schmaler als 480 px (iPhone): Wann klein über dem Titel,
+   ohne Pille. Leer: ein Satz statt „Leer.“. Die Kacheln (```eba-kacheln```) nutzen die Klassen aus Abschnitt 8, 32 und 60. */
+.eba-li { display: flex; flex-direction: column; }
+.eba-li-zeile { display: grid; grid-template-columns: minmax(7.5em, 30%) minmax(0, 1fr) auto; column-gap: 14px; align-items: baseline; padding: 7px 0; border-top: 1px solid var(--eba-border); line-height: 1.45; }
+.eba-li-wann { color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-li-wann.eba-bald { color: var(--eba-text); font-weight: 600; }
+.eba-li-uhr { color: var(--eba-text); font-weight: 500; white-space: nowrap; }
+.eba-li a.eba-li-was { color: var(--eba-text); font-weight: 500; text-decoration: none; overflow-wrap: anywhere; }
+.eba-li a.eba-li-was:hover { color: var(--eba-accent-text); text-decoration: underline; text-underline-offset: 3px; }
+.eba-li .eba-li-art { justify-self: end; white-space: nowrap; }
+.eba-li-leer { padding: 4px 0 2px; color: var(--eba-muted); font-size: 0.92em; }
+.callout[data-callout^="eba-"] .block-language-eba-liste, .callout[data-callout="eba-kennzahlen"] .block-language-eba-kacheln { margin: 0; }
+@container eba-tab (max-width: 480px) {
+  .eba-li-zeile { grid-template-columns: minmax(0, 1fr); row-gap: 1px; }
+  .eba-li-wann { font-size: 0.86em; }
+  .eba-li .eba-li-art { display: none; }
+}
+/* ---------- Ende Abschnitt 63 ---------- */

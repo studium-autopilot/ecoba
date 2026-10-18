@@ -5,7 +5,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
 
-const G = laden("gruppen").ergebnis;
+// mit der einen Regel „ist das deine Gruppe?“ aus meine-gruppe.js (gehoertZu)
+const G = laden("gruppen", { kontext: { user: { "meine-gruppe": laden("meine-gruppe").ergebnis } } }).ergebnis;
 
 const g = (anders = {}) => Object.assign({
   id: "x", code: "X100", art: "Übung", gruppe: "1", tag: "Di", von: "08:00", bis: "10:00", ct: true, raum: "HS 1", leitung: "",

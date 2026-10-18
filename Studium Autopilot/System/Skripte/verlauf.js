@@ -12,12 +12,11 @@
 //             Monaten und vorlesungsfreien Tagen als schmale Striche (Legende „Frei 01.11.“), Prüfungen als Fähnchen (dicht
 //             liegende werden zu einem Fähnchen „n Klausuren 30.01.–12.02.“ zusammengefasst, Einzelheiten in der Liste),
 //             Module mit Countdown. Die Lupe ersetzt seit 17.10.2026 die Tabelle „Semestertermine“ der Seite.
-// Daten: System/Einstellungen.md (semesterliste, pausen, pruefungsphasen, variante), Modulnotizen (typ: modul,
-// semester_geplant, ects, status, ergebnis, klausur, op_modul, rolle_*, gewaehlt, zusatz),
-// Termine mit kategorie „Prüfung“ (eintägig, ohne Nachholtermine, z. B. Zwischentests), SQ-Kurse (typ: sq_kurs);
-// Rückmeldung und freie Tage nur aus dem Datenmodell (zentrale Daten), die Rückmeldung verlinkt ihre Termin-Notiz.
-// Rechenregeln wie auf der Seite Noten & ECTS: ECTS = bestandene/anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange
-// SQ100 offen). Fehlendes erscheint als „offen“.
+// Daten aus dem Fachmodell (ctx.modell, docs/architektur.md „Fachmodell“): Semester, Pausen, Prüfungsphasen, freie Tage,
+// Rückmeldung (die Rückmeldung verlinkt ihre Termin-Notiz), Modulnotizen (typ: modul, semester_geplant, ects, status, ergebnis,
+// gruppe), Prüfungen (pruefungen: Termin-Notizen und Feld klausur, Modulstatus, abgehakt, entfällt; Nachholtermine nur nach
+// „nicht bestanden“), Prüfung je Modul (pruefungVon), ECTS und Orientierungsprüfung (ects), im Plan (imPlan). Fehlendes
+// erscheint als „offen“.
 // Nur richtige Daten (Vorgabe vom 17.10.2026): Semester, Pausen und Prüfungsphasen tragen aus den zentralen Daten status
 // (offiziell | geschätzt) und hinweis. Geschätztes ist überall markiert – „ca.“ vor Daten und Zahlen, die daraus folgen
 // (Abschluss, Resttage, Vorlesungswochen, Frist der Orientierungsprüfung), Streifen und „(geschätzt)“ in Band und Legende
@@ -42,12 +41,10 @@ module.exports = function (ctx) {
   const tag = (v) => { const m = String(v ?? "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
   const heute = () => { const d = ctx.date.jetzt(); d.setHours(0, 0, 0, 0); return d; };
   const isoVon = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  const M = () => (ctx.modell && ctx.modell.woche ? ctx.modell : null); // Datenmodell (modell.js), falls geladen
   const tage = (a, b) => Math.round((b - a) / 864e5);
   const dm = (d) => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`;
   const dmy = (d) => `${dm(d)}${String(d.getFullYear()).slice(2)}`;
   const wdm = (d) => `${WT[d.getDay()]} ${dm(d)}`;
-  const zahl = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return isFinite(n) ? n : 0; };
   const norm = (v) => String(v ?? "").toLowerCase().trim();
   const fertig = (st) => ["bestanden", "anerkannt"].includes(norm(st));
   const relativ = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : n > 1 ? `in ${n} Tagen` : n === -1 ? "gestern" : `vor ${-n} Tagen`);
@@ -60,83 +57,55 @@ module.exports = function (ctx) {
   const ca = (o) => (o && o.geschaetzt ? "ca. " : "");
   const unsicher = (o) => (o && o.geschaetzt ? ` (geschätzt${o.hinweis ? `: ${o.hinweis}` : ""})` : "");
 
-  // ---------- Daten lesen ----------
+  // ---------- Daten lesen (Fachmodell) ----------
   const lesen = () => {
-    const ef = app.vault.getAbstractFileByPath("System/Einstellungen.md");
-    const c = Object.assign({}, (ef && app.metadataCache.getFileCache(ef)?.frontmatter) || {});
-    const zerlege = (liste) => (Array.isArray(liste) ? liste : []).map((z) => String(z).split("|").map((x) => x.trim()));
-    // Datenmodell (modell.js): Semesterliste aus Studienbeginn + zentralen Semesterdaten, Musterplan-Semester der Module.
-    // Ohne Modell wie bisher aus System/Einstellungen.md.
-    const md = ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null;
+    const Mo = ctx.modell, md = Mo.daten();
     const g = (o) => ({ geschaetzt: o.status === "geschätzt", hinweis: String(o.hinweis || "") });
-    let sems, pausen, phasen, rueck = [], frei = [];
-    if (md) {
-      // Datenmodell: mit Status (offiziell | geschätzt) und Hinweis der zentralen Daten (Semester nach Regel: geschätzt)
-      sems = md.semesterliste.map((s) => Object.assign({ fs: s.fs, name: s.name, sb: tag(s.beginn), se: tag(s.ende), vb: tag(s.vb), ve: tag(s.ve) }, g(s)));
-      pausen = md.pausen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), name: p.name || "Pause" }, g(p)));
-      phasen = md.pruefungsphasen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), art: p.art || "Prüfungen" }, g(p)));
-      rueck = (md.rueckmeldung || []).map((r) => Object.assign({ fuer: r.fuer, von: tag(r.von), bis: tag(r.bis), pfad: "", erledigt: false }, g(r))).filter((r) => r.von && r.bis);
-      frei = (md.freieTage || []).map((x) => Object.assign({ name: x.name, datum: tag(x.datum) }, g(x))).filter((x) => x.datum);
-    } else {
-      sems = zerlege(c.semesterliste).filter((p) => p.length >= 6).map((p) => ({ fs: +p[0], name: p[1], sb: tag(p[2]), se: tag(p[3]), vb: tag(p[4]), ve: tag(p[5]), geschaetzt: false, hinweis: "" }));
-      pausen = zerlege(c.pausen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), name: p[2] || "Pause", geschaetzt: false, hinweis: "" }));
-      phasen = zerlege(c.pruefungsphasen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), art: p[2] || "Prüfungen", geschaetzt: /gesch/i.test(p[3] || ""), hinweis: "" }));
+    // Status (offiziell | geschätzt) und Hinweis der zentralen Daten (Semester nach Regel: geschätzt)
+    const sems = md.semesterliste.map((s) => Object.assign({ fs: s.fs, name: s.name, sb: tag(s.beginn), se: tag(s.ende), vb: tag(s.vb), ve: tag(s.ve) }, g(s)))
+      .filter((s) => s.sb && s.se && s.se > s.sb);
+    const pausen = md.pausen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), name: p.name || "Pause" }, g(p))).filter((p) => p.von && p.bis);
+    const phasen = md.pruefungsphasen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), art: p.art || "Prüfungen" }, g(p))).filter((p) => p.von && p.bis);
+    const rueck = (md.rueckmeldung || []).map((r) => Object.assign({ fuer: r.fuer, von: tag(r.von), bis: tag(r.bis), pfad: "", erledigt: false }, g(r))).filter((r) => r.von && r.bis);
+    const frei = (md.freieTage || []).map((x) => Object.assign({ name: x.name, datum: tag(x.datum) }, g(x))).filter((x) => x.datum);
+    const variante = md.variante;
+    // sem: eigene Planung, sonst Musterplan der Variante; semFs: Semester nach dem Feld fachsemester, nur für die Liste „Wählbar,
+    // nicht im Plan“ (Module, die im Musterplan deiner Variante nicht vorkommen); pr: Prüfung nach der einen Regel
+    const module = md.module.map((m) => {
+      const fm = m.fm, fsZahl = Number(fm.fachsemester);
+      const pr = Mo.pruefungVon(m.code);
+      return {
+        pfad: m.f.path, code: m.code, titel: String(fm.titel ?? m.f.basename), ects: m.ects,
+        sem: Mo.modulSemester(fm), semFs: fm.gruppe !== "Schwerpunkt" && fsZahl >= 1 && md.semesterliste[fsZahl - 1] ? md.semesterliste[fsZahl - 1].name : "",
+        status: m.status || "offen", ergebnis: m.ergebnis, op: m.op, zusatz: m.zusatz, gewaehlt: fm.gewaehlt === true, gruppe: m.gruppe,
+        pruefung: String(fm.pruefung ?? ""), imPlan: Mo.imPlan(m), pr: pr ? { datum: tag(pr.datum), offen: pr.offen, erledigt: pr.erledigt } : null,
+      };
+    }).sort((a, b) => a.code.localeCompare(b.code, "de"));
+    // Fähnchen: alle Prüfungen (Nachholtermine nur nach „nicht bestanden“)
+    const pruefungen = Mo.pruefungen().filter((p) => !p.nachhol || (p.modul && p.modul.status === "nicht bestanden")).map((p) => ({
+      datum: tag(p.datum), code: p.code, titel: p.titel, pfad: p.pfad, geschaetzt: p.geschaetzt, test: p.zwischentest, offen: p.offen,
+      erledigt: p.erledigt, quelle: p.quelle, klausurFeld: !!p.modul && String(p.modul.fm.klausur || "").slice(0, 10) === p.datum,
+    }));
+    // Termin-Notiz zur Rückmeldung (gleicher Beginn): die Zeile in der Lupe öffnet sie, ihr Haken gilt als erledigt
+    for (const t of Mo.termine()) {
+      if (!/rückmeldung/i.test(t.titel)) continue;
+      const r = rueck.find((x) => +x.von === +tag(t.datum));
+      if (r) { r.pfad = t.pfad; r.erledigt = t.erledigt; }
     }
-    sems = sems.filter((s) => s.sb && s.se && s.se > s.sb);
-    pausen = pausen.filter((p) => p.von && p.bis);
-    phasen = phasen.filter((p) => p.von && p.bis);
-    const variante = String(c.variante ?? "").trim() || "offen";
-    const module = [], termine = [];
-    let sq = 0;
-    for (const f of app.vault.getMarkdownFiles()) {
-      const fm = app.metadataCache.getFileCache(f)?.frontmatter;
-      if (!fm) continue;
-      if (fm.typ === "modul") {
-        // sem: eigene Planung, sonst Musterplan der Variante (modell.js); semFs: Semester nach dem Feld fachsemester, nur für
-        // die Liste „Wählbar, nicht im Plan“ (Module, die im Musterplan deiner Variante nicht vorkommen)
-        const fsZahl = Number(fm.fachsemester);
-        const semFs = md && fm.gruppe !== "Schwerpunkt" && fsZahl >= 1 && md.semesterliste[fsZahl - 1] ? md.semesterliste[fsZahl - 1].name : "";
-        module.push({
-          pfad: f.path, code: String(fm.code ?? f.basename.split(" ")[0]), titel: String(fm.titel ?? f.basename), ects: zahl(fm.ects),
-          sem: md ? ctx.modell.modulSemester(fm) : String(fm.semester_geplant ?? "").trim(), semFs, status: norm(fm.status) || "offen", ergebnis: String(fm.ergebnis ?? "").trim(),
-          klausur: tag(fm.klausur), op: fm.op_modul === true, zusatz: fm.zusatz === true, gewaehlt: fm.gewaehlt === true,
-          gruppe: String(fm.gruppe ?? ""),
-          pruefung: String(fm.pruefung ?? ""), rolle_economics: fm.rolle_economics, rolle_ba: fm.rolle_ba, rolle_ohne: fm.rolle_ohne,
-        });
-      } else if (fm.typ === "termin" && fm.kategorie === "Prüfung") {
-        const d = tag(fm.datum), b = tag(fm.bis);
-        const titel = String(fm.titel ?? f.basename.replace(/^\d{4}-\d{2}-\d{2}\s*/, ""));
-        if (!d || (b && b > d) || /nachhol/i.test(titel) || /nachhol/i.test(f.basename)) continue;
-        termine.push({ datum: d, titel, code: String(fm.code ?? "").trim(), geschaetzt: /gesch/i.test(String(fm.status ?? "")), pfad: f.path });
-      } else if (fm.typ === "termin" && /rückmeldung/i.test(String(fm.titel ?? f.basename))) {
-        // Termin-Notiz zur Rückmeldung (gleicher Beginn): die Zeile in der Lupe öffnet sie, ihr Haken gilt als erledigt
-        const d = tag(fm.datum), r = d && rueck.find((x) => +x.von === +d);
-        if (r) { r.pfad = f.path; r.erledigt = fm.erledigt === true; }
-      } else if (fm.typ === "sq_kurs" && fertig(fm.status)) sq += zahl(fm.ects);
-    }
-    module.sort((a, b) => a.code.localeCompare(b.code, "de"));
-    return { c, sems, pausen, phasen, rueck, frei, variante, module, termine, sq };
+    const E = Mo.ects();
+    return { sems, pausen, phasen, rueck, frei, variante, module, pruefungen, ects: E.ist, op: E.op };
   };
 
   // ---------- Rechnen ----------
   const rechnen = (D) => {
     const t = heute();
     const v = D.variante, rk = ROLLE[v];
-    // Rolle im Plan: fest = zählt sicher; variante = hängt von der noch offenen Variante ab; wahl = Wahlmodul, nicht gewählt
-    const art = (m) => {
-      if (m.zusatz) return "zusatz";
-      if (m.gruppe !== "Profil & Vertiefung" || m.gewaehlt) return "fest";
-      if (rk) return m[rk] === "Pflicht" ? "fest" : "wahl";
-      return ["rolle_economics", "rolle_ba", "rolle_ohne"].every((k) => m[k] === "Pflicht") ? "fest" : "variante";
-    };
+    // Rolle im Plan: fest = im Plan (ctx.modell.imPlan); variante = Profil & Vertiefung, hängt von der noch offenen Variante ab;
+    // wahl = Wahlmodul, nicht gewählt; zusatz = zählt nicht
+    const art = (m) => (m.zusatz ? "zusatz" : m.imPlan ? "fest" : m.gruppe === "Profil & Vertiefung" && !rk ? "variante" : "wahl");
     for (const m of D.module) { m.art = art(m); m.fertig = fertig(m.status); }
-    const gezaehlt = D.module.filter((m) => m.fertig && !m.zusatz);
-    const sq100 = D.module.find((m) => m.code === "SQ100");
-    const sqteil = sq100 && !sq100.fertig ? Math.min(9, D.sq) : 0;
-    const ects = gezaehlt.reduce((a, m) => a + m.ects, 0) + sqteil;
-    // Orientierungsprüfung (§§ 8, 11 BT): 4 der OP-Module bis Ende des 4. Fachsemesters
-    const opModule = D.module.filter((m) => m.op);
-    const op = Math.min(4, opModule.filter((m) => m.fertig).length);
+    // ECTS und Orientierungsprüfung (§§ 8, 11 BT: 4 der OP-Module bis Ende des 4. Fachsemesters) aus dem Fachmodell
+    const ects = D.ects, op = D.op;
     // Semester
     const sems = D.sems.map((s, i) => {
       const ms = D.module.filter((m) => m.sem === s.name || (!m.sem && (m.art === "wahl" || m.art === "variante") && m.semFs === s.name));
@@ -153,27 +122,18 @@ module.exports = function (ctx) {
     let cur = sems.findIndex((s) => s.jetzt);
     const vorStart = sems.length && t < sems[0].sb;
     const nachEnde = sems.length && t > sems[sems.length - 1].se;
-    // Prüfungen (Fähnchen): eintägige Prüfungs-Termine (z. B. Zwischentests) und Klausurtermine der Module. Kürzel + Tag nur
-    // einmal; die Termin-Notiz gewinnt, „bestanden“ kommt vom Modul (docs/architektur.md „Nächste Prüfung“)
-    const pruef = [];
-    // Zwischentests (Titel enthält „Zwischentest“, wie klausurzeit.js) sind nie die nächste Prüfung und verdecken keine Klausur
-    const gleicherTag = (code, d, test = false) => pruef.find((p) => p.code && p.code === code && +p.datum === +d && !!p.test === test);
-    for (const x of D.termine) {
-      const test = /zwischentest/i.test(x.titel);
-      if (gleicherTag(x.code, x.datum, test)) continue;
+    // Prüfungen (Fähnchen) aus dem Fachmodell: Kürzel + Tag einmal, Zwischentests nie die nächste Prüfung (docs/architektur.md
+    // „Fachmodell“). haupt: Klausur eines Moduls (kein Zwischentest) – gilt in der Modulliste der Lupe als Prüfungstermin
+    const pruef = D.pruefungen.map((x) => {
       const n = x.titel.match(/Zwischentest\s*(\d+)/i);
-      const label = (x.code ? x.code + " " : "") + (n ? `Zwischentest ${n[1]}` : test ? "Zwischentest" : x.code ? "Prüfung" : x.titel.slice(0, 16));
       const m = D.module.find((mm) => mm.code === x.code);
-      // haupt: Klausur des Moduls aus einer Termin-Notiz (kein Zwischentest) – gilt in der Modulliste der Lupe als Prüfungstermin
-      pruef.push({ datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.datum < t, art: "test", geschaetzt: x.geschaetzt, modul: m, haupt: !!m && !test, test });
-    }
-    for (const m of D.module) if (m.klausur && !m.zusatz) {
-      const p = gleicherTag(m.code, m.klausur);
-      if (p) Object.assign(p, { label: m.code, art: "klausur", erledigt: m.fertig, modul: m });
-      else pruef.push({ datum: m.klausur, code: m.code, label: m.code, titel: `${m.code} ${m.titel}`, pfad: m.pfad, erledigt: m.fertig, art: "klausur", modul: m });
-    }
+      const klausur = x.quelle === "modul" || x.klausurFeld;
+      const label = klausur ? x.code : (x.code ? x.code + " " : "") + (n ? `Zwischentest ${n[1]}` : x.test ? "Zwischentest" : x.code ? "Prüfung" : x.titel.slice(0, 16));
+      return { datum: x.datum, code: x.code, label, titel: x.titel, pfad: x.pfad, erledigt: x.erledigt || x.datum < t, offen: x.offen,
+        art: klausur ? "klausur" : "test", geschaetzt: x.geschaetzt, modul: m, haupt: !!m && !x.test, test: x.test };
+    });
     pruef.sort((a, b) => a.datum - b.datum);
-    const naechste = pruef.find((p) => p.datum >= t && !p.erledigt && !p.test);
+    const naechste = pruef.find((p) => p.offen && !p.test);
     // Meilensteine (Quelle: Regeln auf der Seite Studienverlauf)
     const ms = [];
     const sFS = (n) => sems.find((s) => s.fs === n);
@@ -186,19 +146,16 @@ module.exports = function (ctx) {
     const sl = sems[sems.length - 1];
     if (sl) ms.push({ datum: sl.se, fs: sl.fs, titel: "Abschluss B.Sc.", info: `${ca(sl)}${dmy(sl.se)} · 180 ECTS`, ok: ects >= 180, art: "ziel" });
     for (const m of ms) m.vorbei = m.datum < t;
-    return { t, sems, cur, vorStart, nachEnde, ects, op, opModule, pruef, naechste, ms, variante: v };
+    return { t, sems, cur, vorStart, nachEnde, ects, op, pruef, naechste, ms, variante: v };
   };
 
   // Vorlesungswoche heute („Vorlesungswoche 1 von 16“), nur in der Vorlesungszeit. Eine Regel für alle Seiten:
-  // ctx.modell.woche() (Vorlesungswochen ohne Pausenwochen); ohne Modell die alte Rechnung
+  // ctx.modell.woche() (Vorlesungswochen ohne Pausenwochen, am Wochenende schon die kommende)
   const vorlesungswoche = (D, R) => {
-    const t = R.t, s = R.sems[R.cur];
+    const s = R.sems[R.cur];
     if (!s) return "";
-    const W = M() ? M().woche(isoVon(t)) : null;
-    if (W && W.art) return W.art === "vorlesung" ? `Vorlesungswoche ${W.nr} von ${ca(s)}${W.gesamt}` : "";
-    if (D.pausen.some((p) => p.von <= t && t <= p.bis) || D.phasen.some((p) => p.von <= t && t <= p.bis)) return "";
-    if (!s.vb || !s.ve || t < s.vb || t > s.ve) return "";
-    return `Vorlesungswoche ${Math.floor(tage(s.vb, t) / 7) + 1} von ${ca(s)}${Math.ceil((tage(s.vb, s.ve) + 1) / 7)}`;
+    const W = ctx.modell.woche(isoVon(R.t));
+    return W.art === "vorlesung" ? `Vorlesungswoche ${W.nr} von ${ca(s)}${W.gesamt}` : "";
   };
   // Band eines Semesters: Vorlesungszeit, vorlesungsfrei, Pausen, freie Tage, Prüfungsphasen (mit Beschriftung, wenn Platz ist)
   const band = (D, s, R, beschriftet) => {
@@ -493,25 +450,20 @@ module.exports = function (ctx) {
     const st = m.status;
     if (m.fertig) return `<span class="eba-pill ok">${m.ergebnis ? esc(m.ergebnis) : st === "anerkannt" ? "anerkannt" : "bestanden"}</span>`;
     if (st === "nicht bestanden") return `<span class="eba-pill bad">nicht bestanden</span>`;
-    if (st === "angemeldet") return `<span class="eba-pill info">angemeldet</span>`;
-    if (st === "läuft") return `<span class="eba-pill akzent">läuft</span>`;
+    // Farbe wie überall (ctx.modell.statusArt, docs/design.md): angemeldet grün, läuft blau
+    if (st === "angemeldet" || st === "läuft") return `<span class="eba-pill ${ctx.modell.statusArt("modul", st)}">${st}</span>`;
     return `<span class="eba-vl-offen">${esc(st || "offen")}</span>`;
   };
 
-  // Prüfungstermin eines Moduls: Feld klausur, sonst die Klausur aus einer Termin-Notiz (nächste, sonst letzte; „eine Regel“ wie
-  // klausurzeit.js und das Dashboard, docs/architektur.md „Nächste Prüfung“). Ohne beides: null → „Termin folgt“.
-  const klausurVon = (R, m) => {
-    if (m.klausur) return m.klausur;
-    const l = R.pruef.filter((p) => p.haupt && p.modul === m);
-    const k = l.find((p) => p.datum >= R.t) || l[l.length - 1];
-    return k ? k.datum : null;
-  };
+  // Prüfungstermin eines Moduls nach der einen Regel (ctx.modell.pruefungVon, in lesen): Date oder null → „Termin folgt“
+  const klausurVon = (m) => (m.pr ? m.pr.datum : null);
   const modulZeile = (R, m) => {
     let pr;
-    const kl = klausurVon(R, m);
+    const kl = klausurVon(m);
     if (m.zusatz) pr = "Zusatz, zählt nicht";
     else if (m.fertig) pr = kl ? `${wdm(kl)}${String(kl.getFullYear()).slice(2)}` : "";
-    else if (kl) { const d = tage(R.t, kl); pr = `${wdm(kl)} · <b>${relativ(d)}</b>`; }
+    else if (kl && m.pr.offen) { const d = tage(R.t, kl); pr = `${wdm(kl)} · <b>${relativ(d)}</b>`; }
+    else if (kl) pr = `${wdm(kl)}${m.pr.erledigt ? " · erledigt" : ""}`;
     else pr = /^\s*klausur/i.test(m.pruefung) || !m.pruefung ? "Termin folgt" : esc(m.pruefung.length > 34 ? m.pruefung.slice(0, 32) + " …" : m.pruefung);
     return `<div class="eba-vl-mz${m.fertig ? " fertig" : ""}${m.zusatz ? " zusatz" : ""}" data-pfad="${esc(m.pfad)}" role="link" tabindex="0">`
       + `<span class="eba-vl-mcode">${esc(m.code)}</span><span class="eba-vl-mtitel">${esc(m.titel)}</span>`
@@ -519,7 +471,7 @@ module.exports = function (ctx) {
   };
 
   const modulListe = (R, s) => {
-    const fest = s.module.filter((m) => m.art === "fest").sort((a, b) => (klausurVon(R, a) || 9e15) - (klausurVon(R, b) || 9e15) || a.code.localeCompare(b.code));
+    const fest = s.module.filter((m) => m.art === "fest").sort((a, b) => (klausurVon(a) || 9e15) - (klausurVon(b) || 9e15) || a.code.localeCompare(b.code));
     const zus = s.module.filter((m) => m.art === "zusatz");
     const varr = s.variante;
     let h = `<div class="eba-vl-module">`;
@@ -623,9 +575,10 @@ module.exports = function (ctx) {
   };
 
   const zeichnen = (inst, anim) => {
-    const D = lesen();
     const el = inst.el;
-    if (!D.sems.length) { el.innerHTML = `<div class="eba-vl eba-vl-fehlt">Studienverlauf: In System/Einstellungen.md fehlt die semesterliste.</div>`; return; }
+    if (!ctx.modell || !ctx.modell.pruefungen) { ersatz(el, inst.quelle); return; }
+    const D = lesen();
+    if (!D.sems.length) { el.innerHTML = `<div class="eba-vl eba-vl-fehlt">Noch keine Semesterdaten. Der Studienverlauf erscheint, sobald die zentralen Daten da sind.</div>`; return; }
     const R = rechnen(D);
     const z = inst.zustand;
     const std = R.cur >= 0 ? R.cur : R.vorStart ? 0 : R.sems.length - 1;
@@ -695,5 +648,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alleNeu(true); });
   };
 
-  return { registrieren, rendern, alleNeu, rechnen, lupe }; // rechnen und lupe für tests/verlauf.test.js
+  return { registrieren, rendern, alleNeu, lesen, rechnen, lupe }; // lesen, rechnen und lupe für tests/verlauf.test.js
 };

@@ -7,6 +7,12 @@ Studium Autopilot/System/Daten/installiert.json
 Studium Autopilot/System/Daten/ilias.json
 Studium Autopilot/System/Daten/ilias-abruf.json
 Studium Autopilot/System/Daten/Karteikarten/
+Studium Autopilot/System/Daten/alma-konto*.json
+Studium Autopilot/System/Daten/uni-zugang.json
+Studium Autopilot/System/Daten/volltext-abruf.json
+Studium Autopilot/System/Daten/alma-abruf.json
+Studium Autopilot/System/Daten/ilias-kalender*.json
+Studium Autopilot/Unterlagen/_Volltext/
 .DS_Store
 Thumbs.db
 node_modules/

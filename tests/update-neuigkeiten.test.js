@@ -145,3 +145,37 @@ test("Hinweis: nicht, solange die Dashboard-Zeile dasselbe sichtbar zeigt (zähl
   assert.equal(e({ angebot: null, jetzt, nach: "merken" }), null);
   assert.equal(e({ angebot: null, jetzt, nach: null }), null);
 });
+
+// Kern (main.js) mit einem kleinen Ersatz für „obsidian“; nur hinweisSammeln, ohne onload
+test("Andere Geräte: Skripte eines Updates über den Sync ohne „Aktualisiert: …“ je Datei, ein bearbeitetes Skript mit Hinweis", (t) => {
+  const Module = require("node:module");
+  const hinweise = [];
+  const OBS = { Plugin: class {}, Modal: class {}, FuzzySuggestModal: class {}, TFile: class {}, Notice: class { constructor(text) { hinweise.push(text); } } };
+  const laden0 = Module._load;
+  Module._load = function (anfrage, ...rest) { return anfrage === "obsidian" ? OBS : laden0.call(this, anfrage, ...rest); };
+  let Kern;
+  try { Kern = require(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "plugins", "studium-autopilot", "main.js")); } finally { Module._load = laden0; }
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: 1e12 });
+  const k = Object.create(Kern.prototype);
+  k.stillBis = 0;
+
+  k.hinweisSammeln("woche");
+  t.mock.timers.tick(3000);
+  assert.deepEqual(hinweise, ["Aktualisiert: woche"], "eines: Hinweis");
+
+  for (const n of ["zentral", "modul", "todos"]) { k.hinweisSammeln(n); t.mock.timers.tick(1000); }
+  t.mock.timers.tick(3000);
+  k.hinweisSammeln("termine"); // Nachzügler desselben Syncs
+  t.mock.timers.tick(3000);
+  assert.deepEqual(hinweise, ["Aktualisiert: woche"], "mehrere auf einmal und Nachzügler: still");
+
+  t.mock.timers.tick(60000);
+  k.hinweisSammeln("woche");
+  t.mock.timers.tick(3000);
+  assert.deepEqual(hinweise, ["Aktualisiert: woche", "Aktualisiert: woche"], "danach wieder je bearbeitetem Skript");
+
+  k.stillBis = Date.now() + 120000; // während eines Updates auf diesem Gerät bzw. nach neuer installiert.json (update.js)
+  k.hinweisSammeln("woche");
+  t.mock.timers.tick(3000);
+  assert.equal(hinweise.length, 2);
+});

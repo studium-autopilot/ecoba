@@ -1,7 +1,8 @@
 // Gemeinsame Helfer für die Aktionen und Skripte des Vaults.
 // Aufruf in einer Aktion:  const eba = ctx.user.eba(ctx);   (ctx = Kontext des Plugins „Studium Autopilot“)
 // Ohne Aufruf nutzbar (z. B. in Erweiterungen):  ctx.user.eba.MODULCODE, ctx.user.eba.codeImText(text),
-//   ctx.user.eba.eigenerAbgleich(existiert, einstellungen)
+//   ctx.user.eba.eigenerAbgleich(existiert, einstellungen), ctx.user.eba.quelleExtern(schluessel, existiert, einstellungen),
+//   ctx.user.eba.quellenExtern(existiert, einstellungen), ctx.user.eba.QUELLEN, ctx.user.eba.dateiTitel(titel)
 // Je Aktionsaufruf liefert ctx: ctx.datei (leere Notiz, die befüllt wird – Ordner-Automatik – sonst null),
 // ctx.parameter (Werte aus dem Knopf, z. B. { code: "B110" }) und ctx.quelle (Notiz, in der der Knopf steht).
 
@@ -13,18 +14,49 @@ const MODULCODE = "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?";
 // Erster Modulcode in einem freien Text („Klausur B110“, „SQ100-Kurs“), sonst null.
 const MODULCODE_IM_TEXT = new RegExp("(?:^|[^A-Z0-9])(" + MODULCODE + ")(?=[^A-Z0-9]|$)");
 const codeImText = (text) => { const m = String(text ?? "").match(MODULCODE_IM_TEXT); return m ? m[1] : null; };
+// Titel → Dateiname, eine Regel für alle Notizen, die das Plugin benennt (eba.ablegen, zentrale Termine in zentral.js): Emojis
+// samt Bausteinen weg (sonst stehen sie in Tab, Kopfzeile und Suche), „: “ wird „ – “ (UB-Kurs: Zotero → UB-Kurs – Zotero),
+// Zeichen, die Windows, iOS oder Links stören, werden „-“ (WS 2026/27 → WS 2026-27), Leerraum einfach, keine Punkte oder
+// Leerzeichen am Ende (Windows).
+// Bausteine (Variantenwähler, Verbinder, Tastenkappe) als Alternativen, nicht in der Zeichenklasse (sonst falsch zerlegt)
+const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{E0020}-\u{E007F}]|\u{FE0E}|\u{FE0F}|\u{200D}|\u{20E3}/gu;
+const dateiTitel = (text) => String(text ?? "").replace(EMOJI, "").replace(/\s*:\s+/g, " – ").replace(/[\\/:*?"<>|#^\[\]]/g, "-")
+  .replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
 // Eigener Uni-Abgleich: Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“ in den Einstellungen,
-// bringt ein eigener Abgleich ILIAS-Unterlagen und Stundenplan. Dann lädt ilias.js keine Unterlagen und zentral.js wendet den
-// zentralen Stundenplan nicht an. existiert(pfad) → bool, einstellungen = Frontmatter von System/Einstellungen.md.
+// bringt ein eigener Abgleich (bzw. ein eigener Server) Daten selbst. Welche, sagt quelleExtern. existiert(pfad) → bool,
+// einstellungen = Frontmatter von System/Einstellungen.md.
 const EIGENER_ABGLEICH = "System/Skripte/abgleich.js";
 const eigenerAbgleich = (existiert, einstellungen) => {
   try { return !!existiert(EIGENER_ABGLEICH) || String((einstellungen || {}).ilias_unterlagen ?? "").trim().toLowerCase() === "extern"; } catch (e) { return false; }
 };
+// Quellen außerhalb des Plugins (seit 0.4.5): Was ein eigener Abgleich oder Server bringt, holt das Plugin nicht noch einmal
+// (nie zwei Schreiber je Quelle). Jede Funktion fragt bei jedem Lauf quelleExtern(<Schlüssel>, existiert, einstellungen).
+//   stundenplan     zentraler Stundenplan (zentral.js) und Alma-Stundenplan (verbindungen.js)
+//   ilias-dateien   Downloads aus ILIAS (ilias.js)          ilias-gruppen  Übungsgruppen aus ILIAS (ilias.js)
+//   ilias-kalender  Abgaben aus dem ILIAS-Kalender          alma-konto     Noten und Prüfungsanmeldungen aus Alma
+//   volltext        Textfassungen der PDFs
+// Steht „quellen_extern“ (Liste) in System/Einstellungen.md, entscheidet sie, auch leer; unbekannte Einträge zählen nicht,
+// „quellen_extern:“ ohne Wert gilt als nicht gesetzt. Ohne Liste gilt beim eigenen Uni-Abgleich alles außer „ilias-gruppen“
+// als extern (die Übungsgruppen prüft dort das Plugin selbst), sonst nichts.
+const QUELLEN = Object.freeze(["stundenplan", "ilias-dateien", "ilias-gruppen", "ilias-kalender", "alma-konto", "volltext"]);
+// quellenExtern → Schlüssel in der Reihenfolge von QUELLEN; Fehler beim Lesen → keiner (wie eigenerAbgleich).
+const quellenExtern = (existiert, einstellungen) => {
+  try {
+    const v = (einstellungen || {}).quellen_extern;
+    const liste = Array.isArray(v) ? v : typeof v === "string" && v.trim() ? v.split(",") : null;
+    if (liste) {
+      const gesetzt = liste.map((x) => String(x ?? "").trim().toLowerCase());
+      return QUELLEN.filter((q) => gesetzt.indexOf(q) >= 0);
+    }
+    return eigenerAbgleich(existiert, einstellungen) ? QUELLEN.filter((q) => q !== "ilias-gruppen") : [];
+  } catch (e) { return []; }
+};
+const quelleExtern = (schluessel, existiert, einstellungen) => quellenExtern(existiert, einstellungen).indexOf(String(schluessel)) >= 0;
 
 module.exports = function (ctx) {
   const app = window.app;
   const heute = ctx.date.now("YYYY-MM-DD");
-  const sauber = (s) => String(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim();
+  const sauber = dateiTitel; // Titel → Dateiname (eine Regel, oben)
   const J = (v) => JSON.stringify(v ?? "");
   const CURSOR = ctx.CURSOR || "\uE000"; // Cursor-Position im Inhalt für ablegen()
   // Zu befüllende Notiz (Ordner-Automatik: in Vorlesungen/ usw. neu angelegt) oder null (Knopf/Befehl: neue Datei)
@@ -80,14 +112,15 @@ module.exports = function (ctx) {
 
   const modulNachCode = (code) => alleModule().find((x) => x.fm.code === code) || null;
 
-  // Auswahl: zuerst Module des aktuellen Semesters und laufende/gewählte, dann der Rest.
+  // Auswahl: zuerst (●) Module deines Plans im aktuellen Semester (ctx.modell.imPlan und modulSemester, wie Studienverlauf
+  // und Zeitleiste) und laufende/angemeldete, dann der Rest.
   // „zuerst“ (z. B. die laut Stundenplan gerade laufende Vorlesung) steht ganz oben: ein Tipp bestätigt, alles andere bleibt wählbar.
   // Rückgabe: Modul, null bei „– ohne Modul –“, undefined bei Esc (Vorlagen brechen dann ab, wenn es die erste Frage war).
   const modulWaehlen = async (frage, optional = true, zuerst = null) => {
     const vorwahl = codeAusTitel();
     if (vorwahl && modulNachCode(vorwahl)) return modulNachCode(vorwahl);
-    const fs = aktuellesSemester().fs;
-    const wichtig = (x) => x.fm.fachsemester === fs || ["läuft", "angemeldet"].includes(x.fm.status) || x.fm.gewaehlt === true;
+    const sem = aktuellesSemester().name, M = ctx.modell;
+    const wichtig = (x) => ["läuft", "angemeldet"].includes(x.fm.status) || (!!M && M.imPlan(x.fm) && M.modulSemester(x.fm) === sem);
     const ms = alleModule().sort((a, b) => (wichtig(b) - wichtig(a)) || String(a.fm.code).localeCompare(String(b.fm.code)));
     const texte = ms.map((x) => `${wichtig(x) ? "● " : "   "}${x.fm.code} · ${x.fm.titel}`);
     const werte = [...ms];
@@ -186,8 +219,8 @@ module.exports = function (ctx) {
 
   // Ein Datum lesen: „15.10“, „15.10.“, „15.10.26“, „15.10.2026“, „2026-10-15“, „+7“ (Tage ab heute).
   // Eine angehängte Uhrzeit („15.10. 14:00“, „15.10 14 Uhr“) wird ignoriert. Ungültige Daten (31.02.) → "".
-  // Ohne Jahr: liegt das Datum mehr als 60 Tage zurück, gilt das nächste Jahr. „ab“ (ISO, Beginn eines Zeitraums):
-  // Ein Ende in einem früheren Monat liegt im Folgejahr (28.12.–07.01.).
+  // Ohne Jahr: ctx.modell.zeit.jahrRaten (liegt das Datum mehr als 60 Tage zurück, gilt das nächste Jahr). „ab“ (ISO, Beginn
+  // eines Zeitraums): das Ende ist das erste Vorkommen ab dem Beginn (28.12.–07.01.).
   const datumLesen = (s, ab = "") => {
     s = String(s ?? "").trim();
     if (/^\+\d+$/.test(s)) return ctx.date.now("YYYY-MM-DD", Number(s.slice(1)));
@@ -199,22 +232,19 @@ module.exports = function (ctx) {
     m = s.match(new RegExp("^(\\d{1,2})\\.(\\d{1,2})(?:\\.(\\d{4}|\\d{2})?)?" + uhr + "$", "i"));
     if (!m) return "";
     const t = Number(m[1]), mo = Number(m[2]);
-    let j;
-    if (m[3]) j = Number(m[3].length === 2 ? "20" + m[3] : m[3]);
-    else {
-      j = Number(heute.slice(0, 4));
-      if (iso(j, mo, t) < ctx.date.now("YYYY-MM-DD", -60)) j++;
-      if (ab && mo < Number(ab.slice(5, 7)) && iso(j, mo, t) < ab) j++;
-    }
+    if (!m[3]) return ctx.modell.zeit.jahrRaten(t, mo, { ab });
+    const j = Number(m[3].length === 2 ? "20" + m[3] : m[3]);
     return gueltig(j, mo, t) ? iso(j, mo, t) : "";
   };
 
   // Zeitraum abfragen: „12.11.“, „12.11.–15.11.“, „2026-11-12“, „+7“ → { von, bis }
-  // Nicht erkannte Eingabe: Frage mit Hinweis noch einmal. Leer oder Esc: { von: "", bis: "" }.
+  // Nicht erkannte Eingabe: Frage mit Hinweis noch einmal. Leer: { von: "", bis: "" }. Esc: null (Aufrufer bricht ab).
   const zeitraumFragen = async (frage, vorschlag = "") => {
     let hinweis = "";
     for (;;) {
-      const t = ((await ctx.system.prompt(hinweis + frage, vorschlag)) || "").trim();
+      const roh = await ctx.system.prompt(hinweis + frage, vorschlag);
+      if (roh == null) return null;
+      const t = String(roh).trim();
       if (!t) return { von: "", bis: "" };
       const teile = t.replace(/^(\d{1,2}\.\d{1,2}\.?(?:\d{4}|\d{2})?)\s*-\s*(?=\d)/, "$1–").split(/\s*(?:–|—|\sbis\s|\s-\s)\s*/);
       // „15.10. 14–16 Uhr“: ein zweiter Teil, der nur eine Uhrzeit ist, ist kein Ende des Zeitraums
@@ -257,11 +287,13 @@ module.exports = function (ctx) {
   };
 
   // Datum abfragen: akzeptiert 12.10, 12.10., 12.10.26, 12.10.2026, 2026-10-12, +7 (Tage ab heute), auch mit Uhrzeit dahinter.
-  // Nicht erkannte Eingabe: Frage mit Hinweis noch einmal. Leer oder Esc: "".
+  // Nicht erkannte Eingabe: Frage mit Hinweis noch einmal. Leer: "". Esc: null (Aufrufer bricht ab).
   const datumFragen = async (frage, vorschlag = "") => {
     let hinweis = "";
     for (;;) {
-      const t = ((await ctx.system.prompt(hinweis + frage, vorschlag)) || "").trim();
+      const roh = await ctx.system.prompt(hinweis + frage, vorschlag);
+      if (roh == null) return null;
+      const t = String(roh).trim();
       if (!t) return "";
       const d = datumLesen(t);
       if (d) return d;
@@ -270,7 +302,7 @@ module.exports = function (ctx) {
     }
   };
 
-  // Abbruch per Esc in der ersten Frage. Nur bei der Ordner-Automatik gibt es schon eine (leere) Notiz: die wird wieder
+  // Abbruch per Esc in einer der Fragen. Nur bei der Ordner-Automatik gibt es schon eine (leere) Notiz: die wird wieder
   // gelöscht. Danach in der Aktion „return“.
   const abbrechen = () => {
     if (datei) setTimeout(async () => {
@@ -283,4 +315,8 @@ module.exports = function (ctx) {
 };
 module.exports.MODULCODE = MODULCODE;
 module.exports.codeImText = codeImText;
+module.exports.dateiTitel = dateiTitel;
 module.exports.eigenerAbgleich = eigenerAbgleich;
+module.exports.QUELLEN = QUELLEN;
+module.exports.quellenExtern = quellenExtern;
+module.exports.quelleExtern = quelleExtern;

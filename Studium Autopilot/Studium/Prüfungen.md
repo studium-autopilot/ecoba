@@ -18,48 +18,8 @@ Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 ```
 
 > [!eba-tabelle|schlicht|umbruch] Prüfungstermine
-> ```base
-> filters:
->   and:
->     - 'typ == "termin"'
-> formulas:
->   zeitraum: 'date(datum).format("DD.MM.YYYY") + if(bis, " – " + date(bis).format("DD.MM.YYYY"), "")'
->   was: 'file.asLink(titel)'
->   tage: '((date(datum) - today()).days).round()'
->   wann: 'if(date(if(bis, bis, datum)) < today(), "vorbei", if(formula.tage <= 0, if(bis, "läuft", "heute"), if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen")))'
->   stand: 'if(status == "geschätzt", html("<span class=\"eba-pill leer\">geschätzt</span>"), if(file.name.lower().contains("zwischentest"), html("<span class=\"eba-pill info\">Zwischentest</span>"), ""))'
-> properties:
->   formula.zeitraum:
->     displayName: Datum
->   formula.was:
->     displayName: Termin
->   formula.wann:
->     displayName: Wann
->   formula.stand:
->     displayName: Stand
-> views:
->   - type: list
->     rowHeight: medium
->     name: Prüfungstermine
->     filters:
->       and:
->         - 'kategorie == "Prüfung"'
->         - '!bis.isTruthy()'
->         - 'date(if(bis, bis, datum)) >= today()'
->         - 'erledigt != true'
->     sort:
->       - property: datum
->         direction: ASC
->     order:
->       - formula.zeitraum
->       - formula.was
->       - formula.wann
->       - formula.stand
->     columnSize:
->       formula.zeitraum: 156
->       formula.was: 258
->       formula.wann: 92
->       formula.stand: 92
+> ```eba-liste pruefungen
+> Prüfungstermine erscheinen, sobald Studium Autopilot läuft.
 > ```
 
 <p class="eba-hinweis">Klausurräume → <a class="internal-link" data-href="Kontakte & Links#Orte" href="Kontakte & Links#Orte">Kontakte & Links</a></p>
@@ -67,7 +27,7 @@ Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 
 ## Regeln
 
-> [!eba-karte|regeln]- Regeln
+> [!eba-karte|regeln]- Anmeldung, Wiederholung, Bestehen, Einsicht
 > Was die Prüfungsordnung zu Anmeldung, Rücktritt, Wiederholung und Bestehen sagt.
 >
 > > [!eba-raster|2]

@@ -70,3 +70,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Vorbilder (kein Code übernommen)
+
+Für Noten & Anmeldungen aus Alma (`alma-konto-html.js`) stammen die Regeln aus echten Seiten von Alma; wie gefüllte Tabellen von
+HISinOne aussehen (Tabellenklassen, Endungen der Element-ids, Kurzformen der Status), ist aus der Beschreibung bzw. dem Verhalten
+dieser Projekte übernommen, nicht ihr Code:
+
+- tue-api-wrapper (Tue-StudyOS, Apache-2.0)
+- hisinone-mcp (MIT)
+- myhda-notify (MIT)

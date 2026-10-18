@@ -2,6 +2,31 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.5 – PDF-Suche und Seiten aus einem Guss
+
+- **Neu:** Die Suche findet jetzt auch Wörter in deinen PDFs. Zu jeder PDF unter **Unterlagen** entsteht eine Textfassung mit
+  Link auf jede Seite, auch auf iPhone und iPad.
+- **Neu:** Mit eigenem Uni-Abgleich gibt es den Bereich **Lernplan**. Er zeigt je Modul, welches Kapitel diese Woche dran ist,
+  damit du alles früh verstanden hast und Zeit für Altklausuren bleibt.
+- **Neu (Beta):** Mit Beta-Versionen schaltest du unter **Einstellungen & Hilfe** **Noten & Anmeldungen (Alma)** ein. Neue Noten
+  stehen dann zum Übernehmen auf der Modulseite, eine fehlende Prüfungsanmeldung meldet das **Dashboard**.
+- **Übersichtlicher:** Alle Seiten wie aus einem Guss: Listen stehen überall als ruhige Zeilen, Pfeile zum Aufklappen rechts,
+  Symbole nur, wo sie etwas sagen. Jedes Design behält auch dunkel seine Form und Schrift.
+- **Behoben:** Ein Tipp auf **Aktualisieren** bei den zentralen Daten meldete oft nur, ein anderes Gerät aktualisiere gerade,
+  und holte nichts. Jetzt geht der Knopf auf jedem Gerät.
+- **Behoben:** Fiel ein Kurs in Alma weg, verschwand deine Stundenplan-Notiz samt deinem Text, und gelöschte kamen wieder. Jetzt
+  bleibt dein Text, und dein Stundenplan aus Alma aktualisiert sich von selbst.
+- **Übersichtlicher:** Jede Verbindung unter **Einstellungen & Hilfe** zeigt ihren Stand gleich, ein Fehler bleibt stehen, bis
+  es wieder klappt. Was nur du lösen kannst, steht unter **Bitte prüfen** auf dem **Dashboard**.
+- **Behoben:** Ein leeres Übungsblatt mit Abgabe verschwand beim Verlassen samt Frist, und Esc in einer späteren Frage legte
+  trotzdem eine Notiz an. Beides passiert nicht mehr.
+- **Behoben:** Nach einem Update meldeten deine anderen Geräte jede Datei einzeln, ab dem nächsten kommt dort nur eine Zeile zum
+  Neu laden. Zahlen in Spalten stehen bündig, und Hinweise von ILIAS siehst du unter **Einstellungen & Hilfe**.
+- **Behoben:** **Dashboard**, Modulseite, **Prüfungen** und **Studienverlauf** zeigten oft verschiedene nächste Prüfungen, auch
+  abgehakte, entfallene oder anerkannte. Jetzt rechnen alle gleich, am Wochenende mit der kommenden Woche.
+- **Behoben:** An Feiertagen wie Christi Himmelfahrt standen Sitzungen im Stundenplan wie sonst, 12:15 kam vor 9:15, und die
+  Frist der Orientierungsprüfung galt für jeden Studienbeginn. Das stimmt jetzt.
+
 ## 0.4.4 – Modulseiten, neue Designs und schnelleres ILIAS
 
 - **Neu:** Zwei weitere Designs: Flieder in zartem Lila und Klar, weiß und schlicht. Du wählst sie in der Einrichtung oder

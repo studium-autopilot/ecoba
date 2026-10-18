@@ -199,6 +199,26 @@ test("Gruppen: eine Notiz je eindeutiger Mitgliedschaft mit dem ILIAS-Namen, Cod
   assert.equal(x.stand.gruppeKurs, 1);
 });
 
+test("Gruppen: eine Notiz, die du gelöscht hast, bleibt weg (Grabstein im Index), bis du die Gruppe verlässt", async () => {
+  const x = gruppenAufbau();
+  await verbinden(x);
+  await x.m.jetztHolen({ manuell: true });
+  assert.deepEqual(x.sp.pfade(), [B110, S100]);
+  assert.equal(x.t.index().gruppen[351].notiz, "ws-2026-27-s100-tutorium-5");
+  x.sp.m.delete(S100); // von dir gelöscht
+  const b = await x.m.jetztHolen({ manuell: true });
+  assert.deepEqual(x.sp.pfade(), [B110], "kommt nicht wieder");
+  assert.deepEqual(b.gruppen.notizen.geloescht, ["351"]);
+  // verlassen (zwei Läufe ohne die Gruppe) und wieder beigetreten: neue Notiz
+  x.stand.mitglieder = ["352", "901"];
+  await x.m.jetztHolen({ manuell: true });
+  await x.m.jetztHolen({ manuell: true });
+  assert.equal(x.t.index().gruppen[351].notiz, "");
+  x.stand.mitglieder = ["351", "352", "901"];
+  await x.m.jetztHolen({ manuell: true });
+  assert.deepEqual(x.sp.pfade(), [B110, S100]);
+});
+
 test("Gruppen: Brotkrumen ohne Kurs werden gemerkt und erst nach einer Woche neu versucht", async () => {
   const x = gruppenAufbau({ kurs901: null });
   await verbinden(x);
@@ -219,12 +239,21 @@ test("Gruppen: Verlassen erst beim zweiten Lauf in Folge, leere Liste entfernt n
   await x.m.jetztHolen({ manuell: true });
   x.stand.mitglieder = [];
   const b = await x.m.jetztHolen({ manuell: true });
-  assert.match(b.warnung, /keine deiner Gruppen/);
+  assert.match(b.warnung, /keine deiner Übungsgruppen/);
+  // nicht nur im Protokoll: Zeile und Fenster unter Verbindungen sagen es (status().text), bis ein Lauf ohne Warnung kommt
+  assert.match(x.m.status().text, /^Aktualisiert .*\. ILIAS nennt gerade keine deiner Übungsgruppen\. Dein Stundenplan bleibt, wie er ist\.$/);
+  assert.equal(x.m.status().warnung, b.warnung);
+  assert.equal(x.m.protokoll().slice(-1)[0].warnung, b.warnung);
+  // Quellen-Vertrag: gemeinsame Form und „Bitte prüfen“ (ohne Kurs- oder Dateinamen)
+  const s = x.m.status();
+  assert.deepEqual([s.zustand, s.geprueft, s.fehler, s.warnungen], ["an", s.zuletzt, "", [b.warnung]]);
+  assert.deepEqual(I.hinweiseAus(s), [{ text: "**ILIAS** · " + b.warnung, pfad: "Studium/Einstellungen & Hilfe.md", anker: "Verbindungen" }]);
   await x.m.jetztHolen({ manuell: true });
   assert.equal(x.sp.pfade().length, 2, "leere Liste: nichts entfernt");
   // eine (die einzige B110-Gruppe) fehlt: erst beim zweiten Lauf weg
   x.stand.mitglieder = ["351", "352"];
   await x.m.jetztHolen({ manuell: true });
+  assert.equal(x.m.status().warnung, "", "Lauf ohne Warnung: der Satz ist weg");
   assert.deepEqual(x.sp.papierkorb, [], "erster Lauf ohne die Gruppe: bleibt");
   assert.equal(x.m.gruppenListe().some((g) => g.refId === "901"), true, "gilt noch als Mitglied");
   await x.m.jetztHolen({ manuell: true });
@@ -314,6 +343,16 @@ test("Gruppen im eigenen Uni-Abgleich: nur Mitgliedschaften und Notizen, keine D
   // zweiter Lauf: Codes gemerkt, nichts Neues
   const b2 = await x.m.jetztHolen({});
   assert.deepEqual([b2.art, b2.gruppen.neu, x.stand.gruppeKurs], ["nur-gruppen", 0, 3]);
+});
+
+test("Übungsgruppen von außen (quellen_extern: ilias-gruppen): Dateien wie immer, keine Gruppen-Notizen, keine Gruppenseite", async () => {
+  const x = gruppenAufbau({ einstellungen: { quellen_extern: ["ilias-gruppen"] } });
+  await verbinden(x);
+  const b = await x.m.jetztHolen({ manuell: true });
+  assert.equal(b.art, "ok", b.fehler);
+  assert.equal(b.neu, 5, "Dateien kommen");
+  assert.deepEqual([x.sp.pfade(), x.stand.gruppeKurs, b.gruppen], [[], 0, null], "keine Notiz, keine Gruppenseite, kein Gruppenbericht");
+  assert.equal(x.m.status().gruppenExtern, true);
 });
 
 // ---------- Freigeben ----------

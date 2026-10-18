@@ -10,7 +10,7 @@ const { laden } = require("./laden.js");
 
 // Tresor im Speicher: { Pfad: Inhalt }; listItems wie Obsidians metadataCache (task " " = offen, "x" = erledigt)
 const mitNotizen = (notizen) => {
-  const { ctx, ergebnis } = laden("todos", { heute: "2026-10-18" });
+  const { ctx, ergebnis } = laden("todos", { heute: "2026-10-18", kontext: { modell: laden("modell", { heute: "2026-10-18" }).ctx.modell } });
   const dateien = Object.keys(notizen).map((p) => ({ path: p, basename: path.basename(p, ".md") }));
   ctx.app.vault.getMarkdownFiles = () => dateien;
   ctx.app.vault.cachedRead = async (f) => notizen[f.path];
@@ -30,10 +30,11 @@ const VIELE = {
   "Notizen/Allgemein.md": "- [ ] Bibliotheksausweis verlängern\n> - [ ] Lerngruppe fragen #frage\n- [ ] Warum ist das so?",
   "System/Daten/Semester.md": "- [ ] nie zählen",
   "Studium/Prüfungen.md": "- [ ] nie zählen?",
+  "Lernplan/E101 Lernplan.md": "- [ ] 1 Einführung\n  - [ ] 1.1 Knappheit",
   "Dashboard.md": "- [ ] nie zählen",
 };
 
-test("Auswahl: offene Aufgaben außer in System/, Module/, Studium/ und Dashboard; Fragen enden auf „?“ oder tragen #frage", async () => {
+test("Auswahl: offene Aufgaben außer in System/, Module/, Studium/, Lernplan/ und Dashboard; Fragen enden auf „?“ oder tragen #frage", async () => {
   const beide = await mitNotizen(VIELE).lesenBeide();
   assert.deepEqual(beide.todos.map((t) => t.text), ["Übung vorbereiten", "Bibliotheksausweis verlängern", "Folien 3–5 nacharbeiten"]);
   assert.deepEqual(beide.fragen.map((t) => t.text), ["Lerngruppe fragen", "Warum ist das so?"]);

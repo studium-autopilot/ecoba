@@ -1,11 +1,13 @@
-// Kalender (kalender.js, art): Farbe des Punkts je Art. Zwischentests (Titel) sind keine Prüfung und bekommen eine eigene Art.
+// Kalender (kalender.js, art): Farbe des Punkts je Art nach der Regel des Fachmodells (ctx.modell.terminArt). Zwischentests
+// (Titel) sind keine Prüfung und bekommen eine eigene Art.
 // Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
 
-const { art } = laden("kalender", { heute: "2026-10-17" }).ergebnis;
+const modell = laden("modell", { heute: "2026-10-17" }).ctx.modell;
+const { art } = laden("kalender", { heute: "2026-10-17", kontext: { modell } }).ergebnis;
 
 test("art: Prüfung rot, Zwischentest eigene Art, Rest wie bisher", () => {
   assert.equal(art("Prüfung", "Klausur X100 Beispiel"), "pruefung");

@@ -5,9 +5,10 @@
 // mit Note), Anmeldezeitraum und „Termin folgt“ (nur Module ohne Klausurtermin im Modul und ohne Prüfungs-Termin-Notiz in einer
 // Phase). Ersetzt die Chip-Reihe „Prüfungen“ (zeigt alles, was die Chips zeigten). Jeder Eintrag öffnet seine Notiz
 // (Termin-Notiz, sonst das Modul).
-// Daten live (metadataCache, schreibt nichts): Module des aktuellen Fachsemesters wie die Chips (Feld `klausur`),
-// Termin-Notizen (Kategorie Prüfung mit `code`; Frist „Prüfungsanmeldung …“), Phasen und Semester aus dem Datenmodell
-// (modell.js, sonst Einstellungen), `variante`. Neu gezeichnet bei Änderungen, Löschen, Umbenennen und an einem neuen Tag.
+// Daten aus dem Fachmodell (ctx.modell, schreibt nichts): Prüfungen nach der einen Regel (pruefungen: Termin-Notizen und Feld
+// `klausur`, Modulstatus, abgehakt, entfällt), Module deines Plans im aktuellen Fachsemester (imPlan), Fristen
+// „Prüfungsanmeldung …“, Prüfungsphasen nur aus den Semesterdaten. Abgehakte Klausuren stehen gedämpft mit „erledigt“ da und
+// zählen nicht mehr als „Termin folgt“. Neu gezeichnet bei Änderungen, Löschen, Umbenennen und an einem neuen Tag.
 // Erweiterung: Codeblock und Ereignisse über ctx.codeblock/ctx.an (Hot-Reload ohne Neustart).
 // Stil: eba-core.css Abschnitt 37, Klassen eba-kzt-*.
 module.exports = function (ctx) {
@@ -18,8 +19,7 @@ module.exports = function (ctx) {
   const MONAT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   const TAG = 86400000;
   // Zwischentests (freiwillig, unbenotet) tragen kategorie „Prüfung“ und das Kürzel des Moduls, sind aber keine Prüfung:
-  // eigene Farbe, eigener Eintrag in der Legende, zählen nicht für „Termin folgt“. Erkannt am Titel wie in verlauf.js.
-  const ZWISCHENTEST = /zwischentest/i;
+  // eigene Farbe, eigener Eintrag in der Legende, zählen nicht für „Termin folgt“ (ctx.modell.istZwischentest).
 
   const pad = (n) => String(n).padStart(2, "0");
   const datum = (v) => { const m = String(v ?? "").match(/(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
@@ -27,62 +27,28 @@ module.exports = function (ctx) {
   const tm = (d) => `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`;
   const tmj = (d) => `${tm(d)}${d.getFullYear()}`;
   const wt = (d) => `${KURZTAG[d.getDay()]} ${tm(d)}`;
-  const st = (v) => String(v ?? "").toLowerCase().trim();
-  const fertig = (s) => ["bestanden", "anerkannt"].includes(st(s));
   const rel = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : n > 1 ? `in ${n} Tagen` : "vorbei");
 
   const lesen = (heute) => {
-    const fm = (p) => app.metadataCache.getFileCache(app.vault.getAbstractFileByPath(p) || { path: "" })?.frontmatter || {};
-    const ein = fm("System/Einstellungen.md");
-    // Aktuelles Fachsemester und Module wie die frühere Chip-Formel (Seite Prüfungen, Bases)
-    // Datenmodell (modell.js): Fachsemester und Prüfungsphasen aus Studienbeginn + zentralen Semesterdaten
-    const md = ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null;
-    let fs = 1;
-    if (md) fs = md.vorStart ? 1 : md.fachsemester;
-    else for (const z of ein.semesterliste || []) { const t = String(z).split("|"); if (datum(t[2]) <= heute && datum(t[3]) >= heute) { fs = +t[0]; break; } }
-    const variante = String(ein.variante ?? "");
-    // Empfohlenes Fachsemester je Modul aus dem Musterplan der gewählten Variante (Datenmodell), sonst das Feld fachsemester
-    const fsVon = {};
-    if (md) for (const x of md.module) fsVon[x.f.path] = x.fsEmpfohlen;
-    const module = [], termine = [];
-    for (const f of app.vault.getMarkdownFiles()) {
-      const m = app.metadataCache.getFileCache(f)?.frontmatter;
-      if (!m) continue;
-      if (m.typ === "modul") {
-        const pflicht = m.gruppe === "Grundstudium" || m.gruppe === "Abschluss" || m.gewaehlt === true ||
-          (variante === "Economics" && m.rolle_economics === "Pflicht") || (variante === "Business Administration" && m.rolle_ba === "Pflicht");
-        const empf = f.path in fsVon ? fsVon[f.path] : +m.fachsemester;
-        if (pflicht && (empf === fs || ["läuft", "angemeldet"].includes(st(m.status))))
-          module.push({ f, code: String(m.code || f.basename.split(" ")[0]), datum: datum(m.klausur), fertig: fertig(m.status), ergebnis: String(m.ergebnis ?? "").trim() });
-      } else if (m.typ === "termin" && m.erledigt !== true) {
-        const titel = String(m.titel || f.basename);
-        termine.push({ f, titel, kat: String(m.kategorie ?? ""), code: String(m.code ?? "").trim(),
-          von: datum(m.datum), bis: datum(m.bis), geschaetzt: st(m.status) === "geschätzt", test: ZWISCHENTEST.test(titel) });
-      }
-    }
-    module.sort((a, b) => a.code.localeCompare(b.code));
-    // Nächste zwei Prüfungsphasen, die noch nicht vorbei sind
-    const phasenRoh = md ? md.pruefungsphasen.map((p) => [p.von, p.bis, p.art, p.status]) : (ein.pruefungsphasen || []).map((z) => String(z).split("|"));
-    const phasen = phasenRoh.map((t) => ({ von: datum(t[0]), bis: datum(t[1]), art: (t[2] || "Prüfungsphase").trim(), geschaetzt: st(t[3]) === "geschätzt" }))
+    const M = basis.modell, D = M.daten();
+    const h = M.zeit.iso(heute);
+    // Module deines Plans (ctx.modell.imPlan) im aktuellen Fachsemester (Musterplan der Variante) oder schon begonnen
+    const fs = D.vorStart ? 1 : D.fachsemester;
+    const module = D.module.filter((m) => M.imPlan(m) && (m.fsEmpfohlen === fs || ["läuft", "angemeldet"].includes(m.status)))
+      .map((m) => ({ f: m.f, code: m.code, datum: datum(m.fm.klausur), fertig: m.fertig, ergebnis: m.ergebnis }))
+      .sort((a, b) => a.code.localeCompare(b.code));
+    // Nächste zwei Prüfungsphasen, die noch nicht vorbei sind (Semesterdaten: der eine Master für Prüfungsphasen)
+    const phasen = D.pruefungsphasen.map((p) => ({ von: datum(p.von), bis: datum(p.bis), art: (p.art || "Prüfungsphase").trim(), geschaetzt: p.status === "geschätzt" }))
       .filter((p) => p.von && p.bis && p.bis >= heute).sort((a, b) => a.von - b.von).slice(0, 2);
-    const anmeldungen = termine.filter((t) => t.von && /Prüfungsanmeldung/.test(t.titel) && (t.bis || t.von) >= heute).sort((a, b) => a.von - b.von);
-    // Prüfungen: Termin-Notizen (Prüfung mit Kürzel, eintägig) und Modulklausuren. Kürzel + Tag zählen nur einmal; die
-    // Termin-Notiz gewinnt (Ort, „geschätzt“), „bestanden“ und Ergebnis kommen vom Modul (docs/architektur.md „Nächste Prüfung“)
-    const pruef = [], nachTag = new Map();
-    for (const t of termine) {
-      // Zwischentests eigener Schlüssel: Sie verdecken nie die Klausur des Moduls am selben Tag
-      const schluessel = t.code + (t.von ? tmj(t.von) : "") + (t.test ? "|test" : "");
-      if (t.kat !== "Prüfung" || !t.code || !t.von || t.bis || nachTag.has(schluessel)) continue;
-      const k = { code: t.code, d: t.von, f: t.f, fertig: false, ergebnis: "", geschaetzt: t.geschaetzt, termin: true, titel: t.titel, test: t.test };
-      nachTag.set(schluessel, k);
-      pruef.push(k);
-    }
-    for (const m of module) if (m.datum) {
-      const k = nachTag.get(m.code + tmj(m.datum));
-      if (k) Object.assign(k, { fertig: m.fertig, ergebnis: m.ergebnis, modul: true });
-      else pruef.push({ code: m.code, d: m.datum, f: m.f, fertig: m.fertig, ergebnis: m.ergebnis, geschaetzt: false, modul: true });
-    }
-    pruef.sort((a, b) => a.d - b.d || a.code.localeCompare(b.code));
+    const anmeldungen = M.termine().filter((t) => !t.erledigt && /Prüfungsanmeldung/.test(t.titel) && t.ende >= h)
+      .map((t) => ({ f: t.f, titel: t.titel, von: datum(t.datum), bis: t.bis ? datum(t.bis) : null, geschaetzt: t.geschaetzt }));
+    // Prüfungen mit Kürzel (Beschriftung auf der Leiste): Termin-Notiz gewinnt, „bestanden“ und Ergebnis vom Modul
+    const pruef = M.pruefungen({ heute: h }).filter((p) => p.code).map((p) => ({
+      code: p.code, d: datum(p.datum), f: p.f, fertig: p.fertig, ergebnis: p.ergebnis, erledigt: p.erledigt && !p.fertig, geschaetzt: p.geschaetzt,
+      // modul: Klausur, die zum Feld „klausur“ eines Moduls gehört (aus dem Feld oder die Notiz am selben Tag), nie ein Zwischentest
+      termin: p.quelle === "termin", modul: !p.zwischentest && (p.quelle === "modul" || (!!p.modul && String(p.modul.fm.klausur || "").slice(0, 10) === p.datum)),
+      titel: p.titel, test: p.zwischentest,
+    }));
     return { module, phasen, anmeldungen, pruef };
   };
 
@@ -128,7 +94,7 @@ module.exports = function (ctx) {
       for (const k of pruef) {
         if (k.d < a || k.d > e) continue;
         if (k.test) tests++;
-        const p = bahnP.createEl("b", { cls: (k.fertig ? "ok" : k.d < heute ? "vorbei" : inPhase(k.d) ? "" : "einzeln") + (k.test ? " test" : ""),
+        const p = bahnP.createEl("b", { cls: (k.fertig ? "ok" : k.d < heute || k.erledigt ? "vorbei" : inPhase(k.d) ? "" : "einzeln") + (k.test ? " test" : ""),
           attr: { title: `${k.test ? k.titel : k.code} · ${wt(k.d)}` } });
         p.style.left = x(k.d) + "%";
       }
@@ -159,7 +125,7 @@ module.exports = function (ctx) {
         z.appendText("Anmeldung ");
         link(z, anm.f, "eba-kzt-anm-link", `${tm(anm.von)} – ${tmj(anm.bis || anm.von)}`);
         const a0 = tage(heute, anm.von), a1 = tage(heute, anm.bis || anm.von);
-        z.appendText(a0 > 0 ? ` · ${rel(a0)}` : a1 >= 0 ? ` · läuft, noch ${a1 === 0 ? "heute" : a1 + " Tage"}` : "");
+        z.appendText(a0 > 0 ? ` · ${rel(a0)}` : a1 >= 0 ? ` · läuft, noch ${a1 === 0 ? "heute" : a1 === 1 ? "1 Tag" : a1 + " Tage"}` : "");
       }
       const drin = pruef.filter((k) => k.d >= p.von && k.d <= p.bis);
       // Beschriftungen in Reihen, damit nahe Termine sich nicht überdecken (Abstand mind. ca. 20 % der Breite)
@@ -170,13 +136,13 @@ module.exports = function (ctx) {
         let r = reihen.findIndex((letzter) => i - letzter >= abstand);
         if (r < 0) { r = reihen.length; reihen.push(i); } else reihen[r] = i;
         const pos = ((i + 0.5) / n) * 100;
-        const m = link(marken, k.f, "eba-kzt-marke" + (k.fertig ? " ok" : k.d < heute ? " vorbei" : "") + (k.geschaetzt ? " geschaetzt" : "") + (k.termin && p.art.startsWith("Nachhol") ? " nachhol" : "") + (k.test ? " test" : ""), "");
+        const m = link(marken, k.f, "eba-kzt-marke" + (k.fertig ? " ok" : k.d < heute || k.erledigt ? " vorbei" : "") + (k.geschaetzt ? " geschaetzt" : "") + (k.termin && p.art.startsWith("Nachhol") ? " nachhol" : "") + (k.test ? " test" : ""), "");
         m.style.left = pos + "%";
         m.style.setProperty("--reihe", r);
         if (pos < 12) m.addClass("links"); else if (pos > 88) m.addClass("rechts");
         m.createEl("b", { text: k.code });
         const t = tage(heute, k.d);
-        m.createSpan({ text: k.fertig ? "bestanden" + (k.ergebnis ? ` · ${k.ergebnis}` : "") : wt(k.d) + (t >= 0 && t <= 30 ? ` · ${t === 0 ? "heute" : t === 1 ? "morgen" : "in " + t + " T."}` : "") });
+        m.createSpan({ text: k.fertig ? "bestanden" + (k.ergebnis ? ` · ${k.ergebnis}` : "") : wt(k.d) + (k.erledigt ? " · erledigt" : t >= 0 && t <= 30 ? ` · ${t === 0 ? "heute" : t === 1 ? "morgen" : "in " + t + " T."}` : "") });
       }
       marken.style.setProperty("--reihen", Math.max(1, reihen.length));
       if (!drin.length) marken.addClass("leer");
@@ -195,10 +161,10 @@ module.exports = function (ctx) {
 
     // --- Ohne Termin, außerhalb der Phasen, bestanden ohne Datum ---
     // „Termin folgt“ nur ohne Datum im Modul UND ohne Prüfungs-Termin-Notiz mit diesem Kürzel in einer Prüfungsphase (zentrale
-    // Klausurtermine stehen in Termin-Notizen; Zwischentests zählen hier nie, auch nicht innerhalb einer Phase)
+    // Klausurtermine stehen in Termin-Notizen, auch abgehakte zählen; Zwischentests zählen hier nie, auch nicht in einer Phase)
     const folgt = module.filter((m) => !m.datum && !m.fertig && !pruef.some((k) => k.termin && !k.test && k.code === m.code && inPhase(k.d)));
-    const ausser = pruef.filter((k) => k.modul && !inPhase(k.d));
-    const fertigOhne = module.filter((m) => !m.datum && m.fertig);
+    const ausser = pruef.filter((k) => k.modul && !k.test && !inPhase(k.d));
+    const fertigOhne = module.filter((m) => !m.datum && m.fertig && !pruef.some((k) => !k.test && k.code === m.code));
     if (folgt.length || ausser.length || fertigOhne.length) {
       const fuss = el.createDiv({ cls: "eba-kzt-rest" });
       const zeile = (label, liste, text) => {
@@ -211,11 +177,12 @@ module.exports = function (ctx) {
       zeile("Weitere", ausser, (k) => wt(k.d));
       zeile("Bestanden", fertigOhne, (m) => m.ergebnis);
     }
-    if (!phasen.length && !pruef.length && !module.length) el.createDiv({ cls: "eba-kzt-leer", text: "Keine Prüfungsphasen in den Einstellungen." });
+    if (!phasen.length && !pruef.length && !module.length) el.createDiv({ cls: "eba-kzt-leer", text: "Noch keine Prüfungsphasen und Prüfungstermine." });
   };
 
   const registrieren = () => {
     const block = ctx.codeblock(SPRACHE, (quelle, el, c) => {
+      if (!ctx.modell || !ctx.modell.pruefungen) { el.setText(String(quelle || "").trim()); return; }
       try { zeichnen(el, c); } catch (e) { el.setText("Klausurzeit: Fehler – " + e.message); console.error("Klausurzeit", e); }
     });
     const bald = ctx.entprellen(() => block.neu(), 1500);

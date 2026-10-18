@@ -85,6 +85,7 @@
     "nachweis": "text",
     "veranstaltung": "text",
     "aenderungen": "multitext",
-    "stundenplan_ausgeblendet": "multitext"
+    "stundenplan_ausgeblendet": "multitext",
+    "quellen_extern": "multitext"
   }
 }

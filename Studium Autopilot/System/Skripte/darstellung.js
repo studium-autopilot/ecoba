@@ -39,8 +39,8 @@ module.exports = function (ctx) {
   // Reihenfolge der Zeilen; text = die gedämpfte Zeile in Einstellungen & Hilfe und in der Einrichtung
   const DESIGNS = [
     { wert: "elfenbein", titel: "Elfenbein", text: "Warmes Papier, Überschriften wie im Buch" },
-    { wert: "flieder", titel: "Flieder", text: "Zartes Lila, weiche Formen · im Dunkelmodus Elfenbein" },
-    { wert: "klar", titel: "Klar", text: "Weiß und schlicht · im Dunkelmodus Elfenbein" },
+    { wert: "flieder", titel: "Flieder", text: "Zartes Lila, weiche Formen · dunkel mit den Farben von Elfenbein" },
+    { wert: "klar", titel: "Klar", text: "Weiß und schlicht · dunkel mit den Farben von Elfenbein" },
   ];
   const SCHEMA = ["eba-core", "eba-paper-elfenbein", "eba-flieder", "eba-klar"];
   const FRUEHER = ["eba-graphite", "eba-paper", "eba-paper-tuebingen", "eba-paper-schiefer"];

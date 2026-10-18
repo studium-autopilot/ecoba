@@ -42,7 +42,7 @@ cssclasses:
 >   quote: |-
 >     if(formula.u.length > 0, (formula.fertig / formula.u.length * 100).round(), 0)
 >   karte: |-
->     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Unterlagen" + "</span><span class='v'>" + formula.u.length + "</span><span class='s'>" + formula.module + " Module" + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Noch nicht gelesen" + "</span><span class='v'>" + formula.neu + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Durchgearbeitet" + "</span><span class='v'>" + formula.quote + " %" + "</span>" + "<progress max='100' value='" + formula.quote + "'></progress>" + "</div>" + "</div></div>")
+>     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Unterlagen" + "</span><span class='v'>" + formula.u.length + "</span><span class='s'>" + formula.module + if(formula.module == 1, " Modul", " Module") + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Noch nicht gelesen" + "</span><span class='v'>" + formula.neu + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Durchgearbeitet" + "</span><span class='v'>" + formula.quote + " %" + "</span>" + "<progress max='100' value='" + formula.quote + "'></progress>" + "</div>" + "</div></div>")
 > views:
 >   - type: list
 >     name: Kennzahlen

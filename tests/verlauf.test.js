@@ -1,23 +1,31 @@
-// Studienverlauf (verlauf.js, rechnen): Fähnchen der Prüfungen. Zwischentests sind nie die nächste Prüfung und verdecken keine
-// Klausur am selben Tag. Nur ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
+// Studienverlauf (verlauf.js, rechnen und lupe): Fähnchen der Prüfungen aus dem Fachmodell, Zwischentests sind nie die nächste
+// Prüfung und verdecken keine Klausur am selben Tag; Lupe mit Rückmeldung und freien Tagen. lesen() nimmt Prüfungen, ECTS und
+// „im Plan“ aus ctx.modell. Nur ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { laden } = require("./laden.js");
+const { laden, json } = require("./laden.js");
 
-const { rechnen } = laden("verlauf", { heute: "2026-10-17" }).ergebnis;
+const SEMESTER = json("semester.json");
+const verlauf = (notizen = {}) => {
+  const modell = laden("modell", { heute: "2026-10-17", notizen, frontmatter: { "System/Daten/Semester.md": SEMESTER } }).ctx.modell;
+  return laden("verlauf", { heute: "2026-10-17", kontext: { modell } }).ergebnis;
+};
+const { rechnen } = verlauf();
 const d = (tag, monat, jahr) => new Date(jahr || 2026, monat - 1, tag);
-const modul = (code, klausur) => ({ pfad: `Module/${code}.md`, code, titel: "Beispiel", ects: 6, sem: "WS 2026/27", semFs: "", status: "offen",
-  ergebnis: "", klausur, op: false, zusatz: false, gewaehlt: false, gruppe: "Grundstudium", pruefung: "Klausur" });
-const termin = (titel, datum, code = "X100") => ({ datum, titel, code, geschaetzt: false, pfad: `Termine/${titel}.md` });
-const daten = (module, termine) => ({ c: {}, variante: "offen", sq: 0, pausen: [], phasen: [], module, termine,
+const modul = (code) => ({ pfad: `Module/${code}.md`, code, titel: "Beispiel", ects: 6, sem: "WS 2026/27", semFs: "", status: "offen",
+  ergebnis: "", op: false, zusatz: false, gewaehlt: false, gruppe: "Grundstudium", pruefung: "Klausur", imPlan: true, pr: null });
+// Prüfung, wie lesen() sie aus ctx.modell.pruefungen() macht
+const pruefung = (titel, datum, o) => Object.assign({ datum, titel, code: "X100", geschaetzt: false, pfad: `Termine/${titel}.md`, offen: datum >= d(17, 10),
+  erledigt: false, quelle: "termin", klausurFeld: false, test: /zwischentest/i.test(titel) }, o);
+const daten = (module, pruefungen) => ({ variante: "offen", pausen: [], phasen: [], module, pruefungen, ects: 0, op: 0,
   sems: [{ fs: 1, name: "WS 2026/27", sb: d(1, 10), se: d(31, 3, 2027), vb: d(12, 10), ve: d(12, 2, 2027), geschaetzt: false, hinweis: "" }] });
 
 test("Nächste Prüfung überspringt Zwischentests (Titel, Groß- und Kleinschreibung egal)", () => {
-  const R = rechnen(daten([modul("X100", null)], [
-    termin("Zwischentest 1 X100 Beispiel", d(13, 11)),
-    termin("zwischentest X100", d(20, 11)),
-    termin("Klausur X100 Beispiel", d(30, 1, 2027)),
+  const R = rechnen(daten([modul("X100")], [
+    pruefung("Zwischentest 1 X100 Beispiel", d(13, 11)),
+    pruefung("zwischentest X100", d(20, 11)),
+    pruefung("Klausur X100 Beispiel", d(30, 1, 2027)),
   ]));
   assert.equal(R.naechste.titel, "Klausur X100 Beispiel");
   assert.deepEqual(R.pruef.map((p) => [p.label, !!p.test, p.haupt]), [
@@ -28,14 +36,31 @@ test("Nächste Prüfung überspringt Zwischentests (Titel, Groß- und Kleinschre
 });
 
 test("Ein Zwischentest am selben Tag verdeckt die Klausur des Moduls nicht", () => {
-  const R = rechnen(daten([modul("X100", d(13, 11))], [termin("Zwischentest 1 X100", d(13, 11))]));
+  const R = rechnen(daten([modul("X100")], [pruefung("Zwischentest 1 X100", d(13, 11)), pruefung("X100 · Beispiel", d(13, 11), { quelle: "modul", test: false })]));
   assert.equal(R.pruef.length, 2);
   assert.equal(R.naechste.art, "klausur");
 });
 
+test("lesen: Prüfung je Modul nach der einen Regel – abgehakt ohne Countdown, anerkannt ohne kommende Klausur (Fehler 5, 6)", () => {
+  const n = {
+    "Module/1 Grundstudium/X100 Beispiel.md": { typ: "modul", code: "X100", titel: "Beispiel", gruppe: "Grundstudium", ects: 6, fachsemester: 1 },
+    "Module/1 Grundstudium/X180 Beispiel.md": { typ: "modul", code: "X180", titel: "Beispiel", gruppe: "Grundstudium", ects: 6, fachsemester: 1, status: "anerkannt" },
+    "Termine/2027-02-06 Klausur X100.md": { typ: "termin", titel: "Klausur X100", datum: "2027-02-06", kategorie: "Prüfung", code: "X100", erledigt: true },
+    "Termine/2027-01-30 Klausur X180.md": { typ: "termin", titel: "Klausur X180", datum: "2027-01-30", kategorie: "Prüfung", code: "X180" },
+  };
+  const V = verlauf(n), D = V.lesen();
+  const x100 = D.module.find((m) => m.code === "X100"), x180 = D.module.find((m) => m.code === "X180");
+  assert.deepEqual([x100.pr.erledigt, x100.pr.offen], [true, false]);
+  assert.equal(x180.pr, null);
+  assert.equal(D.ects, 6, "anerkannt zählt");
+  const R = V.rechnen(D), html = V.lupe(D, R, R.sems[0]);
+  assert.match(html, /Sa 06\.02\. · erledigt/, "abgehakt: Datum ohne Countdown");
+  assert.ok(!R.naechste, "keine offene Prüfung mehr");
+});
+
 // Lupe statt Tabelle „Semestertermine“ (17.10.2026): Rückmeldung fürs nächste Semester als Meilenstein, vorlesungsfreie Tage
 // als Striche im Band und als eine Legenden-Zeile
-const { lupe } = laden("verlauf", { heute: "2026-10-17" }).ergebnis;
+const { lupe } = verlauf();
 const frei = (name, datum, geschaetzt = false, hinweis = "") => ({ name, datum, geschaetzt, hinweis });
 const rueck = (fuer, von, bis, extra = {}) => Object.assign({ fuer, von, bis, pfad: "", erledigt: false, geschaetzt: false, hinweis: "" }, extra);
 const mitTerminen = (extra) => Object.assign(daten([], []), {

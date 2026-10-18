@@ -1,8 +1,9 @@
 // Wochenraster auf Dashboard und Stundenplan: Codeblock ```eba-woche``` (in der Karte > [!eba-kennzahlen|woche …]).
-// Zeigt eine Kalenderwoche Montag bis Freitag (am Samstag und Sonntag schon die nächste) mit den Stundenplan-Notizen
-// (typ: lehrveranstaltung, jede Herkunft: Alma, eigener Abgleich, zentral, ILIAS-Gruppe, gewählte Gruppe, von Hand).
-// Ein Kasten erscheint nur zwischen von und bis; Ausfall (ausfall, Pausen) durchgestrichen, Änderung (aenderungen) gestrichelt
-// mit neuer Zeit und neuem Raum, Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
+// Zeigt eine Kalenderwoche Montag bis Freitag (die Planwoche des Fachmodells: am Samstag und Sonntag schon die nächste) mit den
+// Stundenplan-Notizen (typ: lehrveranstaltung, jede Herkunft: Alma, eigener Abgleich, zentral, ILIAS-Gruppe, gewählte Gruppe,
+// von Hand). Ob eine Sitzung stattfindet, sagt ctx.modell.findetStatt (eine Regel mit „Als Nächstes“ der Modulseite): ein Kasten
+// nur zwischen von und bis (Einzeltermin nur an seinem Tag); Ausfall (ausfall, Pausen, vorlesungsfreie Tage wie Christi
+// Himmelfahrt) durchgestrichen, Änderung (aenderungen) gestrichelt mit neuer Zeit und neuem Raum, Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
 // sonst Code), blass Art und Gruppe (nur Übung, Tutorium, Seminar; Name aus gruppe), darunter Raum, davor der Beginn, wenn er
 // nicht zur vollen Stunde liegt. Kopfzeile rechts „‹ KW n ›“; Wischen nach links/rechts wechselt am Touch-Gerät die Woche.
 // Welche Woche: nur auf diesem Gerät (app.saveLocalStorage, Schlüssel eba-woche-versatz, nie im Vault, nie abgeglichen), so
@@ -10,7 +11,8 @@
 // (der Wert trägt die Sitzung). „KW n“ ist in einer anderen Woche der Weg zurück.
 // Bis 17.10.2026 war das Raster eine Bases-Formel; Bases liest keinen gerätelokalen Speicher, darum jetzt hier. DOM und Klassen
 // sind dieselben (eba-core.css Abschnitte 13, 33, 39, 47, 54, 55). Schreibt keine Datei. Neu gezeichnet (entprellt) bei
-// Änderungen an Stundenplan-, Modul- und Einstellungsnotizen, beim Zurückkommen in die App und alle 10 Minuten.
+// Änderungen an Stundenplan-, Modul- und Einstellungsnotizen und an den Semesterdaten, beim Zurückkommen in die App und alle
+// 10 Minuten.
 module.exports = function (ctx) {
   const app = window.app;
   const SPRACHE = "eba-woche";
@@ -25,29 +27,17 @@ module.exports = function (ctx) {
   const VORLESUNG = ["Vorlesung", "Veranstaltung"]; // „Veranstaltung“ = Alma ohne erkannte Art
 
   // ---------- Datum (Ortszeit, ganze Tage auch über die Zeitumstellung) ----------
+  const M = () => ctx.modell; // Fachmodell (modell.js), beim Zeichnen nachgeschlagen
   const zwei = (n) => (n < 10 ? "0" : "") + n;
   const iso = (d) => d.getFullYear() + "-" + zwei(d.getMonth() + 1) + "-" + zwei(d.getDate());
-  const tagIso = (v) => {
-    if (v instanceof Date) return isNaN(v.getTime()) ? "" : v.toISOString().slice(0, 10);
-    const m = String(v == null ? "" : v).match(/^\d{4}-\d{2}-\d{2}/);
-    return m ? m[0] : "";
-  };
   const datum = (s) => { const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
   const plus = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
   const liste = (v) => (Array.isArray(v) ? v : v == null || v === "" ? [] : [v]);
 
-  // Montag der aktuellen Woche: Montag bis Freitag diese, Samstag und Sonntag die nächste
-  const aktuellerMontag = (jetzt) => {
-    const wt = jetzt.getDay() || 7;
-    return plus(new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate()), wt >= 6 ? 8 - wt : 1 - wt);
-  };
+  // Montag der gezeigten Woche ohne Blättern: die Planwoche (Montag bis Freitag diese, Samstag und Sonntag die nächste)
+  const aktuellerMontag = (jetzt) => datum(M().planwoche(iso(jetzt)).mo);
   // ISO-Kalenderwoche
-  const kw = (d) => {
-    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    const wt = t.getUTCDay() || 7;
-    t.setUTCDate(t.getUTCDate() + 4 - wt);
-    return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7);
-  };
+  const kw = (d) => M().zeit.kw(iso(d));
 
   // ---------- Gezeigte Woche: nur auf diesem Gerät ----------
   // Sitzung: neu bei jedem Start von Obsidian (ctx.bleibend überlebt nur den Hot-Reload dieses Skripts)
@@ -116,58 +106,54 @@ module.exports = function (ctx) {
 
   // ---------- Woche berechnen (reine Logik, ohne DOM) ----------
   // notizen: [{ pfad, fm }] mit typ lehrveranstaltung; kurzVonCode: { Code: Kurzname }; modulPfad: { Name der Modulnotiz: Pfad };
-  // einst: Frontmatter von System/Einstellungen.md; montag: Date; jetzt: Date
-  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, einst, montag, jetzt }) => {
-    const E = einst || {};
+  // modell: ctx.modell (Semester, Pausen, freie Tage, findetStatt); montag: Date; jetzt: Date
+  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modell, montag, jetzt }) => {
     const tage = [0, 1, 2, 3, 4].map((i) => iso(plus(montag, i)));
     const heute = iso(jetzt), wt = jetzt.getDay() || 7;
     const ht = wt <= 5 && tage[wt - 1] === heute;
-    // Semester nach dem Freitag der gezeigten Woche („fs|Name|Beginn|Ende|Vorlesungsbeginn|Vorlesungsende“)
-    const sems = liste(E.semesterliste).map((s) => String(s).split("|")).filter((s) => s.length >= 6);
-    const fr = tage[4];
-    const im = sems.filter((s) => s[2] <= fr && s[3] >= fr);
-    const sem = im.length ? im[0] : sems.length ? (fr < sems[0][2] ? sems[0] : sems[sems.length - 1]) : null;
-    const pausen = liste(E.pausen).map((p) => String(p).split("|"));
-    const frei = tage.map((t) => pausen.some((p) => p[0] <= t && p[1] >= t));
-    const pw = pausen.filter((p) => p[0] <= tage[4] && p[1] >= tage[0]);
-    const ab = liste(E.stundenplan_ausgeblendet).map(String);
-    const lv = notizen.filter(({ fm }) => sem && fm.semester === sem[1] && fm.entfaellt !== true
-      && !(fm.herkunft === "zentral" && ab.indexOf(String(fm.zentral_id)) >= 0) && zeit(fm.beginn) && zeit(fm.ende));
+    // Semester nach dem Freitag der gezeigten Woche (deine Semesterliste, sonst zentral bzw. nach Regel)
+    const sem = modell.semesterFuer(tage[4]);
+    const pw = modell.daten().pausen.filter((p) => p.von <= tage[4] && p.bis >= tage[0]);
+    // nie: entfallen oder „Besuche ich nicht“ (findetStatt prüft das vor dem Tag)
+    const nie = (fm) => ["entfaellt", "ausgeblendet"].indexOf(modell.findetStatt(fm, tage[0]).grund) >= 0;
+    const lv = notizen.filter(({ fm }) => sem && fm.semester === sem.name && !nie(fm) && zeit(fm.beginn) && zeit(fm.ende));
     // Größe des Rasters aus allen Serien des Semesters (dazu Einzeltermine und geänderte Zeiten dieser Woche), damit es von
     // Woche zu Woche gleich bleibt
     const aenderungIn = (fm) => liste(fm.aenderungen).map((x) => String(x).split("|")).filter((x) => x.length >= 4 && tage.indexOf(x[0]) >= 0 && zeit(x[1]) && zeit(x[2]))[0] || null;
     const spannen = [];
     for (const { fm } of lv) {
-      if (fm.einzeltermin !== true || tage.indexOf(tagIso(fm.von)) >= 0) spannen.push([zeit(fm.beginn), zeit(fm.ende)]);
+      if (fm.einzeltermin !== true || tage.indexOf(M().zeit.iso(fm.von)) >= 0) spannen.push([zeit(fm.beginn), zeit(fm.ende)]);
       const a = aenderungIn(fm);
       if (a) spannen.push([zeit(a[1]), zeit(a[2])]);
     }
     const h0 = spannen.length ? Math.min.apply(null, spannen.map((s) => s[0].h)) : 8;
     const h1 = spannen.length ? Math.max.apply(null, spannen.map((s) => s[1].h + (s[1].m > 0 ? 1 : 0))) : 18;
     const rows = Math.max(1, (h1 - h0) * 4);
-    const wl = lv.filter(({ fm }) => {
-      const w = Number(fm.wochentag);
-      if (!(w >= 1 && w <= 5)) return false;
-      const t = tage[w - 1], von = tagIso(fm.von), bis = tagIso(fm.bis);
-      return (!von || von <= t) && (!bis || bis >= t);
-    });
-    const ausfall = (fm) => liste(fm.ausfall).map(tagIso).indexOf(tage[Number(fm.wochentag) - 1]) >= 0 || frei[Number(fm.wochentag) - 1];
-    const gehalten = wl.filter(({ fm }) => !ausfall(fm));
+    // Je Notiz ihr Tag der Woche und ob sie dort stattfindet (Ausfall, Pause, freier Tag → durchgestrichen)
+    const AUS = ["ausfall", "pause", "frei"];
+    const wl = [];
+    for (const n of lv) {
+      const w = Number(n.fm.wochentag);
+      if (!(w >= 1 && w <= 5)) continue;
+      const s = modell.findetStatt(n.fm, tage[w - 1]);
+      if (s.statt || AUS.indexOf(s.grund) >= 0) wl.push(Object.assign({ s }, n));
+    }
+    const gehalten = wl.filter(({ s }) => s.statt);
     let leer = "";
     if (!gehalten.length) {
-      if (pw.length) leer = pw[0][2] || "Vorlesungsfrei";
-      else if (sem && tage[4] < sem[4]) { const vb = datum(sem[4]); leer = "Vorlesungsbeginn " + zwei(vb.getDate()) + "." + zwei(vb.getMonth() + 1) + "."; }
-      else if (sem && tage[0] > sem[5]) leer = "Vorlesungsfrei";
+      if (pw.length) leer = pw[0].name || "Vorlesungsfrei";
+      else if (sem && sem.vb && tage[4] < sem.vb) { const vb = datum(sem.vb); leer = "Vorlesungsbeginn " + zwei(vb.getDate()) + "." + zwei(vb.getMonth() + 1) + "."; }
+      else if (sem && sem.ve && tage[0] > sem.ve) leer = "Vorlesungsfrei";
       else leer = "Keine Veranstaltungen";
     }
     const jetztHm = zwei(jetzt.getHours()) + ":" + zwei(jetzt.getMinutes());
-    const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm }) => {
+    const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s }) => {
       const tag = Number(fm.wochentag);
-      const aen = aenderungIn(fm);
-      const b = aen ? zeit(aen[1]) : zeit(fm.beginn), e = aen ? zeit(aen[2]) : zeit(fm.ende);
-      const raum = aen ? aen[3] : fm.raum == null ? "" : String(fm.raum);
-      const zeitText = aen ? aen[1] + "–" + aen[2] : String(fm.beginn) + "–" + String(fm.ende);
-      const aus = ausfall(fm);
+      const aen = s.geaendert;
+      const b = aen ? zeit(s.beginn) : zeit(fm.beginn), e = aen ? zeit(s.ende) : zeit(fm.ende);
+      const raum = aen ? s.raum : fm.raum == null ? "" : String(fm.raum);
+      const zeitText = aen ? s.beginn + "–" + s.ende : String(fm.beginn) + "–" + String(fm.ende);
+      const aus = !s.statt;
       const klassen = ["eba-ev", istUebung(fm) ? "ue" : "vl"];
       if (fm.konflikt) klassen.push("konflikt");
       if (aen) klassen.push("geaendert");
@@ -179,7 +165,8 @@ module.exports = function (ctx) {
       return {
         tag, pfad, klassen,
         von: Math.max(2, Math.min(rows + 1, zeileVon(b, h0))), bis: Math.max(3, Math.min(rows + 2, zeileBis(e, h0))),
-        titel: String(fm.titel || pfad) + " · " + zeitText + " · " + raum + (fm.konflikt ? " · überschneidet sich mit " + fm.konflikt : ""),
+        titel: String(fm.titel || pfad) + " · " + zeitText + " · " + raum + (fm.konflikt ? " · überschneidet sich mit " + fm.konflikt : "")
+          + (aus ? " · fällt aus" + (s.name ? " (" + s.name + ")" : "") : ""),
         notiz: ziel,
         kurz: kurzname(fm, kurzVonCode), art: artText(fm),
         // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.), bei einer Änderung die neue Zeit
@@ -188,12 +175,12 @@ module.exports = function (ctx) {
       };
     });
     for (const k of kaesten) if (k.bis <= k.von) k.bis = k.von + 1;
-    return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, kw: kw(montag) };
+    return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, kw: modell.zeit.kw(tage[0]) };
   };
 
   // ---------- Lesen (metadataCache) ----------
   const lesen = () => {
-    const notizen = [], kurzVonCode = {}, modulPfad = {};
+    const notizen = [], kurzVonCode = {}, modulPfad = {}; // Semester, Pausen und „Besuche ich nicht“ kommen aus dem Modell
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
       if (!fm) continue;
@@ -204,9 +191,7 @@ module.exports = function (ctx) {
         if (fm.code && fm.kurz) kurzVonCode[String(fm.code)] = String(fm.kurz);
       }
     }
-    const ef = app.vault.getAbstractFileByPath("System/Einstellungen.md");
-    const einst = ef ? (app.metadataCache.getFileCache(ef) || {}).frontmatter || {} : {};
-    return { notizen, kurzVonCode, modulPfad, einst };
+    return { notizen, kurzVonCode, modulPfad };
   };
 
   // ---------- Zeichnen ----------
@@ -218,7 +203,7 @@ module.exports = function (ctx) {
     const jetzt = ctx.date.jetzt();
     const v = versatz();
     const montag = plus(aktuellerMontag(jetzt), v * 7);
-    const W = wocheBauen(Object.assign(lesen(), { montag, jetzt }));
+    const W = wocheBauen(Object.assign(lesen(), { modell: M(), montag, jetzt }));
     const pfad = (c && c.sourcePath) || "";
     const zeileHoehe = Math.round(((HOEHE[pfad] || HOEHE_SONST) / (W.rows + 1)) * 100) / 100;
     el.empty();
@@ -300,7 +285,8 @@ module.exports = function (ctx) {
     const bald = ctx.entprellen(neu, 400);
     const wichtig = (f, cache) => {
       const typ = cache && cache.frontmatter && cache.frontmatter.typ;
-      return typ === "lehrveranstaltung" || typ === "modul" || (f && (f.path === "System/Einstellungen.md" || String(f.path).indexOf("Stundenplan/") === 0));
+      return typ === "lehrveranstaltung" || typ === "modul" || (f && (f.path === "System/Einstellungen.md" || String(f.path).indexOf("Stundenplan/") === 0
+        || String(f.path).indexOf("System/Daten/") === 0));
     };
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (wichtig(f, cache)) bald(); });
     ctx.an(app.metadataCache, "deleted", (f, vorher) => { if (wichtig(f, vorher)) bald(); });

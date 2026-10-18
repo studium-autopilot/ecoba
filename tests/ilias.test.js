@@ -274,6 +274,30 @@ test("Eigener Uni-Abgleich (abgleich.js oder Einstellung): nie laden; mit Zugang
   }
 });
 
+test("Liste quellen_extern: entscheidet vor dem eigenen Uni-Abgleich; Dateien und Übungsgruppen von außen → kein Lauf", async () => {
+  // nur Dateien von außen, ohne abgleich.js: wie der eigene Uni-Abgleich
+  let x = aufbau({ einstellungen: { quellen_extern: ["ilias-dateien"] } });
+  await verbinden(x);
+  assert.equal((await lauf(x)).art, "nur-gruppen");
+  assert.deepEqual(x.il.geladen(), []);
+  // leere Liste trotz abgleich.js: nichts von außen, das Plugin lädt
+  x = aufbau({ dateien: { "System/Skripte/abgleich.js": "// privat" }, einstellungen: { quellen_extern: [] } });
+  await verbinden(x);
+  assert.equal(x.m.status().extern, false);
+  assert.equal((await lauf(x)).art, "ok");
+  assert.equal(x.il.geladen().length, 5);
+  // beides von außen: auch mit Zugang keine Anfrage, nicht bereit, kein Angebot für Übungsgruppen
+  x = aufbau({ einstellungen: { quellen_extern: ["ilias-dateien", "ilias-gruppen"] } });
+  await verbinden(x);
+  const s = x.m.status();
+  assert.deepEqual([s.extern, s.gruppenExtern, s.gruppenZugang, s.bereit, s.verbunden, s.text],
+    [true, true, false, false, false, "Deine Unterlagen kommen über deinen Uni-Abgleich."]);
+  assert.equal((await lauf(x)).art, "extern");
+  assert.equal((await x.m.jetztHolen({ manuell: true })).art, "extern");
+  assert.equal(x.il.log.length, 0, "keine Anfrage an ILIAS");
+  assert.equal(x.m.auftrag(), null);
+});
+
 test("Eigener Uni-Abgleich: Hinweis „Übungsgruppen geprüft“ nur nach deinem Tipp; kein Auftrag, Weitermachen bleibt still", async () => {
   const x = aufbau({ einstellungen: { ilias_unterlagen: "extern" } });
   await verbinden(x);
@@ -922,4 +946,82 @@ test("Testeinstiege in Obsidian: anmeldungSetzen und quelleSetzen ersetzen Anmel
   e = await il.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
   assert.equal(e.ok, false);
   assert.equal(falsch.anzahl("anmelden"), 0);
+});
+
+// ---------- Uni-Zugang (seit 0.4.5): synchronisierter Ablehnungs-Marker, gerätelokal seit/ok ----------
+
+test("Uni-Zugang: abgelehntes Passwort setzt den Marker; ein Gerät mit altem Passwort versucht nichts, auch nicht per Knopf", async () => {
+  // Gerät 2 hat sein Passwort einen Tag früher gespeichert und einmal erfolgreich gelesen
+  const y = aufbau({ start: "2026-10-15T08:00:00.000Z", anmeldung: A.anmeldung(GEHEIM), geraet: "g-zwei" });
+  await verbinden(y);
+  assert.deepEqual([y.m.uniZugang().bestaetigt, y.m.uniZugang().ok], [false, ""], "ohne prüfende Anmeldung noch nicht bestätigt");
+  assert.equal((await lauf(y)).art, "ok");
+  assert.equal(y.m.uniZugang().bestaetigt, true, "ein erfolgreicher Lauf bestätigt das Passwort");
+  // Die Uni hat das Passwort geändert: Gerät 1 scheitert einmal und schreibt den Marker (ohne Benutzername, ohne Passwort)
+  const x = aufbau({ anmeldung: A.anmeldung("neues-Kw-1") });
+  await verbinden(x);
+  const b = await lauf(x);
+  assert.equal(b.art, "zugang");
+  const marker = JSON.parse(x.t.text(I.K.UNI_ZUGANG));
+  assert.deepEqual(Object.keys(marker).sort(), ["abgelehnt", "dienst", "geraet"]);
+  assert.equal(marker.dienst, "ilias");
+  assert.ok(x.t.text(I.K.UNI_ZUGANG).indexOf("zxabc01") < 0 && x.t.text(I.K.UNI_ZUGANG).indexOf(GEHEIM) < 0);
+  assert.equal(x.m.status().text, "Benutzername oder Kennwort stimmt nicht.", "das Gerät selbst nennt seinen Fehler");
+  assert.equal(x.m.status().gesperrt, true);
+  // Der Marker kommt per Sync auf Gerät 2: kein Versuch mehr, auch nicht per Knopf
+  y.u.vor(2 * 24 * STUNDE);
+  y.t.setzen(I.K.UNI_ZUGANG, x.t.text(I.K.UNI_ZUGANG));
+  await y.m.markerLesen();
+  const vorher = y.anm.aufrufe;
+  assert.equal(y.m.bereit(), false);
+  assert.equal(y.m.uniZugang().gesperrt, true);
+  assert.equal(y.m.uniZugang().bestaetigt, false);
+  const k = await y.m.jetztHolen({ manuell: true });
+  assert.equal(k.art, "abgelehnt");
+  assert.deepEqual(y.meldungen, ["ILIAS: " + I.K.TEXT_ABGELEHNT]);
+  assert.equal(y.anm.aufrufe, vorher, "keine Anmeldung");
+  // Neu eingeben: genau eine prüfende Anmeldung; danach frei und bestätigt
+  const neu = aufbau({ start: "2026-10-17T09:00:00.000Z", anmeldung: A.anmeldung("neues-Kw-1"), geraet: "g-zwei" });
+  neu.t.setzen(I.K.UNI_ZUGANG, x.t.text(I.K.UNI_ZUGANG));
+  await neu.m.markerLesen();
+  const r = await neu.m.zugangSpeichern("zxabc01", () => "neues-Kw-1", { pruefen: true });
+  assert.equal(r.ok, true);
+  assert.equal(neu.anm.aufrufe, 1);
+  assert.equal(neu.m.uniZugang().gesperrt, false);
+  assert.equal(neu.m.uniZugang().bestaetigt, true);
+  assert.equal(neu.m.bereit(), true);
+});
+
+test("Uni-Zugang: falsch getipptes Passwort im Fenster schreibt keinen Marker; Trennen vergisst seit/ok", async () => {
+  const x = aufbau();
+  const r = await x.m.zugangSpeichern("zxabc01", () => "vertippt", { pruefen: true });
+  assert.equal(r.ok, false);
+  assert.equal(x.t.text(I.K.UNI_ZUGANG), null);
+  await verbinden(x);
+  assert.notEqual(x.m.uniZugang().seit, "");
+  await x.m.zugangLoeschen();
+  assert.deepEqual([x.m.uniZugang().seit, x.m.uniZugang().ok, x.m.uniZugang().bestaetigt], ["", "", false]);
+  assert.equal(x.lok.alles().indexOf(GEHEIM), -1);
+});
+
+test("Uni-Zugang: unlesbarer oder leerer Marker sperrt nichts; ein älterer Marker als das Passwort auch nicht", async () => {
+  for (const inhalt of ["{ kaputt", "{}", JSON.stringify({ abgelehnt: "2026-10-01T08:00:00.000Z", dienst: "alma", geraet: "g-x" })]) {
+    const x = aufbau({ dateien: { [I.K.UNI_ZUGANG]: inhalt } });
+    await verbinden(x);
+    await x.m.markerLesen();
+    assert.equal(x.m.uniZugang().gesperrt, false, inhalt);
+    assert.equal((await lauf(x)).art, "ok", inhalt);
+  }
+});
+
+test("kurseAbrufen({ alleAus }): neue Kurse sind aus, kein Download (Verbinden aus der Zeile „Noten & Anmeldungen“)", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  const l = await x.m.kurseAbrufen({ alleAus: true });
+  assert.equal(l.length, 4);
+  assert.ok(l.every((k) => !k.aktiv));
+  assert.equal(x.il.anzahl("laden"), 0);
+  const y = aufbau();
+  await verbinden(y);
+  assert.deepEqual((await y.m.kurseAbrufen()).filter((k) => k.aktiv).map((k) => k.code).sort(), ["B110", "S100"], "ohne alleAus wie bisher");
 });

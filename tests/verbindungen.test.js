@@ -28,11 +28,12 @@ test("Alma verbinden: erst Alma, dann der Stundenplan als Link; Menüweg im Hinw
 });
 
 // ---------- Zeilen je Stand ----------
-// o: { extern (Einstellung ilias_unterlagen: extern), alma (alma.js-Status), ilias (ctx.ilias.status()), zentral (zentraler
-//   Stundenplan da), stundenplan / unterlagen (so viele eigene Notizen), kannSpeichern }
+// o: { extern (Einstellung ilias_unterlagen: extern), einstellungen (weitere Felder, z. B. quellen_extern), alma (alma.js-Status),
+//   ilias (ctx.ilias.status()), zentral (zentraler Stundenplan da), zentralStatus, volltext (ctx.volltext.status()), stundenplan /
+//   unterlagen (so viele eigene Notizen), kannSpeichern }
 const aufbau = (o) => {
   o = o || {};
-  const fm = { "System/Einstellungen.md": o.extern ? { ilias_unterlagen: "extern" } : {} };
+  const fm = { "System/Einstellungen.md": Object.assign(o.extern ? { ilias_unterlagen: "extern" } : {}, o.einstellungen) };
   for (let i = 0; i < (o.stundenplan || 0); i++) fm[`Stundenplan/V${i}.md`] = { typ: "lehrveranstaltung" };
   for (let i = 0; i < (o.unterlagen || 0); i++) fm[`Unterlagen/B110/U${i}.md`] = { typ: "unterlage", ilias_id: String(i) };
   const hinweise = [], geholt = [];
@@ -49,10 +50,11 @@ const aufbau = (o) => {
       },
       zentral: {
         stundenplan: () => ({ verfuegbar: !!o.zentral, anzahl: o.zentral ? 3 : 0, ohneBeginn: false, ausgeblendet: [] }),
-        anzeige: () => ({ html: "Aktualisiert vor 5 Min.", pille: `<span class="eba-pill ok">an</span>`, an: true }),
-        status: () => ({ an: true, pause: false, fehler: "" }),
+        status: () => Object.assign({ zustand: "an", an: true, pause: false, fehler: "", geprueft: "", warnungen: [] }, o.zentralStatus),
       },
       einrichtung: { almaOffen: () => true, iliasOffen: () => true },
+      almaKonto: o.almaKonto,
+      volltext: o.volltext ? { status: () => o.volltext, nachholen: async (x) => { geholt.push(Object.assign({ volltext: true }, x)); } } : undefined,
       link: (aktion, p) => "obsidian://studium-autopilot?aktion=" + aktion + (p && p.id ? "&id=" + p.id : ""),
     },
   });
@@ -80,12 +82,14 @@ const ALLE = [
   ["eigener Uni-Abgleich, ILIAS für Übungsgruppen", { extern: true, ilias: { gruppenZugang: true, text: "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich." } }],
   ["eigener Uni-Abgleich, Alma doch verbunden", { extern: true, alma: { verbunden: true } }],
   ["eigener Uni-Abgleich, Anmeldung abgelehnt", { extern: true, ilias: { gruppenZugang: true, gesperrt: true, text: "Anmeldung abgelehnt." } }],
+  ["ILIAS ganz von außen, Zugang gespeichert", { einstellungen: { quellen_extern: ["ilias-dateien", "ilias-gruppen"] }, ilias: { extern: true, gruppenExtern: true, benutzer: "zxabc01", text: I.K.TEXT_EXTERN } }],
 ];
 
 test("Zeilen: Symbol und Pille widersprechen sich nie, höchstens ein Knopf, Pille nur mit Stand", () => {
   for (const [name, o] of ALLE) {
     const { V: W } = aufbau(o);
     for (const id of Object.keys(W.liste)) {
+      if (!W.zeile(id)) continue; // ohne Zeile (Noten & Anmeldungen ohne Beta, Zustimmung und Daten)
       const z = lesen(W.zeile(id));
       const wo = `${name}: ${id}`;
       if (z.pille === "nicht verbunden") assert.equal(z.symbol, "schloss", wo + " – „nicht verbunden“ nur mit Schloss");
@@ -106,7 +110,7 @@ test("Zeilen ohne eigenen Uni-Abgleich: Alma und ILIAS je Stand", () => {
 
   W = aufbau({ alma: { verbunden: true }, ilias: { verbunden: true, text: "Aktualisiert vor 5 Min." } }).V;
   assert.deepEqual(lesen(W.zeile("alma")), { text: "Noch nicht aktualisiert.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Aktualisieren (cta)", knopfAktion: "verbindung-aktualisieren", link: "Mehr erfahren", linkAktion: "verbinden" });
-  assert.deepEqual(lesen(W.zeile("ilias")), { text: "Aktualisiert vor 5 Min.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Jetzt holen (cta)", knopfAktion: "verbindung-aktualisieren", link: "Mehr erfahren", linkAktion: "verbinden" });
+  assert.deepEqual(lesen(W.zeile("ilias")), { text: "Aktualisiert vor 5 Min.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Aktualisieren (cta)", knopfAktion: "verbindung-aktualisieren", link: "Mehr erfahren", linkAktion: "verbinden" });
 
   // Daten per Sync: Haken ohne Pille, Verbinden leise (kein Hauptknopf)
   W = aufbau({ stundenplan: 2, unterlagen: 1 }).V;
@@ -120,6 +124,17 @@ test("Zeilen ohne eigenen Uni-Abgleich: Alma und ILIAS je Stand", () => {
 
   const g = lesen(aufbau({ ilias: { verbunden: true, gesperrt: true, text: "Benutzername oder Kennwort stimmt nicht." } }).V.zeile("ilias"));
   assert.deepEqual([g.symbol, g.pille, g.knopf], ["warnung", "Anmeldung prüfen", "Verbinden (cta)"]);
+
+  // Warnung aus dem letzten Lauf: steht im Text (ilias.js), die Zeile zeigt das Warnsymbol
+  const w = lesen(aufbau({ ilias: { verbunden: true, warnung: "12 Dateien fehlen gerade in Unterlagen.", text: "Aktualisiert vor 5 Min. 12 Dateien fehlen gerade in Unterlagen." } }).V.zeile("ilias"));
+  assert.deepEqual([w.text, w.symbol, w.ton, w.pille], ["Aktualisiert vor 5 Min. 12 Dateien fehlen gerade in Unterlagen.", "warnung", "warn", "verbunden"]);
+});
+
+test("Zentrale Daten: das Fenster nennt denselben Takt, in dem zentral.js holt", () => {
+  const quelle = require("node:fs").readFileSync(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "zentral.js"), "utf8");
+  const takt = Number((quelle.match(/const TAKT = (\d+) \* MIN;/) || [])[1]);
+  assert.ok(takt > 0, "TAKT in zentral.js gefunden");
+  assert.match(V.liste.zentral.kurz, new RegExp("alle " + takt + " Minuten"));
 });
 
 test("Zeilen im eigenen Uni-Abgleich: Alma nur ein Satz, ILIAS nur für Übungsgruppen", () => {
@@ -137,18 +152,111 @@ test("Zeilen im eigenen Uni-Abgleich: Alma nur ein Satz, ILIAS nur für Übungsg
   assert.match(W.liste.alma.trennenText, /bringt weiter dein Uni-Abgleich/);
 
   const x = aufbau({ extern: true, ilias: { gruppenZugang: true, text: "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich." } });
-  assert.deepEqual(lesen(x.V.zeile("ilias")), { text: "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Jetzt prüfen (cta)", knopfAktion: "verbindung-aktualisieren", link: "Trennen", linkAktion: "trennen" });
+  assert.deepEqual(lesen(x.V.zeile("ilias")), { text: "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Aktualisieren (cta)", knopfAktion: "verbindung-aktualisieren", link: "Trennen", linkAktion: "trennen" });
 
   // Alma doch verbunden (Link von früher): bleibt nutzbar, die Zeile warnt und bietet Trennen
   W = aufbau({ extern: true, alma: { verbunden: true } }).V;
-  assert.deepEqual(lesen(W.zeile("alma")), { text: "Dein Stundenplan kommt über deinen Uni-Abgleich. Alma ist hier zusätzlich verbunden, das kann Einträge doppeln.", symbol: "warnung", ton: "warn", pille: "verbunden", knopf: "Trennen", knopfAktion: "trennen", link: "", linkAktion: "" });
+  assert.deepEqual(lesen(W.zeile("alma")), { text: "Dein Stundenplan kommt über deinen Uni-Abgleich. Der Alma-Link auf diesem Gerät wird nicht genutzt.", symbol: "haken", ton: "ok", pille: "", knopf: "", knopfAktion: "", link: "Trennen", linkAktion: "trennen" });
 });
 
-test("Eigener Uni-Abgleich: „Jetzt prüfen“ prüft gleich (kein Fenster), Alma verbinden zeigt nur den Satz", async () => {
+test("Liste quellen_extern: Alma und ILIAS je Schlüssel; kommen auch die Übungsgruppen von außen, nur der Satz", () => {
+  // nur der Stundenplan von außen (ohne abgleich.js): Alma ein Satz, ILIAS wie immer
+  let W = aufbau({ einstellungen: { quellen_extern: ["stundenplan"] } }).V;
+  assert.equal(W.zeile("alma").text, "Dein Stundenplan kommt über deinen Uni-Abgleich.");
+  assert.equal(W.gesperrt("alma"), false);
+  assert.equal(W.liste.ilias.name, "ILIAS-Unterlagen");
+  // eigener Uni-Abgleich mit leerer Liste: nichts von außen
+  W = aufbau({ extern: true, einstellungen: { quellen_extern: [] }, ilias: { extern: false, text: "Nicht verbunden." } }).V;
+  assert.equal(lesen(W.zeile("alma")).pille, "nicht verbunden");
+  assert.equal(W.liste.ilias.name, "ILIAS-Unterlagen");
+  assert.match(W.liste.alma.trennenText, /nicht mehr aktualisiert/);
+  // ILIAS ganz von außen: kein Verbinden für Übungsgruppen; mit gespeichertem Zugang nur der Textlink Trennen
+  const s = { extern: true, gruppenExtern: true, text: I.K.TEXT_EXTERN };
+  const ein = { quellen_extern: ["ilias-dateien", "ilias-gruppen"] };
+  assert.deepEqual(lesen(aufbau({ einstellungen: ein, ilias: s }).V.zeile("ilias")),
+    { text: I.K.TEXT_EXTERN, symbol: "haken", ton: "ok", pille: "", knopf: "", knopfAktion: "", link: "", linkAktion: "" });
+  assert.deepEqual(lesen(aufbau({ einstellungen: ein, ilias: Object.assign({ benutzer: "zxabc01" }, s) }).V.zeile("ilias")),
+    { text: I.K.TEXT_EXTERN, symbol: "haken", ton: "ok", pille: "", knopf: "", knopfAktion: "", link: "Trennen", linkAktion: "trennen" });
+});
+
+test("Eigener Uni-Abgleich: „Aktualisieren“ prüft gleich (kein Fenster), Alma verbinden zeigt nur den Satz", async () => {
   const x = aufbau({ extern: true, ilias: { gruppenZugang: true, text: "Prüft deine Übungsgruppen." } });
   await x.aktionen["verbindung-aktualisieren"].ausfuehren({ parameter: { id: "ilias" } });
   assert.deepEqual(x.geholt, [{ uebernehmen: false }]);
   const y = aufbau({ extern: true });
   assert.equal(y.V.fensterOeffnen(y.V.liste.alma), null);
   assert.deepEqual(y.hinweise, ["Dein Stundenplan kommt über deinen Uni-Abgleich."]);
+});
+
+test("Noten & Anmeldungen (Alma): Zeile aus alma-konto.js; ohne Zeile nicht in der Übersicht; Fenster von dort", () => {
+  let W = aufbau({}).V;
+  assert.equal(W.zeile("alma-konto"), null);
+  assert.equal(W.liste["alma-konto"].sichtbar(), false);
+  const offen = [];
+  const konto = (zeile) => ({ zeile: () => zeile, sichtbar: () => !!zeile, status: () => ({ art: "an" }), fensterOeffnen: () => { offen.push(1); return { offen: true }; } });
+  W = aufbau({ almaKonto: konto({ text: "Zuletzt geprüft heute 07:10.", symbol: "haken", pille: "an", knopf: { aktion: "alma-konto-pruefen", text: "Jetzt prüfen", cta: true, parameter: {} },
+    link: { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "alma-konto" } } }) }).V;
+  assert.deepEqual(lesen(W.zeile("alma-konto")), { text: "Zuletzt geprüft heute 07:10.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Jetzt prüfen (cta)",
+    knopfAktion: "alma-konto-pruefen", link: "Mehr erfahren", linkAktion: "verbinden" });
+  assert.match(W.zeile("alma-konto").link, /id=alma-konto/);
+  W = aufbau({ almaKonto: konto({ text: "Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben.", symbol: "warnung", pille: "pruefen",
+    knopf: { aktion: "verbinden", text: "ILIAS verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) }).V;
+  assert.deepEqual([lesen(W.zeile("alma-konto")).pille, lesen(W.zeile("alma-konto")).ton], ["Anmeldung prüfen", "warn"]);
+  W = aufbau({ almaKonto: konto({ text: "Alma-Seite sah anders aus. Bitte in Alma selbst nachsehen.", symbol: "warnung", pille: "", knopf: { href: "https://alma.uni-tuebingen.de/alma/x", text: "In Alma öffnen" }, link: null }) }).V;
+  assert.match(W.zeile("alma-konto").knopf, /^<a class="eba-vb-knopf" href="https:\/\/alma\.uni-tuebingen\.de\/alma\/x" target="_blank" rel="noopener">In Alma öffnen<\/a>$/);
+  W.fensterOeffnen(W.liste["alma-konto"]);
+  assert.equal(offen.length, 1);
+});
+
+// ---------- Quellen-Vertrag: eine Formatierung für den Stand jeder Quelle ----------
+const vorMin = (n) => new Date(Date.now() - n * 60e3).toISOString();
+
+test("Stand einer Quelle: eine Formatierung (Aktualisiert, Fehler bleibt mit „Zuletzt aktualisiert“, Warnungen, anderes Gerät)", () => {
+  const { V: W } = aufbau({});
+  assert.deepEqual(W.standText({ zustand: "an", geprueft: vorMin(5) }), { text: "Aktualisiert vor 5 Min.", symbol: "haken", ton: "ok" });
+  assert.deepEqual(W.standText({ zustand: "an" }), { text: "Noch nicht aktualisiert.", symbol: "haken", ton: "ok" });
+  assert.deepEqual(W.standText({ zustand: "fehler", geprueft: vorMin(180), fehler: "Alma antwortet nicht (Fehler 404). Bitte den Link in Alma neu kopieren." }),
+    { text: "Alma antwortet nicht (Fehler 404). Bitte den Link in Alma neu kopieren. Zuletzt aktualisiert vor 3 Std.", symbol: "warnung", ton: "warn" });
+  assert.deepEqual(W.standText({ zustand: "an", geprueft: vorMin(1), warnungen: ["Eine deiner Stundenplan-Notizen steht nicht mehr in Alma."] }),
+    { text: "Aktualisiert vor 1 Min. Eine deiner Stundenplan-Notizen steht nicht mehr in Alma.", symbol: "warnung", ton: "warn" });
+  assert.equal(W.standText({ zustand: "anderes-geraet" }).text, "Ein anderes Gerät aktualisiert, alles kommt über deinen Sync.");
+  assert.equal(W.standText({ zustand: "laeuft" }).symbol, "uhr");
+  assert.equal(W.WORT.knopf, "Aktualisieren", "Entscheidung E1");
+});
+
+test("Alma-Stundenplan: Fehler macht die Zeile nicht mehr grün; ein anderes Gerät aktualisiert → Hier aktualisieren", () => {
+  let z = lesen(aufbau({ alma: { verbunden: true, zustand: "fehler", geprueft: vorMin(120), fehler: "Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen." } }).V.zeile("alma"));
+  assert.deepEqual([z.text, z.symbol, z.ton, z.pille, z.knopf], ["Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen. Zuletzt aktualisiert vor 2 Std.", "warnung", "warn", "verbunden", "Aktualisieren (cta)"]);
+  z = lesen(aufbau({ alma: { verbunden: true, zustand: "anderes-geraet", anderes: vorMin(3) } }).V.zeile("alma"));
+  assert.deepEqual([z.symbol, z.knopf, z.knopfAktion], ["haken", "Hier aktualisieren (cta)", "verbindung-aktualisieren"]);
+  z = lesen(aufbau({ ilias: { verbunden: true, zustand: "anderes-geraet", anderes: true, text: "Ein anderes Gerät lädt deine ILIAS-Unterlagen." } }).V.zeile("ilias"));
+  assert.deepEqual([z.text, z.knopf], ["Ein anderes Gerät aktualisiert, alles kommt über deinen Sync.", "Hier aktualisieren (cta)"]);
+  z = lesen(aufbau({ ilias: { verbunden: true, zustand: "an", geprueft: vorMin(5), warnungen: [], zuGross: 2, grenzeMb: 50, text: "x" } }).V.zeile("ilias"));
+  assert.equal(z.text, "Aktualisiert vor 5 Min. 2 Dateien über 50 MB nicht geladen.");
+});
+
+test("Zentrale Daten: Zeile aus der gemeinsamen Form (Fehler als Satz, Pille Fehler, Knopf Aktualisieren)", () => {
+  let z = lesen(aufbau({ zentralStatus: { geprueft: vorMin(10) } }).V.zeile("zentral"));
+  assert.deepEqual([z.symbol, z.pille, z.knopf], ["haken", "an", "Aktualisieren (cta)"]);
+  const W = aufbau({ zentralStatus: { zustand: "fehler", geprueft: vorMin(60), fehler: "Keine Verbindung zu den zentralen Daten.", hinweis: "Neue Termine folgen." } }).V;
+  z = lesen(W.zeile("zentral"));
+  assert.deepEqual([z.symbol, z.pille], ["warnung", "Fehler"]);
+  assert.equal(W.zeile("zentral").html, "Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert vor 1 Std. Neue Termine folgen.");
+  z = lesen(aufbau({ zentralStatus: { an: false, zustand: "aus" } }).V.zeile("zentral"));
+  assert.deepEqual([z.symbol, z.pille, z.knopf], ["aus", "aus", "Einschalten (cta)"]);
+});
+
+test("Volltext der PDFs: Zeile mit den Zahlen, aus → Einschalten, anderes Gerät → Hier aktualisieren, extern nur der Satz", async () => {
+  assert.equal(aufbau({}).V.zeile("volltext"), null, "ohne volltext.js keine Zeile");
+  let x = aufbau({ volltext: { an: true, zustand: "an", geprueft: vorMin(2), warnungen: [], text: "58 PDFs durchsuchbar, 2 ohne Text." } });
+  let z = lesen(x.V.zeile("volltext"));
+  assert.deepEqual([z.text, z.symbol, z.pille, z.knopf, z.link], ["58 PDFs durchsuchbar, 2 ohne Text.", "haken", "", "Aktualisieren (cta)", "Mehr erfahren"]);
+  await x.aktionen["verbindung-aktualisieren"].ausfuehren({ parameter: { id: "volltext" } });
+  assert.deepEqual(x.geholt, [{ volltext: true, hier: false }]);
+  z = lesen(aufbau({ volltext: { an: true, zustand: "anderes-geraet", warnungen: [], text: "58 PDFs durchsuchbar." } }).V.zeile("volltext"));
+  assert.equal(z.knopf, "Hier aktualisieren (cta)");
+  z = lesen(aufbau({ volltext: { an: false, zustand: "aus", warnungen: [], text: "" } }).V.zeile("volltext"));
+  assert.deepEqual([z.symbol, z.knopf, z.knopfAktion], ["aus", "Einschalten (cta)", "verbinden"]);
+  z = lesen(aufbau({ volltext: { an: true, zustand: "extern", warnungen: [], text: "Kommt über deinen eigenen Abgleich." } }).V.zeile("volltext"));
+  assert.deepEqual([z.text, z.knopf], ["Kommt über deinen eigenen Abgleich.", ""]);
 });

@@ -16,8 +16,10 @@ module.exports = function (ctx) {
   const app = window.app;
   const { Platform } = ctx.obsidian;
   // Einzige Liste der Bereiche (Reihenfolge = Kacheln, zwei je Reihe). Neuer Bereich: Notizname hier eintragen.
+  // Lernplan nur, wenn es Lernplan-Notizen gibt (die schreibt nur eine KI, lernplan.js sichtbar()).
   const ZIELE = ["Dashboard", "Studienverlauf", "Termine & Anmeldungen", "Prüfungen", "Noten & ECTS", "Unterlagen",
-    "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
+    "Lernplan", "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
+  const NUR_WENN = { Lernplan: () => !!(ctx.lernplan && ctx.lernplan.sichtbar()) };
   const ZIELE_SEL = ".eba-pfad:not(.eba-pfad-start), .eba-kz-kopf";
   // Symbol in Obsidians Kopfleiste statt im Seitenkopf: iPhone und iPad (am PC zum Ausprobieren über window.ebaMenueKopfImmer)
   const imKopf = () => Platform.isMobile || window.ebaMenueKopfImmer === true;
@@ -93,6 +95,7 @@ button.eba-menue-knopf { position: relative; z-index: 3; }
     const tafel = doc.body.createDiv({ cls: "callout eba-menue-tafel", attr: { "data-callout": "eba-nav", role: "menu" } });
     const ul = tafel.createDiv({ cls: "callout-content" }).createEl("ul");
     for (const ziel of ZIELE) {
+      if (NUR_WENN[ziel] && !NUR_WENN[ziel]()) continue;
       const datei = app.metadataCache.getFirstLinkpathDest(ziel, quelle);
       const li = ul.createEl("li", { cls: datei && datei.path === quelle ? "aktiv" : "" });
       li.createEl("a", { cls: "internal-link", text: ziel, attr: { "data-href": ziel, href: ziel, role: "menuitem" } });

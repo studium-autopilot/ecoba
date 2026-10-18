@@ -132,3 +132,18 @@ test("Dashboard: nackter Codeblock als erster Block unter „Zu erledigen“, oh
   assert.deepEqual(zeilen.slice(i + 1, i + 5), ["", "```eba-bitte-pruefen", "```", ""]);
   assert.equal(zeilen.filter((z) => z.indexOf("eba-bitte-pruefen") >= 0).length, 1);
 });
+
+test("Punkte der Quellen (Meldekanal): ohne Kästchen, Titel fett, Ziel und Anker; Unvollständiges fällt weg", () => {
+  const P = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "bitte-pruefen.js")).quellenPunkte;
+  assert.deepEqual(P([
+    { quelle: "alma-konto", text: "**B110** · neue Angabe aus Alma, auf der Modulseite übernehmen", pfad: "Module/1 Grundstudium/B110 X.md" },
+    { quelle: "alma-konto", text: "**Prüfungsanmeldung** · laut Alma fehlen B110, S100", pfad: "Studium/Termine & Anmeldungen.md", anker: "Anmeldungen" },
+    { quelle: "ilias", text: "**ILIAS** · 12 Dateien fehlen gerade in Unterlagen", pfad: "Studium/Einstellungen & Hilfe.md", anker: "Verbindungen" },
+    { text: "ohne Ziel" }, null,
+  ]), [
+    { zeile: null, roh: "", haken: null, text: "**B110**", meta: "neue Angabe aus Alma, auf der Modulseite übernehmen", details: [], ziel: "Module/1 Grundstudium/B110 X.md", anker: "", quelle: "alma-konto" },
+    { zeile: null, roh: "", haken: null, text: "**Prüfungsanmeldung**", meta: "laut Alma fehlen B110, S100", details: [], ziel: "Studium/Termine & Anmeldungen.md", anker: "Anmeldungen", quelle: "alma-konto" },
+    { zeile: null, roh: "", haken: null, text: "**ILIAS**", meta: "12 Dateien fehlen gerade in Unterlagen", details: [], ziel: "Studium/Einstellungen & Hilfe.md", anker: "Verbindungen", quelle: "ilias" },
+  ]);
+  assert.deepEqual(P(null), []);
+});

@@ -22,10 +22,15 @@
 // Fehler sind Error-Objekte mit grund: fremder-host, schleife, zu-viele-spruenge, zeitueberschreitung, netz (code),
 //   kein-transport, kodierung. Fehler enthalten nie Bodies, Formularwerte oder Kekswerte; diese Datei protokolliert nichts.
 //
+// Dienste (seit 0.4.5): Eine Sitzung gehört genau einem Dienst und darf nur dessen Server erreichen. „ilias“ (Vorgabe): ILIAS
+//   und die Anmeldeseite der Uni (IdP); „alma“: nur alma.uni-tuebingen.de (Noten & Anmeldungen, alma-konto.js). Am PC kann eine
+//   ILIAS-Sitzung so nie zu Alma springen und umgekehrt. Auf iPhone/iPad folgt requestUrl Weiterleitungen selbst; geprüft
+//   werden dort nur die Startadresse jeder Anfrage und (beim Aufrufer) die Adresse jedes Formulars, an das er Daten schickt.
+//   Alma-Sitzungen senden die Kennung „Studium-Autopilot/<Version> (+https://github.com/studium-autopilot/ecoba)“.
 // Aufruf: const N = ctx.user["ilias-netz"](ctx). Beim Laden passiert nichts (kein Netz, keine Zeitgeber).
-//   N.UNI, N.UNIS, N.ERLAUBTE_HOSTS
-//   N.sitzung({ transport?, uni? ("tuebingen"), jetzt?, drossel? }) → { anfrage(o), keks (nur PC, sonst null),
-//     istHostErlaubt(url), uni, hosts, mobil, schliessen() (offene Verbindungen des PCs schließen) }
+//   N.UNI, N.UNIS, N.ERLAUBTE_HOSTS (Dienst „ilias“), N.hostsFuer(dienst, uni?), N.kennung(version?)
+//   N.sitzung({ transport?, uni? ("tuebingen"), dienst? ("ilias" | "alma"), jetzt?, drossel? }) → { anfrage(o), keks (nur PC,
+//     sonst null), istHostErlaubt(url), uni, dienst, hosts, mobil, schliessen() (offene Verbindungen des PCs schließen) }
 //   N.drossel({ parallel? (2), abstand? (400 ms), jetzt?, warten? }) → { eintritt() → freigeben(), parallel, abstand }
 //     anfrage({ url, methode = "GET", formular?, body?, kopf?, folgen = true, binaer = false, maxSpruenge = 12 })
 //       formular: Objekt oder [[name, wert], …] → application/x-www-form-urlencoded (bei GET als Query an die URL)
@@ -45,7 +50,7 @@ module.exports = function (ctx) {
   const UNIS = Object.freeze({
     tuebingen: Object.freeze({
       id: "tuebingen", name: "Universität Tübingen", ilias: "https://ovidius.uni-tuebingen.de", idp: "https://idp.uni-tuebingen.de",
-      client: "pr02",
+      alma: "https://alma.uni-tuebingen.de", client: "pr02",
     }),
   });
   const UNI = UNIS.tuebingen;
@@ -97,9 +102,14 @@ module.exports = function (ctx) {
     };
   }
   const hostVon = (url) => { const t = teile(url); return t ? t.host : ""; };
-  const hostsVon = (uni) => Object.freeze([hostVon(uni.ilias), hostVon(uni.idp)]);
+  // Server je Dienst: „ilias“ (Vorgabe) ILIAS + Anmeldeseite der Uni, „alma“ nur Alma; unbekannter Dienst → keiner
+  const DIENSTE = ["ilias", "alma"];
+  const hostsVon = (uni, dienst) => Object.freeze(dienst === "alma" ? (uni.alma ? [hostVon(uni.alma)] : [])
+    : dienst == null || dienst === "ilias" ? [hostVon(uni.ilias), hostVon(uni.idp)] : []);
   const ERLAUBTE_HOSTS = hostsVon(UNI);
-  const ALLE_HOSTS = Object.freeze(Object.keys(UNIS).reduce((l, k) => l.concat(hostsVon(UNIS[k])), []));
+  // Die Transporte prüfen zusätzlich gegen alle Server aller Dienste (die Sitzung selbst nur gegen die ihres Dienstes)
+  const ALLE_HOSTS = Object.freeze(Object.keys(UNIS).reduce((l, k) => l.concat.apply(l, DIENSTE.map((d) => hostsVon(UNIS[k], d))), []));
+  const KENNUNG_URL = "https://github.com/studium-autopilot/ecoba";
   const uniVon = (u) => (u == null ? UNI : typeof u === "string" && hat(UNIS, u) ? UNIS[u] : u && u.id && UNIS[u.id] === u ? u : null);
 
   // Wirft { grund: "fremder-host" }, wenn die URL nicht https ist oder nicht auf einen der Hosts zeigt. Gegenprobe mit dem
@@ -492,6 +502,8 @@ module.exports = function (ctx) {
     try { return new TextDecoder(m ? m[1].toLowerCase() : "utf-8").decode(u8); } catch (e) { return new TextDecoder("utf-8").decode(u8); }
   }
   const pluginVersion = () => { const p = ctx.plugin; return (p && p.manifest && p.manifest.version) || ""; };
+  // Kennung für Alma (User-Agent): wer anfragt und wo es den Code gibt
+  const kennung = (version) => "Studium-Autopilot/" + (version || pluginVersion() || "0") + " (+" + KENNUNG_URL + ")";
   const istDesktop = () => !!(ctx.obsidian && ctx.obsidian.Platform && ctx.obsidian.Platform.isDesktopApp);
 
   // ---------- Transport am PC: Node-https aus Electron (folgt nie selbst, set-cookie roh) ----------
@@ -602,7 +614,12 @@ module.exports = function (ctx) {
     o = o || {};
     const uni = uniVon(o.uni);
     if (!uni) throw new Error("sitzung: unbekannte Uni");
-    const hosts = hostsVon(uni);
+    const dienst = o.dienst == null ? "ilias" : String(o.dienst);
+    if (DIENSTE.indexOf(dienst) < 0) throw new Error("sitzung: unbekannter Dienst");
+    const hosts = hostsVon(uni, dienst);
+    if (!hosts.length) throw new Error("sitzung: Dienst ohne Server");
+    // Kopfzeilen jeder Anfrage dieser Sitzung (Alma: Kennung mit Link auf den Code)
+    const sitzungKopf = dienst === "alma" ? { "user-agent": kennung() } : {};
     const transport = o.transport || (istDesktop() ? transportDesktop() : transportMobil());
     const mobil = !!transport.folgtSelbst;
     const keks = mobil ? null : keksDose({ jetzt: o.jetzt });
@@ -630,6 +647,7 @@ module.exports = function (ctx) {
       let url = String(a.url == null ? "" : a.url);
       let body = null;
       const extra = {};
+      for (const k of Object.keys(sitzungKopf)) extra[k] = sitzungKopf[k];
       for (const k of Object.keys(a.kopf || {})) extra[k.toLowerCase()] = String(a.kopf[k]);
       delete extra.cookie; delete extra["content-length"];
       if (a.formular != null) {
@@ -666,11 +684,11 @@ module.exports = function (ctx) {
 
     const istHostErlaubt = (url) => { try { hostPruefen(url, hosts); return true; } catch (e) { return false; } };
     const schliessen = () => { if (typeof transport.schliessen === "function") transport.schliessen(); };
-    return { anfrage, keks, istHostErlaubt, uni, hosts, mobil, schliessen };
+    return { anfrage, keks, istHostErlaubt, uni, dienst, hosts, mobil, schliessen };
   }
 
   return {
     UNI, UNIS, ERLAUBTE_HOSTS, sitzung, drossel, keksDose, formulare, istLoginSeite, entitaeten, aufloesen, formularKodieren,
-    transportDesktop, transportMobil,
+    transportDesktop, transportMobil, kennung, hostsFuer: (dienst, uni) => hostsVon(uniVon(uni) || UNI, dienst),
   };
 };

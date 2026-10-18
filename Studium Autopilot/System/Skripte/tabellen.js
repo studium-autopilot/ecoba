@@ -1,4 +1,4 @@
-// Bases-Tabellen auf dem iPhone als gestapelte Liste (statt seitlich zu scrollen). Jede Zeile einer Tabellenansicht in einer Karte [!eba-tabelle] wird ein Eintrag: Titel (Spalte mit
+// Bases-Tabellen als gestapelte Liste (statt seitlich zu scrollen): auf dem iPhone überall, auf iPad und PC seitenweise. Jede Zeile einer Tabellenansicht in einer Karte [!eba-tabelle] wird ein Eintrag: Titel (Spalte mit
 // Link, sonst erste Spalte) und darunter eine kleine Metazeile mit den übrigen Werten („6 ECTS · offen · 06.02.27“),
 // „Öffnen ↗“ rechts; Gruppen als kleines Label mit Summe („Grundstudium · 60 ECTS“), leere Tabellen nur „Leer.“.
 // Die Daten kommen aus der Bases-Ansicht selbst (view.data), nicht aus den gezeichneten Zellen: Obsidian zeichnet in
@@ -6,9 +6,10 @@
 // jeder Datenänderung (onDataUpdated der Tabellenansicht), in Lese- und Bearbeitungsansicht gleich.
 // Ein/aus nur per CSS: die Liste entsteht nur, wo die Variable --eba-tliste: 1 gilt (eba-core.css
 // Abschnitt 37: body.is-phone .callout[data-callout="eba-tabelle"]); dort blendet das CSS Tabellenkopf, Zeilen und
-// Summenzeile aus. PC/iPad: Variable fehlt, nichts geändert. Ausnahme per Karte: [!eba-tabelle|handy-tabelle].
+// Summenzeile aus. PC/iPad: nur auf den Seiten, die 37.tabellen einschaltet (Modulseite, Noten & ECTS, Unterlagen,
+// Stundenplan), sonst bleibt die Tabelle. Ausnahme per Karte (nur iPhone): [!eba-tabelle|handy-tabelle].
 // Werte nur lesen; Kontrollkästchen (z. B. Nachgearbeitet) bleiben antippbar und schreiben ins Frontmatter, erscheinen aber
-// nur bei Notizen, die das Feld haben. Modulseiten zeigen die Liste auch auf iPad/PC (eba-core.css Abschnitt 58).
+// nur bei Notizen, die das Feld haben.
 // Erweiterung: registrieren() erweitert die Tabellenansicht (Fabrik und Prototyp, Merker __ebaTl/__ebaTlPatch), abmelden()
 // nimmt das beim Hot-Reload und beim Entladen des Plugins vollständig zurück. Post-Processor über ctx.postprozessor.
 // Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“; „offiziell“ ohne Chip, markiert wird nur
@@ -27,11 +28,12 @@ module.exports = function (ctx) {
   const EINHEIT = new Set(["ECTS", "Seiten"]);
   const ZUSAMMEN = { Sum: "", Average: "Ø ", Median: "Median ", Min: "min. ", Max: "max. " };
 
-  const heute = new Date();
+  // Datum wie überall (ctx.modell.zeit): „06.02.“, das Jahr nur außerhalb des laufenden Studienjahrs („06.02.2028“); „heute“ zur
+  // Zeit des Zeichnens (testbar über ctx.date), nicht beim Laden des Skripts
   const datumText = (s) => {
     const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!m) return null;
-    return `${m[3]}.${m[2]}.` + (+m[1] === heute.getFullYear() ? "" : m[1].slice(2));
+    return ctx.modell && ctx.modell.zeit ? ctx.modell.zeit.kurz(m[0]) : `${m[3]}.${m[2]}.${m[1]}`;
   };
   const typ = (v) => (v && v.type ? String(v.type) : "Null"); // type ist teils eine Funktion mit Namen als Text
   const leer = (el) => !el.textContent.trim() && !el.querySelector("input, img, svg");
@@ -81,15 +83,8 @@ module.exports = function (ctx) {
   const STATUS = new Set(["Status", "Stand"]);
   const NOTE = new Set(["Note", "Ergebnis"]);
   const NOTE_RE = /^\s*[1-5]([.,][0-9]+)?\s*$/;
-  // Farbe des Status-Chips aus dem Text (wie die Formeln „stand“ der Seiten)
-  const chipArt = (s) => {
-    s = String(s || "").toLowerCase().trim();
-    if (/^(bestanden|anerkannt|abgegeben|korrigiert|erledigt|gelesen|zugelassen|durchgearbeitet)$/.test(s)) return "ok";
-    if (/^(nicht bestanden|überfällig|abgelehnt)$/.test(s)) return "bad";
-    if (/^(angemeldet|in arbeit)$/.test(s)) return "warn";
-    if (/^(läuft|neu)$/.test(s)) return "info";
-    return "leer";
-  };
+  // Farbe des Status-Chips aus dem Text: eine Regel für alle Bildschirme (ctx.modell.statusArt, docs/design.md)
+  const chipArt = (s) => (ctx.modell && ctx.modell.statusArt ? ctx.modell.statusArt(s) : "leer");
   // Text eines Werts (für Vergleiche „in jeder Zeile gleich“)
   const textVon = (v, doc) => { const t = doc.createElement("span"); try { wertIn(t, v); } catch (e) {} return t.textContent.trim(); };
 
@@ -322,5 +317,5 @@ module.exports = function (ctx) {
     for (const P of Array.from(gepatcht)) entpatchen(P);
   };
 
-  return { registrieren, abmelden, aktualisieren, zeichnen };
+  return { registrieren, abmelden, aktualisieren, zeichnen, datumText, chipArt }; // datumText, chipArt für tests/fachmodell.test.js
 };

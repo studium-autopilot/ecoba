@@ -1,12 +1,38 @@
-// Stundenplan aus Alma in den Vault übernehmen (iCalendar-Abo-Link aus Alma).
-// Aufruf in einer Aktion:  await ctx.user.alma(ctx).aktualisieren({ still: false });  bzw. .verbinden() (Link abfragen + importieren)
+// Stundenplan aus Alma in den Tresor übernehmen (iCalendar-Abo-Link aus Alma). Quelle nach dem Quellen-Vertrag (quellen.js,
+// docs/architektur.md „Quellen-Vertrag“ und „Alma-Stundenplan“).
+// Aufruf: ctx.user.alma(ctx).aktualisieren({ still }) bzw. .verbinden() (Link abfragen + importieren); seit 0.4.5 auch von selbst
+// (registrieren: Zeitplan quellen.planen, stündlich, nach Fehlern früher, zurück in der App nach über einer Stunde).
 // Der Abo-Link ist geheim (wer ihn hat, sieht den Stundenplan). Er liegt NUR im gerätelokalen Speicher
 // von Obsidian (app.saveLocalStorage), nie im Vault und wird deshalb auch nicht synchronisiert.
 // Nur Obsidian-API (requestUrl, vault, fileManager): läuft auf Windows, macOS, iPad und iPhone.
-// Gestartet über den Knopf „Stundenplan aktualisieren“ (Aktion „stundenplan“ in System/Skripte/aktionen.js).
+// Kommt der Stundenplan von außen (eba.quelleExtern „stundenplan“), holt und schreibt Alma nie, egal über welchen Weg
+// (Befehl, Knopf, Verbindungen, Zeitplan): nie zwei Schreiber je Quelle. Gefragt bei jedem Lauf.
+// Ein Schreiber: Abrufer-Sperre System/Daten/alma-abruf.json (sperre.js, Quelle „alma“), darin auch die Grabsteine „angewendet“.
+//   Ein Knopf übernimmt (Hier aktualisieren), der Zeitplan nie. Status gerätelokal (eba-alma-status): Fehler bleiben stehen, bis
+//   ein Abruf klappt (vorher blieb die Zeile grün).
+// Lebenslauf der Notizen: Alma-Notizen (herkunft: alma; ältere am Kasten „Aus Alma“ erkannt und nachgetragen) fallen weg wie
+//   jede erzeugte Notiz (unberührt → Papierkorb, mit deinem Text unter „## Notizen“ → „(entfällt)“); von dir gelöschte kommen
+//   nicht wieder, solange sich der Termin in Alma nicht ändert. Von Hand angelegte Notizen, die Alma verknüpft hat, löscht und
+//   entkoppelt Alma nie: Fehlen sie in Alma, steht alma_fehlt in der Notiz und ein Punkt in „Bitte prüfen“. Neu in Alma, aber
+//   schon vorbei → keine Notiz. Erste Verknüpfung einer Notiz, deren Raum mehr als in der Schreibweise von Alma abweicht →
+//   Almas Raum. (Diese drei Regeln stammen aus der Hülle stundenplan-sync.mjs eines eigenen Uni-Abgleichs.)
+// Läuft das Skript außerhalb des Plugins (eine Hülle ruft nur aktualisieren({ text }) mit window.app aus Dateien und ohne
+//   ctx.user.sperre/quellen), gibt es keine Sperre, keine Grabsteine und keinen Meldekanal; geschrieben wird dann nur über
+//   vault.create, vault.trash und fileManager.processFrontMatter.
+const LAUF = { p: null }; // laufender Abruf, geteilt von allen Aufrufern dieser Fassung (Zeitplan, Knöpfe, Verbindungen)
 module.exports = function (ctx) {
   const app = window.app;
   const { requestUrl, Notice } = ctx.obsidian;
+  const EXTERN = "Dein Stundenplan kommt über deinen Uni-Abgleich.";
+  const extern = () => {
+    try {
+      const f = ctx.user && ctx.user.eba && ctx.user.eba.quelleExtern;
+      if (!f) return false;
+      const e = app.vault.getAbstractFileByPath("System/Einstellungen.md");
+      const c = e && app.metadataCache.getFileCache(e);
+      return !!f("stundenplan", (p) => !!app.vault.getAbstractFileByPath(p), (c && c.frontmatter) || {});
+    } catch (x) { return false; }
+  };
 
   // ---------- Einstellungen ----------
   const SPEICHER = "eba-alma-ics";        // Schlüssel im gerätelokalen Speicher
@@ -213,30 +239,107 @@ module.exports = function (ctx) {
     });
   };
 
-  // Automatische Stundenplan-Notizen gehören nicht dazu: zentrale Vorlesungen (herkunft: zentral, zentral.js) und deine Gruppe
-  // (herkunft: ilias-gruppe aus ilias.js, gruppe-gewaehlt aus gruppen.js, beide über meine-gruppe.js). Alma übernimmt, ändert und
-  // löscht sie nie. Steht dieselbe Veranstaltung oder Gruppe in Alma, legt Alma ihre eigene Notiz an; wer die andere schreibt,
-  // erkennt das und räumt sie weg (eigener Text darin wandert in die Alma-Notiz). So schreibt nie mehr als ein Skript in eine Notiz.
-  const AUTOMATISCH = ["zentral", "ilias-gruppe", "gruppe-gewaehlt"];
+  // Automatische Stundenplan-Notizen anderer Quellen gehören nicht dazu: zentrale Vorlesungen (herkunft: zentral, zentral.js), deine
+  // Gruppe (herkunft: ilias-gruppe aus ilias.js, gruppe-gewaehlt aus gruppen.js, beide über meine-gruppe.js) und jede andere
+  // fremde Besitzmarke (Quellen-Vertrag, z. B. herkunft: claude). Alma übernimmt, ändert und löscht sie nie. Steht dieselbe
+  // Veranstaltung oder Gruppe in Alma, legt Alma ihre eigene Notiz an; wer die andere schreibt, erkennt das und räumt sie weg
+  // (eigener Text darin wandert in die Alma-Notiz). So schreibt nie mehr als ein Skript in eine Notiz.
+  const HERKUNFT = "alma";
+  const fremd = (fm) => { const h = String((fm && fm.herkunft) || "").trim(); return !!h && h !== HERKUNFT; };
   const vorhandene = (ordner) => app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(ordner + "/"))
-    .map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} })).filter((x) => x.fm.typ === "lehrveranstaltung" && AUTOMATISCH.indexOf(String(x.fm.herkunft || "")) < 0);
+    .map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} })).filter((x) => x.fm.typ === "lehrveranstaltung" && !fremd(x.fm));
   const gleich = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
   const liste = (v) => (Array.isArray(v) ? v : v ? [v] : []).map(String).sort();
+  // Raum gleich bis auf die Schreibweise? („Kupferbau HS 25“ = „Hörsaal 25 Kupferbau“)
+  const raumNorm = (r) => String(r || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/hoersaal|horsaal/g, "hs")
+    .replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean).sort().join(" ");
+
+  // ---------- Quellen-Vertrag: Status, Sperre, Grabsteine ----------
+  const Q = () => (ctx.user && ctx.user.quellen) || null;
+  const SPERRE = "System/Daten/alma-abruf.json"; // sperre.js, Quelle „alma“; dazu „angewendet“ (Grabsteine)
+  const STATUS = "eba-alma-status";              // gerätelokal: { geprueft, versucht, fehler, fehlerZeit, warnungen, fehlerSerie, anderes }
+  const jetzt = () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date());
+  const heute = () => {
+    if (ctx.date && ctx.date.now) return ctx.date.now("YYYY-MM-DD");
+    const t = berlin.formatToParts(new Date()), g = (x) => t.find((y) => y.type === x).value;
+    return `${g("year")}-${g("month")}-${g("day")}`;
+  };
+  const lstatus = () => { const s = app.loadLocalStorage(STATUS); return Object.assign({ geprueft: "", versucht: "", fehler: "", fehlerZeit: "", warnungen: [], fehlerSerie: 0, anderes: "" }, s && typeof s === "object" ? s : {}); };
+  const lstatusSetzen = (x) => app.saveLocalStorage(STATUS, Object.assign(lstatus(), x));
+  // Nach einem Lauf: e = { ok: true, warnungen } | { ok: false, fehler }; geprueft = letzter Erfolg (eba-alma-stand bleibt für ältere
+  // Fassungen auf demselben Gerät)
+  const nachLauf = (e) => {
+    const t = jetzt().toISOString(), q = Q();
+    const neu = q ? q.nachLauf(lstatus(), e, t) : Object.assign(lstatus(), e.ok ? { geprueft: t, fehler: "", fehlerZeit: "", warnungen: e.warnungen || [] } : { fehler: e.fehler, fehlerZeit: t }, { versucht: t });
+    app.saveLocalStorage(STATUS, Object.assign(neu, { anderes: "" }));
+    if (e.ok) app.saveLocalStorage(STAND, t);
+  };
+  const datei = (p) => { const f = app.vault.getAbstractFileByPath(p); return f && !f.children ? f : null; };
+  const textLesen = async (p) => { const f = datei(p); return f ? app.vault.read(f) : null; };
+  const textSchreiben = async (p, t) => {
+    const f = datei(p);
+    if (f) { if ((await app.vault.read(f)) !== t) await app.vault.modify(f, t); return; }
+    const o = p.slice(0, p.lastIndexOf("/"));
+    if (o && !app.vault.getAbstractFileByPath(o)) { try { await app.vault.createFolder(o); } catch (e) { /* gibt es schon */ } }
+    await app.vault.create(p, t);
+  };
+  const S = () => (ctx.user && ctx.user.sperre) || null;
+  const mitSperre = () => !!(S() && Q() && app.vault.modify && app.vault.read);
+  const geraetId = () => (ctx.zentral && ctx.zentral.geraetId ? ctx.zentral.geraetId() : String(app.loadLocalStorage("eba-geraet") || "g-ohne-id"));
+  const sperre = () => S().erzeugen({ io: { lesen: textLesen, schreiben: textSchreiben }, quelle: HERKUNFT, geraetId, jetzt,
+    mobil: !!(ctx.obsidian.Platform && ctx.obsidian.Platform.isMobile) });
+  const sperrDatei = async () => { try { const o = JSON.parse((await textLesen(SPERRE)) || "null"); return o && typeof o === "object" && !Array.isArray(o) ? o : {}; } catch (e) { return {}; } };
+  const angewendetSchreiben = async (a) => {
+    const o = await sperrDatei();
+    if (gleich(o.angewendet || {}, a)) return;
+    o.angewendet = a;
+    await textSchreiben(SPERRE, JSON.stringify(o, null, 1) + "\n");
+  };
+  const hashVon = (g) => (Q() ? Q().kurzHash([g.schluessel, g.von, g.bis, g.raum]) : "");
+  // Eigener Text unter „## Notizen“ (quellen.js; außerhalb des Plugins dieselbe Regel hier, leere Aufzählungspunkte zählen nicht)
+  const meineNotizen = (text) => {
+    if (Q()) return Q().meineNotizen(text);
+    const m = /^## (?:Meine Notizen|Notizen)[ \t]*$/m.exec(String(text));
+    return m ? String(text).slice(m.index + m[0].length).split(/\r?\n/).filter((z) => !/^\s*(?:[-*+]\s*)?$/.test(z)).join("\n").trim() : "";
+  };
+  const wegfall = (fm, text) => (Q() ? Q().wegfall(fm, text) : fm.entfaellt === true ? "bleibt" : meineNotizen(text) ? "entfaellt" : "papierkorb");
+  // Text einer Notiz ändern, wo es geht (Plugin: vault.process); außerhalb des Plugins nur das Frontmatter
+  const textAendern = async (f, fn) => { if (app.vault.process) await app.vault.process(f, fn); };
+  const ENTFAELLT = " (entfällt)";
 
   // ---------- Hauptfunktion ----------
-  // optionen: still (keine Meldung ohne Änderung), text (iCalendar direkt, zum Testen), ordner (zum Testen)
+  // optionen: still (keine Meldung ohne Änderung), automatisch (Zeitplan: nie ein Hinweis, übernimmt nie die Sperre), text
+  // (iCalendar direkt, zum Testen und für Hüllen außerhalb des Plugins), ordner (zum Testen)
+  // → Bericht { termine, neu, geaendert, gleich, entfernt, entfaellt, fehlt, vorbei, geloescht, doppel, warnung } oder null
+  //   (extern, nicht verbunden, Fehler, ein anderes Gerät schreibt; Grund in fehler() bzw. status())
   let letzterFehler = "";
   const aktualisieren = async (optionen = {}) => {
-    const { still = false, ordner = ORDNER } = optionen;
+    if (LAUF.p) return LAUF.p;
+    LAUF.p = ablauf(optionen);
+    try { return await LAUF.p; } finally { LAUF.p = null; }
+  };
+  const ablauf = async (optionen) => {
+    const { still = false, ordner = ORDNER, automatisch = false } = optionen;
     let text = optionen.text;
     letzterFehler = "";
+    if (extern()) { letzterFehler = EXTERN; if (!still && !automatisch) new Notice(EXTERN, 6000); return null; }
+    if (text == null && !link()) {
+      letzterFehler = "Alma ist noch nicht verbunden.";
+      if (!still && !automatisch) new Notice("Alma ist noch nicht verbunden. Tippe auf der Seite Stundenplan auf „Alma verbinden“.", 8000);
+      return null;
+    }
+    // Ein Schreiber: der Zeitplan wartet, solange ein anderes Gerät schreibt; ein Knopf übernimmt
+    const sp = mitSperre() ? sperre() : null;
+    if (sp && !(await sp.nehmen({ erzwingen: !automatisch }))) {
+      const p = await sp.pruefen();
+      lstatusSetzen({ anderes: (p.sperre && p.sperre.zuletzt) || jetzt().toISOString(), versucht: jetzt().toISOString() });
+      return null;
+    }
     if (text == null) {
-      const url = link();
-      if (!url) { letzterFehler = "Alma ist noch nicht verbunden."; if (!still) new Notice("Alma ist noch nicht verbunden. Tippe auf der Seite Stundenplan auf „Alma verbinden“.", 8000); return null; }
       let antwort;
       // Nur für Tests (docs/architektur.md): plugin.testAbruf(url) → { status, text } ersetzt den Abruf (kein Netz)
       const abrufen = ctx.plugin && typeof ctx.plugin.testAbruf === "function" ? ctx.plugin.testAbruf : requestUrl;
-      try { antwort = await abrufen({ url: url.replace(/^webcal:/i, "https:"), method: "GET", throw: false }); }
+      try { antwort = await abrufen({ url: link().replace(/^webcal:/i, "https:"), method: "GET", throw: false }); }
       catch (e) { antwort = { status: 0 }; }
       // als Bytes holen und vor dem Dekodieren entfalten (siehe bytesLesen); Rückfall auf .text
       let roh = "";
@@ -244,17 +347,57 @@ module.exports = function (ctx) {
       if (antwort.status !== 200 || !/BEGIN:VCALENDAR/.test(roh)) {
         letzterFehler = antwort.status === 200 ? "Alma hat keinen Stundenplan geliefert. Bitte den Link aus „Link kopieren“ einfügen."
           : antwort.status ? `Alma antwortet nicht (Fehler ${antwort.status}). Bitte den Link in Alma neu kopieren.` : "Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen.";
-        if (!still) new Notice(letzterFehler, 10000);
+        nachLauf({ ok: false, fehler: letzterFehler });
+        if (!still && !automatisch) new Notice(letzterFehler, 10000);
         return null;
       }
       text = roh;
     }
+    const angewendet = sp ? (await sperrDatei()).angewendet || {} : null;
+    const bericht = await anwenden(text, ordner, angewendet);
+    if (sp && bericht.angewendet) await angewendetSchreiben(bericht.angewendet);
+    delete bericht.angewendet;
+    const warnungen = [];
+    if (bericht.warnung) warnungen.push(bericht.warnung);
+    if (bericht.fehlt) warnungen.push(bericht.fehlt === 1 ? "Eine deiner Stundenplan-Notizen steht nicht mehr in Alma." : `${bericht.fehlt} deiner Stundenplan-Notizen stehen nicht mehr in Alma.`);
+    nachLauf({ ok: true, warnungen });
+    const q = Q();
+    if (q) q.meldenNeu(ctx);
+    const teile = [["neu", "neu"], ["geaendert", "geändert"], ["entfernt", "entfernt"], ["entfaellt", "entfallen"]].filter((x) => bericht[x[0]]).map((x) => `${bericht[x[0]]} ${x[1]}`);
+    if (bericht.fehlt) teile.push(`${bericht.fehlt} fehlen in Alma`);
+    if (!automatisch && (!still || teile.length)) {
+      new Notice(`Stundenplan aktualisiert: ${bericht.termine} ${bericht.termine === 1 ? "Lehrveranstaltung" : "Lehrveranstaltungen"} aus Alma${teile.length ? ` (${teile.join(", ")})` : ""}.`, 6000);
+    }
+    return bericht;
+  };
+
+  // iCalendar → Notizen. angewendet = Grabsteine (alma_schluessel → Prüfsumme) oder null (ohne Sperre: keine Grabsteine)
+  const anwenden = async (text, ordner, angewendet) => {
     const gruppen = gruppieren(lesen(text));
     const semesterImFeed = new Set(gruppen.map((g) => g.semester));
     const schluesselImFeed = new Set(gruppen.map((g) => g.schluessel));
     const ms = alleModule();
-    const alt = vorhandene(ordner);
-    const bericht = { neu: 0, geaendert: 0, entfernt: 0, behalten: 0, gleich: 0, termine: gruppen.length };
+    const tag = heute();
+    const bericht = { termine: gruppen.length, neu: 0, geaendert: 0, gleich: 0, entfernt: 0, entfaellt: 0, fehlt: 0, vorbei: 0, geloescht: 0, doppel: 0, warnung: "" };
+    // Notizen, die Obsidian gerade noch einliest (angelegt oder per Sync), fehlen im metadataCache: dann nichts anlegen
+    const unfertig = app.vault.getMarkdownFiles().some((f) => f.path.startsWith(ordner + "/") && !app.metadataCache.getFileCache(f));
+    let alt = vorhandene(ordner);
+    // Wem gehört die Notiz? Alma (herkunft: alma; ältere Fassungen: Kasten „Aus Alma“) oder dir (von Hand, Alma hat sie nur verknüpft)
+    for (const x of alt) {
+      x.text = x.fm.alma_schluessel || x.fm.herkunft === HERKUNFT ? await app.vault.cachedRead(x.f) : "";
+      x.eigen = x.fm.herkunft === HERKUNFT || (!!x.fm.alma_schluessel && AUS_ALMA.test(x.text));
+    }
+    // Doppel einer Alma-Notiz (Sync-Verzug, Konfliktkopie): zusammenführen wie jede Quelle (quellen.js dubletten)
+    const q = Q();
+    if (q && app.vault.modify) {
+      for (const g of q.doppelGruppen(alt.filter((x) => x.eigen), (x) => x.fm.alma_schluessel)) {
+        const d = q.dubletten(g.map((x) => ({ pfad: x.f.path, fm: x.fm, text: x.text })), "## Notizen");
+        const bleibt = g.find((x) => x.f.path === d.bleibt);
+        if (d.text) { await app.vault.modify(bleibt.f, d.text); bleibt.text = d.text; }
+        for (const p of d.weg) { const x = g.find((y) => y.f.path === p); await app.vault.trash(x.f, false); bericht.doppel++; }
+        alt = alt.filter((x) => d.weg.indexOf(x.f.path) < 0);
+      }
+    }
     const benutzt = new Set();
 
     // Modul, Code und Art je Termin einmal bestimmen
@@ -308,14 +451,19 @@ module.exports = function (ctx) {
       return [wt + b, wt, b, abstand(ab, g.beginn) ?? 1440];
     });
 
+    // Grabsteine nach dem Lauf: Semester, die Alma nicht geliefert hat, bleiben, wie sie sind
+    const neuAngewendet = {};
+    if (angewendet) for (const k of Object.keys(angewendet)) if (!semesterImFeed.has(k.split("|")[0])) neuAngewendet[k] = angewendet[k];
+
     for (const g of gruppen) {
       const { m, code, art } = info.get(g.schluessel);
       const treffer = zuordnung.get(g.schluessel);
+      const h = hashVon(g);
       // Kurztitel für neue Notizen: Titel der Modulnotiz, sonst aus einer vorhandenen Notiz gleichen Codes (nie aus einer mit
       // anderer Art oder einem kaputt gekürzten Titel), sonst aus dem Alma-Titel
       const vorbild = alt.filter((x) => code && x.fm.code === code && x.fm.titel && !titelKaputt(x.fm.titel) && artPasst(x.fm.art, art))
         .sort((a, b) => (a.fm.art === art ? 0 : 1) - (b.fm.art === art ? 0 : 1))[0];
-      const kurz = m && m.fm.titel ? kuerzen(String(m.fm.titel)) : vorbild ? String(vorbild.fm.titel).split(" · ")[0]
+      const kurz = m && m.fm.titel ? kuerzen(String(m.fm.titel)) : vorbild ? String(vorbild.fm.titel).split(" · ")[0].replace(/ \(entfällt\)$/, "")
         : kuerzen(g.titel.replace(code, "").replace(/^[\s\-–:·]+/, ""));
       const felder = {
         wochentag: g.wt, tag: TAGE[g.wt - 1], beginn: g.beginn, ende: g.ende, semester: g.semester,
@@ -335,17 +483,39 @@ module.exports = function (ctx) {
         if (nb != null && ne != null && nb === minuten(kb) + 15 && ne === minuten(ke) - 15 && ab % 60 === 0 && ae - ab > 30) {
           neu.beginn = uhrPlus(g.beginn, 15); neu.ende = uhrPlus(g.ende, -15);
         }
-        // Raum: leer -> aus Alma füllen; sonst nur überschreiben, wenn er sich in Alma seit dem letzten Abruf geändert hat
-        if (g.raum && (!fm.raum || (fm.alma_raum && fm.alma_raum !== g.raum))) neu.raum = g.raum;
+        // Raum: leer -> aus Alma füllen; bei der ersten Verknüpfung (noch kein alma_raum) gilt Alma, wenn er mehr als in der
+        // Schreibweise abweicht; danach nur überschreiben, wenn er sich in Alma seit dem letzten Abruf geändert hat
+        if (g.raum && (!fm.raum || (fm.alma_raum && fm.alma_raum !== g.raum) || (!fm.alma_raum && raumNorm(fm.raum) !== raumNorm(g.raum)))) neu.raum = g.raum;
         // kaputt gekürzter Titel einer Notiz, die Alma selbst angelegt hat (Kasten „Aus Alma“; alte Fassung): neu aus dem Kurztitel.
         // Von Hand angelegte Notizen behalten ihren Titel.
-        if (fm.alma_schluessel && titelKaputt(fm.titel) && AUS_ALMA.test(await app.vault.cachedRead(treffer.f))) neu.titel = `${kurz} · ${fm.art || art}`;
-        const aenderung = Object.entries(neu).some(([k, v]) => k === "ausfall" ? !gleich(liste(fm[k]), liste(v)) : !gleich(fm[k] == null ? null : String(fm[k]), v == null ? null : String(v)));
-        if (!aenderung) { bericht.gleich++; continue; }
-        await app.fileManager.processFrontMatter(treffer.f, (x) => { Object.assign(x, neu); });
-        bericht.geaendert++;
+        if (treffer.eigen && titelKaputt(fm.titel)) neu.titel = `${kurz} · ${fm.art || art}`;
+        // Alma-Notiz kommt wieder (war „entfällt“): Titel ohne „(entfällt)“
+        if (fm.entfaellt === true) neu.titel = String(neu.titel || fm.titel || "").replace(/ \(entfällt\)$/, "");
+        const aenderung = Object.entries(neu).some(([k, v]) => k === "ausfall" ? !gleich(liste(fm[k]), liste(v)) : !gleich(fm[k] == null ? null : String(fm[k]), v == null ? null : String(v)))
+          || fm.entfaellt === true || fm.alma_fehlt != null || (treffer.eigen && fm.herkunft !== HERKUNFT);
+        if (!aenderung) bericht.gleich++;
+        else {
+          const raumAlt = fm.raum, warEntfallen = fm.entfaellt === true;
+          await app.fileManager.processFrontMatter(treffer.f, (x) => {
+            Object.assign(x, neu);
+            delete x.entfaellt; delete x.alma_fehlt;
+            if (treffer.eigen) x.herkunft = HERKUNFT; // Besitzmarke (ältere Alma-Notizen hatten keine)
+          });
+          // Kopfzeile unter der Überschrift („Montags, 10:00–12:00 · Raum“) zieht mit, sonst bleibt dein Text unangetastet
+          if (neu.raum && raumAlt && neu.raum !== raumAlt) {
+            await textAendern(treffer.f, (t) => t.split("\n").map((z) => (TAGE_LANG.some((w) => z.indexOf(w) === 0) && z.indexOf(`· ${raumAlt}`) >= 0 ? z.replace(`· ${raumAlt}`, `· ${neu.raum}`) : z)).join("\n"));
+          }
+          if (warEntfallen) await textAendern(treffer.f, (t) => t.replace(/^(# .*?) \(entfällt\)$/m, "$1"));
+          bericht.geaendert++;
+        }
+        if (angewendet) neuAngewendet[g.schluessel] = h;
         continue;
       }
+      // Von dir gelöscht (Grabstein, Termin in Alma unverändert): bleibt weg
+      if (angewendet && Q().geloescht(angewendet, g.schluessel, h)) { neuAngewendet[g.schluessel] = h; bericht.geloescht++; continue; }
+      // Schon vorbei (z. B. ein Vorkurs vor Semesterbeginn): keine neue Notiz
+      if (g.bis < tag) { bericht.vorbei++; continue; }
+      if (unfertig) continue;
       // neu anlegen (nie leer, damit die Ordner-Automatik des Plugins nichts befüllt)
       if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
       const basis = sauber(g.einzeln ? `${g.von} ${code || kurz} ${art}` : `${TAGE[g.wt - 1]} ${g.beginn.replace(":", ".")} ${code || kurz} ${art}`);
@@ -353,45 +523,56 @@ module.exports = function (ctx) {
       while (app.vault.getAbstractFileByPath(`${ordner}/${name}.md`)) name = `${basis} ${i++}`;
       const yaml = {
         typ: "lehrveranstaltung", titel: `${kurz} · ${art}`, code, modul: m ? `[[${m.f.basename}]]` : "", art,
-        ...felder, raum: g.raum, dozent: "", uebersicht: "[[Stundenplan]]",
+        ...felder, herkunft: HERKUNFT, raum: g.raum, dozent: "", uebersicht: "[[Stundenplan]]",
       };
       const kopf = Object.entries(yaml).map(([k, v]) => Array.isArray(v)
         ? (v.length ? `${k}:\n${v.map((x) => `  - ${x}`).join("\n")}` : `${k}: []`)
         : `${k}: ${typeof v === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? JSON.stringify(v) : v}`).join("\n");
       const wann = g.einzeln ? `${TAGE_LANG[g.wt - 1]}, ${deutsch(g.von)}` : `${TAGE_LANG[g.wt - 1]}s`;
       const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${code || kurz} · ${art}\n\n${wann}, ${g.beginn}–${g.ende}${g.raum ? " · " + g.raum : ""}\n\n`
-        + `> [!info] Aus Alma (${g.titel}), aktualisiert mit „Stundenplan aus Alma holen“ auf [[Stundenplan]].\n\n## Notizen\n- \n`;
+        + `> [!info] Aus Alma (${g.titel}). Änderungen in Alma kommen von selbst.\n\n## Notizen\n- \n`;
       await app.vault.create(`${ordner}/${name}.md`, inhalt);
+      if (angewendet) neuAngewendet[g.schluessel] = h;
       bericht.neu++;
     }
 
-    // In Alma nicht mehr vorhanden: nur Einträge, die aus Alma stammen, und nur für Semester, die Alma geliefert hat.
-    // Von Hand angelegte Notizen (ohne den Kasten „Aus Alma“; Alma hat sie über Schritt 2 übernommen) löscht Alma nie:
-    // Sie verlieren nur die Verknüpfung zu Alma und bleiben, wie du sie angelegt hast.
-    if (gruppen.length) for (const x of alt) {
-      if (!x.fm.alma_schluessel || benutzt.has(x.f.path) || !semesterImFeed.has(x.fm.semester)) continue;
-      if (!AUS_ALMA.test(await app.vault.cachedRead(x.f))) {
-        await app.fileManager.processFrontMatter(x.f, (fm) => {
-          for (const k of ["alma_schluessel", "alma_titel", "alma_raum"]) delete fm[k];
-          if (fm.quelle === "alma") delete fm.quelle;
-        });
-        bericht.behalten++;
+    // In Alma nicht mehr vorhanden (nur Semester, die Alma geliefert hat; Ende vor mehr als 30 Tagen: unverändert):
+    //   Alma-Notiz → unberührt in den Papierkorb, mit deinem Text „(entfällt)“; deine eigene Notiz → nie löschen, nie entkoppeln,
+    //   nur alma_fehlt (Punkt in „Bitte prüfen“). Fehlen auf einmal mehr als die Hälfte (und mehr als 2), bleibt alles stehen.
+    const weg = gruppen.length ? alt.filter((x) => x.fm.alma_schluessel && !benutzt.has(x.f.path) && semesterImFeed.has(x.fm.semester)
+      && x.fm.entfaellt !== true && !(x.fm.bis && String(x.fm.bis) < plus(tag, -30))) : [];
+    const verknuepft = alt.filter((x) => x.fm.alma_schluessel && semesterImFeed.has(x.fm.semester) && x.fm.entfaellt !== true).length;
+    if (weg.length > 2 && weg.length > verknuepft / 2) {
+      bericht.warnung = `${weg.length} Lehrveranstaltungen fehlen auf einmal in Alma – nichts entfernt.`;
+      return Object.assign(bericht, { angewendet: angewendet ? Object.assign({}, angewendet, neuAngewendet) : null });
+    }
+    for (const x of weg) {
+      if (!x.eigen) {
+        if (!x.fm.alma_fehlt) await app.fileManager.processFrontMatter(x.f, (fm) => { fm.alma_fehlt = tag; });
+        bericht.fehlt++;
         continue;
       }
-      await app.vault.trash(x.f, false); // Obsidian-Papierkorb (.trash), wiederherstellbar
-      bericht.entfernt++;
+      const w = wegfall(x.fm, x.text);
+      if (w === "papierkorb") { await app.vault.trash(x.f, false); bericht.entfernt++; continue; } // Obsidian-Papierkorb (.trash)
+      if (w !== "entfaellt") continue;
+      await app.fileManager.processFrontMatter(x.f, (fm) => { fm.entfaellt = true; fm.titel = String(fm.titel || "").replace(/ \(entfällt\)$/, "") + ENTFAELLT; fm.herkunft = HERKUNFT; });
+      await textAendern(x.f, (t) => t.replace(/^(# (?!.*\(entfällt\)$).*)$/m, "$1" + ENTFAELLT));
+      bericht.entfaellt++;
     }
-
-    app.saveLocalStorage(STAND, new Date().toISOString());
-    const geaendert = bericht.neu + bericht.geaendert + bericht.entfernt + bericht.behalten;
-    const behalten = bericht.behalten ? `, ${bericht.behalten} eigene behalten` : "";
-    if (!still || geaendert) new Notice(`Fertig – ${bericht.termine} Termine aus Alma${geaendert ? ` (${bericht.neu} neu, ${bericht.geaendert} geändert, ${bericht.entfernt} entfernt${behalten})` : ""}.`, 6000);
-    return bericht;
+    return Object.assign(bericht, { angewendet: angewendet ? neuAngewendet : null });
   };
 
   // ---------- Verbindung (wiederverwendbar, z. B. für eine „Verbinden“-Karte mit Schloss) ----------
-  // Status auf diesem Gerät: verbunden (Link gespeichert) und Zeitpunkt des letzten erfolgreichen Abrufs (ISO) oder null.
-  const status = () => ({ verbunden: hatLink(), stand: app.loadLocalStorage(STAND) || null, seit: app.loadLocalStorage(SEIT) || null });
+  // Status auf diesem Gerät in der gemeinsamen Form der Quellen: { zustand (extern | nicht-verbunden | laeuft | fehler |
+  // anderes-geraet | an), geprueft, fehler, fehlerZeit, warnungen }, dazu verbunden, stand (= geprueft oder null), seit, anderes
+  // (letzte Aktivität des anderen Geräts), laeuft, extern.
+  const status = () => {
+    const s = lstatus(), verbunden = hatLink(), ex = extern();
+    const geprueft = s.geprueft || app.loadLocalStorage(STAND) || "";
+    const zustand = ex ? "extern" : !verbunden ? "nicht-verbunden" : LAUF.p ? "laeuft" : s.fehler ? "fehler" : s.anderes ? "anderes-geraet" : "an";
+    return { zustand, geprueft, fehler: s.fehler, fehlerZeit: s.fehler ? s.fehlerZeit : "", warnungen: Array.isArray(s.warnungen) ? s.warnungen : [],
+      verbunden, stand: geprueft || null, seit: app.loadLocalStorage(SEIT) || null, anderes: s.anderes || "", laeuft: !!LAUF.p, extern: ex };
+  };
   // Link abfragen (oder übergeben) und sofort importieren. Rückgabe: Bericht von aktualisieren() oder null (abgebrochen
   // oder gescheitert). Scheitert der erste Abruf, gilt wieder der vorherige Zustand (alter Link bzw. keiner), damit kein
   // unbrauchbarer Link gespeichert bleibt; Grund in fehler(). optionen.nurBeiErfolg (Verbinden-Fenster): keine Hinweise,
@@ -399,15 +580,20 @@ module.exports = function (ctx) {
   const verbinden = async (vorgabe, optionen = {}) => {
     const vorher = link(), vorherSeit = app.loadLocalStorage(SEIT) || null;
     letzterFehler = "";
+    // Stundenplan von außen: gar nicht erst nach dem Link fragen
+    if (extern()) { letzterFehler = EXTERN; if (!optionen.nurBeiErfolg) new Notice(EXTERN, 6000); return null; }
     if (!(await linkSetzen(vorgabe, true))) return null;
     const bericht = await aktualisieren({ still: !!optionen.nurBeiErfolg });
-    if (!bericht) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); return null; }
+    if (!bericht) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); if (!vorher) app.saveLocalStorage(STATUS, null); return null; }
     if (bericht && (!vorher || vorher !== link() || !vorherSeit)) app.saveLocalStorage(SEIT, new Date().toISOString());
     return bericht;
   };
-  // Link auf diesem Gerät löschen (die Stundenplan-Notizen bleiben).
-  const trennen = () => { app.saveLocalStorage(SPEICHER, null); app.saveLocalStorage(STAND, null); app.saveLocalStorage(SEIT, null); };
-  const fehler = () => letzterFehler;
+  // Link auf diesem Gerät löschen (die Stundenplan-Notizen bleiben); die Sperre wird frei, ein anderes Gerät mit Link übernimmt
+  const trennen = () => {
+    app.saveLocalStorage(SPEICHER, null); app.saveLocalStorage(STAND, null); app.saveLocalStorage(SEIT, null); app.saveLocalStorage(STATUS, null);
+    if (mitSperre()) sperre().freigeben().catch(() => {});
+  };
+  const fehler = () => letzterFehler || lstatus().fehler;
   // Knopf „Stundenplan aktualisieren“: mit Link aktualisieren, sonst verbinden; neuerLink = Link neu abfragen.
   // Ohne Link und bei Abbruch: verständliche Meldung statt stillem Nichts.
   const aktualisierenOderVerbinden = async ({ neuerLink = false } = {}) => {
@@ -418,5 +604,33 @@ module.exports = function (ctx) {
     return bericht;
   };
 
-  return { aktualisieren, linkSetzen, linkPruefen, hatLink, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler };
+  // Punkte für „Bitte prüfen“ (quellen.js, Meldekanal): deine eigenen Stundenplan-Notizen, die in Alma fehlen (alma_fehlt,
+  // synchronisiert, darum auf jedem Gerät), höchstens 14 Tage lang und nicht nach dem Ende der Veranstaltung
+  const hinweise = () => {
+    const t = heute(), ab = plus(t, -14);
+    return app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(ORDNER + "/")).map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} }))
+      .filter((x) => x.fm.alma_fehlt && String(x.fm.alma_fehlt) >= ab && !(x.fm.bis && String(x.fm.bis) < t) && !fremd(x.fm))
+      .map((x) => ({ text: `**Stundenplan** · ${String(x.fm.titel || x.f.basename)} steht nicht mehr in Alma. Fällt sie aus, lösch die Notiz.`, pfad: x.f.path }));
+  };
+
+  // Zeitplan (quellen.js planen): erster Abruf 30 s + Zufall bis 2 Min. nach dem Einlesen, dann stündlich; nach einem Fehler nach
+  // 5, 15, 30 Min.; zurück in der App nach über einer Stunde. Nur mit Link auf diesem Gerät und nie, wenn der Stundenplan von
+  // außen kommt. Testeinstieg: plugin.testStundenplanAus = true (kein automatischer Abruf).
+  const registrieren = () => {
+    const q = Q();
+    if (!q) return;
+    q.melden(ctx, HERKUNFT, hinweise);
+    const bald = ctx.entprellen(() => q.meldenNeu(ctx), 1500);
+    ctx.an(app.metadataCache, "changed", (f) => { if (f && f.path.startsWith(ORDNER + "/")) bald(); });
+    q.planen(ctx, { takt: 60 * 60e3, zurueck: 60 * 60e3, backoff: [5 * 60e3, 15 * 60e3, 30 * 60e3], start: [30e3, 90e3],
+      versucht: () => Date.parse(lstatus().versucht || "") || 0,
+      lauf: async () => {
+        if ((ctx.plugin && ctx.plugin.testStundenplanAus) || !hatLink() || extern()) return null;
+        const b = await aktualisieren({ still: true, automatisch: true });
+        if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen();
+        return b ? true : lstatus().fehler ? false : null;
+      } });
+  };
+
+  return { registrieren, aktualisieren, linkSetzen, linkPruefen, hatLink, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler, hinweise, raumNorm };
 };

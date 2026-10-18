@@ -8,17 +8,23 @@ const path = require("node:path");
 const WURZEL = path.join(__dirname, "..");
 const SKRIPTE = path.join(WURZEL, "Studium Autopilot", "System", "Skripte");
 const DATEN = path.join(__dirname, "daten", "v1");
+// Bibliotheken ohne Obsidian, die das Plugin jedem Skript in ctx.user gibt (Tests ergänzen weitere über kontext.user)
+const BIBLIOTHEKEN = { sperre: require(path.join(SKRIPTE, "sperre.js")), quellen: require(path.join(SKRIPTE, "quellen.js")), felder: require(path.join(SKRIPTE, "felder.js")) };
 
 // frontmatter: { "System/Daten/Semester.md": { … }, … } – was der metadataCache für diese Notizen liefern würde
-function laden(name, { heute = "2026-10-15", frontmatter = {}, kontext = {} } = {}) {
+// notizen: { "Termine/x.md": { … }, … } – wie frontmatter, dazu in vault.getMarkdownFiles() (Notizen, die Skripte durchsuchen)
+function laden(name, { heute = "2026-10-15", frontmatter = {}, notizen = {}, kontext = {} } = {}) {
+  const hat = (o, p) => Object.prototype.hasOwnProperty.call(o, p);
+  const fmVon = (p) => (hat(notizen, p) ? notizen[p] : frontmatter[p]); // frontmatter darf der Test später noch ändern
+  const datei = (p) => ({ path: p, basename: path.basename(p, ".md"), extension: "md" });
   const code = fs.readFileSync(path.join(SKRIPTE, name + ".js"), "utf8");
   const app = {
     vault: {
-      getAbstractFileByPath: (p) => (Object.prototype.hasOwnProperty.call(frontmatter, p) ? { path: p, basename: path.basename(p, ".md") } : null),
-      getMarkdownFiles: () => [],
+      getAbstractFileByPath: (p) => (hat(frontmatter, p) || hat(notizen, p) ? datei(p) : null),
+      getMarkdownFiles: () => Object.keys(notizen).map(datei),
     },
     metadataCache: {
-      getFileCache: (f) => (f && frontmatter[f.path] ? { frontmatter: frontmatter[f.path] } : null),
+      getFileCache: (f) => (f && fmVon(f.path) ? { frontmatter: fmVon(f.path) } : null),
       on: () => ({}), offref: () => {},
     },
     workspace: { on: () => ({}) },
@@ -43,6 +49,7 @@ function laden(name, { heute = "2026-10-15", frontmatter = {}, kontext = {} } = 
     an: () => ({}), dom: () => {}, aufraeumen: () => {}, postprozessor: () => {}, editor: () => {},
     codeblock: () => ({ instanzen: () => [], neu: () => {} }),
   }, kontext);
+  ctx.user = Object.assign({}, BIBLIOTHEKEN, ctx.user);
   const modul = { exports: {} };
   new Function("module", "exports", "window", code)(modul, modul.exports, { app });
   const ergebnis = modul.exports(ctx);

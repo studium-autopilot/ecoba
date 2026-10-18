@@ -43,4 +43,4 @@ body:
     id: bild
     attributes:
       label: Bildschirmfoto (optional)
-      description: Hilft sehr. Bitte vorher persönliche Angaben abdecken.
+      description: Hilft sehr. Bitte vorher persönliche Angaben abdecken, vor allem Noten und deinen Benutzernamen.

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/alma-konto-html.test.js und tests/alma-konto.test.js. Aufbau wie die Startseite von Alma
+     (HISinOne, Uni Tübingen) ohne Anmeldung, Oktober 2026, als verkleinertes Gerüst (ohne Skripte, Stile, Texte des Portals);
+     alle Werte erfunden. Das Formular für Geräte mit kleinem Bildschirm (#mobileLoginForm) trägt die Felder, das zweite
+     (#loginForm) ist leer. -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head><meta charset="utf-8"><title>Startseite – Alma</title></head>
+<body>
+<form id="jsForm" name="jsForm" method="post" action="/alma/pages/cs/sys/portal/hisinoneStartPage.faces"><input type="hidden" name="jsForm_SUBMIT" value="1"></form>
+<form id="mobileLoginForm" name="mobileLoginForm" class="noDisplay formular full-screen-waiting-behavior" method="post"
+      action="https://alma.uni-tuebingen.de:443/alma/rds?state=user&amp;type=1&amp;category=auth.login">
+  <input type="hidden" name="userInfo" value="">
+  <input type="hidden" id="ajaxTokenMobile" name="ajax-token" value="00000000-1111-4222-8333-444444444444">
+  <label for="loginName">Benutzerkennung</label>
+  <input class="input_login_hisinone" id="loginName" name="asdf" type="text">
+  <label for="loginPassword">Passwort</label>
+  <input class="input_login_hisinone" id="loginPassword" name="fdsa" type="password">
+  <button class="submit_image" id="showPassword" name="showPassword" type="button"><img alt="Anzeigen"></button>
+  <label class="noDisplay" for="mobileLoginCheckboxElement">Merken</label>
+  <input class="mobileLoginCheckboxElement" id="mobileLoginCheckboxElement" name="mobileLoginCheckboxElement" type="checkbox">
+</form>
+<form id="loginForm" name="loginform" class="formular full-screen-waiting-behavior " method="post"
+      action="https://alma.uni-tuebingen.de:443/alma/rds?state=user&amp;type=1&amp;category=auth.login"></form>
+<form id="startPage" name="startPage" method="post" action="/alma/pages/cs/sys/portal/hisinoneStartPage.faces">
+  <input type="hidden" name="activePageElementId" value="">
+  <input type="hidden" name="authenticity_token" value="ZXJmdW5kZW4tdG9rZW4=">
+  <div id="startPage:messages-infobox" class="messages-infobox-container" role="dialog">
+    <div class="messages-infobox-behavior  occassionalUser" data-maximum-severity=""></div>
+  </div>
+  <h1>Willkommen in Alma</h1>
+  <input type="hidden" name="startPage_SUBMIT" value="1">
+</form>
+</body>
+</html>

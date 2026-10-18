@@ -5,7 +5,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
 
-const { istLeer } = laden("leer").ergebnis;
+const { istLeer, hatAngaben } = laden("leer").ergebnis;
 
 // wie notizen.js (Aktion „vorlesung“) sie anlegt, Cursor-Zeichen schon entfernt
 const vorlesung = (mitschrift = "") => `---
@@ -48,4 +48,11 @@ test("Eigener Text macht die Notiz nicht leer", () => {
 
 test("Nur Beschriftungen, Callouts und Nummern zählen nicht", () => {
   assert.equal(istLeer("---\ntyp: übungsblatt\n---\n\n# Blatt 1\n\n1.\n2)\n- **Ansatz:**\n> [!tip] Hinweis\n> Text der Vorlage\n"), true);
+});
+
+test("Übungsblatt mit Abgabe, Aufgaben oder eigener Lösung bleibt, auch ohne Text", () => {
+  assert.equal(hatAngaben({ typ: "übungsblatt", faellig: "2026-10-27", datei: "", eigene_loesung: "" }), true);
+  assert.equal(hatAngaben({ typ: "übungsblatt", faellig: null, datei: "[[Blatt 3.pdf]]" }), true);
+  assert.equal(hatAngaben({ typ: "übungsblatt", faellig: "", datei: "", eigene_loesung: "" }), false, "ohne Angaben: darf weg");
+  assert.equal(hatAngaben({ typ: "vorlesung", datum: "2026-10-19" }), false, "Vorlesung: Datum allein hält sie nicht");
 });

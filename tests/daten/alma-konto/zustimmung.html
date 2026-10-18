@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/alma-konto-html.test.js und tests/alma-konto.test.js. Erfundene Seite, auf der man einer Bedingung zustimmen soll (Aufbau nicht erfasst). -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head><meta charset="utf-8"><title>Alma</title></head>
+<body>
+<form id="consentForm" name="consentForm" method="post" action="/alma/pages/cs/sys/portal/consent.faces">
+  <h1>Nutzungsbedingungen</h1>
+  <label for="consentForm:akzeptiert"><input type="checkbox" id="consentForm:akzeptiert" name="consentForm:akzeptiert"> Ich stimme den Nutzungsbedingungen zu.</label>
+  <button type="submit" id="consentForm:zustimmen" name="consentForm:zustimmen"><span>Zustimmen</span></button>
+</form>
+</body>
+</html>

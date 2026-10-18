@@ -36,8 +36,8 @@ module.exports = function (ctx) {
     window.open("shareddocuments://" + encodeURI(p).replace(/#/g, "%23"));
   };
 
-  const VARIANTEN = ["Economics", "Business Administration", "ohne Spezialisierung", "offen"];
-  const varianteText = (v) => (v === "offen" ? "noch offen" : v); // gespeichert bleibt „offen“
+  // Variante: Werte, Reihenfolge und Wörter aus dem Feld-Register (felder.js); gespeichert bleibt „offen“
+  const F = () => ctx.user.felder;
 
   const AKTIONEN = {
     // Knopf „Öffnen ↗“ (Unterlagen-Notizen und -Tabellen): Datei aus „datei“ (mit original=1: aus „original“) extern öffnen
@@ -98,14 +98,14 @@ module.exports = function (ctx) {
       titel: "Variante wechseln",
       ausfuehren: async (c) => {
         let wert = String(c.parameter.wert || "").trim();
-        if (!wert) wert = (await ctx.system.suggester(VARIANTEN.map(varianteText), VARIANTEN, false, "Variante")) || "";
+        if (!wert) wert = (await ctx.system.suggester(F().VARIANTE.werte.map(F().varianteTitel), F().VARIANTE.werte.slice(), false, "Variante")) || "";
         if (!wert) return;
-        const wahl = VARIANTEN.find((v) => v.toLowerCase() === wert.toLowerCase()) || null;
+        const wahl = F().varianteFinden(wert);
         const einstellungen = app.vault.getAbstractFileByPath("System/Einstellungen.md");
         if (!wahl) { new Notice("Unbekannte Variante: " + wert, 3000); return; }
         if (!einstellungen) { new Notice("System/Einstellungen.md fehlt.", 3000); return; }
         await app.fileManager.processFrontMatter(einstellungen, (fm) => { fm.variante = wahl; });
-        new Notice("Variante: " + varianteText(wahl), 3000);
+        new Notice("Variante: " + F().varianteImSatz(wahl), 3000);
       },
     },
 

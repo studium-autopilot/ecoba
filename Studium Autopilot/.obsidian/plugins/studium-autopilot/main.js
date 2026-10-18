@@ -18,6 +18,7 @@ const SKRIPTE = "System/Skripte/";
 const PROTOKOLL = "studium-autopilot";
 const LINK = "obsidian://" + PROTOKOLL;
 const CURSOR = String.fromCharCode(0xE000); // Platzhalter für die Cursor-Position in erzeugten Notizen (siehe eba.js, ablegen)
+const HINWEIS_RUHE = 3000; // ms ohne neues Skript, bis der Hinweis nach dem Hot-Reload kommt (hinweisSammeln)
 // CodeMirror 6 stellt Obsidian Plugins per require bereit (auch auf Mobilgeräten); für echte Editor-Erweiterungen.
 const cmLaden = (name) => { try { return require(name); } catch (e) { return null; } };
 const CM = { view: cmLaden("@codemirror/view"), state: cmLaden("@codemirror/state") };
@@ -89,7 +90,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     this.laufend = new Set(); // gerade laufende Aktionen (Doppelklick-Schutz)
     this.testAntworten = [];  // Nur für Tests: vorbereitete Antworten für Eingabe/Auswahl (siehe docs/architektur.md)
     this.testProtokoll = [];
-    this.stillBis = 0;        // bis zu diesem Zeitpunkt (ms) keine Hinweise beim Hot-Reload (setzt update.js während des Updates)
+    this.stillBis = 0;        // bis zu diesem Zeitpunkt (ms) keine Hinweise beim Hot-Reload (update.js während eines Updates, hinweisSammeln)
     this.testDatum = null;    // Nur für Tests: "YYYY-MM-DD" ersetzt das heutige Datum in ctx.date (Uhrzeit bleibt)
     // Aufräumen je Skript (Helfer in ctx, siehe skriptKontext)
     this.kontexte = {};      // Skript → eigener Kontext (Proxy auf ctx mit den Helfern)
@@ -136,6 +137,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     // Prozessor o. Ä. registrieren – der bliebe sonst für immer angemeldet, und die nächste Instanz (Plugin neu laden,
     // Update) bekäme „already registered“.
     this.entladen = true;
+    clearTimeout(this.hinweisTimer);
     // Je Skript: abmelden() der Erweiterung, dann alles, was über die Helfer in ctx angemeldet wurde.
     // Codeblock-Prozessoren, Post-Processor, Editor-Array und Befehle meldet Obsidian beim Entladen des Plugins selbst ab.
     for (const name of Object.keys(this.erweiterungen).concat(Object.keys(this.aufraeumer))) this.skriptAbmelden(name);
@@ -413,11 +415,28 @@ module.exports = class StudiumAutopilot extends Plugin {
       this.quellen[f.basename] = code;
       if (this.istErweiterung(code)) await this.erweiterungStarten(f.basename, false);
       this.neuZeichnen();
-      if (!(this.stillBis > Date.now())) new Notice("Aktualisiert: " + f.basename, 2000); // still während eines Updates (update.js)
+      this.hinweisSammeln(f.basename);
     } catch (e) {
       console.error("Studium Autopilot: neu laden " + f.path, e);
       new Notice(`Studium Autopilot – ${f.basename} nicht geladen: ${(e && e.message) || e}`, 8000);
     }
+  }
+
+  // Hinweis nach dem Hot-Reload, gesammelt bis HINWEIS_RUHE lang kein Skript mehr kam: genau eines (du hast es bearbeitet) →
+  // „Aktualisiert: name“; mehrere auf einmal (ein Update kommt über den Sync) → kein Hinweis und eine Minute Ruhe für Nachzügler,
+  // das Update meldet die Zeile „Version … ist da. Einmal neu laden.“ (update.js). Während eines Updates (stillBis) nie.
+  hinweisSammeln(name) {
+    if (this.stillBis > Date.now()) return;
+    this.hinweisNamen = (this.hinweisNamen || []).concat([name]);
+    clearTimeout(this.hinweisTimer);
+    this.hinweisTimer = setTimeout(() => {
+      const namen = this.hinweisNamen || [];
+      this.hinweisNamen = [];
+      this.hinweisTimer = null;
+      if (this.entladen || this.stillBis > Date.now()) return;
+      if (namen.length === 1) new Notice("Aktualisiert: " + namen[0], 2000);
+      else this.stillBis = Date.now() + 60000;
+    }, HINWEIS_RUHE);
   }
 
   // Skriptdatei gelöscht oder umbenannt: abmelden und vergessen

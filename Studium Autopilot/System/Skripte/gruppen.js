@@ -24,7 +24,6 @@ module.exports = function (ctx) {
   const TITEL = { "Übung": "Übungsgruppen", "Tutorium": "Tutorien" };
 
   const dmy = (s) => (/^\d{4}-\d{2}-\d{2}/.test(String(s || "")) ? `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}` : "");
-  const minuten = (hm) => { const m = String(hm || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
   const md = () => { try { return ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null; } catch (e) { return null; } };
 
   // „8–10 c.t.“ (volle Stunden, c.t.), „8–10“ (volle Stunden), sonst „8:30–10:00“
@@ -36,18 +35,11 @@ module.exports = function (ctx) {
     return `${lang(g.von)}–${lang(g.bis)}` + (g.ct ? " c.t." : "");
   };
 
-  // Steht die Gruppe in deinem Stundenplan? (stundenplan = ctx.modell.daten().stundenplan: [{ fm }]). Nur Notizen, die eine
-  // Übung sein können: Art Übung, Tutorium, Übungsteil oder unbestimmt (Alma erkennt die Art nicht immer), nie eine Vorlesung.
-  const UEBUNG = ["Übung", "Tutorium", "Übungsteil", "Veranstaltung", ""];
+  // Steht die Gruppe in deinem Stundenplan? (stundenplan = ctx.modell.daten().stundenplan: [{ fm }]). Die eine Regel aus
+  // meine-gruppe.js (gehoertZu): Notizen, die eine Übung sein können (nie eine Vorlesung), Beginn ±15 Min. (c.t./s.t.);
+  // Gruppen-Notizen (ILIAS, gewählt) über ihre gruppe_id. Ohne meine-gruppe.js: keine.
   const HERKUNFT = { "ilias-gruppe": "ilias", "gruppe-gewaehlt": "gewaehlt" };
-  const passt = (g, fm) => {
-    if (fm.entfaellt === true || String(fm.code || "") !== g.code || String(fm.semester || "") !== g.semester) return false;
-    if (fm.gruppe_id && HERKUNFT[String(fm.herkunft || "")]) return String(fm.gruppe_id) === g.id;
-    if (UEBUNG.indexOf(String(fm.art == null ? "" : fm.art)) < 0) return false;
-    if (Number(fm.wochentag) !== TAGE.indexOf(g.tag) + 1) return false;
-    const a = minuten(fm.beginn), b = minuten(g.von);
-    return a != null && b != null && Math.abs(a - b) <= 15;
-  };
+  const passt = (g, fm) => { const L = ctx.user && ctx.user["meine-gruppe"]; return !!(L && L.gehoertZu) && L.gehoertZu(fm, g, { ueberId: true }); };
   // Woher kommt die Gruppe in deinem Stundenplan? "ilias" | "gewaehlt" | "stundenplan" (Alma, von Hand, zentral) | ""
   const deinVon = (g, stundenplan) => {
     let aus = "";

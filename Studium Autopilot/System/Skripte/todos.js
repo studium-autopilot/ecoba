@@ -1,6 +1,7 @@
 // To-dos und Offene Fragen auf dem Dashboard: Codeblock ```eba-todos``` bzw. ```eba-todos fragen``` (statt einer
 // Obsidian-Suche ```query task-todo:…```, die Dateinamen-Gruppen, rohes Markdown und abgeschnittenen Text zeigt).
-// Auswahl: offene Aufgaben `- [ ] Text` in allen Notizen außer in den Ordnern System/, Module/, Studium/ und im Dashboard;
+// Auswahl: offene Aufgaben `- [ ] Text` in allen Notizen außer in den Ordnern System/, Module/, Studium/, Lernplan/ (Kapitel
+// sind Kästchen, aber keine To-dos) und im Dashboard;
 // Offene Fragen = Text endet auf „?“ oder enthält #frage, To-dos = alle übrigen. Daten aus dem metadataCache (listItems,
 // task " ") und den Zeilen der Notiz (cachedRead).
 // Je Zeile: echtes Kästchen (Tipp hakt nach 1,5 s in der Quellnotiz ab: `- [ ]` → `- [x]` genau in dieser Zeile, Text wird
@@ -18,7 +19,7 @@ module.exports = function (ctx) {
   const SPRACHE = "eba-todos";
   const TAG = 86400000;
   // Ausgeschlossene Ordner bzw. Dateien als Pfad-Präfix (vom Vault-Stamm aus, Groß/klein egal)
-  const AUSSCHLUSS = ["system/", "module/", "studium/", "dashboard.md"];
+  const AUSSCHLUSS = ["system/", "module/", "studium/", "lernplan/", "dashboard.md"];
   // Modulcode am Anfang eines Notiznamens (einheitliches Muster aus System/Skripte/eba.js; fehlt eba.js: kein Kurzname)
   const MODULCODE = ctx && ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE;
   const CODE_NAME = MODULCODE ? new RegExp("^(" + MODULCODE + ")\\s+(.+)$") : null;
@@ -66,9 +67,9 @@ module.exports = function (ctx) {
       const davor = s.slice(Math.max(0, m.index - 12), m.index);
       const bis = /\bbis\s*$/i.test(davor);
       if (!m[1] && !m[4] && !bis && !/(\b(ab|am|vor|zum|spätestens)\s*|\(\s*)$/i.test(davor)) continue;
-      let j = m[4] ? (m[4].length === 2 ? 2000 + +m[4] : +m[4]) : heute.getFullYear();
-      let d = new Date(j, mo - 1, tg);
-      if (!m[4]) { if (d - heute < -180 * TAG) d = new Date(j + 1, mo - 1, tg); else if (d - heute > 185 * TAG) d = new Date(j - 1, mo - 1, tg); }
+      // Ohne Jahr: dieselbe Regel wie bei der Eingabe eines Datums (ctx.modell.zeit.jahrRaten: höchstens 60 Tage zurück)
+      const d = m[4] ? new Date(m[4].length === 2 ? 2000 + +m[4] : +m[4], mo - 1, tg) : ctx.modell.zeit.tag(ctx.modell.zeit.jahrRaten(tg, mo, { bezug: ctx.modell.zeit.iso(heute) }));
+      if (!d) continue;
       kand.push({ d, bis });
     }
     const iso = /\b(\d{4})-(\d{2})-(\d{2})\b/g;

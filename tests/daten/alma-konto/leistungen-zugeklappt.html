@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/alma-konto-html.test.js und tests/alma-konto.test.js. Wie leistungen-voll.html (nachgebaut), aber nur die oberen Ebenen
+     sind sichtbar und zugeklappt; der Knopf „Alle aufklappen“ (id-Endung :tree:expandAll2) steht darüber. -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head><meta charset="utf-8"><title>Alma</title></head>
+<body>
+<div id="header">
+  <a class="topMenuLink mainnavLink link_simple flexdropdownmenu capitalizeFirstLetter" href="/alma/rds?state=user&amp;type=3&amp;category=auth.logout" id="widgetRender:1:burgerNavi:logoutLink">Abmelden</a>
+  <form id="widgetRender:22:collapsibleHeaderActionFrom" name="widgetRender:22:collapsibleHeaderActionFrom" method="post" action="/alma/pages/cs/sys/portal/hisinoneStartPage.faces">
+    <div class="widgetPanel" id="widgetRender:22:collapsibleHeaderActionFrom:avatarInfobox">
+      <button class="submit_image portalInfoBoxLink short-waiting-behavior submit" id="widgetRender:22:collapsibleHeaderActionFrom:avatarInfobox:open" name="widgetRender:22:collapsibleHeaderActionFrom:avatarInfobox:open" type="button" title="Erika Musterfrau">
+        <div class="avatar"><div class="initials-circle" id="avatar">EM</div></div>
+      </button>
+    </div>
+    <a class="sLink waiting-behavior" href="/alma/rds?state=user&amp;type=3&amp;category=auth.logout" id="widgetRender:22:collapsibleHeaderActionFrom:logoutLink"><span class="iconfont-exit"></span></a>
+  </form>
+</div>
+<form id="sessionTimeoutLoginForm" name="loginform" class="formular full-screen-waiting-behavior" method="post"
+      action="https://alma.uni-tuebingen.de:443/alma/rds?state=user&amp;type=1&amp;category=auth.login&amp;re=last">
+  <div class="box_content"><fieldset role="presentation">
+    <legend class="noDisplay">Anmelden</legend>
+    <p>Ihre Sitzung ist aus Sicherheitsgründen abgelaufen. Bitte melden Sie sich erneut an.</p>
+    <label for="asdf">Benutzerkennung</label><input class="input_standard autofocus-behavior" id="asdf" name="asdf" type="text">
+    <label for="fdsa">Passwort</label><input class="input_standard" id="fdsa" name="fdsa" type="password">
+    <button class="submit_login" id="sessionTimeoutLoginForm:login" name="submit" type="submit"><span>Anmelden</span></button>
+  </fieldset></div>
+</form>
+<form id="examsReadonly" name="examsReadonly" method="post" action="/alma/pages/sul/examAssessment/personExamsReadonly.xhtml?_flowId=examsOverviewForPerson-flow&amp;_flowExecutionKey=e1s1">
+  <input type="hidden" name="activePageElementId" value="">
+  <input type="hidden" name="refreshButtonClickedId" value="">
+  <input type="hidden" name="navigationPosition" value="hisinoneMeinStudium,examAssessmentForStudent">
+  <input type="hidden" name="authenticity_token" value="ZXJmdW5kZW4tbGVpc3R1bmdlbg==">
+  <div id="examsReadonly:messages-infobox" class="messages-infobox-container" role="dialog"><div class="messages-infobox-behavior  occassionalUser"></div></div>
+  <div id="examsReadonly:overviewAsTreeReadonly">
+    <div class="boxStandard" id="examsReadonly:overviewAsTreeReadonly:fieldset"><div class="box_container">
+      <div id="examsReadonly:overviewAsTreeReadonly:collapsiblePanel">
+        <input type="hidden" name="examsReadonly:overviewAsTreeReadonly:collapsiblePanelCollapsedState" value="false">
+        <div class=" box_title"><div class="layoutFieldsetTitle collapseTitle">
+          <h2 class="withMarginLeft ">Leistungsdaten</h2>
+          <button class="fieldsetHeadlineCollapseButton submit_image" id="examsReadonly:overviewAsTreeReadonly:minmax" name="examsReadonly:overviewAsTreeReadonly:minmax" type="button"><span class="iconfont-arrow_thin_down"></span></button>
+        </div></div>
+        <div class="box_content">
+          <fieldset class="fieldsetNoBorder" id="examsReadonly:overviewAsTreeReadonly:overviewAsTreeReadonly_innerFieldset" role="presentation">
+            <legend>Leistungsdaten</legend>
+            <div class="treeTableButtons"><button class="submit_linkLook" id="examsReadonly:overviewAsTreeReadonly:tree:expandAll2" name="examsReadonly:overviewAsTreeReadonly:tree:expandAll2" type="submit"><span>Alle aufklappen</span></button></div>
+            <table class="treeTableWithIcons" id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly">
+              <thead><tr><th></th><th>Nummer</th><th>Titel</th><th>Semester</th><th>Note</th><th>Credits</th><th>Status</th><th>Vermerk</th><th>Versuch</th><th>Prüfungsdatum</th><th>Prüfer/-in</th></tr></thead>
+              <tbody>
+                <tr class="treeTableCellLevel1"><td class="treeTableToggle"><a class="treeTableExpandCollapse" id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:toggle"><span class="iconfont-arrow_thin_right"></span></a></td><td class="treeElementName"><span class="treeTableIcon"><img class="imageIcon" alt="Abschluss" src="/alma/icon.svg"></span><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:elementnr">88</span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:defaulttext">Bachelor Economics and Business Administration</span></td><td></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:grade"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:bonus"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:workstatus"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:remark"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:0:attempt"></span></td><td></td><td></td></tr>
+                <tr class="treeTableCellLevel2"><td class="treeTableToggle"><a class="treeTableExpandCollapse" id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:toggle"><span class="iconfont-arrow_thin_right"></span></a></td><td class="treeElementName"><span class="treeTableIcon"><img class="imageIcon" alt="Konto" src="/alma/icon.svg"></span><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:elementnr">1000</span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:defaulttext">Grundstudium</span></td><td></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:grade"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:bonus"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:workstatus">PV</span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:remark"></span></td><td><span id="examsReadonly:overviewAsTreeReadonly:tree:ExamOverviewForPersonTreeReadonly:0:1:attempt"></span></td><td></td><td></td></tr>
+              </tbody>
+            </table>
+          </fieldset>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  <div id="examsReadonly:degreeProgramProgressForReportAsTree">
+    <div class="boxStandard" id="examsReadonly:degreeProgramProgressForReportAsTree:fieldset"><div class="box_container">
+      <div id="examsReadonly:degreeProgramProgressForReportAsTree:collapsiblePanel">
+        <input type="hidden" name="examsReadonly:degreeProgramProgressForReportAsTree:collapsiblePanelCollapsedState" value="true">
+        <div class="collapsedTitle box_title"><div class="layoutFieldsetTitle collapseTitle">
+          <h2 class="withMarginLeft ">Studienverlauf</h2>
+          <button class="fieldsetHeadlineCollapseButton submit_image" id="examsReadonly:degreeProgramProgressForReportAsTree:minmax" name="examsReadonly:degreeProgramProgressForReportAsTree:minmax" type="button"><span class="iconfont-arrow_thin_right"></span></button>
+        </div></div>
+      </div>
+    </div></div>
+  </div>
+  <div id="examsReadonly:exaReports:fieldset_exaReports"><div class="boxStandard">
+    <div class="box_title "><h2>Bescheinigungen</h2></div>
+    <div class="box_content"><ul class="buttons_vertical">
+      <li><button class="submit_print_pdf immediate" id="examsReadonly:exaReports:fieldset_exaReports:printReport_1" name="examsReadonly:exaReports:fieldset_exaReports:printReport_1" type="submit"><span>Bescheinigung A</span></button></li>
+      <li><button class="submit_print_pdf immediate" id="examsReadonly:exaReports:fieldset_exaReports:printReport_2" name="examsReadonly:exaReports:fieldset_exaReports:printReport_2" type="submit"><span>Bescheinigung B</span></button></li>
+    </ul></div>
+  </div></div>
+  <input type="hidden" name="examsReadonly_SUBMIT" value="1">
+  <input type="hidden" id="javax.faces.ViewState" name="javax.faces.ViewState" value="ZXJmdW5kZW4tdmlldw==">
+</form>
+</body>
+</html>

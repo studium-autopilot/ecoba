@@ -8,6 +8,10 @@
 // Zeile des Protokolls um, der Text wird vorher geprüft), Text als Markdown (Links gehen, Wurzel ist das Protokoll), „**Titel**
 // · Rest“ als Titel und Metazeile, eingerückte Unterpunkte gedämpft darunter. Abgehakte bleiben durchgestrichen stehen, bis der
 // Abgleich sie wegräumt.
+// Meldekanal der Quellen (seit 0.4.5, für alle; quellen.js, Quellen-Vertrag): Punkte, die eine Quelle mit Q.melden anmeldet,
+// ohne Kästchen und ohne persönliche Werte, z. B. aus Noten & Anmeldungen „**Aus Alma** · neue Angaben zu B110, auf der
+// Modulseite übernehmen“, aus ILIAS „**ILIAS** · 12 Dateien fehlen gerade in Unterlagen …“ oder aus dem Alma-Stundenplan
+// „**Stundenplan** · … steht nicht mehr in Alma“. Ein Tipp öffnet ihr Ziel. Ohne Protokoll keine Knöpfe.
 // In allen anderen Fällen (kein eigener Abgleich, kein Protokoll, kein Abschnitt, keine Punkte) zeichnet der Block nichts: Klasse
 // eba-bp-aus, samt Hülle auf Höhe 0 gefaltet (eba-core.css Abschnitt 59; nie display:none an der Hülle, siehe
 // tests/leseansicht.test.js). Normale Nutzer:innen sehen also keine leere Karte.
@@ -72,6 +76,13 @@ const haken = (text, p, ziel) => {
   return z.join("\n");
 };
 
+// Punkte der Quellen (Q.meldungen: [{ quelle, text: "**Titel** · Rest", pfad, anker? }]) → Punkte wie aus dem Protokoll, ohne
+// Kästchen; quelle = Name der Quelle (für die Klasse und das Ziel beim Tippen)
+const quellenPunkte = (liste) => (Array.isArray(liste) ? liste : []).filter((x) => x && x.text && x.pfad).map((x) => {
+  const t = String(x.text).match(TITEL_REST);
+  return { zeile: null, roh: "", haken: null, text: t ? t[1] : String(x.text), meta: t ? t[2].trim() : "", details: [], ziel: String(x.pfad), anker: x.anker ? String(x.anker) : "", quelle: String(x.quelle || "quelle") };
+});
+
 module.exports = function (ctx) {
   const app = window.app;
   const obs = (ctx && ctx.obsidian) || {};
@@ -87,12 +98,17 @@ module.exports = function (ctx) {
   // Aufgeklappt? Gilt für alle Blöcke dieses Geräts und überlebt Neuzeichnen und Hot-Reload
   const auf = ctx.bleibend("auf", () => ({ wert: false }));
 
-  // Daten für den Block: null = nichts zeichnen
+  // Daten für den Block: null = nichts zeichnen. Protokoll des eigenen Abgleichs (protokoll: true) und Punkte der Quellen
+  const Q = () => (ctx.user && ctx.user.quellen) || null;
   const daten = async () => {
-    if (!eigenerAbgleich()) return null;
-    const f = datei(PROTOKOLL);
-    if (!f) return null;
-    try { return lesen(await app.vault.cachedRead(f)); } catch (e) { return null; }
+    let d = null;
+    const f = eigenerAbgleich() ? datei(PROTOKOLL) : null;
+    if (f) { try { d = lesen(await app.vault.cachedRead(f)); } catch (e) { d = null; } }
+    let quellen = [];
+    try { quellen = Q() ? quellenPunkte(Q().meldungen(ctx)) : []; } catch (e) { quellen = []; }
+    if (!quellen.length) return d ? Object.assign(d, { protokoll: true }) : null;
+    const punkte = (d ? d.punkte : []).concat(quellen);
+    return { punkte, offen: punkte.filter((x) => x.haken !== "x").length, protokoll: !!d };
   };
 
   // Markdown in ein Element rendern, <p> auspacken; ohne Renderer reiner Text
@@ -165,10 +181,12 @@ module.exports = function (ctx) {
     titel.addEventListener("click", (e) => { e.preventDefault(); klappen(); });
     titel.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); klappen(); } });
 
-    const knoepfe = inhalt.createDiv({ cls: "eba-bp-knoepfe" });
-    const zum = knoepfe.createEl("a", { cls: "eba-vb-knopf", text: "Protokoll", href: "#" });
-    zum.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); protokollOeffnen(e); });
-    if (jetztAbgleichen()) knoepfe.createEl("a", { cls: "eba-vb-knopf cta", text: "Jetzt abgleichen", href: ctx.link(AKTION, {}) });
+    if (d.protokoll) {
+      const knoepfe = inhalt.createDiv({ cls: "eba-bp-knoepfe" });
+      const zum = knoepfe.createEl("a", { cls: "eba-vb-knopf", text: "Protokoll", href: "#" });
+      zum.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); protokollOeffnen(e); });
+      if (jetztAbgleichen()) knoepfe.createEl("a", { cls: "eba-vb-knopf cta", text: "Jetzt abgleichen", href: ctx.link(AKTION, {}) });
+    }
 
     const liste = inhalt.createDiv({ cls: "eba-td eba-bp-liste", attr: { role: "list" } });
     const warten = [];
@@ -186,13 +204,15 @@ module.exports = function (ctx) {
       warten.push(md(p.text, inh.createDiv({ cls: "eba-td-text" }), comp));
       if (p.meta) warten.push(md(p.meta, inh.createDiv({ cls: "eba-td-meta" }), comp));
       for (const t of p.details) warten.push(md(t, inh.createDiv({ cls: "eba-bp-detail" }), comp));
-      // Tipp: Link folgen (extern öffnet Obsidian selbst), sonst das Protokoll an dieser Zeile
+      // Tipp: Link folgen (extern öffnet Obsidian selbst), sonst das Protokoll an dieser Zeile; Punkte einer Quelle: ihr Ziel
       inh.addEventListener("click", (e) => {
         const a = e.target.closest ? e.target.closest("a") : null;
         if (a && !a.classList.contains("internal-link")) return;
         e.preventDefault(); e.stopPropagation();
-        if (a) linkOeffnen(a, e); else protokollOeffnen(e, p.zeile);
+        if (p.quelle) app.workspace.openLinkText(p.ziel + (p.anker ? "#" + p.anker : ""), "", !!(e.ctrlKey || e.metaKey));
+        else if (a) linkOeffnen(a, e); else protokollOeffnen(e, p.zeile);
       });
+      if (p.quelle) zeile.addClass("eba-bp-quelle");
     }
     // Bearbeitungsansicht: ein Tipp in die Karte springt nicht in den Quelltext
     k.addEventListener("mousedown", (e) => e.stopPropagation());
@@ -205,7 +225,7 @@ module.exports = function (ctx) {
     const { el } = inst;
     const d = await daten();
     const knopf = jetztAbgleichen();
-    const sig = d ? JSON.stringify([knopf, d.punkte.map((p) => [p.zeile, p.roh, p.details])]) : "";
+    const sig = d ? JSON.stringify([knopf, d.protokoll, d.punkte.map((p) => [p.zeile, p.roh, p.details, p.quelle ? p.text + p.meta + p.ziel : ""])]) : "";
     if (inst.sig === sig && inst.gezeichnet) return;
     inst.sig = sig;
     if (!d) {
@@ -239,7 +259,9 @@ module.exports = function (ctx) {
     });
     const bald = ctx.entprellen(alleNeu, 500);
     const wichtig = (p) => p === PROTOKOLL || p === "System/Einstellungen.md" || String(p).indexOf("System/Skripte/") === 0;
-    ctx.an(app.metadataCache, "changed", (f) => { if (wichtig(f.path)) bald(); });
+    ctx.an(app.metadataCache, "changed", (f) => { if (wichtig(f.path) || String(f.path).indexOf("Module/") === 0) bald(); });
+    // Punkte der Quellen: neu, wenn eine Quelle meldet, dass sich ihre Punkte geändert haben (Q.meldenNeu)
+    if (Q()) Q().beiMeldung(ctx, bald);
     ctx.an(app.vault, "create", (f) => { if (wichtig(f.path)) bald(); });
     ctx.an(app.vault, "delete", (f) => { if (wichtig(f.path)) bald(); });
     ctx.an(app.vault, "rename", (f, alt) => { if (wichtig(f.path) || wichtig(alt)) bald(); });
@@ -248,5 +270,6 @@ module.exports = function (ctx) {
   return { registrieren, zeichnen, daten, lesen, haken, eigenerAbgleich };
 };
 module.exports.lesen = lesen;
+module.exports.quellenPunkte = quellenPunkte;
 module.exports.haken = haken;
 module.exports.PROTOKOLL = PROTOKOLL;

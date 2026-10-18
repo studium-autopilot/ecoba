@@ -112,7 +112,7 @@ cssclasses:
 > > [!eba-regel|handy-zu]+ Prüfung
 > > - **Form:** Klausur (90 Minuten) (6 CP) – 100 % der Modulnote
 > > - **Orientierungsprüfung:** 4 der 6 OP-Module bis Ende FS 4 bestehen
-> > - **Hilfsmittel:** nicht-programmierbarer Taschenrechner, Wörterbuch ohne Notizen (FAQ)
+> > - **Hilfsmittel:** open book, Taschenrechner (Prüfungstermine WS 2026/27)
 
 
 <p class="eba-fuss">Quelle: MHB B.Sc. Wiwi (Datei 2026-3-24_Modulhandbuch_B.Sc.Wiwi.pdf), S. 41; PO 2023 BT EcoBA (AmtlBekUT 24/2023, S. 310-317), § 4 · Stand der Recherche 30.09.2026 · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Alle Quellen</a></p>

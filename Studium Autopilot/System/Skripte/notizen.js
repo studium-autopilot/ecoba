@@ -1,6 +1,6 @@
 // Neue Notizen (früher Templater-Ordnervorlagen in System/Vorlagen/). Jede Aktion fragt mit Obsidian-Fenstern (Eingabe,
-// Auswahl) und legt die fertige Notiz an, öffnet genau diese und setzt den Cursor. Esc in der ersten Frage bricht ab,
-// ohne dass eine Datei entsteht.
+// Auswahl) und legt die fertige Notiz an, öffnet genau diese und setzt den Cursor. Esc in irgendeiner Frage bricht das Anlegen
+// ganz ab, ohne dass eine Datei entsteht; eine leere Eingabe nimmt den Vorschlag.
 // Auslöser:
 //  - Knopf, z. B. obsidian://studium-autopilot?aktion=vorlesung&code=B110 (Modul vorgewählt)
 //  - Befehl „Neue Notiz aus Vorlage …“ (Strg/Cmd+Umschalt+N) oder einzelne Befehle in der Befehlspalette
@@ -112,7 +112,7 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
   };
 
   // ---------- Übungsblatt ----------
-  // Parameter: code (Modul vorgewählt). Esc in der ersten angezeigten Frage bricht ab.
+  // Parameter: code (Modul vorgewählt). Esc in jeder Frage bricht ab.
   // Aufbau wie die Vorlesungsnotiz: Titel, Kopf-Karte ```eba-uebungsblatt``` (vorlesung.js), dann ## Aufgabe 1, ## Aufgabe 2,
   // ## Knackpunkte, ## Fürs Tutorium. „datei“ = Aufgaben (setzt das Einordnen aus dem Eingang), „eigene_loesung“ ebenso.
   const uebungsblatt = async (c) => {
@@ -123,17 +123,18 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
     const code = m.fm.code || "";
     const vorhandene = app.vault.getMarkdownFiles().filter((f) => f.path.startsWith("Übungsblätter/")
       && ((app.metadataCache.getFileCache(f) || {}).frontmatter || {}).code === code).length;
-    // Nummer: nur ganze Zahlen; sonst noch einmal fragen. Leer = Vorschlag; Esc = Vorschlag (bzw. Abbruch, wenn erste Frage).
+    // Nummer: nur ganze Zahlen; sonst noch einmal fragen. Leer = Vorschlag; Esc = Abbruch.
     let nr = null, hinweis = "";
     while (nr === null) {
       const e = await ctx.system.prompt(hinweis + "Nummer des Blatts", String(vorhandene + 1));
-      if (e == null && vorwahl) { eba.abbrechen(); return; }
+      if (e == null) { eba.abbrechen(); return; }
       const s = String(e == null ? "" : e).trim();
       if (!s) nr = vorhandene + 1;
       else if (/^\d+$/.test(s)) nr = Number(s) || vorhandene + 1;
       else hinweis = "Bitte nur eine Zahl. ";
     }
     const faellig = await eba.datumFragen("Abgabe am? z. B. 27.10. oder +7 (in einer Woche)", "+7");
+    if (faellig == null) { eba.abbrechen(); return; }
     const nn = pad2(nr);
     const inhalt = `---
 typ: übungsblatt
@@ -187,11 +188,15 @@ Kopf mit Modul, Abgabe, Status und Unterlagen: erscheint, sobald das Plugin „S
       const von = eba.datumLesen(teile[0]);
       const bis = teile[1] ? eba.datumLesen(teile[1], von) : "";
       z = { von, bis: bis && bis > von ? bis : "" };
-    } else z = await eba.zeitraumFragen("Wann? z. B. 12.11. · 12.11.–15.11. · +7", "");
+    } else {
+      z = await eba.zeitraumFragen("Wann? z. B. 12.11. · 12.11.–15.11. · +7", "");
+      if (z == null) { eba.abbrechen(); return; }
+    }
     const datum = z.von || eba.heute;
-    // Frist-Stichwörter zuerst, damit „Prüfungsanmeldung S110“ eine Frist ist; „test“ nur als ganzes Wort (nicht „Testat“)
+    // Frist-Stichwörter zuerst, damit „Prüfungsanmeldung S110“ eine Frist ist; „test“ nur als ganzes Wort (nicht „Testat“),
+    // ein Zwischentest nach der Regel des Fachmodells (ctx.modell.istZwischentest) ist eine Prüfung (Pille „Zwischentest“)
     const kategorie = /frist|anmeld|abgabe|rückmeld|rueckmeld|deadline|beleg|bewerb/i.test(titel) ? "Frist"
-      : /klausur|prüfung|pruefung|exam|\btest\b/i.test(titel) ? "Prüfung"
+      : /klausur|prüfung|pruefung|exam|\btest\b/i.test(titel) || (ctx.modell && ctx.modell.istZwischentest(titel)) ? "Prüfung"
       : /vorlesung|übung|uebung|tutorium|seminar|sprechstunde/i.test(titel) ? "Lehre"
       : /fachschaft|party|feier|kneipe|grill|spieleabend/i.test(titel) ? "Fachschaft" : "Veranstaltung";
     const codeTitel = eba.codeImText(titel);
@@ -203,6 +208,7 @@ datum: ${datum}
 bis: ${z.bis}
 kategorie: ${kategorie}
 status: offiziell
+uhrzeit: ""
 ort: ""
 modul: ${eba.J(eba.link(m))}
 code: ${eba.J(m ? m.fm.code || "" : "")}
@@ -230,15 +236,17 @@ tags:
     const m = vorwahl || await eba.modulWaehlen("Zu welchem Modul? ● = aktuelles Semester", false);
     if (m === undefined || m === null) { eba.abbrechen(); return; }
     const arten = ["Tutorium", "Übung", "Übungsteil", "Vorlesung", "Seminar"];
-    const artWahl = await ctx.system.suggester(arten, arten, false, "Art");
-    if (artWahl == null && vorwahl) { eba.abbrechen(); return; }
-    const art = artWahl || "Tutorium";
+    const art = await ctx.system.suggester(arten, arten, false, "Art");
+    if (art == null) { eba.abbrechen(); return; }
     const tage = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
-    const wt = (await ctx.system.suggester(tage, [1, 2, 3, 4, 5], false, "Wochentag")) || 1;
-    // Beginn: ungültige Eingabe → noch einmal fragen. Leer oder Esc = 10:15.
+    const wt = await ctx.system.suggester(tage, [1, 2, 3, 4, 5], false, "Wochentag");
+    if (wt == null) { eba.abbrechen(); return; }
+    // Beginn: ungültige Eingabe → noch einmal fragen. Leer = 10:15, Esc = Abbruch.
     let bMin = null, hinweis = "";
     while (bMin === null) {
-      const roh = String((await ctx.system.prompt(hinweis + "Beginn, z. B. 10:15 oder 14 (= 14:15, c.t.)", "10:15")) || "").trim() || "10:15";
+      const ein = await ctx.system.prompt(hinweis + "Beginn, z. B. 10:15 oder 14 (= 14:15, c.t.)", "10:15");
+      if (ein == null) { eba.abbrechen(); return; }
+      const roh = String(ein).trim() || "10:15";
       const mm = roh.match(/^(\d{1,2})(?:[:.](\d{2}))?$/);
       const minuten = mm ? Number(mm[2] == null ? 15 : mm[2]) : 99;
       if (mm && Number(mm[1]) <= 23 && minuten <= 59) bMin = Number(mm[1]) * 60 + minuten;
@@ -315,11 +323,15 @@ ${tage[wt - 1]}, ${beginn}–${ende}. ${hinweisText}${eba.CURSOR}
     const ein = await ctx.system.prompt("Welcher Kurs bzw. welche Leistung?", "");
     if (ein == null) { eba.abbrechen(); return; }
     const titel = String(ein).trim() || "SQ-Kurs";
-    const anbieter = (await ctx.system.suggester(ANBIETER, ANBIETER, false, "Anbieter")) || "Sonstiges";
+    const anbieter = await ctx.system.suggester(ANBIETER, ANBIETER, false, "Anbieter");
+    if (anbieter == null) { eba.abbrechen(); return; }
     const vorschlag = anbieter === "Auslandssemester" ? "6" : "3";
-    const ects = Number(String((await ctx.system.prompt("ECTS", vorschlag)) || vorschlag).replace(",", ".")) || 0;
+    const ectsEin = await ctx.system.prompt("ECTS", vorschlag);
+    if (ectsEin == null) { eba.abbrechen(); return; }
+    const ects = Number((String(ectsEin).trim() || vorschlag).replace(",", ".")) || 0;
     const STAND = ["geplant", "angemeldet", "zugelassen", "bestanden"];
-    const status = (await ctx.system.suggester(STAND, STAND, false, "Stand")) || "geplant";
+    const status = await ctx.system.suggester(STAND, STAND, false, "Stand");
+    if (status == null) { eba.abbrechen(); return; }
     const semester = eba.aktuellesSemester().name;
     const inhalt = `---
 typ: sq_kurs
@@ -359,16 +371,22 @@ tags:
     const codeEingabe = c.parameter.code != null ? c.parameter.code : await ctx.system.prompt("Modulcode, z. B. E385", "");
     if (codeEingabe == null) { eba.abbrechen(); return; }
     const code = (String(codeEingabe).trim() || "X000").toUpperCase();
-    const titel = (await ctx.system.prompt("Titel des Moduls", "")) || "Neues Modul";
+    const titelEin = await ctx.system.prompt("Titel des Moduls", "");
+    if (titelEin == null) { eba.abbrechen(); return; }
+    const titel = String(titelEin).trim() || "Neues Modul";
     let ects = null, hinweis = "";
     while (ects === null) {
-      const s = String((await ctx.system.prompt(hinweis + "ECTS", "6")) || "").trim().replace(",", ".");
+      const ein = await ctx.system.prompt(hinweis + "ECTS", "6");
+      if (ein == null) { eba.abbrechen(); return; }
+      const s = String(ein).trim().replace(",", ".");
       if (!s) ects = 6;
       else if (/^\d+(\.\d+)?$/.test(s)) ects = Number(s);
       else hinweis = "Bitte eine Zahl, z. B. 6 oder 7,5. ";
     }
-    const gruppe = (await ctx.system.suggester(GRUPPEN, GRUPPEN, false, "Bereich")) || "Schwerpunkt";
-    const bereich = gruppe === "Schwerpunkt" ? ((await ctx.system.suggester(BEREICHE, BEREICHE, false, "Schwerpunktbereich")) || "Elective Studies") : "";
+    const gruppe = await ctx.system.suggester(GRUPPEN, GRUPPEN, false, "Bereich");
+    if (gruppe == null) { eba.abbrechen(); return; }
+    const bereich = gruppe === "Schwerpunkt" ? await ctx.system.suggester(BEREICHE, BEREICHE, false, "Schwerpunktbereich") : "";
+    if (bereich == null) { eba.abbrechen(); return; }
     const geruest = app.vault.getAbstractFileByPath("System/Gerüste/Modul.md");
     if (!geruest) throw new Error("System/Gerüste/Modul.md fehlt");
     // Status, Semester, Plan und Anrechnung zeigt und ändert das Modulfeld (modul.js, Codeblock eba-modul im Gerüst)

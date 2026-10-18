@@ -37,12 +37,9 @@ module.exports = function (ctx) {
   const ILIAS = 6; // Bildschirm ILIAS verbinden
   const DARSTELLUNG = 7; // Bildschirm Darstellung
   const PUNKT = { 2: "studienbeginn", 3: "variante", 4: "angaben", 5: "alma", 6: "ilias" }; // Schlüssel für einrichtung_uebersprungen
-  const VARIANTEN = [
-    { wert: "Economics", titel: "Economics", text: "Mehr Volkswirtschaftslehre" },
-    { wert: "Business Administration", titel: "Business Administration", text: "Mehr Betriebswirtschaftslehre" },
-    { wert: "ohne Spezialisierung", titel: "Ohne Spezialisierung", text: "Von beidem etwas" },
-    { wert: "offen", titel: "Weiß ich noch nicht", text: "Du wählst sie vor dem 3. Fachsemester." },
-  ];
+  // Variante: Werte, Reihenfolge und Wörter aus dem Feld-Register (felder.js), gleich wie Formular und Zeilen „Variante“. Erst bei
+  // Bedarf gelesen: Kommt ein Update über den Sync, kann einrichtung.js vor felder.js ankommen
+  const varianten = () => { const FV = ctx.user.felder.VARIANTE; return FV.werte.map((w) => ({ wert: w, titel: FV.titel[w], text: FV.kurz[w] })); };
   // Lucide-Linien (wie verbindungen.js), Strich in currentColor
   const SYM = {
     hut: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
@@ -113,7 +110,7 @@ module.exports = function (ctx) {
       const jetzt = heute ? ctx.modell.semesterNachName(ctx.modell.semesterAusDatum(heute)) : null;
       this.werte = {
         studienbeginn: txt(fm.studienbeginn).slice(0, 10) || (jetzt ? jetzt.beginn : ""),
-        variante: VARIANTEN.some((v) => v.wert === txt(fm.variante)) ? txt(fm.variante) : "offen",
+        variante: varianten().some((v) => v.wert === txt(fm.variante)) ? txt(fm.variante) : "offen",
         name: entwurf.name != null ? entwurf.name : txt(fm.name),
         zielnote: entwurf.zielnote != null ? entwurf.zielnote : txt(fm.zielnote),
       };
@@ -249,7 +246,7 @@ module.exports = function (ctx) {
         titel("Welche Richtung?", "Danach richtet sich dein Musterplan. Ändern geht jederzeit.");
         const gruppe = haupt.createDiv({ cls: "eba-ei-wahl", attr: { role: "radiogroup", "aria-label": "Variante" } });
         const radios = [];
-        for (const v of VARIANTEN) {
+        for (const v of varianten()) {
           const l = gruppe.createEl("label", { cls: "eba-ei-option" });
           const r = l.createEl("input", { type: "radio", attr: { name: "eba-ei-variante", value: v.wert } });
           r.checked = this.werte.variante === v.wert;
@@ -461,8 +458,8 @@ module.exports = function (ctx) {
       let start = "";
       try { start = ctx.modell ? ctx.modell.daten().startSemester : ""; } catch (e) { start = ""; }
       zeile("Studienbeginn", sem || dmy(beginn) || start || "aktuelles Semester");
-      const vari = VARIANTEN.find((x) => x.wert === w("variante")) || VARIANTEN[3];
-      zeile("Variante", vari.wert === "offen" ? "noch offen" : vari.titel);
+      const alle = varianten(), vari = alle.find((x) => x.wert === w("variante")) || alle[3];
+      zeile("Variante", ctx.user.felder.varianteImSatz(vari.wert));
       if (w("name")) zeile("Name", w("name"));
       if (w("zielnote")) zeile("Zielnote", w("zielnote"));
       const v = V(), st = v ? v.status() : { verbunden: false, daten: 0 };
@@ -526,8 +523,8 @@ module.exports = function (ctx) {
   const dashboardSteht = () => app.workspace.getLeavesOfType("markdown").some((l) => l.view && l.view.file && l.view.file.path === DASHBOARD
     && l.view.containerEl && l.view.containerEl.querySelector(".markdown-preview-section > div, .cm-content"));
 
-  ctx.einrichtung = { zustand, eingerichtet, sollZeigen, almaOffen, iliasOffen, oeffnen, automatisch, sitzungMerken, VARIANTEN, SITZUNG,
-    get fenster() { return fenster; } };
+  ctx.einrichtung = { zustand, eingerichtet, sollZeigen, almaOffen, iliasOffen, oeffnen, automatisch, sitzungMerken, SITZUNG,
+    get VARIANTEN() { return varianten(); }, get fenster() { return fenster; } };
 
   const registrieren = () => {
     // Zweites Gerät: kommt per Sync „fertig“ oder ein Name an, während nur das Willkommen offen ist → leise schließen

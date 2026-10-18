@@ -3,10 +3,11 @@
    Weiß und schlicht wie eine moderne App: weiße Seite, kühle Grautöne, die Schrift des Geräts auch in Überschriften,
    runde Ecken, Akzent Blau. Formen und Maße sind die Grundwerte aus eba-core.css; hier stehen nur die Farben und die
    Abschnittsüberschriften.
-   Gilt mit body.eba-design-klar (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Dunkel sieht wie
-   Paper Elfenbein aus (eba-paper-elfenbein.css), dessen helle Regeln bei diesem Design nicht greifen.
-   Regeln stehen unter .eba-design-klar:where(.theme-light) und sind damit so spezifisch wie die von Elfenbein: Die Ausnahmen in
-   eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
+   Gilt mit body.eba-design-klar (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Form und Schrift
+   gelten hell und dunkel (seit 18.10.2026; vorher war Klar nachts ganz Elfenbein), die Farben nur hell: Dunkel gelten die
+   dunklen Farben von Elfenbein (eba-paper-elfenbein.css, .theme-dark), bis Klar eigene hat.
+   Regeln stehen unter .eba-design-klar:where(.theme-light, .theme-dark) und sind damit so spezifisch wie die von Elfenbein: Die
+   Ausnahmen in eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
    ========================================================================== */
 
 .eba-design-klar.theme-light {
@@ -57,7 +58,7 @@
 }
 
 /* Abschnitte: Überschrift in normaler Schreibweise statt Label, ohne Linie; Luft trennt die Abschnitte */
-.eba-design-klar:where(.theme-light) .eba h2 {
+.eba-design-klar:where(.theme-light, .theme-dark) .eba h2 {
   display: block;
   margin: 2.4em 0 0.75em;
   padding: 0;
@@ -69,4 +70,4 @@
   text-transform: none;
   color: var(--eba-text);
 }
-.eba-design-klar:where(.theme-light) .eba h2::after { display: none; }
+.eba-design-klar:where(.theme-light, .theme-dark) .eba h2::after { display: none; }

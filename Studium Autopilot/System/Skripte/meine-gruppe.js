@@ -220,13 +220,21 @@ const notizText = (alt, g, o) => {
 const herkunftVon = (fm) => String((fm && fm.herkunft) || "");
 const istGruppe = (fm) => herkunftVon(fm) === ILIAS || herkunftVon(fm) === GEWAEHLT;
 const gleichesModul = (fm, g) => String(fm.code || "") === g.code && String(fm.art || "") === g.art && String(fm.semester || "") === g.semester;
-// Deckt die Notiz (fm) die Gruppe g? Code, Semester, Wochentag, Beginn ±15 Min. (an der echten und an der Alma-Zeit), Art kann
-// eine Übung sein, nicht entfallen.
-const deckt = (fm, g) => {
-  if (!fm || String(fm.code || "") !== g.code || String(fm.semester || "") !== g.semester || fm.entfaellt === true) return false;
-  if (UEBUNG.indexOf(String(fm.art == null ? "" : fm.art)) < 0 || Number(fm.wochentag) !== TAGE.indexOf(g.tag) + 1) return false;
-  return abstand(fm.beginn, g.von, g.ct, TOLERANZ) != null;
+// Ist die Notiz (fm) deine Gruppe g aus gruppen.json? DIE eine Regel für alle (ilias.js und gruppen.js über deckt, termine.js für
+// „angemeldet · Gruppe 4“, gruppen.js für „Meine“): gleicher Code und gleiches Semester, nicht entfallen, gleicher Wochentag,
+// Beginn höchstens 15 Min. daneben (an der echten und an der Alma-Zeit, c.t./s.t.), Art kann eine Übung sein. Nie über die
+// Nummer der Gruppe (ILIAS und Alma zählen verschieden). o = { arten (statt UEBUNG, z. B. nur Übung und Tutorium), ende (das Ende
+// ebenso ±15 Min.), ueberId (Gruppen-Notizen, ilias-gruppe und gruppe-gewaehlt, über ihre gruppe_id) }
+const gehoertZu = (fm, g, o) => {
+  o = o || {};
+  if (!fm || !g || String(fm.code || "") !== g.code || String(fm.semester || "") !== g.semester || fm.entfaellt === true) return false;
+  if (o.ueberId && fm.gruppe_id && istGruppe(fm)) return String(fm.gruppe_id) === g.id;
+  if ((o.arten || UEBUNG).indexOf(String(fm.art == null ? "" : fm.art)) < 0 || Number(fm.wochentag) !== TAGE.indexOf(g.tag) + 1) return false;
+  if (abstand(fm.beginn, g.von, g.ct, TOLERANZ) == null) return false;
+  return !o.ende || abstand(fm.ende, g.bis, g.ct, -TOLERANZ) != null;
 };
+// Deckt eine andere Notiz die Gruppe? (gehoertZu mit den Vorgaben)
+const deckt = (fm, g) => gehoertZu(fm, g);
 const lehrNotizen = (io) => io.notizen().filter((x) => x.fm && x.fm.typ === "lehrveranstaltung");
 // Passt der Pfad zum gewünschten Namen (auch „… 2“, wenn der Name belegt war)?
 const nameStimmt = (pfad, b) => { const n = basis(pfad); return n === b || (n.indexOf(b + " ") === 0 && /^\d+$/.test(n.slice(b.length + 1))); };
@@ -268,11 +276,13 @@ const weichen = async (io, x, ziel, heute) => {
 };
 // ILIAS (nur ilias.js, nur mit der ILIAS-Sperre). soll = [{ refId, g, name }] (zugeordnete Mitgliedschaften, name aus ILIAS),
 // mitglieder = alle ref_ids, in denen du gerade Mitglied bist (auch nicht zugeordnete), o = { modul(code) → { name, titel } |
-// null, heute, wegErlaubt(refId) → bool (Verlassen bestätigt) }.
-// → { angelegt, aktualisiert, uebernommen, umbenannt, gewichen, entfernt, entfaellt: [Pfade], warnung }
+// null, heute, wegErlaubt(refId) → bool (Verlassen bestätigt), geloescht(refId, id) → bool (Grabstein: für diese Gruppe gab es
+// schon eine Notiz, du hast sie gelöscht; ilias.js merkt sich das im Index) }.
+// → { angelegt, aktualisiert, uebernommen, umbenannt, gewichen, entfernt, entfaellt: [Pfade], geloescht: [refIds], notizen:
+//   { refId: Pfad } (Gruppen mit ILIAS-Notiz nach dem Lauf), warnung }
 const iliasAbgleichen = async (io, soll, mitglieder, o) => {
   o = o || {};
-  const b = { angelegt: [], aktualisiert: [], uebernommen: [], umbenannt: [], gewichen: [], entfernt: [], entfaellt: [], warnung: "" };
+  const b = { angelegt: [], aktualisiert: [], uebernommen: [], umbenannt: [], gewichen: [], entfernt: [], entfaellt: [], geloescht: [], notizen: {}, warnung: "" };
   const alle = lehrNotizen(io);
   const eigene = alle.filter((x) => herkunftVon(x.fm) === ILIAS);
   const gewaehlt = alle.filter((x) => herkunftVon(x.fm) === GEWAEHLT);
@@ -296,6 +306,7 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
     const rest = gleiche.concat(gew).filter((y) => y !== x);
     for (const y of gleiche.concat(gew)) benutzt[y.pfad] = true;
     if (!x && unfertig) continue; // Obsidian liest Stundenplan/ noch ein (Sync): nichts doppelt anlegen
+    if (!x && o.geloescht && o.geloescht(refId, g.id)) { b.geloescht.push(refId); continue; } // von dir gelöscht: bleibt weg
     plan.push({ x, g, opt, rest, uebernommen: !!x && herkunftVon(x.fm) === GEWAEHLT });
   }
   // 2. Überschneidungen mit allen anderen Notizen dieses Plans und im Stundenplan (ohne die, die gerade weichen)
@@ -317,6 +328,7 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
       p.x = { pfad };
     }
     for (const y of p.rest) { await weichen(io, y, p.x, o.heute); b.gewichen.push(y.pfad); }
+    b.notizen[String(p.opt.iliasGruppe)] = p.x.pfad;
   }
   // 4. Verlassen: nicht mehr Mitglied und von ilias.js bestätigt → Papierkorb bzw. „(entfällt)“; Schutz gegen eine leere oder
   // kaputte Mitgliederseite
@@ -416,7 +428,7 @@ const iliasFreigeben = async (io) => {
 };
 
 const API = { ORDNER, ILIAS, GEWAEHLT, ZENTRAL, zeitfenster, raumKern, gruppenName, zuordnen, notizText, dateiName, echteZeit, meineNotizen,
-  deckt, istGruppe, iliasAbgleichen, waehlen, abwaehlen, gewaehltAufraeumen, iliasFreigeben, konfliktFuer, kurzTitel };
+  deckt, gehoertZu, istGruppe, iliasAbgleichen, waehlen, abwaehlen, gewaehltAufraeumen, iliasFreigeben, konfliktFuer, kurzTitel };
 
 // Mit ctx: dazu obsidianIo() (Stundenplan-Notizen über die Obsidian-API)
 module.exports = function () {
