@@ -55,34 +55,25 @@ Mehrere Geräte? → [Weiteres Gerät verbinden](docs/installation.md#weiteres-g
 
 ## Was drin ist
 
-<table>
-<tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-kalender-044b.png" alt="Kalender: Oktober mit Uni-Terminen, Veranstaltungen der Fachschaft und den Orientierungswochen als Balken über mehrere Tage" width="100%"><br><b>Kalender</b><br>Monat für Monat, mit Uni-Terminen, Fachschaft und mehrtägigen Zeiträumen; eigene Termine mit <b>+ Termin</b></td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-termine-044b.png" alt="Termine & Anmeldungen: diese und nächste Woche mit Fristen, Anmeldungen, Fachschaft und Angeboten der Uni" width="100%"><br><b>Termine & Anmeldungen</b><br>Woche für Woche: Fristen, Anmeldungen und Angebote der Uni wie Hochschulsport und UB-Kurse</td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan-044b.png" alt="Stundenplan: eine volle Woche im 3. Semester mit Vorlesungen, Übungen und Tutorien von 8 bis 18 Uhr, mit Uhrzeit und Raum" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma mit Vorlesungen, Übungen und Tutorien, mit ‹ › durch alle Wochen</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-studienverlauf-044b.png" alt="Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen" width="100%"><br><b>Studienverlauf</b><br>Semester bis zum Abschluss, Orientierungsprüfung, Schwerpunkte nach den Regeln der PO</td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-modul-044b.png" alt="Modulseite: Status, Semester mit Vorlesungswoche, Prüfungstermin, Semesterband und die nächsten Termine des Moduls" width="100%"><br><b>Modulseiten</b><br>Dein Stand, die Prüfung, deine Woche im Semester und was als Nächstes ansteht</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen-044b.png" alt="Unterlagen eines Moduls: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur" width="100%"><br><b>Unterlagen</b><br>Kursdateien aus ILIAS je Modul, nach Art sortiert, die Lösung neben ihrer Klausur</td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-noten-044b.png" alt="Noten & ECTS: Gesamtnote, Notenblöcke, ECTS und die Note, die du für deine Zielnote noch brauchst" width="100%"><br><b>Noten & ECTS</b><br>86 Module nach PO 2023, Gesamtnote, ECTS und Zielnote rechnen sich selbst</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-uebungsblatt-044b.png" alt="Übungsblatt auf dem iPad: Abgabe, Status, Links zu Aufgaben und Tutorium, Knackpunkte und Fragen fürs Tutorium" width="100%"><br><b>Übungsblätter</b><br>Abgabe, Status und deine Fragen fürs Tutorium auf einen Blick</td>
-</tr>
-<tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-karteikarten-044b.png" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten" width="100%"><br><b>Karteikarten</b><br>Stapel je Modul, gelernt wird direkt in Obsidian, geplant mit dem Verfahren aus Anki</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-einstellungen-044b.png" alt="Einstellungen & Hilfe: Verbindungen zu Alma, ILIAS, den zentralen Daten und Updates, darunter die Wahl der Variante" width="100%"><br><b>Einstellungen & Hilfe</b><br>Jede Verbindung sagt in einem Satz, wie es steht; hier wählst du auch Variante und Design</td>
-</tr>
-</table>
+<img src="docs/bilder/quellen-044c.png" width="100%" alt="Verteilte Uni-Infos an einem Ort: Öffentliche Quellen (Uni-Webseiten, Prüfungsamt, Fachbereich und Lehrstühle, Fachschaft, Hochschulsport, UB und Vorträge) gehen in einen regelmäßigen Uni-Abgleich, der Neues erkennt; nur Geändertes gleicht eine KI ab, eine Datenschutzprüfung prüft jeden Eintrag. Die geprüften Daten kommen in deinen Tresor in Obsidian. Persönliches holt Obsidian ohne KI direkt von deinem Gerät: den Stundenplan über deinen Alma-Kalender-Link, Kursdateien und Übungsgruppe über deine ILIAS-Anmeldung. Daraus entstehen Dashboard, Termine und Kalender, Stundenplan, Unterlagen, Noten und ECTS sowie der Studienverlauf.">
 
-<p align="center"><img src="docs/bilder/designs-044b.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in den Designs Elfenbein, Flieder und Klar und im Dunkelmodus"><br><b>Drei Designs, hell und dunkel</b><br>Elfenbein, Flieder oder Klar, dazu ein Dunkelmodus. Jedes Gerät wählt für sich.</p>
+<img src="docs/bilder/was-drin-1-044c.png" width="100%" alt="Kalender: Monatsansicht mit Uni-Terminen, Fachschaft und den Orientierungswochen als Balken. Termine & Anmeldungen: diese und nächste Woche mit Fristen, Anmeldungen und Angeboten der Uni.">
+
+<img src="docs/bilder/was-drin-2-044c.png" width="100%" alt="Stundenplan: eine volle Woche im 3. Semester mit Vorlesungen, Übungen und Tutorien, mit Uhrzeit und Raum. Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen.">
+
+<img src="docs/bilder/was-drin-3-044c.png" width="100%" alt="Modulseite: Status, Semester mit Vorlesungswoche, Prüfungstermin und die nächsten Termine des Moduls. Unterlagen: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur.">
+
+<img src="docs/bilder/was-drin-4-044c.png" width="100%" alt="Noten & ECTS: Gesamtnote, Notenblöcke, ECTS und die Note, die du für deine Zielnote noch brauchst. Übungsblatt auf dem iPad: Abgabe, Status, Knackpunkte und Fragen fürs Tutorium.">
+
+<img src="docs/bilder/was-drin-5-044c.png" width="100%" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten. Einstellungen & Hilfe: Verbindungen zu Alma, ILIAS, den zentralen Daten und Updates, darunter die Wahl der Variante.">
+
+<img src="docs/bilder/designs-044c.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in verschiedenen Designs, hell und dunkel">
+
+<p align="center"><b>Verschiedene Designs, hell und dunkel</b></p>
 
 ## Woher die Daten kommen
 
-Termine, Fristen und Semesterdaten pflegt nicht jede:r selbst. Ein Server prüft alle 15 Minuten öffentliche Quellen der Uni
+Termine, Fristen und Semesterdaten pflegt nicht jede:r selbst. Ein Server prüft regelmäßig öffentliche Quellen der Uni
 (Seiten der Universität, des Prüfungsamts und der Fachschaft, öffentliche Kalender und PDFs) auf Änderungen. Nur wenn sich
 etwas geändert hat, gleicht eine KI die Angaben ab. Vor dem Veröffentlichen wird jeder geänderte Eintrag automatisch geprüft:
 
@@ -93,8 +84,6 @@ etwas geändert hat, gleicht eine KI die Angaben ab. Vor dem Veröffentlichen wi
 Nur was alle Prüfungen besteht, landet als einfache Datendatei im öffentlichen Repo
 [`studium-autopilot/ecoba-daten`](https://github.com/studium-autopilot/ecoba-daten). Das Plugin im Tresor holt sie dort ab,
 prüft sie noch einmal und legt daraus Termin-Notizen an.
-
-<img src="docs/bilder/datenfluss-044.png" width="100%" alt="Datenfluss: öffentliche Uni-Seiten → Abgleich alle 15 Minuten, nur Geändertes gleicht eine KI ab → automatische Prüfung (Freigabeliste, Scan auf persönliche Daten, zweite KI-Prüfung) → ecoba-daten auf GitHub Pages → Plugin im Tresor">
 
 Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der letzten Prüfung; Angaben, die die Uni noch
 nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das
@@ -199,9 +188,9 @@ Mehr: [Architektur](docs/architektur.md) · [Datenformat](docs/daten-v1.md) · [
 
 Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business
 Administration (PO 2023) at the University of Tübingen: dashboard, study progress, module pages, grades and ECTS, a
-timetable from Alma, course files from ILIAS, exercise sheets and flashcards with Anki-style scheduling, in three designs
-with a dark mode. Dates and deadlines keep themselves up to date: a server checks public university sources every 15
-minutes, lets an AI reconcile only what changed, checks every entry automatically (allowlist, scan for personal data, AI
+timetable from Alma, course files from ILIAS, exercise sheets and flashcards with Anki-style scheduling, in several designs,
+light and dark. Dates and deadlines keep themselves up to date: a server regularly checks public university sources,
+lets an AI reconcile only what changed, checks every entry automatically (allowlist, scan for personal data, AI
 review) and publishes the result as plain JSON on GitHub Pages. The bundled plugin fetches only that data, never code, and
 sends nothing back. Only if you connect ILIAS does it sign in from your device and download your own course files,
 contacting nothing but the university's servers; the password stays in Obsidian's keychain on that device and is never
