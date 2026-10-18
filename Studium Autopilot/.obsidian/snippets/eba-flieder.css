@@ -1,0 +1,87 @@
+/* ==========================================================================
+   EBA · Design FLIEDER (seit 18.10.2026, nur hell)
+   Zartes Lila wie Briefpapier: fliederfarbene Seite, Schrift in dunkler Aubergine, Akzent Violett, Rosé als einzige zweite
+   Farbe (Markierungen, hervorgehobene Kachel). Weiche Formen: große Rundungen, runde Überschriften (SF Pro Rounded auf
+   iPhone, iPad und Mac, sonst die Schrift des Geräts).
+   Gilt mit body.eba-design-flieder (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Dunkel sieht wie
+   Paper Elfenbein aus (eba-paper-elfenbein.css), dessen helle Regeln bei diesem Design nicht greifen.
+   Regeln stehen unter .eba-design-flieder:where(.theme-light) und sind damit so spezifisch wie die von Elfenbein: Die
+   Ausnahmen in eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
+   ========================================================================== */
+
+.eba-design-flieder.theme-light {
+  --color-base-00: #f7f2fb;
+  --color-base-05: #f4eef9;
+  --color-base-10: #f1eaf7;
+  --color-base-20: #ece3f4;
+  --color-base-25: #e4d9ef;
+  --color-base-30: #dacde7;
+  --color-base-35: #cbbbdb;
+  --color-base-40: #b09fc3;
+  --color-base-50: #8a7c9c;
+  --color-base-60: #66597a;
+  --color-base-70: #463b55;
+  --color-base-100: #2a2133;
+
+  --accent-h: 269;
+  --accent-s: 41%;
+  --accent-l: 46%;
+  --text-accent: #6c3f9e;
+  --text-accent-hover: #7f52b3;
+  --interactive-accent: #7446a6;
+  --interactive-accent-hover: #6a3d9b;
+  --text-selection: rgba(116, 70, 166, 0.16);
+  --text-highlight-bg: rgba(240, 150, 195, 0.38);
+
+  --titlebar-background: #ece3f4;
+  --titlebar-background-focused: #ece3f4;
+  --tab-container-background: #ece3f4;
+  --ribbon-background: #ece3f4;
+
+  --eba-bg: #f7f2fb;
+  --eba-surface: #fdfaff;
+  --eba-card-bg: #fdfaff;
+  --eba-surface-2: #f1eaf7;
+  --eba-border: #e5d9f0;
+  --eba-border-strong: #cdbbdf;
+  --eba-text: #2a2133;
+  --eba-muted: #66597a;
+  --eba-faint: #8a7c9c;
+  --eba-accent: #7446a6;
+  --eba-accent-text: #6c3f9e;
+  --eba-accent-soft: rgba(116, 70, 166, 0.09);
+  --eba-rose: #c2507f;
+  --eba-good: #1f7a4d;
+  --eba-warn: #a3600a;
+  --eba-bad: #b4234a;
+  --eba-info: #4a5ba6;
+
+  --eba-radius: 12px;
+  --eba-radius-s: 8px;
+  --eba-radius-l: 16px;
+  --eba-font-display: ui-rounded, "SF Pro Rounded", var(--font-interface);
+  --eba-display-weight: 650;
+  --eba-display-tracking: -0.012em;
+}
+
+/* Seitenkopf: weiche Linie in Flieder */
+.eba-design-flieder:where(.theme-light) .eba .eba-kopf { border-bottom: 2px solid var(--eba-border); }
+
+/* Abschnitte: runde Überschrift in normaler Schreibweise, darüber eine Linie in Flieder wie auf Briefpapier */
+.eba-design-flieder:where(.theme-light) .eba h2 {
+  display: block;
+  margin: 2.4em 0 0.75em;
+  padding-top: 10px;
+  border: none;
+  border-top: 1px solid var(--eba-border-strong);
+  font-family: var(--eba-font-display);
+  font-size: 1.25em;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--eba-text);
+}
+.eba-design-flieder:where(.theme-light) .eba h2::after { display: none; }
+
+/* Hervorgehobene Kachel: Streifen in Rosé */
+.eba-design-flieder:where(.theme-light) .eba-kachel.akzent::before { background: var(--eba-rose); }

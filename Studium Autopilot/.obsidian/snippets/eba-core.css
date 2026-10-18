@@ -1,7 +1,8 @@
 /* ==========================================================================
    EBA · Kern-Design
    Layout und Bausteine für den Vault „Studium Autopilot“.
-   Farben, Schrift und Linien kommen aus dem Farbschema eba-paper-elfenbein.css (hell und dunkel).
+   Farben, Schrift und Linien kommen aus dem Farbschema eba-paper-elfenbein.css (hell und dunkel), hell wahlweise aus den
+   Designs eba-flieder.css oder eba-klar.css (body.eba-design-…, darstellung.js).
    Hell oder dunkel: Obsidians Grundfarbschema (Einstellungen & Hilfe → Darstellung). Regeln, die gegen das Farbschema
    gewinnen müssen, stehen unter :is(.theme-light, .theme-dark) wie dort, damit ihre Spezifität gleich bleibt.
    Schrift auf einer Akzentfläche: var(--text-on-accent, #fff), nie die Kartenfarbe (dunkel wäre sie zu schwach).
@@ -1138,8 +1139,8 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 
 
 /* ---------- 32. Dashboard-Hierarchie ----------
-   Vier Kacheln (Klasse vier): Nächste Prüfung (akzent), Semester, ECTS, Note; schmal 2 × 2 (Abschnitt Kachelreihen). Die
-   nächste Frist steht als erste Zeile der Liste „Fristen · 30 Tage“ direkt darunter (seit 15.10.2026 keine eigene Kachel).
+   Fünf Kacheln: Nächste Frist (akzent frist, Abschnitt 60; vom 15. bis 18.10.2026 ohne eigene Kachel), Nächste Prüfung,
+   Semester, ECTS, Note.
    Zahlen etwas kleiner als auf den anderen Seiten. Reihenfolge der Seite:
    Kacheln → Neu-Leiste → Heute → Zu erledigen → Module → Bereiche → Design. */
 .eba-s-dashboard .eba-kz-reihe > .eba-kachel .v:not(.text) { font-size: 1.55em; }
@@ -2114,8 +2115,8 @@ body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="re
 /* --- 37.studienverlauf --- */
 /* Studienverlauf (Studium/Studienverlauf.md), nur iPhone.
    Musterstudienpläne als schmale Klappzeilen (geöffnet: Bild lesbar groß und seitlich wischbar
-   statt auf Bildschirmbreite verkleinert), beide Tabellen als Zeilenblöcke ohne seitliches Scrollen. Die Tabellenregeln
-   gelten nur in Karten [!eba-tabelle] (Semestertermine, Meilensteine); die Aufbau-Tabelle in „Regeln“ regelt 37.regeln. */
+   statt auf Bildschirmbreite verkleinert). Die Aufbau-Tabelle in „Regeln“ regelt 37.regeln. Die Tabelle „Semestertermine“
+   entfiel am 17.10.2026 (die Lupe des Studienverlaufs zeigt dieselben Daten), mit ihr die Regeln für [!eba-tabelle]. */
 
 /* Musterstudienpläne: zugeklappt nur eine schmale Zeile */
 body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-karte"] { padding: 9px 13px; margin: 0 0 6px; }
@@ -2125,51 +2126,6 @@ body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-karte"] > .callou
 body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-karte"] > .callout-content p { margin: 0; }
 body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-karte"] .image-embed { display: block; max-width: 100%; }
 body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-karte"] .image-embed img { width: 100% !important; height: auto !important; max-width: 100% !important; }
-
-/* Tabellen als Zeilenblöcke (kein seitliches Scrollen, Spaltenkopf als kleines Label je Zeile) */
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] .markdown-rendered table,
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table { display: block; width: 100%; margin: 0; border: 0; font-size: 14px; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table thead { display: none; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table tbody { display: block; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table td { display: block; padding: 0; border: 0; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table tbody tr:hover td { background: transparent; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table tbody tr:last-child { border-bottom: 0; }
-
-/* Semestertermine (4 Spalten): Semester links, rechts Vorlesung / Frei / Rückmeldung */
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) tr { display: block; padding: 7px 0; border-bottom: 1px solid var(--eba-border); } /* Semester als Kopfzeile, darunter Bezeichnung | Datum (sonst bricht das Datum um) */
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:first-child { font-size: 13.5px; font-weight: 600; line-height: 1.35; margin-bottom: 2px; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:not(:first-child) { display: grid; grid-template-columns: 92px minmax(0, 1fr); column-gap: 6px; font-size: 14px !important; line-height: 1.35; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:not(:first-child) * { font-size: inherit !important; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:not(:first-child)::before { color: var(--eba-muted); font-size: 12px; line-height: 1.52; white-space: nowrap; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:nth-child(2)::before { content: "Vorlesung"; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:nth-child(3)::before { content: "Frei"; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:has(th:nth-child(4)) td:nth-child(4)::before { content: "Rückmeldung"; }
-
-/* Meilensteine (3 Spalten): Meilenstein · Wann in einer Zeile, darunter Was */
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) tr { display: block; padding: 8px 0; border-bottom: 1px solid var(--eba-border); line-height: 1.4; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) td:nth-child(1),
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) td:nth-child(2) { display: inline; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) td:nth-child(1) { font-weight: 600; }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) td:nth-child(2) { color: var(--eba-muted); }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) td:nth-child(2)::before { content: " · "; color: var(--eba-faint); }
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:not(:has(th:nth-child(4))) td:nth-child(3) { margin-top: 2px; }
-
-/* Bearbeitungsansicht (Live Preview): die Semestertermine sind dort ein Tabellen-Editor (.cm-table-widget,
-   Zellen mit .table-cell-wrapper und Zieh-Griffen). Gleiche Zeilenblöcke wie in der Leseansicht; die Meilensteine stehen
-   in der Karte als normale Tabelle, dort greifen die Regeln oben unverändert. */
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget { margin: 0 !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-wrapper { overflow: visible !important; padding: 0 !important; margin: 0 !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-editor :is(tr, td) { position: static !important; height: auto !important; min-height: 0 !important; max-height: none !important; contain: none !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-editor td { padding: 0 !important; border: 0 !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-cell-wrapper { position: static !important; height: auto !important; min-height: 0 !important; padding: 0 !important; white-space: normal !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget :is(.table-row-drag-handle, .table-col-drag-handle, .table-row-btn, .table-col-btn) { display: none !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-editor td { font-size: 14px !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-editor td:first-child { font-size: 13.5px !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-cell-wrapper { font-size: inherit !important; line-height: inherit !important; }
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget,
-body.is-phone .markdown-source-view.is-live-preview.eba-s-studienverlauf .cm-table-widget .table-editor { padding-left: 0 !important; padding-right: 0 !important; margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; }
-/* letzte Zeile beider Tabellen ohne Linie (Karte bzw. Abschnitt schließt ab) */
-body.is-phone .eba-s-studienverlauf .callout[data-callout="eba-tabelle"] table:is(:has(th:nth-child(4)), :not(:has(th:nth-child(4)))) tbody tr:last-child { border-bottom: 0; }
 
 /* --- 37.stundenplan --- */
 /* Stundenplan (Studium/Stundenplan.md, cssclasses eba-s-stundenplan), nur iPhone.
@@ -2322,7 +2278,7 @@ body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .ca
 
 /* ---------- 1. Volle Breite, schmaler Rand (statt lesbarer Zeilenlänge 72rem mit ca. 140-190 px Rand je Seite).
    Sehr breite PC-Fenster: höchstens 1680 px Inhalt, mittig. Folien-Notizen (eba-folien) behalten die lesbare Spalte. ---------- */
-:is(body:not(.is-phone) .eba-s-dashboard, body.is-tablet :is(.eba, .eba-s-vorlesung, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien)) { --file-line-width: 1680px; --file-margins: 16px 22px; }
+:is(body:not(.is-phone) .eba-s-dashboard, body.is-tablet :is(.eba, .eba-s-vorlesung, .eba-s-uebungsblatt, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien)) { --file-line-width: 1680px; --file-margins: 16px 22px; }
 body:not(.is-phone) .markdown-preview-view.eba-s-dashboard,
 body:not(.is-phone) .markdown-source-view.mod-cm6.eba-s-dashboard .cm-scroller,
 body.is-tablet .markdown-preview-view.eba:not(.eba-folien),
@@ -2330,7 +2286,7 @@ body.is-tablet .markdown-source-view.mod-cm6.eba:not(.eba-folien) .cm-scroller {
 body:not(.is-phone) .markdown-preview-view.eba-s-dashboard .markdown-preview-sizer,
 body:not(.is-phone) .markdown-source-view.mod-cm6.eba-s-dashboard .cm-sizer,
 body.is-tablet .markdown-preview-view.eba:not(.eba-folien) .markdown-preview-sizer,
-body.is-tablet .markdown-source-view.mod-cm6:is(.eba, .eba-s-vorlesung, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien) .cm-sizer { max-width: 1680px !important; width: 100% !important; margin-left: auto !important; margin-right: auto !important; }
+body.is-tablet .markdown-source-view.mod-cm6:is(.eba, .eba-s-vorlesung, .eba-s-uebungsblatt, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien) .cm-sizer { max-width: 1680px !important; width: 100% !important; margin-left: auto !important; margin-right: auto !important; }
 /* Reiner Fließtext (Absätze, Listen außerhalb von Karten) bleibt lesbar: höchstens ca. 90 Zeichen je Zeile */
 body.is-tablet .markdown-preview-view.eba:not(.eba-folien) .markdown-preview-sizer > div > :is(p, ul, ol, blockquote) { max-width: 52rem; }
 
@@ -2897,6 +2853,17 @@ body.is-phone .eba-td-text { font-size: 14.5px; } /* iPhone: Inhalt 14,5 px */
 .eba-td-leer { padding: 2px 0; font-size: 13px; color: var(--eba-faint); }
 /* Bearbeitungsansicht: Block ohne Rahmen/Abstand des Codeblock-Widgets */
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-todos) { padding: 0; }
+/* Raster Offene Fragen | To-dos (Dashboard „Zu erledigen“, seit 18.10.2026): Eine leere Karte fällt weg, die andere nimmt die
+   ganze Breite. Vorher stand „Keine offenen Fragen.“ in einer Karte so hoch wie elf To-dos daneben. todos.js setzt is-leer am
+   Block; leere Fragen fallen immer weg, leere To-dos nur neben Fragen (sonst steht die To-do-Karte allein mit „Nichts offen.“).
+   :has() folgt jedem Neuzeichnen sofort (Abhaken, neue Aufgabe), auch in der Bearbeitungsansicht und auf dem iPhone (zugeklappt
+   bleibt eine Titelzeile). display:none nur an der Karte IN der Raster-Karte: Der Abschnitt (.el-div), den die Leseansicht
+   misst, bleibt sichtbar und wird nur niedriger (anders als in Abschnitt 36, siehe tests/leseansicht.test.js). */
+.callout[data-callout="eba-raster"] > .callout-content:has(.eba-td-todos) > .callout:has(.eba-td-fragen.is-leer),
+.callout[data-callout="eba-raster"] > .callout-content:has(.eba-td-fragen:not(.is-leer)) > .callout:has(.eba-td-todos.is-leer) { display: none; }
+.callout[data-callout="eba-raster"] > .callout-content:has(.eba-td.is-leer) > .callout { grid-column: 1 / -1; }
+/* Beide gefüllt: jede Karte so hoch wie ihr Inhalt (drei Fragen nicht als hoher, fast leerer Kasten neben elf To-dos) */
+.callout[data-callout="eba-raster"] > .callout-content:has(.eba-td) { align-items: start; }
 
 /* --- 37.unterlagen --- */
 /* Unterlagen (Studium/Unterlagen.md, cssclasses eba-s-unterlagen), nur iPhone.
@@ -2938,7 +2905,8 @@ body.is-phone .eba-s-unterlagen .callout[data-callout="eba-kennzahlen"] .bases-v
 .eba-s-unterlagen .bases-td input.mod-date::-webkit-date-and-time-value { text-align: left; min-width: 0; }
 
 /* --- 37.vorlesung --- */
-/* ---------- vorlesung: Vorlesungsnotizen (typ: vorlesung, cssclasses eba-s-notizen + eba-s-vorlesung) ----------
+/* ---------- vorlesung: Vorlesungsnotizen (typ: vorlesung, cssclasses eba-s-notizen + eba-s-vorlesung) und
+   Übungsblätter (typ: übungsblatt, eba-s-uebungsblatt; Teil 5) ----------
    Alle Geräte (nicht nur iPhone), Lese- und Bearbeitungsansicht.
    1. Kopf-Karte .eba-vorl (Codeblock ```eba-vorlesung```, gezeichnet von System/Skripte/vorlesung.js): Semesterwoche, Status-Knopf,
       Modul, Thema, Datum/Zeit/Raum, Dozent, Perlen der Vorlesungswochen, Links zu Folien und Stundenplan. Passt sich über
@@ -3079,7 +3047,7 @@ a.eba-vorl-perle { cursor: pointer; }
 }
 
 /* ---------- 2. Abschnitte ---------- */
-.eba-s-vorlesung {
+:is(.eba-s-vorlesung, .eba-s-uebungsblatt) {
   --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6h16M4 12h16M4 18h10'/%3E%3C/svg%3E");
   --eba-vorl-farbe: var(--eba-faint);
 }
@@ -3087,11 +3055,11 @@ a.eba-vorl-perle { cursor: pointer; }
   --eba-vorl-farbe: var(--eba-accent);
   --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 20h9'/%3E%3Cpath d='M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9.9.9-2.9a2 2 0 0 1 .5-.9z'/%3E%3C/svg%3E");
 }
-.eba-s-vorlesung :is(.eba-vorl-h-pruef, h2[data-heading^="Prüfungsrelevant"], h2[data-heading^="Klausurrelevant"]) {
+:is(.eba-s-vorlesung, .eba-s-uebungsblatt) :is(.eba-vorl-h-pruef, h2[data-heading^="Prüfungsrelevant"], h2[data-heading^="Klausurrelevant"]) {
   --eba-vorl-farbe: var(--eba-warn);
   --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/%3E%3C/svg%3E");
 }
-.eba-s-vorlesung :is(.eba-vorl-h-fragen, h2[data-heading^="Offene Fragen"]) {
+:is(.eba-s-vorlesung, .eba-s-uebungsblatt) :is(.eba-vorl-h-fragen, h2[data-heading^="Offene Fragen"]) {
   --eba-vorl-farbe: var(--eba-info);
   --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
 }
@@ -3101,66 +3069,96 @@ a.eba-vorl-perle { cursor: pointer; }
 }
 
 /* ## als Label mit Symbol und Haarlinie (Leseansicht) */
-body .markdown-preview-view.eba-s-vorlesung h2 {
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) h2 {
   display: flex; align-items: center; gap: 8px;
   margin: 1.7em 0 0.55em; padding: 0 0 6px;
   border: none; border-bottom: 1px solid var(--eba-border);
   font-family: var(--font-interface); font-size: 12px; font-weight: 650; line-height: 1.4;
   letter-spacing: 0.085em; text-transform: uppercase; color: var(--eba-text);
 }
-body .markdown-preview-view.eba-s-vorlesung h2::before {
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) h2::before {
   content: ""; flex: none; width: 15px; height: 15px;
   background: var(--eba-vorl-farbe);
   -webkit-mask: var(--eba-vorl-sym) center / contain no-repeat; mask: var(--eba-vorl-sym) center / contain no-repeat;
 }
-body .markdown-preview-view.eba-s-vorlesung h2 .heading-collapse-indicator { margin-left: -22px; }
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) h2 .heading-collapse-indicator { margin-left: -22px; }
 /* Bearbeitungsansicht: dieselbe Gestalt auf der Editorzeile (kein flex, keine margins an .cm-line) */
-body .markdown-source-view.eba-s-vorlesung .cm-line.HyperMD-header-2 {
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.HyperMD-header-2 {
   padding-top: 0.5em !important; padding-bottom: 6px !important;
   border-bottom: 1px solid var(--eba-border);
   font-family: var(--font-interface); font-size: 12px; font-weight: 650; line-height: 1.4;
   letter-spacing: 0.085em; text-transform: uppercase; color: var(--eba-text);
 }
-body .markdown-source-view.eba-s-vorlesung .cm-line.HyperMD-header-2 :is(.cm-header-2, .cm-header) { font-family: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; color: inherit; }
-body .markdown-source-view.eba-s-vorlesung .cm-line.HyperMD-header-2 .cm-formatting-header { color: var(--eba-faint); }
-body .markdown-source-view.eba-s-vorlesung .cm-line.HyperMD-header-2.eba-vorl-h::before {
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.HyperMD-header-2 :is(.cm-header-2, .cm-header) { font-family: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit; color: inherit; }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.HyperMD-header-2 .cm-formatting-header { color: var(--eba-faint); }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.HyperMD-header-2.eba-vorl-h::before {
   content: ""; display: inline-block; width: 15px; height: 15px; margin-right: 8px; vertical-align: -3px;
   background: var(--eba-vorl-farbe);
   -webkit-mask: var(--eba-vorl-sym) center / contain no-repeat; mask: var(--eba-vorl-sym) center / contain no-repeat;
 }
 /* Erster Abschnitt direkt unter der Kopf-Karte: weniger Abstand */
-body .markdown-preview-view.eba-s-vorlesung .markdown-preview-sizer > div:has(.eba-vorl) + div > h2 { margin-top: 1.1em; }
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .markdown-preview-sizer > div:has(.eba-vorl) + div > h2 { margin-top: 1.1em; }
 
 /* Prüfungsrelevant: getönter Kasten mit Randlinie (Leseansicht: Abschnitts-Divs; Bearbeitungsansicht: Editorzeilen) */
-body .markdown-preview-view.eba-s-vorlesung .eba-vorl-z-pruef {
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .eba-vorl-z-pruef {
   margin: 0; padding: 0 12px 0 14px;
   background: color-mix(in srgb, var(--eba-warn) 9%, transparent);
   box-shadow: inset 3px 0 0 var(--eba-warn);
 }
-body .markdown-preview-view.eba-s-vorlesung .eba-vorl-z-pruef.eba-vorl-z-anfang { padding-top: 8px; border-top-right-radius: var(--eba-radius); }
-body .markdown-preview-view.eba-s-vorlesung .eba-vorl-z-pruef.eba-vorl-z-ende { padding-bottom: 8px; border-bottom-right-radius: var(--eba-radius); }
-body .markdown-preview-view.eba-s-vorlesung .eba-vorl-z-pruef > :is(ul, ol, p, blockquote) { margin-top: 0; margin-bottom: 0; }
-body .markdown-source-view.eba-s-vorlesung .cm-line.eba-vorl-z-pruef { position: relative; z-index: 0; }
-body .markdown-source-view.eba-s-vorlesung .cm-line.eba-vorl-z-pruef::after {
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .eba-vorl-z-pruef.eba-vorl-z-anfang { padding-top: 8px; border-top-right-radius: var(--eba-radius); }
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .eba-vorl-z-pruef.eba-vorl-z-ende { padding-bottom: 8px; border-bottom-right-radius: var(--eba-radius); }
+body .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .eba-vorl-z-pruef > :is(ul, ol, p, blockquote) { margin-top: 0; margin-bottom: 0; }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.eba-vorl-z-pruef { position: relative; z-index: 0; }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.eba-vorl-z-pruef::after {
   content: ""; position: absolute; z-index: -1; top: 0; bottom: 0; left: -10px; right: 0;
   background: color-mix(in srgb, var(--eba-warn) 9%, transparent);
   border-left: 3px solid var(--eba-warn);
   pointer-events: none;
 }
-body .markdown-source-view.eba-s-vorlesung .cm-line.eba-vorl-z-pruef.eba-vorl-z-anfang { padding-top: 6px !important; }
-body .markdown-source-view.eba-s-vorlesung .cm-line.eba-vorl-z-pruef.eba-vorl-z-ende { padding-bottom: 6px !important; }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.eba-vorl-z-pruef.eba-vorl-z-anfang { padding-top: 6px !important; }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-line.eba-vorl-z-pruef.eba-vorl-z-ende { padding-bottom: 6px !important; }
 
 /* Kopf-Karte in der Bearbeitungsansicht: kein Editor-Rahmen um den Block */
-body .markdown-source-view.eba-s-vorlesung .cm-embed-block:has(> .eba-vorl), body .markdown-source-view.eba-s-vorlesung .cm-embed-block:has(.eba-vorl) { box-shadow: none; border: none; }
+body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-embed-block:has(> .eba-vorl), body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-embed-block:has(.eba-vorl) { box-shadow: none; border: none; }
 
 /* ---------- 3. iPhone ---------- */
-body.is-phone .eba-s-vorlesung:is(.markdown-preview-view, .markdown-source-view) { --h2-size: 12px; }
-body.is-phone .markdown-preview-view.eba-s-vorlesung .markdown-preview-sizer > div > h2 { margin: 1.5em 0 0.45em; }
-body.is-phone .markdown-source-view.eba-s-vorlesung.is-live-preview .cm-line.HyperMD-header-2 { padding-top: 0.35em !important; padding-bottom: 5px !important; line-height: 1.4; }
+body.is-phone :is(.eba-s-vorlesung, .eba-s-uebungsblatt):is(.markdown-preview-view, .markdown-source-view) { --h2-size: 12px; }
+body.is-phone .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .markdown-preview-sizer > div > h2 { margin: 1.5em 0 0.45em; }
+body.is-phone .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt).is-live-preview .cm-line.HyperMD-header-2 { padding-top: 0.35em !important; padding-bottom: 5px !important; line-height: 1.4; }
 
 /* ---------- 4. iPad/PC: Seitenende der Leseansicht ohne halben Bildschirm Leerraum (nur padding, nie min-height).
    Bearbeitungsansicht behält Obsidians Auslauf, damit die Schreibzeile beim Mitschreiben nicht am unteren Rand klebt. ---------- */
-body:not(.is-phone) .markdown-preview-view.eba-s-vorlesung .markdown-preview-sizer { padding-bottom: 1.5rem !important; }
+body:not(.is-phone) .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .markdown-preview-sizer { padding-bottom: 1.5rem !important; }
+
+/* ---------- 5. Übungsblatt (typ: übungsblatt, cssclasses eba-s-notizen + eba-s-uebungsblatt) ----------
+   Dieselbe Kopf-Karte (.eba-vorl.eba-blatt, Codeblock ```eba-uebungsblatt```, vorlesung.js) und dieselben Abschnitte wie die
+   Vorlesungsnotiz; die Regeln oben gelten für beide. Eigen sind nur: Status in drei Stufen (offen warm, abgegeben Akzent,
+   korrigiert grün gefüllt wie „Nachgearbeitet“), Kennzeichen „überfällig“ und Restzeit, Perlen je Blatt des Moduls (spaet =
+   offen und Abgabe vorbei), Symbole für ## Aufgabe … (Stift im Kasten) und ## Knackpunkte (Glühbirne im Kasten wie
+   „Prüfungsrelevant“). Karten ohne Perlen (erstes Blatt, Vorlesung außerhalb der Vorlesungszeit) bleiben einspaltig. */
+.eba-blatt button.eba-vorl-status.abgegeben {
+  border-color: color-mix(in srgb, var(--eba-accent) 50%, transparent);
+  background: var(--eba-accent-soft);
+  color: var(--eba-accent-text);
+}
+.eba-blatt .eba-vorl-heute.spaet { background: var(--eba-bad); color: var(--text-on-accent, #fff); }
+.eba-blatt .eba-vorl-rest.spaet { color: var(--eba-bad); }
+.eba-blatt .eba-vorl-perle.spaet { border-color: var(--eba-bad); }
+@container eba-vorl (min-width: 640px) {
+  .eba-vorl-karte.ohne-wochen { display: block; }
+}
+.eba-s-uebungsblatt :is(.eba-vorl-h-aufgabe, h2[data-heading^="Aufgabe"]) {
+  --eba-vorl-farbe: var(--eba-accent);
+  --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7'/%3E%3Cpath d='M18.4 2.6a1 1 0 0 1 3 3l-9 9a2 2 0 0 1-.9.5l-2.9.8a.5.5 0 0 1-.6-.6l.8-2.9a2 2 0 0 1 .5-.9z'/%3E%3C/svg%3E");
+}
+.eba-s-uebungsblatt :is(.eba-vorl-h-pruef, h2[data-heading^="Knackpunkt"]) {
+  --eba-vorl-farbe: var(--eba-warn);
+  --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5'/%3E%3Cpath d='M9 18h6M10 22h4'/%3E%3C/svg%3E");
+}
+.eba-s-uebungsblatt h2[data-heading^="Fürs Tutorium"] {
+  --eba-vorl-farbe: var(--eba-info);
+  --eba-vorl-sym: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpath d='M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3'/%3E%3Cpath d='M12 17h.01'/%3E%3C/svg%3E");
+}
 /* ---------- Ende Abschnitt 37 ---------- */
 
 /* ---------- 38. Studienverlauf-Visualisierung „Studienreise“ ----------
@@ -3349,6 +3347,9 @@ body:not(.is-phone) .markdown-preview-view.eba-s-vorlesung .markdown-preview-siz
 .eba-vl-b.pruef.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-ocker) 0 3px, var(--vl-ocker2) 3px 6px); }
 .eba-vl-b.vl.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-salbei) 0 3px, var(--vl-salbei2) 3px 6px); }
 .eba-vl-b.pause.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-ferien) 0 3px, var(--vl-ferien2) 3px 6px); }
+/* Vorlesungsfreie Tage der Lupe: je Tag ein schmaler Strich in der Farbe der Pausen, in der Legende ebenso schmal */
+.eba-vl-b.frei { min-width: 2px; }
+.eba-vl-leg > i.frei { width: 3px; }
 .eba-vl-weg { position: absolute; left: 0; top: 0; bottom: 0; width: var(--w); background: var(--vl-ak); border-radius: inherit; }
 .eba-vl-hierpunkt { position: absolute; top: 50%; z-index: 3; width: 0; height: 0; }
 .eba-vl-hierpunkt i { position: absolute; left: -7px; top: -7px; width: 14px; height: 14px; border-radius: 50%; background: var(--vl-ak); border: 2.5px solid var(--eba-card-bg); box-shadow: 0 0 0 1px var(--vl-ak); }
@@ -3690,7 +3691,7 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
 body.is-phone .eba-form-zeile { grid-template-columns: minmax(0, 1fr); }
 body.is-phone .eba-form-hilfe { grid-column: 1; }
 
-/* Semestertermine (Studienverlauf, System/Daten/Semester.md) */
+/* Semestertermine (System/Daten/Semester.md) */
 .eba-sd { overflow-x: auto; }
 .eba-sd table.eba-sd-tabelle { width: 100%; margin: 0; }
 .eba-sd td, .eba-sd th { vertical-align: top; }
@@ -3715,6 +3716,18 @@ body.is-phone .eba-form-hilfe { grid-column: 1; }
 .eba-ds button.eba-ds-wahl[aria-checked="true"] { border-color: var(--eba-border-strong); background: var(--eba-card-bg); color: var(--eba-text); }
 :is(body.is-mobile, .eba-ei) .eba-ds { display: flex; }
 :is(body.is-mobile, .eba-ei) .eba-ds button.eba-ds-wahl { min-width: 0; min-height: 44px; font-size: 15px; }
+/* Design (darstellung.js): unter dem Umschalter je Design eine Zeile (.eba-vb, Einstellungen & Hilfe) bzw. eine Auswahl
+   (.eba-ei-option, Einrichtung). Das Farbmuster zeigt Seite und Akzent des Designs selbst, gleich, welches gerade gilt. */
+.eba-ds + .eba-dz, .eba-ei-wahl.eba-ei-design { margin-top: 12px; }
+.eba-dz-muster {
+  --m-seite: #faf6ee; --m-akzent: #2f5d46;
+  position: relative; flex: none; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--m-seite); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-text) 16%, transparent);
+}
+.eba-dz-muster::after { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--m-akzent); }
+.eba-dz-muster[data-design="flieder"] { --m-seite: #f7f2fb; --m-akzent: #7446a6; }
+.eba-dz-muster[data-design="klar"] { --m-seite: #ffffff; --m-akzent: #2a5bd7; }
+.eba-ei-option .eba-dz-muster { margin-left: auto; }
 /* ---------- Ende Abschnitt 43 ---------- */
 
 /* ---------- 44. Musterstudienpläne (musterplan.js, ```eba-musterplan```) ----------
@@ -4523,7 +4536,7 @@ body.is-phone .eba-woche a.eba-wpfeil:last-child::after { left: 0; right: -6px; 
    (.eba-sp-aus), dann samt Hülle und Überschrift „Schwerpunkte“ unsichtbar. Leseansicht: Die Überschrift steht nur da, wenn
    direkt danach der gezeichnete Block folgt (Obsidian zeichnet Abschnitte erst nahe am Bildschirm; wer auf .eba-sp-aus
    wartet, lässt sie kurz stehen). Hülle und Überschrift der Leseansicht auf Höhe 0 falten, nie display:none (Abschnitt 36):
-   Sonst misst Obsidian den Abschnitt so hoch wie alles darüber, und die Semestertermine darunter blieben leer. Live Preview:
+   Sonst misst Obsidian den Abschnitt so hoch wie alles darüber, und was darunter steht, bliebe leer. Live Preview:
    .cm-embed-block und die Zeile der Überschrift. Zugeklappt darunter die
    Module je Bereich als Chips: im Plan und hier gezählt = Akzent, im Plan, aber woanders gezählt = gestrichelt.
    Nur --eba-*-Variablen. */
@@ -4638,7 +4651,15 @@ body.is-phone .eba-an-wo { font-size: 12.5px; }
    6. Tabellen (Unterlagen, Meine Notizen, SQ-Kurse) auch auf iPad/PC als Liste aus tabellen.js statt Tabelle: Gruppe als
       Label in Akzentfarbe mit Linie, Titel, darunter gedämpfte Metazeile, rechts Status-Chip bzw. „Öffnen“. Die Tabelle hatte
       keine Rangfolge (alle Zeilen gleich laut, Gruppe als kleine Zeile, „Öffnen ↗“ grün in jeder Zeile, rechte Hälfte leer,
-      Datum im Geräteformat 02/06/2027). Ansichtswahl (Nach Bereich …) bleibt oben. */
+      Datum im Geräteformat 02/06/2027). Ansichtswahl (Nach Bereich …) bleibt oben.
+   7. Modulfeld (modul.js, Codeblock eba-modul unter dem Kopf, alle Geräte): Stand (Status als Knopf, Semester, Prüfung,
+      Anrechnung) in Feldern mit Haarlinien, Semesterband als einziges lautes Element (vorbei getönt, diese Woche Akzent, Pause
+      schraffiert, Prüfung rot markiert, Punkt = Vorlesungsnotiz, voll = nachgearbeitet), Als Nächstes als Zeilen, Knöpfe eckig,
+      der erste im laufenden Semester gefüllt. Schmal (unter 560 px, iPhone): Felder 2 x 2, Zeilen zweizeilig, Knöpfe zwei je Reihe.
+   8. Unterlagen (unterlagenliste.js, Codeblock eba-unterlagen, alle Geräte; seit 18.10.2026): statt der Tabelle „Nach Art“ mit
+      Werkzeugleiste, Spaltenköpfen und Gruppenzeile „art …“ je Art ein Abschnitt (Label wie die Gruppen in Meine Notizen),
+      Nummer als eigene Spalte, Lösung bei ihrer Aufgabe in einer Spalte (fehlende fallen auf), Seiten, ↗ für die Datei.
+      Breit (ab 860 px) zwei Spalten, Abschnitte bleiben ganz; schmal (unter 480 px) ohne Seiten. */
 
 /* --- 1. Kopf --- */
 .eba-s-modul .eba-kopf h1 .eba-code {
@@ -4900,4 +4921,255 @@ body:not(.is-phone) .eba-s-modul .eba-tl-nav::after {
 }
 body:not(.is-phone) .eba-s-modul .eba-tl-leer { font-size: 14px; color: var(--eba-muted); }
 body:not(.is-phone) .eba-s-modul .eba-tl-fuss { display: flex; flex-wrap: wrap; gap: 0 8px; align-items: baseline; margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--eba-border); font-size: 12.5px; color: var(--eba-muted); }
+
+/* --- 7. Modulfeld (modul.js) --- */
+.block-language-eba-modul { margin: 0; padding: 0; background: none; border: 0; }
+.eba-mod { container: eba-mod / inline-size; margin: 6px 0 4px; color: var(--eba-text); }
+.eba-mod-k { margin: 0 0 5px; font-size: 12px; font-weight: 500; line-height: 1.3; letter-spacing: 0; text-transform: none; color: var(--eba-muted); }
+.eba-mod-stand { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); row-gap: 16px; }
+.eba-mod-feld { min-width: 0; padding: 0 20px; border-left: 1px solid var(--eba-border); }
+.eba-mod-feld:first-child { padding-left: 0; border-left: 0; }
+.eba-mod-v { font-family: var(--eba-font-display); font-size: 21px; font-weight: 500; line-height: 1.25; color: var(--eba-text); }
+.eba-mod-z { margin-top: 3px; font-size: 13px; line-height: 1.35; color: var(--eba-muted); }
+.eba-mod-blass { color: var(--eba-faint); }
+.eba-mod-bald { font-weight: 600; color: var(--eba-bad); }
+.eba-mod-link { cursor: pointer; text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-underline-offset: 4px; text-decoration-thickness: 1px; }
+.eba-mod-link:hover { text-decoration-color: currentColor; }
+.eba-mod .eba-mod-feld button:is(.eba-mod-status, .eba-mod-wahl) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  margin: 0;
+  padding: 5px 10px 5px 11px;
+  border: 1px solid var(--eba-border-strong);
+  border-radius: 999px;
+  background: var(--eba-card-bg);
+  box-shadow: none;
+  font-family: var(--font-interface);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--eba-text);
+  cursor: pointer;
+}
+.eba-mod .eba-mod-feld button.eba-mod-wahl { padding-left: 12px; font-weight: 500; }
+.eba-mod .eba-mod-feld button:is(.eba-mod-status, .eba-mod-wahl):hover { border-color: var(--eba-muted); }
+.eba-mod-punkt { flex: none; width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--eba-faint); }
+.eba-mod-status.ok .eba-mod-punkt { background: var(--eba-good); box-shadow: none; }
+.eba-mod-status.bad .eba-mod-punkt { background: var(--eba-bad); box-shadow: none; }
+.eba-mod-status.warn .eba-mod-punkt { background: var(--eba-warn); box-shadow: none; }
+.eba-mod-status.info .eba-mod-punkt { background: var(--eba-info); box-shadow: none; }
+.eba-mod-pfeil { display: inline-flex; color: var(--eba-faint); }
+.eba-mod-pfeil svg { width: 14px; height: 14px; }
+.eba-mod-note { display: inline-block; margin: 0 0 0 12px; vertical-align: middle; font-family: var(--eba-font-display); font-size: 26px; line-height: 1; color: var(--eba-text); }
+.eba-mod-plan { display: inline-block; margin-top: 6px; font-size: 13px; font-weight: 600; color: var(--eba-accent-text); text-decoration: none !important; }
+.eba-mod-plan.drin { color: var(--eba-good); }
+
+/* Semesterband */
+.eba-mod-band { margin-top: 24px; }
+.eba-mod-zellen, .eba-mod-monate { display: grid; grid-template-columns: repeat(var(--eba-mod-n), minmax(0, 1fr)); column-gap: 3px; }
+.eba-mod-zellen { height: 30px; }
+.eba-mod-w { position: relative; border-radius: 2px; background: color-mix(in srgb, var(--eba-text) 6%, transparent); }
+.eba-mod-w.vorbei { background: color-mix(in srgb, var(--eba-text) 22%, transparent); }
+.eba-mod-w.pause { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--eba-text) 20%, transparent) 0 1.5px, transparent 1.5px 5px); }
+.eba-mod-w.jetzt { background: var(--eba-accent); }
+.eba-mod-w.nach { margin-left: 6px; }
+.eba-mod-w.pruefung { box-shadow: inset 0 0 0 2px var(--eba-bad); }
+.eba-mod-w.pruefung::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -9px;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--eba-bad);
+  transform: translateX(-50%);
+}
+.eba-mod-w:is(.n1, .n2)::after { content: ""; position: absolute; left: 50%; top: 50%; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; }
+.eba-mod-w.n1::after { box-shadow: inset 0 0 0 1.5px var(--eba-accent-text); }
+.eba-mod-w.n2::after { background: var(--eba-accent-text); }
+.eba-mod-w.jetzt.n1::after { box-shadow: inset 0 0 0 1.5px var(--text-on-accent, #fff); }
+.eba-mod-w.jetzt.n2::after { background: var(--text-on-accent, #fff); }
+.eba-mod-tipp { cursor: pointer; }
+.eba-mod-monate { margin-top: 6px; font-size: 11.5px; line-height: 1.2; color: var(--eba-muted); }
+.eba-mod-monate span { grid-row: 1; white-space: nowrap; }
+
+/* Als Nächstes */
+.eba-mod-naechstes { margin-top: 22px; }
+.eba-mod-zeile {
+  display: grid;
+  grid-template-columns: 6.6em 7.6em minmax(0, 1fr) auto;
+  column-gap: 14px;
+  align-items: baseline;
+  padding: 8px 0;
+  border-top: 1px solid var(--eba-border);
+  font-size: 15px;
+  line-height: 1.4;
+}
+.eba-mod-zeile:last-child { border-bottom: 1px solid var(--eba-border); }
+.eba-mod-zeile.eba-mod-tipp:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
+.eba-mod-tag { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-mod-zeile.pruefung .eba-mod-tag { color: var(--eba-bad); }
+.eba-mod-zeit { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--eba-muted); }
+.eba-mod-was { min-width: 0; overflow-wrap: anywhere; }
+.eba-mod-was .eba-pill { margin-left: 8px; font-size: 11px; padding: 0 7px; line-height: 1.5; vertical-align: 1px; }
+.eba-mod-wo { font-size: 13.5px; text-align: right; color: var(--eba-muted); }
+
+/* Knöpfe */
+.eba-mod-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.eba-mod-knopf {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px 8px 12px;
+  border: 1px solid var(--eba-border-strong);
+  border-radius: var(--eba-radius);
+  background: var(--eba-card-bg);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--eba-text) !important;
+  text-decoration: none !important;
+}
+.eba-mod-knopf:hover { border-color: color-mix(in srgb, var(--eba-accent) 55%, var(--eba-border)); }
+.eba-mod-knopf.haupt { border-color: var(--eba-accent); background: var(--eba-accent); color: var(--text-on-accent, #fff) !important; }
+.eba-mod-sym { display: inline-flex; color: var(--eba-accent-text); }
+.eba-mod-knopf.haupt .eba-mod-sym { color: inherit; }
+.eba-mod-sym svg { width: 16px; height: 16px; }
+.eba-mod :is(button, a, .eba-mod-tipp):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+.eba-mod-leer { font-size: 14px; color: var(--eba-muted); }
+
+/* Schmal (iPhone, geteiltes iPad) */
+@container eba-mod (max-width: 560px) {
+  .eba-mod-stand { grid-template-columns: 1fr 1fr; row-gap: 14px; }
+  .eba-mod-feld, .eba-mod-feld:first-child { padding: 0 0 0 12px; border-left: 0; }
+  .eba-mod-feld:nth-child(odd) { padding-left: 0; }
+  .eba-mod-v { font-size: 18px; }
+  .eba-mod-zellen { height: 22px; column-gap: 2px; }
+  .eba-mod-monate { column-gap: 2px; font-size: 10.5px; }
+  .eba-mod-zeile { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 0; padding: 7px 0; font-size: 14.5px; }
+  .eba-mod-zeit:empty { display: none; }
+  .eba-mod-was { flex: 1 1 8em; }
+  .eba-mod-wo { flex: 1 0 100%; text-align: left; font-size: 12.5px; }
+  .eba-mod-wo:empty { display: none; }
+  .eba-mod-knoepfe { display: grid; grid-template-columns: 1fr 1fr; }
+  .eba-mod-knopf { justify-content: flex-start; }
+}
+
+/* Fenster „Note“ */
+.eba-mod-fenster input { width: 100%; font-size: 18px; }
+.eba-mod-fehler { min-height: 1.3em; margin-top: 6px; font-size: 13px; color: var(--eba-bad); }
+.eba-mod-fenster-knoepfe { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* Steckbrief (Lehrveranstaltung, Prüfung) auf iPad/PC ohne Kasten: zwei Spalten auf dem Papier, Haarlinie dazwischen */
+body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-raster"]:has(> .callout-content > .callout:is([data-callout="eba-karte"], [data-callout="eba-regel"])) > .callout-content { column-gap: 0; }
+body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-raster"] > .callout-content > .callout:is([data-callout="eba-karte"], [data-callout="eba-regel"]) {
+  padding: 2px 0 0 24px;
+  border: 0;
+  border-left: 1px solid var(--eba-border);
+  border-radius: 0;
+  background: transparent;
+}
+body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-raster"] > .callout-content > .callout:is([data-callout="eba-karte"], [data-callout="eba-regel"]):first-child { padding-left: 0; padding-right: 24px; border-left: 0; }
+
+/* Listen (Unterlagen, Meine Notizen) auf iPad/PC ebenfalls ohne Kasten und ohne Kartentitel (wiederholt nur die ##-Überschrift);
+   die Ansichtswahl bleibt. iPhone: Karte wie bisher (Meine Notizen dort zum Aufklappen). */
+body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-tl) { padding: 0; border: 0; border-radius: 0; background: transparent; }
+body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-tl) > .callout-title { display: none; }
+body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-tl) .bases-header { margin: -4px 0 2px; }
+/* --- 8. Unterlagen (unterlagenliste.js) --- */
+.block-language-eba-unterlagen { container: eba-ul / inline-size; margin: 0; padding: 0; background: none; border: 0; }
+.eba-ul { margin: 2px 0 4px; font-size: 15px; line-height: 1.4; color: var(--eba-text); }
+@container eba-ul (min-width: 860px) {
+  .eba-ul { columns: 2; column-gap: 48px; }
+}
+.eba-ul-gruppe { break-inside: avoid; margin: 0 0 20px; }
+.eba-ul-gruppe:last-child { margin-bottom: 0; }
+.eba-ul-kopf {
+  padding: 0 0 7px;
+  border-bottom: 1px solid var(--eba-border-strong);
+  font-family: var(--font-interface);
+  font-size: var(--eba-label-size);
+  font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking);
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--eba-accent-text);
+}
+.eba-ul-zeile { display: flex; align-items: baseline; gap: 14px; padding: 9px 0; cursor: pointer; }
+.eba-ul-zeile + .eba-ul-zeile { border-top: 1px solid var(--eba-border); }
+.eba-ul-zeile:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
+.eba-ul :is(.eba-ul-zeile, .eba-ul-link, a):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+.eba-ul-nr { flex: none; width: 1.5em; font-variant-numeric: tabular-nums lining-nums; color: var(--eba-faint); }
+.eba-ul-titel { flex: 1 1 auto; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
+.eba-ul-ok { margin-left: 7px; font-size: 13px; font-weight: 600; color: var(--eba-good); }
+.eba-ul-loesung { flex: none; display: inline-flex; gap: 10px; min-width: 4.2em; font-size: 13.5px; }
+.eba-ul-link {
+  color: var(--eba-muted);
+  text-decoration: underline;
+  text-decoration-color: var(--eba-border-strong);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.eba-ul-link:hover { color: var(--eba-accent-text); text-decoration-color: currentColor; }
+.eba-ul-link.gelesen::after { content: " ✓"; color: var(--eba-good); }
+.eba-ul-seiten { flex: none; width: 3.6em; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--eba-muted); }
+.eba-ul-datei { flex: none; width: 1.1em; text-align: center; }
+.eba-ul-datei a { font-size: 14px; color: var(--eba-faint); text-decoration: none; }
+.eba-ul-zeile:hover .eba-ul-datei a, .eba-ul-datei a:hover { color: var(--eba-accent-text); }
+.eba-ul-leer { font-size: 14px; color: var(--eba-muted); }
+@container eba-ul (max-width: 480px) {
+  .eba-ul-zeile { gap: 10px; padding: 8px 0; }
+  .eba-ul-seiten { display: none; }
+  .eba-ul-loesung { min-width: 0; }
+}
 /* ---------- Ende Abschnitt 58 ---------- */
+
+/* ---------- 59. „Bitte prüfen“ auf dem Dashboard (bitte-pruefen.js, ```eba-bitte-pruefen```; seit 18.10.2026) ----------
+   Nur im eigenen Uni-Abgleich mit Punkten unter „Bitte prüfen“ im Protokoll: eine Karte wie die übrigen (Aufbau eines Callouts
+   eba-pruefen, vom Skript gezeichnet, eingeklappt), Zeilen wie die To-dos (eba-td-*, Abschnitt 37.todos). Sonst ist der Block
+   leer (.eba-bp-aus) und nimmt keinen Platz ein: Leseansicht .el-pre auf Höhe 0 gefaltet, nie display:none (Abschnitt 36,
+   tests/leseansicht.test.js), Live Preview .cm-embed-block. Nur --eba-*-Variablen. */
+.block-language-eba-bitte-pruefen { margin: 0; }
+.block-language-eba-bitte-pruefen.eba-bp-aus,
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-bitte-pruefen.eba-bp-aus) { display: none !important; }
+.el-pre:has(> .block-language-eba-bitte-pruefen.eba-bp-aus) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden; }
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-bitte-pruefen) { padding: 0; }
+.callout[data-callout="eba-pruefen"] > .callout-title { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.callout[data-callout="eba-pruefen"] > .callout-title:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 3px; border-radius: 4px; }
+.callout[data-callout="eba-pruefen"].is-collapsed > .callout-title { margin-bottom: 0; }
+.callout[data-callout="eba-pruefen"] .callout-fold .svg-icon { transition: transform 0.15s ease; }
+.callout[data-callout="eba-pruefen"] .callout-fold.is-collapsed .svg-icon { transform: rotate(-90deg); }
+.eba-bp-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 10px; }
+.eba-bp-punkt { width: 5px; height: 5px; margin: 11px 0 0 7px; border-radius: 50%; background: var(--eba-faint); }
+.eba-bp-detail { margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); overflow-wrap: anywhere; }
+.eba-bp-detail p { margin: 0; }
+.eba-bp-detail a, .eba-bp-detail a.internal-link { color: var(--eba-muted); text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-underline-offset: 3px; }
+.eba-bp-detail a:hover { color: var(--eba-accent-text); text-decoration-color: currentColor; }
+.eba-bp-liste .eba-td-zeile.is-erledigt .eba-bp-detail { opacity: 0.55; }
+
+/* ---------- 60. Dashboard: erste Kachel „Nächste Frist“ (seit 18.10.2026; so schon vom 12. bis 15.10.2026 in Abschnitt 32) ----------
+   Fünf Kacheln: Nächste Frist (Klassen akzent frist: breiter, getönt, Titel groß), dann Prüfung, Semester, ECTS, Note mit
+   kleineren Zahlen. Breit (PC) in einer Reihe; bis 980 px (iPad hochkant) die Frist über die ganze Breite, darunter die vier in
+   einer Reihe (in einer Reihe zu fünft wären sie dort nur 123 px breit, „Orientierungsprüfung“ bräche mitten im Wort); bis
+   760 px (iPhone, geteiltes iPad) darunter 2 × 2. */
+.eba-kz-reihe:has(> .frist) { grid-template-columns: minmax(0, 1.8fr) repeat(4, minmax(0, 1fr)); }
+.eba-kz-reihe > .eba-kachel.frist { background: color-mix(in srgb, var(--eba-accent) 8%, var(--eba-card-bg)); }
+.eba-kz-reihe > .eba-kachel.frist .k { color: var(--eba-accent-text); }
+.eba-kz-reihe > .eba-kachel.frist .v.text { font-family: var(--font-interface); font-size: 1.3em; font-weight: 650; line-height: 1.25; }
+.eba-kz-reihe > .eba-kachel.frist .s { color: var(--eba-text); font-weight: 500; }
+@container eba-kz (max-width: 980px) {
+  .eba-kz-reihe:has(> .frist) { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .eba-kz-reihe > .eba-kachel.frist:first-child { grid-column: 1 / -1; }
+}
+@container eba-kz (max-width: 760px) {
+  .eba-kz-reihe:has(> .frist) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eba-kz-reihe:has(> .frist) > .eba-kachel:nth-child(5) { grid-column: auto; }
+}
+@container eba-kz (max-width: 480px) {
+  .eba-s-dashboard .eba-kz-reihe > .eba-kachel.frist .v.text { font-size: 1.12em; line-height: 1.25; }
+  .eba-s-dashboard .eba-kz-reihe > .eba-kachel.frist .s { font-size: 12px; }
+}
+/* ---------- Ende Abschnitt 60 ---------- */

@@ -25,7 +25,7 @@ test("Laden: Bibliothek, keine Erweiterung; Fabrik und direkte Funktionen", () =
   // dieselbe Regel wie main.js (istErweiterung): sonst würde der Kern das Skript als Erweiterung starten
   assert.equal(/\bregistrieren\s*(\(|=|:|,|\})|\baktionen\s*:/.test(code), false);
   for (const n of ["parsen", "angemeldet", "seitenArt", "meldungen", "permalink", "mitgliedschaften", "kurse", "gruppen",
-    "inhalt", "folgeUrl", "uebungen", "formulare", "dateiName", "downloadUrl", "datum", "groesse", "sitzung"]) {
+    "inhalt", "folgeUrl", "inhaltReiter", "uebungen", "formulare", "dateiName", "downloadUrl", "datum", "groesse", "sitzung"]) {
     assert.equal(typeof H[n], "function", "Fabrik: " + n);
     assert.equal(typeof S[n], "function", "direkt: " + n);
   }
@@ -265,6 +265,14 @@ test("Folge-URL: Inhalt-Reiter nicht aktiv, eingeklappte Sitzungen, sonst leer",
     "https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:ni&cmdClass=ilObjCourseGUI&cmd=view&ref_id=2000001");
   const mehr = '<div><a href="ilias.php?baseClass=ilrepositorygui&amp;ref_id=2000001&amp;crs_next_sess=1">Weitere Sitzungen</a></div>';
   assert.equal(H.folgeUrl(mehr, BASIS), "https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilrepositorygui&ref_id=2000001&crs_next_sess=1");
+});
+
+test("Reiter „Inhalt“: Adresse ohne Weiterleitung, aktiv oder nicht; ohne Reiter leer", () => {
+  const ziel = "https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:ni&cmdClass=ilObjCourseGUI&cmd=view&ref_id=2000001";
+  assert.equal(H.inhaltReiter(seite("kurs"), BASIS), ziel);
+  assert.equal(H.inhaltReiter(seite("kurs").replace('<li id="tab_view_content" class="active"', '<li id="tab_view_content" class=""'), BASIS), ziel);
+  assert.equal(H.inhaltReiter("<div><a href=\"ilias.php?ref_id=1\">x</a></div>", BASIS), "");
+  assert.equal(H.inhaltReiter("", BASIS), "");
 });
 
 test("Übungen: Übersicht mit Fristen und Dateien, Aufgabenseite mit Download-Knöpfen", () => {

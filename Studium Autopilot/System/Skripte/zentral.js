@@ -12,7 +12,8 @@
 //   4. Strenge Prüfung je Eintrag (Schema, Grenzen, Kategorien, Domains, reiner Text). Ungültige Einträge einzeln verwerfen.
 //   5. Übernehmen: Termine → Notizen in Termine/ (herkunft: zentral, zentral_id); Semesterdaten → System/Daten/Semester.md.
 //      Geschrieben wird nur bei inhaltlicher Änderung. Nie angefasst: Notizen ohne herkunft: zentral, das Feld erledigt,
-//      alles unter „## Meine Notizen“, eigene Felder und Tags.
+//      alles unter „## Meine Notizen“, eigene Felder und Tags. Einzige Ausnahme, die Übergabe nach id: Eine Notiz eines eigenen
+//      Uni-Abgleichs mit abgleich_id = id eines Termins übernimmt das Plugin an Ort und Stelle (abgleichNotizen).
 //   Übungs- und Tutoriengruppen (gruppen.json, optional, Plan Abschnitt 20): holt JEDES Gerät selbst (vor der Abrufer-Sperre),
 //      geprüft wie oben, nur gerätelokal gespeichert (eba-zentral-gruppen), keine Notizen. Anzeige: gruppen.js (eba-gruppen).
 //   Angebote der Uni (angebote.json, optional: Vorträge, UB-Kurse, Hochschulsport, Welcome Center): genauso, gerätelokal
@@ -608,7 +609,8 @@ module.exports = function (ctx) {
     for (const z of b.zeilen.slice(1)) { const m = z.match(/^\s*-\s*(.+)$/); if (m && ohne(m[1])) werte.push(ohne(m[1])); }
     return werte;
   };
-  const EIGEN = ["typ", "titel", "datum", "bis", "kategorie", "status", "ort", "modul", "code", "bereich", "erledigt", "quelle", "info", "geprueft", "herkunft", "zentral_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
+  // abgleich_id gehört dazu: Bei der Übergabe (abgleichNotizen) fällt sie weg, sonst hätte die Notiz zwei Schreiber
+  const EIGEN = ["typ", "titel", "datum", "bis", "kategorie", "status", "ort", "modul", "code", "bereich", "erledigt", "quelle", "info", "geprueft", "herkunft", "zentral_id", "abgleich_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
   // Kleine Pille im Kopf der Notiz (und in Agenda/Kalender, termine.js/kalender.js): freiwillig, keine Pflicht
   const BEREICH_PILLE = { schluesselqualifikation: '<span class="eba-pill leer">Schlüsselqualifikation · freiwillig</span>' };
   // Inhalt einer zentralen Termin-Notiz. alt = bisheriger Text (oder ""), e = geprüfter Eintrag, o = { modulLink, entfaellt }
@@ -723,6 +725,18 @@ module.exports = function (ctx) {
     for (const f of dateien) { const id = String(fmVon(f).zentral_id); if (!map[id]) map[id] = f; }
     return map;
   };
+  // Termin-Notizen eines eigenen Uni-Abgleichs (abgleich_id, ohne herkunft): abgleich_id → Datei. Erscheint dieselbe id in den
+  // zentralen Daten, übernimmt das Plugin genau diese Notiz (Übergabe nach id, docs/daten-v1.md), statt eine zweite anzulegen
+  // oder die id als „von dir gelöscht“ zu werten. Ohne eigenen Abgleich gibt es solche Notizen nicht.
+  const abgleichNotizen = () => {
+    const map = {};
+    const dateien = app.vault.getMarkdownFiles().filter((f) => {
+      const fm = fmVon(f);
+      return fm && fm.abgleich_id && !fm.herkunft && fm.typ !== "lehrveranstaltung";
+    }).sort((a, b) => a.path.localeCompare(b.path));
+    for (const f of dateien) { const id = String(fmVon(f).abgleich_id); if (!map[id]) map[id] = f; }
+    return map;
+  };
   const freierPfad = (basisName, eigene, ordner) => {
     const o = ordner || ORDNER;
     let name = basisName, i = 2;
@@ -739,6 +753,7 @@ module.exports = function (ctx) {
     const F = filterBauen();
     const heute = heuteIso();
     const vorhanden = zentraleNotizen();
+    const abgleich = abgleichNotizen();
     const angewendet = Object.assign({}, abruf.angewendet || {});
     const imDatensatz = new Set(T.map((e) => e.id));
     // Schutz gegen kaputte Exporte: würde mehr als die Hälfte (und mehr als 10) wegfallen, nichts als entfallen behandeln
@@ -747,7 +762,7 @@ module.exports = function (ctx) {
     if (wegfallSperre) warnen(bericht, `${fehlend.length} Termine fehlen in den Daten – nicht als entfallen behandelt.`);
     if (!datei(ORDNER)) { try { await app.vault.createFolder(ORDNER); } catch (e) { /* da */ } }
     for (const e of T) {
-      const f = vorhanden[e.id] || null;
+      let f = vorhanden[e.id] || null;
       const h = eintragHash(e);
       if (!F.aufnehmen(e)) {
         // nicht (mehr) passend: unberührt → Papierkorb, sonst stehen lassen
@@ -759,6 +774,8 @@ module.exports = function (ctx) {
         continue;
       }
       const soll = { modulLink: modulLink(F, e.code) };
+      // Übergabe: Notiz des eigenen Uni-Abgleichs mit dieser id → übernehmen (erledigt, „Meine Notizen“, eigene Felder bleiben)
+      if (!f && abgleich[e.id]) { f = abgleich[e.id]; bericht.uebernommen.push(f.path); }
       if (!f) {
         if (angewendet[e.id] === h) { bericht.ausgeblendet.push(e.id); continue; } // von dir gelöscht, Daten unverändert
         const pfad = freierPfad(dateiName(e.datum, e.titel), null);
@@ -1134,7 +1151,7 @@ module.exports = function (ctx) {
   const standSetzen = (aend) => lokal(L.stand, Object.assign(stand(), aend));
   const protokoll = ctx.bleibend("protokoll", () => []); // Läufe (für Tests), überlebt den Hot-Reload
 
-  const neuerBericht = (art) => ({ art, geschrieben: [], angelegt: [], aktualisiert: [], umbenannt: [], entfaellt: [], papierkorb: [], ausgeblendet: [], ersetzt: [], verworfen: [], warnung: "", fehler: "", lehre: null });
+  const neuerBericht = (art) => ({ art, geschrieben: [], angelegt: [], aktualisiert: [], uebernommen: [], umbenannt: [], entfaellt: [], papierkorb: [], ausgeblendet: [], ersetzt: [], verworfen: [], warnung: "", fehler: "", lehre: null });
   const warnen = (b, text) => { b.warnung = b.warnung ? b.warnung + " " + text : text; };
 
   // ---------- Ein Abruf ----------

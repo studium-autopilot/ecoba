@@ -41,4 +41,13 @@ export default [
       globals: { ...globals.node },
     },
   },
+  // Werkzeuge für den eigenen Server (server/): Node, nicht im Tresor.
+  {
+    files: ["server/**/*.mjs"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+      globals: { ...globals.node },
+    },
+  },
 ];

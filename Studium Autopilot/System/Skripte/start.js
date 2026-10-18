@@ -93,7 +93,7 @@ module.exports = function (ctx) {
   const knoepfeZeigen = () => { for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view) knopf(l.view, false); };
 
   // 3. Seitenklasse aus dem Feld `typ` (mehrere Klassen mit Leerzeichen). Schreibt keine Datei.
-  const TYP = { termin: "eba-s-termin", unterlage: "eba-s-begleitnotiz", lehrveranstaltung: "eba-s-notizen", vorlesung: "eba-s-notizen eba-s-vorlesung" };
+  const TYP = { termin: "eba-s-termin", unterlage: "eba-s-begleitnotiz", lehrveranstaltung: "eba-s-notizen", vorlesung: "eba-s-notizen eba-s-vorlesung", "übungsblatt": "eba-s-notizen eba-s-uebungsblatt" };
   const klassen = () => {
     for (const l of app.workspace.getLeavesOfType("markdown")) {
       const f = l.view && l.view.file; if (!f) continue;

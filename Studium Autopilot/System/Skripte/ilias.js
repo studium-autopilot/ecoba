@@ -20,13 +20,16 @@
 //   Änderung). Vor jedem Schreiben wird mit dem Stand auf der Platte gemischt (je Eintrag gewinnt der neuere), so
 //   überstehen Änderungen anderer Geräte (Kurswahl, Umbenennen) einen laufenden Abruf. Einträge werden nie gelöscht.
 // Abrufer-Sperre (System/Daten/ilias-abruf.json, synchronisiert): nur ein Gerät lädt, Regeln wie zentral.js (UEBERNAHME,
-//   PULS). Nur Geräte mit gespeichertem Zugang nehmen teil.
-// Ein Lauf: Sperre → Index lesen, Umbenennungen und Löschungen nachziehen → anmelden → Kursliste → aktive Kurse
-//   durchsuchen (Ordner, Sitzungen, Gruppen; eine Anfrage nach der anderen, ABSTAND_MS dazwischen, höchstens ANFRAGEN je
-//   Lauf) → geänderte, dann neue Dateien laden (neueste zuerst, höchstens NEU_MOBIL bzw. NEU_PC je Lauf). Der Index wird
-//   nach jedem Schritt geschrieben; ein Fehler beendet den Lauf sauber, der nächste macht weiter. Abgelaufene Sitzung:
-//   einmal neu anmelden, dann für diesen Lauf aufgeben. Was das Durchsuchen findet, merkt sich das Gerät nach jedem Kurs
-//   (Funde); ein abgebrochener Lauf (iPhone/iPad halten Obsidian im Hintergrund an) fängt so nicht von vorn an.
+//   PULS). Nur Geräte mit gespeichertem Zugang nehmen teil. „frei: true“ setzt ein Gerät, das seine Gruppen-Notizen
+//   freigegeben hat (gruppenFreigeben): Ein Gerät mit Zugang übernimmt dann sofort.
+// Ein Lauf: Sperre → Index lesen, Umbenennungen und Löschungen nachziehen → anmelden (die Sitzung des letzten Laufs gilt
+//   meist noch) → Kursliste → aktive Kurse durchsuchen (Ordner, Sitzungen mit Materialien, Gruppen, in denen du Mitglied
+//   bist; SUCHER Seiten zugleich, höchstens SEITEN je Lauf) → geänderte, dann neue Dateien laden (neueste zuerst, LADER_PC
+//   bzw. LADER_MOBIL zugleich, höchstens NEU_PC bzw. NEU_MOBIL je Lauf). Die Last für ILIAS begrenzt die Drossel der Sitzung
+//   (ilias-netz.js: höchstens 2 Anfragen gleichzeitig, 400 ms zwischen zwei Starts). Der Index wird nach jedem Schritt
+//   geschrieben; ein Fehler beendet den Lauf sauber, der nächste macht weiter. Abgelaufene Sitzung: einmal neu anmelden,
+//   dann für diesen Lauf aufgeben. Was das Durchsuchen findet, merkt sich das Gerät nach jedem Kurs (Funde); ein
+//   abgebrochener Lauf (iPhone/iPad halten Obsidian im Hintergrund an) fängt so nicht von vorn an.
 // Neue Datei: SHA-256 → gleiche Datei schon unter Unterlagen/ (erst Größe, dann Prüfsumme)? Dann nur merken. Sonst Name über
 //   den Einordner, Ordner wie unterlagen.js, freier Name (nie überschreiben, sonst „ (2)“), Datei + Begleitnotiz
 //   (typ: unterlage, original, quelle „ILIAS: Kurs / Ordner“, ilias_id).
@@ -37,8 +40,10 @@
 //   die Gruppen, in denen du Mitglied bist. Je Gruppe: Modulcode aus dem durchsuchten Kurs bzw. den Brotkrumen der Gruppenseite,
 //   Zeitfenster aus Titel und Beschreibung, Zuordnung zu gruppen.json und eine Notiz in Stundenplan/ (meine-gruppe.js,
 //   herkunft: ilias-gruppe). Nur das Gerät mit der Abrufer-Sperre schreibt; ein Fehler dabei hält die Unterlagen nicht an.
+//   Trennen, abgelehnte Anmeldung oder verwaist (gruppenFreigeben): Die Notizen werden zu gewählten, deine Gruppe bleibt.
 // Eigener Uni-Abgleich (eba.eigenerAbgleich): Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“
-//   in den Einstellungen, lädt dieses Skript nichts (Status „über deinen Uni-Abgleich“).
+//   in den Einstellungen, lädt dieses Skript nie Dateien (Status TEXT_EXTERN). Mit ILIAS-Zugang prüft es dort nur die
+//   Übungsgruppen: kurze Läufe ohne Auftrag (kein Weitermachen, keine Stapel), ein Hinweis zum Ergebnis nur nach deinem Tipp.
 // Für andere Skripte: ctx.ilias (siehe unten, api). Testeinstiege: plugin.testIliasAus (kein automatischer Lauf);
 //   ctx.ilias.erzeugen(abh) baut den ganzen Ablauf mit falschem ILIAS und Tresor im Speicher (tests/ilias.test.js);
 //   in Obsidian ersetzen ctx.ilias.anmeldungSetzen(fn) und ctx.ilias.quelleSetzen(fn) Anmeldung bzw. ILIAS (Oberfläche
@@ -62,9 +67,12 @@ module.exports = function (ctx) {
   const UEBERNAHME = 80 * MIN;   // anderes Gerät übernimmt, wenn der Abrufer so lange still war (wie zentral.js)
   const PULS = 50 * MIN;         // Abrufer erneuert ilias-abruf.json höchstens so oft (unter UEBERNAHME)
   const NACHHOLEN = 60 * MIN;    // zurück in der App: neuer Lauf, wenn der letzte Versuch länger her ist
-  const ANFRAGEN = 300;          // höchstens so viele Anfragen an ILIAS je Lauf (Anmeldung zählt als eine)
-  const ABSTAND_MS = 500;        // mindestens so viel Zeit zwischen zwei Anfragen
-  const NEU_MOBIL = 25, NEU_PC = 60; // höchstens so viele Downloads je Lauf (neue und geänderte Dateien)
+  const SEITEN = 400;            // höchstens so viele Seiten (Kurse, Ordner, Sitzungen, Gruppen) je Lauf durchsuchen
+  // Höchstens so viele Downloads je Lauf (neue und geänderte Dateien). Beim ersten Abruf reicht so meist ein Lauf; was übrig
+  // bleibt, holt der nächste Stapel.
+  const NEU_MOBIL = 150, NEU_PC = 400;
+  const SUCHER = 2;              // so viele Seiten zugleich durchsuchen (die Drossel der Sitzung begrenzt die Last)
+  const LADER_PC = 2, LADER_MOBIL = 1; // so viele Dateien zugleich laden (iPhone/iPad: eine, wegen des Arbeitsspeichers)
   const MAX_MB = 50;             // größere Dateien nicht in den Tresor (Sync, Speicher auf iPhone/iPad)
   const PDF_TITEL_MAX_MB = 40;   // Titel aus der ersten PDF-Seite nur bis zu dieser Größe (Arbeitsspeicher iPhone)
   const EINBETTEN_MAX_MB = 10;   // größere PDFs in der Begleitnotiz nur verlinken (wie unterlagen.js)
@@ -74,9 +82,10 @@ module.exports = function (ctx) {
   const TIEFE_MAX = 12;          // Ordnertiefe in einem Kurs
   const KURS_ZULETZT = 24 * STUNDE; // „zuletzt“ eines Kurses im Index ohne andere Änderung höchstens so oft schreiben
   const KURS_PAUSE = 3 * STUNDE;   // automatische Läufe durchsuchen einen Kurs höchstens so oft (Knopf: immer alle)
-  const GRUPPEN_SEITEN = 5;
+  const GRUPPEN_SEITEN = 5;       // höchstens so viele Gruppenseiten je Lauf (Modulcode aus den Brotkrumen, danach gemerkt)
   const KURS_WIEDER = 7 * 24 * STUNDE; // Gruppenseite ohne Kurscode: höchstens so oft neu versuchen
-  const MIGRATION = 1;               // Stand der einmaligen Säuberung (eba-ilias-migration)         // höchstens so viele Gruppenseiten je Lauf (Modulcode aus den Brotkrumen, danach gemerkt)
+  const VERWAIST = 7 * 24 * STUNDE; // so lange still, gilt die Sperre eines anderen Geräts als verlassen (gruppenFreigeben)
+  const MIGRATION = 1;               // Stand der einmaligen Säuberung (eba-ilias-migration)
   const SITZUNG_VORAUS_TAGE = 7;   // Sitzungen weiter in der Zukunft nicht holen (noch leer; spart je Sitzung 2–3 Anfragen)
   const PROTOKOLL_MAX = 20;
   const BEHAELTER = ["ordner", "sitzung", "gruppe"];
@@ -85,14 +94,18 @@ module.exports = function (ctx) {
   const BILDER = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
   const SPERRGRUENDE = ["zugang-falsch", "zustimmung", "zwei-faktor"]; // ohne dein Zutun keine automatischen Versuche mehr
   const WIEDER_MIN = [1, 5, 15];  // offener Auftrag nach einem Fehler (z. B. kein Netz): neuer Versuch nach so vielen Minuten
-  const STAPEL_PAUSE = 45e3;      // Download-Grenze je Lauf erreicht, Dateien übrig: nächster Stapel nach dieser Pause
+  const STAPEL_PAUSE = 20e3;      // Download-Grenze je Lauf erreicht, Dateien übrig: nächster Stapel nach dieser Pause
   const STAPEL_MAX = 10;          // höchstens so viele Stapel je Auftrag (schont ILIAS), danach nur noch stündlich
   const STILL = 2 * MIN;          // so lange ohne Regung gilt ein Lauf als tot (iPhone/iPad halten Skripte im Hintergrund an)
+  // iPhone/iPad zurück in der App nach mehr als so viel Zeit im Hintergrund: regt sich ein Lauf mit Auftrag so lange danach
+  // noch nicht, hängt seine Anfrage (iOS hat sie liegen lassen); er wird verworfen, und der Auftrag macht sofort weiter
+  const ZURUECK_PRUEFEN = 10e3;
   const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet",
     auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt", funde: "eba-ilias-funde",
     migration: "eba-ilias-migration" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
   const TEXT_ANMELDUNG_FOLGT = "ILIAS-Anmeldung folgt in einer späteren Version";
+  const TEXT_EXTERN = "Deine Unterlagen kommen über deinen Uni-Abgleich."; // auch Zeile und Einrichtung (verbindungen.js, einrichtung.js)
   const MODULCODE = (ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE) || "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?"; // wie eba.js
   const CODE_ANFANG = new RegExp("^\\s*(" + MODULCODE + ")(?=[\\s_\\-.:,/]|$)");
   const CODE_GANZ = new RegExp("^" + MODULCODE + "$");
@@ -390,9 +403,10 @@ module.exports = function (ctx) {
   //       dateien(unter) → [{ pfad, groesse }] ohne .md, unterordner(pfad) → [Name], ordnerAnlegen, notizMarkieren(pfad, felder))
   //   lokal(k, v?), geheim: { lesen(id) → Text | null (synchron), schreiben(id, w), loeschen(id) }, geheimId(),
   //   anmeldung() → anmelden(sitzung, zugang, optionen) → { ok, grund?, hinweis? } | null (dann „folgt später“),
-  //   quelle(zugang, anmelden) → { kurse(), inhalt(behaelter), laden(eintrag), name(eintrag) } (meldet sich mit anmelden an),
+  //   quelle(zugang, anmelden, { wiederverwenden }?) → { kurse(), inhalt(behaelter), laden(eintrag), name(eintrag) } (meldet
+  //       sich mit anmelden an; wiederverwenden: Sitzung des letzten Laufs nehmen, solange sie gilt), vergessen()? (Sitzung weg),
   //   einordner() → wie einordnerAus, modul(code) → { name, titel } | null, semester() → Text, einstellungen() → {},
-  //   jetzt() → Date, warten(ms), mobil, geraetId(), melden(text)?, geaendert(info)? }
+  //   jetzt() → Date, mobil, geraetId(), melden(text)?, geaendert(info)? }
   const erzeugen = (abh) => {
     const io = abh.io;
     const lokal = abh.lokal;
@@ -461,13 +475,18 @@ module.exports = function (ctx) {
       melden({ art: "zugang" });
       return { ok: true };
     };
+    // Trennen: Zugang weg; danach die Gruppen-Notizen freigeben (läuft gerade ein Abruf, erst wenn er beim nächsten Schritt endet)
     const zugangLoeschen = async () => {
+      const vorher = laeuft;
       stoppen("trennen");
+      if (abh.vergessen) abh.vergessen(); // Sitzung (Kekse am PC) weg
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       lokal(L.benutzer, null);
       lokal(L.funde, null);
       standSetzen({ fehler: "", fehlerZeit: "", gesperrt: false, abrufer: false });
       melden({ art: "zugang" });
+      const freigeben = () => gruppenFreigeben(UEBERNAHME).catch((e) => { try { console.warn("ilias: Gruppen " + fehlerText(e)); } catch (x) { /* egal */ } });
+      if (vorher) vorher.then(freigeben); else await freigeben();
     };
 
     // ----- Index im Speicher; Schreiben nacheinander, je Eintrag gemischt mit der Platte -----
@@ -513,13 +532,16 @@ module.exports = function (ctx) {
       return n > 0;
     };
 
-    // ----- Abrufer-Sperre -----
+    // ----- Abrufer-Sperre (frei: das Gerät hat seine Gruppen-Notizen freigegeben, ein anderes darf sofort übernehmen) -----
     const sperreLesen = async () => {
       const t = await io.lesenText(ABRUF);
       if (t == null) return null;
-      try { const o = JSON.parse(t); return o && typeof o.geraet === "string" ? { geraet: o.geraet, seit: String(o.seit || ""), zuletzt: String(o.zuletzt || "") } : null; } catch (e) { return null; }
+      try {
+        const o = JSON.parse(t);
+        return o && typeof o.geraet === "string" ? { geraet: o.geraet, seit: String(o.seit || ""), zuletzt: String(o.zuletzt || ""), frei: o.frei === true } : null;
+      } catch (e) { return null; }
     };
-    const sperreSchreiben = (a) => io.schreibenText(ABRUF, JSON.stringify({ geraet: a.geraet, seit: a.seit, zuletzt: a.zuletzt }, null, 1) + "\n");
+    const sperreSchreiben = (a) => io.schreibenText(ABRUF, JSON.stringify(Object.assign({ geraet: a.geraet, seit: a.seit, zuletzt: a.zuletzt }, a.frei ? { frei: true } : {}), null, 1) + "\n");
 
     // ----- Dateien im Tresor: Prüfsummen (je Lauf zwischengespeichert) -----
     const hashVon = async (r, pfad) => {
@@ -560,15 +582,24 @@ module.exports = function (ctx) {
       await speichern();
     };
 
-    // ----- Anfragen an ILIAS: eine nach der anderen, mit Abstand -----
-    // Je Lauf ein Stopp-Zeichen (r.stopp): ein verworfener Lauf, der später aufwacht, schreibt nichts mehr
+    // ----- Anfragen an ILIAS (zählen; Abstand und Gleichzeitigkeit regelt die Drossel der Sitzung) -----
+    // Je Lauf ein Stopp-Zeichen (r.stopp): ein verworfener Lauf, der später aufwacht, schreibt nichts mehr. Scheitert eine von
+    // mehreren gleichzeitigen Arbeiten (r.fehler), hören die anderen beim nächsten Schritt auf.
     let regung = 0; // letzte Anfrage oder letzter Fortschritt (ms), für abgestorben()
-    const halt = (r) => { if (r.stopp.an) throw fehlerArt("abbruch", "abgebrochen"); };
+    const gestoppt = (r) => { if (r.stopp.an) throw fehlerArt("abbruch", "abgebrochen"); };
+    const halt = (r) => { gestoppt(r); if (r.fehler) throw r.fehler; };
     const anfrage = async (b, r, fn) => {
-      if (r.letzte) { const seit = ms() - r.letzte; if (seit < ABSTAND_MS) await abh.warten(ABSTAND_MS - seit); }
       halt(r);
       b.anfragen++;
-      try { return await fn(); } finally { r.letzte = ms(); regung = r.letzte; }
+      try { return await fn(); } finally { regung = ms(); }
+    };
+    // n Arbeiter zugleich; der erste Fehler hält die anderen an, geworfen wird er erst, wenn alle stehen (danach schreibt keiner)
+    const zugleich = async (r, n, arbeit) => {
+      const eins = () => arbeit().catch((e) => { if (!r.fehler) r.fehler = e; });
+      const alle = [];
+      for (let i = 0; i < Math.max(1, n); i++) alle.push(eins());
+      await Promise.all(alle);
+      if (r.fehler) { const e = r.fehler; r.fehler = null; throw e; }
     };
     // Fehler, der nur diese eine Datei oder diesen Ordner betrifft (HTTP-Status, z. B. 403, 404, 500 eines einzelnen Objekts);
     // ohne Status (kein Netz, Zeitüberschreitung, Sitzung) endet der Lauf sofort
@@ -659,7 +690,7 @@ module.exports = function (ctx) {
         mitglieder.add(id);
         const vorher = mem.gruppen[id] || {};
         if (!vorher.code && q.gruppeKurs && seiten < GRUPPEN_SEITEN && darf() && alter(vorher.kursVersucht) >= KURS_WIEDER) {
-          seiten++;
+          seiten++; b.seiten++;
           let k = null;
           try { k = await anfrage(b, r, () => q.gruppeKurs({ refId: id, url: g.url })); } catch (x) { if (!einzeln(x)) throw x; }
           const kc = k && k.refId ? mem.kurse[String(k.refId)] : null;
@@ -673,13 +704,14 @@ module.exports = function (ctx) {
         const zg = z.id ? zentral.find((x) => x.id === z.id) : null;
         if (zg) soll.push({ refId: id, g: zg, name: (mem.gruppen[id] || {}).name || "" });
       }
-      // Fehlende Gruppen (bekannt aus dem Index oder einer Notiz): je Lauf hochzählen; eine leere Liste zählt nicht
+      // Fehlende Gruppen (bekannt aus dem Index oder einer Notiz, die nicht schon „entfällt“): je Lauf hochzählen, höchstens bis 2
+      // (mehr ändert nichts, und ein unveränderter Lauf schreibt den Index nicht neu); eine leere Liste zählt nicht
       const sp = abh.stundenplan ? abh.stundenplan() : null;
-      const ausNotizen = sp ? sp.notizen().filter((x) => x.fm && x.fm.herkunft === "ilias-gruppe").map((x) => String(x.fm.ilias_gruppe || "")).filter(Boolean) : [];
+      const ausNotizen = sp ? sp.notizen().filter((x) => x.fm && x.fm.herkunft === "ilias-gruppe" && x.fm.entfaellt !== true).map((x) => String(x.fm.ilias_gruppe || "")).filter(Boolean) : [];
       const bekannt = Object.keys(mem.gruppen).filter((id) => mem.gruppen[id].mitglied).concat(ausNotizen).filter((id, i, a) => a.indexOf(id) === i);
       const leer = !mitglieder.size && bekannt.length > 0;
       if (leer) warnen("ILIAS nennt keine deiner Gruppen mehr – nichts entfernt.");
-      else for (const id of bekannt) if (!mitglieder.has(id)) gruppeMerken(id, { fehlt: ((mem.gruppen[id] || {}).fehlt || 0) + 1 });
+      else for (const id of bekannt) if (!mitglieder.has(id)) gruppeMerken(id, { fehlt: Math.min(2, ((mem.gruppen[id] || {}).fehlt || 0) + 1) });
       const verlassen = (id) => !leer && ((mem.gruppen[id] || {}).fehlt || 0) >= 2;
       b.gruppen = { mitglied: mitglieder.size, zugeordnet: soll.length, neu: 0 };
       if (zentral && sp) { // ohne Gruppenliste keine Notizen (und keine entfernt)
@@ -698,6 +730,32 @@ module.exports = function (ctx) {
       return Object.keys(g).filter((id) => g[id].mitglied).map((id) => ({ refId: id, code: g[id].code || "", name: g[id].name || "", status: g[id].status || "",
         zentral: g[id].zentral || "", kandidaten: Array.isArray(g[id].kandidaten) ? g[id].kandidaten.slice() : [] }));
     };
+    // Freigeben: Prüft dieses Gerät deine Gruppen nicht mehr (Trennen, Anmeldung abgelehnt) oder hat das Gerät mit der Sperre
+    // lange nichts geprüft (verwaist), werden die ILIAS-Notizen zu gewählten (meine-gruppe.js iliasFreigeben): Deine Gruppe
+    // bleibt im Stundenplan, „Meine“ kann sie ändern. Die Mitgliedschaften im Index gelten nicht mehr (gruppen.js zeigt nichts
+    // mehr „aus ILIAS“). Nur wer die Notizen schreibt: Die Sperre gehört diesem Gerät, ist älter als grenze (UEBERNAHME nach
+    // Trennen und Ablehnung wie ein Lauf, VERWAIST beim Start ohne Zugang) oder fehlt (nicht beim Start: auf einem neuen Gerät
+    // kommt sie vielleicht erst nach den Notizen per Sync). Danach steht die Sperre frei auf diesem Gerät: Ein zweites Gerät
+    // wandelt so nicht noch einmal um, eines mit Zugang übernimmt beim nächsten Lauf (und macht die Notizen wieder zu
+    // ILIAS-Notizen). Nichts zu tun: nichts geschrieben. → [Pfade] | null
+    const gruppenFreigeben = async (grenze, verwaist) => {
+      if (!mem && io.existiert(INDEX)) { try { await indexLesen(); } catch (e) { /* unlesbar: nur die Notizen */ } }
+      const G = gruppenLib(), sp = abh.stundenplan ? abh.stundenplan() : null;
+      const notizen = G && G.iliasFreigeben && sp ? sp.notizen().filter((x) => x.fm && x.fm.herkunft === "ilias-gruppe" && x.fm.entfaellt !== true) : [];
+      const mitglieder = mem ? Object.keys(mem.gruppen).filter((id) => mem.gruppen[id].mitglied) : [];
+      if (!notizen.length && !mitglieder.length) return null;
+      const ich = abh.geraetId(), a = await sperreLesen();
+      if (a ? a.geraet !== ich && alter(a.zuletzt) <= grenze : verwaist) return null; // ein anderes Gerät schreibt sie
+      await sperreSchreiben({ geraet: ich, seit: iso(), zuletzt: iso(), frei: true });
+      const pfade = notizen.length ? await G.iliasFreigeben(sp) : [];
+      for (const id of mitglieder) gruppeMerken(id, { mitglied: false, fehlt: 0, status: "", zentral: "", kandidaten: [] });
+      if (mitglieder.length) await speichern();
+      melden({ art: "gruppen" });
+      return pfade;
+    };
+    // Beim Start, ohne Zugang oder mit abgelehnter Anmeldung: verwaiste Gruppen-Notizen freigeben (z. B. das Gerät mit der
+    // Sperre wurde ohne Trennen zurückgesetzt, oder getrennt mit einer älteren Fassung)
+    const verwaisteGruppen = async () => (hatZugang() && !stand().gesperrt ? null : gruppenFreigeben(VERWAIST, true));
 
     // ----- Einmal je Gerät (mit der Abrufer-Sperre): Kurspasswörter aus älteren Fassungen im Tresor -----
     // Begleitnotizen (quelle, Zeile „Aus ILIAS:“) aus dem Index und Ordner unter Unterlagen/, deren Name eine Passwort-Marke trägt
@@ -794,60 +852,88 @@ module.exports = function (ctx) {
       }
       kandidaten.push(c); r.imLauf[id] = true;
     };
-    // → true, wenn der Kurs ganz durchsucht ist; false, wenn das Anfragen-Budget vorher endete (nächster Lauf beginnt mit ihm)
-    const durchsuchen = async (q, kurs, kandidaten, b, r, o, darf) => {
-      const stapel = [{ url: kurs.url, refId: kurs.refId, titel: kurs.titel, pfad: [], anzeige: [], code: kurs.code, tiefe: 0 }];
-      const gesehen = {};
-      while (stapel.length) {
-        halt(r);
-        if (!darf()) return false;
-        const k = stapel.pop();
-        const sch = String(k.refId || k.url || "");
-        if (!sch || gesehen[sch]) continue;
-        gesehen[sch] = true;
-        fort(o, { phase: "durchsuchen", code: kurs.code || "", erledigt: r.kursNr || 0, gesamt: r.kurseGesamt || 0 });
-        let liste;
-        try { liste = await anfrage(b, r, () => q.inhalt({ url: k.url, refId: k.refId, titel: k.titel })); }
-        catch (e) {
-          if (!einzeln(e)) throw e;
-          plus(b, kurs.refId, "ordnerFehler"); // kein Zugriff, Serverfehler bei diesem einen Objekt: überspringen
-          // kein Zugriff (403/404, z. B. fremde Tutoriumsgruppen) ist normal; nur Serverfehler zählen bis zum Abbruch
-          if (Number(e.status) >= 500 && ++r.ordnerFehler >= ORDNER_FEHLER_MAX) throw fehlerArt("ordner", `${r.ordnerFehler} Ordner ließen sich nicht lesen (zuletzt HTTP ${e.status}).`);
-          continue;
-        }
-        liste = (Array.isArray(liste) ? liste : []).filter((e) => e && typeof e === "object");
-        // Sitzungen: Stehen ihre Materialien auf der Kursseite schon aufgeklappt (Feld inSitzung), wird die Sitzung nicht
-        // einzeln geholt (spart je Sitzung eine Anfrage); die Dateien bekommen den Sitzungsnamen als Ordner. Sitzungen ohne
-        // aufgeklappte Materialien werden geholt (sie könnten eingeklappt sein).
-        // Ordnername zweimal: für den Einordner dateinamentauglich (pfad), für Notiz und Index lesbar (anzeige)
-        const lesbar = (e) => ohneKennwort((e.sitzung && e.sitzung.name) || e.titel) || "Ordner";
-        // für den Einordner: Name wie in ILIAS (unterlagen.js erkennt z. B. „2026-10-12, 10:15 …“ als Sitzung), nur ohne „/“
-        const segment = (t) => t.replace(/\//g, "-");
-        const grenze = tagIso(ms() + SITZUNG_VORAUS_TAGE * 864e5);
-        const sitzungen = {}, aufgeklappt = {};
-        for (const e of liste) if (e.art === "sitzung" && e.refId) sitzungen[String(e.refId)] = lesbar(e);
-        for (const e of liste) if (e.inSitzung) aufgeklappt[String(e.inSitzung)] = true;
-        const unter = [];
-        for (const e of liste) {
-          const art = String(e.art || "");
-          // Gruppe in Kurs oder Ordner: Code des Behälters und Zeitfenster merken (Titel und Beschreibung nur hier im Speicher)
-          if (e.typ === "grp" && e.refId && r.gruppenGesehen) r.gruppenGesehen[String(e.refId)] = { code: k.code || "", kurs: kurs.refId, slot: gruppenSlot(e), name: gruppenNameAus(e.titel) };
-          if (BEHAELTER.indexOf(art) >= 0) {
-            if (!e.url || k.tiefe >= TIEFE_MAX || (art === "sitzung" && aufgeklappt[String(e.refId)])) continue;
-            const tag = art === "sitzung" && e.sitzung && e.sitzung.datum ? String(e.sitzung.datum).slice(0, 10) : "";
-            if (tag && tag > grenze) { plus(b, kurs.refId, "spaeter"); continue; }
-            const titel = textRein(e.titel);
-            const c = codeAm(titel); // Unterordner „SQ888 …“ im Kurs S100 → Modul SQ888
-            unter.push({ url: e.url, refId: e.refId != null ? String(e.refId) : "", titel, pfad: k.pfad.concat([segment(lesbar(e))]), anzeige: k.anzeige.concat([lesbar(e)]), code: c && abh.modul(c) ? c : k.code, tiefe: k.tiefe + 1 });
-          } else if (art === "video") plus(b, kurs.refId, "videos");
-          else if (art === "datei") {
-            const s = e.inSitzung ? sitzungen[String(e.inSitzung)] : "";
-            dateiPruefen(q, e, s ? Object.assign({}, k, { pfad: k.pfad.concat([segment(s)]), anzeige: k.anzeige.concat([s]) }) : k, kurs, kandidaten, b, r);
-          }
-        }
-        for (let i = unter.length - 1; i >= 0; i--) stapel.push(unter[i]);
+    // Einen Behälter (Kurs, Ordner, Sitzung, Gruppe) lesen: Unterbehälter kommen auf den Stapel seines Kurses (x.stapel),
+    // Dateien in die Kandidaten. Nicht geholt werden Sitzungen mehr als 7 Tage voraus, Sitzungen ohne Materialien (die Liste
+    // nennt jede Sitzung mit Materialien mit der Eigenschaft „Materialien zur Sitzung: N“; ohne jede Eigenschaft war die
+    // Sitzungsseite bei allen Messungen leer, 17.10.2026) und Gruppen, in denen du nicht Mitglied bist (ILIAS zeigt dort nur
+    // die Beitrittsseite, gemessen 20 von 20).
+    const behaelterLesen = async (q, x, k, kandidaten, b, r, o) => {
+      const kurs = x.kurs;
+      fort(o, { phase: "durchsuchen", code: kurs.code || "", erledigt: r.kurseFertig || 0, gesamt: r.kurseGesamt || 0 });
+      let liste;
+      try { liste = await anfrage(b, r, () => q.inhalt({ url: k.url, refId: k.refId, titel: k.titel })); }
+      catch (e) {
+        if (!einzeln(e)) throw e;
+        plus(b, kurs.refId, "ordnerFehler"); // kein Zugriff, Serverfehler bei diesem einen Objekt: überspringen
+        // kein Zugriff (403/404, z. B. fremde Tutoriumsgruppen) ist normal; nur Serverfehler zählen bis zum Abbruch
+        if (Number(e.status) >= 500 && ++r.ordnerFehler >= ORDNER_FEHLER_MAX) throw fehlerArt("ordner", `${r.ordnerFehler} Ordner ließen sich nicht lesen (zuletzt HTTP ${e.status}).`);
+        return;
       }
-      return true;
+      liste = (Array.isArray(liste) ? liste : []).filter((e) => e && typeof e === "object");
+      // Sitzungen: Stehen ihre Materialien auf der Kursseite schon aufgeklappt (Feld inSitzung), wird die Sitzung nicht
+      // einzeln geholt (spart je Sitzung eine Anfrage); die Dateien bekommen den Sitzungsnamen als Ordner. Sitzungen ohne
+      // aufgeklappte Materialien werden geholt, wenn die Liste Materialien nennt (sie könnten eingeklappt sein).
+      // Ordnername zweimal: für den Einordner dateinamentauglich (pfad), für Notiz und Index lesbar (anzeige)
+      const lesbar = (e) => ohneKennwort((e.sitzung && e.sitzung.name) || e.titel) || "Ordner";
+      // für den Einordner: Name wie in ILIAS (unterlagen.js erkennt z. B. „2026-10-12, 10:15 …“ als Sitzung), nur ohne „/“
+      const segment = (t) => t.replace(/\//g, "-");
+      const grenze = tagIso(ms() + SITZUNG_VORAUS_TAGE * 864e5);
+      const sitzungen = {}, aufgeklappt = {};
+      for (const e of liste) if (e.art === "sitzung" && e.refId) sitzungen[String(e.refId)] = lesbar(e);
+      for (const e of liste) if (e.inSitzung) aufgeklappt[String(e.inSitzung)] = true;
+      const unter = [];
+      for (const e of liste) {
+        const art = String(e.art || "");
+        // Gruppe in Kurs oder Ordner: Code des Behälters und Zeitfenster merken (Titel und Beschreibung nur hier im Speicher)
+        if (e.typ === "grp" && e.refId && r.gruppenGesehen) r.gruppenGesehen[String(e.refId)] = { code: k.code || "", kurs: kurs.refId, slot: gruppenSlot(e), name: gruppenNameAus(e.titel) };
+        if (BEHAELTER.indexOf(art) >= 0) {
+          if (!e.url || k.tiefe >= TIEFE_MAX || (art === "sitzung" && aufgeklappt[String(e.refId)])) continue;
+          const tag = art === "sitzung" && e.sitzung && e.sitzung.datum ? String(e.sitzung.datum).slice(0, 10) : "";
+          if (tag && tag > grenze) { plus(b, kurs.refId, "spaeter"); continue; }
+          if (art === "sitzung" && Array.isArray(e.eigenschaften) && !e.eigenschaften.length) { plus(b, kurs.refId, "ohneMaterial"); continue; }
+          if (e.typ === "grp" && e.mitglied === false) { plus(b, kurs.refId, "fremdeGruppe"); continue; }
+          const titel = textRein(e.titel);
+          const c = codeAm(titel); // Unterordner „SQ888 …“ im Kurs S100 → Modul SQ888
+          unter.push({ url: e.url, refId: e.refId != null ? String(e.refId) : "", titel, pfad: k.pfad.concat([segment(lesbar(e))]), anzeige: k.anzeige.concat([lesbar(e)]), code: c && abh.modul(c) ? c : k.code, tiefe: k.tiefe + 1 });
+        } else if (art === "video") plus(b, kurs.refId, "videos");
+        else if (art === "datei") {
+          const s = e.inSitzung ? sitzungen[String(e.inSitzung)] : "";
+          dateiPruefen(q, e, s ? Object.assign({}, k, { pfad: k.pfad.concat([segment(s)]), anzeige: k.anzeige.concat([s]) }) : k, kurs, kandidaten, b, r);
+        }
+      }
+      for (let i = unter.length - 1; i >= 0; i--) x.stapel.push(unter[i]);
+    };
+    // Kurse durchsuchen (Tiefensuche je Kurs), SUCHER Arbeiter zugleich: Jeder nimmt den nächsten Behälter aus dem ersten Kurs,
+    // der noch welche hat; so wird Kurs für Kurs fertig. Fertig ist ein Kurs, wenn sein Stapel leer ist und keiner seiner
+    // Behälter mehr gelesen wird; dann ruft das fertig(x). Endet das Seiten-Budget (darf), bleiben die übrigen Kurse offen
+    // (der nächste Lauf beginnt mit ihnen).
+    const durchsuchen = async (q, kurse, kandidaten, b, r, o, darf, fertig) => {
+      let wartende = [];
+      const wecken = () => { const w = wartende; wartende = []; for (const f of w) f(); };
+      const pruefen = (x) => { if (!x.fertig && !x.stapel.length && !x.offen && !r.fehler && !r.stopp.an) { x.fertig = true; fertig(x); } };
+      const naechster = () => { for (const x of kurse) if (!x.fertig && x.stapel.length && kursAn(x.kurs.refId)) return x; return null; };
+      const sucher = async () => {
+        for (;;) {
+          halt(r);
+          if (!darf()) return;
+          const x = naechster();
+          if (!x) {
+            if (!kurse.some((y) => y.offen > 0)) return;
+            await new Promise((weiter) => wartende.push(weiter)); // ein anderer Arbeiter liest gerade; vielleicht kommt mehr
+            continue;
+          }
+          const k = x.stapel.pop();
+          const sch = String(k.refId || k.url || "");
+          if (!sch || x.gesehen[sch]) { pruefen(x); continue; }
+          x.gesehen[sch] = true;
+          if (!x.begonnen) { x.begonnen = true; x.beginn(); }
+          x.offen++; b.seiten++;
+          let gelesen = false; // scheitert die Seite (kein Netz), gilt ihr Kurs nicht als fertig
+          try { await behaelterLesen(q, x, k, kandidaten, b, r, o); gelesen = true; }
+          finally { x.offen--; if (gelesen) pruefen(x); wecken(); }
+        }
+      };
+      await zugleich(r, SUCHER, sucher);
     };
 
     // ----- Ablage -----
@@ -1002,7 +1088,7 @@ module.exports = function (ctx) {
     };
 
     // ----- Ein Lauf -----
-    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null, gruppen: null });
+    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, seiten: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null, gruppen: null });
     const lauf = async (o, b, stopp) => {
       // Eigener Uni-Abgleich (Dateien kommen von dort): mit ILIAS-Zugang nur Mitgliedschaften und Gruppen-Notizen, nie Downloads
       const nurGruppen = extern();
@@ -1017,27 +1103,28 @@ module.exports = function (ctx) {
         // Abrufer-Sperre: ein anderes Gerät war vor kurzem aktiv → nichts tun (außer du übernimmst ausdrücklich)
         const ich = abh.geraetId();
         const a = await sperreLesen();
-        if (a && a.geraet !== ich && alter(a.zuletzt) <= UEBERNAHME && !o.uebernehmen) {
+        if (a && a.geraet !== ich && !a.frei && alter(a.zuletzt) <= UEBERNAHME && !o.uebernehmen) {
           b.art = "anderes-geraet";
           standSetzen({ abrufer: false, anderes: iso() });
           try { await indexLesen(); } catch (e) { /* nur für die Anzeige (Zahl der Dateien) */ }
           return;
         }
-        if (!a || a.geraet !== ich || alter(a.zuletzt) >= PULS) await sperreSchreiben({ geraet: ich, seit: a && a.geraet === ich && a.seit ? a.seit : iso(), zuletzt: iso() });
+        if (!a || a.geraet !== ich || a.frei || alter(a.zuletzt) >= PULS) await sperreSchreiben({ geraet: ich, seit: a && a.geraet === ich && !a.frei && a.seit ? a.seit : iso(), zuletzt: iso() });
         standSetzen({ abrufer: true, anderes: "" });
       }
       standSetzen({ versucht: iso() });
       const geheimId = abh.geheimId();
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
-      const r = { letzte: 0, hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, gruppenGesehen: {} };
+      const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {} };
       await indexLesen();
       if (!o.nurKurse && !nurGruppen) {
         await nachAbbruch(r); await nachziehen(b, r);
         try { await tresorSaeubern(b); } catch (e) { b.warnung = (b.warnung ? b.warnung + " " : "") + "Säubern: " + fehlerText(e); }
       }
       fort(o, { phase: "anmelden" });
-      const q = await anfrage(b, r, () => abh.quelle(zugang, anmeldenMit(f)));
+      // Die Sitzung des letzten Laufs gilt meist noch: dann keine neue Anmeldung (die Quelle merkt es an der ersten Seite)
+      const q = await anfrage(b, r, () => abh.quelle(zugang, anmeldenMit(f), { wiederverwenden: true }));
       fort(o, { phase: "kurse" });
       // Eine Anfrage für Kurse und Gruppen (Seite „Meine Kurse und Gruppen“); von Gruppen bleibt nur das Zeitfenster
       const seite = await anfrage(b, r, () => (q.mitgliedschaften ? q.mitgliedschaften() : q.kurse()));
@@ -1048,13 +1135,13 @@ module.exports = function (ctx) {
       const liste = kurseUebernehmen(roh);
       await speichern();
       if (o.nurKurse && !nurGruppen) { b.art = "kurse"; b.kurse = kurseListe(); return; }
-      if (nurGruppen) { await gruppenAbgleichen(b, r, q, gruppenRoh, () => b.anfragen < ANFRAGEN); b.art = "nur-gruppen"; return; }
+      if (nurGruppen) { await gruppenAbgleichen(b, r, q, gruppenRoh, () => b.seiten < SEITEN); b.art = "nur-gruppen"; return; }
 
-      // 1. Durchsuchen (älteste zuerst; das Budget für Downloads bleibt frei)
+      // 1. Durchsuchen (älteste zuerst)
       const E = abh.einordner();
-      // Grenzen je Lauf; abh.grenzen ({ neu, anfragen }) nur für Probeläufe und Tests
+      // Grenzen je Lauf; abh.grenzen ({ neu, seiten }) nur für Probeläufe und Tests
       const G = abh.grenzen || {};
-      const kappe = G.neu || (abh.mobil ? NEU_MOBIL : NEU_PC), budget = G.anfragen || ANFRAGEN;
+      const kappe = G.neu || (abh.mobil ? NEU_MOBIL : NEU_PC), seitenBudget = G.seiten || SEITEN;
       const kursZeit = Object.assign({}, stand().kursZeit), kursFertig = Object.assign({}, stand().kursFertig);
       // Der Knopf durchsucht alle Kurse; automatische und fortgesetzte Läufe nur die, die nicht vor kurzem ganz durchsucht wurden.
       // Fortgesetzte ohne gemerkte Funde (Update mitten im Abruf) durchsuchen alle, sonst fehlten deren Dateien.
@@ -1072,20 +1159,21 @@ module.exports = function (ctx) {
         c.art = artFuer(c);
         if (c.art) { c.reihe = kandidaten.length; kandidaten.push(c); r.imLauf[c.id] = true; }
       }
-      const darf = () => b.anfragen < budget - kappe;
-      r.kurseGesamt = aktive.length;
-      for (let i = 0; i < aktive.length; i++) {
-        const k = aktive[i];
-        r.kursNr = i;
-        if (!kursAn(k.refId)) continue; // während des Laufs abgewählt
-        kursZeit[k.refId] = iso(); // auch angefangene: der nächste Lauf beginnt mit den anderen (keiner verhungert)
-        if (!(await durchsuchen(q, k, kandidaten, b, r, o, darf))) break;
-        fertig.push(k.refId);
-        kursFertig[k.refId] = iso();
+      const darf = () => b.seiten < seitenBudget;
+      r.kurseGesamt = aktive.length; r.kurseFertig = 0;
+      const kurse = aktive.map((k) => ({
+        kurs: k, stapel: [{ url: k.url, refId: k.refId, titel: k.titel, pfad: [], anzeige: [], code: k.code, tiefe: 0 }], gesehen: {}, offen: 0,
+        begonnen: false, fertig: false,
+        beginn: () => { kursZeit[k.refId] = iso(); }, // auch angefangene: der nächste Lauf beginnt mit den anderen (keiner verhungert)
+      }));
+      await durchsuchen(q, kurse, kandidaten, b, r, o, darf, (x) => {
+        r.kurseFertig++;
+        fertig.push(x.kurs.refId);
+        kursFertig[x.kurs.refId] = iso();
         // nach jedem Kurs: bricht der Lauf ab, durchsucht der nächste diesen Kurs nicht noch einmal
         standSetzen({ kursZeit, kursFertig });
         fundeSpeichern(r, kandidaten);
-      }
+      });
       standSetzen({ kursZeit, kursFertig });
       fundeSpeichern(r, kandidaten);
       await speichern(); // ignoriert (zu groß)
@@ -1101,32 +1189,44 @@ module.exports = function (ctx) {
       kandidaten.sort((x, y) => (x.art === y.art ? 0 : x.art === "geaendert" ? -1 : 1) || vergleich(y.geaendert, x.geaendert) || x.reihe - y.reihe);
       b.kurseOffen = aktive.filter((k) => kursAn(k.refId) && fertig.indexOf(k.refId) < 0).length;
       const geaenderteKurse = {};
-      let n = 0, fehlerN = 0;
+      let n = 0, fehlerN = 0, naechste = 0;
       // Zähler über die Stapel eines Auftrags: schon geladene + alle, die jetzt noch fehlen (auch über der Grenze)
       const vorher = o.weiter ? ((auftrag() || {}).geladen || 0) : 0;
       const gesamt = vorher + kandidaten.length;
-      for (const c of kandidaten) {
-        halt(r);
-        if (!kursAn(c.kurs.refId)) continue; // während des Laufs abgewählt
-        if (n >= kappe || b.anfragen >= budget) { plus(b, c.kurs.refId, "rest"); continue; }
-        fort(o, { phase: "laden", code: c.code || "", erledigt: vorher + n, gesamt });
-        n++; b.geladen = n;
-        let bytes = null;
-        try {
-          bytes = bytesAus(await anfrage(b, r, () => q.laden(c.eintrag)));
-          halt(r); // verworfen, während die Datei kam
-          if (!bytes) throw fehlerArt("datei", "leere Antwort");
-        } catch (e) {
-          if (!einzeln(e)) throw e;
-          fehlerN++;
-          b.fehlerDateien.push(c.original);
-          plus(b, c.kurs.refId, "fehler");
-          if (fehlerN >= FEHLER_MAX) throw fehlerArt("dateien", `${fehlerN} Dateien ließen sich nicht laden (zuletzt ${c.original}).`);
-          continue;
+      // Laden zugleich (LADER_PC bzw. LADER_MOBIL), Ablegen eins nach dem anderen (freie Namen, Index, Prüfsummen). Scheitert
+      // das Ablegen einer Datei, legt der Lauf keine weitere mehr ab (die Markierung eba-ilias-schreibt bleibt für nachAbbruch).
+      let ablage = Promise.resolve(), ablageFehler = null;
+      const ablegen = (fn) => {
+        const p = ablage.then(() => { if (ablageFehler) throw ablageFehler; return fn(); });
+        ablage = p.catch((e) => { if (!ablageFehler) ablageFehler = e; });
+        return p;
+      };
+      const lader = async () => {
+        while (naechste < kandidaten.length) {
+          halt(r);
+          const c = kandidaten[naechste++];
+          if (!kursAn(c.kurs.refId)) continue; // während des Laufs abgewählt
+          if (n >= kappe) { plus(b, c.kurs.refId, "rest"); continue; }
+          fort(o, { phase: "laden", code: c.code || "", erledigt: vorher + n, gesamt });
+          n++; b.geladen = n;
+          let bytes = null;
+          try {
+            bytes = bytesAus(await anfrage(b, r, () => q.laden(c.eintrag)));
+            gestoppt(r); // verworfen, während die Datei kam (eine fertig geladene Datei wird noch abgelegt, auch wenn ein anderer Download scheiterte)
+            if (!bytes) throw fehlerArt("datei", "leere Antwort");
+          } catch (e) {
+            if (!einzeln(e)) throw e;
+            fehlerN++;
+            b.fehlerDateien.push(c.original);
+            plus(b, c.kurs.refId, "fehler");
+            if (fehlerN >= FEHLER_MAX) throw fehlerArt("dateien", `${fehlerN} Dateien ließen sich nicht laden (zuletzt ${c.original}).`);
+            continue;
+          }
+          await ablegen(async () => { gestoppt(r); if (c.art === "neu") await neuAblegen(c, bytes, b, r, E); else await aktualisieren(c, bytes, b, r, E); });
+          geaenderteKurse[c.kurs.refId] = true;
         }
-        if (c.art === "neu") await neuAblegen(c, bytes, b, r, E); else await aktualisieren(c, bytes, b, r, E);
-        geaenderteKurse[c.kurs.refId] = true;
-      }
+      };
+      await zugleich(r, abh.mobil ? LADER_MOBIL : LADER_PC, lader);
       // was noch fehlt (Grenze je Lauf, einzelne Fehler), lädt der nächste Lauf ohne neues Durchsuchen
       fundeSpeichern(r, kandidaten.filter((c) => kursAn(c.kurs.refId) && artFuer(c)));
       // „zuletzt“ je Kurs (synchronisiert) nur bei Änderungen oder spätestens nach einem Tag schreiben (Sync-Verkehr)
@@ -1140,7 +1240,7 @@ module.exports = function (ctx) {
       const n = b.neu + b.fassungen;
       const gleich = weiterIn != null;
       switch (b.art) {
-        case "extern": return "ILIAS-Unterlagen kommen über deinen Uni-Abgleich.";
+        case "extern": return TEXT_EXTERN;
         case "nur-gruppen": {
           const g = b.gruppen ? b.gruppen.neu : 0;
           return "ILIAS: Übungsgruppen geprüft." + (g ? g === 1 ? " Deine Übungsgruppe steht jetzt im Stundenplan." : ` ${g} Übungsgruppen stehen jetzt im Stundenplan.` : "");
@@ -1185,15 +1285,22 @@ module.exports = function (ctx) {
     const auftragNeu = () => lokal(L.auftrag, { seit: iso(), versuche: 0, stapel: 0, geladen: 0 });
     const jetztHolen = (o) => {
       o = o || {};
+      // Eigener Uni-Abgleich: nur die Übungsgruppen, ohne Auftrag. Ein Weitermachen (Auftrag von früher) gilt dort als
+      // automatisch: kein Fortschritt, kein Hinweis zum Ergebnis.
+      const nurGruppen = extern();
+      if (nurGruppen) {
+        if (auftrag()) lokal(L.auftrag, null);
+        if (o.weiter) o = Object.assign({}, o, { manuell: false, weiter: false });
+      }
       if (laeuft) {
         if (o.manuell) {
-          if (!auftrag()) auftragNeu();
+          if (!auftrag() && !nurGruppen) auftragNeu();
           laufO.manuell = true;
           melden({ art: "start", manuell: true, weiter: !!laufO.weiter });
         }
         return laeuft;
       }
-      if (o.manuell && (!o.weiter || !auftrag())) auftragNeu();
+      if (o.manuell && !nurGruppen && (!o.weiter || !auftrag())) auftragNeu();
       const meins = stopp = { an: false, grund: "" };
       laufO = o;
       letzter = null; regung = ms();
@@ -1209,6 +1316,8 @@ module.exports = function (ctx) {
         }
         if (stopp !== meins) return b; // verworfen: ein neuer Lauf hat übernommen
         try { nachLauf(b, beginn, t0); } catch (e) { /* Stand ist Nebensache */ }
+        // Anmeldung abgelehnt (ohne dein Zutun kein Versuch mehr): dieses Gerät prüft deine Gruppen nicht mehr
+        if (b.art === "zugang") { try { await gruppenFreigeben(UEBERNAHME); } catch (e) { /* beim nächsten Start (verwaisteGruppen) */ } }
         let weiterIn = null;
         const a = auftrag();
         if (a) { const n = naechsterSchritt(a, b); lokal(L.auftrag, n.auftrag); weiterIn = n.inMs; }
@@ -1239,8 +1348,9 @@ module.exports = function (ctx) {
       let text, anderes = false; // anderes: ein anderes Gerät lädt (Oberfläche bietet „Hier laden“ an)
       if (ex && verbunden && laeuft) text = "Übungsgruppen werden geprüft …";
       else if (ex && verbunden && s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
-      else if (ex && verbunden) text = "Unterlagen über deinen Uni-Abgleich, Übungsgruppen aus ILIAS" + (s.zuletzt ? ` (geprüft ${vorText(s.zuletzt, ms())})` : "") + ".";
-      else if (ex) text = "über deinen Uni-Abgleich";
+      else if (ex && verbunden && s.fehler) text = "Fehler beim Prüfen deiner Übungsgruppen." + (s.zuletzt ? ` Zuletzt geklappt ${vorText(s.zuletzt, ms())}.` : "");
+      else if (ex && verbunden) text = "Prüft deine Übungsgruppen" + (s.zuletzt ? `, zuletzt ${vorText(s.zuletzt, ms())}` : "") + ". " + TEXT_EXTERN;
+      else if (ex) text = TEXT_EXTERN;
       else if (!da) text = TEXT_ANMELDUNG_FOLGT;
       else if (!hatZugang()) text = "Nicht verbunden.";
       else if (laeuft) text = fortschrittAnzeige(letzter).text;
@@ -1260,7 +1370,7 @@ module.exports = function (ctx) {
 
     return {
       jetztHolen, kurseAbrufen, status, stand, protokoll, zugangSpeichern, zugangLoeschen, hatZugang, bereit, kurse, kursSetzen,
-      umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen, gruppenListe,
+      umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen, gruppenListe, verwaisteGruppen,
       // Alte Einträge mit Kurspasswort im Titel: nur schreiben, wenn das Säubern wirklich einen Eintrag ändert (sonst schrieben
       // nach dem Update alle Geräte die Datei gleichzeitig)
       saeubern: async () => {
@@ -1274,6 +1384,7 @@ module.exports = function (ctx) {
       },
       abbrechen: () => { if (stopp) { stopp.an = true; stopp.grund = "neu-geladen"; } },
       still: () => !!laeuft && abgestorben(regung, ms()),
+      get regung() { return regung; },
       get index() { return mem; },
       get laeuft() { return !!laeuft; },
       get fortschritt() { return laeuft ? letzter : null; },
@@ -1355,13 +1466,23 @@ module.exports = function (ctx) {
   };
 
   // Anschluss an ilias-netz.js (Transport) und ilias-html.js (Seiten lesen). Erwartet, bei Abweichung nur hier anpassen:
-  //   netz.sitzung({}) → s; s.anfrage({ url }) → { status, url (mobil null), text }; s.anfrage({ url, binaer: true }) →
-  //   { status, url, daten | arrayBuffer, typ }; netz.UNI → { ilias, kurse? }; netz.istLoginSeite(text) (sonst html.angemeldet)
-  //   html.kurse(text, url) → [{ refId, titel, code, url }]; html.inhalt(text, url) → [eintrag]; html.folgeUrl(text, url);
-  //   html.seitenArt(text, url); html.downloadUrl(eintrag, basis); html.dateiName(eintrag)
+  //   netz.sitzung({ drossel }) → s; s.anfrage({ url }) → { status, url (mobil null), text }; s.anfrage({ url, binaer: true }) →
+  //   { status, url, daten | arrayBuffer, typ }; netz.drossel(); netz.UNI → { ilias, kurse? }; netz.istLoginSeite(text) (sonst
+  //   html.angemeldet); html.kurse(text, url) → [{ refId, titel, code, url }]; html.inhalt(text, url) → [eintrag];
+  //   html.folgeUrl(text, url); html.inhaltReiter(text, url); html.seitenArt(text, url); html.downloadUrl(eintrag, basis);
+  //   html.dateiName(eintrag)
   // Anmelden kommt von außen (anmelden(sitzung, zugang, { netz, uni }), siehe anmeldungFinden). Abgelaufene Sitzung (Login-
   // Seite statt Inhalt): einmal je Lauf neu anmelden, dann aufgeben.
-  const quelleAusNetz = async (zugang, anmelden) => {
+  // Sitzung über Läufe hinweg (optionen.wiederverwenden), nur im Speicher dieses Geräts: Kekse (PC; iPhone und iPad halten sie
+  // selbst), Drossel und gelernte Adressen. Gilt sie noch, meldet sich der Lauf nicht neu an (spart etwa 10 Anfragen); ob sie
+  // gilt, zeigt die erste Seite. Nur für denselben Benutzernamen; weg beim Trennen, nach gescheiterter Anmeldung und beim Entladen.
+  let gemerkt = null; // { benutzer, s, vorlagen }
+  const sitzungVergessen = () => {
+    const g = gemerkt;
+    gemerkt = null;
+    if (g && typeof g.s.schliessen === "function") { try { g.s.schliessen(); } catch (e) { /* schon zu */ } }
+  };
+  const quelleAusNetz = async (zugang, anmelden, optionen) => {
     const N = modulVon("ilias-netz"), H = modulVon("ilias-html");
     if (!N || typeof N.sitzung !== "function" || !H) throw fehlerArt("baustein", "ILIAS-Baustein fehlt (ilias-netz.js oder ilias-html.js).");
     const uni = N.UNI || {};
@@ -1370,12 +1491,22 @@ module.exports = function (ctx) {
     // Basis für relative Links: End-URL der Antwort; mobil unbekannt (null) → ILIAS-Wurzel (Seiten liegen dort, nicht unter
     // goto.php/<typ>/, sonst würde „ilias.php?…“ zu „goto.php/crs/ilias.php?…“)
     const basis = (r) => r.url || WURZEL + "/ilias.php";
-    // Permalink goto.php/<typ>/<ref> direkt als Repository-Adresse holen: eine Weiterleitung weniger je Ordner. Nur Ordner,
-    // Gruppen, Kurse (Inhaltsseiten „copa“ liefern so HTTP 500, gemessen 17.10.2026)
-    const direkt = (url) => { const m = String(url).match(/^(https:\/\/[^/]+)\/goto\.php\/(?:fold|grp|crs)\/(\d+)\/?$/); return m && m[1] === WURZEL ? WURZEL + "/ilias.php?baseClass=ilrepositorygui&ref_id=" + m[2] : url; };
-    const s = await N.sitzung({});
-    await anmelden(s, zugang, { netz: N, uni });
-    let neuAngemeldet = false;
+    const alt = optionen && optionen.wiederverwenden && gemerkt && gemerkt.benutzer === zugang.benutzer ? gemerkt : null;
+    const g = alt || { benutzer: zugang.benutzer, s: await N.sitzung({ drossel: typeof N.drossel === "function" ? N.drossel() : undefined }), vorlagen: {} };
+    const s = g.s;
+    // Anmelden: höchstens zweimal je Quelle (zu Beginn bzw. wenn die gemerkte Sitzung nicht mehr gilt, und einmal nach Ablauf
+    // mitten im Lauf). Merken gleichzeitige Anfragen den Ablauf, warten sie auf dieselbe Anmeldung.
+    let anmeldungen = 0, laufend = null, stand = 0;
+    const neuAnmelden = () => {
+      if (!laufend) {
+        anmeldungen++;
+        laufend = Promise.resolve().then(() => anmelden(s, zugang, { netz: N, uni })).then(
+          () => { laufend = null; stand++; gemerkt = g; },
+          (e) => { laufend = null; if (gemerkt === g) gemerkt = null; throw e; });
+      }
+      return laufend;
+    };
+    if (!alt) await neuAnmelden();
     const istLogin = (text) => typeof text === "string" && (typeof N.istLoginSeite === "function" ? !!N.istLoginSeite(text)
       : typeof H.angemeldet === "function" && !H.angemeldet(text));
     const pruefen = (r, url) => {
@@ -1383,23 +1514,50 @@ module.exports = function (ctx) {
       return r;
     };
     const mitAnmeldung = async (fn, abgemeldet) => {
-      let r = await fn();
-      if (abgemeldet(r) && !neuAngemeldet) { neuAngemeldet = true; await anmelden(s, zugang, { netz: N, uni }); r = await fn(); }
-      if (abgemeldet(r)) throw fehlerArt("sitzung", "Die ILIAS-Sitzung ist abgelaufen und die erneute Anmeldung half nicht.");
-      return r;
+      for (;;) {
+        if (laufend) await laufend;
+        const vorher = stand;
+        const r = await fn();
+        if (!abgemeldet(r)) return r;
+        if (stand !== vorher) continue; // inzwischen hat eine andere Anfrage neu angemeldet: noch einmal
+        if (anmeldungen >= 2) throw fehlerArt("sitzung", "Die ILIAS-Sitzung ist abgelaufen und die erneute Anmeldung half nicht.");
+        await neuAnmelden();
+      }
     };
     const seite = (url) => mitAnmeldung(async () => pruefen(await s.anfrage({ url }), url), (r) => istLogin(r.text));
-    const pause = () => new Promise((fertig) => ctx.zeit(fertig, ABSTAND_MS)); // Folgeseiten im selben Abstand
-    // Inhalt eines Behälters: Reiter „Inhalt“ bzw. „alle Sitzungen anzeigen“ höchstens zweimal nachgehen; kein Zugriff → 403
+    const keinZugriff = (r) => typeof H.seitenArt === "function" && H.seitenArt(r.text, basis(r)) === "kein-zugriff";
+    // Permalinks goto.php/<typ>/<ref> von Ordnern, Gruppen und Kursen leitet ILIAS zweimal weiter (gemessen 17.10.2026). Darum
+    // gleich die Repository-Adresse (eine Weiterleitung) und, sobald eine Seite dieser Art ihren Reiter „Inhalt“ gezeigt hat,
+    // dessen Adresse als Vorlage mit der neuen ref_id (keine Weiterleitung). Inhaltsseiten („copa“) liefern über die
+    // Repository-Adresse HTTP 500, sie bleiben beim Permalink.
+    const permalink = (url) => { const m = String(url).match(/^(https:\/\/[^/]+)\/goto\.php\/(fold|grp|crs)\/(\d+)\/?$/); return m && m[1] === WURZEL ? { typ: m[2], ref: m[3] } : null; };
+    const direkt = (url) => { const p = permalink(url); return p ? WURZEL + "/ilias.php?baseClass=ilrepositorygui&ref_id=" + p.ref : url; };
+    const vorlageLernen = (p, r) => {
+      if (!p || hat(g.vorlagen, p.typ) || typeof H.inhaltReiter !== "function") return;
+      const u = H.inhaltReiter(r.text, basis(r));
+      const m = /^([^#]*[?&]ref_id=)(\d+)(&[^#]*)?$/.exec(u);
+      if (m && m[2] === p.ref && u.indexOf(WURZEL + "/ilias.php?") === 0 && /[?&]cmdNode=/.test(u)) g.vorlagen[p.typ] = { vor: m[1], nach: m[3] || "" };
+    };
+    // Inhalt eines Behälters: über die Vorlage, sonst (oder wenn sie nicht passt) über den Permalink; danach Reiter „Inhalt“
+    // bzw. „alle Sitzungen anzeigen“ höchstens zweimal nachgehen; kein Zugriff → 403
     const behaelter = async (url) => {
-      let r = await seite(direkt(url));
+      const p = permalink(url), v = p ? g.vorlagen[p.typ] : null;
+      let r = null;
+      if (v) {
+        try { r = await seite(v.vor + p.ref + v.nach); } catch (e) { if (!e || !e.status) throw e; }
+        if (r && keinZugriff(r)) r = null;
+      }
+      if (!r) {
+        r = await seite(direkt(url));
+        if (v && !keinZugriff(r)) g.vorlagen[p.typ] = null; // die Vorlage passte nicht, der Permalink schon: in dieser Sitzung keine mehr
+        vorlageLernen(p, r);
+      }
       for (let i = 0; i < 2 && typeof H.folgeUrl === "function"; i++) {
         const f = H.folgeUrl(r.text, basis(r));
         if (!f || f === r.url) break;
-        await pause();
         r = await seite(f);
       }
-      if (typeof H.seitenArt === "function" && H.seitenArt(r.text, basis(r)) === "kein-zugriff") { const e = new Error("kein Zugriff"); e.status = 403; throw e; }
+      if (keinZugriff(r)) { const e = new Error("kein Zugriff"); e.status = 403; throw e; }
       return r;
     };
     const alsText = (r) => { if (typeof r.text === "string") return r.text; const by = bytesAus(r); return by ? new TextDecoder("utf-8").decode(by.subarray(0, 200000)) : ""; };
@@ -1439,7 +1597,7 @@ module.exports = function (ctx) {
 
   // ILIAS selbst: eingesetzt über ctx.ilias.quelleSetzen(fn) (nur Tests der Oberfläche in Obsidian), sonst quelleAusNetz
   const quelleSlot = ctx.bleibend("quelle", () => ({ fn: null }));
-  const quelleFinden = (zugang, anmelden) => (typeof quelleSlot.fn === "function" ? quelleSlot.fn : quelleAusNetz)(zugang, anmelden);
+  const quelleFinden = (zugang, anmelden, optionen) => (typeof quelleSlot.fn === "function" ? quelleSlot.fn : quelleAusNetz)(zugang, anmelden, optionen);
 
   const hoerer = ctx.bleibend("hoerer", () => new Set());
   const beobachten = (fn) => { if (typeof fn === "function") hoerer.add(fn); return () => hoerer.delete(fn); };
@@ -1500,8 +1658,8 @@ module.exports = function (ctx) {
     stundenplan: () => { const G = modulVon("meine-gruppe"); return G && G.obsidianIo ? G.obsidianIo() : null; },
     einstellungen: () => { const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN), c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; },
     jetzt: () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date()),
-    warten: (n) => new Promise((fertig) => ctx.zeit(fertig, n)),
     mobil: !!(obs.Platform && obs.Platform.isMobile),
+    vergessen: sitzungVergessen,
     geraetId,
     melden: (t) => { if (obs.Notice) new obs.Notice(t, 6000); },
     geaendert: (x) => {
@@ -1516,7 +1674,8 @@ module.exports = function (ctx) {
   const motor = () => motorInst || (motorInst = erzeugen(obsidianAbh()));
 
   // Offenen Auftrag fortsetzen (Fehler, nächster Stapel, Start, zurück in der App): wie dein Knopf, mit Hinweis. Nur wenn bereit
-  // (Zugang da, Anmeldung nicht abgelehnt, kein eigener Uni-Abgleich); ein toter Lauf (still) wird vorher verworfen.
+  // (Zugang da, Anmeldung nicht abgelehnt); ein toter Lauf (still) wird vorher verworfen. Im eigenen Uni-Abgleich gibt es keinen
+  // Auftrag (jetztHolen verwirft ihn und läuft still).
   let weiterZeit = null;
   const fortsetzen = () => {
     weiterZeit = null;
@@ -1570,24 +1729,35 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, ohneKennwort, pfadOhneKennwort, indexPruefen,
-    K: { INDEX, ABRUF, MAX_MB, NEU_MOBIL, NEU_PC, ANFRAGEN, ABSTAND_MS, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL },
+    erzeugen, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
+    K: { INDEX, ABRUF, MAX_MB, NEU_MOBIL, NEU_PC, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;
 
   const registrieren = () => {
     ctx.aufraeumen(() => hinweis.weg());
     // Automatischer Lauf: 20 s + Zufall 0–2 Min. nach dem Einlesen, dann stündlich, zurück in der App nach über 60 Min.
-    // Jeder Takt prüft erst bereit() (Anmeldung vorhanden, Zugang gespeichert, nicht abgelehnt, kein eigener Uni-Abgleich).
+    // Jeder Takt prüft erst bereit() (Anmeldung vorhanden, Zugang gespeichert, nicht abgelehnt); im eigenen Uni-Abgleich prüft
+    // er nur die Übungsgruppen. Automatische Läufe zeigen keinen Hinweis.
     const lauf = () => { const m = motor(); if (!plugin().testIliasAus && m.bereit() && !m.laeuft) m.jetztHolen({}); };
     // Einmal je Start, mit dem Zufallsversatz: Kurspasswörter aus alten Index-Einträgen (synchronisiert, auch ohne Zugang)
     const saeubern = () => { if (!plugin().testIliasAus) motor().saeubern().catch((e) => console.warn("ilias: Index " + ((e && e.message) || e))); };
-    const planen = () => ctx.zeit(() => { saeubern(); lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
+    // Einmal je Start, ohne Zugang: verwaiste Gruppen-Notizen freigeben (gruppenFreigeben)
+    const verwaist = () => { if (!plugin().testIliasAus) motor().verwaisteGruppen().catch((e) => console.warn("ilias: Gruppen " + ((e && e.message) || e))); };
+    const planen = () => ctx.zeit(() => { saeubern(); verwaist(); lauf(); ctx.intervall(lauf, STUNDE); }, 20000 + Math.floor(Math.random() * 2 * MIN));
+    let weg = null; // iPhone/iPad: seit wann im Hintergrund, und die letzte Regung des Laufs davor
     ctx.dom(document, "visibilitychange", () => {
-      if (document.visibilityState !== "visible" || !motor().bereit()) return;
       const m = motor();
+      if (document.visibilityState !== "visible") { weg = { seit: Date.now(), regung: m.regung }; return; }
+      const war = weg;
+      weg = null;
+      if (!m.bereit()) return;
       // offener Auftrag: toter Lauf (im Hintergrund gestorben) oder keiner geplant → gleich weiter
       if (m.auftrag() && (m.laeuft ? m.still() : !weiterZeit)) { weiterPlanen(3000); return; }
+      // länger im Hintergrund und der Lauf regt sich auch kurz danach nicht: seine Anfrage hängt → verwerfen, gleich weiter
+      if (obs.Platform && obs.Platform.isMobile && war && m.laeuft && m.auftrag() && Date.now() - war.seit > ZURUECK_PRUEFEN) {
+        ctx.zeit(() => { if (m.laeuft && m.auftrag() && m.regung === war.regung) { m.verwerfen(); fortsetzen(); } }, ZURUECK_PRUEFEN);
+      }
       const v = Date.parse(m.stand().versucht || "");
       if (!isNaN(v) && Date.now() - v > NACHHOLEN) ctx.zeit(lauf, 5000);
     });
@@ -1602,9 +1772,17 @@ module.exports = function (ctx) {
       if (!f || !alt) return;
       motor().umbenannt(f.path, String(alt)).then((x) => { if (x) bald(); }, () => {});
     });
+    // Index von einem anderen Gerät (Sync), z. B. Gruppen freigegeben: neu einlesen, damit die Gruppen auf Termine & Anmeldungen
+    // stimmen; nur, wenn er schon gelesen ist, und nie während eines Laufs (der mischt beim Schreiben selbst)
+    const frisch = ctx.entprellen(() => {
+      const m = motor();
+      if (!m.index || m.laeuft) return;
+      m.indexLesen().then(() => { try { if (ctx.gruppenAnzeige) ctx.gruppenAnzeige.neu(); } catch (e) { /* egal */ } }, () => {});
+    }, 2000);
+    ctx.an(app.vault, "modify", (f) => { if (f && f.path === INDEX) frisch(); });
   };
-  // Hot-Reload oder Entladen: laufenden Abruf beim nächsten Schritt beenden
-  const abmelden = () => { if (motorInst) motorInst.abbrechen(); };
+  // Hot-Reload oder Entladen: laufenden Abruf beim nächsten Schritt beenden, Sitzung vergessen
+  const abmelden = () => { if (motorInst) motorInst.abbrechen(); sitzungVergessen(); };
 
   return { registrieren, abmelden };
 };

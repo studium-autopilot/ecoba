@@ -9,7 +9,7 @@ ort: "Online-Formular (Microsoft Forms), Restplätze nach Eingang · Abteilung D
 modul:
 code: ""
 erledigt: false
-quelle: "Rundmail Abteilung Deutsch als Fremdsprache und Interkulturelle Programme (Magdalena Bätge) vom 15.10.2026"
+quelle: "Rundmail der Abteilung Deutsch als Fremdsprache und Interkulturelle Programme vom 15.10.2026"
 info: "Wer Deutsch als Muttersprache spricht, kann ein Semester lang 2 SWS in Kursen für Deutsch als Fremdsprache mitarbeiten (2 ECTS Schlüsselqualifikation); Restplätze per Online-Formular."
 herkunft: zentral
 zentral_id: 2026-10-15-mitarbeit-in-daf-deutschkursen-restplatz-anmelden-freiwillig
@@ -29,7 +29,7 @@ Wer Deutsch als Muttersprache spricht, kann ein Semester lang 2 SWS in Kursen f�
 > [!warning] Geschätzt
 > Dieses Datum ist noch nicht offiziell. Sobald die Uni es veröffentlicht, wird es hier automatisch aktualisiert.
 
-Quelle: Rundmail Abteilung Deutsch als Fremdsprache und Interkulturelle Programme (Magdalena Bätge) vom 15.10.2026
+Quelle: Rundmail der Abteilung Deutsch als Fremdsprache und Interkulturelle Programme vom 15.10.2026
 
 ## Meine Notizen
 

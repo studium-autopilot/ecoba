@@ -440,6 +440,47 @@ test("Sitzung: folgen:false, binär, GET-Formular als Query, eigene Kopfzeilen",
   await s.anfrage({ url: I + "/ilias.php?alt=1#x", formular: [["cmd", "suche"], ["q", "a b"]] });
 });
 
+// ---------- Drossel ----------
+
+test("Drossel: höchstens zwei Anfragen zugleich, Starts mindestens 400 ms auseinander", async () => {
+  let t = 0;
+  const d = N.drossel({ jetzt: () => t, warten: async (ms) => { await new Promise((r) => setImmediate(r)); t += ms; } });
+  assert.equal(d.parallel, 2); assert.equal(d.abstand, 400);
+  const starts = [], z = { n: 0, max: 0 };
+  const arbeit = async () => {
+    const frei = await d.eintritt();
+    starts.push(t); z.n++; z.max = Math.max(z.max, z.n);
+    await new Promise((r) => setImmediate(r));
+    z.n--; frei(); frei(); // doppelt freigeben schadet nicht
+  };
+  await Promise.all([arbeit(), arbeit(), arbeit(), arbeit(), arbeit()]);
+  assert.equal(z.max, 2);
+  assert.deepEqual(starts, [0, 400, 800, 1200, 1600]);
+  // nach einer Pause sofort
+  t += 5000;
+  await arbeit();
+  assert.equal(starts[5], 6600);
+  // ohne Testuhr: echte Wartezeit
+  const echt = N.drossel({ parallel: 1, abstand: 30 });
+  const s0 = Date.now();
+  await (await echt.eintritt())();
+  await (await echt.eintritt())();
+  assert.ok(Date.now() - s0 >= 25, "zweiter Start wartet");
+});
+
+test("Sitzung mit Drossel: eine Anfrage hält ihren Platz samt Weiterleitungen, auch bei Fehlern", async () => {
+  const log = [];
+  const d = { eintritt: async () => { log.push("rein"); return () => log.push("raus"); } };
+  const t = attrappe([weiter(I + "/b"), { status: 200, kopf: {}, text: "ok" }]);
+  const s = N.sitzung({ transport: t, drossel: d });
+  const r = await s.anfrage({ url: I + "/a" });
+  assert.equal(r.text, "ok"); assert.equal(t.anfragen.length, 2);
+  assert.deepEqual(log, ["rein", "raus"]);
+  await assert.rejects(s.anfrage({ url: "https://example.org/" }), fremd);
+  assert.deepEqual(log, ["rein", "raus", "rein", "raus"]);
+  assert.equal(typeof s.schliessen, "function");
+});
+
 // ---------- iPhone/iPad: requestUrl ----------
 
 test("mobil: requestUrl folgt selbst, url null, kein eigenes Folgen", async () => {
@@ -498,6 +539,42 @@ test("PC: ohne Node-Zugang kein Transport (Obsidian-Ersatz ohne window.require)"
   assert.throws(() => D.sitzung({}), (e) => e.grund === "kein-transport");
   const ohne = laden("ilias-netz", { kontext: { obsidian: {} } }).ergebnis;
   assert.throws(() => ohne.transportMobil(), (e) => e.grund === "kein-transport");
+});
+
+test("PC-Transport: Verbindungen bleiben offen, Seiten gzip-komprimiert, Dateien unverändert", async () => {
+  const https = require("node:https"), zlib = require("node:zlib");
+  const { EventEmitter } = require("node:events");
+  const echt = https.request;
+  const gesehen = [];
+  https.request = (opt, cb) => {
+    gesehen.push(opt);
+    const anf = new EventEmitter();
+    anf.write = () => {}; anf.destroy = () => {};
+    anf.end = () => setImmediate(() => {
+      const res = new EventEmitter();
+      const seite = opt.headers["accept-encoding"] !== "identity";
+      res.statusCode = 200; res.complete = true;
+      res.headers = seite ? { "content-type": "text/html; charset=utf-8", "content-encoding": "gzip" } : { "content-type": "application/pdf" };
+      cb(res);
+      res.emit("data", seite ? zlib.gzipSync(Buffer.from("<html>Übung</html>")) : Buffer.from("%PDF"));
+      res.emit("end");
+    });
+    return anf;
+  };
+  try {
+    const D = require(DATEI)({});
+    const t = D.transportDesktop({ version: "0.4.3" });
+    const seite = await t({ url: I + "/ilias.php", methode: "GET", kopf: {} });
+    const datei = await t({ url: I + "/datei", methode: "GET", kopf: {}, binaer: true });
+    assert.equal(seite.text, "<html>Übung</html>");
+    assert.equal(seite.kopf["content-encoding"], undefined);
+    assert.equal(new TextDecoder().decode(datei.daten), "%PDF");
+    assert.equal(gesehen[0].headers["accept-encoding"], "gzip, deflate");
+    assert.equal(gesehen[1].headers["accept-encoding"], "identity", "Dateien unverändert");
+    assert.ok(gesehen[0].agent instanceof https.Agent && gesehen[0].agent.keepAlive, "Verbindung bleibt offen");
+    assert.equal(gesehen[0].agent, gesehen[1].agent, "dieselben Verbindungen für alle Anfragen");
+    t.schliessen();
+  } finally { https.request = echt; }
 });
 
 test("PC-Transport unter Node: fremde Hosts und http gehen nie hinaus", async () => {

@@ -7,7 +7,7 @@
 // (ilias.js, app.secretStorage: verschlüsselt, nie synchronisiert). Dieses Skript reicht es nur als Funktion an
 // ctx.ilias.zugangSpeichern weiter und leert danach das Feld. Kein Mail-Passwort (kein IMAP), nichts davon im Vault.
 //
-// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "zentral" | "vorlage" | "claude"), status(), gesperrt(),
+// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "zentral" | "vorlage"), status(), gesperrt(),
 //   vorschau? ("woche": Schloss liegt auf einem ausgegrauten Beispiel-Stundenplan), anreiz? (Überschrift dazu), schlossKnopf? (Text
 //   des Knopfs der Schloss-Karte), trennenText? (Rückfrage beim Trennen), pruefen(link)?, verbinden(link)?, trennen()?, aktualisieren(parameter)? }
 // Texte (auch für Nicht-Techniker): satz = ein Satz Nutzen (Schloss-Karte); kurz = höchstens ein Satz im Fenster;
@@ -17,18 +17,27 @@
 //   ```eba-schloss <id>```  Solange gesperrt: Karte mit Schloss-Symbol, einem Satz und Knopf „Verbinden“ (mit vorschau: über dem Beispielraster). Steht der Block in einer Karte
 //                           (Callout), blendet CSS den übrigen Inhalt der Karte aus (z. B. das Wochenraster). Sonst leer.
 //   ```eba-verbindungen```  Übersicht (Einstellungen): je Verbindung Symbol, Status und höchstens EIN Knopf (Verbinden,
-//                           Aktualisieren, Jetzt holen, Hier laden, Jetzt aktualisieren, Einschalten, Neu laden oder Mehr erfahren). Zeile „Studium
+//                           Aktualisieren, Jetzt holen, Hier laden, Jetzt prüfen, Jetzt aktualisieren, Einschalten, Neu laden oder Mehr erfahren). Zeile „Studium
 //                           Autopilot“ (art vorlage): Version und Update, Text und Knopf aus ctx.update.anzeige() (update.js). Alles Weitere (Trennen, neuer
-//                           Link, Kurswahl, Schalter der zentralen Daten) steht im Fenster hinter dem Textlink „Mehr erfahren“.
+//                           Link, Kurswahl, Schalter der zentralen Daten) steht im Fenster hinter dem Textlink „Mehr erfahren“; braucht
+//                           das Fenster nur einen Knopf, steht er selbst als Textlink da (ILIAS nur für Übungsgruppen: „Trennen“).
+//                           Zeilen (zeile(), seit 18.10.2026): Symbol und Pille widersprechen sich nie. Pille nur, wo der Stand zählt:
+//                           „verbunden“, „nicht verbunden“ (nichts da, Verbinden ist der Weg) oder „Anmeldung prüfen“. Kommt etwas
+//                           ohnehin (Daten per Sync, zentraler Stundenplan, eigener Uni-Abgleich): Haken ohne Pille, Verbinden leise.
+//                           Eigener Uni-Abgleich (eba.eigenerAbgleich, dieselbe Regel wie ilias.js und zentral.js): Alma sagt
+//                           ALMA_EXTERN ohne Knopf (ist doch ein Link gespeichert, warnt die Zeile vor doppelten Einträgen und
+//                           bietet Trennen); ILIAS heißt „ILIAS“, prüft nur die Übungsgruppen (Jetzt prüfen, Textlink Trennen)
+//                           bzw. bietet leise „Für Übungsgruppen verbinden“ (öffnet gleich die Anmeldung).
 //   ```eba-alma-knoepfe```  Knopf auf der Seite Stundenplan (seit 0.3.0): verbunden → „Stundenplan aus Alma holen“, sonst
-//                           „Alma verbinden“ mit einem Satz dazu.
+//                           „Alma verbinden“ mit einem Satz dazu; im eigenen Uni-Abgleich ohne Link nichts.
 //   ```eba-ilias-knopf```   Steht in der Knopf-Karte der Seite Unterlagen (seit 0.4.0) und zeichnet nichts. Ist ILIAS auf diesem
 //                           Gerät verbunden, trägt er die Klasse eba-ilias-an; dann zeigt CSS (eba-core.css 49) den festen Knopf
 //                           „Aus ILIAS holen“ derselben Karte, sonst ist er ausgeblendet. So bleiben alle Knöpfe normales Markdown.
 // Schloss (seit 0.3.0): nur, wenn der Schritt in der Einrichtung übersprungen wurde oder die Einrichtung nicht fertig ist
 //   (ctx.einrichtung.almaOffen() bzw. iliasOffen(); ILIAS auch, wenn die Einrichtung aus 0.3.x ohne ILIAS-Schritt stammt), keine
-//   Daten da sind (Stundenplan bzw. Unterlagen aus ILIAS, z. B. per Sync) und dieses Gerät nicht verbunden ist. ILIAS im
-//   eigenen Uni-Abgleich (ilias.js „extern“): nie ein Schloss; „Mehr erfahren“ führt zum Verbinden nur für die Übungsgruppen.
+//   Daten da sind (Stundenplan bzw. Unterlagen aus ILIAS, z. B. per Sync) und dieses Gerät nicht verbunden ist. Im eigenen
+//   Uni-Abgleich nie ein Schloss, weder für Alma noch für ILIAS.
+// Fenster: kein Knopf, der nur schließt (dafür ist das ×), höchstens ein Hauptknopf (mod-cta) je Fenster.
 // Aktionen (Knöpfe obsidian://studium-autopilot?aktion=…&id=alma): verbinden, verbindung-aktualisieren (ILIAS: uebernehmen=1
 //   lädt hier, auch wenn ein anderes Gerät gerade lädt), trennen, ilias-holen (Knopf „Aus ILIAS holen“ auf der Seite Unterlagen).
 // Hilfsfunktion für andere Skripte: ctx.verbindungen.schlossKarte(el, id) zeichnet die Schloss-Karte, gesperrt(id).
@@ -59,6 +68,12 @@ module.exports = function (ctx) {
     return { verfuegbar: false, anzahl: 0, ohneBeginn: false, ausgeblendet: [] };
   };
   const ALMA_FREIWILLIG = "Deine Vorlesungen kommen von selbst, deine Übungsgruppe meist aus ILIAS, sobald du es verbindest. Alma brauchst du nur für Extras.";
+  // Eigener Uni-Abgleich (eba.eigenerAbgleich, dieselbe Regel wie in ilias.js und zentral.js): bringt Stundenplan und Unterlagen.
+  // Alma verbindet man dann nicht (alma.js schriebe dieselben Veranstaltungen ein zweites Mal).
+  const EINSTELLUNGEN = "System/Einstellungen.md";
+  const einstellungen = () => { const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN), c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
+  const eigenerAbgleich = () => { const f = ctx.user && ctx.user.eba && ctx.user.eba.eigenerAbgleich; return !!f && f((p) => !!app.vault.getAbstractFileByPath(p), einstellungen()); };
+  const ALMA_EXTERN = "Dein Stundenplan kommt über deinen Uni-Abgleich.";
   // ILIAS (ilias.js, seit 0.4.0): Schloss wie bei Alma nur für Übersprungenes (einrichtung.js); Daten = Begleitnotizen mit ilias_id
   const iliasOffen = () => (ctx.einrichtung && ctx.einrichtung.iliasOffen ? ctx.einrichtung.iliasOffen() : true);
   const iliasAnzahl = () => app.vault.getMarkdownFiles().filter((f) => {
@@ -104,14 +119,16 @@ module.exports = function (ctx) {
         "**Link kopieren** und unten einfügen.",
       ],
       platzhalter: "Link hier einfügen",
-      trennenText: "Dein Stundenplan bleibt, wird aber nicht mehr aktualisiert.",
+      get trennenText() { return eigenerAbgleich() ? "Die Einträge aus Alma bleiben. Deinen Stundenplan bringt weiter dein Uni-Abgleich." : "Dein Stundenplan bleibt, wird aber nicht mehr aktualisiert."; },
+      // extern: eigener Uni-Abgleich (bringt den Stundenplan)
       status() {
         const s = alma().status();
-        return { verbunden: !!s.verbunden, seit: s.seit, stand: s.stand, daten: stundenplanAnzahl() };
+        return { verbunden: !!s.verbunden, seit: s.seit, stand: s.stand, daten: stundenplanAnzahl(), extern: eigenerAbgleich() };
       },
       // Gesperrt nur, wenn weder ein Link auf diesem Gerät noch eigene Stundenplan-Notizen (z. B. per Sync) noch zentrale
-      // Vorlesungen da sind UND Alma in der Einrichtung offen blieb (übersprungen, „Später“ oder Einrichtung nicht fertig)
-      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && !zentralerPlan().anzahl && almaOffen(); },
+      // Vorlesungen noch ein eigener Uni-Abgleich da sind UND Alma in der Einrichtung offen blieb (übersprungen, „Später“ oder
+      // Einrichtung nicht fertig)
+      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && !s.extern && !zentralerPlan().anzahl && almaOffen(); },
       pruefen(link) { return alma().linkPruefen(link); },
       async verbinden(link) {
         const a = alma();
@@ -123,27 +140,30 @@ module.exports = function (ctx) {
       trennen() { alma().trennen(); },
     },
     // ILIAS-Unterlagen (ilias.js, seit 0.4.0): Benutzername + Passwort, Kurswahl, Dateien nach Unterlagen/. Eigenes Fenster
-    // (IliasFenster). Im eigenen Uni-Abgleich nie ein Schloss; Verbinden dort nur für die Übungsgruppen (keine Dateien).
+    // (IliasFenster). Im eigenen Uni-Abgleich heißt die Verbindung „ILIAS“, nie ein Schloss; Verbinden dort nur für die
+    // Übungsgruppen (keine Dateien), mit eigenen Texten (Getter).
     ilias: {
-      id: "ilias", name: "ILIAS-Unterlagen", art: "anmeldung",
+      id: "ilias", art: "anmeldung",
+      get name() { return eigenerAbgleich() ? "ILIAS" : "ILIAS-Unterlagen"; },
       satz: "Verbinde ILIAS, dann landen deine Kursdateien von selbst hier.",
       schlossKnopf: "ILIAS verbinden",
-      kurz: "Deine Kursdateien aus ILIAS landen automatisch in Unterlagen.",
-      schritte: [
-        "Benutzername und Passwort von ILIAS eingeben.",
-        "**Verbinden** tippen. Deine Dateien kommen gleich danach, neue später von selbst.",
-        "Kurse wählen. Kurse mit Modulcode sind schon an.",
-      ],
+      get kurz() { return eigenerAbgleich() ? "Deine Übungsgruppe kommt dann von selbst in den Stundenplan, deine Unterlagen weiter über deinen Uni-Abgleich." : "Deine Kursdateien aus ILIAS landen automatisch in Unterlagen."; },
+      get schritte() {
+        return eigenerAbgleich() ? [] : [
+          "Benutzername und Passwort von ILIAS eingeben.",
+          "**Verbinden** tippen. Deine Dateien kommen gleich danach, neue später von selbst.",
+          "Kurse wählen. Kurse mit Modulcode sind schon an.",
+        ];
+      },
       datenschutz: "Dein Passwort bleibt verschlüsselt auf diesem Gerät und geht nur an die Uni.",
-      erklaerung: "Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen; Videos und Dateien über 50 MB bleiben in ILIAS.",
-      trennenText: "Passwort und Benutzername werden auf diesem Gerät gelöscht. Deine Dateien bleiben.",
+      get erklaerung() { return eigenerAbgleich() ? "Ein Gerät reicht, deine Übungsgruppe kommt über deinen Sync auf die anderen." : "Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen; Videos und Dateien über 50 MB bleiben in ILIAS."; },
+      get trennenText() { return eigenerAbgleich() ? "Passwort und Benutzername werden auf diesem Gerät gelöscht. Deine Übungsgruppe bleibt im Stundenplan, wird aber nicht mehr geprüft." : "Passwort und Benutzername werden auf diesem Gerät gelöscht. Deine Dateien bleiben."; },
       // ctx.ilias.status() + daten (Unterlagen aus ILIAS im Vault, auch per Sync von einem anderen Gerät)
       status() {
         const s = ctx.ilias ? ctx.ilias.status() : { verbunden: false, extern: false, text: "Wird geladen …" };
         return Object.assign({}, s, { daten: iliasAnzahl() });
       },
-      gesperrt() { const s = this.status(); return !s.verbunden && !s.extern && !s.daten && !iliasOhneAnmeldung(s) && iliasOffen(); },
-      // Knopf: Ergebnis zeigt ilias.js selbst als Hinweis; uebernehmen = hier laden, obwohl ein anderes Gerät dran ist
+      gesperrt() { const s = this.status(); return !s.verbunden && !s.extern && !s.daten && !iliasOhneAnmeldung(s) && iliasOffen(); },      // Knopf: Ergebnis zeigt ilias.js selbst als Hinweis; uebernehmen = hier laden, obwohl ein anderes Gerät dran ist
       async aktualisieren(p) { return ctx.ilias.jetztHolen({ uebernehmen: !!(p && (p.uebernehmen === true || p.uebernehmen === "1")) }); },
       async trennen() { await ctx.ilias.zugangLoeschen(); },
     },
@@ -174,16 +194,6 @@ module.exports = function (ctx) {
       erklaerung: "Neue Programmteile kommen nur nach deinem Tipp; jede Datei wird geprüft, und vorher entsteht eine Sicherung.",
       status() { return ctx.update ? ctx.update.status() : { verbunden: true }; },
       gesperrt() { return false; },
-    },
-    assistent: {
-      id: "assistent", name: "KI-Assistent", art: "claude",
-      // Noch nicht gebaut (README „Noch im Aufbau“, docs/installation.md „Mit Claude Code“: kommt bald) – Texte sagen das ehrlich
-      satz: "Soll bald Termine in deinen Uni-Mails finden. Braucht dann Claude Code auf deinem Rechner.",
-      kurz: "Der KI-Assistent soll Termine in deinen Uni-Mails finden. Er kommt bald und läuft dann mit Claude Code auf deinem Rechner, nicht in Obsidian.",
-      schritte: [],
-      erklaerung: "Hier wird kein Passwort gespeichert, auch nicht für deine Mails.",
-      status() { return { verbunden: false }; },
-      gesperrt() { return true; },
     },
   };
   const holen = (id) => VERBINDUNGEN[String(id || "").trim().toLowerCase()] || null;
@@ -279,23 +289,19 @@ module.exports = function (ctx) {
     }
   };
 
-  // Erklärung ohne Eingabe (KI-Assistent, zentrale Daten mit Schaltern, Studium Autopilot)
+  // Erklärung ohne Eingabe (zentrale Daten mit Schaltern, Studium Autopilot); kein Knopf, schließen über ×
   class InfoFenster extends Modal {
     constructor(v) { super(app); this.v = v; }
     onOpen() {
       const v = this.v;
       this.modalEl.addClass("eba-modal", "eba-modal-verbinden");
       this.titleEl.setText(v.name);
-      const marke = v.art === "claude" ? `<span class="eba-pill leer">für Fortgeschrittene</span>` : "";
-      if (marke) this.contentEl.createEl("p", { cls: "eba-modal-marke" }).innerHTML = marke;
       if (v.kurz) fett(this.contentEl.createEl("p", { cls: "eba-modal-text" }), v.kurz);
       schritteZeigen(this.contentEl, v);
       if (v.art === "zentral") zentralSchalter(this.contentEl);
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
       // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
-      const k = this.contentEl.createDiv({ cls: "modal-button-container" });
-      k.createEl("button", { text: v.art === "zentral" ? "Fertig" : "Verstanden", cls: "mod-cta" }).addEventListener("click", () => this.close());
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
@@ -316,7 +322,6 @@ module.exports = function (ctx) {
       const k = c.createDiv({ cls: "modal-button-container" });
       const neu = k.createEl("button", { text: "Neuen Link eingeben" });
       const weg = k.createEl("button", { text: "Trennen", cls: "mod-warning" });
-      k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => this.close());
       neu.addEventListener("click", () => { this.close(); const m = new VerbindenFenster(v); fenster = m; m.open(); });
       weg.addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: v.id }); });
     }
@@ -375,7 +380,10 @@ module.exports = function (ctx) {
   //   Fortschritt („Lädt 12 von 40“), ein Satz, dass das Fenster zu darf, Obsidian aber offen bleiben muss (iPhone/iPad halten
   //   es im Hintergrund an; beim nächsten Öffnen geht es weiter), Schließen und Stoppen.
   //   Nach dem ersten Verbinden startet der erste Abruf gleich (wie Jetzt holen), wenn ein Kurs an ist.
-  //   Eigener Uni-Abgleich, Obsidian zu alt (kein Schlüsselbund) oder Anmeldebaustein fehlt: nur ein Satz.
+  //   Eigener Uni-Abgleich: nicht verbunden (oder Anmeldung abgelehnt) gleich die Anmeldung, nur für die Übungsgruppen (eigene
+  //   Texte, keine Schritte); nach dem Verbinden schließt das Fenster, die Prüfung läuft mit Hinweis. Verbunden: Stand, Jetzt
+  //   prüfen, Trennen (die Zeile bietet beides selbst, das Fenster nur über die Aktion verbinden).
+  //   Obsidian zu alt (kein Schlüsselbund) oder Anmeldebaustein fehlt: nur ein Satz, kein Knopf.
   // Passwort – steht nur im Feld (type=password). zugangSpeichern bekommt eine Funktion, die das Feld beim Senden liest, prüft
   // den Zugang mit einer Anmeldung und speichert nur bei Erfolg; danach wird das Feld geleert (auch bei Fehler). Die Hinweise
   // aus ilias.js (falsches Passwort, Zustimmungsseite, Zwei-Faktor) stehen wörtlich in der Meldung. Kein Autofokus auf
@@ -394,34 +402,37 @@ module.exports = function (ctx) {
     ereignis(x) {
       if (!x || !this.offen()) return;
       if (x.art === "fortschritt") { if (this.ansicht === "verwalten" || this.verbindet) this.melden(x.text || "", ""); return; }
-      if ((x.art === "start" || x.art === "fertig") && this.ansicht === "verwalten" && !this.verbindet) this.zeigen();
+      if ((x.art === "start" || x.art === "fertig") && (this.ansicht === "verwalten" || this.ansicht === "gruppen") && !this.verbindet) this.zeigen();
     }
     melden(text, art) { if (!this.meldung) return; this.meldung.setText(text || ""); this.meldung.className = "eba-modal-meldung" + (art ? " " + art : ""); }
     zeigen() {
       const s = this.v.status();
       this.contentEl.empty();
       this.meldung = null; this.felder = null;
-      if (s.extern || iliasOhneAnmeldung(s) || !ctx.ilias.kannSpeichern()) this.infoZeigen(s);
+      if (iliasOhneAnmeldung(s) || !ctx.ilias.kannSpeichern()) this.infoZeigen(s);
+      else if (s.extern) { if (!s.gruppenZugang || s.gesperrt) this.anmeldenZeigen(s); else this.gruppenZeigen(s); }
       else if (!s.verbunden || s.gesperrt) this.anmeldenZeigen(s);
       else this.verwaltenZeigen(s);
     }
     knoepfe() { return this.contentEl.createDiv({ cls: "modal-button-container" }); }
+    // Ein Satz, kein Knopf (schließen über ×): Anmeldebaustein fehlt oder Obsidian zu alt (im eigenen Uni-Abgleich: dessen Satz)
     infoZeigen(s) {
       this.ansicht = "info";
       this.titleEl.setText(this.v.name);
-      const text = s.extern ? (s.gruppenZugang ? s.text : "Deine ILIAS-Unterlagen kommen über deinen Uni-Abgleich. Verbindest du ILIAS hier trotzdem, kommt deine Übungsgruppe in den Stundenplan; Dateien lädt Obsidian dann keine.")
-        : iliasOhneAnmeldung(s) ? (/[.…]$/.test(s.text) ? s.text : `${s.text}.`) : "Dafür braucht Obsidian Version 1.11.4 oder neuer. Bitte Obsidian aktualisieren.";
+      const text = iliasOhneAnmeldung(s) ? (/[.…]$/.test(s.text) ? s.text : `${s.text}.`)
+        : s.extern ? ctx.ilias.K.TEXT_EXTERN : "Dafür braucht Obsidian Version 1.11.4 oder neuer. Bitte Obsidian aktualisieren.";
       this.contentEl.createEl("p", { cls: "eba-modal-text", text });
+    }
+    // Eigener Uni-Abgleich, für die Übungsgruppen verbunden: Stand, Jetzt prüfen, Trennen
+    gruppenZeigen(s) {
+      const c = this.contentEl;
+      this.ansicht = "gruppen";
+      this.titleEl.setText(this.v.name);
+      c.createEl("p", { cls: "eba-modal-marke" }).innerHTML = `<span class="eba-pill ok">verbunden</span>`;
+      c.createEl("p", { cls: "eba-modal-text", text: [s.text, s.benutzer ? `Angemeldet als ${s.benutzer}.` : ""].filter(Boolean).join(" ") });
       const k = this.knoepfe();
-      // Eigener Uni-Abgleich mit Anmeldebaustein: Verbinden nur für die Übungsgruppen (ilias.js lädt dort nie Dateien)
-      if (s.extern && !iliasOhneAnmeldung(s) && ctx.ilias.kannSpeichern()) {
-        if (!s.gruppenZugang) k.createEl("button", { text: "Für Übungsgruppen verbinden", cls: "mod-cta" }).addEventListener("click", () => { this.contentEl.empty(); this.anmeldenZeigen(s); });
-        else {
-          k.createEl("button", { text: "Jetzt prüfen", cls: "mod-cta" }).addEventListener("click", () => { this.close(); ctx.ilias.jetztHolen().catch(() => null); });
-          k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: this.v.id }); });
-        }
-      }
-      k.createEl("button", { text: "Verstanden", cls: s.extern && !s.gruppenZugang && !iliasOhneAnmeldung(s) ? "" : "mod-cta" }).addEventListener("click", () => this.close());
+      if (!s.laeuft) k.createEl("button", { text: "Jetzt prüfen", cls: "mod-cta" }).addEventListener("click", () => { ctx.ilias.jetztHolen().catch(() => null); });
+      k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: this.v.id }); });
     }
     anmeldenZeigen(s) {
       const v = this.v, c = this.contentEl;
@@ -439,11 +450,12 @@ module.exports = function (ctx) {
       schutz.createSpan({ text: v.datenschutz });
       this.meldung = c.createEl("p", { cls: "eba-modal-meldung" });
       // Anmeldung abgelehnt (falsches Passwort, Zustimmungsseite, Zwei-Faktor): den Hinweis gleich zeigen
-      if (s.verbunden && s.gesperrt) this.melden(s.text, "fehler");
+      const angemeldet = !!(s.verbunden || s.gruppenZugang);
+      if (angemeldet && s.gesperrt) this.melden(s.text, "fehler");
       mehrZeigen(c, v.erklaerung);
       const k = this.knoepfe();
       const los = k.createEl("button", { text: "Verbinden", cls: "mod-cta" });
-      if (s.verbunden) k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: v.id }); });
+      if (angemeldet) k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: v.id }); });
       else k.createEl("button", { text: "Abbrechen" }).addEventListener("click", () => this.close());
       this.felder = { benutzer, geheimFeld, los };
       const leeren = () => { if (this.meldung && this.meldung.hasClass("fehler")) this.melden("", ""); };
@@ -472,13 +484,12 @@ module.exports = function (ctx) {
         if (!mobil && this.felder === f) f.geheimFeld.focus();
         return;
       }
-      // Eigener Uni-Abgleich: keine Kursliste, gleich die Gruppen prüfen
+      // Eigener Uni-Abgleich: keine Kursliste; Fenster zu, die Prüfung der Gruppen zeigt Fortschritt und Ergebnis als Hinweis
       if (this.v.status().extern) {
         this.verbindet = false;
-        new Notice(`${this.v.name} für deine Übungsgruppen verbunden.`, 5000);
         ctx.ilias.jetztHolen().catch(() => null);
         neuZeichnen();
-        if (this.offen()) this.zeigen();
+        this.close();
         return;
       }
       this.melden("Lese deine Kurse …", "");
@@ -542,6 +553,8 @@ module.exports = function (ctx) {
 
   let fenster = null; // offenes Fenster (für Tests: ctx.verbindungen.fenster)
   const fensterOeffnen = (v) => {
+    // Alma im eigenen Uni-Abgleich ohne Link: nichts zu verbinden (der Abgleich bringt den Stundenplan), nur der Satz
+    if (v.art === "link") { const s = v.status(); if (s.extern && !s.verbunden) { new Notice(ALMA_EXTERN, 5000); return null; } }
     const m = v.art === "anmeldung" ? new IliasFenster(v) : v.art !== "link" ? new InfoFenster(v) : v.status().verbunden ? new VerwaltenFenster(v) : new VerbindenFenster(v);
     fenster = m;
     m.open();
@@ -587,50 +600,74 @@ module.exports = function (ctx) {
     }
     const karte = el.createDiv({ cls: "eba-schloss" });
     const eingabe = v.art === "link" || v.art === "anmeldung";
-    karte.innerHTML = `<span class="eba-schloss-symbol" aria-hidden="true">${svg(v.art === "claude" ? "extern" : "schloss")}</span>`
+    karte.innerHTML = `<span class="eba-schloss-symbol" aria-hidden="true">${svg("schloss")}</span>`
       + `<span class="eba-schloss-text"><b>${esc(v.name)}</b><span>${esc(v.satz)}</span></span>`
       + knopf("verbinden", v.id, v.schlossKnopf || (eingabe ? "Verbinden" : "Mehr erfahren"), "cta");
     return true;
   };
 
-  // Zeile je Verbindung: symbol (SYMBOLE) + ton (Farbe: ok | warn | leise), Text, Pille
+  // Zeile je Verbindung: { zu, text | html, pille, symbol (SYMBOLE), ton (Farbe: ok | warn | leise), knopf (HTML, höchstens
+  // einer), link (Textlink im Status: „Mehr erfahren“ ins Fenster bzw. „Trennen“) }. Regeln im Kopf („Zeilen“).
+  const PILLE = {
+    an: `<span class="eba-pill ok">verbunden</span>`,
+    nicht: `<span class="eba-pill leer">nicht verbunden</span>`,
+    pruefen: `<span class="eba-pill warn">Anmeldung prüfen</span>`,
+  };
+  const textLink = (aktion, id, text) => `<a class="eba-vb-mehr" href="${ctx.link(aktion, { id })}">${esc(text)}</a>`;
+  const mehrLink = (id) => textLink("verbinden", id, "Mehr erfahren");
+  const tonVon = (symbol) => (symbol === "haken" ? "ok" : symbol === "warnung" ? "warn" : "leise");
   const statusZeile = (v) => {
     if (v.art === "zentral") {
-      if (!ctx.zentral) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise" };
+      if (!ctx.zentral) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise", knopf: "", link: "" };
       const a = ctx.zentral.anzeige(), s = ctx.zentral.status();
       const symbol = !a.an ? "aus" : s.pause ? "pause" : s.fehler ? "warnung" : "haken";
-      return { zu: false, html: a.html, pille: a.pille, an: a.an, veranstaltungen: a.veranstaltungen, symbol, ton: symbol === "haken" ? "ok" : symbol === "warnung" ? "warn" : "leise" };
+      const k = a.an ? knopf("zentral-aktualisieren", "", "Jetzt aktualisieren", "cta")
+        : `<a class="eba-vb-knopf cta" href="${ctx.link("zentral-schalter", { was: "daten", wert: "1" })}">Einschalten</a>`;
+      return { zu: false, html: a.html, pille: a.pille, symbol, ton: tonVon(symbol), knopf: k, link: mehrLink(v.id) };
     }
     if (v.art === "vorlage") {
-      if (!ctx.update) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise" };
+      const mehr = knopf("verbinden", v.id, "Mehr erfahren", "");
+      if (!ctx.update) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise", knopf: mehr, link: "" };
       const a = ctx.update.anzeige();
-      return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: a.knopf };
+      const k = a.knopf ? `<a class="eba-vb-knopf cta" href="${ctx.link(a.knopf.aktion, {})}">${esc(a.knopf.text)}</a>` : mehr;
+      return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
     }
     if (v.art === "anmeldung") return iliasZeile(v);
-    if (v.art === "claude") return { zu: true, text: "Kommt bald. Braucht dann Claude Code auf deinem Rechner.", pille: `<span class="eba-pill leer">für Fortgeschrittene</span>`, symbol: "extern", ton: "leise" };
-    const s = v.status();
-    if (s.verbunden) {
-      const teile = [s.seit ? `verbunden seit ${tagText(s.seit)}` : "verbunden", s.stand ? `zuletzt aktualisiert ${zeitText(s.stand)}` : "noch nicht aktualisiert"];
-      return { zu: false, text: teile.join(" · "), pille: `<span class="eba-pill ok">verbunden</span>`, symbol: "haken", ton: "ok" };
-    }
-    if (s.daten) return { zu: false, text: `Auf diesem Gerät nicht verbunden. Dein Stundenplan liegt vor (${s.daten} Einträge).`, pille: `<span class="eba-pill leer">nicht verbunden</span>`, symbol: "haken", ton: "leise" };
-    if (v.id === "alma" && zentralerPlan().verfuegbar) return { zu: false, text: "Nicht nötig: " + ALMA_FREIWILLIG, pille: `<span class="eba-pill leer">nicht verbunden</span>`, symbol: "haken", ton: "leise" };
-    return { zu: true, text: "Nicht verbunden.", pille: `<span class="eba-pill leer">nicht verbunden</span>`, symbol: "schloss", ton: "leise" };
+    return almaZeile(v);
   };
 
-  // ILIAS: Text aus ctx.ilias.status() (fertig formuliert); Symbol und Pille je Stand
+  // Alma: verbunden → Aktualisieren (Rest im Fenster); Stundenplan schon da (Sync, zentral) → Haken ohne Pille, Verbinden leise;
+  // eigener Uni-Abgleich → nur der Satz (mit gespeichertem Link: Warnung vor doppelten Einträgen und Trennen)
+  const almaZeile = (v) => {
+    const s = v.status();
+    if (s.extern && s.verbunden) return { zu: false, text: `${ALMA_EXTERN} Alma ist hier zusätzlich verbunden, das kann Einträge doppeln.`, pille: PILLE.an, symbol: "warnung", ton: "warn", knopf: knopf("trennen", v.id, "Trennen", ""), link: "" };
+    if (s.extern) return { zu: false, text: ALMA_EXTERN, pille: "", symbol: "haken", ton: "ok", knopf: "", link: "" };
+    if (s.verbunden) return { zu: false, text: s.stand ? `Zuletzt aktualisiert ${zeitText(s.stand)}.` : "Noch nicht aktualisiert.", pille: PILLE.an, symbol: "haken", ton: "ok", knopf: knopf("verbindung-aktualisieren", v.id, "Aktualisieren", "cta"), link: mehrLink(v.id) };
+    if (s.daten) return { zu: false, text: `Dein Stundenplan liegt vor (${s.daten} ${s.daten === 1 ? "Eintrag" : "Einträge"}).`, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
+    if (zentralerPlan().verfuegbar) return { zu: false, text: "Nicht nötig: " + ALMA_FREIWILLIG, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
+    return { zu: true, text: "Mit Alma siehst du deine Woche im Stundenplan.", pille: PILLE.nicht, symbol: "schloss", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
+  };
+
+  // ILIAS: Text aus ctx.ilias.status() (fertig formuliert); Symbol, Pille, Knopf und Textlink je Stand. Eigener Uni-Abgleich:
+  // Unterlagen kommen von dort, ILIAS hier nur für die Übungsgruppen (Jetzt prüfen, Trennen bzw. leise verbinden).
   const iliasZeile = (v) => {
     const s = v.status();
-    const nicht = `<span class="eba-pill leer">nicht verbunden</span>`;
-    if (s.extern) return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok" };
-    if (iliasOhneAnmeldung(s)) return { zu: false, text: s.text, pille: "", symbol: "uhr", ton: "leise" };
-    if (s.verbunden && s.gesperrt) return { zu: false, text: s.text, pille: `<span class="eba-pill warn">Anmeldung prüfen</span>`, symbol: "warnung", ton: "warn" };
-    if (s.verbunden) {
-      const symbol = s.laeuft ? "uhr" : s.fehler ? "warnung" : "haken";
-      return { zu: false, text: s.text, pille: `<span class="eba-pill ok">verbunden</span>`, symbol, ton: symbol === "warnung" ? "warn" : symbol === "haken" ? "ok" : "leise" };
+    if (iliasOhneAnmeldung(s)) return { zu: false, text: s.text, pille: "", symbol: "uhr", ton: "leise", knopf: "", link: "" };
+    const abgelehnt = { zu: false, text: s.text, pille: PILLE.pruefen, symbol: "warnung", ton: "warn", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
+    const symbol = s.laeuft ? "uhr" : s.fehler ? "warnung" : "haken";
+    if (s.extern) {
+      if (!s.gruppenZugang) return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: ctx.ilias.kannSpeichern() ? knopf("verbinden", v.id, "Für Übungsgruppen verbinden", "") : "", link: "" };
+      if (s.gesperrt) return abgelehnt;
+      return { zu: false, text: s.text, pille: PILLE.an, symbol, ton: tonVon(symbol), knopf: knopf("verbindung-aktualisieren", v.id, "Jetzt prüfen", "cta"), link: textLink("trennen", v.id, "Trennen") };
     }
-    if (s.daten) return { zu: false, text: `Auf diesem Gerät nicht verbunden. ${s.daten === 1 ? "1 Unterlage aus ILIAS liegt" : `${s.daten} Unterlagen aus ILIAS liegen`} vor.`, pille: nicht, symbol: "haken", ton: "leise" };
-    return { zu: true, text: "Nicht verbunden.", pille: nicht, symbol: "schloss", ton: "leise" };
+    if (s.verbunden && s.gesperrt) return abgelehnt;
+    if (s.verbunden) {
+      const k = s.anderes ? `<a class="eba-vb-knopf cta" href="${ctx.link("verbindung-aktualisieren", { id: v.id, uebernehmen: "1" })}">Hier laden</a>`
+        : knopf("verbindung-aktualisieren", v.id, "Jetzt holen", "cta");
+      return { zu: false, text: s.text, pille: PILLE.an, symbol, ton: tonVon(symbol), knopf: k, link: mehrLink(v.id) };
+    }
+    if (s.daten) return { zu: false, text: `${s.daten === 1 ? "1 Unterlage aus ILIAS liegt" : `${s.daten} Unterlagen aus ILIAS liegen`} vor.`, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
+    return { zu: true, text: v.kurz, pille: PILLE.nicht, symbol: "schloss", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
   };
 
   const uebersicht = (el) => {
@@ -638,43 +675,24 @@ module.exports = function (ctx) {
     const liste = el.createDiv({ cls: "eba-vb-liste" });
     for (const v of Object.values(VERBINDUNGEN)) {
       const st = statusZeile(v);
-      const s = v.art === "link" || v.art === "anmeldung" ? v.status() : {};
-      // Höchstens EIN Knopf; führt er nicht ins Fenster, steht „Mehr erfahren“ als Textlink im Status (Fenster mit dem Rest)
-      let knoepfe = "", mehr = false;
-      if (v.art === "zentral") {
-        knoepfe = st.an ? knopf("zentral-aktualisieren", "", "Jetzt aktualisieren", "cta")
-          : `<a class="eba-vb-knopf cta" href="${ctx.link("zentral-schalter", { was: "daten", wert: "1" })}">Einschalten</a>`;
-        mehr = true;
-      } else if (v.art === "vorlage") {
-        if (st.knopf) { knoepfe = `<a class="eba-vb-knopf cta" href="${ctx.link(st.knopf.aktion, {})}">${esc(st.knopf.text)}</a>`; mehr = true; }
-        else knoepfe = knopf("verbinden", v.id, "Mehr erfahren", "");
-      } else if (v.art === "anmeldung") {
-        // Eigener Uni-Abgleich oder Anmeldebaustein fehlt: kein Knopf. Verbunden: Jetzt holen (bzw. Hier laden), Rest im Fenster.
-        if (iliasOhneAnmeldung(s)) knoepfe = "";
-        else if (s.extern) knoepfe = knopf("verbinden", v.id, "Mehr erfahren", "");
-        else if (s.verbunden && !s.gesperrt) {
-          knoepfe = s.anderes ? `<a class="eba-vb-knopf cta" href="${ctx.link("verbindung-aktualisieren", { id: v.id, uebernehmen: "1" })}">Hier laden</a>`
-            : knopf("verbindung-aktualisieren", v.id, "Jetzt holen", "cta");
-          mehr = true;
-        } else knoepfe = knopf("verbinden", v.id, "Verbinden", "cta");
-      } else if (v.art === "link" && s.verbunden) { knoepfe = knopf("verbindung-aktualisieren", v.id, "Aktualisieren", "cta"); mehr = true; }
-      else knoepfe = knopf("verbinden", v.id, v.art === "link" ? "Verbinden" : "Mehr erfahren", v.art === "link" ? "cta" : "");
       const zeile = liste.createDiv({ cls: "eba-vb" + (st.zu ? " zu" : "") });
       zeile.setAttr("data-id", v.id);
       zeile.innerHTML = `<span class="eba-vb-symbol ${st.ton || "leise"}" aria-hidden="true">${svg(st.symbol)}</span>`
         + `<span class="eba-vb-text"><b>${esc(v.name)} ${st.pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${st.html != null ? st.html : esc(st.text)}</span>`
-        + (mehr ? ` <a class="eba-vb-mehr" href="${ctx.link("verbinden", { id: v.id })}">Mehr erfahren</a>` : "") + `</span></span>`
-        + `<span class="eba-vb-knoepfe">${knoepfe}</span>`;
+        + (st.link ? " " + st.link : "") + `</span></span>`
+        + `<span class="eba-vb-knoepfe">${st.knopf}</span>`;
     }
   };
 
   // Knöpfe der Seite Stundenplan (```eba-alma-knoepfe```, seit 0.3.0): verbunden → nur „Stundenplan aus Alma holen“, sonst nur
   // „Alma verbinden“ und ein Satz dazu. Den Satz nicht, solange das Schloss gilt: Dann erklärt die Schloss-Karte darunter dasselbe
-  // (Aufräumrunde 16.10.2026). Gleiche Gestalt wie eine Knopf-Karte > [!eba-neu|ohne-titel] (eba-core.css 6).
+  // (Aufräumrunde 16.10.2026). Gleiche Gestalt wie eine Knopf-Karte > [!eba-neu|ohne-titel] (eba-core.css 6). Eigener
+  // Uni-Abgleich ohne Link auf diesem Gerät: nichts (der Abgleich bringt den Stundenplan); mit Link bleibt der Knopf.
   const almaKnoepfe = (el) => {
     el.empty();
-    const verbunden = !!VERBINDUNGEN.alma.status().verbunden;
+    const s = VERBINDUNGEN.alma.status(), verbunden = !!s.verbunden;
     el.toggleClass("eba-alma-verbunden", verbunden);
+    if (s.extern && !verbunden) return;
     const karte = el.createDiv({ cls: "callout eba-alma-knoepfe", attr: { "data-callout": "eba-neu", "data-callout-metadata": "ohne-titel" } });
     const li = karte.createDiv({ cls: "callout-content" }).createEl("ul").createEl("li");
     if (verbunden) li.createEl("a", { text: "Stundenplan aus Alma holen", href: ctx.link("stundenplan", {}) });
@@ -748,7 +766,8 @@ module.exports = function (ctx) {
         const v = await waehlen(c, "Was aktualisieren?");
         if (!v) return;
         const st = v.status();
-        if (!v.aktualisieren || !st.verbunden || st.gesperrt) { fensterOeffnen(v); return; }
+        // ILIAS im eigenen Uni-Abgleich: „Jetzt prüfen“ (gruppenZugang) prüft die Übungsgruppen
+        if (!v.aktualisieren || !(st.verbunden || st.gruppenZugang) || st.gesperrt) { fensterOeffnen(v); return; }
         await v.aktualisieren(c.parameter || {});
         neuZeichnen();
       },
@@ -758,7 +777,8 @@ module.exports = function (ctx) {
       ausfuehren: async (c) => {
         const v = await waehlen(c, "Was trennen?");
         if (!v || !v.trennen) return;
-        if (!v.status().verbunden) { new Notice(`${v.name}: auf diesem Gerät nicht verbunden.`, 4000); return; }
+        const st = v.status();
+        if (!st.verbunden && !st.gruppenZugang) { new Notice(`${v.name}: auf diesem Gerät nicht verbunden.`, 4000); return; }
         const ok = await bestaetigen(`${v.name} trennen?`, v.trennenText || "Deine Daten bleiben, werden aber nicht mehr aktualisiert.", "Trennen");
         if (!ok) return;
         await v.trennen();
@@ -779,7 +799,10 @@ module.exports = function (ctx) {
   };
 
   // Für andere Skripte (z. B. ein Raster, das selbst zeichnet)
+  // zeile(id): Inhalt der Zeile unter Verbindungen (statusZeile; für Tests). ALMA_EXTERN: Satz für Alma im eigenen Uni-Abgleich
+  // (auch die Einrichtung).
   ctx.verbindungen = { liste: VERBINDUNGEN, holen, svg, gesperrt: (id) => { const v = holen(id); return v ? v.gesperrt() : false; }, schlossKarte, fensterOeffnen, neuZeichnen, iliasStand, fett, textTeile,
+    zeile: (id) => { const v = holen(id); return v ? statusZeile(v) : null; }, ALMA_EXTERN,
     ALMA: { start: ALMA_START, stundenplan: ALMA_STUNDENPLAN },
     get fenster() { return fenster; } }; // offenes Verbinden-/Info-Fenster (für Tests)
 

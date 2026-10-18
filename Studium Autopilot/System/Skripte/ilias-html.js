@@ -35,6 +35,7 @@
 //   mitgliedschaften(html, url) → { kurse, gruppen }   kurse(html, url)   gruppen(html, url)
 //   brotkrumen(html, url) → [{ typ, refId, titel, url }] (die Seite selbst zuerst, dann ihre Eltern)
 //   inhalt(html, url, { heute }) → [Eintrag]    folgeUrl(html, url) → URL, die statt dieser Seite zu holen ist, sonst ""
+//   inhaltReiter(html, url) → Adresse des Reiters „Inhalt“ (ohne Weiterleitung), sonst ""
 //   uebungen(html, url, { heute }) → [Aufgabe]  formulare(html, url) → [{ id, name, method, action, felder, knoepfe }]
 //   dateiName(eintrag) → Dateiname              downloadUrl(eintrag, basis) → URL | ""
 //   datum(text, heute) → "JJJJ-MM-TTTHH:MM" | "JJJJ-MM-TT" | ""   groesse(text) → Bytes | null   sitzung(titel, heute)
@@ -706,6 +707,15 @@ function folgeUrl(html, basisUrl) {
   return mehr ? absolut(attr(mehr, "href"), basisUrl) : "";
 }
 
+// Adresse des Reiters „Inhalt“ (li#tab_view_content), aktiv oder nicht, sonst "". Sie zeigt ohne Weiterleitung auf den
+// Inhalt („ilias.php?baseClass=ilrepositorygui&cmdNode=…&cmdClass=ilObjFolderGUI&cmd=view&ref_id=N“); ilias.js leitet daraus
+// je Objektart eine Vorlage ab und spart so bei jedem weiteren Ordner, Kurs oder jeder Gruppe die Weiterleitung des Permalinks.
+function inhaltReiter(html, basisUrl) {
+  const reiter = mitId(parsen(html), "tab_view_content");
+  const a = reiter ? erstes(reiter, (e) => e.name === "a" && !!attr(e, "href")) : null;
+  return a ? absolut(attr(a, "href"), basisUrl) : "";
+}
+
 // -------------------------------------------------------------------------------------------------- Meine Kurse/Gruppen
 // Seite „Meine Kurse und Gruppen“ (ilias.php?baseClass=ilmembershipoverviewgui) → { kurse, gruppen }
 //   je [{ refId, titel, code, url, typ, beschreibung }]; code = Modulcode am Titelanfang (B110, SQ888, Muster wie MODULCODE in
@@ -904,8 +914,8 @@ function downloadUrl(eintrag, basisUrl) {
 
 // ---------------------------------------------------------------------------------------------------------------- Export
 const API = { parsen, alle, erstes, vorfahr, text, attr, hatKlasse, naechstesGeschwister, vorigesGeschwister, entitaeten,
-  angemeldet, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl, uebungen,
-  formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
+  angemeldet, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl,
+  inhaltReiter, uebungen, formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
 
 // Aufruf mit ctx: „heute“ für Heute/Gestern/Morgen kommt aus ctx.date (Testdatum des Plugins), sonst wie ohne Aufruf.
 module.exports = function (ctx) {

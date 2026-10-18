@@ -32,3 +32,42 @@ test("Ein Zwischentest am selben Tag verdeckt die Klausur des Moduls nicht", () 
   assert.equal(R.pruef.length, 2);
   assert.equal(R.naechste.art, "klausur");
 });
+
+// Lupe statt Tabelle „Semestertermine“ (17.10.2026): Rückmeldung fürs nächste Semester als Meilenstein, vorlesungsfreie Tage
+// als Striche im Band und als eine Legenden-Zeile
+const { lupe } = laden("verlauf", { heute: "2026-10-17" }).ergebnis;
+const frei = (name, datum, geschaetzt = false, hinweis = "") => ({ name, datum, geschaetzt, hinweis });
+const rueck = (fuer, von, bis, extra = {}) => Object.assign({ fuer, von, bis, pfad: "", erledigt: false, geschaetzt: false, hinweis: "" }, extra);
+const mitTerminen = (extra) => Object.assign(daten([], []), {
+  pausen: [{ name: "Weihnachtspause", von: d(23, 12), bis: d(6, 1, 2027), geschaetzt: false, hinweis: "" }],
+  frei: [frei("Allerheiligen", d(1, 11)), frei("Neujahr", d(1, 1, 2027)), frei("Karfreitag", d(26, 3, 2027))],
+  rueck: [rueck("SS 2027", d(15, 1, 2027), d(15, 2, 2027), { pfad: "Termine/Rückmeldung SS 2027.md" }), rueck("WS 2027/28", d(1, 6, 2027), d(15, 8, 2027))],
+}, extra);
+
+test("Lupe: freie Tage nur in der Vorlesungszeit und außerhalb von Pausen, Rückmeldung des Fensters in diesem Semester", () => {
+  const s = rechnen(mitTerminen()).sems[0];
+  assert.deepEqual(s.frei.map((x) => x.name), ["Allerheiligen"]);
+  assert.equal(s.rueck.fuer, "SS 2027");
+  assert.equal(rechnen(mitTerminen({ rueck: [], frei: [] })).sems[0].rueck, null);
+});
+
+test("Lupe zeigt Rückmeldung (mit Link auf die Termin-Notiz) und freie Tage", () => {
+  const D = mitTerminen(), R = rechnen(D);
+  const html = lupe(D, R, R.sems[0]);
+  assert.match(html, /<span data-pfad="Termine\/Rückmeldung SS 2027\.md" role="link" tabindex="0"><i class="raute"><\/i><b>Rückmeldung fürs SS 2027<\/b>: 15\.01\. – 15\.02\.<\/span>/);
+  assert.match(html, /<i class="eba-vl-b pause frei"><\/i>Frei 01\.11\.<\/span>/);
+  assert.equal((html.match(/class="eba-vl-b pause frei"/g) || []).length, 2, "ein Strich im Band, einer in der Legende");
+  assert.doesNotMatch(html, /geschätzt/);
+});
+
+test("Lupe: geschätzte Rückmeldung und freie Tage tragen „(geschätzt)“ und ihren Hinweis; abgehakt = gefüllte Raute", () => {
+  const D = mitTerminen({
+    frei: [frei("Allerheiligen", d(1, 11), true, "Liste der Uni noch nicht veröffentlicht")],
+    rueck: [rueck("SS 2027", d(15, 1, 2027), d(15, 2, 2027), { geschaetzt: true, hinweis: "Regelmäßige Frist fortgeschrieben", erledigt: true })],
+  });
+  const R = rechnen(D), html = lupe(D, R, R.sems[0]);
+  assert.match(html, /<i class="raute ok"><\/i><b>Rückmeldung fürs SS 2027<\/b>: 15\.01\. – 15\.02\. \(geschätzt\)/);
+  assert.match(html, /Frei 01\.11\. \(geschätzt\)/);
+  assert.match(html, /<b>Allerheiligen 01\.11\.<\/b> \(geschätzt\): Liste der Uni noch nicht veröffentlicht/);
+  assert.match(html, /<b>Rückmeldung fürs SS 2027<\/b> \(geschätzt\): Regelmäßige Frist fortgeschrieben/);
+});

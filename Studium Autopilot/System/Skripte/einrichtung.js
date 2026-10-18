@@ -1,11 +1,12 @@
 // Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit acht Bildschirmen:
 //   1 Willkommen · 2 Studienbeginn · 3 Variante · 4 Über dich (Name, Zielnote) · 5 Alma verbinden · 6 ILIAS verbinden
-//   (seit 0.4.0, freiwillig) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch; darstellung.js) · 8 Fertig
+//   (seit 0.4.0, freiwillig) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu das Design
+//   Elfenbein, Flieder oder Klar; darstellung.js) · 8 Fertig
 // Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 7“ mit Punkten (ab Bildschirm 2);
 // Zurück jederzeit, Überspringen auf 2–6 (die Darstellung hat immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
-// beenden ohne Verlust (Gespeichertes bleibt, nichts wird geschrieben; eine angetippte Darstellung gilt sofort und bleibt,
-// sie steht nur auf diesem Gerät, nicht in den Einstellungen); kein Autofokus (auf dem iPhone spränge sonst die Tastatur
-// auf); Tippflächen mindestens 44 px; auf dem iPhone bildschirmfüllend (eba-core.css Abschnitt 45).
+// beenden ohne Verlust (Gespeichertes bleibt, nichts wird geschrieben; Darstellung und Design gelten sofort beim Antippen und
+// bleiben, sie stehen nur auf diesem Gerät, nicht in den Einstellungen); kein Autofokus (auf dem iPhone spränge sonst die
+// Tastatur auf); Tippflächen mindestens 44 px; auf dem iPhone bildschirmfüllend (eba-core.css Abschnitt 45).
 //
 // Zustand im synchronisierten System/Einstellungen.md (gilt für alle Geräte):
 //   einrichtung: offen | laeuft | fertig      (leer = offen)
@@ -302,12 +303,13 @@ module.exports = function (ctx) {
 
       if (s === 5) {
         const v = V();
-        const st = v ? v.status() : { verbunden: false, daten: 0 };
-        if (this.alma || st.verbunden || st.daten) {
-          titel("Stundenplan aus Alma", "");
+        const st = v ? v.status() : { verbunden: false, daten: 0, extern: false };
+        // Verbunden, Stundenplan schon da oder eigener Uni-Abgleich (bringt ihn selbst; dort nie verbinden): ein Satz, Weiter
+        if (this.alma || st.verbunden || st.daten || st.extern) {
+          titel(st.extern ? "Stundenplan" : "Stundenplan aus Alma", "");
           const ok = haupt.createDiv({ cls: "eba-ei-erfolg" });
           ok.innerHTML = svg("haken");
-          ok.createSpan({ text: this.alma ? `Verbunden – ${this.alma.text}` : st.verbunden ? "Alma ist auf diesem Gerät verbunden." : "Dein Stundenplan ist schon da." });
+          ok.createSpan({ text: st.extern ? ctx.verbindungen.ALMA_EXTERN : this.alma ? `Verbunden – ${this.alma.text}` : st.verbunden ? "Alma ist auf diesem Gerät verbunden." : "Dein Stundenplan ist schon da." });
           this.aktion = () => this.speichernUndWeiter(null, false);
           unten();
           knopf("Weiter", "haupt", () => this.weiter());
@@ -355,14 +357,14 @@ module.exports = function (ctx) {
         const v = V("ilias"), I = ctx.ilias;
         const st = v ? v.status() : { verbunden: false, daten: 0, extern: false };
         const ohne = !v || !I || st.extern || st.text === I.K.TEXT_ANMELDUNG_FOLGT || !I.kannSpeichern();
-        titel("Unterlagen aus ILIAS", "");
+        titel(st.extern ? "Unterlagen" : "Unterlagen aus ILIAS", "");
         if (this.ilias || st.verbunden || ohne) {
           // Verbunden oder hier nicht möglich (eigener Uni-Abgleich, Obsidian zu alt, Anmeldebaustein fehlt): ein Satz, Weiter
           const n = this.ilias ? this.ilias.kurse : 0;
           const gut = !!(this.ilias || st.verbunden || st.extern);
           const text = this.ilias ? `Verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden` : ""}. ${this.ilias.laedt ? "Deine Dateien werden jetzt geladen." : "Deine Dateien kommen von selbst."}`
             : st.verbunden ? "ILIAS ist auf diesem Gerät verbunden."
-              : st.extern ? "Deine ILIAS-Unterlagen kommen über deinen Uni-Abgleich."
+              : st.extern ? I.K.TEXT_EXTERN
                 : !I || !v || st.text === I.K.TEXT_ANMELDUNG_FOLGT ? "Das geht in dieser Version noch nicht."
                   : "Dafür braucht Obsidian Version 1.11.4 oder neuer.";
           const ok = haupt.createDiv({ cls: "eba-ei-erfolg" + (gut ? "" : " leise") });
@@ -422,10 +424,25 @@ module.exports = function (ctx) {
       }
 
       if (s === DARSTELLUNG) {
-        // Derselbe Umschalter wie in Einstellungen & Hilfe (darstellung.js): Antippen schaltet sofort um; Weiter speichert nur
-        // den Stand der Einrichtung
+        // Derselbe Umschalter wie in Einstellungen & Hilfe (darstellung.js), darunter die Designs als Auswahl wie die Variante:
+        // Antippen schaltet sofort um; Weiter speichert nur den Stand der Einrichtung
         titel("Wie soll es aussehen?", "Tipp an, was dir gefällt, du siehst es sofort.");
-        if (ctx.darstellung) this.felder.darstellung = ctx.darstellung.schalter(haupt.createDiv({ cls: "eba-ei-feld" }));
+        const D = ctx.darstellung;
+        if (D) {
+          this.felder.darstellung = D.schalter(haupt.createDiv({ cls: "eba-ei-feld" }));
+          const gruppe = haupt.createDiv({ cls: "eba-ei-wahl eba-ei-design", attr: { role: "radiogroup", "aria-label": "Design" } });
+          this.felder.designs = D.designZeilen(D.design()).map((z) => {
+            const l = gruppe.createEl("label", { cls: "eba-ei-option" });
+            const r = l.createEl("input", { type: "radio", attr: { name: "eba-ei-design", value: z.wert } });
+            r.checked = z.gewaehlt;
+            const t = l.createSpan({ cls: "eba-ei-option-text" });
+            t.createEl("b", { text: z.titel });
+            t.createSpan({ text: z.text });
+            l.createSpan({ cls: "eba-dz-muster", attr: { "data-design": z.wert, "aria-hidden": "true" } });
+            r.addEventListener("change", () => { if (r.checked) D.designSetzen(z.wert); });
+            return r;
+          });
+        }
         this.aktion = () => this.speichernUndWeiter(null, false);
         unten();
         knopf("Weiter", "haupt", () => this.weiter());
@@ -451,15 +468,18 @@ module.exports = function (ctx) {
       const v = V(), st = v ? v.status() : { verbunden: false, daten: 0 };
       let zentral = false;
       try { zentral = !!(ctx.zentral && ctx.zentral.stundenplan && ctx.zentral.stundenplan().verfuegbar); } catch (e) { zentral = false; }
-      if (st.verbunden || st.daten) zeile("Stundenplan", st.verbunden ? "Alma verbunden" : "liegt vor");
+      if (st.extern) zeile("Stundenplan", "über deinen Uni-Abgleich");
+      else if (st.verbunden || st.daten) zeile("Stundenplan", st.verbunden ? "Alma verbunden" : "liegt vor");
       else if (zentral) zeile("Stundenplan", "kommt von selbst");
       const vi = V("ilias"), si = vi ? vi.status() : { verbunden: false, extern: false };
-      if (si.verbunden || si.extern) zeile("Unterlagen", "ILIAS verbunden");
+      if (si.extern) zeile("Unterlagen", "über deinen Uni-Abgleich");
+      else if (si.verbunden) zeile("Unterlagen", "ILIAS verbunden");
       const dm = ctx.darstellung ? ctx.darstellung.MODI.find((m) => m.wert === ctx.darstellung.modus()) : null;
-      if (dm) zeile("Darstellung", dm.titel);
+      const dd = ctx.darstellung ? ctx.darstellung.DESIGNS.find((d) => d.wert === ctx.darstellung.design()) : null;
+      if (dm) zeile("Darstellung", dd ? `${dd.titel}, ${dm.titel.toLowerCase()}` : dm.titel);
       // Übersprungenes: „Später nachholen“ mit Knopf (springt zu dem Bildschirm)
       const NACH = { studienbeginn: [2, "Studienbeginn"], variante: [3, "Variante"], angaben: [4, "Über dich"], alma: [5, "Alma-Stundenplan"], ilias: [ILIAS, "ILIAS-Unterlagen"] };
-      const erledigt = (p) => (p === "alma" && (st.verbunden || st.daten || zentral)) || (p === "ilias" && (si.verbunden || si.extern));
+      const erledigt = (p) => (p === "alma" && (st.verbunden || st.daten || st.extern || zentral)) || (p === "ilias" && (si.verbunden || si.extern));
       const offen = PUNKT_REIHE.filter((p) => this.uebersprungen.indexOf(p) >= 0 && !erledigt(p));
       if (offen.length) {
         const box = haupt.createDiv({ cls: "eba-ei-nachholen" });

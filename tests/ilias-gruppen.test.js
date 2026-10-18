@@ -1,8 +1,9 @@
 // ILIAS (ilias.js): Kurspasswörter im Titel nie speichern, zeigen oder protokollieren (Index, Funde, Begleitnotizen und Ordner
 // aus älteren Fassungen inklusive), und Übungsgruppen aus deinen Mitgliedschaften in den Stundenplan (Code aus dem Kurs bzw.
 // den Brotkrumen, Zuordnung zu gruppen.json, eine Notiz je Gruppe mit dem ILIAS-Namen, Doppel, gewählte Notizen, Überschneidung,
-// Verlassen erst beim zweiten Lauf, keine Namen). Erfundenes ILIAS, erfundene Passwörter und Namen (Attrappen in
-// tests/ilias-attrappen.js und tests/stundenplan-attrappe.js). Läuft ohne Obsidian: node --test tests/
+// Verlassen erst beim zweiten Lauf, keine Namen, kein Schreiben ohne Änderung, eigener Uni-Abgleich) und Freigeben (Trennen,
+// abgelehnte Anmeldung, verwaist; nur das Gerät mit der Sperre). Erfundenes ILIAS, erfundene Passwörter und Namen (Attrappen
+// in tests/ilias-attrappen.js und tests/stundenplan-attrappe.js). Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -141,20 +142,24 @@ const MITGLIED = {
   351: { refId: "351", titel: "Gruppe 4: Dienstag 10 - 12, Hörsaal 11 (" + NAMEN[0] + ")", beschreibung: NAMEN[1], url: B + "gruppe/351" },
   352: { refId: "352", titel: "Gruppe 8: Mittwoch 14 - 16, Hörsaal 99", beschreibung: "", url: B + "gruppe/352" },
   901: { refId: "901", titel: "Tutorium 1 - Dienstag, 08:15 - 09: 45 Uhr", beschreibung: "Tutor: " + NAMEN[1] + " Ort: Hörsaal 0.02 (Bau)", url: B + "gruppe/901" },
+  // dieselbe B110-Gruppe ohne Raum in Titel und Beschreibung
+  902: { refId: "902", titel: "Tutorium 1 - Dienstag, 08:15 - 09: 45 Uhr", beschreibung: "Tutor: " + NAMEN[1], url: B + "gruppe/902" },
 };
+// o: { notizen, mitglieder, zentral, kurs901, kurse ({ refId der Gruppe: Kurs aus den Brotkrumen }), einstellungen }
 function gruppenAufbau(o) {
   o = o || {};
   const def = standardIlias();
   def.seiten[B + "kurs/300"].push(grp("351", MITGLIED[351].titel, NAMEN[1], true), grp("352", MITGLIED[352].titel, "", true), grp("353", "Gruppe 9: Mittwoch 14 - 16", "", false));
   def.seiten[B + "gruppe/351"] = [];
   def.seiten[B + "gruppe/352"] = [];
-  const x = aufbau({ ilias: def });
+  const x = aufbau({ ilias: def, einstellungen: o.einstellungen });
   const sp = notizenIo(o.notizen);
-  const stand = { mitglieder: o.mitglieder || ["351", "352", "901"], gruppeKurs: 0, zentral: o.zentral === undefined ? ZENTRAL : o.zentral, kurs901: o.kurs901 === undefined ? { refId: "100", code: "B110" } : o.kurs901 };
+  const stand = { mitglieder: o.mitglieder || ["351", "352", "901"], gruppeKurs: 0, zentral: o.zentral === undefined ? ZENTRAL : o.zentral,
+    kurs901: o.kurs901 === undefined ? { refId: "100", code: "B110" } : o.kurs901, kurse: o.kurse || {} };
   x.abh.quelle = async (zugang, anmelden) => {
     const q = await x.il.quelle(zugang, anmelden);
     q.mitgliedschaften = async () => ({ kurse: await q.kurse(), gruppen: stand.mitglieder.map((id) => Object.assign({}, MITGLIED[id])) });
-    q.gruppeKurs = async (g) => { stand.gruppeKurs++; return g.refId === "901" ? stand.kurs901 : null; };
+    q.gruppeKurs = async (g) => { stand.gruppeKurs++; return g.refId === "901" ? stand.kurs901 : stand.kurse[g.refId] || null; };
     return q;
   };
   x.abh.gruppen = () => M;
@@ -271,4 +276,146 @@ test("Gruppen: Quelle ohne Mitgliederseite (ältere Fassung) lässt Notizen in R
   const b = await x.m.jetztHolen({ manuell: true });
   assert.equal(b.gruppen, null);
   assert.deepEqual(sp.pfade(), ["Stundenplan/a.md"]);
+});
+
+test("Gruppen: nach dem Verlassen mit eigenem Text („entfällt“) schreibt ein unveränderter Lauf nichts mehr", async () => {
+  const x = gruppenAufbau();
+  await verbinden(x);
+  await x.m.jetztHolen({ manuell: true });
+  await x.sp.io.schreiben(B110, x.sp.text(B110).replace("## Notizen\n- \n", "## Notizen\n- meine Frage\n"));
+  x.stand.mitglieder = ["351", "352"];
+  await x.m.jetztHolen({});
+  await x.m.jetztHolen({});
+  assert.equal(x.sp.fm(B110).entfaellt, true);
+  const notizen = [];
+  for (const k of ["schreiben", "anlegen", "papierkorb", "umbenennen"]) { const f = x.sp.io[k]; x.sp.io[k] = async (...a) => { notizen.push(k); return f(...a); }; }
+  const n = x.t.schreibvorgaenge.length;
+  for (let i = 0; i < 3; i++) await x.m.jetztHolen({});
+  assert.deepEqual(x.t.schreibvorgaenge.slice(n), [], "weder Index noch Sperre (kein Sync-Verkehr)");
+  assert.deepEqual(notizen, []);
+  assert.equal(x.t.index().gruppen[901].fehlt, 2, "zählt nicht weiter");
+});
+
+test("Gruppen im eigenen Uni-Abgleich: nur Mitgliedschaften und Notizen, keine Downloads; Code aus den Brotkrumen; Gruppe ohne Raum", async () => {
+  const kurse = { 351: { refId: "300", code: "S100" }, 352: { refId: "300", code: "S100" }, 902: { refId: "100", code: "B110" } };
+  const x = gruppenAufbau({ einstellungen: { ilias_unterlagen: "extern" }, mitglieder: ["351", "352", "902"], kurse });
+  await verbinden(x);
+  const b = await x.m.jetztHolen({ manuell: true });
+  assert.equal(b.art, "nur-gruppen", b.fehler);
+  assert.deepEqual(x.il.log.map((e) => e.was), ["anmelden", "kurse"], "nur die Seite „Meine Kurse und Gruppen“, nichts durchsucht");
+  assert.equal(x.stand.gruppeKurs, 3, "ohne Durchsuchen kommt jeder Code aus den Brotkrumen");
+  assert.deepEqual([x.t.pfade("Unterlagen/"), x.il.geladen()], [[], []]);
+  assert.deepEqual(x.sp.pfade(), [B110, S100]);
+  assert.deepEqual([x.sp.fm(B110).gruppe_id, x.sp.fm(B110).raum], ["ws-2026-27-b110-tutorium-1", "Hörsaal 0.02 (Beispielzentrum)"], "ohne Raum in ILIAS: über die Zeit, Raum der Liste");
+  assert.equal(x.m.gruppenListe().find((g) => g.refId === "352").status, "mehrdeutig");
+  assert.deepEqual(x.meldungen, ["ILIAS: Übungsgruppen geprüft. 2 Übungsgruppen stehen jetzt im Stundenplan."]);
+  const alles = x.t.alles() + x.lok.alles() + x.sp.pfade().map((p) => x.sp.text(p)).join("\n");
+  for (const n of NAMEN) assert.ok(alles.indexOf(n) < 0, n);
+  // zweiter Lauf: Codes gemerkt, nichts Neues
+  const b2 = await x.m.jetztHolen({});
+  assert.deepEqual([b2.art, b2.gruppen.neu, x.stand.gruppeKurs], ["nur-gruppen", 0, 3]);
+});
+
+// ---------- Freigeben ----------
+// Ein zweites Gerät am selben Tresor (Notizen, Index, Sperre und ILIAS gemeinsam), mit eigenem Gerätespeicher und Schlüsselbund
+const zweitesGeraet = (x) => {
+  const m = new Map(), geheim = new Map();
+  const abh = Object.assign({}, x.abh, {
+    lokal: (k, v) => { if (v === undefined) return m.has(k) ? JSON.parse(m.get(k)) : null; if (v == null) m.delete(k); else m.set(k, JSON.stringify(v)); return v; },
+    geheim: { lesen: (id) => geheim.get(id) || null, schreiben: async (id, w) => { geheim.set(id, w); }, loeschen: async (id) => { geheim.delete(id); } },
+    geraetId: () => "g-zwei", melden: () => {}, geaendert: () => {},
+  });
+  return { m: I.erzeugen(abh) };
+};
+const S100G = "Stundenplan/Di 10.15 S100 Tutorium Gruppe 4 (gewählt).md", B110G = "Stundenplan/Di 08.15 B110 Tutorium 1 (gewählt).md";
+const sperre = (x) => JSON.parse(x.t.text(I.K.ABRUF));
+// Karte „S100 Tutorien“ auf Termine & Anmeldungen (gruppen.js): gibt es den Knopf „Meine“?
+const GR = laden("gruppen").ergebnis;
+const meineDa = (x, m) => GR.auswaehlen(ZENTRAL, { stundenplan: x.sp.pfade().map((p) => ({ fm: x.sp.fm(p) })), ilias: m.gruppenListe() })
+  .find((k) => k.code === "S100").waehlbar;
+
+test("Trennen: deine Gruppe bleibt als gewählte Notiz (ILIAS-Name, dein Text), „Meine“ geht wieder; Trennen ohne Sperre ändert nichts", async () => {
+  const x = gruppenAufbau({ mitglieder: ["351", "901"] });
+  await verbinden(x);
+  await x.m.jetztHolen({ manuell: true });
+  await x.sp.io.schreiben(S100, x.sp.text(S100).replace("## Notizen\n- \n", "## Notizen\n- Blatt 3 abgeben\n"));
+  assert.equal(meineDa(x, x.m), false, "aus ILIAS: kein „Meine“");
+  // ein zweites Gerät mit Zugang, aber ohne Sperre: sein Trennen lässt die Notizen dem ersten
+  const y = zweitesGeraet(x);
+  await y.m.zugangSpeichern("zxabc01", () => GEHEIM);
+  await y.m.zugangLoeschen();
+  assert.deepEqual([x.sp.pfade(), sperre(x).geraet], [[B110, S100], "g-ich"]);
+  // Trennen auf dem Gerät mit der Sperre
+  await x.m.zugangLoeschen();
+  assert.deepEqual(x.sp.pfade(), [B110G, S100G]);
+  const fm = x.sp.fm(S100G);
+  assert.deepEqual([fm.herkunft, fm.ilias_gruppe, fm.gruppe, fm.gruppe_id], ["gruppe-gewaehlt", undefined, "Gruppe 4", "ws-2026-27-s100-tutorium-5"]);
+  assert.match(x.sp.text(S100G), /- Blatt 3 abgeben/);
+  assert.deepEqual(x.m.gruppenListe(), [], "keine Mitgliedschaft mehr aus ILIAS (auch nicht im Index)");
+  assert.deepEqual(Object.keys(x.t.index().gruppen).filter((id) => x.t.index().gruppen[id].mitglied), []);
+  assert.deepEqual([sperre(x).geraet, sperre(x).frei], ["g-ich", true]);
+  assert.equal(meineDa(x, x.m), true, "„Meine“ ist wieder da");
+  assert.equal((await M.waehlen(x.sp.io, ZENTRAL[1])).art, "geaendert", "eine andere Gruppe wählen ändert dieselbe Notiz");
+  // noch einmal: nichts zu tun, nichts geschrieben
+  const n = x.t.schreibvorgaenge.length;
+  await x.m.zugangLoeschen();
+  assert.equal(x.t.schreibvorgaenge.length, n);
+});
+
+test("Nach dem Trennen übernimmt ein Gerät mit Zugang sofort (Sperre frei), die Notiz kommt wieder aus ILIAS", async () => {
+  const x = gruppenAufbau({ mitglieder: ["351"] });
+  await verbinden(x);
+  await x.m.jetztHolen({ manuell: true });
+  await x.m.zugangLoeschen();
+  assert.deepEqual(x.sp.pfade(), [S100G]);
+  const y = zweitesGeraet(x);
+  await y.m.zugangSpeichern("zxabc01", () => GEHEIM);
+  const b = await y.m.jetztHolen({ manuell: true });
+  assert.equal(b.art, "unveraendert", b.fehler + " (die Dateien liegen schon im Tresor)");
+  assert.deepEqual([x.sp.pfade(), b.gruppen.notizen.uebernommen], [[S100], [S100G]]);
+  assert.deepEqual([x.sp.fm(S100).herkunft, x.sp.fm(S100).ilias_gruppe], ["ilias-gruppe", "351"]);
+  assert.deepEqual([sperre(x).geraet, sperre(x).frei], ["g-zwei", undefined]);
+  assert.deepEqual(y.m.gruppenListe().map((g) => g.refId), ["351"]);
+});
+
+test("Anmeldung abgelehnt: deine Gruppe bleibt als gewählte Notiz; mit neuem Zugang kommt sie wieder aus ILIAS", async () => {
+  const x = gruppenAufbau({ mitglieder: ["351"] });
+  await verbinden(x);
+  await x.m.jetztHolen({ manuell: true });
+  x.geheimnisse.set(I.geheimIdAus("Test-Tresor"), "altes Kennwort");
+  const b = await x.m.jetztHolen({});
+  assert.deepEqual([b.art, b.grund], ["zugang", "zugang-falsch"]);
+  assert.deepEqual(x.sp.pfade(), [S100G]);
+  assert.deepEqual([x.sp.fm(S100G).herkunft, x.m.gruppenListe()], ["gruppe-gewaehlt", []]);
+  await verbinden(x);
+  const b2 = await x.m.jetztHolen({ manuell: true });
+  assert.ok(["ok", "unveraendert"].indexOf(b2.art) >= 0, b2.fehler);
+  assert.deepEqual(x.sp.pfade(), [S100]);
+});
+
+test("Verwaist: ein Gerät ohne Zugang gibt die Gruppen erst frei, wenn das Gerät mit der Sperre eine Woche still war", async () => {
+  const x = gruppenAufbau({ mitglieder: ["351"] });
+  await verbinden(x);
+  await x.m.jetztHolen({ manuell: true });
+  const y = zweitesGeraet(x); // ohne Zugang
+  assert.equal(await x.m.verwaisteGruppen(), null, "mit Zugang nie");
+  assert.equal(await y.m.verwaisteGruppen(), null, "Sperre frisch");
+  const s = x.t.text(I.K.ABRUF);
+  x.t.m.delete(I.K.ABRUF);
+  assert.equal(await y.m.verwaisteGruppen(), null, "ohne Sperre (kommt auf einem neuen Gerät vielleicht erst per Sync): nichts");
+  x.t.setzen(I.K.ABRUF, s);
+  x.u.vor(6 * 24 * STUNDE);
+  assert.equal(await y.m.verwaisteGruppen(), null);
+  assert.equal(x.sp.fm(S100).herkunft, "ilias-gruppe");
+  x.u.vor(2 * 24 * STUNDE);
+  assert.deepEqual(await y.m.verwaisteGruppen(), [S100G]);
+  assert.deepEqual([sperre(x).geraet, sperre(x).frei], ["g-zwei", true]);
+  assert.equal(await y.m.verwaisteGruppen(), null, "nichts mehr zu tun");
+  // das erste Gerät meldet sich zurück: übernimmt sofort, die Notiz kommt wieder aus ILIAS
+  const b = await x.m.jetztHolen({});
+  assert.ok(["ok", "unveraendert"].indexOf(b.art) >= 0, b.fehler);
+  assert.deepEqual(x.sp.pfade(), [S100]);
+  // mit einer älteren Fassung getrennt (Zugang weg, Notiz noch aus ILIAS, Sperre bei diesem Gerät): beim nächsten Start frei
+  x.lok.lokal("eba-ilias-benutzer", null);
+  assert.deepEqual(await x.m.verwaisteGruppen(), [S100G]);
 });

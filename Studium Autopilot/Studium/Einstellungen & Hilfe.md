@@ -16,15 +16,13 @@ cssclasses:
 
 ## Deine Angaben
 
-Alles ist freiwillig. Ferien und Prüfungsphasen rechnen sich aus dem Studienbeginn: [[Studienverlauf#Semestertermine|Semestertermine]].
+Alles ist freiwillig. Ferien und Prüfungsphasen rechnen sich aus dem Studienbeginn; du siehst sie je Semester im [[Studienverlauf]].
 
 ```eba-personalisieren angaben
 Deine Angaben: erscheinen, sobald Studium Autopilot läuft. Ändern: Befehl „Personalisieren“.
 ```
 
 ## Verbindungen
-
-Verbinde Alma und ILIAS, dann kommen Stundenplan und Kursdateien von selbst. Link und Zugang bleiben auf diesem Gerät, das ILIAS-Passwort verschlüsselt im Schlüsselbund von Obsidian; es geht nur an die Uni.
 
 ```eba-verbindungen
 Verbindungen: erscheinen, sobald Studium Autopilot läuft.
@@ -155,10 +153,10 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > [!eba-karte|hilfe|geraete]- Geräte <span class="eba-zeile-unter">Einrichten, Unterschiede</span>
 > > > [!eba-raster|2]
 > > > > [!eba-regel] Einmal pro Gerät
-> > > > 1. Ordner in Obsidian **als Tresor öffnen** (Name egal).
-> > > > 2. **Vertrauen und Plugins aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
+> > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal).
+> > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
 > > > > 3. Unter [[#Verbindungen]] Alma und ILIAS verbinden. Beides gilt nur für dieses Gerät.
-> > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Vertrauen** tippen.
+> > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
 > > > > [!eba-info] Unterschiede je Gerät
 > > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>.

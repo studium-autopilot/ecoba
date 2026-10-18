@@ -43,6 +43,21 @@ test("Name der neuen Fassung neben deiner", () => {
   assert.equal(U.neuName(".obsidian/snippets/eba-core.css", "1.0.0"), ".obsidian/snippets/eba-core (neu 1.0.0).css.txt");
   // Die Kopie eines Skripts wird nie als Skript geladen
   assert.equal(U.klasseVon(U.neuName("System/Skripte/zentral.js", "0.3.0")), "");
+  // Sicherung deiner Systemdatei: immer mit .txt, nie geladen, nie im Update
+  assert.equal(U.deineName(".obsidian/snippets/eba-core.css", "0.4.4"), ".obsidian/snippets/eba-core (deine Fassung vor 0.4.4).css.txt");
+  assert.equal(U.deineName("System/Gerüste/Modul.md", "0.4.4", 2), "System/Gerüste/Modul (deine Fassung vor 0.4.4, 2).md.txt");
+  for (const p of [KERN + "main.js", "System/Skripte/zentral.js", ".obsidian/snippets/eba-core.css", "System/Gerüste/Modul.md"]) {
+    assert.equal(U.klasseVon(U.deineName(p, "0.4.4")), "", p);
+  }
+  // Kopien neben einer Datei erkennen (auch mit zerlegten Umlauten wie auf iPhone und Mac), sonst nichts
+  const namen = ["Studium/Prüfungen (neu 0.4.2).md", "Studium/Prüfungen (neu 0.4.1-beta.1).md", "Studium/Prüfungen.md",
+    "Studium/Prüfungen (neu x).md", "Studium/Prüfungen (neu 0.4.3).md.txt", "Studium/Prüfungen (deine Fassung vor 0.4.4).md.txt",
+    "Studium/Noten (neu 0.4.2).md"];
+  assert.deepEqual(U.kopienVon("Studium/Prüfungen.md", namen), [{ pfad: namen[0], version: "0.4.2" }, { pfad: namen[1], version: "0.4.1-beta.1" }]);
+  assert.deepEqual(U.kopienVon("System/Skripte/zentral.js", ["System/Skripte/zentral (neu 0.4.1).js.txt", "System/Skripte/zentral (neu 0.4.1).js"]),
+    [{ pfad: "System/Skripte/zentral (neu 0.4.1).js.txt", version: "0.4.1" }]);
+  assert.deepEqual(U.kopienVon("Dashboard.md", ["Dashboard (neu 0.3.0).md", "Studium/Dashboard (neu 0.3.0).md"]),
+    [{ pfad: "Dashboard (neu 0.3.0).md", version: "0.3.0" }]);
 });
 
 // ---------- Hilfen: Liste und Speicher wie in Obsidian ----------
@@ -80,17 +95,23 @@ function quelle(version, dateien, listeText, stoerung) {
 function speicher(dateien, kaputtBei) {
   const m = new Map(Object.entries(dateien).map(([k, v]) => [k, enc(v)]));
   let schreibvorgaenge = 0;
+  const reihe = []; // Schreibreihenfolge außerhalb der Sicherung
   return {
-    m,
+    m, reihe,
     text: (p) => (m.has(p) ? dec(m.get(p)) : null),
     stand: () => JSON.stringify(Array.from(m.keys()).filter((k) => !k.startsWith(".trash/")).sort().map((k) => [k, dec(m.get(k))])),
     get schreibvorgaenge() { return schreibvorgaenge; },
     lesen: async (p) => (m.has(p) ? m.get(p) : null),
     schreiben: async (p, b) => {
-      if (!p.startsWith(".trash/")) { schreibvorgaenge++; if (kaputtBei && kaputtBei(p, schreibvorgaenge)) throw new Error("Platte voll"); }
+      if (!p.startsWith(".trash/")) { schreibvorgaenge++; reihe.push(p); if (kaputtBei && kaputtBei(p, schreibvorgaenge)) throw new Error("Platte voll"); }
       m.set(p, b);
     },
     loeschen: async (p) => { m.delete(p); },
+    // Dateien direkt im Ordner ("" = Wurzel), wie io.liste in Obsidian
+    liste: async (o) => Array.from(m.keys()).filter((k) => {
+      const rest = o ? (k.startsWith(o + "/") ? k.slice(o.length + 1) : null) : k;
+      return rest != null && rest.indexOf("/") < 0;
+    }),
   };
 }
 async function update(alt, neu, ist, o) {
@@ -101,7 +122,7 @@ async function update(alt, neu, ist, o) {
   const q = quelle("0.3.0", neu, listeText, o.stoerung);
   const sp = speicher(Object.assign({}, ist, { "System/Daten/installiert.json": JSON.stringify(altListe) }), o.kaputtBei);
   const release = { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: o.falscheListe ? "0".repeat(64) : await U.sha256(enc(listeText)), notiz: "" };
-  const io = { holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen };
+  const io = { holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste };
   const vorher = sp.stand();
   const b = await U.aktualisierenMit(io, { release, alt: U.listePruefen(altListe).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 15, 14, 5) });
   return { b, sp, q, vorher, listeText };
@@ -231,11 +252,204 @@ test("Plan: Entscheidung je Datei", async () => {
     "System/Skripte/neu.js": "anlegen", "Dashboard.md": "behalten-neu", "Studium/Einstellungen & Hilfe.md": "seite-haken",
     "Studium/Prüfungen.md": "uebersprungen", "Module/1 Grundstudium/B110 BWL.md": "modul-mischen+text",
     "Module/1 Grundstudium/E101 VWL.md": "ersetzen", "Module/2 Profil/B220 Marketing.md": "anlegen",
-    ".obsidian/app.json": "json-mischen", "System/Skripte/weg.js": "entfernen", "System/Skripte/weg2.js": "bleibt",
+    ".obsidian/app.json": "json-mischen", "System/Skripte/weg.js": "entfernen", "System/Skripte/weg2.js": "entfernen-sichern",
   });
-  // Ohne installierte Liste: nichts gilt als unverändert, also wird nichts Geändertes überschrieben
+  // Ohne installierte Liste: nichts gilt als unverändert, also wird nichts Geändertes ohne Sicherung überschrieben
   const ohne = U.planen(neu, null, ist);
   assert.ok(ohne.every((s) => s.art !== "ersetzen" && s.art !== "entfernen" && s.art !== "uebersprungen"));
+});
+
+// Systemdateien, Vorlage unverändert, schon neu (seit 0.4.4)
+const ALT2 = {
+  [KERN + "main.js"]: "// kern 0.2.0\n", [KERN + "manifest.json"]: '{"version":"0.2.0"}\n', ".obsidian/snippets/eba-core.css": "/* alt */\n",
+  "System/Skripte/zentral.js": "// zentral alt\n", "Studium/Prüfungen.md": "# Prüfungen\n", "Dashboard.md": "# Dashboard alt\n",
+  "Studium/Noten.md": "# Noten alt\n", "Module/1 Grundstudium/B110 BWL.md": MODUL({}),
+};
+const NEU2 = Object.assign({}, ALT2, {
+  [KERN + "main.js"]: "// kern 0.3.0\n", [KERN + "manifest.json"]: '{"version":"0.3.0"}\n', ".obsidian/snippets/eba-core.css": "/* neu */\n",
+  "System/Skripte/zentral.js": "// zentral neu\n", "Dashboard.md": "# Dashboard neu\n", "Studium/Noten.md": "# Noten neu\n",
+}); // Prüfungen und B110 bleiben in der Vorlage gleich
+
+test("Plan: Systemdateien kommen immer neu, unveränderte Vorlage lässt deine Seite in Ruhe", async () => {
+  const alt = U.listePruefen(await listeBauen("0.2.0", ALT2)).wert;
+  const neu = U.listePruefen(await listeBauen("0.3.0", NEU2)).wert;
+  const ist = {};
+  for (const [p, t] of Object.entries(Object.assign({}, ALT2, {
+    ".obsidian/snippets/eba-core.css": "/* von Hand */\n",       // selbst geändert
+    [KERN + "main.js"]: "// kern, von Hand\n",                    // selbst geändert
+    "Studium/Prüfungen.md": "# Prüfungen\n\nalte Fußzeile\n",     // geändert, Vorlage gleich
+    "Module/1 Grundstudium/B110 BWL.md": MODUL({ status: "läuft" }), // geändert, Vorlage gleich
+    "Dashboard.md": "# Dashboard neu\n",                          // schon gleich der neuen Fassung
+  }))) {
+    ist[p] = { sha: await U.sha256(enc(t)) };
+    if (U.klasseVon(p) === "modul") ist[p].koerper = await U.sha256(enc(U.teilen(t).koerper));
+  }
+  const art = {};
+  for (const s of U.planen(neu, alt, ist)) art[s.pfad] = s.art;
+  assert.deepEqual(art, {
+    [KERN + "main.js"]: "ersetzen-sichern", [KERN + "manifest.json"]: "ersetzen", ".obsidian/snippets/eba-core.css": "ersetzen-sichern",
+    "System/Skripte/zentral.js": "ersetzen", "Studium/Prüfungen.md": "eigene", "Module/1 Grundstudium/B110 BWL.md": "eigene",
+    "Dashboard.md": "gleich", "Studium/Noten.md": "ersetzen",
+  });
+  // Ohne installierte Liste: Systemdateien trotzdem neu (mit Sicherung), Seiten bekommen die neue Fassung daneben
+  const ohne = {};
+  for (const s of U.planen(neu, null, ist)) ohne[s.pfad] = s.art;
+  assert.equal(ohne[".obsidian/snippets/eba-core.css"], "ersetzen-sichern");
+  assert.equal(ohne["Studium/Prüfungen.md"], "behalten-neu");
+});
+
+test("Update: selbst geänderte Darstellung und Programmteile werden ersetzt, deine Fassung liegt daneben", async () => {
+  const CSS = ".obsidian/snippets/eba-core.css", CSS_DEIN = ".obsidian/snippets/eba-core (deine Fassung vor 0.3.0).css.txt";
+  const MAIN_DEIN = KERN + "main (deine Fassung vor 0.3.0).js.txt";
+  const ist = Object.assign({}, ALT2, { [CSS]: "/* von Hand */\n", [KERN + "main.js"]: "// kern, von Hand\n" });
+  const { b, sp, listeText, q } = await update(ALT2, NEU2, ist);
+  assert.equal(b.ok, true, b.fehler);
+  assert.equal(sp.text(CSS), NEU2[CSS], "die neue Darstellung ist aktiv");
+  assert.equal(sp.text(CSS_DEIN), "/* von Hand */\n", "deine Fassung als Sicherung daneben");
+  assert.equal(sp.text(KERN + "main.js"), NEU2[KERN + "main.js"]);
+  assert.equal(sp.text(MAIN_DEIN), "// kern, von Hand\n");
+  assert.equal(sp.text(".obsidian/snippets/eba-core (neu 0.3.0).css.txt"), null, "keine neue Fassung mehr beiseite");
+  assert.deepEqual(b.gesichert, [{ pfad: KERN + "main.js", sicherung: MAIN_DEIN }, { pfad: CSS, sicherung: CSS_DEIN }]);
+  assert.deepEqual(b.neuKopien.map((x) => x.pfad), []);
+  assert.equal(sp.text(b.sicherung + "/" + CSS), "/* von Hand */\n");
+  // Sicherung vor der neuen Fassung, Kern zuletzt (vor den Listen)
+  const r = sp.reihe;
+  assert.ok(r.indexOf(CSS_DEIN) < r.indexOf(CSS) && r.indexOf(MAIN_DEIN) < r.indexOf(KERN + "main.js"));
+  assert.deepEqual(r.slice(-4), [KERN + "main.js", KERN + "manifest.json", U.LISTE, U.INSTALLIERT]);
+  // Zweiter Lauf derselben Version: nichts mehr zu tun, keine zweite Sicherung
+  const vorher = sp.stand();
+  const b2 = await U.aktualisierenMit({ holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste },
+    { release: { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)) }, alt: U.listePruefen(JSON.parse(listeText)).wert, altVersion: "0.3.0", zeit: new Date() });
+  assert.equal(b2.ok, true);
+  assert.equal(b2.gesichert.length + b2.geaendert.length, 0);
+  assert.equal(sp.stand(), vorher);
+  // Name schon mit anderem Inhalt belegt → nächster freier Name, nichts geht verloren
+  const r2 = await update(ALT2, NEU2, Object.assign({}, ist, { [CSS_DEIN]: "/* ältere Sicherung */\n" }));
+  assert.equal(r2.sp.text(CSS_DEIN), "/* ältere Sicherung */\n");
+  assert.equal(r2.sp.text(".obsidian/snippets/eba-core (deine Fassung vor 0.3.0, 2).css.txt"), "/* von Hand */\n");
+});
+
+test("Update: keine Kopie, wenn die Vorlage gleich blieb oder deine Seite schon neu ist; alte Kopien gehen weg", async () => {
+  const P = "Studium/Prüfungen.md", D = "Dashboard.md";
+  const ist = Object.assign({}, ALT2, {
+    [P]: "# Prüfungen\n\nalte Fußzeile\n",                            // geändert, Vorlage gleich → bleibt, keine Kopie
+    "Studium/Prüfungen (neu 0.1.0).md": ALT2[P],                       // alte Kopie = Vorlage → weg
+    "Studium/Prüfungen (neu 0.1.5).md": "# Prüfungen\n\nmeine Notiz\n", // Kopie, die du geändert hast → bleibt
+    [D]: "# Mein Dashboard\n",                                         // geändert, Vorlage neu → Kopie daneben
+    "Dashboard (neu 0.2.0).md": ALT2[D],                               // Kopie der alten Vorlage → weg
+    "Studium/Noten.md": NEU2["Studium/Noten.md"],                      // schon die neue Fassung → nichts
+    "Studium/Eigene (neu 0.1.0).md": "# eigene Seite\n",               // keine Seite der Vorlage → nie angefasst
+  });
+  const { b, sp } = await update(ALT2, NEU2, ist);
+  assert.equal(b.ok, true, b.fehler);
+  assert.equal(sp.text(P), ist[P], "deine Seite bleibt");
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.3.0).md"), null, "keine Kopie ohne neue Vorlage");
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.1.0).md"), null);
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.1.5).md"), ist["Studium/Prüfungen (neu 0.1.5).md"]);
+  assert.equal(sp.text("Dashboard (neu 0.3.0).md"), NEU2[D]);
+  assert.equal(sp.text("Dashboard (neu 0.2.0).md"), null);
+  assert.equal(sp.text("Studium/Noten (neu 0.3.0).md"), null);
+  assert.equal(sp.text("Studium/Eigene (neu 0.1.0).md"), "# eigene Seite\n");
+  assert.equal(sp.text("Module/1 Grundstudium/B110 BWL.md"), ALT2["Module/1 Grundstudium/B110 BWL.md"]);
+  assert.deepEqual(b.neuKopien, [{ pfad: D, kopie: "Dashboard (neu 0.3.0).md" }]);
+  assert.deepEqual(b.aufgeraeumt.sort(), ["Dashboard (neu 0.2.0).md", "Studium/Prüfungen (neu 0.1.0).md"]);
+  assert.equal(sp.text(b.sicherung + "/Studium/Prüfungen (neu 0.1.0).md"), ALT2[P], "weggeräumte Kopie liegt in der Sicherung");
+  assert.ok(sp.reihe.indexOf("Studium/Noten.md") < 0);
+});
+
+// ---------- Reparatur nach dem Update auf 0.4.4 (heilenMit) ----------
+const REL = {
+  [KERN + "main.js"]: "// kern 0.4.4\n", [KERN + "manifest.json"]: '{"version":"0.4.4"}\n', ".obsidian/snippets/eba-core.css": "/* 0.4.4 */\n",
+  "System/Skripte/zentral.js": "// zentral 0.4.4\n", "System/Skripte/termine.js": "// termine 0.4.4\n", "System/Skripte/ilias.js": "// ilias 0.4.4\n",
+  "Studium/Prüfungen.md": "# Prüfungen 0.4.4\n", "Dashboard.md": "# Dashboard 0.4.4\n",
+};
+// So sah ein Tresor nach dem Update auf 0.4.4 aus, das der alte update.js (0.4.3) geplant hat
+const NACH_043 = Object.assign({}, REL, {
+  ".obsidian/snippets/eba-core.css": "/* von Hand */\n",
+  ".obsidian/snippets/eba-core (neu 0.4.4).css.txt": REL[".obsidian/snippets/eba-core.css"],
+  ".obsidian/snippets/eba-core (neu 0.4.1).css.txt": "/* 0.4.1 */\n",
+  ".obsidian/snippets/eba-core (neu 0.4.5).css.txt": "/* kommt gerade per Sync */\n",
+  [KERN + "main.js"]: "// kern, von Hand\n", [KERN + "main (neu 0.4.4).js.txt"]: REL[KERN + "main.js"],
+  "System/Skripte/zentral.js": "// zentral, von Hand\n", "System/Skripte/zentral (neu 0.4.4).js.txt": REL["System/Skripte/zentral.js"],
+  "System/Skripte/termine (neu 0.4.2).js.txt": "// termine 0.4.2\n",                   // aktive Datei ist schon richtig
+  "System/Skripte/ilias.js": "// ilias, anders\n", "System/Skripte/ilias (neu 0.4.3).js.txt": "// ilias 0.4.3\n", // neue Fassung fehlt
+  "Studium/Prüfungen.md": "# Prüfungen 0.4.4\n\nalte Fußzeile\n",
+  "Studium/Prüfungen (neu 0.4.2).md": REL["Studium/Prüfungen.md"],      // = jetzige Vorlage, älter → weg
+  "Studium/Prüfungen (neu 0.4.3).md": "# Prüfungen\n\nmeine Notiz\n",    // selbst geändert → bleibt
+  "Studium/Prüfungen (neu 0.4.4).md": REL["Studium/Prüfungen.md"],      // diese Version → bleibt
+  "Dashboard (neu 0.4.1).md": REL["Dashboard.md"],                      // = jetzige Vorlage, älter → weg
+  "Studium/Eigene (neu 0.4.1).md": "# eigene Seite\n",                  // keine Seite der Vorlage
+});
+async function heilen(dateien, o) {
+  o = o || {};
+  const liste = U.listePruefen(await listeBauen("0.4.4", REL)).wert;
+  const sp = o.sp || speicher(dateien, o.kaputtBei);
+  const vorher = sp.stand();
+  const b = await U.heilenMit({ lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste },
+    { liste, synchron: !!o.synchron, zeit: new Date(2026, 9, 18, 9, 30) });
+  return { b, sp, vorher };
+}
+
+test("Reparatur: beiseitegelegte neue Fassung wird aktiv, deine liegt als Sicherung daneben", async () => {
+  const CSS = ".obsidian/snippets/eba-core.css";
+  // Gerät, das nicht für alle schreibt: nur seine eigenen .obsidian-Dateien
+  let { b, sp } = await heilen(NACH_043);
+  assert.equal(b.ok, true, b.fehler);
+  assert.equal(sp.text(CSS), REL[CSS]);
+  assert.equal(sp.text(".obsidian/snippets/eba-core (deine Fassung vor 0.4.4).css.txt"), "/* von Hand */\n");
+  assert.equal(sp.text(".obsidian/snippets/eba-core (neu 0.4.4).css.txt"), null);
+  assert.equal(sp.text(".obsidian/snippets/eba-core (neu 0.4.1).css.txt"), null, "ältere beiseitegelegte Fassung weg");
+  assert.equal(sp.text(".obsidian/snippets/eba-core (neu 0.4.5).css.txt"), "/* kommt gerade per Sync */\n", "neuere bleibt");
+  assert.equal(sp.text(KERN + "main.js"), REL[KERN + "main.js"]);
+  assert.equal(sp.text(KERN + "main (deine Fassung vor 0.4.4).js.txt"), "// kern, von Hand\n");
+  assert.equal(b.plugin, true);
+  assert.equal(sp.reihe[sp.reihe.length - 1], KERN + "main.js", "Kern zuletzt");
+  assert.equal(sp.text(b.sicherung + "/.obsidian/snippets/eba-core (neu 0.4.1).css.txt"), "/* 0.4.1 */\n");
+  assert.equal(b.sicherung, ".trash/Studium Autopilot Sicherung 0.4.4 2026-10-18 09-30");
+  for (const p of ["System/Skripte/zentral.js", "System/Skripte/zentral (neu 0.4.4).js.txt", "Studium/Prüfungen (neu 0.4.2).md", "Dashboard (neu 0.4.1).md"]) {
+    assert.equal(sp.text(p), NACH_043[p], "synchronisiert: nicht auf diesem Gerät " + p);
+  }
+  // Das Gerät, das für alle schreibt: auch Skripte und alte Kopien von Seiten
+  ({ b, sp } = await heilen(null, { sp, synchron: true }));
+  assert.equal(b.ok, true, b.fehler);
+  assert.equal(sp.text("System/Skripte/zentral.js"), REL["System/Skripte/zentral.js"]);
+  assert.equal(sp.text("System/Skripte/zentral (deine Fassung vor 0.4.4).js.txt"), "// zentral, von Hand\n");
+  assert.equal(sp.text("System/Skripte/zentral (neu 0.4.4).js.txt"), null);
+  assert.equal(sp.text("System/Skripte/termine (neu 0.4.2).js.txt"), null, "aktive Datei richtig → alte Fassung weg");
+  assert.equal(sp.text("System/Skripte/termine.js"), REL["System/Skripte/termine.js"]);
+  assert.equal(sp.text("System/Skripte/ilias.js"), "// ilias, anders\n", "ohne neue Fassung auf dem Gerät: nichts");
+  assert.equal(sp.text("System/Skripte/ilias (neu 0.4.3).js.txt"), "// ilias 0.4.3\n");
+  assert.deepEqual(b.getauscht, [{ pfad: "System/Skripte/zentral.js", sicherung: "System/Skripte/zentral (deine Fassung vor 0.4.4).js.txt" }]);
+  assert.equal(b.plugin, false);
+  // Seiten: nie die Seite selbst, nur unveränderte ältere Kopien
+  assert.equal(sp.text("Studium/Prüfungen.md"), NACH_043["Studium/Prüfungen.md"]);
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.4.2).md"), null);
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.4.3).md"), NACH_043["Studium/Prüfungen (neu 0.4.3).md"]);
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.4.4).md"), REL["Studium/Prüfungen.md"]);
+  assert.equal(sp.text("Dashboard (neu 0.4.1).md"), null);
+  assert.equal(sp.text("Studium/Eigene (neu 0.4.1).md"), "# eigene Seite\n");
+  // Zweiter Lauf: nichts mehr zu tun
+  const n = sp.schreibvorgaenge, stand = sp.stand();
+  ({ b } = await heilen(null, { sp, synchron: true }));
+  assert.equal(b.ok, true);
+  assert.equal(b.getauscht.length + b.entfernt.length, 0);
+  assert.equal(sp.schreibvorgaenge, n);
+  assert.equal(sp.stand(), stand);
+});
+
+test("Reparatur: ohne beiseitegelegte Fassung nichts; Schreibfehler setzt alles zurück", async () => {
+  // Gerät ohne Kopien (z. B. ein anderes iPad): nichts anfassen
+  const ohne = Object.assign({}, REL, { ".obsidian/snippets/eba-core.css": "/* alt */\n", "Studium/Prüfungen.md": "# meins\n" });
+  let r = await heilen(ohne, { synchron: true });
+  assert.equal(r.b.ok, true);
+  assert.equal(r.sp.schreibvorgaenge, 0);
+  assert.equal(r.sp.stand(), r.vorher);
+  // Schreibfehler beim Kern (zuletzt) → Sicherung und neue Fassung wieder zurück, nichts entfernt
+  r = await heilen(NACH_043, { synchron: true, kaputtBei: (p) => p === KERN + "main.js" });
+  assert.equal(r.b.ok, false);
+  assert.equal(r.b.art, "schreiben");
+  assert.equal(r.b.zurueckgesetzt, true);
+  assert.equal(r.sp.stand(), r.vorher);
 });
 
 test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
@@ -259,7 +473,10 @@ test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
   assert.equal(sp.text("Module/2 Profil/B220 Marketing.md"), NEU["Module/2 Profil/B220 Marketing.md"]);
   assert.deepEqual(JSON.parse(sp.text(".obsidian/app.json")), { alwaysUpdateLinks: true, neueEinstellung: 1 });
   assert.equal(sp.text("System/Skripte/weg.js"), null, "unverändert weggefallen → nur noch in der Sicherung");
-  assert.equal(sp.text("System/Skripte/weg2.js"), "// fällt weg, von mir geändert\n");
+  // Weggefallenes Skript, selbst geändert: würde sonst weiter geladen → weg, deine Fassung als .txt daneben
+  assert.equal(sp.text("System/Skripte/weg2.js"), null);
+  assert.equal(sp.text("System/Skripte/weg2 (deine Fassung vor 0.3.0).js.txt"), "// fällt weg, von mir geändert\n");
+  assert.deepEqual(b.gesichert, [{ pfad: "System/Skripte/weg2.js", sicherung: "System/Skripte/weg2 (deine Fassung vor 0.3.0).js.txt" }]);
   for (const p of ["System/Daten/Semester.md", "System/Einstellungen.md", "Termine/2026-10-12 X.md"]) assert.equal(sp.text(p), ist[p], p);
   assert.equal(sp.text(U.LISTE), listeText); assert.equal(sp.text(U.INSTALLIERT), listeText);
   // Sicherung

@@ -466,3 +466,131 @@ test("Ein Schreiber: dieses Gerät schreibt für alle, wenn es Abrufer ist, es n
   assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: vor(81) }, "g-a", jetzt), true, "Abrufer still: dieses Gerät springt ein");
   assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: "" }, "g-a", jetzt), true, "ohne Zeit gilt der Abrufer als still");
 });
+
+// ---------- Übergabe nach id: Notizen eines eigenen Uni-Abgleichs (abgleich_id, docs/daten-v1.md) – nur ausgedachte Daten ----------
+
+// Tresor im Speicher für einen ganzen Abruf: Pfad → Datei, Frontmatter wie der metadataCache (stundenplan-attrappe.js)
+function tresorAbruf(start) {
+  const crypto = require("node:crypto");
+  const { frontmatter } = require("./stundenplan-attrappe.js");
+  const speicher = {}, quelle = {};
+  const L = laden("zentral", {
+    kontext: { plugin: { testZentralAus: true, testQuelle: async (n) => quelle[n] }, modell: { daten: () => ({ module: [], fachsemester: 1 }) } },
+  });
+  const app = L.ctx.app;
+  app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
+  app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = JSON.stringify(v); };
+  const dateien = new Map(), ordner = new Set(["Termine", "System", "System/Daten"]), papierkorb = [];
+  const neueDatei = (p, text) => { const f = { path: p, basename: p.split("/").pop().replace(/\.md$/, ""), text }; dateien.set(p, f); return f; };
+  for (const [p, t] of Object.entries(start || {})) neueDatei(p, t);
+  app.vault.getAbstractFileByPath = (p) => dateien.get(p) || (ordner.has(p) ? { path: p } : null);
+  app.vault.getMarkdownFiles = () => Array.from(dateien.values()).filter((f) => f.path.endsWith(".md"));
+  app.vault.read = async (f) => f.text;
+  app.vault.modify = async (f, t) => { f.text = t; };
+  app.vault.create = async (p, t) => { if (dateien.has(p)) throw new Error("gibt es schon: " + p); return neueDatei(p, t); };
+  app.vault.createFolder = async (p) => { ordner.add(p); };
+  app.vault.trash = async (f) => { dateien.delete(f.path); papierkorb.push(f.path); };
+  app.fileManager = { renameFile: async (f, ziel) => {
+    if (dateien.has(ziel)) throw new Error("gibt es schon: " + ziel);
+    dateien.delete(f.path); f.path = ziel; f.basename = ziel.split("/").pop().replace(/\.md$/, ""); dateien.set(ziel, f);
+  } };
+  app.metadataCache.getFileCache = (f) => {
+    const x = f && dateien.get(f.path);
+    const fm = x && x.path.endsWith(".md") ? frontmatter(x.text) : null;
+    return fm ? { frontmatter: fm } : null;
+  };
+  const daten = (termine) => {
+    quelle["termine.json"] = JSON.stringify({ schema: 1, termine });
+    const b = Buffer.from(quelle["termine.json"], "utf8");
+    quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-18T09:00:00Z",
+      dateien: { "termine.json": { sha256: crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length } } });
+  };
+  return {
+    Z: L.ctx.zentral, daten, papierkorb,
+    text: (p) => (dateien.get(p) ? dateien.get(p).text : null),
+    fm: (p) => frontmatter(dateien.get(p).text),
+    pfade: () => Array.from(dateien.keys()).filter((p) => p.startsWith("Termine/")).sort(),
+    schreiben: (p, t) => { if (dateien.has(p)) dateien.get(p).text = t; else neueDatei(p, t); },
+    loeschen: (p) => { dateien.delete(p); },
+    angewendet: () => JSON.parse(dateien.get("System/Daten/abruf.json").text).angewendet,
+  };
+}
+
+// So sieht eine Notiz des eigenen Uni-Abgleichs aus (Frontmatter wie die zentralen Termine, abgleich_id statt herkunft)
+const abgleichNotiz = (id, datum, titel, o = {}) => [
+  "---", "typ: termin", `titel: "${titel}"`, `datum: ${datum}`, "bis:", "kategorie: Frist", "status: offiziell", "ort: \"\"", "modul:",
+  `code: "${o.code || ""}"`, `erledigt: ${o.erledigt ? "true" : "false"}`, "quelle: \"Rundmail vom 01.10.2026\"", `abgleich_id: ${id}`,
+  "uebersicht: \"[[Prüfungen]]\"", "cssclasses:", "  - eba-s-termin", "tags:", "  - termin",
+].concat(o.eigen ? [o.eigen] : []).concat(["---", "", `# ${titel}`, "", "Text aus dem eigenen Abgleich.", ""])
+  .concat(o.meine ? ["## Meine Notizen", "", o.meine, ""] : []).join("\n");
+const zentraleNotiz = (id, datum, titel) => Z.notizText("", termin({ id, datum, titel, kategorie: "Veranstaltung" }), {});
+
+test("Übergabe nach id: eine Notiz des eigenen Abgleichs wird übernommen, nicht verdoppelt und nicht als gelöscht gewertet", async () => {
+  const id = "2026-11-03-bewerbungsfrist-stipendium";
+  const T = tresorAbruf();
+  T.daten([termin({ id, titel: "Bewerbungsfrist Stipendium", datum: "2026-11-03", kategorie: "Frist" })]);
+  // 1. normal angelegt (wie bei allen Nutzer:innen)
+  const b1 = await T.Z.abrufen({});
+  const pfad = "Termine/2026-11-03 Bewerbungsfrist Stipendium.md";
+  assert.deepEqual(b1.angelegt, [pfad]);
+  assert.ok(T.angewendet()[id], "angewendet gemerkt");
+  // 2. Der eigene Abgleich übernimmt die Notiz (zurückgehalten): gleiche Datei, abgleich_id, Häkchen und eigene Zeilen
+  T.schreiben(pfad, abgleichNotiz(id, "2026-11-03", "Bewerbungsfrist Stipendium", { erledigt: true, eigen: "gruppe: 3", meine: "Eigene Zeile." }));
+  // 3. Wieder veröffentlicht, Daten unverändert: bis 0.4.3 „von dir gelöscht“ (nichts angelegt, Notiz ohne Pflege)
+  const b3 = await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(b3.ausgeblendet, [], "nicht als gelöscht gewertet");
+  assert.deepEqual(b3.angelegt, [], "keine zweite Notiz");
+  assert.deepEqual(b3.uebernommen, [pfad]);
+  assert.deepEqual(T.pfade(), [pfad]);
+  const fm = T.fm(pfad);
+  assert.equal(fm.herkunft, "zentral");
+  assert.equal(fm.zentral_id, id);
+  assert.equal(fm.abgleich_id, undefined, "abgleich_id fällt weg: ein Schreiber");
+  assert.equal(fm.erledigt, true, "Häkchen bleibt");
+  assert.equal(fm.gruppe, 3, "eigenes Feld bleibt");
+  assert.match(T.text(pfad), /## Meine Notizen\n\nEigene Zeile\.\n/);
+  assert.doesNotMatch(T.text(pfad), /Text aus dem eigenen Abgleich/, "verwalteter Teil kommt aus den Daten");
+  // 4. ab jetzt eine normale zentrale Notiz: nichts mehr zu übernehmen
+  const b4 = await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(b4.uebernommen, []);
+  assert.deepEqual(b4.aktualisiert, []);
+});
+
+test("Übergabe nach id: ohne eigenen Abgleich bleibt eine gelöschte Notiz gelöscht", async () => {
+  const id = "2026-11-05-infoabend";
+  const T = tresorAbruf();
+  T.daten([termin({ id, titel: "Infoabend", datum: "2026-11-05", kategorie: "Veranstaltung" })]);
+  await T.Z.abrufen({});
+  T.loeschen("Termine/2026-11-05 Infoabend.md");
+  const b = await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(b.ausgeblendet, [id]);
+  assert.deepEqual(b.uebernommen, []);
+  assert.deepEqual(T.pfade(), []);
+});
+
+test("Übergabe nach id: neues Datum benennt um; gefilterte, nicht veröffentlichte und doppelte Notizen bleiben unberührt", async () => {
+  const a = abgleichNotiz("2026-11-02-tutorien-starten", "2026-11-02", "Tutorien starten", { meine: "Gruppe gewählt." });
+  const gefiltert = abgleichNotiz("2026-11-04-tutorium-x100", "2026-11-04", "Tutorium X100", { code: "X100" });
+  const privat = abgleichNotiz("2026-11-06-eigene-frist", "2026-11-06", "Eigene Frist");
+  const doppel = abgleichNotiz("2026-11-07-vortrag", "2026-11-07", "Vortrag", { erledigt: true });
+  const T = tresorAbruf({
+    "Termine/2026-11-02 Tutorien starten.md": a, "Termine/2026-11-04 Tutorium X100.md": gefiltert,
+    "Termine/2026-11-06 Eigene Frist.md": privat, "Termine/2026-11-07 Vortrag.md": zentraleNotiz("2026-11-07-vortrag", "2026-11-07", "Vortrag"),
+    "Termine/2026-11-07 Vortrag (alt).md": doppel,
+  });
+  T.daten([
+    termin({ id: "2026-11-02-tutorien-starten", titel: "Tutorien starten", datum: "2026-11-03", kategorie: "Lehre" }),
+    termin({ id: "2026-11-04-tutorium-x100", titel: "Tutorium X100", datum: "2026-11-04", kategorie: "Lehre", code: "X100" }),
+    termin({ id: "2026-11-07-vortrag", titel: "Vortrag", datum: "2026-11-07", kategorie: "Veranstaltung" }),
+  ]);
+  const b = await T.Z.abrufen({});
+  assert.deepEqual(b.uebernommen, ["Termine/2026-11-02 Tutorien starten.md"]);
+  assert.deepEqual(b.umbenannt, ["Termine/2026-11-02 Tutorien starten.md → Termine/2026-11-03 Tutorien starten.md"]);
+  assert.match(T.text("Termine/2026-11-03 Tutorien starten.md"), /## Meine Notizen\n\nGruppe gewählt\.\n/);
+  assert.equal(T.text("Termine/2026-11-04 Tutorium X100.md"), gefiltert, "Modul nicht im Plan: nicht übernommen, nicht im Papierkorb");
+  assert.equal(T.text("Termine/2026-11-06 Eigene Frist.md"), privat, "nicht in den Daten: nicht angefasst");
+  assert.equal(T.text("Termine/2026-11-07 Vortrag (alt).md"), doppel, "schon eine zentrale Notiz: die andere bleibt, wie sie ist");
+  assert.equal(T.fm("Termine/2026-11-07 Vortrag.md").herkunft, "zentral");
+  assert.deepEqual(T.papierkorb, []);
+  assert.equal(T.pfade().length, 5, "keine neue Notiz");
+});

@@ -97,4 +97,7 @@ test("Prüfung selbst: erkennt ausgeblendete Abschnitte, lässt Blöcke darin un
     [".eba .markdown-preview-sizer>div:has(> p.x)"]);
   assert.deepEqual(funde(".el-pre:has(> .aus) { display: block; height: 0; overflow: hidden; }"), []);
   assert.deepEqual(funde(".markdown-source-view .cm-embed-block:has(> .aus), .el-div .callout .x { display: none; }"), []);
+  // Karte in einer Raster-Karte (leere To-dos/Fragen, 37.todos): Der Abschnitt der Raster-Karte bleibt sichtbar, nur niedriger.
+  // Am 18.10.2026 in Obsidian geprüft: „Im Eingang“ darunter erscheint nach dem Scrollen, Leseansicht und Bearbeitungsansicht.
+  assert.deepEqual(funde('.callout[data-callout="eba-raster"] > .callout-content > .callout:has(.eba-td.is-leer) { display: none; }'), []);
 });

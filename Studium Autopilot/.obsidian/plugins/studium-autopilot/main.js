@@ -101,6 +101,11 @@ module.exports = class StudiumAutopilot extends Plugin {
     this.editorErw = [];     // CodeMirror-Erweiterungen; das Array ist einmal angemeldet, Inhalt wird getauscht
     this.befehle = {};       // Befehls-ID → Skript (zum Entfernen beim Hot-Reload)
     this.ctx = this.kontextBauen();
+    // Klassen am body, die ein Skript für dieses Gerät gemerkt hat (Gerätespeicher „eba-start-klassen“, z. B. das Design aus
+    // darstellung.js): gleich jetzt setzen, nicht erst nach dem Laden der Skripte, sonst springt das Aussehen beim Start um
+    const start = this.app.loadLocalStorage("eba-start-klassen");
+    this.startKlassen = (Array.isArray(start) ? start : []).filter((k) => /^eba-[a-z0-9-]+$/.test(String(k)));
+    for (const k of this.startKlassen) document.body.classList.add(k);
 
     // Knöpfe: Klick im Capture-Modus abfangen, bevor Obsidian den Link selbst behandelt (Lese-/Bearbeitungsansicht,
     // Bases-html(), Callouts, Hover-Vorschau, auf allen Geräten). Protokoll-Handler als Rückfall (Link von außen).
@@ -134,6 +139,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     // Je Skript: abmelden() der Erweiterung, dann alles, was über die Helfer in ctx angemeldet wurde.
     // Codeblock-Prozessoren, Post-Processor, Editor-Array und Befehle meldet Obsidian beim Entladen des Plugins selbst ab.
     for (const name of Object.keys(this.erweiterungen).concat(Object.keys(this.aufraeumer))) this.skriptAbmelden(name);
+    for (const k of this.startKlassen || []) document.body.classList.remove(k);
     this.zustaende = {};
   }
 

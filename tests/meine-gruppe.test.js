@@ -1,7 +1,8 @@
 // Deine Übungsgruppe im Stundenplan (meine-gruppe.js): Zeitfenster aus ILIAS-Text (nur Tag, Zeit, Raumnummer, nie Namen),
-// Zuordnung zu gruppen.json (Code + Wochentag + Beginn/Ende ±15 Min., c.t./s.t., Raum entscheidet, nie die Nummer), Notiztext
-// fürs Wochenraster, Abgleich mit den Notizen (anlegen, aktualisieren, weichen, übernehmen, verlassen, Schutz) und „Meine
-// Gruppe“. Nur ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
+// Zuordnung zu gruppen.json (Code + Wochentag + Beginn/Ende ±15 Min., c.t./s.t., Raum entscheidet, dann die kleinere
+// Abweichung, nie die Nummer), Notiztext fürs Wochenraster, Abgleich mit den Notizen (anlegen, aktualisieren, weichen,
+// übernehmen, verlassen, Schutz), „Meine Gruppe“, Aufräumen auf zwei Geräten und Freigeben (ILIAS-Notiz wird gewählt). Nur
+// ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -60,6 +61,31 @@ test("Zuordnung: Code + Wochentag + Beginn/Ende ±15 Min. (c.t./s.t.), nie über
   assert.equal(M.zuordnen({ tag: "Mi", beginn: "08:00", ende: "10:00" }, "", LISTE, SEM).status, "ohne-code", "Code nie aus der Uhrzeit");
   assert.equal(M.zuordnen(null, "X100", LISTE, SEM).status, "ohne-zeit");
   assert.equal(M.zuordnen({ tag: "Di", beginn: "10:00", ende: "12:00" }, "X100", LISTE, "SS 2027").status, "ohne-treffer", "anderes Semester");
+});
+
+test("Zuordnung: Ende höchstens 15 Min. daneben, sonst die kleinere Abweichung; ILIAS-Gruppe ohne Raum", () => {
+  // Ende: 10–12 c.t. endet 11:45; gemessen an 12:00 und an 11:45
+  const di = (ende) => M.zuordnen({ tag: "Di", beginn: "10:15", ende, raum: "" }, "X100", LISTE, SEM).status;
+  assert.deepEqual(["12:10", "12:15", "11:30", "12:16", "11:29"].map(di), ["zugeordnet", "zugeordnet", "zugeordnet", "ohne-treffer", "ohne-treffer"]);
+  assert.equal(M.zuordnen({ tag: "Di", beginn: "10:15", raum: "" }, "X100", LISTE, SEM).status, "zugeordnet", "ohne Ende zählt nur der Beginn");
+  // zwei Gruppen am selben Tag, beide in der Toleranz: die kleinere Abweichung (Beginn + Ende) gewinnt, gleich weit → mehrdeutig
+  const zwei = [
+    g({ id: "ws-2026-27-x100-tutorium-1", gruppe: "1", tag: "Do", von: "10:00", bis: "12:00", ct: false, raum: "Raum 1 (Beispielbau)" }),
+    g({ id: "ws-2026-27-x100-tutorium-2", gruppe: "2", tag: "Do", von: "10:15", bis: "11:45", ct: false, raum: "Raum 2 (Beispielbau)" }),
+  ];
+  const zu = (beginn, ende, raum) => M.zuordnen({ tag: "Do", beginn, ende, raum }, "X100", zwei, SEM);
+  assert.equal(zu("10:15", "11:45", "").id, "ws-2026-27-x100-tutorium-2");
+  assert.equal(zu("10:05", "11:55", "").id, "ws-2026-27-x100-tutorium-1");
+  assert.deepEqual(zu("10:07", "11:52", ""), { status: "mehrdeutig", kandidaten: ["ws-2026-27-x100-tutorium-1", "ws-2026-27-x100-tutorium-2"] });
+  assert.equal(zu("10:15", "11:45", "9").id, "ws-2026-27-x100-tutorium-2", "Raum passt zu keiner: dann die Abweichung");
+  assert.equal(zu("10:15", "11:45", "1").id, "ws-2026-27-x100-tutorium-1", "der Raum geht vor der Abweichung");
+  // ILIAS nennt keinen Raum: eindeutig über die Zeit, die Notiz zeigt den Raum der Liste; gleiche Zeit ohne Raum → mehrdeutig
+  const slot = M.zeitfenster("Gruppe 3: Donnerstag 10:15 - 11:45 (Erika Beispiel)");
+  assert.deepEqual(slot, { tag: "Do", beginn: "10:15", ende: "11:45", raum: "" });
+  const z = M.zuordnen(slot, "X100", zwei.slice(1), SEM);
+  assert.equal(z.id, "ws-2026-27-x100-tutorium-2");
+  assert.match(M.notizText("", zwei[1], { herkunft: M.ILIAS, iliasGruppe: "1", name: "Gruppe 3" }), /^raum: "Raum 2 \(Beispielbau\)"$/m);
+  assert.equal(M.zuordnen(M.zeitfenster("Gruppe 8: Mittwoch 14 - 16"), "X100", LISTE, SEM).status, "mehrdeutig");
 });
 
 test("Notiz: Felder fürs Wochenraster (echte Zeit bei c.t.), eigene Felder und Notizen bleiben", () => {
@@ -167,4 +193,67 @@ test("Aufräumen: gewählte Notiz weicht, wenn ILIAS oder Alma die Gruppe liefer
   const w = notizenIo({ "Stundenplan/Di 11.15 Y300 Vorlesung.md": notiz({ typ: "lehrveranstaltung", code: "Y300", art: "Vorlesung", wochentag: 2, beginn: "11:15", ende: "12:45", semester: SEM }) });
   await M.waehlen(w.io, g());
   assert.equal(w.fm("Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (gewählt).md").konflikt, "Di 11.15 Y300 Vorlesung");
+});
+
+test("Aufräumen auf zwei Geräten: dein Text kommt nur einmal in die andere Notiz", async () => {
+  const gw = M.notizText("", LISTE[1], { herkunft: M.GEWAEHLT }).replace("## Notizen\n- \n", "## Notizen\n- meine Frage\n");
+  const start = { "Stundenplan/a.md": gw, "Stundenplan/b.md": M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "9" }) };
+  // zugleich, ohne Sync dazwischen: beide Geräte kommen zum selben Text (der Sync hat nichts zu mischen)
+  const t1 = notizenIo(start), t2 = notizenIo(start);
+  await M.gewaehltAufraeumen(t1.io, "2026-10-17");
+  await M.gewaehltAufraeumen(t2.io, "2026-10-17");
+  assert.equal(t1.text("Stundenplan/b.md"), t2.text("Stundenplan/b.md"));
+  // nacheinander: Gerät 2 hat die Notiz mit deinem Text schon, den Papierkorb von Gerät 1 noch nicht
+  const t3 = notizenIo({ "Stundenplan/a.md": gw, "Stundenplan/b.md": t1.text("Stundenplan/b.md") });
+  assert.deepEqual(await M.gewaehltAufraeumen(t3.io, "2026-10-18"), ["Stundenplan/a.md"]);
+  assert.equal(t3.text("Stundenplan/b.md"), t1.text("Stundenplan/b.md"), "dein Text steht genau einmal da");
+  assert.equal(t3.text("Stundenplan/b.md").split("- meine Frage").length, 2);
+  assert.deepEqual(t3.papierkorb, ["Stundenplan/a.md"]);
+});
+
+test("Freigeben: aus der ILIAS-Notiz wird eine gewählte (Name, Felder, dein Text bleiben), danach geht „Meine“", async () => {
+  const P = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (ILIAS).md", PG = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (gewählt).md";
+  const E = "Stundenplan/Mi 08.15 Y200 Übung Gruppe 2 (ILIAS).md";
+  const il = M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4", kurz: "Beispielökonomik" })
+    .replace("tags:", "farbe: blau\ntags:").replace("## Notizen\n- \n", "## Notizen\n- Blatt 2 mitbringen\n");
+  const entfallen = M.notizText("", LISTE[4], { herkunft: M.ILIAS, iliasGruppe: "352" }).replace("tags:", "entfaellt: true\ntags:");
+  const t = notizenIo({ [P]: il, [E]: entfallen });
+  assert.equal((await M.waehlen(t.io, LISTE[1])).art, "ilias", "vorher: „Meine“ gesperrt");
+  assert.deepEqual(await M.iliasFreigeben(t.io), [PG]);
+  assert.deepEqual(t.umbenannt, [[P, PG]], "mit dem fileManager: Links ziehen mit");
+  const fm = t.fm(PG);
+  assert.deepEqual([fm.herkunft, fm.ilias_gruppe, fm.gruppe, fm.gruppe_alma, fm.gruppe_id, fm.titel, fm.beginn, fm.farbe],
+    ["gruppe-gewaehlt", undefined, "Gruppe 4", "5", "ws-2026-27-x100-tutorium-5", "Beispielökonomik · Tutorium Gruppe 4", "10:15", "blau"], "der ILIAS-Name bleibt");
+  assert.match(t.text(PG), /^> \[!info\] Von dir gewählt, ändern auf \[\[Termine & Anmeldungen\]\]\.$/m);
+  assert.doesNotMatch(t.text(PG), /Aus ILIAS/);
+  assert.match(t.text(PG), /^- Blatt 2 mitbringen$/m);
+  assert.equal(t.text(E), entfallen, "entfallene bleibt, wie sie ist");
+  assert.deepEqual(await M.iliasFreigeben(t.io), [], "zweites Mal: nichts zu tun");
+  // ein zweites Gerät hat die gewählte Notiz schon per Sync, die alte noch: kein Doppel
+  const u = notizenIo({ [P]: il, [PG]: t.text(PG) });
+  assert.deepEqual(await M.iliasFreigeben(u.io), []);
+  assert.deepEqual([u.pfade(), u.papierkorb], [[PG], [P]]);
+  // „Meine“: eine andere Gruppe desselben Moduls ändert dieselbe Notiz, dein Text bleibt
+  const r = await M.waehlen(t.io, LISTE[1]);
+  assert.deepEqual([r.art, r.pfad], ["geaendert", "Stundenplan/Di 08.15 X100 Tutorium Gruppe 4 (gewählt).md"]);
+  assert.deepEqual([t.fm(r.pfad).gruppe_id, t.fm(r.pfad).herkunft], ["ws-2026-27-x100-tutorium-4", "gruppe-gewaehlt"]);
+  assert.match(t.text(r.pfad), /^- Blatt 2 mitbringen$/m);
+});
+
+test("Freigeben auf einem Gerät, Aufräumen auf dem anderen, solange die Umbenennung erst halb per Sync da ist: nichts geht verloren", async () => {
+  const P = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (ILIAS).md", PG = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (gewählt).md";
+  const il = M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4" }).replace("## Notizen\n- \n", "## Notizen\n- Blatt 2 mitbringen\n");
+  const a = notizenIo({ [P]: il });
+  assert.deepEqual(await M.iliasFreigeben(a.io), [PG]);
+  // Gerät B: die neue Notiz ist schon da, die alte (noch ILIAS) auch; ihr Löschen kommt gleich. Weichen hieße: beide weg.
+  const b = notizenIo({ [P]: il, [PG]: a.text(PG) });
+  assert.deepEqual(await M.gewaehltAufraeumen(b.io, "2026-10-18"), [], "gewählte Notiz bleibt");
+  assert.deepEqual(b.papierkorb, []);
+  assert.equal(b.text(PG), a.text(PG));
+  assert.equal(b.text(P), il, "die alte Notiz fasst das Aufräumen nicht an");
+  // Eine echte Doppelung (andere gewählte Notiz neben der ILIAS-Notiz) räumt es weiter auf
+  const gw = M.notizText("", LISTE[1], { herkunft: M.GEWAEHLT }).replace("## Notizen\n- \n", "## Notizen\n- meine Frage\n");
+  const c = notizenIo({ [P]: il, "Stundenplan/Di 08.15 X100 Tutorium.md": gw });
+  assert.deepEqual(await M.gewaehltAufraeumen(c.io, "2026-10-18"), ["Stundenplan/Di 08.15 X100 Tutorium.md"]);
+  assert.match(c.text(P), /- meine Frage/);
 });

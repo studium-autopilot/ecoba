@@ -12,7 +12,8 @@ In der Arbeitskopie (nicht in diesem Repo) baut ein Export-Skript den Baum in ei
 
 - `Studium Autopilot/` aus dem letzten Commit der Arbeitskopie (nichts Ungetracktes), ohne Papierkorb, gerätelokale
   Obsidian-Dateien, Abrufer-Datei, `installiert.json` und fremde Plugins;
-- `docs/`, `tests/`, `.github/`, `README.md`, `LICENSE`, `LICENSE-INHALTE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`;
+- `docs/`, `tests/` (ohne die Tests für `server/`, das noch nicht im Release ist), `.github/`, `README.md`, `LICENSE`,
+  `LICENSE-INHALTE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`;
 - `werkzeuge/pruefen.py`, eine eigene `.gitignore` und eine `.gitattributes` (`* -text`: Dateien byte-genau, sonst stimmen die
   Prüfsummen der Update-Liste nicht).
 
@@ -81,6 +82,12 @@ bzw. in der Konfiguration des Exports) setzen:
 Ab dem nächsten Abruf zeigt die Zeile „Studium Autopilot“ in **Einstellungen & Hilfe** → **Verbindungen** „Neue Version …
 verfügbar“ mit dem Knopf **Aktualisieren**. Vorher gesetzt, bekäme jemand eine Version angeboten, deren Dateien es noch nicht
 gibt (das Update bricht dann ohne Schaden ab). Vertrag: `docs/daten-v1.md`, „Update-Angaben“.
+
+**Neue Regeln für das Update wirken erst ab dem nächsten Mal.** Ein Update plant immer der `update.js`, der beim Tipp läuft,
+also der der *installierten* Version. Was der alte Planer anders macht, gleicht die Reparatur des neuen `update.js` nach dem
+ersten Laden aus, nur mit Dateien, die schon im Tresor liegen (`docs/architektur.md`, „Update“ → „Reparatur nach dem
+Update“; erster Fall 0.4.4: von Hand geänderte Darstellung). Ändert ein Release die Update-Regeln, darum auch den Weg „alter
+Planer, dann Reparatur“ prüfen, etwa mit dem Test-Tresor der Vorversion.
 
 ## Beta
 

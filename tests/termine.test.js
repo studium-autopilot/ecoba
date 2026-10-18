@@ -233,7 +233,7 @@ test("Anmeldungen: „angemeldet · Gruppe 4“ aus deiner Gruppen-Notiz (Name w
   assert.equal(stand([g()]), "angemeldet · Gruppe 4");
   assert.equal(stand([g({ herkunft: "gruppe-gewaehlt", gruppe: "Gruppe 2", gruppe_alma: "2" })]), "angemeldet · Gruppe 2");
   assert.equal(stand([g({ gruppe: "" })]), "angemeldet", "ohne Namen nur „angemeldet“");
-  assert.equal(stand([g({ herkunft: "" }), g({ herkunft: "zentral" })]), "", "Alma, von Hand oder zentral: kein Stand");
+  assert.equal(stand([g({ herkunft: "" }), g({ herkunft: "zentral" })]), "", "Alma, von Hand oder zentral ohne passende Gruppenzeit: kein Stand");
   assert.equal(stand([g({ semester: "SS 2027" })]), "", "anderes Semester");
   assert.equal(stand([g({ entfaellt: true })]), "", "in ILIAS verlassen");
   assert.equal(stand([g({ code: "X110" })]), "", "anderes Modul");
@@ -243,6 +243,45 @@ test("Anmeldungen: „angemeldet · Gruppe 4“ aus deiner Gruppen-Notiz (Name w
   assert.equal(stand(beide), "angemeldet · Tutorium 3");
   assert.equal(stand(beide, { titel: "Gruppen-Anmeldung X100" }), "angemeldet · Gruppe 1, Tutorium 3");
   assert.equal(stand([g({ art: "Übung" })]), "angemeldet · Gruppe 4", "keine Gruppe der genannten Art: die des Moduls");
+});
+
+// Notizen ohne Gruppen-Herkunft (Alma, von Hand, ein eigener Uni-Abgleich ohne Feld herkunft): angemeldet, wenn die Notiz zur
+// Zeit einer Gruppe aus gruppen.json passt (Regel aus meine-gruppe.js: Code, Semester, Wochentag, Beginn und Ende ±15 Min.,
+// c.t. und s.t.; Art Übung oder Tutorium). Nie über die Nummer der Gruppe.
+test("Anmeldungen: „angemeldet“ auch aus einer Stundenplan-Notiz zur Zeit einer Gruppe (Alma, von Hand, ohne herkunft)", () => {
+  const TMG = laden("termine", { heute: "2026-10-17", kontext: { user: { "meine-gruppe": laden("meine-gruppe").ergebnis } } }).ergebnis;
+  const ZG = (extra) => Object.assign({ id: "ws-x100-uebung-2", code: "X100", art: "Übung", gruppe: "2", tag: "Mi", von: "08:00", bis: "10:00", ct: true, semester: "WS 2026/27" }, extra || {});
+  const N = (fm) => ({ fm: Object.assign({ typ: "lehrveranstaltung", code: "X100", art: "Übung", wochentag: 3, beginn: "08:00", ende: "10:00", semester: "WS 2026/27" }, fm) });
+  const t = F(d(14), "Übungsgruppen-Anmeldung X100 (ILIAS)", { code: "X100" });
+  const stand = (gruppen, zentraleGruppen, extra, M) => (M || TMG).anmeldungen([Object.assign({}, t, extra || {})],
+    { heute: HEUTE, ende: WS_ENDE, aufnehmen: null, gruppen, semester: "WS 2026/27", zentraleGruppen })[0].status;
+  const zg = [ZG(), ZG({ id: "ws-x100-uebung-4", gruppe: "4", tag: "Di", von: "16:00", bis: "18:00" })];
+  assert.equal(stand([N()], zg), "angemeldet", "Notiz ohne herkunft zur Zeit von Gruppe 2 (Alma-Zeit 8–10)");
+  assert.equal(stand([N({ beginn: "08:15", ende: "09:45" })], zg), "angemeldet", "echte Zeit (c.t.)");
+  assert.equal(stand([N({ herkunft: "alma", art: "Tutorium", gruppe: "Gruppe 4" })], zg), "angemeldet · Gruppe 4", "Name nur aus dem Feld gruppe der Notiz");
+  assert.equal(stand([N({ ende: "11:00" })], zg), "", "Ende passt nicht");
+  assert.equal(stand([N({ beginn: "08:30", ende: "10:00" })], [ZG({ ct: false })]), "", "s.t.: 08:30 ist mehr als 15 Min. daneben");
+  assert.equal(stand([N({ wochentag: 4 })], zg), "", "anderer Wochentag");
+  assert.equal(stand([N({ art: "Vorlesung" })], zg), "", "eine Vorlesung zur selben Zeit ist keine Gruppe");
+  assert.equal(stand([N({ art: "Übungsteil" })], zg), "", "nur Übung oder Tutorium");
+  assert.equal(stand([N({ herkunft: "zentral" })], zg), "", "zentrale Notizen sagen nichts über deine Anmeldung");
+  assert.equal(stand([N({ semester: "SS 2027" })], zg), "", "anderes Semester");
+  assert.equal(stand([N({ entfaellt: true })], zg), "", "entfallen");
+  assert.equal(stand([N({ code: "X110" })], zg), "", "anderes Modul");
+  assert.equal(stand([N()], []), "", "ohne Gruppenliste kein Abgleich der Zeit");
+  assert.equal(stand([N()], [ZG({ code: "X110" })]), "", "Gruppe eines anderen Moduls");
+  assert.equal(stand([N()], [ZG({ semester: "SS 2027" })]), "", "Gruppe eines anderen Semesters");
+  const beideArten = [ZG(), ZG({ id: "ws-x100-tutorium-1", art: "Tutorium", tag: "Do" })];
+  assert.equal(stand([N()], beideArten, { titel: "Tutorien-Anmeldung X100" }), "",
+    "nennt der Titel Tutorium und gibt es Tutorien, zählen nur sie: Mi 8–10 ist die Übung");
+  assert.equal(stand([N()], beideArten, { titel: "Gruppen-Anmeldung X100" }), "angemeldet", "ohne Art im Titel jede Gruppe");
+  assert.equal(stand([N()], zg, null, TM), "", "ohne meine-gruppe.js kein Abgleich der Zeit");
+  // Gemeldeter Fall (Zeiten wie in gruppen.json): E101 Mi 08:00–10:00 und S100 Di 10:00–12:00 aus einem alten Skript, ohne herkunft
+  const E101 = ZG({ id: "ws-2026-27-e101-uebung-2", code: "E101", gruppe: "2" });
+  const S100 = ZG({ id: "ws-2026-27-s100-tutorium-5", code: "S100", art: "Tutorium", gruppe: "5", tag: "Di", von: "10:00", bis: "12:00" });
+  const notizen = [N({ code: "E101" }), N({ code: "S100", art: "Tutorium", wochentag: 2, beginn: "10:00", ende: "12:00" })];
+  assert.equal(stand(notizen, [E101, S100], { code: "E101", titel: "Übungsgruppen-Anmeldung E101 VWL (ILIAS)" }), "angemeldet");
+  assert.equal(stand(notizen, [E101, S100], { code: "S100", titel: "Tutorien-Anmeldung S100 Mathe (ILIAS)" }), "angemeldet");
 });
 
 test("Anmeldungen: Pillen nur für freiwillig (sofern nicht schon im Titel) und geschätzt", () => {

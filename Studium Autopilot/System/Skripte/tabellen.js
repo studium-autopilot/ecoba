@@ -11,7 +11,8 @@
 // nur bei Notizen, die das Feld haben. Modulseiten zeigen die Liste auch auf iPad/PC (eba-core.css Abschnitt 58).
 // Erweiterung: registrieren() erweitert die Tabellenansicht (Fabrik und Prototyp, Merker __ebaTl/__ebaTlPatch), abmelden()
 // nimmt das beim Hot-Reload und beim Entladen des Plugins vollständig zurück. Post-Processor über ctx.postprozessor.
-// Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“), sonst
+// Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“; „offiziell“ ohne Chip, markiert wird nur
+// „geschätzt“), sonst
 // „Öffnen ↗“; in einer Gruppe überall gleiche Werte (z. B. „Block 34 %“) einmal im Gruppenkopf; „–“ entfällt; ein in der
 // ganzen Ansicht gleicher Status neben „Öffnen ↗“ entfällt („neu“ in „Zu lesen“). Dazu ein Post-Processor, der in
 // Markdown-Tabellen ab 4 Spalten jeder Zelle ihren Spaltenkopf mitgibt (data-eba-k, für die gestapelte iPhone-Ansicht).
@@ -152,7 +153,7 @@ module.exports = function (ctx) {
             const tmp = doc.createElement("span"); wertIn(tmp, v);
             const p = tmp.querySelector(".eba-pill");
             if (p) chip = p;
-            else { const s = tmp.textContent.trim(); if (s) { chip = doc.createElement("span"); chip.className = "eba-pill " + chipArt(s); chip.textContent = s; } }
+            else { const s = tmp.textContent.trim(); if (s && s.toLowerCase() !== "offiziell") { chip = doc.createElement("span"); chip.className = "eba-pill " + chipArt(s); chip.textContent = s; } }
           } catch (x) {}
         }
         for (const p of rest) {

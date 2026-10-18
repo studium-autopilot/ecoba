@@ -7,8 +7,10 @@
 // vorher geprüft; zweiter Tipp in der Zeit nimmt es zurück), Text als Markdown (fett, Links), ohne „**Zu tun:**“,
 // darunter eine Metazeile: Fälligkeit („bis Mi 21.10.“, rot überfällig, Akzent ab 2 Tagen), Quellnotiz kurz („E101 · Folien 01“)
 // und die Belege hinter „→“. Tipp auf den Text öffnet die Quellnotiz an dieser Zeile. Sortiert nach Fälligkeit, dann Notiz.
+// Leer: Klasse is-leer am Block. Im Raster des Dashboards (Offene Fragen | To-dos) fällt die leere Karte dann weg und die andere
+// nimmt die ganze Breite; sind beide leer, bleibt nur die To-do-Karte mit „Nichts offen.“ (CSS, folgt jedem Neuzeichnen).
 // Erweiterung: registrieren() meldet Codeblock, Ereignisse und Uhr über die Helfer in ctx an (Hot-Reload ohne Neustart).
-// Stil: eba-core.css Abschnitt 37, Klassen eba-td-*.
+// Stil: eba-core.css Abschnitt 37 (todos), Klassen eba-td-*.
 // iOS-sicher: keine Node-APIs, keine Lookbehind-Regex, kein .at()/findLast/structuredClone. Fehler → Ersatztext des Blocks.
 module.exports = function (ctx) {
   const app = window.app;
@@ -22,7 +24,7 @@ module.exports = function (ctx) {
   const CODE_NAME = MODULCODE ? new RegExp("^(" + MODULCODE + ")\\s+(.+)$") : null;
   const KURZTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const AUFGABE = /^([\s>]*[-*+] )\[ \] +(\S.*)$/; // offene Aufgabe mit Text (auch in Zitat/Callout)
-  const LEER = { todos: "Nichts zu tun.", fragen: "Keine offenen Fragen." };
+  const LEER = { todos: "Nichts zu tun.", fragen: "Keine offenen Fragen.", alles: "Nichts offen." };
   const WARTEN = 1500; // ms bis zum Schreiben nach dem Abhaken (zweiter Tipp nimmt es zurück)
 
   const pad = (n) => String(n).padStart(2, "0");
@@ -82,9 +84,10 @@ module.exports = function (ctx) {
   const warte = ctx.bleibend("warte", () => new Map());
   const basis = ctx; // zeichnen() überdeckt ctx mit dem Markdown-Kontext
   const schluessel = (pfad, zeile) => pfad + "\n" + zeile;
-  const lesen = async (modus) => {
+  // Beide Listen in einem Durchgang ({ todos, fragen }): Der Block braucht auch die andere, um zu wissen, ob alles leer ist
+  const lesenBeide = async () => {
     const heute = tag0(basis.date.jetzt());
-    const aus = [];
+    const aus = { todos: [], fragen: [] };
     for (const f of app.vault.getMarkdownFiles()) {
       if (ausgeschlossen(f.path)) continue;
       const items = app.metadataCache.getFileCache(f)?.listItems;
@@ -97,20 +100,32 @@ module.exports = function (ctx) {
         const roh = (zeilen[nr] || "").replace(/\r$/, "");
         const m = roh.match(AUFGABE);
         if (!m) continue;
-        if ((modus === "fragen") !== istFrage(m[2])) continue;
+        const modus = istFrage(m[2]) ? "fragen" : "todos";
         const z = zerlegen(m[2], modus);
         const fl = modus === "fragen" ? null : faellig(z.text, heute);
         // reines „(bis 02.11.)“ am Ende steht schon in der Fälligkeits-Pille
         const text = fl ? z.text.replace(/\s*\(bis\s+(?:(?:Mo|Di|Mi|Do|Fr|Sa|So)\.?,?\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2,4})?\)\s*$/, "") || z.text : z.text;
-        aus.push({ f, nr, roh, text, belege: z.belege, faellig: fl });
+        aus[modus].push({ f, nr, roh, text, belege: z.belege, faellig: fl });
       }
     }
-    aus.sort((a, b) => {
+    const ordnen = (a, b) => {
       if (a.faellig && b.faellig && a.faellig - b.faellig) return a.faellig - b.faellig;
       if (!!a.faellig !== !!b.faellig) return a.faellig ? -1 : 1;
       return a.f.path.localeCompare(b.f.path, "de") || a.nr - b.nr;
-    });
+    };
+    aus.todos.sort(ordnen);
+    aus.fragen.sort(ordnen);
     return aus;
+  };
+  const lesen = async (modus) => (await lesenBeide())[modus === "fragen" ? "fragen" : "todos"];
+
+  // Was ein Block zeigt: seine Liste, leer die Klasse is-leer (das Raster blendet die Karte aus, eba-core.css 37.todos) und
+  // einen Satz. Sind auch die Fragen leer, sagt der To-do-Block „Nichts offen.“: Er steht dann allein im Raster.
+  const zustand = (beide, modus) => {
+    const liste = beide[modus];
+    const andere = beide[modus === "fragen" ? "todos" : "fragen"];
+    const leer = liste.length ? "" : modus === "todos" && !andere.length ? LEER.alles : LEER[modus];
+    return { liste, leer, klasse: "eba-td eba-td-" + modus + (liste.length ? "" : " is-leer") };
   };
 
   // Abhaken: genau diese Zeile, nur wenn ihr Text noch stimmt (sonst einmalig gleiche Zeile suchen)
@@ -177,9 +192,9 @@ module.exports = function (ctx) {
   const zeichnen = async (inst, erzwingen) => {
     const { el, ctx } = inst;
     const modus = inst.modus;
-    const liste = await lesen(modus);
+    const { liste, leer, klasse } = zustand(await lesenBeide(), modus);
     const heute = tag0(basis.date.jetzt());
-    const sig = heute.getTime() + "|" + liste.map((t) => t.f.path + ":" + t.nr + ":" + t.roh + ":" + (warte.has(schluessel(t.f.path, t.nr)) ? 1 : 0)).join("\n");
+    const sig = heute.getTime() + "|" + leer + "|" + liste.map((t) => t.f.path + ":" + t.nr + ":" + t.roh + ":" + (warte.has(schluessel(t.f.path, t.nr)) ? 1 : 0)).join("\n");
     if (!erzwingen && inst.sig === sig && el.querySelector(".eba-td-liste, .eba-td-leer")) return;
     inst.sig = sig;
     if (!inst.comp) { inst.comp = obs.MarkdownRenderChild ? new obs.MarkdownRenderChild(el) : null; if (inst.comp && ctx && ctx.addChild) ctx.addChild(inst.comp); }
@@ -187,9 +202,9 @@ module.exports = function (ctx) {
     if (obs.Component) { comp = new obs.Component(); if (inst.comp) inst.comp.addChild(comp); else comp.load(); }
     const quelle = (ctx && ctx.sourcePath) || "";
     const neu = el.ownerDocument.createElement("div");
-    neu.className = "eba-td eba-td-" + modus;
+    neu.className = klasse;
     const stopp = (k) => k.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
-    if (!liste.length) neu.createDiv({ cls: "eba-td-leer", text: LEER[modus] });
+    if (!liste.length) neu.createDiv({ cls: "eba-td-leer", text: leer });
     else {
       const ul = neu.createDiv({ cls: "eba-td-liste", attr: { role: "list" } });
       const warten = [];
@@ -260,5 +275,5 @@ module.exports = function (ctx) {
     ctx.intervall(() => alleNeu(false), 30 * 60 * 1000); // Tageswechsel: „bis morgen“ → „bis heute“
   };
 
-  return { registrieren, zeichnen, lesen, faellig, kurzname, zerlegen };
+  return { registrieren, zeichnen, lesen, lesenBeide, zustand, faellig, kurzname, zerlegen };
 };

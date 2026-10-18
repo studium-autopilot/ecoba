@@ -42,41 +42,9 @@ cssclasses:
 <div class="eba-meta"><span><b>9</b> ECTS</span><span>FS 4.–5.</span><span>WS, SS</span><span>unbenotet</span><span>Deutsch</span></div>
 </div>
 
+```eba-modul
+```
 
-> [!eba-tabelle|schlicht] Mein Stand
-> ```base
-> filters:
->   and:
->     - file == this.file
-> formulas:
->   mpid: 'file("System/Daten/Musterplan.md").properties.plaene.filter(value.name == file("System/Einstellungen.md").properties.variante).map(value.id).join("")'
->   mpfs: 'file("System/Daten/Musterplan.md").properties.eintraege.filter(value.plan == formula.mpid && value.code == code).map(number(value.fs)).sort()'
->   fsplan: 'if(gruppe == "Schwerpunkt", 0, if(formula.mpid == "", if(fachsemester, number(fachsemester), 0), if(formula.mpfs.length > 0, formula.mpfs[0], if(gewaehlt == true && fachsemester, number(fachsemester), 0))))'
->   semester: 'if(semester_geplant, semester_geplant, if(formula.fsplan > 0, file("System/Einstellungen.md").properties.semesterliste.filter(number(value.split("|")[0]) == formula.fsplan).map(value.split("|")[1]).join(""), ""))'
-> properties:
->   note.status:
->     displayName: Status
->   note.ergebnis:
->     displayName: Note
->   note.versuch:
->     displayName: Versuch
->   note.klausur:
->     displayName: Prüfungstermin
->   note.semester_geplant:
->     displayName: Eigene Planung
->   formula.semester:
->     displayName: Semester
-> views:
->   - type: table
->     name: Mein Stand
->     order:
->       - status
->       - ergebnis
->       - versuch
->       - klausur
->       - formula.semester
->       - semester_geplant
-> ```
 
 ## Meine SQ-Kurse
 
@@ -167,116 +135,10 @@ cssclasses:
 > > - Unentschuldigt fehlen bei TCP: im nächsten Semester keine TCP-Kurse.
 
 
-> [!eba-neu|ohne-titel] Neu zu diesem Modul
-> - [Vorlesung](obsidian://studium-autopilot?aktion=vorlesung&code=SQ100)
-> - [Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt&code=SQ100)
-
-
-> [!eba-raster|2]
-> > [!eba-karte|handy-zu]+ Lehrveranstaltung
-> > - **Inhalte:** Überfachliche Kompetenzen, z.B. TCP, ZDV, Fremdsprachen, Schreibzentrum, Weltethos-Institut
-> > - **Lehrform:** je nach gewählten Lehrveranstaltungen / Mitarbeit, Selbststudium, Literaturstudium
-> > - **Workload:** Kontaktzeit 60 h + Selbststudium 210 h = 270 h
-> > - **Verantwortlich:** verschiedene Dozierende
-> > - **Voraussetzungen:** keine laut Modulhandbuch
-> > - **Dauer:** 1-6 Semester
->
-> > [!eba-regel|handy-zu]+ Prüfung
-> > - **Form:** unbenotet
-> > - **Studienleistung:** je nach gewählten Lehrveranstaltungen
-> > - **Gesamtnote:** zählt nicht, weil unbenotet
-
-
-> [!eba-info|handy-zu]+ Hinweise
-> - Titel im Studienplan/PO: "Schlüsselqualifikation"; Modulbeschreibung: DE "Schlüsselqualifikationen" / EN "Professional Skills".
-
-
 ## Unterlagen
 
-> [!eba-neu|ohne-titel]
-> - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen&code=SQ100)
-> - [In SQ100 suchen](obsidian://studium-autopilot?aktion=suchen&q=path%3ASQ100%20)
-
-> [!eba-tabelle] Folien, Skripte, Übungen, Altklausuren
-> ```base
-> formulas:
->   was: 'file.asLink(if(titel, titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art)))'
->   artnr: 'if(titel, if(nummer, art + " " + if(nummer < 10, "0" + nummer, "" + nummer), art), "")'
->   oeffnen: 'html("<a class=\"eba-oeffnen\" href=\"obsidian://studium-autopilot?aktion=oeffnen&notiz=" + file.basename.replace(/%/g, "%25").replace(/&/g, "%26").replace(/#/g, "%23").replace(/\+/g, "%2B") + "\">Öffnen ↗</a>")'
->   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
-> properties:
->   formula.was:
->     displayName: Unterlage
->   formula.artnr:
->     displayName: Art
->   note.seiten:
->     displayName: Seiten
->   note.status:
->     displayName: Status
->   formula.oeffnen:
->     displayName: Datei
->   file.name:
->     displayName: Datei
->   file.ext:
->     displayName: Typ
->   formula.groesse:
->     displayName: Größe
-> views:
->   - type: table
->     name: Nach Art
->     filters:
->       and:
->         - 'typ == "unterlage"'
->         - 'code == "SQ100"'
->     groupBy:
->       property: note.art
->       direction: ASC
->     order:
->       - formula.was
->       - formula.artnr
->       - seiten
->       - status
->       - formula.oeffnen
->     sort:
->       - property: nummer
->         direction: ASC
->     columnSize:
->       formula.was: 250
->       formula.artnr: 80
->       note.seiten: 80
->       note.status: 100
->       formula.oeffnen: 90
->   - type: table
->     name: Noch nicht gelesen
->     filters:
->       and:
->         - 'typ == "unterlage"'
->         - 'code == "SQ100"'
->         - 'status == "neu" || !status'
->     order:
->       - formula.was
->       - formula.artnr
->       - seiten
->       - formula.oeffnen
->     sort:
->       - property: art
->         direction: ASC
->       - property: nummer
->         direction: ASC
->   - type: table
->     name: Dateien im Ordner
->     filters:
->       and:
->         - (file.folder == "Unterlagen/SQ100" || file.folder.startsWith("Unterlagen/SQ100 "))
->         - 'file.ext != "md"'
->     order:
->       - file.name
->       - file.ext
->       - formula.groesse
->     sort:
->       - property: file.name
->         direction: ASC
-> ```
+```eba-unterlagen
+```
 
 ## Meine Notizen
 
@@ -322,6 +184,27 @@ cssclasses:
 >       note.status: 110
 >       note.nachgearbeitet: 120
 > ```
+
+
+## Steckbrief
+
+> [!eba-raster|2]
+> > [!eba-karte|handy-zu]+ Lehrveranstaltung
+> > - **Inhalte:** Überfachliche Kompetenzen, z.B. TCP, ZDV, Fremdsprachen, Schreibzentrum, Weltethos-Institut
+> > - **Lehrform:** je nach gewählten Lehrveranstaltungen / Mitarbeit, Selbststudium, Literaturstudium
+> > - **Workload:** Kontaktzeit 60 h + Selbststudium 210 h = 270 h
+> > - **Verantwortlich:** verschiedene Dozierende
+> > - **Voraussetzungen:** keine laut Modulhandbuch
+> > - **Dauer:** 1-6 Semester
+>
+> > [!eba-regel|handy-zu]+ Prüfung
+> > - **Form:** unbenotet
+> > - **Studienleistung:** je nach gewählten Lehrveranstaltungen
+> > - **Gesamtnote:** zählt nicht, weil unbenotet
+
+
+> [!eba-info|handy-zu]+ Hinweise
+> - Titel im Studienplan/PO: "Schlüsselqualifikation"; Modulbeschreibung: DE "Schlüsselqualifikationen" / EN "Professional Skills".
 
 
 <p class="eba-fuss">Quellen: <a href="https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienfachberatung/faqs-bachelor/">FAQ Bachelor Wirtschaftswissenschaft</a> · <a href="https://uni-tuebingen.de/studium/studienangebot/ueberfachliche-kompetenzen/transdisciplinary-course-program/bachelor-1/">TCP Bachelor, Fristen WS 2026/27</a> · <a href="https://uni-tuebingen.de/international/sprachen-lernen/fremdsprachen-lernen/termine/">Fremdsprachenzentrum, Termine</a> (Stand 07.10.2026) · MHB B.Sc. Wiwi (Datei 2026-3-24_Modulhandbuch_B.Sc.Wiwi.pdf), S. 166; PO 2023 BT EcoBA (AmtlBekUT 24/2023, S. 310-317), § 4 · Stand der Recherche 30.09.2026 · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Alle Quellen</a></p>

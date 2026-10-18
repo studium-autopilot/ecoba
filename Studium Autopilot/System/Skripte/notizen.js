@@ -113,6 +113,8 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
 
   // ---------- Übungsblatt ----------
   // Parameter: code (Modul vorgewählt). Esc in der ersten angezeigten Frage bricht ab.
+  // Aufbau wie die Vorlesungsnotiz: Titel, Kopf-Karte ```eba-uebungsblatt``` (vorlesung.js), dann ## Aufgabe 1, ## Aufgabe 2,
+  // ## Knackpunkte, ## Fürs Tutorium. „datei“ = Aufgaben (setzt das Einordnen aus dem Eingang), „eigene_loesung“ ebenso.
   const uebungsblatt = async (c) => {
     const eba = ctx.user.eba(c);
     const vorwahl = eba.codeAusTitel() && eba.modulNachCode(eba.codeAusTitel());
@@ -140,25 +142,30 @@ modul: ${eba.J(eba.link(m))}
 nummer: ${nr}
 faellig: ${faellig}
 status: offen
+datei: ""
 eigene_loesung: ""
 uebersicht: "[[Unterlagen]]"
 tags:
   - übungsblatt
 cssclasses:
   - eba-s-notizen
+  - eba-s-uebungsblatt
 ---
 
 # ${code} · Blatt ${nn}
 
+\`\`\`eba-uebungsblatt
+Kopf mit Modul, Abgabe, Status und Unterlagen: erscheint, sobald das Plugin „Studium Autopilot“ geladen ist.
+\`\`\`
+
 ## Aufgabe 1
-- **Ansatz:** ${eba.CURSOR}
-- **Ergebnis:**
-- **Knackpunkt:**
+- ${eba.CURSOR}
 
 ## Aufgabe 2
-- **Ansatz:**
-- **Ergebnis:**
-- **Knackpunkt:**
+-
+
+## Knackpunkte
+-
 
 ## Fürs Tutorium
 - [ ]
@@ -364,15 +371,8 @@ tags:
     const bereich = gruppe === "Schwerpunkt" ? ((await ctx.system.suggester(BEREICHE, BEREICHE, false, "Schwerpunktbereich")) || "Elective Studies") : "";
     const geruest = app.vault.getAbstractFileByPath("System/Gerüste/Modul.md");
     if (!geruest) throw new Error("System/Gerüste/Modul.md fehlt");
-    const mitPlan = gruppe === "Schwerpunkt" || gruppe === "Profil & Vertiefung";
-    // Spalte für das Feld „anrechnung“: Schwerpunkt „Anrechnung in“ (Bereich), Profil & Vertiefung „Zählt als“ (Elective Studies)
-    const anrechnung = gruppe === "Schwerpunkt" ? "Anrechnung in" : gruppe === "Profil & Vertiefung" ? "Zählt als" : "";
-    const werte = {
-      code, titel, gruppe, ects: String(ects).replace(".", ","), code_url: encodeURIComponent(code),
-      datum: ctx.date.now("DD.MM.YYYY"),
-      plan_eigenschaft: (mitPlan ? "\n>   formula.plan:\n>     displayName: Im Plan" : "") + (anrechnung ? "\n>   note.anrechnung:\n>     displayName: " + anrechnung : ""),
-      plan_spalte: (mitPlan ? "\n>       - formula.plan" : "") + (anrechnung ? "\n>       - anrechnung" : ""),
-    };
+    // Status, Semester, Plan und Anrechnung zeigt und ändert das Modulfeld (modul.js, Codeblock eba-modul im Gerüst)
+    const werte = { code, titel, gruppe, ects: String(ects).replace(".", ","), datum: ctx.date.now("DD.MM.YYYY") };
     const koerper = (await app.vault.read(geruest)).replace(/^<!--[\s\S]*?-->\r?\n?/, "").replace(/\{\{([a-z_]+)\}\}/g, (x, k) => (k in werte ? werte[k] : x));
     const kopf = `---
 typ: modul

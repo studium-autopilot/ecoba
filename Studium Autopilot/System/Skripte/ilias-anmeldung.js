@@ -7,7 +7,8 @@
 //   2. Anmeldeformular (Feld j_username) per POST an den IdP: versteckte Felder des Formulars + j_username, j_password,
 //      _eventId_proceed. Die Kästchen „donotcache“ und „Zustimmung widerrufen“ bleiben leer wie im Browser.
 //   3. Antwort mit SAMLResponse + RelayState per POST an ILIAS zurück (höchstens 3 Runden).
-//   4. Prüfen: Das Dashboard ist keine Login-Seite.
+//   4. Prüfen: Die Seite, auf der die Weiterleitungen enden (Startseite von ILIAS), zeigt die Metaleiste ohne Anmelde-Link;
+//      nur sonst wird das Dashboard eigens geholt (spart eine Anfrage je Anmeldung).
 //
 // Schutzgeländer:
 //   - Das Passwort holt kennwortGeber() erst unmittelbar vor dem Absenden; es geht nur an das Formular des IdP-Hosts
@@ -41,9 +42,9 @@ module.exports = function (ctx) {
     return typeof n === "function" ? n(ctx) : n;
   };
 
+  const istIlias = (r, N) => !!r && r.status === 200 && /il-maincontrols-metabar/.test(r.text || "") && !N.istLoginSeite(r.text || "");
   async function angemeldet(sitzung, N, uni) {
-    const r = await sitzung.anfrage({ url: `${uni.ilias}/ilias.php?baseClass=ilDashboardGUI&cmd=show` });
-    return r.status === 200 && /il-maincontrols-metabar/.test(r.text || "") && !N.istLoginSeite(r.text || "");
+    return istIlias(await sitzung.anfrage({ url: `${uni.ilias}/ilias.php?baseClass=ilDashboardGUI&cmd=show` }), N);
   }
 
   async function anmelden(sitzung, zugang, optionen) {
@@ -89,8 +90,8 @@ module.exports = function (ctx) {
         if (r.status >= 500) return fehler("netz");
       }
 
-      // 4. Prüfen
-      return (await angemeldet(sitzung, N, uni)) ? { ok: true } : fehler("unerwartet");
+      // 4. Prüfen (meist reicht die letzte Seite)
+      return istIlias(r, N) || (await angemeldet(sitzung, N, uni)) ? { ok: true } : fehler("unerwartet");
     } catch (e) {
       if (e && e.grund === "fremder-host") return fehler("unerwartet");
       return fehler("netz");

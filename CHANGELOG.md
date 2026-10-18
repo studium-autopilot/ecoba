@@ -2,6 +2,33 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.4 – Modulseiten, neue Designs und schnelleres ILIAS
+
+- **Neu:** Zwei weitere Designs: Flieder in zartem Lila und Klar, weiß und schlicht. Du wählst sie in der Einrichtung oder
+  unter **Einstellungen & Hilfe**, auf jedem Gerät für sich; dunkel bleibt alles wie gewohnt.
+- **Neu:** Jede Modulseite zeigt oben deinen Stand, die Prüfung, deine Woche im Semester und was als Nächstes ansteht. Den
+  Status änderst du mit einem Tipp, Unterlagen und Notizen stehen als Listen darunter.
+- **Neu:** Hast du einen eigenen Uni-Abgleich, zeigt das **Dashboard** unter **Zu erledigen** seine Punkte zum Prüfen. Du
+  hakst sie dort ab, **Protokoll** öffnet alle Einzelheiten.
+- **Übersichtlicher:** Die Unterlagen eines Moduls stehen nach Art getrennt, Folien mit ihrer Nummer, Altklausuren neueste
+  zuerst. Die Lösung steht direkt neben ihrer Klausur oder Übung, so siehst du gleich, wo eine fehlt.
+- **Übersichtlicher:** Übungsblätter zeigen oben die Abgabe, den Status zum Antippen, alle Blätter des Moduls und Links zu
+  Aufgaben, Lösung und Tutorium. Darunter schreibst du Aufgaben, Knackpunkte und Fragen fürs Tutorium.
+- **Schneller:** Deine Kursdateien aus ILIAS sind beim ersten Mal in wenigen Minuten da, auf iPhone und iPad in einem Rutsch
+  statt in mehreren Etappen. Wechselst du kurz in eine andere App, geht es beim Zurückkommen gleich weiter.
+- **Übersichtlicher:** Im **Studienverlauf** steht keine eigene Tabelle der Semestertermine mehr. Tippst du ein Semester an,
+  siehst du dort alles, jetzt auch die Rückmeldung fürs nächste Semester und die freien Tage.
+- **Übersichtlicher:** Auf dem **Dashboard** zeigt die erste Kachel wieder deine nächste Frist, **Termine · 14 Tage** auch
+  Fachschaft und Veranstaltungen von heute und morgen. Neben deinen To-dos steht kein leerer Kasten mehr.
+- **Übersichtlicher:** Unter **Einstellungen & Hilfe** sagt jede Verbindung in einem Satz, wie es steht, und zeigt nur den Knopf,
+  den du brauchst. Kommt dein Stundenplan schon über ein anderes Gerät, steht dort kein „nicht verbunden“ mehr.
+- **Behoben:** Nach dem Trennen von ILIAS ließ sich deine Übungsgruppe nicht mehr ändern, nur von Hand löschen. Jetzt bleibt sie
+  im Stundenplan, und auf **Termine & Anmeldungen** wählst du mit **Meine** eine andere.
+- **Behoben:** Deine Notizen zu einer selbst gewählten Übungsgruppe standen manchmal doppelt im Stundenplan, und unter
+  **Anmeldungen** stand „offen“, obwohl deine Gruppe schon im Stundenplan stand. Beides stimmt jetzt.
+- **Behoben:** Updates bringen Darstellung und Programmteile jetzt immer ganz mit; hattest du sie geändert, liegt deine Fassung
+  als Sicherung daneben. Kopien mit „neu“ im Namen kommen nur noch, wenn sich die Seite geändert hat.
+
 ## 0.4.3 – Studienverlauf und Karteikarten behoben
 
 - **Behoben:** Im **Studienverlauf** blieb unter **Semestertermine** die Seite leer, vor allem im ersten Semester auf dem iPad.

@@ -11,9 +11,10 @@
 // „Meine Gruppe“ (Rückfall ohne ILIAS): Knopf „Meine“ je Zeile legt eine Notiz mit herkunft gruppe-gewaehlt an (meine-gruppe.js;
 // synchronisiert wie jede Notiz), „Abwählen“ legt sie in den Papierkorb. „Meine“ fehlt, wenn die Gruppe schon aus ILIAS, Alma oder
 // einer eigenen Notiz kommt; „Abwählen“ bleibt, solange es eine gewählte Notiz gibt. Gewählte Notizen, die inzwischen ILIAS, Alma
-// oder eine eigene Notiz liefert, weichen beim Zeichnen (höchstens einmal je Minute). Gruppen aus ILIAS heißen wie in ILIAS („in
-// ILIAS Gruppe 4“), weil ILIAS und Alma anders zählen. Ist ILIAS nicht eindeutig (ctx.ilias.gruppen(): Status mehrdeutig, ohne Treffer, ohne Zeit, ohne
-// Code), sagt die Karte das und markiert die möglichen Gruppen.
+// oder eine eigene Notiz liefert, weichen beim Zeichnen (höchstens einmal je Minute). Trennst du ILIAS (oder lehnt ILIAS die
+// Anmeldung ab), macht ilias.js aus der ILIAS-Notiz eine gewählte: „Meine“ ist dann wieder da. Gruppen aus ILIAS heißen wie in
+// ILIAS („in ILIAS Gruppe 4“), weil ILIAS und Alma anders zählen. Ist ILIAS nicht eindeutig (ctx.ilias.gruppen(): Status
+// mehrdeutig, ohne Treffer, ohne Zeit, ohne Code), sagt die Karte das und markiert die möglichen Gruppen.
 // Erweiterung: registrieren() meldet den Codeblock an und setzt ctx.gruppenAnzeige (zentral.js zeichnet damit neu, sobald neue
 // Gruppen da sind). zentral.js und modell.js laden nach diesem Skript, darum alles erst beim Zeichnen nachschlagen.
 // Stil: eba-core.css, Klassen eba-gr-*. iOS-sicher: kein Lookbehind, kein .at()/findLast/structuredClone.
@@ -127,7 +128,8 @@ module.exports = function (ctx) {
   };
   let neuZeichnen = () => {};
   // Gewählte Notizen, die inzwischen ILIAS, Alma oder eine eigene Notiz liefert, weichen (meine-gruppe.js); höchstens einmal je
-  // Minute, beim Zeichnen. Dieses Skript ist der einzige Schreiber dieser Notizen.
+  // Minute, beim Zeichnen, auf jedem Gerät. Zwei Geräte zugleich schaden nicht: Steht dein Text schon in der anderen Notiz,
+  // übernimmt ihn das zweite nicht noch einmal.
   let aufgeraeumt = 0;
   const aufraeumen = () => {
     if (Date.now() - aufgeraeumt < 60000) return;

@@ -8,12 +8,14 @@
 //             Meilenstein, Prognose Abschluss). Nächste Prüfung, Notenschnitt und die Wochenleiste stehen auf dem Dashboard
 //             und hier nicht doppelt (die Wochenleiste „Semester-Puls“ entfiel am 17.10.2026: die Lupe zeigt dasselbe Semester).
 //   Lupe      das gewählte Semester (Station antippen): Titel, ECTS, im laufenden Semester Vorlesungswoche und
-//             Resttage der Vorlesungszeit, Meilensteine des Semesters, Band mit Monaten, Prüfungen als Fähnchen (dicht
+//             Resttage der Vorlesungszeit, Meilensteine des Semesters samt Rückmeldung fürs nächste Semester, Band mit
+//             Monaten und vorlesungsfreien Tagen als schmale Striche (Legende „Frei 01.11.“), Prüfungen als Fähnchen (dicht
 //             liegende werden zu einem Fähnchen „n Klausuren 30.01.–12.02.“ zusammengefasst, Einzelheiten in der Liste),
-//             Module mit Countdown.
+//             Module mit Countdown. Die Lupe ersetzt seit 17.10.2026 die Tabelle „Semestertermine“ der Seite.
 // Daten: System/Einstellungen.md (semesterliste, pausen, pruefungsphasen, variante), Modulnotizen (typ: modul,
 // semester_geplant, ects, status, ergebnis, klausur, op_modul, rolle_*, gewaehlt, zusatz),
-// Termine mit kategorie „Prüfung“ (eintägig, ohne Nachholtermine, z. B. Zwischentests), SQ-Kurse (typ: sq_kurs).
+// Termine mit kategorie „Prüfung“ (eintägig, ohne Nachholtermine, z. B. Zwischentests), SQ-Kurse (typ: sq_kurs);
+// Rückmeldung und freie Tage nur aus dem Datenmodell (zentrale Daten), die Rückmeldung verlinkt ihre Termin-Notiz.
 // Rechenregeln wie auf der Seite Noten & ECTS: ECTS = bestandene/anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange
 // SQ100 offen). Fehlendes erscheint als „offen“.
 // Nur richtige Daten (Vorgabe vom 17.10.2026): Semester, Pausen und Prüfungsphasen tragen aus den zentralen Daten status
@@ -67,12 +69,14 @@ module.exports = function (ctx) {
     // Ohne Modell wie bisher aus System/Einstellungen.md.
     const md = ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null;
     const g = (o) => ({ geschaetzt: o.status === "geschätzt", hinweis: String(o.hinweis || "") });
-    let sems, pausen, phasen;
+    let sems, pausen, phasen, rueck = [], frei = [];
     if (md) {
       // Datenmodell: mit Status (offiziell | geschätzt) und Hinweis der zentralen Daten (Semester nach Regel: geschätzt)
       sems = md.semesterliste.map((s) => Object.assign({ fs: s.fs, name: s.name, sb: tag(s.beginn), se: tag(s.ende), vb: tag(s.vb), ve: tag(s.ve) }, g(s)));
       pausen = md.pausen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), name: p.name || "Pause" }, g(p)));
       phasen = md.pruefungsphasen.map((p) => Object.assign({ von: tag(p.von), bis: tag(p.bis), art: p.art || "Prüfungen" }, g(p)));
+      rueck = (md.rueckmeldung || []).map((r) => Object.assign({ fuer: r.fuer, von: tag(r.von), bis: tag(r.bis), pfad: "", erledigt: false }, g(r))).filter((r) => r.von && r.bis);
+      frei = (md.freieTage || []).map((x) => Object.assign({ name: x.name, datum: tag(x.datum) }, g(x))).filter((x) => x.datum);
     } else {
       sems = zerlege(c.semesterliste).filter((p) => p.length >= 6).map((p) => ({ fs: +p[0], name: p[1], sb: tag(p[2]), se: tag(p[3]), vb: tag(p[4]), ve: tag(p[5]), geschaetzt: false, hinweis: "" }));
       pausen = zerlege(c.pausen).map((p) => ({ von: tag(p[0]), bis: tag(p[1]), name: p[2] || "Pause", geschaetzt: false, hinweis: "" }));
@@ -104,10 +108,14 @@ module.exports = function (ctx) {
         const titel = String(fm.titel ?? f.basename.replace(/^\d{4}-\d{2}-\d{2}\s*/, ""));
         if (!d || (b && b > d) || /nachhol/i.test(titel) || /nachhol/i.test(f.basename)) continue;
         termine.push({ datum: d, titel, code: String(fm.code ?? "").trim(), geschaetzt: /gesch/i.test(String(fm.status ?? "")), pfad: f.path });
+      } else if (fm.typ === "termin" && /rückmeldung/i.test(String(fm.titel ?? f.basename))) {
+        // Termin-Notiz zur Rückmeldung (gleicher Beginn): die Zeile in der Lupe öffnet sie, ihr Haken gilt als erledigt
+        const d = tag(fm.datum), r = d && rueck.find((x) => +x.von === +d);
+        if (r) { r.pfad = f.path; r.erledigt = fm.erledigt === true; }
       } else if (fm.typ === "sq_kurs" && fertig(fm.status)) sq += zahl(fm.ects);
     }
     module.sort((a, b) => a.code.localeCompare(b.code, "de"));
-    return { c, sems, pausen, phasen, variante, module, termine, sq };
+    return { c, sems, pausen, phasen, rueck, frei, variante, module, termine, sq };
   };
 
   // ---------- Rechnen ----------
@@ -136,7 +144,11 @@ module.exports = function (ctx) {
       const plan = fest.reduce((a, m) => a + m.ects, 0);
       const ist = ms.filter((m) => m.fertig && !m.zusatz).reduce((a, m) => a + m.ects, 0);
       const variante = ms.filter((m) => m.art === "variante" || m.art === "wahl");
-      return { ...s, i, module: ms, fest, plan, ist, variante, vorbei: s.se < t, jetzt: s.sb <= t && t <= s.se };
+      // Rückmeldung fürs nächste Semester: das Fenster, das in diesem Semester beginnt. Freie Tage: nur in der
+      // Vorlesungszeit und nicht schon in einer Pause (die steht als eigener Streifen da)
+      const rueck = (D.rueck || []).find((r) => r.von >= s.sb && r.von <= s.se) || null;
+      const frei = !s.vb || !s.ve ? [] : (D.frei || []).filter((x) => x.datum >= s.vb && x.datum <= s.ve && !D.pausen.some((p) => p.von <= x.datum && x.datum <= p.bis));
+      return { ...s, i, module: ms, fest, plan, ist, variante, rueck, frei, vorbei: s.se < t, jetzt: s.sb <= t && t <= s.se };
     });
     let cur = sems.findIndex((s) => s.jetzt);
     const vorStart = sems.length && t < sems[0].sb;
@@ -188,7 +200,7 @@ module.exports = function (ctx) {
     if (!s.vb || !s.ve || t < s.vb || t > s.ve) return "";
     return `Vorlesungswoche ${Math.floor(tage(s.vb, t) / 7) + 1} von ${ca(s)}${Math.ceil((tage(s.vb, s.ve) + 1) / 7)}`;
   };
-  // Band eines Semesters: Vorlesungszeit, vorlesungsfrei, Pausen, Prüfungsphasen (mit Beschriftung, wenn Platz ist)
+  // Band eines Semesters: Vorlesungszeit, vorlesungsfrei, Pausen, freie Tage, Prüfungsphasen (mit Beschriftung, wenn Platz ist)
   const band = (D, s, R, beschriftet) => {
     const ende = new Date(+s.se + 864e5);
     const x = (d) => anteil(d, s.sb, ende);
@@ -201,6 +213,7 @@ module.exports = function (ctx) {
     const gk = (o) => (o.geschaetzt ? " geschaetzt" : "");
     if (s.vb && s.ve) h += teil(s.vb, s.ve, "vl" + gk(s), "Vorlesungszeit", `Vorlesungszeit ${dmy(s.vb)} – ${dmy(s.ve)}${unsicher(s)}`);
     for (const p of D.pausen) if (p.bis >= s.sb && p.von <= s.se) h += teil(p.von < s.sb ? s.sb : p.von, p.bis > s.se ? s.se : p.bis, "pause" + gk(p), p.name, `${p.name} ${dm(p.von)} – ${dm(p.bis)}${unsicher(p)}`);
+    for (const f of s.frei || []) h += teil(f.datum, f.datum, "pause frei" + gk(f), "", `${f.name} ${dm(f.datum)}${unsicher(f)}`);
     for (const p of D.phasen) if (p.bis >= s.sb && p.von <= s.se) h += teil(p.von < s.sb ? s.sb : p.von, p.bis > s.se ? s.se : p.bis, "pruef" + gk(p), "Prüfungen", `${p.art} ${dm(p.von)} – ${dm(p.bis)}${unsicher(p)}`);
     const t = R.t;
     const weg = s.se < t ? 1 : s.sb > t ? 0 : x(new Date(+t + 864e5 / 2));
@@ -440,23 +453,31 @@ module.exports = function (ctx) {
     let legende = s.vb && s.ve ? leg("vl", `Vorlesungen ${dm(s.vb)} – ${dm(s.ve)}`, s) : leg("", "Vorlesungszeit offen");
     const pa = D.pausen.filter((p) => p.bis >= s.sb && p.von <= s.se);
     for (const p of pa) legende += leg("pause", `${esc(p.name)} ${dm(p.von)} – ${dm(p.bis)}`, p);
+    // Vorlesungsfreie Tage: ein Eintrag mit allen Daten (auf Touch lesbar), im Band je Tag ein schmaler Strich
+    const fr = s.frei || [], fg = fr.find((x) => x.geschaetzt);
+    if (fr.length) legende += leg("pause frei", `Frei ${fr.map((x) => dm(x.datum)).join(", ")}`, fg ? { geschaetzt: true, hinweis: fg.hinweis } : null);
     const ph = D.phasen.filter((p) => p.bis >= s.sb && p.von <= s.se);
     for (const p of ph) legende += leg("pruef", `${esc(p.art)} ${dm(p.von)} – ${dm(p.bis)}`, p);
     if (!ph.some((p) => /haupt/i.test(p.art) && p.von >= s.sb)) legende += leg("pruef geschaetzt", "Prüfungsphase noch offen");
+    const r = s.rueck, rTitel = r ? `Rückmeldung${r.fuer ? ` fürs ${r.fuer}` : ""}` : "";
     const hinweise = []; // { text, was: [...] }: gleicher Hinweis nur einmal, davor alle Einträge, für die er gilt
-    for (const o of [s].concat(pa, ph)) {
+    const quellen = [[s, s.name]].concat(pa.map((p) => [p, `${p.name} ${dm(p.von)} – ${dm(p.bis)}`]), fr.map((x) => [x, `${x.name} ${dm(x.datum)}`]),
+      ph.map((p) => [p, `${p.art} ${dm(p.von)} – ${dm(p.bis)}`]), r ? [[r, rTitel]] : []);
+    for (const [o, was] of quellen) {
       if (!o.geschaetzt || !o.hinweis) continue;
       let h = hinweise.find((x) => x.text === o.hinweis);
       if (!h) { h = { text: o.hinweis, was: [] }; hinweise.push(h); }
-      const was = o.art ? `${o.art} ${dm(o.von)} – ${dm(o.bis)}` : o.von ? `${o.name} ${dm(o.von)} – ${dm(o.bis)}` : o.name; // wie in der Legende
       if (h.was.indexOf(was) < 0) h.was.push(was);
     }
     const hinweis = !s.module.length ? "noch nichts geplant" : s.plan < 30 && s.variante.length ? `${s.plan} geplant · Rest je nach Variante` : s.plan < 30 ? `${s.plan} geplant · Rest offen` : `${s.plan} geplant`;
     // Laufendes Semester: Vorlesungswoche und Resttage der Vorlesungszeit (die Woche stand bis 17.10.2026 als Satz im Kopf)
     const woche = s.jetzt ? vorlesungswoche(D, R) : "";
     const rest = !s.jetzt ? "" : s.vb && s.ve && R.t <= s.ve ? (R.t < s.vb ? ` · Vorlesungen ab ${ca(s)}${dm(s.vb)}` : `${woche ? ` · ${woche}` : ""} · noch ${ca(s)}<b>${tage(R.t, s.ve)}</b> Tage Vorlesungszeit`) : " · Vorlesungszeit vorbei";
-    // Meilensteine dieses Semesters als Zeile: auf der Bahn tragen die Rauten ihre Erklärung nur als Tooltip (nicht auf Touch)
-    const ms = R.ms.filter((m) => m.fs === s.fs).map((m) => `<span${m.pfad ? ` data-pfad="${esc(m.pfad)}" role="link" tabindex="0"` : ""}><i class="raute${m.ok ? " ok" : ""}${m.art === "option" ? " option" : ""}"></i><b>${esc(m.titel)}</b>: ${esc(m.info)}</span>`).join("");
+    // Meilensteine dieses Semesters als Zeile: auf der Bahn tragen die Rauten ihre Erklärung nur als Tooltip (nicht auf Touch).
+    // Dazu, nur hier, die Rückmeldung fürs nächste Semester (gefüllt, sobald abgehakt oder das Fenster vorbei ist)
+    const msS = R.ms.filter((m) => m.fs === s.fs);
+    if (r) msS.push({ datum: r.von, titel: rTitel, info: `${dm(r.von)} – ${dm(r.bis)}${r.geschaetzt ? " (geschätzt)" : ""}`, ok: r.erledigt || r.bis < R.t, art: "frist", pfad: r.pfad });
+    const ms = msS.sort((a, b) => a.datum - b.datum).map((m) => `<span${m.pfad ? ` data-pfad="${esc(m.pfad)}" role="link" tabindex="0"` : ""}><i class="raute${m.ok ? " ok" : ""}${m.art === "option" ? " option" : ""}"></i><b>${esc(m.titel)}</b>: ${esc(m.info)}</span>`).join("");
     return `<div class="eba-vl-lupe" data-sem="${s.i}">`
       + `<div class="eba-vl-lkopf"><div class="eba-vl-ltitel"><span class="t">${s.fs}. Fachsemester · ${esc(s.name)}</span></div>`
       + `<div class="eba-vl-lects"><b>${s.ist}</b> / 30 ECTS · ${hinweis}${rest}</div>`
@@ -674,5 +695,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alleNeu(true); });
   };
 
-  return { registrieren, rendern, alleNeu, rechnen }; // rechnen für tests/verlauf.test.js
+  return { registrieren, rendern, alleNeu, rechnen, lupe }; // rechnen und lupe für tests/verlauf.test.js
 };

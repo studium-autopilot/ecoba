@@ -33,14 +33,6 @@ Schwerpunkte: erscheinen, sobald Studium Autopilot läuft.
 ```
 
 
-## Semestertermine
-
-> [!eba-tabelle|handy-zu|pc-flach]+ Semestertermine
-> ```eba-semesterdaten
-> Semestertermine: erscheinen, sobald Studium Autopilot läuft.
-> ```
-
-
 ## Regeln
 
 > [!eba-karte|regeln]- Regeln

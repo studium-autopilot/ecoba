@@ -98,9 +98,10 @@ test("Weitermachen: Entscheidung nach einem Lauf und tote Läufe", () => {
 
 test("Stapel: Grenze je Lauf erreicht → Auftrag bleibt, nächster Lauf zählt weiter, dann erledigt", async () => {
   const x = aufbau({ ilias: dreissig(), mobil: true });
+  x.abh.grenzen = { neu: 25 };
   await verbinden(x);
   let b = await knopf(x);
-  assert.equal(b.neu, I.K.NEU_MOBIL); assert.equal(b.rest, 5);
+  assert.equal(b.neu, 25); assert.equal(b.rest, 5);
   assert.deepEqual(x.m.auftrag(), { seit: "2026-10-16T08:00:00.000Z", versuche: 0, stapel: 1, geladen: 25 });
   assert.equal(ereignisse(x, "fertig")[0].weiterIn, I.K.STAPEL_PAUSE);
   assert.equal(x.meldungen[0], "ILIAS: 25 neue Dateien in Unterlagen. 5 weitere folgen gleich.");
@@ -194,13 +195,15 @@ test("Kurs während des Laufs abgewählt: nicht mehr durchsucht, nichts geladen"
   let einmal = true;
   const b = await knopf(x, { fortschritt: (f) => { if (einmal && f.phase === "durchsuchen" && f.code === "B110") { einmal = false; x.m.kursSetzen("300", false); } } });
   assert.equal(b.neu, 3);
-  assert.ok(x.il.geholt().indexOf(B + "kurs/300") < 0);
+  // die Kursseite holte der zweite Sucher schon zugleich; danach nichts mehr aus diesem Kurs
+  assert.ok(x.il.geholt().indexOf(B + "ordner/310") < 0, x.il.geholt().join(" "));
   assert.equal(x.t.pfade("Unterlagen/S100").length + x.t.pfade("Unterlagen/SQ888").length, 0);
+  assert.equal(b.kurseOffen, 0, "abgewählt zählt nicht als offen");
 });
 
 test("Toter Lauf (im Hintergrund gestorben): verwerfen, neu starten; wacht er auf, schreibt er nichts", async () => {
   let haenger = null, gerufen = false;
-  const x = aufbau({ quelle: async (zugang, anmelden) => {
+  const x = aufbau({ mobil: true, quelle: async (zugang, anmelden) => {
     const q = await x.il.quelle(zugang, anmelden);
     const laden = q.laden;
     q.laden = (e) => { if (!gerufen) { gerufen = true; return new Promise((r) => { haenger = () => r(laden(e)); }); } return laden(e); };
@@ -278,6 +281,7 @@ test("Automatischer Lauf bricht beim Laden ab: der nächste lädt den Rest, ohne
 
 test("Fortsetzung ohne gemerkte Funde (Update mitten im Abruf): alle Kurse durchsuchen, nichts fehlt", async () => {
   const x = aufbau({ ilias: dreissig(), mobil: true });
+  x.abh.grenzen = { neu: 25 };
   await verbinden(x);
   await knopf(x);
   x.lok.lokal("eba-ilias-funde", null); // wie eine ältere Fassung, die keine Funde kannte
@@ -293,8 +297,11 @@ test("Trennen räumt die Funde weg; ein verworfener Lauf, der aufwacht, schreibt
   await verbinden(x);
   await knopf(x, { fortschritt: (f) => { if (f.phase === "laden") x.m.stoppen(); } });
   assert.equal(x.lok.lokal("eba-ilias-funde").length, 5);
+  let vergessen = 0;
+  x.abh.vergessen = () => { vergessen++; };
   await x.m.zugangLoeschen();
   assert.equal(x.lok.lokal("eba-ilias-funde"), null);
+  assert.equal(vergessen, 1, "Sitzung (Kekse) vergessen");
   // verworfen, während er den letzten Kurs durchsucht
   let haenger = null, gerufen = false;
   const y = aufbau({ quelle: async (zugang, anmelden) => {

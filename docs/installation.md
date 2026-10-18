@@ -23,7 +23,7 @@ Am besten fängst du hier an.
    Download-Symbol, die Datei antippen → **Kurzbefehl hinzufügen**.
 3. In der App **Kurzbefehle** auf **Studium Autopilot installieren** tippen und den Zugriff erlauben. Als Ort **iCloud Drive** → **Obsidian**
    wählen (kein iCloud: **Auf meinem iPhone** → **Obsidian**).
-4. In Obsidian **Tresor wechseln** tippen → **Studium Autopilot** wählen → [**Vertrauen und Plugins aktivieren**](#vertrauen).
+4. In Obsidian **Vault wechseln** tippen → **Studium Autopilot** wählen → [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
 <details>
 <summary>Mehr erfahren: Was macht der Kurzbefehl?</summary>
@@ -38,36 +38,36 @@ Er überschreibt nichts und sendet nichts. Du kannst ihn danach wieder löschen.
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) antippen → **Laden**.
 2. App **Dateien** → **Downloads** → die ZIP-Datei antippen. Sie wird zum Ordner `Studium Autopilot`.
 3. Den Ordner gedrückt halten → **Bewegen** → **iCloud Drive** → **Obsidian** → **Bewegen** (kein iCloud: **Auf meinem iPhone** → **Obsidian**).
-4. Obsidian öffnen → **Studium Autopilot** → [**Vertrauen und Plugins aktivieren**](#vertrauen).
+4. Obsidian öffnen → **Studium Autopilot** → [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
 ## Mac
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden (Safari entpackt sie meist selbst, sonst Doppelklick).
 2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
-3. **Obsidian** öffnen → **Ordner als Tresor öffnen** → den Ordner wählen.
-4. [**Vertrauen und Plugins aktivieren**](#vertrauen).
+3. **Obsidian** öffnen → **Ordner als Vault öffnen** → den Ordner wählen.
+4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
 ## Windows
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, rechts anklicken → **Alle extrahieren**.
 2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
-3. **Obsidian** öffnen → **Ordner als Tresor öffnen** → den Ordner wählen.
-4. [**Vertrauen und Plugins aktivieren**](#vertrauen).
+3. **Obsidian** öffnen → **Ordner als Vault öffnen** → den Ordner wählen.
+4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
 ## Android
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden.
 2. In der App **Dateien** (oder deinem Dateimanager) die ZIP-Datei antippen → **Entpacken**.
 3. Den Ordner `Studium Autopilot` nach **Documents** verschieben.
-4. Obsidian öffnen → **Ordner als Tresor öffnen** → den Ordner wählen. Fragt Obsidian nach Zugriff auf Dateien: erlauben.
-5. [**Vertrauen und Plugins aktivieren**](#vertrauen).
+4. Obsidian öffnen → **Ordner als Vault öffnen** → den Ordner wählen. Fragt Obsidian nach Zugriff auf Dateien: erlauben.
+5. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
 
 ## Vertrauen
 
 Beim ersten Öffnen fragt Obsidian, ob du dem Tresor vertraust.
 
-1. **Vertrauen und Plugins aktivieren** tippen (englisch: „Trust author and enable plugins“).
+1. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen (englisch: „Trust author and enable plugins“).
 2. Das Dashboard öffnet sich. Aussehen, Menü und Termine sind schon eingerichtet.
 
 Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Kennzahlen und Knöpfe leer.
@@ -99,8 +99,8 @@ Dein Tresor läuft schon auf einem Gerät? So kommt er auf weitere.
 
 1. Auf dem ersten Gerät den Ordner `Studium Autopilot` nach **iCloud Drive → Obsidian** verschieben
    (iPhone/iPad: App **Dateien** → Ordner gedrückt halten → **Bewegen**; Mac: im Finder ziehen).
-2. Auf jedem weiteren Gerät öffnen: iPhone/iPad → Obsidian → **Tresor wechseln** → **Studium Autopilot** (iCloud);
-   Mac → **Ordner als Tresor öffnen** → iCloud Drive → Obsidian → `Studium Autopilot`.
+2. Auf jedem weiteren Gerät öffnen: iPhone/iPad → Obsidian → **Vault wechseln** → **Studium Autopilot** (iCloud);
+   Mac → **Ordner als Vault öffnen** → iCloud Drive → Obsidian → `Studium Autopilot`.
 3. Einmal [**Vertrauen**](#vertrauen) tippen.
 
 **Mit Windows-PC:** iCloud für Windows aus dem Microsoft Store, **iCloud Drive** einschalten, den Ordner
@@ -119,8 +119,9 @@ Gibt es eine neue Version, siehst du das unter **Einstellungen & Hilfe** → **V
 2. Im Fenster noch einmal **Aktualisieren** tippen. Fertig.
 
 - **Was bleibt:** deine Noten, Termine, Notizen, Angaben, Unterlagen und dein Stundenplan. Hast du eine Seite selbst geändert,
-  bleibt deine Fassung; die neue liegt daneben mit „(neu …)“ im Namen. Bei Modulen bleiben deine Einträge (Status, Note,
-  Versuch, Prüfungstermin, Planung), der Rest kommt neu.
+  bleibt deine Fassung; hat sich die Seite in der neuen Version geändert, liegt die neue daneben mit „(neu …)“ im Namen. Bei
+  Modulen bleiben deine Einträge (Status, Note, Versuch, Prüfungstermin, Planung), der Rest kommt neu. Darstellung und
+  Programmteile kommen immer neu; hattest du sie geändert, liegt deine Fassung mit „(deine Fassung vor …)“ im Namen daneben.
 - **Andere Geräte:** Das Update kommt über deinen Sync. Dort **nicht** noch einmal aktualisieren. Steht dort **Neu laden**, das
   antippen (oder Obsidian einmal schließen und wieder öffnen).
 - **Kein Netz oder Fehler:** Dann wird nichts geändert. Einfach später noch einmal versuchen.
@@ -140,7 +141,3 @@ Neue Versionen früher ausprobieren: In der Zeile **Studium Autopilot** auf **Me
 **Mehr erfahren** öffnen und **Beta-Versionen** einschalten. Betas können noch Fehler haben.
 
 </details>
-
-## Mit Claude Code
-
-Ein Weg, der alles mit einem Befehl in Claude Code einrichtet, kommt bald.

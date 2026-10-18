@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 17.10.2026 (`gruppen.json`, `angebote.json`, `veranstaltungen.json` noch nicht veröffentlicht). Vertrag zwischen dem Export (Seite des Autors, später `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 18.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` noch nicht). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -270,7 +270,7 @@ dieser Fassung kennen den Namen nicht und ignorieren ihn.
 | `id` | ja | wie bei Terminen (`^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$`), eindeutig; doppelte: der erste Eintrag gilt. Empfohlen: `<semester>-<code>-<art>-<gruppe>` klein, z. B. `ws-2026-27-x100-uebung-1` |
 | `code` | ja | Modulcode wie bei Terminen |
 | `art` | ja | `Übung` oder `Tutorium` |
-| `gruppe` | nein | Nummer oder Name, wie die Quelle ihn nennt, ≤ 20 Zeichen, reiner Text (abgelehnt wie `titel`: HTML, Klammern, senkrechter Strich …); leer = ohne Nummer |
+| `gruppe` | nein | Nummer oder Name, wie die Quelle ihn nennt, ≤ 20 Zeichen, reiner Text (abgelehnt wie `titel`: HTML, Klammern, senkrechter Strich …); leer = ohne Nummer. ILIAS kann dieselbe Gruppe anders zählen (ILIAS „Gruppe 4“ = Liste Gr. 5); das Plugin ordnet darum nie über die Nummer zu |
 | `tag` | ja | `Mo`, `Di`, `Mi`, `Do` oder `Fr` |
 | `von`, `bis` | ja | `HH:MM`, `bis` nach `von`. Zeiten wie in der Quelle (Alma: volle Stunden). |
 | `ct` | nein | `true` = c.t. (beginnt 15 Min. später, endet 15 Min. früher); alles andere gilt als nicht gesetzt. Das Plugin zeigt „8–10 c.t.“. |
@@ -282,14 +282,17 @@ dieser Fassung kennen den Namen nicht und ignorieren ihn.
 | `zeitraum` | nein | `{ "von", "bis" }`, Daten wie bei Terminen, `bis ≥ von`, höchstens 400 Tage: erster und letzter Termin der Gruppe |
 | `geprueft` | nein | ISO-Datum oder -Zeit der letzten Prüfung |
 
-Gesäubert wie `info` (siehe oben); ungültige Einträge werden **einzeln** verworfen, unbekannte Felder ignoriert. Das Plugin
-schreibt aus `gruppen.json` **keine Notizen**: Jedes Gerät holt die Datei selbst (auch wenn ein anderes Gerät die Termine
-schreibt), prüft sie wie die anderen Dateien gegen das Manifest und speichert nur die gültigen Einträge gerätelokal
-(`eba-zentral-gruppen`). Stimmen Prüfsumme oder Schema nicht, bleiben die Gruppen beim letzten Stand (Warnung im Bericht);
-Termine und Semesterdaten werden trotzdem übernommen, wie beim Export (Pflicht 6). Anzeige: Codeblock `eba-gruppen`
-(`System/Skripte/gruppen.js`), gefiltert wie die Termine mit `code` und auf das aktuelle und das nächste Semester; mit Argument
-`alle` (```` ```eba-gruppen alle ```` ) ohne Filter. Gruppen, die im eigenen Stundenplan stehen (gleicher Code, Semester,
-Wochentag, Beginn höchstens 15 Min. daneben), sind markiert; ein eigener „Stand“ wird nicht gespeichert.
+Gesäubert wie `info` (siehe oben); ungültige Einträge werden **einzeln** verworfen, unbekannte Felder ignoriert. Jedes Gerät
+holt die Datei selbst (auch wenn ein anderes Gerät die Termine schreibt), prüft sie wie die anderen Dateien gegen das Manifest
+und speichert nur die gültigen Einträge gerätelokal (`eba-zentral-gruppen`). Stimmen Prüfsumme oder Schema nicht, bleiben die
+Gruppen beim letzten Stand (Warnung im Bericht); Termine und Semesterdaten werden trotzdem übernommen, wie beim Export
+(Pflicht 6). Eine Notiz in `Stundenplan/` entsteht nur für **deine** Gruppe, nie für die ganze Liste: aus deiner
+ILIAS-Mitgliedschaft (`herkunft: ilias-gruppe`, zugeordnet über Code, Tag und Zeit, nie über die Nummer) oder aus deiner Wahl
+„Meine“ (`herkunft: gruppe-gewaehlt`); Felder aus diesem Eintrag, der Name aus ILIAS (siehe `docs/architektur.md`, „Deine
+Übungs- oder Tutoriengruppe“). Anzeige: Codeblock `eba-gruppen` (`System/Skripte/gruppen.js`), gefiltert wie die Termine mit
+`code` und auf das aktuelle und das nächste Semester; mit Argument `alle` (```` ```eba-gruppen alle ```` ) ohne Filter.
+Gruppen, die im eigenen Stundenplan stehen (gleicher Code, Semester, Wochentag, Beginn höchstens 15 Min. daneben, bei Notizen
+zu deiner Gruppe über `gruppe_id`), sind markiert; ein eigener „Stand“ wird nicht gespeichert.
 
 **Namen (Plan Abschnitt 20):** `leitung` nur, wenn die Universität den Namen selbst öffentlich nennt (Alma-Vorlesungsverzeichnis
 ohne Anmeldung, Seite des Lehrstuhls), mit `quelle_url` auf genau diese Seite. Nie aus Fotos, Folien, Mails oder ILIAS, nie die
@@ -464,7 +467,16 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
   erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei Läufen alle 15 Min.
   also etwa stündlich.
 - **Notizen:** `Termine/JJJJ-MM-TT Titel.md` mit `herkunft: zentral` und `zentral_id`. Felder aus den Daten werden aktualisiert;
-  `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie.
+  `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie, außer bei der
+  Übergabe nach id (nächster Punkt).
+- **Übergabe nach id (eigener Uni-Abgleich, seit 0.4.4):** Ein Abgleich, der zusätzlich eigene Termin-Notizen schreibt (z. B.
+  persönliche oder zurückgehaltene Termine), kennzeichnet sie mit `abgleich_id` (= id nach der id-Regel) und ohne `herkunft`.
+  Jede id gehört genau einer Notiz: Steht sie in `termine.json`, schreibt das Plugin die Notiz, sonst der Abgleich. Findet das
+  Plugin für einen Termin keine Notiz mit `herkunft: zentral`, aber eine mit `abgleich_id` = id, übernimmt es genau diese
+  (wird zentral, `abgleich_id` fällt weg; `erledigt`, „Meine Notizen“, eigene Felder bleiben), statt eine zweite anzulegen
+  oder die id als „von dir gelöscht“ zu werten. Fällt eine id aus `termine.json`, übernimmt der Abgleich die Notiz des
+  Plugins an Ort und Stelle als `abgleich_id`-Notiz, gleich nach dem Export (bevor das Plugin den Wegfall sieht). Zuordnung
+  nur über die id, nie über den Dateinamen.
 - **Filter:** Termine ohne `code` oder mit `bereich` für alle; mit `code` nur, wenn das Modul im eigenen Plan ist (gewählt,
   selbst geplant, läuft, angemeldet) oder laut Musterplan der gewählten Variante im aktuellen oder nächsten Fachsemester liegt.
 - **Wegfall:** Fehlt eine id, wird die Notiz „(entfällt)“ (`entfaellt: true`), oder – wenn unberührt (nicht erledigt, „Meine

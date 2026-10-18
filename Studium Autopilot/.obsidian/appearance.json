@@ -4,6 +4,8 @@
   "baseFontSize": 16,
   "enabledCssSnippets": [
     "eba-core",
-    "eba-paper-elfenbein"
+    "eba-paper-elfenbein",
+    "eba-flieder",
+    "eba-klar"
   ]
 }

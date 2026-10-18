@@ -9,19 +9,24 @@
 // unbekannt (url: null).
 //
 // Ablauf einer Anfrage (sitzung().anfrage):
+//   0. Drossel (falls gesetzt): höchstens 2 Anfragen gleichzeitig, Starts mindestens 400 ms auseinander. Eine Anfrage hält
+//      ihren Platz samt Weiterleitungen.
 //   1. URL prüfen: nur https und nur die Server der Uni (ERLAUBTE_HOSTS). Sonst Fehler { grund: "fremder-host", host }, und
 //      es geht nichts hinaus. Gilt für jeden Weiterleitungsschritt; beide Transporte prüfen zusätzlich selbst.
 //   2. Kekse für diese URL aus der Keksdose (nur PC), einen Schritt über den Transport senden (der folgt nie selbst).
 //   3. set-cookie in die Keksdose. 301/302/303 → GET ohne Body, 307/308 → gleiche Methode mit Body. Location byte-genau
 //      auflösen (aufloesen: die signierte SAML-Query bleibt unverändert). Höchstens maxSpruenge Weiterleitungen; dieselbe
 //      Anfrage (Methode, URL, Kekse, Body) ein zweites Mal → Fehler „schleife“.
+// Am PC hält transportDesktop die Verbindungen offen (keep-alive, spart den TLS-Aufbau je Anfrage) und holt Seiten gzip-
+// komprimiert (ILIAS-Seiten sind 100–200 KB groß); Dateien kommen unverändert.
 // Fehler sind Error-Objekte mit grund: fremder-host, schleife, zu-viele-spruenge, zeitueberschreitung, netz (code),
 //   kein-transport, kodierung. Fehler enthalten nie Bodies, Formularwerte oder Kekswerte; diese Datei protokolliert nichts.
 //
 // Aufruf: const N = ctx.user["ilias-netz"](ctx). Beim Laden passiert nichts (kein Netz, keine Zeitgeber).
 //   N.UNI, N.UNIS, N.ERLAUBTE_HOSTS
-//   N.sitzung({ transport?, uni? ("tuebingen"), jetzt? }) → { anfrage(o), keks (nur PC, sonst null), istHostErlaubt(url),
-//     uni, hosts, mobil }
+//   N.sitzung({ transport?, uni? ("tuebingen"), jetzt?, drossel? }) → { anfrage(o), keks (nur PC, sonst null),
+//     istHostErlaubt(url), uni, hosts, mobil, schliessen() (offene Verbindungen des PCs schließen) }
+//   N.drossel({ parallel? (2), abstand? (400 ms), jetzt?, warten? }) → { eintritt() → freigeben(), parallel, abstand }
 //     anfrage({ url, methode = "GET", formular?, body?, kopf?, folgen = true, binaer = false, maxSpruenge = 12 })
 //       formular: Objekt oder [[name, wert], …] → application/x-www-form-urlencoded (bei GET als Query an die URL)
 //       → { status, kopf (Namen klein, ohne set-cookie), typ (content-type), text | daten + arrayBuffer (binaer: dasselbe
@@ -51,6 +56,11 @@ module.exports = function (ctx) {
   const ZEITLIMIT_MOBIL = 60000;         // ms für eine Seite
   const ZEITLIMIT_MOBIL_DATEI = 300000;  // ms für eine Datei (bis 50 MB auch über langsames Mobilfunknetz)
   const MAX_KEKSE = 300;        // je Keksdose; darüber fällt der älteste weg
+  // Last für den Server der Uni (Drossel): höchstens so viele Anfragen gleichzeitig und so viel Abstand zwischen zwei Starts,
+  // also höchstens 2,5 Anfragen je Sekunde. Zum Vergleich PFERD: eine Anfrage nach der anderen ohne Pause (gemessen bei uns
+  // gut 3,5 je Sekunde samt Weiterleitungen).
+  const PARALLEL = 2;
+  const ABSTAND = 400;
   const WEITERLEITUNG = { 301: 1, 302: 1, 303: 1, 307: 1, 308: 1 };
   const ACCEPT_TEXT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
   const SPRACHE = "de-DE,de;q=0.9,en;q=0.8";
@@ -436,6 +446,34 @@ module.exports = function (ctx) {
     };
   }
 
+  // ---------- Drossel: höchstens `parallel` Anfragen gleichzeitig, Starts mindestens `abstand` ms auseinander ----------
+  // Wer eintritt, wartet auf einen freien Platz (der Reihe nach) und dann auf seinen Startzeitpunkt; freigeben() gibt den
+  // Platz zurück (mehrfacher Aufruf schadet nicht). jetzt/warten nur für Tests (sonst Uhr und setTimeout des Geräts).
+  function drossel(o) {
+    o = o || {};
+    const parallel = o.parallel >= 1 ? Math.floor(o.parallel) : PARALLEL;
+    const abstand = o.abstand >= 0 ? o.abstand : ABSTAND;
+    const jetzt = typeof o.jetzt === "function" ? o.jetzt : () => Date.now();
+    const warten = typeof o.warten === "function" ? o.warten : (ms) => new Promise((fertig) => setTimeout(fertig, ms));
+    let frei = parallel, naechster = 0, kette = Promise.resolve();
+    const wartende = [];
+    const platz = () => (frei > 0 ? (frei--, Promise.resolve()) : new Promise((weiter) => wartende.push(weiter)));
+    const zurueck = () => { const w = wartende.shift(); if (w) w(); else frei++; };
+    async function eintritt() {
+      await platz();
+      const start = kette.then(async () => {
+        const w = naechster - jetzt();
+        if (w > 0) await warten(w);
+        naechster = jetzt() + abstand;
+      });
+      kette = start.catch(() => {});
+      try { await start; } catch (e) { zurueck(); throw e; }
+      let offen = true;
+      return () => { if (offen) { offen = false; zurueck(); } };
+    }
+    return { eintritt, parallel, abstand };
+  }
+
   // ---------- Antworten ----------
   const kopfKlein = (h) => {
     const aus = {};
@@ -469,15 +507,18 @@ module.exports = function (ctx) {
     opt = opt || {};
     const nm = nodeNetz();
     if (!nm || !nm.https) throw fehler("kein-transport");
-    const agent = "Studium-Autopilot/" + (opt.version || pluginVersion() || "0");
+    const kennung = "Studium-Autopilot/" + (opt.version || pluginVersion() || "0");
     const zeitlimit = opt.zeitlimit > 0 ? opt.zeitlimit : ZEITLIMIT;
+    // Verbindungen offen halten: spart je Anfrage den Aufbau (TCP und TLS); der Server schließt ruhende selbst
+    const verbindungen = typeof nm.https.Agent === "function" ? new nm.https.Agent({ keepAlive: true, maxSockets: PARALLEL + 2 }) : undefined;
     const senden = async function (a) {
       const u = hostPruefen(a.url, ALLE_HOSTS);
       const bytes = a.body == null ? null : new TextEncoder().encode(String(a.body));
       const kopf = {};
       for (const k of Object.keys(a.kopf || {})) kopf[k.toLowerCase()] = a.kopf[k];
-      if (!kopf["user-agent"]) kopf["user-agent"] = agent;
-      if (!kopf["accept-encoding"]) kopf["accept-encoding"] = "identity";
+      if (!kopf["user-agent"]) kopf["user-agent"] = kennung;
+      // Seiten komprimiert (etwa ein Zehntel), Dateien unverändert (PDFs sind schon komprimiert, spart Arbeitsspeicher)
+      if (!kopf["accept-encoding"]) kopf["accept-encoding"] = a.binaer || !nm.zlib ? "identity" : "gzip, deflate";
       if (bytes) kopf["content-length"] = String(bytes.length);
       else delete kopf["content-length"];
       return new Promise((fertig, abbruch) => {
@@ -485,7 +526,7 @@ module.exports = function (ctx) {
         const scheitern = (e) => { if (!erledigt) { erledigt = true; abbruch(netzFehler(e, u.host)); } };
         let anf;
         try {
-          anf = nm.https.request({ hostname: u.host, port: u.port ? Number(u.port) : 443, path: anfragePfad(u), method: a.methode || "GET", headers: kopf, timeout: zeitlimit }, (res) => {
+          anf = nm.https.request({ hostname: u.host, port: u.port ? Number(u.port) : 443, path: anfragePfad(u), method: a.methode || "GET", headers: kopf, timeout: zeitlimit, agent: verbindungen }, (res) => {
             const stuecke = [];
             res.on("data", (c) => stuecke.push(c));
             res.on("error", scheitern);
@@ -523,6 +564,7 @@ module.exports = function (ctx) {
         anf.end();
       });
     };
+    senden.schliessen = () => { if (verbindungen) verbindungen.destroy(); };
     return senden;
   }
 
@@ -564,6 +606,7 @@ module.exports = function (ctx) {
     const transport = o.transport || (istDesktop() ? transportDesktop() : transportMobil());
     const mobil = !!transport.folgtSelbst;
     const keks = mobil ? null : keksDose({ jetzt: o.jetzt });
+    const d = o.drossel && typeof o.drossel.eintritt === "function" ? o.drossel : null;
 
     function ergebnis(antwort, url, weg, binaer) {
       const kopf = kopfKlein(antwort.kopf);
@@ -574,6 +617,11 @@ module.exports = function (ctx) {
     }
 
     async function anfrage(a) {
+      if (!d) return anfrageOhneDrossel(a);
+      const freigeben = await d.eintritt();
+      try { return await anfrageOhneDrossel(a); } finally { freigeben(); }
+    }
+    async function anfrageOhneDrossel(a) {
       a = a || {};
       const binaer = !!a.binaer, folgen = a.folgen !== false;
       const maxRoh = a.maxSpruenge != null ? a.maxSpruenge : a["maxSprünge"];
@@ -617,11 +665,12 @@ module.exports = function (ctx) {
     }
 
     const istHostErlaubt = (url) => { try { hostPruefen(url, hosts); return true; } catch (e) { return false; } };
-    return { anfrage, keks, istHostErlaubt, uni, hosts, mobil };
+    const schliessen = () => { if (typeof transport.schliessen === "function") transport.schliessen(); };
+    return { anfrage, keks, istHostErlaubt, uni, hosts, mobil, schliessen };
   }
 
   return {
-    UNI, UNIS, ERLAUBTE_HOSTS, sitzung, keksDose, formulare, istLoginSeite, entitaeten, aufloesen, formularKodieren,
+    UNI, UNIS, ERLAUBTE_HOSTS, sitzung, drossel, keksDose, formulare, istLoginSeite, entitaeten, aufloesen, formularKodieren,
     transportDesktop, transportMobil,
   };
 };

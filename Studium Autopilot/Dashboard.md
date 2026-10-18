@@ -159,8 +159,20 @@ cssclasses:
 >     if(formula.kl.length > 0, formula.kl[0], "")
 >   kt: |-
 >     if(formula.k0, ((date(formula.k0.split("|")[0]) - today()).days).round(), 0)
+>   tf: |-
+>     formula.t.filter(value.properties.kategorie == "Frist" && value.properties.datum && date(if(value.properties.bis, value.properties.bis, value.properties.datum)) >= today()).map(if(value.properties.bis && date(value.properties.datum) < today(), date(value.properties.bis), date(value.properties.datum)).format("YYYY-MM-DD") + "|" + date(value.properties.datum).format("YYYY-MM-DD") + "|" + if(value.properties.bis, date(value.properties.bis).format("YYYY-MM-DD"), "") + "|" + if(value.properties.status == "geschätzt", "geschätzt", "") + "|" + if(value.properties.titel, value.properties.titel.toString().replace(" (ILIAS)", ""), value.basename)).sort()
+>   f0: |-
+>     if(formula.tf.length > 0, formula.tf[0], "")
+>   fstart: |-
+>     if(formula.f0, date(formula.f0.split("|")[1]), today())
+>   fende: |-
+>     if(formula.f0 && formula.f0.split("|")[2], date(formula.f0.split("|")[2]), formula.fstart)
+>   ftage: |-
+>     ((formula.fstart - today()).days).round()
+>   ftext: |-
+>     if(formula.f0, if(formula.fstart < today(), "läuft · bis " + formula.fende.format("DD.MM."), formula.fstart.format("DD.MM.") + " · " + if(formula.ftage == 0, "heute", if(formula.ftage == 1, "morgen", "in " + formula.ftage + " Tagen"))) + if(formula.f0.split("|")[3] == "geschätzt", " · geschätzt", ""), "keine offenen Fristen")
 >   karte: |-
->     html("<div class='eba-kz'><div class='eba-kz-kopf'><h1 class='eba-kz-gruss'>" + formula.gruss + "</h1><span class='eba-kz-datum'>" + formula.datum + "</span></div><div class='eba-kz-reihe vier'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Nächste Prüfung" + "</span><span class='v text'>" + if(formula.k0, formula.k0.split("|")[1], "noch kein Termin") + "</span><span class='s'>" + if(formula.k0, date(formula.k0.split("|")[0]).format("DD.MM.") + " · " + if((formula.kt) == 0, "heute", if((formula.kt) == 1, "morgen", if((formula.kt) < 0, "vorbei", "in " + (formula.kt) + " Tagen"))), "Termine ab ca. Mitte Nov. bzw. Mai") + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Semester" + "</span><span class='v'>" + if(formula.vorstart, "Start <small>" + if((((formula.sb - today()).days).round()) == 0, "heute", if((((formula.sb - today()).days).round()) == 1, "morgen", if((((formula.sb - today()).days).round()) < 0, "vorbei", "in " + (((formula.sb - today()).days).round()) + " Tagen"))) + "</small>", formula.fs + ". FS <small>" + formula.semname + "</small>") + "</span><span class='s'>" + if(formula.vorstart, formula.phasesub, formula.phase + " · " + formula.phasesub) + "</span>" + "<progress max='100' value='" + formula.sempct + "'></progress>" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "ECTS" + "</span><span class='v'>" + formula.ects + "<small>/ 180</small>" + "</span><span class='s'>" + "Orientierungsprüfung " + formula.op + " / 4" + "</span>" + "<progress max='180' value='" + formula.ects + "'></progress>" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Notenschnitt" + "</span><span class='v'>" + formula.note + "</span><span class='s'>" + formula.notesub + "</span>" + "" + "</div>" + "</div><div class='eba-leiste'><div class='eba-leiste-kopf'><span class='k'>" + formula.semname + " · Semesterverlauf</span><span class='s'><b>" + formula.wochetext + "</b></span></div><div class='eba-wochen'>" + formula.wochen + "</div><div class='eba-legende'><span class='v'>Vorlesungszeit</span><span class='w'>Ferien</span><span class='p'>Prüfungen" + if(formula.kz.slice(0, 3).filter(value.split("|")[3].trim() == "geschätzt").length > 0, " (geschätzt)", "") + "</span><span>vorlesungsfrei</span><span class='jetzt'>diese Woche</span></div></div></div>")
+>     html("<div class='eba-kz'><div class='eba-kz-kopf'><h1 class='eba-kz-gruss'>" + formula.gruss + "</h1><span class='eba-kz-datum'>" + formula.datum + "</span></div><div class='eba-kz-reihe'>" + "<div class='eba-kachel akzent frist'><span class='k'>" + "Nächste Frist" + "</span><span class='v text'>" + if(formula.f0, formula.f0.split("|").slice(4).join("|"), "–") + "</span><span class='s'>" + formula.ftext + "</span>" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Nächste Prüfung" + "</span><span class='v text'>" + if(formula.k0, formula.k0.split("|")[1], "noch kein Termin") + "</span><span class='s'>" + if(formula.k0, date(formula.k0.split("|")[0]).format("DD.MM.") + " · " + if((formula.kt) == 0, "heute", if((formula.kt) == 1, "morgen", if((formula.kt) < 0, "vorbei", "in " + (formula.kt) + " Tagen"))), "Termine ab ca. Mitte Nov. bzw. Mai") + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Semester" + "</span><span class='v'>" + if(formula.vorstart, "Start <small>" + if((((formula.sb - today()).days).round()) == 0, "heute", if((((formula.sb - today()).days).round()) == 1, "morgen", if((((formula.sb - today()).days).round()) < 0, "vorbei", "in " + (((formula.sb - today()).days).round()) + " Tagen"))) + "</small>", formula.fs + ". FS <small>" + formula.semname + "</small>") + "</span><span class='s'>" + if(formula.vorstart, formula.phasesub, formula.phase + " · " + formula.phasesub) + "</span>" + "<progress max='100' value='" + formula.sempct + "'></progress>" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "ECTS" + "</span><span class='v'>" + formula.ects + "<small>/ 180</small>" + "</span><span class='s'>" + "Orientierungsprüfung " + formula.op + " / 4" + "</span>" + "<progress max='180' value='" + formula.ects + "'></progress>" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Notenschnitt" + "</span><span class='v'>" + formula.note + "</span><span class='s'>" + formula.notesub + "</span>" + "" + "</div>" + "</div><div class='eba-leiste'><div class='eba-leiste-kopf'><span class='k'>" + formula.semname + " · Semesterverlauf</span><span class='s'><b>" + formula.wochetext + "</b></span></div><div class='eba-wochen'>" + formula.wochen + "</div><div class='eba-legende'><span class='v'>Vorlesungszeit</span><span class='w'>Ferien</span><span class='p'>Prüfungen" + if(formula.kz.slice(0, 3).filter(value.split("|")[3].trim() == "geschätzt").length > 0, " (geschätzt)", "") + "</span><span>vorlesungsfrei</span><span class='jetzt'>diese Woche</span></div></div></div>")
 > properties:
 >   formula.karte:
 >     displayName: Übersicht
@@ -254,11 +266,19 @@ cssclasses:
 > >         - 'erledigt != true'
 > >         - 'date(datum) <= today() + duration("14d")'
 > >         - 'date(if(bis, bis, datum)) >= today()'
+> >     - and:
+> >         - 'typ == "termin"'
+> >         - '["Fachschaft", "Veranstaltung"].contains(kategorie)'
+> >         - 'erledigt != true'
+> >         - 'date(datum) <= today() + duration("1d")'
+> >         - 'date(if(bis, bis, datum)) >= today()'
 > > formulas:
 > >   wann: 'date(if(typ == "übungsblatt", faellig, if(typ == "modul", klausur, datum)))'
 > >   was: 'file.asLink(if(typ == "modul", "Prüfung " + code, if(typ == "übungsblatt", code + " · Blatt " + nummer, titel.toString().replace(" (ILIAS)", ""))))'
 > >   tage: '((formula.wann - today()).days).round()'
 > >   zeit: 'if(ort && ort.toString().split(" · ")[0].contains(":"), ort.toString().split(" · ")[0], "")'
+> >   uhr0: 'if(formula.zeit, formula.zeit.replace(/^[^0-9]*/, ""), "")'
+> >   uhr: 'if(formula.uhr0.slice(1, 2) == ":", "0" + formula.uhr0.slice(0, 4), formula.uhr0.slice(0, 5))'
 > >   tagText: 'if(typ == "übungsblatt" && formula.tage < 0, "überfällig", if(formula.tage < 0, "läuft bis " + ["So","Mo","Di","Mi","Do","Fr","Sa"][number(date(bis).format("d"))] + " " + date(bis).format("DD.MM."), if(formula.tage == 0, "Heute", if(formula.tage == 1, "Morgen", ["So","Mo","Di","Mi","Do","Fr","Sa"][number(formula.wann.format("d"))] + " " + formula.wann.format("DD.MM.")))))'
 > >   wannText: 'html("<span class=\"eba-wann" + if(formula.tage == 0 || formula.tage == 1, " eba-bald", "") + "\">" + formula.tagText + if(formula.zeit, "<span class=\"eba-uhr\"> · " + formula.zeit + "</span>", "") + "</span>")'
 > >   wie: 'if(typ == "übungsblatt" && formula.tage < 0, "überfällig", if(formula.tage < 0, "läuft bis " + date(bis).format("DD.MM."), if(formula.tage == 0, "heute", if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen"))))'
@@ -281,7 +301,9 @@ cssclasses:
 > >     sort:
 > >       - property: formula.wann
 > >         direction: ASC
-> >     limit: 6
+> >       - property: formula.uhr
+> >         direction: ASC
+> >     limit: 8
 > >     order:
 > >       - formula.wannText
 > >       - formula.was
@@ -294,6 +316,9 @@ cssclasses:
 
 
 ## Zu erledigen
+
+```eba-bitte-pruefen
+```
 
 ```eba-karten heute
 Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.

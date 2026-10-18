@@ -45,7 +45,8 @@ INHALT_REGELN = [
     ("privater Benutzername", re.compile(r"cso" + r"ny", re.I)),
     ("Windows-Benutzerpfad", re.compile(r"\b[a-z]:(?:\\\\|\\|/)+users(?:\\\\|\\|/)", re.I)),
     ("Server-Pfad", re.compile(r"/home/(?:ubunt" + r"u|opc)\b")),
-    ("Server-Hinweis", re.compile(r"\bsslip\.io\b|\.ts\.net\b|\bnip\.io\b|orac" + r"lecloud|\bOrac" + r"le[- ]?(?:Server|Box|Cloud|VM)\b", re.I)),
+    ("Server-Hinweis", re.compile(r"\.ts\.net\b", re.I)),
+    ("Server-Hinweis (allgemein)", re.compile(r"\bsslip\.io\b|\bnip\.io\b|orac" + r"lecloud|\bOrac" + r"le[- ]?(?:Server|Box|Cloud|VM)\b", re.I)),
     ("geteilter Drive-Link", re.compile(r"(?:drive|docs)\.google\.com/", re.I)),
     ("timms-Link", re.compile(r"\btimms\.uni-tuebingen\.de\b", re.I)),
     ("ILIAS-Download-Link", re.compile(r"secure" + r"dl", re.I)),
@@ -70,6 +71,10 @@ INHALT_REGELN = [
 
 EMAIL = re.compile(r"(?<![\w.%+-])([A-Za-z0-9._%+-]+)@([A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,})\b")
 IP = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w.]*\d)")
+# Die Funktion „Eigener Server“ (server/) richtet für Studierende einen eigenen Server beim Anbieter der Freistufe ein
+# und muss dessen Namen und die Adressdienste nennen (Entscheidung vom 18.10.2026). Nur dort und nur diese Regel;
+# Tailnet-Namen, IP-Adressen, Pfade und Namen bleiben auch in server/ gesperrt.
+REGEL_AUSNAHMEN = {"Server-Hinweis (allgemein)": ("server/",)}
 IP_ERLAUBT = {"127.0.0.1", "0.0.0.0"}
 TELEFON = [
     re.compile(r"(?<![\w+])(?:\+|00)[1-9]\d{0,2}[\s./-]?\(?0?\d{2,5}\)?[\s./-]?\d{2,}(?:[\s./-]?\d{2,})*"),
@@ -215,6 +220,8 @@ def text_pruefen(rel, text, sperre, funde):
         if len(zeile) > 20000:
             zeile = zeile[:20000]
         for regel, rx in INHALT_REGELN:
+            if rel.startswith(REGEL_AUSNAHMEN.get(regel, ())):
+                continue
             for m in rx.finditer(zeile):
                 funde.append(Fund(rel, nr, regel, maskieren(regel, kuerzen(m.group(0)))))
         for m in EMAIL.finditer(zeile):

@@ -14,14 +14,16 @@
 //   Raumnummer, dann die kleinere Abweichung; sonst „mehrdeutig“ mit den Kandidaten. Nie über die Nummer.
 // Notizen in Stundenplan/ (typ lehrveranstaltung, Felder wie die zentralen Notizen, damit Wochenraster und Listen sie zeigen):
 //   herkunft: ilias-gruppe (ilias_gruppe = ref_id der ILIAS-Gruppe) schreibt NUR ilias.js auf dem Gerät mit der ILIAS-Sperre;
-//   herkunft: gruppe-gewaehlt schreibt NUR gruppen.js (Knopf „Meine“, Aufräumen beim Zeichnen). Dateiname mit „(ILIAS)“ bzw.
+//   herkunft: gruppe-gewaehlt schreibt gruppen.js (Knopf „Meine“, Aufräumen beim Zeichnen) und ilias.js nur beim Freigeben
+//   (iliasFreigeben: Trennen, Anmeldung abgelehnt, verwaist; aus ILIAS-Notizen werden gewählte). Dateiname mit „(ILIAS)“ bzw.
 //   „(gewählt)“ am Ende, nie gleich dem einer Alma-, zentralen oder anderen Notiz; ältere Namen werden umbenannt (Links ziehen
 //   mit). Felder für die Anzeige: titel
 //   („<Modul> · Tutorium Gruppe 4“), gruppe (Name, wie die Quelle ihn nennt), gruppe_alma (Nummer in gruppen.json), gruppe_id,
 //   konflikt (Name einer anderen Stundenplan-Notiz, die sich zeitlich überschneidet; fehlt sonst).
 //   Eine Regel für alle Quellen: Deckt schon eine andere Notiz dieselbe Gruppe (Alma, von Hand oder zentral: Code, Semester,
 //   Wochentag, Beginn ±15 Min.), weicht die Gruppen-Notiz. Eigener Text darin wandert einmal in die andere Notiz, dann Papierkorb
-//   (wie bei zentralen Vorlesungen, wenn Alma sie auch hat). Eine ILIAS-Notiz verdrängt gewählte Notizen desselben Moduls und
+//   (wie bei zentralen Vorlesungen, wenn Alma sie auch hat); steht er dort schon (ein anderes Gerät war schneller), nicht noch
+//   einmal. Eine ILIAS-Notiz verdrängt gewählte Notizen desselben Moduls und
 //   derselben Art (übernimmt die erste, die übrigen weichen), Doppel derselben ILIAS-Gruppe weichen in die erste.
 //   alma.js und zentral.js fassen beide Herkünfte nie an.
 // Eigener Text: alles unter „## Notizen“ und jede Zeile im Kopf, die nicht von hier stammt, bleibt beim Aktualisieren.
@@ -39,6 +41,8 @@ const TAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const TOLERANZ = 15;
 const NOTIZEN = "## Notizen";
+const INFO_ILIAS = "> [!info] Aus ILIAS: Verlässt du die Gruppe dort, verschwindet diese Notiz.";
+const INFO_GEWAEHLT = "> [!info] Von dir gewählt, ändern auf [[Termine & Anmeldungen]].";
 // Arten, die eine Übungsgruppe sein können (Alma erkennt die Art nicht immer: „Veranstaltung“ oder leer), nie eine Vorlesung
 const UEBUNG = ["Übung", "Tutorium", "Übungsteil", "Veranstaltung", ""];
 
@@ -205,8 +209,7 @@ const notizText = (alt, g, o) => {
   for (const b of bloecke) if (b.key && EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
   const kopf = [`# ${mdText(g.code)} · ${mdText(anzeige)}`, "", `${TAGE_LANG[wt - 1]}s, ${z.beginn}–${z.ende}` + (g.raum ? " · " + mdText(g.raum) : ""), ""];
   if (g.zeitraum) kopf.push(`${dmy(g.zeitraum.von)} – ${dmy(g.zeitraum.bis)}`, "");
-  kopf.push(ilias ? "> [!info] Aus ILIAS: Verlässt du die Gruppe dort, verschwindet diese Notiz."
-    : "> [!info] Von dir gewählt, ändern auf [[Termine & Anmeldungen]].", "");
+  kopf.push(ilias ? INFO_ILIAS : INFO_GEWAEHLT, "");
   const fremd = fremderKopf(body);
   if (fremd) kopf.push(fremd, "");
   const i = body.search(/^## Notizen[ \t]*$/m);
@@ -253,12 +256,13 @@ const konfliktFuer = (eigen, andere) => {
   return "";
 };
 const zeitFuer = (g) => { const z = echteZeit(g); return { semester: g.semester, wochentag: TAGE.indexOf(g.tag) + 1, b: minuten(z.beginn), e: minuten(z.ende), id: g.id }; };
-// Gruppen-Notiz weicht einer anderen Notiz: eigener Text wandert einmal dorthin, dann Papierkorb
+// Gruppen-Notiz weicht einer anderen Notiz: eigener Text wandert einmal dorthin, dann Papierkorb. Steht er dort schon (ein
+// anderes Gerät hat dieselbe Notiz eben weichen lassen, ihr Papierkorb kam noch nicht per Sync), nicht noch einmal.
 const weichen = async (io, x, ziel, heute) => {
   const meine = meineNotizen(await io.lesen(x.pfad));
   if (meine) {
     const t = await io.lesen(ziel.pfad);
-    await io.schreiben(ziel.pfad, t.replace(/\s*$/, "") + `\n\nAus der Notiz zu deiner Gruppe übernommen (${dmy(heute || "")}):\n\n${meine}\n`);
+    if (t.indexOf(meine) < 0) await io.schreiben(ziel.pfad, t.replace(/\s*$/, "") + `\n\nAus der Notiz zu deiner Gruppe übernommen (${dmy(heute || "")}):\n\n${meine}\n`);
   }
   await io.papierkorb(x.pfad);
 };
@@ -372,17 +376,47 @@ const gewaehltAufraeumen = async (io, heute) => {
   const alle = lehrNotizen(io), aus = [];
   for (const x of alle.filter((y) => herkunftVon(y.fm) === GEWAEHLT)) {
     const fm = x.fm, g = { code: String(fm.code || ""), art: String(fm.art || ""), semester: String(fm.semester || ""), tag: TAGE[Number(fm.wochentag) - 1], von: fm.beginn, ct: false };
-    const ziel = alle.find((y) => herkunftVon(y.fm) === ILIAS && y.fm.entfaellt !== true && gleichesModul(y.fm, g)) ||
-      alle.find((y) => !istGruppe(y.fm) && deckt(y.fm, g));
+    const il = alle.find((y) => herkunftVon(y.fm) === ILIAS && y.fm.entfaellt !== true && gleichesModul(y.fm, g));
+    // Ist sie genau die freigegebene Fassung dieser ILIAS-Notiz (iliasFreigeben auf einem anderen Gerät, Umbenennen per Sync
+    // erst halb da), verschwindet die ILIAS-Notiz gleich: nicht weichen, sonst gingen beide samt deinem Text verloren.
+    if (il && freigabeText(await io.lesen(il.pfad)) === (await io.lesen(x.pfad))) continue;
+    const ziel = il || alle.find((y) => !istGruppe(y.fm) && deckt(y.fm, g));
     if (!ziel) continue;
     await weichen(io, x, ziel, heute);
     aus.push(x.pfad);
   }
   return aus;
 };
+// Text einer ILIAS-Notiz nach dem Freigeben (null: ohne Frontmatter); auch für das Aufräumen (gewaehltAufraeumen)
+const freigabeText = (alt) => {
+  const t = teilen(String(alt || ""));
+  if (!t.bloecke.length) return null;
+  const zeilen = t.bloecke.filter((bl) => bl.key !== "ilias_gruppe").map((bl) => (bl.key === "herkunft" ? ["herkunft: " + GEWAEHLT] : bl.zeilen))
+    .reduce((a, z) => a.concat(z), []);
+  const body = t.body.replace(/^(?!\r?\n)/, "\n"), i = body.search(/^## Notizen[ \t]*$/m);
+  const kopf = (i < 0 ? body : body.slice(0, i)).replace(/^> \[!info\][^\n]*(?:\n>[^\n]*)*/m, INFO_GEWAEHLT);
+  return "---\n" + zeilen.join("\n") + "\n---\n" + kopf + (i < 0 ? "" : body.slice(i));
+};
+// Freigeben (nur ilias.js, nur das Gerät, das die ILIAS-Notizen schreibt: Trennen, Anmeldung abgelehnt, verwaist): Aus jeder
+// ILIAS-Notiz wird eine gewählte. Deine Gruppe bleibt im Stundenplan mit ihrem ILIAS-Namen, „Meine“ kann sie danach ändern.
+// Geändert werden nur herkunft, ilias_gruppe (fällt weg), der Info-Kasten im Kopf und der Name („… (gewählt)“); Felder, Tags
+// und eigener Text bleiben. Entfallene bleiben, wie sie sind (sie sperren nichts). Jedes Gerät kommt zum selben Text; liegt er
+// unter dem neuen Namen schon da (ein anderes Gerät war schneller), geht die alte Notiz nur in den Papierkorb. → [neue Pfade]
+const iliasFreigeben = async (io) => {
+  const aus = [];
+  for (const x of lehrNotizen(io).filter((y) => herkunftVon(y.fm) === ILIAS && y.fm.entfaellt !== true)) {
+    const alt = await io.lesen(x.pfad), neu = freigabeText(alt);
+    if (neu == null) continue;
+    const name = basis(x.pfad).replace(/ \(ILIAS\)(?: \d+)?$/, "") + " (gewählt)", da = `${ORDNER}/${name}.md`;
+    if (da !== x.pfad && io.existiert(da) && (await io.lesen(da)) === neu) { await io.papierkorb(x.pfad); continue; }
+    if (neu !== alt) await io.schreiben(x.pfad, neu);
+    aus.push(await umbenennen(io, x.pfad, name));
+  }
+  return aus;
+};
 
 const API = { ORDNER, ILIAS, GEWAEHLT, ZENTRAL, zeitfenster, raumKern, gruppenName, zuordnen, notizText, dateiName, echteZeit, meineNotizen,
-  deckt, istGruppe, iliasAbgleichen, waehlen, abwaehlen, gewaehltAufraeumen, konfliktFuer, kurzTitel };
+  deckt, istGruppe, iliasAbgleichen, waehlen, abwaehlen, gewaehltAufraeumen, iliasFreigeben, konfliktFuer, kurzTitel };
 
 // Mit ctx: dazu obsidianIo() (Stundenplan-Notizen über die Obsidian-API)
 module.exports = function () {

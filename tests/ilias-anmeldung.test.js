@@ -73,6 +73,16 @@ test("Erfolg: IdP-Formular, SAML zurück an ILIAS, Dashboard ohne Login-Seite", 
   assert.equal(sb.get("SAMLResponse"), "VEVTVC1TQU1MLVBMQVRaSEFMVEVS+/dGVzdA==", "Entitäten entschlüsselt");
   assert.equal(sb.get("RelayState"), "cookie:1700000000_TEST");
   assert.equal(sb.has("j_password"), false);
+  // die Weiterleitungen enden auf dem Dashboard: kein zweiter Abruf zur Prüfung
+  assert.equal(anfragen.filter((a) => /\/ilias\.php/.test(a.url)).length, 1);
+});
+
+test("Endet die Anmeldung nicht auf einer ILIAS-Seite, wird das Dashboard eigens geprüft", async () => {
+  const r = grundRegeln(html(SAML_FORM));
+  r[`POST ovidius.uni-tuebingen.de/Shibboleth.sso/SAML2/POST`] = html("<html><body>Weiter …</body></html>");
+  const { ergebnis, anfragen } = await lauf(r);
+  assert.deepEqual(ergebnis, { ok: true });
+  assert.equal(anfragen.filter((a) => /\/ilias\.php/.test(a.url)).length, 1, "Dashboard geholt");
 });
 
 test("Falsches Passwort – der IdP zeigt das Formular wieder → zugang-falsch, Hinweis ohne Passwort", async () => {

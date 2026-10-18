@@ -16,12 +16,21 @@
 //      synchronisiert) schreiben. Hat sich der Plugin-Kern geändert, wird das Plugin neu geladen.
 //
 // Nutzeränderungen (Vergleich mit installiert.json, also der Fassung, die zuletzt installiert wurde):
-//   unverändert → ersetzen. Selbst geändert: system/seite → deine Fassung bleibt, neue als „Name (neu X).ext“ daneben
-//   (Skripte und CSS mit .txt am Ende, damit nichts davon geladen wird); Seite nur abgehakt → neue Seite, Haken übernommen;
+//   unverändert oder schon gleich der neuen Fassung → ersetzen bzw. nichts. Selbst geändert:
+//   system (seit 0.4.4) → immer die neue Fassung; deine liegt vorher als „Name (deine Fassung vor X).ext.txt“ daneben (nie
+//     geladen). Bis 0.4.3 blieb deine aktiv und die neue lag als „Name (neu X).ext.txt“ daneben, darum fehlten neue Teile.
+//   seite/modul, deren Vorlage sich seit der installierten Version nicht geändert hat (seit 0.4.4) → deine bleibt, nichts daneben;
+//   sonst seite → deine bleibt, neue als „Name (neu X).md“ daneben; nur abgehakt → neue Seite, Haken übernommen;
 //   modul → Katalogfelder neu, persönliche Felder (PERSOENLICH) und eigene Felder bleiben, Text bleibt, wenn du ihn geändert
 //   hast; einstellung (.obsidian/*.json) → fehlende Einträge ergänzen, deine Werte bleiben. Gelöschte Seiten/Module kommen nicht
-//   wieder. Dateien, die es nicht mehr gibt, wandern unverändert in die Sicherung, geändert bleiben sie; Lesezeichen auf so
-//   entfernte Dateien fallen auch aus deiner bookmarks.json weg.
+//   wieder. Dateien, die es nicht mehr gibt, wandern unverändert in die Sicherung; geänderte Seiten/Module bleiben, geänderte
+//   Systemdateien gehen mit Sicherung daneben. Lesezeichen auf entfernte Dateien fallen auch aus deiner bookmarks.json weg.
+//   Ältere Kopien „Seite (neu X).md“, die genau der alten oder neuen Vorlage gleichen, räumt das Update weg (keine Stapel).
+// Reparatur (seit 0.4.4, heilenMit): Das Update auf 0.4.4 plant noch der alte update.js. Darum prüft der neue einmal je Gerät
+//   und Version: Systemdatei ≠ installiert.json, aber eine beiseitegelegte „(neu X)“-Kopie hat genau die Prüfsumme der Liste →
+//   diese wird aktiv, deine Fassung kommt als Sicherung daneben, die Kopien gehen weg. Kopien von Seiten, die genau der jetzigen
+//   Vorlage gleichen und älter als die installierte Version sind, gehen auch weg. Nie aus dem Netz, nie eine Seite selbst.
+//   Synchronisierte Pfade (alles außer .obsidian/) nur auf dem Gerät, das für alle schreibt (ctx.zentral.abruferHier).
 // Nie angefasst: alles, was klasseVon nicht kennt (Einstellungen, Termine, Stundenplan, Vorlesungen, Unterlagen, Eingang,
 //   Anhänge, Semester.md, abruf.json, appearance.json …).
 // Kanal: update_kanal in System/Einstellungen.md („stabil“ Standard, „beta“). Das Manifest nennt release (stabil) und optional
@@ -36,7 +45,8 @@
 //   Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“. „Was ist neu“ zeigt die Abschnitte aus CHANGELOG.md
 //   am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt Bestätigungsfenster), plugin.testUpdateBasis (andere Basis-URL,
-//   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.neuigkeiten.
+//   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.neuigkeiten,
+//   ctx.update.heilen(true) (Reparatur sofort, ohne Merker eba-update-reparatur).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
   const app = window.app;
@@ -107,13 +117,34 @@ module.exports = function (ctx) {
     if (/^Module\/.+\.md$/.test(p)) return "modul";
     return "";
   };
+  // Pfad → { ordner ("" oder „a/b/“), basis, ext }
+  const nameTeile = (pfad) => {
+    const i = pfad.lastIndexOf("/"), name = pfad.slice(i + 1), p = name.lastIndexOf(".");
+    return { ordner: pfad.slice(0, i + 1), basis: p > 0 ? name.slice(0, p) : name, ext: p > 0 ? name.slice(p) : "" };
+  };
+  const ordnerVon = (pfad) => nameTeile(pfad).ordner.replace(/\/$/, "");
+  // Endung der Kopie: Skripte, CSS und JSON mit .txt am Ende, damit nichts davon geladen wird (bis 0.4.3 auch für System)
+  const kopieEndung = (ext) => (ext === ".js" || ext === ".css" || ext === ".json" ? ext + ".txt" : ext);
   // Name der neuen Fassung neben deiner: „Dashboard (neu 0.3.0).md“, Skripte/CSS „zentral (neu 0.3.0).js.txt“
-  const neuName = (pfad, version) => {
-    const i = pfad.lastIndexOf("/"), ordner = pfad.slice(0, i + 1), name = pfad.slice(i + 1);
-    const p = name.lastIndexOf(".");
-    const basis = p > 0 ? name.slice(0, p) : name, ext = p > 0 ? name.slice(p) : "";
-    const zusatz = ext === ".js" || ext === ".css" || ext === ".json" ? ext + ".txt" : ext;
-    return ordner + basis + " (neu " + version + ")" + zusatz;
+  const neuName = (pfad, version) => { const t = nameTeile(pfad); return t.ordner + t.basis + " (neu " + version + ")" + kopieEndung(t.ext); };
+  // Sicherung deiner Systemdatei daneben, immer mit .txt (Obsidian und der Kern laden sie nie):
+  // „eba-core (deine Fassung vor 0.4.4).css.txt“; nr ≥ 2, wenn der Name schon mit anderem Inhalt belegt ist
+  const deineName = (pfad, version, nr) => {
+    const t = nameTeile(pfad);
+    return t.ordner + t.basis + " (deine Fassung vor " + version + (nr > 1 ? ", " + nr : "") + ")" + t.ext + ".txt";
+  };
+  // Kopien „Name (neu X)…“ neben pfad aus einer Liste von Pfaden im selben Ordner → [{ pfad (wie gelistet), version }].
+  // Namen vergleicht es in NFC (iOS und macOS liefern Umlaute zerlegt).
+  const kopienVon = (pfad, namen) => {
+    const t = nameTeile(nfc(pfad)), vor = t.ordner + t.basis + " (neu ", nach = ")" + kopieEndung(t.ext);
+    const aus = [];
+    for (const n of namen || []) {
+      const x = nfc(n);
+      if (x.length <= vor.length + nach.length || x.indexOf(vor) !== 0 || x.slice(x.length - nach.length) !== nach) continue;
+      const v = x.slice(vor.length, x.length - nach.length);
+      if (semver(v)) aus.push({ pfad: n, version: v });
+    }
+    return aus;
   };
 
   // ---------- Liste prüfen (system-dateien.json, auch installiert.json) ----------
@@ -277,8 +308,8 @@ module.exports = function (ctx) {
 
   // ---------- Plan (rein, ohne Dateien) ----------
   // neu, alt: geprüfte Listen (alt darf null sein); ist: pfad → { sha, koerper?, ohneHaken? } (fehlt = Datei fehlt)
-  // → [{ pfad, klasse, art, eintrag?, koerperNeu? }], art: gleich | anlegen | ersetzen | behalten-neu | modul-mischen |
-  //   seite-haken | json-mischen | uebersprungen | entfernen | bleibt
+  // → [{ pfad, klasse, art, eintrag?, koerperNeu? }], art: gleich | anlegen | ersetzen | ersetzen-sichern | behalten-neu |
+  //   eigene | modul-mischen | seite-haken | json-mischen | uebersprungen | entfernen | entfernen-sichern | bleibt
   const planen = (neu, alt, ist) => {
     const A = {}, N = {};
     if (alt) for (const a of alt.dateien) A[a.pfad] = a;
@@ -290,7 +321,11 @@ module.exports = function (ctx) {
       if (!c) art = a && (e.klasse === "seite" || e.klasse === "modul") ? "uebersprungen" : "anlegen";
       else if (c.sha === e.sha256) art = "gleich";
       else if (a && c.sha === a.sha256) art = "ersetzen";
+      // Darstellung, Programmteile, Gerüste: immer die neue Fassung, deine geänderte vorher als Sicherung daneben
+      else if (e.klasse === "system") art = "ersetzen-sichern";
       else if (e.klasse === "einstellung") art = "json-mischen";
+      // Vorlage seit der installierten Version gleich: deine Seite bzw. dein Modul bleibt, keine Kopie daneben
+      else if (a && e.sha256 === a.sha256) art = "eigene";
       else if (e.klasse === "modul") art = "modul-mischen";
       else if (e.klasse === "seite" && a && a.ohne_haken && c.ohneHaken === a.ohne_haken) art = "seite-haken";
       else art = "behalten-neu";
@@ -300,11 +335,12 @@ module.exports = function (ctx) {
     }
     if (alt) for (const a of alt.dateien) {
       if (hat(N, a.pfad) || !hat(ist, a.pfad)) continue;
-      schritte.push({ pfad: a.pfad, klasse: a.klasse, art: ist[a.pfad].sha === a.sha256 ? "entfernen" : "bleibt" });
+      const art = ist[a.pfad].sha === a.sha256 ? "entfernen" : a.klasse === "system" ? "entfernen-sichern" : "bleibt";
+      schritte.push({ pfad: a.pfad, klasse: a.klasse, art });
     }
     return schritte;
   };
-  const LADEN = { anlegen: 1, ersetzen: 1, "behalten-neu": 1, "modul-mischen": 1, "seite-haken": 1, "json-mischen": 1 };
+  const LADEN = { anlegen: 1, ersetzen: 1, "ersetzen-sichern": 1, "behalten-neu": 1, "modul-mischen": 1, "seite-haken": 1, "json-mischen": 1 };
 
   // Prüfsummen des Ist-Stands einer Datei (wie in der Liste)
   const istVon = async (pfad, bytes, klasse) => {
@@ -337,17 +373,72 @@ module.exports = function (ctx) {
     return true;
   };
   const fehlerArt = (art, text) => { const e = new Error(text); e.art = art; return e; };
+  const grund = (e) => (e && e.message) || e;
+  // Plugin-Kern zuletzt schreiben, damit ein halber Lauf nie mit neuem Kern startet
+  const kernDatei = (p) => p.indexOf(KERN) === 0 && KERN_DATEIEN.indexOf(p.slice(KERN.length)) >= 0;
+  const kernZuletzt = (liste) => liste.filter((w) => !kernDatei(w.pfad)).concat(liste.filter((w) => kernDatei(w.pfad)));
+  // Dateien im Ordner von pfad (io.liste ist freiwillig; ohne → keine). Je Ordner einmal gelesen.
+  const geschwisterLeser = (io) => {
+    const merk = {};
+    return async (pfad) => {
+      const o = ordnerVon(pfad);
+      if (typeof io.liste !== "function") return [];
+      if (!hat(merk, o)) { try { merk[o] = (await io.liste(o)) || []; } catch (e) { merk[o] = []; } }
+      return merk[o];
+    };
+  };
+  // Freier Name für die Sicherung deiner Systemdatei; liegt dort schon genau dieser Inhalt, derselbe Name ohne Schreiben.
+  // → { pfad, schreiben } | null (kein freier Name)
+  const sicherungsName = async (io, pfad, version, bytes) => {
+    for (let nr = 1; nr <= 20; nr++) {
+      const k = deineName(pfad, version, nr), da = await io.lesen(k);
+      if (!da) return { pfad: k, schreiben: true };
+      if (gleich(da, bytes)) return { pfad: k, schreiben: false };
+    }
+    return null;
+  };
+  // Sicherung, Schreiben (bei einem Fehler alles Geschriebene zurück), dann Entfernen. reihe: [{ pfad, bytes, alt }] in
+  // Schreibreihenfolge, loeschen: [{ pfad, alt }]; alles mit alt kommt vorher nach ordner/<pfad>.
+  // → { sicherung, art ("" | sicherung | schreiben), fehler, zurueckgesetzt }
+  const schreibenSicher = async (io, reihe, loeschen, ordner, melden) => {
+    const r = { sicherung: "", art: "", fehler: "", zurueckgesetzt: false };
+    const sichern = reihe.concat(loeschen).filter((w) => w.alt);
+    if (sichern.length) {
+      r.sicherung = ordner;
+      melden("Lege eine Sicherung an …");
+      try { for (const w of sichern) await io.schreiben(ordner + "/" + w.pfad, w.alt); } catch (e) {
+        r.art = "sicherung"; r.fehler = "Sicherung nicht möglich (" + grund(e) + ")"; return r;
+      }
+    }
+    melden("Speichere die neue Version …");
+    const erledigt = [];
+    try {
+      for (const w of reihe) { await io.schreiben(w.pfad, w.bytes); erledigt.push(w); }
+    } catch (e) {
+      for (let i = erledigt.length - 1; i >= 0; i--) {
+        const w = erledigt[i];
+        try { if (w.alt) await io.schreiben(w.pfad, w.alt); else await io.loeschen(w.pfad); } catch (x) { console.error("update: zurücksetzen " + w.pfad, x); }
+      }
+      r.zurueckgesetzt = true; r.art = "schreiben"; r.fehler = "Schreiben fehlgeschlagen (" + grund(e) + ")";
+      return r;
+    }
+    // Entfernen erst, wenn alles geschrieben ist (die Dateien liegen in der Sicherung)
+    for (const l of loeschen) { try { await io.loeschen(l.pfad); } catch (e) { console.error("update: entfernen " + l.pfad, e); } }
+    return r;
+  };
 
   // ---------- Update ausführen (Datei-Zugriff über io, damit es ohne Obsidian testbar ist) ----------
-  // io: { holen(url) → Uint8Array (wirft bei Fehler), lesen(pfad) → Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad) }
+  // io: { holen(url) → Uint8Array (wirft bei Fehler), lesen(pfad) → Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad),
+  //   liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
   // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text) }
   // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, geaendert[], angelegt[],
-  //   neuKopien[{ pfad, kopie }], gemischt[], haken[], einstellungen[], uebersprungen[], entfernt[], behalten[], sicherung,
-  //   plugin (Kern geändert), zurueckgesetzt }
+  //   neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }] (deine Systemdatei daneben gesichert), gemischt[], haken[],
+  //   einstellungen[], uebersprungen[], entfernt[], behalten[], aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert),
+  //   zurueckgesetzt }
   const aktualisierenMit = async (io, o) => {
     const rel = o.release;
-    const b = { ok: false, art: "", fehler: "", version: rel.version, geaendert: [], angelegt: [], neuKopien: [], gemischt: [], haken: [],
-      einstellungen: [], uebersprungen: [], entfernt: [], behalten: [], sicherung: "", plugin: false, zurueckgesetzt: false };
+    const b = { ok: false, art: "", fehler: "", version: rel.version, geaendert: [], angelegt: [], neuKopien: [], gesichert: [], gemischt: [],
+      haken: [], einstellungen: [], uebersprungen: [], entfernt: [], behalten: [], aufgeraeumt: [], sicherung: "", plugin: false, zurueckgesetzt: false };
     const melden = o.fortschritt || (() => {});
     const fehler = (art, text) => { b.art = art; b.fehler = text; return b; };
     const url = (pfad) => rel.url_basis + (ORDNER + "/" + pfad).split("/").map(encodeURIComponent).join("/");
@@ -396,11 +487,24 @@ module.exports = function (ctx) {
     // 5. Inhalte berechnen
     const schreiben = [], loeschen = [];
     const alsText = (p) => dec(istBytes[p]);
-    const weg = schritte.filter((s) => s.art === "entfernen").map((s) => s.pfad);
+    const weg = schritte.filter((s) => s.art === "entfernen" || s.art === "entfernen-sichern").map((s) => s.pfad);
+    // Deine geänderte Systemdatei als „Name (deine Fassung vor X).ext.txt“ daneben (vor der neuen Fassung geschrieben)
+    const deineSichern = async (p, c) => {
+      const s = await sicherungsName(io, p, rel.version, c);
+      if (!s) throw fehlerArt("sicherung", "Kein freier Name für die Sicherung: " + p);
+      if (s.schreiben) schreiben.push({ pfad: s.pfad, bytes: c, alt: null });
+      b.gesichert.push({ pfad: p, sicherung: s.pfad });
+    };
+    try {
+      for (const s of schritte) {
+        const p = s.pfad, c = istBytes[p] || null;
+        if (s.art === "ersetzen-sichern" || s.art === "entfernen-sichern") await deineSichern(p, c);
+      }
+    } catch (e) { return fehler(e.art || "sicherung", (e && e.message) || String(e)); }
     for (const s of schritte) {
       const p = s.pfad, n = geladen[p], c = istBytes[p] || null;
       if (s.art === "anlegen") { schreiben.push({ pfad: p, bytes: n, alt: null }); b.angelegt.push(p); }
-      else if (s.art === "ersetzen") { schreiben.push({ pfad: p, bytes: n, alt: c }); b.geaendert.push(p); }
+      else if (s.art === "ersetzen" || s.art === "ersetzen-sichern") { schreiben.push({ pfad: p, bytes: n, alt: c }); b.geaendert.push(p); }
       else if (s.art === "behalten-neu") {
         const k = neuName(p, rel.version), da = await io.lesen(k);
         if (!gleich(da, n)) { schreiben.push({ pfad: k, bytes: n, alt: da }); b.neuKopien.push({ pfad: p, kopie: k }); }
@@ -415,38 +519,95 @@ module.exports = function (ctx) {
         if (p === LESEZEICHEN) { const o = lesezeichenOhne(t != null ? t : alsText(p), weg); if (o != null) t = o; }
         if (t != null) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.einstellungen.push(p); }
       } else if (s.art === "uebersprungen") b.uebersprungen.push(p);
-      else if (s.art === "entfernen") { loeschen.push({ pfad: p, alt: c }); b.entfernt.push(p); }
+      else if (s.art === "entfernen" || s.art === "entfernen-sichern") { loeschen.push({ pfad: p, alt: c }); b.entfernt.push(p); }
       else if (s.art === "bleibt") b.behalten.push(p);
     }
-    // Plugin-Kern zuletzt (vor den Listen), damit ein halbes Update nie mit neuem Kern startet
-    const kern = (w) => w.pfad.indexOf(KERN) === 0 && KERN_DATEIEN.indexOf(w.pfad.slice(KERN.length)) >= 0;
-    const reihe = schreiben.filter((w) => !kern(w)).concat(schreiben.filter(kern));
-    b.plugin = reihe.some(kern);
+    // Ältere Kopien „Seite (neu X).md“, die genau der alten oder der neuen Vorlage gleichen, gehen weg (keine Stapel); eine
+    // Kopie, die du geändert hast, bleibt. Die neue Kopie dieses Updates (neu <version>) ist nie dabei.
+    const geschwister = geschwisterLeser(io), A = {};
+    if (alt) for (const a of alt.dateien) A[a.pfad] = a;
+    for (const e of neu.dateien) {
+      if (e.klasse !== "seite") continue;
+      for (const k of kopienVon(e.pfad, await geschwister(e.pfad))) {
+        if (!neuer(rel.version, k.version)) continue;
+        const by = await io.lesen(k.pfad), s = by ? await sha256(by) : "";
+        if (s && (s === e.sha256 || (hat(A, e.pfad) && s === A[e.pfad].sha256))) { loeschen.push({ pfad: k.pfad, alt: by }); b.aufgeraeumt.push(k.pfad); }
+      }
+    }
+    // Plugin-Kern zuletzt (vor den Listen)
+    const reihe = kernZuletzt(schreiben);
+    b.plugin = reihe.some((w) => kernDatei(w.pfad));
     for (const p of [LISTE, INSTALLIERT]) { const da = await io.lesen(p); if (!gleich(da, lb)) reihe.push({ pfad: p, bytes: lb, alt: da }); }
 
-    // 6. Sicherung
-    const sichern = reihe.concat(loeschen).filter((w) => w.alt);
-    if (sichern.length) {
-      b.sicherung = SICHERUNG + (o.altVersion || "alt") + " " + stempel(o.zeit || new Date());
-      melden("Lege eine Sicherung an …");
-      try { for (const w of sichern) await io.schreiben(b.sicherung + "/" + w.pfad, w.alt); } catch (e) { return fehler("sicherung", "Sicherung nicht möglich (" + ((e && e.message) || e) + ")"); }
-    }
+    // 6. Sicherung, 7. Schreiben (bei einem Fehler alles zurück), 8. nicht mehr enthaltene Dateien entfernen
+    const w = await schreibenSicher(io, reihe, loeschen, SICHERUNG + (o.altVersion || "alt") + " " + stempel(o.zeit || new Date()), melden);
+    b.sicherung = w.sicherung;
+    b.zurueckgesetzt = w.zurueckgesetzt;
+    if (w.art) return fehler(w.art, w.fehler);
+    b.ok = true;
+    b.art = "ok";
+    return b;
+  };
 
-    // 7. Schreiben; bei einem Fehler alles zurücksetzen
-    melden("Speichere die neue Version …");
-    const erledigt = [];
-    try {
-      for (const w of reihe) { await io.schreiben(w.pfad, w.bytes); erledigt.push(w); }
-    } catch (e) {
-      for (let i = erledigt.length - 1; i >= 0; i--) {
-        const w = erledigt[i];
-        try { if (w.alt) await io.schreiben(w.pfad, w.alt); else await io.loeschen(w.pfad); } catch (x) { console.error("update: zurücksetzen " + w.pfad, x); }
+  // ---------- Reparatur nach einem Update (seit 0.4.4; Datei-Zugriff über io wie oben) ----------
+  // Bis 0.4.3 blieb eine selbst geänderte Systemdatei aktiv und die neue lag als „Name (neu X).ext.txt“ daneben (nie
+  // geladen, darum fehlten neue Teile), und eine geänderte Seite bekam bei jedem Update eine Kopie, auch ohne neue Vorlage.
+  // Das Update auf 0.4.4 plant noch der alte update.js; dieser räumt danach auf, einmal je Gerät und Version (heilen()).
+  // Nur mit Dateien, die schon im Tresor liegen, nie aus dem Netz; eine Seite selbst fasst er nie an.
+  //   system: aktive Datei ≠ Prüfsumme in installiert.json, und eine Kopie bis zu dieser Version hat genau diese Prüfsumme →
+  //     sie wird aktiv, deine Fassung kommt als „Name (deine Fassung vor X).ext.txt“ daneben. Ist die aktive Datei (danach)
+  //     die der Liste, gehen ihre Kopien bis zu dieser Version weg. Sonst (neue Fassung liegt hier nicht vor) nichts.
+  //   seite: Kopien „Seite (neu X).md“ älter als die installierte Version, die genau der jetzigen Vorlage gleichen → weg.
+  // Alles wird vorher gelesen und geprüft; weggeräumte und überschriebene Dateien liegen danach in der Sicherung, Kern zuletzt.
+  // io: { lesen, schreiben, loeschen, liste(ordner) → [pfad] }
+  // o: { liste: geprüfte installiert.json, synchron: dieses Gerät schreibt synchronisierte Pfade (alles außer .obsidian/), zeit }
+  // → { ok, art (ok | sicherung | schreiben), fehler, version, getauscht[{ pfad, sicherung }], entfernt[], plugin, sicherung,
+  //   zurueckgesetzt }
+  const heilenMit = async (io, o) => {
+    const V = o.liste.version;
+    const b = { ok: false, art: "", fehler: "", version: V, getauscht: [], entfernt: [], plugin: false, sicherung: "", zurueckgesetzt: false };
+    const geschwister = geschwisterLeser(io), schreiben = [], loeschen = [];
+    const weg = (pfad, alt) => { loeschen.push({ pfad, alt }); b.entfernt.push(pfad); };
+    for (const e of o.liste.dateien) {
+      if ((e.klasse !== "system" && e.klasse !== "seite") || (e.pfad.charAt(0) !== "." && !o.synchron)) continue;
+      const kopien = kopienVon(e.pfad, await geschwister(e.pfad));
+      if (!kopien.length) continue;
+      if (e.klasse === "seite") {
+        for (const k of kopien) {
+          if (!neuer(V, k.version)) continue;
+          const by = await io.lesen(k.pfad);
+          if (by && (await sha256(by)) === e.sha256) weg(k.pfad, by);
+        }
+        continue;
       }
-      b.zurueckgesetzt = true;
-      return fehler("schreiben", "Schreiben fehlgeschlagen (" + ((e && e.message) || e) + ")");
+      // Kopien einer neueren Version als installiert.json (kommen evtl. gerade per Sync) bleiben unberührt
+      const da = [];
+      for (const k of kopien) {
+        if (neuer(k.version, V)) continue;
+        const by = await io.lesen(k.pfad);
+        if (by) da.push({ pfad: k.pfad, bytes: by, sha: await sha256(by) });
+      }
+      const c = da.length ? await io.lesen(e.pfad) : null;
+      if (!c) continue;
+      if ((await sha256(c)) !== e.sha256) {
+        const q = da.filter((k) => k.sha === e.sha256 && k.bytes.length === e.groesse)[0];
+        if (!q) continue;
+        const s = await sicherungsName(io, e.pfad, V, c);
+        if (!s) continue;
+        if (s.schreiben) schreiben.push({ pfad: s.pfad, bytes: c, alt: null });
+        schreiben.push({ pfad: e.pfad, bytes: q.bytes, alt: c });
+        b.getauscht.push({ pfad: e.pfad, sicherung: s.pfad });
+      }
+      for (const k of da) weg(k.pfad, k.bytes);
     }
-    // 8. Nicht mehr enthaltene, unveränderte Dateien entfernen (liegen in der Sicherung)
-    for (const l of loeschen) { try { await io.loeschen(l.pfad); } catch (e) { console.error("update: entfernen " + l.pfad, e); } }
+    const reihe = kernZuletzt(schreiben);
+    b.plugin = reihe.some((w) => kernDatei(w.pfad));
+    if (reihe.length || loeschen.length) {
+      const w = await schreibenSicher(io, reihe, loeschen, SICHERUNG + V + " " + stempel(o.zeit || new Date()), () => {});
+      b.sicherung = w.sicherung;
+      b.zurueckgesetzt = w.zurueckgesetzt;
+      if (w.art) { b.art = w.art; b.fehler = w.fehler; b.getauscht = []; b.entfernt = []; b.plugin = false; return b; }
+    }
     b.ok = true;
     b.art = "ok";
     return b;
@@ -493,11 +654,20 @@ module.exports = function (ctx) {
       if (istDatei(f)) { await app.vault.delete(f); return; }
       if (await ad().exists(pfad)) await ad().remove(pfad);
     },
+    // Dateien direkt in einem Ordner ("" = Wurzel): sichtbare aus Obsidians Verzeichnis, .obsidian/… über den Adapter
+    liste: async (ordner) => {
+      if (ordner.charAt(0) !== ".") {
+        const f = ordner ? app.vault.getAbstractFileByPath(ordner) : app.vault.getRoot();
+        return f && f.children ? f.children.filter(istDatei).map((x) => x.path) : [];
+      }
+      const r = await ad().list(ordner);
+      return r && Array.isArray(r.files) ? r.files : [];
+    },
   };
 
   // ---------- Zustand ----------
   // bleibend: überlebt den Hot-Reload dieses Skripts (das Update ersetzt update.js womöglich selbst)
-  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, installiert: "", bericht: null, fenster: null }));
+  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, installiert: "", bericht: null, fenster: null }));
   const laufendeVersion = () => (ctx.plugin && ctx.plugin.manifest && ctx.plugin.manifest.version) || "0.0.0";
   const installiertVersion = () => zustand.installiert || laufendeVersion();
   const listeLesen = async (pfad) => {
@@ -523,6 +693,33 @@ module.exports = function (ctx) {
     zustand.installiert = x.liste.version;
     neuZeichnen();
     return true;
+  };
+  // Reparatur (heilenMit) einmal je Gerät und installierter Version, nicht während eines Updates. Gerätelokal
+  // eba-update-reparatur = Version; „Version lokal“, solange dieses Gerät synchronisierte Pfade nicht schreibt (ein Schreiber:
+  // ctx.zentral.abruferHier, wie modell.js), dann noch einmal, sobald es darf. immer = true (Test): ohne Merker.
+  const L_REPARATUR = "eba-update-reparatur";
+  const heilen = async (immer) => {
+    if (zustand.laeuft || zustand.heilt) return null;
+    const x = await listeLesen(INSTALLIERT);
+    if (!x) return null;
+    const V = x.liste.version;
+    let synchron = true;
+    try { if (ctx.zentral && typeof ctx.zentral.abruferHier === "function") synchron = !!(await ctx.zentral.abruferHier()); } catch (e) { synchron = false; }
+    const merk = lokal(L_REPARATUR);
+    if (!immer && (merk === V || (merk === V + " lokal" && !synchron))) return null;
+    zustand.heilt = true;
+    let b;
+    try { b = await heilenMit(io, { liste: x.liste, synchron, zeit: new Date() }); } finally { zustand.heilt = false; }
+    if (!b.ok) { console.error("update: Reparatur", b.fehler); return b; }
+    lokal(L_REPARATUR, synchron ? V : V + " lokal");
+    if (b.getauscht.length) {
+      // Snippets neu einlesen (am PC sieht Obsidian die Änderung ohnehin, auf iPhone/iPad erst so)
+      try { const css = app.customCss; if (css && typeof css.requestLoadSnippets === "function") css.requestLoadSnippets(); } catch (e) { /* egal */ }
+      const neuStarten = b.plugin && !(await pluginNeuLaden());
+      new Notice(`Studium Autopilot: Version ${V} ist jetzt vollständig aktiv. Deine geänderte Fassung liegt als Sicherung daneben.` +
+        (neuStarten ? " Bitte Obsidian einmal schließen und wieder öffnen." : ""), 12000);
+    }
+    return b;
   };
   const stand = () => {
     try { const s = ctx.zentral && ctx.zentral.stand ? ctx.zentral.stand() : null; return { release: (s && s.release) || null, beta: (s && s.beta) || null, aktuell: (s && s.plugin_aktuell) || "" }; } catch (e) { return { release: null, beta: null, aktuell: "" }; }
@@ -655,7 +852,8 @@ module.exports = function (ctx) {
     c.createEl("p", { cls: "eba-modal-text", text: "Deine Noten, Termine und Notizen bleiben. Vorher wird eine Sicherung angelegt." });
     const d = c.createEl("details", { cls: "eba-modal-mehr" });
     d.createEl("summary", { text: "Mehr erfahren" });
-    d.createEl("p", { text: "Hast du eine Seite selbst geändert, bleibt deine Fassung. Die neue legen wir daneben." });
+    d.createEl("p", { text: "Hast du eine Seite selbst geändert, bleibt deine Fassung. Hat sich die Seite geändert, liegt die neue daneben." });
+    d.createEl("p", { text: "Darstellung und Programmteile kommen immer neu. Hattest du sie geändert, liegt deine Fassung als Sicherung daneben." });
     d.createEl("p", { text: "Auf deinen anderen Geräten kommt das Update von selbst. Dort musst du nichts tun." });
     // Knöpfe wie im Fenster „Was ist neu“: PC und iPad nebeneinander, „Aktualisieren“ rechts; iPhone untereinander, oben
     const k = c.createDiv({ cls: "modal-button-container" });
@@ -694,6 +892,7 @@ module.exports = function (ctx) {
         const ul = c.createEl("ul", { cls: "eba-modal-schritte" });
         for (const x of b.neuKopien) ul.createEl("li", { text: name(x.pfad) });
       }
+      if (b.gesichert && b.gesichert.length) text(`Darstellung oder Programmteile hattest du selbst geändert (${b.gesichert.map((x) => x.pfad.split("/").pop()).join(", ")}). Jetzt gilt die neue Version, deine Fassung liegt als Sicherung daneben („deine Fassung vor ${b.version}“).`);
       if (b.behalten.length) text("Diese Seiten gibt es in der neuen Version nicht mehr. Du hattest sie geändert, darum bleiben sie: " + b.behalten.map(name).join(", ") + ".");
       if (b.plugin && !b.neuGeladen) text("Bitte Obsidian einmal schließen und wieder öffnen.");
       else if (b.einstellungen.length) text("Einstellungen wurden ergänzt. Sie wirken nach dem nächsten Öffnen von Obsidian.");
@@ -1008,10 +1207,10 @@ module.exports = function (ctx) {
 
   ctx.update = {
     // reine Logik (Node-Tests)
-    klasseVon, pfadOk, neuName, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, lesezeichenOhne, planen, aktualisierenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
+    jsonMischenText, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     // Obsidian
-    io, anzeige, status, aktualisieren, installiertAnlegen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER,
+    io, anzeige, status, aktualisieren, installiertAnlegen, heilen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     frischPruefen, toastPruefen, neuigkeitenZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
@@ -1032,7 +1231,10 @@ module.exports = function (ctx) {
     }
     installiertNeu().catch(() => {});
     const bald = ctx.entprellen(() => { installiertNeu().catch(() => {}); }, 1500);
-    for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => { if (f && f.path === INSTALLIERT) bald(); });
+    // Reparatur nach einem Update (heilen): 30 s nach dem Laden (Sync und Hot-Reload zuerst) und nach jeder neuen installiert.json
+    const reparatur = ctx.entprellen(() => { heilen(false).catch((e) => console.error("update: Reparatur", e)); }, 30000);
+    reparatur();
+    for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => { if (f && f.path === INSTALLIERT) { bald(); reparatur(); } });
     // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
     // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund
     // zählt wie ein neuer App-Start (Hinweis darf wieder erscheinen; der Abstand von 12 h je Version gilt weiter).

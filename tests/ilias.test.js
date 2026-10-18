@@ -61,9 +61,8 @@ test("Erster Lauf: neue Dateien mit Begleitnotiz, Ordner je Modul, Videos und Fo
   assert.match(e.sha256, /^[0-9a-f]{64}$/);
   assert.equal(e.iliasPfad, "B110 Einführung in die BWL");
   assert.equal(JSON.parse(x.t.text(I.K.ABRUF)).geraet, "g-ich");
-  // Anfragen: eine nach der anderen, mit Abstand; Sitzung (schon aufgeklappt), Forum, Video, Link nicht geholt
-  for (let i = 1; i < x.il.log.length; i++) assert.ok(x.il.log[i].t - x.il.log[i - 1].t >= I.K.ABSTAND_MS, "Abstand " + i);
-  assert.deepEqual(x.il.geholt(), [B + "kurs/100", B + "ordner/110", B + "kurs/300", B + "ordner/310"]);
+  // Anfragen: Sitzung (schon aufgeklappt), Forum, Video, Link nicht geholt; zwei Seiten zugleich, der älteste Kurs zuerst
+  assert.deepEqual(x.il.geholt(), [B + "kurs/100", B + "kurs/300", B + "ordner/110", B + "ordner/310"]);
   // neueste zuerst
   assert.deepEqual(x.il.geladen(), ["1201", "1101", "1001", "3001", "3101"]);
   assert.equal(x.anm.aufrufe, 1);
@@ -260,7 +259,7 @@ test("Eigener Uni-Abgleich (abgleich.js oder Einstellung): nie laden; mit Zugang
   for (const o of [{ dateien: { "System/Skripte/abgleich.js": "// privat" } }, { einstellungen: { ilias_unterlagen: "extern" } }]) {
     const x = aufbau(o);
     const s0 = x.m.status();
-    assert.deepEqual([s0.extern, s0.text, s0.bereit], [true, "über deinen Uni-Abgleich", false]);
+    assert.deepEqual([s0.extern, s0.text, s0.bereit], [true, "Deine Unterlagen kommen über deinen Uni-Abgleich.", false]);
     assert.equal((await lauf(x)).art, "extern", "ohne Zugang nichts");
     assert.equal(x.il.log.length, 0);
     await verbinden(x);
@@ -271,8 +270,32 @@ test("Eigener Uni-Abgleich (abgleich.js oder Einstellung): nie laden; mit Zugang
     assert.deepEqual(x.il.log.map((e) => e.was), ["anmelden", "kurse"], "Anmeldung und Kursliste, sonst nichts");
     assert.deepEqual(x.t.pfade("Unterlagen/"), []);
     assert.deepEqual(x.il.geladen(), []);
-    assert.match(x.m.status().text, /^Unterlagen über deinen Uni-Abgleich, Übungsgruppen aus ILIAS/);
+    assert.equal(x.m.status().text, "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich.");
   }
+});
+
+test("Eigener Uni-Abgleich: Hinweis „Übungsgruppen geprüft“ nur nach deinem Tipp; kein Auftrag, Weitermachen bleibt still", async () => {
+  const x = aufbau({ einstellungen: { ilias_unterlagen: "extern" } });
+  await verbinden(x);
+  assert.equal((await lauf(x)).art, "nur-gruppen");
+  assert.deepEqual(x.meldungen, [], "automatischer Lauf: kein Hinweis");
+  assert.equal((await x.m.jetztHolen({ manuell: true })).art, "nur-gruppen");
+  assert.deepEqual(x.meldungen, ["ILIAS: Übungsgruppen geprüft."]);
+  assert.equal(x.m.auftrag(), null, "kein Auftrag");
+  // Fehler nach deinem Tipp: ein Hinweis, aber kein Weitermachen (das stündliche Prüfen versucht es still wieder)
+  x.abh.quelle = async () => { throw new Error("kein Netz"); };
+  assert.equal((await x.m.jetztHolen({ manuell: true })).art, "fehler");
+  assert.equal(x.m.auftrag(), null);
+  assert.equal(x.hoerer.filter((e) => e.art === "fertig").pop().weiterIn, null);
+  assert.equal(x.m.status().text, "Fehler beim Prüfen deiner Übungsgruppen. Zuletzt geklappt gerade eben.");
+  // Auftrag von früher (vor dem Uni-Abgleich): das Weitermachen läuft still und räumt ihn weg
+  x.abh.quelle = x.il.quelle;
+  x.lok.lokal("eba-ilias-auftrag", { seit: "2026-10-16T07:00:00.000Z", versuche: 1, stapel: 0, geladen: 0 });
+  const n = x.meldungen.length;
+  assert.equal((await x.m.jetztHolen({ manuell: true, weiter: true })).art, "nur-gruppen");
+  assert.equal(x.meldungen.length, n, "kein Hinweis");
+  assert.equal(x.m.auftrag(), null);
+  assert.equal(x.hoerer.filter((e) => e.art === "start").pop().manuell, false, "kein Fortschritt");
 });
 
 test("Kurswahl: an nur mit Modulnotiz; Unterordner mit Modulcode; Wahl von einem anderen Gerät bleibt", async () => {
@@ -321,16 +344,26 @@ test("Nie überschreiben: belegter Name → „ (2)“", async () => {
   assert.ok(x.t.text(B110 + "/B110 Folien 01 Grundlagen (2).md"));
 });
 
-test("Grenzen je Lauf: iPhone 25 Downloads, Rest im nächsten Lauf (neueste zuerst)", async () => {
+// n Dateien in einem Kurs, Datum aufsteigend (Folien VL1 am 1., …)
+const vieleDateien = (n) => {
   const def = standardIlias();
   const viele = [];
-  for (let i = 1; i <= 30; i++) { const id = String(5000 + i); viele.push(datei(id, "Folien VL" + i + " Teil", "pdf", "2026-10-" + String(i).padStart(2, "0") + "T08:00")); def.dateien[id] = "%PDF Teil " + i; }
+  for (let i = 1; i <= n; i++) {
+    const id = String(5000 + i);
+    viele.push(datei(id, "Folien VL" + i + " Teil", "pdf", "2026-" + String(9 + Math.floor((i - 1) / 28)).padStart(2, "0") + "-" + String(1 + ((i - 1) % 28)).padStart(2, "0") + "T08:00"));
+    def.dateien[id] = "%PDF Teil " + i;
+  }
   def.kurse = [def.kurse[0]];
   def.seiten[B + "kurs/100"] = viele;
-  const x = aufbau({ ilias: def, mobil: true });
+  return def;
+};
+
+test("Grenzen je Lauf: Rest im nächsten Lauf (neueste zuerst)", async () => {
+  const x = aufbau({ ilias: vieleDateien(30), mobil: true });
+  x.abh.grenzen = { neu: 25 };
   await verbinden(x);
   let b = await lauf(x);
-  assert.equal(b.neu, I.K.NEU_MOBIL); assert.equal(b.rest, 5);
+  assert.equal(b.neu, 25); assert.equal(b.rest, 5);
   assert.equal(x.il.geladen()[0], "5030", "neueste zuerst");
   assert.equal(x.m.status().rest, 5);
   x.u.vor(4 * STUNDE); x.il.leeren();
@@ -339,20 +372,33 @@ test("Grenzen je Lauf: iPhone 25 Downloads, Rest im nächsten Lauf (neueste zuer
   assert.deepEqual(x.il.geladen(), ["5005", "5004", "5003", "5002", "5001"]);
 });
 
-test("Grenzen je Lauf: Anfragen-Budget, angefangener Kurs lässt die anderen nicht verhungern", async () => {
+test("Grenzen je Lauf: erster Abruf meist in einem Lauf (iPhone/iPad 150 Downloads, PC 400)", async () => {
+  assert.equal(I.K.NEU_MOBIL, 150); assert.equal(I.K.NEU_PC, 400);
+  let x = aufbau({ ilias: vieleDateien(160), mobil: true });
+  await verbinden(x);
+  let b = await lauf(x);
+  assert.equal(b.neu, 150); assert.equal(b.rest, 10);
+  x = aufbau({ ilias: vieleDateien(160) });
+  await verbinden(x);
+  b = await lauf(x);
+  assert.equal(b.neu, 160); assert.equal(b.rest, 0);
+});
+
+test("Grenzen je Lauf: Seiten-Budget; der große Kurs bleibt offen, die anderen kommen trotzdem dran", async () => {
   const def = { kurse: [{ refId: "100", titel: "B110 Riesig", url: B + "kurs/100" }, { refId: "300", titel: "S100 Klein", url: B + "kurs/300" }], seiten: {}, dateien: { 3001: "%PDF klein" } };
   def.seiten[B + "kurs/100"] = [];
-  for (let i = 0; i < 280; i++) { def.seiten[B + "kurs/100"].push(ordner(String(10000 + i), "Ordner " + i)); def.seiten[B + "ordner/" + (10000 + i)] = []; }
+  for (let i = 0; i < I.K.SEITEN + 50; i++) { def.seiten[B + "kurs/100"].push(ordner(String(10000 + i), "Ordner " + i)); def.seiten[B + "ordner/" + (10000 + i)] = []; }
   def.seiten[B + "kurs/300"] = [datei("3001", "Skript", "pdf", "2026-10-12T08:00")];
   const x = aufbau({ ilias: def });
   await verbinden(x);
   let b = await lauf(x);
-  assert.ok(b.anfragen <= I.K.ANFRAGEN, String(b.anfragen));
-  assert.equal(b.neu, 0, "Budget im großen Kurs aufgebraucht");
+  assert.equal(b.seiten, I.K.SEITEN, "nie mehr Seiten als das Budget");
+  assert.equal(x.il.anzahl("inhalt"), I.K.SEITEN);
+  assert.equal(b.neu, 1, "der kleine Kurs wird neben dem großen fertig");
+  assert.equal(b.kurseOffen, 1);
   x.u.vor(4 * STUNDE); x.il.leeren();
   b = await lauf(x);
-  assert.equal(b.neu, 1, "nächster Lauf beginnt mit dem anderen Kurs");
-  assert.equal(x.il.geholt()[0], B + "kurs/300");
+  assert.ok(x.il.geholt().indexOf(B + "kurs/100") >= 0, "der offene Kurs kommt im nächsten Lauf wieder dran");
 });
 
 test("Fehler mitten im Lauf: Index bleibt stimmig, nächster Lauf macht weiter", async () => {
@@ -703,6 +749,138 @@ test("Anschluss: Permalink direkt als Repository-Adresse, relative Links ohne En
   assert.deepEqual(geholt, ["https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilrepositorygui&ref_id=123",
     "https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilrepositorygui&cmd=infoScreen&ref_id=7", "https://andere.example/goto.php/fold/5"]);
   assert.deepEqual(basen, ["https://ovidius.uni-tuebingen.de/ilias.php", "https://ovidius.uni-tuebingen.de/ilias.php", "https://ovidius.uni-tuebingen.de/ilias.php"]);
+});
+
+test("Zugleich: zwei Seiten, am PC zwei Downloads, auf iPhone/iPad einer; geladen wird nach dem Durchsuchen", async () => {
+  const tick = () => new Promise((r) => setImmediate(r));
+  for (const mobil of [false, true]) {
+    const z = { seiten: 0, dateien: 0, maxSeiten: 0, maxDateien: 0, gemischt: 0, optionen: [] };
+    const x = aufbau({ mobil, quelle: async (zugang, anmelden, optionen) => {
+      z.optionen.push(optionen);
+      const q = await x.il.quelle(zugang, anmelden);
+      const inhalt = q.inhalt, laden = q.laden;
+      q.inhalt = async (k) => { z.seiten++; z.maxSeiten = Math.max(z.maxSeiten, z.seiten); if (z.dateien) z.gemischt++; await tick(); await tick(); z.seiten--; return inhalt(k); };
+      q.laden = async (e) => { z.dateien++; z.maxDateien = Math.max(z.maxDateien, z.dateien); if (z.seiten) z.gemischt++; await tick(); await tick(); z.dateien--; return laden(e); };
+      return q;
+    } });
+    await verbinden(x);
+    const b = await lauf(x);
+    assert.equal(b.art, "ok", b.fehler); assert.equal(b.neu, 5);
+    assert.equal(z.maxSeiten, I.K.SUCHER, "Seiten zugleich");
+    assert.equal(z.maxDateien, mobil ? I.K.LADER_MOBIL : I.K.LADER_PC, "Downloads zugleich");
+    assert.equal(z.gemischt, 0, "erst durchsuchen, dann laden");
+    assert.deepEqual(z.optionen, [{ wiederverwenden: true }], "der Lauf nimmt die Sitzung des letzten Laufs");
+    assert.equal(x.t.pfade("Unterlagen/").length, 10, "jede Datei einmal, mit Notiz");
+  }
+});
+
+test("Nicht geholt: Sitzungen ohne Materialien und Gruppen, in denen du nicht Mitglied bist", async () => {
+  const def = standardIlias();
+  const sitzung = (refId, eigenschaften) => ({ art: "sitzung", typ: "sess", refId, titel: "Sitzung " + refId, url: B + "sitzung/" + refId, eigenschaften,
+    sitzung: { datum: "2026-10-14", name: "2026-10-14, 10:15 - 11:45: Sitzung " + refId } });
+  const gruppe = (refId, mitglied) => ({ art: "ordner", typ: "grp", refId, titel: "Übung Gruppe " + refId, url: B + "gruppe/" + refId, mitglied });
+  def.seiten[B + "kurs/100"] = def.seiten[B + "kurs/100"].concat([sitzung("160", []), sitzung("161", ["Materialien zur Sitzung: 1"]), sitzung("162"),
+    gruppe("170", false), gruppe("171", true), gruppe("172", null)]);
+  def.seiten[B + "sitzung/161"] = [datei("1611", "Folien VL03", "pdf", "2026-10-14T09:00")];
+  def.seiten[B + "sitzung/162"] = [];
+  def.seiten[B + "gruppe/171"] = [];
+  def.seiten[B + "gruppe/172"] = [];
+  def.dateien["1611"] = "%PDF drei";
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  const b = await lauf(x);
+  const geholt = x.il.geholt();
+  for (const u of ["sitzung/161", "sitzung/162", "gruppe/171", "gruppe/172"]) assert.ok(geholt.indexOf(B + u) >= 0, u + " geholt");
+  for (const u of ["sitzung/160", "gruppe/170"]) assert.ok(geholt.indexOf(B + u) < 0, u + " nicht geholt");
+  assert.equal(b.jeKurs["100"].ohneMaterial, 1); assert.equal(b.jeKurs["100"].fremdeGruppe, 1);
+  assert.ok(x.t.index().dateien["1611"], "Material der Sitzung geladen");
+});
+
+test("Anschluss: Sitzung des letzten Laufs wiederverwenden; gleichzeitig abgemeldet → eine Anmeldung", async () => {
+  let gueltig = false, sitzungen = 0, anmeldungen = 0;
+  const tick = () => new Promise((r) => setImmediate(r));
+  const N = {
+    UNI: { ilias: "https://ilias.test" },
+    drossel: () => ({ eintritt: async () => () => {} }),
+    sitzung: (o) => {
+      sitzungen++;
+      assert.ok(o && o.drossel && typeof o.drossel.eintritt === "function", "Sitzung mit Drossel");
+      return { anfrage: async (a) => { await tick(); return { status: 200, url: a.url, text: gueltig ? "<seite>" : "LOGIN" }; } };
+    },
+    istLoginSeite: (t) => t === "LOGIN",
+  };
+  const H = { kurse: () => [], inhalt: () => [], folgeUrl: () => "", seitenArt: () => "ilias", downloadUrl: (e) => e.url, dateiName: (e) => e.titel };
+  const Q = laden("ilias", { kontext: { user: { "ilias-netz": N, "ilias-html": H } } }).ctx.ilias;
+  let klappt = true;
+  const anmelden = async () => { anmeldungen++; await tick(); if (!klappt) throw new Error("abgelehnt"); gueltig = true; };
+  const z = { benutzer: "zxabc01", kennwortGeber: () => "x" };
+  let q = await Q.quelleAusNetz(z, anmelden, { wiederverwenden: true });
+  assert.deepEqual([sitzungen, anmeldungen], [1, 1], "erster Lauf: neue Sitzung, gleich angemeldet");
+  await q.kurse();
+  q = await Q.quelleAusNetz(z, anmelden, { wiederverwenden: true });
+  await q.kurse();
+  assert.deepEqual([sitzungen, anmeldungen], [1, 1], "zweiter Lauf: dieselbe Sitzung, keine Anmeldung");
+  gueltig = false;
+  q = await Q.quelleAusNetz(z, anmelden, { wiederverwenden: true });
+  const listen = await Promise.all([q.inhalt({ url: "https://ilias.test/o/1" }), q.inhalt({ url: "https://ilias.test/o/2" }), q.kurse()]);
+  assert.equal(listen.length, 3);
+  assert.deepEqual([sitzungen, anmeldungen], [1, 2], "abgelaufen, drei Seiten zugleich: eine Anmeldung");
+  await Q.quelleAusNetz({ benutzer: "zxabc02", kennwortGeber: () => "y" }, anmelden, { wiederverwenden: true });
+  assert.deepEqual([sitzungen, anmeldungen], [2, 3], "anderer Benutzer: neue Sitzung");
+  await Q.quelleAusNetz(z, anmelden);
+  assert.deepEqual([sitzungen, anmeldungen], [3, 4], "ohne wiederverwenden (Prüfen beim Verbinden): neu angemeldet");
+  Q.sitzungVergessen();
+  await Q.quelleAusNetz(z, anmelden, { wiederverwenden: true });
+  assert.deepEqual([sitzungen, anmeldungen], [4, 5], "nach dem Trennen: neue Sitzung");
+  // gemerkte Sitzung abgelaufen und die Anmeldung scheitert: Fehler, und die Sitzung ist vergessen
+  gueltig = false; klappt = false;
+  q = await Q.quelleAusNetz(z, anmelden, { wiederverwenden: true });
+  await assert.rejects(q.kurse(), /abgelehnt/);
+  klappt = true;
+  await Q.quelleAusNetz(z, anmelden, { wiederverwenden: true });
+  assert.equal(sitzungen, 5, "nach gescheiterter Anmeldung neue Sitzung");
+});
+
+test("Anschluss: Ordner und Kurse über die Vorlage aus dem Reiter „Inhalt“, ohne Weiterleitung; passt sie nicht, Permalink", async () => {
+  const W = "https://ovidius.uni-tuebingen.de";
+  const geholt = [];
+  let kaputt = false;
+  const refVon = (url) => (/goto\.php\/[a-z]+\/(\d+)/.exec(url) || /ref_id=(\d+)/.exec(url) || [])[1];
+  const N = {
+    UNI: { ilias: W },
+    sitzung: () => ({ anfrage: async (o) => {
+      geholt.push(o.url.replace(W, ""));
+      if (kaputt && /cmdNode/.test(o.url)) return { status: 500, url: null, text: "Fehler" };
+      return { status: 200, url: null, text: "<seite ref=" + refVon(o.url) + ">" };
+    } }),
+    istLoginSeite: () => false,
+  };
+  const reiter = { 1: "yt:of&cmdClass=ilObjFolderGUI", 3: "yt:ni&cmdClass=ilObjCourseGUI" };
+  const H = {
+    inhalt: () => [], folgeUrl: () => "", seitenArt: (t) => (/ref=9/.test(t) ? "kein-zugriff" : "ilias"), downloadUrl: (e) => e.url, dateiName: (e) => e.titel,
+    // Reiter „Inhalt“: Ordner (ref 1xx) und Kurse (3xx) haben einen, die Beitrittsseite einer Gruppe (2xx) nicht
+    inhaltReiter: (t) => { const ref = /ref=(\d+)/.exec(t)[1]; return reiter[ref[0]] ? W + "/ilias.php?baseClass=ilrepositorygui&cmdNode=" + reiter[ref[0]] + "&cmd=view&ref_id=" + ref : ""; },
+  };
+  const Q = laden("ilias", { kontext: { user: { "ilias-netz": N, "ilias-html": H } } }).ctx.ilias;
+  const q = await Q.quelleAusNetz({ benutzer: "zxabc01", kennwortGeber: () => "x" }, async () => {});
+  for (const u of ["fold/101", "fold/102", "crs/301", "crs/302", "grp/201", "grp/202", "copa/401"]) await q.inhalt({ url: W + "/goto.php/" + u });
+  assert.deepEqual(geholt, [
+    "/ilias.php?baseClass=ilrepositorygui&ref_id=101", "/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:of&cmdClass=ilObjFolderGUI&cmd=view&ref_id=102",
+    "/ilias.php?baseClass=ilrepositorygui&ref_id=301", "/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:ni&cmdClass=ilObjCourseGUI&cmd=view&ref_id=302",
+    "/ilias.php?baseClass=ilrepositorygui&ref_id=201", "/ilias.php?baseClass=ilrepositorygui&ref_id=202", "/goto.php/copa/401",
+  ]);
+  // kein Zugriff über die Vorlage und über den Permalink: echtes „kein Zugriff“, die Vorlage bleibt
+  geholt.length = 0;
+  await assert.rejects(q.inhalt({ url: W + "/goto.php/fold/901" }), (e) => e.status === 403);
+  await q.inhalt({ url: W + "/goto.php/fold/105" });
+  assert.deepEqual(geholt, ["/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:of&cmdClass=ilObjFolderGUI&cmd=view&ref_id=901",
+    "/ilias.php?baseClass=ilrepositorygui&ref_id=901", "/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:of&cmdClass=ilObjFolderGUI&cmd=view&ref_id=105"]);
+  // Vorlage passt nicht mehr (Serverfehler): einmal über den Permalink, danach in dieser Sitzung ohne Vorlage
+  geholt.length = 0; kaputt = true;
+  await q.inhalt({ url: W + "/goto.php/fold/103" });
+  await q.inhalt({ url: W + "/goto.php/fold/104" });
+  assert.deepEqual(geholt, ["/ilias.php?baseClass=ilrepositorygui&cmdNode=yt:of&cmdClass=ilObjFolderGUI&cmd=view&ref_id=103",
+    "/ilias.php?baseClass=ilrepositorygui&ref_id=103", "/ilias.php?baseClass=ilrepositorygui&ref_id=104"]);
 });
 
 test("Oberfläche: status().anderes nur, wenn ein anderes Gerät lädt", async () => {

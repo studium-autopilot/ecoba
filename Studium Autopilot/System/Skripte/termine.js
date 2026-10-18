@@ -20,8 +20,9 @@
 // (Karriere, Workshops, Sport, Vorträge, Kolloquium) steht nur als Frist in der Agenda (dort gilt „Fachschaft &
 // Veranstaltungen“): jede Information an einer Stelle. Nur bis zum Ende des aktuellen Semesters und ohne, was seit mehr als 7
 // Tagen vorbei ist. Wann aus datum/bis und den Zeiten im Feld ort („ab 15:00“, „bis 30.10. 15:00“), Wo aus dem Rest von ort, sonst
-// die Quelle. Hast du für das Modul eine Gruppe (Stundenplan/, herkunft ilias-gruppe oder gruppe-gewaehlt, aktuelles Semester),
-// steht „angemeldet · Gruppe 4“ dabei: Feld gruppe, wie ILIAS sie nennt, nie gruppe_alma. Neu gezeichnet bei Änderungen im
+// die Quelle. Hast du für das Modul eine Gruppe (Stundenplan/, herkunft ilias-gruppe oder gruppe-gewaehlt, aktuelles Semester;
+// seit 18.10.2026 auch jede andere Notiz außer zentralen, die zur Zeit einer Gruppe aus gruppen.json passt, Regel aus
+// meine-gruppe.js), steht „angemeldet · Gruppe 4“ dabei: Feld gruppe der Notiz, nie gruppe_alma. Neu gezeichnet bei Änderungen im
 // Datenmodell (Termine, Stundenplan, Module, Einstellungen) und wie die Agenda. Stil: eba-core.css Abschnitt 57.
 // Erweiterung: registrieren() meldet Codeblöcke, Ereignisse und Uhr über die Helfer in ctx an (Hot-Reload ohne Neustart).
 // iOS-sicher: keine Node-APIs, keine Lookbehind-Regex.
@@ -219,13 +220,36 @@ module.exports = function (ctx) {
     if (a === "bis") return "bis " + amUm(t.von, o.bis || o.zeit);
     return amUm(t.von, o.zeit);
   };
-  // „angemeldet · Gruppe 4“, wenn du für das Modul eine Gruppe hast (gruppen = Stundenplan-Notizen [{ fm }]). Nennt der Titel die
-  // Art (Übung, Tutorium) und gibt es Gruppen dieser Art, zählen nur sie.
-  const anmeldeStand = (t, gruppen, semester) => {
+  // Andere Stundenplan-Notiz (Alma, von Hand, eigener Uni-Abgleich, ohne herkunft; nie zentral) zur Zeit einer Gruppe aus
+  // gruppen.json? Regel aus meine-gruppe.js (deckt: gleicher Code, gleiches Semester, gleicher Wochentag, Beginn höchstens 15 Min.
+  // daneben, c.t. und s.t.), dazu das Ende ebenso und Art Übung oder Tutorium. Nie über die Nummer der Gruppe.
+  const SLOT_ARTEN = ["Übung", "Tutorium"];
+  const minuten = (hm) => { const m = String(hm ?? "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const meineGruppe = () => { const L = ctx.user && ctx.user["meine-gruppe"]; return L && L.deckt && L.echteZeit ? L : null; };
+  const slotPasst = (fm, g, L) => {
+    if (SLOT_ARTEN.indexOf(String(fm.art || "")) < 0 || !L.deckt(fm, g)) return false;
+    const e = minuten(fm.ende), b = minuten(g.bis), echt = minuten(L.echteZeit(g).ende);
+    return e != null && ((b != null && Math.abs(e - b) <= 15) || (!!g.ct && echt != null && Math.abs(e - echt) <= 15));
+  };
+  // „angemeldet · Gruppe 4“, wenn du für das Modul eine Gruppe hast (gruppen = Stundenplan-Notizen [{ fm }]): eine Gruppen-Notiz
+  // (ILIAS oder gewählt) oder eine andere Notiz zur Zeit einer Gruppe dieses Moduls (zentrale = geprüfte Gruppen aus gruppen.json,
+  // slotPasst). Nennt der Titel die Art (Übung, Tutorium) und gibt es Gruppen dieser Art, zählen nur sie. Der Name kommt nur aus
+  // dem Feld gruppe der Notiz.
+  const anmeldeStand = (t, gruppen, semester, zentrale) => {
     if (!t.code) return "";
-    let g = (gruppen || []).map((x) => (x && x.fm) || {}).filter((fm) => GRUPPE.indexOf(String(fm.herkunft || "")) >= 0 && fm.entfaellt !== true
+    const notizen = (gruppen || []).map((x) => (x && x.fm) || {}).filter((fm) => fm.entfaellt !== true
       && String(fm.code || "") === t.code && (!semester || String(fm.semester || "") === semester));
+    let g = notizen.filter((fm) => GRUPPE.indexOf(String(fm.herkunft || "")) >= 0);
     const art = /übung/i.test(t.titel) ? "Übung" : /tutori/i.test(t.titel) ? "Tutorium" : "";
+    const L = meineGruppe();
+    if (L) {
+      const slots = (zentrale || []).filter((x) => x && x.code === t.code && (!semester || x.semester === semester));
+      const passend = art && slots.some((x) => x.art === art) ? slots.filter((x) => x.art === art) : slots;
+      for (const fm of notizen) {
+        const h = String(fm.herkunft || "");
+        if (GRUPPE.indexOf(h) < 0 && h !== "zentral" && passend.some((x) => slotPasst(fm, x, L))) g.push(fm);
+      }
+    }
     if (art && g.some((fm) => fm.art === art)) g = g.filter((fm) => fm.art === art);
     if (!g.length) return "";
     const namen = [];
@@ -237,7 +261,7 @@ module.exports = function (ctx) {
   const STUDIUM = /prüfungsanmeld|übungsgruppe|tutori|\bTCP\b/i;
   const fuersStudium = (t) => !!t.code || !!t.bereich || STUDIUM.test(t.titel);
   // alle = lesen(), o = { heute: Date, ende: Date | null (Ende des aktuellen Semesters), aufnehmen: Filter der zentralen Termine
-  // oder null, gruppen: [{ fm }], semester: Name des aktuellen Semesters } →
+  // oder null, gruppen: [{ fm }], semester: Name des aktuellen Semesters, zentraleGruppen: geprüfte Gruppen aus gruppen.json } →
   // [{ t, wann, wo, status, vorbei, pillen }]; erst, was noch läuft oder kommt (nach Datum), dann, was seit höchstens NACHLAUF
   // Tagen vorbei ist.
   const anmeldungen = (alle, o) => {
@@ -252,7 +276,7 @@ module.exports = function (ctx) {
       const teile = ortTeilen(t.ort);
       const a = datumArt(t, teile);
       const z = {
-        t, wann: wannText(t, teile), wo: teile.wo, status: anmeldeStand(t, o.gruppen, o.semester),
+        t, wann: wannText(t, teile), wo: teile.wo, status: anmeldeStand(t, o.gruppen, o.semester, o.zentraleGruppen),
         vorbei: a === "spanne" ? t.bis < o.heute : a === "bis" ? t.von < o.heute : false,
         pillen: [t.sq && !/freiwillig/i.test(t.titel) ? "freiwillig" : "", t.geschaetzt ? "geschätzt" : ""].filter(Boolean),
       };
@@ -316,7 +340,9 @@ module.exports = function (ctx) {
     // zentral.js lädt nach diesem Skript: Filter erst beim Zeichnen nachschlagen (ohne ihn: alle Notizen, die es gibt)
     try { aufnehmen = ctx.zentral && ctx.zentral.filterBauen ? ctx.zentral.filterBauen().aufnehmen : null; } catch (e) { aufnehmen = null; }
     const s = D && D.aktuell;
-    const zeilen = anmeldungen(lesen(), { heute, ende: s ? datum(s.ende) : null, aufnehmen, gruppen: D ? D.stundenplan : [], semester: s ? s.name : "" });
+    let zentraleGruppen = [];
+    try { const z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null; zentraleGruppen = z && Array.isArray(z.gruppen) ? z.gruppen : []; } catch (e) { zentraleGruppen = []; }
+    const zeilen = anmeldungen(lesen(), { heute, ende: s ? datum(s.ende) : null, aufnehmen, gruppen: D ? D.stundenplan : [], semester: s ? s.name : "", zentraleGruppen });
     const schluessel = JSON.stringify(zeilen.map((z) => [z.t.f.path, z.t.titel, z.wann, z.wo, z.t.quelle, z.status, z.vorbei, z.pillen]));
     if (schluessel === inst.zuletzt && el.childElementCount) return;
     inst.zuletzt = schluessel;

@@ -1,0 +1,72 @@
+/* ==========================================================================
+   EBA · Design KLAR (seit 18.10.2026, nur hell)
+   Weiß und schlicht wie eine moderne App: weiße Seite, kühle Grautöne, die Schrift des Geräts auch in Überschriften,
+   runde Ecken, Akzent Blau. Formen und Maße sind die Grundwerte aus eba-core.css; hier stehen nur die Farben und die
+   Abschnittsüberschriften.
+   Gilt mit body.eba-design-klar (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Dunkel sieht wie
+   Paper Elfenbein aus (eba-paper-elfenbein.css), dessen helle Regeln bei diesem Design nicht greifen.
+   Regeln stehen unter .eba-design-klar:where(.theme-light) und sind damit so spezifisch wie die von Elfenbein: Die Ausnahmen in
+   eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
+   ========================================================================== */
+
+.eba-design-klar.theme-light {
+  --color-base-00: #ffffff;
+  --color-base-05: #fcfcfd;
+  --color-base-10: #f9fafb;
+  --color-base-20: #f4f5f7;
+  --color-base-25: #eceef1;
+  --color-base-30: #e3e6ea;
+  --color-base-35: #d5d9df;
+  --color-base-40: #b8bec7;
+  --color-base-50: #868d98;
+  --color-base-60: #5a616c;
+  --color-base-70: #3c424b;
+  --color-base-100: #16191f;
+
+  --accent-h: 223;
+  --accent-s: 68%;
+  --accent-l: 50%;
+  --text-accent: #2453c9;
+  --text-accent-hover: #2a5bd7;
+  --interactive-accent: #2a5bd7;
+  --interactive-accent-hover: #2453c9;
+  --text-selection: rgba(42, 91, 215, 0.16);
+  --text-highlight-bg: rgba(255, 210, 90, 0.42);
+
+  --titlebar-background: #f4f5f7;
+  --titlebar-background-focused: #f4f5f7;
+  --tab-container-background: #f4f5f7;
+  --ribbon-background: #f4f5f7;
+
+  --eba-bg: #ffffff;
+  --eba-surface: #ffffff;
+  --eba-card-bg: #ffffff;
+  --eba-surface-2: #f4f5f7;
+  --eba-border: #e4e7eb;
+  --eba-border-strong: #cdd2d9;
+  --eba-text: #16191f;
+  --eba-muted: #5a616c;
+  --eba-faint: #868d98;
+  --eba-accent: #2a5bd7;
+  --eba-accent-text: #2453c9;
+  --eba-accent-soft: rgba(42, 91, 215, 0.08);
+  --eba-good: #1a7f4b;
+  --eba-warn: #a3600a;
+  --eba-bad: #c0262d;
+  --eba-info: #2a5bd7;
+}
+
+/* Abschnitte: Überschrift in normaler Schreibweise statt Label, ohne Linie; Luft trennt die Abschnitte */
+.eba-design-klar:where(.theme-light) .eba h2 {
+  display: block;
+  margin: 2.4em 0 0.75em;
+  padding: 0;
+  border: none;
+  font-family: var(--eba-font-display);
+  font-size: 1.2em;
+  font-weight: 650;
+  letter-spacing: -0.014em;
+  text-transform: none;
+  color: var(--eba-text);
+}
+.eba-design-klar:where(.theme-light) .eba h2::after { display: none; }
