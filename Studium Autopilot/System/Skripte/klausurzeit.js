@@ -13,7 +13,7 @@
 // Stil: eba-core.css Abschnitt 37, Klassen eba-kzt-*.
 module.exports = function (ctx) {
   const app = window.app;
-  const basis = ctx; // zeichnen(el, ctx) überdeckt ctx mit dem Markdown-Kontext
+  const basis = ctx; // Kontext des Skripts (Datum, Notiz öffnen)
   const SPRACHE = "eba-klausurzeit";
   const KURZTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   const MONAT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
@@ -52,12 +52,12 @@ module.exports = function (ctx) {
     return { module, phasen, anmeldungen, pruef };
   };
 
-  const zeichnen = (el, ctx) => {
+  const zeichnen = (el) => {
     const jetzt = basis.date.jetzt(), heute = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
     const { module, phasen, anmeldungen, pruef } = lesen(heute);
     const oeffnen = (knoten, f) => {
       knoten.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
-      knoten.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); app.workspace.openLinkText(f.path, ctx?.sourcePath || "", e.ctrlKey || e.metaKey); });
+      knoten.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); basis.oeffnen(f, { neu: e.ctrlKey || e.metaKey }); });
     };
     const link = (eltern, f, cls, text) => { const a = eltern.createEl("a", { cls: `internal-link ${cls}`, text, href: f.path, attr: { "data-href": f.path } }); oeffnen(a, f); return a; };
     const inPhase = (d) => phasen.find((p) => d >= p.von && d <= p.bis);
@@ -177,7 +177,7 @@ module.exports = function (ctx) {
       zeile("Weitere", ausser, (k) => wt(k.d));
       zeile("Bestanden", fertigOhne, (m) => m.ergebnis);
     }
-    if (!phasen.length && !pruef.length && !module.length) el.createDiv({ cls: "eba-kzt-leer", text: "Noch keine Prüfungsphasen und Prüfungstermine." });
+    if (!phasen.length && !pruef.length && !module.length) el.createDiv({ cls: "eba-kzt-leer", text: "Noch keine Prüfungsphasen und Prüfungen." });
   };
 
   const registrieren = () => {

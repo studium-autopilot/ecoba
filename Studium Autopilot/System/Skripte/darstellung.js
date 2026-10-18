@@ -13,20 +13,21 @@
 //   Beim Start: Die Klasse des Designs steht zusätzlich in „eba-start-klassen“. Die setzt das Plugin (main.js) schon beim
 //   Laden, nicht erst nach den Skripten; sonst zeigte jeder Start erst Elfenbein und spränge dann um.
 //   ```eba-darstellung```  „Darstellung“ (Einstellungen & Hilfe): ein Umschalter Hell · Dunkel · Automatisch, ohne Untertexte
-//                          (Stil eba-core.css Abschnitt 43, .eba-ds), darunter je Design eine Zeile wie bei der Variante
-//                          (Farbmuster, gewählt mit Pille, sonst „Wählen“). Denselben Umschalter zeigt die Einrichtung
-//                          (schalter()), die Designs dort als Auswahl wie die Variante (einrichtung.js).
+//                          (Stil eba-core.css Abschnitt 43, .eba-ds), darunter die Designs als drei gleiche Vorschau-Kacheln
+//                          ohne Namen (designWahl(), .eba-dk; seit 18.10.2026, bis dahin Zeilen mit Namen): eine Mini-Karte in
+//                          den Farben des Designs, gewählt mit Ring und Haken, für Vorlesesoftware „Design 1“ bis „Design 3“.
+//                          Beides zeigt auch die Einrichtung (einrichtung.js). Designs haben für Nutzer:innen keine Namen; die
+//                          Namen hier (Elfenbein, Flieder, Klar) gibt es nur in Code und CSS (tests/wortliste.js).
 //   Aktion/Befehl „darstellung“  wert = hell | dunkel | automatisch; ohne wert eine Auswahl.
-//   Aktion/Befehl „design“       wert = elfenbein | flieder | klar; ohne wert eine Auswahl.
+//   Aktion/Befehl „design“       wert = elfenbein | flieder | klar; ohne wert eine Auswahl „Design 1“ bis „Design 3“.
 //   Schema sichern (beim Wählen und einmal beim Start): eba-core und die drei Designs an, die bis 0.4.x wählbaren
 //   Designs (Befehl „Design wechseln“: Graphite, Paper, Paper Tübingen, Paper Schiefer) aus. Sonst sähe ein Tresor, in dem
 //   eines davon gewählt war, nach dem Update ungestaltet aus. Beim Start nur, wenn eba-core an ist.
 // Für die Einrichtung (einrichtung.js) und Tests: ctx.darstellung = { MODI, DESIGNS, modusAus, modus, dunkelFuer, setzen, segmente,
-// schalter, design, designZeilen, designSetzen, anwenden, schemaSichern }. modusAus(), dunkelFuer(), segmente() und
-// designZeilen() sind rein (tests/darstellung.test.js).
+// schalter, design, designKacheln, designNachTaste, designSetzen, designWahl, anwenden, schemaSichern }. modusAus(), dunkelFuer(),
+// segmente(), designKacheln() und designNachTaste() sind rein (tests/darstellung.test.js).
 module.exports = function (ctx) {
   const app = window.app;
-  const { Notice } = ctx.obsidian;
   const Platform = ctx.obsidian.Platform || {};
   const SPEICHER = "eba-darstellung";
   const DESIGN_SPEICHER = "eba-design";
@@ -36,12 +37,8 @@ module.exports = function (ctx) {
     { wert: "dunkel", theme: "obsidian", titel: "Dunkel" },
     { wert: "automatisch", theme: "system", titel: "Automatisch" },
   ];
-  // Reihenfolge der Zeilen; text = die gedämpfte Zeile in Einstellungen & Hilfe und in der Einrichtung
-  const DESIGNS = [
-    { wert: "elfenbein", titel: "Elfenbein", text: "Warmes Papier, Überschriften wie im Buch" },
-    { wert: "flieder", titel: "Flieder", text: "Zartes Lila, weiche Formen · dunkel mit den Farben von Elfenbein" },
-    { wert: "klar", titel: "Klar", text: "Weiß und schlicht · dunkel mit den Farben von Elfenbein" },
-  ];
+  // Reihenfolge der Kacheln; titel nur für Vorlesesoftware und die Auswahl des Befehls, nie ein Name
+  const DESIGNS = ["elfenbein", "flieder", "klar"].map((wert, i) => ({ wert, titel: "Design " + (i + 1) }));
   const SCHEMA = ["eba-core", "eba-paper-elfenbein", "eba-flieder", "eba-klar"];
   const FRUEHER = ["eba-graphite", "eba-paper", "eba-paper-tuebingen", "eba-paper-schiefer"];
   const DUNKEL_ABFRAGE = "(prefers-color-scheme: dark)";
@@ -67,8 +64,15 @@ module.exports = function (ctx) {
   // Design dieses Geräts (ohne Wahl Elfenbein) und die Klasse dafür am body (Elfenbein: keine)
   const design = () => { const w = app.loadLocalStorage(DESIGN_SPEICHER); return DESIGNS.some((d) => d.wert === w) ? w : "elfenbein"; };
   const klasseVon = (wert) => (wert === "elfenbein" ? null : "eba-design-" + wert);
-  // Zeilen für Einstellungen & Hilfe und Einrichtung, genau eine gewählt
-  const designZeilen = (ist) => DESIGNS.map((d) => ({ wert: d.wert, titel: d.titel, text: d.text, gewaehlt: d.wert === ist }));
+  // Kacheln für Einstellungen & Hilfe und Einrichtung, genau eine gewählt
+  const designKacheln = (ist) => DESIGNS.map((d) => ({ wert: d.wert, titel: d.titel, gewaehlt: d.wert === ist }));
+  // Pfeiltasten in den Kacheln wie in einer Optionsgruppe: rechts/unten weiter, links/oben zurück (rundum), Pos1/Ende;
+  // andere Tasten → null
+  const designNachTaste = (ist, taste) => {
+    const n = DESIGNS.length, i = Math.max(0, DESIGNS.findIndex((d) => d.wert === ist));
+    const j = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: n - 1 }[taste];
+    return j === undefined ? null : DESIGNS[(j + n) % n].wert;
+  };
 
   // Klassen in einem Dokument setzen; true, wenn sich etwas geändert hat
   const klassen = (doc, dunkel) => {
@@ -153,47 +157,65 @@ module.exports = function (ctx) {
     });
     return g;
   };
-  // Designs als Zeilenliste wie die Variante (personalisieren.js): Farbmuster, Titel, gedämpfte Zeile, „Wählen“
-  const designListe = (el) => {
-    const l = el.createDiv({ cls: "eba-vb-liste eba-dz", attr: { role: "list", "aria-label": "Design" } });
-    for (const z of designZeilen(design())) {
-      const zeile = l.createDiv({ cls: "eba-vb", attr: { role: "listitem", "data-id": z.wert } });
-      zeile.createSpan({ cls: "eba-vb-symbol eba-dz-muster", attr: { "data-design": z.wert, "aria-hidden": "true" } });
-      const t = zeile.createSpan({ cls: "eba-vb-text" });
-      const b = t.createEl("b", { text: z.titel });
-      if (z.gewaehlt) b.createSpan({ cls: "eba-pill ok", text: "gewählt" });
-      t.createSpan({ cls: "eba-vb-status" }).createSpan({ cls: "eba-vb-stand", text: z.text });
-      const k = zeile.createSpan({ cls: "eba-vb-knoepfe" });
-      if (!z.gewaehlt) k.createEl("a", { cls: "eba-vb-knopf", text: "Wählen", href: ctx.link("design", { wert: z.wert }) });
+  // Designs als drei gleiche Vorschau-Kacheln ohne Text (Einstellungen & Hilfe, Einrichtung): je eine Mini-Karte in den Farben
+  // des Designs (eba-core.css Abschnitt 43, .eba-dk). Tippen wählt; mit der Tastatur Tab auf die gewählte, Pfeiltasten wechseln.
+  // In Einstellungen & Hilfe zeichnet designSetzen() den Block neu, dann bekommt die neue Kachel den Fokus.
+  const designWahl = (el) => {
+    const g = el.createDiv({ cls: "eba-dk", attr: { role: "radiogroup", "aria-label": "Design" } });
+    const waehlen = (wert, fokus) => {
+      if (!designSetzen(wert)) return;
+      for (const k of g.querySelectorAll(".eba-dk-wahl")) {
+        const an = k.getAttribute("data-design") === wert;
+        k.setAttribute("aria-checked", String(an));
+        k.setAttribute("tabindex", an ? "0" : "-1");
+      }
+      const neu = fokus ? el.querySelector(`.eba-dk-wahl[data-design="${wert}"]`) : null;
+      if (neu) neu.focus();
+    };
+    for (const k of designKacheln(design())) {
+      const b = g.createEl("button", { cls: "eba-dk-wahl", attr: { type: "button", role: "radio", "aria-checked": String(k.gewaehlt),
+        "aria-label": k.titel, title: k.titel, tabindex: k.gewaehlt ? "0" : "-1", "data-design": k.wert } });
+      const karte = b.createSpan({ cls: "eba-dk-karte", attr: { "aria-hidden": "true" } });
+      karte.createSpan({ cls: "eba-dk-akzent" });
+      karte.createSpan({ cls: "eba-dk-zeile" });
+      karte.createSpan({ cls: "eba-dk-zeile eba-dk-kurz" });
+      b.addEventListener("click", () => waehlen(k.wert, false));
+      b.addEventListener("keydown", (e) => {
+        const ziel = designNachTaste(k.wert, e.key);
+        if (!ziel) return;
+        e.preventDefault();
+        waehlen(ziel, true);
+      });
     }
-    return l;
+    return g;
   };
 
   const AKTIONEN = {
     darstellung: {
-      titel: "Darstellung wählen (hell, dunkel, automatisch)",
+      titel: "Darstellung wählen",
       ausfuehren: async (c) => {
         let wert = String((c && c.parameter && c.parameter.wert) || "").trim();
         if (!wert) wert = (await ctx.system.suggester(MODI.map((m) => m.titel), MODI.map((m) => m.wert), false, "Darstellung")) || "";
-        if (wert && !setzen(wert)) new Notice("Unbekannte Darstellung: " + wert, 3000);
+        if (wert && !setzen(wert)) ctx.hinweis(`„${wert}“ gibt es als Darstellung nicht.`);
       },
     },
     design: {
-      titel: "Design wählen (Elfenbein, Flieder, Klar)",
+      titel: "Design wählen",
       ausfuehren: async (c) => {
         let wert = String((c && c.parameter && c.parameter.wert) || "").trim();
         if (!wert) wert = (await ctx.system.suggester(DESIGNS.map((d) => d.titel), DESIGNS.map((d) => d.wert), false, "Design")) || "";
-        if (wert && !designSetzen(wert)) new Notice("Unbekanntes Design: " + wert, 3000);
+        if (wert && !designSetzen(wert)) ctx.hinweis(`„${wert}“ gibt es als Design nicht.`);
       },
     },
   };
 
-  ctx.darstellung = { MODI, DESIGNS, modusAus, modus, dunkelFuer, setzen, segmente, schalter, design, designZeilen, designSetzen, anwenden, schemaSichern };
+  ctx.darstellung = { MODI, DESIGNS, modusAus, modus, dunkelFuer, setzen, segmente, schalter, design, designKacheln, designNachTaste,
+    designSetzen, designWahl, anwenden, schemaSichern };
 
   const registrieren = () => {
     block = ctx.codeblock("eba-darstellung", (quelle, el) => {
       el.empty();
-      try { schalter(el); designListe(el); } catch (e) { console.error("eba-darstellung", e); }
+      try { schalter(el); designWahl(el); } catch (e) { console.error("eba-darstellung", e); }
     });
     // Obsidian schaltet nach seiner Einstellung um (Sync, Gerät, Obsidians Einstellungen): gleich danach die Wahl wieder
     // durchsetzen. anwenden() löst selbst css-change aus, ändert beim zweiten Mal aber nichts mehr.

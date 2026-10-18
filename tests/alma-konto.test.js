@@ -8,7 +8,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { laden } = require("./laden.js");
+const { laden, json } = require("./laden.js");
 const { uhr, tresor, dec } = require("./ilias-attrappen.js");
 
 const SKRIPTE = path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte");
@@ -153,7 +153,7 @@ test("Einschalten: leer/leer am PC; Passwort nur im POST an Alma; Abmelden mit t
   assert.deepEqual(mitGeheim.map((x) => [x.methode, new URL(x.url).hostname, new URL(x.url).pathname]), [["POST", "alma.uni-tuebingen.de", "/alma/rds"]]);
   const post = new URLSearchParams(g.server.log.filter((x) => x.methode === "POST")[0].body);
   assert.deepEqual(Array.from(post.keys()), ["userInfo", "ajax-token", "asdf", "fdsa", "submit"]);
-  assert.deepEqual(g.meldungen, ["Alma: geprüft, nichts Neues."]);
+  assert.deepEqual(g.meldungen, ["Alma geprüft, nichts Neues."]);
 });
 
 test("Voll: Module mit Status und Note, Belegungen je Code; Vorschlag fürs Modulfeld", async () => {
@@ -163,7 +163,7 @@ test("Voll: Module mit Status und Note, Belegungen je Code; Vorschlag fürs Modu
   assert.deepEqual(z.leistungen.module.B110, { status: "bestanden", note: "1,7", unbenotet: false, versuch: 1, semester: "WS 2026/27", datum: "2027-02-12",
     eindeutig: true, stati: [{ status: "bestanden", semester: "WS 2026/27" }] });
   assert.deepEqual(z.belegungen.pruefungen, { B110: { status: "angemeldet" }, S100: { status: "zurückgetreten" }, B180: { status: "zugelassen" } });
-  assert.match(g.meldungen[0], /^Alma: geprüft\. 5 neue Angaben auf deinen Modulseiten\.$/);
+  assert.match(g.meldungen[0], /^Alma geprüft, 5 neue Angaben auf deinen Modulseiten\.$/);
   const v = g.m.vorschlag({ code: "B110", status: "offen", ergebnis: null, versuch: null });
   assert.deepEqual(v.felder, { status: "bestanden", ergebnis: "1,7" });
   assert.equal(v.text, "Alma: bestanden · 1,7 · Stand 12.02.");
@@ -207,7 +207,7 @@ test("Abgelehnt (bekannte Meldung): Marker über ILIAS, kein zweiter Versuch, ke
   assert.equal(g.server.posts(), 1);
   assert.equal(g.server.abmeldungen(), 0);
   assert.equal(g.t.text(K.K.STAND), null);
-  assert.deepEqual(g.meldungen, ["Alma: Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben."]);
+  assert.deepEqual(g.meldungen, ["Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden."]);
   // Der Marker kommt (über ILIAS) zurück: kein Versuch mehr, auch nicht per Knopf
   g.zugang.gesperrt = true; g.zugang.bestaetigt = false;
   g.u.vor(13 * STUNDE);
@@ -272,7 +272,7 @@ test("Zwei Läufe ohne Änderung im Abstand von 30 Min.: genau eine Anmeldung; n
   assert.equal(g.server.posts(), 2);
   assert.ok(z2.geprueft > z1.geprueft);
   assert.equal(z2.stand, z1.stand, "keine inhaltliche Änderung");
-  assert.deepEqual(g.meldungen, ["Alma: geprüft, nichts Neues."], "automatische Läufe ohne Hinweis");
+  assert.deepEqual(g.meldungen, ["Alma geprüft, nichts Neues."], "automatische Läufe ohne Hinweis");
 });
 
 test("Anmeldephase: alle 3 Std.; ein Versuch zählt, auch wenn er scheiterte; Fehler vor dem POST: neuer Blick nach 30 Min.", async () => {
@@ -500,6 +500,14 @@ const TERMINE = [
   { fm: { titel: "Zwischentest B180", code: "B180", kategorie: "Prüfung", datum: "2026-12-20" } },
   { fm: { titel: "Klausur E101", code: "E101", kategorie: "Prüfung", datum: "2027-02-20" } },
 ];
+// Prüfung eines Moduls aus dem Fachmodell (ctx.modell.pruefungVon) über dieselben Termine und Module wie in der Erinnerung
+const pruefungVonAus = (heute, module, termine) => {
+  const notizen = {};
+  for (const m of module) notizen["Module/" + m.code + ".md"] = Object.assign({ typ: "modul", code: m.code, titel: m.code, ects: 6, status: m.status }, m.fm);
+  termine.forEach((t, i) => { notizen["Termine/" + i + " " + t.fm.titel + ".md"] = Object.assign({ typ: "termin" }, t.fm); });
+  const M = laden("modell", { heute, notizen, frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": {} } }).ctx.modell;
+  return (code) => M.pruefungVon(code, { heute });
+};
 test("Erinnerung an die Prüfungsanmeldung: Wahrheitstabelle (nur fehlende, nie „alles angemeldet“)", () => {
   const sem = { name: "WS 2026/27" };
   const module = [
@@ -509,7 +517,8 @@ test("Erinnerung an die Prüfungsanmeldung: Wahrheitstabelle (nur fehlende, nie 
     { code: "E101", status: "bestanden", semester: "WS 2026/27", fm: {} },
     { code: "B220", status: "offen", semester: "SS 2027", fm: {} },
   ];
-  const f = (z, heute, mehr) => K.fehlendeAnmeldungen(Object.assign({ module, termine: TERMINE, zustand: z, heute: heute || "2026-12-08", jetzt: Date.parse("2026-12-08T09:00:00Z"), aktuell: sem }, mehr || {}));
+  const f = (z, heute, mehr) => K.fehlendeAnmeldungen(Object.assign({ module, termine: TERMINE, zustand: z, heute: heute || "2026-12-08", jetzt: Date.parse("2026-12-08T09:00:00Z"), aktuell: sem,
+    pruefungVon: pruefungVonAus(heute || "2026-12-08", (mehr && mehr.module) || module, TERMINE) }, mehr || {}));
   assert.equal(f(Z(), "2026-12-01"), null, "Fenster noch zu");
   assert.equal(f(Z(), "2027-03-10"), null, "Nachholtermin zählt nicht");
   assert.deepEqual(f(Z()), { art: "fehlt", codes: ["B110", "S100"], stand: "2026-12-08T07:00:00.000Z" }, "B180 ohne Klausur (nur Zwischentest), E101 bestanden, B220 nicht dieses Semester");
@@ -524,6 +533,30 @@ test("Erinnerung an die Prüfungsanmeldung: Wahrheitstabelle (nur fehlende, nie 
   assert.deepEqual(f(Z({}, {}, { belegungen: { art: "unsicher", semester: "WS 2026/27", pruefungen: {}, unzugeordnet: 0 } })), { art: "selbst" });
   assert.deepEqual(f(Z({}, {}, { belegungen: { art: "ok", semester: "WS 2026/27", pruefungen: {}, unzugeordnet: 1 } })), { art: "selbst" }, "unzugeordnete Anmeldung");
   assert.deepEqual(f(null), { art: "selbst" });
+});
+
+test("Erinnerung: welche Prüfung zählt, sagt das Fachmodell (pruefungVon), keine eigene Regel", () => {
+  const sem = { name: "WS 2026/27" };
+  const Z0 = Z();
+  const termine = [
+    TERMINE[0],
+    { fm: { titel: "Klausur B110", code: "B110", kategorie: "Prüfung", datum: "2027-02-12", entfaellt: true } },
+    { fm: { titel: "Klausur S100", code: "S100", kategorie: "Prüfung", datum: "2027-02-15", erledigt: true } },
+    { fm: { titel: "Nachholklausur B130", code: "B130", kategorie: "Prüfung", datum: "2027-01-20" } },
+    { fm: { titel: "Nachholklausur B140", code: "B140", kategorie: "Prüfung", datum: "2027-01-22" } },
+  ];
+  const module = [
+    { code: "B110", status: "läuft", semester: "WS 2026/27", fm: {} },
+    { code: "S100", status: "läuft", semester: "WS 2026/27", fm: {} },
+    { code: "B130", status: "nicht bestanden", semester: "WS 2026/27", fm: {} },
+    { code: "B140", status: "läuft", semester: "WS 2026/27", fm: {} },
+    { code: "B150", status: "läuft", semester: "WS 2026/27", fm: { klausur: "2027-02-01" } },
+  ];
+  const r = K.fehlendeAnmeldungen({ module, termine, zustand: Z0, heute: "2026-12-08", jetzt: Date.parse("2026-12-08T09:00:00Z"), aktuell: sem,
+    pruefungVon: pruefungVonAus("2026-12-08", module, termine) });
+  assert.deepEqual(r.codes, ["B130", "B150"], "entfallen und abgehakt zählen nicht; Nachholtermin nur nach „nicht bestanden“; Modulfeld klausur");
+  assert.deepEqual(K.fehlendeAnmeldungen({ module, termine, zustand: Z0, heute: "2026-12-08", jetzt: Date.parse("2026-12-08T09:00:00Z"), aktuell: sem }), null,
+    "ohne Fachmodell keine Prüfung, also keine Erinnerung");
 });
 
 // ---------- Datenschutz-Spione ----------

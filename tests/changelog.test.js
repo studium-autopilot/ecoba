@@ -9,7 +9,7 @@ const path = require("node:path");
 
 const TEXT = fs.readFileSync(path.join(__dirname, "..", "CHANGELOG.md"), "utf8").replace(/\r\n/g, "\n");
 const AB = [0, 4, 1]; // ab dieser Version gelten die Regeln
-const ARTEN = ["Neu", "Einfacher", "Schneller", "Übersichtlicher", "Zuverlässiger", "Behoben"];
+const ARTEN = ["Neu", "Einfacher", "Schneller", "Übersichtlicher", "Zuverlässiger", "Einheitlicher", "Behoben"];
 const MAX_ZEICHEN = 240, MAX_SAETZE = 2, MAX_PUNKTE = 12, MAX_TITELWOERTER = 6;
 // Fachwörter: Wortanfang (Plugin, Plugins, Skripte …) bzw. nur als ganzes Wort (Sync, aber nicht „synchronisiert“)
 const ANFANG = ["Manifest", "Cache", "Plugin", "Skript", "Codeblock", "Prüfsumme", "Frontmatter", "Callout", "Commit", "Parser",

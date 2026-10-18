@@ -52,3 +52,62 @@ test("Fehler beim Nachsehen: nichts extern statt Absturz", () => {
   assert.deepEqual(EBA.quellenExtern(nichts, kaputteEinstellungen), []);
   assert.equal(EBA.quelleExtern("volltext", nichts, kaputteEinstellungen), false);
 });
+
+// ---------- Gemischte Fassungen (Sync liefert Skripte einzeln; eba.js bis 0.4.4 kennt nur eigenerAbgleich) ----------
+const Q = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "quellen.js"));
+const { laden } = require("./laden.js");
+const fs = require("node:fs");
+// eba.js aus 0.4.4: nur eigenerAbgleich (dieselbe Regel wie heute: abgleich.js im Tresor oder ilias_unterlagen: extern)
+const EBA_044 = { eigenerAbgleich: EBA.eigenerAbgleich };
+// Sicht eines Geräts mit 0.4.4 (zentral.js, ilias.js, verbindungen.js aus 0.4.4): Stundenplan und ILIAS-Dateien kommen beim eigenen
+// Abgleich von außen, die Übungsgruppen nie; die Quellen seit 0.4.5 kennt es nicht (es schreibt sie also nie)
+const SICHT_044 = { stundenplan: true, "ilias-dateien": true, "ilias-gruppen": false };
+const FAELLE = [
+  ["nichts", nichts, {}], ["abgleich.js", mitAbgleich, {}], ["ilias_unterlagen: extern", nichts, { ilias_unterlagen: "extern" }],
+  ["Liste leer", mitAbgleich, { quellen_extern: [] }], ["Liste volltext", nichts, { quellen_extern: ["volltext"] }],
+  ["Liste als Text", mitAbgleich, { quellen_extern: "Stundenplan, ilias-gruppen" }], ["Liste null", mitAbgleich, { quellen_extern: null }],
+  ["Liste alle", nichts, { quellen_extern: ALLE }],
+];
+
+test("Gemischte Fassungen: quellen.js extern entscheidet mit eba.js aus 0.4.4 genau wie eba.quelleExtern", () => {
+  for (const [fall, existiert, einstellungen] of FAELLE) for (const q of ALLE) {
+    const soll = EBA.quelleExtern(q, existiert, einstellungen);
+    assert.equal(Q.extern(EBA, q, existiert, einstellungen), soll, fall + ": " + q);
+    assert.equal(Q.extern(EBA_044, q, existiert, einstellungen), soll, fall + ": " + q + " (eba.js aus 0.4.4)");
+  }
+  assert.equal(Q.extern(null, "volltext", mitAbgleich, {}), false, "ohne eba.js nichts extern");
+  assert.equal(Q.extern(EBA_044, "volltext", () => { throw new Error("Tresor nicht bereit"); }, {}), false);
+});
+
+test("Gerät mit 0.4.4 und Gerät mit 0.4.6 im selben Tresor: ohne Liste dieselbe Entscheidung je Quelle", () => {
+  for (const [fall, existiert, einstellungen] of FAELLE.filter((f) => !("quellen_extern" in f[2]) || f[2].quellen_extern == null)) {
+    const eigener = EBA.eigenerAbgleich(existiert, einstellungen);
+    for (const q of Object.keys(SICHT_044)) {
+      assert.equal(EBA.quelleExtern(q, existiert, einstellungen), SICHT_044[q] && eigener, fall + ": " + q);
+      assert.equal(Q.extern(EBA_044, q, existiert, einstellungen), SICHT_044[q] && eigener, fall + ": " + q + " (neue Skripte, alte eba.js)");
+    }
+  }
+});
+
+test("Neue Skripte mit eba.js aus 0.4.4 und eigenem Abgleich: Alma-Stundenplan und Volltext bleiben aus", async () => {
+  let abrufe = 0;
+  const A = laden("alma", {
+    frontmatter: { "System/Einstellungen.md": {}, "System/Skripte/abgleich.js": {} },
+    kontext: { user: { eba: Object.assign({ MODULCODE: "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?" }, EBA_044) }, plugin: { testAbruf: async () => { abrufe++; return { status: 200, text: "" }; } } },
+  }).ergebnis;
+  assert.equal(await A.aktualisieren({ automatisch: true }), null);
+  assert.equal(A.status().zustand, "extern");
+  assert.equal(abrufe, 0);
+  const V = laden("volltext").ctx.volltext;
+  assert.equal(V.quelleExternAus(EBA_044, mitAbgleich, {}, Q), true);
+  assert.equal(V.quelleExternAus(EBA_044, nichts, {}, Q), false);
+  assert.equal(V.quelleExternAus(EBA_044, nichts, { quellen_extern: ["volltext"] }, Q), true);
+});
+
+test("Kein Skript fragt eba.quelleExtern ohne quellen.js extern (sonst gilt mit alter eba.js „vom Plugin“)", () => {
+  const ordner = path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte");
+  for (const n of fs.readdirSync(ordner).filter((x) => /\.js$/.test(x) && x !== "eba.js" && x !== "quellen.js")) {
+    const t = fs.readFileSync(path.join(ordner, n), "utf8");
+    if (/\.quelleExtern\(/.test(t)) assert.match(t, /\.extern\(eba, /, n);
+  }
+});

@@ -11,7 +11,8 @@
 //    (Vorgabe 20 s + Zufall bis 2 Min.), danach im Takt; nach Fehlern nach backoff (1., 2., … Fehler in Folge; nie länger als
 //    takt); zurück in der App nach mehr als zurueck seit dem letzten Versuch. Rein und testbar: zeitplan().
 // 3. Ein Schreiber: sperre.js (ctx.user.sperre), „Hier aktualisieren“ = nehmen({ erzwingen: true }).
-// 4. Quellen außerhalb des Plugins: eba.quelleExtern(schluessel, …) in JEDEM Lauf der Abruf-Funktion, nicht nur in der Oberfläche.
+// 4. Quellen außerhalb des Plugins: eba.quelleExtern(schluessel, …) in JEDEM Lauf der Abruf-Funktion, nicht nur in der Oberfläche,
+//    über extern(eba, …): dieselbe Regel auch, wenn auf einem Gerät noch eba.js einer älteren Fassung liegt.
 // 5. Besitz einer Notiz: herkunft: <quelle> + Id-Feld (idFeld; ältere Namen bleiben gültig: zentral_id, alma_schluessel,
 //    ilias_gruppe, gruppe_id, abgleich_id ohne herkunft, volltext_von: plugin). Das Feld quelle ist nur zum Lesen da.
 // 6. Lebenslauf erzeugter Notizen: von dir gelöscht → Grabstein (kommt nicht wieder, bis sich der Eintrag in der Quelle ändert;
@@ -24,11 +25,11 @@
 const MIN = 60e3;
 const K = Object.freeze({
   MEINE: "## Meine Notizen",          // eigener Text in Termin-Notizen
-  NOTIZEN: "## Notizen",              // eigener Text in Stundenplan-Notizen (bis die Wortliste sie umstellt)
+  NOTIZEN: "## Notizen",              // eigener Text in älteren Stundenplan-Notizen (neue: „## Meine Notizen“)
   ENTFAELLT: " (entfällt)",
   START: 20e3, START_ZUFALL: 2 * MIN, // erster Lauf nach dem Einlesen
   ZURUECK_WARTEN: 5e3,                // zurück in der App: so lange warten (Sync und Oberfläche zuerst)
-  REIHE: ["zentral", "ilias", "alma", "alma-konto", "volltext", "server"], // Reihenfolge der Quellen in „Bitte prüfen“
+  REIHE: ["zentral", "ilias", "ilias-kalender", "alma", "alma-konto", "volltext", "server"], // Reihenfolge der Quellen in „Bitte prüfen“
 });
 
 // ---------- 1. Status ----------
@@ -124,6 +125,21 @@ const planen = (ctx, o) => {
   return { jetzt, spaeter, stand: () => ({ versucht: zuletzt(), naechster, fehlerSerie: serie, laeuft }), plan: p };
 };
 
+// ---------- 4. Quellen außerhalb des Plugins ----------
+// Kommt eine Quelle von außen (eigener Uni-Abgleich, eigener Server)? Die Regel steht in eba.js (quelleExtern). Der Sync liefert
+// Skripte einzeln, und eba.js bis 0.4.4 kennt nur eigenerAbgleich: Ohne eba.quelleExtern ginge sonst jede Quelle als „vom Plugin“
+// durch, während ein anderes Gerät sie für extern hält (zwei Schreiber). Darum hier dieselbe Regel (tests/quellen-extern.test.js
+// hält beide gleich): Liste quellen_extern, sonst beim eigenen Uni-Abgleich alles außer ilias-gruppen, sonst nichts.
+const extern = (eba, schluessel, existiert, einstellungen) => {
+  try {
+    if (eba && typeof eba.quelleExtern === "function") return !!eba.quelleExtern(schluessel, existiert, einstellungen);
+    const k = String(schluessel), v = (einstellungen || {}).quellen_extern;
+    const liste = Array.isArray(v) ? v : typeof v === "string" && v.trim() ? v.split(",") : null;
+    if (liste) return liste.some((x) => String(x == null ? "" : x).trim().toLowerCase() === k);
+    return k !== "ilias-gruppen" && !!(eba && typeof eba.eigenerAbgleich === "function" && eba.eigenerAbgleich(existiert, einstellungen));
+  } catch (e) { return false; }
+};
+
 // ---------- 5. Besitz ----------
 // Id-Feld je herkunft; neue Quellen: <quelle>_id (Bindestriche → _). Ältere Namen bleiben gültig.
 const ID_FELD = Object.freeze({
@@ -144,6 +160,15 @@ const besitz = (fm) => {
   if (fm.abgleich_id) return { quelle: "abgleich", id: String(fm.abgleich_id) };
   return null;
 };
+// Ein Papierkorb für alles (Bedien-Bausteine, seit 0.4.6): Obsidians Papierkorb nach deiner Einstellung „Gelöschte Dateien“
+// (Papierkorb des Systems, auf iPhone und iPad .trash im Tresor), nie endgültig, auch wenn dort „Endgültig löschen“ steht. Jede
+// Quelle und jede Aktion wirft nur hierüber weg (vorher drei Wege: System, .trash, endgültig). o.lokal: immer .trash (Tests,
+// plugin.testPapierkorbLokal). Was du selbst wegwirfst, geht über ctx.papierkorb (papierkorb.js) mit „Rückgängig“.
+const papierkorb = async (app, f, o) => {
+  const lokal = !!(o && o.lokal) || !!(app.vault.getConfig && app.vault.getConfig("trashOption") === "local");
+  return app.vault.trash(f, !lokal);
+};
+
 // Felder der Besitzmarke einer neuen Notiz
 const marke = (quelle, id) => { const m = { herkunft: String(quelle) }; m[idFeld(quelle)] = String(id); return m; };
 
@@ -253,8 +278,8 @@ const beiMeldung = (ctx, fn) => {
 };
 
 const API = {
-  K, statusForm, nachLauf, vorText, zeitplan, ergebnisOk, planen, ID_FELD, idFeld, besitz, marke, meineNotizen, unberuehrt, wegfall,
-  zuViel, kurzHash, geloescht, titelEntfaellt, meineMischen, doppelGruppen, dubletten, melden, meldungen, meldenNeu, beiMeldung,
+  K, statusForm, nachLauf, vorText, zeitplan, ergebnisOk, planen, extern, ID_FELD, idFeld, besitz, marke, meineNotizen, unberuehrt, wegfall,
+  zuViel, kurzHash, geloescht, titelEntfaellt, meineMischen, doppelGruppen, dubletten, melden, meldungen, meldenNeu, beiMeldung, papierkorb,
 };
 module.exports = function () { return API; };
 Object.assign(module.exports, API);

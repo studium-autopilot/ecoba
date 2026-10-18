@@ -44,7 +44,7 @@ cssclasses:
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Schwerpunkt</span></div>
 <h1><span class="eba-code">B340</span> Organisation</h1>
 <p class="eba-untertitel">Organization</p>
-<div class="eba-meta"><span><b>9</b> ECTS</span><span>FS 4.–6.</span><span>SS</span><span>Klausur 60 min</span><span>Deutsch</span><span>Notenblock 66 %</span></div>
+<div class="eba-meta"><span><b>9</b> ECTS</span><span>4.–6. FS</span><span>SS</span><span>Klausur 60 min</span><span>Deutsch</span><span>Notenblock 66 %</span></div>
 </div>
 
 ```eba-modul
@@ -56,7 +56,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -82,7 +82,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC
@@ -114,7 +114,7 @@ cssclasses:
 > > - **Dauer:** 1 Semester
 >
 > > [!eba-regel|handy-zu]+ Prüfung
-> > - **Form:** Klausur (60 Minuten) (9 CP) – 100 % der Modulnote
+> > - **Form:** Klausur (60 Minuten) (9 ECTS) – 100 % der Modulnote
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in
@@ -126,7 +126,7 @@ cssclasses:
 
 
 > [!eba-info|handy-zu]+ Hinweise
-> - Ab SS 2026 wahlweise mit 6 oder 9 CP, immer im SS (Aktuelles zum Studium).
+> - Ab SS 2026 wahlweise mit 6 oder 9 ECTS, immer im SS (Aktuelles zum Studium).
 
 
 <p class="eba-fuss">Quelle: MHB B.Sc. Wiwi (Datei 2026-3-24_Modulhandbuch_B.Sc.Wiwi.pdf), S. 71; Webseite "Aktuelles zum Studium" (Stand 30.09.2026) · Stand der Recherche 30.09.2026 · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Alle Quellen</a></p>

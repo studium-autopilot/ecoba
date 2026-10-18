@@ -384,7 +384,8 @@ module.exports = class StudiumAutopilot extends Plugin {
         console.error("Studium Autopilot: Erweiterung " + f.basename, e); fehler.push(`${f.basename} (${(e && e.message) || e})`);
       }
     }
-    if (fehler.length) new Notice("Studium Autopilot – nicht geladen: " + fehler.join(", "), 10000);
+    // Hinweis ohne Fehlertext (der steht in der Konsole); Wortliste: docs/design.md, „Sprache“
+    if (fehler.length) new Notice(`Ein Teil der App ließ sich nicht laden (${fehler.map((x) => x.split(" (")[0]).join(", ")}). Bitte Obsidian einmal neu starten.`, 10000);
     this.neuZeichnen();
     return fehler;
   }
@@ -400,7 +401,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     if (typeof m.registrieren === "function") await m.registrieren(this);
     if (start && typeof m.start === "function") {
       // start() läuft nur beim App-Start (nicht beim Hot-Reload); Fehler darin melden, aber nicht weiterreichen
-      Promise.resolve().then(() => m.start()).catch((e) => { console.error("Studium Autopilot: start " + name, e); new Notice(`Studium Autopilot – ${name}: ${(e && e.message) || e}`, 8000); });
+      Promise.resolve().then(() => m.start()).catch((e) => { console.error("Studium Autopilot: start " + name, e); new Notice(`Beim Start ging etwas schief (${name}). Bitte Obsidian einmal neu starten.`, 8000); });
     }
   }
 
@@ -418,7 +419,7 @@ module.exports = class StudiumAutopilot extends Plugin {
       this.hinweisSammeln(f.basename);
     } catch (e) {
       console.error("Studium Autopilot: neu laden " + f.path, e);
-      new Notice(`Studium Autopilot – ${f.basename} nicht geladen: ${(e && e.message) || e}`, 8000);
+      new Notice(`${f.basename} nicht geladen: ${(e && e.message) || e}`, 8000); // nur beim Bearbeiten eines Skripts
     }
   }
 
@@ -496,7 +497,7 @@ module.exports = class StudiumAutopilot extends Plugin {
   async aktionAusfuehren(name, parameter, extra) {
     const def = this.aktionen[name];
     if (!def) {
-      new Notice(name ? `Der Knopf „${name}“ geht gerade nicht. Bitte kurz warten oder Obsidian neu starten.` : "Studium Autopilot: Knopf ohne Aktion.", 6000);
+      new Notice(name ? "Dieser Knopf geht gerade nicht. Bitte kurz warten oder Obsidian neu starten." : "Dieser Knopf hat keine Aktion.", 6000);
       return undefined;
     }
     const schluessel = name + JSON.stringify(parameter || {});
@@ -510,7 +511,7 @@ module.exports = class StudiumAutopilot extends Plugin {
       return await def.ausfuehren(c);
     } catch (e) {
       console.error("Studium Autopilot: Aktion " + name, e);
-      new Notice(`${def.titel || name}: ${(e && e.message) || e}`, 10000);
+      new Notice(`„${def.titel || name}“ hat nicht geklappt. Bitte noch einmal versuchen.`, 8000);
       return undefined;
     } finally {
       this.laufend.delete(schluessel);
@@ -537,6 +538,8 @@ module.exports = class StudiumAutopilot extends Plugin {
       return t && typeof t.closest === "function" ? t.closest('a[href^="' + LINK + '"]') : null;
     };
     const sperren = (e) => { if (knopf(e)) { e.preventDefault(); e.stopPropagation(); } };
+    // Wo zuletzt getippt wurde: ctx.oeffnen öffnet eine Notiz im Tab, in dem du getippt hast (Skripte stoppen mousedown oft selbst)
+    this.registerDomEvent(doc, "pointerdown", (e) => { this.letzterTipp = { el: e.target, zeit: Date.now() }; }, { capture: true });
     for (const typ of ["mousedown", "mouseup", "pointerdown", "auxclick", "contextmenu"]) this.registerDomEvent(doc, typ, sperren, { capture: true });
     this.registerDomEvent(doc, "click", (e) => {
       const a = knopf(e);
@@ -564,7 +567,7 @@ module.exports = class StudiumAutopilot extends Plugin {
   // Befehl „Neue Notiz aus Vorlage …“ (Strg/Cmd+Umschalt+N): alle Aktionen, die eine Notiz anlegen (mit „ordner“)
   async neueNotizWaehlen() {
     const liste = Object.keys(this.aktionen).filter((k) => this.aktionen[k].ordner && this.aktionen[k].titel);
-    if (!liste.length) { new Notice("Studium Autopilot: keine Notiz-Aktionen geladen.", 5000); return; }
+    if (!liste.length) { new Notice("Die Vorlagen sind noch nicht geladen. Bitte kurz warten.", 5000); return; }
     const wahl = await this.auswahl(liste.map((k) => this.aktionen[k].titel), liste, "Welche Notiz?");
     if (wahl) await this.aktionAusfuehren(wahl, {});
   }
@@ -597,13 +600,40 @@ module.exports = class StudiumAutopilot extends Plugin {
     setTimeout(pruefen, 300);
   }
 
-  // Notiz öffnen (Bearbeitungsansicht, Live Preview) und Cursor setzen. Schon offen: in diesem Tab bleiben.
-  async notizOeffnen(datei, optionen) {
+  // Notiz öffnen: DER Weg für alle Skripte (ctx.oeffnen, Bedien-Bausteine seit 0.4.6; docs/architektur.md).
+  // ziel: TFile, Pfad oder Linktext (mit „#Überschrift“). o = { neu (neuer Tab, Strg/⌘-Klick), quelle (Notiz, von der ein
+  // Linktext ausgeht), zeile (0-basiert), cursor ({ line, ch }), modus („preview“ | „source“ erzwingt), von (Element, auf das
+  // getippt wurde; sonst der letzte Tipp der letzten 2 s) }.
+  // Ansicht: Übersichtsseiten (Dashboard, Studium/, Einstellungen, Daten; ctx.leseansicht.nurLesen aus start.js) in der Leseansicht,
+  // deine Notizen in der Bearbeitungsansicht (Live Preview). Im Tab, in dem getippt wurde (sonst der aktive), Zurück führt
+  // zurück; schon offen: dorthin wechseln.
+  // Fokus und Cursor nur mit cursor (sonst springt auf iPhone und iPad die Tastatur auf). Andere Dateien (PDF, Bild) wie ein Link.
+  async notizOeffnen(ziel, optionen) {
     const o = optionen || {};
-    let blatt = this.app.workspace.getLeavesOfType("markdown").find((l) => l.view && l.view.file === datei);
-    if (!blatt) blatt = this.app.workspace.getLeaf(false);
-    await blatt.openFile(datei, { active: true, state: o.modus === "preview" ? { mode: "preview" } : { mode: "source", source: false } });
-    this.app.workspace.setActiveLeaf(blatt, { focus: true });
+    let datei = ziel, anker = "";
+    if (!(ziel instanceof TFile)) {
+      const s = String(ziel == null ? "" : ziel).replace(/^\[\[|\]\]$/g, "").split("|")[0].trim();
+      const i = s.indexOf("#");
+      const pfad = i >= 0 ? s.slice(0, i) : s;
+      anker = i >= 0 ? s.slice(i) : "";
+      datei = this.app.vault.getAbstractFileByPath(pfad) || this.app.vault.getAbstractFileByPath(pfad + ".md")
+        || this.app.metadataCache.getFirstLinkpathDest(pfad, o.quelle || "");
+    }
+    if (!(datei instanceof TFile)) return null;
+    if (datei.extension !== "md") { const b = this.app.workspace.getLeaf(o.neu ? "tab" : false); await b.openFile(datei, { active: true }); return b; }
+    const L = this.ctx.leseansicht;
+    const lesen = o.modus ? o.modus === "preview" : !!(L && typeof L.nurLesen === "function" && L.nurLesen(datei));
+    let blatt = o.neu ? null : this.app.workspace.getLeavesOfType("markdown").find((l) => l.view && l.view.file === datei);
+    if (!blatt && !o.neu) {
+      const t = this.letzterTipp, von = o.von || (t && Date.now() - t.zeit < 2000 ? t.el : null);
+      if (von) this.app.workspace.iterateAllLeaves((l) => { if (!blatt && l.view && l.view.containerEl && l.view.containerEl.contains(von)) blatt = l; });
+      const ws = this.app.workspace, wurzel = blatt && blatt.getRoot ? blatt.getRoot() : null;
+      if (blatt && (blatt.getViewState().pinned || wurzel === ws.leftSplit || wurzel === ws.rightSplit)) blatt = null; // nie in der Seitenleiste
+    }
+    if (!blatt) blatt = this.app.workspace.getLeaf(o.neu ? "tab" : false);
+    const eState = o.zeile != null ? { line: Number(o.zeile) } : anker ? { subpath: anker } : undefined;
+    await blatt.openFile(datei, { active: true, state: lesen ? { mode: "preview" } : { mode: "source", source: false }, eState });
+    this.app.workspace.setActiveLeaf(blatt, { focus: !!o.cursor });
     if (o.cursor) {
       const setzen = () => { const ed = blatt.view && blatt.view.editor; if (!ed) return false; ed.setCursor(o.cursor); ed.focus(); return true; };
       if (!setzen()) setTimeout(setzen, 200);

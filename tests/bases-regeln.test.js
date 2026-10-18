@@ -12,7 +12,9 @@ const { auswerten, formelnAus } = require("./bases-formel.js");
 
 const NOTEN = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "Studium", "Noten & ECTS.md"), "utf8").replace(/\r/g, "");
 const bloecke = NOTEN.split("```base").slice(1).map((b) => b.slice(0, b.indexOf("```")));
-const KENNZAHLEN = formelnAus(bloecke[0]), MODULE = formelnAus(bloecke[1]), OP = formelnAus(bloecke[3]);
+const KENNZAHLEN = formelnAus(bloecke[0]), MODULE = formelnAus(bloecke[1]), BESTANDEN = formelnAus(bloecke[2]), OP = formelnAus(bloecke[3]);
+// Filter der Ansicht „Bestanden“ (eine Zeile unter „filters: and:“ der Ansicht)
+const BESTANDEN_FILTER = (/name: Bestanden\n>\s+filters:\n>\s+and:\n>\s+- '(.*)'\n/.exec(bloecke[2]) || [])[1];
 const SQ100 = "Module/4 Schlüsselqualifikation & Abschluss/SQ100 Schlüsselqualifikation.md";
 
 const modul = (code, o) => ({ ["Module/1 Grundstudium/" + code + " Beispiel.md"]: Object.assign({ typ: "modul", code, titel: code + " Beispiel", gruppe: "Grundstudium", ects: 6, status: "offen", notenblock: "34 %" }, o) });
@@ -73,6 +75,9 @@ for (const variante of ["", "Economics", "Business Administration", "ohne Spezia
       assert.equal(auswerten("formula.op", W, "Studium/Noten & ECTS.md", KENNZAHLEN), E.op, "Orientierungsprüfung");
       assert.equal(auswerten("formula.note", W, "Studium/Noten & ECTS.md", KENNZAHLEN), N.note, "Gesamtnote");
       assert.equal(auswerten("formula.notesub", W, "Studium/Noten & ECTS.md", KENNZAHLEN), N.unter, "Unterzeile");
+      // Tabelle „Bestanden“: Summe der Spalte ECTS = ECTS oben (ohne Zusatzleistungen, SQ-Kurse bei offenem SQ100)
+      const zeilen = Object.keys(NOTIZEN).filter((p) => NOTIZEN[p].typ === "modul" && auswerten(BESTANDEN_FILTER, W, p, BESTANDEN));
+      assert.equal(zeilen.reduce((a, p) => a + auswerten("formula.zaehlt", W, p, BESTANDEN), 0), E.ist, "Summe der Tabelle Bestanden");
       // Je Modul: Termin (Prüfung nach der einen Regel), im Plan, Statusfarbe, Block
       for (const pfad of Object.keys(NOTIZEN).filter((p) => NOTIZEN[p].typ === "modul")) {
         const fm = NOTIZEN[pfad], p = M.pruefungVon(fm.code);
@@ -95,4 +100,11 @@ test("Fälle, an denen sich beide Fassungen früher unterschieden", () => {
   assert.equal(termin("X150"), "", "entfallen");
   assert.equal(M.pruefungVon("X140").datum, "2027-03-30", "nicht bestanden: der Nachholtermin");
   assert.equal(termin("X140"), "30.03.2027");
+  // Bestanden: früher mit Zusatzleistung (X160) und ohne SQ-Kurse; jetzt eine Zeile SQ100 mit den gezählten 9 ECTS
+  assert.ok(BESTANDEN_FILTER, "Filter der Ansicht Bestanden gefunden");
+  const pfad = (code) => Object.keys(NOTIZEN).find((p) => NOTIZEN[p].code === code && NOTIZEN[p].typ === "modul");
+  assert.equal(auswerten(BESTANDEN_FILTER, W, pfad("X160"), BESTANDEN), false, "Zusatzleistung nicht in der Summe");
+  assert.equal(auswerten(BESTANDEN_FILTER, W, pfad("SQ100"), BESTANDEN), true);
+  assert.equal(auswerten("formula.zaehlt", W, pfad("SQ100"), BESTANDEN), 9, "SQ-Kurse 6 + 4, höchstens 9");
+  assert.equal(auswerten(BESTANDEN_FILTER, W, pfad("X100"), BESTANDEN), false, "offen");
 });

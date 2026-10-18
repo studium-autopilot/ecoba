@@ -1,7 +1,8 @@
 // Start des Vaults (früher Templater-Startskript System/Vorlagen/Start.md). Geladen vom Plugin „Studium Autopilot“ auf
 // jedem Gerät, ohne Schalter. Schreibt keine Notizen. Punkte:
-//  1. Dashboard als ersten, angepinnten Tab in der Leseansicht öffnen (nur beim App-Start: start()).
-//  2. Übersichtsseiten bleiben in der Leseansicht (Dashboard, Seiten in Studium/, Einstellungen, Daten; seit 17.10.2026).
+//  1. Dashboard als Startseite in der Leseansicht zeigen (nur beim App-Start: start()); seit 0.4.6 nicht mehr angeheftet.
+//  2. Übersichtsseiten bleiben in der Leseansicht (Dashboard, Seiten in Studium/, Einstellungen, Daten; seit 17.10.2026), deine
+//     Notizen öffnen von dort in der Bearbeitungsansicht (seit 0.4.6, wie ctx.oeffnen).
 //  3. Seitenklasse aus dem Feld `typ` an die Ansicht hängen (Gestaltung auch für Notizen ohne `cssclasses`).
 //  4. Optional, nur iPhone: Kapitel der Folien-Notizen beim ersten Öffnen zuklappen.
 //  5. Experimentell: Höhenmessung der Leseansicht korrigieren (Leerraum am Seitenende).
@@ -12,7 +13,7 @@
 // Kein Node-API, keine Lookbehind-Regex (iOS).
 module.exports = function (ctx) {
   const app = window.app;
-  const { Platform, Notice } = ctx.obsidian;
+  const { Platform } = ctx.obsidian;
 
   // Schalter für die optionalen Teile (false = aus).
   const FOLIEN_VORFALTEN = true; // Punkt 4
@@ -21,7 +22,12 @@ module.exports = function (ctx) {
   const DASHBOARD = "Dashboard.md";
   const an = (quelle, name, fn) => ctx.an(quelle, name, fn);
 
-  // 1. Dashboard als ersten, angepinnten Tab in der Leseansicht öffnen.
+  // 1. Dashboard als Startseite. Bis 0.4.5 ein angehefteter erster Tab (so schon im Startskript des Templater-Tresors, damit das
+  //    Dashboard bei jedem Start da ist). Ein angehefteter Tab öffnet aber jeden Link in einem neuen Tab: Tabs stapelten sich, und
+  //    Zurück führte nicht zum Dashboard (Konsistenz-Audit E6). Darum seit 0.4.6: Ist das Dashboard nicht schon offen, zeigt es der
+  //    zuletzt benutzte Tab (die Notiz darin bleibt über Zurück erreichbar), sonst ein neuer; Links öffnen im selben Tab, und die
+  //    Übersicht (menue.js) führt mit „Dashboard“ jederzeit zurück. Die Anheftung früherer Fassungen nimmt es einmal je Gerät zurück.
+  const FREI = "eba-dashboard-frei"; // Gerätespeicher: Anheftung schon zurückgenommen (danach bleibt eine eigene Anheftung)
   const dashboardOeffnen = async () => {
     const ziel = app.vault.getAbstractFileByPath(DASHBOARD);
     if (!ziel) return;
@@ -30,14 +36,15 @@ module.exports = function (ctx) {
     let blatt = app.workspace.getLeavesOfType("markdown").find(istDashboard);
     if (blatt && blatt.loadIfDeferred) await blatt.loadIfDeferred();
     if (!blatt) {
-      const erstes = app.workspace.getLeavesOfType("markdown")[0] || app.workspace.getLeavesOfType("empty")[0];
-      blatt = erstes && !erstes.getViewState().pinned && erstes.view && erstes.view.getViewType && erstes.view.getViewType() === "empty" ? erstes : app.workspace.getLeaf("tab");
+      const zuletzt = app.workspace.getMostRecentLeaf ? app.workspace.getMostRecentLeaf(app.workspace.rootSplit) : null;
+      const art = zuletzt && zuletzt.view && zuletzt.view.getViewType ? zuletzt.view.getViewType() : "";
+      blatt = zuletzt && !zuletzt.getViewState().pinned && (art === "markdown" || art === "empty") ? zuletzt : app.workspace.getLeaf("tab");
       await blatt.openFile(ziel, { state: { mode: "preview" } });
     }
     if (blatt.view && blatt.view.getMode && blatt.view.getMode() === "source") {
       const vs = blatt.getViewState(); vs.state = Object.assign({}, vs.state, { mode: "preview" }); await blatt.setViewState(vs);
     }
-    blatt.setPinned(true);
+    if (!app.loadLocalStorage(FREI)) { if (blatt.getViewState().pinned) blatt.setPinned(false); app.saveLocalStorage(FREI, true); }
     const tabs = blatt.parent;
     if (tabs && tabs.children && tabs.children.indexOf(blatt) > 0) {
       tabs.children.splice(tabs.children.indexOf(blatt), 1);
@@ -55,8 +62,9 @@ module.exports = function (ctx) {
   //    Anmeldungen füllen sich seit 17.10.2026 selbst). Das Feld `ansicht` geht vor: `lesen` sperrt jede Notiz,
   //    `bearbeiten` gibt sie frei (in der Seitenleiste „Eigenschaften“ änderbar, auch wenn die Notiz gesperrt ist).
   //    Gesperrt: Der Knopf zum Bearbeiten im Kopf der Ansicht ist ausgeblendet; wer trotzdem umschaltet (Strg/⌘ E, Befehl),
-  //    landet sofort wieder in der Leseansicht, mit Hinweis. Kam ein Tab aus der Bearbeitung einer anderen Notiz (Link), geht
-  //    er beim Weiterklicken auf eine freie Notiz wieder in die Bearbeitung.
+  //    landet sofort wieder in der Leseansicht, mit Hinweis. Geht ein Tab von einer gesperrten Seite zu deiner Notiz (Link, Liste,
+  //    Kachel), öffnet sie in der Bearbeitungsansicht: Übersichten lesen, eigene Notizen bearbeiten (wie ctx.oeffnen, seit 0.4.6;
+  //    vorher nur, wenn der Tab vorher eine Notiz bearbeitet hatte).
   const GESPERRT = ["dashboard", "übersicht", "einstellungen", "daten"];
   const nurLesen = (f) => {
     if (!f || !/\.md$/.test(f.path)) return false;
@@ -69,7 +77,7 @@ module.exports = function (ctx) {
   };
   const modusSetzen = (l, mode) => { const vs = l.getViewState(); vs.state = Object.assign({}, vs.state, { mode }); return l.setViewState(vs); };
   const gelesen = new WeakMap();   // Ansicht → Pfad, der zuletzt gesperrt in der Leseansicht stand (Umschalten erkennen)
-  const umgestellt = new WeakSet(); // Ansichten, die beim Öffnen einer gesperrten Seite aus der Bearbeitung kamen
+  const umgestellt = new WeakSet(); // Ansichten, die eine gesperrte Seite zeigen (danach: deine Notiz in der Bearbeitung)
   const knopf = (v, aus) => { if (v.modeButtonEl) v.modeButtonEl.style.display = aus ? "none" : ""; };
   const leseansicht = () => {
     for (const l of app.workspace.getLeavesOfType("markdown")) {
@@ -82,13 +90,44 @@ module.exports = function (ctx) {
         if (umgestellt.has(v)) { umgestellt.delete(v); if (v.getMode() === "preview") modusSetzen(l, "source"); }
         continue;
       }
+      umgestellt.add(v);
       if (v.getMode() !== "source") { gelesen.set(v, f.path); continue; }
-      if (gelesen.get(v) === f.path) new Notice("Diese Seite bleibt in der Leseansicht. Bearbeiten kannst du deine Notizen.", 3000);
-      else umgestellt.add(v);
+      if (gelesen.get(v) === f.path) ctx.hinweis("Diese Seite bleibt in der Leseansicht. Bearbeiten kannst du deine Notizen.", { dauer: 3000 });
       modusSetzen(l, "preview");
     }
   };
   ctx.leseansicht = { nurLesen }; // für Tests (tests/leseansicht.test.js)
+
+  // Übergang nach einem Update, bis „Neu laden“ getippt ist: Ein Kern vor 0.4.6 im Speicher öffnet mit ctx.oeffnen nur Dateien,
+  // die Skripte geben seit 0.4.6 auch Pfade und Linktexte („Pfad#Überschrift“) mit { neu, quelle, zeile, cursor, modus }. Bis zum
+  // Neuladen öffnet sie dieser Ersatz nach denselben Regeln wie notizOeffnen im Kern (nur ohne „im Tab des letzten Tipps“).
+  const kern = String((ctx.plugin && ctx.plugin.manifest && ctx.plugin.manifest.version) || "").split(/[.-]/).map(Number);
+  if (kern.length >= 3 && kern[0] === 0 && (kern[1] < 4 || (kern[1] === 4 && kern[2] < 6))) {
+    ctx.oeffnen = async (ziel, optionen) => {
+      const o = optionen || {};
+      const { TFile } = ctx.obsidian;
+      let datei = ziel, anker = "";
+      if (!(ziel instanceof TFile)) {
+        const s = String(ziel == null ? "" : ziel).replace(/^\[\[|\]\]$/g, "").split("|")[0].trim();
+        const i = s.indexOf("#");
+        const pfad = i >= 0 ? s.slice(0, i) : s;
+        anker = i >= 0 ? s.slice(i) : "";
+        datei = app.vault.getAbstractFileByPath(pfad) || app.vault.getAbstractFileByPath(pfad + ".md")
+          || app.metadataCache.getFirstLinkpathDest(pfad, o.quelle || "");
+      }
+      if (!(datei instanceof TFile)) return null;
+      const ws = app.workspace;
+      const blatt = (!o.neu && ws.getLeavesOfType("markdown").find((l) => l.view && l.view.file === datei)) || ws.getLeaf(o.neu ? "tab" : false);
+      if (datei.extension !== "md") { await blatt.openFile(datei, { active: true }); return blatt; }
+      const lesen = o.modus ? o.modus === "preview" : nurLesen(datei);
+      const eState = o.zeile != null ? { line: Number(o.zeile) } : anker ? { subpath: anker } : undefined;
+      await blatt.openFile(datei, { active: true, state: lesen ? { mode: "preview" } : { mode: "source", source: false }, eState });
+      ws.setActiveLeaf(blatt, { focus: !!o.cursor });
+      const ed = o.cursor && blatt.view && blatt.view.editor;
+      if (ed) { ed.setCursor(o.cursor); ed.focus(); }
+      return blatt;
+    };
+  }
   // Beim Entladen (Hot-Reload, Plugin aus): Knöpfe wieder zeigen
   const knoepfeZeigen = () => { for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view) knopf(l.view, false); };
 

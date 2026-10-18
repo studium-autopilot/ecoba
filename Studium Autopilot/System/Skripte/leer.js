@@ -57,8 +57,10 @@ module.exports = function (ctx) {
       if (app.workspace.getActiveFile() === f) return false;               // doch wieder offen
       if (blaetter(f).some((l) => l.view.containerEl && l.view.containerEl.isShown && l.view.containerEl.isShown())) return false;
       if (!istLeer(await textVon(f))) return false;
+      const text = `„${f.basename}“ war leer und liegt jetzt im Papierkorb.`;
+      if (ctx.papierkorb) return await ctx.papierkorb(f, { text }); // mit „Rückgängig“ (papierkorb.js)
       await app.vault.trash(f, false);
-      new ctx.obsidian.Notice("Leere Notiz gelöscht: " + f.basename + " (Papierkorb .trash)", 4000);
+      ctx.hinweis(text);
       return true;
     } catch (e) { console.error("eba leer", e); return false; }
   };

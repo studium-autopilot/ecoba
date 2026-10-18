@@ -1,5 +1,6 @@
-// Darstellung (darstellung.js): Umschalter Hell · Dunkel · Automatisch und Design (Elfenbein, Flieder, Klar), je Gerät. Mit einem
-// Ersatz für Obsidians Einstellung „theme“, den Gerätespeicher, die CSS-Bausteine und die Klassen am body. Läuft ohne Obsidian.
+// Darstellung (darstellung.js): Umschalter Hell · Dunkel · Automatisch und Design (drei Vorschau-Kacheln ohne Namen), je Gerät.
+// Mit einem Ersatz für Obsidians Einstellung „theme“, den Gerätespeicher, die CSS-Bausteine, die Klassen am body und ein kleines
+// Ersatz-DOM für die Kacheln. Läuft ohne Obsidian.
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -99,15 +100,76 @@ test("Design: ohne Wahl Elfenbein, Unbekanntes im Speicher zählt nicht", () => 
   assert.equal(mitObsidian("system", [], { design: "graphite" }).D.design(), "elfenbein");
 });
 
-test("Design-Zeilen: Elfenbein, Flieder, Klar, genau eines gewählt; Flieder und Klar sagen, dass dunkel die Farben von Elfenbein gelten", () => {
-  const z = mitObsidian("system", []).D.designZeilen("klar");
-  assert.deepEqual(z.map((x) => [x.wert, x.titel, x.gewaehlt]), [
-    ["elfenbein", "Elfenbein", false],
-    ["flieder", "Flieder", false],
-    ["klar", "Klar", true],
+test("Design-Kacheln: drei ohne Namen, genau eine gewählt; Vorlesesoftware liest „Design 1“ bis „Design 3“", () => {
+  const { D } = mitObsidian("system", []);
+  assert.deepEqual(D.designKacheln("klar"), [
+    { wert: "elfenbein", titel: "Design 1", gewaehlt: false },
+    { wert: "flieder", titel: "Design 2", gewaehlt: false },
+    { wert: "klar", titel: "Design 3", gewaehlt: true },
   ]);
-  assert.ok(z.every((x) => x.text), "jede Zeile hat eine gedämpfte Zeile");
-  assert.deepEqual(z.filter((x) => /dunkel mit den Farben von Elfenbein/.test(x.text)).map((x) => x.wert), ["flieder", "klar"]);
+  assert.deepEqual(D.DESIGNS.map((d) => d.titel), ["Design 1", "Design 2", "Design 3"], "auch die Auswahl des Befehls ohne Namen");
+});
+
+test("Design-Kacheln mit der Tastatur: Pfeile wechseln rundum, dazu Pos1 und Ende; andere Tasten nichts", () => {
+  const { D } = mitObsidian("system", []);
+  assert.equal(D.designNachTaste("elfenbein", "ArrowRight"), "flieder");
+  assert.equal(D.designNachTaste("klar", "ArrowDown"), "elfenbein");
+  assert.equal(D.designNachTaste("elfenbein", "ArrowLeft"), "klar");
+  assert.equal(D.designNachTaste("flieder", "ArrowUp"), "elfenbein");
+  assert.equal(D.designNachTaste("klar", "Home"), "elfenbein");
+  assert.equal(D.designNachTaste("elfenbein", "End"), "klar");
+  assert.equal(D.designNachTaste("flieder", "Enter"), null, "Enter und Leertaste tippen den Knopf selbst an");
+  assert.equal(D.designNachTaste("flieder", "Tab"), null);
+});
+
+// Ersatz für Obsidians Elemente: createDiv/createEl/createSpan, Attribute, Ereignisse, Suche nach „.klasse“ und
+// „.klasse[attr="wert"]“, Fokus
+let fokus = null;
+const knoten = (tag, o = {}) => {
+  const k = { tag, cls: String(o.cls || "").split(" ").filter(Boolean), attr: { ...(o.attr || {}) }, text: o.text || "", kinder: [], an: {} };
+  k.createEl = (t, p) => { const c = knoten(t, p); k.kinder.push(c); return c; };
+  k.createDiv = (p) => k.createEl("div", p);
+  k.createSpan = (p) => k.createEl("span", p);
+  k.getAttribute = (n) => (n in k.attr ? String(k.attr[n]) : null);
+  k.setAttribute = (n, v) => { k.attr[n] = String(v); };
+  k.addEventListener = (e, f) => { k.an[e] = f; };
+  k.focus = () => { fokus = k; };
+  k.alle = () => k.kinder.flatMap((c) => [c, ...c.alle()]);
+  k.querySelectorAll = (sel) => {
+    const [, klasse, name, wert] = /^\.([\w-]+)(?:\[([\w-]+)="([^"]*)"\])?$/.exec(sel);
+    return k.alle().filter((c) => c.cls.includes(klasse) && (!name || c.getAttribute(name) === wert));
+  };
+  k.querySelector = (sel) => k.querySelectorAll(sel)[0] || null;
+  return k;
+};
+
+test("Design-Kacheln zeichnen: kein Text, Optionsgruppe mit „Design n“, Tippen und Pfeiltasten wählen und behalten den Fokus", () => {
+  const o = mitObsidian("system", ALLE, { design: "flieder" });
+  const el = knoten("div");
+  const g = o.D.designWahl(el);
+  assert.deepEqual([g.attr.role, g.attr["aria-label"]], ["radiogroup", "Design"]);
+  const k = g.kinder;
+  assert.deepEqual(k.map((x) => [x.tag, x.attr.role, x.attr["data-design"], x.attr["aria-label"], x.attr.title, x.attr["aria-checked"], x.attr.tabindex]), [
+    ["button", "radio", "elfenbein", "Design 1", "Design 1", "false", "-1"],
+    ["button", "radio", "flieder", "Design 2", "Design 2", "true", "0"],
+    ["button", "radio", "klar", "Design 3", "Design 3", "false", "-1"],
+  ]);
+  assert.ok(g.alle().every((x) => !x.text), "kein sichtbarer Text, auch kein Name");
+  assert.ok(k.every((x) => x.kinder.length === 1 && x.kinder[0].attr["aria-hidden"] === "true"), "die Mini-Karte liest Vorlesesoftware nicht vor");
+
+  k[2].an.click();
+  assert.equal(o.speicher.get("eba-design"), "klar");
+  assert.deepEqual(k.map((x) => [x.attr["aria-checked"], x.attr.tabindex]), [["false", "-1"], ["false", "-1"], ["true", "0"]]);
+
+  let verhindert = 0;
+  const taste = (key) => ({ key, preventDefault: () => { verhindert++; } });
+  k[2].an.keydown(taste("ArrowRight"));
+  assert.equal(o.speicher.get("eba-design"), "elfenbein", "rundum zur ersten");
+  assert.equal(fokus, k[0], "Fokus folgt der Wahl");
+  assert.deepEqual(o.klassen(), ["theme-light"]);
+  k[0].an.keydown(taste("Tab"));
+  assert.equal(verhindert, 1, "Tab bleibt Obsidians");
+  assert.equal(o.speicher.get("eba-design"), "elfenbein");
 });
 
 test("Design wählen: nur auf diesem Gerät, Klasse am body sofort, hell oder dunkel bleibt, alle Designs eingeschaltet", () => {

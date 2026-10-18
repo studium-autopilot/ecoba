@@ -82,6 +82,8 @@ test("Meine Gruppe: Abwählen bleibt neben ILIAS, ILIAS-Name für die Anzeige", 
   const k = G.auswaehlen(liste, { stundenplan: sp })[0];
   assert.deepEqual(k.gruppen.map((x) => [x.id, x.woher, x.gewaehlt, x.iliasName]), [["a1", "gewaehlt", true, ""], ["a5", "ilias", false, "Gruppe 4"]]);
   assert.deepEqual([k.waehlbar, k.knoepfe], [false, true], "„Meine“ weg, „Abwählen“ bleibt");
+  const mitDatei = G.auswaehlen(liste, { stundenplan: [Object.assign({ f: { path: "Stundenplan/Mi 12.15 X100 Übung Gruppe 4 (ILIAS).md" } }, sp[0])] })[0];
+  assert.deepEqual(mitDatei.gruppen.map((x) => x.pfad), ["", "Stundenplan/Mi 12.15 X100 Übung Gruppe 4 (ILIAS).md"], "Zeile antippen öffnet die Notiz der Gruppe");
   const k2 = G.auswaehlen(liste, { ilias: [{ code: "X100", status: "zugeordnet", zentral: "a5", name: "Gruppe 4", kandidaten: [] }] })[0];
   assert.equal(k2.gruppen.find((x) => x.id === "a5").iliasName, "Gruppe 4", "Name aus ILIAS, bevor die Notiz da ist");
 });

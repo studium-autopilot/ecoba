@@ -30,7 +30,7 @@ const fmAusText = (t) => {
   }
   return fm;
 };
-function tresor({ testAbruf, prompt, eba = {}, sperre = false, ohneBibliotheken = false, heute } = {}) {
+function tresor({ testAbruf, prompt, eba = {}, sperre = false, ohneBibliotheken = false, heute, zeitgeber } = {}) {
   const fm = {}, text = {}, papierkorb = [], speicher = {}, dateien = {};
   const L = laden("alma", {
     frontmatter: fm,
@@ -40,6 +40,7 @@ function tresor({ testAbruf, prompt, eba = {}, sperre = false, ohneBibliotheken 
       modell: { semesterVon: () => ({ name: SEM }) },
       plugin: { testAbruf },
       system: { prompt: prompt || (async () => null) },
+      ...(zeitgeber ? { zeit: zeitgeber.zeit, stopp: zeitgeber.stopp } : {}),
     },
   });
   if (ohneBibliotheken) { delete L.ctx.user.sperre; delete L.ctx.user.quellen; }
@@ -114,7 +115,7 @@ test("Wegfall in Alma: Alma-Notiz mit deinem Text wird „(entfällt)“ und ist
   await t.A.aktualisieren({ text: kalender(B130, S100), still: true });
   const p = Object.keys(t.fm).find((x) => /B130/.test(x));
   assert.equal(t.fm[p].herkunft, "alma");
-  t.text[p] = t.text[p].replace("## Notizen\n- \n", "## Notizen\n- Tutor fragt nach Blatt 2\n");
+  t.text[p] = t.text[p].replace("## Meine Notizen\n- \n", "## Meine Notizen\n- Tutor fragt nach Blatt 2\n");
   const b = await t.A.aktualisieren({ text: kalender(S100), still: true });
   assert.deepEqual([b.entfaellt, b.entfernt], [1, 0]);
   assert.equal(t.fm[p].entfaellt, true);
@@ -169,7 +170,7 @@ test("Doppel einer Alma-Notiz (Konfliktkopie) werden zusammengeführt, dein Text
   const p = Object.keys(t.fm).find((x) => /B130/.test(x));
   const kopie = p.replace(/\.md$/, " 2.md");
   t.fm[kopie] = Object.assign({}, t.fm[p]);
-  t.text[kopie] = t.text[p].replace("## Notizen\n- \n", "## Notizen\n- Aus der Kopie\n");
+  t.text[kopie] = t.text[p].replace("## Meine Notizen\n- \n", "## Meine Notizen\n- Aus der Kopie\n");
   const b = await t.A.aktualisieren({ text: kalender(B130), still: true });
   assert.equal(b.doppel, 1);
   assert.deepEqual(t.papierkorb, [kopie]);
@@ -200,7 +201,7 @@ test("Außerhalb des Plugins (Hülle eines eigenen Uni-Abgleichs: ohne sperre.js
   const t = tresor({ ohneBibliotheken: true });
   await t.A.aktualisieren({ text: kalender(B130), still: true });
   const p = Object.keys(t.fm).find((x) => /B130/.test(x));
-  t.text[p] = t.text[p].replace("## Notizen\n- \n", "## Notizen\n- eigener Text\n");
+  t.text[p] = t.text[p].replace("## Meine Notizen\n- \n", "## Meine Notizen\n- eigener Text\n");
   const b = await t.A.aktualisieren({ text: kalender(S100), still: true });
   assert.deepEqual([b.entfaellt, b.entfernt], [1, 0]);
   assert.deepEqual(Object.keys(t.dateien), [], "keine Sperr-Datei");
@@ -294,7 +295,7 @@ test("Stundenplan von außen (quellen_extern): Alma holt und schreibt nie, auch 
   });
   t.fm["System/Einstellungen.md"] = { quellen_extern: ["stundenplan"] };
   t.speicher["eba-alma-ics"] = alt;
-  assert.equal(await t.A.aktualisierenOderVerbinden(), null, "Knopf und Befehl „Stundenplan aus Alma aktualisieren“");
+  assert.equal(await t.A.aktualisierenOderVerbinden(), null, "Knopf und Befehl „Stundenplan aktualisieren“");
   assert.equal(await t.A.aktualisierenOderVerbinden({ neuerLink: true }), null, "Befehl „Alma-Link ändern“");
   assert.equal(await t.A.verbinden("https://alma.uni-tuebingen.de/alma/ical/neu", { nurBeiErfolg: true }), null, "Verbinden-Fenster");
   assert.equal(t.A.fehler(), "Dein Stundenplan kommt über deinen Uni-Abgleich.");
@@ -306,4 +307,56 @@ test("Stundenplan von außen (quellen_extern): Alma holt und schreibt nie, auch 
   t.fm["System/Einstellungen.md"].quellen_extern = ["ilias-dateien"];
   assert.equal((await t.A.aktualisieren({ still: true })).neu, 1);
   assert.equal(abrufe, 1);
+});
+
+// Zeitgeber zum Weiterdrehen (ctx.zeit/ctx.stopp): alle(ms) feuert, was bis dahin fällig ist
+const uhr = () => {
+  const t = { jetzt: 0, offen: [], gesehen: [] };
+  t.zeit = (fn, ms) => { const id = t.offen.length + 1; t.offen.push({ id, fn, bis: t.jetzt + ms }); t.gesehen.push(ms); return id; };
+  t.stopp = (id) => { t.offen = t.offen.filter((x) => x.id !== id); };
+  t.vor = (ms) => { t.jetzt += ms; const f = t.offen.filter((x) => x.bis <= t.jetzt); t.offen = t.offen.filter((x) => x.bis > t.jetzt); for (const x of f) x.fn(); };
+  return t;
+};
+const tick = () => new Promise((r) => setImmediate(r));
+
+test("Fristen: Alma antwortet nicht → nach 60 s Fehler im Status, der Lauf ist frei, die späte Antwort schreibt nichts", async () => {
+  let antworten = [];
+  const z = uhr();
+  const t = tresor({ sperre: true, zeitgeber: z, testAbruf: () => new Promise((r) => antworten.push(r)) });
+  t.speicher["eba-alma-ics"] = "https://alma.uni-tuebingen.de/alma/ical/x";
+  const lauf = t.A.aktualisieren({ automatisch: true });
+  await tick();
+  assert.equal(t.A.status().zustand, "laeuft");
+  assert.ok(z.gesehen.indexOf(60e3) >= 0 && z.gesehen.indexOf(120e3) >= 0, "Frist je Anfrage und je Abruf");
+  z.vor(60e3);
+  assert.equal(await lauf, null);
+  let s = t.A.status();
+  assert.deepEqual([s.zustand, s.fehler, !!s.fehlerZeit, s.laeuft], ["fehler", "Alma hat nicht rechtzeitig geantwortet. Neuer Versuch später.", true, false]);
+  assert.deepEqual(z.offen, [], "keine Zeitgeber übrig");
+  // die Antwort kommt doch noch: nichts wird geschrieben
+  antworten[0]({ status: 200, text: kalender(S100) });
+  await tick();
+  assert.deepEqual(Object.keys(t.fm).filter((p) => p.startsWith("Stundenplan/")), []);
+  // nächster Lauf geht wieder (LAUF frei) und klappt
+  antworten = [];
+  const zweiter = t.A.aktualisieren({ automatisch: true });
+  await tick();
+  antworten[0]({ status: 200, text: kalender(S100) });
+  assert.equal((await zweiter).neu, 1);
+  s = t.A.status();
+  assert.deepEqual([s.zustand, s.fehler], ["an", ""]);
+});
+
+test("Fristen: hängt schon die Sperre (Tresor antwortet nicht), endet der Abruf nach 2 Min. mit Fehler", async () => {
+  const z = uhr();
+  const t = tresor({ sperre: true, zeitgeber: z, testAbruf: async () => ({ status: 200, text: kalender(S100) }) });
+  t.speicher["eba-alma-ics"] = "https://alma.uni-tuebingen.de/alma/ical/x";
+  t.dateien["System/Daten/alma-abruf.json"] = JSON.stringify({ geraet: "g-ich", seit: new Date().toISOString(), zuletzt: new Date().toISOString() });
+  t.ctx.app.vault.read = () => new Promise(() => {}); // Sperr-Datei lesen hängt
+  const lauf = t.A.aktualisieren({ still: true });
+  await tick();
+  z.vor(120e3);
+  assert.equal(await lauf, null);
+  assert.equal(t.A.status().fehler, "Alma hat nicht rechtzeitig geantwortet. Neuer Versuch später.");
+  assert.equal(t.A.status().laeuft, false);
 });

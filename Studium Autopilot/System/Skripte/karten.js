@@ -22,7 +22,6 @@
 module.exports = function (ctx) {
   const app = window.app;
   const O = ctx.obsidian || {};
-  const Notice = O.Notice || class {};
   const Fenster = O.Modal || class { constructor() { this.app = app; } };
   const SPRACHE = "eba-karten";
   const ARTEN = ["uebersicht", "stapel", "statistik", "liste", "heute"];
@@ -562,7 +561,7 @@ module.exports = function (ctx) {
     return logsLaeuft;
   };
   let kette = Promise.resolve();
-  const fehlerMelden = (x) => { console.error(SPRACHE, x); new Notice("Karteikarten: Der Lernstand ließ sich nicht speichern (" + ((x && x.message) || x) + ").", 8000); };
+  const fehlerMelden = (x) => { console.error(SPRACHE, x); ctx.hinweis("Dein Lernstand ließ sich nicht speichern. Bitte noch einmal versuchen."); };
   const anhaengen = (e) => {
     (eigene || (eigene = [])).push(e);
     alle.push(e); logVersion++;
@@ -677,30 +676,24 @@ module.exports = function (ctx) {
     const fm = ["---", "typ: karteikarten", `code: ${JSON.stringify(code || "")}`, "tags:", "  - karteikarten", "cssclasses:", "  - eba", "  - eba-s-karten-stapel", "---", "", ""];
     return fm.join("\n") + koerper.split("{{titel}}").join(titel).replace(/\s*$/, "\n\n") + (ctx.CURSOR || "");
   };
+  // Fenster „Neuer Kartenstapel“ (ctx.formular): Modul (oder ohne) und Name. Ohne Modul braucht der Stapel einen Namen; hat das
+  // Modul schon einen Stapel, heißt der weitere nach seinem Namen („B110 Kapitel 2“). Esc legt nichts an.
   const stapelAnlegen = async (c, oeffnen) => {
     const eba = ctx.user.eba(c);
-    const m = await eba.modulWaehlen("Für welches Modul ist der Stapel? ● = aktuelles Semester", true);
-    if (m === undefined) { eba.abbrechen(); return null; }
-    const code = m ? String(m.fm.code || "") : "";
+    const vorhanden = (m) => !c.datei && !!m && stapelDateien().some((f) => codeVon(f) === String(m.fm.code || ""));
+    const w = typeof ctx.formular === "function" ? await ctx.formular({ titel: "Neuer Kartenstapel", felder: [
+      eba.modulFeld({ optional: true }),
+      { name: "name", titel: "Name", art: "text", platzhalter: "z. B. Kapitel 2",
+        hilfe: (x) => (!x.modul ? "" : vorhanden(x.modul) ? `${x.modul.fm.code} hat schon einen Stapel. Der weitere braucht einen Namen.` : "Leer lassen: Der Stapel heißt wie das Modul.") },
+    ], pruefen: (x) => (!x.modul && !x.name ? { feld: "name", fehler: "Bitte einen Namen für den Stapel." }
+      : !x.name && vorhanden(x.modul) ? { feld: "name", fehler: "Bitte einen Namen für den weiteren Stapel, z. B. Kapitel 2." } : null) }) : null;
+    if (!w) { eba.abbrechen(); return null; }
+    const m = w.modul, code = m ? String(m.fm.code || "") : "";
     const vergeben = fremdeNamen();
-    let titel = m ? String(m.fm.titel || "") : "", name = code ? stapelName(code, "", vergeben) : "";
-    if (!code) {
-      const t = await ctx.system.prompt("Name des Stapels", "");
-      if (!t || !t.trim()) { eba.abbrechen(); return null; }
-      titel = t.trim();
-      name = stapelName("", titel, vergeben);
-    } else if (!c.datei) {
-      const da = stapelDateien().filter((f) => codeVon(f) === code);
-      if (da.length) {
-        const wahl = await ctx.system.suggester(["Vorhandenen Stapel öffnen", "Weiteren Stapel anlegen, z. B. für ein Kapitel"], ["oeffnen", "neu"], false, `${code} hat schon einen Stapel`);
-        if (!wahl) return null;
-        if (wahl === "oeffnen") { if (oeffnen) await ctx.oeffnen(da[0], { modus: "preview" }); return da[0]; }
-        const zusatz = await ctx.system.prompt("Name des weiteren Stapels, z. B. Kapitel 2", "");
-        if (!zusatz || !zusatz.trim()) return null;
-        name = stapelName(code, zusatz, vergeben);
-        titel = `${titel} · ${zusatz.trim()}`;
-      }
-    }
+    let titel = m ? String(m.fm.titel || "") : w.name, name;
+    if (!code) name = stapelName("", w.name, vergeben);
+    else if (w.name) { name = stapelName(code, w.name, vergeben); titel = `${titel} · ${w.name}`; }
+    else name = stapelName(code, "", vergeben);
     const inhalt = await stapelText(code, titel);
     indexAlt = true;
     if (oeffnen) return eba.ablegen(ORDNER, name, inhalt);
@@ -883,7 +876,7 @@ module.exports = function (ctx) {
       this.s.verlauf.push({ e, schluessel: k.schluessel, art: a.art, vorher, karte: k, gezaehlt: true });
       this.s.gelernt++; this.s.zeit += e.d;
       if (b > 1) this.s.richtig++;
-      if (neu.ausgesetzt && !alt.ausgesetzt) new Notice("Schwierige Karte: ausgesetzt. Du findest sie in der Kartenliste.", 6000);
+      if (neu.ausgesetzt && !alt.ausgesetzt) ctx.hinweis("Diese Karte war oft schwer und ist jetzt ausgesetzt. Du findest sie in der Kartenliste.");
       this.aktuell = null;
       this.weiter();
     }
@@ -898,13 +891,13 @@ module.exports = function (ctx) {
       anhaengen(e);
       sitzungNehmen(this.s, k.schluessel, a.art, null, false);
       this.s.verlauf.push({ e, schluessel: k.schluessel, art: a.art, vorher, karte: k, gezaehlt: false });
-      new Notice(art === "aus" ? "Karte ausgesetzt." : "Karte bis morgen zurückgestellt.", 2500);
+      ctx.hinweis(art === "aus" ? "Karte ausgesetzt." : "Karte bis morgen zurückgestellt.", { dauer: 2500 });
       this.aktuell = null;
       this.weiter();
     }
     rueckgaengig() {
       const v = this.s && this.s.verlauf.pop();
-      if (!v) { new Notice("Nichts zum Rückgängigmachen.", 2500); return; }
+      if (!v) { ctx.hinweis("Nichts zum Rückgängigmachen.", { dauer: 2500 }); return; }
       if (v.vorher) this.d.stand.set(v.schluessel, v.vorher); else this.d.stand.delete(v.schluessel);
       if (v.e.b) {
         const l = this.d.log[this.d.log.length - 1];
@@ -1089,7 +1082,7 @@ module.exports = function (ctx) {
     onOpen() {
       const c = this.contentEl, o = optionen();
       this.modalEl.addClass("eba-modal", "eba-lk-optionen");
-      this.titleEl.setText("Karteikarten: Optionen");
+      this.titleEl.setText("Lernoptionen");
       const w = { neu: String(o.neu), wdh: String(o.wdh), ziel: Math.round(o.ziel * 100), schritte: o.schritteText, neuSchritte: o.neuSchritteText,
         maxIntervall: String(o.maxIntervall), tagesbeginn: String(o.tagesbeginn), schwierig: String(o.schwierig),
         schwierigAussetzen: o.schwierigAussetzen, geschwister: o.geschwister, neuReihenfolge: o.neuReihenfolge };
@@ -1105,14 +1098,14 @@ module.exports = function (ctx) {
       text("maxIntervall", "Höchstes Intervall (Tage)", "", true);
       S("Neuer Tag beginnt um").addDropdown((dd) => { for (let h = 0; h < 24; h++) dd.addOption(String(h), `${h} Uhr`); dd.setValue(w.tagesbeginn).onChange((v) => { w.tagesbeginn = v; }); });
       S("Neue Karten").addDropdown((dd) => dd.addOption("notiz", "In der Reihenfolge der Notiz").addOption("zufall", "Zufällig").setValue(w.neuReihenfolge).onChange((v) => { w.neuReihenfolge = v; }));
-      S("Geschwister zurückstellen", "Vorder- und Rückseite derselben Karte nicht am selben Tag.").addToggle((t) => t.setValue(w.geschwister).onChange((v) => { w.geschwister = v; }));
+      S("Verwandte Karten verteilen", "Gegenrichtung und andere Lücken derselben Karte nicht am selben Tag.").addToggle((t) => t.setValue(w.geschwister).onChange((v) => { w.geschwister = v; }));
       text("schwierig", "Schwierig ab … Fehlern", "0 = nie.", true);
       S("Schwierige Karten aussetzen", "Sonst bleiben sie nur markiert.").addToggle((t) => t.setValue(w.schwierigAussetzen).onChange((v) => { w.schwierigAussetzen = v; }));
       const k = c.createDiv({ cls: "modal-button-container" });
       k.createEl("button", { text: "Abbrechen" }).addEventListener("click", () => this.close());
       k.createEl("button", { cls: "mod-cta", text: "Speichern" }).addEventListener("click", async () => {
         const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
-        if (!f) { new Notice("Die Einstellungen fehlen (System/Einstellungen.md).", 6000); return; }
+        if (!f) { ctx.hinweis("Deine Einstellungen fehlen im Tresor. Stell sie aus einer Sicherung wieder her."); return; }
         const z = (v) => { const n = Number(String(v).replace(",", ".")); return isFinite(n) && String(v).trim() !== "" ? n : null; };
         await app.fileManager.processFrontMatter(f, (x) => {
           x[FELD.neu] = z(w.neu); x[FELD.wdh] = z(w.wdh); x[FELD.ziel] = w.ziel / 100;
@@ -1121,7 +1114,7 @@ module.exports = function (ctx) {
           x[FELD.schwierigAussetzen] = !!w.schwierigAussetzen; x[FELD.geschwister] = !!w.geschwister; x[FELD.neuReihenfolge] = w.neuReihenfolge;
         });
         this.close();
-        new Notice("Optionen gespeichert.", 2500);
+        ctx.hinweis("Lernoptionen gespeichert.", { dauer: 2500 });
       });
     }
     onClose() { this.contentEl.empty(); anzeigeNeu(); }
@@ -1147,7 +1140,7 @@ module.exports = function (ctx) {
     if (!d.idx.stapel.length) {
       const l = box.createDiv({ cls: "eba-angaben leer" });
       l.createSpan({ cls: "eba-angaben-leer", text: "Noch keine Karteikarten." });
-      l.createEl("a", { cls: "eba-vb-knopf cta", text: "Stapel anlegen", href: ctx.link("kartenstapel", {}) });
+      l.createEl("a", { cls: "eba-vb-knopf cta", text: "Neuer Kartenstapel", href: ctx.link("kartenstapel", {}) });
       return;
     }
     const offen = ctx.bleibend("offen", () => new Set());
@@ -1425,18 +1418,17 @@ module.exports = function (ctx) {
               ziel = idx.karten.find((x) => x.pfad === k.pfad && x.notiz.von === k.notiz.von && x.ord === k.ord) || null;
               if (!ziel) return;
             }
-            anhaengen({ k: ziel.schluessel, t: jetztMs(), a });
-            new Notice(text, 2500);
+            // Sofort, mit „Rückgängig“ im Hinweis (nimmt genau diesen Eintrag aus dem Lernstand), keine Rückfrage
+            const eintrag = { k: ziel.schluessel, t: jetztMs(), a };
+            anhaengen(eintrag);
+            ctx.hinweis(text, { aktion: { text: "Rückgängig", ausfuehren: () => { zuruecknehmen(eintrag); anzeigeNeu(); } } });
             anzeigeNeu();
           };
           menue(e, [
             { titel: "In der Notiz zeigen", symbol: "file-text", tun: () => notizZeigen(k) },
             st && st.ausgesetzt ? { titel: "Fortsetzen", symbol: "play", tun: aktion("an", "Karte fortgesetzt.") } : { titel: "Aussetzen", symbol: "pause", tun: aktion("aus", "Karte ausgesetzt.") },
             { titel: "Bis morgen zurückstellen", symbol: "eye-off", tun: aktion("zur", "Karte bis morgen zurückgestellt.") },
-            st && st.wdh ? { titel: "Als neu zurücksetzen …", symbol: "rotate-ccw", tun: async () => {
-              const ja = await ctx.system.suggester(["Ja, Lernstand dieser Karte zurücksetzen", "Abbrechen"], [true, false], false, "Karte wieder als neu lernen?");
-              if (ja) await aktion("neu", "Karte zurückgesetzt.")();
-            } } : null,
+            st && st.wdh ? { titel: "Als neu zurücksetzen", symbol: "rotate-ccw", tun: aktion("neu", "Karte zurückgesetzt, du lernst sie wieder als neu.") } : null,
           ].filter(Boolean));
         };
         zeile.addEventListener("click", handeln);
@@ -1580,14 +1572,14 @@ module.exports = function (ctx) {
       },
     },
     "karte-neu": {
-      titel: "Karteikarte hinzufügen",
+      titel: "Neue Karte",
       ausfuehren: async (c) => {
         const p = c.parameter || {};
         neuOeffnen(p.stapel || (c.quelle && c.quelle.path && c.quelle.path.startsWith(ORDNER + "/") ? c.quelle.path : ""));
       },
     },
-    kartenstapel: { titel: "Neuer Karteikarten-Stapel", ordner: [ORDNER], ausfuehren: async (c) => stapelAnlegen(c, true) },
-    "karten-optionen": { titel: "Karteikarten: Optionen", ausfuehren: async () => new OptionenFenster(app).open() },
+    kartenstapel: { titel: "Neuer Kartenstapel", ordner: [ORDNER], ausfuehren: async (c) => stapelAnlegen(c, true) },
+    "karten-optionen": { titel: "Lernoptionen", ausfuehren: async () => new OptionenFenster(app).open() },
   };
 
   const registrieren = () => {
@@ -1604,7 +1596,7 @@ module.exports = function (ctx) {
       block.neu((i) => i.art === "liste");
       const inst = block.instanzen().find((i) => i.art === "liste" && i.el.offsetParent);
       if (inst) inst.el.scrollIntoView({ block: "start", behavior: "smooth" });
-      else new Notice("Die Kartenliste steht auf der Seite Karteikarten.", 3000);
+      else ctx.hinweis("Die Kartenliste steht auf der Seite Karteikarten.", { dauer: 3000 });
     };
     const geaendert = (f, alt) => {
       const p = String((f && f.path) || ""), a = String(alt || "");
@@ -1633,7 +1625,7 @@ module.exports = function (ctx) {
   // Einmal beim App-Start, wenn der metadataCache fertig ist: Stapel mit dem Namen einer anderen Notiz umbenennen
   const start = () => {
     const los = () => ctx.zeit(() => {
-      namenPruefen().then((n) => { if (n) { anzeigeNeu(); new Notice(`${n} Karteikarten-Stapel umbenannt, damit Links aufs Modul eindeutig sind.`, 6000); } })
+      namenPruefen().then((n) => { if (n) { anzeigeNeu(); ctx.hinweis(`${n} Karteikarten-Stapel umbenannt, damit Links aufs Modul eindeutig sind.`); } })
         .catch((e) => console.error(SPRACHE + ": namenPruefen", e));
     }, 5000);
     if (app.metadataCache.resolved) los();

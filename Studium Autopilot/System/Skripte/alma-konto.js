@@ -183,9 +183,10 @@ const anmeldeFenster = (termine, heute) => {
 };
 
 // Erinnerung an die Prüfungsanmeldung (nur, wenn eine fehlt): → null | { art: "selbst" } | { art: "fehlt", codes, stand }
-// module: [{ code, status, semester, fm }] (ctx.modell), termine: [{ f, fm }], aktuell: { name } (aktuelles Semester).
-// Nie „alles angemeldet“; im Zweifel „selbst“ (eine leise Zeile, kein Alarm).
-const fehlendeAnmeldungen = ({ module, termine, zustand, heute, jetzt, aktuell }) => {
+// module: [{ code, status, semester, fm }] (ctx.modell), termine: [{ f, fm }], aktuell: { name } (aktuelles Semester),
+// pruefungVon(code) → Prüfung des Moduls nach der einen Regel des Fachmodells (ctx.modell.pruefungVon: ohne Zwischentests,
+// Nachholtermin nur nach „nicht bestanden“, entfallene nie) oder null. Nie „alles angemeldet“; im Zweifel „selbst“.
+const fehlendeAnmeldungen = ({ module, termine, zustand, heute, jetzt, aktuell, pruefungVon }) => {
   const fenster = anmeldeFenster(termine, heute);
   if (!fenster) return null;
   const z = zustand;
@@ -193,16 +194,10 @@ const fehlendeAnmeldungen = ({ module, termine, zustand, heute, jetzt, aktuell }
   const sem = aktuell && aktuell.name ? aktuell.name : "";
   if (!z || !lesbar(z.leistungen) || !lesbar(z.belegungen) || !sem || z.belegungen.semester !== sem || z.belegungen.unzugeordnet
     || !zeitVon(z.geprueft) || jetzt - zeitVon(z.geprueft) > FRISCH) return { art: "selbst" };
+  // Prüfung nach dem Beginn der Frist (bis 120 Tage nach ihrem Ende), noch nicht abgehakt
   const pruefungDa = (m) => {
-    const ende = plusTage(fenster.bis, 120);
-    const k = text(m.fm && m.fm.klausur).slice(0, 10);
-    if (k && k >= fenster.datum && k <= ende) return true;
-    return (termine || []).some((t) => {
-      const fm = (t && t.fm) || {};
-      const d = tag(fm.datum), titel = text(fm.titel || (t.f && t.f.basename)).toLowerCase();
-      return text(fm.code) === m.code && text(fm.kategorie) === "Prüfung" && !fm.bis && d >= fenster.datum && d <= ende
-        && titel.indexOf("zwischentest") < 0 && titel.indexOf("nachhol") < 0;
-    });
+    const p = typeof pruefungVon === "function" ? pruefungVon(m.code) : null;
+    return !!p && !p.erledigt && tag(p.datum) >= fenster.datum && tag(p.datum) <= plusTage(fenster.bis, 120);
   };
   const angemeldet = (code) => {
     const p = z.belegungen.pruefungen[code];
@@ -399,9 +394,9 @@ const erzeugen = (abh) => {
   };
   const meldungText = (b) => {
     switch (b.art) {
-      case "ok": return b.neu ? `Alma: geprüft. ${b.neu === 1 ? "Eine neue Angabe" : b.neu + " neue Angaben"} auf deinen Modulseiten.` : "Alma: geprüft, nichts Neues.";
-      case "unsicher": return "Alma: Die Seite sah anders aus als erwartet. Bitte in Alma selbst nachsehen.";
-      case "zugang-falsch": case "abgelehnt": return "Alma: Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben.";
+      case "ok": return b.neu ? `Alma geprüft, ${b.neu === 1 ? "eine neue Angabe" : b.neu + " neue Angaben"} auf deinen Modulseiten.` : "Alma geprüft, nichts Neues.";
+      case "unsicher": return "Die Seite von Alma sah anders aus als erwartet. Bitte in Alma selbst nachsehen.";
+      case "zugang-falsch": case "abgelehnt": return "Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden.";
       case "abgelehnt-unklar": case "unerwartet": case "fehler": return "Alma hat anders geantwortet als erwartet.";
       case "zwei-faktor": return "Alma verlangt einen zweiten Faktor. Melde dich einmal im Browser bei Alma an.";
       case "zustimmung": return "Alma möchte eine Zustimmung. Melde dich einmal im Browser bei Alma an.";
@@ -472,7 +467,7 @@ const erzeugen = (abh) => {
 
   // ----- Stand für die Oberfläche (ohne Noten) -----
   const FEHLER = {
-    "abgelehnt": "Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben.",
+    "abgelehnt": "Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden.",
     "abgelehnt-unklar": "Alma hat anders geantwortet als erwartet.", "unerwartet": "Alma hat anders geantwortet als erwartet.",
     "zwei-faktor": "Alma verlangt einen zweiten Faktor. Melde dich einmal im Browser an.",
     "zustimmung": "Alma möchte eine Zustimmung. Melde dich einmal im Browser an.",
@@ -549,7 +544,12 @@ module.exports = function (ctx) {
       liste: (o) => { const d = V.getAbstractFileByPath(o); return d && d.children ? d.children.filter((k) => !k.children).map((k) => k.name) : []; },
     };
   };
-  const quelleExtern = (schluessel) => { const f = ctx.user && ctx.user.eba && ctx.user.eba.quelleExtern; return !!f && f(schluessel, (p) => !!app.vault.getAbstractFileByPath(p), einstellungen()); };
+  // Regel aus eba.js über quellen.js extern (auch mit eba.js einer älteren Fassung auf diesem Gerät)
+  const quelleExtern = (schluessel) => {
+    const eba = ctx.user && ctx.user.eba, Q = ctx.user && ctx.user.quellen, existiert = (p) => !!app.vault.getAbstractFileByPath(p);
+    if (Q && Q.extern) return Q.extern(eba, schluessel, existiert, einstellungen());
+    return !!(eba && eba.quelleExtern && eba.quelleExtern(schluessel, existiert, einstellungen()));
+  };
   const modell = () => { try { return ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null; } catch (e) { return null; } };
   const heute = () => (ctx.date && ctx.date.now ? ctx.date.now("YYYY-MM-DD") : new Date().toISOString().slice(0, 10));
   const jetzt = () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date());
@@ -580,7 +580,7 @@ module.exports = function (ctx) {
     netz: () => modulVon("ilias-netz"), html: () => modulVon("alma-konto-html"),
     codes: () => { const d = modell(); return d ? d.module.map((m) => m.code).filter(Boolean) : []; },
     jetzt, mobil: !!(obs.Platform && obs.Platform.isMobile), geraetId,
-    melden: (t) => { if (obs.Notice) new obs.Notice(t, 6000); },
+    melden: (t) => ctx.hinweis(t),
     geaendert: () => neuZeichnen(),
   };
   let motorInst = null;
@@ -590,7 +590,7 @@ module.exports = function (ctx) {
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f) && app.metadataCache.getFileCache(f).frontmatter) || {};
   const uebernehmen = async (f, v) => {
     await app.fileManager.processFrontMatter(f, (m) => { for (const k of Object.keys(v.felder)) m[k] = v.felder[k]; });
-    if (obs.Notice) new obs.Notice(`${v.code}: aus Alma übernommen.`, 4000);
+    ctx.hinweis(`${v.code} aus Alma übernommen.`);
   };
   const ausblenden = async (f, v) => {
     await app.fileManager.processFrontMatter(f, (m) => {
@@ -621,7 +621,8 @@ module.exports = function (ctx) {
   const fehlende = () => {
     const d = modell(), m = motor();
     if (!d || m.extern() || !m.zustand()) return null;
-    return fehlendeAnmeldungen({ module: d.module, termine: d.termine, zustand: m.zustand(), heute: heute(), jetzt: jetzt().getTime(), aktuell: d.aktuell });
+    return fehlendeAnmeldungen({ module: d.module, termine: d.termine, zustand: m.zustand(), heute: heute(), jetzt: jetzt().getTime(), aktuell: d.aktuell,
+      pruefungVon: (code) => (ctx.modell.pruefungVon ? ctx.modell.pruefungVon(code, { heute: heute() }) : null) });
   };
   const hinweise = () => {
     const d = modell(), m = motor();
@@ -673,7 +674,7 @@ module.exports = function (ctx) {
       case "ohne-zugang": return { text: "Braucht deinen Uni-Zugang.", symbol: "schloss", pille: "", knopf: ilias, link: null };
       case "aus-anderes-geraet": return { text: "Auf einem anderen Gerät ausgeschaltet.", symbol: "aus", pille: "", knopf: fenster("Einschalten"), link: null };
       case "aus": return { text: "Liest deine Noten und Prüfungsanmeldungen aus Alma.", symbol: "aus", pille: "", knopf: fenster("Einschalten"), link: null };
-      case "abgelehnt": return { text: "Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben.", symbol: "warnung", pille: "pruefen", knopf: ilias, link: null };
+      case "abgelehnt": return { text: "Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden.", symbol: "warnung", pille: "pruefen", knopf: ilias, link: null };
       case "wartet-ilias": return { text: "Wartet, bis ILIAS deinen Zugang bestätigt hat.", symbol: "uhr", pille: "", knopf: null, link: MEHR };
       case "laeuft": return { text: "Prüft gerade …", symbol: "uhr", pille: "an", knopf: null, link: MEHR };
       case "zwei-faktor": return { text: "Alma verlangt einen zweiten Faktor. Melde dich einmal im Browser an.", symbol: "warnung", pille: "", knopf: pruefen("Erneut versuchen"), link: MEHR };
@@ -718,13 +719,13 @@ module.exports = function (ctx) {
       if (!mitLoeschen && !aufbau) return;
       const k = d.createDiv({ cls: "eba-modal-mehr-knoepfe" });
       if (aufbau) k.createEl("button", { text: "Aufbau kopieren (ohne deine Daten)" }).addEventListener("click", async () => {
-        try { await navigator.clipboard.writeText(aufbau); if (obs.Notice) new obs.Notice("Aufbau kopiert. Er enthält keine Noten und keine Namen.", 5000); } catch (e) { if (obs.Notice) new obs.Notice("Kopieren hat nicht geklappt.", 4000); }
+        try { await navigator.clipboard.writeText(aufbau); ctx.hinweis("Aufbau kopiert. Er enthält keine Noten und keine Namen."); } catch (e) { ctx.hinweis("Kopieren hat nicht geklappt."); }
       });
       if (mitLoeschen) k.createEl("button", { text: "Daten aus Alma löschen", cls: "mod-warning" }).addEventListener("click", async () => {
         const ok = await bestaetigen("Daten aus Alma löschen?", "Noten und Anmeldungen aus Alma verschwinden aus deinem Tresor, und Noten & Anmeldungen geht auf allen deinen Geräten aus. Was du in deine Modulseiten übernommen hast, bleibt.", "Löschen");
         if (!ok) return;
         await motor().loeschen();
-        if (obs.Notice) new obs.Notice("Daten aus Alma gelöscht.", 5000);
+        ctx.hinweis("Daten aus Alma gelöscht.");
         if (this.offen()) this.zeigen();
       });
     }
@@ -775,7 +776,7 @@ module.exports = function (ctx) {
         const b = k.createEl("button", { text: s.art === "anderes-geraet" ? "Hier aktualisieren" : PAUSEN.indexOf(s.art) >= 0 || s.art === "unerwartet" ? "Erneut versuchen" : "Aktualisieren", cls: "mod-cta" });
         b.addEventListener("click", async () => { b.disabled = true; await motor().jetztPruefen({ manuell: true, hier: s.art === "anderes-geraet" }); if (this.offen()) this.zeigen(); });
       }
-      k.createEl("button", { text: "Ausschalten" }).addEventListener("click", () => { motor().ausschalten(); if (obs.Notice) new obs.Notice("Noten & Anmeldungen auf diesem Gerät aus.", 4000); this.zeigen(); });
+      k.createEl("button", { text: "Ausschalten" }).addEventListener("click", () => { motor().ausschalten(); ctx.hinweis("Noten & Anmeldungen auf diesem Gerät aus."); this.zeigen(); });
       this.mehr(c, true, s.art === "unsicher" ? s.aufbau : "");
     }
   }

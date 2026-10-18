@@ -1,10 +1,10 @@
 // Update der Vorlage mit einem Knopf (seit 0.2.0). Zeile „Studium Autopilot“ in ```eba-verbindungen``` (verbindungen.js):
-// Version, „Neue Version X verfügbar“ und Knopf „Aktualisieren“. Seit 0.3.1 zusätzlich ```eba-update-hinweis``` oben auf dem
+// Version, „Neue Version X verfügbar“ und Knopf „Neue Version installieren“. Seit 0.3.1 zusätzlich ```eba-update-hinweis``` oben auf dem
 // Dashboard: schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Doku: docs/architektur.md, „Update“.
 //
 // Woher: Das Manifest der zentralen Daten (zentral.js, docs/daten-v1.md) nennt im optionalen Feld „release“ die neue Version,
 // die Basisadresse der Dateien (raw.githubusercontent.com, Tag v<version> im Haupt-Repo) und die SHA-256 der Dateiliste
-// system-dateien.json. Geladen wird NUR nach einem Tipp auf „Aktualisieren“ und Bestätigung.
+// system-dateien.json. Geladen wird NUR nach einem Tipp auf „Neue Version installieren“ und Bestätigung.
 //
 // Ablauf (alles oder nichts):
 //   1. system-dateien.json laden, Prüfsumme gegen das Manifest, Liste streng prüfen (nur erlaubte Pfade, siehe klasseVon).
@@ -42,7 +42,7 @@
 //   „Aktualisiert: …“-Hinweise neu (mehrere auf einmal oder nach einer neuen installiert.json: stillBis).
 // Neuigkeiten (seit 0.4.1): Beim Öffnen von Obsidian (und nach über 6 h im Hintergrund) holt update.js nach wenigen Sekunden
 //   nur das kleine Manifest, wenn die letzte Prüfung über 30 Min. her ist. Gibt es ein Angebot, erscheint einmal je App-Start
-//   ein Hinweis (Notice) mit „Aktualisieren“ und „Was ist neu“, für dieselbe Version höchstens alle 12 h. Läuft eine neue
+//   ein Hinweis (Notice) mit „Neue Version installieren“ und „Was ist neu“, für dieselbe Version höchstens alle 12 h. Läuft eine neue
 //   Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“. „Was ist neu“ zeigt die Abschnitte aus CHANGELOG.md
 //   am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt Bestätigungsfenster), plugin.testUpdateBasis (andere Basis-URL,
@@ -52,7 +52,6 @@
 module.exports = function (ctx) {
   const app = window.app;
   const obs = ctx.obsidian || {};
-  const Notice = obs.Notice;
 
   // ---------- Konstanten ----------
   const ORDNER = "Studium Autopilot"; // Ordner des Vaults im Haupt-Repo (Pfad unter url_basis)
@@ -281,11 +280,23 @@ module.exports = function (ctx) {
     }
     return u;
   };
-  const jsonMischenText = (deine, neu) => {
+  // Geänderte Vorgaben (seit 0.4.6): Ändert die Vorlage den Wert eines Schlüssels, bekommt ihn, wer noch den alten Wert hat und von
+  // einer Version davor kommt; wer selbst etwas anderes gewählt hat, behält es, und ein späteres Update fasst es nicht mehr an.
+  // pfad → { ab: Version mit der neuen Vorgabe, werte: { schlüssel: [alt, neu] } }
+  const VORGABE_NEU = Object.freeze({
+    // Obsidian zeigt keine JSON-, Sicherungs- und Systemdateien mehr; „+“ legt die Notiz in Vorlesungen/ an (Ordner-Automatik)
+    ".obsidian/app.json": { ab: "0.4.6", werte: { showUnsupportedFiles: [true, false], newFileLocation: ["root", "folder"] } },
+  });
+  // pfad, von (installierte Version): für VORGABE_NEU; ohne pfad nur mischen
+  const jsonMischenText = (deine, neu, pfad, von) => {
     let u, n;
     try { n = JSON.parse(neu); } catch (e) { return null; }
     try { u = JSON.parse(deine); } catch (e) { return neu; }
     const r = jsonMischen(u, n);
+    const v = pfad && hat(VORGABE_NEU, pfad) ? VORGABE_NEU[pfad] : null;
+    if (v && istObj(r) && (!von || neuer(v.ab, von))) {
+      for (const k of Object.keys(v.werte)) if (hat(r, k) && r[k] === v.werte[k][0]) r[k] = v.werte[k][1];
+    }
     return JSON.stringify(r) === JSON.stringify(u) ? null : JSON.stringify(r, null, 2);
   };
   // Lesezeichen (.obsidian/bookmarks.json) auf Dateien, die das Update entfernt, fallen weg, auch in Gruppen. Beim Mischen
@@ -518,7 +529,7 @@ module.exports = function (ctx) {
         const t = seiteHaken(alsText(p), dec(n));
         if (t !== alsText(p)) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.haken.push(p); }
       } else if (s.art === "json-mischen") {
-        let t = jsonMischenText(alsText(p), dec(n));
+        let t = jsonMischenText(alsText(p), dec(n), p, alt && alt.version);
         if (p === LESEZEICHEN) { const o = lesezeichenOhne(t != null ? t : alsText(p), weg); if (o != null) t = o; }
         if (t != null) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.einstellungen.push(p); }
       } else if (s.art === "uebersprungen") b.uebersprungen.push(p);
@@ -697,6 +708,21 @@ module.exports = function (ctx) {
     neuZeichnen();
     return true;
   };
+  // Geänderte Vorgaben (VORGABE_NEU) auch nach einem Update mit einem älteren Planer, der sie noch nicht kennt (0.4.6: der
+  // Planer von 0.4.4/0.4.5 mischt app.json nur): einmal je Gerät und Vorgabe, sobald die installierte Version sie mitbringt,
+  // nur wo noch der alte Wert gilt. Über Obsidians Einstellungen (getConfig/setConfig), sonst schriebe Obsidian beim nächsten
+  // Speichern seine Werte aus dem Speicher zurück. Wer danach etwas anderes wählt, behält es (Merker eba-update-vorgabe-<ab>).
+  // vault: app.vault (Test: Ersatz) → [geänderte Schlüssel]
+  const L_VORGABE = "eba-update-vorgabe-";
+  const vorgabenAnwenden = (V, vault) => {
+    const v = VORGABE_NEU[".obsidian/app.json"];
+    if (!v || !V || neuer(v.ab, V) || lokal(L_VORGABE + v.ab)) return [];
+    if (!vault || typeof vault.getConfig !== "function" || typeof vault.setConfig !== "function") return [];
+    const geaendert = [];
+    for (const k of Object.keys(v.werte)) if (vault.getConfig(k) === v.werte[k][0]) { vault.setConfig(k, v.werte[k][1]); geaendert.push(k); }
+    lokal(L_VORGABE + v.ab, true);
+    return geaendert;
+  };
   // Reparatur (heilenMit) einmal je Gerät und installierter Version, nicht während eines Updates. Gerätelokal
   // eba-update-reparatur = Version; „Version lokal“, solange dieses Gerät synchronisierte Pfade nicht schreibt (ein Schreiber:
   // ctx.zentral.abruferHier, wie modell.js), dann noch einmal, sobald es darf. immer = true (Test): ohne Merker.
@@ -706,6 +732,7 @@ module.exports = function (ctx) {
     const x = await listeLesen(INSTALLIERT);
     if (!x) return null;
     const V = x.liste.version;
+    try { vorgabenAnwenden(V, app.vault); } catch (e) { console.error("update: Vorgaben", e); }
     let synchron = true;
     try { if (ctx.zentral && typeof ctx.zentral.abruferHier === "function") synchron = !!(await ctx.zentral.abruferHier()); } catch (e) { synchron = false; }
     const merk = lokal(L_REPARATUR);
@@ -719,8 +746,8 @@ module.exports = function (ctx) {
       // Snippets neu einlesen (am PC sieht Obsidian die Änderung ohnehin, auf iPhone/iPad erst so)
       try { const css = app.customCss; if (css && typeof css.requestLoadSnippets === "function") css.requestLoadSnippets(); } catch (e) { /* egal */ }
       const neuStarten = b.plugin && !(await pluginNeuLaden());
-      new Notice(`Studium Autopilot: Version ${V} ist jetzt vollständig aktiv. Deine geänderte Fassung liegt als Sicherung daneben.` +
-        (neuStarten ? " Bitte Obsidian einmal schließen und wieder öffnen." : ""), 12000);
+      ctx.hinweis(`Version ${V} ist jetzt vollständig aktiv, deine geänderte Fassung liegt als Sicherung daneben.` +
+        (neuStarten ? " Bitte Obsidian einmal schließen und wieder öffnen." : ""), { dauer: 12000 });
     }
     return b;
   };
@@ -748,7 +775,7 @@ module.exports = function (ctx) {
       .addToggle((t) => t.setValue(kanal() === "beta").onChange(async (an) => {
         await kanalSetzen(an ? "beta" : "stabil");
         // Notice statt Neuzeichnen des Fensters: der metadataCache kennt den neuen Wert erst gleich
-        new Notice(an ? "Beta-Versionen an. Neue Testversionen erscheinen hier zuerst." : "Beta-Versionen aus. Du bekommst nur fertige Versionen.", 5000);
+        ctx.hinweis(an ? "Beta-Versionen an. Neue Testversionen erscheinen hier zuerst." : "Beta-Versionen aus. Du bekommst nur fertige Versionen.");
         setTimeout(neuZeichnen, 1200);
       }));
   };
@@ -766,7 +793,7 @@ module.exports = function (ctx) {
     }
     if (neu) {
       return { html: esc(`Neue ${istBeta(neu.version) ? "Beta-Version" : "Version"} ${neu.version} verfügbar.`) + (neu.notiz ? " " + esc(neu.notiz) : ""), pille: `<span class="eba-pill info">neu</span>`,
-        symbol: "laden", ton: "warn", knopf: { aktion: "vorlage-aktualisieren", text: "Aktualisieren" } };
+        symbol: "laden", ton: "warn", knopf: { aktion: "vorlage-aktualisieren", text: "Neue Version installieren" } };
     }
     // Rückfall laut Doku: nur plugin_aktuell (ohne release) → Link auf die Releases
     if (!neu && s.aktuell && neuer(s.aktuell, inst)) {
@@ -792,7 +819,7 @@ module.exports = function (ctx) {
     if (neuer(inst, lauf)) return { art: "laden", version: inst, text: `Version ${inst} ist da. Einmal neu laden.`, knopf: "Neu laden", symbol: "neu-laden" };
     const neu = angebot(s.release, s.beta, kanal(), inst);
     let h = null;
-    if (neu) h = { art: "update", version: neu.version, text: `Neue ${istBeta(neu.version) ? "Beta-Version" : "Version"} ${neu.version} verfügbar.`, notiz: neu.notiz || "", knopf: "Aktualisieren", symbol: "laden" };
+    if (neu) h = { art: "update", version: neu.version, text: `Neue ${istBeta(neu.version) ? "Beta-Version" : "Version"} ${neu.version} verfügbar.`, notiz: neu.notiz || "", knopf: "Neue Version installieren", symbol: "laden" };
     else if (s.aktuell && neuer(s.aktuell, inst)) h = { art: "link", version: s.aktuell, text: `Neue Version ${s.aktuell} verfügbar.`, knopf: "Ansehen", symbol: "laden",
       url: (ctx.zentral && ctx.zentral.RELEASES) || "https://github.com/studium-autopilot/ecoba/releases" };
     return h && spaeter() !== h.version ? h : null;
@@ -846,7 +873,7 @@ module.exports = function (ctx) {
     m.titleEl.setText(`Auf Version ${rel.version} aktualisieren?`);
     const c = m.contentEl;
     if (rel.notiz) c.createEl("p", { cls: "eba-modal-text eba-modal-notiz", text: rel.notiz });
-    // „Was ist neu“: dasselbe Fenster wie sonst; dort beantworten „Aktualisieren“ / „Später“ diese Frage (kein zweites Fragen)
+    // „Was ist neu“: dasselbe Fenster wie sonst; dort beantworten „Neue Version installieren“ / „Später“ diese Frage (kein zweites Fragen)
     c.createEl("button", { cls: "eba-modal-link", text: "Was ist neu", attr: { type: "button" } }).addEventListener("click", () => {
       erledigt = true;
       m.close();
@@ -858,10 +885,10 @@ module.exports = function (ctx) {
     d.createEl("p", { text: "Hast du eine Seite selbst geändert, bleibt deine Fassung. Hat sich die Seite geändert, liegt die neue daneben." });
     d.createEl("p", { text: "Darstellung und Programmteile kommen immer neu. Hattest du sie geändert, liegt deine Fassung als Sicherung daneben." });
     d.createEl("p", { text: "Auf deinen anderen Geräten kommt das Update von selbst. Dort tippst du höchstens einmal auf „Neu laden“ oben auf dem Dashboard." });
-    // Knöpfe wie im Fenster „Was ist neu“: PC und iPad nebeneinander, „Aktualisieren“ rechts; iPhone untereinander, oben
+    // Knöpfe wie im Fenster „Was ist neu“: PC und iPad nebeneinander, „Neue Version installieren“ rechts; iPhone untereinander, oben
     const k = c.createDiv({ cls: "modal-button-container" });
     const ab = k.createEl("button", { text: "Später" });
-    const ok = k.createEl("button", { text: "Aktualisieren", cls: "mod-cta" });
+    const ok = k.createEl("button", { text: "Neue Version installieren", cls: "mod-cta" });
     ok.addEventListener("click", () => { erledigt = true; m.close(); fertig(true); });
     ab.addEventListener("click", () => m.close());
     m.onClose = () => { c.empty(); if (!erledigt) fertig(false); };
@@ -932,10 +959,10 @@ module.exports = function (ctx) {
     } catch (e) { console.error("update: Plugin neu laden", e); return false; }
   };
 
-  // ---------- Ablauf nach dem Tipp auf „Aktualisieren“ ----------
+  // ---------- Ablauf nach dem Tipp auf „Neue Version installieren“ ----------
   const aktualisieren = async () => {
     if (zustand.laeuft) return null;
-    if (!ctx.zentral || !ctx.zentral.manifestHolen) { new Notice("Studium Autopilot: Bitte später noch einmal versuchen.", 5000); return null; }
+    if (!ctx.zentral || !ctx.zentral.manifestHolen) { ctx.hinweis("Das geht gerade nicht. Bitte später noch einmal versuchen."); return null; }
     let rel;
     const inst = installiertVersion();
     try { const m = await ctx.zentral.manifestHolen(); rel = angebot(m.release, m.beta, kanal(), inst); } catch (e) {
@@ -943,19 +970,19 @@ module.exports = function (ctx) {
       zustand.bericht = b; ergebnisZeigen(b); return b;
     }
     neuZeichnen();
-    if (!rel) { new Notice(`Studium Autopilot ist aktuell (Version ${inst}).`, 5000); return null; }
+    if (!rel) { ctx.hinweis(`Du hast schon die neueste Version (${inst}).`); return null; }
     if (!(await fragen(rel))) return null;
     const p = plugin();
     if (p.testUpdateBasis) rel = Object.assign({}, rel, { url_basis: String(p.testUpdateBasis) });
     zustand.laeuft = true;
     neuZeichnen();
-    const hinweis = new Notice("Lade die neue Version …", 0);
+    const fortschritt = ctx.hinweis("Lade die neue Version …", { dauer: 0 });
     let b;
     try {
       p.stillBis = Date.now() + 120000; // Kern: keine „Aktualisiert: …“-Hinweise beim Hot-Reload der Skripte
       const alt = (await listeLesen(INSTALLIERT)) || (await listeLesen(LISTE));
       b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(),
-        fortschritt: (t) => { try { hinweis.setMessage(t); } catch (e) { /* egal */ } } });
+        fortschritt: (t) => { try { if (fortschritt) fortschritt.setMessage(t); } catch (e) { /* egal */ } } });
       if (b.ok) {
         zustand.installiert = rel.version;
         b.vorher = inst;
@@ -966,7 +993,7 @@ module.exports = function (ctx) {
       console.error("update", e);
       b = { ok: false, art: "schreiben", fehler: (e && e.message) || String(e) };
     } finally {
-      try { hinweis.hide(); } catch (e) { /* egal */ }
+      try { if (fortschritt) fortschritt.hide(); } catch (e) { /* egal */ }
       zustand.laeuft = false;
       p.stillBis = Date.now() + 5000;
     }
@@ -1095,7 +1122,7 @@ module.exports = function (ctx) {
   };
   // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | "verdeckt" | null
   const toastPruefen = () => {
-    if (!Notice || sitzungGezeigt() || zustand.laeuft || zustand.fenster || neuigkeit.fenster || einrichtungOffen()) return null;
+    if (typeof ctx.hinweis !== "function" || sitzungGezeigt() || zustand.laeuft || zustand.fenster || neuigkeit.fenster || einrichtungOffen()) return null;
     if (!(app.metadataCache.initialized || app.metadataCache.resolved)) return null; // Kanal und Einrichtung stehen im Frontmatter
     const inst = installiertVersion(), lauf = laufendeVersion(), s = stand();
     const n = nachUpdate(lokal(L_GESEHEN), lauf, inst);
@@ -1114,19 +1141,11 @@ module.exports = function (ctx) {
     }
     return e;
   };
-  // Notice mit eigenem Inhalt: Text und Knöpfe (≥ 44 px, CSS Abschnitt „Neuigkeiten“). Antippen irgendwo blendet ihn aus.
+  // Hinweis mit Knöpfen (ctx.hinweis, Gestalt CSS Abschnitt „Neuigkeiten“, ≥ 44 px). Antippen irgendwo blendet ihn aus.
   const toastZeigen = (t) => {
-    const f = document.createDocumentFragment();
-    const box = f.createDiv({ cls: "eba-toast" });
-    box.createDiv({ cls: "eba-toast-text", text: t.text });
-    const k = box.createDiv({ cls: "eba-toast-knoepfe" });
-    const knopf = (text, cls, fn) => {
-      k.createEl("button", { text, cls: "eba-toast-knopf" + (cls ? " " + cls : ""), attr: { type: "button" } })
-        .addEventListener("click", () => { try { fn(); } catch (e) { console.error("update: Hinweis", e); } });
-    };
-    if (t.angebot) knopf("Aktualisieren", "mod-cta", () => { aktualisieren().catch((e) => console.error("update", e)); });
-    knopf("Was ist neu", "", () => { neuigkeitenZeigen({ von: t.von, bis: t.bis, angebot: t.angebot }); });
-    return new Notice(f, t.angebot ? 30000 : 15000);
+    const was = { text: "Was ist neu", ausfuehren: () => { neuigkeitenZeigen({ von: t.von, bis: t.bis, angebot: t.angebot }); } };
+    const knoepfe = t.angebot ? [{ text: "Neue Version installieren", ausfuehren: () => aktualisieren() }, was] : [was];
+    return ctx.hinweis(t.text, { aktion: knoepfe, dauer: t.angebot ? 30000 : 15000 });
   };
 
   // ---------- Fenster „Was ist neu“ ----------
@@ -1177,8 +1196,8 @@ module.exports = function (ctx) {
     }
     return liste.length;
   };
-  // o = { von, bis, angebot, antwort } – angebot (aus dem Manifest) → Knöpfe „Später“ und „Aktualisieren“, sonst „Fertig“.
-  // antwort(ja): aus dem Fenster vor dem Update geöffnet; „Aktualisieren“ → antwort(true), sonst beim Schließen antwort(false)
+  // o = { von, bis, angebot, antwort } – angebot (aus dem Manifest) → Knöpfe „Später“ und „Neue Version installieren“, sonst „Fertig“.
+  // antwort(ja): aus dem Fenster vor dem Update geöffnet; „Neue Version installieren“ → antwort(true), sonst beim Schließen antwort(false)
   const neuigkeitenZeigen = (o) => {
     if (!Modal) { if (o.antwort) o.antwort(false); return null; }
     if (neuigkeit.fenster) neuigkeit.fenster.close();
@@ -1197,7 +1216,7 @@ module.exports = function (ctx) {
     const k = c.createDiv({ cls: "modal-button-container" });
     if (o.angebot) {
       k.createEl("button", { text: "Später" }).addEventListener("click", () => m.close());
-      k.createEl("button", { text: "Aktualisieren", cls: "mod-cta" }).addEventListener("click", () => {
+      k.createEl("button", { text: "Neue Version installieren", cls: "mod-cta" }).addEventListener("click", () => {
         if (o.antwort) { antworten(true); m.close(); return; }
         m.close(); aktualisieren().catch((e) => console.error("update", e));
       });
@@ -1211,7 +1230,7 @@ module.exports = function (ctx) {
   ctx.update = {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     // Obsidian
     io, anzeige, status, aktualisieren, installiertAnlegen, heilen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
@@ -1263,10 +1282,10 @@ module.exports = function (ctx) {
   };
 
   const AKTIONEN = {
-    "vorlage-aktualisieren": { titel: "Studium Autopilot aktualisieren", ausfuehren: async () => { await aktualisieren(); } },
+    "vorlage-aktualisieren": { titel: "Neue Version installieren", ausfuehren: async () => { await aktualisieren(); } },
     "vorlage-neu-laden": {
-      titel: "Studium Autopilot neu laden",
-      ausfuehren: async () => { if (!(await pluginNeuLaden())) new Notice("Bitte Obsidian einmal schließen und wieder öffnen.", 8000); },
+      titel: "Neu laden",
+      ausfuehren: async () => { if (!(await pluginNeuLaden())) ctx.hinweis("Bitte Obsidian einmal schließen und wieder öffnen."); },
     },
   };
 

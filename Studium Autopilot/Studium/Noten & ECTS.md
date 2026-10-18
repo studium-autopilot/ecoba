@@ -137,7 +137,7 @@ cssclasses:
 >   formula.block:
 >     displayName: Block
 >   note.gruppe:
->     displayName: Bereich
+>     displayName: Teil
 >   formula.stand:
 >     displayName: Stand
 > views:
@@ -179,6 +179,8 @@ cssclasses:
 >   and:
 >     - 'typ == "modul"'
 > formulas:
+>   fertig: '["bestanden", "anerkannt"].contains(status.toString().lower().trim())'
+>   zaehlt: 'if(formula.fertig, if(zusatz != true, number(ects), 0), if(code == "SQ100", min(9, file("Module/4 Schlüsselqualifikation & Abschluss/SQ100 Schlüsselqualifikation.md").backlinks.map(value.asFile()).filter(value.properties.typ == "sq_kurs" && ["bestanden", "anerkannt"].contains(value.properties.status.toString().lower().trim())).reduce(acc + number(value.properties.ects), 0)), 0))'
 >   stand: 'html("<span class=\"eba-pill " + if(["bestanden", "anerkannt"].contains(status.toString().lower().trim()), "ok", if(status.toString().lower().trim() == "nicht bestanden", "bad", if(status.toString().lower().trim() == "angemeldet", "ok", if(status.toString().lower().trim() == "läuft", "info", "leer")))) + "\">" + if(status, status, "offen") + "</span>")'
 >   var: 'file("System/Einstellungen.md").properties.variante'
 >   block: 'if((gruppe == "Profil & Vertiefung" && ((formula.var == "Economics" && rolle_economics == "Elective Studies") || (formula.var == "Business Administration" && rolle_ba == "Elective Studies") || (anrechnung == "Elective Studies" && !(formula.var == "Economics" && rolle_economics == "Pflicht") && !(formula.var == "Business Administration" && rolle_ba == "Pflicht")))), "66 %", notenblock)'
@@ -190,7 +192,7 @@ cssclasses:
 > properties:
 >   file.name:
 >     displayName: Modul
->   note.ects:
+>   formula.zaehlt:
 >     displayName: ECTS
 >   note.fachsemester:
 >     displayName: FS
@@ -205,7 +207,7 @@ cssclasses:
 >   formula.block:
 >     displayName: Block
 >   note.gruppe:
->     displayName: Bereich
+>     displayName: Teil
 >   formula.stand:
 >     displayName: Stand
 >   formula.semester:
@@ -215,20 +217,19 @@ cssclasses:
 >     rowHeight: medium
 >     name: Bestanden
 >     filters:
->       or:
->         - 'status.toString().lower().trim() == "bestanden"'
->         - 'status.toString().lower().trim() == "anerkannt"'
+>       and:
+>         - '(formula.fertig && zusatz != true) || (code == "SQ100" && formula.zaehlt > 0)'
 >     summaries:
->       note.ects: Sum
+>       formula.zaehlt: Sum
 >     order:
 >       - file.name
->       - ects
+>       - formula.zaehlt
 >       - ergebnis
 >       - formula.block
 >       - formula.semester
 >     columnSize:
 >       file.name: 268
->       note.ects: 63
+>       formula.zaehlt: 63
 >       note.ergebnis: 69
 >       formula.block: 79
 >       formula.semester: 119
@@ -270,7 +271,7 @@ cssclasses:
 >   formula.block:
 >     displayName: Block
 >   note.gruppe:
->     displayName: Bereich
+>     displayName: Teil
 >   formula.stand:
 >     displayName: Stand
 > views:
@@ -322,7 +323,7 @@ cssclasses:
 >   formula.block:
 >     displayName: Block
 >   note.gruppe:
->     displayName: Bereich
+>     displayName: Teil
 >   formula.stand:
 >     displayName: Stand
 > views:
@@ -350,7 +351,8 @@ cssclasses:
 > [!eba-info]- Wie Studium Autopilot rechnet
 > - Module aus Profil & Vertiefung wechseln je nach Variante: in Economics zählen **B220**, **B250**, **B290** und **J200** als Elective Studies (66 %), in Business Administration **E230**.
 > - Profilmodul als Elective Studies genutzt: in seiner Modulnotiz bei „Zählt als“ `Elective Studies` eintragen.
-> - Feld `zusatz: true` nimmt ein Modul aus der Rechnung; die Zielnote stellst du in den [[Einstellungen & Hilfe#Deine Angaben|Einstellungen]] ein.
+> - Eine Zusatzleistung zählt nicht mit: in der Modulnotiz die Eigenschaft **zusatz** anhaken. Die Zielnote stellst du unter [[Einstellungen & Hilfe#Deine Angaben|Deine Angaben]] ein.
+> - **Bestanden** zählt wie die ECTS oben: ohne Zusatzleistungen, dazu bestandene SQ-Kurse (höchstens 9 ECTS) bei SQ100, solange es offen ist.
 
 ## Regeln
 

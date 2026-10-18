@@ -109,7 +109,7 @@ module.exports = function (ctx) {
     const knopf = (ort, text, label, fn) => klick(ort.createEl("button", { text, attr: { type: "button", "aria-label": label, title: label } }), () => { fn(); neu(); });
     // „+ Termin“: dieselbe Aktion wie der Link obsidian://studium-autopilot?aktion=termin (fragt Titel und Datum ab);
     // auf dem iPhone nur das Plus (eba-core.css). Kein neu(): die neue Notiz löst das Neuzeichnen über den metadataCache aus.
-    const neuKnopf = nav.createEl("button", { cls: "eba-kal-neu", attr: { type: "button", "aria-label": "Termin anlegen", title: "Termin anlegen" } });
+    const neuKnopf = nav.createEl("button", { cls: "eba-kal-neu", attr: { type: "button", "aria-label": "Neuer Termin", title: "Neuer Termin" } });
     neuKnopf.createSpan({ cls: "eba-kal-neu-zeichen", text: "+" });
     neuKnopf.createSpan({ cls: "eba-kal-neu-wort", text: "Termin" });
     klick(neuKnopf, () => basis.aktion("termin", {}, { quelle: app.workspace.getActiveFile() }));
@@ -190,7 +190,7 @@ module.exports = function (ctx) {
     const ts = amTag(tag);
     const link = (ort, t) => {
       const a = ort.createEl("a", { cls: "internal-link eba-kal-link", text: t.titel, href: t.f.path, attr: { "data-href": t.f.path } });
-      klick(a, (e) => app.workspace.openLinkText(t.f.path, ctx?.sourcePath || "", e.ctrlKey || e.metaKey));
+      klick(a, (e) => basis.oeffnen(t.f, { neu: e.ctrlKey || e.metaKey }));
     };
     // Mehrtägige Termine, die an diesem Tag weder beginnen noch enden: nur eine ruhige Sammelzeile „läuft“ am Ende
     const laufend = ts.filter((t) => t.bis && !gleich(t.von, tag) && !gleich(t.bis, tag));
@@ -227,6 +227,8 @@ module.exports = function (ctx) {
   const registrieren = () => {
     // Codeblock: das Plugin meldet je Sprache einen Prozessor an und ruft immer diese (aktuelle) Fassung
     const block = ctx.codeblock(SPRACHE, (quelle, el, c) => {
+      // Das Plugin startet die Erweiterungen alphabetisch, modell.js erst danach: bis dahin der Ersatztext des Blocks
+      if (!ctx.modell || !ctx.modell.termine) { el.setText(String(quelle || "").trim()); return; }
       try { zeichnen(el, c); } catch (e) { el.setText("Kalender: Fehler – " + e.message); console.error("Kalender", e); }
     });
     const bald = ctx.entprellen(() => block.neu(), 1500);

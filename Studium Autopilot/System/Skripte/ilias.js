@@ -15,8 +15,10 @@
 //   geaendert, iliasGroesse, original, iliasPfad, kurs, seit, wie, aktualisiert?, geloescht?, fassungen?, t } },
 //   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, t } }, gruppen: { <ref_id der Gruppe>:
 //   { code, kurs, tag, beginn, ende, raum, mitglied, status, zentral, kandidaten, notiz (Grabstein, siehe gruppenAbgleichen),
-//   t } } }. Kurstitel und ILIAS-Pfade nur ohne Kurspasswort (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von
-//   Gruppen nie Titel oder Beschreibung (dort stehen Namen), nur Code, Zeitfenster und Raumnummer. Jeder Eintrag trägt „t“
+//   t } }, objekte: { <ref_id einer Übung>: { typ: "exc", code, kurs, t } } }. Kurstitel und ILIAS-Pfade nur ohne Kurspasswort
+//   (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von Gruppen nie Titel oder Beschreibung (dort stehen Namen), nur
+//   Code, Zeitfenster und Raumnummer; von Übungen nur Code und Kurs (der ILIAS-Kalender, ilias-kalender.js, findet so den
+//   Modulcode einer Abgabe; der Kalender nennt nur die Übung, nicht ihren Kurs). Jeder Eintrag trägt „t“
 //   (letzte Änderung). Vor jedem Schreiben wird mit dem Stand auf der Platte gemischt (je Eintrag gewinnt der neuere), so
 //   überstehen Änderungen anderer Geräte (Kurswahl, Umbenennen) einen laufenden Abruf. Einträge werden nie gelöscht.
 // Abrufer-Sperre (System/Daten/ilias-abruf.json, synchronisiert): nur ein Gerät lädt, Regeln wie zentral.js (UEBERNAHME,
@@ -112,14 +114,19 @@ module.exports = function (ctx) {
     auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt", funde: "eba-ilias-funde",
     migration: "eba-ilias-migration", zugangSeit: "eba-uni-zugang-seit", zugangOk: "eba-uni-zugang-ok" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
-  const TEXT_ANMELDUNG_FOLGT = "ILIAS-Anmeldung folgt in einer späteren Version";
+  const TEXT_ANMELDUNG_FOLGT = "Mit ILIAS verbinden geht erst in einer späteren Version";
   const TEXT_EXTERN = "Deine Unterlagen kommen über deinen Uni-Abgleich."; // auch Zeile und Einrichtung (verbindungen.js, einrichtung.js)
-  const TEXT_ABGELEHNT = "Anmeldung abgelehnt. Bitte dein Passwort neu eingeben."; // Uni-Zugang abgelehnt (auf einem deiner Geräte)
+  const TEXT_ABGELEHNT = "ILIAS hat dein Passwort abgelehnt. Bitte neu verbinden."; // Uni-Zugang abgelehnt (auf einem deiner Geräte)
   const MODULCODE = (ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE) || "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?"; // wie eba.js
   const CODE_ANFANG = new RegExp("^\\s*(" + MODULCODE + ")(?=[\\s_\\-.:,/]|$)");
   const CODE_GANZ = new RegExp("^" + MODULCODE + "$");
-  // Quellen außerhalb des Plugins (eigener Uni-Abgleich): eine Regel für alle Skripte (eba.quelleExtern); ohne eba.js keine
-  const quelleExtern = (schluessel, existiert, einstellungen) => { const f = ctx.user && ctx.user.eba && ctx.user.eba.quelleExtern; return !!f && f(schluessel, existiert, einstellungen); };
+  // Quellen außerhalb des Plugins (eigener Uni-Abgleich): eine Regel für alle Skripte (eba.quelleExtern über quellen.js extern,
+  // auch mit eba.js einer älteren Fassung auf diesem Gerät); ohne eba.js keine
+  const quelleExtern = (schluessel, existiert, einstellungen) => {
+    const eba = ctx.user && ctx.user.eba, Q = ctx.user && ctx.user.quellen;
+    if (Q && Q.extern) return Q.extern(eba, schluessel, existiert, einstellungen);
+    return !!(eba && eba.quelleExtern && eba.quelleExtern(schluessel, existiert, einstellungen));
+  };
 
   // ---------- Kleine Helfer ----------
   const pad = (n) => String(n).padStart(2, "0");
@@ -301,8 +308,8 @@ module.exports = function (ctx) {
   const vorText = (iso, jetztMs) => { const Q = ctx.user && ctx.user.quellen; return Q ? Q.vorText(iso, jetztMs) : ""; };
 
   // ---------- Index: lesen, prüfen, mischen ----------
-  const BEREICHE = ["kurse", "dateien", "ignoriert", "gruppen"];
-  const leererIndex = () => ({ version: 1, kurse: {}, dateien: {}, ignoriert: {}, gruppen: {} });
+  const BEREICHE = ["kurse", "dateien", "ignoriert", "gruppen", "objekte"];
+  const leererIndex = () => ({ version: 1, kurse: {}, dateien: {}, ignoriert: {}, gruppen: {}, objekte: {} });
   // Titel ohne Kurspasswort (auch alte Einträge: beim Lesen gesäubert, beim nächsten Schreiben ersetzt)
   const saeubern = (b, e, id) => {
     if (b === "kurse" && hat(e, "titel")) { const t = ohneKennwort(e.titel) || e.code || "Kurs " + id; if (t !== e.titel) return Object.assign({}, e, { titel: t }); }
@@ -491,7 +498,7 @@ module.exports = function (ctx) {
       name = String(name == null ? "" : name).trim();
       let wert = "";
       try { wert = typeof geber === "function" ? await geber() : geber; } catch (e) { wert = ""; }
-      if (!name || typeof wert !== "string" || !wert) return { ok: false, art: "leer", fehler: "Benutzername oder Kennwort fehlt." };
+      if (!name || typeof wert !== "string" || !wert) return { ok: false, art: "leer", fehler: "Benutzername oder Passwort fehlt." };
       try {
         if (o.pruefen) {
           const f = anmeldung();
@@ -923,6 +930,8 @@ module.exports = function (ctx) {
         const art = String(e.art || "");
         // Gruppe in Kurs oder Ordner: Code des Behälters und Zeitfenster merken (Titel und Beschreibung nur hier im Speicher)
         if (e.typ === "grp" && e.refId && r.gruppenGesehen) r.gruppenGesehen[String(e.refId)] = { code: k.code || "", kurs: kurs.refId, slot: gruppenSlot(e), name: gruppenNameAus(e.titel) };
+        // Übung: nur Code des Behälters und Kurs merken (Index „objekte“, für den ILIAS-Kalender), nie ihr Titel
+        if (e.typ === "exc" && e.refId && r.uebungenGesehen) r.uebungenGesehen[String(e.refId)] = { code: k.code || "", kurs: String(kurs.refId) };
         if (BEHAELTER.indexOf(art) >= 0) {
           if (!e.url || k.tiefe >= TIEFE_MAX || (art === "sitzung" && aufgeklappt[String(e.refId)])) continue;
           const tag = art === "sitzung" && e.sitzung && e.sitzung.datum ? String(e.sitzung.datum).slice(0, 10) : "";
@@ -1135,7 +1144,7 @@ module.exports = function (ctx) {
       if (!hatZugang()) { b.art = "ohne-zugang"; return; }
       if (stand().gesperrt && !o.manuell) { b.art = "gesperrt"; return; }
       // vor der Sperre: ein Gerät ohne nutzbares Kennwort darf die anderen nicht aufhalten
-      if (!geheimLesen()) throw fehlerArt("zugang", "Das Kennwort fehlt auf diesem Gerät. Bitte ILIAS neu verbinden.");
+      if (!geheimLesen()) throw fehlerArt("zugang", "Das Passwort fehlt auf diesem Gerät. Bitte ILIAS neu verbinden.");
       // Auf einem deiner Geräte abgelehnt (uni-zugang.json): kein Versuch mit diesem Passwort, auch nicht per Knopf
       await markerLesen();
       if (abgelehnt()) { b.art = "abgelehnt"; return; }
@@ -1154,7 +1163,7 @@ module.exports = function (ctx) {
       const geheimId = abh.geheimId();
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
-      const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {} };
+      const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {}, uebungenGesehen: {} };
       await indexLesen();
       if (!o.nurKurse && !nurGruppen) {
         await nachAbbruch(r); await nachziehen(b, r);
@@ -1214,7 +1223,12 @@ module.exports = function (ctx) {
       });
       standSetzen({ kursZeit, kursFertig });
       fundeSpeichern(r, kandidaten);
-      await speichern(); // ignoriert (zu groß)
+      // Übungen: Code und Kurs je ref_id (geschrieben nur, wenn sich etwas geändert hat)
+      for (const id of Object.keys(r.uebungenGesehen)) {
+        const x = r.uebungenGesehen[id], alt = mem.objekte[id] || {};
+        if (alt.typ !== "exc" || alt.code !== x.code || alt.kurs !== x.kurs) setzen("objekte", id, { typ: "exc", code: x.code, kurs: x.kurs });
+      }
+      await speichern(); // ignoriert (zu groß), Übungen
 
       // 1b. Gruppen in den Stundenplan (nicht, wenn sie von außen kommen); ein Fehler hier hält die Unterlagen nicht an
       if (!ohneGruppen) {
@@ -1283,19 +1297,20 @@ module.exports = function (ctx) {
         case "extern": return TEXT_EXTERN;
         case "nur-gruppen": {
           const g = b.gruppen ? b.gruppen.neu : 0;
-          return "ILIAS: Übungsgruppen geprüft." + (g ? g === 1 ? " Deine Übungsgruppe steht jetzt im Stundenplan." : ` ${g} Übungsgruppen stehen jetzt im Stundenplan.` : "") + (b.warnung ? " " + b.warnung : "");
+          return "Übungsgruppen aus ILIAS geprüft." + (g ? g === 1 ? " Deine Übungsgruppe steht jetzt im Stundenplan." : ` ${g} Übungsgruppen stehen jetzt im Stundenplan.` : "") + (b.warnung ? " " + b.warnung : "");
         }
         case "ohne-anmeldung": return TEXT_ANMELDUNG_FOLGT + ".";
         case "ohne-zugang": return "ILIAS ist auf diesem Gerät nicht verbunden.";
         case "anderes-geraet": return "Ein anderes Gerät lädt gerade deine ILIAS-Unterlagen. Sie kommen über deinen Sync.";
-        case "zugang": return "ILIAS: " + b.fehler;
-        case "abgelehnt": return "ILIAS: " + TEXT_ABGELEHNT;
-        case "fehler": return "ILIAS: Fehler beim Abruf. " + b.fehler + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : "");
-        case "abgebrochen": return b.grund === "stopp" ? "ILIAS: gestoppt." : "ILIAS: Abruf abgebrochen.";
-        case "kurse": return "ILIAS: Kursliste aktualisiert.";
+        case "zugang": return b.fehler;
+        case "abgelehnt": return TEXT_ABGELEHNT;
+        // Fehlertext aus dem Code nur in Zeile, Fenster und Protokoll, nie im Hinweis
+        case "fehler": return "Unterlagen aus ILIAS kamen nicht an." + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : " Bitte später noch einmal versuchen.");
+        case "abgebrochen": return b.grund === "stopp" ? "ILIAS gestoppt." : "Abruf von ILIAS abgebrochen.";
+        case "kurse": return "Kursliste aus ILIAS aktualisiert.";
         default: {
-          const t = [n ? `ILIAS: ${n} neue ${n === 1 ? "Datei" : "Dateien"} in Unterlagen.` : b.ersetzt ? "ILIAS:" : "ILIAS: keine neuen Dateien."];
-          if (b.ersetzt) t.push(`${b.ersetzt} ${b.ersetzt === 1 ? "Datei" : "Dateien"} aktualisiert.`);
+          const t = n ? [`${n} neue ${n === 1 ? "Datei" : "Dateien"} aus ILIAS in Unterlagen.`] : b.ersetzt ? [] : ["Keine neuen Dateien in ILIAS."];
+          if (b.ersetzt) t.push(`${b.ersetzt} ${b.ersetzt === 1 ? "Datei" : "Dateien"} aus ILIAS aktualisiert.`);
           if (b.rest) t.push(gleich ? `${b.rest} weitere folgen gleich.` : `${b.rest} weitere beim nächsten Abruf.`);
           const g = b.gruppen ? b.gruppen.neu : 0;
           if (g) t.push(g === 1 ? "Deine Übungsgruppe steht jetzt im Stundenplan." : `${g} Übungsgruppen stehen jetzt im Stundenplan.`);
@@ -1396,7 +1411,7 @@ module.exports = function (ctx) {
       let text, anderes = false; // anderes: ein anderes Gerät lädt (Oberfläche bietet „Hier laden“ an)
       let warnung = ""; // Sätze aus dem letzten Lauf (Stand), nur nach einem Lauf, der geklappt hat
       if (gruppenHier && laeuft) text = "Übungsgruppen werden geprüft …";
-      else if (gruppenHier && s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
+      else if (gruppenHier && s.gesperrt) text = s.fehler || TEXT_ABGELEHNT;
       else if (gruppenHier && abgelehnt()) text = TEXT_ABGELEHNT;
       else if (gruppenHier && s.fehler) text = "Fehler beim Prüfen deiner Übungsgruppen." + (s.zuletzt ? ` Zuletzt geklappt ${vorText(s.zuletzt, ms())}.` : "");
       else if (gruppenHier) { warnung = s.warnung; text = "Prüft deine Übungsgruppen" + (s.zuletzt ? `, zuletzt ${vorText(s.zuletzt, ms())}` : "") + ". " + (warnung ? warnung + " " : "") + TEXT_EXTERN; }
@@ -1404,7 +1419,7 @@ module.exports = function (ctx) {
       else if (!da) text = TEXT_ANMELDUNG_FOLGT;
       else if (!hatZugang()) text = "Nicht verbunden.";
       else if (laeuft) text = fortschrittAnzeige(letzter).text;
-      else if (s.gesperrt) text = s.fehler || "Anmeldung abgelehnt. Bitte Zugang neu eingeben.";
+      else if (s.gesperrt) text = s.fehler || TEXT_ABGELEHNT;
       else if (abgelehnt()) text = TEXT_ABGELEHNT;
       else if (s.fehler) text = "Fehler beim letzten Abruf." + (s.zuletzt ? ` Zuletzt aktualisiert ${vorText(s.zuletzt, ms())}.` : "");
       else if (s.anderes && !s.abrufer) { text = "Ein anderes Gerät lädt deine ILIAS-Unterlagen. Sie kommen über deinen Sync."; anderes = true; }
@@ -1675,14 +1690,14 @@ module.exports = function (ctx) {
     const zeichnen = (x) => {
       if (weggetippt()) { aktiv = false; schliessen(); return; } // ausgeblendet: still bis zum nächsten Knopfdruck
       if (!notiz) {
-        if (!obs.Notice) return;
+        if (typeof ctx.hinweis !== "function" || typeof document === "undefined") return;
         const f = document.createDocumentFragment();
         const box = f.createDiv({ cls: "eba-ilias-fortschritt" });
         const zeile = box.createDiv({ cls: "eba-ilias-fortschritt-zeile" });
         text = zeile.createDiv({ cls: "eba-ilias-fortschritt-text" });
         zeile.createEl("button", { text: "Stoppen", cls: "eba-ilias-fortschritt-stopp" }).addEventListener("click", () => { if (motorInst) motorInst.stoppen(); });
         balken = box.createDiv({ cls: "eba-ilias-fortschritt-spur" }).createDiv({ cls: "eba-ilias-fortschritt-balken" });
-        notiz = new obs.Notice(f, 0);
+        notiz = ctx.hinweis(f, { dauer: 0 });
       }
       const a = fortschrittAnzeige(x, weiter);
       text.setText(a.kurz);
@@ -1718,7 +1733,7 @@ module.exports = function (ctx) {
     mobil: !!(obs.Platform && obs.Platform.isMobile),
     vergessen: sitzungVergessen,
     geraetId,
-    melden: (t) => { if (obs.Notice) new obs.Notice(t, 6000); },
+    melden: (t) => ctx.hinweis(t),
     geaendert: (x) => {
       for (const h of Array.from(hoerer)) { try { h(x); } catch (e) { /* Hörer egal */ } }
       hinweis.ereignis(x);

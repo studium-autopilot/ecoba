@@ -281,7 +281,7 @@ module.exports = function (ctx) {
       const a = e.target.closest && e.target.closest("a.internal-link");
       if (!a) return;
       e.preventDefault(); e.stopPropagation();
-      app.workspace.openLinkText(a.getAttribute("data-href") || a.getAttribute("href") || "", quelle, Keymap.isModEvent(e));
+      ctx.oeffnen(a.getAttribute("data-href") || a.getAttribute("href") || "", { quelle, neu: !!Keymap.isModEvent(e) });
     });
   };
 
@@ -340,11 +340,14 @@ module.exports = function (ctx) {
     // Der Codeblock-Prozessor ruft immer diese Fassung; inst (vom Plugin) trägt zuletzt/comp dieser Agenda
     const block = ctx.codeblock(SPRACHE, (q, el, c, inst) => {
       inst.zuletzt = null;
+      // Das Plugin startet die Erweiterungen alphabetisch, modell.js erst danach: bis dahin der Ersatztext des Blocks
+      if (!ctx.modell || !ctx.modell.termine) { el.setText(String(q || "").trim()); return undefined; }
       return zeichnen(inst).catch((e) => { el.setText("Agenda: Fehler – " + e.message); console.error("Agenda", e); });
     });
     const anBlock = ctx.codeblock(SPRACHE_AN, (q, el, c, inst) => {
       inst.zuletzt = null;
       if (!abo && ctx.modell && ctx.modell.beiAenderung) { abo = true; ctx.aufraeumen(ctx.modell.beiAenderung(() => anAlleNeu())); }
+      if (!ctx.modell || !ctx.modell.termine) { el.setText(String(q || "").trim()); return; }
       try { anmeldungenZeichnen(inst); } catch (e) { el.setText(String(q)); console.error(SPRACHE_AN, e); }
     });
     const anAlleNeu = () => { for (const i of anBlock.instanzen()) { try { anmeldungenZeichnen(i); } catch (e) { console.error(SPRACHE_AN, e); } } };

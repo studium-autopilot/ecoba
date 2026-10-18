@@ -146,6 +146,21 @@ module.exports = function (ctx) {
     return ok;
   };
 
+  // Rückgängig: die eben abgehakte Zeile wieder offen (nur, wenn sie noch genau so abgehakt dasteht)
+  const zuruecknehmen = async (t) => {
+    const x = t.roh.replace(/^([\s>]*[-*+] )\[ \]/, "$1[x]");
+    await app.vault.process(t.f, (data) => {
+      const z = data.split("\n");
+      const tr = [];
+      z.forEach((s, j) => { if ((s || "").replace(/\r$/, "") === x) tr.push(j); });
+      const i = tr.indexOf(t.nr) >= 0 ? t.nr : tr.length === 1 ? tr[0] : -1;
+      if (i < 0) return data;
+      z[i] = z[i].replace(/^([\s>]*[-*+] )\[x\]/, "$1[ ]");
+      return z.join("\n");
+    });
+    alleNeu(true);
+  };
+
   const umschalten = (t, zeile, box) => {
     const k = schluessel(t.f.path, t.nr);
     const w = warte.get(k);
@@ -156,9 +171,9 @@ module.exports = function (ctx) {
       let ok = false;
       try { ok = await schreiben(t, "x"); } catch (e) { console.error("To-dos abhaken", e); }
       if (!ok) {
-        try { new obs.Notice("Die Aufgabe hat sich geändert und wurde nicht abgehakt: " + t.f.basename, 5000); } catch (e) {}
+        try { ctx.hinweis(`Die Aufgabe in „${t.f.basename}“ hat sich inzwischen geändert und ist nicht abgehakt. Bitte noch einmal tippen.`); } catch (e) {}
         zeile.removeClass("is-erledigt"); box.checked = false;
-      }
+      } else ctx.hinweis("Aufgabe abgehakt.", { aktion: { text: "Rückgängig", ausfuehren: () => zuruecknehmen(t).catch((e) => console.error("To-dos", e)) } });
       alleNeu(true);
     }, WARTEN);
     warte.set(k, { timer });
@@ -176,9 +191,9 @@ module.exports = function (ctx) {
     if (p) { while (p.firstChild) ziel.insertBefore(p.firstChild, p); p.remove(); }
   };
 
-  const oeffnen = (t, e, quelle) => {
+  const oeffnen = (t, e) => {
     const neu = !!(e && (e.ctrlKey || e.metaKey));
-    app.workspace.openLinkText(t.f.path, quelle || "", neu, { eState: { line: t.nr } });
+    basis.oeffnen(t.f, { neu, zeile: t.nr });
   };
 
   const modusVon = (quelle, el, ctx) => {
@@ -201,7 +216,6 @@ module.exports = function (ctx) {
     if (!inst.comp) { inst.comp = obs.MarkdownRenderChild ? new obs.MarkdownRenderChild(el) : null; if (inst.comp && ctx && ctx.addChild) ctx.addChild(inst.comp); }
     let comp = null; // je Zeichnung ein Kind-Component (Links, Vorschau), beim nächsten Zeichnen entladen
     if (obs.Component) { comp = new obs.Component(); if (inst.comp) inst.comp.addChild(comp); else comp.load(); }
-    const quelle = (ctx && ctx.sourcePath) || "";
     const neu = el.ownerDocument.createElement("div");
     neu.className = klasse;
     const stopp = (k) => k.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
@@ -234,8 +248,8 @@ module.exports = function (ctx) {
           const a = e.target.closest ? e.target.closest("a") : null;
           if (a && !a.hasClass("internal-link")) return; // externe Links: Obsidian öffnet sie selbst
           e.preventDefault(); e.stopPropagation();
-          if (a && !a.hasClass("eba-td-quelle")) { app.workspace.openLinkText(a.getAttr("data-href") || a.getAttr("href") || "", t.f.path, e.ctrlKey || e.metaKey); return; }
-          oeffnen(t, e, quelle);
+          if (a && !a.hasClass("eba-td-quelle")) { basis.oeffnen(a.getAttr("data-href") || a.getAttr("href") || "", { quelle: t.f.path, neu: e.ctrlKey || e.metaKey }); return; }
+          oeffnen(t, e);
         });
       }
       await Promise.all(warten);

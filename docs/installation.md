@@ -72,7 +72,10 @@ Beim ersten Öffnen fragt Obsidian, ob du dem Tresor vertraust.
 
 Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Kennzahlen und Knöpfe leer.
 
-Termine und Fristen kommen danach von selbst, beim ersten Mal nach einigen Minuten. Nicht warten? Seite **Einstellungen & Hilfe** → **Verbindungen** → bei „Zentrale Daten“ **Jetzt aktualisieren**.
+Termine und Fristen kommen danach von selbst, beim ersten Mal nach einigen Minuten. Nicht warten? Seite **Einstellungen & Hilfe** → **Verbindungen** → bei „Zentrale Daten“ **Aktualisieren**.
+
+Die Vorlesungen deiner Module stehen im laufenden Semester von selbst im **Stundenplan**, auch ohne Alma (dafür braucht die
+App deinen Studienbeginn aus der Einrichtung). Mit Alma kommt dein ganzer Stundenplan samt Übungsgruppen.
 
 ## Einrichtung beim ersten Start
 
@@ -90,6 +93,18 @@ Angaben gilt das aktuelle Semester als dein erstes.
 4. Link in Obsidian einfügen und **Verbinden** tippen.
 
 Dein Stundenplan erscheint sofort. Der Link enthält kein Passwort und bleibt nur auf diesem Gerät. Auf einem zweiten Gerät verbindest du Alma noch einmal – oder der Stundenplan kommt per Sync mit. Die Einrichtung selbst erscheint dort nicht noch einmal.
+
+### ILIAS-Kalender verbinden (Abgabetermine)
+
+Die Abgabetermine deiner Übungen aus ILIAS stehen dann bei deinen Fristen.
+
+1. **Einstellungen & Hilfe** → **Verbindungen** → bei „ILIAS-Kalender“ **Verbinden**.
+2. ILIAS öffnen und anmelden, dann **Persönlicher Arbeitsraum** → **Kalender**.
+3. Neben dem Monatsblatt **Abonnieren** tippen und den Link unter **iCal-URL** kopieren.
+4. Link in Obsidian einfügen und **Verbinden** tippen.
+
+Der Link ist geheim wie ein Passwort und bleibt nur auf diesem Gerät. Steht eine Abgabe schon bei deinen Fristen, kommt sie nicht
+doppelt.
 
 ## Weiteres Gerät verbinden
 
@@ -115,21 +130,21 @@ Ist der iCloud-Speicher voll, stockt der Abgleich – dann erst Platz schaffen.
 
 Gibt es eine neue Version, siehst du das unter **Einstellungen & Hilfe** → **Verbindungen** in der Zeile **Studium Autopilot**.
 
-1. **Aktualisieren** tippen.
-2. Im Fenster noch einmal **Aktualisieren** tippen. Fertig.
+1. **Neue Version installieren** tippen.
+2. Im Fenster noch einmal **Neue Version installieren** tippen. Fertig.
 
 - **Was bleibt:** deine Noten, Termine, Notizen, Angaben, Unterlagen und dein Stundenplan. Hast du eine Seite selbst geändert,
   bleibt deine Fassung; hat sich die Seite in der neuen Version geändert, liegt die neue daneben mit „(neu …)“ im Namen. Bei
   Modulen bleiben deine Einträge (Status, Note, Versuch, Prüfungstermin, Planung), der Rest kommt neu. Darstellung und
   Programmteile kommen immer neu; hattest du sie geändert, liegt deine Fassung mit „(deine Fassung vor …)“ im Namen daneben.
-- **Andere Geräte:** Das Update kommt über deinen Sync. Dort **nicht** noch einmal aktualisieren. Steht dort **Neu laden**, das
+- **Andere Geräte:** Das Update kommt über deinen Sync. Dort **nicht** noch einmal installieren. Steht dort **Neu laden**, das
   antippen (oder Obsidian einmal schließen und wieder öffnen).
 - **Kein Netz oder Fehler:** Dann wird nichts geändert. Einfach später noch einmal versuchen.
 
 <details>
 <summary>Mehr erfahren</summary>
 
-Neue Programmteile lädt Studium Autopilot nur, wenn du auf **Aktualisieren** tippst, direkt aus diesem Repo auf GitHub. Jede
+Neue Programmteile lädt Studium Autopilot nur, wenn du auf **Neue Version installieren** tippst, direkt aus diesem Repo auf GitHub. Jede
 Datei wird mit einer Prüfsumme geprüft; erst wenn alles da und richtig ist, wird geschrieben. Vorher legt das Update eine
 Sicherung der geänderten Dateien im versteckten Ordner `.trash/Studium Autopilot Sicherung …` deines Tresors an (am PC und Mac
 sichtbar, wenn versteckte Dateien eingeblendet sind).

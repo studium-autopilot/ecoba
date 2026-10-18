@@ -6,7 +6,7 @@
 // Neue Aktion: Eintrag in AKTIONEN (titel = Befehl in der Befehlspalette, ohne titel kein Befehl). Doku: docs/architektur.md.
 module.exports = function (ctx) {
   const app = window.app;
-  const { Notice, Platform, MarkdownView } = ctx.obsidian;
+  const { Platform, MarkdownView } = ctx.obsidian;
 
   const fmVon = (f) => { const c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
   // Notiz aus dem Parameter „notiz“ (Name ohne .md) oder die Notiz mit dem Knopf
@@ -32,7 +32,7 @@ module.exports = function (ctx) {
     p = p.replace(/^file:\/\//, "");
     try { p = decodeURI(p); } catch (e) { /* roh */ }
     if (p.startsWith("/var/")) p = "/private" + p;
-    if (Platform.isAndroidApp) { new Notice("Auf Android bitte über die Dateien-App öffnen: " + f.path, 6000); return; }
+    if (Platform.isAndroidApp) { ctx.hinweis(`Auf Android öffnest du „${f.name}“ über die Dateien-App.`); return; }
     window.open("shareddocuments://" + encodeURI(p).replace(/#/g, "%23"));
   };
 
@@ -42,7 +42,7 @@ module.exports = function (ctx) {
   const AKTIONEN = {
     // Knopf „Öffnen ↗“ (Unterlagen-Notizen und -Tabellen): Datei aus „datei“ (mit original=1: aus „original“) extern öffnen
     oeffnen: {
-      titel: "Unterlage extern öffnen (aktive Notiz)",
+      titel: "Unterlage öffnen",
       ausfuehren: async (c) => {
         const notiz = notizAus(c, "unterlage");
         const name = String(c.parameter.notiz || (notiz ? notiz.basename : "")).trim();
@@ -50,17 +50,17 @@ module.exports = function (ctx) {
         const fm = fmVon(notiz);
         const ziel = ausLink(original ? fm.original : fm.datei, notiz ? notiz.path : "")
           || app.vault.getFiles().find((f) => f.basename === name && f.extension !== "md") || null;
-        if (!ziel) { new Notice(`Keine Datei zu „${name || "dieser Notiz"}“ gefunden.`, 4000); return; }
+        if (!ziel) { ctx.hinweis(`Keine Datei zu „${name || "dieser Notiz"}“ gefunden.`); return; }
         extern(ziel);
       },
     },
 
     // Knopf „Größe ⇅“: PDF-Ansicht der Notiz klein ↔ groß (eba-core.css Abschnitt 29), gespeichert in cssclasses
     pdf: {
-      titel: "PDF-Größe umschalten (aktive Notiz)",
+      titel: "PDF-Größe umschalten",
       ausfuehren: async (c) => {
         const notiz = notizAus(c, "unterlage");
-        if (!notiz) { new Notice("Keine Notiz zur PDF-Größe gefunden.", 2500); return; }
+        if (!notiz) { ctx.hinweis("Keine Notiz zur PDF-Größe gefunden."); return; }
         const KLEIN = "eba-pdf-klein", GROSS = "eba-pdf-gross";
         const text = await app.vault.read(notiz);
         const anzahl = (text.match(/!\[\[[^\]|#]+\.pdf(?:[#|][^\]]*)?\]\]/gi) || []).length;
@@ -74,7 +74,7 @@ module.exports = function (ctx) {
           fm.cssclasses = k;
           jetzt = istKlein ? (anzahl > 1 ? "groß untereinander" : "groß") : (anzahl > 1 ? "als Gitter" : "klein");
         });
-        new Notice(`PDF ${jetzt}.`, 2500);
+        ctx.hinweis(`PDF ${jetzt}.`, { dauer: 2500 });
       },
     },
 
@@ -86,26 +86,26 @@ module.exports = function (ctx) {
         const name = String(c.parameter.modul || "").trim();
         const modul = name ? app.vault.getMarkdownFiles().find((f) => fmVon(f).typ === "modul" && (fmVon(f).code === name || f.basename === name))
           : (fmVon(c.quelle).typ === "modul" ? c.quelle : null);
-        if (!modul) { new Notice(`Modul „${name}“ nicht gefunden.`, 2500); return; }
+        if (!modul) { ctx.hinweis(`Modul „${name}“ nicht gefunden.`); return; }
         let jetzt = null;
         await app.fileManager.processFrontMatter(modul, (fm) => { fm.gewaehlt = !(fm.gewaehlt === true); jetzt = fm.gewaehlt; });
-        new Notice(`${modul.basename.split(" ")[0]} ${jetzt ? "in den Plan aufgenommen" : "aus dem Plan entfernt"}`, 2500);
+        ctx.hinweis(`${modul.basename.split(" ")[0]} ${jetzt ? "ist jetzt in deinem Plan" : "ist nicht mehr in deinem Plan"}.`, { dauer: 2500 });
       },
     },
 
     // Knöpfe „Variante“ (Einstellungen): Feld „variante“ in System/Einstellungen.md
     variante: {
-      titel: "Variante wechseln",
+      titel: "Variante wählen",
       ausfuehren: async (c) => {
         let wert = String(c.parameter.wert || "").trim();
         if (!wert) wert = (await ctx.system.suggester(F().VARIANTE.werte.map(F().varianteTitel), F().VARIANTE.werte.slice(), false, "Variante")) || "";
         if (!wert) return;
         const wahl = F().varianteFinden(wert);
         const einstellungen = app.vault.getAbstractFileByPath("System/Einstellungen.md");
-        if (!wahl) { new Notice("Unbekannte Variante: " + wert, 3000); return; }
-        if (!einstellungen) { new Notice("System/Einstellungen.md fehlt.", 3000); return; }
+        if (!wahl) { ctx.hinweis(`„${wert}“ ist keine Variante.`); return; }
+        if (!einstellungen) { ctx.hinweis("Deine Einstellungen fehlen im Tresor. Stell sie aus einer Sicherung wieder her."); return; }
         await app.fileManager.processFrontMatter(einstellungen, (fm) => { fm.variante = wahl; });
-        new Notice("Variante: " + F().varianteImSatz(wahl), 3000);
+        ctx.hinweis(`Variante: ${F().varianteImSatz(wahl)}.`, { dauer: 3000 });
       },
     },
 
@@ -117,11 +117,11 @@ module.exports = function (ctx) {
 
     // Knöpfe auf der Seite Stundenplan: aktualisieren; …&link=neu fragt den Alma-Link neu ab
     stundenplan: {
-      titel: "Stundenplan aus Alma aktualisieren",
+      titel: "Stundenplan aktualisieren",
       ausfuehren: async (c) => ctx.user.alma(c).aktualisierenOderVerbinden({ neuerLink: !!c.parameter.link }),
     },
     "alma-link": {
-      titel: "Alma-Link ändern (dieses Gerät)",
+      titel: "Alma-Link ändern",
       ausfuehren: async (c) => ctx.user.alma(c).aktualisierenOderVerbinden({ neuerLink: true }),
     },
 
@@ -131,7 +131,7 @@ module.exports = function (ctx) {
         const q = String(c.parameter.q || "");
         const suche = app.internalPlugins && app.internalPlugins.getPluginById && app.internalPlugins.getPluginById("global-search");
         if (suche && suche.instance && suche.instance.openGlobalSearch) suche.instance.openGlobalSearch(q);
-        else new Notice("Suche ist ausgeschaltet (Einstellungen → Kernplugins → Suche).", 4000);
+        else ctx.hinweis("Die Suche ist in Obsidian ausgeschaltet. Einschalten unter Obsidian-Einstellungen → Kernplugins → Suche.");
       },
     },
 
@@ -140,7 +140,7 @@ module.exports = function (ctx) {
       ausfuehren: async (c) => {
         const ziel = String(c.parameter.notiz || "").replace(/^\[\[|\]\]$/g, "").split("|")[0].trim();
         if (!ziel) return;
-        await app.workspace.openLinkText(ziel, c.quelle ? c.quelle.path : "", false);
+        await ctx.oeffnen(ziel, { quelle: c.quelle ? c.quelle.path : "" });
       },
     },
 
@@ -152,7 +152,7 @@ module.exports = function (ctx) {
         const view = app.workspace.getActiveViewOfType(MarkdownView);
         const f = view && view.file;
         const folien = String(fmVon(f).folien || "").replace(/^\[\[|\]\]$/g, "");
-        if (!view || !folien) { new Notice("Diese Notiz hat keine Folien. Trag sie oben bei „folien“ ein.", 5000); return; }
+        if (!view || !folien) { ctx.hinweis("Diese Notiz hat keine Folien. Trag sie in den Eigenschaften der Notiz ein."); return; }
         const s = String((await ctx.system.prompt("Seite der Folien", "")) || "").trim();
         if (/^\d+$/.test(s)) view.editor.replaceSelection(`[[${folien}#page=${s}|S. ${s}]]`);
       },

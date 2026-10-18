@@ -1,10 +1,10 @@
 {
   "promptDelete": false,
   "alwaysUpdateLinks": true,
-  "newFileLocation": "root",
+  "newFileLocation": "folder",
   "newFileFolderPath": "Vorlesungen",
   "attachmentFolderPath": "Anhänge",
-  "showUnsupportedFiles": true,
+  "showUnsupportedFiles": false,
   "readableLineLength": true,
   "showInlineTitle": true,
   "propertiesInDocument": "visible",

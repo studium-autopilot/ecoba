@@ -593,7 +593,7 @@ module.exports = function (ctx) {
       if (!ziel || !root.contains(ziel) || e.target.closest("summary")) return;
       if (ziel.dataset && ziel.dataset.pfad) {
         e.preventDefault(); e.stopPropagation();
-        app.workspace.openLinkText(ziel.dataset.pfad, (inst.ctx && inst.ctx.sourcePath) || "", e.ctrlKey || e.metaKey);
+        ctx.oeffnen(ziel.dataset.pfad, { quelle: (inst.ctx && inst.ctx.sourcePath) || "", neu: e.ctrlKey || e.metaKey });
         return;
       }
       if (ziel.classList.contains("eba-vl-lupe")) return;

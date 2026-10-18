@@ -112,24 +112,26 @@ module.exports = function (ctx) {
 
   const modulNachCode = (code) => alleModule().find((x) => x.fm.code === code) || null;
 
-  // Auswahl: zuerst (●) Module deines Plans im aktuellen Semester (ctx.modell.imPlan und modulSemester, wie Studienverlauf
-  // und Zeitleiste) und laufende/angemeldete, dann der Rest.
-  // „zuerst“ (z. B. die laut Stundenplan gerade laufende Vorlesung) steht ganz oben: ein Tipp bestätigt, alles andere bleibt wählbar.
-  // Rückgabe: Modul, null bei „– ohne Modul –“, undefined bei Esc (Vorlagen brechen dann ab, wenn es die erste Frage war).
-  const modulWaehlen = async (frage, optional = true, zuerst = null) => {
-    const vorwahl = codeAusTitel();
-    if (vorwahl && modulNachCode(vorwahl)) return modulNachCode(vorwahl);
+  // Feld „Modul“ für das Fenster „Neu …“ (ctx.formular): oben eine gerade laufende Lehrveranstaltung („Läuft gerade“), dann die
+  // Module deines Plans im aktuellen Semester und laufende/angemeldete („Dieses Semester“, ctx.modell.imPlan und modulSemester wie
+  // Studienverlauf und Zeitleiste), dann alle übrigen. Vorgabe: das Modul aus dem Knopf (code) bzw. Dateinamen, sonst die laufende
+  // Lehrveranstaltung, sonst (Pflicht) das erste Modul dieses Semesters. o = { titel, optional, laufend, vorgabe }; Wert: das
+  // Modul ({ f, fm }), die laufende Lehrveranstaltung (jetztLaufend) oder null (ohne Modul).
+  const modulFeld = (o = {}) => {
     const sem = aktuellesSemester().name, M = ctx.modell;
     const wichtig = (x) => ["läuft", "angemeldet"].includes(x.fm.status) || (!!M && M.imPlan(x.fm) && M.modulSemester(x.fm) === sem);
     const ms = alleModule().sort((a, b) => (wichtig(b) - wichtig(a)) || String(a.fm.code).localeCompare(String(b.fm.code)));
-    const texte = ms.map((x) => `${wichtig(x) ? "● " : "   "}${x.fm.code} · ${x.fm.titel}`);
-    const werte = [...ms];
-    const OHNE = { ohne: true };
-    if (optional) { texte.unshift("– ohne Modul –"); werte.unshift(OHNE); }
-    if (zuerst) { texte.unshift(`▶ ${zuerst.modul ? `${zuerst.fm.code} · ${zuerst.fm.titel}` : zuerst.titel} (läuft gerade)`); werte.unshift(zuerst); }
-    const wahl = await ctx.system.suggester(texte, werte, false, frage);
-    if (wahl === OHNE) return null;
-    return wahl ?? undefined;
+    const optionen = [];
+    const laufend = o.laufend || null;
+    if (laufend) optionen.push({ wert: laufend, text: laufend.modul ? `${laufend.fm.code} · ${laufend.fm.titel}` : laufend.titel, gruppe: "Läuft gerade" });
+    if (o.optional) optionen.push({ wert: null, text: "Ohne Modul", gruppe: laufend ? "Ohne Modul" : "" });
+    for (const x of ms) optionen.push({ wert: x, text: `${x.fm.code} · ${x.fm.titel}`, gruppe: wichtig(x) ? "Dieses Semester" : "Alle Module" });
+    const vorwahl = codeAusTitel();
+    const vorgabe = o.vorgabe !== undefined ? o.vorgabe : (vorwahl && modulNachCode(vorwahl) && ms.find((x) => x.fm.code === vorwahl))
+      || laufend || (o.optional ? null : ms.find(wichtig) || ms[0] || null);
+    // waehlen(code): die Option zu einem Modulcode (für Vorgaben, die anderen Feldern folgen; die Auswahl vergleicht Werte genau)
+    const waehlen = (code) => (code && ms.find((x) => x.fm.code === code)) || null;
+    return { name: "modul", titel: o.titel || "Modul", art: "auswahl", optionen, vorgabe, waehlen, pflicht: !o.optional, fehlt: "Bitte ein Modul wählen." };
   };
 
   // Gerade laufende Veranstaltung (heute, 30 min vor Beginn bis 15 min nach Ende): Lehrveranstaltungen aus dem Stundenplan
@@ -237,23 +239,15 @@ module.exports = function (ctx) {
     return gueltig(j, mo, t) ? iso(j, mo, t) : "";
   };
 
-  // Zeitraum abfragen: „12.11.“, „12.11.–15.11.“, „2026-11-12“, „+7“ → { von, bis }
-  // Nicht erkannte Eingabe: Frage mit Hinweis noch einmal. Leer: { von: "", bis: "" }. Esc: null (Aufrufer bricht ab).
-  const zeitraumFragen = async (frage, vorschlag = "") => {
-    let hinweis = "";
-    for (;;) {
-      const roh = await ctx.system.prompt(hinweis + frage, vorschlag);
-      if (roh == null) return null;
-      const t = String(roh).trim();
-      if (!t) return { von: "", bis: "" };
-      const teile = t.replace(/^(\d{1,2}\.\d{1,2}\.?(?:\d{4}|\d{2})?)\s*-\s*(?=\d)/, "$1–").split(/\s*(?:–|—|\sbis\s|\s-\s)\s*/);
-      // „15.10. 14–16 Uhr“: ein zweiter Teil, der nur eine Uhrzeit ist, ist kein Ende des Zeitraums
-      const zweiter = teile[1] && !/^\d{1,2}(?::\d{2})?\s*(?:Uhr|h)?$|^\d{1,2}\.\d{2}\s*(?:Uhr|h)$/i.test(teile[1]) ? teile[1] : "";
-      const von = datumLesen(teile[0]), bis = zweiter ? datumLesen(zweiter, von) : "";
-      if (von && (!zweiter || bis)) return { von, bis: bis && bis > von ? bis : "" };
-      hinweis = "Datum nicht erkannt. ";
-      vorschlag = t;
-    }
+  // Zeitraum lesen: „12.11.“, „12.11.–15.11.“, „12.11. bis 15.11.“, „2026-11-12“, „+7“ → { von, bis } (bis "" bei einem Tag),
+  // nicht erkannt → null. „15.10. 14–16 Uhr“: ein zweiter Teil, der nur eine Uhrzeit ist, ist kein Ende des Zeitraums.
+  const zeitraumLesen = (roh) => {
+    const t = String(roh ?? "").trim();
+    if (!t) return null;
+    const teile = t.replace(/^(\d{1,2}\.\d{1,2}\.?(?:\d{4}|\d{2})?)\s*-\s*(?=\d)/, "$1–").split(/\s*(?:–|—|\sbis\s|\s-\s)\s*/);
+    const zweiter = teile[1] && !/^\d{1,2}(?::\d{2})?\s*(?:Uhr|h)?$|^\d{1,2}\.\d{2}\s*(?:Uhr|h)$/i.test(teile[1]) ? teile[1] : "";
+    const von = datumLesen(teile[0]), bis = zweiter ? datumLesen(zweiter, von) : "";
+    return von && (!zweiter || bis) ? { von, bis: bis && bis > von ? bis : "" } : null;
   };
 
   const link = (m) => (m ? `[[${m.f.basename}]]` : "");
@@ -273,7 +267,7 @@ module.exports = function (ctx) {
     let f = datei;
     if (f && !neu) {
       await app.vault.modify(f, text);
-      new ctx.obsidian.Notice("Vorlage eingefügt. Die Notiz behält Namen und Ort.", 4000);
+      ctx.hinweis("Vorlage eingefügt. Die Notiz behält Namen und Ort.");
     } else {
       if (!app.vault.getAbstractFileByPath(ordner)) { try { await app.vault.createFolder(ordner); } catch (e) { /* gibt es schon */ } }
       let name = sauber(basis), i = 2;
@@ -286,32 +280,17 @@ module.exports = function (ctx) {
     return f;
   };
 
-  // Datum abfragen: akzeptiert 12.10, 12.10., 12.10.26, 12.10.2026, 2026-10-12, +7 (Tage ab heute), auch mit Uhrzeit dahinter.
-  // Nicht erkannte Eingabe: Frage mit Hinweis noch einmal. Leer: "". Esc: null (Aufrufer bricht ab).
-  const datumFragen = async (frage, vorschlag = "") => {
-    let hinweis = "";
-    for (;;) {
-      const roh = await ctx.system.prompt(hinweis + frage, vorschlag);
-      if (roh == null) return null;
-      const t = String(roh).trim();
-      if (!t) return "";
-      const d = datumLesen(t);
-      if (d) return d;
-      hinweis = "Datum nicht erkannt. ";
-      vorschlag = t;
-    }
-  };
-
-  // Abbruch per Esc in einer der Fragen. Nur bei der Ordner-Automatik gibt es schon eine (leere) Notiz: die wird wieder
-  // gelöscht. Danach in der Aktion „return“.
+  // Abbruch im Fenster „Neu …“ (Esc, ×, „Abbrechen“): Es entsteht nichts. Nur bei der Ordner-Automatik gibt es schon eine
+  // (leere) Notiz: die wird wieder gelöscht, mit Hinweis (sonst bliebe unklar, wohin sie ist). Danach in der Aktion „return“.
   const abbrechen = () => {
-    if (datei) setTimeout(async () => {
+    if (!datei) return;
+    setTimeout(async () => {
       try { if (!(await app.vault.read(datei)).trim()) await app.vault.delete(datei); } catch (e) { /* schon weg */ }
     }, 400);
-    new ctx.obsidian.Notice("Abgebrochen.", 3000);
+    ctx.hinweis("Abgebrochen, es ist nichts entstanden.", { dauer: 3000 });
   };
 
-  return { app, heute, sauber, J, neu, datei, CURSOR, MODULCODE, codeImText, codeAusTitel, einstellungen, modell, semesterZeile, aktuellesSemester, alleModule, modulNachCode, modulWaehlen, link, ablegen, datumFragen, jetztLaufend, heutigeNotiz, naechsteVlNr, folienZu, zeitraumFragen, datumLesen, abbrechen };
+  return { app, heute, sauber, J, neu, datei, CURSOR, MODULCODE, codeImText, codeAusTitel, einstellungen, modell, semesterZeile, aktuellesSemester, alleModule, modulNachCode, modulFeld, link, ablegen, jetztLaufend, heutigeNotiz, naechsteVlNr, folienZu, zeitraumLesen, datumLesen, abbrechen };
 };
 module.exports.MODULCODE = MODULCODE;
 module.exports.codeImText = codeImText;

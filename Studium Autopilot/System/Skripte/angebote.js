@@ -228,7 +228,7 @@ module.exports = function (ctx) {
         await app.fileManager.processFrontMatter(f, (x) => { wahlSchreiben(x, auswahl, veranstaltungen); });
       } catch (e) {
         console.error(SPRACHE, e);
-        new ctx.obsidian.Notice("Deine Auswahl konnte nicht gespeichert werden. Versuch es bitte noch einmal.", 6000);
+        ctx.hinweis("Deine Auswahl konnte nicht gespeichert werden. Versuch es bitte noch einmal.");
         fertig.disabled = false;
         return;
       }

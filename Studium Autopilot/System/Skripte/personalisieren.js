@@ -19,7 +19,7 @@
 // 17.10.2026 standen die Angaben in einem eigenen Kasten und die Variante als Chips mit Tabelle.
 module.exports = function (ctx) {
   const app = window.app;
-  const { Modal, Notice } = ctx.obsidian;
+  const { Modal } = ctx.obsidian;
   const EINSTELLUNGEN = "System/Einstellungen.md";
   // Variante, Studienbeginn und Zielnote: eine Beschreibung für alle Stellen (felder.js, Feld-Register)
   const F = () => ctx.user.felder;
@@ -95,7 +95,7 @@ module.exports = function (ctx) {
     onOpen() {
       const c = this.contentEl, d = D(), fm = fmVon();
       this.modalEl.addClass("eba-modal", "eba-modal-personalisieren");
-      this.titleEl.setText("Personalisieren");
+      this.titleEl.setText("Deine Angaben");
       c.createEl("p", { cls: "eba-modal-text", text: "Alles ist freiwillig und jederzeit änderbar." });
       const form = c.createDiv({ cls: "eba-form" });
       const zeile = (label, hilfe) => {
@@ -144,7 +144,7 @@ module.exports = function (ctx) {
         await app.fileManager.processFrontMatter(f, (x) => { x.name = werte.name; x.studienbeginn = werte.studienbeginn; x.variante = werte.variante; x.zielnote = werte.zielnote; });
         this.gespeichert = werte;
         this.close();
-        new Notice("Gespeichert" + (werte.name ? `, ${werte.name}` : "") + ".", 3000);
+        ctx.hinweis("Gespeichert" + (werte.name ? `, ${werte.name}` : "") + ".", { dauer: 3000 });
         // Semesterliste usw. sofort nachziehen (sonst nach 1,5 s über das Änderungsereignis)
         if (ctx.modell && ctx.modell.abgleichen) setTimeout(() => ctx.modell.abgleichen("personalisieren").catch((e) => console.error(e)), 300);
       };
@@ -229,7 +229,7 @@ module.exports = function (ctx) {
 
   const AKTIONEN = {
     personalisieren: {
-      titel: "Personalisieren (Name, Studienbeginn, Variante, Zielnote)",
+      titel: "Deine Angaben ändern",
       ausfuehren: async (c) => { const m = new Formular(c && c.parameter ? c.parameter.feld : ""); fenster = m; m.open(); },
     },
   };

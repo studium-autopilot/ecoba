@@ -9,9 +9,10 @@
 // (Befehl, Knopf, Verbindungen, Zeitplan): nie zwei Schreiber je Quelle. Gefragt bei jedem Lauf.
 // Ein Schreiber: Abrufer-Sperre System/Daten/alma-abruf.json (sperre.js, Quelle „alma“), darin auch die Grabsteine „angewendet“.
 //   Ein Knopf übernimmt (Hier aktualisieren), der Zeitplan nie. Status gerätelokal (eba-alma-status): Fehler bleiben stehen, bis
-//   ein Abruf klappt (vorher blieb die Zeile grün).
+//   ein Abruf klappt (vorher blieb die Zeile grün). Fristen: eine Anfrage 60 s, der Abruf bis die Daten da sind 2 Min.; danach
+//   ist der Lauf mit Fehler zu Ende, statt bis zum Neustart zu hängen.
 // Lebenslauf der Notizen: Alma-Notizen (herkunft: alma; ältere am Kasten „Aus Alma“ erkannt und nachgetragen) fallen weg wie
-//   jede erzeugte Notiz (unberührt → Papierkorb, mit deinem Text unter „## Notizen“ → „(entfällt)“); von dir gelöschte kommen
+//   jede erzeugte Notiz (unberührt → Papierkorb, mit deinem Text unter „## Meine Notizen“ → „(entfällt)“); von dir gelöschte kommen
 //   nicht wieder, solange sich der Termin in Alma nicht ändert. Von Hand angelegte Notizen, die Alma verknüpft hat, löscht und
 //   entkoppelt Alma nie: Fehlen sie in Alma, steht alma_fehlt in der Notiz und ein Punkt in „Bitte prüfen“. Neu in Alma, aber
 //   schon vorbei → keine Notiz. Erste Verknüpfung einer Notiz, deren Raum mehr als in der Schreibweise von Alma abweicht →
@@ -22,15 +23,20 @@
 const LAUF = { p: null }; // laufender Abruf, geteilt von allen Aufrufern dieser Fassung (Zeitplan, Knöpfe, Verbindungen)
 module.exports = function (ctx) {
   const app = window.app;
-  const { requestUrl, Notice } = ctx.obsidian;
+  const { requestUrl } = ctx.obsidian;
+  // Hinweise über ctx.hinweis; die Hülle eines eigenen Uni-Abgleichs (stundenplan-sync.mjs) hat keins, dort bleibt es still
+  const hinweis = (text, o) => (typeof ctx.hinweis === "function" ? ctx.hinweis(text, o) : null);
   const EXTERN = "Dein Stundenplan kommt über deinen Uni-Abgleich.";
+  // Regel aus eba.js über quellen.js extern (gilt auch, wenn auf diesem Gerät noch eba.js einer älteren Fassung liegt); in der
+  // Hülle eines eigenen Uni-Abgleichs ohne quellen.js direkt eba.quelleExtern
   const extern = () => {
     try {
-      const f = ctx.user && ctx.user.eba && ctx.user.eba.quelleExtern;
-      if (!f) return false;
+      const eba = ctx.user && ctx.user.eba, Q = ctx.user && ctx.user.quellen;
       const e = app.vault.getAbstractFileByPath("System/Einstellungen.md");
       const c = e && app.metadataCache.getFileCache(e);
-      return !!f("stundenplan", (p) => !!app.vault.getAbstractFileByPath(p), (c && c.frontmatter) || {});
+      const existiert = (p) => !!app.vault.getAbstractFileByPath(p), fm = (c && c.frontmatter) || {};
+      if (Q && Q.extern) return Q.extern(eba, "stundenplan", existiert, fm);
+      return !!(eba && eba.quelleExtern && eba.quelleExtern("stundenplan", existiert, fm));
     } catch (x) { return false; }
   };
 
@@ -61,18 +67,15 @@ module.exports = function (ctx) {
   };
   const linkSetzen = async (vorgabe, still) => {
     const eingabe = vorgabe != null ? vorgabe : await ctx.system.prompt("Alma-Link einfügen. Du findest ihn in Alma unter Mein Studium → Stundenplan → „Daten für iCalendar (ics) exportieren“ → „Link kopieren“.", "");
-    // Esc/Abbrechen (null) oder leere Eingabe: gespeicherten Link nicht anfassen
+    // Esc/Abbrechen (null) oder leere Eingabe: gespeicherten Link nicht anfassen. Löschen geht nur über Trennen (mit Rückfrage,
+    // seit 0.4.6; vorher auch mit dem Wort „löschen“ in diesem Feld)
     const neu = String(eingabe ?? "").trim();
     if (!neu) return false;
-    if (/^l(ö|oe)schen$/i.test(neu)) {
-      if (!hatLink()) { new Notice("Auf diesem Gerät ist kein Alma-Link gespeichert.", 5000); return false; }
-      app.saveLocalStorage(SPEICHER, null); new Notice("Alma-Link auf diesem Gerät gelöscht.", 5000); return false;
-    }
     // webcal:// ist dieselbe Adresse; aktualisieren() schreibt sie beim Abruf auf https:// um
     const fehler = linkPruefen(neu);
-    if (fehler) { new Notice(fehler, 8000); return false; }
+    if (fehler) { hinweis(fehler); return false; }
     app.saveLocalStorage(SPEICHER, neu);
-    if (!still) new Notice("Alma-Link auf diesem Gerät gespeichert.", 4000);
+    if (!still) hinweis("Alma-Link auf diesem Gerät gespeichert.");
     return true;
   };
 
@@ -123,11 +126,13 @@ module.exports = function (ctx) {
     return new TextDecoder("utf-8").decode(aus.subarray(0, n));
   };
   const klartext = (v) => String(v || "").replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1").replace(/\s+/g, " ").trim();
+  // VEVENT → { NAME: Wert, …, EXDATE: [], PARAM: { NAME: "TZID=Europe/Berlin" } } (Parameter je Eigenschaft, z. B. für die
+  // Zeitzone; der ILIAS-Kalender nutzt denselben Leser, ilias-kalender.js)
   const lesen = (text) => {
     const liste = [];
     let e = null, tiefe = 0;
     for (const zeile of entfalten(text).split("\n")) {
-      if (zeile === "BEGIN:VEVENT") { e = { EXDATE: [] }; tiefe = 0; continue; }
+      if (zeile === "BEGIN:VEVENT") { e = { EXDATE: [], PARAM: {} }; tiefe = 0; continue; }
       if (zeile === "END:VEVENT") { if (e) liste.push(e); e = null; continue; }
       if (!e) continue;
       // eingebettete Komponenten (VALARM u. a.) überspringen, ihre Eigenschaften gehören nicht zum Termin
@@ -136,9 +141,9 @@ module.exports = function (ctx) {
       if (tiefe) continue;
       const i = zeile.indexOf(":");
       if (i < 0) continue;
-      const name = zeile.slice(0, i).split(";")[0].toUpperCase(), wert = zeile.slice(i + 1);
+      const teile = zeile.slice(0, i).split(";"), name = teile[0].toUpperCase(), wert = zeile.slice(i + 1);
       if (name === "EXDATE") e.EXDATE.push(...wert.split(","));
-      else e[name] = wert;
+      else { e[name] = wert; if (teile.length > 1) e.PARAM[name] = teile.slice(1).join(";"); }
     }
     return liste;
   };
@@ -256,6 +261,9 @@ module.exports = function (ctx) {
 
   // ---------- Quellen-Vertrag: Status, Sperre, Grabsteine ----------
   const Q = () => (ctx.user && ctx.user.quellen) || null;
+  // Ein Papierkorb für alles (quellen.js); in der Hülle eines eigenen Uni-Abgleichs ohne quellen.js (oder mit einer älteren
+  // Fassung ohne papierkorb, solange der Sync nach einem Update noch läuft) der Papierkorb im Tresor
+  const papierkorb = (f) => (Q() && Q().papierkorb ? Q().papierkorb(app, f) : app.vault.trash(f, false));
   const SPERRE = "System/Daten/alma-abruf.json"; // sperre.js, Quelle „alma“; dazu „angewendet“ (Grabsteine)
   const STATUS = "eba-alma-status";              // gerätelokal: { geprueft, versucht, fehler, fehlerZeit, warnungen, fehlerSerie, anderes }
   const jetzt = () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date());
@@ -296,7 +304,7 @@ module.exports = function (ctx) {
     await textSchreiben(SPERRE, JSON.stringify(o, null, 1) + "\n");
   };
   const hashVon = (g) => (Q() ? Q().kurzHash([g.schluessel, g.von, g.bis, g.raum]) : "");
-  // Eigener Text unter „## Notizen“ (quellen.js; außerhalb des Plugins dieselbe Regel hier, leere Aufzählungspunkte zählen nicht)
+  // Eigener Text unter „## Meine Notizen“ oder „## Notizen“ (quellen.js; außerhalb des Plugins dieselbe Regel hier, leere Aufzählungspunkte zählen nicht)
   const meineNotizen = (text) => {
     if (Q()) return Q().meineNotizen(text);
     const m = /^## (?:Meine Notizen|Notizen)[ \t]*$/m.exec(String(text));
@@ -313,46 +321,67 @@ module.exports = function (ctx) {
   // → Bericht { termine, neu, geaendert, gleich, entfernt, entfaellt, fehlt, vorbei, geloescht, doppel, warnung } oder null
   //   (extern, nicht verbunden, Fehler, ein anderes Gerät schreibt; Grund in fehler() bzw. status())
   let letzterFehler = "";
+  // Fristen (iOS-sicher: requestUrl lässt sich nicht abbrechen, eine späte Antwort wird verworfen): eine Anfrage an Alma höchstens
+  // ANFRAGE_FRIST, der ganze Abruf bis die Daten da sind (Sperre, Anfrage, Lesen) höchstens LAUF_FRIST. Danach ist der Lauf zu
+  // Ende (LAUF frei, Fehler im Status, Zeitplan wie nach jedem Fehler); geschrieben wird erst nach dem Abruf, nur der Tresor.
+  const ANFRAGE_FRIST = 60e3, LAUF_FRIST = 120e3, FRIST = "alma-frist";
+  const ZU_LANGE = "Alma hat nicht rechtzeitig geantwortet. Neuer Versuch später.";
+  const mitFrist = (p, ms) => {
+    if (!ctx.zeit || !ctx.stopp) return p; // Hülle außerhalb des Plugins: ohne Zeitgeber, ohne Frist
+    return new Promise((ja, nein) => {
+      let aus = false;
+      const id = ctx.zeit(() => { if (!aus) { aus = true; nein(new Error(FRIST)); } }, ms);
+      Promise.resolve(p).then((v) => { if (!aus) { aus = true; ctx.stopp(id); ja(v); } }, (e) => { if (!aus) { aus = true; ctx.stopp(id); nein(e); } });
+    });
+  };
   const aktualisieren = async (optionen = {}) => {
     if (LAUF.p) return LAUF.p;
     LAUF.p = ablauf(optionen);
     try { return await LAUF.p; } finally { LAUF.p = null; }
   };
-  const ablauf = async (optionen) => {
-    const { still = false, ordner = ORDNER, automatisch = false } = optionen;
-    let text = optionen.text;
-    letzterFehler = "";
-    if (extern()) { letzterFehler = EXTERN; if (!still && !automatisch) new Notice(EXTERN, 6000); return null; }
-    if (text == null && !link()) {
-      letzterFehler = "Alma ist noch nicht verbunden.";
-      if (!still && !automatisch) new Notice("Alma ist noch nicht verbunden. Tippe auf der Seite Stundenplan auf „Alma verbinden“.", 8000);
-      return null;
-    }
+  // Sperre nehmen und den Stundenplan holen → { text } | { anderes: true } | { fehler } (Text für Status und Hinweis)
+  const holen = async (sp, text, automatisch, lauf) => {
     // Ein Schreiber: der Zeitplan wartet, solange ein anderes Gerät schreibt; ein Knopf übernimmt
-    const sp = mitSperre() ? sperre() : null;
     if (sp && !(await sp.nehmen({ erzwingen: !automatisch }))) {
       const p = await sp.pruefen();
-      lstatusSetzen({ anderes: (p.sperre && p.sperre.zuletzt) || jetzt().toISOString(), versucht: jetzt().toISOString() });
+      if (!lauf.aus) lstatusSetzen({ anderes: (p.sperre && p.sperre.zuletzt) || jetzt().toISOString(), versucht: jetzt().toISOString() });
+      return { anderes: true };
+    }
+    if (text != null) return { text };
+    let antwort;
+    // Nur für Tests (docs/architektur.md): plugin.testAbruf(url) → { status, text } ersetzt den Abruf (kein Netz)
+    const abrufen = ctx.plugin && typeof ctx.plugin.testAbruf === "function" ? ctx.plugin.testAbruf : requestUrl;
+    try { antwort = await mitFrist(abrufen({ url: link().replace(/^webcal:/i, "https:"), method: "GET", throw: false }), ANFRAGE_FRIST); }
+    catch (e) { antwort = { status: 0, zuLange: !!e && e.message === FRIST }; }
+    // als Bytes holen und vor dem Dekodieren entfalten (siehe bytesLesen); Rückfall auf .text
+    let roh = "";
+    if (antwort.status === 200) { try { roh = antwort.arrayBuffer ? bytesLesen(antwort.arrayBuffer) : antwort.text || ""; } catch (e) { roh = antwort.text || ""; } }
+    if (antwort.status === 200 && /BEGIN:VCALENDAR/.test(roh)) return { text: roh };
+    return { fehler: antwort.zuLange ? ZU_LANGE : antwort.status === 200 ? "Alma hat keinen Stundenplan geliefert. Bitte den Link aus „Link kopieren“ einfügen."
+      : antwort.status ? `Alma antwortet nicht (Fehler ${antwort.status}). Bitte den Link in Alma neu kopieren.` : "Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen." };
+  };
+  const ablauf = async (optionen) => {
+    const { still = false, ordner = ORDNER, automatisch = false } = optionen;
+    letzterFehler = "";
+    if (extern()) { letzterFehler = EXTERN; if (!still && !automatisch) hinweis(EXTERN); return null; }
+    if (optionen.text == null && !link()) {
+      letzterFehler = "Alma ist noch nicht verbunden.";
+      if (!still && !automatisch) hinweis("Alma ist noch nicht verbunden.", { aktion: { text: "Verbinden", aktion: "verbinden", parameter: { id: "alma" } } });
       return null;
     }
-    if (text == null) {
-      let antwort;
-      // Nur für Tests (docs/architektur.md): plugin.testAbruf(url) → { status, text } ersetzt den Abruf (kein Netz)
-      const abrufen = ctx.plugin && typeof ctx.plugin.testAbruf === "function" ? ctx.plugin.testAbruf : requestUrl;
-      try { antwort = await abrufen({ url: link().replace(/^webcal:/i, "https:"), method: "GET", throw: false }); }
-      catch (e) { antwort = { status: 0 }; }
-      // als Bytes holen und vor dem Dekodieren entfalten (siehe bytesLesen); Rückfall auf .text
-      let roh = "";
-      if (antwort.status === 200) { try { roh = antwort.arrayBuffer ? bytesLesen(antwort.arrayBuffer) : antwort.text || ""; } catch (e) { roh = antwort.text || ""; } }
-      if (antwort.status !== 200 || !/BEGIN:VCALENDAR/.test(roh)) {
-        letzterFehler = antwort.status === 200 ? "Alma hat keinen Stundenplan geliefert. Bitte den Link aus „Link kopieren“ einfügen."
-          : antwort.status ? `Alma antwortet nicht (Fehler ${antwort.status}). Bitte den Link in Alma neu kopieren.` : "Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen.";
-        nachLauf({ ok: false, fehler: letzterFehler });
-        if (!still && !automatisch) new Notice(letzterFehler, 10000);
-        return null;
-      }
-      text = roh;
+    const sp = mitSperre() ? sperre() : null;
+    const lauf = { aus: false };
+    let h;
+    try { h = await mitFrist(holen(sp, optionen.text, automatisch, lauf), LAUF_FRIST); }
+    catch (e) { if (!e || e.message !== FRIST) throw e; lauf.aus = true; h = { fehler: ZU_LANGE }; }
+    if (h.anderes) return null;
+    if (h.fehler) {
+      letzterFehler = h.fehler;
+      nachLauf({ ok: false, fehler: letzterFehler });
+      if (!still && !automatisch) hinweis(letzterFehler);
+      return null;
     }
+    const text = h.text;
     const angewendet = sp ? (await sperrDatei()).angewendet || {} : null;
     const bericht = await anwenden(text, ordner, angewendet);
     if (sp && bericht.angewendet) await angewendetSchreiben(bericht.angewendet);
@@ -366,7 +395,7 @@ module.exports = function (ctx) {
     const teile = [["neu", "neu"], ["geaendert", "geändert"], ["entfernt", "entfernt"], ["entfaellt", "entfallen"]].filter((x) => bericht[x[0]]).map((x) => `${bericht[x[0]]} ${x[1]}`);
     if (bericht.fehlt) teile.push(`${bericht.fehlt} fehlen in Alma`);
     if (!automatisch && (!still || teile.length)) {
-      new Notice(`Stundenplan aktualisiert: ${bericht.termine} ${bericht.termine === 1 ? "Lehrveranstaltung" : "Lehrveranstaltungen"} aus Alma${teile.length ? ` (${teile.join(", ")})` : ""}.`, 6000);
+      hinweis(`Stundenplan aktualisiert, ${bericht.termine} ${bericht.termine === 1 ? "Lehrveranstaltung" : "Lehrveranstaltungen"} aus Alma${teile.length ? ` (${teile.join(", ")})` : ""}.`);
     }
     return bericht;
   };
@@ -391,10 +420,10 @@ module.exports = function (ctx) {
     const q = Q();
     if (q && app.vault.modify) {
       for (const g of q.doppelGruppen(alt.filter((x) => x.eigen), (x) => x.fm.alma_schluessel)) {
-        const d = q.dubletten(g.map((x) => ({ pfad: x.f.path, fm: x.fm, text: x.text })), "## Notizen");
+        const d = q.dubletten(g.map((x) => ({ pfad: x.f.path, fm: x.fm, text: x.text })), "## Meine Notizen");
         const bleibt = g.find((x) => x.f.path === d.bleibt);
         if (d.text) { await app.vault.modify(bleibt.f, d.text); bleibt.text = d.text; }
-        for (const p of d.weg) { const x = g.find((y) => y.f.path === p); await app.vault.trash(x.f, false); bericht.doppel++; }
+        for (const p of d.weg) { const x = g.find((y) => y.f.path === p); await papierkorb(x.f); bericht.doppel++; }
         alt = alt.filter((x) => d.weg.indexOf(x.f.path) < 0);
       }
     }
@@ -530,7 +559,7 @@ module.exports = function (ctx) {
         : `${k}: ${typeof v === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? JSON.stringify(v) : v}`).join("\n");
       const wann = g.einzeln ? `${TAGE_LANG[g.wt - 1]}, ${deutsch(g.von)}` : `${TAGE_LANG[g.wt - 1]}s`;
       const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${code || kurz} · ${art}\n\n${wann}, ${g.beginn}–${g.ende}${g.raum ? " · " + g.raum : ""}\n\n`
-        + `> [!info] Aus Alma (${g.titel}). Änderungen in Alma kommen von selbst.\n\n## Notizen\n- \n`;
+        + `> [!info] Aus Alma (${g.titel}). Änderungen in Alma kommen von selbst.\n\n## Meine Notizen\n- \n`;
       await app.vault.create(`${ordner}/${name}.md`, inhalt);
       if (angewendet) neuAngewendet[g.schluessel] = h;
       bericht.neu++;
@@ -553,7 +582,7 @@ module.exports = function (ctx) {
         continue;
       }
       const w = wegfall(x.fm, x.text);
-      if (w === "papierkorb") { await app.vault.trash(x.f, false); bericht.entfernt++; continue; } // Obsidian-Papierkorb (.trash)
+      if (w === "papierkorb") { await papierkorb(x.f); bericht.entfernt++; continue; }
       if (w !== "entfaellt") continue;
       await app.fileManager.processFrontMatter(x.f, (fm) => { fm.entfaellt = true; fm.titel = String(fm.titel || "").replace(/ \(entfällt\)$/, "") + ENTFAELLT; fm.herkunft = HERKUNFT; });
       await textAendern(x.f, (t) => t.replace(/^(# (?!.*\(entfällt\)$).*)$/m, "$1" + ENTFAELLT));
@@ -581,7 +610,7 @@ module.exports = function (ctx) {
     const vorher = link(), vorherSeit = app.loadLocalStorage(SEIT) || null;
     letzterFehler = "";
     // Stundenplan von außen: gar nicht erst nach dem Link fragen
-    if (extern()) { letzterFehler = EXTERN; if (!optionen.nurBeiErfolg) new Notice(EXTERN, 6000); return null; }
+    if (extern()) { letzterFehler = EXTERN; if (!optionen.nurBeiErfolg) hinweis(EXTERN); return null; }
     if (!(await linkSetzen(vorgabe, true))) return null;
     const bericht = await aktualisieren({ still: !!optionen.nurBeiErfolg });
     if (!bericht) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); if (!vorher) app.saveLocalStorage(STATUS, null); return null; }
@@ -600,7 +629,7 @@ module.exports = function (ctx) {
     if (hatLink() && !neuerLink) return await aktualisieren({ still: false });
     const bericht = await verbinden();
     // abgebrochen ohne Link: erklären; gescheitert: aktualisieren() hat den Grund schon gemeldet
-    if (!bericht && !hatLink() && !letzterFehler) new Notice("Kein Stundenplan geholt: Alma ist noch nicht verbunden. Tippe auf „Alma verbinden“.", 10000);
+    if (!bericht && !hatLink() && !letzterFehler) hinweis("Alma ist noch nicht verbunden.", { aktion: { text: "Verbinden", aktion: "verbinden", parameter: { id: "alma" } } });
     return bericht;
   };
 
@@ -632,5 +661,6 @@ module.exports = function (ctx) {
       } });
   };
 
-  return { registrieren, aktualisieren, linkSetzen, linkPruefen, hatLink, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler, hinweise, raumNorm };
+  return { registrieren, aktualisieren, linkSetzen, linkPruefen, hatLink, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler, hinweise, raumNorm,
+    zeit, bytesLesen, klartext };
 };

@@ -15,9 +15,9 @@ cssclasses:
 
 > [!eba-neu|ohne-titel]
 > - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen)
-> - [Übungsblatt anlegen](obsidian://studium-autopilot?aktion=uebungsblatt)
+> - [Neues Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
 > - [In Unterlagen suchen](obsidian://studium-autopilot?aktion=suchen&q=path%3AUnterlagen%20)
-> - [Aus ILIAS holen](obsidian://studium-autopilot?aktion=ilias-holen)
+> - [Unterlagen aktualisieren](obsidian://studium-autopilot?aktion=ilias-holen)
 >
 > ```eba-ilias-knopf
 > ```

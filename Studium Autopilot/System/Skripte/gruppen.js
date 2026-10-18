@@ -58,7 +58,8 @@ module.exports = function (ctx) {
   // stundenplan, titel: { B110: "Einführung …" }, ilias: [{ code, status, zentral, kandidaten }] (ctx.ilias.gruppen()) } →
   // [{ code, art, semester, titel, anmeldung: [Texte], quellen: [URLs], geprueft, iliasOffen ("" oder Status einer nicht
   // eindeutigen ILIAS-Gruppe dieses Moduls), waehlbar (Knopf „Meine“), gruppen: [{ …, dein, woher ("ilias" | "gewaehlt" |
-  // "stundenplan" | ""), kandidat }] }] sortiert nach Semester (Reihenfolge in o.semester), Code, Art.
+  // "stundenplan" | ""), kandidat, pfad (Stundenplan-Notiz dieser Gruppe, sonst "") }] }] sortiert nach Semester (Reihenfolge in
+  // o.semester), Code, Art.
   const auswaehlen = (liste, o) => {
     o = o || {};
     const karten = {};
@@ -73,10 +74,12 @@ module.exports = function (ctx) {
       const woher = deinVon(g, o.stundenplan);
       // gewählt: es gibt eine Notiz „Meine Gruppe“ für genau diese Gruppe (Knopf „Abwählen“ bleibt, auch wenn ILIAS oder Alma
       // die Gruppe inzwischen liefern); iliasName: wie ILIAS die Gruppe nennt („Gruppe 4“)
-      const notizen = (o.stundenplan || []).map((x) => (x && x.fm) || {}).filter((fm) => String(fm.gruppe_id || "") === g.id && fm.entfaellt !== true);
+      const mitNotiz = (o.stundenplan || []).filter((x) => x && x.fm && String(x.fm.gruppe_id || "") === g.id && x.fm.entfaellt !== true);
+      const notizen = mitNotiz.map((x) => x.fm);
       const gewaehlt = notizen.some((fm) => fm.herkunft === "gruppe-gewaehlt");
       const il = notizen.find((fm) => fm.herkunft === "ilias-gruppe");
-      kt.gruppen.push(Object.assign({}, g, { dein: !!woher, woher, kandidat: false, gewaehlt, iliasName: il ? String(il.gruppe || "") : "" }));
+      const pfad = mitNotiz.length && mitNotiz[0].f ? mitNotiz[0].f.path : "";
+      kt.gruppen.push(Object.assign({}, g, { dein: !!woher, woher, kandidat: false, gewaehlt, iliasName: il ? String(il.gruppe || "") : "", pfad }));
     }
     // ILIAS: zugeordnete Gruppen sind „aus ILIAS“ (die Notiz kommt mit dem Abruf), nicht eindeutige markieren ihre Kandidaten
     const il = (o.ilias || []).filter((x) => x && x.code);
@@ -134,12 +137,17 @@ module.exports = function (ctx) {
   };
   // Knopf „Meine“ bzw. „Abwählen“: Notiz mit herkunft gruppe-gewaehlt (meine-gruppe.js), geschrieben auf diesem Gerät
   const waehlen = async (g, ab, D) => {
-    const Notice = ctx.obsidian && ctx.obsidian.Notice;
-    const melden = (t) => { if (Notice) new Notice(t, 5000); };
+    const melden = (t) => ctx.hinweis(t);
     const L = ctx.user && typeof ctx.user["meine-gruppe"] === "function" ? ctx.user["meine-gruppe"](ctx) : null;
     if (!L) { melden("Das geht gerade nicht. Bitte Obsidian neu starten."); return; }
     const nr = g.gruppe ? "Gruppe " + g.gruppe : "Die Gruppe";
-    if (ab) { if (await L.abwaehlen(L.obsidianIo(), g)) melden(`${nr} steht nicht mehr in deinem Stundenplan. Die Notiz liegt im Papierkorb.`); return; }
+    // Abwählen: die Notiz geht in den Papierkorb, der Hinweis hat „Rückgängig“ (ctx.papierkorb holt sie mit deinem Text zurück)
+    if (ab) {
+      const io = L.obsidianIo(), text = `${nr} steht nicht mehr in deinem Stundenplan.`;
+      if (ctx.papierkorb) io.papierkorb = async (p) => { await ctx.papierkorb(window.app.vault.getAbstractFileByPath(p), { text }); };
+      if ((await L.abwaehlen(io, g)) && !ctx.papierkorb) melden(text);
+      return;
+    }
     const m = D ? D.module.find((x) => x.code === g.code) : null;
     const r = await L.waehlen(L.obsidianIo(), g, { modul: () => (m && m.f ? { name: m.f.basename, titel: m.titel || "" } : null) });
     if (r.art === "ilias") melden("Deine Gruppe kommt schon aus ILIAS. Wechseln kannst du sie dort.");
@@ -184,7 +192,7 @@ module.exports = function (ctx) {
       const dein = k.gruppen.filter((g) => g.dein);
       const wo = dein.some((g) => g.woher === "ilias") ? "aus ILIAS" : dein.some((g) => g.woher === "gewaehlt") ? "deine Gruppe" : "im Stundenplan";
       // ILIAS zählt anders als Alma: für Gruppen aus ILIAS deren Name („Gruppe 4“), sonst die Nummer der Liste
-      const nameVon = (g) => (g.woher === "ilias" && g.iliasName ? g.iliasName : g.gruppe ? "Gr. " + g.gruppe : g.tag);
+      const nameVon = (g) => (g.woher === "ilias" && g.iliasName ? g.iliasName : g.gruppe ? "Gruppe " + g.gruppe : g.tag);
       sum.createSpan({ cls: "eba-gr-zahl", text: dein.length ? `${wo}: ${dein.map(nameVon).join(", ")}` : `${k.gruppen.length} ${k.gruppen.length === 1 ? "Gruppe" : "Gruppen"}` });
       const inhalt = det.createDiv({ cls: "eba-gr-inhalt" });
       if (k.iliasOffen) inhalt.createEl("p", { cls: "eba-gr-ilias", text: OFFEN[k.iliasOffen] || OFFEN["ohne-treffer"] });
@@ -192,15 +200,23 @@ module.exports = function (ctx) {
       const mitLeitung = k.gruppen.some((g) => g.leitung);
       const tab = inhalt.createEl("table", { cls: "eba-gr-tabelle" });
       const kz = tab.createEl("thead").createEl("tr");
-      for (const t of ["Gr.", "Tag", "Zeit", "Raum"].concat(mitLeitung ? ["Leitung"] : [], k.knoepfe ? [""] : [])) kz.createEl("th", { text: t });
+      for (const t of ["Gruppe", "Tag", "Zeit", "Raum"].concat(mitLeitung ? ["Leitung"] : [], k.knoepfe ? [""] : [])) kz.createEl("th", { text: t });
       const tb = tab.createEl("tbody");
       for (const g of k.gruppen) {
         const z = tb.createEl("tr");
         if (g.dein) z.addClass("eba-gr-dein");
+        // Zeile antippen öffnet die Notiz der Gruppe im Stundenplan (Knopf „Meine“/„Abwählen“ bleibt die Nebenaktion)
+        if (g.pfad) {
+          z.addClass("eba-gr-nav");
+          z.setAttr("tabindex", "0");
+          const los = (ev) => { if (ev.target.closest("button, a")) return; ev.preventDefault(); ctx.oeffnen(g.pfad, { von: z, neu: !!(ev.ctrlKey || ev.metaKey) }); };
+          z.addEventListener("click", los);
+          z.addEventListener("keydown", (ev) => { if (ev.key === "Enter") los(ev); });
+        }
         else if (g.kandidat) z.addClass("eba-gr-kandidat");
         const gr = z.createEl("td", { text: g.gruppe || "–" });
         if (g.dein) gr.createSpan({ cls: "eba-pill ok eba-gr-pille", text: g.woher === "ilias" && g.iliasName ? "in ILIAS " + g.iliasName : PILLE[g.woher] || PILLE.stundenplan,
-          attr: g.woher === "ilias" && g.iliasName ? { title: `ILIAS nennt sie ${g.iliasName}, die Liste Gr. ${g.gruppe || "–"}` } : {} });
+          attr: g.woher === "ilias" && g.iliasName ? { title: `ILIAS nennt sie ${g.iliasName}, die Liste Gruppe ${g.gruppe || "–"}` } : {} });
         else if (g.kandidat) gr.createSpan({ cls: "eba-pill leer eba-gr-pille", text: "laut ILIAS möglich" });
         z.createEl("td", { text: g.tag });
         z.createEl("td", { text: zeitText(g) });
@@ -210,7 +226,7 @@ module.exports = function (ctx) {
         else if (k.knoepfe) {
           const ab = g.gewaehlt;
           const knopf = z.createEl("td", { cls: "eba-gr-knopf" }).createEl("button", { cls: "eba-gr-wahl", text: ab ? "Abwählen" : "Meine",
-            attr: { "aria-label": (ab ? "Nicht mehr meine Gruppe: " : "Meine Gruppe: ") + k.code + (g.gruppe ? " Gr. " + g.gruppe : "") } });
+            attr: { "aria-label": (ab ? "Nicht mehr meine Gruppe: " : "Meine Gruppe: ") + k.code + (g.gruppe ? " Gruppe " + g.gruppe : "") } });
           knopf.addEventListener("click", (ev) => {
             ev.preventDefault();
             knopf.disabled = true;

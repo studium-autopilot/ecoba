@@ -2,6 +2,32 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.6 – Abgaben aus ILIAS und einfachere Bedienung
+
+- **Neu:** Verbindest du unter **Einstellungen & Hilfe** den **ILIAS-Kalender**, stehen die Abgabetermine deiner Übungen bei
+  deinen Fristen. Was dort schon steht, kommt nicht doppelt.
+- **Neu:** Die Vorlesungen deiner Module stehen in diesem Semester von selbst im **Stundenplan**, auch ohne Alma, samt Ausfällen
+  und Raumänderungen. Was du nicht besuchst, blendest du oben in der Notiz mit **Besuche ich nicht** aus.
+- **Einfacher:** Neues legst du in einem Fenster mit allen Angaben und Vorschlägen an, vom Termin mit Uhrzeit und Ort bis zum
+  eigenen Modul. Abbrechen legt nichts an.
+- **Einfacher:** Oben in Terminen, Unterlagen, SQ-Kursen und Lehrveranstaltungen steht ihr Stand zum Antippen, etwa **Erledigt**
+  oder **Gelesen**. Listen auf den Seiten sind nur zum Lesen, ein Tipp öffnet die Notiz.
+- **Übersichtlicher:** Das Menü **Übersicht** steht oben in jeder Notiz, jetzt mit **Stundenplan**. Vom **Dashboard** aus öffnet
+  alles im selben Tab, auch die Kacheln.
+- **Einfacher:** Was du wegwirfst, abhakst oder abwählst, holst du mit **Rückgängig** im Hinweis zurück, statt vorher eine Frage
+  zu beantworten. Gelöschtes landet immer im Papierkorb.
+- **Einheitlicher:** Überall dieselben Wörter: **Aktualisieren** holt neue Daten, **Neue Version installieren** das Update, und
+  die Modulseiten zählen wie Alma in ECTS. Hinweise sind ein kurzer Satz, oft mit dem nächsten Schritt als Knopf.
+- **Übersichtlicher:** Prüfungen sind überall rot und Fristen ocker, auch im Semesterverlauf auf dem **Dashboard** und im
+  **Studienverlauf**. In Fenstern steht der wichtigste Knopf immer an derselben Stelle.
+- **Einfacher:** Auf iPhone und iPad triffst du kleine Knöpfe wie **Ändern**, **Meine** oder die Pfeile im Kalender jetzt
+  leichter. Ein Tipp auf eine Übungsgruppe öffnet ihre Notiz.
+- **Behoben:** Nach dem Start stand kurz ein Fehlertext in Woche, Kalender und **Dashboard**, und Alma oder das Lesen einer PDF
+  hing manchmal bis zum Neustart.
+- **Behoben:** Textfassungen von PDFs verschwanden und kamen wieder, wenn ein Gerät die PDF noch nicht hatte.
+- **Behoben:** Auf **Noten & ECTS** zählte „Bestanden“ Zusatzleistungen mit, und die Erinnerung an die Prüfungsanmeldung kam
+  auch für entfallene Prüfungen.
+
 ## 0.4.5 – PDF-Suche und Seiten aus einem Guss
 
 - **Neu:** Die Suche findet jetzt auch Wörter in deinen PDFs. Zu jeder PDF unter **Unterlagen** entsteht eine Textfassung mit
@@ -29,8 +55,8 @@ Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## 0.4.4 – Modulseiten, neue Designs und schnelleres ILIAS
 
-- **Neu:** Zwei weitere Designs: Flieder in zartem Lila und Klar, weiß und schlicht. Du wählst sie in der Einrichtung oder
-  unter **Einstellungen & Hilfe**, auf jedem Gerät für sich; dunkel bleibt alles wie gewohnt.
+- **Neu:** Zwei weitere Designs zur Auswahl. Du wählst sie in der Einrichtung oder unter **Einstellungen & Hilfe**, auf jedem
+  Gerät für sich; dunkel bleibt alles wie gewohnt.
 - **Neu:** Jede Modulseite zeigt oben deinen Stand, die Prüfung, deine Woche im Semester und was als Nächstes ansteht. Den
   Status änderst du mit einem Tipp, Unterlagen und Notizen stehen als Listen darunter.
 - **Neu:** Hast du einen eigenen Uni-Abgleich, zeigt das **Dashboard** unter **Zu erledigen** seine Punkte zum Prüfen. Du

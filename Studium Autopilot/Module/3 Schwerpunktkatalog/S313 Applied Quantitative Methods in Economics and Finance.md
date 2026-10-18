@@ -41,7 +41,7 @@ cssclasses:
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Schwerpunkt</span></div>
 <h1><span class="eba-code">S313</span> Applied Quantitative Methods in Economics and Finance</h1>
-<div class="eba-meta"><span><b>6</b> ECTS</span><span>FS 4.–6.</span><span>SS</span><span>nicht im Modulhandbuch beschrieben</span><span>Notenblock 66 %</span></div>
+<div class="eba-meta"><span><b>6</b> ECTS</span><span>4.–6. FS</span><span>SS</span><span>nicht im Modulhandbuch beschrieben</span><span>Notenblock 66 %</span></div>
 </div>
 
 ```eba-modul
@@ -53,7 +53,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -79,7 +79,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC

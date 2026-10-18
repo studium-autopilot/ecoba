@@ -144,7 +144,7 @@ module.exports = function (ctx) {
       if (pw.length) leer = pw[0].name || "Vorlesungsfrei";
       else if (sem && sem.vb && tage[4] < sem.vb) { const vb = datum(sem.vb); leer = "Vorlesungsbeginn " + zwei(vb.getDate()) + "." + zwei(vb.getMonth() + 1) + "."; }
       else if (sem && sem.ve && tage[0] > sem.ve) leer = "Vorlesungsfrei";
-      else leer = "Keine Veranstaltungen";
+      else leer = "Keine Lehrveranstaltungen";
     }
     const jetztHm = zwei(jetzt.getHours()) + ":" + zwei(jetzt.getMinutes());
     const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s }) => {
@@ -280,7 +280,9 @@ module.exports = function (ctx) {
   const neu = () => { if (block) block.neu(); };
   const registrieren = () => {
     block = ctx.codeblock(SPRACHE, (quelle, el, c) => {
-      try { zeichnen(el, c); } catch (e) { el.setText("Wochenraster: Fehler – " + e.message); console.error("Wochenraster", e); }
+      // Das Plugin startet die Erweiterungen alphabetisch, modell.js erst danach: bis dahin der Ersatztext des Blocks
+      if (!ctx.modell || !ctx.modell.planwoche) { el.setText(String(quelle || "").trim()); return; }
+      try { zeichnen(el, c); } catch (e) { el.setText("Woche: Fehler – " + e.message); console.error("Woche", e); }
     });
     const bald = ctx.entprellen(neu, 400);
     const wichtig = (f, cache) => {

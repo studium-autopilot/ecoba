@@ -39,6 +39,11 @@ body {
   --eba-label-tracking: 0.09em;
   --eba-label-weight: 600;
   --eba-bar-h: 4px;
+  /* Abschnittsüberschrift (##), je Design (Werte in den Farbschemata), auch für die Bearbeitungsansicht: Linie darüber,
+     Gewicht, Größe. Grundwerte = Klar (ohne Linie). */
+  --eba-h2-linie: transparent;
+  --eba-h2-weight: 650;
+  --eba-h2-size: 1.2em;
 }
 
 /* ---------- 2. Typografie im ganzen Vault ---------- */
@@ -416,7 +421,7 @@ li:has(> a[data-href$="Noten & ECTS"])        { --eba-icon: url("data:image/svg+
 li:has(> a[data-href$="Prüfungen"])           { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 14v2.2l1.6 1'/%3E%3Cpath d='M16 2v4'/%3E%3Cpath d='M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5'/%3E%3Cpath d='M3 10h5'/%3E%3Cpath d='M8 2v4'/%3E%3Ccircle cx='16' cy='16' r='6'/%3E%3C/svg%3E"); }
 li:has(> a[data-href$="Termine & Anmeldungen"]){ --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3Cpath d='M8 14h.01'/%3E%3Cpath d='M12 14h.01'/%3E%3Cpath d='M16 14h.01'/%3E%3Cpath d='M8 18h.01'/%3E%3Cpath d='M12 18h.01'/%3E%3Cpath d='M16 18h.01'/%3E%3C/svg%3E"); }
 li:has(> a[data-href$="Kontakte & Links"])    { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 2v2'/%3E%3Cpath d='M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M8 2v2'/%3E%3Ccircle cx='12' cy='11' r='3'/%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3C/svg%3E"); }
-li:has(> a[data-href$="Stundenplan"])         { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3Cpath d='M8 14h.01'/%3E%3Cpath d='M12 14h.01'/%3E%3Cpath d='M16 14h.01'/%3E%3Cpath d='M8 18h.01'/%3E%3Cpath d='M12 18h.01'/%3E%3Cpath d='M16 18h.01'/%3E%3C/svg%3E"); }
+li:has(> a[data-href$="Stundenplan"])         { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M9 3v18'/%3E%3Cpath d='M15 3v18'/%3E%3C/svg%3E"); } /* Lucide „columns-3“: Wochenspalten, anders als der Kalender von Termine & Anmeldungen */
 li:has(> a[data-href$="Einstellungen & Hilfe"]){ --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
 li:has(> a[href*="aktion=stundenplan"])      { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3Cpath d='M8 14h.01'/%3E%3Cpath d='M12 14h.01'/%3E%3Cpath d='M16 14h.01'/%3E%3Cpath d='M8 18h.01'/%3E%3Cpath d='M12 18h.01'/%3E%3Cpath d='M16 18h.01'/%3E%3C/svg%3E"); }
 li:has(> a[data-href$="Unterlagen"])          { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8'/%3E%3Cpath d='M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z'/%3E%3Cpath d='M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1'/%3E%3C/svg%3E"); }
@@ -658,7 +663,7 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   font-style: normal;
 }
 .eba-wochen i.v { background: color-mix(in srgb, var(--eba-accent-text) 48%, transparent); }
-.eba-wochen i.p { background: color-mix(in srgb, var(--eba-warn) 62%, transparent); }
+.eba-wochen i.p { background: color-mix(in srgb, var(--eba-bad) 30%, var(--eba-card-bg)); } /* Prüfungen rot wie überall, Ocker nur für Fristen (seit 18.10.2026) */
 .eba-wochen i.f { background: color-mix(in srgb, var(--eba-text) 7%, transparent); }
 .eba-wochen i.w { background: color-mix(in srgb, var(--eba-info) 30%, transparent); }
 .eba-wochen i.vorbei { opacity: 0.38; }
@@ -667,7 +672,7 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 .eba-legende span { display: inline-flex; align-items: center; gap: 6px; }
 .eba-legende span::before { content: ""; width: 10px; height: 10px; border-radius: 2px; background: color-mix(in srgb, var(--eba-text) 7%, transparent); }
 .eba-legende .v::before { background: color-mix(in srgb, var(--eba-accent-text) 48%, transparent); }
-.eba-legende .p::before { background: color-mix(in srgb, var(--eba-warn) 55%, transparent); }
+.eba-legende .p::before { background: color-mix(in srgb, var(--eba-bad) 30%, var(--eba-card-bg)); }
 .eba-legende .w::before { background: color-mix(in srgb, var(--eba-info) 30%, transparent); }
 .eba-legende .jetzt::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--eba-text); }
 
@@ -1376,8 +1381,8 @@ body.is-phone .markdown-source-view.is-live-preview.eba .cm-content > .cm-html-e
 body.is-phone .markdown-source-view.is-live-preview.eba .cm-content > .cm-embed-block { margin: 0 0 var(--eba-gap, 8px) !important; }
 body.is-phone .markdown-source-view.is-live-preview.eba .cm-content > .cm-embed-block > .markdown-rendered > .callout { margin: 0 !important; }
 body.is-phone .markdown-source-view.is-live-preview.eba .HyperMD-header-2 {
-  margin-top: 0.9em; padding-top: 7px !important; padding-bottom: 7px !important; border-top: 1px solid var(--eba-text);
-  font-family: var(--eba-font-display); font-size: 1.2em; font-weight: 500; line-height: 1.25;
+  margin-top: 0.9em; padding-top: 7px !important; padding-bottom: 7px !important; border-top: 1px solid var(--eba-h2-linie);
+  font-family: var(--eba-font-display); font-size: 1.2em; font-weight: var(--eba-h2-weight); line-height: 1.25;
 }
 body.is-phone .markdown-source-view.is-live-preview.eba .HyperMD-header-2 .cm-header-2 { font-size: inherit; font-family: inherit; font-weight: inherit; }
 /* HTML-Blöcke (Fußzeile eba-fuss, Kopf) ohne zusätzlichen Editor-Abstand */
@@ -1908,7 +1913,7 @@ body.is-phone .eba-s-noten .eba-rechner p { font-size: 14.5px; }
 /* Modultabellen: auf dem iPhone gestapelte Liste (tabellen.js + 37.tabellen): Titel, Metazeile
    „6 ECTS · offen · 06.02.27 · Block 34 %“, Gruppen „Grundstudium · 60 ECTS“, unten „Gesamt 81 ECTS“. */
 /* Bearbeitungsansicht: Linie über „Module“ wie in der Leseansicht (dort steht die Kennzahlen-Karte dazwischen, die Linie bleibt) */
-body.is-phone .markdown-source-view.is-live-preview.eba-s-noten .cm-content > .HyperMD-header-2:not(.HyperMD-header-2 ~ .HyperMD-header-2) { border-top: 1px solid var(--eba-text); }
+body.is-phone .markdown-source-view.is-live-preview.eba-s-noten .cm-content > .HyperMD-header-2:not(.HyperMD-header-2 ~ .HyperMD-header-2) { border-top: 1px solid var(--eba-h2-linie); }
 /* Kennzahlen: oben die zwei Hauptzahlen Gesamtnote | ECTS, darunter die beiden
    Block-Schnitte kleiner (Nebenzahlen), Unterzeilen ohne Umbruch-Lücken; gleiche Reihenfolge in Lese- und Bearbeitungsansicht */
 body.is-phone .eba-s-noten .eba-kz-reihe.vier > .eba-kachel:nth-child(4) { order: 1; }
@@ -2166,17 +2171,14 @@ body.is-phone .eba-s-stundenplan .eba-woche .eba-ev { padding: 4px 5px; }
    („6 ECTS · offen · 06.02.27“), „Öffnen ↗“ rechts, Gruppen als kleines Label mit Summe, leere Tabellen nur „Leer.“.
    Die Daten kommen aus der Bases-Ansicht, nicht aus den Zellen (Obsidian zeichnet nur Spalten/Zeilen im Ausschnitt).
    Schalter ist die Variable --eba-tliste: nur wo sie 1 ist, legt das Skript die Liste an; dann blendet die Regel unten
-   Spaltenkopf, Zeilen und Summenzeile der Tabelle aus. Am PC/iPad gilt sie nur auf den Seiten
-   unten, sonst bleibt die Tabelle. Gilt in Lese- und Bearbeitungsansicht (die Karte ist in beiden dieselbe Bases-Einbettung).
-   Ausnahmen (eigene Lösung der Seite): Einstellungen (bearbeitbare Angaben), Modulseite „Mein Stand“; sonst per Karte
-   [!eba-tabelle|…|handy-tabelle].
+   Spaltenkopf, Zeilen und Summenzeile der Tabelle aus. Seit 0.4.6 überall, auf allen Geräten und ohne Ausnahmen (Entscheidung E4:
+   Tabellen nur lesen, ändern im Modulfeld und im Kopf der Notiz; vorher blieben am PC/iPad Tabellen außerhalb der Seiten unten,
+   „Mein Stand“ der Modulseite, Einstellungen und Karten mit handy-tabelle bearbeitbar). Gilt in Lese- und Bearbeitungsansicht
+   (die Karte ist in beiden dieselbe Bases-Einbettung).
    Wie iOS-Listen: rechts Note („1,7“) bzw. Status-Chip (Spalte „Status“/„Stand“, Farbe aus dem Text),
    sonst „Öffnen ↗“; Zeilen, die eine Notiz öffnen, mit Pfeil; Werte, die in einer Gruppe überall gleich sind (z. B.
    „Block 34 %“), stehen einmal im Gruppenkopf, die Summe rechts; „–“ entfällt. Markdown-Tabellen ab 4 Spalten gestapelt (unten). */
 body.is-phone .callout[data-callout="eba-tabelle"] { --eba-tliste: 1; }
-body.is-phone .callout[data-callout="eba-tabelle"][data-callout-metadata*="handy-tabelle"],
-body.is-phone .eba-s-einstellungen .callout[data-callout="eba-tabelle"],
-body.is-phone .eba-s-modul .bases-view[data-view-name="Mein Stand"] { --eba-tliste: 0; }
 
 /* Tabelle ausblenden, sobald die Liste da ist (Kopf, Zeilen, Summenzeile); kein seitliches Wischen mehr */
 body.is-phone .bases-view:has(> .eba-tl) > :not(.eba-tl) { display: none !important; }
@@ -2220,8 +2222,6 @@ body.is-phone .eba-tl-w + .eba-tl-w::before { content: "·"; margin: 0 3px 0 6px
 body.is-phone .eba-tl-k { color: var(--eba-faint); }
 body.is-phone .eba-tl-meta .internal-link { color: var(--eba-muted); text-decoration: none; }
 body.is-phone .eba-tl-meta .eba-pill { font-size: 11px; padding: 0 7px; line-height: 1.5; }
-body.is-phone .eba-tl-check { gap: 5px; align-items: center; cursor: pointer; }
-body.is-phone .eba-tl-check input { width: 15px; height: 15px; margin: 0; flex: none; }
 body.is-phone .eba-tl-aktion { flex: none; font-size: 13px; white-space: nowrap; }
 /* Rechts wie in iOS-Listen: Note als Zahl, sonst Status-Chip, sonst „Öffnen ↗“; Zeilen, die eine Notiz öffnen, mit Pfeil */
 body.is-phone .eba-tl-ende { flex: none; display: flex; align-items: center; gap: 8px; max-width: 45%; }
@@ -2263,10 +2263,9 @@ body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .ca
 body.is-phone .callout[data-callout="eba-tabelle"]:not(.eba-s-studienverlauf .callout) table:has(th:nth-child(4)) > tbody > tr > td:nth-child(n+3):not(:empty) ~ td:nth-child(n+3):not(:empty) { margin-left: 5px; }
 
 /* iPad und PC (Designsprache: Zeilen statt Kästen, docs/design.md „Tabellen“): dieselbe Liste. Bis 18.10.2026 nur auf der
-   Modulseite (Abschnitt 58.6), seither Seite für Seite eingeschaltet (erste Regel): Noten & ECTS, Unterlagen, Stundenplan. Das Aussehen hängt nur an den Klassen der
-   Liste (.eba-tl…), die tabellen.js nur zeichnet, wo --eba-tliste: 1 gilt. Ausnahme: „Mein Stand“ der Modulseite. */
-body:not(.is-phone) :is(.eba-s-modul, .eba-s-noten, .eba-s-unterlagen, .eba-s-stundenplan) .callout[data-callout="eba-tabelle"] { --eba-tliste: 1; }
-body:not(.is-phone) .eba-s-modul .bases-view[data-view-name="Mein Stand"] { --eba-tliste: 0; }
+   Modulseite (Abschnitt 58.6), dann Seite für Seite (Noten & ECTS, Unterlagen, Stundenplan), seit 0.4.6 überall (E4). Das Aussehen
+   hängt nur an den Klassen der Liste (.eba-tl…), die tabellen.js nur zeichnet, wo --eba-tliste: 1 gilt. */
+body:not(.is-phone) .callout[data-callout="eba-tabelle"] { --eba-tliste: 1; }
 body:not(.is-phone) .bases-view:has(> .eba-tl) > :not(.eba-tl) { display: none !important; }
 body:not(.is-phone) .bases-view:has(> .eba-tl) { overflow: visible !important; height: auto !important; }
 body:not(.is-phone) .eba-tl { display: block; margin-top: 2px; font-size: 15px; line-height: 1.4; color: var(--eba-text); }
@@ -2311,8 +2310,6 @@ body:not(.is-phone) .eba-tl-w + .eba-tl-w::before { content: "·"; margin: 0 4px
 body:not(.is-phone) .eba-tl-k { color: var(--eba-faint); }
 body:not(.is-phone) .eba-tl-meta .internal-link { color: var(--eba-muted); text-decoration: none; }
 body:not(.is-phone) .eba-tl-meta .eba-pill { font-size: 11.5px; padding: 0 8px; line-height: 1.55; }
-body:not(.is-phone) .eba-tl-check { gap: 6px; align-items: center; cursor: pointer; }
-body:not(.is-phone) .eba-tl-check input { width: 15px; height: 15px; margin: 0; flex: none; }
 body:not(.is-phone) .eba-tl-ende { flex: none; display: flex; align-items: center; gap: 12px; max-width: 45%; }
 body:not(.is-phone) .eba-tl-ende .eba-pill { font-size: 12px; padding: 1px 9px; line-height: 1.5; white-space: nowrap; }
 body:not(.is-phone) .eba-tl-note { font-size: 18px; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--eba-text); }
@@ -2384,15 +2381,9 @@ body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-tabelle"] .bases
 body:not(.is-phone) .eba-s-dashboard .eba-woche { grid-template-rows: 30px !important; grid-auto-rows: 9px; padding-top: 8px; padding-bottom: 10px; }
 body:not(.is-phone) .eba-s-dashboard .eba-tagspalte { position: absolute; grid-row: auto !important; grid-column-end: span 1 !important; top: 0; bottom: 0; left: -3px; right: -3px; margin: 0; z-index: 0; }
 
-/* ---------- 7. Bereiche-Symbol im Gruß-Kopf (menue.js): mittig zur Datumszeile; falls das Symbol (SVG) fehlt, zeichnet
-   CSS dasselbe Raster-Symbol, damit nie ein leerer Kasten erscheint. ---------- */
+/* ---------- 7. Gruß-Kopf: Gruß und Datum mittig zueinander (das Symbol der Übersicht steht seit 0.4.6 in der Kopfleiste jeder
+   Notiz, menue.js). ---------- */
 body:not(.is-phone) .eba-s-dashboard .eba-kz-kopf { align-items: center; }
-body:not(.is-phone) .eba-s-dashboard .eba-kz-kopf > button.eba-menue-knopf { margin-top: 0; margin-bottom: 0; }
-body:not(.is-phone) button.eba-menue-knopf:not(:has(svg))::after {
-  content: ""; width: 17px; height: 17px; background-color: currentColor;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='7' height='7' x='3' y='3' rx='1'/%3E%3Crect width='7' height='7' x='14' y='3' rx='1'/%3E%3Crect width='7' height='7' x='14' y='14' rx='1'/%3E%3Crect width='7' height='7' x='3' y='14' rx='1'/%3E%3C/svg%3E") center / contain no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.9' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect width='7' height='7' x='3' y='3' rx='1'/%3E%3Crect width='7' height='7' x='14' y='3' rx='1'/%3E%3Crect width='7' height='7' x='14' y='14' rx='1'/%3E%3Crect width='7' height='7' x='3' y='14' rx='1'/%3E%3C/svg%3E") center / contain no-repeat;
-}
 
 /* --- 37.termin --- */
 /* Termin-Notizen (Termine/*.md, cssclasses: eba-s-termin; Aktion „termin“ in System/Skripte/notizen.js) – nur iPhone.
@@ -2578,7 +2569,7 @@ body .markdown-source-view.is-live-preview.eba-s-termine .cm-content > .cm-line.
 /* Linie über jeder ##-Überschrift wie in der Leseansicht (dort hat auch „Diese Woche“ eine). Die globale Regel „erste
    Überschrift ohne Linie“ (36c) zählt nur Zeilen im DOM; der Editor zeichnet nur den sichtbaren Ausschnitt, dadurch
    fehlte die Linie beim Scrollen auch über „Nächste Woche“. */
-body.is-phone .markdown-source-view.is-live-preview.eba-s-termine.eba .cm-content > .cm-line.HyperMD-header.HyperMD-header-2 { border-top: 1px solid var(--eba-text); }
+body.is-phone .markdown-source-view.is-live-preview.eba-s-termine.eba .cm-content > .cm-line.HyperMD-header.HyperMD-header-2 { border-top: 1px solid var(--eba-h2-linie); }
 
 /* ---- Hierarchie der Liste (alle Geräte): Titel > Kalender > ## (1,2em) > Tagesziffer > Termin (14,5 px, Textfarbe) > Pillen ---- */
 body .eba-s-termine.eba h2 { font-size: 1.2em; }
@@ -2625,8 +2616,8 @@ body .eba-s-termine .callout[data-callout="eba-regel"] > .callout-content > ul {
 body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-content > .cm-line:not(.cm-active):has(> br:only-child) { height: 3px; min-height: 0; padding: 0 !important; font-size: 0; line-height: 3px; overflow: hidden; }
 body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-content > .cm-line.HyperMD-header-2 {
   padding-top: 37px !important; padding-bottom: 8px !important;
-  background: linear-gradient(var(--eba-text), var(--eba-text)) no-repeat 0 26px / 100% 1px;
-  font-family: var(--eba-font-display); font-size: 1.2em; font-weight: 500; line-height: 1.25;
+  background: linear-gradient(var(--eba-h2-linie), var(--eba-h2-linie)) no-repeat 0 26px / 100% 1px;
+  font-family: var(--eba-font-display); font-size: 1.2em; font-weight: var(--eba-h2-weight); line-height: 1.25;
 }
 body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-content > .cm-line.HyperMD-header-2 .cm-header-2 { font-size: inherit; font-family: inherit; font-weight: inherit; }
 body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-content { padding-bottom: 1.5rem !important; }
@@ -3255,6 +3246,9 @@ body:not(.is-phone) .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsbl
   --vl-ocker: var(--eba-warn);
   --vl-ocker-t: var(--eba-warn);
   --vl-ocker2: var(--eba-border);
+  --vl-pruef: var(--eba-bad); /* Prüfungen rot wie überall (seit 18.10.2026; vorher Ocker wie Fristen) */
+  --vl-pruef-t: var(--eba-bad);
+  --vl-pruef2: var(--eba-border);
   --vl-salbei2: var(--eba-border);
   --vl-ferien: var(--eba-border);
   --vl-ferien2: var(--eba-surface-2);
@@ -3285,6 +3279,9 @@ body:not(.is-phone) .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsbl
     --vl-ocker: color-mix(in srgb, var(--eba-warn) 62%, var(--eba-card-bg));
     --vl-ocker2: color-mix(in srgb, var(--eba-warn) 22%, var(--eba-card-bg));
     --vl-ocker-t: color-mix(in srgb, var(--eba-warn) 80%, var(--eba-text));
+    --vl-pruef: color-mix(in srgb, var(--eba-bad) 30%, var(--eba-card-bg)); /* wie die Prüfungsphase unter Prüfungen */
+    --vl-pruef2: color-mix(in srgb, var(--eba-bad) 12%, var(--eba-card-bg));
+    --vl-pruef-t: color-mix(in srgb, var(--eba-bad) 85%, var(--eba-text));
     --vl-salbei2: color-mix(in srgb, var(--eba-accent-text) 20%, var(--eba-card-bg));
     --vl-ferien: color-mix(in srgb, var(--eba-info) 30%, var(--eba-card-bg));
     --vl-ferien2: color-mix(in srgb, var(--eba-info) 12%, var(--eba-card-bg));
@@ -3405,8 +3402,8 @@ body:not(.is-phone) .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsbl
 .eba-vl-b { position: absolute; top: 0; bottom: 0; display: block; overflow: hidden; }
 .eba-vl-b.vl { background: var(--vl-salbei); }
 .eba-vl-b.pause { background: var(--vl-ferien); }
-.eba-vl-b.pruef { background: var(--vl-ocker); }
-.eba-vl-b.pruef.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-ocker) 0 3px, var(--vl-ocker2) 3px 6px); }
+.eba-vl-b.pruef { background: var(--vl-pruef); }
+.eba-vl-b.pruef.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-pruef) 0 3px, var(--vl-pruef2) 3px 6px); }
 .eba-vl-b.vl.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-salbei) 0 3px, var(--vl-salbei2) 3px 6px); }
 .eba-vl-b.pause.geschaetzt { background: repeating-linear-gradient(135deg, var(--vl-ferien) 0 3px, var(--vl-ferien2) 3px 6px); }
 /* Vorlesungsfreie Tage der Lupe: je Tag ein schmaler Strich in der Farbe der Pausen, in der Legende ebenso schmal */
@@ -3424,9 +3421,9 @@ body:not(.is-phone) .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsbl
 .eba-vl-fahne.links .tuch { left: auto; right: 0; border-left-width: 1px; border-left-color: var(--eba-border-strong); border-right-width: 2px; border-right-color: var(--eba-text); border-radius: var(--vl-rad) 0 0 var(--vl-rad); }
 .eba-vl-fahne.test .tuch { font-weight: 500; color: var(--eba-muted); }
 .eba-vl-fahne.gruppe { cursor: default; }
-.eba-vl-fahne.naechste .tuch { color: var(--vl-ocker-t); border-color: var(--vl-ocker); border-left-color: var(--eba-warn); }
-.eba-vl-fahne.naechste.links .tuch { border-left-color: var(--vl-ocker); border-right-color: var(--eba-warn); }
-.eba-vl-fahne.naechste .mast { background: var(--eba-warn); }
+.eba-vl-fahne.naechste .tuch { color: var(--vl-pruef-t); border-color: var(--vl-pruef); border-left-color: var(--eba-bad); }
+.eba-vl-fahne.naechste.links .tuch { border-left-color: var(--vl-pruef); border-right-color: var(--eba-bad); }
+.eba-vl-fahne.naechste .mast { background: var(--eba-bad); }
 .eba-vl-fahne.vorbei { opacity: 0.55; }
 .eba-vl-fahne.erledigt .tuch { color: var(--eba-good); border-left-color: var(--eba-good); }
 .eba-vl-fahne.hier { cursor: default; }
@@ -3585,8 +3582,8 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
    verbindungen.js:    ```eba-schloss <id>``` (.eba-schloss; in einer Karte blendet :has() den übrigen Inhalt aus),
                        ```eba-verbindungen``` (.eba-vb-*), Verbinden-Fenster (.eba-modal-verbinden)
    modell.js:          ```eba-semesterdaten``` (.eba-sd-*)
-   darstellung.js:     ```eba-darstellung``` (Umschalter .eba-ds, auch in der Einrichtung)
-   Nur Farb-Tokens (--eba-*), damit es hell und dunkel passt. */
+   darstellung.js:     ```eba-darstellung``` (Umschalter .eba-ds, Design-Kacheln .eba-dk, beides auch in der Einrichtung)
+   Nur Farb-Tokens (--eba-*), damit es hell und dunkel passt; feste Farben nur in den Vorschau-Variablen --m-* der Kacheln. */
 
 /* Knöpfe in Karten und Listen (klein, ruhig; cta = Akzent) */
 .eba-vb-knopf {
@@ -3602,6 +3599,14 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
 .eba-vb-knopf.cta { border-color: color-mix(in srgb, var(--eba-accent) 45%, transparent); background: var(--eba-accent-soft); color: var(--eba-accent-text) !important; }
 .eba-vb-knopf.leise { border-color: transparent; background: transparent; color: var(--eba-muted) !important; font-weight: 500; }
 .eba-vb-knopf.leise:hover { color: var(--eba-text) !important; background: color-mix(in srgb, var(--eba-text) 6%, transparent); }
+/* Tippflächen auf iPhone und iPad mindestens 44 × 44 px (docs/design.md, Grundsatz 9; seit 18.10.2026): kleine Knöpfe behalten ihr
+   Aussehen, eine unsichtbare Fläche (::after) wächst auf mindestens 44 px. Muster: Wochenpfeile (Abschnitt 55). */
+body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk-mehr, button.eba-lk-auf, button.eba-gr-wahl,
+  .eba-kalender .eba-kal-nav button, .eba-sp-chip, button.eba-ang-wahl-fertig, button.eba-mod-alma-knopf, button.eba-lp-box) { position: relative; }
+body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk-mehr, button.eba-lk-auf, button.eba-gr-wahl,
+  .eba-kalender .eba-kal-nav button, .eba-sp-chip, button.eba-ang-wahl-fertig, button.eba-mod-alma-knopf, button.eba-lp-box)::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+}
 
 /* Leere Blöcke: ```eba-personalisieren``` ohne Argument (früher die Personalisieren-Karte, seit 0.3.0 leer; ihre Klassen
    eba-perso* sind seit 16.10.2026 entfernt) und ein offenes Schloss */
@@ -3739,6 +3744,26 @@ body.is-phone .markdown-preview-view .markdown-preview-sizer > div:has(> h2[data
 .eba-modal .eba-modal-hinweis { margin: 10px 0 0; font-size: 12.5px; color: var(--eba-muted); }
 .eba-modal .eba-modal-erfolg { margin: 4px 0 0; font-weight: 600; color: var(--eba-good); }
 .eba-modal .modal-button-container { margin-top: 16px; }
+/* Knopfreihe aller Fenster (eba-modal und das Eingabefenster sa-eingabe aus main.js): Hauptknopf (mod-cta) ganz rechts, auf
+   dem iPhone untereinander über die ganze Breite mit dem Hauptknopf oben, auf iPhone und iPad 44 px hoch (docs/design.md
+   „Knöpfe“; seit 18.10.2026, vorher je Fenster anders: „Verbinden | Abbrechen“, „OK | Abbrechen“ gegen „Abbrechen | Speichern“). */
+:is(.eba-modal, .sa-eingabe) .modal-button-container > .mod-cta { order: 1; }
+body.is-mobile :is(.eba-modal, .sa-eingabe) .modal-button-container button { min-height: 44px; }
+body.is-phone :is(.eba-modal, .sa-eingabe) .modal-button-container { flex-direction: column-reverse; align-items: stretch; }
+body.is-phone :is(.eba-modal, .sa-eingabe) .modal-button-container button { width: 100%; margin: 0; }
+/* Eingabefenster (main.js, Eingabe: Titel einer neuen Notiz u. a.) wie die übrigen Fenster: Frage als Titelzeile, Feld mit
+   16 px Schrift (iOS zoomt sonst), Rahmen und Rundung aus den Tokens */
+.modal.sa-eingabe { width: min(560px, calc(100vw - 24px)); }
+/* Fenster wie Karten: Rahmen und Rundung aus den Tokens, kein Schatten (vorher Obsidians Schatten und Rundung) */
+.modal:is(.eba-modal, .sa-eingabe) { border: 1px solid var(--eba-border-strong); border-radius: var(--eba-radius); box-shadow: var(--eba-shadow); }
+.sa-eingabe .sa-frage { margin: 0 0 12px; font-size: 1.05em; font-weight: 600; line-height: 1.4; color: var(--eba-text); }
+.sa-eingabe input.sa-feld {
+  box-sizing: border-box; min-height: 40px; padding: 6px 12px; border: 1px solid var(--eba-border-strong); border-radius: var(--eba-radius-s);
+  background: var(--eba-bg); color: var(--eba-text); font-size: 16px; box-shadow: none;
+}
+.sa-eingabe input.sa-feld:focus { border-color: var(--eba-accent); outline: 2px solid var(--eba-accent-soft); outline-offset: 0; }
+body.is-mobile .sa-eingabe input.sa-feld { min-height: 44px; }
+.sa-eingabe .modal-button-container { margin-top: 16px; }
 .eba-modal .eba-modal-schritte b, .eba-modal .eba-modal-text b, .eba-modal .eba-modal-hinweis b { font-weight: 600; }
 /* „Mehr erfahren“: Hintergrund eingeklappt (verbindungen.js) */
 .eba-modal .eba-modal-mehr { margin: 12px 0 0; font-size: 13px; color: var(--eba-muted); }
@@ -3781,18 +3806,39 @@ body.is-phone .eba-form-hilfe { grid-column: 1; }
 .eba-ds button.eba-ds-wahl[aria-checked="true"] { border-color: var(--eba-border-strong); background: var(--eba-card-bg); color: var(--eba-text); }
 :is(body.is-mobile, .eba-ei) .eba-ds { display: flex; }
 :is(body.is-mobile, .eba-ei) .eba-ds button.eba-ds-wahl { min-width: 0; min-height: 44px; font-size: 15px; }
-/* Design (darstellung.js): unter dem Umschalter je Design eine Zeile (.eba-vb, Einstellungen & Hilfe) bzw. eine Auswahl
-   (.eba-ei-option, Einrichtung). Das Farbmuster zeigt Seite und Akzent des Designs selbst, gleich, welches gerade gilt. */
-.eba-ds + .eba-dz, .eba-ei-wahl.eba-ei-design { margin-top: 12px; }
-.eba-dz-muster {
-  --m-seite: #faf6ee; --m-akzent: #2f5d46;
-  position: relative; flex: none; width: 30px; height: 30px; border-radius: 50%;
-  background: var(--m-seite); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-text) 16%, transparent);
+/* Design (darstellung.js, seit 18.10.2026): unter dem Umschalter drei gleiche Vorschau-Kacheln ohne Text (.eba-dk, Einstellungen &
+   Hilfe und Einrichtung; bis dahin Zeilen mit Namen). Jede zeigt eine Mini-Karte in den hellen Farben und der Rundung (etwa ein
+   Drittel) ihres Designs, gleich, welches gerade gilt: Seite, Karte mit Rahmen, Akzent, zwei Textzeilen. Gewählt: Ring und
+   Haken im Akzent des geltenden Designs. Am PC so breit wie der Umschalter, auf iPhone, iPad und in der Einrichtung über die
+   ganze Breite; jede Kachel mindestens 44 px hoch. Der Haken ragt 6 px über die Ecke (nichts darum schneidet ab). */
+.eba-dk { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; max-width: 320px; margin-top: 12px; }
+:is(body.is-mobile, .eba-ei) .eba-dk { max-width: none; }
+.eba-dk button.eba-dk-wahl {
+  --m-seite: #faf6ee; --m-karte: #fffdf8; --m-rand: #e6dccb; --m-text: #2a2119; --m-akzent: #2f5d46; --m-rund: 2px;
+  position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: auto; min-height: 64px;
+  margin: 0; padding: 12px; border: 1px solid color-mix(in srgb, var(--eba-text) 16%, transparent); border-radius: var(--eba-radius);
+  background: var(--m-seite); box-shadow: none; cursor: pointer;
 }
-.eba-dz-muster::after { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--m-akzent); }
-.eba-dz-muster[data-design="flieder"] { --m-seite: #f7f2fb; --m-akzent: #7446a6; }
-.eba-dz-muster[data-design="klar"] { --m-seite: #ffffff; --m-akzent: #2a5bd7; }
-.eba-ei-option .eba-dz-muster { margin-left: auto; }
+.eba-dk button.eba-dk-wahl[data-design="flieder"] { --m-seite: #f7f2fb; --m-karte: #fdfaff; --m-rand: #e5d9f0; --m-text: #2a2133; --m-akzent: #7446a6; --m-rund: 6px; }
+.eba-dk button.eba-dk-wahl[data-design="klar"] { --m-seite: #ffffff; --m-karte: #ffffff; --m-rand: #e4e7eb; --m-text: #16191f; --m-akzent: #2a5bd7; --m-rund: 4px; }
+.eba-dk button.eba-dk-wahl:hover { background: var(--m-seite); box-shadow: none; border-color: color-mix(in srgb, var(--eba-accent) 45%, var(--eba-border)); }
+.eba-dk button.eba-dk-wahl:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 3px; box-shadow: none; }
+.eba-dk button.eba-dk-wahl[aria-checked="true"] { border-color: var(--eba-accent); box-shadow: 0 0 0 1px var(--eba-accent); }
+.eba-dk button.eba-dk-wahl[aria-checked="true"]::before,
+.eba-dk button.eba-dk-wahl[aria-checked="true"]::after { content: ""; position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; }
+.eba-dk button.eba-dk-wahl[aria-checked="true"]::before { background: var(--eba-accent); box-shadow: 0 0 0 2px var(--eba-bg); }
+.eba-dk button.eba-dk-wahl[aria-checked="true"]::after {
+  background: var(--text-on-accent, #fff);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 11px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M20 6 9 17l-5-5'/%3E%3C/svg%3E") center / 11px no-repeat;
+}
+.eba-dk-karte {
+  display: flex; flex-direction: column; gap: 5px; width: 100%; max-width: 120px; padding: 8px 9px;
+  border: 1px solid var(--m-rand); border-radius: var(--m-rund); background: var(--m-karte);
+}
+.eba-dk-akzent { width: 45%; height: 6px; border-radius: 999px; background: var(--m-akzent); }
+.eba-dk-zeile { width: 85%; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--m-text) 16%, transparent); }
+.eba-dk-zeile.eba-dk-kurz { width: 55%; }
 /* ---------- Ende Abschnitt 43 ---------- */
 
 /* ---------- 44. Musterstudienpläne (musterplan.js, ```eba-musterplan```) ----------
@@ -4288,7 +4334,7 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
 .eba-lk-karte {
   box-sizing: border-box; width: 100%; max-width: 600px; margin: auto; padding: 28px 30px 30px;
   border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 28px -18px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--eba-shadow); /* kein Schatten (Designsprache), bis 18.10.2026 der einzige feste Schatten */
   font-size: 1.3em; line-height: 1.5; color: var(--eba-text);
 }
 .eba-lk-ort { margin-bottom: 18px; text-align: center; font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--eba-muted); }
@@ -4922,10 +4968,10 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-h
   margin-top: 1.5em;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
-  border-top: 1px solid var(--eba-text);
+  border-top: 1px solid var(--eba-h2-linie);
   font-family: var(--eba-font-display);
-  font-size: 1.35em;
-  font-weight: 500;
+  font-size: var(--eba-h2-size);
+  font-weight: var(--eba-h2-weight);
   line-height: 1.25;
 }
 body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-header-2 .cm-header-2 { font-size: inherit; font-family: inherit; font-weight: inherit; }
@@ -5167,8 +5213,12 @@ body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-t
    einer Reihe (in einer Reihe zu fünft wären sie dort nur 123 px breit, „Orientierungsprüfung“ bräche mitten im Wort); bis
    760 px (iPhone, geteiltes iPad) darunter 2 × 2. */
 .eba-kz-reihe:has(> .frist) { grid-template-columns: minmax(0, 1.8fr) repeat(4, minmax(0, 1fr)); }
-.eba-kz-reihe > .eba-kachel.frist { background: color-mix(in srgb, var(--eba-accent) 8%, var(--eba-card-bg)); }
-.eba-kz-reihe > .eba-kachel.frist .k { color: var(--eba-accent-text); }
+/* Frist in der Farbe der Fristen (Ocker), nicht im Akzent: in Flieder lag die rosa Kante sonst nah am Rot der Prüfungen
+   (seit 18.10.2026). Kante bzw. obere Linie je Design über .akzent.frist. */
+.eba-kz-reihe > .eba-kachel.frist { background: color-mix(in srgb, var(--eba-warn) 8%, var(--eba-card-bg)); }
+.eba-kz-reihe > .eba-kachel.frist .k { color: var(--eba-warn); }
+.eba-kz-reihe > .eba-kachel.akzent.frist { border-top-color: var(--eba-warn); }
+.eba-kz-reihe > .eba-kachel.akzent.frist::before { background: var(--eba-warn); }
 .eba-kz-reihe > .eba-kachel.frist .v.text { font-family: var(--font-interface); font-size: 1.3em; font-weight: 650; line-height: 1.25; }
 .eba-kz-reihe > .eba-kachel.frist .s { color: var(--eba-text); font-weight: 500; }
 @container eba-kz (max-width: 980px) {
@@ -5281,3 +5331,37 @@ body.is-mobile .eba-mod .eba-mod-alma button.eba-mod-alma-knopf { height: 44px; 
   .eba-li .eba-li-art { display: none; }
 }
 /* ---------- Ende Abschnitt 63 ---------- */
+
+/* ---------- 64. Bedien-Bausteine (formular.js, kopf.js; seit 0.4.6, docs/architektur.md „Bedien-Bausteine“) ----------
+   64.1 Fenster „Neu …“ (formular.js, ctx.formular): EIN Fenster für alle Anlege-Aktionen, Aufbau wie „Deine Angaben“ (eba-form,
+   Abschnitt 43). Ein Fehler steht unter seinem Feld in --eba-bad. Auf iPhone und iPad Felder 44 px hoch mit 16 px Schrift (sonst
+   zoomt Safari beim Antippen); der Inhalt rollt, damit ein Feld mit Fokus über der Tastatur bleibt. */
+.eba-modal-neu .eba-form-hilfe.fehler { color: var(--eba-bad); }
+.eba-modal-neu :is(.eba-modal-feld, .eba-form-auswahl) { box-sizing: border-box; }
+body.is-mobile .eba-modal-neu :is(.eba-modal-feld, .eba-form-auswahl) { min-height: 44px; font-size: 16px; }
+body.is-mobile .modal.eba-modal-neu .modal-content { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+body.is-phone .eba-modal-neu .eba-modal-feld.eba-form-kurz { max-width: none; }
+
+/* 64.2 Kopf-Karte (kopf.js): unter dem Titel jeder Termin-, Stundenplan-, SQ- und Begleitnotiz eine Zeile wie der Kopf der
+   Vorlesungsnotiz (.eba-vorl-karte, 37.vorlesung): links Art · Modul · Tag als Label, rechts genau ein Status-Knopf. Gleich in
+   Lese- und Bearbeitungsansicht (dort ein Block unter der Überschrift). Zwischenstand getönt im Akzent (SQ-Kurs angemeldet),
+   „Besuche ich nicht“ leise. Der Status-Knopf (auch Vorlesung, Übungsblatt) hat auf iPhone und iPad 44 px Tippfläche. */
+.eba-notizkopf { margin: 4px 0 16px; }
+.eba-notizkopf .eba-vorl-karte { padding: 8px 10px 8px 14px; }
+.eba-notizkopf .eba-vorl-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eba-notizkopf button.eba-vorl-status.zwischen { border-color: color-mix(in srgb, var(--eba-accent) 50%, transparent); background: var(--eba-accent-soft); color: var(--eba-accent-text); }
+.eba-notizkopf button.eba-vorl-status.leise { border-color: var(--eba-border-strong); background: transparent; color: var(--eba-muted); }
+.eba-notizkopf button.eba-vorl-status .eba-vorl-sym:last-child:not(:first-child) { width: 12px; height: 12px; margin-left: -1px; }
+/* Bearbeitungsansicht: Block-Widget von CodeMirror, Abstand als Innenabstand (Ränder misst CodeMirror nicht mit) */
+.markdown-source-view.is-live-preview .cm-content > .eba-notizkopf { margin: 0; padding: 12px 0 14px; }
+@container eba-vorl (max-width: 480px) { .eba-notizkopf .eba-vorl-label { white-space: normal; } }
+body.is-mobile .eba-vorl button.eba-vorl-status { position: relative; }
+body.is-mobile .eba-vorl button.eba-vorl-status::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
+}
+
+/* 64.3 Antippen öffnet (ctx.oeffnen): Kacheln des Dashboards (dashboard.js, data-pfad) und Zeilen der Übungsgruppen mit Notiz im
+   Stundenplan (gruppen.js) öffnen ihre Notiz; der Knopf der Zeile bleibt die Nebenaktion */
+:is(.eba-kachel[data-pfad], tr.eba-gr-nav) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:is(.eba-kachel[data-pfad], tr.eba-gr-nav):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+/* ---------- Ende Abschnitt 64 ---------- */

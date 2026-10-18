@@ -27,8 +27,10 @@ werden: [architektur.md](architektur.md), „Darstellung“. Regeln für Skripte
 8. **Symbole nur mit Bedeutung.** Ein Symbol steht nur, wo es etwas sagt, das der Titel nicht sagt (Ort, Kontakt, Achtung,
    ein Zustand, verschiedene Themen in einer Zeilenliste). Schmückende Symbole entfallen. Wenn, dann Lucide (24er-Raster,
    Strich 2, `currentColor`), keine Emojis.
-9. **Tippen geht immer.** Tippflächen auf iPhone und iPad mindestens 44 px, Eingabefelder 16 px Schrift.
-10. **Kurze Texte.** Du-Form, ohne Fachwörter, wie im Changelog (siehe [CONTRIBUTING.md](../CONTRIBUTING.md)).
+9. **Tippen geht immer.** Tippflächen auf iPhone und iPad mindestens 44 px, Eingabefelder 16 px Schrift. Kleine Knöpfe
+   behalten ihr Aussehen und bekommen eine unsichtbare Fläche (`::after`, `eba-core.css` Abschnitt 43).
+10. **Kurze Texte, gleiche Wörter.** Du-Form, ohne Fachwörter, wie im Changelog (siehe [CONTRIBUTING.md](../CONTRIBUTING.md)), mit
+    den Wörtern aus der Wortliste (Abschnitt [Sprache](#sprache)).
 
 ## Farben
 
@@ -50,7 +52,7 @@ Nur diese Variablen verwenden. Die Werte setzen die Farbschemata; `eba-core.css`
 | `--eba-good` | erledigt | `#1f7a4d` | `#62bf8c` | `#1f7a4d` | `#1a7f4b` |
 | `--eba-warn` | Frist | `#a8660b` | `#dea64a` | `#a3600a` | `#a3600a` |
 | `--eba-bad` | Prüfung, Fehler | `#b42318` | `#ec7468` | `#b4234a` | `#c0262d` |
-| `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#4a5ba6` | `#2a5bd7` |
+| `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#4a5ba6` | `#1f6e8c` |
 
 Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel `#d98bab`).
 
@@ -60,7 +62,7 @@ Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel
 |---|---|---|
 | `--eba-good` | erledigt, bestanden, verbunden, angemeldet | Pille „angemeldet“, Haken bei gelesenen Unterlagen |
 | `--eba-warn` | Frist, Anmeldung, etwas ist offen und hat ein Datum | Pille „Frist“, Anmeldezeitraum, „Nacharbeit offen“ |
-| `--eba-bad` | Prüfung, Klausur, Fehler, nicht bestanden | Prüfungstag im Kalender und in der Zeitleiste |
+| `--eba-bad` | Prüfung, Klausur, Fehler, nicht bestanden | Prüfungstag im Kalender und in der Zeitleiste, Prüfungsphase (getönt) im Semesterverlauf und im Studienverlauf |
 | `--eba-info` | Lehre, Zwischentest, offene Fragen | Pille „Lehre“, „Zwischentest“ |
 | neutral (`--eba-text` 6–7 %) | freiwillig, geschätzt, neu, leise Marken | Pille „freiwillig“ |
 
@@ -100,12 +102,14 @@ Innenabstand, Karten 16 × 18 px (iPhone 11 × 13 px). **(geplant)** Variablen `
 
 ### Seitenkopf
 Pfad (Label, Links gedämpft) → Titel (`h1`) → höchstens eine Zeile Eckdaten (Werte mit „ · “ getrennt, auf der Modulseite mit
-feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `cssclasses: eba`. Das Symbol für die Bereiche steht am
-PC rechts im Kopf, auf iPhone und iPad in Obsidians Kopfleiste. **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
-Begleitnotiz, Termin- und Stundenplan-Notiz bekommen den Pfad (Modul) über dem Titel.
+feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `cssclasses: eba`. Das Symbol der Übersicht steht auf
+allen Geräten in Obsidians Kopfleiste jeder Notiz (seit 0.4.6). **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
+Begleitnotiz, Termin- und Stundenplan-Notiz bekommen den Pfad (Modul) über dem Titel; ihren Status zeigt schon die Kopf-Karte
+unter dem Titel (`kopf.js`, `eba-core.css` 64.2).
 
 ### Abschnitt
-`##` gliedert eine Seite in Themen. Sein Aussehen bestimmt das Design (Elfenbein: Serif mit Linie darüber). Eine Karte direkt
+`##` gliedert eine Seite in Themen. Sein Aussehen bestimmt das Design (Elfenbein: Serif mit Linie darüber), auch in der
+Bearbeitungsansicht: Regeln dafür nehmen `--eba-h2-linie`, `--eba-h2-weight` und `--eba-h2-size` (Werte je Design). Eine Karte direkt
 darunter wiederholt den Abschnittsnamen nicht als Titel.
 
 ### Karte
@@ -141,7 +145,8 @@ Der wichtigste Baustein. Code: `.eba-vb-liste` mit `.eba-vb` (Skripte), `> [!eba
 
 ### Kachel und Kennzahl
 `> [!eba-kennzahlen]`: höchstens vier Kacheln. Label, Wert (Kennzahl), höchstens eine Unterzeile mit neuer Information, optional
-ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent.
+ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent, auf dem Dashboard („Nächste Frist“) die Farbe der Fristen
+(`--eba-warn`).
 
 ### Knöpfe
 
@@ -153,11 +158,14 @@ ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent.
 | Leise | ohne Rahmen, `--eba-muted` | Nebenwege („Später“, „Überspringen“, „Zurück“) |
 
 - Größen: **klein** 13 px Schrift, 30 px hoch (Zeile, Leiste); **groß** 15 px, 44 px hoch (Fenster, Einrichtung, iPhone).
-  Auf iPhone und iPad ist jeder Knopf mindestens 44 px hoch.
+  Auf iPhone und iPad hat jeder Knopf mindestens 44 × 44 px Tippfläche; ein neuer kleiner Knopf kommt in die Liste der
+  Tippflächen-Regel in Abschnitt 43.
 - Je Bereich höchstens ein Haupt- oder Empfohlen-Knopf.
 - Beschriftung: ein Verb oder Verb + Ding, ohne Punkt („Verbinden“, „Neue Karte“). „…“ nur, wenn danach eine Frage kommt.
 - In Fenstern rechts unten, **Hauptknopf ganz rechts**, Abbrechen/Später links daneben. Auf dem iPhone untereinander über die
-  ganze Breite, Hauptknopf oben.
+  ganze Breite, Hauptknopf oben. Das CSS ordnet den Knopf `mod-cta` so ein, egal an welcher Stelle ihn ein Skript anlegt
+  (`eba-core.css` Abschnitt 43, für `.eba-modal` und das Eingabefenster `.sa-eingabe`). Fenster haben Rahmen und Rundung wie
+  Karten, keinen Schatten.
 - Symbole in Knöpfen nur, wenn alle Knöpfe der Reihe eins haben.
 - **Knopfkacheln** (`> [!eba-neu]`, Seitenanfang): Symbol in getöntem Feld + Titel; auf dem iPhone zwei je Reihe.
 
@@ -170,12 +178,19 @@ für Zustände, höchstens zwei je Zeile. Steht in jeder Zeile derselbe Wert, ge
 `.eba-ds`: zwei bis vier Möglichkeiten nebeneinander, eine gewählt (Hell · Dunkel · Automatisch). Ohne Untertexte.
 
 ### Auswahl aus Zeilen
-Je Möglichkeit eine Zeile der Zeilenliste: gewählt mit Haken und Pille „gewählt“, die anderen mit „Wählen“ (Variante, Design).
+Je Möglichkeit eine Zeile der Zeilenliste: gewählt mit Haken und Pille „gewählt“, die anderen mit „Wählen“ (Variante).
 **(geplant)** Die Einrichtung zeigt dieselbe Zeile statt eines Optionsfelds links.
+
+### Vorschau-Kacheln
+`.eba-dk` (Design, unter dem Segmentschalter in Einstellungen & Hilfe und in der Einrichtung): Für eine Wahl, die man sehen statt
+lesen soll. Gleich breite Kacheln in einer Reihe, ohne Text: Jede zeigt eine Mini-Karte in den Farben ihrer Möglichkeit (Seite,
+Karte, Akzent). Gewählt mit Ring und Haken im Akzent, mindestens 44 px hoch, am PC so breit wie der Segmentschalter, auf iPhone,
+iPad und in der Einrichtung über die ganze Breite. Für Vorlesesoftware `role="radiogroup"`, je Kachel `role="radio"` mit
+`aria-label` und `title` ohne Namen („Design 1“); Tab erreicht die gewählte, Pfeiltasten wechseln.
 
 ### Leerzustand
 Ein Satz in `--eba-muted` an der Stelle des Inhalts, danach der nächste Schritt als Link oder Knopf: „Noch keine Unterlagen.
-**Aus ILIAS holen**“. „Noch keine …“ für Dinge, die kommen werden, „Nichts offen.“ für erledigte Listen. Nie nur „Leer.“, nie
+**Unterlagen aktualisieren**“. „Noch keine …“ für Dinge, die kommen werden, „Nichts offen.“ für erledigte Listen. Nie nur „Leer.“, nie
 eine leere Tabelle mit Spaltenköpfen.
 
 ### Schloss-Karte
@@ -187,14 +202,15 @@ statt eines Inhalts, der eine Verbindung braucht.
 Bildschirm. Schritte als nummerierte Liste, Bedienelemente **fett** wie in der App beschriftet.
 
 ### Hinweis
-Obsidians Hinweis (`Notice`): nur als Antwort auf eine Handlung oder bei einem Fehler. Ein Satz mit Punkt, ohne
-„Studium Autopilot:“ davor, ohne Dateipfade. Hinweise mit Knöpfen (`.eba-toast`) nur für das Update.
+Obsidians Hinweis (`Notice`), immer über `ctx.hinweis(text, { aktion })`: nur als Antwort auf eine Handlung oder bei einem
+Fehler. Regeln für den Text unter [Sprache](#sprache) → „Hinweise“. Ein nächster Schritt als Knopf (`aktion`) hat die Gestalt
+des Update-Hinweises (`.eba-toast`).
 
 ### Tabellen
 Markdown-Tabellen nur für Nachschlage-Inhalt (Regeln, Steckbrief): Spaltenköpfe als Label, nur waagerechte Haarlinien, Zahlen
 tabellarisch. Bases-Tabellen sind Datenquelle: `tabellen.js` zeichnet sie als Zeilenliste (`--eba-tliste: 1`), Spaltenköpfe
-ohne Symbole, keine Werkzeugleiste. Auf iPad und PC seitenweise eingeschaltet (`eba-core.css` 37.tabellen): Modulseite,
-Noten & ECTS, Unterlagen, Stundenplan. Die Listen „Fristen“, „Termine“ (Dashboard) und „Prüfungstermine“ zeichnet
+ohne Symbole, keine Werkzeugleiste, nur zum Lesen (seit 0.4.6 überall, auf allen Geräten, `eba-core.css` 37.tabellen; ändern im
+Modulfeld und im Kopf der Notiz, architektur.md „Bedien-Bausteine“). Die Listen „Fristen“, „Termine“ (Dashboard und **Prüfungen**) zeichnet
 `dashboard.js` als Zeilen (```` ```eba-liste ````, eba-core.css Abschnitt 63), übrige Listenansichten von Bases Obsidian selbst.
 
 ## Daten, Zahlen und Links
@@ -209,6 +225,58 @@ die Statusfarben oben um (architektur.md, „Fachmodell“); kein Skript formati
 - **Zahlen:** „6 ECTS“, Noten mit Komma („2,3“), „34 %“ mit Leerzeichen; Spalten mit `tabular-nums`.
 - **Links:** `--eba-accent-text`, ohne Unterstrich, unterstrichen beim Zeigen. Verweis auf eine andere Seite als eigene Zeile
   „Thema → Seite“. Externe Links mit Obsidians Pfeil.
+
+## Sprache
+
+Eine App, ein Wortschatz: Knöpfe, Fenster, Hinweise, Seiten, Hilfe und Changelog nehmen die Wörter aus dieser Liste. Der Test
+`tests/wortliste.test.js` sucht die Wörter aus der Spalte „Nicht“ in den Texten der Skripte (nur Zeichenketten, keine
+Kommentare), auf allen Seiten unter `Studium/`, im Dashboard, in den Gerüsten, auf den Modulseiten und im Changelog unter
+„Unveröffentlicht“. Steht eine Variante dort mit Absicht (Obsidians eigene Beschriftung wie **Ordner als Vault öffnen**, der
+Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in `tests/wortliste.js`.
+
+### Wortliste
+
+| Sag | Nicht | Warum |
+|---|---|---|
+| **Aktualisieren** (Daten jetzt holen, auch als „Stundenplan aktualisieren“); **Hier aktualisieren**, wenn gerade ein anderes Gerät aktualisiert | „Jetzt aktualisieren“, „Jetzt holen“, „Jetzt prüfen“, „Jetzt abgleichen“, „Hier laden“, „Aus ILIAS holen“, „… aus Alma holen“, „Neu holen“ | ein Wort für dieselbe Handlung |
+| **Neue Version installieren** (Update der App) | „Aktualisieren“, „Studium Autopilot aktualisieren“ | „Aktualisieren“ heißt schon: Daten holen |
+| **Lehrveranstaltung** (Eintrag im Stundenplan: Vorlesung, Übung, Tutorium) | „Stundenplan-Eintrag“, „Veranstaltung“ für den Stundenplan | **Veranstaltung** nur für Events: Party, Vortrag, Fachschaft |
+| **ECTS** | „CP“, „Credits“, „Leistungspunkte“ | so heißen sie in Alma und in der Prüfungsordnung |
+| **Prüfung**; **Prüfungsphase** mit Haupttermin und Nachholtermin | „Klausurtermin“, „Prüfungstermin“, „Klausurphase“, „Prüfungszeitraum“ | „Klausur“ nur als Form der Prüfung („Klausur 90 min“) |
+| **1. Fachsemester**, wo es eng ist **1. FS** | „FS 1“ | eine Schreibweise |
+| **Gesamtnote**, **Zielnote** | „Notenschnitt“, „Wunsch-Schnitt“, „Wunschnote“ | dieselbe Zahl heißt überall gleich |
+| **Übungsgruppe**, kurz **Gruppe 4** | „Gr. 4“ | keine Abkürzungen |
+| **angemeldet**: für eine Prüfung oder einen Kurs (grün) | „angemeldet“ für ILIAS, Alma oder die Übungsgruppe | ein Wort, eine Bedeutung |
+| **verbunden**, **neu verbinden** (ILIAS, Alma) | „Anmeldung prüfen“, „Anmeldung abgelehnt“, „Melde mich an“ | „Anmeldung“ heißt: für eine Prüfung oder einen Kurs |
+| **Passwort** | „Kennwort“ | ein Wort |
+| **## Meine Notizen** (dein Text in einer Notiz); **Zum Modul** (die Liste der Notizen auf der Modulseite) | „## Notizen“, „Meine Notizen“ als Liste | dein Text steht in jeder Notiz unter derselben Überschrift und bleibt dort |
+| **vorlesungsfrei**; benannte Pausen **Weihnachtspause**, **Pfingstpause** | „Ferien“, „Pfingstferien“ | so sagt es die Uni |
+| **Stundenplan** (Seite), **Woche** (Raster auf Dashboard und Stundenplan) | „Wochenplan“, „Wochenraster“, „Wochenansicht“ | ein Name je Ansicht |
+| **Übersicht** (Menü mit allen Seiten); **Teil** (Grundstudium, Profil & Vertiefung …); **Schwerpunktbereich** | „Bereiche-Menü“, „Bereich“ für einen Teil | „Bereich“ nur für Schwerpunkte |
+| **Deine Angaben** mit **Ändern**; **Obsidian-Einstellungen** für Obsidians eigene | „Personalisieren“, „Einstellungen →“ für Obsidians | wie die Überschrift in der App; Obsidians Einstellungen sind andere |
+| **Tresor**, einmal erklärt: „(in Obsidian: Vault)“ | „Vault“ | deutsch wie der Rest |
+| **Termin folgt** (Datum fehlt noch) | „noch kein Termin“ | ein Satz für denselben Zustand |
+| **mit Unterlagen**, **ohne Unterlagen**, **handschriftliches A4-Blatt** | „open book“, „closed book“, „Cheat-Sheet“ | ohne Jargon |
+| **Design** ohne Namen; **Design 1**, **Design 2**, **Design 3** nur für Vorlesesoftware und die Auswahl des Befehls **Design wählen** | „Elfenbein“, „Paper Elfenbein“, „Flieder“, „Klar“ | Designs haben keine Namen, die Vorschau-Kacheln zeigen sie; die Namen gibt es nur in Code und CSS (`eba-design-flieder`) |
+
+### Knöpfe und Befehle
+
+- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesung**, **Neues Übungsblatt**, **Unterlagen einordnen**,
+  **Unterlagen aktualisieren**, **Neue Karte**. Fehlt dem Knopf auf seiner Seite nichts, der Befehl aber Zusammenhang, kommt
+  nur das Ding dazu (Knopf **Lernen** → Befehl **Karteikarten lernen**), nie ein anderes Verb.
+- Befehle ohne „Studium Autopilot“ (Obsidian setzt den Namen davor), ohne Vorsatz mit Doppelpunkt, ohne Erklärung in Klammern;
+  „…“ nur, wenn eine Frage folgt (**Verbinden …**).
+- Neues anlegen beginnt mit „Neu“: **Neuer Termin**, **Neue Lehrveranstaltung**, **Neuer Kartenstapel**.
+
+### Hinweise
+
+- Immer `ctx.hinweis(text, { aktion })` aus `hinweis.js`, nie `new Notice`. Der Test findet jedes `Notice` in den Skripten.
+- Ein Satz mit Punkt, danach höchstens ein Satz mit dem nächsten Schritt, oder der Schritt als Knopf: `aktion: { text:
+  "Verbinden", aktion: "verbinden", parameter: { id: "ilias" } }`.
+- Kein Vorsatz („Studium Autopilot:“, „ILIAS:“, „Zentrale Daten:“), keine Dateipfade, kein Fehlertext aus dem Code (`e.message`
+  gehört in die Konsole), keine Liste in mehreren Zeilen.
+- Fortschritt: das Verb vorn, „…“ am Ende („Lade die neue Version …“, „Ordne 3 Unterlagen ein …“), mit `dauer: 0`; danach
+  `setMessage` und `hide` an der zurückgegebenen Notice.
 
 ## iPhone und iPad
 
@@ -228,3 +296,6 @@ die Statusfarben oben um (architektur.md, „Fachmodell“); kein Skript formati
 3. Ansehen in iPhone-Breite (390 px) und iPad-Breite (820 px), in Lese- und Bearbeitungsansicht.
 4. Gibt es den Baustein schon? Dann ihn nehmen, keine neue Klasse mit ähnlichem Aussehen.
 5. Neue CSS-Regeln in den Abschnitt des Bausteins in `eba-core.css`, seitenbezogene in Abschnitt 37 mit `eba-s-<seite>`.
+6. `npm test`: `tests/design.test.js` (Design-Wächter) prüft, was sich ohne Obsidian prüfen lässt: feste Farben, Schatten,
+   Symbole der Karten, `@media`-Breiten, Safari 16, und hält Schriftgrößen, Knopf-Klassen und Zeichen-Symbole auf dem Stand
+   vom 18.10.2026 oder darunter. Ein neuer Wert dort heißt fast immer: einen vorhandenen nehmen.

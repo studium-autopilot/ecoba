@@ -20,7 +20,6 @@
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Fehler → Ersatztext des Blocks.
 module.exports = function (ctx) {
   const app = window.app;
-  const obs = (ctx && ctx.obsidian) || {};
   const SPRACHE = "eba-lernplan";
   const ORDNER = "Lernplan/";
   const ANTEIL = 0.7;
@@ -246,13 +245,13 @@ module.exports = function (ctx) {
       z[i] = neu; ok = true;
       return z.join("\n");
     });
-    if (!ok) try { new obs.Notice("Das Kapitel hat sich geändert und wurde nicht abgehakt: " + f.basename, 5000); } catch (e) { /* ohne Notice */ }
+    if (!ok) try { ctx.hinweis(`„${f.basename}“ hat sich inzwischen geändert und ist nicht abgehakt. Bitte noch einmal tippen.`); } catch (e) { /* ohne Obsidian */ }
   };
 
   // ---------- Zeichnen ----------
   const auf = ctx.bleibend("auf", () => ({}));
   const nurStoppen = (knoten) => knoten.addEventListener("mousedown", (e) => e.stopPropagation()); // Live Preview: nicht in den Quelltext
-  const oeffnen = (f, e, quelle) => { e.preventDefault(); e.stopPropagation(); app.workspace.openLinkText(f.path, quelle || "", e.ctrlKey || e.metaKey); };
+  const oeffnen = (f, e, quelle) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(f, { quelle: quelle || "", neu: e.ctrlKey || e.metaKey }); };
 
   const kapitelName = (k, i) => (k.nr ? `Kapitel ${k.nr}` : `Kapitel ${i + 1}`);
   const namenListe = (P, idx) => {
@@ -264,7 +263,7 @@ module.exports = function (ctx) {
     if (P.fehlt === "keine Kapitel") return "Noch keine Kapitel eingetragen.";
     const fertig = P.kapitel.filter((k) => k.anteil >= 1 - EPS).length;
     const teile = [`${fertig} von ${P.kapitel.length} Kapiteln${P.vorlaeufig ? " (Liste vorläufig)" : ""}`];
-    if (P.fehlt === "keine Klausur") { teile.push("Klausurtermin fehlt"); return teile.join(" · "); }
+    if (P.fehlt === "keine Klausur") { teile.push("Datum der Klausur fehlt"); return teile.join(" · "); }
     const S = P.stand;
     if (S.art === "vorbei") teile.push(`Klausur war am ${wtm(P.klausur.datum)}`);
     else {

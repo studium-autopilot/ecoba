@@ -24,7 +24,7 @@ Testen nimmt `--arbeitsstand` den Arbeitsordner statt des Commits; so gebaut wir
 
 Dann schreibt der Export die **Update-Liste** `Studium Autopilot/System/Daten/system-dateien.json`: Version, und je Datei, die
 ein Update ersetzen darf, Pfad, Klasse, Größe und SHA-256 (Regeln in `werkzeuge/pruefen.py`, `klasse_von`, gleich wie
-`klasseVon` in `update.js`). Mit ihr aktualisiert der Knopf **Aktualisieren** im Plugin (siehe `docs/architektur.md`, „Update“).
+`klasseVon` in `update.js`). Mit ihr installiert der Knopf **Neue Version installieren** im Plugin die neue Version (siehe `docs/architektur.md`, „Update“).
 
 Danach läuft **immer** `werkzeuge/pruefen.py` über den Baum, lokal zusätzlich mit einer privaten Sperrliste (Namen, die nie
 veröffentlicht werden dürfen). Sie prüft auch, dass die Update-Liste zu den Dateien passt. Bei einem Fund bricht der Export mit
@@ -85,7 +85,7 @@ bzw. in der Konfiguration des Exports) setzen:
   was neu ist, höchstens 200 Zeichen).
 
 Ab dem nächsten Abruf zeigt die Zeile „Studium Autopilot“ in **Einstellungen & Hilfe** → **Verbindungen** „Neue Version …
-verfügbar“ mit dem Knopf **Aktualisieren**. Vorher gesetzt, bekäme jemand eine Version angeboten, deren Dateien es noch nicht
+verfügbar“ mit dem Knopf **Neue Version installieren**. Vorher gesetzt, bekäme jemand eine Version angeboten, deren Dateien es noch nicht
 gibt (das Update bricht dann ohne Schaden ab). Vertrag: `docs/daten-v1.md`, „Update-Angaben“.
 
 **Neue Regeln für das Update wirken erst ab dem nächsten Mal.** Ein Update plant immer der `update.js`, der beim Tipp läuft,

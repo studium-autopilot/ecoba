@@ -35,8 +35,8 @@ kennt sich mit Technik nicht aus. Darum gelten für jeden neuen Abschnitt feste 
 
 1. **Nutzen zuerst.** Jeder Punkt sagt, was du jetzt kannst oder was dir erspart bleibt, nicht, was im Code passiert ist.
    „Neue Uni-Termine kommen schneller an“ statt „Abruf der zentralen Daten nach 2 statt 10 Minuten“.
-2. **Ein Punkt beginnt mit seiner Art:** **Neu:**, **Einfacher:**, **Schneller:**, **Übersichtlicher:**, **Zuverlässiger:**
-   oder **Behoben:**, bei einer Funktion nur für Beta-Versionen mit „ (Beta)“ dahinter (**Neu (Beta):**). Bei **Behoben:** steht, was vorher schiefging, so wie man es gesehen hat („Manchmal fehlten …“).
+2. **Ein Punkt beginnt mit seiner Art:** **Neu:**, **Einfacher:**, **Schneller:**, **Übersichtlicher:**, **Zuverlässiger:**,
+   **Einheitlicher:** oder **Behoben:**, bei einer Funktion nur für Beta-Versionen mit „ (Beta)“ dahinter (**Neu (Beta):**). Bei **Behoben:** steht, was vorher schiefging, so wie man es gesehen hat („Manchmal fehlten …“).
 3. **Kurz.** Höchstens zwei Sätze und 240 Zeichen je Punkt, höchstens 12 Punkte je Version. Der Titel der Version nennt den
    wichtigsten Nutzen in höchstens 6 Wörtern.
 4. **Keine Fachwörter.** Keine Dateinamen, kein Code in Backticks, keine Wörter wie Manifest, Cache, Index, Plugin, Skript,
@@ -46,6 +46,13 @@ kennt sich mit Technik nicht aus. Darum gelten für jeden neuen Abschnitt feste 
    Commit-Nachricht, nicht hierher.
 
 Veröffentlichte Abschnitte bleiben, wie sie sind; die Regeln gelten ab 0.4.1.
+
+## Texte in der App: eine Wortliste
+
+Knöpfe, Fenster, Hinweise, Seiten und Hilfe nehmen die Wörter aus der Wortliste in [docs/design.md](docs/design.md#sprache)
+(„Sprache“), damit sich alles wie eine App anfühlt: zum Beispiel **ECTS** statt „CP“, **Aktualisieren**, wenn Daten geholt
+werden, und **Neue Version installieren** für das Update. Ein Knopf heißt wie sein Befehl; ein Hinweis ist ein Satz ohne
+Vorsatz und ohne Dateipfad. `tests/wortliste.test.js` prüft das.
 
 ## Keine Lehrmaterialien
 

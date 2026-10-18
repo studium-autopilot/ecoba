@@ -204,10 +204,10 @@ test("Notiz: c.t.-Zeiten, Ausfälle und Änderungen in den Feldern, die das Woch
   for (const z of ["typ: lehrveranstaltung", 'titel: "Einführung in die Beispielökonomik · Vorlesung"', "wochentag: 1", 'beginn: "10:15"', 'ende: "11:45"',
     "ausfall:\n  - 2026-12-21\n  - 2026-12-28", 'aenderungen:\n  - "2026-11-09|10:15|11:45|Hörsaal 2"', "einzeltermin: false", "herkunft: zentral",
     "zentral_id: " + e.id, 'uebersicht: "[[Stundenplan]]"']) assert.ok(t.indexOf(z) >= 0, z);
-  assert.ok(t.indexOf("aktion=besuche-nicht&id=" + e.id) >= 0, "Knopf „Besuche ich nicht“");
+  assert.ok(t.indexOf("aktion=besuche-nicht") < 0, "„Besuche ich nicht“ steht im Kopf der Notiz (kopf.js), nicht im Text");
   assert.ok(/Zusätzlich: Fr 20\.11\. 08:15–09:45 in Raum 3/.test(t));
   // Neu schreiben: eigene Felder und alles unter „## Notizen“ bleiben
-  const mitEigenem = t.replace("---\n\n", "dozent: \"Ich\"\n---\n\n").replace(/## Notizen\n- \n$/, "## Notizen\n- Kapitel 1 lesen\n");
+  const mitEigenem = t.replace("---\n\n", "dozent: \"Ich\"\n---\n\n").replace(/## Meine Notizen\n- \n$/, "## Meine Notizen\n- Kapitel 1 lesen\n");
   const neu = Z.lehreNotizText(mitEigenem, Object.assign({}, e, { raum: "Hörsaal 9" }), { kurz: "Einführung in die Beispielökonomik" });
   assert.ok(neu.indexOf('dozent: "Ich"') > 0 && neu.indexOf("- Kapitel 1 lesen") > 0 && neu.indexOf('raum: "Hörsaal 9"') > 0);
   assert.equal(Z.lehreMeine(t), "");
@@ -314,7 +314,7 @@ test("Abrufer: Raumänderung und Ausfall kommen in die Notiz, dein Text bleibt",
   t.veroeffentlichen(FIXTURE());
   await t.abrufen();
   const p = "Stundenplan/Mo 10.15 X100 Vorlesung.md";
-  t.text[p] = t.text[p].replace(/## Notizen\n- \n$/, "## Notizen\n- Skript lesen\n");
+  t.text[p] = t.text[p].replace(/## Meine Notizen\n- \n$/, "## Meine Notizen\n- Skript lesen\n");
   const d = FIXTURE();
   d.veranstaltungen[0].ausfall = ["2026-12-21", "2026-12-28"];
   d.veranstaltungen[0].aenderungen = [{ datum: "2026-11-23", raum: "Hörsaal 5" }];
@@ -322,7 +322,7 @@ test("Abrufer: Raumänderung und Ausfall kommen in die Notiz, dein Text bleibt",
   await t.abrufen();
   assert.deepEqual(t.fm(p).ausfall, ["2026-12-21", "2026-12-28"]);
   assert.deepEqual(t.fm(p).aenderungen, ["2026-11-23|10:15|11:45|Hörsaal 5"]);
-  assert.ok(t.text[p].endsWith("## Notizen\n- Skript lesen\n"));
+  assert.ok(t.text[p].endsWith("## Meine Notizen\n- Skript lesen\n"));
 });
 
 test("Besuche ich nicht: Notiz weg, kommt nach Änderungen nicht wieder; Zurücknehmen bringt sie zurück", async () => {
@@ -359,7 +359,7 @@ test("Alma gewinnt im Tresor: unberührt in den Papierkorb, eigener Text wandert
   t.veroeffentlichen(FIXTURE());
   await t.abrufen();
   const vlP = "Stundenplan/Mo 10.15 X100 Vorlesung.md", ueP = "Stundenplan/Mo 12.15 X100 Übung.md";
-  t.text[ueP] = t.text[ueP].replace(/## Notizen\n- \n$/, "## Notizen\n- Blatt 1 abgeben\n");
+  t.text[ueP] = t.text[ueP].replace(/## Meine Notizen\n- \n$/, "## Meine Notizen\n- Blatt 1 abgeben\n");
   // Alma-Import (anderes Gerät, per Sync): beide Veranstaltungen als eigene Notizen, Alma-Zeiten
   const almaVl = "Stundenplan/Mo 10.00 X100 Vorlesung.md", almaUe = "Stundenplan/Mo 12.00 X100 Übung.md";
   t.text[almaVl] = fmSchreiben({ typ: "lehrveranstaltung", code: "X100", art: "Vorlesung", wochentag: 1, beginn: "10:00", ende: "12:00", semester: SEM, alma_schluessel: "a" }, "\n# X100 · Vorlesung\n\n## Notizen\n- \n");
@@ -391,7 +391,7 @@ test("Wegfall: wenige → unberührt weg, mit Text „(entfällt)“; Massenwegf
   assert.equal(t.zentral().length, 4);
   // Eine Serie fällt weg (mit eigenem Text) und eine zweite (unberührt): „(entfällt)“ bzw. Papierkorb
   const p = "Stundenplan/Mi 08.00 X110 Vorlesung.md";
-  t.text[p] = t.text[p].replace(/## Notizen\n- \n$/, "## Notizen\n- wichtig\n");
+  t.text[p] = t.text[p].replace(/## Meine Notizen\n- \n$/, "## Meine Notizen\n- wichtig\n");
   t.veroeffentlichen(datei(d.veranstaltungen[0], d.veranstaltungen[1]));
   await t.abrufen();
   assert.equal(t.fm(p).entfaellt, true);
@@ -423,7 +423,7 @@ test("Notizen zu deiner Gruppe (aus ILIAS oder gewählt) fasst der Abrufer nie a
   t.veroeffentlichen(FIXTURE());
   await t.abrufen();
   const ueP = "Stundenplan/Mo 12.15 X100 Übung.md";
-  t.text[ueP] = t.text[ueP].replace(/## Notizen\n- \n$/, "## Notizen\n- Blatt 1 abgeben\n");
+  t.text[ueP] = t.text[ueP].replace(/## Meine Notizen\n- \n$/, "## Meine Notizen\n- Blatt 1 abgeben\n");
   // gleiche Zeit wie die zentrale Übung: eine Notiz aus ILIAS und eine gewählte
   const il = "Stundenplan/Mo 12.15 X100 Übung 2.md", gw = "Stundenplan/Mo 12.15 X100 Übung 3.md";
   const fm = { typ: "lehrveranstaltung", code: "X100", art: "Übung", wochentag: 1, beginn: "12:15", ende: "13:45", semester: SEM, gruppe_id: "ws-2026-27-x100-uebung-1" };

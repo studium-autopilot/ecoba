@@ -54,7 +54,7 @@ module.exports = function (ctx) {
   };
 
   // Eine Spalte = ein Fachsemester eines Plans; liefert seine ECTS-Summe
-  const spalteZeichnen = (raster, M, plan, fs, K, quellePfad) => {
+  const spalteZeichnen = (raster, M, plan, fs, K) => {
     const es = M.eintraege.filter((e) => e.plan === plan.id && e.fs === fs);
     const summe = es.reduce((a, e) => a + e.ects, 0);
     const sem = K.d && K.d.semesterliste[fs - 1];
@@ -69,7 +69,7 @@ module.exports = function (ctx) {
       const chip = liste.createEl(m ? "a" : "div", { cls: `eba-mp-chip ${e.art}${e.op ? " op" : ""}${fertig ? " fertig" : ""}` });
       if (m) {
         chip.setAttr("href", "#"); chip.setAttr("title", `${e.code} öffnen`);
-        chip.addEventListener("click", (ev) => { ev.preventDefault(); app.workspace.openLinkText(m.f.path, quellePfad || "", ev.ctrlKey || ev.metaKey); });
+        chip.addEventListener("click", (ev) => { ev.preventDefault(); ctx.oeffnen(m.f, { neu: ev.ctrlKey || ev.metaKey }); });
       }
       const text = chip.createSpan({ cls: "eba-mp-name" });
       if (e.code) text.createEl("b", { text: e.code + " " });
@@ -84,13 +84,13 @@ module.exports = function (ctx) {
   };
 
   // Ein Plan ganz: eine gewählte Variante, oder mehrere Pläne ohne gemeinsamen Stamm
-  const planZeichnen = (el, M, plan, quellePfad) => {
+  const planZeichnen = (el, M, plan) => {
     const K = modulKarte();
     const box = el.createDiv({ cls: "eba-mp", attr: { lang: "de" } });
     if (M.plaene.length > 1) box.createDiv({ cls: "eba-mp-titel", text: `Variante ${plan.name}` });
     const raster = box.createDiv({ cls: "eba-mp-raster" });
     let gesamt = 0;
-    for (let fs = 1; fs <= SEMESTER; fs++) gesamt += spalteZeichnen(raster, M, plan, fs, K, quellePfad);
+    for (let fs = 1; fs <= SEMESTER; fs++) gesamt += spalteZeichnen(raster, M, plan, fs, K);
     box.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${gesamt} ECTS` });
   };
 
@@ -102,14 +102,14 @@ module.exports = function (ctx) {
     box.createDiv({ cls: "eba-mp-titel", text: bis === 1 ? "1. Fachsemester – in allen Varianten gleich" : `1. bis ${bis}. Fachsemester – in allen Varianten gleich` });
     const stammRaster = box.createDiv({ cls: "eba-mp-raster eba-mp-stamm" });
     let stammSumme = 0;
-    for (let fs = 1; fs <= bis; fs++) stammSumme += spalteZeichnen(stammRaster, M, M.plaene[0], fs, K, quellePfad);
+    for (let fs = 1; fs <= bis; fs++) stammSumme += spalteZeichnen(stammRaster, M, M.plaene[0], fs, K);
     const gabel = stammRaster.createDiv({ cls: "eba-mp-gabelung" });
     gabel.createEl("p", { text: `Ab dem ${bis + 1}. Fachsemester trennen sich die ${M.plaene.length} Pläne: ${M.plaene.map((p) => p.name).join(", ")}.` });
     if (mitWahl) {
       const p = gabel.createEl("p");
       p.appendText("Wähle deine Variante vorher unter ");
       const a = p.createEl("a", { text: "Einstellungen & Hilfe", href: "#", cls: "internal-link" });
-      a.addEventListener("click", (ev) => { ev.preventDefault(); app.workspace.openLinkText(EINSTELLUNGEN, quellePfad || "", ev.ctrlKey || ev.metaKey); });
+      a.addEventListener("click", (ev) => { ev.preventDefault(); ctx.oeffnen(EINSTELLUNGEN, { quelle: quellePfad || "", neu: ev.ctrlKey || ev.metaKey }); });
       p.appendText("; dann steht hier nur noch dein Plan.");
     }
     for (const plan of M.plaene) {
@@ -117,7 +117,7 @@ module.exports = function (ctx) {
       const raster = zweig.createDiv({ cls: "eba-mp-raster" });
       raster.createDiv({ cls: "eba-mp-zweigkopf" }).createDiv({ cls: "eba-mp-titel", text: `Variante ${plan.name}` });
       let summe = stammSumme;
-      for (let fs = bis + 1; fs <= SEMESTER; fs++) summe += spalteZeichnen(raster, M, plan, fs, K, quellePfad);
+      for (let fs = bis + 1; fs <= SEMESTER; fs++) summe += spalteZeichnen(raster, M, plan, fs, K);
       zweig.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${summe} ECTS` });
     }
   };
@@ -165,7 +165,7 @@ module.exports = function (ctx) {
     const M2 = Object.assign({}, M, { plaene });
     const bis = stamm(M.eintraege, plaene);
     if (plaene.length > 1 && bis > 0 && bis < SEMESTER) gabelZeichnen(el, M2, bis, quellePfad, !a && quellePfad !== DATEN);
-    else for (const p of plaene) planZeichnen(el, M2, p, quellePfad);
+    else for (const p of plaene) planZeichnen(el, M2, p);
     hinweiseZeichnen(el, M, plaene);
     const fuss = el.createEl("p", { cls: "eba-mp-quelle" });
     const dmy = M.stand ? `${M.stand.slice(8, 10)}.${M.stand.slice(5, 7)}.${M.stand.slice(0, 4)}` : "";
@@ -174,7 +174,7 @@ module.exports = function (ctx) {
     if (andere) {
       const ziel = DATEN.replace(/\.md$/, "");
       const link = el.createEl("p", { cls: "eba-hinweis eba-mp-andere" }).createEl("a", { text: "Andere Varianten ansehen →", href: ziel, cls: "internal-link", attr: { "data-href": ziel } });
-      link.addEventListener("click", (ev) => { ev.preventDefault(); app.workspace.openLinkText(ziel, quellePfad || "", ev.ctrlKey || ev.metaKey); });
+      link.addEventListener("click", (ev) => { ev.preventDefault(); ctx.oeffnen(ziel, { quelle: quellePfad || "", neu: ev.ctrlKey || ev.metaKey }); });
     }
   };
 

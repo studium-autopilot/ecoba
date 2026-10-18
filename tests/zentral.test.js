@@ -640,7 +640,7 @@ const sperreVon = (T) => JSON.parse(T.text(ABRUF));
 const fristA = termin({ id: "2026-11-02-frist-a", titel: "Frist A", datum: "2026-11-02", kategorie: "Frist" });
 const fristB = termin({ id: "2026-11-03-frist-b", titel: "Frist B", datum: "2026-11-03", kategorie: "Frist" });
 const fristC = termin({ id: "2026-11-04-frist-c", titel: "Frist C", datum: "2026-11-04", kategorie: "Frist" });
-const GERADE_ANDERS = "Zentrale Daten: gerade auf einem anderen Gerät aktualisiert, deine Notizen kommen per Sync.";
+const GERADE_ANDERS = "Ein anderes Gerät hat die zentralen Daten gerade aktualisiert, deine Notizen kommen über deinen Sync.";
 
 test("Abrufer-Wechsel: „Jetzt aktualisieren“ übernimmt nach 54 Min., schreibt abruf.json vor den Notizen, „angewendet“ bleibt", async () => {
   const T = tresorAbruf();
@@ -664,7 +664,7 @@ test("Abrufer-Wechsel: „Jetzt aktualisieren“ übernimmt nach 54 Min., schrei
   assert.equal(s.geraet, T.Z.geraetId());
   assert.ok(Date.now() - Date.parse(s.zuletzt) < MIN);
   assert.deepEqual(Object.keys(s.angewendet).sort(), [fristA.id, fristB.id, fristC.id]);
-  assert.deepEqual(T.hinweise, ["Zentrale Daten aktualisiert: 1 Eintrag geändert."]);
+  assert.deepEqual(T.hinweise, ["Zentrale Daten aktualisiert, 1 Eintrag geändert."]);
   assert.equal(T.Z.stand().abrufer, true);
 });
 

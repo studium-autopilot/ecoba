@@ -66,6 +66,9 @@
   --eba-font-display: ui-rounded, "SF Pro Rounded", var(--font-interface);
   --eba-display-weight: 650;
   --eba-display-tracking: -0.012em;
+  --eba-h2-linie: var(--eba-border-strong);
+  --eba-h2-weight: 650;
+  --eba-h2-size: 1.25em;
 }
 .eba-design-flieder.theme-dark { --eba-rose: #d98bab; } /* Streifen der hervorgehobenen Kachel, auf dunklem Grund heller */
 

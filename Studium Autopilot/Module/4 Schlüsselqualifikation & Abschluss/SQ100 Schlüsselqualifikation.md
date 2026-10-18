@@ -39,7 +39,7 @@ cssclasses:
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Abschluss</span></div>
 <h1><span class="eba-code">SQ100</span> Schlüsselqualifikation</h1>
 <p class="eba-untertitel">Professional Skills</p>
-<div class="eba-meta"><span><b>9</b> ECTS</span><span>FS 4.–5.</span><span>WS, SS</span><span>unbenotet</span><span>Deutsch</span></div>
+<div class="eba-meta"><span><b>9</b> ECTS</span><span>4.–5. FS</span><span>WS, SS</span><span>unbenotet</span><span>Deutsch</span></div>
 </div>
 
 ```eba-modul
@@ -116,7 +116,7 @@ cssclasses:
 > ```
 
 > [!eba-neu|ohne-titel]
-> - [SQ-Kurs eintragen](obsidian://studium-autopilot?aktion=sq-kurs)
+> - [Neuer SQ-Kurs](obsidian://studium-autopilot?aktion=sq-kurs)
 
 > [!eba-raster|2]
 > > [!eba-karte|handy-zu]+ Was zählt
@@ -140,7 +140,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -166,7 +166,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC

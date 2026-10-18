@@ -227,6 +227,35 @@ test("Einstellungen (.obsidian/*.json): deine Werte bleiben, Neues kommt dazu", 
   assert.deepEqual(JSON.parse(U.jsonMischenText(JSON.stringify(["a", "b"]), JSON.stringify(["studium-autopilot"]))), ["a", "b", "studium-autopilot"]);
 });
 
+test("Einstellungen: geänderte Vorgaben (app.json seit 0.4.6) nur für den alten Wert und nur beim Update von davor", () => {
+  const vorlage = JSON.stringify({ newFileLocation: "folder", newFileFolderPath: "Vorlesungen", showUnsupportedFiles: false, promptDelete: false });
+  const alt = JSON.stringify({ newFileLocation: "root", newFileFolderPath: "Vorlesungen", showUnsupportedFiles: true, promptDelete: true });
+  const r = JSON.parse(U.jsonMischenText(alt, vorlage, ".obsidian/app.json", "0.4.5"));
+  assert.deepEqual([r.newFileLocation, r.showUnsupportedFiles, r.promptDelete], ["folder", false, true], "alte Vorgaben wechseln, deine übrigen Werte bleiben");
+  const eigen = JSON.parse(U.jsonMischenText(JSON.stringify({ newFileLocation: "current", showUnsupportedFiles: true }), vorlage, ".obsidian/app.json", "0.4.5"));
+  assert.equal(eigen.newFileLocation, "current", "selbst gewählt bleibt");
+  assert.equal(U.jsonMischenText(JSON.stringify({ newFileLocation: "root", newFileFolderPath: "Vorlesungen", showUnsupportedFiles: true, promptDelete: false }), vorlage, ".obsidian/app.json", "0.4.6"),
+    null, "von 0.4.6 an: deine Werte bleiben, auch wenn sie den alten Vorgaben gleichen");
+  assert.equal(U.jsonMischenText(alt, vorlage, ".obsidian/core-plugins.json", "0.4.5"), null, "nur die genannte Datei");
+});
+
+test("Einstellungen: Reparatur setzt geänderte Vorgaben einmal je Gerät, nur für den alten Wert (Update mit älterem Planer)", () => {
+  const r = laden("update");
+  const speicher = {};
+  r.ctx.app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
+  r.ctx.app.saveLocalStorage = (k, v) => { speicher[k] = v; };
+  const W = r.ctx.update;
+  const config = { newFileLocation: "root", showUnsupportedFiles: false, promptDelete: true };
+  const vault = { getConfig: (k) => config[k], setConfig: (k, v) => { config[k] = v; } };
+  assert.deepEqual(W.vorgabenAnwenden("0.4.5", vault), [], "Version ohne die Vorgabe: nichts");
+  assert.deepEqual(W.vorgabenAnwenden("0.4.6", vault), ["newFileLocation"]);
+  assert.deepEqual(config, { newFileLocation: "folder", showUnsupportedFiles: false, promptDelete: true }, "nur der alte Wert wechselt");
+  config.newFileLocation = "root";
+  assert.deepEqual(W.vorgabenAnwenden("0.4.7", vault), [], "einmal je Gerät: danach selbst Gewähltes bleibt");
+  assert.equal(config.newFileLocation, "root");
+  assert.deepEqual(laden("update").ctx.update.vorgabenAnwenden("0.4.6", {}), [], "ohne getConfig: nichts");
+});
+
 test("Plan: Entscheidung je Datei", async () => {
   const alt = U.listePruefen(await listeBauen("0.2.0", ALT)).wert;
   const neu = U.listePruefen(await listeBauen("0.3.0", NEU)).wert;

@@ -25,7 +25,7 @@ test("Seiten: Kacheln und Listen sind Codeblöcke aus dem Fachmodell, keine Base
   assert.match(DASH, /\n> \[!eba-kennzahlen\]\n> ```eba-kacheln\n/);
   assert.match(DASH, /> > \[!eba-termin\|[^\n]*\]\+ Fristen · 30 Tage\n> > ```eba-liste fristen\n> > Fristen erscheinen/);
   assert.match(DASH, /> > \[!eba-termin\|[^\n]*\]\+ Termine · 14 Tage\n> > ```eba-liste termine\n> > Termine erscheinen/);
-  assert.match(PRUEF, /> \[!eba-tabelle\|[^\n]*\] Prüfungstermine\n> ```eba-liste pruefungen\n/);
+  assert.match(PRUEF, /> \[!eba-tabelle\|[^\n]*\] Termine\n> ```eba-liste pruefungen\n> Prüfungen erscheinen/);
   for (const f of ["formula.tf", "formula.kl", "formula.wochetext", "eba-kz-reihe"]) assert.ok(!DASH.includes(f), "Formel noch da: " + f);
 });
 
@@ -33,7 +33,8 @@ test("Ersatztext entscheidet, welche Liste (verschachtelte Karten liefern den Ab
   const { B } = dashboard("2026-10-18");
   assert.equal(B.artVon("Termine erscheinen, sobald Studium Autopilot läuft.\n"), "termine");
   assert.equal(B.artVon("Fristen erscheinen, sobald Studium Autopilot läuft.\n"), "fristen");
-  assert.equal(B.artVon("Prüfungstermine erscheinen, sobald Studium Autopilot läuft.\n"), "pruefungen");
+  assert.equal(B.artVon("Prüfungen erscheinen, sobald Studium Autopilot läuft.\n"), "pruefungen");
+  assert.equal(B.artVon("Prüfungstermine erscheinen, sobald Studium Autopilot läuft.\n"), "pruefungen", "Seite vor 0.4.6");
 });
 
 const NOTIZEN = alle(
@@ -52,12 +53,12 @@ const NOTIZEN = alle(
   { "Übungsblätter/X100 Blatt 01.md": { typ: "übungsblatt", code: "X100", nummer: 1, faellig: "2026-10-16", status: "offen" } },
 );
 
-test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus gilt), Semester, ECTS, Notenschnitt; Leiste mit Planwoche", () => {
+test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus gilt), Semester, ECTS, Gesamtnote; Leiste mit Planwoche", () => {
   const { B, M } = dashboard("2026-10-18", NOTIZEN, { name: "Alex" });
   const K = B.kachelnBauen(M, new Date("2026-10-18T09:00:00"));
   assert.equal(K.gruss, "Guten Morgen, Alex");
   assert.equal(K.datum, "Sonntag, 18. Oktober 2026");
-  assert.deepEqual(K.kacheln.map((k) => (k.cls ? k.cls + "|" : "|") + k.k), ["akzent frist|Nächste Frist", "|Nächste Prüfung", "|Semester", "|ECTS", "|Notenschnitt"]);
+  assert.deepEqual(K.kacheln.map((k) => (k.cls ? k.cls + "|" : "|") + k.k), ["akzent frist|Nächste Frist", "|Nächste Prüfung", "|Semester", "|ECTS", "|Gesamtnote"]);
   assert.deepEqual([K.kacheln[0].v, K.kacheln[0].s], ["Belegfrist Kolloquium", "18.10. · heute"]);
   assert.deepEqual([K.kacheln[1].v, K.kacheln[1].s], ["X100 · Beispielmathematik", "08.02. · in 113 Tagen"], "X180 ist anerkannt");
   assert.equal(K.kacheln[2].s, "Vorlesungszeit · noch 111 Tage Vorlesungen");

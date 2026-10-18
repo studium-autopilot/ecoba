@@ -41,7 +41,7 @@ Alma verbinden: Einstellungen & Hilfe → Verbindungen.
 >   formula.zeit:
 >     displayName: Zeit
 >   formula.was:
->     displayName: Veranstaltung
+>     displayName: Lehrveranstaltung
 >   note.art:
 >     displayName: Art
 >   note.raum:

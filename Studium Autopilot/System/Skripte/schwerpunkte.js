@@ -156,7 +156,7 @@ module.exports = function (ctx) {
       const a = e.target.closest ? e.target.closest("[data-pfad]") : null;
       if (!a || !root.contains(a)) return;
       e.preventDefault(); e.stopPropagation();
-      app.workspace.openLinkText(a.getAttribute("data-pfad"), (inst.ctx && inst.ctx.sourcePath) || "", e.ctrlKey || e.metaKey);
+      ctx.oeffnen(a.getAttribute("data-pfad"), { quelle: (inst.ctx && inst.ctx.sourcePath) || "", neu: e.ctrlKey || e.metaKey });
     });
   };
 

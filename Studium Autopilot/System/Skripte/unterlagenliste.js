@@ -120,7 +120,7 @@ module.exports = function (ctx) {
 
   // ---------- Obsidian ----------
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f)?.frontmatter) || {};
-  const oeffnen = (f, e) => { if (f) app.workspace.getLeaf(!!(e && (e.metaKey || e.ctrlKey))).openFile(f); };
+  const oeffnen = (f, e) => { if (f) ctx.oeffnen(f, { neu: !!(e && (e.metaKey || e.ctrlKey)) }); };
   // Tippen ohne Sprung in den Quelltext (Bearbeitungsansicht)
   const tippen = (el, fn) => {
     el.addEventListener("mousedown", (e) => { e.stopPropagation(); });

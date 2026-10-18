@@ -39,7 +39,7 @@ cssclasses:
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Abschluss</span></div>
 <h1><span class="eba-code">BA302</span> Bachelorarbeit Economics and Business Administration</h1>
 <p class="eba-untertitel">Bachelor Thesis Economics and Business Administration</p>
-<div class="eba-meta"><span><b>12</b> ECTS</span><span>FS 6</span><span>WS, SS</span><span>Schriftliche Arbeit + Präsentation</span><span>Deutsch/Englisch</span><span>Notenblock 66 %</span></div>
+<div class="eba-meta"><span><b>12</b> ECTS</span><span>6. FS</span><span>WS, SS</span><span>Schriftliche Arbeit + Präsentation</span><span>Deutsch/Englisch</span><span>Notenblock 66 %</span></div>
 </div>
 
 ```eba-modul
@@ -51,7 +51,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -77,7 +77,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC
@@ -109,12 +109,12 @@ cssclasses:
 > > - **Dauer:** 1 Semester
 >
 > > [!eba-regel|handy-zu]+ Prüfung
-> > - **Form:** Im allg. schriftliche Arbeit und Präsentation (Gewichtung je nach gewähltem Lehrstuhl verschieden) (12 CP) – 100 % der Modulnote
+> > - **Form:** Im allg. schriftliche Arbeit und Präsentation (Gewichtung je nach gewähltem Lehrstuhl verschieden) (12 ECTS) – 100 % der Modulnote
 > > - **Versuche:** Bachelorarbeit einmal wiederholbar, Thema einmal in den ersten 4 Wochen zurückgebbar
 
 
 > [!eba-info|handy-zu]+ Hinweise
-> - Zulassung: CP aller Module bis einschl. FS 3 laut Modultabelle (§ 10 BT); Bearbeitungszeit 9 Wochen (§ 28 Abs. 3 BRPO); 1 Wiederholung (§ 31 BRPO).
+> - Zulassung: ECTS aller Module bis einschließlich 3. Fachsemester laut Modultabelle (§ 10 BT); Bearbeitungszeit 9 Wochen (§ 28 Abs. 3 BRPO); 1 Wiederholung (§ 31 BRPO).
 
 
 <p class="eba-fuss">Quelle: MHB B.Sc. Wiwi (Datei 2026-3-24_Modulhandbuch_B.Sc.Wiwi.pdf), S. 92; PO 2023 BT EcoBA (AmtlBekUT 24/2023, S. 310-317), § 4 · Stand der Recherche 30.09.2026 · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Alle Quellen</a></p>

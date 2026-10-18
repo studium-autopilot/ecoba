@@ -1,5 +1,5 @@
 // Feld-Register (seit 0.4.5, Konsistenz-Audit Schritt 3): Angaben, die du an mehreren Stellen machst (Einrichtung, Formular
-// „Deine Angaben“, Zeilen „Variante“, Befehl „Variante wechseln“, Modulfeld), haben EINE Beschreibung: gespeicherter Wert,
+// „Deine Angaben“, Zeilen „Variante“, Befehl „Variante wählen“, Modulfeld), haben EINE Beschreibung: gespeicherter Wert,
 // Reihenfolge, Wörter und Prüfung. Bibliothek ohne Obsidian (ctx.user.felder), startet nichts. Doku: docs/architektur.md,
 // „Feld-Register“. Tests: tests/felder.test.js. Neue Eingaben, die an mehr als einer Stelle vorkommen, kommen hierher.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.

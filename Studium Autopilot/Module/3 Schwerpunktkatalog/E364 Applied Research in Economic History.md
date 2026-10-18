@@ -44,7 +44,7 @@ cssclasses:
 <div class="eba-kopf">
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Schwerpunkt</span></div>
 <h1><span class="eba-code">E364</span> Applied Research in Economic History</h1>
-<div class="eba-meta"><span><b>9</b> ECTS</span><span>FS 3.–6.</span><span>WS, SS</span><span>Assignment, Hausarbeit</span><span>Englisch</span><span>Notenblock 66 %</span></div>
+<div class="eba-meta"><span><b>9</b> ECTS</span><span>3.–6. FS</span><span>WS, SS</span><span>Assignment, Hausarbeit</span><span>Englisch</span><span>Notenblock 66 %</span></div>
 </div>
 
 ```eba-modul
@@ -56,7 +56,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -82,7 +82,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC
@@ -114,7 +114,7 @@ cssclasses:
 > > - **Dauer:** 1 Semester
 >
 > > [!eba-regel|handy-zu]+ Prüfung
-> > - **Form:** Assignment, Hausarbeit (term paper) (9 CP) – 100 % der Modulnote
+> > - **Form:** Assignment, Hausarbeit (term paper) (9 ECTS) – 100 % der Modulnote
 
 
 > [!eba-ziel|handy-zu]+ Anrechenbar in

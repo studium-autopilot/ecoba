@@ -1,7 +1,7 @@
 // Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit acht Bildschirmen:
 //   1 Willkommen · 2 Studienbeginn · 3 Variante · 4 Über dich (Name, Zielnote) · 5 Alma verbinden · 6 ILIAS verbinden
-//   (seit 0.4.0, freiwillig) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu das Design
-//   Elfenbein, Flieder oder Klar; darstellung.js) · 8 Fertig
+//   (seit 0.4.0, freiwillig) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu das Design als
+//   drei Vorschau-Kacheln ohne Namen; darstellung.js) · 8 Fertig
 // Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 7“ mit Punkten (ab Bildschirm 2);
 // Zurück jederzeit, Überspringen auf 2–6 (die Darstellung hat immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
 // beenden ohne Verlust (Gespeichertes bleibt, nichts wird geschrieben; Darstellung und Design gelten sofort beim Antippen und
@@ -29,7 +29,7 @@
 // das Fenster hat weiter(), ueberspringen(), zurueck(), schritt und felder.
 module.exports = function (ctx) {
   const app = window.app;
-  const { Modal, Notice } = ctx.obsidian;
+  const { Modal } = ctx.obsidian;
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const DASHBOARD = "Dashboard.md";
   const SITZUNG = "eba-einrichtung-gezeigt"; // sessionStorage: in dieser App-Sitzung schon automatisch gezeigt
@@ -155,7 +155,8 @@ module.exports = function (ctx) {
       this.laeuft = true;
       try { await schreiben(werte); } catch (e) {
         this.laeuft = false;
-        new Notice((e && e.message) || String(e), 8000);
+        console.error("Einrichtung: speichern", e);
+        ctx.hinweis("Speichern hat nicht geklappt. Bitte noch einmal versuchen.");
         return false;
       }
       this.laeuft = false;
@@ -189,7 +190,7 @@ module.exports = function (ctx) {
       const fuss = rahmen.createDiv({ cls: "eba-ei-fuss" });
       const knopf = (text, art, fn) => {
         const b = fuss.createEl("button", { text, cls: "eba-ei-knopf " + art + (art === "haupt" ? " mod-cta" : "") });
-        b.addEventListener("click", () => { Promise.resolve(fn()).catch((e) => { console.error("Einrichtung", e); new Notice((e && e.message) || String(e), 8000); }); });
+        b.addEventListener("click", () => { Promise.resolve(fn()).catch((e) => { console.error("Einrichtung", e); ctx.hinweis("Das hat nicht geklappt. Bitte noch einmal versuchen."); }); });
         return b;
       };
       const titel = (t, satz) => {
@@ -279,7 +280,7 @@ module.exports = function (ctx) {
         const zz = zeile("Zielnote");
         const ziel = zz.z.createEl("input", { type: "text", cls: "eba-ei-eingabe kurz", attr: { placeholder: "z. B. 2,0", inputmode: "decimal", enterkeyhint: "done" } });
         ziel.value = this.werte.zielnote || "";
-        zz.z.createSpan({ cls: "eba-ei-hilfe", text: "Dein Wunsch-Schnitt, 1,0 bis 4,0." });
+        zz.z.createSpan({ cls: "eba-ei-hilfe", text: "Deine Zielnote, 1,0 bis 4,0." });
         const meldung = haupt.createEl("p", { cls: "eba-ei-meldung" });
         ziel.addEventListener("input", () => { ziel.removeClass("eba-feld-fehler"); meldung.setText(""); meldung.removeClass("fehler"); });
         name.addEventListener("input", () => { this.werte.name = name.value; });
@@ -394,7 +395,7 @@ module.exports = function (ctx) {
           const fehler = (t) => { meldung.setText(t); meldung.addClass("fehler"); return false; };
           if (!name) return fehler("Bitte deinen Benutzernamen eingeben.");
           if (!geheimFeld.value) return fehler("Bitte dein Passwort eingeben.");
-          this.laeuft = true; los.disabled = true; los.setText("Verbinde …"); meldung.removeClass("fehler"); meldung.setText("Melde mich bei ILIAS an …");
+          this.laeuft = true; los.disabled = true; los.setText("Verbinde …"); meldung.removeClass("fehler"); meldung.setText("Verbinde mit ILIAS …");
           let r;
           try { r = await I.zugangSpeichern(name, () => geheimFeld.value, { pruefen: true }); } catch (e) { r = null; }
           geheimFeld.value = "";
@@ -421,24 +422,13 @@ module.exports = function (ctx) {
       }
 
       if (s === DARSTELLUNG) {
-        // Derselbe Umschalter wie in Einstellungen & Hilfe (darstellung.js), darunter die Designs als Auswahl wie die Variante:
-        // Antippen schaltet sofort um; Weiter speichert nur den Stand der Einrichtung
+        // Derselbe Umschalter und dieselben Design-Kacheln wie in Einstellungen & Hilfe (darstellung.js): Antippen schaltet
+        // sofort um; Weiter speichert nur den Stand der Einrichtung
         titel("Wie soll es aussehen?", "Tipp an, was dir gefällt, du siehst es sofort.");
         const D = ctx.darstellung;
         if (D) {
           this.felder.darstellung = D.schalter(haupt.createDiv({ cls: "eba-ei-feld" }));
-          const gruppe = haupt.createDiv({ cls: "eba-ei-wahl eba-ei-design", attr: { role: "radiogroup", "aria-label": "Design" } });
-          this.felder.designs = D.designZeilen(D.design()).map((z) => {
-            const l = gruppe.createEl("label", { cls: "eba-ei-option" });
-            const r = l.createEl("input", { type: "radio", attr: { name: "eba-ei-design", value: z.wert } });
-            r.checked = z.gewaehlt;
-            const t = l.createSpan({ cls: "eba-ei-option-text" });
-            t.createEl("b", { text: z.titel });
-            t.createSpan({ text: z.text });
-            l.createSpan({ cls: "eba-dz-muster", attr: { "data-design": z.wert, "aria-hidden": "true" } });
-            r.addEventListener("change", () => { if (r.checked) D.designSetzen(z.wert); });
-            return r;
-          });
+          this.felder.designs = D.designWahl(haupt.createDiv({ cls: "eba-ei-feld" }));
         }
         this.aktion = () => this.speichernUndWeiter(null, false);
         unten();
@@ -472,8 +462,7 @@ module.exports = function (ctx) {
       if (si.extern) zeile("Unterlagen", "über deinen Uni-Abgleich");
       else if (si.verbunden) zeile("Unterlagen", "ILIAS verbunden");
       const dm = ctx.darstellung ? ctx.darstellung.MODI.find((m) => m.wert === ctx.darstellung.modus()) : null;
-      const dd = ctx.darstellung ? ctx.darstellung.DESIGNS.find((d) => d.wert === ctx.darstellung.design()) : null;
-      if (dm) zeile("Darstellung", dd ? `${dd.titel}, ${dm.titel.toLowerCase()}` : dm.titel);
+      if (dm) zeile("Darstellung", dm.titel);
       // Übersprungenes: „Später nachholen“ mit Knopf (springt zu dem Bildschirm)
       const NACH = { studienbeginn: [2, "Studienbeginn"], variante: [3, "Variante"], angaben: [4, "Über dich"], alma: [5, "Alma-Stundenplan"], ilias: [ILIAS, "ILIAS-Unterlagen"] };
       const erledigt = (p) => (p === "alma" && (st.verbunden || st.daten || st.extern || zentral)) || (p === "ilias" && (si.verbunden || si.extern));

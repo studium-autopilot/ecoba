@@ -122,7 +122,7 @@ module.exports = function (ctx) {
     if (p) { while (p.firstChild) ziel.insertBefore(p.firstChild, p); p.remove(); }
   };
 
-  const melden = (text) => { try { new obs.Notice(text, 5000); } catch (e) { /* ohne Obsidian */ } };
+  const melden = (text) => { try { ctx.hinweis(text); } catch (e) { /* ohne Obsidian */ } };
   const umschalten = async (p, box, zeile) => {
     const ziel = box.checked ? "x" : " ";
     zeile.toggleClass("is-erledigt", ziel === "x");
@@ -143,10 +143,10 @@ module.exports = function (ctx) {
     const ziel = a.getAttribute("data-href") || a.getAttribute("href") || "";
     const pfad = ziel.split("#")[0];
     if (pfad && !app.metadataCache.getFirstLinkpathDest(pfad, PROTOKOLL)) { melden(`„${pfad}“ gibt es in deinem Tresor nicht.`); return; }
-    app.workspace.openLinkText(ziel, PROTOKOLL, !!(e.ctrlKey || e.metaKey));
+    ctx.oeffnen(ziel, { quelle: PROTOKOLL, neu: !!(e.ctrlKey || e.metaKey) });
   };
   const protokollOeffnen = (e, zeile) => {
-    app.workspace.openLinkText(PROTOKOLL, "", !!(e && (e.ctrlKey || e.metaKey)), zeile == null ? undefined : { eState: { line: zeile } });
+    ctx.oeffnen(PROTOKOLL, { neu: !!(e && (e.ctrlKey || e.metaKey)), zeile });
   };
 
   // Karte mit dem Aufbau eines Callouts (Stil der übrigen Karten), aber selbst gezeichnet: So bleibt der Klapp-Zustand beim
@@ -185,7 +185,7 @@ module.exports = function (ctx) {
       const knoepfe = inhalt.createDiv({ cls: "eba-bp-knoepfe" });
       const zum = knoepfe.createEl("a", { cls: "eba-vb-knopf", text: "Protokoll", href: "#" });
       zum.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); protokollOeffnen(e); });
-      if (jetztAbgleichen()) knoepfe.createEl("a", { cls: "eba-vb-knopf cta", text: "Jetzt abgleichen", href: ctx.link(AKTION, {}) });
+      if (jetztAbgleichen()) knoepfe.createEl("a", { cls: "eba-vb-knopf cta", text: "Aktualisieren", href: ctx.link(AKTION, {}) });
     }
 
     const liste = inhalt.createDiv({ cls: "eba-td eba-bp-liste", attr: { role: "list" } });
@@ -209,7 +209,7 @@ module.exports = function (ctx) {
         const a = e.target.closest ? e.target.closest("a") : null;
         if (a && !a.classList.contains("internal-link")) return;
         e.preventDefault(); e.stopPropagation();
-        if (p.quelle) app.workspace.openLinkText(p.ziel + (p.anker ? "#" + p.anker : ""), "", !!(e.ctrlKey || e.metaKey));
+        if (p.quelle) ctx.oeffnen(p.ziel + (p.anker ? "#" + p.anker : ""), { neu: !!(e.ctrlKey || e.metaKey) });
         else if (a) linkOeffnen(a, e); else protokollOeffnen(e, p.zeile);
       });
       if (p.quelle) zeile.addClass("eba-bp-quelle");

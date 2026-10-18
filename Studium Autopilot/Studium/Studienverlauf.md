@@ -66,7 +66,7 @@ Schwerpunkte: erscheinen, sobald Studium Autopilot läuft.
 > >
 > > > [!eba-regel]- Bachelorarbeit (§§ 9, 10 BT, §§ 28, 31 BRPO)
 > > > - **12 ECTS**, **9 Wochen** Bearbeitungszeit, Deutsch oder Englisch.
-> > > - Zulassung: alle Module bis einschließlich **FS 3** (Antrag bei einzelnen fehlenden Leistungen möglich).
+> > > - Zulassung: alle Module bis einschließlich **3. Fachsemester** (Antrag bei einzelnen fehlenden Leistungen möglich).
 > > > - Einmal wiederholbar; Thema einmal in den ersten **4 Wochen** zurückgebbar.
 > > > - Vergabe zentral über das Prüfungsamt, einmal im Jahr; Präferenzen im **Juni/Juli des 4. FS**.
 > >

@@ -29,7 +29,7 @@ test("Alma verbinden: erst Alma, dann der Stundenplan als Link; Menüweg im Hinw
 
 // ---------- Zeilen je Stand ----------
 // o: { extern (Einstellung ilias_unterlagen: extern), einstellungen (weitere Felder, z. B. quellen_extern), alma (alma.js-Status),
-//   ilias (ctx.ilias.status()), zentral (zentraler Stundenplan da), zentralStatus, volltext (ctx.volltext.status()), stundenplan /
+//   ilias (ctx.ilias.status()), zentral (zentraler Stundenplan da), zentralStatus, volltext (ctx.volltext.status()), kalender (ctx.iliasKalender.status()), stundenplan /
 //   unterlagen (so viele eigene Notizen), kannSpeichern }
 const aufbau = (o) => {
   o = o || {};
@@ -55,6 +55,8 @@ const aufbau = (o) => {
       einrichtung: { almaOffen: () => true, iliasOffen: () => true },
       almaKonto: o.almaKonto,
       volltext: o.volltext ? { status: () => o.volltext, nachholen: async (x) => { geholt.push(Object.assign({ volltext: true }, x)); } } : undefined,
+      iliasKalender: o.kalender ? { status: () => o.kalender, K: { EXTERN: "Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich." },
+        aktualisieren: async (x) => { geholt.push(Object.assign({ kalender: true }, x)); }, linkPruefen: () => "" } : undefined,
       link: (aktion, p) => "obsidian://studium-autopilot?aktion=" + aktion + (p && p.id ? "&id=" + p.id : ""),
     },
   });
@@ -95,7 +97,7 @@ test("Zeilen: Symbol und Pille widersprechen sich nie, höchstens ein Knopf, Pil
       if (z.pille === "nicht verbunden") assert.equal(z.symbol, "schloss", wo + " – „nicht verbunden“ nur mit Schloss");
       if (z.symbol === "haken") assert.notEqual(z.pille, "nicht verbunden", wo);
       if (z.pille === "verbunden") assert.notEqual(z.symbol, "schloss", wo);
-      if (z.pille === "Anmeldung prüfen") assert.equal(z.symbol, "warnung", wo);
+      if (z.pille === "neu verbinden") assert.equal(z.symbol, "warnung", wo);
       assert.ok((W.zeile(id).knopf.match(/eba-vb-knopf/g) || []).length <= 1, wo + " – höchstens ein Knopf");
     }
   }
@@ -123,7 +125,7 @@ test("Zeilen ohne eigenen Uni-Abgleich: Alma und ILIAS je Stand", () => {
   assert.deepEqual([z.symbol, z.pille, z.knopf], ["haken", "", "Verbinden"]);
 
   const g = lesen(aufbau({ ilias: { verbunden: true, gesperrt: true, text: "Benutzername oder Kennwort stimmt nicht." } }).V.zeile("ilias"));
-  assert.deepEqual([g.symbol, g.pille, g.knopf], ["warnung", "Anmeldung prüfen", "Verbinden (cta)"]);
+  assert.deepEqual([g.symbol, g.pille, g.knopf], ["warnung", "neu verbinden", "Verbinden (cta)"]);
 
   // Warnung aus dem letzten Lauf: steht im Text (ilias.js), die Zeile zeigt das Warnsymbol
   const w = lesen(aufbau({ ilias: { verbunden: true, warnung: "12 Dateien fehlen gerade in Unterlagen.", text: "Aktualisiert vor 5 Min. 12 Dateien fehlen gerade in Unterlagen." } }).V.zeile("ilias"));
@@ -201,7 +203,7 @@ test("Noten & Anmeldungen (Alma): Zeile aus alma-konto.js; ohne Zeile nicht in d
   assert.match(W.zeile("alma-konto").link, /id=alma-konto/);
   W = aufbau({ almaKonto: konto({ text: "Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben.", symbol: "warnung", pille: "pruefen",
     knopf: { aktion: "verbinden", text: "ILIAS verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) }).V;
-  assert.deepEqual([lesen(W.zeile("alma-konto")).pille, lesen(W.zeile("alma-konto")).ton], ["Anmeldung prüfen", "warn"]);
+  assert.deepEqual([lesen(W.zeile("alma-konto")).pille, lesen(W.zeile("alma-konto")).ton], ["neu verbinden", "warn"]);
   W = aufbau({ almaKonto: konto({ text: "Alma-Seite sah anders aus. Bitte in Alma selbst nachsehen.", symbol: "warnung", pille: "", knopf: { href: "https://alma.uni-tuebingen.de/alma/x", text: "In Alma öffnen" }, link: null }) }).V;
   assert.match(W.zeile("alma-konto").knopf, /^<a class="eba-vb-knopf" href="https:\/\/alma\.uni-tuebingen\.de\/alma\/x" target="_blank" rel="noopener">In Alma öffnen<\/a>$/);
   W.fensterOeffnen(W.liste["alma-konto"]);
@@ -259,4 +261,36 @@ test("Volltext der PDFs: Zeile mit den Zahlen, aus → Einschalten, anderes Ger�
   assert.deepEqual([z.symbol, z.knopf, z.knopfAktion], ["aus", "Einschalten (cta)", "verbinden"]);
   z = lesen(aufbau({ volltext: { an: true, zustand: "extern", warnungen: [], text: "Kommt über deinen eigenen Abgleich." } }).V.zeile("volltext"));
   assert.deepEqual([z.text, z.knopf], ["Kommt über deinen eigenen Abgleich.", ""]);
+});
+
+test("ILIAS-Kalender: nicht verbunden Verbinden, verbunden Stand und Zahl der Abgaben, anderes Gerät, von außen nur der Satz", async () => {
+  assert.equal(aufbau({}).V.zeile("ilias-kalender"), null, "ohne ilias-kalender.js keine Zeile");
+  let z = lesen(aufbau({ kalender: { verbunden: false, zustand: "nicht-verbunden", warnungen: [] } }).V.zeile("ilias-kalender"));
+  assert.deepEqual(z, { text: "Mit dem ILIAS-Kalender stehen die Abgabetermine deiner Übungen bei deinen Fristen.", symbol: "aus", ton: "leise", pille: "",
+    knopf: "Verbinden (cta)", knopfAktion: "verbinden", link: "", linkAktion: "" });
+  const x = aufbau({ kalender: { verbunden: true, zustand: "an", geprueft: vorMin(5), warnungen: [], abgaben: 3 } });
+  z = lesen(x.V.zeile("ilias-kalender"));
+  assert.deepEqual([z.text, z.symbol, z.pille, z.knopf, z.link], ["Aktualisiert vor 5 Min. 3 Abgaben stehen bei deinen Fristen.", "haken", "verbunden", "Aktualisieren (cta)", "Mehr erfahren"]);
+  await x.aktionen["verbindung-aktualisieren"].ausfuehren({ parameter: { id: "ilias-kalender" } });
+  assert.deepEqual(x.geholt, [{ kalender: true }]);
+  z = lesen(aufbau({ kalender: { verbunden: true, zustand: "an", geprueft: vorMin(5), warnungen: [], abgaben: 1 } }).V.zeile("ilias-kalender"));
+  assert.equal(z.text, "Aktualisiert vor 5 Min. 1 Abgabe steht bei deinen Fristen.");
+  z = lesen(aufbau({ kalender: { verbunden: true, zustand: "an", geprueft: vorMin(5), warnungen: [], abgaben: 0 } }).V.zeile("ilias-kalender"));
+  assert.equal(z.text, "Aktualisiert vor 5 Min. Gerade keine Abgaben offen.");
+  z = lesen(aufbau({ kalender: { verbunden: true, zustand: "fehler", geprueft: vorMin(180), warnungen: [], abgaben: 1,
+    fehler: "ILIAS kennt diesen Link nicht mehr. Bitte den Link in ILIAS neu kopieren." } }).V.zeile("ilias-kalender"));
+  assert.deepEqual([z.text, z.symbol, z.pille], ["ILIAS kennt diesen Link nicht mehr. Bitte den Link in ILIAS neu kopieren. Zuletzt aktualisiert vor 3 Std.", "warnung", "verbunden"]);
+  z = lesen(aufbau({ kalender: { verbunden: true, zustand: "anderes-geraet", warnungen: [], abgaben: 1 } }).V.zeile("ilias-kalender"));
+  assert.deepEqual([z.text, z.knopf], ["Ein anderes Gerät aktualisiert, alles kommt über deinen Sync.", "Hier aktualisieren (cta)"]);
+  z = lesen(aufbau({ kalender: { verbunden: false, extern: true, zustand: "extern", warnungen: [] } }).V.zeile("ilias-kalender"));
+  assert.deepEqual([z.text, z.symbol, z.knopf, z.link], ["Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich.", "haken", "", ""]);
+  z = lesen(aufbau({ kalender: { verbunden: true, extern: true, zustand: "extern", warnungen: [] } }).V.zeile("ilias-kalender"));
+  assert.deepEqual([z.knopf, z.link, z.linkAktion], ["", "Trennen", "trennen"]);
+  // Reihenfolge unter Verbindungen (Plan 7.2), Schritte mit dem Link zu ILIAS und den Beschriftungen aus ILIAS 10
+  assert.deepEqual(Object.keys(x.V.liste).slice(0, 5), ["alma", "alma-konto", "ilias", "ilias-kalender", "volltext"]);
+  const k = x.V.liste["ilias-kalender"];
+  assert.deepEqual(V.textTeile(k.schritte[0]).filter((t) => t.art === "link").map((t) => t.href), ["https://ovidius.uni-tuebingen.de/"]);
+  assert.match(k.schritte.join(" "), /\*\*Persönlicher Arbeitsraum\*\* → \*\*Kalender\*\*.*\*\*Abonnieren\*\*.*\*\*iCal-URL\*\*/);
+  assert.deepEqual([k.laedt, k.externText], ["Abgaben werden geholt …", "Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich."]);
+  assert.equal(x.V.liste.alma.laedt, "Stundenplan wird geholt …", "Alma behält ihre Texte");
 });

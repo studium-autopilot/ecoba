@@ -289,8 +289,9 @@ module.exports = function (ctx) {
   const WT_LANG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
   // Uhrzeit in einem Text („17:00–18:00 · online“, „Mo 12:15–14:00 · HS N06“): nur Doppelpunkt-Zeiten, damit „06.11.“ nie als
-  // Uhrzeit gilt; ohne Lookbehind (iOS < 16.4). Gruppe 1 = Uhrzeit bzw. Spanne.
-  const ZEIT_RE = /(?:^|\D)((?:[01]?\d|2[0-3]):[0-5]\d(?:\s*[–-]\s*(?:[01]?\d|2[0-3]):[0-5]\d)?)(?!\d)/;
+  // Uhrzeit gilt; ohne Lookbehind (iOS < 16.4). Gruppe 1 = Uhrzeit bzw. Spanne. „24:00“ ist das Ende eines Tages (eine Abgabe
+  // „bis 24:00 Uhr“ aus dem ILIAS-Kalender) und kommt nach 23:59.
+  const ZEIT_RE = /(?:^|\D)((?:(?:[01]?\d|2[0-3]):[0-5]\d|24:00)(?:\s*[–-]\s*(?:(?:[01]?\d|2[0-3]):[0-5]\d|24:00))?)(?!\d)/;
   // Ein Datum ohne Jahr liegt höchstens so viele Tage zurück (sonst gilt das nächste Jahr) bzw. voraus (sonst das vorige)
   const ZURUECK = 60, VORAUS = 305;
   const isoAus = (v) => (v instanceof Date ? (isNaN(v.getTime()) ? "" : isoVon(v)) : s10(v));
@@ -383,7 +384,7 @@ module.exports = function (ctx) {
 
   // Feld „ort“ eines Termins („ab 15:00 · bis 30.10. 15:00 · ILIAS-Kurs E101 → Übungen“) → { ab, bis (Uhrzeiten), schluss (ein
   // „bis …“ kam vor), zeit (reine Uhrzeit oder Spanne), wo (der Rest, ohne angehängtes „bis 18.10.“) }
-  const UHR = "(?:[01]?\\d|2[0-3]):[0-5]\\d";
+  const UHR = "(?:(?:[01]?\\d|2[0-3]):[0-5]\\d|24:00)";
   const TAGMUSTER = "\\d{1,2}\\.\\d{1,2}\\.(?:\\d{2,4})?";
   const AB_ZEIT = new RegExp(`^ab\\s+(${UHR})(?:\\s*Uhr)?$`, "i");
   const BIS_ZEIT = new RegExp(`^bis\\s+(?:${TAGMUSTER}(?:,?\\s*(${UHR}))?|(${UHR}))(?:\\s*Uhr)?$`, "i");
@@ -539,6 +540,24 @@ module.exports = function (ctx) {
     return Object.assign(kalenderwoche(wt >= 6 ? plusTage(d, 8 - wt) : d), { vorgezogen: wt >= 6 });
   };
 
+  // ---------- Stundenplan: „Besuche ich nicht“ (Kopf der Notiz, kopf.js) ----------
+  // Eine Lehrveranstaltung aus einer Quelle steht mit ihrem Schlüssel in stundenplan_ausgeblendet (Einstellungen): zentral die
+  // zentral_id (wie bisher), sonst „<herkunft>:<id>“ (Alma, ILIAS-Gruppe …), weil die Quelle ihre Notiz neu schreibt. Deine eigene
+  // Notiz trägt besuche_nicht: true. besuchSchluessel → Schlüssel oder "" (eigene Notiz).
+  const besuchSchluessel = (fm) => {
+    const h = text(fm && fm.herkunft);
+    const Q = ctx.user && ctx.user.quellen;
+    if (!h || !Q || typeof Q.idFeld !== "function") return "";
+    const id = text(fm[Q.idFeld(h)]);
+    return !id ? "" : h === "zentral" ? id : `${h}:${id}`;
+  };
+  const besuchtNicht = (fm, einstellungen) => {
+    if (!fm) return false;
+    if (fm.besuche_nicht === true) return true;
+    const k = besuchSchluessel(fm);
+    return !!k && liste((einstellungen || daten().einstellungen).stundenplan_ausgeblendet).map(String).indexOf(k) >= 0;
+  };
+
   // ---------- Stundenplan: findet eine Sitzung statt? ----------
   // fm: Notiz typ lehrveranstaltung (wochentag 1 = Montag, von, bis, ausfall[], aenderungen["Datum|Beginn|Ende|Raum"], einzeltermin,
   // entfaellt, herkunft/zentral_id), tag: ISO. → { statt, grund, name, beginn, ende, raum, geaendert }. grund: "" (findet statt),
@@ -551,7 +570,7 @@ module.exports = function (ctx) {
     const D = daten();
     const nein = (grund, name) => Object.assign(aus, { grund, name: name || "" });
     if (fm.entfaellt === true) return nein("entfaellt");
-    if (fm.herkunft === "zentral" && liste(D.einstellungen.stundenplan_ausgeblendet).map(String).indexOf(String(fm.zentral_id)) >= 0) return nein("ausgeblendet");
+    if (besuchtNicht(fm, D.einstellungen)) return nein("ausgeblendet");
     const von = s10(fm.von), bis = s10(fm.bis);
     if (fm.einzeltermin === true) { if (von && d !== von) return nein("anderer Tag"); }
     else if (Number(fm.wochentag) !== wochentagVon(d)) return nein("anderer Tag");
@@ -637,7 +656,8 @@ module.exports = function (ctx) {
   // akzent Veranstaltung/Fachschaft; leer neutral (offen, neu, geschätzt, freiwillig). typ: "modul", "termin" (Wert = Kategorie
   // oder Art) oder leer (nach dem Wort).
   const TON = {
-    ok: ["bestanden", "anerkannt", "angemeldet", "abgegeben", "korrigiert", "erledigt", "gelesen", "bearbeitet", "zugelassen", "durchgearbeitet", "verbunden"],
+    ok: ["bestanden", "anerkannt", "angemeldet", "abgegeben", "korrigiert", "erledigt", "gelesen", "bearbeitet", "zugelassen", "durchgearbeitet", "verbunden",
+      "im stundenplan"],
     bad: ["nicht bestanden", "überfällig", "abgelehnt", "fehler", "prüfung", "pruefung"],
     warn: ["in arbeit", "frist", "abgabe"],
     info: ["läuft", "lehre", "zwischentest", "uni", "termin"],
@@ -731,7 +751,7 @@ module.exports = function (ctx) {
     const T = semesterTabelle(D, persoenlich);
     const fuss = [];
     if (T.sterne) fuss.push("* geschätzt, noch nicht offiziell");
-    if (persoenlich) fuss.push(`Studienbeginn ${esc(D.startSemester)}${D.studienbeginnStandard ? " (änderbar unter Personalisieren)" : ""}`);
+    if (persoenlich) fuss.push(`Studienbeginn ${esc(D.startSemester)}${D.studienbeginnStandard ? " (ändern unter Deine Angaben)" : ""}`);
     else if (D.zentral.stand) fuss.push(`Stand ${dmy(D.zentral.stand)}`);
     const n = T.hinweise.length;
     // Ein Hinweis steht direkt da, erst mehrere klappen sich ein
@@ -792,7 +812,7 @@ module.exports = function (ctx) {
     beiAenderung, protokoll, woche, vorlesungswochen, semesterFuer,
     // Fachmodell (docs/architektur.md „Fachmodell“)
     zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, opFrist, kalenderwoche, planwoche, findetStatt,
-    naechsteSitzung, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach,
+    naechsteSitzung, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
   };
   ctx.modell = api;
 

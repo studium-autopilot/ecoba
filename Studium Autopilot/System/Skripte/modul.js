@@ -97,7 +97,7 @@ module.exports = function (ctx) {
 
   // ---------- Obsidian ----------
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f)?.frontmatter) || {};
-  const oeffnen = (f, e) => { if (f) app.workspace.getLeaf(!!(e && (e.metaKey || e.ctrlKey))).openFile(f); };
+  const oeffnen = (f, e) => { if (f) ctx.oeffnen(f, { neu: !!(e && (e.metaKey || e.ctrlKey)) }); };
   const symbol = (el, name) => { try { if (O.setIcon) O.setIcon(el, name); } catch (e) { /* ohne Symbol */ } };
   const schreiben = (f, felder) => app.fileManager.processFrontMatter(f, (m) => { for (const k of Object.keys(felder)) m[k] = felder[k]; });
   // Tippen ohne Fokuswechsel und ohne Sprung in den Quelltext (Bearbeitungsansicht)

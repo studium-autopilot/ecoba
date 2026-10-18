@@ -12,7 +12,7 @@ Bitte schick keine echten Zugangsdaten, Matrikelnummern oder Noten mit, auch nic
 ## Was dazugehört
 
 - Das Plugin und die Skripte im Tresor (`Studium Autopilot/.obsidian/plugins/studium-autopilot/`, `System/Skripte/`).
-- Das Update über den Knopf **Aktualisieren** (Prüfsummen, Update-Liste, Sicherung).
+- Das Update über den Knopf **Neue Version installieren** (Prüfsummen, Update-Liste, Sicherung).
 - Die Prüfung der zentralen Daten im Plugin (alles, was eine manipulierte Datendatei in den Tresor schreiben oder ausführen
   könnte).
 - Die Anmeldung bei ILIAS und der Umgang mit Zugangsdaten: Das Passwort darf nur im Schlüsselbund des Geräts liegen und nur
@@ -24,7 +24,7 @@ Betreiber melden.
 ## Unterstützte Versionen
 
 Nur die neueste Version (siehe [Releases](https://github.com/studium-autopilot/ecoba/releases/latest)). Behebungen kommen
-als neue Version über **Aktualisieren**.
+als neue Version über **Neue Version installieren**.
 
 ## Wie das Plugin geschützt ist
 

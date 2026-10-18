@@ -48,13 +48,13 @@ test("Ereignisse eines Knopf-Laufs: start manuell, Fortschritt ohne Titel und Da
   assert.deepEqual(fort.filter((e) => e.phase === "durchsuchen").map((e) => e.code).filter((c, i, l) => l.indexOf(c) === i), ["B110", "S100"]);
   const fertig = ereignisse(x, "fertig");
   assert.equal(fertig.length, 1);
-  assert.equal(fertig[0].text, "ILIAS: 5 neue Dateien in Unterlagen."); assert.equal(fertig[0].weiterIn, null);
-  assert.deepEqual(x.meldungen, ["ILIAS: 5 neue Dateien in Unterlagen."]);
+  assert.equal(fertig[0].text, "5 neue Dateien aus ILIAS in Unterlagen."); assert.equal(fertig[0].weiterIn, null);
+  assert.deepEqual(x.meldungen, ["5 neue Dateien aus ILIAS in Unterlagen."]);
   assert.equal(x.m.auftrag(), null, "alles geladen: kein offener Auftrag");
   // nichts Neues
   x.u.vor(5 * MIN);
   await knopf(x);
-  assert.equal(x.meldungen[1], "ILIAS: keine neuen Dateien.");
+  assert.equal(x.meldungen[1], "Keine neuen Dateien in ILIAS.");
 });
 
 test("Status während eines Laufs: kurzer Text und Fortschritt", async () => {
@@ -104,7 +104,7 @@ test("Stapel: Grenze je Lauf erreicht → Auftrag bleibt, nächster Lauf zählt 
   assert.equal(b.neu, 25); assert.equal(b.rest, 5);
   assert.deepEqual(x.m.auftrag(), { seit: "2026-10-16T08:00:00.000Z", versuche: 0, stapel: 1, geladen: 25 });
   assert.equal(ereignisse(x, "fertig")[0].weiterIn, I.K.STAPEL_PAUSE);
-  assert.equal(x.meldungen[0], "ILIAS: 25 neue Dateien in Unterlagen. 5 weitere folgen gleich.");
+  assert.equal(x.meldungen[0], "25 neue Dateien aus ILIAS in Unterlagen. 5 weitere folgen gleich.");
   const laden1 = ereignisse(x, "fortschritt").filter((e) => e.phase === "laden");
   assert.deepEqual([laden1[0].erledigt, laden1[0].gesamt], [0, 30], "gesamt = alle, die fehlen");
   x.u.vor(I.K.STAPEL_PAUSE); x.hoerer.length = 0; x.il.leeren();
@@ -115,7 +115,7 @@ test("Stapel: Grenze je Lauf erreicht → Auftrag bleibt, nächster Lauf zählt 
   const laden2 = ereignisse(x, "fortschritt").filter((e) => e.phase === "laden");
   assert.equal(I.fortschrittAnzeige(laden2[0], true).kurz, "ILIAS · weiter: 26 von 30");
   assert.equal(x.m.auftrag(), null);
-  assert.equal(x.meldungen[1], "ILIAS: 5 neue Dateien in Unterlagen.");
+  assert.equal(x.meldungen[1], "5 neue Dateien aus ILIAS in Unterlagen.");
   // automatische Läufe legen keinen Auftrag an
   x.u.vor(4 * 60 * MIN);
   await x.m.jetztHolen({});
@@ -130,7 +130,7 @@ test("Fehler (kein Netz): neuer Versuch nach 1, 5, 15 Min., danach nur noch stü
   let b = await knopf(x);
   assert.equal(b.art, "fehler");
   warten.push(ereignisse(x, "fertig").pop().weiterIn);
-  assert.match(x.meldungen[0], /^ILIAS: Fehler beim Abruf\. offline Neuer Versuch in 1 Min\.$/);
+  assert.match(x.meldungen[0], /^Unterlagen aus ILIAS kamen nicht an\. Neuer Versuch in 1 Min\.$/);
   for (let i = 0; i < 3; i++) { x.u.vor(MIN); b = await knopf(x, { weiter: true }); warten.push(ereignisse(x, "fertig").pop().weiterIn); }
   assert.deepEqual(warten, [MIN, 5 * MIN, 15 * MIN, null]);
   assert.equal(x.m.auftrag(), null);
@@ -171,7 +171,7 @@ test("Nie weiter: abgelehnte Anmeldung, anderes Gerät, Trennen, Stoppen", async
   x.m.stoppen();
   b = await p;
   assert.equal(b.art, "abgebrochen"); assert.equal(x.m.auftrag(), null);
-  assert.deepEqual(x.meldungen, ["ILIAS: gestoppt."]);
+  assert.deepEqual(x.meldungen, ["ILIAS gestoppt."]);
   assert.equal(x.t.pfade("Unterlagen/").length, 0);
 });
 
@@ -185,7 +185,7 @@ test("Knopf während eines automatischen Laufs: derselbe Lauf, jetzt mit Fortsch
   assert.deepEqual(ereignisse(x, "start").map((e) => e.manuell), [false, true]);
   const b = await k;
   assert.equal(b.neu, 5);
-  assert.deepEqual(x.meldungen, ["ILIAS: 5 neue Dateien in Unterlagen."]);
+  assert.deepEqual(x.meldungen, ["5 neue Dateien aus ILIAS in Unterlagen."]);
   assert.equal(x.m.auftrag(), null);
 });
 

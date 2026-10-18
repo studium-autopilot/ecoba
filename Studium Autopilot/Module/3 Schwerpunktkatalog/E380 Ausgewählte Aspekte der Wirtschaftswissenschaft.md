@@ -54,7 +54,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -80,7 +80,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC
@@ -112,7 +112,7 @@ cssclasses:
 > > - **Dauer:** 1 Semester
 >
 > > [!eba-regel|handy-zu]+ Prüfung
-> > - **Form:** Klausur (60 Minuten) oder Seminararbeit oder Präsentation (6 CP) – 100 % der Modulnote
+> > - **Form:** Klausur (60 Minuten) oder Seminararbeit oder Präsentation (6 ECTS) – 100 % der Modulnote
 > > - **Studienleistung:** Depending on the specific choices
 
 

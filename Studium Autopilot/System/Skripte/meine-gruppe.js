@@ -26,7 +26,7 @@
 //   einmal. Eine ILIAS-Notiz verdrängt gewählte Notizen desselben Moduls und
 //   derselben Art (übernimmt die erste, die übrigen weichen), Doppel derselben ILIAS-Gruppe weichen in die erste.
 //   alma.js und zentral.js fassen beide Herkünfte nie an.
-// Eigener Text: alles unter „## Notizen“ und jede Zeile im Kopf, die nicht von hier stammt, bleibt beim Aktualisieren.
+// Eigener Text: alles unter „## Meine Notizen“ (ältere Notizen: „## Notizen“) und jede Zeile im Kopf, die nicht von hier stammt, bleibt beim Aktualisieren.
 // Verlassen in ILIAS: die Notiz geht in den Papierkorb; mit eigenem Text bleibt sie als „(entfällt)“. Ob verlassen, entscheidet
 //   ilias.js (zweiter Lauf in Folge, o.wegErlaubt); zusätzlich bleibt alles stehen, wenn auf einmal mindestens zwei und mehr
 //   als die Hälfte fehlen (Warnung).
@@ -40,7 +40,8 @@ const ZENTRAL = "zentral";
 const TAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const TOLERANZ = 15;
-const NOTIZEN = "## Notizen";
+const NOTIZEN = "## Meine Notizen";
+const ABSCHNITT = /^## (?:Meine Notizen|Notizen)[ \t]*$/m; // auch die Überschrift älterer Notizen
 const INFO_ILIAS = "> [!info] Aus ILIAS: Verlässt du die Gruppe dort, verschwindet diese Notiz.";
 const INFO_GEWAEHLT = "> [!info] Von dir gewählt, ändern auf [[Termine & Anmeldungen]].";
 // Arten, die eine Übungsgruppe sein können (Alma erkennt die Art nicht immer: „Veranstaltung“ oder leer), nie eine Vorlesung
@@ -159,7 +160,7 @@ const EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "begi
 const listenWerte = (b) => (b ? b.zeilen.slice(1).map((z) => z.replace(/^\s*-\s*/, "").trim().replace(/^["']|["']$/g, "")).filter(Boolean) : []);
 // Kopfzeilen, die von hier stammen: Überschrift, Zeitzeile, Zeitraum, Info-Kasten (auch ältere aufklappbare mit ihren „> “-Zeilen)
 const fremderKopf = (body) => {
-  const i = body.search(/^## Notizen[ \t]*$/m);
+  const i = body.search(ABSCHNITT);
   const aus = [];
   let kasten = false;
   for (const z of (i < 0 ? body : body.slice(0, i)).split(/\r?\n/)) {
@@ -171,11 +172,11 @@ const fremderKopf = (body) => {
   }
   return aus.join("\n").trim();
 };
-// Eigener Text: Zeilen im Kopf, die nicht von hier stammen, und alles unter „## Notizen“ (leere Aufzählungspunkte zählen nicht)
+// Eigener Text: Zeilen im Kopf, die nicht von hier stammen, und alles unter „## Meine Notizen“ (leere Aufzählungspunkte zählen nicht)
 const meineNotizen = (text) => {
   const { body } = teilen(text);
-  const i = body.search(/^## Notizen[ \t]*$/m);
-  const unten = i < 0 ? "" : body.slice(i).replace(/^## Notizen[ \t]*\r?\n?/, "").split(/\r?\n/).filter((z) => !/^\s*(?:[-*+]\s*)?$/.test(z)).join("\n").trim();
+  const i = body.search(ABSCHNITT);
+  const unten = i < 0 ? "" : body.slice(i).replace(/^## (?:Meine Notizen|Notizen)[ \t]*\r?\n?/, "").split(/\r?\n/).filter((z) => !/^\s*(?:[-*+]\s*)?$/.test(z)).join("\n").trim();
   return [fremderKopf(body), unten].filter(Boolean).join("\n");
 };
 const kurzTitel = (s, n) => {
@@ -212,7 +213,7 @@ const notizText = (alt, g, o) => {
   kopf.push(ilias ? INFO_ILIAS : INFO_GEWAEHLT, "");
   const fremd = fremderKopf(body);
   if (fremd) kopf.push(fremd, "");
-  const i = body.search(/^## Notizen[ \t]*$/m);
+  const i = body.search(ABSCHNITT);
   return "---\n" + zeilen.join("\n") + "\n---\n\n" + kopf.join("\n") + "\n" + (i >= 0 ? body.slice(i) : NOTIZEN + "\n- \n");
 };
 
@@ -405,7 +406,7 @@ const freigabeText = (alt) => {
   if (!t.bloecke.length) return null;
   const zeilen = t.bloecke.filter((bl) => bl.key !== "ilias_gruppe").map((bl) => (bl.key === "herkunft" ? ["herkunft: " + GEWAEHLT] : bl.zeilen))
     .reduce((a, z) => a.concat(z), []);
-  const body = t.body.replace(/^(?!\r?\n)/, "\n"), i = body.search(/^## Notizen[ \t]*$/m);
+  const body = t.body.replace(/^(?!\r?\n)/, "\n"), i = body.search(ABSCHNITT);
   const kopf = (i < 0 ? body : body.slice(0, i)).replace(/^> \[!info\][^\n]*(?:\n>[^\n]*)*/m, INFO_GEWAEHLT);
   return "---\n" + zeilen.join("\n") + "\n---\n" + kopf + (i < 0 ? "" : body.slice(i));
 };
@@ -430,10 +431,11 @@ const iliasFreigeben = async (io) => {
 const API = { ORDNER, ILIAS, GEWAEHLT, ZENTRAL, zeitfenster, raumKern, gruppenName, zuordnen, notizText, dateiName, echteZeit, meineNotizen,
   deckt, gehoertZu, istGruppe, iliasAbgleichen, waehlen, abwaehlen, gewaehltAufraeumen, iliasFreigeben, konfliktFuer, kurzTitel };
 
-// Mit ctx: dazu obsidianIo() (Stundenplan-Notizen über die Obsidian-API)
-module.exports = function () {
+// Mit ctx: dazu obsidianIo() (Stundenplan-Notizen über die Obsidian-API; Papierkorb über quellen.js, ein Papierkorb für alles)
+module.exports = function (ctx) {
   const obsidianIo = () => {
     const app = window.app, V = app.vault;
+    const Q = ctx && ctx.user && ctx.user.quellen;
     const datei = (p) => { const f = V.getAbstractFileByPath(p); return f && !f.children ? f : null; };
     const inOrdner = () => V.getMarkdownFiles().filter((f) => f.path.indexOf(ORDNER + "/") === 0);
     return {
@@ -442,7 +444,7 @@ module.exports = function () {
       lesen: async (p) => { const f = datei(p); return f ? V.read(f) : ""; },
       schreiben: async (p, t) => { const f = datei(p); if (f) await V.modify(f, t); },
       anlegen: async (p, t) => { await V.create(p, t); },
-      papierkorb: async (p) => { const f = datei(p); if (f) await V.trash(f, false); },
+      papierkorb: async (p) => { const f = datei(p); if (f) await (Q && Q.papierkorb ? Q.papierkorb(app, f) : V.trash(f, false)); },
       existiert: (p) => !!V.getAbstractFileByPath(p),
       ordnerAnlegen: async (p) => { try { await V.createFolder(p); } catch (e) { if (!V.getAbstractFileByPath(p)) throw e; } },
       // umbenennen mit dem fileManager: Links auf die Notiz ziehen mit

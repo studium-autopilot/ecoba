@@ -19,8 +19,8 @@ Deine Stapel erscheinen, sobald Studium Autopilot läuft.
 
 > [!eba-neu|ohne-titel]
 > - [Neue Karte](obsidian://studium-autopilot?aktion=karte-neu)
-> - [Stapel anlegen](obsidian://studium-autopilot?aktion=kartenstapel)
-> - [Optionen](obsidian://studium-autopilot?aktion=karten-optionen)
+> - [Neuer Kartenstapel](obsidian://studium-autopilot?aktion=kartenstapel)
+> - [Lernoptionen](obsidian://studium-autopilot?aktion=karten-optionen)
 
 ## Statistik
 

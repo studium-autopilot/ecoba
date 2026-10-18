@@ -43,7 +43,7 @@ cssclasses:
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Schwerpunkt</span></div>
 <h1><span class="eba-code">DS321</span> Data Science in der Praxis</h1>
 <p class="eba-untertitel">Data Science in Practice</p>
-<div class="eba-meta"><span><b>6</b> ECTS</span><span>FS 3.–6.</span><span>WS, SS</span><span>unbenotet</span><span>Deutsch</span><span>unbenotet</span></div>
+<div class="eba-meta"><span><b>6</b> ECTS</span><span>3.–6. FS</span><span>WS, SS</span><span>unbenotet</span><span>Deutsch</span><span>unbenotet</span></div>
 </div>
 
 ```eba-modul
@@ -55,7 +55,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -81,7 +81,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC

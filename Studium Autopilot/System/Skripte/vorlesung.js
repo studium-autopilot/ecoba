@@ -112,7 +112,7 @@ module.exports = function (ctx) {
     const a = eltern.createEl("a", { cls: "internal-link " + cls, href: ziel.path, attr: { "data-href": ziel.path } });
     if (text) a.setText(text);
     a.addEventListener("mousedown", (e) => e.stopPropagation());
-    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); app.workspace.openLinkText(ziel.path, quelle, e.ctrlKey || e.metaKey); });
+    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); basis.oeffnen(ziel, { quelle, neu: e.ctrlKey || e.metaKey }); });
     return a;
   };
 

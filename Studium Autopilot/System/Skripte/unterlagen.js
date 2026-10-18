@@ -8,8 +8,10 @@
 module.exports = function (ctx) {
   const eba = ctx.user.eba(ctx);
   const app = eba.app;
-  const { TFile, TFolder, Notice, Platform } = ctx.obsidian;
+  const { TFile, TFolder, Platform, Modal } = ctx.obsidian;
   const J = eba.J;
+  // Ein Papierkorb für alles (quellen.js): Obsidians Einstellung „Gelöschte Dateien“, nie endgültig
+  const wegwerfen = (f) => (ctx.user.quellen && ctx.user.quellen.papierkorb ? ctx.user.quellen.papierkorb(app, f) : app.vault.trash(f, false));
 
   // ---------- Einstellungen ----------
   const EINGANG = "Eingang";
@@ -654,7 +656,7 @@ module.exports = function (ctx) {
     if (!(wurzel instanceof TFolder)) return;
     const lauf = async (o) => {
       for (const k of [...o.children]) if (k instanceof TFolder) await lauf(k);
-      if (o !== wurzel && o.children.length === 0) { try { await app.fileManager.trashFile(o); } catch (e) {} }
+      if (o !== wurzel && o.children.length === 0) { try { await wegwerfen(o); } catch (e) {} }
     };
     await lauf(wurzel);
   };
@@ -756,21 +758,23 @@ module.exports = function (ctx) {
     }
   };
   const unsicher = (p) => p.dup || p.art === "Sonstiges" || (["Folien", "Übung", "Lösung"].includes(p.art) && p.nr == null && !p.titel);
+  // Eine Datei der Vorschau ändern: ein Fenster „Neu …“ (ctx.formular) mit Art (oder im Eingang lassen), Nummer und Titel;
+  // Esc lässt alles, wie es war
+  const LASSEN = "im-eingang";
   const korrigieren = async (p) => {
-    const h = p.st.haupt;
-    const reihe = [p.art, ...ARTEN.filter((a) => a !== p.art), p.auslassen ? "einordnen" : "auslassen"];
-    const texte = reihe.map((a, k) => (k === 0 ? `● ${a}` : a === "auslassen" ? "✗ im Eingang lassen" : a === "einordnen" ? "↩ doch einordnen" : `   ${a}`));
-    const art = await frage(texte, reihe, `${h.name}: Art?`);
-    if (!art) return;
-    if (art === "auslassen") { p.auslassen = true; return; }
-    p.auslassen = false;
-    if (art !== "einordnen") p.art = art;
-    const vor = [p.nr != null ? pad(p.nr) : "", p.titel].filter(Boolean).join(" ");
-    const ein = await ctx.system.prompt(`${h.name}: Nummer und Titel, z. B. „03 Optimierung“`, vor);
-    if (ein === null || ein === undefined) return;
-    const m = String(ein).trim().match(/^(\d{1,2})(?!\d)(?:\s+|$)(.*)$/);
-    p.nr = m ? Number(m[1]) : null;
-    p.titel = sauber(m ? m[2] : ein);
+    if (typeof ctx.formular !== "function") return;
+    const w = await ctx.formular({ titel: p.st.haupt.name, knopf: "Übernehmen", felder: [
+      { name: "art", titel: "Art", art: "auswahl", pflicht: true, optionen: ARTEN.map((a) => ({ wert: a, text: a })).concat([{ wert: LASSEN, text: "Im Eingang lassen" }]),
+        vorgabe: p.auslassen ? LASSEN : p.art },
+      { name: "nummer", titel: "Nummer", art: "zahl", ganz: true, min: 0, max: 99, vorgabe: p.nr != null ? pad(p.nr) : "", wenn: (x) => x.art !== LASSEN },
+      { name: "titel", titel: "Titel", art: "text", vorgabe: p.titel || "", platzhalter: "z. B. Optimierung", wenn: (x) => x.art !== LASSEN },
+    ] });
+    if (!w) return;
+    p.auslassen = w.art === LASSEN;
+    if (p.auslassen) return;
+    p.art = w.art;
+    p.nr = w.nummer;
+    p.titel = sauber(w.titel || "");
   };
   // true = übernehmen, false = abgebrochen
   const vorschau = async (plan) => {
@@ -793,10 +797,22 @@ module.exports = function (ctx) {
     }
   };
 
+  // Fenster „Details“ nach dem Einordnen: jede Zeile des Ergebnisses (eba-modal wie die Verbindungen)
+  const detailsZeigen = (zeilen) => {
+    if (!Modal) return;
+    const m = new Modal(app);
+    m.modalEl.addClass("eba-modal");
+    m.titleEl.setText("Unterlagen eingeordnet");
+    const liste = m.contentEl.createEl("ul", { cls: "eba-modal-schritte" });
+    for (const z of zeilen) liste.createEl("li", { text: z });
+    m.contentEl.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
+    m.open();
+  };
+
   // ---------- Hauptfunktion ----------
   const einordnen = async () => {
     if (!app.vault.getAbstractFileByPath(EINGANG)) await app.vault.createFolder(EINGANG);
-    const abbruch = () => { new Notice("Abgebrochen. Es wurde nichts verändert.", 4000); return { eingeordnet: 0 }; };
+    const abbruch = () => { ctx.hinweis("Abgebrochen. Es wurde nichts verändert."); return { eingeordnet: 0 }; };
     const roh = alleImEingang();
     const archive = roh.filter((f) => ARCHIVE.includes(ext(f)));
     const ausgelassen = roh.filter((f) => AUSLASSEN.includes(ext(f)) && !ARCHIVE.includes(ext(f)));
@@ -813,10 +829,10 @@ module.exports = function (ctx) {
     }
     if (!stapel.length && !nachtragen.length) {
       // nur ZIP im Eingang: nicht wegwerfen (noch nicht entpackt), Obsidian kann nicht entpacken
-      const zip = archive.length ? `ZIP im Eingang: ${archive.slice(0, 3).map((f) => f.name).join(", ")}${archive.length > 3 ? " …" : ""}. Bitte erst entpacken (PC oder Dateien-App), dann erneut einordnen.` : "";
-      new Notice([fehlend.length ? "Nichts eingeordnet." : ausgelassen.length
-        ? `Im Eingang liegen nur Notizen (${ausgelassen.length}). Bitte selbst verschieben.`
-        : zip ? "" : "Der Eingang ist leer. Lege PDFs oder Folien in den Ordner „Eingang“.", zip].filter(Boolean).join("\n"), zip ? 12000 : 8000);
+      const zip = archive.length ? `${archive.length === 1 ? "Im Eingang liegt ein ZIP" : `Im Eingang liegen ${archive.length} ZIP-Dateien`}, bitte erst am PC oder in der Dateien-App entpacken und dann noch einmal einordnen.` : "";
+      ctx.hinweis(zip || (fehlend.length ? "Nichts eingeordnet." : ausgelassen.length
+        ? `Im Eingang liegen nur Notizen (${ausgelassen.length}), die verschiebst du selbst.`
+        : "Der Eingang ist leer. Lege PDFs oder Folien in den Ordner „Eingang“."));
       return { eingeordnet: 0 };
     }
 
@@ -859,7 +875,7 @@ module.exports = function (ctx) {
         // schwacher Titel im Dateinamen („EBWL_1“, „VL_3_Opt_1Var“): Titel von der ersten PDF-Seite, wenn er eindeutig ist
         let titel = v.titel;
         if (v.schwach && ext(h) === "pdf") {
-          if (!lesen) lesen = new Notice("Lese Titel aus den PDFs …", 0);
+          if (!lesen) lesen = ctx.hinweis("Lese Titel aus den PDFs …", { dauer: 0 });
           titel = titelMitPdf(v.titel, await titelAusPdf(h, { code }));
         }
         const mo = modulOrdnerPlan(modul, code);
@@ -896,16 +912,16 @@ module.exports = function (ctx) {
 
     const semester = eba.aktuellesSemester().name;
     const arbeit = [...nachtragen, ...plan.filter((p) => !p.auslassen && !p.dup), ...plan.filter((p) => !p.auslassen && p.dup)];
-    const hinweis = new Notice(`Ordne ${arbeit.length} Unterlage(n) ein …`, 0);
+    const fortschritt = ctx.hinweis(`Ordne ${arbeit.length} ${arbeit.length === 1 ? "Unterlage" : "Unterlagen"} ein …`, { dauer: 0 });
     let erste = null;
 
     // 7. Jede Unterlage verarbeiten
     try {
       for (const [i, p] of arbeit.entries()) {
         const st = p.st, h = st.haupt;
-        hinweis.setMessage(`Unterlagen einordnen: ${i + 1} von ${arbeit.length}\n${h.name}`);
+        if (fortschritt) fortschritt.setMessage(`Ordne ${i + 1} von ${arbeit.length} ein: ${h.name}`);
         if (p.dup) bericht.duplikate.push(`${h.name} = ${p.dup}`);
-        if (p.weg) { for (const f of st.dateien) await app.vault.trash(f, false); continue; }
+        if (p.weg) { for (const f of st.dateien) await wegwerfen(f); continue; }
         if (p.eigenerCode && p.code && p.eigenerCode !== p.code && eba.modulNachCode(p.eigenerCode)) bericht.fremd.push(h.name);
         let ordner = p.ordner, name = p.name, paar = null;
         if (!p.nachtrag) {
@@ -940,14 +956,14 @@ module.exports = function (ctx) {
         if (p.art === "Eigene Lösung" && (await blattVerknuepfen(p.code, p.nr, h, "eigene_loesung"))) bericht.loesungen++;
         if (p.nachtrag) bericht.nachgetragen++; else bericht.eingeordnet++;
       }
-      if (zipWeg) for (const f of archive) { await app.vault.trash(f, false); bericht.zipPapierkorb++; }
+      if (zipWeg) for (const f of archive) { await wegwerfen(f); bericht.zipPapierkorb++; }
     } finally {
-      hinweis.hide();
+      if (fortschritt) fortschritt.hide();
     }
     await leereOrdnerAufraeumen();
 
     // 8. Zusammenfassung
-    const zeilen = bericht.eingeordnet || !bericht.nachgetragen ? [`${bericht.eingeordnet} Unterlage(n) eingeordnet.`] : [];
+    const zeilen = bericht.eingeordnet || !bericht.nachgetragen ? [`${bericht.eingeordnet} ${bericht.eingeordnet === 1 ? "Unterlage" : "Unterlagen"} eingeordnet.`] : [];
     if (bericht.ergaenzt) zeilen.push(`${bericht.ergaenzt} PDF(s) zur vorhandenen PowerPoint abgelegt, Begleitnotiz ergänzt.`);
     if (bericht.nachgetragen) zeilen.push(`${bericht.nachgetragen} Begleitnotiz(en) nachgetragen.`);
     if (bericht.uebersprungen) zeilen.push(`${bericht.uebersprungen} im Eingang gelassen.`);
@@ -963,7 +979,10 @@ module.exports = function (ctx) {
     if (bericht.gross.length) zeilen.push(`Große Dateien: ${bericht.gross.join(", ")}`);
     if (bericht.zuGross.length) zeilen.push(`Zu groß zum Auslesen, eingeordnet ohne Seitenzahl/Text: ${bericht.zuGross.join(", ")}`);
     if (bericht.ohneSeiten) zeilen.push(`${bericht.ohneSeiten} PDF(s) konnten nicht gelesen werden (Seitenzahl fehlt).`);
-    new Notice(zeilen.join("\n"), 12000);
+    // Ein Satz im Hinweis, die Einzelheiten im Fenster „Details“
+    const mehr = zeilen.length - 1;
+    if (!mehr) ctx.hinweis(zeilen[0]);
+    else ctx.hinweis(`${zeilen[0]} ${mehr === 1 ? "Dazu gibt es einen Hinweis." : `Dazu gibt es ${mehr} Hinweise.`}`, { aktion: { text: "Details", ausfuehren: () => detailsZeigen(zeilen) } });
     return { ...bericht, erste };
   };
 

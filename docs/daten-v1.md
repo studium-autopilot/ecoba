@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 18.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` noch nicht). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 18.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -16,7 +16,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `termine.json` | nein | 1 000 000 Byte | Termine, Fristen, Veranstaltungen (max. 2000 Einträge) |
 | `semester.json` | nein | 256 KB | Semesterdaten, entspricht `System/Daten/Semester.md` |
 | `gruppen.json` | nein | 512 KB | Übungs- und Tutoriengruppen (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#gruppenjson) |
-| `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, noch nicht veröffentlicht, siehe [unten](#veranstaltungenjson) |
+| `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, veröffentlicht seit 18.10.2026, siehe [unten](#veranstaltungenjson) |
 | `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, UB-Kurse, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); Plugin 0.1 liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; Plugin 0.1 liest ihn noch nicht |
@@ -366,9 +366,8 @@ selbst aus.
 
 ## veranstaltungen.json
 
-Vertrag seit 17.10.2026 (Plan Abschnitt 27.1, Punkte 1 und 2). **Noch nicht im Manifest:** Der Export veröffentlicht die Datei
-erst nach einer Woche Trockenlauf und wenn ein Plugin sie liest (Schalter `veranstaltungen.veroeffentlichen` im Export). Optional
-wie `gruppen.json`: Fehlt sie im Manifest, bleibt auf jedem Gerät der letzte Stand; ältere Plugins kennen den Namen nicht und
+Vertrag seit 17.10.2026, **im Manifest seit 18.10.2026** (Schalter `veranstaltungen.veroeffentlichen` im Export). Optional
+wie `gruppen.json`: Fehlt sie im Manifest, bleibt auf jedem Gerät der letzte Stand; Plugins vor 0.4.2 kennen den Namen nicht und
 ignorieren ihn.
 
 **Herkunft:** das öffentliche Vorlesungsverzeichnis in Alma, ohne Anmeldung gelesen, höchstens einmal am Tag, nacheinander mit

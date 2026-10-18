@@ -12,7 +12,7 @@ rolle_economics: Pflicht
 rolle_ba: Pflicht
 rolle_ohne: Pflicht
 bereiche: []
-pruefung: Klausur 90 min, open book
+pruefung: Klausur 90 min, mit Unterlagen
 benotet: true
 notenblock: 34 %
 sprache: Deutsch
@@ -40,7 +40,7 @@ cssclasses:
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Grundstudium</span></div>
 <h1><span class="eba-code">B110</span> Einführung in die Betriebswirtschaftslehre</h1>
 <p class="eba-untertitel">Introduction to Business Administration</p>
-<div class="eba-meta"><span><b>6</b> ECTS</span><span>FS 1</span><span>WS</span><span>Klausur 90 min</span><span>Deutsch</span><span class="eba-akzent">Orientierungsprüfung</span><span>Notenblock 34 %</span></div>
+<div class="eba-meta"><span><b>6</b> ECTS</span><span>1. FS</span><span>WS</span><span>Klausur 90 min</span><span>Deutsch</span><span class="eba-akzent">Orientierungsprüfung</span><span>Notenblock 34 %</span></div>
 </div>
 
 ```eba-modul
@@ -52,7 +52,7 @@ cssclasses:
 ```eba-unterlagen
 ```
 
-## Meine Notizen
+## Zum Modul
 
 > [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
 > ```base
@@ -78,7 +78,7 @@ cssclasses:
 >     displayName: Nachgearbeitet
 > views:
 >   - type: table
->     name: Meine Notizen
+>     name: Zum Modul
 >     groupBy:
 >       property: formula.art
 >       direction: ASC
@@ -110,9 +110,9 @@ cssclasses:
 > > - **Dauer:** 1 Semester
 >
 > > [!eba-regel|handy-zu]+ Prüfung
-> > - **Form:** Klausur (90 Minuten) (6 CP) – 100 % der Modulnote
-> > - **Orientierungsprüfung:** 4 der 6 OP-Module bis Ende FS 4 bestehen
-> > - **Hilfsmittel:** open book, Taschenrechner (Prüfungstermine WS 2026/27)
+> > - **Form:** Klausur (90 Minuten) (6 ECTS) – 100 % der Modulnote
+> > - **Orientierungsprüfung:** 4 der 6 OP-Module bis Ende des 4. Fachsemesters bestehen
+> > - **Hilfsmittel:** mit Unterlagen, Taschenrechner (Prüfungstermine WS 2026/27)
 
 
 <p class="eba-fuss">Quelle: MHB B.Sc. Wiwi (Datei 2026-3-24_Modulhandbuch_B.Sc.Wiwi.pdf), S. 41; PO 2023 BT EcoBA (AmtlBekUT 24/2023, S. 310-317), § 4 · Stand der Recherche 30.09.2026 · <a class="internal-link" data-href="Kontakte & Links#Offizielle Dokumente" href="Kontakte & Links#Offizielle Dokumente">Alle Quellen</a></p>

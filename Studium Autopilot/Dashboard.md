@@ -19,9 +19,9 @@ cssclasses:
 > ```
 
 > [!eba-neu|ohne-titel]
-> - [Vorlesung](obsidian://studium-autopilot?aktion=vorlesung)
-> - [Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
-> - [Unterlagen](obsidian://studium-autopilot?aktion=einordnen)
+> - [Neue Vorlesung](obsidian://studium-autopilot?aktion=vorlesung)
+> - [Neues Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
+> - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen)
 
 
 > [!eba-kennzahlen|woche kurz]
@@ -64,15 +64,12 @@ Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
 >     displayName: Vorlesung
 >   formula.datumText:
 >     displayName: Datum
->   note.nachgearbeitet:
->     displayName: Erledigt
 > views:
 >   - type: list
 >     name: Nachzuarbeiten
 >     order:
 >       - file.name
 >       - formula.datumText
->       - nachgearbeitet
 >     sort:
 >       - property: datum
 >         direction: ASC
@@ -80,7 +77,6 @@ Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
 >     columnSize:
 >       file.name: 380
 >       formula.datumText: 120
->       note.nachgearbeitet: 110
 > ```
 
 > [!eba-raster|2]

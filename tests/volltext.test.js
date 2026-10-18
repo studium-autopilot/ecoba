@@ -87,6 +87,7 @@ const aufbau = (o) => {
           offen: true,
           getPage: async (i) => ({
             getTextContent: async () => {
+              if (spec.seiteHaengt === i) return new Promise(() => {});
               uhr.t += spec.msProSeite || 0;
               if (spec.beiSeite) spec.beiSeite(i);
               if (typeof spec.seiten === "number") return { items: [zeile("Seite " + i + " " + "x".repeat(spec.zeichenProSeite || 10), 700)] };
@@ -94,7 +95,7 @@ const aufbau = (o) => {
             },
             cleanup: () => {},
           }),
-          destroy: async () => { doc.offen = false; x.zerstoert++; },
+          destroy: () => { doc.offen = false; x.zerstoert++; return spec.zuHaengt ? new Promise(() => {}) : Promise.resolve(); },
         };
         return doc;
       })();
@@ -103,7 +104,7 @@ const aufbau = (o) => {
   };
   const einstellungen = Object.assign({}, o.einstellungen || {});
   const x = {
-    uhr, dateien, papierkorb, schreibLog, lokalSpeicher, specs, gelesen, einstellungen, zerstoert: 0, abgebrochen: 0, ereignisse: [], pdf, notiz,
+    uhr, dateien, papierkorb, schreibLog, lokalSpeicher, specs, gelesen, einstellungen, zerstoert: 0, abgebrochen: 0, ereignisse: [], fristen: [], pdf, notiz,
     lese: { pfad: null },
     text: (p) => { const k = finden(p); return k ? dateien.get(k).text : null; },
     vor: (ms) => { uhr.t += ms; },
@@ -121,7 +122,7 @@ const aufbau = (o) => {
     geraetId: () => o.geraet || "g-pc",
     pause: async () => {},
     // Frist für pdf.js: in Tests sofort abgelaufen, aber erst nach allen anderen Schritten (setImmediate)
-    wecker: o.wecker ? () => ({ promise: new Promise((r) => setImmediate(r)), aus: () => {} }) : undefined,
+    wecker: o.wecker ? (n) => { x.fristen.push(n); return { promise: new Promise((r) => setImmediate(r)), aus: () => {} }; } : undefined,
     geaendert: (e) => x.ereignisse.push(e),
     lese: x.lese,
   };
@@ -495,7 +496,14 @@ test("Umbenannte PDF: Notiz zieht mit (Name, Quelle, Links), ohne die PDF neu zu
   assert.equal((await x.m.lauf({})).art, "aktuell");
 });
 
-test("Gelöschte PDF: Notiz erst nach 2 Std. in den Papierkorb; viele auf einmal → nichts löschen", async () => {
+// Läufe, bis eine Notiz ohne PDF reif ist: WAISE_LAEUFE Läufe mit ruhigem Tresor und WAISE_ALTER seit dem ersten Fehlen
+const reifen = async (x) => {
+  const b = [];
+  for (let i = 0; i < K.WAISE_LAEUFE; i++) { x.vor(i === K.WAISE_LAEUFE - 1 ? K.WAISE_ALTER : MIN); b.push(await x.m.lauf({})); }
+  return b;
+};
+
+test("Gelöschte PDF: Notiz erst nach mehreren Läufen und 2 Std. in den Papierkorb; viele auf einmal → nichts löschen", async () => {
   const specs = {};
   for (let i = 1; i <= 24; i++) specs["p" + i] = { seiten: [seite("Text " + i)] };
   const x = aufbau({ specs });
@@ -505,20 +513,161 @@ test("Gelöschte PDF: Notiz erst nach 2 Std. in den Papierkorb; viele auf einmal
   x.dateien.delete(B110 + "/Blatt 1.pdf");
   x.vor(MIN);
   await x.m.lauf({});
-  assert.ok(x.text(vollPfad("Blatt 1")), "noch nicht: vielleicht nur Sync");
   x.vor(K.WAISE_ALTER);
+  await x.m.lauf({});
+  assert.ok(x.text(vollPfad("Blatt 1")), "2 Std., aber erst zwei Läufe: noch nicht");
+  x.vor(MIN);
   const b = await x.m.lauf({});
   assert.equal(b.geloescht, 1);
   assert.deepEqual(x.papierkorb, [vollPfad("Blatt 1")]);
+  assert.equal(x.lokalSpeicher[K.L.waisen][vollPfad("Blatt 1")], undefined);
   // 13 von 23 auf einmal (mehr als die Hälfte und mehr als 10) → nichts
   for (let i = 2; i <= 14; i++) x.dateien.delete(B110 + "/Blatt " + i + ".pdf");
-  x.vor(MIN);
-  await x.m.lauf({});
-  x.vor(K.WAISE_ALTER);
-  const c = await x.m.lauf({});
-  assert.equal(c.geloescht, 0);
-  assert.equal(c.massenwegfall, true);
+  const c = await reifen(x);
+  assert.equal(c[c.length - 1].geloescht, 0);
+  assert.equal(c[c.length - 1].massenwegfall, true);
   assert.equal(x.papierkorb.length, 1);
+});
+
+test("PDF nie auf diesem Gerät (anderer Sync-Umfang, noch nicht angekommen): Notiz bleibt, wie sie ist", async () => {
+  const x = aufbau({ specs: { f: folien() } });
+  x.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 3000 });
+  await x.m.lauf({});
+  const t = x.text(vollPfad("B110 Folien 01"));
+  // zweites Gerät: die Notiz kam per Sync, die PDF nie
+  const y = aufbau({ specs: { f: folien() }, geraet: "g-zwei", jetzt: START + 3 * 3600e3 });
+  y.notiz(vollPfad("B110 Folien 01"), t);
+  for (let i = 0; i < 6; i++) { await y.m.lauf({}); y.vor(K.WAISE_ALTER); }
+  assert.equal(y.text(vollPfad("B110 Folien 01")), t, "weder gelöscht noch markiert");
+  assert.deepEqual(y.papierkorb, []);
+  assert.deepEqual(y.schreibLog.filter((e) => e[0] !== "sperre"), []);
+});
+
+test("Notiz ohne PDF: nie, solange ilias.json die PDF kennt oder der Tresor nicht ruhig ist", async () => {
+  const x = aufbau({ specs: { f: folien() } });
+  const pdf = B110 + "/B110 Folien 01.pdf";
+  x.pdf(pdf, "f", { groesse: 3000 });
+  await x.m.lauf({});
+  x.dateien.delete(pdf);
+  // laut ILIAS-Abgleich gibt es die PDF noch (nur auf diesem Gerät fehlt sie)
+  const ilias = (geloescht) => x.notiz("System/Daten/ilias.json", JSON.stringify({ dateien: { a: Object.assign({ pfad: pdf, groesse: 3000 }, geloescht ? { geloescht: true } : {}) } }));
+  ilias(false);
+  await reifen(x); await reifen(x);
+  assert.ok(x.text(vollPfad("B110 Folien 01")), "ilias.json: noch da");
+  // Tresor nicht ruhig (Sync läuft): weder zählen noch handeln
+  ilias(true);
+  x.abh.ruhig = () => false;
+  await reifen(x); await reifen(x);
+  assert.ok(x.text(vollPfad("B110 Folien 01")), "Sync läuft");
+  x.abh.ruhig = () => true;
+  const b = await reifen(x);
+  assert.deepEqual(b.map((r) => r.geloescht), [0, 0, 1], "erst nach WAISE_LAEUFE ruhigen Läufen");
+});
+
+test("iPhone/iPad und eigener Text: „(PDF fehlt)“ statt Papierkorb; kommt die PDF wieder, ist die Marke weg", async () => {
+  const x = aufbau({ specs: { f: folien() }, mobil: true, geraet: "g-iphone" });
+  const pdf = B110 + "/B110 Folien 01.pdf", n = vollPfad("B110 Folien 01");
+  x.pdf(pdf, "f", { groesse: 3000 });
+  await x.m.lauf({});
+  const original = x.text(n);
+  const d = x.dateien.get(pdf);
+  x.dateien.delete(pdf);
+  const b = await reifen(x);
+  assert.equal(b[b.length - 1].markiert, 1);
+  assert.deepEqual(x.papierkorb, []);
+  const t = x.text(n);
+  assert.match(t, /\nentfaellt: true\n---\n/);
+  assert.match(t, /^# B110 Folien 01 · Volltext \(PDF fehlt\)$/m);
+  assert.ok(t.indexOf(K.FEHLT_KARTE) > 0);
+  assert.match(t, /> Stakeholder-Ansatz/, "Seitentexte bleiben");
+  assert.equal(V.kopfLesen(t).entfaellt, true);
+  await reifen(x);
+  assert.equal(x.text(n), t, "schon markiert: bleibt");
+  // die PDF ist wieder da (z. B. aus der iCloud geladen): Marke weg, Text wie vorher, nichts neu gelesen
+  x.dateien.set(pdf, d);
+  const gelesen = x.gelesen.length;
+  x.vor(MIN);
+  const z = await x.m.lauf({});
+  assert.equal(z.zurueck, 1);
+  assert.equal(x.text(n), original);
+  assert.equal(x.gelesen.length, gelesen);
+  // Computer mit eigenem Text unter „## Meine Notizen“: Marke statt Papierkorb (quellen.js wegfall)
+  const y = aufbau({ specs: { f: folien() } });
+  y.pdf(pdf, "f", { groesse: 3000 });
+  await y.m.lauf({});
+  y.notiz(n, y.text(n) + "\n## Meine Notizen\n- Folie 2 klausurrelevant\n");
+  y.dateien.delete(pdf);
+  assert.equal((await reifen(y))[K.WAISE_LAEUFE - 1].markiert, 1);
+  assert.match(y.text(n), /Folie 2 klausurrelevant/);
+  assert.deepEqual(y.papierkorb, []);
+});
+
+test("Marke einmal je Zeuge: nimmt ein anderes Gerät die Marke weg, setzt dieses sie nicht wieder", async () => {
+  const x = aufbau({ specs: { f: folien() }, mobil: true, geraet: "g-iphone" });
+  const pdf = B110 + "/B110 Folien 01.pdf", n = vollPfad("B110 Folien 01");
+  x.pdf(pdf, "f", { groesse: 3000 });
+  await x.m.lauf({});
+  x.dateien.delete(pdf);
+  await reifen(x);
+  x.notiz(n, V.fehltEntfernen(x.text(n))); // ein Computer mit der PDF hat die Marke genommen (per Sync)
+  const ohne = x.text(n);
+  await reifen(x); await reifen(x);
+  assert.equal(x.text(n), ohne);
+});
+
+test("Marke „(PDF fehlt)“: hin und zurück derselbe Text; umbenannte PDF nimmt sie mit weg", async () => {
+  const t = V.notizText({ titel: "X", quelle: "Unterlagen/B/X.pdf", seiten: 1, groesse: 10, sha: "", ergebnis: "kein-text", dateiFm: "X.pdf",
+    dateiLink: "[[X.pdf]]", seitenTexte: [], hinweis: V.hinweisText("kein-text") });
+  const m = V.fehltMarkieren(t);
+  assert.notEqual(m, t);
+  assert.equal(V.fehltMarkieren(m), m, "zweimal markieren ändert nichts");
+  assert.equal(V.fehltEntfernen(m), t);
+  assert.equal(V.fehltEntfernen(t), t);
+  assert.equal(V.kopfLesen(m).entfaellt, true);
+  assert.equal(V.ausFm({ entfaellt: true }).entfaellt, true);
+  // Notiz mit Marke, die PDF taucht unter neuem Namen wieder auf (gleiche Größe und Prüfsumme): Notiz zieht um, ohne Marke
+  const x = aufbau({ specs: { f: folien() }, mobil: true });
+  x.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 3000 });
+  await x.m.lauf({});
+  const d = x.dateien.get(B110 + "/B110 Folien 01.pdf");
+  x.dateien.delete(B110 + "/B110 Folien 01.pdf");
+  await reifen(x);
+  assert.match(x.text(vollPfad("B110 Folien 01")), /PDF fehlt/);
+  x.dateien.set(B110 + "/B110 Folien 01 neu.pdf", d);
+  const c = x.abh.lokal(K.L.cache) || {};
+  c[B110 + "/B110 Folien 01 neu.pdf"] = [3000, d.mtime, nodeCrypto.createHash("sha256").update(Buffer.from(d.bytes)).digest("hex")];
+  x.abh.lokal(K.L.cache, c);
+  x.vor(MIN);
+  assert.equal((await x.m.lauf({})).umbenannt, 1);
+  const neu = x.text(vollPfad("B110 Folien 01 neu"));
+  assert.doesNotMatch(neu, /PDF fehlt|entfaellt/);
+  assert.match(neu, /> Stakeholder-Ansatz/);
+});
+
+test("waisenPruefen: Zeuge, ilias.json, Ruhe, Läufe und Zeit; alte Merker aus 0.4.5 (Zahl) zählen die Läufe neu", () => {
+  const n = { pfad: vollPfad("A"), quelle: "Unterlagen/B/A.pdf", groesse: 5 };
+  const r = (o) => V.waisenPruefen(Object.assign({ waisen: [n], alt: {}, gesehen: { "unterlagen/b/a.pdf": 5 }, vorhanden: {}, ruhig: true, jetzt: START }, o));
+  assert.deepEqual(r({ gesehen: {} }), { reif: [], merken: {} }, "nie gesehen: nicht einmal gemerkt");
+  assert.deepEqual(r({ vorhanden: { "unterlagen/b/a.pdf": true } }).merken, {}, "laut ilias.json da");
+  assert.deepEqual(r({}).merken[n.pfad], { seit: START, laeufe: 1 });
+  assert.deepEqual(r({ ruhig: false }).merken[n.pfad], { seit: START, laeufe: 0 });
+  assert.equal(r({ alt: { [n.pfad]: START - K.WAISE_ALTER } }).reif.length, 0, "alter Merker aus 0.4.5 (Zahl): Läufe zählen neu");
+  assert.equal(r({ alt: { [n.pfad]: { seit: START - K.WAISE_ALTER, laeufe: K.WAISE_LAEUFE - 1 } } }).reif.length, 1);
+  assert.equal(r({ alt: { [n.pfad]: { seit: START - K.WAISE_ALTER + 1, laeufe: 9 } } }).reif.length, 0, "zu früh");
+  assert.equal(r({ alt: { [n.pfad]: { seit: START - K.WAISE_ALTER, laeufe: 9 } }, ruhig: false }).reif.length, 0, "unruhig: nie");
+  assert.equal(r({ waisen: [Object.assign({ entfaellt: true }, n)] }).reif.length, 0, "schon markiert");
+});
+
+test("Nach dem Update aus 0.4.5: was der Gerätespeicher kannte, war auf diesem Gerät (Zeuge)", async () => {
+  const x = aufbau({ specs: { f: folien() } });
+  const pdf = B110 + "/B110 Folien 01.pdf";
+  x.pdf(pdf, "f", { groesse: 3000 });
+  await x.m.lauf({});
+  delete x.lokalSpeicher[K.L.gesehen]; // Stand wie nach 0.4.5: nur eba-volltext-cache
+  assert.ok(x.lokalSpeicher[K.L.cache][pdf]);
+  x.dateien.delete(pdf);
+  const b = await reifen(x);
+  assert.equal(b[b.length - 1].geloescht, 1);
 });
 
 test("Gerade geänderte PDF (unter 60 s) wartet bis zum nächsten Lauf", async () => {
@@ -638,6 +787,61 @@ test("pdf.js kommt nicht zurück → Frist, Ladeaufgabe beendet, PDF auf diesem 
   assert.equal(x.abgebrochen, 1);
   assert.equal(x.lokalSpeicher[K.L.zuSchwer][B110 + "/Hängt.pdf"].grund, "zeit");
   assert.equal(x.abh.lokal(K.L.inArbeit), null);
+});
+
+test("Seite kommt nicht zurück → Frist je Seite, PDF auf diesem Gerät übersprungen, Dokument zu, Lauf frei, Warnung im Status", async () => {
+  const x = aufbau({ specs: { s: { seiten: 3, seiteHaengt: 2 }, f: folien() }, wecker: true });
+  x.pdf(B110 + "/Hängt auf Seite 2.pdf", "s", { groesse: 1000 });
+  x.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 2000 });
+  const b = await x.m.lauf({});
+  assert.deepEqual([b.art, b.zeit, b.warten, b.neu], ["ok", 1, 1, 1], JSON.stringify(b));
+  assert.equal(x.zerstoert, 2, "beide Dokumente geschlossen");
+  assert.equal(x.lokalSpeicher[K.L.zuSchwer][B110 + "/Hängt auf Seite 2.pdf"].grund, "zeit");
+  assert.ok(x.fristen.indexOf(K.GRENZEN.pc.seite) >= 0, "Frist je Seite: " + x.fristen.join(", "));
+  assert.equal(x.m.laeuft, false);
+  assert.equal(x.abh.lokal(K.L.inArbeit), null);
+  let s = x.m.status();
+  assert.deepEqual(s.warnungen, ["Eine PDF brauchte zu lange und wird auf diesem Gerät übersprungen."]);
+  assert.match(s.text, /1 PDF ließ sich nicht lesen/);
+  x.vor(MIN);
+  await x.m.lauf({});
+  s = x.m.status();
+  assert.deepEqual(s.warnungen, [], "nächster Lauf ohne Frist: keine Warnung mehr");
+});
+
+test("Schließen oder Laden von pdf.js kommt nicht zurück → der Lauf endet trotzdem; pdf.js fehlt: Fehler, keine PDF ausgelassen", async () => {
+  const x = aufbau({ specs: { z: { seiten: [seite("Text")], zuHaengt: true }, f: folien() }, wecker: true });
+  x.pdf(B110 + "/Schließt nicht.pdf", "z", { groesse: 1000 });
+  x.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 2000 });
+  assert.equal((await x.m.lauf({})).neu, 2);
+  assert.equal(x.m.laeuft, false);
+  // pdf.js lädt nicht: Lauf mit Fehler zu Ende, die PDF wird nicht ausgelassen, der nächste Lauf liest sie
+  const y = aufbau({ specs: { f: folien() }, wecker: true });
+  y.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 2000 });
+  const pdfjs = y.abh.pdfjs;
+  y.abh.pdfjs = () => new Promise(() => {});
+  const b = await y.m.lauf({});
+  assert.equal(b.art, "fehler");
+  assert.equal(y.m.status().zustand, "fehler");
+  assert.equal(y.lokalSpeicher[K.L.zuSchwer], undefined);
+  assert.equal(y.m.laeuft, false);
+  y.abh.pdfjs = pdfjs;
+  y.vor(MIN);
+  assert.equal((await y.m.lauf({})).neu, 1);
+  assert.equal(y.m.status().zustand, "an");
+});
+
+test("Datei lesen kommt nicht zurück (Platzhalter) → Frist, nächster Lauf, nichts ausgelassen", async () => {
+  const x = aufbau({ specs: { f: folien() }, mobil: true, wecker: true });
+  x.pdf(B110 + "/B110 Folien 01.pdf", "f");
+  const lesen = x.abh.io.lesenBinaer;
+  x.abh.io.lesenBinaer = () => new Promise(() => {});
+  const b = await x.m.lauf({});
+  assert.deepEqual([b.rest, b.fehler, b.warten], [1, 0, 0]);
+  assert.ok(x.fristen.indexOf(K.LESEN_FRIST) >= 0);
+  assert.equal(x.lokalSpeicher[K.L.zuSchwer], undefined);
+  x.abh.io.lesenBinaer = lesen;
+  assert.equal((await x.m.lauf({})).neu, 1);
 });
 
 test("Lesefehler der Datei (noch nicht ganz da) → nächster Lauf, kein Absturz-Zähler", async () => {

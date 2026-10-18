@@ -86,6 +86,7 @@
     "veranstaltung": "text",
     "aenderungen": "multitext",
     "stundenplan_ausgeblendet": "multitext",
+    "besuche_nicht": "checkbox",
     "quellen_extern": "multitext"
   }
 }

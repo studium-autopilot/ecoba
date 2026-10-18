@@ -15,20 +15,50 @@
     {
       "type": "file",
       "ctime": 1790760000002,
+      "path": "Studium/Studienverlauf.md",
+      "title": "Studienverlauf"
+    },
+    {
+      "type": "file",
+      "ctime": 1790760000003,
+      "path": "Studium/Termine & Anmeldungen.md",
+      "title": "Termine & Anmeldungen"
+    },
+    {
+      "type": "file",
+      "ctime": 1790760000004,
       "path": "Studium/Prüfungen.md",
       "title": "Prüfungen"
     },
     {
       "type": "file",
-      "ctime": 1790760000003,
+      "ctime": 1790760000005,
       "path": "Studium/Noten & ECTS.md",
       "title": "Noten & ECTS"
     },
     {
       "type": "file",
-      "ctime": 1790760000005,
+      "ctime": 1790760000006,
+      "path": "Studium/Unterlagen.md",
+      "title": "Unterlagen"
+    },
+    {
+      "type": "file",
+      "ctime": 1790760000007,
+      "path": "Studium/Karteikarten.md",
+      "title": "Karteikarten"
+    },
+    {
+      "type": "file",
+      "ctime": 1790760000008,
       "path": "Studium/Kontakte & Links.md",
       "title": "Kontakte & Links"
+    },
+    {
+      "type": "file",
+      "ctime": 1790760000009,
+      "path": "Studium/Einstellungen & Hilfe.md",
+      "title": "Einstellungen & Hilfe"
     }
   ]
 }

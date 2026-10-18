@@ -38,7 +38,6 @@
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
-  const { Notice } = ctx.obsidian;
 
   // ---------- Konstanten ----------
   const BASIS = "https://studium-autopilot.github.io/ecoba-daten/v1/";
@@ -644,9 +643,14 @@ module.exports = function (ctx) {
   const EIGEN = ["typ", "titel", "datum", "bis", "kategorie", "status", "ort", "modul", "code", "bereich", "erledigt", "quelle", "info", "geprueft", "herkunft", "zentral_id", "abgleich_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
   // Kleine Pille im Kopf der Notiz (und in Agenda/Kalender, termine.js/kalender.js): freiwillig, keine Pflicht
   const BEREICH_PILLE = { schluesselqualifikation: '<span class="eba-pill leer">Schlüsselqualifikation · freiwillig</span>' };
-  // Inhalt einer zentralen Termin-Notiz. alt = bisheriger Text (oder ""), e = geprüfter Eintrag, o = { modulLink, entfaellt }
+  // Inhalt einer zentralen Termin-Notiz. alt = bisheriger Text (oder ""), e = geprüfter Eintrag, o = { modulLink, entfaellt }.
+  // Andere Quellen schreiben ihre Termine in derselben Form (ILIAS-Kalender, ilias-kalender.js): o.herkunft und o.idFeld setzen die
+  // Besitzmarke (Quellen-Vertrag), o.weg sagt im Kasten „Entfällt“, wo der Termin fehlt. Ohne sie bleibt jede zentrale Notiz Byte
+  // für Byte wie bisher.
   const notizText = (alt, e, o) => {
     o = o || {};
+    const fremd = !!o.herkunft && o.herkunft !== "zentral";
+    const eigenFelder = fremd ? EIGEN.concat([o.idFeld]) : EIGEN;
     const { fm, body } = teilen(alt || "");
     const bl = bloecke(fm);
     const holB = (k) => bl.find((b) => b.key === k) || null;
@@ -670,19 +674,20 @@ module.exports = function (ctx) {
     ]);
     if (e.info) zeilen.push("info: " + J(e.info));
     if (e.geprueft) zeilen.push("geprueft: " + e.geprueft);
-    zeilen.push("herkunft: zentral", "zentral_id: " + e.id);
+    if (fremd) zeilen.push("herkunft: " + o.herkunft, o.idFeld + ": " + J(e.id));
+    else zeilen.push("herkunft: zentral", "zentral_id: " + e.id);
     if (o.entfaellt) zeilen.push("entfaellt: true");
     zeilen.push('uebersicht: "[[Prüfungen]]"');
     Array.prototype.push.apply(zeilen, liste("cssclasses", ["eba-s-termin"]));
     Array.prototype.push.apply(zeilen, liste("tags", bereich ? ["termin", BEREICHE[bereich]] : ["termin"], BEREICH_TAGS));
     // eigene Felder der Nutzer (alles, was nicht uns gehört) unverändert dahinter
-    for (const b of bl) if (b.key && EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
+    for (const b of bl) if (b.key && eigenFelder.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
     // Text: verwalteter Kopf, dann „## Meine Notizen“ und alles darunter unverändert
     const wann = e.bis ? `${dmy(e.datum)} – ${dmy(e.bis)}` : dmy(e.datum);
     // Pille in derselben Zeile wie das Datum (die Agenda überspringt diese Zeile in der Beschreibung)
     const kopf = [`# ${mdText(titel)}`, "", `**${wann}**` + (ort ? " · " + mdText(ort) : "") + (bereich ? " · " + BEREICH_PILLE[bereich] : ""), ""];
     if (e.info) kopf.push(mdText(e.info), "");
-    if (o.entfaellt) kopf.push("> [!warning] Entfällt", "> Dieser Termin steht nicht mehr in den zentralen Daten. Deine Notizen unten bleiben.", "");
+    if (o.entfaellt) kopf.push("> [!warning] Entfällt", `> Dieser Termin steht nicht mehr ${fremd && o.weg ? o.weg : "in den zentralen Daten"}. Deine Notizen unten bleiben.`, "");
     else if (e.status === "geschätzt") kopf.push("> [!warning] Geschätzt", "> Dieses Datum ist noch nicht offiziell. Sobald die Uni es veröffentlicht, wird es hier automatisch aktualisiert.", "");
     const geprueft = e.geprueft ? `geprüft am ${dmy(e.geprueft)}` : "";
     let qz = "";
@@ -706,7 +711,7 @@ module.exports = function (ctx) {
       .filter((x) => x.fm && x.fm.herkunft === "zentral" && x.fm.zentral_id && (x.fm.typ === "lehrveranstaltung") === !!lehre);
     for (const g of Q().doppelGruppen(liste, (x) => String(x.fm.zentral_id))) {
       for (const x of g) x.text = await app.vault.read(x.f);
-      const d = Q().dubletten(g, lehre ? NOTIZEN : MEINE);
+      const d = Q().dubletten(g, MEINE);
       const bleibt = g.find((x) => x.pfad === d.bleibt);
       if (d.text) { await app.vault.modify(bleibt.f, d.text); bericht.geschrieben.push(bleibt.pfad); }
       if (d.erledigt) await app.fileManager.processFrontMatter(bleibt.f, (fm) => { fm.erledigt = true; });
@@ -791,10 +796,9 @@ module.exports = function (ctx) {
     while (datei(`${o}/${name}.md`) && datei(`${o}/${name}.md`) !== eigene) name = `${basisName} ${i++}`;
     return `${o}/${name}.md`;
   };
-  const papierkorb = async (f) => {
-    const system = !(plugin().testPapierkorbLokal || (app.vault.getConfig && app.vault.getConfig("trashOption") === "local"));
-    await app.vault.trash(f, system); // nie endgültig löschen, auch wenn „Gelöschte Dateien: endgültig“ eingestellt ist
-  };
+  // Ein Papierkorb für alles (quellen.js): nie endgültig löschen, auch wenn „Gelöschte Dateien: endgültig“ eingestellt ist.
+  // Ohne quellen.js mit papierkorb (ältere Fassung, solange der Sync nach einem Update noch läuft): Obsidians Papierkorb im Tresor.
+  const papierkorb = async (f) => (Q() && Q().papierkorb ? Q().papierkorb(app, f, { lokal: !!plugin().testPapierkorbLokal }) : app.vault.trash(f, false));
   const modulLink = (F, code) => { const f = code && F.module[code]; return f ? `[[${f.basename}]]` : ""; };
 
   const termineAnwenden = async (T, ids, abruf, bericht) => {
@@ -985,7 +989,6 @@ module.exports = function (ctx) {
   const vergleichen = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
 
   // ---------- Zentraler Stundenplan: Notiz ----------
-  const NOTIZEN = "## Notizen";
   const LEHRE_EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "beginn", "ende", "raum", "semester", "von", "bis", "ausfall", "aenderungen",
     "einzeltermin", "quelle", "herkunft", "zentral_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
@@ -1035,13 +1038,14 @@ module.exports = function (ctx) {
     if (zusatz.length) kopf.push("Zusätzlich: " + zusatz.join(" · "), "");
     let host = "Alma";
     try { host = new URL(e.quelle_url).hostname; } catch (x) { host = "Alma"; }
-    kopf.push(`[Besuche ich nicht](obsidian://studium-autopilot?aktion=besuche-nicht&id=${e.id}) · Quelle: [${host}](${e.quelle_url})`, "");
+    kopf.push(`Quelle: [${host}](${e.quelle_url})`, ""); // „Besuche ich nicht“ steht im Kopf der Notiz (kopf.js)
     kopf.push("> [!info] Aus dem Vorlesungsverzeichnis, bleibt von selbst aktuell, auch bei Ausfällen und Raumänderungen.", "");
-    const i = body.search(/^## Notizen[ \t]*$/m);
-    const meine = i >= 0 ? body.slice(i) : NOTIZEN + "\n- \n";
+    // dein Text: neue Notizen „## Meine Notizen“, ältere behalten „## Notizen“
+    const i = body.search(/^## (?:Meine Notizen|Notizen)[ \t]*$/m);
+    const meine = i >= 0 ? body.slice(i) : MEINE + "\n- \n";
     return "---\n" + zeilen.join("\n") + "\n---\n\n" + kopf.join("\n") + "\n" + meine;
   };
-  // Eigener Text unter „## Notizen“ (quellen.js meineNotizen: leere Aufzählungspunkte zählen nicht)
+  // Eigener Text unter „## Meine Notizen“ (quellen.js meineNotizen: leere Aufzählungspunkte zählen nicht)
   const lehreMeine = (text) => Q().meineNotizen(text);
 
   // ---------- Zentraler Stundenplan: Übernehmen (nur der Abrufer) ----------
@@ -1049,7 +1053,12 @@ module.exports = function (ctx) {
   // Stundenplan von außen (eba.quelleExtern „stundenplan“, ohne Liste in den Einstellungen beim eigenen Uni-Abgleich): Der
   // zentrale wird dann weder geholt noch angewendet, zentrale Notizen von früher bleiben unberührt, und die Texte versprechen
   // keine Vorlesungen.
-  const stundenplanExtern = () => { const f = ctx.user && ctx.user.eba && ctx.user.eba.quelleExtern; return !!f && f("stundenplan", (p) => !!datei(p), einstellungen()); };
+  // (quellen.js extern: dieselbe Regel auch mit eba.js einer älteren Fassung auf diesem Gerät)
+  const stundenplanExtern = () => {
+    const eba = ctx.user && ctx.user.eba, existiert = (p) => !!datei(p);
+    if (Q() && Q().extern) return Q().extern(eba, "stundenplan", existiert, einstellungen());
+    return !!(eba && eba.quelleExtern && eba.quelleExtern("stundenplan", existiert, einstellungen()));
+  };
   // Eigene Notizen (Alma oder von Hand). Notizen zu deiner Gruppe (herkunft ilias-gruppe, gruppe-gewaehlt; meine-gruppe.js)
   // zählen nicht: Sie weichen selbst, wenn eine zentrale Notiz dieselbe Gruppe zeigt, und dieses Skript schreibt nie hinein.
   const eigeneLehre = () => app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(LEHRE_ORDNER + "/"))
@@ -1066,7 +1075,8 @@ module.exports = function (ctx) {
     } catch (e) { return ""; }
   };
   const filterSchluessel = () => filterBauen().schluessel + "|" + lehreSchluessel();
-  // „Besuche ich nicht“ setzen oder zurücknehmen (System/Einstellungen.md, für alle Geräte). Alte Semester fallen dabei weg.
+  // „Besuche ich nicht“ setzen oder zurücknehmen (System/Einstellungen.md, für alle Geräte). Alte Semester fallen dabei weg;
+  // Schlüssel anderer Quellen („alma:…“, kopf.js und ctx.modell.besuchtNicht) bleiben.
   const ausblendenSetzen = async (ids, an) => {
     const f = datei(EINSTELLUNGEN);
     if (!f) return false;
@@ -1074,13 +1084,13 @@ module.exports = function (ctx) {
     try { const a = ctx.modell.daten().aktuell; if (a) jetzt = [a.name, ctx.modell.naechster(a.name)].filter(Boolean).map((n) => n.toLowerCase().replace(/[ /]/g, "-")); } catch (e) { jetzt = []; }
     await app.fileManager.processFrontMatter(f, (x) => {
       const alt = (Array.isArray(x[AUSGEBLENDET]) ? x[AUSGEBLENDET] : x[AUSGEBLENDET] ? [x[AUSGEBLENDET]] : []).map(String);
-      let neu = alt.filter((id) => !jetzt.length || jetzt.some((p) => id.indexOf(p + "-") === 0));
+      let neu = alt.filter((id) => !ID.test(id) || !jetzt.length || jetzt.some((p) => id.indexOf(p + "-") === 0));
       for (const id of ids) { if (an && neu.indexOf(id) < 0) neu.push(id); if (!an) neu = neu.filter((x2) => x2 !== id); }
       x[AUSGEBLENDET] = neu;
     });
     return true;
   };
-  // Eigene Notiz gewinnt: zentrale Notiz unberührt → Papierkorb; mit eigenem Text → der Text wandert unter „## Notizen“ der
+  // Eigene Notiz gewinnt: zentrale Notiz unberührt → Papierkorb; mit eigenem Text → der Text wandert ans Ende der
   // eigenen Notiz (mit Hinweis), dann Papierkorb. So gibt es nie zwei Notizen und nie zwei Schreiber.
   const durchEigeneErsetzen = async (f, eigen, b) => {
     const meine = lehreMeine(await app.vault.read(f));
@@ -1180,7 +1190,7 @@ module.exports = function (ctx) {
     for (const id of Object.keys(notizen)) { const fm = fmVon(notizen[id]) || {}; if (fm.entfaellt !== true && !aus.has(id)) anzahl++; }
     let ohneBeginn = false;
     try { ohneBeginn = !!(ctx.modell && ctx.modell.daten().studienbeginnStandard); } catch (e) { ohneBeginn = false; }
-    return { verfuegbar: (!!stand().lehre || anzahl > 0) && !stundenplanExtern(), anzahl, ohneBeginn, ausgeblendet: Array.from(aus) };
+    return { verfuegbar: (!!stand().lehre || anzahl > 0) && !stundenplanExtern(), anzahl, ohneBeginn, ausgeblendet: Array.from(aus).filter((id) => ID.test(id)) };
   };
   // Lesbarer Name einer ausgeblendeten id: aus der Notiz, sonst aus dem letzten Stand, sonst aus der id selbst
   const lehreName = (id) => {
@@ -1214,12 +1224,14 @@ module.exports = function (ctx) {
       (e) => { laeuft = null; console.error("zentral: Abruf", e); const b = neuerBericht("fehler"); b.fehler = (e && e.message) || String(e); standSetzen({ fehler: b.fehler, fehlerZeit: new Date().toISOString() }); neuZeichnen(); return b; });
     return laeuft;
   };
+  const KEINE_VERBINDUNG = "Keine Verbindung zu den zentralen Daten. Dein letzter Stand bleibt.";
   const abrufenIntern = async (o) => {
     const b = neuerBericht("ok");
-    const melden = (text) => { if (o.manuell) new Notice(text, 6000); };
+    const melden = (text) => { if (o.manuell) ctx.hinweis(text); };
     if (!eingeschaltet()) { b.art = "aus"; melden("Zentrale Daten sind ausgeschaltet."); return b; }
     if (!ctx.modell || !ctx.modell.daten) { b.art = "fehler"; b.fehler = "Datenmodell fehlt"; return b; }
-    const fehler = (text) => { b.art = "fehler"; b.fehler = text; standSetzen({ fehler: text, fehlerZeit: new Date().toISOString() }); melden("Zentrale Daten: " + text); return b; };
+    // text (Fehler für Zeile und Konsole) und satz (Hinweis ohne Technik)
+    const fehler = (text, satz) => { b.art = "fehler"; b.fehler = text; standSetzen({ fehler: text, fehlerZeit: new Date().toISOString() }); melden(satz || "Die zentralen Daten ließen sich nicht übernehmen. Dein letzter Stand bleibt."); return b; };
     const ich = geraetId();
     const S0 = stand();
     if (o.nurCache && S0.pause) { b.art = "pausiert"; return b; }
@@ -1227,7 +1239,7 @@ module.exports = function (ctx) {
     if (!o.nurCache) {
       // 1. Manifest
       let roh;
-      try { roh = await holen("manifest.json"); } catch (e) { return fehler("keine Verbindung (" + ((e && e.message) || e) + ")"); }
+      try { roh = await holen("manifest.json"); } catch (e) { return fehler("keine Verbindung (" + ((e && e.message) || e) + ")", KEINE_VERBINDUNG); }
       if (roh.bytes.length > G.manifest) return fehler("Manifest zu groß");
       let m;
       try { m = JSON.parse(roh.text); } catch (e) { return fehler("Manifest unlesbar"); }
@@ -1256,7 +1268,7 @@ module.exports = function (ctx) {
     const fremd = (x) => !!x && x.geraet !== ich && alterMs(x.zuletzt) <= UEBERNAHME;
     const anderesGeraet = () => {
       b.art = "anderes-geraet"; standSetzen({ fehler: "", fehlerZeit: "", warnung: "", erfolg: new Date().toISOString(), abrufer: false });
-      melden("Zentrale Daten: gerade auf einem anderen Gerät aktualisiert, deine Notizen kommen per Sync.");
+      melden("Ein anderes Gerät hat die zentralen Daten gerade aktualisiert, deine Notizen kommen über deinen Sync.");
       return b;
     };
     if (fremd(a) && (!o.manuell || alterMs(a.zuletzt) < GERADE)) return anderesGeraet();
@@ -1271,7 +1283,7 @@ module.exports = function (ctx) {
         const soll = manifest.dateien[name];
         if (!o.manuell && S0.hashes[name] === soll.sha256 && cache[name]) continue;
         let r;
-        try { r = await holen(name); } catch (e) { return fehler("keine Verbindung (" + ((e && e.message) || e) + ")"); }
+        try { r = await holen(name); } catch (e) { return fehler("keine Verbindung (" + ((e && e.message) || e) + ")", KEINE_VERBINDUNG); }
         if (r.bytes.length !== soll.groesse || (await sha256(r.bytes)) !== soll.sha256) return fehler("Prüfsumme von " + name + " stimmt nicht – nichts übernommen");
         let d;
         try { d = JSON.parse(r.text); } catch (e) { return fehler(name + " unlesbar"); }
@@ -1346,7 +1358,7 @@ module.exports = function (ctx) {
     if (b.art === "ok" && !b.geschrieben.length) b.art = "unveraendert";
     if (o.manuell) {
       const n = b.angelegt.length + b.aktualisiert.length + b.entfaellt.length + b.papierkorb.length;
-      melden((n ? `Zentrale Daten aktualisiert: ${n} ${n === 1 ? "Eintrag" : "Einträge"} geändert.` : "Zentrale Daten: alles aktuell.") + (b.warnung ? " " + b.warnung : ""));
+      melden((n ? `Zentrale Daten aktualisiert, ${n} ${n === 1 ? "Eintrag" : "Einträge"} geändert.` : "Die zentralen Daten sind aktuell.") + (b.warnung ? " " + b.warnung : ""));
     }
     return b;
   };
@@ -1443,32 +1455,27 @@ module.exports = function (ctx) {
         if (was === "veranstaltungen") {
           const neu = fest !== null ? fest : !veranstaltungenZeigen();
           await schalten("zentrale_veranstaltungen", neu);
-          new Notice(neu ? "Fachschaft und Veranstaltungen werden wieder gezeigt." : "Fachschaft und Veranstaltungen ausgeblendet.", 4000);
+          ctx.hinweis(neu ? "Fachschaft und Veranstaltungen werden wieder gezeigt." : "Fachschaft und Veranstaltungen ausgeblendet.");
         } else {
           const neu = fest !== null ? fest : !eingeschaltet();
           await schalten("zentrale_daten", neu);
-          new Notice(neu ? "Zentrale Daten eingeschaltet." : "Zentrale Daten ausgeschaltet. Vorhandene Termine bleiben.", 4000);
+          ctx.hinweis(neu ? "Zentrale Daten eingeschaltet." : "Zentrale Daten ausgeschaltet. Vorhandene Termine bleiben.");
           if (neu && !plugin().testZentralAus) ctx.zeit(() => abrufen({}), 1500);
         }
         neuZeichnen();
       },
     },
-    // „Besuche ich nicht“ (Knopf in jeder zentralen Stundenplan-Notiz, id=…; als Befehl: die geöffnete Notiz). Gilt sofort im
+    // „Besuche ich nicht“ (Kopf jeder zentralen Stundenplan-Notiz, kopf.js, id=…; als Befehl: die geöffnete Notiz). Gilt sofort im
     // Raster (Bases-Formel liest die Liste), die Notiz räumt der Abrufer weg. Hinweis mit „Rückgängig“.
     "besuche-nicht": {
-      titel: "Besuche ich nicht (Veranstaltung aus dem Stundenplan nehmen)",
+      titel: "Besuche ich nicht",
       ausfuehren: async (c) => {
         let id = String((c.parameter && c.parameter.id) || "");
         if (!id) { const fm = fmVon(app.workspace.getActiveFile()); if (fm && fm.herkunft === "zentral" && fm.typ === "lehrveranstaltung") id = String(fm.zentral_id || ""); }
-        if (!ID.test(id)) { new Notice("Das geht bei Veranstaltungen, die von selbst in deinen Stundenplan kamen.", 6000); return; }
+        if (!ID.test(id)) { ctx.hinweis("Das geht bei Lehrveranstaltungen, die von selbst in deinen Stundenplan kamen."); return; }
         const name = lehreName(id);
         await ausblendenSetzen([id], true);
-        const frag = document.createDocumentFragment();
-        frag.append(`${name} steht nicht mehr in deinem Stundenplan. `);
-        const a = frag.appendChild(document.createElement("a"));
-        a.textContent = "Rückgängig";
-        a.href = ctx.link("wieder-zeigen", { id });
-        new Notice(frag, 10000);
+        ctx.hinweis(`${name} steht nicht mehr in deinem Stundenplan.`, { aktion: { text: "Rückgängig", aktion: "wieder-zeigen", parameter: { id } } });
         neuZeichnen();
         rasterNeu();
       },
@@ -1478,7 +1485,7 @@ module.exports = function (ctx) {
         const id = String((c.parameter && c.parameter.id) || "");
         if (!ID.test(id)) return;
         await ausblendenSetzen([id], false);
-        new Notice(`${lehreName(id)} steht wieder in deinem Stundenplan.`, 5000);
+        ctx.hinweis(`${lehreName(id)} steht wieder in deinem Stundenplan.`);
         neuZeichnen();
         rasterNeu();
       },

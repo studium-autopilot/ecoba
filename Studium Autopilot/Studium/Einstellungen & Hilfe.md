@@ -16,10 +16,10 @@ cssclasses:
 
 ## Deine Angaben
 
-Alles ist freiwillig. Ferien und Prüfungsphasen rechnen sich aus dem Studienbeginn; du siehst sie je Semester im [[Studienverlauf]].
+Alles ist freiwillig. Vorlesungszeit, Pausen und Prüfungsphasen rechnen sich aus dem Studienbeginn; du siehst sie je Semester im [[Studienverlauf]].
 
 ```eba-personalisieren angaben
-Deine Angaben: erscheinen, sobald Studium Autopilot läuft. Ändern: Befehl „Personalisieren“.
+Deine Angaben: erscheinen, sobald Studium Autopilot läuft. Ändern: Befehl „Deine Angaben ändern“.
 ```
 
 ## Verbindungen
@@ -31,7 +31,7 @@ Verbindungen: erscheinen, sobald Studium Autopilot läuft.
 ## Variante
 
 ```eba-personalisieren variante
-Variante: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Variante wechseln“.
+Variante: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Variante wählen“.
 ```
 
 ## Darstellung
@@ -43,19 +43,20 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 ## Hilfe
 
 > [!eba-zeilen]
-> > [!eba-karte|hilfe|bedienung]- Bedienung <span class="eba-zeile-unter">Knöpfe, Vorlagen, Bereiche-Menü</span>
+> > [!eba-karte|hilfe|bedienung]- Bedienung <span class="eba-zeile-unter">Knöpfe, Vorlagen, Übersicht</span>
 > > | Knopf | Wo | Fragt nach | Landet in |
 > > | --- | --- | --- | --- |
-> > | Vorlesung | Dashboard, Modulseite | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst das Modul; vom Modul-Knopf nie) | Vorlesungen/Modulcode, Name „Datum Code VL 03“ |
-> > | Übungsblatt | Dashboard, Modulseite, [[Unterlagen#Übungsblätter\|Unterlagen]] | Modul, Nummer, Abgabe | Übungsblätter |
-> > | Unterlagen | Dashboard, Modulseite, [[Unterlagen]] | Vorschau der neuen Namen | Unterlagen/Modul |
-> > | Aus ILIAS holen | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
-> > | Termin anlegen | [[Termine & Anmeldungen]] | Titel und Datum (Art und Modul ergeben sich aus dem Titel) | Termine |
-> > | Alma verbinden, danach Stundenplan aus Alma holen | [[Stundenplan]] | beim Verbinden deinen Alma-Link | Stundenplan |
+> > | Neue Vorlesung | Dashboard, Modulseite, **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst das Modul; vom Modul-Knopf nie) | Vorlesungen/Modulcode, Name „Datum Code VL 03“ |
+> > | Neues Übungsblatt | Dashboard, Modulseite, [[Unterlagen#Übungsblätter\|Unterlagen]] | Modul, Nummer, Abgabe | Übungsblätter |
+> > | Unterlagen einordnen | Dashboard, Modulseite, [[Unterlagen]] | Vorschau der neuen Namen | Unterlagen/Modul |
+> > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
+> > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
+> > | Alma verbinden, danach Stundenplan aktualisieren | [[Stundenplan]] | beim Verbinden deinen Alma-Link | Stundenplan |
 > >
-> > - **Bereiche-Menü:** Raster-Symbol (vier Kästchen) tippen: am PC rechts im Seitenkopf, auf iPhone und iPad oben in der Leiste jeder Notiz.
-> > - **Vorlagen:** Jeder Knopf legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
-> > - <kbd>Esc</kbd> bricht das Anlegen ab, es entsteht nichts. Leer bestätigen nimmt den Vorschlag. Datum als „15.10.“ oder „15.10.2026“, gern mit Uhrzeit.
+> > - **Übersicht:** Raster-Symbol (vier Kästchen) oben in der Leiste jeder Notiz tippen, es zeigt alle Seiten. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite.
+> > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
+> > - Jedes Feld hat einen Vorschlag. <kbd>Esc</kbd> oder **Abbrechen** legt nichts an. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche), darunter steht, welcher Tag gemeint ist.
+> > - **Rückgängig:** Was du wegwirfst oder abhakst, passiert sofort; der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.
 >
 > > [!eba-karte|hilfe|vorlesung]- Vorlesung <span class="eba-zeile-unter">Mitschreiben, nacharbeiten</span>
 > > > [!eba-raster|2]
@@ -67,16 +68,16 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > >
 > > > > [!eba-regel] Nacharbeiten
 > > > > - Abends **Kernaussagen** ergänzen und offene Fragen klären.
-> > > > - Dann oben in der Notiz auf **Nacharbeit offen** tippen, daraus wird **Nachgearbeitet**. Oder das Kästchen unter „Nachzuarbeiten“ auf dem Dashboard anhaken.
+> > > > - Dann oben in der Notiz auf **Nacharbeit offen** tippen, daraus wird **Nachgearbeitet**.
 > > > > - Handschrift auf den Folien: Abschnitt „Unterlagen“ unten, „Mit dem Stift annotieren“.
-> > > > - **Seitenlink aufs iPad legen (einmal):** Einstellungen → *Werkzeugleiste für Mobilgeräte* → „Studium Autopilot: Seitenlink auf die Folien einfügen“ hinzufügen.
+> > > > - **Seitenlink aufs iPad legen (einmal):** Obsidian-Einstellungen → *Werkzeugleiste für Mobilgeräte* → „Studium Autopilot: Seitenlink auf die Folien einfügen“ hinzufügen.
 >
-> > [!eba-karte|hilfe|alltag]- Im Alltag <span class="eba-zeile-unter">Modulstatus, Fragen, Markieren</span>
+> > [!eba-karte|hilfe|alltag]- Im Alltag <span class="eba-zeile-unter">Modulstatus, Stundenplan, Fragen</span>
 > > > [!eba-raster|2]
 > > > > [!eba-karte] Status und Note eines Moduls
 > > > > - Auf der Modulseite unter **Status** auf den Knopf tippen (z. B. **Offen**) und wählen: offen · läuft · angemeldet · bestanden · nicht bestanden · anerkannt.
 > > > > - Bei **bestanden** und **nicht bestanden** fragt ein Fenster nach der Note (mit Komma, z. B. `1,7`). Im selben Menü: **Note eintragen …**, Versuch und **Semester planen …**.
-> > > > - Tabellen und Listen zeigen nur an. Ändern geht in der Notiz selbst, Kästchen wie „Nachgearbeitet“ kannst du direkt anhaken.
+> > > > - Tabellen und Listen zeigen nur an. Ändern geht im Kopf der Notiz: Unter dem Titel steht ihr Stand zum Antippen, z. B. **Offen** bei einem Termin oder **Noch nicht gelesen** bei einer Unterlage.
 > > >
 > > > > [!eba-fragen] Fragen und To-dos
 > > > > - Zeile schreiben, <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>L</kbd> macht daraus eine Aufgabe (iPhone/iPad: Kästchen-Symbol in der Leiste über der Tastatur).
@@ -89,8 +90,14 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > > - Formeln mit `$…$` oder `$$…$$` (LaTeX).
 > > > > - `/` am Zeilenanfang öffnet die Befehle.
 > > >
+> > > > [!eba-karte] Stundenplan, Gruppen, Angebote
+> > > > - **Übungsgruppe:** Unter [[Termine & Anmeldungen#Übungen und Tutorien]] bei deiner Gruppe **Meine** tippen, sie steht dann im Stundenplan. Mit ILIAS kommt sie von selbst.
+> > > > - **Besuche ich nicht:** Im Kopf der Lehrveranstaltung auf **Im Stundenplan** tippen, dann fehlt sie im Stundenplan. Der Hinweis danach hat **Rückgängig**.
+> > > > - **Angebote der Uni:** Kurse, Vorträge und Sport stehen unter [[Termine & Anmeldungen#Angebote der Uni]]. Mit **Auswahl ändern** wählst du, was du siehst.
+> > > > - **Lernplan:** Mit eigenem Uni-Abgleich zeigt die Seite **Lernplan** je Modul, welches Kapitel diese Woche dran ist.
+> > >
 > > > > [!eba-rechner] Was sich selbst rechnet
-> > > > - Aktuelles Semester, Phase und Wochenraster aus deinen Angaben oben.
+> > > > - Aktuelles Semester, Phase und Woche aus deinen Angaben oben.
 > > > > - ECTS, Gesamtnote nach § 13 und Orientierungsprüfung aus den Modulen.
 > > > > - Nächste Prüfung und Frist aus Modulen und Terminen.
 > > > > - Termine und Fristen für alle kommen von selbst, siehe [[#Verbindungen]].
@@ -106,14 +113,14 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > [!eba-karte|hilfe|unterlagen]- Unterlagen <span class="eba-zeile-unter">Aus ILIAS, einordnen, annotieren</span>
 > > Kursdateien kommen von selbst aus ILIAS, alles andere legst du in den Eingang.
 > >
-> > 1. Einmal unter [[#Verbindungen]] **ILIAS-Unterlagen** verbinden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Aus ILIAS holen**.
+> > 1. Einmal unter [[#Verbindungen]] **ILIAS-Unterlagen** verbinden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
 > > 2. Andere Dateien (Mail, Scan, ZIP) in den Ordner **Eingang** deines Tresors legen.
 > > 3. **Unterlagen einordnen** tippen, in der Vorschau **Alle übernehmen**.
 > > 4. Zum Lesen und Anmerken in der Unterlage **Öffnen ↗** tippen.
 > >
 > > > [!eba-info]- Mehr erfahren
 > > > - **ILIAS:** Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Trennen: [[#Verbindungen]] → **ILIAS-Unterlagen** → **Mehr erfahren** → **Trennen**.
-> > > - **Anmeldung klappt nicht:** Fragt die Uni nach deiner Zustimmung, einmal im Browser bei ILIAS anmelden und zustimmen, dann erneut **Verbinden**. Mit zweitem Faktor geht es noch nicht.
+> > > - **Verbinden klappt nicht:** Fragt die Uni nach deiner Zustimmung, einmal im Browser bei ILIAS anmelden und zustimmen, dann erneut **Verbinden**. Mit zweitem Faktor geht es noch nicht.
 > > > - **Was nicht kommt:** Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder. Umbenennen und Verschieben ist sicher.
 > > > - **Geänderte Dateien:** Hast du eine Datei angemerkt und der Dozent lädt sie neu hoch, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
 > > > - **In den Eingang:** Windows: im Explorer kopieren. iPhone/iPad: **Teilen → In Dateien sichern →** Ordner **Eingang**; Papier über die App **Dateien → ⋯ → Dokumente scannen**; ZIP vorher antippen, dann entpackt es sich. PowerPoint: als PDF exportieren und beide mit gleichem Namen ablegen.
@@ -124,14 +131,14 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > [!eba-karte|hilfe|karteikarten]- Karteikarten <span class="eba-zeile-unter">Anlegen, lernen, wiederholen</span>
 > > Karten stehen als normale Notizen je Modul im Ordner **Karteikarten**, Studium Autopilot plant die Wiederholungen.
 > >
-> > 1. [[Karteikarten]] → **Stapel anlegen** und das Modul wählen.
+> > 1. [[Karteikarten]] → **Neuer Kartenstapel** und das Modul wählen.
 > > 2. Karten schreiben, eine je Absatz: `Frage :: Antwort`. Oder **Neue Karte** tippen.
 > > 3. **Lernen** tippen, die Antwort ansehen und ehrlich bewerten: **Nochmal**, **Schwer**, **Gut** oder **Einfach**.
 > > 4. Jeden Tag lernen, was fällig ist; das Dashboard zeigt es unter „Zu erledigen“.
 > >
 > > > [!eba-info]- Mehr erfahren
 > > > - **Kartenarten:** `Frage :: Antwort` · `Frage ::: Antwort` lernt auch die Gegenrichtung · über mehrere Zeilen: Frage, dann eine Zeile nur mit `?`, dann die Antwort (`??` mit Gegenrichtung) · Lückentext: `Die {{c1::Grenzkosten}} sind …`, jede Nummer wird eine Karte. Überschriften gliedern, Formeln und Bilder gehen.
-> > > - **Wiederholungen:** nach FSRS, demselben Verfahren wie in Anki. Über jedem Knopf steht, wann die Karte wiederkommt. Am Tag höchstens 20 neue Karten und 200 Wiederholungen je Modul; ändern unter **Optionen**.
+> > > - **Wiederholungen:** nach FSRS, demselben Verfahren wie in Anki. Über jedem Knopf steht, wann die Karte wiederkommt. Am Tag höchstens 20 neue Karten und 200 Wiederholungen je Modul; ändern unter **Lernoptionen**.
 > > > - **Kürzel am Rechner:** <kbd>Leertaste</kbd> Antwort zeigen, danach Gut · <kbd>1</kbd>–<kbd>4</kbd> bewerten · <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> rückgängig · <kbd>E</kbd> bearbeiten · <kbd>-</kbd> bis morgen zurückstellen · <kbd>@</kbd> aussetzen.
 > > > - **Kennung:** Beim ersten Lernen bekommt jede Karte am Ende ein Kürzel wie `^k3f9a1b`. Es verbindet Karte und Lernstand: bitte stehen lassen. Den Text davor darfst du jederzeit ändern.
 > > > - **Lernstand:** liegt je Gerät in `System/Daten/Karteikarten` und kommt über deinen Sync auf die anderen Geräte. Ausgesetzte und schwierige Karten findest du unter [[Karteikarten#Alle Karten]].
@@ -153,30 +160,31 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > [!eba-karte|hilfe|geraete]- Geräte <span class="eba-zeile-unter">Einrichten, Unterschiede</span>
 > > > [!eba-raster|2]
 > > > > [!eba-regel] Einmal pro Gerät
-> > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal).
+> > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
 > > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
 > > > > 3. Unter [[#Verbindungen]] Alma und ILIAS verbinden. Beides gilt nur für dieses Gerät.
 > > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
 > > > > [!eba-info] Unterschiede je Gerät
 > > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>.
-> > > > - **iPad/iPhone:** Aufgaben über das Kästchen-Symbol über der Tastatur. Tabellen stehen auf dem iPhone als Liste untereinander, auf dem iPad breite Tabellen seitlich wischen.
+> > > > - **Neue Version:** Unter [[#Verbindungen]] in der Zeile **Studium Autopilot** auf **Neue Version installieren** tippen. Deine anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
+> > > > - **iPad/iPhone:** Aufgaben über das Kästchen-Symbol über der Tastatur. Tabellen stehen auf allen Geräten als Liste untereinander.
 > >
 > > > [!eba-achtung] Bitte nicht umbenennen
-> > > `System/Einstellungen.md` und die Seiten in `Studium/` (vor allem Noten & ECTS, Prüfungen, Stundenplan, Unterlagen) nicht umbenennen. Das Feld **uebersicht** in Notizen bitte stehen lassen.
+> > > Die Seiten im Ordner **Studium** (vor allem Noten & ECTS, Prüfungen, Stundenplan, Unterlagen) und die Einstellungen im Ordner **System** nicht umbenennen. Die Eigenschaft **uebersicht** oben in deinen Notizen bitte stehen lassen, über sie finden die Übersichten deine Notizen.
 >
 > > [!eba-karte|hilfe|stand]- Stand der Angaben <span class="eba-zeile-unter">Regeln und Module vom 30.09.2026, manches noch geschätzt</span>
 > > Termine und Semesterdaten kommen laufend über die zentralen Daten und ersetzen nach und nach, was hier noch geschätzt ist.
 > >
 > > **Noch geschätzt**
-> > - Nachholtermin **WS 2026/27** sowie Anmeldefristen und Klausurphasen ab **SS 2027**.
+> > - Nachholtermin **WS 2026/27** sowie Anmeldefristen und Prüfungsphasen ab **SS 2027**.
 > > - Erasmus-Bewerbung **November 2027** und Bachelorarbeits-Frist **Juli 2028**.
 > > - Orientierungsprüfung bis **30.09.2028**: aus „Ende des 4. Fachsemesters“ abgeleitet, gilt ohne Urlaubssemester.
 > >
 > > **Nicht belegt oder widersprüchlich**
 > > - Formale Wahl der Variante: weder PO noch Modulhandbuch regeln Wie und Wann; klärt die Studienfachberatung. Studium Autopilot empfiehlt die Wahl vor dem 3. Fachsemester, weil sich ab dann die Musterpläne unterscheiden.
 > > - **B370** und **S313** ohne Modulbeschreibung, **S312** in keiner EcoBA-Studienplantabelle.
-> > - Frist der Orientierungsprüfung: Modulhandbuch nennt in einem Plan Ende **FS 3**, maßgeblich ist die PO mit **FS 4**.
+> > - Frist der Orientierungsprüfung: Modulhandbuch nennt in einem Plan das Ende des **3. Fachsemesters**, maßgeblich ist die PO mit dem **4. Fachsemester**.
 > > - Rücktritt bei Krankheit: BRPO „unverzüglich“, FAQ „innerhalb von drei Werktagen“; im Zweifel sofort handeln.
 > > - Gesamtnote: ob nach zwei Stellen abgeschnitten wird, regelt die BRPO nicht eindeutig (**§ 35 Abs. 2** verweist nicht auf § 19 Abs. 3 Satz 3); Studium Autopilot schneidet ab.
 > > - Elective Studies: fachfremde Fächer (z. B. Informatik, Mathematik, Psychologie, Recht) mit mind. **15 ECTS** je Fach.

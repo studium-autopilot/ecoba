@@ -17,9 +17,9 @@ cssclasses:
 Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 ```
 
-> [!eba-tabelle|schlicht|umbruch] Prüfungstermine
+> [!eba-tabelle|schlicht|umbruch] Termine
 > ```eba-liste pruefungen
-> Prüfungstermine erscheinen, sobald Studium Autopilot läuft.
+> Prüfungen erscheinen, sobald Studium Autopilot läuft.
 > ```
 
 <p class="eba-hinweis">Klausurräume → <a class="internal-link" data-href="Kontakte & Links#Orte" href="Kontakte & Links#Orte">Kontakte & Links</a></p>

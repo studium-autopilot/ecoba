@@ -35,6 +35,18 @@ test("zeit: Datum wie in docs/design.md – Wochentag, Jahr nur außerhalb des S
   assert.equal(Z.tageBis("2026-10-25"), 7);
 });
 
+test("zeit und Ort: „bis 24:00 Uhr“ ist das Ende des Tages (Abgaben aus dem ILIAS-Kalender) und kommt nach 23:55", () => {
+  const M = modell("2026-10-18", alle(
+    termin("2026-11-03", "B110 Abgabe 3", { kategorie: "Frist", ort: "bis 24:00 Uhr · ILIAS" }),
+    termin("2026-11-03", "S100 Abgabe 2", { kategorie: "Frist", ort: "bis 23:55 Uhr · ILIAS" })));
+  assert.equal(M.zeit.uhrzeitIn("bis 24:00 Uhr · ILIAS"), "24:00");
+  assert.ok(M.zeit.minuten("24:00") > M.zeit.minuten("23:59"));
+  assert.deepEqual(M.ortTeilen("bis 24:00 Uhr · ILIAS"), { ab: "", bis: "24:00", schluss: true, zeit: "", wo: "ILIAS" });
+  assert.equal(M.zeit.uhrzeitIn("ab 25:00"), "", "nach 24:00 keine Uhrzeit");
+  assert.equal(M.zeit.uhrzeitIn("24:30"), "");
+  assert.deepEqual(M.fristen({ heute: "2026-10-18" }).map((t) => [t.titel, t.zeit]), [["S100 Abgabe 2", "23:55"], ["B110 Abgabe 3", "24:00"]]);
+});
+
 test("zeit: Uhrzeit, Kalenderwoche, Mehrzahl, HTML-Schutz", () => {
   const Z = modell("2026-10-18").zeit;
   assert.equal(Z.uhr("9:15"), "09:15");

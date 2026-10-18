@@ -15,10 +15,14 @@
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) {
   --eba-radius: 3px;
   --eba-radius-s: 2px;
+  --eba-radius-l: 4px; /* Lernkarte; vorher galt der Grundwert 12 px neben sonst 2–3 px */
   --eba-shadow: none;
   --eba-font-display: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   --eba-display-weight: 500;
   --eba-display-tracking: -0.012em;
+  --eba-h2-linie: var(--eba-text);
+  --eba-h2-weight: 500;
+  --eba-h2-size: 1.35em;
 }
 
 .theme-light:where(:not([class*="eba-design-"])) {

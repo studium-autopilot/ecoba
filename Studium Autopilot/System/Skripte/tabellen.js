@@ -6,10 +6,10 @@
 // jeder Datenänderung (onDataUpdated der Tabellenansicht), in Lese- und Bearbeitungsansicht gleich.
 // Ein/aus nur per CSS: die Liste entsteht nur, wo die Variable --eba-tliste: 1 gilt (eba-core.css
 // Abschnitt 37: body.is-phone .callout[data-callout="eba-tabelle"]); dort blendet das CSS Tabellenkopf, Zeilen und
-// Summenzeile aus. PC/iPad: nur auf den Seiten, die 37.tabellen einschaltet (Modulseite, Noten & ECTS, Unterlagen,
-// Stundenplan), sonst bleibt die Tabelle. Ausnahme per Karte (nur iPhone): [!eba-tabelle|handy-tabelle].
-// Werte nur lesen; Kontrollkästchen (z. B. Nachgearbeitet) bleiben antippbar und schreiben ins Frontmatter, erscheinen aber
-// nur bei Notizen, die das Feld haben.
+// Summenzeile aus. Seit 0.4.6 überall, auf allen Geräten (vorher am PC/iPad nur auf einigen Seiten).
+// Nur lesen (Entscheidung E4 des Konsistenz-Audits): Ein Kontrollkästchen (z. B. Nachgearbeitet) steht als Pille da, wenn es
+// gesetzt ist, und nur bei Notizen, die das Feld haben; geändert wird es im Kopf der Notiz (Zeile antippen öffnet sie). Bis 0.4.5
+// ließ es sich hier antippen und schrieb ins Frontmatter.
 // Erweiterung: registrieren() erweitert die Tabellenansicht (Fabrik und Prototyp, Merker __ebaTl/__ebaTlPatch), abmelden()
 // nimmt das beim Hot-Reload und beim Entladen des Plugins vollständig zurück. Post-Processor über ctx.postprozessor.
 // Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“; „offiziell“ ohne Chip, markiert wird nur
@@ -22,8 +22,8 @@ module.exports = function (ctx) {
   const app = window.app;
   const Keymap = ctx?.obsidian?.Keymap;
   // Spaltennamen, deren Wert ohne Bezeichnung verständlich ist bzw. deren Bezeichnung als Einheit dahinter steht
-  const OHNE = new Set(["Status", "Stand", "Modul", "Art", "Typ", "Bereich", "Bereiche", "Datum", "Termin", "Wann", "Fällig", "Hinweis",
-    "Datei", "Unterlage", "Blatt", "Notiz", "Veranstaltung", "Raum", "Zeit", "Kurs", "Anbieter", "Turnus", "Sprache", "Größe", "Name",
+  const OHNE = new Set(["Status", "Stand", "Modul", "Art", "Typ", "Teil", "Bereich", "Bereiche", "Datum", "Termin", "Wann", "Fällig", "Hinweis",
+    "Datei", "Unterlage", "Blatt", "Notiz", "Lehrveranstaltung", "Veranstaltung", "Raum", "Zeit", "Kurs", "Anbieter", "Turnus", "Sprache", "Größe", "Name",
     "Prüfungstermin", "Prüfung", "Was daraus folgt", "Aktuell"]);
   const EINHEIT = new Set(["ECTS", "Seiten"]);
   const ZUSAMMEN = { Sum: "", Average: "Ø ", Median: "Median ", Min: "min. ", Max: "max. " };
@@ -156,19 +156,16 @@ module.exports = function (ctx) {
           let v; try { v = e.getValue(p); } catch (x) { continue; }
           const nm = name[p];
           const feld = p.startsWith("note.") ? p.slice(5) : null;
-          // Kontrollkästchen im Frontmatter: antippbar wie in der Tabelle
+          // Kontrollkästchen im Frontmatter: nur lesen, gesetzt als Pille (Farbe aus statusArt), sonst nichts
           if (feld && e.file?.extension === "md") {
             let art = null;
             try { const ti = app.metadataTypeManager.getTypeInfo(feld, e.getRawProperty?.(feld)); art = ti?.expected?.type || ti?.inferred?.type; } catch (x) {}
             if (art === "checkbox") {
               // Nur bei Notizen, die das Feld haben (z. B. „Nachgearbeitet“ bei Vorlesungen, nicht bei Terminen in derselben Liste)
               const fmDa = app.metadataCache.getFileCache(e.file)?.frontmatter;
-              if (!fmDa || !Object.prototype.hasOwnProperty.call(fmDa, feld)) continue;
-              const w = meta.createEl("label", { cls: "eba-tl-w eba-tl-check" });
-              const cb = w.createEl("input", { type: "checkbox" });
-              cb.checked = String(v?.toString?.()) === "true";
-              w.appendText(nm);
-              cb.addEventListener("change", () => { const neu = cb.checked; app.fileManager.processFrontMatter(e.file, (fm) => { fm[feld] = neu; }); });
+              if (fmDa && Object.prototype.hasOwnProperty.call(fmDa, feld) && String(v?.toString?.()) === "true") {
+                meta.createSpan("eba-tl-w").createSpan({ cls: "eba-pill " + chipArt("erledigt"), text: nm });
+              }
               continue;
             }
           }
@@ -203,13 +200,12 @@ module.exports = function (ctx) {
     const quelle = () => view.queryController?.currentFile?.path || "";
     liste.addEventListener("mousedown", (ev) => ev.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
     liste.addEventListener("click", (ev) => {
-      if (ev.target.closest("input, label")) { ev.stopPropagation(); return; }
       const mod = Keymap ? Keymap.isModEvent(ev) : false;
       const il = ev.target.closest(".internal-link[data-href]");
-      if (il) { ev.preventDefault(); ev.stopPropagation(); app.workspace.openLinkText(il.getAttribute("data-href"), quelle(), mod); return; }
+      if (il) { ev.preventDefault(); ev.stopPropagation(); ctx.oeffnen(il.getAttribute("data-href"), { quelle: quelle(), neu: mod }); return; }
       if (ev.target.closest("a")) return; // externe Links / obsidian:// (Öffnen ↗) wie bisher
       const z = ev.target.closest(".eba-tl-zeile");
-      if (z && z.__ebaDatei) { ev.preventDefault(); ev.stopPropagation(); app.workspace.getLeaf(mod).openFile(z.__ebaDatei); }
+      if (z && z.__ebaDatei) { ev.preventDefault(); ev.stopPropagation(); ctx.oeffnen(z.__ebaDatei, { neu: mod }); }
     });
   };
 

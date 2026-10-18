@@ -85,6 +85,25 @@ test("Zweiter Lauf lädt nichts und schreibt den Index nicht neu", async () => {
   assert.ok(x.t.schreibvorgaenge.every((p) => p === I.K.ABRUF), x.t.schreibvorgaenge.join(", "));
 });
 
+test("Übungen: Code und Kurs je ref_id im Index (für den ILIAS-Kalender), nie der Titel; unverändert kein Schreiben", async () => {
+  const def = standardIlias();
+  def.seiten[B + "kurs/100"].push({ art: "uebung", typ: "exc", refId: "150", titel: "Erfundene Übung (Pass" + "wort: Igel42)", url: B + "uebung/150" });
+  def.seiten[B + "ordner/310"].push({ art: "uebung", typ: "exc", refId: "350", titel: "Erfundene Schreibübung", url: B + "uebung/350" });
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  const o = x.t.index().objekte;
+  assert.deepEqual(Object.keys(o).sort(), ["150", "350"]);
+  assert.deepEqual([o[150].typ, o[150].code, o[150].kurs], ["exc", "B110", "100"]);
+  assert.deepEqual([o[350].code, o[350].kurs], ["SQ888", "300"], "Unterordner mit eigenem Code");
+  const vorher = x.t.text(I.K.INDEX);
+  assert.ok(vorher.indexOf("Igel42") < 0 && vorher.indexOf("Erfundene") < 0, "nie der Titel");
+  assert.equal(x.il.geholt().filter((u) => /uebung/.test(u)).length, 0, "Übungen werden nicht geöffnet");
+  x.u.vor(4 * STUNDE);
+  await lauf(x, { manuell: true });
+  assert.equal(x.t.text(I.K.INDEX), vorher);
+});
+
 test("Byte-gleiche Datei schon unter Unterlagen/: nur gemerkt, keine Kopie, keine Notiz", async () => {
   const x = aufbau({ dateien: { "Unterlagen/Eigenes/vl1.pdf": "%PDF Folien eins" } });
   await verbinden(x);
@@ -244,7 +263,7 @@ test("Abrufer-Sperre: anderes Gerät aktiv → nichts; still → übernehmen; oh
   await verbinden(x);
   x.geheimnisse.clear();
   b = await lauf(x);
-  assert.equal(b.art, "zugang"); assert.match(b.fehler, /Kennwort fehlt/);
+  assert.equal(b.art, "zugang"); assert.match(b.fehler, /Passwort fehlt/);
   assert.equal(x.t.text(I.K.ABRUF), null); assert.equal(x.il.log.length, 0);
   // ohne gespeicherten Zugang: kein Lauf, keine Sperre
   x = aufbau();
@@ -304,7 +323,7 @@ test("Eigener Uni-Abgleich: Hinweis „Übungsgruppen geprüft“ nur nach deine
   assert.equal((await lauf(x)).art, "nur-gruppen");
   assert.deepEqual(x.meldungen, [], "automatischer Lauf: kein Hinweis");
   assert.equal((await x.m.jetztHolen({ manuell: true })).art, "nur-gruppen");
-  assert.deepEqual(x.meldungen, ["ILIAS: Übungsgruppen geprüft."]);
+  assert.deepEqual(x.meldungen, ["Übungsgruppen aus ILIAS geprüft."]);
   assert.equal(x.m.auftrag(), null, "kein Auftrag");
   // Fehler nach deinem Tipp: ein Hinweis, aber kein Weitermachen (das stündliche Prüfen versucht es still wieder)
   x.abh.quelle = async () => { throw new Error("kein Netz"); };
@@ -978,7 +997,7 @@ test("Uni-Zugang: abgelehntes Passwort setzt den Marker; ein Gerät mit altem Pa
   assert.equal(y.m.uniZugang().bestaetigt, false);
   const k = await y.m.jetztHolen({ manuell: true });
   assert.equal(k.art, "abgelehnt");
-  assert.deepEqual(y.meldungen, ["ILIAS: " + I.K.TEXT_ABGELEHNT]);
+  assert.deepEqual(y.meldungen, [I.K.TEXT_ABGELEHNT]);
   assert.equal(y.anm.aufrufe, vorher, "keine Anmeldung");
   // Neu eingeben: genau eine prüfende Anmeldung; danach frei und bestätigt
   const neu = aufbau({ start: "2026-10-17T09:00:00.000Z", anmeldung: A.anmeldung("neues-Kw-1"), geraet: "g-zwei" });

@@ -271,8 +271,8 @@ test("Gruppen: Doppel derselben Gruppe und gewählte Notizen desselben Moduls we
   const g5 = ZENTRAL[0], g4 = ZENTRAL[1];
   const notizen = {
     [S100_ALT]: M.notizText("", g5, { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4" }),
-    "Stundenplan/Di 10.15 S100 Tutorium 2.md": M.notizText("", g5, { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4" }).replace("## Notizen\n- \n", "## Notizen\n- aus der Kopie\n"),
-    "Stundenplan/Di 08.15 S100 Tutorium.md": M.notizText("", g4, { herkunft: M.GEWAEHLT }).replace("## Notizen\n- \n", "## Notizen\n- gewählt\n"),
+    "Stundenplan/Di 10.15 S100 Tutorium 2.md": M.notizText("", g5, { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4" }).replace("## Meine Notizen\n- \n", "## Meine Notizen\n- aus der Kopie\n"),
+    "Stundenplan/Di 08.15 S100 Tutorium.md": M.notizText("", g4, { herkunft: M.GEWAEHLT }).replace("## Meine Notizen\n- \n", "## Meine Notizen\n- gewählt\n"),
   };
   const x = gruppenAufbau({ notizen, mitglieder: ["351"] });
   await verbinden(x);
@@ -311,7 +311,7 @@ test("Gruppen: nach dem Verlassen mit eigenem Text („entfällt“) schreibt ei
   const x = gruppenAufbau();
   await verbinden(x);
   await x.m.jetztHolen({ manuell: true });
-  await x.sp.io.schreiben(B110, x.sp.text(B110).replace("## Notizen\n- \n", "## Notizen\n- meine Frage\n"));
+  await x.sp.io.schreiben(B110, x.sp.text(B110).replace("## Meine Notizen\n- \n", "## Meine Notizen\n- meine Frage\n"));
   x.stand.mitglieder = ["351", "352"];
   await x.m.jetztHolen({});
   await x.m.jetztHolen({});
@@ -337,7 +337,7 @@ test("Gruppen im eigenen Uni-Abgleich: nur Mitgliedschaften und Notizen, keine D
   assert.deepEqual(x.sp.pfade(), [B110, S100]);
   assert.deepEqual([x.sp.fm(B110).gruppe_id, x.sp.fm(B110).raum], ["ws-2026-27-b110-tutorium-1", "Hörsaal 0.02 (Beispielzentrum)"], "ohne Raum in ILIAS: über die Zeit, Raum der Liste");
   assert.equal(x.m.gruppenListe().find((g) => g.refId === "352").status, "mehrdeutig");
-  assert.deepEqual(x.meldungen, ["ILIAS: Übungsgruppen geprüft. 2 Übungsgruppen stehen jetzt im Stundenplan."]);
+  assert.deepEqual(x.meldungen, ["Übungsgruppen aus ILIAS geprüft. 2 Übungsgruppen stehen jetzt im Stundenplan."]);
   const alles = x.t.alles() + x.lok.alles() + x.sp.pfade().map((p) => x.sp.text(p)).join("\n");
   for (const n of NAMEN) assert.ok(alles.indexOf(n) < 0, n);
   // zweiter Lauf: Codes gemerkt, nichts Neues
@@ -377,7 +377,7 @@ test("Trennen: deine Gruppe bleibt als gewählte Notiz (ILIAS-Name, dein Text), 
   const x = gruppenAufbau({ mitglieder: ["351", "901"] });
   await verbinden(x);
   await x.m.jetztHolen({ manuell: true });
-  await x.sp.io.schreiben(S100, x.sp.text(S100).replace("## Notizen\n- \n", "## Notizen\n- Blatt 3 abgeben\n"));
+  await x.sp.io.schreiben(S100, x.sp.text(S100).replace("## Meine Notizen\n- \n", "## Meine Notizen\n- Blatt 3 abgeben\n"));
   assert.equal(meineDa(x, x.m), false, "aus ILIAS: kein „Meine“");
   // ein zweites Gerät mit Zugang, aber ohne Sperre: sein Trennen lässt die Notizen dem ersten
   const y = zweitesGeraet(x);

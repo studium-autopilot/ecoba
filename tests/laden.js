@@ -50,6 +50,8 @@ function laden(name, { heute = "2026-10-15", frontmatter = {}, notizen = {}, kon
     codeblock: () => ({ instanzen: () => [], neu: () => {} }),
   }, kontext);
   ctx.user = Object.assign({}, BIBLIOTHEKEN, ctx.user);
+  // ctx.hinweis wie im Plugin (hinweis.js); wer Hinweise mitlesen will, gibt obsidian.Notice vor
+  if (!ctx.hinweis) require(path.join(SKRIPTE, "hinweis.js"))(ctx);
   const modul = { exports: {} };
   new Function("module", "exports", "window", code)(modul, modul.exports, { app });
   const ergebnis = modul.exports(ctx);
