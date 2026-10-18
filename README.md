@@ -15,7 +15,7 @@ in der kostenlosen App Obsidian, auf iPhone, iPad, Android, Mac und Windows.
 
 <br>
 
-![Dashboard am Computer und auf dem iPhone: nächste Frist, nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan](docs/bilder/vorschau-dashboard-044.png)
+![Dashboard am Computer und auf dem iPhone: nächste Frist, nächste Prüfung, Semester, ECTS, Notenschnitt, Semesterverlauf und Stundenplan](docs/bilder/vorschau-dashboard-044b.png)
 
 Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein Konto, keine Kosten, keine Werbung.
 
@@ -57,24 +57,28 @@ Mehrere Geräte? → [Weiteres Gerät verbinden](docs/installation.md#weiteres-g
 
 <table>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-termine-044.png" alt="Termine & Anmeldungen: diese und nächste Woche mit Fristen, Anmeldungen, Fachschaft und Angeboten der Uni" width="100%"><br><b>Termine & Anmeldungen</b><br>Woche für Woche: Fristen, Anmeldungen, Fachschaft und Angebote der Uni wie Hochschulsport und UB-Kurse</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-studienverlauf-044.png" alt="Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen" width="100%"><br><b>Studienverlauf</b><br>Semester bis zum Abschluss, Orientierungsprüfung, Schwerpunkte nach den Regeln der PO</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-kalender-044b.png" alt="Kalender: Oktober mit Uni-Terminen, Veranstaltungen der Fachschaft und den Orientierungswochen als Balken über mehrere Tage" width="100%"><br><b>Kalender</b><br>Monat für Monat, mit Uni-Terminen, Fachschaft und mehrtägigen Zeiträumen; eigene Termine mit <b>+ Termin</b></td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-termine-044b.png" alt="Termine & Anmeldungen: diese und nächste Woche mit Fristen, Anmeldungen, Fachschaft und Angeboten der Uni" width="100%"><br><b>Termine & Anmeldungen</b><br>Woche für Woche: Fristen, Anmeldungen und Angebote der Uni wie Hochschulsport und UB-Kurse</td>
 </tr>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-modul-044.png" alt="Modulseite: Status, Semester mit Vorlesungswoche, Prüfungstermin, Semesterband und die nächsten Termine des Moduls" width="100%"><br><b>Modulseiten</b><br>Dein Stand, die Prüfung, deine Woche im Semester und was als Nächstes ansteht</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen-044.png" alt="Unterlagen eines Moduls: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur" width="100%"><br><b>Unterlagen</b><br>Kursdateien aus ILIAS je Modul, nach Art sortiert, die Lösung neben ihrer Klausur</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan-044b.png" alt="Stundenplan: eine volle Woche im 3. Semester mit Vorlesungen, Übungen und Tutorien von 8 bis 18 Uhr, mit Uhrzeit und Raum" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma mit Vorlesungen, Übungen und Tutorien, mit ‹ › durch alle Wochen</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-studienverlauf-044b.png" alt="Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen" width="100%"><br><b>Studienverlauf</b><br>Semester bis zum Abschluss, Orientierungsprüfung, Schwerpunkte nach den Regeln der PO</td>
 </tr>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-noten-044.png" alt="Noten & ECTS: Gesamtnote, Notenblöcke, ECTS und die Note, die du für deine Zielnote noch brauchst" width="100%"><br><b>Noten & ECTS</b><br>86 Module nach PO 2023, Gesamtnote, ECTS und Zielnote rechnen sich selbst</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-stundenplan-044.png" alt="Stundenplan: Vorlesungen und Übungen einer Kalenderwoche mit Uhrzeit und Raum" width="100%"><br><b>Stundenplan</b><br>Deine Woche aus Alma, die Übungsgruppe aus ILIAS oder selbst gewählt, mit ‹ › durch alle Wochen</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-modul-044b.png" alt="Modulseite: Status, Semester mit Vorlesungswoche, Prüfungstermin, Semesterband und die nächsten Termine des Moduls" width="100%"><br><b>Modulseiten</b><br>Dein Stand, die Prüfung, deine Woche im Semester und was als Nächstes ansteht</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-unterlagen-044b.png" alt="Unterlagen eines Moduls: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur" width="100%"><br><b>Unterlagen</b><br>Kursdateien aus ILIAS je Modul, nach Art sortiert, die Lösung neben ihrer Klausur</td>
 </tr>
 <tr>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-uebungsblatt-044.png" alt="Übungsblatt auf dem iPad: Abgabe, Status, Links zu Aufgaben und Übung, Knackpunkte und Fragen fürs Tutorium" width="100%"><br><b>Übungsblätter</b><br>Abgabe, Status und deine Fragen fürs Tutorium auf einen Blick</td>
-<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-karteikarten-044.png" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten" width="100%"><br><b>Karteikarten</b><br>Stapel je Modul, gelernt wird direkt in Obsidian, geplant mit dem Verfahren aus Anki</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-noten-044b.png" alt="Noten & ECTS: Gesamtnote, Notenblöcke, ECTS und die Note, die du für deine Zielnote noch brauchst" width="100%"><br><b>Noten & ECTS</b><br>86 Module nach PO 2023, Gesamtnote, ECTS und Zielnote rechnen sich selbst</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-uebungsblatt-044b.png" alt="Übungsblatt auf dem iPad: Abgabe, Status, Links zu Aufgaben und Tutorium, Knackpunkte und Fragen fürs Tutorium" width="100%"><br><b>Übungsblätter</b><br>Abgabe, Status und deine Fragen fürs Tutorium auf einen Blick</td>
+</tr>
+<tr>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-karteikarten-044b.png" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten" width="100%"><br><b>Karteikarten</b><br>Stapel je Modul, gelernt wird direkt in Obsidian, geplant mit dem Verfahren aus Anki</td>
+<td width="50%" align="center" valign="top"><img src="docs/bilder/seite-einstellungen-044b.png" alt="Einstellungen & Hilfe: Verbindungen zu Alma, ILIAS, den zentralen Daten und Updates, darunter die Wahl der Variante" width="100%"><br><b>Einstellungen & Hilfe</b><br>Jede Verbindung sagt in einem Satz, wie es steht; hier wählst du auch Variante und Design</td>
 </tr>
 </table>
 
-<p align="center"><img src="docs/bilder/designs-044.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in den Designs Elfenbein, Flieder und Klar und im Dunkelmodus"><br><b>Drei Designs, hell und dunkel</b><br>Elfenbein, Flieder oder Klar, dazu ein Dunkelmodus. Jedes Gerät wählt für sich.</p>
+<p align="center"><img src="docs/bilder/designs-044b.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in den Designs Elfenbein, Flieder und Klar und im Dunkelmodus"><br><b>Drei Designs, hell und dunkel</b><br>Elfenbein, Flieder oder Klar, dazu ein Dunkelmodus. Jedes Gerät wählt für sich.</p>
 
 ## Woher die Daten kommen
 
