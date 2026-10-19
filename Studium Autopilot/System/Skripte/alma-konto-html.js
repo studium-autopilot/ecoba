@@ -10,6 +10,7 @@
 //   anmeldeFormular(html, basisUrl) → { action, felder: [[name, wert]] } | null   (nur versteckte Felder; Benutzername und
 //       Passwort setzt alma-konto.js erst beim Absenden ein). null, wenn das Formular nicht genau zu Alma passt.
 //   fehler(html) → "zugang-falsch" | "abgelehnt-unklar" | "zwei-faktor" | "zustimmung" | "wartung" | "unerwartet"
+//   stundenplanLink(html) → Abo-Link des Stundenplans (iCalendar) | ""   (Uni-Login, seit 0.4.8; Seite „Stundenplan“)
 //   leistungen(html, basisUrl) → { art: "leer" | "ok" | "zugeklappt" | "unsicher", grund?, zeilen, aufklappen? }
 //   belegungen(html) → { art: "leer" | "ok" | "unsicher", grund?, semester, eintraege }
 //   zuordnen(zeilen, codes) → zeilen mit code     zusammenfassen(zeilen) → { <Code>: { status, note, versuch, semester, datum,
@@ -25,6 +26,10 @@
 //     erfolgreich. …“. Ob ein falsches Passwort eines echten Kontos genauso aussieht, ist ungeprüft.
 //   * Leer: Leistungen ohne Tabelle mit dem Hinweis „Es wurden keine Datensätze gefunden.“; Belegungen ohne Einträge mit „Sie
 //     haben bisher keine Veranstaltungen belegt und keine Prüfungen angemeldet.“; eine gewählte Semesteroption.
+//   * Stundenplan (19.10.2026, angemeldet, Link dabei nicht verändert): Das Fenster „Daten für iCalendar (ics) exportieren“ steht
+//     versteckt in der Seite; der Link (…/individualTimetableCalendarExport.faces?user=…&hash=…&termgroup=, mit „:443“) im Feld
+//     textarea …:ical:cal_add und in dessen data-page-permalink. Im selben Fenster „Sicherheitsmaßnahmen erneuern“: erneuert
+//     den Schlüssel im Link, darum schickt Studium Autopilot dort nie etwas ab.
 //   * Gefüllte Tabellen, englische Texte: noch nicht gesehen. Der Leser folgt dem, was öffentliche HISinOne-Leser beschreiben
 //     (Tabelle treeTableWithIcons, Zeilen treeTableCellLevelN, Werte nach Spaltenkopf oder id-Endung, Art aus img[alt]), und
 //     liefert im Zweifel „unsicher“, nie „leer“ (fail-closed). Bis zum Abgleich mit echten Seiten nur als Beta.
@@ -32,6 +37,7 @@
 //   je Zeile nur Nummer, Ebene, Art, Status, Note, Versuch, Semester, Datum. Titel nur zum Zuordnen, sie bleiben nicht.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const HOST = "alma.uni-tuebingen.de";
+const EXPORT_PFAD = "/alma/pages/cm/exa/timetable/individualTimetableCalendarExport.faces"; // Abo-Link des Stundenplans
 const LEER_LEISTUNGEN = ["Es wurden keine Datensätze gefunden."];
 const LEER_BELEGUNGEN = ["Sie haben bisher keine Veranstaltungen belegt und keine Prüfungen angemeldet."];
 // Anfang der Meldung nach einer abgelehnten Anmeldung (V-A1, 18.10.2026)
@@ -141,6 +147,28 @@ const erzeugen = (H) => {
     if (alle(b, (e) => e.name === "form").length && /zustimm|einverstanden|nutzungsbedingungen|akzeptier|consent|terms of use|i agree/.test(ganz)) return "zustimmung";
     if (/wartung|maintenance|nicht erreichbar|nicht verfügbar|temporarily unavailable/.test(ganz)) return "wartung";
     return "unerwartet";
+  };
+
+  // ---------- Stundenplan: Abo-Link (Uni-Login, uni-login.js) ----------
+  // Nur ein Link nach diesem Muster gilt: https, HOST, Port leer/443, Pfad EXPORT_PFAD, user und hash nicht leer.
+  const exportLink = (roh) => {
+    const s = norm(roh);
+    let u;
+    try { u = new URL(s); } catch (e) { return ""; }
+    if (u.protocol !== "https:" || u.hostname !== HOST || (u.port !== "" && u.port !== "443") || u.username || u.password) return "";
+    if (u.pathname !== EXPORT_PFAD || !u.searchParams.get("user") || !u.searchParams.get("hash")) return "";
+    return s;
+  };
+  // Seite „Stundenplan“ → Abo-Link wie hinter „Link kopieren“ | "". Er steht schon in der Seite, im versteckten Fenster
+  // „Daten für iCalendar (ics) exportieren“: als Text des schreibgeschützten Felds (textarea …:ical:cal_add) und in dessen
+  // data-page-permalink. Zwei verschiedene Links → "" (fail-closed).
+  const stundenplanLink = (html) => {
+    const b = baumVon(html), gefunden = {};
+    for (const e of alle(b, (x) => x.name === "textarea" || !!attr(x, "data-page-permalink"))) {
+      for (const roh of [e.name === "textarea" ? text(e) : "", attr(e, "data-page-permalink")]) { const l = exportLink(roh); if (l) gefunden[l] = true; }
+    }
+    const l = Object.keys(gefunden);
+    return l.length === 1 ? l[0] : "";
   };
 
   // ---------- Leistungen ----------
@@ -378,7 +406,7 @@ const erzeugen = (H) => {
     return z.join("\n");
   };
 
-  return { seite, anmeldeFormular, fehler, leistungen, belegungen, zuordnen, zusammenfassen, pruefungenZuordnen, fingerabdruck,
+  return { seite, anmeldeFormular, fehler, stundenplanLink, leistungen, belegungen, zuordnen, zusammenfassen, pruefungenZuordnen, fingerabdruck,
     semesterName, noteNorm, HOST, ABGESCHLOSSEN };
 };
 

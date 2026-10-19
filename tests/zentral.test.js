@@ -737,3 +737,28 @@ test("Dateinamen nach einer Regel (eba.dateiTitel): Emojis weg, auch in alten Na
   const b2 = await T.Z.abrufen({ manuell: true });
   assert.deepEqual(b2.umbenannt, [], "danach kein Umbenennen mehr");
 });
+
+test("Abruf frisch vom Server: Adresse je Minute und no-cache, 304 noch einmal mit eigenem Zeitstempel", async () => {
+  // GitHub Pages schickt max-age=600: Ohne eigene Adresse kam das Manifest bis zu 10 Min. alt aus dem Zwischenspeicher
+  assert.equal(Z.frischUrl("https://x.example/v1/manifest.json", 3 * 60e3 + 59e3), "https://x.example/v1/manifest.json?t=3");
+  assert.equal(Z.frischUrl("https://x.example/a.json?v=1", 60e3), "https://x.example/a.json?v=1&t=1");
+  assert.deepEqual(Object.assign({}, Z.FRISCH_KOPF), { "Cache-Control": "no-cache" });
+  const anfragen = [];
+  const manifest = JSON.stringify({ schema: 1, erstellt: "2026-10-19T09:41:00Z", dateien: {} });
+  const antwort = (status) => ({ status, arrayBuffer: new TextEncoder().encode(status === 200 ? manifest : "").buffer });
+  let erste = 200;
+  const ZN = laden("zentral", { kontext: { obsidian: { requestUrl: async (p) => { anfragen.push(p); return antwort(anfragen.length === 1 ? erste : 200); } } } }).ctx.zentral;
+  const vorher = Math.floor(Date.now() / 60e3);
+  await ZN.manifestHolen();
+  const nachher = Math.floor(Date.now() / 60e3);
+  assert.equal(anfragen.length, 1);
+  const t = Number(anfragen[0].url.match(/^https:\/\/studium-autopilot\.github\.io\/ecoba-daten\/v1\/manifest\.json\?t=(\d+)$/)[1]);
+  assert.ok(t >= vorher && t <= nachher, "Minute des Abrufs");
+  assert.deepEqual(anfragen[0].headers, { "Cache-Control": "no-cache" });
+  assert.equal(anfragen[0].throw, false);
+  // 304 ohne Inhalt: einmal mit Zeitstempel in ms an der Adresse ohne Minute
+  anfragen.length = 0; erste = 304;
+  await ZN.manifestHolen();
+  assert.equal(anfragen.length, 2);
+  assert.match(anfragen[1].url, /\/manifest\.json\?t=\d{13}$/);
+});

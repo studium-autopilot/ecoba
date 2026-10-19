@@ -65,6 +65,7 @@ function almaServer(o) {
     };
     if (p === "/alma/pages/sul/examAssessment/personExamsReadonly.xhtml") return flow(o.leistungen, o.aufgeklappt || "leistungen-voll");
     if (p === "/alma/pages/cm/exa/enrollment/info/start.xhtml") return flow(o.belegungen);
+    if (p === "/alma/pages/plan/individualTimetable.xhtml") return flow(o.stundenplan || "stundenplan");
     return { status: 404, kopf: {}, text: "" };
   };
   s.posts = () => s.log.filter((x) => x.methode === "POST" && /auth\.login/.test(x.url)).length;
@@ -197,6 +198,80 @@ test("Drossel: eine Anfrage zugleich, Starts mindestens 2 s auseinander (eine An
   for (let i = 1; i < z.length; i++) assert.ok(z[i] - z[i - 1] >= 2000, `Schritt ${i}: ${z[i] - z[i - 1]} ms`);
 });
 
+// ---------- Stundenplan-Link (Uni-Login) ----------
+const ALMA_LINK = "https://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable/individualTimetableCalendarExport.faces"
+  + "?user=00000000-0000-4000-8000-00000000e1a7&hash=0123456789abcdef0123456789abcdef&termgroup=";
+
+test("Stundenplan-Link: anmelden, Seite „Stundenplan“ lesen, abmelden; ohne Beta und Einschalten; Noten & Anmeldungen unberührt", async () => {
+  const g = geraet({ beta: false });
+  assert.deepEqual(await g.m.stundenplanLink(), { art: "ok", link: ALMA_LINK });
+  assert.deepEqual(g.server.log.map((x) => [x.methode, new URL(x.url).pathname]).filter((x) => x[1] !== "/alma/rds" || x[0] === "POST").map((x) => x.join(" ")),
+    ["GET " + START_PFAD, "POST /alma/rds", "GET " + START_PFAD, "GET /alma/pages/plan/individualTimetable.xhtml", "GET /alma/pages/plan/individualTimetable.xhtml", "GET " + START_PFAD]);
+  assert.equal(g.server.posts(), 1);
+  assert.equal(g.server.abmeldungen(), 1);
+  // Das Passwort nur im POST an /alma/rds; nichts wird an die Stundenplan-Seite geschickt („Sicherheitsmaßnahmen erneuern“)
+  const mitGeheim = g.server.log.filter((x) => x.body.indexOf(encodeURIComponent(GEHEIM).replace(/%20/g, "+")) >= 0 || x.body.indexOf(GEHEIM) >= 0);
+  assert.deepEqual(mitGeheim.map((x) => [x.methode, new URL(x.url).pathname]), [["POST", "/alma/rds"]]);
+  assert.ok(!g.server.log.some((x) => x.methode === "POST" && /individualTimetable/.test(x.url)));
+  assert.deepEqual([g.m.lstand().versuch, g.m.lstand().letzter, g.t.text(K.K.STAND), g.m.an()], ["", "", null, ""]);
+  assert.deepEqual(g.meldungen, []);
+});
+
+test("Stundenplan-Link auf iPhone/iPad (requestUrl folgt selbst, keine End-URL); schon angemeldet: kein POST", async () => {
+  const g = geraet({ mobil: true });
+  assert.deepEqual(await g.m.stundenplanLink(), { art: "ok", link: ALMA_LINK });
+  assert.equal(g.server.abmeldungen(), 1);
+  const h = geraet({ server: almaServer({ schonAn: true }) });
+  assert.equal((await h.m.stundenplanLink()).art, "ok");
+  assert.equal(h.server.posts(), 0);
+});
+
+test("Stundenplan-Link: abgelehnt → Marker; ohne Bestätigung durch ILIAS oder nach Ablehnung keine Anfrage; ohne Link → unerwartet", async () => {
+  const g = geraet({ server: almaServer({ geheim: "anders" }) });
+  assert.deepEqual(await g.m.stundenplanLink(), { art: "zugang-falsch", grund: "zugang-falsch" });
+  assert.deepEqual(g.marker, ["alma"]);
+  assert.equal(g.server.abmeldungen(), 0);
+  for (const zugang of [{ bestaetigt: false }, { gesperrt: true }, { benutzer: "" }]) {
+    const h = geraet({ zugang });
+    assert.ok(["wartet-ilias", "abgelehnt", "ohne-zugang"].indexOf((await h.m.stundenplanLink()).art) >= 0);
+    assert.equal(h.server.log.length, 0, JSON.stringify(zugang));
+  }
+  const i = geraet({ server: almaServer({ stundenplan: "nach-anmeldung" }) });
+  assert.deepEqual(await i.m.stundenplanLink(), { art: "unerwartet", grund: "kein-link" });
+  assert.equal(i.server.abmeldungen(), 1);
+});
+
+test("Stundenplan-Link und Lauf von Noten & Anmeldungen nie zugleich (eine Alma-Sitzung); nach einer Bremse keine Anmeldung", async () => {
+  const g = geraet({ server: almaServer({ leistungen: "leistungen-voll", belegungen: "belegungen-voll" }) });
+  await g.m.einschalten();
+  g.u.vor(13 * STUNDE);
+  const n = g.server.log.length;
+  const [b, l] = await Promise.all([g.m.jetztPruefen({ manuell: true }), g.m.stundenplanLink()]);
+  assert.equal(b.art, "ok", JSON.stringify(b));
+  assert.equal(l.art, "ok");
+  // Je Sitzung: Start … Abmelden; die zweite beginnt erst nach dem Abmelden der ersten
+  const wege = g.server.log.slice(n).map((x) => (/auth\.logout/.test(x.url) ? "ab" : /auth\.login/.test(x.url) ? "an" : ""));
+  const erstesAb = wege.indexOf("ab"), zweitesAn = wege.lastIndexOf("an");
+  assert.ok(erstesAb >= 0 && zweitesAn > erstesAb, wege.join(","));
+  assert.equal(g.server.abmeldungen(), 3);
+  // Alma hat gebremst (Stopp für den Tag): der Link-Abruf meldet sich bis dahin nicht an
+  const h = geraet({ server: almaServer({ stoerung: ({ p }) => (p === START_PFAD ? { status: 429, kopf: {}, text: "" } : null) }) });
+  await h.m.einschalten();
+  assert.equal(h.m.lstand().pauseBis > "", true);
+  const vorher = h.server.log.length;
+  assert.deepEqual(await h.m.stundenplanLink(), { art: "stopp", grund: "pause" });
+  assert.equal(h.server.log.length, vorher);
+});
+
+test("Stundenplan-Link: zwei Aufrufe zugleich teilen einen Abruf", async () => {
+  const g = geraet();
+  const [a, b] = await Promise.all([g.m.stundenplanLink(), g.m.stundenplanLink()]);
+  assert.deepEqual(a, b);
+  assert.equal(g.server.posts(), 1);
+  assert.equal((await g.m.stundenplanLink()).art, "ok");
+  assert.equal(g.server.posts(), 2, "danach ein neuer Abruf");
+});
+
 // ---------- Uni-Zugang ----------
 
 test("Abgelehnt (bekannte Meldung): Marker über ILIAS, kein zweiter Versuch, kein Abmelden, nichts geschrieben", async () => {
@@ -207,7 +282,7 @@ test("Abgelehnt (bekannte Meldung): Marker über ILIAS, kein zweiter Versuch, ke
   assert.equal(g.server.posts(), 1);
   assert.equal(g.server.abmeldungen(), 0);
   assert.equal(g.t.text(K.K.STAND), null);
-  assert.deepEqual(g.meldungen, ["Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden."]);
+  assert.deepEqual(g.meldungen, ["Alma hat dein Passwort abgelehnt. Bitte deinen Uni-Login neu eingeben."]);
   // Der Marker kommt (über ILIAS) zurück: kein Versuch mehr, auch nicht per Knopf
   g.zugang.gesperrt = true; g.zugang.bestaetigt = false;
   g.u.vor(13 * STUNDE);

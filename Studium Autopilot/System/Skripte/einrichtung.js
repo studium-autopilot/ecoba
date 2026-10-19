@@ -1,18 +1,22 @@
-// Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit acht Bildschirmen:
-//   1 Willkommen · 2 Studienbeginn · 3 Variante · 4 Über dich (Name, Zielnote) · 5 Alma verbinden · 6 ILIAS verbinden
-//   (seit 0.4.0, freiwillig) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu das Design als
-//   drei Vorschau-Kacheln ohne Namen; darstellung.js) · 8 Fertig
-// Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 7“ mit Punkten (ab Bildschirm 2);
-// Zurück jederzeit, Überspringen auf 2–6 (die Darstellung hat immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
+// Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit sieben Bildschirmen:
+//   1 Willkommen · 2 Studienbeginn · 3 Variante · 4 Über dich (Name, Zielnote) · 5 Dein Uni-Login (seit 0.4.8, freiwillig:
+//   verbindet ILIAS-Unterlagen, ILIAS-Kalender und Alma-Stundenplan auf einmal, uni-login.js; bis 0.4.7 je ein Bildschirm für
+//   Alma mit kopiertem Link und für ILIAS) · 6 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu
+//   das Design als drei Vorschau-Kacheln ohne Namen; darstellung.js) · 7 Fertig
+// Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 6“ mit Punkten (ab Bildschirm 2);
+// Zurück jederzeit, Überspringen auf 2–5 (die Darstellung hat immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
 // beenden ohne Verlust (Gespeichertes bleibt, nichts wird geschrieben; Darstellung und Design gelten sofort beim Antippen und
 // bleiben, sie stehen nur auf diesem Gerät, nicht in den Einstellungen); kein Autofokus (auf dem iPhone spränge sonst die
 // Tastatur auf); Tippflächen mindestens 44 px; auf dem iPhone bildschirmfüllend (eba-core.css Abschnitt 45).
 //
 // Zustand im synchronisierten System/Einstellungen.md (gilt für alle Geräte):
 //   einrichtung: offen | laeuft | fertig      (leer = offen)
-//   einrichtung_schritt: 1–8                  Bildschirm, an dem es beim nächsten Start weitergeht (0.3.x: Fertig war 6,
-//                                             0.4.x: Fertig war 7; beides ist mit „fertig“ gespeichert)
-//   einrichtung_uebersprungen: [studienbeginn, variante, angaben, alma, ilias]   was übersprungen wurde (Fertig: „Später nachholen“)
+//   einrichtung_schritt: 1–7                  Bildschirm, an dem es beim nächsten Start weitergeht
+//   einrichtung_fassung: 2                    Zählung der Bildschirme (seit 0.4.8, bei jedem Speichern geschrieben). Fehlt sie,
+//                                             stammt der Schritt aus 0.4.7 oder früher (5 Alma, 6 ILIAS, 7 Darstellung, 8 Fertig;
+//                                             0.3.x: Fertig war 6, 0.4.0–0.4.4: 7) und zustand() rechnet ihn um (ab 6 eins weniger).
+//   einrichtung_uebersprungen: [studienbeginn, variante, angaben, uni]   was übersprungen wurde (Fertig: „Später nachholen“);
+//                                             alma und ilias stammen aus Einrichtungen bis 0.4.7 und gelten weiter
 // Geschrieben wird nur nach einem Tipp auf Weiter/Überspringen/Los geht’s (Antworten sofort, kein Verlust beim Abbrechen).
 //
 // Automatisch (start(), nur beim App-Start, höchstens einmal je App-Sitzung): erst wenn der metadataCache fertig ist und das
@@ -21,9 +25,9 @@
 // dabei wird nichts geschrieben. Kommt per Sync während des Willkommens-Bildschirms „fertig“ oder ein Name an, schließt das
 // Fenster von selbst (zweites Gerät).
 //
-// Schloss (verbindungen.js): ctx.einrichtung.almaOffen() = Einrichtung nicht fertig ODER Alma übersprungen.
-//   iliasOffen() ebenso für ILIAS, dazu: fertig mit einrichtung_schritt ≤ 6 (Einrichtung aus 0.3.x ohne ILIAS-Schritt; so ein
-//   Tresor sieht die Einrichtung nicht noch einmal, sondern das Schloss auf der Seite Unterlagen).
+// Schloss (verbindungen.js): ctx.einrichtung.almaOffen() = Einrichtung nicht fertig ODER Uni-Login (bzw. bis 0.4.7 Alma)
+//   übersprungen. iliasOffen() ebenso für ILIAS, dazu: fertig ohne Fassung mit gespeichertem Schritt ≤ 6 (Einrichtung aus 0.3.x
+//   ohne ILIAS-Schritt; so ein Tresor sieht die Einrichtung nicht noch einmal, sondern das Schloss auf der Seite Unterlagen).
 // Aktion/Befehl „einrichtung“ (Parameter ab=2: ab Studienbeginn, vorausgefüllt; Knopf in Einstellungen & Hilfe).
 // Für Tests: ctx.einrichtung = { zustand, eingerichtet, sollZeigen, almaOffen, iliasOffen, oeffnen, automatisch, fenster, … };
 // das Fenster hat weiter(), ueberspringen(), zurueck(), schritt und felder.
@@ -33,10 +37,13 @@ module.exports = function (ctx) {
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const DASHBOARD = "Dashboard.md";
   const SITZUNG = "eba-einrichtung-gezeigt"; // sessionStorage: in dieser App-Sitzung schon automatisch gezeigt
-  const LETZTER = 8;
-  const ILIAS = 6; // Bildschirm ILIAS verbinden
-  const DARSTELLUNG = 7; // Bildschirm Darstellung
-  const PUNKT = { 2: "studienbeginn", 3: "variante", 4: "angaben", 5: "alma", 6: "ilias" }; // Schlüssel für einrichtung_uebersprungen
+  const LETZTER = 7;
+  const UNI = 5; // Bildschirm Dein Uni-Login
+  const DARSTELLUNG = 6; // Bildschirm Darstellung
+  const FASSUNG = 2; // Zählung der Bildschirme seit 0.4.8 (einrichtung_fassung); ohne Feld: Zählung bis 0.4.7 (acht Bildschirme)
+  const ALT_MAX = 8; // höchster gespeicherter Schritt der alten Zählung (0.4.5–0.4.7: Fertig war 8)
+  const OHNE_ILIAS_BIS = 6; // fertig ohne Fassung bei Schritt ≤ 6: Einrichtung aus 0.3.x, damals ohne ILIAS-Schritt
+  const PUNKT = { 2: "studienbeginn", 3: "variante", 4: "angaben", 5: "uni" }; // Schlüssel für einrichtung_uebersprungen
   // Variante: Werte, Reihenfolge und Wörter aus dem Feld-Register (felder.js), gleich wie Formular und Zeilen „Variante“. Erst bei
   // Bedarf gelesen: Kommt ein Update über den Sync, kann einrichtung.js vor felder.js ankommen
   const varianten = () => { const FV = ctx.user.felder.VARIANTE; return FV.werte.map((w) => ({ wert: w, titel: FV.titel[w], text: FV.kurz[w] })); };
@@ -54,13 +61,17 @@ module.exports = function (ctx) {
   const liste = (x) => (Array.isArray(x) ? x : txt(x) ? [x] : []).map((s) => txt(s).toLowerCase()).filter(Boolean);
   const P = () => ctx.personalisieren || null;
   const V = (id) => (ctx.verbindungen && ctx.verbindungen.holen ? ctx.verbindungen.holen(id || "alma") : null);
+  // Uni-Login (uni-login.js, Bibliothek): verbindet nach der Anmeldung ILIAS-Kalender und Alma mit
+  const uni = () => { const f = ctx.user && ctx.user["uni-login"]; try { return typeof f === "function" ? f(ctx) : null; } catch (e) { return null; } };
   const pause = (ms) => new Promise((r) => ctx.zeit(r, ms));
 
   // ---------- Zustand ----------
   const zustand = () => {
     const fm = fmVon(), e = txt(fm.einrichtung).toLowerCase();
-    const s = Math.round(Number(fm.einrichtung_schritt) || 0);
-    return { status: e === "fertig" || e === "laeuft" ? e : "offen", schritt: s >= 1 && s <= LETZTER ? s : 0, uebersprungen: liste(fm.einrichtung_uebersprungen) };
+    const roh = Math.round(Number(fm.einrichtung_schritt) || 0), fassung = Math.round(Number(fm.einrichtung_fassung) || 0);
+    // Alte Zählung (bis 0.4.7): 5 Alma → 5 Uni-Login, 6 ILIAS → 5 Uni-Login, 7 Darstellung → 6, 8 Fertig → 7
+    const s = fassung >= FASSUNG ? (roh >= 1 && roh <= LETZTER ? roh : 0) : roh >= 1 && roh <= ALT_MAX ? (roh >= 6 ? roh - 1 : roh) : 0;
+    return { status: e === "fertig" || e === "laeuft" ? e : "offen", schritt: s, roh, fassung, uebersprungen: liste(fm.einrichtung_uebersprungen) };
   };
   const stundenplanDa = () => app.vault.getMarkdownFiles().some((f) => f.path.indexOf("Stundenplan/") === 0);
   // Offensichtlich schon eingerichtet (z. B. 0.2.0 mit Angaben, oder Stundenplan per Sync): Name oder Studienbeginn oder Stundenplan
@@ -72,10 +83,12 @@ module.exports = function (ctx) {
     if (z.status === "laeuft") return true;
     return !eingerichtet();
   };
-  // Schloss für Alma (verbindungen.js): solange die Einrichtung nicht fertig ist oder Alma dort übersprungen wurde
-  const almaOffen = () => { const z = zustand(); return z.status !== "fertig" || z.uebersprungen.indexOf("alma") >= 0; };
+  // Schloss für Alma (verbindungen.js): solange die Einrichtung nicht fertig ist oder der Uni-Login (bis 0.4.7: Alma) dort
+  // übersprungen wurde
+  const uebersprungen = (z, p) => z.uebersprungen.indexOf(p) >= 0;
+  const almaOffen = () => { const z = zustand(); return z.status !== "fertig" || uebersprungen(z, "uni") || uebersprungen(z, "alma"); };
   // Schloss für ILIAS: ebenso, und wenn die Einrichtung vor 0.4.0 fertig wurde (nie bis hinter den ILIAS-Bildschirm gekommen)
-  const iliasOffen = () => { const z = zustand(); return z.status !== "fertig" || z.uebersprungen.indexOf("ilias") >= 0 || z.schritt <= ILIAS; };
+  const iliasOffen = () => { const z = zustand(); return z.status !== "fertig" || uebersprungen(z, "uni") || uebersprungen(z, "ilias") || (z.fassung < FASSUNG && z.roh <= OHNE_ILIAS_BIS); };
 
   const schreiben = async (werte) => {
     const f = datei();
@@ -106,6 +119,9 @@ module.exports = function (ctx) {
       this.automatisch = !!o.automatisch;
       this.fertigGewesen = z.status === "fertig"; // „erneut starten“: Status bleibt fertig
       this.uebersprungen = z.uebersprungen.slice();
+      // Einrichtung aus 0.3.x (fertig ohne Fassung bei Schritt ≤ 6, nie ein ILIAS-Bildschirm): gilt als Uni-Login übersprungen, damit
+      // das Schloss auf Unterlagen bleibt, auch wenn ein erneuter Start vor Bildschirm 5 endet (mit Fassung entfiele die Erkennung)
+      if (z.status === "fertig" && z.fassung < FASSUNG && z.roh <= OHNE_ILIAS_BIS && this.uebersprungen.indexOf("uni") < 0) this.uebersprungen.push("uni");
       const heute = ctx.modell ? ctx.modell.daten().heute : "";
       const jetzt = heute ? ctx.modell.semesterNachName(ctx.modell.semesterAusDatum(heute)) : null;
       this.werte = {
@@ -115,8 +131,7 @@ module.exports = function (ctx) {
         zielnote: entwurf.zielnote != null ? entwurf.zielnote : txt(fm.zielnote),
       };
       this.gespeichert = {}; // in diesem Fenster geschriebene Antworten (der metadataCache kommt kurz danach)
-      this.alma = null; // Ergebnis des Verbindens in diesem Fenster ({ text })
-      this.ilias = null; // ebenso für ILIAS ({ kurse, laedt: erster Abruf gestartet })
+      this.uni = null; // Ergebnis des Uni-Logins in diesem Fenster ({ kurse, laedt: erster Abruf gestartet, weitere: uni-login.js alleVerbinden })
       this.felder = {};
       this.laeuft = false;
     }
@@ -144,12 +159,15 @@ module.exports = function (ctx) {
         const i = this.uebersprungen.indexOf(punkt);
         if (uebersprungen && i < 0) this.uebersprungen.push(punkt);
         if (!uebersprungen && i >= 0) this.uebersprungen.splice(i, 1);
+        // Uni-Login erledigt: auch übersprungenes Alma und ILIAS aus 0.4.7 und früher
+        if (punkt === "uni" && !uebersprungen) this.uebersprungen = this.uebersprungen.filter((p) => p !== "alma" && p !== "ilias");
       }
       const naechster = Math.min(LETZTER, this.schritt + 1);
       if (naechster === LETZTER) this.fertigGewesen = true;
       const werte = Object.assign({}, daten || {}, {
         einrichtung: this.fertigGewesen ? "fertig" : "laeuft",
         einrichtung_schritt: naechster,
+        einrichtung_fassung: FASSUNG,
         einrichtung_uebersprungen: PUNKT_REIHE.filter((p) => this.uebersprungen.indexOf(p) >= 0),
       });
       this.laeuft = true;
@@ -299,78 +317,67 @@ module.exports = function (ctx) {
         return;
       }
 
-      if (s === 5) {
-        const v = V();
-        const st = v ? v.status() : { verbunden: false, daten: 0, extern: false };
-        // Verbunden, Stundenplan schon da oder eigener Uni-Abgleich (bringt ihn selbst; dort nie verbinden): ein Satz, Weiter
-        if (this.alma || st.verbunden || st.daten || st.extern) {
-          titel(st.extern ? "Stundenplan" : "Stundenplan aus Alma", "");
-          const ok = haupt.createDiv({ cls: "eba-ei-erfolg" });
-          ok.innerHTML = svg("haken");
-          ok.createSpan({ text: st.extern ? ctx.verbindungen.ALMA_EXTERN : this.alma ? `Verbunden – ${this.alma.text}` : st.verbunden ? "Alma ist auf diesem Gerät verbunden." : "Dein Stundenplan ist schon da." });
+      if (s === UNI) {
+        const v = V("ilias"), I = ctx.ilias, U = uni();
+        const st = v ? v.status() : { verbunden: false, extern: false };
+        const almaSt = V() ? V().status() : { extern: false };
+        const ohne = !v || !I || st.text === I.K.TEXT_ANMELDUNG_FOLGT || !I.kannSpeichern();
+        titel("Dein Uni-Login", "");
+        // Ergebnis in Zeilen: ✓ verbunden, sonst leise mit dem Grund
+        const zeilen = (liste) => {
+          for (const z of liste) {
+            const el = haupt.createDiv({ cls: "eba-ei-erfolg" + (z.ok ? "" : " leise") });
+            if (z.ok) el.innerHTML = svg("haken");
+            el.createSpan({ text: z.text });
+          }
+        };
+        const weitereZeilen = (w) => (U && w ? U.QUELLEN.filter((id) => w[id]).map((id) => ({ ok: w[id].ok, text: U.zeile(id, w[id]) })) : []);
+        // ILIAS-Kalender und Alma mit dem Uni-Login verbinden (uni-login.js); meldung nennt den Schritt
+        const weitere = (meldung) => (U ? U.alleVerbinden({ schritt: (id) => meldung.setText(id === "alma" ? "Hole deinen Stundenplan aus Alma …" : "Verbinde deinen ILIAS-Kalender …") }) : Promise.resolve({}));
+        const weiterKnopf = () => {
           this.aktion = () => this.speichernUndWeiter(null, false);
           unten();
           knopf("Weiter", "haupt", () => this.weiter());
+        };
+        if (this.uni) {
+          const n = this.uni.kurse;
+          const ilias = n == null ? [] : [{ ok: true, text: `ILIAS-Unterlagen verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden` : ""}. ${this.uni.laedt ? "Deine Dateien werden jetzt geladen." : "Deine Dateien kommen von selbst."}` }];
+          zeilen(ilias.concat(weitereZeilen(this.uni.weitere)));
+          weiterKnopf();
           return;
         }
-        // Mit zentralem Stundenplan (zentral.js) ist Alma freiwillig: anderer Satz, „Ohne Alma weiter“ statt „Überspringen“
-        let zentral = false;
-        try { zentral = !!(ctx.zentral && ctx.zentral.stundenplan && ctx.zentral.stundenplan().verfuegbar); } catch (e) { zentral = false; }
-        titel("Stundenplan aus Alma", zentral ? "Deine Vorlesungen kommen von selbst, deine Übungsgruppe meist aus ILIAS, sobald du es verbindest. Alma brauchst du nur für Extras." : "Verbinde Alma, dann siehst du hier deine Woche.");
-        const ol = haupt.createEl("ol", { cls: "eba-ei-schritte" });
-        // Links wie im Fenster unter Verbindungen (ctx.verbindungen.ALMA); ohne verbindungen.js der Weg durchs Menü
-        const A = ctx.verbindungen && ctx.verbindungen.ALMA;
-        const erst = A ? `[Alma](${A.start}) öffnen und anmelden, dann [deinen Stundenplan](${A.stundenplan}) öffnen.` : "In **Alma** anmelden, dann **Mein Studium** → **Stundenplan**.";
-        for (const t of [erst, "**Daten für iCalendar (ics) exportieren** → **Link kopieren**.", "Link hier einfügen."]) fett(ol.createEl("li"), t);
-        const feld = haupt.createEl("input", { type: "text", cls: "eba-ei-eingabe", attr: { inputmode: "url", placeholder: "Link hier einfügen", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Alma-Link", enterkeyhint: "go" } });
-        const meldung = haupt.createEl("p", { cls: "eba-ei-meldung" });
-        if (v && v.erklaerung) haupt.createEl("p", { cls: "eba-ei-hilfe", text: v.erklaerung });
-        feld.addEventListener("input", () => { if (meldung.hasClass("fehler")) { meldung.setText(""); meldung.removeClass("fehler"); } });
-        this.felder.link = feld; this.felder.meldung = meldung;
-        let los = null;
-        this.aktion = async () => {
-          if (this.laeuft) return false;
-          if (!v) return this.speichernUndWeiter(null, true);
-          const link = feld.value.trim();
-          const fehler = v.pruefen ? v.pruefen(link) : "";
-          if (fehler) { meldung.setText(fehler); meldung.addClass("fehler"); return false; }
-          this.laeuft = true; los.disabled = true; los.setText("Verbinde …"); meldung.removeClass("fehler"); meldung.setText("Stundenplan wird geholt …");
-          let r;
-          try { r = await v.verbinden(link); } catch (e) { r = { ok: false, fehler: (e && e.message) || String(e) }; }
-          this.laeuft = false;
-          if (!r || !r.ok) { los.disabled = false; los.setText("Verbinden"); meldung.setText((r && r.fehler) || "Das hat nicht geklappt. Bitte noch einmal versuchen."); meldung.addClass("fehler"); return false; }
-          this.alma = { text: r.text || "" };
-          if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen();
-          this.zeigen();
-          return true;
-        };
-        feld.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); this.weiter(); } });
-        unten();
-        knopf(zentral ? "Ohne Alma weiter" : "Überspringen", "leise", () => this.ueberspringen());
-        los = knopf("Verbinden", "haupt", () => this.weiter());
-        return;
-      }
-
-      if (s === ILIAS) {
-        const v = V("ilias"), I = ctx.ilias;
-        const st = v ? v.status() : { verbunden: false, daten: 0, extern: false };
-        const ohne = !v || !I || st.extern || st.text === I.K.TEXT_ANMELDUNG_FOLGT || !I.kannSpeichern();
-        titel(st.extern ? "Unterlagen" : "Unterlagen aus ILIAS", "");
-        if (this.ilias || st.verbunden || ohne) {
-          // Verbunden oder hier nicht möglich (eigener Uni-Abgleich, Obsidian zu alt, Anmeldebaustein fehlt): ein Satz, Weiter
-          const n = this.ilias ? this.ilias.kurse : 0;
-          const gut = !!(this.ilias || st.verbunden || st.extern);
-          const text = this.ilias ? `Verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden` : ""}. ${this.ilias.laedt ? "Deine Dateien werden jetzt geladen." : "Deine Dateien kommen von selbst."}`
-            : st.verbunden ? "ILIAS ist auf diesem Gerät verbunden."
-              : st.extern ? I.K.TEXT_EXTERN
-                : !I || !v || st.text === I.K.TEXT_ANMELDUNG_FOLGT ? "Das geht in dieser Version noch nicht."
-                  : "Dafür braucht Obsidian Version 1.11.4 oder neuer.";
-          const ok = haupt.createDiv({ cls: "eba-ei-erfolg" + (gut ? "" : " leise") });
-          if (gut) ok.innerHTML = svg("haken");
-          ok.createSpan({ text });
-          this.aktion = () => this.speichernUndWeiter(null, false);
+        // Eigener Uni-Abgleich (Unterlagen von außen) oder hier nicht möglich (Obsidian zu alt, Anmeldebaustein fehlt): ein Satz, Weiter
+        if (st.extern || ohne) {
+          const saetze = st.extern ? [I.K.TEXT_EXTERN].concat(almaSt.extern && ctx.verbindungen ? [ctx.verbindungen.ALMA_EXTERN] : [])
+            : [!I || !v || st.text === I.K.TEXT_ANMELDUNG_FOLGT ? "Das geht in dieser Version noch nicht." : "Dafür braucht Obsidian Version 1.11.4 oder neuer."];
+          zeilen(saetze.map((t) => ({ ok: !!st.extern, text: t })));
+          weiterKnopf();
+          return;
+        }
+        // Schon auf diesem Gerät gespeichert: was noch fehlt (Kalender, Alma), verbindet ein Tipp ohne Passwort
+        if (st.verbunden) {
+          const offen = U ? U.moeglich() : [];
+          zeilen([{ ok: true, text: "Dein Uni-Login ist auf diesem Gerät gespeichert." }]);
+          if (!offen.length) { weiterKnopf(); return; }
+          const wo = offen.map((id) => (id === "alma" ? "Alma" : "ILIAS")).join(" und ");
+          haupt.createEl("p", { cls: "eba-ei-hilfe", text: `Noch nicht verbunden: ${offen.map((id) => U.NAME[id]).join(" und ")}. Dafür meldet sich Studium Autopilot mit deinem Uni-Login bei ${wo} an.` });
+          const meldung = haupt.createEl("p", { cls: "eba-ei-meldung" });
+          let los = null;
+          this.aktion = async () => {
+            if (this.laeuft) return false;
+            this.laeuft = true; los.disabled = true; los.setText("Verbinde …");
+            U.zustimmen(offen);
+            let w = {};
+            try { w = await weitere(meldung); } catch (e) { w = {}; }
+            this.laeuft = false;
+            this.uni = { kurse: null, laedt: false, weitere: w };
+            if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen();
+            if (fenster === this && this.schritt === UNI) this.zeigen();
+            return true;
+          };
           unten();
-          knopf("Weiter", "haupt", () => this.weiter());
+          knopf("Überspringen", "leise", () => this.ueberspringen());
+          los = knopf("Verbinden", "haupt", () => this.weiter());
           return;
         }
         fett(haupt.createEl("p", { cls: "eba-ei-satz" }), v.kurz);
@@ -388,7 +395,8 @@ module.exports = function (ctx) {
         geheimFeld.addEventListener("input", leeren);
         this.felder.benutzer = benutzer; this.felder.geheimFeld = geheimFeld; this.felder.meldung = meldung;
         let los = null;
-        // Wie im Fenster unter Verbindungen (verbindungen.js): prüfen, nur bei Erfolg speichern, das Feld danach immer leeren
+        // Wie im Fenster unter Verbindungen (verbindungen.js): prüfen, nur bei Erfolg speichern, das Feld danach immer leeren; dann
+        // Kurse lesen (erster Abruf im Hintergrund) und ILIAS-Kalender und Alma mit verbinden (uni-login.js)
         this.aktion = async () => {
           if (this.laeuft) return false;
           const name = benutzer.value.trim();
@@ -400,16 +408,20 @@ module.exports = function (ctx) {
           try { r = await I.zugangSpeichern(name, () => geheimFeld.value, { pruefen: true }); } catch (e) { r = null; }
           geheimFeld.value = "";
           if (!r || !r.ok) { this.laeuft = false; los.disabled = false; los.setText("Verbinden"); return fehler((r && r.fehler) || "Das hat nicht geklappt. Bitte noch einmal versuchen."); }
+          // Zustimmung nur für das, was der Satz über den Feldern nannte (ältere Registry ohne uniQuellen: für nichts)
+          if (U) U.zustimmen(v && Array.isArray(v.uniQuellen) ? v.uniQuellen : []);
           meldung.setText("Lese deine Kurse …");
           let liste = null;
           try { liste = await I.kurseAbrufen(); } catch (e) { liste = null; }
-          this.laeuft = false;
           // erster Abruf gleich, im Hintergrund (Hinweis mit Fortschritt, wie Jetzt holen), wenn ein Kurs an ist
           const laedt = Array.isArray(liste) && liste.some((k) => k.aktiv);
-          this.ilias = { kurse: Array.isArray(liste) ? liste.length : 0, laedt };
           if (laedt) I.jetztHolen().catch(() => null);
+          let w = {};
+          try { w = await weitere(meldung); } catch (e) { w = {}; }
+          this.laeuft = false;
+          this.uni = { kurse: Array.isArray(liste) ? liste.length : 0, laedt, weitere: w };
           if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen();
-          if (fenster === this && this.schritt === ILIAS) this.zeigen();
+          if (fenster === this && this.schritt === UNI) this.zeigen();
           return true;
         };
         benutzer.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); geheimFeld.focus(); } });
@@ -461,19 +473,24 @@ module.exports = function (ctx) {
       const vi = V("ilias"), si = vi ? vi.status() : { verbunden: false, extern: false };
       if (si.extern) zeile("Unterlagen", "über deinen Uni-Abgleich");
       else if (si.verbunden) zeile("Unterlagen", "ILIAS verbunden");
+      const vk = V("ilias-kalender"), sk = vk && ctx.iliasKalender ? vk.status() : { verbunden: false, extern: false };
+      if (sk.extern) zeile("Abgaben", "über deinen Uni-Abgleich");
+      else if (sk.verbunden) zeile("Abgaben", "ILIAS-Kalender verbunden");
       const dm = ctx.darstellung ? ctx.darstellung.MODI.find((m) => m.wert === ctx.darstellung.modus()) : null;
       if (dm) zeile("Darstellung", dm.titel);
-      // Übersprungenes: „Später nachholen“ mit Knopf (springt zu dem Bildschirm)
-      const NACH = { studienbeginn: [2, "Studienbeginn"], variante: [3, "Variante"], angaben: [4, "Über dich"], alma: [5, "Alma-Stundenplan"], ilias: [ILIAS, "ILIAS-Unterlagen"] };
-      const erledigt = (p) => (p === "alma" && (st.verbunden || st.daten || st.extern || zentral)) || (p === "ilias" && (si.verbunden || si.extern));
-      const offen = PUNKT_REIHE.filter((p) => this.uebersprungen.indexOf(p) >= 0 && !erledigt(p));
+      // Übersprungenes: „Später nachholen“ mit Knopf (springt zu dem Bildschirm); Alma oder ILIAS aus 0.4.7 und früher holt der
+      // Uni-Login nach (erledigt, sobald ILIAS hier verbunden ist oder die Unterlagen von außen kommen)
+      const NACH = { studienbeginn: [2, "Studienbeginn"], variante: [3, "Variante"], angaben: [4, "Über dich"], uni: [UNI, "Uni-Login"] };
+      const ueber = this.uebersprungen.map((p) => (p === "alma" || p === "ilias" ? "uni" : p));
+      const erledigt = (p) => p === "uni" && (si.verbunden || si.extern);
+      const offen = Object.keys(NACH).filter((p) => ueber.indexOf(p) >= 0 && !erledigt(p));
       if (offen.length) {
         const box = haupt.createDiv({ cls: "eba-ei-nachholen" });
         box.createEl("p", { cls: "eba-ei-nachholen-titel", text: "Später nachholen" });
         for (const p of offen) {
           const z = box.createDiv({ cls: "eba-ei-nachholen-zeile" });
           z.createSpan({ text: NACH[p][1] });
-          const b = z.createEl("button", { cls: "eba-ei-knopf klein", text: p === "alma" || p === "ilias" ? "Verbinden" : "Nachholen" });
+          const b = z.createEl("button", { cls: "eba-ei-knopf klein", text: p === "uni" ? "Verbinden" : "Nachholen" });
           b.addEventListener("click", () => this.gehe(NACH[p][0]));
         }
       }
@@ -482,7 +499,7 @@ module.exports = function (ctx) {
       knopf("Fertig", "haupt", () => this.weiter());
     }
   }
-  const PUNKT_REIHE = ["studienbeginn", "variante", "angaben", "alma", "ilias"];
+  const PUNKT_REIHE = ["studienbeginn", "variante", "angaben", "uni", "alma", "ilias"]; // alma, ilias: aus 0.4.7 und früher
 
   let fenster = null;
   // Öffnen: ab = 2 (Einstellungen: „Einrichtung erneut starten“, vorausgefüllt); sonst am gespeicherten Schritt bzw. Willkommen
@@ -512,7 +529,7 @@ module.exports = function (ctx) {
   const dashboardSteht = () => app.workspace.getLeavesOfType("markdown").some((l) => l.view && l.view.file && l.view.file.path === DASHBOARD
     && l.view.containerEl && l.view.containerEl.querySelector(".markdown-preview-section > div, .cm-content"));
 
-  ctx.einrichtung = { zustand, eingerichtet, sollZeigen, almaOffen, iliasOffen, oeffnen, automatisch, sitzungMerken, SITZUNG,
+  ctx.einrichtung = { zustand, eingerichtet, sollZeigen, almaOffen, iliasOffen, oeffnen, automatisch, sitzungMerken, SITZUNG, FASSUNG,
     get VARIANTEN() { return varianten(); }, get fenster() { return fenster; } };
 
   const registrieren = () => {

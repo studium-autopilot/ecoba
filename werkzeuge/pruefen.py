@@ -112,6 +112,7 @@ BILD_ORDNER = "docs/bilder/"
 TRESOR_DATEIEN = [
     (re.compile(r"/System/Daten/alma-konto[^/]*\.json$"), "persönliche Daten (Noten aus Alma)"),
     (re.compile(r"/System/Daten/uni-zugang\.json$"), "vaultlokale Datei (Uni-Zugang)"),
+    (re.compile(r"/System/Daten/update\.json$"), "vaultlokale Datei (Update-Stand)"),
     (re.compile(r"/System/Daten/volltext-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
     (re.compile(r"/System/Daten/alma-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
     (re.compile(r"/System/Daten/ilias-kalender[^/]*\.json$"), "vaultlokale Datei (ILIAS-Kalender)"),

@@ -1,6 +1,6 @@
 ---
 name: studium-autopilot
-description: Liest und schreibt im Obsidian-Tresor „Studium Autopilot“ (B.Sc. EcoBA, Uni Tübingen) nach dessen Regeln – Termine, Fristen, Prüfungen, Module, Unterlagen und PDFs, To-dos, Vorlesungsnotizen, Karteikarten. Verwenden für Fragen wie „Was steht diese Woche an?“, „Fass die Folien zusammen“, „Leg einen Termin an“, „Mach Karteikarten zu Kapitel 3“ oder „Das ist kaputt, melde das“, sobald Claude im Tresor-Ordner arbeitet.
+description: Liest und schreibt im Obsidian-Tresor „Studium Autopilot“ (B.Sc. EcoBA, Uni Tübingen) nach dessen Regeln – Termine, Fristen, Prüfungen, Module, Unterlagen und PDFs, To-dos, Vorlesungsnotizen, Karteikarten. Verwenden für Fragen wie „Was steht diese Woche an?“, „Fass die Folien zusammen“, „Mach eine Lesefassung der Folien“, „Leg einen Termin an“, „Mach Karteikarten zu Kapitel 3“ oder „Das ist kaputt, melde das“, sobald Claude im Tresor-Ordner arbeitet.
 ---
 
 # Studium Autopilot: Daten aus und in Obsidian
@@ -16,6 +16,7 @@ Schnittstelle dazwischen; du liest und schreibst die Markdown-Dateien direkt. Ob
 | Karte: Ordner, Notizarten, Felder, Namen | immer zuerst | [tresor.md](tresor.md) |
 | Daten aus Obsidian holen | Fragen nach Terminen, Prüfungen, Noten, Unterlagen, To-dos | [lesen.md](lesen.md) |
 | Daten in Obsidian schreiben | neue Notizen, Zusammenfassungen, To-dos, Karteikarten | [schreiben.md](schreiben.md) |
+| Lesefassung von Folien | „Mach eine Lesefassung“, „Die Folien als Text“ | [lesefassung.md](lesefassung.md) |
 | Fehler an den Autor melden | etwas geht nicht, ein zentraler Termin stimmt nicht, eine Idee | [fehler-melden.md](fehler-melden.md) |
 
 ## Grundregeln

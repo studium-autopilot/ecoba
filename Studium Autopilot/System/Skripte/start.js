@@ -6,7 +6,7 @@
 //     Leseansicht, ohne Sperre (zuerstLesen, seit 19.10.2026).
 //  3. Seitenklasse aus dem Feld `typ` an die Ansicht hängen (Gestaltung auch für Notizen ohne `cssclasses`), dazu eba-notiz an jeder
 //     Notiz des Plugins.
-//  4. Optional, nur iPhone: Kapitel der Folien-Notizen beim ersten Öffnen zuklappen.
+//  4. Optional, alle Geräte: Kapitel der Folien-Notizen beim ersten Öffnen zuklappen, ein Tipp auf die Kapitelzeile klappt auf.
 //  5. Experimentell: Höhenmessung der Leseansicht korrigieren (Leerraum am Seitenende).
 // (Erweiterungen laden und Hot-Reload macht das Plugin selbst; die Agenda ist jetzt der Codeblock ```eba-agenda```,
 // System/Skripte/termine.js, und schreibt keine Datei mehr.)
@@ -15,7 +15,6 @@
 // Kein Node-API, keine Lookbehind-Regex (iOS).
 module.exports = function (ctx) {
   const app = window.app;
-  const { Platform } = ctx.obsidian;
 
   // Schalter für die optionalen Teile (false = aus).
   const FOLIEN_VORFALTEN = true; // Punkt 4
@@ -169,8 +168,9 @@ module.exports = function (ctx) {
     }
   };
 
-  // 4. Nur iPhone: Kapitel (##) der Folien-Notizen (cssclasses eba-folien) beim ersten Öffnen zuklappen. Obsidian merkt sich
-  //    Faltungen je Gerät (foldManager, lokaler Speicher); jede Notiz wird je Gerät nur einmal vorgefaltet.
+  // 4. Kapitel (##) der Folien-Notizen (cssclasses eba-folien) beim ersten Öffnen zuklappen, auf allen Geräten (bis 19.10.2026 nur
+  //    iPhone; auf dem iPad lief ein langer Foliensatz ohne erkennbare Kapitel durch). Obsidian merkt sich Faltungen je Gerät
+  //    (foldManager, lokaler Speicher); jede Notiz wird je Gerät nur einmal vorgefaltet.
   const OFFEN = ["Das Wichtigste", "Zu tun", "Offene Fragen"];
   const vorfalten = async (f) => {
     const liste = app.loadLocalStorage("eba-vorgefaltet") || [];
@@ -185,14 +185,32 @@ module.exports = function (ctx) {
     liste.push(f.path); app.saveLocalStorage("eba-vorgefaltet", liste);
     return folds.length ? { folds, lines: zeilen } : null;
   };
+  // Die Leseansicht faltet erst, wenn sie ihre Abschnitte kennt. Direkt nach file-open griff applyFoldInfo dort ins Leere, und
+  // onMarkdownFold speicherte dann „nichts gefaltet“ über die eben gespeicherte Faltung (gesehen 19.10.2026). Darum nachfassen,
+  // bis die Faltung steht (höchstens 15 × 200 ms), und erst dann speichern.
+  const anwenden = (l, f, info, rest) => {
+    if (!l.view || l.view.file !== f) return;
+    try {
+      const modus = l.view.currentMode;
+      modus.applyFoldInfo(info);
+      const steht = !modus.getFoldInfo || ((modus.getFoldInfo() || {}).folds || []).length > 0;
+      if (!steht) { if (rest > 0) ctx.zeit(() => anwenden(l, f, info, rest - 1), 200); return; }
+      if (l.view.onMarkdownFold) l.view.onMarkdownFold();
+    } catch (e) { if (l.rebuildView) l.rebuildView(); }
+  };
   const vorfaltenBeimOeffnen = async (f) => {
     try {
       const info = await vorfalten(f);
       if (!info) return;
-      for (const l of app.workspace.getLeavesOfType("markdown").filter((x) => x.view && x.view.file === f)) {
-        try { l.view.currentMode.applyFoldInfo(info); if (l.view.onMarkdownFold) l.view.onMarkdownFold(); } catch (e) { if (l.rebuildView) l.rebuildView(); }
-      }
+      for (const l of app.workspace.getLeavesOfType("markdown").filter((x) => x.view && x.view.file === f)) anwenden(l, f, info, 15);
     } catch (e) { /* nicht vorfalten */ }
+  };
+  // Leseansicht: Ein Tipp irgendwo auf die Kapitelzeile klappt auf und zu, nicht nur der kleine Pfeil (eba-core.css 31).
+  const kapitelTipp = (e) => {
+    const h2 = e.target.closest && e.target.closest(".markdown-preview-view.eba-folien h2");
+    if (!h2 || e.target.closest("a, .heading-collapse-indicator")) return;
+    const pfeil = h2.querySelector(":scope > .heading-collapse-indicator");
+    if (pfeil) pfeil.click();
   };
 
   // 5. Experimentell, alle Geräte: Die Leseansicht misst eine Bases-Tabelle in einer eingeklappten Karte manchmal mit
@@ -247,7 +265,8 @@ module.exports = function (ctx) {
     an(app.metadataCache, "changed", ctx.entprellen(leseansicht, 300)); // Feld `ansicht` oder `typ` geändert (ILIAS schreibt viele Dateien: entprellt)
     an(ws, "layout-change", klassen);
     an(ws, "file-open", () => ctx.zeit(klassen, 50));
-    if (FOLIEN_VORFALTEN && Platform.isPhone && app.foldManager) an(ws, "file-open", vorfaltenBeimOeffnen);
+    if (FOLIEN_VORFALTEN && app.foldManager) an(ws, "file-open", vorfaltenBeimOeffnen);
+    if (FOLIEN_VORFALTEN) ctx.dom(document, "click", kapitelTipp);
     if (MESSKORREKTUR) { an(ws, "layout-change", flicken); ctx.zeit(flicken, 1000); }
     ctx.zeit(klassen, 500);
     ctx.zeit(leseansicht, 500);
@@ -256,7 +275,7 @@ module.exports = function (ctx) {
   // Nur beim App-Start (nicht beim Hot-Reload)
   const start = async () => {
     ctx.zeit(() => { dashboardOeffnen().catch((e) => console.error("Start: Dashboard", e)); }, 300);
-    if (FOLIEN_VORFALTEN && Platform.isPhone && app.foldManager) {
+    if (FOLIEN_VORFALTEN && app.foldManager) {
       ctx.zeit(async () => { for (const f of app.vault.getMarkdownFiles()) { try { await vorfalten(f); } catch (e) { /* nächste */ } } }, 4000);
     }
   };

@@ -36,6 +36,13 @@
 // Kanal: update_kanal in System/Einstellungen.md („stabil“ Standard, „beta“). Das Manifest nennt release (stabil) und optional
 //   beta (X.Y.Z-beta.N); auf Kanal beta wird die höhere von beiden angeboten, nie eine ältere als die installierte.
 //   Schalter „Beta-Versionen“ im Fenster „Studium Autopilot“ unter „Mehr erfahren“.
+// Unterbrochen (seit 0.4.8): Als erste Datei schreibt das Update System/Daten/update.json (synchronisiert, { version, von,
+//   geraet, seit }) und lässt sie danach liegen; fertig ist es erst mit installiert.json (zuletzt). Neuer als installiert.json
+//   und von diesem Gerät → „Update fertigstellen“ (App beendet, bevor alles geschrieben war; ein zweiter Lauf schreibt nur, was
+//   fehlt). Von einem anderen Gerät, vor weniger als 1 Std. → „Ein Update wird gerade auf einem anderen Gerät installiert“
+//   statt eines zweiten Updates (seine Dateien kommen noch über den Sync). Gilt ab dem Update, das 0.4.8 plant.
+// Nach Updates suchen (seit 0.4.8): Knopf in der Zeile und Befehl; holt das Manifest sofort, Ergebnis als ein Hinweis. Das
+//   Manifest und die Liste kommen mit Minuten-Zeitstempel und „no-cache“ (zentral.js frischUrl), nie aus dem Zwischenspeicher.
 // Erstinstallation: Fehlt installiert.json, legt das Plugin sie einmal aus system-dateien.json an (sonst keine Datei).
 // Andere Geräte: Das Update kommt über den Sync. installiert.json zeigt dort die neue Version → kein zweites Update; läuft
 //   noch der alte Kern im Speicher, zeigt die Zeile „Neu laden“. Die Skripte, die dabei ankommen, lädt der Kern ohne
@@ -57,6 +64,8 @@ module.exports = function (ctx) {
   const ORDNER = "Studium Autopilot"; // Ordner des Vaults im Haupt-Repo (Pfad unter url_basis)
   const LISTE = "System/Daten/system-dateien.json";
   const INSTALLIERT = "System/Daten/installiert.json";
+  const MARKE = "System/Daten/update.json"; // welches Gerät welches Update begonnen hat (markeLage)
+  const MARKE_STILL = 60 * 60e3; // so lange gilt ein Update auf einem anderen Gerät als „läuft gerade“
   const PLUGIN_ID = "studium-autopilot";
   const KERN = ".obsidian/plugins/" + PLUGIN_ID + "/";
   const KERN_DATEIEN = ["main.js", "manifest.json", "styles.css"];
@@ -84,6 +93,17 @@ module.exports = function (ctx) {
     let a = rel || null;
     if (kanal === "beta" && beta && (!a || neuer(beta.version, a.version))) a = beta;
     return a && neuer(a.version, installiert) ? a : null;
+  };
+  // Unterbrochenes Update? m = Inhalt von update.json (MARKE), o = { installiert, ich (Geräte-ID), jetzt (ms), laeuft }.
+  // Fertig ist ein Update, sobald installiert.json seine Version zeigt; bis dahin: begonnen auf diesem Gerät → "fertigstellen"
+  // (nicht, solange es hier läuft), auf einem anderen vor weniger als MARKE_STILL → "anderes" (Dateien kommen noch über den
+  // Sync; danach gilt das Gerät als weg, und hier darf wieder installiert werden). Sonst null.
+  const markeLage = (m, o) => {
+    if (!m || typeof m !== "object" || !semver(m.version) || typeof m.geraet !== "string" || !m.geraet) return null;
+    if (o.laeuft || !neuer(m.version, o.installiert)) return null;
+    if (o.ich && m.geraet === o.ich) return "fertigstellen";
+    const seit = Date.parse(m.seit || "");
+    return seit && Math.abs(o.jetzt - seit) < MARKE_STILL ? "anderes" : null;
   };
   const hat = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
   const nfc = (s) => { try { return String(s).normalize("NFC"); } catch (e) { return String(s); } };
@@ -441,9 +461,10 @@ module.exports = function (ctx) {
   };
 
   // ---------- Update ausführen (Datei-Zugriff über io, damit es ohne Obsidian testbar ist) ----------
-  // io: { holen(url) → Uint8Array (wirft bei Fehler), lesen(pfad) → Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad),
-  //   liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
-  // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text) }
+  // io: { holen(url, { frisch }) → Uint8Array (wirft bei Fehler; frisch: nie aus dem Zwischenspeicher), lesen(pfad) →
+  //   Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad), liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
+  // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text),
+  //   marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage) }
   // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, geaendert[], angelegt[],
   //   neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }] (deine Systemdatei daneben gesichert), gemischt[], haken[],
   //   einstellungen[], uebersprungen[], entfernt[], behalten[], aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert),
@@ -459,7 +480,7 @@ module.exports = function (ctx) {
     // 1. Dateiliste
     melden("Prüfe die neue Version …");
     let lb;
-    try { lb = await io.holen(url(LISTE)); } catch (e) { return fehler("netz", "Dateiliste nicht geladen (" + ((e && e.message) || e) + ")"); }
+    try { lb = await io.holen(url(LISTE), { frisch: true }); } catch (e) { return fehler("netz", "Dateiliste nicht geladen (" + ((e && e.message) || e) + ")"); }
     if (lb.length > G.liste || (await sha256(lb)) !== rel.sha256) return fehler("pruefsumme", "Prüfsumme der Dateiliste stimmt nicht");
     let d;
     try { d = JSON.parse(dec(lb)); } catch (e) { return fehler("liste", "Dateiliste unlesbar"); }
@@ -552,6 +573,12 @@ module.exports = function (ctx) {
     const reihe = kernZuletzt(schreiben);
     b.plugin = reihe.some((w) => kernDatei(w.pfad));
     for (const p of [LISTE, INSTALLIERT]) { const da = await io.lesen(p); if (!gleich(da, lb)) reihe.push({ pfad: p, bytes: lb, alt: da }); }
+    // update.json zuerst (markeLage): Bricht das Update ab, sieht dieses Gerät beim nächsten Start „Update fertigstellen“, die
+    // anderen, dass es hier läuft. Sie bleibt danach liegen; ein Fehler beim Schreiben setzt auch sie zurück.
+    if (o.marke && o.marke.geraet && (reihe.length || loeschen.length)) {
+      const m = { version: rel.version, von: o.altVersion || "", geraet: String(o.marke.geraet), seit: String(o.marke.seit || "") };
+      reihe.unshift({ pfad: MARKE, bytes: enc(JSON.stringify(m, null, 2) + "\n"), alt: await io.lesen(MARKE) });
+    }
 
     // 6. Sicherung, 7. Schreiben (bei einem Fehler alles zurück), 8. nicht mehr enthaltene Dateien entfernen
     const w = await schreibenSicher(io, reihe, loeschen, SICHERUNG + (o.altVersion || "alt") + " " + stempel(o.zeit || new Date()), melden);
@@ -643,8 +670,10 @@ module.exports = function (ctx) {
   };
   const puffer = (bytes) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const io = {
-    holen: async (url) => {
-      let r = await obs.requestUrl({ url, method: "GET", throw: false });
+    // frisch (Liste, Manifest): Minuten-Zeitstempel und „no-cache“ wie zentral.js, damit nie ein alter Stand zurückkommt
+    holen: async (url, o) => {
+      const Z = o && o.frisch && ctx.zentral && typeof ctx.zentral.frischUrl === "function" ? ctx.zentral : null;
+      let r = await obs.requestUrl(Z ? { url: Z.frischUrl(url), method: "GET", headers: Object.assign({}, Z.FRISCH_KOPF), throw: false } : { url, method: "GET", throw: false });
       if (r.status === 304) r = await obs.requestUrl({ url: url + "?t=" + Date.now(), method: "GET", throw: false });
       if (r.status !== 200) throw new Error("HTTP " + r.status);
       return new Uint8Array(r.arrayBuffer);
@@ -681,9 +710,24 @@ module.exports = function (ctx) {
 
   // ---------- Zustand ----------
   // bleibend: überlebt den Hot-Reload dieses Skripts (das Update ersetzt update.js womöglich selbst)
-  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, installiert: "", bericht: null, fenster: null }));
+  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, installiert: "", bericht: null, fenster: null, marke: null }));
   const laufendeVersion = () => (ctx.plugin && ctx.plugin.manifest && ctx.plugin.manifest.version) || "0.0.0";
   const installiertVersion = () => zustand.installiert || laufendeVersion();
+  const geraetId = () => { try { return ctx.zentral && typeof ctx.zentral.geraetId === "function" ? String(ctx.zentral.geraetId() || "") : ""; } catch (e) { return ""; } };
+  // update.json lesen (beim Start und wenn sie sich ändert, auch per Sync); zustand.marke für anzeige() und hinweis()
+  const markeNeu = async () => {
+    let m = null;
+    try { const by = await io.lesen(MARKE); m = by ? JSON.parse(dec(by)) : null; } catch (e) { m = null; }
+    if (!m || typeof m !== "object" || Array.isArray(m)) m = null;
+    const anders = JSON.stringify(m) !== JSON.stringify(zustand.marke || null);
+    zustand.marke = m;
+    if (anders) neuZeichnen();
+    return m;
+  };
+  // → "fertigstellen" | "anderes" | null (markeLage mit dem Stand dieses Geräts)
+  const lage = () => markeLage(zustand.marke, { installiert: installiertVersion(), ich: geraetId(), jetzt: Date.now(), laeuft: !!zustand.laeuft });
+  const ANDERES = "Ein Update wird gerade auf einem anderen Gerät installiert.";
+  const fertigText = () => `Das Update auf Version ${zustand.marke && zustand.marke.version} ist nicht fertig geworden.`;
   const listeLesen = async (pfad) => {
     try {
       const by = await io.lesen(pfad);
@@ -781,12 +825,20 @@ module.exports = function (ctx) {
   };
 
   // ---------- Anzeige (Zeile „Studium Autopilot“ in eba-verbindungen) ----------
-  // → { html, pille, symbol, ton, knopf: { aktion, text } | null }
+  // → { html, pille, symbol, ton, knopf: { aktion, text, cta? (false: normaler Knopf) } | null }
+  // Ohne Angebot steht rechts **Nach Updates suchen** (seit 0.4.8), daneben „Mehr erfahren“ als Textlink (verbindungen.js).
+  const SUCHEN = { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false };
   const anzeige = () => {
     const inst = installiertVersion(), lauf = laufendeVersion(), s = stand(), k = kanal();
     const rel = s.release || (k === "beta" ? s.beta : null), neu = angebot(s.release, s.beta, k, inst);
     const zusatz = k === "beta" ? " Kanal: Beta." : "";
     if (zustand.laeuft) return { html: "Wird aktualisiert …", pille: `<span class="eba-pill info">läuft</span>`, symbol: "uhr", ton: "leise", knopf: null };
+    const l = lage();
+    if (l === "fertigstellen") {
+      return { html: esc(fertigText()), pille: `<span class="eba-pill warn">unterbrochen</span>`, symbol: "laden", ton: "warn",
+        knopf: { aktion: "vorlage-aktualisieren", text: "Update fertigstellen" } };
+    }
+    if (l === "anderes") return { html: esc(ANDERES), pille: `<span class="eba-pill info">läuft</span>`, symbol: "uhr", ton: "leise", knopf: null };
     if (neuer(inst, lauf)) {
       return { html: esc(`Version ${inst} ist da. Einmal neu laden, dann ist alles aktiv.`), pille: `<span class="eba-pill info">neu laden</span>`,
         symbol: "neu-laden", ton: "warn", knopf: { aktion: "vorlage-neu-laden", text: "Neu laden" } };
@@ -800,8 +852,8 @@ module.exports = function (ctx) {
       const url = (ctx.zentral && ctx.zentral.RELEASES) || "https://github.com/studium-autopilot/ecoba/releases";
       return { html: `<a class="eba-vb-neu external-link" href="${esc(url)}" target="_blank" rel="noopener">${esc(`Neue Version ${s.aktuell} verfügbar`)}</a>`, pille: `<span class="eba-pill info">neu</span>`, symbol: "laden", ton: "warn", knopf: null };
     }
-    if (rel) return { html: esc(`Version ${inst}. Du hast die neueste Version.${zusatz}`), pille: `<span class="eba-pill ok">aktuell</span>`, symbol: "haken", ton: "ok", knopf: null };
-    return { html: esc(`Version ${inst}.${zusatz}`), pille: "", symbol: "haken", ton: "leise", knopf: null };
+    if (rel) return { html: esc(`Version ${inst}. Du hast die neueste Version.${zusatz}`), pille: `<span class="eba-pill ok">aktuell</span>`, symbol: "haken", ton: "ok", knopf: SUCHEN };
+    return { html: esc(`Version ${inst}.${zusatz}`), pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN };
   };
   const status = () => ({ verbunden: true, version: installiertVersion(), laufend: laufendeVersion(), release: release(), kanal: kanal(), laeuft: !!zustand.laeuft });
   // verbindungen.neuZeichnen() zeichnet auch den Hinweis auf dem Dashboard neu (ctx.update.hinweisNeu)
@@ -813,9 +865,12 @@ module.exports = function (ctx) {
   // „Später“ blendet die Zeile für DIESE Version auf diesem Gerät aus (app.saveLocalStorage eba-update-spaeter = Version).
   const SPAETER = "eba-update-spaeter";
   const spaeter = () => { try { return app.loadLocalStorage(SPAETER) || ""; } catch (e) { return ""; } };
+  // Unterbrochenes Update (lage): „Update fertigstellen“ bzw. der Satz ohne Knopf, beides ohne „Später“.
   const hinweis = () => {
     if (zustand.laeuft) return null;
-    const inst = installiertVersion(), lauf = laufendeVersion(), s = stand();
+    const inst = installiertVersion(), lauf = laufendeVersion(), s = stand(), l = lage();
+    if (l === "fertigstellen") return { art: "fertig", version: zustand.marke.version, text: fertigText(), knopf: "Update fertigstellen", symbol: "laden" };
+    if (l === "anderes") return { art: "anderes", version: zustand.marke.version, text: ANDERES, knopf: "", symbol: "uhr" };
     if (neuer(inst, lauf)) return { art: "laden", version: inst, text: `Version ${inst} ist da. Einmal neu laden.`, knopf: "Neu laden", symbol: "neu-laden" };
     const neu = angebot(s.release, s.beta, kanal(), inst);
     let h = null;
@@ -835,6 +890,7 @@ module.exports = function (ctx) {
     const t = z.createSpan({ cls: "eba-uh-text" });
     t.createEl("b", { text: h.text });
     // Nur der Titel; was neu ist, steht unter „Was ist neu“ (seit 17.10.2026 kein Satz im Hinweis).
+    if (!h.knopf) return; // ein anderes Gerät installiert: nur der Satz
     const k = z.createSpan({ cls: "eba-uh-knoepfe" });
     if (h.art === "link") {
       k.createEl("a", { cls: "eba-vb-knopf cta eba-uh-knopf", text: h.knopf, href: h.url, attr: { target: "_blank", rel: "noopener" } });
@@ -849,7 +905,7 @@ module.exports = function (ctx) {
       k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-neu", text: "Was ist neu", attr: { type: "button" } })
         .addEventListener("click", () => { neuigkeitenZeigen({ von: installiertVersion(), bis: h.version, angebot: { version: h.version, notiz: h.notiz } }); });
     }
-    if (h.art !== "laden") {
+    if (h.art === "update" || h.art === "link") {
       const sp = k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-spaeter", text: "Später", attr: { type: "button" } });
       // „Später“ zählt auch als Antwort auf den Hinweis beim Öffnen (sonst käme er gleich danach, weil die Zeile weg ist)
       sp.addEventListener("click", () => { try { app.saveLocalStorage(SPAETER, h.version); } catch (e) { /* egal */ } sitzungMerken(true); hinweisNeu(); });
@@ -959,10 +1015,15 @@ module.exports = function (ctx) {
     } catch (e) { console.error("update: Plugin neu laden", e); return false; }
   };
 
-  // ---------- Ablauf nach dem Tipp auf „Neue Version installieren“ ----------
+  // ---------- Ablauf nach dem Tipp auf „Neue Version installieren“ bzw. „Update fertigstellen“ ----------
+  // Installiert gerade ein anderes Gerät (lage „anderes“), nur der Satz. Fertigstellen derselben Version fragt nicht noch einmal
+  // (du hattest schon bestätigt); ein zweiter Lauf lädt und schreibt nur, was noch fehlt.
   const aktualisieren = async () => {
     if (zustand.laeuft) return null;
     if (!ctx.zentral || !ctx.zentral.manifestHolen) { ctx.hinweis("Das geht gerade nicht. Bitte später noch einmal versuchen."); return null; }
+    await markeNeu();
+    const l = lage();
+    if (l === "anderes") { ctx.hinweis(ANDERES + " Öffne Obsidian dort, dann kommt es hierher."); return null; }
     let rel;
     const inst = installiertVersion();
     try { const m = await ctx.zentral.manifestHolen(); rel = angebot(m.release, m.beta, kanal(), inst); } catch (e) {
@@ -971,7 +1032,9 @@ module.exports = function (ctx) {
     }
     neuZeichnen();
     if (!rel) { ctx.hinweis(`Du hast schon die neueste Version (${inst}).`); return null; }
-    if (!(await fragen(rel))) return null;
+    const fertig = l === "fertigstellen" && zustand.marke && rel.version === zustand.marke.version;
+    if (!fertig && !(await fragen(rel))) return null;
+    const ich = geraetId();
     const p = plugin();
     if (p.testUpdateBasis) rel = Object.assign({}, rel, { url_basis: String(p.testUpdateBasis) });
     zustand.laeuft = true;
@@ -982,6 +1045,7 @@ module.exports = function (ctx) {
       p.stillBis = Date.now() + 120000; // Kern: keine „Aktualisiert: …“-Hinweise beim Hot-Reload der Skripte
       const alt = (await listeLesen(INSTALLIERT)) || (await listeLesen(LISTE));
       b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(),
+        marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null,
         fortschritt: (t) => { try { if (fortschritt) fortschritt.setMessage(t); } catch (e) { /* egal */ } } });
       if (b.ok) {
         zustand.installiert = rel.version;
@@ -999,9 +1063,43 @@ module.exports = function (ctx) {
     }
     zustand.bericht = b;
     // Nach dem Neuladen gehört die Anzeige der neuen Plugin-Instanz (die alte darf nichts mehr zeichnen)
-    if (!b.neuGeladen) neuZeichnen();
+    if (!b.neuGeladen) { await markeNeu(); neuZeichnen(); }
     ergebnisZeigen(b);
     return b;
+  };
+
+  // ---------- Nach Updates suchen (Knopf in der Zeile „Studium Autopilot“ und Befehl, seit 0.4.8) ----------
+  // Holt das Manifest sofort, ohne die Wartezeit der automatischen Prüfung (zählt als Prüfung: eba-update-geprueft), und sagt das
+  // Ergebnis in einem Hinweis: das Angebot mit „Neue Version installieren“ und „Was ist neu“, sonst „Du hast die neueste
+  // Version.“ → "angebot" | "aktuell" | "laden" | "link" | "fertigstellen" | "anderes" | "fehler" | null (läuft gerade)
+  const suchen = async () => {
+    if (zustand.laeuft) return null;
+    if (!ctx.zentral || !ctx.zentral.manifestHolen) { ctx.hinweis("Das geht gerade nicht. Bitte später noch einmal versuchen."); return "fehler"; }
+    lokal(L_GEPRUEFT, Date.now());
+    try { await ctx.zentral.manifestHolen(); } catch (e) {
+      console.error("update: Nach Updates suchen", e);
+      ctx.hinweis("Keine Verbindung. Versuch es später noch einmal.");
+      return "fehler";
+    }
+    await markeNeu();
+    neuZeichnen();
+    const inst = installiertVersion(), lauf = laufendeVersion(), s = stand(), l = lage();
+    if (l === "anderes") { ctx.hinweis(ANDERES + " Öffne Obsidian dort, dann kommt es hierher."); return l; }
+    if (l === "fertigstellen") { ctx.hinweis(fertigText(), { aktion: { text: "Update fertigstellen", ausfuehren: () => aktualisieren() } }); return l; }
+    if (neuer(inst, lauf)) { ctx.hinweis(`Version ${inst} ist da. Einmal neu laden.`, { aktion: { text: "Neu laden", aktion: "vorlage-neu-laden" } }); return "laden"; }
+    const a = angebot(s.release, s.beta, kanal(), inst);
+    if (a) {
+      sitzungMerken(true);
+      lokal(L_TOAST, { version: a.version, zeit: Date.now() });
+      toastZeigen({ text: `Neue ${istBeta(a.version) ? "Beta-Version" : "Version"} ${a.version} ist da.`, angebot: a, von: inst, bis: a.version });
+      return "angebot";
+    }
+    if (s.aktuell && neuer(s.aktuell, inst)) {
+      ctx.hinweis(`Neue Version ${s.aktuell} ist da.`, { aktion: { text: "Ansehen", ausfuehren: () => { window.open(releasesUrl(), "_blank"); } } });
+      return "link";
+    }
+    ctx.hinweis("Du hast die neueste Version.");
+    return "aktuell";
   };
 
   // ---------- Neuigkeiten: frische Prüfung beim Start, Hinweis (Notice) und „Was ist neu“ (seit 0.4.1) ----------
@@ -1127,7 +1225,8 @@ module.exports = function (ctx) {
     const inst = installiertVersion(), lauf = laufendeVersion(), s = stand();
     const n = nachUpdate(lokal(L_GESEHEN), lauf, inst);
     if (n) lokal(L_GESEHEN, lauf);
-    const a = angebot(s.release, s.beta, kanal(), inst);
+    // Unterbrochenes Update (lage): kein Angebot, die Zeile oben auf dem Dashboard sagt, was los ist
+    const a = lage() ? null : angebot(s.release, s.beta, kanal(), inst);
     const e = toastEntscheiden({ angebot: a, neuLaden: neuer(inst, lauf), merk: lokal(L_TOAST), jetzt: Date.now(), nach: n,
       bannerSichtbar: !!a && bannerSichtbar() });
     neuigkeit.verdeckt = e === "verdeckt"; // beim nächsten Wechsel der Ansicht noch einmal prüfen (registrieren)
@@ -1231,8 +1330,9 @@ module.exports = function (ctx) {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
     jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    markeLage, MARKE, MARKE_STILL,
     // Obsidian
-    io, anzeige, status, aktualisieren, installiertAnlegen, heilen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
+    io, anzeige, status, aktualisieren, suchen, markeNeu, installiertAnlegen, heilen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     frischPruefen, toastPruefen, neuigkeitenZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
@@ -1259,7 +1359,12 @@ module.exports = function (ctx) {
     // Neue installiert.json über den Sync (Update auf einem anderen Gerät): eine Minute keine „Aktualisiert: …“-Hinweise für die
     // Skripte, die mit ihr kommen; die Zeile „Version … ist da. Einmal neu laden.“ sagt es einmal (Kern: stillBis)
     const syncStill = () => { if (!zustand.laeuft) { const p = plugin(); p.stillBis = Math.max(Number(p.stillBis) || 0, Date.now() + 60000); } };
-    for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => { if (f && f.path === INSTALLIERT) { syncStill(); bald(); reparatur(); } });
+    // update.json (unterbrochenes Update, auch von einem anderen Gerät per Sync): beim Start und bei jeder Änderung lesen
+    markeNeu().catch(() => {});
+    const baldMarke = ctx.entprellen(() => { markeNeu().catch(() => {}); }, 1500);
+    for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => {
+      if (f && f.path === INSTALLIERT) { syncStill(); bald(); reparatur(); } else if (f && f.path === MARKE) baldMarke();
+    });
     // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
     // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund
     // zählt wie ein neuer App-Start (Hinweis darf wieder erscheinen; der Abstand von 12 h je Version gilt weiter).
@@ -1283,6 +1388,7 @@ module.exports = function (ctx) {
 
   const AKTIONEN = {
     "vorlage-aktualisieren": { titel: "Neue Version installieren", ausfuehren: async () => { await aktualisieren(); } },
+    "vorlage-suchen": { titel: "Nach Updates suchen", ausfuehren: async () => { await suchen(); } },
     "vorlage-neu-laden": {
       titel: "Neu laden",
       ausfuehren: async () => { if (!(await pluginNeuLaden())) ctx.hinweis("Bitte Obsidian einmal schließen und wieder öffnen."); },

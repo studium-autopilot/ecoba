@@ -87,6 +87,7 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
     [`${VAULT}/System/Daten/alma-konto-abruf.json`]: "{}\n",
     [`${VAULT}/System/Daten/alma-konto-aus.json`]: "{}\n",
     [`${VAULT}/System/Daten/uni-zugang.json`]: "{}\n",
+    [`${VAULT}/System/Daten/update.json`]: "{}\n",
     [`${VAULT}/System/Daten/volltext-abruf.json`]: "{}\n",
     [`${VAULT}/System/Daten/alma-abruf.json`]: "{}\n",
     [`${VAULT}/System/Daten/ilias-kalender.json`]: "{}\n",
@@ -101,6 +102,7 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
     assert.match(fund("System/Daten/" + p), /\[persönliche Daten \(Noten aus Alma\)\]/, p);
   }
   assert.match(fund("System/Daten/uni-zugang.json"), /\[vaultlokale Datei \(Uni-Zugang\)\]/);
+  assert.match(fund("System/Daten/update.json"), /\[vaultlokale Datei \(Update-Stand\)\]/);
   assert.match(fund("System/Daten/volltext-abruf.json"), /\[vaultlokale Datei \(Abrufer-Sperre\)\]/);
   assert.match(fund("System/Daten/alma-abruf.json"), /\[vaultlokale Datei \(Abrufer-Sperre\)\]/);
   assert.match(fund("System/Daten/ilias-kalender.json"), /\[vaultlokale Datei \(ILIAS-Kalender\)\]/);

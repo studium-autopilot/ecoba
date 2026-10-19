@@ -1066,7 +1066,9 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
    > Kartentitel (Label) > fette Zwischenzeile. Gilt hell und dunkel (höhere Spezifität als :is(.theme-light, .theme-dark) .eba h2). */
 .eba.eba-folien h2,
 :is(.theme-light, .theme-dark) .eba.eba-folien h2 {
-  display: block;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   margin: 3.2em 0 1em;
   padding: 14px 0 0;
   border: none;
@@ -1080,6 +1082,46 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   color: var(--eba-text);
 }
 .eba.eba-folien h2::after { display: none; }
+/* Kapitel einklappbar, alle Geräte (bis 19.10.2026 nur iPhone, 37.folien): Das Plugin klappt sie beim ersten Öffnen zu (start.js
+   Punkt 4), ein Tipp auf die Zeile klappt auf. Pfeil rechts in der Kapitelzeile und immer sichtbar statt im linken Rand beim
+   Überfahren. Eingeklappte Kapitel stehen dicht untereinander wie ein Inhaltsverzeichnis. */
+.markdown-preview-view.eba-folien h2 { cursor: pointer; }
+.eba-folien h2 > .heading-collapse-indicator {
+  order: 2;
+  flex: none;
+  align-self: center;
+  position: static !important;
+  margin: 0 0 0 auto !important;
+  padding: 4px 2px 4px 10px;
+  opacity: 0.55 !important;
+  visibility: visible !important;
+}
+.eba-folien h2 > .heading-collapse-indicator svg { width: 20px; height: 20px; }
+.eba.eba-folien .el-h2.is-collapsed > h2 { margin: 0.8em 0 0 !important; padding-top: 12px !important; border-top-width: 1px !important; }
+.eba-folien .el-h2.is-collapsed > h2 > .heading-collapse-indicator { opacity: 0.8 !important; color: var(--eba-accent-text, var(--eba-accent)); }
+/* Bearbeitungsansicht: dieselbe Kapitelzeile (Linie als Hintergrund-Verlauf, CodeMirror misst Ränder an Editorzeilen nicht) */
+.markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 {
+  position: relative;
+  margin-top: 0 !important;
+  padding: calc(2.2em + 14px) 0 6px 0 !important;
+  border-top: 0 !important;
+  background: linear-gradient(var(--eba-text), var(--eba-text)) no-repeat 0 2.2em / 100% 2px;
+  line-height: 1.2;
+}
+.markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2:has(> .cm-fold-indicator.is-collapsed) {
+  padding-top: calc(0.8em + 12px) !important;
+  background-position: 0 0.8em;
+  background-size: 100% 1px;
+}
+.markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator {
+  position: static !important; float: right; display: flex !important; align-items: center; justify-content: center; width: 28px; height: 28px; margin: 0 -2px 0 8px; line-height: 0;
+}
+.markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator .collapse-indicator {
+  position: static !important; display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  margin: 0 !important; padding: 0 !important; opacity: 0.55 !important; visibility: visible !important;
+}
+.markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator .collapse-indicator svg { width: 20px; height: 20px; }
+.markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator.is-collapsed .collapse-indicator { opacity: 0.8 !important; color: var(--eba-accent-text, var(--eba-accent)); }
 .eba-folien h3 {
   display: flex;
   align-items: baseline;
@@ -1638,11 +1680,12 @@ body.is-phone .markdown-source-view.is-live-preview.eba-s-einstellungen .cm-cont
 
 /* --- 37.folien --- */
 /* Folien als Markdown (cssclasses: eba, eba-folien; Abschnitt 31) auf dem iPhone.
-   Lange Seiten sind hier gewollt (bis 164 Folien). Ziel: klare Hierarchie Kapitel > Folientitel > Text, Kapitel per Pfeil
-   einklappbar (Obsidians Überschriften-Falten, rechts an der Kapitelzeile), Karten untereinander, Bilder in voller Breite,
-   nichts abgeschnitten oder seitlich verschoben. Typklasse eba-folien statt eigener eba-s-Klasse (gilt für alle Folien-Notizen). */
+   Lange Seiten sind hier gewollt (bis 164 Folien). Ziel: klare Hierarchie Kapitel > Folientitel > Text, Karten untereinander,
+   Bilder in voller Breite, nichts abgeschnitten oder seitlich verschoben. Einklappbare Kapitel (Pfeil rechts, zugeklappt beim
+   ersten Öffnen) gelten auf allen Geräten (Abschnitt 31); hier nur die kleineren Maße. Typklasse eba-folien statt eigener
+   eba-s-Klasse (gilt für alle Folien-Notizen). */
 
-/* Kapitel (h2): deutlich über dem Folientitel, Linie bleibt; Pfeil zum Einklappen rechts statt im (zu schmalen) linken Rand */
+/* Kapitel (h2): deutlich über dem Folientitel, Linie bleibt */
 body.is-phone .eba.eba-folien h2 {
   display: flex !important;
   align-items: baseline;
@@ -1653,20 +1696,8 @@ body.is-phone .eba.eba-folien h2 {
   line-height: 1.2;
 }
 body.is-phone .eba.eba-folien div:has(> .eba-kopf) + div > h2 { margin-top: 1em !important; padding-top: 0 !important; }
-body.is-phone .eba-folien h2 > .heading-collapse-indicator {
-  order: 2;
-  flex: none;
-  align-self: center;
-  position: static !important;
-  margin: 0 0 0 auto !important;
-  padding: 4px 2px 4px 10px;
-  opacity: 0.55 !important;
-  visibility: visible !important;
-}
 body.is-phone .eba-folien h2 > .heading-collapse-indicator svg { width: 18px; height: 18px; }
-/* Eingeklappte Kapitel stehen dicht untereinander wie ein Inhaltsverzeichnis (Obsidian merkt sich das Falten je Gerät) */
-body.is-phone .eba.eba-folien .el-h2.is-collapsed > h2 { margin: 0.8em 0 0 !important; padding-top: 10px !important; border-top-width: 1px !important; }
-body.is-phone .eba-folien .el-h2.is-collapsed > h2 > .heading-collapse-indicator { opacity: 0.8 !important; color: var(--eba-accent-text, var(--eba-accent)); }
+body.is-phone .eba.eba-folien .el-h2.is-collapsed > h2 { padding-top: 10px !important; }
 
 /* Folientitel (h3): eine Stufe unter dem Kapitel, nur fett, weniger Abstand */
 body.is-phone .eba-folien h3 { font-size: 1.08em; margin: 1.8em 0 0.45em; gap: 8px; }
@@ -1695,29 +1726,11 @@ body.is-phone .eba-folien mjx-container[display="true"] { max-width: 100%; overf
 
 /* ---- Bearbeitungsansicht (Live Preview) wie die Leseansicht. Leerzeilen, Karten-Abstände und Seitenende regelt
    36c (gilt für alle eba-Seiten); hier Kapitel/Folientitel, Faltpfeil, Seiten-Chip und Markierung. ---- */
-/* Kapitel: 1,3em Serif, kräftige Linie, Abschnittsabstand (Padding statt Margin, damit CodeMirror die Zeilenhöhe richtig misst) */
+/* Kapitel: 1,3em Serif, kräftige Linie, kleinerer Abschnittsabstand; Faltpfeil und gefaltete Zeile wie Abschnitt 31 */
 body.is-phone .markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 {
-  position: relative;
-  margin-top: 0 !important;
   padding: calc(1.6em + 10px) 0 4px 0 !important;
-  border-top: 0 !important;
-  background: linear-gradient(var(--eba-text), var(--eba-text)) no-repeat 0 1.6em / 100% 2px;
+  background-position: 0 1.6em;
   font-size: 1.3em !important;
-  line-height: 1.2;
-}
-/* Gefaltete Kapitel dicht untereinander (wie in der Leseansicht): weniger Abstand, dünne Linie */
-body.is-phone .markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2:has(> .cm-fold-indicator.is-collapsed) {
-  padding-top: calc(0.7em + 10px) !important;
-  background-position: 0 0.7em;
-  background-size: 100% 1px;
-}
-/* Faltpfeil rechts in der Kapitelzeile (Obsidian setzt ihn in den linken Rand, der auf dem iPhone nur 8 px hat) */
-body.is-phone .markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator {
-  position: static !important; float: right; display: flex !important; align-items: center; justify-content: center; width: 26px; height: 26px; margin: 0 -2px 0 8px; line-height: 0;
-}
-body.is-phone .markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator .collapse-indicator {
-  position: static !important; display: flex; align-items: center; justify-content: center; width: 26px; height: 26px;
-  margin: 0 !important; padding: 0 !important; opacity: 0.55 !important; visibility: visible !important;
 }
 body.is-phone .markdown-source-view.is-live-preview.eba-folien .HyperMD-header-2 > .cm-fold-indicator .collapse-indicator svg { width: 18px; height: 18px; }
 /* Folientitel: 1,08em fett, Abstand davor */
@@ -3748,6 +3761,8 @@ body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk
 .eba-modal .eba-modal-meldung.fehler { color: var(--eba-bad); }
 .eba-modal .eba-modal-hinweis { margin: 10px 0 0; font-size: 12.5px; color: var(--eba-muted); }
 .eba-modal .eba-modal-erfolg { margin: 4px 0 0; font-weight: 600; color: var(--eba-good); }
+/* Haken als Linien-Symbol vor dem Text (Uni-Login: „ILIAS-Kalender verbunden – …“), in derselben Zeile statt darüber */
+.eba-modal .eba-modal-erfolg > .eba-sym { display: inline-block; vertical-align: -2px; }
 .eba-modal .modal-button-container { margin-top: 16px; }
 /* Knopfreihe aller Fenster (eba-modal und das Eingabefenster sa-eingabe aus main.js): Hauptknopf (mod-cta) ganz rechts, auf
    dem iPhone untereinander über die ganze Breite mit dem Hauptknopf oben, auf iPhone und iPad 44 px hoch (docs/design.md
@@ -5387,13 +5402,15 @@ body.is-mobile .eba-vorl button.eba-vorl-status::after {
    („- “, „- [ ] “) darunter und keine leere Überschrift; Begleitnotizen keinen erzeugten Kasten „Eckdaten“. Leseansicht: kopf.js
    markiert Überschriften (eba-abschnitt) und Listen aus nur leeren Punkten (eba-leer); ob eine Überschrift wegfällt, sagt ihr Nachbar
    (nächste Überschrift, ein Kasten des Plugins oder das Ende). Auf Höhe 0 gefaltet, nie display: none (Abschnitt 36, fb8d768).
+   Eine zugeklappte Überschrift (.is-collapsed) bleibt: Obsidian nimmt ihren Inhalt aus der Seite, sie stünde sonst als „leer“ da
+   und eingeklappte Kapitel der Folien-Notizen verschwänden ganz.
    Bearbeitungsansicht der Begleitnotizen: Zeilen eba-leer-zeile, solange der Cursor nicht darin steht. */
 .markdown-preview-sizer > :is(.el-ul.eba-leer,
   .el-h2.eba-abschnitt:has(+ .el-ul.eba-leer + :is(.el-h1, .el-h2, .mod-footer)),
   .el-h2.eba-abschnitt:has(+ .el-ul.eba-leer + .el-div > .callout[data-callout^="eba-"]),
   .el-h2.eba-abschnitt:has(+ .el-ul.eba-leer:last-child),
-  .el-h2.eba-abschnitt:has(+ :is(.el-h1, .el-h2, .mod-footer)),
-  .el-h2.eba-abschnitt:last-child,
+  .el-h2.eba-abschnitt:not(.is-collapsed):has(+ :is(.el-h1, .el-h2, .mod-footer)),
+  .el-h2.eba-abschnitt:not(.is-collapsed):last-child,
   .el-div:has(> .callout.eba-eck-leer)) { height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; }
 .markdown-source-view.is-live-preview .cm-content > .cm-line.eba-leer-zeile,
 .markdown-source-view.is-live-preview .cm-content > .cm-embed-block:has(.callout.eba-eck-leer),

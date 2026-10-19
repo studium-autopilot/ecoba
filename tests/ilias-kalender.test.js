@@ -58,7 +58,7 @@ const fmAusText = (t) => {
   return fm;
 };
 // o = { heute, termine (ctx.modell.termine()), blaetter (ctx.modell.abgaben()), objekte (Index der ILIAS-Unterlagen), abruf
-// (plugin.testKalenderAbruf), einstellungen }
+// (plugin.testKalenderAbruf), einstellungen, uni (Attrappe von uni-login.js) }
 function tresor(o) {
   o = o || {};
   const fm = {}, text = {}, dateien = {}, papierkorb = [], speicher = { "eba-geraet": "g-ich" }, hinweise = [], abrufe = [];
@@ -70,7 +70,7 @@ function tresor(o) {
     frontmatter: fm,
     kontext: {
       obsidian: { Notice: class { constructor(t) { hinweise.push(String(t)); } }, Platform: {}, requestUrl: async () => { throw new Error("kein Netz im Test"); } },
-      user: { eba: EBA, alma: () => ALMA },
+      user: { eba: EBA, alma: () => ALMA, "uni-login": o.uni ? () => o.uni : undefined },
       zentral: { notizText: Z.notizText, geraetId: () => "g-ich" },
       ilias: { ohneKennwort: I.ohneKennwort },
       modell: { termine: () => o.termine || [], abgaben: () => o.blaetter || [], modul },
@@ -110,6 +110,9 @@ test("Link prüfen: nur der Abo-Link von ILIAS; die Sätze nennen den Link nie",
     `https://ilias.example.org/calendar.php?client_id=pr02&token=${SCHLUESSEL}`, `https://ovidius.uni-tuebingen.de:8443/calendar.php?client_id=pr02&token=${SCHLUESSEL}`,
     `https://jemand@ovidius.uni-tuebingen.de/calendar.php?client_id=pr02&token=${SCHLUESSEL}`, "https://ovidius.uni-tuebingen.de/calendar.php?client_id=pr02",
     `https://ovidius.uni-tuebingen.de/ilias.php?client_id=pr02&token=${SCHLUESSEL}`, "https://ovidius.uni-tuebingen.de/",
+    // Host, den ein anderer Parser anders liest (\ und @ vor dem Pfad)
+    `https://ovidius.uni-tuebingen.de\\@evil.example/calendar.php?client_id=pr02&token=${SCHLUESSEL}`,
+    `https://ovidius.uni-tuebingen.de${"@"}evil.example/calendar.php?client_id=pr02&token=${SCHLUESSEL}`,
   ];
   for (const l of falsch) {
     const s = K.linkPruefen(l);
@@ -331,6 +334,32 @@ test("Doppel einer id (Konfliktkopie): zusammengeführt, erledigt gewinnt, eigen
   assert.deepEqual(t.notizen(), [p]);
   assert.equal(t.fm[p].erledigt, true);
   assert.match(t.text[p], /- aus der Kopie\n/);
+});
+
+test("Uni-Login: Link gilt nicht mehr → neuen holen und gleich damit; beim Verbinden und ohne neuen Link nicht", async () => {
+  const NEU = LINK.replace("Erfunden0Schluessel0fuer0Tests0x", "Erfunden0Schluessel0fuer0Tests0y");
+  const gefragt = [];
+  let neu = NEU;
+  const uni = { erneuern: async (id, alt) => { gefragt.push([id, alt]); return neu; }, kannSelbst: () => true };
+  const gut = { status: 200, text: kalender(...WIE_ECHT, abgabe(9001, "Blatt 1", "20261103T235500")) };
+  const t = tresor({ uni, abruf: (x) => (x.url === NEU ? gut : { status: 404, text: "" }), objekte: { 9001: { typ: "exc", code: "B110" } } });
+  // Ein eingegebener Link, der nicht geht: kein Ersatz über den Uni-Login
+  assert.equal(await t.K.verbinden(LINK, { nurBeiErfolg: true }), null);
+  assert.deepEqual(gefragt, []);
+  t.speicher["eba-ilias-ics"] = LINK; // wie nach einem Verbinden, bei dem der Link noch ging
+  const b = await t.K.aktualisieren({ still: true });
+  assert.equal(b.offen, 1);
+  assert.deepEqual(gefragt, [["ilias-kalender", LINK]]);
+  assert.deepEqual(t.abrufe, [LINK, LINK, NEU]);
+  assert.equal(t.speicher["eba-ilias-ics"], NEU);
+  assert.equal(t.K.status().zustand, "an");
+  // Kein neuer Link zu haben: der Fehler bleibt, „Bitte prüfen“ sagt, wo es weitergeht
+  neu = "";
+  t.speicher["eba-ilias-ics"] = LINK;
+  assert.equal(await t.K.aktualisieren({ still: true }), null);
+  assert.equal(gefragt.length, 2);
+  assert.deepEqual([t.K.status().linkFehler, t.speicher["eba-ilias-ics"]], [true, LINK]);
+  assert.match(t.K.hinweise()[0].text, /Neuen Link eingeben\*\* tippen, den Rest macht Studium Autopilot\.$/);
 });
 
 test("Abruf: der Schlüssel im Link steht nirgends; abgelaufener Link → Fehler bleibt, „Bitte prüfen“, nichts geändert", async () => {

@@ -43,8 +43,10 @@ test("Deine Angaben eingetragen: Wert in der Zeile, Studienbeginn mit Fachsemest
 });
 
 test("Einrichtung: übersprungene Schritte in Worten, angefangene geht dort weiter, wo sie stand", () => {
-  const fertig = nach(P.angabenZeilen({}, { status: "fertig", uebersprungen: ["alma", "ilias", "unbekannt"] }));
-  assert.equal(fertig.einrichtung.text, "Übersprungen: Alma, ILIAS.");
+  const fertig = nach(P.angabenZeilen({}, { status: "fertig", uebersprungen: ["uni", "unbekannt"] }));
+  assert.equal(fertig.einrichtung.text, "Übersprungen: Uni-Login.");
+  // aus Einrichtungen bis 0.4.7
+  assert.equal(nach(P.angabenZeilen({}, { status: "fertig", uebersprungen: ["alma", "ilias"] })).einrichtung.text, "Übersprungen: Alma, ILIAS.");
   assert.deepEqual(fertig.einrichtung.pille, { text: "fertig", art: "ok" });
   const laeuft = nach(P.angabenZeilen({}, { status: "laeuft", uebersprungen: [] }));
   assert.deepEqual(laeuft.einrichtung.knopf, { text: "Fortsetzen", aktion: "einrichtung", parameter: {}, cta: true });

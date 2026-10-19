@@ -79,13 +79,14 @@ const BASIS = (v) => `https://raw.githubusercontent.com/studium-autopilot/ecoba/
 // Release-Quelle: Dateien des neuen Stands unter BASIS/Studium Autopilot/…; stoerung(pfad) → "netz" | "kaputt" | undefined
 function quelle(version, dateien, listeText, stoerung) {
   const praefix = BASIS(version) + "Studium%20Autopilot/";
-  const geholt = [];
+  const geholt = [], frisch = [];
   return {
-    geholt,
-    holen: async (url) => {
+    geholt, frisch,
+    holen: async (url, o) => {
       assert.ok(url.startsWith(praefix), url);
       const pfad = url.slice(praefix.length).split("/").map(decodeURIComponent).join("/");
       geholt.push(pfad);
+      if (o && o.frisch) frisch.push(pfad);
       const s = stoerung && stoerung(pfad);
       if (s === "netz") throw new Error("offline");
       if (pfad === U.LISTE) return enc(listeText);
@@ -126,8 +127,8 @@ async function update(alt, neu, ist, o) {
   const release = { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: o.falscheListe ? "0".repeat(64) : await U.sha256(enc(listeText)), notiz: "" };
   const io = { holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste };
   const vorher = sp.stand();
-  const b = await U.aktualisierenMit(io, { release, alt: U.listePruefen(altListe).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 15, 14, 5) });
-  return { b, sp, q, vorher, listeText };
+  const b = await U.aktualisierenMit(io, { release, alt: U.listePruefen(altListe).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 15, 14, 5), marke: o.marke });
+  return { b, sp, q, vorher, listeText, release, io };
 }
 
 // Ein kleiner Vault: Kern, Skript, Seite mit Checkliste, Modul
@@ -647,4 +648,162 @@ test("Manifest: Feld beta (X.Y.Z-beta.N), release nur fertige Versionen", () => 
   assert.ok(U.listePruefen(Object.assign({}, { schema: 1, version: "0.3.0-beta.1", ordner: "Studium Autopilot", dateien: [
     { pfad: KERN + "main.js", klasse: "system", groesse: 1, sha256: "a".repeat(64) },
     { pfad: KERN + "manifest.json", klasse: "system", groesse: 1, sha256: "a".repeat(64) }] }), "0.3.0-beta.1").wert);
+});
+
+// ---------- Unterbrochenes Update (update.json, seit 0.4.8) und Nach Updates suchen ----------
+test("Unterbrochen: was dieses und ein anderes Gerät sehen (markeLage)", () => {
+  const jetzt = Date.parse("2026-10-19T12:00:00Z");
+  const m = (anders) => Object.assign({ version: "0.4.9", von: "0.4.8", geraet: "g-a", seit: "2026-10-19T11:40:00Z" }, anders);
+  const o = (anders) => Object.assign({ installiert: "0.4.8", ich: "g-a", jetzt, laeuft: false }, anders);
+  assert.equal(U.markeLage(m(), o()), "fertigstellen", "hier begonnen, installiert.json zeigt noch die alte Version");
+  assert.equal(U.markeLage(m({ seit: "2026-10-01T00:00:00Z" }), o()), "fertigstellen", "auf diesem Gerät ohne Zeitgrenze");
+  assert.equal(U.markeLage(m(), o({ laeuft: true })), null, "läuft gerade hier");
+  assert.equal(U.markeLage(m(), o({ installiert: "0.4.9" })), null, "fertig");
+  assert.equal(U.markeLage(m(), o({ installiert: "0.5.0" })), null);
+  assert.equal(U.markeLage(m(), o({ ich: "g-b" })), "anderes", "anderes Gerät, vor 20 Min.: seine Dateien kommen noch");
+  assert.equal(U.markeLage(m({ seit: "2026-10-19T10:59:00Z" }), o({ ich: "g-b" })), null, "über eine Stunde still: hier darf wieder installiert werden");
+  assert.equal(U.markeLage(m({ seit: "" }), o({ ich: "g-b" })), null);
+  assert.equal(U.MARKE_STILL, 60 * 60e3);
+  for (const kaputt of [null, "x", [], m({ version: "neu" }), m({ geraet: "" }), m({ geraet: 3 })]) assert.equal(U.markeLage(kaputt, o()), null, JSON.stringify(kaputt));
+  assert.equal(U.klasseVon(U.MARKE), "", "update.json kommt nie aus einem Update");
+});
+
+test("Unterbrochen: update.json als erste Datei und danach liegen lassen; Schreibfehler setzt sie zurück; nichts zu tun → keine", async () => {
+  const marke = { geraet: "g-a", seit: "2026-10-19T11:40:00Z" };
+  let r = await update(ALT, NEU, ALT, { marke });
+  assert.equal(r.b.ok, true, r.b.fehler);
+  assert.equal(r.sp.reihe[0], U.MARKE, "zuerst, vor jeder anderen Datei");
+  assert.deepEqual(r.sp.reihe.slice(-2), [U.LISTE, U.INSTALLIERT], "installiert.json zuletzt");
+  assert.deepEqual(JSON.parse(r.sp.text(U.MARKE)), { version: "0.3.0", von: "0.2.0", geraet: "g-a", seit: marke.seit });
+  assert.deepEqual(r.q.frisch, [U.LISTE], "die Liste kommt nie aus dem Zwischenspeicher");
+  // Zweiter Lauf derselben Version: nichts zu schreiben, also auch keine neue Marke
+  const vorher = r.sp.stand();
+  const b2 = await U.aktualisierenMit(r.io, { release: r.release, alt: U.listePruefen(JSON.parse(r.listeText)).wert, altVersion: "0.3.0", zeit: new Date(),
+    marke: { geraet: "g-b", seit: "2026-10-19T12:00:00Z" } });
+  assert.equal(b2.ok, true);
+  assert.equal(r.sp.stand(), vorher);
+  // Schreibfehler: alles zurück, auch die Marke (fehlte sie vorher, ist sie wieder weg; sonst der alte Inhalt)
+  r = await update(ALT, NEU, ALT, { marke, kaputtBei: (_p, n) => n === 5 });
+  assert.equal(r.b.art, "schreiben"); assert.equal(r.sp.stand(), r.vorher); assert.equal(r.sp.text(U.MARKE), null);
+  const alteMarke = JSON.stringify({ version: "0.2.0", von: "0.1.0", geraet: "g-b", seit: "2026-09-01T10:00:00Z" });
+  r = await update(ALT, NEU, Object.assign({}, ALT, { [U.MARKE]: alteMarke }), { marke, kaputtBei: (_p, n) => n === 5 });
+  assert.equal(r.sp.text(U.MARKE), alteMarke);
+  // Ohne Marke (kein Gerät bekannt) wie bisher
+  r = await update(ALT, NEU, ALT);
+  assert.equal(r.sp.text(U.MARKE), null);
+});
+
+test("Unterbrochen: App mitten im Schreiben beendet → dieses Gerät sieht „fertigstellen“, ein zweiter Lauf ergibt denselben Stand", async () => {
+  const marke = { geraet: "g-a", seit: "2026-10-19T11:40:00Z" };
+  const altListe = await listeBauen("0.2.0", ALT), neuListe = await listeBauen("0.3.0", NEU);
+  const listeText = JSON.stringify(neuListe, null, 1);
+  const release = { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)), notiz: "" };
+  const start = Object.assign({}, ALT, { [U.INSTALLIERT]: JSON.stringify(altListe) });
+  const lauf = (sp, alt) => U.aktualisierenMit({ holen: quelle("0.3.0", NEU, listeText).holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste },
+    { release, alt: U.listePruefen(alt).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 19, 11, 40), marke });
+  const ganz = speicher(start);
+  assert.equal((await lauf(ganz, altListe)).ok, true);
+  const n = ganz.reihe.length;
+  const ohneSicherung = (m) => Object.fromEntries(Array.from(m).filter(([k]) => !k.startsWith(".trash/")).map(([k, v]) => [k, dec(v)]));
+  for (const k of [2, Math.floor(n / 2), n]) {
+    // Stand nach k − 1 Schreibvorgängen: so bleibt der Tresor, wenn iOS die App beendet (nichts wird zurückgesetzt)
+    let sp = null, halb = null;
+    sp = speicher(start, (_p, nr) => { if (nr === k && !halb) halb = ohneSicherung(sp.m); return false; });
+    await lauf(sp, altListe);
+    assert.ok(halb, "Abbruch bei " + k);
+    assert.equal(JSON.parse(halb[U.INSTALLIERT]).version, "0.2.0", "installiert.json kommt zuletzt");
+    assert.equal(U.markeLage(JSON.parse(halb[U.MARKE]), { installiert: "0.2.0", ich: "g-a", jetzt: Date.parse(marke.seit), laeuft: false }), "fertigstellen");
+    assert.equal(U.markeLage(JSON.parse(halb[U.MARKE]), { installiert: "0.2.0", ich: "g-b", jetzt: Date.parse(marke.seit) + 60e3, laeuft: false }), "anderes");
+    // Update fertigstellen: gleicher Plan gegen die alte installiert.json, nur was fehlt
+    const weiter = speicher(halb);
+    const b = await lauf(weiter, JSON.parse(halb[U.INSTALLIERT]));
+    assert.equal(b.ok, true, b.fehler);
+    assert.equal(weiter.stand(), ganz.stand(), "Abbruch bei " + k + ": gleicher Stand wie ohne Abbruch");
+  }
+});
+
+// update.js mit erfundenem Tresor (dateien: Pfad → Text), Manifest (release) und Geräte-ID; Hinweise als Text
+function geraet(o) {
+  const dateien = Object.assign({}, o.dateien), hinweise = [], anfragen = [];
+  const rel = (v) => (v ? { version: v, url_basis: BASIS(v), sha256: "a".repeat(64), notiz: "" } : null);
+  const zaehler = { manifest: 0 };
+  const L = laden("update", { kontext: {
+    obsidian: {
+      Notice: class { constructor(t) { hinweise.push(String(t)); } setMessage() {} hide() {} },
+      requestUrl: async (p) => { anfragen.push(p); throw new Error("kein Netz im Test"); },
+    },
+    plugin: Object.assign({ manifest: { version: o.lauf || "0.4.8" } }, o.plugin),
+    zentral: {
+      geraetId: () => o.ich || "g-ich", stand: () => ({ release: rel(o.release), beta: null, plugin_aktuell: "" }),
+      manifestHolen: async () => { zaehler.manifest++; if (o.offline) throw new Error("offline"); return { release: rel(o.release), beta: null }; },
+      frischUrl: (u) => u + "?t=7", FRISCH_KOPF: { "Cache-Control": "no-cache" },
+    },
+  } });
+  const hat = (p) => Object.prototype.hasOwnProperty.call(dateien, p);
+  L.ctx.app.vault.adapter = { stat: async (p) => (hat(p) ? { type: "file" } : null), readBinary: async (p) => enc(dateien[p]).buffer };
+  return { U: L.ctx.update, aktionen: L.ergebnis.aktionen, hinweise, anfragen, zaehler };
+}
+const vorMin = (min) => new Date(Date.now() - min * 60e3).toISOString();
+const markeText = (geraetId, version, seit) => JSON.stringify({ version, von: "0.4.8", geraet: geraetId, seit });
+
+test("Nach Updates suchen: Knopf in der Zeile, Befehl, Ergebnis in einem Hinweis", async () => {
+  let G = geraet({ release: "0.4.8" });
+  assert.equal(G.aktionen["vorlage-suchen"].titel, "Nach Updates suchen", "Knopf und Befehl heißen gleich");
+  const a = G.U.anzeige();
+  assert.equal(a.html, "Version 0.4.8. Du hast die neueste Version.");
+  assert.deepEqual(a.knopf, { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false });
+  assert.equal(await G.U.suchen(), "aktuell");
+  assert.equal(G.zaehler.manifest, 1, "sofort geholt, ohne Wartezeit");
+  assert.deepEqual(G.hinweise, ["Du hast die neueste Version."]);
+  // Ohne Angaben (zentrale Daten aus): trotzdem der Knopf
+  assert.equal(geraet({}).U.anzeige().knopf.text, "Nach Updates suchen");
+  // Neue Version: das Angebot (mit „Neue Version installieren“ und „Was ist neu“), die Zeile zeigt den Hauptknopf
+  G = geraet({ release: "0.4.9" });
+  assert.equal(await G.U.suchen(), "angebot");
+  assert.deepEqual(G.hinweise, ["Neue Version 0.4.9 ist da."]);
+  assert.deepEqual(G.U.anzeige().knopf, { aktion: "vorlage-aktualisieren", text: "Neue Version installieren" });
+  // Kein Netz: ein Satz, kein Fehlertext
+  G = geraet({ release: "0.4.9", offline: true });
+  const fehler = console.error; console.error = () => {};
+  try { assert.equal(await G.U.suchen(), "fehler"); } finally { console.error = fehler; }
+  assert.deepEqual(G.hinweise, ["Keine Verbindung. Versuch es später noch einmal."]);
+});
+
+test("Unterbrochen: Zeile, Dashboard und Knöpfe auf diesem und auf einem anderen Gerät", async () => {
+  const ANDERES = "Ein Update wird gerade auf einem anderen Gerät installiert.";
+  // Anderes Gerät hat vor 10 Min. begonnen, seine Dateien kommen noch: kein zweites Update
+  let G = geraet({ release: "0.4.9", plugin: { testUpdateAntwort: true }, dateien: { [U.MARKE]: markeText("g-anders", "0.4.9", vorMin(10)) } });
+  await G.U.markeNeu();
+  assert.deepEqual([G.U.anzeige().html, G.U.anzeige().knopf], [ANDERES, null]);
+  assert.deepEqual(G.U.hinweis(), { art: "anderes", version: "0.4.9", text: ANDERES, knopf: "", symbol: "uhr" });
+  assert.equal(await G.U.aktualisieren(), null);
+  assert.equal(G.zaehler.manifest, 0, "nichts geholt, nichts installiert");
+  assert.equal(await G.U.suchen(), "anderes");
+  assert.deepEqual(G.hinweise, [ANDERES + " Öffne Obsidian dort, dann kommt es hierher.", ANDERES + " Öffne Obsidian dort, dann kommt es hierher."]);
+  // Über eine Stunde still: wieder das Angebot
+  G = geraet({ release: "0.4.9", dateien: { [U.MARKE]: markeText("g-anders", "0.4.9", vorMin(61)) } });
+  await G.U.markeNeu();
+  assert.equal(G.U.anzeige().knopf.text, "Neue Version installieren");
+  // Schon fertig (installiert.json zeigt die Version): nichts Besonderes
+  G = geraet({ lauf: "0.4.9", release: "0.4.9", dateien: { [U.MARKE]: markeText("g-anders", "0.4.9", vorMin(1)) } });
+  await G.U.markeNeu();
+  assert.equal(G.U.hinweis(), null);
+
+  // Dieses Gerät hat begonnen und wurde beendet: „Update fertigstellen“ fragt nicht noch einmal und holt die Liste frisch
+  G = geraet({ release: "0.4.9", plugin: { testUpdateAntwort: false }, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(300)) } });
+  await G.U.markeNeu();
+  const a = G.U.anzeige();
+  assert.equal(a.html, "Das Update auf Version 0.4.9 ist nicht fertig geworden.");
+  assert.deepEqual(a.knopf, { aktion: "vorlage-aktualisieren", text: "Update fertigstellen" });
+  assert.deepEqual(G.U.hinweis(), { art: "fertig", version: "0.4.9", text: a.html, knopf: "Update fertigstellen", symbol: "laden" });
+  const b = await G.U.aktualisieren();
+  assert.equal(b && b.art, "netz", "ohne zweite Frage weiter bis zum Laden (im Test ohne Netz)");
+  assert.deepEqual(G.hinweise, ["Lade die neue Version …"]);
+  assert.equal(G.anfragen[0].url, BASIS("0.4.9") + "Studium%20Autopilot/System/Daten/system-dateien.json?t=7");
+  assert.deepEqual(G.anfragen[0].headers, { "Cache-Control": "no-cache" });
+  // Bietet das Manifest inzwischen eine andere Version an, wird wie sonst gefragt
+  G = geraet({ release: "0.5.0", plugin: { testUpdateAntwort: false }, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(5)) } });
+  await G.U.markeNeu();
+  assert.equal(await G.U.aktualisieren(), null, "Frage mit Nein beantwortet");
+  assert.deepEqual(G.hinweise, []);
 });

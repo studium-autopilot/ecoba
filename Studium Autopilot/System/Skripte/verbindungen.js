@@ -31,6 +31,8 @@
 //                           Übungsgruppen (Aktualisieren, Textlink Trennen) bzw. bietet leise „Für Übungsgruppen verbinden“
 //                           (öffnet gleich die Anmeldung); kommen auch die Übungsgruppen von außen, nur der Satz (mit
 //                           gespeichertem Zugang Textlink Trennen).
+//                           „Uni-Login“ (art uni, seit 0.4.8): EINE Zeile statt ILIAS, ILIAS-Kalender, Alma-Stundenplan und Noten &
+//                           Anmeldungen (uniZeile); deren Zeilen (Regeln hier unten) stehen im Fenster dahinter (UniFenster).
 //                           „Noten & Anmeldungen (Alma)“ (art konto, seit 0.4.5): Zeile und Fenster aus alma-konto.js
 //                           (ctx.almaKonto.zeile(), fensterOeffnen()); nur sichtbar mit Beta, Zustimmung oder Daten (sichtbar()).
 //                           „Volltext der PDFs“ (art volltext, seit 0.4.5): Zahlen aus ctx.volltext.status(), Fenster mit Schalter.
@@ -96,6 +98,7 @@ module.exports = function (ctx) {
   };
   const stundenplanExtern = () => quelleExtern("stundenplan");
   const dateienExtern = () => quelleExtern("ilias-dateien");
+  const kalenderExtern = () => quelleExtern("ilias-kalender");
   const ALMA_EXTERN = "Dein Stundenplan kommt über deinen Uni-Abgleich.";
   // ILIAS (ilias.js, seit 0.4.0): Schloss wie bei Alma nur für Übersprungenes (einrichtung.js); Daten = Begleitnotizen mit ilias_id
   const iliasOffen = () => (ctx.einrichtung && ctx.einrichtung.iliasOffen ? ctx.einrichtung.iliasOffen() : true);
@@ -107,6 +110,43 @@ module.exports = function (ctx) {
   // Anmeldebaustein fehlt (ilias-anmeldung.js nicht geladen): nichts anbieten, was nicht geht
   const iliasOhneAnmeldung = (s) => !ctx.ilias || s.text === ctx.ilias.K.TEXT_ANMELDUNG_FOLGT;
   const mobil = !!(Platform && Platform.isMobile);
+  // Uni-Login (uni-login.js, Bibliothek, seit 0.4.8): holt die Links von ILIAS-Kalender und Alma selbst
+  const uni = () => { const f = ctx.user && ctx.user["uni-login"]; try { return typeof f === "function" ? f(ctx) : null; } catch (e) { return null; } };
+  const uniBenutzer = () => { try { return ctx.ilias ? ctx.ilias.uniZugang().benutzer || "" : ""; } catch (e) { return ""; } };
+  // Lässt sich der Uni-Login hier eingeben? (Schlüsselbund da, Anmeldebaustein da, Unterlagen nicht von außen)
+  const uniAnmeldungHier = () => { const s = VERBINDUNGEN.ilias.status(); return !!(ctx.ilias && ctx.ilias.kannSpeichern() && !iliasOhneAnmeldung(s) && !s.extern); };
+  // Nach einer Anmeldung im Fenster (Zustimmung: das Fenster nannte vorher Unterlagen, Kalender und Stundenplan; uni-login.js
+  // zustimmen): ILIAS-Kalender und Alma gleich mit verbinden (alleVerbinden). anzeigen(stand) bei jedem Schritt, stand =
+  // { <id>: "laeuft" | Ergebnis }. → Promise<Hinweis zum Ergebnis> (leer: nichts zu tun)
+  const uniWeiter = (anzeigen) => {
+    const U = uni();
+    if (!U) return Promise.resolve("");
+    U.zustimmen(VERBINDUNGEN.ilias.uniQuellen);
+    const stand = {};
+    const zeigen = () => { try { anzeigen(stand); } catch (e) { /* nur Anzeige */ } };
+    return U.alleVerbinden({ schritt: (id) => { stand[id] = "laeuft"; zeigen(); } }).then((r) => {
+      for (const id of U.QUELLEN) if (r[id]) stand[id] = r[id];
+      zeigen();
+      neuZeichnen();
+      return U.hinweis(r);
+    }, () => "");
+  };
+  // Stand von uniWeiter als Zeilen im Fenster (ILIAS, Einrichtung): läuft, ✓ verbunden oder der Grund
+  const uniStandZeigen = (el, stand) => {
+    const U = uni();
+    el.empty();
+    if (!U) return;
+    for (const id of U.QUELLEN) {
+      const x = stand && stand[id];
+      if (!x) continue;
+      if (x === "laeuft") el.createEl("p", { cls: "eba-modal-hinweis", text: `${U.NAME[id]} wird verbunden …` });
+      else {
+        const p = el.createEl("p", { cls: x.ok ? "eba-modal-erfolg" : "eba-modal-meldung fehler" });
+        if (x.ok) p.innerHTML = svg("haken") + " ";
+        p.appendText(U.zeile(id, x));
+      }
+    }
+  };
 
   // ---------- Verbunden in diesem Tresor (seit 0.4.7, quellen.js verbindung) ----------
   // Link und Passwort liegen nur auf dem Gerät, das verbunden ist; die Daten kommen über den Sync. Hält ein anderes Gerät die Sperre
@@ -165,6 +205,17 @@ module.exports = function (ctx) {
   const ILIAS_START = "https://ovidius.uni-tuebingen.de/";
   const ALMA_STUNDENPLAN = "https://alma.uni-tuebingen.de/alma/pages/plan/individualTimetable.xhtml?_flowId=individualTimetableSchedule-flow";
   const VERBINDUNGEN = {
+    // Uni-Login (seit 0.4.8): EINE Zeile unter Verbindungen für alles, was der Login holt (UNI_TEILE); deren eigene Zeilen stehen
+    // nur noch im Fenster (UniFenster). Aktualisieren holt alles, was auf diesem Gerät verbunden ist; Trennen trennt alles hier.
+    "uni-login": {
+      id: "uni-login", name: "Uni-Login", art: "uni",
+      satz: "Ein Login für Unterlagen, Abgaben und Stundenplan.",
+      trennenText: "Passwort, Benutzername und Links werden auf diesem Gerät gelöscht. Deine Daten bleiben, werden aber nicht mehr aktualisiert.",
+      status() { return { verbunden: uniTeile().some((x) => x.hier), gesperrt: !!VERBINDUNGEN.ilias.status().gesperrt }; },
+      gesperrt() { return false; },
+      async aktualisieren(p) { await Promise.all(uniTeile().filter((x) => x.hier && x.v.art !== "konto" && !x.s.laeuft).map((x) => x.v.aktualisieren(p).catch(() => null))); },
+      async trennen() { for (const x of uniTeile()) if (x.hier && x.v.trennen) await x.v.trennen(); },
+    },
     alma: {
       id: "alma", name: "Alma-Stundenplan", art: "link",
       satz: "Verbinde Alma, dann siehst du hier deine Woche.",
@@ -221,16 +272,34 @@ module.exports = function (ctx) {
       get name() { return dateienExtern() ? "ILIAS" : "ILIAS-Unterlagen"; },
       satz: "Verbinde ILIAS, dann landen deine Kursdateien von selbst hier.",
       schlossKnopf: "ILIAS verbinden",
-      get kurz() { return dateienExtern() ? "Deine Übungsgruppe kommt dann von selbst in den Stundenplan, deine Unterlagen weiter über deinen Uni-Abgleich." : "Deine Kursdateien aus ILIAS landen automatisch in Unterlagen."; },
+      // Fenster zum Anmelden: seit 0.4.8 der Uni-Login für alles (uni-login.js verbindet danach Kalender und Alma mit)
+      get anmeldenTitel() { return dateienExtern() ? "ILIAS verbinden" : "Mit Uni-Login verbinden"; },
+      // Zustimmung sichtbar vor der Eingabe (Uni-Login): ein Satz nennt, was der Login holt
+      get kurz() {
+        if (dateienExtern()) return "Deine Übungsgruppe kommt dann von selbst in den Stundenplan, deine Unterlagen weiter über deinen Uni-Abgleich.";
+        const teile = ["deine Unterlagen aus ILIAS"].concat(kalenderExtern() ? [] : ["die Abgaben aus dem ILIAS-Kalender"], stundenplanExtern() ? [] : ["deinen Alma-Stundenplan"]);
+        return `Mit deinem Uni-Login holt Studium Autopilot ${teile.length > 1 ? teile.slice(0, -1).join(", ") + " und " + teile[teile.length - 1] : teile[0]}.`;
+      },
+      // Aus „Noten & Anmeldungen“ (fuer=alma): die Kurse bleiben aus
+      get kurzOhneKurse() {
+        const teile = (kalenderExtern() ? [] : ["die Abgaben aus dem ILIAS-Kalender"]).concat(stundenplanExtern() ? [] : ["deinen Alma-Stundenplan"]);
+        return teile.length ? `Mit deinem Uni-Login holt Studium Autopilot ${teile.join(" und ")}; deine Kurse in ILIAS bleiben aus.` : "Deine Kurse in ILIAS bleiben dabei aus.";
+      },
+      // Quellen, die kurz bzw. kurzOhneKurse vor der Eingabe nennen: nur für sie gilt die Anmeldung als Zustimmung (uni-login.js
+      // zustimmen). Eine Einrichtung, die eine ältere Registry ohne dieses Feld liest (Skripte kommen einzeln per Sync), stimmt
+      // für keine zu.
+      get uniQuellen() { return dateienExtern() ? [] : (kalenderExtern() ? [] : ["ilias-kalender"]).concat(stundenplanExtern() ? [] : ["alma"]); },
       get schritte() {
         return dateienExtern() ? [] : [
-          "Benutzername und Passwort von ILIAS eingeben.",
-          "**Verbinden** tippen. Deine Dateien kommen gleich danach, neue später von selbst.",
+          "Benutzername und Passwort der Uni eingeben, wie bei ILIAS.",
+          "**Verbinden** tippen. Dateien, Abgaben und Stundenplan kommen gleich danach, Neues später von selbst.",
           "Kurse wählen. Kurse mit Modulcode sind schon an.",
         ];
       },
-      datenschutz: "Dein Passwort bleibt verschlüsselt auf diesem Gerät und geht nur an die Uni.",
-      get erklaerung() { return dateienExtern() ? "Ein Gerät reicht, deine Übungsgruppe kommt über deinen Sync auf die anderen." : "Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen; Videos und Dateien über 50 MB bleiben in ILIAS."; },
+      // Zustimmung sichtbar vor der Eingabe (Uni-Login): wo sich Studium Autopilot damit anmeldet; Alma nur, wenn der Stundenplan
+      // nicht von außen kommt
+      get datenschutz() { return `Damit meldet sich Studium Autopilot bei ${dateienExtern() || stundenplanExtern() ? "ILIAS" : "ILIAS und Alma"} an. Dein Passwort bleibt verschlüsselt auf diesem Gerät.`; },
+      get erklaerung() { return dateienExtern() ? "Ein Gerät reicht, deine Übungsgruppe kommt über deinen Sync auf die anderen." : "Ein Gerät reicht, alles kommt über deinen Sync auf die anderen; Videos und Dateien über 50 MB bleiben in ILIAS."; },
       get trennenText() { return dateienExtern() ? "Passwort und Benutzername werden auf diesem Gerät gelöscht. Deine Übungsgruppe bleibt im Stundenplan, wird aber nicht mehr geprüft." : "Passwort und Benutzername werden auf diesem Gerät gelöscht. Deine Dateien bleiben."; },
       // ctx.ilias.status() + daten (Unterlagen aus ILIAS im Vault, auch per Sync von einem anderen Gerät)
       status() {
@@ -299,13 +368,15 @@ module.exports = function (ctx) {
       gesperrt() { return false; },
       async aktualisieren() { if (ctx.zentral) await ctx.zentral.abrufen({ manuell: true }); },
     },
-    // Die Vorlage selbst (update.js, seit 0.2.0): Version und Knopf „Aktualisieren“, wenn eine neue Version da ist
+    // Die Vorlage selbst (update.js, seit 0.2.0): Version und Knopf „Neue Version installieren“, wenn eine neue Version da ist,
+    // sonst „Nach Updates suchen“ (seit 0.4.8)
     vorlage: {
       id: "vorlage", name: "Studium Autopilot", art: "vorlage",
       satz: "Neue Versionen holst du mit einem Tipp.",
-      kurz: "Gibt es eine neue Version, steht hier **Aktualisieren**. Ein Tipp holt sie, deine Einträge bleiben.",
+      kurz: "Gibt es eine neue Version, steht hier **Neue Version installieren**. Ein Tipp holt sie, deine Einträge bleiben.",
       schritte: [
-        "**Aktualisieren** tippen und bestätigen.",
+        "Nicht warten? **Nach Updates suchen** tippen.",
+        "**Neue Version installieren** tippen und bestätigen.",
         "Auf deinen anderen Geräten kommt das Update über deinen Sync. Dort nicht noch einmal tippen.",
       ],
       erklaerung: "Neue Programmteile kommen nur nach deinem Tipp; jede Datei wird geprüft, und vorher entsteht eine Sicherung.",
@@ -314,6 +385,14 @@ module.exports = function (ctx) {
     },
   };
   const holen = (id) => VERBINDUNGEN[String(id || "").trim().toLowerCase()] || null;
+  // Teile des Uni-Logins mit Stand: { v, s, hier, anderswo, zuletzt } (Kalender nur mit ilias-kalender.js, Noten nur sichtbar)
+  const UNI_TEILE = ["ilias", "ilias-kalender", "alma", "alma-konto"];
+  const UNI_WORT = { ilias: "Unterlagen", "ilias-kalender": "Abgaben", alma: "Stundenplan", "alma-konto": "Noten" };
+  const uniTeile = () => UNI_TEILE.map(holen).filter((v) => !v.sichtbar || v.sichtbar()).map((v) => {
+    const s = v.status() || {}, o = ortVon(v, s);
+    const hier = v.art === "konto" ? !!(s.an && s.benutzer) && ["extern", "beta-aus"].indexOf(s.art) < 0 : o.art === "hier";
+    return { v, s, hier, anderswo: o.art === "anderswo", zuletzt: hier ? s.geprueft || s.zuletzt || "" : o.zuletzt };
+  });
 
   // ---------- Anzeige aktualisieren ----------
   const bloecke = []; // Codeblock-Griffe (ctx.codeblock), gesetzt in registrieren()
@@ -474,23 +553,35 @@ module.exports = function (ctx) {
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
 
-  // Link eingeben, prüfen, verbinden, sofort importieren, Ergebnis zeigen
+  // Link eingeben, prüfen, verbinden, sofort importieren, Ergebnis zeigen. Mit gespeichertem Uni-Login (seit 0.4.8, uni-login.js)
+  // statt dessen: ein Satz mit deinem Benutzernamen und Verbinden, Studium Autopilot holt den Link selbst; geht das nicht, das
+  // Fenster zum Einfügen mit dem Grund darüber. Ohne Uni-Login darunter leise „Mit Uni-Login verbinden“ (öffnet die Anmeldung,
+  // die alles verbindet).
   class VerbindenFenster extends Modal {
-    constructor(v) { super(app); this.v = v; this.laeuft = false; }
+    constructor(v) { super(app); this.v = v; this.laeuft = false; this.vonHand = false; this.grund = ""; }
     onOpen() {
       const v = this.v, c = this.contentEl;
       this.modalEl.addClass("eba-modal", "eba-modal-verbinden");
       this.titleEl.setText(`${v.name} verbinden`);
+      const U = uni();
+      if (!this.vonHand && U && U.kannSelbst(v.id)) { this.selbstZeigen(U); return; }
       if (v.kurz) fett(c.createEl("p", { cls: "eba-modal-text" }), v.kurz);
       schritteZeigen(c, v);
       const feld = c.createEl("input", { type: "text", cls: "eba-modal-feld", attr: { inputmode: "url", placeholder: v.platzhalter || "https://…", autocomplete: "off", autocapitalize: "off", spellcheck: "false", "aria-label": "Link" } });
       const meldung = c.createEl("p", { cls: "eba-modal-meldung" });
       mehrZeigen(c, v.erklaerung);
+      // Ohne Uni-Login auf diesem Gerät: der schnellere Weg, leise (nur wo die Anmeldung hier möglich ist)
+      if (U && !U.bereit() && uniAnmeldungHier()) {
+        const p = c.createEl("p", { cls: "eba-modal-hinweis" });
+        p.appendText("Ohne Kopieren: ");
+        p.createEl("a", { text: "Mit Uni-Login verbinden", href: ctx.link("verbinden", { id: "ilias" }) }).addEventListener("click", () => this.close());
+      }
       const k = c.createDiv({ cls: "modal-button-container" });
       const los = k.createEl("button", { text: "Verbinden", cls: "mod-cta" });
       const ab = k.createEl("button", { text: "Abbrechen" });
       this.feld = feld; this.meldung = meldung; this.los = los;
       const zeigen = (text, art) => { meldung.setText(text || ""); meldung.className = "eba-modal-meldung" + (art ? " " + art : ""); };
+      if (this.grund) zeigen(`${this.grund} Du kannst den Link auch selbst einfügen.`, "fehler");
       feld.addEventListener("input", () => { if (meldung.hasClass("fehler")) zeigen(""); });
       const senden = async () => {
         if (this.laeuft) return;
@@ -502,20 +593,55 @@ module.exports = function (ctx) {
         try { r = await v.verbinden(link); } catch (e) { r = { ok: false, fehler: (e && e.message) || String(e) }; }
         this.laeuft = false;
         if (!r || !r.ok) { los.disabled = false; los.setText("Verbinden"); zeigen((r && r.fehler) || "Das hat nicht geklappt. Bitte noch einmal versuchen.", "fehler"); return; }
-        // Erfolg: Fenster zeigt das Ergebnis, Eingabe weg
-        c.empty();
-        c.createEl("p", { cls: "eba-modal-erfolg", text: `✓ Verbunden${r.text ? " – " + r.text : "."}` });
-        c.createEl("p", { cls: "eba-modal-hinweis", text: v.danach });
-        const k2 = c.createDiv({ cls: "modal-button-container" });
-        k2.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => this.close());
-        ctx.hinweis(`${v.name} verbunden${r.text ? " – " + r.text : "."}`);
-        neuZeichnen();
+        this.erfolg(r);
       };
       this.senden = senden;
       los.addEventListener("click", senden);
       ab.addEventListener("click", () => this.close());
       feld.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); senden(); } });
       setTimeout(() => feld.focus(), 30);
+    }
+    // Mit Uni-Login: kein Link nötig. Scheitert es, das Fenster zum Einfügen mit dem Grund (vonHand)
+    selbstZeigen(U) {
+      const v = this.v, c = this.contentEl;
+      if (v.kurz) fett(c.createEl("p", { cls: "eba-modal-text" }), v.kurz);
+      // Wo es sich anmeldet, steht vor dem Tipp; der Tipp gilt als Zustimmung für diese Quelle (uni-login.js zustimmen)
+      const p = c.createEl("p", { cls: "eba-modal-text" });
+      p.appendText("Studium Autopilot meldet sich mit deinem Uni-Login ");
+      p.createEl("b", { text: uniBenutzer() });
+      p.appendText(` bei ${v.id === "alma" ? "Alma" : "ILIAS"} an und holt den Link selbst.`);
+      const meldung = c.createEl("p", { cls: "eba-modal-meldung" });
+      // Ausweg: den Link selbst einfügen (z. B. eben in ILIAS bzw. Alma kopiert)
+      const selbst = c.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Link selbst einfügen", href: "#" });
+      selbst.addEventListener("click", (e) => { e.preventDefault(); if (this.laeuft) return; this.vonHand = true; this.grund = ""; this.contentEl.empty(); this.onOpen(); });
+      const k = c.createDiv({ cls: "modal-button-container" });
+      const los = k.createEl("button", { text: "Verbinden", cls: "mod-cta" });
+      k.createEl("button", { text: "Abbrechen" }).addEventListener("click", () => this.close());
+      const senden = async () => {
+        if (this.laeuft) return;
+        this.laeuft = true; los.disabled = true; los.setText("Verbinde …"); meldung.setText(v.laedt || "");
+        U.zustimmen([v.id]);
+        const r = await U.verbinden(v.id);
+        this.laeuft = false;
+        if (fenster !== this) { if (r.ok) { ctx.hinweis(`${v.name} verbunden${r.text ? " – " + r.text : "."}`); neuZeichnen(); } return; }
+        // Kommt die Quelle inzwischen von außen (eigener Uni-Abgleich per Sync), nicht zum Einfügen auffordern: nur der Satz
+        if (!r.ok && r.art === "extern") { los.setText("Verbinden"); meldung.setText(r.fehler || ""); meldung.addClass("fehler"); return; }
+        if (!r.ok) { this.vonHand = true; this.grund = r.fehler || ""; this.contentEl.empty(); this.onOpen(); return; }
+        this.erfolg(r);
+      };
+      this.senden = senden;
+      los.addEventListener("click", senden);
+    }
+    // Erfolg: Fenster zeigt das Ergebnis, Eingabe weg
+    erfolg(r) {
+      const v = this.v, c = this.contentEl;
+      c.empty();
+      c.createEl("p", { cls: "eba-modal-erfolg", text: `✓ Verbunden${r.text ? " – " + r.text : "."}` });
+      c.createEl("p", { cls: "eba-modal-hinweis", text: v.danach });
+      const k2 = c.createDiv({ cls: "modal-button-container" });
+      k2.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => this.close());
+      ctx.hinweis(`${v.name} verbunden${r.text ? " – " + r.text : "."}`);
+      neuZeichnen();
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
@@ -538,7 +664,8 @@ module.exports = function (ctx) {
   class IliasFenster extends Modal {
     // o.alleAus: aus der Zeile „Noten & Anmeldungen“ (nur der Uni-Zugang ist gewollt): nach dem Verbinden alle Kurse aus, kein
     // erster Abruf, ein Satz dazu
-    constructor(v, o) { super(app); this.v = v; this.alleAus = !!(o && o.alleAus); this.verbindet = false; this.ansicht = ""; this.meldung = null; this.felder = null; this.weg = null; this.gefunden = null; }
+    // weitere: Stand von ILIAS-Kalender und Alma nach der Anmeldung in diesem Fenster (uniWeiter), weitereEl: ihre Zeilen
+    constructor(v, o) { super(app); this.v = v; this.alleAus = !!(o && o.alleAus); this.verbindet = false; this.ansicht = ""; this.meldung = null; this.felder = null; this.weg = null; this.gefunden = null; this.weitere = null; this.weitereEl = null; }
     onOpen() {
       this.modalEl.addClass("eba-modal", "eba-modal-verbinden", "eba-modal-ilias");
       // Abruf (auch ein automatischer), während das Fenster offen ist: Fortschritt zeigen, an Start und Ende neu zeichnen
@@ -556,7 +683,7 @@ module.exports = function (ctx) {
     zeigen() {
       const s = this.v.status();
       this.contentEl.empty();
-      this.meldung = null; this.felder = null;
+      this.meldung = null; this.felder = null; this.weitereEl = null;
       if (iliasOhneAnmeldung(s) || !ctx.ilias.kannSpeichern() || (s.extern && s.gruppenExtern)) this.infoZeigen(s);
       else if (s.extern) { if (!s.gruppenZugang || s.gesperrt) this.anmeldenZeigen(s); else this.gruppenZeigen(s); }
       else if (!s.verbunden || s.gesperrt) this.anmeldenZeigen(s);
@@ -585,9 +712,11 @@ module.exports = function (ctx) {
     anmeldenZeigen(s) {
       const v = this.v, c = this.contentEl;
       this.ansicht = "anmelden";
-      this.titleEl.setText(`${v.name} verbinden`);
-      fett(c.createEl("p", { cls: "eba-modal-text" }), v.kurz);
-      schritteZeigen(c, v);
+      this.titleEl.setText(v.anmeldenTitel || `${v.name} verbinden`);
+      const ohneKurse = !!(this.alleAus && !s.extern && v.kurzOhneKurse);
+      fett(c.createEl("p", { cls: "eba-modal-text" }), ohneKurse ? v.kurzOhneKurse : v.kurz);
+      // Aus Noten & Anmeldungen bleiben die Kurse aus: dann ohne die Schritte, die Dateien und Kurse versprechen
+      if (!ohneKurse) schritteZeigen(c, v);
       const form = c.createDiv({ cls: "eba-modal-zugang" });
       const zeile = (text) => { const l = form.createEl("label", { cls: "eba-modal-zeile" }); l.createSpan({ cls: "eba-modal-label", text }); return l; };
       const benutzer = zeile("Benutzername").createEl("input", { type: "text", cls: "eba-modal-feld", attr: { placeholder: "z. B. zxabc01", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false", enterkeyhint: "next" } });
@@ -632,7 +761,8 @@ module.exports = function (ctx) {
         if (!mobil && this.felder === f) f.geheimFeld.focus();
         return;
       }
-      // Eigener Uni-Abgleich: keine Kursliste; Fenster zu, die Prüfung der Gruppen zeigt Fortschritt und Ergebnis als Hinweis
+      // Eigener Uni-Abgleich: keine Kursliste; Fenster zu, die Prüfung der Gruppen zeigt Fortschritt und Ergebnis als Hinweis.
+      // Kalender und Alma nicht von selbst (das Fenster nannte sie nicht); dort geht ein Tipp auf Verbinden.
       if (this.v.status().extern) {
         this.verbindet = false;
         ctx.ilias.jetztHolen().catch(() => null);
@@ -648,6 +778,10 @@ module.exports = function (ctx) {
       this.gefunden = Array.isArray(liste) ? liste.length : 0;
       // erster Abruf gleich, im Hintergrund (Hinweis mit Fortschritt; das Fenster darf zu); aus der Alma-Zeile nicht
       if (!this.alleAus && Array.isArray(liste) && liste.some((k) => k.aktiv)) ctx.ilias.jetztHolen().catch(() => null);
+      // Uni-Login: ILIAS-Kalender und Alma gleich mit (Zeilen im Fenster; ist es zu, das Ergebnis als Hinweis)
+      this.weitere = {};
+      uniWeiter((st) => { this.weitere = Object.assign({}, st); if (this.offen() && this.weitereEl) uniStandZeigen(this.weitereEl, this.weitere); })
+        .then((text) => { if (!this.offen() && text) ctx.hinweis(text); });
       neuZeichnen();
       if (!this.offen()) return;
       this.contentEl.empty();
@@ -664,6 +798,7 @@ module.exports = function (ctx) {
         c.createEl("p", { cls: "eba-modal-erfolg", text: `✓ Verbunden${n ? ` – ${n} ${n === 1 ? "Kurs" : "Kurse"} gefunden.` : "."}` });
         if (this.alleAus) c.createEl("p", { cls: "eba-modal-hinweis", text: "Deine Kurse sind aus. Schalte sie an, wenn du Dateien willst." });
       }
+      if (this.weitere) { this.weitereEl = c.createDiv({ cls: "eba-modal-uni" }); uniStandZeigen(this.weitereEl, this.weitere); }
       c.createEl("p", { cls: "eba-modal-text", text: [s.laeuft ? "" : iliasText(s), s.benutzer ? `Angemeldet als ${s.benutzer}.` : ""].filter(Boolean).join(" ") });
       this.meldung = c.createEl("p", { cls: "eba-modal-meldung" });
       if (s.laeuft) {
@@ -700,6 +835,33 @@ module.exports = function (ctx) {
     }
   }
 
+  // Uni-Login (seit 0.4.8): Stand wie in der Zeile, je Quelle ihr Stand und ein Schalter „auf diesem Gerät“ (an: das Fenster der
+  // Quelle zum Verbinden, aus: Trennen mit Rückfrage), „Link selbst einfügen“ ohne Passwort, „Kurse“ bei ILIAS; Noten & Anmeldungen
+  // schaltet man in seinem eigenen Fenster. Trennen trennt alles auf diesem Gerät.
+  class UniFenster extends Modal {
+    constructor(v) { super(app); this.v = v; }
+    onOpen() {
+      const v = this.v, c = this.contentEl, z = uniZeile(v), b = uniBenutzer(), teile = uniTeile();
+      this.modalEl.addClass("eba-modal", "eba-modal-verbinden");
+      this.titleEl.setText(v.name);
+      if (z.pille) c.createEl("p", { cls: "eba-modal-marke" }).innerHTML = z.pille;
+      c.createEl("p", { cls: "eba-modal-text", text: [z.text, b ? `Angemeldet als ${b}.` : ""].filter(Boolean).join(" ") });
+      const box = c.createDiv({ cls: "eba-modal-schalter" });
+      const weiter = (fn) => () => { this.close(); fn(); };
+      for (const x of teile) {
+        const q = x.v, zq = statusZeile(q) || { text: "" }, ext = !!x.s.extern || x.s.art === "extern";
+        const zeile = new ctx.obsidian.Setting(box).setName(q.name).setDesc(q.art === "konto" || !(zq.zu || zq.symbol === "aus") ? zq.text : "Nicht verbunden.");
+        if (q.art === "konto") { zeile.addButton((k) => k.setButtonText("Mehr erfahren").onClick(weiter(() => fensterOeffnen(q)))); continue; }
+        if (!ext || x.hier) zeile.addToggle((t) => t.setValue(x.hier).onChange(weiter(() => (x.hier ? ctx.aktion("trennen", { id: q.id }) : fensterOeffnen(q, { auch: "1" })))));
+        if (q.art === "link" && !ext) zeile.addButton((k) => k.setButtonText("Link selbst einfügen").onClick(weiter(() => { const m = new VerbindenFenster(q); m.vonHand = true; fenster = m; m.open(); })));
+        if (q.id === "ilias" && x.s.verbunden) zeile.addButton((k) => k.setButtonText("Kurse").onClick(weiter(() => fensterOeffnen(q))));
+      }
+      mehrZeigen(c, "Ein Gerät reicht, alles kommt über deinen Sync auf die anderen.");
+      if (teile.some((x) => x.hier)) c.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", weiter(() => ctx.aktion("trennen", { id: v.id })));
+    }
+    onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
+  }
+
   let fenster = null; // offenes Fenster (für Tests: ctx.verbindungen.fenster)
   // p: Parameter der Aktion (ILIAS mit fuer=alma: aus der Zeile „Noten & Anmeldungen“, danach sind alle Kurse aus)
   const fensterOeffnen = (v, p) => {
@@ -708,7 +870,7 @@ module.exports = function (ctx) {
     // Über ein anderes Gerät verbunden: erst der Stand; „Auch hier verbinden“ (auch=1) öffnet das Verbinden
     if (!(p && (p.auch === true || p.auch === "1")) && anderswo(v, v.status())) { const a = new AnderswoFenster(v); fenster = a; a.open(); return a; }
     if (v.art === "konto") { const k = ctx.almaKonto ? ctx.almaKonto.fensterOeffnen() : null; fenster = k; return k; }
-    const m = v.art === "anmeldung" ? new IliasFenster(v, { alleAus: !!(p && p.fuer === "alma") }) : v.art !== "link" ? new InfoFenster(v) : v.status().verbunden ? new VerwaltenFenster(v) : new VerbindenFenster(v);
+    const m = v.art === "uni" ? new UniFenster(v) : v.art === "anmeldung" ? new IliasFenster(v, { alleAus: !!(p && p.fuer === "alma") }) : v.art !== "link" ? new InfoFenster(v) : v.status().verbunden ? new VerwaltenFenster(v) : new VerbindenFenster(v);
     fenster = m;
     m.open();
     return m;
@@ -817,9 +979,11 @@ module.exports = function (ctx) {
       const mehr = knopf("verbinden", v.id, "Mehr erfahren", "");
       if (!ctx.update) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise", knopf: mehr, link: "" };
       const a = ctx.update.anzeige();
-      const k = a.knopf ? `<a class="eba-vb-knopf cta" href="${ctx.link(a.knopf.aktion, {})}">${esc(a.knopf.text)}</a>` : mehr;
+      // cta: false (Nach Updates suchen) ist ein normaler Knopf; das Angebot, Neu laden und Update fertigstellen sind Hauptknöpfe
+      const k = a.knopf ? `<a class="eba-vb-knopf${a.knopf.cta === false ? "" : " cta"}" href="${ctx.link(a.knopf.aktion, {})}">${esc(a.knopf.text)}</a>` : mehr;
       return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
     }
+    if (v.art === "uni") return uniZeile(v);
     if (v.art === "anmeldung") return iliasZeile(v);
     if (v.art === "konto") {
       // „Braucht deinen Uni-Zugang“, aber ein anderes Gerät prüft schon: verbunden
@@ -843,6 +1007,37 @@ module.exports = function (ctx) {
     const l = z.link;
     return { zu: false, text: z.text, pille: z.pille === "an" ? PILLE.an : z.pille === "pruefen" ? PILLE.pruefen : "", symbol: z.symbol, ton: tonVon(z.symbol),
       knopf: knopfHtml, link: l ? `<a class="eba-vb-mehr" href="${ctx.link(l.aktion, l.parameter || {})}">${esc(l.text)}</a>` : "" };
+  };
+
+  // Uni-Login (seit 0.4.8): „Verbunden · Unterlagen, Abgaben und Stundenplan · aktualisiert vor 5 Min.“ (nur, was verbunden ist;
+  // Problem einer Quelle mit ihrem Namen dahinter), Aktualisieren, Rest im Fenster; nur über andere Geräte: „Verbunden über ein
+  // anderes Gerät · …“; Passwort abgelehnt: neu verbinden; nichts verbunden: der Satz vor der Eingabe und „Mit Uni-Login verbinden“.
+  // Eigener Uni-Abgleich (Unterlagen von außen): nur der Satz, was von dort kommt (Übungsgruppen auf diesem Gerät wie bisher).
+  const undListe = (l) => (l.length > 1 ? `${l.slice(0, -1).join(", ")} und ${l[l.length - 1]}` : l[0] || "");
+  const uniZeile = (v) => {
+    const si = VERBINDUNGEN.ilias.status(), teile = uniTeile(), hier = teile.filter((x) => x.hier), mehr = mehrLink(v.id);
+    if ((si.verbunden || si.gruppenZugang) && si.gesperrt) return { zu: false, text: si.text, pille: PILLE.pruefen, symbol: "warnung", ton: "warn", knopf: knopf("verbinden", "ilias", "Verbinden", "cta"), link: mehr };
+    if (si.extern) {
+      if (si.gruppenZugang) { const sy = si.laeuft ? "uhr" : si.fehler || si.warnung ? "warnung" : "haken"; return { zu: false, text: si.text, pille: PILLE.an, symbol: sy, ton: tonVon(sy), knopf: si.laeuft ? "" : aktualisierenKnopf(v.id, false, {}), link: mehr }; }
+      const von = ["deine Unterlagen"].concat(kalenderExtern() ? ["deine Abgaben"] : [], stundenplanExtern() ? ["dein Stundenplan"] : []);
+      const satz = `${undListe(von)} kommen über deinen Uni-Abgleich.`;
+      return { zu: false, text: satz.charAt(0).toUpperCase() + satz.slice(1), pille: "", symbol: "haken", ton: "ok", knopf: "", link: hier.length || si.benutzer || von.length < 3 ? mehr : "" };
+    }
+    const aktiv = teile.filter((x) => x.hier || x.anderswo);
+    if (!aktiv.length) {
+      const zu = VERBINDUNGEN.ilias.gesperrt(), los = uniAnmeldungHier();
+      return { zu, text: VERBINDUNGEN.ilias.kurz, pille: zu ? PILLE.nicht : "", symbol: zu ? "schloss" : "aus", ton: "leise",
+        knopf: los ? knopf("verbinden", "ilias", "Mit Uni-Login verbinden", "cta") : knopf("verbinden", v.id, "Mehr erfahren", ""), link: los ? mehr : "" };
+    }
+    const neu = Math.max(0, ...aktiv.map((x) => Date.parse(x.zuletzt || "") || 0)), bis = neu ? vor(new Date(neu).toISOString()) : "";
+    const laeuft = hier.some((x) => x.s.laeuft);
+    const problem = laeuft ? null : hier.map((x) => ({ x, z: statusZeile(x.v) })).find((p) => p.z && p.z.symbol === "warnung");
+    const text = `${hier.length ? "Verbunden" : "Verbunden über ein anderes Gerät"} · ${undListe(aktiv.map((x) => UNI_WORT[x.v.id]))} · `
+      + (laeuft ? "aktualisiert gerade …" : bis ? `aktualisiert ${bis}.` : "noch nicht aktualisiert.") + (problem ? ` ${problem.x.v.name}: ${problem.z.text}` : "");
+    const symbol = laeuft ? "uhr" : problem ? "warnung" : "haken";
+    return { zu: false, text: text.replace(/\.\./g, "."), pille: PILLE.an, symbol, ton: tonVon(symbol),
+      knopf: !hier.length ? knopf("verbinden", v.id, "Mehr erfahren", "") : laeuft ? "" : aktualisierenKnopf(v.id, hier.some((x) => x.s.zustand === "anderes-geraet"), { uebernehmen: "1" }),
+      link: hier.length ? mehr : "" };
   };
 
   // Alma: verbunden → Aktualisieren (Rest im Fenster); Stundenplan schon da (Sync, zentral) → Haken ohne Pille, Verbinden leise;
@@ -922,7 +1117,7 @@ module.exports = function (ctx) {
     el.empty();
     const liste = el.createDiv({ cls: "eba-vb-liste" });
     for (const v of Object.values(VERBINDUNGEN)) {
-      if (v.sichtbar && !v.sichtbar()) continue;
+      if ((v.sichtbar && !v.sichtbar()) || UNI_TEILE.indexOf(v.id) >= 0) continue; // Teile des Uni-Logins: nur in dessen Fenster
       const st = statusZeile(v);
       if (!st) continue;
       const zeile = liste.createDiv({ cls: "eba-vb" + (st.zu ? " zu" : "") });
@@ -983,7 +1178,7 @@ module.exports = function (ctx) {
       for (const inst of b.instanzen()) {
         if (inst.art === "ilias-knopf") iliasKnopf(inst);
         else if (inst.art === "uebersicht") {
-          const el = inst.el.querySelector('.eba-vb[data-id="ilias"] .eba-vb-stand');
+          const el = inst.el.querySelector('.eba-vb[data-id="uni-login"] .eba-vb-stand');
           if (el) el.setText(s.text);
         }
       }

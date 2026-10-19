@@ -25,7 +25,7 @@ test("Laden: Bibliothek, keine Erweiterung; Fabrik und direkte Funktionen", () =
   // dieselbe Regel wie main.js (istErweiterung): sonst würde der Kern das Skript als Erweiterung starten
   assert.equal(/\bregistrieren\s*(\(|=|:|,|\})|\baktionen\s*:/.test(code), false);
   for (const n of ["parsen", "angemeldet", "seitenArt", "meldungen", "permalink", "mitgliedschaften", "kurse", "gruppen",
-    "inhalt", "folgeUrl", "inhaltReiter", "uebungen", "formulare", "dateiName", "downloadUrl", "datum", "groesse", "sitzung"]) {
+    "inhalt", "folgeUrl", "inhaltReiter", "aboFenster", "aboLinks", "uebungen", "formulare", "dateiName", "downloadUrl", "datum", "groesse", "sitzung"]) {
     assert.equal(typeof H[n], "function", "Fabrik: " + n);
     assert.equal(typeof S[n], "function", "direkt: " + n);
   }
@@ -273,6 +273,26 @@ test("Reiter „Inhalt“: Adresse ohne Weiterleitung, aktiv oder nicht; ohne Re
   assert.equal(H.inhaltReiter(seite("kurs").replace('<li id="tab_view_content" class="active"', '<li id="tab_view_content" class=""'), BASIS), ziel);
   assert.equal(H.inhaltReiter("<div><a href=\"ilias.php?ref_id=1\">x</a></div>", BASIS), "");
   assert.equal(H.inhaltReiter("", BASIS), "");
+});
+
+test("Kalender-Abo: Adresse des Fensters „Kalender abonnieren“ aus dem Skript der Kalender-Seite, Links aus dem Fenster", () => {
+  const k = seite("kalender");
+  const FENSTER = "https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilcalendarsubscriptiongui&cmd=getModalForSubscription&category_id=0&seed=2026-11-01&cmdMode=asynch";
+  assert.equal(H.aboFenster(k, "https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ildashboardgui&cmdClass=ilcalendarinboxgui"), FENSTER);
+  assert.equal(H.aboFenster(H.parsen(k), "https://ovidius.uni-tuebingen.de/ilias.php"), FENSTER, "auch aus einem zerlegten Baum");
+  // JSON-Schreibweise mit \/ und \u0026 (andere ILIAS-Fassungen)
+  const json = k.replace('"ajaxRenderUrl":"ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilcalendarsubscriptiongui',
+    '"ajaxRenderUrl":"\\/ilias.php?baseClass=ildashboardgui\\u0026cmdNode=x1:y2\\u0026cmdClass=ilcalendarsubscriptiongui');
+  assert.ok(json.indexOf("\\u0026cmdClass") > 0);
+  assert.equal(H.aboFenster(json, "https://ovidius.uni-tuebingen.de/"), FENSTER);
+  // Nur das Abo-Fenster, nicht das Fenster eines Termins; ohne Knopf nichts
+  assert.equal(H.aboFenster(k.split("ilcalendarsubscriptiongui").join("ilcalendarxgui"), "https://ovidius.uni-tuebingen.de/"), "");
+  assert.equal(H.aboFenster(seite("dashboard"), "https://ovidius.uni-tuebingen.de/"), "");
+  const L = H.aboLinks(seite("kalender-abo"));
+  const basis = "https://ovidius.uni-tuebingen.de/calendar.php?client_id=pr02&token=Erfunden0Schluessel0fuer0Tests0x&limited=";
+  assert.deepEqual(L, [{ url: basis + "0", begrenzt: false }, { url: basis + "1", begrenzt: true }]);
+  assert.deepEqual(H.aboLinks(seite("kalender")), []);
+  assert.deepEqual(H.aboLinks(seite("kalender-abo").split("token=").join("tok=")), []);
 });
 
 test("Übungen: Übersicht mit Fristen und Dateien, Aufgabenseite mit Download-Knöpfen", () => {

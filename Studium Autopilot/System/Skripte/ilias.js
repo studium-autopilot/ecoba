@@ -474,7 +474,7 @@ module.exports = function (ctx) {
     const abgelehnt = () => !!marker && hatZugang() && zeitVon(marker.abgelehnt) > zeitVon(lokal(L.zugangSeit));
     const markerSchreiben = async (dienst) => {
       const m = { abgelehnt: iso(), dienst: dienst === "alma" ? "alma" : "ilias", geraet: abh.geraetId() };
-      try { await io.schreibenText(UNI_ZUGANG, JSON.stringify(m, null, 1) + "\n"); marker = m; } catch (e) { try { console.warn("ilias: Uni-Zugang nicht vermerkt"); } catch (x) { /* egal */ } }
+      try { await io.schreibenText(UNI_ZUGANG, JSON.stringify(m, null, 1) + "\n"); marker = m; } catch (e) { try { console.warn("ilias: Ablehnung des Uni-Logins nicht vermerkt"); } catch (x) { /* egal */ } }
       melden({ art: "zugang" });
     };
     const uniZugang = () => {
@@ -546,6 +546,34 @@ module.exports = function (ctx) {
       melden({ art: "zugang" });
       const freigeben = () => gruppenFreigeben(UEBERNAHME).catch((e) => { try { console.warn("ilias: Gruppen " + fehlerText(e)); } catch (x) { /* egal */ } });
       if (vorher) vorher.then(freigeben); else await freigeben();
+    };
+    // Abo-Links des ILIAS-Kalenders (Uni-Login, uni-login.js) → [{ url, begrenzt }]. Mit der Sitzung des letzten Laufs, sonst einer
+    // neuen Anmeldung; wie ein Lauf nur mit Zugang und ohne Ablehnung. Lehnt ILIAS das Passwort dabei ab, dasselbe wie nach einem
+    // Lauf (Stand gesperrt, eindeutig falsch → Marker, Gruppen frei). Fehler: e.art (ohne-zugang, zugang, anmeldung, kalender …),
+    // Text ohne Passwort.
+    const kalenderLinks = async () => {
+      const f = anmeldung();
+      if (!f) throw fehlerArt("ohne-anmeldung", TEXT_ANMELDUNG_FOLGT + ".");
+      if (!hatZugang() || !geheimLesen()) throw fehlerArt("ohne-zugang", "Dein Uni-Login fehlt auf diesem Gerät.");
+      await markerLesen();
+      if (abgelehnt() || stand().gesperrt) throw fehlerArt("zugang", TEXT_ABGELEHNT);
+      const geheimId = abh.geheimId();
+      const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
+      try {
+        const q = await abh.quelle(zugang, anmeldenMit(f), { wiederverwenden: true });
+        if (!q || typeof q.kalenderAbo !== "function") throw fehlerArt("baustein", "ILIAS-Baustein fehlt.");
+        return await q.kalenderAbo();
+      } catch (e) {
+        const x = fehlerArt((e && e.art) || "fehler", fehlerText(e));
+        x.grund = (e && e.grund) || "";
+        if (x.art === "zugang") {
+          standSetzen({ gesperrt: true, fehler: x.message, fehlerZeit: iso() });
+          if (x.grund === "zugang-falsch") await markerSchreiben("ilias");
+          try { await gruppenFreigeben(UEBERNAHME); } catch (y) { /* beim nächsten Start (verwaisteGruppen) */ }
+          melden({ art: "zugang" });
+        }
+        throw x;
+      }
     };
 
     // ----- Index im Speicher; Schreiben nacheinander, je Eintrag gemischt mit der Platte -----
@@ -1455,7 +1483,7 @@ module.exports = function (ctx) {
 
     return {
       jetztHolen, kurseAbrufen, status, stand, protokoll, zugangSpeichern, zugangLoeschen, hatZugang, bereit, kurse, kursSetzen,
-      uniZugang, markerLesen, markerSchreiben,
+      uniZugang, markerLesen, markerSchreiben, kalenderLinks,
       umbenannt, speichern, indexLesen, auftrag, stoppen, verwerfen, gruppenListe, verwaisteGruppen,
       // Alte Einträge mit Kurspasswort im Titel: nur schreiben, wenn das Säubern wirklich einen Eintrag ändert (sonst schrieben
       // nach dem Update alle Geräte die Datei gleichzeitig)
@@ -1574,6 +1602,7 @@ module.exports = function (ctx) {
     const uni = N.UNI || {};
     const WURZEL = String(uni.ilias || "").replace(/\/$/, "");
     const KURSE = uni.kurse || WURZEL + "/ilias.php?baseClass=ilmembershipoverviewgui";
+    const KALENDER = WURZEL + "/ilias.php?baseClass=ilDashboardGUI&cmd=jumpToCalendar"; // Persönlicher Arbeitsraum → Kalender
     // Basis für relative Links: End-URL der Antwort; mobil unbekannt (null) → ILIAS-Wurzel (Seiten liegen dort, nicht unter
     // goto.php/<typ>/, sonst würde „ilias.php?…“ zu „goto.php/crs/ilias.php?…“)
     const basis = (r) => r.url || WURZEL + "/ilias.php";
@@ -1668,6 +1697,16 @@ module.exports = function (ctx) {
         return r;
       },
       name: (e) => (typeof H.dateiName === "function" ? H.dateiName(e) : ""),
+      // Kalender-Abo (Uni-Login, uni-login.js): Seite „Kalender“, dann das Fenster „Kalender abonnieren“ wie der Knopf
+      // Abonnieren (ILIAS legt den Schlüssel nur an, wenn es noch keinen gibt) → [{ url, begrenzt }]
+      kalenderAbo: async () => {
+        if (typeof H.aboFenster !== "function") throw fehlerArt("baustein", "ILIAS-Baustein fehlt (ilias-html.js zu alt).");
+        const r = await seite(KALENDER);
+        const f = H.aboFenster(r.text, basis(r));
+        if (!f || f.indexOf(WURZEL + "/") !== 0) throw fehlerArt("kalender", "Im ILIAS-Kalender fehlt der Knopf „Abonnieren“.");
+        const r2 = await seite(f);
+        return H.aboLinks(r2.text);
+      },
     };
   };
 
@@ -1803,6 +1842,8 @@ module.exports = function (ctx) {
     // zugangAbgelehnt(dienst) schreibt den Marker (nur nach eindeutiger Ablehnung eines gespeicherten Passworts)
     uniZugang: () => motor().uniZugang(),
     zugangAbgelehnt: (dienst) => motor().markerSchreiben(dienst),
+    // Abo-Links des ILIAS-Kalenders für den Uni-Login (uni-login.js): [{ url, begrenzt }], wirft mit e.art
+    kalenderLinks: () => motor().kalenderLinks(),
     bereit: () => motor().bereit(),
     kannSpeichern: () => !!(app && app.secretStorage && typeof app.secretStorage.setSecret === "function"),
     kurse: () => motor().kurse(),

@@ -246,7 +246,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 | Sag | Nicht | Warum |
 |---|---|---|
 | **Aktualisieren** (Daten jetzt holen, auch als „Stundenplan aktualisieren“); **Hier aktualisieren**, wenn gerade ein anderes Gerät aktualisiert | „Jetzt aktualisieren“, „Jetzt holen“, „Jetzt prüfen“, „Jetzt abgleichen“, „Hier laden“, „Aus ILIAS holen“, „… aus Alma holen“, „Neu holen“ | ein Wort für dieselbe Handlung |
-| **Neue Version installieren** (Update der App) | „Aktualisieren“, „Studium Autopilot aktualisieren“ | „Aktualisieren“ heißt schon: Daten holen |
+| **Neue Version installieren** (Update der App); **Nach Updates suchen** (sofort nachsehen); **Update fertigstellen** (ein abgebrochenes Update zu Ende bringen) | „Aktualisieren“, „Studium Autopilot aktualisieren“ | „Aktualisieren“ heißt schon: Daten holen |
 | **Lehrveranstaltung** (Eintrag im Stundenplan: Vorlesung, Übung, Tutorium) | „Stundenplan-Eintrag“, „Veranstaltung“ für den Stundenplan | **Veranstaltung** nur für Events: Party, Vortrag, Fachschaft |
 | **ECTS** | „CP“, „Credits“, „Leistungspunkte“ | so heißen sie in Alma und in der Prüfungsordnung |
 | **Prüfung**; **Prüfungsphase** mit Haupttermin und Nachholtermin | „Klausurtermin“, „Prüfungstermin“, „Klausurphase“, „Prüfungszeitraum“ | „Klausur“ nur als Form der Prüfung („Klausur 90 min“) |
@@ -256,6 +256,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 | **angemeldet**: für eine Prüfung oder einen Kurs (grün) | „angemeldet“ für ILIAS, Alma oder die Übungsgruppe | ein Wort, eine Bedeutung |
 | **verbunden**, **neu verbinden** (ILIAS, Alma) | „Anmeldung prüfen“, „Anmeldung abgelehnt“, „Melde mich an“ | „Anmeldung“ heißt: für eine Prüfung oder einen Kurs |
 | **Passwort** | „Kennwort“ | ein Wort |
+| **Uni-Login** (Benutzername und Passwort der Uni, gilt für ILIAS und Alma; seit 0.4.8) | „Uni-Zugang“, „Zugangsdaten“ | ein Login für alles, ein Wort dafür |
 | **## Meine Notizen** (dein Text in einer Notiz); **Zum Modul** (die Liste der Notizen auf der Modulseite) | „## Notizen“, „Meine Notizen“ als Liste | dein Text steht in jeder Notiz unter derselben Überschrift und bleibt dort |
 | **vorlesungsfrei**; benannte Pausen **Weihnachtspause**, **Pfingstpause** | „Ferien“, „Pfingstferien“ | so sagt es die Uni |
 | **Stundenplan** (Seite), **Woche** (Raster auf Dashboard und Stundenplan) | „Wochenplan“, „Wochenraster“, „Wochenansicht“ | ein Name je Ansicht |

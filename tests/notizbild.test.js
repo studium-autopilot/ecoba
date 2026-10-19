@@ -116,6 +116,51 @@ test("Modulseite: eine leere Liste fällt samt Überschrift weg, auf Höhe 0 gef
   assert.match(CSS, /\.eba-s-modul \.markdown-preview-sizer > :is\(\.el-div\.eba-tl-ohne, \.el-h2:has\(\+ \.el-div\.eba-tl-ohne \+ :is\(\.el-h1, \.el-h2, \.mod-footer\)\),/);
 });
 
+test("Leere Abschnitte: eine zugeklappte Überschrift bleibt stehen, auch wenn gleich die nächste folgt", () => {
+  // Obsidian nimmt den Inhalt eines zugeklappten Kapitels aus der Seite; ohne :not(.is-collapsed) verschwanden die Kapitel der Folien
+  assert.match(CSS, /\.el-h2\.eba-abschnitt:not\(\.is-collapsed\):has\(\+ :is\(\.el-h1, \.el-h2, \.mod-footer\)\),/);
+  assert.match(CSS, /\.el-h2\.eba-abschnitt:not\(\.is-collapsed\):last-child,/);
+  assert.doesNotMatch(CSS, /\.el-h2\.eba-abschnitt:(?:has\(\+ :is\(\.el-h1|last-child)/);
+});
+
+test("Folien als Markdown: Kapitel beim ersten Öffnen zu, auf jedem Gerät; die Leseansicht faltet erst, wenn sie gezeichnet hat", async () => {
+  const an = {}, timer = [], dom = [];
+  const F = { typ: "unterlage", cssclasses: ["eba", "eba-folien"] };
+  const { ctx, ergebnis: S } = laden("start", { frontmatter: { "U/f.md": F },
+    kontext: { an: (_q, n, fn) => { (an[n] = an[n] || []).push(fn); }, zeit: (fn) => timer.push(fn), dom: (_el, typ, fn) => dom.push([typ, fn]) } });
+  const h = (heading, line) => ({ level: 2, heading, position: { start: { line } } });
+  const f = { path: "U/f.md" };
+  const gespeichert = [];
+  let gezeichnet = false, angewandt = 0, vonDerAnsicht = 0;
+  const modus = { info: null, applyFoldInfo(i) { angewandt++; if (gezeichnet) this.info = i; }, getFoldInfo() { return this.info || { folds: [], lines: 9 }; } };
+  Object.assign(ctx.app, {
+    foldManager: { save: async (_f, i) => { gespeichert.push(i); } },
+    loadLocalStorage: () => [], saveLocalStorage: () => {},
+    workspace: { on: () => ({}), getLeavesOfType: () => [{ view: { file: f, currentMode: modus, onMarkdownFold: () => { vonDerAnsicht++; } } }] },
+  });
+  ctx.app.vault.cachedRead = async () => "\n".repeat(8);
+  ctx.app.metadataCache.getFileCache = () => ({ frontmatter: F, headings: [h("Das Wichtigste", 1), h("1.1 Grundbegriffe", 4), h("1.2 Ziele", 6)] });
+  globalThis.document = {};
+  try { S.registrieren(); } finally { delete globalThis.document; }
+  const vorher = timer.length;
+  for (const fn of an["file-open"]) await fn(f);
+  assert.deepEqual(gespeichert, [{ folds: [{ from: 4, to: 5 }, { from: 6, to: 8 }], lines: 9 }], "„Das Wichtigste“ bleibt offen");
+  assert.equal(vonDerAnsicht, 0, "noch nicht gezeichnet: nichts speichern, was die Faltung überschreibt");
+  gezeichnet = true;
+  for (const fn of timer.slice(vorher)) if (fn.length === 0 && /anwenden/.test(String(fn))) fn();
+  assert.equal(angewandt, 2);
+  assert.equal(vonDerAnsicht, 1);
+  // Tipp auf die Kapitelzeile klappt auf, ein Link darin bleibt ein Link
+  const tipp = dom.find(([typ]) => typ === "click")[1];
+  let geklickt = 0;
+  const pfeil = { click: () => { geklickt++; } };
+  const kapitel = { querySelector: () => pfeil };
+  const ziel = (link) => ({ closest: (sel) => (sel.indexOf(".eba-folien h2") >= 0 ? kapitel : link ? {} : null) });
+  tipp({ target: ziel(false) });
+  tipp({ target: ziel(true) });
+  assert.equal(geklickt, 1);
+});
+
 test("Wochenraster: Rahmen der laufenden Lehrveranstaltung innen (auch iPhone), nie bei einem Kasten vor seinem Beginn", () => {
   assert.match(CSS, /\.eba-ev\.jetzt:not\(\.spaeter\) \{ box-shadow: inset 0 0 0 2px var\(--eba-accent\); \}/);
   assert.doesNotMatch(CSS, /\.eba-ev\.jetzt \{ box-shadow: 0 0 0/, "kein Rahmen außen (am iPhone ohne Platz)");

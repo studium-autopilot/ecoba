@@ -36,6 +36,7 @@
 //   brotkrumen(html, url) → [{ typ, refId, titel, url }] (die Seite selbst zuerst, dann ihre Eltern)
 //   inhalt(html, url, { heute }) → [Eintrag]    folgeUrl(html, url) → URL, die statt dieser Seite zu holen ist, sonst ""
 //   inhaltReiter(html, url) → Adresse des Reiters „Inhalt“ (ohne Weiterleitung), sonst ""
+//   aboFenster(html, url) → Adresse des Fensters „Kalender abonnieren“ | ""   aboLinks(html) → [{ url, begrenzt }] (Uni-Login)
 //   uebungen(html, url, { heute }) → [Aufgabe]  formulare(html, url) → [{ id, name, method, action, felder, knoepfe }]
 //   dateiName(eintrag) → Dateiname              downloadUrl(eintrag, basis) → URL | ""
 //   datum(text, heute) → "JJJJ-MM-TTTHH:MM" | "JJJJ-MM-TT" | ""   groesse(text) → Bytes | null   sitzung(titel, heute)
@@ -62,6 +63,9 @@
 //   * Abgelaufene Sitzung: 302 auf login.php?…cmd=force_login; die Anmeldeseite hat die Metaleiste mit login.php-Link.
 //   * Übungen (exc): in den erfassten Kursen gab es im Oktober 2026 keine; uebungen() folgt PFERD und ILIAS-10-Markup, ist
 //     aber noch nicht an echten Seiten geprüft.
+//   * Kalender (19.10.2026): jumpToCalendar leitet auf die Seite mit cmdClass=ilcalendarinboxgui. Das Fenster „Kalender
+//     abonnieren“ kommt als HTML-Stück (<dialog class="c-modal il-modal-roundtrip">); den Schlüssel im Link legt ILIAS nur beim
+//     ersten Öffnen an, danach bleibt derselbe.
 //
 // Herkunft: Selektoren und Regeln (Typerkennung, Datei = Titel + "." + erste Eigenschaft, Sitzungsnamen, Datumsformate,
 //   Anmeldeprüfung, eingeklappte Sitzungen, Inhalt-Reiter, Gruppenblöcke) nach PFERD (https://github.com/Garmelon/PFERD,
@@ -716,6 +720,36 @@ function inhaltReiter(html, basisUrl) {
   return a ? absolut(attr(a, "href"), basisUrl) : "";
 }
 
+// ------------------------------------------------------------------------------------------------------------ Kalender-Abo
+// Seite „Kalender“ (ilias.php?baseClass=ilDashboardGUI&cmd=jumpToCalendar) → Adresse des Fensters „Kalender abonnieren“ | "".
+//   Der Knopf „Abonnieren“ lädt das Fenster nach; seine Adresse steht im Skript der Seite als ajaxRenderUrl mit
+//   cmdClass=ilcalendarsubscriptiongui und cmd=getModalForSubscription (gemessen am 19.10.2026).
+function aboFenster(html, basisUrl) {
+  const t = istElement(html) ? alle(html, (e) => e.name === "script").map(rohtext).join("\n") : String(html || "");
+  const re = /"ajaxRenderUrl"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while ((m = re.exec(t))) {
+    let u = m[1];
+    try { u = JSON.parse('"' + m[1] + '"'); } catch (e) { u = m[1].replace(/\\\//g, "/"); }
+    u = u.replace(/&amp;/g, "&");
+    if (/[?&]cmdClass=ilcalendarsubscriptiongui(&|$)/i.test(u) && /[?&]cmd=getModalForSubscription(&|$)/i.test(u)) return absolut(u, basisUrl);
+  }
+  return "";
+}
+// Fenster „Kalender abonnieren“ → [{ url, begrenzt }] je Abo-Link (calendar.php mit client_id und token), ohne Doppel. Die Links
+//   stehen im Etikett (a href) und im Feld daneben (input value): „iCal-URL“ mit limited=0 (alles), „iCal-URL (Google
+//   Kalender)“ mit limited=1 (ohne Termine, die älter als 30 Tage sind). Beide tragen denselben Schlüssel.
+function aboLinks(html) {
+  const aus = [], gesehen = {};
+  for (const e of alle(parsen(html), (x) => (x.name === "input" && !!attr(x, "value")) || (x.name === "a" && !!attr(x, "href")))) {
+    const u = String(e.name === "input" ? attr(e, "value") : attr(e, "href")).trim();
+    if (!/^https:\/\/[^/?#]+\/calendar\.php\?/i.test(u) || !parameter(u, "client_id") || !parameter(u, "token") || gesehen[u]) continue;
+    gesehen[u] = true;
+    aus.push({ url: u, begrenzt: parameter(u, "limited") === "1" });
+  }
+  return aus;
+}
+
 // -------------------------------------------------------------------------------------------------- Meine Kurse/Gruppen
 // Seite „Meine Kurse und Gruppen“ (ilias.php?baseClass=ilmembershipoverviewgui) → { kurse, gruppen }
 //   je [{ refId, titel, code, url, typ, beschreibung }]; code = Modulcode am Titelanfang (B110, SQ888, Muster wie MODULCODE in
@@ -915,7 +949,7 @@ function downloadUrl(eintrag, basisUrl) {
 // ---------------------------------------------------------------------------------------------------------------- Export
 const API = { parsen, alle, erstes, vorfahr, text, attr, hatKlasse, naechstesGeschwister, vorigesGeschwister, entitaeten,
   angemeldet, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl,
-  inhaltReiter, uebungen, formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
+  inhaltReiter, aboFenster, aboLinks, uebungen, formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
 
 // Aufruf mit ctx: „heute“ für Heute/Gestern/Morgen kommt aus ctx.date (Testdatum des Plugins), sonst wie ohne Aufruf.
 module.exports = function (ctx) {

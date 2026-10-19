@@ -75,36 +75,33 @@ Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Ke
 Termine und Fristen kommen danach von selbst, beim ersten Mal nach einigen Minuten. Nicht warten? Seite **Einstellungen & Hilfe** → **Verbindungen** → bei „Zentrale Daten“ **Aktualisieren**.
 
 Die Vorlesungen deiner Module stehen im laufenden Semester von selbst im **Stundenplan**, auch ohne Alma (dafür braucht die
-App deinen Studienbeginn aus der Einrichtung). Mit Alma kommt dein ganzer Stundenplan samt Übungsgruppen.
+App deinen Studienbeginn aus der Einrichtung). Mit deinem Uni-Login kommt dein ganzer Stundenplan aus Alma samt Übungsgruppen.
 
 ## Einrichtung beim ersten Start
 
 Nach dem [Vertrauen](#vertrauen) begrüßt dich eine kurze Einrichtung: **Studienbeginn**, **Variante**, Name und Zielnote,
-dann **Alma verbinden**. Jeden Schritt kannst du überspringen; mit **Später** geht es beim nächsten Start dort weiter. Ohne
-Angaben gilt das aktuelle Semester als dein erstes.
+dann **Dein Uni-Login** und das Aussehen. Jeden Schritt kannst du überspringen; mit **Später** geht es beim nächsten Start dort
+weiter. Ohne Angaben gilt das aktuelle Semester als dein erstes.
 
 Ändern kannst du alles unter **Einstellungen & Hilfe** → **Deine Angaben** (**Ändern** oder **Einrichtung erneut starten**).
 
-### Alma verbinden (Stundenplan)
+### Dein Uni-Login (Unterlagen, Abgaben, Stundenplan)
 
-1. In der Einrichtung bei **Stundenplan aus Alma** (später: **Einstellungen & Hilfe** → **Verbindungen** → **Verbinden**).
-2. Im Fenster auf **Alma** tippen und anmelden, dann auf **Deinen Stundenplan** (in Alma: **Mein Studium** → **Stundenplan**).
-3. **Daten für iCalendar (ics) exportieren** → **Link kopieren**.
-4. Link in Obsidian einfügen und **Verbinden** tippen.
+1. In der Einrichtung bei **Dein Uni-Login** (später: **Einstellungen & Hilfe** → **Verbindungen** → bei „ILIAS-Unterlagen“
+   **Verbinden**).
+2. Benutzername und Passwort der Uni eingeben, wie bei ILIAS.
+3. **Verbinden** tippen.
 
-Dein Stundenplan erscheint sofort. Der Link enthält kein Passwort und bleibt nur auf diesem Gerät. Auf einem zweiten Gerät verbindest du Alma noch einmal – oder der Stundenplan kommt per Sync mit. Die Einrichtung selbst erscheint dort nicht noch einmal.
+Danach kommen deine Kursdateien aus ILIAS, die Abgabetermine deiner Übungen aus dem ILIAS-Kalender und dein Stundenplan aus Alma
+von selbst. Die Links zu Kalender und Stundenplan holt Studium Autopilot selbst. Dein Passwort bleibt verschlüsselt auf diesem
+Gerät und geht nur an die Uni (ILIAS und Alma). Ein Gerät reicht, alles kommt über deinen Sync auf die anderen. Hast du ILIAS
+schon früher verbunden, tippst du bei „ILIAS-Kalender“ bzw. „Alma-Stundenplan“ einmal auf **Verbinden**.
 
-### ILIAS-Kalender verbinden (Abgabetermine)
-
-Die Abgabetermine deiner Übungen aus ILIAS stehen dann bei deinen Fristen.
-
-1. **Einstellungen & Hilfe** → **Verbindungen** → bei „ILIAS-Kalender“ **Verbinden**.
-2. ILIAS öffnen und anmelden, dann **Persönlicher Arbeitsraum** → **Kalender**.
-3. Neben dem Monatsblatt **Abonnieren** tippen und den Link unter **iCal-URL** kopieren.
-4. Link in Obsidian einfügen und **Verbinden** tippen.
-
-Der Link ist geheim wie ein Passwort und bleibt nur auf diesem Gerät. Steht eine Abgabe schon bei deinen Fristen, kommt sie nicht
-doppelt.
+**Ohne Passwort:** Kalender und Stundenplan kannst du auch mit einem kopierten Link verbinden. Bei „Alma-Stundenplan“ bzw.
+„ILIAS-Kalender“ **Verbinden** tippen und den Schritten im Fenster folgen: in Alma **Mein Studium** → **Stundenplan** →
+**Daten für iCalendar (ics) exportieren** → **Link kopieren**, in ILIAS **Persönlicher Arbeitsraum** → **Kalender** →
+**Abonnieren** → Link unter **iCal-URL**. Die Links bleiben nur auf diesem Gerät; der Link zum ILIAS-Kalender ist geheim wie ein
+Passwort. Steht eine Abgabe schon bei deinen Fristen, kommt sie nicht doppelt.
 
 ## Weiteres Gerät verbinden
 

@@ -64,6 +64,27 @@ test("fehler: abgelehnt (bekannte Meldung), unklar, zweiter Faktor, Zustimmung, 
   assert.equal(A.fehler("<html><body><p>Irgendwas</p></body></html>"), "unerwartet");
 });
 
+test("stundenplanLink: Link aus dem versteckten Fenster der Seite „Stundenplan“; fremd, kaputt oder doppelt → leer", () => {
+  const LINK = "https://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable/individualTimetableCalendarExport.faces?user=00000000-0000-4000-8000-00000000e1a7&hash=0123456789abcdef0123456789abcdef&termgroup=";
+  const s = seite("stundenplan");
+  assert.equal(A.stundenplanLink(s), LINK);
+  assert.equal(A.stundenplanLink(H.parsen(s)), LINK, "auch aus einem zerlegten Baum");
+  // Ohne Fenster (andere Seite) kein Link
+  for (const n of ["start-anonym", "nach-anmeldung", "leistungen-voll"]) assert.equal(A.stundenplanLink(seite(n)), "", n);
+  // Nur Alma, nur der Export-Pfad, user und hash nötig; nur im Feld steht er auch allein
+  const ersetzt = (alt, neu2) => s.split(alt).join(neu2);
+  assert.equal(A.stundenplanLink(ersetzt("alma.uni-tuebingen.de:443/alma/pages/cm", "alma.example.org/alma/pages/cm")), "");
+  assert.equal(A.stundenplanLink(ersetzt("alma.uni-tuebingen.de:443/alma/pages/cm", "alma.uni-tuebingen.de:8443/alma/pages/cm")), "");
+  assert.equal(A.stundenplanLink(ersetzt("individualTimetableCalendarExport", "individualTimetable")), "");
+  assert.equal(A.stundenplanLink(ersetzt("hash=0123456789abcdef0123456789abcdef", "hash=")), "");
+  assert.equal(A.stundenplanLink(ersetzt("https://alma.uni-tuebingen.de:443/alma/pages/cm", "http://alma.uni-tuebingen.de/alma/pages/cm")), "");
+  const nurFeld = s.replace(/ data-page-permalink(-title)?="[^"]*"/g, "");
+  assert.equal(A.stundenplanLink(nurFeld), LINK);
+  // Zwei verschiedene Links: lieber keiner (fail-closed)
+  const zwei = s.replace(/(data-page-permalink=")([^"]*)hash=0123/, "$1$2hash=9999");
+  assert.equal(A.stundenplanLink(zwei), "");
+});
+
 test("Leistungen leer: nur bekannter Text und kein Baum; anderer Hinweis oder fehlender Bereich → unsicher", () => {
   assert.deepEqual(A.leistungen(seite("leistungen-leer")), { art: "leer", zeilen: [] });
   assert.deepEqual(A.leistungen(seite("leistungen-unbekannter-hinweis")), { art: "unsicher", grund: "hinweis", zeilen: [] });

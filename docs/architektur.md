@@ -127,7 +127,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 
 | Skript | Aufgabe |
 |---|---|
-| `start.js` | Dashboard als Startseite (seit 0.4.6 nicht mehr angeheftet), Übersichtsseiten nur in der Leseansicht und deine Notizen von dort in der Bearbeitung (siehe unten), Seitenklasse aus `typ`, Folien vorfalten (iPhone), Messkorrektur |
+| `start.js` | Dashboard als Startseite (seit 0.4.6 nicht mehr angeheftet), Übersichtsseiten nur in der Leseansicht und deine Notizen von dort in der Bearbeitung (siehe unten), Seitenklasse aus `typ`, Kapitel der Folien vorfalten (alle Geräte, siehe unten), Messkorrektur |
 | `aktionen.js` | Knopf-Aktionen (siehe Liste) |
 | `notizen.js` | Notiz-Aktionen mit Ordner-Automatik |
 | `kalender.js`, `termine.js`, `klausurzeit.js`, `verlauf.js`, `todos.js`, `vorlesung.js`, `gruppen.js`, `angebote.js` | Codeblöcke `eba-kalender`, `eba-agenda`, `eba-anmeldungen`, `eba-klausurzeit`, `eba-verlauf`, `eba-todos`, `eba-vorlesung` und `eba-uebungsblatt`, `eba-gruppen`, `eba-angebote` |
@@ -137,7 +137,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `modell.js` | Datenmodell und Fachmodell `ctx.modell` (siehe „Fachmodell“), Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
 | `dashboard.js` | Kacheln und Listen aus dem Fachmodell: Codeblöcke `eba-kacheln` (Dashboard) und `eba-liste fristen\|termine\|pruefungen` (Dashboard, Prüfungen) |
 | `verbindungen.js` | Verbindungen und Schloss: Codeblöcke `eba-schloss`, `eba-verbindungen`; Aktionen `verbinden`, `verbindung-aktualisieren`, `trennen` |
-| `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit acht Bildschirmen, Zustand in den Einstellungen, Aktion `einrichtung`; siehe „Einrichtung“ |
+| `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit sieben Bildschirmen (seit 0.4.8, vorher acht), Zustand in den Einstellungen, Aktion `einrichtung`; siehe „Einrichtung“ |
 | `darstellung.js` | Hell, dunkel oder automatisch (seit 17.10.2026) und Design (seit 18.10.2026, intern `elfenbein`, `flieder`, `klar`), je Gerät (`ctx.darstellung`): Umschalter und Design-Kacheln `eba-darstellung`, Aktionen `darstellung` und `design`; siehe „Darstellung“ |
 | `personalisieren.js` | Formular (Aktion `personalisieren`, Parameter `feld` setzt den Cursor), Zeilen „Deine Angaben“ und „Variante“ (`eba-personalisieren angaben` bzw. `variante`, gleiche Zeilenliste wie die Verbindungen; Inhalt aus `angabenZeilen`/`varianteZeilen`); die Karte auf dem Dashboard entfällt seit 0.3.0 |
 | `musterplan.js` | Musterstudienpläne als eigene Darstellung, Codeblock `eba-musterplan` |
@@ -159,6 +159,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `quellen.js` | Helfer: Quellen-Vertrag (`ctx.user.quellen`): Statusform, ein Zeitplan, Besitzmarke, Lebenslauf erzeugter Notizen, Meldekanal „Bitte prüfen“; siehe „Quellen-Vertrag“ |
 | `volltext.js` | Volltext der PDFs (seit 0.4.5): Textfassungen unter `Unterlagen/_Volltext/` für die Suche, `ctx.volltext`; siehe „Volltext der PDFs“ |
 | `ilias-kalender.js` | ILIAS-Kalender (seit 18.10.2026): Abgaben deiner Übungen aus dem Kalender-Abo als Fristen unter `Termine/`, `ctx.iliasKalender`; siehe „ILIAS-Kalender“ |
+| `uni-login.js` | Helfer: Uni-Login (seit 0.4.8, `ctx.user["uni-login"](ctx)`): verbindet nach der Anmeldung ILIAS-Kalender und Alma-Stundenplan ohne kopierten Link, holt einen neuen Link, wenn der alte nicht mehr gilt; siehe „Uni-Login“ |
 
 Beim Start schreibt das Plugin keine Datei. Die Agenda (`eba-agenda`) wird live gerendert, wie der Kalender. Einzige
 Ausnahme seit 2b: Weichen die abgeleiteten Felder in `System/Einstellungen.md` vom berechneten Inhalt ab (siehe „Zentrale
@@ -511,6 +512,12 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Prüfsumme, Notizen nur bei geänderten Daten), beim Zurückkehren in die App nach über 10 Min.; dazu Aktion/Befehl „Zentrale Daten aktualisieren“. Ändert sich der Filter (Variante,
   Plan, Schalter), wendet das Abrufer-Gerät den letzten Stand ohne Netz neu an (`abrufen({ nurCache: true })`, 5 s entprellt über
   `ctx.modell.beiAenderung`). Hinweise (Notice) nur beim Knopf, nie beim automatischen Lauf.
+- **Frisch vom Server** (seit 19.10.2026, `frischUrl`): GitHub Pages schickt jede Datei mit `Cache-Control: max-age=600`. Gerät
+  und Zwischenspeicher gaben das Manifest darum bis zu 10 Min. alt zurück: Nach 0.4.7 zeigte ein iPad das Update lange nicht an,
+  und eine Datei, die älter ist als ihr Manifest, scheitert an der Prüfsumme. Jeder Abruf hängt `?t=<Minute seit 1970>` an
+  (gleich viele Abrufe wie vorher, Geräte in derselben Minute teilen sich den Zwischenspeicher) und schickt `Cache-Control:
+  no-cache` (`FRISCH_KOPF`; `requestUrl` reicht Kopfzeilen auf iPhone und iPad durch wie bei `ilias-netz.js`). Ein 304 ohne
+  Inhalt holt wie bisher einmal mit Zeitstempel in ms nach. `update.js` holt die Liste einer neuen Version genauso.
 - **Gerätelokal** (`app.saveLocalStorage`): `eba-geraet` (zufällige Geräte-ID), `eba-darstellung` (Hell, Dunkel, Automatisch),
   `eba-design` (`elfenbein`, `flieder`, `klar`), `eba-start-klassen` (Klassen am `body`, die `main.js` schon beim Laden setzt),
   `eba-zentral-stand` (letzter Abruf, Fehler,
@@ -777,7 +784,7 @@ hat, fasst ein Update nie an, auch wenn die Liste es nennt (dann lehnt das Plugi
 | `seite` | `Dashboard.md`, `Studium/*.md`, `System/Daten/Musterplan.md` | ersetzen | Vorlage seit der installierten Version gleich → deine bleibt, keine Kopie (seit 0.4.4); nur abgehakt (`ohne_haken` gleich) → neue Seite mit deinen Haken; sonst deine bleibt, neue daneben `Name (neu X).md` |
 | `modul` | `Module/**/*.md` | ersetzen | Vorlage seit der installierten Version gleich → deines bleibt unverändert (seit 0.4.4); sonst Frontmatter: Reihenfolge und Katalogfelder neu, persönliche Felder (`status`, `ergebnis`, `versuch`, `klausur`, `semester_geplant`, `gewaehlt`, `anrechnung`, `zusatz`, `alma_ausgeblendet`, `anmeldung_verzicht`) und eigene Felder bleiben, `tags`/`aliases`/`cssclasses` vereinigt; Text neu, wenn `koerper` gleich, sonst deiner |
 
-Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal), `abruf.json`, `installiert.json`,
+Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal), `abruf.json`, `installiert.json`, `update.json`,
 `.obsidian/appearance.json` (Obsidians Grundfarbschema; Hell, Dunkel, Automatisch speichert jedes Gerät selbst), `workspace*.json`, Plugin-`data.json`, `Termine/`, `Stundenplan/`,
 `Vorlesungen/`, `Übungsblätter/`, `Unterlagen/`, `Eingang/`, `Schlüsselqualifikationen/`, `Anhänge/`, `Karteikarten/`,
 `System/Daten/Karteikarten/` (Lernstände) und alles andere ohne Klasse.
@@ -820,6 +827,32 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   (Aktion `vorlage-neu-laden`). Skripte lädt der Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
   `installiert.json` an, setzt `update.js` `plugin.stillBis` für eine Minute; mehrere Skripte auf einmal schweigen ohnehin.
   Die Fenster vor und nach dem Update sagen darum „Dort einmal auf ‚Neu laden‘ … tippen“ (ohne neuen Kern: „nichts tun“).
+- **Unterbrochenes Update** (seit 0.4.8, `System/Daten/update.json`, `markeLage`): Befund 19.10.2026: Ein Gerät ging mitten im
+  Hochladen über LiveSync in den Hintergrund, der Tresor war auf den anderen Geräten eine Weile halb aktualisiert. Darum schreibt
+  das Update als **erste** Datei `update.json` = `{ version, von, geraet, seit }` (Geräte-ID aus `ctx.zentral.geraetId`; nur, wenn
+  es überhaupt etwas schreibt) und lässt sie danach liegen: Eine am Ende gelöschte Datei käme über den Sync erst nach allen anderen
+  an (ein Dokument steht dort, wo es zuletzt geändert wurde). Fertig ist ein Update erst mit `installiert.json` (zuletzt, nach dem
+  Kern). Ein Schreibfehler setzt auch `update.json` zurück (`schreibenSicher`). Solange `update.json` eine neuere Version nennt als
+  `installiert.json`:
+  - *dieses Gerät* (gleiche Geräte-ID, kein Lauf hier): Die App wurde beendet, bevor alles geschrieben war. Zeile und Dashboard
+    zeigen „Das Update auf Version X ist nicht fertig geworden.“ mit **Update fertigstellen** (Aktion `vorlage-aktualisieren`):
+    Derselbe Ablauf ohne zweite Frage (bietet das Manifest inzwischen eine andere Version an, wird gefragt); der Plan gegen die
+    alte `installiert.json` lädt und schreibt nur, was fehlt, und ergibt denselben Stand wie ein Lauf ohne Abbruch
+    (`tests/update.test.js`). Ohne Zeitgrenze.
+  - *ein anderes Gerät*, `seit` vor weniger als 1 Std. (`MARKE_STILL`): seine Dateien kommen noch über den Sync. Statt eines
+    Angebots steht „Ein Update wird gerade auf einem anderen Gerät installiert.“ (Zeile nur mit „Mehr erfahren“, Dashboard ohne
+    Knöpfe, kein Hinweis beim Öffnen); **Neue Version installieren** und **Nach Updates suchen** sagen es als Hinweis mit „Öffne Obsidian dort,
+    dann kommt es hierher.“. Danach gilt das Gerät als weg, und hier wird wieder angeboten (ein zweiter Lauf schreibt dieselben
+    Dateien).
+  Gelesen beim Start und bei jeder Änderung von `update.json` (auch per Sync). Wirkt ab dem Update, das 0.4.8 plant: Das Update
+  auf 0.4.8 schreibt noch der Planer von 0.4.7 (ohne `update.json`). `update.json` steht in `.gitignore`, `release.py` und
+  `pruefen.py`.
+- **Nach Updates suchen** (seit 0.4.8, `suchen()`, Aktion und Befehl `vorlage-suchen`): Knopf (normal, nicht Hauptknopf) in der
+  Zeile „Studium Autopilot“, wenn nichts angeboten wird, daneben der Textlink „Mehr erfahren“. Holt das Manifest sofort
+  (`ctx.zentral.manifestHolen`, ohne die 30 Min. der frischen Prüfung und ohne den Takt von `zentral.js`; zählt als Prüfung,
+  `eba-update-geprueft`) und sagt das Ergebnis in einem Hinweis: das Angebot wie der Hinweis beim Öffnen (**Neue Version
+  installieren**, **Was ist neu**), „Version X ist da. Einmal neu laden.“, „Du hast die neueste Version.“ oder „Keine Verbindung.
+  Versuch es später noch einmal.“. Ein Tipp, ein Abruf: Die automatischen Prüfungen bleiben, wie sie sind.
 - **Neustart:** Hat sich `main.js`/`manifest.json` geändert, lädt `pluginNeuLaden()` das Plugin neu
   (`app.plugins.disablePlugin` → `loadManifests` → `enablePlugin`, nicht gespeichert, also bleibt es in
   `community-plugins.json` aktiv). Danach zeichnet nur die neue Instanz. Klappt das nicht, sagt das Ergebnisfenster „Obsidian
@@ -835,7 +868,9 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
 - **Anzeige:** `ctx.update.anzeige()` → `{ html, pille, symbol, ton, knopf }`: „Wird aktualisiert …“, „Neu laden“, „Neue
   (Beta-)Version X verfügbar.“ + Notiz + Knopf „Neue Version installieren“, Rückfall „Neue Version X verfügbar“ als Link auf die Releases
   (nur `plugin_aktuell`, kein `release`), „Version X. Du hast die neueste Version.“ oder nur „Version X.“ (ohne Angaben im
-  Manifest, z. B. zentrale Daten aus). Die Zeile „Zentrale Daten“ zeigt den Hinweis nicht mehr.
+  Manifest, z. B. zentrale Daten aus), diese beiden mit dem Knopf **Nach Updates suchen** (`knopf.cta: false`); dazu seit 0.4.8
+  „Update fertigstellen“ und „Ein Update wird gerade auf einem anderen Gerät installiert.“ (siehe „Unterbrochenes Update“). Die
+  Zeile „Zentrale Daten“ zeigt den Hinweis nicht mehr.
 - **Hinweis auf dem Dashboard (seit 0.3.1):** Codeblock `eba-update-hinweis` ganz oben in `Dashboard.md` (nach der Pfadzeile,
   vor den Kennzahlen). `ctx.update.hinweis()` nutzt dieselbe Logik wie `anzeige()` (Neu laden, Angebot je Kanal, Rückfall
   `plugin_aktuell` → Link „Ansehen“ auf die Releases) und liefert sonst `null`: Dann ist der Block leer (`.eba-uh-aus`) und
@@ -884,7 +919,8 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   ohneHaken, seiteHaken, fmMischen, modulMischen, jsonMischenText, lesezeichenOhne, planen, aktualisierenMit(io, o),
   heilenMit(io, o), angebot, neuer, kanal, kanalSetzen, io, anzeige, hinweis, hinweisNeu, status, aktualisieren,
   installiertAnlegen, heilen, pluginNeuLaden, letzterBericht, fenster, changelogAbschnitte, abschnitteZwischen, markdownSicher,
-  toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, frischPruefen, toastPruefen, neuigkeitenZeigen, neuigkeiten }`.
+  toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, frischPruefen, toastPruefen, neuigkeitenZeigen, neuigkeiten,
+  markeLage, MARKE, MARKE_STILL, markeNeu, suchen }`.
   `aktualisierenMit` und `heilenMit` bekommen den Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`, `liste`)
   und sind darum ohne Obsidian testbar (`tests/update.test.js`, Neuigkeiten: `tests/update-neuigkeiten.test.js`).
   `heilen(true)` startet die Reparatur sofort, ohne den Merker des Geräts.
@@ -1114,6 +1150,12 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
   (bleibt richtig, wenn Obsidian nur die geänderte Liste neu zeichnet); in der Bearbeitungsansicht der Begleitnotizen fallen die Zeilen
   (`leereAbschnitte`, `eba-leer-zeile`) weg, solange der Cursor nicht darin steht. Andere Notizen zeigen ihre Überschriften dort
   weiter: Dort schreibst du hinein. Gefaltet auf Höhe 0 (`eba-core.css` 64.4), nie `display: none`.
+- **Kapitel der Folien als Markdown** (`cssclasses: eba, eba-folien`; seit 19.10.2026 auf allen Geräten, vorher nur iPhone):
+  `start.js` klappt jedes `##` außer „Das Wichtigste“, „Zu tun“ und „Offene Fragen“ beim ersten Öffnen je Gerät zu (Obsidians
+  Faltung, `foldManager`). Die Leseansicht nimmt die Faltung erst an, wenn sie ihre Abschnitte kennt: `start.js` fasst bis zu 15 × 200 ms
+  nach und speichert erst dann (sonst schrieb `onMarkdownFold` „nichts gefaltet“ darüber). Ein Tipp irgendwo auf die Kapitelzeile
+  klappt in der Leseansicht auf und zu. Zugeklappte Kapitel stehen wie ein Inhaltsverzeichnis untereinander (`eba-core.css` 31);
+  die Regel für leere Abschnitte (64.4) lässt eine zugeklappte Überschrift stehen, obwohl ihr gleich die nächste folgt.
 - **Eckdaten** (seit 19.10.2026): Der Kasten „Eckdaten“ der Begleitnotizen bis 0.4.6 wiederholte den Kopf (Modul, Art, Semester)
   und trug „Öffnen ↗ · Größe ⇅“. Neue Begleitnotizen haben ihn nicht mehr; bei älteren entfernt der Post-Processor jede Zeile, die das
   Plugin geschrieben hat (`eckZeileErzeugt`), und blendet den leeren Kasten aus. Eigener Text darin bleibt stehen. Das gilt nur für
@@ -1236,8 +1278,9 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
 
 | id | Art | Gesperrt, solange … |
 |---|---|---|
+| `uni-login` | „Uni-Login“ (seit 0.4.8), Art `uni`: EINE Zeile unter Verbindungen statt `ilias`, `ilias-kalender`, `alma` und `alma-konto` (`uniZeile`): „Verbunden · Unterlagen, Abgaben und Stundenplan · aktualisiert vor 5 Min.“ (nur, was hier oder über ein anderes Gerät verbunden ist; das Problem einer Quelle mit ihrem Namen dahinter), Knopf **Aktualisieren** (alles, was hier verbunden ist), „Mehr erfahren“ öffnet `UniFenster` (je Quelle ihr Stand aus den Zeilen unten und ein Schalter „auf diesem Gerät“, „Link selbst einfügen“, „Kurse“, Noten & Anmeldungen nur, wenn sichtbar; **Trennen** trennt alles hier); nur über andere Geräte „Verbunden über ein anderes Gerät · …“; nichts verbunden: Satz vor der Eingabe und **Mit Uni-Login verbinden**; eigener Uni-Abgleich: nur der Satz, was von dort kommt. Die Zeilen der vier Quellen gibt es weiter (`zeile(id)`), nur im Fenster | nie (die Schlösser gelten je Quelle) |
 | `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`); im eigenen Uni-Abgleich nur der Satz „Dein Stundenplan kommt über deinen Uni-Abgleich.“ ohne Knopf (Aktion `verbinden` zeigt ihn als Hinweis); ist dort doch ein Link gespeichert, holt Alma trotzdem nichts, die Zeile sagt „Der Alma-Link auf diesem Gerät wird nicht genutzt.“ und bietet Trennen als Textlink | kein Link auf diesem Gerät **und** keine eigene Notiz in `Stundenplan/` **und** keine zentrale Stundenplan-Notiz **und** kein eigener Uni-Abgleich **und** kein anderes Gerät verbunden (seit 0.4.7) **und** Alma in der Einrichtung offen (übersprungen oder Einrichtung nicht fertig, `ctx.einrichtung.almaOffen()`; seit 0.3.0) |
-| `ilias` | „ILIAS-Unterlagen“ (seit 0.4.0), Anmeldung mit Benutzername und Passwort über `ctx.ilias` (siehe „ILIAS-Unterlagen“); eigenes Fenster `IliasFenster`; Knopf Verbinden, verbunden Aktualisieren (lädt gerade ein anderes Gerät: Hier aktualisieren). Im eigenen Uni-Abgleich heißt sie „ILIAS“: nicht verbunden der Satz „Deine Unterlagen kommen über deinen Uni-Abgleich.“ und leise **Für Übungsgruppen verbinden** (öffnet gleich die Anmeldung, eigene Texte ohne Schritte, danach schließt das Fenster); verbunden Stand der Prüfung, Knopf **Aktualisieren**, Textlink **Trennen** | nicht verbunden **und** keine Begleitnotiz mit `ilias_id` unter `Unterlagen/` **und** kein anderes Gerät verbunden (seit 0.4.7) **und** ILIAS in der Einrichtung offen (`ctx.einrichtung.iliasOffen()`); nie im eigenen Uni-Abgleich oder ohne Anmeldebaustein |
+| `ilias` | „ILIAS-Unterlagen“ (seit 0.4.0), Anmeldung mit Benutzername und Passwort über `ctx.ilias` (siehe „ILIAS-Unterlagen“); eigenes Fenster `IliasFenster`, seit 0.4.8 „Mit Uni-Login verbinden“ (`anmeldenTitel`): danach verbindet `uni-login.js` ILIAS-Kalender und Alma mit, ihre Zeilen stehen im Fenster, ist es zu, kommt ein Hinweis (siehe „Uni-Login“); Knopf Verbinden, verbunden Aktualisieren (lädt gerade ein anderes Gerät: Hier aktualisieren). Im eigenen Uni-Abgleich heißt sie „ILIAS“: nicht verbunden der Satz „Deine Unterlagen kommen über deinen Uni-Abgleich.“ und leise **Für Übungsgruppen verbinden** (öffnet gleich die Anmeldung, eigene Texte ohne Schritte, danach schließt das Fenster); verbunden Stand der Prüfung, Knopf **Aktualisieren**, Textlink **Trennen** | nicht verbunden **und** keine Begleitnotiz mit `ilias_id` unter `Unterlagen/` **und** kein anderes Gerät verbunden (seit 0.4.7) **und** ILIAS in der Einrichtung offen (`ctx.einrichtung.iliasOffen()`); nie im eigenen Uni-Abgleich oder ohne Anmeldebaustein |
 | `alma-konto` | „Noten & Anmeldungen (Alma)“ (seit 0.4.5, Beta), Art `konto`: Zeile (`ctx.almaKonto.zeile()`) und Fenster (`fensterOeffnen()`) kommen aus `alma-konto.js`; ohne Beta, Zustimmung und Daten keine Zeile (`sichtbar()`). „ILIAS verbinden“ aus dieser Zeile öffnet das ILIAS-Fenster mit `fuer=alma`: danach sind alle neuen Kurse aus (`kurseAbrufen({ alleAus: true })`), kein erster Abruf | nie |
 | `ilias-kalender` | „ILIAS-Kalender“ (seit 18.10.2026, `ilias-kalender.js`), Art `link` wie Alma: nicht verbunden Satz und **Verbinden** (Symbol aus, keine Pille, kein Schloss); verbunden Stand aus `standText` und die Zahl der kommenden offenen Abgaben („Aktualisiert vor 5 Min. 3 Abgaben stehen bei deinen Fristen.“), Knopf Aktualisieren bzw. Hier aktualisieren, „Mehr erfahren“ öffnet das Link-Fenster (Neuen Link eingeben, Trennen); von außen nur der Satz „Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich.“ (mit gespeichertem Link Textlink Trennen). Die Link-Fenster nehmen ihre Texte aus der Registry (`laedt`, `danach`, `neuerLink`, `externText`; Alma unverändert) | nie |
 | `volltext` | „Volltext der PDFs“ (seit 0.4.5, `volltext.js`): Text mit den Zahlen aus `ctx.volltext.status()` („58 PDFs durchsuchbar, 2 ohne Text.“), Knopf Aktualisieren (`nachholen`; liest gerade ein anderes Gerät: Hier aktualisieren, `hier=1`); aus: Einschalten öffnet das Fenster mit dem Schalter „Textfassungen anlegen“ (`setzen`, für alle Geräte); extern oder fremde Textfassungen: nur der Satz | nie |
@@ -1284,7 +1327,10 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   kopieren“; Einrichtung ebenso). Die Links (`ctx.verbindungen.ALMA`) sind am 17.10.2026 mit Anmeldung geprüft; ohne Anmeldung
   führt der Stundenplan-Link zur Anmeldung und danach zur Startseite, darum zuerst Alma. Der Weg durchs Menü (Mein Studium →
   Stundenplan) steht unter „Mehr erfahren“, falls Alma die Adresse ändert. Eingabe mit Prüfung (https/webcal, Server alma.uni-tuebingen.de, nicht nur die Startseite), sofortiger Import, Ergebnis mit
-  Anzahl. Scheitert der Abruf, bleibt kein Link gespeichert (vorheriger Zustand gilt wieder).
+  Anzahl. Scheitert der Abruf, bleibt kein Link gespeichert (vorheriger Zustand gilt wieder). Mit gespeichertem Uni-Login (seit
+  0.4.8, Alma und ILIAS-Kalender) statt der Schritte ein Satz mit dem Benutzernamen und **Verbinden**: Studium Autopilot holt den
+  Link selbst; scheitert das, zeigt das Fenster die Schritte zum Einfügen mit dem Grund darüber. Ohne Uni-Login auf diesem Gerät
+  steht unter den Schritten leise „Ohne Kopieren: Mit Uni-Login verbinden“ (siehe „Uni-Login“).
 - Gespeichert wird nur gerätelokal (`app.saveLocalStorage`): `eba-alma-ics`, `eba-alma-stand`, `eba-alma-seit`.
 - Codeblock `eba-alma-knoepfe` (Seite Stundenplan, seit 0.3.0): verbunden → nur „Stundenplan aktualisieren“, über ein anderes Gerät
   verbunden nichts (seit 0.4.7), sonst
@@ -1454,7 +1500,7 @@ Alma eine Prüfungsanmeldung fehlt. Es schreibt nie selbst in Modulnotizen und n
 
 | Skript | Aufgabe |
 |---|---|
-| `alma-konto-html.js` | reiner Leser (CommonJS ohne Obsidian, Zerleger aus `ilias-html.js`; auch für einen eigenen Server): `seite`, `anmeldeFormular`, `fehler`, `leistungen`, `belegungen`, `zuordnen`, `zusammenfassen`, `pruefungenZuordnen`, `fingerabdruck`, `semesterName` |
+| `alma-konto-html.js` | reiner Leser (CommonJS ohne Obsidian, Zerleger aus `ilias-html.js`; auch für einen eigenen Server): `seite`, `anmeldeFormular`, `fehler`, `stundenplanLink` (seit 0.4.8), `leistungen`, `belegungen`, `zuordnen`, `zusammenfassen`, `pruefungenZuordnen`, `fingerabdruck`, `semesterName` |
 | `alma-konto.js` | Ablauf, Zeitplan, Zustand, Vorschläge, Erinnerung, Zeile und Fenster (`ctx.almaKonto`), Aktion `alma-konto-pruefen` |
 | `sperre.js` | Abrufer-Sperre der Quelle `alma-konto` (siehe „Abrufer-Sperre“) |
 | `ilias-netz.js` | Sitzung mit Dienst `alma`: nur `alma.uni-tuebingen.de`, Kennung `Studium-Autopilot/<Version> (+https://github.com/studium-autopilot/ecoba)` |
@@ -1537,8 +1583,11 @@ Alma eine Prüfungsanmeldung fehlt. Es schreibt nie selbst in Modulnotizen und n
   Noten; `zustand` z. B. `an`, `aus`, `ohne-zugang`, `wartet-ilias`, `abgelehnt`, `unsicher`, `anderes-geraet`, `pause`), dazu
   `an`, `benutzer`, `laeuft`, `daten`, `aufbau`. Zustände, in denen nur du weiterhilfst (abgelehnt, zweiter Faktor, Zustimmung,
   unklare Antwort), meldet zusätzlich „Bitte prüfen“ („**Alma** · …“).
+- **Stundenplan-Link** (seit 0.4.8, ohne Beta und ohne **Einschalten**, für den Uni-Login): `stundenplanLink()` meldet sich mit
+  derselben Anmeldung wie ein Lauf an (`mitAlma`), liest „Stundenplan“ und meldet sich ab → `{ art: "ok", link }` oder die Art
+  wie bei einem Lauf; ändert den Stand von Noten & Anmeldungen nicht. Siehe „Uni-Login“.
 - **Für die Oberfläche:** `ctx.almaKonto = { status(), zeile(), sichtbar(), einschalten(), ausschalten(), jetztPruefen({ hier }),
-  loeschen(), zustand(), vorschlag(fm), uebernehmen(f, v), ausblenden(f, v), modulFeld(box, f, fm), fehlendeAnmeldungen(),
+  loeschen(), zustand(), vorschlag(fm), stundenplanLink(), uebernehmen(f, v), ausblenden(f, v), modulFeld(box, f, fm), fehlendeAnmeldungen(),
   hinweise(), fingerabdruck(), beobachten(fn), fensterOeffnen() }`.
 - **Tests:** `tests/alma-konto-html.test.js` (erfundene Testseiten `tests/daten/alma-konto/`, Aufbau aus echten Seiten bzw.
   nachgebaut), `tests/alma-konto.test.js` (erfundenes Alma, PC-Transport und `requestUrlWieIOS`: Ablauf, Passwort nur im POST an
@@ -1644,7 +1693,8 @@ eigene zu bauen.
   „iCal-URL (Google Kalender)“ (`limited=1`, ohne Einträge, die älter als 30 Tage sind) geht. `linkPruefen`: https oder webcal,
   Host `ovidius.uni-tuebingen.de` ohne Port und Benutzer, Pfad `/calendar.php`, `client_id` und `token`. Der Link enthält einen
   geheimen Schlüssel: nur gerätelokal (`eba-ilias-ics`, dazu `eba-ilias-ics-status`, `eba-ilias-ics-seit`), nie in einer Datei,
-  in Status, Fehlertexten, Hinweisen oder Konsole. Scheitert der erste Abruf, bleibt kein Link gespeichert.
+  in Status, Fehlertexten, Hinweisen oder Konsole. Scheitert der erste Abruf, bleibt kein Link gespeichert. Seit 0.4.8 geht es
+  mit dem Uni-Login ohne Kopieren (siehe „Uni-Login“); `linkWaehlen` nimmt dann „iCal-URL (Google Kalender)“.
 - **Abruf** mit `requestUrl` (Bytes vor dem Dekodieren entfaltet, `bytesLesen` aus `alma.js`), gelesen mit `alma.js` (`lesen`
   behält seit 18.10.2026 die Parameter je Eigenschaft in `PARAM`, dazu exportiert `zeit`, `bytesLesen`, `klartext`).
 - **Was übernommen wird:** nur Übungen (`URL` = `goto.php/exc/<ref>`, ältere Formen `goto.php?target=exc_<ref>`,
@@ -1686,10 +1736,12 @@ eigene zu bauen.
   jeder Knopf übernimmt. Trennen gibt die Sperre frei.
 - **Status** in der gemeinsamen Form (`zustand`: extern, nicht-verbunden, laeuft, fehler, anderes-geraet, an), dazu `abgaben`
   (kommende offene) und `linkFehler`. Fehler: 401, 403, 404, 410 oder eine Antwort ohne Kalender → „ILIAS kennt diesen Link nicht
-  mehr. Bitte den Link in ILIAS neu kopieren.“ und ein Punkt unter „Bitte prüfen“ (nur auf dem Gerät mit Link); sonst „ILIAS
+  mehr. Bitte den Link in ILIAS neu kopieren.“ und ein Punkt unter „Bitte prüfen“ (nur auf dem Gerät mit Link; mit Uni-Login
+  „Unter Verbindungen **Neuen Link eingeben** tippen, den Rest macht Studium Autopilot.“, nachdem `erneuern` höchstens einmal am
+  Tag einen neuen Link versucht hat, siehe „Uni-Login“); sonst „ILIAS
   antwortet nicht (Fehler n)“ bzw. „Keine Verbindung zu ILIAS“. Warnungen des letzten Laufs stehen in der Zeile und unter „Bitte
   prüfen“. Hinweise (Notice) nur nach deinem Tipp.
-- **Für andere Skripte:** `ctx.iliasKalender = { status(), linkPruefen(link), verbinden(link, { nurBeiErfolg }), aktualisieren(o),
+- **Für andere Skripte:** `ctx.iliasKalender = { status(), linkPruefen(link), linkWaehlen(links), verbinden(link, { nurBeiErfolg }), aktualisieren(o),
   trennen(), fehler(), hinweise(), K }` und die reinen Teile (`artAus`, `zielAus`, `zeitpunktAus`, `nummerAus`, `eintraegeAus`,
   `schonDa`, `titelVon`, `dateiNameVon`, `eintragVon`). Testeinstiege: `plugin.testIliasKalenderAus = true` (kein automatischer
   Lauf), `plugin.testKalenderAbruf = async ({ url }) => ({ status, text })` (kein Netz).
@@ -1698,22 +1750,103 @@ eigene zu bauen.
   Sperre, extern, zentrale Notizen gleich); `tests/ilias.test.js` (`objekte`), `tests/verbindungen.test.js` (Zeile),
   `tests/fachmodell.test.js` (24:00).
 
+## Uni-Login (seit 0.4.8, `uni-login.js`)
+
+Einmal Benutzername und Passwort der Uni, dann verbindet Studium Autopilot alles, was diesen Login braucht: ILIAS-Unterlagen,
+den ILIAS-Kalender und den Alma-Stundenplan. Bis 0.4.7 musste man die Abo-Links von ILIAS-Kalender und Alma selbst kopieren
+(je vier Schritte in ILIAS bzw. Alma), obwohl das Passwort für ILIAS schon gespeichert war.
+
+- **Zustimmung** (Entscheidung vom 19.10.2026, Bedingung des Orchestrators): Wer seinen Uni-Login eingibt, stimmt zu, dass sich
+  Studium Autopilot damit bei ILIAS **und** Alma anmeldet, aber nur, wenn das Fenster es vor der Eingabe sagt. Darum nennt im
+  Fenster „Mit Uni-Login verbinden“ (`IliasFenster`) und in der Einrichtung (Bildschirm 5) ein Satz über den Feldern, was der
+  Login holt („Mit deinem Uni-Login holt Studium Autopilot deine Unterlagen aus ILIAS, die Abgaben aus dem ILIAS-Kalender und
+  deinen Alma-Stundenplan.“, Registry `kurz`; was von außen kommt, fehlt im Satz; aus Noten & Anmeldungen `kurzOhneKurse`), und
+  die Datenschutz-Zeile, wo er sich anmeldet („Damit meldet sich Studium Autopilot bei ILIAS und Alma an. …“). Die Zustimmung gilt
+  je Quelle und Gerät (gerätelokal `eba-uni-zustimmung`) und nur für das Passwort, das danach gespeichert ist (Zeitpunkt ≥
+  `uniZugang().seit`): `zustimmen(uniQuellen)` nach der Anmeldung in diesen beiden Fenstern (genau die Quellen, die der Satz
+  nannte, Registry `uniQuellen`; liest die Einrichtung eine ältere Registry ohne das Feld, für keine), `zustimmen([id])` beim Tipp auf **Verbinden** im
+  Link-Fenster einer Quelle (der Satz dort sagt, bei wem es sich anmeldet) und in der Einrichtung mit schon gespeichertem Login
+  (der Satz nennt, was fehlt und wo es sich anmeldet). Von selbst verbindet der Uni-Login nach der Anmeldung nur, was zugestimmt,
+  hier nicht verbunden, nicht über ein anderes deiner Geräte verbunden (`ctx.verbindungen.imTresor`, wie Zeilen und Schloss) und
+  nicht von außen ist (`offen()`; `moeglich()` ohne die Zustimmung). In einem Tresor mit eigenem Uni-Abgleich also nichts; dort
+  meldet sich das Fenster nur für die Übungsgruppen bei ILIAS an und verbindet nichts weiter. Ein Login aus 0.4.7 oder früher hat
+  keine Zustimmung: Dort passiert nichts von selbst, auch kein neuer Link im Hintergrund, bis zum Tipp auf **Verbinden**.
+  **Noten & Anmeldungen** bleibt davon getrennt (Beta, eigenes **Einschalten**).
+- **ILIAS-Kalender:** `ctx.ilias.kalenderLinks()` nimmt die Sitzung des letzten Laufs (sonst eine neue Anmeldung, wie ein Lauf
+  nur mit Zugang und ohne Ablehnung), holt `ilias.php?baseClass=ilDashboardGUI&cmd=jumpToCalendar` und daraus das Fenster
+  „Kalender abonnieren“ (`ilias-html.js` `aboFenster`: ajaxRenderUrl mit `cmdClass=ilcalendarsubscriptiongui&cmd=getModalForSubscription`;
+  `aboLinks`: die Links aus `a href` und `input value`). ILIAS legt den Schlüssel nur beim ersten Öffnen an, danach bleibt
+  derselbe. `ctx.iliasKalender.linkWaehlen` nimmt „iCal-URL (Google Kalender)“ (`limited=1`: ohne Termine, die älter als 30 Tage
+  sind; für Abgaben reicht das Künftige, und der Kalender bleibt unter der Grenze von 1 MB), sonst „iCal-URL“. Lehnt ILIAS das
+  Passwort dabei ab, gilt dasselbe wie nach einem Lauf (Stand gesperrt, Marker, Gruppen frei).
+- **Alma-Stundenplan:** `ctx.almaKonto.stundenplanLink()` (ohne Beta und ohne **Einschalten**) meldet sich mit derselben Anmeldung
+  wie Noten & Anmeldungen an (`mitAlma`: Drossel, nur `alma.uni-tuebingen.de`, Abmelden in jedem Ausgang), liest „Mein Studium →
+  Stundenplan“ und meldet sich ab. Der Link steht dort schon im versteckten Fenster „Daten für iCalendar (ics) exportieren“
+  (`alma-konto-html.js` `stundenplanLink`: `textarea …:ical:cal_add` und `data-page-permalink`; zwei verschiedene → keiner).
+  Nichts wird angeklickt; „Sicherheitsmaßnahmen erneuern“ im selben Fenster erneuert den Schlüssel im Link und bleibt
+  unberührt. Wie ein Lauf nur, wenn ILIAS das Passwort bestätigt hat (`uniZugang().bestaetigt`), nie nach einer Ablehnung; lehnt
+  Alma eindeutig ab, schreibt das Gerät den Marker. Der Stand von Noten & Anmeldungen bleibt unberührt. Eine Alma-Sitzung zugleich:
+  Auf iPhone und iPad teilen sich Sitzungen die Kekse, das Abmelden der einen beendete die andere; darum wartet der Link-Abruf auf
+  einen laufenden Lauf von Noten & Anmeldungen und umgekehrt. Hat Alma gebremst (`pauseBis` nach 403/429 oder wiederholten
+  Fehlern), meldet sich auch der Link-Abruf bis dahin nicht an (`art: "stopp"`).
+- **Verbinden** danach wie mit einem eingefügten Link (`ctx.verbindungen.holen(id).verbinden(link)`): Nur wenn der erste Abruf
+  klappt, bleibt der Link gespeichert (gerätelokal `eba-ilias-ics` bzw. `eba-alma-ics`, nie im Tresor).
+- **Link gilt nicht mehr:** Zeigt ein Abruf auf den Link (ILIAS: 200 ohne Kalender, 401, 403, 404, 410; Alma: 200 ohne
+  Stundenplan, 401, 404, 410, nicht 403, so bremst Alma), fragen `ilias-kalender.js` und `alma.js` `erneuern(id, alterLink)`. Mit
+  Zustimmung für diese Quelle höchstens einmal am Tag je Quelle und Gerät (gerätelokal `eba-uni-erneuert`) holt das einen neuen
+  Link; die Quelle speichert ihn und versucht es gleich noch einmal (`erneuert`). Derselbe Link zählt nicht als neu. Beim Verbinden
+  mit einem eingegebenen Link nie (`erneuert: true`).
+- **Oberfläche:** Link-Fenster (Alma, ILIAS-Kalender) mit gespeichertem Uni-Login: „Studium Autopilot meldet sich mit deinem
+  Uni-Login **zxabc01** bei Alma (bzw. ILIAS) an und holt den Link selbst.“, **Verbinden** und leise „Link selbst einfügen“;
+  scheitert es, die Schritte zum Einfügen mit dem Grund darüber (`vonHand`). Ohne Uni-Login auf diesem Gerät steht unter den
+  Schritten leise „Ohne Kopieren: Mit Uni-Login verbinden“. Im Fenster „Mit Uni-Login verbinden“ stehen nach den Kursen Zeilen
+  für Kalender und Alma („… wird verbunden …“, dann ✓ mit Ergebnis oder der Grund; `uniStandZeigen`); ist das Fenster schon zu,
+  kommt ein Hinweis mit höchstens zwei Sätzen ohne Vorsatz (`hinweis`). Fehlersätze je Grund (abgelehnt, zweiter Faktor,
+  Zustimmung, unklare Antwort, kein Link, keine Verbindung, gebremst, Login fehlt, alte Fassung; ILIAS: der Satz der Anmeldung mit
+  Code, ohne Adressen). Wort: **Uni-Login** (Wortliste, nicht „Uni-Zugang“).
+- **Absicherung beim Tipp:** `linkHolen` fragt jedes Mal neu, ob es geht (Login bereit, nicht von außen; per Sync kann ein eigener
+  Uni-Abgleich ankommen, während ein Fenster offen ist; dann zeigt das Link-Fenster nur den Satz und bietet kein Einfügen an).
+  `bereit()` prüft neben dem Marker auch den Stand von ILIAS (`gesperrt`), falls der Marker nach einer Ablehnung nicht geschrieben
+  werden konnte; der Grund heißt dann wie bei ILIAS (abgelehnt, zweiter Faktor, Zustimmung), nicht „Login fehlt“.
+- **Trennen** bleibt je Quelle: ILIAS trennen löscht den Uni-Login; Kalender und Stundenplan behalten ihre Links.
+- **Schnittstelle** (Bibliothek, `ctx.user["uni-login"](ctx)`; beim Laden passiert nichts): `bereit()`, `kannSelbst(id)`,
+  `zugestimmt(id)`, `zustimmen(ids?)`, `moeglich()`, `offen()`, `linkHolen(id)`, `verbinden(id)` → `{ ok, text }` | `{ ok: false, art,
+  fehler }`, `alleVerbinden({ schritt })`, `erneuern(id, alt)`, `zeile(id, ergebnis)`, `hinweis(ergebnisse)`, `QUELLEN`, `NAME`.
+  Gleichzeitige Aufrufe für dieselbe Quelle teilen einen Abruf.
+- **Geprüft vor dem Release** (adversariale Prüfung am 19.10.2026, nach dem Zusammenführen nachgeholt): Behoben wurden die
+  Anmeldung bei Alma im Hintergrund mit einem Login aus 0.4.7 (jetzt Zustimmung je Quelle), die Schritt-Zählung der Einrichtung
+  (`einrichtung_fassung`), gleichzeitige Alma-Sitzungen, die Anmeldung trotz Bremse (403, `pauseBis`), der fehlende Weg zum
+  Einfügen, Fehlersätze, der Hinweis, zwei Namen für Alma und die Absicherung beim Tipp; eine Kontrollrunde fand danach drei kleine
+  Folgefehler (Zustimmung für Ungenanntes, Schloss eines Tresors aus 0.3.x nach erneutem Start, Grund bei Sperre), auch behoben.
+  Die Prüfung vor dem Release 0.4.8 fand noch zwei Lücken, behoben: Die Einrichtung stimmte auch nach dem Satz einer älteren
+  Registry zu (Skripte kommen per Sync einzeln), und eine Quelle ohne lesbaren Stand galt als „nicht von außen“.
+  Bewusst offen: Zwei gleichzeitige
+  Anmeldungen bei ILIAS, wenn der Kalender-Link genau dann erneuert wird, während ein ILIAS-Lauf ohne gemerkte Sitzung anfängt
+  (höchstens einmal am Tag, beide Anmeldungen gelten).
+- **Geprüft** am 19.10.2026 an echten Seiten (ein Konto, nur lesend): Beide Links standen nach der Anmeldung in der Seite bzw.
+  im nachgeladenen Fenster und waren gleich den gespeicherten; das Lesen hat keinen neuen Link erzeugt.
+- **Tests:** `tests/uni-login.test.js` (Reihenfolge, nur mit bestätigtem Login, Zustimmung je Quelle und Passwort, übersprungen,
+  Fehler je Quelle, Hinweis, einmal am Tag, Absicherung, geteilter Abruf), `tests/verbindungen.test.js` (Sätze vor der Eingabe),
+  `tests/einrichtung.test.js` (Schritt-Zählung, Schloss), `tests/ilias-html.test.js` (`aboFenster`, `aboLinks`), `tests/alma-konto-html.test.js` (`stundenplanLink`),
+  `tests/alma-konto.test.js` (Ablauf am PC und wie auf iOS, Passwort nur im POST, Ablehnung, kein Link), `tests/ilias.test.js`
+  (Kalender-Abo über die Sitzung der Prüfung, Ablehnung), `tests/ilias-kalender.test.js` und `tests/alma.test.js` (neuer Link).
+
 ## Einrichtung (seit 0.3.0)
 
-`einrichtung.js` ersetzt die Personalisieren-Karte. Ein Obsidian-Modal (`eba-modal eba-modal-einrichtung`) mit acht
-Bildschirmen: 1 Willkommen (ein Satz, **Los geht’s** / *Später*), 2 Studienbeginn (Semester-Auswahl aus
+`einrichtung.js` ersetzt die Personalisieren-Karte. Ein Obsidian-Modal (`eba-modal eba-modal-einrichtung`) mit sieben
+Bildschirmen (seit 0.4.8; bis 0.4.7 acht, je einer für Alma und ILIAS): 1 Willkommen (ein Satz, **Los geht’s** / *Später*), 2 Studienbeginn (Semester-Auswahl aus
 `ctx.modell.semesterAuswahl()`, vorausgewählt das aktuelle Semester; Hinweis „Heute bist du im n. Fachsemester.“),
 3 Variante (vier Optionen aus dem Feld-Register, „Noch offen“ = `offen` vorausgewählt), 4 Über dich (Name, Zielnote; Prüfung
-`ctx.personalisieren.zielnotePruefen`), 5 Alma (drei Schritte, Feld, Prüfung und Verbinden über `ctx.verbindungen.holen("alma")`,
-also `alma.js` `linkPruefen`/`verbinden(link, { nurBeiErfolg })`; im eigenen Uni-Abgleich nur „Dein Stundenplan kommt über
-deinen Uni-Abgleich.“ und **Weiter**), 6 ILIAS (seit 0.4.0, freiwillig: ein Satz, Benutzername,
-Passwort, Datenschutz-Zeile; **Verbinden** prüft den Zugang und liest die Kursliste, ohne zu laden; im eigenen Uni-Abgleich, mit zu
-altem Obsidian oder ohne Anmeldebaustein nur ein Satz und **Weiter**), 7 Darstellung (seit 17.10.2026: derselbe Umschalter
+`ctx.personalisieren.zielnotePruefen`), 5 Dein Uni-Login (seit 0.4.8, freiwillig, siehe „Uni-Login“: ein Satz, Benutzername,
+Passwort, Datenschutz-Zeile; **Verbinden** prüft den Zugang, liest die Kursliste, startet den ersten Abruf im Hintergrund und
+verbindet ILIAS-Kalender und Alma mit, Fortschritt in der Meldung; danach je Zeile ✓ oder der Grund. Schon auf diesem Gerät
+gespeichert: ein Satz und, wenn Kalender oder Alma fehlen, **Verbinden** ohne Passwort. Im eigenen Uni-Abgleich, mit zu altem
+Obsidian oder ohne Anmeldebaustein nur ein Satz und **Weiter**), 6 Darstellung (seit 17.10.2026: derselbe Umschalter
 Hell · Dunkel · Automatisch, `ctx.darstellung.schalter`, seit 18.10.2026 darunter dieselben Design-Kacheln wie in Einstellungen &
 Hilfe, `designWahl`; Antippen schaltet sofort um, nur **Weiter**, siehe
-[Darstellung](#darstellung-hell-dunkel-automatisch-und-design)), 8 Fertig (Zusammenfassung mit Hell, Dunkel oder Automatisch, ohne
-das Design, das keinen Namen hat; „Später nachholen“ mit Knopf zum Bildschirm). Ab Bildschirm 2 „Schritt n von 7“
-und Punkte; Zurück jederzeit, Überspringen auf 2–6.
+[Darstellung](#darstellung-hell-dunkel-automatisch-und-design)), 7 Fertig (Zusammenfassung mit Hell, Dunkel oder Automatisch, ohne
+das Design, das keinen Namen hat, dazu Stundenplan, Unterlagen und Abgaben; „Später nachholen“ mit Knopf zum Bildschirm). Ab
+Bildschirm 2 „Schritt n von 6“ und Punkte; Zurück jederzeit, Überspringen auf 2–5.
 
 Regeln: je Bildschirm ein Satz und eine Hauptaktion, keine Fachwörter; kein Autofokus (sonst springt auf dem iPhone die Tastatur
 auf); Tippflächen ≥ 44 px, Eingaben 16 px; auf dem iPhone bildschirmfüllend (`eba-core.css` Abschnitt 45). Esc, × und
@@ -1724,12 +1857,13 @@ auf); Tippflächen ≥ 44 px, Eingaben 16 px; auf dem iPhone bildschirmfüllend 
 | Feld | Werte |
 |---|---|
 | `einrichtung` | `offen` (oder leer) · `laeuft` · `fertig` |
-| `einrichtung_schritt` | Bildschirm 1–8, an dem es beim nächsten Start weitergeht (bis 0.3.x war 6 „Fertig“, bis 0.4.x 7) |
-| `einrichtung_uebersprungen` | Liste aus `studienbeginn`, `variante`, `angaben`, `alma`, `ilias` |
+| `einrichtung_schritt` | Bildschirm 1–7, an dem es beim nächsten Start weitergeht |
+| `einrichtung_fassung` | `2` (seit 0.4.8, bei jedem Speichern): Zählung mit sieben Bildschirmen. Fehlt das Feld, stammt der Schritt aus 0.4.7 oder früher (5 Alma, 6 ILIAS, 7 Darstellung, 8 Fertig; Fertig war bis 0.3.x 6, in 0.4.0–0.4.4 7), und `zustand()` rechnet um: ab 6 eins weniger (6 ILIAS und 5 Alma → 5 Uni-Login). Startet ein Tresor aus 0.3.x die Einrichtung erneut, gilt der Uni-Login als übersprungen (`uni`), damit das ILIAS-Schloss nach dem Speichern bleibt |
+| `einrichtung_uebersprungen` | Liste aus `studienbeginn`, `variante`, `angaben`, `uni`; `alma` und `ilias` stammen aus Einrichtungen bis 0.4.7 und gelten weiter (erledigt der Uni-Login den Bildschirm, fallen sie weg) |
 
 Geschrieben wird nur nach einem Tipp auf **Los geht’s**, **Weiter** oder **Überspringen**: Antworten des Bildschirms und Stand
 zusammen in einem `processFrontMatter` (Studienbeginn als festes Datum, nicht leer, damit er nicht mit dem Semester wandert).
-Der Schritt zu Fertig (Bildschirm 8) setzt `fertig`. Die Darstellung steht nicht hier, sondern nur auf dem Gerät. „Erneut starten“ (Aktion `einrichtung`, `ab=2`) beginnt bei 2, vorausgefüllt, ohne Zurück zum
+Der Schritt zu Fertig (Bildschirm 7) setzt `fertig`. Die Darstellung steht nicht hier, sondern nur auf dem Gerät. „Erneut starten“ (Aktion `einrichtung`, `ab=2`) beginnt bei 2, vorausgefüllt, ohne Zurück zum
 Willkommen; der Status bleibt `fertig`.
 
 **Automatisch** (`start()`, nur beim App-Start): wenn der metadataCache eingelesen ist (`initialized`, sonst `resolved`) und das
@@ -1739,10 +1873,10 @@ kein Name, kein Studienbeginn, keine Notiz in `Stundenplan/`). Ein Tresor aus 0.
 wird nichts geschrieben. Weitere Geräte: Der Stand kommt per Sync; trifft `fertig` oder ein Name ein, während dort nur das
 Willkommen offen ist, schließt es sich von selbst.
 
-**Schloss:** `ctx.einrichtung.almaOffen()` = `einrichtung` ≠ `fertig` oder `alma` übersprungen. Das Alma-Schloss
+**Schloss:** `ctx.einrichtung.almaOffen()` = `einrichtung` ≠ `fertig` oder `uni` (bis 0.4.7 `alma`) übersprungen. Das Alma-Schloss
 (`eba-schloss alma`, Wochenraster auf Dashboard und Stundenplan) erscheint nur, wenn das gilt **und** kein Stundenplan da ist
-**und** dieses Gerät nicht verbunden ist. `iliasOffen()` gilt ebenso für `ilias`, dazu bei `fertig` mit
-`einrichtung_schritt` ≤ 6: Die Einrichtung wurde vor 0.4.0 abgeschlossen. So ein Tresor sieht die Einrichtung nach dem Update
+**und** dieses Gerät nicht verbunden ist. `iliasOffen()` gilt ebenso für `uni` bzw. `ilias`, dazu bei `fertig` mit
+`einrichtung_schritt` ≤ 6 ohne `einrichtung_fassung`: Die Einrichtung wurde vor 0.4.0 abgeschlossen. So ein Tresor sieht die Einrichtung nach dem Update
 nicht noch einmal, sondern das Schloss `eba-schloss ilias` auf der Seite Unterlagen.
 
 Für Tests: `ctx.einrichtung = { zustand(), eingerichtet(), sollZeigen(), almaOffen(), iliasOffen(), oeffnen({ ab }), automatisch({ immer }),

@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/alma-konto-html.test.js und tests/alma-konto.test.js. Aufbau wie die Seite „Stundenplan“
+     von Alma nach der Anmeldung (Mein Studium → Stundenplan, Oktober 2026), verkleinertes Gerüst, alle Werte erfunden. Das
+     Fenster „Daten für iCalendar (ics) exportieren“ steht versteckt schon in der Seite: der Abo-Link im schreibgeschützten Feld
+     (textarea …:ical:cal_add) und in dessen data-page-permalink. Daneben „Sicherheitsmaßnahmen erneuern“ (erneuert den
+     Schlüssel im Link, wird nie angeklickt). -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="de">
+<head><meta charset="utf-8"><title>Stundenplan</title></head>
+<body>
+<div id="header">
+  <a class="topMenuLink mainnavLink link_simple" href="/alma/rds?state=user&amp;type=3&amp;category=auth.logout" id="widgetRender:1:burgerNavi:logoutLink">Abmelden</a>
+</div>
+<form id="sessionTimeoutLoginForm" name="loginform" class="formular full-screen-waiting-behavior" method="post"
+      action="https://alma.uni-tuebingen.de:443/alma/rds?state=user&amp;type=1&amp;category=auth.login&amp;re=last">
+  <p>Ihre Sitzung ist aus Sicherheitsgründen abgelaufen. Bitte melden Sie sich erneut an.</p>
+  <input id="asdf" name="asdf" type="text"><input id="fdsa" name="fdsa" type="password">
+</form>
+<form id="plan" name="plan" method="post" action="/alma/pages/plan/individualTimetable.xhtml">
+  <h1>Stundenplan für Erika Musterfrau</h1>
+  <div id="plan:scheduleConfiguration:anzeigeoptionen:ical" class="displayInline popupDismissable"><button id="plan:scheduleConfiguration:anzeigeoptionen:ical:showPopup" name="plan:scheduleConfiguration:anzeigeoptionen:ical:showPopup" type="button" value="Daten für iCalendar (ics) exportieren" class="submit_calendar_go" data-popupButton="true"><span>Daten für iCalendar (ics) exportieren</span></button><div id="plan:scheduleConfiguration:anzeigeoptionen:ical:popupPlaceholder" class="popoverContainer" style="position:absolute;display:none;max-width:100%;" role="dialog"><div class="popupContainer" style="position:absolute;"><div class="box_content ">
+<div class="permalink-popup-content"><div class="permalink-description">Benutzen Sie diesen Link um die Daten in Ihren Kalender zu importieren.
+</div><div class="permalink-url"><textarea id="plan:scheduleConfiguration:anzeigeoptionen:ical:cal_add" name="plan:scheduleConfiguration:anzeigeoptionen:ical:cal_add" class="input_readonly textarea_standard" readonly="readonly" data-page-permalink-title="https://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable/individualTimetableCalendarExport.faces?user=00000000-0000-4000-8000-00000000e1a7&amp;hash=0123456789abcdef0123456789abcdef&amp;termgroup=" data-page-permalink="https://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable/individualTimetableCalendarExport.faces?user=00000000-0000-4000-8000-00000000e1a7&amp;hash=0123456789abcdef0123456789abcdef&amp;termgroup=">https://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable/individualTimetableCalendarExport.faces?user=00000000-0000-4000-8000-00000000e1a7&amp;hash=0123456789abcdef0123456789abcdef&amp;termgroup=</textarea>
+</div><div class="permalink-actions"><ol class="links_horizontal"><li><a href="#" onclick="de.his.component.Permalink.copyToClipboard(event)" class="link_copy"><span title="Link in die Zwischenablage Ihres Systems kopieren">Link kopieren</span></a>
+</li><li><a href="#" onclick="de.his.component.Permalink.openInNewWindow(event)" class="link_new_window">iCal-Datei öffnen</a>
+</li><li><button id="plan:scheduleConfiguration:anzeigeoptionen:ical:renewSecurityToken" name="plan:scheduleConfiguration:anzeigeoptionen:ical:renewSecurityToken" type="submit" value="Sicherheitsmaßnahmen erneuern" class="submit_linkLook immediate"><span>Sicherheitsmaßnahmen erneuern</span></button>
+</li></ol></div></div></div></div></div></div>
+  <input type="hidden" name="plan_SUBMIT" value="1">
+</form>
+</body>
+</html>

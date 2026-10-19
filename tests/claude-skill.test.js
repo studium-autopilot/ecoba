@@ -23,7 +23,7 @@ test("Aufbau: CLAUDE.md verweist auf den Skill, SKILL.md mit Name und Beschreibu
   assert.equal(kopf[1], "studium-autopilot");
   assert.ok(kopf[2].length > 80 && kopf[2].length <= 1024, "Beschreibung sagt, wann");
   const teile = [...s.matchAll(/\]\(([a-z-]+\.md)\)/g)].map((m) => m[1]);
-  assert.deepEqual(teile.sort(), ["fehler-melden.md", "lesen.md", "schreiben.md", "tresor.md"]);
+  assert.deepEqual(teile.sort(), ["fehler-melden.md", "lesefassung.md", "lesen.md", "schreiben.md", "tresor.md"]);
   for (const t of teile) assert.ok(fs.existsSync(path.join(SKILL, t)), t);
 });
 
@@ -79,4 +79,19 @@ test("Sprache: Wörter wie in der App, keine Pfade dieses Rechners", () => {
   assert.doesNotMatch(t.replace(/in Obsidian: Vault/g, ""), /\bVault\b/, "Tresor statt Vault");
   assert.doesNotMatch(t, /\bCP\b|\bCredits?\b|Klausurtermin|Kennwort|[Ff]erien/);
   assert.doesNotMatch(t, /[A-Z]:\\|\/Users\//, "keine Pfade dieses Rechners (private Ordner prüft pruefen.py im Export)");
+});
+
+// Lesefassung von Folien: nur Bausteine, die das CSS kennt, und die Abschnitte, die das Plugin beim Vorfalten offen lässt
+test("Lesefassung: Klassen und Kästen aus eba-core.css, offene Abschnitte wie start.js", () => {
+  const t = lesen(path.join(SKILL, "lesefassung.md"));
+  const css = lesen(path.join(TRESOR, ".obsidian", "snippets", "eba-core.css"));
+  assert.ok(css.includes("cssclasses: eba, eba-folien"), "Abschnitt Folien als Markdown");
+  for (const k of ["eba-bild", "eba-raster", "eba-karte", "eba-formeln", "eba-pdf"]) {
+    assert.ok(t.includes("[!" + k), k + " im Skill");
+    assert.ok(css.includes(`data-callout="${k}"`), k + " im CSS");
+  }
+  assert.ok(css.includes('data-callout-metadata~="spalten"'), "|spalten im CSS");
+  const offen = JSON.parse(/const OFFEN = (\[[^\]]*\]);/.exec(lesen(path.join(SKRIPTE, "start.js")))[1]);
+  for (const h of offen) assert.ok(t.includes("„" + h + "“"), h);
+  assert.match(t, /cssclasses` mit `eba` und `eba-folien`/);
 });

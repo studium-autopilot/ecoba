@@ -30,13 +30,13 @@ const fmAusText = (t) => {
   }
   return fm;
 };
-function tresor({ testAbruf, prompt, eba = {}, sperre = false, ohneBibliotheken = false, heute, zeitgeber } = {}) {
+function tresor({ testAbruf, prompt, eba = {}, sperre = false, ohneBibliotheken = false, heute, zeitgeber, uni } = {}) {
   const fm = {}, text = {}, papierkorb = [], speicher = {}, dateien = {};
   const L = laden("alma", {
     frontmatter: fm,
     heute,
     kontext: {
-      user: { eba: Object.assign({ MODULCODE }, eba) },
+      user: { eba: Object.assign({ MODULCODE }, eba), "uni-login": uni ? () => uni : undefined },
       modell: { semesterVon: () => ({ name: SEM }) },
       plugin: { testAbruf },
       system: { prompt: prompt || (async () => null) },
@@ -207,6 +207,14 @@ test("Außerhalb des Plugins (Hülle eines eigenen Uni-Abgleichs: ohne sperre.js
   assert.deepEqual(Object.keys(t.dateien), [], "keine Sperr-Datei");
 });
 
+test("Link prüfen: nur Alma als Host, höchstens mit :443; nichts, was ein Parser anders liest", () => {
+  const A = tresor().A;
+  assert.equal(A.linkPruefen("https://alma.uni-tuebingen.de/alma/ical/x"), "");
+  assert.equal(A.linkPruefen("webcal://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable/x.faces?user=u&hash=h"), "");
+  for (const l of ["https://alma.uni-tuebingen.de:x" + "@evil.example/alma", "https://alma.uni-tuebingen.de\\@evil.example/alma",
+    "https://alma.uni-tuebingen.de.evil.example/alma", "https://alma.uni-tuebingen.de:8443/alma"]) assert.ok(A.linkPruefen(l), l);
+});
+
 test("Verbinden: scheitert der erste Abruf, gilt wieder der vorherige Link", async () => {
   const alt = "https://alma.uni-tuebingen.de/alma/ical/alt";
   const neu = "https://alma.uni-tuebingen.de/alma/ical/neu";
@@ -230,6 +238,38 @@ test("Verbinden: scheitert der erste Abruf, gilt wieder der vorherige Link", asy
   const b = await t.A.verbinden(undefined, { nurBeiErfolg: true });
   assert.equal(b.neu, 1);
   assert.equal(t.speicher["eba-alma-ics"], neu);
+});
+
+test("Uni-Login: Alma kennt den Link nicht mehr → neuen holen und gleich damit; Netzfehler, Verbinden und Hülle nie", async () => {
+  const alt = "https://alma.uni-tuebingen.de/alma/ical/alt", neu = "https://alma.uni-tuebingen.de/alma/ical/neu";
+  const gefragt = [], abrufe = [];
+  let ersatz = neu, kaputt = { status: 404 };
+  const uni = { erneuern: async (id, l) => { gefragt.push([id, l]); return ersatz; } };
+  const t = tresor({ uni, testAbruf: async (x) => { abrufe.push(x.url); return x.url === neu ? { status: 200, text: kalender(S100) } : kaputt; } });
+  t.speicher["eba-alma-ics"] = alt;
+  const b = await t.A.aktualisieren({ still: true });
+  assert.equal(b.neu, 1);
+  assert.deepEqual(gefragt, [["alma", alt]]);
+  assert.deepEqual(abrufe, [alt, neu]);
+  assert.equal(t.speicher["eba-alma-ics"], neu);
+  // Alma liefert eine Seite statt des Stundenplans: auch das zeigt auf den Link
+  t.speicher["eba-alma-ics"] = alt; kaputt = { status: 200, text: "<html>Anmeldung</html>" };
+  assert.ok(await t.A.aktualisieren({ still: true }));
+  assert.equal(gefragt.length, 2);
+  // Keine Verbindung oder 403 (so bremst Alma): kein Link-Fehler, nicht fragen; kein neuer Link: der Fehler bleibt
+  t.speicher["eba-alma-ics"] = alt; kaputt = { status: 0 };
+  assert.equal(await t.A.aktualisieren({ still: true }), null);
+  kaputt = { status: 403 };
+  assert.equal(await t.A.aktualisieren({ still: true }), null);
+  assert.equal(gefragt.length, 2);
+  kaputt = { status: 410 }; ersatz = "";
+  assert.equal(await t.A.aktualisieren({ still: true }), null);
+  assert.deepEqual([gefragt.length, t.speicher["eba-alma-ics"]], [3, alt]);
+  assert.match(t.A.fehler(), /Fehler 410/);
+  // Ein eingegebener Link, der nicht geht: kein Ersatz über den Uni-Login
+  ersatz = neu;
+  assert.equal(await t.A.verbinden("https://alma.uni-tuebingen.de/alma/ical/getippt", { nurBeiErfolg: true }), null);
+  assert.equal(gefragt.length, 3);
 });
 
 test("Zentrale Stundenplan-Notizen übernimmt, ändert und löscht Alma nie (eigene Notiz daneben)", async () => {

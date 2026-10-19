@@ -561,6 +561,13 @@ module.exports = function (ctx) {
 
   // ---------- Abruf (Netz oder Testquelle) ----------
   const basis = () => String(plugin().testZentralBasis || BASIS).replace(/\/?$/, "/");
+  // Frisch vom Server (seit 19.10.2026): GitHub Pages schickt jede Datei mit „Cache-Control: max-age=600“, Gerät und
+  // Zwischenspeicher gaben das Manifest darum bis zu 10 Min. alt zurück (0.4.7 erschien auf einem iPad lange nicht; eine Datei,
+  // die älter ist als ihr Manifest, scheitert genauso an der Prüfsumme). Darum je Minute eine eigene Adresse: gleich viele
+  // Abrufe wie vorher, Geräte in derselben Minute teilen sich den Zwischenspeicher. Dazu „Cache-Control: no-cache“; requestUrl
+  // reicht Kopfzeilen auf allen Geräten durch (ilias-netz.js auf iPhone und iPad genauso). update.js nimmt beides für die Liste.
+  const frischUrl = (url, ms) => url + (url.indexOf("?") >= 0 ? "&" : "?") + "t=" + Math.floor((ms == null ? jetztMs() : ms) / MIN);
+  const FRISCH_KOPF = Object.freeze({ "Cache-Control": "no-cache" });
   const holen = async (name) => {
     const p = plugin();
     if (typeof p.testQuelle === "function") {
@@ -569,7 +576,7 @@ module.exports = function (ctx) {
       const bytes = new TextEncoder().encode(String(t));
       return { bytes, text: String(t) };
     }
-    let r = await ctx.obsidian.requestUrl({ url: basis() + name, method: "GET", throw: false });
+    let r = await ctx.obsidian.requestUrl({ url: frischUrl(basis() + name), method: "GET", headers: Object.assign({}, FRISCH_KOPF), throw: false });
     // 304 ohne Inhalt (Zwischenspeicher des Geräts): einmal mit Zeitstempel an der Adresse neu holen
     if (r.status === 304) r = await ctx.obsidian.requestUrl({ url: basis() + name + "?t=" + jetztMs(), method: "GET", throw: false });
     if (r.status !== 200) throw new Error("HTTP " + r.status + " (" + name + ")");
@@ -1583,7 +1590,7 @@ module.exports = function (ctx) {
     angebote: () => { const g = angeboteStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), angebote: g.angebote } : null; },
     // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt bzw. zurückgezogen)
     kapitel: () => { const g = kapitelStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
-    semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, RELEASE_ROH, BASIS, RELEASES, ABRUF, MEINE,
+    semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, frischUrl, FRISCH_KOPF, RELEASE_ROH, BASIS, RELEASES, ABRUF, MEINE,
     abruferHier, abruferHierAus,
     get laeuft() { return !!laeuft; },
   };

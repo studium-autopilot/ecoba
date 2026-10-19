@@ -51,7 +51,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | Unterlagen einordnen | Dashboard, Modulseite, [[Unterlagen]] | Vorschau der neuen Namen | Unterlagen/Modul |
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
-> > | Alma verbinden, danach Stundenplan aktualisieren | [[Stundenplan]] | beim Verbinden deinen Alma-Link | Stundenplan |
+> > | Alma verbinden, danach Stundenplan aktualisieren | [[Stundenplan]] | beim Verbinden nichts, wenn dein Uni-Login gespeichert ist (sonst deinen Alma-Link) | Stundenplan |
 > >
 > > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite.
 > > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
@@ -162,12 +162,12 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > > [!eba-regel] Einmal pro Gerät
 > > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
 > > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
-> > > > 3. Unter [[#Verbindungen]] Alma und ILIAS verbinden. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
+> > > > 3. Unter [[#Verbindungen]] bei ILIAS-Unterlagen **Verbinden** tippen und deinen Uni-Login eingeben: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
 > > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
 > > > > [!eba-info] Unterschiede je Gerät
 > > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>.
-> > > > - **Neue Version:** Unter [[#Verbindungen]] in der Zeile **Studium Autopilot** auf **Neue Version installieren** tippen. Deine anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
+> > > > - **Neue Version:** Unter [[#Verbindungen]] in der Zeile **Studium Autopilot** auf **Neue Version installieren** tippen; steht dort **Nach Updates suchen**, sieht ein Tipp sofort nach. Deine anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
 > > > > - **iPad/iPhone:** Aufgaben über das Kästchen-Symbol über der Tastatur. Tabellen stehen auf allen Geräten als Liste untereinander.
 > >
 > > > [!eba-achtung] Bitte nicht umbenennen

@@ -2,6 +2,24 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.8 – Ein Uni-Login für alles
+
+- **Neu:** **Nach Updates suchen** unter **Einstellungen & Hilfe** in der Zeile **Studium Autopilot** sagt dir sofort, ob es
+  eine neue Version gibt.
+- **Einfacher:** Deinen Uni-Login gibst du nur noch einmal ein. Damit verbindet Studium Autopilot ILIAS, den ILIAS-Kalender und
+  deinen Stundenplan aus Alma, ohne dass du Links kopierst.
+- **Übersichtlicher:** Unter **Einstellungen & Hilfe** → **Verbindungen** steht dafür nur noch eine Zeile **Uni-Login**.
+  **Aktualisieren** holt alles auf einmal, **Mehr erfahren** zeigt jede Quelle einzeln.
+- **Übersichtlicher:** Folien, die als Text in ihrer Notiz stehen, zeigen ihre Kapitel jetzt auch auf iPad und Computer erst
+  zugeklappt, wie ein Inhaltsverzeichnis. Ein Tipp auf ein Kapitel klappt es auf.
+- **Zuverlässiger:** Gilt der Link zu deinem Stundenplan oder ILIAS-Kalender nicht mehr, holt Studium Autopilot mit deinem
+  Uni-Login selbst einen neuen.
+- **Zuverlässiger:** Bricht ein künftiges Update ab, etwa weil die App in den Hintergrund ging, zeigt dieses Gerät **Update
+  fertigstellen**. Deine anderen Geräte installieren es so lange nicht ein zweites Mal.
+- **Behoben:** Seit 0.4.7 verschwanden zugeklappte Kapitel solcher Folien auf dem iPhone ganz. Jetzt stehen sie wieder da.
+- **Behoben:** Manchmal zeigte ein Gerät eine neue Version erst lange nach den anderen an. Jetzt erscheint sie, sobald
+  Studium Autopilot das nächste Mal nach neuen Terminen schaut.
+
 ## 0.4.7 – Seitenleiste, Vorlesungsnotizen und ruhigere Unterlagen
 
 - **Neu:** Für die Module des ersten Semesters steht der **Lernplan** jetzt von selbst bereit und zeigt, welches Kapitel diese

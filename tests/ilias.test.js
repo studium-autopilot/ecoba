@@ -756,6 +756,47 @@ test("Mit echtem ilias-netz.js (Transport-Attrappe) und ilias-html.js: Kursseite
   assert.ok(!holt(/frm|tst|xvid|2000013|lti|2000043|deliver\.php/), geholt.join("\n"));
 });
 
+test("Kalender-Abo für den Uni-Login: Kalender-Seite, Fenster „Kalender abonnieren“, beide Links; Sitzung der Prüfung gilt weiter", async () => {
+  const fs = require("node:fs"), path = require("node:path");
+  const seite = (n) => fs.readFileSync(path.join(__dirname, "daten", "ilias-seiten", n + ".html"), "utf8");
+  const ILIAS = "https://ovidius.uni-tuebingen.de";
+  const html = { "content-type": "text/html; charset=utf-8" };
+  const geholt = [];
+  const transport = async (a) => {
+    geholt.push(a.url.replace(ILIAS, ""));
+    if (/cmd=jumpToCalendar$/.test(a.url)) return { status: 302, kopf: { location: "/ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilcalendarinboxgui&seed=2026-10-19" } };
+    if (/cmdClass=ilcalendarinboxgui/.test(a.url)) return { status: 200, kopf: html, text: seite("kalender") };
+    if (/cmd=getModalForSubscription/.test(a.url)) return { status: 200, kopf: html, text: seite("kalender-abo") };
+    return { status: 404, kopf: html, text: "" };
+  };
+  const echt = laden("ilias-netz").ergebnis;
+  const N = Object.assign({}, echt, { sitzung: (o) => echt.sitzung(Object.assign({}, o, { transport })) });
+  const Q = laden("ilias", { kontext: { user: { "ilias-netz": N, "ilias-html": laden("ilias-html").ergebnis } } }).ctx.ilias;
+  let anmeldungen = 0, klappt = true;
+  const x = aufbau({ quelle: Q.quelleAusNetz, anmeldung: async (s, z) => { anmeldungen++; return klappt && z.kennwortGeber() === GEHEIM ? { ok: true } : { ok: false, grund: "zugang-falsch", hinweis: "Benutzername oder Passwort falsch." }; } });
+  // Ohne Uni-Login auf diesem Gerät geht nichts hinaus
+  await assert.rejects(x.m.kalenderLinks(), (e) => e.art === "ohne-zugang");
+  assert.equal(geholt.length, 0);
+  assert.equal((await x.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true })).ok, true);
+  const basis = ILIAS + "/calendar.php?client_id=pr02&token=Erfunden0Schluessel0fuer0Tests0x&limited=";
+  assert.deepEqual(await x.m.kalenderLinks(), [{ url: basis + "0", begrenzt: false }, { url: basis + "1", begrenzt: true }]);
+  assert.equal(anmeldungen, 1, "die Sitzung der Prüfung gilt noch: keine zweite Anmeldung");
+  assert.deepEqual(geholt, ["/ilias.php?baseClass=ilDashboardGUI&cmd=jumpToCalendar", "/ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilcalendarinboxgui&seed=2026-10-19",
+    "/ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilcalendarsubscriptiongui&cmd=getModalForSubscription&category_id=0&seed=2026-11-01&cmdMode=asynch"]);
+  // Passwort inzwischen geändert: wie nach einem Lauf gesperrt und vermerkt; danach keine Anmeldung mehr
+  Q.sitzungVergessen(); klappt = false;
+  await assert.rejects(x.m.kalenderLinks(), (e) => e.art === "zugang" && e.message.indexOf(GEHEIM) < 0);
+  assert.equal(x.m.stand().gesperrt, true);
+  assert.equal(JSON.parse(x.t.text(I.K.UNI_ZUGANG)).dienst, "ilias");
+  const vorher = anmeldungen;
+  await assert.rejects(x.m.kalenderLinks(), (e) => e.art === "zugang");
+  assert.equal(anmeldungen, vorher);
+  // Ohne Knopf „Abonnieren“: klarer Fehler
+  const ohne = laden("ilias", { kontext: { user: { "ilias-netz": Object.assign({}, echt, { sitzung: (o) => echt.sitzung(Object.assign({}, o, { transport: async () => ({ status: 200, kopf: html, text: seite("dashboard") }) })) }), "ilias-html": laden("ilias-html").ergebnis } } }).ctx.ilias;
+  const q = await ohne.quelleAusNetz({ benutzer: "zxabc01", kennwortGeber: () => GEHEIM }, async () => {});
+  await assert.rejects(q.kalenderAbo(), (e) => e.art === "kalender");
+});
+
 test("Automatische Läufe: Kurs höchstens alle 3 Std. durchsuchen, der Knopf immer", async () => {
   const x = aufbau();
   await verbinden(x);

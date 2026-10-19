@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/ilias-html.test.js und tests/ilias.test.js. Aufbau wie die Seite „Kalender“ von ILIAS 10
+     (Persönlicher Arbeitsraum → Kalender, Oktober 2026), verkleinertes Gerüst, alle Werte erfunden. Der Knopf „Abonnieren“ hat
+     nur eine Kennung; das Fenster „Kalender abonnieren“ lädt ein Skript am Ende der Seite nach (ajaxRenderUrl mit
+     cmdClass=ilcalendarsubscriptiongui). Ein Termin in der Liste lädt sein Fenster auf dieselbe Art (getModalForApp). -->
+<html lang="de">
+<head><meta charset="utf-8"><title>Kalender</title></head>
+<body>
+<div class="il-maincontrols-metabar"><a href="https://ovidius.uni-tuebingen.de/logout.php?lang=de">Abmelden</a></div>
+<main>
+  <h1>Kalender</h1>
+  <div class="ilCalendarAgendaList">
+    <button class="btn btn-link" id="il_ui_fw_0000000000aa01_00000001">Heute, 10:15 - 11:45 Übung zur Musterveranstaltung</button>
+  </div>
+  <div class="ilFloatRight"><span class="ilIcalIcon"><span id='il_ui_fw_0000000000aa02_00000002'></span><button class="btn btn-default" id="il_ui_fw_0000000000aa03_00000003">Abonnieren</button> </span></div>
+  <div id="block_cal_sel_0"><div class="panel panel-secondary panel-flex"><div class="panel-heading ilHeader"><div class="panel-title"><h2>Kalenderauswahl</h2></div></div></div></div>
+</main>
+<script>
+try { $(document).on('il_signal_0000000000aa04_00000004', function(event, signalData) {
+                    let modal = document.getElementById('il_ui_fw_0000000000aa05_00000005');
+                    il.UI.modal.showModal(modal, {"ajaxRenderUrl":"ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilCalendarAgendaListGUI&cmd=getModalForApp&category_id=0&seed=2026-10-19&app_id=1234567&cmdMode=asynch","keyboard":true,"url":"#il_ui_fw_0000000000aa05_00000005"}, signalData, 'il_signal_0000000000aa06_00000006');
+                }); } catch (e) { console.log(e); }
+try { $(document).on('il_signal_0000000000aa07_00000007', function(event, signalData) {
+                    let modal = document.getElementById('il_ui_fw_0000000000aa02_00000002');
+                    il.UI.modal.showModal(modal, {"ajaxRenderUrl":"ilias.php?baseClass=ildashboardgui&cmdNode=x1:y2&cmdClass=ilcalendarsubscriptiongui&cmd=getModalForSubscription&category_id=0&seed=2026-11-01&cmdMode=asynch","keyboard":true,"url":"#il_ui_fw_0000000000aa02_00000002"}, signalData, 'il_signal_0000000000aa08_00000008');
+                }); } catch (e) { console.log(e); }
+</script>
+</body>
+</html>

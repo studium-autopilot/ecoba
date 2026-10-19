@@ -37,7 +37,10 @@
 //   Gerät und nie, wenn die Abgaben von außen kommen (eba.quelleExtern("ilias-kalender"), bei jedem Lauf gefragt).
 // Status gerätelokal (eba-ilias-ics-status) in der gemeinsamen Form; ein Fehler bleibt stehen, bis ein Abruf klappt. Ein Link, den
 //   ILIAS nicht mehr kennt, steht unter „Bitte prüfen“ (Meldekanal).
-// Für andere Skripte: ctx.iliasKalender = { status(), linkPruefen(link), verbinden(link, { nurBeiErfolg }), aktualisieren(o),
+// Uni-Login (seit 0.4.8, uni-login.js): Mit deinem Uni-Login holt Studium Autopilot den Link selbst aus ILIAS (linkWaehlen nimmt
+//   „iCal-URL (Google Kalender)“); kennt ILIAS einen gespeicherten Link nicht mehr, holt es höchstens einmal am Tag einen neuen
+//   und versucht es gleich damit (ablauf, erneuert). Ein Link, den du selbst eingibst, wird dabei nie ersetzt, solange er geht.
+// Für andere Skripte: ctx.iliasKalender = { status(), linkPruefen(link), linkWaehlen(links), verbinden(link, { nurBeiErfolg }), aktualisieren(o),
 //   trennen(), fehler(), hinweise(), K } und die reinen Teile für Tests. Testeinstiege: plugin.testIliasKalenderAus (kein
 //   automatischer Lauf), plugin.testKalenderAbruf({ url }) → { status, text } (kein Netz), aktualisieren({ text, vollstaendig }).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
@@ -68,6 +71,9 @@ const linkPruefen = (s) => {
   if (!v) return "Bitte zuerst den Link aus ILIAS einfügen.";
   if (/\s/.test(v)) return "Im Link sind Leerzeichen. Bitte den Link neu kopieren und einfügen.";
   if (!/^(https|webcal):\/\//i.test(v)) return "Der Link ist unvollständig. Bitte den ganzen Link einfügen (beginnt mit https://).";
+  // Host genau so im Text, direkt gefolgt von „/“: Bei „\“ oder „@“ davor lesen URL-Parser verschiedene Hosts (der Link geht roh an
+  // requestUrl, mit deinem Schlüssel)
+  if (/\\/.test(v) || v.replace(/^webcal:/i, "https:").toLowerCase().indexOf("https://" + K.HOST + "/") !== 0) return "Das ist kein Link aus ILIAS. Bitte den Link unter „iCal-URL“ kopieren.";
   let u = null;
   try { u = new URL(v.replace(/^webcal:/i, "https:")); } catch (e) { u = null; }
   if (!u || u.hostname.toLowerCase() !== K.HOST || u.port || u.username || u.password) return "Das ist kein Link aus ILIAS. Bitte den Link unter „iCal-URL“ kopieren.";
@@ -75,6 +81,14 @@ const linkPruefen = (s) => {
   return "";
 };
 const linkAdresse = (s) => String(s == null ? "" : s).trim().replace(/^webcal:/i, "https:");
+// Uni-Login (uni-login.js): aus den Links im Fenster „Kalender abonnieren“ ([{ url, begrenzt }], ilias-html.js aboLinks) den,
+// der für Abgaben reicht und klein bleibt: „iCal-URL (Google Kalender)“ (limited=1, ohne Termine, die älter als 30 Tage sind;
+// ILIAS bricht ab 1 MB ab), sonst „iCal-URL“. Nur Links, die linkPruefen besteht. → Link | ""
+const linkWaehlen = (links) => {
+  const gut = (Array.isArray(links) ? links : []).filter((l) => l && typeof l.url === "string" && !linkPruefen(l.url));
+  const w = gut.filter((l) => l.begrenzt)[0] || gut[0];
+  return w ? w.url : "";
+};
 
 // Zusatz am Titelende → { art: "abgabe" | "feedback" | "", titel (ohne Zusatz) }. ILIAS: Titel der Aufgabe + „ (Abgabetermin)“,
 // englisch „ (Deadline)“; Peer-Feedback „ (Feedback geben bis)“ bzw. „ (Feedback Deadline)“.
@@ -189,6 +203,8 @@ module.exports = function (ctx) {
   const Q = () => (ctx.user && ctx.user.quellen) || null;
   const S = () => (ctx.user && ctx.user.sperre) || null;
   const plugin = () => ctx.plugin || {};
+  // Uni-Login (uni-login.js, Bibliothek): neuen Link holen, wenn ILIAS den alten nicht mehr kennt
+  const uni = () => { const f = ctx.user && ctx.user["uni-login"]; try { return typeof f === "function" ? f(ctx) : null; } catch (e) { return null; } };
   const jetzt = () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date());
   const heute = () => ctx.date.now("YYYY-MM-DD");
   const fmVon = (f) => { const c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || null; };
@@ -356,7 +372,8 @@ module.exports = function (ctx) {
     LAUF.p = ablauf(o || {});
     try { return await LAUF.p; } finally { LAUF.p = null; }
   };
-  // o = { automatisch (Zeitplan: kein Hinweis, übernimmt nie die Sperre), still (kein Hinweis), text + vollstaendig (Tests) }
+  // o = { automatisch (Zeitplan: kein Hinweis, übernimmt nie die Sperre), still (kein Hinweis), erneuert (keinen neuen Link über den
+  // Uni-Login holen), text + vollstaendig (Tests) }
   // → Bericht oder null (extern, nicht verbunden, Fehler, ein anderes Gerät schreibt; Grund in fehler() bzw. status())
   const ablauf = async (o) => {
     const leise = !!(o.automatisch || o.still);
@@ -395,6 +412,11 @@ module.exports = function (ctx) {
       const status = antwort ? Number(antwort.status) || 0 : 0;
       if (status !== 200 || !/BEGIN:VCALENDAR/.test(roh)) {
         const linkFehler = status === 200 || status === 401 || status === 403 || status === 404 || status === 410;
+        // Mit deinem Uni-Login holt uni-login.js höchstens einmal am Tag einen neuen Link; damit gleich noch einmal
+        const U = linkFehler && !o.erneuert ? uni() : null;
+        let neu = "";
+        if (U) { try { neu = await U.erneuern(K.QUELLE, link()); } catch (e) { neu = ""; } }
+        if (neu) { app.saveLocalStorage(K.LINK, neu); return ablauf(Object.assign({}, o, { erneuert: true })); }
         letzterFehler = linkFehler ? "ILIAS kennt diesen Link nicht mehr. Bitte den Link in ILIAS neu kopieren."
           : status ? `ILIAS antwortet nicht (Fehler ${status}). Später kommt der nächste Versuch.` : "Keine Verbindung zu ILIAS. Bitte Internet prüfen und erneut versuchen.";
         nachLauf({ ok: false, fehler: letzterFehler, linkFehler });
@@ -448,7 +470,8 @@ module.exports = function (ctx) {
     if (f) { letzterFehler = f; if (!o.nurBeiErfolg) ctx.hinweis(f); return null; }
     const vorher = link(), vorherSeit = app.loadLocalStorage(K.SEIT) || null, vorherStatus = app.loadLocalStorage(K.STATUS);
     app.saveLocalStorage(K.LINK, v);
-    const b = await aktualisieren({ still: !!o.nurBeiErfolg });
+    // erneuert: beim Verbinden keinen anderen Link holen (der eingegebene soll gelten)
+    const b = await aktualisieren({ still: !!o.nurBeiErfolg, erneuert: true });
     if (!b) {
       const grund = letzterFehler;
       app.saveLocalStorage(K.LINK, vorher || null); app.saveLocalStorage(K.SEIT, vorherSeit); app.saveLocalStorage(K.STATUS, vorher ? vorherStatus : null);
@@ -469,12 +492,15 @@ module.exports = function (ctx) {
   const hinweise = () => {
     const s = status();
     if (!s.verbunden || s.extern) return [];
-    if (s.fehler && s.linkFehler) return [Object.assign({ text: "**ILIAS-Kalender** · Der Link gilt nicht mehr. Kopier ihn in ILIAS neu und gib ihn unter Verbindungen ein." }, K.ZIEL)];
+    // Mit Uni-Login holt „Neuen Link eingeben“ ihn selbst (uni-login.js), sonst kopierst du ihn
+    const selbst = !!(uni() && uni().kannSelbst(K.QUELLE));
+    if (s.fehler && s.linkFehler) return [Object.assign({ text: selbst ? "**ILIAS-Kalender** · Der Link gilt nicht mehr. Unter Verbindungen **Neuen Link eingeben** tippen, den Rest macht Studium Autopilot."
+      : "**ILIAS-Kalender** · Der Link gilt nicht mehr. Kopier ihn in ILIAS neu und gib ihn unter Verbindungen ein." }, K.ZIEL)];
     return s.fehler ? [] : s.warnungen.map((w) => Object.assign({ text: "**ILIAS-Kalender** · " + w }, K.ZIEL));
   };
 
   const api = {
-    status, linkPruefen, verbinden, aktualisieren, trennen, fehler, hinweise, K,
+    status, linkPruefen, linkWaehlen, verbinden, aktualisieren, trennen, fehler, hinweise, K,
     // reine Teile (Tests)
     artAus, zielAus, zeitpunktAus, nummerAus, eintraegeAus, schonDa, titelVon, dateiNameVon, eintragVon, linkAdresse,
   };

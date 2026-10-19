@@ -107,10 +107,30 @@ test("Zeilen: Symbol und Pille widersprechen sich nie, höchstens ein Knopf, Pil
   }
 });
 
+test("Uni-Login: vor der Eingabe nennt ein Satz, was er holt, und die Datenschutz-Zeile, wo er sich anmeldet", () => {
+  const ilias = (o) => aufbau(o).V.liste.ilias;
+  let v = ilias();
+  assert.equal(v.kurz, "Mit deinem Uni-Login holt Studium Autopilot deine Unterlagen aus ILIAS, die Abgaben aus dem ILIAS-Kalender und deinen Alma-Stundenplan.");
+  assert.equal(v.datenschutz, "Damit meldet sich Studium Autopilot bei ILIAS und Alma an. Dein Passwort bleibt verschlüsselt auf diesem Gerät.");
+  assert.equal(v.kurzOhneKurse, "Mit deinem Uni-Login holt Studium Autopilot die Abgaben aus dem ILIAS-Kalender und deinen Alma-Stundenplan; deine Kurse in ILIAS bleiben aus.");
+  assert.equal(v.anmeldenTitel, "Mit Uni-Login verbinden");
+  assert.deepEqual(v.uniQuellen, ["ilias-kalender", "alma"], "zugestimmt wird genau für das, was der Satz nennt");
+  // Stundenplan von außen (Liste quellen_extern): Alma kommt in keinem der Sätze vor
+  v = ilias({ einstellungen: { quellen_extern: ["stundenplan"] } });
+  assert.equal(v.kurz, "Mit deinem Uni-Login holt Studium Autopilot deine Unterlagen aus ILIAS und die Abgaben aus dem ILIAS-Kalender.");
+  assert.equal(v.datenschutz, "Damit meldet sich Studium Autopilot bei ILIAS an. Dein Passwort bleibt verschlüsselt auf diesem Gerät.");
+  assert.deepEqual(v.uniQuellen, ["ilias-kalender"]);
+  // Eigener Uni-Abgleich: nur für die Übungsgruppen, nur ILIAS
+  v = ilias({ extern: true });
+  assert.match(v.kurz, /^Deine Übungsgruppe kommt dann von selbst/);
+  assert.deepEqual(v.uniQuellen, []);
+  assert.equal(v.datenschutz, "Damit meldet sich Studium Autopilot bei ILIAS an. Dein Passwort bleibt verschlüsselt auf diesem Gerät.");
+});
+
 test("Zeilen ohne eigenen Uni-Abgleich: Alma und ILIAS je Stand", () => {
   let W = aufbau({}).V;
   assert.deepEqual(lesen(W.zeile("alma")), { text: "Mit Alma siehst du deine Woche im Stundenplan.", symbol: "schloss", ton: "leise", pille: "nicht verbunden", knopf: "Verbinden (cta)", knopfAktion: "verbinden", link: "", linkAktion: "" });
-  assert.deepEqual(lesen(W.zeile("ilias")), { text: "Deine Kursdateien aus ILIAS landen automatisch in Unterlagen.", symbol: "schloss", ton: "leise", pille: "nicht verbunden", knopf: "Verbinden (cta)", knopfAktion: "verbinden", link: "", linkAktion: "" });
+  assert.deepEqual(lesen(W.zeile("ilias")), { text: "Mit deinem Uni-Login holt Studium Autopilot deine Unterlagen aus ILIAS, die Abgaben aus dem ILIAS-Kalender und deinen Alma-Stundenplan.", symbol: "schloss", ton: "leise", pille: "nicht verbunden", knopf: "Verbinden (cta)", knopfAktion: "verbinden", link: "", linkAktion: "" });
   assert.equal(W.liste.ilias.name, "ILIAS-Unterlagen");
   assert.equal(W.gesperrt("alma"), true);
 
@@ -206,7 +226,7 @@ test("Noten & Anmeldungen (Alma): Zeile aus alma-konto.js; ohne Zeile nicht in d
     knopfAktion: "alma-konto-pruefen", link: "Mehr erfahren", linkAktion: "verbinden" });
   assert.match(W.zeile("alma-konto").link, /id=alma-konto/);
   W = aufbau({ almaKonto: konto({ text: "Anmeldung abgelehnt. Bitte dein Passwort unter ILIAS neu eingeben.", symbol: "warnung", pille: "pruefen",
-    knopf: { aktion: "verbinden", text: "ILIAS verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) }).V;
+    knopf: { aktion: "verbinden", text: "Mit Uni-Login verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) }).V;
   assert.deepEqual([lesen(W.zeile("alma-konto")).pille, lesen(W.zeile("alma-konto")).ton], ["neu verbinden", "warn"]);
   W = aufbau({ almaKonto: konto({ text: "Alma-Seite sah anders aus. Bitte in Alma selbst nachsehen.", symbol: "warnung", pille: "", knopf: { href: "https://alma.uni-tuebingen.de/alma/x", text: "In Alma öffnen" }, link: null }) }).V;
   assert.match(W.zeile("alma-konto").knopf, /^<a class="eba-vb-knopf" href="https:\/\/alma\.uni-tuebingen\.de\/alma\/x" target="_blank" rel="noopener">In Alma öffnen<\/a>$/);
@@ -291,7 +311,7 @@ test("ILIAS-Kalender: nicht verbunden Verbinden, verbunden Stand und Zahl der Ab
   z = lesen(aufbau({ kalender: { verbunden: true, extern: true, zustand: "extern", warnungen: [] } }).V.zeile("ilias-kalender"));
   assert.deepEqual([z.knopf, z.link, z.linkAktion], ["", "Trennen", "trennen"]);
   // Reihenfolge unter Verbindungen (Plan 7.2), Schritte mit dem Link zu ILIAS und den Beschriftungen aus ILIAS 10
-  assert.deepEqual(Object.keys(x.V.liste).slice(0, 5), ["alma", "alma-konto", "ilias", "ilias-kalender", "volltext"]);
+  assert.deepEqual(Object.keys(x.V.liste).slice(0, 6), ["uni-login", "alma", "alma-konto", "ilias", "ilias-kalender", "volltext"]);
   const k = x.V.liste["ilias-kalender"];
   assert.deepEqual(V.textTeile(k.schritte[0]).filter((t) => t.art === "link").map((t) => t.href), ["https://ovidius.uni-tuebingen.de/"]);
   assert.match(k.schritte.join(" "), /\*\*Persönlicher Arbeitsraum\*\* → \*\*Kalender\*\*.*\*\*Abonnieren\*\*.*\*\*iCal-URL\*\*/);
@@ -346,13 +366,39 @@ test("Über ein anderes Gerät verbunden: ILIAS im eigenen Uni-Abgleich, Passwor
   // Passwort auf einem deiner Geräte abgelehnt: nicht „verbunden“
   x = await mitSperren({ sperren: { ilias: sperre("g-ipad", 30) }, ilias: { abgelehnt: true } });
   assert.equal(lesen(x.V.zeile("ilias")).knopf, "Verbinden (cta)");
-  // Noten & Anmeldungen: statt „Braucht deinen Uni-Zugang“ verbunden; „Auch hier verbinden“ öffnet ILIAS für Alma
+  // Noten & Anmeldungen: statt „Braucht deinen Uni-Login“ verbunden; „Auch hier verbinden“ öffnet ILIAS für Alma
   const konto = { sichtbar: () => true, status: () => ({ art: "ohne-zugang", benutzer: "" }), fensterOeffnen: () => ({ konto: true }),
-    zeile: () => ({ text: "Braucht deinen Uni-Zugang.", symbol: "schloss", pille: "", knopf: { aktion: "verbinden", text: "ILIAS verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) };
+    zeile: () => ({ text: "Braucht deinen Uni-Login.", symbol: "schloss", pille: "", knopf: { aktion: "verbinden", text: "Mit Uni-Login verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) };
   x = await mitSperren({ almaKonto: konto, sperren: { "alma-konto": sperre("g-ipad", 60) } });
   const z = lesen(x.V.zeile("alma-konto"));
   assert.deepEqual([z.text, z.pille, z.knopf], ["Verbunden über ein anderes Gerät · aktualisiert vor 1 Std.", "verbunden", "Mehr erfahren"]);
   assert.equal(x.V.fensterOeffnen(x.V.liste["alma-konto"], { id: "alma-konto" }).constructor.name, "AnderswoFenster");
   x = await mitSperren({ almaKonto: konto, sperren: {} });
-  assert.equal(lesen(x.V.zeile("alma-konto")).knopf, "ILIAS verbinden (cta)");
+  assert.equal(lesen(x.V.zeile("alma-konto")).knopf, "Mit Uni-Login verbinden (cta)");
+});
+
+// ---------- Uni-Login (seit 0.4.8): eine Zeile statt ILIAS, ILIAS-Kalender, Alma-Stundenplan und Noten & Anmeldungen ----------
+test("Uni-Login: eine Zeile mit allem, was verbunden ist; anderes Gerät, abgelehnt, nicht verbunden, eigener Uni-Abgleich", async () => {
+  const z = (o) => lesen(aufbau(o).V.zeile("uni-login"));
+  const kal = { verbunden: true, zustand: "an", geprueft: vorMin(30), warnungen: [], abgaben: 1 };
+  assert.deepEqual(z({ ilias: { verbunden: true, zustand: "an", zuletzt: vorMin(5), text: "Aktualisiert vor 5 Min." }, kalender: kal, alma: { verbunden: true, zustand: "an", geprueft: vorMin(60) } }),
+    { text: "Verbunden · Unterlagen, Abgaben und Stundenplan · aktualisiert vor 5 Min.", symbol: "haken", ton: "ok", pille: "verbunden",
+      knopf: "Aktualisieren (cta)", knopfAktion: "verbindung-aktualisieren", link: "Mehr erfahren", linkAktion: "verbinden" });
+  // Problem einer Quelle: mit ihrem Namen dahinter, Warnsymbol
+  const p = z({ alma: { verbunden: true, zustand: "fehler", geprueft: vorMin(120), fehler: "Keine Verbindung zu Alma." } });
+  assert.deepEqual([p.text, p.symbol], ["Verbunden · Stundenplan · aktualisiert vor 2 Std. Alma-Stundenplan: Keine Verbindung zu Alma. Zuletzt aktualisiert vor 2 Std.", "warnung"]);
+  // nur über ein anderes Gerät: verbunden, rechts nur „Mehr erfahren“
+  const x = await mitSperren({ sperren: { ilias: sperre("g-ipad", 20), alma: sperre("g-ipad", 180) } });
+  assert.deepEqual([lesen(x.V.zeile("uni-login")).text, lesen(x.V.zeile("uni-login")).knopf], ["Verbunden über ein anderes Gerät · Unterlagen und Stundenplan · aktualisiert vor 20 Min.", "Mehr erfahren"]);
+  // Passwort abgelehnt, nichts verbunden
+  assert.deepEqual([z({ ilias: { verbunden: true, gesperrt: true, text: "Benutzername oder Passwort stimmt nicht." } }).pille, z({}).knopf, z({}).pille],
+    ["neu verbinden", "Mit Uni-Login verbinden (cta)", "nicht verbunden"]);
+  // eigener Uni-Abgleich: nur der Satz, nichts zu verbinden
+  assert.deepEqual(z({ extern: true, einstellungen: { quellen_extern: ["stundenplan", "ilias-dateien", "ilias-kalender"] }, ilias: { extern: true, text: I.K.TEXT_EXTERN } }),
+    { text: "Deine Unterlagen, deine Abgaben und dein Stundenplan kommen über deinen Uni-Abgleich.", symbol: "haken", ton: "ok", pille: "", knopf: "", knopfAktion: "", link: "", linkAktion: "" });
+  // Fenster dahinter; Aktualisieren holt alles, was hier verbunden ist
+  const y = aufbau({ ilias: { verbunden: true, text: "x" }, kalender: kal });
+  assert.equal(y.V.fensterOeffnen(y.V.liste["uni-login"], { id: "uni-login" }).constructor.name, "UniFenster");
+  await y.aktionen["verbindung-aktualisieren"].ausfuehren({ parameter: { id: "uni-login" } });
+  assert.deepEqual(y.geholt, [{ uebernehmen: false }, { kalender: true }]);
 });

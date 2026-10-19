@@ -14,6 +14,8 @@
 //   solange System/Daten/uni-zugang.json eine neuere Ablehnung meldet. Lehnt Alma eindeutig ab, schreibt dieses Gerät den Marker
 //   (alle Geräte mit diesem Passwort halten an). Unklare Antworten, zweiter Faktor, Zustimmungsseite: nur Alma auf diesem Gerät
 //   pausiert (Erneut versuchen). Höchstens eine Anmeldung je Lauf, nie ein zweiter Versuch.
+// Stundenplan-Link (seit 0.4.8, ohne Beta und ohne „Einschalten“): Für den Uni-Login (uni-login.js) holt stundenplanLink() mit
+//   derselben Anmeldung den Abo-Link aus der Seite „Stundenplan“; alma.js holt damit den Stundenplan wie mit einem kopierten Link.
 // Ablauf eines Laufs (Drossel: eine Anfrage zugleich, 2 s Abstand; ganzer Lauf höchstens 3 Min.): Startseite → schon angemeldet?
 //   sonst Formular prüfen (Host, Pfad, Port) und POST mit Benutzername und Passwort → angemeldet nur mit Abmelde-Link →
 //   Leistungen (zugeklappt: einmal „Alle aufklappen“) → Belegungen → Abmelden (type=4) in jedem Ausgang. Stopp für den Tag bei
@@ -51,6 +53,8 @@ const URL_LEISTUNGEN = ALMA + "/alma/pages/sul/examAssessment/personExamsReadonl
 const URL_BELEGUNGEN = ALMA + "/alma/pages/cm/exa/enrollment/info/start.xhtml?_flowId=searchOwnEnrollmentInfo-flow"
   + "&navigationPosition=hisinoneMeinStudium%2ChisinoneOwnEnrollmentList&recordRequest=true";
 const URL_ABMELDEN = ALMA + "/alma/rds?state=user&type=4&category=auth.logout";
+// Mein Studium → Stundenplan (wie verbindungen.js ALMA_STUNDENPLAN): trägt den Abo-Link für den Uni-Login
+const URL_STUNDENPLAN = ALMA + "/alma/pages/plan/individualTimetable.xhtml?_flowId=individualTimetableSchedule-flow";
 const MIN = 60e3, STUNDE = 60 * MIN;
 const NORMAL = 12 * STUNDE, PHASE = 3 * STUNDE, NETZ_WIEDER = 30 * MIN, KNOPF_ABSTAND = 2 * MIN, LAUF_MAX = 3 * MIN;
 const PAUSE_UNERWARTET = 24 * STUNDE, UNERWARTET_MAX = 3, FRISCH = 26 * STUNDE, PROTOKOLL_MAX = 20;
@@ -286,25 +290,11 @@ const erzeugen = (abh) => {
   };
   const faellig = () => !laeuft && faelligSonst();
 
-  // ----- Ein Lauf -----
-  let laeuft = null;
-  const lauf = async (o, b) => {
-    if (!beta()) { b.art = "beta-aus"; return; }
-    if (extern()) { b.art = "extern"; return; }
-    await lesen();
-    if (!an()) { b.art = lstand().aus ? "aus-anderes-geraet" : "aus"; return; }
-    const z = zugang();
-    if (!z.benutzer) { b.art = "ohne-zugang"; return; }
-    if (z.gesperrt) { b.art = "abgelehnt"; return; }
-    if (!z.bestaetigt) { b.art = "wartet-ilias"; return; }
-    const s0 = lstand();
-    if (!o.manuell && !faelligSonst()) { b.art = "nicht-faellig"; return; }
-    if (o.manuell && alter(s0.letzter) < KNOPF_ABSTAND) { b.art = "zu-frueh"; return; }
-    const S = sperre();
-    const p = await S.pruefen();
-    if (p.anderes && !o.hier) { b.art = "anderes-geraet"; sperreInfo = p; return; }
-    await S.nehmen({ erzwingen: !!o.hier });
-    lsetzen({ letzter: iso(), pause: o.manuell ? "" : s0.pause });
+  // ----- Eine Sitzung bei Alma (für den Lauf und den Stundenplan-Link) -----
+  // Drossel, nur alma.uni-tuebingen.de (Dienst „alma“), ganze Sitzung höchstens LAUF_MAX: Startseite → schon angemeldet? sonst
+  // Formular prüfen und POST mit Benutzername und Passwort (vorPost() unmittelbar davor) → angemeldet nur mit Abmelde-Link →
+  // fn(holen, A) → Abmelden (type=4, geprüft am 18.10.2026) in jedem Ausgang. b zählt anfragen, post, angemeldet.
+  const mitAlma = async (b, z, vorPost, fn) => {
     const N = sicher(() => abh.netz(), null), A = sicher(() => abh.html(), null);
     if (!N || !A || typeof N.sitzung !== "function") throw fehlerArt("baustein");
     // Drossel mit der Uhr des Geräts; nur Tests geben Uhr und Warten vor
@@ -330,15 +320,43 @@ const erzeugen = (abh) => {
         if (!f) throw fehlerArt("unerwartet", "formular");
         const kw = sicher(() => abh.kennwort(), "");
         if (!kw) throw fehlerArt("ohne-zugang");
-        // Ab hier zählt der Lauf als Versuch (höchstens einer je 12 bzw. 3 Std.); das Passwort steht nur in diesem POST
-        lsetzen({ versuch: iso() });
+        if (vorPost) vorPost();
         b.post = true;
+        // Das Passwort steht nur in diesem POST
         r = await holen({ url: f.action, methode: "POST", formular: f.felder.concat([["asdf", z.benutzer], ["fdsa", kw], ["submit", ""]]) });
         angemeldet = A.seite(r.text) === "angemeldet";
         if (!angemeldet) { const g = A.fehler(r.text); throw fehlerArt(g, g); }
       }
       b.angemeldet = true;
-      r = await holen({ url: URL_LEISTUNGEN });
+      return await fn(holen, A);
+    } finally {
+      if (angemeldet) { try { await holen({ url: URL_ABMELDEN }, true); } catch (e) { /* Sitzung läuft bei Alma ab */ } }
+      try { if (typeof sitzung.schliessen === "function") sitzung.schliessen(); } catch (e) { /* schon zu */ }
+    }
+  };
+
+  // ----- Ein Lauf -----
+  let laeuft = null;
+  const lauf = async (o, b) => {
+    if (!beta()) { b.art = "beta-aus"; return; }
+    if (extern()) { b.art = "extern"; return; }
+    await lesen();
+    if (!an()) { b.art = lstand().aus ? "aus-anderes-geraet" : "aus"; return; }
+    const z = zugang();
+    if (!z.benutzer) { b.art = "ohne-zugang"; return; }
+    if (z.gesperrt) { b.art = "abgelehnt"; return; }
+    if (!z.bestaetigt) { b.art = "wartet-ilias"; return; }
+    const s0 = lstand();
+    if (!o.manuell && !faelligSonst()) { b.art = "nicht-faellig"; return; }
+    if (o.manuell && alter(s0.letzter) < KNOPF_ABSTAND) { b.art = "zu-frueh"; return; }
+    const S = sperre();
+    const p = await S.pruefen();
+    if (p.anderes && !o.hier) { b.art = "anderes-geraet"; sperreInfo = p; return; }
+    await S.nehmen({ erzwingen: !!o.hier });
+    lsetzen({ letzter: iso(), pause: o.manuell ? "" : s0.pause });
+    // Ab dem POST zählt der Lauf als Versuch (höchstens einer je 12 bzw. 3 Std.)
+    await mitAlma(b, z, () => lsetzen({ versuch: iso() }), async (holen, A) => {
+      let r = await holen({ url: URL_LEISTUNGEN });
       if (A.seite(r.text) !== "angemeldet") throw fehlerArt("unerwartet", "sitzung");
       let Lr = A.leistungen(r.text, r.url || URL_LEISTUNGEN);
       if (Lr.art === "zugeklappt" && Lr.aufklappen) {
@@ -355,16 +373,12 @@ const erzeugen = (abh) => {
       b.leistungen = Lr.art; b.belegungen = Br.art;
       b.grund = Lr.art === "unsicher" ? "leistungen-" + (Lr.grund || "") : Br.art === "unsicher" ? "belegungen-" + (Br.grund || "") : "";
       b.L = Lr; b.B = Br;
-    } finally {
-      // Abmelden in jedem Ausgang (type=4, geprüft am 18.10.2026), dann offene Verbindungen schließen
-      if (angemeldet) { try { await holen({ url: URL_ABMELDEN }, true); } catch (e) { /* Sitzung läuft bei Alma ab */ } }
-      try { if (typeof sitzung.schliessen === "function") sitzung.schliessen(); } catch (e) { /* schon zu */ }
-    }
+    });
     // Inzwischen auf einem anderen Gerät gelöscht? Dann nichts schreiben.
     await lesen();
     if (!an()) { b.art = "aus-anderes-geraet"; return; }
     const alt = zustand;
-    const neu = zustandBauen({ alt, L: b.L, B: b.B, codes: sicher(() => abh.codes(), []) || [], jetzt: iso(), geraet: abh.geraetId(), A });
+    const neu = zustandBauen({ alt, L: b.L, B: b.B, codes: sicher(() => abh.codes(), []) || [], jetzt: iso(), geraet: abh.geraetId(), A: abh.html() });
     b.neu = Object.keys(neu.leistungen.module).filter((c) => JSON.stringify(neu.leistungen.module[c]) !== JSON.stringify(alt && alt.leistungen.module[c])).length;
     if (!alt || JSON.stringify(neu) !== JSON.stringify(alt)) await io.schreibenText(STAND, JSON.stringify(neu, null, 1) + "\n");
     zustand = neu;
@@ -396,7 +410,7 @@ const erzeugen = (abh) => {
     switch (b.art) {
       case "ok": return b.neu ? `Alma geprüft, ${b.neu === 1 ? "eine neue Angabe" : b.neu + " neue Angaben"} auf deinen Modulseiten.` : "Alma geprüft, nichts Neues.";
       case "unsicher": return "Die Seite von Alma sah anders aus als erwartet. Bitte in Alma selbst nachsehen.";
-      case "zugang-falsch": case "abgelehnt": return "Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden.";
+      case "zugang-falsch": case "abgelehnt": return "Alma hat dein Passwort abgelehnt. Bitte deinen Uni-Login neu eingeben.";
       case "abgelehnt-unklar": case "unerwartet": case "fehler": return "Alma hat anders geantwortet als erwartet.";
       case "zwei-faktor": return "Alma verlangt einen zweiten Faktor. Melde dich einmal im Browser bei Alma an.";
       case "zustimmung": return "Alma möchte eine Zustimmung. Melde dich einmal im Browser bei Alma an.";
@@ -404,7 +418,7 @@ const erzeugen = (abh) => {
       case "server": case "wartung": case "stopp": return "Alma ist gerade nicht erreichbar. Später noch einmal versuchen.";
       case "anderes-geraet": return "Alma: Ein anderes Gerät prüft gerade.";
       case "wartet-ilias": return "Alma wartet, bis ILIAS deinen Zugang bestätigt hat.";
-      case "ohne-zugang": return "Alma braucht deinen Uni-Zugang (ILIAS verbinden).";
+      case "ohne-zugang": return "Alma braucht deinen Uni-Login.";
       case "zu-frueh": return "Alma wurde gerade erst geprüft.";
       case "beta-aus": return "Noten & Anmeldungen gibt es gerade nur mit Beta-Versionen.";
       case "extern": return "Noten & Anmeldungen kommen über deinen eigenen Abgleich.";
@@ -419,6 +433,8 @@ const erzeugen = (abh) => {
     laeuft = (async () => {
       const b = { art: "", grund: "", anfragen: 0, post: false, angemeldet: false, neu: 0 }, t0 = ms(), beginn = iso();
       melden({ art: "start", manuell: !!o.manuell });
+      // Holt gerade der Uni-Login den Stundenplan-Link, erst danach (eine Alma-Sitzung zugleich, siehe stundenplanLink)
+      if (linkLauf) { try { await linkLauf; } catch (e) { /* egal */ } }
       try { await lauf(o, b); } catch (e) {
         b.art = (e && e.art) || "fehler";
         b.grund = b.grund || (e && e.grund) || "";
@@ -434,6 +450,46 @@ const erzeugen = (abh) => {
       return b;
     })();
     return laeuft;
+  };
+
+  // ----- Abo-Link des Stundenplans (Uni-Login, uni-login.js, seit 0.4.8) -----
+  // Anmelden, die Seite „Stundenplan“ lesen, abmelden. Der Link steht dort schon im versteckten Fenster „Daten für iCalendar
+  // (ics) exportieren“; nichts wird angeklickt oder erneuert. Unabhängig von Beta und „Einschalten“: Wer seinen Uni-Login eingibt,
+  // stimmt dieser Anmeldung bei Alma zu (Entscheidung vom 19.10.2026). Sonst wie ein Lauf: nur, wenn ILIAS das Passwort bestätigt
+  // hat und keine Ablehnung vorliegt; lehnt Alma eindeutig ab, hält der Marker alle Geräte an. Der Stand von Noten & Anmeldungen
+  // bleibt unberührt. Gleichzeitige Aufrufe teilen einen Abruf. → { art: "ok", link } | { art, grund } (art wie bei einem Lauf)
+  // Eine Alma-Sitzung zugleich: Auf iPhone und iPad teilen sich Sitzungen die Kekse, das Abmelden der einen beendete die andere.
+  // Darum wartet der Link auf einen laufenden Lauf (und ein Lauf auf den Link, jetztPruefen). Hat Alma gebremst (pauseBis nach
+  // 403/429 oder wiederholten Fehlern von Noten & Anmeldungen), meldet sich auch der Link-Abruf bis dahin nicht an.
+  let linkLauf = null;
+  const linkHolen = async () => {
+    if (laeuft) { try { await laeuft; } catch (e) { /* egal */ } }
+    const z = zugang();
+    if (!z.benutzer) return { art: "ohne-zugang" };
+    if (z.gesperrt) return { art: "abgelehnt" };
+    if (!z.bestaetigt) return { art: "wartet-ilias" };
+    if (alter(lstand().pauseBis) < 0) return { art: "stopp", grund: "pause" };
+    const b = { anfragen: 0, post: false, angemeldet: false };
+    try {
+      const link = await mitAlma(b, z, null, async (holen, A) => {
+        const r = await holen({ url: URL_STUNDENPLAN });
+        if (A.seite(r.text) !== "angemeldet") throw fehlerArt("unerwartet", "sitzung");
+        const l = A.stundenplanLink(r.text);
+        if (!l) throw fehlerArt("unerwartet", "kein-link");
+        return l;
+      });
+      return { art: "ok", link };
+    } catch (e) {
+      const art = (e && e.art) || "fehler";
+      if (art === "zugang-falsch") { try { await abh.abgelehnt("alma"); } catch (x) { /* Marker beim nächsten Mal */ } }
+      try { console.warn("alma-konto: Stundenplan-Link " + art + (e && e.grund && e.grund !== art ? " " + e.grund : "")); } catch (x) { /* egal */ }
+      return { art, grund: (e && e.grund) || "" };
+    }
+  };
+  const stundenplanLink = async () => {
+    if (linkLauf) return linkLauf;
+    linkLauf = linkHolen();
+    try { return await linkLauf; } finally { linkLauf = null; }
   };
 
   // ----- Einschalten, Ausschalten, Löschen -----
@@ -467,7 +523,7 @@ const erzeugen = (abh) => {
 
   // ----- Stand für die Oberfläche (ohne Noten) -----
   const FEHLER = {
-    "abgelehnt": "Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden.",
+    "abgelehnt": "Alma hat dein Passwort abgelehnt. Bitte deinen Uni-Login neu eingeben.",
     "abgelehnt-unklar": "Alma hat anders geantwortet als erwartet.", "unerwartet": "Alma hat anders geantwortet als erwartet.",
     "zwei-faktor": "Alma verlangt einen zweiten Faktor. Melde dich einmal im Browser an.",
     "zustimmung": "Alma möchte eine Zustimmung. Melde dich einmal im Browser an.",
@@ -503,7 +559,7 @@ const erzeugen = (abh) => {
   };
 
   return {
-    jetztPruefen, faellig, einschalten, ausschalten, loeschen, lesen, status, protokoll, sichtbar, beta, extern,
+    jetztPruefen, faellig, einschalten, ausschalten, loeschen, lesen, status, protokoll, sichtbar, beta, extern, stundenplanLink,
     zustand: () => zustand, an, lstand,
     vorschlag: (fm) => (extern() ? null : vorschlagAus(fm, zustand)),
     get laeuft() { return !!laeuft; },
@@ -665,16 +721,16 @@ module.exports = function (ctx) {
     const s = motor().status();
     const pruefen = (text) => ({ aktion: "alma-konto-pruefen", text, cta: true, parameter: {} });
     const fenster = (text, cta) => ({ aktion: "verbinden", text, cta: !!cta, parameter: { id: "alma-konto" } });
-    const ilias = { aktion: "verbinden", text: "ILIAS verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } };
+    const ilias = { aktion: "verbinden", text: "Mit Uni-Login verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } };
     const fa = s.art === "an" ? fehlende() : null;
     switch (s.art) {
       case "unsichtbar": return null;
       case "extern": return { text: "Kommt über deinen eigenen Abgleich.", symbol: "haken", pille: "", knopf: null, link: null };
       case "beta-aus": return { text: "Gibt es gerade nur mit Beta-Versionen.", symbol: "aus", pille: "", knopf: null, link: MEHR };
-      case "ohne-zugang": return { text: "Braucht deinen Uni-Zugang.", symbol: "schloss", pille: "", knopf: ilias, link: null };
+      case "ohne-zugang": return { text: "Braucht deinen Uni-Login.", symbol: "schloss", pille: "", knopf: ilias, link: null };
       case "aus-anderes-geraet": return { text: "Auf einem anderen Gerät ausgeschaltet.", symbol: "aus", pille: "", knopf: fenster("Einschalten"), link: null };
       case "aus": return { text: "Liest deine Noten und Prüfungsanmeldungen aus Alma.", symbol: "aus", pille: "", knopf: fenster("Einschalten"), link: null };
-      case "abgelehnt": return { text: "Alma hat dein Passwort abgelehnt. Bitte ILIAS neu verbinden.", symbol: "warnung", pille: "pruefen", knopf: ilias, link: null };
+      case "abgelehnt": return { text: "Alma hat dein Passwort abgelehnt. Bitte deinen Uni-Login neu eingeben.", symbol: "warnung", pille: "pruefen", knopf: ilias, link: null };
       case "wartet-ilias": return { text: "Wartet, bis ILIAS deinen Zugang bestätigt hat.", symbol: "uhr", pille: "", knopf: null, link: MEHR };
       case "laeuft": return { text: "Prüft gerade …", symbol: "uhr", pille: "an", knopf: null, link: MEHR };
       case "zwei-faktor": return { text: "Alma verlangt einen zweiten Faktor. Melde dich einmal im Browser an.", symbol: "warnung", pille: "", knopf: pruefen("Erneut versuchen"), link: MEHR };
@@ -745,15 +801,15 @@ module.exports = function (ctx) {
       if (!s.an) {
         c.createEl("p", { cls: "eba-modal-text", text: "Studium Autopilot liest deine Noten und Prüfungsanmeldungen aus Alma und schlägt sie dir auf der Modulseite vor." });
         if (s.art === "ohne-zugang") {
-          c.createEl("p", { cls: "eba-modal-hinweis", text: "Dafür braucht es deinen Uni-Zugang. Verbinde zuerst ILIAS, deine Kurse bleiben dabei aus." });
-          this.knoepfe().createEl("button", { text: "ILIAS verbinden", cls: "mod-cta" }).addEventListener("click", () => { this.close(); ctx.aktion("verbinden", { id: "ilias", fuer: "alma" }); });
+          c.createEl("p", { cls: "eba-modal-hinweis", text: "Dafür braucht es deinen Uni-Login. Deine Kurse in ILIAS bleiben dabei aus." });
+          this.knoepfe().createEl("button", { text: "Mit Uni-Login verbinden", cls: "mod-cta" }).addEventListener("click", () => { this.close(); ctx.aktion("verbinden", { id: "ilias", fuer: "alma" }); });
           return;
         }
         if (s.art === "aus-anderes-geraet") c.createEl("p", { cls: "eba-modal-hinweis", text: "Auf einem anderen Gerät wurden die Daten aus Alma gelöscht." });
         const schutz = c.createEl("p", { cls: "eba-modal-datenschutz" });
         schutz.innerHTML = SYM_SCHLOSS;
         const t = schutz.createSpan();
-        t.appendText("Dafür meldet sich dieses Gerät mit deinem Uni-Zugang ");
+        t.appendText("Dafür meldet sich dieses Gerät mit deinem Uni-Login ");
         t.createEl("b", { text: s.benutzer });
         t.appendText(" auch bei Alma an, höchstens zweimal am Tag, in der Anmeldephase alle 3 Stunden. Das Passwort bleibt verschlüsselt auf diesem Gerät.");
         c.createEl("p", { cls: "eba-modal-hinweis", text: "Noch Beta: Prüfe Noten und Anmeldungen bitte weiter auch selbst in Alma." });
@@ -787,6 +843,7 @@ module.exports = function (ctx) {
     status: () => motor().status(), zeile, sichtbar: () => motor().sichtbar() && motor().status().sichtbar, einschalten: () => motor().einschalten(),
     ausschalten: () => motor().ausschalten(), jetztPruefen: (o) => motor().jetztPruefen(Object.assign({ manuell: true }, o || {})),
     loeschen: () => motor().loeschen(), zustand: () => motor().zustand(), vorschlag: (fm) => motor().vorschlag(fm),
+    stundenplanLink: () => motor().stundenplanLink(),
     uebernehmen, ausblenden, modulFeld, fehlendeAnmeldungen: fehlende, hinweise, fingerabdruck: () => motor().status().aufbau,
     beobachten, fensterOeffnen, URL_START,
     testSetzen: async (w) => { test.w = w || null; await motor().lesen(); neuZeichnen(); },
@@ -838,5 +895,5 @@ module.exports.anmeldeFenster = anmeldeFenster;
 module.exports.zustandBauen = zustandBauen;
 module.exports.zustandPruefen = zustandPruefen;
 module.exports.sha256 = sha256;
-module.exports.K = Object.freeze({ ALMA_KONTO_STABIL, STAND, ABRUF, AUS, L, URL_START, URL_LEISTUNGEN, URL_BELEGUNGEN, URL_ABMELDEN, NORMAL, PHASE,
+module.exports.K = Object.freeze({ ALMA_KONTO_STABIL, STAND, ABRUF, AUS, L, URL_START, URL_LEISTUNGEN, URL_BELEGUNGEN, URL_ABMELDEN, URL_STUNDENPLAN, NORMAL, PHASE,
   NETZ_WIEDER, KNOPF_ABSTAND, LAUF_MAX, FRISCH, DROSSEL });

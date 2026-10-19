@@ -1,5 +1,8 @@
 // Stundenplan aus Alma in den Tresor übernehmen (iCalendar-Abo-Link aus Alma). Quelle nach dem Quellen-Vertrag (quellen.js,
 // docs/architektur.md „Quellen-Vertrag“ und „Alma-Stundenplan“).
+// Uni-Login (seit 0.4.8, uni-login.js): Den Link holt Studium Autopilot mit deinem Uni-Login auch selbst aus Alma. Zeigt ein Abruf
+//   auf den Link (Alma kennt ihn nicht, kein Stundenplan), holt es höchstens einmal am Tag einen neuen und versucht es gleich damit
+//   (ablauf, erneuert); beim Verbinden mit einem eingegebenen Link nie.
 // Aufruf: ctx.user.alma(ctx).aktualisieren({ still }) bzw. .verbinden() (Link abfragen + importieren); seit 0.4.5 auch von selbst
 // (registrieren: Zeitplan quellen.planen, stündlich, nach Fehlern früher, zurück in der App nach über einer Stunde).
 // Der Abo-Link ist geheim (wer ihn hat, sieht den Stundenplan). Er liegt NUR im gerätelokalen Speicher
@@ -24,6 +27,9 @@ const LAUF = { p: null }; // laufender Abruf, geteilt von allen Aufrufern dieser
 module.exports = function (ctx) {
   const app = window.app;
   const { requestUrl } = ctx.obsidian;
+  // Uni-Login (uni-login.js, Bibliothek): neuen Link holen, wenn Alma den alten nicht mehr kennt; fehlt in der Hülle eines eigenen
+  // Uni-Abgleichs (dort nie)
+  const uni = () => { const f = ctx.user && ctx.user["uni-login"]; try { return typeof f === "function" ? f(ctx) : null; } catch (e) { return null; } };
   // Hinweise über ctx.hinweis; die Hülle eines eigenen Uni-Abgleichs (stundenplan-sync.mjs) hat keins, dort bleibt es still
   const hinweis = (text, o) => (typeof ctx.hinweis === "function" ? ctx.hinweis(text, o) : null);
   const EXTERN = "Dein Stundenplan kommt über deinen Uni-Abgleich.";
@@ -61,7 +67,8 @@ module.exports = function (ctx) {
     if (!v) return "Bitte zuerst den Link aus Alma einfügen.";
     if (/\s/.test(v)) return "Im Link sind Leerzeichen. Bitte den Link neu kopieren und einfügen.";
     if (!/^(https|webcal):\/\//i.test(v)) return "Der Link ist unvollständig. Bitte den ganzen Link einfügen (beginnt mit https://).";
-    if (!/^(https|webcal):\/\/alma\.uni-tuebingen\.de[:/]/i.test(v)) return "Das ist kein Alma-Link. Bitte den Link aus „Link kopieren“ einfügen.";
+    // Host genau so, danach höchstens :443 und dann „/“ (sonst ginge ein Link durch, der nach dem Host mit „:…@“ auf einen anderen Host zeigt); kein „\“
+    if (/\\/.test(v) || !/^(https|webcal):\/\/alma\.uni-tuebingen\.de(:443)?\//i.test(v)) return "Das ist kein Alma-Link. Bitte den Link aus „Link kopieren“ einfügen.";
     if (/^(https|webcal):\/\/alma\.uni-tuebingen\.de\/?$/i.test(v)) return "Das ist nur die Alma-Startseite. Bitte den Link aus „Link kopieren“ einfügen.";
     return "";
   };
@@ -339,7 +346,8 @@ module.exports = function (ctx) {
     LAUF.p = ablauf(optionen);
     try { return await LAUF.p; } finally { LAUF.p = null; }
   };
-  // Sperre nehmen und den Stundenplan holen → { text } | { anderes: true } | { fehler } (Text für Status und Hinweis)
+  // Sperre nehmen und den Stundenplan holen → { text } | { anderes: true } | { fehler, linkFehler } (Text für Status und Hinweis;
+  // linkFehler: Antwort zeigt auf den Link, Alma kennt ihn nicht oder liefert keinen Stundenplan)
   const holen = async (sp, text, automatisch, lauf) => {
     // Ein Schreiber: der Zeitplan wartet, solange ein anderes Gerät schreibt; ein Knopf übernimmt
     if (sp && !(await sp.nehmen({ erzwingen: !automatisch }))) {
@@ -358,7 +366,9 @@ module.exports = function (ctx) {
     if (antwort.status === 200) { try { roh = antwort.arrayBuffer ? bytesLesen(antwort.arrayBuffer) : antwort.text || ""; } catch (e) { roh = antwort.text || ""; } }
     if (antwort.status === 200 && /BEGIN:VCALENDAR/.test(roh)) return { text: roh };
     return { fehler: antwort.zuLange ? ZU_LANGE : antwort.status === 200 ? "Alma hat keinen Stundenplan geliefert. Bitte den Link aus „Link kopieren“ einfügen."
-      : antwort.status ? `Alma antwortet nicht (Fehler ${antwort.status}). Bitte den Link in Alma neu kopieren.` : "Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen." };
+      : antwort.status ? `Alma antwortet nicht (Fehler ${antwort.status}). Bitte den Link in Alma neu kopieren.` : "Keine Verbindung zu Alma. Bitte Internet prüfen und erneut versuchen.",
+    // 403 nicht: so bremst Alma (wie in alma-konto.js „Stopp für den Tag“), ein neuer Link hilft dann nicht
+    linkFehler: !antwort.zuLange && [200, 401, 404, 410].indexOf(antwort.status) >= 0 };
   };
   const ablauf = async (optionen) => {
     const { still = false, ordner = ORDNER, automatisch = false } = optionen;
@@ -375,6 +385,11 @@ module.exports = function (ctx) {
     try { h = await mitFrist(holen(sp, optionen.text, automatisch, lauf), LAUF_FRIST); }
     catch (e) { if (!e || e.message !== FRIST) throw e; lauf.aus = true; h = { fehler: ZU_LANGE }; }
     if (h.anderes) return null;
+    // Mit deinem Uni-Login holt uni-login.js höchstens einmal am Tag einen neuen Link; damit gleich noch einmal
+    const U = h.linkFehler && !optionen.erneuert && optionen.text == null ? uni() : null;
+    let neu = "";
+    if (U) { try { neu = await U.erneuern("alma", link()); } catch (e) { neu = ""; } }
+    if (neu) { app.saveLocalStorage(SPEICHER, neu); return ablauf(Object.assign({}, optionen, { erneuert: true })); }
     if (h.fehler) {
       letzterFehler = h.fehler;
       nachLauf({ ok: false, fehler: letzterFehler });
@@ -612,7 +627,8 @@ module.exports = function (ctx) {
     // Stundenplan von außen: gar nicht erst nach dem Link fragen
     if (extern()) { letzterFehler = EXTERN; if (!optionen.nurBeiErfolg) hinweis(EXTERN); return null; }
     if (!(await linkSetzen(vorgabe, true))) return null;
-    const bericht = await aktualisieren({ still: !!optionen.nurBeiErfolg });
+    // erneuert: beim Verbinden keinen anderen Link holen (der eingegebene soll gelten)
+    const bericht = await aktualisieren({ still: !!optionen.nurBeiErfolg, erneuert: true });
     if (!bericht) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); if (!vorher) app.saveLocalStorage(STATUS, null); return null; }
     if (bericht && (!vorher || vorher !== link() || !vorherSeit)) app.saveLocalStorage(SEIT, new Date().toISOString());
     return bericht;

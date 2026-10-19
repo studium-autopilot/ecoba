@@ -12,7 +12,7 @@ const TRESOR = "Studium Autopilot";
 const REGELN = [
   { name: "aktualisieren", sag: "Aktualisieren (Daten holen); Hier aktualisieren", warum: "ein Wort für dieselbe Handlung",
     nicht: /\bJetzt (?:aktualisieren|holen|laden|prüfen|abgleichen)\b|\bHier (?:holen|laden|prüfen)\b|\b(?:[Aa]us ILIAS|aus Alma|Neu) holen\b/ },
-  { name: "neue-version", sag: "Neue Version installieren", warum: "„Aktualisieren“ heißt Daten holen",
+  { name: "neue-version", sag: "Neue Version installieren; Nach Updates suchen; Update fertigstellen", warum: "„Aktualisieren“ heißt Daten holen",
     nicht: /Studium Autopilot aktualisieren|Vorlage aktualisieren/ },
   { name: "lehrveranstaltung", sag: "Lehrveranstaltung", warum: "„Veranstaltung“ nur für Events",
     nicht: /Stundenplan-Eintr|(?:^|[^\p{L}])[Vv]eranstaltung(?:en)? (?:aus dem|im|in deinem|in deinen) Stundenplan|\bKeine Veranstaltungen\b/u },
@@ -30,6 +30,8 @@ const REGELN = [
     nicht: /Anmeldung (?:prüfen|abgelehnt|klappt)|Melde mich\b/ },
   { name: "passwort", sag: "Passwort", warum: "ein Wort",
     nicht: /Kennwort/ },
+  { name: "uni-login", sag: "Uni-Login", warum: "ein Login für alles, ein Wort dafür",
+    nicht: /Uni-Zugang|Zugangsdaten/ },
   { name: "meine-notizen", sag: "## Meine Notizen", warum: "dein Text steht in jeder Notiz unter derselben Überschrift",
     nicht: /(?:^|\n)## Notizen[ \t]*(?:\n|$)/ },
   { name: "vorlesungsfrei", sag: "vorlesungsfrei, Weihnachtspause, Pfingstpause", warum: "so sagt es die Uni",

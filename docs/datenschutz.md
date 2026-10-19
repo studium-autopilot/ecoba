@@ -1,15 +1,16 @@
 # Datenschutz
 
 Kurz: Studium Autopilot holt Daten, schickt aber nichts über dich an den Autor oder an Dritte. Es gibt kein Konto, keine
-Statistik und keine Telemetrie. Nur wenn du ILIAS verbindest (und, als Beta, **Noten & Anmeldungen** einschaltest), meldet
-sich das Plugin mit deinem Uni-Zugang an, direkt von deinem Gerät bei der Uni.
+Statistik und keine Telemetrie. Nur wenn du deinen Uni-Login eingibst, meldet sich das Plugin damit an, direkt von deinem Gerät
+bei der Uni (ILIAS und Alma).
 
 ## Was das Plugin abruft
 
 | Was | Woher | Wann |
 |---|---|---|
-| Zentrale Daten (Termine, Fristen, Semesterdaten) | `studium-autopilot.github.io` (GitHub Pages) | beim Start, dann alle 15 Minuten, solange Obsidian offen ist (meist nur eine kleine Datei) |
-| Dein Stundenplan | direkt von Alma (`alma.uni-tuebingen.de`) | nur wenn du Alma verbunden hast, beim Verbinden und auf Knopfdruck |
+| Zentrale Daten (Termine, Fristen, Semesterdaten) | `studium-autopilot.github.io` (GitHub Pages) | beim Start, dann alle 15 Minuten, solange Obsidian offen ist (meist nur eine kleine Datei); die kleine Datei auch, wenn du auf **Nach Updates suchen** tippst |
+| Dein Stundenplan | direkt von Alma (`alma.uni-tuebingen.de`) | nur wenn du Alma verbunden hast: beim Start, dann stündlich, solange Obsidian offen ist, und auf Knopfdruck |
+| Die Links zu deinem Stundenplan und deinem ILIAS-Kalender | direkt von Alma (Seite „Stundenplan“, mit Anmeldung) bzw. ILIAS (Seite „Kalender“) | nur mit deinem Uni-Login: beim Verbinden und höchstens einmal am Tag, wenn ein Link nicht mehr gilt |
 | Deine Kursdateien | direkt von ILIAS (`ovidius.uni-tuebingen.de`), Anmeldung bei der Uni (`idp.uni-tuebingen.de`) | nur wenn du ILIAS verbunden hast: beim Start, dann etwa stündlich, solange Obsidian offen ist, und auf Knopfdruck |
 | Deine Noten und Prüfungsanmeldungen (Beta) | direkt von Alma (`alma.uni-tuebingen.de`, Seiten „Leistungen“ und „Belegungen“) | nur wenn du **Noten & Anmeldungen (Alma)** eingeschaltet hast: höchstens zweimal am Tag, in der Anmeldephase alle 3 Stunden, und auf Knopfdruck; nur eines deiner Geräte |
 | Abgabetermine deiner Übungen | direkt von ILIAS (`ovidius.uni-tuebingen.de`, dein Kalender-Abo) | nur wenn du den **ILIAS-Kalender** verbunden hast: beim Start, dann alle 2 Stunden, solange Obsidian offen ist, und auf Knopfdruck; nur eines deiner Geräte |
@@ -31,9 +32,12 @@ sich das Plugin mit deinem Uni-Zugang an, direkt von deinem Gerät bei der Uni.
   **Verbindungen** → ILIAS-Kalender → **Trennen**.
 - **Dein Uni-Passwort** ist dasselbe für ILIAS und Alma. Du gibst es beim Verbinden von ILIAS ein, und es liegt nur im
   Schlüsselbund von Obsidian auf diesem Gerät, vom Betriebssystem verschlüsselt. Es steht in keiner Notiz, wird nicht
-  synchronisiert und erscheint in keinem Protokoll und keiner Fehlermeldung. Auf jedem Gerät gibst du es selbst ein. Schaltest
-  du **Noten & Anmeldungen (Alma)** ein, nutzt das Plugin es auch für die Anmeldeseite von Alma, sonst nur für ILIAS. Deinen
-  Benutzernamen speichert Obsidian wie den Alma-Link nur auf diesem Gerät.
+  synchronisiert und erscheint in keinem Protokoll und keiner Fehlermeldung. Auf jedem Gerät gibst du es selbst ein. Seit 0.4.8
+  gilt dein Uni-Login für alles: Das Fenster sagt vor der Eingabe, was er holt und wo er sich anmeldet; mit der Eingabe stimmst du
+  zu, dass sich das Plugin damit auch bei Alma anmeldet, um den Link zu deinem Stundenplan zu holen (siehe „Uni-Login“). Hast du
+  dein Passwort vor 0.4.8 eingegeben, meldet es sich bei Alma erst nach deinem Tipp auf **Verbinden** an. Für **Noten &
+  Anmeldungen (Alma)** braucht es weiter dein **Einschalten**.
+  Deinen Benutzernamen speichert Obsidian wie den Alma-Link nur auf diesem Gerät.
 - **Deine Karteikarten und Lernstände** sind normale Dateien in deinem Tresor (`Karteikarten/` und
   `System/Daten/Karteikarten/`). Sie gehen nirgends hin; mit einem Sync-Dienst kommen sie auf deine anderen Geräte.
 - **Die Textfassungen deiner PDFs** (`Unterlagen/_Volltext/`, damit die Suche Wörter in PDFs findet) liest das Plugin auf
@@ -41,6 +45,23 @@ sich das Plugin mit deinem Uni-Zugang an, direkt von deinem Gerät bei der Uni.
   kommen sie auf deine anderen Geräte. Steht `volltext: aus` in `System/Einstellungen.md`, entstehen keine neuen.
 - **Deine Angaben, Noten und Notizen** sind normale Dateien in deinem Tresor. Sie verlassen das Gerät nur, wenn du selbst einen Sync-Dienst einrichtest (dann gelten dessen Regeln).
 - **Ein Passwort für deine Mails** speichert das Plugin nie.
+
+## Uni-Login
+
+Freiwillig: Ohne deinen Uni-Login meldet sich das Plugin nirgends an. Gibst du ihn ein (in der Einrichtung oder unter
+**Verbindungen** → **Mit Uni-Login verbinden**), verbindet das Plugin ILIAS-Unterlagen, den ILIAS-Kalender und deinen Stundenplan
+aus Alma, soweit sie noch nicht verbunden sind.
+
+- **Was es holt:** In ILIAS die Seite „Kalender“ und das Fenster „Kalender abonnieren“, in Alma nach der Anmeldung die Seite
+  „Stundenplan“; daraus nur den Abo-Link, den du sonst selbst kopieren würdest. Danach meldet es sich bei Alma wieder ab. Es
+  klickt dort nichts an und erneuert keinen Link.
+- **Wann:** beim Verbinden und, wenn ILIAS oder Alma einen gespeicherten Link nicht mehr kennt, höchstens einmal am Tag je Link
+  (nur nachdem du dafür deinen Uni-Login eingegeben oder auf **Verbinden** getippt hast). Bremst Alma, meldet es sich bis dahin
+  nicht an.
+- **Wohin dein Passwort geht:** nur an die Anmeldeseiten der Uni (`idp.uni-tuebingen.de` für ILIAS, `alma.uni-tuebingen.de`),
+  wie unten bei ILIAS-Unterlagen und Noten & Anmeldungen beschrieben. Alma bekommt es nur, wenn ILIAS genau dieses Passwort
+  angenommen hat.
+- **Ohne Passwort:** Beide Links kannst du weiter selbst einfügen (Fenster „Verbinden“ → Schritte zum Einfügen).
 
 ## ILIAS-Unterlagen
 
@@ -100,6 +121,7 @@ Freiwillig und nur mit Beta-Versionen: Ohne dein **Einschalten** fragt das Plugi
 2. Bei „Zentrale Daten“ auf **Mehr erfahren** tippen.
 3. Den Schalter **Zentrale Daten** ausschalten.
 
-Danach ruft das Plugin nichts mehr bei GitHub ab. Vorhandene Termine bleiben stehen. Mit dem Schalter **Fachschaft & Veranstaltungen** blendest du nur Partys, Vorträge und Ähnliches aus.
+Danach ruft das Plugin nichts mehr von selbst bei GitHub ab, nur noch, wenn du auf **Nach Updates suchen** oder **Neue Version
+installieren** tippst. Vorhandene Termine bleiben stehen. Mit dem Schalter **Fachschaft & Veranstaltungen** blendest du nur Partys, Vorträge und Ähnliches aus.
 
 Obsidian selbst und ein Sync-Dienst haben eigene Datenschutzregeln; die beschreibt diese Seite nicht.

@@ -31,8 +31,8 @@ module.exports = function (ctx) {
     "ohne Spezialisierung": "Profil 18 ECTS VWL + 18 ECTS BWL · Schwerpunkte 63 ECTS, je mind. 1 VWL- und BWL-Bereich",
     "offen": "Vor dem 3. Fachsemester wählen; bis dahin rechnet Studium Autopilot ohne Variante",
   };
-  // Übersprungene Schritte der Einrichtung (einrichtung_uebersprungen) in Worten
-  const SCHRITTE = { studienbeginn: "Studienbeginn", variante: "Variante", angaben: "Name und Zielnote", alma: "Alma", ilias: "ILIAS" };
+  // Übersprungene Schritte der Einrichtung (einrichtung_uebersprungen) in Worten; alma und ilias aus Einrichtungen bis 0.4.7
+  const SCHRITTE = { studienbeginn: "Studienbeginn", variante: "Variante", angaben: "Name und Zielnote", uni: "Uni-Login", alma: "Alma", ilias: "ILIAS" };
   // Symbole der Zeilen (Lucide, 24er-Raster, Strich in currentColor; wie verbindungen.js)
   const SYMBOLE = {
     person: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
@@ -189,7 +189,7 @@ module.exports = function (ctx) {
       knopf: { text: "Erneut starten", aktion: "einrichtung", parameter: { ab: "2" } } });
     else if (ez.status === "laeuft") Object.assign(e, { ton: "leise", pille: { text: "angefangen", art: "warn" }, text: "Noch nicht abgeschlossen.",
       knopf: { text: "Fortsetzen", aktion: "einrichtung", parameter: {}, cta: true } });
-    else Object.assign(e, { ton: "leise", pille: { text: "offen", art: "leer" }, text: "Führt durch Studienbeginn, Variante, Name, Alma, ILIAS und Darstellung.",
+    else Object.assign(e, { ton: "leise", pille: { text: "offen", art: "leer" }, text: "Führt durch Studienbeginn, Variante, Name, Uni-Login und Darstellung.",
       knopf: { text: "Starten", aktion: "einrichtung", parameter: { ab: "2" }, cta: true } });
     zeilen.push(e);
     return zeilen;

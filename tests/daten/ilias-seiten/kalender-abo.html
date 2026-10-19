@@ -1,0 +1,32 @@
+<!-- Erfundene Testseite für tests/ilias-html.test.js und tests/ilias.test.js: das Fenster „Kalender abonnieren“. Aufbau wie die
+     Antwort von ILIAS 10 auf getModalForSubscription (Oktober 2026), Schlüssel erfunden. Beide Links tragen denselben Schlüssel. -->
+<dialog class="c-modal il-modal-roundtrip" tabindex="-1" id="il_ui_fw_0000000000ab01_00000001">
+	<div class="modal-dialog" role="document" data-replace-marker="component">
+		<div class="modal-content">
+			<div class="modal-header">
+				<form><button formmethod="dialog" class="close" aria-label="Schließen"><span aria-hidden="true">&times;</span></button></form>
+				<h1 class="modal-title">Kalender abonnieren</h1>
+			</div>
+			<div class="modal-body">
+				Verwenden Sie eine der folgenden Adressen, um mittels anderer Anwendungen auf Ihren Kalender zuzugreifen.
+<br />
+<div class="ilPermalinkContainer input-group">
+	<label for="current_perma_link">
+		<a href="https://ovidius.uni-tuebingen.de/calendar.php?client_id=pr02&token=Erfunden0Schluessel0fuer0Tests0x&limited=0" onclick="with(document.getElementById('current_perma_link')){focus();select();} return false;" class="permalink_label">iCal-URL</a>
+	</label>
+	<input size="30" class="form-control" id="current_perma_link" type="text" value="https://ovidius.uni-tuebingen.de/calendar.php?client_id=pr02&token=Erfunden0Schluessel0fuer0Tests0x&limited=0" readonly="readonly" onclick="this.focus();this.select();return false;" />
+</div>
+<br />
+<div class="ilPermalinkContainer input-group">
+	<label for="current_perma_link">
+		<a href="https://ovidius.uni-tuebingen.de/calendar.php?client_id=pr02&token=Erfunden0Schluessel0fuer0Tests0x&limited=1" onclick="with(document.getElementById('current_perma_link_limited')){focus();select();} return false;" class="permalink_label">iCal-URL (Google Kalender)</a>
+	</label>
+	<input size="30" class="form-control" id="current_perma_link_limited" type="text" value="https://ovidius.uni-tuebingen.de/calendar.php?client_id=pr02&token=Erfunden0Schluessel0fuer0Tests0x&limited=1" readonly="readonly" onclick="this.focus();this.select();return false;" />
+</div>
+			</div>
+			<div class="modal-footer">
+				<form><button formmethod="dialog" class="btn btn-default" data-dismiss="modal">Abbrechen</button></form>
+			</div>
+		</div>
+	</div>
+</dialog>
