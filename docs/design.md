@@ -291,7 +291,8 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 
 - Breiten nur über `body.is-phone` (Seitenebene) oder Container-Abfragen (`@container … (max-width: 480px)`), nie `@media`.
 - iPhone: Was nicht täglich gebraucht wird, ist zu (`|handy-zu`). Raster werden einspaltig, Kacheln zweispaltig, Knopfkacheln
-  zwei je Reihe.
+  zwei je Reihe. Die Woche zeigt dort einen Tag (Tagesansicht, unter 520 px Kartenbreite) statt fünf schmaler Spalten.
+- Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`), nur an Silben (`hyphens: auto` mit `lang="de"`).
 - Die Bearbeitungsansicht (Live Preview) muss aussehen wie die Leseansicht (`eba-core.css` 36c).
 - Einen leeren Block nie mit `display: none` auf dem Abschnitt ausblenden, sondern auf Höhe 0 falten (architektur.md, „Regeln
   für Skript-Autoren“).

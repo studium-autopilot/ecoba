@@ -32,6 +32,8 @@ Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein 
 
 <a href="https://apps.apple.com/app/obsidian-connected-notes/id1557175442"><img src="docs/bilder/badge-app-store.png" alt="Laden im App Store" height="48"></a>&nbsp;&nbsp;<a href="https://play.google.com/store/apps/details?id=md.obsidian"><img src="docs/bilder/badge-google-play.png" alt="Jetzt bei Google Play" height="48"></a>&nbsp;&nbsp;<a href="https://obsidian.md/download"><img src="docs/bilder/badge-obsidian-desktop.svg" alt="Obsidian für Windows und Mac herunterladen" height="48"></a>
 
+<sub>Am Mac: <b>Herunterladen für Windows & Mac</b>. Im App Store gibt es Obsidian nur für iPhone und iPad.</sub>
+
 <br>
 
 <img src="docs/bilder/schritt-2.svg" alt="Schritt 2" height="40"><br>
@@ -39,12 +41,14 @@ Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein 
 
 <a href="https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut"><img src="docs/bilder/badge-vorlage-ios.svg" alt="Vorlage für iPhone und iPad – mit Kurzbefehl" height="48"></a>&nbsp;&nbsp;<a href="https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip"><img src="docs/bilder/badge-vorlage-zip.svg" alt="Vorlage als ZIP-Datei für Mac, Windows und Android" height="48"></a>
 
+<sub>Mac und iPhone oder iPad? Erst mit dem Kurzbefehl aufs iPhone oder iPad, dann am Mac aus iCloud öffnen: <a href="docs/installation.md#mac-mit-iphone-oder-ipad">Anleitung</a>.</sub>
+
 <br>
 
 <img src="docs/bilder/schritt-3.svg" alt="Schritt 3" height="40"><br>
 <b>In Obsidian öffnen</b>
 
-Ordner <b>Studium Autopilot</b> in Obsidian öffnen → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>. Fertig.
+Ordner <b>Studium Autopilot</b> in Obsidian öffnen (am Computer: <b>Ordner als Vault öffnen</b>) → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>. Fertig.
 
 <br>
 
@@ -141,9 +145,31 @@ Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ec
 </details>
 
 <details>
-<summary><b>Hilfe für Mac & Windows</b></summary>
+<summary><b>Hilfe für Mac</b></summary>
 
-1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden und entpacken (Mac: Doppelklick, Windows: Rechtsklick → **Alle extrahieren**).
+Obsidian für den Mac kommt von [obsidian.md](https://obsidian.md/download), nicht aus dem App Store: Datei öffnen, **Obsidian** in **Programme** ziehen.
+
+**Mit iPhone oder iPad:** zuerst dort installieren (Ort **iCloud Drive → Obsidian**), dann am Mac:
+
+1. Obsidian öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken.
+2. **iCloud Drive** → **Obsidian** → `Studium Autopilot` markieren → **Öffnen**.
+3. **Dem Ersteller vertrauen und Erweiterungen aktivieren**.
+
+**Nur Mac:**
+
+1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden. Safari packt sie selbst aus, sonst in **Downloads** doppelklicken.
+2. Den Ordner `Studium Autopilot` im Finder von **Downloads** nach **Dokumente** ziehen.
+3. Obsidian öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken → **Dokumente** → `Studium Autopilot` markieren → **Öffnen**.
+4. **Dem Ersteller vertrauen und Erweiterungen aktivieren**.
+
+Hängt es? [Hilfe für den Mac](docs/installation.md#hängt-es-am-mac)
+
+</details>
+
+<details>
+<summary><b>Hilfe für Windows</b></summary>
+
+1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, rechts anklicken → **Alle extrahieren**.
 2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
 3. Obsidian öffnen → **Ordner als Vault öffnen** → den Ordner `Studium Autopilot` wählen.
 4. **Dem Ersteller vertrauen und Erweiterungen aktivieren**.

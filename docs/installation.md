@@ -42,10 +42,49 @@ Er überschreibt nichts und sendet nichts. Du kannst ihn danach wieder löschen.
 
 ## Mac
 
-1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden (Safari entpackt sie meist selbst, sonst Doppelklick).
-2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
-3. **Obsidian** öffnen → **Ordner als Vault öffnen** → den Ordner wählen.
+Obsidian für den Mac kommt von [obsidian.md/download](https://obsidian.md/download), nicht aus dem App Store (dort gibt es
+Obsidian nur für iPhone und iPad). Die geladene Datei öffnen und **Obsidian** in den Ordner **Programme** ziehen.
+
+Danach einer von zwei Wegen:
+
+- **Du hast auch ein iPhone oder iPad:** [Mac mit iPhone oder iPad](#mac-mit-iphone-oder-ipad). Ohne ZIP-Datei, und der Tresor
+  ist gleich auf allen Apple-Geräten.
+- **Nur der Mac:** [Nur Mac](#nur-mac), mit der ZIP-Datei.
+
+### Mac mit iPhone oder iPad
+
+1. Zuerst auf dem iPhone oder iPad installieren, wie [oben](#iphone-und-ipad) beschrieben, mit dem Ort **iCloud Drive** →
+   **Obsidian**.
+2. Auf dem Mac **Obsidian** öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken.
+3. Links **iCloud Drive** → Ordner **Obsidian** (der mit dem Obsidian-Symbol) → `Studium Autopilot` markieren → **Öffnen**.
 4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
+
+Beide Geräte brauchen denselben Apple Account mit eingeschaltetem iCloud Drive. Fehlt `Studium Autopilot` im Ordner
+**Obsidian**, lädt iCloud noch: kurz warten.
+
+### Nur Mac
+
+1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden.
+   Safari packt sie selbst aus; bei Chrome oder Firefox die ZIP-Datei in **Downloads** doppelklicken. Danach liegt in
+   **Downloads** der Ordner `Studium Autopilot`.
+2. Im Finder den Ordner von **Downloads** nach **Dokumente** ziehen.
+3. **Obsidian** öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken → **Dokumente** → `Studium Autopilot`
+   markieren → **Öffnen**.
+4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
+
+Kommt später ein iPhone oder iPad dazu: [Weiteres Gerät verbinden](#weiteres-gerät-verbinden).
+
+### Hängt es am Mac?
+
+- **Obsidian zeigt gleich einen anderen Tresor:** unten links auf seinen Namen klicken → **Vaults verwalten…**. Dort geht es mit
+  **Ordner als Vault öffnen** weiter.
+- **Der Mac fragt, ob Obsidian auf „Dokumente“ oder iCloud Drive zugreifen darf:** **Erlauben**. Sonst kann Obsidian den Tresor
+  nicht lesen.
+- **In iCloud Drive fehlt der Ordner Obsidian:** Den legt erst Obsidian auf dem iPhone oder iPad an. Dort Obsidian einmal
+  öffnen; iCloud Drive muss an sein (iPhone: **Einstellungen** → dein Name → **iCloud** → **iCloud Drive**). Einen selbst
+  angelegten Ordner „Obsidian“ ohne Symbol findet Obsidian auf dem iPhone nicht.
+- **Tresor in iCloud öffnet langsam:** Im Finder bei gedrückter Control-Taste auf **iCloud Drive** → **Obsidian** klicken und
+  den Ordner geladen behalten (englisch „Keep Downloaded“, ab macOS 15). Sonst lädt der Mac Dateien erst beim Öffnen.
 
 ## Windows
 
@@ -109,10 +148,14 @@ Dein Tresor läuft schon auf einem Gerät? So kommt er auf weitere.
 
 **Nur Apple-Geräte (iPhone, iPad, Mac): iCloud** – kostenlos, die Vorlage braucht nur wenige MB.
 
-1. Auf dem ersten Gerät den Ordner `Studium Autopilot` nach **iCloud Drive → Obsidian** verschieben
-   (iPhone/iPad: App **Dateien** → Ordner gedrückt halten → **Bewegen**; Mac: im Finder ziehen).
+1. Liegt der Ordner `Studium Autopilot` noch nicht in **iCloud Drive → Obsidian**, ihn dorthin verschieben:
+   - iPhone/iPad: App **Dateien** → Ordner gedrückt halten → **Bewegen** → **iCloud Drive** → **Obsidian**.
+   - Mac: Obsidian beenden (⌘Q), im Finder den Ordner nach **iCloud Drive** → **Obsidian** ziehen. Dann Obsidian öffnen →
+     **Ordner als Vault öffnen** → **Öffnen** → den Ordner dort wählen.
+
+   Den Ordner **Obsidian** in iCloud Drive gibt es erst, wenn Obsidian auf einem iPhone oder iPad einmal geöffnet war.
 2. Auf jedem weiteren Gerät öffnen: iPhone/iPad → Obsidian → **Vault wechseln** → **Studium Autopilot** (iCloud);
-   Mac → **Ordner als Vault öffnen** → iCloud Drive → Obsidian → `Studium Autopilot`.
+   Mac → **Ordner als Vault öffnen** → **Öffnen** → **iCloud Drive** → **Obsidian** → `Studium Autopilot`.
 3. Einmal [**Vertrauen**](#vertrauen) tippen.
 
 **Mit Windows-PC:** iCloud für Windows aus dem Microsoft Store, **iCloud Drive** einschalten, den Ordner

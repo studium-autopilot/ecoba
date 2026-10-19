@@ -26,6 +26,14 @@
 //   einmal. Eine ILIAS-Notiz verdrängt gewählte Notizen desselben Moduls und
 //   derselben Art (übernimmt die erste, die übrigen weichen), Doppel derselben ILIAS-Gruppe weichen in die erste.
 //   alma.js und zentral.js fassen beide Herkünfte nie an.
+// Eine Gruppe je Modul und Art (seit 19.10.2026, doppelt): Zwei Gruppen-Notizen desselben Moduls und derselben Art entstanden,
+//   wenn „Meine“ eine gerade angelegte Notiz noch nicht sah (Obsidian hatte sie nicht eingelesen, oder ein zweites Gerät wählte
+//   vor dem Sync) oder wenn du in ILIAS die Gruppe wechseltest (die alte Notiz blieb bis zum zweiten Lauf). Darum: Wählen läuft
+//   nacheinander und liest frische Notizen selbst, eine neue Wahl ersetzt jede ältere (gewaehlt_am = Zeitpunkt der Wahl), eine
+//   neue ILIAS-Gruppe übernimmt die Notiz der verlassenen, bei zwei Mitgliedschaften desselben Moduls bekommt nur eine eine Notiz.
+//   Bestehende Doppel führt das Aufräumen einmal zusammen, nach einer festen Reihenfolge (vorrang: ILIAS vor deiner Wahl, die
+//   jüngere Wahl vor der älteren, dann die zur Gruppenliste passende): dein Text wandert in die bleibende Notiz, die andere in den
+//   Papierkorb. Was entschieden wurde, steht nur im Protokoll dieses Geräts (io.protokoll), nie als Aufgabe für dich.
 // Eigener Text: alles unter „## Meine Notizen“ (ältere Notizen: „## Notizen“) und jede Zeile im Kopf, die nicht von hier stammt, bleibt beim Aktualisieren.
 // Verlassen in ILIAS: die Notiz geht in den Papierkorb; mit eigenem Text bleibt sie als „(entfällt)“. Ob verlassen, entscheidet
 //   ilias.js (zweiter Lauf in Folge, o.wegErlaubt); zusätzlich bleibt alles stehen, wenn auf einmal mindestens zwei und mehr
@@ -41,6 +49,7 @@ const TAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const TOLERANZ = 15;
 const NOTIZEN = "## Meine Notizen";
+const PROTOKOLL = "eba-gruppen-protokoll"; // Gerätespeicher: Entscheidungen bei doppelten Gruppen
 const ABSCHNITT = /^## (?:Meine Notizen|Notizen)[ \t]*$/m; // auch die Überschrift älterer Notizen
 const INFO_ILIAS = "> [!info] Aus ILIAS: Verlässt du die Gruppe dort, verschwindet diese Notiz.";
 const INFO_GEWAEHLT = "> [!info] Von dir gewählt, ändern auf [[Termine & Anmeldungen]].";
@@ -156,7 +165,13 @@ const teilen = (text) => {
   return { bloecke, body: String(text).slice(m[0].length) };
 };
 const EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "beginn", "ende", "raum", "semester", "von", "bis", "ausfall",
-  "einzeltermin", "gruppe", "gruppe_alma", "gruppe_id", "quelle", "herkunft", "ilias_gruppe", "konflikt", "entfaellt", "uebersicht", "tags", "cssclasses"];
+  "einzeltermin", "gruppe", "gruppe_alma", "gruppe_id", "quelle", "herkunft", "ilias_gruppe", "gewaehlt_am", "konflikt", "entfaellt", "uebersicht", "tags", "cssclasses"];
+// Einfacher Wert eines Schlüssels im Frontmatter-Block („gewaehlt_am: "2026-10-19T…"“ → Text ohne Anführungszeichen)
+const blockWert = (b) => {
+  const v = b ? b.zeilen[0].replace(/^[A-Za-z_][\w-]*:\s*/, "").trim() : "";
+  if (/^".*"$/.test(v)) { try { return String(JSON.parse(v)); } catch (e) { return v.slice(1, -1); } }
+  return v.replace(/^'(.*)'$/, "$1");
+};
 const listenWerte = (b) => (b ? b.zeilen.slice(1).map((z) => z.replace(/^\s*-\s*/, "").trim().replace(/^["']|["']$/g, "")).filter(Boolean) : []);
 // Kopfzeilen, die von hier stammen: Überschrift, Zeitzeile, Zeitraum, Info-Kasten (auch ältere aufklappbare mit ihren „> “-Zeilen)
 const fremderKopf = (body) => {
@@ -190,7 +205,8 @@ const kurzTitel = (s, n) => {
   return teile.join(" ").replace(/[\s,;:–-]+$/, "") || s.slice(0, n);
 };
 // Inhalt einer Gruppen-Notiz. alt = bisheriger Text oder "", g = geprüfte Gruppe (gruppen.json), o = { herkunft, iliasGruppe,
-// name (aus ILIAS), modulLink, kurz (Modultitel), konflikt }. Eigene Felder, Tags und eigener Text (meineNotizen) bleiben.
+// name (aus ILIAS), modulLink, kurz (Modultitel), konflikt, gewaehltAm (Zeitpunkt der Wahl, nur gewählt; sonst bleibt der alte) }.
+// Eigene Felder, Tags und eigener Text (meineNotizen) bleiben.
 const notizText = (alt, g, o) => {
   o = o || {};
   const { bloecke, body } = teilen(alt || "");
@@ -199,13 +215,14 @@ const notizText = (alt, g, o) => {
   const liste = (k, werte) => (werte.length ? [k + ":"].concat(werte.map((w) => "  - " + w)) : [k + ": []"]);
   const vereinigt = (k, pflicht) => { const w = listenWerte(bloecke.find((b) => b.key === k) || null); pflicht.slice().reverse().forEach((p) => { if (w.indexOf(p) < 0) w.unshift(p); }); return w; };
   const ilias = o.herkunft === ILIAS;
+  const am = ilias ? "" : o.gewaehltAm || blockWert(bloecke.find((b) => b.key === "gewaehlt_am"));
   const zeilen = [
     "typ: lehrveranstaltung", "titel: " + J(kurz + " · " + anzeige), "code: " + J(g.code),
     "modul:" + (o.modulLink ? " " + J(o.modulLink) : ""), "art: " + J(g.art), "wochentag: " + wt, "tag: " + g.tag, "beginn: " + J(z.beginn),
     "ende: " + J(z.ende), "raum: " + J(g.raum), "semester: " + J(g.semester),
   ].concat(g.zeitraum ? ["von: " + g.zeitraum.von, "bis: " + g.zeitraum.bis] : [], ["ausfall: []", "einzeltermin: false", "gruppe: " + J(name),
     "gruppe_alma: " + J(g.gruppe), "gruppe_id: " + g.id, "quelle: " + J(g.quelle_url), "herkunft: " + (ilias ? ILIAS : GEWAEHLT)],
-  ilias ? ["ilias_gruppe: " + J(o.iliasGruppe)] : [], o.konflikt ? ["konflikt: " + J(o.konflikt)] : [], ['uebersicht: "[[Stundenplan]]"'],
+  ilias ? ["ilias_gruppe: " + J(o.iliasGruppe)] : am ? ["gewaehlt_am: " + J(am)] : [], o.konflikt ? ["konflikt: " + J(o.konflikt)] : [], ['uebersicht: "[[Stundenplan]]"'],
   liste("tags", vereinigt("tags", ["stundenplan"])), liste("cssclasses", vereinigt("cssclasses", ["eba-s-notizen"])));
   for (const b of bloecke) if (b.key && EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
   const kopf = [`# ${mdText(g.code)} · ${mdText(anzeige)}`, "", `${TAGE_LANG[wt - 1]}s, ${z.beginn}–${z.ende}` + (g.raum ? " · " + mdText(g.raum) : ""), ""];
@@ -237,6 +254,75 @@ const gehoertZu = (fm, g, o) => {
 // Deckt eine andere Notiz die Gruppe? (gehoertZu mit den Vorgaben)
 const deckt = (fm, g) => gehoertZu(fm, g);
 const lehrNotizen = (io) => io.notizen().filter((x) => x.fm && x.fm.typ === "lehrveranstaltung");
+// Wie lehrNotizen, dazu Notizen, die Obsidian noch nicht eingelesen hat (gerade angelegt): ihr Frontmatter aus dem Text. Sonst
+// sieht ein zweites „Meine“ kurz nach dem ersten dessen Notiz nicht und legt eine zweite an.
+const fmAusText = (text) => {
+  const fm = {};
+  for (const b of teilen(text).bloecke) {
+    if (!b.key || b.zeilen.length !== 1) continue;
+    const v = blockWert(b);
+    fm[b.key] = /^-?\d+$/.test(v) ? Number(v) : v === "true" ? true : v === "false" ? false : v;
+  }
+  return fm;
+};
+const frischeNotizen = async (io) => {
+  const aus = [];
+  for (const x of io.notizen()) {
+    const fm = x.fm || fmAusText(await io.lesen(x.pfad));
+    if (fm && fm.typ === "lehrveranstaltung") aus.push({ pfad: x.pfad, fm });
+  }
+  return aus;
+};
+// Wer auf diesem Gerät Gruppen-Notizen schreibt (Wählen, Abwählen, Aufräumen, ILIAS), kommt nacheinander dran: Zwei schnelle Tipps
+// auf „Meine“ sahen sonst beide noch keine Notiz und legten zwei an.
+let reihe = Promise.resolve();
+const nacheinander = (fn) => function () {
+  const a = arguments;
+  const p = reihe.then(() => fn.apply(null, a));
+  reihe = p.then(() => {}, () => {});
+  return p;
+};
+// Eine Gruppe je Modul und Art: welche gilt, wenn es mehrere gibt? Eine feste Reihenfolge, auf jedem Gerät dieselbe: eine
+// ILIAS-Mitgliedschaft vor deiner Wahl, die jüngere Wahl (gewaehlt_am) vor der älteren, dann die Gruppe, die zur aktuellen
+// Gruppenliste passt (liste = gruppen.json; gleiche id, Tag und Beginn), dann die früheste in der Woche, dann die id.
+// a, b = { pfad, fm } → < 0, wenn a gilt
+const vorrang = (liste) => {
+  const am = (x) => (herkunftVon(x.fm) === GEWAEHLT ? String(x.fm.gewaehlt_am || "") : "");
+  const passt = (x) => {
+    const g = (liste || []).find((y) => y && y.id === String(x.fm.gruppe_id || ""));
+    return g && gehoertZu(x.fm, g) ? 0 : 1;
+  };
+  const vgl = (p, q) => (p < q ? -1 : p > q ? 1 : 0);
+  return (a, b) => (herkunftVon(a.fm) === ILIAS ? 0 : 1) - (herkunftVon(b.fm) === ILIAS ? 0 : 1) || vgl(am(b), am(a)) || passt(a) - passt(b)
+    || Number(a.fm.wochentag) - Number(b.fm.wochentag) || (minuten(a.fm.beginn) || 0) - (minuten(b.fm.beginn) || 0)
+    || vgl(String(a.fm.gruppe_id || ""), String(b.fm.gruppe_id || "")) || vgl(a.pfad, b.pfad);
+};
+// Doppelte Gruppen im Stundenplan. notizen = [{ pfad, fm }], liste = gruppen.json (darf fehlen) → { verdeckt: { Pfad: Pfad der
+// Notiz, die statt ihrer gilt }, faelle: [{ code, art, semester, zeigen, andere: [Pfade] }] }. Verdeckt ist eine Gruppen-Notiz,
+// die eine andere Notiz zur selben Zeit abdeckt (Alma, von Hand, zentral: dieselbe Gruppe, sie weicht ohnehin), und jede weitere
+// Gruppen-Notiz desselben Moduls, derselben Art und desselben Semesters (vorrang). Andere Notizen derselben Art zu einer anderen
+// Zeit zählen nicht: Das kann eine Übung für alle sein.
+const doppelt = (notizen, liste) => {
+  const verdeckt = {}, je = {}, reihenfolge = [];
+  const lv = (notizen || []).filter((x) => x && x.fm && x.fm.entfaellt !== true && x.fm.einzeltermin !== true);
+  for (const x of lv.filter((y) => istGruppe(y.fm))) {
+    const fm = x.fm, g = { code: String(fm.code || ""), art: String(fm.art || ""), semester: String(fm.semester || ""), tag: TAGE[Number(fm.wochentag) - 1], von: fm.beginn, ct: false };
+    if (!g.code || !g.semester) continue;
+    const ziel = lv.find((y) => !istGruppe(y.fm) && deckt(y.fm, g));
+    if (ziel) { verdeckt[x.pfad] = ziel.pfad; continue; }
+    const k = [g.code, g.art, g.semester].join("|");
+    if (!je[k]) { je[k] = []; reihenfolge.push(k); }
+    je[k].push(x);
+  }
+  const faelle = [];
+  for (const k of reihenfolge) {
+    if (je[k].length < 2) continue;
+    const r = je[k].slice().sort(vorrang(liste)), zeigen = r[0], andere = r.slice(1);
+    for (const x of andere) verdeckt[x.pfad] = zeigen.pfad;
+    faelle.push({ code: String(zeigen.fm.code), art: String(zeigen.fm.art || ""), semester: String(zeigen.fm.semester), zeigen: zeigen.pfad, andere: andere.map((x) => x.pfad) });
+  }
+  return { verdeckt, faelle };
+};
 // Passt der Pfad zum gewünschten Namen (auch „… 2“, wenn der Name belegt war)?
 const nameStimmt = (pfad, b) => { const n = basis(pfad); return n === b || (n.indexOf(b + " ") === 0 && /^\d+$/.test(n.slice(b.length + 1))); };
 // Notiz unter ihren gewünschten Namen bringen; Links ziehen mit (io.umbenennen = fileManager.renameFile). → neuer Pfad
@@ -291,10 +377,27 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
   const unfertig = io.unfertig ? io.unfertig() : false;
   const benutzt = {}, plan = [];
   if (!io.existiert(ORDNER)) await io.ordnerAnlegen(ORDNER);
+  // 0. Eine Gruppe je Modul und Art: Bist du in ILIAS in mehreren, bekommt nur eine eine Notiz (die eine Notiz zur selben Zeit
+  // schon abdeckt, sonst nach vorrang); Notizen der anderen gehen in ihr auf
+  const je = {}, mit = {};
+  for (const s of soll) { const k = [s.g.code, s.g.art, s.g.semester].join("|"); (je[k] = je[k] || []).push(s); }
+  const alsNotiz = (s) => ({ pfad: dateiName(s.g, { herkunft: ILIAS, name: s.name }), fm: { herkunft: ILIAS, wochentag: TAGE.indexOf(s.g.tag) + 1, beginn: echteZeit(s.g).beginn, gruppe_id: s.g.id } });
+  const gedeckt = (s) => (andere.some((x) => deckt(x.fm, s.g)) ? 0 : 1);
+  const sieger = [];
+  for (const k of Object.keys(je)) {
+    const r = je[k].slice().sort((a, c) => gedeckt(a) - gedeckt(c) || vorrang()(alsNotiz(a), alsNotiz(c)));
+    mit[String(r[0].refId)] = r.slice(1).map((x) => String(x.refId));
+    if (r.length > 1 && io.protokoll) io.protokoll({ art: "ilias", bleibt: r[0].g.id, weg: r.slice(1).map((x) => x.g.id) });
+    sieger.push(r[0]);
+  }
   // 1. Je Gruppe: weichen (eine andere Notiz hat sie) oder planen (vorhandene ILIAS-Notiz, sonst eine gewählte, sonst neu)
-  for (const s of soll) {
-    const g = s.g, refId = String(s.refId);
-    const gleiche = eigene.filter((x) => String(x.fm.ilias_gruppe || "") === refId && !benutzt[x.pfad]);
+  for (const s of soll.filter((x) => sieger.indexOf(x) >= 0)) {
+    const g = s.g, refId = String(s.refId), ids = [refId].concat(mit[refId] || []);
+    const gleiche = eigene.filter((x) => ids.indexOf(String(x.fm.ilias_gruppe || "")) >= 0 && !benutzt[x.pfad])
+      .sort((a, c) => ids.indexOf(String(a.fm.ilias_gruppe || "")) - ids.indexOf(String(c.fm.ilias_gruppe || "")));
+    // In ILIAS gewechselt: Die Notiz der verlassenen Gruppe desselben Moduls und derselben Art wird die der neuen (dein Text
+    // bleibt), statt bis zum zweiten Lauf neben ihr zu stehen
+    const wechsel = eigene.filter((y) => !benutzt[y.pfad] && y.fm.entfaellt !== true && gleichesModul(y.fm, g) && !mitglieder.has(String(y.fm.ilias_gruppe || "")));
     const gew = gewaehlt.filter((y) => !benutzt[y.pfad] && gleichesModul(y.fm, g));
     const ziel = andere.find((x) => deckt(x.fm, g));
     if (ziel) {
@@ -303,9 +406,10 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
     }
     const m = o.modul ? o.modul(g.code) : null;
     const opt = { herkunft: ILIAS, iliasGruppe: refId, name: s.name || "", modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "" };
-    const x = gleiche[0] || gew[0] || null;
-    const rest = gleiche.concat(gew).filter((y) => y !== x);
-    for (const y of gleiche.concat(gew)) benutzt[y.pfad] = true;
+    const kandidaten = gleiche.concat(wechsel, gew);
+    const x = kandidaten[0] || null;
+    const rest = kandidaten.filter((y) => y !== x);
+    for (const y of kandidaten) benutzt[y.pfad] = true;
     if (!x && unfertig) continue; // Obsidian liest Stundenplan/ noch ein (Sync): nichts doppelt anlegen
     if (!x && o.geloescht && o.geloescht(refId, g.id)) { b.geloescht.push(refId); continue; } // von dir gelöscht: bleibt weg
     plan.push({ x, g, opt, rest, uebernommen: !!x && herkunftVon(x.fm) === GEWAEHLT });
@@ -351,42 +455,56 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
   return b;
 };
 
-// „Meine Gruppe“ (nur gruppen.js, auf dem Gerät, auf dem du tippst). g = gewählte Gruppe, o = { modul(code) }.
-// → { art: "angelegt" | "geaendert" | "gleich" | "ilias" (kommt schon aus ILIAS) | "gedeckt" (andere Notiz hat sie), pfad }
+// „Meine Gruppe“ (nur gruppen.js, auf dem Gerät, auf dem du tippst). g = gewählte Gruppe, o = { modul(code), jetzt (Zeitpunkt
+// der Wahl, ISO → gewaehlt_am), heute }. Eine neue Wahl ersetzt jede ältere desselben Moduls und derselben Art: Die Notiz dieser
+// Gruppe (sonst die jüngste Wahl) wird die neue, weitere weichen in sie (dein Text wandert mit).
+// → { art: "angelegt" | "geaendert" | "gleich" | "ilias" (kommt schon aus ILIAS) | "gedeckt" (andere Notiz hat sie), pfad, gewichen }
 const waehlen = async (io, g, o) => {
   o = o || {};
-  const alle = lehrNotizen(io);
+  const alle = await frischeNotizen(io);
   const il = alle.find((x) => herkunftVon(x.fm) === ILIAS && gleichesModul(x.fm, g) && x.fm.entfaellt !== true);
-  if (il) return { art: "ilias", pfad: il.pfad };
+  if (il) return { art: "ilias", pfad: il.pfad, gewichen: [] };
   const ziel = alle.find((x) => !istGruppe(x.fm) && deckt(x.fm, g));
-  if (ziel) return { art: "gedeckt", pfad: ziel.pfad };
+  if (ziel) return { art: "gedeckt", pfad: ziel.pfad, gewichen: [] };
   const m = o.modul ? o.modul(g.code) : null;
-  const da = alle.find((x) => herkunftVon(x.fm) === GEWAEHLT && gleichesModul(x.fm, g));
+  const am = (x) => String(x.fm.gewaehlt_am || "");
+  const diese = (x) => (String(x.fm.gruppe_id || "") === g.id ? 0 : 1);
+  const meine = alle.filter((x) => herkunftVon(x.fm) === GEWAEHLT && gleichesModul(x.fm, g) && x.fm.entfaellt !== true)
+    .sort((a, b) => diese(a) - diese(b) || (am(a) > am(b) ? -1 : am(a) < am(b) ? 1 : 0));
+  const da = meine[0] || null, rest = meine.slice(1);
   const name = da ? basis(da.pfad) : dateiName(g, { herkunft: GEWAEHLT });
-  const konflikt = konfliktFuer(zeitFuer(g), alle.filter((x) => x !== da).map((x) => ({ name: basis(x.pfad), fm: x.fm })).filter((x) => x.name !== name));
-  const soll = { herkunft: GEWAEHLT, modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "", konflikt };
+  const konflikt = konfliktFuer(zeitFuer(g), alle.filter((x) => meine.indexOf(x) < 0).map((x) => ({ name: basis(x.pfad), fm: x.fm })).filter((x) => x.name !== name));
+  const soll = { herkunft: GEWAEHLT, modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "", konflikt, gewaehltAm: o.jetzt || "" };
   if (da) {
     const alt = await io.lesen(da.pfad), neu = notizText(alt, g, soll);
     if (neu !== alt) await io.schreiben(da.pfad, neu);
     const pfad = await umbenennen(io, da.pfad, dateiName(g, soll));
-    return { art: neu === alt && pfad === da.pfad ? "gleich" : "geaendert", pfad };
+    for (const y of rest) await weichen(io, y, { pfad }, o.heute);
+    if (rest.length && io.protokoll) io.protokoll({ art: "gewaehlt", bleibt: pfad, weg: rest.map((y) => y.pfad), grund: "neue Wahl" });
+    return { art: neu === alt && pfad === da.pfad && !rest.length ? "gleich" : "geaendert", pfad, gewichen: rest.map((y) => y.pfad) };
   }
   if (!io.existiert(ORDNER)) await io.ordnerAnlegen(ORDNER);
   const pfad = freierPfad(io, dateiName(g, soll));
   await io.anlegen(pfad, notizText("", g, soll));
-  return { art: "angelegt", pfad };
+  return { art: "angelegt", pfad, gewichen: [] };
 };
-// Wahl zurücknehmen: die gewählte Notiz dieses Moduls und dieser Art geht in den Papierkorb (wiederherstellbar)
+// Wahl zurücknehmen: die gewählte Notiz dieser Gruppe (sonst eine dieses Moduls und dieser Art) geht in den Papierkorb
+// (wiederherstellbar)
 const abwaehlen = async (io, g) => {
-  const x = lehrNotizen(io).find((y) => herkunftVon(y.fm) === GEWAEHLT && gleichesModul(y.fm, g));
+  const meine = (await frischeNotizen(io)).filter((y) => herkunftVon(y.fm) === GEWAEHLT && gleichesModul(y.fm, g));
+  const x = meine.find((y) => String(y.fm.gruppe_id || "") === g.id) || meine[0];
   if (!x) return false;
   await io.papierkorb(x.pfad);
   return true;
 };
-// Aufräumen (nur gruppen.js): Gewählte Notizen, die eine ILIAS-Notiz desselben Moduls und derselben Art oder eine andere Notiz
-// (Alma, von Hand, zentral) zur selben Zeit inzwischen abdeckt, weichen. → [Pfade]
-const gewaehltAufraeumen = async (io, heute) => {
-  const alle = lehrNotizen(io), aus = [];
+// Aufräumen (nur gruppen.js, auf jedem Gerät): Gewählte Notizen, die eine ILIAS-Notiz desselben Moduls und derselben Art oder
+// eine andere Notiz (Alma, von Hand, zentral) zur selben Zeit inzwischen abdeckt, weichen. Danach jedes weitere Doppel desselben
+// Moduls und derselben Art (zwei Geräte vor dem Sync, ältere Fassung): Es bleibt, was die Woche zeigt (doppelt, vorrang), die
+// anderen gewählten weichen in sie. Doppelte ILIAS-Notizen fasst nur ilias.js an (ein Schreiber), die Woche zeigt sie schon als
+// eine. o = { liste (gruppen.json) } → [Pfade]
+const gewaehltAufraeumen = async (io, heute, o) => {
+  o = o || {};
+  const alle = await frischeNotizen(io), aus = [];
   for (const x of alle.filter((y) => herkunftVon(y.fm) === GEWAEHLT)) {
     const fm = x.fm, g = { code: String(fm.code || ""), art: String(fm.art || ""), semester: String(fm.semester || ""), tag: TAGE[Number(fm.wochentag) - 1], von: fm.beginn, ct: false };
     const il = alle.find((y) => herkunftVon(y.fm) === ILIAS && y.fm.entfaellt !== true && gleichesModul(y.fm, g));
@@ -397,6 +515,15 @@ const gewaehltAufraeumen = async (io, heute) => {
     if (!ziel) continue;
     await weichen(io, x, ziel, heute);
     aus.push(x.pfad);
+    if (io.protokoll) io.protokoll({ art: "gewaehlt", bleibt: ziel.pfad, weg: [x.pfad], grund: il ? "ILIAS" : "gleiche Zeit" });
+  }
+  // Doppel nur aus gewählten (mit einer ILIAS-Notiz hat Schritt 1 entschieden, auch die halb synchronisierte Freigabe geschont)
+  const rest = alle.filter((x) => aus.indexOf(x.pfad) < 0), gewaehlte = (p) => rest.some((x) => x.pfad === p && herkunftVon(x.fm) === GEWAEHLT);
+  for (const f of doppelt(rest, o.liste).faelle) {
+    if (!gewaehlte(f.zeigen)) continue;
+    const weg = f.andere.filter(gewaehlte);
+    for (const p of weg) { await weichen(io, { pfad: p }, { pfad: f.zeigen }, heute); aus.push(p); }
+    if (weg.length && io.protokoll) io.protokoll({ art: "gewaehlt", bleibt: f.zeigen, weg, grund: "Reihenfolge" });
   }
   return aus;
 };
@@ -429,7 +556,8 @@ const iliasFreigeben = async (io) => {
 };
 
 const API = { ORDNER, ILIAS, GEWAEHLT, ZENTRAL, zeitfenster, raumKern, gruppenName, zuordnen, notizText, dateiName, echteZeit, meineNotizen,
-  deckt, gehoertZu, istGruppe, iliasAbgleichen, waehlen, abwaehlen, gewaehltAufraeumen, iliasFreigeben, konfliktFuer, kurzTitel };
+  deckt, gehoertZu, istGruppe, doppelt, konfliktFuer, kurzTitel, iliasAbgleichen: nacheinander(iliasAbgleichen), waehlen: nacheinander(waehlen),
+  abwaehlen: nacheinander(abwaehlen), gewaehltAufraeumen: nacheinander(gewaehltAufraeumen), iliasFreigeben: nacheinander(iliasFreigeben) };
 
 // Mit ctx: dazu obsidianIo() (Stundenplan-Notizen über die Obsidian-API; Papierkorb über quellen.js, ein Papierkorb für alles)
 module.exports = function (ctx) {
@@ -449,6 +577,11 @@ module.exports = function (ctx) {
       ordnerAnlegen: async (p) => { try { await V.createFolder(p); } catch (e) { if (!V.getAbstractFileByPath(p)) throw e; } },
       // umbenennen mit dem fileManager: Links auf die Notiz ziehen mit
       umbenennen: async (alt, neu) => { const f = datei(alt); if (f) await app.fileManager.renameFile(f, neu); },
+      // Protokoll nur auf diesem Gerät (nie im Tresor, nie als Aufgabe): welche Gruppen-Notiz blieb und welche wich, und warum
+      protokoll: (e) => {
+        const alt = app.loadLocalStorage(PROTOKOLL);
+        app.saveLocalStorage(PROTOKOLL, (Array.isArray(alt) ? alt : []).concat([Object.assign({ zeit: new Date().toISOString() }, e)]).slice(-30));
+      },
     };
   };
   return Object.assign({}, API, { obsidianIo });

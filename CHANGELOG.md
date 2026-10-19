@@ -2,6 +2,15 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.9 – Stundenplan passt aufs iPhone
+
+- **Übersichtlicher:** Auf dem iPhone zeigt die **Woche** einen Tag auf einmal, mit vollem Namen, Zeit und Raum. Oben tippst
+  du auf einen Tag, Wischen blättert zum nächsten.
+- **Behoben:** Eine Gruppe, die erst später beginnt, halbierte in der **Woche** eine Vorlesung zur selben Zeit. Jetzt steht
+  sie schmal daneben, und Namen brechen nicht mehr mitten im Wort um.
+- **Behoben:** Manchmal standen zwei Tutorien desselben Moduls blass im Stundenplan, etwa nach einem Gruppenwechsel in ILIAS.
+  Jetzt steht dort nur eine, die aus ILIAS oder sonst deine letzte Wahl, und deine Notizen zur anderen ziehen mit.
+
 ## 0.4.8 – Ein Uni-Login für alles
 
 - **Neu:** **Nach Updates suchen** unter **Einstellungen & Hilfe** in der Zeile **Studium Autopilot** sagt dir sofort, ob es

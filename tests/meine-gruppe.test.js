@@ -1,8 +1,8 @@
 // Deine Übungsgruppe im Stundenplan (meine-gruppe.js): Zeitfenster aus ILIAS-Text (nur Tag, Zeit, Raumnummer, nie Namen),
 // Zuordnung zu gruppen.json (Code + Wochentag + Beginn/Ende ±15 Min., c.t./s.t., Raum entscheidet, dann die kleinere
 // Abweichung, nie die Nummer), Notiztext fürs Wochenraster, Abgleich mit den Notizen (anlegen, aktualisieren, weichen,
-// übernehmen, verlassen, Schutz), „Meine Gruppe“, Aufräumen auf zwei Geräten und Freigeben (ILIAS-Notiz wird gewählt). Nur
-// ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
+// übernehmen, verlassen, Schutz), „Meine Gruppe“, Aufräumen auf zwei Geräten, Freigeben (ILIAS-Notiz wird gewählt) und eine
+// Gruppe je Modul und Art (doppelt). Nur ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -280,4 +280,117 @@ test("Eine Regel „ist das deine Gruppe?“ (gehoertZu) für ILIAS, „Meine“
   assert.equal(M.gehoertZu(fm({ herkunft: "ilias-gruppe", gruppe_id: "anders", beginn: "10:15" }), G, { ueberId: true }), false);
   assert.equal(M.gehoertZu(fm({ herkunft: "gruppe-gewaehlt", gruppe_id: G.id, wochentag: 5 }), G, { ueberId: true }), true);
   assert.equal(M.deckt(fm(), G), M.gehoertZu(fm(), G));
+});
+
+// Eine Gruppe je Modul und Art (19.10.2026): Im Stundenplan standen zwei Tutorien desselben Moduls blass nebeneinander.
+const T1 = g({ id: "ws-2026-27-x100-tutorium-1", gruppe: "1", tag: "Di", von: "10:00", bis: "12:00", zeitraum: { von: "2026-11-03", bis: "2027-02-02" } });
+const T7 = g({ id: "ws-2026-27-x100-tutorium-7", gruppe: "7", tag: "Do", von: "08:00", bis: "10:00", zeitraum: { von: "2026-11-05", bis: "2027-02-04" } });
+const P1 = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 1 (gewählt).md", P7 = "Stundenplan/Do 08.15 X100 Tutorium Gruppe 7 (gewählt).md";
+const mitText = (t, text) => t.replace("## Meine Notizen\n- \n", "## Meine Notizen\n- " + text + "\n");
+
+test("Eine Gruppe je Modul und Art: zweites „Meine“, bevor Obsidian die erste Notiz eingelesen hat, oder zwei Tipps zugleich", async () => {
+  // Obsidian hat die eben angelegte Notiz noch nicht eingelesen (kein Frontmatter im metadataCache): vorher entstand eine zweite
+  const t = notizenIo(), frisch = new Set(), notizen = t.io.notizen, anlegen = t.io.anlegen;
+  t.io.notizen = () => notizen().map((x) => (frisch.has(x.pfad) ? { pfad: x.pfad, fm: null } : x));
+  t.io.anlegen = async (p, text) => { await anlegen(p, text); frisch.add(p); };
+  await M.waehlen(t.io, T1, { jetzt: "2026-10-19T10:00:00.000Z" });
+  const r = await M.waehlen(t.io, T7, { jetzt: "2026-10-19T10:00:02.000Z" });
+  assert.deepEqual([r.art, t.pfade()], ["geaendert", [P7]]);
+  assert.equal(t.fm(P7).gewaehlt_am, "2026-10-19T10:00:02.000Z", "Zeitpunkt der Wahl");
+  // zwei Tipps zugleich: Anlegen dauert (Obsidian schreibt die Datei), die Wahlen kommen nacheinander dran
+  const u = notizenIo(), an = u.io.anlegen;
+  u.io.anlegen = async (p, text) => { await new Promise((ok) => setTimeout(ok, 5)); await an(p, text); };
+  await Promise.all([M.waehlen(u.io, T1, { jetzt: "2026-10-19T10:00:00.000Z" }), M.waehlen(u.io, T7, { jetzt: "2026-10-19T10:00:01.000Z" })]);
+  assert.deepEqual(u.pfade(), [P7]);
+});
+
+test("Eine neue Wahl ersetzt jede ältere: zwei gewählte Notizen (zwei Geräte vor dem Sync) werden eine, dein Text bleibt", async () => {
+  const t = notizenIo({ [P1]: mitText(M.notizText("", T1, { herkunft: M.GEWAEHLT }), "Frage A"), [P7]: mitText(M.notizText("", T7, { herkunft: M.GEWAEHLT }), "Frage B") });
+  const r = await M.waehlen(t.io, LISTE[1], { jetzt: "2026-10-20T08:00:00.000Z", heute: "2026-10-20" });
+  const p4 = "Stundenplan/Di 08.15 X100 Tutorium Gruppe 4 (gewählt).md";
+  assert.deepEqual([r.art, r.pfad, t.pfade()], ["geaendert", p4, [p4]]);
+  assert.equal(t.papierkorb.length, 1, "die zweite geht in den Papierkorb, nicht verloren");
+  assert.match(t.text(p4), /- Frage A/);
+  assert.match(t.text(p4), /- Frage B/);
+  assert.equal(t.fm(p4).gruppe_id, "ws-2026-27-x100-tutorium-4");
+  // Abwählen nimmt die Notiz der angetippten Gruppe, nicht irgendeine des Moduls
+  const u = notizenIo({ [P1]: M.notizText("", T1, { herkunft: M.GEWAEHLT }), [P7]: M.notizText("", T7, { herkunft: M.GEWAEHLT }) });
+  assert.equal(await M.abwaehlen(u.io, T7), true);
+  assert.deepEqual([u.pfade(), u.papierkorb], [[P1], [P7]]);
+});
+
+test("Gruppe in ILIAS gewechselt: die Notiz der alten wird die der neuen (dein Text bleibt), keine zweite bis zum nächsten Lauf", async () => {
+  const t = notizenIo();
+  await M.iliasAbgleichen(t.io, [{ refId: "11", g: T1 }], new Set(["11"]), {});
+  const alt = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 1 (ILIAS).md", neu = "Stundenplan/Do 08.15 X100 Tutorium Gruppe 7 (ILIAS).md";
+  await t.io.schreiben(alt, mitText(t.text(alt), "Blatt 1"));
+  // erster Lauf nach dem Wechsel: die alte Gruppe fehlt erst einmal (ilias.js entfernt sie erst beim zweiten Lauf)
+  const b = await M.iliasAbgleichen(t.io, [{ refId: "17", g: T7 }], new Set(["17"]), { wegErlaubt: () => false });
+  assert.deepEqual([t.pfade(), b.angelegt, b.umbenannt], [[neu], [], [neu]]);
+  assert.deepEqual([t.fm(neu).ilias_gruppe, t.fm(neu).gruppe_id], ["17", "ws-2026-27-x100-tutorium-7"]);
+  assert.match(t.text(neu), /- Blatt 1/);
+});
+
+test("In ILIAS in zwei Gruppen desselben Moduls: eine Notiz (die frühere in der Woche), eine schon vorhandene zweite geht in ihr auf", async () => {
+  const P1I = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 1 (ILIAS).md", P7I = "Stundenplan/Do 08.15 X100 Tutorium Gruppe 7 (ILIAS).md";
+  const beide = [{ refId: "17", g: T7 }, { refId: "11", g: T1 }], mitglieder = new Set(["11", "17"]);
+  const protokoll = [];
+  const t = notizenIo();
+  t.io.protokoll = (e) => protokoll.push(e);
+  await M.iliasAbgleichen(t.io, beide, mitglieder, {});
+  assert.deepEqual(t.pfade(), [P1I]);
+  assert.deepEqual(protokoll, [{ art: "ilias", bleibt: "ws-2026-27-x100-tutorium-1", weg: ["ws-2026-27-x100-tutorium-7"] }], "nur im Protokoll des Geräts");
+  assert.deepEqual((await M.iliasAbgleichen(t.io, beide, mitglieder, {})).angelegt, [], "der nächste Lauf legt die zweite nicht an");
+  // aus einer älteren Fassung liegen schon beide da, in der zweiten dein Text: er wandert in die eine
+  const u = notizenIo({ [P1I]: M.notizText("", T1, { herkunft: M.ILIAS, iliasGruppe: "11" }), [P7I]: mitText(M.notizText("", T7, { herkunft: M.ILIAS, iliasGruppe: "17" }), "Blatt 2") });
+  const b = await M.iliasAbgleichen(u.io, beide, mitglieder, { heute: "2026-10-19" });
+  assert.deepEqual([u.pfade(), b.gewichen, u.papierkorb], [[P1I], [P7I], [P7I]]);
+  assert.match(u.text(P1I), /- Blatt 2/);
+  // deckt eine andere Notiz (Alma) eine der beiden zur selben Zeit, gilt diese: keine ILIAS-Notiz daneben
+  const v = notizenIo({ "Stundenplan/Do 08.15 X100 Tutorium.md": notiz(Object.assign({}, ALMA, { art: "Tutorium", wochentag: 4, beginn: "08:15", ende: "09:45" })) });
+  await M.iliasAbgleichen(v.io, beide, mitglieder, {});
+  assert.deepEqual(v.pfade(), ["Stundenplan/Do 08.15 X100 Tutorium.md"]);
+});
+
+test("Doppelte Gruppen: es gilt ILIAS, dann die jüngere Wahl, dann die zur Gruppenliste passende, dann die frühere; zusammengeführt wird immer", async () => {
+  const gw = (x, am, text) => { const s = M.notizText("", x, { herkunft: M.GEWAEHLT, gewaehltAm: am }); return text ? mitText(s, text) : s; };
+  const IL = "Stundenplan/Do 08.15 X100 Tutorium Gruppe 7 (ILIAS).md";
+  // ILIAS vor deiner Wahl, auch vor einer jüngeren
+  const a = notizenIo({ [P1]: gw(T1, "2026-10-19T09:00:00.000Z", "Frage A"), [IL]: M.notizText("", T7, { herkunft: M.ILIAS, iliasGruppe: "17" }) });
+  assert.deepEqual(M.doppelt(a.io.notizen()).verdeckt, { [P1]: IL });
+  assert.deepEqual(await M.gewaehltAufraeumen(a.io, "2026-10-19"), [P1]);
+  assert.match(a.text(IL), /- Frage A/);
+  // die jüngere Wahl vor der älteren; eine Wahl ohne Zeitpunkt (ältere Fassung) ist die ältere
+  const t = notizenIo({ [P1]: gw(T1, "2026-10-19T09:00:00.000Z", "Frage A"), [P7]: gw(T7, "2026-10-19T11:00:00.000Z") });
+  const protokoll = [];
+  t.io.protokoll = (e) => protokoll.push(e);
+  assert.deepEqual(M.doppelt(t.io.notizen()).faelle.map((f) => [f.zeigen, f.andere]), [[P7, [P1]]]);
+  assert.deepEqual(await M.gewaehltAufraeumen(t.io, "2026-10-19"), [P1]);
+  assert.deepEqual([t.pfade(), t.papierkorb], [[P7], [P1]], "die andere im Papierkorb, nicht gelöscht");
+  assert.match(t.text(P7), /Aus der Notiz zu deiner Gruppe übernommen \(19\.10\.2026\):\n\n- Frage A/);
+  assert.deepEqual(protokoll, [{ art: "gewaehlt", bleibt: P7, weg: [P1], grund: "Reihenfolge" }]);
+  assert.deepEqual(await M.gewaehltAufraeumen(t.io, "2026-10-19"), [], "einmal");
+  assert.deepEqual(M.doppelt(notizenIo({ [P1]: gw(T1, ""), [P7]: gw(T7, "2026-10-19T08:00:00.000Z") }).io.notizen()).faelle[0].zeigen, P7);
+  // gleich alt: die zur aktuellen Gruppenliste passt (T1 hat dort jetzt eine andere Zeit), sonst die frühere in der Woche
+  const u = notizenIo({ [P7]: gw(T7, ""), [P1]: gw(T1, "") });
+  assert.deepEqual(M.doppelt(u.io.notizen()).verdeckt, { [P7]: P1 });
+  assert.deepEqual(M.doppelt(u.io.notizen(), [Object.assign({}, T1, { tag: "Mi" }), T7]).verdeckt, { [P1]: P7 });
+  assert.deepEqual(await M.gewaehltAufraeumen(u.io, "2026-10-19", { liste: [Object.assign({}, T1, { tag: "Mi" }), T7] }), [P1]);
+  assert.deepEqual(u.pfade(), [P7]);
+  // zwei ILIAS-Notizen fasst nur ilias.js an (ein Schreiber); die Woche zeigt eine
+  const w = notizenIo({ [IL]: M.notizText("", T7, { herkunft: M.ILIAS, iliasGruppe: "17" }), "Stundenplan/Di 10.15 X100 Tutorium Gruppe 1 (ILIAS).md": M.notizText("", T1, { herkunft: M.ILIAS, iliasGruppe: "11" }) });
+  assert.deepEqual(M.doppelt(w.io.notizen()).verdeckt, { [IL]: "Stundenplan/Di 10.15 X100 Tutorium Gruppe 1 (ILIAS).md" });
+  assert.deepEqual(await M.gewaehltAufraeumen(w.io, "2026-10-19"), []);
+  // eine Notiz derselben Gruppe zur selben Zeit (Alma): die Gruppen-Notiz ist verdeckt; eine Übung zu anderer Zeit (etwa für
+  // alle) zählt nicht, entfallene und andere Arten auch nicht
+  const v = notizenIo({ [P1]: gw(T1, ""), "Stundenplan/Di 10.15 X100 Tutorium.md": notiz(Object.assign({}, ALMA, { art: "Tutorium", beginn: "10:15" })),
+    "Stundenplan/Fr 10.15 X100 Tutorium.md": notiz(Object.assign({}, ALMA, { art: "Tutorium", wochentag: 5 })),
+    "Stundenplan/Mi 08.15 X100 Übung (ILIAS).md": M.notizText("", g({ id: "u", art: "Übung", tag: "Mi" }), { herkunft: M.ILIAS, iliasGruppe: "9" }),
+    [P7]: gw(T7, "").replace("tags:", "entfaellt: true\ntags:") });
+  const dv = M.doppelt(v.io.notizen());
+  assert.deepEqual([dv.verdeckt, dv.faelle], [{ [P1]: "Stundenplan/Di 10.15 X100 Tutorium.md" }, []]);
+  // stabil: ein zweites Schreiben ändert den Zeitpunkt nicht, eine ILIAS-Notiz trägt keinen
+  const s = gw(T1, "2026-10-19T09:00:00.000Z");
+  assert.equal(M.notizText(s, T1, { herkunft: M.GEWAEHLT }), s);
+  assert.doesNotMatch(M.notizText(s, T1, { herkunft: M.ILIAS, iliasGruppe: "11" }), /gewaehlt_am/);
 });

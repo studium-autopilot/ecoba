@@ -14,17 +14,29 @@
 // sind dieselben (eba-core.css Abschnitte 13, 33, 39, 47, 54, 55). Schreibt keine Datei. Neu gezeichnet (entprellt) bei
 // Änderungen an Stundenplan-, Modul- und Einstellungsnotizen und an den Semesterdaten, beim Zurückkommen in die App und alle
 // 10 Minuten.
+// Je Modul und Art steht nur eine Gruppe da (meine-gruppe.js doppelt, dieselbe Reihenfolge wie beim Zusammenführen).
+// Ein blasser Kasten (beginnt erst) teilt sich nie die Breite mit einem echten: Überschneidet er einen, steht er schmal am
+// rechten Rand, eine Vorlesung wird nie halbiert (spalten).
+// Schmale Karte (iPhone, unter 520 px, eba-core.css 55): Tagesansicht statt Raster (seit 19.10.2026). Kopf „KW n“ mit ‹ ›, fünf
+// Tage mit Datum (heute betont, Punkt bei Lehrveranstaltungen), darunter die Lehrveranstaltungen des gewählten Tags über die
+// ganze Breite mit vollem Namen, Zeit und Raum; was erst beginnt, als leise Zeile („Tutorium BWL · ab 04.11. · Mi 14:15“).
+// Wischen wechselt den Tag (über Freitag hinaus die Woche). Welcher Tag: wie die Woche nur auf diesem Gerät (eba-woche-tag),
+// sonst heute bzw. am Wochenende Montag (Planwoche des Fachmodells). Beide Ansichten werden gezeichnet, die Breite entscheidet
+// im CSS (Container-Abfrage), so passt es auch nach dem Drehen.
 module.exports = function (ctx) {
   const app = window.app;
   const SPRACHE = "eba-woche";
   const SCHLUESSEL = "eba-woche-versatz";
+  const TAG_SCHLUESSEL = "eba-woche-tag";
   const FRISCH_MS = 30 * 60 * 1000;
+  const SCHMAL = 22; // % der Tagesspalte für einen blassen Kasten neben einem echten
   const WEIT = 60; // Wochen in jede Richtung
   const WISCHEN = 50; // px Mindestweg
   const RAND = 30; // px: Wischen vom Bildschirmrand gehört Obsidian (Seitenleisten)
   const HOEHE = { "Dashboard.md": 497 }; // Höhe des Rasters in px (am PC/iPad nur Stundenplan, Dashboard hat feste Viertelstunden)
   const HOEHE_SONST = 697;
   const TAGE = ["Mo", "Di", "Mi", "Do", "Fr"];
+  const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
   const VORLESUNG = ["Vorlesung", "Veranstaltung"]; // „Veranstaltung“ = Alma ohne erkannte Art
 
   // ---------- Datum (Ortszeit, ganze Tage auch über die Zeitumstellung) ----------
@@ -60,6 +72,18 @@ module.exports = function (ctx) {
     const n = Math.max(-WEIT, Math.min(WEIT, Math.round(Number(v) || 0)));
     app.saveLocalStorage(SCHLUESSEL, versatzWert(n, ctx.date.jetzt().getTime(), sitzung));
   };
+  // Tag der Tagesansicht (0 = Montag … 4 = Freitag): gewählt gilt wie der Versatz nur in derselben Sitzung und 30 Minuten, sonst
+  // heute (in der aktuellen Woche, Montag bis Freitag) bzw. Montag (andere Woche, Wochenende: die Planwoche beginnt erst)
+  const tagAus = (roh, jetztMs, sitz) => {
+    let o = roh;
+    if (typeof o === "string") { try { o = JSON.parse(o); } catch (e) { return null; } }
+    if (!o || typeof o !== "object" || o.sitzung !== sitz) return null;
+    const t = Number(o.tag), alter = jetztMs - Number(o.zeit);
+    return [0, 1, 2, 3, 4].indexOf(t) >= 0 && alter >= 0 && alter < FRISCH_MS ? t : null;
+  };
+  const tagWahl = (gewaehlt, W) => (gewaehlt != null ? gewaehlt : W.ht ? W.wt - 1 : 0);
+  const tagSetzen = (t) => app.saveLocalStorage(TAG_SCHLUESSEL, JSON.stringify({ tag: t, zeit: ctx.date.jetzt().getTime(), sitzung }));
+  const tagGewaehlt = () => tagAus(app.loadLocalStorage(TAG_SCHLUESSEL), ctx.date.jetzt().getTime(), sitzung);
 
   // ---------- Kasten: Text ----------
   const istUebung = (fm) => !!fm.art && VORLESUNG.indexOf(String(fm.art)) < 0;
@@ -85,13 +109,14 @@ module.exports = function (ctx) {
   const zeileVon = (z, h0) => (z.h - h0) * 4 + Math.floor(z.m / 15) + 2;
   const zeileBis = (z, h0) => (z.h - h0) * 4 + Math.ceil(z.m / 15) + 2;
   // Überschneidungen je Tag nebeneinander: Gruppen sich überlappender Kästen, je Kasten Spalte und Spaltenzahl der Gruppe
-  const spalten = (kaesten) => {
+  // (gruppeVon: Kasten → seine Gruppe)
+  const teilen = (kaesten, gruppeVon) => {
     const nachTag = {};
     for (const k of kaesten) (nachTag[k.tag] = nachTag[k.tag] || []).push(k);
     for (const tag of Object.keys(nachTag)) {
       const ks = nachTag[tag].slice().sort((a, b) => a.von - b.von || b.bis - a.bis);
       let gruppe = [], ende = -1;
-      const abschliessen = () => { const n = gruppe.reduce((m, k) => Math.max(m, k.spalte + 1), 1); for (const k of gruppe) k.spalten = n; };
+      const abschliessen = () => { const n = gruppe.reduce((m, k) => Math.max(m, k.spalte + 1), 1); for (const k of gruppe) { k.spalten = n; gruppeVon.set(k, gruppe); } };
       for (const k of ks) {
         if (gruppe.length && k.von >= ende) { abschliessen(); gruppe = []; ende = -1; }
         const belegt = gruppe.filter((x) => x.bis > k.von).map((x) => x.spalte);
@@ -103,13 +128,40 @@ module.exports = function (ctx) {
       }
       if (gruppe.length) abschliessen();
     }
+  };
+  // Blasse Kästen (spaeter: beginnt erst) teilen sich die Breite nie mit echten. Überschneidet eine Gruppe blasser Kästen einen
+  // echten, steht sie schmal am rechten Rand (schmal, Klasse „schmal“), und die echten Gruppen daneben lassen dafür Platz (rand):
+  // Eine Vorlesung wird so nie halbiert.
+  const spalten = (kaesten) => {
+    const gruppeVon = new Map();
+    const echt = kaesten.filter((k) => !k.spaeter), blass = kaesten.filter((k) => k.spaeter);
+    teilen(echt, gruppeVon);
+    teilen(blass, gruppeVon);
+    const ueber = (a, b) => a.tag === b.tag && a.von < b.bis && b.von < a.bis;
+    for (const b of blass) {
+      if (b.schmal) continue;
+      const gruppe = gruppeVon.get(b);
+      const daneben = echt.filter((k) => gruppe.some((x) => ueber(x, k)));
+      if (!daneben.length) continue;
+      for (const x of gruppe) { x.schmal = true; if (x.klassen) x.klassen.push("schmal"); }
+      for (const k of daneben) for (const x of gruppeVon.get(k)) x.rand = true;
+    }
     return kaesten;
+  };
+  // Breite und Abstand links in % der Tagesspalte (null: ganze Spalte)
+  const lage = (k) => {
+    const n = k.spalten || 1, s = k.spalte || 0;
+    if (n === 1 && !k.schmal && !k.rand) return null;
+    const breite = k.schmal ? SCHMAL : k.rand ? 100 - SCHMAL : 100, ab = k.schmal ? 100 - SCHMAL : 0;
+    const r = (x) => Math.round(x * 100) / 100;
+    return { breite: r(breite / n), links: r(ab + (breite * s) / n) };
   };
 
   // ---------- Woche berechnen (reine Logik, ohne DOM) ----------
   // notizen: [{ pfad, fm }] mit typ lehrveranstaltung; kurzVonCode: { Code: Kurzname }; modulPfad: { Name der Modulnotiz: Pfad };
-  // modell: ctx.modell (Semester, Pausen, freie Tage, findetStatt); montag: Date; jetzt: Date
-  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modell, montag, jetzt }) => {
+  // modell: ctx.modell (Semester, Pausen, freie Tage, findetStatt); montag: Date; jetzt: Date; verdeckt: { Pfad: … } (eine Gruppe
+  // je Modul und Art, meine-gruppe.js doppelt: weitere Gruppen-Notizen fehlen im Raster)
+  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modell, montag, jetzt, verdeckt }) => {
     const tage = [0, 1, 2, 3, 4].map((i) => iso(plus(montag, i)));
     const heute = iso(jetzt), wt = jetzt.getDay() || 7;
     const ht = wt <= 5 && tage[wt - 1] === heute;
@@ -118,7 +170,7 @@ module.exports = function (ctx) {
     const pw = modell.daten().pausen.filter((p) => p.von <= tage[4] && p.bis >= tage[0]);
     // nie: entfallen oder „Besuche ich nicht“ (findetStatt prüft das vor dem Tag)
     const nie = (fm) => ["entfaellt", "ausgeblendet"].indexOf(modell.findetStatt(fm, tage[0]).grund) >= 0;
-    const lv = notizen.filter(({ fm }) => sem && fm.semester === sem.name && !nie(fm) && zeit(fm.beginn) && zeit(fm.ende));
+    const lv = notizen.filter(({ pfad, fm }) => sem && fm.semester === sem.name && !(verdeckt && verdeckt[pfad]) && !nie(fm) && zeit(fm.beginn) && zeit(fm.ende));
     // Größe des Rasters aus allen Serien des Semesters (dazu Einzeltermine und geänderte Zeiten dieser Woche), damit es von
     // Woche zu Woche gleich bleibt
     const aenderungIn = (fm) => liste(fm.aenderungen).map((x) => String(x).split("|")).filter((x) => x.length >= 4 && tage.indexOf(x[0]) >= 0 && zeit(x[1]) && zeit(x[2]))[0] || null;
@@ -178,11 +230,23 @@ module.exports = function (ctx) {
         // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.), bei einer Änderung die neue Zeit, vor dem Beginn „ab TT.MM.“
         zeit: ab ? "ab " + tagMonat(ab) : aen ? zeitText : String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
         raum,
+        // Tagesansicht: Beginn und Ende (bei einer Änderung die neuen), Art auch bei Vorlesungen, Ausfall mit Grund, vor dem Beginn
+        // eine leise Zeile „Tutorium BWL · ab 04.11. · Mi 14:15“
+        spaeter: !!ab, aus, beginn: aen ? s.beginn : String(fm.beginn), ende: aen ? s.ende : String(fm.ende),
+        artLang: artText(fm) || (String(fm.art || "") === "Vorlesung" ? "Vorlesung" : ""),
+        ausText: aus ? "fällt aus" + (s.name ? " (" + s.name + ")" : "") : "",
+        leise: ab ? [String(fm.art || "") === "Veranstaltung" ? "" : String(fm.art || ""), kurzname(fm, kurzVonCode)].filter(Boolean).join(" ")
+          + " · ab " + tagMonat(ab) + " · " + TAGE[tag - 1] + " " + String(fm.beginn) : "",
       };
     });
     for (const k of kaesten) if (k.bis <= k.von) k.bis = k.von + 1;
     return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, kw: modell.zeit.kw(tage[0]) };
   };
+  // Tagesansicht: die fünf Tage (Kurzname, Datum, heute, Punkt bei Lehrveranstaltungen, die stattfinden) und je Tag die Kästen
+  // in der Reihenfolge des Tages (i = 0 Montag … 4 Freitag)
+  const tageAus = (W) => W.tage.map((t, i) => ({ iso: t, name: TAGE[i], lang: TAGE_LANG[i], datum: Number(t.slice(8, 10)) + ".",
+    heute: W.ht && W.wt === i + 1, termine: W.kaesten.some((k) => k.tag === i + 1 && !k.spaeter && !k.aus) }));
+  const tagKaesten = (W, i) => W.kaesten.filter((k) => k.tag === i + 1).sort((a, b) => a.von - b.von || a.bis - b.bis || (a.spaeter ? 1 : 0) - (b.spaeter ? 1 : 0));
 
   // ---------- Lesen (metadataCache) ----------
   const lesen = () => {
@@ -209,11 +273,15 @@ module.exports = function (ctx) {
     const jetzt = ctx.date.jetzt();
     const v = versatz();
     const montag = plus(aktuellerMontag(jetzt), v * 7);
-    const W = wocheBauen(Object.assign(lesen(), { modell: M(), montag, jetzt }));
+    const daten = lesen(), L = ctx.user && ctx.user["meine-gruppe"];
+    const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
+    const verdeckt = L && L.doppelt ? L.doppelt(daten.notizen, Z ? Z.gruppen : null).verdeckt : null;
+    const W = wocheBauen(Object.assign(daten, { modell: M(), montag, jetzt, verdeckt }));
     const pfad = (c && c.sourcePath) || "";
     const zeileHoehe = Math.round(((HOEHE[pfad] || HOEHE_SONST) / (W.rows + 1)) * 100) / 100;
     el.empty();
-    const g = el.createDiv({ cls: "eba-woche", attr: { lang: "de", style: "grid-template-rows:34px repeat(" + (W.rows + 1) + ", " + zeileHoehe + "px)" } });
+    tagZeichnen(el, W, v, tagWahl(tagGewaehlt(), W));
+    const g = el.createDiv({ cls: "eba-woche hat-tag", attr: { lang: "de", style: "grid-template-rows:34px repeat(" + (W.rows + 1) + ", " + zeileHoehe + "px)" } });
     if (W.ht) g.createEl("i", { cls: "eba-tagspalte", attr: { style: "grid-column:" + (W.wt + 1) } });
     g.createDiv({ cls: "eba-tagkopf eba-ecke", attr: { style: "grid-column:1" } });
     TAGE.forEach((t, i) => {
@@ -235,7 +303,8 @@ module.exports = function (ctx) {
     }
     for (const k of W.kaesten) {
       let stil = "grid-column:" + (k.tag + 1) + ";grid-row:" + k.von + " / " + k.bis;
-      if (k.spalten > 1) stil += ";width:calc(" + Math.round(10000 / k.spalten) / 100 + "% - 2px);margin-left:" + Math.round((10000 * k.spalte) / k.spalten) / 100 + "%";
+      const l = lage(k);
+      if (l) stil += ";width:calc(" + l.breite + "% - 2px);margin-left:" + l.links + "%";
       const a = g.createEl("a", { cls: k.klassen.join(" "), attr: { title: k.titel, href: ctx.link("zeigen", { notiz: k.notiz }), style: stil } });
       const b = a.createEl("b", { text: k.kurz });
       if (k.art) { b.appendText(" "); b.createEl("i", { text: k.art }); }
@@ -247,16 +316,57 @@ module.exports = function (ctx) {
     wischen(g, v);
   };
 
+  // Tagesansicht (schmale Karte, iPhone): Kopf, fünf Tage, Lehrveranstaltungen des Tags t über die ganze Breite
+  const tagZeichnen = (el, W, v, t) => {
+    const box = el.createDiv({ cls: "eba-wt", attr: { lang: "de" } });
+    const kopf = box.createDiv({ cls: "eba-wt-kopf" });
+    const kwEl = v ? knopf(kopf, "eba-wt-kw anders", "", "Zurück zur aktuellen Woche", 0) : kopf.createSpan({ cls: "eba-wt-kw" });
+    kwEl.appendText("KW " + W.kw);
+    kopf.createSpan({ cls: "eba-wt-spanne", text: M().zeit.spanne(W.tage[0], W.tage[4]) });
+    const nav = kopf.createDiv({ cls: "eba-wt-pfeile" });
+    knopf(nav, "eba-wt-pfeil", "‹", "Woche davor", v - 1);
+    knopf(nav, "eba-wt-pfeil", "›", "Woche danach", v + 1);
+    const leiste = box.createDiv({ cls: "eba-wt-tage", attr: { role: "group", "aria-label": "Tag" } });
+    tageAus(W).forEach((d, i) => {
+      const cls = ["eba-wt-tag"].concat(i === t ? ["gewaehlt"] : [], d.heute ? ["heute"] : [], d.termine ? ["termine"] : []).join(" ");
+      const c = leiste.createDiv({ cls, attr: { role: "button", tabindex: "0", "aria-pressed": String(i === t), "aria-label": d.lang + " " + d.datum + (d.heute ? ", heute" : "") } });
+      c.createSpan({ cls: "eba-wt-name", text: d.name });
+      c.createSpan({ cls: "eba-wt-datum", text: d.datum });
+      const los = (e) => { e.preventDefault(); tagSetzen(i); neu(); };
+      c.addEventListener("click", los);
+      c.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") los(e); });
+    });
+    const liste = box.createDiv({ cls: "eba-wt-liste" });
+    const ks = W.leer ? [] : tagKaesten(W, t);
+    if (!ks.length) liste.createDiv({ cls: "eba-wt-leer", text: W.leer || "Keine Lehrveranstaltungen" });
+    for (const k of ks) {
+      const href = ctx.link("zeigen", { notiz: k.notiz });
+      if (k.spaeter) { liste.createEl("a", { cls: "eba-wt-leise", text: k.leise, attr: { title: k.titel, href } }); continue; }
+      const a = liste.createEl("a", { cls: k.klassen.filter((x) => x !== "schmal").join(" "), attr: { title: k.titel, href } });
+      const uhr = a.createEl("time", { cls: "eba-wt-uhr" });
+      uhr.createSpan({ text: k.beginn });
+      uhr.createSpan({ text: k.ende });
+      const b = a.createEl("b", { text: k.kurz });
+      if (k.artLang) { b.appendText(" "); b.createEl("i", { text: k.artLang }); }
+      const ort = [k.raum, k.ausText].filter(Boolean).join(" · ");
+      if (ort) a.createSpan({ cls: "eba-wt-ort", text: ort });
+    }
+    wischen(box, v, t);
+  };
+
   // Wischen (Touch, Hauptweg zum Blättern am iPhone): waagerecht mehr als 50 px und mehr als doppelt so weit wie senkrecht →
   // Woche danach (nach links) bzw. davor. Nicht vom Bildschirmrand (30 px, dort zieht Obsidian die Seitenleisten auf) und
   // nicht auf einem Link oder Kasten begonnen. Ob waagerecht, entscheidet die erste Bewegung über 10 px; erst danach
   // preventDefault (und nicht weiterreichen), senkrechtes Scrollen bleibt also unberührt.
-  const wischen = (g, v) => {
+  // Tagesansicht (tag = gezeigter Tag): Wischen wechselt den Tag, über Freitag bzw. Montag hinaus die Woche (tagSchritt). Dort
+  // füllen die Kästen die Breite, darum darf das Wischen auf einem Kasten beginnen (ein Tipp öffnet ihn weiter), nur nicht auf ‹ ›.
+  const wischen = (g, v, tag) => {
+    const tagesansicht = typeof tag === "number";
     let start = null, achse = "";
     const breite = () => (g.ownerDocument && g.ownerDocument.defaultView ? g.ownerDocument.defaultView.innerWidth : 0);
     g.addEventListener("touchstart", (e) => {
       const t = e.touches && e.touches[0];
-      const aufLink = !!(e.target && e.target.closest && e.target.closest("a"));
+      const aufLink = !!(e.target && e.target.closest && e.target.closest(tagesansicht ? ".eba-wt-kopf a" : "a"));
       start = t && e.touches.length === 1 && !aufLink && wischStartOk(t.clientX, breite()) ? { x: t.clientX, y: t.clientY } : null;
       achse = "";
     }, { passive: true });
@@ -272,8 +382,21 @@ module.exports = function (ctx) {
       start = null;
       if (!t) return;
       const r = wischRichtung(t.clientX - s.x, t.clientY - s.y);
-      if (r) { versatzSetzen(v + r); neu(); }
+      if (!r) return;
+      if (tagesansicht) {
+        const z = tagSchritt(v, tag, r);
+        if (z.versatz !== v) versatzSetzen(z.versatz);
+        tagSetzen(z.tag);
+      } else versatzSetzen(v + r);
+      neu();
     }, { passive: true });
+  };
+  // Tagesansicht: ein Tag weiter (r = 1) oder zurück (−1); nach Freitag der Montag der nächsten Woche, vor Montag der Freitag davor
+  const tagSchritt = (v, tag, r) => {
+    const n = tag + r;
+    if (n > 4) return { versatz: v + 1, tag: 0 };
+    if (n < 0) return { versatz: v - 1, tag: 4 };
+    return { versatz: v, tag: n };
   };
   // Beginnt das Wischen weit genug vom linken und rechten Bildschirmrand?
   const wischStartOk = (x, breite) => x >= RAND && (!breite || x <= breite - RAND);
@@ -306,8 +429,10 @@ module.exports = function (ctx) {
 
   const aktionen = {
     // ‹ › und „KW n“ (Links im Raster): schritt = Versatz in Wochen (0 = aktuelle Woche)
-    woche: { ausfuehren: (c) => { versatzSetzen(c.parameter.schritt); neu(); } },
+    // „KW n“ zurück zur aktuellen Woche zeigt in der Tagesansicht auch wieder heute
+    woche: { ausfuehren: (c) => { versatzSetzen(c.parameter.schritt); if (Number(c.parameter.schritt) === 0) app.saveLocalStorage(TAG_SCHLUESSEL, null); neu(); } },
   };
 
-  return { registrieren, aktionen, aktuellerMontag, kw, versatzAus, versatzWert, versatz, wocheBauen, spalten, kurzname, artText, wischStartOk, wischAchse, wischRichtung };
+  return { registrieren, aktionen, aktuellerMontag, kw, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, wischStartOk, wischAchse,
+    wischRichtung, tagAus, tagWahl, tageAus, tagKaesten, tagSchritt };
 };

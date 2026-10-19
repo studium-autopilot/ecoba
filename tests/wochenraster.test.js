@@ -127,6 +127,19 @@ test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Begi
   assert.equal(W.artText({ art: "Veranstaltung", gruppe: "3" }), "");
 });
 
+test("Eine Gruppe je Modul und Art: eine zweite Gruppen-Notiz desselben Tutoriums fehlt im Raster (meine-gruppe.js doppelt)", () => {
+  const MG = laden("meine-gruppe").ergebnis;
+  const gr = (pfad, fm) => lv(pfad, Object.assign({ code: "X180", art: "Tutorium", modul: "", von: "2026-11-03", bis: "2027-02-04" }, fm));
+  const n = [
+    gr("Stundenplan/Di 10.15 X180 Tutorium Gruppe 1 (gewählt).md", { titel: "Beispielabschluss · Tutorium Gruppe 1", wochentag: 2, beginn: "10:15", ende: "11:45", herkunft: "gruppe-gewaehlt", gruppe_id: "t1" }),
+    gr("Stundenplan/Do 08.15 X180 Tutorium Gruppe 7 (ILIAS).md", { titel: "Beispielabschluss · Tutorium Gruppe 7", wochentag: 4, beginn: "08:15", ende: "09:45", herkunft: "ilias-gruppe", ilias_gruppe: "17", gruppe_id: "t7", von: "2026-11-05" }),
+    NOTIZEN[4],
+  ];
+  const w = W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-19T12:00:00"), verdeckt: MG.doppelt(n).verdeckt });
+  assert.deepEqual(w.kaesten.map((k) => k.pfad).sort(), ["Stundenplan/Di X100.md", "Stundenplan/Do 08.15 X180 Tutorium Gruppe 7 (ILIAS).md"]);
+  assert.equal(W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-19T12:00:00") }).kaesten.length, 3, "ohne Regel beide");
+});
+
 test("Antippen öffnet das Modul über den Pfad, auch bei Link mit Pfad, Alias oder Abschnitt", () => {
   const n = [lv("Stundenplan/Mo X110.md", Object.assign({}, NOTIZEN[0].fm, { modul: "[[Module/1 Grundstudium/X110 Beispieldatenanalyse#Prüfung|X110]]" }))];
   const w = W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: MODULPFAD, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });
@@ -212,4 +225,96 @@ test("Seiten: Dashboard und Stundenplan zeigen das Raster über den Codeblock, k
     assert.equal(z.filter((l) => l.includes("```eba-woche")).length, 1, datei);
     assert.ok(!z.join("\n").includes("System/Daten/Woche.md"), datei);
   }
+});
+
+// Blasse Gruppe neben einer Vorlesung und Tagesansicht für das iPhone (19.10.2026): Am iPhone halbierte ein blasses Tutorium,
+// das erst in zwei Wochen beginnt, eine Vorlesung; fünf Spalten à 60 px zerbrachen Namen und schnitten Räume ab.
+const TUT = lv("Stundenplan/Di 10.15 X180 Tutorium Gruppe 1 (gewählt).md", { titel: "Beispielabschluss · Tutorium Gruppe 1", code: "X180", art: "Tutorium", gruppe: "Gruppe 1",
+  wochentag: 2, beginn: "10:15", ende: "11:45", von: "2026-11-03", bis: "2027-02-02", herkunft: "gruppe-gewaehlt", raum: "Seminarraum E 02" });
+const mitTut = (montag, jetzt = "2026-10-27T10:30:00", extra = []) => W.wocheBauen({ notizen: NOTIZEN.concat([TUT], extra), kurzVonCode: { X180: "Abschluss" }, modulPfad: {},
+  modell: MODELL, montag: tag(montag), jetzt: new Date(jetzt) });
+
+test("Blasse Gruppe nimmt nie an der Teilung teil: schmal am Rand, die Vorlesung behält ihren Platz", () => {
+  const w = mitTut("2026-10-26");
+  const vl = kasten(w, "Stundenplan/Di X100.md"), tut = kasten(w, "Stundenplan/Di X100 Tutorium.md"), blass = kasten(w, TUT.pfad);
+  assert.deepEqual([blass.spaeter, blass.schmal, blass.klassen.includes("schmal")], [true, true, true]);
+  // Vorlesung und Tutorium (echt) teilen sich wie bisher, nur ohne den Streifen rechts; nie mit dem blassen Kasten
+  assert.deepEqual([vl.spalte, vl.spalten, tut.spalte, tut.spalten], [0, 2, 1, 2]);
+  assert.deepEqual([W.lage(vl), W.lage(tut), W.lage(blass)], [{ breite: 39, links: 0 }, { breite: 39, links: 39 }, { breite: 22, links: 78 }]);
+  // allein mit einer Vorlesung: Vorlesung 78 %, nie die Hälfte
+  const nur = W.spalten([{ tag: 2, von: 10, bis: 18 }, { tag: 2, von: 11, bis: 17, spaeter: true, klassen: ["eba-ev", "ue", "spaeter"] }]);
+  assert.deepEqual(nur.map((k) => [k.spalten, W.lage(k)]), [[1, { breite: 78, links: 0 }], [1, { breite: 22, links: 78 }]]);
+  // ohne echten Kasten daneben: ganze Breite; andere Tage unberührt
+  assert.equal(W.lage(kasten(w, "Stundenplan/Di X180 Tutorium.md")), null);
+  assert.equal(W.lage(W.spalten([{ tag: 3, von: 2, bis: 6, spaeter: true }])[0]), null);
+  assert.equal(W.lage(kasten(w, "Stundenplan/Mo X110.md")), null);
+});
+
+test("Tagesansicht: fünf Tage mit Datum, heute betont, Punkt nur bei Lehrveranstaltungen, die stattfinden", () => {
+  const w = mitTut("2026-10-26");
+  const t = W.tageAus(w);
+  assert.deepEqual(t.map((d) => d.name + " " + d.datum), ["Mo 26.", "Di 27.", "Mi 28.", "Do 29.", "Fr 30."]);
+  assert.deepEqual(t.map((d) => d.heute), [false, true, false, false, false]);
+  assert.deepEqual(t.map((d) => d.termine), [true, true, true, true, false]);
+  assert.equal(t[1].lang, "Dienstag");
+  // nur Blasses (noch nicht begonnen) oder Ausfall: kein Punkt
+  const frei = W.tageAus(woche("2026-12-21"));
+  assert.deepEqual(frei.map((d) => d.termine), [true, true, false, false, false], "ab Mittwoch Weihnachtspause: durchgestrichen, kein Punkt");
+});
+
+test("Tagesansicht: Kästen des Tags in Reihenfolge, voller Name, Zeit und Raum; was erst beginnt, als leise Zeile", () => {
+  const w = mitTut("2026-10-26");
+  const di = W.tagKaesten(w, 1);
+  assert.deepEqual(di.map((k) => k.pfad), ["Stundenplan/Di X180 Tutorium.md", "Stundenplan/Di X100.md", "Stundenplan/Di X100 Tutorium.md", TUT.pfad]);
+  const [t1, vl] = di;
+  assert.deepEqual([t1.kurz, t1.artLang, t1.beginn, t1.ende, t1.raum], ["Abschluss", "Tutorium 1", "08:15", "09:45", "Hörsaal 1"]);
+  assert.deepEqual([vl.artLang, vl.beginn, vl.ende], ["Vorlesung", "10:00", "12:00"]);
+  assert.equal(di[3].leise, "Tutorium Abschluss · ab 03.11. · Di 10:15");
+  assert.equal(di[3].spaeter, true);
+  // heute und jetzt bleiben (Dienstag 10:30)
+  assert.deepEqual(vl.klassen.slice(-2), ["heute", "jetzt"]);
+  // Änderung: neue Zeit und neuer Raum; Ausfall mit Grund
+  const d = W.tagKaesten(woche("2026-10-19"), 3)[0];
+  assert.deepEqual([d.beginn, d.ende, d.raum, d.klassen.includes("geaendert")], ["12:15", "13:45", "Hörsaal 9", true]);
+  const mi = W.tagKaesten(woche("2026-12-21"), 2).find((k) => k.pfad === "Stundenplan/Mi X101.md");
+  assert.deepEqual([mi.aus, mi.ausText], [true, "fällt aus (Weihnachtspause)"]);
+  // Alma ohne erkannte Art: kein Wort dazu
+  assert.equal(W.tagKaesten(w, 0)[0].artLang, "");
+});
+
+test("Tagesansicht: welcher Tag (heute, am Wochenende Montag, gewählt nur 30 Minuten in derselben Sitzung), Wischen über die Woche hinaus", () => {
+  assert.equal(W.tagWahl(null, woche("2026-10-19", "2026-10-21T09:00:00")), 2, "heute Mittwoch");
+  assert.equal(W.tagWahl(null, woche("2026-10-26", "2026-10-24T09:00:00")), 0, "Samstag: Montag der Planwoche");
+  assert.equal(W.tagWahl(null, woche("2026-11-02", "2026-10-21T09:00:00")), 0, "andere Woche: Montag");
+  assert.equal(W.tagWahl(4, woche("2026-10-19", "2026-10-21T09:00:00")), 4, "gewählt");
+  const t = tag("2026-10-21").getTime(), s = "sitzung-a";
+  const roh = (x, zeit = t, sitz = s) => JSON.stringify({ tag: x, zeit, sitzung: sitz });
+  assert.equal(W.tagAus(roh(3), t + 60000, s), 3);
+  assert.equal(W.tagAus(roh(3), t + 30 * 60000, s), null);
+  assert.equal(W.tagAus(roh(3), t, "sitzung-b"), null);
+  assert.equal(W.tagAus(roh(5), t, s), null);
+  assert.equal(W.tagAus("kein json", t, s), null);
+  assert.deepEqual(W.tagSchritt(0, 2, 1), { versatz: 0, tag: 3 });
+  assert.deepEqual(W.tagSchritt(0, 4, 1), { versatz: 1, tag: 0 });
+  assert.deepEqual(W.tagSchritt(1, 0, -1), { versatz: 0, tag: 4 });
+});
+
+test("„KW n“ zurück zur aktuellen Woche zeigt in der Tagesansicht wieder heute (Gerätespeicher, keine Datei)", () => {
+  const L = laden("woche", { heute: "2026-10-21" });
+  const speicher = { "eba-woche-tag": JSON.stringify({ tag: 4, zeit: Date.now(), sitzung: "x" }) };
+  L.ctx.app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
+  L.ctx.app.saveLocalStorage = (k, v) => { if (v === null) delete speicher[k]; else speicher[k] = v; };
+  L.ergebnis.aktionen.woche.ausfuehren({ parameter: { schritt: "1" } });
+  assert.ok("eba-woche-tag" in speicher, "eine andere Woche behält den Tag");
+  L.ergebnis.aktionen.woche.ausfuehren({ parameter: { schritt: "0" } });
+  assert.deepEqual(Object.keys(speicher), []);
+});
+
+test("Stil: unter 520 px Tagesansicht statt Raster, Wörter brechen nie mitten im Wort", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8");
+  assert.match(css, /@container eba-kz \(max-width: 520px\) \{\s*\.eba-woche\.hat-tag \{ display: none; \}\s*\.eba-wt \{ display: block; \}/);
+  assert.match(css, /\.eba-wt \{ display: none;/);
+  const regeln = css.match(/[^{}]*\.eba-(?:woche|wt) [^{}]*\{[^}]*\}/g) || [];
+  const brechen = regeln.filter((r) => /overflow-wrap:\s*(anywhere|break-word)|word-break:\s*break-all/.test(r));
+  assert.deepEqual(brechen, []);
 });

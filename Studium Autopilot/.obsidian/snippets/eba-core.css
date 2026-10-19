@@ -4568,7 +4568,8 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
    und durchgestrichen (Abschnitt 33), Änderung gestrichelt (Abschnitt 54).
    Titel und Raum je höchstens zwei Zeilen. Jeder Kasten ist ein Größen-Container (eba-ev): Passt etwas nicht in seine Höhe,
    entfällt erst die zweite Titelzeile, dann die zweite Raumzeile, dann der Raum; ein Kasten bis 60 Minuten zeigt am PC und
-   iPad nur den Titel. Text ragt so nie aus dem Kasten oder in den nächsten. Schwellen = Inhaltshöhe ohne Innenabstand. */
+   iPad nur den Titel. Text ragt so nie aus dem Kasten oder in den nächsten. Schwellen = Inhaltshöhe ohne Innenabstand.
+   Wörter brechen nie mitten im Wort (nur an Silben, lang="de"; seit 19.10.2026, vorher „Ma|the“ in halbierten Kästen). */
 .eba-woche .eba-ev {
   container: eba-ev / size;
   justify-content: flex-start;
@@ -4586,13 +4587,13 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
 }
 .eba-woche .eba-ev > b {
   display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  flex: 0 0 auto; overflow: hidden; white-space: normal; overflow-wrap: anywhere; hyphens: auto; -webkit-hyphens: auto;
+  flex: 0 0 auto; overflow: hidden; white-space: normal; overflow-wrap: normal; hyphens: auto; -webkit-hyphens: auto;
   font-size: 12.5px; font-weight: 600; line-height: 1.2; color: var(--eba-text);
 }
 .eba-woche .eba-ev > b i { font-style: normal; font-weight: 400; font-size: 11px; color: var(--eba-muted); }
 .eba-woche .eba-ev > span {
   display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-  flex: 0 0 auto; overflow: hidden; white-space: normal; overflow-wrap: anywhere;
+  flex: 0 0 auto; overflow: hidden; white-space: normal; overflow-wrap: normal; hyphens: auto; -webkit-hyphens: auto;
   font-size: 11px; line-height: 1.2; color: var(--eba-muted);
 }
 /* Höhe reicht nicht für 2 + 2 Zeilen (57,4 px): Titel einzeilig; nicht für 1 + 2 (42,4 px): Raum einzeilig; nicht für 1 + 1 (29,2 px): nur Titel */
@@ -4616,7 +4617,7 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
 @container eba-kz (max-width: 480px) {
   .eba-woche .eba-ev, .eba-woche .eba-ev.ue { padding: 3px 4px; gap: 1px; }
   .eba-woche .eba-ev.ue { padding-left: 3px; }
-  .eba-woche .eba-ev > b { font-size: 11px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
+  .eba-woche .eba-ev > b { font-size: 11px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: normal; }
   .eba-woche .eba-ev > b i, .eba-woche .eba-ev:not(.geaendert):not(.spaeter) > span time { display: none; }
   .eba-woche .eba-ev > span {
     display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
@@ -4669,6 +4670,71 @@ body.is-phone .eba-woche a.eba-wpfeil:last-child::after { left: 0; right: -6px; 
 /* Überschneidung: woche.js stellt sich überschneidende Kästen nebeneinander (Breite und Abstand links im Stil des Kastens).
    konflikt (an Gruppen-Notizen): kleiner Warnpunkt, Name der anderen Veranstaltung im Tooltip */
 .eba-woche .eba-ev.konflikt::after { content: ""; position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--eba-warn); }
+/* Blasser Kasten neben einem echten (woche.js spalten, seit 19.10.2026): Eine Gruppe, die erst beginnt, steht schmal am rechten
+   Rand, nur mit dem Kurznamen in einer Zeile, und lässt dem echten Kasten den Platz; eine Vorlesung wird nie halbiert. */
+.eba-woche .eba-ev.schmal { z-index: 0; padding: 3px 4px; }
+.eba-woche .eba-ev.schmal > b { -webkit-line-clamp: 1; white-space: nowrap; hyphens: manual; -webkit-hyphens: manual; font-size: 11px; }
+.eba-woche .eba-ev.schmal > b i, .eba-woche .eba-ev.schmal > span { display: none !important; }
+
+/* 55b. Tagesansicht (woche.js tagZeichnen, seit 19.10.2026): Unter 520 px Kartenbreite (iPhone) zeigt die Woche einen Tag statt
+   fünf Spalten à 60 px, in denen Namen zerbrachen und Räume fehlten. Gezeichnet werden beide, die Breite der Karte wählt.
+   Kopf „KW n · Spanne“ mit ‹ › (Tippflächen 44 px), fünf Tage als Reihe (gewählt getönt, heute in Akzentfarbe, Punkt bei
+   Lehrveranstaltungen), darunter die Kästen des Tags über die ganze Breite: Zeit links, voller Name (Kurzname kräftig, Art
+   blass), Raum; nichts abgeschnitten. Gleiche Klassen wie im Raster (ue, heute, jetzt, ausfall, geaendert, konflikt), darum
+   gleiche Farben und Rahmen. Was erst beginnt, ist eine leise Zeile, kein Kasten. */
+.eba-wt { display: none; padding: 10px 12px 12px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); }
+@container eba-kz (max-width: 520px) {
+  .eba-woche.hat-tag { display: none; }
+  .eba-wt { display: block; }
+}
+.eba-wt-kopf { display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.eba-wt-kw { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--eba-muted); white-space: nowrap; }
+a.eba-wt-kw.anders { position: relative; color: var(--eba-accent-text); text-decoration: none; cursor: pointer; }
+a.eba-wt-kw.anders::after { content: ""; position: absolute; top: -14px; bottom: -14px; left: -6px; right: -6px; }
+.eba-wt-spanne { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--eba-faint); white-space: nowrap; }
+.eba-wt-pfeile { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+a.eba-wt-pfeil {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 30px;
+  border-radius: var(--eba-radius-s); color: var(--eba-muted); font-size: 19px; line-height: 1; text-decoration: none;
+}
+a.eba-wt-pfeil::after { content: ""; position: absolute; top: -7px; bottom: -7px; left: -4px; right: -4px; }
+.eba-wt-tage { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 6px 0 10px; }
+.eba-wt-tag {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  min-height: 44px; padding: 4px 0 9px; border-radius: var(--eba-radius-s); color: var(--eba-muted); cursor: pointer;
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+.eba-wt-name { font-size: 12px; font-weight: 600; }
+.eba-wt-datum { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--eba-text); }
+.eba-wt-tag.heute .eba-wt-name, .eba-wt-tag.heute .eba-wt-datum { color: var(--eba-accent-text); }
+.eba-wt-tag.heute .eba-wt-datum { font-weight: 700; }
+.eba-wt-tag.gewaehlt { background: var(--eba-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 45%, transparent); }
+.eba-wt-tag.termine::after {
+  content: ""; position: absolute; bottom: 5px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
+  background: var(--eba-faint);
+}
+.eba-wt-tag.heute.termine::after { background: var(--eba-accent-text); }
+.eba-wt-tag:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
+.eba-wt-liste { display: flex; flex-direction: column; gap: 6px; }
+.eba-wt .eba-ev {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: start;
+  margin: 0; padding: 9px 10px; border-left: 0; background: color-mix(in srgb, var(--eba-accent) 13%, var(--eba-bg));
+  font-size: 13px; line-height: 1.3;
+}
+.eba-wt .eba-ev.ue { padding-left: 8px; border-left: 2px solid var(--eba-info); background: color-mix(in srgb, var(--eba-info) 5%, var(--eba-bg)); }
+.eba-wt .eba-wt-uhr { grid-column: 1; grid-row: 1 / span 2; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
+.eba-wt .eba-wt-uhr span { font-size: 13px; line-height: 1.35; color: var(--eba-muted); white-space: nowrap; overflow: visible; }
+.eba-wt .eba-wt-uhr span + span { color: var(--eba-faint); }
+.eba-wt .eba-ev > b {
+  grid-column: 2; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--eba-text);
+  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; padding-right: 10px;
+}
+.eba-wt .eba-ev > b i { font-style: normal; font-weight: 400; font-size: 13px; color: var(--eba-muted); }
+.eba-wt .eba-ev > .eba-wt-ort { grid-column: 2; font-size: 13px; line-height: 1.3; color: var(--eba-muted); white-space: normal; overflow: visible; text-overflow: clip; }
+.eba-wt .eba-ev.geaendert > .eba-wt-ort, .eba-wt .eba-ev.geaendert .eba-wt-uhr span { color: var(--eba-text); font-weight: 600; }
+.eba-wt .eba-ev.konflikt::after { content: ""; position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--eba-warn); }
+a.eba-wt-leise { display: block; padding: 2px 10px 2px 64px; font-size: 13px; line-height: 1.35; color: var(--eba-faint); text-decoration: none; }
+.eba-wt-leer { padding: 12px 2px; font-size: 13px; color: var(--eba-muted); }
 /* ---------- Ende Abschnitt 55 ---------- */
 
 /* ---------- 56. Schwerpunkte im Studienverlauf (schwerpunkte.js, ```eba-schwerpunkte```; seit 17.10.2026, vorher die Seite

@@ -375,7 +375,8 @@ Hinweis „Nach Regel berechnet“.
 `> [!eba-kennzahlen|woche …]` auf Dashboard und Stundenplan (vorher eine Bases-Formel; Bases liest keinen gerätelokalen
 Speicher, darum jetzt Code). Das Raster zeigt eine echte Kalenderwoche, Montag bis Freitag, die Planwoche des Fachmodells (am
 Samstag und Sonntag schon die nächste); im Kopf das Datum jedes Tages, rechts oben „‹ KW n ›“. Daten: alle Notizen mit `typ:
-lehrveranstaltung` (jede Herkunft) und Kurznamen aus Modulnotizen (`kurz`) aus dem metadataCache, Semester, Pausen, freie Tage
+lehrveranstaltung` (jede Herkunft; je Modul und Art nur eine Gruppen-Notiz, siehe „Deine Übungs- oder Tutoriengruppe“)
+und Kurznamen aus Modulnotizen (`kurz`) aus dem metadataCache, Semester, Pausen, freie Tage
 und „Besuche ich nicht“ aus dem Fachmodell (`ctx.modell.findetStatt`, seit 18.10.2026; vorher die Kopien `semesterliste`,
 `pausen` in `System/Einstellungen.md`, ohne freie Tage). Gezeichnet wird nur die gezeigte Woche; neu (entprellt, 0,4 s) bei Änderungen an
 Stundenplan-, Modul- und Einstellungsnotizen, beim Zurückkommen in die App und alle 10 Minuten. Schreibt keine Datei.
@@ -391,8 +392,24 @@ der Woche: gestrichelt (`geaendert`), an der neuen Zeit, mit neuer Zeit und neue
 (Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Veranstaltungen“). Stunden von–bis aus allen Serien des
 Semesters (dazu Einzeltermine und geänderte Zeiten der Woche), damit das Raster von Woche zu Woche gleich bleibt; Höhe am
 Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Überschneiden sich Kästen eines Tages, stehen sie nebeneinander
-(`spalten`: Breite und Abstand links im Stil). Reine Logik als Funktionen (`wocheBauen`, `spalten`, `kurzname`, `artText`,
-`versatzAus`, `wischStartOk`, `wischAchse`, `wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS: Abschnitte 47 und 55.
+(`spalten`, `lage`: Breite und Abstand links im Stil). Ein blasser Kasten (`spaeter`) teilt sich die Breite nie mit einem
+echten (seit 19.10.2026; vorher halbierte ein Tutorium, das erst in zwei Wochen begann, eine Vorlesung): Überschneidet er
+einen, steht er schmal am rechten Rand (22 %, Klasse `schmal`, nur der Kurzname), die echten Kästen daneben behalten 78 %.
+Wörter brechen nie mitten im Wort, nur an Silben. Reine Logik als Funktionen (`wocheBauen`, `spalten`, `lage`, `kurzname`,
+`artText`, `versatzAus`, `tagAus`, `tagWahl`, `tageAus`, `tagKaesten`, `tagSchritt`, `wischStartOk`, `wischAchse`,
+`wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS: Abschnitte 47 und 55 (Tagesansicht 55b).
+*Tagesansicht (iPhone, seit 19.10.2026):* Unter 520 px Kartenbreite (Container-Abfrage auf `eba-kz`, also auch iPad im
+geteilten Bildschirm) zeigt die Woche einen Tag statt des Rasters; vorher standen fünf Spalten à 60 px da, Namen zerbrachen
+Buchstabe für Buchstabe und Räume fehlten. `zeichnen` legt beide Ansichten an (`.eba-wt` und `.eba-woche.hat-tag`), das CSS
+wählt nach der Breite, so passt es auch nach dem Drehen. Kopf „KW n · 26.–30.10.“ mit ‹ › (dieselbe Aktion `woche`; „KW n“
+in einer anderen Woche zurück), darunter fünf Tage mit Datum (gewählt getönt, heute in Akzentfarbe, Punkt, wenn an dem Tag
+etwas stattfindet), darunter die Kästen des Tags über die ganze Breite: links Beginn und Ende, kräftig der Kurzname, blass
+die Art (auch „Vorlesung“), darunter Raum und bei Ausfall „fällt aus (Grund)“, nichts abgeschnitten. Dieselben Klassen wie im
+Raster (heute, jetzt, ausfall, geaendert, konflikt), ein Tipp öffnet wie dort. Was erst beginnt, ist eine leise Zeile
+„Tutorium BWL · ab 04.11. · Mi 14:15“, kein Kasten. Welcher Tag: gewählt (Tipp auf einen Tag oder Wischen) merkt sich nur
+dieses Gerät (`eba-woche-tag`, wie der Versatz: dieselbe Sitzung, 30 Minuten), sonst heute, in einer anderen Woche und am
+Wochenende Montag (Planwoche). Wischen wechselt den Tag, nach Freitag weiter zum Montag der nächsten Woche (`tagSchritt`);
+es darf auf einem Kasten beginnen, nur nicht auf ‹ ›.
 *Andere Woche:* ‹ und › sind Links auf die Aktion `woche` (`schritt` = Wochen ab heute), „KW n“ ist in einer anderen Woche
 der Link zurück (`schritt=0`). Welche Woche, merkt sich nur dieses Gerät: `app.saveLocalStorage("eba-woche-versatz")` mit
 Versatz, Uhrzeit und Sitzung (`ctx.bleibend`, neu bei jedem Start von Obsidian). Gilt nur in derselben Sitzung und höchstens
@@ -708,9 +725,11 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Gruppen-Notiz, die andere Notiz bleibt unberührt), `uebersicht: "[[Stundenplan]]"`. Eigener Text (Zeilen im Kopf, die
   nicht von hier stammen, und alles ab `## Meine Notizen` bzw. `## Notizen`) bleibt beim Aktualisieren.
   *Gewählt* („Meine“ in `eba-gruppen`, `gruppen.js`, auf dem Gerät, auf dem du tippst): Notiz mit `herkunft: gruppe-gewaehlt`;
-  eine je Modul und Art (eine neue Wahl ändert sie), „Abwählen“ → Papierkorb und bleibt, solange es eine gewählte Notiz gibt.
-  „Meine“ fehlt, wenn die Gruppe schon aus ILIAS, Alma, von Hand oder zentral kommt. Beim Zeichnen (höchstens einmal je
-  Minute, auf jedem Gerät) weichen gewählte Notizen, die eine ILIAS-Notiz desselben Moduls oder eine andere Notiz zur selben
+  eine je Modul und Art (eine neue Wahl ändert sie und trägt `gewaehlt_am`, den Zeitpunkt der Wahl), „Abwählen“ → Papierkorb
+  (die Notiz der angetippten Gruppe) und bleibt, solange es eine gewählte Notiz gibt.
+  „Meine“ fehlt, wenn die Gruppe schon aus ILIAS, Alma, von Hand oder zentral kommt. Beim Zeichnen und nach jeder Änderung in
+  `Stundenplan/` (höchstens einmal je Minute, auf jedem Gerät) weichen gewählte Notizen,
+  die eine ILIAS-Notiz desselben Moduls oder eine andere Notiz zur selben
   Zeit inzwischen abdeckt; steht der eigene Text schon in der anderen Notiz (ein zweites Gerät war schneller), wandert er
   nicht noch einmal. Ist die gewählte Notiz genau die freigegebene Fassung der ILIAS-Notiz (`freigabeText`, siehe
   *Freigeben*: ein anderes Gerät hat umbenannt, der Sync hat die neue Notiz schon, das Löschen der alten noch nicht), weicht
@@ -737,6 +756,24 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   *Von dir gelöscht* (seit 0.4.5, Lebenslauf des Quellen-Vertrags): Der Index merkt je Gruppe, für welche Gruppe aus
   `gruppen.json` schon eine ILIAS-Notiz da war (`notiz`). Fehlt sie dann (und keine gewählte Notiz desselben Moduls), hast du sie
   gelöscht: Sie kommt nicht wieder, bis die Zuordnung wechselt oder du die Gruppe verlässt (`notiz` wird leer).
+  *Eine Gruppe je Modul und Art* (seit 19.10.2026, `doppelt` und `vorrang` in `meine-gruppe.js`): Zwei Tutorien desselben
+  Moduls standen blass nebeneinander im Stundenplan. Ursachen: Ein zweites „Meine“ sah die eben angelegte Notiz nicht (Obsidian
+  hatte sie noch nicht eingelesen, zwei Tipps kurz hintereinander, oder ein zweites Gerät wählte vor dem Sync), und zwei
+  gewählte Notizen führte nichts zusammen; wer in ILIAS die Gruppe wechselte, hatte die alte Notiz bis zum zweiten Lauf daneben;
+  wer in ILIAS in zwei Gruppen eines Moduls war, bekam zwei Notizen. Jetzt, an der Quelle: Wer auf einem Gerät Gruppen-Notizen
+  schreibt (Wählen, Abwählen, Aufräumen, ILIAS), kommt nacheinander dran, und Wählen liest Notizen ohne Eintrag im
+  metadataCache aus ihrem Text; eine neue Wahl ersetzt jede ältere desselben Moduls und derselben Art (weitere weichen samt Text
+  in sie); eine neue ILIAS-Gruppe übernimmt die Notiz der verlassenen; von mehreren ILIAS-Mitgliedschaften eines Moduls und
+  einer Art bekommt nur eine eine Notiz (die eine andere Notiz zur selben Zeit schon abdeckt, sonst nach `vorrang`). Welche
+  gilt, entscheidet überall dieselbe Reihenfolge (`vorrang`, auf jedem Gerät gleich): ILIAS vor deiner Wahl, die jüngere Wahl
+  (`gewaehlt_am`; ohne = älter) vor der älteren, dann die Gruppe, die zur aktuellen Gruppenliste passt (gleiche id, Tag und
+  Beginn), dann die frühere in der Woche, dann die id. Die Woche zeigt nur diese; bestehende Doppel führt das Aufräumen von
+  `gruppen.js` einmal zusammen (nach jeder Änderung in `Stundenplan/` und beim Zeichnen, höchstens einmal je Minute): Text der
+  anderen wandert in die bleibende, die anderen gehen in den Papierkorb. Doppelte ILIAS-Notizen fasst nur `ilias.js` an (ein
+  Schreiber), eine halb synchronisierte Freigabe bleibt verschont. Nichts davon wird eine Aufgabe für dich: Was entschieden
+  wurde, steht nur im Gerätespeicher (`eba-gruppen-protokoll`, die letzten 30). Eine Gruppen-Notiz, die eine Notiz zur selben
+  Zeit abdeckt (Alma, von Hand, zentral), fehlt in der Woche gleich; Notizen derselben Art zu einer anderen Zeit, die keine
+  Gruppen-Notizen sind, zählen nicht (das kann eine Übung für alle sein).
   Tests: `tests/meine-gruppe.test.js`, `tests/ilias-gruppen.test.js`, `tests/gruppen.test.js`.
 - **Anzeige:** Zeile „Zentrale Daten“ im Codeblock `eba-verbindungen` ohne Schloss: „Aktualisiert vor X Min.“ / „Pausiert“ /
   „Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert …“, `hinweis` aus dem Manifest. `status()` hat die gemeinsame
