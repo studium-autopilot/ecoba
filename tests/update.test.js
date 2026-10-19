@@ -20,6 +20,8 @@ test("Dateiklassen: was ein Update ersetzen darf", () => {
     ".obsidian/plugins/anderes/main.js": "",
     "System/Skripte/zentral.js": "system", "System/Skripte/unter/x.js": "", "System/Skripte/notiz.md": "",
     "System/Gerüste/Modul.md": "system", ".obsidian/snippets/eba-core.css": "system", ".obsidian/snippets/eigen.css": "",
+    ".claude/CLAUDE.md": "", ".claude/skills/studium-autopilot/SKILL.md": "", ".claude/skills/studium-autopilot/unter/x.md": "",
+    ".claude/skills/eigener/SKILL.md": "", ".claude/settings.json": "", ".claude/settings.local.json": "",
     ".obsidian/app.json": "einstellung", ".obsidian/types.json": "einstellung", ".obsidian/community-plugins.json": "einstellung",
     ".obsidian/appearance.json": "", ".obsidian/workspace.json": "", ".obsidian/workspace-mobile.json": "",
     "Dashboard.md": "seite", "Studium/Prüfungen.md": "seite", "Studium/Unter/x.md": "", "System/Daten/Musterplan.md": "seite",

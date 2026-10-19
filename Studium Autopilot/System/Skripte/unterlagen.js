@@ -504,24 +504,22 @@ module.exports = function (ctx) {
   };
 
   // ---------- Begleitnotiz ----------
-  const originalZeile = (f) => `> **Original:** [[${f.name}]] (am PC öffnet es die passende App; auf iPad und iPhone über die Dateien-App)`;
   // Knopf „Öffnen ↗“: Datei außerhalb von Obsidian öffnen (iPad/iPhone Dateien-App mit Markieren, PC Standardprogramm),
-  // Aktion „oeffnen“ (System/Skripte/aktionen.js). Ohne Notizname: die Notiz, in der der Knopf steht (übersteht Umbenennen).
-  // Kein Vault-Name, kein Notizname im Link: der Knopf wirkt auf die Notiz, in der er steht.
-  const oeffnenUrl = (notizName, original = false) => `obsidian://studium-autopilot?aktion=oeffnen${original ? "&original=1" : ""}`;
-  // Knopf „Größe ⇅“: PDF-Ansicht klein ↔ groß (Aktion „pdf“ in System/Skripte/aktionen.js, eba-core.css Abschnitt 29)
-  const groesseUrl = () => "obsidian://studium-autopilot?aktion=pdf";
-  const oeffnenZeile = (notizName, original) =>
-    `> [Öffnen ↗](${oeffnenUrl(notizName)})${original ? ` · [Original öffnen ↗](${oeffnenUrl(notizName, true)})` : ""} · [Größe ⇅](${groesseUrl()})`;
-  // Ansicht der Hauptdatei: eingebettet, verlinkt oder mit Hinweis
-  const ansichtText = (h, zuGross) => {
+  // Aktion „oeffnen“ (System/Skripte/aktionen.js). Kein Vault-Name, kein Notizname im Link: der Knopf wirkt auf die Notiz, in der er
+  // steht (übersteht Umbenennen). Bei einer eingebetteten PDF steht „Öffnen“ in der Kopfzeile des PDF-Kastens (pdfkasten.js), sonst
+  // als Link hinter der Datei. orig: Office-Datei zur PDF („Original öffnen“).
+  const oeffnenUrl = (original = false) => `obsidian://studium-autopilot?aktion=oeffnen${original ? "&original=1" : ""}`;
+  const oeffnenLinks = (orig) => ` · [Öffnen ↗](${oeffnenUrl()})${orig ? ` · [Original öffnen ↗](${oeffnenUrl(true)})` : ""}`;
+  // Ansicht der Hauptdatei: eingebettet (PDF-Kasten, Titel mit Seitenzahl), verlinkt oder mit Hinweis
+  const ansichtText = (h, zuGross, seiten = null, orig = null) => {
     const e = ext(h);
+    const n = Number(seiten);
     let ansicht;
-    if (e === "pdf" && h.stat.size >= EINBETTEN_MAX_MB * 1048576) ansicht = `**PDF öffnen:** [[${h.name}]] (${mb(h.stat.size)}, zu groß zum Einbetten)`;
-    else if (e === "pdf") ansicht = `> [!eba-pdf]- PDF\n> ![[${h.name}#height=560]]`; // eingeklappt, Tipp auf „PDF“ öffnet
-    else if (["heic", "heif"].includes(e)) ansicht = `[[${h.name}]]\n\n> [!eba-achtung] HEIC zeigt Obsidian nicht an\n> Beim nächsten Mal als PDF oder JPG sichern, zum Beispiel über „Dokumente scannen“ in der Dateien-App.`;
+    if (e === "pdf" && h.stat.size >= EINBETTEN_MAX_MB * 1048576) ansicht = `**PDF öffnen:** [[${h.name}]] (${mb(h.stat.size)}, zu groß zum Einbetten)${oeffnenLinks(orig)}`;
+    else if (e === "pdf") ansicht = `> [!eba-pdf]- PDF${n > 0 ? ` (${n} ${n === 1 ? "Seite" : "Seiten"})` : ""}\n> ![[${h.name}#height=560]]`; // eingeklappt, Tipp auf „PDF“ öffnet
+    else if (["heic", "heif"].includes(e)) ansicht = `[[${h.name}]]${oeffnenLinks()}\n\n> [!eba-achtung] HEIC zeigt Obsidian nicht an\n> Beim nächsten Mal als PDF oder JPG sichern, zum Beispiel über „Dokumente scannen“ in der Dateien-App.`;
     else if (BILDER.includes(e)) ansicht = `![[${h.name}]]`;
-    else ansicht = `[[${h.name}]]\n\n> [!eba-info] Nur als ${e.toUpperCase()} vorhanden\n> Obsidian zeigt diesen Dateityp nicht an. Am PC als PDF exportieren und mit gleichem Namen in \`Eingang\` legen, dann erscheint die PDF hier.`;
+    else ansicht = `[[${h.name}]]${oeffnenLinks()}\n\n> [!eba-info] Nur als ${e.toUpperCase()} vorhanden\n> Obsidian zeigt diesen Dateityp nicht an. Am PC als PDF exportieren und mit gleichem Namen in \`Eingang\` legen, dann erscheint die PDF hier.`;
     if (zuGross) ansicht += `\n\n> [!eba-info] Zu groß zum Auslesen\n> Die Datei hat ${mb(h.stat.size)}, auf diesem Gerät werden PDFs bis ${LESEN_MAX_MB} MB ausgelesen (PC ${LESEN_MAX_MB_PC} MB, iPhone/iPad ${LESEN_MAX_MB_MOBIL} MB). Sie ist vollständig eingeordnet, nur Seitenzahl und Text fehlen in dieser Notiz.`;
     return ansicht;
   };
@@ -529,7 +527,12 @@ module.exports = function (ctx) {
   // code, modul (Modul-Objekt aus eba.modulNachCode oder Notizname), art, nummer, titel, datei (TFile oder Dateiname; Größe dann
   // aus „groesse“ in Byte), original (TFile oder Dateiname, z. B. die PPTX zur PDF), format („pdf, pptx“; Standard: Endungen
   // von datei, original und weitere), seiten, semester, quelle (Text oder Link, Standard leer), extra (weitere Eigenschaften
-  // nach „quelle“, z. B. { ilias_id: "…" }; Standardfelder lassen sich nicht überschreiben), weitere (Dateien), zuGross.
+  // nach „quelle“, z. B. { ilias_id: "…" }; Standardfelder lassen sich nicht überschreiben), weitere (Dateien), zuGross, hinweis (Satz
+  // für den Kasten „Neue Fassung aus ILIAS“ über der Datei).
+  // Text: Titel, gleich darunter die Datei. Seit 19.10.2026 ohne Kasten „Eckdaten“ (Modul, Art und Semester stehen im Kopf der Notiz,
+  // kopf.js; die Seiten im Titel des PDF-Kastens; „Öffnen“ und „Original“ in dessen Kopfzeile, pdfkasten.js) und ohne die leeren
+  // Abschnitte „## Das Wichtigste“ („- “) und „## Offene Fragen“ („- [ ] “), die wie kaputt aussahen. Ältere Notizen bleiben, wie
+  // sie sind; kopf.js blendet bei ihnen beides aus, solange es unberührt ist.
   const STANDARDFELDER = ["typ", "code", "modul", "art", "nummer", "titel", "datei", "original", "format", "seiten", "semester", "status", "datum", "quelle", "uebersicht", "cssclasses", "tags"];
   const alsDatei = (f, groesse = 0) => {
     if (!f || typeof f !== "string") return f || null;
@@ -538,15 +541,13 @@ module.exports = function (ctx) {
   };
   const yamlWert = (v) => (v == null ? "" : typeof v === "number" || typeof v === "boolean" ? String(v) : typeof v === "string" ? J(v) : JSON.stringify(v));
   const begleitnotiz = ({ code = "", modul = null, art = "Sonstiges", nummer = null, titel = "", datei, original = null, format, seiten = null,
-    semester = "", quelle = "", extra = null, weitere = [], zuGross = false, groesse = 0 } = {}) => {
+    semester = "", quelle = "", extra = null, weitere = [], zuGross = false, groesse = 0, hinweis = "" } = {}) => {
     const h = alsDatei(datei, groesse), orig = alsDatei(original), mehr = (weitere || []).map((f) => alsDatei(f));
     const modulName = !modul ? "" : typeof modul === "string" ? modul.replace(/^\[\[|\]\]$/g, "") : modul.f?.basename || "";
     const titelZeile = [code, [art, nummer != null ? pad(nummer) : ""].filter(Boolean).join(" "), titel].filter(Boolean).join(" · ");
-    const eck = [`**Modul:** ${modulName ? `[[${modulName}|${code}]]` : "–"}`, `**Art:** ${art}`,
-      seiten ? `**Seiten:** ${seiten}` : "", `**Semester:** ${semester}`].filter(Boolean).join(" · ");
-    const origZeile = orig ? `\n${originalZeile(orig)}` : "";
-    const weitereZeile = mehr.length ? `\n> **Weitere Dateien:** ${mehr.map((f) => `[[${f.name}]]`).join(", ")}` : "";
-    const ansicht = ansichtText(h, zuGross);
+    const weitereZeilen = mehr.length ? ["", `**Weitere Dateien:** ${mehr.map((f) => `[[${f.name}]]`).join(", ")}`] : [];
+    const ilias = hinweis ? ["> [!eba-info] Neue Fassung aus ILIAS", "> " + String(hinweis).replace(/\s*\n\s*/g, " "), ""] : [];
+    const ansicht = ansichtText(h, zuGross, seiten, orig);
     const fmt = format != null ? format : [h, orig, ...mehr].filter(Boolean).map(ext).join(", ");
     const zusatz = Object.keys(extra || {}).filter((k) => /^[A-Za-z_][A-Za-z0-9_-]*$/.test(k) && !STANDARDFELDER.includes(k)).map((k) => `${k}: ${yamlWert(extra[k])}`);
     return [
@@ -576,18 +577,9 @@ module.exports = function (ctx) {
       "",
       `# ${titelZeile}`,
       "",
-      `> [!eba-regel] Eckdaten`,
-      `> ${eck}${origZeile}${weitereZeile}`,
-      oeffnenZeile(h.basename, orig),
-      "",
-      // Reihenfolge: „Das Wichtigste“ und „Offene Fragen“ vor der Datei, PDF-Kasten eingeklappt darunter
-      "## Das Wichtigste",
-      "- ",
-      "",
-      "## Offene Fragen",
-      "- [ ] ",
-      "",
+      ...ilias,
       ansicht,
+      ...weitereZeilen,
       "",
     ].join("\n");
   };
@@ -614,18 +606,15 @@ module.exports = function (ctx) {
       if (seiten) fm.seiten = seiten;
     });
     const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const hinweis = new RegExp(`\\[\\[${esc(original.name)}\\]\\]\\n\\n> \\[!eba-info\\] Nur als [^\\n]*\\n> [^\\n]*`);
-    const ansicht = ansichtText(pdf, zuGross);
+    // „Nur als PPTX vorhanden“ samt Link (seit 19.10.2026 mit „Öffnen ↗“ dahinter) weicht dem PDF-Kasten. Den Kasten „Eckdaten“ älterer
+    // Notizen pflegt es nicht mehr (kopf.js blendet ihn aus); Seiten und Original stehen in den Eigenschaften und im PDF-Kasten.
+    const hinweis = new RegExp(`\\[\\[${esc(original.name)}\\]\\][^\\n]*\\n\\n> \\[!eba-info\\] Nur als [^\\n]*\\n> [^\\n]*`);
+    const ansicht = ansichtText(pdf, zuGross, seiten, original);
     await app.vault.process(notiz, (text) => {
       const nachFragen = text.indexOf("\n## ", text.indexOf("\n## Offene Fragen") + 1);
-      let t = hinweis.test(text) ? text.replace(hinweis, () => ansicht)
+      return hinweis.test(text) ? text.replace(hinweis, () => ansicht)
         : text.includes("\n## Offene Fragen") ? (nachFragen > 0 ? `${text.slice(0, nachFragen)}\n${ansicht}\n${text.slice(nachFragen)}` : `${text.replace(/\n*$/, "")}\n\n${ansicht}\n`)
         : /\n## /.test(text) ? text.replace(/\n## /, () => `\n${ansicht}\n\n## `) : `${text.replace(/\n*$/, "")}\n\n${ansicht}\n`;
-      if (seiten && !t.includes("**Seiten:**")) t = t.replace(/^(> \*\*Modul:\*\*[^\n]*?)( · \*\*Semester:\*\*)/m, (m, a, b) => `${a} · **Seiten:** ${seiten}${b}`);
-      if (!t.includes("**Original:**")) t = t.replace(/^> \*\*Modul:\*\*[^\n]*$/m, (m) => `${m}\n${originalZeile(original)}`);
-      const knopf = oeffnenZeile(notiz.basename, original);
-      t = /^> \[Öffnen ↗\]\(.*$/m.test(t) ? t.replace(/^> \[Öffnen ↗\]\(.*$/m, () => knopf) : t.replace(/^> \*\*Original:\*\*[^\n]*$/m, (m) => `${m}\n${knopf}`);
-      return t;
     });
   };
 

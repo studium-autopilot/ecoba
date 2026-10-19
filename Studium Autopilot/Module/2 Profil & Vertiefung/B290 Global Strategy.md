@@ -54,16 +54,17 @@ cssclasses:
 
 ## Zum Modul
 
-> [!eba-tabelle|schlicht|handy-zu]+ Vorlesungen, Übungsblätter, Stundenplan, Termine
+> [!eba-tabelle|schlicht|handy-zu]+ Übungsblätter, Stundenplan, Termine
 > ```base
 > filters:
 >   and:
 >     - 'code == "B290"'
 >     - 'typ != "modul"'
 >     - 'typ != "unterlage"'
+>     - 'typ != "vorlesung"'
 > formulas:
 >   wann: 'if(faellig, faellig, datum)'
->   art: 'if(typ == "vorlesung", "Vorlesungen", if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ)))))'
+>   art: 'if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ))))'
 >   notiz: 'file.asLink(file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(code + " ", ""))'
 > properties:
 >   formula.notiz:
@@ -74,8 +75,6 @@ cssclasses:
 >     displayName: Art
 >   note.status:
 >     displayName: Status
->   note.nachgearbeitet:
->     displayName: Nachgearbeitet
 > views:
 >   - type: table
 >     name: Zum Modul
@@ -86,7 +85,6 @@ cssclasses:
 >       - formula.notiz
 >       - formula.wann
 >       - status
->       - nachgearbeitet
 >     sort:
 >       - property: formula.wann
 >         direction: DESC
@@ -94,7 +92,6 @@ cssclasses:
 >       formula.notiz: 330
 >       formula.wann: 120
 >       note.status: 110
->       note.nachgearbeitet: 120
 > ```
 
 

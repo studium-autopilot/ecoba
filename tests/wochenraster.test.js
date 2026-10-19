@@ -79,18 +79,36 @@ const MODULPFAD = { "X110 Beispieldatenanalyse": "Module/1 Grundstudium/X110 Bei
 const woche = (montag, jetzt = "2026-10-17T12:00:00", modulPfad = MODULPFAD) => W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: { X110: "Daten", X101: "Ökonomik" }, modulPfad, modell: MODELL, montag: tag(montag), jetzt: new Date(jetzt) });
 const kasten = (w, pfad) => w.kaesten.find((k) => k.pfad === pfad);
 
-test("Woche 19.10.: nur, was zwischen von und bis liegt; Ausgeblendetes, Entfallenes und andere Semester fehlen", () => {
+test("Woche 19.10.: was noch nicht begonnen hat, blass mit „ab TT.MM.“; Ausgeblendetes, Entfallenes und andere Semester fehlen", () => {
   const w = woche("2026-10-19");
   assert.deepEqual(w.tage, ["2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23"]);
   assert.equal(w.kw, 43);
-  assert.deepEqual(w.kaesten.map((k) => k.pfad).sort(), ["Stundenplan/Di X100 Tutorium.md", "Stundenplan/Di X100.md", "Stundenplan/Do X200.md",
-    "Stundenplan/Mi X101 Übung.md", "Stundenplan/Mi X101.md", "Stundenplan/Mo X110.md"]);
+  assert.deepEqual(w.kaesten.map((k) => k.pfad).sort(), ["Stundenplan/Di X100 Tutorium.md", "Stundenplan/Di X100.md", "Stundenplan/Di X180 Tutorium.md",
+    "Stundenplan/Do X200.md", "Stundenplan/Mi X101 Übung.md", "Stundenplan/Mi X101.md", "Stundenplan/Mo X110.md"]);
   assert.equal(w.leer, "");
   assert.equal(w.h0, 8);
   assert.equal(w.h1, 14); // die Änderung am Donnerstag reicht bis 13:45
   assert.equal(woche("2026-10-26").h1, 12);
-  // eine Woche später ist das Tutorium ab 27.10. dabei
-  assert.ok(kasten(woche("2026-10-26"), "Stundenplan/Di X180 Tutorium.md"));
+  // das Tutorium ab 27.10. steht schon da: blass, sein Beginn statt der Uhrzeit, nie „heute“ oder „jetzt“
+  const t = kasten(w, "Stundenplan/Di X180 Tutorium.md");
+  assert.deepEqual([t.zeit, t.raum, t.klassen.join(" ")], ["ab 27.10.", "Hörsaal 1", "eba-ev ue spaeter"]);
+  assert.match(t.titel, /· beginnt am 27\.10\.$/);
+  assert.deepEqual(kasten(woche("2026-10-19", "2026-10-20T09:00:00"), "Stundenplan/Di X180 Tutorium.md").klassen, ["eba-ev", "ue", "spaeter"]);
+  // eine Woche später findet es statt
+  const t2 = kasten(woche("2026-10-26"), "Stundenplan/Di X180 Tutorium.md");
+  assert.deepEqual([t2.zeit, t2.klassen.includes("spaeter")], ["08:15", false]);
+});
+
+test("Nach bis kein Kasten; vor von nur in Wochen, in denen etwas stattfindet", () => {
+  const n = [
+    lv("Stundenplan/Mo X120.md", { titel: "Beispiel · Vorlesung", code: "X120", art: "Vorlesung", wochentag: 1, beginn: "10:00", ende: "12:00", von: "2026-10-12", bis: "2026-10-26" }),
+    lv("Stundenplan/Mi X120 Tutorium.md", { titel: "Beispiel · Tutorium 5", code: "X120", art: "Tutorium", wochentag: 3, beginn: "14:15", ende: "15:45", von: "2026-11-04", bis: "2027-02-03" }),
+  ];
+  const w = (montag) => W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag(montag), jetzt: new Date("2026-10-17T12:00:00") })
+    .kaesten.map((k) => k.pfad + (k.klassen.includes("spaeter") ? " " + k.zeit : "")).sort();
+  assert.deepEqual(w("2026-10-26"), ["Stundenplan/Mi X120 Tutorium.md ab 04.11.", "Stundenplan/Mo X120.md"]);
+  assert.deepEqual(w("2026-11-02"), ["Stundenplan/Mi X120 Tutorium.md"], "nach dem letzten Termin fehlt die Vorlesung");
+  assert.deepEqual(w("2026-10-05"), [], "vor Vorlesungsbeginn nur der Satz");
 });
 
 test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Beginn nur bei c.t., Lage im Raster", () => {

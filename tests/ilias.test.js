@@ -618,8 +618,23 @@ test("Begleitnotiz: Pflichtfelder auch bei fremdem Notizbauer", () => {
   assert.match(I.pflichtfelder("ohne Kopf", { typ: "unterlage" }), /^---\ntyp: unterlage\n---\n\nohne Kopf$/);
   const n = I.notizText({ code: "", modul: "", art: "Sonstiges", nr: null, titel: "Info", datei: "Info.pdf", endung: "pdf", groesse: 20 * 1048576,
     original: "Info.pdf", quelle: "ILIAS: Kurs", herkunft: "Kurs / Info_[1].pdf", iliasId: "f9", semester: "WS 2026/27", datum: "2026-10-16" });
-  assert.match(n, /^\*\*PDF öffnen:\*\* \[\[Info\.pdf\]\] \(20,0 MB, zu groß zum Einbetten\)$/m);
-  assert.match(n, /^> \*\*Aus ILIAS:\*\* Kurs \/ Info\\_\\\[1\\\]\.pdf$/m, "Fremdtext entschärft");
+  assert.match(n, /^\*\*PDF öffnen:\*\* \[\[Info\.pdf\]\] \(20,0 MB, zu groß zum Einbetten\) · \[Öffnen ↗\]\(obsidian:\/\/studium-autopilot\?aktion=oeffnen\)$/m);
+  // seit 19.10.2026: Titel, gleich darunter die Datei; kein Kasten „Eckdaten“, keine leeren Abschnitte, kein Name aus ILIAS im Text
+  assert.match(n, /\n# Sonstiges · Info\n\n\*\*PDF öffnen:\*\*/);
+  assert.doesNotMatch(n, /Eckdaten|Das Wichtigste|Offene Fragen|^- (\[ \] )?$|aktion=pdf|Info_/m);
+});
+
+test("Begleitnotiz: „Neue Fassung aus ILIAS“ über der Datei, auch in Notizen eines älteren Notizbauers", () => {
+  const H = "Die Datei in ILIAS hat sich geändert.";
+  const neu = "---\ntyp: unterlage\n---\n\n# B110 · Folien 01\n\n> [!eba-pdf]- PDF\n> ![[a.pdf#height=560]]\n";
+  assert.equal(I.hinweisEinsetzen(neu, H), "---\ntyp: unterlage\n---\n\n# B110 · Folien 01\n\n> [!eba-info] Neue Fassung aus ILIAS\n> " + H +
+    "\n\n> [!eba-pdf]- PDF\n> ![[a.pdf#height=560]]\n");
+  const alt = "---\ntyp: unterlage\n---\n\n# T\n\n> [!eba-regel] Eckdaten\n> x\n\n## Das Wichtigste\n- \n";
+  assert.match(I.hinweisEinsetzen(alt, H), /> x\n\n> \[!eba-info\] Neue Fassung aus ILIAS\n> .*\n\n## Das Wichtigste\n/, "bis 0.4.6: vor „Das Wichtigste“");
+  assert.equal(I.hinweisEinsetzen(neu + "\n> [!eba-info] Neue Fassung aus ILIAS\n> " + H + "\n", H), neu + "\n> [!eba-info] Neue Fassung aus ILIAS\n> " + H + "\n", "schon da");
+  assert.equal(I.hinweisEinsetzen(neu, ""), neu);
+  assert.match(I.notizText({ code: "B110", art: "Folien", nr: 1, titel: "T", datei: "a.pdf", endung: "pdf", groesse: 10, hinweis: H }),
+    /\n# B110 · Folien 01 · T\n\n> \[!eba-info\] Neue Fassung aus ILIAS\n> .*\n\n> \[!eba-pdf\]- PDF\n> !\[\[a\.pdf#height=560\]\]\n$/);
 });
 
 // echtes unterlagen.js (pdf.js gibt es unter Node nicht: titelAusPdf liefert dann null)

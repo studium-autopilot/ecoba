@@ -12,6 +12,18 @@
 // Bearbeitungsansicht über eine CodeMirror-Erweiterung (Block unter dem Titel). Farbe des Knopfs aus ctx.modell.statusArt: erledigt
 // gefüllt (wie „Nachgearbeitet“), ein Zwischenstand getönt im Akzent, offen warm, „Besuche ich nicht“ leise. Schreibt nur nach einem
 // Tipp. Stil: eba-core.css Abschnitt 64. Doku: docs/architektur.md, „Bedien-Bausteine“.
+// Seit 19.10.2026 außerdem:
+//  - Rechts im Kopf „⋯“ mit „Eigenschaften“: Die Eigenschaften der Notizen des Plugins sind in keiner Ansicht zu sehen (eba-core.css
+//    Abschnitt 25, Klasse eba-notiz aus start.js), geändert wird im Kopf (Entscheidung E4). Der Menüpunkt zeigt sie für diese Notiz
+//    aufgeklappt, bis man ihn noch einmal tippt oder Obsidian neu startet. Vorlesung und Übungsblatt nehmen dasselbe (ctx.kopf.mehr).
+//  - Der Modulcode im Kopf öffnet die Modulseite.
+//  - Leere Abschnitte (rein: leereAbschnitte) sind in Notizen des Plugins nicht zu sehen: in der Leseansicht keine Überschrift mit
+//    nur leeren Punkten („- “, „- [ ] “) darunter, in der Bearbeitungsansicht der Begleitnotizen auch nicht, solange der Cursor
+//    nicht darin steht. Die Notiz ändert sich dafür nicht (auch ältere und vom Uni-Abgleich geschriebene sehen so ruhig aus).
+//  - Der Kasten „Eckdaten“ der Begleitnotizen (bis 0.4.6 erzeugt) verschwindet: Modul, Art und Semester stehen im Kopf, die Seiten im
+//    Titel des PDF-Kastens, „Öffnen“ in dessen Kopfzeile (pdfkasten.js). Nur Zeilen, die das Plugin selbst geschrieben hat
+//    (eckZeileErzeugt); eigener Text darin bleibt stehen. Nur in Notizen mit PDF-Kasten (hatPdfKasten): Ohne (Word, PowerPoint,
+//    Excel, ZIP, sehr große PDF) ist „Öffnen ↗“ dort der einzige Weg zur Datei, darum bleibt der Kasten; nur „Größe ⇅“ fällt weg.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const TYPEN = ["termin", "unterlage", "sq_kurs", "lehrveranstaltung"];
 const SQ = ["geplant", "angemeldet", "zugelassen", "bestanden"];
@@ -44,6 +56,43 @@ const statusVon = (typ, fm, nicht) => {
 // Klasse des Knopfs aus dem Ton (statusArt): gefüllt, getönt, leise oder warm (offen)
 const klasseVon = (s, ton) => (s.leise ? "leise" : ton === "ok" ? (s.fertig ? "fertig" : "zwischen") : "");
 
+// Leere Abschnitte: „## …“ mit nichts als leeren Punkten und Leerzeilen darunter, bis zur nächsten Überschrift (Ebene 1 oder 2), zum
+// Ende oder, wenn leere Punkte darin stehen, bis zu einem Kasten des Plugins („> [!eba-…“) oder einer Einbettung. Ohne Punkte zählt ein
+// Kasten darunter zur Überschrift. Folgt eigener Text, bleibt alles stehen. zeilen: ganze Notiz → [[von, bis]] (0-basiert, inklusive
+// der Leerzeilen danach), außerhalb von Eigenschaften und Codeblöcken.
+const LEERER_PUNKT = /^\s*[-*+](?:\s+\[ \])?\s*$/;
+const leereAbschnitte = (zeilen) => {
+  const z = zeilen || [], aus = [];
+  let i = 0, zaun = false;
+  if (z.length && z[0].trim() === "---") { i = 1; while (i < z.length && z[i].trim() !== "---") i++; i++; }
+  for (; i < z.length; i++) {
+    if (/^\s*(```|~~~)/.test(z[i])) { zaun = !zaun; continue; }
+    if (zaun || !/^##\s+\S/.test(z[i])) continue;
+    let j = i + 1, punkte = 0;
+    while (j < z.length && (!z[j].trim() || LEERER_PUNKT.test(z[j]))) { if (z[j].trim()) punkte++; j++; }
+    const t = j < z.length ? z[j] : null;
+    if (t === null || /^#{1,2}\s/.test(t) || (punkte > 0 && /^(?:>\s*\[!eba-|!\[\[)/.test(t))) aus.push([i, j - 1]);
+    i = j - 1;
+  }
+  return aus;
+};
+// Zeile im Kasten „Eckdaten“, die das Plugin geschrieben hat: jeder Teil (mit „ · “ getrennt) beginnt mit Modul, Art, Seiten,
+// Semester, Original oder Aus ILIAS, oder er ist ein Knopf des Plugins (knoepfe: deren Texte, „Öffnen ↗“, „Größe ⇅“).
+const ECKDATEN = /^(?:Modul|Art|Seiten|Semester|Original|Aus ILIAS):\s/;
+const eckZeileErzeugt = (text, knoepfe) => {
+  let t = String(text == null ? "" : text).replace(/\s+/g, " ");
+  for (const k of knoepfe || []) if (k) t = t.split(k).join("");
+  return t.split(" · ").map((x) => x.trim()).filter(Boolean).every((x) => ECKDATEN.test(x));
+};
+// Hat die Notiz einen PDF-Kasten, also eine PDF-Einbettung in einem Kasten („> [!eba-pdf]“)? Nur dann steht „Öffnen“ in dessen
+// Kopfzeile (pdfkasten.js). cache = Obsidians Metadaten der Notiz (embeds, sections); ohne Metadaten: nein (Eckdaten bleiben).
+const hatPdfKasten = (cache) => {
+  const abschnitte = (cache && cache.sections) || [];
+  return ((cache && cache.embeds) || []).some((e) => !!e && !!e.position && /\.pdf(?:#|$)/i.test(String(e.link || ""))
+    && abschnitte.some((s) => s && s.type === "callout" && s.position.start.line <= e.position.start.line
+      && e.position.end.line <= s.position.end.line));
+};
+
 module.exports = function (ctx) {
   const app = window.app;
   const O = ctx.obsidian || {};
@@ -66,7 +115,8 @@ module.exports = function (ctx) {
       return [(txt(fm.art) || "Unterlage") + nr, txt(fm.code), txt(fm.semester)].filter(Boolean).join(" · ");
     }
     if (typ === "sq_kurs") return ["SQ-Kurs", txt(fm.semester), fm.ects != null && fm.ects !== "" ? String(fm.ects).replace(".", ",") + " ECTS" : ""].filter(Boolean).join(" · ");
-    const gruppe = txt(fm.gruppe), art = txt(fm.art) || "Lehrveranstaltung";
+    // „Veranstaltung“ = Alma ohne erkannte Art, wie im Wochenraster eine Vorlesung (das Wort gilt nur für Events, docs/design.md)
+    const gruppe = txt(fm.gruppe), art = txt(fm.art) === "Veranstaltung" ? "Vorlesung" : txt(fm.art) || "Lehrveranstaltung";
     const tag = z && Number(fm.wochentag) >= 1 && Number(fm.wochentag) <= 7 ? z.WT[Number(fm.wochentag) % 7] : "";
     const zeit = [tag, txt(fm.beginn) + (fm.ende ? "–" + txt(fm.ende) : "")].filter(Boolean).join(" ");
     return [art, gruppe ? (/^\d+$/.test(gruppe) ? "Gruppe " + gruppe : gruppe) : "", txt(fm.code), zeit].filter(Boolean).join(" · ");
@@ -122,6 +172,56 @@ module.exports = function (ctx) {
   };
 
   // ---------- Zeichnen ----------
+  // ---------- „⋯“: Eigenschaften dieser Notiz zeigen ----------
+  // Gezeigt bleiben sie je Notiz bis zum Neustart (auch über Tabs und Ansichten); die Klasse am Tab schaltet eba-core.css 25 um.
+  const gezeigt = ctx.bleibend("eigenschaften", () => ({ pfade: [] }));
+  const eigenschaftenAnwenden = () => {
+    for (const l of app.workspace.getLeavesOfType("markdown")) {
+      const v = l.view, f = v && v.file;
+      if (v && v.containerEl) v.containerEl.classList.toggle("eba-eigenschaften", !!f && gezeigt.pfade.indexOf(f.path) >= 0);
+    }
+  };
+  const eigenschaftenUmschalten = (f) => {
+    const i = gezeigt.pfade.indexOf(f.path);
+    if (i >= 0) gezeigt.pfade.splice(i, 1); else gezeigt.pfade.push(f.path);
+    eigenschaftenAnwenden();
+  };
+  // Knopf „⋯“ rechts im Kopf (Gestalt wie in der Kartenliste, eba-lk-mehr); Obsidians Menü mit „Eigenschaften“
+  const mehr = (eltern, f) => {
+    if (!f || !O.Menu) return null;
+    const b = eltern.createEl("button", { cls: "eba-lk-mehr eba-kopf-mehr", text: "⋯", attr: { type: "button", title: "Mehr", "aria-label": "Mehr", "aria-haspopup": "menu" } });
+    b.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
+    b.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const m = new O.Menu();
+      m.addItem((i) => { i.setTitle("Eigenschaften"); i.setChecked(gezeigt.pfade.indexOf(f.path) >= 0); i.onClick(() => eigenschaftenUmschalten(f)); });
+      const r = b.getBoundingClientRect();
+      m.showAtPosition({ x: r.left, y: r.bottom + 4 });
+    });
+    return b;
+  };
+
+  // Modulseite zur Notiz: Link im Feld modul, sonst das Modul mit diesem Code (nur typ modul)
+  const modulVon = (f, fm) => {
+    const ist = (x) => !!x && txt(fmVon(x).typ) === "modul";
+    const l = String(fm.modul == null ? "" : fm.modul).replace(/^\[\[|\]\]$/g, "").split("|")[0].trim();
+    const z = l ? app.metadataCache.getFirstLinkpathDest(l, f.path) : null;
+    if (ist(z)) return z;
+    const code = txt(fm.code);
+    return code ? app.vault.getMarkdownFiles().find((x) => x.path.indexOf("Module/") === 0 && ist(x) && txt(fmVon(x).code) === code) || null : null;
+  };
+  // Label mit dem Modulcode als Link (öffnet die Modulseite im selben Tab)
+  const labelZeichnen = (lab, text, code, ziel) => {
+    const teile = text.split(" · ");
+    const i = code && ziel ? teile.indexOf(code) : -1;
+    if (i < 0) { lab.setText(text); return; }
+    if (i > 0) lab.appendText(teile.slice(0, i).join(" · ") + " · ");
+    const a = lab.createEl("a", { cls: "internal-link eba-kopf-modul", text: code, attr: { href: ziel.path, "data-href": ziel.path } });
+    a.addEventListener("mousedown", (e) => e.stopPropagation());
+    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(ziel, { von: a, neu: e.ctrlKey || e.metaKey }); });
+    if (i < teile.length - 1) lab.appendText(" · " + teile.slice(i + 1).join(" · "));
+  };
+
   const angezeigt = new Set(); // { el, pfad } aller gezeichneten Karten (Lese- und Bearbeitungsansicht), zum Neuzeichnen
   const zeichnen = (el, f) => {
     const fm = fmVon(f), typ = txt(fm.typ);
@@ -132,7 +232,7 @@ module.exports = function (ctx) {
     const s = statusVon(typ, fm, nicht);
     const ton = M() && M().statusArt ? M().statusArt(typ, s.wort) : "leer";
     const kopf = el.createDiv({ cls: "eba-vorl-karte" }).createDiv({ cls: "eba-vorl-kopf" });
-    kopf.createSpan({ cls: "eba-vorl-label", text: labelVon(typ, f, fm) });
+    labelZeichnen(kopf.createSpan({ cls: "eba-vorl-label" }), labelVon(typ, f, fm), txt(fm.code), modulVon(f, fm));
     const b = kopf.createEl("button", { cls: ("eba-vorl-status " + klasseVon(s, ton)).trim(),
       attr: { type: "button", "aria-label": s.menue ? `Stand: ${s.text}. Ändern` : s.text, "aria-pressed": s.menue ? null : String(!!s.fertig) } });
     symbol(b, s.fertig ? "fertig" : "status");
@@ -144,6 +244,7 @@ module.exports = function (ctx) {
       if (s.menue) { menue(e, typ, f, s); return; }
       setzen(typ, f, s, s.neu).catch((x) => console.error("Kopf", x));
     });
+    mehr(kopf, f);
   };
   const merken = (el, f) => {
     angezeigt.add({ el, pfad: f.path });
@@ -215,15 +316,117 @@ module.exports = function (ctx) {
     }));
   };
 
-  const registrieren = () => {
-    ctx.postprozessor((el, c) => { try { nachbearbeiten(el, c); } catch (e) { console.error("Kopf", e); } });
-    try { editorErweiterung(); } catch (e) { console.error("Kopf Editor", e); }
-    const bald = ctx.entprellen(() => neu(null), 300);
-    ctx.an(app.metadataCache, "changed", (f) => { if (f && (f.path === EINSTELLUNGEN || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald(); });
+  // ---------- Leere Abschnitte und Eckdaten (Lese- und Bearbeitungsansicht, Stil eba-core.css 64.4) ----------
+  const NOTIZ = TYPEN.concat(["vorlesung", "übungsblatt"]);
+  // Formeln zählen als Inhalt: MathJax zeichnet sie ohne Text im DOM (textContent leer)
+  // „- [ ]“ ohne Text macht Obsidian zu keiner Aufgabe, sondern zu einem Punkt mit dem Text „[ ]“: zählt als leer
+  const leererPunkt = (li) => /^(?:\[ \])?$/.test(li.textContent.trim())
+    && !li.querySelector("img, iframe, .internal-embed, .math, mjx-container");
+  // „Größe ⇅“ (Aktion pdf bis 0.4.6) gibt es nicht mehr: Knopf samt Trenner davor weg
+  const groesseWeg = (inhalt) => {
+    for (const a of Array.from(inhalt.querySelectorAll('a[href="obsidian://studium-autopilot?aktion=pdf"]'))) {
+      const vor = a.previousSibling;
+      if (vor && vor.nodeType === 3) vor.textContent = vor.textContent.replace(/\s*·\s*$/, "");
+      a.remove();
+    }
+  };
+  // Kasten „Eckdaten“: erzeugte Zeilen weg (Knoten zwischen <br>); bleibt nichts, ist der Kasten unsichtbar (Klasse eba-eck-leer).
+  // Ohne PDF-Kasten bleibt er samt „Öffnen ↗“, nur „Größe ⇅“ fällt weg.
+  const eckdatenAus = (k, pdfKasten) => {
+    const t = k.querySelector(":scope > .callout-title .callout-title-inner"), inhalt = k.querySelector(":scope > .callout-content");
+    if (!t || !inhalt || t.textContent.trim() !== "Eckdaten" || k.getAttribute("data-eba-eck") === "1") return;
+    k.setAttribute("data-eba-eck", "1");
+    if (!pdfKasten) { groesseWeg(inhalt); return; }
+    let rest = 0;
+    for (const p of Array.from(inhalt.children)) {
+      if (p.tagName !== "P") { rest++; continue; }
+      const zeilen = [{ knoten: [], br: null }];
+      for (const n of Array.from(p.childNodes)) {
+        if (n.nodeName === "BR") { zeilen[zeilen.length - 1].br = n; zeilen.push({ knoten: [], br: null }); } else zeilen[zeilen.length - 1].knoten.push(n);
+      }
+      let bleibt = 0;
+      for (const z of zeilen) {
+        const knoepfe = [];
+        for (const n of z.knoten) {
+          const as = n.nodeType !== 1 ? [] : n.matches("a") ? [n] : Array.from(n.querySelectorAll("a"));
+          for (const a of as) if (/^obsidian:\/\/studium-autopilot\?aktion=/.test(a.getAttribute("href") || "")) knoepfe.push(a.textContent.trim());
+        }
+        if (!eckZeileErzeugt(z.knoten.map((n) => n.textContent).join(""), knoepfe)) { bleibt++; continue; }
+        for (const n of z.knoten) n.remove();
+        if (z.br) z.br.remove();
+      }
+      while (p.lastChild && (p.lastChild.nodeName === "BR" || (p.lastChild.nodeType === 3 && !p.lastChild.textContent.trim()))) p.lastChild.remove();
+      if (bleibt) rest++; else p.remove();
+    }
+    if (!rest) k.classList.add("eba-eck-leer");
+  };
+  // Leseansicht: Überschriften der Notizen des Plugins (eba-abschnitt) und Listen nur aus leeren Punkten (eba-leer); ob eine Überschrift
+  // verschwindet, entscheidet das CSS am Nachbarn (bleibt richtig, wenn Obsidian nur die geänderte Liste neu zeichnet)
+  const aufraeumen = (el, c) => {
+    const f = app.vault.getAbstractFileByPath((c && c.sourcePath) || "");
+    const typ = f ? txt(fmVon(f).typ) : "";
+    if (NOTIZ.indexOf(typ) < 0) return;
+    if (el.classList.contains("el-h2")) el.classList.add("eba-abschnitt");
+    if (el.classList.contains("el-ul")) {
+      const ul = el.querySelector(":scope > ul");
+      const punkte = ul ? Array.from(ul.querySelectorAll("li")) : [];
+      if (punkte.length && punkte.every(leererPunkt)) el.classList.add("eba-leer");
+    }
+    if (typ === "unterlage") {
+      const kaesten = el.querySelectorAll('.callout[data-callout="eba-regel"]');
+      const pdfKasten = kaesten.length ? hatPdfKasten(app.metadataCache.getFileCache(f)) : false;
+      for (const k of kaesten) eckdatenAus(k, pdfKasten);
+    }
+  };
+  // Bearbeitungsansicht der Begleitnotizen: leere Abschnitte auf Höhe 0, solange der Cursor nicht darin steht. Andere Notizen zeigen
+  // ihre Überschriften dort weiter: Dort schreibst du hinein.
+  const leerErweiterung = () => {
+    const V = ctx.cm && ctx.cm.view, info = O.editorInfoField, lp = O.editorLivePreviewField;
+    if (!V || !V.ViewPlugin || !V.Decoration || !info) return;
+    const D = V.Decoration;
+    const bauen = (view) => {
+      try {
+        const x = view.state.field(info, false), f = x && x.file;
+        if (!f || txt(fmVon(f).typ) !== "unterlage" || (lp && !view.state.field(lp, false))) return D.none;
+        const doc = view.state.doc, zeilen = [];
+        for (let i = 1; i <= doc.lines; i++) zeilen.push(doc.line(i).text);
+        const cursor = view.state.selection.ranges.map((r) => doc.lineAt(r.head).number - 1);
+        const r = [];
+        for (const [von, bis] of leereAbschnitte(zeilen)) {
+          let a = von; // die Leerzeilen davor gleich mit (sonst bleibt eine Lücke, wo der Abschnitt stand)
+          while (a > 0 && !zeilen[a - 1].trim()) a--;
+          if (cursor.some((n) => n >= a && n <= bis)) continue;
+          for (let k = a; k <= bis; k++) r.push(D.line({ class: "eba-leer-zeile" }).range(doc.line(k + 1).from));
+        }
+        return D.set(r, true);
+      } catch (e) { return D.none; }
+    };
+    ctx.editor(V.ViewPlugin.fromClass(class {
+      constructor(view) { this.decorations = bauen(view); }
+      update(u) { if (u.docChanged || u.selectionSet || u.transactions.length) this.decorations = bauen(u.view); }
+    }, { decorations: (v) => v.decorations }));
   };
 
-  return { registrieren, statusVon, klasseVon, labelVon, zeichnen, TYPEN };
+  const registrieren = () => {
+    ctx.postprozessor((el, c) => { try { nachbearbeiten(el, c); aufraeumen(el, c); } catch (e) { console.error("Kopf", e); } });
+    try { editorErweiterung(); } catch (e) { console.error("Kopf Editor", e); }
+    try { leerErweiterung(); } catch (e) { console.error("Kopf Editor leer", e); }
+    const bald = ctx.entprellen(() => neu(null), 300);
+    ctx.an(app.metadataCache, "changed", (f) => { if (f && (f.path === EINSTELLUNGEN || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald(); });
+    ctx.an(app.workspace, "file-open", eigenschaftenAnwenden);
+    ctx.an(app.workspace, "layout-change", eigenschaftenAnwenden);
+    eigenschaftenAnwenden();
+    ctx.kopf = { mehr }; // „⋯“ auch im Kopf von Vorlesung und Übungsblatt (vorlesung.js)
+  };
+  const abmelden = () => {
+    for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view && l.view.containerEl) l.view.containerEl.classList.remove("eba-eigenschaften");
+  };
+
+  return { registrieren, abmelden, statusVon, klasseVon, labelVon, zeichnen, TYPEN, leereAbschnitte, eckZeileErzeugt };
 };
 module.exports.statusVon = statusVon;
 module.exports.klasseVon = klasseVon;
 module.exports.TYPEN = TYPEN;
+module.exports.leereAbschnitte = leereAbschnitte;
+module.exports.eckZeileErzeugt = eckZeileErzeugt;
+module.exports.hatPdfKasten = hatPdfKasten;

@@ -68,7 +68,7 @@ Er überschreibt nichts und sendet nichts. Du kannst ihn danach wieder löschen.
 Beim ersten Öffnen fragt Obsidian, ob du dem Tresor vertraust.
 
 1. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen (englisch: „Trust author and enable plugins“).
-2. Das Dashboard öffnet sich. Aussehen, Menü und Termine sind schon eingerichtet.
+2. Das Dashboard öffnet sich. Aussehen, Übersicht und Termine sind schon eingerichtet.
 
 Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Kennzahlen und Knöpfe leer.
 

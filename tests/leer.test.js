@@ -55,4 +55,8 @@ test("Übungsblatt mit Abgabe, Aufgaben oder eigener Lösung bleibt, auch ohne T
   assert.equal(hatAngaben({ typ: "übungsblatt", faellig: null, datei: "[[Blatt 3.pdf]]" }), true);
   assert.equal(hatAngaben({ typ: "übungsblatt", faellig: "", datei: "", eigene_loesung: "" }), false, "ohne Angaben: darf weg");
   assert.equal(hatAngaben({ typ: "vorlesung", datum: "2026-10-19" }), false, "Vorlesung: Datum allein hält sie nicht");
+  assert.equal(hatAngaben({ typ: "vorlesung", datum: "2026-10-19", thema: "" }), false, "leeres Thema hält sie nicht");
+  assert.equal(hatAngaben({ typ: "vorlesung", datum: "2026-10-19", thema: "Nachfrage und Angebot" }), true,
+    "Thema aus dem Fenster „Neue Vorlesungsnotiz“: bleibt");
+  assert.equal(hatAngaben({ typ: "übungsblatt", thema: "x" }), false, "Thema zählt nur bei Vorlesungen");
 });

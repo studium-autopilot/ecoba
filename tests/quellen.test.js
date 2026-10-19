@@ -165,3 +165,19 @@ test("Meldekanal: Quellen melden Punkte ohne Kästchen, fester Reihe nach, Abmel
   for (const f of aufr.splice(0)) f();
   assert.deepEqual(Q.meldungen(ctx), []);
 });
+
+test("Verbunden in diesem Tresor: hier, über ein anderes Gerät (höchstens 7 Tage still), sonst nein", () => {
+  const jetzt = Date.parse("2026-10-19T12:00:00Z"), vor = (min) => new Date(jetzt - min * MIN).toISOString();
+  const s = (geraet, min, frei) => Object.assign({ geraet, seit: vor(min + 60), zuletzt: vor(min), mobil: true }, frei ? { frei: true } : {});
+  const v = (o) => Q.verbindung(Object.assign({ geraet: "g-hier", jetztMs: jetzt }, o));
+  assert.deepEqual(v({ hier: true, sperre: s("g-ipad", 5) }), { art: "hier", zuletzt: "" });
+  assert.deepEqual(v({ sperre: s("g-ipad", 90) }), { art: "anderswo", zuletzt: vor(90) });
+  assert.equal(v({ sperre: s("g-ipad", 7 * 24 * 60) }).art, "anderswo", "genau 7 Tage zählen noch");
+  assert.equal(v({ sperre: s("g-ipad", 7 * 24 * 60 + 1) }).art, "nein", "länger still: wie nie verbunden");
+  assert.equal(v({ sperre: s("g-ipad", 5, true) }).art, "nein", "getrennt (frei)");
+  assert.equal(v({ sperre: s("g-hier", 5) }).art, "nein", "Sperre dieses Geräts, hier aber nicht verbunden");
+  assert.equal(v({ sperre: null }).art, "nein", "nie verbunden");
+  assert.equal(v({ sperre: { geraet: "g-ipad", zuletzt: "kaputt" } }).art, "nein");
+  assert.equal(v({ sperre: s("g-ipad", 180), grenze: 120 * MIN }).art, "nein", "eigene Grenze");
+  assert.equal(Q.K.VERBUNDEN_GRENZE, 7 * 24 * 60 * MIN);
+});

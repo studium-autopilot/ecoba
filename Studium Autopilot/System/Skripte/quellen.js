@@ -21,6 +21,8 @@
 //    Doppel einer id zusammenführen wie termine-sync.py des Uni-Abgleichs, erledigt gewinnt (dubletten).
 // 7. Meldekanal „Bitte prüfen“: melden(ctx, quelle, fn) – fn() → [{ text: "**Titel** · Rest", pfad, anker? }] ohne persönliche
 //    Werte; bitte-pruefen.js zeigt alle (meldungen) und zeichnet nach meldenNeu(ctx) neu (beiMeldung).
+// Dazu für die Oberfläche (seit 0.4.7): verbindung() sagt, ob eine Quelle in diesem Tresor verbunden ist: hier, auf einem anderen
+//    Gerät (dessen Sperre, höchstens 7 Tage still) oder nein.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const MIN = 60e3;
 const K = Object.freeze({
@@ -30,6 +32,7 @@ const K = Object.freeze({
   START: 20e3, START_ZUFALL: 2 * MIN, // erster Lauf nach dem Einlesen
   ZURUECK_WARTEN: 5e3,                // zurück in der App: so lange warten (Sync und Oberfläche zuerst)
   REIHE: ["zentral", "ilias", "ilias-kalender", "alma", "alma-konto", "volltext", "server"], // Reihenfolge der Quellen in „Bitte prüfen“
+  VERBUNDEN_GRENZE: 7 * 24 * 60 * MIN, // so lange still, gilt ein anderes Gerät noch als verbunden (verbindung)
 });
 
 // ---------- 1. Status ----------
@@ -277,9 +280,25 @@ const beiMeldung = (ctx, fn) => {
   return weg;
 };
 
+// ---------- Verbunden in diesem Tresor (seit 0.4.7) ----------
+// Link und Passwort einer Quelle liegen nur auf dem Gerät, das verbunden ist; die Daten kommen über den Sync auf alle. Für die
+// Oberfläche (verbindungen.js): o = { hier (dieses Gerät ist verbunden), sperre (Inhalt der Sperre der Quelle, sperre.lesenAus,
+// oder null), geraet (dieses Gerät), jetztMs, grenze? } → { art: "hier" | "anderswo" | "nein", zuletzt }. anderswo: Ein anderes
+// Gerät hält die Sperre, sie ist nicht frei, und es war vor höchstens grenze (K.VERBUNDEN_GRENZE, 7 Tage) aktiv; zuletzt = dann.
+// Sonst nein (nie verbunden, getrennt oder länger still). Nur für die Anzeige; wer schreibt, regelt weiter sperre.js.
+const verbindung = (o) => {
+  const x = o || {}, s = x.sperre;
+  if (x.hier) return { art: "hier", zuletzt: "" };
+  const t = s ? Date.parse(s.zuletzt || "") : NaN, jetzt = typeof x.jetztMs === "number" ? x.jetztMs : Date.now();
+  const grenze = x.grenze > 0 ? x.grenze : K.VERBUNDEN_GRENZE;
+  const anderswo = !!s && !s.frei && !!s.geraet && s.geraet !== String(x.geraet || "") && !isNaN(t) && jetzt - t <= grenze;
+  return anderswo ? { art: "anderswo", zuletzt: String(s.zuletzt) } : { art: "nein", zuletzt: "" };
+};
+
 const API = {
   K, statusForm, nachLauf, vorText, zeitplan, ergebnisOk, planen, extern, ID_FELD, idFeld, besitz, marke, meineNotizen, unberuehrt, wegfall,
   zuViel, kurzHash, geloescht, titelEntfaellt, meineMischen, doppelGruppen, dubletten, melden, meldungen, meldenNeu, beiMeldung, papierkorb,
+  verbindung,
 };
 module.exports = function () { return API; };
 Object.assign(module.exports, API);

@@ -1,10 +1,13 @@
 // Lernplan (seit 18.10.2026): Bereich „Lernplan“ (Codeblock ```eba-lernplan``` auf Studium/Lernplan.md) und die Zeile oben in
 // jeder Lernplan-Notiz (```eba-lernplan modul```). Regel „70/100“: Nach 70 % der Zeit von Vorlesungsbeginn bis zur Klausur ist der
 // ganze Stoff verstanden (nicht beherrscht), danach bleibt die Zeit für die Klausurvorbereitung (Übungen, Altklausuren, Karteikarten).
-// Kapitel: Notizen unter Lernplan/ (typ: lernplan, code), je Modul eine, „<Code> Lernplan“. Nur eine KI schreibt sie (dein
-// Uni-Abgleich oder Claude auf deinem eigenen Server); ohne KI gibt es keine, dann fehlt der Bereich im Menü (sichtbar()).
-// Je Kapitel eine Aufgabe `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Unterlage (`[[B110 Folien 01 …]]`) und
-// die Seitenzahl (`118 S.`); eingerückte Aufgaben darunter sind Unterkapitel. Abgehakt = verstanden (bei Unterkapiteln anteilig).
+// Kapitel: Notizen unter Lernplan/ (typ: lernplan, code), je Modul eine, „<Code> Lernplan“. Quellen: die zentralen Kapitellisten
+// (kapitel.json, zentral.js holt sie gerätelokal; dieses Skript schreibt daraus die Notizen mit herkunft: zentral, nur auf dem
+// Abrufer, nur für Module des laufenden Semesters, Häkchen und „## Meine Notizen“ bleiben) oder eine eigene KI (andere herkunft,
+// nie überschrieben). Gibt es keine Notiz, fehlt der Lernplan in der Übersicht (sichtbar()).
+// Je Kapitel eine Aufgabe `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Unterlage (`[[B110 Folien 01 …]]`), die
+// Nummer der Folien (`Folien 1`, wenn sie von der Kapitelnummer abweicht) und die Seitenzahl (`118 S.`); eingerückte Aufgaben
+// darunter sind Unterkapitel. Abgehakt = verstanden (bei Unterkapiteln anteilig).
 // Gewicht eines Kapitels = Seiten (Angabe in der Zeile, sonst Feld `seiten` der verlinkten oder gleich nummerierten Folien, sonst
 // der Mittelwert); „da“ = eine verlinkte Datei oder Folien mit dieser Nummer existieren. Wochen: Montag bis Freitag ohne Pausen und
 // freie Tage aus dem Datenmodell, eine Woche ganz in einer Pause zählt 30 %. Jedes Kapitel bekommt die Woche, in der der Plan es
@@ -44,6 +47,7 @@ module.exports = function (ctx) {
   const LINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g;
   const WEB = /\[[^\]]*\]\((https:\/\/[^)\s]+)\)/g;
   const SEITEN = /^(\d{1,4})\s*S\.?$/;
+  const FOLIEN = /^Folien (\d{1,2})$/;
   const ROEMISCH = { I: 1, V: 5, X: 10, L: 50, C: 100 };
   const roemisch = (s) => {
     let n = 0;
@@ -59,10 +63,12 @@ module.exports = function (ctx) {
     const kopf = teile.shift().trim();
     const m = kopf.match(NUMMER);
     const links = [], web = [];
-    let seiten = null;
+    let seiten = null, folien = null;
     for (const t of teile) {
       const s = t.trim().match(SEITEN);
       if (s) { seiten = +s[1]; continue; }
+      const f = t.trim().match(FOLIEN);
+      if (f) { folien = +f[1]; continue; }
       let l;
       LINK.lastIndex = 0;
       while ((l = LINK.exec(t))) links.push(l[1].trim());
@@ -70,7 +76,7 @@ module.exports = function (ctx) {
       while ((l = WEB.exec(t))) web.push(l[1]);
     }
     const titel = (m ? m[2] : kopf).replace(LINK, (_, z, a) => a || z).trim();
-    return { nr: m ? m[1] : "", titel, links, web, seiten };
+    return { nr: m ? m[1] : "", titel, links, web, seiten, folien };
   };
   // Markdown einer Lernplan-Notiz → [{ zeile, roh, nr, titel, fertig, links, seiten, teile: [{ zeile, roh, nr, titel, fertig }] }]
   // Nur Aufgaben außerhalb von Frontmatter und Codeblöcken; ohne Einrückung = Kapitel, eingerückt = Unterkapitel des letzten.
@@ -213,7 +219,7 @@ module.exports = function (ctx) {
     const folien = folienVon(code);
     const kapitel = roh.map((k) => {
       const ziele = k.links.map((l) => app.metadataCache.getFirstLinkpathDest(l, f.path)).filter(Boolean);
-      const n = nrZahl(k.nr);
+      const n = k.folien != null ? k.folien : nrZahl(k.nr);
       const fol = n != null ? folien[n] : null;
       const verlinkt = ziele.map((z) => parseInt(fmVon(z).seiten, 10)).filter((x) => x > 0)[0] || null;
       return Object.assign({}, k, { anteil: anteilVon(k), da: ziele.length > 0 || k.web.length > 0 || !!fol,
@@ -340,6 +346,17 @@ module.exports = function (ctx) {
   };
 
   const LEER = "Noch kein Lernplan für deine Module.";
+  // In Entwicklung (seit 19.10.2026): Bereich und Lernplan-Notizen tragen oben einen Satz, der Inhalt ist abgeblendet, bleibt aber
+  // bedienbar (eba-core.css Abschnitt 61, .is-entwicklung). Ist der Lernplan fertig: IN_ENTWICKLUNG = false.
+  const IN_ENTWICKLUNG = true;
+  const ENTWICKLUNG = "Diese Funktion ist noch in Entwicklung. Du nutzt sie auf eigene Gefahr, sie kann sich noch ändern.";
+  const entwicklungHinweis = (el) => {
+    if (!IN_ENTWICKLUNG) return;
+    el.addClass("is-entwicklung");
+    const h = el.createDiv({ cls: "eba-lp-entwicklung" });
+    h.createSpan({ cls: "eba-pill leer", text: "In Entwicklung" });
+    h.createSpan({ text: ENTWICKLUNG });
+  };
   const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1 };
   const zeichnen = async (el, mdCtx, art, neu) => {
     const D = ctx.modell.daten(), heute = heuteIso(), quelle = (mdCtx && mdCtx.sourcePath) || "";
@@ -349,18 +366,102 @@ module.exports = function (ctx) {
       if (!f || fmVon(f).typ !== "lernplan") { el.setText("Dieser Block gehört in eine Lernplan-Notiz."); return; }
       const P = await sammeln(f, D, heute);
       el.empty();
+      entwicklungHinweis(el);
       zeile(el.createDiv({ cls: "eba-vb-liste" }), P, quelle, neu, false);
       return;
     }
     const alle = [];
     for (const f of lernplaene()) alle.push(await sammeln(f, D, heute));
     el.empty(); el.addClass("eba-lp");
+    entwicklungHinweis(el);
     if (!alle.length) { el.createDiv({ cls: "eba-lp-leer", text: LEER }); return; }
     // Reihenfolge: was jetzt zu tun ist zuerst, dann nach Klausurdatum; vorbei ans Ende
     const rang = (P) => (P.stand ? NACH_KLAUSUR[P.stand.art] || 0 : 3);
     alle.sort((a, b) => rang(a) - rang(b) || String(a.klausur ? a.klausur.datum : "9").localeCompare(String(b.klausur ? b.klausur.datum : "9")) || a.code.localeCompare(b.code, "de"));
     const l = el.createDiv({ cls: "eba-vb-liste" });
     for (const P of alle) zeile(l, P, quelle, neu, true);
+  };
+
+  // ---------- Lernplan-Notizen aus den zentralen Kapitellisten (kapitel.json) ----------
+  // Notiztext für einen Eintrag { code, semester, quelle, stand, vorlaeufig, kapitel: [{ nr, titel, seiten, folien, url, teile }] }.
+  // alt = bisheriger Text oder "": Häkchen bleiben (Kapitel und Unterkapitel nach Nummer), ebenso `seit`, `verstanden_bis` und alles
+  // unter „## Meine Notizen“.
+  const MEINE = "## Meine Notizen";
+  const zentralNotiz = (e, alt) => {
+    const vorher = kapitelLesen(alt || ""), fertig = {};
+    for (const k of vorher) { fertig["k" + k.nr] = k.fertig; for (const t of k.teile) fertig["t" + t.nr] = t.fertig; }
+    const fmAlt = {};
+    const fmBlock = String(alt || "").match(/^---\n([\s\S]*?)\n---/);
+    if (fmBlock) for (const z of fmBlock[1].split("\n")) { const m = z.match(/^(seit|verstanden_bis):\s*(\d{4}-\d{2}-\d{2})\s*$/); if (m) fmAlt[m[1]] = m[2]; }
+    const fm = ["---", "typ: lernplan", `code: ${e.code}`, "herkunft: zentral", `semester: ${JSON.stringify(e.semester)}`];
+    if (e.quelle) fm.push(`quelle: ${JSON.stringify(e.quelle)}`);
+    if (e.stand) fm.push(`stand: ${e.stand}`);
+    if (e.vorlaeufig) fm.push("vorlaeufig: true");
+    if (fmAlt.seit) fm.push(`seit: ${fmAlt.seit}`);
+    if (fmAlt.verstanden_bis) fm.push(`verstanden_bis: ${fmAlt.verstanden_bis}`);
+    fm.push("cssclasses:", "  - eba", "  - eba-s-lernplan-notiz", "---");
+    const haken = (an) => (an ? "[x]" : "[ ]");
+    const zeilen = [];
+    for (const k of e.kapitel) {
+      const teile = [`${k.nr} ${k.titel}`];
+      if (k.url) teile.push(`[online](${k.url})`);
+      if (k.folien != null && k.folien !== nrZahl(k.nr)) teile.push(`Folien ${k.folien}`);
+      if (k.seiten) teile.push(`${k.seiten} S.`);
+      zeilen.push(`- ${haken(fertig["k" + k.nr])} ${teile.join(" · ")}`);
+      for (const t of k.teile || []) zeilen.push(`  - ${haken(fertig["t" + t.nr])} ${t.nr} ${t.titel}`);
+    }
+    const i = String(alt || "").indexOf("\n" + MEINE);
+    const meine = i >= 0 ? String(alt).slice(i + 1).replace(/\s+$/, "") : MEINE;
+    return fm.join("\n") + "\n\n"
+      + '<div class="eba-kopf">\n<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a>'
+      + '<a class="internal-link" data-href="Lernplan" href="Lernplan">Lernplan</a></div>\n'
+      + `<h1>${e.code} Lernplan</h1>\n</div>\n\n`
+      + "```eba-lernplan modul\nDer Stand erscheint, sobald Studium Autopilot läuft.\n```\n\n"
+      + "## Kapitel\n\n" + zeilen.join("\n") + "\n\n" + meine + "\n";
+  };
+  // Welche Einträge zählen: Semester = das laufende, das Modul liegt laut deinem Plan in diesem Semester (bzw. läuft oder ist
+  // angemeldet) und ist nicht bestanden oder anerkannt
+  const zentralAuswahl = (eintraege, D, semesterName) => eintraege.filter((e) => {
+    if (e.semester !== semesterName) return false;
+    const m = D.module.find((x) => x.code === e.code);
+    if (!m || ["bestanden", "anerkannt"].indexOf(m.status) >= 0) return false;
+    return m.semester === e.semester || ["läuft", "angemeldet"].indexOf(m.status) >= 0;
+  });
+  // Notizen schreiben: nur auf dem Abrufer (ctx.zentral.abruferHier, ein Schreiber wie bei den Terminen), nur wenn sich die Liste des
+  // Moduls geändert hat (gerätelokal gemerkt, eba-lernplan-zentral); dann bleiben Häkchen, seit, verstanden_bis und „Meine Notizen“.
+  // Bei gleicher Liste fasst es die Notiz nicht an, also bleibt auch anderes Eigenes (Zeilen unter „## Kapitel“, eigene
+  // Eigenschaften); vorher schrieb jeder Start sie neu, sobald der Text abwich. Eine Notiz mit anderer herkunft (eigene KI) bleibt
+  // unberührt. Eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert.
+  const GEMERKT = "eba-lernplan-zentral";
+  let gleicht = false;
+  const zentralAbgleichen = async () => {
+    const Z = ctx.zentral;
+    if (gleicht || !Z || !Z.kapitel || !ctx.modell || !ctx.modell.daten) return;
+    const daten = Z.kapitel();
+    if (!daten || !daten.module.length || !(await Z.abruferHier())) return;
+    gleicht = true;
+    try {
+      const D = ctx.modell.daten(), heute = heuteIso(), sem = ctx.modell.semesterFuer(heute);
+      if (!sem) return;
+      const gemerkt = app.loadLocalStorage(GEMERKT) || {};
+      if (!app.vault.getAbstractFileByPath(ORDNER.slice(0, -1))) await app.vault.createFolder(ORDNER.slice(0, -1)).catch(() => {});
+      for (const e of zentralAuswahl(daten.module, D, sem.name)) {
+        const pfad = `${ORDNER}${e.code} Lernplan.md`, schluessel = JSON.stringify(e);
+        const f = app.vault.getAbstractFileByPath(pfad);
+        if (!f) {
+          if (gemerkt[e.code] === schluessel) continue;
+          await app.vault.create(pfad, zentralNotiz(e, ""));
+        } else {
+          if (fmVon(f).herkunft !== "zentral") continue;
+          if (gemerkt[e.code] !== schluessel) {
+            const alt = await app.vault.read(f);
+            if (zentralNotiz(e, alt) !== alt) await app.vault.process(f, (x) => zentralNotiz(e, x));
+          }
+        }
+        gemerkt[e.code] = schluessel;
+      }
+      app.saveLocalStorage(GEMERKT, gemerkt);
+    } catch (err) { console.error("Lernplan aus den Kapitellisten", err); } finally { gleicht = false; }
   };
 
   let block = null;
@@ -382,9 +483,17 @@ module.exports = function (ctx) {
     // Neuer Tag: Wochenziele und Stand rücken weiter
     const tag = ctx.bleibend("tag", () => ({ wert: heuteIso() }));
     ctx.intervall(() => { const h = heuteIso(); if (h !== tag.wert) { tag.wert = h; neuZeichnen(); } }, 5 * 60 * 1000);
+    // Neue Kapitellisten (zentral.js meldet sich über ctx.lernplanAnzeige): Notizen abgleichen
+    const abgleichBald = ctx.entprellen(() => { zentralAbgleichen(); }, 2000);
+    ctx.lernplanAnzeige = { neu: abgleichBald };
+    ctx.aufraeumen(() => { if (ctx.lernplanAnzeige && ctx.lernplanAnzeige.neu === abgleichBald) ctx.lernplanAnzeige = null; });
   };
 
-  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar };
+  // Einmal beim App-Start: unveränderte Listen holt zentral.js nicht neu, also hier einmal abgleichen (fehlende Notizen eines neuen
+  // Semesters), nachdem Fachmodell und zentrale Daten bereit sind
+  const start = () => { ctx.zeit(() => { zentralAbgleichen(); }, 45000); };
+
+  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl };
   ctx.lernplan = api;
-  return Object.assign({ registrieren }, api);
+  return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

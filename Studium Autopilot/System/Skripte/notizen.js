@@ -23,65 +23,77 @@ module.exports = function (ctx) {
 
   // ---------- Vorlesung ----------
   // Schnellstart mit möglichst wenig Tipps (eba.jetztLaufend: Stundenplan und Termine mit Uhrzeit):
-  // - Läuft gerade genau eine Veranstaltung, entsteht die Notiz ohne Frage.
+  // - Läuft gerade genau eine Veranstaltung und ist kein Modul vorgewählt, entsteht die Notiz ohne Frage.
   // - Gibt es zu dieser Veranstaltung heute schon eine Notiz (Feld „veranstaltung“), öffnet der Knopf sie am Ende der
-  //   Mitschrift, statt eine zweite anzulegen.
-  // - Knopf auf der Modulseite = Modul fest. Sonst das Fenster „Neue Vorlesung“: laufende Lehrveranstaltung oben, jedes Modul wählbar.
-  // Aufbau: Titel, Kopf-Karte ```eba-vorlesung``` (vorlesung.js), dann ## Mitschrift, ## Prüfungsrelevant, ## Offene Fragen,
+  //   Mitschrift, statt eine zweite anzulegen (vom Knopf auf der Modulseite noch vor dem Fenster).
+  // - Sonst das Fenster „Neue Vorlesungsnotiz“: Modul (vom Knopf auf der Modulseite vorgewählt, laufende Lehrveranstaltung oben,
+  //   jedes Modul wählbar) und Thema (optional, Feld thema).
+  // Aufbau: Titel = Name der Notiz („Vorlesung 1 · Mo 19.10. · Thema“, ctx.modell.vorlesungTitel; der Dateiname bleibt
+  // „Datum Code VL 01“), Kopf-Karte ```eba-vorlesung``` (vorlesung.js), dann ## Mitschrift, ## Prüfungsrelevant, ## Offene Fragen,
   // ## Nacharbeit. Die Überschriften nicht umbenennen (vorlesung.js und der Sprung ans Ende der Mitschrift suchen sie).
+  const heutigeOeffnen = async (c, vorhanden) => {
+    const leer = c.datei;
+    if (leer) {
+      for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view && l.view.file === leer && l.view.file !== vorhanden) l.detach();
+      try { if (!(await app.vault.read(leer)).trim()) await app.vault.delete(leer); } catch (e) { /* schon weg */ }
+    }
+    const blatt = await ctx.oeffnen(vorhanden, {});
+    const ed = blatt && blatt.view && blatt.view.editor;
+    if (ed) {
+      const z = ed.getValue().split("\n");
+      const i = z.findIndex((s) => /^##\s+Prüfungsrelevant/.test(s));
+      let j = i > 0 ? i - 1 : z.length - 1;
+      while (j > 0 && !z[j].trim()) j--;
+      ed.setCursor({ line: j, ch: z[j].length });
+      ed.focus();
+    }
+    ctx.hinweis("Die Notiz von heute gibt es schon, hier ist sie.", { dauer: 3000 });
+    return vorhanden;
+  };
   const vorlesung = async (c) => {
     const eba = ctx.user.eba(c);
     const vorwahl = eba.codeAusTitel();
+    const vorModul = vorwahl ? eba.modulNachCode(vorwahl) : null;
     const laufend = eba.jetztLaufend();
-    let m, quelle = null;
-    if (vorwahl && eba.modulNachCode(vorwahl)) m = eba.modulNachCode(vorwahl);
-    else if (laufend && laufend.eindeutig) { m = laufend.modul; quelle = laufend; }
+    const gleich = (x) => !!(x && laufend && laufend.modul && laufend.modul.fm.code === x.fm.code);
+    let m, quelle = null, thema = "";
+    if (!vorModul && laufend && laufend.eindeutig) { m = laufend.modul; quelle = laufend; }
     else {
-      const w = await fenster({ titel: "Neue Vorlesung", felder: [eba.modulFeld({ laufend, optional: true })] });
+      const schon = gleich(vorModul) && eba.neu ? eba.heutigeNotiz(laufend.quelle) : null;
+      if (schon) return heutigeOeffnen(c, schon);
+      const w = await fenster({ titel: "Neue Vorlesungsnotiz", felder: [eba.modulFeld({ laufend, optional: true }),
+        { name: "thema", titel: "Thema", art: "text", platzhalter: "z. B. Lineare Regression", hilfe: "Leer lassen, wenn du es noch nicht weißt." }] });
       if (!w) { eba.abbrechen(); return; }
       if (w.modul && w.modul === laufend) { m = laufend.modul; quelle = laufend; } else m = w.modul;
+      thema = String(w.thema || "").trim();
     }
-    if (!quelle && m && laufend && laufend.modul && laufend.modul.fm.code === m.fm.code) quelle = laufend;
+    if (!quelle && gleich(m)) quelle = laufend;
 
     // Heute schon eine Notiz zu dieser Veranstaltung: die öffnen, Cursor ans Ende der Mitschrift
     const vorhanden = quelle && eba.neu ? eba.heutigeNotiz(quelle.quelle) : null;
-    if (vorhanden) {
-      const leer = c.datei;
-      if (leer) {
-        for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view && l.view.file === leer && l.view.file !== vorhanden) l.detach();
-        try { if (!(await app.vault.read(leer)).trim()) await app.vault.delete(leer); } catch (e) { /* schon weg */ }
-      }
-      const blatt = await ctx.oeffnen(vorhanden, {});
-      const ed = blatt && blatt.view && blatt.view.editor;
-      if (ed) {
-        const z = ed.getValue().split("\n");
-        const i = z.findIndex((s) => /^##\s+Prüfungsrelevant/.test(s));
-        let j = i > 0 ? i - 1 : z.length - 1;
-        while (j > 0 && !z[j].trim()) j--;
-        ed.setCursor({ line: j, ch: z[j].length });
-        ed.focus();
-      }
-      ctx.hinweis("Die Notiz von heute gibt es schon, hier ist sie.", { dauer: 3000 });
-      return vorhanden;
-    }
+    if (vorhanden) return heutigeOeffnen(c, vorhanden);
 
     const code = m ? m.fm.code || "" : "";
     const termin = !m && quelle && quelle.lv.typ === "termin" ? quelle : null;
     const nr = code ? eba.naechsteVlNr(code) : 1;
     const nn = pad2(nr);
     const folien = code ? eba.folienZu(code, nr) : "";
-    // Dozent: aus dem Stundenplan, wenn das Modul gerade läuft; sonst „verantwortlich“ aus dem Modul
-    const dozent = (quelle && quelle.dozent) || (m && m.fm.verantwortlich) || "";
+    // Dozent: nur aus deinem Stundenplan (Feld dozent der laufenden Lehrveranstaltung). Bis 0.4.6 sonst „verantwortlich“ der Modulseite
+    // aus dem Modulhandbuch; seit 19.10.2026 steht ein Name im Kopf der Notiz nur, wenn du ihn selbst eingetragen hast.
+    const dozent = (quelle && quelle.dozent) || "";
     const veranstaltung = quelle ? `[[${quelle.quelle.path.replace(/\.md$/, "")}]]` : "";
     const kurztitel = termin ? (termin.titel.length > 70 ? termin.titel.slice(0, 70).replace(/\s+\S*$/, "") : termin.titel) : "";
-    const titel = termin ? termin.titel : (code ? code + " · " : "") + "VL " + nn;
+    if (!thema && termin) thema = termin.titel;
+    const M = ctx.modell;
+    const titel = termin ? termin.titel
+      : M && M.vorlesungTitel ? M.vorlesungTitel({ nummer: nr, datum: eba.heute, thema, code }) : `Vorlesung ${nr}${thema ? " · " + thema : ""}`;
     const inhalt = `---
 typ: vorlesung
 datum: ${eba.heute}
 code: ${eba.J(code)}
 modul: ${eba.J(eba.link(m))}
 nummer: ${termin ? "" : nr}
-thema: ${eba.J(termin ? termin.titel : "")}
+thema: ${eba.J(thema)}
 dozent: ${eba.J(dozent)}
 folien: ${eba.J(folien ? `[[${folien}]]` : "")}
 veranstaltung: ${eba.J(veranstaltung)}
@@ -103,10 +115,8 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
 - ${eba.CURSOR}
 
 ## Prüfungsrelevant
--
 
 ## Offene Fragen
-- [ ]
 
 ## Nacharbeit
 - Kernaussagen:
@@ -114,7 +124,7 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
     const f = await eba.ablegen(code ? `Vorlesungen/${code}` : "Vorlesungen",
       termin ? `${eba.heute} Mitschrift ${kurztitel}` : `${eba.heute} ${code ? code + " " : ""}VL ${nn}`, inhalt);
     if (laufend && laufend.eindeutig && quelle === laufend && !vorwahl) {
-      ctx.hinweis(`Notiz für ${code ? code + " · VL " + nn : kurztitel}, das läuft gerade. Für ein anderes Modul tippe auf seiner Modulseite auf „Neue Vorlesung“.`);
+      ctx.hinweis(`Vorlesungsnotiz für ${code ? code + " · Vorlesung " + nr : kurztitel}, das läuft gerade. Für ein anderes Modul tippe auf seiner Modulseite auf „Neue Vorlesungsnotiz“.`);
     }
     return f;
   };
@@ -163,13 +173,10 @@ Kopf mit Modul, Abgabe, Status und Unterlagen: erscheint, sobald das Plugin „S
 - ${eba.CURSOR}
 
 ## Aufgabe 2
--
 
 ## Knackpunkte
--
 
 ## Fürs Tutorium
-- [ ]
 `;
     return await eba.ablegen("Übungsblätter", `${code} Blatt ${nn}`, inhalt);
   };
@@ -427,7 +434,7 @@ cssclasses:
 
   return {
     aktionen: {
-      vorlesung: { titel: "Neue Vorlesung", ordner: ["Vorlesungen"], ausfuehren: vorlesung },
+      vorlesung: { titel: "Neue Vorlesungsnotiz", ordner: ["Vorlesungen"], ausfuehren: vorlesung },
       uebungsblatt: { titel: "Neues Übungsblatt", ordner: ["Übungsblätter"], ausfuehren: uebungsblatt },
       termin: { titel: "Neuer Termin", ordner: ["Termine"], ausfuehren: termin },
       lehrveranstaltung: { titel: "Neue Lehrveranstaltung", ordner: ["Stundenplan"], ausfuehren: lehrveranstaltung },

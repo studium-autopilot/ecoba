@@ -40,41 +40,20 @@ module.exports = function (ctx) {
   const F = () => ctx.user.felder;
 
   const AKTIONEN = {
-    // Knopf „Öffnen ↗“ (Unterlagen-Notizen und -Tabellen): Datei aus „datei“ (mit original=1: aus „original“) extern öffnen
+    // Knopf „Öffnen“ (Kopfzeile des PDF-Kastens, pdfkasten.js; Unterlagen-Tabellen): Datei aus „datei“ (mit original=1: aus
+    // „original“) extern öffnen; der PDF-Kasten nennt die eingebettete Datei selbst (Parameter datei, Link relativ zur Notiz)
     oeffnen: {
       titel: "Unterlage öffnen",
       ausfuehren: async (c) => {
         const notiz = notizAus(c, "unterlage");
-        const name = String(c.parameter.notiz || (notiz ? notiz.basename : "")).trim();
+        const name = notiz ? notiz.basename : String(c.parameter.notiz || "").trim(); // im Hinweis nie ein Pfad
         const original = c.parameter.original === "1" || c.parameter.original === "true";
         const fm = fmVon(notiz);
-        const ziel = ausLink(original ? fm.original : fm.datei, notiz ? notiz.path : "")
+        const ziel = (!original && c.parameter.datei ? ausLink(c.parameter.datei, notiz ? notiz.path : "") : null)
+          || ausLink(original ? fm.original : fm.datei, notiz ? notiz.path : "")
           || app.vault.getFiles().find((f) => f.basename === name && f.extension !== "md") || null;
         if (!ziel) { ctx.hinweis(`Keine Datei zu „${name || "dieser Notiz"}“ gefunden.`); return; }
         extern(ziel);
-      },
-    },
-
-    // Knopf „Größe ⇅“: PDF-Ansicht der Notiz klein ↔ groß (eba-core.css Abschnitt 29), gespeichert in cssclasses
-    pdf: {
-      titel: "PDF-Größe umschalten",
-      ausfuehren: async (c) => {
-        const notiz = notizAus(c, "unterlage");
-        if (!notiz) { ctx.hinweis("Keine Notiz zur PDF-Größe gefunden."); return; }
-        const KLEIN = "eba-pdf-klein", GROSS = "eba-pdf-gross";
-        const text = await app.vault.read(notiz);
-        const anzahl = (text.match(/!\[\[[^\]|#]+\.pdf(?:[#|][^\]]*)?\]\]/gi) || []).length;
-        let jetzt = "";
-        await app.fileManager.processFrontMatter(notiz, (fm) => {
-          let k = fm.cssclasses;
-          k = Array.isArray(k) ? k.map(String) : (k ? String(k).split(/[,\s]+/).filter(Boolean) : []);
-          const istKlein = k.indexOf(KLEIN) >= 0 || (k.indexOf(GROSS) < 0 && anzahl > 1);
-          k = k.filter((x) => x !== KLEIN && x !== GROSS);
-          k.push(istKlein ? GROSS : KLEIN);
-          fm.cssclasses = k;
-          jetzt = istKlein ? (anzahl > 1 ? "groß untereinander" : "groß") : (anzahl > 1 ? "als Gitter" : "klein");
-        });
-        ctx.hinweis(`PDF ${jetzt}.`, { dauer: 2500 });
       },
     },
 

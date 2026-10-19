@@ -19,7 +19,7 @@ cssclasses:
 > ```
 
 > [!eba-neu|ohne-titel]
-> - [Neue Vorlesung](obsidian://studium-autopilot?aktion=vorlesung)
+> - [Neue Vorlesungsnotiz](obsidian://studium-autopilot?aktion=vorlesung)
 > - [Neues Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
 > - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen)
 
@@ -52,31 +52,8 @@ Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
 ```
 
 > [!eba-tabelle|schlicht|handy-zu]+ Nachzuarbeiten
-> ```base
-> filters:
->   and:
->     - 'typ == "vorlesung"'
->     - 'nachgearbeitet != true'
-> formulas:
->   datumText: 'if(datum, date(datum).format("DD.MM.YYYY"), "")'
-> properties:
->   file.name:
->     displayName: Vorlesung
->   formula.datumText:
->     displayName: Datum
-> views:
->   - type: list
->     name: Nachzuarbeiten
->     order:
->       - file.name
->       - formula.datumText
->     sort:
->       - property: datum
->         direction: ASC
->     limit: 8
->     columnSize:
->       file.name: 380
->       formula.datumText: 120
+> ```eba-liste nachzuarbeiten
+> Vorlesungen zum Nacharbeiten erscheinen, sobald Studium Autopilot läuft.
 > ```
 
 > [!eba-raster|2]

@@ -112,14 +112,20 @@ module.exports = function (ctx) {
 
   const modulNachCode = (code) => alleModule().find((x) => x.fm.code === code) || null;
 
+  // „Dieses Semester“: Module deines Plans im aktuellen Semester und laufende/angemeldete (ctx.modell.imPlan und modulSemester wie
+  // Studienverlauf und Zeitleiste). Eine Regel für das Fenster „Neu …“ und die Seitenleiste (seitenleiste.js).
+  const diesesSemester = (x, sem = aktuellesSemester().name) => {
+    const M = ctx.modell;
+    return ["läuft", "angemeldet"].includes(x.fm.status) || (!!M && M.imPlan(x.fm) && M.modulSemester(x.fm) === sem);
+  };
+
   // Feld „Modul“ für das Fenster „Neu …“ (ctx.formular): oben eine gerade laufende Lehrveranstaltung („Läuft gerade“), dann die
-  // Module deines Plans im aktuellen Semester und laufende/angemeldete („Dieses Semester“, ctx.modell.imPlan und modulSemester wie
-  // Studienverlauf und Zeitleiste), dann alle übrigen. Vorgabe: das Modul aus dem Knopf (code) bzw. Dateinamen, sonst die laufende
-  // Lehrveranstaltung, sonst (Pflicht) das erste Modul dieses Semesters. o = { titel, optional, laufend, vorgabe }; Wert: das
-  // Modul ({ f, fm }), die laufende Lehrveranstaltung (jetztLaufend) oder null (ohne Modul).
+  // Module dieses Semesters (diesesSemester), dann alle übrigen. Vorgabe: das Modul aus dem Knopf (code) bzw. Dateinamen, sonst die
+  // laufende Lehrveranstaltung, sonst (Pflicht) das erste Modul dieses Semesters. o = { titel, optional, laufend, vorgabe }; Wert:
+  // das Modul ({ f, fm }), die laufende Lehrveranstaltung (jetztLaufend) oder null (ohne Modul).
   const modulFeld = (o = {}) => {
-    const sem = aktuellesSemester().name, M = ctx.modell;
-    const wichtig = (x) => ["läuft", "angemeldet"].includes(x.fm.status) || (!!M && M.imPlan(x.fm) && M.modulSemester(x.fm) === sem);
+    const sem = aktuellesSemester().name;
+    const wichtig = (x) => diesesSemester(x, sem);
     const ms = alleModule().sort((a, b) => (wichtig(b) - wichtig(a)) || String(a.fm.code).localeCompare(String(b.fm.code)));
     const optionen = [];
     const laufend = o.laufend || null;
@@ -290,7 +296,7 @@ module.exports = function (ctx) {
     ctx.hinweis("Abgebrochen, es ist nichts entstanden.", { dauer: 3000 });
   };
 
-  return { app, heute, sauber, J, neu, datei, CURSOR, MODULCODE, codeImText, codeAusTitel, einstellungen, modell, semesterZeile, aktuellesSemester, alleModule, modulNachCode, modulFeld, link, ablegen, jetztLaufend, heutigeNotiz, naechsteVlNr, folienZu, zeitraumLesen, datumLesen, abbrechen };
+  return { app, heute, sauber, J, neu, datei, CURSOR, MODULCODE, codeImText, codeAusTitel, einstellungen, modell, semesterZeile, aktuellesSemester, alleModule, modulNachCode, diesesSemester, modulFeld, link, ablegen, jetztLaufend, heutigeNotiz, naechsteVlNr, folienZu, zeitraumLesen, datumLesen, abbrechen };
 };
 module.exports.MODULCODE = MODULCODE;
 module.exports.codeImText = codeImText;

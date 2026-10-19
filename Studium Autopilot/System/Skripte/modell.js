@@ -594,7 +594,9 @@ module.exports = function (ctx) {
       if (!s.statt) { if (s.grund === "ausserhalb" && s10(fm && fm.bis) && d > s10(fm.bis)) return null; if (s.grund === "entfaellt" || s.grund === "ausgeblendet") return null; continue; }
       const schluss = minutenVon(s.ende || s.beginn);
       if (i === 0 && schluss != null && schluss <= nun) continue;
-      return { d: tagObj(d), datum: d, beginn: s.beginn, ende: s.ende, raum: s.raum, art: text(fm.art) || "Veranstaltung", geaendert: s.geaendert };
+      // Art wie im Wochenraster: „Veranstaltung“ (Alma ohne erkannte Art) und leer heißen Vorlesung; „Veranstaltung“ nur für Events
+      const art = text(fm.art);
+      return { d: tagObj(d), datum: d, beginn: s.beginn, ende: s.ende, raum: s.raum, art: !art || art === "Veranstaltung" ? "Vorlesung" : art, geaendert: s.geaendert };
     }
     return null;
   };
@@ -657,7 +659,7 @@ module.exports = function (ctx) {
   // oder Art) oder leer (nach dem Wort).
   const TON = {
     ok: ["bestanden", "anerkannt", "angemeldet", "abgegeben", "korrigiert", "erledigt", "gelesen", "bearbeitet", "zugelassen", "durchgearbeitet", "verbunden",
-      "im stundenplan"],
+      "im stundenplan", "nachgearbeitet"],
     bad: ["nicht bestanden", "überfällig", "abgelehnt", "fehler", "prüfung", "pruefung"],
     warn: ["in arbeit", "frist", "abgabe"],
     info: ["läuft", "lehre", "zwischentest", "uni", "termin"],
@@ -669,6 +671,90 @@ module.exports = function (ctx) {
     if (typ === "termin" && istZwischentest(w)) return "info";
     for (const ton of Object.keys(TON)) if (TON[ton].indexOf(w) >= 0) return ton;
     return "leer";
+  };
+
+  // ---------- Vorlesungsnotizen: ein Name überall (seit 19.10.2026) ----------
+  // „Vorlesung 1 · Mo 13.10. · Thema“ auf der Modulseite, in „Nachzuarbeiten“, bei den To-dos und im Kopf der Notiz; vorher
+  // stand der Dateiname „S110 VL 01“ da. Thema: Feld thema, sonst die erste Überschrift der Notiz, wenn sie mehr sagt als
+  // Kürzel, Nummer und Datum, sonst der Titel der verlinkten Folien. Nie erfunden. Dateinamen („2026-10-13 S110 VL 01“) bleiben.
+  const VL_LEER = /^(mitschrift|pr(ü|ue)fungsrelevant|klausurrelevant|(offene )?fragen|nacharbeit|kernaussagen|zusammenfassung|(meine )?notizen|folien|vorlesung(snotiz)?)$/i;
+  // Teile ohne eigene Aussage, vorn und hinten abgeschnitten: Datum (auch mit Wochentag), „VL 03“, „Vorlesung 3“, „Folien 01“,
+  // „Mitschrift“ vor einem Trennzeichen, Semester („WS 2026-27“), Modulkürzel, Trennzeichen
+  const VL_TEIL = "(?:\\d{4}-\\d{2}-\\d{2}|(?:(?:Mo|Di|Mi|Do|Fr|Sa|So|Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)\\.?,?\\s+)?"
+    + "\\d{1,2}\\.\\d{1,2}\\.(?:\\d{4}|\\d{2})?|(?:VL|Vorlesung|Vorlesungsnotiz|Folien|Slides)\\s*\\d{1,3}\\b"
+    + "|(?:VL|Vorlesung|Vorlesungsnotiz|Mitschrift)(?=\\s*[·|:,;/–—-])"
+    + "|(?:WS|SS|SoSe|WiSe)\\s?\\d{2,4}(?:[-/]\\d{2,4})?|[A-ZÄÖÜ]{1,4}\\d{2,4}[a-z]?\\b|[·|:,;/–—-]+)";
+  const VL_VORN = new RegExp("^" + VL_TEIL + "\\s*", "i"), VL_HINTEN = new RegExp("\\s*" + VL_TEIL + "$", "i");
+  // Was ein Text über Kürzel, Nummer, Datum und Semester hinaus sagt; leer, wenn nichts (oder nur der Name eines Abschnitts
+  // bzw. der Titel des Moduls). Höchstens 70 Zeichen, an einer Wortgrenze gekürzt.
+  const vorlesungThemaAus = (s, modulTitel) => {
+    let t = text(s), alt = "";
+    while (t && t !== alt) { alt = t; t = t.replace(VL_VORN, "").replace(VL_HINTEN, "").trim(); }
+    if (!t || VL_LEER.test(t) || (modulTitel && t.toLowerCase() === text(modulTitel).toLowerCase())) return "";
+    return t.length > 70 ? t.slice(0, 70).replace(/\s+\S*$/, "") + " …" : t;
+  };
+  // thema (Feld), ueberschrift (erste Überschrift der Notiz), folien (Titel der Begleitnotiz bzw. Name der PDF), modulTitel
+  const vorlesungThema = (o) => {
+    const x = o || {};
+    return text(x.thema) || vorlesungThemaAus(x.ueberschrift, x.modulTitel) || vorlesungThemaAus(x.folien, x.modulTitel);
+  };
+  // Nummer: Feld nummer, sonst aus dem Dateinamen („… VL 03“)
+  const vorlesungNummer = (nummer, name) => {
+    const n = Number(nummer);
+    if (n > 0 && Math.floor(n) === n) return n;
+    const m = String(name || "").match(/\bVL\s*0*(\d{1,3})\b/i);
+    return m && Number(m[1]) > 0 ? Number(m[1]) : null;
+  };
+  // { nummer, datum, thema, code } → „Vorlesung 1 · Mo 13.10. · Thema“ (ohne Nummer „Vorlesung“, ohne Modul „Mitschrift“)
+  const vorlesungTitel = (o) => {
+    const x = o || {};
+    const teile = [x.nummer ? "Vorlesung " + x.nummer : x.code ? "Vorlesung" : "Mitschrift"];
+    if (s10(x.datum)) teile.push(datumText(x.datum));
+    if (text(x.thema)) teile.push(text(x.thema));
+    return teile.join(" · ");
+  };
+  // Titel der Folien einer Vorlesungsnotiz (Feld folien: Begleitnotiz oder PDF; zur PDF die Begleitnotiz mit datei darauf)
+  const linkZiel = (wert, von) => {
+    const s = text(wert);
+    if (!s) return null;
+    const m = s.match(/^\[\[([^\]|#]+)/), p = (m ? m[1] : s).trim();
+    const mc = app.metadataCache;
+    return (mc.getFirstLinkpathDest && mc.getFirstLinkpathDest(p, von || "")) || app.vault.getAbstractFileByPath(p) || app.vault.getAbstractFileByPath(p + ".md");
+  };
+  const begleitnotizen = () => {
+    const aus = {};
+    for (const f of app.vault.getMarkdownFiles()) {
+      const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
+      if (!fm || fm.typ !== "unterlage" || !fm.datei) continue;
+      const z = linkZiel(fm.datei, f.path);
+      if (z) aus[z.path] = fm;
+    }
+    return aus;
+  };
+  const folienTitel = (fm, von, index) => {
+    const z = linkZiel(fm.folien, von);
+    if (!z) return "";
+    const b = z.extension === "md" ? (app.metadataCache.getFileCache(z) || {}).frontmatter || {} : (index || begleitnotizen())[z.path] || null;
+    return text(b ? b.titel || "" : "") || String(z.basename || "");
+  };
+  // Eine Vorlesungsnotiz → { f, code, nummer, datum, thema, titel, nachgearbeitet }
+  const vorlesungVon = (f, index) => {
+    const c = (f && app.metadataCache.getFileCache(f)) || {}, fm = c.frontmatter || {};
+    const code = text(fm.code), m = code ? modulNach(code) : null;
+    const nummer = vorlesungNummer(fm.nummer, f && f.basename);
+    const datum = s10(fm.datum) || s10(f && f.basename);
+    const thema = vorlesungThema({ thema: fm.thema, ueberschrift: ((c.headings || [])[0] || {}).heading, folien: fm.folien ? folienTitel(fm, f.path, index) : "",
+      modulTitel: m ? m.titel : "" });
+    return { f, code, nummer, datum, thema, titel: vorlesungTitel({ nummer, datum, thema, code }), nachgearbeitet: fm.nachgearbeitet === true };
+  };
+  // Alle Vorlesungsnotizen (eines Moduls), neueste zuerst (Datum, dann Nummer)
+  const vorlesungen = (o) => {
+    const code = text(o && o.code), index = begleitnotizen(), aus = [];
+    for (const f of app.vault.getMarkdownFiles()) {
+      const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
+      if (fm && fm.typ === "vorlesung" && (!code || text(fm.code) === code)) aus.push(vorlesungVon(f, index));
+    }
+    return aus.sort((a, b) => (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : (b.nummer || 0) - (a.nummer || 0)));
   };
 
   // ---------- Abgleich mit System/Einstellungen.md ----------
@@ -813,6 +899,7 @@ module.exports = function (ctx) {
     // Fachmodell (docs/architektur.md „Fachmodell“)
     zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, opFrist, kalenderwoche, planwoche, findetStatt,
     naechsteSitzung, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
+    vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer,
   };
   ctx.modell = api;
 

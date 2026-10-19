@@ -307,8 +307,7 @@ body {
    stehen in einem Text, darin findet ~= sie nicht) */
 .callout[data-callout^="eba-"][data-callout-metadata*="ohne-titel"] > .callout-title { display: none; }
 
-/* ---------- 6. Kachel-Navigation  > [!eba-nav] und Knöpfe  > [!eba-neu] ---------- */
-.callout[data-callout="eba-nav"] > .callout-content > ul,
+/* ---------- 6. Knöpfe  > [!eba-neu] und Link-Kacheln  > [!eba-links]; Symbole der Seiten (Seitenleiste, Abschnitt 66) ---------- */
 .callout[data-callout="eba-neu"] > .callout-content > ul,
 .callout[data-callout="eba-links"] > .callout-content > ul {
   display: grid;
@@ -318,7 +317,6 @@ body {
   padding: 0;
   list-style: none;
 }
-.callout[data-callout="eba-nav"] > .callout-content > ul > li,
 .callout[data-callout="eba-neu"] > .callout-content > ul > li,
 .callout[data-callout="eba-links"] > .callout-content > ul > li {
   position: relative;
@@ -334,10 +332,8 @@ body {
   background: color-mix(in srgb, var(--eba-bg) 55%, transparent);
   transition: border-color 120ms ease, background-color 120ms ease, transform 120ms ease;
 }
-.callout[data-callout="eba-nav"] > .callout-content > ul > li::marker,
 .callout[data-callout="eba-neu"] > .callout-content > ul > li::marker,
 .callout[data-callout="eba-links"] > .callout-content > ul > li::marker { content: none; }
-.callout[data-callout="eba-nav"] > .callout-content > ul > li::before,
 .callout[data-callout="eba-neu"] > .callout-content > ul > li::before,
 .callout[data-callout="eba-links"] > .callout-content > ul > li::before {
   content: "";
@@ -349,7 +345,6 @@ body {
   -webkit-mask: none;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 20%, transparent);
 }
-.callout[data-callout="eba-nav"] > .callout-content > ul > li::after,
 .callout[data-callout="eba-neu"] > .callout-content > ul > li::after,
 .callout[data-callout="eba-links"] > .callout-content > ul > li::after {
   content: "";
@@ -364,13 +359,11 @@ body {
   mask: var(--eba-icon) center / contain no-repeat;
   pointer-events: none;
 }
-.callout[data-callout="eba-nav"] > .callout-content > ul > li:hover,
 .callout[data-callout="eba-neu"] > .callout-content > ul > li:hover,
 .callout[data-callout="eba-links"] > .callout-content > ul > li:hover {
   border-color: color-mix(in srgb, var(--eba-accent) 55%, var(--eba-border));
   background: color-mix(in srgb, var(--eba-accent) 5%, var(--eba-bg));
 }
-.callout[data-callout="eba-nav"] li > a,
 .callout[data-callout="eba-neu"] li > a,
 .callout[data-callout="eba-links"] li > a {
   grid-column: 2;
@@ -384,10 +377,8 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.callout[data-callout="eba-nav"] li > a::before,
 .callout[data-callout="eba-neu"] li > a::before,
 .callout[data-callout="eba-links"] li > a::before { content: ""; position: absolute; inset: 0; z-index: 1; }
-.callout[data-callout="eba-nav"] li > em,
 .callout[data-callout="eba-neu"] li > em,
 .callout[data-callout="eba-links"] li > em {
   grid-column: 2;
@@ -400,10 +391,8 @@ body {
   text-overflow: ellipsis;
 }
 /* Listenpunkte in Kacheln ausblenden */
-.callout[data-callout="eba-nav"] li > .list-bullet,
 .callout[data-callout="eba-neu"] li > .list-bullet,
 .callout[data-callout="eba-links"] li > .list-bullet,
-.callout[data-callout="eba-nav"] li > .list-collapse-indicator,
 .callout[data-callout="eba-neu"] li > .list-collapse-indicator,
 .callout[data-callout="eba-links"] li > .list-collapse-indicator { display: none; }
 
@@ -411,7 +400,7 @@ body {
 .callout[data-callout="eba-neu"] > .callout-content > ul { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .callout[data-callout="eba-neu"] > .callout-content > ul > li { padding: 8px 10px; }
 /* Standard-Icons (niedrige Spezifität, damit die Ziel-Icons unten gewinnen) */
-:where(.callout[data-callout="eba-nav"], .callout[data-callout="eba-links"]) li { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E"); }
+:where(.callout[data-callout="eba-links"]) li { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 7h10v10'/%3E%3Cpath d='M7 17 17 7'/%3E%3C/svg%3E"); }
 :where(.callout[data-callout="eba-neu"]) li { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12h14'/%3E%3Cpath d='M12 5v14'/%3E%3C/svg%3E"); }
 
 /* Icons je Ziel (per Link-Adresse) */
@@ -576,6 +565,7 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 }
 .eba-kz-datum { font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
 .eba-kz-datum b { color: var(--eba-text); font-weight: 600; }
+.eba-kz-kopf > .eba-kz-datum { margin-left: auto; } /* bleibt rechts, auch wenn der Kopf umbricht (bis 0.4.6 im Stil von menue.js) */
 .eba-kz-reihe { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--eba-gap, 12px); }
 .eba-kachel {
   position: relative;
@@ -881,11 +871,9 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   .callout[data-callout="eba-raster"][data-callout-metadata~="4"] > .callout-content { grid-template-columns: 1fr !important; } /* |3/|4 sonst spezifischer als die 1fr-Regel */
 }
 /* Kacheln und Knöpfe: Titel dürfen umbrechen statt mit … zu enden */
-.callout[data-callout="eba-nav"] li > a,
 .callout[data-callout="eba-neu"] li > a,
 .callout[data-callout="eba-links"] li > a { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; overflow-wrap: anywhere; }
-.callout[data-callout="eba-neu"] > .callout-content > ul > li:not(:has(> em)),
-.callout[data-callout="eba-nav"] > .callout-content > ul > li:not(:has(> em)) { grid-template-rows: auto; min-height: 50px; }
+.callout[data-callout="eba-neu"] > .callout-content > ul > li:not(:has(> em)) { grid-template-rows: auto; min-height: 50px; }
 /* Tabellen mit |umbruch (und rowHeight: medium): lange Namen auf bis zu zwei Zeilen */
 .callout[data-callout-metadata*="umbruch"] .bases-td { white-space: normal; }
 .callout[data-callout-metadata*="umbruch"] .bases-table-cell {
@@ -908,14 +896,12 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 .callout[data-callout="eba-tabelle"][data-callout-metadata*="umbruch"] .bases-tbody .bases-table-cell { align-items: center; }
 
 /* Kacheln ohne Untertitel: nur eine Rasterzeile, Titel senkrecht mittig zum Symbol */
-.callout[data-callout="eba-neu"] > .callout-content > ul > li:not(:has(> em))::before,
-.callout[data-callout="eba-nav"] > .callout-content > ul > li:not(:has(> em))::before { grid-row: 1; }
+.callout[data-callout="eba-neu"] > .callout-content > ul > li:not(:has(> em))::before { grid-row: 1; }
 
-/* „Neu anlegen“ ab fünf Knöpfen: die Reihe füllt die Breite wie die Bereiche-Kacheln (keine leere Spalte rechts) */
+/* „Neu anlegen“ ab fünf Knöpfen: die Reihe füllt die Breite (keine leere Spalte rechts) */
 .callout[data-callout="eba-neu"] > .callout-content > ul:has(> li:nth-child(5)) { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
 
 /* Lange Titel in Kacheln mit Silbentrennung statt hartem Umbruch („Lehrveranstaltu|ng“) */
-.callout[data-callout="eba-nav"] li > a,
 .callout[data-callout="eba-neu"] li > a,
 .callout[data-callout="eba-links"] li > a { -webkit-hyphens: auto; hyphens: auto; }
 
@@ -946,6 +932,17 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 :is(.markdown-source-view, .markdown-preview-view) .metadata-container:not(.is-collapsed) > .metadata-properties-heading .collapse-indicator svg { transform: rotate(-90deg); }
 :is(.markdown-source-view, .markdown-preview-view) .metadata-container.is-collapsed > .metadata-properties-heading .collapse-indicator svg { transform: none; }
 :is(.markdown-source-view, .markdown-preview-view) .metadata-container:not(.is-collapsed) { margin-bottom: 0.6rem; }
+/* 25b. Notizen des Plugins (eba-notiz aus start.js; Begleitnotiz, Termin, Lehrveranstaltung, Vorlesung, Übungsblatt, SQ-Kurs,
+   Volltext): Eigenschaften auch in der Bearbeitungsansicht aus (seit 19.10.2026). Bis dahin stand dort ein einsames „Properties“ mit
+   Leerraum über dem Titel; geändert wird im Kopf der Notiz (Entscheidung E4). „⋯ → Eigenschaften“ im Kopf (kopf.js) zeigt sie für
+   diese Notiz aufgeklappt, in Lese- und Bearbeitungsansicht (Klasse eba-eigenschaften am Tab). Im Quelltextmodus und in deinen
+   eigenen Notizen bleibt alles, wie Obsidian es zeigt. Kein Abschnitt der Leseansicht (die Eigenschaften stehen im Kopf .mod-header,
+   in der Bearbeitungsansicht vor dem Inhalt von CodeMirror), darum stört display: none die Höhenmessung nicht. */
+.markdown-source-view.is-live-preview:is(.eba-notiz, .eba-s-begleitnotiz, .eba-s-termin, .eba-s-notizen) .metadata-container { display: none !important; }
+.eba-eigenschaften :is(.markdown-source-view.is-live-preview, .markdown-preview-view) .metadata-container { display: block !important; }
+.eba-eigenschaften .markdown-preview-view { --metadata-display-reading: block; }
+.eba-eigenschaften :is(.markdown-source-view, .markdown-preview-view) .metadata-container > .metadata-content { display: block !important; }
+.eba-eigenschaften :is(.markdown-source-view, .markdown-preview-view) .metadata-container > .metadata-properties-heading .collapse-indicator { display: none; }
 
 /* ---------- 26. Lesemodus ohne „Eigenschaften“, kein doppelter Titel ----------
    Lesemodus: Eigenschaften ganz ausgeblendet (bearbeiten im Bearbeitungsmodus, dort bleibt die Klappzeile aus Abschnitt 25).
@@ -958,36 +955,40 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 /* ---------- 27. Notizen mit eingebetteter PDF: ganze Breite, PDF so hoch wie der Bildschirm ----------
    Die lesbare Zeilenlänge (ca. 700 px) bleibt für reine Textnotizen. Notizen mit PDF (Unterlagen, Vorlesungen mit Folien)
    nutzen die volle Tab-Breite. Die eingebettete PDF hat von Obsidian eine feste Höhe als Inline-Style (#height=560),
-   hier überstimmt: Bildschirmhöhe abzüglich Kopfzeile, mindestens 560 px. Die Begleitnotizen sind kurz (Volltext liegt in
-   Unterlagen/_Volltext), darum bleibt die eingebettete PDF im DOM und :has() greift verlässlich. */
+   hier überstimmt: Bildschirmhöhe abzüglich Kopfzeile, mindestens 560 px (iPhone: 37.begleitnotiz). Eine Höhe je Gerät, seit
+   19.10.2026 ohne Knopf „Größe“ (der sah aus wie Sortieren). Im zugeklappten PDF-Kasten liegt noch keine PDF (pdfkasten.js lädt sie
+   beim ersten Aufklappen); volle Breite gilt darum erst, wenn sie aufgeklappt da ist. */
 :is(.markdown-preview-view, .markdown-source-view).is-readable-line-width:has(.pdf-embed):not(:has(.callout[data-callout="eba-pdf"].is-collapsed)) { --file-line-width: 100%; } /* volle Breite erst, wenn die PDF aufgeklappt ist */
 :is(.markdown-preview-view, .markdown-source-view) .internal-embed.pdf-embed { height: max(560px, calc(100vh - 170px)) !important; height: max(560px, calc(100dvh - 170px)) !important; }
 
-/* ---------- 28. Klappbarer PDF-Kasten „[!eba-pdf]+ PDF“ ----------
-   In Begleitnotizen steht die eingebettete PDF in einem Callout mit „+“: beim Öffnen ausgeklappt, ein Tipp auf „PDF“
-   klappt sie ein (z. B. wenn die PDF gerade in einer anderen App offen ist und man in Obsidian nur Notizen schreibt).
+/* ---------- 28. Klappbarer PDF-Kasten „[!eba-pdf]- PDF“ ----------
+   In Begleitnotizen steht die eingebettete PDF in einem Callout, zugeklappt. Seit 19.10.2026 ist die Kopfzeile ein Knopf
+   (pdfkasten.js): Ein Tipp klappt auf oder zu, so oft man will, in Lese- und Bearbeitungsansicht, ohne Cursor und Tastatur. Rechts
+   davor leise Knöpfe „Öffnen“ (PDF in der App des Geräts) und „Original“ (Office-Datei), Gestalt der leisen Knöpfe aus Abschnitt 43.
    Schlank gehalten, damit die PDF die Breite behält: kein Innenabstand, Titel als kleine Zeile mit Klapppfeil. */
 .callout[data-callout="eba-pdf"] { padding: 8px 10px 10px; }
-.callout[data-callout="eba-pdf"] > .callout-title { margin: 0 0 8px; cursor: pointer; }
+.callout[data-callout="eba-pdf"] > .callout-title { margin: 0 0 8px; cursor: pointer; align-items: center; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
 .callout[data-callout="eba-pdf"].is-collapsed { padding-bottom: 8px; }
 .callout[data-callout="eba-pdf"].is-collapsed > .callout-title { margin-bottom: 0; }
 .callout[data-callout="eba-pdf"] > .callout-content > p { margin: 0; }
+.callout[data-callout="eba-pdf"] > .callout-title:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; border-radius: var(--eba-radius-s); }
+.callout[data-callout="eba-pdf"] > .callout-title > .callout-title-inner { flex: 1 1 auto; min-width: 0; }
+.callout[data-callout="eba-pdf"] .eba-pdf-leiste { display: flex; flex: none; align-items: center; gap: 2px; margin: -4px 2px -4px 8px; }
+.callout[data-callout="eba-pdf"] .eba-pdf-leiste .eba-vb-knopf { height: 26px; min-height: 0; padding: 0 8px; font-size: 13px; text-transform: none; letter-spacing: 0; }
 
-/* ---------- 29. PDF klein / groß / Gitter ----------
-   Knopf „Größe ⇅“ (Aktion „pdf“, System/Skripte/aktionen.js) setzt in „cssclasses“ eba-pdf-klein oder eba-pdf-gross.
-   Eine PDF im Kasten:   Standard groß (Abschnitt 27) · eba-pdf-klein = kleines Fenster.
-   Mehrere PDFs im Kasten (Zeilen ![[a.pdf]] ![[b.pdf]] direkt untereinander oder durch Leerzeile getrennt):
-   Standard Gitter aus Kacheln mit Dateiname · eba-pdf-gross = groß untereinander. In einer Kachel öffnet der Knopf
-   „Öffnen“ der PDF-Leiste die PDF groß im eigenen Tab. Kein verschachteltes :has() (nicht erlaubt), darum die zwei Fälle. */
-.eba-pdf-klein .callout[data-callout="eba-pdf"] .internal-embed.pdf-embed { height: 420px !important; max-width: min(100%, 600px); }
-:is(.markdown-preview-view, .markdown-source-view):not(.eba-pdf-gross) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) {
+/* ---------- 29. Mehrere PDFs: Gitter ----------
+   Mehrere PDFs im Kasten (Zeilen ![[a.pdf]] ![[b.pdf]] direkt untereinander oder durch Leerzeile getrennt): Gitter aus Kacheln mit
+   Dateiname. In einer Kachel öffnet der Knopf „Öffnen“ der PDF-Leiste die PDF groß im eigenen Tab. Kein verschachteltes :has() (nicht
+   erlaubt), darum die zwei Fälle. Bis 19.10.2026 schaltete „Größe ⇅“ zwischen klein, groß und Gitter (cssclasses eba-pdf-klein,
+   eba-pdf-gross); seitdem gibt es eine Höhe je Gerät, die Klassen älterer Notizen wirken nicht mehr. */
+:is(.markdown-preview-view, .markdown-source-view) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 12px;
 }
-:is(.markdown-preview-view, .markdown-source-view):not(.eba-pdf-gross) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) > p { display: contents; }
-:is(.markdown-preview-view, .markdown-source-view):not(.eba-pdf-gross) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) br { display: none; }
-:is(.markdown-preview-view, .markdown-source-view):not(.eba-pdf-gross) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) .internal-embed.pdf-embed {
+:is(.markdown-preview-view, .markdown-source-view) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) > p { display: contents; }
+:is(.markdown-preview-view, .markdown-source-view) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) br { display: none; }
+:is(.markdown-preview-view, .markdown-source-view) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) .internal-embed.pdf-embed {
   height: 380px !important;
   max-width: none;
   min-width: 0;
@@ -995,7 +996,7 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   border-radius: var(--eba-radius);
   overflow: hidden;
 }
-:is(.markdown-preview-view, .markdown-source-view):not(.eba-pdf-gross) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) .internal-embed.pdf-embed::before {
+:is(.markdown-preview-view, .markdown-source-view) .callout[data-callout="eba-pdf"] > .callout-content:is(:has(.pdf-embed ~ .pdf-embed), :has(> p ~ p > .pdf-embed:first-child)) .internal-embed.pdf-embed::before {
   content: attr(src);
   flex: none;
   padding: 5px 9px;
@@ -1006,7 +1007,6 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   text-overflow: ellipsis;
   border-bottom: 1px solid var(--eba-border);
 }
-.eba-pdf-gross .callout[data-callout="eba-pdf"] > .callout-content > p > .internal-embed.pdf-embed + br { display: block; content: ""; margin-bottom: 12px; }
 
 /* ---------- 30. Termine-Agenda  (Studium/Termine & Anmeldungen.md, erzeugt von System/Skripte/termine.js) ---------- */
 /* Je Termin ein eingeklappter Kasten [!eba-t|frist|pruefung|event|uni|erledigt]: Titelzeile = Überblick, aufgeklappt = Details. */
@@ -1167,14 +1167,16 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 
 /* ---------- 33. Wochenraster anklickbar (Dashboard „Diese Woche“ und Stundenplan) ----------
    Jede Veranstaltung ist ein Link auf ihre Modulseite (obsidian://open). Heute: Spalte getönt, Termine kräftiger,
-   laufende Veranstaltung mit Rahmen („jetzt“), an diesem Tag ausfallende blass und durchgestrichen. */
+   laufende Veranstaltung mit Rahmen („jetzt“), an diesem Tag ausfallende blass und durchgestrichen. Der Rahmen liegt innen
+   (seit 19.10.2026): Außen brauchte er Platz neben dem Kasten, den es am iPhone nicht gibt (Kästen 1,5 px untereinander,
+   3–4 px zur Nachbarspalte, Heute-Spalte absolut darunter); dort fehlte er. Ein Kasten vor seinem Beginn (.spaeter) ist nie „jetzt“. */
 a.eba-ev { text-decoration: none; color: inherit; cursor: pointer; }
 a.eba-ev:hover { filter: brightness(0.96); }
 .eba-tagspalte { grid-row: 1 / -1; margin: -12px -3px -14px; background: color-mix(in srgb, var(--eba-accent) 6%, transparent); border-radius: var(--eba-radius-s); }
 .eba-ev.heute { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 35%, transparent); }
 .eba-ev.ue.heute { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-info) 40%, transparent); }
-.eba-ev.jetzt { box-shadow: 0 0 0 2px var(--eba-accent); }
-.eba-ev.jetzt b::after { content: " · jetzt"; font-weight: 500; color: var(--eba-accent-text); }
+.eba-ev.jetzt:not(.spaeter) { box-shadow: inset 0 0 0 2px var(--eba-accent); }
+.eba-ev.jetzt:not(.spaeter) b::after { content: " · jetzt"; font-weight: 500; color: var(--eba-accent-text); }
 .eba-ev.ausfall { opacity: 0.45; }
 .eba-ev.ausfall b { text-decoration: line-through; }
 /* Aufbau und Zeilen der Kästen im Wochenraster: Abschnitt 55 */
@@ -1466,7 +1468,8 @@ body.is-phone .markdown-preview-view.eba-s-begleitnotiz .markdown-preview-sizer 
 /* Kopf: Titel höchstens zwei Zeilen */
 body.is-phone .eba-s-begleitnotiz .el-h1 > h1 { font-size: 1.6em; line-height: 1.15; margin: 0 0 8px; text-wrap: balance; }
 
-/* Eckdaten (erste Karte unter dem Titel) als ruhige Textzeile ohne Kasten und ohne Kartentitel, „Öffnen ↗ · Größe ⇅“ darunter */
+/* Eckdaten (erste Karte unter dem Titel, nur noch in älteren Notizen mit eigenem Text darin; den erzeugten Kasten blendet kopf.js aus,
+   64.4) als ruhige Textzeile ohne Kasten und ohne Kartentitel */
 body.is-phone .eba-s-begleitnotiz .el-h1 + .el-div > .callout[data-callout="eba-regel"] {
   margin: 0 0 12px;
   padding: 0;
@@ -1485,11 +1488,11 @@ body.is-phone .eba-s-begleitnotiz .el-h1 + .el-div > .callout[data-callout="eba-
 
 /* PDF-Kasten: schmaler Rahmen, Titelzeile klein (eingeklappt nur diese Zeile). Aufgeklappt ist eine PDF fast bildschirmhoch,
    unten bleibt ein Rand zum Weiterscrollen der Seite (iPhone 14/15: 844 − 210 = 634 px; Abschnitt 27 gäbe 674 px, die PDF
-   füllte dann den ganzen sichtbaren Bereich). klein (eba-pdf-klein) und Gitter (mehrere PDFs) bleiben wie in Abschnitt 29. */
+   füllte dann den ganzen sichtbaren Bereich). Das Gitter (mehrere PDFs) bleibt wie in Abschnitt 29. */
 body.is-phone .eba-s-begleitnotiz .callout[data-callout="eba-pdf"] { padding: 6px 7px 7px; margin-bottom: 4px; }
 body.is-phone .eba-s-begleitnotiz .callout[data-callout="eba-pdf"] > .callout-title { margin: 0 2px 6px; }
 body.is-phone .eba-s-begleitnotiz .callout[data-callout="eba-pdf"].is-collapsed > .callout-title { margin-bottom: 0; }
-body.is-phone .markdown-preview-view.eba-s-begleitnotiz:not(.eba-pdf-klein) .callout[data-callout="eba-pdf"] > .callout-content > p:only-child > .internal-embed.pdf-embed:only-of-type {
+body.is-phone .markdown-preview-view.eba-s-begleitnotiz .callout[data-callout="eba-pdf"] > .callout-content > p:only-child > .internal-embed.pdf-embed:only-of-type {
   height: max(420px, calc(100vh - 210px)) !important;
   height: max(420px, calc(100dvh - 210px)) !important;
 }
@@ -1554,7 +1557,7 @@ body.is-phone .markdown-source-view.is-live-preview.eba-s-begleitnotiz :is(.Hype
 body.is-phone .markdown-source-view.is-live-preview.eba-s-begleitnotiz :is(.HyperMD-header-1 + .cm-embed-block, .HyperMD-header-1 + .cm-line + .cm-embed-block) .callout[data-callout="eba-regel"] strong { font-weight: 500; color: var(--eba-muted); }
 body.is-phone .markdown-source-view.is-live-preview.eba-s-begleitnotiz :is(.HyperMD-header-1 + .cm-embed-block, .HyperMD-header-1 + .cm-line + .cm-embed-block) .callout[data-callout="eba-regel"] a { font-size: 13px; }
 /* PDF-Höhe wie in der Leseansicht */
-body.is-phone .markdown-source-view.is-live-preview.eba-s-begleitnotiz:not(.eba-pdf-klein) .callout[data-callout="eba-pdf"] > .callout-content > p:only-child > .internal-embed.pdf-embed:only-of-type {
+body.is-phone .markdown-source-view.is-live-preview.eba-s-begleitnotiz .callout[data-callout="eba-pdf"] > .callout-content > p:only-child > .internal-embed.pdf-embed:only-of-type {
   height: max(420px, calc(100vh - 210px)) !important;
   height: max(420px, calc(100dvh - 210px)) !important;
 }
@@ -1566,8 +1569,7 @@ body.is-phone .markdown-source-view.is-live-preview.eba-s-begleitnotiz .cm-scrol
 /* Dashboard (Dashboard.md, cssclasses eba-s-dashboard) – nur iPhone.
    Oben, was heute gebraucht wird: Kopf + vier kleine Kennzahlen, Knöpfe, Wochenraster, Fristen.
    Termine und „Zu erledigen“ sind |handy-zu (Markdown) und auf dem iPhone zu; Fristen klappbar, offen.
-   Bereiche: keine Karte am Seitenende, sondern das Bereiche-Menü
-   (Symbol in Obsidians Kopfleiste) aus System/Skripte/menue.js, Ziele und Stil dort. */
+   Seiten: keine Karte am Seitenende, sondern die Seitenleiste „Übersicht“ (seitenleiste.js, Abschnitt 66). */
 
 /* Pfad: auf dem iPhone weg, der Gruß ist der Titel (in der Bearbeitungsansicht blendet 36c ihn schon aus; beide Ansichten gleich) */
 body.is-phone .eba-s-dashboard .eba-pfad-start { display: none; }
@@ -1888,6 +1890,10 @@ body.is-phone .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.bases-table
 body.is-phone .eba-s-modul .callout[data-callout="eba-tabelle"] .bases-table-container[style*="height: 0px"] { height: auto !important; width: auto !important; }
 body.is-phone .eba-s-modul .callout[data-callout="eba-tabelle"] .bases-table-container[style*="height: 0px"]::after { content: "Leer."; display: block; padding: 0; font-size: 13.5px; color: var(--eba-muted); }
 body.is-phone .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.bases-table-container[style*="height: 0px"]) .bases-table-footer { display: none !important; }
+/* Leere Liste (tabellen.js, Klasse eba-tl-ohne; alle Geräte, seit 19.10.2026): Karte weg statt Kartentitel über leerer Liste, ebenso eine
+   Überschrift, unter der dann nichts mehr steht („Zum Modul“). Auf Höhe 0 gefaltet, nie display: none (Abschnitt 36). */
+.eba-s-modul .markdown-preview-sizer > :is(.el-div.eba-tl-ohne, .el-h2:has(+ .el-div.eba-tl-ohne + :is(.el-h1, .el-h2, .mod-footer)),
+  .el-h2:has(+ .el-div.eba-tl-ohne:last-child)) { height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; }
 
 /* SQ100 „Meine SQ-Kurse“: vier Kacheln (2 × 2) flacher, Zahl kleiner (vorher 233 px hoch) */
 @container eba-kz (max-width: 480px) {
@@ -2381,8 +2387,7 @@ body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-tabelle"] .bases
 body:not(.is-phone) .eba-s-dashboard .eba-woche { grid-template-rows: 30px !important; grid-auto-rows: 9px; padding-top: 8px; padding-bottom: 10px; }
 body:not(.is-phone) .eba-s-dashboard .eba-tagspalte { position: absolute; grid-row: auto !important; grid-column-end: span 1 !important; top: 0; bottom: 0; left: -3px; right: -3px; margin: 0; z-index: 0; }
 
-/* ---------- 7. Gruß-Kopf: Gruß und Datum mittig zueinander (das Symbol der Übersicht steht seit 0.4.6 in der Kopfleiste jeder
-   Notiz, menue.js). ---------- */
+/* ---------- 7. Gruß-Kopf: Gruß und Datum mittig zueinander. ---------- */
 body:not(.is-phone) .eba-s-dashboard .eba-kz-kopf { align-items: center; }
 
 /* --- 37.termin --- */
@@ -4072,12 +4077,13 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 
 /* ---------- 47. Wochenraster nach Kalenderwoche (Dashboard, Stundenplan; seit 0.3.2) ----------
    Das Raster zeigt eine echte Woche, am Wochenende die nächste: Datum im Kopf jedes Tages, rechts oben „‹ KW n ›“ (Abschnitt
-   55), Kästen nur zwischen von und bis, Ausfälle (ausfall, Pausen) der ganzen Woche durchgestrichen. Findet in der Woche nichts statt, steht
-   in der Mitte ein Satz (Name der Pause, „Vorlesungsbeginn …“, „Vorlesungsfrei“, „Keine Veranstaltungen“). */
+   55), Kästen bis zu bis, vor von blass mit „ab TT.MM.“ (.spaeter), Ausfälle (ausfall, Pausen) der ganzen Woche durchgestrichen. Findet
+   in der Woche nichts statt, steht in der Mitte ein Satz (Name der Pause, „Vorlesungsbeginn …“, „Vorlesungsfrei“, „Keine Veranstaltungen“). */
 .eba-tagkopf { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eba-tagdatum { margin-left: 0.4em; font-weight: 500; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; color: var(--eba-faint); }
 .eba-tagkopf.heute .eba-tagdatum { color: inherit; }
 .eba-ev.ausfall .eba-ev-kurz { text-decoration: line-through; }
+.eba-ev.spaeter { opacity: 0.45; }
 .eba-woche-leer { grid-column: 2 / -1; align-self: center; justify-self: center; position: relative; z-index: 1; text-align: center; }
 .eba-woche-leer span { display: inline-block; padding: 5px 12px; border-radius: var(--eba-radius-s); background: var(--eba-card-bg); font-size: 13px; color: var(--eba-muted); }
 /* schmale Karte (iPhone): Datum kleiner */
@@ -4213,7 +4219,7 @@ body.is-mobile .eba-modal-update .eba-modal-mehr > summary { padding: 12px 0; }
    (.eba-lk-liste), Lernfenster (.eba-lk-fenster; iPhone: ganzer Bildschirm, Knöpfe unten, ≥ 44 px), „Karte hinzufügen“
    (.eba-lk-neu) und Leseansicht der Kartennotizen (.eba-lk-k, eine Zeile je Karte). Nur --eba-*-Variablen. */
 
-/* Symbole: Bereich im Menü, Knöpfe auf der Seite Karteikarten („Karte hinzufügen“ behält das Plus) */
+/* Symbole: Seite in der Übersicht, Knöpfe auf der Seite Karteikarten („Karte hinzufügen“ behält das Plus) */
 li:has(> a[data-href$="Karteikarten"])         { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='14' height='14' rx='2'/%3E%3Cpath d='M7 3h12a2 2 0 0 1 2 2v12'/%3E%3C/svg%3E"); }
 li:has(> a[href*="aktion=karten-lernen"])      { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolygon points='6 3 20 12 6 21 6 3'/%3E%3C/svg%3E"); }
 li:has(> a[href*="aktion=kartenstapel"])       { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='14' height='14' rx='2'/%3E%3Cpath d='M7 3h12a2 2 0 0 1 2 2v12'/%3E%3Cpath d='M10 11v6'/%3E%3Cpath d='M7 14h6'/%3E%3C/svg%3E"); }
@@ -4590,12 +4596,13 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
   body:not(.is-phone) .eba-woche { column-gap: 8px; --eba-wg: 8px; }
 }
 
-/* Schmale Spalten (iPhone, Karte unter 480 px): nur Kurzname und Raum (Zeit nur, wenn geändert); die Art zeigt die Fläche */
+/* Schmale Spalten (iPhone, Karte unter 480 px): nur Kurzname und Raum (Zeit nur, wenn geändert, und „ab TT.MM.“ vor dem Beginn,
+   .spaeter); die Art zeigt die Fläche */
 @container eba-kz (max-width: 480px) {
   .eba-woche .eba-ev, .eba-woche .eba-ev.ue { padding: 3px 4px; gap: 1px; }
   .eba-woche .eba-ev.ue { padding-left: 3px; }
   .eba-woche .eba-ev > b { font-size: 11px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: break-word; }
-  .eba-woche .eba-ev > b i, .eba-woche .eba-ev:not(.geaendert) > span time { display: none; }
+  .eba-woche .eba-ev > b i, .eba-woche .eba-ev:not(.geaendert):not(.spaeter) > span time { display: none; }
   .eba-woche .eba-ev > span {
     display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
     white-space: normal; font-size: 9.5px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto;
@@ -5274,6 +5281,12 @@ body.is-mobile .eba-lp-k > .eba-td-haken { box-sizing: border-box; width: 44px; 
 body.is-phone .eba-lp-k { flex-wrap: wrap; row-gap: 0; padding: 4px 0; }
 body.is-phone .eba-lp-k-text { flex: 1 1 calc(100% - 40px); }
 body.is-phone .eba-lp-k-bis { flex: 1 1 100%; padding: 0 0 6px 40px; margin-top: -6px; }
+/* In Entwicklung (lernplan.js IN_ENTWICKLUNG, seit 19.10.2026): ein Satz oben, der Inhalt abgeblendet und grau, bleibt bedienbar;
+   in der Übersicht (Seitenleiste) ist die Zeile „Lernplan“ ebenso abgeblendet */
+.eba-lp-entwicklung { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+.eba-lp.is-entwicklung > .eba-vb-liste, .eba-lp.is-entwicklung > .eba-lp-leer { opacity: 0.55; filter: grayscale(1); transition: opacity 0.15s ease; }
+.eba-lp.is-entwicklung > .eba-vb-liste:hover, .eba-lp.is-entwicklung > .eba-vb-liste:focus-within { opacity: 0.8; }
+.eba-sl-zeile:has(> a[data-href="Lernplan"]) { opacity: 0.55; }
 /* ---------- Ende Abschnitt 61 ---------- */
 
 /* ---------- 62. Noten & Anmeldungen aus Alma (alma-konto.js; seit 0.4.5, Beta) ----------
@@ -5354,6 +5367,12 @@ body.is-phone .eba-modal-neu .eba-modal-feld.eba-form-kurz { max-width: none; }
 .eba-notizkopf button.eba-vorl-status .eba-vorl-sym:last-child:not(:first-child) { width: 12px; height: 12px; margin-left: -1px; }
 /* Bearbeitungsansicht: Block-Widget von CodeMirror, Abstand als Innenabstand (Ränder misst CodeMirror nicht mit) */
 .markdown-source-view.is-live-preview .cm-content > .eba-notizkopf { margin: 0; padding: 12px 0 14px; }
+/* „⋯“ (Eigenschaften, seit 19.10.2026) rechts neben dem Status-Knopf, auch bei Vorlesung und Übungsblatt; Modulcode im Label öffnet
+   die Modulseite (Link in Label-Farbe, unterstrichen beim Zeigen) */
+.eba-vorl-kopf > .eba-vorl-label { flex: 1 1 auto; }
+.eba-vorl-kopf > button.eba-kopf-mehr { width: 28px; height: 26px; margin: -2px -6px -2px -4px; }
+.eba-vorl-label a.eba-kopf-modul { color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; text-decoration: none; }
+.eba-vorl-label a.eba-kopf-modul:hover { text-decoration: underline; }
 @container eba-vorl (max-width: 480px) { .eba-notizkopf .eba-vorl-label { white-space: normal; } }
 body.is-mobile .eba-vorl button.eba-vorl-status { position: relative; }
 body.is-mobile .eba-vorl button.eba-vorl-status::after {
@@ -5364,4 +5383,61 @@ body.is-mobile .eba-vorl button.eba-vorl-status::after {
    Stundenplan (gruppen.js) öffnen ihre Notiz; der Knopf der Zeile bleibt die Nebenaktion */
 :is(.eba-kachel[data-pfad], tr.eba-gr-nav) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 :is(.eba-kachel[data-pfad], tr.eba-gr-nav):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+/* 64.4 Leere Abschnitte und Eckdaten (kopf.js, seit 19.10.2026): Notizen des Plugins zeigen keine Überschrift mit nur leeren Punkten
+   („- “, „- [ ] “) darunter und keine leere Überschrift; Begleitnotizen keinen erzeugten Kasten „Eckdaten“. Leseansicht: kopf.js
+   markiert Überschriften (eba-abschnitt) und Listen aus nur leeren Punkten (eba-leer); ob eine Überschrift wegfällt, sagt ihr Nachbar
+   (nächste Überschrift, ein Kasten des Plugins oder das Ende). Auf Höhe 0 gefaltet, nie display: none (Abschnitt 36, fb8d768).
+   Bearbeitungsansicht der Begleitnotizen: Zeilen eba-leer-zeile, solange der Cursor nicht darin steht. */
+.markdown-preview-sizer > :is(.el-ul.eba-leer,
+  .el-h2.eba-abschnitt:has(+ .el-ul.eba-leer + :is(.el-h1, .el-h2, .mod-footer)),
+  .el-h2.eba-abschnitt:has(+ .el-ul.eba-leer + .el-div > .callout[data-callout^="eba-"]),
+  .el-h2.eba-abschnitt:has(+ .el-ul.eba-leer:last-child),
+  .el-h2.eba-abschnitt:has(+ :is(.el-h1, .el-h2, .mod-footer)),
+  .el-h2.eba-abschnitt:last-child,
+  .el-div:has(> .callout.eba-eck-leer)) { height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; }
+.markdown-source-view.is-live-preview .cm-content > .cm-line.eba-leer-zeile,
+.markdown-source-view.is-live-preview .cm-content > .cm-embed-block:has(.callout.eba-eck-leer),
+.markdown-source-view.is-live-preview .cm-content > .cm-embed-block:has(.callout.eba-eck-leer) + .cm-line:has(> br:only-child) {
+  height: 0 !important; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0; font-size: 0; line-height: 0; overflow: hidden;
+}
 /* ---------- Ende Abschnitt 64 ---------- */
+
+/* ---------- 65. Vorlesungen auf der Modulseite (modul.js, im Codeblock eba-modul; seit 19.10.2026) ----------
+   Eigener Abschnitt direkt unter dem Modulfeld, über „Unterlagen“, ohne Codeblock in den Modulnotizen: Überschrift als echtes
+   h2 (Gestalt wie jedes ## der Seite, .eba h2 je Design), Zeilen wie die Unterlagen (.eba-ul-*, Abschnitt 58.8), „nachgearbeitet“
+   als Pille, darunter „Neue Vorlesungsnotiz“ (.eba-mod-knopf, im laufenden Semester .haupt) und ab sechs Notizen „Alle n zeigen“
+   (.eba-vb-knopf leise). Leer: ein Satz in --eba-muted vor dem Knopf. Lese- und Bearbeitungsansicht gleich (dort ein Widget). */
+.eba-mod-vl .eba-ul { margin: 0; }
+.eba-mod-vl .eba-ul-zeile { align-items: center; }
+.eba-mod-vl .eba-ul-zeile .eba-pill { flex: none; }
+.eba-mod-vl .eba-ul-zeile:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+.eba-mod-vl:not(.alle) .eba-mod-vl-alt { display: none; }
+.eba-mod-vl-fuss { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin-top: 12px; }
+body.is-mobile .eba-mod-vl-fuss .eba-mod-knopf { min-height: 44px; box-sizing: border-box; }
+/* ---------- Ende Abschnitt 65 ---------- */
+
+/* ---------- 66. Seitenleiste „Übersicht“ (seitenleiste.js; seit 19.10.2026) ----------
+   Linke Seitenleiste (PC) bzw. Schublade (iPhone, iPad): die Seiten (ZIELE in seitenleiste.js) mit ihren Symbolen (Abschnitt 6,
+   li:has(> a[data-href$=…])), darunter „Dieses Semester“ mit dem Modulcode in der ersten Spalte. Die vorn offene Seite bzw. ihr
+   Modul steht im Akzent. Tippflächen auf iPhone und iPad 44 px. */
+.view-content.eba-sl { padding: 8px 6px 16px; }
+.eba-sl-liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+.eba-sl-zeile { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 4px 10px; border-radius: var(--eba-radius-s); color: var(--eba-text); cursor: pointer; }
+body.is-mobile .eba-sl-zeile { min-height: 44px; }
+.eba-sl-zeile:hover { background: color-mix(in srgb, var(--eba-text) 6%, transparent); }
+.eba-sl-zeile.aktiv { background: var(--eba-accent-soft); color: var(--eba-accent-text); }
+.eba-sl-liste:not(.eba-sl-module) > .eba-sl-zeile::before {
+  content: "";
+  flex: 0 0 16px;
+  height: 16px;
+  background-color: var(--eba-muted);
+  -webkit-mask: var(--eba-icon) center / contain no-repeat;
+  mask: var(--eba-icon) center / contain no-repeat;
+}
+.eba-sl-liste > .eba-sl-zeile.aktiv::before { background-color: var(--eba-accent-text); }
+.eba-sl-text { flex: 1 1 auto; min-width: 0; color: inherit !important; font-size: var(--nav-item-size); font-weight: 500; text-decoration: none !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eba-sl-zeile.aktiv > .eba-sl-text { font-weight: 600; }
+.eba-sl-code { flex: 0 0 auto; min-width: 42px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--eba-muted); }
+.eba-sl-zeile.aktiv > .eba-sl-code { color: var(--eba-accent-text); }
+.eba-sl-label { margin: 18px 10px 6px; font-size: var(--eba-label-size); letter-spacing: var(--eba-label-tracking); font-weight: var(--eba-label-weight); text-transform: uppercase; color: var(--eba-accent-text); }
+/* ---------- Ende Abschnitt 66 ---------- */

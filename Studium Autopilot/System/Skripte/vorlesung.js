@@ -85,7 +85,7 @@ module.exports = function (ctx) {
     return erg;
   };
 
-  // ---------- Symbole als eigenes SVG (setIcon blieb auf dem iPad leer, siehe menue.js) ----------
+  // ---------- Symbole als eigenes SVG (setIcon blieb auf dem iPad leer, docs/architektur.md) ----------
   const SYM = {
     status: [["circle", { cx: 12, cy: 12, r: 9 }]],
     fertig: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "m8 12.5 2.6 2.5L16 9.5" }]],
@@ -205,6 +205,9 @@ module.exports = function (ctx) {
     return n;
   };
 
+  // Name einer Vorlesungsnotiz wie überall (ctx.modell.vorlesung); fehlt modell.js noch (Sync), der Dateiname ohne Datum
+  const vlName = (x) => (basis.modell && basis.modell.vorlesung ? basis.modell.vorlesung(x).titel : x.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, ""));
+
   // ---------- Kopf-Karte zeichnen ----------
   const zeichnen = (el, ctx) => {
     const f = app.vault.getAbstractFileByPath(ctx?.sourcePath || "");
@@ -245,6 +248,7 @@ module.exports = function (ctx) {
           await app.fileManager.processFrontMatter(f, (m) => { m.nachgearbeitet = !(m.nachgearbeitet === true); });
         } catch (err) { console.error("Vorlesung Status", err); }
       });
+      if (basis.kopf && basis.kopf.mehr) basis.kopf.mehr(kopf, f); // „⋯“ mit Eigenschaften (kopf.js)
     }
 
     // Titel: Modul (Link) bzw. Thema; darunter das Thema, wenn es etwas anderes sagt
@@ -255,8 +259,12 @@ module.exports = function (ctx) {
       const titel = karte.createDiv({ cls: "eba-vorl-titel" });
       if (x.modulF) link(titel, x.modulF, "eba-vorl-modul", titelText); else titel.setText(titelText);
     }
+    // Darunter der Name der Notiz wie überall („Vorlesung 1 · Mo 13.10. · Thema“, ctx.modell.vorlesung), außer der Titel # sagt
+    // dasselbe (neue Notizen); ohne Modul (Mitschrift zu einem Termin) nur das Thema, wenn es etwas anderes sagt
     const thema = String(fm.thema ?? "").trim();
-    if (thema && thema !== titelText && thema !== h1) karte.createDiv({ cls: "eba-vorl-thema", text: thema });
+    const name = code && f && basis.modell && basis.modell.vorlesung ? basis.modell.vorlesung(f).titel : "";
+    if (name) { if (name !== h1) karte.createDiv({ cls: "eba-vorl-thema", text: name }); }
+    else if (thema && thema !== titelText && thema !== h1) karte.createDiv({ cls: "eba-vorl-thema", text: thema });
 
     // Datum · Uhrzeit · Raum
     const meta = karte.createDiv({ cls: "eba-vorl-meta" });
@@ -287,7 +295,7 @@ module.exports = function (ctx) {
         if (p.hier) cls.push("hier");
         if (p.jetzt) cls.push("jetzt");
         const text = (p.nr ? `Vorlesungswoche ${p.nr} · ab ${tm(p.mo)}` : `ab ${tm(p.mo)}`) + (p.pause ? ` · ${p.pause.name}` : "") +
-          (p.drin.length ? " · " + p.drin.map((n) => n.f.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "") + (n.fertig ? " (nachgearbeitet)" : "")).join(", ") : "");
+          (p.drin.length ? " · " + p.drin.map((n) => vlName(n.f) + (n.fertig ? " (nachgearbeitet)" : "")).join(", ") : "");
         const ziel = p.drin.find((n) => n.f !== f) || null;
         const e = ziel && !p.hier ? link(reihe, ziel.f, cls.join(" "), "") : reihe.createSpan({ cls: cls.join(" ") });
         e.setAttr("title", text);
@@ -427,6 +435,7 @@ module.exports = function (ctx) {
           await app.fileManager.processFrontMatter(f, (m) => { m.status = naechsterStatus(m.status); });
         } catch (err) { console.error("Übungsblatt Status", err); }
       });
+      if (basis.kopf && basis.kopf.mehr) basis.kopf.mehr(kopf, f); // „⋯“ mit Eigenschaften (kopf.js)
     }
 
     // Titel: Modul (Link); darunter das Thema, wenn es im Feld „thema“ steht (der Titel der Aufgaben steht im Chip unten)

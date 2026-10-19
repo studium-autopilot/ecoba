@@ -15,7 +15,7 @@ in der kostenlosen App Obsidian, auf iPhone, iPad, Android, Mac und Windows.
 
 <br>
 
-![Dashboard am Computer und auf dem iPhone: nächste Frist, nächste Prüfung, Semester, ECTS, Gesamtnote, Semesterverlauf und Stundenplan](docs/bilder/vorschau-dashboard-046.png)
+![Dashboard am Computer und auf dem iPhone: nächste Frist, nächste Prüfung, Semester, ECTS, Gesamtnote, Semesterverlauf und Stundenplan](docs/bilder/vorschau-dashboard-047.png)
 
 Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein Konto, keine Kosten, keine Werbung.
 
@@ -61,13 +61,13 @@ Mehrere Geräte? → [Weiteres Gerät verbinden](docs/installation.md#weiteres-g
 
 <img src="docs/bilder/was-drin-2-046.png" width="100%" alt="Stundenplan: eine volle Woche im 3. Semester mit Vorlesungen, Übungen und Tutorien, mit Uhrzeit und Raum. Die Vorlesungen deiner Module stehen von selbst darin, mit deinem Alma-Link deine ganze Woche. Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen.">
 
-<img src="docs/bilder/was-drin-3-046.png" width="100%" alt="Modulseite: Status, ECTS, Semester mit Vorlesungswoche, Prüfung und die nächsten Termine des Moduls. Unterlagen: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur.">
+<img src="docs/bilder/was-drin-3-047.png" width="100%" alt="Modulseite: Status, ECTS, Semester mit Vorlesungswoche, Prüfung, die nächsten Termine des Moduls und deine Vorlesungsnotizen. Unterlagen: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur.">
 
 <img src="docs/bilder/was-drin-4-046.png" width="100%" alt="Noten & ECTS: Gesamtnote, Notenblöcke, ECTS und die Note, die du für deine Zielnote noch brauchst. Übungsblatt auf dem iPad: Abgabe, Status, Knackpunkte und Fragen fürs Tutorium.">
 
 <img src="docs/bilder/was-drin-5-046.png" width="100%" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten. Einstellungen & Hilfe: Verbindungen zu Alma, ILIAS-Unterlagen und ILIAS-Kalender, der Volltext der PDFs, die zentralen Daten und Updates, darunter die Wahl der Variante.">
 
-<img src="docs/bilder/designs-046.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in verschiedenen Designs, hell und dunkel">
+<img src="docs/bilder/designs-047.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in verschiedenen Designs, hell und dunkel">
 
 <p align="center"><b>Verschiedene Designs, hell und dunkel</b></p>
 

@@ -11,7 +11,11 @@
 //  3. Als Nächstes: höchstens drei Einträge ab jetzt: die nächste Sitzung jeder Stundenplan-Serie (ctx.modell.naechsteSitzung:
 //     von/bis, ausfall, aenderungen, Pausen, freie Tage, entfaellt) und Termin-Notizen mit diesem Kürzel (ctx.modell.termine),
 //     die nicht erledigt sind. Tipp öffnet die Notiz.
-//  4. Knöpfe: Neue Vorlesung, Neues Übungsblatt, Karteikarten lernen (wenn es einen Stapel gibt), Unterlagen einordnen, Suchen.
+//  4. Knöpfe: Neues Übungsblatt, Karteikarten lernen (wenn es einen Stapel gibt), Unterlagen einordnen, Suchen.
+//  5. Vorlesungen (seit 19.10.2026): eigener Abschnitt direkt unter dem Modulfeld, über „Unterlagen“, ohne Codeblock in den
+//     Modulnotizen. Deine Vorlesungsnotizen, neueste zuerst, als Zeilen wie die Unterlagen; Name aus ctx.modell.vorlesung
+//     („Vorlesung 1 · Mo 13.10. · Thema“), „nachgearbeitet“ als Pille. Darunter „Neue Vorlesungsnotiz“ (Fenster mit diesem
+//     Modul vorgewählt, im laufenden Semester hervorgehoben); ohne Notizen ein Satz davor. Ab sechs Notizen erst die fünf neuesten.
 //  Unter dem Stand (seit 0.4.5, Beta): ein offener Vorschlag aus Alma („Alma: bestanden · 1,7 · Stand 12.02.“ mit Übernehmen und
 //     Ausblenden), gezeichnet von alma-konto.js (ctx.almaKonto.modulFeld); neu gezeichnet, wenn sich die Daten aus Alma ändern.
 // Reine Logik (naechstes, band, noteOk, titelOhne, spanne) für tests/modul.test.js.
@@ -179,6 +183,40 @@ module.exports = function (ctx) {
 
   const feld = (el, k, cls) => { const b = el.createDiv({ cls: "eba-mod-feld" + (cls ? " " + cls : "") }); b.createDiv({ cls: "eba-mod-k", text: k }); return b; };
 
+  // 5. Vorlesungen: Abschnitt mit Überschrift wie ## (gleiche Gestalt durch .eba h2), Zeilen wie die Unterlagen (.eba-ul-*).
+  // liste = ctx.modell.vorlesungen({ code }) (neueste zuerst); laeuft = laufendes Semester des Moduls (Knopf hervorgehoben).
+  const VL_ERST = 5;
+  const vlAlle = ctx.bleibend("modul-vl-alle", () => ({})); // Code → alle zeigen (je Gerät, überlebt den Hot-Reload)
+  const vorlesungenZeichnen = (el, { code, pfad, liste, laeuft }) => {
+    const s = el.createDiv({ cls: "eba-mod-vl" + (vlAlle[code] ? " alle" : "") });
+    s.createEl("h2", { cls: "eba-mod-vl-titel", text: "Vorlesungen" });
+    if (liste.length) {
+      const l = s.createDiv({ cls: "eba-ul eba-mod-vl-liste" });
+      liste.forEach((v, i) => {
+        const z = l.createDiv({ cls: "eba-ul-zeile" + (i >= VL_ERST && liste.length > VL_ERST + 1 ? " eba-mod-vl-alt" : ""),
+          attr: { role: "link", tabindex: "0", "data-pfad": v.f.path } });
+        z.createSpan({ cls: "eba-ul-titel", text: v.titel });
+        if (v.nachgearbeitet) z.createSpan({ cls: "eba-pill " + ctx.modell.statusArt("nachgearbeitet"), text: "nachgearbeitet" });
+        knopf(z, (e) => oeffnen(v.f, e));
+        z.addEventListener("keydown", (e) => { if (e.key === "Enter") oeffnen(v.f, e); });
+      });
+    }
+    const fuss = s.createDiv({ cls: "eba-mod-vl-fuss" });
+    if (!liste.length) fuss.createSpan({ cls: "eba-ul-leer", text: "Noch keine Vorlesungsnotizen." });
+    const a = fuss.createEl("a", { cls: "eba-mod-knopf" + (laeuft ? " haupt" : ""), href: `${LINK}vorlesung&code=${encodeURIComponent(code)}`,
+      attr: { "data-sa-quelle": pfad } });
+    a.addEventListener("mousedown", (e) => e.stopPropagation());
+    symbol(a.createSpan({ cls: "eba-mod-sym" }), "plus");
+    a.createSpan({ text: "Neue Vorlesungsnotiz" });
+    if (liste.length > VL_ERST + 1) {
+      const mehr = fuss.createEl("button", { cls: "eba-vb-knopf leise eba-mod-vl-mehr", attr: { type: "button" } });
+      const beschriften = () => mehr.setText(vlAlle[code] ? "Weniger zeigen" : `Alle ${liste.length} zeigen`);
+      beschriften();
+      knopf(mehr, () => { vlAlle[code] = !vlAlle[code]; s.toggleClass("alle", !!vlAlle[code]); beschriften(); });
+    }
+    return s;
+  };
+
   const zeichnen = (el, c) => {
     el.empty();
     const f = app.vault.getAbstractFileByPath(c.sourcePath);
@@ -250,11 +288,10 @@ module.exports = function (ctx) {
 
     // 2. Semesterband: im laufenden Semester des Moduls, sonst nur, wenn es darin Vorlesungsnotizen gibt
     const laeuft = !!(sem && D.aktuell && D.aktuell.name === sem.name);
+    const vl = M.vorlesungen ? M.vorlesungen({ code }) : []; // fehlt, solange der Sync ein älteres modell.js hat
     if (sem && sem.vb && sem.ve) {
       const W = M.vorlesungswochen({ vb: sem.vb, ve: sem.ve, name: sem.name });
-      const notizen = app.vault.getMarkdownFiles().map((x) => ({ x, m: fmVon(x) }))
-        .filter(({ m }) => m.typ === "vorlesung" && text(m.code) === code && datum(m.datum))
-        .map(({ x, m }) => ({ f: x, d: datum(m.datum), fertig: m.nachgearbeitet === true }));
+      const notizen = vl.filter((v) => datum(v.datum)).map((v) => ({ f: v.f, d: datum(v.datum), fertig: v.nachgearbeitet, titel: v.titel }));
       const B = band({ wochen: W && W.wochen, notizen, woche: M.planwoche().mo, pruefung: pr && pr.offen ? pr.datum : null });
       if (B.zellen.length && (laeuft || B.zellen.some((z) => z.stand))) {
         const b = box.createDiv({ cls: "eba-mod-band", attr: { style: `--eba-mod-n: ${B.zellen.length}` } });
@@ -268,7 +305,7 @@ module.exports = function (ctx) {
           if (z.pruefung) k.push("pruefung");
           if (z.stand) k.push("n" + z.stand);
           const titel = (z.nr ? `Vorlesungswoche ${z.nr}` : z.pruefung ? "Prüfung" : "Pause") + ` · ${pad(z.mo.getDate())}.${pad(z.mo.getMonth() + 1)}.`
-            + (z.notizen.length ? ` · ${z.notizen.length === 1 ? "1 Notiz" : z.notizen.length + " Notizen"}` : "");
+            + (z.notizen.length ? " · " + z.notizen.map((n) => n.titel).join(", ") : "");
           const zelle = reihe.createSpan({ cls: k.join(" "), attr: { title: titel } });
           if (z.notizen.length) { zelle.addClass("eba-mod-tipp"); knopf(zelle, (e) => oeffnen(z.notizen[0].f, e)); }
         }
@@ -299,7 +336,6 @@ module.exports = function (ctx) {
     const stapel = app.vault.getMarkdownFiles().some((x) => { const m = fmVon(x); return m.typ === "karteikarten" && text(m.code) === code; });
     const q = encodeURIComponent(code);
     const knoepfe = [
-      ["file-plus", "Neue Vorlesung", `vorlesung&code=${q}`],
       ["file-pen", "Neues Übungsblatt", `uebungsblatt&code=${q}`],
       stapel ? ["layers", "Karteikarten lernen", `karten-lernen&code=${q}`] : null,
       ["folder-input", "Unterlagen einordnen", `einordnen&code=${q}`],
@@ -307,12 +343,14 @@ module.exports = function (ctx) {
     ];
     for (const x of knoepfe) {
       if (!x) continue;
-      // Hervorgehoben nur im laufenden Semester des Moduls (dann entstehen Vorlesungsnotizen)
-      const a = k.createEl("a", { cls: "eba-mod-knopf" + (laeuft && x === knoepfe[0] ? " haupt" : ""), href: LINK + x[2], attr: { "data-sa-quelle": f.path } });
+      const a = k.createEl("a", { cls: "eba-mod-knopf", href: LINK + x[2], attr: { "data-sa-quelle": f.path } });
       a.addEventListener("mousedown", (e) => e.stopPropagation());
       symbol(a.createSpan({ cls: "eba-mod-sym" }), x[0]);
       a.createSpan({ text: x[1] });
     }
+
+    // 5. Vorlesungen: direkt unter dem Modulfeld (über „## Unterlagen“); im laufenden Semester ist „Neue Vorlesungsnotiz“ der Hauptknopf
+    if (M.vorlesungen) vorlesungenZeichnen(el, { code, pfad: f.path, liste: vl, laeuft });
   };
 
   let block = null;
@@ -335,5 +373,5 @@ module.exports = function (ctx) {
     if (ctx.almaKonto && ctx.almaKonto.beobachten) ctx.aufraeumen(ctx.almaKonto.beobachten(bald));
   };
 
-  return { registrieren, zeichnen, naechstes, band, noteOk, titelOhne, spanne };
+  return { registrieren, zeichnen, vorlesungenZeichnen, naechstes, band, noteOk, titelOhne, spanne };
 };

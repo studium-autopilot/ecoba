@@ -2,7 +2,8 @@
 // außer dem Gerüst der Vorlage nichts steht (Überschriften, leere Aufzählungspunkte, Beschriftungen wie „Ansatz:“ oder
 // „Kernaussagen:“, der Kopf-Codeblock, Callouts der Vorlage), wandert sie in den Vault-Papierkorb (`.trash/`, wiederherstellbar).
 // Termine, Module, Stundenplan-Einträge, Begleitnotizen sind ausgenommen: ihr Inhalt steht in den Eigenschaften. Ebenso ein
-// Übungsblatt mit Abgabedatum (oder verknüpften Aufgaben bzw. eigener Lösung): Seine Abgabe zählt in Fristen und Unterlagen.
+// Übungsblatt mit Abgabedatum (oder verknüpften Aufgaben bzw. eigener Lösung): Seine Abgabe zählt in Fristen und Unterlagen. Und
+// eine Vorlesungsnotiz mit Thema (das Fenster „Neue Vorlesungsnotiz“ fragt danach): Sie steht so auf der Modulseite.
 // „Verlassen“ = eine andere Notiz wird aktiv oder der Tab schließt (Ereignis file-open; der Wechsel zu Folien, PDFs oder
 // Bildern zählt nicht). Geprüft wird 2,5 s später, und nur,
 // wenn die Notiz in keinem Tab mehr sichtbar ist (geteilte Ansicht, Seitenleiste am PC: nichts passiert). Text aus einem noch
@@ -36,9 +37,13 @@ module.exports = function (ctx) {
     return true;
   };
 
-  // Übungsblatt mit Angaben in den Eigenschaften (Abgabe, Aufgaben, eigene Lösung): bleibt, auch ohne Text darunter
-  const hatAngaben = (fm) => !!fm && String(fm.typ || "").toLowerCase() === "übungsblatt"
-    && ["faellig", "datei", "eigene_loesung"].some((k) => fm[k] != null && String(fm[k]).trim() !== "");
+  // Übungsblatt mit Angaben in den Eigenschaften (Abgabe, Aufgaben, eigene Lösung) oder Vorlesung mit Thema: bleibt, auch ohne Text
+  const gefuellt = (fm, k) => fm[k] != null && String(fm[k]).trim() !== "";
+  const hatAngaben = (fm) => {
+    const typ = String((fm && fm.typ) || "").toLowerCase();
+    if (typ === "vorlesung") return gefuellt(fm, "thema");
+    return typ === "übungsblatt" && ["faellig", "datei", "eigene_loesung"].some((k) => gefuellt(fm, k));
+  };
 
   const fmVon = (f) => { const c = app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
   const blaetter = (f) => app.workspace.getLeavesOfType("markdown").filter((l) => l.view && l.view.file === f);
@@ -57,7 +62,8 @@ module.exports = function (ctx) {
       if (app.workspace.getActiveFile() === f) return false;               // doch wieder offen
       if (blaetter(f).some((l) => l.view.containerEl && l.view.containerEl.isShown && l.view.containerEl.isShown())) return false;
       if (!istLeer(await textVon(f))) return false;
-      const text = `„${f.basename}“ war leer und liegt jetzt im Papierkorb.`;
+      const M = ctx.modell, name = M && M.vorlesung && String(fm.typ).toLowerCase() === "vorlesung" ? M.vorlesung(f).titel : f.basename;
+      const text = `„${name}“ war leer und liegt jetzt im Papierkorb.`;
       if (ctx.papierkorb) return await ctx.papierkorb(f, { text }); // mit „Rückgängig“ (papierkorb.js)
       await app.vault.trash(f, false);
       ctx.hinweis(text);

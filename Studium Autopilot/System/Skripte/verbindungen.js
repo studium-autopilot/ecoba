@@ -1,7 +1,7 @@
 // Verbindungen und Schloss-System (Phase 2b).
 // Alles, was eine Verbindung braucht, zeigt ein Schloss. Ein Klick erklärt, was fehlt, und verbindet direkt.
 // Symbole (seit 15.10.2026): ruhige Lucide-Linien als inline-SVG in currentColor (SYMBOLE), keine Emojis; setIcon blieb auf
-// dem iPad leer (siehe menue.js). Farbe über die Klasse am Rahmen (eba-core.css 43).
+// dem iPad leer (docs/architektur.md, Verbindungen). Farbe über die Klasse am Rahmen (eba-core.css 43).
 // Links (z. B. der Alma-Kalenderlink) und der ILIAS-Benutzername liegen NUR gerätelokal (app.saveLocalStorage), nie in einer
 // Datei des Vaults. Passwörter: nur dein Uni-Passwort (seit 0.4.0), und nur im Schlüsselbund von Obsidian auf diesem Gerät
 // (ilias.js, app.secretStorage: verschlüsselt, nie synchronisiert). Dieses Skript reicht es nur als Funktion an
@@ -40,14 +40,19 @@
 //                           „Aktualisiert vor 5 Min.“, Fehler „<Satz> Zuletzt aktualisiert …“ mit Warnsymbol, Warnungen
 //                           angehängt, ein anderes Gerät aktualisiert → „Hier aktualisieren“. Wörter in WORT (Entscheidung E1:
 //                           Daten holt man mit „Aktualisieren“).
-//   ```eba-alma-knoepfe```  Knopf auf der Seite Stundenplan (seit 0.3.0): verbunden → „Stundenplan aus Alma holen“, sonst
-//                           „Alma verbinden“ mit einem Satz dazu; im eigenen Uni-Abgleich nichts.
+//                           Über ein anderes Gerät verbunden (seit 0.4.7, ortVon, Q.verbindung): Link und Passwort liegen nur
+//                           auf einem Gerät. Hält ein anderes die Sperre der Quelle (sperre.js) und war es vor höchstens 7 Tagen
+//                           aktiv, steht „Verbunden über ein anderes Gerät · aktualisiert vor …“ mit Pille „verbunden“, rechts nur
+//                           „Mehr erfahren“; das Fenster bietet leise „Auch hier verbinden“ (Aktion verbinden mit auch=1). Länger
+//                           still oder getrennt: wie nie verbunden.
+//   ```eba-alma-knoepfe```  Knopf auf der Seite Stundenplan (seit 0.3.0): verbunden → „Stundenplan aktualisieren“, sonst
+//                           „Alma verbinden“ mit einem Satz dazu; im eigenen Uni-Abgleich und über ein anderes Gerät verbunden nichts.
 //   ```eba-ilias-knopf```   Steht in der Knopf-Karte der Seite Unterlagen (seit 0.4.0) und zeichnet nichts. Ist ILIAS auf diesem
 //                           Gerät verbunden, trägt er die Klasse eba-ilias-an; dann zeigt CSS (eba-core.css 49) den festen Knopf
 //                           „Unterlagen aktualisieren“ derselben Karte, sonst ist er ausgeblendet. So bleiben alle Knöpfe normales Markdown.
 // Schloss (seit 0.3.0): nur, wenn der Schritt in der Einrichtung übersprungen wurde oder die Einrichtung nicht fertig ist
 //   (ctx.einrichtung.almaOffen() bzw. iliasOffen(); ILIAS auch, wenn die Einrichtung aus 0.3.x ohne ILIAS-Schritt stammt), keine
-//   Daten da sind (Stundenplan bzw. Unterlagen aus ILIAS, z. B. per Sync) und dieses Gerät nicht verbunden ist. Im eigenen
+//   Daten da sind (Stundenplan bzw. Unterlagen aus ILIAS, z. B. per Sync) und weder dieses noch ein anderes Gerät verbunden ist. Im eigenen
 //   Uni-Abgleich nie ein Schloss, weder für Alma noch für ILIAS.
 // Fenster: kein Knopf, der nur schließt (dafür ist das ×), höchstens ein Hauptknopf (mod-cta) je Fenster.
 // Aktionen (Knöpfe obsidian://studium-autopilot?aktion=…&id=alma): verbinden, verbindung-aktualisieren (ILIAS: uebernehmen=1
@@ -103,6 +108,44 @@ module.exports = function (ctx) {
   const iliasOhneAnmeldung = (s) => !ctx.ilias || s.text === ctx.ilias.K.TEXT_ANMELDUNG_FOLGT;
   const mobil = !!(Platform && Platform.isMobile);
 
+  // ---------- Verbunden in diesem Tresor (seit 0.4.7, quellen.js verbindung) ----------
+  // Link und Passwort liegen nur auf dem Gerät, das verbunden ist; die Daten kommen über den Sync. Hält ein anderes Gerät die Sperre
+  // der Quelle (sperre.js) und war es vor höchstens 7 Tagen aktiv, gilt die Quelle auch hier als verbunden: kein Verbinden-Knopf,
+  // kein Schloss. sperrenLesen() liest die Sperren beim Start und nach jeder Änderung (Sync, eigener Lauf); geändert → neu zeichnen.
+  const FREMD = ["alma", "ilias", "ilias-kalender", "alma-konto"];
+  const sperren = {}; // Quelle → Inhalt der Sperre (sperre.lesenAus) oder null
+  const sperrePfad = (q) => `System/Daten/${q}-abruf.json`; // wie sperre.pfadVon
+  const geraetId = () => (ctx.zentral && ctx.zentral.geraetId ? ctx.zentral.geraetId() : String(app.loadLocalStorage("eba-geraet") || ""));
+  const sperrenLesen = async () => {
+    const S = ctx.user && ctx.user.sperre;
+    if (!S || !S.lesenAus) return false;
+    let neu = false;
+    for (const q of FREMD) {
+      const f = app.vault.getAbstractFileByPath(sperrePfad(q));
+      let a = null;
+      try { a = f ? S.lesenAus(await app.vault.read(f)) : null; } catch (e) { a = null; }
+      if (JSON.stringify(a) !== JSON.stringify(sperren[q] || null)) { sperren[q] = a; neu = true; }
+    }
+    return neu;
+  };
+  // Wo ist die Verbindung v mit ihrem Status s? → { art: "hier" | "anderswo" | "nein", zuletzt }. Hier: Link bzw. Zugang auf diesem
+  // Gerät (ILIAS im eigenen Uni-Abgleich: für die Übungsgruppen). Noten & Anmeldungen kann nur statt „Braucht deinen Uni-Zugang“
+  // anderswo sein. Nie anderswo: Quelle von außen (dann gibt es nichts zu verbinden) und ILIAS mit abgelehntem Passwort (auf einem
+  // deiner Geräte; sonst sähe es aus, als liefe alles).
+  const HIER = Object.freeze({ art: "hier", zuletzt: "" }), NEIN = Object.freeze({ art: "nein", zuletzt: "" });
+  const ortVon = (v, s) => {
+    const Q = ctx.user && ctx.user.quellen;
+    s = s || {};
+    if (!v || FREMD.indexOf(v.id) < 0) return NEIN;
+    if (v.art === "konto" ? s.benutzer : s.verbunden || s.gruppenZugang) return HIER;
+    if (v.art === "konto" && s.art !== "ohne-zugang") return NEIN;
+    if ((s.extern && (v.id !== "ilias" || s.gruppenExtern)) || s.abgelehnt) return NEIN;
+    if (!Q || !Q.verbindung) return NEIN; // quellen.js einer älteren Fassung: wie bisher
+    return Q.verbindung({ sperre: sperren[v.id] || null, geraet: geraetId(), jetztMs: Date.now() });
+  };
+  const anderswo = (v, s) => ortVon(v, s).art === "anderswo";
+  const imTresor = (id) => { const v = holen(id); return ortVon(v, v ? v.status() : null); };
+
   // ---------- Symbole (Lucide, 24er-Raster, Strich in currentColor) ----------
   const SYMBOLE = {
     schloss: '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
@@ -148,9 +191,9 @@ module.exports = function (ctx) {
         return Object.assign({}, s, { verbunden: !!s.verbunden, seit: s.seit, stand: s.stand, daten: stundenplanAnzahl(), extern: stundenplanExtern() });
       },
       // Gesperrt nur, wenn weder ein Link auf diesem Gerät noch eigene Stundenplan-Notizen (z. B. per Sync) noch zentrale
-      // Vorlesungen noch ein eigener Uni-Abgleich da sind UND Alma in der Einrichtung offen blieb (übersprungen, „Später“ oder
-      // Einrichtung nicht fertig)
-      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && !s.extern && !zentralerPlan().anzahl && almaOffen(); },
+      // Vorlesungen noch ein eigener Uni-Abgleich noch ein anderes verbundenes Gerät da sind UND Alma in der Einrichtung offen
+      // blieb (übersprungen, „Später“ oder Einrichtung nicht fertig)
+      gesperrt() { const s = this.status(); return !s.verbunden && !s.daten && !s.extern && !zentralerPlan().anzahl && almaOffen() && !anderswo(this, s); },
       pruefen(link) { return alma().linkPruefen(link); },
       async verbinden(link) {
         const a = alma();
@@ -194,7 +237,7 @@ module.exports = function (ctx) {
         const s = ctx.ilias ? ctx.ilias.status() : { verbunden: false, extern: false, text: "Wird geladen …" };
         return Object.assign({}, s, { daten: iliasAnzahl() });
       },
-      gesperrt() { const s = this.status(); return !s.verbunden && !s.extern && !s.daten && !iliasOhneAnmeldung(s) && iliasOffen(); },      // Knopf: Ergebnis zeigt ilias.js selbst als Hinweis; uebernehmen = hier laden, obwohl ein anderes Gerät dran ist
+      gesperrt() { const s = this.status(); return !s.verbunden && !s.extern && !s.daten && !iliasOhneAnmeldung(s) && iliasOffen() && !anderswo(this, s); },      // Knopf: Ergebnis zeigt ilias.js selbst als Hinweis; uebernehmen = hier laden, obwohl ein anderes Gerät dran ist
       async aktualisieren(p) { return ctx.ilias.jetztHolen({ uebernehmen: !!(p && (p.uebernehmen === true || p.uebernehmen === "1")) }); },
       async trennen() { await ctx.ilias.zugangLoeschen(); },
     },
@@ -408,6 +451,25 @@ module.exports = function (ctx) {
       const weg = k.createEl("button", { text: "Trennen", cls: "mod-warning" });
       neu.addEventListener("click", () => { this.close(); const m = new VerbindenFenster(v); fenster = m; m.open(); });
       weg.addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: v.id }); });
+    }
+    onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
+  }
+
+  // Über ein anderes Gerät verbunden (seit 0.4.7, ortVon): Stand und leise „Auch hier verbinden“ (öffnet das Verbinden der Quelle,
+  // aus „Noten & Anmeldungen“ das ILIAS-Fenster wie dort). Kein Hauptknopf: Ein Gerät reicht.
+  class AnderswoFenster extends Modal {
+    constructor(v) { super(app); this.v = v; }
+    onOpen() {
+      const v = this.v, c = this.contentEl;
+      this.modalEl.addClass("eba-modal", "eba-modal-verbinden");
+      this.titleEl.setText(v.name);
+      c.createEl("p", { cls: "eba-modal-marke" }).innerHTML = PILLE.an;
+      c.createEl("p", { cls: "eba-modal-text", text: anderswoText(imTresor(v.id)) });
+      c.createEl("p", { cls: "eba-modal-hinweis", text: "Ein Gerät reicht, alles kommt über deinen Sync." });
+      c.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Auch hier verbinden" }).addEventListener("click", () => {
+        this.close();
+        ctx.aktion("verbinden", v.art === "konto" ? { id: "ilias", fuer: "alma", auch: "1" } : { id: v.id, auch: "1" });
+      });
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
@@ -643,6 +705,8 @@ module.exports = function (ctx) {
   const fensterOeffnen = (v, p) => {
     // Alma bzw. ILIAS-Kalender im eigenen Uni-Abgleich ohne Link: nichts zu verbinden (der Abgleich bringt die Daten), nur der Satz
     if (v.art === "link") { const s = v.status(); if (s.extern && !s.verbunden) { ctx.hinweis(v.externText); return null; } }
+    // Über ein anderes Gerät verbunden: erst der Stand; „Auch hier verbinden“ (auch=1) öffnet das Verbinden
+    if (!(p && (p.auch === true || p.auch === "1")) && anderswo(v, v.status())) { const a = new AnderswoFenster(v); fenster = a; a.open(); return a; }
     if (v.art === "konto") { const k = ctx.almaKonto ? ctx.almaKonto.fensterOeffnen() : null; fenster = k; return k; }
     const m = v.art === "anmeldung" ? new IliasFenster(v, { alleAus: !!(p && p.fuer === "alma") }) : v.art !== "link" ? new InfoFenster(v) : v.status().verbunden ? new VerwaltenFenster(v) : new VerbindenFenster(v);
     fenster = m;
@@ -729,6 +793,12 @@ module.exports = function (ctx) {
   // Knopf einer Quelle: Aktualisieren bzw. Hier aktualisieren (ein anderes Gerät schreibt gerade; der Knopf übernimmt)
   const aktualisierenKnopf = (id, hier, parameter) => `<a class="eba-vb-knopf cta" href="${ctx.link("verbindung-aktualisieren", Object.assign({ id }, hier ? parameter : {}))}">${esc(hier ? WORT.hier : WORT.knopf)}</a>`;
 
+  // Über ein anderes Gerät verbunden (ortVon): „verbunden“, wann es zuletzt aktiv war, rechts nur „Mehr erfahren“ (Fenster mit
+  // „Auch hier verbinden“); zusatz: Satz dahinter (ILIAS im eigenen Uni-Abgleich)
+  const anderswoText = (o) => { const bis = vor(o.zuletzt); return `Verbunden über ein anderes Gerät${bis ? ` · aktualisiert ${bis}` : ""}.`.replace(/\.\./g, "."); };
+  const anderswoZeile = (v, s, zusatz) => ({ zu: false, text: anderswoText(ortVon(v, s)) + (zusatz ? " " + zusatz : ""), pille: PILLE.an, symbol: "haken",
+    ton: "ok", knopf: knopf("verbinden", v.id, "Mehr erfahren", ""), link: "" });
+
   const statusZeile = (v) => {
     if (v.art === "zentral") {
       if (!ctx.zentral) return { zu: false, text: "Wird geladen …", pille: `<span class="eba-pill leer">…</span>`, symbol: "uhr", ton: "leise", knopf: "", link: "" };
@@ -751,7 +821,12 @@ module.exports = function (ctx) {
       return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
     }
     if (v.art === "anmeldung") return iliasZeile(v);
-    if (v.art === "konto") return quelleZeile(ctx.almaKonto ? ctx.almaKonto.zeile() : null);
+    if (v.art === "konto") {
+      // „Braucht deinen Uni-Zugang“, aber ein anderes Gerät prüft schon: verbunden
+      const s = ctx.almaKonto ? v.status() : null;
+      if (s && s.art === "ohne-zugang" && anderswo(v, s)) return anderswoZeile(v, s);
+      return quelleZeile(ctx.almaKonto ? ctx.almaKonto.zeile() : null);
+    }
     if (v.art === "volltext") return volltextZeile(v);
     if (v.id === "ilias-kalender") return kalenderZeile(v);
     return almaZeile(v);
@@ -781,6 +856,7 @@ module.exports = function (ctx) {
       const t = standText(Object.assign({ geprueft: s.stand }, s));
       return { zu: false, text: t.text, pille: PILLE.an, symbol: t.symbol, ton: t.ton, knopf: aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", {}), link: mehrLink(v.id) };
     }
+    if (anderswo(v, s)) return anderswoZeile(v, s);
     if (s.daten) return { zu: false, text: `Dein Stundenplan liegt vor (${s.daten} ${s.daten === 1 ? "Eintrag" : "Einträge"}).`, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
     if (zentralerPlan().verfuegbar) return { zu: false, text: "Nicht nötig: " + ALMA_FREIWILLIG, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
     return { zu: true, text: "Mit Alma siehst du deine Woche im Stundenplan.", pille: PILLE.nicht, symbol: "schloss", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
@@ -793,6 +869,7 @@ module.exports = function (ctx) {
     if (!ctx.iliasKalender) return null;
     const s = v.status();
     if (s.extern) return { zu: false, text: s.verbunden ? `${v.externText} Der Link auf diesem Gerät wird nicht genutzt.` : v.externText, pille: "", symbol: "haken", ton: "ok", knopf: "", link: s.verbunden ? textLink("trennen", v.id, "Trennen") : "" };
+    if (!s.verbunden && anderswo(v, s)) return anderswoZeile(v, s);
     if (!s.verbunden) return { zu: false, text: v.satz, pille: "", symbol: "aus", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
     const t = standText(s), n = Number(s.abgaben) || 0;
     const zahl = s.zustand !== "an" ? "" : n ? ` ${n === 1 ? "1 Abgabe steht" : `${n} Abgaben stehen`} bei deinen Fristen.` : " Gerade keine Abgaben offen.";
@@ -808,6 +885,7 @@ module.exports = function (ctx) {
     const symbol = s.laeuft ? "uhr" : s.fehler || s.warnung ? "warnung" : "haken"; // warnung: Satz des letzten Laufs steht in s.text
     if (s.extern) {
       if (s.gruppenExtern) return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: "", link: s.benutzer ? textLink("trennen", v.id, "Trennen") : "" };
+      if (!s.gruppenZugang && anderswo(v, s)) return anderswoZeile(v, s, s.text);
       if (!s.gruppenZugang) return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: ctx.ilias.kannSpeichern() ? knopf("verbinden", v.id, "Für Übungsgruppen verbinden", "") : "", link: "" };
       if (s.gesperrt) return abgelehnt;
       return { zu: false, text: s.text, pille: PILLE.an, symbol, ton: tonVon(symbol), knopf: knopf("verbindung-aktualisieren", v.id, WORT.knopf, "cta"), link: textLink("trennen", v.id, "Trennen") };
@@ -817,6 +895,7 @@ module.exports = function (ctx) {
       const t = s.laeuft || !s.zustand ? { text: s.text, symbol, ton: tonVon(symbol) } : Object.assign(standText(s), { text: iliasText(s) });
       return { zu: false, text: t.text, pille: PILLE.an, symbol: t.symbol, ton: t.ton, knopf: aktualisierenKnopf(v.id, !!s.anderes, { uebernehmen: "1" }), link: mehrLink(v.id) };
     }
+    if (anderswo(v, s)) return anderswoZeile(v, s);
     if (s.daten) return { zu: false, text: `${s.daten === 1 ? "1 Unterlage aus ILIAS liegt" : `${s.daten} Unterlagen aus ILIAS liegen`} vor.`, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
     return { zu: true, text: v.kurz, pille: PILLE.nicht, symbol: "schloss", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
   };
@@ -855,15 +934,16 @@ module.exports = function (ctx) {
     }
   };
 
-  // Knöpfe der Seite Stundenplan (```eba-alma-knoepfe```, seit 0.3.0): verbunden → nur „Stundenplan aus Alma holen“, sonst nur
+  // Knöpfe der Seite Stundenplan (```eba-alma-knoepfe```, seit 0.3.0): verbunden → nur „Stundenplan aktualisieren“, sonst nur
   // „Alma verbinden“ und ein Satz dazu. Den Satz nicht, solange das Schloss gilt: Dann erklärt die Schloss-Karte darunter dasselbe
   // (Aufräumrunde 16.10.2026). Gleiche Gestalt wie eine Knopf-Karte > [!eba-neu|ohne-titel] (eba-core.css 6). Eigener
-  // Uni-Abgleich: nichts (der Abgleich bringt den Stundenplan, alma.js holt dann auch mit Link nichts).
+  // Uni-Abgleich: nichts (der Abgleich bringt den Stundenplan, alma.js holt dann auch mit Link nichts). Über ein anderes Gerät
+  // verbunden (seit 0.4.7): auch nichts; „Auch hier verbinden“ steht nur leise im Fenster unter Verbindungen.
   const almaKnoepfe = (el) => {
     el.empty();
     const s = VERBINDUNGEN.alma.status(), verbunden = !!s.verbunden;
     el.toggleClass("eba-alma-verbunden", verbunden);
-    if (s.extern) return;
+    if (s.extern || (!verbunden && anderswo(VERBINDUNGEN.alma, s))) return;
     const karte = el.createDiv({ cls: "callout eba-alma-knoepfe", attr: { "data-callout": "eba-neu", "data-callout-metadata": "ohne-titel" } });
     const li = karte.createDiv({ cls: "callout-content" }).createEl("ul").createEl("li");
     if (verbunden) li.createEl("a", { text: "Stundenplan aktualisieren", href: ctx.link("stundenplan", {}) });
@@ -972,9 +1052,10 @@ module.exports = function (ctx) {
 
   // Für andere Skripte (z. B. ein Raster, das selbst zeichnet)
   // zeile(id): Inhalt der Zeile unter Verbindungen (statusZeile; für Tests). ALMA_EXTERN: Satz für Alma im eigenen Uni-Abgleich
-  // (auch die Einrichtung).
+  // (auch die Einrichtung). imTresor(id): { art: hier | anderswo | nein, zuletzt } (über ein anderes Gerät verbunden?);
+  // sperrenLesen(): Sperren der Quellen neu lesen → true, wenn sich etwas geändert hat.
   ctx.verbindungen = { liste: VERBINDUNGEN, holen, svg, gesperrt: (id) => { const v = holen(id); return v ? v.gesperrt() : false; }, schlossKarte, fensterOeffnen, neuZeichnen, iliasStand, fett, textTeile,
-    standText, quelleZeile, WORT,
+    standText, quelleZeile, WORT, imTresor, sperrenLesen,
     zeile: (id) => { const v = holen(id); return v ? statusZeile(v) : null; }, ALMA_EXTERN,
     ALMA: { start: ALMA_START, stundenplan: ALMA_STUNDENPLAN },
     get fenster() { return fenster; } }; // offenes Verbinden-/Info-Fenster (für Tests)
@@ -1002,6 +1083,12 @@ module.exports = function (ctx) {
     // Schloss auf Unterlagen: verschwindet, sobald Unterlagen aus ILIAS da sind (auch per Sync)
     const unterlagenBald = ctx.entprellen(neuZeichnen, 1500);
     ctx.an(app.metadataCache, "changed", (f) => { if (f.path.startsWith("Unterlagen/")) unterlagenBald(); });
+    // Über ein anderes Gerät verbunden: Sperren der Quellen beim Start und nach jeder Änderung (Sync, eigener Lauf) lesen,
+    // geändert → neu zeichnen
+    const pfade = FREMD.map(sperrePfad);
+    const sperrenBald = ctx.entprellen(() => { sperrenLesen().then((neu) => { if (neu) neuZeichnen(); }, () => {}); }, 1000);
+    for (const art of ["create", "modify", "delete"]) ctx.an(app.vault, art, (f) => { if (f && pfade.indexOf(f.path) >= 0) sperrenBald(); });
+    sperrenBald();
     // Neu zeichnen, wenn sich der Stundenplan ändert (Import, Sync) – über das Datenmodell, sonst direkt
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(() => neuZeichnen()));
     else {

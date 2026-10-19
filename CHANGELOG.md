@@ -2,6 +2,29 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.7 – Seitenleiste, Vorlesungsnotizen und ruhigere Unterlagen
+
+- **Neu:** Für die Module des ersten Semesters steht der **Lernplan** jetzt von selbst bereit und zeigt, welches Kapitel diese
+  Woche dran ist. Er ist noch in Entwicklung und kann sich ändern.
+- **Einfacher:** Die **Übersicht** steht jetzt links in der Seitenleiste statt hinter dem Raster-Symbol, mit allen Seiten und den
+  Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie oben links.
+- **Übersichtlicher:** Eine gewählte Übungs- oder Tutoriumsgruppe steht gleich nach der Anmeldung im **Stundenplan**, blass
+  mit ihrem ersten Termin („ab 04.11.“), nicht erst ab der Woche, in der sie beginnt.
+- **Übersichtlicher:** Deine Vorlesungsnotizen stehen oben auf jeder Modulseite, neueste zuerst, mit **Neue Vorlesungsnotiz**.
+  Überall heißen sie jetzt „Vorlesung 1 · Mo 13.10.“, mit Thema, wenn es bekannt ist.
+- **Übersichtlicher:** Unterlagen öffnen zum Lesen: oben Stand und Modul, gleich darunter die PDF mit **Öffnen**. Doppelte
+  Angaben, der Knopf „Größe“ und leere Abschnitte mit einsamem Punkt oder Kästchen sind weg, auch in älteren Notizen.
+- **Zuverlässiger:** Klappt die Anmeldung bei ILIAS nicht, steht ein Code für deine Meldung im Hinweis. Ist Alma oder ILIAS auf
+  einem deiner Geräte verbunden, zeigen die anderen jetzt „verbunden“ statt **Verbinden**.
+- **Einheitlicher:** Unter „Als Nächstes“ auf der Modulseite heißt die Vorlesung jetzt Vorlesung statt Veranstaltung, und eine
+  leere Liste unter „Zum Modul“ fällt weg.
+- **Behoben:** Ein Tipp auf den PDF-Kasten zeigte manchmal seinen Text und öffnete die Tastatur. Jetzt klappt er bei jedem
+  Tipp nur auf oder zu.
+- **Behoben:** Über Terminen, Unterlagen und anderen Notizen von Studium Autopilot stand oft ein leerer Bereich
+  „Eigenschaften“. Du findest ihn jetzt oben in der Notiz unter **⋯** → **Eigenschaften**.
+- **Behoben:** Auf dem iPhone fehlte der Rahmen um die Lehrveranstaltung, die gerade läuft, und eine Gruppe vor ihrem ersten
+  Termin zeigte kein „ab 04.11.“. Beides steht jetzt auf allen Geräten.
+
 ## 0.4.6 – Abgaben aus ILIAS und einfachere Bedienung
 
 - **Neu:** Verbindest du unter **Einstellungen & Hilfe** den **ILIAS-Kalender**, stehen die Abgabetermine deiner Übungen bei

@@ -2,8 +2,10 @@
 // jedem Gerät, ohne Schalter. Schreibt keine Notizen. Punkte:
 //  1. Dashboard als Startseite in der Leseansicht zeigen (nur beim App-Start: start()); seit 0.4.6 nicht mehr angeheftet.
 //  2. Übersichtsseiten bleiben in der Leseansicht (Dashboard, Seiten in Studium/, Einstellungen, Daten; seit 17.10.2026), deine
-//     Notizen öffnen von dort in der Bearbeitungsansicht (seit 0.4.6, wie ctx.oeffnen).
-//  3. Seitenklasse aus dem Feld `typ` an die Ansicht hängen (Gestaltung auch für Notizen ohne `cssclasses`).
+//     Notizen öffnen von dort in der Bearbeitungsansicht (seit 0.4.6, wie ctx.oeffnen). Begleitnotizen und Volltexte öffnen in der
+//     Leseansicht, ohne Sperre (zuerstLesen, seit 19.10.2026).
+//  3. Seitenklasse aus dem Feld `typ` an die Ansicht hängen (Gestaltung auch für Notizen ohne `cssclasses`), dazu eba-notiz an jeder
+//     Notiz des Plugins.
 //  4. Optional, nur iPhone: Kapitel der Folien-Notizen beim ersten Öffnen zuklappen.
 //  5. Experimentell: Höhenmessung der Leseansicht korrigieren (Leerraum am Seitenende).
 // (Erweiterungen laden und Hot-Reload macht das Plugin selbst; die Agenda ist jetzt der Codeblock ```eba-agenda```,
@@ -26,7 +28,7 @@ module.exports = function (ctx) {
   //    Dashboard bei jedem Start da ist). Ein angehefteter Tab öffnet aber jeden Link in einem neuen Tab: Tabs stapelten sich, und
   //    Zurück führte nicht zum Dashboard (Konsistenz-Audit E6). Darum seit 0.4.6: Ist das Dashboard nicht schon offen, zeigt es der
   //    zuletzt benutzte Tab (die Notiz darin bleibt über Zurück erreichbar), sonst ein neuer; Links öffnen im selben Tab, und die
-  //    Übersicht (menue.js) führt mit „Dashboard“ jederzeit zurück. Die Anheftung früherer Fassungen nimmt es einmal je Gerät zurück.
+  //    Übersicht (seitenleiste.js) führt mit „Dashboard“ jederzeit zurück. Die Anheftung früherer Fassungen nimmt es einmal je Gerät zurück.
   const FREI = "eba-dashboard-frei"; // Gerätespeicher: Anheftung schon zurückgenommen (danach bleibt eine eigene Anheftung)
   const dashboardOeffnen = async () => {
     const ziel = app.vault.getAbstractFileByPath(DASHBOARD);
@@ -75,6 +77,17 @@ module.exports = function (ctx) {
     if (a === "bearbeiten") return false;
     return f.path === DASHBOARD || (GESPERRT.indexOf(String(fm.typ || "").trim().toLowerCase()) >= 0);
   };
+  // Begleitnotizen (typ unterlage, auch Folien als Markdown) und Volltexte sind zum Lesen da: Sie öffnen in der Leseansicht (ctx.oeffnen,
+  // auch von einer gesperrten Seite aus), sind aber nicht gesperrt; das Buch oben schaltet zum Bearbeiten. `ansicht: bearbeiten` geht
+  // vor. Seit 19.10.2026; vorher öffneten sie in der Bearbeitungsansicht, wo ein Tipp auf den PDF-Kasten die Tastatur aufgehen ließ.
+  const LESEN_ZUERST = ["unterlage", "volltext"];
+  const zuerstLesen = (f) => {
+    if (!f || !/\.md$/.test(f.path)) return false;
+    const c = app.metadataCache.getFileCache(f);
+    const fm = (c && c.frontmatter) || {};
+    if (String(fm.ansicht == null ? "" : fm.ansicht).trim().toLowerCase() === "bearbeiten") return false;
+    return LESEN_ZUERST.indexOf(String(fm.typ || "").trim().toLowerCase()) >= 0;
+  };
   const modusSetzen = (l, mode) => { const vs = l.getViewState(); vs.state = Object.assign({}, vs.state, { mode }); return l.setViewState(vs); };
   const gelesen = new WeakMap();   // Ansicht → Pfad, der zuletzt gesperrt in der Leseansicht stand (Umschalten erkennen)
   const umgestellt = new WeakSet(); // Ansichten, die eine gesperrte Seite zeigen (danach: deine Notiz in der Bearbeitung)
@@ -87,7 +100,7 @@ module.exports = function (ctx) {
       knopf(v, sperre);
       if (!sperre) {
         gelesen.delete(v);
-        if (umgestellt.has(v)) { umgestellt.delete(v); if (v.getMode() === "preview") modusSetzen(l, "source"); }
+        if (umgestellt.has(v)) { umgestellt.delete(v); if (v.getMode() === "preview" && !zuerstLesen(f)) modusSetzen(l, "source"); }
         continue;
       }
       umgestellt.add(v);
@@ -96,7 +109,7 @@ module.exports = function (ctx) {
       modusSetzen(l, "preview");
     }
   };
-  ctx.leseansicht = { nurLesen }; // für Tests (tests/leseansicht.test.js)
+  ctx.leseansicht = { nurLesen, zuerstLesen }; // ctx.oeffnen im Kern und Tests (tests/leseansicht.test.js)
 
   // Übergang nach einem Update, bis „Neu laden“ getippt ist: Ein Kern vor 0.4.6 im Speicher öffnet mit ctx.oeffnen nur Dateien,
   // die Skripte geben seit 0.4.6 auch Pfade und Linktexte („Pfad#Überschrift“) mit { neu, quelle, zeile, cursor, modus }. Bis zum
@@ -119,7 +132,7 @@ module.exports = function (ctx) {
       const ws = app.workspace;
       const blatt = (!o.neu && ws.getLeavesOfType("markdown").find((l) => l.view && l.view.file === datei)) || ws.getLeaf(o.neu ? "tab" : false);
       if (datei.extension !== "md") { await blatt.openFile(datei, { active: true }); return blatt; }
-      const lesen = o.modus ? o.modus === "preview" : nurLesen(datei);
+      const lesen = o.modus ? o.modus === "preview" : nurLesen(datei) || zuerstLesen(datei);
       const eState = o.zeile != null ? { line: Number(o.zeile) } : anker ? { subpath: anker } : undefined;
       await blatt.openFile(datei, { active: true, state: lesen ? { mode: "preview" } : { mode: "source", source: false }, eState });
       ws.setActiveLeaf(blatt, { focus: !!o.cursor });
@@ -131,15 +144,28 @@ module.exports = function (ctx) {
   // Beim Entladen (Hot-Reload, Plugin aus): Knöpfe wieder zeigen
   const knoepfeZeigen = () => { for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view) knopf(l.view, false); };
 
-  // 3. Seitenklasse aus dem Feld `typ` (mehrere Klassen mit Leerzeichen). Schreibt keine Datei.
+  // 3. Seitenklasse aus dem Feld `typ` (mehrere Klassen mit Leerzeichen). Schreibt keine Datei. Dazu eba-notiz an jeder Notiz des
+  //    Plugins (NOTIZ): Ihre Eigenschaften stehen nur im Kopf (eba-core.css 25, „⋯“ in kopf.js). Klassen einer vorher im selben Tab
+  //    gezeigten Notiz nimmt es wieder ab (seit 19.10.2026; vorher trug eine eigene Notiz danach z. B. eba-s-termin weiter), nie aber
+  //    eine, die in den cssclasses der Notiz selbst steht (die setzt Obsidian).
   const TYP = { termin: "eba-s-termin", unterlage: "eba-s-begleitnotiz", lehrveranstaltung: "eba-s-notizen", vorlesung: "eba-s-notizen eba-s-vorlesung", "übungsblatt": "eba-s-notizen eba-s-uebungsblatt" };
+  const NOTIZ = ["termin", "unterlage", "lehrveranstaltung", "vorlesung", "übungsblatt", "sq_kurs", "volltext"];
+  const ALLE = ["eba-notiz"].concat(Object.keys(TYP).map((t) => TYP[t]).join(" ").split(" ")).filter((k, i, a) => a.indexOf(k) === i);
+  const klassenVon = (fm) => {
+    const eigen = (Array.isArray(fm.cssclasses) ? fm.cssclasses : String(fm.cssclasses || "").split(/[,\s]+/)).map(String);
+    const soll = eigen.indexOf("eba-folien") >= 0 || !TYP[fm.typ] ? [] : TYP[fm.typ].split(" ");
+    if (NOTIZ.indexOf(String(fm.typ || "")) >= 0) soll.push("eba-notiz");
+    return { soll, eigen };
+  };
   const klassen = () => {
     for (const l of app.workspace.getLeavesOfType("markdown")) {
       const f = l.view && l.view.file; if (!f) continue;
       const c = app.metadataCache.getFileCache(f);
-      const fm = (c && c.frontmatter) || {};
-      const k = TYP[fm.typ]; if (!k || (fm.cssclasses || []).indexOf("eba-folien") >= 0) continue;
-      for (const el of l.view.containerEl.querySelectorAll(".markdown-preview-view, .markdown-source-view")) el.classList.add(...k.split(" "));
+      const { soll, eigen } = klassenVon((c && c.frontmatter) || {});
+      for (const el of l.view.containerEl.querySelectorAll(".markdown-preview-view, .markdown-source-view")) {
+        for (const k of ALLE) if (soll.indexOf(k) < 0 && eigen.indexOf(k) < 0) el.classList.remove(k);
+        for (const k of soll) el.classList.add(k);
+      }
     }
   };
 
@@ -235,5 +261,5 @@ module.exports = function (ctx) {
     }
   };
 
-  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); } };
+  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); }, klassenVon };
 };

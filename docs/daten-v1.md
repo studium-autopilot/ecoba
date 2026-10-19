@@ -17,6 +17,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `semester.json` | nein | 256 KB | Semesterdaten, entspricht `System/Daten/Semester.md` |
 | `gruppen.json` | nein | 512 KB | Übungs- und Tutoriengruppen (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#gruppenjson) |
 | `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, veröffentlicht seit 18.10.2026, siehe [unten](#veranstaltungenjson) |
+| `kapitel.json` | nein | 512 KB | Kapitellisten der Module für den Lernplan (höchstens 60 Module), seit 19.10.2026, siehe [unten](#kapiteljson) |
 | `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, UB-Kurse, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); Plugin 0.1 liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; Plugin 0.1 liest ihn noch nicht |
@@ -363,6 +364,63 @@ in einem gültigen Manifest** (ohne `pause`), gelten die Angebote als zurückgez
 Codeblock `eba-angebote` (`System/Skripte/angebote.js`): beim ersten Mal eine Auswahl (Kategorien, Vortragsreihen), danach Chips
 je gewählter Kategorie mit Anzahl, nach Tagen die nächsten 14 Tage, der Rest unter „Mehr anzeigen“. Vergangenes (Tage vor heute, heutige Angebote nach `bis`) blendet das Plugin
 selbst aus.
+
+## kapitel.json
+
+Seit 19.10.2026 (Plan Abschnitt 31). Optional. Kapitellisten der Module für den Lernplan: je Modul und Semester die Kapitel aus
+der Gliederung der Vorlesung bzw. die Einheiten des Lehrbuchs, die die Vorlesung nennt. Nur Fakten (Nummer, Titel, Seitenzahl der
+Folien, Nummer der Folien, Link auf ein frei zugängliches Lehrbuch); keine Beschreibungen, keine Lernziele, keine Namen. Plugins
+vor dieser Fassung kennen den Namen nicht und ignorieren ihn. Erzeugt vom Uni-Abgleich (Kurse, in denen der Autor ist), veröffentlicht
+erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-10-19T06:30:00Z",
+ "module": [
+  {
+   "code": "X100",
+   "semester": "WS 2026/27",
+   "quelle": "Folien 00 Einführung, S. 9",
+   "stand": "2026-10-18",
+   "vorlaeufig": false,
+   "kapitel": [
+    { "nr": "1", "titel": "Grundlagen", "seiten": 42, "folien": 1, "teile": [{ "nr": "1.1", "titel": "Grundbegriffe" }] },
+    { "nr": "2", "titel": "Märkte", "folien": 2 },
+    { "nr": "3", "titel": "Knappheit", "url": "https://books.core-econ.org/the-economy-v1/book/de/text/03.html" }
+   ]
+  }
+ ]
+}
+```
+
+| Feld | Regel |
+|---|---|
+| `schema` | genau `1`, sonst wird die ganze Datei abgelehnt |
+| `stand` | optional, ISO-Zeit |
+| `module` | höchstens 60; je `code` + `semester` nur einmal (sonst „doppelt“) |
+| `code` | Modulcode wie im Modulkatalog |
+| `semester` | „WS JJJJ/JJ“ oder „SS JJJJ“ |
+| `quelle` | optional, reiner Text ≤ 120 Zeichen: woher die Liste stammt (Folie, Lehrbuch) |
+| `stand` (Modul) | optional, `JJJJ-MM-TT` |
+| `vorlaeufig` | optional, `true` = Liste teils geschätzt (z. B. Lehrbuch-Einheiten, die die Vorlesung noch nicht genannt hat) |
+| `kapitel` | 1–40 Einträge, Nummern im Modul eindeutig |
+| `nr` | 1–8 Zeichen, beginnt mit Ziffer oder Großbuchstabe (`1`, `IV`, `E`, `2.3`) |
+| `titel` | reiner Text ≤ 140 Zeichen, ohne `[`, `]`, `<`, `>`, `{`, `}`, `|`, `\` |
+| `seiten` | optional, ganze Zahl 1–2000 (Folien des Kapitels, Gewicht im Plan) |
+| `folien` | optional, ganze Zahl 0–99: Nummer der Folien-Unterlage dieses Kapitels (`art: Folien`, Feld `nummer`); ohne sie gilt die Kapitelnummer |
+| `url` | optional, `https` auf `uni-tuebingen.de` oder `core-econ.org` (jeweils mit Subdomains) |
+| `teile` | optional, höchstens 40 Unterkapitel `{ nr, titel }` mit denselben Regeln |
+
+Ein ungültiges Kapitel oder Unterkapitel verwirft sein **ganzes Modul** (keine halbe Liste im Lernplan), die anderen Module bleiben.
+Unbekannte Felder werden ignoriert.
+
+**Was das Plugin daraus macht:** Jedes Gerät holt die Datei selbst und merkt sie sich gerätelokal (wie `angebote.json`). Nur der
+Abrufer schreibt daraus `Lernplan/<Code> Lernplan.md` (`herkunft: zentral`), nur für Module des laufenden Semesters, die in deinem
+Plan liegen (oder laufen bzw. angemeldet sind) und nicht bestanden sind. Häkchen (nach Kapitel- und Unterkapitelnummer), `seit`,
+`verstanden_bis` und alles unter „## Meine Notizen“ bleiben bei jeder neuen Liste. Notizen mit anderer `herkunft` (eigene KI) fasst
+das Plugin nie an. Eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert. Fehlt die Datei im Manifest, bleiben die
+Notizen, wie sie sind.
 
 ## veranstaltungen.json
 

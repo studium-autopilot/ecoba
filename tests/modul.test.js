@@ -29,9 +29,12 @@ test("Als Nächstes: Sitzungen und Termine nach Tag und Uhrzeit, ohne Erledigtes
   const n = M.naechstes({ M: D, code: "X100", stundenplan, termine: liste, jetzt: tag("2026-10-15") });
   assert.deepEqual(n.map((x) => [ist(x.d), x.zeit, x.was, x.art]), [
     ["2026-10-19", "", "Tutorien-Anmeldung (ILIAS)", "termin"],
-    ["2026-10-19", "10:00–12:00", "Veranstaltung", "sitzung"],
-    ["2026-10-19", "14:00–16:00", "Veranstaltung", "sitzung"],
+    ["2026-10-19", "10:00–12:00", "Vorlesung", "sitzung"],
+    ["2026-10-19", "14:00–16:00", "Vorlesung", "sitzung"],
   ]);
+  // Art wie im Wochenraster: ohne Art oder „Veranstaltung“ (Alma ohne erkannte Art) eine Vorlesung, sonst die Art der Notiz
+  const arten = [serie({ art: "Veranstaltung" }), serie({ art: "Tutorium", beginn: "14:00", ende: "16:00" })].map((fm) => ({ f: { basename: "X" }, fm }));
+  assert.deepEqual(M.naechstes({ M: D, code: "X100", stundenplan: arten, termine: [], jetzt: tag("2026-10-15") }).map((x) => x.was), ["Vorlesung", "Tutorium"]);
   assert.equal(n[0].wo, "ILIAS-Kurs");
   assert.equal(ist(n[0].bis), "2026-10-25");
   // läuft schon: Tag = heute, Prüfung erkannt

@@ -2,7 +2,8 @@
 // Zeigt eine Kalenderwoche Montag bis Freitag (die Planwoche des Fachmodells: am Samstag und Sonntag schon die nächste) mit den
 // Stundenplan-Notizen (typ: lehrveranstaltung, jede Herkunft: Alma, eigener Abgleich, zentral, ILIAS-Gruppe, gewählte Gruppe,
 // von Hand). Ob eine Sitzung stattfindet, sagt ctx.modell.findetStatt (eine Regel mit „Als Nächstes“ der Modulseite): ein Kasten
-// nur zwischen von und bis (Einzeltermin nur an seinem Tag); Ausfall (ausfall, Pausen, vorlesungsfreie Tage wie Christi
+// bis zu bis (Einzeltermin nur an seinem Tag), vor von blass mit „ab TT.MM.“ (eine gewählte Gruppe steht gleich nach der
+// Anmeldung da, nicht erst ab ihrer ersten Woche); Ausfall (ausfall, Pausen, vorlesungsfreie Tage wie Christi
 // Himmelfahrt) durchgestrichen, Änderung (aenderungen) gestrichelt mit neuer Zeit und neuem Raum, Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
 // sonst Code), blass Art und Gruppe (nur Übung, Tutorium, Seminar; Name aus gruppe), darunter Raum, davor der Beginn, wenn er
 // nicht zur vollen Stunde liegt. Kopfzeile rechts „‹ KW n ›“; Wischen nach links/rechts wechselt am Touch-Gerät die Woche.
@@ -31,6 +32,7 @@ module.exports = function (ctx) {
   const zwei = (n) => (n < 10 ? "0" : "") + n;
   const iso = (d) => d.getFullYear() + "-" + zwei(d.getMonth() + 1) + "-" + zwei(d.getDate());
   const datum = (s) => { const m = String(s || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
+  const tagMonat = (s) => { const d = datum(s); return zwei(d.getDate()) + "." + zwei(d.getMonth() + 1) + "."; };
   const plus = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
   const liste = (v) => (Array.isArray(v) ? v : v == null || v === "" ? [] : [v]);
 
@@ -129,35 +131,39 @@ module.exports = function (ctx) {
     const h0 = spannen.length ? Math.min.apply(null, spannen.map((s) => s[0].h)) : 8;
     const h1 = spannen.length ? Math.max.apply(null, spannen.map((s) => s[1].h + (s[1].m > 0 ? 1 : 0))) : 18;
     const rows = Math.max(1, (h1 - h0) * 4);
-    // Je Notiz ihr Tag der Woche und ob sie dort stattfindet (Ausfall, Pause, freier Tag → durchgestrichen)
+    // Je Notiz ihr Tag der Woche und ob sie dort stattfindet (Ausfall, Pause, freier Tag → durchgestrichen). Vor ihrem Beginn
+    // (Tag vor von, etwa ein Tutorium ab der vierten Woche) blass mit „ab TT.MM.“, nach bis gar nicht.
     const AUS = ["ausfall", "pause", "frei"];
     const wl = [];
     for (const n of lv) {
       const w = Number(n.fm.wochentag);
       if (!(w >= 1 && w <= 5)) continue;
       const s = modell.findetStatt(n.fm, tage[w - 1]);
-      if (s.statt || AUS.indexOf(s.grund) >= 0) wl.push(Object.assign({ s }, n));
+      const von = n.fm.einzeltermin === true ? "" : modell.zeit.iso(n.fm.von);
+      const ab = s.grund === "ausserhalb" && von && tage[w - 1] < von ? von : "";
+      if (s.statt || ab || AUS.indexOf(s.grund) >= 0) wl.push(Object.assign({ s, ab }, n));
     }
     const gehalten = wl.filter(({ s }) => s.statt);
     let leer = "";
     if (!gehalten.length) {
       if (pw.length) leer = pw[0].name || "Vorlesungsfrei";
-      else if (sem && sem.vb && tage[4] < sem.vb) { const vb = datum(sem.vb); leer = "Vorlesungsbeginn " + zwei(vb.getDate()) + "." + zwei(vb.getMonth() + 1) + "."; }
+      else if (sem && sem.vb && tage[4] < sem.vb) leer = "Vorlesungsbeginn " + tagMonat(sem.vb);
       else if (sem && sem.ve && tage[0] > sem.ve) leer = "Vorlesungsfrei";
       else leer = "Keine Lehrveranstaltungen";
     }
     const jetztHm = zwei(jetzt.getHours()) + ":" + zwei(jetzt.getMinutes());
-    const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s }) => {
+    const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s, ab }) => {
       const tag = Number(fm.wochentag);
       const aen = s.geaendert;
       const b = aen ? zeit(s.beginn) : zeit(fm.beginn), e = aen ? zeit(s.ende) : zeit(fm.ende);
       const raum = aen ? s.raum : fm.raum == null ? "" : String(fm.raum);
       const zeitText = aen ? s.beginn + "–" + s.ende : String(fm.beginn) + "–" + String(fm.ende);
-      const aus = !s.statt;
+      const aus = !s.statt && !ab;
       const klassen = ["eba-ev", istUebung(fm) ? "ue" : "vl"];
       if (fm.konflikt) klassen.push("konflikt");
       if (aen) klassen.push("geaendert");
-      if (aus) klassen.push("ausfall");
+      if (ab) klassen.push("spaeter");
+      else if (aus) klassen.push("ausfall");
       else if (ht && tag === wt) { klassen.push("heute"); if (jetztHm >= String(fm.beginn) && jetztHm <= String(fm.ende)) klassen.push("jetzt"); }
       // Antippen öffnet das Modul über seinen vollen Pfad, nie über den Namen (den könnte eine andere Notiz auch tragen)
       const modul = String(fm.modul || "").replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
@@ -166,11 +172,11 @@ module.exports = function (ctx) {
         tag, pfad, klassen,
         von: Math.max(2, Math.min(rows + 1, zeileVon(b, h0))), bis: Math.max(3, Math.min(rows + 2, zeileBis(e, h0))),
         titel: String(fm.titel || pfad) + " · " + zeitText + " · " + raum + (fm.konflikt ? " · überschneidet sich mit " + fm.konflikt : "")
-          + (aus ? " · fällt aus" + (s.name ? " (" + s.name + ")" : "") : ""),
+          + (aus ? " · fällt aus" + (s.name ? " (" + s.name + ")" : "") : "") + (ab ? " · beginnt am " + tagMonat(ab) : ""),
         notiz: ziel,
         kurz: kurzname(fm, kurzVonCode), art: artText(fm),
-        // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.), bei einer Änderung die neue Zeit
-        zeit: aen ? zeitText : String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
+        // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.), bei einer Änderung die neue Zeit, vor dem Beginn „ab TT.MM.“
+        zeit: ab ? "ab " + tagMonat(ab) : aen ? zeitText : String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
         raum,
       };
     });

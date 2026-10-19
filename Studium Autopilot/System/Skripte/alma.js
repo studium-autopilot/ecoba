@@ -628,6 +628,8 @@ module.exports = function (ctx) {
   const aktualisierenOderVerbinden = async ({ neuerLink = false } = {}) => {
     if (hatLink() && !neuerLink) return await aktualisieren({ still: false });
     const bericht = await verbinden();
+    // verbunden: Knöpfe und Zeilen gleich ohne „Alma verbinden“, auch wenn sich am Stundenplan nichts ändert
+    if (bericht && ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen();
     // abgebrochen ohne Link: erklären; gescheitert: aktualisieren() hat den Grund schon gemeldet
     if (!bericht && !hatLink() && !letzterFehler) hinweis("Alma ist noch nicht verbunden.", { aktion: { text: "Verbinden", aktion: "verbinden", parameter: { id: "alma" } } });
     return bericht;

@@ -215,10 +215,13 @@ test("Begleitnotiz: Eigenschaften in fester Reihenfolge, Zusatzfelder nach „qu
   assert.deepEqual(schluessel, ["typ", "code", "modul", "art", "nummer", "titel", "datei", "original", "format", "seiten", "semester", "status", "datum", "quelle", "ilias_id", "ilias_pfad", "uebersicht", "cssclasses", "tags"]);
   assert.ok(fm.includes('typ: unterlage') && fm.includes('modul: "[[S100 Mathematische Methoden der Wirtschaftswissenschaft]]"'));
   assert.ok(fm.includes('nummer: 3') && fm.includes('format: "pdf"') && fm.includes('quelle: "ILIAS"') && fm.includes('ilias_id: "file_123"'));
-  assert.ok(md.includes("# S100 · Folien 03 · Optimierung\n"));
-  assert.ok(md.includes("> **Modul:** [[S100 Mathematische Methoden der Wirtschaftswissenschaft|S100]] · **Art:** Folien · **Seiten:** 37 · **Semester:** WS 2026/27\n"));
-  assert.ok(md.includes("> [!eba-pdf]- PDF\n> ![[S100 Folien 03 Optimierung.pdf#height=560]]"), "PDF unter 10 MB eingebettet");
-  assert.ok(md.endsWith("\n"));
+  // Titel, gleich darunter der PDF-Kasten mit der Seitenzahl im Titel (seit 19.10.2026): kein Kasten „Eckdaten“ (steht im Kopf der
+  // Notiz), keine leeren Abschnitte, kein Knopf „Größe“
+  const text = md.slice(md.indexOf("\n---\n") + 5);
+  assert.equal(text, "\n# S100 · Folien 03 · Optimierung\n\n> [!eba-pdf]- PDF (37 Seiten)\n> ![[S100 Folien 03 Optimierung.pdf#height=560]]\n");
+  assert.doesNotMatch(md, /Eckdaten|Das Wichtigste|Offene Fragen|aktion=pdf|^- (\[ \] )?$/m);
+  const hinweis = U.begleitnotiz({ code: "B110", art: "Folien", nummer: 1, titel: "T", datei: "a.pdf", groesse: 1, hinweis: "Geändert\nin ILIAS." });
+  assert.match(hinweis, /\n# B110 · Folien 01 · T\n\n> \[!eba-info\] Neue Fassung aus ILIAS\n> Geändert in ILIAS\.\n\n> \[!eba-pdf\]- PDF\n/);
 });
 
 test("Begleitnotiz: Dateiobjekt und Dateiname geben dasselbe, Original und große PDF", () => {
@@ -229,9 +232,12 @@ test("Begleitnotiz: Dateiobjekt und Dateiname geben dasselbe, Original und groß
     groesse: 12e6, original: "B110 Folien 00 Einführung.pptx", semester: "WS 2026/27" });
   assert.equal(a, b);
   assert.ok(a.includes('format: "pdf, pptx"') && a.includes('original: "[[B110 Folien 00 Einführung.pptx]]"') && a.includes('quelle: ""'));
-  assert.ok(a.includes("> **Original:** [[B110 Folien 00 Einführung.pptx]]"));
-  assert.ok(a.includes("[Original öffnen ↗](obsidian://studium-autopilot?aktion=oeffnen&original=1)"));
-  assert.ok(a.includes("**PDF öffnen:** [[B110 Folien 00 Einführung.pdf]] (11,4 MB, zu groß zum Einbetten)"));
+  // zu groß zum Einbetten: Link, dahinter „Öffnen“ und „Original öffnen“ (eingebettet stehen sie in der Kopfzeile des PDF-Kastens)
+  assert.ok(a.includes("**PDF öffnen:** [[B110 Folien 00 Einführung.pdf]] (11,4 MB, zu groß zum Einbetten) · [Öffnen ↗](obsidian://studium-autopilot?aktion=oeffnen)"
+    + " · [Original öffnen ↗](obsidian://studium-autopilot?aktion=oeffnen&original=1)"));
   const ohne = U.begleitnotiz({ art: "Scan", datei: "Unterlage 2026-10-15.jpg", semester: "WS 2026/27" });
-  assert.ok(ohne.includes('code: ""') && ohne.includes("**Modul:** –") && ohne.includes("![[Unterlage 2026-10-15.jpg]]"));
+  assert.ok(ohne.includes('code: ""') && ohne.includes("\n# Scan\n\n![[Unterlage 2026-10-15.jpg]]\n"));
+  const pptx = U.begleitnotiz({ code: "B110", art: "Folien", datei: datei("B110 Folien 01.pptx", 5), weitere: ["B110 Folien 01.zip"] });
+  assert.match(pptx, /\n\[\[B110 Folien 01\.pptx\]\] · \[Öffnen ↗\]\(obsidian:\/\/studium-autopilot\?aktion=oeffnen\)\n\n> \[!eba-info\] Nur als PPTX vorhanden\n/);
+  assert.match(pptx, /\n\n\*\*Weitere Dateien:\*\* \[\[B110 Folien 01\.zip\]\]\n$/);
 });

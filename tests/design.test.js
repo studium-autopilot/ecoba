@@ -109,7 +109,7 @@ test("Schriftgrößen in px: keine neue Stufe (docs/design.md, „Schriftgröße
 });
 
 test("Knöpfe: keine neue Knopf-Klasse (vorhandene nehmen, docs/design.md „Knöpfe“)", () => {
-  const BESTAND = ["eba-ei-knopf", "eba-gr-knopf", "eba-menue-knopf", "eba-mod-alma-knopf", "eba-mod-knopf", "eba-toast-knopf",
+  const BESTAND = ["eba-ei-knopf", "eba-gr-knopf", "eba-mod-alma-knopf", "eba-mod-knopf", "eba-toast-knopf",
     "eba-uh-knopf", "eba-vb-knopf"];
   const neu = [...new Set((CORE.match(/\.eba-[a-z0-9-]*knopf\b/g) || []).map((s) => s.slice(1)))].filter((x) => BESTAND.indexOf(x) < 0);
   assert.deepEqual(neu, []);

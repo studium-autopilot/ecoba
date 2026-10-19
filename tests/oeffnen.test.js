@@ -25,10 +25,11 @@ test("Kern: ctx.oeffnen nimmt Datei, Pfad oder Linktext, Ansicht nach ctx.lesean
   const f = kern.slice(a, kern.indexOf("return blatt;", a));
   assert.match(f, /getFirstLinkpathDest/);
   assert.match(f, /nurLesen\(datei\)/);
+  assert.match(f, /zuerstLesen\(datei\)/, "Begleitnotizen in der Leseansicht (seit 19.10.2026)");
   assert.match(f, /focus: !!o\.cursor/);
   assert.match(f, /getLeaf\(o\.neu \? "tab" : false\)/, "derselbe Tab, Zurück geht; Strg/⌘ neuer Tab");
   const start = fs.readFileSync(path.join(SKRIPTE, "start.js"), "utf8");
-  assert.match(start, /ctx\.leseansicht = \{ nurLesen \}/);
+  assert.match(start, /ctx\.leseansicht = \{ nurLesen, zuerstLesen \}/);
   assert.doesNotMatch(start, /setPinned\(true\)/, "das Dashboard wird nicht mehr angeheftet (E6)");
 });
 

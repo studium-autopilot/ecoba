@@ -364,25 +364,39 @@ module.exports = function (ctx) {
   };
   // Notiz wie unterlagen.js (notizInhalt), mit Herkunft aus ILIAS. d: { code, modul (Notizname), art, nr, titel, datei
   // (Dateiname im Tresor), endung, groesse, original (Name in ILIAS), quelle, herkunft, iliasId, semester, datum, hinweis? }
+  // Seit 19.10.2026 wie dort ohne Kasten „Eckdaten“ und ohne leere Abschnitte: Titel, gleich darunter die Datei.
   const notizText = (d) => {
     const e = d.endung;
     const kopf = [d.code, [d.art, d.nr != null ? pad(d.nr) : ""].filter(Boolean).join(" "), d.titel].filter(Boolean).join(" · ") || ohneEndung(d.datei);
-    const eck = [`**Modul:** ${d.modul ? `[[${d.modul}|${d.code}]]` : "–"}`, `**Art:** ${d.art}`, `**Semester:** ${d.semester || "–"}`].join(" · ");
+    const oeffnen = " · [Öffnen ↗](obsidian://studium-autopilot?aktion=oeffnen)";
     let ansicht;
-    if (e === "pdf" && d.groesse >= EINBETTEN_MAX_MB * 1048576) ansicht = `**PDF öffnen:** [[${d.datei}]] (${mb(d.groesse)}, zu groß zum Einbetten)`;
+    if (e === "pdf" && d.groesse >= EINBETTEN_MAX_MB * 1048576) ansicht = `**PDF öffnen:** [[${d.datei}]] (${mb(d.groesse)}, zu groß zum Einbetten)${oeffnen}`;
     else if (e === "pdf") ansicht = `> [!eba-pdf]- PDF\n> ![[${d.datei}#height=560]]`;
     else if (BILDER.indexOf(e) >= 0) ansicht = `![[${d.datei}]]`;
-    else ansicht = `[[${d.datei}]]\n\n> [!eba-info] Nur als ${e.toUpperCase()} vorhanden\n> Obsidian zeigt diesen Dateityp nicht an. Über „Öffnen“ öffnet sie sich in der passenden App.`;
+    else ansicht = `[[${d.datei}]]${oeffnen}\n\n> [!eba-info] Nur als ${e.toUpperCase()} vorhanden\n> Obsidian zeigt diesen Dateityp nicht an. Über „Öffnen“ öffnet sie sich in der passenden App.`;
     const zeilen = [
       "---", "typ: unterlage", `code: ${J(d.code)}`, `modul: ${J(d.modul ? `[[${d.modul}]]` : "")}`, `art: ${J(d.art)}`,
       `nummer: ${d.nr != null ? d.nr : ""}`, `titel: ${J(d.titel)}`, `datei: ${J(`[[${d.datei}]]`)}`, `original: ${J(d.original)}`,
       `format: ${J(e)}`, "seiten:", `semester: ${J(d.semester)}`, "status: neu", `datum: ${d.datum}`, `quelle: ${J(d.quelle)}`,
       `ilias_id: ${J(d.iliasId)}`, 'uebersicht: "[[Unterlagen]]"', "cssclasses:", "  - eba-s-begleitnotiz", "tags:", "  - unterlage", "---",
-      "", `# ${kopf}`, "", "> [!eba-regel] Eckdaten", `> ${eck}`, `> **Aus ILIAS:** ${mdText(d.herkunft)}`,
-      "> [Öffnen ↗](obsidian://studium-autopilot?aktion=oeffnen) · [Größe ⇅](obsidian://studium-autopilot?aktion=pdf)", "",
+      "", `# ${kopf}`, "",
     ];
     if (d.hinweis) zeilen.push("> [!eba-info] Neue Fassung aus ILIAS", "> " + d.hinweis, "");
-    return zeilen.concat(["## Das Wichtigste", "- ", "", "## Offene Fragen", "- [ ] ", "", ansicht, ""]).join("\n");
+    return zeilen.concat([ansicht, ""]).join("\n");
+  };
+  // Kasten „Neue Fassung aus ILIAS“ in einen Notiztext, der ihn noch nicht hat (Begleitnotiz eines älteren unterlagen.js): vor
+  // „## Das Wichtigste“ (bis 0.4.6), sonst vor dem PDF-Kasten bzw. der Datei nach dem Titel, sonst ans Ende
+  const hinweisEinsetzen = (text, hinweis) => {
+    if (!hinweis || String(text).indexOf(hinweis) >= 0) return text;
+    const kasten = "> [!eba-info] Neue Fassung aus ILIAS\n> " + hinweis + "\n\n";
+    const z = String(text).split("\n");
+    let i = z.findIndex((x) => /^## Das Wichtigste/.test(x));
+    if (i < 0) {
+      const t = z.findIndex((x) => /^# /.test(x));
+      i = z.findIndex((x, k) => k > t && t >= 0 && x.trim() !== "");
+    }
+    if (i < 0) return String(text).replace(/\n*$/, "\n\n") + kasten.replace(/\n+$/, "\n");
+    return z.slice(0, i).join("\n") + (i ? "\n" : "") + kasten + z.slice(i).join("\n");
   };
 
   // ---------- Einordner (unterlagen.js) ----------
@@ -402,7 +416,7 @@ module.exports = function (ctx) {
     // kommt darum erst danach über pflichtfelder ins Frontmatter, nie als Link
     begleitnotiz: U && typeof U.begleitnotiz === "function" ? (d) => U.begleitnotiz({
       code: d.code, modul: d.modul || null, art: d.art, nummer: d.nr, titel: d.titel, datei: d.datei, groesse: d.groesse,
-      semester: d.semester, quelle: d.quelle, extra: { ilias_id: d.iliasId },
+      semester: d.semester, quelle: d.quelle, extra: { ilias_id: d.iliasId }, hinweis: d.hinweis || "",
     }) : null,
   });
 
@@ -470,12 +484,12 @@ module.exports = function (ctx) {
     };
     // Eigener Uni-Abgleich: trotzdem bereit, dann nur für die Übungsgruppen (lauf: nurGruppen, keine Downloads)
     const bereit = () => !!anmeldung() && hatZugang() && !stand().gesperrt && !abgelehnt() && !(extern() && gruppenExtern());
-    // Fehlertext ohne Kennwort (auch URL-kodiert), höchstens 300 Zeichen
+    // Fehlertext ohne Kennwort (auch URL-kodiert), höchstens 700 Zeichen (Platz für den Code einer gescheiterten Anmeldung)
     const fehlerText = (e, wert) => {
       let t = String((e && e.message) || e || "Fehler");
       const w = wert || geheimLesen();
       if (w) for (const g of [w, encodeURIComponent(w)]) t = t.split(g).join("•••");
-      return t.slice(0, 300);
+      return t.slice(0, 700);
     };
     // Warnung eines Laufs: klar = Satz für Zeile, Fenster und Hinweis (Stand „warnung“); technik = Einzelheiten nur fürs Protokoll
     const warnen = (b, klar, technik) => {
@@ -1026,7 +1040,7 @@ module.exports = function (ctx) {
       let text = null;
       if (E.begleitnotiz) { try { text = E.begleitnotiz(d); } catch (e) { text = null; } }
       if (typeof text !== "string" || !text) text = notizText(d);
-      else if (d.hinweis && text.indexOf(d.hinweis) < 0) text = text.replace(/^## Das Wichtigste/m, () => "> [!eba-info] Neue Fassung aus ILIAS\n> " + d.hinweis + "\n\n## Das Wichtigste");
+      else text = hinweisEinsetzen(text, d.hinweis);
       return pflichtfelder(text, { typ: "unterlage", original: J(d.original), quelle: J(d.quelle), ilias_id: J(d.iliasId), uebersicht: '"[[Unterlagen]]"' });
     };
     const notizDaten = (c, plan, datei, groesse, hinweis) => {
@@ -1816,7 +1830,7 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, hinweiseAus, einordnerAus, notizText, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
+    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
     K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, MAX_MB, NEU_MOBIL, NEU_PC, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;

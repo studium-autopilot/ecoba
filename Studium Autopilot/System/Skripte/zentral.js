@@ -21,6 +21,8 @@
 //      geprüft wie oben, nur gerätelokal gespeichert (eba-zentral-gruppen), keine Notizen. Anzeige: gruppen.js (eba-gruppen).
 //   Angebote der Uni (angebote.json, optional: Vorträge, UB-Kurse, Hochschulsport, Welcome Center): genauso, gerätelokal
 //      (eba-zentral-angebote); fehlt die Datei im Manifest, wird der Stand gelöscht. Anzeige: angebote.js (eba-angebote).
+//   Kapitellisten (kapitel.json, optional, seit 19.10.2026): genauso, gerätelokal (eba-zentral-kapitel). Die Lernplan-Notizen
+//      daraus schreibt lernplan.js (nur der Abrufer); dieses Skript meldet nur „neu“ an ctx.lernplanAnzeige.
 //   Zentraler Stundenplan (veranstaltungen.json, optional, Plan Abschnitt 27.1): holt und schreibt NUR der Abrufer, mit eigener
 //      Fehlerbehandlung (ein Fehler hält nur den Stundenplan an). Eine Notiz je id in Stundenplan/ (typ lehrveranstaltung,
 //      herkunft: zentral, zentral_id), nur für das aktuelle Fachsemester (stundenplanFilter), ohne Parallelgruppen, ohne
@@ -34,7 +36,7 @@
 //   „Zentrale Daten aktualisieren“.
 // Testeinstiege (docs/architektur.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
 // plugin.testZentralBasis (andere Basis-URL, z. B. lokaler Server). Gerätelokal (app.saveLocalStorage): eba-geraet,
-// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote.
+// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -67,18 +69,22 @@ module.exports = function (ctx) {
   // Erlaubte Domains für Links (inkl. Subdomains wie alma., ovidius., www.). Erweitern nur mit Begründung in docs/daten-v1.md.
   const DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de"];
   // bekannte Dateien und Höchstgröße (Bytes)
-  const DATEIEN = { "termine.json": 1000000, "semester.json": 262144, "gruppen.json": 524288, "angebote.json": 524288, "veranstaltungen.json": 1500000 };
+  const DATEIEN = { "termine.json": 1000000, "semester.json": 262144, "gruppen.json": 524288, "angebote.json": 524288, "veranstaltungen.json": 1500000,
+    "kapitel.json": 524288 };
   const GRUPPEN = "gruppen.json"; // optional, gerätelokal (nicht an die Abrufer-Sperre gebunden)
   const ANGEBOTE = "angebote.json"; // optional, gerätelokal wie die Gruppen
+  const KAPITEL = "kapitel.json"; // optional, gerätelokal wie die Gruppen; die Notizen schreibt lernplan.js
   const LEHRE = "veranstaltungen.json"; // optional, zentraler Stundenplan: nur der Abrufer, eigene Fehlerbehandlung
   const LEHRE_ORDNER = "Stundenplan";
   const MUSTERPLAN = "System/Daten/Musterplan.md";
   const AUSGEBLENDET = "stundenplan_ausgeblendet"; // Feld in System/Einstellungen.md: ids, die du nicht besuchst
   const G = { manifest: 16384, id: 80, titel: 120, ort: 120, uhrzeit: 11, info: 200, quelleText: 200, url: 500, hinweis: 200, termine: 2000, name: 60, liste: 100,
-    gruppen: 1000, gruppe: 20, raum: 120, leitung: 120, anmeldung: 200, angebote: 1000, reihe: 80, lehre: 3000, ausfall: 100, aenderungen: 100 };
+    gruppen: 1000, gruppe: 20, raum: 120, leitung: 120, anmeldung: 200, angebote: 1000, reihe: 80, lehre: 3000, ausfall: 100, aenderungen: 100,
+    kapitelModule: 60, kapitel: 40, teile: 40, kapitelTitel: 140, quelle: 120 };
   const DATUM_MIN = "2020-01-01", DATUM_MAX = "2040-12-31";
   const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
-  const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten", gruppen: "eba-zentral-gruppen", angebote: "eba-zentral-angebote" };
+  const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten", gruppen: "eba-zentral-gruppen", angebote: "eba-zentral-angebote",
+    kapitel: "eba-zentral-kapitel" };
 
   // ---------- Kleine Helfer ----------
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
@@ -392,6 +398,69 @@ module.exports = function (ctx) {
       const r = angebotNormal(roh);
       if (r.fehler) aus.verworfen.push({ id: id || "?", grund: r.fehler });
       else aus.angebote.push(r.wert);
+    }
+    return aus;
+  };
+
+  // ---------- Prüfen: Kapitellisten (kapitel.json, docs/daten-v1.md) ----------
+  // → { stand, module: [gültig], verworfen: [{ id, grund }] } oder { fehler } (ganze Datei abgelehnt). Nur Fakten: Nummer, Titel,
+  // Seiten, Nummer der Folien, Link aufs Lehrbuch; ein ungültiges Kapitel verwirft sein ganzes Modul (keine halben Listen).
+  const KAPITEL_DOMAINS = ["uni-tuebingen.de", "core-econ.org"]; // Uni und das freie Lehrbuch von CORE
+  const KAPITEL_NR = /^[0-9A-Z][0-9A-Za-z.]{0,7}$/;
+  const SEMESTER_NAME = /^(WS \d{4}\/\d{2}|SS \d{4})$/;
+  const kapitelTitel = (v) => (reinerText(v) ? textFeld(v, G.kapitelTitel, true) : { fehler: "unzulässig" });
+  const ganzZahl = (v, min, max) => (v == null || v === "" ? { wert: null } : Number.isInteger(v) && v >= min && v <= max ? { wert: v } : { fehler: "ungültig" });
+  const kapitelNormal = (k) => {
+    if (!k || typeof k !== "object" || Array.isArray(k)) return { fehler: "kein Objekt" };
+    if (typeof k.nr !== "string" || !KAPITEL_NR.test(k.nr)) return { fehler: "nr ungültig" };
+    const titel = kapitelTitel(k.titel);
+    if (titel.fehler) return { fehler: "titel " + titel.fehler };
+    const seiten = ganzZahl(k.seiten, 1, 2000), folien = ganzZahl(k.folien, 0, 99);
+    if (seiten.fehler) return { fehler: "seiten ungültig" };
+    if (folien.fehler) return { fehler: "folien ungültig" };
+    let url = "";
+    if (k.url != null && k.url !== "") { const u = urlPruefen(k.url, KAPITEL_DOMAINS); if (u.fehler) return { fehler: "url: " + u.fehler }; url = u.wert; }
+    const teile = [];
+    if (k.teile != null) {
+      if (!Array.isArray(k.teile) || k.teile.length > G.teile) return { fehler: "teile ungültig" };
+      for (const t of k.teile) {
+        if (!t || typeof t !== "object" || typeof t.nr !== "string" || !KAPITEL_NR.test(t.nr)) return { fehler: "teil ungültig" };
+        const tt = kapitelTitel(t.titel);
+        if (tt.fehler) return { fehler: "teil " + t.nr + " titel " + tt.fehler };
+        teile.push({ nr: t.nr, titel: tt.wert });
+      }
+    }
+    return { wert: { nr: k.nr, titel: titel.wert, seiten: seiten.wert, folien: folien.wert, url, teile } };
+  };
+  const kapitelModulNormal = (e) => {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return { fehler: "kein Objekt" };
+    if (typeof e.code !== "string" || !MODULCODE.test(e.code)) return { fehler: "code ungültig" };
+    if (typeof e.semester !== "string" || !SEMESTER_NAME.test(e.semester)) return { fehler: "semester ungültig" };
+    if (!reinerText(e.quelle == null ? "" : e.quelle)) return { fehler: "quelle unzulässig" };
+    const quelle = textFeld(e.quelle, G.quelle, false);
+    if (quelle.fehler) return { fehler: "quelle " + quelle.fehler };
+    if (!Array.isArray(e.kapitel) || !e.kapitel.length || e.kapitel.length > G.kapitel) return { fehler: "kapitel ungültig" };
+    const kapitel = [];
+    for (const k of e.kapitel) {
+      const r = kapitelNormal(k);
+      if (r.fehler) return { fehler: "kapitel " + (k && typeof k.nr === "string" ? k.nr : "?") + ": " + r.fehler };
+      kapitel.push(r.wert);
+    }
+    if (new Set(kapitel.map((k) => k.nr)).size !== kapitel.length) return { fehler: "doppelte Kapitelnummer" };
+    return { wert: { code: e.code, semester: e.semester, quelle: quelle.wert, stand: datumOk(e.stand) ? e.stand : "", vorlaeufig: e.vorlaeufig === true, kapitel } };
+  };
+  const kapitelPruefen = (daten) => {
+    if (!daten || typeof daten !== "object" || daten.schema !== 1 || !Array.isArray(daten.module)) return { fehler: "kapitel.json: Format ungültig" };
+    if (daten.module.length > G.kapitelModule) return { fehler: "kapitel.json: zu viele Module" };
+    const aus = { stand: isoZeitOk(daten.stand) ? daten.stand.slice(0, 10) : "", module: [], verworfen: [] };
+    const gesehen = new Set();
+    for (const roh of daten.module) {
+      const id = roh && typeof roh.code === "string" && typeof roh.semester === "string" ? `${roh.code} ${roh.semester}` : "?";
+      if (gesehen.has(id)) { aus.verworfen.push({ id, grund: "doppelt" }); continue; }
+      gesehen.add(id);
+      const r = kapitelModulNormal(roh);
+      if (r.fehler) aus.verworfen.push({ id, grund: r.fehler });
+      else aus.module.push(r.wert);
     }
     return aus;
   };
@@ -1262,6 +1331,12 @@ module.exports = function (ctx) {
       if (g.fehler) warnen(b, "Angebote: " + g.fehler);
       if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
     } else if (manifest && angeboteStand()) { lokal(L.angebote, null); angeboteNeuZeichnen(); }
+    // 1d. Kapitellisten (kapitel.json): ebenso jedes Gerät selbst; die Notizen daraus schreibt lernplan.js (nur der Abrufer)
+    if (manifest && manifest.dateien[KAPITEL]) {
+      const g = await kapitelHolen(manifest.dateien[KAPITEL], o.manuell);
+      if (g.fehler) warnen(b, "Kapitellisten: " + g.fehler);
+      if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
+    } else if (manifest && kapitelStand()) { lokal(L.kapitel, null); kapitelNeu(); }
     // 2. Abrufer-Sperre: Ein anderes Gerät, das vor höchstens UEBERNAHME abgerufen hat, bleibt Abrufer. „Jetzt aktualisieren“
     // übernimmt (wie „Hier laden“ bei ILIAS), außer das andere Gerät hat vor weniger als GERADE abgerufen.
     const a = await abrufLesen();
@@ -1387,12 +1462,16 @@ module.exports = function (ctx) {
   const anzeigeNeu = (a) => { try { if (a && a.neu) a.neu(); } catch (e) { /* egal */ } };
   const gruppenNeuZeichnen = () => anzeigeNeu(ctx.gruppenAnzeige);
   const angeboteNeuZeichnen = () => anzeigeNeu(ctx.angeboteAnzeige);
+  const kapitelNeu = () => anzeigeNeu(ctx.lernplanAnzeige);
   const gruppenStand = () => lokalerStand(L.gruppen, "gruppen");
   const angeboteStand = () => lokalerStand(L.angebote, "angebote");
+  const kapitelStand = () => lokalerStand(L.kapitel, "module");
   const gruppenHolen = (soll, manuell) => optionalHolen(GRUPPEN, soll, manuell,
     { schluessel: L.gruppen, liste: "gruppen", pruefen: gruppenPruefen, praefix: "gruppe ", neuZeichnen: gruppenNeuZeichnen });
   const angeboteHolen = (soll, manuell) => optionalHolen(ANGEBOTE, soll, manuell,
     { schluessel: L.angebote, liste: "angebote", pruefen: angebotePruefen, praefix: "angebot ", neuZeichnen: angeboteNeuZeichnen });
+  const kapitelHolen = (soll, manuell) => optionalHolen(KAPITEL, soll, manuell,
+    { schluessel: L.kapitel, liste: "module", pruefen: kapitelPruefen, praefix: "kapitel ", neuZeichnen: kapitelNeu });
 
   // ---------- Status (Quellen-Vertrag) ----------
   // Gemeinsame Form der Quellen: { zustand (aus | laeuft | pause | fehler | an), geprueft (letzter Lauf ohne Fehler; vor dem ersten
@@ -1494,7 +1573,7 @@ module.exports = function (ctx) {
 
   ctx.zentral = {
     abrufen, status, stand, geraetId, idAusName, notizText, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
-    angebotePruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
+    angebotePruefen, kapitelPruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
     aenderungenFelder, lehreDateiName, lehreName,
     // zentraler Stundenplan für Anzeige und Texte: { verfuegbar, anzahl, ohneBeginn, ausgeblendet: [ids] }
     stundenplan: stundenplanStand,
@@ -1502,6 +1581,8 @@ module.exports = function (ctx) {
     gruppen: () => { const g = gruppenStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), gruppen: g.gruppen } : null; },
     // gerätelokaler Stand der Angebote (angebote.js): { stand, geholt, angebote } oder null (nie geholt bzw. zurückgezogen)
     angebote: () => { const g = angeboteStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), angebote: g.angebote } : null; },
+    // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt bzw. zurückgezogen)
+    kapitel: () => { const g = kapitelStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
     semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, RELEASE_ROH, BASIS, RELEASES, ABRUF, MEINE,
     abruferHier, abruferHierAus,
     get laeuft() { return !!laeuft; },

@@ -36,7 +36,7 @@ const REGELN = [
     nicht: /[Ff]erien/ },
   { name: "woche", sag: "Stundenplan (Seite), Woche (Raster)", warum: "ein Name je Ansicht",
     nicht: /Wochenplan|Wochenraster|Wochenansicht/ },
-  { name: "uebersicht", sag: "Übersicht (Menü), Teil (Grundstudium …), Schwerpunktbereich", warum: "„Bereich“ nur für Schwerpunkte",
+  { name: "uebersicht", sag: "Übersicht (Seitenleiste), Teil (Grundstudium …), Schwerpunktbereich", warum: "„Bereich“ nur für Schwerpunkte",
     nicht: /Bereiche-Menü|Bereichsmenü/ },
   { name: "deine-angaben", sag: "Deine Angaben, Ändern; Obsidian-Einstellungen", warum: "wie die Überschrift in der App",
     nicht: /Personalisieren|(?:^|[^\p{L}-])Einstellungen →/u },
@@ -46,6 +46,8 @@ const REGELN = [
     nicht: /[Nn]och kein Termin/ },
   { name: "ohne-jargon", sag: "mit Unterlagen, ohne Unterlagen, handschriftliches A4-Blatt", warum: "ohne Fachjargon",
     nicht: /open book|closed book|Cheat-?Sheet/i },
+  { name: "vorlesungsnotiz", sag: "Vorlesungsnotiz, Vorlesung 1 (Name einer Notiz)", warum: "keine Abkürzungen; „VL“ nur im Dateinamen",
+    nicht: /\bVL\b/ },
   // Nur die Namen mit großem Anfangsbuchstaben: Kennungen und Klassen (elfenbein, eba-design-flieder, eba-klar) bleiben erlaubt
   { name: "design-ohne-namen", sag: "Design 1, Design 2, Design 3 (nur für Vorlesesoftware)", warum: "Designs haben keine Namen",
     nicht: /\b(?:Elfenbein|Flieder|Klar)\b/ },
@@ -60,6 +62,9 @@ const AUSNAHMEN = [
   { datei: "Studium/Einstellungen & Hilfe.md", regel: "tresor", stueck: "in Obsidian: Vault", grund: "die eine Erklärung" },
   { datei: "Studium/Kontakte & Links.md", regel: "pruefung", stueck: "Prüfungstermine", grund: "Titel der Seiten der Uni" },
   { datei: /^Module\//, regel: "pruefung", stueck: "Prüfungstermine WS", grund: "Titel eines Dokuments der Uni" },
+  { datei: "System/Skripte/notizen.js", regel: "vorlesungsnotiz", stueck: "VL ", grund: "Dateiname der Vorlesungsnotiz („Datum Code VL 01“) bleibt, damit Links gültig bleiben" },
+  { datei: "Studium/Einstellungen & Hilfe.md", regel: "vorlesungsnotiz", stueck: "Dateiname „Datum Code VL 03“", grund: "nennt den Dateinamen" },
+  { datei: "System/Skripte/modell.js", regel: "vorlesungsnotiz", stueck: "(?:VL|", grund: "Muster, das Dateinamen und ältere Titel („S110 · VL 01“) liest" },
 ];
 
 // ---------- Texte aus JavaScript ----------

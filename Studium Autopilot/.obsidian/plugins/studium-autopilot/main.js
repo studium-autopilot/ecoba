@@ -604,8 +604,8 @@ module.exports = class StudiumAutopilot extends Plugin {
   // ziel: TFile, Pfad oder Linktext (mit „#Überschrift“). o = { neu (neuer Tab, Strg/⌘-Klick), quelle (Notiz, von der ein
   // Linktext ausgeht), zeile (0-basiert), cursor ({ line, ch }), modus („preview“ | „source“ erzwingt), von (Element, auf das
   // getippt wurde; sonst der letzte Tipp der letzten 2 s) }.
-  // Ansicht: Übersichtsseiten (Dashboard, Studium/, Einstellungen, Daten; ctx.leseansicht.nurLesen aus start.js) in der Leseansicht,
-  // deine Notizen in der Bearbeitungsansicht (Live Preview). Im Tab, in dem getippt wurde (sonst der aktive), Zurück führt
+  // Ansicht: Übersichtsseiten (Dashboard, Studium/, Einstellungen, Daten; ctx.leseansicht.nurLesen aus start.js) und Begleitnotizen
+  // (ctx.leseansicht.zuerstLesen, seit 19.10.2026) in der Leseansicht, deine Notizen in der Bearbeitungsansicht (Live Preview). Im Tab, in dem getippt wurde (sonst der aktive), Zurück führt
   // zurück; schon offen: dorthin wechseln.
   // Fokus und Cursor nur mit cursor (sonst springt auf iPhone und iPad die Tastatur auf). Andere Dateien (PDF, Bild) wie ein Link.
   async notizOeffnen(ziel, optionen) {
@@ -622,7 +622,8 @@ module.exports = class StudiumAutopilot extends Plugin {
     if (!(datei instanceof TFile)) return null;
     if (datei.extension !== "md") { const b = this.app.workspace.getLeaf(o.neu ? "tab" : false); await b.openFile(datei, { active: true }); return b; }
     const L = this.ctx.leseansicht;
-    const lesen = o.modus ? o.modus === "preview" : !!(L && typeof L.nurLesen === "function" && L.nurLesen(datei));
+    const lesen = o.modus ? o.modus === "preview" : !!(L && ((typeof L.nurLesen === "function" && L.nurLesen(datei))
+      || (typeof L.zuerstLesen === "function" && L.zuerstLesen(datei))));
     let blatt = o.neu ? null : this.app.workspace.getLeavesOfType("markdown").find((l) => l.view && l.view.file === datei);
     if (!blatt && !o.neu) {
       const t = this.letzterTipp, von = o.von || (t && Date.now() - t.zeit < 2000 ? t.el : null);

@@ -30,17 +30,19 @@ test("Alma verbinden: erst Alma, dann der Stundenplan als Link; Menüweg im Hinw
 // ---------- Zeilen je Stand ----------
 // o: { extern (Einstellung ilias_unterlagen: extern), einstellungen (weitere Felder, z. B. quellen_extern), alma (alma.js-Status),
 //   ilias (ctx.ilias.status()), zentral (zentraler Stundenplan da), zentralStatus, volltext (ctx.volltext.status()), kalender (ctx.iliasKalender.status()), stundenplan /
-//   unterlagen (so viele eigene Notizen), kannSpeichern }
+//   unterlagen (so viele eigene Notizen), kannSpeichern, sperren (Inhalt der Sperre je Quelle; dieses Gerät ist g-hier) }
 const aufbau = (o) => {
   o = o || {};
   const fm = { "System/Einstellungen.md": Object.assign(o.extern ? { ilias_unterlagen: "extern" } : {}, o.einstellungen) };
   for (let i = 0; i < (o.stundenplan || 0); i++) fm[`Stundenplan/V${i}.md`] = { typ: "lehrveranstaltung" };
   for (let i = 0; i < (o.unterlagen || 0); i++) fm[`Unterlagen/B110/U${i}.md`] = { typ: "unterlage", ilias_id: String(i) };
+  const sperrDateien = {};
+  for (const q of Object.keys(o.sperren || {})) { fm[`System/Daten/${q}-abruf.json`] = {}; sperrDateien[`System/Daten/${q}-abruf.json`] = JSON.stringify(o.sperren[q]); }
   const hinweise = [], geholt = [];
   const r = laden("verbindungen", {
     frontmatter: fm,
     kontext: {
-      obsidian: Object.assign({}, OBS, { Notice: class { constructor(t) { hinweise.push(t); } } }),
+      obsidian: Object.assign({}, OBS, { Notice: class { constructor(t) { hinweise.push(t); } }, Modal: class { open() { this.offen = true; } } }),
       user: { eba: EBA, alma: () => ({ status: () => Object.assign({ verbunden: false, stand: null, seit: null }, o.alma) }) },
       ilias: {
         K: I.K,
@@ -50,6 +52,7 @@ const aufbau = (o) => {
       },
       zentral: {
         stundenplan: () => ({ verfuegbar: !!o.zentral, anzahl: o.zentral ? 3 : 0, ohneBeginn: false, ausgeblendet: [] }),
+        geraetId: () => "g-hier",
         status: () => Object.assign({ zustand: "an", an: true, pause: false, fehler: "", geprueft: "", warnungen: [] }, o.zentralStatus),
       },
       einrichtung: { almaOffen: () => true, iliasOffen: () => true },
@@ -61,6 +64,7 @@ const aufbau = (o) => {
     },
   });
   r.ctx.app.vault.getMarkdownFiles = () => Object.keys(fm).map((p) => ({ path: p }));
+  r.ctx.app.vault.read = async (f) => sperrDateien[f.path];
   return { V: r.ctx.verbindungen, aktionen: r.ergebnis.aktionen, hinweise, geholt };
 };
 // Zeile lesbar: Pille, Knopf (mit „cta“) und Textlink als Text, Aktionen aus den Links
@@ -293,4 +297,62 @@ test("ILIAS-Kalender: nicht verbunden Verbinden, verbunden Stand und Zahl der Ab
   assert.match(k.schritte.join(" "), /\*\*Persönlicher Arbeitsraum\*\* → \*\*Kalender\*\*.*\*\*Abonnieren\*\*.*\*\*iCal-URL\*\*/);
   assert.deepEqual([k.laedt, k.externText], ["Abgaben werden geholt …", "Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich."]);
   assert.equal(x.V.liste.alma.laedt, "Stundenplan wird geholt …", "Alma behält ihre Texte");
+});
+
+// ---------- Über ein anderes Gerät verbunden (seit 0.4.7): Link und Passwort liegen nur auf einem Gerät ----------
+const TAG = 24 * 60;
+const sperre = (geraet, min, frei) => Object.assign({ geraet, seit: vorMin(min + 600), zuletzt: vorMin(min), mobil: false }, frei ? { frei: true } : {});
+const mitSperren = async (o) => { const x = aufbau(o); await x.V.sperrenLesen(); return x; };
+
+test("Über ein anderes Gerät verbunden: „verbunden“ ohne Verbinden und ohne Schloss; hier, länger still und nie verbunden wie bisher", async () => {
+  // nie verbunden: Schloss und Verbinden
+  let x = await mitSperren({ sperren: {} });
+  assert.deepEqual([x.V.imTresor("alma").art, lesen(x.V.zeile("alma")).knopf, x.V.gesperrt("alma"), x.V.gesperrt("ilias")], ["nein", "Verbinden (cta)", true, true]);
+
+  // über ein anderes Gerät: Pille verbunden, Haken, rechts nur „Mehr erfahren“, kein Schloss
+  const fremd = { alma: sperre("g-ipad", 180), ilias: sperre("g-ipad", 20), "ilias-kalender": sperre("g-ipad", 2 * TAG) };
+  x = await mitSperren({ sperren: fremd, kalender: { verbunden: false, zustand: "nicht-verbunden", warnungen: [] } });
+  assert.deepEqual(lesen(x.V.zeile("alma")), { text: "Verbunden über ein anderes Gerät · aktualisiert vor 3 Std.", symbol: "haken", ton: "ok", pille: "verbunden",
+    knopf: "Mehr erfahren", knopfAktion: "verbinden", link: "", linkAktion: "" });
+  assert.equal(x.V.zeile("ilias").text, "Verbunden über ein anderes Gerät · aktualisiert vor 20 Min.");
+  assert.equal(x.V.zeile("ilias-kalender").text, "Verbunden über ein anderes Gerät · aktualisiert vor 2 Tagen.");
+  assert.equal(lesen(x.V.zeile("ilias-kalender")).knopf, "Mehr erfahren");
+  assert.deepEqual([x.V.gesperrt("alma"), x.V.gesperrt("ilias")], [false, false]);
+  assert.deepEqual(x.V.imTresor("ilias"), { art: "anderswo", zuletzt: fremd.ilias.zuletzt });
+  // das Fenster der Zeile zeigt den Stand; „Auch hier verbinden“ (auch=1) öffnet das Verbinden
+  assert.equal(x.V.fensterOeffnen(x.V.liste.alma, { id: "alma" }).constructor.name, "AnderswoFenster");
+  assert.equal(x.V.fensterOeffnen(x.V.liste.alma, { id: "alma", auch: "1" }).constructor.name, "VerbindenFenster");
+  assert.equal(x.V.fensterOeffnen(x.V.liste.ilias, { id: "ilias", auch: "1" }).constructor.name, "IliasFenster");
+
+  // hier verbunden: Aktualisieren wie bisher, auch wenn ein anderes Gerät die Sperre hält
+  x = await mitSperren({ sperren: fremd, alma: { verbunden: true }, ilias: { verbunden: true, text: "Aktualisiert vor 5 Min." } });
+  assert.deepEqual([x.V.imTresor("alma").art, lesen(x.V.zeile("alma")).knopf, lesen(x.V.zeile("ilias")).knopf], ["hier", "Aktualisieren (cta)", "Aktualisieren (cta)"]);
+
+  // länger als 7 Tage still, getrennt (frei) oder die Sperre dieses Geräts: wie nie verbunden
+  for (const s of [sperre("g-ipad", 8 * TAG), sperre("g-ipad", 5, true), sperre("g-hier", 5)]) {
+    x = await mitSperren({ sperren: { alma: s, ilias: s } });
+    assert.deepEqual([x.V.imTresor("alma").art, lesen(x.V.zeile("alma")).knopf, x.V.gesperrt("alma"), lesen(x.V.zeile("ilias")).knopf], ["nein", "Verbinden (cta)", true, "Verbinden (cta)"]);
+  }
+  // länger still, Stundenplan per Sync da: Verbinden leise wie bisher
+  x = await mitSperren({ sperren: { alma: sperre("g-ipad", 8 * TAG) }, stundenplan: 2 });
+  assert.equal(lesen(x.V.zeile("alma")).knopf, "Verbinden");
+});
+
+test("Über ein anderes Gerät verbunden: ILIAS im eigenen Uni-Abgleich, Passwort abgelehnt, Alma von außen, Noten & Anmeldungen", async () => {
+  let x = await mitSperren({ extern: true, sperren: { ilias: sperre("g-ipad", 30), alma: sperre("g-ipad", 30) } });
+  assert.deepEqual(lesen(x.V.zeile("ilias")), { text: "Verbunden über ein anderes Gerät · aktualisiert vor 30 Min. Deine Unterlagen kommen über deinen Uni-Abgleich.",
+    symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Mehr erfahren", knopfAktion: "verbinden", link: "", linkAktion: "" });
+  assert.equal(x.V.zeile("alma").text, "Dein Stundenplan kommt über deinen Uni-Abgleich.", "Alma von außen: nur der Satz");
+  // Passwort auf einem deiner Geräte abgelehnt: nicht „verbunden“
+  x = await mitSperren({ sperren: { ilias: sperre("g-ipad", 30) }, ilias: { abgelehnt: true } });
+  assert.equal(lesen(x.V.zeile("ilias")).knopf, "Verbinden (cta)");
+  // Noten & Anmeldungen: statt „Braucht deinen Uni-Zugang“ verbunden; „Auch hier verbinden“ öffnet ILIAS für Alma
+  const konto = { sichtbar: () => true, status: () => ({ art: "ohne-zugang", benutzer: "" }), fensterOeffnen: () => ({ konto: true }),
+    zeile: () => ({ text: "Braucht deinen Uni-Zugang.", symbol: "schloss", pille: "", knopf: { aktion: "verbinden", text: "ILIAS verbinden", cta: true, parameter: { id: "ilias", fuer: "alma" } }, link: null }) };
+  x = await mitSperren({ almaKonto: konto, sperren: { "alma-konto": sperre("g-ipad", 60) } });
+  const z = lesen(x.V.zeile("alma-konto"));
+  assert.deepEqual([z.text, z.pille, z.knopf], ["Verbunden über ein anderes Gerät · aktualisiert vor 1 Std.", "verbunden", "Mehr erfahren"]);
+  assert.equal(x.V.fensterOeffnen(x.V.liste["alma-konto"], { id: "alma-konto" }).constructor.name, "AnderswoFenster");
+  x = await mitSperren({ almaKonto: konto, sperren: {} });
+  assert.equal(lesen(x.V.zeile("alma-konto")).knopf, "ILIAS verbinden (cta)");
 });

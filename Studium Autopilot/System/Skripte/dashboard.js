@@ -4,19 +4,22 @@
 //    Kalenderwoche des Semesters Vorlesungszeit, Pause, Prüfungsphase aus den Semesterdaten; „diese Woche“ = planwoche).
 //  ```eba-liste fristen|termine|pruefungen```: Zeilen „Wann · Was · Art“. fristen = Dashboard „Fristen · 30 Tage“ (Fristen,
 //    Prüfungen samt Zwischentests, Abgaben; nach dem Tag, den die Zeile zeigt), termine = „Termine · 14 Tage“ (ohne Fristen und
-//    Prüfungen; Fachschaft und Veranstaltungen nur heute und morgen), pruefungen = Seite Prüfungen „Prüfungstermine“.
+//    Prüfungen; Fachschaft und Veranstaltungen nur heute und morgen), pruefungen = Seite Prüfungen „Prüfungstermine“,
+//    nachzuarbeiten = Dashboard „Nachzuarbeiten“ (seit 19.10.2026, vorher Bases mit dem Dateinamen „S110 VL 01“): Vorlesungsnotizen
+//    ohne Haken, älteste zuerst, links das Modul, dann ihr Name wie überall (ctx.modell.vorlesung, „Vorlesung 1 · Di 13.10. · Thema“).
 // DOM und Klassen der Kacheln wie die frühere Formel (eba-core.css Abschnitte 8, 32, 60); Listen: Abschnitt 63. Schreibt nichts.
 // Jede Kachel öffnet ihre Notiz (ctx.oeffnen, Bedien-Bausteine): Frist und Prüfung ihre Notiz (ohne: Termine & Anmeldungen bzw.
 // Prüfungen), Semester den Studienverlauf, ECTS und Gesamtnote Noten & ECTS.
 // Neu gezeichnet bei Änderungen im Datenmodell, beim Zurückkommen in die App und alle 10 Minuten (Gruß, Tageswechsel).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
-  const LISTEN = ["fristen", "termine", "pruefungen"];
-  const GRENZE = { fristen: 6, termine: 8, pruefungen: 0 };
+  const LISTEN = ["fristen", "termine", "pruefungen", "nachzuarbeiten"];
+  const GRENZE = { fristen: 6, termine: 8, pruefungen: 0, nachzuarbeiten: 8 };
   const LEER = {
     fristen: "Keine Fristen in den nächsten 30 Tagen.",
     termine: "Keine Termine in den nächsten 14 Tagen.",
     pruefungen: "Noch keine Prüfungen.",
+    nachzuarbeiten: "Nichts offen.",
   };
 
   // ---------- Kacheln (rein, testbar) ----------
@@ -112,6 +115,12 @@ module.exports = function (ctx) {
         aus.push({ sort: p.datum, min: p.minuten, wann: `${Z.datum(p.datum, { bezug: heute })} · ${Z.abstand(p.datum, heute)}`, bald: bald(p.datum), uhr: "",
           was: p.titel, pfad: p.pfad, pille: p.zwischentest ? { ton: "info", text: "Zwischentest" } : p.geschaetzt ? { ton: "leer", text: "geschätzt" } : null });
       }
+    } else if (art === "nachzuarbeiten" && M.vorlesungen) {
+      for (const v of M.vorlesungen()) {
+        if (v.nachgearbeitet) continue;
+        const m = v.code ? M.modul(v.code) : null;
+        aus.push({ sort: v.datum, min: null, wann: (m && String(m.fm.kurz || "").trim()) || v.code, bald: false, uhr: "", was: v.titel, pfad: v.f.path, pille: null });
+      }
     }
     aus.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0) || ((a.min == null ? -1 : a.min) - (b.min == null ? -1 : b.min)));
     return GRENZE[art] ? aus.slice(0, GRENZE[art]) : aus;
@@ -170,6 +179,7 @@ module.exports = function (ctx) {
   // den Abschnitt der äußeren Karte, und dort stehen beide Listen des Dashboards; sonst das Argument der Kopfzeile.
   const artVon = (quelle, el, c) => {
     const q = String(quelle || "").toLowerCase();
+    if (/nacharbeit/.test(q)) return "nachzuarbeiten";
     if (/prüfungstermine|prüfungen erscheinen/.test(q)) return "pruefungen"; // „Prüfungstermine“: Seiten vor 0.4.6
     if (/termine/.test(q)) return "termine";
     if (/fristen/.test(q)) return "fristen";
@@ -191,6 +201,13 @@ module.exports = function (ctx) {
     // Das Plugin startet die Erweiterungen alphabetisch, modell.js also nach dashboard.js: dann kurz danach anmelden und zeichnen
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(alle));
     else ctx.zeit(() => { if (ctx.modell && ctx.modell.beiAenderung) { ctx.aufraeumen(ctx.modell.beiAenderung(alle)); alle(); } }, 3000);
+    // „Nachzuarbeiten“: Vorlesungsnotizen liegen außerhalb der Ordner, die das Modell meldet (Haken im Kopf der Notiz, neue Notiz)
+    const nachBald = ctx.entprellen(() => {
+      for (const i of listen.instanzen()) if (i.art === "nachzuarbeiten") { try { listeZeichnen(i.el, i.art, i.ctx); } catch (e) { console.error("eba-liste", e); } }
+    }, 600);
+    const vorlesung = (cache) => !!(cache && cache.frontmatter && cache.frontmatter.typ === "vorlesung");
+    ctx.an(window.app.metadataCache, "changed", (_f, _d, cache) => { if (vorlesung(cache)) nachBald(); });
+    ctx.an(window.app.metadataCache, "deleted", (_f, vorher) => { if (vorlesung(vorher)) nachBald(); });
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alle(); });
     ctx.intervall(() => { if (document.visibilityState === "visible") alle(); }, 10 * 60 * 1000);
   };

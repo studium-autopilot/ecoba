@@ -34,8 +34,11 @@ module.exports = function (ctx) {
   const istFrage = (t) => /\?\s*$/.test(t) || /#frage/i.test(t);
   const ausgeschlossen = (pfad) => { const p = pfad.toLowerCase(); return AUSSCHLUSS.some((a) => p.startsWith(a)); };
 
-  // Kurzname der Quellnotiz: „E101 Folien 01 Einführung“ → „E101 · Folien 01“, „2026-10-13 S110 VL 01“ → „S110 · VL 01“
+  // Kurzname der Quellnotiz: „E101 Folien 01 Einführung“ → „E101 · Folien 01“; eine Vorlesungsnotiz mit ihrem Namen wie überall
+  // (ctx.modell.vorlesung): „2026-10-13 S110 VL 01“ → „S110 · Vorlesung 1 · Di 13.10. · Thema“
   const kurzname = (f) => {
+    const fm = ((app.metadataCache.getFileCache(f) || {}).frontmatter) || {};
+    if (fm.typ === "vorlesung" && ctx.modell && ctx.modell.vorlesung) { const v = ctx.modell.vorlesung(f); return (v.code ? v.code + " · " : "") + v.titel; }
     const b = f.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "");
     const m = CODE_NAME && b.match(CODE_NAME);
     if (!m) return b;

@@ -121,8 +121,7 @@ Jedes Skript ist CommonJS: `module.exports = function (ctx) { … return { … }
   - `start()`: läuft nur beim App-Start (z. B. Dashboard-Tab in `start.js`).
   - `aktionen: { name: { titel, ausfuehren(c), ordner?, editor? } }`: siehe unten.
   - `abmelden()`: optional, vor dem Hot-Reload und beim Entladen des Plugins; für Dinge, die die Helfer nicht abdecken
-    (`start.js` nimmt die Messkorrektur zurück, `tabellen.js` die Erweiterung der Bases-Tabelle, `menue.js` trennt Beobachter
-    und entfernt seine Knöpfe).
+    (`start.js` nimmt die Messkorrektur zurück, `tabellen.js` die Erweiterung der Bases-Tabelle).
 
 Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.user`, das dann schon vollständig ist.
 
@@ -132,7 +131,8 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `aktionen.js` | Knopf-Aktionen (siehe Liste) |
 | `notizen.js` | Notiz-Aktionen mit Ordner-Automatik |
 | `kalender.js`, `termine.js`, `klausurzeit.js`, `verlauf.js`, `todos.js`, `vorlesung.js`, `gruppen.js`, `angebote.js` | Codeblöcke `eba-kalender`, `eba-agenda`, `eba-anmeldungen`, `eba-klausurzeit`, `eba-verlauf`, `eba-todos`, `eba-vorlesung` und `eba-uebungsblatt`, `eba-gruppen`, `eba-angebote` |
-| `menue.js`, `tabellen.js`, `leer.js` | Menü „Übersicht“, Bases-Tabellen als Liste zum Lesen (seit 0.4.6 überall und auf allen Geräten, `eba-core.css` 37.tabellen), leere Mitschriften und Übungsblätter beim Verlassen in den Papierkorb (nicht beim Wechsel zu Folien/PDF; ein Übungsblatt mit Abgabedatum, Aufgaben oder eigener Lösung bleibt) |
+| `seitenleiste.js` | Seitenleiste „Übersicht“ (seit 19.10.2026, ersetzt das Raster-Menü aus `menue.js`): eigener Tab in Obsidians linker Seitenleiste mit allen Seiten (`ZIELE`) und den Modulen dieses Semesters; siehe „Öffnen und Navigieren“ |
+| `tabellen.js`, `leer.js` | Bases-Tabellen als Liste zum Lesen (seit 0.4.6 überall und auf allen Geräten, `eba-core.css` 37.tabellen), leere Mitschriften und Übungsblätter beim Verlassen in den Papierkorb (nicht beim Wechsel zu Folien/PDF; ein Übungsblatt mit Abgabedatum, Aufgaben oder eigener Lösung bleibt, ebenso eine Vorlesungsnotiz mit Thema) |
 | `eba.js`, `alma.js`, `unterlagen.js`, `meine-gruppe.js` | Helfer: Semester, Module, Datumseingabe, `ablegen()`; Alma-Stundenplan (seit 0.4.5 auch Erweiterung mit Zeitplan, siehe „Alma-Stundenplan“); Eingang einordnen; deine Übungsgruppe im Stundenplan |
 | `modell.js` | Datenmodell und Fachmodell `ctx.modell` (siehe „Fachmodell“), Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
 | `dashboard.js` | Kacheln und Listen aus dem Fachmodell: Codeblöcke `eba-kacheln` (Dashboard) und `eba-liste fristen\|termine\|pruefungen` (Dashboard, Prüfungen) |
@@ -152,7 +152,8 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `sperre.js` | Helfer: Abrufer-Sperre, der gemeinsame Schreiber-Lock aller Quellen (`ctx.user.sperre.erzeugen`); siehe „Abrufer-Sperre“ |
 | `hinweis.js` | `ctx.hinweis` (seit 0.4.6): Hinweise ohne Vorsatz und Pfad, nächster Schritt als Knopf; `tests/wortliste.test.js` findet jedes `new Notice` in den Skripten |
 | `formular.js` | `ctx.formular` (seit 0.4.6): das Fenster „Neu …“ für alle Anlege-Aktionen; siehe „Bedien-Bausteine“ |
-| `kopf.js` | Kopf-Karte unter dem Titel jeder Termin-, Stundenplan-, SQ- und Begleitnotiz mit genau einem Status-Knopf (seit 0.4.6); siehe „Bedien-Bausteine“ |
+| `kopf.js` | Kopf-Karte unter dem Titel jeder Termin-, Stundenplan-, SQ- und Begleitnotiz mit genau einem Status-Knopf (seit 0.4.6), „⋯“ mit Eigenschaften, leere Abschnitte und Eckdaten ausblenden (seit 19.10.2026); siehe „Bedien-Bausteine“ |
+| `pdfkasten.js` | PDF-Kasten der Begleitnotizen als Knopf (seit 19.10.2026): klappt in Lese- und Bearbeitungsansicht ohne Cursor und Tastatur, lädt die PDF erst beim Aufklappen, „Öffnen“ und „Original“ in der Kopfzeile; siehe „Bedien-Bausteine“ |
 | `papierkorb.js` | `ctx.papierkorb` (seit 0.4.6): wegwerfen mit Hinweis und „Rückgängig“; siehe „Bedien-Bausteine“ |
 | `felder.js` | Helfer: Feld-Register der Eingaben (Variante, Studienbeginn, Note, Zielnote; `ctx.user.felder`); siehe „Personalisieren“ |
 | `quellen.js` | Helfer: Quellen-Vertrag (`ctx.user.quellen`): Statusform, ein Zeitplan, Besitzmarke, Lebenslauf erzeugter Notizen, Meldekanal „Bitte prüfen“; siehe „Quellen-Vertrag“ |
@@ -197,14 +198,13 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 
 | Aktion | Parameter | Wirkung | Befehl |
 |---|---|---|---|
-| `vorlesung` | `code` | neue Vorlesungsnotiz (laufende Lehrveranstaltung erkannt; heute schon angelegt → öffnen) | Neue Vorlesung |
+| `vorlesung` | `code` | neue Vorlesungsnotiz: Fenster mit Modul (`code` wählt vor) und Thema; läuft gerade genau eine Lehrveranstaltung und ist kein Modul vorgewählt, ohne Fenster; heute schon angelegt → öffnen | Neue Vorlesungsnotiz |
 | `uebungsblatt` | `code` | neues Übungsblatt (Kopf-Karte `eba-uebungsblatt` wie die Vorlesungsnotiz: Status zum Antippen, Abgabe, Perlen der Blätter des Moduls, Links zu Aufgaben, Musterlösung, eigener Lösung und Übung/Tutorium; Abschnitte Aufgabe, Knackpunkte, Fürs Tutorium) | Neues Übungsblatt |
 | `termin` | `titel`, `wann`, `code` | neuer Termin | Neuer Termin |
 | `lehrveranstaltung` | `code` | Lehrveranstaltung im Stundenplan von Hand | Neue Lehrveranstaltung |
 | `sq-kurs` | – | SQ-Leistung | Neuer SQ-Kurs |
 | `modul` | `code` | eigenes Modul aus `System/Gerüste/Modul.md` | Neues eigenes Modul |
-| `oeffnen` | `notiz`, `original=1` | Datei der Unterlage extern öffnen (PC: Standardprogramm, iOS: Dateien-App) | Unterlage öffnen |
-| `pdf` | `notiz` | PDF-Ansicht klein ↔ groß (`cssclasses`) | PDF-Größe umschalten |
+| `oeffnen` | `notiz`, `original=1`, `datei` (Link relativ zur Notiz, vom PDF-Kasten) | Datei der Unterlage extern öffnen (PC: Standardprogramm, iOS: Dateien-App) | Unterlage öffnen |
 | `plan` | `modul` (Code oder Name) | `gewaehlt` umschalten | – |
 | `variante` | `wert` | `variante` in `System/Einstellungen.md` | Variante wählen (mit Auswahl) |
 | `darstellung` | `wert` (`hell`, `dunkel`, `automatisch`) | Hell, dunkel oder automatisch wie das Gerät | Darstellung wählen (mit Auswahl) |
@@ -378,8 +378,11 @@ lehrveranstaltung` (jede Herkunft) und Kurznamen aus Modulnotizen (`kurz`) aus d
 und „Besuche ich nicht“ aus dem Fachmodell (`ctx.modell.findetStatt`, seit 18.10.2026; vorher die Kopien `semesterliste`,
 `pausen` in `System/Einstellungen.md`, ohne freie Tage). Gezeichnet wird nur die gezeigte Woche; neu (entprellt, 0,4 s) bei Änderungen an
 Stundenplan-, Modul- und Einstellungsnotizen, beim Zurückkommen in die App und alle 10 Minuten. Schreibt keine Datei.
-Ein Kasten erscheint nur, wenn das Datum seines Wochentags zwischen `von` und `bis` liegt (leer = unbegrenzt), Tutorien und
-Übungen also erst ab ihrer ersten Woche; ohne `semester` des gezeigten Semesters (nach dem Freitag der Woche), mit
+Ein Kasten erscheint, solange das Datum seines Wochentags nicht nach `bis` liegt (leer = unbegrenzt). Liegt es vor `von`
+(Serie, kein Einzeltermin), ist der Kasten blass (`spaeter`) mit „ab TT.MM.“ statt der Uhrzeit und Tooltip „beginnt am
+TT.MM.“: Eine gewählte Übungs- oder Tutoriumsgruppe steht so gleich nach der Anmeldung da, nicht erst ab ihrer ersten Woche
+(seit 19.10.2026; vorher fehlte sie bis dahin). Solche Kästen zählen nicht als „findet statt“; ohne `semester` des
+gezeigten Semesters (nach dem Freitag der Woche), mit
 `entfaellt: true` oder ausgeblendet (`herkunft: zentral`, `zentral_id` in `stundenplan_ausgeblendet`) gar nicht, ein
 Einzeltermin nur an seinem Tag. Liegt der Tag in `ausfall`, in einer Pause oder auf einem vorlesungsfreien Tag, ist der Kasten
 durchgestrichen (`ausfall`, Tooltip „fällt aus (Christi Himmelfahrt)“); `aenderungen` („Datum|Beginn|Ende|Raum“) in
@@ -436,6 +439,7 @@ Modulseite, Zeitleiste und Studienverlauf widersprachen sich (Konsistenz-Audit).
 | `statusArt(typ, wert)` | Ton einer Pille nach docs/design.md: ok (bestanden, anerkannt, angemeldet, erledigt, gelesen …), warn (Frist, in Arbeit, Abgabe), bad (Prüfung, nicht bestanden, überfällig), info (läuft, Lehre, Zwischentest), akzent (Fachschaft, Veranstaltung), sonst leer (offen, neu, geschätzt). |
 | `istZwischentest(x)`, `istNachhol(x)`, `terminArt(kategorie, zt)`, `ortTeilen(ort)`, `modul(code)`, `opFrist()` | Einzelregeln; Zwischentest = „Zwischentest“ (auch „Zwischen-Test“) im Titel oder Dateinamen. |
 | `besuchtNicht(fm)`, `besuchSchluessel(fm)` | „Besuche ich nicht“ für jede Lehrveranstaltung (seit 0.4.6): Notiz einer Quelle über ihren Schlüssel in `stundenplan_ausgeblendet` der Einstellungen (zentral die `zentral_id`, sonst `<herkunft>:<id>`, z. B. `alma:…`, weil die Quelle ihre Notiz neu schreibt), deine eigene über das Feld `besuche_nicht: true`. `findetStatt` gibt dann `ausgeblendet`. Bis 0.4.5 nur für zentrale Notizen. |
+| `vorlesung(f)`, `vorlesungen({ code })`, `vorlesungTitel(o)`, `vorlesungThema(o)` | Der eine Name einer Vorlesungsnotiz (seit 19.10.2026): „Vorlesung 1 · Mo 13.10. · Thema“ (ohne Nummer „Vorlesung“, ohne Modul „Mitschrift“). Nummer aus `nummer`, sonst aus dem Dateinamen („… VL 03“); Thema aus `thema`, sonst die erste Überschrift, wenn sie mehr sagt als Kürzel, Nummer, Datum und Modultitel, sonst der Titel der verlinkten Folien (Begleitnotiz, ohne Semester); nie erfunden. `vorlesungen` neueste zuerst. Nutzer: Modulseite, „Nachzuarbeiten“, To-dos, Kopf der Vorlesungsnotiz, neue Notizen. Dateinamen bleiben. |
 
 Prüfungsphasen kommen nur aus den Semesterdaten (`daten().pruefungsphasen`); Termin-Notizen wie „Klausurphase Haupttermin“
 sind Kalendereinträge und zählen für keine Regel. Die Frist der Orientierungsprüfung aus den zentralen Daten (30.09.2028)
@@ -968,6 +972,7 @@ Q.meineNotizen(text) / Q.unberuehrt(fm, text) / Q.wegfall(fm, text) / Q.zuViel(w
   Q.geloescht(angewendet, id, hash) / Q.dubletten(gruppe) / Q.doppelGruppen(liste, idVon) / Q.meineMischen(text, weitere)
 Q.melden(ctx, quelle, fn) / Q.meldungen(ctx) / Q.meldenNeu(ctx) / Q.beiMeldung(ctx, fn)
 Q.papierkorb(app, datei, { lokal }) (der eine Papierkorb, siehe „Bedien-Bausteine“)
+Q.verbindung({ hier, sperre, geraet, jetztMs, grenze }) → { art: hier | anderswo | nein, zuletzt }   Q.K.VERBUNDEN_GRENZE
 ```
 
 1. **Status** in einer Form: `status()` liefert `{ zustand, geprueft, fehler, fehlerZeit, warnungen }` (dazu Eigenes der
@@ -1003,6 +1008,11 @@ Q.papierkorb(app, datei, { lokal }) (der eine Papierkorb, siehe „Bedien-Bauste
    persönliche Werte; nach einem Lauf `Q.meldenNeu(ctx)`. `bitte-pruefen.js` zeigt alle Punkte auf dem Dashboard (Reihenfolge
    `K.REIHE`), ein Tipp öffnet `pfad`. Hinweise (Notice) nur nach deinem Tipp, nie vom Zeitplan.
 
+**Verbunden in diesem Tresor (seit 0.4.7, `Q.verbindung`):** Link und Passwort einer Quelle liegen nur auf dem Gerät, das verbunden
+ist; die Daten kommen über den Sync auf alle. Ob ein anderes Gerät verbunden ist, sagt die Sperre der Quelle: Ein anderes Gerät hält
+sie, sie ist nicht frei, und es war vor höchstens `K.VERBUNDEN_GRENZE` (7 Tage) aktiv → `anderswo` mit `zuletzt`; sonst `nein` (nie
+verbunden, getrennt, länger still). Nur für die Anzeige (siehe „Verbindungen und Schloss“); wer schreibt, regelt weiter die Sperre.
+
 **Stand der Quellen (18.10.2026):**
 
 | Quelle | Zeitplan (`Q.planen`) | Sperre (`sperre.js`) | Status | Besitzmarke | Lebenslauf | „Bitte prüfen“ |
@@ -1032,8 +1042,8 @@ einen Baustein. Eine neue Funktion nimmt ihn, statt etwas Eigenes zu bauen; fehl
 
 ### Fenster „Neu …“ (`formular.js`, `ctx.formular`)
 
-Jede Aktion, die etwas anlegt, fragt in **einem** Fenster mit allen Feldern und ihren Vorgaben: Neue Vorlesung (nur, wenn nicht
-gerade genau eine Lehrveranstaltung läuft und kein Modul vorgewählt ist), Neues Übungsblatt, Neuer Termin, Neue Lehrveranstaltung,
+Jede Aktion, die etwas anlegt, fragt in **einem** Fenster mit allen Feldern und ihren Vorgaben: Neue Vorlesungsnotiz (Modul und
+Thema; ohne Fenster nur, wenn gerade genau eine Lehrveranstaltung läuft und kein Modul vorgewählt ist), Neues Übungsblatt, Neuer Termin, Neue Lehrveranstaltung,
 Neuer SQ-Kurs, Neues eigenes Modul, Neuer Kartenstapel und beim Einordnen „Ändern“ einer Unterlage. Esc, × und **Abbrechen**
 legen nichts an; mit der Ordner-Automatik verschwindet auch die leere Notiz wieder (`eba.abbrechen`). Bis 0.4.5 war das eine
 Kette aus Eingabe- und Auswahlfenstern (bis zu fünf), in der Esc mal abbrach und mal die Vorgabe nahm (Fehler 24).
@@ -1090,6 +1100,26 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
   Einstellungen. Die zentralen Stundenplan-Notizen tragen den Textlink „Besuche ich nicht“ nicht mehr (`zentral.js`), ein neuer SQ-Kurs
   nicht mehr den Satz „Stand in den Eigenschaften pflegen“ (`notizen.js`).
 - Tests: `tests/kopf.test.js` (Stufen je Typ, Farbe aus `statusArt`, „Besuche ich nicht“ je Quelle). Stil: `eba-core.css` Abschnitt 64.2.
+- **„⋯“ mit Eigenschaften** (seit 19.10.2026): Rechts im Kopf, auch bei Vorlesung und Übungsblatt (`ctx.kopf.mehr`). Die Eigenschaften
+  der Notizen des Plugins stehen in keiner Ansicht mehr (Klasse `eba-notiz` aus `start.js` an Termin, Begleitnotiz, Lehrveranstaltung,
+  Vorlesung, Übungsblatt, SQ-Kurs, Volltext; `eba-core.css` 25b); vorher stand in der Bearbeitungsansicht ein einsames
+  „Properties“ mit Leerraum über dem Titel. **Eigenschaften** im Menü zeigt sie für diese Notiz aufgeklappt (Lese- und
+  Bearbeitungsansicht, Klasse `eba-eigenschaften` am Tab), bis man den Punkt noch einmal tippt oder Obsidian neu startet; im
+  Quelltextmodus und in deinen eigenen Notizen bleibt alles wie in Obsidian. `start.js` nimmt Klassen einer vorher im selben Tab
+  gezeigten Notiz wieder ab (sonst trug eine eigene Notiz danach z. B. `eba-notiz` weiter). Der Modulcode im Kopf öffnet die Modulseite.
+- **Leere Abschnitte** (seit 19.10.2026): Notizen des Plugins zeigen keine Überschrift `##` mit nur leeren Punkten (`- `, `- [ ] `)
+  darunter und keine leere Überschrift, auch ältere nicht und solche, die der Uni-Abgleich schreibt (dort ist oft „Das Wichtigste“
+  gefüllt und „Offene Fragen“ leer). Die Notiz ändert sich nicht: In der Leseansicht markiert der Post-Processor Überschriften
+  (`eba-abschnitt`) und Listen aus leeren Punkten (`eba-leer`), ob eine Überschrift wegfällt, entscheidet das CSS am Nachbarn
+  (bleibt richtig, wenn Obsidian nur die geänderte Liste neu zeichnet); in der Bearbeitungsansicht der Begleitnotizen fallen die Zeilen
+  (`leereAbschnitte`, `eba-leer-zeile`) weg, solange der Cursor nicht darin steht. Andere Notizen zeigen ihre Überschriften dort
+  weiter: Dort schreibst du hinein. Gefaltet auf Höhe 0 (`eba-core.css` 64.4), nie `display: none`.
+- **Eckdaten** (seit 19.10.2026): Der Kasten „Eckdaten“ der Begleitnotizen bis 0.4.6 wiederholte den Kopf (Modul, Art, Semester)
+  und trug „Öffnen ↗ · Größe ⇅“. Neue Begleitnotizen haben ihn nicht mehr; bei älteren entfernt der Post-Processor jede Zeile, die das
+  Plugin geschrieben hat (`eckZeileErzeugt`), und blendet den leeren Kasten aus. Eigener Text darin bleibt stehen. Das gilt nur für
+  Notizen mit PDF-Kasten (`hatPdfKasten`: eine PDF-Einbettung in einem Kasten), denn dort steht „Öffnen“. Bei Word, PowerPoint, Excel,
+  ZIP oder einer sehr großen PDF ist „Öffnen ↗“ in den Eckdaten der einzige Weg zur Datei: Der Kasten bleibt, nur „Größe ⇅“ (Aktion
+  `pdf` bis 0.4.6) fällt weg.
 
 ### Ändern nur im Modulfeld und im Kopf der Notiz (Entscheidung E4)
 
@@ -1098,24 +1128,25 @@ Tabellen und Listen zeigen nur an; ein Tipp auf eine Zeile öffnet ihre Notiz. G
 Bases-Tabelle in einer Karte `[!eba-tabelle]` als Liste, auf allen Geräten und ohne Ausnahmen (vorher blieben am PC/iPad Tabellen
 außerhalb von Modulseite, Noten & ECTS, Unterlagen und Stundenplan, „Mein Stand“ älterer Modulseiten, die Einstellungen und Karten
 mit `handy-tabelle` bearbeitbar), und ein Kontrollkästchen steht als Pille da statt zum Antippen. Die Liste „Nachzuarbeiten“ des
-Dashboards zeigt Vorlesung und Datum ohne Kästchen; „Nachgearbeitet“ setzt der Kopf der Vorlesungsnotiz.
+Dashboards (`dashboard.js`, siehe „Dashboard“) zeigt Vorlesung und Datum ohne Kästchen; „Nachgearbeitet“ setzt der Kopf der Vorlesungsnotiz.
 
 ### Obsidian scheint nicht durch (`.obsidian/app.json`)
 
 Seit 0.4.6 zeigt Obsidian keine Dateien, die es nicht öffnen kann (`showUnsupportedFiles: false`: JSON der Daten, Sicherungen,
 `(neu X)`-Kopien), und **+** (neue Notiz) legt sie in `Vorlesungen/` an (`newFileLocation: folder`, `newFileFolderPath`): Die
-Ordner-Automatik macht daraus eine Vorlesungsnotiz (läuft gerade etwas, sofort, sonst mit dem Fenster „Neue Vorlesung“, auch
+Ordner-Automatik macht daraus eine Vorlesungsnotiz (läuft gerade etwas, sofort, sonst mit dem Fenster „Neue Vorlesungsnotiz“, auch
 „Ohne Modul“); Abbrechen löscht die leere Notiz. Vorher legte **+** „Unbenannt.md“ im Stamm des Tresors an. Wer schon installiert
 hat, bekommt beides über das Mischen der Einstellungen, aber nur, wenn noch die alten Vorgaben gelten (`update.js`, `VORGABE_NEU`,
 `tests/update.test.js`); selbst Gewähltes bleibt. Weil das Update auf 0.4.6 noch der Planer von 0.4.4/0.4.5 plant (der das nicht
 kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidians Einstellungen, nur wo noch der alte Wert gilt
 (`vorgabenAnwenden`, Merker `eba-update-vorgabe-0.4.6`).
 
-### Öffnen und Navigieren (`ctx.oeffnen`, `menue.js`, `start.js`)
+### Öffnen und Navigieren (`ctx.oeffnen`, `seitenleiste.js`, `start.js`)
 
 - **Ein Weg zum Öffnen**: `ctx.oeffnen(ziel, { neu, quelle, zeile, cursor, modus, von })` im Kern (`main.js`). `ziel` ist eine Datei,
-  ein Pfad oder ein Linktext (mit `#Überschrift`). Übersichtsseiten (`ctx.leseansicht.nurLesen`) öffnen in der Leseansicht, deine
-  Notizen in der Bearbeitungsansicht; `modus` erzwingt eine Ansicht. Geöffnet wird im Tab, in dem getippt wurde (`von` bzw. der letzte
+  ein Pfad oder ein Linktext (mit `#Überschrift`). Übersichtsseiten (`ctx.leseansicht.nurLesen`) und Begleitnotizen
+  (`ctx.leseansicht.zuerstLesen`, seit 19.10.2026) öffnen in der Leseansicht, deine Notizen in der Bearbeitungsansicht; `modus`
+  erzwingt eine Ansicht. Geöffnet wird im Tab, in dem getippt wurde (`von` bzw. der letzte
   Tipp, den der Kern im Capture-Modus merkt, weil Skripte `mousedown` oft selbst stoppen; nie in der Seitenleiste), sonst im aktiven;
   Zurück führt zurück, Strg/⌘ (`neu`) öffnet einen neuen Tab. Fokus und Cursor nur mit `cursor` (sonst springt auf iPhone und iPad die
   Tastatur auf). Vorher gab es sechs Wege (`openLinkText`, `getLeaf().openFile`, `blatt.openFile`, `ctx.oeffnen` …) mit
@@ -1135,10 +1166,34 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   des Templater-Tresors, damit es bei jedem Start da ist; ein angehefteter Tab öffnet aber jeden Link in einem neuen Tab, Tabs stapelten
   sich, und Zurück führte nicht zum Dashboard. Beim Start zeigt der zuletzt benutzte Tab das Dashboard, wenn es nicht schon offen ist
   (die Notiz darin bleibt über Zurück erreichbar); die Anheftung früherer Fassungen nimmt `start.js` einmal je Gerät zurück
-  (`eba-dashboard-frei`). Zurück zum Start geht jederzeit über **Dashboard** im Menü.
-- **Menü in jeder Notiz**: Das Symbol der Übersicht steht auf allen Geräten in Obsidians Kopfleiste jeder Notiz (`view.addAction`;
-  vorher am PC nur im Seitenkopf der eba-Seiten). `ZIELE` (seit 0.4.6 mit Stundenplan) ist die einzige Liste; die Lesezeichen der
-  Vorlage (`.obsidian/bookmarks.json`) folgen ihr (`tests/menue.test.js`), jedes Ziel hat ein eigenes Symbol.
+  (`eba-dashboard-frei`). Zurück zum Start geht jederzeit über **Dashboard** in der Übersicht.
+- **Seitenleiste „Übersicht“** (seit 19.10.2026, `seitenleiste.js`): ein eigener Tab (`ItemView`, Typ `eba-uebersicht`) in Obsidians
+  linker Seitenleiste, am PC neben der Notiz, auf iPhone und iPad die Schublade hinter dem Symbol oben links. Sie ersetzt das
+  Raster-Menü, das bis 0.4.6 in Obsidians Kopfleiste jeder Notiz stand (`menue.js`, `view.addAction`); das Update entfernt
+  `menue.js`, ein Gerät mit offener App nimmt das Symbol beim Löschen sofort weg (`skriptEntfernen` → `abmelden()`). Oben die
+  Seiten aus `sichtbareZiele(ctx)` (`ZIELE`, einzige Liste; die Lesezeichen der Vorlage `.obsidian/bookmarks.json` folgen ihr,
+  jede Seite hat ein eigenes Symbol, `tests/seitenleiste.test.js`), darunter „Dieses Semester“ mit den Modulen
+  nach `diesesSemester` (`eba.js`, dieselbe Regel wie die Gruppe „Dieses Semester“ im Fenster „Neu …“), Modulcode statt Symbol. Im
+  Akzent steht die Seite, die vorn offen ist, bei Notizen mit `code` (Unterlagen, Vorlesungen, Termine …) auch ihr Modul. Ein Tipp
+  öffnet über `ctx.oeffnen` (nie in der Seitenleiste) und schließt auf iPhone und iPad die Schublade, wenn sie nicht angeheftet ist.
+  Fehlt der Tab, legt das Skript ihn beim Start als ersten Tab der linken Seitenleiste an und wählt ihn aus (Obsidian merkt sich
+  die Lage je Gerät in `workspace.json` bzw. `workspace-mobile.json`). Die Ansicht meldet sich aus dem Skript an; Obsidian baut
+  Tabs eines Typs, der sich später anmeldet, selbst neu auf („view-registered“), darum überlebt der Tab Start und Hot-Reload
+  ohne Eingriff in `main.js`. Das Symbol des Tabs ist ein eigenes SVG (`addIcon`, Strich als Attribut), nicht Obsidians
+  `layout-grid`: über `setIcon` blieb es auf dem iPad leer. Stil: `eba-core.css` Abschnitt 66.
+
+### PDF-Kasten (`pdfkasten.js`, seit 19.10.2026)
+
+Der Kasten `> [!eba-pdf]- PDF` der Begleitnotizen ist ein Knopf: Ein Tipp auf die Kopfzeile klappt auf oder zu, so oft man will, in Lese-
+und Bearbeitungsansicht. Vorher war er ein gewöhnlicher Callout; in der Bearbeitungsansicht setzte ein Tipp neben den Pfeil den Cursor
+hinein, der Kasten zeigte seinen Quelltext, und auf dem iPad ging die Tastatur auf. Die Notiz bleibt Markdown (der Link auf die PDF folgt
+Umbenennungen, ohne Plugin ein normaler Kasten): Der Post-Processor übernimmt den Kasten, wo Obsidian ihn zeichnet, auch in der
+Bearbeitungsansicht (Obsidian zeichnet Callouts dort mit denselben Post-Processoren). Die Kopfzeile fängt Tipps am Kasten ab (Einfangen),
+bevor Obsidian oder der Editor sie sehen; im Inhalt behält die PDF ihre Bedienung, nichts geht weiter an den Editor. Zugeklappt ist der
+Kasten leer, die PDF lädt beim ersten Aufklappen (`MarkdownRenderer`, Kind der Notiz). Rechts in der Kopfzeile leise Knöpfe **Öffnen**
+(Aktion `oeffnen` mit `datei`) und **Original** (wenn `original` auf eine Datei zeigt); die Seitenzahl steht im Titel („PDF (37 Seiten)“,
+sonst aus `seiten`). Eine Höhe je Gerät (`eba-core.css` 27, iPhone 37.begleitnotiz); den Knopf „Größe ⇅“ (Aktion `pdf`, `eba-pdf-klein`,
+`eba-pdf-gross`) gibt es nicht mehr, er sah aus wie Sortieren. Tests: `tests/notizbild.test.js`.
 
 ### Rückgängig statt Rückfrage, ein Papierkorb (`papierkorb.js`, `quellen.js`)
 
@@ -1181,16 +1236,28 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
 
 | id | Art | Gesperrt, solange … |
 |---|---|---|
-| `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`); im eigenen Uni-Abgleich nur der Satz „Dein Stundenplan kommt über deinen Uni-Abgleich.“ ohne Knopf (Aktion `verbinden` zeigt ihn als Hinweis); ist dort doch ein Link gespeichert, holt Alma trotzdem nichts, die Zeile sagt „Der Alma-Link auf diesem Gerät wird nicht genutzt.“ und bietet Trennen als Textlink | kein Link auf diesem Gerät **und** keine eigene Notiz in `Stundenplan/` **und** keine zentrale Stundenplan-Notiz **und** kein eigener Uni-Abgleich **und** Alma in der Einrichtung offen (übersprungen oder Einrichtung nicht fertig, `ctx.einrichtung.almaOffen()`; seit 0.3.0) |
-| `ilias` | „ILIAS-Unterlagen“ (seit 0.4.0), Anmeldung mit Benutzername und Passwort über `ctx.ilias` (siehe „ILIAS-Unterlagen“); eigenes Fenster `IliasFenster`; Knopf Verbinden, verbunden Aktualisieren (lädt gerade ein anderes Gerät: Hier aktualisieren). Im eigenen Uni-Abgleich heißt sie „ILIAS“: nicht verbunden der Satz „Deine Unterlagen kommen über deinen Uni-Abgleich.“ und leise **Für Übungsgruppen verbinden** (öffnet gleich die Anmeldung, eigene Texte ohne Schritte, danach schließt das Fenster); verbunden Stand der Prüfung, Knopf **Aktualisieren**, Textlink **Trennen** | nicht verbunden **und** keine Begleitnotiz mit `ilias_id` unter `Unterlagen/` **und** ILIAS in der Einrichtung offen (`ctx.einrichtung.iliasOffen()`); nie im eigenen Uni-Abgleich oder ohne Anmeldebaustein |
+| `alma` | Link (iCalendar), nutzt `alma.js` (`status`, `linkPruefen`, `verbinden(link, { nurBeiErfolg })`, `trennen`, `fehler`); im eigenen Uni-Abgleich nur der Satz „Dein Stundenplan kommt über deinen Uni-Abgleich.“ ohne Knopf (Aktion `verbinden` zeigt ihn als Hinweis); ist dort doch ein Link gespeichert, holt Alma trotzdem nichts, die Zeile sagt „Der Alma-Link auf diesem Gerät wird nicht genutzt.“ und bietet Trennen als Textlink | kein Link auf diesem Gerät **und** keine eigene Notiz in `Stundenplan/` **und** keine zentrale Stundenplan-Notiz **und** kein eigener Uni-Abgleich **und** kein anderes Gerät verbunden (seit 0.4.7) **und** Alma in der Einrichtung offen (übersprungen oder Einrichtung nicht fertig, `ctx.einrichtung.almaOffen()`; seit 0.3.0) |
+| `ilias` | „ILIAS-Unterlagen“ (seit 0.4.0), Anmeldung mit Benutzername und Passwort über `ctx.ilias` (siehe „ILIAS-Unterlagen“); eigenes Fenster `IliasFenster`; Knopf Verbinden, verbunden Aktualisieren (lädt gerade ein anderes Gerät: Hier aktualisieren). Im eigenen Uni-Abgleich heißt sie „ILIAS“: nicht verbunden der Satz „Deine Unterlagen kommen über deinen Uni-Abgleich.“ und leise **Für Übungsgruppen verbinden** (öffnet gleich die Anmeldung, eigene Texte ohne Schritte, danach schließt das Fenster); verbunden Stand der Prüfung, Knopf **Aktualisieren**, Textlink **Trennen** | nicht verbunden **und** keine Begleitnotiz mit `ilias_id` unter `Unterlagen/` **und** kein anderes Gerät verbunden (seit 0.4.7) **und** ILIAS in der Einrichtung offen (`ctx.einrichtung.iliasOffen()`); nie im eigenen Uni-Abgleich oder ohne Anmeldebaustein |
 | `alma-konto` | „Noten & Anmeldungen (Alma)“ (seit 0.4.5, Beta), Art `konto`: Zeile (`ctx.almaKonto.zeile()`) und Fenster (`fensterOeffnen()`) kommen aus `alma-konto.js`; ohne Beta, Zustimmung und Daten keine Zeile (`sichtbar()`). „ILIAS verbinden“ aus dieser Zeile öffnet das ILIAS-Fenster mit `fuer=alma`: danach sind alle neuen Kurse aus (`kurseAbrufen({ alleAus: true })`), kein erster Abruf | nie |
 | `ilias-kalender` | „ILIAS-Kalender“ (seit 18.10.2026, `ilias-kalender.js`), Art `link` wie Alma: nicht verbunden Satz und **Verbinden** (Symbol aus, keine Pille, kein Schloss); verbunden Stand aus `standText` und die Zahl der kommenden offenen Abgaben („Aktualisiert vor 5 Min. 3 Abgaben stehen bei deinen Fristen.“), Knopf Aktualisieren bzw. Hier aktualisieren, „Mehr erfahren“ öffnet das Link-Fenster (Neuen Link eingeben, Trennen); von außen nur der Satz „Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich.“ (mit gespeichertem Link Textlink Trennen). Die Link-Fenster nehmen ihre Texte aus der Registry (`laedt`, `danach`, `neuerLink`, `externText`; Alma unverändert) | nie |
 | `volltext` | „Volltext der PDFs“ (seit 0.4.5, `volltext.js`): Text mit den Zahlen aus `ctx.volltext.status()` („58 PDFs durchsuchbar, 2 ohne Text.“), Knopf Aktualisieren (`nachholen`; liest gerade ein anderes Gerät: Hier aktualisieren, `hier=1`); aus: Einschalten öffnet das Fenster mit dem Schalter „Textfassungen anlegen“ (`setzen`, für alle Geräte); extern oder fremde Textfassungen: nur der Satz | nie |
 | `zentral` | Zentrale Daten (`zentral.js`), Knopf Aktualisieren (aus: Einschalten); die Schalter Zentrale Daten und Fachschaft & Veranstaltungen stehen im Fenster „Mehr erfahren“ | nie (Standard an) |
 | `vorlage` | „Studium Autopilot“ (`update.js`): Version, Knopf Aktualisieren bzw. Neu laden, sonst Mehr erfahren; Schalter „Beta-Versionen“ im Fenster unter „Mehr erfahren“ | nie |
 
+- **Über ein anderes Gerät verbunden** (seit 0.4.7, `ctx.verbindungen.imTresor(id)` → `{ art: hier | anderswo | nein, zuletzt }`, aus
+  `Q.verbindung`): Bis 0.4.6 bot jedes Gerät ohne eigenen Link bzw. Zugang **Verbinden** an (Zeile, **Alma verbinden** auf
+  Stundenplan), obwohl die Daten über ein anderes Gerät kamen; das sah nach „nicht verbunden“ aus. `sperrenLesen` liest die Sperren
+  von Alma, ILIAS, ILIAS-Kalender und Noten & Anmeldungen (`System/Daten/<quelle>-abruf.json`) beim Start und nach jeder Änderung
+  (Sync, eigener Lauf) und zeichnet geändert neu. Hält ein anderes Gerät eine davon (höchstens 7 Tage still), sagt die Zeile
+  „Verbunden über ein anderes Gerät · aktualisiert vor 3 Std.“ (ILIAS im eigenen Uni-Abgleich mit dessen Satz dahinter, Noten &
+  Anmeldungen statt „Braucht deinen Uni-Zugang“), Pille „verbunden“, Haken, rechts nur **Mehr erfahren**. Das Fenster
+  (`AnderswoFenster`) zeigt den Stand und leise **Auch hier verbinden** (Aktion `verbinden` mit `auch=1`; aus Noten & Anmeldungen das
+  ILIAS-Fenster mit `fuer=alma`). Kein Schloss, auf Stundenplan kein Knopf, auf Unterlagen bleibt **Unterlagen aktualisieren**
+  ausgeblendet. Länger still, frei oder von außen: wie bisher. Hat ILIAS dein Passwort abgelehnt, gilt ILIAS nie als anderswo
+  verbunden. Nach Verbinden und Trennen auf diesem Gerät zeichnen alle Blöcke neu (`neuZeichnen`, auch nach Verbinden über
+  **Stundenplan aktualisieren** in `alma.js`). Tests: `tests/verbindungen.test.js`, `tests/quellen.test.js`.
 - Symbole (seit 15.10.2026, iPad-Test): ruhige Lucide-Linien als inline-SVG in `currentColor` (`SYMBOLE`, `ctx.verbindungen.svg(name)`:
-  schloss, haken, uhr, extern, warnung, pause, aus), keine Emojis; `setIcon` blieb auf dem iPad leer (wie in `menue.js`).
+  schloss, haken, uhr, extern, warnung, pause, aus), keine Emojis; `setIcon` blieb auf dem iPad leer (so auch im Raster-Menü bis 0.4.6).
 - Codeblock `eba-schloss <id>`: Solange gesperrt, eine Karte mit Schloss-Symbol, einem Satz und „Verbinden“. Steht der Block in einer Karte
   (Callout), blendet CSS (`:has`) den übrigen Inhalt aus, z. B. das Wochenraster auf Dashboard und Stundenplan. Sind
   Stundenplan-Notizen da (etwa per Sync), gibt es kein Schloss; die Übersicht sagt dann „Dein Stundenplan liegt vor (n
@@ -1219,7 +1286,8 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   Stundenplan) steht unter „Mehr erfahren“, falls Alma die Adresse ändert. Eingabe mit Prüfung (https/webcal, Server alma.uni-tuebingen.de, nicht nur die Startseite), sofortiger Import, Ergebnis mit
   Anzahl. Scheitert der Abruf, bleibt kein Link gespeichert (vorheriger Zustand gilt wieder).
 - Gespeichert wird nur gerätelokal (`app.saveLocalStorage`): `eba-alma-ics`, `eba-alma-stand`, `eba-alma-seit`.
-- Codeblock `eba-alma-knoepfe` (Seite Stundenplan, seit 0.3.0): verbunden → nur „Stundenplan aus Alma holen“, sonst
+- Codeblock `eba-alma-knoepfe` (Seite Stundenplan, seit 0.3.0): verbunden → nur „Stundenplan aktualisieren“, über ein anderes Gerät
+  verbunden nichts (seit 0.4.7), sonst
   „Alma verbinden“ und ein Satz dazu; den Satz nicht, solange das Schloss gilt (die Schloss-Karte darunter sagt dasselbe,
   seit 16.10.2026); im eigenen Uni-Abgleich nichts (auch mit Link). Gezeichnet als Knopf-Karte `callout[data-callout=eba-neu]` (gleiche Gestalt wie
   `> [!eba-neu|ohne-titel]`). Vorher standen beide Knöpfe fest in der Notiz, auch bei verbundenem Alma.
@@ -1235,7 +1303,7 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
 | Skript | Aufgabe |
 |---|---|
 | `ilias-netz.js` | Sitzung mit Keksdose, Weiterleitungen, Drossel, nur https und nur Server der Uni; am PC Node-https aus Electron (Verbindungen bleiben offen, Seiten gzip), auf iPhone/iPad `requestUrl` |
-| `ilias-anmeldung.js` | Anmeldung über Shibboleth; Ergebnis `{ ok }` bzw. `{ ok: false, grund, hinweis }` (falsches Passwort, Zustimmung, zweiter Faktor, Netz) |
+| `ilias-anmeldung.js` | Anmeldung über Shibboleth; Ergebnis `{ ok }` bzw. `{ ok: false, grund, hinweis, code }` (falsches Passwort, Zustimmung, zweiter Faktor, Netz, unerwartet). `code` = „Stelle · Gerät Version · Spur“ (je Antwort Schritt, Status, Seitenart; bei fremden Seiten Titel und Feldnamen, am PC Server und Pfad; nie Feldwerte, Query, Kekse oder Zugangsdaten), bei „unerwartet“ und „netz“ im Hinweis; Stellen und Beispiel im Kopf der Datei |
 | `ilias-html.js` | Kursliste und Kursinhalt aus dem HTML lesen (eigener kleiner Leser) |
 | `ilias.js` | Zeitplan, Abrufer-Sperre, Durchsuchen, Ablage, Index; `ctx.ilias` für die Oberfläche |
 | `unterlagen.js` | Namen „Code Art NN Titel“ (auch Titel aus der ersten PDF-Seite), Ordner, Begleitnotiz |
@@ -1768,6 +1836,10 @@ Tests: `ctx.personalisieren.angabenZeilen(fm, zustand)`, `varianteZeilen(fm)`.
 
 ## Übersichtsseiten nur in der Leseansicht
 
+Begleitnotizen (`typ: unterlage`, auch Folien als Markdown) und Volltexte öffnen seit 19.10.2026 in der Leseansicht, ohne Sperre
+(`ctx.leseansicht.zuerstLesen`, im Kern `notizOeffnen`; `ansicht: bearbeiten` geht vor): Sie sind zum Lesen da, das Buch oben schaltet
+zum Bearbeiten. Vorher öffneten sie in der Bearbeitungsansicht, wo ein Tipp auf den PDF-Kasten in den Quelltext sprang.
+
 Seit 17.10.2026 (`start.js`, Punkt 2): Notizen mit `typ` `dashboard`, `übersicht`, `einstellungen` oder `daten` bleiben in der
 Leseansicht (auch `Studium/Termine & Anmeldungen.md`, seit die Anmeldungen sich selbst füllen). Das Feld `ansicht` geht vor (`lesen`
 sperrt jede Notiz, `bearbeiten` gibt sie frei; in der Seitenleiste „Eigenschaften“ auch bei gesperrter Notiz änderbar). Der Knopf
@@ -1797,6 +1869,9 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   Semestereröffnung am selben Abend), nach Tag und Uhrzeit, höchstens 8. Welche Liste ein Block zeigt, sagt zuerst sein
   Ersatztext („Fristen erscheinen …“): In verschachtelten Karten liefert Obsidian den Abschnitt der äußeren Karte mit beiden
   Kopfzeilen. Die Seite Prüfungen zeigt ```` ```eba-liste pruefungen ```` (kommende Prüfungen, auch aus dem Modulfeld).
+- **Nachzuarbeiten** (seit 19.10.2026 ```` ```eba-liste nachzuarbeiten ```` aus `dashboard.js`, vorher Bases mit dem Dateinamen):
+  Vorlesungsnotizen ohne Haken bei Nachgearbeitet, älteste zuerst, höchstens 8; links das Modul (`kurz`, sonst Kürzel), dann der
+  Name aus `ctx.modell.vorlesung`. Neu gezeichnet, wenn sich eine Vorlesungsnotiz ändert. Leer: „Nichts offen.“.
 - **Bitte prüfen** (`bitte-pruefen.js`, Codeblock `eba-bitte-pruefen`, erster Block unter „Zu erledigen“, ohne Karte im
   Markdown): nur im eigenen Uni-Abgleich (`eba.eigenerAbgleich`) und nur, wenn `System/Abgleich/Protokoll.md` einen Abschnitt
   „Bitte prüfen“ (Überschrift beliebiger Ebene) mit Listenpunkten hat. Dann zeichnet der Block selbst eine Karte im Aufbau
@@ -1815,13 +1890,12 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 
 ## Bereiche (seit 15.10.2026: 9 statt 13)
 
-Das Menü „Übersicht“ (bis 0.4.5 „Bereiche“; `menue.js`, `ZIELE`, einzige Quelle) zeigt zehn Kacheln (seit 0.4.6 mit Stundenplan): Dashboard,
+Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt zehn Seiten: Dashboard,
 Stundenplan, Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
-Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`NUR_WENN`, `ctx.lernplan.sichtbar()`;
+Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`sichtbareZiele`, `ctx.lernplan.sichtbar()`;
 die schreibt nur eine KI, siehe „Lernplan“). Die Icons hängen an `li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6;
-Stundenplan seit 0.4.6 mit Wochenspalten statt des Kalenders von Termine & Anmeldungen). Das Symbol, das die Tafel öffnet, steht
-seit 0.4.6 auf allen Geräten genau einmal: in Obsidians Kopfleiste jeder Notiz (bis 0.4.5 am PC im Seitenkopf der eba-Seiten). Die
-Lesezeichen der Vorlage folgen `ZIELE` (siehe „Bedien-Bausteine“).
+Stundenplan seit 0.4.6 mit Wochenspalten statt des Kalenders von Termine & Anmeldungen). Die Lesezeichen der Vorlage folgen `ZIELE`
+(siehe „Öffnen und Navigieren“).
 
 | Seite | Enthält (früher eigene Seite) |
 |---|---|
@@ -1928,12 +2002,21 @@ Regel „70/100“: Nach 70 % der Zeit von Vorlesungsbeginn bis zur Klausur ist 
 restliche Zeit gehört der Klausurvorbereitung (Übungen, Altklausuren auf Zeit, Karteikarten). Der Plan verteilt die Kapitel so, dass
 jede Woche gleich viel zu tun ist, und sagt je Modul, welches Kapitel bis Sonntag dran ist.
 
-**Nur mit KI.** Die Kapitelliste eines Moduls steht in den ersten Folien (Gliederung, Inhalte, Road Map), aber in jeder Vorlesung
-anders (1.–7., I.–VI., E und I–VI, eine PDF für alle Teile). Baut ein Modul auf einem Lehrbuch auf und nennt jede Vorlesung erst ihre
-Einheiten, sind die Kapitel die Einheiten des Lehrbuchs (Inhaltsverzeichnis), die noch nicht genannten nach der Modulbeschreibung
-geschätzt (`vorlaeufig: true`); jede neue Vorlesung berichtigt die Liste. Lesen kann das nur eine KI: dein Uni-Abgleich bzw. Claude auf deinem
-eigenen Server (Plan „Zwei Stufen“). Das Plugin legt nie selbst Lernplan-Notizen an. Gibt es keine, fehlt der Bereich im Menü, und
-die Seite zeigt den Leerzustand „Noch kein Lernplan für deine Module.“ (ohne Zusage, woher er käme).
+**Woher die Kapitel kommen.** Die Kapitelliste eines Moduls steht in den ersten Folien (Gliederung, Inhalte, Road Map), aber in
+jeder Vorlesung anders (1.–7., I.–VI., E und I–VI, eine PDF für alle Teile). Baut ein Modul auf einem Lehrbuch auf und nennt jede
+Vorlesung erst ihre Einheiten, sind die Kapitel die Einheiten des Lehrbuchs (Inhaltsverzeichnis), die noch nicht genannten nach der
+Modulbeschreibung geschätzt (`vorlaeufig: true`); jede neue Vorlesung berichtigt die Liste. Lesen kann das nur eine KI, und die läuft
+seit 19.10.2026 an einer Stelle: Der Uni-Abgleich des Autors pflegt die Listen und veröffentlicht sie als `kapitel.json`
+([daten-v1.md](daten-v1.md#kapiteljson)). Jedes Gerät holt sie, der Abrufer schreibt daraus die Notizen (`zentralNotiz`,
+`zentralAuswahl`, `zentralAbgleichen`, Tests `tests/kapitel.test.js`); niemand braucht eine eigene KI. Neu geschrieben wird eine
+Notiz nur, wenn sich die Liste ihres Moduls geändert hat (gerätelokal gemerkt); dabei bleiben Häkchen, `seit`, `verstanden_bis` und
+„## Meine Notizen“. Bei gleicher Liste bleibt die Notiz, wie sie ist. Eine eigene KI (Claude auf dem
+eigenen Server) darf weiter Notizen nach dem Gerüst schreiben, ohne `herkunft: zentral`; die überschreibt das Plugin nie. Gibt es
+keine Notiz, fehlt der Lernplan in der Übersicht, und die Seite zeigt den Leerzustand „Noch kein Lernplan für deine Module.“
+
+**In Entwicklung** (seit 19.10.2026): Bereich und Lernplan-Notizen zeigen oben die Pille „In Entwicklung“ und einen Satz
+(„… auf eigene Gefahr, sie kann sich noch ändern.“), der Inhalt ist abgeblendet und grau, bleibt aber bedienbar; in der Übersicht
+ist die Zeile „Lernplan“ abgeblendet. Ein Schalter: `IN_ENTWICKLUNG` in `lernplan.js` (CSS Abschnitt 61, `.is-entwicklung`).
 
 **Lernplan-Notiz** `Lernplan/<Code> Lernplan.md` (Gerüst `System/Gerüste/Lernplan.md`; Name nie wie die Modulnotiz):
 
@@ -1980,8 +2063,8 @@ und kommt nie in den Datenkanal.
 ## Modulseite (seit 17.10.2026, `modul.js`)
 
 Jede Modulnotiz (und das Gerüst `System/Gerüste/Modul.md`) hat den Aufbau Kopf (HTML: Pfad, Kürzel als eigene Zeile
-`<span class="eba-code">` im `<h1>`, englischer Titel als `eba-untertitel`, Eckdaten) → Codeblock ```` ```eba-modul```` →
-`## Unterlagen` (Codeblock ```` ```eba-unterlagen````) → `## Zum Modul` (bis 0.4.5 „Meine Notizen“) → `## Steckbrief` (Lehrveranstaltung, Prüfung, Ergänzungen wie Rolle je Variante,
+`<span class="eba-code">` im `<h1>`, englischer Titel als `eba-untertitel`, Eckdaten) → Codeblock ```` ```eba-modul```` (Modulfeld
+und darunter der Abschnitt „Vorlesungen“) → `## Unterlagen` (Codeblock ```` ```eba-unterlagen````) → `## Zum Modul` (bis 0.4.5 „Meine Notizen“) → `## Steckbrief` (Lehrveranstaltung, Prüfung, Ergänzungen wie Rolle je Variante,
 Anrechenbar in, Hinweise) → Fußzeile. Die Tabelle „Mein Stand“ und die Knopfreihen gibt es nicht mehr; Modulnotizen, deren
 Text du selbst geändert hast, behalten sie (das Update ersetzt nur unveränderten Text, siehe „Update“), ihr Stil bleibt in
 `eba-core.css` 37.modul und 58.2.
@@ -2003,15 +2086,24 @@ Frontmatter dieser Modulnotiz:
   (`wochentag`, `von`/`bis`, `ausfall`, `aenderungen`, Pausen, `entfaellt`, `einzeltermin`; heute nur, solange sie nicht vorbei
   ist) und Termin-Notizen mit diesem Kürzel, die nicht erledigt sind (Zeitraum mit `bis` als „19.–25.10.“, läuft er schon
   „bis So 25.10.“). Kürzel im Titel entfällt.
-- *Knöpfe:* Neue Vorlesung (im laufenden Semester hervorgehoben), Neues Übungsblatt, Karteikarten lernen (nur mit Stapel),
-  Unterlagen einordnen, Suchen.
+- *Knöpfe:* Neues Übungsblatt, Karteikarten lernen (nur mit Stapel), Unterlagen einordnen, Suchen.
+
+Die **Vorlesungen** (seit 19.10.2026: die eigenen Notizen gehören zum Meistgenutzten; bis dahin standen sie
+ganz unten unter „Zum Modul“ als „VL 01 · 13.10.“) zeichnet derselbe Codeblock direkt unter dem Modulfeld, über `## Unterlagen`,
+ohne eigenen Codeblock in den 87 Modulnotizen: Überschrift als `<h2>` (Gestalt wie jedes `##` der Seite), deine
+Vorlesungsnotizen aus `ctx.modell.vorlesungen({ code })`, neueste zuerst, als Zeilen wie die Unterlagen (Name wie überall,
+„nachgearbeitet“ als Pille, Tipp öffnet), ab sechs Notizen erst die fünf neuesten und „Alle n zeigen“ (gerätelokal). Darunter
+**Neue Vorlesungsnotiz** (Fenster mit diesem Modul vorgewählt und Thema; im laufenden Semester der Hauptknopf, vorher „Neue
+Vorlesung“ in der Knopfreihe); ohne Notizen davor der Satz „Noch keine Vorlesungsnotizen.“. „Zum Modul“ zeigt seitdem keine
+Vorlesungen mehr (Filter `typ != "vorlesung"`, ohne Spalte Nachgearbeitet). Tests: `tests/vorlesungen.test.js`. CSS:
+`eba-core.css` Abschnitt 65.
 
 Neu gezeichnet wird bei Änderungen an Modul-, Stundenplan-, Termin-, Vorlesungs- und Kartennotizen, an den Einstellungen und
 `System/Daten/`, beim Zurückkommen in die App und alle 10 Minuten. Prüfung, nächste Sitzung, Termine und Statusfarbe kommen
 seit 18.10.2026 aus dem Fachmodell (`pruefungVon`, `naechsteSitzung`, `termine`, `statusArt`): Eine abgehakte Klausur steht ohne
 Countdown mit „erledigt“, ein bestandenes oder anerkanntes Modul hat keine kommende Prüfung mehr. Reine Logik (`naechstes`,
 `band`, `noteOk`, `titelOhne`, `spanne`) in `tests/modul.test.js`. Die Tabelle „Zum Modul“ zeichnet
-`tabellen.js` auf allen Geräten als Liste zum Lesen (`--eba-tliste: 1`); ein gesetztes Kontrollkästchen (Nachgearbeitet) steht als
+`tabellen.js` auf allen Geräten als Liste zum Lesen (`--eba-tliste: 1`); ein gesetztes Kontrollkästchen steht als
 Pille da, nur bei Notizen, die das Feld haben, „offiziell“ ohne Chip. CSS: `eba-core.css` Abschnitt 58.
 
 Die **Unterlagen** (`unterlagenliste.js`, Codeblock `eba-unterlagen`, seit 18.10.2026; vorher eine Tabelle mit
@@ -2060,6 +2152,31 @@ Die Dashboard-Kachel „Nächste Prüfung“ überspringt sie (Regel oben).
 Bases-Falle: Ein leeres Feld ist in Formeln und Filtern zwar falsy für `if(feld, …)`, aber `!feld` ist **nicht** wahr.
 Für „Feld leer“ `!feld.isTruthy()` schreiben (bzw. `!value.properties.feld.isTruthy()`).
 
+## Claude im Tresor (`.claude/`)
+
+Wer Claude Code im Tresor-Ordner startet, bekommt mit der Vorlage, wie man hier liest und schreibt: `.claude/CLAUDE.md`
+(drei Regeln und der Verweis auf den Skill) und den Skill `.claude/skills/studium-autopilot/` mit `SKILL.md` (Grundregeln),
+`tresor.md` (Ordner, Notizarten, Felder, Besitz über `herkunft`, Dateinamen), `lesen.md` (Woche, Prüfungen, Noten,
+Unterlagen über die Textfassungen, To-dos), `schreiben.md` (Termin, Zusammenfassung in der Begleitnotiz, To-do,
+Vorlesungsnotiz, Karteikarten; was nie geschrieben wird) und `fehler-melden.md` (Meldung an den Autor: gehört es zu Studium
+Autopilot, schon gemeldet?, ohne persönliche Daten und Unterlagen, Vorlage aus `.github/ISSUE_TEMPLATE`, ganze Meldung zeigen,
+dann ein vorausgefüllter Link `issues/new?template=…&<Feld-id>=…` ohne `labels=`, den die Person selbst abschickt;
+Sicherheitslücken nur privat wie in `SECURITY.md`). Dieselbe Regel steht für die Einrichtung im Skill `server-einrichten`,
+und Claude auf dem eigenen Server beginnt einen Hinweis zu einem falschen zentralen Termin mit „Zentraler Termin wohl falsch:“. Es gibt keine Schnittstelle dazwischen: Claude schreibt die Dateien
+so, wie das Plugin sie selbst anlegt, und das Plugin erkennt sie am `typ`.
+
+- **Update:** `.claude/` hat keine Klasse (`klasse_von` in `pruefen.py`, `klasseVon` in `update.js`) und steht darum nicht in
+  der Update-Liste; der Skill kommt mit einer neuen Installation (ZIP). Grund: Das Update plant der `update.js` der
+  installierten Version, und die Planer bis 0.4.6 lehnen eine Liste mit einem Pfad ohne Klasse ganz ab („Liste: Datei nicht
+  erlaubt“), es gäbe also kein Update. Soll ein Update den Skill bringen, braucht die Liste dafür einen eigenen Schlüssel, den
+  ältere Planer übergehen. Eigene Regeln gehören in einen eigenen Skill unter `.claude/skills/<name>/`; auch `.claude/settings*.json`
+  fasst kein Update an.
+- **Gleiche Regeln wie der Code:** `tests/claude-skill.test.js` prüft Kategorien (`zentral.js`), Arten der Unterlagen
+  (`unterlagen.js`), Abschnitte der Begleit- und Vorlesungsnotizen, die Auswahl der To-dos (`todos.js`) und die Id-Felder der
+  Quellen (`quellen.js`) gegen den Text des Skills.
+- Der Skill des eigenen Servers (`server/skill/studium-autopilot/`) ist ein anderer: Er schreibt nie Notizen, sondern das
+  Eingang-Format, das das Plugin übernimmt.
+
 ## Erweiterung oder Aktion hinzufügen
 
 1. Datei `System/Skripte/meins.js` anlegen:
@@ -2103,6 +2220,10 @@ Regeln für Skript-Autoren:
 - Prüfungen, Fristen, „diese Woche“, Sitzungen, ECTS, Noten, „im Plan“, Statusfarben und Datumstexte nur über das Fachmodell
   (`ctx.modell`, Abschnitt „Fachmodell“), nie eine eigene Regel; fehlt etwas, kommt es mit Test ins Modell.
 - `registrieren()` darf annehmen, dass die alte Fassung abgemeldet ist; offene Seiten zeichnet der Kern danach selbst neu.
+- Erzeugte Notizen haben keine leeren Punkte (`- `, `- [ ] `) und keine leeren Abschnitte (seit 19.10.2026); ein Abschnitt kommt dazu,
+  sobald es etwas gibt. Ausnahme: der Punkt, in dem nach dem Anlegen der Cursor steht. `## Meine Notizen` der Quellen bleibt als
+  Grenze für deinen Text; ist er leer, blendet ihn die Leseansicht aus (`kopf.js`). `tests/notizbild.test.js` prüft `notizen.js`,
+  die Begleitnotiz und `ilias.js`.
 - Einen leeren Block samt Hülle ausblenden: in der Leseansicht den Abschnitt (`.el-*`) per CSS auf Höhe 0 falten, nie
   `display: none`. Obsidian misst einen unsichtbaren Abschnitt sonst so hoch wie alles darüber, und was darunter steht,
   bleibt leer. `tests/leseansicht.test.js` prüft die Snippets darauf. Eine Karte **in** einer Raster-Karte darf
@@ -2165,8 +2286,6 @@ Timer auf einmal pro Minute.
   zurück.
 - Ein Codeblock in einer Notiz, die in der Leseansicht offen ist, existiert zweimal (Leseansicht und versteckter Editor);
   `griff.neu()` zeichnet beide.
->>>NEU
-
 - Datenkanal: Die Daten kommen von `studium-autopilot.github.io/ecoba-daten` (Organisation `studium-autopilot`). Ohne Netz
   oder bei einem Fehler bleibt der letzte Stand; die Übersicht „Verbindungen“ zeigt dann „Fehler beim letzten Abruf“.
 - Datenkanal: Eine gelöschte zentrale Notiz kommt zurück, sobald sich ihr Termin in den Daten ändert (oder `abruf.json` fehlt).

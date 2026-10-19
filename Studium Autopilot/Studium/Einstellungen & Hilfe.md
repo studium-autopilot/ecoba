@@ -46,14 +46,14 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > [!eba-karte|hilfe|bedienung]- Bedienung <span class="eba-zeile-unter">Knöpfe, Vorlagen, Übersicht</span>
 > > | Knopf | Wo | Fragt nach | Landet in |
 > > | --- | --- | --- | --- |
-> > | Neue Vorlesung | Dashboard, Modulseite, **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst das Modul; vom Modul-Knopf nie) | Vorlesungen/Modulcode, Name „Datum Code VL 03“ |
+> > | Neue Vorlesungsnotiz | Dashboard, Modulseite (Abschnitt Vorlesungen), **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst Modul und Thema; auf der Modulseite ist das Modul gewählt) | Vorlesungen/Modulcode, Dateiname „Datum Code VL 03“, angezeigt als „Vorlesung 3 · Di 27.10. · Thema“ |
 > > | Neues Übungsblatt | Dashboard, Modulseite, [[Unterlagen#Übungsblätter\|Unterlagen]] | Modul, Nummer, Abgabe | Übungsblätter |
 > > | Unterlagen einordnen | Dashboard, Modulseite, [[Unterlagen]] | Vorschau der neuen Namen | Unterlagen/Modul |
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
 > > | Alma verbinden, danach Stundenplan aktualisieren | [[Stundenplan]] | beim Verbinden deinen Alma-Link | Stundenplan |
 > >
-> > - **Übersicht:** Raster-Symbol (vier Kästchen) oben in der Leiste jeder Notiz tippen, es zeigt alle Seiten. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite.
+> > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite.
 > > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
 > > - Jedes Feld hat einen Vorschlag. <kbd>Esc</kbd> oder **Abbrechen** legt nichts an. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche), darunter steht, welcher Tag gemeint ist.
 > > - **Rückgängig:** Was du wegwirfst oder abhakst, passiert sofort; der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.
@@ -162,7 +162,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > > [!eba-regel] Einmal pro Gerät
 > > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
 > > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
-> > > > 3. Unter [[#Verbindungen]] Alma und ILIAS verbinden. Beides gilt nur für dieses Gerät.
+> > > > 3. Unter [[#Verbindungen]] Alma und ILIAS verbinden. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
 > > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
 > > > > [!eba-info] Unterschiede je Gerät

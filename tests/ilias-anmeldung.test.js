@@ -10,6 +10,7 @@ const { laden } = require("./laden.js");
 
 const N = laden("ilias-netz").ergebnis;
 const A = laden("ilias-anmeldung").ergebnis;
+const H = laden("ilias-html").ergebnis;
 const I = "https://ovidius.uni-tuebingen.de", P = "https://idp.uni-tuebingen.de";
 const seite = (name) => fs.readFileSync(path.join(__dirname, "daten", "ilias-netz", name), "utf8");
 const IDP_FORM = seite("idp.html");
@@ -46,12 +47,25 @@ function grundRegeln(nachLogin) {
   };
 }
 
-async function lauf(regeln, zugang) {
+// mobil: wie requestUrl auf iPhone/iPad folgt der Transport Weiterleitungen selbst und nennt keine Adressen
+async function lauf(regeln, zugang, { mobil = false, anmeldung = A } = {}) {
   const s = server(regeln);
-  const sitzung = N.sitzung({ transport: s.transport });
+  let transport = s.transport;
+  if (mobil) {
+    transport = async (a) => {
+      let r = await s.transport(a), url = a.url;
+      for (let i = 0; i < 12 && r.status >= 300 && r.status < 400 && r.kopf && r.kopf.location; i++) {
+        url = new URL(r.kopf.location, url).href;
+        r = await s.transport({ url, methode: "GET", kopf: {} });
+      }
+      return r;
+    };
+    transport.folgtSelbst = true;
+  }
+  const sitzung = N.sitzung({ transport });
   let geholt = 0;
   const z = zugang || { benutzer: "abc12345", kennwortGeber: () => { geholt++; return GEHEIM; } };
-  const ergebnis = await A.anmelden(sitzung, z, { netz: N });
+  const ergebnis = await anmeldung.anmelden(sitzung, z, { netz: N, html: H });
   return { ergebnis, anfragen: s.anfragen, geholt: () => geholt };
 }
 
@@ -149,15 +163,23 @@ test("Weiterleitung auf fremden Server blockiert die Sitzung → unerwartet", as
   const { ergebnis, anfragen } = await lauf(r);
   assert.equal(ergebnis.grund, "unerwartet");
   assert.equal(anfragen.filter((a) => host(a.url) === "boese.example.org").length, 0);
+  assert.ok(ergebnis.code.startsWith("blockiert-boese.example.org bei start · PC "), ergebnis.code);
 });
 
-test("Netzfehler und 5xx → netz", async () => {
+test("Netzfehler und 5xx → netz, Code nennt Grund und Schritt", async () => {
   const r = grundRegeln(null);
   r[`GET ovidius.uni-tuebingen.de/shib_login.php`] = () => { throw Object.assign(new Error("ECONNRESET"), { grund: "netz" }); };
   assert.equal((await lauf(r)).ergebnis.grund, "netz");
   const r5 = grundRegeln(null);
   r5[`GET ovidius.uni-tuebingen.de/shib_login.php`] = { status: 503, kopf: {}, text: "weg" };
-  assert.equal((await lauf(r5)).ergebnis.grund, "netz");
+  const e5 = (await lauf(r5)).ergebnis;
+  assert.equal(e5.grund, "netz");
+  assert.ok(e5.code.startsWith("netz-http-503 · "), e5.code);
+  const rz = grundRegeln(() => { throw Object.assign(new Error("Zeit"), { grund: "zeitueberschreitung" }); });
+  const ez = (await lauf(rz)).ergebnis;
+  assert.equal(ez.grund, "netz");
+  assert.ok(ez.code.startsWith("netz-zeitueberschreitung bei passwort · "), ez.code);
+  assert.ok(ez.hinweis.endsWith(" Code: " + ez.code));
 });
 
 test("Nach SAML immer noch Login-Seite → unerwartet", async () => {
@@ -170,4 +192,45 @@ test("Fehlender Benutzer oder Passwort-Geber → zugang-falsch ohne Anfrage", as
   const { ergebnis, anfragen } = await lauf(grundRegeln(null), { benutzer: "", kennwortGeber: () => GEHEIM });
   assert.equal(ergebnis.grund, "zugang-falsch");
   assert.equal(anfragen.length, 0);
+});
+
+test("Unbekannte Seite nach dem Passwort → unerwartet; Code mit Stelle, Spur, Titel und Feldnamen, nie Werte oder Zugangsdaten", async () => {
+  const seiteNeu = '<html><head><title>Hinweis für ABC12345</title></head><body><form method="post" action="/idp/x">'
+    + '<input type="hidden" name="csrf_token" value="WERT-99"><button name="_eventId_proceed">Weiter</button></form></body></html>';
+  const { ergebnis } = await lauf(grundRegeln(html(seiteNeu)));
+  assert.equal(ergebnis.grund, "unerwartet");
+  const c = ergebnis.code;
+  assert.ok(c.startsWith("nach-passwort · PC ? · start 200 idp/idp/profile/SAML2/Redirect/SSO idp-anmeldung › passwort 200 "), c);
+  assert.ok(c.endsWith("unbekannt „Hinweis für •••“ [csrf_token,_eventId_proceed]"), c);
+  assert.equal(ergebnis.hinweis, A.HINWEISE.unerwartet + " Code: " + c);
+  for (const nie of ["WERT-99", GEHEIM, "abc12345", "ABC12345", "execution="]) assert.equal(JSON.stringify(ergebnis).indexOf(nie), -1, nie);
+});
+
+test("Zustimmung gleich beim Einstieg (IdP-Sitzung gilt noch) → zustimmung, nichts abgeschickt", async () => {
+  const r = grundRegeln(null);
+  r[`GET idp.uni-tuebingen.de/idp/profile/SAML2/Redirect/SSO`] = html('<html><body><form id="attributeRelease" method="post" action="/idp/y">'
+    + '<input type="submit" name="_eventId_proceed" value="Accept"></form></body></html>');
+  const { ergebnis, anfragen, geholt } = await lauf(r);
+  assert.equal(ergebnis.grund, "zustimmung");
+  assert.equal(ergebnis.hinweis, A.HINWEISE.zustimmung, "ohne Code: der Hinweis sagt, was zu tun ist");
+  assert.equal(geholt(), 0);
+  assert.equal(anfragen.filter((a) => a.methode === "POST").length, 0);
+});
+
+test("iPad: Anmeldung endet nicht in ILIAS → Code mit Gerät, Version und Seitenart je Schritt (ohne Adressen)", async () => {
+  const ipad = laden("ilias-anmeldung", { kontext: {
+    obsidian: { Platform: { isIosApp: true, isTablet: true, isMobile: true } }, plugin: { manifest: { version: "9.9.9" } },
+  } }).ergebnis;
+  const r = grundRegeln(html(SAML_FORM));
+  r[`GET ovidius.uni-tuebingen.de/ilias.php`] = html(seite("login.html"));
+  const { ergebnis } = await lauf(r, null, { mobil: true, anmeldung: ipad });
+  assert.equal(ergebnis.grund, "unerwartet");
+  assert.ok(ergebnis.code.startsWith("nicht-angemeldet · iPad 9.9.9 · start 200 idp-anmeldung › passwort 200 saml-weiterleitung › saml 200 ilias-anmeldung „Bei ILIAS anmelden"), ergebnis.code);
+  assert.ok(/› dashboard 200 ilias-anmeldung „Bei ILIAS anmelden/.test(ergebnis.code), ergebnis.code);
+  assert.ok(ergebnis.code.length <= 450);
+});
+
+test("iPad: erfolgreiche Anmeldung wie am PC", async () => {
+  const { ergebnis } = await lauf(grundRegeln(html(SAML_FORM)), null, { mobil: true });
+  assert.deepEqual(ergebnis, { ok: true });
 });

@@ -102,10 +102,16 @@ Innenabstand, Karten 16 × 18 px (iPhone 11 × 13 px). **(geplant)** Variablen `
 
 ### Seitenkopf
 Pfad (Label, Links gedämpft) → Titel (`h1`) → höchstens eine Zeile Eckdaten (Werte mit „ · “ getrennt, auf der Modulseite mit
-feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `cssclasses: eba`. Das Symbol der Übersicht steht auf
-allen Geräten in Obsidians Kopfleiste jeder Notiz (seit 0.4.6). **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
+feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `cssclasses: eba`. Die Übersicht steht in Obsidians
+linker Seitenleiste (seit 0.4.7, `seitenleiste.js`; bis 0.4.6 ein Symbol in der Kopfleiste jeder Notiz). **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
 Begleitnotiz, Termin- und Stundenplan-Notiz bekommen den Pfad (Modul) über dem Titel; ihren Status zeigt schon die Kopf-Karte
-unter dem Titel (`kopf.js`, `eba-core.css` 64.2).
+unter dem Titel (`kopf.js`, `eba-core.css` 64.2): Art · Modul (Link) · Tag, rechts der Status-Knopf und „⋯“ (Eigenschaften). Was
+der Kopf zeigt, steht nicht noch einmal darunter: keine Karte „Eckdaten“, keine Eigenschaften über dem Titel.
+
+### PDF-Kasten
+`> [!eba-pdf]- PDF (37 Seiten)` in Begleitnotizen: eine schlanke Karte, Kopfzeile als Label mit Seitenzahl, rechts leise Knöpfe
+**Öffnen** (und **Original**) vor dem Pfeil. Die ganze Kopfzeile ist ein Knopf zum Auf- und Zuklappen, in beiden Ansichten (`pdfkasten.js`,
+`eba-core.css` 28). Eine Höhe je Gerät, kein Größen-Schalter.
 
 ### Abschnitt
 `##` gliedert eine Seite in Themen. Sein Aussehen bestimmt das Design (Elfenbein: Serif mit Linie darüber), auch in der
@@ -139,7 +145,7 @@ Der wichtigste Baustein. Code: `.eba-vb-liste` mit `.eba-vb` (Skripte), `> [!eba
 - Rechts genau eins: ein Knopf, ein Pfeil (öffnet etwas), ein Wert (Note, Datum) oder ein Haken (gewählt).
 - **Mit Rahmen** für Listen, in denen man etwas tut (Einstellungen, Verbindungen, Variante, Hilfe, Übungsgruppen, Karten
   eines Stapels). **Ohne Rahmen**,
-  nur mit Haarlinien, für Leselisten unter einem Gruppenlabel (Unterlagen, „Als Nächstes“, Agenda).
+  nur mit Haarlinien, für Leselisten unter einem Gruppenlabel (Unterlagen, Vorlesungen der Modulseite, „Als Nächstes“, Agenda).
 - Gruppen: Label in `--eba-accent-text` über der Gruppe (ohne Rahmen) oder als Band in `--eba-surface-2` (mit Rahmen).
 - iPhone: Der Knopf bleibt rechts, solange der Titel zwei Zeilen hat; erst danach rutscht er unter den Text.
 
@@ -152,7 +158,7 @@ ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent, auf dem Dashboar
 
 | Stufe | Aussehen | Wann |
 |---|---|---|
-| Haupt | Fläche `--eba-accent`, Schrift `--text-on-accent` | die eine Handlung eines Fensters oder Modulfelds („Weiter“, „Verbinden“, „Neue Vorlesung“) |
+| Haupt | Fläche `--eba-accent`, Schrift `--text-on-accent` | die eine Handlung eines Fensters oder Abschnitts („Weiter“, „Verbinden“, „Neue Vorlesungsnotiz“) |
 | Empfohlen | Tönung `--eba-accent-soft`, Rahmen Akzent 45 % | der eine empfohlene Schritt in einer Zeile oder Leiste („Neu laden“, „Lernen“) |
 | Normal | Rahmen `--eba-border`, Fläche `--eba-bg` | alles andere („Ändern“, „Wählen“) |
 | Leise | ohne Rahmen, `--eba-muted` | Nebenwege („Später“, „Überspringen“, „Zurück“) |
@@ -191,7 +197,8 @@ iPad und in der Einrichtung über die ganze Breite. Für Vorlesesoftware `role="
 ### Leerzustand
 Ein Satz in `--eba-muted` an der Stelle des Inhalts, danach der nächste Schritt als Link oder Knopf: „Noch keine Unterlagen.
 **Unterlagen aktualisieren**“. „Noch keine …“ für Dinge, die kommen werden, „Nichts offen.“ für erledigte Listen. Nie nur „Leer.“, nie
-eine leere Tabelle mit Spaltenköpfen.
+eine leere Tabelle mit Spaltenköpfen. In Notizen gilt: Ein Abschnitt ohne Inhalt erscheint nicht, kein einsamer Punkt und kein leeres
+Kästchen (`kopf.js`, `eba-core.css` 64.4); eine leere Liste auf der Modulseite fällt samt Überschrift weg (37.modul).
 
 ### Schloss-Karte
 `eba-schloss`: gestrichelter Rahmen, rundes Schloss-Symbol, Titel und ein Satz, ein Empfohlen-Knopf („ILIAS verbinden“). Steht
@@ -252,16 +259,17 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 | **## Meine Notizen** (dein Text in einer Notiz); **Zum Modul** (die Liste der Notizen auf der Modulseite) | „## Notizen“, „Meine Notizen“ als Liste | dein Text steht in jeder Notiz unter derselben Überschrift und bleibt dort |
 | **vorlesungsfrei**; benannte Pausen **Weihnachtspause**, **Pfingstpause** | „Ferien“, „Pfingstferien“ | so sagt es die Uni |
 | **Stundenplan** (Seite), **Woche** (Raster auf Dashboard und Stundenplan) | „Wochenplan“, „Wochenraster“, „Wochenansicht“ | ein Name je Ansicht |
-| **Übersicht** (Menü mit allen Seiten); **Teil** (Grundstudium, Profil & Vertiefung …); **Schwerpunktbereich** | „Bereiche-Menü“, „Bereich“ für einen Teil | „Bereich“ nur für Schwerpunkte |
+| **Übersicht** (Seitenleiste mit allen Seiten); **Teil** (Grundstudium, Profil & Vertiefung …); **Schwerpunktbereich** | „Bereiche-Menü“, „Bereich“ für einen Teil | „Bereich“ nur für Schwerpunkte |
 | **Deine Angaben** mit **Ändern**; **Obsidian-Einstellungen** für Obsidians eigene | „Personalisieren“, „Einstellungen →“ für Obsidians | wie die Überschrift in der App; Obsidians Einstellungen sind andere |
 | **Tresor**, einmal erklärt: „(in Obsidian: Vault)“ | „Vault“ | deutsch wie der Rest |
 | **Termin folgt** (Datum fehlt noch) | „noch kein Termin“ | ein Satz für denselben Zustand |
 | **mit Unterlagen**, **ohne Unterlagen**, **handschriftliches A4-Blatt** | „open book“, „closed book“, „Cheat-Sheet“ | ohne Jargon |
+| **Vorlesungsnotiz** (deine Mitschrift zu einer Vorlesung), in Listen und im Kopf **Vorlesung 1 · Mo 13.10. · Thema** (`ctx.modell.vorlesung`) | „VL“, „VL 01“ | keine Abkürzungen; „VL 01“ bleibt nur im Dateinamen, damit Links gültig bleiben |
 | **Design** ohne Namen; **Design 1**, **Design 2**, **Design 3** nur für Vorlesesoftware und die Auswahl des Befehls **Design wählen** | „Elfenbein“, „Paper Elfenbein“, „Flieder“, „Klar“ | Designs haben keine Namen, die Vorschau-Kacheln zeigen sie; die Namen gibt es nur in Code und CSS (`eba-design-flieder`) |
 
 ### Knöpfe und Befehle
 
-- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesung**, **Neues Übungsblatt**, **Unterlagen einordnen**,
+- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesungsnotiz**, **Neues Übungsblatt**, **Unterlagen einordnen**,
   **Unterlagen aktualisieren**, **Neue Karte**. Fehlt dem Knopf auf seiner Seite nichts, der Befehl aber Zusammenhang, kommt
   nur das Ding dazu (Knopf **Lernen** → Befehl **Karteikarten lernen**), nie ein anderes Verb.
 - Befehle ohne „Studium Autopilot“ (Obsidian setzt den Namen davor), ohne Vorsatz mit Doppelpunkt, ohne Erklärung in Klammern;
