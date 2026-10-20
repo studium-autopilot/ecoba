@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.4)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.5)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -131,8 +131,22 @@ ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo -u studium -H /var/lib/studi
 ```
 
 Claude Code zeigt einen Link. Bei „Claude klickt“ öffnest du ihn im Browser; anmelden und **Autorisieren** klickt der Mensch.
-Den angezeigten Code trägst du in die Cloud Shell ein (bei „Ich klicke selbst“ der Mensch). Danach
-`ssh -i ~/.ssh/studium_autopilot ubuntu@$IP sudo studium-server zustand`; fertig, wenn der Status `claude: angemeldet` meldet.
+Den angezeigten Code kopierst du mit dem Kopier-Knopf auf der Seite und fügst ihn in die Cloud Shell ein, nie
+abgetippt: Ein falsches Zeichen, und die Anmeldung scheitert (bei „Ich klicke selbst“ kopiert und fügt der Mensch). Gleich
+nach dem Link einfügen, der Code gilt nur ein paar Minuten, nur einmal und nur für den Link desselben Befehls.
+
+Nach **jedem** Versuch, egal was die Cloud Shell meldet:
+
+```bash
+ssh -i ~/.ssh/studium_autopilot ubuntu@$IP sudo studium-server zustand
+```
+
+Fertig, sobald dort `claude angemeldet` steht. Sonst:
+
+- `Login failed: Request failed with status code 400`: Der Code passte nicht zum Link (falsch eingefügt, zu alt oder schon
+  benutzt). Den Anmeldebefehl oben noch einmal und nur seinen neuen Link und Code nehmen. Nach drei solchen Versuchen anhalten und
+  melden (SKILL.md, „Fehler an den Autor melden“).
+- Jede andere Meldung: wie eine unbekannte Meldung (SKILL.md, „Fehler ohne Vermutung“).
 
 ## 7. Gmail
 

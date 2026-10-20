@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.5 – Claude-Anmeldung auf dem Server
+
+- **Behoben:** Beim Einrichten des eigenen Servers brach Claude die Anmeldung manchmal mit einem Fehler ab, obwohl
+  sie beim nächsten Versuch klappte. Jetzt prüft Claude nach jedem Versuch, ob du angemeldet bist, und versucht es sonst neu.
+
 ## 0.5.4 – Server erreichbar, Update in einem Fenster
 
 - **Behoben:** Nach dem Einrichten des eigenen Servers war er von außen nicht erreichbar. Richtest du ihn noch einmal ein,
