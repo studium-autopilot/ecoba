@@ -57,6 +57,7 @@ sie ausgeliefert werden.
 | `beta` | optional, seit Plugin 0.2.0. Neueste **Beta** (gleiches Schema), nur für Tresore mit Kanal „Beta“. |
 | `hinweis` | optional, reiner Text ≤ 200 Zeichen (gesäubert wie `info`), erscheint in der Übersicht „Verbindungen“ |
 | `pause` | optional. `true` = **Notbremse**: Kein Gerät übernimmt etwas, Anzeige „Pausiert“. Rücknahme: `false` (oder Git-Revert). |
+| `abdeckung` | optional, seit Plugin 0.5.3 (ältere ignorieren es). `{ "stand": "JJJJ-MM-TT", "module": ["B110", …] }`: Module, deren ILIAS-Unterlagen (Folien, Blätter, Kursseiten) der Abgleich des Autors liest, sodass deren Termine aus Unterlagen in `termine.json` kommen; `stand` = Tag des letzten Abrufs dieser Unterlagen. Höchstens 60 Codes, ungültige fallen weg; ohne gültiges `stand` gilt das Feld als fehlend. Älter als 14 Tage: kein Modul gilt als abgedeckt. Das Plugin zeigt auf der Modulseite jedes anderen Moduls im laufenden Semester einen Satz dazu, und ein eigener Server durchsucht neue Unterlagen dieser Module nach Terminen. Nur Modulcodes und ein Datum, nichts über die Person. |
 
 Das Plugin holt zuerst nur das Manifest. Eine Datei lädt es nur, wenn ihre Prüfsumme sich gegenüber dem letzten übernommenen
 Stand dieses Geräts geändert hat (oder beim Knopf **Aktualisieren**). Stimmt Größe oder SHA-256 nicht, wird **in diesem Lauf

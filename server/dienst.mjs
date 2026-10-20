@@ -8,7 +8,8 @@
 //                       werden danach auf dem Server gelöscht)
 //   POST /v1/unterlagen mit Zugangsschlüssel: verschlüsselt bis zu 3 Textfassungen von PDFs (Folien, Skripte …), zu denen
 //                       Claude eine Begleitnotiz schreiben soll; landen in unterlagen/neu/ (mit modell: "opus", auf Wunsch per
-//                       Knopf: unterlagen/opus/, eigener Lauf mit Opus), ein Anstoß startet den Lauf
+//                       Knopf: unterlagen/opus/, eigener Lauf mit Opus; mit nur_termine nur nach Terminen durchsuchen, ohne
+//                       Begleitnotiz), ein Anstoß startet den Lauf
 //   POST /v1/anstoss    mit Zugangsschlüssel: Knopf „Mails durchsuchen“ in Obsidian startet einen Claude-Lauf (mit Gmail),
 //                       höchstens einmal in 10 Minuten; wartet schon ein Anstoß, bleibt er
 //   POST /v1/verbinden  Einmal-Code (verbinden.mjs) gegen Adresse, Zugangs- und Datenschlüssel
@@ -139,7 +140,7 @@ export function unterlagenPruefen(roh) {
     if (!text.trim()) continue;
     const titel = saeubern(u.titel, 160, false);
     aus.push({ datei: pfad, kennung: u.kennung, art: u.art, titel: titel.fehler ? "" : titel.wert, code: typeof u.code === "string" && MODULCODE.test(u.code) ? u.code : "",
-      seiten: Number.isInteger(u.seiten) && u.seiten > 0 && u.seiten < 10000 ? u.seiten : 0, opus: u.modell === "opus", text });
+      seiten: Number.isInteger(u.seiten) && u.seiten > 0 && u.seiten < 10000 ? u.seiten : 0, opus: u.modell === "opus", nurTermine: u.modell !== "opus" && u.nur_termine === true, text });
   }
   return aus;
 }
@@ -156,7 +157,8 @@ export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
     const ziel = join(ordner(u.opus ? "opus" : "neu"), u.kennung + ".md");
     if (u.opus) rmSync(join(ordner("neu"), u.kennung + ".md"), { force: true }); // auf Wunsch mit Opus statt im gewöhnlichen Lauf
     const kopf = [`# ${u.titel || u.datei.slice(u.datei.lastIndexOf("/") + 1)}`, "", `Datei: ${u.datei}`,
-      `Modul: ${u.code || "–"} · Art: ${u.art}${u.seiten ? ` · Seiten: ${u.seiten}` : ""}`, "", "---", ""];
+      `Modul: ${u.code || "–"} · Art: ${u.art}${u.seiten ? ` · Seiten: ${u.seiten}` : ""}`,
+      ...(u.nurTermine ? ["Auftrag: nur Termine (keine Begleitnotiz)"] : []), "", "---", ""];
     writeFileSync(ziel + ".neu", kopf.join("\n") + u.text + "\n");
     renameSync(ziel + ".neu", ziel);
     n++;

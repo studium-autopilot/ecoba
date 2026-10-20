@@ -8,7 +8,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const nodeCrypto = require("node:crypto");
 const path = require("node:path");
-const { laden } = require("./laden.js");
+const { laden, json } = require("./laden.js");
 
 const EBA = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "eba.js"));
 
@@ -281,7 +281,7 @@ function tresor(D) {
   const Zt = L.ctx.zentral;
   const notizen = () => Object.keys(text).filter((p) => p.indexOf("Stundenplan/") === 0).sort();
   const zentral = () => notizen().filter((p) => fmLesen(text[p]).herkunft === "zentral");
-  return { Z: Zt, text, nurFm, papierkorb, veroeffentlichen, notizen, zentral, abrufen: (o) => Zt.abrufen(o || { manuell: true }), fm: (p) => fmLesen(text[p]) };
+  return { Z: Zt, text, nurFm, papierkorb, speicher, veroeffentlichen, notizen, zentral, abrufen: (o) => Zt.abrufen(o || { manuell: true }), fm: (p) => fmLesen(text[p]) };
 }
 
 const FIXTURE = () => datei(
@@ -323,6 +323,38 @@ test("Abrufer: Raumänderung und Ausfall kommen in die Notiz, dein Text bleibt",
   assert.deepEqual(t.fm(p).ausfall, ["2026-12-21", "2026-12-28"]);
   assert.deepEqual(t.fm(p).aenderungen, ["2026-11-23|10:15|11:45|Hörsaal 5"]);
   assert.ok(t.text[p].endsWith("## Meine Notizen\n- Skript lesen\n"));
+});
+
+test("14-täglich: rhythmus steht in der Notiz, die Woche zeigt sie nur jede zweite Woche; wöchentlich ohne das Feld", () => {
+  const e = Z.lehrePruefen(datei(v({ rhythmus: "14-täglich" }))).veranstaltungen[0];
+  const t = Z.lehreNotizText("", e, { kurz: "Einführung in die Beispielökonomik" });
+  assert.equal(fmLesen(t).rhythmus, "14-täglich");
+  assert.match(t, /Montags, alle zwei Wochen, 10:15–11:45/);
+  // ab von (Mo 12.10.) jede zweite Woche, wie das Wochenraster es über findetStatt liest
+  const M = laden("modell", { heute: "2026-11-02", frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": {} } }).ctx.modell;
+  assert.deepEqual(["2026-11-09", "2026-11-16", "2026-11-23"].map((d) => M.findetStatt(fmLesen(t), d).statt), [true, false, true]);
+  // Wird die Serie wöchentlich, fällt das Feld weg
+  const w = Z.lehreNotizText(t, Object.assign({}, e, { rhythmus: "wöchentlich" }), { kurz: "Einführung in die Beispielökonomik" });
+  assert.equal(fmLesen(w).rhythmus, undefined);
+});
+
+test("14-täglich nach dem Update: der Abrufer schreibt ältere Notizen ohne rhythmus einmal neu, auch ohne neue Daten", async () => {
+  const t = tresor(daten());
+  const d = FIXTURE();
+  d.veranstaltungen[0].rhythmus = "14-täglich";
+  t.veroeffentlichen(d);
+  await t.abrufen();
+  const p = "Stundenplan/Mo 10.15 X100 Vorlesung.md";
+  assert.equal(t.fm(p).rhythmus, "14-täglich");
+  // Stand einer Fassung ohne rhythmus: Notiz ohne das Feld, Filter-Schlüssel ohne Fassung
+  t.text[p] = t.text[p].replace(/\nrhythmus: .*/, "");
+  const s = t.speicher["eba-zentral-stand"];
+  assert.match(s.filter, /,"f":2\}$/);
+  s.filter = s.filter.replace(/,"f":2\}$/, "}");
+  const b = await t.abrufen({});
+  assert.deepEqual(b.aktualisiert, [p]);
+  assert.equal(t.fm(p).rhythmus, "14-täglich");
+  assert.deepEqual((await t.abrufen({})).geschrieben, [], "danach wieder still");
 });
 
 test("Besuche ich nicht: Notiz weg, kommt nach Änderungen nicht wieder; Zurücknehmen bringt sie zurück", async () => {

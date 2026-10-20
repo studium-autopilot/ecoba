@@ -221,7 +221,7 @@ module.exports = function (ctx) {
       else if (sem && sem.ve && tage[0] > sem.ve) leer = "Vorlesungsfrei";
       else leer = "Keine Lehrveranstaltungen";
     }
-    const jetztHm = zwei(jetzt.getHours()) + ":" + zwei(jetzt.getMinutes());
+    const nun = jetzt.getHours() * 60 + jetzt.getMinutes();
     const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s, ab }) => {
       const tag = Number(fm.wochentag);
       const aen = s.geaendert;
@@ -241,7 +241,8 @@ module.exports = function (ctx) {
       if (ausnahme) klassen.push("ausnahme");
       if (ab) klassen.push("spaeter");
       else if (aus) klassen.push("ausfall");
-      else if (ht && tag === wt) { klassen.push("heute"); if (jetztHm >= String(fm.beginn) && jetztHm <= String(fm.ende)) klassen.push("jetzt"); }
+      // „jetzt“ nach der Zeit dieses Tages (bei einer Änderung die neue, seit 20.10.2026; vorher die übliche)
+      else if (ht && tag === wt) { klassen.push("heute"); if (b.h * 60 + b.m <= nun && nun <= e.h * 60 + e.m) klassen.push("jetzt"); }
       // Antippen öffnet das Modul über seinen vollen Pfad, nie über den Namen (den könnte eine andere Notiz auch tragen)
       const modul = String(fm.modul || "").replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
       const ziel = (modulPfad && (modulPfad[modul] || modulPfad[modul.replace(/\.md$/, "").split("/").pop()])) || pfad;

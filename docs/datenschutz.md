@@ -130,8 +130,10 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   zusammenführen kann).
   To-dos, die nach Zugangsdaten aussehen, schickt es nie; der Server prüft das noch einmal. Tippst du in einer Unterlage auf
   **Zusammenfassen**, dazu deren Textfassung (Folien, Skripte, Übungen, Lösungen, Altklausuren, Literatur), damit Claude „Das
-  Wichtigste“ schreibt; nie Mitschriften, eigene Lösungen oder Scans. Mit `server_unterlagen: alle` in `System/Einstellungen.md`
-  gehen alle Unterlagen ohne Zusammenfassung von selbst, mit `server_unterlagen: aus` keine. Keine Noten, keine übrigen Notiztexte, keine PDFs. Den
+  Wichtigste“ schreibt; nie Mitschriften, eigene Lösungen oder Scans. Von selbst geht die Textfassung neuer Unterlagen (höchstens
+  drei Wochen alt) aus Modulen, deren Termine aus Unterlagen nicht über die zentralen Daten kommen, damit Claude darin nur nach
+  Terminen sucht. Mit `server_unterlagen: alle` in `System/Einstellungen.md` gehen alle Unterlagen ohne Zusammenfassung von
+  selbst, mit `server_unterlagen: aus` keine. Keine Noten, keine übrigen Notiztexte, keine PDFs. Den
   ganzen Tresor sieht der Server nie.
 - **Was im Tresor landet:** Termine als Notizen unter `Termine/` und kurze Hinweise in `System/Daten/server.json`. Hinweise
   fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten.

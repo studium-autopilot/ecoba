@@ -5,6 +5,10 @@ Skript, Übung, Tutorium, Lösung, Altklausur, Literatur). Oben steht der Kopf: 
 darunter der Text, Seite für Seite. Aus deinem Eintrag macht das Plugin die Abschnitte „Das Wichtigste“, „Zu tun“ und
 „Offene Fragen“ in der Notiz neben der Datei; was die Person dort schon geschrieben hat, bleibt.
 
+**Nur Termine:** Steht im Kopf `Auftrag: nur Termine (keine Begleitnotiz)`, schreibst du zu dieser Datei **keinen** Eintrag in
+`begleitnotizen`. Du liest sie nur nach Terminen (Abgaben, Probeklausur, Anmeldung, verschobene Sitzung …) und lieferst sie nach
+termine.md, wie unten unter „Termine in der Unterlage“. Die Person lässt sich die Unterlage bei Bedarf selbst zusammenfassen.
+
 ## Je Datei ein Eintrag in `begleitnotizen` (Format in ausgabe.md)
 
 - `datei`: genau der Pfad aus der Zeile `Datei:`.

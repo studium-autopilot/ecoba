@@ -126,6 +126,13 @@ test("Unterlagen für Begleitnotizen: nur Lehrmaterial mit gültigem Pfad und Ke
   unterlagenAblegen(w, [gewuenscht]);
   assert.deepEqual([fs.readdirSync(path.join(w, "unterlagen", "neu")), fs.readdirSync(path.join(w, "unterlagen", "opus"))], [[k("a") + ".md"], [k("b") + ".md"]]);
   assert.equal(unterlagenPruefen({ schema: 1, unterlagen: [u({ modell: "haiku" })] })[0].opus, false, "nur opus zählt");
+
+  // Nur Termine (Module ohne zentrale Termine aus Unterlagen): Kopfzeile für Claude; ein Wunsch mit Opus geht vor
+  const [nurT, beides] = unterlagenPruefen({ schema: 1, unterlagen: [u({ kennung: k("c"), nur_termine: true }), u({ kennung: k("d"), nur_termine: true, modell: "opus" })] });
+  assert.deepEqual([nurT.nurTermine, beides.nurTermine, beides.opus], [true, false, true]);
+  unterlagenAblegen(w, [nurT]);
+  assert.match(fs.readFileSync(path.join(w, "unterlagen", "neu", k("c") + ".md"), "utf8"), /\nAuftrag: nur Termine \(keine Begleitnotiz\)\n\n---\n/);
+  assert.doesNotMatch(fs.readFileSync(path.join(w, "unterlagen", "neu", k("a") + ".md"), "utf8"), /Auftrag:/);
 });
 
 test("Auszug aus dem Tresor: Termine und To-dos einzeln geprüft und gesäubert, nichts mit Zugangsdaten, Grenzen", async () => {

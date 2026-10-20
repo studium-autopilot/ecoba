@@ -5287,6 +5287,7 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-h
 .eba-mod-sym svg { width: 16px; height: 16px; }
 .eba-mod :is(button, a, .eba-mod-tipp):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
 .eba-mod-leer { font-size: 14px; color: var(--eba-muted); }
+.eba-mod-abdeckung { margin-top: 14px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
 
 /* Schmal (iPhone, geteiltes iPad) */
 @container eba-mod (max-width: 560px) {

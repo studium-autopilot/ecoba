@@ -180,3 +180,19 @@ test("Neue Vorlesungsnotiz von der Modulseite: Fenster mit Modul vorgewählt und
   assert.match(angelegt[0].inhalt, /^# Vorlesung 1 · Do 15\.10\. · Lineare Regression$/m);
   assert.equal(N.ergebnis.aktionen.vorlesung.titel, "Neue Vorlesungsnotiz", "Befehl heißt wie der Knopf");
 });
+
+test("Läuft gerade (Neue Vorlesungsnotiz ohne Frage): Stundenplan mit der Zeit dieses Tages, geänderte Zeit und Pause zählen", () => {
+  const LV = "Stundenplan/Di X100.md";
+  const notizen = notizenMit({ [LV]: { typ: "lehrveranstaltung", titel: "Beispielmodul · Vorlesung", code: "X100", art: "Vorlesung", semester: "WS 2026/27",
+    wochentag: 2, beginn: "10:00", ende: "12:00", von: "2026-10-13", bis: "2027-02-02", aenderungen: ["2026-10-27|14:15|15:45|Hörsaal 9"] } });
+  const E = laden("eba", { heute: "2026-10-20", notizen, kontext: { modell: modell("2026-10-20", notizen) } }).ergebnis;
+  const laufend = (wann) => { const l = E.jetztLaufend(new Date(wann)); return l && [l.fm.code, l.quelle.path, l.eindeutig]; };
+  assert.deepEqual(laufend("2026-10-20T10:30:00"), ["X100", LV, true], "übliche Zeit");
+  // 27.10. auf 14:15–15:45 verschoben: zur üblichen Zeit läuft nichts, zur neuen schon (30 Minuten vorher bis 15 danach)
+  assert.equal(laufend("2026-10-27T10:30:00"), null);
+  assert.equal(laufend("2026-10-27T13:40:00"), null);
+  assert.deepEqual(laufend("2026-10-27T13:45:00"), ["X100", LV, true]);
+  assert.deepEqual(laufend("2026-10-27T16:00:00"), ["X100", LV, true]);
+  assert.equal(laufend("2026-10-27T16:01:00"), null);
+  assert.equal(laufend("2026-12-29T10:30:00"), null, "Weihnachtspause");
+});

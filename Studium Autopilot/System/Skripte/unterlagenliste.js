@@ -8,7 +8,8 @@
 //     im Titel ohne „Lösung“, „Kurzlösung“, „Korrektur“ … (eindeutig, sonst bleibt die Lösung im Abschnitt „Lösungen“).
 //  3. Folien und Übungen nach Nummer (Nummer als eigene Spalte), Altklausuren nach Semester, neueste zuerst.
 //  4. Zeile: Titel (Tipp öffnet die Notiz), ✓ bei gelesen/bearbeitet („neu“ ist der Normalfall und steht nicht da), Lösung,
-//     Seiten, ↗ öffnet die Datei außerhalb von Obsidian (Aktion oeffnen).
+//     Seiten, ↗ öffnet die Datei außerhalb von Obsidian (Aktion oeffnen); ohne Datei führt ↗ zur Online-Fassung im Feld link
+//     (nur https, z. B. das E-Book in der Literaturliste, seit 20.10.2026).
 // Reine Logik (artVon, woerter, semesterRang, gliedern) für tests/unterlagenliste.test.js.
 // Stil: eba-core.css Abschnitt 58.8 (eba-ul-*). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast.
 module.exports = function (ctx) {
@@ -31,6 +32,8 @@ module.exports = function (ctx) {
   const pad = (n) => String(n).padStart(2, "0");
   const nummer = (v) => (v === "" || v == null || !isFinite(Number(v)) ? null : Number(v));
   const vergleich = (a, b) => a.localeCompare(b, "de", { numeric: true, sensitivity: "base" });
+  // Online-Fassung aus dem Feld link: nur https ohne Leerzeichen, sonst ""
+  const webLink = (v) => { const t = text(v); return /^https:\/\/[^\s<>"]+$/i.test(t) ? t : ""; };
 
   // ---------- Reine Logik ----------
   // Art wie in ARTEN geschrieben („übung“ → „Übung“); leer → „Sonstiges“, Unbekanntes bleibt, wie es ist
@@ -54,7 +57,7 @@ module.exports = function (ctx) {
     return Number(m[0]) + (/\b(ws|wise|wintersemester)\b/i.test(text(s)) ? 0.5 : 0);
   };
 
-  // eintraege: [{ f, fm }] → [{ art, name, mitNr, mitLoesung, zeilen: [{ f, titel, nr, seiten, gelesen, datei, loesungen: [{ f, name, gelesen }] }] }]
+  // eintraege: [{ f, fm }] → [{ art, name, mitNr, mitLoesung, zeilen: [{ f, titel, nr, seiten, gelesen, datei, link, loesungen: [{ f, name, gelesen }] }] }]
   const gliedern = (eintraege, code) => {
     const alle = (eintraege || []).filter((x) => x && x.fm).map((x) => {
       const art = artVon(x.fm.art), nr = nummer(x.fm.nummer);
@@ -66,7 +69,7 @@ module.exports = function (ctx) {
         titel = text(rest.indexOf(art + " ") === 0 ? rest.slice(art.length + 1) : rest === art ? "" : rest).replace(/^\d{1,3}(\s+|$)/, "") || art;
       }
       return { f: x.f, art, titel, nr, seiten: nummer(x.fm.seiten), gelesen: !!GELESEN[text(x.fm.status).toLowerCase()],
-        datei: !!text(x.fm.datei), loesungen: [] };
+        datei: !!text(x.fm.datei), link: webLink(x.fm.link), loesungen: [] };
     });
     // Lösungen zu ihrer Aufgabe: gleiche Nummer (Übung), sonst Titelwörter als Teilmenge mit eindeutig wenigsten Zusatzwörtern
     const ziele = alle.filter((z) => ZIEL[z.art]);
@@ -158,9 +161,13 @@ module.exports = function (ctx) {
         }
         r.createSpan({ cls: "eba-ul-seiten", text: z.seiten ? z.seiten + " S." : "" });
         const d = r.createSpan({ cls: "eba-ul-datei" });
-        if (z.datei && z.f) {
-          const a = d.createEl("a", { text: "↗", href: `${LINK}oeffnen&notiz=${encodeURIComponent(z.f.basename)}`,
-            attr: { "aria-label": "Datei öffnen", title: "Datei öffnen", "data-sa-quelle": c.sourcePath } });
+        // Datei geht vor; ohne Datei die Online-Fassung im Browser
+        const ziel = z.datei && z.f
+          ? { href: `${LINK}oeffnen&notiz=${encodeURIComponent(z.f.basename)}`, name: "Datei öffnen", attr: { "data-sa-quelle": c.sourcePath } }
+          : z.link ? { href: z.link, name: "Online öffnen", attr: { target: "_blank", rel: "noopener" } } : null;
+        if (ziel) {
+          const a = d.createEl("a", { text: "↗", href: ziel.href,
+            attr: Object.assign({ "aria-label": ziel.name, title: ziel.name }, ziel.attr) });
           a.addEventListener("mousedown", (e) => e.stopPropagation());
           a.addEventListener("click", (e) => e.stopPropagation());
         }

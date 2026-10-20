@@ -100,6 +100,12 @@ test("Manifest: Pflichtfelder, Prüfsummen, Version", () => {
   assert.ok(Z.manifestPruefen(Object.assign({}, m, { dateien: { "termine.json": { sha256: "xyz", groesse: 10 } } })).fehler);
   assert.equal(Z.manifestPruefen(Object.assign({}, m, { plugin_aktuell: "1.0" })).wert.plugin_aktuell, "");
   assert.equal(Z.manifestPruefen(Object.assign({}, m, { pause: "ja" })).wert.pause, false, "pause nur bei true");
+  // Abdeckung (seit 0.5.3): optional, nur gültige Modulcodes; ungültig → null, das Manifest gilt trotzdem
+  assert.equal(ok.wert.abdeckung, null);
+  assert.deepEqual(Z.manifestPruefen(Object.assign({}, m, { abdeckung: { stand: "2026-10-20", module: ["B110", "s100", "<b>", 7, "E101"] } })).wert.abdeckung,
+    { stand: "2026-10-20", semester: "", module: ["B110", "E101"] });
+  assert.equal(Z.manifestPruefen(Object.assign({}, m, { abdeckung: { stand: "gestern", module: ["B110"] } })).wert.abdeckung, null);
+  assert.equal(Z.manifestPruefen(Object.assign({}, m, { abdeckung: ["B110"] })).fehler, undefined);
 });
 
 test("Semesterdaten: ungültige Semester fallen weg, ohne gültige → Fehler", () => {

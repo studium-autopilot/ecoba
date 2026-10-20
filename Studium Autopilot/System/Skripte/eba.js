@@ -140,13 +140,15 @@ module.exports = function (ctx) {
     return { name: "modul", titel: o.titel || "Modul", art: "auswahl", optionen, vorgabe, waehlen, pflicht: !o.optional, fehlt: "Bitte ein Modul wählen." };
   };
 
-  // Gerade laufende Veranstaltung (heute, 30 min vor Beginn bis 15 min nach Ende): Lehrveranstaltungen aus dem Stundenplan
-  // und Termine, deren „ort“ eine Uhrzeit trägt („14:00–16:00 · HS 10“, „Mo–Mi 9:15–12:00 · …“, nur Beginn = 90 min;
-  // ohne Fristen und Prüfungen, z. B. Vorkurs und Einführungsveranstaltungen). Bei Überlappung gewinnt, was gerade läuft,
-  // sonst der nächstliegende Beginn. Rückgabe: das Modul ({ f, fm }, bei Terminen ohne Modul f = null) mit „modul“ (Modul
-  // oder null), „quelle“ (Datei der Lehrveranstaltung bzw. des Termins), „lv“ (deren Frontmatter), „titel“, „dozent“ und
-  // „eindeutig“ (nur ein Treffer, oder nur einer läuft gerade): Dann fragt die Vorlage „Vorlesung“ gar nicht erst.
-  // „jetzt“ nur zum Testen.
+  // Gerade laufende Veranstaltung (heute, 30 min vor Beginn bis 15 min nach Ende): Lehrveranstaltungen aus dem Stundenplan,
+  // die heute stattfinden, mit der Zeit dieses Tages (ctx.modell.findetStatt wie Woche und Modulseite: Ausfall, Pause,
+  // freier Tag, 14-täglich, „Besuche ich nicht“, geänderte Zeit; seit 20.10.2026, vorher galt auch an einem Tag mit
+  // Änderung die übliche Zeit), und Termine, deren „ort“ eine Uhrzeit trägt („14:00–16:00 · HS 10“, „Mo–Mi 9:15–12:00 · …“,
+  // nur Beginn = 90 min; ohne Fristen und Prüfungen, z. B. Vorkurs und Einführungsveranstaltungen). Bei Überlappung
+  // gewinnt, was gerade läuft, sonst der nächstliegende Beginn. Rückgabe: das Modul ({ f, fm }, bei Terminen ohne Modul
+  // f = null) mit „modul“ (Modul oder null), „quelle“ (Datei der Lehrveranstaltung bzw. des Termins), „lv“ (deren
+  // Frontmatter), „titel“, „dozent“ und „eindeutig“ (nur ein Treffer, oder nur einer läuft gerade): Dann fragt die Vorlage
+  // „Vorlesung“ gar nicht erst. „jetzt“ nur zum Testen.
   const zuMin = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   const terminZeit = (ort) => {
     const s = String(ort ?? "").trim();
@@ -157,16 +159,15 @@ module.exports = function (ctx) {
   };
   const jetztLaufend = (jetzt = new Date()) => {
     const tag = `${jetzt.getFullYear()}-${String(jetzt.getMonth() + 1).padStart(2, "0")}-${String(jetzt.getDate()).padStart(2, "0")}`;
-    const wt = ((jetzt.getDay() + 6) % 7) + 1, min = jetzt.getHours() * 60 + jetzt.getMinutes();
+    const min = jetzt.getHours() * 60 + jetzt.getMinutes();
     const kandidaten = [];
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = app.metadataCache.getFileCache(f)?.frontmatter;
       if (fm?.typ === "lehrveranstaltung" && f.path.startsWith("Stundenplan/")) {
-        if (Number(fm.wochentag) !== wt || (fm.von && String(fm.von) > tag) || (fm.bis && String(fm.bis) < tag)
-          || (Array.isArray(fm.ausfall) && fm.ausfall.map(String).includes(tag))) continue;
-        const b = zuMin(fm.beginn), m = fm.code && modulNachCode(fm.code);
+        const s = ctx.modell && ctx.modell.findetStatt ? ctx.modell.findetStatt(fm, tag) : null;
+        const b = s && s.statt ? zuMin(s.beginn) : null, m = fm.code && modulNachCode(fm.code);
         if (b == null || !m) continue;
-        kandidaten.push({ f, fm, m, b, e: zuMin(fm.ende) ?? b + 90 });
+        kandidaten.push({ f, fm, m, b, e: zuMin(s.ende) ?? b + 90 });
       } else if (fm?.typ === "termin" && !["Frist", "Prüfung"].includes(fm.kategorie)) {
         const von = String(fm.datum ?? "").slice(0, 10), bis = String(fm.bis ?? "").slice(0, 10) || von;
         const z = terminZeit(fm.ort);

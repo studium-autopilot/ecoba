@@ -421,6 +421,9 @@ test("Begleitnotiz ergänzen: neue Notiz bekommt Abschnitte über dem PDF-Kasten
   const eigen2 = S.begleitnotizErgaenzen(eigen, bn, name);
   assert.match(eigen2, /## Das Wichtigste\n- Mein eigener Punkt\n\n## Zu tun\n- \[ \] Aufgabe 2\.3 vorbereiten \(bis 29\.10\.\)\n\n## Offene Fragen\n- \[ \] Warum zählen fixe Kosten nicht\?\n- \[ \] Meine Frage\?\n\n> \[!eba-pdf\]/);
   assert.ok(!eigen2.includes("Deckungsbeitrag"), "dein „Das Wichtigste“ bleibt, wie es ist");
+  // „Zu tun“ und „Offene Fragen“ da, „Das Wichtigste“ nicht (z. B. Knopf „Zusammenfassen“ später): kommt davor, nicht ans Ende
+  const ohneW = kopf + "## Zu tun\n- [ ] Aufgabe 2.3 vorbereiten (bis 29.10.)\n\n## Offene Fragen\n- [ ] Warum zählen fixe Kosten nicht?\n\n" + pdf;
+  assert.equal(S.begleitnotizErgaenzen(ohneW, bn, name), neu, "dieselbe Reihenfolge wie bei einer neuen Notiz");
   // ohne PDF-Kasten: ans Ende
   assert.match(S.begleitnotizErgaenzen(kopf, { wichtigste: [{ text: "A" }] }, name), /# B110 · Folien 02 · Kosten\n\n> \[!eba-regel\] Eckdaten\n> B110 · Folien\n\n## Das Wichtigste\n- A\n/);
 });
@@ -488,6 +491,23 @@ test("Zusammenfassen auf Wunsch: gewünschte Unterlage geht mit Opus in den eige
     assert.ok(!text.includes("zusammenfassung_angefordert"), "Wunsch erledigt");
     assert.match(text, /^---\ntyp: unterlage\nart: Folien\n---\n/);
     assert.match(text, /## Das Wichtigste\n- Erlös: Menge mal Preis\./);
+  } finally { await srv.zu(); }
+});
+
+test("Terminsuche: Unterlage eines nicht abgedeckten Moduls geht einmal mit nur_termine an den Server, ein späterer Wunsch mit Opus", async () => {
+  const srv = await serverStarten();
+  try {
+    const k = "9".repeat(64), pdf = "Unterlagen/W100 Wahlmodul/W100 Folien 01.pdf";
+    let wunsch = "";
+    const { m } = await verbunden(srv, tresor(), { unterlagen: async () => [Object.assign({ datei: pdf, kennung: k, art: "Folien", titel: "Folien 01", code: "W100",
+      seiten: 5, text: "[S. 1]\nAbgabe Blatt 1 am 30.10." }, wunsch ? { angefordert: wunsch } : { nur_termine: true })] });
+    assert.equal((await m.abrufen()).unterlagen, 1);
+    assert.match(fs.readFileSync(path.join(srv.verzeichnis, "unterlagen", "neu", k + ".md"), "utf8"), /Auftrag: nur Termine/);
+    assert.equal((await m.abrufen()).unterlagen, 0, "nur einmal");
+    wunsch = "2099-01-01T00:00";
+    assert.equal((await m.abrufen()).unterlagen, 1, "Zusammenfassen später geht trotzdem");
+    assert.ok(fs.existsSync(path.join(srv.verzeichnis, "unterlagen", "opus", k + ".md")));
+    assert.ok(!fs.existsSync(path.join(srv.verzeichnis, "unterlagen", "neu", k + ".md")), "nicht zweimal");
   } finally { await srv.zu(); }
 });
 

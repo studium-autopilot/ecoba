@@ -46,7 +46,8 @@ eigene Notizen können `besuche_nicht: true` haben.
 **Unterlage (Begleitnotiz)** – neben der Datei, gleicher Name: `<Code> <Art> <NN> <Titel>.md` (höchstens 80 Zeichen)
 `typ: unterlage`, `code`, `modul`, `art` (Folien, Skript, Übung, Tutorium, Lösung, Eigene Lösung, Mitschrift, Altklausur, Literatur,
 Scan, Sonstiges; Tutorium: alles aus dem Tutorium, im Unterordner `Tutorium/` des Modulordners), `nummer`, `titel`, `datei` („[[x.pdf]]“), `seiten`, `semester`, `status` (neu | gelesen | bearbeitet),
-`datum`, `quelle`, aus ILIAS `ilias_id`. Neu angelegt: nur der Titel und darunter der eingeklappte PDF-Kasten. Abschnitte kommen
+`datum`, `quelle`, aus ILIAS `ilias_id`; `link` = Online-Fassung (nur `https://`, etwa E-Book oder Online-Buch; ohne Datei
+führt das ↗ in der Liste der Unterlagen dorthin). Neu angelegt: nur der Titel und darunter der eingeklappte PDF-Kasten. Abschnitte kommen
 dazu, sobald es etwas gibt, alle über dem PDF-Kasten: `## Das Wichtigste`, darunter auf Wunsch `## Zu tun`, dann
 `## Offene Fragen`. Nie einen leeren Abschnitt oder leere Punkte (`- `, `- [ ] `) anlegen.
 

@@ -2,6 +2,17 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.3 – Termine aus Unterlagen
+
+- **Neu:** Auf der Modulseite steht jetzt, wenn Termine aus Folien und ILIAS-Dateien dieses Moduls nicht zentral kommen. Mit
+  eigenem Server sucht Claude in neuen Unterlagen solcher Module nach Abgaben und Terminen.
+- **Behoben:** Wurde eine Lehrveranstaltung an einem Tag auf eine andere Uhrzeit verlegt, stand „jetzt“ in der **Woche** zur
+  alten Uhrzeit, und **Neue Vorlesungsnotiz** erkannte sie nicht. Jetzt gilt die neue Uhrzeit.
+- **Neu:** Liegt Literatur online, etwa als E-Book, öffnet das ↗ in ihrer Zeile unter **Unterlagen** sie direkt.
+- **Behoben:** Vorlesungen, die von selbst im **Stundenplan** stehen und nur alle zwei Wochen stattfinden, standen in der
+  **Woche** jede Woche. Jetzt stehen sie nur in ihren Wochen.
+- **Behoben:** Kommt eine Zusammenfassung später, steht „Das Wichtigste“ jetzt oben, über „Zu tun“ und „Offene Fragen“.
+
 ## 0.5.2 – Zusammenfassen auf Wunsch
 
 - **Neu:** Mit eigenem Server tippst du in einer Unterlage auf **Zusammenfassen**, und Claude fasst sie gründlich mit Opus

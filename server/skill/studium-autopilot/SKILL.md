@@ -15,7 +15,7 @@ Ausgabe geprüft hat.
 | Teil | Wann | Datei |
 |---|---|---|
 | Termine und Hinweise aus Quellen | jeder Lauf des Servers, „Prüf meine Uni-Mails“ | [termine.md](termine.md) |
-| Begleitnotizen zu Unterlagen | wenn auftrag.md neue Unterlagen nennt | [begleitnotiz.md](begleitnotiz.md) |
+| Begleitnotizen zu Unterlagen (oder nur Termine daraus) | wenn auftrag.md neue Unterlagen nennt | [begleitnotiz.md](begleitnotiz.md) |
 | Ausgabeformat (Eingang v1) | immer, bevor du schreibst | [ausgabe.md](ausgabe.md) |
 
 Lies vor jedem Lauf termine.md und ausgabe.md, bei neuen Unterlagen auch begleitnotiz.md.

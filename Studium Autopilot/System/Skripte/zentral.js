@@ -161,6 +161,22 @@ module.exports = function (ctx) {
   };
   const ID = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/;
 
+  // Optionales Feld „abdeckung“ (seit 0.5.3, docs/daten-v1.md): Module, deren ILIAS-Unterlagen (Folien, Blätter, Kursseiten) der
+  // Autor im laufenden Semester liest; nur deren Termine aus Unterlagen kommen zentral. Ungültig → null (das Manifest gilt trotzdem).
+  const abdeckungPruefen = (a) => {
+    if (!a || typeof a !== "object" || Array.isArray(a) || !datumOk(a.stand) || !Array.isArray(a.module)) return null;
+    const sem = textFeld(a.semester, 40, false);
+    return { stand: a.stand, semester: sem.fehler ? "" : sem.wert, module: a.module.filter((c) => typeof c === "string" && MODULCODE.test(c)).slice(0, 60) };
+  };
+  const ABDECKUNG_TAGE = 14; // älter: der Abgleich des Autors läuft nicht mehr, kein Modul gilt als abgedeckt
+  // → { stand, semester, module, gilt } oder null (nie geholt, zentrale Daten aus)
+  const abdeckungStand = () => {
+    const a = stand().abdeckung;
+    if (!a || !Array.isArray(a.module) || !eingeschaltet()) return null;
+    const alter = (Date.now() - Date.parse(a.stand + "T12:00:00Z")) / 864e5;
+    return { stand: a.stand, semester: String(a.semester || ""), module: a.module.slice(), gilt: alter <= ABDECKUNG_TAGE };
+  };
+
   // ---------- Prüfen: Manifest ----------
   const manifestPruefen = (m) => {
     if (!m || typeof m !== "object" || Array.isArray(m)) return { fehler: "Manifest ist kein Objekt" };
@@ -182,6 +198,7 @@ module.exports = function (ctx) {
         hinweis: h.fehler ? "" : h.wert,
         release: releasePruefen(m.release, false),
         beta: releasePruefen(m.beta, true),
+        abdeckung: abdeckungPruefen(m.abdeckung),
       },
     };
   };
@@ -1065,8 +1082,12 @@ module.exports = function (ctx) {
   const vergleichen = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
 
   // ---------- Zentraler Stundenplan: Notiz ----------
-  const LEHRE_EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "beginn", "ende", "raum", "semester", "von", "bis", "ausfall", "aenderungen",
-    "einzeltermin", "quelle", "herkunft", "zentral_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
+  const LEHRE_EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "beginn", "ende", "raum", "semester", "von", "bis", "rhythmus", "ausfall",
+    "aenderungen", "einzeltermin", "quelle", "herkunft", "zentral_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
+  // Fassung der Notiz im Filter-Schlüssel (lehreSchluessel): Kommt ein Feld dazu, schreibt der Abrufer nach dem Update alle
+  // zentralen Notizen einmal neu, auch wenn veranstaltungen.json gleich bleibt. 2 = rhythmus (seit 20.10.2026; vorher stand eine
+  // 14-tägliche Veranstaltung jede Woche im Raster).
+  const LEHRE_FASSUNG = 2;
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const dm = (s) => `${s.slice(8, 10)}.${s.slice(5, 7)}.`;
   // Kurztitel wie in alma.js (an einer Wortgrenze gekürzt)
@@ -1100,7 +1121,7 @@ module.exports = function (ctx) {
       "typ: lehrveranstaltung", "titel: " + J(kurz + " · " + e.art), "code: " + J(e.code), "modul:" + (o.modulLink ? " " + J(o.modulLink) : ""),
       "art: " + J(e.art), "wochentag: " + (WOCHE.indexOf(e.tag) + 1), "tag: " + e.tag, "beginn: " + J(z.beginn), "ende: " + J(z.ende),
       "raum: " + J(e.raum), "semester: " + J(e.semester), "von: " + e.zeitraum.von, "bis: " + e.zeitraum.bis,
-    ].concat(liste("ausfall", e.ausfall), liste("aenderungen", aenderungenFelder(e).map(J)), [
+    ].concat(e.rhythmus === "14-täglich" ? ["rhythmus: " + J(e.rhythmus)] : [], liste("ausfall", e.ausfall), liste("aenderungen", aenderungenFelder(e).map(J)), [
       "einzeltermin: " + einzeln, "quelle: " + J(e.quelle_url), "herkunft: zentral", "zentral_id: " + e.id, 'uebersicht: "[[Stundenplan]]"',
     ], liste("tags", vereinigt("tags", ["stundenplan"])), liste("cssclasses", vereinigt("cssclasses", ["eba-s-notizen"])));
     for (const b of bl) if (b.key && LEHRE_EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
@@ -1147,7 +1168,7 @@ module.exports = function (ctx) {
       const F = lehreFilter();
       const eigen = eigeneLehre().map((x) => [x.fm.code, x.fm.semester, x.fm.wochentag, x.fm.beginn, x.fm.ende, x.fm.art, x.fm.einzeltermin === true ? s10(x.fm.von) : ""].join(",")).sort();
       const zentral = Object.keys(zentraleNotizen(true)).sort();
-      return JSON.stringify({ s: F.semester, c: Object.keys(F.codes).sort(), a: Array.from(ausgeblendet()).sort(), e: eigen, z: zentral, x: stundenplanExtern() });
+      return JSON.stringify({ s: F.semester, c: Object.keys(F.codes).sort(), a: Array.from(ausgeblendet()).sort(), e: eigen, z: zentral, x: stundenplanExtern(), f: LEHRE_FASSUNG });
     } catch (e) { return ""; }
   };
   const filterSchluessel = () => filterBauen().schluessel + "|" + lehreSchluessel();
@@ -1283,7 +1304,7 @@ module.exports = function (ctx) {
   // ---------- Status (gerätelokal) ----------
   // geprueft = letztes geprüftes Manifest (auch update.js), erfolg = letzter Lauf ohne Fehler (Quellen-Vertrag), warnung = Satz des
   // letzten Laufs
-  const stand = () => Object.assign({ geprueft: "", erfolg: "", fehler: "", fehlerZeit: "", warnung: "", pause: false, hinweis: "", plugin_aktuell: "", release: null, beta: null, hashes: {}, filter: "", abrufer: false, lehre: false }, lokal(L.stand) || {});
+  const stand = () => Object.assign({ geprueft: "", erfolg: "", fehler: "", fehlerZeit: "", warnung: "", pause: false, hinweis: "", plugin_aktuell: "", release: null, beta: null, abdeckung: null, hashes: {}, filter: "", abrufer: false, lehre: false }, lokal(L.stand) || {});
   const standSetzen = (aend) => lokal(L.stand, Object.assign(stand(), aend));
   const protokoll = ctx.bleibend("protokoll", () => []); // Läufe (für Tests), überlebt den Hot-Reload
 
@@ -1322,7 +1343,7 @@ module.exports = function (ctx) {
       const mp = manifestPruefen(m);
       if (mp.fehler) return fehler(mp.fehler);
       manifest = mp.wert;
-      standSetzen({ geprueft: new Date().toISOString(), hinweis: manifest.hinweis, plugin_aktuell: manifest.plugin_aktuell, release: manifest.release, beta: manifest.beta, pause: manifest.pause, lehre: !!manifest.dateien[LEHRE] });
+      standSetzen({ geprueft: new Date().toISOString(), hinweis: manifest.hinweis, plugin_aktuell: manifest.plugin_aktuell, release: manifest.release, beta: manifest.beta, abdeckung: manifest.abdeckung, pause: manifest.pause, lehre: !!manifest.dateien[LEHRE] });
       if (manifest.pause) { b.art = "pausiert"; standSetzen({ fehler: "", fehlerZeit: "" }); melden("Zentrale Daten sind gerade pausiert. Dein letzter Stand bleibt."); return b; }
     }
     // 1b. Gruppen (gruppen.json): jedes Gerät selbst, nur gerätelokal. Ein Fehler hält nur die Gruppen an (ihr letzter
@@ -1507,7 +1528,7 @@ module.exports = function (ctx) {
     try { m = JSON.parse(roh.text); } catch (e) { throw new Error("Manifest unlesbar", { cause: e }); }
     const mp = manifestPruefen(m);
     if (mp.fehler) throw new Error(mp.fehler);
-    standSetzen({ plugin_aktuell: mp.wert.plugin_aktuell, release: mp.wert.release, beta: mp.wert.beta });
+    standSetzen({ plugin_aktuell: mp.wert.plugin_aktuell, release: mp.wert.release, beta: mp.wert.beta, abdeckung: mp.wert.abdeckung });
     return mp.wert;
   };
   const neuZeichnen = () => { try { if (ctx.verbindungen && ctx.verbindungen.neuZeichnen) ctx.verbindungen.neuZeichnen(); } catch (e) { /* egal */ } };
@@ -1589,6 +1610,8 @@ module.exports = function (ctx) {
     // gerätelokaler Stand der Angebote (angebote.js): { stand, geholt, angebote } oder null (nie geholt bzw. zurückgezogen)
     angebote: () => { const g = angeboteStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), angebote: g.angebote } : null; },
     // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt bzw. zurückgezogen)
+    // Module, deren Termine aus Unterlagen zentral kommen (modul.js, server.js): { stand, semester, module, gilt } oder null
+    abdeckung: abdeckungStand,
     kapitel: () => { const g = kapitelStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
     semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, frischUrl, FRISCH_KOPF, RELEASE_ROH, BASIS, RELEASES, ABRUF, MEINE,
     abruferHier, abruferHierAus,

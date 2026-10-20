@@ -38,7 +38,9 @@
 //   den Server (POST /v1/unterlagen, modell: opus; höchstens 9 je Abruf in Anfragen zu 3, Gewünschtes zuerst, gemerkt in
 //   server.json „gesendet“ mit Minute), und Claude schreibt sie dort mit Opus in einem eigenen Lauf. Einstellung
 //   server_unterlagen: knopf (Standard, nur auf Wunsch) | alle (dazu jede neue Unterlage ohne Zusammenfassung, mit dem Modell
-//   des Servers) | aus (nichts, auch kein Knopf). Claude
+//   des Servers) | aus (nichts, auch kein Knopf). Terminsuche (seit 0.5.3, nicht bei aus): Unterlagen von Modulen, deren Termine
+//   nicht zentral kommen (ctx.zentral.abdeckung), gehen einmal mit nur_termine an den Server, wenn die PDF höchstens
+//   TERMINSUCHE_TAGE alt ist; Claude sucht darin nur Termine (Abgaben, Probeklausur …), ohne Zusammenfassung. Claude
 //   schreibt die Abschnitte, der nächste Abruf trägt sie in die Notiz neben der PDF ein (begleitnotizErgaenzen): fehlende
 //   Abschnitte über dem PDF-Kasten, Platzhalter älterer Notizen ersetzt, „Das Wichtigste“ nur, wenn dort noch nichts steht, bei
 //   „Zu tun“ und „Offene Fragen“ nur, was fehlt; dein Text bleibt. Dieselbe Lieferung nie zweimal (server.json „begleitet“).
@@ -79,6 +81,7 @@ module.exports = function (ctx) {
   const STATUS_ALTER = 5 * MIN;   // öffentlichen Status höchstens so oft holen
   const STAND_ALTER = 6 * 60 * MIN; // Stand ohne Änderung höchstens so oft schicken
   const NEU_JE_ABRUF = 50;          // höchstens so viele neue Notizen je Abruf
+  const TERMINSUCHE_TAGE = 21; // nur neue Unterlagen nach Terminen durchsuchen, nicht den ganzen Bestand
   const UNTERLAGEN_JE_ABRUF = 9, UNTERLAGEN_JE_ANFRAGE = 3; // Textfassungen an den Server (Anfrage: wie UNTERLAGEN in server/dienst.mjs)
   const ERLEDIGT_TAGE = 60, LAEUFE = 20, HINWEISE = 30;
   const HINWEIS_NEU_TAGE = 14;      // ältere Hinweise zählen nie als neu (etwa auf einem neuen Gerät)
@@ -167,9 +170,10 @@ module.exports = function (ctx) {
       zeilen.splice(i, a.bis - i, ...neu, "");
       geaendert = true;
     };
-    const anlegen = (name, neu, nach) => {
+    const anlegen = (name, neu, nach, vor) => {
       let pos = -1;
       for (const n of nach) { const a = abschnitt(n); if (a) pos = a.bis; }
+      for (const n of vor) { const a = pos < 0 ? abschnitt(n) : null; if (a) pos = a.von - 1; } // vor der Überschrift des folgenden Abschnitts
       if (pos < 0) {
         const p = pdfBox();
         if (p >= 0) pos = p;
@@ -184,11 +188,12 @@ module.exports = function (ctx) {
     const W = (bn.wichtigste || []).map((p) => `- ${p.text}${p.seite ? ` ([[${pdfName}#page=${p.seite}|S. ${p.seite}]])` : ""}`);
     const T = (bn.zu_tun || []).map((p) => `- [ ] ${p.text}${p.frist ? ` (bis ${tt(p.frist)})` : ""}`);
     const F = (bn.fragen || []).map((p) => `- [ ] ${p.text}`);
-    const regeln = [["Das Wichtigste", W, [], "nur-leer"], ["Zu tun", T, ["Das Wichtigste"], "ergaenzen"], ["Offene Fragen", F, ["Das Wichtigste", "Zu tun"], "ergaenzen"]];
-    for (const [name, neu, nach, art] of regeln) {
+    const regeln = [["Das Wichtigste", W, [], ["Zu tun", "Offene Fragen"], "nur-leer"], ["Zu tun", T, ["Das Wichtigste"], ["Offene Fragen"], "ergaenzen"],
+      ["Offene Fragen", F, ["Das Wichtigste", "Zu tun"], [], "ergaenzen"]];
+    for (const [name, neu, nach, vor, art] of regeln) {
       if (!neu.length) continue;
       const a = abschnitt(name);
-      if (!a) anlegen(name, neu, nach);
+      if (!a) anlegen(name, neu, nach, vor);
       else if (nurPlatzhalter(a)) ersetzen(a, neu);
       else if (art === "ergaenzen") { const f = fehlend(a, neu); if (f.length) anhaengen(a, f); }
     }
@@ -616,7 +621,8 @@ module.exports = function (ctx) {
         ARTEN_SENDEN.indexOf(u.art) >= 0 && typeof u.text === "string" && u.text.trim() &&
         (u.angefordert ? !(String(z.gesendet[u.kennung] || "") >= String(u.angefordert).slice(0, 16)) : !z.gesendet[u.kennung])).slice(0, UNTERLAGEN_JE_ABRUF)
         .map((u) => ({ datei: String(u.datei), kennung: u.kennung, art: u.art, titel: reinerText(String(u.titel || ""), 160), code: String(u.code || ""),
-          seiten: Number.isInteger(u.seiten) ? u.seiten : 0, ...(u.angefordert ? { modell: "opus", angefordert: String(u.angefordert).slice(0, 16) } : {}), text: u.text.slice(0, 400000) }));
+          seiten: Number.isInteger(u.seiten) ? u.seiten : 0, ...(u.angefordert ? { modell: "opus", angefordert: String(u.angefordert).slice(0, 16) } : u.nur_termine === true ? { nur_termine: true } : {}),
+          text: u.text.slice(0, 400000) }));
       let n = 0;
       for (let i = 0; i < offen.length; i += UNTERLAGEN_JE_ANFRAGE) {
         const teil = offen.slice(i, i + UNTERLAGEN_JE_ANFRAGE);
@@ -930,15 +936,24 @@ module.exports = function (ctx) {
   // wie auf dem Dashboard (todos.js, ohne Offene Fragen) mit Modulcode und Frist
   const tagIso = (d) => { const x = new Date(d); return `${x.getFullYear()}-${pad2(x.getMonth() + 1)}-${pad2(x.getDate())}`; };
   const CODE_AM_ANFANG = /^([A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?)(?:\s|$)/;
+  const MODULCODE_SERVER = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
   const codeVon = (f) => {
     const c = f && app.metadataCache.getFileCache(f), fc = c && c.frontmatter && c.frontmatter.code;
     if (typeof fc === "string" && CODE_AM_ANFANG.test(fc)) return fc;
     const m = f && String(f.basename).match(CODE_AM_ANFANG);
     return m ? m[1] : "";
   };
-  // Lehrmaterial ohne Zusammenfassung: Notiz (typ: unterlage) mit Art aus ARTEN_SENDEN, „Das Wichtigste“ fehlt oder ist leer, die PDF
-  // hat eine Textfassung mit Text (ergebnis text oder gekuerzt). Nur gewünschte (Knopf, mit angefordert), mit
-  // server_unterlagen: alle auch die übrigen; aus: keine.
+  // Terminsuche: Modul nicht abgedeckt (zentrale Daten an, Abdeckung bekannt) und PDF neu genug
+  const terminsuche = (code, mtime) => {
+    const A = ctx.zentral && ctx.zentral.abdeckung ? ctx.zentral.abdeckung() : null;
+    if (!A || !MODULCODE_SERVER.test(String(code || ""))) return false;
+    if (A.gilt && A.module.indexOf(String(code)) >= 0) return false;
+    return Date.now() - (mtime || 0) <= TERMINSUCHE_TAGE * 864e5;
+  };
+  const terminsucheAn = () => unterlagenModus() !== "aus" && motor().sichtbar();
+  // Lehrmaterial: Notiz (typ: unterlage) mit Art aus ARTEN_SENDEN, die PDF hat eine Textfassung mit Text (ergebnis text oder
+  // gekuerzt). Gewünschte (Knopf, mit angefordert); mit server_unterlagen: alle auch die übrigen ohne Zusammenfassung („Das
+  // Wichtigste“ fehlt oder ist leer), sonst neue aus nicht abgedeckten Modulen mit nur_termine; aus: keine.
   // o: { ohne: { Kennung: Zeit } (schon gesendet), hoechstens } → gewünschte zuerst, sonst neueste PDF zuerst
   const unterlagenModus = () => { const m = String(einstellungenFm().server_unterlagen || "").toLowerCase(); return m === "alle" || m === "aus" ? m : "knopf"; };
   const unterlagenObs = async (o) => {
@@ -966,16 +981,18 @@ module.exports = function (ctx) {
       if (!/\.pdf$/i.test(p)) continue;
       const n = notizVon(p), k = String(textVon[p].fm.pdf_sha256);
       if (!n) continue;
-      if (n.wunsch ? String(ohne[k] || "") >= n.wunsch : modus !== "alle" || ohne[k]) continue;
-      kandidaten.push(Object.assign({ p, zeit: zeit(p) }, n));
+      const termine = !n.wunsch && modus !== "alle" && terminsuche(n.nfm.code, zeit(p));
+      if (n.wunsch ? String(ohne[k] || "") >= n.wunsch : (modus !== "alle" && !termine) || ohne[k]) continue;
+      kandidaten.push(Object.assign({ p, zeit: zeit(p), termine }, n));
     }
     kandidaten.sort((a, b) => (b.wunsch ? 1 : 0) - (a.wunsch ? 1 : 0) || b.zeit - a.zeit || (a.p < b.p ? -1 : 1));
-    for (const { p: pdfPfad, nf, nfm, wunsch } of kandidaten) {
+    for (const { p: pdfPfad, nf, nfm, wunsch, termine } of kandidaten) {
       if (aus.length >= hoechstens) break;
-      if (begleitnotizErgaenzen(await app.vault.cachedRead(nf), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) continue; // „Das Wichtigste“ steht schon
+      // „Das Wichtigste“ steht schon: keine Zusammenfassung (Termine sucht der Server trotzdem)
+      if (!termine && begleitnotizErgaenzen(await app.vault.cachedRead(nf), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) continue;
       const t = textVon[pdfPfad];
       aus.push({ datei: pdfPfad, kennung: String(t.fm.pdf_sha256), art: nfm.art, titel: String(nfm.titel || nf.basename), code: String(nfm.code || ""),
-        seiten: Number(t.fm.seiten) || 0, ...(wunsch ? { angefordert: wunsch } : {}), text: volltextText(await app.vault.cachedRead(t.f)) });
+        seiten: Number(t.fm.seiten) || 0, ...(wunsch ? { angefordert: wunsch } : termine ? { nur_termine: true } : {}), text: volltextText(await app.vault.cachedRead(t.f)) });
     }
     return aus;
   };
@@ -1167,7 +1184,7 @@ module.exports = function (ctx) {
   ctx.server = {
     erzeugen, aehnlich, adresseNormal, PROMPT, kopieren, begleitnotizErgaenzen, volltextText, taktAus,
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
-    jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
+    jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
   };
 
   // Gemeinsamer Zeitplan (quellen.js): nach 30 s + Zufall bis 2 Min., dann alle 15 Min., nach Fehlern früher; zurück in der App

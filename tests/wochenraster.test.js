@@ -296,6 +296,14 @@ test("Heute und jetzt nur in der aktuellen Woche", () => {
   assert.equal(woche("2026-10-26", "2026-10-21T09:00:00").ht, false);
 });
 
+test("Jetzt nach der Zeit dieses Tages: eine geänderte Zeit zählt, die übliche nicht", () => {
+  // Do X200 am 22.10. auf 12:15–13:45 verschoben (sonst 10:00–12:00)
+  const jetzt = (uhr) => kasten(woche("2026-10-19", "2026-10-22T" + uhr), "Stundenplan/Do X200.md").klassen.includes("jetzt");
+  assert.deepEqual(["10:30:00", "12:10:00", "12:15:00", "13:45:00", "13:46:00"].map(jetzt), [false, false, true, true, false]);
+  // eine Woche später wieder die übliche Zeit
+  assert.equal(kasten(woche("2026-10-26", "2026-10-29T10:30:00"), "Stundenplan/Do X200.md").klassen.includes("jetzt"), true);
+});
+
 test("Wischen: nicht vom Bildschirmrand, Richtung erst nach 10 px, nur deutlich waagerecht und weiter als 50 px", () => {
   assert.equal(W.wischStartOk(20, 390), false); // linker Rand: Seitenleiste von Obsidian
   assert.equal(W.wischStartOk(375, 390), false); // rechter Rand

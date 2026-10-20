@@ -417,6 +417,8 @@ gezeigten Semesters (nach dem Freitag der Woche), mit
 Einzeltermin nur an seinem Tag. Liegt der Tag in einer Pause, auf einem vorlesungsfreien Tag oder in `ausfall`, hat der Kasten
 den Namen durchgestrichen und statt des Raums „Fällt aus“ (Klasse `ausfall`, Tooltip „fällt aus (Christi Himmelfahrt)“);
 `aenderungen` („Datum|Beginn|Ende|Raum“) in der Woche: an der neuen Zeit, mit neuer Zeit und neuem Raum (`geaendert`).
+Was heute gerade läuft, hat die Klasse `jetzt` („· jetzt“ hinter dem Namen), nach der Zeit dieses Tages: bei einer Änderung
+die neue (seit 20.10.2026; vorher die übliche, „jetzt“ stand dann zur alten Zeit am verschobenen Kasten).
 *Ausnahmen* (seit 20.10.2026, weil Raumverlegungen und Ausfälle nicht genug auffielen; vorher sah ein
 Ausfall blass aus wie „ab TT.MM.“ und eine Änderung hatte nur einen gestrichelten Rand): Ein Ausfall dieser Lehrveranstaltung
 (`findetStatt` mit `grund` `ausfall`) und ein anderer Raum oder eine andere Zeit an diesem Tag, auch ein neuer Raum in den ersten
@@ -505,7 +507,7 @@ Modulseite, Zeitleiste und Studienverlauf widersprachen sich (Konsistenz-Audit).
 | `naechstePruefung()` | Kachel „Nächste Prüfung“: früheste offene Klausur ohne Zwischentests und Nachholtermine. |
 | `fristen({ tage })`, `abgaben({ tage })` | Fristen (`kategorie: Frist`, offen, laufen noch oder kommen), sortiert nach dem nächsten Stichtag (`stichtag`: läuft der Zeitraum schon, sein Ende, sonst sein Beginn); offene Übungsblätter mit Fälligkeit (überfällige bleiben bis zur Abgabe). |
 | `kalenderwoche(iso)`, `planwoche(iso)` | Montag bis Sonntag des Tages bzw. die Woche, um die es geht: **am Samstag und Sonntag schon die kommende** (`vorgezogen`). Die eine Wochenend-Regel für alles, was „diese Woche“ zeigt: Wochenraster, Leiste „Semesterverlauf“, Semesterband der Modulseite, Agenda („Diese Woche · 17.–25.10.“ ab heute) und `woche().text` („Vorlesungswoche 2 von 16“ am Sonntag vor Woche 2). Tagesangaben (heute, morgen, Countdown, „Vorlesungsbeginn morgen“) bleiben am Tag. |
-| `findetStatt(fm, tag)` | Findet eine Sitzung (`typ: lehrveranstaltung`) an dem Tag statt? `{ statt, grund, name, beginn, ende, raum, geaendert, raumGeaendert, raumAlt, zeitGeaendert, zeitAlt }`; `grund`: `entfaellt`, `ausgeblendet` (Besuche ich nicht), `anderer Tag` (auch Einzeltermin), `ausserhalb` (`von`/`bis`), `pause`, `frei` (vorlesungsfreier Tag wie Christi Himmelfahrt), `ausfall` (seit 20.10.2026 in dieser Reihenfolge: Pause und freier Tag gehen dem Ausfall vor, Alma trägt die Weihnachtspause auch in `ausfall` ein); `aenderungen` setzen Zeit und Raum, `raumAlt` und `zeitAlt` („10:15–11:45“) sind dann der übliche Wert; vor `raum_seit` gilt `raum_vorher`, die ersten zwei Wochen ab `raum_seit` `neuerRaum` mit `raumAlt` = `raum_vorher`; `rhythmus: 14-täglich` nur jede zweite Woche ab `von`. Wochenraster, Kopf der Vorlesungsnotiz (Zeit und Raum am Tag der Notiz) und `naechsteSitzung(fm, jetzt)` („Als Nächstes“, dieselben Felder) nutzen sie. `ausfaelle(fm, jetzt, tage = 14)`: Ausfälle (`grund` `ausfall`) ab heute, heute nur bis zum Ende. |
+| `findetStatt(fm, tag)` | Findet eine Sitzung (`typ: lehrveranstaltung`) an dem Tag statt? `{ statt, grund, name, beginn, ende, raum, geaendert, raumGeaendert, raumAlt, zeitGeaendert, zeitAlt }`; `grund`: `entfaellt`, `ausgeblendet` (Besuche ich nicht), `anderer Tag` (auch Einzeltermin), `ausserhalb` (`von`/`bis`), `pause`, `frei` (vorlesungsfreier Tag wie Christi Himmelfahrt), `ausfall` (seit 20.10.2026 in dieser Reihenfolge: Pause und freier Tag gehen dem Ausfall vor, Alma trägt die Weihnachtspause auch in `ausfall` ein); `aenderungen` setzen Zeit und Raum, `raumAlt` und `zeitAlt` („10:15–11:45“) sind dann der übliche Wert; vor `raum_seit` gilt `raum_vorher`, die ersten zwei Wochen ab `raum_seit` `neuerRaum` mit `raumAlt` = `raum_vorher`; `rhythmus: 14-täglich` nur jede zweite Woche ab `von`. Wochenraster (auch „jetzt“), Kopf der Vorlesungsnotiz (Zeit und Raum am Tag der Notiz), „Läuft gerade“ (`eba.jetztLaufend`, seit 20.10.2026; vorher nur `wochentag`, `von`, `bis` und `ausfall` mit der üblichen Zeit) und `naechsteSitzung(fm, jetzt)` („Als Nächstes“, dieselben Felder) nutzen sie. `ausfaelle(fm, jetzt, tage = 14)`: Ausfälle (`grund` `ausfall`) ab heute, heute nur bis zum Ende. |
 | `imPlan(modul)` | Gehört zu deinem Studium: gewählt, selbst geplant, begonnen (Status nicht „offen“), Grundstudium und Abschluss, in Profil & Vertiefung Pflicht deiner Variante (offen: Pflicht in allen); Schwerpunkt nur gewählt oder begonnen; Zusatzleistungen nie. |
 | `ects()`, `noten()`, `blockVon(fm, variante)` | ECTS = bestandene und anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange SQ100 offen), `op` (höchstens 4), `opFrist` (Ende des 4. Fachsemesters); Gesamtnote nach § 13 BT wie Noten & ECTS. |
 | `statusArt(typ, wert)` | Ton einer Pille nach docs/design.md: ok (bestanden, anerkannt, angemeldet, erledigt, gelesen …), warn (Frist, in Arbeit, Abgabe), bad (Prüfung, nicht bestanden, überfällig), info (läuft, Lehre, Zwischentest), akzent (Fachschaft, Veranstaltung), sonst leer (offen, neu, geschätzt). |
@@ -704,10 +706,13 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Wahl und wird nie eine Notiz (eigene Gruppe: Alma oder von Hand); ids aus `stundenplan_ausgeblendet` nicht.
   *Notiz* (`lehreNotizText`): eine je id in `Stundenplan/` („Mo 10.15 B110 Vorlesung“, Einzeltermin „JJJJ-MM-TT B110 …“),
   Frontmatter wie Alma-Notizen (`typ: lehrveranstaltung`, `titel`, `code`, `modul`, `art`, `wochentag`, `tag`, `beginn`/`ende`
-  mit c.t. verschoben, `raum`, `semester`, `von`/`bis`, `ausfall`, `aenderungen`, `einzeltermin`, `quelle`, `herkunft: zentral`,
-  `zentral_id`, `uebersicht: "[[Stundenplan]]"`), eigene Felder und alles ab `## Meine Notizen` (ältere: `## Notizen`) bleiben. Text: Zeit, Zeitraum,
+  mit c.t. verschoben, `raum`, `semester`, `von`/`bis`, `rhythmus` (nur „14-täglich“, wie in Alma-Notizen), `ausfall`,
+  `aenderungen`, `einzeltermin`, `quelle`, `herkunft: zentral`, `zentral_id`, `uebersicht: "[[Stundenplan]]"`), eigene Felder und
+  alles ab `## Meine Notizen` (ältere: `## Notizen`) bleiben. Text: Zeit, Zeitraum,
   „Fällt aus“, „Anders“, „Zusätzlich“, Quelle; **Besuche ich nicht** steht seit 0.4.6 als Status-Knopf im Kopf der Notiz
-  (`kopf.js`). Nie umbenannt (die id hängt an Tag und Beginn).
+  (`kopf.js`). Nie umbenannt (die id hängt an Tag und Beginn). Kommt ein Feld dazu, steigt `LEHRE_FASSUNG` (Teil von
+  `lehreSchluessel`): Der Abrufer schreibt dann alle zentralen Notizen einmal neu, auch ohne neue `veranstaltungen.json`. Bis
+  20.10.2026 fehlte `rhythmus`, eine 14-tägliche Veranstaltung stand darum jede Woche im Raster.
   *Wochenraster* (Dashboard und Stundenplan, jede gezeigte Woche, `woche.js`): `ausfall` → „Fällt aus“ in Warnfarbe;
   `aenderungen` = „Datum|Beginn|Ende|Raum“ (immer vollständig, ohne Zusatztermine) → liegt das Datum in der
   gezeigten Woche, zeigt der Kasten Zeit und Raum der Änderung in Warnfarbe, den üblichen Wert durchgestrichen (siehe
@@ -1216,7 +1221,11 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   die Uhr des Geräts nachgeht) verhindert doppeltes Senden; ein späterer Wunsch geht wieder. Der Server legt Gewünschtes nach
   `unterlagen/opus/` und schreibt es vor dem gewöhnlichen Lauf in einem eigenen Lauf mit Opus (höchstens 3 je Lauf, ohne Mails).
   `server_unterlagen`: `knopf` (Standard) | `alle` (dazu jede neue Unterlage ohne Zusammenfassung, gewöhnlicher Lauf, Modell des
-  Servers; so bis 0.5.1) | `aus` (nichts, kein Knopf). Die übernommene Begleitnotiz löscht den Wunsch. Claude schreibt die Einträge
+  Servers; so bis 0.5.1) | `aus` (nichts, kein Knopf). Die übernommene Begleitnotiz löscht den Wunsch. **Terminsuche** (seit
+  0.5.3, nicht bei `aus`): Neue Unterlagen (PDF höchstens 21 Tage alt, `TERMINSUCHE_TAGE`) von Modulen, deren Termine aus
+  Unterlagen nicht zentral kommen (`ctx.zentral.abdeckung()`, Manifest-Feld `abdeckung`), gehen einmal mit `nur_termine`; der
+  Server schreibt die Kopfzeile „Auftrag: nur Termine (keine Begleitnotiz)“, und Claude liefert daraus nur Termine. Ein späterer
+  Wunsch per Knopf geht trotzdem. Ohne Abdeckung (zentrale Daten aus, Manifest ohne Feld) keine Terminsuche. Claude schreibt die Einträge
   (`server/skill/studium-autopilot/begleitnotiz.md`), der nächste Abruf trägt sie mit `begleitnotizErgaenzen` in die Notiz neben
   der PDF ein (gleicher Name `.md`, sonst die Unterlage, deren `datei` auf die PDF zeigt): fehlende Abschnitte über dem
   PDF-Kasten in der Reihenfolge „Das Wichtigste“, „Zu tun“, „Offene Fragen“; Platzhalter älterer Notizen werden ersetzt;
@@ -2447,7 +2456,8 @@ im Codeblock geht vor), auf allen Geräten gleich:
   sie im Abschnitt Lösungen. Die Spalte Lösung steht in jeder Zeile des Abschnitts, fehlende Lösungen fallen so auf.
 - *Reihenfolge:* nach `nummer` (eigene Spalte, ohne Nummer zuletzt), Altklausuren nach dem Semester im Titel, neueste zuerst.
 - *Zeile:* Titel (Tipp öffnet die Notiz), ✓ bei `status` gelesen oder bearbeitet („neu“ steht nicht da), Lösung, Seiten,
-  ↗ öffnet die Datei außerhalb von Obsidian (Aktion `oeffnen`, nur mit `datei`).
+  ↗ öffnet die Datei außerhalb von Obsidian (Aktion `oeffnen`, nur mit `datei`). Ohne Datei führt ↗ zur Online-Fassung im Feld
+  `link` (seit 20.10.2026; nur `https://` ohne Leerzeichen, sonst kein ↗), etwa zum E-Book oder Online-Buch einer Literaturnotiz.
 
 Ab 860 px Breite zwei Spalten, ein Abschnitt bricht nie um; unter 480 px ohne Seiten. Neu gezeichnet wird bei Änderungen an
 Unterlagen- und Modulnotizen und beim Umbenennen. „Noch nicht gelesen“ und Dateien ohne Begleitnotiz zeigt die Seite

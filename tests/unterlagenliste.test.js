@@ -126,3 +126,20 @@ test("Tutorium: eigener Abschnitt nach den Übungen, Lösungen hängen nicht an 
   assert.deepEqual(G[1].zeilen[0].loesungen.map((l) => l.name), ["Lösung"], "die Lösung gehört zur Übung mit gleicher Nummer");
   assert.equal(U.artVon("TUTORIUM"), "Tutorium");
 });
+
+test("Online-Fassung: link nur mit https, auch ohne Datei", () => {
+  const ohne = (name, fm) => ({ f: { basename: "X100 " + name, path: `Unterlagen/X100 Beispiel/X100 ${name}.md` },
+    fm: Object.assign({ typ: "unterlage", code: "X100", art: "Literatur", datei: "" }, fm) });
+  const G = U.gliedern([
+    ohne("Literatur 00 Literaturliste", { nummer: 0, titel: "Literaturliste", link: "https://example.org/buch/kapitel-1" }),
+    ohne("Literatur 02 Aufsatz", { nummer: 2, titel: "Aufsatz", link: "http://example.org/aufsatz" }),
+    ohne("Literatur 03 Zweites Buch", { nummer: 3, titel: "Zweites Buch", link: "javascript:alert(1)" }),
+    ohne("Literatur 04 Drittes Buch", { nummer: 4, titel: "Drittes Buch", link: "https://example.org/mit leerzeichen" }),
+  ], "X100");
+  assert.deepEqual(G[0].zeilen.map((z) => [z.titel, z.datei, z.link]), [
+    ["Literaturliste", false, "https://example.org/buch/kapitel-1"],
+    ["Aufsatz", false, ""],
+    ["Zweites Buch", false, ""],
+    ["Drittes Buch", false, ""],
+  ]);
+});

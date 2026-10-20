@@ -13,6 +13,9 @@
 //     die nicht erledigt sind. Tipp öffnet die Notiz. Seit 20.10.2026 auch Ausfälle der nächsten 14 Tage (ctx.modell.ausfaelle;
 //     vorher übersprang die Liste sie still) mit Pille „fällt aus“, und eine geänderte Sitzung mit Pille „anderer Raum“, „neuer
 //     Raum“, „andere Zeit“ oder „geändert“, neuem Wert in Warnfarbe und dem üblichen durchgestrichen (wie die Woche).
+//  3b. Abdeckung (seit 0.5.3): Termine aus Folien und ILIAS-Dateien kommen zentral nur für Module, deren Unterlagen der Autor
+//     liest (ctx.zentral.abdeckung). Im laufenden Semester steht bei jedem anderen Modul ein Satz darüber; mit eigenem Server liest
+//     der die neuen Unterlagen des Moduls nach Terminen (server.js).
 //  4. Knöpfe: Neues Übungsblatt, Karteikarten lernen (wenn es einen Stapel gibt), Unterlagen einordnen, Suchen.
 //  5. Vorlesungen (seit 19.10.2026): eigener Abschnitt direkt unter dem Modulfeld, über „Unterlagen“, ohne Codeblock in den
 //     Modulnotizen. Deine Vorlesungsnotizen, neueste zuerst, als Zeilen wie die Unterlagen; Name aus ctx.modell.vorlesung
@@ -348,6 +351,14 @@ module.exports = function (ctx) {
         } else if (x.wo) wo.appendText(x.wo);
         if (x.f) knopf(z, (e) => oeffnen(x.f, e));
       }
+    }
+
+    // 3b. Abdeckung
+    const A = laeuft && ctx.zentral && ctx.zentral.abdeckung ? ctx.zentral.abdeckung() : null;
+    if (A && !(A.gilt && A.module.indexOf(code) >= 0)) {
+      const server = !!(ctx.server && ctx.server.terminsucheAn && ctx.server.terminsucheAn());
+      box.createDiv({ cls: "eba-mod-abdeckung", text: "Termine aus Folien und ILIAS-Dateien dieses Moduls kommen nicht über die zentralen Daten. " +
+        (server ? "Dein Server liest neue Unterlagen des Moduls dafür nach Terminen." : "Achte selbst auf Abgaben und Termine in den Unterlagen.") });
     }
 
     // 4. Knöpfe
