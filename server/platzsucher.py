@@ -13,7 +13,7 @@ Nur Standardbibliothek und die OCI-Kommandozeile.
 
 Konfiguration $PLATZSUCHER_KONFIG (Standard /etc/studium-platzsucher/konfig.json, schreibt die Einrichtung):
   { "compartment": OCID, "ads": [Namen der Verfügbarkeitsbereiche], "subnet": OCID, "image": OCID (Ubuntu 24.04, aarch64),
-    "boot_gb": 150, "ssh_schluessel": "ssh-ed25519 …", "user_data": base64 (cloud-init des Servers), "thema": OCID }
+    "boot_gb": 150, "ssh_schluessel": "ssh-rsa …", "user_data": base64 (cloud-init des Servers), "thema": OCID }
 Stand $PLATZSUCHER_STAND (Standard /var/lib/studium-platzsucher/stand.json):
   { seit, versuche, tag, versuche_heute, letzter_fehler, erfolg, instanz, gemeldet_14 }
 
@@ -32,6 +32,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -219,9 +220,16 @@ def nach_erfolg(oci, k, stand, instanz):
            "Oracle hat deinen kostenlosen Server für Studium Autopilot angelegt. "
            "Öffne Claude und sag „Weiter mit der Einrichtung“, dann richtet Claude ihn ein.")
     # Helfer samt Boot-Volume beenden (nur Instanzen mit dem Kennzeichen des Platzsuchers)
+    # Klappt das nicht, belegt der Helfer weiter 50 GB des kostenlosen Speichers: Mail, damit ihn ein Mensch beendet.
     helfer = gekennzeichnet(oci, k, "helfer")
-    for h in helfer if isinstance(helfer, list) else []:
-        oci(["compute", "instance", "terminate", "--instance-id", h["id"], "--preserve-boot-volume", "false", "--force"])
+    beendet = isinstance(helfer, list) and bool(helfer) and all(
+        oci(["compute", "instance", "terminate", "--instance-id", h["id"], "--preserve-boot-volume", "false", "--force"])["ok"] for h in helfer)
+    if not beendet:
+        stand["helfer_bleibt"] = True
+        melden(oci, k, "Platzsucher-Helfer läuft noch",
+               "Dein Server ist da, aber der Helfer des Platzsuchers konnte sich nicht selbst beenden. Sag Claude „Platzsucher "
+               "beenden“ oder beende ihn in der Oracle-Konsole (Compute, Instanzen, Kennzeichen studium-autopilot=helfer) samt "
+               "Boot-Volume; sonst belegt er 50 GB des kostenlosen Speichers.")
 
 
 def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetime.now(timezone.utc)):
@@ -268,6 +276,9 @@ def main():
     if fehler:
         print("Konfiguration ungültig: " + "; ".join(fehler), file=sys.stderr)
         return 2
+    if not shutil.which(a.oci):
+        print(f"OCI-Kommandozeile fehlt: {a.oci}", file=sys.stderr)
+        return 3
     oci = oci_aufrufer(a.oci)
     if a.einmal:
         stand = lesen(STAND, {})

@@ -1,21 +1,24 @@
-# Eigener Server mit Claude (im Aufbau)
+# Eigener Server mit Claude
 
-Für Fortgeschrittene soll Studium Autopilot einen eigenen, kostenlosen Server bei Oracle nutzen können, auf dem Claude mit dem
-eigenen Abo Termine aus Mails findet und Begleitnotizen schreibt. Die Einrichtung übernimmt ein Claude-Skill. Dieser Teil ist
-**noch nicht Teil eines Releases**; der Ordner `server/` kommt erst mit diesem Teil hinein.
+Für Technische nutzt Studium Autopilot einen eigenen, kostenlosen Server bei Oracle, auf dem Claude mit dem eigenen Abo Termine
+aus Mails findet und Begleitnotizen schreibt. Seit 0.5.0 Teil jedes Releases (`studium-server.tar.gz`).
 
-Fertig sind die Prüfung des Oracle-Kontos (`stand.mjs`), die Schritte der Einrichtung in der Cloud Shell (`einrichten.mjs`), der
-Einrichtungs-Skill (`skill/server-einrichten/`), der Platzsucher (`platzsucher.py`), das Grundgerüst des Servers (Installer,
-Web-Dienst mit verschlüsseltem Datenkanal, Speicherreserve, Uni-Zugang, Befehle), der Abruf des Uni-Postfachs ohne KI
-(`abrufen.py`) und der Claude-Lauf mit dem Skill (`lauf.mjs`, `skill/studium-autopilot/`, Prüfung `eingang.mjs`).
-Die Gegenstelle im Plugin (`server.js`, Zeile „Eigener Server“) liegt auf dem Zweig `eigener-server`, damit kein Release sie
-vorzeitig mitnimmt. Noch nicht: Abrufe von ILIAS-Dateien und Alma, das Server-Paket im Release (`studium-server.tar.gz`) und ein
-Test von null in einem neuen Oracle-Konto.
+Dazu gehören die Prüfung des Oracle-Kontos (`stand.mjs`), die Schritte der Einrichtung in der Cloud Shell (`einrichten.mjs`),
+der Einrichtungs-Skill (`skill/server-einrichten/`), der Platzsucher (`platzsucher.py`), der Server selbst (Installer, Web-Dienst
+mit verschlüsseltem Datenkanal, Speicherreserve, Uni-Zugang, Befehle), der Abruf des Uni-Postfachs ohne KI (`abrufen.py`) und
+der Claude-Lauf mit dem Skill (`lauf.mjs`, `skill/studium-autopilot/`, Prüfung `eingang.mjs`). Die Gegenstelle im Plugin ist
+`server.js` (Zeile „Eigener Server“). Noch nicht: Abrufe von ILIAS-Dateien und Alma.
 
 **Einrichtung:** Ein Claude-Skill (`skill/server-einrichten/`: `SKILL.md`, `schritte.md`, `kosten.md`) führt in Claude Desktop durch
 die Schritte 0 bis 12, wahlweise mit Computer Use („Claude klickt“) oder mit Ansagen („Ich klicke selbst“). Angelegt wird im
 Konto nur über `einrichten.mjs`; jeder Schritt erkennt am Stand, ob er schon erledigt ist. `tests/server-einrichten.test.js`
 prüft, dass jeder im Skill genannte Befehl existiert.
+
+**Eine Version für alles:** Der Prompt (README und Knopf **Prompt kopieren**) lässt Claude die Anleitung aus dem Tag des
+neuesten Releases lesen, nie von `main`. `release.py` setzt in `schritte.md` (Schritt 2) genau diese Version für den Download
+des Server-Pakets ein. So passen Anleitung und Paket immer zusammen, auch wenn während einer Einrichtung ein neues Release
+erscheint. Ältere Prompts, die noch `main` lesen, bekommen dort die Anleitung des neuesten Releases mit derselben Bindung; der
+Pfad `server/skill/server-einrichten/` bleibt darum, wo er ist.
 
 ## Ziel: nie Kosten
 
@@ -113,9 +116,16 @@ Rückfrage nötig bzw. falscher Aufruf, `3` Oracle hat gerade keinen Platz (dann
 - **Reihenfolge beim Platzsucher:** Die Regel der dynamischen Gruppe braucht die OCID des Helfers, also entstehen Gruppe und
   Richtlinie kurz nach ihm. Der Platzsucher wertet fehlende Rechte darum erst nach 30 Minuten als Grund zum Anhalten.
 
-Tests: `tests/server-einrichten.test.js` mit einem nachgebauten Konto, das Angelegtes behält (zweiter Lauf legt nichts an).
-Befehle, Schalter und JSON-Felder am 18.10.2026 gegen OCI CLI 3.95.0 geprüft (nur `--help`, Abbilder und Verfügbarkeitsbereiche
-lesend); Quota-Sätze und Budget-Regeln wie in einem echten Konto. Noch nicht geprüft: ein echter Lauf in einem neuen Konto.
+- **Fehlermeldungen:** Die OCI-Kommandozeile schreibt Fehler als `ServiceError:` und JSON mit sortierten Schlüsseln; die
+  Nachricht steht erst nach gut 200 Zeichen. `fehlerText` in `stand.mjs` macht daraus `Code (Status): Nachricht` und kürzt erst
+  dann. „Out of host capacity“ kommt bei Oracle als `InternalError (500)`; die Schritte erkennen es an der Nachricht.
+
+Tests: `tests/server-einrichten.test.js` mit einem nachgebauten Konto, das Angelegtes behält (zweiter Lauf legt nichts an),
+und mit Fehlern in der Form der echten OCI-Kommandozeile durch `ociAufrufer`. Befehle, Schalter und JSON-Felder am 18.10.2026
+gegen OCI CLI 3.95.0 geprüft (nur `--help`, Abbilder und Verfügbarkeitsbereiche lesend); Quota-Sätze und Budget-Regeln wie in
+einem echten Konto. Erster echter Lauf in einem neuen Konto am 20.10.2026: Stand, Schutz und Netz gingen durch (sonst hätte
+`server` nicht angelegt); daraus behoben: abgeschnittene Fehler (kein Platz sah wie ein harter Fehler aus) und ed25519 in der Cloud Shell
+(FIPS-Modus, jetzt RSA 4096). Noch offen: Platzsucher in einem neuen Konto.
 
 ## Platzsucher: `server/platzsucher.py`
 
@@ -130,7 +140,9 @@ auf einem kleinen Helfer weiter, nicht am Rechner der Nutzerin oder des Nutzers:
   Testpaket vor einem Release. Oracle nimmt höchstens 32 000 Byte Startdaten, die Einrichtung prüft das vorher.
 - **Rechte nur für den Helfer:** dynamische Gruppe `studium-platzsucher` mit der Regel `instance.id = '<OCID des Helfers>'` und
   eine Richtlinie im Compartment:
-  `manage instance-family`, `use volume-family`, `use virtual-network-family`, `use ons-topics`. Der Platzsucher meldet sich mit
+  `manage instance-family`, `use volume-family`, `use virtual-network-family`, `use ons-topics`, dazu `manage volume-family`
+  nur mit `request.permission = 'VOLUME_DELETE'` (damit er sich samt Boot-Volume beendet; eine ältere Richtlinie bringt die
+  Einrichtung auf diesen Stand). Der Platzsucher meldet sich mit
   der Identität der Instanz an (`--auth instance_principal`), es gibt keinen Schlüssel zum Kopieren. Gruppe und Richtlinie
   entfernt die Einrichtung nach dem Erfolg wieder.
 - **Versuche:** alle 2 bis 5 Minuten jeder Verfügbarkeitsbereich mit genau `VM.Standard.A1.Flex`, 2 OCPU, 12 GB, Boot-Volume
@@ -183,7 +195,7 @@ jedem weiteren Lauf erhalten. Er richtet ein:
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
 | `studium-server-aktualisieren.timer` | täglich: neues Server-Paket aus dem Release, nur mit passender Prüfsumme und nur vorwärts (nie auf eine ältere Version zurück) |
-| Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes öffnet die Einrichtung in der Konsole) |
+| Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an) |
 
 ### Web-Dienst (`dienst.mjs`)
 

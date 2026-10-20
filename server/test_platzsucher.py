@@ -23,10 +23,11 @@ START = datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc)
 class Attrappe:
     """OCI-Kommandozeile: launch antwortet nach Liste (je Aufruf ein Eintrag), list liefert vorhandene Instanzen."""
 
-    def __init__(self, antworten=(), vorhanden=(), liste_fehler=None):
+    def __init__(self, antworten=(), vorhanden=(), liste_fehler=None, beenden=None):
         self.antworten = list(antworten)
         self.vorhanden = list(vorhanden)
         self.liste_fehler = liste_fehler
+        self.beenden = beenden
         self.aufrufe = []
 
     def __call__(self, args):
@@ -38,6 +39,8 @@ class Attrappe:
             if a == "ok":
                 return {"ok": True, "data": {"data": {"id": "ocid1.instance.oc1.eu-frankfurt-1.neu", "lifecycle-state": "PROVISIONING"}}}
             return a
+        if args[:3] == ["compute", "instance", "terminate"] and self.beenden:
+            return self.beenden
         return {"ok": True, "data": None}
 
     def von(self, *praefix):
@@ -176,6 +179,27 @@ class Suchen(unittest.TestCase):
         s = json.loads(self.stand.read_text(encoding="utf-8"))
         self.assertEqual([s["versuche"], s["instanz"]], [7, "ocid1.instance.oc1.eu-frankfurt-1.neu"])
 
+    def test_helfer_beendet_sich_nicht_dann_mail(self):
+        helfer = {"id": "ocid1.instance.oc1.eu-frankfurt-1.helfer", "freeform-tags": {"studium-autopilot": "helfer"}, "lifecycle-state": "RUNNING"}
+        rechte = {"ok": False, "status": 404, "code": "NotAuthorizedOrNotFound", "nachricht": "Authorization failed"}
+        for oci in (Attrappe(["ok"], vorhanden=[helfer], beenden=rechte), Attrappe(["ok"], vorhanden=[])):
+            self.assertEqual(P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(minutes=1))), "erfolg")
+            self.assertEqual([Attrappe.wert(m, "--title") for m in oci.von("ons", "message", "publish")],
+                             ["Dein Server ist da", "Platzsucher-Helfer läuft noch"])
+            self.assertTrue(json.loads(self.stand.read_text(encoding="utf-8"))["helfer_bleibt"])
+            self.stand.unlink()
+
+    def test_ohne_kommandozeile_kein_suchen(self):
+        with tempfile.TemporaryDirectory() as d:
+            k = Path(d) / "konfig.json"
+            k.write_text(json.dumps(KONFIG), encoding="utf-8")
+            alt = sys.argv, P.KONFIG
+            try:
+                sys.argv, P.KONFIG = ["platzsucher.py", "--oci", str(Path(d) / "fehlt" / "oci")], k
+                self.assertEqual(P.main(), 3)
+            finally:
+                sys.argv, P.KONFIG = alt
+
     def test_halt_meldet_und_endet_ohne_beenden(self):
         oci = Attrappe([GRENZE])
         self.assertEqual(P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(minutes=1))), "halt")
@@ -195,7 +219,8 @@ class Suchen(unittest.TestCase):
         self.assertEqual(pausen, [600, 1200, 1800, 1800])
 
     def test_nach_14_tagen_eine_mail_dann_weiter(self):
-        oci = Attrappe([KAPAZITAET] * 9 + ["ok"])
+        helfer = {"id": "helfer", "freeform-tags": {"studium-autopilot": "helfer"}, "lifecycle-state": "RUNNING"}
+        oci = Attrappe([KAPAZITAET] * 9 + ["ok"], vorhanden=[helfer])
         P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(days=5)))
         titel = [Attrappe.wert(m, "--title") for m in oci.von("ons", "message", "publish")]
         self.assertEqual(titel, ["Platzsucher sucht weiter", "Dein Server ist da"])
@@ -210,6 +235,9 @@ class HelferVorlage(unittest.TestCase):
         self.assertIn("content: KONFIG_JSON_BASE64", t)
         self.assertIn("ExecStart=/usr/bin/python3 /opt/studium-platzsucher/platzsucher.py --oci /opt/oci/bin/oci", t)
         self.assertRegex(t, r"oci-cli==\d+\.\d+\.\d+", "Version fest")
+        self.assertIn("swapon /swapfile", t, "1 GB Arbeitsspeicher reicht pip nicht sicher")
+        self.assertLess(t.index("/opt/oci/bin/oci --version ||"), t.index("systemctl enable --now studium-platzsucher.service"),
+                        "Dienst nur mit lauffähiger Kommandozeile")
         self.assertIn("content: PLATZSUCHER_GZ_BASE64", t)
         self.assertIn("encoding: gz+b64", t, "platzsucher.py kommt gepackt mit")
         self.assertNotIn("api.github.com", t, "der Helfer lädt nichts nach")

@@ -157,8 +157,9 @@ module.exports = function (ctx) {
       return;
     }
     const m = D ? D.module.find((x) => x.code === g.code) : null;
+    const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
     const r = await L.waehlen(L.obsidianIo(), g, { modul: () => (m && m.f ? { name: m.f.basename, titel: m.titel || "" } : null),
-      jetzt: ctx.date.jetzt().toISOString(), heute: heuteIso() });
+      jetzt: ctx.date.jetzt().toISOString(), heute: heuteIso(), liste: Z ? Z.gruppen : null });
     if (r.art === "ilias") melden("Deine Gruppe kommt schon aus ILIAS. Wechseln kannst du sie dort.");
     else if (r.art === "gedeckt") melden(`${nr} steht schon in deinem Stundenplan.`);
     else melden(`${nr} steht jetzt in deinem Stundenplan.`);

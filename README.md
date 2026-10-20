@@ -111,9 +111,10 @@ Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an
 In Claude Desktop einfügen:
 
 ```
-Richte mir den eigenen Server für Studium Autopilot ein (github.com/studium-autopilot/ecoba). Lies dazu
-https://github.com/studium-autopilot/ecoba/blob/main/server/skill/server-einrichten/SKILL.md und die Dateien daneben
-und führe mich Schritt für Schritt.
+Richte mir den eigenen Server für Studium Autopilot ein oder setz die Einrichtung fort (github.com/studium-autopilot/ecoba).
+Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die Versionsnummer daraus (vX.Y.Z) und lies aus
+genau dieser Version https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die
+Dateien daneben. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich Schritt für Schritt.
 ```
 
 Wie es gebaut ist: [server/README.md](server/README.md).

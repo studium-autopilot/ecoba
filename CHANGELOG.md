@@ -2,6 +2,16 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.1 – Server-Einrichtung in neuen Oracle-Konten
+
+- **Behoben:** Stand in Alma ein anderes Tutorium als deins, zeigte der Stundenplan beide, und dein Tutorium meldete eine
+  Überschneidung. Jetzt steht nur deine Gruppe da.
+- **Behoben:** Beim Einrichten des eigenen Servers in einem neuen Oracle-Konto blieb Claude mit einer abgeschnittenen
+  Meldung stehen. Jetzt geht es durch, und hat Oracle gerade keinen Platz, sucht ein kleiner Helfer von selbst weiter.
+- **Behoben:** Ist dein Server da, räumt der Helfer hinter sich auf. Klappt das nicht, bekommst du eine Mail.
+- **Einfacher:** Hat die Einrichtung schon einmal angefangen, setzt Claude sie im selben Chat fort und räumt Reste früherer
+  Versuche auf.
+
 ## 0.5.0 – Eigener Server mit Claude
 
 - **Neu:** Für Technische: Ein eigener kostenloser Server mit Claude sucht in deinen Uni-Mails nach Terminen, die nur dich

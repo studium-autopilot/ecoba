@@ -800,7 +800,7 @@ module.exports = function (ctx) {
         // Grabstein (Lebenslauf der Quellen): „notiz“ im Index = Gruppe aus gruppen.json, für die schon eine ILIAS-Notiz da war.
         // Fehlt sie jetzt, hast du sie gelöscht: nicht wieder anlegen, bis die Zuordnung wechselt oder du die Gruppe verlässt.
         const geloescht = (id, zid) => !!zid && (mem.gruppen[id] || {}).notiz === zid;
-        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen, geloescht });
+        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen, geloescht, liste: zentral });
         b.gruppen.neu = n.angelegt.length + n.uebernommen.length;
         b.gruppen.notizen = n;
         for (const s of soll) if (n.notizen && n.notizen[s.refId] && (mem.gruppen[s.refId] || {}).notiz !== s.g.id) gruppeMerken(s.refId, { notiz: s.g.id });

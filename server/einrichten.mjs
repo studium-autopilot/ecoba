@@ -12,7 +12,8 @@
 //   node einrichten.mjs adresse                              öffentliche IP, Adresse und SSH-Befehl des Servers
 //   --oci <pfad>  --tenancy <ocid>  --json
 // Exit: 0 erledigt, 1 Fehler oder Kostenregel verletzt, 2 Rückfrage nötig (--ja) bzw. falscher Aufruf, 3 kein Platz.
-import { readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { homedir } from "node:os";
 import { gzipSync } from "node:zlib";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -56,9 +57,11 @@ const BUDGET_REGELN = [
   { typ: "FORECAST", schwelle: 100, name: "prognose-1-euro", text: "Oracle erwartet diesen Monat Kosten über 1 Euro." },
 ];
 
-// Rechte des Platzsuchers: nur für die dynamische Gruppe mit genau dem Helfer
-export const PLATZSUCHER_RECHTE = ["manage instance-family", "use volume-family", "use virtual-network-family", "use ons-topics"]
-  .map((r) => `Allow dynamic-group ${NAMEN.gruppe} to ${r} in tenancy`);
+// Rechte des Platzsuchers: nur für die dynamische Gruppe mit genau dem Helfer. VOLUME_DELETE (sonst nur in „manage“), damit er
+// sich nach dem Erfolg samt Boot-Volume beenden kann (DeleteBootVolume braucht es laut Oracles Rechtetabelle).
+export const PLATZSUCHER_RECHTE = ["manage instance-family", "use volume-family", "use virtual-network-family", "use ons-topics",
+  "manage volume-family in tenancy where request.permission = 'VOLUME_DELETE'"]
+  .map((r) => `Allow dynamic-group ${NAMEN.gruppe} to ${r.includes(" in tenancy") ? r : r + " in tenancy"}`);
 
 // Kleiner Helfer für die Schritte: Protokoll [{ was, status, text }] und Aufrufe, die bei Fehler werfen
 function ablauf(oci) {
@@ -293,6 +296,10 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     await muss("rechte", ["iam", "policy", "create", ...t, "--name", NAMEN.gruppe, "--description", "Rechte des Platzsuchers (Studium Autopilot)",
       "--statements", JSON.stringify(PLATZSUCHER_RECHTE), "--freeform-tags", kennzeichen("helfer")]);
     geaendert = true;
+  } else if (JSON.stringify(richtlinie.statements) !== JSON.stringify(PLATZSUCHER_RECHTE)) {
+    // Richtlinie einer älteren Version: auf den aktuellen Stand bringen
+    await muss("rechte", ["iam", "policy", "update", "--policy-id", richtlinie.id, "--statements", JSON.stringify(PLATZSUCHER_RECHTE), "--force"]);
+    geaendert = true;
   }
   merken("rechte", geaendert ? "angelegt" : "da", geaendert ? "Rechte nur für den Helfer vergeben (dynamische Gruppe und Richtlinie)." : "Rechte des Helfers bestehen.");
   if (geaendert && schritte.some((s) => s.was === "helfer" && s.status === "da")) {
@@ -373,7 +380,12 @@ export async function abschliessen(oci, { tenancy, a }) {
 }
 
 // ---------- Adresse ----------
-export async function adresse(oci, { tenancy }) {
+// schluessel: { "~/.ssh/<name>.pub": Inhalt } aus der Cloud Shell. Passt ~/.ssh/studium_autopilot nicht zum Server (ein früherer
+// Versuch legte ihn mit einem anderen Schlüssel an), nennt der Schritt die passende Datei und wie sie an den festen Ort kommt.
+const SCHLUESSEL = "~/.ssh/studium_autopilot.pub";
+const kern = (s) => String(s || "").trim().split(/\s+/).slice(0, 2).join(" ");
+
+export async function adresse(oci, { tenancy, schluessel }) {
   const { schritte, merken, muss } = ablauf(oci);
   const srv = liste(await muss("server", ["compute", "instance", "list", "--compartment-id", tenancy, "--all"])).find((i) => lebt(i) && gehoert(i, "server"));
   if (!srv) { merken("server", "fehler", "Kein Server mit Kennzeichen gefunden."); return { schritte, exit: 1 }; }
@@ -382,7 +394,19 @@ export async function adresse(oci, { tenancy }) {
   const ip = vnic["public-ip"];
   const wert = { ip, adresse: `https://${ip.replace(/\./g, "-")}.sslip.io`, ssh: `ssh -i ~/.ssh/studium_autopilot ubuntu@${ip}`, zustand: srv["lifecycle-state"] };
   merken("adresse", "da", `Server ${wert.zustand}: ${wert.adresse} · ${wert.ssh}`);
-  return { schritte, exit: 0, ...wert };
+  if (!schluessel) return { schritte, exit: 0, ...wert };
+  const meta = ((await muss("schluessel", ["compute", "instance", "get", "--instance-id", srv.id])) || {}).metadata || {};
+  const erlaubt = String(meta.ssh_authorized_keys || "").split("\n").map(kern).filter(Boolean);
+  const passend = Object.keys(schluessel).filter((p) => erlaubt.includes(kern(schluessel[p])));
+  if (passend.includes(SCHLUESSEL)) { merken("schluessel", "da", "Der Schlüssel ~/.ssh/studium_autopilot passt zum Server."); return { schritte, exit: 0, ...wert }; }
+  if (passend.length) {
+    const p = passend[0];
+    merken("schluessel", "anderer", `Der Server wurde mit ${p} angelegt. Einmal an den festen Ort kopieren, dann weiter: ` +
+      `cp ${p.replace(/\.pub$/, "")} ~/.ssh/studium_autopilot && cp ${p} ${SCHLUESSEL}`);
+    return { schritte, exit: 2, ...wert };
+  }
+  merken("schluessel", "fehlt", "Kein Schlüssel unter ~/.ssh passt zum Server.");
+  return { schritte, exit: 1, ...wert };
 }
 
 // ---------- Aufruf ----------
@@ -406,9 +430,15 @@ async function main(argv) {
     const a = bestand ? auswerten(bestand, { helfer: befehl === "platzsucher" }) : null;
     const ads = bestand ? bestand.ads : [];
     const hier = dirname(fileURLToPath(import.meta.url));
+    const ssh = join(homedir(), ".ssh");
+    const alleSchluessel = () => {
+      try {
+        return Object.fromEntries(readdirSync(ssh).filter((n) => n.endsWith(".pub")).map((n) => ["~/.ssh/" + n, lesen(join(ssh, n))]));
+      } catch (e) { return {}; }
+    };
     ergebnis = await SCHRITTE[befehl](oci, {
       tenancy, a, ads, mail: wert("--mail"), ja: argv.includes("--ja"),
-      schluessel: wert("--schluessel") ? lesen(wert("--schluessel")) : "",
+      schluessel: befehl === "adresse" ? alleSchluessel() : wert("--schluessel") ? lesen(wert("--schluessel")) : "",
       vorlage: lesen(wert("--vorlage") || join(hier, "platzsucher-helfer.yaml")),
       skript: befehl === "platzsucher" ? lesen(join(hier, "platzsucher.py")) : "",
     });

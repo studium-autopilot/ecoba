@@ -34,6 +34,11 @@
 //   Bestehende Doppel führt das Aufräumen einmal zusammen, nach einer festen Reihenfolge (vorrang: ILIAS vor deiner Wahl, die
 //   jüngere Wahl vor der älteren, dann die zur Gruppenliste passende): dein Text wandert in die bleibende Notiz, die andere in den
 //   Papierkorb. Was entschieden wurde, steht nur im Protokoll dieses Geräts (io.protokoll), nie als Aufgabe für dich.
+// Eine andere Gruppe deines Kurses aus Alma (seit 20.10.2026, andereGruppe): Steht in deinem Alma-Stundenplan eine Parallelgruppe
+//   (etwa die in Alma vorgemerkte), du bist aber in einer anderen (ILIAS oder deine Wahl), standen beide in der Woche, und deine
+//   Gruppe meldete eine Überschneidung mit der fremden. Jetzt gilt deine Gruppe: Die Alma-Notiz ist verdeckt (doppelt) und zählt
+//   nicht als Überschneidung. Erkannt nur über gruppen.json (die Alma-Notiz gehört dort zu einer anderen Gruppe desselben Kurses;
+//   Alma nennt ein Tutorium oft „Übung zu …“); ohne Liste bleibt sie, ebenso jede Notiz von Hand. Die Notiz selbst bleibt liegen.
 // Eigener Text: alles unter „## Meine Notizen“ (ältere Notizen: „## Notizen“) und jede Zeile im Kopf, die nicht von hier stammt, bleibt beim Aktualisieren.
 // Verlassen in ILIAS: die Notiz geht in den Papierkorb; mit eigenem Text bleibt sie als „(entfällt)“. Ob verlassen, entscheidet
 //   ilias.js (zweiter Lauf in Folge, o.wegErlaubt); zusätzlich bleibt alles stehen, wenn auf einmal mindestens zwei und mehr
@@ -45,7 +50,8 @@ const ORDNER = "Stundenplan";
 const ILIAS = "ilias-gruppe";
 const GEWAEHLT = "gruppe-gewaehlt";
 const ZENTRAL = "zentral";
-const TAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+const ALMA = "alma"; // herkunft der Notizen, die alma.js anlegt
+const TAGE =["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 const TOLERANZ = 15;
 const NOTIZEN = "## Meine Notizen";
@@ -253,6 +259,13 @@ const gehoertZu = (fm, g, o) => {
 };
 // Deckt eine andere Notiz die Gruppe? (gehoertZu mit den Vorgaben)
 const deckt = (fm, g) => gehoertZu(fm, g);
+// Gruppe einer Gruppen-Notiz als Eintrag der Gruppenliste (über gruppe_id), sonst aus der Notiz selbst
+const gruppeVon = (fm, liste) => (liste || []).find((y) => y && y.id === String(fm.gruppe_id || ""))
+  || { id: String(fm.gruppe_id || ""), code: String(fm.code || ""), art: String(fm.art || ""), semester: String(fm.semester || ""), tag: TAGE[Number(fm.wochentag) - 1], von: fm.beginn, ct: false };
+// Ist die Notiz (fm) eine Alma-Notiz zu einer anderen Gruppe des Kurses deiner Gruppe g? Gleicher Kurs = gleicher Code, gleiches
+// Semester und gleiche Art in der Gruppenliste (liste = gruppen.json). Gehört sie auch zu g (gleiche Zeit), ist sie deine Gruppe.
+const andereGruppe = (fm, g, liste) => !!fm && !!g && herkunftVon(fm) === ALMA && fm.entfaellt !== true && !gehoertZu(fm, g)
+  && (liste || []).some((y) => y && y.id !== g.id && y.code === g.code && y.semester === g.semester && y.art === g.art && gehoertZu(fm, y));
 const lehrNotizen = (io) => io.notizen().filter((x) => x.fm && x.fm.typ === "lehrveranstaltung");
 // Wie lehrNotizen, dazu Notizen, die Obsidian noch nicht eingelesen hat (gerade angelegt): ihr Frontmatter aus dem Text. Sonst
 // sieht ein zweites „Meine“ kurz nach dem ersten dessen Notiz nicht und legt eine zweite an.
@@ -301,28 +314,40 @@ const vorrang = (liste) => {
 // Notiz, die statt ihrer gilt }, faelle: [{ code, art, semester, zeigen, andere: [Pfade] }] }. Verdeckt ist eine Gruppen-Notiz,
 // die eine andere Notiz zur selben Zeit abdeckt (Alma, von Hand, zentral: dieselbe Gruppe, sie weicht ohnehin), und jede weitere
 // Gruppen-Notiz desselben Moduls, derselben Art und desselben Semesters (vorrang). Andere Notizen derselben Art zu einer anderen
-// Zeit zählen nicht: Das kann eine Übung für alle sein.
+// Zeit zählen nicht: Das kann eine Übung für alle sein. Ausnahme mit der Gruppenliste: Eine Alma-Notiz zu einer anderen Gruppe
+// des Kurses deiner Gruppe ist verdeckt (andereGruppe), deine Gruppe gilt. faelle nennt nur Gruppen-Notizen (nur die räumt
+// gewaehltAufraeumen weg).
 const doppelt = (notizen, liste) => {
-  const verdeckt = {}, je = {}, reihenfolge = [];
+  const verdeckt = {}, je = {}, reihenfolge = [], deine = [];
   const lv = (notizen || []).filter((x) => x && x.fm && x.fm.entfaellt !== true && x.fm.einzeltermin !== true);
   for (const x of lv.filter((y) => istGruppe(y.fm))) {
     const fm = x.fm, g = { code: String(fm.code || ""), art: String(fm.art || ""), semester: String(fm.semester || ""), tag: TAGE[Number(fm.wochentag) - 1], von: fm.beginn, ct: false };
     if (!g.code || !g.semester) continue;
     const ziel = lv.find((y) => !istGruppe(y.fm) && deckt(y.fm, g));
-    if (ziel) { verdeckt[x.pfad] = ziel.pfad; continue; }
+    if (ziel) { verdeckt[x.pfad] = ziel.pfad; deine.push({ x, zeigen: ziel.pfad }); continue; }
     const k = [g.code, g.art, g.semester].join("|");
     if (!je[k]) { je[k] = []; reihenfolge.push(k); }
     je[k].push(x);
   }
   const faelle = [];
   for (const k of reihenfolge) {
-    if (je[k].length < 2) continue;
     const r = je[k].slice().sort(vorrang(liste)), zeigen = r[0], andere = r.slice(1);
+    deine.push({ x: zeigen, zeigen: zeigen.pfad });
+    if (!andere.length) continue;
     for (const x of andere) verdeckt[x.pfad] = zeigen.pfad;
     faelle.push({ code: String(zeigen.fm.code), art: String(zeigen.fm.art || ""), semester: String(zeigen.fm.semester), zeigen: zeigen.pfad, andere: andere.map((x) => x.pfad) });
   }
+  // Alma-Notizen anderer Gruppen deiner Kurse: Es gilt deine Gruppe (bzw. die Notiz, die sie zur selben Zeit abdeckt)
+  for (const y of lv.filter((x) => herkunftVon(x.fm) === ALMA && !verdeckt[x.pfad])) {
+    const d = deine.find((e) => e.zeigen !== y.pfad && andereGruppe(y.fm, gruppeVon(e.x.fm, liste), liste));
+    if (d) verdeckt[y.pfad] = d.zeigen;
+  }
   return { verdeckt, faelle };
 };
+// Steht die Notiz { pfad, fm } nicht in der Woche, weil eine andere statt ihrer gilt (verdeckt = doppelt(…).verdeckt) oder weil sie
+// eine Alma-Notiz zu einer anderen Gruppe des Kurses einer gerade geschriebenen Gruppe ist (gruppen: Einträge der Gruppenliste)?
+// Dann ist sie keine Überschneidung (konfliktFuer).
+const nichtImPlan = (x, verdeckt, gruppen, liste) => !!verdeckt[x.pfad] || gruppen.some((g) => andereGruppe(x.fm, g, liste));
 // Passt der Pfad zum gewünschten Namen (auch „… 2“, wenn der Name belegt war)?
 const nameStimmt = (pfad, b) => { const n = basis(pfad); return n === b || (n.indexOf(b + " ") === 0 && /^\d+$/.test(n.slice(b.length + 1))); };
 // Notiz unter ihren gewünschten Namen bringen; Links ziehen mit (io.umbenennen = fileManager.renameFile). → neuer Pfad
@@ -364,7 +389,7 @@ const weichen = async (io, x, ziel, heute) => {
 // ILIAS (nur ilias.js, nur mit der ILIAS-Sperre). soll = [{ refId, g, name }] (zugeordnete Mitgliedschaften, name aus ILIAS),
 // mitglieder = alle ref_ids, in denen du gerade Mitglied bist (auch nicht zugeordnete), o = { modul(code) → { name, titel } |
 // null, heute, wegErlaubt(refId) → bool (Verlassen bestätigt), geloescht(refId, id) → bool (Grabstein: für diese Gruppe gab es
-// schon eine Notiz, du hast sie gelöscht; ilias.js merkt sich das im Index) }.
+// schon eine Notiz, du hast sie gelöscht; ilias.js merkt sich das im Index), liste (gruppen.json, für nichtImPlan) }.
 // → { angelegt, aktualisiert, uebernommen, umbenannt, gewichen, entfernt, entfaellt: [Pfade], geloescht: [refIds], notizen:
 //   { refId: Pfad } (Gruppen mit ILIAS-Notiz nach dem Lauf), warnung }
 const iliasAbgleichen = async (io, soll, mitglieder, o) => {
@@ -414,8 +439,10 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
     if (!x && o.geloescht && o.geloescht(refId, g.id)) { b.geloescht.push(refId); continue; } // von dir gelöscht: bleibt weg
     plan.push({ x, g, opt, rest, uebernommen: !!x && herkunftVon(x.fm) === GEWAEHLT });
   }
-  // 2. Überschneidungen mit allen anderen Notizen dieses Plans und im Stundenplan (ohne die, die gerade weichen)
-  const sicht = alle.filter((x) => !benutzt[x.pfad]).map((x) => ({ name: basis(x.pfad), fm: x.fm }))
+  // 2. Überschneidungen mit allen anderen Notizen dieses Plans und im Stundenplan (ohne die, die gerade weichen, und ohne die, die
+  // die Woche nicht zeigt: nichtImPlan)
+  const verdeckt = doppelt(alle, o.liste).verdeckt, geplant = plan.map((p) => p.g);
+  const sicht = alle.filter((x) => !benutzt[x.pfad] && !nichtImPlan(x, verdeckt, geplant, o.liste)).map((x) => ({ name: basis(x.pfad), fm: x.fm }))
     .concat(plan.map((p) => ({ name: p.x ? basis(p.x.pfad) : dateiName(p.g, p.opt), fm: { semester: p.g.semester, wochentag: TAGE.indexOf(p.g.tag) + 1, beginn: echteZeit(p.g).beginn, ende: echteZeit(p.g).ende, gruppe_id: p.g.id } })));
   // 3. Schreiben; Doppel und übrige gewählte Notizen weichen in die eine
   for (const p of plan) {
@@ -456,7 +483,7 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
 };
 
 // „Meine Gruppe“ (nur gruppen.js, auf dem Gerät, auf dem du tippst). g = gewählte Gruppe, o = { modul(code), jetzt (Zeitpunkt
-// der Wahl, ISO → gewaehlt_am), heute }. Eine neue Wahl ersetzt jede ältere desselben Moduls und derselben Art: Die Notiz dieser
+// der Wahl, ISO → gewaehlt_am), heute, liste (gruppen.json, für nichtImPlan) }. Eine neue Wahl ersetzt jede ältere desselben Moduls und derselben Art: Die Notiz dieser
 // Gruppe (sonst die jüngste Wahl) wird die neue, weitere weichen in sie (dein Text wandert mit).
 // → { art: "angelegt" | "geaendert" | "gleich" | "ilias" (kommt schon aus ILIAS) | "gedeckt" (andere Notiz hat sie), pfad, gewichen }
 const waehlen = async (io, g, o) => {
@@ -473,7 +500,9 @@ const waehlen = async (io, g, o) => {
     .sort((a, b) => diese(a) - diese(b) || (am(a) > am(b) ? -1 : am(a) < am(b) ? 1 : 0));
   const da = meine[0] || null, rest = meine.slice(1);
   const name = da ? basis(da.pfad) : dateiName(g, { herkunft: GEWAEHLT });
-  const konflikt = konfliktFuer(zeitFuer(g), alle.filter((x) => meine.indexOf(x) < 0).map((x) => ({ name: basis(x.pfad), fm: x.fm })).filter((x) => x.name !== name));
+  const verdeckt = doppelt(alle, o.liste).verdeckt;
+  const konflikt = konfliktFuer(zeitFuer(g), alle.filter((x) => meine.indexOf(x) < 0 && !nichtImPlan(x, verdeckt, [g], o.liste))
+    .map((x) => ({ name: basis(x.pfad), fm: x.fm })).filter((x) => x.name !== name));
   const soll = { herkunft: GEWAEHLT, modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "", konflikt, gewaehltAm: o.jetzt || "" };
   if (da) {
     const alt = await io.lesen(da.pfad), neu = notizText(alt, g, soll);

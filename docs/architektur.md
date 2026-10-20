@@ -481,7 +481,8 @@ ihn, z. B. „VWL“, „Mathe“), sonst der Code. Daneben blass Art und Gruppe
 „Vorlesung“ und „Veranstaltung“ (Alma ohne erkannte Art) gelten als Vorlesung (Klasse `vl`, gefüllte Fläche, kein Wort), alles
 andere als `ue` (helle Fläche, Farbkante). Die Gruppe ist `gruppe` (Anzeigename wie in ILIAS, nie `gruppe_alma`): beginnt sie
 mit der Art („Tutorium 1“), steht nur sie da, eine bloße Zahl wird „Gruppe n“, sonst Art und Name („Tutorium Gruppe 4“).
-`konflikt` (an Gruppen-Notizen): Warnpunkt und „überschneidet sich mit …“ im Tooltip. Zweite Zeile: Raum, davor der Beginn in
+`konflikt` (an Gruppen-Notizen): Warnpunkt und „überschneidet sich mit …“ im Tooltip, nur wenn die genannte Notiz im Raster
+steht (seit 20.10.2026; nicht verdeckt, nicht „Besuche ich nicht“). Zweite Zeile: Raum, davor der Beginn in
 `<time>`, wenn er nicht zur vollen Stunde liegt (bei einer Änderung die neue Zeit; am iPhone nur dann). Voller Titel mit Zeit
 und Raum im `title`, ein Tipp öffnet das Modul (Aktion `zeigen`, immer mit dem vollen Pfad der Modulnotiz aus `modulPfad`, nie
 über den Namen; ohne Modulnotiz die Stundenplan-Notiz selbst). Jeder Kasten ist ein CSS-Größen-Container; was nicht in
@@ -828,7 +829,18 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   wurde, steht nur im Gerätespeicher (`eba-gruppen-protokoll`, die letzten 30). Eine Gruppen-Notiz, die eine Notiz zur selben
   Zeit abdeckt (Alma, von Hand, zentral), fehlt in der Woche gleich; Notizen derselben Art zu einer anderen Zeit, die keine
   Gruppen-Notizen sind, zählen nicht (das kann eine Übung für alle sein).
-  Tests: `tests/meine-gruppe.test.js`, `tests/ilias-gruppen.test.js`, `tests/gruppen.test.js`.
+  *Eine andere Gruppe deines Kurses aus Alma* (seit 20.10.2026, `andereGruppe` in `meine-gruppe.js`): In einem Tresor standen
+  zwei B110-Tutorien und zwei Mathe-Tutorien in der Woche, und das eigene Mathe-Tutorium zeigte den Warnpunkt. Der
+  Alma-Stundenplan enthielt je eine Parallelgruppe (in Alma vorgemerkt, Alma nennt sie „Übung zu …“, also `art: Übung`), die
+  eigene Gruppe kam aus ILIAS (`art: Tutorium`). Weder „gleiche Zeit“ noch „ein Modul, eine Art“ traf. Jetzt: Gehört eine Alma-Notiz (`herkunft: alma`)
+  in `gruppen.json` zu einer anderen Gruppe desselben Kurses (Code, Semester, Art der Liste) als deine Gruppen-Notiz (ILIAS oder
+  gewählt; ihre Gruppe über `gruppe_id`), ist sie verdeckt (`doppelt`), es gilt deine Gruppe. Sie bleibt liegen (Alma gehört
+  sie), steht nie in `faelle` (das Aufräumen fasst sie nicht an) und zählt nicht als Überschneidung: Wählen und ILIAS-Abgleich
+  lassen verdeckte Notizen und andere Gruppen der gerade geschriebenen aus (`nichtImPlan`, dafür bekommen beide `liste`). Ohne
+  Gruppenliste und für Notizen von Hand bleibt alles wie vorher. Die Woche zeigt den Warnpunkt außerdem nur, wenn die Notiz aus
+  `konflikt` im Raster steht (nicht verdeckt, nicht „Besuche ich nicht“, noch vorhanden), auch wenn das Feld noch vom letzten Lauf
+  stammt.
+  Tests: `tests/meine-gruppe.test.js`, `tests/ilias-gruppen.test.js`, `tests/gruppen.test.js`, `tests/wochenraster.test.js`.
 - **Anzeige:** Zeile „Zentrale Daten“ im Codeblock `eba-verbindungen` ohne Schloss: „Aktualisiert vor X Min.“ / „Pausiert“ /
   „Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert …“, `hinweis` aus dem Manifest. `status()` hat die gemeinsame
   Form der Quellen (`zustand`: aus, laeuft, pause, fehler, an; `geprueft` = letzter Lauf ohne Fehler, gerätelokal `erfolg`;

@@ -725,5 +725,7 @@ test("Prompt kopieren: derselbe Text wie im README unter „Für Technische“, 
   const readme = fs.readFileSync(path.join(__dirname, "..", "README.md"), "utf8").replace(/\r\n/g, "\n");
   assert.ok(readme.includes(S.PROMPT), "README enthält den Prompt wörtlich");
   assert.match(S.PROMPT, /server\/skill\/server-einrichten\/SKILL\.md/);
+  assert.match(S.PROMPT, /releases\/latest/, "Anleitung aus dem neuesten Release");
+  assert.doesNotMatch(S.PROMPT, /\/(blob|raw|tree)\/main\//, "nie von main");
   assert.ok(fs.existsSync(path.join(SERVER, "skill", "server-einrichten", "SKILL.md")), "der Skill liegt dort");
 });

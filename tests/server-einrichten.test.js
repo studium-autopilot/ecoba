@@ -81,6 +81,7 @@ function konto(o = {}) {
       return ok(i);
     },
     "compute instance list": () => ok(k.instanzen),
+    "compute instance get": (a) => { const i = k.instanzen.find((x) => x.id === w(a, "--instance-id")); return ok({ ...i, metadata: i.metadaten }); },
     "compute instance action": (a) => { k.aktionen = (k.aktionen || []).concat([[w(a, "--instance-id"), w(a, "--action")]]); return ok({}); },
     "compute instance terminate": (a) => { k.instanzen.find((i) => i.id === w(a, "--instance-id"))["lifecycle-state"] = "TERMINATING"; return ok(null); },
     "compute instance list-vnics": () => ok([{ "hostname-label": "intern" }, { "public-ip": "127.0.0.1" }]),
@@ -94,6 +95,7 @@ function konto(o = {}) {
     "iam dynamic-group update": (a) => { k.gruppen.find((g) => g.id === w(a, "--dynamic-group-id"))["matching-rule"] = w(a, "--matching-rule"); return ok({}); },
     "iam dynamic-group delete": (a) => { k.gruppen = k.gruppen.filter((g) => g.id !== w(a, "--dynamic-group-id")); return ok(null); },
     "iam policy list": (a) => ok(nachName(k.richtlinien, a)),
+    "iam policy update": (a) => { const p = k.richtlinien.find((y) => y.id === w(a, "--policy-id")); p.statements = JSON.parse(w(a, "--statements")); return ok({}); },
     "iam policy create": (a) => { k.richtlinien.push(mitTags(a, { id: neu("policy"), name: w(a, "--name"), statements: JSON.parse(w(a, "--statements")), "lifecycle-state": "ACTIVE" })); return ok({}); },
     "iam policy delete": (a) => { k.richtlinien = k.richtlinien.filter((p) => p.id !== w(a, "--policy-id")); return ok(null); },
     "compute boot-volume-attachment list": (a) => ok(k.anhaenge.filter((x) => x["instance-id"] === w(a, "--instance-id"))),
@@ -197,6 +199,45 @@ test("Server: genau A1 2/12 mit Boot-Volume aus dem Rest, nächster Bereich bei 
   assert.equal(leer.k.instanzen.length, 0, "nichts angelegt");
 });
 
+// Fehlerausgabe wie die echte OCI-Kommandozeile (oci_cli/cli_exceptions.py: json.dumps(…, indent=4, sort_keys=True)):
+// „message“ steht erst nach client_version und logging_tips.
+const ociAusgabe = (code, status, message) => {
+  const d = { client_version: "Oracle-PythonSDK/2.163.1, Oracle-PythonCLI/3.66.1", code,
+    logging_tips: "Please run the OCI CLI command using --debug flag to find more debug information.", message,
+    "opc-request-id": "ABC/DEF/GHI", operation_name: "launch_instance", request_endpoint: "POST https://iaas.example/20160918/instances",
+    status, target_service: "compute", timestamp: "2026-10-20T12:00:00.000000+00:00",
+    troubleshooting_tips: "See the documentation for more information about resolving this error." };
+  return "ServiceError:\n" + JSON.stringify(d, Object.keys(d).sort(), 4) + "\n";
+};
+
+test("Fehler der OCI-Kommandozeile: Code, Status und Nachricht bleiben lesbar; „Out of host capacity“ aus echter Ausgabe → Exit 3", async () => {
+  const { fehlerText, ociAufrufer, netz, server, auswerten } = await laden();
+  assert.equal(fehlerText(ociAusgabe("InternalError", 500, "Out of host capacity.")), "InternalError (500): Out of host capacity.");
+  assert.equal(fehlerText("WARNING: x\n" + ociAusgabe("LimitExceeded", 400, "The following service limits were exceeded: standard-e2-micro-core-count")),
+    "LimitExceeded (400): The following service limits were exceeded: standard-e2-micro-core-count");
+  assert.equal(fehlerText("Error: Missing option(s) --compartment-id."), "Error: Missing option(s) --compartment-id.");
+  // Wie execFile: Anlegen scheitert mit der echten Ausgabe, alles andere beantwortet das nachgebaute Konto
+  const echt = (x, fehler) => (pfad, args, optionen, fertig) => {
+    const a = args.slice(0, args.indexOf("--output"));
+    if (a.slice(0, 3).join(" ") === "compute instance launch" && fehler) return fertig(Object.assign(new Error("Exit 1"), { code: 1 }), "", fehler);
+    x.oci(a).then((r) => fertig(null, JSON.stringify({ data: r.data }), ""));
+  };
+  const voll = konto();
+  await netz(voll.oci, { tenancy: T });
+  const kein = await server(ociAufrufer("oci", echt(voll, ociAusgabe("InternalError", 500, "Out of host capacity."))),
+    { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH });
+  assert.equal(kein.exit, 3, JSON.stringify(kein.schritte));
+  assert.equal(voll.k.instanzen.length, 0);
+  const anders = konto();
+  await netz(anders.oci, { tenancy: T });
+  await assert.rejects(server(ociAufrufer("oci", echt(anders, ociAusgabe("InternalError", 500, "Internal error occurred."))),
+    { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH }), /^Error: anlegen: InternalError \(500\): Internal error occurred\.$/);
+  const frei = konto();
+  await netz(frei.oci, { tenancy: T });
+  const r = await server(ociAufrufer("oci", echt(frei, "")), { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH });
+  assert.deepEqual([r.exit, frei.k.instanzen.length], [0, 1]);
+});
+
 test("Platzsucher: Mail-Thema, Helfer (Micro, 50 GB) mit fertiger Konfiguration, Rechte nur für ihn; läuft er, nichts Neues", async () => {
   const { netz, platzsucher, auswerten, PLATZSUCHER_RECHTE } = await laden();
   const x = konto();
@@ -229,6 +270,12 @@ test("Platzsucher: Mail-Thema, Helfer (Micro, 50 GB) mit fertiger Konfiguration,
   assert.equal(r3.exit, 0);
   assert.deepEqual(x.k.richtlinien[0].statements, PLATZSUCHER_RECHTE);
   assert.deepEqual(x.k.aktionen, [[h.id, "SOFTRESET"]]);
+  // Richtlinie einer älteren Version (ohne VOLUME_DELETE): wird ergänzt, der Helfer startet neu
+  x.k.aktionen = undefined;
+  x.k.richtlinien[0].statements = PLATZSUCHER_RECHTE.slice(0, 4);
+  assert.equal((await platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT })).exit, 0);
+  assert.deepEqual([x.k.richtlinien.length, x.k.richtlinien[0].statements, x.k.aktionen], [1, PLATZSUCHER_RECHTE, [[h.id, "SOFTRESET"]]]);
+  assert.ok(PLATZSUCHER_RECHTE.includes("Allow dynamic-group studium-platzsucher to manage volume-family in tenancy where request.permission = 'VOLUME_DELETE'"));
   // Micro gibt es nur im zweiten Bereich: weiter statt Abbruch
   const y = konto({ grenze: 1 });
   await netz(y.oci, { tenancy: T });
@@ -300,6 +347,19 @@ test("Adresse: öffentliche IP, Adresse mit der IP im Namen und SSH-Befehl", asy
   x.k.instanzen.push({ id: "s", "display-name": "studium-autopilot-server", "freeform-tags": { "studium-autopilot": "server" }, "lifecycle-state": "RUNNING" });
   const r = await adresse(x.oci, { tenancy: T });
   assert.deepEqual([r.ip, r.adresse, r.ssh], ["127.0.0.1", `https://127-0-0-1.${SSLIP}`, "ssh -i ~/.ssh/studium_autopilot ubuntu@127.0.0.1"]);
+});
+
+test("Adresse: prüft den Schlüssel; nach einem früheren Versuch mit anderem Namen nennt sie die passende Datei", async () => {
+  const { adresse } = await laden();
+  const x = konto();
+  const rsa = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABtest";
+  x.k.instanzen.push({ id: "s", "freeform-tags": { "studium-autopilot": "server" }, "lifecycle-state": "RUNNING", metadaten: { ssh_authorized_keys: rsa + " alt" } });
+  const fest = await adresse(x.oci, { tenancy: T, schluessel: { "~/.ssh/studium_autopilot.pub": rsa + " studium-autopilot\n" } });
+  assert.deepEqual([fest.exit, fest.schritte[1].status], [0, "da"]);
+  const anders = await adresse(x.oci, { tenancy: T, schluessel: { "~/.ssh/studium_autopilot.pub": SSH, "~/.ssh/id_rsa.pub": rsa + "\n" } });
+  assert.equal(anders.exit, 2);
+  assert.match(anders.schritte[1].text, /cp ~\/\.ssh\/id_rsa ~\/\.ssh\/studium_autopilot && cp ~\/\.ssh\/id_rsa\.pub ~\/\.ssh\/studium_autopilot\.pub/);
+  assert.equal((await adresse(x.oci, { tenancy: T, schluessel: {} })).exit, 1);
 });
 
 test("Aufruf: ohne Befehl Hilfe und Exit 2, nichts wird aufgerufen", () => {

@@ -394,3 +394,38 @@ test("Doppelte Gruppen: es gilt ILIAS, dann die jüngere Wahl, dann die zur Grup
   assert.equal(M.notizText(s, T1, { herkunft: M.GEWAEHLT }), s);
   assert.doesNotMatch(M.notizText(s, T1, { herkunft: M.ILIAS, iliasGruppe: "11" }), /gewaehlt_am/);
 });
+
+test("Alma-Notiz einer anderen Gruppe deines Kurses: deine Gruppe gilt, keine Überschneidung mit ihr (nur mit Gruppenliste)", async () => {
+  // Alma-Abo mit Tutorium 1 (Alma: „Übung zu …“, Art Übung, Zeit wie in Alma), deine Gruppe ist Tutorium 7
+  const Y2 = g({ id: "ws-2026-27-y200-tutorium-2", code: "Y200", gruppe: "2", tag: "Di", von: "10:00", bis: "12:00" });
+  const Y3 = g({ id: "ws-2026-27-y200-tutorium-3", code: "Y200", gruppe: "3", tag: "Mi", von: "14:00", bis: "16:00" });
+  const LI = [T1, T7, Y2, Y3];
+  const AL1 = "Stundenplan/Di 10.00 X100 Übung.md", IL7 = "Stundenplan/Do 08.15 X100 Tutorium Gruppe 7 (ILIAS).md";
+  const alma = (fm) => notiz(Object.assign({}, ALMA, { beginn: "10:00", ende: "12:00", herkunft: "alma" }, fm));
+  const il7 = M.notizText("", T7, { herkunft: M.ILIAS, iliasGruppe: "17" });
+  const a = notizenIo({ [AL1]: alma(), [IL7]: il7 });
+  assert.deepEqual(M.doppelt(a.io.notizen(), LI), { verdeckt: { [AL1]: IL7 }, faelle: [] }, "nie in faelle: das Aufräumen fasst Alma nie an");
+  assert.deepEqual(M.doppelt(a.io.notizen()).verdeckt, {}, "ohne Gruppenliste bleibt sie");
+  assert.deepEqual(M.doppelt(notizenIo({ [AL1]: alma(), [P7]: M.notizText("", T7, { herkunft: M.GEWAEHLT }) }).io.notizen(), LI).verdeckt, { [AL1]: P7 }, "neben deiner Wahl ebenso");
+  // Alma liefert deine Gruppe selbst (gleiche Zeit): Die Gruppen-Notiz weicht wie bisher, die Alma-Notiz bleibt
+  assert.deepEqual(M.doppelt(notizenIo({ [AL1]: alma(), [P1]: M.notizText("", T1, { herkunft: M.GEWAEHLT }) }).io.notizen(), LI).verdeckt, { [P1]: AL1 });
+  // bleiben: eine Notiz von Hand zur Zeit von Tutorium 1, eine Übung für alle (nicht in der Liste), die Gruppe eines Kurses ohne deine
+  const b = notizenIo({ [IL7]: il7, [AL1]: notiz(Object.assign({}, ALMA, { beginn: "10:00", ende: "12:00" })),
+    "Stundenplan/Mo 14.00 X100 Übungsteil.md": alma({ art: "Übungsteil", wochentag: 1, beginn: "14:00", ende: "16:00" }),
+    "Stundenplan/Mi 14.00 Y200 Übung.md": alma({ code: "Y200", wochentag: 3, beginn: "14:00", ende: "16:00" }) });
+  assert.deepEqual(M.doppelt(b.io.notizen(), LI).verdeckt, {});
+  // Überschneidung: dein Y200-Tutorium liegt zur Zeit von X100-Tutorium 1 und meldet sie nicht mehr (ILIAS-Abgleich und Wählen)
+  const soll = [{ refId: "17", g: T7 }, { refId: "22", g: Y2 }], mitglieder = new Set(["17", "22"]);
+  const c = notizenIo({ [AL1]: alma() });
+  const n = await M.iliasAbgleichen(c.io, soll, mitglieder, { liste: LI });
+  assert.equal(c.fm(n.notizen["22"]).konflikt, undefined, "auch im ersten Lauf, in dem Tutorium 7 erst entsteht");
+  const d = notizenIo({ [AL1]: alma() });
+  const o = await M.iliasAbgleichen(d.io, soll, mitglieder, {});
+  assert.equal(d.fm(o.notizen["22"]).konflikt, "Di 10.00 X100 Übung", "ohne Gruppenliste wie bisher");
+  const e = notizenIo({ [AL1]: alma(), [IL7]: il7 });
+  await M.waehlen(e.io, Y2, { liste: LI });
+  assert.equal(e.fm("Stundenplan/Di 10.15 Y200 Tutorium Gruppe 2 (gewählt).md").konflikt, undefined);
+  const f = notizenIo({ [AL1]: alma(), [IL7]: il7 });
+  await M.waehlen(f.io, Y2, {});
+  assert.equal(f.fm("Stundenplan/Di 10.15 Y200 Tutorium Gruppe 2 (gewählt).md").konflikt, "Di 10.00 X100 Übung");
+});

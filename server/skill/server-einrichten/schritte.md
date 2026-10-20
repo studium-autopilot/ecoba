@@ -34,8 +34,10 @@ Den Status liest du selbst (Webabruf, öffentlich, ohne persönliche Daten), der
 ## 1. Oracle-Konto
 
 - Hat der Mensch schon ein Konto: anmelden lassen und weiter mit Schritt 2. Sonst: [signup.cloud.oracle.com](https://signup.cloud.oracle.com).
-- Felder erklären, eintragen tut der Mensch: Name, Mail, Land. **Heimatregion** gilt für immer und lässt sich nicht ändern.
-  Frankfurt ist beliebt und hat oft keinen freien Platz für den Server; eine andere Region in der EU kann schneller gehen.
+- Felder erklären, eintragen tut der Mensch: Name, Mail, Land. **Heimatregion: Germany Central (Frankfurt)**, für alle gleich;
+  sie gilt für immer. Nicht nach freiem Platz wählen: Platz für den Server fehlt in jeder Region einmal, dafür gibt es den
+  Platzsucher (Schritt 4). Hat jemand schon ein Konto mit einer anderen Heimatregion, bleibt es dabei; die Einrichtung läuft dort
+  genauso.
 - Kreditkarte: nur zur Prüfung, Oracle bucht ohne Upgrade nichts ab. Das Upgrade auf Pay-As-You-Go wird nie gemacht
   ([kosten.md](kosten.md), Regel 1).
 - Zwei-Faktor einrichten lässt du den Menschen allein.
@@ -43,30 +45,21 @@ Den Status liest du selbst (Webabruf, öffentlich, ohne persönliche Daten), der
 ## 2. Bestand
 
 Die **Cloud Shell** öffnen (Konsole oben rechts, Symbol **>_**). Dort ist die OCI-Kommandozeile schon angemeldet. Dann das
-Server-Paket aus dem neuesten Release holen, nur mit passender Prüfsumme:
+Server-Paket holen, nur mit passender Prüfsumme. Die erste Zeile mit `curl` nennt die Version dieser Anleitung (beim Release
+eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/latest)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.1)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
-curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && tar -xzf studium-server.tar.gz
-node server/stand.mjs
-```
-
-**Testpaket** (vor einem Release, mit `testpaket.txt`): Statt von GitHub kommt das Paket aus dem Testpaket. Der Mensch lädt
-`studium-server.tar.gz` über das Menü der Cloud Shell (**Upload**) hoch, die Datei landet im Home-Ordner. Dann, mit der Prüfsumme
-aus `testpaket.txt`:
-
-```bash
-mkdir -p ~/studium-autopilot && cd ~/studium-autopilot && mv ~/studium-server.tar.gz .
-echo "<Prüfsumme aus testpaket.txt>  studium-server.tar.gz" | sha256sum -c - && tar -xzf studium-server.tar.gz
+curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
 node server/stand.mjs
 ```
 
 Meldet `sha256sum` einen Fehler: nichts ausführen, neu laden, sonst anhalten. Das Ergebnis von `stand.mjs` erklärst du in zwei
 Sätzen (Kontotyp, was frei ist, was von Studium Autopilot schon da ist). Bei „Ich klicke selbst“ kopiert der Mensch die
-Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
+Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`; ab Schritt 5 die Zeile mit `IP=` von dort.
 
 ## 3. Schutz vor Kosten
 
@@ -81,16 +74,19 @@ noch einmal mit `--ja`.
 ## 4. Server anlegen
 
 ```bash
-[ -f ~/.ssh/studium_autopilot ] || ssh-keygen -t ed25519 -N "" -C studium-autopilot -f ~/.ssh/studium_autopilot
+[ -f ~/.ssh/studium_autopilot ] || ssh-keygen -t rsa -b 4096 -N "" -C studium-autopilot -f ~/.ssh/studium_autopilot
 node server/einrichten.mjs netz
 node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
 ```
 
+- Der Schlüssel ist immer RSA mit 4096 Bit unter `~/.ssh/studium_autopilot`; alle späteren Schritte erwarten genau diese Datei.
+  (Die Cloud Shell lehnt ed25519 ab.) Liegt dort schon ein Schlüssel, bleibt er.
+- Exit 0: weiter mit Schritt 5.
 - Exit 1 mit „Neuer Server passt nicht“: Die freie Menge ist belegt (z. B. von einem eigenen Server). Erklären, nichts anlegen
   ([kosten.md](kosten.md), Regel 2).
-- **Exit 3 (kein Platz):** Oracle hat in keinem Verfügbarkeitsbereich Platz. Erklären und den **Platzsucher** anbieten: Ein
-  kleiner kostenloser Helfer versucht es weiter, alle paar Minuten, auch wenn der Rechner aus ist, und schickt eine Mail, sobald
-  der Server da ist.
+- **Exit 3 (kein Platz):** Oracle hat in keinem Verfügbarkeitsbereich Platz. Das ist normal und kein Fehler des Kontos. Erklären
+  und den **Platzsucher** einrichten, nicht zum Warten oder Wiederholen raten: Ein kleiner kostenloser Helfer versucht es weiter,
+  alle paar Minuten, auch wenn der Rechner aus ist, und schickt eine Mail, sobald der Server da ist.
 
   ```bash
   node server/einrichten.mjs platzsucher --mail <Mail-Adresse> --schluessel ~/.ssh/studium_autopilot.pub
@@ -104,10 +100,21 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
 ```bash
 cd ~/studium-autopilot
 node server/einrichten.mjs abschliessen
+node server/einrichten.mjs adresse
 IP=$(node server/einrichten.mjs adresse --json | jq -r .ip)
 scp -i ~/.ssh/studium_autopilot -o StrictHostKeyChecking=accept-new studium-server.tar.gz ubuntu@$IP:
 ssh -i ~/.ssh/studium_autopilot ubuntu@$IP "tar -xzf studium-server.tar.gz && sudo bash server/installieren.sh --ip $IP"
 ```
+
+Die Befehle ab hier brauchen `$IP`. In einer neuen Cloud-Shell-Sitzung darum zuerst wieder
+`cd ~/studium-autopilot && IP=$(node server/einrichten.mjs adresse --json | jq -r .ip)`.
+
+- `adresse` nennt den Zustand des Servers. Nur bei `RUNNING` geht es weiter. Bei `PROVISIONING` oder `STARTING` eine Minute
+  warten und `adresse` noch einmal. Bei `STOPPED` in der Konsole unter **Compute →
+  Instances** die Instanz „studium-autopilot-server“ öffnen und **Start** klicken (nur diese), nach etwa einer Minute weiter.
+  Jeder andere Zustand oder ein Fehler beim Starten: wie eine unbekannte Meldung (SKILL.md, „Fehler ohne Vermutung“).
+- `adresse` prüft auch den Schlüssel. Exit 2 mit „Der Server wurde mit … angelegt“: den genannten `cp`-Befehl einmal
+  ausführen, dann `adresse` noch einmal. Exit 1 mit „Kein Schlüssel … passt“: anhalten, Meldung an den Autor.
 
 - `abschliessen` entfernt die Rechte eines Platzsuchers, vergrößert das Boot-Volume auf den ganzen freien Rest und setzt die
   Quota so, dass nichts Neues mehr hinzukommt. Meldet es „Boot-Volume … vergrößert“: einmal

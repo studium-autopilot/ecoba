@@ -31,7 +31,18 @@ write_files:
 
       [Install]
       WantedBy=multi-user.target
+# 1 GB Arbeitsspeicher: 1 GB Auslagerung, damit pip nicht abbricht; Installation bis zu fünfmal (Netz, Paketquelle). Nur mit
+# lauffähiger Kommandozeile startet der Dienst, sonst würde er jede Runde als unklar werten und nie melden.
 runcmd:
-  - [bash, -c, "python3 -m venv /opt/oci && /opt/oci/bin/pip install --quiet oci-cli==3.95.0"]
-  - [systemctl, daemon-reload]
-  - [systemctl, enable, --now, studium-platzsucher.service]
+  - - bash
+    - -c
+    - |
+      set -u
+      if [ ! -e /swapfile ]; then fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile; fi
+      for i in 1 2 3 4 5; do
+        { [ -x /opt/oci/bin/pip ] || python3 -m venv /opt/oci; } && /opt/oci/bin/pip install --quiet oci-cli==3.95.0 && /opt/oci/bin/oci --version && break
+        sleep 60
+      done
+      /opt/oci/bin/oci --version || { echo "Platzsucher: OCI-Kommandozeile nicht installierbar" >&2; exit 1; }
+      systemctl daemon-reload
+      systemctl enable --now studium-platzsucher.service

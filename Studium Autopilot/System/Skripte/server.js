@@ -106,10 +106,12 @@ module.exports = function (ctx) {
   };
   const ENTFAELLT_ZENTRAL = "> Dieser Termin steht nicht mehr in den zentralen Daten. Deine Notizen unten bleiben.";
   const ENTFAELLT_SERVER = "> Laut deinem Server entfällt dieser Termin. Deine Notizen unten bleiben.";
-  // Text zum Einfügen in Claude Desktop, Knopf „Prompt kopieren“ (gleicher Wortlaut wie im README, „Für Technische“)
-  const PROMPT = "Richte mir den eigenen Server für Studium Autopilot ein (github.com/studium-autopilot/ecoba). Lies dazu\n" +
-    "https://github.com/studium-autopilot/ecoba/blob/main/server/skill/server-einrichten/SKILL.md und die Dateien daneben\n" +
-    "und führe mich Schritt für Schritt.";
+  // Text zum Einfügen in Claude Desktop, Knopf „Prompt kopieren“ (gleicher Wortlaut wie im README, „Für Technische“). Die
+  // Anleitung kommt aus dem Tag des neuesten Releases, nie von main: Sie lädt dann genau das Server-Paket ihrer Version.
+  const PROMPT = "Richte mir den eigenen Server für Studium Autopilot ein oder setz die Einrichtung fort (github.com/studium-autopilot/ecoba).\n" +
+    "Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die Versionsnummer daraus (vX.Y.Z) und lies aus\n" +
+    "genau dieser Version https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die\n" +
+    "Dateien daneben. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich Schritt für Schritt.";
 
   // ---------- Kleine Helfer ----------
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };

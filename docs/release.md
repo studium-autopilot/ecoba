@@ -72,7 +72,9 @@ Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
 **`Studium-Autopilot.zip`** und **`studium-server.tar.gz`** anhängen (genau diese Namen; beide aus `release.py --zip`). Das
 Server-Paket lädt die Einrichtung des eigenen Servers und täglich `studium-server aktualisieren`, beide nur mit der Prüfsumme,
-die GitHub zum Asset zeigt; fehlt es, bleibt jeder eigene Server auf seinem Stand. Titel wie die Überschrift im Changelog:
+die GitHub zum Asset zeigt; fehlt es, bleibt jeder eigene Server auf seinem Stand. Die Anleitung der Einrichtung im Baum lädt
+genau das Paket ihrer Version (`release.py` setzt `releases/tags/v<version>` ein); bis das Release mit Asset öffentlich ist,
+scheitert dort der Download, statt ein Paket einer anderen Version zu nehmen. Titel wie die Überschrift im Changelog:
 `0.3.1 – Update-Hinweis auf dem Dashboard`. Als **Latest release** veröffentlichen. Releases sind unveränderlich (Immutable
 Releases): Nach dem Veröffentlichen lassen sich Assets nicht mehr tauschen, also erst als Entwurf vollständig machen. Das ZIP enthält nur den
 Tresor-Ordner, so wie Nutzer:innen ihn brauchen (siehe `docs/installation.md`).
@@ -120,9 +122,12 @@ Für Tests vor dem Release (zum Beispiel im eigenen Test-Tresor mit Kanal „Bet
 
 1. `python werkzeuge/release.py --zip --beta 1` – im Baum wird die Plugin-Version `X.Y.Z` zu `X.Y.Z-beta.1` (die Quelle bleibt),
    die Update-Liste trägt diese Version, gedruckt wird ein Block `beta`.
-2. Commit, Tag `vX.Y.Z-beta.1` pushen.
-3. GitHub-Release mit diesem Tag als **Vorab-Release** („Set as a pre-release“), **nicht** als Latest; Asset
-   `Studium-Autopilot.zip`. So laden der grüne Knopf und der iOS-Kurzbefehl (`releases/latest`) weiter die stabile Version.
+2. Commit, nur den Tag `vX.Y.Z-beta.1` pushen, **nie `main`**: `main` zeigt immer die stabile Version.
+3. GitHub-Release mit diesem Tag als **Vorab-Release** („Set as a pre-release“), **nicht** als Latest; Assets
+   `Studium-Autopilot.zip` und `studium-server.tar.gz`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
+   und das Update eigener Server (`releases/latest`) weiter die stabile Version. Die Server-Einrichtung einer Beta testet man
+   mit dem Prompt aus dem README, nur mit `vX.Y.Z-beta.1` statt der Version aus `releases/latest`: Die Anleitung dieses Tags
+   lädt genau sein Server-Paket.
 4. Im Manifest der zentralen Daten `beta` setzen (nicht `release`, nicht `plugin_aktuell`).
 
 Nur Tresore mit `update_kanal: beta` in `System/Einstellungen.md` (Schalter **Beta-Versionen** im Fenster „Studium Autopilot“

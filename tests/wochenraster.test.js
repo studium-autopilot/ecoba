@@ -140,6 +140,46 @@ test("Eine Gruppe je Modul und Art: eine zweite Gruppen-Notiz desselben Tutorium
   assert.equal(W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-19T12:00:00") }).kaesten.length, 3, "ohne Regel beide");
 });
 
+test("Alma-Notiz einer anderen Gruppe deines Kurses fehlt im Raster, und deine andere Gruppe meldet keine Überschneidung mit ihr", () => {
+  // Alma-Abo mit Tutorium 1 von X180 („Übung zu …“), deine Gruppe ist Tutorium 7 (ILIAS); dein X100-Tutorium lag zur Zeit von
+  // Tutorium 1 und trägt noch den Namen der Alma-Notiz als konflikt
+  const MG = laden("meine-gruppe").ergebnis;
+  const liste = [
+    { id: "t1", code: "X180", art: "Tutorium", tag: "Di", von: "10:00", bis: "12:00", ct: true, semester: "WS 2026/27" },
+    { id: "t7", code: "X180", art: "Tutorium", tag: "Do", von: "08:00", bis: "10:00", ct: true, semester: "WS 2026/27" },
+  ];
+  const alma = "Stundenplan/Di 10.00 X180 Übung.md", mathe = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (ILIAS).md";
+  const n = [
+    lv(alma, { titel: "X180 · Übung", code: "X180", art: "Übung", wochentag: 2, beginn: "10:00", ende: "12:00", von: "2026-11-03", bis: "2027-02-02", herkunft: "alma" }),
+    lv("Stundenplan/Do 08.15 X180 Tutorium Gruppe 7 (ILIAS).md", { titel: "Beispielabschluss · Tutorium Gruppe 7", code: "X180", art: "Tutorium", wochentag: 4, beginn: "08:15", ende: "09:45",
+      von: "2026-11-05", bis: "2027-02-04", herkunft: "ilias-gruppe", ilias_gruppe: "17", gruppe_id: "t7" }),
+    lv(mathe, { titel: "Beispielmathematik · Tutorium Gruppe 4", code: "X100", art: "Tutorium", wochentag: 2, beginn: "10:15", ende: "11:45", von: "2026-10-20", bis: "2027-02-02",
+      herkunft: "ilias-gruppe", ilias_gruppe: "4", gruppe_id: "m4", konflikt: "Di 10.00 X180 Übung" }),
+  ];
+  const bauen = (verdeckt) => W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-11-02"), jetzt: new Date("2026-10-20T14:50:00"), verdeckt });
+  const w = bauen(MG.doppelt(n, liste).verdeckt);
+  assert.deepEqual(w.kaesten.map((k) => k.pfad).sort(), [mathe, "Stundenplan/Do 08.15 X180 Tutorium Gruppe 7 (ILIAS).md"]);
+  const m = kasten(w, mathe);
+  assert.ok(!m.klassen.includes("konflikt"));
+  assert.doesNotMatch(m.titel, /überschneidet/);
+  assert.equal(m.spalten, 1, "volle Breite");
+  // ohne Gruppenliste (zentrale Daten aus) bleibt die Alma-Notiz, und die Überschneidung gilt
+  const ohne = bauen(MG.doppelt(n).verdeckt);
+  assert.equal(ohne.kaesten.length, 3);
+  assert.ok(kasten(ohne, mathe).klassen.includes("konflikt"));
+  assert.match(kasten(ohne, mathe).titel, /überschneidet sich mit Di 10\.00 X180 Übung$/);
+});
+
+test("Warnpunkt nur, wenn die andere Notiz im Raster steht: nicht für „Besuche ich nicht“, eine verdeckte oder eine fehlende", () => {
+  const tut = NOTIZEN[5];
+  const mit = (konflikt) => [NOTIZEN[4], NOTIZEN[7], lv(tut.pfad, Object.assign({}, tut.fm, { konflikt }))];
+  const bauen = (n, verdeckt) => kasten(W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00"), verdeckt }), tut.pfad);
+  assert.ok(bauen(mit("Di X100")).klassen.includes("konflikt"));
+  assert.ok(!bauen(mit("Fr X900")).klassen.includes("konflikt"), "Besuche ich nicht");
+  assert.ok(!bauen(mit("Di X100"), { "Stundenplan/Di X100.md": "Stundenplan/Fr X900.md" }).klassen.includes("konflikt"), "verdeckt");
+  assert.ok(!bauen(mit("Di X999")).klassen.includes("konflikt"), "gibt es nicht mehr");
+});
+
 test("Antippen öffnet das Modul über den Pfad, auch bei Link mit Pfad, Alias oder Abschnitt", () => {
   const n = [lv("Stundenplan/Mo X110.md", Object.assign({}, NOTIZEN[0].fm, { modul: "[[Module/1 Grundstudium/X110 Beispieldatenanalyse#Prüfung|X110]]" }))];
   const w = W.wocheBauen({ notizen: n, kurzVonCode: {}, modulPfad: MODULPFAD, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });

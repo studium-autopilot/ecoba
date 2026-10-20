@@ -27,18 +27,32 @@ const WEG = new Set(["TERMINATED", "TERMINATING"]);
 
 const zahl = (x) => (Number.isFinite(Number(x)) ? Number(x) : 0);
 const summe = (liste, f) => liste.reduce((s, x) => s + zahl(f(x)), 0);
-const kurz = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 200);
+const kurz = (s) => String(s || "").replace(/\s+/g, " ").trim().slice(0, 300);
 const liste = (d) => (Array.isArray(d) ? d : d && Array.isArray(d.items) ? d.items : []);
 const lebt = (x) => !WEG.has(x["lifecycle-state"]);
 const unsere = (x) => Object.prototype.hasOwnProperty.call(x["freeform-tags"] || {}, KENNZEICHEN);
 
-// Startet `oci … --output json` und liefert { ok, data } bzw. { ok: false, fehler }; wirft nie.
-export function ociAufrufer(pfad = "oci") {
+// Fehlertext der OCI-Kommandozeile → eine Zeile „Code (Status): Nachricht“. Sie schreibt „ServiceError:“ und ein JSON mit
+// alphabetisch sortierten Schlüsseln; „message“ steht erst nach client_version und logging_tips, gut 200 Zeichen weit hinten.
+// Gekürzt wird darum erst danach, sonst fehlt genau die Nachricht („Out of host capacity.“), nach der die Schritte entscheiden.
+export function fehlerText(roh) {
+  const s = String(roh || "");
+  const i = s.indexOf("{", Math.max(0, s.indexOf("ServiceError")));
+  if (s.indexOf("ServiceError") >= 0 && i >= 0) {
+    let d = null;
+    try { d = JSON.parse(s.slice(i, s.lastIndexOf("}") + 1)); } catch (e) { d = null; }
+    if (d && (d.code || d.message)) return kurz(`${d.code || "ServiceError"} (${d.status || "?"}): ${d.message || ""}`);
+  }
+  return kurz(s);
+}
+
+// Startet `oci … --output json` und liefert { ok, data } bzw. { ok: false, fehler }; wirft nie. ausfuehren: wie execFile (Tests).
+export function ociAufrufer(pfad = "oci", ausfuehren = execFile) {
   return (args) => new Promise((fertig) => {
-    execFile(pfad, [...args, "--output", "json"],
+    ausfuehren(pfad, [...args, "--output", "json"],
       { maxBuffer: 64 * 1024 * 1024, env: { ...process.env, SUPPRESS_LABEL_WARNING: "True" } },
       (err, stdout, stderr) => {
-        if (err) return fertig({ ok: false, fehler: kurz(stderr || err.message) });
+        if (err) return fertig({ ok: false, fehler: fehlerText(stderr || err.message) });
         const roh = String(stdout || "");
         if (!roh.trim()) return fertig({ ok: true, data: null });
         try {
