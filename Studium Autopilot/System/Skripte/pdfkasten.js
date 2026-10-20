@@ -2,6 +2,8 @@
 // verhält sich in Lese- und Bearbeitungsansicht wie ein Knopf. Ein Tipp auf die Kopfzeile klappt auf oder zu, so oft man will;
 // er springt nie in den Quelltext und öffnet keine Tastatur. Rechts in der Kopfzeile „Öffnen“ (die PDF in der App des Geräts,
 // Aktion oeffnen) und, wenn es eine Office-Datei daneben gibt, „Original“. Die PDF lädt erst beim ersten Aufklappen.
+// Mit eigenem Server (seit 0.5.2) davor „Zusammenfassen“, solange „Das Wichtigste“ leer ist: Claude fasst die Unterlage auf dem
+// Server mit Opus zusammen (server.js, zusammenfassen); danach „Wird zusammengefasst“, bis die Zusammenfassung da ist.
 // Vorher war es ein gewöhnlicher Callout: In der Bearbeitungsansicht setzte ein Tipp neben den Pfeil den Cursor hinein, der Kasten
 // zeigte seinen Quelltext und auf dem iPad ging die Tastatur auf (bis 19.10.2026).
 // Die Notiz bleibt, wie sie ist (Markdown-Callout, der Link auf die PDF folgt Umbenennungen, ohne Plugin ein normaler Kasten):
@@ -81,7 +83,22 @@ module.exports = function (ctx) {
     leiste.className = "eba-pdf-leiste";
     if (erste && pfad) knopf(leiste, "Öffnen", "PDF in einer anderen App öffnen", () => ctx.aktion("oeffnen", { notiz: pfad, datei: erste }));
     if (pfad && linkZiel(fm.original, pfad)) knopf(leiste, "Original", "Original in einer anderen App öffnen", () => ctx.aktion("oeffnen", { notiz: pfad, original: "1" }));
-    if (leiste.childElementCount) titel.insertBefore(leiste, fold || null);
+    const einfuegen = () => { if (!leiste.parentNode && leiste.childElementCount) titel.insertBefore(leiste, fold || null); };
+    einfuegen();
+    const S = ctx.server;
+    if (pfad && S && S.zusammenfassenStand) {
+      S.zusammenfassenStand(pfad).then((stand) => {
+        if (!stand) return;
+        const WARTET = "Wird zusammengefasst";
+        let gewuenscht = stand === "angefordert";
+        const b = knopf(leiste, gewuenscht ? WARTET : "Zusammenfassen", "Claude fasst die Unterlage mit Opus zusammen: das Wichtigste, Aufgaben und offene Fragen", () => {
+          if (gewuenscht) { ctx.hinweis("Claude arbeitet schon daran. Die Zusammenfassung kommt in ein paar Minuten."); return; }
+          S.zusammenfassen(pfad).then((ok) => { if (ok) { gewuenscht = true; b.setText(WARTET); } }).catch((e) => console.error("PDF-Kasten: Zusammenfassen", e));
+        });
+        leiste.insertBefore(b, leiste.firstChild);
+        einfuegen();
+      }).catch((e) => console.error("PDF-Kasten: Zusammenfassen", e));
+    }
 
     // Spätes Laden: zugeklappt bleibt der Kasten leer, die PDF kommt beim ersten Aufklappen (nur, wenn er nur Einbettungen hat)
     let geladen = true;

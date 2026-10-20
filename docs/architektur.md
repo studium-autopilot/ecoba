@@ -1206,11 +1206,17 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   Papierkorb. Absagen (`entfaellt`) wie bei den zentralen Daten, neues Datum benennt im selben Ordner um, gelöscht bleibt
   gelöscht, bis sich der Termin ändert (Grabstein `angewendet`: id → `Q.kurzHash`, wie bei den anderen Quellen in der
   Sperr-Datei `server-abruf.json`). Zwei Notizen derselben `claude_id` führt der Abruf mit `Q.dubletten` zusammen.
-- **Begleitnotizen:** Zu Lehrmaterial (`art` Folien, Skript, Übung, Tutorium, Lösung, Altklausur, Literatur), dessen „Das Wichtigste“ fehlt
-  oder nur Platzhalter hat und dessen PDF eine Textfassung mit Text hat (`volltext.js`), schickt der Abruf die Textfassung als
-  Text mit `[S. N]` (`volltextText`) verschlüsselt an `POST /v1/unterlagen` (Zweck `unterlagen`), bis zu 9 je Abruf in Anfragen zu 3, neueste PDF zuerst (schon
-  gesendete liest `unterlagenObs` gar nicht erst; eine abgelehnte Anfrage beendet den Abruf, der Rest kommt beim nächsten), jede PDF
-  einmal (`server.json` `gesendet`: SHA-256 → Datum); aus mit `server_unterlagen: aus`. Claude schreibt die Einträge
+- **Begleitnotizen (auf Wunsch, seit 0.5.2):** Zu Lehrmaterial (`art` Folien, Skript, Übung, Tutorium, Lösung, Altklausur, Literatur), dessen
+  „Das Wichtigste“ fehlt oder nur Platzhalter hat, zeigt der PDF-Kasten (`pdfkasten.js`) den Knopf **Zusammenfassen**. Er setzt
+  `zusammenfassung_angefordert` (UTC, Minute) in den Eigenschaften der Notiz; so erreicht der Wunsch über den Sync das Gerät, das
+  mit dem Server spricht, und der Knopf heißt einen Tag lang „Wird zusammengefasst“. Hat die PDF eine Textfassung mit Text
+  (`volltext.js`), schickt der Abruf sie als Text mit `[S. N]` (`volltextText`) verschlüsselt an `POST /v1/unterlagen` (Zweck
+  `unterlagen`, mit `modell: "opus"`), bis zu 9 je Abruf in Anfragen zu 3, Gewünschtes zuerst (eine abgelehnte Anfrage beendet den
+  Abruf, der Rest kommt beim nächsten). `server.json` `gesendet` (SHA-256 → Minute, bei einem Wunsch mindestens dessen Zeit, falls
+  die Uhr des Geräts nachgeht) verhindert doppeltes Senden; ein späterer Wunsch geht wieder. Der Server legt Gewünschtes nach
+  `unterlagen/opus/` und schreibt es vor dem gewöhnlichen Lauf in einem eigenen Lauf mit Opus (höchstens 3 je Lauf, ohne Mails).
+  `server_unterlagen`: `knopf` (Standard) | `alle` (dazu jede neue Unterlage ohne Zusammenfassung, gewöhnlicher Lauf, Modell des
+  Servers; so bis 0.5.1) | `aus` (nichts, kein Knopf). Die übernommene Begleitnotiz löscht den Wunsch. Claude schreibt die Einträge
   (`server/skill/studium-autopilot/begleitnotiz.md`), der nächste Abruf trägt sie mit `begleitnotizErgaenzen` in die Notiz neben
   der PDF ein (gleicher Name `.md`, sonst die Unterlage, deren `datei` auf die PDF zeigt): fehlende Abschnitte über dem
   PDF-Kasten in der Reihenfolge „Das Wichtigste“, „Zu tun“, „Offene Fragen“; Platzhalter älterer Notizen werden ersetzt;

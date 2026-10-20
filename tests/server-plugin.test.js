@@ -468,6 +468,29 @@ test("Begleitnotizen vom Server: Übernahme in die Notiz neben der PDF, gleiche 
   } finally { await srv.zu(); }
 });
 
+test("Zusammenfassen auf Wunsch: gewünschte Unterlage geht mit Opus in den eigenen Ordner, wieder nach neuem Wunsch; die Begleitnotiz löscht den Wunsch", async () => {
+  const srv = await serverStarten();
+  try {
+    const notiz = "Unterlagen/B110 Einführung/B110 Folien 03 Erlöse.md", pdf = "Unterlagen/B110 Einführung/B110 Folien 03 Erlöse.pdf";
+    const t = tresor({ [notiz]: "---\ntyp: unterlage\nart: Folien\nzusammenfassung_angefordert: 2026-10-20T17:50Z\n---\n\n# B110 · Folien 03\n\n> [!eba-pdf]- PDF\n> ![[B110 Folien 03 Erlöse.pdf]]\n" });
+    const k = "f".repeat(64);
+    let wunsch = "2099-01-01T00:00"; // Uhr dieses Geräts geht nach: trotzdem nur einmal
+    const { m } = await verbunden(srv, t, { unterlagen: async () => [{ datei: pdf, kennung: k, art: "Folien", titel: "Folien 03", code: "B110", seiten: 12, angefordert: wunsch, text: "[S. 1]\nErlöse" }] });
+    assert.equal((await m.abrufen()).unterlagen, 1);
+    assert.ok(fs.existsSync(path.join(srv.verzeichnis, "unterlagen", "opus", k + ".md")), "mit Opus");
+    assert.equal((await m.abrufen()).unterlagen, 0, "derselbe Wunsch nur einmal");
+    wunsch = "2099-01-02T00:00"; // später noch einmal gewünscht (z. B. hat es auf dem Server nicht geklappt)
+    assert.equal((await m.abrufen()).unterlagen, 1, "neuer Wunsch geht wieder");
+
+    srv.eingang({ begleitnotizen: [{ datei: pdf, wichtigste: [{ text: "Erlös: Menge mal Preis.", seite: 3 }] }] });
+    assert.deepEqual((await m.abrufen()).begleitnotizen, [notiz]);
+    const text = t.m.get(notiz);
+    assert.ok(!text.includes("zusammenfassung_angefordert"), "Wunsch erledigt");
+    assert.match(text, /^---\ntyp: unterlage\nart: Folien\n---\n/);
+    assert.match(text, /## Das Wichtigste\n- Erlös: Menge mal Preis\./);
+  } finally { await srv.zu(); }
+});
+
 test("Textfassungen: sagt der Server „zu viele warten“, kommt der Rest beim nächsten Abruf; nichts geht doppelt", async () => {
   const srv = await serverStarten();
   try {

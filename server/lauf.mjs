@@ -29,6 +29,9 @@ const LAEUFE_BEHALTEN = 10;
 // damit alles in Claudes Kontext passt und das Abo-Limit für Mails übrig bleibt; der Rest kommt gleich im nächsten Lauf
 const UNTERLAGEN_JE_LAUF = 6;
 const UNTERLAGEN_ZEICHEN = 200000;
+// Auf Wunsch (Knopf „Zusammenfassen“ in Obsidian, unterlagen/opus/): ein eigener Lauf mit Opus vor dem gewöhnlichen, nur diese
+// Unterlagen, ohne Mails; je Lauf höchstens 3, damit Opus jede gründlich liest
+const UNTERLAGEN_OPUS_JE_LAUF = 3;
 // Öffentliche zentrale Termine (für alle EcoBA-Studierenden): kommen über das Plugin ohnehin, Claude liefert sie nicht doppelt.
 export const ZENTRAL = "https://studium-autopilot.github.io/ecoba-daten/v1/termine.json";
 const GMAIL_SCHREIBEND = ["create_draft", "update_draft", "delete_draft", "send_message", "reply", "forward", "create_label", "update_label",
@@ -85,7 +88,7 @@ export function rechte(arbeit, gmail) {
   };
 }
 
-export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterlagen = 0 }) {
+export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterlagen = 0, opus = false }) {
   const zeit = jetzt.toLocaleString("de-DE", { timeZone: "Europe/Berlin", dateStyle: "full", timeStyle: "short" });
   return [
     "# Auftrag für diesen Lauf", "",
@@ -93,6 +96,8 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterla
     `Gmail durchsuchen: ${gmail ? `ja, Zeitraum newer_than:${gmailTage}d` : "nein (nicht öffnen)"}.`,
     "Neue Rohdaten: " + (meldungen.length ? meldungen.join("; ") : "keine") + ".",
     `Neue Unterlagen für Begleitnotizen: ${unterlagen ? `${unterlagen} (Ordner unterlagen/)` : "keine"}.`,
+    ...(opus ? ["Dieser Lauf schreibt nur die Begleitnotizen zu den Unterlagen, die die Person ausgewählt hat. Sie wünscht sich besonders " +
+      "gründliche Zusammenfassungen: lies jede Unterlage ganz."] : []),
     ...(grund === "taeglich" ? ["Täglicher Sicherheitslauf: Die Uni-Mails in roh/ sind die der letzten 24 Stunden, einige kennst du schon. " +
       "Liefere nur, was in bisher.json fehlt oder sich geändert hat."] : []), "",
     "Lies skill/SKILL.md, skill/termine.md und skill/ausgabe.md" + (unterlagen ? ", für die Unterlagen auch skill/begleitnotiz.md" : "") +
@@ -103,14 +108,14 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterla
 
 // Textfassungen für Begleitnotizen (der Dienst legt sie nach unterlagen/neu/): die ältesten im Rahmen der Grenzen in den
 // Lauf-Ordner; scheitert der Lauf, zurück (unterlagenZurueck). → Namen
-function unterlagenUebernehmen(von, nach) {
+function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF) {
   if (!existsSync(von)) return [];
   const alle = readdirSync(von).filter((n) => /^[0-9a-f]{64}\.md$/.test(n)).map((n) => ({ n, s: statSync(join(von, n)) }))
     .sort((a, b) => a.s.mtimeMs - b.s.mtimeMs || (a.n < b.n ? -1 : 1));
   const namen = [];
   let summe = 0;
   for (const { n, s } of alle) {
-    if (namen.length >= UNTERLAGEN_JE_LAUF || (namen.length && summe + s.size > UNTERLAGEN_ZEICHEN)) break;
+    if (namen.length >= hoechstens || (namen.length && summe + s.size > UNTERLAGEN_ZEICHEN)) break;
     namen.push(n);
     summe += s.size;
   }
@@ -170,14 +175,26 @@ export async function zentralHolen(holen = fetch) {
   }
 }
 
-export async function laufen({ verzeichnis, jetzt = new Date(), claude = ["claude"], skill = join(PAKET, "skill", "studium-autopilot"), modell, timeout, holen = fetch } = {}) {
+const wartet = (ordner) => existsSync(ordner) && readdirSync(ordner).some((n) => n.endsWith(".md"));
+
+// Ein Anstoß: zuerst die gewünschten Zusammenfassungen mit Opus (falls welche warten), dann der gewöhnliche Lauf. → Ergebnis des
+// gewöhnlichen Laufs, mit opus: Ergebnis des Opus-Laufs (hatte der gewöhnliche nichts zu tun, das Ergebnis des Opus-Laufs)
+export async function laufen(o = {}) {
+  const { verzeichnis } = o;
   const anstossDatei = join(verzeichnis, "anstoss");
   const anstoss = lesen(anstossDatei, null);
   if (!anstoss) return { status: "kein-anstoss" };
   rmSync(anstossDatei, { force: true });
+  const opus = wartet(join(verzeichnis, "unterlagen", "opus")) ? await einLauf({ ...o, anstoss, opus: true }) : null;
+  const r = await einLauf({ ...o, anstoss, opus: false });
+  if (!opus) return r;
+  return r.status === "nichts-zu-tun" ? opus : { ...r, opus };
+}
+
+async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], skill = join(PAKET, "skill", "studium-autopilot"), modell, timeout, holen = fetch, anstoss, opus }) {
   const zustand = lesen(join(verzeichnis, "zustand.json"), {});
   const einstellungen = lesen(join(verzeichnis, "einstellungen.json"), {});
-  const gmail = gmailDran(anstoss, zustand, jetzt, taktLesen(verzeichnis).gmail);
+  const gmail = !opus && gmailDran(anstoss, zustand, jetzt, taktLesen(verzeichnis).gmail);
   const tage = Math.min(14, Math.max(1, Math.ceil((jetzt - (Date.parse(zustand.gmailZuletzt || "") || jetzt - 14 * 24 * STUNDE)) / (24 * STUNDE))));
 
   // eigener Ordner je Lauf, auch bei zwei Läufen in derselben Sekunde
@@ -185,9 +202,10 @@ export async function laufen({ verzeichnis, jetzt = new Date(), claude = ["claud
   for (let i = 2; existsSync(join(verzeichnis, "laeufe", name)); i++) name = `${stempel(jetzt)}-${i}`;
   const arbeit = join(verzeichnis, "laeufe", name);
   mkdirSync(arbeit, { recursive: true });
-  rohUebernehmen(join(verzeichnis, "roh"), join(arbeit, "roh"));
-  const unterlagenNeu = join(verzeichnis, "unterlagen", "neu");
-  const unterlagen = unterlagenUebernehmen(unterlagenNeu, join(arbeit, "unterlagen"));
+  if (opus) mkdirSync(join(arbeit, "roh"));
+  else rohUebernehmen(join(verzeichnis, "roh"), join(arbeit, "roh"));
+  const unterlagenNeu = join(verzeichnis, "unterlagen", opus ? "opus" : "neu");
+  const unterlagen = unterlagenUebernehmen(unterlagenNeu, join(arbeit, "unterlagen"), opus ? UNTERLAGEN_OPUS_JE_LAUF : UNTERLAGEN_JE_LAUF);
   const index = existsSync(join(arbeit, "roh", "INDEX.md")) ? readFileSync(join(arbeit, "roh", "INDEX.md"), "utf8") : "";
   const meldungen = index.split("\n").filter((z) => z.startsWith("- ")).map((z) => z.replace(/^- [\d.]+ [\d:]+ UTC: /, "").trim());
   if (!gmail && !meldungen.length && !unterlagen.length) {
@@ -198,7 +216,7 @@ export async function laufen({ verzeichnis, jetzt = new Date(), claude = ["claud
   const vorher = lesen(join(verzeichnis, "zustand.json"), {});
   schreiben(join(verzeichnis, "zustand.json"), { ...vorher, laeuftSeit: jetzt.toISOString() });
   const bestand = lesen(join(verzeichnis, "termine.json"), {});
-  writeFileSync(join(arbeit, "auftrag.md"), auftragText({ jetzt, grund: anstoss.grund, gmail, gmailTage: tage, meldungen, unterlagen: unterlagen.length }));
+  writeFileSync(join(arbeit, "auftrag.md"), auftragText({ jetzt, grund: opus ? "Zusammenfassungen auf Wunsch" : anstoss.grund, gmail, gmailTage: tage, meldungen, unterlagen: unterlagen.length, opus }));
   writeFileSync(join(arbeit, "bisher.json"), JSON.stringify(Object.values(bestand).map((t) => ({ schluessel: t.schluessel, titel: t.titel,
     datum: t.datum, bis: t.bis, uhrzeit: t.uhrzeit, ort: t.ort, kategorie: t.kategorie, status: t.status, code: t.code, entfaellt: t.entfaellt === true })), null, 1));
   // Stand des Plugins: stand.json (Modulcodes, Studienbeginn, Variante) und tresor.json (was schon in Obsidian steht)
@@ -212,7 +230,8 @@ export async function laufen({ verzeichnis, jetzt = new Date(), claude = ["claud
 
   const prompt = "Du bist der Lauf von Studium Autopilot auf dem eigenen Server. Arbeitsordner: " + abs(arbeit) +
     ". Lies auftrag.md und folge ihm. Schreibe nur ausgabe.json.";
-  const args = [...claude.slice(1), "-p", prompt, "--model", modell || einstellungen.modell || "sonnet", "--settings", rechteDatei,
+  const modellLauf = opus ? "opus" : modell || einstellungen.modell || "sonnet";
+  const args = [...claude.slice(1), "-p", prompt, "--model", modellLauf, "--settings", rechteDatei,
     "--permission-mode", "dontAsk", "--tools", "Read,Write,Edit,Glob,Grep", "--output-format", "json"];
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
@@ -223,14 +242,14 @@ export async function laufen({ verzeichnis, jetzt = new Date(), claude = ["claud
   const ende = (ok, code, mehr = {}) => {
     if (!ok) { fehler.add(code); rohZurueck(join(arbeit, "roh"), join(verzeichnis, "roh")); unterlagenZurueck(join(arbeit, "unterlagen"), unterlagenNeu); }
     // warten noch Unterlagen, gleich der nächste Lauf (nur nach Erfolg, sonst liefe ein Fehler im Kreis)
-    else if (existsSync(unterlagenNeu) && readdirSync(unterlagenNeu).some((n) => n.endsWith(".md")) && !existsSync(join(verzeichnis, "anstoss"))) {
+    else if (["neu", "opus"].some((u) => wartet(join(verzeichnis, "unterlagen", u))) && !existsSync(join(verzeichnis, "anstoss"))) {
       anstossSchreiben(verzeichnis, "unterlagen", jetzt);
     }
     neuerZustand.fehler = [...fehler];
     neuerZustand.letzterLauf = { zeit: jetzt.toISOString(), ok };
     delete neuerZustand.laeuftSeit;
     schreiben(join(verzeichnis, "zustand.json"), neuerZustand);
-    writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok, code, exit: r.code, gmail, unterlagen: unterlagen.length, ...mehr }, null, 2));
+    writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok, code, exit: r.code, modell: modellLauf, gmail, unterlagen: unterlagen.length, ...mehr }, null, 2));
     aufraeumen(join(verzeichnis, "laeufe"));
     return { status: ok ? "ok" : code, ...mehr };
   };

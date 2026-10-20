@@ -191,6 +191,48 @@ test("Unterlagen: bis 6 je Lauf (älteste zuerst) in den Arbeitsordner, Begleitn
   assert.deepEqual(fs.readdirSync(neu), [], "150 000 + 1 000 schon");
 });
 
+test("Zusammenfassen auf Wunsch: eigener Lauf mit Opus vor dem gewöhnlichen, nur diese Unterlagen, ohne Mails; Fehlschlag legt sie zurück", async () => {
+  const { laufen, anstossSchreiben } = await laden("lauf.mjs");
+  const { v, skill, claude } = umgebung();
+  const opus = path.join(v, "unterlagen", "opus"), neu = path.join(v, "unterlagen", "neu");
+  for (const [d, c] of [[opus, "a"], [opus, "b"], [opus, "c"], [opus, "d"], [neu, "e"]]) {
+    fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(d, c.repeat(64) + ".md"), `# B110 Folien ${c}
+
+Datei: Unterlagen/B110 Einführung/B110 Folien ${c}.pdf
+Modul: B110 · Art: Folien
+
+---
+[S. 1]
+Text`);
+  }
+  process.env.ATTRAPPE = "begleitnotiz";
+  anstossSchreiben(v, "gmail", JETZT);
+  const r = await laufen({ verzeichnis: v, jetzt: JETZT, claude, skill, holen: async () => ({ ok: false }) });
+  assert.deepEqual([r.status, r.opus.status, r.opus.begleitnotizen], ["ok", "ok", 3]);
+  const [erster, zweiter] = ordner(v).sort();
+  const argumente = (o) => lesen(path.join(v, "laeufe", o, "argumente.json"));
+  const modell = (o) => argumente(o)[argumente(o).indexOf("--model") + 1];
+  assert.deepEqual([modell(erster), modell(zweiter)], ["opus", "sonnet"]);
+  assert.equal(fs.readdirSync(path.join(v, "laeufe", erster, "unterlagen")).length, 3, "höchstens 3 je Opus-Lauf");
+  assert.deepEqual(fs.readdirSync(path.join(v, "laeufe", erster, "roh")), [], "keine Mails im Opus-Lauf");
+  const auftrag = fs.readFileSync(path.join(v, "laeufe", erster, "auftrag.md"), "utf8");
+  assert.match(auftrag, /Gmail durchsuchen: nein/);
+  assert.match(auftrag, /die die Person ausgewählt hat/);
+  assert.ok(!lesen(path.join(v, "laeufe", erster, ".rechte.json")).permissions.allow.some((x) => x.includes("Gmail")), "kein Gmail im Opus-Lauf");
+  assert.ok(fs.existsSync(path.join(v, "laeufe", zweiter, "roh", "uni-postfach", "9.txt")), "die Mails im gewöhnlichen Lauf");
+  assert.equal(lesen(path.join(v, "laeufe", zweiter, "protokoll.json")).gmail, true, "der Anlass gmail gilt weiter");
+  assert.deepEqual(fs.readdirSync(opus), ["d".repeat(64) + ".md"], "eine wartet noch");
+  assert.equal(lesen(path.join(v, "anstoss")).grund, "unterlagen", "nächster Lauf gleich angestoßen");
+
+  // Fehlschlag des Opus-Laufs: Unterlage zurück nach opus/, der gewöhnliche Lauf läuft trotzdem
+  process.env.ATTRAPPE = "limit";
+  const r2 = await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 60e3), claude, skill, holen: async () => ({ ok: false }) });
+  assert.equal(r2.status, "claude-limit");
+  assert.deepEqual(fs.readdirSync(opus), ["d".repeat(64) + ".md"]);
+  delete process.env.ATTRAPPE;
+});
+
 test("Fehlschläge: Rohdaten kommen zurück, Zustand meldet Limit bzw. ungültige Ausgabe", async () => {
   const { laufen, anstossSchreiben } = await laden("lauf.mjs");
   const { v, skill, claude } = umgebung();

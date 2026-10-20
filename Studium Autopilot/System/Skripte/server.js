@@ -32,10 +32,13 @@
 //   über die zentralen Daten (eine Rundmail an alle), weicht die Notiz vom Server, solange du sie nicht angefasst hast (nicht
 //   erledigt, „Meine Notizen“ leer, unberuehrt): Sie kommt in den Papierkorb (zentralWeicht). Neue Termine, die schon vorbei sind (eine Datei
 //   lag lange auf dem Server), legt das Plugin nicht an.
-// Begleitnotizen: Zu Lehrmaterial (Folien, Skript, Übung, Tutorium, Lösung, Altklausur, Literatur), dessen „Das Wichtigste“ noch leer ist und
-//   dessen PDF eine Textfassung hat (volltext.js), schickt der Abruf die Textfassung an den Server (POST /v1/unterlagen, höchstens
-//   9 je Abruf in Anfragen zu 3, neueste PDF zuerst, jede PDF einmal, gemerkt in server.json „gesendet“; aus mit
-//   server_unterlagen: aus in den Einstellungen). Claude
+// Begleitnotizen (seit 0.5.2 auf Wunsch): Der Knopf „Zusammenfassen“ im PDF-Kasten einer Notiz zu Lehrmaterial (Folien, Skript,
+//   Übung, Tutorium, Lösung, Altklausur, Literatur), deren „Das Wichtigste“ noch leer ist, setzt zusammenfassung_angefordert in
+//   ihren Eigenschaften (synchronisiert, also auf jedem Gerät). Der Abruf schickt die Textfassung der PDF (volltext.js) dann an
+//   den Server (POST /v1/unterlagen, modell: opus; höchstens 9 je Abruf in Anfragen zu 3, Gewünschtes zuerst, gemerkt in
+//   server.json „gesendet“ mit Minute), und Claude schreibt sie dort mit Opus in einem eigenen Lauf. Einstellung
+//   server_unterlagen: knopf (Standard, nur auf Wunsch) | alle (dazu jede neue Unterlage ohne Zusammenfassung, mit dem Modell
+//   des Servers) | aus (nichts, auch kein Knopf). Claude
 //   schreibt die Abschnitte, der nächste Abruf trägt sie in die Notiz neben der PDF ein (begleitnotizErgaenzen): fehlende
 //   Abschnitte über dem PDF-Kasten, Platzhalter älterer Notizen ersetzt, „Das Wichtigste“ nur, wenn dort noch nichts steht, bei
 //   „Zu tun“ und „Offene Fragen“ nur, was fehlt; dein Text bleibt. Dieselbe Lieferung nie zweimal (server.json „begleitet“).
@@ -192,6 +195,21 @@ module.exports = function (ctx) {
     return geaendert ? zeilen.join("\n") : null;
   };
 
+  // Knopf „Zusammenfassen“: Wunsch in den Eigenschaften der Notiz (zusammenfassung_angefordert: Zeitpunkt UTC, „2026-10-20T17:50Z“)
+  const WUNSCH = "zusammenfassung_angefordert";
+  const wunschVon = (fm) => {
+    const w = fm && fm[WUNSCH];
+    const s = w instanceof Date ? w.toISOString() : String(w == null ? "" : w).trim();
+    return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) ? s.slice(0, 16) : "";
+  };
+  // Wunsch aus dem Text der Notiz entfernen (nur die Zeile in den Eigenschaften); → Text
+  const wunschWeg = (text) => {
+    const m = /^---\n([\s\S]*?)\n---(\n|$)/.exec(String(text));
+    if (!m) return text;
+    const fm = m[1].split("\n").filter((z) => z.indexOf(WUNSCH + ":") !== 0).join("\n");
+    return fm === m[1] ? text : "---\n" + fm + "\n---" + m[2] + text.slice(m[0].length);
+  };
+
   // To-dos, die nach Zugangsdaten aussehen, gehen nie an den Server (dieselbe Regel prüft server/dienst.mjs noch einmal)
   const GEHEIM = /passw|kennw|password|\bpw\b|zugangscode|\bpin\b/i;
   const hash32 = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
@@ -310,7 +328,7 @@ module.exports = function (ctx) {
         if (Array.isArray(o.laeufe)) z.laeufe = o.laeufe.filter((x) => x && typeof x === "object").slice(-LAEUFE);
         if (Array.isArray(o.hinweise)) z.hinweise = o.hinweise.filter((x) => x && typeof x.text === "string").slice(-HINWEISE);
         const ges = objekt(o.gesendet), beg = objekt(o.begleitet);
-        for (const k of Object.keys(ges).slice(-2000)) if (/^[0-9a-f]{64}$/.test(k)) z.gesendet[k] = String(ges[k]).slice(0, 10);
+        for (const k of Object.keys(ges).slice(-2000)) if (/^[0-9a-f]{64}$/.test(k)) z.gesendet[k] = String(ges[k]).slice(0, 16);
         for (const k of Object.keys(beg).slice(-2000)) if (/^Unterlagen\//.test(k) && k.length <= 240) z.begleitet[k] = String(beg[k]).slice(0, 20);
       }
       hinweisListe = z.hinweise;
@@ -548,9 +566,11 @@ module.exports = function (ctx) {
       const text = pfad ? await io.lesenText(pfad) : null;
       z.begleitet[pdf] = h;
       if (text == null) return false; // PDF verschoben oder Notiz gelöscht: nichts anlegen
-      const neu = begleitnotizErgaenzen(text, sauber, pdf.slice(pdf.lastIndexOf("/") + 1));
-      if (neu == null) return false;
+      const ergaenzt = begleitnotizErgaenzen(text, sauber, pdf.slice(pdf.lastIndexOf("/") + 1));
+      const neu = wunschWeg(ergaenzt == null ? text : ergaenzt); // der Wunsch (Knopf „Zusammenfassen“) ist erledigt
+      if (neu === text) return false;
       await io.schreibenText(pfad, neu);
+      if (ergaenzt == null) return false;
       b.begleitnotizen.push(pfad);
       return true;
     };
@@ -586,24 +606,28 @@ module.exports = function (ctx) {
     };
 
     // Textfassungen von Lehrmaterial ohne Zusammenfassung an den Server (Claude schreibt die Begleitnotiz); je Abruf bis zu 9 in
-    // Anfragen zu 3, neueste PDF zuerst, jede PDF (Kennung = SHA-256) nur einmal. Klappt eine Anfrage nicht (Netz, schon zu viele
+    // Anfragen zu 3, jede PDF (Kennung = SHA-256) nur einmal, eine gewünschte (angefordert, Knopf „Zusammenfassen“) mit Opus und
+    // wieder, wenn sie nach dem letzten Senden noch einmal gewünscht wurde. Klappt eine Anfrage nicht (Netz, schon zu viele
     // warten), kommt der Rest beim nächsten Abruf. → Anzahl
     const unterlagenSenden = async (v, z) => {
       let liste = [];
       try { liste = abh.unterlagen ? await abh.unterlagen({ ohne: z.gesendet, hoechstens: UNTERLAGEN_JE_ABRUF }) : []; } catch (e) { liste = []; }
-      const offen = (Array.isArray(liste) ? liste : []).filter((u) => u && /^[0-9a-f]{64}$/.test(String(u.kennung)) && !z.gesendet[u.kennung] &&
-        ARTEN_SENDEN.indexOf(u.art) >= 0 && typeof u.text === "string" && u.text.trim()).slice(0, UNTERLAGEN_JE_ABRUF)
+      const offen = (Array.isArray(liste) ? liste : []).filter((u) => u && /^[0-9a-f]{64}$/.test(String(u.kennung)) &&
+        ARTEN_SENDEN.indexOf(u.art) >= 0 && typeof u.text === "string" && u.text.trim() &&
+        (u.angefordert ? !(String(z.gesendet[u.kennung] || "") >= String(u.angefordert).slice(0, 16)) : !z.gesendet[u.kennung])).slice(0, UNTERLAGEN_JE_ABRUF)
         .map((u) => ({ datei: String(u.datei), kennung: u.kennung, art: u.art, titel: reinerText(String(u.titel || ""), 160), code: String(u.code || ""),
-          seiten: Number.isInteger(u.seiten) ? u.seiten : 0, text: u.text.slice(0, 400000) }));
+          seiten: Number.isInteger(u.seiten) ? u.seiten : 0, ...(u.angefordert ? { modell: "opus", angefordert: String(u.angefordert).slice(0, 16) } : {}), text: u.text.slice(0, 400000) }));
       let n = 0;
       for (let i = 0; i < offen.length; i += UNTERLAGEN_JE_ANFRAGE) {
         const teil = offen.slice(i, i + UNTERLAGEN_JE_ANFRAGE);
         try {
-          const paket = await verschluesseln(v.schluessel, "unterlagen", { schema: 1, unterlagen: teil });
+          const paket = await verschluesseln(v.schluessel, "unterlagen", { schema: 1, unterlagen: teil.map((u) => { const x = Object.assign({}, u); delete x.angefordert; return x; }) });
           const r = await abh.netz({ url: v.adresse + "/v1/unterlagen", method: "POST", headers: { authorization: "Bearer " + v.zugang, "content-type": "application/json" }, body: JSON.stringify(paket) });
           if (r.status !== 200) break;
         } catch (e) { break; }
-        for (const u of teil) z.gesendet[u.kennung] = abh.jetzt().toISOString().slice(0, 10);
+        // gewünschte mindestens mit der Zeit des Wunsches (geht die Uhr dieses Geräts nach, sonst jeder Abruf noch einmal)
+        const jetzt = abh.jetzt().toISOString().slice(0, 16);
+        for (const u of teil) z.gesendet[u.kennung] = u.angefordert && u.angefordert > jetzt ? u.angefordert : jetzt;
         n += teil.length;
       }
       return n;
@@ -913,12 +937,14 @@ module.exports = function (ctx) {
     return m ? m[1] : "";
   };
   // Lehrmaterial ohne Zusammenfassung: Notiz (typ: unterlage) mit Art aus ARTEN_SENDEN, „Das Wichtigste“ fehlt oder ist leer, die PDF
-  // hat eine Textfassung mit Text (ergebnis text oder gekuerzt). Aus mit server_unterlagen: aus in den Einstellungen.
-  // o: { ohne: { Kennung: Datum } (schon gesendet, gar nicht erst lesen), hoechstens } → neueste PDF zuerst
+  // hat eine Textfassung mit Text (ergebnis text oder gekuerzt). Nur gewünschte (Knopf, mit angefordert), mit
+  // server_unterlagen: alle auch die übrigen; aus: keine.
+  // o: { ohne: { Kennung: Zeit } (schon gesendet), hoechstens } → gewünschte zuerst, sonst neueste PDF zuerst
+  const unterlagenModus = () => { const m = String(einstellungenFm().server_unterlagen || "").toLowerCase(); return m === "alle" || m === "aus" ? m : "knopf"; };
   const unterlagenObs = async (o) => {
     o = o || {};
-    const ohne = o.ohne || {}, hoechstens = o.hoechstens || UNTERLAGEN_JE_ABRUF;
-    if (String(einstellungenFm().server_unterlagen || "").toLowerCase() === "aus") return [];
+    const ohne = o.ohne || {}, hoechstens = o.hoechstens || UNTERLAGEN_JE_ABRUF, modus = unterlagenModus();
+    if (modus === "aus") return [];
     const textVon = {};
     for (const f of app.vault.getMarkdownFiles()) {
       if (f.path.indexOf("Unterlagen/_Volltext/") !== 0) continue;
@@ -929,18 +955,27 @@ module.exports = function (ctx) {
     }
     const aus = [], io = obsidianIo();
     const zeit = (p) => { const f = app.vault.getAbstractFileByPath(p); return f && f.stat ? f.stat.mtime || 0 : 0; };
-    const pdfs = Object.keys(textVon).filter((p) => /\.pdf$/i.test(p) && !ohne[String(textVon[p].fm.pdf_sha256)])
-      .map((p) => ({ p, zeit: zeit(p) })).sort((a, b) => b.zeit - a.zeit || (a.p < b.p ? -1 : 1)).map((x) => x.p);
-    for (const pdfPfad of pdfs) {
-      if (aus.length >= hoechstens) break;
+    const notizVon = (pdfPfad) => {
       const pfad = io.begleitnotiz(pdfPfad);
       const nf = pfad && app.vault.getAbstractFileByPath(pfad);
       const nfm = nf ? (app.metadataCache.getFileCache(nf) || {}).frontmatter || {} : null;
-      if (!nfm || ARTEN_SENDEN.indexOf(nfm.art) < 0) continue;
+      return nfm && ARTEN_SENDEN.indexOf(nfm.art) >= 0 ? { nf, nfm, wunsch: wunschVon(nfm) } : null;
+    };
+    const kandidaten = [];
+    for (const p of Object.keys(textVon)) {
+      if (!/\.pdf$/i.test(p)) continue;
+      const n = notizVon(p), k = String(textVon[p].fm.pdf_sha256);
+      if (!n) continue;
+      if (n.wunsch ? String(ohne[k] || "") >= n.wunsch : modus !== "alle" || ohne[k]) continue;
+      kandidaten.push(Object.assign({ p, zeit: zeit(p) }, n));
+    }
+    kandidaten.sort((a, b) => (b.wunsch ? 1 : 0) - (a.wunsch ? 1 : 0) || b.zeit - a.zeit || (a.p < b.p ? -1 : 1));
+    for (const { p: pdfPfad, nf, nfm, wunsch } of kandidaten) {
+      if (aus.length >= hoechstens) break;
       if (begleitnotizErgaenzen(await app.vault.cachedRead(nf), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) continue; // „Das Wichtigste“ steht schon
       const t = textVon[pdfPfad];
       aus.push({ datei: pdfPfad, kennung: String(t.fm.pdf_sha256), art: nfm.art, titel: String(nfm.titel || nf.basename), code: String(nfm.code || ""),
-        seiten: Number(t.fm.seiten) || 0, text: volltextText(await app.vault.cachedRead(t.f)) });
+        seiten: Number(t.fm.seiten) || 0, ...(wunsch ? { angefordert: wunsch } : {}), text: volltextText(await app.vault.cachedRead(t.f)) });
     }
     return aus;
   };
@@ -1027,6 +1062,33 @@ module.exports = function (ctx) {
   };
   const jetztHolen = async (o) => { const b = await motor().abrufen(Object.assign({ manuell: true }, o)); melden(b); neuZeichnen(); return b; };
 
+  // Knopf „Zusammenfassen“ im PDF-Kasten (pdfkasten.js). Stand einer Notiz: "" (kein Knopf: kein Server, Einstellung aus, kein
+  // Lehrmaterial oder „Das Wichtigste“ steht schon) | "frei" | "angefordert" (gewünscht vor weniger als einem Tag; danach wieder
+  // frei, falls es auf dem Server nicht geklappt hat)
+  const zusammenfassenStand = async (pfad) => {
+    const f = app.vault.getAbstractFileByPath(pfad || "");
+    if (!f || f.children || unterlagenModus() === "aus" || !motor().sichtbar()) return "";
+    const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter || {};
+    if (fm.typ !== "unterlage" || ARTEN_SENDEN.indexOf(fm.art) < 0) return "";
+    if (begleitnotizErgaenzen(await app.vault.cachedRead(f), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) return "";
+    const w = wunschVon(fm);
+    return w && Date.now() - Date.parse(w + ":00Z") < 24 * 60 * MIN ? "angefordert" : "frei";
+  };
+  // Wunsch in die Eigenschaften der Notiz (kommt über den Sync zum Gerät, das mit dem Server spricht), dann gleich abrufen
+  const zusammenfassen = async (pfad) => {
+    const f = app.vault.getAbstractFileByPath(pfad || "");
+    if (!f || f.children) return false;
+    await app.fileManager.processFrontMatter(f, (fm) => { fm[WUNSCH] = new Date().toISOString().slice(0, 16) + "Z"; });
+    const hier = motor().verbunden();
+    ctx.hinweis("Claude fasst die Unterlage mit Opus zusammen. Das dauert einige Minuten, danach steht die Zusammenfassung hier." +
+      (hier ? "" : " Dein Gerät mit dem Server schickt sie beim nächsten Abruf."));
+    if (hier) {
+      // kurz warten, bis Obsidian die Eigenschaften neu gelesen hat, dann senden; das Ergebnis holt ein Abruf in 10 Min.
+      setTimeout(() => { motor().abrufen({}).then(() => { neuZeichnen(); if (plan) plan.spaeter(10 * MIN); }).catch((e) => console.error("server: Zusammenfassen", e)); }, 1500);
+    }
+    return true;
+  };
+
   // Fenster „Eigener Server“ (InfoFenster in verbindungen.js): Stand, Hinweise, letzte Übernahmen, Trennen
   const kopieren = async () => {
     try {
@@ -1105,7 +1167,7 @@ module.exports = function (ctx) {
   ctx.server = {
     erzeugen, aehnlich, adresseNormal, PROMPT, kopieren, begleitnotizErgaenzen, volltextText, taktAus,
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
-    jetztHolen, durchsuchen, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
+    jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
   };
 
   // Gemeinsamer Zeitplan (quellen.js): nach 30 s + Zufall bis 2 Min., dann alle 15 Min., nach Fehlern früher; zurück in der App

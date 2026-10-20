@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.2 – Zusammenfassen auf Wunsch
+
+- **Neu:** Mit eigenem Server tippst du in einer Unterlage auf **Zusammenfassen**, und Claude fasst sie gründlich mit Opus
+  zusammen. Von selbst fasst er nichts mehr zusammen, das spart dein Claude-Limit.
+
 ## 0.5.1 – Server-Einrichtung in neuen Oracle-Konten
 
 - **Behoben:** Stand in Alma ein anderes Tutorium als deins, zeigte der Stundenplan beide, und dein Tutorium meldete eine

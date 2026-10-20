@@ -117,6 +117,15 @@ test("Unterlagen für Begleitnotizen: nur Lehrmaterial mit gültigem Pfad und Ke
   const viele = Array.from({ length: 29 }, (_, i) => Object.assign({}, geprueft[0], { kennung: String(i).padStart(64, "0") }));
   assert.throws(() => unterlagenAblegen(v, viele), (e) => e.status === 429, "höchstens 30 warten");
   assert.equal(unterlagenAblegen(v, viele.slice(0, 28)), 28, "bis 30 geht");
+
+  // Auf Wunsch (Knopf „Zusammenfassen“): modell opus → eigener Ordner für den Opus-Lauf, raus aus dem gewöhnlichen
+  const w = fs.mkdtempSync(path.join(os.tmpdir(), "studium-unterlagen-"));
+  const [gewoehnlich, gewuenscht] = unterlagenPruefen({ schema: 1, unterlagen: [u(), u({ kennung: k("b"), modell: "opus" })] });
+  assert.deepEqual([gewoehnlich.opus, gewuenscht.opus], [false, true]);
+  unterlagenAblegen(w, [gewoehnlich, Object.assign({}, gewoehnlich, { kennung: k("b") })]);
+  unterlagenAblegen(w, [gewuenscht]);
+  assert.deepEqual([fs.readdirSync(path.join(w, "unterlagen", "neu")), fs.readdirSync(path.join(w, "unterlagen", "opus"))], [[k("a") + ".md"], [k("b") + ".md"]]);
+  assert.equal(unterlagenPruefen({ schema: 1, unterlagen: [u({ modell: "haiku" })] })[0].opus, false, "nur opus zählt");
 });
 
 test("Auszug aus dem Tresor: Termine und To-dos einzeln geprüft und gesäubert, nichts mit Zugangsdaten, Grenzen", async () => {
