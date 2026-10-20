@@ -61,7 +61,7 @@ Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel
 | Farbe | Bedeutung | Beispiele |
 |---|---|---|
 | `--eba-good` | erledigt, bestanden, verbunden, angemeldet | Pille „angemeldet“, Haken bei gelesenen Unterlagen |
-| `--eba-warn` | Frist, Anmeldung, etwas ist offen und hat ein Datum | Pille „Frist“, Anmeldezeitraum, „Nacharbeit offen“ |
+| `--eba-warn` | Frist, Anmeldung, etwas ist offen und hat ein Datum; Ausnahme im Stundenplan (Ausfall, anderer Raum, andere Zeit) | Pille „Frist“, Anmeldezeitraum, „Nacharbeit offen“, „Fällt aus“ und „Hörsaal 9 statt ~~Hörsaal 1~~“ in der Woche |
 | `--eba-bad` | Prüfung, Klausur, Fehler, nicht bestanden | Prüfungstag im Kalender und in der Zeitleiste, Prüfungsphase (getönt) im Semesterverlauf und im Studienverlauf |
 | `--eba-info` | Lehre, Zwischentest, offene Fragen | Pille „Lehre“, „Zwischentest“ |
 | neutral (`--eba-text` 6–7 %) | freiwillig, geschätzt, neu, leise Marken | Pille „freiwillig“ |
@@ -105,7 +105,8 @@ Pfad (Label, Links gedämpft) → Titel (`h1`) → höchstens eine Zeile Eckdate
 feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `cssclasses: eba`. Die Übersicht steht in Obsidians
 linker Seitenleiste (seit 0.4.7, `seitenleiste.js`; bis 0.4.6 ein Symbol in der Kopfleiste jeder Notiz). **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
 Begleitnotiz, Termin- und Stundenplan-Notiz bekommen den Pfad (Modul) über dem Titel; ihren Status zeigt schon die Kopf-Karte
-unter dem Titel (`kopf.js`, `eba-core.css` 64.2): Art · Modul (Link) · Tag, rechts der Status-Knopf und „⋯“ (Eigenschaften). Was
+unter dem Titel (`kopf.js`, `eba-core.css` 64.2): Art · Modul (Link) · Tag, rechts der Status-Knopf und „⋯“ (Eigenschaften); bei
+Übung und Tutorium darunter die Unterlagen aus ihrem Bereich (Übung bzw. Tutorium) als Chips wie in der Vorlesungsnotiz. Was
 der Kopf zeigt, steht nicht noch einmal darunter: keine Karte „Eckdaten“, keine Eigenschaften über dem Titel.
 
 ### PDF-Kasten
@@ -173,12 +174,23 @@ ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent, auf dem Dashboar
   (`eba-core.css` Abschnitt 43, für `.eba-modal` und das Eingabefenster `.sa-eingabe`). Fenster haben Rahmen und Rundung wie
   Karten, keinen Schatten.
 - Symbole in Knöpfen nur, wenn alle Knöpfe der Reihe eins haben.
-- **Knopfkacheln** (`> [!eba-neu]`, Seitenanfang): Symbol in getöntem Feld + Titel; auf dem iPhone zwei je Reihe.
+- **Knopfkacheln** (`> [!eba-neu]`, Seitenanfang): Symbol in getöntem Feld + Titel; auf dem iPhone zwei je Reihe. Titel
+  trennen nie, sie brechen nur an Leerzeichen (Abschnitt „iPhone und iPad“).
 
 ### Pille
 `.eba-pill` mit Ton `ok`, `warn`, `bad`, `info`, `akzent` oder `leer`: 12 px, runde Enden, Punkt vorn (Ring bei `leer`). Nur
 für Zustände, höchstens zwei je Zeile. Steht in jeder Zeile derselbe Wert, gehört er in den Gruppenkopf, nicht in die Pille.
 **Wahlpille** (`.eba-mod-status`, `.eba-vorl-status`): Pille mit Pfeil, öffnet ein Menü; für einen Status, den man selbst setzt.
+
+### Ausnahme im Stundenplan
+Fällt eine Lehrveranstaltung aus oder findet sie an einem Tag in einem anderen Raum oder zu einer anderen Zeit statt, muss man es
+sofort sehen, ohne dass der Rest laut wird: Fläche `--eba-warn` 12 %, Kante links 3 px in `--eba-warn`, ein kurzer Text in
+Warnfarbe („Fällt aus“, „Anderer Raum“, „Neuer Raum“, „Andere Zeit“, „Geändert“) und der neue Wert in Warnfarbe, der übliche mit
+„statt“ durchgestrichen daneben („Hörsaal 9 statt ~~Hörsaal 1~~“), wo Platz ist. Bei einem Ausfall ist der Name durchgestrichen.
+Keine Symbole. Ein Ausfall wegen einer Pause oder eines freien Tags ist keine Ausnahme: neutrale Fläche, „Fällt aus“ gedämpft.
+Nie blass (`opacity`): Blass heißt „beginnt erst“. In der Tagesleiste (Dashboard auf dem iPhone) markiert ein kurzer Strich in
+Warnfarbe einen Tag mit Ausnahme; im schmalen Raster (Seite Stundenplan auf dem iPhone) stehen Fläche, Kante und das kurze Wort
+(„Fällt aus“, „statt“) wie im breiten (`eba-core.css` Abschnitt 55).
 
 ### Segmentschalter
 `.eba-ds`: zwei bis vier Möglichkeiten nebeneinander, eine gewählt (Hell · Dunkel · Automatisch). Ohne Untertexte.
@@ -291,8 +303,14 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 
 - Breiten nur über `body.is-phone` (Seitenebene) oder Container-Abfragen (`@container … (max-width: 480px)`), nie `@media`.
 - iPhone: Was nicht täglich gebraucht wird, ist zu (`|handy-zu`). Raster werden einspaltig, Kacheln zweispaltig, Knopfkacheln
-  zwei je Reihe. Die Woche zeigt dort einen Tag (Tagesansicht, unter 520 px Kartenbreite) statt fünf schmaler Spalten.
-- Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`), nur an Silben (`hyphens: auto` mit `lang="de"`).
+  zwei je Reihe. Die Woche auf dem Dashboard zeigt dort einen Tag (Tagesansicht, unter 520 px Kartenbreite) statt fünf schmaler
+  Spalten; die Seite Stundenplan zeigt immer die ganze Woche (seit 20.10.2026), schmal mit Kurzname und gekürztem Raum („HS 1“).
+- Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`). Silbentrennung (`hyphens: auto`) nur in Fließtext;
+  Skripte setzen dafür `lang="de"` an ihren Container. In Markdown gilt die Sprache der Obsidian-Oberfläche (Obsidian setzt
+  `lang` danach): Mit englischer Oberfläche trennt Safari deutsche Wörter nach englischen Regeln („Vorlesung-snotiz“).
+- Knöpfe, Knopf- und Link-Kacheln und Kartentitel, die man antippt, trennen nie (`hyphens: manual`): Sie brechen nur an
+  Leerzeichen („Neue / Vorlesungsnotiz“) und an weichen Trennstrichen (U+00AD) im Text. Passt ein Wort bei 360 px nicht,
+  wird die Schrift etwas kleiner oder die Reihe hat weniger Knöpfe (Container-Abfrage).
 - Die Bearbeitungsansicht (Live Preview) muss aussehen wie die Leseansicht (`eba-core.css` 36c).
 - Einen leeren Block nie mit `display: none` auf dem Abschnitt ausblenden, sondern auf Höhe 0 falten (architektur.md, „Regeln
   für Skript-Autoren“).

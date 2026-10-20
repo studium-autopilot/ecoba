@@ -1,8 +1,9 @@
 // Unterlagen auf der Modulseite (seit 18.10.2026): Codeblock ```eba-unterlagen``` unter „## Unterlagen“ jeder Modulnotiz.
 // Ersetzt die Tabelle „Nach Art“ (Werkzeugleiste, Spaltenköpfe, Gruppenzeile „art Altklausur“, Spalte Art in jeder Zeile).
 // Daten live aus dem metadataCache: Notizen mit typ: unterlage und dem Kürzel des Moduls (oder dem Kürzel im Codeblock).
-//  1. Abschnitte je Art in fester Reihenfolge (Folien, Skripte, Mitschriften, Übungen, Altklausuren, Lösungen, …), Name in der
-//     Mehrzahl; unbekannte Arten mit ihrem eigenen Namen vor „Sonstiges“.
+//  1. Abschnitte je Art in fester Reihenfolge (Folien, Skripte, Mitschriften, Übungen, Tutorium, Altklausuren, Lösungen, …), Name in
+//     der Mehrzahl; unbekannte Arten mit ihrem eigenen Namen vor „Sonstiges“. Tutorium ist ein eigener Bereich (seit 20.10.2026):
+//     alles aus dem Tutorium, auch seine Lösungen, steht dort und nicht bei den Übungen.
 //  2. Lösungen stehen bei ihrer Übung bzw. Altklausur statt als eigene Zeile: gleiche Nummer bei Übungen, sonst gleiche Wörter
 //     im Titel ohne „Lösung“, „Kurzlösung“, „Korrektur“ … (eindeutig, sonst bleibt die Lösung im Abschnitt „Lösungen“).
 //  3. Folien und Übungen nach Nummer (Nummer als eigene Spalte), Altklausuren nach Semester, neueste zuerst.
@@ -16,7 +17,7 @@ module.exports = function (ctx) {
   const LINK = "obsidian://studium-autopilot?aktion=";
   // Reihenfolge und Name des Abschnitts (wie ARTEN in unterlagen.js)
   const ARTEN = [
-    ["Folien", "Folien"], ["Skript", "Skripte"], ["Mitschrift", "Mitschriften"], ["Übung", "Übungen"],
+    ["Folien", "Folien"], ["Skript", "Skripte"], ["Mitschrift", "Mitschriften"], ["Übung", "Übungen"], ["Tutorium", "Tutorium"],
     ["Altklausur", "Altklausuren"], ["Lösung", "Lösungen"], ["Eigene Lösung", "Eigene Lösungen"], ["Literatur", "Literatur"],
     ["Scan", "Scans"], ["Sonstiges", "Sonstiges"],
   ];

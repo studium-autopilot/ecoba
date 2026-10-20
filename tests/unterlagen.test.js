@@ -78,7 +78,6 @@ test("Formelsammlung, FAQ, Vorlagen, Organisatorisches → Sonstiges", () => {
   assert.equal(art("Unterlagen der Vorlesung/Formelsammlung.pdf", "S100"), "Sonstiges");
   assert.equal(art("Formelsammlung Klausur.pdf"), "Sonstiges");
   assert.equal(name("Allgemeines/FAQ_B110_WS2627.pdf"), "B110 Sonstiges FAQ WS 2026-27", "Code mitten im Namen fällt weg");
-  assert.equal(art("Tutoriumsunterlagen/Case Study & Vorlagen/Abgabe_TBX_DATUM_GRUPPE.docx"), "Sonstiges");
   assert.equal(art("Infos zur Klausur.pdf"), "Sonstiges");
   assert.equal(art("Cheat Sheet.pdf"), "Sonstiges");
   assert.equal(art("Organisatorisches.pdf"), "Sonstiges");
@@ -86,6 +85,22 @@ test("Formelsammlung, FAQ, Vorlagen, Organisatorisches → Sonstiges", () => {
   assert.equal(art("VL0 Organisatorisches.pdf"), "Folien");
   assert.equal(art("Vorlesung/Organisatorisches.pdf"), "Folien", "schwacher Hinweis im Namen, Ordner entscheidet");
   assert.equal(art("Organisatorisches/01_Einfuehrung.pdf"), "Folien");
+});
+
+test("Tutorium ist ein eigener Bereich: alles aus Tutoriumsordnern und mit „Tutorium“ im Namen, auch Lösungen und Vorlagen", () => {
+  assert.equal(art("Tutoriumsunterlagen/Case Study & Vorlagen/Abgabe_TBX_DATUM_GRUPPE.docx"), "Tutorium", "Vorlage aus dem Tutorium");
+  assert.equal(name("Tutoriengruppen/Gruppe 4: Dienstag 10 - 12, Hörsaal 11/Aufgabenblatt.pdf", "S100"), "S100 Tutorium Aufgabenblatt",
+    "keine Nummer aus dem Ordner der Gruppe");
+  assert.equal(name("Unterlagen zu den Tutorien/Woche 10/JA_Tutorium10.pdf", "B180"), "B180 Tutorium 10");
+  assert.equal(name("Unterlagen zu den Tutorien/Woche 3/Lösung.pdf", "B180"), "B180 Tutorium 03 Lösung", "Lösung bleibt im Tutorium");
+  assert.equal(nr("Tutoriumsunterlagen/Tutorium 5 | Name | Mittwoch 14-16/Tutoriumsblatt II/Blatt.pdf"), null, "Gruppennummer ist keine Blattnummer");
+  assert.equal(art("Tutorium 3 Folien.pdf"), "Tutorium");
+  assert.equal(art("2026-10-14, 12:15 - 13:45: Vorlesung 4/Aufgaben Tutorium.pdf"), "Tutorium");
+  assert.notEqual(art("Chatbot-Tutor/Die KI-Tutorin zur Vorlesung/Readme.pdf", "E101"), "Tutorium", "Tutorin ist kein Tutorium");
+  assert.equal(art("Software/R Tutorial.pdf", "S110"), "Sonstiges", "Tutorial ist eine Anleitung");
+  assert.equal(art("Übungsmaterialien/Übungsunterlagen/1. Übung/Aufgabenblatt_1.pdf", "S100"), "Übung", "Übung bleibt Übung");
+  assert.equal(name("Übungsgruppen/Gruppe 2/Blatt_3.pdf", "E101"), "E101 Übung 03");
+  assert.equal(nr("Übungsgruppen/Gruppe 2/Blatt.pdf", "E101"), null);
 });
 
 test("Nummern: Kürzel mit Nummer, Tag N, Sitzungs- und Sammelordner", () => {
@@ -97,7 +112,7 @@ test("Nummern: Kürzel mit Nummer, Tag N, Sitzungs- und Sammelordner", () => {
   // ILIAS-Sitzung: Nummer aus dem Ordner nur für Folien, die selbst keine haben
   assert.equal(nr("2026-10-12, 10:15 - 11:45: Vorlesung 4/Handout.pdf"), 4);
   assert.equal(nr("2026-10-12, 10:15 - 11:45: Vorlesung 4/EBWL_3.pdf"), 3, "Nummer im Namen geht vor");
-  assert.equal(nr("2026-10-14, 12:15 - 13:45: Vorlesung 4/Aufgaben Tutorium.pdf"), null, "Übung im Sitzungsordner");
+  assert.equal(nr("2026-10-14, 12:15 - 13:45: Vorlesung 4/Aufgaben Tutorium.pdf"), null, "Tutorium im Sitzungsordner");
   assert.equal(nr("14.10.2026, 12:15 - 13:45: Vorlesung 4/Lösung.pdf"), null);
   // Gliederung eines Sammelordners ist keine Nummer, Ordinalzahl und Themenordner schon
   assert.equal(nr("00 - Vorlesung/Die Folien zur Vorlesung/Datenanalyse.pdf", "S110"), null);

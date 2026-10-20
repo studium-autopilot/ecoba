@@ -61,3 +61,28 @@ test("Besuche ich nicht: zentral über die id, andere Quellen über „<herkunft
   assert.equal(M.naechsteSitzung(alma, new Date("2027-04-20T12:00:00")), null, "keine nächste Sitzung");
   assert.equal(modell("2027-04-20").besuchtNicht(alma), false);
 });
+
+test("Übung und Tutorium im Stundenplan: Unterlagen aus dem eigenen Bereich, neueste Nummer zuerst, ohne Nummer danach, höchstens drei", () => {
+  const u = (code, art, nummer, titel) => ({ f: { basename: `${code} ${art} ${titel}` }, fm: { typ: "unterlage", code, art, nummer, titel } });
+  const unterlagen = [
+    u("X100", "Übung", 1, "Aufgabenblatt Vorkurs"), u("X100", "Übung", "", "Aufgabenkatalog"), u("X100", "Übung", 3, "Integrale"),
+    u("X100", "Lösung", 1, "Kurzlösung"), u("X100", "Folien", 2, "Ableitungen"), u("Y200", "Übung", 4, "Fremdes Modul"),
+    { f: { basename: "X100 Übung 02" }, fm: { typ: "unterlage", code: "X100", art: "übung", nummer: 2 } },
+    { f: { basename: "X100 Übung WS 2026" }, fm: { typ: "unterlage", code: "X100", art: "Übung" } },
+    u("X100", "Tutorium", 1, "Aufgabenblatt"), u("X100", "Tutorium", "", "Vorlage Abgabe"),
+    { f: { basename: "X100 Tutorium 02" }, fm: { typ: "unterlage", code: "X100", art: "Tutorium", nummer: 2 } },
+  ];
+  const titel = (r) => r.blaetter.map((b) => [b.nr, b.titel]);
+  const tut = K.blaetterFuer(serie({ art: "Tutorium" }), unterlagen);
+  assert.equal(tut.art, "Tutorium");
+  assert.deepEqual(titel(tut), [[2, ""], [1, "Aufgabenblatt"], [null, "Vorlage Abgabe"]], "nur der Bereich Tutorium; ohne Titel: Dateiname ohne Kürzel, Art, Nummer");
+  assert.equal(tut.mehr, 0);
+  const ue = K.blaetterFuer(serie({ art: "Übung" }), unterlagen);
+  assert.equal(ue.art, "Übung");
+  assert.deepEqual(titel(ue), [[3, "Integrale"], [2, ""], [1, "Aufgabenblatt Vorkurs"]], "keine Tutoriumsunterlagen bei der Übung");
+  assert.equal(ue.mehr, 2, "die Blätter ohne Nummer kommen über „Alle Unterlagen“");
+  assert.deepEqual(titel(K.blaetterFuer(serie({ art: "Übungsteil" }), unterlagen, 10)).slice(3), [[null, "Aufgabenkatalog"], [null, "WS 2026"]]);
+  assert.equal(K.blaetterFuer(serie({ art: "Vorlesung" }), unterlagen), null, "Vorlesung: keine Chips");
+  assert.equal(K.blaetterFuer(serie({ art: "Tutorium", code: "" }), unterlagen), null, "ohne Modul: nichts");
+  assert.deepEqual(K.blaetterFuer(serie({ art: "Tutorium", code: "Z300" }), unterlagen), { art: "Tutorium", blaetter: [], mehr: 0 });
+});

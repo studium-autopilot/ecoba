@@ -10,7 +10,9 @@
 //     Markierung in der Woche der Prüfung. Nur, wenn das Semester bekannt ist.
 //  3. Als Nächstes: höchstens drei Einträge ab jetzt: die nächste Sitzung jeder Stundenplan-Serie (ctx.modell.naechsteSitzung:
 //     von/bis, ausfall, aenderungen, Pausen, freie Tage, entfaellt) und Termin-Notizen mit diesem Kürzel (ctx.modell.termine),
-//     die nicht erledigt sind. Tipp öffnet die Notiz.
+//     die nicht erledigt sind. Tipp öffnet die Notiz. Seit 20.10.2026 auch Ausfälle der nächsten 14 Tage (ctx.modell.ausfaelle;
+//     vorher übersprang die Liste sie still) mit Pille „fällt aus“, und eine geänderte Sitzung mit Pille „anderer Raum“, „neuer
+//     Raum“, „andere Zeit“ oder „geändert“, neuem Wert in Warnfarbe und dem üblichen durchgestrichen (wie die Woche).
 //  4. Knöpfe: Neues Übungsblatt, Karteikarten lernen (wenn es einen Stapel gibt), Unterlagen einordnen, Suchen.
 //  5. Vorlesungen (seit 19.10.2026): eigener Abschnitt direkt unter dem Modulfeld, über „Unterlagen“, ohne Codeblock in den
 //     Modulnotizen. Deine Vorlesungsnotizen, neueste zuerst, als Zeilen wie die Unterlagen; Name aus ctx.modell.vorlesung
@@ -53,17 +55,26 @@ module.exports = function (ctx) {
   // Titel ohne das Kürzel des Moduls („Tutorien starten: B110 BWL“ → „Tutorien starten: BWL“)
   const titelOhne = (s, code) => text(text(s).split(code + " ").join("").split(" " + code).join(""));
 
-  // Als Nächstes → [{ d, bis, zeit, was, wo, f, art: "sitzung" | "pruefung" | "termin", geschaetzt, geaendert }], höchstens max.
-  // M = ctx.modell; stundenplan: [{ f, fm }]; termine: ctx.modell.termine() (ohne Entfallenes). Prüfungen eines bestandenen oder
-  // anerkannten Moduls und Zwischentests als Termin (blau), nie als Prüfung.
+  // Als Nächstes → [{ d, bis, zeit, was, wo, f, art: "sitzung" | "pruefung" | "termin", geschaetzt, geaendert, ausfall, marke,
+  // raumNeu, raumAlt, zeitNeu, zeitAlt }], höchstens max. M = ctx.modell; stundenplan: [{ f, fm }]; termine: ctx.modell.termine()
+  // (ohne Entfallenes). Prüfungen eines bestandenen oder anerkannten Moduls und Zwischentests als Termin (blau), nie als Prüfung.
+  // Ausfall (ausfall): Sitzung der nächsten 14 Tage, die ausfällt (nicht wegen Pause); marke: kurzer Text der Pille.
   const naechstes = ({ M, code, stundenplan, termine, jetzt, max = 3 }) => {
     const heute = datum(jetzt), aus = [];
     const m = M.modul(code), fertig = !!m && m.fertig;
     for (const s of stundenplan || []) {
       if (!s || !s.fm || text(s.fm.code) !== code) continue;
+      for (const a of M.ausfaelle ? M.ausfaelle(s.fm, jetzt, 14) : []) {
+        aus.push({ d: a.d, bis: null, zeit: a.beginn + (a.ende ? "–" + a.ende : ""), sort: minuten(a.beginn) || 0, was: a.art, wo: "",
+          f: s.f || null, art: "sitzung", geschaetzt: false, geaendert: false, ausfall: true, marke: "fällt aus" });
+      }
       const x = M.naechsteSitzung(s.fm, jetzt);
-      if (x) aus.push({ d: x.d, bis: null, zeit: x.beginn + (x.ende ? "–" + x.ende : ""), sort: minuten(x.beginn) || 0, was: x.art,
-        wo: x.raum, f: s.f || null, art: "sitzung", geschaetzt: false, geaendert: x.geaendert });
+      if (!x) continue;
+      const raumNeu = !!x.raumGeaendert, zeitNeu = !!x.zeitGeaendert;
+      aus.push({ d: x.d, bis: null, zeit: x.beginn + (x.ende ? "–" + x.ende : ""), sort: minuten(x.beginn) || 0, was: x.art,
+        wo: x.raum, f: s.f || null, art: "sitzung", geschaetzt: false, geaendert: x.geaendert, ausfall: false,
+        marke: raumNeu && zeitNeu ? "geändert" : raumNeu ? (x.neuerRaum ? "neuer Raum" : "anderer Raum") : zeitNeu ? "andere Zeit" : "",
+        raumNeu, raumAlt: raumNeu ? x.raumAlt || "" : "", zeitNeu, zeitAlt: zeitNeu ? x.zeitAlt || "" : "" });
     }
     for (const t of termine || []) {
       if (!t || t.code !== code || t.erledigt) continue;
@@ -72,7 +83,8 @@ module.exports = function (ctx) {
       const pruefung = t.kategorie === "Prüfung" && !t.zwischentest;
       if (pruefung && fertig) continue;
       aus.push({ d: d < heute ? heute : d, bis: bis && bis > d ? bis : null, zeit: t.zeit, sort: t.minuten == null ? -1 : t.minuten,
-        was: titelOhne(t.titel, code), wo: t.wo, f: t.f || null, art: pruefung ? "pruefung" : "termin", geschaetzt: t.geschaetzt, geaendert: false });
+        was: titelOhne(t.titel, code), wo: t.wo, f: t.f || null, art: pruefung ? "pruefung" : "termin", geschaetzt: t.geschaetzt, geaendert: false,
+        ausfall: false, marke: "" });
     }
     aus.sort((a, b) => a.d - b.d || a.sort - b.sort);
     return aus.slice(0, max);
@@ -320,13 +332,20 @@ module.exports = function (ctx) {
       const n = box.createDiv({ cls: "eba-mod-naechstes" });
       n.createDiv({ cls: "eba-mod-k", text: "Als Nächstes" });
       for (const x of N) {
-        const z = n.createDiv({ cls: "eba-mod-zeile " + x.art + (x.f ? " eba-mod-tipp" : "") });
+        const z = n.createDiv({ cls: "eba-mod-zeile " + x.art + (x.f ? " eba-mod-tipp" : "") + (x.ausfall ? " ausfall" : "") });
         z.createSpan({ cls: "eba-mod-tag", text: x.bis ? spanne(x.d, x.bis, heute) : tagText(x.d) });
-        z.createSpan({ cls: "eba-mod-zeit", text: x.zeit });
-        const w = z.createSpan({ cls: "eba-mod-was", text: x.was });
+        z.createSpan({ cls: "eba-mod-zeit" + (x.zeitNeu ? " eba-mod-neu" : ""), text: x.zeit });
+        const w = z.createSpan({ cls: "eba-mod-was" });
+        w.createSpan({ cls: "eba-mod-text", text: x.was });
         if (x.geschaetzt) w.createSpan({ cls: "eba-pill leer", text: "geschätzt" });
-        if (x.geaendert) w.createSpan({ cls: "eba-pill warn", text: "geändert" });
-        z.createSpan({ cls: "eba-mod-wo", text: x.wo });
+        if (x.marke) w.createSpan({ cls: "eba-pill warn", text: x.marke });
+        // Ort: bei einer Änderung „statt“ und die übliche Zeit, dann der neue Raum in Warnfarbe und der übliche durchgestrichen
+        const wo = z.createSpan({ cls: "eba-mod-wo" });
+        if (x.zeitAlt) { wo.appendText("statt "); wo.createEl("s", { text: x.zeitAlt }); if (x.wo) wo.appendText(" · "); }
+        if (x.raumNeu && x.wo) {
+          wo.createSpan({ cls: "eba-mod-neu", text: x.wo });
+          if (x.raumAlt) { wo.appendText(" statt "); wo.createEl("s", { text: x.raumAlt }); }
+        } else if (x.wo) wo.appendText(x.wo);
         if (x.f) knopf(z, (e) => oeffnen(x.f, e));
       }
     }

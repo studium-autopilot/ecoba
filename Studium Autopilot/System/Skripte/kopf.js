@@ -24,6 +24,10 @@
 //    Titel des PDF-Kastens, „Öffnen“ in dessen Kopfzeile (pdfkasten.js). Nur Zeilen, die das Plugin selbst geschrieben hat
 //    (eckZeileErzeugt); eigener Text darin bleibt stehen. Nur in Notizen mit PDF-Kasten (hatPdfKasten): Ohne (Word, PowerPoint,
 //    Excel, ZIP, sehr große PDF) ist „Öffnen ↗“ dort der einzige Weg zur Datei, darum bleibt der Kasten; nur „Größe ⇅“ fällt weg.
+// Seit 20.10.2026: Die Stundenplan-Notiz eines Tutoriums zeigt unter dem Kopf die Unterlagen aus dem Bereich Tutorium ihres Moduls,
+// die einer Übung die Übungen, als Chips wie die Vorlesungsnotiz (höchstens drei, neueste Nummer zuerst; Tipp öffnet die
+// Begleitnotiz), bei mehr „Alle Unterlagen“ zur Modulseite. Vorher fand man ein Blatt aus dem Ordner der eigenen Tutoriumsgruppe
+// vom Tutorium aus nicht.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const TYPEN = ["termin", "unterlage", "sq_kurs", "lehrveranstaltung"];
 const SQ = ["geplant", "angemeldet", "zugelassen", "bestanden"];
@@ -55,6 +59,32 @@ const statusVon = (typ, fm, nicht) => {
 };
 // Klasse des Knopfs aus dem Ton (statusArt): gefüllt, getönt, leise oder warm (offen)
 const klasseVon = (s, ton) => (s.leise ? "leise" : ton === "ok" ? (s.fertig ? "fertig" : "zwischen") : "");
+
+// Unterlagen zu einer Übung oder einem Tutorium im Stundenplan, jeweils aus dem eigenen Bereich: Tutorium → Unterlagen der Art
+// „Tutorium“, Übung (auch „Übungsteil“) → Art „Übung“, desselben Moduls. Höchste Nummer zuerst (das neueste Blatt), ohne Nummer
+// (Aufgabenkatalog, Vorlage) danach. lfm = Eigenschaften der Stundenplan-Notiz, unterlagen = [{ f, fm }] → { art, blaetter:
+// [{ f, nr, titel }] (höchstens max), mehr: wie viele darüber hinaus } oder null, wenn die Notiz keine Übung und kein Tutorium ist.
+const bereichVon = (art) => (/tutori/i.test(art) ? "Tutorium" : /(ü|ue)bung/i.test(art) ? "Übung" : "");
+const blaetterFuer = (lfm, unterlagen, max) => {
+  const code = txt(lfm && lfm.code), bereich = bereichVon(txt(lfm && lfm.art));
+  if (!code || !bereich) return null;
+  const nummer = (v) => (v === "" || v == null || !isFinite(Number(v)) ? null : Number(v));
+  // Ohne Titel der Dateiname ohne Kürzel, Art und Nummer („S100 Übung 01 Blatt“ → „Blatt“), wie auf der Modulseite
+  const ausName = (b) => {
+    const w = txt(b).split(/\s+/).filter(Boolean);
+    if (w[0] === code) w.shift();
+    if (w.length && w[0].toLowerCase() === bereich.toLowerCase()) w.shift();
+    if (w.length && /^\d{1,3}$/.test(w[0])) w.shift();
+    return w.join(" ");
+  };
+  const alle = (unterlagen || []).filter((x) => x && x.fm && txt(x.fm.typ) === "unterlage" && txt(x.fm.code) === code
+    && txt(x.fm.art).toLowerCase() === bereich.toLowerCase())
+    .map((x) => ({ f: x.f, nr: nummer(x.fm.nummer), titel: txt(x.fm.titel) || ausName(x.f && x.f.basename) }));
+  alle.sort((a, b) => (a.nr == null) - (b.nr == null) || (b.nr || 0) - (a.nr || 0)
+    || a.titel.localeCompare(b.titel, "de", { numeric: true, sensitivity: "base" }));
+  const n = max == null ? 3 : max;
+  return { art: bereich, blaetter: alle.slice(0, n), mehr: Math.max(0, alle.length - n) };
+};
 
 // Leere Abschnitte: „## …“ mit nichts als leeren Punkten und Leerzeilen darunter, bis zur nächsten Überschrift (Ebene 1 oder 2), zum
 // Ende oder, wenn leere Punkte darin stehen, bis zu einem Kasten des Plugins („> [!eba-…“) oder einer Einbettung. Ohne Punkte zählt ein
@@ -127,6 +157,8 @@ module.exports = function (ctx) {
     status: [["circle", { cx: 12, cy: 12, r: 9 }]],
     fertig: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "m8 12.5 2.6 2.5L16 9.5" }]],
     pfeil: [["path", { d: "m6 9 6 6 6-6" }]],
+    blatt: [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8" }]],
+    ordner: [["path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" }]],
   };
   const symbol = (eltern, name) => {
     const NS = "http://www.w3.org/2000/svg", doc = eltern.ownerDocument;
@@ -222,6 +254,27 @@ module.exports = function (ctx) {
     if (i < teile.length - 1) lab.appendText(" · " + teile.slice(i + 1).join(" · "));
   };
 
+  // Link-Chip wie in der Kopf-Karte der Vorlesungsnotiz (vorlesung.js); öffnet das Ziel, ohne in der Bearbeitungsansicht in den
+  // Quelltext zu springen
+  const chip = (eltern, ziel, sym, fett, text, quelle) => {
+    const a = eltern.createEl("a", { cls: "internal-link eba-vorl-chip " + sym, attr: { href: ziel.path, "data-href": ziel.path } });
+    symbol(a, sym);
+    a.createEl("b", { text: fett });
+    if (text) a.createSpan({ text });
+    a.addEventListener("mousedown", (e) => e.stopPropagation());
+    a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(ziel, { quelle, neu: e.ctrlKey || e.metaKey }); });
+    return a;
+  };
+  // Übung oder Tutorium im Stundenplan: die Unterlagen aus ihrem Bereich unter dem Kopf (neueste zuerst), sonst nichts
+  const blaetterZeichnen = (karte, f, fm) => {
+    const u = blaetterFuer(fm, app.vault.getMarkdownFiles().map((x) => ({ f: x, fm: fmVon(x) })).filter((x) => x.fm.typ === "unterlage"));
+    if (!u || !u.blaetter.length) return;
+    const links = karte.createDiv({ cls: "eba-vorl-links", attr: { "aria-label": u.art === "Tutorium" ? "Unterlagen zum Tutorium" : "Übungsblätter" } });
+    for (const b of u.blaetter) chip(links, b.f, "blatt", b.nr == null ? u.art : u.art + " " + pad(b.nr), b.titel, f.path);
+    const modul = u.mehr ? modulVon(f, fm) : null;
+    if (modul) chip(links, modul, "ordner", "Alle Unterlagen", "", f.path);
+  };
+
   const angezeigt = new Set(); // { el, pfad } aller gezeichneten Karten (Lese- und Bearbeitungsansicht), zum Neuzeichnen
   const zeichnen = (el, f) => {
     const fm = fmVon(f), typ = txt(fm.typ);
@@ -231,7 +284,8 @@ module.exports = function (ctx) {
     const nicht = typ === "lehrveranstaltung" && !!(M() && M().besuchtNicht && M().besuchtNicht(fm));
     const s = statusVon(typ, fm, nicht);
     const ton = M() && M().statusArt ? M().statusArt(typ, s.wort) : "leer";
-    const kopf = el.createDiv({ cls: "eba-vorl-karte" }).createDiv({ cls: "eba-vorl-kopf" });
+    const karte = el.createDiv({ cls: "eba-vorl-karte" });
+    const kopf = karte.createDiv({ cls: "eba-vorl-kopf" });
     labelZeichnen(kopf.createSpan({ cls: "eba-vorl-label" }), labelVon(typ, f, fm), txt(fm.code), modulVon(f, fm));
     const b = kopf.createEl("button", { cls: ("eba-vorl-status " + klasseVon(s, ton)).trim(),
       attr: { type: "button", "aria-label": s.menue ? `Stand: ${s.text}. Ändern` : s.text, "aria-pressed": s.menue ? null : String(!!s.fertig) } });
@@ -245,6 +299,7 @@ module.exports = function (ctx) {
       setzen(typ, f, s, s.neu).catch((x) => console.error("Kopf", x));
     });
     mehr(kopf, f);
+    if (typ === "lehrveranstaltung") blaetterZeichnen(karte, f, fm);
   };
   const merken = (el, f) => {
     angezeigt.add({ el, pfad: f.path });
@@ -412,7 +467,12 @@ module.exports = function (ctx) {
     try { editorErweiterung(); } catch (e) { console.error("Kopf Editor", e); }
     try { leerErweiterung(); } catch (e) { console.error("Kopf Editor leer", e); }
     const bald = ctx.entprellen(() => neu(null), 300);
-    ctx.an(app.metadataCache, "changed", (f) => { if (f && (f.path === EINSTELLUNGEN || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald(); });
+    // Neu zeichnen bei Änderungen an einer gezeigten Notiz, den Einstellungen (Besuche ich nicht) oder einer Unterlage (Chips unter Übung und Tutorium)
+    const unterlage = (cache) => !!(cache && cache.frontmatter && cache.frontmatter.typ === "unterlage");
+    ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
+      if (f && (f.path === EINSTELLUNGEN || unterlage(cache) || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald();
+    });
+    ctx.an(app.metadataCache, "deleted", (_f, vorher) => { if (unterlage(vorher)) bald(); });
     ctx.an(app.workspace, "file-open", eigenschaftenAnwenden);
     ctx.an(app.workspace, "layout-change", eigenschaftenAnwenden);
     eigenschaftenAnwenden();
@@ -422,10 +482,11 @@ module.exports = function (ctx) {
     for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view && l.view.containerEl) l.view.containerEl.classList.remove("eba-eigenschaften");
   };
 
-  return { registrieren, abmelden, statusVon, klasseVon, labelVon, zeichnen, TYPEN, leereAbschnitte, eckZeileErzeugt };
+  return { registrieren, abmelden, statusVon, klasseVon, labelVon, zeichnen, TYPEN, leereAbschnitte, eckZeileErzeugt, blaetterFuer };
 };
 module.exports.statusVon = statusVon;
 module.exports.klasseVon = klasseVon;
+module.exports.blaetterFuer = blaetterFuer;
 module.exports.TYPEN = TYPEN;
 module.exports.leereAbschnitte = leereAbschnitte;
 module.exports.eckZeileErzeugt = eckZeileErzeugt;

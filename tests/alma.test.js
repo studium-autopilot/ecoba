@@ -400,3 +400,118 @@ test("Fristen: hängt schon die Sperre (Tresor antwortet nicht), endet der Abruf
   assert.equal(t.A.status().fehler, "Alma hat nicht rechtzeitig geantwortet. Neuer Versuch später.");
   assert.equal(t.A.status().laeuft, false);
 });
+
+// Raum je Termin, verschobene und abgesagte Termine, 14-täglich, Verlegung (seit 20.10.2026).
+// Bis dahin galt der häufigste Raum aller Termine, ein einzelner Termin in einem anderen
+// Raum ging verloren, ein auf eine andere Uhrzeit verschobener Termin wurde Ausfall plus eigene Notiz. Nur ausgedachte Daten.
+const ve = (felder) => ["BEGIN:VEVENT", ...Object.entries(felder).map(([k, v]) => k + (k === "EXDATE" ? ";TZID=Europe/Berlin:" : ":") + v), "END:VEVENT"].join("\n");
+const notizVon = (t, muster) => { const p = Object.keys(t.fm).filter((x) => muster.test(x)); assert.equal(p.length, 1, p.join(", ")); return t.fm[p[0]]; };
+
+test("Raum je Termin: einzelner Termin in anderem Raum wird eine Änderung, Raum der Serie bleibt, keine weitere Notiz", async () => {
+  const t = tresor();
+  await t.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "r1", SUMMARY: "X410 Beispiel Vorlesung", DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;COUNT=5", LOCATION: "Hörsaal 1" }),
+    ve({ UID: "r1", "RECURRENCE-ID": "20261102T100000", SUMMARY: "X410 Beispiel Vorlesung", DTSTART: "20261102T100000", DTEND: "20261102T120000", LOCATION: "Hörsaal 21" })) });
+  const n = notizVon(t, /X410/);
+  assert.deepEqual([n.raum, n.von, n.bis, n.ausfall, n.aenderungen], ["Hörsaal 1", "2026-10-19", "2026-11-16", [], ["2026-11-02|10:00|12:00|Hörsaal 21"]]);
+  assert.equal(n.raum_seit, undefined, "keine Verlegung");
+});
+
+test("Raum der Serie = Raum der kommenden Termine: dauerhafte Verlegung mit Datum und altem Raum, auch wenn der alte häufiger war", async () => {
+  const t = tresor();
+  const ics = kalender(
+    ve({ UID: "a", SUMMARY: "X420 Beispiel Vorlesung", DTSTART: "20261021T100000", DTEND: "20261021T120000", RRULE: "FREQ=WEEKLY;COUNT=6", LOCATION: "Hörsaal 1" }),
+    ve({ UID: "b", SUMMARY: "X420 Beispiel Vorlesung", DTSTART: "20261202T100000", DTEND: "20261202T120000", RRULE: "FREQ=WEEKLY;COUNT=3", LOCATION: "Hörsaal 21, Kupferbau" }));
+  await t.A.aktualisieren({ still: true, text: ics });
+  const n = notizVon(t, /X420/);
+  assert.deepEqual([n.raum, n.raum_vorher, n.raum_seit, n.aenderungen, n.alma_raum], ["Hörsaal 21, Kupferbau", "Hörsaal 1", "2026-12-02", undefined, "Hörsaal 21, Kupferbau"]);
+  assert.deepEqual([n.von, n.bis, n.ausfall], ["2026-10-21", "2026-12-16", []]);
+  // nur anders geschrieben: keine Verlegung
+  const u = tresor();
+  await u.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "a", SUMMARY: "X421 Beispiel Vorlesung", DTSTART: "20261021T100000", DTEND: "20261021T120000", RRULE: "FREQ=WEEKLY;COUNT=3", LOCATION: "Kupferbau HS 25" }),
+    ve({ UID: "b", SUMMARY: "X421 Beispiel Vorlesung", DTSTART: "20261111T100000", DTEND: "20261111T120000", RRULE: "FREQ=WEEKLY;COUNT=3", LOCATION: "Hörsaal 25 Kupferbau" })) });
+  assert.equal(notizVon(u, /X421/).raum_seit, undefined);
+});
+
+test("Alma nennt für die ganze Serie einen neuen Raum: Verlegung ab dem nächsten Termin, bleibt bei weiteren Abrufen, Kopfzeile zieht mit", async () => {
+  const t = tresor({ sperre: true, heute: "2026-10-27" });
+  const serie = (raum) => kalender(ve({ UID: "c", SUMMARY: "X430 Beispiel Vorlesung", DTSTART: "20261021T100000", DTEND: "20261021T120000", RRULE: "FREQ=WEEKLY;COUNT=8", LOCATION: raum }));
+  await t.A.aktualisieren({ still: true, text: serie("Hörsaal 1") });
+  const p = Object.keys(t.fm).find((x) => /X430/.test(x));
+  assert.equal(t.fm[p].raum_seit, undefined);
+  await t.A.aktualisieren({ still: true, text: serie("Hörsaal 21, Kupferbau") });
+  assert.deepEqual([t.fm[p].raum, t.fm[p].raum_vorher, t.fm[p].raum_seit], ["Hörsaal 21, Kupferbau", "Hörsaal 1", "2026-10-28"]);
+  assert.match(t.text[p], /^Mittwochs, 10:00–12:00 · Hörsaal 21, Kupferbau$/m);
+  const b = await t.A.aktualisieren({ still: true, text: serie("Hörsaal 21, Kupferbau") });
+  assert.deepEqual([b.gleich, b.geaendert], [1, 0], "bleibt, ohne neu zu schreiben");
+  assert.equal(t.fm[p].raum_seit, "2026-10-28");
+});
+
+test("Erste Verknüpfung mit anderem Raum: dein Raum wird der alte, ab dem nächsten Termin gilt Almas; c.t. auch für Änderungen", async () => {
+  const t = tresor({ heute: "2026-10-20" });
+  const hand = "Stundenplan/Mi 10.15 X440 Vorlesung.md";
+  t.fm[hand] = { typ: "lehrveranstaltung", code: "X440", art: "Vorlesung", wochentag: 3, beginn: "10:15", ende: "11:45", semester: SEM, raum: "Hörsaal 1" };
+  t.text[hand] = "---\n---\n\n# X440 · Vorlesung\n";
+  await t.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "d", SUMMARY: "X440 Beispiel Vorlesung", DTSTART: "20261014T100000", DTEND: "20261014T120000", RRULE: "FREQ=WEEKLY;COUNT=6", LOCATION: "Hörsaal 21" }),
+    ve({ UID: "d", "RECURRENCE-ID": "20261104T100000", SUMMARY: "X440 Beispiel Vorlesung", DTSTART: "20261104T100000", DTEND: "20261104T120000", LOCATION: "Audimax" })) });
+  const n = t.fm[hand];
+  assert.deepEqual([n.beginn, n.ende, n.raum, n.raum_vorher, n.raum_seit], ["10:15", "11:45", "Hörsaal 21", "Hörsaal 1", "2026-10-21"]);
+  assert.deepEqual(n.aenderungen, ["2026-11-04|10:15|11:45|Audimax"], "c.t. wie die Serie");
+});
+
+test("Verschobener Termin (andere Uhrzeit, gleicher Tag): Änderung der Serie statt Ausfall und eigener Notiz; nicht eindeutig: wie bisher", async () => {
+  const t = tresor();
+  await t.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "e", SUMMARY: "X450 Beispiel Übung", DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;COUNT=5", EXDATE: "20261102T100000", LOCATION: "Raum 5" }),
+    ve({ UID: "f", SUMMARY: "X450 Beispiel Übung", DTSTART: "20261102T140000", DTEND: "20261102T160000", LOCATION: "Raum 7" })) });
+  assert.equal(Object.keys(t.fm).filter((x) => /X450/.test(x)).length, 1, "keine eigene Notiz für den verschobenen Termin");
+  const n = notizVon(t, /X450/);
+  assert.deepEqual([n.ausfall, n.aenderungen, n.einzeltermin], [[], ["2026-11-02|14:00|16:00|Raum 7"], false]);
+  // ohne Raum: der Raum der Serie; auch der erste Termin
+  const v = tresor();
+  await v.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "e", SUMMARY: "X451 Beispiel Übung", DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;COUNT=5", EXDATE: "20261019T100000", LOCATION: "Raum 5" }),
+    ve({ UID: "f", SUMMARY: "X451 Beispiel Übung", DTSTART: "20261019T080000", DTEND: "20261019T100000" })) });
+  assert.deepEqual([notizVon(v, /X451/).von, notizVon(v, /X451/).aenderungen], ["2026-10-19", ["2026-10-19|08:00|10:00|Raum 5"]]);
+  // zwei Serien gleichen Titels fehlen am selben Tag: nicht eindeutig, Ausfall und eigene Notiz wie bisher
+  const u = tresor();
+  await u.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "g", SUMMARY: "X452 Beispiel Übung", DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;COUNT=5", EXDATE: "20261102T100000" }),
+    ve({ UID: "h", SUMMARY: "X452 Beispiel Übung", DTSTART: "20261019T140000", DTEND: "20261019T160000", RRULE: "FREQ=WEEKLY;COUNT=5", EXDATE: "20261102T140000" }),
+    ve({ UID: "i", SUMMARY: "X452 Beispiel Übung", DTSTART: "20261102T170000", DTEND: "20261102T190000" })) });
+  assert.equal(Object.keys(u.fm).filter((x) => /X452/.test(x)).length, 3);
+  assert.ok(Object.keys(u.fm).filter((x) => /X452/.test(x)).every((x) => !u.fm[x].aenderungen));
+});
+
+test("Abgesagt (STATUS:CANCELLED) steht als Ausfall in der Serie, auch am Anfang; ganz abgesagt fehlt wie bisher", async () => {
+  const t = tresor();
+  await t.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "j", SUMMARY: "X460 Beispiel Vorlesung", DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;COUNT=4" }),
+    ve({ UID: "j", "RECURRENCE-ID": "20261019T100000", SUMMARY: "X460 Beispiel Vorlesung", DTSTART: "20261019T100000", DTEND: "20261019T120000", STATUS: "CANCELLED" }),
+    ve({ UID: "k", SUMMARY: "X461 Beispiel Vorlesung", DTSTART: "20261020T100000", DTEND: "20261020T120000", STATUS: "CANCELLED" })) });
+  const n = notizVon(t, /X460/);
+  assert.deepEqual([n.von, n.bis, n.ausfall], ["2026-10-19", "2026-11-09", ["2026-10-19"]]);
+  assert.equal(Object.keys(t.fm).filter((x) => /X461/.test(x)).length, 0);
+});
+
+test("14-täglich: die Wochen dazwischen sind kein Ausfall (rhythmus), ein fehlender Termin im Rhythmus schon", async () => {
+  const t = tresor();
+  await t.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "l", SUMMARY: "X470 Beispiel Übung", DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;INTERVAL=2;COUNT=5", EXDATE: "20261116T100000" }),
+    ve({ UID: "m", SUMMARY: "X471 Beispiel Übung", DTSTART: "20261020T100000", DTEND: "20261020T120000", RRULE: "FREQ=WEEKLY;INTERVAL=2;COUNT=2" })) });
+  const n = notizVon(t, /X470/);
+  assert.deepEqual([n.rhythmus, n.ausfall, n.von, n.bis], ["14-täglich", ["2026-11-16"], "2026-10-19", "2026-12-14"]);
+  assert.deepEqual([notizVon(t, /X471/).rhythmus, notizVon(t, /X471/).ausfall], [undefined, ["2026-10-27"]], "zwei Termine: nicht sicher, wie bisher");
+});
+
+test("Hülle eines eigenen Uni-Abgleichs (ohne Bibliotheken): Änderungen und Verlegung kommen nur über die Eigenschaften", async () => {
+  const t = tresor({ ohneBibliotheken: true });
+  await t.A.aktualisieren({ still: true, text: kalender(
+    ve({ UID: "a", SUMMARY: "X480 Beispiel Vorlesung", DTSTART: "20261021T100000", DTEND: "20261021T120000", RRULE: "FREQ=WEEKLY;COUNT=3", LOCATION: "Hörsaal 1" }),
+    ve({ UID: "b", SUMMARY: "X480 Beispiel Vorlesung", DTSTART: "20261111T100000", DTEND: "20261111T120000", RRULE: "FREQ=WEEKLY;COUNT=3", LOCATION: "Hörsaal 21" })) });
+  const n = notizVon(t, /X480/);
+  assert.deepEqual([n.raum, n.raum_vorher, n.raum_seit], ["Hörsaal 21", "Hörsaal 1", "2026-11-11"]);
+  assert.deepEqual(Object.keys(t.dateien), []);
+});

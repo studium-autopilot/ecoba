@@ -560,12 +560,20 @@ module.exports = function (ctx) {
 
   // ---------- Stundenplan: findet eine Sitzung statt? ----------
   // fm: Notiz typ lehrveranstaltung (wochentag 1 = Montag, von, bis, ausfall[], aenderungen["Datum|Beginn|Ende|Raum"], einzeltermin,
-  // entfaellt, herkunft/zentral_id), tag: ISO. → { statt, grund, name, beginn, ende, raum, geaendert }. grund: "" (findet statt),
-  // "entfaellt", "ausgeblendet" (Besuche ich nicht), "anderer Tag", "ausserhalb" (vor von, nach bis), "ausfall", "pause", "frei"
-  // (vorlesungsfreier Tag, z. B. Christi Himmelfahrt). name: Name der Pause bzw. des freien Tags.
+  // entfaellt, herkunft/zentral_id), tag: ISO. → { statt, grund, name, beginn, ende, raum, geaendert, raumGeaendert, raumAlt,
+  // zeitGeaendert, zeitAlt }. grund: "" (findet statt), "entfaellt", "ausgeblendet" (Besuche ich nicht), "anderer Tag",
+  // "ausserhalb" (vor von, nach bis), "pause", "frei" (vorlesungsfreier Tag, z. B. Christi Himmelfahrt), "ausfall". name: Name der
+  // Pause bzw. des freien Tags. Pause und freier Tag gehen dem Ausfall vor (seit 20.10.2026): Alma trägt die Weihnachtspause auch
+  // als Ausfall ein, der Grund ist aber die Pause, nicht diese Lehrveranstaltung. Nur grund "ausfall" ist eine Ausnahme dieser
+  // Lehrveranstaltung (die Woche zeigt sie in Warnfarbe). Änderung (aenderungen an diesem Tag): neue Zeit und neuer Raum, dazu was
+  // sich geändert hat und der übliche Wert davor (raumAlt, zeitAlt „10:15–11:45“), damit die Anzeige „HS 9 statt HS 1“ sagen kann.
+  // Dauerhafte Verlegung (raum_seit, raum_vorher; alma.js): Vor raum_seit gilt raum_vorher als üblicher Raum; die ersten zwei
+  // Wochen ab raum_seit ist der Raum neu (neuerRaum, raumAlt = raum_vorher). rhythmus „14-täglich“: nur jede zweite Woche ab von,
+  // dazwischen „anderer Tag“.
   const findetStatt = (fm, tag) => {
     const d = isoAus(tag);
-    const aus = { statt: false, grund: "", name: "", beginn: uhrText(fm && fm.beginn), ende: uhrText(fm && fm.ende), raum: text(fm && fm.raum), geaendert: false };
+    const aus = { statt: false, grund: "", name: "", beginn: uhrText(fm && fm.beginn), ende: uhrText(fm && fm.ende), raum: text(fm && fm.raum), geaendert: false,
+      raumGeaendert: false, raumAlt: "", zeitGeaendert: false, zeitAlt: "", neuerRaum: false };
     if (!fm || !d) { aus.grund = "anderer Tag"; return aus; }
     const D = daten();
     const nein = (grund, name) => Object.assign(aus, { grund, name: name || "" });
@@ -575,18 +583,27 @@ module.exports = function (ctx) {
     if (fm.einzeltermin === true) { if (von && d !== von) return nein("anderer Tag"); }
     else if (Number(fm.wochentag) !== wochentagVon(d)) return nein("anderer Tag");
     if ((von && d < von) || (bis && d > bis)) return nein("ausserhalb");
-    if (liste(fm.ausfall).map(isoAus).indexOf(d) >= 0) return nein("ausfall");
+    if (fm.einzeltermin !== true && text(fm.rhythmus) === "14-täglich" && von && Math.round((tagObj(d) - tagObj(von)) / 864e5 / 7) % 2) return nein("anderer Tag");
     const p = D.pausen.find((x) => x.von <= d && d <= x.bis);
     if (p) return nein("pause", p.name);
     const frei = D.freieTage.find((x) => x.datum === d);
     if (frei) return nein("frei", frei.name);
+    if (liste(fm.ausfall).map(isoAus).indexOf(d) >= 0) return nein("ausfall");
+    const seit = s10(fm.raum_seit), vorher = text(fm.raum_vorher);
+    if (seit && vorher && d < seit) aus.raum = vorher;
     const a = liste(fm.aenderungen).map((x) => String(x).split("|")).find((x) => x.length >= 3 && isoAus(x[0]) === d);
-    if (a) Object.assign(aus, { beginn: uhrText(a[1]) || aus.beginn, ende: uhrText(a[2]) || aus.ende, raum: text(a[3]) || aus.raum, geaendert: true });
+    if (a) {
+      const neu = { beginn: uhrText(a[1]) || aus.beginn, ende: uhrText(a[2]) || aus.ende, raum: text(a[3]) || aus.raum };
+      const zeitGeaendert = neu.beginn !== aus.beginn || neu.ende !== aus.ende, raumGeaendert = neu.raum !== aus.raum;
+      Object.assign(aus, { raumGeaendert, raumAlt: raumGeaendert ? aus.raum : "", zeitGeaendert,
+        zeitAlt: zeitGeaendert ? aus.beginn + (aus.ende ? "–" + aus.ende : "") : "" }, neu, { geaendert: true });
+    }
+    if (seit && vorher && !aus.raumGeaendert && d >= seit && d < plusTage(seit, 14) && vorher !== aus.raum) Object.assign(aus, { neuerRaum: true, raumGeaendert: true, raumAlt: vorher });
     aus.statt = true;
     return aus;
   };
   // Nächste Sitzung einer Serie ab jetzt (heute nur, solange sie nicht vorbei ist) → { d (Date), datum, beginn, ende, raum, art,
-  // geaendert } | null
+  // geaendert, raumGeaendert, raumAlt, zeitGeaendert, zeitAlt, neuerRaum } | null
   const naechsteSitzung = (fm, jetzt, tage) => {
     const j = jetzt || ctx.date.jetzt(), heute = isoVon(j), nun = j.getHours() * 60 + j.getMinutes();
     for (let i = 0; i <= (tage == null ? 35 : tage); i++) {
@@ -596,9 +613,26 @@ module.exports = function (ctx) {
       if (i === 0 && schluss != null && schluss <= nun) continue;
       // Art wie im Wochenraster: „Veranstaltung“ (Alma ohne erkannte Art) und leer heißen Vorlesung; „Veranstaltung“ nur für Events
       const art = text(fm.art);
-      return { d: tagObj(d), datum: d, beginn: s.beginn, ende: s.ende, raum: s.raum, art: !art || art === "Veranstaltung" ? "Vorlesung" : art, geaendert: s.geaendert };
+      return { d: tagObj(d), datum: d, beginn: s.beginn, ende: s.ende, raum: s.raum, art: !art || art === "Veranstaltung" ? "Vorlesung" : art, geaendert: s.geaendert,
+        raumGeaendert: s.raumGeaendert, raumAlt: s.raumAlt, zeitGeaendert: s.zeitGeaendert, zeitAlt: s.zeitAlt, neuerRaum: s.neuerRaum };
     }
     return null;
+  };
+
+  // Ausfälle dieser Lehrveranstaltung (grund „ausfall“, nicht Pause oder freier Tag) in den nächsten tage Tagen (Standard 14) ab
+  // heute, heute nur, solange die Sitzung nicht vorbei ist (seit 20.10.2026, „Als Nächstes“ der Modulseite: naechsteSitzung
+  // überspringt sie) → [{ d (Date), datum, beginn, ende, art }]
+  const ausfaelle = (fm, jetzt, tage) => {
+    const j = jetzt || ctx.date.jetzt(), heute = isoVon(j), nun = j.getHours() * 60 + j.getMinutes(), aus = [];
+    const art = text(fm && fm.art);
+    for (let i = 0; i < (tage == null ? 14 : tage); i++) {
+      const d = plusTage(heute, i), s = findetStatt(fm, d);
+      if (s.grund !== "ausfall") continue;
+      const schluss = minutenVon(s.ende || s.beginn);
+      if (i === 0 && schluss != null && schluss <= nun) continue;
+      aus.push({ d: tagObj(d), datum: d, beginn: s.beginn, ende: s.ende, art: !art || art === "Veranstaltung" ? "Vorlesung" : art });
+    }
+    return aus;
   };
 
   // ---------- Plan, ECTS, Noten, Status ----------
@@ -898,7 +932,7 @@ module.exports = function (ctx) {
     beiAenderung, protokoll, woche, vorlesungswochen, semesterFuer,
     // Fachmodell (docs/architektur.md „Fachmodell“)
     zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, opFrist, kalenderwoche, planwoche, findetStatt,
-    naechsteSitzung, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
+    naechsteSitzung, ausfaelle, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
     vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer,
   };
   ctx.modell = api;

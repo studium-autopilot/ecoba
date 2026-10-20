@@ -20,6 +20,11 @@
 //   entkoppelt Alma nie: Fehlen sie in Alma, steht alma_fehlt in der Notiz und ein Punkt in „Bitte prüfen“. Neu in Alma, aber
 //   schon vorbei → keine Notiz. Erste Verknüpfung einer Notiz, deren Raum mehr als in der Schreibweise von Alma abweicht →
 //   Almas Raum. (Diese drei Regeln stammen aus der Hülle stundenplan-sync.mjs eines eigenen Uni-Abgleichs.)
+// Raum, Änderungen und Ausfälle je Termin (seit 20.10.2026, gruppieren): Raum der Serie ist der Raum der kommenden Termine (vorher
+//   der häufigste aller Termine), ein einzelner Termin in einem anderen Raum und ein auf eine andere Uhrzeit verschobener Termin
+//   stehen in aenderungen („Datum|Beginn|Ende|Raum“, c.t. wie die Notiz), abgesagte Termine in ausfall, 14-tägliche Serien haben
+//   rhythmus statt eines Ausfalls jede zweite Woche. Zieht die Serie dauerhaft um (zwei Läufe im Kalender, oder ein Abruf ändert
+//   den Raum der Notiz), stehen raum_seit und raum_vorher in der Notiz; die Woche zeigt dann zwei Wochen lang „Neuer Raum“.
 // Läuft das Skript außerhalb des Plugins (eine Hülle ruft nur aktualisieren({ text }) mit window.app aus Dateien und ohne
 //   ctx.user.sperre/quellen), gibt es keine Sperre, keine Grabsteine und keinen Meldekanal; geschrieben wird dann nur über
 //   vault.create, vault.trash und fileManager.processFrontMatter.
@@ -220,34 +225,117 @@ module.exports = function (ctx) {
   const titelKaputt = (t) => { const v = String(t || "").split(" · ")[0].trim().split(" "); return v.length > 1 && FUELL.test(v[v.length - 1]); };
   const sauber = (s) => String(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim();
 
-  // Einzeltermine gleicher Art (Titel, Wochentag, Uhrzeit, Semester) zu einem Eintrag zusammenfassen
-  const gruppieren = (events) => {
+  // Raum einer Serie (seit 20.10.2026; bis dahin der häufigste Raum aller Termine): Läufe gleicher Räume nach Datum (raumNorm,
+  // Termine ohne Raum zählen nicht). Raum der Serie ist der Raum des letzten Laufs mit mindestens zwei Terminen, also der Raum,
+  // in dem die Serie ab jetzt bzw. am Ende stattfindet; ohne solchen Lauf der häufigste der kommenden Termine (sonst aller).
+  // Liegt davor ein anderer Lauf mit mindestens zwei Terminen (einzelne Abweichungen dazwischen zählen nicht), ist das eine
+  // dauerhafte Verlegung: seit = erster Termin im neuen Raum, vorher = alter Raum. Jeder Termin in einem anderen als dem
+  // erwarteten Raum (vor seit der alte, sonst der neue) ist eine einzelne Abweichung → { d, raum }.
+  // raumAm: Map Datum → Raum, tag: heute (ISO) → { raum, seit, vorher, abweichungen }
+  const raeumeLesen = (raumAm, tag) => {
+    const mit = [...raumAm.keys()].sort().map((d) => ({ d, r: raumAm.get(d), k: raumNorm(raumAm.get(d)) }));
+    if (!mit.length) return { raum: "", seit: "", vorher: "", abweichungen: [] };
+    const laeufe = [];
+    for (const x of mit) {
+      const l = laeufe[laeufe.length - 1];
+      if (l && l.k === x.k) { l.daten.push(x.d); l.r = x.r; } else laeufe.push({ k: x.k, r: x.r, daten: [x.d] });
+    }
+    let fin = -1;
+    for (let i = laeufe.length - 1; i >= 0; i--) if (laeufe[i].daten.length >= 2) { fin = i; break; }
+    let raum, k, seit = "", vorher = "", vk = "";
+    if (fin < 0) {
+      const kommend = mit.filter((x) => x.d >= tag), pool = kommend.length ? kommend : mit;
+      const zahl = new Map();
+      for (const x of pool) zahl.set(x.k, (zahl.get(x.k) || 0) + 1);
+      const best = pool.reduce((a, x) => (zahl.get(x.k) > zahl.get(a.k) ? x : a), pool[0]);
+      raum = best.r; k = best.k;
+    } else {
+      raum = laeufe[fin].r; k = laeufe[fin].k;
+      let anfang = fin, j = fin - 1;
+      for (; j >= 0; j--) {
+        if (laeufe[j].k === k) { anfang = j; continue; }
+        if (laeufe[j].daten.length === 1) continue;
+        break;
+      }
+      if (j >= 0) { seit = laeufe[anfang].daten[0]; vorher = laeufe[j].r; vk = laeufe[j].k; }
+    }
+    const abweichungen = mit.filter((x) => x.k !== (seit && x.d < seit ? vk : k)).map((x) => ({ d: x.d, raum: x.r }));
+    return { raum, seit, vorher, abweichungen };
+  };
+  const tageZwischen = (a, b) => Math.round((tagObj(b) - tagObj(a)) / 864e5);
+
+  // Einzeltermine gleicher Art (Titel, Wochentag, Uhrzeit, Semester) zu einem Eintrag zusammenfassen. tag: heute (ISO), für den
+  // Raum der kommenden Termine. Seit 20.10.2026 außerdem:
+  //  - abgesagte Termine (STATUS:CANCELLED, auch als Einzeltermin einer Serie) stehen als Ausfall in ihrer Serie (vorher fehlten
+  //    sie nur; am Anfang oder Ende verkürzten sie die Serie);
+  //  - 14-täglich: Liegen alle Termine einer Serie (mindestens drei) im Abstand von zwei Wochen, ist sie 14-täglich (rhythmus);
+  //    die Wochen dazwischen sind kein Ausfall (die Woche zeigt einen Ausfall seit 20.10.2026 in Warnfarbe);
+  //  - Raum je Termin (raeumeLesen): Raum der Serie, einzelne Abweichungen als Änderung, dauerhafte Verlegung (seit, vorher);
+  //  - ein auf eine andere Uhrzeit verschobener Termin: Ein einzelner Termin gleichen Titels und Semesters an einem Tag, an dem
+  //    genau einer Serie ihr Termin fehlt (ihr Wochentag, ihr Rhythmus, höchstens einen Schritt vor dem ersten bzw. nach dem letzten
+  //    Termin), wird eine Änderung dieser Serie statt Ausfall plus eigener Notiz.
+  // → [{ schluessel, titel, semester, wt, beginn, ende, gehalten (Tage mit Termin), von, bis, ausfall, raum, einzeln, rhythmus,
+  //    seit, vorher, aenderungen: [{ d, beginn, ende, raum }] }]
+  const gruppieren = (events, tag) => {
+    const stichtag = tag || "";
     const verschoben = new Map(); // UID -> Daten, die durch RECURRENCE-ID ersetzt wurden
     for (const e of events) if (e["RECURRENCE-ID"] && e.UID) {
       const d = zeit(e["RECURRENCE-ID"])?.datum;
       if (d) verschoben.set(e.UID, [...(verschoben.get(e.UID) || []), d]);
     }
-    const gruppen = new Map();
+    const gruppen = new Map(), abgesagt = [];
     for (const e of events) {
-      if (/CANCELLED/i.test(e.STATUS || "")) continue;
       const titel = klartext(e.SUMMARY);
       if (!titel) continue;
-      const raum = klartext(e.LOCATION);
+      const raum = klartext(e.LOCATION), aus = /CANCELLED/i.test(e.STATUS || "");
       for (const t of termine(e, e["RECURRENCE-ID"] ? null : verschoben.get(e.UID))) {
         const semester = semesterVon(t.datum);
         const schluessel = [semester, titel, wochentag(t.datum), t.beginn, t.ende].join("|");
-        if (!gruppen.has(schluessel)) gruppen.set(schluessel, { schluessel, titel, semester, wt: wochentag(t.datum), beginn: t.beginn, ende: t.ende, daten: new Set(), raeume: new Map() });
+        if (aus) { abgesagt.push({ schluessel, datum: t.datum }); continue; }
+        if (!gruppen.has(schluessel)) {
+          gruppen.set(schluessel, { schluessel, titel, semester, wt: wochentag(t.datum), beginn: t.beginn, ende: t.ende, daten: new Set(), raumAm: new Map(),
+            abgesagt: new Set(), anders: new Map() });
+        }
         const g = gruppen.get(schluessel);
         g.daten.add(t.datum);
-        if (raum) g.raeume.set(raum, (g.raeume.get(raum) || 0) + 1);
+        if (raum) g.raumAm.set(t.datum, raum);
       }
     }
+    // Abgesagt: nur in einer Serie, die es gibt (eine ganz abgesagte Veranstaltung fehlt wie bisher)
+    for (const a of abgesagt) { const g = gruppen.get(a.schluessel); if (g && !g.daten.has(a.datum)) g.abgesagt.add(a.datum); }
+    // Schritt je Serie: 14 Tage, wenn alle Termine (mindestens drei) zwei Wochen oder ein Vielfaches davon auseinander liegen
+    const alle = (g) => [...g.daten, ...g.abgesagt].sort();
+    for (const g of gruppen.values()) {
+      const d = alle(g);
+      g.schritt = d.length >= 3 && d.every((x, i) => !i || tageZwischen(d[i - 1], x) % 14 === 0) ? 14 : 7;
+    }
+    // Verschobene Termine (andere Uhrzeit, gleicher Tag) als Änderung ihrer Serie
+    const serien = [...gruppen.values()].filter((g) => g.daten.size >= 2);
+    for (const e of [...gruppen.values()].filter((g) => g.daten.size === 1 && !g.abgesagt.size)) {
+      const d = [...e.daten][0];
+      const passt = serien.filter((g) => {
+        if (g === e || g.titel !== e.titel || g.semester !== e.semester || g.wt !== e.wt || g.daten.has(d)) return false;
+        const a = alle(g), n = tageZwischen(a[0], d);
+        return n % g.schritt === 0 && n >= -g.schritt && tageZwischen(a[a.length - 1], d) <= g.schritt;
+      });
+      if (passt.length !== 1) continue;
+      const g = passt[0];
+      g.anders.set(d, { beginn: e.beginn, ende: e.ende, raum: e.raumAm.get(d) || "" });
+      g.abgesagt.delete(d);
+      gruppen.delete(e.schluessel);
+    }
     return [...gruppen.values()].map((g) => {
-      const daten = [...g.daten].sort(), von = daten[0], bis = daten[daten.length - 1];
+      const daten = [...g.daten, ...g.abgesagt, ...g.anders.keys()].sort(), von = daten[0], bis = daten[daten.length - 1];
       const ausfall = [];
-      for (let d = plus(von, 7); d < bis; d = plus(d, 7)) if (!g.daten.has(d)) ausfall.push(d);
-      const raum = [...g.raeume.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "";
-      return { ...g, von, bis, ausfall, raum, einzeln: daten.length === 1 };
+      for (let d = von; d <= bis; d = plus(d, g.schritt)) if (!g.daten.has(d) && !g.anders.has(d)) ausfall.push(d);
+      const R = raeumeLesen(g.raumAm, stichtag);
+      const erwartet = (d) => (R.seit && d < R.seit ? R.vorher : R.raum);
+      const aenderungen = R.abweichungen.map((x) => ({ d: x.d, beginn: g.beginn, ende: g.ende, raum: x.raum }))
+        .concat([...g.anders.entries()].map(([d, x]) => ({ d, beginn: x.beginn, ende: x.ende, raum: x.raum || erwartet(d) })))
+        .sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+      const gehalten = [...g.daten, ...g.anders.keys()].sort();
+      return { schluessel: g.schluessel, titel: g.titel, semester: g.semester, wt: g.wt, beginn: g.beginn, ende: g.ende, gehalten, von, bis, ausfall,
+        raum: R.raum, seit: R.seit, vorher: R.vorher, aenderungen, rhythmus: g.schritt === 14 ? "14-täglich" : "", einzeln: daten.length === 1 };
     });
   };
 
@@ -417,11 +505,11 @@ module.exports = function (ctx) {
 
   // iCalendar → Notizen. angewendet = Grabsteine (alma_schluessel → Prüfsumme) oder null (ohne Sperre: keine Grabsteine)
   const anwenden = async (text, ordner, angewendet) => {
-    const gruppen = gruppieren(lesen(text));
+    const tag = heute();
+    const gruppen = gruppieren(lesen(text), tag);
     const semesterImFeed = new Set(gruppen.map((g) => g.semester));
     const schluesselImFeed = new Set(gruppen.map((g) => g.schluessel));
     const ms = alleModule();
-    const tag = heute();
     const bericht = { termine: gruppen.length, neu: 0, geaendert: 0, gleich: 0, entfernt: 0, entfaellt: 0, fehlt: 0, vorbei: 0, geloescht: 0, doppel: 0, warnung: "" };
     // Notizen, die Obsidian gerade noch einliest (angelegt oder per Sync), fehlen im metadataCache: dann nichts anlegen
     const unfertig = app.vault.getMarkdownFiles().some((f) => f.path.startsWith(ordner + "/") && !app.metadataCache.getFileCache(f));
@@ -509,9 +597,21 @@ module.exports = function (ctx) {
         .sort((a, b) => (a.fm.art === art ? 0 : 1) - (b.fm.art === art ? 0 : 1))[0];
       const kurz = m && m.fm.titel ? kuerzen(String(m.fm.titel)) : vorbild ? String(vorbild.fm.titel).split(" · ")[0].replace(/ \(entfällt\)$/, "")
         : kuerzen(g.titel.replace(code, "").replace(/^[\s\-–:·]+/, ""));
+      // Änderungen als „Datum|Beginn|Ende|Raum“ (findetStatt); ct: die Notiz ist c.t., dann beginnt auch eine Änderung zur vollen
+      // Stunde 15 Minuten später und endet 15 Minuten früher (wie die Serie). null = Feld fällt weg (leer, nicht 14-täglich …).
+      const aenderungenText = (ct) => {
+        const l = g.aenderungen.map((a) => {
+          let b = a.beginn, e = a.ende;
+          const mb = minuten(b), me = minuten(e);
+          if (ct && mb != null && me != null && mb % 60 === 0 && me - mb > 30) { b = uhrPlus(b, 15); e = uhrPlus(e, -15); }
+          return `${a.d}|${b}|${e}|${a.raum}`;
+        });
+        return l.length ? l : null;
+      };
       const felder = {
         wochentag: g.wt, tag: TAGE[g.wt - 1], beginn: g.beginn, ende: g.ende, semester: g.semester,
-        von: g.von, bis: g.bis, ausfall: g.ausfall, einzeltermin: g.einzeln,
+        von: g.von, bis: g.bis, ausfall: g.ausfall, aenderungen: aenderungenText(false), rhythmus: g.rhythmus || null,
+        raum_seit: g.seit || null, raum_vorher: g.vorher || null, einzeltermin: g.einzeln,
         quelle: "alma", alma_schluessel: g.schluessel, alma_titel: g.titel, alma_raum: g.raum,
       };
       if (treffer) {
@@ -524,24 +624,35 @@ module.exports = function (ctx) {
         const nb = minuten(fm.beginn), ne = minuten(fm.ende);
         const [kb, ke] = fm.alma_schluessel ? String(fm.alma_schluessel).split("|").slice(-2) : [g.beginn, g.ende];
         const ab = minuten(g.beginn), ae = minuten(g.ende);
-        if (nb != null && ne != null && nb === minuten(kb) + 15 && ne === minuten(ke) - 15 && ab % 60 === 0 && ae - ab > 30) {
-          neu.beginn = uhrPlus(g.beginn, 15); neu.ende = uhrPlus(g.ende, -15);
-        }
+        const ct = nb != null && ne != null && nb === minuten(kb) + 15 && ne === minuten(ke) - 15 && ab % 60 === 0 && ae - ab > 30;
+        if (ct) { neu.beginn = uhrPlus(g.beginn, 15); neu.ende = uhrPlus(g.ende, -15); }
+        neu.aenderungen = aenderungenText(ct);
         // Raum: leer -> aus Alma füllen; bei der ersten Verknüpfung (noch kein alma_raum) gilt Alma, wenn er mehr als in der
         // Schreibweise abweicht; danach nur überschreiben, wenn er sich in Alma seit dem letzten Abruf geändert hat
         if (g.raum && (!fm.raum || (fm.alma_raum && fm.alma_raum !== g.raum) || (!fm.alma_raum && raumNorm(fm.raum) !== raumNorm(g.raum)))) neu.raum = g.raum;
+        // Dauerhafte Verlegung (raum_seit, raum_vorher; die Woche hebt den neuen Raum zwei Wochen lang hervor): aus dem Kalender
+        // (zwei Läufe, raeumeLesen); sonst, wenn dieser Abruf den Raum der Notiz mehr als in der Schreibweise ändert (Alma nennt für
+        // die ganze Serie einen neuen Raum, auch für vergangene Termine, oder die erste Verknüpfung bringt einen anderen), ab dem
+        // nächsten Termin mit deinem bisherigen Raum als altem; sonst bleibt eine frühere Angabe, solange sie etwas sagt.
+        const naechster = g.gehalten.filter((d) => d >= tag)[0] || "";
+        const seitAlt = fm.raum_seit ? String(fm.raum_seit).slice(0, 10) : "", vorherAlt = fm.raum_vorher ? String(fm.raum_vorher) : "";
+        if (g.seit) Object.assign(neu, { raum_seit: g.seit, raum_vorher: g.vorher });
+        else if (neu.raum && fm.raum && raumNorm(fm.raum) !== raumNorm(neu.raum) && naechster) Object.assign(neu, { raum_seit: naechster, raum_vorher: String(fm.raum) });
+        else if (seitAlt && vorherAlt && raumNorm(vorherAlt) !== raumNorm(neu.raum || fm.raum)) Object.assign(neu, { raum_seit: seitAlt, raum_vorher: vorherAlt });
+        else Object.assign(neu, { raum_seit: null, raum_vorher: null });
         // kaputt gekürzter Titel einer Notiz, die Alma selbst angelegt hat (Kasten „Aus Alma“; alte Fassung): neu aus dem Kurztitel.
         // Von Hand angelegte Notizen behalten ihren Titel.
         if (treffer.eigen && titelKaputt(fm.titel)) neu.titel = `${kurz} · ${fm.art || art}`;
         // Alma-Notiz kommt wieder (war „entfällt“): Titel ohne „(entfällt)“
         if (fm.entfaellt === true) neu.titel = String(neu.titel || fm.titel || "").replace(/ \(entfällt\)$/, "");
-        const aenderung = Object.entries(neu).some(([k, v]) => k === "ausfall" ? !gleich(liste(fm[k]), liste(v)) : !gleich(fm[k] == null ? null : String(fm[k]), v == null ? null : String(v)))
+        const aenderung = Object.entries(neu).some(([k, v]) => k === "ausfall" || k === "aenderungen" ? !gleich(liste(fm[k]), liste(v)) : !gleich(fm[k] == null ? null : String(fm[k]), v == null ? null : String(v)))
           || fm.entfaellt === true || fm.alma_fehlt != null || (treffer.eigen && fm.herkunft !== HERKUNFT);
         if (!aenderung) bericht.gleich++;
         else {
           const raumAlt = fm.raum, warEntfallen = fm.entfaellt === true;
           await app.fileManager.processFrontMatter(treffer.f, (x) => {
             Object.assign(x, neu);
+            for (const k of Object.keys(neu)) if (neu[k] == null) delete x[k]; // leere Felder fallen weg (aenderungen, rhythmus …)
             delete x.entfaellt; delete x.alma_fehlt;
             if (treffer.eigen) x.herkunft = HERKUNFT; // Besitzmarke (ältere Alma-Notizen hatten keine)
           });
@@ -569,7 +680,7 @@ module.exports = function (ctx) {
         typ: "lehrveranstaltung", titel: `${kurz} · ${art}`, code, modul: m ? `[[${m.f.basename}]]` : "", art,
         ...felder, herkunft: HERKUNFT, raum: g.raum, dozent: "", uebersicht: "[[Stundenplan]]",
       };
-      const kopf = Object.entries(yaml).map(([k, v]) => Array.isArray(v)
+      const kopf = Object.entries(yaml).filter(([, v]) => v != null).map(([k, v]) => Array.isArray(v)
         ? (v.length ? `${k}:\n${v.map((x) => `  - ${x}`).join("\n")}` : `${k}: []`)
         : `${k}: ${typeof v === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? JSON.stringify(v) : v}`).join("\n");
       const wann = g.einzeln ? `${TAGE_LANG[g.wt - 1]}, ${deutsch(g.von)}` : `${TAGE_LANG[g.wt - 1]}s`;

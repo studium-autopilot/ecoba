@@ -10,7 +10,9 @@ lesen.
   1. Termine: `Termine/*.md` mit `datum` (oder `datum` bis `bis`) in der Woche, ohne `erledigt: true` und ohne
      `entfaellt: true`. Prüfungen (`kategorie: Prüfung`) und Fristen (`kategorie: Frist`) zuerst.
   2. Lehrveranstaltungen: `Stundenplan/*.md` mit `wochentag`, `beginn`, `ende`, `raum`, gültig von `von` bis `bis`; ohne
-     Tage aus `ausfall`, ohne `besuche_nicht: true`; `aenderungen` (`Datum|Beginn|Ende|Raum`) gehen vor.
+     Tage aus `ausfall`, ohne `besuche_nicht: true`; `aenderungen` (`Datum|Beginn|Ende|Raum`) gehen vor. Vor `raum_seit` gilt
+     `raum_vorher` als Raum; `rhythmus: 14-täglich` heißt: nur jede zweite Woche ab `von`. Einen Ausfall, eine Änderung und einen
+     neuen Raum (die ersten zwei Wochen ab `raum_seit`) nennst du ausdrücklich, mit dem alten Raum bzw. der alten Zeit.
   3. Vorlesungsfreie Tage: `pausen` in `System/Einstellungen.md`.
   4. Offene To-dos mit Frist in dieser Woche (siehe unten).
 - **Nächste Prüfungen:** Termine mit `kategorie: Prüfung` ab heute; dazu im Modul `klausur` und `status`. Prüfungsphasen:

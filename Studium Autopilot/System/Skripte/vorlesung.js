@@ -1,6 +1,7 @@
 // Vorlesungsnotiz (typ: vorlesung) und Übungsblatt (typ: übungsblatt) lebendig gestalten.
 // 1. Codeblock ```eba-vorlesung``` unter dem Titel: Kopf-Karte mit Vorlesungswoche, Status „Nacharbeit offen/Nachgearbeitet“
-//    (Tipp schaltet das Feld `nachgearbeitet`), Modul (Link), Thema, Datum mit Wochentag, Uhrzeit und Raum aus dem Stundenplan,
+//    (Tipp schaltet das Feld `nachgearbeitet`), Modul (Link), Thema, Datum mit Wochentag, Uhrzeit und Raum aus dem Stundenplan
+//    (an diesem Tag, seit 20.10.2026 mit Änderung oder Verlegung: neuer Wert in Warnfarbe, der übliche durchgestrichen),
 //    Dozent, einer Perlenreihe der Vorlesungswochen dieses Moduls (Tipp öffnet die Notiz der Woche) und Links zu Folien
 //    (Begleitnotiz) und Stundenplan-Eintrag. Daten live aus dem metadataCache; schreibt nur beim Tipp auf den Status.
 // 2. Abschnitte (## Mitschrift, ## Prüfungsrelevant, ## Offene Fragen, ## Nacharbeit) bekommen Klassen eba-vorl-h-<art> bzw.
@@ -215,8 +216,10 @@ module.exports = function (ctx) {
     const { fm, mfm, code, d } = x;
     const quelle = ctx?.sourcePath || "";
     const nachgearbeitet = fm.nachgearbeitet === true;
+    // Zeit und Raum an diesem Tag (seit 20.10.2026 aus dem Fachmodell: Änderung, Verlegung; vorher immer die üblichen)
+    const st = x.lfm.typ === "lehrveranstaltung" && d && basis.modell && basis.modell.findetStatt ? basis.modell.findetStatt(x.lfm, iso(d)) : null;
     // Nichts neu zeichnen, wenn sich nichts geändert hat (beim Tippen meldet der metadataCache jede Speicherung)
-    const sig = JSON.stringify([fm, x.lv?.path, x.lfm.beginn, x.lfm.ende, x.lfm.raum, x.folien?.path, x.mfm.titel,
+    const sig = JSON.stringify([fm, x.lv?.path, x.lfm.beginn, x.lfm.ende, x.lfm.raum, st, x.folien?.path, x.mfm.titel,
       (x.perlen || []).map((p) => p.drin.map((n) => n.f.path + n.fertig).join() + p.jetzt + p.nr), x.woche, x.wochenGesamt, basis.date.jetzt().toDateString()]);
     if (el.__ebaSig === sig && el.childElementCount) { if (el.__ebaFragen) el.__ebaFragen(); return; }
     el.__ebaSig = sig;
@@ -275,11 +278,28 @@ module.exports = function (ctx) {
       if (diff === 0) s.createEl("b", { cls: "eba-vorl-heute", text: "heute" });
       else if (diff === -1) s.createEl("b", { cls: "eba-vorl-heute alt", text: "gestern" });
     }
-    // Uhrzeit und Raum als eine Angabe (bricht auf dem iPhone als zweite Zeile um, ohne führenden Punkt)
-    const ort = x.lfm.typ === "lehrveranstaltung"
-      ? [x.lfm.beginn ? `${x.lfm.beginn}${x.lfm.ende ? "–" + x.lfm.ende : ""}` : "", String(x.lfm.raum ?? "").trim()].filter(Boolean).join(" · ")
-      : String(x.lfm.ort ?? "").trim();
-    if (ort) meta.createSpan({ cls: "eba-vorl-ort", text: ort });
+    // Uhrzeit und Raum als eine Angabe (bricht auf dem iPhone als zweite Zeile um, ohne führenden Punkt). An diesem Tag geändert
+    // (findetStatt): der neue Wert in Warnfarbe, der übliche durchgestrichen daneben (docs/design.md „Ausnahme im Stundenplan“)
+    if (st && st.statt) {
+      const o = meta.createSpan({ cls: "eba-vorl-ort" });
+      const zeit = st.beginn ? st.beginn + (st.ende ? "–" + st.ende : "") : "";
+      const teil = (wert, neu, alt) => {
+        if (!wert) return;
+        if (o.childNodes.length) o.appendText(" · ");
+        if (!neu) { o.appendText(wert); return; }
+        o.createSpan({ cls: "eba-vorl-neu", text: wert });
+        if (alt) { o.appendText(" statt "); o.createEl("s", { text: alt }); }
+      };
+      teil(zeit, st.zeitGeaendert, st.zeitAlt);
+      teil(st.raum, st.raumGeaendert, st.raumAlt);
+      if (st.zeitGeaendert || st.raumGeaendert) o.addClass("geaendert");
+      if (!o.childNodes.length) o.remove();
+    } else {
+      const ort = x.lfm.typ === "lehrveranstaltung"
+        ? [x.lfm.beginn ? `${x.lfm.beginn}${x.lfm.ende ? "–" + x.lfm.ende : ""}` : "", String(x.lfm.raum ?? "").trim()].filter(Boolean).join(" · ")
+        : String(x.lfm.ort ?? "").trim();
+      if (ort) meta.createSpan({ cls: "eba-vorl-ort", text: ort });
+    }
     const dozent = String(fm.dozent ?? "").trim();
     if (dozent) { const p = karte.createDiv({ cls: "eba-vorl-dozent" }); symbol(p, "person"); p.createSpan({ text: dozent }); }
 

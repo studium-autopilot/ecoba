@@ -164,5 +164,5 @@ test("Folien als Markdown: Kapitel beim ersten Öffnen zu, auf jedem Gerät; die
 test("Wochenraster: Rahmen der laufenden Lehrveranstaltung innen (auch iPhone), nie bei einem Kasten vor seinem Beginn", () => {
   assert.match(CSS, /\.eba-ev\.jetzt:not\(\.spaeter\) \{ box-shadow: inset 0 0 0 2px var\(--eba-accent\); \}/);
   assert.doesNotMatch(CSS, /\.eba-ev\.jetzt \{ box-shadow: 0 0 0/, "kein Rahmen außen (am iPhone ohne Platz)");
-  assert.match(CSS, /\.eba-woche \.eba-ev:not\(\.geaendert\):not\(\.spaeter\) > span time \{ display: none; \}/, "„ab TT.MM.“ auch am iPhone");
+  assert.match(CSS, /\.eba-ev \.eba-ev-knapp \{ display: inline; \}/, "schmal die knappe Zeile, mit „ab TT.MM.“ und einer anderen Zeit (woche.js zeileZeichnen)");
 });

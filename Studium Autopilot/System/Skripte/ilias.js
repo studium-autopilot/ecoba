@@ -1041,7 +1041,7 @@ module.exports = function (ctx) {
       return { art, nr, titel, name, code };
     };
     // Ordner wie unterlagen.js: vorhandener „Unterlagen/<Code> …“, sonst „<Code> <Modultitel>“; ohne Code der Kurstitel.
-    // Hat der Modulordner „Vorlesung“/„Übung“, kommt die Datei je nach Art dorthin.
+    // Hat der Modulordner „Vorlesung“/„Übung“, kommt die Datei je nach Art dorthin; Tutorium immer nach „Tutorium“.
     const zielOrdner = (code, kurs, art) => {
       let o;
       if (code) {
@@ -1054,7 +1054,8 @@ module.exports = function (ctx) {
         }
       } else o = ZIEL + "/" + (sauber(kuerzen(sauber(kurs.titel), ORDNER_TITEL_MAX)) || "ILIAS");
       const unter = { Folien: "Vorlesung", Skript: "Vorlesung", Mitschrift: "Vorlesung", "Übung": "Übung", "Lösung": "Übung", "Eigene Lösung": "Übung" }[art];
-      if (unter && io.unterordner(o).indexOf(unter) >= 0) o += "/" + unter;
+      if (art === "Tutorium") o += "/Tutorium"; // eigener Bereich, immer (angelegt beim Schreiben)
+      else if (unter && io.unterordner(o).indexOf(unter) >= 0) o += "/" + unter;
       return o;
     };
     // Nie überschreiben: Datei und Notiz müssen frei sein, sonst „ (2)“, „ (3)“ …

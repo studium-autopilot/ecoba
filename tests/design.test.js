@@ -100,6 +100,16 @@ test("iPhone und iPad: Breiten nie über @media, Safari 16: kein CSS-Nesting, ke
   }
 });
 
+// Knöpfe und Knopfkacheln brechen nur an Leerzeichen (docs/design.md, „iPhone und iPad“; seit 20.10.2026, vorher „Vorlesung-snotiz“)
+const KNOPF = /data-callout="eba-(?:neu|links)"\][^,{]*li > a|knopf\b|\bbutton\b/;
+const trenntImKnopf = (d) => KNOPF.test(d.selektor) && ((/(^|-)hyphens$/.test(d.eigenschaft) && /^auto\b/.test(d.wert))
+  || (d.eigenschaft === "overflow-wrap" && /^anywhere\b/.test(d.wert)));
+
+test("Knöpfe trennen nie: kein hyphens: auto, kein overflow-wrap: anywhere an Knöpfen und Knopfkacheln", () => {
+  const funde = deklarationen(CORE).filter(trenntImKnopf).map((d) => `Z. ${d.zeile}: ${d.selektor} { ${d.eigenschaft}: ${d.wert} }`);
+  assert.deepEqual(funde, [], "Knöpfe brechen nur an Leerzeichen; passt ein Wort nicht, kleinere Schrift oder weniger Knöpfe je Reihe");
+});
+
 // Obergrenzen (Stand 18.10.2026): neue Werte nur nach docs/design.md, Bestand darf nur weniger werden.
 test("Schriftgrößen in px: keine neue Stufe (docs/design.md, „Schriftgrößen“)", () => {
   const BESTAND = [9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 13.5, 14, 14.5, 15, 15.5, 16, 17, 18, 19, 21, 24, 26];
@@ -142,4 +152,6 @@ test("Der Wächter erkennt Verstöße", () => {
   assert.deepEqual(teilen("0 0 0 1px var(--a), inset 0 0 0 2px color-mix(in srgb, red 10%, transparent)"),
     ["0 0 0 1px var(--a)", "inset 0 0 0 2px color-mix(in srgb, red 10%, transparent)"]);
   assert.equal(ohneUrl('url("data:image/svg+xml,%23fff") no-repeat'), "url() no-repeat");
+  const k = deklarationen('.callout[data-callout="eba-neu"] li > a { -webkit-hyphens: auto; overflow-wrap: anywhere; } .eba-mod-knopf { hyphens: manual; } .eba-wt b { hyphens: auto; }');
+  assert.deepEqual(k.filter(trenntImKnopf).map((x) => x.eigenschaft), ["-webkit-hyphens", "overflow-wrap"]);
 });

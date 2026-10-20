@@ -2,6 +2,25 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.4.10 – Ausfälle und Raumwechsel fallen auf
+
+- **Übersichtlicher:** Alles aus deinem Tutorium steht jetzt in einem eigenen Bereich **Tutorium**, getrennt von Vorlesung und
+  Übung, auf der Modulseite und im Ordner des Moduls.
+- **Übersichtlicher:** Dein Tutorium und deine Übung im **Stundenplan** zeigen oben ihre Unterlagen, das neueste Blatt zuerst.
+  Ein Tipp öffnet es.
+- **Behoben:** Auf dem iPhone trennten Knöpfe Wörter an falscher Stelle, etwa „Neue Vorlesung-snotiz“ auf dem **Dashboard**.
+  Jetzt brechen sie nur zwischen ganzen Wörtern um, und kein Knopf ragt mehr über den Rand.
+- **Übersichtlicher:** Fällt eine Lehrveranstaltung aus oder wechselt sie Raum oder Zeit, zeigt die **Woche** das jetzt farbig,
+  etwa „Fällt aus“ oder „Hörsaal 9 statt Hörsaal 1“. Auf dem iPhone markiert ein Strich den Tag.
+- **Übersichtlicher:** Zieht eine Lehrveranstaltung dauerhaft in einen anderen Raum, zeigt die **Woche** zwei Wochen lang
+  „Neuer Raum“ mit dem alten Raum daneben, damit du nicht vor der falschen Tür stehst.
+- **Behoben:** Aus Alma fehlte ein Raumwechsel an einem einzelnen Tag, und ein auf eine andere Uhrzeit verschobener Termin stand
+  als Ausfall und noch einmal extra da. Jetzt zeigt die **Woche** beides als Änderung des Tages.
+- **Übersichtlicher:** Auf der Modulseite steht unter „Als Nächstes“ jetzt auch, wenn eine Sitzung in den nächsten zwei Wochen
+  ausfällt oder woanders stattfindet, mit dem alten Raum durchgestrichen.
+- **Übersichtlicher:** Die Seite **Stundenplan** zeigt auf dem iPhone wieder die ganze Woche, mit kurzen Namen und Räumen.
+  Das **Dashboard** zeigt dort weiter einen Tag auf einmal.
+
 ## 0.4.9 – Stundenplan passt aufs iPhone
 
 - **Übersichtlicher:** Auf dem iPhone zeigt die **Woche** einen Tag auf einmal, mit vollem Namen, Zeit und Raum. Oben tippst

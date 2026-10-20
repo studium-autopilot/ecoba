@@ -112,3 +112,17 @@ test("Zeile: Titel ersatzweise aus dem Dateinamen, gelesen/bearbeitet markiert, 
   assert.equal(so.zeilen[0].datei, false);
   assert.equal(skr.zeilen[0].datei, true);
 });
+
+test("Tutorium: eigener Abschnitt nach den Übungen, Lösungen hängen nicht an Tutoriumsblättern", () => {
+  const G = U.gliedern([
+    u("Folien 01 Einführung", { art: "Folien", nummer: 1, titel: "Einführung" }),
+    u("Tutorium 01 Aufgabenblatt", { art: "Tutorium", nummer: 1, titel: "Aufgabenblatt" }),
+    u("Übung 01 Blatt", { art: "Übung", nummer: 1, titel: "Blatt" }),
+    u("Lösung 01 Kurzlösung", { art: "Lösung", nummer: 1, titel: "Kurzlösung" }),
+    u("Tutorium Vorlage", { art: "tutorium", titel: "Vorlage" }),
+  ], "X100");
+  assert.deepEqual(namen(G), ["Folien", "Übungen", "Tutorium"]);
+  assert.deepEqual(titel(G[2]), ["Aufgabenblatt", "Vorlage"]);
+  assert.deepEqual(G[1].zeilen[0].loesungen.map((l) => l.name), ["Lösung"], "die Lösung gehört zur Übung mit gleicher Nummer");
+  assert.equal(U.artVon("TUTORIUM"), "Tutorium");
+});

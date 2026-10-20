@@ -152,7 +152,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `sperre.js` | Helfer: Abrufer-Sperre, der gemeinsame Schreiber-Lock aller Quellen (`ctx.user.sperre.erzeugen`); siehe „Abrufer-Sperre“ |
 | `hinweis.js` | `ctx.hinweis` (seit 0.4.6): Hinweise ohne Vorsatz und Pfad, nächster Schritt als Knopf; `tests/wortliste.test.js` findet jedes `new Notice` in den Skripten |
 | `formular.js` | `ctx.formular` (seit 0.4.6): das Fenster „Neu …“ für alle Anlege-Aktionen; siehe „Bedien-Bausteine“ |
-| `kopf.js` | Kopf-Karte unter dem Titel jeder Termin-, Stundenplan-, SQ- und Begleitnotiz mit genau einem Status-Knopf (seit 0.4.6), „⋯“ mit Eigenschaften, leere Abschnitte und Eckdaten ausblenden (seit 19.10.2026); siehe „Bedien-Bausteine“ |
+| `kopf.js` | Kopf-Karte unter dem Titel jeder Termin-, Stundenplan-, SQ- und Begleitnotiz mit genau einem Status-Knopf (seit 0.4.6), „⋯“ mit Eigenschaften, leere Abschnitte und Eckdaten ausblenden (seit 19.10.2026), Übungsblätter unter Übung und Tutorium (seit 20.10.2026); siehe „Bedien-Bausteine“ |
 | `pdfkasten.js` | PDF-Kasten der Begleitnotizen als Knopf (seit 19.10.2026): klappt in Lese- und Bearbeitungsansicht ohne Cursor und Tastatur, lädt die PDF erst beim Aufklappen, „Öffnen“ und „Original“ in der Kopfzeile; siehe „Bedien-Bausteine“ |
 | `papierkorb.js` | `ctx.papierkorb` (seit 0.4.6): wegwerfen mit Hinweis und „Rückgängig“; siehe „Bedien-Bausteine“ |
 | `felder.js` | Helfer: Feld-Register der Eingaben (Variante, Studienbeginn, Note, Zielnote; `ctx.user.felder`); siehe „Personalisieren“ |
@@ -286,8 +286,35 @@ Eingabefeld), gilt wieder der vorherige Link.
 - **Außerhalb des Plugins** (eine Hülle, die `aktualisieren({ text })` mit `window.app` aus Dateien und ohne `ctx.user.sperre`/
   `quellen` aufruft): dieselben Regeln, aber keine Sperre, keine Grabsteine, kein Meldekanal; geschrieben wird nur über
   `vault.create`, `vault.trash` und `fileManager.processFrontMatter` (die Kopfzeile ändert dort die Hülle).
+- **Raum, Änderungen und Ausfälle je Termin** (seit 20.10.2026, `gruppieren(events, heute)`; vorher galt der häufigste Raum aller
+  Termine, ein einzelner Termin in einem anderen Raum ging verloren, eine dauerhafte Verlegung ab Semestermitte behielt den alten
+  Raum, solange er häufiger war, und ein auf eine andere Uhrzeit verschobener Termin wurde Ausfall plus eigene Notiz):
+  - *Raum der Serie* (`raeumeLesen`): Läufe gleicher Räume nach Datum (`raumNorm`, Termine ohne Raum zählen nicht). Raum ist der
+    des letzten Laufs mit mindestens zwei Terminen (wo die Serie ab jetzt bzw. am Ende stattfindet), ohne solchen der häufigste
+    der kommenden Termine. Jeder Termin in einem anderen Raum als erwartet → `aenderungen` („Datum|Beginn|Ende|Raum“, Zeiten der
+    Serie, bei einer c.t.-Notiz verschoben wie die Serie).
+  - *Dauerhafte Verlegung* → `raum_seit` (erster Termin im neuen Raum) und `raum_vorher`: aus dem Kalender, wenn vor dem letzten
+    Lauf ein anderer mit mindestens zwei Terminen liegt (einzelne Abweichungen dazwischen zählen nicht); sonst, wenn ein Abruf den
+    Raum der Notiz mehr als in der Schreibweise ändert (Alma nennt für die ganze Serie einen neuen Raum, auch für vergangene
+    Termine; oder die erste Verknüpfung bringt einen anderen), ab dem nächsten Termin mit dem bisherigen Raum der Notiz als altem.
+    Eine frühere Angabe bleibt, solange `raum_vorher` vom Raum abweicht. `findetStatt` gibt vor `raum_seit` den alten Raum, die
+    Woche zeigt die ersten zwei Wochen ab `raum_seit` „Neuer Raum“ (siehe „Wochenraster“, *Ausnahmen*).
+  - *Verschobener Termin* (andere Uhrzeit, gleicher Tag): Ein einzelner Termin gleichen Titels und Semesters an einem Tag, an dem
+    genau einer Serie ihr Termin fehlt (ihr Wochentag und Rhythmus, höchstens einen Schritt vor dem ersten bzw. nach dem letzten
+    Termin), wird eine Änderung dieser Serie statt Ausfall plus eigener Notiz. Nicht eindeutig (zwei Serien fehlen) oder an einem
+    anderen Tag: wie bisher.
+  - *Abgesagt* (`STATUS:CANCELLED`, auch als Einzeltermin einer Serie über `RECURRENCE-ID`) → `ausfall` der Serie, auch am Anfang
+    oder Ende (vorher fehlte der Termin und verkürzte `von`/`bis`). Eine ganz abgesagte Veranstaltung fehlt wie bisher.
+  - *14-täglich*: Liegen alle Termine einer Serie (mindestens drei) zwei Wochen oder ein Vielfaches davon auseinander, steht
+    `rhythmus: 14-täglich` in der Notiz und die Wochen dazwischen sind kein Ausfall (`findetStatt`: „anderer Tag“); sonst hätte die
+    Woche jede zweite Woche „Fällt aus“ in Warnfarbe gezeigt.
+  - Leere Felder (`aenderungen`, `rhythmus`, `raum_seit`, `raum_vorher`) stehen nicht in der Notiz und fallen beim Schreiben weg.
+    Die Hülle `stundenplan-sync.mjs` braucht dafür nichts Neues (nur `processFrontMatter`, flache Felder und Listen von Texten).
+    Trockenlauf gegen einen echten Alma-Kalender (20.10.2026): keine Änderung; mit dem Stand einer Notiz vor ihrer ersten
+    Verknüpfung (anderer Raum) `raum_seit` und `raum_vorher` wie erwartet.
 - Tests: `tests/alma.test.js` (Wegfall, „(entfällt)“ und zurück, Grabstein, vorbei, Raum, Doppel, Fehler im Status, Sperre,
-  ohne Bibliotheken, quellen_extern).
+  ohne Bibliotheken, quellen_extern; Raum je Termin, Verlegung im Kalender und über Abrufe, erste Verknüpfung, verschobener und
+  abgesagter Termin, 14-täglich).
 
 ## Datenmodell `ctx.modell` (Phase 2b)
 
@@ -344,7 +371,8 @@ Vorlesungszeit → „Prüfungsphase bis 13.02.“ (in der Vorlesungszeit: „Vo
 Vorlesungsbeginn → „noch N Tage bis Vorlesungsbeginn“ (heute/morgen), danach → „vorlesungsfrei“. Quelle ist
 `ctx.modell.woche()` (Woche nach der Planwoche: am Samstag und Sonntag zählt schon die kommende; bis 18.10.2026 stand
 dieselbe Regel als Bases-Formel `wochetext` im Dashboard). Nutzer: Dashboard (Kopf des Semesterverlaufs, `dashboard.js`), `verlauf.js` (Vorlesungswoche und Resttage in der
-Lupe), `vorlesung.js` (Kopf der Vorlesungsnotiz: Woche des Notizdatums, Perlen mit Vorlesungswochen). Die Leiste
+Lupe), `vorlesung.js` (Kopf der Vorlesungsnotiz: Woche des Notizdatums, Perlen mit Vorlesungswochen; Zeit und Raum am Tag der
+Notiz über `findetStatt`, seit 20.10.2026 mit Änderung oder Verlegung in Warnfarbe und dem üblichen Wert durchgestrichen). Die Leiste
 „Semesterverlauf“ im Dashboard zeigt alle Kalenderwochen des Semesters als Grafik; der Studienverlauf wiederholt sie seit
 17.10.2026 nicht mehr (seine Lupe zeigt dasselbe Semester als Band).
 
@@ -386,10 +414,21 @@ TT.MM.“: Eine gewählte Übungs- oder Tutoriumsgruppe steht so gleich nach der
 (seit 19.10.2026; vorher fehlte sie bis dahin). Solche Kästen zählen nicht als „findet statt“; ohne `semester` des
 gezeigten Semesters (nach dem Freitag der Woche), mit
 `entfaellt: true` oder ausgeblendet (`herkunft: zentral`, `zentral_id` in `stundenplan_ausgeblendet`) gar nicht, ein
-Einzeltermin nur an seinem Tag. Liegt der Tag in `ausfall`, in einer Pause oder auf einem vorlesungsfreien Tag, ist der Kasten
-durchgestrichen (`ausfall`, Tooltip „fällt aus (Christi Himmelfahrt)“); `aenderungen` („Datum|Beginn|Ende|Raum“) in
-der Woche: gestrichelt (`geaendert`), an der neuen Zeit, mit neuer Zeit und neuem Raum. Findet nichts statt, steht ein Satz
-(Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Veranstaltungen“). Stunden von–bis aus allen Serien des
+Einzeltermin nur an seinem Tag. Liegt der Tag in einer Pause, auf einem vorlesungsfreien Tag oder in `ausfall`, hat der Kasten
+den Namen durchgestrichen und statt des Raums „Fällt aus“ (Klasse `ausfall`, Tooltip „fällt aus (Christi Himmelfahrt)“);
+`aenderungen` („Datum|Beginn|Ende|Raum“) in der Woche: an der neuen Zeit, mit neuer Zeit und neuem Raum (`geaendert`).
+*Ausnahmen* (seit 20.10.2026, weil Raumverlegungen und Ausfälle nicht genug auffielen; vorher sah ein
+Ausfall blass aus wie „ab TT.MM.“ und eine Änderung hatte nur einen gestrichelten Rand): Ein Ausfall dieser Lehrveranstaltung
+(`findetStatt` mit `grund` `ausfall`) und ein anderer Raum oder eine andere Zeit an diesem Tag, auch ein neuer Raum in den ersten
+zwei Wochen nach einer dauerhaften Verlegung (`neuerRaum`, siehe „Alma-Stundenplan“), haben die Klasse `ausnahme`:
+Fläche und Kante links in `--eba-warn`, „Fällt aus“ bzw. der neue Wert in Warnfarbe und der übliche durchgestrichen daneben
+(Raster: „Hörsaal 9 statt ~~Hörsaal 1~~“, „12:15 statt ~~10:00~~“, ändert sich nur das Ende „bis 13:45 statt ~~12:00~~“; den Beginn
+bei c.t. lässt das Raster bei einem anderen Raum weg, der Raum braucht den Platz). Ein Ausfall wegen einer Pause oder eines freien
+Tags bleibt leise (neutrale Fläche, „Fällt aus“ gedämpft): Pausen sind keine Überraschung, und Alma trägt die Weihnachtspause auch
+in `ausfall` ein. Keine Symbole, Farbe und Wort (Felder `ausnahme`, `marke`, `raumNeu`, `raumAlt`, `zeitNeu`, `zeitAlt`,
+`zeitStatt`, `grund` am Kasten; CSS Abschnitt 55, „Ausnahmen“). Findet nichts statt, steht ein Satz
+(Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Veranstaltungen“); fällt eine Lehrveranstaltung selbst aus,
+zeigt die Woche trotzdem ihre Kästen, damit man den Ausfall sieht. Stunden von–bis aus allen Serien des
 Semesters (dazu Einzeltermine und geänderte Zeiten der Woche), damit das Raster von Woche zu Woche gleich bleibt; Höhe am
 Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Überschneiden sich Kästen eines Tages, stehen sie nebeneinander
 (`spalten`, `lage`: Breite und Abstand links im Stil). Ein blasser Kasten (`spaeter`) teilt sich die Breite nie mit einem
@@ -398,14 +437,28 @@ einen, steht er schmal am rechten Rand (22 %, Klasse `schmal`, nur der Kurzname)
 Wörter brechen nie mitten im Wort, nur an Silben. Reine Logik als Funktionen (`wocheBauen`, `spalten`, `lage`, `kurzname`,
 `artText`, `versatzAus`, `tagAus`, `tagWahl`, `tageAus`, `tagKaesten`, `tagSchritt`, `wischStartOk`, `wischAchse`,
 `wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS: Abschnitte 47 und 55 (Tagesansicht 55b).
-*Tagesansicht (iPhone, seit 19.10.2026):* Unter 520 px Kartenbreite (Container-Abfrage auf `eba-kz`, also auch iPad im
-geteilten Bildschirm) zeigt die Woche einen Tag statt des Rasters; vorher standen fünf Spalten à 60 px da, Namen zerbrachen
-Buchstabe für Buchstabe und Räume fehlten. `zeichnen` legt beide Ansichten an (`.eba-wt` und `.eba-woche.hat-tag`), das CSS
-wählt nach der Breite, so passt es auch nach dem Drehen. Kopf „KW n · 26.–30.10.“ mit ‹ › (dieselbe Aktion `woche`; „KW n“
+*Tagesansicht (iPhone, seit 19.10.2026; seit 20.10.2026 nur noch auf dem Dashboard):* Unter 520 px Kartenbreite
+(Container-Abfrage auf `eba-kz`, also auch iPad im geteilten Bildschirm) zeigt die Woche einen Tag statt des Rasters; vorher
+standen fünf Spalten à 60 px da, Namen zerbrachen Buchstabe für Buchstabe und Räume fehlten. `zeichnen` legt beide Ansichten
+an (`.eba-wt` und `.eba-woche.hat-tag`), das CSS wählt nach der Breite, so passt es auch nach dem Drehen. Die Seite
+**Stundenplan** zeigt immer das Raster (`mitTag(pfad)`: `Studium/Stundenplan.md` ohne Tagesansicht und ohne `hat-tag`; seit
+20.10.2026). Entschieden wird am Pfad, nicht
+an einem Argument im Codeblock: Die Seite hat im Update die Klasse „seite“, eine selbst geänderte bleibt stehen, und ein neues
+Argument käme dort nie an. *Schmales Raster* (Karte unter 480 px, also die Seite Stundenplan auf dem iPhone hochkant): Spalten
+von gut 60 px; der Kurzname in 10,5 px bricht nur an Silben (`hyphens: auto`, `lang="de"`, nie mitten im Wort), darunter die
+knappe Zeile (`zeileZeichnen(el, k, true)`, beide Zeilen stehen im Kasten, das CSS wählt nach der Breite): Raum gekürzt
+(`raumKnapp`: ohne Zusatz in Klammern, auch verschachtelt, „Hörsaal“ als „HS“, „Hörsaal 1 (Keplerstraße 2)“ → „HS 1“), Zeit nur
+bei einer Änderung („18:15 statt ~~16:15~~“) und als „ab TT.MM.“, Ausfall „Fällt aus“; ein hoher Kasten zeigt drei Zeilen
+(`eba-core.css` 55 und 37.stundenplan, Innenabstand seitlich 3 px). Quer (iPhone) und am iPad ist die Karte breiter: das volle
+Raster. Kopf „KW n · 26.–30.10.“ mit ‹ › (dieselbe Aktion `woche`; „KW n“
 in einer anderen Woche zurück), darunter fünf Tage mit Datum (gewählt getönt, heute in Akzentfarbe, Punkt, wenn an dem Tag
-etwas stattfindet), darunter die Kästen des Tags über die ganze Breite: links Beginn und Ende, kräftig der Kurzname, blass
-die Art (auch „Vorlesung“), darunter Raum und bei Ausfall „fällt aus (Grund)“, nichts abgeschnitten. Dieselben Klassen wie im
-Raster (heute, jetzt, ausfall, geaendert, konflikt), ein Tipp öffnet wie dort. Was erst beginnt, ist eine leise Zeile
+etwas stattfindet; ein kurzer Strich in Warnfarbe statt des Punkts, wenn an dem Tag eine Ausnahme ist, `tageAus`: `ausnahme`,
+`hinweis` „Ausfall“, „Änderung“ oder „Ausfall und Änderung“ für Vorlesesoftware und Tooltip), darunter die Kästen des Tags über
+die ganze Breite: links Beginn und Ende, kräftig der Kurzname, blass die Art (auch „Vorlesung“), darunter der Raum, nichts
+abgeschnitten. Bei einer Ausnahme steht vorn der kurze Text („Fällt aus“, „Anderer Raum“, „Neuer Raum“, „Andere Zeit“, „Geändert“), bei einer
+anderen Zeit „statt ~~10:15–11:45~~“, dann „Hörsaal 9 statt ~~Hörsaal 1~~“; die neue Zeit links in Warnfarbe; ein Ausfall wegen
+einer Pause „Fällt aus (Weihnachtspause)“. Dieselben Klassen wie im Raster (heute, jetzt, ausfall, ausnahme, geaendert,
+konflikt), ein Tipp öffnet wie dort. Was erst beginnt, ist eine leise Zeile
 „Tutorium BWL · ab 04.11. · Mi 14:15“, kein Kasten. Welcher Tag: gewählt (Tipp auf einen Tag oder Wischen) merkt sich nur
 dieses Gerät (`eba-woche-tag`, wie der Versatz: dieselbe Sitzung, 30 Minuten), sonst heute, in einer anderen Woche und am
 Wochenende Montag (Planwoche). Wischen wechselt den Tag, nach Freitag weiter zum Montag der nächsten Woche (`tagSchritt`);
@@ -451,7 +504,7 @@ Modulseite, Zeitleiste und Studienverlauf widersprachen sich (Konsistenz-Audit).
 | `naechstePruefung()` | Kachel „Nächste Prüfung“: früheste offene Klausur ohne Zwischentests und Nachholtermine. |
 | `fristen({ tage })`, `abgaben({ tage })` | Fristen (`kategorie: Frist`, offen, laufen noch oder kommen), sortiert nach dem nächsten Stichtag (`stichtag`: läuft der Zeitraum schon, sein Ende, sonst sein Beginn); offene Übungsblätter mit Fälligkeit (überfällige bleiben bis zur Abgabe). |
 | `kalenderwoche(iso)`, `planwoche(iso)` | Montag bis Sonntag des Tages bzw. die Woche, um die es geht: **am Samstag und Sonntag schon die kommende** (`vorgezogen`). Die eine Wochenend-Regel für alles, was „diese Woche“ zeigt: Wochenraster, Leiste „Semesterverlauf“, Semesterband der Modulseite, Agenda („Diese Woche · 17.–25.10.“ ab heute) und `woche().text` („Vorlesungswoche 2 von 16“ am Sonntag vor Woche 2). Tagesangaben (heute, morgen, Countdown, „Vorlesungsbeginn morgen“) bleiben am Tag. |
-| `findetStatt(fm, tag)` | Findet eine Sitzung (`typ: lehrveranstaltung`) an dem Tag statt? `{ statt, grund, name, beginn, ende, raum, geaendert }`; `grund`: `entfaellt`, `ausgeblendet` (Besuche ich nicht), `anderer Tag` (auch Einzeltermin), `ausserhalb` (`von`/`bis`), `ausfall`, `pause`, `frei` (vorlesungsfreier Tag wie Christi Himmelfahrt); `aenderungen` setzen Zeit und Raum. Wochenraster und `naechsteSitzung(fm, jetzt)` („Als Nächstes“) nutzen sie. |
+| `findetStatt(fm, tag)` | Findet eine Sitzung (`typ: lehrveranstaltung`) an dem Tag statt? `{ statt, grund, name, beginn, ende, raum, geaendert, raumGeaendert, raumAlt, zeitGeaendert, zeitAlt }`; `grund`: `entfaellt`, `ausgeblendet` (Besuche ich nicht), `anderer Tag` (auch Einzeltermin), `ausserhalb` (`von`/`bis`), `pause`, `frei` (vorlesungsfreier Tag wie Christi Himmelfahrt), `ausfall` (seit 20.10.2026 in dieser Reihenfolge: Pause und freier Tag gehen dem Ausfall vor, Alma trägt die Weihnachtspause auch in `ausfall` ein); `aenderungen` setzen Zeit und Raum, `raumAlt` und `zeitAlt` („10:15–11:45“) sind dann der übliche Wert; vor `raum_seit` gilt `raum_vorher`, die ersten zwei Wochen ab `raum_seit` `neuerRaum` mit `raumAlt` = `raum_vorher`; `rhythmus: 14-täglich` nur jede zweite Woche ab `von`. Wochenraster, Kopf der Vorlesungsnotiz (Zeit und Raum am Tag der Notiz) und `naechsteSitzung(fm, jetzt)` („Als Nächstes“, dieselben Felder) nutzen sie. `ausfaelle(fm, jetzt, tage = 14)`: Ausfälle (`grund` `ausfall`) ab heute, heute nur bis zum Ende. |
 | `imPlan(modul)` | Gehört zu deinem Studium: gewählt, selbst geplant, begonnen (Status nicht „offen“), Grundstudium und Abschluss, in Profil & Vertiefung Pflicht deiner Variante (offen: Pflicht in allen); Schwerpunkt nur gewählt oder begonnen; Zusatzleistungen nie. |
 | `ects()`, `noten()`, `blockVon(fm, variante)` | ECTS = bestandene und anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange SQ100 offen), `op` (höchstens 4), `opFrist` (Ende des 4. Fachsemesters); Gesamtnote nach § 13 BT wie Noten & ECTS. |
 | `statusArt(typ, wert)` | Ton einer Pille nach docs/design.md: ok (bestanden, anerkannt, angemeldet, erledigt, gelesen …), warn (Frist, in Arbeit, Abgabe), bad (Prüfung, nicht bestanden, überfällig), info (läuft, Lehre, Zwischentest), akzent (Fachschaft, Veranstaltung), sonst leer (offen, neu, geschätzt). |
@@ -654,9 +707,10 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   `zentral_id`, `uebersicht: "[[Stundenplan]]"`), eigene Felder und alles ab `## Meine Notizen` (ältere: `## Notizen`) bleiben. Text: Zeit, Zeitraum,
   „Fällt aus“, „Anders“, „Zusätzlich“, Quelle; **Besuche ich nicht** steht seit 0.4.6 als Status-Knopf im Kopf der Notiz
   (`kopf.js`). Nie umbenannt (die id hängt an Tag und Beginn).
-  *Wochenraster* (Dashboard und Stundenplan, jede gezeigte Woche, `woche.js`): `ausfall` streicht durch
-  wie bisher; `aenderungen` = „Datum|Beginn|Ende|Raum“ (immer vollständig, ohne Zusatztermine) → liegt das Datum in der
-  gezeigten Woche, zeigt der Kasten Zeit und Raum der Änderung, Klasse `geaendert` (CSS Abschnitt 54). Das Raster lässt
+  *Wochenraster* (Dashboard und Stundenplan, jede gezeigte Woche, `woche.js`): `ausfall` → „Fällt aus“ in Warnfarbe;
+  `aenderungen` = „Datum|Beginn|Ende|Raum“ (immer vollständig, ohne Zusatztermine) → liegt das Datum in der
+  gezeigten Woche, zeigt der Kasten Zeit und Raum der Änderung in Warnfarbe, den üblichen Wert durchgestrichen (siehe
+  „Wochenraster“, *Ausnahmen*; CSS Abschnitt 55). Das Raster lässt
   Notizen mit `entfaellt: true` und ausgeblendete zentrale ids (`stundenplan_ausgeblendet`) weg; Einzeltermine stehen in ihrer
   Woche im Raster (für die Höhe zählen Serien plus Einzeltermine dieser Woche). Die Liste filtert genauso.
   *Alma gewinnt* (`eigenePaare`, Befund 6): Eine eigene Notiz (Alma oder von Hand, nicht zentral) ersetzt einen zentralen
@@ -1172,7 +1226,13 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
 - Geschrieben wird nur nach einem Tipp, mit `processFrontMatter`; neu gezeichnet bei Änderungen an der Notiz und an den
   Einstellungen. Die zentralen Stundenplan-Notizen tragen den Textlink „Besuche ich nicht“ nicht mehr (`zentral.js`), ein neuer SQ-Kurs
   nicht mehr den Satz „Stand in den Eigenschaften pflegen“ (`notizen.js`).
-- Tests: `tests/kopf.test.js` (Stufen je Typ, Farbe aus `statusArt`, „Besuche ich nicht“ je Quelle). Stil: `eba-core.css` Abschnitt 64.2.
+- **Unterlagen unter Übung und Tutorium** (seit 20.10.2026): Die Stundenplan-Notiz eines Tutoriums (Feld `art` mit „Tutorium“)
+  zeigt unter dem Kopf die Unterlagen der Art „Tutorium“ ihres Moduls (`code`), die einer Übung (auch „Übungsteil“) die der Art
+  „Übung“, jeweils nur aus dem eigenen Bereich, als Chips wie die Vorlesungsnotiz (`.eba-vorl-links`): höchstens drei, höchste
+  Nummer zuerst (das neueste Blatt), ohne Nummer (Aufgabenkatalog, Vorlage) danach; gibt es mehr, „Alle Unterlagen“ zur
+  Modulseite. Tipp öffnet die Begleitnotiz. Ohne Unterlagen bleibt der Kopf eine Zeile. Neu gezeichnet auch, wenn sich eine
+  Unterlage ändert oder wegfällt (`blaetterFuer`, reine Logik).
+- Tests: `tests/kopf.test.js` (Stufen je Typ, Farbe aus `statusArt`, „Besuche ich nicht“ je Quelle, Unterlagen unter Übung und Tutorium). Stil: `eba-core.css` Abschnitt 64.2.
 - **„⋯“ mit Eigenschaften** (seit 19.10.2026): Rechts im Kopf, auch bei Vorlesung und Übungsblatt (`ctx.kopf.mehr`). Die Eigenschaften
   der Notizen des Plugins stehen in keiner Ansicht mehr (Klasse `eba-notiz` aus `start.js` an Termin, Begleitnotiz, Lehrveranstaltung,
   Vorlesung, Übungsblatt, SQ-Kurs, Volltext; `eba-core.css` 25b); vorher stand in der Bearbeitungsansicht ein einsames
@@ -2256,7 +2316,12 @@ Frontmatter dieser Modulnotiz:
 - *Als Nächstes:* höchstens drei Einträge, nach Tag und Uhrzeit: die nächste Sitzung jeder Stundenplan-Serie mit diesem Kürzel
   (`wochentag`, `von`/`bis`, `ausfall`, `aenderungen`, Pausen, `entfaellt`, `einzeltermin`; heute nur, solange sie nicht vorbei
   ist) und Termin-Notizen mit diesem Kürzel, die nicht erledigt sind (Zeitraum mit `bis` als „19.–25.10.“, läuft er schon
-  „bis So 25.10.“). Kürzel im Titel entfällt.
+  „bis So 25.10.“). Kürzel im Titel entfällt. Seit 20.10.2026 auch jeder Ausfall dieser Lehrveranstaltung der nächsten 14 Tage
+  (`ctx.modell.ausfaelle`, nicht wegen Pause; vorher übersprang die Liste ihn still) mit Zeit und Art durchgestrichen und Pille
+  „fällt aus“, und eine geänderte Sitzung mit Pille „anderer Raum“, „neuer Raum“, „andere Zeit“ oder „geändert“, dem neuen Wert in
+  Warnfarbe und dem üblichen durchgestrichen („Hörsaal 9 statt ~~Hörsaal 1~~“, `eba-core.css` 58.7). Der Kopf einer
+  Stundenplan-Notiz (`kopf.js`) zeigt nur die Serie („Mi 10:15–11:45“), keinen einzelnen Termin; Ausfälle und Änderungen stehen
+  darum dort nicht (eine Stelle je Angabe: Woche und Modulseite).
 - *Knöpfe:* Neues Übungsblatt, Karteikarten lernen (nur mit Stapel), Unterlagen einordnen, Suchen.
 
 Die **Vorlesungen** (seit 19.10.2026: die eigenen Notizen gehören zum Meistgenutzten; bis dahin standen sie
@@ -2280,8 +2345,14 @@ Pille da, nur bei Notizen, die das Feld haben, „offiziell“ ohne Chip. CSS: `
 Die **Unterlagen** (`unterlagenliste.js`, Codeblock `eba-unterlagen`, seit 18.10.2026; vorher eine Tabelle mit
 Werkzeugleiste, Spaltenköpfen und Spalte Art) zeigen alle Notizen mit `typ: unterlage` und dem Kürzel des Moduls (ein Kürzel
 im Codeblock geht vor), auf allen Geräten gleich:
-- *Abschnitte* je Art in fester Reihenfolge, Name in der Mehrzahl: Folien, Skripte, Mitschriften, Übungen, Altklausuren,
+- *Abschnitte* je Art in fester Reihenfolge, Name in der Mehrzahl: Folien, Skripte, Mitschriften, Übungen, Tutorium, Altklausuren,
   Lösungen, Eigene Lösungen, Literatur, Scans, Sonstiges; unbekannte Arten mit eigenem Namen vor Sonstiges.
+- *Tutorium* (seit 20.10.2026) ist ein eigener Bereich, getrennt von Vorlesung und Übung: Nennt ein Ordner oder der Dateiname das
+  Tutorium („Tutoriumsunterlagen“, „Tutoriengruppen/Gruppe 4“, „Unterlagen zu den Tutorien“, „JA_Tutorium10“; nicht „Tutorin“, nicht
+  „Tutorial“), ist alles darin Art „Tutorium“, auch Blätter, Lösungen, Folien und Vorlagen (`unterlagen.js`, vor allen anderen
+  Regeln). Es liegt immer im Unterordner `Tutorium/` des Modulordners (`unterlagen.js`, `ilias.js` legen ihn an); eine Zahl aus dem
+  Ordner einer Gruppe („Gruppe 4: Dienstag …“, „Tutorium 5 | … | Mittwoch …“) ist keine Blattnummer. Lösungen hängen nicht an
+  Tutoriumsblättern, sie stehen im Abschnitt Tutorium. Der Uni-Abgleich auf dem eigenen Server folgt derselben Regel.
 - *Lösungen bei ihrer Aufgabe:* Eine Lösung (auch eine eigene) steht in der Zeile ihrer Übung oder Altklausur, wenn genau
   eine Übung dieselbe `nummer` hat oder die Wörter ihres Titels ohne „Lösung“, „Kurzlösung“, „Musterlösung“, „Korrektur“ …
   im Titel der Aufgabe vorkommen (bei mehreren die mit den wenigsten übrigen Wörtern, bei Gleichstand keine). Sonst bleibt

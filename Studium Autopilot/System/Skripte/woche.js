@@ -4,7 +4,10 @@
 // von Hand). Ob eine Sitzung stattfindet, sagt ctx.modell.findetStatt (eine Regel mit „Als Nächstes“ der Modulseite): ein Kasten
 // bis zu bis (Einzeltermin nur an seinem Tag), vor von blass mit „ab TT.MM.“ (eine gewählte Gruppe steht gleich nach der
 // Anmeldung da, nicht erst ab ihrer ersten Woche); Ausfall (ausfall, Pausen, vorlesungsfreie Tage wie Christi
-// Himmelfahrt) durchgestrichen, Änderung (aenderungen) gestrichelt mit neuer Zeit und neuem Raum, Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
+// Himmelfahrt) mit durchgestrichenem Namen und „Fällt aus“, Änderung (aenderungen) mit neuer Zeit und neuem Raum („HS 9 statt
+// HS 1“). Seit 20.10.2026 ist jede Ausnahme dieser Lehrveranstaltung (Ausfall aus ausfall, andere Zeit, anderer Raum; Klasse
+// ausnahme) in Warnfarbe, Ausfall wegen einer Pause oder eines freien Tags bleibt leise; vorher sah ein Ausfall blass aus wie
+// „ab TT.MM.“ und eine Änderung war nur gestrichelt umrandet. Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
 // sonst Code), blass Art und Gruppe (nur Übung, Tutorium, Seminar; Name aus gruppe), darunter Raum, davor der Beginn, wenn er
 // nicht zur vollen Stunde liegt. Kopfzeile rechts „‹ KW n ›“; Wischen nach links/rechts wechselt am Touch-Gerät die Woche.
 // Welche Woche: nur auf diesem Gerät (app.saveLocalStorage, Schlüssel eba-woche-versatz, nie im Vault, nie abgeglichen), so
@@ -18,8 +21,10 @@
 // Ein blasser Kasten (beginnt erst) teilt sich nie die Breite mit einem echten: Überschneidet er einen, steht er schmal am
 // rechten Rand, eine Vorlesung wird nie halbiert (spalten).
 // Schmale Karte (iPhone, unter 520 px, eba-core.css 55): Tagesansicht statt Raster (seit 19.10.2026). Kopf „KW n“ mit ‹ ›, fünf
-// Tage mit Datum (heute betont, Punkt bei Lehrveranstaltungen), darunter die Lehrveranstaltungen des gewählten Tags über die
-// ganze Breite mit vollem Namen, Zeit und Raum; was erst beginnt, als leise Zeile („Tutorium BWL · ab 04.11. · Mi 14:15“).
+// Tage mit Datum (heute betont, Punkt bei Lehrveranstaltungen, Strich in Warnfarbe an Tagen mit Ausfall oder Änderung), darunter
+// die Lehrveranstaltungen des gewählten Tags über die ganze Breite mit vollem Namen, Zeit und Raum, bei einer Ausnahme zuerst der
+// kurze Text („Fällt aus“, „Anderer Raum“ …) und der übliche Wert durchgestrichen; was erst beginnt, als leise Zeile („Tutorium
+// BWL · ab 04.11. · Mi 14:15“).
 // Wischen wechselt den Tag (über Freitag hinaus die Woche). Welcher Tag: wie die Woche nur auf diesem Gerät (eba-woche-tag),
 // sonst heute bzw. am Wochenende Montag (Planwoche des Fachmodells). Beide Ansichten werden gezeichnet, die Breite entscheidet
 // im CSS (Container-Abfrage), so passt es auch nach dem Drehen.
@@ -35,6 +40,11 @@ module.exports = function (ctx) {
   const RAND = 30; // px: Wischen vom Bildschirmrand gehört Obsidian (Seitenleisten)
   const HOEHE = { "Dashboard.md": 497 }; // Höhe des Rasters in px (am PC/iPad nur Stundenplan, Dashboard hat feste Viertelstunden)
   const HOEHE_SONST = 697;
+  // Die Seite Stundenplan zeigt immer das Raster, auch schmal (seit 20.10.2026); überall sonst (Dashboard) schmal die
+  // Tagesansicht. Am Pfad, nicht an einem Argument
+  // im Codeblock: Hat jemand die Seite geändert, ersetzt das Update sie nicht (Klasse „seite“), der Pfad gilt trotzdem.
+  const NUR_RASTER = ["Studium/Stundenplan.md"];
+  const mitTag = (pfad) => NUR_RASTER.indexOf(String(pfad || "")) < 0;
   const TAGE = ["Mo", "Di", "Mi", "Do", "Fr"];
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
   const VORLESUNG = ["Vorlesung", "Veranstaltung"]; // „Veranstaltung“ = Alma ohne erkannte Art
@@ -195,7 +205,9 @@ module.exports = function (ctx) {
       const ab = s.grund === "ausserhalb" && von && tage[w - 1] < von ? von : "";
       if (s.statt || ab || AUS.indexOf(s.grund) >= 0) wl.push(Object.assign({ s, ab }, n));
     }
-    const gehalten = wl.filter(({ s }) => s.statt);
+    // Fällt in der Woche alles aus, steht ein Satz da; außer eine Lehrveranstaltung fällt selbst aus (ausfall): Dann zeigt die
+    // Woche ihre Kästen, damit man den Ausfall sieht
+    const gehalten = wl.filter(({ s }) => s.statt || s.grund === "ausfall");
     let leer = "";
     if (!gehalten.length) {
       if (pw.length) leer = pw[0].name || "Vorlesungsfrei";
@@ -208,33 +220,49 @@ module.exports = function (ctx) {
       const tag = Number(fm.wochentag);
       const aen = s.geaendert;
       const b = aen ? zeit(s.beginn) : zeit(fm.beginn), e = aen ? zeit(s.ende) : zeit(fm.ende);
-      const raum = aen ? s.raum : fm.raum == null ? "" : String(fm.raum);
+      const raum = s.raum; // findetStatt: der Raum an diesem Tag (Änderung, sonst der übliche)
       const zeitText = aen ? s.beginn + "–" + s.ende : String(fm.beginn) + "–" + String(fm.ende);
       const aus = !s.statt && !ab;
+      // Ausnahme dieser Lehrveranstaltung (Warnfarbe): Ausfall aus ausfall (nicht Pause oder freier Tag) oder an diesem Tag ein
+      // anderer Raum bzw. eine andere Zeit, auch ein neuer Raum in den ersten zwei Wochen nach einer Verlegung (neuerRaum). Kurzer
+      // Text dazu (marke), in der Tagesansicht vor Raum und Zeit.
+      const raumNeu = !aus && !ab && s.raumGeaendert, zeitNeu = !aus && !ab && s.zeitGeaendert;
+      const ausnahme = (aus && s.grund === "ausfall") || raumNeu || zeitNeu;
+      const marke = aus ? "Fällt aus" : raumNeu && zeitNeu ? "Geändert" : raumNeu ? (s.neuerRaum ? "Neuer Raum" : "Anderer Raum") : zeitNeu ? "Andere Zeit" : "";
       const klassen = ["eba-ev", istUebung(fm) ? "ue" : "vl"];
       if (fm.konflikt) klassen.push("konflikt");
       if (aen) klassen.push("geaendert");
+      if (ausnahme) klassen.push("ausnahme");
       if (ab) klassen.push("spaeter");
       else if (aus) klassen.push("ausfall");
       else if (ht && tag === wt) { klassen.push("heute"); if (jetztHm >= String(fm.beginn) && jetztHm <= String(fm.ende)) klassen.push("jetzt"); }
       // Antippen öffnet das Modul über seinen vollen Pfad, nie über den Namen (den könnte eine andere Notiz auch tragen)
       const modul = String(fm.modul || "").replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
       const ziel = (modulPfad && (modulPfad[modul] || modulPfad[modul.replace(/\.md$/, "").split("/").pop()])) || pfad;
+      const sonst = [zeitNeu ? s.zeitAlt : "", raumNeu ? s.raumAlt : ""].filter(Boolean).join(" · ");
+      // Raster (wenig Platz): bei einer anderen Zeit der neue Beginn und „statt“ der übliche („12:15 statt 10:00“); ändert sich
+      // nur das Ende, „bis 13:45 statt 12:00“
+      const alt = zeitNeu ? s.zeitAlt.split("–") : [];
+      const nurEnde = zeitNeu && alt[0] === s.beginn;
       return {
         tag, pfad, klassen,
         von: Math.max(2, Math.min(rows + 1, zeileVon(b, h0))), bis: Math.max(3, Math.min(rows + 2, zeileBis(e, h0))),
         titel: String(fm.titel || pfad) + " · " + zeitText + " · " + raum + (fm.konflikt ? " · überschneidet sich mit " + fm.konflikt : "")
-          + (aus ? " · fällt aus" + (s.name ? " (" + s.name + ")" : "") : "") + (ab ? " · beginnt am " + tagMonat(ab) : ""),
+          + (aus ? " · fällt aus" + (s.name ? " (" + s.name + ")" : "") : "") + (ab ? " · beginnt am " + tagMonat(ab) : "")
+          + (marke && !aus ? " · " + marke.charAt(0).toLowerCase() + marke.slice(1) + (sonst ? (s.neuerRaum && !zeitNeu ? ", vorher " : ", sonst ") + sonst : "") : ""),
         notiz: ziel,
         kurz: kurzname(fm, kurzVonCode), art: artText(fm),
-        // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.), bei einer Änderung die neue Zeit, vor dem Beginn „ab TT.MM.“
-        zeit: ab ? "ab " + tagMonat(ab) : aen ? zeitText : String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
+        // Beginn nur, wenn er nicht zur vollen Stunde liegt (c.t.) und nicht der Raum wechselt (der braucht den Platz), bei einer
+        // Änderung der Zeit der neue Beginn (zeitStatt: der übliche), vor dem Beginn „ab TT.MM.“
+        zeit: ab ? "ab " + tagMonat(ab) : zeitNeu ? (nurEnde ? "bis " + s.ende : s.beginn) : !raumNeu && String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
+        zeitStatt: zeitNeu ? (nurEnde ? alt[1] || "" : alt[0]) : "",
         raum,
+        ausnahme, marke, raumNeu, zeitNeu, raumAlt: raumNeu ? s.raumAlt : "", zeitAlt: zeitNeu ? s.zeitAlt : "", grund: aus ? s.name : "",
         // Tagesansicht: Beginn und Ende (bei einer Änderung die neuen), Art auch bei Vorlesungen, Ausfall mit Grund, vor dem Beginn
         // eine leise Zeile „Tutorium BWL · ab 04.11. · Mi 14:15“
         spaeter: !!ab, aus, beginn: aen ? s.beginn : String(fm.beginn), ende: aen ? s.ende : String(fm.ende),
         artLang: artText(fm) || (String(fm.art || "") === "Vorlesung" ? "Vorlesung" : ""),
-        ausText: aus ? "fällt aus" + (s.name ? " (" + s.name + ")" : "") : "",
+        ausText: aus ? "Fällt aus" + (s.name ? " (" + s.name + ")" : "") : "",
         leise: ab ? [String(fm.art || "") === "Veranstaltung" ? "" : String(fm.art || ""), kurzname(fm, kurzVonCode)].filter(Boolean).join(" ")
           + " · ab " + tagMonat(ab) + " · " + TAGE[tag - 1] + " " + String(fm.beginn) : "",
       };
@@ -242,10 +270,15 @@ module.exports = function (ctx) {
     for (const k of kaesten) if (k.bis <= k.von) k.bis = k.von + 1;
     return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, kw: modell.zeit.kw(tage[0]) };
   };
-  // Tagesansicht: die fünf Tage (Kurzname, Datum, heute, Punkt bei Lehrveranstaltungen, die stattfinden) und je Tag die Kästen
-  // in der Reihenfolge des Tages (i = 0 Montag … 4 Freitag)
-  const tageAus = (W) => W.tage.map((t, i) => ({ iso: t, name: TAGE[i], lang: TAGE_LANG[i], datum: Number(t.slice(8, 10)) + ".",
-    heute: W.ht && W.wt === i + 1, termine: W.kaesten.some((k) => k.tag === i + 1 && !k.spaeter && !k.aus) }));
+  // Tagesansicht: die fünf Tage (Kurzname, Datum, heute, Punkt bei Lehrveranstaltungen, die stattfinden; Strich in Warnfarbe bei
+  // einer Ausnahme: Ausfall oder Änderung, hinweis für Vorlesesoftware und Tooltip) und je Tag die Kästen in der Reihenfolge des
+  // Tages (i = 0 Montag … 4 Freitag)
+  const tageAus = (W) => W.tage.map((t, i) => {
+    const ks = W.kaesten.filter((k) => k.tag === i + 1), aus = ks.some((k) => k.ausnahme && k.aus), anders = ks.some((k) => k.ausnahme && !k.aus);
+    return { iso: t, name: TAGE[i], lang: TAGE_LANG[i], datum: Number(t.slice(8, 10)) + ".",
+      heute: W.ht && W.wt === i + 1, termine: ks.some((k) => !k.spaeter && !k.aus), ausnahme: aus || anders,
+      hinweis: aus && anders ? "Ausfall und Änderung" : aus ? "Ausfall" : anders ? "Änderung" : "" };
+  });
   const tagKaesten = (W, i) => W.kaesten.filter((k) => k.tag === i + 1).sort((a, b) => a.von - b.von || a.bis - b.bis || (a.spaeter ? 1 : 0) - (b.spaeter ? 1 : 0));
 
   // ---------- Lesen (metadataCache) ----------
@@ -280,8 +313,9 @@ module.exports = function (ctx) {
     const pfad = (c && c.sourcePath) || "";
     const zeileHoehe = Math.round(((HOEHE[pfad] || HOEHE_SONST) / (W.rows + 1)) * 100) / 100;
     el.empty();
-    tagZeichnen(el, W, v, tagWahl(tagGewaehlt(), W));
-    const g = el.createDiv({ cls: "eba-woche hat-tag", attr: { lang: "de", style: "grid-template-rows:34px repeat(" + (W.rows + 1) + ", " + zeileHoehe + "px)" } });
+    const tag = mitTag(pfad);
+    if (tag) tagZeichnen(el, W, v, tagWahl(tagGewaehlt(), W));
+    const g = el.createDiv({ cls: "eba-woche" + (tag ? " hat-tag" : ""), attr: { lang: "de", style: "grid-template-rows:34px repeat(" + (W.rows + 1) + ", " + zeileHoehe + "px)" } });
     if (W.ht) g.createEl("i", { cls: "eba-tagspalte", attr: { style: "grid-column:" + (W.wt + 1) } });
     g.createDiv({ cls: "eba-tagkopf eba-ecke", attr: { style: "grid-column:1" } });
     TAGE.forEach((t, i) => {
@@ -308,12 +342,41 @@ module.exports = function (ctx) {
       const a = g.createEl("a", { cls: k.klassen.join(" "), attr: { title: k.titel, href: ctx.link("zeigen", { notiz: k.notiz }), style: stil } });
       const b = a.createEl("b", { text: k.kurz });
       if (k.art) { b.appendText(" "); b.createEl("i", { text: k.art }); }
+      // Zweite Zeile zweimal, das CSS wählt nach der Breite (Abschnitt 55): lang und knapp (schmale Spalten)
       const s = a.createSpan();
-      if (k.zeit) s.createEl("time", { text: k.zeit + " · " });
-      s.appendText(k.raum);
+      zeileZeichnen(s.createSpan({ cls: "eba-ev-lang" }), k, false);
+      zeileZeichnen(s.createSpan({ cls: "eba-ev-knapp" }), k, true);
     }
     if (W.leer) g.createDiv({ cls: "eba-woche-leer", attr: { style: "grid-row:2 / span " + W.rows } }).createSpan({ text: W.leer });
     wischen(g, v);
+  };
+
+  // Zweite Zeile eines Kastens im Raster: Ausfall „Fällt aus“ statt des Raums; sonst [Zeit ·] Raum, eine Änderung in Warnfarbe
+  // mit „statt“ und dem üblichen Wert durchgestrichen. knapp (schmale Spalten, Seite Stundenplan auf dem iPhone hochkant): Zeit
+  // nur bei einer Änderung und „ab TT.MM.“, Raum gekürzt (raumKnapp), ohne den Namen der Pause
+  const zeileZeichnen = (el, k, knapp) => {
+    if (k.aus) { el.createSpan({ cls: "eba-ev-marke", text: "Fällt aus" }); if (k.grund && !knapp) el.appendText(" · " + k.grund); return; }
+    if (k.zeit && (!knapp || k.zeitNeu || k.spaeter)) {
+      el.createEl("time", { cls: k.zeitNeu ? "eba-ev-neu" : undefined, text: k.zeit });
+      if (k.zeitStatt) { el.appendText(" statt "); el.createEl("s", { text: k.zeitStatt }); }
+      el.appendText(" · ");
+    }
+    raumZeichnen(el, k, knapp ? raumKnapp : null);
+  };
+  // Raum kurz für schmale Spalten: ohne Zusatz in Klammern (auch verschachtelt), „Hörsaal“ als „HS“ („Hörsaal 1 (Keplerstraße 2)“
+  // → „HS 1“); bliebe nichts, der ganze Raum
+  const raumKnapp = (r) => {
+    let s = String(r || "");
+    while (/\([^()]*\)/.test(s)) s = s.replace(/\s*\([^()]*\)/g, "");
+    return s.replace(/Hörsaal\b/g, "HS").replace(/\s+/g, " ").replace(/[\s,]+$/, "").trim() || String(r || "");
+  };
+  // Raum eines Kastens: geändert in Warnfarbe, dahinter „statt“ und der übliche Raum durchgestrichen („HS 9 statt HS 1“);
+  // kuerzen: raumKnapp für schmale Spalten
+  const raumZeichnen = (el, k, kuerzen) => {
+    const r = (x) => (kuerzen ? kuerzen(x) : x);
+    if (!k.raumNeu) { el.appendText(r(k.raum)); return; }
+    el.createSpan({ cls: "eba-ev-neu", text: r(k.raum) });
+    if (k.raumAlt) { el.appendText(" statt "); el.createEl("s", { text: r(k.raumAlt) }); }
   };
 
   // Tagesansicht (schmale Karte, iPhone): Kopf, fünf Tage, Lehrveranstaltungen des Tags t über die ganze Breite
@@ -328,8 +391,9 @@ module.exports = function (ctx) {
     knopf(nav, "eba-wt-pfeil", "›", "Woche danach", v + 1);
     const leiste = box.createDiv({ cls: "eba-wt-tage", attr: { role: "group", "aria-label": "Tag" } });
     tageAus(W).forEach((d, i) => {
-      const cls = ["eba-wt-tag"].concat(i === t ? ["gewaehlt"] : [], d.heute ? ["heute"] : [], d.termine ? ["termine"] : []).join(" ");
-      const c = leiste.createDiv({ cls, attr: { role: "button", tabindex: "0", "aria-pressed": String(i === t), "aria-label": d.lang + " " + d.datum + (d.heute ? ", heute" : "") } });
+      const cls = ["eba-wt-tag"].concat(i === t ? ["gewaehlt"] : [], d.heute ? ["heute"] : [], d.termine ? ["termine"] : [], d.ausnahme ? ["ausnahme"] : []).join(" ");
+      const c = leiste.createDiv({ cls, attr: { role: "button", tabindex: "0", "aria-pressed": String(i === t),
+        "aria-label": d.lang + " " + d.datum + (d.heute ? ", heute" : "") + (d.hinweis ? ", " + d.hinweis : ""), title: d.hinweis || null } });
       c.createSpan({ cls: "eba-wt-name", text: d.name });
       c.createSpan({ cls: "eba-wt-datum", text: d.datum });
       const los = (e) => { e.preventDefault(); tagSetzen(i); neu(); };
@@ -343,13 +407,20 @@ module.exports = function (ctx) {
       const href = ctx.link("zeigen", { notiz: k.notiz });
       if (k.spaeter) { liste.createEl("a", { cls: "eba-wt-leise", text: k.leise, attr: { title: k.titel, href } }); continue; }
       const a = liste.createEl("a", { cls: k.klassen.filter((x) => x !== "schmal").join(" "), attr: { title: k.titel, href } });
-      const uhr = a.createEl("time", { cls: "eba-wt-uhr" });
+      const uhr = a.createEl("time", { cls: "eba-wt-uhr" + (k.zeitNeu ? " eba-ev-neu" : "") });
       uhr.createSpan({ text: k.beginn });
       uhr.createSpan({ text: k.ende });
       const b = a.createEl("b", { text: k.kurz });
       if (k.artLang) { b.appendText(" "); b.createEl("i", { text: k.artLang }); }
-      const ort = [k.raum, k.ausText].filter(Boolean).join(" · ");
-      if (ort) a.createSpan({ cls: "eba-wt-ort", text: ort });
+      // Zweite Zeile: bei einer Ausnahme zuerst der kurze Text („Fällt aus“, „Anderer Raum“ …), bei einer anderen Zeit „statt“ und
+      // die übliche Zeit durchgestrichen, dann der Raum („HS 9 statt HS 1“); Ausfall wegen einer Pause mit ihrem Namen
+      const ort = a.createSpan({ cls: "eba-wt-ort" });
+      const trennen = () => { if (ort.childNodes.length) ort.appendText(" · "); };
+      if (k.aus) { ort.createSpan({ cls: "eba-ev-marke", text: "Fällt aus" }); if (k.grund) ort.appendText(" (" + k.grund + ")"); continue; }
+      if (k.marke) ort.createSpan({ cls: "eba-ev-marke", text: k.marke });
+      if (k.zeitAlt) { trennen(); ort.appendText("statt "); ort.createEl("s", { text: k.zeitAlt }); }
+      if (k.raum) { trennen(); raumZeichnen(ort, k); }
+      if (!ort.childNodes.length) ort.remove();
     }
     wischen(box, v, t);
   };
@@ -433,6 +504,6 @@ module.exports = function (ctx) {
     woche: { ausfuehren: (c) => { versatzSetzen(c.parameter.schritt); if (Number(c.parameter.schritt) === 0) app.saveLocalStorage(TAG_SCHLUESSEL, null); neu(); } },
   };
 
-  return { registrieren, aktionen, aktuellerMontag, kw, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, wischStartOk, wischAchse,
+  return { registrieren, aktionen, aktuellerMontag, kw, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, mitTag, raumKnapp, wischStartOk, wischAchse,
     wischRichtung, tagAus, tagWahl, tageAus, tagKaesten, tagSchritt };
 };

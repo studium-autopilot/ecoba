@@ -30,7 +30,13 @@ module.exports = function (ctx) {
   const ARCHIVE = ["zip", "rar", "7z"];
   const LESEFORMATE = ["", "pdf", "epub", "djvu", "doc", "docx", "odt", "rtf", "txt", "htm", "html"];
   const AUSLASSEN = ["md", "base", "canvas", ...ARCHIVE];
-  const ARTEN = ["Folien", "Skript", "Übung", "Lösung", "Eigene Lösung", "Mitschrift", "Altklausur", "Literatur", "Scan", "Sonstiges"];
+  const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lösung", "Eigene Lösung", "Mitschrift", "Altklausur", "Literatur", "Scan", "Sonstiges"];
+  // Tutorium ist ein eigener Bereich (seit 20.10.2026): Nennt der Dateiname oder ein Ordner das Tutorium („Tutoriumsunterlagen“,
+  // „Tutoriengruppen/Gruppe 4“, „JA_Tutorium10“), ist alles darin Tutorium, auch Blätter, Lösungen und Folien. Nicht „Tutorin“
+  // (Chatbot) und nicht „Tutorial“ (Anleitung).
+  const TUTORIUM = /tutori(um|en)/i;
+  // Ordner einer Gruppe („Gruppe 4: Dienstag 10 - 12“, „Tutorium 5 | … | Mittwoch 14-16“): Die Zahl darin ist keine Blattnummer
+  const GRUPPENORDNER = /(^|[^a-zäöüß])(gruppe|group)[\s._-]*\d|montag|dienstag|mittwoch|donnerstag|freitag/i;
 
   // Reihenfolge zählt: spezifische Begriffe zuerst („Formelsammlung zur Klausur“ → Sonstiges, „Skript zur Vorlesung“ → Skript).
   // „(^|[^a-zäöüß])“ statt \b, weil „_“ in Dateinamen wie „Kurs_VL03“ sonst als Buchstabe zählt. Kein Lookbehind (ältere iOS-Versionen).
@@ -44,7 +50,7 @@ module.exports = function (ctx) {
     ["Altklausur", new RegExp(`klausur(en)?(?![a-zäöüß])|klausur(aufgaben?|fragen?|sammlung)|${W}exams?${E}|midterm`, "i")],
     ["Eigene Lösung", new RegExp(`(meine|eigene)[\\s._-]*l(ö|oe)sung|${W}my[\\s._-]*solution|mitschrift[\\s._-]*(zu[\\s._-]*)?(blatt|(ü|ue)bung)`, "i")],
     ["Lösung", new RegExp(`l(ö|oe)sung|solution|musterl|${W}lsg${E}`, "i")],
-    ["Übung", new RegExp(`(ü|ue)bung|exercise|aufgaben|hausaufgabe|${W}ha[\\s._-]?\\d|${W}(ü|ue)[\\s._-]?\\d|${W}blatt([^a-zäöüß]|$)|sheet|tutori|problem.?set|${W}ps\\s?\\d`, "i")],
+    ["Übung", new RegExp(`(ü|ue)bung|exercise|aufgaben|hausaufgabe|${W}ha[\\s._-]?\\d|${W}(ü|ue)[\\s._-]?\\d|${W}blatt([^a-zäöüß]|$)|sheet|problem.?set|${W}ps\\s?\\d`, "i")],
     // „skript“ nur am Wortanfang oder nach Fugen-s („Vorlesungsskript“), nicht in „Deskriptive“
     ["Skript", new RegExp(`${W}([a-zäöüß]*s)?skript|${W}script|${W}reader${E}|lecture.?notes|vorlesungsunterlagen`, "i")],
     ["Mitschrift", new RegExp(`mitschrift|annotiert|annotated|handschrift|${W}notizen${E}`, "i")],
@@ -91,6 +97,7 @@ module.exports = function (ctx) {
     Folien: WF,
     Skript: "lecture notes|([a-zäöüß]*s)?skript(um|e|en)?|script|reader|vorlesungsunterlagen",
     Übung: WU,
+    Tutorium: "tutori(um|ums|en)", // was es ist („Aufgabenblatt“, „Lösung“, „Folien“), bleibt im Titel
     Lösung: `${WL}|${WU}|kl`, // „…_KL“ (Klausurlösung)
     "Eigene Lösung": `(meine|eigene) (${WL})|my solutions?|mitschrift|${WL}|${WU}`,
     Mitschrift: `mitschrift|annotiert|annotated|handschrift|notizen|${WF}`,
@@ -157,6 +164,8 @@ module.exports = function (ctx) {
   // die Klausur selbst („…_Korrektur“, „Klausur mit Lösungen“) bleibt Altklausur.
   // Ergebnis: { art, quelle: "name" | "ordner" | "rest", schwach } (schwach = nur ein schwacher Hinweis wie „Organisatorisches“)
   const artBestimmen = (rel, endung, basis) => {
+    if (TUTORIUM.test(basis)) return { art: "Tutorium", quelle: "name", schwach: false };
+    if (rel.split("/").slice(0, -1).some((o) => TUTORIUM.test(o))) return { art: "Tutorium", quelle: "ordner", schwach: false };
     if (SCAN_ANFANG.test(basis)) return { art: "Scan", quelle: "name", schwach: false };
     let r = KL_ENDE.test(basis) ? ["Lösung"] : regelFinden(basis);
     if (r && r[0] === "Altklausur" && !MIT_LOESUNG.test(basis)) r = REGELN.find(([a, re]) => (a === "Eigene Lösung" || a === "Lösung") && re.test(basis)) || r;
@@ -285,10 +294,10 @@ module.exports = function (ctx) {
     // nummerierte Dateien ohne erkannte Art („01_Einfuehrung“, „01_Organisatorisches“) sind meist Folien
     if (art === "Sonstiges" && ausName && (a.quelle === "rest" || a.schwach) && !BILDER.includes(endung)) art = "Folien";
     // ohne Nummer im Namen: Nummer aus dem Unterordner („Woche 3/slides.pdf“, „03_Kostenrechnung/Folien.pdf“), der tiefste zuerst;
-    // nicht aus der Gliederung eines Sammelordners, aus einem Sitzungsordner nur für Folien
+    // nicht aus der Gliederung eines Sammelordners und nicht aus dem Ordner einer Gruppe, aus einem Sitzungsordner nur für Folien
     if (!ausName) for (const o of ordner.slice().reverse()) {
       const n = nummerErkennen(o);
-      if (n.nr == null || gliederungsNummer(o, n) || (SITZUNGSORDNER.test(o) && art !== "Folien")) continue;
+      if (n.nr == null || gliederungsNummer(o, n) || GRUPPENORDNER.test(o) || (SITZUNGSORDNER.test(o) && art !== "Folien")) continue;
       nr = n.nr; bis = n.bis; break;
     }
     let titel = titelErkennen(basis, eigenerCode || codeNeu, treffer, art, idx);
@@ -746,7 +755,7 @@ module.exports = function (ctx) {
       vergeben.add(`${p.ordner}/${p.name}`.toLowerCase());
     }
   };
-  const unsicher = (p) => p.dup || p.art === "Sonstiges" || (["Folien", "Übung", "Lösung"].includes(p.art) && p.nr == null && !p.titel);
+  const unsicher = (p) => p.dup || p.art === "Sonstiges" || (["Folien", "Übung", "Tutorium", "Lösung"].includes(p.art) && p.nr == null && !p.titel);
   // Eine Datei der Vorschau ändern: ein Fenster „Neu …“ (ctx.formular) mit Art (oder im Eingang lassen), Nummer und Titel;
   // Esc lässt alles, wie es war
   const LASSEN = "im-eingang";
@@ -916,9 +925,13 @@ module.exports = function (ctx) {
         if (!p.nachtrag) {
           ordner = await modulOrdner(p.modul, p.code);
           if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
-          // Modulordner mit Unterordnern „Vorlesung“/„Übung“ (z. B. B110): Datei nach Art dorthin, sonst in den Modulordner
+          // Modulordner mit Unterordnern „Vorlesung“/„Übung“ (z. B. B110): Datei nach Art dorthin, sonst in den Modulordner.
+          // Tutorium hat immer seinen eigenen Unterordner (getrennt von Vorlesung und Übung).
           const unter = { Folien: "Vorlesung", Skript: "Vorlesung", Mitschrift: "Vorlesung", Übung: "Übung", Lösung: "Übung", "Eigene Lösung": "Übung" }[p.art];
-          if (unter && app.vault.getAbstractFileByPath(`${ordner}/${unter}`) instanceof TFolder) ordner = `${ordner}/${unter}`;
+          if (p.art === "Tutorium") {
+            ordner = `${ordner}/Tutorium`;
+            if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
+          } else if (unter && app.vault.getAbstractFileByPath(`${ordner}/${unter}`) instanceof TFolder) ordner = `${ordner}/${unter}`;
           const wunsch = zielName(p.code, p.art, p.nr, p.titel);
           paar = !p.dup && pdfAllein(st) ? nurOriginal(ordner, wunsch) : null; // PDF zur schon eingeordneten PPTX
           name = paar ? wunsch : freierName(ordner, wunsch, st.dateien.map(ext));

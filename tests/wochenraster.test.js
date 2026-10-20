@@ -157,12 +157,67 @@ test("Überschneidung: nebeneinander, konflikt mit Warnung im Tooltip", () => {
   assert.deepEqual(s.map((k) => k.spalte + "/" + k.spalten), ["0/3", "1/3", "2/3", "0/1"]);
 });
 
-test("Änderung in dieser Woche: neue Zeit und neuer Raum, Kasten an der neuen Zeit, gestrichelt", () => {
+test("Änderung in dieser Woche: neue Zeit und neuer Raum, Kasten an der neuen Zeit, Ausnahme mit dem üblichen Wert dazu", () => {
   const d = kasten(woche("2026-10-19"), "Stundenplan/Do X200.md");
-  assert.ok(d.klassen.includes("geaendert"));
-  assert.deepEqual([d.zeit, d.raum, d.von, d.bis], ["12:15–13:45", "Hörsaal 9", 19, 25]);
-  assert.match(d.titel, /· 12:15–13:45 · Hörsaal 9$/);
-  assert.ok(!kasten(woche("2026-10-26"), "Stundenplan/Do X200.md").klassen.includes("geaendert"));
+  assert.ok(d.klassen.includes("geaendert") && d.klassen.includes("ausnahme"));
+  assert.deepEqual([d.zeit, d.zeitStatt, d.raum, d.von, d.bis], ["12:15", "10:00", "Hörsaal 9", 19, 25]);
+  assert.deepEqual([d.marke, d.zeitNeu, d.zeitAlt, d.raumNeu, d.raumAlt], ["Geändert", true, "10:00–12:00", true, "Hörsaal 1"]);
+  assert.match(d.titel, /· 12:15–13:45 · Hörsaal 9 · geändert, sonst 10:00–12:00 · Hörsaal 1$/);
+  const n = kasten(woche("2026-10-26"), "Stundenplan/Do X200.md");
+  assert.ok(!n.klassen.includes("geaendert") && !n.klassen.includes("ausnahme"));
+  assert.deepEqual([n.marke, n.raumAlt, n.zeitAlt], ["", "", ""]);
+});
+
+// Ausnahmen (seit 20.10.2026): Ausfall dieser
+// Lehrveranstaltung und Änderungen in Warnfarbe mit kurzem Text; Ausfall wegen Pause oder freiem Tag leise
+const ausnahmen = (montag, extra) => W.wocheBauen({ notizen: extra, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag(montag), jetzt: new Date("2026-10-19T08:00:00") });
+const X = (pfad, fm) => lv(pfad, Object.assign({ code: "X400", art: "Vorlesung", beginn: "10:15", ende: "11:45", von: "2026-10-12", bis: "2027-02-05" }, fm));
+
+test("Ausnahmen: Ausfall dieser Lehrveranstaltung in Warnfarbe mit „Fällt aus“, nicht blass wie „ab TT.MM.“", () => {
+  const w = ausnahmen("2026-10-19", [X("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", wochentag: 3, ausfall: ["2026-10-21"] })]);
+  const k = w.kaesten[0];
+  assert.deepEqual([k.aus, k.ausnahme, k.marke, k.grund, k.ausText], [true, true, "Fällt aus", "", "Fällt aus"]);
+  assert.deepEqual(k.klassen, ["eba-ev", "vl", "ausnahme", "ausfall"]);
+  assert.ok(!k.klassen.includes("spaeter"));
+  assert.match(k.titel, /· fällt aus$/);
+  const t = W.tageAus(w);
+  assert.deepEqual(t.map((d) => [d.termine, d.ausnahme, d.hinweis]), [[false, false, ""], [false, false, ""], [false, true, "Ausfall"], [false, false, ""], [false, false, ""]]);
+});
+
+test("Ausnahmen: nur anderer Raum oder nur andere Zeit, je mit kurzem Text und dem üblichen Wert", () => {
+  const raum = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|10:15|11:45|Hörsaal 21"] })]).kaesten[0];
+  assert.deepEqual([raum.marke, raum.raum, raum.raumNeu, raum.raumAlt, raum.zeitNeu, raum.zeitAlt, raum.zeit], ["Anderer Raum", "Hörsaal 21", true, "Hörsaal 1", false, "", ""]);
+  assert.ok(raum.klassen.includes("ausnahme"));
+  const zeit = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|14:15|15:45|Hörsaal 1"] })]).kaesten[0];
+  assert.deepEqual([zeit.marke, zeit.zeit, zeit.zeitStatt, zeit.zeitAlt, zeit.raumNeu, zeit.raumAlt, zeit.beginn, zeit.ende],
+    ["Andere Zeit", "14:15", "10:15", "10:15–11:45", false, "", "14:15", "15:45"]);
+  const ende = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|10:15|12:45|Hörsaal 1"] })]).kaesten[0];
+  assert.deepEqual([ende.zeit, ende.zeitStatt], ["bis 12:45", "11:45"], "nur das Ende anders");
+  // Änderung, die nichts ändert (gleiche Zeit, gleicher Raum): keine Ausnahme
+  const gleich = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|10:15|11:45|Hörsaal 1"] })]).kaesten[0];
+  assert.deepEqual([gleich.ausnahme, gleich.marke], [false, ""]);
+  assert.deepEqual(W.tageAus(ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|14:15|15:45|Hörsaal 1"] })]))[1],
+    { iso: "2026-10-20", name: "Di", lang: "Dienstag", datum: "20.", heute: false, termine: true, ausnahme: true, hinweis: "Änderung" });
+});
+
+test("Ausnahmen: dauerhafte Verlegung – in den ersten zwei Wochen „Neuer Raum“ mit dem alten Raum, davor der alte, danach still", () => {
+  const n = [X("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", wochentag: 3, raum: "Hörsaal 21, Kupferbau", raum_vorher: "Hörsaal 1", raum_seit: "2026-10-28" })];
+  const k = (montag) => ausnahmen(montag, n).kaesten[0];
+  assert.deepEqual([k("2026-10-19").raum, k("2026-10-19").ausnahme], ["Hörsaal 1", false]);
+  const a = k("2026-10-26");
+  assert.deepEqual([a.raum, a.marke, a.raumNeu, a.raumAlt, a.ausnahme, a.zeit], ["Hörsaal 21, Kupferbau", "Neuer Raum", true, "Hörsaal 1", true, ""]);
+  assert.match(a.titel, /· neuer Raum, vorher Hörsaal 1$/);
+  assert.equal(k("2026-11-02").marke, "Neuer Raum", "zweite Woche");
+  assert.deepEqual([k("2026-11-09").marke, k("2026-11-09").ausnahme], ["", false]);
+});
+
+test("Ausnahmen: Ausfall wegen Pause oder freiem Tag bleibt leise, auch wenn er in ausfall steht (Alma trägt die Weihnachtspause ein)", () => {
+  const w = ausnahmen("2026-12-21", [X("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", wochentag: 3, ausfall: ["2026-12-23", "2026-12-30"] }),
+    X("Stundenplan/Mo X400.md", { titel: "X400 · Übung", art: "Übung", wochentag: 1, beginn: "08:15", ende: "09:45" })]);
+  const mi = w.kaesten.find((k) => k.pfad === "Stundenplan/Mi X400.md");
+  assert.deepEqual([mi.aus, mi.ausnahme, mi.grund, mi.ausText], [true, false, "Weihnachtspause", "Fällt aus (Weihnachtspause)"]);
+  assert.ok(mi.klassen.includes("ausfall") && !mi.klassen.includes("ausnahme"));
+  assert.deepEqual(W.tageAus(w).map((d) => d.ausnahme), [false, false, false, false, false]);
 });
 
 test("Ausfall und Pause durchgestrichen; ganze Woche frei → Satz statt Kästen; vor Vorlesungsbeginn", () => {
@@ -277,7 +332,7 @@ test("Tagesansicht: Kästen des Tags in Reihenfolge, voller Name, Zeit und Raum;
   const d = W.tagKaesten(woche("2026-10-19"), 3)[0];
   assert.deepEqual([d.beginn, d.ende, d.raum, d.klassen.includes("geaendert")], ["12:15", "13:45", "Hörsaal 9", true]);
   const mi = W.tagKaesten(woche("2026-12-21"), 2).find((k) => k.pfad === "Stundenplan/Mi X101.md");
-  assert.deepEqual([mi.aus, mi.ausText], [true, "fällt aus (Weihnachtspause)"]);
+  assert.deepEqual([mi.aus, mi.ausText], [true, "Fällt aus (Weihnachtspause)"]);
   // Alma ohne erkannte Art: kein Wort dazu
   assert.equal(W.tagKaesten(w, 0)[0].artLang, "");
 });
@@ -317,4 +372,45 @@ test("Stil: unter 520 px Tagesansicht statt Raster, Wörter brechen nie mitten i
   const regeln = css.match(/[^{}]*\.eba-(?:woche|wt) [^{}]*\{[^}]*\}/g) || [];
   const brechen = regeln.filter((r) => /overflow-wrap:\s*(anywhere|break-word)|word-break:\s*break-all/.test(r));
   assert.deepEqual(brechen, []);
+});
+
+test("Stil: Ausnahme in Warnfarbe (Fläche, Kante, Text), Ausfall nie blass wie „ab TT.MM.“, kein gestrichelter Rand mehr", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const regel = (sel) => { const m = css.match(new RegExp("(?:^|\\n)" + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{([^}]*)\\}")); return m ? m[1] : ""; };
+  const a = regel(":is(.eba-woche, .eba-wt) .eba-ev.ausnahme");
+  assert.match(a, /background: color-mix\(in srgb, var\(--eba-warn\)/);
+  assert.match(a, /border-left: 3px solid var\(--eba-warn\)/);
+  assert.match(css, /\.eba-ev\.ausnahme \.eba-ev-marke, \.eba-ev \.eba-ev-neu[^{]*\{[^}]*color: var\(--eba-warn\)/);
+  assert.match(css, /\.eba-wt-tag\.ausnahme::after[^{]*\{[^}]*background: var\(--eba-warn\)/);
+  assert.ok(!/\.eba-ev\.ausfall[^{]*\{[^}]*opacity/.test(css), "Ausfall nicht blass");
+  assert.ok(!/\.eba-ev\.geaendert[^{]*\{[^}]*dashed/.test(css), "kein gestrichelter Rand");
+});
+
+// Seit 20.10.2026: Die Seite Stundenplan
+// zeigt immer das Raster, auch auf dem iPhone hochkant; das Dashboard schmal weiter einen Tag. Am Pfad, damit es auch in Tresoren
+// greift, deren Seite das Update nicht ersetzt (selbst geändert).
+test("Seite Stundenplan immer als Raster, Dashboard und andere Seiten schmal als Tagesansicht", () => {
+  assert.equal(W.mitTag("Studium/Stundenplan.md"), false);
+  assert.equal(W.mitTag("Dashboard.md"), true);
+  assert.equal(W.mitTag(""), true);
+});
+
+test("Schmales Raster: Raum gekürzt (ohne Klammerzusatz, „HS“), Name des Raums sonst unverändert", () => {
+  assert.equal(W.raumKnapp("Hörsaal 1 (Keplerstraße 2)"), "HS 1");
+  assert.equal(W.raumKnapp("Hörsaal 21, Kupferbau"), "HS 21, Kupferbau");
+  assert.equal(W.raumKnapp("Hörsaal 11 (Universitätskasse u.a.)"), "HS 11");
+  assert.equal(W.raumKnapp("Hörsaal 0.02 (VG Beispielstraße - SSC (Servicecenter))"), "HS 0.02", "verschachtelte Klammern");
+  assert.equal(W.raumKnapp("Hörsaalzentrum Morgenstelle"), "Hörsaalzentrum Morgenstelle", "nur das ganze Wort");
+  assert.equal(W.raumKnapp("Seminarraum 2"), "Seminarraum 2");
+  assert.equal(W.raumKnapp("(nur Klammer)"), "(nur Klammer)", "nie leer");
+  assert.equal(W.raumKnapp(""), "");
+});
+
+test("Stil: schmal die knappe Zeile statt der langen, Wörter brechen nur an Silben, Ausnahme mit schmaler Kante", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  assert.match(css, /\.eba-ev \.eba-ev-knapp \{ display: none; \}/);
+  const schmal = css.slice(css.indexOf("@container eba-kz (max-width: 480px) {\n  .eba-woche .eba-ev, .eba-woche .eba-ev.ue"));
+  assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > b i, \.eba-ev \.eba-ev-lang \{ display: none; \}\s*\.eba-ev \.eba-ev-knapp \{ display: inline; \}/);
+  assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > b \{[^}]*hyphens: auto;[^}]*overflow-wrap: normal;/);
+  assert.match(css, /@container eba-kz \(max-width: 480px\) \{ \.eba-woche \.eba-ev\.ausnahme \{ border-left-width: 2px; \} \}/);
 });

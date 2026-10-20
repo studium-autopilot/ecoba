@@ -49,6 +49,25 @@ test("Als Nächstes: Sitzungen und Termine nach Tag und Uhrzeit, ohne Erledigtes
   assert.ok(!M.naechstes({ M: A.D, code: "X100", stundenplan: [], termine: A.liste, jetzt: tag("2026-10-21"), max: 5 }).some((x) => x.art === "pruefung"));
 });
 
+test("Als Nächstes: Ausfall der nächsten 14 Tage mit „fällt aus“, Änderung mit kurzem Text und dem üblichen Wert (20.10.2026)", () => {
+  const D = modell("2026-10-15");
+  const mit = (fm) => M.naechstes({ M: D, code: "X100", stundenplan: [{ f: { basename: "Mo X100" }, fm: serie(fm) }], termine: [], jetzt: tag("2026-10-15"), max: 5 });
+  // Mo 19.10. fällt aus: erst der Ausfall, dann die nächste Sitzung (vorher stand nur diese da, der Ausfall fehlte)
+  const a = mit({ ausfall: ["2026-10-19"] });
+  assert.deepEqual(a.map((x) => [ist(x.d), x.ausfall, x.marke, x.zeit]), [["2026-10-19", true, "fällt aus", "10:00–12:00"], ["2026-10-26", false, "", "10:00–12:00"]]);
+  // Ausfall nach 14 Tagen oder wegen einer Pause: kein Eintrag
+  assert.equal(mit({ ausfall: ["2026-11-02"] }).filter((x) => x.ausfall).length, 0);
+  assert.equal(M.naechstes({ M: modell("2026-12-21"), code: "X100", stundenplan: [{ fm: serie({ wochentag: 3, ausfall: ["2026-12-23"] }) }], termine: [], jetzt: tag("2026-12-21") })
+    .filter((x) => x.ausfall).length, 0, "Weihnachtspause");
+  const r = mit({ aenderungen: ["2026-10-19|10:00|12:00|Hörsaal 21"] })[0];
+  assert.deepEqual([r.marke, r.wo, r.raumNeu, r.raumAlt, r.zeitNeu, r.zeitAlt], ["anderer Raum", "Hörsaal 21", true, "Hörsaal 1", false, ""]);
+  const z = mit({ aenderungen: ["2026-10-19|14:00|16:00|Hörsaal 1"] })[0];
+  assert.deepEqual([z.marke, z.zeit, z.zeitAlt, z.raumNeu], ["andere Zeit", "14:00–16:00", "10:00–12:00", false]);
+  const v = mit({ raum: "Hörsaal 21", raum_vorher: "Hörsaal 1", raum_seit: "2026-10-19" })[0];
+  assert.deepEqual([v.marke, v.wo, v.raumAlt], ["neuer Raum", "Hörsaal 21", "Hörsaal 1"]);
+  assert.equal(mit({})[0].marke, "");
+});
+
 test("Semesterband: Wochen vorbei/jetzt/Pause, Notizen (offen/nachgearbeitet), Monate, Prüfung in oder nach der Vorlesungszeit", () => {
   const wochen = [
     { mo: "2026-10-12", nr: 1 }, { mo: "2026-10-19", nr: 2 }, { mo: "2026-10-26", nr: 3 },

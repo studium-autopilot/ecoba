@@ -19,7 +19,7 @@ cssclasses:
 > - [Alma](https://alma.uni-tuebingen.de) *Prüfungsanmeldung, Noten, Bescheinigungen*
 > - [ILIAS](https://ovidius.uni-tuebingen.de/ilias3/) *Unterlagen der Lehrstühle*
 > - [Webmail](https://webmail.uni-tuebingen.de) *Uni-Mail, offizielle Infos*
-> - [Universitätsbibliothek](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/) *E-Books, Datenbanken, Kurse*
+> - [Universitäts­bibliothek](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/) *E-Books, Datenbanken, Kurse*
 > - [Fachbibliothek WiWi](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/fb-wiwi/einrichtungen-wirtschaftswissenschaft/bibliothek/bibliothek/) *Mohlstraße 36, 1. OG*
 > - [ZDV für Studierende](https://uni-tuebingen.de/einrichtungen/zentrum-fuer-datenverarbeitung/oft-gefragt/studierende/) *Login, Drucken, Microsoft 365*
 > - [WLAN eduroam](https://uni-tuebingen.de/einrichtungen/zentrum-fuer-datenverarbeitung/dienstleistungen/netze/netzzugang/wlan-eduroam/) *Einrichtung je Gerät*
@@ -27,7 +27,7 @@ cssclasses:
 > - [Studierendenwerk](https://www.my-stuwe.de/) *Mensa, BAföG, Wohnen*
 > - [Semesterticket](https://uni-tuebingen.de/studium/rund-ums-studium/semesterticket/) *naldo und Deutschlandticket*
 > - [Hochschulsport](https://uni-tuebingen.de/einrichtungen/zentrale-einrichtungen/hochschulsport/home/) *Kurse, Anmeldung zu Semesterbeginn*
-> - [Fremdsprachenzentrum](https://uni-tuebingen.de/international/sprachen-lernen/fremdsprachen-lernen/) *zählt für SQ100*
+> - [Fremdsprachen­zentrum](https://uni-tuebingen.de/international/sprachen-lernen/fremdsprachen-lernen/) *zählt für SQ100*
 
 ## Fachbereich & Prüfungsamt
 

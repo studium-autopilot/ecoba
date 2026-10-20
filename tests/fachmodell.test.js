@@ -205,6 +205,46 @@ test("findetStatt: freie Tage (Christi Himmelfahrt), Pausen, Ausfall, Änderunge
   assert.equal(M.findetStatt(serie({ herkunft: "zentral", zentral_id: "ss-2027-x100" }), "2027-04-22").grund, "ausgeblendet");
 });
 
+test("findetStatt: was sich an einem Tag ändert (Raum, Zeit, der übliche Wert davor); Pause und freier Tag gehen dem Ausfall vor", () => {
+  const M = modell("2027-04-20");
+  const r = M.findetStatt(serie({ aenderungen: ["2027-04-29|10:15|11:45|Raum 5"] }), "2027-04-29");
+  assert.deepEqual([r.raum, r.raumGeaendert, r.raumAlt, r.zeitGeaendert, r.zeitAlt], ["Raum 5", true, "Hörsaal 1", false, ""]);
+  const z = M.findetStatt(serie({ aenderungen: ["2027-04-29|14:00|15:30"] }), "2027-04-29");
+  assert.deepEqual([z.beginn, z.ende, z.raum, z.raumGeaendert, z.zeitGeaendert, z.zeitAlt], ["14:00", "15:30", "Hörsaal 1", false, true, "10:15–11:45"]);
+  const n = M.findetStatt(serie(), "2027-04-29");
+  assert.deepEqual([n.geaendert, n.raumGeaendert, n.raumAlt, n.zeitGeaendert, n.zeitAlt], [false, false, "", false, ""]);
+  // Alma trägt die Pause auch als Ausfall ein: Grund ist die Pause bzw. der freie Tag, kein Ausfall dieser Lehrveranstaltung
+  assert.deepEqual([M.findetStatt(serie({ wochentag: 3, ausfall: ["2027-05-19"] }), "2027-05-19").grund], ["pause"]);
+  assert.equal(M.findetStatt(serie({ ausfall: ["2027-05-06"] }), "2027-05-06").grund, "frei");
+  const x = M.naechsteSitzung(serie({ aenderungen: ["2027-04-22|10:15|11:45|Raum 5"] }), new Date("2027-04-20T12:00:00"));
+  assert.deepEqual([x.raum, x.raumGeaendert, x.raumAlt], ["Raum 5", true, "Hörsaal 1"]);
+});
+
+test("findetStatt: dauerhafte Verlegung (raum_seit, raum_vorher) – vorher der alte Raum, zwei Wochen lang „neuer Raum“; 14-täglich", () => {
+  const M = modell("2027-04-20");
+  const v = serie({ raum: "Hörsaal 21", raum_vorher: "Hörsaal 1", raum_seit: "2027-04-29" });
+  const am = (d) => { const s = M.findetStatt(v, d); return [s.raum, s.neuerRaum, s.raumGeaendert, s.raumAlt]; };
+  assert.deepEqual(am("2027-04-22"), ["Hörsaal 1", false, false, ""], "vor der Verlegung der alte Raum, ohne Hinweis");
+  assert.deepEqual(am("2027-04-29"), ["Hörsaal 21", true, true, "Hörsaal 1"]);
+  assert.deepEqual(am("2027-05-13"), ["Hörsaal 21", false, false, ""], "nach zwei Wochen (6.5. Christi Himmelfahrt) wieder still");
+  // eine Änderung an einem Tag vergleicht mit dem Raum, der an dem Tag gilt
+  const a = M.findetStatt(serie({ raum: "Hörsaal 21", raum_vorher: "Hörsaal 1", raum_seit: "2027-04-29", aenderungen: ["2027-04-22|10:15|11:45|Audimax"] }), "2027-04-22");
+  assert.deepEqual([a.raum, a.raumAlt, a.neuerRaum], ["Audimax", "Hörsaal 1", false]);
+  assert.equal(M.naechsteSitzung(v, new Date("2027-04-27T12:00:00")).neuerRaum, true);
+  // 14-täglich ab von: die Woche dazwischen ist kein Termin
+  const z = serie({ rhythmus: "14-täglich" });
+  assert.deepEqual(["2027-04-15", "2027-04-22", "2027-04-29"].map((d) => M.findetStatt(z, d).grund), ["", "anderer Tag", ""]);
+  assert.equal(M.naechsteSitzung(z, new Date("2027-04-20T12:00:00")).datum, "2027-04-29");
+});
+
+test("ausfaelle: Ausfälle dieser Lehrveranstaltung in den nächsten 14 Tagen, heute nur bis zum Ende, nie wegen Pause", () => {
+  const M = modell("2027-04-20");
+  const s = serie({ ausfall: ["2027-04-22", "2027-04-29", "2027-05-06", "2027-05-13"] });
+  assert.deepEqual(M.ausfaelle(s, new Date("2027-04-22T09:00:00")).map((a) => [a.datum, a.beginn, a.ende, a.art]),
+    [["2027-04-22", "10:15", "11:45", "Vorlesung"], ["2027-04-29", "10:15", "11:45", "Vorlesung"]], "6.5. ist Christi Himmelfahrt, 13.5. nach 14 Tagen");
+  assert.deepEqual(M.ausfaelle(s, new Date("2027-04-22T12:00:00")).map((a) => a.datum), ["2027-04-29"], "heute schon vorbei");
+});
+
 test("naechsteSitzung: überspringt freie Tage und Pausen, heute nur bis zum Ende", () => {
   const M = modell("2027-05-03");
   assert.equal(M.naechsteSitzung(serie(), new Date("2027-05-03T12:00:00")).datum, "2027-05-13", "Do 6.5. Christi Himmelfahrt");

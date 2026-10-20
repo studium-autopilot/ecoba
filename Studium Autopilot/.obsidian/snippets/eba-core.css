@@ -870,9 +870,12 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
   .callout[data-callout="eba-raster"][data-callout-metadata~="3"] > .callout-content,
   .callout[data-callout="eba-raster"][data-callout-metadata~="4"] > .callout-content { grid-template-columns: 1fr !important; } /* |3/|4 sonst spezifischer als die 1fr-Regel */
 }
-/* Kacheln und Knöpfe: Titel dürfen umbrechen statt mit … zu enden */
+/* Kacheln und Knöpfe: Titel dürfen umbrechen statt mit … zu enden, aber nur an Leerzeichen („Neue / Vorlesungsnotiz“), nie
+   mitten im Wort und ohne Silbentrennung. Obsidian setzt lang nach der Sprache der App, nicht des Inhalts; bis 20.10.2026 trennte
+   Safari so „Vorlesung-snotiz“. Passt ein Wort nicht, wird die Schrift kleiner oder die Reihe hat weniger Knöpfe (37.dashboard,
+   37.tablet); lange Namen in Link-Kacheln tragen im Text einen weichen Trennstrich (U+00AD) an der richtigen Stelle. */
 .callout[data-callout="eba-neu"] li > a,
-.callout[data-callout="eba-links"] li > a { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; overflow-wrap: anywhere; }
+.callout[data-callout="eba-links"] li > a { white-space: normal; overflow: visible; text-overflow: clip; line-height: 1.25; overflow-wrap: normal; -webkit-hyphens: manual; hyphens: manual; }
 .callout[data-callout="eba-neu"] > .callout-content > ul > li:not(:has(> em)) { grid-template-rows: auto; min-height: 50px; }
 /* Tabellen mit |umbruch (und rowHeight: medium): lange Namen auf bis zu zwei Zeilen */
 .callout[data-callout-metadata*="umbruch"] .bases-td { white-space: normal; }
@@ -900,10 +903,6 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 
 /* „Neu anlegen“ ab fünf Knöpfen: die Reihe füllt die Breite (keine leere Spalte rechts) */
 .callout[data-callout="eba-neu"] > .callout-content > ul:has(> li:nth-child(5)) { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
-
-/* Lange Titel in Kacheln mit Silbentrennung statt hartem Umbruch („Lehrveranstaltu|ng“) */
-.callout[data-callout="eba-neu"] li > a,
-.callout[data-callout="eba-links"] li > a { -webkit-hyphens: auto; hyphens: auto; }
 
 /* Offene Fragen / To-dos: kein zusätzlicher Abstand unter dem Leerhinweis (oben 16, unten sonst 30 px) */
 .callout[data-callout="eba-fragen"] .search-empty-state,
@@ -1209,9 +1208,10 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 
 /* ---------- 33. Wochenraster anklickbar (Dashboard „Diese Woche“ und Stundenplan) ----------
    Jede Veranstaltung ist ein Link auf ihre Modulseite (obsidian://open). Heute: Spalte getönt, Termine kräftiger,
-   laufende Veranstaltung mit Rahmen („jetzt“), an diesem Tag ausfallende blass und durchgestrichen. Der Rahmen liegt innen
-   (seit 19.10.2026): Außen brauchte er Platz neben dem Kasten, den es am iPhone nicht gibt (Kästen 1,5 px untereinander,
-   3–4 px zur Nachbarspalte, Heute-Spalte absolut darunter); dort fehlte er. Ein Kasten vor seinem Beginn (.spaeter) ist nie „jetzt“. */
+   laufende Veranstaltung mit Rahmen („jetzt“), an diesem Tag ausfallende mit durchgestrichenem Namen (Abschnitt 55,
+   „Ausnahmen“). Der Rahmen liegt innen (seit 19.10.2026): Außen brauchte er Platz neben dem Kasten, den es am iPhone nicht gibt
+   (Kästen 1,5 px untereinander, 3–4 px zur Nachbarspalte, Heute-Spalte absolut darunter); dort fehlte er. Ein Kasten vor seinem
+   Beginn (.spaeter) ist nie „jetzt“. */
 a.eba-ev { text-decoration: none; color: inherit; cursor: pointer; }
 a.eba-ev:hover { filter: brightness(0.96); }
 .eba-tagspalte { grid-row: 1 / -1; margin: -12px -3px -14px; background: color-mix(in srgb, var(--eba-accent) 6%, transparent); border-radius: var(--eba-radius-s); }
@@ -1219,9 +1219,7 @@ a.eba-ev:hover { filter: brightness(0.96); }
 .eba-ev.ue.heute { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-info) 40%, transparent); }
 .eba-ev.jetzt:not(.spaeter) { box-shadow: inset 0 0 0 2px var(--eba-accent); }
 .eba-ev.jetzt:not(.spaeter) b::after { content: " · jetzt"; font-weight: 500; color: var(--eba-accent-text); }
-.eba-ev.ausfall { opacity: 0.45; }
-.eba-ev.ausfall b { text-decoration: line-through; }
-/* Aufbau und Zeilen der Kästen im Wochenraster: Abschnitt 55 */
+/* Aufbau und Zeilen der Kästen im Wochenraster, Ausfall und Änderung: Abschnitt 55 */
 
 /* ---------- 34. Wochenraster, Seitenkopf, Seitenende, Tabellen und Listen in Karten ---------- */
 /* Wochenraster immer so breit wie die übrigen Karten (sonst schrumpft es in der Kennzahlen-Karte auf seinen Inhalt) */
@@ -1669,6 +1667,20 @@ body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-conte
 body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul > li::before,
 body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul > li::after { display: none; }
 body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] li > a { grid-column: 1; font-size: 13px; }
+/* Ein Drittel der Breite ist für „Vorlesungsnotiz“ in 13 px knapp (gut 100 px). Knöpfe trennen nie (Abschnitt 18), darum nach
+   der Breite der Reihe: unter 380 px (iPhone mit 390 px) Schrift 12 px, unter 350 px (Telefone mit 360 px) weniger Innenabstand,
+   unter 330 px (Bildschirmzoom auf kleinen iPhones, 320 px) zwei Knöpfe je Reihe wie auf den übrigen Seiten. */
+body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content { container: eba-neu / inline-size; }
+@container eba-neu (max-width: 380px) {
+  body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] li > a { font-size: 12px; }
+}
+@container eba-neu (max-width: 350px) {
+  body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul > li { padding: 6px 4px; }
+}
+@container eba-neu (max-width: 330px) {
+  body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  body.is-phone .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul > li:last-child:nth-child(odd) { grid-column: 1 / -1; }
+}
 
 /* --- 37.einstellungen --- */
 /* Einstellungen (Studium/Einstellungen & Hilfe.md, cssclasses eba-s-einstellungen; die Daten stehen in System/Einstellungen.md), nur iPhone.
@@ -1789,10 +1801,11 @@ body.is-phone .eba-s-kontakte .callout[data-callout="eba-links"] > .callout-cont
 body.is-phone .eba-s-kontakte .callout[data-callout="eba-links"] li > a { font-size: 14.5px; line-height: 1.25; overflow-wrap: normal; }
 body.is-phone .eba-s-kontakte .callout[data-callout="eba-links"] li > em { font-size: 12px; line-height: 1.3; white-space: normal; overflow: visible; text-overflow: clip; }
 
-/* Zugeklappte Karten: die ganze Karte ist Tippfläche (Innenabstand in den Titel verlegt), mind. 46 px hoch */
+/* Zugeklappte Karten: die ganze Karte ist Tippfläche (Innenabstand in den Titel verlegt), mind. 46 px hoch. Titel trennen wie
+   Knöpfe nie selbst (Abschnitt 18), nur an weichen Trennstrichen (U+00AD) im Text, etwa in „Wirtschafts|wissenschaft“. */
 body.is-phone .eba-s-kontakte .callout[data-callout-metadata*="handy-zu"] { padding: 0 !important; }
 body.is-phone .eba-s-kontakte .callout[data-callout-metadata*="handy-zu"] > .callout-title { min-height: 46px; padding: 10px 12px; margin: 0 !important; }
-body.is-phone .eba-s-kontakte .callout[data-callout-metadata*="handy-zu"] > .callout-title .callout-title-inner { -webkit-hyphens: auto; hyphens: auto; overflow-wrap: break-word; letter-spacing: 0.03em; line-height: 1.3; }
+body.is-phone .eba-s-kontakte .callout[data-callout-metadata*="handy-zu"] > .callout-title .callout-title-inner { -webkit-hyphens: manual; hyphens: manual; overflow-wrap: break-word; letter-spacing: 0.03em; line-height: 1.3; }
 body.is-phone .eba-s-kontakte .callout[data-callout-metadata*="handy-zu"].is-collapsed > .callout-content { padding: 0 13px 12px; }
 
 /* Ansprechpersonen und Orte: zugeklappt zwei Karten je Reihe; eine geöffnete Karte nimmt die volle Breite
@@ -2087,8 +2100,8 @@ body.is-phone .eba-kzt-tage span { font-size: 9.5px; padding: 3px 0 2px; }
 /* --- 37.regeln --- */
 /* Karten „Regeln“ ([!eba-karte|regeln]-) auf Prüfungen, Noten & ECTS und Studienverlauf (früher eigene Seite Prüfungsordnung),
    nur iPhone. Aufbau-Tabelle (4 Spalten, Studienverlauf) passt in die Bildschirmbreite statt seitlich zu wischen: feste
-   Spaltenbreiten, Spaltenköpfe klein, lange Wörter mit Silbentrennung (Obsidian setzt lang="de"; Safari/iOS trennt deutsch,
-   Chromium unter Windows nicht, dort bricht overflow-wrap ohne Strich), engere Zellen.
+   Spaltenbreiten, Spaltenköpfe klein, lange Wörter mit Silbentrennung (lang setzt Obsidian nach der Sprache der App, deutsch
+   also nur mit deutscher Obsidian-Oberfläche; Chromium unter Windows trennt nicht, dort bricht overflow-wrap ohne Strich), engere Zellen.
    Regeln darin: verschachtelte „1. …“-Liste ohne Einzug und Hilfslinie. */
 body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"] table { width: 100%; table-layout: fixed; font-size: 13.5px; }
 body.is-phone .eba .callout[data-callout="eba-karte"][data-callout-metadata*="regeln"] th,
@@ -2171,8 +2184,9 @@ body.is-phone .eba-s-stundenplan .eba-tagkopf { padding-left: 5px; }
 body.is-phone .eba-s-stundenplan .eba-zeit { padding-right: 2px; font-size: 10.5px; }
 body.is-phone .eba-s-stundenplan .eba-zeit::after { content: none; }
 
-/* Kästen: etwas weniger Innenabstand, damit Kurzname und Raum in die schmalen Spalten passen */
-body.is-phone .eba-s-stundenplan .eba-woche .eba-ev { padding: 4px 5px; }
+/* Kästen: wenig Innenabstand, damit Kurzname und Raum in die schmalen Spalten passen (seit 20.10.2026 seitlich 3 px: das Raster
+   steht hier wieder statt der Tagesansicht, „Jahres-/abschluss“ passt so in zwei Zeilen) */
+body.is-phone .eba-s-stundenplan .eba-woche .eba-ev { padding: 4px 3px; }
 
 /* Karte „Liste“ (eingeklappt): rowHeight medium = 2 x Variable; 24 px ergibt 48-px-Zeilen statt 96 px */
 @container eba-tab (max-width: 480px) {
@@ -2379,6 +2393,9 @@ body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-neu"], body.is-t
 body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul,
 body.is-tablet .eba .callout[data-callout="eba-neu"] > .callout-content > ul,
 body.is-tablet .eba .callout[data-callout="eba-neu"] > .callout-content > ul:has(> li:nth-child(5)) { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--eba-gap, 12px); }
+/* Dashboard: „Vorlesungsnotiz“ passt neben dem Symbol erst ab ca. 190 px Knopfbreite; schmaler stehen zwei Knöpfe je Reihe
+   (geteiltes iPad-Fenster), denn Knöpfe trennen nie (Abschnitt 18) */
+body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
 body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-neu"] > .callout-content > ul > li, body.is-tablet .eba .callout[data-callout="eba-neu"] > .callout-content > ul > li { min-height: 48px; padding: 8px 12px; background: var(--eba-card-bg); }
 
 /* ---------- 4. Karten, die auf dem iPhone klappen (Fristen „+“): auf iPad und PC offen und ohne Pfeil ---------- */
@@ -3046,6 +3063,13 @@ body.is-phone .eba-s-unterlagen .callout[data-callout="eba-kennzahlen"] .bases-v
 .eba-vorl-meta { display: flex; flex-wrap: wrap; align-items: center; margin-top: 7px; color: var(--eba-muted); }
 .eba-vorl-meta > span { white-space: nowrap; }
 .eba-vorl-meta > span + span::before { content: "·"; margin: 0 7px; color: var(--eba-faint); }
+/* Zeit oder Raum an diesem Tag geändert (vorlesung.js, findetStatt; seit 20.10.2026): neuer Wert in Warnfarbe, der übliche
+   durchgestrichen (docs/design.md „Ausnahme im Stundenplan“) */
+.eba-vorl-neu { font-weight: 600; color: var(--eba-warn); }
+.eba-vorl-ort s { color: var(--eba-faint); }
+/* bleibt neben dem Datum und bricht in sich um, beide an der ersten Zeile ausgerichtet */
+.eba-vorl-meta > span.eba-vorl-ort.geaendert { flex: 1 1 14em; white-space: normal; }
+.eba-vorl-meta:has(> .eba-vorl-ort.geaendert) { align-items: baseline; }
 .eba-vorl-datum { color: var(--eba-text); font-weight: 600; }
 .eba-vorl-heute {
   margin-left: 7px; padding: 1px 6px; vertical-align: 1px;
@@ -4092,12 +4116,11 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 
 /* ---------- 47. Wochenraster nach Kalenderwoche (Dashboard, Stundenplan; seit 0.3.2) ----------
    Das Raster zeigt eine echte Woche, am Wochenende die nächste: Datum im Kopf jedes Tages, rechts oben „‹ KW n ›“ (Abschnitt
-   55), Kästen bis zu bis, vor von blass mit „ab TT.MM.“ (.spaeter), Ausfälle (ausfall, Pausen) der ganzen Woche durchgestrichen. Findet
+   55), Kästen bis zu bis, vor von blass mit „ab TT.MM.“ (.spaeter), Ausfälle (ausfall, Pausen) mit „Fällt aus“ (Abschnitt 55). Findet
    in der Woche nichts statt, steht in der Mitte ein Satz (Name der Pause, „Vorlesungsbeginn …“, „Vorlesungsfrei“, „Keine Veranstaltungen“). */
 .eba-tagkopf { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eba-tagdatum { margin-left: 0.4em; font-weight: 500; letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; color: var(--eba-faint); }
 .eba-tagkopf.heute .eba-tagdatum { color: inherit; }
-.eba-ev.ausfall .eba-ev-kurz { text-decoration: line-through; }
 .eba-ev.spaeter { opacity: 0.45; }
 .eba-woche-leer { grid-column: 2 / -1; align-self: center; justify-self: center; position: relative; z-index: 1; text-align: center; }
 .eba-woche-leer span { display: inline-block; padding: 5px 12px; border-radius: var(--eba-radius-s); background: var(--eba-card-bg); font-size: 13px; color: var(--eba-muted); }
@@ -4208,6 +4231,9 @@ body.is-mobile .eba-toast .eba-toast-knopf { min-height: 44px; font-size: 14.5px
 body.is-mobile .eba-modal-neu .modal-button-container button { min-height: 44px; }
 /* Dashboard-Zeile (Abschnitt 46) mit drei Knöpfen: auf dem iPhone in einer Reihe, jeder ≥ 44 px, etwas schmaler gepolstert */
 body.is-phone .eba-uh .eba-uh-knopf { flex: 1 1 auto; padding: 0 10px !important; white-space: nowrap; }
+/* Bis 20.10.2026 lief „Später“ bei 360 px über den Rand: Der Hauptknopf bricht an Leerzeichen um („Neue Version / installieren“),
+   nie im Wort (Abschnitt 18) */
+body.is-phone .eba-uh .eba-uh-knopf.cta { white-space: normal; overflow-wrap: normal; line-height: 1.2; }
 /* Dashboard-Zeile: langer Titel bricht um, statt über den Rand zu laufen */
 .eba-uh-text { flex-direction: column; align-items: flex-start; gap: 1px; }
 /* Fenster vor dem Update, „Was ist neu“ und Ergebnis: Knöpfe in der Reihenfolge [Später] [Aktualisieren]. PC und iPad
@@ -4551,11 +4577,8 @@ body.is-phone .eba-ang button:is(.eba-ang-wahl-fertig, .eba-ang-mehr) { min-heig
 /* ---------- Ende Abschnitt 53 ---------- */
 
 /* ---------- 54. Zentraler Stundenplan (zentral.js, Wochenraster auf Dashboard und Stundenplan; seit 17.10.2026) ----------
-   Raum- oder Zeitänderung in dieser Woche (Klasse .geaendert aus woche.js, Feld aenderungen): gestrichelter Rand
-   und Zeit/Raum in Akzentfarbe; Ausfälle bleiben durchgestrichen (Abschnitt 47). Fenster „Zentrale Daten“: Liste „Nicht in
-   deinem Stundenplan“ mit „Wieder zeigen“. Nur --eba-*-Variablen. */
-.eba-ev.geaendert { outline: 1px dashed var(--eba-warn); outline-offset: -1px; }
-.eba-ev.geaendert > span { color: var(--eba-text); font-weight: 600; }
+   Raum- oder Zeitänderung und Ausfall im Wochenraster: Abschnitt 55, „Ausnahmen“ (bis 20.10.2026 hier nur ein gestrichelter
+   Rand). Fenster „Zentrale Daten“: Liste „Nicht in deinem Stundenplan“ mit „Wieder zeigen“. Nur --eba-*-Variablen. */
 .eba-modal .eba-modal-ausgeblendet .setting-item-name { font-size: 13px; }
 body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
 /* ---------- Ende Abschnitt 54 ---------- */
@@ -4564,8 +4587,8 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
    Ein Kasten hat genau ein kräftiges Element: den Kurznamen des Moduls (kurz aus der Modulnotiz, sonst der Code). Blass
    daneben Art und Gruppe (nur Übung, Tutorium, Seminar), darunter klein der Raum, davor der Beginn, wenn er nicht zur vollen
    Stunde liegt, bei einer Änderung die neue Zeit (die Lage im Raster zeigt den Rest). Voller Titel, Zeit, Raum im Tooltip.
-   Vorlesung = ruhige gefüllte Fläche, Übung/Tutorium = helle Fläche mit Farbkante wie in der Termine-Agenda; Ausfall blass
-   und durchgestrichen (Abschnitt 33), Änderung gestrichelt (Abschnitt 54).
+   Vorlesung = ruhige gefüllte Fläche, Übung/Tutorium = helle Fläche mit Farbkante wie in der Termine-Agenda; Ausfall und
+   Änderung: unten in diesem Abschnitt („Ausnahmen“).
    Titel und Raum je höchstens zwei Zeilen. Jeder Kasten ist ein Größen-Container (eba-ev): Passt etwas nicht in seine Höhe,
    entfällt erst die zweite Titelzeile, dann die zweite Raumzeile, dann der Raum; ein Kasten bis 60 Minuten zeigt am PC und
    iPad nur den Titel. Text ragt so nie aus dem Kasten oder in den nächsten. Schwellen = Inhaltshöhe ohne Innenabstand.
@@ -4612,17 +4635,23 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
   body:not(.is-phone) .eba-woche { column-gap: 8px; --eba-wg: 8px; }
 }
 
-/* Schmale Spalten (iPhone, Karte unter 480 px): nur Kurzname und Raum (Zeit nur, wenn geändert, und „ab TT.MM.“ vor dem Beginn,
-   .spaeter); die Art zeigt die Fläche */
+/* Schmale Spalten (Karte unter 480 px: die Seite Stundenplan auf dem iPhone hochkant, seit 20.10.2026 wieder als Raster): nur
+   Kurzname und die knappe Zeile (woche.js zeileZeichnen: Raum gekürzt, „HS 1“ statt „Hörsaal 1 (Keplerstraße 2)“; Zeit nur bei
+   einer Änderung und „ab TT.MM.“ vor dem Beginn); die Art zeigt die Fläche. Wörter brechen nur an Silben. Ein hoher Kasten
+   (ab 64 px) zeigt drei Zeilen, damit eine Änderung mit „statt“ ganz dasteht. */
+.eba-ev .eba-ev-lang, .eba-ev .eba-ev-knapp { font-size: inherit; color: inherit; white-space: normal; overflow: visible; }
+.eba-ev .eba-ev-knapp { display: none; }
 @container eba-kz (max-width: 480px) {
   .eba-woche .eba-ev, .eba-woche .eba-ev.ue { padding: 3px 4px; gap: 1px; }
   .eba-woche .eba-ev.ue { padding-left: 3px; }
-  .eba-woche .eba-ev > b { font-size: 11px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: normal; }
-  .eba-woche .eba-ev > b i, .eba-woche .eba-ev:not(.geaendert):not(.spaeter) > span time { display: none; }
+  .eba-woche .eba-ev > b { font-size: 10.5px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: normal; }
+  .eba-woche .eba-ev > b i, .eba-ev .eba-ev-lang { display: none; }
+  .eba-ev .eba-ev-knapp { display: inline; }
   .eba-woche .eba-ev > span {
     display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
     white-space: normal; font-size: 9.5px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto;
   }
+  @container eba-ev (min-height: 64px) { .eba-woche .eba-ev > span { -webkit-line-clamp: 3; } }
   @container eba-ev (max-height: 49px) { .eba-woche .eba-ev > span { -webkit-line-clamp: 1; } }
   @container eba-ev (max-height: 38px) { .eba-woche .eba-ev > b { -webkit-line-clamp: 1; } }
   @container eba-ev (max-height: 25px) { .eba-woche .eba-ev > span { display: none !important; } }
@@ -4676,12 +4705,13 @@ body.is-phone .eba-woche a.eba-wpfeil:last-child::after { left: 0; right: -6px; 
 .eba-woche .eba-ev.schmal > b { -webkit-line-clamp: 1; white-space: nowrap; hyphens: manual; -webkit-hyphens: manual; font-size: 11px; }
 .eba-woche .eba-ev.schmal > b i, .eba-woche .eba-ev.schmal > span { display: none !important; }
 
-/* 55b. Tagesansicht (woche.js tagZeichnen, seit 19.10.2026): Unter 520 px Kartenbreite (iPhone) zeigt die Woche einen Tag statt
-   fünf Spalten à 60 px, in denen Namen zerbrachen und Räume fehlten. Gezeichnet werden beide, die Breite der Karte wählt.
+/* 55b. Tagesansicht (woche.js tagZeichnen, seit 19.10.2026): Unter 520 px Kartenbreite (iPhone) zeigt die Woche auf dem
+   Dashboard einen Tag statt fünf Spalten à 60 px (die Seite Stundenplan zeigt seit 20.10.2026 immer das Raster, woche.js
+   mitTag; dort ohne .hat-tag). Gezeichnet werden beide, die Breite der Karte wählt.
    Kopf „KW n · Spanne“ mit ‹ › (Tippflächen 44 px), fünf Tage als Reihe (gewählt getönt, heute in Akzentfarbe, Punkt bei
-   Lehrveranstaltungen), darunter die Kästen des Tags über die ganze Breite: Zeit links, voller Name (Kurzname kräftig, Art
-   blass), Raum; nichts abgeschnitten. Gleiche Klassen wie im Raster (ue, heute, jetzt, ausfall, geaendert, konflikt), darum
-   gleiche Farben und Rahmen. Was erst beginnt, ist eine leise Zeile, kein Kasten. */
+   Lehrveranstaltungen, Strich in Warnfarbe bei einem Ausfall oder einer Änderung), darunter die Kästen des Tags über die ganze
+   Breite: Zeit links, voller Name (Kurzname kräftig, Art blass), Raum; nichts abgeschnitten. Gleiche Klassen wie im Raster (ue,
+   heute, jetzt, ausfall, ausnahme, konflikt), darum gleiche Farben und Rahmen. Was erst beginnt, ist eine leise Zeile, kein Kasten. */
 .eba-wt { display: none; padding: 10px 12px 12px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); }
 @container eba-kz (max-width: 520px) {
   .eba-woche.hat-tag { display: none; }
@@ -4714,6 +4744,11 @@ a.eba-wt-pfeil::after { content: ""; position: absolute; top: -7px; bottom: -7px
   background: var(--eba-faint);
 }
 .eba-wt-tag.heute.termine::after { background: var(--eba-accent-text); }
+/* Tag mit Ausfall oder Änderung: kurzer Strich in Warnfarbe statt des Punkts, so sieht man ihn ohne Durchtippen */
+.eba-wt-tag.ausnahme::after, .eba-wt-tag.heute.termine.ausnahme::after {
+  content: ""; position: absolute; bottom: 4px; left: 50%; width: 14px; height: 3px; margin-left: -7px; border-radius: 2px;
+  background: var(--eba-warn);
+}
 .eba-wt-tag:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
 .eba-wt-liste { display: flex; flex-direction: column; gap: 6px; }
 .eba-wt .eba-ev {
@@ -4731,10 +4766,26 @@ a.eba-wt-pfeil::after { content: ""; position: absolute; top: -7px; bottom: -7px
 }
 .eba-wt .eba-ev > b i { font-style: normal; font-weight: 400; font-size: 13px; color: var(--eba-muted); }
 .eba-wt .eba-ev > .eba-wt-ort { grid-column: 2; font-size: 13px; line-height: 1.3; color: var(--eba-muted); white-space: normal; overflow: visible; text-overflow: clip; }
-.eba-wt .eba-ev.geaendert > .eba-wt-ort, .eba-wt .eba-ev.geaendert .eba-wt-uhr span { color: var(--eba-text); font-weight: 600; }
 .eba-wt .eba-ev.konflikt::after { content: ""; position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--eba-warn); }
 a.eba-wt-leise { display: block; padding: 2px 10px 2px 64px; font-size: 13px; line-height: 1.35; color: var(--eba-faint); text-decoration: none; }
 .eba-wt-leer { padding: 12px 2px; font-size: 13px; color: var(--eba-muted); }
+
+/* Ausnahmen (seit 20.10.2026, Raster und Tagesansicht): Ausfall dieser Lehrveranstaltung und ein anderer Raum oder eine andere
+   Zeit an diesem Tag (Klasse .ausnahme aus woche.js) in Warnfarbe: getönte Fläche, Kante links, kurzer Text („Fällt aus“,
+   „Anderer Raum“ …) und der neue Wert in Warnfarbe, der übliche durchgestrichen daneben („HS 9 statt HS 1“). Vorher sah ein
+   Ausfall blass aus wie „ab TT.MM.“ (.spaeter) und eine Änderung hatte nur einen gestrichelten Rand; beides ging unter. Ein
+   Ausfall wegen einer Pause oder eines freien Tags (ohne .ausnahme) bleibt leise: neutrale Fläche, Name durchgestrichen,
+   „Fällt aus“ gedämpft. Keine Symbole: Farbe und Wort. Steht nach 55b, damit es die Flächen von Übung und Tutorium dort ersetzt. */
+:is(.eba-woche, .eba-wt) .eba-ev.ausfall { background: color-mix(in srgb, var(--eba-text) 6%, var(--eba-bg)); border-left: 0; }
+:is(.eba-woche, .eba-wt) .eba-ev.ausfall > b { color: var(--eba-muted); text-decoration: line-through; }
+:is(.eba-woche, .eba-wt) .eba-ev.ausnahme { background: color-mix(in srgb, var(--eba-warn) 12%, var(--eba-bg)); border-left: 3px solid var(--eba-warn); }
+.eba-woche .eba-ev.ausnahme { padding-left: 5px; }
+.eba-wt .eba-ev.ausnahme { padding-left: 7px; }
+@container eba-kz (max-width: 480px) { .eba-woche .eba-ev.ausnahme { border-left-width: 2px; } }
+/* Text in einer Zeile des Kastens: Größe und Umbruch der Zeile (sonst 11 px und ohne Umbruch aus Abschnitt 13) */
+.eba-ev .eba-ev-marke, .eba-ev .eba-ev-neu { font-size: inherit; font-weight: 600; white-space: normal; overflow: visible; }
+.eba-ev.ausnahme .eba-ev-marke, .eba-ev .eba-ev-neu, .eba-wt .eba-wt-uhr.eba-ev-neu span { color: var(--eba-warn); font-weight: 600; }
+.eba-ev s { color: var(--eba-muted); }
 /* ---------- Ende Abschnitt 55 ---------- */
 
 /* ---------- 56. Schwerpunkte im Studienverlauf (schwerpunkte.js, ```eba-schwerpunkte```; seit 17.10.2026, vorher die Seite
@@ -5160,6 +5211,12 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-h
 .eba-mod-was { min-width: 0; overflow-wrap: anywhere; }
 .eba-mod-was .eba-pill { margin-left: 8px; font-size: 11px; padding: 0 7px; line-height: 1.5; vertical-align: 1px; }
 .eba-mod-wo { min-width: 0; font-size: 13.5px; text-align: right; color: var(--eba-muted); overflow-wrap: anywhere; }
+/* Ausfall und Änderung (seit 20.10.2026, docs/design.md „Ausnahme im Stundenplan“): Pille in Warnfarbe („fällt aus“, „anderer
+   Raum“, „neuer Raum“, „andere Zeit“, „geändert“), der neue Wert in Warnfarbe, der übliche durchgestrichen („Hörsaal 9 statt
+   Hörsaal 1“); bei einem Ausfall Zeit und Art durchgestrichen */
+.eba-mod-zeile.ausfall :is(.eba-mod-zeit, .eba-mod-text) { color: var(--eba-muted); text-decoration: line-through; }
+.eba-mod-neu { font-weight: 600; color: var(--eba-warn); }
+.eba-mod-wo s { color: var(--eba-faint); }
 
 /* Knöpfe */
 .eba-mod-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
@@ -5446,6 +5503,8 @@ body.is-phone .eba-modal-neu .eba-modal-feld.eba-form-kurz { max-width: none; }
 .eba-notizkopf button.eba-vorl-status.zwischen { border-color: color-mix(in srgb, var(--eba-accent) 50%, transparent); background: var(--eba-accent-soft); color: var(--eba-accent-text); }
 .eba-notizkopf button.eba-vorl-status.leise { border-color: var(--eba-border-strong); background: transparent; color: var(--eba-muted); }
 .eba-notizkopf button.eba-vorl-status .eba-vorl-sym:last-child:not(:first-child) { width: 12px; height: 12px; margin-left: -1px; }
+/* Übungsblätter unter dem Kopf einer Übung oder eines Tutoriums (seit 20.10.2026): Chips wie in der Vorlesungsnotiz, enger */
+.eba-notizkopf .eba-vorl-links { margin-top: 8px; padding-top: 8px; }
 /* Bearbeitungsansicht: Block-Widget von CodeMirror, Abstand als Innenabstand (Ränder misst CodeMirror nicht mit) */
 .markdown-source-view.is-live-preview .cm-content > .eba-notizkopf { margin: 0; padding: 12px 0 14px; }
 /* „⋯“ (Eigenschaften, seit 19.10.2026) rechts neben dem Status-Knopf, auch bei Vorlesung und Übungsblatt; Modulcode im Label öffnet

@@ -31,7 +31,8 @@ dazu `herkunft: zentral`, `zentral_id`, `info`, `geprueft`, `entfaellt`.
 
 **Lehrveranstaltung** – `Stundenplan/<Mo> <10.15> <Code> <Art>.md`
 `typ: lehrveranstaltung`, `titel` („<Code> · <Art>“), `code`, `modul`, `art` (Vorlesung, Übung, Tutorium …), `wochentag`
-(1 = Montag … 5), `beginn`, `ende`, `raum`, `dozent`, `semester`, `von`, `bis`, `ausfall` (Liste von Daten), `aenderungen`;
+(1 = Montag … 5), `beginn`, `ende`, `raum`, `dozent`, `semester`, `von`, `bis`, `ausfall` (Liste von Daten), `aenderungen`
+(„Datum|Beginn|Ende|Raum“), aus Alma auch `raum_seit` und `raum_vorher` (dauerhaft verlegt) und `rhythmus` (14-täglich);
 eigene Notizen können `besuche_nicht: true` haben.
 
 **Vorlesungsnotiz** – `Vorlesungen/<Code>/JJJJ-MM-TT <Code> VL NN.md`
@@ -43,8 +44,8 @@ eigene Notizen können `besuche_nicht: true` haben.
 `eigene_loesung`. Abschnitte: `## Aufgabe 1`, `## Aufgabe 2` …, `## Knackpunkte`, `## Fürs Tutorium`.
 
 **Unterlage (Begleitnotiz)** – neben der Datei, gleicher Name: `<Code> <Art> <NN> <Titel>.md` (höchstens 80 Zeichen)
-`typ: unterlage`, `code`, `modul`, `art` (Folien, Skript, Übung, Lösung, Eigene Lösung, Mitschrift, Altklausur, Literatur,
-Scan, Sonstiges), `nummer`, `titel`, `datei` („[[x.pdf]]“), `seiten`, `semester`, `status` (neu | gelesen | bearbeitet),
+`typ: unterlage`, `code`, `modul`, `art` (Folien, Skript, Übung, Tutorium, Lösung, Eigene Lösung, Mitschrift, Altklausur, Literatur,
+Scan, Sonstiges; Tutorium: alles aus dem Tutorium, im Unterordner `Tutorium/` des Modulordners), `nummer`, `titel`, `datei` („[[x.pdf]]“), `seiten`, `semester`, `status` (neu | gelesen | bearbeitet),
 `datum`, `quelle`, aus ILIAS `ilias_id`. Neu angelegt: nur der Titel und darunter der eingeklappte PDF-Kasten. Abschnitte kommen
 dazu, sobald es etwas gibt, alle über dem PDF-Kasten: `## Das Wichtigste`, darunter auf Wunsch `## Zu tun`, dann
 `## Offene Fragen`. Nie einen leeren Abschnitt oder leere Punkte (`- `, `- [ ] `) anlegen.
