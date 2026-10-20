@@ -196,3 +196,10 @@ Neue Versionen früher ausprobieren: In der Zeile **Studium Autopilot** auf **Me
 **Mehr erfahren** öffnen und **Beta-Versionen** einschalten. Betas können noch Fehler haben.
 
 </details>
+
+## Eigener Server mit Claude (für Technische)
+
+Freiwillig und erst, wenn die Einrichtung in Obsidian fertig ist. Claude richtet dir einen kostenlosen Server bei Oracle ein,
+der in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop und was du dafür brauchst, findest du im
+README unter „Für Technische: eigener Server mit Claude“. Verbunden wird jedes Gerät mit einem eigenen Link vom Server;
+danach steht unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**.

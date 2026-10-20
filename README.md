@@ -93,6 +93,31 @@ Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der
 nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das
 Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
 
+## Für Technische: eigener Server mit Claude
+
+Wer mehr will als die Termine für alle, lässt sich einen eigenen, kostenlosen Server einrichten. Darauf sucht Claude mit deinem
+eigenen Abo in deinen Uni-Mails und in Gmail nach Terminen, Fristen und Hinweisen, die nur dich betreffen.
+Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an, ohne Doppel zu den Terminen für alle.
+
+- **Kostet nichts:** ein Server im Always-Free-Angebot von Oracle (2 OCPU, 12 GB), ohne Upgrade auf Pay-As-You-Go. Ein Budget
+  warnt ab dem ersten Cent, eine Quota sperrt alles, was Geld kosten könnte.
+- **Claude richtet ihn ein:** In Claude Desktop führt ein Skill durch alle Schritte und klickt auf Wunsch selbst (Computer
+  Use). Anmeldungen, Kreditkarte und Zustimmungen machst du. Hat Oracle gerade keinen Platz, sucht ein kleiner Helfer weiter
+  und schickt dir eine Mail, sobald der Server da ist.
+- **Du brauchst:** Claude Pro oder Max, ein Oracle-Konto und Gmail.
+- **Deine Daten** bleiben auf deinem Server und in deinem Tresor, der Weg dazwischen ist verschlüsselt. Mehr in
+  [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
+
+In Claude Desktop einfügen:
+
+```
+Richte mir den eigenen Server für Studium Autopilot ein (github.com/studium-autopilot/ecoba). Lies dazu
+https://github.com/studium-autopilot/ecoba/blob/main/server/skill/server-einrichten/SKILL.md und die Dateien daneben
+und führe mich Schritt für Schritt.
+```
+
+Wie es gebaut ist: [server/README.md](server/README.md).
+
 ## Datenschutz: Was das Plugin tut und nicht tut
 
 Der Tresor bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du musst nichts weiter installieren.

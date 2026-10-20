@@ -35,3 +35,13 @@ Schnittstelle dazwischen; du liest und schreibst die Markdown-Dateien direkt. Ob
 - **Nichts erfinden.** Daten, Räume und Fristen nur aus Notizen, PDFs oder dem, was die Person sagt. Unsicheres sagst du dazu.
 - **Wörter wie in der App:** Tresor, Lehrveranstaltung, Prüfung (Klausur nur als Form), ECTS, Übungsgruppe, Aktualisieren,
   vorlesungsfrei, „## Meine Notizen“. Daten in Notizen und Feldern als `JJJJ-MM-TT`, im Text „Mo 19.10.“, Uhrzeiten „10:00–12:00“.
+
+## Eigener Server mit Claude
+
+Ist ein eigener Server verbunden (Zeile „Eigener Server“ unter **Einstellungen & Hilfe** → **Verbindungen**), holt Obsidian
+dessen Ergebnisse selbst ab: Termine aus Uni-Mails und Gmail erscheinen als Notizen unter `Termine/` mit `herkunft: claude`,
+Hinweise im Fenster „Eigener Server“. Diese Termine legst du nicht noch einmal an; für sie gilt dasselbe wie für jede Notiz mit
+`herkunft`. Was du selbst anlegst, sieht der Server beim nächsten Abruf (Titel, Datum, offene To-dos) und liefert es nicht
+doppelt. Zusammenfassungen von Folien und Skripten kommen von dort in die Notiz neben der PDF, solange „Das Wichtigste“ leer
+ist; schreibst du selbst eine, schickt Obsidian die Unterlage nicht mehr hin. Beginnt ein Hinweis des Servers mit
+„Zentraler Termin wohl falsch:“, bietest du an, ihn nach `fehler-melden.md` mit der Vorlage `termin.yml` zu melden.

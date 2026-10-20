@@ -1,0 +1,37 @@
+#cloud-config
+# Helfer für den Platzsucher (server/README.md, „Platzsucher“): VM.Standard.E2.1.Micro mit Ubuntu 24.04 Minimal, Always Free.
+# Die Einrichtung ersetzt KONFIG_JSON_BASE64 durch die Konfiguration von platzsucher.py (JSON, base64) und
+# PLATZSUCHER_GZ_BASE64 durch platzsucher.py selbst (gzip, base64) aus dem Paket in der Cloud Shell, das sie schon mit seiner
+# Prüfsumme geprüft hat. Der Helfer lädt also nichts nach und läuft auch mit einem Testpaket vor einem Release. Er läuft als
+# Dienst, bis der Server da ist; dann beendet er sich samt Boot-Volume.
+package_update: true
+packages:
+  - python3-venv
+write_files:
+  - path: /etc/studium-platzsucher/konfig.json
+    permissions: "0600"
+    encoding: b64
+    content: KONFIG_JSON_BASE64
+  - path: /opt/studium-platzsucher/platzsucher.py
+    permissions: "0755"
+    encoding: gz+b64
+    content: PLATZSUCHER_GZ_BASE64
+  - path: /etc/systemd/system/studium-platzsucher.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Platzsucher für den Server von Studium Autopilot
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      ExecStart=/usr/bin/python3 /opt/studium-platzsucher/platzsucher.py --oci /opt/oci/bin/oci
+      Restart=on-failure
+      RestartSec=300
+
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - [bash, -c, "python3 -m venv /opt/oci && /opt/oci/bin/pip install --quiet oci-cli==3.95.0"]
+  - [systemctl, daemon-reload]
+  - [systemctl, enable, --now, studium-platzsucher.service]

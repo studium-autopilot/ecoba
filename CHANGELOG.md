@@ -2,6 +2,21 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.0 – Eigener Server mit Claude
+
+- **Neu:** Für Technische: Ein eigener kostenloser Server mit Claude sucht in deinen Uni-Mails nach Terminen, die nur dich
+  betreffen. Sie landen von selbst unter **Termine**, ohne Doppel zu den Terminen für alle.
+- **Einfacher:** Claude richtet dir den Server Schritt für Schritt ein und klickt auf Wunsch selbst. Den Stand siehst du unter
+  **Einstellungen & Hilfe** in der Zeile **Eigener Server**.
+- **Neu:** Mit eigenem Server fasst Claude neue Folien und Unterlagen für dich zusammen. „Das Wichtigste“, Aufgaben und offene
+  Fragen stehen dann von selbst in der Notiz neben der PDF, mit Seitenzahlen.
+- **Einfacher:** Mit **Mails durchsuchen** schaust du sofort nach neuen Terminen, und wie oft dein Server von selbst nachsieht,
+  stellst du im Fenster **Eigener Server** ein.
+- **Übersichtlicher:** Steht dieselbe Aufgabe in zwei Notizen, bleibt sie mit eigenem Server nur einmal unter **To-dos**. Die
+  andere Stelle zeigt dann, wo die Aufgabe steht.
+- **Behoben:** Im geteilten iPad-Fenster und auf dem iPhone quer blieb rechts die halbe Breite leer, die Mitschrift begann erst
+  am unteren Rand. Jetzt nutzt die Notiz die ganze Breite, und ihr Kopf rückt in drei Zeilen zusammen.
+
 ## 0.4.10 – Ausfälle und Raumwechsel fallen auf
 
 - **Übersichtlicher:** Alles aus deinem Tutorium steht jetzt in einem eigenen Bereich **Tutorium**, getrennt von Vorlesung und

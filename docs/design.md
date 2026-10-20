@@ -301,7 +301,12 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 
 ## iPhone und iPad
 
-- Breiten nur über `body.is-phone` (Seitenebene) oder Container-Abfragen (`@container … (max-width: 480px)`), nie `@media`.
+- Breiten nur über `body.is-phone` (Seitenebene) oder Container-Abfragen (`@container … (max-width: 480px)`). `@media` mit
+  Breite oder Höhe nur zusammen mit `body.is-phone`: Obsidian nimmt die Telefon-Ansicht, sobald Breite oder Höhe des Fensters
+  unter 600 px liegt, also auch im geteilten iPad-Fenster (1376 × 500) und auf dem iPhone quer, und zeigt dort eine Notiz über
+  das ganze Fenster. Ab 600 px Breite gilt dort die Breite wie auf dem iPad (`eba-core.css` 37.tablet 1b); unter 600 px Höhe
+  rückt der Kopf von Vorlesungsnotiz und Übungsblatt in drei Zeilen zusammen, damit die Mitschrift ohne Scrollen zu sehen ist
+  (37.vorlesung 3b). Ein breites, flaches Fenster bleibt sonst in der Telefon-Ansicht: Karten richten sich nach ihrer Breite.
 - iPhone: Was nicht täglich gebraucht wird, ist zu (`|handy-zu`). Raster werden einspaltig, Kacheln zweispaltig, Knopfkacheln
   zwei je Reihe. Die Woche auf dem Dashboard zeigt dort einen Tag (Tagesansicht, unter 520 px Kartenbreite) statt fünf schmaler
   Spalten; die Seite Stundenplan zeigt immer die ganze Woche (seit 20.10.2026), schmal mit Kurzname und gekürztem Raum („HS 1“).
@@ -321,9 +326,10 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 
 1. Nur Variablen aus diesem Dokument, keine festen Farben, Schriftgrößen aus den Stufen.
 2. Ansehen in Elfenbein hell und dunkel, Flieder und Klar.
-3. Ansehen in iPhone-Breite (390 px) und iPad-Breite (820 px), in Lese- und Bearbeitungsansicht.
+3. Ansehen in iPhone-Breite (390 px), iPad-Breite (820 px) und im flachen Fenster (1376 × 500, iPhone quer 844 × 390), in
+   Lese- und Bearbeitungsansicht.
 4. Gibt es den Baustein schon? Dann ihn nehmen, keine neue Klasse mit ähnlichem Aussehen.
 5. Neue CSS-Regeln in den Abschnitt des Bausteins in `eba-core.css`, seitenbezogene in Abschnitt 37 mit `eba-s-<seite>`.
 6. `npm test`: `tests/design.test.js` (Design-Wächter) prüft, was sich ohne Obsidian prüfen lässt: feste Farben, Schatten,
-   Symbole der Karten, `@media`-Breiten, Safari 16, und hält Schriftgrößen, Knopf-Klassen und Zeichen-Symbole auf dem Stand
+   Symbole der Karten, `@media` nur mit `body.is-phone`, Safari 16, und hält Schriftgrößen, Knopf-Klassen und Zeichen-Symbole auf dem Stand
    vom 18.10.2026 oder darunter. Ein neuer Wert dort heißt fast immer: einen vorhandenen nehmen.

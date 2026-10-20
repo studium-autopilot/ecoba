@@ -1057,8 +1057,9 @@ Quellen seit 0.4.5 schreibt es gar nicht). Nur in der Hülle eines eigenen Uni-A
 
 Was eine Quelle in den Tresor schreibt, schreibt nur ein Gerät. `sperre.js` ist der gemeinsame Lock dafür (Bibliothek, kein
 Netz, keine Zeitgeber). Noten & Anmeldungen, ILIAS (`ilias-abruf.json`, Dateiname wie bisher), Alma-Stundenplan
-(`alma-abruf.json`) und Volltext (`volltext-abruf.json`, mit Computer-Vorrang) nutzen ihn; die zentralen Daten ihre ältere
-Fassung mit denselben Regeln und Werten (nur für die Übernahme).
+(`alma-abruf.json`), Volltext (`volltext-abruf.json`, mit Computer-Vorrang) und der eigene Server (`server.js`,
+`server-abruf.json`) nutzen ihn; die zentralen Daten ihre ältere Fassung mit denselben Regeln und Werten (nur für die
+Übernahme).
 
 ```
 ctx.user.sperre.erzeugen({ io: { lesen(pfad), schreiben(pfad, text) }, quelle | pfad, geraetId(), jetzt(), mobil,
@@ -1150,6 +1151,7 @@ verbunden, getrennt, länger still). Nur für die Anzeige (siehe „Verbindungen
 | Noten & Anmeldungen (`alma-konto.js`, Beta) | Blick 60–180 s, alle 30 Min., zurück > 60 Min. (fällig nach 12 bzw. 3 Std.) | `alma-konto-abruf.json` | gemeinsame Form | keine Notizen (Modulfeld nach Tipp) | Grabstein `alma-konto-aus.json` fürs Löschen | Vorschläge, fehlende Anmeldung, abgelehnt |
 | Volltext der PDFs (`volltext.js`) | nach 5 Min. Ruhe, alle 30 Min., zurück > 30 Min., Stapel | `volltext-abruf.json` mit Computer-Vorrang | gemeinsame Form | `volltext_von: plugin` (+ `quelle`) | Notiz ohne PDF nur, wenn die PDF wirklich weg ist (Zeuge, 3 Läufe, 2 Std.): Papierkorb oder „(PDF fehlt)“, Massenschutz, Doppel | – |
 | ILIAS-Kalender (`ilias-kalender.js`, seit 18.10.2026) | 20 s + 0–100 s, alle 2 Std., Backoff 15/30/60 Min., zurück > 2 Std. | `ilias-kalender-abruf.json` (mit `angewendet`) | gemeinsame Form, Fehler bleibt | `herkunft: ilias-kalender` + `ilias_kalender_id` | Grabstein, Wegfall nur künftiger Abgaben, Massenschutz, Doppel, keine Doppel mit anderen Fristen | Link gilt nicht mehr, Warnungen |
+| Eigener Server (`server.js`) | 30 s + 0–2 Min., alle 15 Min., Backoff 2/5 Min., zurück > 10 Min. | `server-abruf.json` (mit `angewendet`) | gemeinsame Form, Fehler bleibt | `herkunft: claude` + `claude_id` | Grabstein, Doppel einer id, unberührte Notiz weicht einem späteren zentralen Termin, Absage als „(entfällt)“ | Gerät neu verbinden, Claude neu verbinden, Uni-Passwort nicht angenommen |
 
 **Was eine neue Quelle nutzt (so gebaut: der ILIAS-Kalender, `ilias-kalender.js`, siehe „ILIAS-Kalender“):** `Q.planen` für alle automatischen Läufe;
 `ctx.user.sperre.erzeugen({ quelle: "ilias-kalender", … })` mit Grabsteinen `angewendet` in derselben Datei
@@ -1158,8 +1160,75 @@ verbunden, getrennt, länger still). Nur für die Anzeige (siehe „Verbindungen
 über `standText`/`quelleZeile` in `verbindungen.js` (Knopf „Aktualisieren“, bei einem anderen Gerät „Hier aktualisieren“);
 Notizen mit `Q.marke("ilias-kalender", id)` (`herkunft: ilias-kalender` + `ilias_kalender_id`), Wegfall über `Q.wegfall`,
 `Q.zuViel`, Doppel über `Q.dubletten`, eigener Text unter `## Meine Notizen`; Punkte, die nur du lösen kannst (Link abgelaufen),
-mit `Q.melden(ctx, "ilias-kalender", …)`. Eine Quelle außerhalb des Plugins (eigener Server) setzt `quellen_extern` und schreibt
-Notizen mit `herkunft: claude` + `claude_id`.
+mit `Q.melden(ctx, "ilias-kalender", …)`. Übernimmt ein eigener Server später eine dieser Quellen (z. B. den
+ILIAS-Kalender), steht sie in `quellen_extern`; seine Termine aus Mails schreibt `server.js` mit `herkunft: claude` +
+`claude_id` (siehe „Eigener Server mit Claude“).
+
+## Eigener Server mit Claude (`server.js`)
+
+Gegenstelle zum Server-Paket in `server/` (dort `README.md`): Ein eigener Server findet mit Claude Termine und Hinweise; das
+Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen steht dann nur die leise Zeile „Für Technische“
+(Fenster mit Schritten und **Prompt kopieren**, `ctx.server.PROMPT`, gleicher Wortlaut wie im README).
+
+- **Verbinden:** Aktion `server-verbinden` (Link vom Server: `adresse`, `code`), immer mit Rückfrage. Der Einmal-Code geht per
+  `POST /v1/verbinden` an den Server, zurück kommen Zugangs- und Datenschlüssel (je 32 Byte). Beides liegt mit der Adresse im
+  Schlüsselbund (`app.secretStorage`, Eintrag je Tresor wie in `ilias.js`). Adresse nur `https://<host>` ohne Pfad, Port oder
+  Anmeldung (Test: `plugin.testServerLokal` erlaubt `http://127.0.0.1`).
+- **Abruf** (`Q.planen`: nach 30 s bis 2,5 Min., dann alle 15 Min., nach Fehlern nach 2 bzw. 5 Min., zurück in der App nach
+  über 10 Min.; Knopf **Aktualisieren**): `GET /v1/eingang` mit dem
+  Zugangsschlüssel → Paket `{ schema, zweck, iv, daten }`, AES-256-GCM über Web Crypto, Zusatzdaten
+  `studium-autopilot/kanal/v1/eingang` (Gegenstück zu `server/kanal.mjs`) → noch nicht übernommene Eingang-Dateien. Jede
+  wird einmal übernommen, danach `POST /v1/stand` (verschlüsselt, Zweck `stand`: Modulcodes aus `ctx.zentral.filterBauen()`,
+  Studienbeginn, Variante, `takt` (`server_uni_postfach` 15 | 30 | 60 und `server_gmail` 3 | 1 | 0 aus den Einstellungen, sonst
+  15 und 3; im Fenster als zwei Auswahlfelder, Änderung geht beim nächsten Abruf mit), übernommene Dateien, dazu `tresor`: Termine von vor 30 Tagen bis in einem Jahr mit Titel, Datum,
+  Kategorie, Modulcode, Herkunft und Haken sowie die offenen To-dos aus `todos.js` mit Modulcode, Frist, Kennung `id` (`t-` + `Q.kurzHash(Pfad + Zeile)`), `pfad` und
+  `aenderbar` (offene Aufgabe unter „Zu tun“ einer Begleitnotiz), ohne alles, was nach
+  Zugangsdaten aussieht; der Server löscht die Dateien und legt den Auszug Claude als `tresor.json` hin). Nur ein Gerät übernimmt: `sperre.js` mit Quelle
+  `server` (`System/Daten/server-abruf.json`), nur Geräte mit Verbindung; hält ein anderes Gerät sie, zeigt die Zeile
+  **Hier aktualisieren** (`uebernehmen`, `nehmen({ erzwingen: true })`). Höchstens 50 neue Notizen je Abruf; der Rest bleibt auf dem Server (die Datei gilt erst als
+  übernommen, wenn alles da ist, Hinweise kommen dann einmal). Neue Termine, die schon vorbei sind, entstehen nicht.
+- **Termine:** geprüft mit `ctx.zentral.terminePruefen`, ids nur `c-` + 20 Hex-Zeichen. Notiz über `ctx.zentral.notizText`,
+  danach `herkunft: claude` und `claude_id` statt der zentralen Felder; `zentral.js` fasst sie darum nie an. Doppel: Steht ein
+  zentraler oder eigener Termin am selben Tag (±1) mit ähnlichem Titel da (`aehnlich`: Wörter ohne Füllwörter, Zahlen müssen
+  gleich sein), entsteht keine Notiz. Erscheint derselbe Termin später zentral, kommt die unberührte Notiz vom Server in den
+  Papierkorb. Absagen (`entfaellt`) wie bei den zentralen Daten, neues Datum benennt im selben Ordner um, gelöscht bleibt
+  gelöscht, bis sich der Termin ändert (Grabstein `angewendet`: id → `Q.kurzHash`, wie bei den anderen Quellen in der
+  Sperr-Datei `server-abruf.json`). Zwei Notizen derselben `claude_id` führt der Abruf mit `Q.dubletten` zusammen.
+- **Begleitnotizen:** Zu Lehrmaterial (`art` Folien, Skript, Übung, Tutorium, Lösung, Altklausur, Literatur), dessen „Das Wichtigste“ fehlt
+  oder nur Platzhalter hat und dessen PDF eine Textfassung mit Text hat (`volltext.js`), schickt der Abruf die Textfassung als
+  Text mit `[S. N]` (`volltextText`) verschlüsselt an `POST /v1/unterlagen` (Zweck `unterlagen`), bis zu 9 je Abruf in Anfragen zu 3, neueste PDF zuerst (schon
+  gesendete liest `unterlagenObs` gar nicht erst; eine abgelehnte Anfrage beendet den Abruf, der Rest kommt beim nächsten), jede PDF
+  einmal (`server.json` `gesendet`: SHA-256 → Datum); aus mit `server_unterlagen: aus`. Claude schreibt die Einträge
+  (`server/skill/studium-autopilot/begleitnotiz.md`), der nächste Abruf trägt sie mit `begleitnotizErgaenzen` in die Notiz neben
+  der PDF ein (gleicher Name `.md`, sonst die Unterlage, deren `datei` auf die PDF zeigt): fehlende Abschnitte über dem
+  PDF-Kasten in der Reihenfolge „Das Wichtigste“, „Zu tun“, „Offene Fragen“; Platzhalter älterer Notizen werden ersetzt;
+  „Das Wichtigste“ nur, wenn dort nichts steht, bei den anderen nur, was fehlt. Seiten als `[[X.pdf#page=N|S. N]]`, Fristen
+  „(bis TT.MM.)“. Dieselbe Lieferung nie zweimal (`server.json` `begleitet`: PDF-Pfad → `Q.kurzHash`); fehlt die Notiz, entsteht
+  keine.
+- **Doppelte To-dos:** Claude nennt Paare `todo_doppel: [{ behalten, weg }]` aus den Kennungen des Auszugs. `todoDoppelAnwenden`
+  liest den Auszug frisch und ändert nur „weg“, wenn es eine offene Aufgabe unter „Zu tun“ einer Begleitnotiz ist und die Zeile
+  noch genau so dasteht: aus `- [ ] Text` wird `- Text – steht schon in [[Pfad|Name]]`. Keine Ketten, nie abgehakt, nie
+  gelöscht; die Zahl steht im Lauf (`todos`) und im Hinweis nach **Aktualisieren**.
+- **`server.json`** (synchronisiert, schreibt nur das übernehmende Gerät): `{ schema, erledigt, laeufe, hinweise }`.
+  Persönlich (Hinweise aus Mails): wie `server-abruf.json` nie im Release (`server*.json` in `release.py`, `pruefen.py`,
+  `.gitignore`).
+- **Status, Zeile und Fenster:** `ctx.server.status()` in der Form des Vertrags (`zustand`: `nicht-verbunden` | `anderswo` |
+  `laeuft` | `anderes-geraet` | `fehler` | `an`; gerätelokal über `Q.nachLauf`). `ctx.server.zeile()` liefert die Zeile im
+  Format von Noten & Anmeldungen (`{ text, symbol, pille, knopf, link }`, HTML an einer Stelle: `quelleZeile` in
+  `verbindungen.js`), aus dem öffentlichen `GET /v1/status` (höchstens alle 5 Min., nur Werte aus festen Listen) und dem letzten
+  Abruf; Fehler zuerst (Gerät unbekannt → neu verbinden, Claude nicht verbunden, Uni-Passwort nicht angenommen, Limit), der Stand-Satz aus
+  `ctx.verbindungen.standText` wie bei allen Quellen, dahinter der letzte Lauf des Servers und neue Termine. Was nur du lösen kannst, sagt die Zeile selbst (Pille „prüfen“);
+  der Server meldet sich nicht in „Bitte prüfen“ (neue Funktionen schieben Nutzern keine Prüf-Listen zu, sie zeigen ihren Zustand selbst). Neue Hinweise von Claude
+  (noch nicht im Fenster gesehen, höchstens 14 Tage alt; „gesehen“ merkt sich jedes Gerät selbst, Kurz-Hashes in
+  `eba-server-gesehen`, denn `server.json` schreibt nur das übernehmende Gerät): Der Link der Zeile heißt dann „Hinweise ansehen“;
+  das Fenster setzt sie auf gesehen.
+  **Mails durchsuchen** (Knopf im Fenster und Befehl `server-durchsuchen`) startet einen Claude-Lauf auf dem Server
+  (`POST /v1/anstoss`, höchstens alle 10 Min., sonst „Wieder möglich ab …“); solange der Status `claude_lauf` „wartet“ oder
+  „laeuft“ meldet, sagt die Zeile „Claude durchsucht gerade …“, und der nächste Abruf kommt nach 5 Min. (`plan.spaeter`).
+  Hinweise (`ctx.hinweis`) nur nach **Aktualisieren**, nie vom Zeitplan; Notizen weg nur über den einen Papierkorb. `ctx.server.fensterInhalt(el)`: Stand, Hinweise, letzte
+  Übernahmen, „Dieses Gerät trennen“.
+- Testeinstieg: `ctx.server.erzeugen(abh)` (Netz, Tresor, Schlüsselbund als Ersatz); `tests/server-plugin.test.js` läuft gegen
+  den echten `server/dienst.mjs` auf einem freien Port. `plugin.testServerAus` schaltet den automatischen Abruf ab.
 
 ## Bedien-Bausteine (seit 0.4.6): Pflicht für jede Funktion
 
@@ -1363,8 +1432,8 @@ ctx.user.quellen.papierkorb(app, datei, { lokal })            der eine Papierkor
 ## Verbindungen und Schloss
 
 `verbindungen.js` hält eine Registry. Eine Verbindung ist `{ id, name, art ("link" | "anmeldung" | "konto" | "volltext" | "zentral" |
-"vorlage"), satz, kurz?, erklaerung, schritte, status(), gesperrt(), schlossKnopf?, trennenText?, pruefen(link)?, verbinden(link)?,
-aktualisieren(parameter)?, trennen()? }`.
+"server" | "vorlage"), satz, kurz?, erklaerung, schritte, status(), gesperrt(), sichtbar()?, schlossKnopf?, trennenText?,
+pruefen(link)?, verbinden(link)?, aktualisieren(parameter)?, trennen()? }`. `sichtbar()` haben nur `konto`, `volltext` und `server`.
 
 Texte für Nicht-Techniker (seit 15.10.2026): `satz` = ein Satz Nutzen (Schloss-Karte), `kurz` = höchstens ein Satz im Fenster,
 `schritte` = kurze Schritte mit Verb vorn (`**fett**` = Bedienelement, genau wie in Alma/Obsidian benannt; `[Text](https://…)`
@@ -1382,6 +1451,7 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
 | `ilias-kalender` | „ILIAS-Kalender“ (seit 18.10.2026, `ilias-kalender.js`), Art `link` wie Alma: nicht verbunden Satz und **Verbinden** (Symbol aus, keine Pille, kein Schloss); verbunden Stand aus `standText` und die Zahl der kommenden offenen Abgaben („Aktualisiert vor 5 Min. 3 Abgaben stehen bei deinen Fristen.“), Knopf Aktualisieren bzw. Hier aktualisieren, „Mehr erfahren“ öffnet das Link-Fenster (Neuen Link eingeben, Trennen); von außen nur der Satz „Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich.“ (mit gespeichertem Link Textlink Trennen). Die Link-Fenster nehmen ihre Texte aus der Registry (`laedt`, `danach`, `neuerLink`, `externText`; Alma unverändert) | nie |
 | `volltext` | „Volltext der PDFs“ (seit 0.4.5, `volltext.js`): Text mit den Zahlen aus `ctx.volltext.status()` („58 PDFs durchsuchbar, 2 ohne Text.“), Knopf Aktualisieren (`nachholen`; liest gerade ein anderes Gerät: Hier aktualisieren, `hier=1`); aus: Einschalten öffnet das Fenster mit dem Schalter „Textfassungen anlegen“ (`setzen`, für alle Geräte); extern oder fremde Textfassungen: nur der Satz | nie |
 | `zentral` | Zentrale Daten (`zentral.js`), Knopf Aktualisieren (aus: Einschalten); die Schalter Zentrale Daten und Fachschaft & Veranstaltungen stehen im Fenster „Mehr erfahren“ | nie (Standard an) |
+| `server` | „Eigener Server“ (`server.js`): ohne Server (keine Schlüssel hier, keine `server.json` per Sync) leise „Für Technische: …“ mit Mehr erfahren (Fenster: drei Schritte, Knopf Prompt kopieren, was es kostet und braucht); sonst Zeile aus `ctx.server.zeile()`, Knopf Aktualisieren (holt ein anderes Gerät gerade ab: Hier aktualisieren), Fenster mit Stand, Hinweisen und Trennen; ohne Verbindung auf diesem Gerät die Schritte zum Verbinden (Link vom Server) | nie |
 | `vorlage` | „Studium Autopilot“ (`update.js`): Version, Knopf Aktualisieren bzw. Neu laden, sonst Mehr erfahren; Schalter „Beta-Versionen“ im Fenster unter „Mehr erfahren“ | nie |
 
 - **Über ein anderes Gerät verbunden** (seit 0.4.7, `ctx.verbindungen.imTresor(id)` → `{ art: hier | anderswo | nein, zuletzt }`, aus
@@ -1417,7 +1487,7 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   „Noch nicht aktualisiert.“ (Haken), Warnungen des letzten Laufs dahinter (Warnsymbol), ein Fehler als Satz der Quelle mit
   „Zuletzt aktualisiert …“ (Warnsymbol, bleibt bis zum nächsten Erfolg), „Ein anderes Gerät aktualisiert, alles kommt über deinen
   Sync.“ mit dem Knopf **Hier aktualisieren**, „Aktualisiert gerade …“ (Uhr). Zeitwörter aus `quellen.js` (`vorText`). So zeigen
-  Alma-Stundenplan, ILIAS, Zentrale Daten, Volltext und Noten & Anmeldungen (über `ctx.verbindungen.standText`) dieselben
+  Alma-Stundenplan, ILIAS, Zentrale Daten, Volltext, Noten & Anmeldungen und der eigene Server (über `ctx.verbindungen.standText`) dieselben
   Wörter; Sonderfälle (nicht verbunden, abgelehnt, extern, Fortschritt) formuliert die Quelle selbst. Liefert eine Quelle ihre
   Zeile selbst (`zeile()`, Noten & Anmeldungen, eigener Server), baut `quelleZeile(z)` daraus das HTML.
 - Verbinden-Fenster: vier Schritte (Link zu Alma, Link zum Stundenplan → „Daten für iCalendar (ics) exportieren“ → „Link

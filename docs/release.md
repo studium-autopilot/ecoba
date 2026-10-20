@@ -70,7 +70,9 @@ Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst
 ## 5. GitHub-Release
 
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
-**`Studium-Autopilot.zip`** anhängen (genau dieser Name). Titel wie die Überschrift im Changelog:
+**`Studium-Autopilot.zip`** und **`studium-server.tar.gz`** anhängen (genau diese Namen; beide aus `release.py --zip`). Das
+Server-Paket lädt die Einrichtung des eigenen Servers und täglich `studium-server aktualisieren`, beide nur mit der Prüfsumme,
+die GitHub zum Asset zeigt; fehlt es, bleibt jeder eigene Server auf seinem Stand. Titel wie die Überschrift im Changelog:
 `0.3.1 – Update-Hinweis auf dem Dashboard`. Als **Latest release** veröffentlichen. Releases sind unveränderlich (Immutable
 Releases): Nach dem Veröffentlichen lassen sich Assets nicht mehr tauschen, also erst als Entwurf vollständig machen. Das ZIP enthält nur den
 Tresor-Ordner, so wie Nutzer:innen ihn brauchen (siehe `docs/installation.md`).

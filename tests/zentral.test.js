@@ -148,8 +148,10 @@ test("Live: aktuelle zentrale Daten sind gültig", { skip: process.env.ECOBA_LIV
     const b = await holen(name);
     assert.equal(await Z.sha256(b), m.wert.dateien[name].sha256, name + ": SHA-256");
     const d = JSON.parse(new TextDecoder().decode(b));
-    const pruefen = { "termine.json": Z.terminePruefen, "gruppen.json": Z.gruppenPruefen, "angebote.json": Z.angebotePruefen };
-    const r = (pruefen[name] || Z.semesterPruefen)(d);
+    const pruefen = { "termine.json": Z.terminePruefen, "semester.json": Z.semesterPruefen, "gruppen.json": Z.gruppenPruefen,
+      "angebote.json": Z.angebotePruefen, "veranstaltungen.json": Z.lehrePruefen, "kapitel.json": Z.kapitelPruefen };
+    assert.ok(pruefen[name], name + ": kein Prüfer im Test");
+    const r = pruefen[name](d);
     assert.equal(r.fehler, undefined, r.fehler);
     assert.deepEqual(r.verworfen, [], name + ": verworfen");
   }

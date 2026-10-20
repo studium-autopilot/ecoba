@@ -8,7 +8,8 @@
 // ctx.ilias.zugangSpeichern weiter und leert danach das Feld. Noten & Anmeldungen (alma-konto.js, seit 0.4.5, Beta) nutzt
 // denselben Eintrag für Alma, erst nach „Einschalten“ in seinem Fenster. Kein Mail-Passwort (kein IMAP), nichts davon im Vault.
 //
-// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "konto" | "zentral" | "vorlage"), status(), gesperrt(),
+// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "konto" | "zentral" | "server" | "vorlage"), status(), gesperrt(),
+//   sichtbar()? (fehlt = immer; „Noten & Anmeldungen“ unter ihren Bedingungen, „Eigener Server“, wenn server.js geladen ist),
 //   vorschau? ("woche": Schloss liegt auf einem ausgegrauten Beispiel-Stundenplan), anreiz? (Überschrift dazu), schlossKnopf? (Text
 //   des Knopfs der Schloss-Karte), trennenText? (Rückfrage beim Trennen), pruefen(link)?, verbinden(link)?, trennen()?, aktualisieren(parameter)? }
 // Texte (auch für Nicht-Techniker): satz = ein Satz Nutzen (Schloss-Karte); kurz = höchstens ein Satz im Fenster;
@@ -368,6 +369,46 @@ module.exports = function (ctx) {
       gesperrt() { return false; },
       async aktualisieren() { if (ctx.zentral) await ctx.zentral.abrufen({ manuell: true }); },
     },
+    // Eigener Server mit Claude (server.js): Termine und Hinweise aus Uni-Mails und Kursdaten. Ohne Server (kein Gerät verbunden,
+    // keine server.json per Sync) eine leise Zeile „Für Technische“ mit „Mehr erfahren“: Fenster mit Schritten und dem Knopf
+    // „Prompt kopieren“ für Claude Desktop. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert
+    // ctx.server (zeile(), fensterInhalt()).
+    server: {
+      id: "server", name: "Eigener Server", art: "server",
+      satz: "Dein Server findet mit Claude Termine in deinen Uni-Mails.",
+      // Ohne Server (kein Gerät verbunden): Weg zur Einrichtung mit Claude Desktop; sonst Stand bzw. Verbinden dieses Geräts
+      get kurz() {
+        return ctx.server && !ctx.server.sichtbar()
+          ? "Claude richtet dir am Computer einen eigenen, kostenlosen Server ein, der in deinen Uni-Mails nach Terminen für dich sucht."
+          : "Dein eigener Server sucht mit Claude in deinen Uni-Mails nach Terminen, neue landen von selbst unter Termine.";
+      },
+      get schritte() {
+        if (!ctx.server || ctx.server.verbunden()) return [];
+        if (!ctx.server.sichtbar()) {
+          return [
+            "Unten **Prompt kopieren** tippen.",
+            "Claude Desktop öffnen, den Text einfügen und senden. Claude führt dich durch alles Weitere.",
+            "Zum Schluss auf jedem Gerät den Link öffnen, den dein Server zeigt.",
+          ];
+        }
+        return [
+          "Auf deinem Server **sudo studium-server verbinden** eingeben.",
+          "Den Link auf diesem Gerät öffnen oder den QR-Code scannen.",
+        ];
+      },
+      get erklaerung() {
+        return ctx.server && !ctx.server.sichtbar()
+          ? "Kostet nichts: ein Server im Always-Free-Angebot von Oracle ohne Upgrade, ein Budget warnt ab dem ersten Cent. Du brauchst Claude Pro oder Max, ein Oracle-Konto und Gmail."
+          : "Die Schlüssel liegen nur im Schlüsselbund dieses Geräts, die Daten kommen verschlüsselt. Ein Gerät reicht, die Termine kommen über deinen Sync auf die anderen.";
+      },
+      trennenText: "Die Schlüssel werden auf diesem Gerät gelöscht. Deine Termine bleiben, dein Server läuft weiter.",
+      sichtbar() { return !!ctx.server; },
+      status() { return ctx.server ? ctx.server.status() : { verbunden: false }; },
+      gesperrt() { return false; },
+      // uebernehmen = Knopf „Hier aktualisieren“: die Sperre von einem anderen Gerät herholen
+      async aktualisieren(p) { if (ctx.server) await ctx.server.jetztHolen({ uebernehmen: !!(p && (p.uebernehmen === true || p.uebernehmen === "1")) }); },
+      async trennen() { if (ctx.server) await ctx.server.trennen(); },
+    },
     // Die Vorlage selbst (update.js, seit 0.2.0): Version und Knopf „Neue Version installieren“, wenn eine neue Version da ist,
     // sonst „Nach Updates suchen“ (seit 0.4.8)
     vorlage: {
@@ -505,6 +546,7 @@ module.exports = function (ctx) {
       schritteZeigen(this.contentEl, v);
       if (v.art === "zentral") zentralSchalter(this.contentEl);
       if (v.art === "volltext") volltextSchalter(this.contentEl);
+      if (v.art === "server" && ctx.server) ctx.server.fensterInhalt(this.contentEl.createDiv()).catch((e) => console.error("Eigener Server: Fenster", e));
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
       // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
@@ -984,6 +1026,10 @@ module.exports = function (ctx) {
       return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
     }
     if (v.art === "uni") return uniZeile(v);
+    if (v.art === "server") {
+      if (!ctx.server) return { zu: false, text: "Wird geladen …", pille: "", symbol: "uhr", ton: "leise", knopf: "", link: "" };
+      return quelleZeile(ctx.server.zeile());
+    }
     if (v.art === "anmeldung") return iliasZeile(v);
     if (v.art === "konto") {
       // „Braucht deinen Uni-Zugang“, aber ein anderes Gerät prüft schon: verbunden

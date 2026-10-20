@@ -54,7 +54,7 @@ jobs:
           npm ci --no-audit --no-fund
           npx eslint .
           pip install --quiet "ruff==$RUFF_VERSION"
-          ruff check werkzeuge/
+          ruff check werkzeuge/ server/
 
       - name: Safari-16-Verträglichkeit (esbuild)
         # Jedes Skript wird zweimal von esbuild ausgegeben: mit Ziel safari16 und mit Ziel esnext. Nutzt ein Skript Syntax,

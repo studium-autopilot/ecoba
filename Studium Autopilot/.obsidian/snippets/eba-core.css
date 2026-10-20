@@ -1405,11 +1405,15 @@ body:not(.is-phone) .callout[data-callout-metadata*="pc-flach"] > .callout-conte
 body:not(.is-phone) .callout[data-callout-metadata*="pc-flach"] ul { padding-left: var(--list-indent, 2em); } /* Einzug wie eine Liste ohne Karte */
 
 /* ---------- 36b. iPhone: volle Breite (kein weißer Rand links und rechts) ----------
-   Obsidian lässt auf dem iPhone ca. 28 px Rand je Seite; jetzt 8 px. Gilt für alle Notizen, Lese- und Bearbeitungsansicht. */
-body.is-phone .markdown-preview-view,
-body.is-phone .markdown-source-view.mod-cm6 .cm-scroller { --file-margins: 8px 8px; padding-left: 8px !important; padding-right: 8px !important; }
-body.is-phone .markdown-preview-view .markdown-preview-sizer,
-body.is-phone .markdown-source-view.mod-cm6 .cm-sizer { max-width: none !important; width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }
+   Obsidian lässt auf dem iPhone ca. 28 px Rand je Seite; jetzt 8 px. Gilt für alle Notizen, Lese- und Bearbeitungsansicht, nur
+   in schmalen Fenstern (unter 600 px). Ein breites, flaches Fenster zeigt Obsidian ebenfalls als Telefon; dort gilt die Breite
+   wie auf dem iPad (37.tablet, Teil 1b). */
+@media (max-width: 599px) {
+  body.is-phone .markdown-preview-view,
+  body.is-phone .markdown-source-view.mod-cm6 .cm-scroller { --file-margins: 8px 8px; padding-left: 8px !important; padding-right: 8px !important; }
+  body.is-phone .markdown-preview-view .markdown-preview-sizer,
+  body.is-phone .markdown-source-view.mod-cm6 .cm-sizer { max-width: none !important; width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }
+}
 
 /* Seitenende auf dem iPhone für alle Notizen: kein halber Bildschirm Leerraum nach dem letzten Absatz */
 body.is-phone .markdown-preview-view .markdown-preview-sizer { padding-bottom: 1.5rem !important; }
@@ -2366,7 +2370,8 @@ body:not(.is-phone) .eba-tl-fuss { display: flex; flex-wrap: wrap; gap: 0 8px; a
 /* iPad und PC (body:not(.is-phone)): Startseite so ruhig wie auf dem iPhone – kein breiter weißer Rand an den Seiten,
    Knöpfe füllen eine Zeile, Fristen und Termine klappen auf dem iPad nicht ein; dasselbe Design auf dem PC.
    Dashboard (eba-s-dashboard): auf iPad und PC. Übrige eba-Seiten: volle Breite, Rhythmus und Knopfreihe nur auf dem iPad
-   (body.is-tablet); am PC bleiben sie unverändert. iPhone (is-phone) nie. Breiten über Container-/Inhaltsbreite, nicht Gerät.
+   (body.is-tablet); am PC bleiben sie unverändert. iPhone (is-phone) nie; die Breite aus Teil 1 aber auch im breiten, flachen
+   Fenster in der Telefon-Ansicht (Teil 1b). Breiten über Container-/Inhaltsbreite, nicht Gerät.
    Geprüft bei iPad 1376 px (quer) und 1032 px (hoch), PC 1100/1440/1900 px. */
 
 /* ---------- 1. Volle Breite, schmaler Rand (statt lesbarer Zeilenlänge 72rem mit ca. 140-190 px Rand je Seite).
@@ -2382,6 +2387,22 @@ body.is-tablet .markdown-preview-view.eba:not(.eba-folien) .markdown-preview-siz
 body.is-tablet .markdown-source-view.mod-cm6:is(.eba, .eba-s-vorlesung, .eba-s-uebungsblatt, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien) .cm-sizer { max-width: 1680px !important; width: 100% !important; margin-left: auto !important; margin-right: auto !important; }
 /* Reiner Fließtext (Absätze, Listen außerhalb von Karten) bleibt lesbar: höchstens ca. 90 Zeichen je Zeile */
 body.is-tablet .markdown-preview-view.eba:not(.eba-folien) .markdown-preview-sizer > div > :is(p, ul, ol, blockquote) { max-width: 52rem; }
+
+/* ---------- 1b. Breites, flaches Fenster in der Telefon-Ansicht (seit 20.10.2026) ----------
+   Obsidian schaltet auf die Telefon-Ansicht (body.is-phone), sobald Breite ODER Höhe des Fensters unter 600 px liegt
+   (window.matchMedia("(min-width: 600px) and (min-height: 600px)") entscheidet über is-tablet), also auch im geteilten
+   iPad-Fenster (z. B. 1376 × 500) und auf dem iPhone quer. Bis hier galt dort die iPhone-Breite aus 36b; in der
+   Bearbeitungsansicht blieb die Mitschrift bei 700 px links stehen und rechts die halbe Breite leer. Die Telefon-Ansicht zeigt
+   genau eine Notiz über die ganze Fensterbreite, die Fensterbreite (@media) ist darum die Breite der Notiz: Ab 600 px gilt die
+   Breite wie auf dem iPad (Teil 1). Alles andere in der Telefon-Ansicht richtet sich nach der Breite der eigenen Karte. */
+@media (min-width: 600px) {
+  body.is-phone :is(.eba, .eba-s-vorlesung, .eba-s-uebungsblatt, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien) { --file-line-width: 1680px; --file-margins: 16px 22px; }
+  body.is-phone .markdown-preview-view.eba:not(.eba-folien),
+  body.is-phone .markdown-source-view.mod-cm6.eba:not(.eba-folien) .cm-scroller { padding-left: 22px !important; padding-right: 22px !important; }
+  body.is-phone .markdown-preview-view.eba:not(.eba-folien) .markdown-preview-sizer,
+  body.is-phone .markdown-source-view.mod-cm6:is(.eba, .eba-s-vorlesung, .eba-s-uebungsblatt, .eba-s-termin, .eba-s-begleitnotiz):not(.eba-folien) .cm-sizer { max-width: 1680px !important; width: 100% !important; margin-left: auto !important; margin-right: auto !important; }
+  body.is-phone .markdown-preview-view.eba:not(.eba-folien) .markdown-preview-sizer > div > :is(p, ul, ol, blockquote) { max-width: 52rem; }
+}
 
 /* ---------- 2. Ruhiger Rhythmus: Abschnittsüberschrift näher am Inhalt (Farbschema setzt 2,6em darüber) ---------- */
 body:not(.is-phone) .eba-s-dashboard h2, body.is-tablet .eba h2 { margin-top: 1.5em !important; margin-bottom: 0.6em !important; }
@@ -2998,7 +3019,7 @@ body.is-phone .eba-s-unterlagen .callout[data-callout="eba-kennzahlen"] .bases-v
    Alle Geräte (nicht nur iPhone), Lese- und Bearbeitungsansicht.
    1. Kopf-Karte .eba-vorl (Codeblock ```eba-vorlesung```, gezeichnet von System/Skripte/vorlesung.js): Semesterwoche, Status-Knopf,
       Modul, Thema, Datum/Zeit/Raum, Dozent, Perlen der Vorlesungswochen, Links zu Folien und Stundenplan. Passt sich über
-      @container eba-vorl der eigenen Breite an (iPhone schmal, iPad/PC breit).
+      @container eba-vorl der eigenen Breite an (iPhone schmal, iPad/PC breit), im flachen Fenster in drei Zeilen (Teil 3b).
    2. Abschnitte als ruhige Labels mit Symbol (Mitschrift, Prüfungsrelevant, Offene Fragen, Nacharbeit); „Prüfungsrelevant“ als
       getönter Kasten mit Randlinie. Klassen eba-vorl-h-… und eba-vorl-z-… setzt vorlesung.js (Leseansicht: Post-Processor,
       Bearbeitungsansicht: Zeilen-Dekoration). Ohne Skript greifen in der Leseansicht die data-heading-Regeln, in der
@@ -3220,6 +3241,31 @@ body .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .cm-embed-b
 body.is-phone :is(.eba-s-vorlesung, .eba-s-uebungsblatt):is(.markdown-preview-view, .markdown-source-view) { --h2-size: 12px; }
 body.is-phone .markdown-preview-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt) .markdown-preview-sizer > div > h2 { margin: 1.5em 0 0.45em; }
 body.is-phone .markdown-source-view:is(.eba-s-vorlesung, .eba-s-uebungsblatt).is-live-preview .cm-line.HyperMD-header-2 { padding-top: 0.35em !important; padding-bottom: 5px !important; line-height: 1.4; }
+
+/* ---------- 3b. Flaches Fenster: Kopf-Karte in drei Zeilen (seit 20.10.2026) ----------
+   Im flachen Fenster (unter 600 px hoch: iPad geteilt, iPhone quer) fraß die Karte fast die ganze Höhe, die Mitschrift begann
+   erst am unteren Rand. Jetzt: Zeile 1 Semester · Woche, rechts die Perlen der Wochen, Status und „⋯“; Zeile 2 Modul und Name
+   der Notiz; Zeile 3 Datum, Zeit, Raum, Dozent und die Links (reicht der Platz nicht, eine Zeile mehr). Nichts fällt weg.
+   Nur in der Telefon-Ansicht: Dort zeigt Obsidian eine Notiz über das ganze Fenster, die Fensterhöhe (@media) ist die der
+   Notiz (37.tablet, Teil 1b). Die Karte ist hier Flexbox statt Raster, der Kopf löst sich auf (display: contents), damit die
+   Perlen zwischen Woche und Status stehen; ::before und ::after brechen nach Zeile 1 und 2 um. */
+@media (max-height: 599px) {
+  body.is-phone .eba-vorl-karte { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; row-gap: 3px; padding: 8px 16px 10px; }
+  body.is-phone .eba-vorl-karte > * { margin: 0; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-kopf { display: contents; }
+  body.is-phone .eba-vorl-kopf > .eba-vorl-label { order: 1; flex: 0 1 auto; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-wochen { order: 2; flex: 1 1 230px; max-width: 340px; margin-left: auto; }
+  body.is-phone .eba-vorl-kopf > .eba-vorl-status { order: 3; }
+  body.is-phone .eba-vorl-kopf > .eba-kopf-mehr { order: 4; margin-left: -10px; }
+  body.is-phone .eba-vorl-karte::before { content: ""; order: 5; flex: 1 1 100%; height: 0; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-titel { order: 6; flex: 0 1 auto; font-size: 1.3em; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-thema { order: 7; flex: 1 1 16em; min-width: 0; font-size: 1em; }
+  body.is-phone .eba-vorl-karte::after { content: ""; order: 8; flex: 1 1 100%; height: 0; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-meta { order: 9; flex: 0 1 auto; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-dozent { order: 10; flex: 0 1 auto; align-items: center; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-dozent .eba-vorl-sym { margin-top: 0; }
+  body.is-phone .eba-vorl-karte > .eba-vorl-links { order: 11; flex: 0 1 auto; padding: 0; border-top: 0; }
+}
 
 /* ---------- 4. iPad/PC: Seitenende der Leseansicht ohne halben Bildschirm Leerraum (nur padding, nie min-height).
    Bearbeitungsansicht behält Obsidians Auslauf, damit die Schreibzeile beim Mitschreiben nicht am unteren Rand klebt. ---------- */

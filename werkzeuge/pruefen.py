@@ -116,6 +116,7 @@ TRESOR_DATEIEN = [
     (re.compile(r"/System/Daten/volltext-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
     (re.compile(r"/System/Daten/alma-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
     (re.compile(r"/System/Daten/ilias-kalender[^/]*\.json$"), "vaultlokale Datei (ILIAS-Kalender)"),
+    (re.compile(r"/System/Daten/server[^/]*\.json$"), "persönliche Daten bzw. Sperre des eigenen Servers"),
     (re.compile(r"/Unterlagen/_Volltext/"), "persönliche Textfassung einer PDF (Volltext)"),
 ]
 TESTSEITE = re.compile(r"^tests/daten/.+\.html?$", re.I)

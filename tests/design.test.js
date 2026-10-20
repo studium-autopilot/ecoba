@@ -90,9 +90,25 @@ test("Symbole nur mit Bedeutung: --callout-icon nur für Ort, Kontakt, Achtung u
   assert.deepEqual(funde, [], "ein Symbol nur, wo es etwas sagt, das der Titel nicht sagt (docs/design.md, Grundsatz 8)");
 });
 
-test("iPhone und iPad: Breiten nie über @media, Safari 16: kein CSS-Nesting, keine Stilabfragen, kein @property", () => {
+// Fenstermaße (@media mit width/height) nur für die Telefon-Ansicht: Dort zeigt Obsidian eine Notiz über das ganze Fenster,
+// das Fenster ist also die Notiz (seit 20.10.2026, breite flache Fenster; docs/design.md „iPhone und iPad“). Liefert die
+// Selektoren in solchen Blöcken, die nicht mit body.is-phone beginnen.
+const fensterRegelnOhneTelefon = (css) => {
+  const funde = [];
+  const muster = /@media[^{]*(?:width|height)[^{]*\{/g;
+  while (muster.exec(css)) {
+    let tiefe = 1, i = muster.lastIndex;
+    for (; i < css.length && tiefe; i++) { if (css[i] === "{") tiefe++; else if (css[i] === "}") tiefe--; }
+    for (const d of deklarationen(css.slice(muster.lastIndex, i - 1))) {
+      for (const s of teilen(d.selektor)) if (!/^body\.is-phone[\s.:[]/.test(s)) funde.push(s);
+    }
+  }
+  return [...new Set(funde)];
+};
+
+test("iPhone und iPad: Fenstermaße (@media) nur mit body.is-phone, Safari 16: kein CSS-Nesting, keine Stilabfragen, kein @property", () => {
   for (const [name, css] of [["eba-core.css", CORE], ...DESIGNS]) {
-    assert.ok(!/@media[^{]*(width|height)/.test(css), `${name}: Breiten über body.is-phone oder @container, nie @media`);
+    assert.deepEqual(fensterRegelnOhneTelefon(css), [], `${name}: Breiten über body.is-phone oder @container; @media nur in der Telefon-Ansicht`);
     assert.ok(!/@container[^{]*style\(/.test(css), `${name}: keine Stilabfragen in @container (Safari 16)`);
     assert.ok(!/@property\b/.test(css), `${name}: kein @property (Safari 16.0–16.3)`);
     const ohneTexte = css.replace(/"[^"\n]*"|'[^'\n]*'/g, "\"\"");
@@ -154,4 +170,7 @@ test("Der Wächter erkennt Verstöße", () => {
   assert.equal(ohneUrl('url("data:image/svg+xml,%23fff") no-repeat'), "url() no-repeat");
   const k = deklarationen('.callout[data-callout="eba-neu"] li > a { -webkit-hyphens: auto; overflow-wrap: anywhere; } .eba-mod-knopf { hyphens: manual; } .eba-wt b { hyphens: auto; }');
   assert.deepEqual(k.filter(trenntImKnopf).map((x) => x.eigenschaft), ["-webkit-hyphens", "overflow-wrap"]);
+  assert.deepEqual(fensterRegelnOhneTelefon("@media (min-width: 600px) { body.is-phone .a, .b { x: 1 } @container k (min-width: 4px) {"
+    + " body.is-phonex .c { x: 1 } body.is-phone:not(.d) .e { x: 1 } } } @media (max-height: 599px) { .f { x: 1 } }"
+    + " @media print { .g { x: 1 } } .h { x: 1 }"), [".b", "body.is-phonex .c", ".f"]);
 });

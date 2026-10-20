@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# studium-server: Befehle für den eigenen Server von Studium Autopilot (server/README.md). Liegt nach der Installation
+# unter /usr/local/bin/studium-server.
+set -euo pipefail
+
+PAKET=/opt/studium-server/aktuell
+KONFIG=/etc/studium-server/dienst.json
+DATEN=/var/lib/studium-server
+ZUGANG=/etc/credstore.encrypted/uni-zugang
+RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest
+
+hilfe() {
+  cat <<'TEXT'
+studium-server status                  Stand des Servers (wie /v1/status) und der Dienste
+studium-server verbinden               Einmal-Link und QR-Code, um ein Gerät mit Obsidian zu verbinden (30 Minuten gültig)
+studium-server uni-zugang setzen       Uni-Benutzername und -Passwort verschlüsselt speichern (verdeckte Eingabe)
+studium-server uni-zugang loeschen     gespeicherten Uni-Zugang löschen
+studium-server uni-zugang pruefen      zeigt nur, ob ein Zugang gespeichert und entschlüsselbar ist
+studium-server zustand                 Zustand für den Status jetzt neu prüfen
+studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
+studium-server modell sonnet|opus      Modell für die Claude-Läufe (Standard: sonnet, schont das Limit)
+studium-server lauf                    Ergebnis des letzten Claude-Laufs
+studium-server aktualisieren           neuestes Server-Paket aus dem Release holen (Prüfsumme) und installieren
+TEXT
+}
+
+root_noetig() {
+  [ "$(id -u)" -eq 0 ] || { echo "Bitte mit sudo starten: sudo studium-server $*" >&2; exit 1; }
+}
+
+als_studium() {
+  if [ "$(id -un)" = studium ]; then
+    STUDIUM_SERVER_KONFIG="$KONFIG" STUDIUM_SERVER_DATEN="$DATEN" "$@"
+  else
+    sudo -u studium -H env STUDIUM_SERVER_KONFIG="$KONFIG" STUDIUM_SERVER_DATEN="$DATEN" "$@"
+  fi
+}
+
+port() { jq -r '.port // 8743' "$KONFIG" 2>/dev/null || echo 8743; }
+
+uni_zugang() {
+  case "${1:-}" in
+    setzen)
+      root_noetig uni-zugang setzen
+      read -r -p "Uni-Benutzername: " benutzer
+      [ -n "$benutzer" ] || { echo "Kein Benutzername eingegeben." >&2; exit 1; }
+      eingabe=$(systemd-ask-password --emoji=no "Uni-Passwort (wird nicht angezeigt):")
+      [ -n "$eingabe" ] || { echo "Kein Passwort eingegeben." >&2; exit 1; }
+      install -d -m 0755 /etc/credstore.encrypted
+      # printf ist eingebaut: Das Passwort steht nie in einer Befehlszeile (ps), nur in Pipes.
+      printf '%s\n%s\n' "$benutzer" "$eingabe" \
+        | python3 -c 'import json,sys; b=sys.stdin.readline().rstrip("\n"); p=sys.stdin.readline().rstrip("\n"); sys.stdout.write(json.dumps({"username": b, "password": p}))' \
+        | systemd-creds encrypt --name=uni-zugang - "$ZUGANG"
+      unset eingabe
+      chmod 0600 "$ZUGANG"
+      rm -f "$DATEN/uni-zugang-falsch"
+      als_studium node "$PAKET/zustand.mjs" >/dev/null || true
+      echo "Uni-Zugang verschlüsselt gespeichert."
+      ;;
+    loeschen)
+      root_noetig uni-zugang loeschen
+      rm -f "$ZUGANG" "$DATEN/uni-zugang-falsch"
+      als_studium node "$PAKET/zustand.mjs" >/dev/null || true
+      echo "Uni-Zugang gelöscht. Es laufen nur noch Quellen ohne Anmeldung."
+      ;;
+    pruefen)
+      root_noetig uni-zugang pruefen
+      if systemd-creds decrypt --name=uni-zugang "$ZUGANG" - >/dev/null 2>&1; then echo "gespeichert"; else echo "fehlt"; fi
+      ;;
+    *) hilfe; exit 1 ;;
+  esac
+}
+
+aktualisieren() {
+  root_noetig aktualisieren
+  local info url pruefsumme tmp neu alt
+  info=$(curl -fsSL "$RELEASES") || { echo "GitHub nicht erreichbar." >&2; exit 1; }
+  url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
+  if [ -z "$url" ]; then echo "Das neueste Release enthält noch kein Server-Paket; nichts zu tun."; exit 0; fi
+  pruefsumme=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
+  [ -n "$pruefsumme" ] || { echo "Keine Prüfsumme im Release; nichts installiert." >&2; exit 1; }
+  tmp=$(mktemp -d)
+  trap 'rm -rf "$tmp"' EXIT
+  curl -fsSL "$url" -o "$tmp/paket.tar.gz"
+  echo "${pruefsumme#sha256:}  $tmp/paket.tar.gz" | sha256sum -c --quiet - || { echo "Prüfsumme stimmt nicht; nichts installiert." >&2; exit 1; }
+  tar -xzf "$tmp/paket.tar.gz" -C "$tmp"
+  neu=$(cat "$tmp/server/VERSION")
+  alt=$(cat "$PAKET/VERSION" 2>/dev/null || true)
+  if [ "$neu" = "$alt" ]; then echo "Schon aktuell ($alt)."; exit 0; fi
+  # Nur vorwärts: Ein Server mit neuerem Stand (z. B. aus einem Testpaket) geht nie auf ein älteres Release zurück.
+  if [ -n "$alt" ] && [ "$(printf '%s\n%s\n' "$alt" "$neu" | sort -V | tail -n 1)" != "$neu" ]; then
+    echo "Installiert ist $alt, neuer als das Release ($neu); nichts zu tun."; exit 0
+  fi
+  bash "$tmp/server/installieren.sh" --ip "$(jq -r '.ip' "$KONFIG")"
+  apt-get install -y --only-upgrade caddy nodejs >/dev/null
+}
+
+case "${1:-hilfe}" in
+  status)
+    curl -fsS "http://127.0.0.1:$(port)/v1/status" | jq .
+    for d in dienst speicher; do printf '%-9s %s\n' "$d" "$(systemctl is-active "studium-server-$d.service" || true)"; done
+    takt=$(als_studium cat "$DATEN/takt.json" 2>/dev/null || echo '{"uni_postfach":15,"gmail":3}')
+    jq -r '"Takt aus Obsidian: Uni-Postfach alle \(.uni_postfach) Min., Gmail \(.gmail)-mal am Tag"' <<<"$takt"
+    ;;
+  verbinden)
+    root_noetig verbinden
+    ausgabe=$(als_studium node "$PAKET/verbinden.mjs")
+    link=$(jq -r '.link' <<<"$ausgabe")
+    echo "Code: $(jq -r '.code' <<<"$ausgabe") (gültig bis $(jq -r '.ablauf' <<<"$ausgabe"), einmal verwendbar)"
+    echo "Link: $link"
+    qrencode -t ANSIUTF8 "$link"
+    ;;
+  uni-zugang) shift; uni_zugang "$@" ;;
+  zustand) als_studium node "$PAKET/zustand.mjs" ;;
+  jetzt) als_studium node "$PAKET/lauf.mjs" --anstoss knopf; echo "Angestoßen; das Ergebnis zeigt: studium-server lauf" ;;
+  modell)
+    [[ "${2:-}" =~ ^(sonnet|opus)$ ]] || { echo "Erwartet: sonnet oder opus" >&2; exit 1; }
+    als_studium bash -c "jq -n --arg m '$2' '{modell: \$m}' > '$DATEN/einstellungen.json'"
+    echo "Modell für die Claude-Läufe: $2"
+    ;;
+  lauf)
+    letzter=$(ls -1d "$DATEN"/laeufe/*/ 2>/dev/null | tail -1)
+    [ -n "$letzter" ] && jq . "$letzter/protokoll.json" 2>/dev/null || echo "Noch kein Claude-Lauf."
+    ;;
+  aktualisieren) aktualisieren ;;
+  hilfe|-h|--help) hilfe ;;
+  *) hilfe; exit 1 ;;
+esac

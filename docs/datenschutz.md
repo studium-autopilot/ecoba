@@ -2,7 +2,8 @@
 
 Kurz: Studium Autopilot holt Daten, schickt aber nichts über dich an den Autor oder an Dritte. Es gibt kein Konto, keine
 Statistik und keine Telemetrie. Nur wenn du deinen Uni-Login eingibst, meldet sich das Plugin damit an, direkt von deinem Gerät
-bei der Uni (ILIAS und Alma).
+bei der Uni (ILIAS und Alma). Richtest du dir einen eigenen Server mit Claude ein (freiwillig), holt das Plugin
+zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 
 ## Was das Plugin abruft
 
@@ -14,6 +15,7 @@ bei der Uni (ILIAS und Alma).
 | Deine Kursdateien | direkt von ILIAS (`ovidius.uni-tuebingen.de`), Anmeldung bei der Uni (`idp.uni-tuebingen.de`) | nur wenn du ILIAS verbunden hast: beim Start, dann etwa stündlich, solange Obsidian offen ist, und auf Knopfdruck |
 | Deine Noten und Prüfungsanmeldungen (Beta) | direkt von Alma (`alma.uni-tuebingen.de`, Seiten „Leistungen“ und „Belegungen“) | nur wenn du **Noten & Anmeldungen (Alma)** eingeschaltet hast: höchstens zweimal am Tag, in der Anmeldephase alle 3 Stunden, und auf Knopfdruck; nur eines deiner Geräte |
 | Abgabetermine deiner Übungen | direkt von ILIAS (`ovidius.uni-tuebingen.de`, dein Kalender-Abo) | nur wenn du den **ILIAS-Kalender** verbunden hast: beim Start, dann alle 2 Stunden, solange Obsidian offen ist, und auf Knopfdruck; nur eines deiner Geräte |
+| Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse steht im Link zum Verbinden) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst |
 
 - Das sind normale Abrufe wie beim Öffnen einer Webseite. Dabei sieht GitHub bzw. die Uni deine IP-Adresse. Philip als Autor sieht davon nichts.
@@ -114,6 +116,34 @@ Freiwillig und nur mit Beta-Versionen: Ohne dein **Einschalten** fragt das Plugi
   Geräten aus. Was du in Modulseiten übernommen hast, bleibt. Ältere Fassungen im Verlauf deines Sync-Dienstes (z. B.
   Versionen in iCloud, der Verlauf von Obsidian Sync oder von Self-hosted LiveSync) kann das Plugin nicht löschen; das geht nur
   dort. Liegt dein Tresor in einem öffentlichen Git-Repo, gehört `System/Daten/alma-konto*.json` in dessen `.gitignore`.
+
+## Eigener Server mit Claude
+
+Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spricht das Plugin mit keinem weiteren Server.
+
+- **Zwischen Server und Tresor:** Das Plugin holt die Ergebnisse über HTTPS ab, zusätzlich verschlüsselt mit einem Schlüssel,
+  den nur dein Server und deine Geräte kennen (AES-256-GCM). Zugangs- und Datenschlüssel liegen im Schlüsselbund von Obsidian
+  auf jedem Gerät, nie in einer Notiz. Verbunden wird mit einem Link, der einmal und 30 Minuten gilt; Obsidian fragt vorher.
+- **Was das Plugin dem Server schickt:** die Modulcodes deines Plans, Studienbeginn und Variante, wie oft er nachsehen soll, welche Ergebnisse es
+  übernommen hat (danach löscht der Server sie), und damit Claude nichts doppelt liefert: Titel, Datum, Art, Modul und Haken
+  deiner Termine (von vor 30 Tagen bis in einem Jahr) und deine offenen To-dos wie auf dem Dashboard, mit Modul, Frist und dem Namen der Notiz (damit Claude doppelte
+  zusammenführen kann).
+  To-dos, die nach Zugangsdaten aussehen, schickt es nie; der Server prüft das noch einmal. Damit Claude „Das Wichtigste“ zu
+  deinen Unterlagen schreiben kann, dazu die Textfassung von Folien, Skripten, Übungen, Lösungen, Altklausuren und Literatur,
+  deren Notiz noch keine Zusammenfassung hat (je Abruf bis zu 9, jede einmal); nie Mitschriften, eigene Lösungen oder Scans.
+  Abschalten: `server_unterlagen: aus` in `System/Einstellungen.md`. Keine Noten, keine übrigen Notiztexte, keine PDFs. Den
+  ganzen Tresor sieht der Server nie.
+- **Was im Tresor landet:** Termine als Notizen unter `Termine/` und kurze Hinweise in `System/Daten/server.json`. Hinweise
+  fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten.
+- **Auf dem Server:** Claude Code läuft mit deinem Claude-Konto. Was Claude dort liest (deine Mails), verarbeitet
+  Anthropic nach den Bedingungen deines Kontos. Gmail nur lesend: Senden, Entwürfe, Labels und Löschen sind gesperrt.
+  Personennamen schreibt Claude nicht in die Ergebnisse, Absender nur als Einrichtung und Datum.
+- **Uni-Passwort (freiwillig):** Du tippst es selbst auf dem Server ein. Es liegt dort nur verschlüsselt. Entschlüsselt bekommt
+  es nur der Abruf deines Uni-Postfachs, unter einem eigenen Benutzer; Claude und der Web-Dienst nie. Nach einer abgelehnten Anmeldung versucht der Server es nicht wieder, damit dein Konto
+  nicht gesperrt wird. Grenze: Wer root auf deinem Server ist, könnte es entschlüsseln.
+- **Öffentlich** ist nur eine Statusseite ohne persönliche Daten (Version, Claude verbunden ja oder nein, Zeitpunkte).
+- **Abschalten:** in Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server** → **Trennen**; den
+  Server selbst beendest du in der Oracle-Konsole.
 
 ## Zentrale Daten ausschalten
 
