@@ -182,7 +182,7 @@ jedem weiteren Lauf erhalten. Er richtet ein:
 
 | Teil | Was |
 |---|---|
-| Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch), Caddy aus dessen offiziellem Paketarchiv |
+| Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht), Caddy aus dessen offiziellem Paketarchiv |
 | Benutzer `studium` | führt die Dienste aus (Web-Dienst, Claude-Lauf, Zustand); Claude Code liegt in `/var/lib/studium/.local/bin/claude` |
 | Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium` für die Rohdaten) |
 | `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version |
@@ -195,7 +195,7 @@ jedem weiteren Lauf erhalten. Er richtet ein:
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
 | `studium-server-aktualisieren.timer` | täglich: neues Server-Paket aus dem Release, nur mit passender Prüfsumme und nur vorwärts (nie auf eine ältere Version zurück) |
-| Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an) |
+| Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an; die Standardliste, die Oracle mit dem Netz anlegt und die dessen Kennzeichen erbt, erlaubt nur 22 und zählt nicht als eigene) |
 
 ### Web-Dienst (`dienst.mjs`)
 
@@ -266,7 +266,8 @@ Benutzer `studium-abruf`; Web-Dienst und Claude-Lauf (Benutzer `studium`) könne
 
 **Grenze:** Der Schlüssel von `systemd-creds` liegt auf demselben Server. Das Passwort steht also nie lesbar in einer Datei, im
 Status, im Journal oder in einer Kopie der Datei allein; wer aber root auf dem Server ist, kann es entschlüsseln. Darum: nur
-Schlüssel-Anmeldung per SSH, automatische Sicherheitsupdates, nur Port 443 offen.
+Schlüssel-Anmeldung per SSH (kein Passwort, kein root), automatische Sicherheitsupdates mit Neustart, von außen nur Port 22 und 443
+offen, Metadaten der Instanz nur über IMDSv2.
 
 ### Befehle (`studium-server`)
 

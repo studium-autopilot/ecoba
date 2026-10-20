@@ -934,7 +934,8 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   Läuft dort noch der alte Kern im Speicher (`installiert` > `plugin.manifest.version`), zeigt die Zeile „Neu laden“
   (Aktion `vorlage-neu-laden`). Skripte lädt der Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
   `installiert.json` an, setzt `update.js` `plugin.stillBis` für eine Minute; mehrere Skripte auf einmal schweigen ohnehin.
-  Die Fenster vor und nach dem Update sagen darum „Dort einmal auf ‚Neu laden‘ … tippen“ (ohne neuen Kern: „nichts tun“).
+  Das Fenster nach dem Update sagt darum unter „Andere Geräte“: „Dort einmal auf ‚Neu laden‘ … tippen“ (ohne neuen Kern:
+  „dort musst du nichts tun“).
 - **Unterbrochenes Update** (seit 0.4.8, `System/Daten/update.json`, `markeLage`): Befund 19.10.2026: Ein Gerät ging mitten im
   Hochladen über LiveSync in den Hintergrund, der Tresor war auf den anderen Geräten eine Weile halb aktualisiert. Darum schreibt
   das Update als **erste** Datei `update.json` = `{ version, von, geraet, seit }` (Geräte-ID aus `ctx.zentral.geraetId`; nur, wenn
@@ -958,18 +959,19 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
 - **Nach Updates suchen** (seit 0.4.8, `suchen()`, Aktion und Befehl `vorlage-suchen`): Knopf (normal, nicht Hauptknopf) in der
   Zeile „Studium Autopilot“, wenn nichts angeboten wird, daneben der Textlink „Mehr erfahren“. Holt das Manifest sofort
   (`ctx.zentral.manifestHolen`, ohne die 30 Min. der frischen Prüfung und ohne den Takt von `zentral.js`; zählt als Prüfung,
-  `eba-update-geprueft`) und sagt das Ergebnis in einem Hinweis: das Angebot wie der Hinweis beim Öffnen (**Neue Version
-  installieren**, **Was ist neu**), „Version X ist da. Einmal neu laden.“, „Du hast die neueste Version.“ oder „Keine Verbindung.
-  Versuch es später noch einmal.“. Ein Tipp, ein Abruf: Die automatischen Prüfungen bleiben, wie sie sind.
+  `eba-update-geprueft`) und sagt das Ergebnis: ein Angebot gleich im Fenster „Neue Version“ (seit 0.5.4, vorher ein Hinweis),
+  sonst in einem Hinweis „Version X ist da. Einmal neu laden.“, „Du hast die neueste Version.“ oder „Keine Verbindung. Versuch es
+  später noch einmal.“. Ein Tipp, ein Abruf: Die automatischen Prüfungen bleiben, wie sie sind.
 - **Neustart:** Hat sich `main.js`/`manifest.json` geändert, lädt `pluginNeuLaden()` das Plugin neu
   (`app.plugins.disablePlugin` → `loadManifests` → `enablePlugin`, nicht gespeichert, also bleibt es in
-  `community-plugins.json` aktiv). Danach zeichnet nur die neue Instanz. Klappt das nicht, sagt das Ergebnisfenster „Obsidian
-  einmal schließen und wieder öffnen“. Während des Updates zeigt der Kern beim Hot-Reload keine Hinweise (`plugin.stillBis`).
+  `community-plugins.json` aktiv). Danach zeichnet nur die neue Instanz. Klappt das nicht, steht im Fenster oben „Noch ein
+  Schritt: Obsidian einmal schließen und wieder öffnen.“. Während des Updates zeigt der Kern beim Hot-Reload keine Hinweise (`plugin.stillBis`).
 - **Sicherung** in `.trash/` (wie Obsidians Papierkorb; Obsidian zeigt ihn nicht an, Sync-Dienste gleichen ihn meist nicht ab,
   steht in `.gitignore`). Bewusst nicht in einem sichtbaren Ordner: Kopien von Modulen würden sonst in Bases als Module zählen.
   In der Dateien-App von iOS sind versteckte Ordner nicht sichtbar; wiederherstellen geht am PC/Mac.
 - **Fehler:** kein Netz, falsche Prüfsumme oder Liste → nichts geschrieben, keine Sicherung; Schreibfehler → alles schon
-  Geschriebene aus der Sicherung zurück. Das Ergebnisfenster sagt es in einem Satz, Einzelheiten unter „Mehr erfahren“.
+  Geschriebene aus der Sicherung zurück. Das Fenster sagt es im Titel „Nicht installiert“ und einem Satz (`ergebnisSatz`), den
+  Grund klein darunter.
 - **Kanal:** `update_kanal: beta` in `System/Einstellungen.md` (Schalter „Beta-Versionen“ im Fenster „Studium Autopilot“ unter
   „Mehr erfahren“; Standard stabil). Angeboten wird `release`, auf Kanal beta die höhere von `beta` und `release`, nie eine
   ältere als die installierte. Versionen `X.Y.Z` und `X.Y.Z-beta.N` (Beta vor der fertigen Version).
@@ -982,8 +984,8 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
 - **Hinweis auf dem Dashboard (seit 0.3.1):** Codeblock `eba-update-hinweis` ganz oben in `Dashboard.md` (nach der Pfadzeile,
   vor den Kennzahlen). `ctx.update.hinweis()` nutzt dieselbe Logik wie `anzeige()` (Neu laden, Angebot je Kanal, Rückfall
   `plugin_aktuell` → Link „Ansehen“ auf die Releases) und liefert sonst `null`: Dann ist der Block leer (`.eba-uh-aus`) und
-  samt Hülle unsichtbar. Der Hinweis zeigt nur den Titel, ohne Satz; was neu ist, steht unter „Was ist neu“. Knöpfe **Neue Version installieren** (gleicher
-  Ablauf mit Bestätigung) bzw. **Neu laden**, dazu **Später**:
+  samt Hülle unsichtbar. Der Hinweis zeigt nur den Titel, ohne Satz; was neu ist, zeigt das Fenster „Neue Version“. Knöpfe
+  **Neue Version installieren** (öffnet das Fenster) bzw. **Neu laden**, dazu **Später** (seit 0.5.4 ohne **Was ist neu**):
   merkt die Version gerätelokal (`app.saveLocalStorage("eba-update-spaeter", version)`), bei einer anderen Version erscheint
   die Zeile wieder. Neu gezeichnet über `ctx.update.hinweisNeu()`, das `ctx.verbindungen.neuZeichnen()` mit aufruft (nach
   Abruf der zentralen Daten, Update, Kanalwechsel). CSS: Abschnitt 46 in `eba-core.css`.
@@ -994,41 +996,63 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
     von `zentral.js`; eigene: `eba-update-geprueft`). Zurück in der App nach 15 s ebenso; `zentral.js` holt nach 5 s nach,
     danach ist die Prüfung frisch, also kein zweiter Abruf. Beim Start kann der volle Abruf das Manifest (wenige KB) ein
     zweites Mal holen. Zentrale Daten aus oder `plugin.testZentralAus` → nie.
-  - *Hinweis beim Öffnen* (`toastPruefen()`): Obsidian-Notice „Neue Version X ist da.“ mit **Neue Version installieren** (gleicher Ablauf
-    mit Bestätigung) und **Was ist neu**; antippen blendet ihn aus (= später). Angebot wie `hinweis()` (`angebot()`, Kanal).
+  - *Hinweis beim Öffnen* (`toastPruefen()`): Obsidian-Notice „Neue Version X ist da.“ mit einem Knopf **Neue Version
+    installieren**, der das Fenster „Neue Version“ öffnet; antippen irgendwo blendet ihn aus (= später). Angebot wie `hinweis()`
+    (`angebot()`, Kanal). Es gibt immer nur einen (`neuigkeit.toast`, `toastWeg()`): Er geht weg, sobald das Fenster aufgeht, ein
+    Update beginnt oder die App in den Hintergrund geht (iOS hält dort seine Zeit an, er stünde sonst Stunden später noch da).
     Einmal je App-Start (`sessionStorage` `eba-update-toast-sitzung`; über 6 h im Hintergrund zählt als neuer Start) und für
-    dieselbe Version höchstens alle 12 h (`eba-update-toast` = `{ version, zeit }`, `toastFaellig`). Zeigt die Zeile
-    `eba-update-hinweis` das Angebot gerade sichtbar (gezeichneter Block mit Fläche in einem sichtbaren Fenster; ein
-    Dashboard im Hintergrund-Tab zählt nicht), kein Hinweis und nichts gemerkt (`toastEntscheiden` → `verdeckt`); beim
-    nächsten Wechsel der Seite (`active-leaf-change`, `file-open`) wird neu entschieden. „Später“ auf der Zeile blendet sie
-    für diese Version aus und zählt als Antwort für diesen App-Start; beim nächsten Start (nach dem Abstand) kommt der
-    Hinweis wieder. Die Zeile hat dafür auch **Was ist neu** (leiser Knopf zwischen **Neue Version installieren** und **Später**; auf dem
-    iPhone drei Knöpfe in einer Reihe, je ≥ 44 px, CSS Abschnitt 51). Nicht während der Einrichtung
-    (`ctx.einrichtung.fenster` oder `sollZeigen()`), nicht während eines Updates oder solange „Neu laden“ aussteht. Bringt
-    der volle Abruf das Angebot erst später, zeigt `hinweisNeu()` den Hinweis noch bis 10 Min. nach Start/Rückkehr.
+    dieselbe Version höchstens alle 12 h (`eba-update-toast` = `{ version, zeit, fenster }`, `toastFaellig`). Hast du das Fenster
+    zu dieser Version gesehen (`fenster: true`, auch nur geschlossen), kommt für sie nie wieder ein Hinweis: Die Zeilen auf dem
+    Dashboard und unter Verbindungen bieten sie weiter an. Befund 20.10.2026 (0.5.2 auf dem iPad): Hinweis beim Start, ein
+    zweiter von **Nach Updates suchen** und „Lade 4 von 7 Dateien …“ standen oben rechts, während das Fenster in der Mitte offen
+    war. Zeigt die Zeile `eba-update-hinweis` das Angebot gerade sichtbar (gezeichneter Block mit Fläche in einem sichtbaren
+    Fenster; ein Dashboard im Hintergrund-Tab zählt nicht), kein Hinweis und nichts gemerkt (`toastEntscheiden` → `verdeckt`);
+    beim nächsten Wechsel der Seite (`active-leaf-change`, `file-open`) wird neu entschieden. „Später“ auf der Zeile blendet sie
+    für diese Version aus und zählt als Antwort für diesen App-Start; beim nächsten Start (nach dem Abstand) kommt der Hinweis
+    wieder. Nicht während der Einrichtung (`ctx.einrichtung.fenster` oder `sollZeigen()`), nicht, solange das Fenster offen ist,
+    nicht während eines Updates oder solange „Neu laden“ aussteht. Bringt der volle Abruf das Angebot erst später, zeigt
+    `hinweisNeu()` den Hinweis noch bis 10 Min. nach Start/Rückkehr.
   - *Nach einem Update:* `eba-update-gesehen` = zuletzt auf diesem Gerät gelaufene Version. Läuft eine neuere, einmal
-    „Aktualisiert auf Version X.“ mit **Was ist neu** (`nachUpdate`). Erster Lauf auf einem Gerät: still merken. Das Gerät, das
-    aktualisiert, merkt die Version gleich; sein Ergebnisfenster hat den Knopf **Was ist neu**.
-  - *Fenster „Was ist neu“* (`neuigkeitenZeigen({ von, bis, angebot })`, `.eba-modal-neu`): `CHANGELOG.md` vom Tag
-    `RELEASE_ROH + "v" + bis` (wie die Update-Dateien; `plugin.testUpdateBasis` gilt auch hier), höchstens 256 KB. Abschnitte
-    `## X.Y.Z – Titel` (`changelogAbschnitte`), Auswahl `von` (ausschließlich) bis `bis` (einschließlich), neueste zuerst,
-    höchstens 8 (`abschnitteZwischen`). Gezeichnet mit `MarkdownRenderer` nach `markdownSicher` (kein HTML, keine
-    Einbettungen, Wikilinks oder Codeblöcke, umbrochene Zeilen verbunden); danach bleiben nur https-Links. Fehler oder keine
-    Abschnitte → `notiz` aus dem Manifest und Link „Auf GitHub ansehen“ auf das Release. Knöpfe **Neue Version installieren**/**Später**
-    beim Angebot, sonst **Fertig**. Mit `antwort` (aus dem Fenster vor dem Update geöffnet) beantwortet **Neue Version installieren**
-    die offene Frage direkt (`antwort(true)`, kein zweites Fragen), Schließen oder **Später** → `antwort(false)`. CSS: Abschnitt 51.
-- **Fenster vor dem Update** (`fragen(rel)`, `.eba-modal-update`): Titel „Auf Version X aktualisieren?“, die Notiz aus dem
-  Manifest als Text, leiser Knopf **Was ist neu** (öffnet „Was ist neu“ mit `antwort`), ein Satz „Deine Noten, Termine und
-  Notizen bleiben. Vorher wird eine Sicherung angelegt.“, Einzelheiten eingeklappt unter „Mehr erfahren“. Knöpfe **Später**
-  und **Neue Version installieren** (Hauptknopf zuletzt im DOM): PC und iPad nebeneinander rechts, Hauptknopf rechts; iPhone untereinander,
-  Hauptknopf oben; auf iPad und iPhone ≥ 44 px. Dieselbe Reihenfolge haben „Was ist neu“ und das Ergebnisfenster. Obsidian
-  stapelt Knöpfe auf iPad und iPhone sonst (`column-reverse`); Abschnitt 51 legt die Richtung selbst fest.
+    „Aktualisiert auf Version X.“ mit **Was ist neu** (`nachUpdate`, öffnet das Fenster in der Stufe `neu`). Erster Lauf auf
+    einem Gerät: still merken. Das Gerät, das aktualisiert, merkt die Version gleich; es sieht das Ergebnis im Fenster.
+  - *Änderungen aus `CHANGELOG.md`* (`abschnitteZeichnen`): vom Tag `RELEASE_ROH + "v" + bis` (wie die Update-Dateien;
+    `plugin.testUpdateBasis` gilt auch hier), höchstens 256 KB. Abschnitte `## X.Y.Z – Titel` (`changelogAbschnitte`), Auswahl
+    `von` (ausschließlich) bis `bis` (einschließlich), neueste zuerst, höchstens 8 (`abschnitteZwischen`). Gezeichnet mit
+    `MarkdownRenderer` nach `markdownSicher` (kein HTML, keine Einbettungen, Wikilinks oder Codeblöcke, umbrochene Zeilen
+    verbunden); danach bleiben nur https-Links. Fehler oder keine Abschnitte → `notiz` aus dem Manifest und Link „Auf GitHub
+    ansehen“ auf das Release.
+- **Fenster „Neue Version“** (seit 0.5.4, `fensterZeigen({ stufe, von, bis, angebot, ohneListe })`, `.eba-modal-update`): ein
+  Fenster für das ganze Update, nie zwei übereinander (ein neues schließt das alte). Bis 0.5.2 kamen nacheinander das Fenster
+  vor dem Update, der Hinweis „Lade …“ oben rechts und ein Ergebnisfenster, alle Teile gleich laut. Aufbau von oben (Rangfolge,
+  CSS Abschnitt 51): Titel (groß), ein Satz (leise), „Wichtig“ (nur, wenn du noch etwas tun musst, auf Akzentfläche), die
+  Änderungen aus `CHANGELOG.md` mit eigenem Bildlauf zwischen zwei Linien, der Fuß (klein und leise) und die Knopfreihe. Stufen
+  (`data-stufe`):
+  - `angebot`: „Neue (Beta-)Version X“, „Du hast Version Y.“, im Fuß „Deine Noten, Termine und Notizen bleiben. Vorher wird eine
+    Sicherung angelegt.“; Knöpfe **Später** und **Neue Version installieren**. Öffnen zählt als gesehen (`eba-update-toast` mit
+    `fenster: true`).
+  - `laeuft`: „Version X wird installiert“, „Lass Obsidian offen, bis es fertig ist.“, im Fuß ein Balken (`role="progressbar"`)
+    und der Schritt („Lade 4 von 7 Dateien …“, `fortschritt(text, anteil)` von `aktualisierenMit`); keine Knöpfe.
+  - `fertig`: „Version X ist installiert“ und `ergebnisSatz`; `ergebnisZeilen` = „Noch ein Schritt“ (oben unter „Wichtig“, wenn
+    der neue Kern nicht von selbst lud), im Fuß „Einstellungen“, „Deine Seiten“, „Deine Änderungen“, „Behalten“, „Andere Geräte“
+    und „Sicherung“; Knopf **Fertig**.
+  - `fehler`: „Nicht installiert“, ein Satz je Art (`netz`, `pruefsumme`, `liste`, `sicherung`, `schreiben`), der Grund klein im
+    Fuß, ohne Änderungen; Knopf **Fertig**.
+  - `neu`: „Was ist neu“, „Du hast jetzt Version X.“ (nach „Aktualisiert auf …“); Knopf **Fertig**.
+
+  **Neue Version installieren** im Fenster wechselt gleich auf `laeuft` (keine zweite Frage); `aktualisieren(g)` schreibt
+  Fortschritt und Ergebnis in dasselbe Fenster (`g.laeuft`, `g.fertig`). Kommt der Tipp von woanders (Dashboard, Verbindungen,
+  Hinweis), fragt `fragen()` mit diesem Fenster und wartet auf `g.antwort`. „Update fertigstellen“ fragt nicht und öffnet es in
+  `laeuft`. Hast du es während des Updates geschlossen, kommt das Ergebnis in einem neuen. Knöpfe: Hauptknopf zuletzt im DOM;
+  PC und iPad nebeneinander rechts, Hauptknopf rechts; iPhone untereinander, Hauptknopf oben, ≥ 44 px (Obsidian stapelt Knöpfe
+  auf iPad und iPhone sonst, `column-reverse`). Auf dem iPhone kommt es von unten wie Obsidians Bestätigungen, so hoch wie der
+  Inhalt, der Titel links und mehrzeilig (Obsidian kürzt Titel dort sonst mit „…“).
 - **Für Tests und andere Skripte:** `ctx.update` = `{ klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen,
   ohneHaken, seiteHaken, fmMischen, modulMischen, jsonMischenText, lesezeichenOhne, planen, aktualisierenMit(io, o),
   heilenMit(io, o), angebot, neuer, kanal, kanalSetzen, io, anzeige, hinweis, hinweisNeu, status, aktualisieren,
   installiertAnlegen, heilen, pluginNeuLaden, letzterBericht, fenster, changelogAbschnitte, abschnitteZwischen, markdownSicher,
-  toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, frischPruefen, toastPruefen, neuigkeitenZeigen, neuigkeiten,
-  markeLage, MARKE, MARKE_STILL, markeNeu, suchen }`.
+  toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen,
+  toastWeg, toast, neuigkeitenZeigen, fensterZeigen, ergebnisZeigen, markeLage, MARKE, MARKE_STILL, markeNeu, suchen }`
+  (`fenster` = Griff des Fensters „Neue Version“ mit `m` = Obsidians Modal, `toast` = der Hinweis zum Update oder `null`).
   `aktualisierenMit` und `heilenMit` bekommen den Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`, `liste`)
   und sind darum ohne Obsidian testbar (`tests/update.test.js`, Neuigkeiten: `tests/update-neuigkeiten.test.js`).
   `heilen(true)` startet die Reparatur sofort, ohne den Merker des Geräts.
@@ -2342,9 +2366,10 @@ Notiz nur, wenn sich die Liste ihres Moduls geändert hat (gerätelokal gemerkt)
 eigenen Server) darf weiter Notizen nach dem Gerüst schreiben, ohne `herkunft: zentral`; die überschreibt das Plugin nie. Gibt es
 keine Notiz, fehlt der Lernplan in der Übersicht, und die Seite zeigt den Leerzustand „Noch kein Lernplan für deine Module.“
 
-**In Entwicklung** (seit 19.10.2026): Bereich und Lernplan-Notizen zeigen oben die Pille „In Entwicklung“ und einen Satz
-(„… auf eigene Gefahr, sie kann sich noch ändern.“), der Inhalt ist abgeblendet und grau, bleibt aber bedienbar; in der Übersicht
-ist die Zeile „Lernplan“ abgeblendet. Ein Schalter: `IN_ENTWICKLUNG` in `lernplan.js` (CSS Abschnitt 61, `.is-entwicklung`).
+**In Entwicklung** (seit 19.10.2026): Bereich und Lernplan-Notizen zeigen oben einen Warnkasten (Pille „In Entwicklung“,
+„Noch nicht fertig: Lern nicht danach.“ und ein Satz, was falsch sein kann), der Inhalt ist stark abgeblendet und grau, bleibt aber
+bedienbar; in der Übersicht ist die Zeile „Lernplan“ abgeblendet und trägt rechts „in Entwicklung“. Ein Schalter:
+`IN_ENTWICKLUNG` in `lernplan.js` (CSS Abschnitt 61, `.is-entwicklung`).
 
 **Lernplan-Notiz** `Lernplan/<Code> Lernplan.md` (Gerüst `System/Gerüste/Lernplan.md`; Name nie wie die Modulnotiz):
 

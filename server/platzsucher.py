@@ -168,6 +168,7 @@ def anlegen(oci, k, ad):
         "--source-details", json.dumps({"sourceType": "image", "imageId": k["image"], "bootVolumeSizeInGBs": k["boot_gb"], "bootVolumeVpusPerGB": VPU}),
         "--subnet-id", k["subnet"], "--assign-public-ip", "true",
         "--display-name", NAME, "--freeform-tags", json.dumps(KENNZEICHEN), "--metadata", json.dumps(metadaten),
+        "--instance-options", json.dumps({"areLegacyImdsEndpointsDisabled": True}),
     ])
 
 

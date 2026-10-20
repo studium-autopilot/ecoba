@@ -2,6 +2,21 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.4 – Server erreichbar, Update in einem Fenster
+
+- **Behoben:** Nach dem Einrichten des eigenen Servers war er von außen nicht erreichbar. Richtest du ihn noch einmal ein,
+  geht es jetzt durch, ohne den Server neu anzulegen.
+- **Zuverlässiger:** Dein eigener Server startet nach wichtigen Sicherheitsupdates nachts von selbst neu, damit sie wirklich
+  wirken. Er ist dann ein paar Minuten nicht erreichbar.
+- **Neu:** Zieht eine Lehrveranstaltung in einen anderen Raum, zeigt dein **Stundenplan** das auch ohne Alma-Login zwei Wochen
+  lang als „Neuer Raum“. Räume, die nur eine Kursmail nennt, stehen jetzt auch drin.
+- **Übersichtlicher:** Der **Lernplan** ist noch nicht fertig, und das siehst du jetzt deutlich: Oben steht ein gelber
+  Warnkasten, die Liste ist stärker abgeblendet, und in der Seitenleiste steht neben „Lernplan“ „in Entwicklung“.
+- **Übersichtlicher:** Ein Update läuft jetzt in einem Fenster: erst was neu ist, dann der Fortschritt, dann das Ergebnis.
+  Oben rechts stapeln sich keine Hinweise mehr, und nach dem Fenster kommt für diese Version keiner mehr.
+- **Übersichtlicher:** Im geteilten iPad-Fenster und auf dem iPhone quer stehen Gruß und Datum auf dem **Dashboard** in einer
+  Zeile. So siehst du mehr vom Semester, ohne zu scrollen.
+
 ## 0.5.3 – Termine aus Unterlagen
 
 - **Neu:** Auf der Modulseite steht jetzt, wenn Termine aus Folien und ILIAS-Dateien dieses Moduls nicht zentral kommen. Mit

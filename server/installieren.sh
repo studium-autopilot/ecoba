@@ -343,12 +343,31 @@ else
   echo "iptables nicht verfügbar, übersprungen"
 fi
 
+schritt "SSH nur mit Schlüssel"
+# Oracles Ubuntu-Abbild stellt das schon so ein; die eigene Datei kommt vor denen des Abbilds (60-…) und hält es fest
+if [ -d /etc/ssh/sshd_config.d ] && command -v sshd >/dev/null; then
+  cat >/etc/ssh/sshd_config.d/10-studium-server.conf <<'SSHD'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+SSHD
+  if sshd -t; then systemctl reload ssh 2>/dev/null || true; echo "festgelegt"
+  else rm -f /etc/ssh/sshd_config.d/10-studium-server.conf; fehler "SSH-Einstellungen ungültig, nichts geändert"; fi
+else
+  echo "kein SSH-Server, übersprungen"
+fi
+
 schritt "Sicherheitsupdates"
 cat >/etc/apt/apt.conf.d/20auto-upgrades <<'APT'
 APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 APT
-echo "automatisch"
+# Kernel-Updates wirken erst nach einem Neustart; der Server startet nur, wenn eins wartet, und vor dem Sicherheitslauf (06:30 Berlin)
+cat >/etc/apt/apt.conf.d/52studium-server-neustart <<'APT'
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "03:30";
+APT
+echo "automatisch, bei Bedarf Neustart um 03:30 Uhr (UTC)"
 
 schritt "Claude Code für den Benutzer studium"
 if [ "$TEST" -eq 1 ]; then

@@ -722,15 +722,50 @@ test("Unterbrochen: App mitten im Schreiben beendet → dieses Gerät sieht „f
   }
 });
 
-// update.js mit erfundenem Tresor (dateien: Pfad → Text), Manifest (release) und Geräte-ID; Hinweise als Text
+// Ersatz für Obsidians Elemente (createEl/createDiv/createSpan, setText, setAttr, addClass, empty, Klick) und Fenster (Modal):
+// genug für das Fenster „Neue Version“ (fensterZeigen), ohne Browser
+const knoten = (tag, o) => {
+  const k = { tag, cls: String((o && o.cls) || "").split(" ").filter(Boolean), attr: Object.assign({}, o && o.attr), text: (o && o.text) || "",
+    kinder: [], an: {}, style: {}, isConnected: true };
+  k.createEl = (t, p) => { const c = knoten(t, p); k.kinder.push(c); return c; };
+  k.createDiv = (p) => k.createEl("div", p);
+  k.createSpan = (p) => k.createEl("span", p);
+  k.setText = (t) => { k.text = String(t); };
+  k.setAttr = (n, v) => { k.attr[n] = String(v); };
+  k.addClass = (...c) => { k.cls.push(...c); };
+  k.empty = () => { k.kinder = []; };
+  k.addEventListener = (e, f) => { k.an[e] = f; };
+  k.alle = () => k.kinder.flatMap((c) => [c, ...c.alle()]);
+  k.mit = (klasse) => k.alle().filter((c) => c.cls.includes(klasse));
+  return k;
+};
+const fensterKlasse = (fenster) => class {
+  constructor() { this.modalEl = knoten("div"); this.titleEl = knoten("div"); this.contentEl = knoten("div"); fenster.push(this); }
+  open() { this.offen = true; }
+  close() { if (!this.offen) return; this.offen = false; if (this.onClose) this.onClose(); }
+};
+// Was das Fenster zeigt: Stufe, Titel, Satz, Knöpfe (Hauptknopf mit *), Zeilen „Wichtig“ und im Fuß, Schritt
+const ansicht = (m) => {
+  const c = m.contentEl, eins = (k) => c.mit(k)[0];
+  const zeilen = (el) => (el ? el.mit("eba-up-zeile").map((z) => z.kinder[0].text) : []);
+  return { stufe: m.modalEl.attr["data-stufe"], titel: m.titleEl.text, satz: eins("eba-up-satz").text,
+    knoepfe: eins("modal-button-container").kinder.map((b) => b.text + (b.cls.includes("mod-cta") ? "*" : "")),
+    wichtig: zeilen(eins("eba-up-wichtig")), fuss: zeilen(eins("eba-up-fuss")), schritt: (eins("eba-up-schritt") || {}).text };
+};
+const tippen = (m, text) => eineVon(m.contentEl.mit("modal-button-container")[0].kinder.filter((b) => b.text === text)).an.click();
+const eineVon = (l) => { assert.equal(l.length, 1); return l[0]; };
+
+// update.js mit erfundenem Tresor (dateien: Pfad → Text), Manifest (release) und Geräte-ID; Hinweise als Text (hinweise) und
+// als Notice (notices, mit weg = ausgeblendet), Fenster (fenster), Gerätespeicher (speicher). netz(p): eigene Antwort auf Abrufe.
 function geraet(o) {
-  const dateien = Object.assign({}, o.dateien), hinweise = [], anfragen = [];
+  const dateien = Object.assign({}, o.dateien), hinweise = [], notices = [], anfragen = [], fenster = [], speicher = new Map();
   const rel = (v) => (v ? { version: v, url_basis: BASIS(v), sha256: "a".repeat(64), notiz: "" } : null);
   const zaehler = { manifest: 0 };
   const L = laden("update", { kontext: {
     obsidian: {
-      Notice: class { constructor(t) { hinweise.push(String(t)); } setMessage() {} hide() {} },
-      requestUrl: async (p) => { anfragen.push(p); throw new Error("kein Netz im Test"); },
+      Notice: class { constructor(t) { hinweise.push(String(t)); notices.push(this); this.text = String(t); this.weg = false; } setMessage() {} hide() { this.weg = true; } },
+      Modal: fensterKlasse(fenster),
+      requestUrl: async (p) => { anfragen.push(p); if (o.netz) return o.netz(p); throw new Error("kein Netz im Test"); },
     },
     plugin: Object.assign({ manifest: { version: o.lauf || "0.4.8" } }, o.plugin),
     zentral: {
@@ -741,12 +776,15 @@ function geraet(o) {
   } });
   const hat = (p) => Object.prototype.hasOwnProperty.call(dateien, p);
   L.ctx.app.vault.adapter = { stat: async (p) => (hat(p) ? { type: "file" } : null), readBinary: async (p) => enc(dateien[p]).buffer };
-  return { U: L.ctx.update, aktionen: L.ergebnis.aktionen, hinweise, anfragen, zaehler };
+  L.ctx.app.loadLocalStorage = (k) => (speicher.has(k) ? speicher.get(k) : null);
+  L.ctx.app.saveLocalStorage = (k, v) => { speicher.set(k, v); };
+  L.ctx.app.metadataCache.initialized = true;
+  return { U: L.ctx.update, aktionen: L.ergebnis.aktionen, hinweise, notices, anfragen, zaehler, fenster, speicher };
 }
 const vorMin = (min) => new Date(Date.now() - min * 60e3).toISOString();
 const markeText = (geraetId, version, seit) => JSON.stringify({ version, von: "0.4.8", geraet: geraetId, seit });
 
-test("Nach Updates suchen: Knopf in der Zeile, Befehl, Ergebnis in einem Hinweis", async () => {
+test("Nach Updates suchen: Knopf in der Zeile, Befehl; eine neue Version gleich im Fenster, sonst ein Hinweis", async () => {
   let G = geraet({ release: "0.4.8" });
   assert.equal(G.aktionen["vorlage-suchen"].titel, "Nach Updates suchen", "Knopf und Befehl heißen gleich");
   const a = G.U.anzeige();
@@ -757,10 +795,13 @@ test("Nach Updates suchen: Knopf in der Zeile, Befehl, Ergebnis in einem Hinweis
   assert.deepEqual(G.hinweise, ["Du hast die neueste Version."]);
   // Ohne Angaben (zentrale Daten aus): trotzdem der Knopf
   assert.equal(geraet({}).U.anzeige().knopf.text, "Nach Updates suchen");
-  // Neue Version: das Angebot (mit „Neue Version installieren“ und „Was ist neu“), die Zeile zeigt den Hauptknopf
+  // Neue Version: das Fenster mit den Änderungen und „Neue Version installieren“, kein Hinweis; die Zeile zeigt den Hauptknopf
   G = geraet({ release: "0.4.9" });
   assert.equal(await G.U.suchen(), "angebot");
-  assert.deepEqual(G.hinweise, ["Neue Version 0.4.9 ist da."]);
+  assert.deepEqual(G.hinweise, []);
+  assert.equal(G.fenster.length, 1);
+  assert.deepEqual(ansicht(G.fenster[0]), { stufe: "angebot", titel: "Neue Version 0.4.9", satz: "Du hast Version 0.4.8.",
+    knoepfe: ["Später", "Neue Version installieren*"], wichtig: [], fuss: [], schritt: undefined });
   assert.deepEqual(G.U.anzeige().knopf, { aktion: "vorlage-aktualisieren", text: "Neue Version installieren" });
   // Kein Netz: ein Satz, kein Fehlertext
   G = geraet({ release: "0.4.9", offline: true });
@@ -798,12 +839,105 @@ test("Unterbrochen: Zeile, Dashboard und Knöpfe auf diesem und auf einem andere
   assert.deepEqual(G.U.hinweis(), { art: "fertig", version: "0.4.9", text: a.html, knopf: "Update fertigstellen", symbol: "laden" });
   const b = await G.U.aktualisieren();
   assert.equal(b && b.art, "netz", "ohne zweite Frage weiter bis zum Laden (im Test ohne Netz)");
-  assert.deepEqual(G.hinweise, ["Lade die neue Version …"]);
-  assert.equal(G.anfragen[0].url, BASIS("0.4.9") + "Studium%20Autopilot/System/Daten/system-dateien.json?t=7");
-  assert.deepEqual(G.anfragen[0].headers, { "Cache-Control": "no-cache" });
+  assert.deepEqual(G.hinweise, [], "Fortschritt und Ergebnis im Fenster, kein Hinweis");
+  assert.equal(G.fenster.length, 1);
+  assert.deepEqual([ansicht(G.fenster[0]).stufe, ansicht(G.fenster[0]).titel, ansicht(G.fenster[0]).knoepfe], ["fehler", "Nicht installiert", ["Fertig*"]]);
+  // Die Liste kommt frisch; das Fenster holt daneben die Änderungen (CHANGELOG.md am Tag)
+  const liste = eineVon(G.anfragen.filter((x) => x.url.includes("system-dateien.json")));
+  assert.equal(liste.url, BASIS("0.4.9") + "Studium%20Autopilot/System/Daten/system-dateien.json?t=7");
+  assert.deepEqual(liste.headers, { "Cache-Control": "no-cache" });
+  assert.deepEqual(G.anfragen.map((x) => x.url).filter((u) => u.endsWith("CHANGELOG.md")), [BASIS("0.4.9") + "CHANGELOG.md"]);
   // Bietet das Manifest inzwischen eine andere Version an, wird wie sonst gefragt
   G = geraet({ release: "0.5.0", plugin: { testUpdateAntwort: false }, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(5)) } });
   await G.U.markeNeu();
   assert.equal(await G.U.aktualisieren(), null, "Frage mit Nein beantwortet");
+  assert.deepEqual(G.hinweise, []);
+});
+
+// ---------- Fenster „Neue Version“ (seit 0.5.4): ein Fenster für das ganze Update, höchstens ein Hinweis ----------
+const bericht = (o) => Object.assign({ ok: true, art: "", fehler: "", version: "0.4.9", geaendert: [], angelegt: [], neuKopien: [], gesichert: [],
+  gemischt: [], haken: [], einstellungen: [], uebersprungen: [], entfernt: [], behalten: [], aufgeraeumt: [], sicherung: "", plugin: false }, o);
+
+test("Ergebnis: ein Satz unter dem Titel, Zeilen darunter; was du noch tun musst, steht oben", () => {
+  assert.equal(U.ergebnisSatz(bericht({ geaendert: ["a"], angelegt: ["b", "c"] })), "3 Dateien aktualisiert. Deine Einträge sind geblieben.");
+  assert.equal(U.ergebnisSatz(bericht({ haken: ["a"] })), "1 Datei aktualisiert. Deine Einträge sind geblieben.");
+  assert.equal(U.ergebnisSatz(bericht({})), "Alles war schon aktuell.");
+  assert.equal(U.ergebnisSatz({ ok: false, art: "pruefsumme" }), "Die neue Version kam nicht vollständig an. Es wurde nichts geändert. Versuch es später noch einmal.");
+  assert.equal(U.ergebnisSatz({ ok: false, art: "?" }), U.ergebnisSatz({ ok: false, art: "netz" }), "unbekannte Art: wie kein Netz");
+  assert.deepEqual(U.ergebnisZeilen({ ok: false, art: "netz" }), [], "Fehler: nur der Satz und der Grund");
+  const z = U.ergebnisZeilen(bericht({ plugin: true, neuGeladen: false, einstellungen: ["app.json"], sicherung: ".sicherung/0.4.8",
+    neuKopien: [{ pfad: "Studium Autopilot/Studium/Dashboard.md" }], behalten: ["Studium Autopilot/Studium/Alt.md"] }));
+  assert.deepEqual(z.map((x) => [x.titel, !!x.wichtig]), [["Noch ein Schritt", true], ["Deine Seiten", false], ["Behalten", false],
+    ["Andere Geräte", false], ["Sicherung", false]]);
+  assert.match(z[1].text, /\(„neu 0\.4\.9“\): Dashboard\.$/);
+  assert.match(z[2].text, /: Alt\.$/);
+  assert.match(z[3].text, /„Neu laden“/, "neuer Kern: andere Geräte laden einmal neu");
+  // Kern neu geladen: kein Schritt mehr, dafür der Satz zu den Einstellungen
+  assert.deepEqual(U.ergebnisZeilen(bericht({ plugin: true, neuGeladen: true, einstellungen: ["app.json"] })).map((x) => x.titel), ["Einstellungen", "Andere Geräte"]);
+  assert.deepEqual(U.ergebnisZeilen(bericht({})).map((x) => x.text), ["Das Update kommt von selbst, dort musst du nichts tun."]);
+});
+
+test("Fenster „Neue Version“: Hinweis geht weg, Angebot und Fehler im selben Fenster, danach kein Hinweis mehr", async () => {
+  const G = geraet({ release: "0.4.9" });
+  // Beim Start fällig: genau ein Hinweis
+  assert.equal(G.U.toastPruefen(), "angebot");
+  assert.deepEqual(G.hinweise, ["Neue Version 0.4.9 ist da."]);
+  assert.equal(G.U.toast, G.notices[0]);
+  // Nach Updates suchen öffnet das Fenster: der Hinweis geht weg, es kommt keiner dazu, und die Version gilt als gesehen
+  assert.equal(await G.U.suchen(), "angebot");
+  assert.deepEqual([G.notices[0].weg, G.U.toast, G.hinweise.length], [true, null, 1]);
+  assert.equal(G.fenster.length, 1);
+  const m = G.fenster[0];
+  assert.equal(G.U.fenster.m, m);
+  assert.equal(G.speicher.get(U.L_TOAST).fenster, true);
+  // Später: Fenster zu; der Hinweis kommt für diese Version nicht wieder (auch nicht nach 12 Stunden), die Zeilen bieten sie an
+  tippen(m, "Später");
+  assert.deepEqual([m.offen, G.U.fenster], [false, null]);
+  assert.equal(G.U.toastPruefen(), null);
+  G.speicher.set(U.L_TOAST, Object.assign({}, G.speicher.get(U.L_TOAST), { zeit: Date.now() - 13 * 3600e3 }));
+  assert.equal(G.U.toastPruefen(), null);
+  assert.deepEqual(G.hinweise, ["Neue Version 0.4.9 ist da."]);
+  // Ein zweites Fenster ersetzt das erste (nie zwei übereinander)
+  const g1 = G.U.fensterZeigen({ stufe: "angebot", von: "0.4.8", bis: "0.4.9", angebot: { version: "0.4.9", notiz: "" } });
+  const g2 = G.U.fensterZeigen({ stufe: "neu", von: "0.4.8", bis: "0.4.9" });
+  assert.deepEqual([g1.offen, g2.offen, G.U.fenster === g2], [false, true, true]);
+  assert.deepEqual(ansicht(g2.m), { stufe: "neu", titel: "Was ist neu", satz: "Du hast jetzt Version 0.4.9.", knoepfe: ["Fertig*"],
+    wichtig: [], fuss: [], schritt: undefined });
+  g2.m.close();
+  // Neue Version installieren im Fenster: keine zweite Frage, Fortschritt und Ergebnis im selben Fenster, kein Hinweis
+  const g = G.U.fensterZeigen({ stufe: "angebot", von: "0.4.8", bis: "0.4.9", angebot: { version: "0.4.9", notiz: "" } });
+  const fehler = console.error; console.error = () => {};
+  try {
+    tippen(g.m, "Neue Version installieren");
+    assert.equal(ansicht(g.m).stufe, "laeuft", "sofort sichtbar, dass es losgeht");
+    assert.deepEqual([ansicht(g.m).titel, ansicht(g.m).satz, ansicht(g.m).knoepfe, ansicht(g.m).schritt],
+      ["Version 0.4.9 wird installiert", "Lass Obsidian offen, bis es fertig ist.", [], "Prüfe die neue Version …"]);
+    for (let i = 0; i < 20 && ansicht(g.m).stufe === "laeuft"; i++) await new Promise((r) => setTimeout(r, 5));
+  } finally { console.error = fehler; }
+  assert.equal(G.fenster.length, 4, "kein weiteres Fenster");
+  assert.deepEqual([ansicht(g.m).stufe, ansicht(g.m).titel, ansicht(g.m).knoepfe], ["fehler", "Nicht installiert", ["Fertig*"]]);
+  assert.equal(ansicht(g.m).satz, U.ergebnisSatz({ ok: false, art: "netz" }));
+  assert.deepEqual(G.hinweise, ["Neue Version 0.4.9 ist da."]);
+});
+
+test("Fenster „Neue Version“: Fortschritt als Balken, Ergebnis mit „Noch ein Schritt“ oben und den anderen Zeilen im Fuß", () => {
+  const G = geraet({ release: "0.4.9" });
+  const g = G.U.fensterZeigen({ stufe: "laeuft", von: "0.4.8", bis: "0.4.9", ohneListe: true });
+  g.laeuft("Lade 4 von 7 Dateien …", 0.5);
+  assert.equal(ansicht(g.m).schritt, "Lade 4 von 7 Dateien …");
+  const balken = g.m.contentEl.mit("eba-up-balken")[0];
+  assert.deepEqual([balken.attr.role, balken.attr["aria-valuenow"], g.m.contentEl.mit("eba-up-fuellung")[0].style.width], ["progressbar", "50", "50%"]);
+  g.laeuft("", 2);
+  assert.deepEqual([ansicht(g.m).schritt, balken.attr["aria-valuenow"]], ["Lade 4 von 7 Dateien …", "100"], "ohne Text bleibt der Schritt");
+  assert.equal(G.U.ergebnisZeigen(bericht({ plugin: true, neuGeladen: false, geaendert: ["a", "b"], sicherung: ".sicherung/0.4.8" }), g), g);
+  assert.deepEqual(ansicht(g.m), { stufe: "fertig", titel: "Version 0.4.9 ist installiert", satz: "2 Dateien aktualisiert. Deine Einträge sind geblieben.",
+    knoepfe: ["Fertig*"], wichtig: ["Noch ein Schritt"], fuss: ["Andere Geräte", "Sicherung"], schritt: undefined });
+  // Fenster während des Updates geschlossen: das Ergebnis kommt in einem neuen Fenster
+  g.m.close();
+  const f = G.U.ergebnisZeigen(Object.assign(bericht({}), { vorher: "0.4.8" }));
+  assert.deepEqual([f !== g, ansicht(f.m).stufe, ansicht(f.m).satz], [true, "fertig", "Alles war schon aktuell."]);
+  // Fehler: der Grund klein im Fuß
+  const e = G.U.ergebnisZeigen({ ok: false, art: "schreiben", fehler: "EACCES", version: "0.4.9" });
+  assert.deepEqual([ansicht(e.m).stufe, e.m.contentEl.mit("eba-up-grund")[0].text], ["fehler", "EACCES"]);
   assert.deepEqual(G.hinweise, []);
 });

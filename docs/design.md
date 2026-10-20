@@ -1,6 +1,6 @@
 # Designsprache „Ruhig“
 
-Zielgruppe: wer Seiten, Karten, Fenster oder CSS ändert. Stand 18.10.2026.
+Zielgruppe: wer Seiten, Karten, Fenster oder CSS ändert. Stand 20.10.2026.
 
 Alle Bildschirme sollen aussehen, als wären sie zusammen entstanden. Neue und geänderte Teile folgen diesen Regeln; ältere
 Stellen werden Schritt für Schritt angeglichen. Wo etwas noch nicht umgesetzt ist, steht **(geplant)**.
@@ -217,8 +217,12 @@ Kästchen (`kopf.js`, `eba-core.css` 64.4); eine leere Liste auf der Modulseite 
 statt eines Inhalts, der eine Verbindung braucht.
 
 ### Fenster
-`.eba-modal`: Titel, höchstens ein Satz (`.eba-modal-text`), Inhalt, Knopfreihe. Breite bis 560 px, auf dem iPhone ganzer
-Bildschirm. Schritte als nummerierte Liste, Bedienelemente **fett** wie in der App beschriftet.
+`.eba-modal`: Titel, höchstens ein Satz (`.eba-modal-text`), Inhalt, Knopfreihe. Breite bis 560 px, auf dem iPhone fast die
+ganze Breite (Einrichtung und Lernen: ganzer Bildschirm; „Neue Version“: von unten, so hoch wie der Inhalt). Schritte als
+nummerierte Liste, Bedienelemente **fett** wie in der App beschriftet. Rangfolge sichtbar machen, nicht alles gleich laut: Was
+du noch tun musst, steht über dem Inhalt; Beruhigendes und Nachschlagbares (Sicherung, andere Geräte, Fehlergrund) klein und
+leise im Fuß über den Knöpfen. Ein Vorgang, ein Fenster: Fortschritt und Ergebnis erscheinen im Fenster, das ihn gestartet hat,
+nicht als Hinweis daneben (Vorbild: Fenster „Neue Version“, `eba-core.css` Abschnitt 51).
 
 ### Hinweis
 Obsidians Hinweis (`Notice`), immer über `ctx.hinweis(text, { aktion })`: nur als Antwort auf eine Handlung oder bei einem
@@ -296,7 +300,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
   "Verbinden", aktion: "verbinden", parameter: { id: "ilias" } }`.
 - Kein Vorsatz („Studium Autopilot:“, „ILIAS:“, „Zentrale Daten:“), keine Dateipfade, kein Fehlertext aus dem Code (`e.message`
   gehört in die Konsole), keine Liste in mehreren Zeilen.
-- Fortschritt: das Verb vorn, „…“ am Ende („Lade die neue Version …“, „Ordne 3 Unterlagen ein …“), mit `dauer: 0`; danach
+- Fortschritt: das Verb vorn, „…“ am Ende („Ordne 3 Unterlagen ein …“), mit `dauer: 0`; danach
   `setMessage` und `hide` an der zurückgegebenen Notice.
 
 ## iPhone und iPad
@@ -306,7 +310,8 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
   unter 600 px liegt, also auch im geteilten iPad-Fenster (1376 × 500) und auf dem iPhone quer, und zeigt dort eine Notiz über
   das ganze Fenster. Ab 600 px Breite gilt dort die Breite wie auf dem iPad (`eba-core.css` 37.tablet 1b); unter 600 px Höhe
   rückt der Kopf von Vorlesungsnotiz und Übungsblatt in drei Zeilen zusammen, damit die Mitschrift ohne Scrollen zu sehen ist
-  (37.vorlesung 3b). Ein breites, flaches Fenster bleibt sonst in der Telefon-Ansicht: Karten richten sich nach ihrer Breite.
+  (37.vorlesung 3b); auf dem Dashboard stehen dort Gruß und Datum in einer Zeile, der Gruß in Kennzahlgröße. Ein breites,
+  flaches Fenster bleibt sonst in der Telefon-Ansicht: Karten richten sich nach ihrer Breite.
 - iPhone: Was nicht täglich gebraucht wird, ist zu (`|handy-zu`). Raster werden einspaltig, Kacheln zweispaltig, Knopfkacheln
   zwei je Reihe. Die Woche auf dem Dashboard zeigt dort einen Tag (Tagesansicht, unter 520 px Kartenbreite) statt fünf schmaler
   Spalten; die Seite Stundenplan zeigt immer die ganze Woche (seit 20.10.2026), schmal mit Kurzname und gekürztem Raum („HS 1“).

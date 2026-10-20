@@ -17,7 +17,7 @@ semester:
   - {name: "SS 2030", beginn: 2030-04-01, ende: 2030-09-30, vorlesung_beginn: 2030-04-15, vorlesung_ende: 2030-07-27, status: geschätzt, hinweis: "Noch nicht veröffentlicht. Vorlesungszeit nach dem Muster der Vorjahre: Montag Mitte April, 15 Wochen bis Samstag."}
 pausen:
   - {name: "Weihnachtspause", von: 2026-12-23, bis: 2027-01-06, status: offiziell}
-  - {name: "Pfingstferien", von: 2027-05-17, bis: 2027-05-22, status: offiziell}
+  - {name: "Pfingstpause", von: 2027-05-17, bis: 2027-05-22, status: offiziell}
   - {name: "Weihnachtspause", von: 2027-12-23, bis: 2028-01-06, status: offiziell}
   - {name: "Pfingstpause", von: 2028-06-05, bis: 2028-06-10, status: offiziell}
   - {name: "Weihnachtspause", von: 2028-12-23, bis: 2029-01-06, status: offiziell}

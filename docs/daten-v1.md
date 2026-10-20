@@ -433,7 +433,9 @@ ignorieren ihn.
 mindestens einer Sekunde Abstand und dem User-Agent `StudiumAutopilot-Abgleich/1.0 (+https://github.com/studium-autopilot/ecoba)`.
 Gelesen werden nur die Detailseiten der Veranstaltungen zu den Modulen im Modulkatalog, für das laufende und das nächste Semester.
 Bei Fehlern oder einer Überlastungsantwort ruht der Abruf bis zum nächsten Tag. Übernommen werden nur Fakten: Titel, Art,
-Parallelgruppe, Rhythmus, Wochentag, Zeit, Zeitraum, Ausfalltermine, Raum und Raum- oder Zeitänderungen je Datum. **Keine
+Parallelgruppe, Rhythmus, Wochentag, Zeit, Zeitraum, Ausfalltermine, Raum und Raum- oder Zeitänderungen je Datum. Seit
+20.10.2026 kommen Räume dazu, die nur eine Ankündigung an alle Teilnehmenden nennt (Kursmail, ILIAS-Kurs, Uni-Seite), nie Angaben
+nur zur eigenen Gruppe des Autors; einen eigenen Termin „Raumwechsel“ gibt es dafür nicht mehr. **Keine
 Namen und kein Freitext:** Verantwortliche, Durchführende, Vertretungen, Bemerkungen und Teilnehmerzahlen werden nie gespeichert.
 
 ```json
@@ -483,6 +485,7 @@ Ein Eintrag ist eine **Termin-Serie** (eine Zeile der Alma-Terminliste), nicht e
 | `rhythmus` | ja | `wöchentlich`, `14-täglich` (alle zwei Wochen ab `zeitraum.von`) oder `Einzeltermin` (`zeitraum.von` = `zeitraum.bis`). Blockveranstaltungen, tägliche und 3- oder 4-wöchentliche Serien schreibt der Export als Einzeltermine aus. Unbekannter Wert: Eintrag verworfen. |
 | `zeitraum` | ja | `{ "von", "bis" }`: erster und letzter Termin der Serie; Daten wie bei Terminen, `bis ≥ von`, höchstens 400 Tage; höchstens 31 Tage vor Beginn oder nach Ende des Semesters (WS 01.10.–31.03., SS 01.04.–30.09.) |
 | `raum` | nein | ≤ 120 Zeichen nach dem Säubern; mehrere Räume mit „ / “ getrennt, eine zu lange Liste als „<erster Raum> und N weitere Räume“; leer = noch kein Raum. Nennt Alma für eine Serie mehrere Räume und findet die Mehrheit der Termine in einem davon statt, steht dieser hier und die übrigen Daten stehen in `aenderungen`. |
+| `raum_seit`, `raum_vorher` | nein | seit 20.10.2026, nur zusammen: dauerhafte Verlegung. `raum_seit` = erster Termin im neuen Raum (`raum`, nicht leer), innerhalb von `zeitraum`; `raum_vorher` = der bisherige Raum (Regeln wie `raum`, nicht leer). Vor `raum_seit` gilt `raum_vorher`. Der Export setzt beide, wenn der Raum einer Serie sich gegenüber der veröffentlichten Fassung ändert, und behält sie, solange der Raum bleibt. Ungültig → Eintrag verworfen. |
 | `ausfall` | nein | aufsteigende Liste verschiedener Daten (höchstens 100) innerhalb von `zeitraum`, an denen die Serie entfällt |
 | `aenderungen` | nein | Liste (höchstens 100) von `{ "datum", "raum"?, "von"?, "bis"?, "zusatz"? }`, nur heute und künftig: an diesem Datum anderer Raum und/oder andere Zeit (`von` und `bis` nur zusammen, Regeln wie oben). `zusatz: true` = zusätzlicher Termin außerhalb des Rhythmus (mit Zeit und Raum). Datum höchstens 31 Tage außerhalb von `zeitraum`. Ein Ausfall steht in `ausfall`, nie hier. Unbekannte Schlüssel werden ignoriert. |
 | `semester` | ja | `WS JJJJ/JJ` oder `SS JJJJ` |
@@ -546,7 +549,8 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
 - **Stundenplan** (`veranstaltungen.json`, Plugin seit 17.10.2026): nur der Abrufer; eine Notiz je id in `Stundenplan/`
   für das aktuelle Fachsemester, ohne Parallelgruppen und ohne „Besuche ich nicht“ (`stundenplan_ausgeblendet` in den
   Einstellungen). Eine eigene Notiz (Alma oder von Hand) mit gleichem Code, Art, Wochentag und Beginn (±15 Min., c.t.) gewinnt.
-  `ausfall` und `aenderungen` landen im Wochenraster. Wegfall mit Schutz (mehr als die Hälfte und mehr als 2 laufende Serien).
+  `ausfall` und `aenderungen` landen im Wochenraster, `raum_seit`/`raum_vorher` in der Notiz (seit 20.10.2026; die Woche zeigt
+  zwei Wochen lang „Neuer Raum“, wie bei Alma). Wegfall mit Schutz (mehr als die Hälfte und mehr als 2 laufende Serien).
   Einzelheiten: `docs/architektur.md`, „Datenkanal“ → „Zentraler Stundenplan“.
 
 ## Pflichten des Exports (Seite des Autors, `export-daten.py` im Uni-Abgleich)

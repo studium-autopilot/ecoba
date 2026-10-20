@@ -49,6 +49,9 @@ test("Prüfung: ungültige Einträge einzeln verworfen, ihre id bleibt bekannt",
     "Änderung nur von": { aenderungen: [{ datum: "2026-11-02", von: "14:00" }] },
     "fremde Domain": { quelle_url: "https://example.org/x" },
     "Code klein": { code: "x100" },
+    "raum_seit ohne raum_vorher": { raum_seit: "2026-10-19" },
+    "raum_seit außerhalb": { raum_seit: "2027-03-01", raum_vorher: "Hörsaal 7" },
+    "raum_vorher leer": { raum_seit: "2026-10-19", raum_vorher: "" },
   };
   let i = 0;
   for (const [fall, anders] of Object.entries(schlecht)) {
@@ -338,6 +341,20 @@ test("14-täglich: rhythmus steht in der Notiz, die Woche zeigt sie nur jede zwe
   assert.equal(fmLesen(w).rhythmus, undefined);
 });
 
+test("Verlegung: raum_seit und raum_vorher kommen in die Notiz, die Woche zeigt zwei Wochen „Neuer Raum“; ohne sie fallen die Felder weg", () => {
+  const e = Z.lehrePruefen(datei(v({ raum: "Hörsaal 21 (Beispielbau)", raum_seit: "2026-10-19", raum_vorher: "Hörsaal 1 (Beispielbau)" }))).veranstaltungen[0];
+  const t = Z.lehreNotizText("", e, { kurz: "Einführung in die Beispielökonomik" });
+  assert.deepEqual([fmLesen(t).raum_seit, fmLesen(t).raum_vorher], ["2026-10-19", "Hörsaal 1 (Beispielbau)"]);
+  assert.match(t, /Neuer Raum ab 19\.10\., vorher Hörsaal 1 \(Beispielbau\)/);
+  const M = laden("modell", { heute: "2026-10-12", frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": {} } }).ctx.modell;
+  const am = (d) => { const s = M.findetStatt(fmLesen(t), d); return [s.raum, s.neuerRaum]; };
+  assert.deepEqual(am("2026-10-12"), ["Hörsaal 1 (Beispielbau)", false], "vor der Verlegung der alte Raum");
+  assert.deepEqual(am("2026-10-19"), ["Hörsaal 21 (Beispielbau)", true]);
+  const ohne = Z.lehreNotizText(t, Object.assign({}, e, { raum_seit: "", raum_vorher: "" }), { kurz: "Einführung in die Beispielökonomik" });
+  assert.deepEqual([fmLesen(ohne).raum_seit, fmLesen(ohne).raum_vorher], [undefined, undefined]);
+  assert.doesNotMatch(ohne, /Neuer Raum/);
+});
+
 test("14-täglich nach dem Update: der Abrufer schreibt ältere Notizen ohne rhythmus einmal neu, auch ohne neue Daten", async () => {
   const t = tresor(daten());
   const d = FIXTURE();
@@ -349,8 +366,8 @@ test("14-täglich nach dem Update: der Abrufer schreibt ältere Notizen ohne rhy
   // Stand einer Fassung ohne rhythmus: Notiz ohne das Feld, Filter-Schlüssel ohne Fassung
   t.text[p] = t.text[p].replace(/\nrhythmus: .*/, "");
   const s = t.speicher["eba-zentral-stand"];
-  assert.match(s.filter, /,"f":2\}$/);
-  s.filter = s.filter.replace(/,"f":2\}$/, "}");
+  assert.match(s.filter, /,"f":\d+\}$/);
+  s.filter = s.filter.replace(/,"f":\d+\}$/, "}");
   const b = await t.abrufen({});
   assert.deepEqual(b.aktualisiert, [p]);
   assert.equal(t.fm(p).rhythmus, "14-täglich");

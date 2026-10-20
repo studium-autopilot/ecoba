@@ -527,6 +527,11 @@ module.exports = function (ctx) {
     if (z.von < plusTage(rahmen.von, -31) || z.bis > plusTage(rahmen.bis, 31)) return { fehler: "zeitraum außerhalb des Semesters" };
     const raum = kurzText(e.raum, G.raum, "raum");
     if (raum.fehler) return { fehler: raum.fehler };
+    // Dauerhafte Verlegung (seit 20.10.2026): nur beide zusammen, raum_seit im Zeitraum, der neue Raum gesetzt
+    if ((e.raum_seit != null) !== (e.raum_vorher != null)) return { fehler: "raum_seit und raum_vorher nur zusammen" };
+    const vorher = e.raum_vorher == null ? { wert: "" } : kurzText(e.raum_vorher, G.raum, "raum_vorher");
+    if (vorher.fehler) return { fehler: vorher.fehler };
+    if (e.raum_seit != null && (!datumOk(e.raum_seit) || e.raum_seit < z.von || e.raum_seit > z.bis || !raum.wert || !vorher.wert)) return { fehler: "raum_seit/raum_vorher unzulässig" };
     const ausfall = e.ausfall == null ? [] : e.ausfall;
     if (!Array.isArray(ausfall) || ausfall.length > G.ausfall) return { fehler: "ausfall ungültig" };
     for (let i = 0; i < ausfall.length; i++) {
@@ -558,7 +563,7 @@ module.exports = function (ctx) {
     // Nur bekannte Felder; unbekannte (neuere optionale) werden ignoriert. Unbekannte Art gilt als „Sonstige“.
     return { wert: { id: e.id, code: e.code, art: LEHRE_ARTEN.indexOf(e.art) >= 0 ? e.art : "Sonstige", titel: titel.wert, gruppe: gruppe.wert,
       tag: e.tag, von: e.von, bis: e.bis, ct: e.ct === true, rhythmus: e.rhythmus, zeitraum: { von: z.von, bis: z.bis }, raum: raum.wert,
-      ausfall: ausfall.slice(), aenderungen, semester: e.semester, quelle_url: url.wert } };
+      raum_seit: e.raum_seit || "", raum_vorher: vorher.wert, ausfall: ausfall.slice(), aenderungen, semester: e.semester, quelle_url: url.wert } };
   };
   const lehrePruefen = (daten) => {
     if (!daten || typeof daten !== "object" || daten.schema !== 1 || !Array.isArray(daten.veranstaltungen)) return { fehler: "veranstaltungen.json: Format ungültig" };
@@ -1082,12 +1087,12 @@ module.exports = function (ctx) {
   const vergleichen = (a, b) => { for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] - b[i]; return 0; };
 
   // ---------- Zentraler Stundenplan: Notiz ----------
-  const LEHRE_EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "beginn", "ende", "raum", "semester", "von", "bis", "rhythmus", "ausfall",
-    "aenderungen", "einzeltermin", "quelle", "herkunft", "zentral_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
+  const LEHRE_EIGEN = ["typ", "titel", "code", "modul", "art", "wochentag", "tag", "beginn", "ende", "raum", "raum_seit", "raum_vorher", "semester", "von",
+    "bis", "rhythmus", "ausfall", "aenderungen", "einzeltermin", "quelle", "herkunft", "zentral_id", "entfaellt", "uebersicht", "cssclasses", "tags"];
   // Fassung der Notiz im Filter-Schlüssel (lehreSchluessel): Kommt ein Feld dazu, schreibt der Abrufer nach dem Update alle
   // zentralen Notizen einmal neu, auch wenn veranstaltungen.json gleich bleibt. 2 = rhythmus (seit 20.10.2026; vorher stand eine
-  // 14-tägliche Veranstaltung jede Woche im Raster).
-  const LEHRE_FASSUNG = 2;
+  // 14-tägliche Veranstaltung jede Woche im Raster). 3 = raum_seit/raum_vorher (seit 20.10.2026, dauerhafte Verlegung).
+  const LEHRE_FASSUNG = 3;
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const dm = (s) => `${s.slice(8, 10)}.${s.slice(5, 7)}.`;
   // Kurztitel wie in alma.js (an einer Wortgrenze gekürzt)
@@ -1120,14 +1125,17 @@ module.exports = function (ctx) {
     const zeilen = [
       "typ: lehrveranstaltung", "titel: " + J(kurz + " · " + e.art), "code: " + J(e.code), "modul:" + (o.modulLink ? " " + J(o.modulLink) : ""),
       "art: " + J(e.art), "wochentag: " + (WOCHE.indexOf(e.tag) + 1), "tag: " + e.tag, "beginn: " + J(z.beginn), "ende: " + J(z.ende),
-      "raum: " + J(e.raum), "semester: " + J(e.semester), "von: " + e.zeitraum.von, "bis: " + e.zeitraum.bis,
-    ].concat(e.rhythmus === "14-täglich" ? ["rhythmus: " + J(e.rhythmus)] : [], liste("ausfall", e.ausfall), liste("aenderungen", aenderungenFelder(e).map(J)), [
+      "raum: " + J(e.raum),
+    ].concat(e.raum_seit ? ["raum_seit: " + e.raum_seit, "raum_vorher: " + J(e.raum_vorher)] : [], [
+      "semester: " + J(e.semester), "von: " + e.zeitraum.von, "bis: " + e.zeitraum.bis,
+    ], e.rhythmus === "14-täglich" ? ["rhythmus: " + J(e.rhythmus)] : [], liste("ausfall", e.ausfall), liste("aenderungen", aenderungenFelder(e).map(J)), [
       "einzeltermin: " + einzeln, "quelle: " + J(e.quelle_url), "herkunft: zentral", "zentral_id: " + e.id, 'uebersicht: "[[Stundenplan]]"',
     ], liste("tags", vereinigt("tags", ["stundenplan"])), liste("cssclasses", vereinigt("cssclasses", ["eba-s-notizen"])));
     for (const b of bl) if (b.key && LEHRE_EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
     const wann = einzeln ? `${TAGE_LANG[WOCHE.indexOf(e.tag)]}, ${dmy(e.zeitraum.von)}` : `${TAGE_LANG[WOCHE.indexOf(e.tag)]}s` + (e.rhythmus === "14-täglich" ? ", alle zwei Wochen" : "");
     const kopf = [`# ${mdText(e.code)} · ${mdText(e.art)}`, "", `${wann}, ${z.beginn}–${z.ende}` + (e.raum ? " · " + mdText(e.raum) : ""), ""];
     if (!einzeln) kopf.push(`${dmy(e.zeitraum.von)} – ${dmy(e.zeitraum.bis)}`, "");
+    if (e.raum_seit) kopf.push(`Neuer Raum ab ${dm(e.raum_seit)}, vorher ${mdText(e.raum_vorher)}`, "");
     if (e.ausfall.length) kopf.push("Fällt aus: " + e.ausfall.map(dm).join(", "), "");
     const anders = e.aenderungen.filter((a) => !a.zusatz).map((a) => dm(a.datum) + (a.von ? ` ${ctVerschieben(a.von, e.ct, 15)}–${ctVerschieben(a.bis, e.ct, -15)}` : "") + (a.raum ? " in " + mdText(a.raum) : ""));
     if (anders.length) kopf.push("Anders: " + anders.join(" · "), "");

@@ -59,7 +59,16 @@ function konto(o = {}) {
       return ok({});
     },
     "network vcn list": () => ok(k.vcns),
-    "network vcn create": (a) => { const rt = neu("routetable"); k.routen[rt] = { id: rt, "route-rules": [] }; const v = mitTags(a, { id: neu("vcn"), "default-route-table-id": rt }); k.vcns.push(v); return ok(v); },
+    // Wie bei Oracle: Das Netz bringt eine Standardliste (nur Port 22) mit, und die erbt seine Kennzeichen
+    "network vcn create": (a) => {
+      const rt = neu("routetable");
+      k.routen[rt] = { id: rt, "route-rules": [] };
+      const sl = mitTags(a, { id: neu("securitylist"), ein: [{ protocol: "6", tcpOptions: { destinationPortRange: { min: 22, max: 22 } } }] });
+      k.listen.push(sl);
+      const v = mitTags(a, { id: neu("vcn"), "default-route-table-id": rt, "default-security-list-id": sl.id });
+      k.vcns.push(v);
+      return ok(v);
+    },
     "network internet-gateway list": () => ok(k.gateways),
     "network internet-gateway create": (a) => { const g = mitTags(a, { id: neu("internetgateway") }); k.gateways.push(g); return ok(g); },
     "network route-table get": (a) => ok(k.routen[w(a, "--rt-id")]),
@@ -67,13 +76,15 @@ function konto(o = {}) {
     "network security-list list": () => ok(k.listen),
     "network security-list create": (a) => { const s = mitTags(a, { id: neu("securitylist"), ein: JSON.parse(w(a, "--ingress-security-rules")) }); k.listen.push(s); return ok(s); },
     "network subnet list": () => ok(k.subnetze),
-    "network subnet create": (a) => { const s = mitTags(a, { id: neu("subnet") }); k.subnetze.push(s); return ok(s); },
+    "network subnet create": (a) => { const s = mitTags(a, { id: neu("subnet"), "security-list-ids": JSON.parse(w(a, "--security-list-ids")) }); k.subnetze.push(s); return ok(s); },
+    "network subnet update": (a) => { k.subnetze.find((s) => s.id === w(a, "--subnet-id"))["security-list-ids"] = JSON.parse(w(a, "--security-list-ids")); return ok({}); },
     "compute image list": (a) => ok([{ id: "img-" + w(a, "--shape"), "display-name": `Canonical-Ubuntu-${w(a, "--operating-system-version").replace(" ", "-")}-2026.09.18-0` }]),
     "compute instance launch": (a) => {
       if (k.kapazitaet > 0) { k.kapazitaet--; return { ok: false, fehler: 'ServiceError: { "code": "InternalError", "message": "Out of host capacity.", "status": 500 }' }; }
       if (k.grenze > 0) { k.grenze--; return { ok: false, fehler: 'ServiceError: { "code": "LimitExceeded", "message": "The following service limits were exceeded: standard-e2-micro-core-count", "status": 400 }' }; }
       const i = mitTags(a, { id: neu("instance"), shape: w(a, "--shape"), "availability-domain": w(a, "--availability-domain"), "display-name": w(a, "--display-name"),
-        "lifecycle-state": "PROVISIONING", quelle: JSON.parse(w(a, "--source-details")), metadaten: JSON.parse(w(a, "--metadata")) });
+        "lifecycle-state": "PROVISIONING", quelle: JSON.parse(w(a, "--source-details")), metadaten: JSON.parse(w(a, "--metadata")),
+        "instance-options": { "are-legacy-imds-endpoints-disabled": JSON.parse(w(a, "--instance-options")).areLegacyImdsEndpointsDisabled } });
       const bv = neu("bootvolume");
       k.volumes[bv] = { id: bv, "size-in-gbs": i.quelle.bootVolumeSizeInGBs };
       k.anhaenge.push({ "instance-id": i.id, "boot-volume-id": bv, "lifecycle-state": "ATTACHED" });
@@ -83,6 +94,7 @@ function konto(o = {}) {
     "compute instance list": () => ok(k.instanzen),
     "compute instance get": (a) => { const i = k.instanzen.find((x) => x.id === w(a, "--instance-id")); return ok({ ...i, metadata: i.metadaten }); },
     "compute instance action": (a) => { k.aktionen = (k.aktionen || []).concat([[w(a, "--instance-id"), w(a, "--action")]]); return ok({}); },
+    "compute instance update": (a) => { k.instanzen.find((i) => i.id === w(a, "--instance-id"))["instance-options"] = { "are-legacy-imds-endpoints-disabled": JSON.parse(w(a, "--instance-options")).areLegacyImdsEndpointsDisabled }; return ok({}); },
     "compute instance terminate": (a) => { k.instanzen.find((i) => i.id === w(a, "--instance-id"))["lifecycle-state"] = "TERMINATING"; return ok(null); },
     "compute instance list-vnics": () => ok([{ "hostname-label": "intern" }, { "public-ip": "127.0.0.1" }]),
     "ons topic list": (a) => ok(nachName(k.themen, a)),
@@ -163,14 +175,31 @@ test("Netz: eigenes Netz mit nur Port 22 und 443, Route ins Internet; beim zweit
   const r = await netz(x.oci, { tenancy: T });
   assert.equal(r.exit, 0);
   assert.deepEqual(r.schritte.map((s) => s.status), ["angelegt", "angelegt", "angelegt", "angelegt", "angelegt"]);
-  const ports = x.k.listen[0].ein.filter((e) => e.protocol === "6").map((e) => e.tcpOptions.destinationPortRange.min);
+  const eigene = x.k.listen.find((l) => l.id !== x.k.vcns[0]["default-security-list-id"]);
+  const ports = eigene.ein.filter((e) => e.protocol === "6").map((e) => e.tcpOptions.destinationPortRange.min);
   assert.deepEqual(ports, [22, 443]);
+  assert.deepEqual(x.k.subnetze[0]["security-list-ids"], [eigene.id], "Teilnetz hängt an der eigenen Liste, nicht an der Standardliste");
   assert.deepEqual(x.k.routen[x.k.vcns[0]["default-route-table-id"]]["route-rules"], [{ destination: "0.0.0.0/0", "network-entity-id": x.k.gateways[0].id }]);
   assert.ok([...x.k.vcns, ...x.k.gateways, ...x.k.listen, ...x.k.subnetze].every((y) => y["freeform-tags"]["studium-autopilot"] === "netz"));
   const vorher = x.angelegt().length;
   const r2 = await netz(x.oci, { tenancy: T });
   assert.deepEqual(r2.schritte.map((s) => s.status), ["da", "da", "da", "da", "da"]);
   assert.equal(x.angelegt().length, vorher, "nichts doppelt");
+});
+
+test("Netz: Teilnetz an der Standardliste (bis 0.5.3) bekommt die eigene Liste mit Port 443", async () => {
+  const { netz } = await laden();
+  const x = konto();
+  await netz(x.oci, { tenancy: T });
+  const standard = x.k.vcns[0]["default-security-list-id"];
+  x.k.listen = x.k.listen.filter((l) => l.id === standard);
+  x.k.subnetze[0]["security-list-ids"] = [standard];
+  const r = await netz(x.oci, { tenancy: T });
+  assert.deepEqual(r.schritte.map((s) => s.status), ["da", "da", "da", "angelegt", "repariert"]);
+  const eigene = x.k.listen.find((l) => l.id !== standard);
+  assert.ok(eigene.ein.some((e) => e.tcpOptions && e.tcpOptions.destinationPortRange.min === 443));
+  assert.deepEqual(x.k.subnetze[0]["security-list-ids"], [eigene.id]);
+  assert.equal(x.k.listen.length, 2, "Standardliste bleibt unangetastet");
 });
 
 test("Server: genau A1 2/12 mit Boot-Volume aus dem Rest, nächster Bereich bei „Out of host capacity“, Exit 3 ohne Platz", async () => {
@@ -186,6 +215,7 @@ test("Server: genau A1 2/12 mit Boot-Volume aus dem Rest, nächster Bereich bei 
   assert.deepEqual(s.quelle, { sourceType: "image", imageId: "img-VM.Standard.A1.Flex", bootVolumeSizeInGBs: 153, bootVolumeVpusPerGB: 10 });
   assert.equal(x.w(x.k.aufrufe.find((y) => y[2] === "launch"), "--shape-config"), '{"ocpus":2,"memoryInGBs":12}');
   assert.deepEqual(s.metadaten, { ssh_authorized_keys: SSH });
+  assert.deepEqual(s["instance-options"], { "are-legacy-imds-endpoints-disabled": true }, "nur IMDSv2");
   const voll = konto({ kapazitaet: 3 });
   await netz(voll.oci, { tenancy: T });
   assert.equal((await server(voll.oci, { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH })).exit, 3);
@@ -314,10 +344,12 @@ test("Abschließen: wartet auf den Helfer, entfernt nur eigene Rechte, Boot-Volu
   assert.deepEqual(x.k.richtlinien.map((p) => p.id), ["fremd"], "fremde Richtlinie gleichen Namens bleibt");
   assert.deepEqual(x.k.gruppen, []);
   assert.equal(x.k.volumes.bvs["size-in-gbs"], 200);
+  assert.deepEqual(x.k.instanzen[1]["instance-options"], { "are-legacy-imds-endpoints-disabled": true }, "Server von 0.5.3: nur noch IMDSv2");
   assert.ok(x.k.quota[0].statements.includes("set block-storage quota total-storage-gb to 200 in tenancy"));
   // fremde Quota gleichen Namens bleibt unverändert
   const y = konto({ quota: [{ id: "q1", name: "nur-kostenlos", "lifecycle-state": "ACTIVE", "freeform-tags": {}, statements: ["set block-storage quota total-storage-gb to 0 in tenancy"] }] });
-  y.k.instanzen.push({ id: "s", "availability-domain": ADS[0], "freeform-tags": { "studium-autopilot": "server" }, "lifecycle-state": "RUNNING" });
+  y.k.instanzen.push({ id: "s", "availability-domain": ADS[0], "freeform-tags": { "studium-autopilot": "server" }, "lifecycle-state": "RUNNING",
+    "instance-options": { "are-legacy-imds-endpoints-disabled": true } });
   const r2 = await abschliessen(y.oci, { tenancy: T, a: auswerten(bestand({ freierTopf: { used: 200, available: 0 } })) });
   assert.equal(r2.schritte.find((s) => s.was === "quota").status, "uebersprungen");
   assert.deepEqual(y.angelegt(), []);

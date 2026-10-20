@@ -1648,6 +1648,16 @@ body.is-phone .eba-s-dashboard .callout[data-callout="eba-termin"].is-collapsibl
   .eba-s-dashboard .eba-legende span::before { width: 8px; height: 8px; }
 }
 
+/* Flaches Fenster (unter 600 px hoch: iPad geteilt, iPhone quer; seit 20.10.2026): Gruß und Datum in einer Zeile, Gruß in der
+   Größe der Kennzahlen. Vorher stand der Gruß in Titelgröße (Elfenbein 2,5em, gewinnt gegen die 1,7em aus Abschnitt 8) und
+   auf dem iPhone quer das Datum darunter: 84 von 390 px Fensterhöhe, jetzt 38. Fensterhöhe per @media nur in der
+   Telefon-Ansicht (37.tablet, Teil 1b); .eba-kz davor wie in der Regel darüber. */
+@media (max-height: 599px) {
+  body.is-phone .eba-s-dashboard .eba-kz { gap: 8px; }
+  body.is-phone .eba-s-dashboard .eba-kz-kopf { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px 16px; }
+  body.is-phone .eba-s-dashboard .eba-kz .eba-kz-gruss { font-size: 1.55em; line-height: 1.2; }
+}
+
 /* Wochenraster „woche kurz“ wie in 37.stundenplan (feste Viertelstunde, Zeitspalte nur „08“, Heute-Spalte absolut),
    aber flacher: Viertelstunde 10 px (Stunde 40 px), damit Fristen noch nah am ersten Bildschirm stehen */
 body.is-phone .eba-s-dashboard .eba-woche {
@@ -4259,45 +4269,78 @@ body.is-mobile .eba-gr-tabelle button.eba-gr-wahl { min-height: 32px; font-size:
 .eba-gr-ilias { margin: 0 0 6px !important; font-size: 12.5px; color: var(--eba-muted); }
 /* ---------- Ende Abschnitt 50 ---------- */
 
-/* ---------- 51. Neuigkeiten zum Update (update.js: Hinweis beim Öffnen, Fenster „Was ist neu“; seit 0.4.1) ----------
-   Hinweis von Obsidian (Notice, oben; iPhone/iPad volle Breite) mit einem Satz und den Knöpfen „Aktualisieren“ und
-   „Was ist neu“ (iPhone/iPad mindestens 44 px). Fenster: Abschnitte aus dem Changelog, neueste zuerst, eigener Bildlauf. */
+/* ---------- 51. Update: Hinweis und Fenster „Neue Version“ (update.js; Hinweis seit 0.4.1, ein Fenster seit 0.5.4) ----------
+   Hinweis von Obsidian (Notice, oben; iPhone/iPad volle Breite) mit einem Satz und einem Knopf (iPhone/iPad mindestens 44 px).
+   Fenster: eines für das ganze Update, data-stufe = angebot | laeuft | fertig | fehler | neu. Rangfolge von oben: Titel (groß),
+   ein Satz (leise), „Wichtig“ (nur, wenn du noch etwas tun musst, auf Akzentfläche), die Änderungen aus CHANGELOG.md (eigener
+   Bildlauf zwischen zwei Linien), der Fuß (klein und leise: Satz zur Sicherung, Balken mit Schritt, Zeilen wie „Andere Geräte“
+   oder der Grund eines Fehlers) und die Knopfreihe. Bis 0.5.2 standen alle Teile gleich laut untereinander. */
 .eba-toast { display: flex; flex-direction: column; gap: 8px; min-width: min(280px, 72vw); }
 .eba-toast-text { font-weight: 600; line-height: 1.4; }
 .eba-toast-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; }
 .eba-toast .eba-toast-knopf { flex: 1 1 auto; height: auto; min-height: 34px; padding: 0 14px; font-family: inherit; white-space: nowrap; }
 body.is-mobile .eba-toast .eba-toast-knopf { min-height: 44px; font-size: 14.5px; }
-.modal.eba-modal-neu .eba-neu-liste { max-height: min(56vh, 520px); overflow-y: auto; -webkit-overflow-scrolling: touch; }
-.eba-modal-neu .eba-neu-version + .eba-neu-version { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--eba-border); }
-.eba-modal-neu .eba-neu-titel { margin: 0 0 4px; font-size: 15px; font-weight: 650; }
-.eba-modal-neu .eba-neu-text { font-size: 14px; line-height: 1.5; }
-.eba-modal-neu .eba-neu-text p { margin: 6px 0; }
-.eba-modal-neu .eba-neu-text ul { margin: 4px 0; padding-left: 1.3em; }
-.eba-modal-neu .eba-neu-text li { margin: 3px 0; }
-body.is-mobile .eba-modal-neu .modal-button-container button { min-height: 44px; }
-/* Dashboard-Zeile (Abschnitt 46) mit drei Knöpfen: auf dem iPhone in einer Reihe, jeder ≥ 44 px, etwas schmaler gepolstert */
+.modal.eba-modal-update .modal-title {
+  font-family: var(--eba-font-display); font-size: 1.3em; font-weight: var(--eba-display-weight);
+  letter-spacing: var(--eba-display-tracking); line-height: 1.25; color: var(--eba-text);
+}
+.eba-modal-update .eba-up-satz { margin: 2px 0 16px; }
+.eba-modal-update .eba-up-wichtig { margin: 0 0 16px; padding: 10px 14px; border-radius: var(--eba-radius-s); background: var(--eba-accent-soft); }
+.eba-modal-update .eba-up-wichtig:empty { display: none; }
+.eba-modal-update .eba-up-wichtig .eba-up-zeile { display: flex; flex-direction: column; gap: 2px; line-height: 1.45; }
+.eba-modal-update .eba-up-wichtig .eba-up-zeile + .eba-up-zeile { margin-top: 8px; }
+.eba-modal-update .eba-up-wichtig b { font-weight: 650; color: var(--eba-accent-text); }
+.eba-modal-update .eba-neu-liste {
+  max-height: min(46vh, 440px); overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 2px 0 12px; border-top: 1px solid var(--eba-border); border-bottom: 1px solid var(--eba-border);
+}
+.eba-modal-update .eba-neu-liste:empty, .eba-modal-update[data-stufe="fehler"] .eba-neu-liste { display: none; }
+.eba-modal-update .eba-neu-liste > p { margin: 12px 0 0; }
+.eba-modal-update .eba-neu-version + .eba-neu-version { margin-top: 14px; padding-top: 2px; border-top: 1px solid var(--eba-border); }
+.eba-modal-update .eba-neu-titel { margin: 12px 0 4px; font-size: 14.5px; font-weight: 650; line-height: 1.35; }
+.eba-modal-update .eba-neu-text { font-size: 14px; line-height: 1.5; }
+.eba-modal-update .eba-neu-text p { margin: 6px 0; }
+.eba-modal-update .eba-neu-text ul { margin: 4px 0; padding-left: 1.3em; }
+.eba-modal-update .eba-neu-text li { margin: 3px 0; }
+.eba-modal-update .eba-up-fuss { margin-top: 14px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+.eba-modal-update .eba-up-fuss:empty { display: none; }
+.eba-modal-update .eba-up-fuss p { margin: 0; }
+.eba-modal-update .eba-up-fuss .eba-up-zeile { display: grid; grid-template-columns: 8.5em minmax(0, 1fr); gap: 2px 12px; padding: 7px 0; }
+.eba-modal-update .eba-up-fuss .eba-up-zeile + .eba-up-zeile { border-top: 1px solid var(--eba-border); }
+.eba-modal-update .eba-up-fuss b { font-weight: 600; color: var(--eba-text); }
+.eba-modal-update .eba-up-grund { margin-bottom: 4px; overflow-wrap: anywhere; }
+.eba-modal-update .eba-up-balken { height: 6px; margin: 2px 0 8px; border-radius: 3px; background: var(--eba-border); overflow: hidden; }
+.eba-modal-update .eba-up-fuellung { width: 0; height: 100%; border-radius: inherit; background: var(--eba-accent); transition: width 0.3s ease; }
+.eba-modal-update .eba-up-schritt { min-height: 1.45em; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .eba-modal-update .eba-up-fuellung { transition: none; } }
+/* Während der Installation keine Knöpfe (Abbrechen ginge nicht ohne halben Stand) */
+.eba-modal-update .modal-button-container:empty { display: none; }
+/* Knopfreihe [Später] [Neue Version installieren]: PC und iPad nebeneinander rechts, Hauptknopf rechts (Obsidian stapelt auf iPad
+   und iPhone sonst); iPhone untereinander, Hauptknopf oben. eba-modal-neu: das Fenster „Neu“ von formular.js */
+.modal.eba-modal-update .modal-button-container, .modal.eba-modal-neu .modal-button-container { flex-direction: row; justify-content: flex-end; }
+body.is-mobile .modal.eba-modal-update .modal-button-container button { min-height: 44px; padding: 0 18px; }
+body.is-phone .modal.eba-modal-update .modal-button-container, body.is-phone .modal.eba-modal-neu .modal-button-container { flex-direction: column-reverse; }
+body.is-phone .modal.eba-modal-update .modal-button-container button, body.is-phone .modal.eba-modal-neu .modal-button-container button { width: 100%; }
+/* iPhone: von unten wie Obsidians Bestätigungen, so hoch wie der Inhalt (höchstens der Bildschirm), Knöpfe unten (Daumen). Titel
+   links und mehrzeilig (Obsidian kürzt Titel dort sonst nach 70 % der Breite mit „…“), die Änderungen geben Platz ab und
+   scrollen, Knöpfe bündig mit dem Text (Obsidian rückt sie dort sonst 12 px ein) */
+body.is-phone .modal.eba-modal-update {
+  width: 100vw; max-width: 100vw; max-height: calc(100% - env(safe-area-inset-top, 0px) - 12px); margin-top: auto;
+  border-width: 1px 0 0; border-radius: var(--eba-radius-l) var(--eba-radius-l) 0 0; display: flex; flex-direction: column;
+}
+body.is-phone .modal.eba-modal-update .modal-header { padding: 22px 64px 2px 16px; }
+body.is-phone .modal.eba-modal-update .modal-title { margin: 0; max-width: none; white-space: normal; text-align: start; }
+body.is-phone .eba-modal-update .modal-content { flex: 1 1 auto; min-height: 0; padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 12px); }
+body.is-phone .eba-modal-update .eba-neu-liste { flex: 0 1 auto; max-height: none; min-height: 0; }
+body.is-phone .eba-modal-update .eba-up-fuss .eba-up-zeile { grid-template-columns: minmax(0, 1fr); }
+body.is-phone .modal.eba-modal-update .modal-button-container { margin-bottom: 0; padding: 16px 0 0; }
+/* Dashboard-Zeile (Abschnitt 46) mit zwei Knöpfen: auf dem iPhone in einer Reihe, jeder ≥ 44 px, etwas schmaler gepolstert */
 body.is-phone .eba-uh .eba-uh-knopf { flex: 1 1 auto; padding: 0 10px !important; white-space: nowrap; }
 /* Bis 20.10.2026 lief „Später“ bei 360 px über den Rand: Der Hauptknopf bricht an Leerzeichen um („Neue Version / installieren“),
    nie im Wort (Abschnitt 18) */
 body.is-phone .eba-uh .eba-uh-knopf.cta { white-space: normal; overflow-wrap: normal; line-height: 1.2; }
 /* Dashboard-Zeile: langer Titel bricht um, statt über den Rand zu laufen */
 .eba-uh-text { flex-direction: column; align-items: flex-start; gap: 1px; }
-/* Fenster vor dem Update, „Was ist neu“ und Ergebnis: Knöpfe in der Reihenfolge [Später] [Aktualisieren]. PC und iPad
-   nebeneinander rechts, Hauptknopf rechts (Obsidian stapelt auf iPad und iPhone sonst); iPhone untereinander, Hauptknopf oben */
-.modal.eba-modal-update .modal-button-container, .modal.eba-modal-neu .modal-button-container { flex-direction: row; justify-content: flex-end; }
-body.is-mobile .modal.eba-modal-update .modal-button-container button { min-height: 44px; padding: 0 18px; }
-body.is-phone .modal.eba-modal-update .modal-button-container, body.is-phone .modal.eba-modal-neu .modal-button-container { flex-direction: column-reverse; }
-body.is-phone .modal.eba-modal-update .modal-button-container button, body.is-phone .modal.eba-modal-neu .modal-button-container button { width: 100%; }
-/* Leiser Textknopf „Was ist neu“ unter der Notiz; „Mehr erfahren“ auf iPad und iPhone mit 44 px Tippfläche */
-.eba-modal .eba-modal-link {
-  height: auto; min-height: 0; margin: -6px 0 12px; padding: 2px 0; border: 0; background: none !important; box-shadow: none;
-  color: var(--eba-accent-text); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
-}
-.eba-modal .eba-modal-link:hover { text-decoration: underline; }
-body.is-mobile .eba-modal .eba-modal-link { min-height: 44px; margin: -12px 0 2px; padding: 0; }
-body.is-mobile .eba-modal-update .eba-modal-mehr { margin-top: 0; }
-body.is-mobile .eba-modal-update .eba-modal-mehr > summary { padding: 12px 0; }
-.eba-modal-update .eba-modal-mehr > p + p { margin-top: 4px; }
 /* ---------- Ende Abschnitt 51 ---------- */
 
 /* ---------- 52. Karteikarten (karten.js, ```eba-karten```, Lernfenster; seit 17.10.2026) ----------
@@ -5466,12 +5509,27 @@ body.is-mobile .eba-lp-k > .eba-td-haken { box-sizing: border-box; width: 44px; 
 body.is-phone .eba-lp-k { flex-wrap: wrap; row-gap: 0; padding: 4px 0; }
 body.is-phone .eba-lp-k-text { flex: 1 1 calc(100% - 40px); }
 body.is-phone .eba-lp-k-bis { flex: 1 1 100%; padding: 0 0 6px 40px; margin-top: -6px; }
-/* In Entwicklung (lernplan.js IN_ENTWICKLUNG, seit 19.10.2026): ein Satz oben, der Inhalt abgeblendet und grau, bleibt bedienbar;
-   in der Übersicht (Seitenleiste) ist die Zeile „Lernplan“ ebenso abgeblendet */
-.eba-lp-entwicklung { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 12px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
-.eba-lp.is-entwicklung > .eba-vb-liste, .eba-lp.is-entwicklung > .eba-lp-leer { opacity: 0.55; filter: grayscale(1); transition: opacity 0.15s ease; }
-.eba-lp.is-entwicklung > .eba-vb-liste:hover, .eba-lp.is-entwicklung > .eba-vb-liste:focus-within { opacity: 0.8; }
+/* In Entwicklung (lernplan.js IN_ENTWICKLUNG, seit 19.10.2026): oben ein Warnkasten (Pille, fetter Satz, Erklärung), der Inhalt
+   stark abgeblendet und grau, bleibt bedienbar; in der Übersicht (Seitenleiste) ist die Zeile „Lernplan“ abgeblendet und trägt
+   rechts „in Entwicklung“ */
+.eba-lp-entwicklung {
+  margin: 0 0 14px; padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--eba-warn) 45%, transparent);
+  border-left: 3px solid var(--eba-warn);
+  border-radius: var(--eba-radius-s);
+  background: color-mix(in srgb, var(--eba-warn) 10%, transparent);
+  font-size: 13px; line-height: 1.45; color: var(--eba-text);
+}
+.eba-lp-entwicklung-kopf { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 4px; }
+.eba-lp-entwicklung-kopf > strong { font-weight: 650; color: var(--eba-warn-text, var(--eba-warn)); }
+.eba-lp.is-entwicklung > .eba-vb-liste, .eba-lp.is-entwicklung > .eba-lp-leer { opacity: 0.4; filter: grayscale(1); transition: opacity 0.15s ease; }
+.eba-lp.is-entwicklung > .eba-vb-liste:hover, .eba-lp.is-entwicklung > .eba-vb-liste:focus-within { opacity: 0.75; }
 .eba-sl-zeile:has(> a[data-href="Lernplan"]) { opacity: 0.55; }
+.eba-sl-zeile:has(> a[data-href="Lernplan"])::after {
+  content: "in Entwicklung"; margin-left: auto; padding: 0 7px; border-radius: 999px; flex: none;
+  font-size: 10.5px; font-weight: 600; line-height: 1.6; white-space: nowrap;
+  color: var(--eba-warn); background: color-mix(in srgb, var(--eba-warn) 14%, transparent);
+}
 /* ---------- Ende Abschnitt 61 ---------- */
 
 /* ---------- 62. Noten & Anmeldungen aus Alma (alma-konto.js; seit 0.4.5, Beta) ----------

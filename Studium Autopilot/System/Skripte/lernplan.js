@@ -346,16 +346,19 @@ module.exports = function (ctx) {
   };
 
   const LEER = "Noch kein Lernplan für deine Module.";
-  // In Entwicklung (seit 19.10.2026): Bereich und Lernplan-Notizen tragen oben einen Satz, der Inhalt ist abgeblendet, bleibt aber
-  // bedienbar (eba-core.css Abschnitt 61, .is-entwicklung). Ist der Lernplan fertig: IN_ENTWICKLUNG = false.
+  // In Entwicklung (seit 19.10.2026): Bereich und Lernplan-Notizen tragen oben einen Warnkasten, der Inhalt ist abgeblendet, bleibt
+  // aber bedienbar (eba-core.css Abschnitt 61, .is-entwicklung). Ist der Lernplan fertig: IN_ENTWICKLUNG = false.
   const IN_ENTWICKLUNG = true;
-  const ENTWICKLUNG = "Diese Funktion ist noch in Entwicklung. Du nutzt sie auf eigene Gefahr, sie kann sich noch ändern.";
+  const ENTWICKLUNG_TITEL = "Noch nicht fertig: Lern nicht danach.";
+  const ENTWICKLUNG = "Kapitel, Fristen und Fortschritt können fehlen oder falsch sein, und alles kann sich noch ändern. Plane dein Lernen weiter selbst.";
   const entwicklungHinweis = (el) => {
     if (!IN_ENTWICKLUNG) return;
     el.addClass("is-entwicklung");
-    const h = el.createDiv({ cls: "eba-lp-entwicklung" });
-    h.createSpan({ cls: "eba-pill leer", text: "In Entwicklung" });
-    h.createSpan({ text: ENTWICKLUNG });
+    const h = el.createDiv({ cls: "eba-lp-entwicklung", attr: { role: "note" } });
+    const kopf = h.createDiv({ cls: "eba-lp-entwicklung-kopf" });
+    kopf.createSpan({ cls: "eba-pill warn", text: "In Entwicklung" });
+    kopf.createEl("strong", { text: ENTWICKLUNG_TITEL });
+    h.createDiv({ text: ENTWICKLUNG });
   };
   const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1 };
   const zeichnen = async (el, mdCtx, art, neu) => {

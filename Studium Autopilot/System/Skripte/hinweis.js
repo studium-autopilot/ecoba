@@ -8,7 +8,7 @@
 //   dauer   ms; 0 = bleibt, bis der Aufrufer hide() ruft (Fortschritt, setMessage ändert den Text). Vorgabe: 5 s, mit Knopf 10 s,
 //           bei langem Text eine Sekunde je 60 Zeichen mehr, höchstens 15 s
 // → die Notice (setMessage, hide) oder null, wenn es keine gibt (Tests ohne Obsidian)
-// Knopf-Gestalt wie der Update-Hinweis (eba-core.css, „Neuigkeiten“: .eba-toast). iOS-sicher: keine Node-APIs, kein Lookbehind.
+// Knopf-Gestalt wie der Update-Hinweis (eba-core.css, Abschnitt 51: .eba-toast). iOS-sicher: keine Node-APIs, kein Lookbehind.
 const DAUER = 5000, DAUER_KNOPF = 10000, DAUER_MAX = 15000;
 
 // Anzeigedauer aus Text und Knopf (dauer gesetzt → genau diese)

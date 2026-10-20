@@ -111,6 +111,14 @@ test("Hinweis: einmal je Version und höchstens alle 12 Stunden", () => {
   assert.equal(f({ version: "0.4.1", zeit: "kaputt" }, "0.4.1", jetzt), true, "unlesbare Zeit: zeigen");
 });
 
+test("Hinweis: nach dem Fenster zu dieser Version keiner mehr, auch wenn du es nur geschlossen hast", () => {
+  const f = U.toastFaellig;
+  const jetzt = Date.parse("2026-10-20T12:00:00Z");
+  assert.equal(f({ version: "0.4.9", zeit: jetzt - 13 * STUNDE }, "0.4.9", jetzt), true, "nur der Hinweis: nach 12 Stunden wieder");
+  assert.equal(f({ version: "0.4.9", zeit: jetzt - 13 * STUNDE, fenster: true }, "0.4.9", jetzt), false, "Fenster gesehen: nie wieder");
+  assert.equal(f({ version: "0.4.9", zeit: jetzt, fenster: true }, "0.5.0", jetzt), true, "nächste Version: wieder");
+});
+
 test("Nach einem Update: einmal „Aktualisiert auf …“, erster Lauf auf dem Gerät still", () => {
   const n = U.nachUpdate;
   assert.deepEqual(n("0.4.0", "0.4.1", "0.4.1"), { von: "0.4.0", bis: "0.4.1" });

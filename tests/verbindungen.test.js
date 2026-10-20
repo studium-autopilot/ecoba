@@ -180,7 +180,7 @@ test("Zeilen im eigenen Uni-Abgleich: Alma nur ein Satz, ILIAS nur für Übungsg
   const x = aufbau({ extern: true, ilias: { gruppenZugang: true, text: "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich." } });
   assert.deepEqual(lesen(x.V.zeile("ilias")), { text: "Prüft deine Übungsgruppen, zuletzt gerade eben. Deine Unterlagen kommen über deinen Uni-Abgleich.", symbol: "haken", ton: "ok", pille: "verbunden", knopf: "Aktualisieren (cta)", knopfAktion: "verbindung-aktualisieren", link: "Trennen", linkAktion: "trennen" });
 
-  // Alma doch verbunden (Link von früher): bleibt nutzbar, die Zeile warnt und bietet Trennen
+  // Alma doch verbunden (Link von früher): Alma holt trotzdem nichts (alma.js), die Zeile sagt das und bietet Trennen
   W = aufbau({ extern: true, alma: { verbunden: true } }).V;
   assert.deepEqual(lesen(W.zeile("alma")), { text: "Dein Stundenplan kommt über deinen Uni-Abgleich. Der Alma-Link auf diesem Gerät wird nicht genutzt.", symbol: "haken", ton: "ok", pille: "", knopf: "", knopfAktion: "", link: "Trennen", linkAktion: "trennen" });
 });

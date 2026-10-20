@@ -19,7 +19,7 @@ semesterliste:
   - 6|SS 2029|2029-04-01|2029-09-30|2029-04-16|2029-07-28
 pausen:
   - 2026-12-23|2027-01-06|Weihnachtspause
-  - 2027-05-17|2027-05-22|Pfingstferien
+  - 2027-05-17|2027-05-22|Pfingstpause
   - 2027-12-23|2028-01-06|Weihnachtspause
   - 2028-06-05|2028-06-10|Pfingstpause
   - 2028-12-23|2029-01-06|Weihnachtspause

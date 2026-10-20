@@ -1087,7 +1087,7 @@ module.exports = function (ctx) {
   };
 
   // Alma: verbunden → Aktualisieren (Rest im Fenster); Stundenplan schon da (Sync, zentral) → Haken ohne Pille, Verbinden leise;
-  // eigener Uni-Abgleich → nur der Satz (mit gespeichertem Link: Warnung vor doppelten Einträgen und Trennen)
+  // eigener Uni-Abgleich → nur der Satz (mit gespeichertem Link: Alma holt trotzdem nichts, das sagt die Zeile; Textlink Trennen)
   const almaZeile = (v) => {
     const s = v.status();
     if (s.extern && s.verbunden) return { zu: false, text: `${ALMA_EXTERN} Der Alma-Link auf diesem Gerät wird nicht genutzt.`, pille: "", symbol: "haken", ton: "ok", knopf: "", link: textLink("trennen", v.id, "Trennen") };

@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Pfingstferien"
+titel: "Pfingstpause"
 datum: 2027-05-17
 bis: 2027-05-22
 kategorie: Vorlesungsfrei
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Pfingstferien
+# Pfingstpause
 
 **17.05.2027 – 22.05.2027**
 

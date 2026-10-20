@@ -104,6 +104,7 @@ class Runde(unittest.TestCase):
         self.assertEqual(json.loads(Attrappe.wert(a, "--freeform-tags")), {"studium-autopilot": "server"})
         self.assertEqual(json.loads(Attrappe.wert(a, "--metadata"))["user_data"], KONFIG["user_data"])
         self.assertNotIn("--boot-volume-size-in-gbs", a, "Größe nur einmal (source-details)")
+        self.assertEqual(json.loads(Attrappe.wert(a, "--instance-options")), {"areLegacyImdsEndpointsDisabled": True})
 
     def test_kein_platz_alle_bereiche_dann_weiter(self):
         oci = Attrappe([KAPAZITAET] * 3)

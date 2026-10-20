@@ -5,7 +5,7 @@ datum: 2026-10-13
 bis: 2026-10-25
 kategorie: Frist
 status: offiziell
-ort: "ab 16:00 · bis 25.10. 23:59 · ILIAS-Kurs B180, Zuteilung zu den Tutorien, first come, first served"
+ort: "ab 16:00 · bis 25.10., 24:00 · ILIAS-Kurs B180, Zuteilung zu den Tutorien, first come, first served"
 modul: "[[B180 Jahresabschluss]]"
 code: "B180"
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Tutorien-Anmeldung B180 Jahresabschluss (ILIAS)
 
-**13.10.2026 – 25.10.2026** · ab 16:00 · bis 25.10. 23:59 · ILIAS-Kurs B180, Zuteilung zu den Tutorien, first come, first served
+**13.10.2026 – 25.10.2026** · ab 16:00 · bis 25.10., 24:00 · ILIAS-Kurs B180, Zuteilung zu den Tutorien, first come, first served
 
 Anmeldung zu den Tutorien in B180 Jahresabschluss, Plätze nach Reihenfolge der Anmeldung. Im ILIAS-Kurs B180 in genau ein Tutorium eintragen; Mehrfacheintragungen werden gelöscht.
 

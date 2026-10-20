@@ -5,7 +5,7 @@ datum: 2026-11-05
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "14:00–16:30 · Neckawa · Anmeldung bis 12.10."
+ort: "14:00–16:30 · Neckawa · Anmeldung über den Career Service"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Speed Dating „Talent Meets Industry“
 
-**05.11.2026** · 14:00–16:30 · Neckawa · Anmeldung bis 12.10.
+**05.11.2026** · 14:00–16:30 · Neckawa · Anmeldung über den Career Service
 
 Speed Dating des Career Service mit regionalen Arbeitgebern, dazu ein Vorbereitungsworkshop. Anmeldung per Online-Formular, danach Lebenslauf und kurzes Motivationsschreiben per Mail.
 

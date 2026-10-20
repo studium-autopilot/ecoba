@@ -152,7 +152,10 @@ export async function netz(oci, { tenancy }) {
       "--route-rules", JSON.stringify([{ destination: "0.0.0.0/0", destinationType: "CIDR_BLOCK", networkEntityId: gw.id }])]);
     merken("route", "angelegt", "Route ins Internet eingetragen.");
   }
-  let sl = await eigenes("regeln", ["network", "security-list", "list", ...t, ...v, "--all"]);
+  // Die Standardliste (nur Port 22) legt Oracle mit dem Netz an und gibt ihr dessen Kennzeichen mit; sie ist nicht unsere
+  const standard = vcn["default-security-list-id"];
+  let sl = liste(await muss("regeln", ["network", "security-list", "list", ...t, ...v, "--all"]))
+    .find((x) => lebt(x) && gehoert(x, "netz") && x.id !== standard) || null;
   if (!sl) {
     sl = await muss("regeln", ["network", "security-list", "create", ...t, ...v, "--display-name", "studium-autopilot",
       "--ingress-security-rules", JSON.stringify(REGELN_EIN), "--egress-security-rules", JSON.stringify(REGELN_AUS), ...fertig]);
@@ -163,7 +166,13 @@ export async function netz(oci, { tenancy }) {
     sub = await muss("subnetz", ["network", "subnet", "create", ...t, ...v, "--cidr-block", NETZ.subnetz, "--display-name", "studium-autopilot",
       "--dns-label", "server", "--route-table-id", rt.id, "--security-list-ids", JSON.stringify([sl.id]), "--prohibit-public-ip-on-vnic", "false", ...fertig]);
     merken("subnetz", "angelegt", `Teilnetz angelegt (${NETZ.subnetz}).`);
-  } else merken("subnetz", "da", "Teilnetz besteht.");
+  } else if ((sub["security-list-ids"] || []).includes(sl.id)) merken("subnetz", "da", "Teilnetz besteht.");
+  else {
+    // Bis 0.5.3 hing das Teilnetz an der Standardliste: Port 443 war von außen zu
+    await muss("subnetz", ["network", "subnet", "update", "--subnet-id", sub.id, "--security-list-ids", JSON.stringify([sl.id]), "--force",
+      "--wait-for-state", "AVAILABLE"]);
+    merken("subnetz", "repariert", "Teilnetz nutzt jetzt die eigenen Regeln: Port 443 (HTTPS) ist von außen erreichbar.");
+  }
   return { schritte, exit: 0, subnetz: sub.id };
 }
 
@@ -201,6 +210,8 @@ const schluesselPruefen = (s) => {
   if (!SSH.test(k)) throw Object.assign(new Error("--schluessel: öffentlicher SSH-Schlüssel (.pub) fehlt"), { exit: 2 });
   return k;
 };
+// Metadaten nur über IMDSv2 (CIS OCI 3.1): Die alten Endpunkte ohne Kopfzeile lassen sich über SSRF auslesen
+const NUR_IMDS2 = ["--instance-options", JSON.stringify({ areLegacyImdsEndpointsDisabled: true })];
 const quelle = (image, gb) => JSON.stringify({ sourceType: "image", imageId: image, bootVolumeSizeInGBs: gb, bootVolumeVpusPerGB: FREI.vpu });
 
 export async function server(oci, { tenancy, a, ads, schluessel }) {
@@ -214,7 +225,7 @@ export async function server(oci, { tenancy, a, ads, schluessel }) {
   const r = await anlegenIrgendwo(oci, ["compute", "instance", "launch", "--compartment-id", tenancy, "--shape", A1,
     "--shape-config", JSON.stringify({ ocpus: ZIEL.ocpu, memoryInGBs: ZIEL.gb }), "--source-details", quelle(image.id, a.plan.bootGb),
     "--subnet-id", sub, "--assign-public-ip", "true", "--display-name", "studium-autopilot-server",
-    "--freeform-tags", kennzeichen("server"), "--metadata", JSON.stringify({ ssh_authorized_keys: ssh })], ads);
+    "--freeform-tags", kennzeichen("server"), "--metadata", JSON.stringify({ ssh_authorized_keys: ssh }), ...NUR_IMDS2], ads);
   if (r.kapazitaet) {
     merken("server", "kein-platz", "Oracle hat gerade in keinem Verfügbarkeitsbereich Platz für den Server. Der Platzsucher kann es weiter versuchen.");
     return { schritte, exit: 3 };
@@ -272,7 +283,7 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     if (JSON.stringify(metadaten).length > METADATEN_MAX) throw new Error(`Startdaten des Helfers zu groß (über ${METADATEN_MAX} Byte)`);
     const r = await anlegenIrgendwo(oci, ["compute", "instance", "launch", ...t, "--shape", MICRO, "--source-details", quelle(helferBild.id, ZIEL.helferBootGb),
       "--subnet-id", sub, "--assign-public-ip", "true", "--display-name", "studium-autopilot-platzsucher", "--freeform-tags", kennzeichen("helfer"),
-      "--metadata", JSON.stringify(metadaten)], ads, /out of (host )?capacity|LimitExceeded/i);
+      "--metadata", JSON.stringify(metadaten), ...NUR_IMDS2], ads, /out of (host )?capacity|LimitExceeded/i);
     if (r.kapazitaet) { merken("helfer", "kein-platz", "Auch für den kleinen Helfer ist gerade kein Platz. Später noch einmal versuchen."); return { schritte, exit: 3 }; }
     if (r.fehler) { merken("helfer", "fehler", "Der Helfer ließ sich in keinem Bereich anlegen: " + r.fehler); return { schritte, exit: 1 }; }
     helfer = r.instanz;
@@ -352,6 +363,12 @@ export async function abschliessen(oci, { tenancy, a }) {
   const srv = instanzen.find((i) => gehoert(i, "server"));
   if (!srv) { merken("server", "fehler", "Kein Server mit Kennzeichen gefunden."); return { schritte, exit: 1 }; }
   await rechteEntfernen(muss, merken, t);
+  // Server aus Versionen bis 0.5.3 erlauben noch die alten Metadaten-Endpunkte; die Änderung braucht keinen Neustart
+  if ((srv["instance-options"] || {})["are-legacy-imds-endpoints-disabled"]) merken("metadaten", "da", "Metadaten nur über IMDSv2.");
+  else {
+    await muss("metadaten", ["compute", "instance", "update", "--instance-id", srv.id, ...NUR_IMDS2, "--force"]);
+    merken("metadaten", "angepasst", "Metadaten des Servers nur noch über IMDSv2.");
+  }
   // Boot-Volume auf den ganzen freien Rest (Oracle zählt es danach ganz zum freien Topf)
   const anhang = liste(await muss("volume", ["compute", "boot-volume-attachment", "list", ...t, "--availability-domain", srv["availability-domain"],
     "--instance-id", srv.id, "--all"])).find((x) => x["lifecycle-state"] === "ATTACHED");

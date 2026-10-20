@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.3)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.4)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -81,7 +81,8 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
 
 - Der Schlüssel ist immer RSA mit 4096 Bit unter `~/.ssh/studium_autopilot`; alle späteren Schritte erwarten genau diese Datei.
   (Die Cloud Shell lehnt ed25519 ab.) Liegt dort schon ein Schlüssel, bleibt er.
-- Exit 0: weiter mit Schritt 5.
+- Exit 0: weiter mit Schritt 5. Meldet `netz` „[repariert] Teilnetz nutzt jetzt die eigenen Regeln“, war der Server bisher von
+  außen nicht erreichbar (bis 0.5.3); ein laufender Server muss dafür nicht neu angelegt werden.
 - Exit 1 mit „Neuer Server passt nicht“: Die freie Menge ist belegt (z. B. von einem eigenen Server). Erklären, nichts anlegen
   ([kosten.md](kosten.md), Regel 2).
 - **Exit 3 (kein Platz):** Oracle hat in keinem Verfügbarkeitsbereich Platz. Das ist normal und kein Fehler des Kontos. Erklären
@@ -116,7 +117,7 @@ Die Befehle ab hier brauchen `$IP`. In einer neuen Cloud-Shell-Sitzung darum zue
 - `adresse` prüft auch den Schlüssel. Exit 2 mit „Der Server wurde mit … angelegt“: den genannten `cp`-Befehl einmal
   ausführen, dann `adresse` noch einmal. Exit 1 mit „Kein Schlüssel … passt“: anhalten, Meldung an den Autor.
 
-- `abschliessen` entfernt die Rechte eines Platzsuchers, vergrößert das Boot-Volume auf den ganzen freien Rest und setzt die
+- `abschliessen` entfernt die Rechte eines Platzsuchers, lässt die Metadaten des Servers nur über IMDSv2 zu, vergrößert das Boot-Volume auf den ganzen freien Rest und setzt die
   Quota so, dass nichts Neues mehr hinzukommt. Meldet es „Boot-Volume … vergrößert“: einmal
   `ssh -i ~/.ssh/studium_autopilot ubuntu@$IP sudo reboot`, nach etwa einer Minute weiter (Ubuntu vergrößert das Dateisystem
   beim Start).

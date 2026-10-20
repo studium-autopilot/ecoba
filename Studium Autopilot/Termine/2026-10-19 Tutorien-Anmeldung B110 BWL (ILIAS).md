@@ -2,10 +2,10 @@
 typ: termin
 titel: "Tutorien-Anmeldung B110 BWL (ILIAS)"
 datum: 2026-10-19
-bis: 2026-10-25
+bis: 2026-10-26
 kategorie: Frist
 status: offiziell
-ort: "bis 25.10. · ILIAS-Kurs B110"
+ort: "ab 08:00 · bis 26.10., 08:05 · ILIAS-Kurs B110"
 modul: "[[B110 Einführung in die Betriebswirtschaftslehre]]"
 code: "B110"
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Tutorien-Anmeldung B110 BWL (ILIAS)
 
-**19.10.2026 – 25.10.2026** · bis 25.10. · ILIAS-Kurs B110
+**19.10.2026 – 26.10.2026** · ab 08:00 · bis 26.10., 08:05 · ILIAS-Kurs B110
 
 Anmeldung zu den sieben inhaltlich gleichen Tutorien in B110 mit Gruppenarbeit und Bonuspunkten für die Klausur. Im ILIAS-Kurs B110 verbindlich in genau ein Tutorium eintragen.
 

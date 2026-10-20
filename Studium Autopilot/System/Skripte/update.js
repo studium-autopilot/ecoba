@@ -49,11 +49,12 @@
 //   „Aktualisiert: …“-Hinweise neu (mehrere auf einmal oder nach einer neuen installiert.json: stillBis).
 // Neuigkeiten (seit 0.4.1): Beim Öffnen von Obsidian (und nach über 6 h im Hintergrund) holt update.js nach wenigen Sekunden
 //   nur das kleine Manifest, wenn die letzte Prüfung über 30 Min. her ist. Gibt es ein Angebot, erscheint einmal je App-Start
-//   ein Hinweis (Notice) mit „Neue Version installieren“ und „Was ist neu“, für dieselbe Version höchstens alle 12 h. Läuft eine neue
-//   Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“. „Was ist neu“ zeigt die Abschnitte aus CHANGELOG.md
-//   am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
-// Testeinstiege: plugin.testUpdateAntwort (true/false statt Bestätigungsfenster), plugin.testUpdateBasis (andere Basis-URL,
-//   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.neuigkeiten,
+//   ein Hinweis (Notice) mit „Neue Version installieren“, für dieselbe Version höchstens alle 12 h und nie mehr, wenn du ihr Fenster
+//   schon gesehen hast. Läuft eine neue Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“ mit „Was ist neu“.
+//   Seit 0.5.4 läuft das ganze Update in EINEM Fenster („Neue Version“: Änderungen, Fortschritt, Ergebnis) ohne Hinweis daneben;
+//   es zeigt die Abschnitte aus CHANGELOG.md am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
+// Testeinstiege: plugin.testUpdateAntwort (true/false statt der Frage im Fenster), plugin.testUpdateBasis (andere Basis-URL,
+//   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.toast,
 //   ctx.update.heilen(true) (Reparatur sofort, ohne Merker eba-update-reparatur).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
@@ -438,12 +439,12 @@ module.exports = function (ctx) {
     const sichern = reihe.concat(loeschen).filter((w) => w.alt);
     if (sichern.length) {
       r.sicherung = ordner;
-      melden("Lege eine Sicherung an …");
+      melden("Lege eine Sicherung an …", 0.85);
       try { for (const w of sichern) await io.schreiben(ordner + "/" + w.pfad, w.alt); } catch (e) {
         r.art = "sicherung"; r.fehler = "Sicherung nicht möglich (" + grund(e) + ")"; return r;
       }
     }
-    melden("Speichere die neue Version …");
+    melden("Speichere die neue Version …", 0.92);
     const erledigt = [];
     try {
       for (const w of reihe) { await io.schreiben(w.pfad, w.bytes); erledigt.push(w); }
@@ -464,7 +465,7 @@ module.exports = function (ctx) {
   // io: { holen(url, { frisch }) → Uint8Array (wirft bei Fehler; frisch: nie aus dem Zwischenspeicher), lesen(pfad) →
   //   Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad), liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
   // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text),
-  //   marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage) }
+  //   (fortschritt(text, anteil): anteil 0…1 für den Balken im Fenster), marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage) }
   // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, geaendert[], angelegt[],
   //   neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }] (deine Systemdatei daneben gesichert), gemischt[], haken[],
   //   einstellungen[], uebersprungen[], entfernt[], behalten[], aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert),
@@ -478,7 +479,7 @@ module.exports = function (ctx) {
     const url = (pfad) => rel.url_basis + (ORDNER + "/" + pfad).split("/").map(encodeURIComponent).join("/");
 
     // 1. Dateiliste
-    melden("Prüfe die neue Version …");
+    melden("Prüfe die neue Version …", 0.03);
     let lb;
     try { lb = await io.holen(url(LISTE), { frisch: true }); } catch (e) { return fehler("netz", "Dateiliste nicht geladen (" + ((e && e.message) || e) + ")"); }
     if (lb.length > G.liste || (await sha256(lb)) !== rel.sha256) return fehler("pruefsumme", "Prüfsumme der Dateiliste stimmt nicht");
@@ -507,7 +508,8 @@ module.exports = function (ctx) {
     const geladen = {};
     let fertig = 0;
     const dateien = brauchen.length === 1 ? "Datei" : "Dateien";
-    melden(`Lade 0 von ${brauchen.length} ${dateien} …`);
+    const anteil = () => 0.08 + 0.72 * (brauchen.length ? fertig / brauchen.length : 1); // Laden: 8 bis 80 % des Balkens
+    melden(`Lade 0 von ${brauchen.length} ${dateien} …`, anteil());
     try {
       await parallel(brauchen, G.parallel, async (s) => {
         let by;
@@ -515,7 +517,7 @@ module.exports = function (ctx) {
         if (by.length !== s.eintrag.groesse || (await sha256(by)) !== s.eintrag.sha256) throw fehlerArt("pruefsumme", "Prüfsumme stimmt nicht: " + s.pfad);
         geladen[s.pfad] = by;
         fertig++;
-        melden(`Lade ${fertig} von ${brauchen.length} ${dateien} …`);
+        melden(`Lade ${fertig} von ${brauchen.length} ${dateien} …`, anteil());
       });
     } catch (e) { return fehler(e.art || "netz", (e && e.message) || String(e)); }
 
@@ -889,7 +891,8 @@ module.exports = function (ctx) {
     z.createSpan({ cls: "eba-uh-symbol", attr: { "aria-hidden": "true" } }).innerHTML = svg(h.symbol);
     const t = z.createSpan({ cls: "eba-uh-text" });
     t.createEl("b", { text: h.text });
-    // Nur der Titel; was neu ist, steht unter „Was ist neu“ (seit 17.10.2026 kein Satz im Hinweis).
+    // Nur der Titel; was neu ist, zeigt das Fenster nach **Neue Version installieren** (seit 17.10.2026 kein Satz im Hinweis,
+    // seit 0.5.4 kein eigener Knopf „Was ist neu“: er öffnete dasselbe Fenster).
     if (!h.knopf) return; // ein anderes Gerät installiert: nur der Satz
     const k = z.createSpan({ cls: "eba-uh-knoepfe" });
     if (h.art === "link") {
@@ -900,10 +903,6 @@ module.exports = function (ctx) {
         if (h.art === "laden") AKTIONEN["vorlage-neu-laden"].ausfuehren().catch((e) => console.error("update: neu laden", e));
         else aktualisieren().catch((e) => console.error("update", e));
       });
-    }
-    if (h.art === "update") {
-      k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-neu", text: "Was ist neu", attr: { type: "button" } })
-        .addEventListener("click", () => { neuigkeitenZeigen({ von: installiertVersion(), bis: h.version, angebot: { version: h.version, notiz: h.notiz } }); });
     }
     if (h.art === "update" || h.art === "link") {
       const sp = k.createEl("button", { cls: "eba-vb-knopf leise eba-uh-knopf eba-uh-spaeter", text: "Später", attr: { type: "button" } });
@@ -918,38 +917,13 @@ module.exports = function (ctx) {
     if (neuigkeit.start && Date.now() - neuigkeit.start < START_FENSTER) { try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); } }
   };
 
-  // ---------- Fenster ----------
+  // ---------- Fenster „Neue Version“ (seit 0.5.4): ein Fenster für das ganze Update ----------
+  // Angebot → wird installiert → Ergebnis im selben Fenster; ohne Angebot ist es „Was ist neu“. Kein Hinweis daneben: Bis 0.5.2
+  // kamen nacheinander das Fenster vor dem Update, der Hinweis „Lade …“ oben rechts und das Ergebnisfenster, und der Hinweis
+  // beim Öffnen blieb daneben stehen. Aufbau (CSS Abschnitt 51): Titel, ein Satz, „Wichtig“ (nur, wenn du etwas tun musst),
+  // die Änderungen aus CHANGELOG.md mit eigenem Bildlauf, der Fuß und die Knopfreihe. Der Fuß ist je Stufe der Satz zur
+  // Sicherung (Angebot), Balken und Schritt (läuft), Zeilen wie „Andere Geräte“ und „Sicherung“ (fertig) oder der Grund (fehler).
   const Modal = obs.Modal;
-  const fragen = (rel) => new Promise((fertig) => {
-    const p = plugin();
-    if (typeof p.testUpdateAntwort === "boolean") { fertig(p.testUpdateAntwort); return; }
-    const m = new Modal(app);
-    let erledigt = false;
-    m.modalEl.addClass("eba-modal", "eba-modal-update");
-    m.titleEl.setText(`Auf Version ${rel.version} aktualisieren?`);
-    const c = m.contentEl;
-    if (rel.notiz) c.createEl("p", { cls: "eba-modal-text eba-modal-notiz", text: rel.notiz });
-    // „Was ist neu“: dasselbe Fenster wie sonst; dort beantworten „Neue Version installieren“ / „Später“ diese Frage (kein zweites Fragen)
-    c.createEl("button", { cls: "eba-modal-link", text: "Was ist neu", attr: { type: "button" } }).addEventListener("click", () => {
-      erledigt = true;
-      m.close();
-      neuigkeitenZeigen({ von: installiertVersion(), bis: rel.version, angebot: rel, antwort: fertig });
-    });
-    c.createEl("p", { cls: "eba-modal-text", text: "Deine Noten, Termine und Notizen bleiben. Vorher wird eine Sicherung angelegt." });
-    const d = c.createEl("details", { cls: "eba-modal-mehr" });
-    d.createEl("summary", { text: "Mehr erfahren" });
-    d.createEl("p", { text: "Hast du eine Seite selbst geändert, bleibt deine Fassung. Hat sich die Seite geändert, liegt die neue daneben." });
-    d.createEl("p", { text: "Darstellung und Programmteile kommen immer neu. Hattest du sie geändert, liegt deine Fassung als Sicherung daneben." });
-    d.createEl("p", { text: "Auf deinen anderen Geräten kommt das Update von selbst. Dort tippst du höchstens einmal auf „Neu laden“ oben auf dem Dashboard." });
-    // Knöpfe wie im Fenster „Was ist neu“: PC und iPad nebeneinander, „Neue Version installieren“ rechts; iPhone untereinander, oben
-    const k = c.createDiv({ cls: "modal-button-container" });
-    const ab = k.createEl("button", { text: "Später" });
-    const ok = k.createEl("button", { text: "Neue Version installieren", cls: "mod-cta" });
-    ok.addEventListener("click", () => { erledigt = true; m.close(); fertig(true); });
-    ab.addEventListener("click", () => m.close());
-    m.onClose = () => { c.empty(); if (!erledigt) fertig(false); };
-    m.open();
-  });
   const name = (p) => p.split("/").pop().replace(/\.md$/, "");
   const FEHLERTEXT = {
     netz: "Die neue Version ließ sich gerade nicht laden. Es wurde nichts geändert. Versuch es später noch einmal.",
@@ -958,39 +932,104 @@ module.exports = function (ctx) {
     sicherung: "Die Sicherung ließ sich nicht anlegen. Es wurde nichts geändert.",
     schreiben: "Beim Speichern ging etwas schief. Alles wurde auf den alten Stand zurückgesetzt.",
   };
-  const ergebnisZeigen = (b) => {
-    if (!Modal) return;
+  // Satz unter dem Titel nach einem Update (Bericht b)
+  const ergebnisSatz = (b) => {
+    if (!b.ok) return FEHLERTEXT[b.art] || FEHLERTEXT.netz;
+    const n = b.geaendert.length + b.angelegt.length + b.gemischt.length + b.haken.length + b.einstellungen.length;
+    return n ? `${n} ${n === 1 ? "Datei" : "Dateien"} aktualisiert. Deine Einträge sind geblieben.` : "Alles war schon aktuell.";
+  };
+  // Zeilen unter dem Ergebnis: { titel, text, wichtig } in dieser Reihenfolge. wichtig = du musst noch etwas tun (steht oben,
+  // über den Änderungen); die anderen stehen klein im Fuß.
+  const ergebnisZeilen = (b) => {
+    const z = [];
+    if (!b.ok) return z;
+    if (b.plugin && !b.neuGeladen) z.push({ titel: "Noch ein Schritt", text: "Obsidian einmal schließen und wieder öffnen.", wichtig: true });
+    else if (b.einstellungen.length) z.push({ titel: "Einstellungen", text: "Ergänzt. Sie wirken nach dem nächsten Öffnen von Obsidian." });
+    if (b.neuKopien.length) z.push({ titel: "Deine Seiten", text: `Deine Fassung bleibt, die neue liegt daneben („neu ${b.version}“): ${b.neuKopien.map((x) => name(x.pfad)).join(", ")}.` });
+    if (b.gesichert && b.gesichert.length) z.push({ titel: "Deine Änderungen", text: `Jetzt gilt die neue Fassung, deine liegt als Sicherung daneben („deine Fassung vor ${b.version}“): ${b.gesichert.map((x) => x.pfad.split("/").pop()).join(", ")}.` });
+    if (b.behalten.length) z.push({ titel: "Behalten", text: `Nicht mehr in der neuen Version, du hattest sie geändert: ${b.behalten.map(name).join(", ")}.` });
+    z.push({ titel: "Andere Geräte", text: b.plugin ? "Das Update kommt von selbst. Dort einmal auf „Neu laden“ oben auf dem Dashboard tippen." : "Das Update kommt von selbst, dort musst du nichts tun." });
+    if (b.sicherung) z.push({ titel: "Sicherung", text: `Im versteckten Ordner „${b.sicherung}“ deines Tresors, am PC oder Mac zu öffnen.` });
+    return z;
+  };
+  // o = { stufe: "angebot" | "laeuft" | "neu", von, bis, angebot, ohneListe } → Griff { m, version, stufe, offen, wartet,
+  //   antwort (Promise: true = „Neue Version installieren“, false = geschlossen oder „Später“), laeuft(text, anteil), fertig(b) }
+  //   oder null (ohne Obsidian). Öffnen blendet den Hinweis zum Update aus; mit Angebot zählt die Version auf diesem Gerät als
+  //   gesehen (eba-update-toast mit fenster: true, toastFaellig), auch wenn du das Fenster nur schließt.
+  const fensterZeigen = (o) => {
+    if (!Modal) return null;
+    if (zustand.fenster && zustand.fenster.offen) zustand.fenster.m.close();
+    toastWeg();
+    if (o.angebot) { sitzungMerken(true); lokal(L_TOAST, { version: o.bis, zeit: Date.now(), fenster: true }); }
     const m = new Modal(app);
-    zustand.fenster = m;
+    const comp = obs.Component ? new obs.Component() : null;
+    if (comp) comp.load();
     m.modalEl.addClass("eba-modal", "eba-modal-update");
     const c = m.contentEl;
-    const text = (t, cls) => c.createEl("p", { cls: cls || "eba-modal-text", text: t });
-    if (!b.ok) {
-      m.titleEl.setText("Nicht aktualisiert");
-      text(FEHLERTEXT[b.art] || FEHLERTEXT.netz);
-      if (b.fehler) text(b.fehler, "eba-modal-hinweis");
-    } else {
-      m.titleEl.setText(`Fertig: Version ${b.version}`);
-      const n = b.geaendert.length + b.angelegt.length + b.gemischt.length + b.haken.length + b.einstellungen.length;
-      text(n ? `${n} ${n === 1 ? "Datei" : "Dateien"} aktualisiert. Deine Einträge sind geblieben.` : "Alles war schon aktuell.", "eba-modal-erfolg");
-      if (b.neuKopien.length) {
-        text("Diese Seiten hattest du geändert. Deine Fassung bleibt, die neue liegt daneben („neu " + b.version + "“):");
-        const ul = c.createEl("ul", { cls: "eba-modal-schritte" });
-        for (const x of b.neuKopien) ul.createEl("li", { text: name(x.pfad) });
-      }
-      if (b.gesichert && b.gesichert.length) text(`Darstellung oder Programmteile hattest du selbst geändert (${b.gesichert.map((x) => x.pfad.split("/").pop()).join(", ")}). Jetzt gilt die neue Version, deine Fassung liegt als Sicherung daneben („deine Fassung vor ${b.version}“).`);
-      if (b.behalten.length) text("Diese Seiten gibt es in der neuen Version nicht mehr. Du hattest sie geändert, darum bleiben sie: " + b.behalten.map(name).join(", ") + ".");
-      if (b.plugin && !b.neuGeladen) text("Bitte Obsidian einmal schließen und wieder öffnen.");
-      else if (b.einstellungen.length) text("Einstellungen wurden ergänzt. Sie wirken nach dem nächsten Öffnen von Obsidian.");
-      text("Auf deinen anderen Geräten kommt das Update von selbst. " + (b.plugin ? "Dort einmal auf „Neu laden“ oben auf dem Dashboard tippen." : "Dort musst du nichts tun."), "eba-modal-hinweis");
-      if (b.sicherung) text(`Die Sicherung liegt im versteckten Ordner „${b.sicherung}“ in deinem Tresor. Am PC oder Mac kannst du ihn öffnen.`, "eba-modal-hinweis");
-    }
-    // Reihenfolge wie im Fenster vor dem Update: Hauptknopf zuletzt (PC/iPad rechts, iPhone oben)
+    const satz = c.createEl("p", { cls: "eba-modal-text eba-up-satz" });
+    const wichtig = c.createDiv({ cls: "eba-up-wichtig" });
+    const liste = c.createDiv({ cls: "eba-neu-liste" });
+    const fuss = c.createDiv({ cls: "eba-up-fuss" });
     const k = c.createDiv({ cls: "modal-button-container" });
-    if (b.ok && b.vorher) k.createEl("button", { text: "Was ist neu" }).addEventListener("click", () => { m.close(); neuigkeitenZeigen({ von: b.vorher, bis: b.version }); });
-    k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
-    m.onClose = () => { c.empty(); if (zustand.fenster === m) zustand.fenster = null; };
+    let antworten = null;
+    const g = { m, version: o.bis, stufe: "", offen: true, wartet: false, antwort: new Promise((r) => { antworten = r; }) };
+    const antwort = (ja) => { const r = antworten; antworten = null; if (r) r(ja); };
+    const stufe = (s, titel, text) => {
+      g.stufe = s;
+      m.modalEl.setAttr("data-stufe", s);
+      m.titleEl.setText(titel);
+      satz.setText(text);
+      wichtig.empty(); fuss.empty(); k.empty();
+    };
+    // Reihenfolge wie in allen Fenstern: Hauptknopf zuletzt (PC/iPad rechts, iPhone oben; Abschnitt 43)
+    const knopf = (text, tun, cta) => { k.createEl("button", cta ? { text, cls: "mod-cta" } : { text }).addEventListener("click", tun); };
+    const zeile = (el, z) => { const r = el.createDiv({ cls: "eba-up-zeile" }); r.createEl("b", { text: z.titel }); r.createSpan({ text: z.text }); };
+    const angebotZeigen = () => {
+      stufe("angebot", `Neue ${istBeta(o.bis) ? "Beta-Version" : "Version"} ${o.bis}`, `Du hast Version ${o.von}.`);
+      fuss.createEl("p", { cls: "eba-up-sicher", text: "Deine Noten, Termine und Notizen bleiben. Vorher wird eine Sicherung angelegt." });
+      knopf("Später", () => m.close());
+      knopf("Neue Version installieren", () => {
+        if (g.wartet) { antwort(true); return; } // aktualisieren() hat gefragt und wartet
+        aktualisieren(g).catch((e) => console.error("update", e));
+      }, true);
+    };
+    g.laeuft = (text, anteil) => {
+      if (g.stufe !== "laeuft") {
+        stufe("laeuft", `Version ${o.bis} wird installiert`, "Lass Obsidian offen, bis es fertig ist.");
+        g.balken = fuss.createDiv({ cls: "eba-up-balken", attr: { role: "progressbar", "aria-label": "Fortschritt", "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuenow": "0" } });
+        g.fuellung = g.balken.createDiv({ cls: "eba-up-fuellung" });
+        g.schritt = fuss.createEl("p", { cls: "eba-up-schritt", attr: { "aria-live": "polite" } });
+      }
+      if (text) g.schritt.setText(text);
+      if (typeof anteil === "number") {
+        const p = Math.round(Math.max(0, Math.min(1, anteil)) * 100);
+        g.fuellung.style.width = p + "%";
+        g.balken.setAttr("aria-valuenow", String(p));
+      }
+    };
+    g.fertig = (b) => {
+      stufe(b.ok ? "fertig" : "fehler", b.ok ? `Version ${b.version} ist installiert` : "Nicht installiert", ergebnisSatz(b));
+      if (!b.ok && b.fehler) fuss.createEl("p", { cls: "eba-up-grund", text: b.fehler });
+      for (const z of ergebnisZeilen(b)) zeile(z.wichtig ? wichtig : fuss, z);
+      knopf("Fertig", () => m.close(), true);
+    };
+    m.onClose = () => { g.offen = false; if (comp) comp.unload(); c.empty(); if (zustand.fenster === g) zustand.fenster = null; antwort(false); };
+    zustand.fenster = g;
+    if (o.stufe === "laeuft") g.laeuft("Prüfe die neue Version …", 0);
+    else if (o.stufe === "neu") { stufe("neu", "Was ist neu", `Du hast jetzt Version ${o.bis}.`); knopf("Fertig", () => m.close(), true); }
+    else angebotZeigen();
     m.open();
+    if (o.ohneListe) return g;
+    liste.createEl("p", { cls: "eba-modal-text", text: "Lädt …" });
+    g.geladen = abschnitteZeichnen(liste, o, comp).catch((e) => { console.error("update: Was ist neu", e); return 0; });
+    return g;
+  };
+  // Ergebnis im offenen Fenster; hast du es während des Updates geschlossen (oder gab es keins), kommt es dafür wieder
+  const ergebnisZeigen = (b, g) => {
+    if (g && g.offen) { g.fertig(b); return g; }
+    const f = fensterZeigen({ stufe: "neu", von: b.vorher || "", bis: b.version || "", ohneListe: !b.ok });
+    if (f) f.fertig(b);
+    return f;
   };
 
   // ---------- Plugin neu laden (neuer Kern) ----------
@@ -1017,60 +1056,79 @@ module.exports = function (ctx) {
 
   // ---------- Ablauf nach dem Tipp auf „Neue Version installieren“ bzw. „Update fertigstellen“ ----------
   // Installiert gerade ein anderes Gerät (lage „anderes“), nur der Satz. Fertigstellen derselben Version fragt nicht noch einmal
-  // (du hattest schon bestätigt); ein zweiter Lauf lädt und schreibt nur, was noch fehlt.
-  const aktualisieren = async () => {
+  // (du hattest schon bestätigt); ein zweiter Lauf lädt und schreibt nur, was noch fehlt. g: das Fenster, in dem du gerade
+  // **Neue Version installieren** getippt hast (keine zweite Frage, es zeigt gleich „Prüfe …“); sonst fragt ein neues Fenster.
+  // Fortschritt und Ergebnis stehen im Fenster, nie in einem Hinweis.
+  const fragen = async (rel, inst) => {
+    const p = plugin();
+    if (typeof p.testUpdateAntwort === "boolean") return { ja: p.testUpdateAntwort, g: null };
+    const g = fensterZeigen({ stufe: "angebot", von: inst, bis: rel.version, angebot: rel });
+    if (!g) return { ja: false, g: null };
+    g.wartet = true;
+    return { ja: await g.antwort, g };
+  };
+  const aktualisieren = async (g) => {
     if (zustand.laeuft) return null;
-    if (!ctx.zentral || !ctx.zentral.manifestHolen) { ctx.hinweis("Das geht gerade nicht. Bitte später noch einmal versuchen."); return null; }
+    toastWeg();
+    sitzungMerken(true); // du kümmerst dich gerade um das Update: in diesem App-Start kein Hinweis mehr dazu
+    const zu = () => { if (g && g.offen) g.m.close(); };
+    if (!ctx.zentral || !ctx.zentral.manifestHolen) { zu(); ctx.hinweis("Das geht gerade nicht. Bitte später noch einmal versuchen."); return null; }
+    if (g && g.offen) g.laeuft("Prüfe die neue Version …", 0);
     await markeNeu();
     const l = lage();
-    if (l === "anderes") { ctx.hinweis(ANDERES + " Öffne Obsidian dort, dann kommt es hierher."); return null; }
+    if (l === "anderes") { zu(); ctx.hinweis(ANDERES + " Öffne Obsidian dort, dann kommt es hierher."); return null; }
     let rel;
     const inst = installiertVersion();
     try { const m = await ctx.zentral.manifestHolen(); rel = angebot(m.release, m.beta, kanal(), inst); } catch (e) {
       const b = { ok: false, art: "netz", fehler: (e && e.message) || String(e) };
-      zustand.bericht = b; ergebnisZeigen(b); return b;
+      zustand.bericht = b; ergebnisZeigen(b, g); return b;
     }
     neuZeichnen();
-    if (!rel) { ctx.hinweis(`Du hast schon die neueste Version (${inst}).`); return null; }
+    if (!rel) { zu(); ctx.hinweis(`Du hast schon die neueste Version (${inst}).`); return null; }
+    // Bietet das Manifest inzwischen eine andere Version an als das Fenster, fragt ein neues
+    if (g && g.version !== rel.version) { zu(); g = null; }
     const fertig = l === "fertigstellen" && zustand.marke && rel.version === zustand.marke.version;
-    if (!fertig && !(await fragen(rel))) return null;
+    if (!g && !fertig) {
+      const a = await fragen(rel, inst);
+      if (!a.ja) return null;
+      g = a.g;
+    }
+    if (!g || !g.offen) g = fensterZeigen({ stufe: "laeuft", von: inst, bis: rel.version }); // Fertigstellen (ohne Frage), Tests
     const ich = geraetId();
     const p = plugin();
     if (p.testUpdateBasis) rel = Object.assign({}, rel, { url_basis: String(p.testUpdateBasis) });
     zustand.laeuft = true;
     neuZeichnen();
-    const fortschritt = ctx.hinweis("Lade die neue Version …", { dauer: 0 });
+    const melden = (t, anteil) => { try { if (g && g.offen) g.laeuft(t, anteil); } catch (e) { /* egal */ } };
     let b;
     try {
       p.stillBis = Date.now() + 120000; // Kern: keine „Aktualisiert: …“-Hinweise beim Hot-Reload der Skripte
       const alt = (await listeLesen(INSTALLIERT)) || (await listeLesen(LISTE));
       b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(),
-        marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null,
-        fortschritt: (t) => { try { if (fortschritt) fortschritt.setMessage(t); } catch (e) { /* egal */ } } });
+        marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null, fortschritt: melden });
       if (b.ok) {
         zustand.installiert = rel.version;
         b.vorher = inst;
-        lokal(L_GESEHEN, rel.version); // dieses Gerät sieht das Ergebnisfenster, also kein „Aktualisiert auf …“ danach
-        if (b.plugin) b.neuGeladen = await pluginNeuLaden();
+        lokal(L_GESEHEN, rel.version); // dieses Gerät sieht das Ergebnis im Fenster, also kein „Aktualisiert auf …“ danach
+        if (b.plugin) { melden("", 1); b.neuGeladen = await pluginNeuLaden(); }
       }
     } catch (e) {
       console.error("update", e);
       b = { ok: false, art: "schreiben", fehler: (e && e.message) || String(e) };
     } finally {
-      try { if (fortschritt) fortschritt.hide(); } catch (e) { /* egal */ }
       zustand.laeuft = false;
       p.stillBis = Date.now() + 5000;
     }
     zustand.bericht = b;
     // Nach dem Neuladen gehört die Anzeige der neuen Plugin-Instanz (die alte darf nichts mehr zeichnen)
     if (!b.neuGeladen) { await markeNeu(); neuZeichnen(); }
-    ergebnisZeigen(b);
+    ergebnisZeigen(b, g);
     return b;
   };
 
   // ---------- Nach Updates suchen (Knopf in der Zeile „Studium Autopilot“ und Befehl, seit 0.4.8) ----------
   // Holt das Manifest sofort, ohne die Wartezeit der automatischen Prüfung (zählt als Prüfung: eba-update-geprueft), und sagt das
-  // Ergebnis in einem Hinweis: das Angebot mit „Neue Version installieren“ und „Was ist neu“, sonst „Du hast die neueste
+  // Ergebnis: das Angebot im Fenster „Neue Version“ (seit 0.5.4), sonst ein Hinweis: „Du hast die neueste
   // Version.“ → "angebot" | "aktuell" | "laden" | "link" | "fertigstellen" | "anderes" | "fehler" | null (läuft gerade)
   const suchen = async () => {
     if (zustand.laeuft) return null;
@@ -1089,9 +1147,8 @@ module.exports = function (ctx) {
     if (neuer(inst, lauf)) { ctx.hinweis(`Version ${inst} ist da. Einmal neu laden.`, { aktion: { text: "Neu laden", aktion: "vorlage-neu-laden" } }); return "laden"; }
     const a = angebot(s.release, s.beta, kanal(), inst);
     if (a) {
-      sitzungMerken(true);
-      lokal(L_TOAST, { version: a.version, zeit: Date.now() });
-      toastZeigen({ text: `Neue ${istBeta(a.version) ? "Beta-Version" : "Version"} ${a.version} ist da.`, angebot: a, von: inst, bis: a.version });
+      // Du hast gefragt: gleich das Fenster mit den Änderungen und **Neue Version installieren** (seit 0.5.4, vorher ein Hinweis)
+      fensterZeigen({ stufe: "angebot", von: inst, bis: a.version, angebot: a });
       return "angebot";
     }
     if (s.aktuell && neuer(s.aktuell, inst)) {
@@ -1157,7 +1214,9 @@ module.exports = function (ctx) {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/!\[/g, "\\![").replace(/\[\[/g, "\\[\\[").replace(/\]\]/g, "\\]\\]").replace(/%%/g, "\\%\\%");
   // Hinweis für diese Version zeigen? merk = { version, zeit } vom letzten Hinweis auf diesem Gerät
-  const toastFaellig = (merk, version, jetzt) => !merk || merk.version !== version || !(jetzt - Number(merk.zeit) < TOAST_ABSTAND);
+  // Hast du das Fenster zu dieser Version gesehen (merk.fenster, seit 0.5.4), kommt für sie kein Hinweis mehr, auch wenn du es
+  // nur geschlossen hast: Du weißt Bescheid, und die Zeilen auf dem Dashboard und unter Verbindungen bieten sie weiter an.
+  const toastFaellig = (merk, version, jetzt) => !merk || merk.version !== version || (!merk.fenster && !(jetzt - Number(merk.zeit) < TOAST_ABSTAND));
   // Nach einem Update. gesehen = zuletzt auf diesem Gerät gelaufene Version. → { von, bis } (einmal „Aktualisiert auf bis“),
   // "merken" (erster Lauf auf diesem Gerät oder ältere Version: still merken) oder null (nichts zu tun; auch solange
   // „Neu laden“ aussteht, weil installiert.json schon eine neuere Version zeigt als der laufende Kern)
@@ -1170,8 +1229,8 @@ module.exports = function (ctx) {
   // Manifest frisch holen? geprueftIso = letzter voller Abruf (zentral.js), eigeneMs = letzte eigene Prüfung
   const pruefungFaellig = (geprueftIso, eigeneMs, jetzt) => !(jetzt - Math.max(Date.parse(geprueftIso || "") || 0, Number(eigeneMs) || 0) < PRUEFEN_NACH);
 
-  // Zustand (überlebt den Hot-Reload): Start des Fensters, Zeit des Verbergens, offenes Fenster, geladene Changelogs je Version
-  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, fenster: null, changelog: {} }));
+  // Zustand (überlebt den Hot-Reload): Start des Fensters, Zeit des Verbergens, der Hinweis zum Update, Changelogs je Version
+  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, toast: null, changelog: {} }));
   const lokal = (k, v) => {
     if (v === undefined) { try { return app.loadLocalStorage(k); } catch (e) { return null; } }
     try { app.saveLocalStorage(k, v); } catch (e) { /* egal */ }
@@ -1220,7 +1279,7 @@ module.exports = function (ctx) {
   };
   // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | "verdeckt" | null
   const toastPruefen = () => {
-    if (typeof ctx.hinweis !== "function" || sitzungGezeigt() || zustand.laeuft || zustand.fenster || neuigkeit.fenster || einrichtungOffen()) return null;
+    if (typeof ctx.hinweis !== "function" || sitzungGezeigt() || zustand.laeuft || zustand.fenster || einrichtungOffen()) return null;
     if (!(app.metadataCache.initialized || app.metadataCache.resolved)) return null; // Kanal und Einrichtung stehen im Frontmatter
     const inst = installiertVersion(), lauf = laufendeVersion(), s = stand();
     const n = nachUpdate(lokal(L_GESEHEN), lauf, inst);
@@ -1240,14 +1299,24 @@ module.exports = function (ctx) {
     }
     return e;
   };
-  // Hinweis mit Knöpfen (ctx.hinweis, Gestalt CSS Abschnitt „Neuigkeiten“, ≥ 44 px). Antippen irgendwo blendet ihn aus.
+  // Hinweis mit Knopf (ctx.hinweis, Gestalt CSS Abschnitt 51, ≥ 44 px). Antippen irgendwo blendet ihn aus. Es gibt
+  // immer nur EINEN: ein neuer ersetzt den alten, und er geht weg, sobald das Fenster „Neue Version“ aufgeht, ein Update beginnt
+  // oder die App in den Hintergrund geht (iOS hält dort seine Zeit an; er stünde sonst Stunden später noch da). Beim Angebot
+  // öffnet **Neue Version installieren** das Fenster mit den Änderungen; „Aktualisiert auf …“ hat **Was ist neu**.
+  const toastWeg = () => {
+    const t = neuigkeit.toast;
+    neuigkeit.toast = null;
+    try { if (t) t.hide(); } catch (e) { /* schon weg */ }
+  };
   const toastZeigen = (t) => {
-    const was = { text: "Was ist neu", ausfuehren: () => { neuigkeitenZeigen({ von: t.von, bis: t.bis, angebot: t.angebot }); } };
-    const knoepfe = t.angebot ? [{ text: "Neue Version installieren", ausfuehren: () => aktualisieren() }, was] : [was];
-    return ctx.hinweis(t.text, { aktion: knoepfe, dauer: t.angebot ? 30000 : 15000 });
+    toastWeg();
+    const knopf = t.angebot ? { text: "Neue Version installieren", ausfuehren: () => aktualisieren() }
+      : { text: "Was ist neu", ausfuehren: () => { neuigkeitenZeigen({ von: t.von, bis: t.bis }); } };
+    neuigkeit.toast = ctx.hinweis(t.text, { aktion: knopf, dauer: t.angebot ? 30000 : 15000 });
+    return neuigkeit.toast;
   };
 
-  // ---------- Fenster „Was ist neu“ ----------
+  // ---------- Änderungen aus CHANGELOG.md (Liste im Fenster „Neue Version“) ----------
   // CHANGELOG.md am Tag v<version> (gleiche Adresse wie die Dateien des Updates, siehe releasePruefen in zentral.js)
   const changelogUrl = (version) => {
     const p = plugin();
@@ -1295,36 +1364,8 @@ module.exports = function (ctx) {
     }
     return liste.length;
   };
-  // o = { von, bis, angebot, antwort } – angebot (aus dem Manifest) → Knöpfe „Später“ und „Neue Version installieren“, sonst „Fertig“.
-  // antwort(ja): aus dem Fenster vor dem Update geöffnet; „Neue Version installieren“ → antwort(true), sonst beim Schließen antwort(false)
-  const neuigkeitenZeigen = (o) => {
-    if (!Modal) { if (o.antwort) o.antwort(false); return null; }
-    if (neuigkeit.fenster) neuigkeit.fenster.close();
-    let geantwortet = false;
-    const antworten = (ja) => { if (o.antwort && !geantwortet) { geantwortet = true; o.antwort(ja); } };
-    const m = new Modal(app);
-    neuigkeit.fenster = m;
-    const comp = obs.Component ? new obs.Component() : null;
-    if (comp) comp.load();
-    m.modalEl.addClass("eba-modal", "eba-modal-neu");
-    m.titleEl.setText("Was ist neu");
-    const c = m.contentEl;
-    c.createEl("p", { cls: "eba-modal-text", text: o.angebot ? `Version ${o.bis} ist da. Du hast Version ${o.von}.` : `Du hast jetzt Version ${o.bis}.` });
-    const liste = c.createDiv({ cls: "eba-neu-liste" });
-    liste.createEl("p", { cls: "eba-modal-text", text: "Lädt …" });
-    const k = c.createDiv({ cls: "modal-button-container" });
-    if (o.angebot) {
-      k.createEl("button", { text: "Später" }).addEventListener("click", () => m.close());
-      k.createEl("button", { text: "Neue Version installieren", cls: "mod-cta" }).addEventListener("click", () => {
-        if (o.antwort) { antworten(true); m.close(); return; }
-        m.close(); aktualisieren().catch((e) => console.error("update", e));
-      });
-    } else k.createEl("button", { text: "Fertig", cls: "mod-cta" }).addEventListener("click", () => m.close());
-    m.onClose = () => { if (comp) comp.unload(); c.empty(); if (neuigkeit.fenster === m) neuigkeit.fenster = null; antworten(false); };
-    m.open();
-    m.geladen = abschnitteZeichnen(liste, o, comp).catch((e) => { console.error("update: Was ist neu", e); return 0; });
-    return m;
-  };
+  // „Was ist neu“ (Hinweis „Aktualisiert auf …“, Tests): das Fenster „Neue Version“, mit angebot als Angebot, sonst nur die Liste
+  const neuigkeitenZeigen = (o) => fensterZeigen({ stufe: o.angebot ? "angebot" : "neu", von: o.von, bis: o.bis, angebot: o.angebot || null });
 
   ctx.update = {
     // reine Logik (Node-Tests)
@@ -1335,10 +1376,10 @@ module.exports = function (ctx) {
     io, anzeige, status, aktualisieren, suchen, markeNeu, installiertAnlegen, heilen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
-    frischPruefen, toastPruefen, neuigkeitenZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
+    ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
     get letzterBericht() { return zustand.bericht; },
-    get fenster() { return zustand.fenster; },
-    get neuigkeiten() { return neuigkeit.fenster; },
+    get fenster() { return zustand.fenster; }, // Griff des Fensters „Neue Version“ (m = Obsidians Modal) oder null
+    get toast() { return neuigkeit.toast; },
   };
 
   const registrieren = () => {
@@ -1378,7 +1419,7 @@ module.exports = function (ctx) {
     const nachWechsel = ctx.entprellen(() => { if (neuigkeit.verdeckt) { try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); } } }, 800);
     for (const ev of ["active-leaf-change", "file-open"]) ctx.an(app.workspace, ev, () => { if (neuigkeit.verdeckt) nachWechsel(); });
     ctx.dom(document, "visibilitychange", () => {
-      if (document.visibilityState === "hidden") { neuigkeit.versteckt = Date.now(); return; }
+      if (document.visibilityState === "hidden") { neuigkeit.versteckt = Date.now(); toastWeg(); return; }
       if (document.visibilityState !== "visible" || !neuigkeit.versteckt) return;
       if (Date.now() - neuigkeit.versteckt >= PAUSE_NEUSTART) sitzungMerken(false);
       neuigkeit.versteckt = 0;
