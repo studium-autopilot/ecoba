@@ -55,9 +55,9 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 "begleitnotizen": [
   {
     "datei": "Unterlagen/B110 Einführung in die BWL/B110 Folien 02 Kosten.pdf",
-    "wichtigste": [{ "text": "Deckungsbeitrag: Erlös minus variable Kosten.", "seite": 7 }],
-    "zu_tun": [{ "text": "Aufgabe 2.3 vorbereiten", "frist": "2026-10-29" }],
-    "fragen": [{ "text": "Warum zählen fixe Kosten kurzfristig nicht?" }]
+    "wichtigste": [{ "begriff": "Deckungsbeitrag", "text": "Erlös minus variable Kosten.", "seite": 7, "bis": 8 }],
+    "zu_tun": [{ "text": "Aufgabe 2.3 vorbereiten", "frist": "2026-10-29", "seite": 12 }],
+    "fragen": [{ "text": "Warum zählen fixe Kosten kurzfristig nicht?", "seite": 9 }]
   }
 ]
 ```
@@ -65,9 +65,10 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 | Feld | Regel |
 |---|---|
 | `datei` | genau der Pfad aus der Zeile `Datei:` der Textfassung |
-| `wichtigste[]` | höchstens 12, `text` höchstens 300 Zeichen, `seite` als Zahl |
+| `wichtigste[]` | höchstens 12, `text` höchstens 300 Zeichen, `begriff` höchstens 60 (fett davor) oder weglassen |
 | `zu_tun[]` | höchstens 12, `text` höchstens 200 Zeichen, `frist` `JJJJ-MM-TT` oder weglassen |
 | `fragen[]` | höchstens 10, `text` höchstens 200 Zeichen |
+| `seite`, `bis` | in allen drei Listen: erste und letzte Seite als Zahl; `bis` nur bei mehreren Seiten, sonst weglassen |
 
 Der Server prüft jede Zeile. Was die Regeln verletzt, fällt einzeln weg; die id jedes Termins bildet der Server aus dem
 `schluessel`. Gibt es nichts Neues, schreibe `{ "quellen": [...], "termine": [], "hinweise": [] }`.

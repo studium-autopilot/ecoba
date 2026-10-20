@@ -2,6 +2,13 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.6 – Kürzere Zusammenfassungen
+
+- **Übersichtlicher:** **Zusammenfassen** schreibt jetzt 3 bis 5 Punkte statt bis zu 10, jeder mit fettem Stichwort und den
+  Seiten, auf denen es steht. Auch bei „Zu tun“ und „Offene Fragen“ führt ein Link zur passenden Seite.
+- **Übersichtlicher:** Steht eine Aufgabe aus den Folien schon in deinen To-dos, kommt sie nicht noch einmal dazu. Unter
+  „Offene Fragen“ steht nur noch, was die Unterlage wirklich offen lässt.
+
 ## 0.5.5 – Claude-Anmeldung auf dem Server
 
 - **Behoben:** Beim Einrichten des eigenen Servers brach Claude die Anmeldung manchmal mit einem Fehler ab, obwohl

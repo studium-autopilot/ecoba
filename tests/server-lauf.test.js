@@ -330,5 +330,5 @@ test("Skill: Beispiel aus ausgabe.md besteht die Prüfung, Kategorien gleich wie
   const b = eingangNormal(Object.assign({ termine: [], hinweise: [] }, teil), { jetzt: JETZT });
   assert.deepEqual(b.verworfen, []);
   assert.equal(b.eingang.begleitnotizen.length, 1);
-  assert.deepEqual(b.eingang.begleitnotizen[0].wichtigste[0], { text: "Deckungsbeitrag: Erlös minus variable Kosten.", seite: 7 });
+  assert.deepEqual(b.eingang.begleitnotizen[0].wichtigste[0], { begriff: "Deckungsbeitrag", text: "Erlös minus variable Kosten.", seite: 7, bis: 8 });
 });

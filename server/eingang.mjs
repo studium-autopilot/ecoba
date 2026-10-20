@@ -13,7 +13,7 @@ export const QUELLEN = ["gmail", "uni-postfach"];
 const STATUS = ["offiziell", "geschätzt"];
 export const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/;
 const GEFAEHRLICH = /<\s*\/?\s*[a-z!]|<%|%>|obsidian:\/\/|\[\[|\]\]|`|[\r\n]|javascript:/i;
-const G = { titel: 120, ort: 120, info: 200, quelleText: 200, schluessel: 200, hinweis: 300, punkt: 300, aufgabe: 200, frage: 200,
+const G = { titel: 120, ort: 120, info: 200, quelleText: 200, schluessel: 200, hinweis: 300, punkt: 300, begriff: 60, aufgabe: 200, frage: 200,
   termine: 300, hinweise: 50, begleitnotizen: 50, punkte: 12, aufgaben: 12, fragen: 10, pfad: 240, todoDoppel: 50 };
 // Kennung eines To-dos im Auszug aus dem Tresor (tresor.json, vom Plugin: „t-“ und eine Kurz-Prüfsumme aus Notiz und Zeile)
 export const TODO_ID = /^t-[0-9a-z]{1,13}$/;
@@ -79,14 +79,20 @@ export function terminNormal(e, heute) {
   return { wert };
 }
 
-function listeText(liste, max, anzahl, art, verworfen) {
+// felder: was außer text und Seiten (seite, bis) erlaubt ist, „frist“ und/oder „begriff“
+function listeText(liste, max, anzahl, art, verworfen, felder = []) {
   const aus = [];
   for (const roh of Array.isArray(liste) ? liste.slice(0, anzahl) : []) {
     const r = saeubern(istObjekt(roh) ? roh.text : roh, max, true);
     if (r.fehler) { verworfen.push({ art, grund: r.fehler }); continue; }
     const eintrag = { text: r.wert };
     if (istObjekt(roh) && Number.isInteger(roh.seite) && roh.seite > 0 && roh.seite < 10000) eintrag.seite = roh.seite;
-    if (istObjekt(roh) && datumOk(roh.frist)) eintrag.frist = roh.frist;
+    if (eintrag.seite && Number.isInteger(roh.bis) && roh.bis > eintrag.seite && roh.bis < 10000) eintrag.bis = roh.bis;
+    if (felder.includes("frist") && istObjekt(roh) && datumOk(roh.frist)) eintrag.frist = roh.frist;
+    if (felder.includes("begriff") && istObjekt(roh) && typeof roh.begriff === "string") {
+      const b = saeubern(roh.begriff.replace(/\*/g, " ").replace(/:\s*$/, ""), G.begriff, false);
+      if (b.wert) eintrag.begriff = b.wert;
+    }
     aus.push(eintrag);
   }
   return aus;
@@ -100,9 +106,9 @@ function begleitnotizNormal(b, verworfen) {
     /[\u0000-\u001f<>:"|?*]/.test(datei)) return { fehler: "datei unzulässig" };
   const wert = {
     datei,
-    wichtigste: listeText(b.wichtigste, G.punkt, G.punkte, "begleitnotiz", verworfen),
-    zu_tun: listeText(b.zu_tun, G.aufgabe, G.aufgaben, "begleitnotiz", verworfen).map(({ text, frist }) => (frist ? { text, frist } : { text })),
-    fragen: listeText(b.fragen, G.frage, G.fragen, "begleitnotiz", verworfen).map(({ text }) => ({ text })),
+    wichtigste: listeText(b.wichtigste, G.punkt, G.punkte, "begleitnotiz", verworfen, ["begriff"]),
+    zu_tun: listeText(b.zu_tun, G.aufgabe, G.aufgaben, "begleitnotiz", verworfen, ["frist"]),
+    fragen: listeText(b.fragen, G.frage, G.fragen, "begleitnotiz", verworfen),
   };
   if (!wert.wichtigste.length && !wert.zu_tun.length && !wert.fragen.length) return { fehler: "leer" };
   return { wert };

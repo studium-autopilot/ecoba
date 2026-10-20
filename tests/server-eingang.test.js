@@ -58,15 +58,18 @@ test("Begleitnotizen und Hinweise: nur Pfade unter Unterlagen/, Listen begrenzt,
   const { eingangNormal } = await laden();
   const { eingang, verworfen } = eingangNormal({
     begleitnotizen: [
-      { datei: "Unterlagen/B110/Vorlesung/B110 Folien 02.pdf", wichtigste: [{ text: "Begriff: Ziel", seite: 5 }, "Zweiter Punkt"],
-        zu_tun: [{ text: "Blatt 2 lösen", frist: "2026-10-30" }], fragen: ["Was ist X?"] },
+      { datei: "Unterlagen/B110/Vorlesung/B110 Folien 02.pdf", wichtigste: [{ text: "Begriff: Ziel", seite: 5 }, "Zweiter Punkt",
+        { begriff: "**Organisation:**", text: "90 Minuten", seite: 3, bis: 4, frist: "2026-10-30" }, { text: "Bereich verkehrt", seite: 6, bis: 2 }],
+        zu_tun: [{ text: "Blatt 2 lösen", frist: "2026-10-30", seite: 9, begriff: "x" }], fragen: ["Was ist X?", { text: "Warum?", seite: 2, frist: "2026-10-30" }] },
       { datei: "../System/Einstellungen.md", wichtigste: ["x"] }, { datei: "Unterlagen/a.pdf" }, { datei: "Notizen/a.pdf", fragen: ["y"] },
     ],
     hinweise: [{ text: "Raumänderung prüfen", quelle: "Mail, 17.10.2026" }, "nur Text", { text: "" }],
   }, { jetzt: JETZT });
   assert.equal(eingang.begleitnotizen.length, 1);
-  assert.deepEqual(eingang.begleitnotizen[0].wichtigste, [{ text: "Begriff: Ziel", seite: 5 }, { text: "Zweiter Punkt" }]);
-  assert.deepEqual(eingang.begleitnotizen[0].zu_tun, [{ text: "Blatt 2 lösen", frist: "2026-10-30" }]);
+  assert.deepEqual(eingang.begleitnotizen[0].wichtigste, [{ text: "Begriff: Ziel", seite: 5 }, { text: "Zweiter Punkt" },
+    { text: "90 Minuten", seite: 3, bis: 4, begriff: "Organisation" }, { text: "Bereich verkehrt", seite: 6 }]);
+  assert.deepEqual(eingang.begleitnotizen[0].zu_tun, [{ text: "Blatt 2 lösen", seite: 9, frist: "2026-10-30" }]);
+  assert.deepEqual(eingang.begleitnotizen[0].fragen, [{ text: "Was ist X?" }, { text: "Warum?", seite: 2 }]);
   assert.deepEqual(eingang.hinweise, [{ text: "Raumänderung prüfen", quelle: "Mail, 17.10.2026" }, { text: "nur Text" }]);
   assert.deepEqual(verworfen.map((v) => `${v.art}:${v.grund}`).sort(),
     ["begleitnotiz:datei unzulässig", "begleitnotiz:datei unzulässig", "begleitnotiz:leer", "hinweis:fehlt"]);

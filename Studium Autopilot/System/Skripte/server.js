@@ -142,7 +142,8 @@ module.exports = function (ctx) {
     return aus.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   };
   // Notiz neben der PDF ergänzen (Regeln wie unterlagen.js: Abschnitte über dem PDF-Kasten, nie leere Abschnitte oder Punkte).
-  // bn = { wichtigste: [{ text, seite }], zu_tun: [{ text, frist }], fragen: [{ text }] }, pdfName = Dateiname der PDF
+  // bn = { wichtigste: [{ begriff, text, seite, bis }], zu_tun: [{ text, frist, seite, bis }], fragen: [{ text, seite, bis }] },
+  // pdfName = Dateiname der PDF
   // → neuer Text oder null, wenn sich nichts ändert
   const PLATZHALTER = /^\s*(?:[-*]\s*(?:\[ \]\s*)?)?$/;
   const begleitnotizErgaenzen = (text, bn, pdfName) => {
@@ -185,9 +186,10 @@ module.exports = function (ctx) {
       geaendert = true;
     };
     const tt = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}.`;
-    const W = (bn.wichtigste || []).map((p) => `- ${p.text}${p.seite ? ` ([[${pdfName}#page=${p.seite}|S. ${p.seite}]])` : ""}`);
-    const T = (bn.zu_tun || []).map((p) => `- [ ] ${p.text}${p.frist ? ` (bis ${tt(p.frist)})` : ""}`);
-    const F = (bn.fragen || []).map((p) => `- [ ] ${p.text}`);
+    const seiten = (p) => (p.seite ? ` → [[${pdfName}#page=${p.seite}|S. ${p.seite}${p.bis ? "–" + p.bis : ""}]]` : "");
+    const W = (bn.wichtigste || []).map((p) => `- ${p.begriff ? `**${p.begriff}:** ` : ""}${p.text}${seiten(p)}`);
+    const T = (bn.zu_tun || []).map((p) => `- [ ] ${p.text}${p.frist ? ` (bis ${tt(p.frist)})` : ""}${seiten(p)}`);
+    const F = (bn.fragen || []).map((p) => `- [ ] ${p.text}${seiten(p)}`);
     const regeln = [["Das Wichtigste", W, [], ["Zu tun", "Offene Fragen"], "nur-leer"], ["Zu tun", T, ["Das Wichtigste"], ["Offene Fragen"], "ergaenzen"],
       ["Offene Fragen", F, ["Das Wichtigste", "Zu tun"], [], "ergaenzen"]];
     for (const [name, neu, nach, vor, art] of regeln) {
@@ -557,14 +559,21 @@ module.exports = function (ctx) {
         b.verworfen.push({ id: "begleitnotiz", grund: "datei unzulässig" });
         return false;
       }
-      const liste = (l, max, n) => (Array.isArray(l) ? l : []).slice(0, n).map((p) => {
+      // felder: was außer text und Seiten (seite, bis) erlaubt ist, „frist“ und/oder „begriff“
+      const liste = (l, max, n, felder = []) => (Array.isArray(l) ? l : []).slice(0, n).map((p) => {
         const text = punktText(p && typeof p === "object" ? p.text : p, max);
         const x = { text };
         if (p && Number.isInteger(p.seite) && p.seite > 0 && p.seite < 10000) x.seite = p.seite;
-        if (p && s10(p.frist) === p.frist) x.frist = p.frist;
+        if (x.seite && Number.isInteger(p.bis) && p.bis > x.seite && p.bis < 10000) x.bis = p.bis;
+        if (felder.includes("frist") && p && s10(p.frist) === p.frist) x.frist = p.frist;
+        if (felder.includes("begriff") && p && typeof p.begriff === "string") {
+          const b = punktText(p.begriff.replace(/\*/g, " ").replace(/:\s*$/, ""), 60);
+          if (b) x.begriff = b;
+        }
         return x;
       }).filter((p) => p.text);
-      const sauber = { wichtigste: liste(bn.wichtigste, 300, 12), zu_tun: liste(bn.zu_tun, 200, 12), fragen: liste(bn.fragen, 200, 10) };
+      const sauber = { wichtigste: liste(bn.wichtigste, 300, 12, ["begriff"]), zu_tun: liste(bn.zu_tun, 200, 12, ["frist"]),
+        fragen: liste(bn.fragen, 200, 10) };
       const h = Q.kurzHash(sauber);
       if (z.begleitet[pdf] === h) return false;
       const pfad = io.begleitnotiz ? io.begleitnotiz(pdf) : "";

@@ -1253,8 +1253,9 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   (`server/skill/studium-autopilot/begleitnotiz.md`), der nächste Abruf trägt sie mit `begleitnotizErgaenzen` in die Notiz neben
   der PDF ein (gleicher Name `.md`, sonst die Unterlage, deren `datei` auf die PDF zeigt): fehlende Abschnitte über dem
   PDF-Kasten in der Reihenfolge „Das Wichtigste“, „Zu tun“, „Offene Fragen“; Platzhalter älterer Notizen werden ersetzt;
-  „Das Wichtigste“ nur, wenn dort nichts steht, bei den anderen nur, was fehlt. Seiten als `[[X.pdf#page=N|S. N]]`, Fristen
-  „(bis TT.MM.)“. Dieselbe Lieferung nie zweimal (`server.json` `begleitet`: PDF-Pfad → `Q.kurzHash`); fehlt die Notiz, entsteht
+  „Das Wichtigste“ nur, wenn dort nichts steht, bei den anderen nur, was fehlt. Seiten in allen drei Abschnitten als
+  ` → [[X.pdf#page=N|S. N]]`, mit `bis` als „S. N–M“ (seit 0.5.6, vorher in Klammern), Fristen „(bis TT.MM.)“; `begriff` steht
+  fett vor dem Punkt („**Opportunitätskosten:** …“), wie in den Notizen des Uni-Abgleichs. Dieselbe Lieferung nie zweimal (`server.json` `begleitet`: PDF-Pfad → `Q.kurzHash`); fehlt die Notiz, entsteht
   keine.
 - **Doppelte To-dos:** Claude nennt Paare `todo_doppel: [{ behalten, weg }]` aus den Kennungen des Auszugs. `todoDoppelAnwenden`
   liest den Auszug frisch und ändert nur „weg“, wenn es eine offene Aufgabe unter „Zu tun“ einer Begleitnotiz ist und die Zeile

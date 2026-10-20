@@ -407,7 +407,7 @@ test("Begleitnotiz ergänzen: neue Notiz bekommt Abschnitte über dem PDF-Kasten
   const name = "B110 Folien 02 Kosten.pdf";
   const neu = S.begleitnotizErgaenzen(kopf + pdf, bn, name);
   assert.equal(neu, kopf +
-    "## Das Wichtigste\n- Deckungsbeitrag: Erlös minus variable Kosten. ([[B110 Folien 02 Kosten.pdf#page=7|S. 7]])\n- Fixkosten zählen kurzfristig nicht.\n\n" +
+    "## Das Wichtigste\n- Deckungsbeitrag: Erlös minus variable Kosten. → [[B110 Folien 02 Kosten.pdf#page=7|S. 7]]\n- Fixkosten zählen kurzfristig nicht.\n\n" +
     "## Zu tun\n- [ ] Aufgabe 2.3 vorbereiten (bis 29.10.)\n\n## Offene Fragen\n- [ ] Warum zählen fixe Kosten nicht?\n\n" + pdf);
   assert.equal(S.begleitnotizErgaenzen(neu, bn, name), null, "zweimal dasselbe: keine Änderung");
   // ältere Notiz mit leeren Platzhaltern
@@ -426,6 +426,16 @@ test("Begleitnotiz ergänzen: neue Notiz bekommt Abschnitte über dem PDF-Kasten
   assert.equal(S.begleitnotizErgaenzen(ohneW, bn, name), neu, "dieselbe Reihenfolge wie bei einer neuen Notiz");
   // ohne PDF-Kasten: ans Ende
   assert.match(S.begleitnotizErgaenzen(kopf, { wichtigste: [{ text: "A" }] }, name), /# B110 · Folien 02 · Kosten\n\n> \[!eba-regel\] Eckdaten\n> B110 · Folien\n\n## Das Wichtigste\n- A\n/);
+});
+
+test("Begleitnotiz ergänzen: Stichwort fett, Seitenbereich, Seiten auch bei „Zu tun“ und „Offene Fragen“", () => {
+  const name = "B110 Folien 01 Grundlagen.pdf";
+  const bn = { wichtigste: [{ begriff: "Opportunitätskosten", text: "Nutzen der nächstbesten Alternative.", seite: 32, bis: 33 }],
+    zu_tun: [{ text: "Kapitel 2 lesen", frist: "2026-10-26", seite: 42 }], fragen: [{ text: "Gilt das auch für Staaten?", seite: 12 }] };
+  assert.equal(S.begleitnotizErgaenzen("# Folien 01\n", bn, name), "# Folien 01\n\n" +
+    "## Das Wichtigste\n- **Opportunitätskosten:** Nutzen der nächstbesten Alternative. → [[B110 Folien 01 Grundlagen.pdf#page=32|S. 32–33]]\n\n" +
+    "## Zu tun\n- [ ] Kapitel 2 lesen (bis 26.10.) → [[B110 Folien 01 Grundlagen.pdf#page=42|S. 42]]\n\n" +
+    "## Offene Fragen\n- [ ] Gilt das auch für Staaten? → [[B110 Folien 01 Grundlagen.pdf#page=12|S. 12]]\n");
 });
 
 test("Textfassung → Text mit Seitenmarken für den Server", () => {
@@ -462,7 +472,7 @@ test("Begleitnotizen vom Server: Übernahme in die Notiz neben der PDF, gleiche 
     const b2 = await m.abrufen();
     assert.deepEqual(b2.begleitnotizen, [notiz]);
     const text = t.m.get(notiz);
-    assert.match(text, /## Das Wichtigste\n- Deckungsbeitrag: Erlös minus variable Kosten\. \(\[\[B110 Folien 02 Kosten\.pdf#page=7\|S\. 7\]\]\)\n\n## Offene Fragen\n- \[ \] Wozu fixe Kosten\?\n\n> \[!eba-pdf\]/);
+    assert.match(text, /## Das Wichtigste\n- Deckungsbeitrag: Erlös minus variable Kosten\. → \[\[B110 Folien 02 Kosten\.pdf#page=7\|S\. 7\]\]\n\n## Offene Fragen\n- \[ \] Wozu fixe Kosten\?\n\n> \[!eba-pdf\]/);
     assert.ok(!t.pfade("Unterlagen/").some((p) => p.includes("Gelöscht")), "fehlt die Notiz, entsteht keine");
     // dieselbe Lieferung noch einmal (z. B. nach einem Fehler auf dem Server): nichts doppelt
     srv.eingang({ begleitnotizen: [{ datei: pdf, wichtigste: [{ text: "Deckungsbeitrag: Erlös minus variable Kosten.", seite: 7 }], fragen: [{ text: "Wozu fixe Kosten?" }] }] });

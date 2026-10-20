@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "version": "0.5.5",
+ "version": "0.5.6",
  "ordner": "Studium Autopilot",
- "erstellt": "2026-10-20T20:58:27Z",
+ "erstellt": "2026-10-20T21:30:14Z",
  "dateien": [
   {"pfad": ".obsidian/app.json", "klasse": "einstellung", "groesse": 421, "sha256": "20924393fe3278ce1b209b52300419d4866aa6cec0617f6c36cfb2893e59ac82"},
   {"pfad": ".obsidian/bookmarks.json", "klasse": "einstellung", "groesse": 1403, "sha256": "090e4224fd0b7f4010915855eb348582ed6000f85e2a9a83134cdf7821ebb33d"},
@@ -10,7 +10,7 @@
   {"pfad": ".obsidian/core-plugins.json", "klasse": "einstellung", "groesse": 698, "sha256": "b06ab63f09578efd584bb3d57c57aca6b6052d6861284919ef2f53f579318a14"},
   {"pfad": ".obsidian/hotkeys.json", "klasse": "einstellung", "groesse": 110, "sha256": "33864b03da9bc6edf5a5f669961f2e041ee92b9d87213057ced8c479296aca69"},
   {"pfad": ".obsidian/plugins/studium-autopilot/main.js", "klasse": "system", "groesse": 36913, "sha256": "f0382994ba630644074ed1dad1ef0253f321cddc0a71a11447d1b949099f0ee9"},
-  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 312, "sha256": "0c7a0b456a52a0b9c2505a58b246475a720221c967208cd3e62863d8d8ceabc6"},
+  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 312, "sha256": "88715f52874512fe773eab8f364f869350b377eca4c401ea6a1637ce615609ce"},
   {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 453752, "sha256": "4ab2407145371aadc633a1b5045b1938e8863a0cb8cccbd9140ca3bb969d21eb"},
   {"pfad": ".obsidian/snippets/eba-flieder.css", "klasse": "system", "groesse": 3750, "sha256": "9717ebdcf13dff7da52b8ca33b5b19a1b2a8e2d8953a649e3ed0db45164cb6cb"},
   {"pfad": ".obsidian/snippets/eba-klar.css", "klasse": "system", "groesse": 2870, "sha256": "e2341ceb999a0e7ce128ce11efd6071b9e2408e3dc67f457183ca4f688f25b28"},
@@ -155,7 +155,7 @@
   {"pfad": "System/Skripte/quellen.js", "klasse": "system", "groesse": 20623, "sha256": "f95fd31122b5d445bc7707c6229d67736f536d55849accd8cd0f1218547dc429"},
   {"pfad": "System/Skripte/schwerpunkte.js", "klasse": "system", "groesse": 12068, "sha256": "085cbf470d12da665477d7a820fc629de4ea3cbec78b3a297937a3b2e4d56c65"},
   {"pfad": "System/Skripte/seitenleiste.js", "klasse": "system", "groesse": 7906, "sha256": "2b301330c620eef07327c8e4c4c2f34b849879f5c3c09e8461ed36617c658077"},
-  {"pfad": "System/Skripte/server.js", "klasse": "system", "groesse": 83360, "sha256": "5ee3cf76eade2ff34eb42486e6f22dd349ddb1e4dce224a6e933308e3a16ca96"},
+  {"pfad": "System/Skripte/server.js", "klasse": "system", "groesse": 84023, "sha256": "0313336ebba4d84c6b98f20ac1f01c51fe9d46c35aaef44944d2ab3312f47640"},
   {"pfad": "System/Skripte/sperre.js", "klasse": "system", "groesse": 7244, "sha256": "11334c83d542a7435ad5349d346ca6b6f062ae2e554afa4b39a78a154818ac68"},
   {"pfad": "System/Skripte/start.js", "klasse": "system", "groesse": 18611, "sha256": "bbd5ba00ab0608d38915bc6320452bb453c67bc360d24d4d4208deee7633970e"},
   {"pfad": "System/Skripte/tabellen.js", "klasse": "system", "groesse": 19790, "sha256": "22c4a42a2e515a24bed54cae85a6dd7eedbdd81714d445413d1969747eb2e177"},
