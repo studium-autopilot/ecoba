@@ -164,6 +164,12 @@ Dein Tresor läuft schon auf einem Gerät? So kommt er auf weitere.
 **Mit Android:** **Obsidian Sync** (kostenpflichtig, alle Geräte; Einstellungen → Sync, Plugins, CSS-Snippets und andere
 Dateitypen mit abgleichen, sonst fehlen z. B. die Lernstände der Karteikarten) oder **Syncthing** (kostenlos, Android und PC, nicht iPhone/iPad; Ordner samt `.obsidian` teilen).
 
+**Mit eigenem Server: LiveSync** – kostenlos, alle Geräte (Windows, Mac, iPhone, iPad, Android), ohne iCloud. Hast du deinen
+eigenen Server verbunden, tippe unter **Einstellungen & Hilfe** → **Verbindungen** in der Zeile „Eigener Server“ auf **Mehr
+erfahren**. Unter „Windows und iPhone abgleichen“ **Prompt kopieren** tippen und in Claude Desktop einfügen. Claude richtet den
+Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das Community-Plugin Self-hosted LiveSync auf jedes Gerät; iCloud und
+andere Abgleiche für den Tresor schaltest du danach aus.
+
 Ist der iCloud-Speicher voll, stockt der Abgleich – dann erst Platz schaffen.
 
 ## Update auf eine neue Version

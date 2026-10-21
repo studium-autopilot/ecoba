@@ -2,6 +2,15 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.7 – Tresor auf allen Geräten gleich
+
+- **Neu:** Mit eigenem Server gleicht dein Tresor auf Wunsch zwischen Windows, iPhone und iPad ab, kostenlos und ohne iCloud.
+  Im Fenster **Eigener Server** tippst du **Prompt kopieren**, und Claude richtet es mit dir ein.
+- **Neu:** **Zusammenfassen** liest jetzt die PDF selbst und sieht so auch Abbildungen, Tabellen und Formeln. Bei langen
+  Unterlagen fragt es vorher, ob du dafür mehr von deinem Claude-Limit einsetzen willst.
+- **Behoben:** Auf deinen anderen Geräten tat **Neu laden** nach einem Update manchmal nichts, und die Zeile blieb stehen.
+  Jetzt holt es fehlende Teile der neuen Version selbst, sonst sagt ein Hinweis, was zu tun ist.
+
 ## 0.5.6 – Kürzere Zusammenfassungen
 
 - **Übersichtlicher:** **Zusammenfassen** schreibt jetzt 3 bis 5 Punkte statt bis zu 10, jeder mit fettem Stichwort und den

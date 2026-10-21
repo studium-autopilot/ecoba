@@ -86,7 +86,13 @@ IP = re.compile(r"(?<![\w.])(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})(?![\w.]*\
 # Die Funktion „Eigener Server“ (server/) richtet für Studierende einen eigenen Server beim Anbieter der Freistufe ein
 # und muss dessen Namen und die Adressdienste nennen (Entscheidung vom 18.10.2026). Nur dort und nur diese Regel;
 # Tailnet-Namen, IP-Adressen, Pfade und Namen bleiben auch in server/ gesperrt.
-REGEL_AUSNAHMEN = {"Server-Hinweis (allgemein)": ("server/",)}
+# LiveSync auf dem eigenen Server (Entscheidung vom 21.10.2026): Die beiden Dateien, die CouchDB einrichten und den Setup-Link
+# bauen, müssen die Feldnamen von LiveSync und den Port von CouchDB nennen. Zugangsdaten stehen dort keine; sie entstehen
+# erst auf dem Server (/etc/studium-server/livesync.json).
+REGEL_AUSNAHMEN = {
+    "Server-Hinweis (allgemein)": ("server/",),
+    "LiveSync/CouchDB-Konfiguration": ("server/livesync.mjs", "server/livesync.sh"),
+}
 IP_ERLAUBT = {"127.0.0.1", "0.0.0.0"}
 TELEFON = [
     re.compile(r"(?<![\w+])(?:\+|00)[1-9]\d{0,2}[\s./-]?\(?0?\d{2,5}\)?[\s./-]?\d{2,}(?:[\s./-]?\d{2,})*"),

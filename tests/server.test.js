@@ -55,7 +55,7 @@ test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliche
   assert.deepEqual(s.fehler, ["claude-abgemeldet"]);
   assert.deepEqual(s.letzter_lauf, { zeit: "2026-10-18T07:30:00.000Z", ok: true });
   assert.equal(s.plugin_abruf, "2026-10-18T08:00:00.000Z");
-  assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "plugin_abruf", "letzter_lauf", "claude_lauf", "fehler"]);
+  assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "livesync", "plugin_abruf", "letzter_lauf", "claude_lauf", "fehler"]);
   assert.doesNotMatch(JSON.stringify(s), /zxabc01|geheim|Passwort/);
   // claude_lauf: wartet (Anstoß da) | laeuft (seit unter einer Stunde) | ruht
   const jetzt = new Date("2026-10-18T09:00:00Z");
@@ -133,6 +133,76 @@ test("Unterlagen für Begleitnotizen: nur Lehrmaterial mit gültigem Pfad und Ke
   unterlagenAblegen(w, [nurT]);
   assert.match(fs.readFileSync(path.join(w, "unterlagen", "neu", k("c") + ".md"), "utf8"), /\nAuftrag: nur Termine \(keine Begleitnotiz\)\n\n---\n/);
   assert.doesNotMatch(fs.readFileSync(path.join(w, "unterlagen", "neu", k("a") + ".md"), "utf8"), /Auftrag:/);
+});
+
+test("PDF zum Zusammenfassen: verschlüsselt in Stücken über /v1/pdf, Name = SHA-256, Kopfzeile für Opus, Grenzen, verwaiste verfallen", async () => {
+  const { createHash, webcrypto } = require("node:crypto");
+  const { erzeugeDienst, pdfTeilAblegen, pdfAufraeumen, unterlagenPruefen, unterlagenAblegen, PDF } = await laden("dienst.mjs");
+  const { neuerSchluessel, entschluesselnRoh } = await laden("kanal.mjs");
+  // wie im Plugin (server.js): Kopfzeile, Zeilenumbruch, Bytes; verschlüsselt wie verschluesselnRoh
+  const stueck = (kennung, teil, teile, bytes) => Buffer.concat([Buffer.from(JSON.stringify({ schema: 1, kennung, teil, teile }) + "\n"), bytes]);
+  const roh = async (schluessel, zweck, bytes) => {
+    const iv = webcrypto.getRandomValues(new Uint8Array(12));
+    const key = await webcrypto.subtle.importKey("raw", Buffer.from(schluessel, "base64url"), "AES-GCM", false, ["encrypt"]);
+    const geheim = await webcrypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode("studium-autopilot/kanal/v1/" + zweck) }, key, bytes);
+    return { schema: 1, zweck, iv: Buffer.from(iv).toString("base64url"), daten: Buffer.from(geheim).toString("base64url") };
+  };
+  const sha = (b) => createHash("sha256").update(b).digest("hex");
+  // größer als ein Stück: zwei Anfragen
+  const pdf = Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(PDF.teil + 1000, 7)]);
+  const kennung = sha(pdf);
+  const k = neuerSchluessel();
+  const probe = stueck(kennung, 0, 1, Buffer.from("%PDF-"));
+  assert.deepEqual(await entschluesselnRoh(k, "pdf", await roh(k, "pdf", probe)), probe, "Bytes hin und zurück");
+  await assert.rejects(entschluesselnRoh(k, "unterlagen", await roh(k, "pdf", probe)), /anderen Zweck/);
+
+  const v = ordner();
+  const opus = path.join(v, "unterlagen", "opus");
+  const konfig = { zugang: "zugang-" + neuerSchluessel(), schluessel: k, adresse: "https://beispiel.example", version: "0.0.0-test" };
+  const server = erzeugeDienst({ konfig, verzeichnis: v });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const basis = `http://127.0.0.1:${server.address().port}`;
+  const mit = { authorization: `Bearer ${konfig.zugang}` };
+  const senden = async (klar, kopf = mit) => fetch(`${basis}/v1/pdf`, { method: "POST", headers: kopf, body: JSON.stringify(await roh(k, "pdf", klar)) });
+  try {
+    const erstes = stueck(kennung, 0, 2, pdf.subarray(0, PDF.teil)), zweites = stueck(kennung, 1, 2, pdf.subarray(PDF.teil));
+    assert.equal((await senden(erstes, {})).status, 401, "nur mit Schlüssel");
+    assert.equal((await senden(zweites)).status, 409, "nicht außer der Reihe");
+    const a = await senden(erstes);
+    assert.deepEqual([a.status, await a.json()], [200, { kennung, fertig: false }]);
+    assert.ok(!fs.existsSync(path.join(opus, kennung + ".pdf")), "halb hochgeladen heißt sie noch nicht .pdf");
+    const b = await senden(zweites);
+    assert.deepEqual([b.status, await b.json()], [200, { kennung, fertig: true }]);
+    assert.ok(fs.readFileSync(path.join(opus, kennung + ".pdf")).equals(pdf));
+    assert.equal((await senden(stueck("a".repeat(64), 0, 1, Buffer.from("kein PDF")))).status, 400, "nur PDFs");
+  } finally {
+    server.close();
+  }
+  // Grenzen: falsche Prüfsumme, falsche Stückgröße, zu viele Stücke, zu viele wartende
+  const jetzt = new Date();
+  const klein = Buffer.from("%PDF-1.7\nklein\n");
+  assert.throws(() => pdfTeilAblegen(v, stueck("b".repeat(64), 0, 1, klein), jetzt), (e) => e.status === 400, "Prüfsumme");
+  assert.ok(!fs.existsSync(path.join(opus, "b".repeat(64) + ".pdf.teil")), "verworfen");
+  assert.throws(() => pdfTeilAblegen(v, stueck(sha(klein), 0, 2, klein), jetzt), (e) => e.status === 400, "nur das letzte Stück darf kleiner sein");
+  assert.throws(() => pdfTeilAblegen(v, stueck(sha(klein), 0, Math.ceil(PDF.bytes / PDF.teil) + 1, klein), jetzt), (e) => e.status === 413);
+  for (let i = 1; i < PDF.warten; i++) { const b = Buffer.from(`%PDF-1.7\n${i}\n`); pdfTeilAblegen(v, stueck(sha(b), 0, 1, b), jetzt); }
+  assert.throws(() => pdfTeilAblegen(v, stueck(sha(klein), 0, 1, klein), jetzt), (e) => e.status === 429, `höchstens ${PDF.warten} warten`);
+  assert.deepEqual(pdfTeilAblegen(v, stueck(kennung, 0, 2, pdf.subarray(0, PDF.teil)), jetzt), { kennung, fertig: false }, "dieselbe PDF noch einmal geht");
+  pdfTeilAblegen(v, stueck(kennung, 1, 2, pdf.subarray(PDF.teil)), jetzt);
+
+  // Die Textfassung danach: mit Opus nennt ihr Kopf die PDF, ohne PDF daneben nicht
+  const u = (x) => Object.assign({ datei: "Unterlagen/B110/B110 Folien 01.pdf", kennung, art: "Folien", titel: "B110 Folien 01", code: "B110", seiten: 2,
+    text: "[S. 1] Kosten", modell: "opus" }, x);
+  unterlagenAblegen(v, unterlagenPruefen({ schema: 1, unterlagen: [u(), u({ kennung: "e".repeat(64) })] }));
+  assert.match(fs.readFileSync(path.join(opus, kennung + ".md"), "utf8"), new RegExp(`\nPDF: ${kennung}\\.pdf \\(liegt daneben; lies die PDF statt dieses Textes\\)\n\n---\n`));
+  assert.doesNotMatch(fs.readFileSync(path.join(opus, "e".repeat(64) + ".md"), "utf8"), /PDF:/);
+
+  // eine verwaiste PDF (ohne Text) und halb Hochgeladenes verfallen nach einem Tag, eine PDF mit Text bleibt
+  const halb = Buffer.concat([Buffer.from("%PDF-1.7\n"), Buffer.alloc(PDF.teil - 9)]);
+  fs.rmSync(path.join(opus, sha(Buffer.from("%PDF-1.7\n1\n")) + ".pdf"));
+  pdfTeilAblegen(v, stueck("c".repeat(64), 0, 2, halb), jetzt);
+  pdfAufraeumen(opus, new Date(jetzt.getTime() + PDF.verfall + 60e3));
+  assert.deepEqual(fs.readdirSync(opus).filter((n) => n.includes(".pdf")), [kennung + ".pdf"], "nur die mit Textfassung bleibt");
 });
 
 test("Auszug aus dem Tresor: Termine und To-dos einzeln geprüft und gesäubert, nichts mit Zugangsdaten, Grenzen", async () => {
@@ -242,6 +312,80 @@ test("Dienst: Status offen, Eingang nur mit Schlüssel und verschlüsselt, Stand
   }
 });
 
+test("LiveSync: Setup-Link nur mit dem Code lesbar, Einstellungen wie im Tresor bewährt, Zugangsdaten geprüft", async () => {
+  const L = await laden("livesync.mjs");
+  // Begriffe zerlegt, damit diese Datei (tests/ wird veröffentlicht) sich in pruefen.py nicht selbst meldet
+  const HOST = "obsidian.beispiel.example", PW = "Pw2" + "abc", URI = "couch" + "DB_URI";
+  const k = { adresse: "https://" + HOST, benutzer: "admin", passwort: PW, datenbank: "studium-autopilot", e2ee: "Geheim7" };
+  const code = L.neuerCode();
+  assert.match(code, /^[a-km-np-z2-9]{4}-[a-km-np-z2-9]{4}-[a-km-np-z2-9]{4}$/);
+  const r = await L.link(k, code);
+  assert.equal(r.code, code);
+  assert.ok(r.link.startsWith(L.LINK_ANFANG));
+  const paket = decodeURIComponent(r.link.slice(L.LINK_ANFANG.length));
+  assert.doesNotMatch(paket, new RegExp([PW, "Geheim7", "beispiel"].join("|")), "nur verschlüsselt");
+  const e = JSON.parse(await L.entschluesseln(paket, code));
+  assert.equal(e[URI], "https://" + HOST);
+  assert.equal(e.remoteConfigurations[e.activeConfigurationId].uri, `sls+https://${["admin", PW].join(":")}@${HOST}/?db=studium-autopilot`);
+  assert.equal(e["pass" + "phrase"], "Geheim7");
+  assert.ok(e.encrypt && e.usePathObfuscation && e.liveSync && e.syncInternalFiles && e.isConfigured);
+  assert.equal(e.useAdvancedMode, true, "sonst fehlt der Abschnitt „Hidden Files“ zum Wiedereinschalten");
+  assert.match(e.syncInternalFilesIgnorePatterns, /obsidian-livesync/, "jedes Gerät behält seine eigene Verbindung");
+  await assert.rejects(L.entschluesseln(paket, L.neuerCode()), "falscher Code");
+  assert.equal(L.einstellungen({ ...k, adresse: "http://127.0.0.1:8081" })[URI], "http://127.0.0.1:8081", "Testmodus");
+  assert.throws(() => L.einstellungen({ ...k, e2ee: "" }), /e2ee fehlt/);
+  assert.throws(() => L.einstellungen({ ...k, passwort: PW + ":x" }), /Buchstaben und Ziffern/);
+});
+
+test("LiveSync: kurzer Link gilt 30 Minuten, liegt nur als Hash, Seite maskiert und läuft ab", async () => {
+  const L = await laden("livesync.mjs");
+  const v = ordner();
+  const jetzt = new Date("2026-10-21T10:00:00Z");
+  const setup = L.LINK_ANFANG + "%25%24abc%22%3C";
+  assert.throws(() => L.ablegen(v, "https://boese.example"), /kein Setup-Link/);
+  const { kennung, ablauf } = L.ablegen(v, setup, { jetzt });
+  assert.match(kennung, L.KENNUNG);
+  assert.equal(ablauf, "2026-10-21T10:30:00.000Z");
+  assert.ok(!fs.readdirSync(path.join(v, "livesync-links")).some((n) => n.includes(kennung)), "nur der Hash liegt ab");
+  assert.equal(L.abholen(v, kennung, jetzt), setup);
+  assert.equal(L.abholen(v, kennung, jetzt), setup, "mehrfach abrufbar");
+  assert.equal(L.abholen(v, kennung, new Date("2026-10-21T10:31:00Z")), null, "abgelaufen");
+  assert.equal(L.abholen(v, "../../etc/passwd", jetzt), null);
+  L.ablegen(v, setup, { jetzt: new Date("2026-10-21T11:00:00Z") });
+  assert.equal(fs.readdirSync(path.join(v, "livesync-links")).length, 1, "Abgelaufenes wird beim Ablegen gelöscht");
+  assert.match(L.seite('obsidian://x?a="><script>'), /href="obsidian:\/\/x\?a=&quot;&gt;&lt;script&gt;"/);
+  assert.match(L.seite(null), /abgelaufen/);
+  fs.rmSync(v, { recursive: true, force: true });
+});
+
+test("Dienst: LiveSync-Seite unter /v1/livesync/<kennung>, unbekannte Kennungen zählen als Fehlversuch, Status livesync", async () => {
+  const { erzeugeDienst } = await laden("dienst.mjs");
+  const { ablegen, LINK_ANFANG } = await laden("livesync.mjs");
+  const v = ordner();
+  const server = erzeugeDienst({ konfig: { zugang: "zugang-x", schluessel: "s".repeat(44), adresse: "https://beispiel.example", version: "0.0.0-test" }, verzeichnis: v });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const basis = `http://127.0.0.1:${server.address().port}`;
+  try {
+    assert.equal((await (await fetch(`${basis}/v1/status`)).json()).livesync, "aus");
+    fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify({ livesync: "an" }));
+    assert.equal((await (await fetch(`${basis}/v1/status`)).json()).livesync, "an");
+    const { kennung } = ablegen(v, LINK_ANFANG + "%25%24abc");
+    const s = await fetch(`${basis}/v1/livesync/${kennung}`);
+    assert.equal(s.status, 200);
+    assert.match(s.headers.get("content-security-policy"), /default-src 'none'/);
+    assert.equal(s.headers.get("cache-control"), "no-store");
+    assert.match(await s.text(), /In Obsidian öffnen/);
+    assert.equal((await fetch(`${basis}/v1/livesync/${kennung}`, { method: "POST" })).status, 405);
+    const von = { "x-forwarded-for": "rater" };
+    for (let i = 0; i < 10; i++) assert.equal((await fetch(`${basis}/v1/livesync/aaaaaaaaaaaaaaaaaaaa`, { headers: von })).status, 404);
+    assert.equal((await fetch(`${basis}/v1/livesync/${kennung}`, { headers: von })).status, 429, "Raten wird gesperrt");
+    assert.equal((await fetch(`${basis}/v1/livesync/${kennung}`)).status, 200, "andere Absender nicht");
+  } finally {
+    await new Promise((r) => server.close(r));
+    fs.rmSync(v, { recursive: true, force: true });
+  }
+});
+
 test("Eingang: Nicht Abgeholtes mit künftigen Terminen bleibt über 30 Tage, Vergangenes und sehr Altes fällt weg", async () => {
   const { eingangBuendel } = await laden("dienst.mjs");
   const v = ordner();
@@ -283,6 +427,9 @@ test("Zustand: Proben setzen Claude, Uni-Zugang und Reserve; Felder anderer Teil
   assert.deepEqual(z.fehler.sort(), ["claude-abgemeldet", "gmail-fehlt", "uni-zugang-falsch"]);
   z = await zustandAktualisieren(v, proben("angemeldet", false));
   assert.equal(z.uniZugang, "fehlt");
+  assert.equal(z.livesync, "aus");
+  fs.writeFileSync(path.join(v, "livesync-an"), "");
+  assert.equal((await zustandAktualisieren(v, proben("angemeldet", false))).livesync, "an", "Marke von livesync.sh");
   // schreibt der Claude-Lauf, während die Proben laufen, bleibt sein Stand erhalten
   const langsam = Object.assign(proben("angemeldet", false), { claude: async () => {
     fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify({ gmailZuletzt: "2026-10-18T05:30:00.000Z", fehler: [] }));

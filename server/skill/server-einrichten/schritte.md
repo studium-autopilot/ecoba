@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.6)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.7)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -156,20 +156,23 @@ Fertig, sobald dort `claude angemeldet` steht. Sonst:
 
 ## 8. Uni-Mails
 
-Zwei Wege, der Mensch wählt:
+Zwei Wege. Empfiehl die Weiterleitung; das Uni-Postfach direkt nur, wenn der Mensch es nach dem Abwägen ausdrücklich will:
 
-- **Uni-Postfach direkt (empfohlen, freiwillig):** Der Server liest das Postfach der Uni nur lesend. Nutzen: alles kommt an,
-  auch ohne Weiterleitung. Risiko: Das Uni-Passwort liegt verschlüsselt auf dem Server; wer dort root ist, könnte es lesen. Der
-  Mensch tippt es selbst in eine verdeckte Eingabe. Bei „Claude klickt“ hältst du an und sagst: „Tipp jetzt dein Passwort, ich
-  schaue nicht hin und tippe nichts.“
+- **Weiterleitung an Gmail (empfohlen):** Auf dem Server liegt kein Uni-Passwort. Das Uni-Passwort gilt auch für ILIAS, Alma
+  und Noten; wer root auf dem Server ist, könnte es sonst entschlüsseln. Nachteil: Uni-Mails kommen erst mit der nächsten
+  Gmail-Suche an (7:30, 13:30, 19:30 Uhr, „Mails durchsuchen“), nicht alle 15 Minuten.
+  [webmail.uni-tuebingen.de](https://webmail.uni-tuebingen.de/) → links **Webmail → Filter → Weiterleitung** →
+  Gmail-Adresse eintragen, **„Kopien der Nachrichten in diesem Konto belassen?“ an lassen** → **Zur Regelliste zurückkehren**
+  → Regel per Doppelklick aktivieren. Anmelden tut der Mensch.
+
+- **Uni-Postfach direkt (freiwillig):** Der Server liest das Postfach der Uni nur lesend, alle 15 Minuten. Risiko: Das
+  Uni-Passwort liegt verschlüsselt auf dem Server; wer dort root ist, könnte es lesen. Der Mensch tippt es selbst in eine
+  verdeckte Eingabe. Bei „Claude klickt“ hältst du an und sagst: „Tipp jetzt dein Passwort, ich schaue nicht hin und tippe
+  nichts.“
 
   ```bash
   ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server uni-zugang setzen"
   ```
-
-- **Weiterleitung an Gmail:** [webmail.uni-tuebingen.de](https://webmail.uni-tuebingen.de/) → links **Webmail → Filter →
-  Weiterleitung** → Gmail-Adresse eintragen, **„Kopien der Nachrichten in diesem Konto belassen?“ an lassen** → **Zur
-  Regelliste zurückkehren** → Regel per Doppelklick aktivieren. Anmelden tut der Mensch.
 
 ## 9. Obsidian verbinden
 

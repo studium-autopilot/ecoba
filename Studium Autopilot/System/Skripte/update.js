@@ -1054,6 +1054,66 @@ module.exports = function (ctx) {
     } catch (e) { console.error("update: Plugin neu laden", e); return false; }
   };
 
+  // ---------- Kern nachholen (vor „Neu laden“) ----------
+  // Befund 21.10.2026: Nach dem Update auf einem anderen Gerät zeigte das iPhone „Version 0.5.4 ist da“, der Sync hatte den
+  // neuen Kern (.obsidian/plugins/…) aber nicht geliefert. „Neu laden“ lud den alten Kern von der Platte, die Zeile blieb,
+  // und es kam kein Wort. Darum vorher: Kerndateien mit installiert.json vergleichen, abweichende aus dem Release dieser
+  // Version laden und wie beim Update mit Größe und SHA-256 prüfen. Geschrieben wird erst, wenn alles da ist, manifest.json
+  // zuletzt; ein Schreibfehler setzt die schon geschriebenen zurück.
+  // o: { liste: geprüfte installiert.json, basis: Adresse am Tag v<liste.version> }
+  // → { ok, art (ok | netz | pruefsumme | schreiben), fehler, geschrieben[] }
+  const kernNachholen = async (io, o) => {
+    const r = { ok: false, art: "", fehler: "", geschrieben: [] };
+    const fehler = (art, text) => { r.art = art; r.fehler = text; return r; };
+    const url = (pfad) => o.basis + (ORDNER + "/" + pfad).split("/").map(encodeURIComponent).join("/");
+    const fehlt = [];
+    for (const e of o.liste.dateien) {
+      if (!kernDatei(e.pfad)) continue;
+      const by = await io.lesen(e.pfad);
+      if (!by || by.length !== e.groesse || (await sha256(by)) !== e.sha256) fehlt.push({ e, alt: by });
+    }
+    const istManifest = (f) => f.e.pfad === KERN + "manifest.json";
+    const reihe = fehlt.filter((f) => !istManifest(f)).concat(fehlt.filter(istManifest));
+    for (const f of reihe) {
+      try { f.neu = await io.holen(url(f.e.pfad)); } catch (e) { return fehler("netz", f.e.pfad + " nicht geladen (" + grund(e) + ")"); }
+      if (f.neu.length !== f.e.groesse || (await sha256(f.neu)) !== f.e.sha256) return fehler("pruefsumme", "Prüfsumme stimmt nicht: " + f.e.pfad);
+    }
+    const fertig = [];
+    try {
+      for (const f of reihe) { await io.schreiben(f.e.pfad, f.neu); fertig.push(f); }
+    } catch (e) {
+      for (const f of fertig) {
+        try { if (f.alt) await io.schreiben(f.e.pfad, f.alt); else await io.loeschen(f.e.pfad); } catch (x) { console.error("update: Kern zurück " + f.e.pfad, x); }
+      }
+      return fehler("schreiben", grund(e));
+    }
+    r.geschrieben = fertig.map((f) => f.e.pfad);
+    r.ok = true;
+    r.art = "ok";
+    return r;
+  };
+  // „Neu laden“: erst den Kern nachholen, dann laden. Läuft danach immer noch ein älterer Kern als installiert, sagt es ein
+  // Hinweis. → true, wenn der Kern der installierten Version läuft
+  const neuLaden = async () => {
+    const x = await listeLesen(INSTALLIERT);
+    const basis = x ? tagBasis(x.liste.version) : "";
+    if (basis) {
+      const r = await kernNachholen(io, { liste: x.liste, basis });
+      if (!r.ok) {
+        console.error("update: Kern nachholen", r.fehler);
+        ctx.hinweis(r.art === "netz" ? "Keine Verbindung. Versuch es gleich noch einmal." : "Neu laden hat nicht geklappt. Bitte Obsidian einmal schließen und wieder öffnen.");
+        return false;
+      }
+    }
+    const ok = await pluginNeuLaden();
+    const pl = app.plugins && app.plugins.plugins && app.plugins.plugins[PLUGIN_ID];
+    if (!ok || !pl || !pl.manifest || neuer(installiertVersion(), pl.manifest.version)) {
+      ctx.hinweis("Bitte Obsidian einmal schließen und wieder öffnen.");
+      return false;
+    }
+    return true;
+  };
+
   // ---------- Ablauf nach dem Tipp auf „Neue Version installieren“ bzw. „Update fertigstellen“ ----------
   // Installiert gerade ein anderes Gerät (lage „anderes“), nur der Satz. Fertigstellen derselben Version fragt nicht noch einmal
   // (du hattest schon bestätigt); ein zweiter Lauf lädt und schreibt nur, was noch fehlt. g: das Fenster, in dem du gerade
@@ -1318,12 +1378,14 @@ module.exports = function (ctx) {
 
   // ---------- Änderungen aus CHANGELOG.md (Liste im Fenster „Neue Version“) ----------
   // CHANGELOG.md am Tag v<version> (gleiche Adresse wie die Dateien des Updates, siehe releasePruefen in zentral.js)
-  const changelogUrl = (version) => {
+  // Basisadresse der Dateien am Tag v<version> (auch für kernNachholen); plugin.testUpdateBasis ersetzt sie
+  const tagBasis = (version) => {
     const p = plugin();
-    if (p.testUpdateBasis) return String(p.testUpdateBasis).replace(/\/?$/, "/") + "CHANGELOG.md";
+    if (p.testUpdateBasis) return String(p.testUpdateBasis).replace(/\/?$/, "/");
     const roh = (ctx.zentral && ctx.zentral.RELEASE_ROH) || "https://raw.githubusercontent.com/studium-autopilot/ecoba/";
-    return semver(version) ? roh + "v" + version + "/CHANGELOG.md" : "";
+    return semver(version) ? roh + "v" + version + "/" : "";
   };
+  const changelogUrl = (version) => { const b = tagBasis(version); return b ? b + "CHANGELOG.md" : ""; };
   const changelogHolen = async (version) => {
     if (hat(neuigkeit.changelog, version)) return neuigkeit.changelog[version];
     const url = changelogUrl(version);
@@ -1373,7 +1435,7 @@ module.exports = function (ctx) {
     jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     markeLage, MARKE, MARKE_STILL,
     // Obsidian
-    io, anzeige, status, aktualisieren, suchen, markeNeu, installiertAnlegen, heilen, pluginNeuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
+    kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertAnlegen, heilen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
@@ -1432,7 +1494,7 @@ module.exports = function (ctx) {
     "vorlage-suchen": { titel: "Nach Updates suchen", ausfuehren: async () => { await suchen(); } },
     "vorlage-neu-laden": {
       titel: "Neu laden",
-      ausfuehren: async () => { if (!(await pluginNeuLaden())) ctx.hinweis("Bitte Obsidian einmal schließen und wieder öffnen."); },
+      ausfuehren: async () => { await neuLaden(); },
     },
   };
 

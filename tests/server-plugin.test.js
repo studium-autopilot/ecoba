@@ -88,6 +88,7 @@ function abhBauen(t, o) {
     sperre: SPERRE, quellen: Q, standText: standTextMit(uhr), mobil: false,
     tresor: o.tresor || (async () => ({ termine: [], todos: [] })),
     unterlagen: o.unterlagen || (async () => []),
+    pdf: o.pdf || (async () => null),
     lokalErlaubt: true,
     geheimMap: geheim, lokalMap: lokal, uhr,
   };
@@ -504,6 +505,48 @@ test("Zusammenfassen auf Wunsch: gewünschte Unterlage geht mit Opus in den eige
   } finally { await srv.zu(); }
 });
 
+test("Zusammenfassen mit PDF: erst die PDF verschlüsselt in Stücken zu 8 MB, dann der Text, dessen Kopf sie nennt; ohne lesbare PDF nur der Text; die Begleitnotiz löscht beides", async () => {
+  const { createHash } = require("node:crypto");
+  const srv = await serverStarten();
+  try {
+    const notiz = "Unterlagen/B110 Einführung/B110 Folien 04 Kosten.md", pdf = "Unterlagen/B110 Einführung/B110 Folien 04 Kosten.pdf";
+    const t = tresor({ [notiz]: "---\ntyp: unterlage\nart: Folien\nzusammenfassung_angefordert: 2026-10-20T17:50Z\nzusammenfassung_pdf: true\n---\n\n# B110 · Folien 04\n" });
+    const bytes = new Uint8Array(8 * 1024 * 1024 + 1000); // zwei Stücke
+    bytes.set(new TextEncoder().encode("%PDF-1.7\nFolien 04\n"));
+    const k = createHash("sha256").update(bytes).digest("hex");
+    let lesbar = true, wunsch = "2026-10-20T17:50";
+    const wege = [];
+    const netz = async (a) => { wege.push(a.url.replace(/^.*\/v1\//, "")); assert.doesNotMatch(String(a.body || ""), /Folien 04/, "nur verschlüsselt"); return netzEcht(a); };
+    const { m } = await verbunden(srv, t, { netz, pdf: async (p) => (p === pdf && lesbar ? bytes : null),
+      unterlagen: async () => [{ datei: pdf, kennung: k, art: "Folien", titel: "Folien 04", code: "B110", seiten: 2, angefordert: wunsch, pdf: true, text: "[S. 1]\nKosten" }] });
+    wege.length = 0;
+    assert.equal((await m.abrufen()).unterlagen, 1);
+    assert.deepEqual(wege.slice(wege.indexOf("pdf"), wege.indexOf("unterlagen") + 1), ["pdf", "pdf", "unterlagen"], wege.join(", "));
+    const opus = path.join(srv.verzeichnis, "unterlagen", "opus");
+    assert.deepEqual(new Uint8Array(fs.readFileSync(path.join(opus, k + ".pdf"))), bytes);
+    assert.match(fs.readFileSync(path.join(opus, k + ".md"), "utf8"), new RegExp(`\nPDF: ${k}\\.pdf `));
+
+    // PDF nicht lesbar (etwa noch nicht synchronisiert): der Text geht trotzdem, ohne Hinweis auf eine PDF
+    fs.rmSync(opus, { recursive: true });
+    lesbar = false; wunsch = "2026-10-20T18:00"; wege.length = 0;
+    assert.equal((await m.abrufen()).unterlagen, 1);
+    assert.equal(wege.indexOf("pdf"), -1);
+    assert.doesNotMatch(fs.readFileSync(path.join(opus, k + ".md"), "utf8"), /PDF:/);
+
+    srv.eingang({ begleitnotizen: [{ datei: pdf, wichtigste: [{ text: "Kosten: fix und variabel.", seite: 1 }] }] });
+    assert.deepEqual((await m.abrufen()).begleitnotizen, [notiz]);
+    assert.match(t.m.get(notiz), /^---\ntyp: unterlage\nart: Folien\n---\n/, "Wunsch und PDF-Wunsch erledigt");
+  } finally { await srv.zu(); }
+});
+
+test("Kosten mit PDF: grob geschätzt als Anteil eines Fünf-Stunden-Limits im Pro-Abo; ab 5 % fragt der Knopf", () => {
+  // gemessen (Opus 5.5): 2 Seiten Übung ≈ 4 300 Token mit PDF, 42 Seiten Folien ≈ 71 000
+  assert.ok(S.pdfKosten(2, 6000, true) < S.PDF_FRAGEN, "kurze Übung: ohne Frage");
+  assert.ok(S.pdfKosten(42, 25000, true) > S.PDF_FRAGEN, "Foliensatz: mit Frage");
+  assert.ok(S.pdfKosten(42, 25000, false) < S.PDF_FRAGEN, "derselbe Foliensatz nur als Text: darunter");
+  assert.ok(Math.abs(S.pdfKosten(42, 25000, true) - 0.15) < 0.03, String(S.pdfKosten(42, 25000, true)));
+});
+
 test("Terminsuche: Unterlage eines nicht abgedeckten Moduls geht einmal mit nur_termine an den Server, ein späterer Wunsch mit Opus", async () => {
   const srv = await serverStarten();
   try {
@@ -781,4 +824,21 @@ test("Prompt kopieren: derselbe Text wie im README unter „Für Technische“, 
   assert.match(S.PROMPT, /releases\/latest/, "Anleitung aus dem neuesten Release");
   assert.doesNotMatch(S.PROMPT, /\/(blob|raw|tree)\/main\//, "nie von main");
   assert.ok(fs.existsSync(path.join(SERVER, "skill", "server-einrichten", "SKILL.md")), "der Skill liegt dort");
+});
+
+test("LiveSync im Fenster „Eigener Server“: nur verbunden und ohne LiveSync hier, Prompt führt zum Abschnitt im Skill", () => {
+  assert.equal(S.livesyncAngebot({ verbunden: false, hier: false, livesync: "aus" }), null, "nicht verbunden: nichts");
+  assert.equal(S.livesyncAngebot({ verbunden: true, hier: true, livesync: "an" }), null, "LiveSync läuft hier schon");
+  const neu = S.livesyncAngebot({ verbunden: true, hier: false, livesync: "aus" });
+  assert.match(neu.titel, /Windows und iPhone/);
+  assert.match(neu.text, /Claude Desktop/);
+  assert.deepEqual(S.livesyncAngebot({ verbunden: true, hier: false, livesync: "unbekannt" }), neu, "älterer Server: wie aus");
+  assert.match(S.livesyncAngebot({ verbunden: true, hier: false, livesync: "an" }).text, /läuft schon/);
+  assert.match(S.LIVESYNC_PROMPT, /releases\/latest/);
+  assert.match(S.LIVESYNC_PROMPT, /server\/skill\/server-einrichten\/SKILL\.md/);
+  assert.doesNotMatch(S.LIVESYNC_PROMPT, /\/(blob|raw|tree)\/main\//, "nie von main");
+  const skill = path.join(SERVER, "skill", "server-einrichten");
+  assert.match(fs.readFileSync(path.join(skill, "SKILL.md"), "utf8"), /„Richte LiveSync ein“.*livesync\.md/);
+  assert.match(fs.readFileSync(path.join(skill, "livesync.md"), "utf8"), /^# LiveSync einrichten$/m, "Abschnitt, den der Prompt nennt");
+  assert.match(S.LIVESYNC_PROMPT, /„LiveSync einrichten“/);
 });

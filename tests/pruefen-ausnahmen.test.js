@@ -38,3 +38,18 @@ test("Server-Begriffe: in server/ erlaubt, anderswo gemeldet; Tailnet-Namen übe
     fs.rmSync(baum, { recursive: true, force: true });
   }
 });
+
+test("LiveSync-Felder: nur in server/livesync.mjs und server/livesync.sh erlaubt", { skip: !python && "kein Python" }, () => {
+  const baum = fs.mkdtempSync(path.join(os.tmpdir(), "pruefen-"));
+  const FELD = "couch" + "DB_URI";
+  try {
+    fs.mkdirSync(path.join(baum, "server"));
+    fs.writeFileSync(path.join(baum, "server", "livesync.mjs"), `const x = { ${FELD}: 1 };\n`);
+    fs.writeFileSync(path.join(baum, "server", "anderes.mjs"), `const x = { ${FELD}: 1 };\n`);
+    const r = spawnSync(python, [PRUEFEN, baum, "--ohne-node"], { encoding: "utf8" });
+    assert.doesNotMatch(r.stdout, /^server\/livesync\.mjs\r?$/m, "erlaubt");
+    assert.match(r.stdout, /^server\/anderes\.mjs\r?\n\s+:1 {2}\[LiveSync\/CouchDB-Konfiguration\]/m, "anderswo in server/ gemeldet");
+  } finally {
+    fs.rmSync(baum, { recursive: true, force: true });
+  }
+});

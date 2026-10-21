@@ -10,24 +10,36 @@
 //                       Claude eine Begleitnotiz schreiben soll; landen in unterlagen/neu/ (mit modell: "opus", auf Wunsch per
 //                       Knopf: unterlagen/opus/, eigener Lauf mit Opus; mit nur_termine nur nach Terminen durchsuchen, ohne
 //                       Begleitnotiz), ein Anstoß startet den Lauf
+//   POST /v1/pdf        mit Zugangsschlüssel: verschlüsselt ein Stück (8 MB) einer PDF zu einer gewünschten Zusammenfassung;
+//                       zusammengesetzt und geprüft (SHA-256) landet sie als unterlagen/opus/<SHA-256>.pdf neben der Textfassung,
+//                       die gleich danach kommt, und Opus liest sie
 //   POST /v1/anstoss    mit Zugangsschlüssel: Knopf „Mails durchsuchen“ in Obsidian startet einen Claude-Lauf (mit Gmail),
 //                       höchstens einmal in 10 Minuten; wartet schon ein Anstoß, bleibt er
 //   POST /v1/verbinden  Einmal-Code (verbinden.mjs) gegen Adresse, Zugangs- und Datenschlüssel
+//   GET  /v1/livesync/<kennung>  Seite mit dem Setup-Link für LiveSync (livesync.mjs, 30 Minuten; verschlüsselt mit einem Code,
+//                       den nur das Terminal zeigt)
 // Konfiguration $STUDIUM_SERVER_KONFIG (Standard /etc/studium-server/dienst.json: zugang, schluessel, adresse, port,
 // version), Daten $STUDIUM_SERVER_DATEN (Standard /var/lib/studium-server).
 import { createHash, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { datumOk, KATEGORIEN, MODULCODE, saeubern, TODO_ID } from "./eingang.mjs";
-import { entschluesseln, verschluesseln } from "./kanal.mjs";
+import { entschluesseln, entschluesselnRoh, verschluesseln } from "./kanal.mjs";
+import { abholen, seite } from "./livesync.mjs";
 import { codeEinloesen } from "./verbinden.mjs";
 
 const TAG = 864e5;
 const EINGANG_TAGE = 30, EINGANG_HOECHSTENS = 180;
-// Größte Anfrage je Weg (verschlüsselt, base64): Stand mit Auszug aus dem Tresor bis 512 KB, Textfassungen bis 4 MB
-const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/anstoss": 1024 };
+// PDFs zu gewünschten Zusammenfassungen: in Stücken zu 8 MB (jedes ein eigenes Paket, so braucht weder das Gerät noch der Dienst
+// die ganze PDF auf einmal im Speicher), je PDF bis 500 MB, höchstens 6 und zusammen 1 GB warten (die Platte); eine PDF ohne
+// Textfassung daneben oder ein halb hochgeladenes Stück verfällt nach einem Tag (das Plugin schickt die PDF vor dem Text)
+export const PDF = { teil: 8 * 1024 * 1024, bytes: 500 * 1024 * 1024, gesamt: 1024 * 1024 * 1024, warten: 6, verfall: TAG };
+// Größte Anfrage je Weg (verschlüsselt, base64): Stand mit Auszug aus dem Tresor bis 512 KB, Textfassungen bis 4 MB, ein Stück
+// einer PDF mit Kopfzeile und dem Aufschlag von base64
+const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/anstoss": 1024,
+  "/v1/pdf": Math.ceil((PDF.teil + 1024) * 4 / 3) + 4096 };
 const KNOPF_ABSTAND = 10 * 60e3; // Knopf „Mails durchsuchen“: höchstens so oft (jeder Lauf kostet Abo-Limit)
 const LAUF_HOECHSTENS = 60 * 60e3; // „läuft“ gilt höchstens so lange (ein abgebrochener Lauf hängt nicht für immer)
 // Textfassungen: höchstens 3 je Anfrage (das Plugin schickt bis zu 3 Anfragen je Abruf), je 400 000 Zeichen, höchstens 30 warten
@@ -64,6 +76,7 @@ export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(),
     weiterleitung: aus(z.weiterleitung, ["ok", "fehlt"]),
     uni_zugang: aus(z.uniZugang, ["gespeichert", "fehlt", "falsch"]),
     speicher_reserve: aus(z.speicherReserve, ["an", "aus"]),
+    livesync: z.livesync === "an" ? "an" : "aus",
     plugin_abruf: abruf && !Number.isNaN(Date.parse(abruf.zuletzt)) ? new Date(abruf.zuletzt).toISOString() : null,
     letzter_lauf: lauf,
     claude_lauf: claudeLauf,
@@ -158,7 +171,9 @@ export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
     if (u.opus) rmSync(join(ordner("neu"), u.kennung + ".md"), { force: true }); // auf Wunsch mit Opus statt im gewöhnlichen Lauf
     const kopf = [`# ${u.titel || u.datei.slice(u.datei.lastIndexOf("/") + 1)}`, "", `Datei: ${u.datei}`,
       `Modul: ${u.code || "–"} · Art: ${u.art}${u.seiten ? ` · Seiten: ${u.seiten}` : ""}`,
-      ...(u.nurTermine ? ["Auftrag: nur Termine (keine Begleitnotiz)"] : []), "", "---", ""];
+      ...(u.nurTermine ? ["Auftrag: nur Termine (keine Begleitnotiz)"] : []),
+      ...(u.opus && existsSync(join(ordner("opus"), u.kennung + ".pdf")) ? [`PDF: ${u.kennung}.pdf (liegt daneben; lies die PDF statt dieses Textes)`] : []),
+      "", "---", ""];
     writeFileSync(ziel + ".neu", kopf.join("\n") + u.text + "\n");
     renameSync(ziel + ".neu", ziel);
     n++;
@@ -169,6 +184,56 @@ export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
     renameSync(anstoss + ".neu", anstoss);
   }
   return n;
+}
+
+// PDFs ohne Textfassung daneben und halb hochgeladene, älter als PDF.verfall, löschen (auch lauf.mjs vor einem Lauf mit Opus)
+export function pdfAufraeumen(ordner, jetzt = new Date()) {
+  if (!existsSync(ordner)) return;
+  for (const n of readdirSync(ordner)) {
+    const m = /^([0-9a-f]{64})\.pdf(\.teil)?$/.exec(n);
+    if (!m || (!m[2] && existsSync(join(ordner, m[1] + ".md")))) continue;
+    try { if (jetzt.getTime() - statSync(join(ordner, n)).mtimeMs > PDF.verfall) rmSync(join(ordner, n), { force: true }); } catch (e) { /* schon weg */ }
+  }
+}
+
+// Ein Stück einer PDF für den Lauf mit Opus (unterlagen/opus/<SHA-256>.pdf, die Kennung der Textfassung). Entschlüsselt: eine
+// Kopfzeile { schema: 1, kennung, teil, teile } als JSON, Zeilenumbruch, dann die Bytes; alle Stücke außer dem letzten genau
+// PDF.teil groß, der Reihe nach (sonst 409). Das erste beginnt mit „%PDF-“ (sonst 400) und prüft die Grenzen (413, 429); nach dem
+// letzten muss der SHA-256 stimmen (sonst 400), erst dann heißt die Datei .pdf. → { kennung, fertig }
+export function pdfTeilAblegen(verzeichnis, klar, jetzt = new Date()) {
+  const fehler = (status, text) => Object.assign(new Error(text), { status });
+  const nl = klar.indexOf(10);
+  if (nl < 0 || nl > 1024) throw fehler(400, "Kopfzeile fehlt");
+  let k;
+  try { k = JSON.parse(klar.subarray(0, nl).toString("utf8")); } catch (e) { throw fehler(400, "Kopfzeile ungültig"); }
+  const bytes = klar.subarray(nl + 1);
+  if (!k || k.schema !== 1 || typeof k.kennung !== "string" || !/^[0-9a-f]{64}$/.test(k.kennung) || !Number.isInteger(k.teile) || !Number.isInteger(k.teil) ||
+    k.teile < 1 || k.teil < 0 || k.teil >= k.teile) throw fehler(400, "Kopfzeile ungültig");
+  if (k.teile > Math.ceil(PDF.bytes / PDF.teil)) throw fehler(413, "zu groß");
+  const letztes = k.teil === k.teile - 1;
+  if (letztes ? !bytes.length || bytes.length > PDF.teil : bytes.length !== PDF.teil) throw fehler(400, "Stück falsch groß");
+  const ordner = join(verzeichnis, "unterlagen", "opus");
+  mkdirSync(ordner, { recursive: true });
+  const ziel = join(ordner, k.kennung + ".pdf"), teil = ziel + ".teil";
+  if (k.teil === 0) {
+    if (bytes.subarray(0, 5).toString("latin1") !== "%PDF-") throw fehler(400, "keine PDF");
+    pdfAufraeumen(ordner, jetzt);
+    const andere = readdirSync(ordner).filter((n) => /^[0-9a-f]{64}\.pdf(\.teil)?$/.test(n) && !n.startsWith(k.kennung));
+    const belegt = andere.reduce((s, n) => { try { return s + statSync(join(ordner, n)).size; } catch (e) { return s; } }, 0);
+    if (andere.length >= PDF.warten || belegt + k.teile * PDF.teil > PDF.gesamt) throw fehler(429, "zu viele");
+    writeFileSync(teil, bytes);
+  } else {
+    let da = -1;
+    try { da = statSync(teil).size; } catch (e) { /* fehlt */ }
+    if (da !== k.teil * PDF.teil) throw fehler(409, "Stück außer der Reihe");
+    appendFileSync(teil, bytes);
+  }
+  if (!letztes) return { kennung: k.kennung, fertig: false };
+  const h = createHash("sha256"), puffer = Buffer.alloc(PDF.teil), fd = openSync(teil, "r");
+  try { for (let n; (n = readSync(fd, puffer, 0, puffer.length, null)) > 0;) h.update(puffer.subarray(0, n)); } finally { closeSync(fd); }
+  if (h.digest("hex") !== k.kennung) { rmSync(teil, { force: true }); throw fehler(400, "Prüfsumme"); }
+  renameSync(teil, ziel);
+  return { kennung: k.kennung, fertig: true };
 }
 
 // Knopf „Mails durchsuchen“: Anstoß für einen Lauf mit Gmail (Grund knopf). Wartet schon einer, bleibt er (ein wartender
@@ -256,8 +321,17 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
         return antwort(res, 200, oeffentlicherStatus(lesen(join(verzeichnis, "zustand.json"), {}),
           lesen(join(verzeichnis, "abruf.json"), {}), konfig.version, jetzt(), existsSync(join(verzeichnis, "anstoss"))));
       }
-      if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/anstoss", "/v1/verbinden"].includes(pfad)) return antwort(res, 404, { fehler: "unbekannt" });
       const wer = absenderVon(req);
+      if (pfad.startsWith("/v1/livesync/")) {
+        if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
+        if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
+        const setupLink = abholen(verzeichnis, pfad.slice("/v1/livesync/".length), jetzt());
+        if (!setupLink) fehlversuch(wer);
+        res.writeHead(setupLink ? 200 : 404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
+          "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", "referrer-policy": "no-referrer" });
+        return res.end(seite(setupLink));
+      }
+      if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/pdf", "/v1/anstoss", "/v1/verbinden"].includes(pfad)) return antwort(res, 404, { fehler: "unbekannt" });
 
       if (pfad === "/v1/verbinden") {
         if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
@@ -283,6 +357,9 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
       if (pfad === "/v1/unterlagen") {
         const n = unterlagenAblegen(verzeichnis, unterlagenPruefen(await entschluesseln(konfig.schluessel, "unterlagen", await koerper(req, MAX_KOERPER[pfad]))), jetzt());
         return antwort(res, 200, { angenommen: n });
+      }
+      if (pfad === "/v1/pdf") {
+        return antwort(res, 200, pdfTeilAblegen(verzeichnis, await entschluesselnRoh(konfig.schluessel, "pdf", await koerper(req, MAX_KOERPER[pfad])), jetzt()));
       }
       // /v1/stand
       const { stand, erledigt } = standPruefen(await entschluesseln(konfig.schluessel, "stand", await koerper(req, MAX_KOERPER[pfad])));

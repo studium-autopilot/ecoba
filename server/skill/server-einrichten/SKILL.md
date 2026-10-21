@@ -1,6 +1,6 @@
 ---
 name: server-einrichten
-description: Richtet den eigenen kostenlosen Server für Studium Autopilot ein (Oracle Always Free, Claude Code mit dem eigenen Abo) und führt Schritt für Schritt durch Oracle-Konto, Server, Claude, Mails und die Verbindung mit Obsidian. Verwenden für „Richte meinen Server ein“, „Weiter mit der Einrichtung“, „Prüf meine Oracle-Kosten“ und „Platzsucher beenden“.
+description: Richtet den eigenen kostenlosen Server für Studium Autopilot ein (Oracle Always Free, Claude Code mit dem eigenen Abo) und führt Schritt für Schritt durch Oracle-Konto, Server, Claude, Mails und die Verbindung mit Obsidian. Verwenden für „Richte meinen Server ein“, „Weiter mit der Einrichtung“, „Prüf meine Oracle-Kosten“, „Platzsucher beenden“ und „Richte LiveSync ein“ (Tresor zwischen Windows, iPhone und iPad abgleichen).
 ---
 
 # Studium Autopilot: eigenen Server einrichten
@@ -15,8 +15,9 @@ Abo in Uni-Mails und Gmail nach Terminen, und Obsidian holt die Ergebnisse versc
 |---|---|
 | Schritte 0 bis 12, woran du erkennst, was schon erledigt ist | [schritte.md](schritte.md) |
 | Kostenregeln (gelten vor jedem Anlegen, in jedem Konto) | [kosten.md](kosten.md) |
+| LiveSync: Tresor über den Server zwischen Geräten abgleichen (freiwillig, nach der Einrichtung) | [livesync.md](livesync.md) |
 
-Lies vor dem ersten Schritt beide Dateien, aus derselben Version wie diese Datei. Schritt 2 lädt das Server-Paket genau dieser
+Lies vor dem ersten Schritt schritte.md und kosten.md (für LiveSync dazu livesync.md), aus derselben Version wie diese Datei. Schritt 2 lädt das Server-Paket genau dieser
 Version; Anleitung und Paket passen so immer zusammen.
 
 ## Grundregeln
@@ -80,6 +81,7 @@ sonst sagst du die Tasten an.
 - **„Weiter mit der Einrichtung“**: Schritt 2 (Stand), dann der erste offene Schritt. Kam eine Mail „Dein Server ist da“ vom
   Platzsucher: weiter mit Schritt 5.
 - **„Prüf meine Oracle-Kosten“**: Schritt 11 allein.
+- **„Richte LiveSync ein“** und **„Verbinde noch ein Gerät mit LiveSync“**: [livesync.md](livesync.md).
 
 ## Aufräumen nach früheren Versuchen
 

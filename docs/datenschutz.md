@@ -130,20 +130,29 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   zusammenführen kann).
   To-dos, die nach Zugangsdaten aussehen, schickt es nie; der Server prüft das noch einmal. Tippst du in einer Unterlage auf
   **Zusammenfassen**, dazu deren Textfassung (Folien, Skripte, Übungen, Lösungen, Altklausuren, Literatur), damit Claude „Das
-  Wichtigste“ schreibt; nie Mitschriften, eigene Lösungen oder Scans. Von selbst geht die Textfassung neuer Unterlagen (höchstens
+  Wichtigste“ schreibt; nie Mitschriften, eigene Lösungen oder Scans. Dazu geht auch die PDF selbst mit (verschlüsselt, damit
+  Claude Abbildungen und Tabellen sieht); wird das teuer oder ist sie groß, fragt der Knopf vorher, und mit „Nur Text“
+  bleibt es bei der Textfassung. Der Server löscht die PDF nach dem Lauf. Von selbst geht die Textfassung neuer Unterlagen (höchstens
   drei Wochen alt) aus Modulen, deren Termine aus Unterlagen nicht über die zentralen Daten kommen, damit Claude darin nur nach
   Terminen sucht. Mit `server_unterlagen: alle` in `System/Einstellungen.md` gehen alle Unterlagen ohne Zusammenfassung von
-  selbst, mit `server_unterlagen: aus` keine. Keine Noten, keine übrigen Notiztexte, keine PDFs. Den
-  ganzen Tresor sieht der Server nie.
+  selbst, mit `server_unterlagen: aus` keine. Keine Noten, keine übrigen Notiztexte, keine PDFs außer
+  denen, die du zusammenfassen lässt. Den
+  ganzen Tresor sieht der Server nie, außer du schaltest LiveSync ein (unten).
 - **Was im Tresor landet:** Termine als Notizen unter `Termine/` und kurze Hinweise in `System/Daten/server.json`. Hinweise
   fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten.
 - **Auf dem Server:** Claude Code läuft mit deinem Claude-Konto. Was Claude dort liest (deine Mails), verarbeitet
   Anthropic nach den Bedingungen deines Kontos. Gmail nur lesend: Senden, Entwürfe, Labels und Löschen sind gesperrt.
   Personennamen schreibt Claude nicht in die Ergebnisse, Absender nur als Einrichtung und Datum.
-- **Uni-Passwort (freiwillig):** Du tippst es selbst auf dem Server ein. Es liegt dort nur verschlüsselt. Entschlüsselt bekommt
+- **Uni-Mails:** Empfohlen ist eine Weiterleitung deiner Uni-Mails an Gmail. Dann liegt dein Uni-Passwort, das auch für
+  ILIAS, Alma und Noten gilt, nicht auf dem Server; die Mails kommen dafür erst mit der nächsten Gmail-Suche an.
+- **Uni-Passwort (freiwillig, statt der Weiterleitung):** Du tippst es selbst auf dem Server ein. Es liegt dort nur verschlüsselt. Entschlüsselt bekommt
   es nur der Abruf deines Uni-Postfachs, unter einem eigenen Benutzer; Claude und der Web-Dienst nie. Nach einer abgelehnten Anmeldung versucht der Server es nicht wieder, damit dein Konto
   nicht gesperrt wird. Grenze: Wer root auf deinem Server ist, könnte es entschlüsseln.
-- **Öffentlich** ist nur eine Statusseite ohne persönliche Daten (Version, Claude verbunden ja oder nein, Zeitpunkte).
+- **LiveSync (freiwillig):** Gleicht dein Server deinen Tresor zwischen deinen Geräten ab, liegt der ganze Tresor dort, in der
+  Datenbank verschlüsselt, auch die Dateinamen. Den Schlüssel dafür bewahrt der Server auf (nur root), damit Claude neue Geräte
+  verbinden kann. Wie beim Uni-Passwort gilt: Wer root auf deinem Server ist, könnte den Tresor lesen. Claude liest ihn nicht.
+- **Öffentlich** ist nur eine Statusseite ohne persönliche Daten (Version, Claude verbunden ja oder nein, LiveSync an oder aus,
+  Zeitpunkte).
 - **Abschalten:** in Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server** → **Trennen**; den
   Server selbst beendest du in der Oracle-Konsole.
 

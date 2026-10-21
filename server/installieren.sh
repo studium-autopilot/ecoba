@@ -39,7 +39,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 schritt "Pakete"
 fehlend=()
-for p in nodejs jq qrencode curl ca-certificates gnupg python3 iptables iptables-persistent unattended-upgrades; do
+for p in nodejs jq qrencode curl ca-certificates gnupg python3 poppler-utils iptables iptables-persistent unattended-upgrades; do
   dpkg -s "$p" >/dev/null 2>&1 || fehlend+=("$p")
 done
 if [ ${#fehlend[@]} -gt 0 ]; then
@@ -72,7 +72,7 @@ install -d -m 0750 -o studium -g studium /var/lib/studium-server/eingang
 install -d -m 0700 -o studium -g studium /var/lib/studium-server/verbinden
 install -d -m 0755 /etc/credstore.encrypted
 install -d -m 0755 "$ZIEL"
-for datei in VERSION README.md kanal.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py studium-server installieren.sh; do
+for datei in VERSION README.md kanal.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh; do
   install -m 0644 "$QUELLE/$datei" "$ZIEL/$datei"
 done
 rm -rf "$ZIEL/skill"
@@ -311,6 +311,8 @@ if [ -f "$CADDYFILE" ] && ! grep -q '^# studium-server' "$CADDYFILE"; then
   echo "bisherige Caddyfile gesichert: $CADDYFILE.vor-studium-server"
 fi
 if [ "$TEST" -eq 1 ]; then SEITE=":8080"; else SEITE="${ADRESSE#https://}"; fi
+# Weitere Adressen (LiveSync, livesync.sh) legen ihre Teile in studium-server.d/ ab; sie bleiben bei jeder Installation
+install -d -m 0755 /etc/caddy/studium-server.d
 cat >"$CADDYFILE" <<CADDY
 # studium-server (installieren.sh): wird bei jeder Installation neu geschrieben
 $SEITE {
@@ -322,6 +324,8 @@ $SEITE {
 		respond 404
 	}
 }
+
+import /etc/caddy/studium-server.d/*.caddy
 CADDY
 caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null
 systemctl enable -q caddy
@@ -394,4 +398,5 @@ Nächste Schritte:
   sudo -u studium -i claude auth login      Claude auf dem Server anmelden
   sudo studium-server uni-zugang setzen     (freiwillig) Uni-Zugang verschlüsselt speichern
   sudo studium-server verbinden             Link und QR-Code, um Obsidian zu verbinden
+  sudo studium-server livesync              (freiwillig) LiveSync: Tresor zwischen Windows, iPhone und iPad abgleichen
 TEXT

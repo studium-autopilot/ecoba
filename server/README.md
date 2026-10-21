@@ -182,7 +182,7 @@ jedem weiteren Lauf erhalten. Er richtet ein:
 
 | Teil | Was |
 |---|---|
-| Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht), Caddy aus dessen offiziellem Paketarchiv |
+| Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `poppler-utils` (Claude liest damit Seitenbereiche aus PDFs), `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht), Caddy aus dessen offiziellem Paketarchiv |
 | Benutzer `studium` | führt die Dienste aus (Web-Dienst, Claude-Lauf, Zustand); Claude Code liegt in `/var/lib/studium/.local/bin/claude` |
 | Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium` für die Rohdaten) |
 | `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version |
@@ -190,7 +190,7 @@ jedem weiteren Lauf erhalten. Er richtet ein:
 | `/var/lib/studium-server` | Zustand, Eingang (Ergebnisse für das Plugin), Einmal-Codes |
 | `studium-server-dienst` | Web-Dienst `dienst.mjs`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404 |
 | `studium-server-speicher` | Speicherreserve `speicher-reserve.mjs` (25 % des Arbeitsspeichers), damit Oracle den Server nicht wegen Leerlaufs anhält |
-| `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet, Uni-Zugang, Reserve |
+| `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet, Uni-Zugang, Reserve, LiveSync |
 | `studium-server-abruf.timer` | alle 15 Minuten `abrufen.py` ohne KI: das Uni-Postfach, nur mit gespeichertem Uni-Zugang (nach der Uhr, weil ein übersprungener Dienst einen relativen Zeitgeber nicht weiterstellt). Steht in Obsidian ein Takt von 30 oder 60 Minuten, fallen die Zwischenzeiten aus, außer nach „Mails durchsuchen“. Beim ersten Start ab 06:30 Uhr der tägliche Sicherheitslauf: die Uni-Mails der letzten 24 Stunden noch einmal und ein Anstoß (Grund `taeglich`), auch ohne neue Mail |
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
@@ -201,12 +201,14 @@ jedem weiteren Lauf erhalten. Er richtet ein:
 
 | Weg | Wer | Was |
 |---|---|---|
-| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail, Weiterleitung, Uni-Zugang, Reserve, letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
+| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail, Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
 | `POST /v1/anstoss` | mit Zugangsschlüssel | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 10 Minuten (sonst 429 mit `wieder`); ein wartender Anstoß bleibt |
 | `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180 |
 | `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
 | `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
+| `POST /v1/pdf` | mit Zugangsschlüssel | verschlüsselt ein Stück (8 MB, Zweck `pdf`) einer PDF zu einer gewünschten Zusammenfassung, der Reihe nach (sonst 409); nach dem letzten und geprüftem SHA-256 liegt sie als `unterlagen/opus/<SHA-256>.pdf` da. Die Textfassung kommt gleich danach und nennt sie im Kopf, Opus liest dann die PDF. Je PDF bis 500 MB (sonst 413), höchstens 6 und zusammen 1 GB warten (sonst 429), ohne Textfassung oder halb hochgeladen verfällt eine nach einem Tag; nach einem erfolgreichen Lauf gelöscht |
 | `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät |
+| `GET /v1/livesync/<kennung>` | mit Kennung (20 Zeichen, 30 Minuten) | Seite mit dem Knopf „In Obsidian öffnen“ für den Setup-Link von LiveSync; unbekannte Kennungen zählen als Fehlversuch (siehe „LiveSync“) |
 
 Je Absender (letzter Eintrag in `X-Forwarded-For`, den Caddy setzt) antworten die geschützten Wege nach 10 Fehlversuchen in
 10 Minuten 10 Minuten lang mit 429. Ein gültiger Zugangsschlüssel wird nie gesperrt, sonst könnte jeder das Plugin aussperren.
@@ -240,8 +242,8 @@ sie nicht doppelt liefert), die ältesten Textfassungen aus `unterlagen/neu/` (b
 Begleitnotizen; scheitert der Lauf, kommen sie zurück, warten danach noch welche, startet gleich der nächste Lauf) und dem Skill
 `studium-autopilot`. Claude Code läuft headless (`claude -p`) mit dem Abo des Nutzers, Standardmodell
 Sonnet (`studium-server modell opus` für Opus). Warten Unterlagen in `unterlagen/opus/` (in Obsidian per Knopf „Zusammenfassen“
-gewünscht), läuft vorher ein eigener Lauf mit Opus nur für sie (höchstens 3, ohne Mails und ohne Gmail); der gewöhnliche Lauf
-folgt mit demselben Anstoß:
+gewünscht), läuft vorher ein eigener Lauf mit Opus nur für sie (höchstens 3, ohne Mails und ohne Gmail; eine PDF daneben kommt
+mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben Anstoß:
 
 - **Werkzeuge:** nur Lesen, Suchen und Schreiben von `ausgabe.json`; kein Bash, kein Web, keine Unteragenten, nichts außerhalb
   des Lauf-Ordners (Glob und Grep ohne eigene Freigabe; mit Claude Code im Modus `dontAsk` geprüft: außerhalb verweigert). Gmail nur lesend und nur, wenn die Gmail-Suche dran ist (Uhrzeiten oben, Knopf, Sicherheitslauf, oder letzte Suche
@@ -256,6 +258,10 @@ folgt mit demselben Anstoß:
 
 ### Uni-Zugang (freiwillig)
 
+Empfohlen ist stattdessen eine Weiterleitung der Uni-Mails an Gmail (Status `weiterleitung: ok`): Dann liegt das
+Uni-Passwort, das auch für ILIAS, Alma und Noten gilt, nicht auf dem Server. Die Mails kommen dafür erst mit der nächsten
+Gmail-Suche an statt alle 15 Minuten.
+
 `sudo studium-server uni-zugang setzen` fragt Benutzername und Passwort ab; das Passwort verdeckt (`systemd-ask-password`)
 und nur über Pipes, nie in einer Befehlszeile. Gespeichert wird es nur verschlüsselt mit `systemd-creds` unter
 `/etc/credstore.encrypted/uni-zugang` (nur root). Entschlüsselt bekommt es nur der Abruf des Uni-Postfachs, unter eigenem
@@ -268,6 +274,40 @@ Benutzer `studium-abruf`; Web-Dienst und Claude-Lauf (Benutzer `studium`) könne
 Status, im Journal oder in einer Kopie der Datei allein; wer aber root auf dem Server ist, kann es entschlüsseln. Darum: nur
 Schlüssel-Anmeldung per SSH (kein Passwort, kein root), automatische Sicherheitsupdates mit Neustart, von außen nur Port 22 und 443
 offen, Metadaten der Instanz nur über IMDSv2.
+
+### LiveSync (freiwillig)
+
+Gleicht den Tresor über den eigenen Server zwischen Windows, Mac, iPhone, iPad und Android ab, mit dem Community-Plugin
+Self-hosted LiveSync. Eingerichtet wird es mit Claude (Skill `server-einrichten`, `livesync.md`); in Obsidian steht dafür im
+Fenster „Eigener Server“ ein Knopf **Prompt kopieren**, aber nur auf einem verbundenen Gerät, auf dem LiveSync noch nicht läuft.
+
+`sudo studium-server livesync` (`livesync.sh`) schaltet beim ersten Mal ein und zeigt dann einen Link für ein Gerät:
+
+| Teil | Was |
+|---|---|
+| CouchDB | aus dem Paketarchiv von Apache (`couchdb-deb`, Arm und x86), ein Knoten, nur auf 127.0.0.1, Anmeldung immer nötig, CORS nur für die Obsidian-Apps (Computer, iPhone/iPad, Android) |
+| Caddy | `https://obsidian.<IP mit Bindestrichen>.sslip.io` → CouchDB (`/etc/caddy/studium-server.d/livesync.caddy`, eingebunden vom Caddyfile) |
+| `/etc/studium-server/livesync.json` | Benutzer, Passwort (32 Zeichen), Datenbank, Schlüssel der Ende-zu-Ende-Verschlüsselung von LiveSync (32 Zeichen); nur root |
+| `/var/lib/studium-server/livesync-an` | Marke für den Status (`livesync: an`) |
+
+Der Benutzer ist der Administrator von CouchDB: LiveSync braucht diese Rechte für „Overwrite remote“, und auf dem Server liegt
+nur dieser eine Tresor. In der Datenbank liegt er verschlüsselt, auch die Dateinamen.
+
+**Link für ein Gerät:** `livesync.mjs` baut die Einstellungen (Ende-zu-Ende-Verschlüsselung, Live-Abgleich, versteckte Dateien
+außer LiveSync selbst und der Fensteranordnung) und verschlüsselt sie wie LiveSync 1.0 („persistent“: PBKDF2-SHA-256 mit
+310 000 Runden, HKDF, AES-256-GCM) mit einem neuen Code aus 12 Zeichen. Weil der Setup-Link für einen QR-Code im Terminal zu
+lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (Dateiname nur ihr SHA-256) und zeigt den
+kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf dem Gerät ein; ohne ihn nützt der
+Link nichts. Der Code steht nur im Terminal, nie im Journal.
+
+**Grenze:** Wie beim Uni-Zugang liegt der Schlüssel der Verschlüsselung auf dem Server (nur root). Wer root auf dem Server ist,
+kann den Tresor lesen.
+
+```
+sudo studium-server livesync               einschalten (falls nötig), dann Link und Code für ein Gerät
+sudo studium-server livesync einschalten   nur einschalten bzw. nachziehen (wiederholbar, Zugangsdaten bleiben)
+sudo studium-server livesync verbinden     nur einen neuen Link für ein Gerät
+```
 
 ### Befehle (`studium-server`)
 
@@ -282,6 +322,7 @@ studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell der Claude-Läufe
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
 studium-server aktualisieren           Server-Paket aus dem Release (Prüfsumme) installieren
+studium-server livesync                LiveSync einschalten und ein Gerät verbinden (siehe „LiveSync“)
 ```
 
 ### Geprüft
@@ -291,6 +332,11 @@ Testmodus dreimal hintereinander. Ende zu Ende über Caddy mit 27 Prüfungen: St
 und mit Node 18 entschlüsselt, Stand mit Aufräumen, Uni-Zugang nur verschlüsselt und für `studium` unlesbar, nichts davon im
 Status oder Journal, Sperre nach Fehlversuchen, Speicherreserve wirklich belegt. Claude Code ließ sich als `studium`
 installieren. Noch nicht geprüft: HTTPS mit `sslip.io` an einer echten öffentlichen IP.
+
+LiveSync (21.10.2026): im selben Testaufbau mit echter CouchDB 3.5 aus dem Paketarchiv von Apache, 26 Prüfungen: nur auf
+127.0.0.1, ohne oder mit falscher Anmeldung 401, CORS nur für die Obsidian-Apps, große Anfragen, Status, Linkseite und Ablauf,
+nichts im Journal, zweites Einschalten und Neuinstallation ohne Verlust. Den Setup-Link von der Linkseite las der echte
+Decoder von LiveSync 1.0.38. Noch nicht geprüft: echte Geräte (Windows, iPhone) und das Zertifikat für `obsidian.…sslip.io`.
 
 Abruf und Lauf: `server/test_abrufen.py` (IMAP als Attrappe), `tests/server-eingang.test.js` (auch gegen
 `terminePruefen` des Plugins) und `tests/server-lauf.test.js` (Claude als Attrappe). Dazu ein echter Lauf am 18.10.2026 mit

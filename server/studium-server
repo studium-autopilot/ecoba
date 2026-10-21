@@ -21,6 +21,9 @@ studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell für die Claude-Läufe (Standard: sonnet, schont das Limit)
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
 studium-server aktualisieren           neuestes Server-Paket aus dem Release holen (Prüfsumme) und installieren
+studium-server livesync                LiveSync einschalten (falls nötig), dann Link und Code für ein Gerät (30 Minuten)
+studium-server livesync einschalten    nur einschalten: CouchDB für den Tresor, HTTPS unter obsidian.<IP>.sslip.io
+studium-server livesync verbinden      nur Link und Code für ein weiteres Gerät
 TEXT
 }
 
@@ -123,6 +126,7 @@ case "${1:-hilfe}" in
     [ -n "$letzter" ] && jq . "$letzter/protokoll.json" 2>/dev/null || echo "Noch kein Claude-Lauf."
     ;;
   aktualisieren) aktualisieren ;;
+  livesync) shift; root_noetig livesync; bash "$PAKET/livesync.sh" "$@" ;;
   hilfe|-h|--help) hilfe ;;
   *) hilfe; exit 1 ;;
 esac

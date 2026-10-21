@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Schreibt die Fakten für den öffentlichen Status (dienst.mjs, /v1/status) nach $STUDIUM_SERVER_DATEN/zustand.json.
 // Läuft per Timer alle 15 Minuten als Benutzer „studium“. Prüft selbst: Claude angemeldet, Uni-Zugang gespeichert bzw.
-// abgelehnt, Speicherreserve aktiv (ihre Meldung speicher-reserve.json mit lebender PID). Felder, die andere Teile setzen
+// abgelehnt, Speicherreserve aktiv (ihre Meldung speicher-reserve.json mit lebender PID), LiveSync eingeschaltet (Marke
+// livesync-an, schreibt livesync.sh). Felder, die andere Teile setzen
 // (gmail, weiterleitung, letzterLauf), bleiben stehen.
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, realpathSync, renameSync, writeFileSync } from "node:fs";
@@ -37,7 +38,8 @@ async function messen(verzeichnis, p) {
   const claude = await p.claude();
   const speicherReserve = await p.speicherReserve(verzeichnis);
   const uniZugang = !(await p.uniZugangGespeichert()) ? "fehlt" : existsSync(join(verzeichnis, "uni-zugang-falsch")) ? "falsch" : "gespeichert";
-  return { claude, speicherReserve, uniZugang };
+  const livesync = existsSync(join(verzeichnis, "livesync-an")) ? "an" : "aus";
+  return { claude, speicherReserve, uniZugang, livesync };
 }
 
 // Eigene Felder in den Zustand; Felder des Claude-Laufs (letzterLauf, gmail, fehler anderer Art) bleiben
@@ -67,5 +69,5 @@ export async function zustandAktualisieren(verzeichnis, p = proben) {
 // realpathSync: Node löst den Symlink /opt/studium-server/aktuell für import.meta.url auf, für argv[1] nicht.
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   zustandAktualisieren(process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server")
-    .then((z) => console.log(`zustand: claude ${z.claude}, uni-zugang ${z.uniZugang}, speicherreserve ${z.speicherReserve}`));
+    .then((z) => console.log(`zustand: claude ${z.claude}, uni-zugang ${z.uniZugang}, speicherreserve ${z.speicherReserve}, livesync ${z.livesync}`));
 }

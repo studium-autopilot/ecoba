@@ -28,7 +28,7 @@ if (modus === "limit-neu") {
 }
 if (modus === "begleitnotiz") {
   // je Textfassung in unterlagen/ eine Begleitnotiz zur Datei aus ihrer Kopfzeile
-  const begleitnotizen = fs.readdirSync("unterlagen").map((n) => ({
+  const begleitnotizen = fs.readdirSync("unterlagen").filter((n) => n.endsWith(".md")).map((n) => ({
     datei: /^Datei: (.+)$/m.exec(fs.readFileSync("unterlagen/" + n, "utf8"))[1],
     wichtigste: [{ text: "Deckungsbeitrag = Erlös minus variable Kosten.", seite: 2 }], zu_tun: [], fragen: [{ text: "Wozu fixe Kosten?" }],
   }));
@@ -191,7 +191,7 @@ test("Unterlagen: bis 6 je Lauf (älteste zuerst) in den Arbeitsordner, Begleitn
   assert.deepEqual(fs.readdirSync(neu), [], "150 000 + 1 000 schon");
 });
 
-test("Zusammenfassen auf Wunsch: eigener Lauf mit Opus vor dem gewöhnlichen, nur diese Unterlagen, ohne Mails; Fehlschlag legt sie zurück", async () => {
+test("Zusammenfassen auf Wunsch: eigener Lauf mit Opus vor dem gewöhnlichen, nur diese Unterlagen, ohne Mails; PDFs mit und danach weg; Fehlschlag legt sie zurück", async () => {
   const { laufen, anstossSchreiben } = await laden("lauf.mjs");
   const { v, skill, claude } = umgebung();
   const opus = path.join(v, "unterlagen", "opus"), neu = path.join(v, "unterlagen", "neu");
@@ -206,6 +206,7 @@ Modul: B110 · Art: Folien
 [S. 1]
 Text`);
   }
+  fs.writeFileSync(path.join(opus, "a".repeat(64) + ".pdf"), "%PDF-1.7\n");
   process.env.ATTRAPPE = "begleitnotiz";
   anstossSchreiben(v, "gmail", JETZT);
   const r = await laufen({ verzeichnis: v, jetzt: JETZT, claude, skill, holen: async () => ({ ok: false }) });
@@ -219,17 +220,20 @@ Text`);
   const auftrag = fs.readFileSync(path.join(v, "laeufe", erster, "auftrag.md"), "utf8");
   assert.match(auftrag, /Gmail durchsuchen: nein/);
   assert.match(auftrag, /die die Person ausgewählt hat/);
+  assert.match(auftrag, /nennt ihr Kopf eine PDF, die PDF/);
+  assert.ok(!fs.readdirSync(path.join(v, "laeufe", erster, "unterlagen")).some((n) => n.endsWith(".pdf")), "PDF mit in den Lauf, danach gelöscht");
   assert.ok(!lesen(path.join(v, "laeufe", erster, ".rechte.json")).permissions.allow.some((x) => x.includes("Gmail")), "kein Gmail im Opus-Lauf");
   assert.ok(fs.existsSync(path.join(v, "laeufe", zweiter, "roh", "uni-postfach", "9.txt")), "die Mails im gewöhnlichen Lauf");
   assert.equal(lesen(path.join(v, "laeufe", zweiter, "protokoll.json")).gmail, true, "der Anlass gmail gilt weiter");
   assert.deepEqual(fs.readdirSync(opus), ["d".repeat(64) + ".md"], "eine wartet noch");
   assert.equal(lesen(path.join(v, "anstoss")).grund, "unterlagen", "nächster Lauf gleich angestoßen");
 
-  // Fehlschlag des Opus-Laufs: Unterlage zurück nach opus/, der gewöhnliche Lauf läuft trotzdem
+  // Fehlschlag des Opus-Laufs: Unterlage mit PDF zurück nach opus/, der gewöhnliche Lauf läuft trotzdem
+  fs.writeFileSync(path.join(opus, "d".repeat(64) + ".pdf"), "%PDF-1.7\n");
   process.env.ATTRAPPE = "limit";
   const r2 = await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 60e3), claude, skill, holen: async () => ({ ok: false }) });
   assert.equal(r2.status, "claude-limit");
-  assert.deepEqual(fs.readdirSync(opus), ["d".repeat(64) + ".md"]);
+  assert.deepEqual(fs.readdirSync(opus).sort(), ["d".repeat(64) + ".md", "d".repeat(64) + ".pdf"]);
   delete process.env.ATTRAPPE;
 });
 

@@ -44,6 +44,9 @@
 //   schreibt die Abschnitte, der nächste Abruf trägt sie in die Notiz neben der PDF ein (begleitnotizErgaenzen): fehlende
 //   Abschnitte über dem PDF-Kasten, Platzhalter älterer Notizen ersetzt, „Das Wichtigste“ nur, wenn dort noch nichts steht, bei
 //   „Zu tun“ und „Offene Fragen“ nur, was fehlt; dein Text bleibt. Dieselbe Lieferung nie zweimal (server.json „begleitet“).
+//   Mit PDF (seit 0.5.7): Der Knopf schickt dazu die PDF selbst (bis 500 MB, zusammenfassung_pdf: true, POST /v1/pdf in Stücken
+//   zu 8 MB vor dem Text), damit Opus auch Abbildungen, Tabellen und Formeln sieht. Kostet das grob geschätzt mehr als 5 % eines
+//   Fünf-Stunden-Limits im Pro-Abo (pdfKosten) oder hat die PDF mehr als 20 MB, fragt der Knopf erst: „Mit PDF“ oder „Nur Text“.
 // Doppelte To-dos: Claude nennt Paare (behalten, weg) über die Kennung aus dem Auszug (id = „t-“ + Q.kurzHash(Pfad + Zeile)).
 //   Aus „weg“ wird ein einfacher Punkt mit Link auf die Notiz, in der die Aufgabe bleibt: nur eine offene Aufgabe unter „Zu tun“
 //   einer Begleitnotiz (typ: unterlage), nur wenn die Zeile noch genau so dasteht; nie abgehakt, nie gelöscht.
@@ -83,6 +86,15 @@ module.exports = function (ctx) {
   const NEU_JE_ABRUF = 50;          // höchstens so viele neue Notizen je Abruf
   const TERMINSUCHE_TAGE = 21; // nur neue Unterlagen nach Terminen durchsuchen, nicht den ganzen Bestand
   const UNTERLAGEN_JE_ABRUF = 9, UNTERLAGEN_JE_ANFRAGE = 3; // Textfassungen an den Server (Anfrage: wie UNTERLAGEN in server/dienst.mjs)
+  // PDFs zum Knopf „Zusammenfassen“: Stücke und Grenze wie PDF.teil und PDF.bytes in server/dienst.mjs; ab PDF_GROSS fragt der
+  // Knopf (das Hochladen dauert)
+  const PDF_TEIL = 8 * 1024 * 1024, PDF_MAX = 500 * 1024 * 1024, PDF_GROSS = 20 * 1024 * 1024;
+  // Grob geschätzte Kosten einer Zusammenfassung mit Opus 5.5 (4 $ je Mio. Token Eingabe, 20 $ Ausgabe): der Text (etwa 3,5
+  // Zeichen je Token), mit PDF dazu je Seite etwa 1500 Token für das Bild (gemessen an Folien und Übungen), etwa 4000 Token
+  // Ausgabe. Ein Pro-Abo bekommt grob ein Zwanzigstel von Max 20x (etwa 8000 $ im Monat), verteilt auf etwa 146
+  // Fünf-Stunden-Fenster. → Anteil an einem Fenster (0.05 = 5 %); ab PDF_FRAGEN fragt der Knopf nach
+  const PRO_FENSTER_USD = 8000 / 20 / 146, PDF_FRAGEN = 0.05;
+  const pdfKosten = (seiten, zeichen, mitPdf) => (((mitPdf ? (seiten || 0) * 1500 : 0) + (zeichen || 0) / 3.5) * 4e-6 + 4000 * 20e-6) / PRO_FENSTER_USD;
   const ERLEDIGT_TAGE = 60, LAEUFE = 20, HINWEISE = 30;
   const HINWEIS_NEU_TAGE = 14;      // ältere Hinweise zählen nie als neu (etwa auf einem neuen Gerät)
   // Takt des Servers: Werte wie TAKT in server/dienst.mjs, der erste ist der Standard
@@ -118,6 +130,23 @@ module.exports = function (ctx) {
     "Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die Versionsnummer daraus (vX.Y.Z) und lies aus\n" +
     "genau dieser Version https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die\n" +
     "Dateien daneben. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich Schritt für Schritt.";
+  // LiveSync (seit 0.5.7): Der Server gleicht auf Wunsch den Tresor zwischen Windows, iPhone und iPad ab. Nur auf einem
+  // verbundenen Gerät, und nur solange LiveSync hier noch nicht läuft, steht im Fenster „Eigener Server“ der Knopf
+  // „Prompt kopieren“ mit diesem Text (Ablauf im Skill: server/skill/server-einrichten/livesync.md).
+  const LIVESYNC_PROMPT = "Richte LiveSync auf meinem eigenen Server für Studium Autopilot ein, damit mein Tresor zwischen meinen Geräten abgleicht\n" +
+    "(github.com/studium-autopilot/ecoba). Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die\n" +
+    "Versionsnummer daraus (vX.Y.Z) und lies aus genau dieser Version\n" +
+    "https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die Dateien daneben,\n" +
+    "dann „LiveSync einrichten“. Führe mich Schritt für Schritt.";
+  // Was das Fenster zu LiveSync zeigt: null (nicht verbunden, oder LiveSync läuft hier schon) | { titel, text }.
+  // livesync: Wert des Servers („an“, „aus“, „unbekannt“ bei älteren Servern; die Anleitung aktualisiert sie zuerst)
+  const livesyncAngebot = ({ verbunden, hier, livesync }) => {
+    if (!verbunden || hier) return null;
+    if (livesync === "an") {
+      return { titel: "Dieses Gerät abgleichen", text: "LiveSync läuft schon auf deinem Server. Kopier den Prompt und füg ihn in Claude Desktop ein: Claude bringt deinen Tresor auch auf dieses Gerät." };
+    }
+    return { titel: "Windows und iPhone abgleichen", text: "Dein Server kann deinen Tresor zwischen Windows, iPhone und iPad abgleichen, kostenlos und ohne iCloud. Kopier den Prompt und füg ihn in Claude Desktop ein: Claude richtet alles ein und sagt dir, wo du tippen musst." };
+  };
 
   // ---------- Kleine Helfer ----------
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
@@ -203,17 +232,17 @@ module.exports = function (ctx) {
   };
 
   // Knopf „Zusammenfassen“: Wunsch in den Eigenschaften der Notiz (zusammenfassung_angefordert: Zeitpunkt UTC, „2026-10-20T17:50Z“)
-  const WUNSCH = "zusammenfassung_angefordert";
+  const WUNSCH = "zusammenfassung_angefordert", WUNSCH_PDF = "zusammenfassung_pdf"; // dazu true: mit der PDF selbst
   const wunschVon = (fm) => {
     const w = fm && fm[WUNSCH];
     const s = w instanceof Date ? w.toISOString() : String(w == null ? "" : w).trim();
     return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s) ? s.slice(0, 16) : "";
   };
-  // Wunsch aus dem Text der Notiz entfernen (nur die Zeile in den Eigenschaften); → Text
+  // Wunsch aus dem Text der Notiz entfernen (nur die Zeilen in den Eigenschaften); → Text
   const wunschWeg = (text) => {
     const m = /^---\n([\s\S]*?)\n---(\n|$)/.exec(String(text));
     if (!m) return text;
-    const fm = m[1].split("\n").filter((z) => z.indexOf(WUNSCH + ":") !== 0).join("\n");
+    const fm = m[1].split("\n").filter((z) => z.indexOf(WUNSCH + ":") !== 0 && z.indexOf(WUNSCH_PDF + ":") !== 0).join("\n");
     return fm === m[1] ? text : "---\n" + fm + "\n---" + m[2] + text.slice(m[0].length);
   };
 
@@ -242,7 +271,7 @@ module.exports = function (ctx) {
 
   // ---------- Datenkanal (Gegenstück zu server/kanal.mjs) ----------
   const kodieren = (s) => new TextEncoder().encode(s);
-  const b64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
+  const b64 = (bytes) => { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); };
   const unb64 = (text) => {
     const t = String(text || "").replace(/-/g, "+").replace(/_/g, "/");
     const s = atob(t + "===".slice(0, (4 - (t.length % 4)) % 4));
@@ -262,11 +291,13 @@ module.exports = function (ctx) {
     const klar = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: kodieren(KANAL + zweck) }, await schluesselLaden(s), unb64(p.daten));
     return JSON.parse(new TextDecoder("utf-8").decode(klar));
   };
-  const verschluesseln = async (s, zweck, objekt) => {
+  // Bytes (Zweck „pdf“: die PDF) bzw. ein Objekt als JSON → Paket { schema, zweck, iv, daten }
+  const verschluesselnRoh = async (s, zweck, bytes) => {
     const iv = crypto.getRandomValues(new Uint8Array(12));
-    const geheim = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: kodieren(KANAL + zweck) }, await schluesselLaden(s), kodieren(JSON.stringify(objekt)));
+    const geheim = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: kodieren(KANAL + zweck) }, await schluesselLaden(s), bytes);
     return { schema: 1, zweck, iv: b64(iv), daten: b64(new Uint8Array(geheim)) };
   };
+  const verschluesseln = (s, zweck, objekt) => verschluesselnRoh(s, zweck, kodieren(JSON.stringify(objekt)));
 
   // ---------- Doppel erkennen ----------
   // Titel → Wörter: klein, Umlaute ausgeschrieben, ohne Füllwörter; Zahlen zählen immer (Blatt 2 ≠ Blatt 3)
@@ -298,7 +329,8 @@ module.exports = function (ctx) {
   //   modulLink(code) → "[[…]]" | "", bestaetigen(titel, text, ja) → Promise<boolean>, sperre (ctx.user.sperre),
   //   quellen (ctx.user.quellen), standText(status) → { text, symbol } (ctx.verbindungen.standText), mobil, lokalErlaubt,
   //   tresor() → Promise<{ termine: [{ titel, datum, bis, kategorie, code, herkunft, erledigt }], todos: [{ text, code, frist }] }>,
-  //   unterlagen() → Promise<[{ datei (PDF), kennung (SHA-256), art, titel, code, seiten, text }]> (ohne Zusammenfassung) }
+  //   unterlagen() → Promise<[{ datei (PDF), kennung (SHA-256), art, titel, code, seiten, text, angefordert?, pdf?, nur_termine? }]>
+  //   (ohne Zusammenfassung), pdf(datei) → Promise<Uint8Array | null> (die PDF selbst, für pdf: true) }
   //   io.begleitnotiz(pdfPfad) → Pfad der Notiz neben der PDF oder ""
   const erzeugen = (abh) => {
     const io = abh.io;
@@ -365,6 +397,7 @@ module.exports = function (ctx) {
       weiterleitung: wahl(o.weiterleitung, ["ok", "fehlt"]),
       uniZugang: wahl(o.uni_zugang, ["gespeichert", "fehlt", "falsch"]),
       speicherReserve: wahl(o.speicher_reserve, ["an", "aus"]),
+      livesync: wahl(o.livesync, ["an", "aus"]),
       letzterLauf: o.letzter_lauf && isoOk(o.letzter_lauf.zeit) ? { zeit: new Date(o.letzter_lauf.zeit).toISOString(), ok: o.letzter_lauf.ok === true } : null,
       claudeLauf: wahl(o.claude_lauf, ["wartet", "laeuft", "ruht"]),
       fehler: (Array.isArray(o.fehler) ? o.fehler : []).filter((f) => typeof f === "string" && /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
@@ -621,7 +654,8 @@ module.exports = function (ctx) {
 
     // Textfassungen von Lehrmaterial ohne Zusammenfassung an den Server (Claude schreibt die Begleitnotiz); je Abruf bis zu 9 in
     // Anfragen zu 3, jede PDF (Kennung = SHA-256) nur einmal, eine gewünschte (angefordert, Knopf „Zusammenfassen“) mit Opus und
-    // wieder, wenn sie nach dem letzten Senden noch einmal gewünscht wurde. Klappt eine Anfrage nicht (Netz, schon zu viele
+    // wieder, wenn sie nach dem letzten Senden noch einmal gewünscht wurde; mit pdf: true zuerst die PDF selbst (POST /v1/pdf;
+    // nimmt der Server sie nicht, etwa ein älterer, liest Claude den Text). Klappt eine Anfrage nicht (Netz, schon zu viele
     // warten), kommt der Rest beim nächsten Abruf. → Anzahl
     const unterlagenSenden = async (v, z) => {
       let liste = [];
@@ -630,13 +664,29 @@ module.exports = function (ctx) {
         ARTEN_SENDEN.indexOf(u.art) >= 0 && typeof u.text === "string" && u.text.trim() &&
         (u.angefordert ? !(String(z.gesendet[u.kennung] || "") >= String(u.angefordert).slice(0, 16)) : !z.gesendet[u.kennung])).slice(0, UNTERLAGEN_JE_ABRUF)
         .map((u) => ({ datei: String(u.datei), kennung: u.kennung, art: u.art, titel: reinerText(String(u.titel || ""), 160), code: String(u.code || ""),
-          seiten: Number.isInteger(u.seiten) ? u.seiten : 0, ...(u.angefordert ? { modell: "opus", angefordert: String(u.angefordert).slice(0, 16) } : u.nur_termine === true ? { nur_termine: true } : {}),
+          seiten: Number.isInteger(u.seiten) ? u.seiten : 0, ...(u.angefordert ? { modell: "opus", angefordert: String(u.angefordert).slice(0, 16), pdf: u.pdf === true } : u.nur_termine === true ? { nur_termine: true } : {}),
           text: u.text.slice(0, 400000) }));
       let n = 0;
       for (let i = 0; i < offen.length; i += UNTERLAGEN_JE_ANFRAGE) {
         const teil = offen.slice(i, i + UNTERLAGEN_JE_ANFRAGE);
         try {
-          const paket = await verschluesseln(v.schluessel, "unterlagen", { schema: 1, unterlagen: teil.map((u) => { const x = Object.assign({}, u); delete x.angefordert; return x; }) });
+          for (const u of teil) {
+            let pdf = null;
+            try { pdf = u.pdf && abh.pdf ? await abh.pdf(u.datei) : null; } catch (e) { pdf = null; }
+            if (!pdf || !pdf.length || pdf.length > PDF_MAX) continue;
+            // Stück für Stück: Kopfzeile (JSON), Zeilenumbruch, Bytes; nimmt der Server eins nicht, bleibt es beim Text
+            const teile = Math.ceil(pdf.length / PDF_TEIL);
+            for (let j = 0; j < teile; j++) {
+              const kopf = kodieren(JSON.stringify({ schema: 1, kennung: u.kennung, teil: j, teile }) + "\n"), stueck = pdf.subarray(j * PDF_TEIL, (j + 1) * PDF_TEIL);
+              const klar = new Uint8Array(kopf.length + stueck.length);
+              klar.set(kopf);
+              klar.set(stueck, kopf.length);
+              const r = await abh.netz({ url: v.adresse + "/v1/pdf", method: "POST", headers: { authorization: "Bearer " + v.zugang, "content-type": "application/json" },
+                body: JSON.stringify(await verschluesselnRoh(v.schluessel, "pdf", klar)) });
+              if (r.status !== 200) break;
+            }
+          }
+          const paket = await verschluesseln(v.schluessel, "unterlagen", { schema: 1, unterlagen: teil.map((u) => { const x = Object.assign({}, u); delete x.angefordert; delete x.pdf; return x; }) });
           const r = await abh.netz({ url: v.adresse + "/v1/unterlagen", method: "POST", headers: { authorization: "Bearer " + v.zugang, "content-type": "application/json" }, body: JSON.stringify(paket) });
           if (r.status !== 200) break;
         } catch (e) { break; }
@@ -923,21 +973,23 @@ module.exports = function (ctx) {
     const r = await obs.requestUrl({ url: a.url, method: a.method || "GET", headers: kopf, body: a.body, contentType: kopf["content-type"], throw: false });
     return { status: r.status, text: r.text };
   };
-  // Ja/Nein-Frage mit Hauptknopf → Promise<boolean>
-  const bestaetigenObs = (titel, text, ja) => new Promise((fertig) => {
+  // Frage mit Knöpfen (der erste ist der Hauptknopf) und „Abbrechen“ → Promise<Nummer des Knopfs | -1>
+  const wahlObs = (titel, text, knoepfe) => new Promise((fertig) => {
     const m = new obs.Modal(app);
-    let erledigt = false;
+    let wahl = -1;
     m.modalEl.addClass("eba-modal");
     m.titleEl.setText(titel);
     m.contentEl.createEl("p", { text, cls: "eba-modal-text" });
     const k = m.contentEl.createDiv({ cls: "modal-button-container" });
-    const ok = k.createEl("button", { text: ja, cls: "mod-cta" });
-    const ab = k.createEl("button", { text: "Abbrechen" });
-    ok.addEventListener("click", () => { erledigt = true; m.close(); fertig(true); });
-    ab.addEventListener("click", () => m.close());
-    m.onClose = () => { m.contentEl.empty(); if (!erledigt) fertig(false); };
+    knoepfe.forEach((t, i) => {
+      const b = k.createEl("button", i === 0 ? { text: t, cls: "mod-cta" } : { text: t });
+      b.addEventListener("click", () => { wahl = i; m.close(); });
+    });
+    k.createEl("button", { text: "Abbrechen" }).addEventListener("click", () => m.close());
+    m.onClose = () => { m.contentEl.empty(); fertig(wahl); };
     m.open();
   });
+  const bestaetigenObs = (titel, text, ja) => wahlObs(titel, text, [ja]).then((i) => i === 0);
   const eba = () => { try { return ctx.user.eba(ctx); } catch (e) { return null; } };
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const einstellungenFm = () => { const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN); const c = f && !f.children ? app.metadataCache.getFileCache(f) : null; return (c && c.frontmatter) || {}; };
@@ -965,10 +1017,8 @@ module.exports = function (ctx) {
   // Wichtigste“ fehlt oder ist leer), sonst neue aus nicht abgedeckten Modulen mit nur_termine; aus: keine.
   // o: { ohne: { Kennung: Zeit } (schon gesendet), hoechstens } → gewünschte zuerst, sonst neueste PDF zuerst
   const unterlagenModus = () => { const m = String(einstellungenFm().server_unterlagen || "").toLowerCase(); return m === "alle" || m === "aus" ? m : "knopf"; };
-  const unterlagenObs = async (o) => {
-    o = o || {};
-    const ohne = o.ohne || {}, hoechstens = o.hoechstens || UNTERLAGEN_JE_ABRUF, modus = unterlagenModus();
-    if (modus === "aus") return [];
+  // Textfassungen mit Text (volltext.js) → { PDF-Pfad: { f, fm } }
+  const volltexte = () => {
     const textVon = {};
     for (const f of app.vault.getMarkdownFiles()) {
       if (f.path.indexOf("Unterlagen/_Volltext/") !== 0) continue;
@@ -977,6 +1027,14 @@ module.exports = function (ctx) {
         textVon[String(fm.quelle || "")] = { f, fm };
       }
     }
+    return textVon;
+  };
+  const groesse = (p) => { const f = app.vault.getAbstractFileByPath(p); return f && f.stat ? f.stat.size || 0 : 0; };
+  const unterlagenObs = async (o) => {
+    o = o || {};
+    const ohne = o.ohne || {}, hoechstens = o.hoechstens || UNTERLAGEN_JE_ABRUF, modus = unterlagenModus();
+    if (modus === "aus") return [];
+    const textVon = volltexte();
     const aus = [], io = obsidianIo();
     const zeit = (p) => { const f = app.vault.getAbstractFileByPath(p); return f && f.stat ? f.stat.mtime || 0 : 0; };
     const notizVon = (pdfPfad) => {
@@ -1001,7 +1059,8 @@ module.exports = function (ctx) {
       if (!termine && begleitnotizErgaenzen(await app.vault.cachedRead(nf), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) continue;
       const t = textVon[pdfPfad];
       aus.push({ datei: pdfPfad, kennung: String(t.fm.pdf_sha256), art: nfm.art, titel: String(nfm.titel || nf.basename), code: String(nfm.code || ""),
-        seiten: Number(t.fm.seiten) || 0, ...(wunsch ? { angefordert: wunsch } : termine ? { nur_termine: true } : {}), text: volltextText(await app.vault.cachedRead(t.f)) });
+        seiten: Number(t.fm.seiten) || 0, ...(wunsch ? { angefordert: wunsch, pdf: nfm[WUNSCH_PDF] === true && groesse(pdfPfad) <= PDF_MAX } : termine ? { nur_termine: true } : {}),
+        text: volltextText(await app.vault.cachedRead(t.f)) });
     }
     return aus;
   };
@@ -1043,6 +1102,7 @@ module.exports = function (ctx) {
     standText: (s) => ctx.verbindungen.standText(s), // nur die Zeile unter Verbindungen fragt danach, also ist verbindungen.js geladen
     tresor: tresorObs,
     unterlagen: unterlagenObs,
+    pdf: async (p) => { const f = app.vault.getAbstractFileByPath(p); return f && !f.children ? new Uint8Array(await app.vault.readBinary(f)) : null; },
     mobil: !!(obs.Platform && obs.Platform.isMobile),
     lokalErlaubt: !!plugin().testServerLokal,
   });
@@ -1100,13 +1160,40 @@ module.exports = function (ctx) {
     const w = wunschVon(fm);
     return w && Date.now() - Date.parse(w + ":00Z") < 24 * 60 * MIN ? "angefordert" : "frei";
   };
-  // Wunsch in die Eigenschaften der Notiz (kommt über den Sync zum Gerät, das mit dem Server spricht), dann gleich abrufen
+  // PDF zur Notiz: gleicher Name mit .pdf, sonst das Feld datei (obsidianIo().begleitnotiz andersherum) → Datei | null
+  const pdfZurNotiz = (f, fm) => {
+    const gleich = app.vault.getAbstractFileByPath(f.path.replace(/\.md$/i, ".pdf"));
+    if (gleich && !gleich.children) return gleich;
+    const ziel = String(fm.datei || "").replace(/^\[\[|\]\]$/g, "").split("|")[0];
+    const d = ziel && app.metadataCache.getFirstLinkpathDest(ziel, f.path);
+    return d && /\.pdf$/i.test(d.path) ? d : null;
+  };
+  const prozent = (x) => `${Math.max(1, Math.round(x * 100))} %`;
+  // Wunsch in die Eigenschaften der Notiz (kommt über den Sync zum Gerät, das mit dem Server spricht), dann gleich abrufen. Mit
+  // der PDF (bis 500 MB); kostet das mehr als PDF_FRAGEN eines Pro-Fensters oder hat sie mehr als 20 MB, fragt der Knopf erst.
+  // → false, wenn du abbrichst
   const zusammenfassen = async (pfad) => {
     const f = app.vault.getAbstractFileByPath(pfad || "");
     if (!f || f.children) return false;
-    await app.fileManager.processFrontMatter(f, (fm) => { fm[WUNSCH] = new Date().toISOString().slice(0, 16) + "Z"; });
+    const pdf = pdfZurNotiz(f, (app.metadataCache.getFileCache(f) || {}).frontmatter || {}), t = pdf && volltexte()[pdf.path];
+    const bytes = t ? pdf.stat.size || 0 : 0, zuGross = bytes > PDF_MAX;
+    let mitPdf = !!t && !zuGross;
+    const seiten = t ? Number(t.fm.seiten) || 0 : 0, zeichen = t ? volltextText(await app.vault.cachedRead(t.f)).length : 0;
+    if (mitPdf && (pdfKosten(seiten, zeichen, true) > PDF_FRAGEN || bytes > PDF_GROSS)) {
+      const w = await wahlObs("Mit der PDF zusammenfassen?", "Mit der PDF sieht Claude auch Abbildungen, Tabellen und Formeln. " +
+        `Bei ${seiten} Seiten braucht das grob geschätzt ${prozent(pdfKosten(seiten, zeichen, true))} deines Fünf-Stunden-Limits im Pro-Abo, ` +
+        `nur mit dem Text etwa ${prozent(pdfKosten(seiten, zeichen, false))}.` +
+        (bytes > PDF_GROSS ? ` Die PDF hat ${Math.round(bytes / 1048576)} MB, das Hochladen dauert eine Weile.` : ""), ["Mit PDF", "Nur Text"]);
+      if (w < 0) return false;
+      mitPdf = w === 0;
+    }
+    await app.fileManager.processFrontMatter(f, (fm) => {
+      fm[WUNSCH] = new Date().toISOString().slice(0, 16) + "Z";
+      if (mitPdf) fm[WUNSCH_PDF] = true; else delete fm[WUNSCH_PDF];
+    });
     const hier = motor().verbunden();
-    ctx.hinweis("Claude fasst die Unterlage mit Opus zusammen. Das dauert einige Minuten, danach steht die Zusammenfassung hier." +
+    ctx.hinweis(`Claude fasst die Unterlage mit Opus zusammen${mitPdf ? " und liest dafür die PDF" : ""}. ` +
+      "Das dauert einige Minuten, danach steht die Zusammenfassung hier." + (zuGross ? " Die PDF hat mehr als 500 MB, darum liest Claude nur ihren Text." : "") +
       (hier ? "" : " Dein Gerät mit dem Server schickt sie beim nächsten Abruf."));
     if (hier) {
       // kurz warten, bis Obsidian die Eigenschaften neu gelesen hat, dann senden; das Ergebnis holt ein Abruf in 10 Min.
@@ -1116,9 +1203,9 @@ module.exports = function (ctx) {
   };
 
   // Fenster „Eigener Server“ (InfoFenster in verbindungen.js): Stand, Hinweise, letzte Übernahmen, Trennen
-  const kopieren = async () => {
+  const kopieren = async (text) => {
     try {
-      await navigator.clipboard.writeText(PROMPT);
+      await navigator.clipboard.writeText(typeof text === "string" ? text : PROMPT);
       ctx.hinweis("Kopiert. Füg den Text in Claude Desktop ein.");
     } catch (e) {
       ctx.hinweis("Kopieren ging nicht. Den Text findest du im README unter „Für Technische“.");
@@ -1167,6 +1254,14 @@ module.exports = function (ctx) {
       for (const l of d.laeufe) ul.createEl("li", { text: [l.wann, zahl(l.termine || 0, "Termin", "Termine"), zahl(l.hinweise || 0, "Hinweis", "Hinweise")].concat(l.begleitnotizen ? [zahl(l.begleitnotizen, "Begleitnotiz", "Begleitnotizen")] : []).concat(l.doppelt ? [zahl(l.doppelt, "Doppel", "Doppel") + " übersprungen"] : []).concat(l.todos ? [zahl(l.todos, "To-do", "To-dos") + " zusammengeführt"] : []).join(" · ") });
     }
     taktZeigen(box);
+    const plugins = app.plugins;
+    const angebot = livesyncAngebot({ verbunden: motor().verbunden(), livesync: (motor().status().werte || {}).livesync,
+      hier: !!(plugins && plugins.enabledPlugins && plugins.enabledPlugins.has("obsidian-livesync")) });
+    if (angebot) {
+      box.createEl("p", { cls: "eba-modal-abschnitt", text: angebot.titel });
+      box.createEl("p", { cls: "eba-modal-text", text: angebot.text });
+      box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Prompt kopieren", cls: "mod-cta" }).addEventListener("click", () => kopieren(LIVESYNC_PROMPT));
+    }
     if (motor().verbunden()) {
       box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Mails durchsuchen" }).addEventListener("click", () => durchsuchen());
       box.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Dieses Gerät trennen", href: ctx.link("trennen", { id: "server" }) });
@@ -1191,7 +1286,7 @@ module.exports = function (ctx) {
   };
 
   ctx.server = {
-    erzeugen, aehnlich, adresseNormal, PROMPT, kopieren, begleitnotizErgaenzen, volltextText, taktAus,
+    erzeugen, aehnlich, adresseNormal, PROMPT, LIVESYNC_PROMPT, livesyncAngebot, kopieren, begleitnotizErgaenzen, volltextText, taktAus, pdfKosten, PDF_FRAGEN,
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
     jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
   };

@@ -582,6 +582,36 @@ test("Alles oder nichts: falsche Prüfsumme, kein Netz, Schreibfehler", async ()
   assert.equal(r.sp.stand(), r.vorher);
 });
 
+test("Neu laden: Kern, den der Sync nicht geliefert hat, kommt aus dem Release dieser Version, geprüft, manifest.json zuletzt", async () => {
+  const liste = U.listePruefen(await listeBauen("0.3.0", NEU)).wert;
+  const kern = (o) => Object.assign({}, NEU, { [KERN + "main.js"]: ALT[KERN + "main.js"], [KERN + "manifest.json"]: ALT[KERN + "manifest.json"] }, o);
+  const lauf = async (ist, o) => {
+    o = o || {};
+    const q = quelle("0.3.0", NEU, "", o.stoerung);
+    const sp = speicher(ist, o.kaputtBei);
+    const vorher = sp.stand();
+    const r = await U.kernNachholen({ holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen }, { liste, basis: BASIS("0.3.0") });
+    return { r, q, sp, vorher };
+  };
+  // Alter Kern auf der Platte (Befund iPhone 21.10.2026): beide Dateien neu, manifest.json zuletzt, sonst nichts geholt
+  let x = await lauf(kern());
+  assert.equal(x.r.ok, true);
+  assert.deepEqual(x.q.geholt, [KERN + "main.js", KERN + "manifest.json"]);
+  assert.deepEqual(x.sp.reihe, [KERN + "main.js", KERN + "manifest.json"]);
+  assert.equal(x.sp.text(KERN + "manifest.json"), NEU[KERN + "manifest.json"]);
+  // Kern schon da (der Sync war schneller): nichts laden, nichts schreiben
+  x = await lauf(NEU);
+  assert.equal(x.r.ok, true); assert.deepEqual(x.q.geholt, []); assert.equal(x.sp.schreibvorgaenge, 0);
+  // Falsche Prüfsumme, kein Netz: nichts geschrieben
+  x = await lauf(kern(), { stoerung: (p) => (p === KERN + "manifest.json" ? "kaputt" : undefined) });
+  assert.equal(x.r.art, "pruefsumme"); assert.equal(x.sp.schreibvorgaenge, 0);
+  x = await lauf(kern(), { stoerung: () => "netz" });
+  assert.equal(x.r.art, "netz"); assert.equal(x.sp.schreibvorgaenge, 0);
+  // Schreibfehler bei manifest.json: main.js wieder alt
+  x = await lauf(kern(), { kaputtBei: (p) => p === KERN + "manifest.json" });
+  assert.equal(x.r.art, "schreiben"); assert.equal(x.sp.stand(), x.vorher);
+});
+
 test("Manifest der zentralen Daten: Feld release (optional, streng)", () => {
   const m = { schema: 1, erstellt: "2026-10-15T07:53:49Z", dateien: {}, plugin_aktuell: "0.2.0" };
   const rel = { version: "0.2.0", url_basis: "https://raw.githubusercontent.com/studium-autopilot/ecoba/v0.2.0/", sha256: "a".repeat(64), notiz: "Update-Knopf <b>neu</b>" };

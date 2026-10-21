@@ -4,7 +4,8 @@
 // (abrufen.py ab 06:30 Uhr: Uni-Mails der letzten 24 Stunden noch einmal, dazu Gmail und Liegengebliebenes). Den Takt für Gmail
 // stellst du in Obsidian ein (takt.json vom Dienst: 3-, 1- oder 0-mal am Tag).
 //   1. Anstoß und roh/ übernehmen, Arbeitsordner laeufe/<zeit>/ mit auftrag.md, roh/, bisher.json, stand.json, tresor.json,
-//      Textfassungen von Unterlagen (unterlagen/, vom Dienst; bis zu 6, zusammen höchstens 200 000 Zeichen) und dem Skill
+//      Textfassungen von Unterlagen (unterlagen/, vom Dienst; bis zu 6, zusammen höchstens 200 000 Zeichen; auf Wunsch mit der PDF
+//      daneben, die nach einem erfolgreichen Lauf gelöscht wird) und dem Skill
 //   2. claude -p mit engen Rechten: lesen nur im Arbeitsordner, schreiben nur ausgabe.json, kein Bash, kein Web, keine
 //      Unteragenten; Gmail nur lesend und nur, wenn Gmail dran ist; nie der Uni-Zugang, die Schlüssel oder ~/.claude
 //   3. ausgabe.json prüfen (eingang.mjs), nur Neues bzw. Geändertes nach eingang/, Bestand und Zustand nachziehen
@@ -15,6 +16,7 @@ import { spawn } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { pdfAufraeumen } from "./dienst.mjs";
 import { eingangNormal, istLeer, nurNeueHinweise, nurNeueOderGeaenderte } from "./eingang.mjs";
 
 const PAKET = dirname(fileURLToPath(import.meta.url));
@@ -97,7 +99,7 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterla
     "Neue Rohdaten: " + (meldungen.length ? meldungen.join("; ") : "keine") + ".",
     `Neue Unterlagen für Begleitnotizen: ${unterlagen ? `${unterlagen} (Ordner unterlagen/)` : "keine"}.`,
     ...(opus ? ["Dieser Lauf schreibt nur die Begleitnotizen zu den Unterlagen, die die Person ausgewählt hat. Sie wünscht sich besonders " +
-      "gründliche Zusammenfassungen: lies jede Unterlage ganz."] : []),
+      "gründliche Zusammenfassungen: lies jede Unterlage ganz, und nennt ihr Kopf eine PDF, die PDF (skill/begleitnotiz.md, „Mit PDF“)."] : []),
     ...(grund === "taeglich" ? ["Täglicher Sicherheitslauf: Die Uni-Mails in roh/ sind die der letzten 24 Stunden, einige kennst du schon. " +
       "Liefere nur, was in bisher.json fehlt oder sich geändert hat."] : []), "",
     "Lies skill/SKILL.md, skill/termine.md und skill/ausgabe.md" + (unterlagen ? ", für die Unterlagen auch skill/begleitnotiz.md" : "") +
@@ -107,7 +109,8 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterla
 }
 
 // Textfassungen für Begleitnotizen (der Dienst legt sie nach unterlagen/neu/): die ältesten im Rahmen der Grenzen in den
-// Lauf-Ordner; scheitert der Lauf, zurück (unterlagenZurueck). → Namen
+// Lauf-Ordner, eine PDF gleichen Namens (auf Wunsch, nur unterlagen/opus/) mit; scheitert der Lauf, zurück (unterlagenZurueck).
+// → Namen der Textfassungen
 function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF) {
   if (!existsSync(von)) return [];
   const alle = readdirSync(von).filter((n) => /^[0-9a-f]{64}\.md$/.test(n)).map((n) => ({ n, s: statSync(join(von, n)) }))
@@ -120,7 +123,11 @@ function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF) {
     summe += s.size;
   }
   if (namen.length) mkdirSync(nach, { recursive: true });
-  for (const n of namen) renameSync(join(von, n), join(nach, n));
+  for (const n of namen) {
+    renameSync(join(von, n), join(nach, n));
+    const pdf = n.slice(0, -3) + ".pdf";
+    if (existsSync(join(von, pdf))) renameSync(join(von, pdf), join(nach, pdf));
+  }
   return namen;
 }
 function unterlagenZurueck(arbeitU, neu) {
@@ -205,6 +212,7 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   if (opus) mkdirSync(join(arbeit, "roh"));
   else rohUebernehmen(join(verzeichnis, "roh"), join(arbeit, "roh"));
   const unterlagenNeu = join(verzeichnis, "unterlagen", opus ? "opus" : "neu");
+  if (opus) pdfAufraeumen(unterlagenNeu, jetzt);
   const unterlagen = unterlagenUebernehmen(unterlagenNeu, join(arbeit, "unterlagen"), opus ? UNTERLAGEN_OPUS_JE_LAUF : UNTERLAGEN_JE_LAUF);
   const index = existsSync(join(arbeit, "roh", "INDEX.md")) ? readFileSync(join(arbeit, "roh", "INDEX.md"), "utf8") : "";
   const meldungen = index.split("\n").filter((z) => z.startsWith("- ")).map((z) => z.replace(/^- [\d.]+ [\d:]+ UTC: /, "").trim());
@@ -241,8 +249,12 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   const fehler = new Set((neuerZustand.fehler || []).filter((f) => !["claude-lauf", "claude-limit", "ausgabe-ungueltig"].includes(f)));
   const ende = (ok, code, mehr = {}) => {
     if (!ok) { fehler.add(code); rohZurueck(join(arbeit, "roh"), join(verzeichnis, "roh")); unterlagenZurueck(join(arbeit, "unterlagen"), unterlagenNeu); }
+    // PDFs nicht aufheben (der Lauf-Ordner bleibt eine Weile zur Fehlersuche, die Textfassung reicht dafür)
+    else if (existsSync(join(arbeit, "unterlagen"))) {
+      for (const n of readdirSync(join(arbeit, "unterlagen"))) if (n.endsWith(".pdf")) rmSync(join(arbeit, "unterlagen", n), { force: true });
+    }
     // warten noch Unterlagen, gleich der nächste Lauf (nur nach Erfolg, sonst liefe ein Fehler im Kreis)
-    else if (["neu", "opus"].some((u) => wartet(join(verzeichnis, "unterlagen", u))) && !existsSync(join(verzeichnis, "anstoss"))) {
+    if (ok && ["neu", "opus"].some((u) => wartet(join(verzeichnis, "unterlagen", u))) && !existsSync(join(verzeichnis, "anstoss"))) {
       anstossSchreiben(verzeichnis, "unterlagen", jetzt);
     }
     neuerZustand.fehler = [...fehler];

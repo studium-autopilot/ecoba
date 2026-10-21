@@ -932,7 +932,12 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   als Sicherung daneben).
 - **Andere Geräte:** Das Update kommt per Sync. Dort zeigt `installiert.json` schon die neue Version → kein zweites Update.
   Läuft dort noch der alte Kern im Speicher (`installiert` > `plugin.manifest.version`), zeigt die Zeile „Neu laden“
-  (Aktion `vorlage-neu-laden`). Skripte lädt der Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
+  (Aktion `vorlage-neu-laden`, `neuLaden`). Seit 21.10.2026 holt sie vorher den Kern nach (`kernNachholen`): Befund iPhone,
+  `installiert.json` war schon 0.5.4, der Kern im versteckten Ordner `.obsidian/plugins/` aber nicht angekommen; „Neu laden“
+  lud den alten Kern von der Platte, die Zeile blieb, ohne Hinweis. Jetzt vergleicht sie die Kerndateien mit `installiert.json`,
+  lädt abweichende vom Tag `v<installiert>` (Größe und SHA-256 wie beim Update, alles geprüft vor dem Schreiben, `manifest.json`
+  zuletzt, Schreibfehler → zurück) und lädt dann neu. Kein Netz → „Keine Verbindung …“; läuft danach noch ein älterer Kern →
+  „Bitte Obsidian einmal schließen und wieder öffnen.“ Skripte lädt der Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
   `installiert.json` an, setzt `update.js` `plugin.stillBis` für eine Minute; mehrere Skripte auf einmal schweigen ohnehin.
   Das Fenster nach dem Update sagt darum unter „Andere Geräte“: „Dort einmal auf ‚Neu laden‘ … tippen“ (ohne neuen Kern:
   „dort musst du nichts tun“).
@@ -1244,6 +1249,20 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   Abruf, der Rest kommt beim nächsten). `server.json` `gesendet` (SHA-256 → Minute, bei einem Wunsch mindestens dessen Zeit, falls
   die Uhr des Geräts nachgeht) verhindert doppeltes Senden; ein späterer Wunsch geht wieder. Der Server legt Gewünschtes nach
   `unterlagen/opus/` und schreibt es vor dem gewöhnlichen Lauf in einem eigenen Lauf mit Opus (höchstens 3 je Lauf, ohne Mails).
+  **Mit PDF (seit 0.5.7):** Hat die PDF höchstens 500 MB (`PDF_MAX`), setzt der Knopf dazu `zusammenfassung_pdf: true`, und der
+  Abruf schickt vor dem Text die PDF selbst an `POST /v1/pdf`, in Stücken zu 8 MB (`PDF_TEIL`, je Stück ein Paket mit Zweck `pdf`:
+  Kopfzeile `{ schema, kennung, teil, teile }` als JSON, Zeilenumbruch, Bytes; `verschluesselnRoh`), damit weder das iPhone noch
+  der Dienst die ganze PDF auf einmal verschlüsselt. Der Server setzt sie der Reihe nach in `<SHA-256>.pdf.teil` zusammen, prüft
+  am Ende den SHA-256 und legt sie als `unterlagen/opus/<SHA-256>.pdf` ab (höchstens 6 und zusammen 1 GB warten, ohne Textfassung
+  daneben oder halb hochgeladen verfällt sie nach einem Tag), die
+  Textfassung derselben Kennung bekommt die Kopfzeile `PDF: <SHA-256>.pdf`, und Opus liest die PDF mit Read (Skill
+  `begleitnotiz.md`, „Mit PDF“; für Seitenbereiche braucht Claude Code `poppler-utils`). Nach einem erfolgreichen Lauf löscht der
+  Server die PDF, nach einem gescheiterten kommt sie mit der Textfassung zurück. Nimmt der Server die PDF nicht (älterer Server,
+  zu viele, nicht lesbar), geht nur der Text. Vorher schätzt der Knopf die Kosten (`pdfKosten`: je Seite etwa 1500 Token für das
+  Bild, gemessen mit `count_tokens` an Folien und Übungen, dazu der Text mit etwa 3,5 Zeichen je Token und etwa 4000 Token
+  Ausgabe, Preise von Opus 5.5) als Anteil eines Fünf-Stunden-Fensters im Pro-Abo (grob ein Zwanzigstel von Max 20x mit etwa
+  8000 $ im Monat, verteilt auf 146 Fenster). Ab 5 % (`PDF_FRAGEN`, etwa ab 8 Seiten) oder ab 20 MB (`PDF_GROSS`, das Hochladen
+  dauert) fragt er: „Mit PDF“ oder „Nur Text“. Claude Code liest auch große PDFs, wenn es Seitenbereiche angibt (geprüft mit 30 MB).
   `server_unterlagen`: `knopf` (Standard) | `alle` (dazu jede neue Unterlage ohne Zusammenfassung, gewöhnlicher Lauf, Modell des
   Servers; so bis 0.5.1) | `aus` (nichts, kein Knopf). Die übernommene Begleitnotiz löscht den Wunsch. **Terminsuche** (seit
   0.5.3, nicht bei `aus`): Neue Unterlagen (PDF höchstens 21 Tage alt, `TERMINSUCHE_TAGE`) von Modulen, deren Termine aus
