@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.9 – Platzsucher sucht zuverlässig weiter
+
+- **Behoben:** Lief beim Einrichten des eigenen Servers schon ein Platzsucher aus einer älteren Version, brach die
+  Einrichtung mit einer Fehlermeldung ab. Jetzt ersetzt Claude ihn durch einen neuen, der sicher weitersucht.
+
 ## 0.5.8 – Offene Fragen am richtigen Platz
 
 - **Behoben:** Offene Fragen aus deinen Unterlagen standen auf dem Dashboard bei den To-dos, sobald ein Seitenverweis

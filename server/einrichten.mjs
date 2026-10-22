@@ -12,6 +12,7 @@
 //   node einrichten.mjs adresse                              öffentliche IP, Adresse und SSH-Befehl des Servers
 //   --oci <pfad>  --tenancy <ocid>  --json
 // Exit: 0 erledigt, 1 Fehler oder Kostenregel verletzt, 2 Rückfrage nötig (--ja) bzw. falscher Aufruf, 3 kein Platz.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { gzipSync } from "node:zlib";
@@ -237,12 +238,20 @@ export async function server(oci, { tenancy, a, ads, schluessel }) {
 // ---------- Platzsucher ----------
 // Oracle nimmt höchstens 32 000 Byte Metadaten je Instanz (user_data base64 und SSH-Schlüssel zusammen)
 const METADATEN_MAX = 32000;
+// Fassung des Helfers: Prüfsumme über cloud-init-Vorlage und platzsucher.py, als zweites Kennzeichen am Helfer
+const FASSUNG = KENNZEICHEN + "-fassung";
+export const helferFassung = (vorlage, skript) => createHash("sha256").update(vorlage).update("\0").update(skript).digest("hex").slice(0, 16);
 
 export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorlage, skript }) {
   const { schritte, merken, muss } = ablauf(oci);
   if (!MAIL.test(String(mail || ""))) throw Object.assign(new Error("--mail <adresse> fehlt"), { exit: 2 });
   if (a.plan.status === "da") { merken("platzsucher", "da", a.plan.text + " Kein Platzsucher nötig."); return { schritte, exit: 0 }; }
   if (schutzFehlt(a)) throw schutzFehlt(a);
+  // die Zeilen in write_files (die Platzhalter stehen auch im Kopfkommentar)
+  const PLATZ = "content: KONFIG_JSON_BASE64", PLATZ_SKRIPT = "content: PLATZSUCHER_GZ_BASE64";
+  if (!vorlage || vorlage.indexOf(PLATZ) < 0 || vorlage.indexOf(PLATZ_SKRIPT) < 0) throw new Error("vorlage: platzsucher-helfer.yaml fehlt");
+  if (!skript || skript.indexOf("#!/usr/bin/env python3") !== 0) throw new Error("skript: platzsucher.py fehlt");
+  const fassung = helferFassung(vorlage, skript);
   const t = ["--compartment-id", tenancy];
   // Nur Eigenes anfassen: Thema, Gruppe oder Richtlinie gleichen Namens ohne unser Kennzeichen → abbrechen
   const eigenesOder = async (was, abfrage, name) => {
@@ -251,13 +260,21 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     return x || null;
   };
   let helfer = liste(await muss("helfer", ["compute", "instance", "list", ...t, "--all"])).find((i) => lebt(i) && gehoert(i, "helfer"));
+  // Helfer einer früheren Fassung ersetzen: cloud-init läuft nur beim ersten Start, ein Neustart brächte weder das neue Skript noch
+  // eine damals gescheiterte Installation. Sein Boot-Volume zählt in a.plan noch mit; der neue sucht darum mit entsprechend
+  // kleinerem Boot-Volume (nie über dem freien Topf, auch solange das alte noch gelöscht wird), „abschliessen“ vergrößert es.
+  if (helfer && (helfer["freeform-tags"] || {})[FASSUNG] !== fassung) {
+    if (a.plan.status !== "passt") { merken("helfer", "fehler", a.plan.text); return { schritte, exit: 1 }; }
+    // Warten auf den Arbeitsauftrag (nicht die Instanz): Erst danach ist der Micro-Platz für den neuen Helfer frei
+    const auftrag = await muss("helfer", ["compute", "instance", "terminate", "--instance-id", helfer.id, "--preserve-boot-volume", "false", "--force",
+      "--wait-for-state", "SUCCEEDED", "--wait-for-state", "FAILED"]);
+    if ((auftrag || {}).status === "FAILED") throw Object.assign(new Error("helfer: Oracle konnte den alten Helfer nicht beenden"), { schritt: "helfer" });
+    merken("helfer", "ersetzt", "Helfer einer früheren Version beendet; ein neuer sucht mit diesem Stand weiter.");
+    helfer = null;
+  }
   if (helfer) merken("helfer", "da", "Der Platzsucher läuft schon.");
   else {
     if (a.plan.status !== "passt") { merken("helfer", "fehler", a.plan.text); return { schritte, exit: 1 }; }
-    // die Zeilen in write_files (die Platzhalter stehen auch im Kopfkommentar)
-    const PLATZ = "content: KONFIG_JSON_BASE64", PLATZ_SKRIPT = "content: PLATZSUCHER_GZ_BASE64";
-    if (!vorlage || vorlage.indexOf(PLATZ) < 0 || vorlage.indexOf(PLATZ_SKRIPT) < 0) throw new Error("vorlage: platzsucher-helfer.yaml fehlt");
-    if (!skript || skript.indexOf("#!/usr/bin/env python3") !== 0) throw new Error("skript: platzsucher.py fehlt");
     const ssh = schluesselPruefen(schluessel);
     const sub = await eigenesSubnetz(muss, tenancy);
     // Bescheid per Mail: Thema und Abo (die Mail von Oracle einmal bestätigen)
@@ -282,7 +299,8 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     const metadaten = { ssh_authorized_keys: ssh, user_data: Buffer.from(cloudInit).toString("base64") };
     if (JSON.stringify(metadaten).length > METADATEN_MAX) throw new Error(`Startdaten des Helfers zu groß (über ${METADATEN_MAX} Byte)`);
     const r = await anlegenIrgendwo(oci, ["compute", "instance", "launch", ...t, "--shape", MICRO, "--source-details", quelle(helferBild.id, ZIEL.helferBootGb),
-      "--subnet-id", sub, "--assign-public-ip", "true", "--display-name", "studium-autopilot-platzsucher", "--freeform-tags", kennzeichen("helfer"),
+      "--subnet-id", sub, "--assign-public-ip", "true", "--display-name", "studium-autopilot-platzsucher",
+      "--freeform-tags", JSON.stringify({ [KENNZEICHEN]: "helfer", [FASSUNG]: fassung }),
       "--metadata", JSON.stringify(metadaten), ...NUR_IMDS2], ads, /out of (host )?capacity|LimitExceeded/i);
     if (r.kapazitaet) { merken("helfer", "kein-platz", "Auch für den kleinen Helfer ist gerade kein Platz. Später noch einmal versuchen."); return { schritte, exit: 3 }; }
     if (r.fehler) { merken("helfer", "fehler", "Der Helfer ließ sich in keinem Bereich anlegen: " + r.fehler); return { schritte, exit: 1 }; }
@@ -308,8 +326,10 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
       "--statements", JSON.stringify(PLATZSUCHER_RECHTE), "--freeform-tags", kennzeichen("helfer")]);
     geaendert = true;
   } else if (JSON.stringify(richtlinie.statements) !== JSON.stringify(PLATZSUCHER_RECHTE)) {
-    // Richtlinie einer älteren Version: auf den aktuellen Stand bringen
-    await muss("rechte", ["iam", "policy", "update", "--policy-id", richtlinie.id, "--statements", JSON.stringify(PLATZSUCHER_RECHTE), "--force"]);
+    // Richtlinie einer älteren Version: auf den aktuellen Stand bringen. Mit --statements verlangt die OCI-Kommandozeile auch
+    // --version-date; leer schickt sie keins mit, das Datum bleibt also ungesetzt wie beim Anlegen.
+    await muss("rechte", ["iam", "policy", "update", "--policy-id", richtlinie.id, "--statements", JSON.stringify(PLATZSUCHER_RECHTE),
+      "--version-date", "", "--force"]);
     geaendert = true;
   }
   merken("rechte", geaendert ? "angelegt" : "da", geaendert ? "Rechte nur für den Helfer vergeben (dynamische Gruppe und Richtlinie)." : "Rechte des Helfers bestehen.");

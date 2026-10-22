@@ -109,8 +109,9 @@ Rückfrage nötig bzw. falscher Aufruf, `3` Oracle hat gerade keinen Platz (dann
 - **Ohne Schutz kein Server:** `server` und `platzsucher` brechen mit Exit 2 ab, solange Quota und Budget mit Mail-Regel fehlen
   (sonst hielte nichts eine zweite bezahlte Instanz auf). Ein Budget zählt nur mit Mail-Regel für echte Kosten (`stand.mjs`).
 - **Wiederholen repariert:** Bricht ein Schritt mittendrin ab, ergänzt der nächste Aufruf, was fehlt (Mail-Regeln des Budgets,
-  Gruppe und Richtlinie des Helfers; ein schon laufender Helfer startet dann neu und sucht weiter). Den Helfer (E2.1.Micro)
-  versucht er in jedem Bereich, weil es ihn oft nur in einem gibt.
+  Gruppe und Richtlinie des Helfers; ein schon laufender Helfer startet dann neu und sucht weiter). Einen Helfer einer
+  früheren Fassung ersetzt er (siehe Platzsucher). Den Helfer (E2.1.Micro) versucht er in jedem Bereich, weil es ihn oft nur
+  in einem gibt.
 - **Was nicht von der Einrichtung stammt** (Budget, Quota, Thema, Gruppe, Richtlinie gleichen Namens ohne Kennzeichen
   `schutz` bzw. `helfer`), ändert kein Schritt: Er lässt es stehen oder bricht ab.
 - **Reihenfolge beim Platzsucher:** Die Regel der dynamischen Gruppe braucht die OCID des Helfers, also entstehen Gruppe und
@@ -125,7 +126,10 @@ und mit Fehlern in der Form der echten OCI-Kommandozeile durch `ociAufrufer`. Be
 gegen OCI CLI 3.95.0 geprüft (nur `--help`, Abbilder und Verfügbarkeitsbereiche lesend); Quota-Sätze und Budget-Regeln wie in
 einem echten Konto. Erster echter Lauf in einem neuen Konto am 20.10.2026: Stand, Schutz und Netz gingen durch (sonst hätte
 `server` nicht angelegt); daraus behoben: abgeschnittene Fehler (kein Platz sah wie ein harter Fehler aus) und ed25519 in der Cloud Shell
-(FIPS-Modus, jetzt RSA 4096). Noch offen: Platzsucher in einem neuen Konto.
+(FIPS-Modus, jetzt RSA 4096). Der Platzsucher entstand dort mit 0.5.0; der nächste Aufruf mit einer neueren Version scheiterte
+am Update der Richtlinie: `iam policy update` verlangt mit `--statements` auch `--version-date` (Prüfung in der Kommandozeile
+selbst, nicht in `--help`). Die Attrappe lehnt das seit dem 22.10.2026 genauso ab. Noch offen: ob ein Helfer im echten Konto
+Platz findet und sich danach beendet.
 
 ### Den Server aus der Cloud Shell bedienen: `server/fern.sh`
 
@@ -154,11 +158,16 @@ auf einem kleinen Helfer weiter, nicht am Rechner der Nutzerin oder des Nutzers:
   `PLATZSUCHER_GZ_BASE64` = `platzsucher.py` gepackt, aus dem Paket in der Cloud Shell, das schon mit seiner Prüfsumme geprüft
   ist). Er installiert nur die OCI-Kommandozeile in fester Version und lädt sonst nichts nach; so läuft er auch mit einem
   Testpaket vor einem Release. Oracle nimmt höchstens 32 000 Byte Startdaten, die Einrichtung prüft das vorher.
+- **Fassung:** Das zweite Kennzeichen `studium-autopilot-fassung` ist eine Prüfsumme über Vorlage und `platzsucher.py`. Läuft
+  ein Helfer ohne dieses Kennzeichen oder mit einer anderen Prüfsumme, beendet `platzsucher` ihn samt Boot-Volume (wartet auf
+  den Arbeitsauftrag) und legt einen neuen an: cloud-init läuft nur beim ersten Start, ein Neustart brächte weder das neue
+  Skript noch eine damals gescheiterte Installation (bis 0.5.0 ohne Auslagerung). Thema und Mail-Abo bleiben. Der neue Helfer
+  sucht mit 50 GB weniger Boot-Volume, weil das alte beim Anlegen noch zählen kann; `abschliessen` gleicht das aus.
 - **Rechte nur für den Helfer:** dynamische Gruppe `studium-platzsucher` mit der Regel `instance.id = '<OCID des Helfers>'` und
   eine Richtlinie im Compartment:
   `manage instance-family`, `use volume-family`, `use virtual-network-family`, `use ons-topics`, dazu `manage volume-family`
   nur mit `request.permission = 'VOLUME_DELETE'` (damit er sich samt Boot-Volume beendet; eine ältere Richtlinie bringt die
-  Einrichtung auf diesen Stand). Der Platzsucher meldet sich mit
+  Einrichtung auf diesen Stand, mit leerem `--version-date`, das die Kommandozeile dazu verlangt). Der Platzsucher meldet sich mit
   der Identität der Instanz an (`--auth instance_principal`), es gibt keinen Schlüssel zum Kopieren. Gruppe und Richtlinie
   entfernt die Einrichtung nach dem Erfolg wieder.
 - **Versuche:** alle 2 bis 5 Minuten jeder Verfügbarkeitsbereich mit genau `VM.Standard.A1.Flex`, 2 OCPU, 12 GB, Boot-Volume

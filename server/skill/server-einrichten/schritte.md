@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.8)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.9)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -99,6 +99,10 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
 
   Danach: „Bestätige die Mail von Oracle (‚Confirm subscription‘). Du kannst den Rechner jetzt ausmachen. Kommt die Mail ‚Dein
   Server ist da‘, sag mir ‚Weiter mit der Einrichtung‘.“
+
+  Meldet `platzsucher` „[ersetzt] Helfer einer früheren Version beendet“, lief schon ein Platzsucher aus einer älteren Version;
+  jetzt sucht ein neuer. Das dauert ein bis zwei Minuten länger und ist kein Fehler. Neu ist nur der Helfer; das Mail-Abo
+  bleibt. Wurde die Mail von Oracle schon früher bestätigt, kommt keine neue.
 
 ## 5. Paket installieren
 

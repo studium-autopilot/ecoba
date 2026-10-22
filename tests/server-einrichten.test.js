@@ -95,7 +95,12 @@ function konto(o = {}) {
     "compute instance get": (a) => { const i = k.instanzen.find((x) => x.id === w(a, "--instance-id")); return ok({ ...i, metadata: i.metadaten }); },
     "compute instance action": (a) => { k.aktionen = (k.aktionen || []).concat([[w(a, "--instance-id"), w(a, "--action")]]); return ok({}); },
     "compute instance update": (a) => { k.instanzen.find((i) => i.id === w(a, "--instance-id"))["instance-options"] = { "are-legacy-imds-endpoints-disabled": JSON.parse(w(a, "--instance-options")).areLegacyImdsEndpointsDisabled }; return ok({}); },
-    "compute instance terminate": (a) => { k.instanzen.find((i) => i.id === w(a, "--instance-id"))["lifecycle-state"] = "TERMINATING"; return ok(null); },
+    // mit --wait-for-state wartet die Kommandozeile auf den Arbeitsauftrag und gibt ihn aus, sonst kommt nichts zurück
+    "compute instance terminate": (a) => {
+      const warten = w(a, "--wait-for-state");
+      k.instanzen.find((i) => i.id === w(a, "--instance-id"))["lifecycle-state"] = warten ? "TERMINATED" : "TERMINATING";
+      return ok(warten ? { "operation-type": "TerminateInstance", status: "SUCCEEDED" } : null);
+    },
     "compute instance list-vnics": () => ok([{ "hostname-label": "intern" }, { "public-ip": "127.0.0.1" }]),
     "ons topic list": (a) => ok(nachName(k.themen, a)),
     "ons topic create": (a) => { const t = mitTags(a, { "topic-id": neu("onstopic"), name: w(a, "--name"), "lifecycle-state": "ACTIVE" }); k.themen.push(t); return ok(t); },
@@ -107,7 +112,15 @@ function konto(o = {}) {
     "iam dynamic-group update": (a) => { k.gruppen.find((g) => g.id === w(a, "--dynamic-group-id"))["matching-rule"] = w(a, "--matching-rule"); return ok({}); },
     "iam dynamic-group delete": (a) => { k.gruppen = k.gruppen.filter((g) => g.id !== w(a, "--dynamic-group-id")); return ok(null); },
     "iam policy list": (a) => ok(nachName(k.richtlinien, a)),
-    "iam policy update": (a) => { const p = k.richtlinien.find((y) => y.id === w(a, "--policy-id")); p.statements = JSON.parse(w(a, "--statements")); return ok({}); },
+    // wie update_policy in identity_cli_extended.py (OCI CLI 3.95): --statements nur zusammen mit --version-date
+    "iam policy update": (a) => {
+      const [saetze, datum] = [w(a, "--statements"), w(a, "--version-date")];
+      if ((saetze || datum) && (saetze === undefined || datum === undefined)) {
+        return { ok: false, fehler: "If updating either statements or version date, both parameters must be specified." };
+      }
+      k.richtlinien.find((y) => y.id === w(a, "--policy-id")).statements = JSON.parse(saetze);
+      return ok({});
+    },
     "iam policy create": (a) => { k.richtlinien.push(mitTags(a, { id: neu("policy"), name: w(a, "--name"), statements: JSON.parse(w(a, "--statements")), "lifecycle-state": "ACTIVE" })); return ok({}); },
     "iam policy delete": (a) => { k.richtlinien = k.richtlinien.filter((p) => p.id !== w(a, "--policy-id")); return ok(null); },
     "compute boot-volume-attachment list": (a) => ok(k.anhaenge.filter((x) => x["instance-id"] === w(a, "--instance-id"))),
@@ -324,6 +337,49 @@ test("Platzsucher: Mail-Thema, Helfer (Micro, 50 GB) mit fertiger Konfiguration,
   const riesig = "#!/usr/bin/env python3\n" + require("node:crypto").randomBytes(60000).toString("hex");
   await assert.rejects(platzsucher(w.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: riesig }), /zu groß/);
   assert.equal(w.k.instanzen.length, 0);
+});
+
+test("Platzsucher: Helfer einer früheren Version wird ersetzt, nicht nur neu gestartet; Richtlinie mit --version-date", async () => {
+  const { netz, platzsucher, auswerten, helferFassung, PLATZSUCHER_RECHTE } = await laden();
+  const x = konto();
+  await netz(x.oci, { tenancy: T });
+  // Stand nach der Einrichtung mit 0.5.0: Helfer ohne Fassung, Gruppe für ihn, Richtlinie ohne VOLUME_DELETE, Thema mit Abo
+  const alt = { id: "ocid1.instance.oc1..alt", shape: "VM.Standard.E2.1.Micro", "availability-domain": ADS[0], "freeform-tags": { "studium-autopilot": "helfer" }, "lifecycle-state": "RUNNING" };
+  const helfer = { "studium-autopilot": "helfer" };
+  x.k.instanzen.push(alt);
+  x.k.gruppen.push({ id: "g", name: "studium-platzsucher", "matching-rule": `instance.id = '${alt.id}'`, "freeform-tags": helfer, "lifecycle-state": "ACTIVE" });
+  x.k.richtlinien.push({ id: "p", name: "studium-platzsucher", statements: PLATZSUCHER_RECHTE.slice(0, 4), "freeform-tags": helfer, "lifecycle-state": "ACTIVE" });
+  x.k.themen.push({ "topic-id": "thema", name: "studium-autopilot", "freeform-tags": helfer, "lifecycle-state": "ACTIVE" });
+  x.k.abos.push({ endpoint: MAIL, protokoll: "EMAIL", "lifecycle-state": "ACTIVE" });
+  // Bestand mit dem alten Helfer: sein Micro-Platz und seine 50 GB sind belegt
+  const a = auswerten(geschuetzt({ instanzen: [alt], freierTopf: { used: 50, available: 150 } }), { helfer: true });
+  const r = await platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
+  assert.equal(r.exit, 0, JSON.stringify(r.schritte));
+  assert.deepEqual(r.schritte.map((s) => [s.was, s.status]), [["helfer", "ersetzt"], ["thema", "da"], ["abo", "da"], ["helfer", "angelegt"], ["rechte", "angelegt"]]);
+  const ende = x.k.aufrufe.find((y) => y[2] === "terminate");
+  assert.deepEqual([x.w(ende, "--instance-id"), x.w(ende, "--preserve-boot-volume"), x.w(ende, "--wait-for-state")], [alt.id, "false", "SUCCEEDED"]);
+  assert.ok(x.k.aufrufe.indexOf(ende) < x.k.aufrufe.findIndex((y) => y[2] === "launch"), "erst beendet, dann neu angelegt");
+  const neu = x.k.instanzen.find((i) => i.id !== alt.id);
+  assert.deepEqual([alt["lifecycle-state"], neu["freeform-tags"]], ["TERMINATED", { "studium-autopilot": "helfer", "studium-autopilot-fassung": helferFassung(VORLAGE, SKRIPT) }]);
+  // Boot-Volume des Servers: der freie Rest ohne beide Helfer, solange das alte Volume noch zählen kann (abschliessen vergrößert)
+  const cloudInit = Buffer.from(neu.metadaten.user_data, "base64").toString("utf8");
+  assert.equal(JSON.parse(Buffer.from(/content: (\S+)/.exec(cloudInit.slice(cloudInit.indexOf("konfig.json")))[1], "base64").toString("utf8")).boot_gb, 100);
+  assert.deepEqual([x.k.gruppen[0]["matching-rule"], x.k.richtlinien.length, x.k.richtlinien[0].statements], [`instance.id = '${neu.id}'`, 1, PLATZSUCHER_RECHTE]);
+  assert.equal(x.w(x.k.aufrufe.find((y) => y[1] === "policy" && y[2] === "update"), "--version-date"), "");
+  assert.equal(x.k.aktionen, undefined, "der neue Helfer braucht keinen Neustart");
+  // derselbe Stand noch einmal: der neue Helfer bleibt
+  const vorher = x.angelegt().length;
+  const r2 = await platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
+  assert.deepEqual([r2.exit, r2.schritte[0].text, x.angelegt().length], [0, "Der Platzsucher läuft schon.", vorher]);
+  // ohne Platz für einen neuen Helfer bleibt der alte, statt ersatzlos zu verschwinden
+  const y = konto();
+  await netz(y.oci, { tenancy: T });
+  const alt2 = { ...alt, "lifecycle-state": "RUNNING" };
+  y.k.instanzen.push(alt2);
+  const voll = auswerten(geschuetzt({ instanzen: [alt2, { ...alt2, id: "andere" }], freierTopf: { used: 100, available: 100 } }), { helfer: true });
+  const davor = y.angelegt().length;
+  const r3 = await platzsucher(y.oci, { tenancy: T, a: voll, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
+  assert.deepEqual([r3.exit, alt2["lifecycle-state"], y.angelegt().length], [1, "RUNNING", davor]);
 });
 
 test("Abschließen: wartet auf den Helfer, entfernt nur eigene Rechte, Boot-Volume auf den Rest, eigene Quota fest", async () => {
