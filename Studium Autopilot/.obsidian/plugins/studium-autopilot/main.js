@@ -107,6 +107,8 @@ module.exports = class StudiumAutopilot extends Plugin {
     const start = this.app.loadLocalStorage("eba-start-klassen");
     this.startKlassen = (Array.isArray(start) ? start : []).filter((k) => /^eba-[a-z0-9-]+$/.test(String(k)));
     for (const k of this.startKlassen) document.body.classList.add(k);
+    // Blendet auf dem Dashboard den Hinweis „Studium Autopilot ist noch aus“ aus (eba-core.css)
+    document.body.classList.add("eba-plugin-an");
 
     // Knöpfe: Klick im Capture-Modus abfangen, bevor Obsidian den Link selbst behandelt (Lese-/Bearbeitungsansicht,
     // Bases-html(), Callouts, Hover-Vorschau, auf allen Geräten). Protokoll-Handler als Rückfall (Link von außen).
@@ -142,6 +144,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     // Codeblock-Prozessoren, Post-Processor, Editor-Array und Befehle meldet Obsidian beim Entladen des Plugins selbst ab.
     for (const name of Object.keys(this.erweiterungen).concat(Object.keys(this.aufraeumer))) this.skriptAbmelden(name);
     for (const k of this.startKlassen || []) document.body.classList.remove(k);
+    document.body.classList.remove("eba-plugin-an");
     this.zustaende = {};
   }
 

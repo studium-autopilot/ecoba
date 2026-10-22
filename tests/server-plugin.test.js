@@ -796,10 +796,10 @@ test("Verbindungen: ohne Server leise „Für Technische“ mit Mehr erfahren, v
   assert.match(z0.knopf, /aktion=verbinden&id=server">Mehr erfahren</);
   assert.doesNotMatch(z0.knopf, /cta/, "leise, kein Hauptknopf");
   assert.match(ohne.liste.server.schritte[0], /\*\*Prompt kopieren\*\*/);
-  assert.match(ohne.liste.server.erklaerung, /Claude Pro oder Max, ein Oracle-Konto und Gmail/);
+  assert.match(ohne.liste.server.erklaerung, /Claude Pro oder Max und ein Oracle-Konto, Gmail ist freiwillig/);
   const anderswo = aufbau({ sichtbar: () => true, verbunden: () => false, status: () => ({ verbunden: false }),
     zeile: () => ({ text: "Auf einem anderen Gerät verbunden.", symbol: "haken", pille: "", knopf: null, link: MEHR }) });
-  assert.match(anderswo.liste.server.schritte[0], /sudo studium-server verbinden/, "anderes Gerät: Schritte zum Verbinden");
+  assert.match(anderswo.liste.server.schritte[0], /fern\.sh verbinden/, "anderes Gerät: Schritte zum Verbinden");
   assert.equal(anderswo.zeile("server").knopf, "");
   const hier = aufbau({ sichtbar: () => true, verbunden: () => true, status: () => ({ verbunden: true }),
     zeile: () => ({ text: "Ein anderes Gerät holt die Termine ab.", symbol: "haken", pille: "an",

@@ -24,7 +24,9 @@ termine.md, wie unten unter „Termine in der Unterlage“. Die Person lässt si
   Übungsblatt 3, Lösung zu Blatt 2), steht das in einem Punkt mit `begriff` „Gehört zu“.
 - `zu_tun`: nur echte Handlungen, die die Unterlage von der Person verlangt (Kapitel lesen, Aufgabe vorbereiten, mitbringen,
   anmelden, abgeben, Quiz machen), je Handlung ein Eintrag mit `seite` und `frist`, wenn ein Datum genannt ist. Sie stehen
-  nicht noch einmal unter `wichtigste`. Gibt es keine, bleibt die Liste leer.
+  nicht noch einmal unter `wichtigste`. Nur was die Person einmal erledigt und dann abhakt: Ein Dauerhinweis ohne Ende
+  („Folien in jede Vorlesung mitnehmen und dort beschriften“) ist ein Punkt mit `begriff` „Organisation“. Gibt es keine, bleibt
+  die Liste leer.
 - **Keine doppelten To-dos:** Steht dieselbe Handlung schon offen unter `todos` in `tresor.json` (gleiches Modul, auch anders
   formuliert), kommt sie nicht noch einmal in `zu_tun`. Nennt die Unterlage ein Datum, das dort fehlt, lieferst du es als
   Frist nach termine.md. Ähnlich ist nicht gleich: Blatt 2 und Blatt 3 sind verschiedene Aufgaben.

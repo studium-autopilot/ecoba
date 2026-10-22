@@ -34,7 +34,8 @@ lesen.
 ## To-dos und Offene Fragen
 
 - Ein To-do ist jede Zeile `- [ ] Text` (auch in Zitaten und Kästen) außerhalb von `System/`, `Module/`, `Studium/`,
-  `Lernplan/` und `Dashboard.md`. Endet der Text auf „?“ oder enthält er `#frage`, ist es eine Offene Frage.
+  `Lernplan/` und `Dashboard.md`. Steht sie unter einer Überschrift „Offene Fragen“, endet ihr Text (vor den Belegen
+  hinter „ → “) auf „?“ oder enthält er `#frage`, ist es eine Offene Frage.
 - Die Frist: das erste Datum `TT.MM.` bzw. `TT.MM.JJJJ` nach „bis“, sonst nach einem Wochentag, „ab“, „am“, „vor“, „zum“,
   „spätestens“ oder in Klammern; auch `JJJJ-MM-TT`. Text nach dem letzten „ → “ sind die Belege.
 - Kästchen unter `## Kapitel` in `Lernplan/` sind Kapitel, keine To-dos.

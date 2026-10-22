@@ -258,6 +258,9 @@ body {
    Auch Karten, die ein Skript zeichnet (Bitte prüfen), folgen der Regel. */
 .callout[data-callout^="eba-"]:not([data-callout="eba-ort"], [data-callout="eba-kontakt"], [data-callout="eba-achtung"], [data-callout-metadata*="hilfe"]) > .callout-title > .callout-icon { display: none; }
 .callout[data-callout="eba-achtung"]   { --callout-icon: lucide-triangle-alert; }
+/* Hinweis „Studium Autopilot ist noch aus“ (Dashboard): sichtbar, bis das Plugin läuft und am body eba-plugin-an setzt.
+   Snippets laufen auch, wenn Obsidian die Plugins des Tresors nicht eingeschaltet hat (falscher Knopf beim Vertrauen). */
+body.eba-plugin-an .callout[data-callout="eba-achtung"][data-callout-metadata*="plugin-aus"] { display: none; }
 .callout[data-callout="eba-kontakt"]   { --callout-icon: lucide-user-round; }
 .callout[data-callout="eba-ort"]       { --callout-icon: lucide-map-pin; }
 /* Hilfe (Einstellungen & Hilfe, > [!eba-zeilen] mit > > [!eba-karte|hilfe|<thema>]): je Thema ein eigenes Symbol */

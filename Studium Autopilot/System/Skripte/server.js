@@ -421,7 +421,7 @@ module.exports = function (ctx) {
     const verbinden = async (adresseRoh, codeRoh) => {
       const adresse = adresseNormal(adresseRoh, abh.lokalErlaubt);
       const code = String(codeRoh || "").trim().toUpperCase();
-      if (!adresse || !CODE.test(code)) return { ok: false, fehler: "Der Link ist unvollständig. Bitte auf deinem Server einen neuen erzeugen: sudo studium-server verbinden" };
+      if (!adresse || !CODE.test(code)) return { ok: false, fehler: "Der Link ist unvollständig. Bitte in der Cloud Shell von Oracle einen neuen erzeugen: bash ~/studium-autopilot/server/fern.sh verbinden" };
       const bisher = verbindung();
       const ersetzt = bisher && bisher.adresse !== adresse ? ` Die Verbindung zu ${hostVon(bisher.adresse)} wird dabei ersetzt.` : "";
       const ja = await abh.bestaetigen("Mit deinem Server verbinden?",

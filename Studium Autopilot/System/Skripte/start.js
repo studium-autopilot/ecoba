@@ -8,6 +8,9 @@
 //     Notiz des Plugins.
 //  4. Optional, alle Geräte: Kapitel der Folien-Notizen beim ersten Öffnen zuklappen, ein Tipp auf die Kapitelzeile klappt auf.
 //  5. Experimentell: Höhenmessung der Leseansicht korrigieren (Leerraum am Seitenende).
+//  6. Klasse eba-plugin-an am body: blendet auf dem Dashboard den Hinweis „Studium Autopilot ist noch aus“ aus (eba-core.css).
+//     Der Kern setzt sie schon beim Laden (main.js); hier steht sie auch, weil ein älterer Kern nach einem Update über den Sync
+//     bis „Neu laden“ weiterläuft und nur die Skripte neu lädt.
 // (Erweiterungen laden und Hot-Reload macht das Plugin selbst; die Agenda ist jetzt der Codeblock ```eba-agenda```,
 // System/Skripte/termine.js, und schreibt keine Datei mehr.)
 // registrieren() läuft beim Start und nach jeder Änderung dieser Datei (Hot-Reload). Ereignisse und Timer laufen über die
@@ -261,6 +264,7 @@ module.exports = function (ctx) {
 
   const registrieren = () => {
     const ws = app.workspace;
+    document.body.classList.add("eba-plugin-an");
     an(ws, "layout-change", leseansicht);
     an(app.metadataCache, "changed", ctx.entprellen(leseansicht, 300)); // Feld `ansicht` oder `typ` geändert (ILIAS schreibt viele Dateien: entprellt)
     an(ws, "layout-change", klassen);
@@ -280,5 +284,5 @@ module.exports = function (ctx) {
     }
   };
 
-  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); }, klassenVon };
+  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); document.body.classList.remove("eba-plugin-an"); }, klassenVon };
 };

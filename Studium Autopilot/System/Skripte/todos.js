@@ -2,7 +2,8 @@
 // Obsidian-Suche ```query task-todo:…```, die Dateinamen-Gruppen, rohes Markdown und abgeschnittenen Text zeigt).
 // Auswahl: offene Aufgaben `- [ ] Text` in allen Notizen außer in den Ordnern System/, Module/, Studium/, Lernplan/ (Kapitel
 // sind Kästchen, aber keine To-dos) und im Dashboard;
-// Offene Fragen = Text endet auf „?“ oder enthält #frage, To-dos = alle übrigen. Daten aus dem metadataCache (listItems,
+// Offene Fragen = Aufgabe unter einer Überschrift „Offene Fragen“, Text endet (vor den Belegen hinter „ → “) auf „?“ oder
+// enthält #frage, To-dos = alle übrigen. Daten aus dem metadataCache (listItems,
 // task " ") und den Zeilen der Notiz (cachedRead).
 // Je Zeile: echtes Kästchen (Tipp hakt nach 1,5 s in der Quellnotiz ab: `- [ ]` → `- [x]` genau in dieser Zeile, Text wird
 // vorher geprüft; zweiter Tipp in der Zeit nimmt es zurück), Text als Markdown (fett, Links), ohne „**Zu tun:**“,
@@ -31,7 +32,15 @@ module.exports = function (ctx) {
   const pad = (n) => String(n).padStart(2, "0");
   const tag0 = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
   const kurz = (d) => `${KURZTAG[d.getDay()]} ${pad(d.getDate())}.${pad(d.getMonth() + 1)}.`;
-  const istFrage = (t) => /\?\s*$/.test(t) || /#frage/i.test(t);
+  const istFrage = (t) => { const i = t.lastIndexOf(" → "); return /\?\s*$/.test(i > 0 ? t.slice(0, i) : t) || /#frage/i.test(t); };
+  // Überschrift über Zeile nr (auch in Zitat/Callout): steht die Aufgabe unter „Offene Fragen“?
+  const unterFragen = (zeilen, nr) => {
+    for (let i = nr - 1; i >= 0; i--) {
+      const h = (zeilen[i] || "").match(/^[\s>]*#{1,6}\s+(.*)$/);
+      if (h) return /^offene\s+fragen\b/i.test(h[1].trim());
+    }
+    return false;
+  };
   const ausgeschlossen = (pfad) => { const p = pfad.toLowerCase(); return AUSSCHLUSS.some((a) => p.startsWith(a)); };
 
   // Kurzname der Quellnotiz: „E101 Folien 01 Einführung“ → „E101 · Folien 01“; eine Vorlesungsnotiz mit ihrem Namen wie überall
@@ -104,7 +113,7 @@ module.exports = function (ctx) {
         const roh = (zeilen[nr] || "").replace(/\r$/, "");
         const m = roh.match(AUFGABE);
         if (!m) continue;
-        const modus = istFrage(m[2]) ? "fragen" : "todos";
+        const modus = istFrage(m[2]) || unterFragen(zeilen, nr) ? "fragen" : "todos";
         const z = zerlegen(m[2], modus);
         const fl = modus === "fragen" ? null : faellig(z.text, heute);
         // reines „(bis 02.11.)“ am Ende steht schon in der Fälligkeits-Pille

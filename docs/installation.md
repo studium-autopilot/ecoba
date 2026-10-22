@@ -41,10 +41,10 @@ Er überschreibt nichts und sendet nichts. Du kannst ihn danach wieder löschen.
 ### Ohne Kurzbefehl
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) antippen → **Laden**.
-2. App **Dateien** → **Downloads** → die ZIP-Datei antippen. Sie wird zum Ordner `Studium Autopilot`.
+2. App **Dateien** → **Downloads** → die ZIP-Datei antippen. Sie wird zum Ordner `Studium-Autopilot`.
 3. Den Ordner gedrückt halten → **Bewegen** → **iCloud Drive** → **Obsidian** → **Bewegen** (kein iCloud: **Auf meinem iPhone** → **Obsidian**).
    Fehlt dort der Ordner **Obsidian**: zuerst Schritt 1 oben.
-4. Obsidian öffnen → **Vault wechseln** → **Studium Autopilot** → [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
+4. Obsidian öffnen → **Vault wechseln** → **Studium-Autopilot** → [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
 ## Mac
 
@@ -72,9 +72,9 @@ Beide Geräte brauchen denselben Apple Account mit eingeschaltetem iCloud Drive.
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden.
    Safari packt sie selbst aus; bei Chrome oder Firefox die ZIP-Datei in **Downloads** doppelklicken. Danach liegt in
-   **Downloads** der Ordner `Studium Autopilot`.
+   **Downloads** der Ordner `Studium-Autopilot`.
 2. Im Finder den Ordner von **Downloads** nach **Dokumente** ziehen.
-3. **Obsidian** öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken → **Dokumente** → `Studium Autopilot`
+3. **Obsidian** öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken → **Dokumente** → `Studium-Autopilot`
    markieren → **Öffnen**.
 4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
@@ -90,23 +90,36 @@ Kommt später ein iPhone oder iPad dazu: [Weiteres Gerät verbinden](#weiteres-g
   iCloud entsteht. Dort Obsidian öffnen → **iCloud verwenden** → **Vault erstellen**; iCloud Drive muss an sein (iPhone:
   **Einstellungen** → dein Name → **iCloud** → **iCloud Drive**). Einen selbst angelegten Ordner „Obsidian“ ohne Symbol findet
   Obsidian auf dem iPhone nicht.
+- **Obsidian zeigt einen fast leeren Tresor, nur mit einem Ordner darin:** Du hast den Ordner darüber geöffnet. Den Ordner
+  wählen, in dem `Dashboard.md` direkt liegt.
 - **Tresor in iCloud öffnet langsam:** Im Finder bei gedrückter Control-Taste auf **iCloud Drive** → **Obsidian** klicken und
   den Ordner geladen behalten (englisch „Keep Downloaded“, ab macOS 15). Sonst lädt der Mac Dateien erst beim Öffnen.
 
 ## Windows
 
-1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, rechts anklicken → **Alle extrahieren**.
-2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
-3. **Obsidian** öffnen → **Ordner als Vault öffnen** → den Ordner wählen.
+1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip)
+   laden. Im Explorer unter **Downloads** die ZIP-Datei rechts anklicken → **Alle extrahieren…** → **Extrahieren**. Das Ziel
+   so lassen, wie es vorgeschlagen wird.
+2. In **Downloads** liegt jetzt der Ordner `Studium-Autopilot`. Ihn links auf **Dokumente** ziehen, damit er beim Aufräumen
+   von Downloads nicht verloren geht.
+3. **Obsidian** öffnen → **Ordner als Vault öffnen** → **Dokumente** → `Studium-Autopilot` markieren → **Ordner auswählen**.
 4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
+
+Obsidian zeigt einen fast leeren Tresor, nur mit einem Ordner darin? Dann war es der Ordner darüber. In Obsidian unten links
+auf den Namen des Tresors → **Vaults verwalten…** → **Ordner als Vault öffnen** und den Ordner wählen, in dem `Dashboard.md`
+direkt liegt.
 
 ## Android
 
 1. [**Studium-Autopilot.zip**](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden.
-2. In der App **Dateien** (oder deinem Dateimanager) die ZIP-Datei antippen → **Entpacken**.
-3. Den Ordner `Studium Autopilot` nach **Documents** verschieben.
-4. Obsidian öffnen → **Ordner als Vault öffnen** → den Ordner wählen. Fragt Obsidian nach Zugriff auf Dateien: erlauben.
-5. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
+2. In der App **Dateien** (oder deinem Dateimanager) unter **Downloads** die ZIP-Datei antippen → **Entpacken**. Es entsteht
+   der Ordner `Studium-Autopilot`.
+3. Obsidian öffnen → **Ordner als Vault öffnen** → **Download** → `Studium-Autopilot` → **Diesen Ordner verwenden**. Fragt
+   Obsidian nach Zugriff auf Dateien: erlauben.
+4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
+
+Wähle immer den Ordner, in dem `Dashboard.md` direkt liegt. Liegen nach dem Entpacken die Dateien lose in Download statt in
+einem Ordner: in Download einen Ordner `Studium-Autopilot` anlegen, die ZIP-Datei dorthin verschieben und dort entpacken.
 
 
 ## Vertrauen
@@ -117,6 +130,10 @@ Beim ersten Öffnen fragt Obsidian, ob du dem Tresor vertraust.
 2. Das Dashboard öffnet sich. Aussehen, Übersicht und Termine sind schon eingerichtet.
 
 Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Kennzahlen und Knöpfe leer.
+
+**Den anderen Knopf erwischt?** Dann steht oben auf dem Dashboard „Studium Autopilot ist noch aus“. So schaltest du es ein:
+**Einstellungen** (Zahnrad unten links, am Handy erst ☰) → **Community-Plugins** → **Community-Plugins aktivieren**. Steht dort
+„Studium Autopilot“ mit einem Schalter, ihn einschalten. Englisch: Settings → Community plugins → Turn on community plugins.
 
 Termine und Fristen kommen danach von selbst, beim ersten Mal nach einigen Minuten. Nicht warten? Seite **Einstellungen & Hilfe** → **Verbindungen** → bei „Zentrale Daten“ **Aktualisieren**.
 
@@ -151,34 +168,71 @@ Passwort. Steht eine Abgabe schon bei deinen Fristen, kommt sie nicht doppelt.
 
 ## Weiteres Gerät verbinden
 
-Dein Tresor läuft schon auf einem Gerät? So kommt er auf weitere.
+Dein Tresor läuft schon auf einem Gerät? So kommt er auf weitere. Such dir die Zeile mit deinen Geräten:
 
-**Nur Apple-Geräte (iPhone, iPad, Mac): iCloud** – kostenlos, die Vorlage braucht nur wenige MB.
+| Deine Geräte | Am einfachsten | Kosten |
+|---|---|---|
+| Nur Apple (iPhone, iPad, Mac) | [iCloud](#nur-apple-icloud) | kostenlos |
+| Windows-PC und iPhone oder iPad | [iCloud für Windows](#windows-und-iphone-oder-ipad-icloud-für-windows) | kostenlos |
+| Mit Android, oder alles ohne Aufwand | [Obsidian Sync](#alle-geräte-obsidian-sync) | kostenpflichtig |
+| Eigener Server schon eingerichtet | [LiveSync](#mit-eigenem-server-livesync) | kostenlos |
 
-1. Liegt der Ordner `Studium Autopilot` noch nicht in **iCloud Drive → Obsidian**, ihn dorthin verschieben:
+Nimm für einen Tresor immer nur **einen** Weg. Zwei Abgleiche gleichzeitig erzeugen doppelte Dateien.
+
+### Nur Apple: iCloud
+
+Kostenlos, die Vorlage braucht nur wenige MB.
+
+1. Liegt dein Tresor-Ordner noch nicht in **iCloud Drive → Obsidian**, ihn dorthin verschieben:
    - iPhone/iPad: App **Dateien** → Ordner gedrückt halten → **Bewegen** → **iCloud Drive** → **Obsidian**.
    - Mac: Obsidian beenden (⌘Q), im Finder den Ordner nach **iCloud Drive** → **Obsidian** ziehen. Dann Obsidian öffnen →
      **Ordner als Vault öffnen** → **Öffnen** → den Ordner dort wählen.
 
    Den Ordner **Obsidian** in iCloud Drive gibt es erst, wenn Obsidian auf einem iPhone oder iPad einen Vault in iCloud
    erstellt hat (**iCloud verwenden** → **Vault erstellen**, Name egal).
-2. Auf jedem weiteren Gerät öffnen: iPhone/iPad → Obsidian → **Vault wechseln** → **Studium Autopilot** (iCloud);
-   Mac → **Ordner als Vault öffnen** → **Öffnen** → **iCloud Drive** → **Obsidian** → `Studium Autopilot`.
+2. Auf jedem weiteren Gerät öffnen: iPhone/iPad → Obsidian → **Vault wechseln** → den Tresor (iCloud); Mac → **Ordner als
+   Vault öffnen** → **Öffnen** → **iCloud Drive** → **Obsidian** → den Tresor-Ordner.
 3. Einmal [**Vertrauen**](#vertrauen) tippen.
 
-**Mit Windows-PC:** iCloud für Windows aus dem Microsoft Store, **iCloud Drive** einschalten, den Ordner
-`iCloudDrive\iCloud~md~obsidian` rechts anklicken → **Immer auf diesem Gerät behalten**, dann dort `Studium Autopilot` als Tresor öffnen.
-
-**Mit Android:** **Obsidian Sync** (kostenpflichtig, alle Geräte; Einstellungen → Sync, Plugins, CSS-Snippets und andere
-Dateitypen mit abgleichen, sonst fehlen z. B. die Lernstände der Karteikarten) oder **Syncthing** (kostenlos, Android und PC, nicht iPhone/iPad; Ordner samt `.obsidian` teilen).
-
-**Mit eigenem Server: LiveSync** – kostenlos, alle Geräte (Windows, Mac, iPhone, iPad, Android), ohne iCloud. Hast du deinen
-eigenen Server verbunden, tippe unter **Einstellungen & Hilfe** → **Verbindungen** in der Zeile „Eigener Server“ auf **Mehr
-erfahren**. Unter „Windows und iPhone abgleichen“ **Prompt kopieren** tippen und in Claude Desktop einfügen. Claude richtet den
-Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das Community-Plugin Self-hosted LiveSync auf jedes Gerät; iCloud und
-andere Abgleiche für den Tresor schaltest du danach aus.
-
 Ist der iCloud-Speicher voll, stockt der Abgleich – dann erst Platz schaffen.
+
+### Windows und iPhone oder iPad: iCloud für Windows
+
+Kostenlos. Der Tresor muss dafür schon auf dem iPhone oder iPad in **iCloud Drive → Obsidian** liegen (wie oben bei
+[iPhone und iPad](#iphone-und-ipad) mit dem Ort **iCloud Drive**).
+
+1. **iCloud für Windows** aus dem Microsoft Store installieren, mit deinem Apple Account anmelden und **iCloud Drive**
+   einschalten.
+2. Im Explorer links **iCloud Drive** öffnen. Den Ordner **Obsidian** (heißt im Pfad `iCloud~md~obsidian`) rechts anklicken →
+   **Immer auf diesem Gerät behalten**. Warten, bis überall ein grüner Haken steht.
+3. Obsidian öffnen → **Ordner als Vault öffnen** → **iCloud Drive** → **Obsidian** → den Tresor-Ordner → **Ordner auswählen**.
+4. Einmal [**Vertrauen**](#vertrauen) tippen.
+
+Ohne „Immer auf diesem Gerät behalten“ lädt Windows Dateien erst beim Öffnen, und Studium Autopilot startet unvollständig.
+
+### Alle Geräte: Obsidian Sync
+
+Kostenpflichtig (Preis auf [obsidian.md/sync](https://obsidian.md/sync)), dafür auf allen Geräten gleich und ohne weitere App.
+
+1. Auf dem Gerät mit dem Tresor: **Einstellungen** → **Kernplugins** → **Sync** einschalten. Dann **Einstellungen** → **Sync**
+   → anmelden → einen neuen Remote-Tresor anlegen und verbinden.
+2. Unter **Einstellungen** → **Sync** alles bei den Dateitypen und Einstellungen einschalten, vor allem **Plugins**,
+   **CSS-Snippets** und **andere Dateitypen**. Sonst fehlen auf den anderen Geräten Studium Autopilot, das Aussehen und die
+   Lernstände der Karteikarten.
+3. Auf jedem weiteren Gerät: Obsidian installieren, einen leeren Tresor anlegen, Sync wie in Punkt 1 einschalten und den
+   Remote-Tresor wählen, dann dieselben Schalter wie in Punkt 2.
+4. Warten, bis alles geladen ist, Obsidian einmal schließen und wieder öffnen, dann [**Vertrauen**](#vertrauen) tippen.
+
+Für Technische geht auch Syncthing (kostenlos, nicht für iPhone und iPad). Die Android-App gibt es nur noch als
+„Syncthing-Fork“ über F-Droid, nicht im Play Store. Den ganzen Tresor-Ordner samt `.obsidian` teilen.
+
+### Mit eigenem Server: LiveSync
+
+Kostenlos, alle Geräte (Windows, Mac, iPhone, iPad, Android), ohne iCloud. Hast du deinen
+[eigenen Server](#eigener-server-mit-claude-für-technische) verbunden, tippe unter **Einstellungen & Hilfe** →
+**Verbindungen** in der Zeile „Eigener Server“ auf **Mehr erfahren**. Unter „Windows und iPhone abgleichen“ **Prompt kopieren**
+tippen und in Claude Desktop einfügen. Claude richtet den Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das
+Community-Plugin Self-hosted LiveSync auf jedes Gerät; iCloud und andere Abgleiche für den Tresor schaltest du danach aus.
 
 ## Update auf eine neue Version
 

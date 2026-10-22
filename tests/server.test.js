@@ -458,7 +458,7 @@ test("Speicherreserve: 25 % des Arbeitsspeichers, feste Größe oder Anteil eins
 });
 
 test("Shell-Skripte: Syntax gültig (bash -n)", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
-  for (const datei of ["installieren.sh", "studium-server"]) {
+  for (const datei of ["installieren.sh", "studium-server", "fern.sh"]) {
     const r = spawnSync("bash", ["-n", path.join(SERVER, datei)], { encoding: "utf8" });
     assert.equal(r.status, 0, `${datei}: ${r.stderr}`);
   }

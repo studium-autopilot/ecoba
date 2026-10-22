@@ -30,7 +30,10 @@ Danach läuft **immer** `werkzeuge/pruefen.py` über den Baum, lokal zusätzlich
 veröffentlicht werden dürfen). Sie prüft auch, dass die Update-Liste zu den Dateien passt. Bei einem Fund bricht der Export mit
 einer Liste ab; korrigiert wird in der Quelle, dann neu bauen.
 
-Mit `--zip` baut der Export zusätzlich **`Studium-Autopilot.zip`** mit dem Ordner `Studium Autopilot/`. Der Name ist fest und
+Mit `--zip` baut der Export zusätzlich **`Studium-Autopilot.zip`** mit dem Inhalt des Ordners `Studium Autopilot/`, ohne den
+Ordner selbst: Windows („Alle extrahieren“), Android und macOS legen beim Entpacken genau einen Ordner `Studium-Autopilot` an,
+der selbst der Tresor ist. (Bis 0.5.7 lag der Ordner im Archiv; unter Windows und Android entstand
+`Studium-Autopilot/Studium Autopilot/`, und wer den äußeren Ordner öffnete, hatte einen leeren Tresor.) Der Name ist fest und
 ohne Version: Die Anleitung, der grüne Knopf der README und der iOS-Kurzbefehl laden
 `https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip`. **Das Asset muss bei jedem
 Release genau so heißen.**
@@ -135,4 +138,4 @@ unter „Mehr erfahren“) bekommen die Beta angeboten. Nach dem fertigen Releas
 die Beta-Tresore bekommen dann die fertige Version. `beta` kann stehen bleiben oder entfernt werden.
 
 **Zwei Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen) und `Studium-Autopilot-iOS.zip`
-(gleicher Inhalt, eine Ebene tiefer verschachtelt) für den iOS-Kurzbefehl `docs/kurzbefehl/`. Beide Namen sind fest; `release.py --zip` erzeugt beide.
+(gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/`. Beide Namen sind fest; `release.py --zip` erzeugt beide.

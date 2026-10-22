@@ -2,6 +2,19 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.5.8 – Offene Fragen am richtigen Platz
+
+- **Behoben:** Offene Fragen aus deinen Unterlagen standen auf dem Dashboard bei den To-dos, sobald ein Seitenverweis
+  dahinter stand. Jetzt erscheinen sie unter **Offene Fragen**.
+- **Übersichtlicher:** **Zusammenfassen** trägt Dauerhinweise wie „Folien in jede Vorlesung mitnehmen“ nicht mehr als To-do
+  ein, das du nie abhaken kannst.
+- **Behoben:** Unter Windows und Android ergab das Entpacken einen Ordner im Ordner, und wer den äußeren öffnete, hatte einen
+  leeren Tresor. Jetzt ist der entpackte Ordner selbst dein Tresor.
+- **Einfacher:** Bleibt Studium Autopilot beim ersten Öffnen ausgeschaltet, sagt dir das Dashboard jetzt, wie du es einschaltest.
+- **Einfacher:** Die Anleitung zeigt für jedes weitere Gerät genau einen Weg, deinen Tresor dorthin zu bringen.
+- **Einfacher:** Beim Einrichten des eigenen Servers kopierst du keine Adressen und langen Befehle mehr von Hand. Gmail ist
+  dabei freiwillig.
+
 ## 0.5.7 – Tresor auf allen Geräten gleich
 
 - **Neu:** Mit eigenem Server gleicht dein Tresor auf Wunsch zwischen Windows, iPhone und iPad ab, kostenlos und ohne iCloud.

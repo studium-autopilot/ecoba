@@ -32,19 +32,23 @@ const VIELE = {
   "Studium/Prüfungen.md": "- [ ] nie zählen?",
   "Lernplan/E101 Lernplan.md": "- [ ] 1 Einführung\n  - [ ] 1.1 Knappheit",
   "Dashboard.md": "- [ ] nie zählen",
+  // Begleitnotiz: unter „Offene Fragen“ ist alles Frage, auch ohne „?“ und mit Belegen hinter „ → “
+  "Unterlagen/B180 Folien 02.md": "## Zu tun\n- [ ] Haus-Aufgabe lösen → [[F.pdf#page=34|S. 34]]\n\n## Offene Fragen\n- [ ] Tesla-Beispiel: Frage auf der Folie → [[F.pdf#page=5|S. 5]]\n- [ ] Welcher Typ ist es? → [[F.pdf#page=18|S. 18]]",
+  // Frage am Textende vor den Belegen, ohne Abschnitt
+  "Notizen/Belege.md": "- [ ] Gilt das auch langfristig? → [[F.pdf#page=2|S. 2]]",
 };
 
-test("Auswahl: offene Aufgaben außer in System/, Module/, Studium/, Lernplan/ und Dashboard; Fragen enden auf „?“ oder tragen #frage", async () => {
+test("Auswahl: offene Aufgaben außer in System/, Module/, Studium/, Lernplan/ und Dashboard; Fragen stehen unter „Offene Fragen“, enden vor den Belegen auf „?“ oder tragen #frage", async () => {
   const beide = await mitNotizen(VIELE).lesenBeide();
-  assert.deepEqual(beide.todos.map((t) => t.text), ["Übung vorbereiten", "Bibliotheksausweis verlängern", "Folien 3–5 nacharbeiten"]);
-  assert.deepEqual(beide.fragen.map((t) => t.text), ["Lerngruppe fragen", "Warum ist das so?"]);
+  assert.deepEqual(beide.todos.map((t) => t.text), ["Übung vorbereiten", "Bibliotheksausweis verlängern", "Haus-Aufgabe lösen", "Folien 3–5 nacharbeiten"]);
+  assert.deepEqual(beide.fragen.map((t) => t.text), ["Lerngruppe fragen", "Warum ist das so?", "Gilt das auch langfristig?", "Tesla-Beispiel: Frage auf der Folie", "Welcher Typ ist es?"]);
   assert.equal(beide.todos[0].faellig.getDate(), 20); // nach Fälligkeit zuerst, dann nach Notiz
 });
 
 test("lesen(modus) liefert dieselben Listen wie lesenBeide", async () => {
   const T = mitNotizen(VIELE);
-  assert.equal((await T.lesen("todos")).length, 3);
-  assert.equal((await T.lesen("fragen")).length, 2);
+  assert.equal((await T.lesen("todos")).length, 4);
+  assert.equal((await T.lesen("fragen")).length, 5);
 });
 
 test("Leerer Block: Klasse is-leer und eigener Satz; sind beide leer, sagt der To-do-Block „Nichts offen.“", async () => {
@@ -53,12 +57,12 @@ test("Leerer Block: Klasse is-leer und eigener Satz; sind beide leer, sagt der T
   const z = (beide, modus) => { const s = T.zustand(beide, modus); return [s.klasse, s.leer, s.liste.length]; };
   // viele To-dos, keine Fragen: nur die Fragen-Karte ist leer
   const ohneFragen = { todos: gefuellt.todos, fragen: [] };
-  assert.deepEqual(z(ohneFragen, "todos"), ["eba-td eba-td-todos", "", 3]);
+  assert.deepEqual(z(ohneFragen, "todos"), ["eba-td eba-td-todos", "", 4]);
   assert.deepEqual(z(ohneFragen, "fragen"), ["eba-td eba-td-fragen is-leer", "Keine offenen Fragen.", 0]);
   // Fragen, keine To-dos
   const ohneTodos = { todos: [], fragen: gefuellt.fragen };
   assert.deepEqual(z(ohneTodos, "todos"), ["eba-td eba-td-todos is-leer", "Nichts zu tun.", 0]);
-  assert.deepEqual(z(ohneTodos, "fragen"), ["eba-td eba-td-fragen", "", 2]);
+  assert.deepEqual(z(ohneTodos, "fragen"), ["eba-td eba-td-fragen", "", 5]);
   // beide gefüllt: keine Klasse is-leer
   assert.deepEqual(z(gefuellt, "todos").slice(0, 2), ["eba-td eba-td-todos", ""]);
   assert.deepEqual(z(gefuellt, "fragen").slice(0, 2), ["eba-td eba-td-fragen", ""]);

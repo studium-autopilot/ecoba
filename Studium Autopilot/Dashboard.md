@@ -10,6 +10,11 @@ cssclasses:
 
 <div class="eba-pfad eba-pfad-start"><span>Economics and Business Administration (B.Sc.)</span><span>Universität Tübingen</span><span>PO 2023</span></div>
 
+> [!eba-achtung|plugin-aus] Studium Autopilot ist noch aus
+> Darum fehlen hier Fristen, Termine und Knöpfe. **Einstellungen** öffnen (Zahnrad unten links, am Handy erst ☰) → **Community-Plugins** → **Community-Plugins aktivieren**. Steht dort „Studium Autopilot“ mit einem Schalter, ihn einschalten. Danach verschwindet dieser Hinweis.
+>
+> Englisch: Settings → Community plugins → Turn on community plugins.
+
 ```eba-update-hinweis
 ```
 

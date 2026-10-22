@@ -127,6 +127,22 @@ einem echten Konto. Erster echter Lauf in einem neuen Konto am 20.10.2026: Stand
 `server` nicht angelegt); daraus behoben: abgeschnittene Fehler (kein Platz sah wie ein harter Fehler aus) und ed25519 in der Cloud Shell
 (FIPS-Modus, jetzt RSA 4096). Noch offen: Platzsucher in einem neuen Konto.
 
+### Den Server aus der Cloud Shell bedienen: `server/fern.sh`
+
+Ab dem Installieren geht alles auf dem Server über einen Befehl, ohne IP-Adresse und ssh von Hand:
+
+```
+bash ~/studium-autopilot/server/fern.sh installieren        Paket kopieren, installieren.sh --ip <IP> (wiederholbar)
+bash ~/studium-autopilot/server/fern.sh neustart            nach „Boot-Volume … vergrößert“
+bash ~/studium-autopilot/server/fern.sh claude-anmelden     claude auth login als Nutzer studium, danach zustand
+bash ~/studium-autopilot/server/fern.sh <befehl …>          sonst: sudo studium-server <befehl …> (Liste unten)
+```
+
+Jeder Aufruf holt die Adresse mit `einrichten.mjs adresse` und prüft dabei den Schlüssel; er läuft aus jedem Ordner, auch in
+einer neuen Cloud-Shell-Sitzung. Exit wie `adresse` (1, 2), `3` unbekannter Befehl, `4` Server nicht `RUNNING`, sonst der Exit
+auf dem Server. Angaben sind nur Kleinbuchstaben und Bindestriche, damit nichts Fremdes in die ssh-Zeile kommt. Tests in
+`tests/server-einrichten.test.js` mit nachgebautem `adresse`, ssh und scp.
+
 ## Platzsucher: `server/platzsucher.py`
 
 Beim Anlegen des freien Servers meldet Oracle oft „Out of host capacity“, teils tagelang. Der Platzsucher versucht es darum

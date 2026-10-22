@@ -13,7 +13,7 @@ sind wiederholbar und legen nichts doppelt an.
 | 4 | Server anlegen | `stand.mjs` meldet „Server … ist schon angelegt“ |
 | 5 | Paket installieren | `https://<Adresse>/v1/status` antwortet mit einer Version |
 | 6 | Claude auf dem Server | Status: `claude` ist `angemeldet` |
-| 7 | Gmail | Status: `gmail` ist `ok` |
+| 7 | Gmail (freiwillig) | Status: `gmail` ist `ok`, oder der Mensch will kein Gmail |
 | 8 | Uni-Mails | Status: `uni_zugang` ist `gespeichert` oder `weiterleitung` ist `ok` |
 | 9 | Obsidian verbinden | Status: `plugin_abruf` liegt höchstens 30 Minuten zurück |
 | 10 | Erster Lauf | Status: `letzter_lauf.ok` ist `true` |
@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.7)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.8)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -59,7 +59,11 @@ node server/stand.mjs
 
 Meldet `sha256sum` einen Fehler: nichts ausführen, neu laden, sonst anhalten. Das Ergebnis von `stand.mjs` erklärst du in zwei
 Sätzen (Kontotyp, was frei ist, was von Studium Autopilot schon da ist). Bei „Ich klicke selbst“ kopiert der Mensch die
-Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`; ab Schritt 5 die Zeile mit `IP=` von dort.
+Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
+
+Ab Schritt 5 geht alles auf dem Server über **`bash ~/studium-autopilot/server/fern.sh <befehl>`**: Es holt die Adresse selbst,
+prüft den Schlüssel und ruft ssh auf; keine IP und kein ssh-Befehl von Hand, auch nicht in einer neuen Sitzung. Exit 4 heißt: Der
+Server läuft nicht (Schritt 5, Zustand). Exit 2 und 1 sind die von `adresse` (Schritt 5).
 
 ## 3. Schutz vor Kosten
 
@@ -102,13 +106,8 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
 cd ~/studium-autopilot
 node server/einrichten.mjs abschliessen
 node server/einrichten.mjs adresse
-IP=$(node server/einrichten.mjs adresse --json | jq -r .ip)
-scp -i ~/.ssh/studium_autopilot -o StrictHostKeyChecking=accept-new studium-server.tar.gz ubuntu@$IP:
-ssh -i ~/.ssh/studium_autopilot ubuntu@$IP "tar -xzf studium-server.tar.gz && sudo bash server/installieren.sh --ip $IP"
+bash server/fern.sh installieren
 ```
-
-Die Befehle ab hier brauchen `$IP`. In einer neuen Cloud-Shell-Sitzung darum zuerst wieder
-`cd ~/studium-autopilot && IP=$(node server/einrichten.mjs adresse --json | jq -r .ip)`.
 
 - `adresse` nennt den Zustand des Servers. Nur bei `RUNNING` geht es weiter. Bei `PROVISIONING` oder `STARTING` eine Minute
   warten und `adresse` noch einmal. Bei `STOPPED` in der Konsole unter **Compute →
@@ -119,7 +118,7 @@ Die Befehle ab hier brauchen `$IP`. In einer neuen Cloud-Shell-Sitzung darum zue
 
 - `abschliessen` entfernt die Rechte eines Platzsuchers, lässt die Metadaten des Servers nur über IMDSv2 zu, vergrößert das Boot-Volume auf den ganzen freien Rest und setzt die
   Quota so, dass nichts Neues mehr hinzukommt. Meldet es „Boot-Volume … vergrößert“: einmal
-  `ssh -i ~/.ssh/studium_autopilot ubuntu@$IP sudo reboot`, nach etwa einer Minute weiter (Ubuntu vergrößert das Dateisystem
+  `bash ~/studium-autopilot/server/fern.sh neustart`, nach etwa einer Minute weiter (Ubuntu vergrößert das Dateisystem
   beim Start).
 - Ist der Server gerade erst angelegt, braucht er ein bis zwei Minuten, bis SSH antwortet.
 - Der Installer ist wiederholbar. Fertig ist der Schritt, wenn der Status eine Version meldet.
@@ -127,7 +126,7 @@ Die Befehle ab hier brauchen `$IP`. In einer neuen Cloud-Shell-Sitzung darum zue
 ## 6. Claude auf dem Server
 
 ```bash
-ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo -u studium -H /var/lib/studium/.local/bin/claude auth login"
+bash ~/studium-autopilot/server/fern.sh claude-anmelden
 ```
 
 Claude Code zeigt einen Link. Bei „Claude klickt“ öffnest du ihn im Browser; anmelden und **Autorisieren** klickt der Mensch.
@@ -135,13 +134,8 @@ Den angezeigten Code kopierst du mit dem Kopier-Knopf auf der Seite und fügst i
 abgetippt: Ein falsches Zeichen, und die Anmeldung scheitert (bei „Ich klicke selbst“ kopiert und fügt der Mensch). Gleich
 nach dem Link einfügen, der Code gilt nur ein paar Minuten, nur einmal und nur für den Link desselben Befehls.
 
-Nach **jedem** Versuch, egal was die Cloud Shell meldet:
-
-```bash
-ssh -i ~/.ssh/studium_autopilot ubuntu@$IP sudo studium-server zustand
-```
-
-Fertig, sobald dort `claude angemeldet` steht. Sonst:
+Nach jedem Versuch prüft der Befehl selbst den Zustand (`studium-server zustand`). Fertig, sobald dort `claude angemeldet`
+steht. Sonst:
 
 - `Login failed: Request failed with status code 400`: Der Code passte nicht zum Link (falsch eingefügt, zu alt oder schon
   benutzt). Den Anmeldebefehl oben noch einmal und nur seinen neuen Link und Code nehmen. Nach drei solchen Versuchen anhalten und
@@ -153,6 +147,9 @@ Fertig, sobald dort `claude angemeldet` steht. Sonst:
 - In claude.ai: **Einstellungen → Connectors → Gmail → Verbinden**. Die Google-Zustimmung gibt der Mensch.
 - Erklären: Claude sucht und liest auf dem Server nur; Senden, Entwürfe, Labels und Löschen sind dort gesperrt.
 - Fertig, wenn der Status nach dem ersten Lauf `gmail: ok` meldet (Schritt 10).
+- **Ohne Gmail:** Wer kein Gmail hat oder nicht verbinden will, überspringt diesen Schritt. Uni-Mails gehen dann nur über das
+  Uni-Postfach direkt (Schritt 8), und im Fenster „Eigener Server“ steht Gmail auf „nie“. Der Status meldet `gmail` dann nicht
+  als `ok`; das ist so gewollt.
 
 ## 8. Uni-Mails
 
@@ -171,13 +168,13 @@ Zwei Wege. Empfiehl die Weiterleitung; das Uni-Postfach direkt nur, wenn der Men
   nichts.“
 
   ```bash
-  ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server uni-zugang setzen"
+  bash ~/studium-autopilot/server/fern.sh uni-zugang setzen
   ```
 
 ## 9. Obsidian verbinden
 
 ```bash
-ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server verbinden"
+bash ~/studium-autopilot/server/fern.sh verbinden
 ```
 
 Der Server zeigt einen Einmal-Link (30 Minuten) und einen QR-Code. Am Rechner den Link öffnen: Obsidian fragt „Mit deinem Server
@@ -187,10 +184,10 @@ Code. Unter **Einstellungen → Verbindungen** steht danach die Zeile „Eigener
 ## 10. Erster Lauf
 
 ```bash
-ssh -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server jetzt"
+bash ~/studium-autopilot/server/fern.sh jetzt
 ```
 
-Der Lauf dauert einige Minuten. Danach `sudo studium-server lauf` (Ergebnis) und in Obsidian die Zeile „Eigener Server“ („Aktualisiert …“).
+Der Lauf dauert einige Minuten. Danach `bash ~/studium-autopilot/server/fern.sh lauf` (Ergebnis) und in Obsidian die Zeile „Eigener Server“ („Aktualisiert …“).
 Bei „Claude klickt“ schaust du selbst in Obsidian nach, sonst fragst du. Meldet der Status `claude-limit`: Das Abo-Limit ist
 erreicht, der nächste Lauf versucht es von selbst.
 

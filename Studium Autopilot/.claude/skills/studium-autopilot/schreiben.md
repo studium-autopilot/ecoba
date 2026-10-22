@@ -54,7 +54,8 @@ dem PDF-Kasten an; leere Abschnitte und leere Punkte (`- `, `- [ ] `) gibt es ni
 
 - `## Das Wichtigste`: 5 bis 10 Punkte `- `, eigene Worte, je Punkt die Seite als Link `[[X.pdf#page=N|S. N]]`. Begriffe
   fett mit kurzer Erklärung.
-- `## Zu tun` (nur wenn es etwas gibt): `- [ ] Aufgabe (bis TT.MM.)`, direkt unter „Das Wichtigste“.
+- `## Zu tun` (nur wenn es etwas gibt): `- [ ] Aufgabe (bis TT.MM.)`, direkt unter „Das Wichtigste“. Nur was man einmal
+  erledigt und dann abhakt; ein Dauerhinweis („Folien in jede Vorlesung mitnehmen“) ist ein Punkt „Organisation“.
 - `## Offene Fragen` (nur wenn es eine gibt): `- [ ] Frage?`, was zum Verstehen fehlt.
 - Was die Person schon geschrieben hat, bleibt; du ergänzt darunter. Danach `status: bearbeitet` nur, wenn sie es möchte.
 - Nichts wörtlich abschreiben außer Formeln und Bezeichnungen.

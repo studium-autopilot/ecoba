@@ -140,8 +140,10 @@ test("Folien als Markdown: Kapitel beim ersten Öffnen zu, auf jedem Gerät; die
   });
   ctx.app.vault.cachedRead = async () => "\n".repeat(8);
   ctx.app.metadataCache.getFileCache = () => ({ frontmatter: F, headings: [h("Das Wichtigste", 1), h("1.1 Grundbegriffe", 4), h("1.2 Ziele", 6)] });
-  globalThis.document = {};
+  const klassen = new Set();
+  globalThis.document = { body: { classList: { add: (k) => klassen.add(k), remove: (k) => klassen.delete(k) } } };
   try { S.registrieren(); } finally { delete globalThis.document; }
+  assert.ok(klassen.has("eba-plugin-an"), "blendet den Hinweis „Studium Autopilot ist noch aus“ aus, auch mit älterem Kern");
   const vorher = timer.length;
   for (const fn of an["file-open"]) await fn(f);
   assert.deepEqual(gespeichert, [{ folds: [{ from: 4, to: 5 }, { from: 6, to: 8 }], lines: 9 }], "„Das Wichtigste“ bleibt offen");

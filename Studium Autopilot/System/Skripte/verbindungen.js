@@ -392,13 +392,13 @@ module.exports = function (ctx) {
           ];
         }
         return [
-          "Auf deinem Server **sudo studium-server verbinden** eingeben.",
+          "In der Cloud Shell von Oracle **bash ~/studium-autopilot/server/fern.sh verbinden** eingeben.",
           "Den Link auf diesem Gerät öffnen oder den QR-Code scannen.",
         ];
       },
       get erklaerung() {
         return ctx.server && !ctx.server.sichtbar()
-          ? "Kostet nichts: ein Server im Always-Free-Angebot von Oracle ohne Upgrade, ein Budget warnt ab dem ersten Cent. Du brauchst Claude Pro oder Max, ein Oracle-Konto und Gmail."
+          ? "Kostet nichts: ein Server im Always-Free-Angebot von Oracle ohne Upgrade, ein Budget warnt ab dem ersten Cent. Du brauchst Claude Pro oder Max und ein Oracle-Konto, Gmail ist freiwillig."
           : "Die Schlüssel liegen nur im Schlüsselbund dieses Geräts, die Daten kommen verschlüsselt. Ein Gerät reicht, die Termine kommen über deinen Sync auf die anderen.";
       },
       trennenText: "Die Schlüssel werden auf diesem Gerät gelöscht. Deine Termine bleiben, dein Server läuft weiter.",

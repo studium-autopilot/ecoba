@@ -48,7 +48,7 @@ Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein 
 <img src="docs/bilder/schritt-3.svg" alt="Schritt 3" height="40"><br>
 <b>In Obsidian öffnen</b>
 
-iPhone und iPad: Der Kurzbefehl öffnet <b>Studium Autopilot</b> in Obsidian → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>.<br>Am Computer und unter Android: <b>Ordner als Vault öffnen</b> → Ordner <b>Studium Autopilot</b> → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>. Fertig.
+iPhone und iPad: Der Kurzbefehl öffnet <b>Studium Autopilot</b> in Obsidian → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>.<br>Am Computer und unter Android: <b>Ordner als Vault öffnen</b> → Ordner <b>Studium-Autopilot</b> → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>. Fertig.
 
 <br>
 
@@ -104,7 +104,7 @@ Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an
 - **Claude richtet ihn ein:** In Claude Desktop führt ein Skill durch alle Schritte und klickt auf Wunsch selbst (Computer
   Use). Anmeldungen, Kreditkarte und Zustimmungen machst du. Hat Oracle gerade keinen Platz, sucht ein kleiner Helfer weiter
   und schickt dir eine Mail, sobald der Server da ist.
-- **Du brauchst:** Claude Pro oder Max, ein Oracle-Konto und Gmail.
+- **Du brauchst:** Claude Pro oder Max und ein Oracle-Konto. Gmail ist freiwillig.
 - **Deine Daten** bleiben auf deinem Server und in deinem Tresor, der Weg dazwischen ist verschlüsselt. Mehr in
   [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
 
@@ -184,8 +184,8 @@ Obsidian für den Mac kommt von [obsidian.md](https://obsidian.md/download), nic
 **Nur Mac:**
 
 1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden. Safari packt sie selbst aus, sonst in **Downloads** doppelklicken.
-2. Den Ordner `Studium Autopilot` im Finder von **Downloads** nach **Dokumente** ziehen.
-3. Obsidian öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken → **Dokumente** → `Studium Autopilot` markieren → **Öffnen**.
+2. Den Ordner `Studium-Autopilot` im Finder von **Downloads** nach **Dokumente** ziehen.
+3. Obsidian öffnen → bei **Ordner als Vault öffnen** auf **Öffnen** klicken → **Dokumente** → `Studium-Autopilot` markieren → **Öffnen**.
 4. **Dem Ersteller vertrauen und Erweiterungen aktivieren**.
 
 Hängt es? [Hilfe für den Mac](docs/installation.md#hängt-es-am-mac)
@@ -195,9 +195,9 @@ Hängt es? [Hilfe für den Mac](docs/installation.md#hängt-es-am-mac)
 <details>
 <summary><b>Hilfe für Windows</b></summary>
 
-1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, rechts anklicken → **Alle extrahieren**.
-2. Den Ordner `Studium Autopilot` an einen festen Platz legen, z. B. **Dokumente**.
-3. Obsidian öffnen → **Ordner als Vault öffnen** → den Ordner `Studium Autopilot` wählen.
+1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Downloads** rechts anklicken → **Alle extrahieren…** → **Extrahieren** (Ziel so lassen).
+2. Den Ordner `Studium-Autopilot` aus **Downloads** nach **Dokumente** ziehen.
+3. Obsidian öffnen → **Ordner als Vault öffnen** → **Dokumente** → `Studium-Autopilot` → **Ordner auswählen**.
 4. **Dem Ersteller vertrauen und Erweiterungen aktivieren**.
 
 </details>
@@ -206,10 +206,12 @@ Hängt es? [Hilfe für den Mac](docs/installation.md#hängt-es-am-mac)
 <summary><b>Hilfe für Android</b></summary>
 
 1. [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen → **Entpacken**.
-2. Obsidian öffnen → **Ordner als Vault öffnen** → den Ordner `Studium Autopilot` wählen → Zugriff **Erlauben**.
+2. Obsidian öffnen → **Ordner als Vault öffnen** → **Download** → `Studium-Autopilot` → **Diesen Ordner verwenden** → Zugriff **Erlauben**.
 3. **Dem Ersteller vertrauen und Erweiterungen aktivieren**.
 
 </details>
+
+**Dashboard bleibt leer, oben steht „Studium Autopilot ist noch aus“?** Beim Vertrauen den anderen Knopf erwischt: **Einstellungen** → **Community-Plugins** → **Community-Plugins aktivieren**. **Fast leerer Tresor mit nur einem Ordner darin?** Den Ordner wählen, in dem `Dashboard.md` direkt liegt.
 
 Die ganze Anleitung mit Alma, ILIAS, weiteren Geräten und Updates: [docs/installation.md](docs/installation.md).
 

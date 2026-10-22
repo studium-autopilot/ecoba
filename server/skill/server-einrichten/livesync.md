@@ -26,16 +26,15 @@ Erst fragen, auf welchen Geräten der Tresor sein soll und auf welchem er gerade
 die Cloud Shell öffnen (Oracle-Konsole oben rechts, **>_**):
 
 ```bash
-cd ~/studium-autopilot && IP=$(node server/einrichten.mjs adresse --json | jq -r .ip)
-ssh -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server aktualisieren"
-ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server livesync"
+bash ~/studium-autopilot/server/fern.sh aktualisieren
+bash ~/studium-autopilot/server/fern.sh livesync
 ```
 
 Das Einschalten dauert beim ersten Mal 2 bis 4 Minuten (Datenbank installieren, Zertifikat holen). Am Ende stehen ein Link,
 ein **Code** (`xxxx-xxxx-xxxx`) und ein QR-Code; beide gelten 30 Minuten. Ein neuer Link: nur die letzte Zeile noch einmal.
 
 Meldungen:
-- „das Server-Paket ist zu alt; erst: sudo studium-server aktualisieren“: die zweite Zeile ist nicht durchgelaufen. Ihre
+- „das Server-Paket ist zu alt; erst: sudo studium-server aktualisieren“: die erste Zeile ist nicht durchgelaufen. Ihre
   Ausgabe zeigen, nicht weiter.
 - „… ist von außen nicht erreichbar“: eine Minute warten und die letzte Zeile noch einmal. Kommt die Meldung wieder: wörtlich
   zeigen und die Meldung an den Autor vorbereiten (SKILL.md).
@@ -72,8 +71,7 @@ Dann in Obsidian:
 Jedes Gerät braucht einen eigenen Link: in der Cloud Shell
 
 ```bash
-cd ~/studium-autopilot && IP=$(node server/einrichten.mjs adresse --json | jq -r .ip)
-ssh -t -i ~/.ssh/studium_autopilot ubuntu@$IP "sudo studium-server livesync verbinden"
+bash ~/studium-autopilot/server/fern.sh livesync verbinden
 ```
 
 Auf dem Gerät:
