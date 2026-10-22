@@ -32,7 +32,7 @@ Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein 
 
 <a href="https://apps.apple.com/app/obsidian-connected-notes/id1557175442"><img src="docs/bilder/badge-app-store.png" alt="Laden im App Store" height="48"></a>&nbsp;&nbsp;<a href="https://play.google.com/store/apps/details?id=md.obsidian"><img src="docs/bilder/badge-google-play.png" alt="Jetzt bei Google Play" height="48"></a>&nbsp;&nbsp;<a href="https://obsidian.md/download"><img src="docs/bilder/badge-obsidian-desktop.svg" alt="Obsidian für Windows und Mac herunterladen" height="48"></a>
 
-<sub>Am Mac: <b>Herunterladen für Windows & Mac</b>. Im App Store gibt es Obsidian nur für iPhone und iPad.</sub>
+<sub>iPhone und iPad: Obsidian öffnen → <b>iCloud verwenden</b> → <b>Vault erstellen</b> (Name egal). Erst dann gibt es den Ordner, in den die Vorlage kommt.<br>Am Mac: <b>Herunterladen für Windows & Mac</b>. Im App Store gibt es Obsidian nur für iPhone und iPad.</sub>
 
 <br>
 
@@ -48,7 +48,7 @@ Für Studierende im B.Sc. Economics and Business Administration (PO 2023). Kein 
 <img src="docs/bilder/schritt-3.svg" alt="Schritt 3" height="40"><br>
 <b>In Obsidian öffnen</b>
 
-Ordner <b>Studium Autopilot</b> in Obsidian öffnen (am Computer: <b>Ordner als Vault öffnen</b>) → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>. Fertig.
+iPhone und iPad: Der Kurzbefehl öffnet <b>Studium Autopilot</b> in Obsidian → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>.<br>Am Computer und unter Android: <b>Ordner als Vault öffnen</b> → Ordner <b>Studium Autopilot</b> → <b>Dem Ersteller vertrauen und Erweiterungen aktivieren</b>. Fertig.
 
 <br>
 
@@ -161,12 +161,12 @@ Ideen. Sicherheitslücken bitte privat melden: [SECURITY.md](SECURITY.md). Ände
 <details>
 <summary><b>Hilfe für iPhone & iPad</b></summary>
 
-1. **Obsidian** einmal öffnen und wieder schließen.
+1. **Obsidian** öffnen → **iCloud verwenden** → einen Namen eingeben (egal welchen, z. B. „Start“) → **Vault erstellen**. Erst damit legt Obsidian den Ordner **iCloud Drive → Obsidian** an; nur öffnen reicht nicht. Ohne iCloud: einen Vault auf dem Gerät erstellen.
 2. [**Kurzbefehl für iPhone & iPad**](https://github.com/studium-autopilot/ecoba/raw/main/docs/kurzbefehl/Studium%20Autopilot%20installieren.shortcut) antippen → **Laden** → Datei öffnen → **Kurzbefehl hinzufügen**.
-3. Den Kurzbefehl starten → **Erlauben** → als Ort **iCloud Drive → Obsidian** wählen (kein iCloud: **Auf meinem iPhone → Obsidian**).
-4. Obsidian öffnen → **Studium Autopilot** → **Dem Ersteller vertrauen und Erweiterungen aktivieren**.
+3. Den Kurzbefehl starten → **Erlauben** → als Ort **iCloud Drive → Obsidian** wählen (kein iCloud: **Auf meinem iPhone → Obsidian**), nicht den Ordner des Vaults aus Schritt 1.
+4. Obsidian öffnet sich mit **Studium Autopilot** (sonst: **Vault wechseln** → **Studium Autopilot**) → **Dem Ersteller vertrauen und Erweiterungen aktivieren**. Den Vault aus Schritt 1 brauchst du nicht mehr; löschen kannst du ihn in **Dateien** unter **iCloud Drive → Obsidian**.
 
-Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **iCloud Drive → Obsidian** (kein iCloud: **Auf meinem iPhone → Obsidian**) bewegen.
+Klappt der Kurzbefehl nicht: [ZIP-Datei](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip) laden, in **Dateien** antippen und den Ordner nach **iCloud Drive → Obsidian** (kein iCloud: **Auf meinem iPhone → Obsidian**) bewegen. Fehlt dort der Ordner **Obsidian**: zuerst Schritt 1.
 
 </details>
 
