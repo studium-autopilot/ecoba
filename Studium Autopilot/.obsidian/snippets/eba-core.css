@@ -5691,3 +5691,73 @@ body.is-mobile .eba-sl-zeile { min-height: 44px; }
 .eba-sl-zeile.aktiv > .eba-sl-code { color: var(--eba-accent-text); }
 .eba-sl-label { margin: 18px 10px 6px; font-size: var(--eba-label-size); letter-spacing: var(--eba-label-tracking); font-weight: var(--eba-label-weight); text-transform: uppercase; color: var(--eba-accent-text); }
 /* ---------- Ende Abschnitt 66 ---------- */
+
+/* ---------- 67. Postfach (postfach.js, ```eba-postfach```; seit 0.6.0) ----------
+   Seite Postfach: oben „Posteingang“ mit der Zahl ungelesener Mails, rechts Aktualisieren und „Im Webmail öffnen“. Darunter die
+   Mails als Zeilenliste (.eba-vb-liste): Punkt für ungelesen, Absender (fett, wenn ungelesen), Datum rechts, Betreff darunter.
+   Tipp klappt die Mail auf (.eba-pf-offen): Kopf, Text mit Zeilen, Link zum Webmail. Ohne Uni-Login bzw. Zustimmung eine Zeile
+   wie unter Verbindungen. Tippflächen auf iPhone und iPad 44 px. Nur --eba-*-Variablen. */
+li:has(> a[data-href$="Postfach"]) { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2' y='4' width='20' height='16' rx='2'/%3E%3Cpath d='m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7'/%3E%3C/svg%3E"); }
+.eba-pf { display: flex; flex-direction: column; gap: 12px; }
+.eba-pf-leiste { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 12px; }
+.eba-pf-titel { display: flex; align-items: baseline; gap: 10px; font-weight: 600; font-size: 15px; }
+.eba-pf-zahl { font-size: 13px; font-weight: 600; color: var(--eba-accent-text); }
+.eba-pf-leiste .eba-vb-knoepfe { align-items: center; gap: 12px; }
+.eba-pf-webmail { font-size: 13px; font-weight: 500; color: var(--eba-accent-text) !important; text-decoration: none; }
+.eba-pf-webmail:hover { text-decoration: underline; }
+.eba-pf-mail { gap: 10px; flex-wrap: nowrap; align-items: flex-start; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.eba-pf-mail:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
+.eba-pf-mail.is-offen { background: color-mix(in srgb, var(--eba-accent-soft) 60%, transparent); }
+.eba-pf-punkt { flex: none; width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: transparent; }
+.eba-pf-mail.is-ungelesen .eba-pf-punkt { background: var(--eba-accent-text); }
+.eba-pf-mitte { flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.eba-pf-oben { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.eba-pf-von { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; color: var(--eba-text); }
+.eba-pf-mail.is-ungelesen .eba-pf-von { font-weight: 600; }
+.eba-pf-datum { flex: none; font-size: 12px; color: var(--eba-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-pf-betreff { font-size: 13px; line-height: 1.4; color: var(--eba-muted); overflow-wrap: anywhere; }
+.eba-pf-mail.is-ungelesen .eba-pf-betreff { color: var(--eba-text); }
+.eba-pf-offen { border-top: 1px solid var(--eba-border); padding: 12px 14px 14px 32px; }
+.eba-pf-offen.is-zu { display: none; }
+.eba-pf-offen + .eba-vb { border-top: 1px solid var(--eba-border); }
+.eba-pf-kopfzeilen { display: flex; flex-direction: column; gap: 2px; margin: 0 0 10px; font-size: 12.5px; color: var(--eba-muted); overflow-wrap: anywhere; }
+.eba-pf-feld { display: inline-block; min-width: 4.5em; font-weight: 600; color: var(--eba-text); }
+.eba-pf-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; line-height: 1.55; color: var(--eba-text); user-select: text; }
+.eba-pf-fuss { margin-top: 12px; }
+.eba-pf-leer { padding: 14px 16px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); color: var(--eba-muted); font-size: 14px; }
+.eba-pf-hinweis {
+  padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--eba-warn) 45%, transparent); border-left: 3px solid var(--eba-warn);
+  border-radius: var(--eba-radius-s); background: color-mix(in srgb, var(--eba-warn) 10%, transparent); font-size: 13px; line-height: 1.45;
+}
+.eba-pf-leise { font-size: 13px; color: var(--eba-muted); }
+.eba-pf-seiten { display: flex; align-items: center; justify-content: center; gap: 12px; }
+.eba-pf button.eba-vb-knopf:disabled { opacity: 0.5; cursor: default; }
+.eba-pf-aus { text-align: center; font-size: 12px; }
+.eba-pf-aus a { color: var(--eba-faint) !important; text-decoration: none; }
+.eba-pf-aus a:hover { color: var(--eba-muted) !important; text-decoration: underline; }
+body.is-mobile .eba-pf-mail { min-height: 44px; box-sizing: border-box; }
+body.is-mobile .eba-pf .eba-vb-knopf { min-height: 44px; box-sizing: border-box; }
+body.is-phone .eba-pf-offen { padding-left: 14px; }
+/* ---------- Ende Abschnitt 67 ---------- */
+
+/* ---------- 68. „Seit deinem letzten Besuch“ auf dem Dashboard (seit-besuch.js, ```eba-seit-besuch```; seit 0.6.0) ----------
+   Eine Karte wie „Bitte prüfen“ (Abschnitt 59): Aufbau eines Callouts eba-seit-besuch, vom Skript gezeichnet, eingeklappt, Zeilen
+   wie die To-dos (eba-td-*, Abschnitt 37.todos), unten „Alles gesehen“. Ohne Änderungen ist der Block leer (.eba-sb-aus) und
+   nimmt keinen Platz ein: Leseansicht .el-pre auf Höhe 0 gefaltet, nie display:none (Abschnitt 36, tests/leseansicht.test.js),
+   Live Preview .cm-embed-block. Nur --eba-*-Variablen. */
+.block-language-eba-seit-besuch { margin: 0; }
+.block-language-eba-seit-besuch.eba-sb-aus,
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-seit-besuch.eba-sb-aus) { display: none !important; }
+.el-pre:has(> .block-language-eba-seit-besuch.eba-sb-aus) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden; }
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-seit-besuch) { padding: 0; }
+.callout[data-callout="eba-seit-besuch"] > .callout-title { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.callout[data-callout="eba-seit-besuch"] > .callout-title:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 3px; border-radius: 4px; }
+.callout[data-callout="eba-seit-besuch"].is-collapsed > .callout-title { margin-bottom: 0; }
+.callout[data-callout="eba-seit-besuch"] .callout-fold .svg-icon { transition: transform 0.15s ease; }
+.callout[data-callout="eba-seit-besuch"] .callout-fold.is-collapsed .svg-icon { transform: rotate(-90deg); }
+.eba-sb-punkt { flex: none; width: 5px; height: 5px; margin: 11px 0 0 7px; border-radius: 50%; background: var(--eba-faint); }
+.eba-sb-abgesagt .eba-sb-punkt, .eba-sb-ausfall .eba-sb-punkt { background: var(--eba-warn); }
+.eba-sb-ziel .eba-td-inhalt { cursor: pointer; }
+.eba-sb-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+body.is-mobile .eba-sb-knoepfe .eba-vb-knopf { min-height: 44px; box-sizing: border-box; }
+/* ---------- Ende Abschnitt 68 ---------- */

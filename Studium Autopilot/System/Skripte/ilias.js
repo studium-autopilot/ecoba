@@ -473,7 +473,7 @@ module.exports = function (ctx) {
     // Abgelehnt, nachdem das Passwort hier gespeichert wurde: keine Anmeldung, auch nicht per Knopf
     const abgelehnt = () => !!marker && hatZugang() && zeitVon(marker.abgelehnt) > zeitVon(lokal(L.zugangSeit));
     const markerSchreiben = async (dienst) => {
-      const m = { abgelehnt: iso(), dienst: dienst === "alma" ? "alma" : "ilias", geraet: abh.geraetId() };
+      const m = { abgelehnt: iso(), dienst: dienst === "alma" || dienst === "mail" ? dienst : "ilias", geraet: abh.geraetId() };
       try { await io.schreibenText(UNI_ZUGANG, JSON.stringify(m, null, 1) + "\n"); marker = m; } catch (e) { try { console.warn("ilias: Ablehnung des Uni-Logins nicht vermerkt"); } catch (x) { /* egal */ } }
       melden({ art: "zugang" });
     };

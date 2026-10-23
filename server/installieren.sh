@@ -394,9 +394,10 @@ studium-server status
 cat <<TEXT
 
 Fertig. Adresse: $ADRESSE
-Nächste Schritte:
-  sudo -u studium -i claude auth login      Claude auf dem Server anmelden
-  sudo studium-server uni-zugang setzen     (freiwillig) Uni-Zugang verschlüsselt speichern
-  sudo studium-server verbinden             Link und QR-Code, um Obsidian zu verbinden
-  sudo studium-server livesync              (freiwillig) LiveSync: Tresor zwischen Windows, iPhone und iPad abgleichen
+Nächste Schritte in der Cloud Shell (bash ~/studium-autopilot/server/fern.sh <befehl>):
+  claude-anmelden      Claude auf dem Server anmelden
+  uni-zugang setzen    (freiwillig) Uni-Zugang verschlüsselt speichern
+  verbinden            Link und QR-Code, um Obsidian zu verbinden
+  livesync             (freiwillig) LiveSync: Tresor zwischen Windows, iPhone und iPad abgleichen
+Direkt auf dem Server: sudo studium-server <befehl>, Claude anmelden mit sudo -u studium -i claude auth login
 TEXT

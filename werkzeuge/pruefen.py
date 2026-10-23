@@ -124,6 +124,7 @@ TRESOR_DATEIEN = [
     (re.compile(r"/System/Daten/ilias-kalender[^/]*\.json$"), "vaultlokale Datei (ILIAS-Kalender)"),
     (re.compile(r"/System/Daten/server[^/]*\.json$"), "persönliche Daten bzw. Sperre des eigenen Servers"),
     (re.compile(r"/Unterlagen/_Volltext/"), "persönliche Textfassung einer PDF (Volltext)"),
+    (re.compile(r"/System/Daten/seit-besuch/"), "persönliche Daten (Seit deinem letzten Besuch)"),
 ]
 TESTSEITE = re.compile(r"^tests/daten/.+\.html?$", re.I)
 TESTSEITE_KOPF = re.compile(r"<!--\s*(?:Erfundene Testseite|Öffentliche Seite ohne Anmeldung)\b")

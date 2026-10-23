@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.5.9)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.0)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -62,8 +62,10 @@ Sätzen (Kontotyp, was frei ist, was von Studium Autopilot schon da ist). Bei �
 Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
 
 Ab Schritt 5 geht alles auf dem Server über **`bash ~/studium-autopilot/server/fern.sh <befehl>`**: Es holt die Adresse selbst,
-prüft den Schlüssel und ruft ssh auf; keine IP und kein ssh-Befehl von Hand, auch nicht in einer neuen Sitzung. Exit 4 heißt: Der
-Server läuft nicht (Schritt 5, Zustand). Exit 2 und 1 sind die von `adresse` (Schritt 5).
+prüft den Schlüssel und ruft ssh auf; keine IP und kein ssh-Befehl von Hand, auch nicht in einer neuen Sitzung. Exit 4: Der
+Server läuft nicht (Schritt 5, Zustand). Exit 5: Er antwortet nicht auf ssh; eine Minute warten, dann denselben Befehl noch
+einmal, beim dritten Mal wie eine unbekannte Meldung. Exit 2 oder 1 mit einer Zeile `[…]` von `adresse` und ohne Ausgabe vom
+Server: Schritt 5. Sonst ist es der Exit des Befehls auf dem Server.
 
 ## 3. Schutz vor Kosten
 
@@ -107,25 +109,26 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
 ## 5. Paket installieren
 
 ```bash
-cd ~/studium-autopilot
-node server/einrichten.mjs abschliessen
-node server/einrichten.mjs adresse
-bash server/fern.sh installieren
+cd ~/studium-autopilot && node server/einrichten.mjs abschliessen && bash server/fern.sh installieren
 ```
 
-- `adresse` nennt den Zustand des Servers. Nur bei `RUNNING` geht es weiter. Bei `PROVISIONING` oder `STARTING` eine Minute
-  warten und `adresse` noch einmal. Bei `STOPPED` in der Konsole unter **Compute →
-  Instances** die Instanz „studium-autopilot-server“ öffnen und **Start** klicken (nur diese), nach etwa einer Minute weiter.
-  Jeder andere Zustand oder ein Fehler beim Starten: wie eine unbekannte Meldung (SKILL.md, „Fehler ohne Vermutung“).
-- `adresse` prüft auch den Schlüssel. Exit 2 mit „Der Server wurde mit … angelegt“: den genannten `cp`-Befehl einmal
-  ausführen, dann `adresse` noch einmal. Exit 1 mit „Kein Schlüssel … passt“: anhalten, Meldung an den Autor.
+Eine Zeile mit `&&`: Scheitert `abschliessen`, wird nicht installiert. Danach immer die ganze Zeile noch einmal; beides ist
+wiederholbar.
 
-- `abschliessen` entfernt die Rechte eines Platzsuchers, lässt die Metadaten des Servers nur über IMDSv2 zu, vergrößert das Boot-Volume auf den ganzen freien Rest und setzt die
-  Quota so, dass nichts Neues mehr hinzukommt. Meldet es „Boot-Volume … vergrößert“: einmal
-  `bash ~/studium-autopilot/server/fern.sh neustart`, nach etwa einer Minute weiter (Ubuntu vergrößert das Dateisystem
-  beim Start).
-- Ist der Server gerade erst angelegt, braucht er ein bis zwei Minuten, bis SSH antwortet.
-- Der Installer ist wiederholbar. Fertig ist der Schritt, wenn der Status eine Version meldet.
+- `abschliessen` entfernt die Rechte eines Platzsuchers, lässt die Metadaten des Servers nur über IMDSv2 zu, vergrößert das
+  Boot-Volume auf den ganzen freien Rest und setzt die Quota so, dass nichts Neues mehr hinzukommt. Exit 2 mit „Der
+  Platzsucher-Helfer läuft noch“: einige Minuten warten, dann die Zeile noch einmal. Meldet es „Boot-Volume … vergrößert“:
+  nach dem Installieren einmal `bash ~/studium-autopilot/server/fern.sh neustart`, nach etwa einer Minute weiter (Ubuntu
+  vergrößert das Dateisystem beim Start).
+- `fern.sh` prüft vor dem Installieren Zustand und Schlüssel (mit `adresse`). Exit 4 „[warten] Der Server ist …“: bei
+  `PROVISIONING` oder `STARTING` eine Minute warten, dann die Zeile noch einmal. Bei `STOPPED` in der Konsole unter **Compute
+  → Instances** die Instanz „studium-autopilot-server“ öffnen und **Start** klicken (nur diese), nach etwa einer Minute
+  weiter. Jeder andere Zustand oder ein Fehler beim Starten: wie eine unbekannte Meldung (SKILL.md, „Fehler ohne Vermutung“).
+- Exit 2 mit „Der Server wurde mit … angelegt“: den genannten `cp`-Befehl einmal ausführen, dann die Zeile noch einmal. Exit 1
+  mit „Kein Schlüssel … passt“: anhalten, Meldung an den Autor.
+- Exit 5 „[fern] Der Server antwortet nicht auf ssh“: Ist der Server gerade erst angelegt, braucht er ein bis zwei Minuten.
+  Warten, dann die Zeile noch einmal.
+- Fertig ist der Schritt, wenn der Status eine Version meldet.
 
 ## 6. Claude auf dem Server
 
@@ -157,7 +160,9 @@ steht. Sonst:
 
 ## 8. Uni-Mails
 
-Zwei Wege. Empfiehl die Weiterleitung; das Uni-Postfach direkt nur, wenn der Mensch es nach dem Abwägen ausdrücklich will:
+Zwei Wege. Empfiehl die Weiterleitung; das Uni-Postfach direkt nur, wenn der Mensch es nach dem Abwägen ausdrücklich will.
+Ohne Gmail (Schritt 7 übersprungen) entfällt die Weiterleitung: Erkläre das Risiko des Uni-Postfachs direkt wie unten. Will der
+Mensch es nicht, kommen keine Uni-Mails auf den Server, und dieser Schritt entfällt.
 
 - **Weiterleitung an Gmail (empfohlen):** Auf dem Server liegt kein Uni-Passwort. Das Uni-Passwort gilt auch für ILIAS, Alma
   und Noten; wer root auf dem Server ist, könnte es sonst entschlüsseln. Nachteil: Uni-Mails kommen erst mit der nächsten

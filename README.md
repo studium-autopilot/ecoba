@@ -211,7 +211,7 @@ Hängt es? [Hilfe für den Mac](docs/installation.md#hängt-es-am-mac)
 
 </details>
 
-**Dashboard bleibt leer, oben steht „Studium Autopilot ist noch aus“?** Beim Vertrauen den anderen Knopf erwischt: **Einstellungen** → **Community-Plugins** → **Community-Plugins aktivieren**. **Fast leerer Tresor mit nur einem Ordner darin?** Den Ordner wählen, in dem `Dashboard.md` direkt liegt.
+**Dashboard bleibt leer, oben steht „Studium Autopilot ist noch aus“?** Beim Vertrauen den anderen Knopf erwischt: **Einstellungen** → **Externe Erweiterungen** → **Eingeschränkten Modus verlassen**. **Fast leerer Tresor mit nur einem Ordner darin?** Den Ordner wählen, in dem `Dashboard.md` direkt liegt.
 
 Die ganze Anleitung mit Alma, ILIAS, weiteren Geräten und Updates: [docs/installation.md](docs/installation.md).
 

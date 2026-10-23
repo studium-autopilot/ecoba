@@ -34,7 +34,7 @@ Das Einschalten dauert beim ersten Mal 2 bis 4 Minuten (Datenbank installieren, 
 ein **Code** (`xxxx-xxxx-xxxx`) und ein QR-Code; beide gelten 30 Minuten. Ein neuer Link: nur die letzte Zeile noch einmal.
 
 Meldungen:
-- „das Server-Paket ist zu alt; erst: sudo studium-server aktualisieren“: die erste Zeile ist nicht durchgelaufen. Ihre
+- „das Server-Paket ist zu alt; erst aktualisieren …“: die erste Zeile ist nicht durchgelaufen. Ihre
   Ausgabe zeigen, nicht weiter.
 - „… ist von außen nicht erreichbar“: eine Minute warten und die letzte Zeile noch einmal. Kommt die Meldung wieder: wörtlich
   zeigen und die Meldung an den Autor vorbereiten (SKILL.md).
@@ -45,12 +45,13 @@ Dieses Gerät lädt den Tresor auf den Server. Vorher:
 
 - **Liegt der Tresor in iCloud?** (iPhone/iPad: Obsidian fragt beim Anlegen „In iCloud speichern“; Windows: Ordner unter
   „iCloud Drive“.) Dann gleicht er doppelt ab, das gibt Konflikte. Am Computer: Obsidian schließen, den Tresor-Ordner aus iCloud
-  Drive an einen normalen Ort verschieben (z. B. „Dokumente“), in Obsidian mit **Ordner als Tresor öffnen** wieder öffnen. Das
+  Drive an einen normalen Ort verschieben (z. B. „Dokumente“), in Obsidian mit **Ordner als Vault öffnen** wieder öffnen. Das
   verschiebt der Mensch selbst.
 
 Dann in Obsidian:
 
-1. **Einstellungen → Community-Plugins**. Steht da „Eingeschränkter Modus“: **Community-Plugins aktivieren**.
+1. **Einstellungen → Externe Erweiterungen** (englisch Community plugins). Steht da der Knopf **Eingeschränkten Modus
+   verlassen**: tippen. Nicht „Einschalten“ beim Eingeschränkten Modus, das schaltet alle Erweiterungen aus.
 2. **Durchsuchen**, nach **Self-hosted LiveSync** suchen (Autor vorotamoroz), **Installieren**, dann **Aktivieren**. Fragt
    LiveSync gleich nach einer Einrichtung: **schließen**; die Einrichtung kommt über den Link.
 3. Am Computer den **Link** aus der Cloud Shell im Browser öffnen, am Handy den **QR-Code** mit der Kamera scannen. Auf der Seite
@@ -79,7 +80,7 @@ Auf dem Gerät:
 1. **Neuen, leeren Tresor** anlegen, Name wie auf dem ersten Gerät. iPhone/iPad: **„In iCloud speichern“ ausschalten** (der
    Tresor liegt dann „Auf meinem iPhone/iPad“). Nicht den alten Tresor nehmen, wenn es auf dem Gerät schon einen gibt: Zwei
    Fassungen würden vermischt. Einen alten Tresor erst umbenennen, damit nichts verloren geht.
-2. Wie in L2, Punkte 1 bis 4: Community-Plugins aktivieren, **Self-hosted LiveSync** installieren und aktivieren, QR-Code
+2. Wie in L2, Punkte 1 bis 4: Eingeschränkten Modus verlassen, **Self-hosted LiveSync** installieren und aktivieren, QR-Code
    scannen bzw. Link öffnen, **In Obsidian öffnen**, Code eintippen.
 3. Bei „Mostly Complete: Decision Required“ diesmal **„Join this device“** wählen (nicht „overwrite“!), danach „All optional
    features are disabled“ mit **OK**. Obsidian offen lassen, bis die Notizen da sind.

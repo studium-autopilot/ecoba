@@ -143,8 +143,11 @@ bash ~/studium-autopilot/server/fern.sh <befehl …>          sonst: sudo studiu
 ```
 
 Jeder Aufruf holt die Adresse mit `einrichten.mjs adresse` und prüft dabei den Schlüssel; er läuft aus jedem Ordner, auch in
-einer neuen Cloud-Shell-Sitzung. Exit wie `adresse` (1, 2), `3` unbekannter Befehl, `4` Server nicht `RUNNING`, sonst der Exit
-auf dem Server. Angaben sind nur Kleinbuchstaben und Bindestriche, damit nichts Fremdes in die ssh-Zeile kommt. Tests in
+einer neuen Cloud-Shell-Sitzung. Exit wie `adresse` (1, 2), `3` unbekannter Befehl, `4` Server nicht `RUNNING`, `5` keine
+Antwort auf ssh (`ConnectTimeout=15`), sonst der Exit auf dem Server. Nur `claude-anmelden` und `uni-zugang` lesen von der
+Tastatur (im Terminal mit `-t`); alle anderen laufen mit `ssh -n`, damit ssh keine Zeilen schluckt, die danach in der Cloud
+Shell laufen sollen. `neustart` startet den Server über `systemd-run` erst nach zwei Sekunden neu, damit ssh sauber
+zurückkommt. Angaben sind nur Kleinbuchstaben und Bindestriche, damit nichts Fremdes in die ssh-Zeile kommt. Tests in
 `tests/server-einrichten.test.js` mit nachgebautem `adresse`, ssh und scp.
 
 ## Platzsucher: `server/platzsucher.py`

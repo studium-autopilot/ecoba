@@ -15,6 +15,7 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 | Deine Kursdateien | direkt von ILIAS (`ovidius.uni-tuebingen.de`), Anmeldung bei der Uni (`idp.uni-tuebingen.de`) | nur wenn du ILIAS verbunden hast: beim Start, dann etwa stündlich, solange Obsidian offen ist, und auf Knopfdruck |
 | Deine Noten und Prüfungsanmeldungen (Beta) | direkt von Alma (`alma.uni-tuebingen.de`, Seiten „Leistungen“ und „Belegungen“) | nur wenn du **Noten & Anmeldungen (Alma)** eingeschaltet hast: höchstens zweimal am Tag, in der Anmeldephase alle 3 Stunden, und auf Knopfdruck; nur eines deiner Geräte |
 | Abgabetermine deiner Übungen | direkt von ILIAS (`ovidius.uni-tuebingen.de`, dein Kalender-Abo) | nur wenn du den **ILIAS-Kalender** verbunden hast: beim Start, dann alle 2 Stunden, solange Obsidian offen ist, und auf Knopfdruck; nur eines deiner Geräte |
+| Dein Uni-Posteingang und die Mails, die du öffnest | direkt vom Webmail der Uni (`webmail.uni-tuebingen.de`) | nur wenn du auf der Seite **Postfach** **Postfach anzeigen** getippt hast: beim Öffnen der Seite, wenn die Liste älter als 5 Minuten ist, und auf Knopfdruck; nie im Hintergrund |
 | Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse steht im Link zum Verbinden) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
 
@@ -45,8 +46,11 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 - **Die Textfassungen deiner PDFs** (`Unterlagen/_Volltext/`, damit die Suche Wörter in PDFs findet) liest das Plugin auf
   deinem Gerät aus den PDFs; dabei geht nichts ins Netz. Es sind normale Notizen in deinem Tresor, mit einem Sync-Dienst
   kommen sie auf deine anderen Geräte. Steht `volltext: aus` in `System/Einstellungen.md`, entstehen keine neuen.
+- **Seit deinem letzten Besuch** merkt sich in `System/Daten/seit-besuch/`, welche Uni-Termine sich geändert haben und was du
+  schon gesehen hast. Es sind Dateien in deinem Tresor; sie gehen nirgends hin, mit einem Sync-Dienst auf deine anderen Geräte.
 - **Deine Angaben, Noten und Notizen** sind normale Dateien in deinem Tresor. Sie verlassen das Gerät nur, wenn du selbst einen Sync-Dienst einrichtest (dann gelten dessen Regeln).
-- **Ein Passwort für deine Mails** speichert das Plugin nie.
+- **Ein eigenes Passwort für deine Mails** speichert das Plugin nie; das **Postfach** nutzt deinen Uni-Login. **Deine Mails**
+  speichert es auch nicht: Sie stehen nur im Speicher dieses Geräts, solange Obsidian offen ist (siehe „Postfach“).
 
 ## Uni-Login
 
@@ -116,6 +120,24 @@ Freiwillig und nur mit Beta-Versionen: Ohne dein **Einschalten** fragt das Plugi
   Geräten aus. Was du in Modulseiten übernommen hast, bleibt. Ältere Fassungen im Verlauf deines Sync-Dienstes (z. B.
   Versionen in iCloud, der Verlauf von Obsidian Sync oder von Self-hosted LiveSync) kann das Plugin nicht löschen; das geht nur
   dort. Liegt dein Tresor in einem öffentlichen Git-Repo, gehört `System/Daten/alma-konto*.json` in dessen `.gitignore`.
+
+## Postfach
+
+Freiwillig und je Gerät: Ohne deinen Tipp auf **Postfach anzeigen** meldet sich das Plugin nie beim Webmail an.
+
+- **Wohin dein Passwort geht:** Benutzername und Passwort deines Uni-Logins gehen nur in einer eigenen Anfrage an die
+  Anmeldeseite des Webmails (`webmail.uni-tuebingen.de`), nachdem das Plugin geprüft hat, dass das Formular dorthin zeigt.
+  Das Webmail bekommt es nur, wenn ILIAS genau dieses Passwort angenommen hat. Nur über https, kein Server dazwischen, keine
+  KI. Für Weiterleitungen gilt dasselbe wie bei ILIAS: Am Computer prüft das Plugin jeden Sprung, auf iPhone und iPad folgt
+  iOS selbst.
+- **Was es liest:** die Liste deines Posteingangs (Absender, Betreff, Datum, gelesen oder nicht), die Zahl ungelesener Mails
+  und eine Mail, wenn du sie antippst. Die Uni markiert sie dann als gelesen, wie im Browser. Das Plugin löscht, verschiebt,
+  beantwortet und markiert sonst nichts; die Adressen dafür baut es gar nicht.
+- **Was gespeichert wird:** nichts. Deine Mails stehen nur im Speicher dieses Geräts, solange Obsidian offen ist; nie im
+  Tresor, in Hinweisen, im Protokoll oder bei Claude. Nach 10 Minuten ohne Abruf meldet sich das Plugin beim Webmail ab.
+- **Abgelehnt:** Lehnt das Webmail dein Passwort ab, halten alle deine Geräte an wie bei ILIAS (siehe „Abgelehnt“ oben).
+
+**Ausschalten:** auf der Seite **Postfach** → **Auf diesem Gerät ausschalten**. Das meldet ab und vergisst die geladenen Mails.
 
 ## Eigener Server mit Claude
 

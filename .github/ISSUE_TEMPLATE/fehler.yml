@@ -37,7 +37,7 @@ body:
     id: version
     attributes:
       label: Version von Studium Autopilot
-      description: Steht in Obsidian unter Einstellungen → Community-Plugins → Studium Autopilot.
+      description: Steht in Obsidian unter Einstellungen → Externe Erweiterungen → Studium Autopilot.
       placeholder: "0.1.0"
   - type: textarea
     id: bild

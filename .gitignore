@@ -15,6 +15,7 @@ Studium Autopilot/System/Daten/alma-abruf.json
 Studium Autopilot/System/Daten/server*.json
 Studium Autopilot/System/Daten/ilias-kalender*.json
 Studium Autopilot/Unterlagen/_Volltext/
+Studium Autopilot/System/Daten/seit-besuch/
 .DS_Store
 Thumbs.db
 node_modules/

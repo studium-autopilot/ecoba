@@ -93,6 +93,8 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
     [`${VAULT}/System/Daten/ilias-kalender.json`]: "{}\n",
     [`${VAULT}/System/Daten/ilias-kalender-abruf.json`]: "{}\n",
     [`${VAULT}/Unterlagen/_Volltext/Folien 01 (Volltext).md`]: "# Folien 01\n",
+    [`${VAULT}/System/Daten/seit-besuch/g-0a1b2c3d4e5f.json`]: "{}\n",
+    [`${VAULT}/System/Daten/seit-besuch/gesehen-g-0a1b2c3d4e5f.json`]: "{}\n",
     [`${VAULT}/Module/B110 ausgeblendet.md`]: modul("alma_ausgeblendet:\n  - 1a2b3c4d\n"),
     [`${VAULT}/Module/B111 verzicht.md`]: modul("anmeldung_verzicht: WS 2026/27\n"),
     [`${VAULT}/Module/B112 leer.md`]: modul("alma_ausgeblendet: []\nanmeldung_verzicht: \"\"\n"),
@@ -108,6 +110,9 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
   assert.match(fund("System/Daten/ilias-kalender.json"), /\[vaultlokale Datei \(ILIAS-Kalender\)\]/);
   assert.match(fund("System/Daten/ilias-kalender-abruf.json"), /\[vaultlokale Datei \(ILIAS-Kalender\)\]/);
   assert.match(fund("Unterlagen/_Volltext/Folien 01 (Volltext).md"), /\[persönliche Textfassung einer PDF \(Volltext\)\]/);
+  for (const p of ["g-0a1b2c3d4e5f.json", "gesehen-g-0a1b2c3d4e5f.json"]) {
+    assert.match(fund("System/Daten/seit-besuch/" + p), /\[persönliche Daten \(Seit deinem letzten Besuch\)\]/, p);
+  }
   assert.match(fund("Module/B110 ausgeblendet.md"), /persönliches Feld gesetzt\]\s+alma_ausgeblendet/);
   assert.match(fund("Module/B111 verzicht.md"), /persönliches Feld gesetzt\]\s+anmeldung_verzicht/);
   assert.equal(fund("Module/B112 leer.md"), "", "leere Felder sind kein Fund");

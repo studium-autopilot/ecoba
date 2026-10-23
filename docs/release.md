@@ -34,9 +34,10 @@ Mit `--zip` baut der Export zusätzlich **`Studium-Autopilot.zip`** mit dem Inha
 Ordner selbst: Windows („Alle extrahieren“), Android und macOS legen beim Entpacken genau einen Ordner `Studium-Autopilot` an,
 der selbst der Tresor ist. (Bis 0.5.7 lag der Ordner im Archiv; unter Windows und Android entstand
 `Studium-Autopilot/Studium Autopilot/`, und wer den äußeren Ordner öffnete, hatte einen leeren Tresor.) Der Name ist fest und
-ohne Version: Die Anleitung, der grüne Knopf der README und der iOS-Kurzbefehl laden
-`https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip`. **Das Asset muss bei jedem
-Release genau so heißen.**
+ohne Version: Die Anleitung und der grüne Knopf der README laden
+`https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip`, der iOS-Kurzbefehl daneben
+`Studium-Autopilot-iOS.zip` (der Tresor zwei Ebenen tief, siehe unten). **Beide Assets müssen bei jedem Release genau so
+heißen.**
 
 Am Ende druckt der Export den Block für das Manifest der zentralen Daten (`release` mit `version`, `url_basis`, `sha256` der
 Update-Liste, `notiz`), siehe Schritt 6.
@@ -73,7 +74,8 @@ Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst
 ## 5. GitHub-Release
 
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
-**`Studium-Autopilot.zip`** und **`studium-server.tar.gz`** anhängen (genau diese Namen; beide aus `release.py --zip`). Das
+**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`** und **`studium-server.tar.gz`** anhängen (genau diese Namen; alle
+drei aus `release.py --zip`). Fehlt das iOS-ZIP, scheitert der Kurzbefehl auf iPhone und iPad. Das
 Server-Paket lädt die Einrichtung des eigenen Servers und täglich `studium-server aktualisieren`, beide nur mit der Prüfsumme,
 die GitHub zum Asset zeigt; fehlt es, bleibt jeder eigene Server auf seinem Stand. Die Anleitung der Einrichtung im Baum lädt
 genau das Paket ihrer Version (`release.py` setzt `releases/tags/v<version>` ein); bis das Release mit Asset öffentlich ist,
@@ -127,7 +129,7 @@ Für Tests vor dem Release (zum Beispiel im eigenen Test-Tresor mit Kanal „Bet
    die Update-Liste trägt diese Version, gedruckt wird ein Block `beta`.
 2. Commit, nur den Tag `vX.Y.Z-beta.1` pushen, **nie `main`**: `main` zeigt immer die stabile Version.
 3. GitHub-Release mit diesem Tag als **Vorab-Release** („Set as a pre-release“), **nicht** als Latest; Assets
-   `Studium-Autopilot.zip` und `studium-server.tar.gz`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
+   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip` und `studium-server.tar.gz`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
    und das Update eigener Server (`releases/latest`) weiter die stabile Version. Die Server-Einrichtung einer Beta testet man
    mit dem Prompt aus dem README, nur mit `vX.Y.Z-beta.1` statt der Version aus `releases/latest`: Die Anleitung dieses Tags
    lädt genau sein Server-Paket.
@@ -137,5 +139,6 @@ Nur Tresore mit `update_kanal: beta` in `System/Einstellungen.md` (Schalter **Be
 unter „Mehr erfahren“) bekommen die Beta angeboten. Nach dem fertigen Release `X.Y.Z` ist `release` wieder höher als die Beta;
 die Beta-Tresore bekommen dann die fertige Version. `beta` kann stehen bleiben oder entfernt werden.
 
-**Zwei Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen) und `Studium-Autopilot-iOS.zip`
-(gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/`. Beide Namen sind fest; `release.py --zip` erzeugt beide.
+**Drei Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
+(gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/` und
+`studium-server.tar.gz` für den eigenen Server. Die Namen sind fest; `release.py --zip` erzeugt alle drei.

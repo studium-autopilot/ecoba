@@ -24,12 +24,13 @@
 //
 // Dienste (seit 0.4.5): Eine Sitzung gehört genau einem Dienst und darf nur dessen Server erreichen. „ilias“ (Vorgabe): ILIAS
 //   und die Anmeldeseite der Uni (IdP); „alma“: nur alma.uni-tuebingen.de (Noten & Anmeldungen, alma-konto.js). Am PC kann eine
-//   ILIAS-Sitzung so nie zu Alma springen und umgekehrt. Auf iPhone/iPad folgt requestUrl Weiterleitungen selbst; geprüft
-//   werden dort nur die Startadresse jeder Anfrage und (beim Aufrufer) die Adresse jedes Formulars, an das er Daten schickt.
+//   ILIAS-Sitzung so nie zu Alma springen und umgekehrt; „mail“ (seit 0.6.0): nur webmail.uni-tuebingen.de (Postfach,
+//   postfach.js). Auf iPhone/iPad folgt requestUrl Weiterleitungen selbst; geprüft werden dort nur die Startadresse jeder
+//   Anfrage und (beim Aufrufer) die Adresse jedes Formulars, an das er Daten schickt.
 //   Alma-Sitzungen senden die Kennung „Studium-Autopilot/<Version> (+https://github.com/studium-autopilot/ecoba)“.
 // Aufruf: const N = ctx.user["ilias-netz"](ctx). Beim Laden passiert nichts (kein Netz, keine Zeitgeber).
 //   N.UNI, N.UNIS, N.ERLAUBTE_HOSTS (Dienst „ilias“), N.hostsFuer(dienst, uni?), N.kennung(version?)
-//   N.sitzung({ transport?, uni? ("tuebingen"), dienst? ("ilias" | "alma"), jetzt?, drossel? }) → { anfrage(o), keks (nur PC,
+//   N.sitzung({ transport?, uni? ("tuebingen"), dienst? ("ilias" | "alma" | "mail"), jetzt?, drossel? }) → { anfrage(o), keks (nur PC,
 //     sonst null), istHostErlaubt(url), uni, dienst, hosts, mobil, schliessen() (offene Verbindungen des PCs schließen) }
 //   N.drossel({ parallel? (2), abstand? (400 ms), jetzt?, warten? }) → { eintritt() → freigeben(), parallel, abstand }
 //     anfrage({ url, methode = "GET", formular?, body?, kopf?, folgen = true, binaer = false, maxSpruenge = 12 })
@@ -50,7 +51,7 @@ module.exports = function (ctx) {
   const UNIS = Object.freeze({
     tuebingen: Object.freeze({
       id: "tuebingen", name: "Universität Tübingen", ilias: "https://ovidius.uni-tuebingen.de", idp: "https://idp.uni-tuebingen.de",
-      alma: "https://alma.uni-tuebingen.de", client: "pr02",
+      alma: "https://alma.uni-tuebingen.de", webmail: "https://webmail.uni-tuebingen.de", client: "pr02",
     }),
   });
   const UNI = UNIS.tuebingen;
@@ -102,9 +103,11 @@ module.exports = function (ctx) {
     };
   }
   const hostVon = (url) => { const t = teile(url); return t ? t.host : ""; };
-  // Server je Dienst: „ilias“ (Vorgabe) ILIAS + Anmeldeseite der Uni, „alma“ nur Alma; unbekannter Dienst → keiner
-  const DIENSTE = ["ilias", "alma"];
+  // Server je Dienst: „ilias“ (Vorgabe) ILIAS + Anmeldeseite der Uni, „alma“ nur Alma, „mail“ nur das Webmail; unbekannter
+  // Dienst → keiner
+  const DIENSTE = ["ilias", "alma", "mail"];
   const hostsVon = (uni, dienst) => Object.freeze(dienst === "alma" ? (uni.alma ? [hostVon(uni.alma)] : [])
+    : dienst === "mail" ? (uni.webmail ? [hostVon(uni.webmail)] : [])
     : dienst == null || dienst === "ilias" ? [hostVon(uni.ilias), hostVon(uni.idp)] : []);
   const ERLAUBTE_HOSTS = hostsVon(UNI);
   // Die Transporte prüfen zusätzlich gegen alle Server aller Dienste (die Sitzung selbst nur gegen die ihres Dienstes)

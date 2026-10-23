@@ -770,3 +770,41 @@ test("Abruf frisch vom Server: Adresse je Minute und no-cache, 304 noch einmal m
   assert.equal(anfragen.length, 2);
   assert.match(anfragen[1].url, /\/manifest\.json\?t=\d{13}$/);
 });
+
+// ---------- „Seit deinem letzten Besuch“: der Abrufer meldet, was er an zentralen Terminen ändert ----------
+
+test("Seit deinem letzten Besuch: erster Abruf meldet nichts; neues Datum, neue id und Absage kommen mit alten und neuen Werten", async () => {
+  const meldungen = [];
+  const T = tresorAbruf(null, { seitBesuch: { zentral: async (roh, o) => { meldungen.push({ roh, o }); } } });
+  T.daten([fristA, fristB]);
+  await T.Z.abrufen({});
+  assert.equal(meldungen.length, 1);
+  assert.equal(meldungen[0].o.erster, true, "erster Abruf: alles ist neu, nichts davon ist eine Änderung");
+  T.daten([Object.assign({}, fristA, { datum: "2026-11-09", ort: "Hörsaal 9" }), fristC]);
+  await T.Z.abrufen({ manuell: true });
+  assert.equal(meldungen.length, 2);
+  const { roh, o } = meldungen[1];
+  assert.equal(o.erster, false);
+  assert.ok(o.altIds.has(fristA.id) && o.altIds.has(fristB.id) && !o.altIds.has(fristC.id), "ids des vorigen Abrufs");
+  const art = (a, id) => roh.find((x) => x.art === a && x.id === id);
+  assert.equal(art("geaendert", fristA.id).alt.datum, "2026-11-02");
+  assert.equal(art("geaendert", fristA.id).neu.datum, "2026-11-09");
+  assert.equal(art("geaendert", fristA.id).neu.ort, "Hörsaal 9");
+  assert.equal(art("abgesagt", fristB.id).alt.titel, "Frist B");
+  assert.equal(art("neu", fristC.id).neu.datum, "2026-11-04");
+  assert.equal(roh.length, 3);
+  await T.Z.abrufen({ manuell: true });
+  assert.equal(meldungen.length, 2, "nichts geändert: keine Meldung");
+});
+
+test("Seit deinem letzten Besuch: eine Übergabe aus dem eigenen Abgleich ist keine Änderung", async () => {
+  const meldungen = [];
+  const T = tresorAbruf({ "Termine/2026-11-02 Tutorien starten.md": abgleichNotiz("2026-11-02-tutorien-starten", "2026-11-02", "Tutorien starten") },
+    { seitBesuch: { zentral: async (roh) => { meldungen.push(roh); } } });
+  T.daten([fristB]);
+  await T.Z.abrufen({});
+  T.daten([fristB, termin({ id: "2026-11-02-tutorien-starten", titel: "Tutorien starten", datum: "2026-11-02", kategorie: "Lehre" })]);
+  const b = await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(b.uebernommen, ["Termine/2026-11-02 Tutorien starten.md"]);
+  assert.deepEqual(meldungen.flat().filter((x) => x.id === "2026-11-02-tutorien-starten"), []);
+});

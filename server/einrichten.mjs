@@ -430,7 +430,7 @@ export async function adresse(oci, { tenancy, schluessel }) {
   if (!vnic) { merken("adresse", "fehler", `Server „${srv["display-name"]}“ (${srv["lifecycle-state"]}) hat noch keine öffentliche IP.`); return { schritte, exit: 1 }; }
   const ip = vnic["public-ip"];
   const wert = { ip, adresse: `https://${ip.replace(/\./g, "-")}.sslip.io`, ssh: `ssh -i ~/.ssh/studium_autopilot ubuntu@${ip}`, zustand: srv["lifecycle-state"] };
-  merken("adresse", "da", `Server ${wert.zustand}: ${wert.adresse} · ${wert.ssh}`);
+  merken("adresse", "da", `Server ${wert.zustand}: ${wert.adresse}`);
   if (!schluessel) return { schritte, exit: 0, ...wert };
   const meta = ((await muss("schluessel", ["compute", "instance", "get", "--instance-id", srv.id])) || {}).metadata || {};
   const erlaubt = String(meta.ssh_authorized_keys || "").split("\n").map(kern).filter(Boolean);

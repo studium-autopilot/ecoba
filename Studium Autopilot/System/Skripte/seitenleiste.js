@@ -17,8 +17,8 @@ const SYMBOL_SVG = '<g fill="none" stroke="currentColor" stroke-width="7.5" stro
   + "</g>";
 // Einzige Liste der Seiten (Reihenfolge = Zeilen). Neue Seite: Notizname hier eintragen; die Lesezeichen der Vorlage folgen ihr
 // (tests/seitenleiste.test.js), ihr Symbol kommt nach eba-core.css (li:has(> a[data-href$=…])).
-const ZIELE = ["Dashboard", "Stundenplan", "Studienverlauf", "Termine & Anmeldungen", "Prüfungen", "Noten & ECTS", "Unterlagen",
-  "Lernplan", "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
+const ZIELE = ["Dashboard", "Stundenplan", "Studienverlauf", "Termine & Anmeldungen", "Postfach", "Prüfungen", "Noten & ECTS",
+  "Unterlagen", "Lernplan", "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
 // Seiten, die gerade gelten: Lernplan nur, wenn es Lernplan-Notizen gibt (lernplan.js sichtbar())
 const sichtbareZiele = (ctx) => ZIELE.filter((z) => z !== "Lernplan" || !!(ctx.lernplan && ctx.lernplan.sichtbar()));
 

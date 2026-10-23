@@ -105,6 +105,9 @@ Kommt später ein iPhone oder iPad dazu: [Weiteres Gerät verbinden](#weiteres-g
 3. **Obsidian** öffnen → **Ordner als Vault öffnen** → **Dokumente** → `Studium-Autopilot` markieren → **Ordner auswählen**.
 4. [**Dem Ersteller vertrauen und Erweiterungen aktivieren**](#vertrauen).
 
+Mit 7-Zip oder WinRAR: **Entpacken nach „Studium-Autopilot\“** wählen, nicht **Hier entpacken**. Sonst liegen die Dateien
+lose in Downloads.
+
 Obsidian zeigt einen fast leeren Tresor, nur mit einem Ordner darin? Dann war es der Ordner darüber. In Obsidian unten links
 auf den Namen des Tresors → **Vaults verwalten…** → **Ordner als Vault öffnen** und den Ordner wählen, in dem `Dashboard.md`
 direkt liegt.
@@ -132,8 +135,9 @@ Beim ersten Öffnen fragt Obsidian, ob du dem Tresor vertraust.
 Das ist auf jedem Gerät einmal nötig. Ohne diesen Schritt bleiben Kalender, Kennzahlen und Knöpfe leer.
 
 **Den anderen Knopf erwischt?** Dann steht oben auf dem Dashboard „Studium Autopilot ist noch aus“. So schaltest du es ein:
-**Einstellungen** (Zahnrad unten links, am Handy erst ☰) → **Community-Plugins** → **Community-Plugins aktivieren**. Steht dort
-„Studium Autopilot“ mit einem Schalter, ihn einschalten. Englisch: Settings → Community plugins → Turn on community plugins.
+**Einstellungen** (Zahnrad unten links, am Handy erst ☰) → **Externe Erweiterungen** → **Eingeschränkten Modus verlassen**.
+Steht dort bei „Studium Autopilot“ ein Schalter, ihn einschalten. Englisch: Settings → Community plugins → Exit Restricted
+mode.
 
 Termine und Fristen kommen danach von selbst, beim ersten Mal nach einigen Minuten. Nicht warten? Seite **Einstellungen & Hilfe** → **Verbindungen** → bei „Zentrale Daten“ **Aktualisieren**.
 
@@ -203,25 +207,33 @@ Kostenlos. Der Tresor muss dafür schon auf dem iPhone oder iPad in **iCloud Dri
 
 1. **iCloud für Windows** aus dem Microsoft Store installieren, mit deinem Apple Account anmelden und **iCloud Drive**
    einschalten.
-2. Im Explorer links **iCloud Drive** öffnen. Den Ordner **Obsidian** (heißt im Pfad `iCloud~md~obsidian`) rechts anklicken →
-   **Immer auf diesem Gerät behalten**. Warten, bis überall ein grüner Haken steht.
-3. Obsidian öffnen → **Ordner als Vault öffnen** → **iCloud Drive** → **Obsidian** → den Tresor-Ordner → **Ordner auswählen**.
+2. Im Explorer links **iCloud Drive** öffnen. Der Ordner von Obsidian heißt unter Windows `iCloud~md~obsidian`. Ihn rechts
+   anklicken → **Immer auf diesem Gerät behalten**. Warten, bis überall ein grüner Haken steht.
+3. Obsidian öffnen → **Ordner als Vault öffnen** → **iCloud Drive** → `iCloud~md~obsidian` → den Tresor-Ordner → **Ordner
+   auswählen**.
 4. Einmal [**Vertrauen**](#vertrauen) tippen.
 
 Ohne „Immer auf diesem Gerät behalten“ lädt Windows Dateien erst beim Öffnen, und Studium Autopilot startet unvollständig.
+iCloud für Windows legt bei Obsidian manchmal doppelte Dateien an. Passiert dir das oft, nimm
+[Obsidian Sync](#alle-geräte-obsidian-sync) oder [LiveSync](#mit-eigenem-server-livesync).
 
 ### Alle Geräte: Obsidian Sync
 
 Kostenpflichtig (Preis auf [obsidian.md/sync](https://obsidian.md/sync)), dafür auf allen Geräten gleich und ohne weitere App.
 
-1. Auf dem Gerät mit dem Tresor: **Einstellungen** → **Kernplugins** → **Sync** einschalten. Dann **Einstellungen** → **Sync**
-   → anmelden → einen neuen Remote-Tresor anlegen und verbinden.
-2. Unter **Einstellungen** → **Sync** alles bei den Dateitypen und Einstellungen einschalten, vor allem **Plugins**,
-   **CSS-Snippets** und **andere Dateitypen**. Sonst fehlen auf den anderen Geräten Studium Autopilot, das Aussehen und die
-   Lernstände der Karteikarten.
-3. Auf jedem weiteren Gerät: Obsidian installieren, einen leeren Tresor anlegen, Sync wie in Punkt 1 einschalten und den
-   Remote-Tresor wählen, dann dieselben Schalter wie in Punkt 2.
-4. Warten, bis alles geladen ist, Obsidian einmal schließen und wieder öffnen, dann [**Vertrauen**](#vertrauen) tippen.
+1. Auf dem Gerät mit dem Tresor: **Einstellungen** → **Obsidian-Erweiterungen** → **Sync** einschalten. Dann **Einstellungen**
+   → **Sync** → anmelden → bei **Remote-Vault** auf **Auswählen** → **Neuen Vault erstellen** → **Verbinden**.
+2. Weiter unten unter **Einstellungen** → **Sync** alle Schalter einschalten, bei **Selektive Synchronisierung** und bei
+   **Vault-Konfiguration synchronisieren**. Wichtig sind vor allem **Alle anderen Dateien synchronisieren**, **Themen und
+   Snippets**, **Aktive externe Erweiterungen** und **Installierte externe Erweiterungen**. Sonst fehlen auf den anderen
+   Geräten Studium Autopilot, das Aussehen und die Lernstände der Karteikarten.
+3. Auf jedem weiteren Gerät: Obsidian installieren, einen neuen, leeren Vault anlegen, Sync wie in Punkt 1 einschalten und bei
+   **Remote-Vault** → **Auswählen** deinen Tresor → **Verbinden**. Dann dieselben Schalter wie in Punkt 2.
+4. Warten, bis alles geladen ist, Obsidian einmal schließen und wieder öffnen. Fragt Obsidian, ob du vertraust:
+   [**Vertrauen**](#vertrauen). Sonst **Einstellungen** → **Externe Erweiterungen** → **Eingeschränkten Modus verlassen**.
+
+Nicht mit kommt der versteckte Ordner `.claude` (Hinweise für Claude zu deinem Tresor). Arbeitest du auch am zweiten Computer
+mit Claude im Tresor-Ordner, kopiere ihn einmal mit.
 
 Für Technische geht auch Syncthing (kostenlos, nicht für iPhone und iPad). Die Android-App gibt es nur noch als
 „Syncthing-Fork“ über F-Droid, nicht im Play Store. Den ganzen Tresor-Ordner samt `.obsidian` teilen.

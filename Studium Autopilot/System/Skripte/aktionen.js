@@ -110,7 +110,7 @@ module.exports = function (ctx) {
         const q = String(c.parameter.q || "");
         const suche = app.internalPlugins && app.internalPlugins.getPluginById && app.internalPlugins.getPluginById("global-search");
         if (suche && suche.instance && suche.instance.openGlobalSearch) suche.instance.openGlobalSearch(q);
-        else ctx.hinweis("Die Suche ist in Obsidian ausgeschaltet. Einschalten unter Obsidian-Einstellungen → Kernplugins → Suche.");
+        else ctx.hinweis("Die Suche ist in Obsidian ausgeschaltet. Einschalten unter Obsidian-Einstellungen → Obsidian-Erweiterungen → Suchen.");
       },
     },
 

@@ -2069,6 +2069,73 @@ den ILIAS-Kalender und den Alma-Stundenplan. Bis 0.4.7 musste man die Abo-Links 
   `tests/alma-konto.test.js` (Ablauf am PC und wie auf iOS, Passwort nur im POST, Ablehnung, kein Link), `tests/ilias.test.js`
   (Kalender-Abo über die Sitzung der Prüfung, Ablehnung), `tests/ilias-kalender.test.js` und `tests/alma.test.js` (neuer Link).
 
+## Postfach (seit 0.6.0, `postfach.js`, `postfach-html.js`)
+
+Seite `Studium/Postfach.md` mit dem Codeblock `eba-postfach`: dein Uni-Posteingang aus dem Webmail der Uni (Horde IMP,
+`webmail.uni-tuebingen.de`). Auf PC, iPhone und iPad derselbe Weg über https (`ilias-netz.js`, Dienst `mail`: nur dieser
+Server); kein IMAP, weil iOS keine eigenen Verbindungen erlaubt und das Webmail die Mails schon als Text liefert.
+
+- **Voraussetzung:** Uni-Login auf diesem Gerät, von ILIAS bestätigt und nicht abgelehnt (`ctx.ilias.uniZugang()`:
+  `bestaetigt`, nicht `gesperrt`), dazu die Zustimmung je Gerät (`eba-postfach-an`, Knopf **Postfach anzeigen**). Sonst zeigt
+  der Block eine Zeile wie unter Verbindungen (Mit Uni-Login verbinden, abgelehnt, wird geprüft, Postfach anzeigen).
+- **Anmeldung:** `/login.php` holen, Formular `#horde_login` nur als POST an `https://webmail.uni-tuebingen.de/login.php`;
+  versteckte Felder bleiben, dazu `login_post=1`, `horde_user`, `horde_pass` (erst beim Absenden aus dem Schlüsselbund),
+  `horde_select_view=mobile_nojs`, `new_lang=de_DE`. Angemeldet nur mit Abmelde-Link (`horde_logout_token`); die bekannte
+  Ablehnung („… falsch eingegeben …“) schreibt den Marker `System/Daten/uni-zugang.json` mit Dienst `mail`, alles andere ist
+  `unerwartet`. Höchstens eine Anmeldung je Abruf; eine abgelaufene Sitzung (Anmeldeseite statt Liste) einmal neu.
+- **Lesen:** Liste aus der Ansicht basic (`/imp/basic.php?page=mailbox&mailbox=SU5CT1g&mpage=N`, 30 Mails je Seite, Zeilen
+  `tr#row<buid>`, `flagUnseen`, ganzer Betreff im `title`; Zahl aller Mails und Seiten aus `#mailboxLabel` „Posteingang (145
+  Nachrichten / Seite 1 von 5)“). Die Zahl ungelesener Mails nennt nur der Titel der Liste in der Ansicht minimal
+  (`/imp/minimal.php?page=mailbox&mailbox=SU5CT1g`, „(145 ungelesen/145 insgesamt)“); diese Seite holt das Plugin mit Seite 1
+  und sonst nur, solange die Zahl fehlt. Klappt das nicht, fehlt nur die Zahl, die Liste bleibt. Eine Mail kommt aus der
+  Ansicht minimal (`/imp/minimal.php?mailbox=SU5CT1g&buid=N&page=message`, Kopf aus `<em>Betreff:</em>` …, Text aus
+  `.mimePartData`). Die Adressen baut `postfach-html.js` aus Zahlen (`listeAdresse`, `zahlenAdresse`, `nachrichtAdresse`), nie
+  aus Links der Seite: Diese tragen auch Löschen, Ordner leeren und Endgültig löschen. Eine Seite ohne erkennbare Liste ist
+  `unsicher`, nie `leer`.
+- **Wann:** beim Zeichnen, wenn die Liste fehlt oder älter als 5 Minuten ist (nach einem Fehler erst nach 5 Minuten wieder),
+  und mit **Aktualisieren** (frühestens 15 s nach dem letzten Abruf). Nach 10 Minuten ohne Anfrage und beim Ausschalten bzw.
+  Entladen meldet es sich ab. Kein Abruf im Hintergrund.
+- **Datenschutz:** Mails nur im Speicher (`ctx.bleibend("zustand")`, überlebt den Hot-Reload, nicht den Neustart), nie im
+  Tresor, in Hinweisen, Konsole oder Fehlern; Fehler nennen nur die Art (`zugang-falsch`, `netz`, `unerwartet`). Der Text
+  einer Mail wird als Text gezeichnet, Adressen darin als Links; nie HTML aus der Mail.
+- **Oberfläche:** oben „Posteingang“ mit der Zahl ungelesener Mails (nur wenn es welche gibt; beim Öffnen einer ungelesenen eins
+  weniger), **Aktualisieren** und „Im Webmail
+  öffnen“; die Mails als Zeilenliste, Tipp klappt eine auf; bei mehreren Seiten **Neuere** und **Ältere**; unten „Auf diesem
+  Gerät ausschalten“. Stil: `eba-core.css` Abschnitt 67 (`.eba-pf-*`).
+- **Tests:** `tests/postfach-html.test.js` (erfundene Seiten nach dem echten Aufbau vom 22.10.2026 in `tests/daten/postfach/`),
+  `tests/postfach.test.js` (Ablauf mit Webmail-Attrappe).
+
+## Seit deinem letzten Besuch (seit 0.6.0, `seit-besuch.js`)
+
+Karte auf dem Dashboard (Codeblock `eba-seit-besuch`, direkt unter dem Update-Hinweis): „3 Änderungen seit deinem letzten
+Besuch“, eingeklappt, ein Tipp klappt auf (Zustand je Gerät, bleibt beim Neuzeichnen). Sie zeigt nur, was sich **von selbst**
+geändert hat, je Zeile „Titel · was anders ist“ mit Ziel zum Antippen, unten **Alles gesehen**. Ohne Änderungen bleibt der
+Block leer (`.eba-sb-aus`) und samt Hülle auf Höhe 0 gefaltet wie „Bitte prüfen“ (eba-core.css Abschnitt 68). Eine Karte statt
+einer eigenen Seite: Was neu ist, gehört dahin, wo man ohnehin zuerst hinschaut, und verschwindet, wenn es nichts gibt.
+
+- **Zentrale Termine** (Protokoll): Nur hier geht der alte Wert beim Schreiben verloren. `termineAnwenden` in `zentral.js`
+  meldet im Bericht (`seitBesuch`) neu angelegte, geänderte (Text der Notiz anders, alte Werte aus dem Frontmatter davor) und
+  abgesagte Termine; `abrufenIntern` gibt sie mit `erster` (noch nichts angewendet) und den ids des letzten Abrufs (`altIds`,
+  aus dem Gerätespeicher vor dem Überschreiben) an `ctx.seitBesuch.zentral`. Daraus werden Einträge: „Neu“ nur für ids, die im
+  letzten Abruf fehlten (nicht, was nur durch deine Auswahl dazukommt), „geändert“ nur bei Datum, Ende, Ort mit Uhrzeit, Titel
+  oder „geschätzt“ → „offiziell“, „findet wieder statt“ nach „(entfällt)“ und „entfällt“. Nie: Termine, die schon vorbei sind,
+  der erste Abruf eines Tresors, eine Übergabe aus dem eigenen Abgleich, Quelle, Info, Tags. Höchstens 30 je Abruf, dann eine
+  Sammelzeile zu Termine & Anmeldungen. Der Schlüssel enthält alten und neuen Stand, und je Termin zeigt die Karte nur die
+  neueste Meldung: Wird ein Termin verschoben und wieder zurückverlegt, steht der Stand von jetzt da, nicht der von vorhin.
+- **Abgeleitet**, ohne Protokoll und ohne zweiten Schreiber: Ausfälle, Raum- und Zeitänderungen deines Stundenplans in den
+  nächsten 14 Tagen (`ctx.modell.findetStatt`, wie das Wochenraster; besuchte Veranstaltungen), offene Abgaben aus dem
+  ILIAS-Kalender, die noch kommen, und neue oder aktualisierte ILIAS-Dateien der letzten 30 Tage aus `System/Daten/ilias.json`
+  (je Modul eine Zeile, Ziel die Modulnotiz; ohne die Dateien vom ersten Tag eines Kurses, das erste Laden ist keine Änderung).
+- **Speicher** `System/Daten/seit-besuch/` (synchronisiert): `<Geräte-ID>.json` mit den Einträgen dieses Geräts (jedes Gerät
+  schreibt nur seine Datei, die Karte liest alle; gleiche Änderung = gleicher Schlüssel; 60 Tage, höchstens 500) und
+  `gesehen-<Geräte-ID>.json` mit den Schlüsseln, die beim Tippen auf **Alles gesehen** angezeigt waren (je Gerät geschrieben,
+  gelesen als Vereinigung aller, gilt also auf allen Geräten; 180 Tage). Nie eine
+  Uhrzeit „gesehen bis“: Ein Eintrag, der erst später per Sync ankommt, wäre sonst verborgen. Kein Pfad im Protokoll, das Ziel
+  wird beim Zeichnen über `zentral_id` aufgelöst. Der Ordner ist persönlich: nicht im Release, nicht in Updates, Fund in
+  `pruefen.py`.
+- **Neu gezeichnet** nach `ctx.modell.beiAenderung`, bei Änderungen im Ordner und an `ilias.json` und alle 15 Minuten (Mitternacht).
+- **Tests:** `tests/seit-besuch.test.js` (reine Funktionen, Karte, Dashboard), `tests/zentral.test.js` (Meldungen des Abrufers).
+
 ## Einrichtung (seit 0.3.0)
 
 `einrichtung.js` ersetzt die Personalisieren-Karte. Ein Obsidian-Modal (`eba-modal eba-modal-einrichtung`) mit sieben
@@ -2262,8 +2329,8 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 
 ## Bereiche (seit 15.10.2026: 9 statt 13)
 
-Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt zehn Seiten: Dashboard,
-Stundenplan, Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
+Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt elf Seiten: Dashboard,
+Stundenplan, Studienverlauf, Termine & Anmeldungen, Postfach (seit 0.6.0), Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
 Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`sichtbareZiele`, `ctx.lernplan.sichtbar()`;
 die schreibt nur eine KI, siehe „Lernplan“). Die Icons hängen an `li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6;
 Stundenplan seit 0.4.6 mit Wochenspalten statt des Kalenders von Termine & Anmeldungen). Die Lesezeichen der Vorlage folgen `ZIELE`
@@ -2627,7 +2694,7 @@ Regeln für Skript-Autoren:
   `alma.js` (Lebenslauf der Notizen, Grabstein, Sperre, Fehler im Status, Verbinden ohne Erfolg), `leer.js`
   (`istLeer`), `fsrs.js` und `karten.js` (siehe „Karteikarten“), `woche.js` (Wochenraster), `todos.js` (Auswahl,
   leere Blöcke) sowie `bitte-pruefen.js` (Protokoll lesen, abhaken), `volltext.js` (siehe „Volltext der PDFs“), `ilias-kalender.js`
-  (siehe „ILIAS-Kalender“) und
+  (siehe „ILIAS-Kalender“), `seit-besuch.js` (siehe „Seit deinem letzten Besuch“) und
   `Dashboard.md` mit `dashboard.js` (Kacheln und Listen), das Fachmodell (`tests/fachmodell.test.js`) und die Bases-Formeln auf
   Noten & ECTS gegen das Modell (`tests/bases-regeln.test.js`, Auswerter `tests/bases-formel.js`). `tests/laden.js` lädt die Skripte mit einem kleinen Ersatz für Obsidian.
 - **In Obsidian** (Entwickler-PC, nicht im Repo): Oberfläche, Knöpfe, Hot-Reload, Datenkanal mit Testquelle, Bases-Formeln.

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite für tests/postfach-html.test.js und tests/postfach.test.js: Posteingang in der Ansicht basic, Aufbau wie das Webmail der Uni (Horde) am 22.10.2026. -->
+<html lang="de-DE"><head><title>Webmail :: Posteingang</title></head><body>
+<div id="horde-sub"><div id="horde-date">22.10.2026</div><div id="horde-info"><span class="">0% von 2000MB</span> <span id="mailboxLabel"> Posteingang (64 Nachrichten / Seite 1 von 3)</span></div></div>
+<a class="horde-mainnavi" href="/imp/minimal.php?mailbox=SU5CT1g&amp;page=mailbox&amp;newmail=1&amp;mpage=1">Aktualisieren</a>
+<a href="/imp/minimal.php?mailbox=SU5CT1g&amp;page=mailbox&amp;newmail=1&amp;actionID=empty_mailbox&amp;token=T0k3n">Ordner leeren</a>
+<a href="/imp/minimal.php?mailbox=SU5CT1g&amp;page=mailbox&amp;newmail=1&amp;mpage=1&amp;actionID=expunge_mailbox&amp;token=T0k3n">Endgültig löschen</a>
+<table class="messageList"><tr class="horde-table-header"><th id="checkheader"></th><th id="mboxfrom">Von</th><th id="mboxsubject">Betreff</th><th id="mboxdate">Datum</th><th id="mboxsize">Größe</th></tr>
+<tr id="row64" class="flagPersonal flagUnseen" style="background-color:#eef"><td><label><input type="checkbox" class="checkbox" name="buid[]" value="64" /><span class="iconImg msgflags flagUnseen" title="Ungelesen">Ungelesen</span></label></td><td><a href="/imp/minimal.php?mailbox=SU5CT1g&amp;buid=64&amp;page=message">Prüfungsamt Wirtschaftswissenschaft  </a></td><td><a href="/imp/minimal.php?mailbox=SU5CT1g&amp;buid=64&amp;page=message" title="Anmeldung zu den Prüfungen &amp; Fristen im Wintersemester 2026/27" class="mboxSubject">Anmeldung zu den Prüfungen &amp; Fristen im Wintersemester 2026/27</a></td><td>08:40:00</td><td class="rightAlign">5 KB</td></tr>
+<tr id="row63" class="flagPersonal flagUnseen flagFlagged"><td><label><input type="checkbox" class="checkbox" name="buid[]" value="63" /></label></td><td><a href="/imp/minimal.php?mailbox=SU5CT1g&amp;buid=63&amp;page=message">Fachschaft WiWi</a></td><td><a href="/imp/minimal.php?mailbox=SU5CT1g&amp;buid=63&amp;page=message" title="Ersti-Abend am Donnerstag" class="mboxSubject">Ersti-Abend am Donnerstag</a></td><td>21.10.2026</td><td class="rightAlign">18 KB</td></tr>
+<tr id="row12" class="flagPersonal"><td><label><input type="checkbox" class="checkbox" name="buid[]" value="12" /></label></td><td><a href="/imp/minimal.php?mailbox=SU5CT1g&amp;buid=12&amp;page=message">Universitätsbibliothek</a></td><td><a href="/imp/minimal.php?mailbox=SU5CT1g&amp;buid=12&amp;page=message" class="mboxSubject">Leihfrist endet bald</a></td><td>30.12.2025</td><td class="rightAlign">4 KB</td></tr>
+</table>
+<a href="/imp/minimal.php?mailbox=SU5CT1g&amp;page=mailbox&amp;newmail=1&amp;mpage=2"><span class="iconImg nextPage"></span></a>
+<a href="/imp/minimal.php?mailbox=SU5CT1g&amp;page=mailbox&amp;newmail=1&amp;mpage=3"><span class="iconImg lastPage"></span></a>
+<a href="/login.php?horde_logout_token=AbC123-x_Yz&amp;logout_reason=4">Abmelden</a>
+</body></html>

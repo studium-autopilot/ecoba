@@ -468,10 +468,14 @@ test("Skill server-einrichten: jeder genannte Befehl von einrichten.mjs und stud
   const befehle = new Set([...cli.matchAll(/^ {2}([a-z|-]+)\)/gm)].flatMap((m) => m[1].split("|")));
   const genannt = new Set([...text.matchAll(/studium-server ([a-z][a-z-]*)/g)].map((m) => m[1]));
   for (const b of genannt) assert.ok(befehle.has(b), "studium-server " + b);
-  // fern.sh: eigene Befehle oder Weitergabe an studium-server
+  // fern.sh: eigene Befehle oder Weitergabe an studium-server; auch dort, wo Plugin, Doku und Server-Meldungen es nennen
   const fern = fs.readFileSync(path.join(SERVER, "fern.sh"), "utf8");
   const erlaubt = new Set(fern.match(/^ {2}(installieren\|[a-z|-]+)\) ;;$/m)[1].split("|"));
-  const ueberFern = new Set([...text.matchAll(/fern\.sh ([a-z][a-z-]*)/g)].map((m) => m[1]));
+  const skripte = path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte");
+  const weitere = [path.join(skripte, "verbindungen.js"), path.join(skripte, "server.js"), path.join(SERVER, "README.md"),
+    path.join(SERVER, "installieren.sh"), path.join(SERVER, "livesync.sh"), path.join(SERVER, "abrufen.py"),
+    path.join(__dirname, "..", "docs", "installation.md")].filter((p) => fs.existsSync(p)).map((p) => fs.readFileSync(p, "utf8"));
+  const ueberFern = new Set([text, ...weitere].flatMap((t) => [...t.matchAll(/fern\.sh ([a-z][a-z-]*)/g)].map((m) => m[1])));
   for (const b of ueberFern) {
     assert.ok(erlaubt.has(b), "fern.sh " + b);
     assert.ok(["installieren", "neustart", "claude-anmelden"].includes(b) || befehle.has(b), "studium-server " + b);
@@ -479,7 +483,8 @@ test("Skill server-einrichten: jeder genannte Befehl von einrichten.mjs und stud
   assert.ok(ueberFern.has("verbinden") && ueberFern.has("uni-zugang") && ueberFern.has("installieren"));
 });
 
-// fern.sh mit nachgebautem `einrichten.mjs adresse` und ssh/scp, die nur ihre Argumente aufschreiben
+// fern.sh mit nachgebautem `einrichten.mjs adresse` und ssh/scp, die nur ihre Argumente aufschreiben. adresse.roh: Ausgabe
+// ohne JSON; adresse.sshExit, adresse.scpExit: Exit von ssh bzw. scp (255 = nicht erreichbar)
 const fernLaufen = (adresse, ...args) => {
   const { spawnSync } = require("node:child_process");
   const os = require("node:os");
@@ -488,9 +493,13 @@ const fernLaufen = (adresse, ...args) => {
     fs.mkdirSync(path.join(tmp, "server"));
     fs.mkdirSync(path.join(tmp, "bin"));
     fs.copyFileSync(path.join(SERVER, "fern.sh"), path.join(tmp, "server", "fern.sh"));
+    const ausgabe = adresse.roh !== undefined ? adresse.roh : JSON.stringify(adresse);
     fs.writeFileSync(path.join(tmp, "server", "einrichten.mjs"),
-      `console.log(${JSON.stringify(JSON.stringify(adresse))}); process.exitCode = ${adresse.exit};\n`);
-    for (const n of ["ssh", "scp"]) fs.writeFileSync(path.join(tmp, "bin", n), `#!/usr/bin/env bash\necho "${n} $*" >> "$HOME/aufrufe"\n`, { mode: 0o755 });
+      `if (process.argv.slice(2).join(" ") !== "adresse --json") { console.error("falscher Aufruf"); process.exit(9); }\n` +
+      `console.log(${JSON.stringify(ausgabe)}); process.exitCode = ${adresse.exit};\n`);
+    for (const n of ["ssh", "scp"]) {
+      fs.writeFileSync(path.join(tmp, "bin", n), `#!/usr/bin/env bash\necho "${n} $*" >> "$HOME/aufrufe"\nexit ${adresse[n + "Exit"] || 0}\n`, { mode: 0o755 });
+    }
     const r = spawnSync("bash", [path.join(tmp, "server", "fern.sh"), ...args], {
       encoding: "utf8", cwd: os.tmpdir(), input: "",
       env: Object.assign({}, process.env, { HOME: tmp, PATH: path.join(tmp, "bin") + path.delimiter + process.env.PATH }),
@@ -509,12 +518,31 @@ fernTest("fern.sh: Befehle für den Server ohne IP von Hand, mit dem festen Schl
   const a = fernLaufen(LAEUFT, "claude-anmelden");
   assert.equal(a.status, 0, a.aus);
   assert.equal(a.aufrufe.length, 1);
-  assert.match(a.aufrufe[0], /^ssh -i \S*\.ssh\/studium_autopilot -o StrictHostKeyChecking=accept-new ubuntu@127\.0\.0\.1 /);
+  // fragt etwas ab: liest von der Eingabe (ohne Terminal hier ohne -t, aber auch ohne -n)
+  assert.match(a.aufrufe[0], /^ssh -i \S*\.ssh\/studium_autopilot -o StrictHostKeyChecking=accept-new -o ConnectTimeout=15 ubuntu@127\.0\.0\.1 /);
   assert.match(a.aufrufe[0], /claude auth login; sudo studium-server zustand$/);
+  assert.doesNotMatch(fernLaufen(LAEUFT, "uni-zugang", "setzen").aufrufe[0], / -n /);
   const i = fernLaufen(LAEUFT, "installieren");
   assert.match(i.aufrufe[0], /^scp .* studium-server\.tar\.gz ubuntu@127\.0\.0\.1:$/);
-  assert.match(i.aufrufe[1], /sudo bash server\/installieren\.sh --ip 127\.0\.0\.1$/);
-  assert.match(fernLaufen(LAEUFT, "livesync", "verbinden").aufrufe[0], /ubuntu@127\.0\.0\.1 sudo studium-server livesync verbinden$/);
+  assert.match(i.aufrufe[1], / -n ubuntu@127\.0\.0\.1 rm -rf server && tar -xzf studium-server\.tar\.gz && sudo bash server\/installieren\.sh --ip 127\.0\.0\.1$/);
+  // alles andere mit -n: ssh liest keine Zeilen, die danach in der Cloud Shell laufen sollen
+  assert.match(fernLaufen(LAEUFT, "livesync", "verbinden").aufrufe[0], / -n ubuntu@127\.0\.0\.1 sudo studium-server livesync verbinden$/);
+  const n = fernLaufen(LAEUFT, "neustart");
+  assert.equal(n.status, 0, n.aus);
+  assert.match(n.aufrufe[0], / -n ubuntu@127\.0\.0\.1 sudo systemd-run --quiet --on-active=2 \/usr\/bin\/systemctl reboot$/);
+  assert.match(n.aus, /startet neu/);
+});
+
+fernTest("fern.sh: Server antwortet nicht auf ssh → Exit 5 mit Hinweis; Fehler vom Server kommen durch", () => {
+  for (const r of [fernLaufen({ ...LAEUFT, sshExit: 255 }, "status"), fernLaufen({ ...LAEUFT, sshExit: 255 }, "neustart")]) {
+    assert.equal(r.status, 5, r.aus);
+    assert.match(r.aus, /\[fern\] Der Server antwortet nicht auf ssh\. .*eine Minute warten/);
+    assert.doesNotMatch(r.aus, /startet neu/);
+  }
+  const kopie = fernLaufen({ ...LAEUFT, scpExit: 1 }, "installieren");
+  assert.equal(kopie.status, 5);
+  assert.equal(kopie.aufrufe.length, 1, "nach gescheitertem scp nicht installieren");
+  assert.equal(fernLaufen({ ...LAEUFT, sshExit: 1 }, "status").status, 1);
 });
 
 fernTest("fern.sh: Server nicht RUNNING, Fehler von adresse, unbekannter Befehl → nichts per ssh", () => {
@@ -525,7 +553,11 @@ fernTest("fern.sh: Server nicht RUNNING, Fehler von adresse, unbekannter Befehl 
   const s = fernLaufen(fremd, "verbinden");
   assert.equal(s.status, 2);
   assert.match(s.aus, /\[anderer\] Der Server wurde mit/);
+  // kein Konto: `adresse` schreibt nur auf stderr, kein JSON; Exit 2 bleibt, ohne Fehler aus node
+  const ohne = fernLaufen({ roh: "", exit: 2 }, "status");
+  assert.equal(ohne.status, 2, ohne.aus);
+  assert.doesNotMatch(ohne.aus, /SyntaxError|JSON/);
   assert.equal(fernLaufen(LAEUFT, "rm").status, 3);
   assert.equal(fernLaufen(LAEUFT, "livesync", "a;b").status, 3);
-  for (const r of [gestoppt, s]) assert.deepEqual(r.aufrufe, []);
+  for (const r of [gestoppt, s, ohne]) assert.deepEqual(r.aufrufe, []);
 });

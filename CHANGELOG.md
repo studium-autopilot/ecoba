@@ -2,6 +2,19 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.0 – Uni-Mails direkt in Obsidian
+
+- **Neu:** Auf der Seite **Postfach** liest du deine Uni-Mails direkt in Obsidian, auf dem Computer, iPhone und iPad. Dafür
+  reicht dein Uni-Login, und deine Mails bleiben bei der Uni.
+- **Neu:** Auf dem Dashboard siehst du, was sich seit deinem letzten Besuch geändert hat: verschobene oder abgesagte
+  Uni-Termine, Ausfälle und Raumwechsel, neue Abgaben und Dateien aus ILIAS. Ein Tipp führt hin.
+- **Behoben:** Der Hinweis „Studium Autopilot ist noch aus“ nannte Menüs, die es in Obsidian nicht gibt. Jetzt steht dort
+  der echte Weg: **Externe Erweiterungen** → **Eingeschränkten Modus verlassen**.
+- **Behoben:** Beim Einrichten des eigenen Servers lief die zweite Zeile mancher Befehle nicht. Antwortet der Server noch
+  nicht, sagt dir die Cloud Shell jetzt, dass du kurz warten sollst.
+- **Einfacher:** Meldungen des eigenen Servers nennen jetzt Befehle, die in der Cloud Shell auch funktionieren.
+- **Einfacher:** Die Anleitung für Windows hilft bei 7-Zip und WinRAR und findet den iCloud-Ordner unter seinem echten Namen.
+
 ## 0.5.9 – Platzsucher sucht zuverlässig weiter
 
 - **Behoben:** Lief beim Einrichten des eigenen Servers schon ein Platzsucher aus einer älteren Version, brach die

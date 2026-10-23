@@ -745,6 +745,8 @@ module.exports = function (ctx) {
   // Andere Quellen schreiben ihre Termine in derselben Form (ILIAS-Kalender, ilias-kalender.js): o.herkunft und o.idFeld setzen die
   // Besitzmarke (Quellen-Vertrag), o.weg sagt im Kasten „Entfällt“, wo der Termin fehlt. Ohne sie bleibt jede zentrale Notiz Byte
   // für Byte wie bisher.
+  // Ort mit Uhrzeit, wie er in der Notiz steht (auch für „Seit deinem letzten Besuch“, seit-besuch.js)
+  const ortText = (e) => (e.uhrzeit && e.ort.indexOf(e.uhrzeit) < 0 ? [e.uhrzeit, e.ort].filter(Boolean).join(" · ") : e.ort);
   const notizText = (alt, e, o) => {
     o = o || {};
     const fremd = !!o.herkunft && o.herkunft !== "zentral";
@@ -753,7 +755,7 @@ module.exports = function (ctx) {
     const bl = bloecke(fm);
     const holB = (k) => bl.find((b) => b.key === k) || null;
     const titel = e.titel + (o.entfaellt ? ENTFAELLT : "");
-    const ort = e.uhrzeit && e.ort.indexOf(e.uhrzeit) < 0 ? [e.uhrzeit, e.ort].filter(Boolean).join(" · ") : e.ort;
+    const ort = ortText(e);
     const quelle = e.quelle_url || e.quelle_text || "";
     // Liste (cssclasses, tags): Pflichtwerte vorn ergänzen, eigene Werte behalten; „weg“ = verwaltete Werte, die nicht mehr gelten
     // (fehlender Pflichtwert: hinter den vorigen Pflichtwert, der erste ganz nach vorn; vorhandene bleiben, wo sie sind)
@@ -898,6 +900,10 @@ module.exports = function (ctx) {
   // Ohne quellen.js mit papierkorb (ältere Fassung, solange der Sync nach einem Update noch läuft): Obsidians Papierkorb im Tresor.
   const papierkorb = async (f) => (Q() && Q().papierkorb ? Q().papierkorb(app, f, { lokal: !!plugin().testPapierkorbLokal }) : app.vault.trash(f, false));
   const modulLink = (F, code) => { const f = code && F.module[code]; return f ? `[[${f.basename}]]` : ""; };
+  // Fachliche Werte für „Seit deinem letzten Besuch“ (seit-besuch.js): alt aus dem Frontmatter vor dem Schreiben, neu aus dem Eintrag
+  const sbAlt = (fm) => ({ titel: String(fm.titel || ""), datum: s10(fm.datum), bis: s10(fm.bis), ort: String(fm.ort || ""), status: String(fm.status || ""),
+    entfaellt: fm.entfaellt === true, code: String(fm.code || "") });
+  const sbNeu = (e) => ({ titel: e.titel, datum: e.datum, bis: e.bis || "", ort: ortText(e), status: e.status, code: e.code || "" });
 
   const termineAnwenden = async (T, ids, abruf, bericht) => {
     const F = filterBauen();
@@ -926,18 +932,24 @@ module.exports = function (ctx) {
       }
       const soll = { modulLink: modulLink(F, e.code) };
       // Übergabe: Notiz des eigenen Uni-Abgleichs mit dieser id → übernehmen (erledigt, „Meine Notizen“, eigene Felder bleiben)
-      if (!f && abgleich[e.id]) { f = abgleich[e.id]; bericht.uebernommen.push(f.path); }
+      const uebergabe = !f && !!abgleich[e.id];
+      if (uebergabe) { f = abgleich[e.id]; bericht.uebernommen.push(f.path); }
       if (!f) {
         if (angewendet[e.id] === h) { bericht.ausgeblendet.push(e.id); continue; } // von dir gelöscht, Daten unverändert
         const pfad = freierPfad(dateiName(e.datum, e.titel), null);
         await app.vault.create(pfad, notizText("", e, soll));
         bericht.angelegt.push(pfad); bericht.geschrieben.push(pfad);
+        bericht.seitBesuch.push({ art: "neu", id: e.id, neu: sbNeu(e) });
         angewendet[e.id] = h;
         continue;
       }
       const alt = await app.vault.read(f);
+      const vorher = sbAlt(fmVon(f) || {}); // alte Werte für „Seit deinem letzten Besuch“, vor dem Schreiben
       const neu = notizText(alt, e, soll);
-      if (neu !== alt) { await app.vault.modify(f, neu); bericht.aktualisiert.push(f.path); bericht.geschrieben.push(f.path); }
+      if (neu !== alt) {
+        await app.vault.modify(f, neu); bericht.aktualisiert.push(f.path); bericht.geschrieben.push(f.path);
+        if (!uebergabe) bericht.seitBesuch.push({ art: "geaendert", id: e.id, alt: vorher, neu: sbNeu(e) });
+      }
       // Datum geändert oder Name nicht nach der Regel → umbenennen (Nutzerteile bleiben, Links zieht Obsidian nach)
       const sollName = neuerName(f.basename, e.datum, e.titel);
       if (sollName) {
@@ -953,6 +965,7 @@ module.exports = function (ctx) {
       const ende = s10(fm.bis) || s10(fm.datum);
       if (ende && tageZwischen(ende, heute) > 30) continue;
       const text = await app.vault.read(f);
+      if (fm.entfaellt !== true) bericht.seitBesuch.push({ art: "abgesagt", id, alt: sbAlt(fm) });
       if (unberuehrt(fm, text)) { await papierkorb(f); bericht.papierkorb.push(f.path); delete angewendet[id]; continue; }
       if (fm.entfaellt === true) continue;
       // letzter bekannter Stand aus der Notiz selbst
@@ -1316,7 +1329,7 @@ module.exports = function (ctx) {
   const standSetzen = (aend) => lokal(L.stand, Object.assign(stand(), aend));
   const protokoll = ctx.bleibend("protokoll", () => []); // Läufe (für Tests), überlebt den Hot-Reload
 
-  const neuerBericht = (art) => ({ art, geschrieben: [], angelegt: [], aktualisiert: [], uebernommen: [], umbenannt: [], entfaellt: [], papierkorb: [], ausgeblendet: [], ersetzt: [], verworfen: [], doppel: 0, warnung: "", fehler: "", lehre: null });
+  const neuerBericht = (art) => ({ art, geschrieben: [], angelegt: [], aktualisiert: [], uebernommen: [], umbenannt: [], entfaellt: [], papierkorb: [], ausgeblendet: [], ersetzt: [], verworfen: [], seitBesuch: [], doppel: 0, warnung: "", fehler: "", lehre: null });
   const warnen = (b, text) => { b.warnung = b.warnung ? b.warnung + " " + text : text; };
 
   // ---------- Ein Abruf ----------
@@ -1447,8 +1460,16 @@ module.exports = function (ctx) {
     let angewendetNeu = false;
     if (anwenden) {
       if (T) {
+        // „Seit deinem letzten Besuch“: erster Lauf des Tresors (nichts angewendet) meldet nichts; ids aus dem letzten Stand dieses
+        // Geräts trennen neue Termine von solchen, die nur durch deine Auswahl dazukommen
+        const erster = !Object.keys(abruf.angewendet || {}).length;
+        const altT = cache["termine.json"];
+        const altIds = altT && Array.isArray(altT.termine) ? new Set(altT.termine.map((x) => x && x.id).filter(Boolean)) : null;
         const r = await termineAnwenden(T, ids, abruf, b);
         if (JSON.stringify(r.angewendet) !== JSON.stringify(abruf.angewendet || {})) { abruf.angewendet = r.angewendet; angewendetNeu = true; }
+        if (ctx.seitBesuch && b.seitBesuch.length) {
+          try { await ctx.seitBesuch.zentral(b.seitBesuch, { erster, altIds }); } catch (e) { console.error("zentral: Seit deinem letzten Besuch", e); }
+        }
       }
       if (S) await semesterSchreiben(S, b);
       if (LP) {

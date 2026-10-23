@@ -37,7 +37,7 @@ einschalten() {
     fehler "keine öffentliche IP in $KONFIG (Server mit --ip installiert?)"
   fi
   grep -q '^import /etc/caddy/studium-server.d/' /etc/caddy/Caddyfile 2>/dev/null \
-    || fehler "das Server-Paket ist zu alt; erst: sudo studium-server aktualisieren"
+    || fehler "das Server-Paket ist zu alt; erst aktualisieren (Cloud Shell: bash ~/studium-autopilot/server/fern.sh aktualisieren)"
 
   schritt "Zugangsdaten"
   if [ -f "$LS_KONFIG" ]; then
@@ -166,7 +166,7 @@ CADDY
 }
 
 verbinden() {
-  [ -f "$LS_KONFIG" ] && [ -f "$DATEN/livesync-an" ] || fehler "LiveSync ist noch nicht eingeschaltet: sudo studium-server livesync"
+  [ -f "$LS_KONFIG" ] && [ -f "$DATEN/livesync-an" ] || fehler "LiveSync ist noch nicht eingeschaltet; erst einschalten (Cloud Shell: bash ~/studium-autopilot/server/fern.sh livesync)"
   local paket code kennung link
   paket=$(node "$PAKET/livesync.mjs" link "$LS_KONFIG")
   code=$(jq -r '.code' <<<"$paket")

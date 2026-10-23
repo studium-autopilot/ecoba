@@ -178,7 +178,7 @@ def uni_postfach(stand, roh, zugang, imap_klasse=imaplib.IMAP4_SSL, nachlesen=Fa
     """Neue Mails seit der letzten UID nach roh/uni-postfach/; beim Sicherheitslauf (nachlesen) dazu die der letzten 24 Stunden.
     → Meldung oder None."""
     if (DATEN / "uni-zugang-falsch").exists():
-        return "Uni-Postfach: übersprungen, Zugang wurde abgelehnt (sudo studium-server uni-zugang setzen)"
+        return "Uni-Postfach: übersprungen, Zugang wurde abgelehnt (neu setzen in der Cloud Shell: bash ~/studium-autopilot/server/fern.sh uni-zugang setzen)"
     try:
         imap = imap_klasse(IMAP_HOST, 993, timeout=60)
     except (OSError, imaplib.IMAP4.error) as e:

@@ -591,7 +591,8 @@ test("Dienst alma: nur alma.uni-tuebingen.de, Kennung mit Link auf den Code; ILI
   const A = "https://alma.uni-tuebingen.de";
   assert.deepEqual(Array.from(N.hostsFuer("alma")), ["alma.uni-tuebingen.de"]);
   assert.deepEqual(Array.from(N.hostsFuer("ilias")), ["ovidius.uni-tuebingen.de", "idp.uni-tuebingen.de"]);
-  assert.deepEqual(Array.from(N.hostsFuer("mail")), []);
+  assert.deepEqual(Array.from(N.hostsFuer("mail")), ["webmail.uni-tuebingen.de"]);
+  assert.deepEqual(Array.from(N.hostsFuer("ftp")), []);
   assert.equal(N.kennung("0.4.5"), "Studium-Autopilot/0.4.5 (+https://github.com/studium-autopilot/ecoba)");
   const t = attrappe([{ status: 200, kopf: {}, text: "ok" }]);
   const s = N.sitzung({ transport: t, dienst: "alma" });
@@ -613,7 +614,14 @@ test("Dienst alma: nur alma.uni-tuebingen.de, Kennung mit Link auf den Code; ILI
   assert.equal(t4.anfragen.length, 0);
   await il.anfrage({ url: I + "/x" });
   assert.equal(t4.anfragen[0].kopf["user-agent"], undefined);
-  assert.throws(() => N.sitzung({ transport: t4, dienst: "mail" }), /Dienst/);
+  assert.throws(() => N.sitzung({ transport: t4, dienst: "ftp" }), /Dienst/);
+  // Dienst mail (Postfach): nur das Webmail, keine Weiterleitung zu ILIAS oder Alma
+  const t5 = attrappe([{ status: 200, kopf: {}, text: "" }, weiter(A + "/alma/rds")]);
+  const m = N.sitzung({ transport: t5, dienst: "mail" });
+  await assert.rejects(m.anfrage({ url: I + "/x" }), fremd);
+  await m.anfrage({ url: "https://webmail.uni-tuebingen.de/login.php" });
+  await assert.rejects(m.anfrage({ url: "https://webmail.uni-tuebingen.de/imp/basic.php" }), fremd);
+  assert.equal(t5.anfragen.length, 2);
 });
 
 test("Dienst alma auf iPhone/iPad: requestUrl folgt selbst; geprüft wird die Startadresse", async () => {
