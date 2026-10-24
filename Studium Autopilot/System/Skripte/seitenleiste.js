@@ -19,8 +19,10 @@ const SYMBOL_SVG = '<g fill="none" stroke="currentColor" stroke-width="7.5" stro
 // (tests/seitenleiste.test.js), ihr Symbol kommt nach eba-core.css (li:has(> a[data-href$=…])).
 const ZIELE = ["Dashboard", "Stundenplan", "Studienverlauf", "Termine & Anmeldungen", "Postfach", "Prüfungen", "Noten & ECTS",
   "Unterlagen", "Lernplan", "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
-// Seiten, die gerade gelten: Lernplan nur, wenn es Lernplan-Notizen gibt (lernplan.js sichtbar())
-const sichtbareZiele = (ctx) => ZIELE.filter((z) => z !== "Lernplan" || !!(ctx.lernplan && ctx.lernplan.sichtbar()));
+// Seiten, die gerade gelten: Lernplan nur, wenn es Lernplan-Notizen gibt (lernplan.js sichtbar()); Stundenplan nur am iPhone
+// (seit 24.10.2026): Sonst zeigt das Dashboard dieselbe Woche als Raster, am iPhone nur einen Tag (woche.js, Tagesansicht)
+const sichtbareZiele = (ctx) => ZIELE.filter((z) => (z !== "Lernplan" || !!(ctx.lernplan && ctx.lernplan.sichtbar()))
+  && (z !== "Stundenplan" || !!(ctx.obsidian && ctx.obsidian.Platform && ctx.obsidian.Platform.isPhone)));
 
 // Modulzeilen „Dieses Semester“, nach Code sortiert: [{ f, fm }]
 const moduleJetzt = (eba) => {

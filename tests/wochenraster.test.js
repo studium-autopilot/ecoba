@@ -451,6 +451,48 @@ test("Seite Stundenplan immer als Raster, Dashboard und andere Seiten schmal als
   assert.equal(W.mitTag(""), true);
 });
 
+// Seit 24.10.2026 ist die Seite Stundenplan nur noch das Raster (am PC und iPad zeigt das Dashboard dieselbe Woche, die Seitenleiste
+// führt die Seite nur am iPhone): keine Liste der Lehrveranstaltungen, kein Alma-Knopf darüber.
+test("Seite Stundenplan: nur Kopf und Raster, keine Liste, kein Alma-Knopf", () => {
+  const md = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "Studium", "Stundenplan.md"), "utf8").replace(/\r/g, "");
+  assert.ok(!md.includes("```base"), "keine Liste");
+  assert.ok(!md.includes("eba-alma-knoepfe"), "kein Knopf");
+  assert.deepEqual(md.match(/^> \[!eba-[a-z]+/gm), ["> [!eba-kennzahlen"], "eine Karte: das Raster");
+  const vb = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "verbindungen.js"), "utf8");
+  assert.match(vb, /ctx\.codeblock\("eba-alma-knoepfe", \(quelle, el\) => \{ el\.empty\(\); \}\);/, "ältere, selbst geänderte Seiten zeigen keinen Codeblock");
+});
+
+// Ohne Studienbeginn kommen keine zentralen Vorlesungen (zentral.js), die Woche bliebe leer. Die Bitte darum stand bis 24.10.2026
+// nur im Alma-Knopf der Seite Stundenplan; jetzt im Raster selbst, auf Dashboard und Stundenplan.
+const knoten = (tag = "span", p = {}) => {
+  const k = { tag, href: p.href || "", teile: p.text ? [p.text] : [] };
+  k.setText = (t) => { k.teile = [String(t)]; };
+  k.appendText = (t) => { k.teile.push(String(t)); };
+  k.createEl = (t, q = {}) => { const c = knoten(t, q); k.teile.push(c); return c; };
+  return k;
+};
+const textVon = (k) => k.teile.map((x) => (typeof x === "string" ? x : textVon(x))).join("");
+
+test("Leere Woche ohne Studienbeginn: Bitte mit Link statt „Keine Lehrveranstaltungen“, sonst der Satz der Woche", () => {
+  const bau = (montag, notizen, ohneBeginn) => W.wocheBauen({ notizen, kurzVonCode: {}, modulPfad: MODULPFAD, modell: MODELL, montag: tag(montag),
+    jetzt: new Date("2026-10-17T12:00:00"), ohneBeginn });
+  const leer = bau("2026-10-19", [], true);
+  assert.deepEqual([leer.leer, leer.beginnFehlt], ["Keine Lehrveranstaltungen", true]);
+  assert.equal(bau("2026-10-19", [], false).beginnFehlt, false, "Studienbeginn eingetragen");
+  assert.equal(bau("2026-10-19", NOTIZEN, true).beginnFehlt, false, "etwas im Raster");
+  assert.equal(bau("2026-12-28", [], true).beginnFehlt, false, "Pause: ihr Name");
+  assert.equal(bau("2026-10-05", [], true).beginnFehlt, false, "vor Vorlesungsbeginn");
+  const L = laden("woche", { kontext: { modell: MODELL, link: (aktion) => "obsidian://studium-autopilot?aktion=" + aktion } }).ergebnis;
+  const el = knoten();
+  L.leerSatz(el, leer);
+  assert.equal(textVon(el), "Deine Vorlesungen kommen von selbst, sobald du deinen Studienbeginn eingetragen hast.");
+  assert.deepEqual(el.teile.filter((x) => typeof x !== "string").map((a) => [a.tag, textVon(a), a.href]),
+    [["a", "Studienbeginn", "obsidian://studium-autopilot?aktion=personalisieren"]]);
+  const pause = knoten();
+  L.leerSatz(pause, bau("2026-12-28", [], true));
+  assert.equal(textVon(pause), "Weihnachtspause");
+});
+
 test("Schmales Raster: Raum gekürzt (ohne Klammerzusatz, „HS“), Name des Raums sonst unverändert", () => {
   assert.equal(W.raumKnapp("Hörsaal 1 (Keplerstraße 2)"), "HS 1");
   assert.equal(W.raumKnapp("Hörsaal 21, Kupferbau"), "HS 21, Kupferbau");

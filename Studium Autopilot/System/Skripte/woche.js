@@ -51,6 +51,7 @@ module.exports = function (ctx) {
   const TAGE = ["Mo", "Di", "Mi", "Do", "Fr"];
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
   const VORLESUNG = ["Vorlesung", "Veranstaltung"]; // „Veranstaltung“ = Alma ohne erkannte Art
+  const KEINE = "Keine Lehrveranstaltungen";
 
   // ---------- Datum (Ortszeit, ganze Tage auch über die Zeitumstellung) ----------
   const M = () => ctx.modell; // Fachmodell (modell.js), beim Zeichnen nachgeschlagen
@@ -173,8 +174,10 @@ module.exports = function (ctx) {
   // ---------- Woche berechnen (reine Logik, ohne DOM) ----------
   // notizen: [{ pfad, fm }] mit typ lehrveranstaltung; kurzVonCode: { Code: Kurzname }; modulPfad: { Name der Modulnotiz: Pfad };
   // modell: ctx.modell (Semester, Pausen, freie Tage, findetStatt); montag: Date; jetzt: Date; verdeckt: { Pfad: … } (eine Gruppe
-  // je Modul und Art, meine-gruppe.js doppelt: weitere Gruppen-Notizen fehlen im Raster)
-  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modell, montag, jetzt, verdeckt }) => {
+  // je Modul und Art, meine-gruppe.js doppelt: weitere Gruppen-Notizen fehlen im Raster); ohneBeginn: Die zentralen Vorlesungen
+  // warten auf den Studienbeginn (ctx.zentral.stundenplan(), verfuegbar und ohneBeginn) → beginnFehlt, wenn sonst „Keine
+  // Lehrveranstaltungen“ dastünde
+  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modell, montag, jetzt, verdeckt, ohneBeginn }) => {
     const tage = [0, 1, 2, 3, 4].map((i) => iso(plus(montag, i)));
     const heute = iso(jetzt), wt = jetzt.getDay() || 7;
     const ht = wt <= 5 && tage[wt - 1] === heute;
@@ -228,7 +231,7 @@ module.exports = function (ctx) {
       if (pw.length) leer = pw[0].name || "Vorlesungsfrei";
       else if (sem && sem.vb && tage[4] < sem.vb) leer = "Vorlesungsbeginn " + tagMonat(sem.vb);
       else if (sem && sem.ve && tage[0] > sem.ve) leer = "Vorlesungsfrei";
-      else leer = "Keine Lehrveranstaltungen";
+      else leer = KEINE;
     }
     const nun = jetzt.getHours() * 60 + jetzt.getMinutes();
     const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s, ab }) => {
@@ -284,7 +287,7 @@ module.exports = function (ctx) {
       };
     });
     for (const k of kaesten) if (k.bis <= k.von) k.bis = k.von + 1;
-    return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, kw: modell.zeit.kw(tage[0]) };
+    return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, beginnFehlt: !!ohneBeginn && leer === KEINE, kw: modell.zeit.kw(tage[0]) };
   };
   // Tagesansicht: die fünf Tage (Kurzname, Datum, heute, Punkt bei Lehrveranstaltungen, die stattfinden; Strich in Warnfarbe bei
   // einer Ausnahme: Ausfall oder Änderung, hinweis für Vorlesesoftware und Tooltip) und je Tag die Kästen in der Reihenfolge des
@@ -314,6 +317,14 @@ module.exports = function (ctx) {
   };
 
   // ---------- Zeichnen ----------
+  // Satz einer leeren Woche bzw. eines leeren Tags; fehlt der Studienbeginn (beginnFehlt), stattdessen die Bitte mit Link (seit
+  // 24.10.2026 hier, auf Dashboard und Stundenplan; vorher nur im Knopf über dem Raster der Seite Stundenplan)
+  const leerSatz = (el, W) => {
+    if (!W.beginnFehlt) { el.setText(W.leer); return; }
+    el.appendText("Deine Vorlesungen kommen von selbst, sobald du deinen ");
+    el.createEl("a", { text: "Studienbeginn", href: ctx.link("personalisieren", {}) });
+    el.appendText(" eingetragen hast.");
+  };
   const knopf = (eltern, cls, text, titel, schritt) => {
     const a = eltern.createEl("a", { cls, text, attr: { href: ctx.link("woche", { schritt }), title: titel, role: "button" } });
     return a;
@@ -325,7 +336,8 @@ module.exports = function (ctx) {
     const daten = lesen(), L = ctx.user && ctx.user["meine-gruppe"];
     const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
     const verdeckt = L && L.doppelt ? L.doppelt(daten.notizen, Z ? Z.gruppen : null).verdeckt : null;
-    const W = wocheBauen(Object.assign(daten, { modell: M(), montag, jetzt, verdeckt }));
+    const zp = ctx.zentral && ctx.zentral.stundenplan ? ctx.zentral.stundenplan() : null;
+    const W = wocheBauen(Object.assign(daten, { modell: M(), montag, jetzt, verdeckt, ohneBeginn: !!(zp && zp.verfuegbar && zp.ohneBeginn) }));
     const pfad = (c && c.sourcePath) || "";
     const zeileHoehe = Math.round(((HOEHE[pfad] || HOEHE_SONST) / (W.rows + 1)) * 100) / 100;
     el.empty();
@@ -363,7 +375,7 @@ module.exports = function (ctx) {
       zeileZeichnen(s.createSpan({ cls: "eba-ev-lang" }), k, false);
       zeileZeichnen(s.createSpan({ cls: "eba-ev-knapp" }), k, true);
     }
-    if (W.leer) g.createDiv({ cls: "eba-woche-leer", attr: { style: "grid-row:2 / span " + W.rows } }).createSpan({ text: W.leer });
+    if (W.leer) leerSatz(g.createDiv({ cls: "eba-woche-leer", attr: { style: "grid-row:2 / span " + W.rows } }).createSpan(), W);
     wischen(g, v);
   };
 
@@ -418,7 +430,7 @@ module.exports = function (ctx) {
     });
     const liste = box.createDiv({ cls: "eba-wt-liste" });
     const ks = W.leer ? [] : tagKaesten(W, t);
-    if (!ks.length) liste.createDiv({ cls: "eba-wt-leer", text: W.leer || "Keine Lehrveranstaltungen" });
+    if (!ks.length) leerSatz(liste.createDiv({ cls: "eba-wt-leer" }), W.leer ? W : { leer: KEINE });
     for (const k of ks) {
       const href = ctx.link("zeigen", { notiz: k.notiz });
       if (k.spaeter) { liste.createEl("a", { cls: "eba-wt-leise", text: k.leise, attr: { title: k.titel, href } }); continue; }
@@ -521,5 +533,5 @@ module.exports = function (ctx) {
   };
 
   return { registrieren, aktionen, aktuellerMontag, kw, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, mitTag, raumKnapp, wischStartOk, wischAchse,
-    wischRichtung, tagAus, tagWahl, tageAus, tagKaesten, tagSchritt };
+    wischRichtung, tagAus, tagWahl, tageAus, tagKaesten, tagSchritt, leerSatz };
 };

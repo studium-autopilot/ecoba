@@ -450,7 +450,12 @@ bei c.t. lässt das Raster bei einem anderen Raum weg, der Raum braucht den Plat
 Tags bleibt leise (neutrale Fläche, „Fällt aus“ gedämpft): Pausen sind keine Überraschung, und Alma trägt die Weihnachtspause auch
 in `ausfall` ein. Keine Symbole, Farbe und Wort (Felder `ausnahme`, `marke`, `raumNeu`, `raumAlt`, `zeitNeu`, `zeitAlt`,
 `zeitStatt`, `grund` am Kasten; CSS Abschnitt 55, „Ausnahmen“). Findet nichts statt, steht ein Satz
-(Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Veranstaltungen“); fällt eine Lehrveranstaltung selbst aus,
+(Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Lehrveranstaltungen“). Statt „Keine Lehrveranstaltungen“ steht
+„Deine Vorlesungen kommen von selbst, sobald du deinen Studienbeginn eingetragen hast.“ mit Link auf das Formular (Aktion
+`personalisieren`), wenn die zentralen Vorlesungen auf den Studienbeginn warten (`ctx.zentral.stundenplan()`: `verfuegbar` und
+`ohneBeginn`; `wocheBauen` → `beginnFehlt`, gezeichnet von `leerSatz`, im Raster wie in der Tagesansicht). Seit 24.10.2026;
+vorher stand der Satz nur im Alma-Knopf über dem Raster der Seite Stundenplan, das Dashboard sagte „Keine
+Lehrveranstaltungen“. Fällt eine Lehrveranstaltung selbst aus,
 zeigt die Woche trotzdem ihre Kästen, damit man den Ausfall sieht. Stunden von–bis aus allen Serien des
 Semesters (dazu Einzeltermine und geänderte Zeiten der Woche), damit das Raster von Woche zu Woche gleich bleibt; Höhe am
 Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Überschneiden sich Kästen eines Tages, stehen sie nebeneinander
@@ -465,7 +470,10 @@ Wörter brechen nie mitten im Wort, nur an Silben. Reine Logik als Funktionen (`
 standen fünf Spalten à 60 px da, Namen zerbrachen Buchstabe für Buchstabe und Räume fehlten. `zeichnen` legt beide Ansichten
 an (`.eba-wt` und `.eba-woche.hat-tag`), das CSS wählt nach der Breite, so passt es auch nach dem Drehen. Die Seite
 **Stundenplan** zeigt immer das Raster (`mitTag(pfad)`: `Studium/Stundenplan.md` ohne Tagesansicht und ohne `hat-tag`; seit
-20.10.2026). Entschieden wird am Pfad, nicht
+20.10.2026). Seit 24.10.2026 ist die Seite nur Kopf und Raster (die eingeklappte Liste aller Lehrveranstaltungen und der
+Alma-Knopf sind weg: Seitenleiste und Modulseiten zeigen die Module und ihre nächsten Sitzungen, Alma holt stündlich) und steht
+in der Seitenleiste nur am iPhone (`sichtbareZiele`, siehe „Öffnen und Navigieren“): Am PC und iPad zeigt das Dashboard dieselbe
+Woche als Raster. Entschieden wird am Pfad, nicht
 an einem Argument im Codeblock: Die Seite hat im Update die Klasse „seite“, eine selbst geänderte bleibt stehen, und ein neues
 Argument käme dort nie an. *Schmales Raster* (Karte unter 480 px, also die Seite Stundenplan auf dem iPhone hochkant): Spalten
 von gut 60 px; der Kurzname in 10,5 px bricht nur an Silben (`hyphens: auto`, `lang="de"`, nie mitten im Wort), darunter die
@@ -747,8 +755,8 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   `semester_geplant` nur, wenn es das aktuelle Semester ist (Wiederholer, Verschieben); `gewaehlt` ohne eigenes Semester, wenn
   sein Musterplan-Semester das aktuelle ist oder es keins hat (Schwerpunkt); sonst Pflichtmodule des aktuellen Fachsemesters
   laut Musterplan der Variante, bei „offen“ nur Codes, die **alle** Pläne in diesem Fachsemester haben (`pflichtCodes`). Ohne
-  Studienbeginn (`studienbeginnStandard`) kein Musterplan-Anteil, nur selbst Markiertes; die Seite Stundenplan bittet dann um den
-  Studienbeginn. *Auswahl* (`stundenplanAuswahl`): Hat ein Modul für eine Art mehrere Gruppennummern, ist das eine persönliche
+  Studienbeginn (`studienbeginnStandard`) kein Musterplan-Anteil, nur selbst Markiertes; das Wochenraster bittet dann um den
+  Studienbeginn, wenn die Woche sonst leer wäre (siehe „Wochenraster“). *Auswahl* (`stundenplanAuswahl`): Hat ein Modul für eine Art mehrere Gruppennummern, ist das eine persönliche
   Wahl und wird nie eine Notiz (eigene Gruppe: Alma oder von Hand); ids aus `stundenplan_ausgeblendet` nicht.
   *Notiz* (`lehreNotizText`): eine je id in `Stundenplan/` („Mo 10.15 B110 Vorlesung“, Einzeltermin „JJJJ-MM-TT B110 …“),
   Frontmatter wie Alma-Notizen (`typ: lehrveranstaltung`, `titel`, `code`, `modul`, `art`, `wochentag`, `tag`, `beginn`/`ende`
@@ -768,11 +776,7 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   „Wochenraster“, *Ausnahmen*; CSS Abschnitt 55). Das Raster lässt
   Notizen mit `entfaellt: true` und „Besuche ich nicht“ (`ctx.modell.besuchtNicht`: Schlüssel in `stundenplan_ausgeblendet`,
   eigene Notiz `besuche_nicht: true`) weg; Einzeltermine stehen in ihrer Woche im Raster (für die Höhe zählen Serien plus
-  Einzeltermine dieser Woche). Die Liste (Bases in `Studium/Stundenplan.md`) filtert genauso: `entfaellt`, `besuche_nicht` und
-  der Schlüssel jeder Quelle (`zentral_id`, sonst `<herkunft>:<id>` mit dem Id-Feld aus `quellen.js`), Spalte Zeit mit dem
-  Wochentag aus `wochentag` (sonst `tag`). Bis 24.10.2026 kannte sie nur zentrale ids und zeigte etwa ausgeblendete
-  Alma-Veranstaltungen weiter. Bases kann das Modell nicht aufrufen: `tests/stundenplan.test.js` vergleicht den Filter für jede
-  Quelle mit `besuchtNicht`, eine neue Quelle muss also in die Formel.
+  Einzeltermine dieser Woche). Die Liste (Bases) auf der Seite Stundenplan gibt es seit 24.10.2026 nicht mehr.
   *Alma gewinnt* (`eigenePaare`, Befund 6): Eine eigene Notiz (Alma oder von Hand, nicht zentral) ersetzt einen zentralen
   Eintrag bei gleichem Code, Semester, Wochentag, Art-Klasse (Vorlesung ≠ Übung/Tutorium ≠ Seminar; unbestimmte Art wie
   „Veranstaltung“ oder Almas „Übungsteil“, den die Daten als Vorlesung führen, nur bei genau passender Zeit), Beginn und Ende
@@ -804,7 +808,7 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   nicht“), aber noch in den Daten: unberührt → Papierkorb, mit eigenem Text bleibt sie und Zeit, Raum, Ausfälle kommen weiter
   aus den Daten.
   *Texte und Schloss* (Befund 7): Mit zentralem Stundenplan (`ctx.zentral.stundenplan()` → `{ verfuegbar, anzahl, ohneBeginn,
-  ausgeblendet }`) ist Alma freiwillig: Seite Stundenplan, Zeile Alma unter Verbindungen und Einrichtungsschritt sagen „Deine
+  ausgeblendet }`) ist Alma freiwillig: Zeile Alma unter Verbindungen und Einrichtungsschritt sagen „Deine
   Vorlesungen kommen von selbst, deine Übungsgruppe meist aus ILIAS, sobald du es verbindest. Alma brauchst du nur für Extras.“ (bei
   EcoBA meldet man sich in ILIAS für Gruppen an, Almas Kalender kennt sie meist nicht), kein Schloss, solange zentrale Notizen
   da sind; `stundenplanAnzahl()` in `verbindungen.js` zählt zentrale und Gruppen-Notizen nicht als Alma-Daten.
@@ -818,7 +822,7 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   bleiben unberührt und `verfuegbar` ist `false`, die Texte versprechen also keine Vorlesungen; Gruppen-Notizen aus ILIAS
   weichen den Notizen des eigenen Abgleichs wie jeder anderen Notiz ohne `herkunft`. Alma verbindet man dort nicht (`alma.js`
   schriebe dieselben Veranstaltungen ein zweites Mal): Zeile unter Verbindungen und Einrichtung sagen nur „Dein Stundenplan
-  kommt über deinen Uni-Abgleich.“, kein Schloss, kein Knopf auf der Seite Stundenplan (siehe „Verbindungen und Schloss“).
+  kommt über deinen Uni-Abgleich.“, kein Schloss (siehe „Verbindungen und Schloss“).
   Tests: `tests/stundenplan.test.js` (Prüfung, Filter, Auswahl, Alma gewinnt, Notiz mit offiziellem Namen und Umbenennen, Ablauf im Tresor im Speicher).
 - **Deine Übungs- oder Tutoriengruppe** (seit 17.10.2026, Plan 27.1 Punkt 1; ohne KI und ohne `veranstaltungen.json`, nur
   ILIAS-Mitgliedschaften und `gruppen.json`): Bibliothek `meine-gruppe.js`, zwei Schreiber mit je eigener `herkunft`.
@@ -1626,7 +1630,9 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   Raster-Menü, das bis 0.4.6 in Obsidians Kopfleiste jeder Notiz stand (`menue.js`, `view.addAction`); das Update entfernt
   `menue.js`, ein Gerät mit offener App nimmt das Symbol beim Löschen sofort weg (`skriptEntfernen` → `abmelden()`). Oben die
   Seiten aus `sichtbareZiele(ctx)` (`ZIELE`, einzige Liste; die Lesezeichen der Vorlage `.obsidian/bookmarks.json` folgen ihr,
-  jede Seite hat ein eigenes Symbol, `tests/seitenleiste.test.js`), darunter „Dieses Semester“ mit den Modulen
+  jede Seite hat ein eigenes Symbol, `tests/seitenleiste.test.js`; Stundenplan seit 24.10.2026 nur am iPhone,
+  `Platform.isPhone`, weil das Dashboard sonst dieselbe Woche als Raster zeigt; iPad im geteilten Bildschirm zeigt am Dashboard
+  die Tagesansicht und hat die Seite trotzdem nicht in der Seitenleiste, bewusst hingenommen), darunter „Dieses Semester“ mit den Modulen
   nach `diesesSemester` (`eba.js`, dieselbe Regel wie die Gruppe „Dieses Semester“ im Fenster „Neu …“), Modulcode statt Symbol. Im
   Akzent steht die Seite, die vorn offen ist, bei Notizen mit `code` (Unterlagen, Vorlesungen, Termine …) auch ihr Modul. Ein Tipp
   öffnet über `ctx.oeffnen` (nie in der Seitenleiste) und schließt auf iPhone und iPad die Schublade, wenn sie nicht angeheftet ist.
@@ -1729,10 +1735,10 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   „Verbunden über ein anderes Gerät · aktualisiert vor 3 Std.“ (ILIAS im eigenen Uni-Abgleich mit dessen Satz dahinter, Noten &
   Anmeldungen statt „Braucht deinen Uni-Zugang“), Pille „verbunden“, Haken, rechts nur **Mehr erfahren**. Das Fenster
   (`AnderswoFenster`) zeigt den Stand und leise **Auch hier verbinden** (Aktion `verbinden` mit `auch=1`; aus Noten & Anmeldungen das
-  ILIAS-Fenster mit `fuer=alma`). Kein Schloss, auf Stundenplan kein Knopf, auf Unterlagen bleibt **Unterlagen aktualisieren**
+  ILIAS-Fenster mit `fuer=alma`). Kein Schloss, auf Unterlagen bleibt **Unterlagen aktualisieren**
   ausgeblendet. Länger still, frei oder von außen: wie bisher. Hat ILIAS dein Passwort abgelehnt, gilt ILIAS nie als anderswo
   verbunden. Nach Verbinden und Trennen auf diesem Gerät zeichnen alle Blöcke neu (`neuZeichnen`, auch nach Verbinden über
-  **Stundenplan aktualisieren** in `alma.js`). Tests: `tests/verbindungen.test.js`, `tests/quellen.test.js`.
+  den Befehl **Stundenplan aktualisieren** in `alma.js`). Tests: `tests/verbindungen.test.js`, `tests/quellen.test.js`.
 - Symbole (seit 15.10.2026, iPad-Test): ruhige Lucide-Linien als inline-SVG in `currentColor` (`SYMBOLE`, `ctx.verbindungen.svg(name)`:
   schloss, haken, uhr, extern, warnung, pause, aus), keine Emojis; `setIcon` blieb auf dem iPad leer (so auch im Raster-Menü bis 0.4.6).
 - Codeblock `eba-schloss <id>`: Solange gesperrt, eine Karte mit Schloss-Symbol, einem Satz und „Verbinden“. Steht der Block in einer Karte
@@ -1766,11 +1772,11 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   Link selbst; scheitert das, zeigt das Fenster die Schritte zum Einfügen mit dem Grund darüber. Ohne Uni-Login auf diesem Gerät
   steht unter den Schritten leise „Ohne Kopieren: Mit Uni-Login verbinden“ (siehe „Uni-Login“).
 - Gespeichert wird nur gerätelokal (`app.saveLocalStorage`): `eba-alma-ics`, `eba-alma-stand`, `eba-alma-seit`.
-- Codeblock `eba-alma-knoepfe` (Seite Stundenplan, seit 0.3.0): verbunden → nur „Stundenplan aktualisieren“, über ein anderes Gerät
-  verbunden nichts (seit 0.4.7), sonst
-  „Alma verbinden“ und ein Satz dazu; den Satz nicht, solange das Schloss gilt (die Schloss-Karte darunter sagt dasselbe,
-  seit 16.10.2026); im eigenen Uni-Abgleich nichts (auch mit Link). Gezeichnet als Knopf-Karte `callout[data-callout=eba-neu]` (gleiche Gestalt wie
-  `> [!eba-neu|ohne-titel]`). Vorher standen beide Knöpfe fest in der Notiz, auch bei verbundenem Alma.
+- Codeblock `eba-alma-knoepfe` (Seite Stundenplan, 0.3.0 bis 0.6.5): zeigte verbunden „Stundenplan aktualisieren“, sonst „Alma
+  verbinden“ und einen Satz dazu. Seit 24.10.2026 steht er nicht mehr auf der Seite und zeichnet nichts, damit ältere, selbst
+  geänderte Seiten keinen Codeblock zeigen: Alma holt stündlich, von Hand **Aktualisieren** in der Zeile Uni-Login bzw. der Befehl
+  **Stundenplan aktualisieren**; „Alma brauchst du nur für Extras“ sagt die Zeile Alma, die Bitte um den Studienbeginn das
+  Wochenraster.
 - Codeblock `eba-ilias-knopf` (Seite Unterlagen, seit 0.4.0): steht leer in der Knopf-Karte und trägt die Klasse `eba-ilias-an`,
   solange ILIAS auf diesem Gerät verbunden ist. Dann zeigt CSS (Abschnitt 49, `:has`) den festen Knopf **Unterlagen aktualisieren**
   derselben Karte (Aktion `ilias-holen`), sonst ist er ausgeblendet. Darunter steht `eba-schloss ilias`.
@@ -2580,7 +2586,8 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt elf Seiten: Dashboard,
 Stundenplan, Studienverlauf, Termine & Anmeldungen, Postfach (seit 0.6.0), Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
 Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`sichtbareZiele`, `ctx.lernplan.sichtbar()`;
-die schreibt nur eine KI, siehe „Lernplan“). Die Icons hängen an `li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6;
+die schreibt nur eine KI, siehe „Lernplan“). Stundenplan steht seit 24.10.2026 nur am iPhone dort (am PC und iPad zeigt das
+Dashboard dieselbe Woche als Raster); die Seite und ihr Lesezeichen bleiben. Die Icons hängen an `li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6;
 Stundenplan seit 0.4.6 mit Wochenspalten statt des Kalenders von Termine & Anmeldungen). Die Lesezeichen der Vorlage folgen `ZIELE`
 (siehe „Öffnen und Navigieren“).
 

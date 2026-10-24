@@ -132,7 +132,9 @@ module.exports = function (ctx) {
     const M = ctx.modell;
     if (!M || !M.fristen) { ohneModell(el); return; }
     const K = kachelnBauen(M, ctx.date.jetzt()), esc = M.zeit.esc;
-    let h = `<div class="eba-kz"><div class="eba-kz-kopf"><h1 class="eba-kz-gruss">${esc(K.gruss)}</h1><span class="eba-kz-datum"><b>${esc(K.datum)}</b></span></div><div class="eba-kz-reihe">`;
+    // Wochentag und Datum getrennt: am iPhone zweizeilig rechts neben dem Gruß, sonst eine Zeile (Komma per CSS, Abschnitt 8)
+    const [wt, tag] = K.datum.split(", ");
+    let h = `<div class="eba-kz"><div class="eba-kz-kopf"><h1 class="eba-kz-gruss">${esc(K.gruss)}</h1><span class="eba-kz-datum"><b>${esc(wt)}</b> <b>${esc(tag)}</b></span></div><div class="eba-kz-reihe">`;
     for (const k of K.kacheln) {
       const ziel = k.pfad ? ` role="link" tabindex="0" data-pfad="${esc(k.pfad)}"` : "";
       h += `<div class="eba-kachel${k.cls ? " " + k.cls : ""}"${ziel}><span class="k">${k.k}</span><span class="v${k.text ? " text" : ""}">${k.v}</span><span class="s">${k.s}</span>`

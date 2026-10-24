@@ -49,8 +49,9 @@
 //                           aktiv, steht „Verbunden über ein anderes Gerät · aktualisiert vor …“ mit Pille „verbunden“, rechts nur
 //                           „Mehr erfahren“; das Fenster bietet leise „Auch hier verbinden“ (Aktion verbinden mit auch=1). Länger
 //                           still oder getrennt: wie nie verbunden.
-//   ```eba-alma-knoepfe```  Knopf auf der Seite Stundenplan (seit 0.3.0): verbunden → „Stundenplan aktualisieren“, sonst
-//                           „Alma verbinden“ mit einem Satz dazu; im eigenen Uni-Abgleich und über ein anderes Gerät verbunden nichts.
+//   ```eba-alma-knoepfe```  früher der Knopf auf der Seite Stundenplan (0.3.0 bis 0.6.5); seit 24.10.2026 leer (Alma holt
+//                           stündlich, von Hand unter Verbindungen; den Satz zum Studienbeginn sagt das Wochenraster). Der Block
+//                           zeichnet nichts, damit ältere, selbst geänderte Seiten keinen Codeblock zeigen.
 //   ```eba-ilias-knopf```   Steht in der Knopf-Karte der Seite Unterlagen (seit 0.4.0) und zeichnet nichts. Ist ILIAS auf diesem
 //                           Gerät verbunden, trägt er die Klasse eba-ilias-an; dann zeigt CSS (eba-core.css 49) den festen Knopf
 //                           „Unterlagen aktualisieren“ derselben Karte, sonst ist er ausgeblendet. So bleiben alle Knöpfe normales Markdown.
@@ -1212,33 +1213,6 @@ module.exports = function (ctx) {
     }
   };
 
-  // Knöpfe der Seite Stundenplan (```eba-alma-knoepfe```, seit 0.3.0): verbunden → nur „Stundenplan aktualisieren“, sonst nur
-  // „Alma verbinden“ und ein Satz dazu. Den Satz nicht, solange das Schloss gilt: Dann erklärt die Schloss-Karte darunter dasselbe
-  // (Aufräumrunde 16.10.2026). Gleiche Gestalt wie eine Knopf-Karte > [!eba-neu|ohne-titel] (eba-core.css 6). Eigener
-  // Uni-Abgleich: nichts (der Abgleich bringt den Stundenplan, alma.js holt dann auch mit Link nichts). Über ein anderes Gerät
-  // verbunden (seit 0.4.7): auch nichts; „Auch hier verbinden“ steht nur leise im Fenster unter Verbindungen.
-  const almaKnoepfe = (el) => {
-    el.empty();
-    const s = VERBINDUNGEN.alma.status(), verbunden = !!s.verbunden;
-    el.toggleClass("eba-alma-verbunden", verbunden);
-    if (s.extern || (!verbunden && anderswo(VERBINDUNGEN.alma, s))) return;
-    const karte = el.createDiv({ cls: "callout eba-alma-knoepfe", attr: { "data-callout": "eba-neu", "data-callout-metadata": "ohne-titel" } });
-    const li = karte.createDiv({ cls: "callout-content" }).createEl("ul").createEl("li");
-    if (verbunden) li.createEl("a", { text: "Stundenplan aktualisieren", href: ctx.link("stundenplan", {}) });
-    else {
-      li.createEl("a", { text: "Alma verbinden", href: ctx.link("verbinden", { id: "alma" }) });
-      const z = zentralerPlan();
-      if (z.verfuegbar && z.ohneBeginn) {
-        // Ohne Studienbeginn ist das Fachsemester geraten: dann keine Vorlesungen aus dem Musterplan, sondern dieser Satz
-        const p = el.createEl("p", { cls: "eba-alma-hinweis" });
-        p.appendText("Deine Vorlesungen kommen von selbst, sobald du deinen ");
-        p.createEl("a", { text: "Studienbeginn", href: ctx.link("personalisieren", {}) });
-        p.appendText(" eingetragen hast.");
-      } else if (z.verfuegbar) fett(el.createEl("p", { cls: "eba-alma-hinweis" }), ALMA_FREIWILLIG);
-      else if (!VERBINDUNGEN.alma.gesperrt()) fett(el.createEl("p", { cls: "eba-alma-hinweis" }), "Einmal **Alma verbinden**, dann holst du deinen Stundenplan hier mit einem Tipp.");
-    }
-  };
-
   // Knopf „Unterlagen aktualisieren“ auf Unterlagen (Link in derselben Karte): sichtbar, wenn verbunden (CSS über eba-ilias-an); während
   // eines Abrufs heißt er „Lädt 12 von 40“ bzw. „Lädt …“. Ist der Block noch nicht im Dokument, einmal kurz danach.
   const iliasKnopf = (inst) => {
@@ -1270,7 +1244,6 @@ module.exports = function (ctx) {
 
   const zeichnen = (inst) => {
     if (inst.art === "uebersicht") uebersicht(inst.el);
-    else if (inst.art === "alma-knoepfe") almaKnoepfe(inst.el);
     else if (inst.art === "ilias-knopf") iliasKnopf(inst);
     else schlossKarte(inst.el, inst.id);
   };
@@ -1349,10 +1322,7 @@ module.exports = function (ctx) {
       inst.art = "uebersicht";
       try { zeichnen(inst); } catch (e) { console.error("eba-verbindungen", e); el.setText(String(quelle)); }
     }));
-    bloecke.push(ctx.codeblock("eba-alma-knoepfe", (quelle, el, c, inst) => {
-      inst.art = "alma-knoepfe";
-      try { zeichnen(inst); } catch (e) { console.error("eba-alma-knoepfe", e); el.setText(String(quelle)); }
-    }));
+    ctx.codeblock("eba-alma-knoepfe", (quelle, el) => { el.empty(); }); // seit 24.10.2026 leer, siehe oben
     bloecke.push(ctx.codeblock("eba-ilias-knopf", (quelle, el, c, inst) => {
       inst.art = "ilias-knopf";
       el.addClass("eba-ilias-knopf");

@@ -148,12 +148,16 @@ Der wichtigste Baustein. Code: `.eba-vb-liste` mit `.eba-vb` (Skripte), `> [!eba
   eines Stapels). **Ohne Rahmen**,
   nur mit Haarlinien, für Leselisten unter einem Gruppenlabel (Unterlagen, Vorlesungen der Modulseite, „Als Nächstes“, Agenda).
 - Gruppen: Label in `--eba-accent-text` über der Gruppe (ohne Rahmen) oder als Band in `--eba-surface-2` (mit Rahmen).
-- iPhone: Der Knopf bleibt rechts, solange der Titel zwei Zeilen hat; erst danach rutscht er unter den Text.
+- iPhone: Der Text bekommt mindestens 150 px, der Knopf bleibt daneben rechts (Titel und Pille dürfen dafür zwei Zeilen
+  haben). Erst ein Knopf, der dann nicht mehr passt, rutscht unter den Text, rechtsbündig. Keine Erklärsätze über einer
+  Zeilenliste: Was eine Zeile bedeutet, sagt ihre Metazeile oder das Fenster hinter ihrem Knopf.
 
 ### Kachel und Kennzahl
 `> [!eba-kennzahlen]`: höchstens vier Kacheln. Label, Wert (Kennzahl), höchstens eine Unterzeile mit neuer Information, optional
 ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent, auf dem Dashboard („Nächste Frist“) die Farbe der Fristen
 (`--eba-warn`).
+iPhone (unter 480 px Kartenbreite): Auf dem Dashboard stehen der Balken und das Datum der Frist rechts in der Label-Zeile, so
+spart jede Kachel eine Zeile; Gruß und Datum teilen sich eine Zeile, das Datum zweizeilig rechts (`eba-core.css` 37.dashboard).
 
 ### Knöpfe
 

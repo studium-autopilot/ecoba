@@ -16,8 +16,6 @@ cssclasses:
 
 ## Deine Angaben
 
-Alles ist freiwillig. Vorlesungszeit, Pausen und Prüfungsphasen rechnen sich aus dem Studienbeginn; du siehst sie je Semester im [[Studienverlauf]].
-
 ```eba-personalisieren angaben
 Deine Angaben: erscheinen, sobald Studium Autopilot läuft. Ändern: Befehl „Deine Angaben ändern“.
 ```
@@ -51,9 +49,8 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | Unterlagen hinzufügen | Dashboard, Modulseite, [[Unterlagen]] | Dateien, dann die Vorschau der neuen Namen | Unterlagen/Modul |
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
-> > | Alma verbinden, danach Stundenplan aktualisieren | [[Stundenplan]] | beim Verbinden nichts, wenn dein Uni-Login gespeichert ist (sonst deinen Alma-Link) | Stundenplan |
 > >
-> > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite.
+> > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite. **Stundenplan** steht dort nur am iPhone, sonst zeigt das **Dashboard** deine Woche.
 > > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
 > > - Jedes Feld hat einen Vorschlag. <kbd>Esc</kbd> oder **Abbrechen** legt nichts an. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche), darunter steht, welcher Tag gemeint ist.
 > > - **Rückgängig:** Was du wegwirfst oder abhakst, passiert sofort; der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.

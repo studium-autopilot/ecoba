@@ -2,6 +2,17 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.6 – Mehr Platz auf dem iPhone
+
+- **Übersichtlicher:** Auf dem iPhone ist oben auf dem **Dashboard** mehr zu sehen: Gruß und Datum stehen in einer Zeile, und
+  die Kacheln sind rund ein Viertel flacher, ohne dass eine Angabe fehlt.
+- **Übersichtlicher:** Auf dem iPhone ist **Einstellungen & Hilfe** kürzer: Knöpfe wie **Ändern** stehen rechts neben ihrer
+  Zeile statt in einer eigenen Zeile darunter.
+- **Übersichtlicher:** Am PC und iPad zeigt das **Dashboard** deine Woche, darum steht **Stundenplan** links in der Übersicht
+  nur noch am iPhone. Die Seite zeigt jetzt nur die Woche, ohne Liste.
+- **Behoben:** Ohne Studienbeginn stand in der Woche nur „Keine Lehrveranstaltungen“. Jetzt steht dort, dass deine Vorlesungen
+  von selbst kommen, sobald du ihn einträgst, mit Link zum Eintragen.
+
 ## 0.6.5 – Mitzählen ohne Angaben über dich
 
 - **Neu:** Studium Autopilot zählt, auf wie vielen Geräten eine Version läuft, ohne Angaben über dich. Ausschalten kannst du

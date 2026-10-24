@@ -1,16 +1,14 @@
 // Zentraler Stundenplan (zentral.js, veranstaltungen.json): Prüfung, Filter (aktuelles Fachsemester), Auswahl ohne
 // Parallelgruppen, „Alma gewinnt“ (auch Vorlesung und Übung direkt hintereinander, c.t./s.t.), Notiztext mit Ausfällen und
 // Änderungen fürs Wochenraster, „Besuche ich nicht“ und Zurücknehmen, gelöschte Notiz, Schutz gegen Massenwegfall, eigener
-// Uni-Abgleich (kein zentraler Stundenplan). Dazu die Liste in Studium/Stundenplan.md (Bases): Filter wie „Besuche ich nicht“.
+// Uni-Abgleich (kein zentraler Stundenplan).
 // Nur ausgedachte Daten (Codes X100 …). Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const nodeCrypto = require("node:crypto");
 const path = require("node:path");
-const fs = require("node:fs");
 const { laden, json } = require("./laden.js");
-const { auswerten, formelnAus } = require("./bases-formel.js");
 
 const EBA = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "eba.js"));
 
@@ -741,39 +739,3 @@ test("Alle Vorlesungen auf einmal weg: nicht als „Besuche ich nicht“ gewerte
   assert.deepEqual(grabsteine(t), [ID_VL, ID_UE, ID_X110].sort());
 });
 
-// Liste in Studium/Stundenplan.md: Bases kann ctx.modell.besuchtNicht nicht aufrufen, darum bildet der Filter die Regel nach
-// (Schlüssel „<herkunft>:<id>“ bzw. zentral_id in stundenplan_ausgeblendet, eigene Notiz besuche_nicht). Jede Quelle aus quellen.js
-// (außer volltext, die keine Lehrveranstaltungen schreibt) muss darin stehen, sonst zeigte die Liste, was die Woche ausblendet.
-test("Liste im Stundenplan: blendet für jede Quelle aus, was „Besuche ich nicht“ ausblendet; Zeit aus wochentag", () => {
-  const Q = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "quellen.js"));
-  const md = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "Studium", "Stundenplan.md"), "utf8").replace(/\r/g, "");
-  const block = md.split("```base")[1].split("```")[0];
-  const filter = block.split("\n").map((z) => z.replace(/^(> ?)+/, "")).filter((z) => /^ {4}- '.*'$/.test(z)).map((z) => z.replace(/^ {4}- '(.*)'$/, "$1").replace(/''/g, "'"));
-  assert.equal(filter.length, 4);
-  const lv = { typ: "lehrveranstaltung", code: "X100", wochentag: 2, tag: "Di", beginn: "10:15", ende: "11:45", semester: SEM };
-  const notizen = {}, ausgeblendet = [];
-  for (const h of Object.keys(Q.ID_FELD).filter((x) => x !== "volltext")) {
-    const feld = Q.ID_FELD[h];
-    notizen[`Stundenplan/${h} aus.md`] = Object.assign({}, lv, { herkunft: h, [feld]: "id-" + h });
-    notizen[`Stundenplan/${h} an.md`] = Object.assign({}, lv, { herkunft: h, [feld]: "anders-" + h });
-    ausgeblendet.push(h === "zentral" ? "id-" + h : h + ":id-" + h);
-  }
-  Object.assign(notizen, {
-    "Stundenplan/eigen aus.md": Object.assign({}, lv, { besuche_nicht: true }),
-    "Stundenplan/eigen an.md": Object.assign({}, lv),
-    "Stundenplan/alma ohne Schlüssel.md": Object.assign({}, lv, { herkunft: "alma" }),
-    "Stundenplan/entfällt.md": Object.assign({}, lv, { herkunft: "alma", alma_schluessel: "x", entfaellt: true }),
-  });
-  const einst = { stundenplan_ausgeblendet: ausgeblendet };
-  const W = { heute: "2026-10-24", notizen: Object.assign({ "System/Einstellungen.md": einst }, notizen), rueckverweise: {} };
-  const M = laden("modell", { heute: "2026-10-24", notizen, frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": einst } }).ctx.modell;
-  assert.equal(Object.keys(notizen).filter((p) => M.besuchtNicht(notizen[p])).length, ausgeblendet.length + 1);
-  for (const p of Object.keys(notizen)) {
-    assert.equal(filter.every((f) => auswerten(f, W, p) === true), notizen[p].entfaellt !== true && !M.besuchtNicht(notizen[p]), p);
-  }
-  // Spalte Zeit: der Wochentag aus wochentag (wie die Woche), ältere Notizen nur mit tag
-  const F = formelnAus(block);
-  const zeit = (fm) => auswerten("formula.zeit", { heute: "2026-10-24", notizen: { "a.md": fm } }, "a.md", F);
-  assert.equal(zeit({ wochentag: 4, tag: "Di", beginn: "10:15", ende: "11:45" }), "Do 10:15–11:45", "wochentag gilt");
-  assert.equal(zeit({ tag: "Mi", beginn: "08:15", ende: "09:45" }), "Mi 08:15–09:45");
-});
