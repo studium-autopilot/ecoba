@@ -106,13 +106,46 @@ test("Frühere Zusammenfassung in die Notiz der neuen Fassung, vor die Datei", (
   assert.equal(F.fruehereUebernehmen(altNotiz, KOPF, "2026-10-24"), KOPF + "## Das Wichtigste (frühere Fassung, bis 24.10.2026)\n- **Vektoren:** addieren\n");
 });
 
-test("Kasten „Neuere Fassung“: nach dem Titel, beim nächsten Mal ersetzt statt doppelt", () => {
+test("Kasten „Deine bearbeitete Fassung“: nach dem Titel, beim nächsten Mal ersetzt statt doppelt, auch der ältere „Neuere Fassung“", () => {
   const altNotiz = KOPF + "## Das Wichtigste\n- a\n\n" + PDF;
   const eins = F.neuereKasten(altNotiz, "S100 Folien 03 Vektoren neue Fassung 2026-10-24", "2026-10-24");
-  assert.equal(eins, KOPF + "> [!eba-info] Neuere Fassung\n> Am 24.10.2026 kam eine neuere Fassung dieser Unterlage: [[S100 Folien 03 Vektoren neue Fassung 2026-10-24]]. " +
-    "Deine Datei hier bleibt, wie sie ist.\n\n## Das Wichtigste\n- a\n\n" + PDF);
+  assert.equal(eins, KOPF + "> [!eba-info] Deine bearbeitete Fassung\n> Am 24.10.2026 kam eine neue Fassung aus ILIAS: [[S100 Folien 03 Vektoren neue Fassung 2026-10-24]]. " +
+    "Diese Datei hier bleibt, wie sie ist.\n\n## Das Wichtigste\n- a\n\n" + PDF);
   const zwei = F.neuereKasten(eins, "S100 Folien 03 Vektoren neue Fassung 2026-11-02", "2026-11-02");
-  assert.equal((zwei.match(/Neuere Fassung/g) || []).length, 1);
+  assert.equal((zwei.match(/\[!eba-info\]/g) || []).length, 1);
   assert.match(zwei, /Am 02\.11\.2026 kam .*2026-11-02\]\]/);
   assert.equal(F.neuereKasten(zwei, "S100 Folien 03 Vektoren neue Fassung 2026-11-02", "2026-11-02"), zwei);
+  // Kasten aus 0.6.9 („Neuere Fassung“): ersetzt, nicht ein zweiter darüber
+  const alt069 = KOPF + "> [!eba-info] Neuere Fassung\n> Am 24.10.2026 kam eine neuere Fassung dieser Unterlage: [[S100 Folien 03 Vektoren neue Fassung 2026-10-24]]. " +
+    "Deine Datei hier bleibt, wie sie ist.\n\n## Das Wichtigste\n- a\n\n" + PDF;
+  assert.equal(F.neuereKasten(alt069, "S100 Folien 03 Vektoren neue Fassung 2026-11-02", "2026-11-02"), zwei);
+  // eine Kopie, die du inzwischen bearbeitet hast: ihr Kasten „Neue Fassung aus ILIAS“ wird zu „Deine bearbeitete Fassung“
+  const kopie = KOPF + "> [!eba-info] Neue Fassung aus ILIAS\n> Das ist die neue Fassung vom 24.10.2026. Deine bearbeitete Fassung bleibt daneben, " +
+    "wie sie ist: [[S100 Folien 03 Vektoren]].\n\n## Das Wichtigste\n- a\n\n" + PDF;
+  assert.equal(F.neuereKasten(kopie, "S100 Folien 03 Vektoren neue Fassung 2026-11-02", "2026-11-02"), zwei);
+});
+
+test("Beide Fassungen: deine bearbeitete und die neueste am Namen erkannt, je Ordner, beschriftet", () => {
+  assert.deepEqual(F.fassungVon("S100 Folien 03 Vektoren neue Fassung 2026-10-24 (2)"), { stamm: "S100 Folien 03 Vektoren", datum: "2026-10-24", n: 2 });
+  assert.deepEqual(F.fassungVon("S100 Folien 03 Vektoren"), { stamm: "S100 Folien 03 Vektoren", datum: "", n: 0 });
+  // „(10)“ nach „(9)“, nicht nach „(1)“ (Textvergleich)
+  const folge = ["X neue Fassung 2026-10-24 (10)", "X", "X neue Fassung 2026-10-24 (9)", "X neue Fassung 2026-10-24", "X neue Fassung 2026-10-02"]
+    .map(F.fassungVon).sort(F.fassungFolge).map((v) => v.datum + "/" + v.n);
+  assert.deepEqual(folge, ["/0", "2026-10-02/1", "2026-10-24/1", "2026-10-24/9", "2026-10-24/10"]);
+  const U = "Unterlagen/S100/Folien/";
+  const fam = F.familien([U + "S100 Folien 03 Vektoren neue Fassung 2026-10-24.md", U + "S100 Folien 03 Vektoren.md", U + "S100 Folien 04 Matrizen.md",
+    "Unterlagen/S100/Anderswo/S100 Folien 03 Vektoren.md"]);
+  assert.deepEqual(Object.keys(fam).sort(), [U + "S100 Folien 03 Vektoren neue Fassung 2026-10-24.md", U + "S100 Folien 03 Vektoren.md"],
+    "nur Dateien mit einer zweiten Fassung im selben Ordner");
+  const eigen = fam[U + "S100 Folien 03 Vektoren.md"], neu = fam[U + "S100 Folien 03 Vektoren neue Fassung 2026-10-24.md"];
+  assert.deepEqual([eigen.rolle, neu.rolle, neu.eigen, neu.neu], ["eigen", "neu", U + "S100 Folien 03 Vektoren.md", U + "S100 Folien 03 Vektoren neue Fassung 2026-10-24.md"]);
+  assert.equal(F.fassungText(eigen), "Deine bearbeitete Fassung");
+  assert.equal(F.fassungText(neu), "Neue Fassung vom 24.10.2026");
+  assert.equal(F.fassungText(neu, "2026-11-02"), "Neue Fassung vom 02.11.2026", "nach dem Ersetzen der Kopie: der Tag der neuesten");
+  assert.equal(F.fassungText(neu, "2026-10-01"), "Neue Fassung vom 24.10.2026");
+  assert.equal(F.fassungText(null), "");
+  // drei: die mittlere ist deine bearbeitete, die erste deine ältere
+  const drei = F.familien(["A/X.md", "A/X neue Fassung 2026-10-24.md", "A/X neue Fassung 2026-11-02.md"]);
+  assert.deepEqual(["A/X.md", "A/X neue Fassung 2026-10-24.md", "A/X neue Fassung 2026-11-02.md"].map((p) => F.fassungText(drei[p])),
+    ["Deine ältere Fassung", "Deine bearbeitete Fassung", "Neue Fassung vom 02.11.2026"]);
 });

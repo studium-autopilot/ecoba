@@ -3144,6 +3144,12 @@ a.eba-vorl-perle { cursor: pointer; }
 .eba-vorl-chip b { color: var(--eba-text); font-weight: 600; white-space: nowrap; }
 .eba-vorl-chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .eba-vorl-chip .eba-vorl-sym { color: var(--eba-accent-text); }
+/* Zwei Fassungen derselben Folien (seit 24.10.2026): Beschriftung kürzt sich nie, die neue im Akzent */
+.eba-vorl-chip span.eba-vorl-fassung {
+  flex: none; overflow: visible; padding: 0 6px; border-radius: 999px;
+  background: color-mix(in srgb, var(--eba-text) 7%, transparent); color: var(--eba-text); font-size: 11.5px; font-weight: 500;
+}
+.eba-vorl-chip span.eba-vorl-fassung.neu { background: color-mix(in srgb, var(--eba-accent) 14%, transparent); color: var(--eba-accent-text); }
 .eba-vorl-chip.fragen { border-color: color-mix(in srgb, var(--eba-info) 35%, transparent); background: color-mix(in srgb, var(--eba-info) 7%, transparent); color: var(--eba-info); font-weight: 600; }
 .eba-vorl-chip.fragen .eba-vorl-sym { color: var(--eba-info); }
 
@@ -3782,7 +3788,7 @@ a.eba-ez:active { background-color: color-mix(in srgb, var(--eba-text) 6%, trans
 .eba-ez-kopf { display: flex; align-items: baseline; gap: 12px; }
 .eba-ez-titel { flex: 0 0 auto; max-width: 100%; font-weight: 500; line-height: 1.3; }
 .eba-ez-unter { font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
-.eba-ez-wert { flex: 0 1 auto; min-width: 0; margin-left: auto; text-align: right; line-height: 1.3; color: var(--eba-muted); overflow-wrap: break-word; }
+.eba-ez-wert { flex: 0 1 auto; min-width: 0; margin-left: auto; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; line-height: 1.3; color: var(--eba-muted); }
 .eba-ez-wert.akzent { font-weight: 600; color: var(--eba-accent-text); } /* etwas wartet auf dich: Starten, neue Version */
 .eba-ez-wert.warn { font-weight: 600; color: var(--eba-warn); } /* Problem, der Satz steht darunter */
 .eba-ez-rechts { flex: none; display: inline-flex; color: var(--eba-faint); }
@@ -5366,6 +5372,9 @@ body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-t
 .eba-ul-nr { flex: none; width: 1.5em; font-variant-numeric: tabular-nums lining-nums; color: var(--eba-faint); }
 .eba-ul-titel { flex: 1 1 auto; min-width: 0; font-weight: 500; overflow-wrap: anywhere; }
 .eba-ul-ok { margin-left: 7px; font-size: 13px; font-weight: 600; color: var(--eba-good); }
+/* Zwei Fassungen derselben Unterlage (seit 24.10.2026, fassung.js): Beschriftung unter dem Titel */
+.eba-ul-fassung { display: block; font-size: 12.5px; font-weight: 400; color: var(--eba-muted); }
+.eba-ul-fassung.neu { color: var(--eba-accent-text); }
 .eba-ul-loesung { flex: none; display: inline-flex; gap: 10px; min-width: 4.2em; font-size: 13.5px; }
 .eba-ul-link {
   color: var(--eba-muted);
@@ -5592,10 +5601,6 @@ body.is-mobile .eba-vorl button.eba-vorl-status { position: relative; }
 body.is-mobile .eba-vorl button.eba-vorl-status::after {
   content: ""; position: absolute; left: 50%; top: 50%; width: max(100%, 44px); height: max(100%, 44px); transform: translate(-50%, -50%);
 }
-
-/* 64.3 Antippen öffnet (ctx.oeffnen): Kacheln des Dashboards (dashboard.js, data-pfad) und Zeilen der Übungsgruppen mit Notiz im
-   Stundenplan (gruppen.js) öffnen ihre Notiz; der Knopf der Zeile bleibt die Nebenaktion */
-:is(.eba-kachel[data-pfad], tr.eba-gr-nav) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 /* Termin (seit 24.10.2026, kopf.js terminZeichnen): unter dem Label der Tag in der Schrift der Titel, daneben „heute“ (Akzent),
    „morgen“ und „läuft“ (getönt) wie in der Vorlesungsnotiz oder leise die Restzeit; darunter Uhrzeit · Ort wie deren Eckdaten
    (schmal untereinander), bei einer Schlüsselqualifikation die Pille. Auch im breiten Fenster einspaltig. Die Datumszeile unter dem
@@ -5618,6 +5623,10 @@ body.is-mobile .eba-vorl button.eba-vorl-status::after {
 .markdown-preview-sizer > .el-p.eba-termin-datum { height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; overflow: hidden; }
 .markdown-preview-view .el-p.eba-termin-quelle > p,
 .markdown-source-view.is-live-preview .cm-content > .cm-line.eba-termin-quelle { font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+
+/* 64.3 Antippen öffnet (ctx.oeffnen): Kacheln des Dashboards (dashboard.js, data-pfad) und Zeilen der Übungsgruppen mit Notiz im
+   Stundenplan (gruppen.js) öffnen ihre Notiz; der Knopf der Zeile bleibt die Nebenaktion */
+:is(.eba-kachel[data-pfad], tr.eba-gr-nav) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
 :is(.eba-kachel[data-pfad], tr.eba-gr-nav):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
 /* 64.4 Leere Abschnitte und Eckdaten (kopf.js, seit 19.10.2026): Notizen des Plugins zeigen keine Überschrift mit nur leeren Punkten
    („- “, „- [ ] “) darunter und keine leere Überschrift; Begleitnotizen keinen erzeugten Kasten „Eckdaten“. Leseansicht: kopf.js
@@ -5769,7 +5778,7 @@ body.is-mobile .eba-sb-knoepfe .eba-vb-knopf { min-height: 44px; box-sizing: bor
 /* ---------- 69. Reiter (reiter.js, ```eba-reiter```; seit 24.10.2026) ----------
    Karten mit „reiter=Name“ in den Angaben stehen als eine Reihe Reiter in einer Karte an der Stelle des Blocks (Dashboard:
    Fristen, Termine, Nacharbeiten, To-dos; vorher Karten untereinander, am iPhone zugeklappt). Gestalt: eine Karte, oben eine
-   Reihe Knöpfe, der gewählte in der Akzentfarbe getönt, darunter der Inhalt. Die Karten im Reiter haben keinen eigenen Rahmen
+   Reihe leicht gefüllter Knöpfe mit Pfeil, der gewählte in der Akzentfarbe getönt (Pfeil nach oben), darunter der Inhalt. Die Karten im Reiter haben keinen eigenen Rahmen
    und Titel, die Reiterkarte ist ihr Rahmen; nur im Raster „Offene Fragen | To-dos“ bleiben die Titel, solange es offene
    Fragen gibt (sie trennen dann zwei Listen).
    Auf jedem Gerät gleich (seit 24.10.2026; zuerst nur am iPhone, PC und iPad zeigten die Karten offen nebeneinander). Die
@@ -5800,11 +5809,12 @@ body.eba-plugin-an .markdown-source-view.is-live-preview .cm-embed-block:has(.ca
   container: eba-rt / inline-size; margin: 0 0 var(--eba-gap, 12px); padding: 4px; border: 1px solid var(--eba-border);
   border-radius: var(--eba-radius); background: var(--eba-card-bg);
 }
-.eba-rt-leiste { display: flex; gap: 2px; }
+.eba-rt-leiste { display: flex; gap: 3px; }
 .eba-rt-reiter {
   flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 0 5px;
   border-radius: var(--eba-radius-s); color: var(--eba-muted); font-size: 13px; font-weight: 600; line-height: 1.2; white-space: nowrap;
   cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+  background: color-mix(in srgb, var(--eba-text) 4.5%, transparent); /* jeder Reiter ein Knopf, nicht ein Wort in einer Zeile */
 }
 .eba-rt-reiter.gewaehlt { color: var(--eba-text); background: var(--eba-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 45%, transparent); }
 .eba-rt-reiter:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
@@ -5815,9 +5825,23 @@ body.eba-plugin-an .markdown-source-view.is-live-preview .cm-embed-block:has(.ca
   font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
 }
 .eba-rt-reiter.gewaehlt .eba-rt-zahl { color: var(--eba-accent-text); background: color-mix(in srgb, var(--eba-accent) 24%, transparent); }
+/* Pfeil (seit 24.10.2026): zeigt, dass ein Reiter etwas aufklappt (ohne ihn las sich die Reihe wie eine Legende); offen zeigt er
+   nach oben. Leise wie der Pfeil am Modulstatus (.eba-mod-pfeil) */
+.eba-rt-pfeil { flex: none; display: inline-flex; margin-left: 2px; color: var(--eba-faint); transition: transform 150ms ease; }
+.eba-rt-pfeil svg { width: 13px; height: 13px; stroke-width: 2.5px; }
+.eba-rt-reiter.gewaehlt .eba-rt-pfeil { color: var(--eba-accent-text); transform: rotate(180deg); }
+/* iPhone mit 375 bis 393 px: vier Zahlen und Pfeile passen nur mit weniger Luft (sonst stößt der Pfeil an das nächste Wort) */
+@container eba-rt (max-width: 365px) {
+  .eba-rt-reiter { padding: 0 3px; font-size: 12.5px; }
+  .eba-rt-zahl { min-width: 16px; margin-left: 3px; padding: 0 4px; line-height: 16px; }
+  .eba-rt-pfeil { margin-left: 0; }
+  .eba-rt-pfeil svg { width: 11px; height: 11px; }
+}
 @container eba-rt (max-width: 330px) {
   .eba-rt-reiter { padding: 0 2px; font-size: 11.5px; }
   .eba-rt-zahl { min-width: 16px; margin-left: 3px; padding: 0 4px; font-size: 10px; line-height: 16px; }
+  .eba-rt-pfeil { margin-left: 1px; }
+  .eba-rt-pfeil svg { width: 11px; height: 11px; }
 }
 .eba-rt-inhalt { padding: 6px 9px 4px; }
 .eba-rt-inhalt .callout[data-callout^="eba-"] {

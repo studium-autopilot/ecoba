@@ -79,3 +79,27 @@ test("Dashboard: Block eba-reiter vor den Karten, vier Reiter in dieser Reihenfo
   assert.match(md("To-dos"), /^> \[!eba-raster\|2\]\n> > \[!eba-fragen\] Offene Fragen\n[\s\S]*> > \[!eba-todo\] To-dos\n/);
   for (const r of reiter) assert.ok(!/handy-zu|reiter=|\]\+/.test(r.md), r.name);
 });
+
+test("Höhe in der Leseansicht: Abschnitt nachmessen, Seite nur bei neuer Höhe neu einteilen, weggescrollt nie", () => {
+  const renderer = (neu) => {
+    const r = { s: { height: 488 }, neuEingeteilt: 0 };
+    r.getSectionForElement = () => r.s;
+    r.measureSection = (s) => { s.height = neu; };
+    r.updateVirtualDisplay = () => { r.neuEingeteilt++; };
+    return r;
+  };
+  const da = { isConnected: true, offsetParent: {} };
+  let r = renderer(265);
+  assert.equal(R.abschnittNachmessen(r, da), true, "kürzerer Reiter");
+  assert.equal(r.s.height, 265);
+  assert.equal(r.neuEingeteilt, 1);
+  r = renderer(489);
+  assert.equal(R.abschnittNachmessen(r, da), false, "Höhe fast gleich: nichts neu einteilen");
+  assert.equal(r.neuEingeteilt, 0);
+  r = renderer(0);
+  assert.equal(R.abschnittNachmessen(r, { isConnected: false, offsetParent: null }), false, "ausgehängt");
+  assert.equal(R.abschnittNachmessen(r, { isConnected: true, offsetParent: null }), false, "unsichtbar");
+  assert.equal(r.s.height, 488, "nie als 0 px gemessen");
+  assert.equal(R.abschnittNachmessen({}, da), false, "Renderer ohne diese Funktionen (Obsidian-Update)");
+  assert.equal(R.abschnittNachmessen(Object.assign(renderer(100), { getSectionForElement: () => null }), da), false);
+});

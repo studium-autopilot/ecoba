@@ -841,7 +841,11 @@ module.exports = function (ctx) {
   // Folien mit dem Datum einer anderen Sitzung gehören nur zu ihr; ein Datum außerhalb des Semesters (kommentierte Fassung aus
   // dem Vorjahr) und ein anderes Semester (Feld semester) zählen nie von selbst. Ein Datum, an dem das Modul laut Stundenplan keine Sitzung hat (etwa ein Upload-Tag), ist
   // kein Sitzungsdatum. Je Nummer eine Fassung: die neueste, dann die mit mehr Seiten.
-  const FOLIEN_MAX = 3; // höchstens so viele Folien je Sitzung
+  // Beide Fassungen (seit 24.10.2026): Hast du Folien bearbeitet und kam eine neue Fassung daneben („<Name> neue Fassung
+  // JJJJ-MM-TT“, fassung.js familien), zeigt die Notiz beide, deine zuerst, jede beschriftet (fassung). Die neue zählt mit dem Tag
+  // der ersten Fassung, wie eine ersetzte Datei: Sonst hielte die Sitzung, in der sie kam, ein altes Kapitel für ihres. Wählst du
+  // die neueste, gilt sie allein; wählst du eine ältere, kommt die neueste dazu, damit sie nie hinter einer Wahl verschwindet.
+  const FOLIEN_MAX = 3; // höchstens so viele Nummern je Sitzung (je Nummer bis zu zwei Fassungen)
   const linkZiel = (wert, von) => {
     const s = text(wert);
     if (!s) return null;
@@ -857,8 +861,9 @@ module.exports = function (ctx) {
     const iso = m[1] ? `${m[1]}-${m[2]}-${m[3]}` : `${m[6]}-${pad(m[5])}-${pad(m[4])}`;
     return isoVon(tagObj(iso)) === iso ? iso : "";
   };
-  // Einmal je Berechnung: Folien (art Folien) und Vorlesungsnotizen je Modulcode; die Begleitnotiz zu einer Datei
-  // (begleitnotiz(pfad)) erst, wenn eine Wahl auf eine PDF zeigt (löst dann einmal alle Links auf)
+  // Einmal je Berechnung: Folien (art Folien) und Vorlesungsnotizen je Modulcode, die Fassungen derselben Folien (fassung: Pfad →
+  // familien-Eintrag, eintrag: Pfad → Folien); die Begleitnotiz zu einer Datei (begleitnotiz(pfad)) erst, wenn eine Wahl auf eine
+  // PDF zeigt (löst dann einmal alle Links auf)
   const folienIndex = () => {
     const unterlagen = [], folien = {}, notizen = {};
     let datei = null;
@@ -874,11 +879,22 @@ module.exports = function (ctx) {
       (folien[code] = folien[code] || []).push({ f, fm, nr, datum: s10(fm.datum), semester: text(fm.semester),
         tag: datumImText(fm.quelle) || datumImText(fm.original), seiten: Number(fm.seiten) || 0 });
     }
+    const Fa = ctx.user && ctx.user.fassung, fassung = {}, eintrag = {};
+    for (const code of Object.keys(folien)) {
+      for (const d of folien[code]) eintrag[d.f.path] = d;
+      const fam = Fa ? Fa.familien(folien[code].map((d) => d.f.path)) : {};
+      for (const d of folien[code]) {
+        const g = fam[d.f.path];
+        if (!g) continue;
+        fassung[d.f.path] = g;
+        d.datum = g.alle.map((p) => eintrag[p].datum).filter(Boolean).sort()[0] || d.datum;
+      }
+    }
     const begleitnotiz = (pfad) => {
       if (!datei) { datei = {}; for (const u of unterlagen) { const z = linkZiel(u.fm.datei, u.f.path); if (z) datei[z.path] = u; } }
       return datei[pfad] || null;
     };
-    return { folien, notizen, begleitnotiz };
+    return { folien, notizen, begleitnotiz, fassung, eintrag };
   };
   // Tage mit einer Sitzung des Moduls in der Vorlesungszeit (alles außer Übung und Tutorium), aufsteigend
   const sitzungsTage = (code, sem) => {
@@ -890,13 +906,13 @@ module.exports = function (ctx) {
     D.zwischen[k] = tage;
     return tage;
   };
-  // Deine Wahl im Feld folien → { f, fm, nr } (zu einer PDF ihre Begleitnotiz) oder null (leer, Link ins Leere)
+  // Deine Wahl im Feld folien → { f, fm, nr, wahl: true } (zu einer PDF ihre Begleitnotiz) oder null (leer, Link ins Leere)
   const folienWahl = (fm, von, ix) => {
     const z = linkZiel(fm.folien, von);
     if (!z) return null;
     const b = z.extension === "md" ? { f: z, fm: (app.metadataCache.getFileCache(z) || {}).frontmatter || {} } : ix.begleitnotiz(z.path) || { f: z, fm: {} };
     const nr = Number(b.fm.nummer);
-    return { f: b.f, fm: b.fm, nr: b.fm.nummer === "" || b.fm.nummer == null || !isFinite(nr) ? null : nr };
+    return { f: b.f, fm: b.fm, nr: b.fm.nummer === "" || b.fm.nummer == null || !isFinite(nr) ? null : nr, wahl: true };
   };
   const nachNummer = (a, b) => (a.nr == null ? 1e9 : a.nr) - (b.nr == null ? 1e9 : b.nr);
   const nachPfad = (a, b) => (a.f.path < b.f.path ? -1 : a.f.path > b.f.path ? 1 : 0);
@@ -907,14 +923,33 @@ module.exports = function (ctx) {
     return Object.keys(je).map((k) => je[k].sort((a, b) => (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0) || (b.seiten - a.seiten) || nachPfad(a, b))[0])
       .sort(nachNummer);
   };
-  // Vorlesungsnotiz → { folien: [{ f, fm }] (höchstens FOLIEN_MAX, nach Nummer), gewaehlt (Feld folien gilt), alle (Folien des
-  // Moduls zum Wählen: nach Nummer, je Nummer neueste zuerst) }
+  // Vorlesungsnotiz → { folien: [{ f, fm, fassung }] (höchstens FOLIEN_MAX Nummern, nach Nummer, je Nummer deine bearbeitete vor
+  // der neuesten Fassung), gewaehlt (Feld folien gilt), alle (Folien des Moduls zum Wählen: nach Nummer, je Nummer neueste zuerst) }.
+  // fassung: { rolle, text } bei zwei Fassungen derselben Folien (fassung.js fassungText), sonst null
   const folienVon = (f, index) => {
     const ix = index || folienIndex();
     const fm = (f && (app.metadataCache.getFileCache(f) || {}).frontmatter) || {};
     const code = text(fm.code), alle = ix.folien[code] || [];
-    const aus = (liste, gewaehlt) => ({ folien: liste.slice(0, FOLIEN_MAX).map((d) => ({ f: d.f, fm: d.fm })), gewaehlt,
-      alle: alle.slice().sort((a, b) => nachNummer(a, b) || (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0) || nachPfad(a, b)).map((d) => ({ f: d.f, fm: d.fm })) });
+    const mitFassung = (d) => {
+      const g = ix.fassung[d.f.path];
+      return { f: d.f, fm: d.fm, fassung: g ? { rolle: g.rolle, text: ctx.user.fassung.fassungText(g, d.fm.aktualisiert) } : null };
+    };
+    // je Familie die neueste zuerst (gleiche Nummer, gleicher Tag der ersten Fassung)
+    const nachFassung = (a, b) => {
+      const x = ix.fassung[a.f.path], y = ix.fassung[b.f.path];
+      return x && y && x.alle === y.alle ? x.alle.indexOf(b.f.path) - x.alle.indexOf(a.f.path) : 0;
+    };
+    const aus = (liste, gewaehlt) => {
+      const folien = [], da = {};
+      const dazu = (d) => { if (d && !da[d.f.path]) { da[d.f.path] = true; folien.push(mitFassung(d)); } };
+      for (const d of liste.slice(0, FOLIEN_MAX)) {
+        const g = ix.fassung[d.f.path];
+        if (!g || (d.wahl && g.rolle === "neu")) dazu(d);
+        else { dazu(d.wahl ? d : ix.eintrag[g.eigen]); dazu(ix.eintrag[g.neu]); }
+      }
+      return { folien, gewaehlt,
+        alle: alle.slice().sort((a, b) => nachNummer(a, b) || (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0) || nachFassung(a, b) || nachPfad(a, b)).map(mitFassung) };
+    };
     const wahl = folienWahl(fm, f ? f.path : "", ix);
     if (wahl) return aus([wahl], true);
     const t = s10(fm.datum) || s10(f && f.basename), sem = t && code && alle.length ? semesterVon(t) : null;

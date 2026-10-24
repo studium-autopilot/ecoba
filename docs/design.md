@@ -377,7 +377,8 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
   eigene Seite.
 - Fristen, Termine, Nachzuarbeiten und To-dos stehen auf dem Dashboard auf jedem Gerät als eine Reihe Reiter in einer Karte,
   ein Tipp zeigt eine Liste (`reiter=Name`, architektur/seiten.md „Dashboard“). Am Reiter steht klein die Zahl der Einträge, bei 0
-  nichts.
+  nichts. Jeder Reiter ist ein leicht gefüllter Knopf mit Pfeil nach unten, der offene getönt mit Pfeil nach oben: Ohne das sah
+  die Reihe nicht aufklappbar aus.
 - Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`). Silbentrennung (`hyphens: auto`) nur in Fließtext;
   Skripte setzen dafür `lang="de"` an ihren Container. In Markdown gilt die Sprache der Obsidian-Oberfläche (Obsidian setzt
   `lang` danach): Mit englischer Oberfläche trennt Safari deutsche Wörter nach englischen Regeln („Vorlesung-snotiz“).

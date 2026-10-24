@@ -4,8 +4,9 @@
 //    (an diesem Tag, seit 20.10.2026 mit Änderung oder Verlegung: neuer Wert in Warnfarbe, der übliche durchgestrichen),
 //    Dozent (Feld der Notiz, sonst aus dem Stundenplan-Eintrag), einer Perlenreihe der Vorlesungswochen dieses Moduls (Tipp öffnet
 //    die Notiz der Woche) und Links zu den Folien dieser Sitzung (Begleitnotizen, gewählt von ctx.modell.folien; „⋯“ → „Andere
-//    Folien …“, falls die Wahl danebenliegt) und zum Stundenplan-Eintrag. Daten live aus dem metadataCache, neu gezeichnet auch beim
-//    Tageswechsel; schreibt nur beim Tipp auf den Status oder bei „Andere Folien“.
+//    Folien …“, falls die Wahl danebenliegt; seit 24.10.2026 deine bearbeitete und die neue Fassung nebeneinander, beschriftet) und
+//    zum Stundenplan-Eintrag. Daten live aus dem metadataCache, neu gezeichnet auch beim Tageswechsel; schreibt nur beim Tipp auf
+//    den Status oder bei „Andere Folien“.
 // 2. Abschnitte (## Mitschrift, ## Prüfungsrelevant, ## Offene Fragen, ## Nacharbeit) bekommen Klassen eba-vorl-h-<art> bzw.
 //    eba-vorl-z-<art>: Leseansicht über einen Post-Processor, Bearbeitungsansicht (Live Preview) über eine CodeMirror-
 //    Erweiterung (ViewPlugin, Decoration.line). Der Text bleibt reines Markdown (keine Callout-Präfixe beim Mitschreiben); Stil in eba-core.css.
@@ -213,7 +214,7 @@ module.exports = function (ctx) {
     const st = x.lfm.typ === "lehrveranstaltung" && d && basis.modell && basis.modell.findetStatt ? basis.modell.findetStatt(x.lfm, iso(d)) : null;
     // Nichts neu zeichnen, wenn sich nichts geändert hat (beim Tippen meldet der metadataCache jede Speicherung)
     const sig = JSON.stringify([fm, x.lv?.path, x.lfm.beginn, x.lfm.ende, x.lfm.raum, x.lfm.dozent, wtKurz(x.lfm), st,
-      x.folien.map((d) => d.f.path + (d.fm.titel || "")), x.folienAlle.length, x.mfm.titel,
+      x.folien.map((d) => d.f.path + (d.fm.titel || "") + (d.fassung ? d.fassung.text : "")), x.folienAlle.length, x.mfm.titel,
       (x.perlen || []).map((p) => p.drin.map((n) => n.f.path + n.fertig).join() + p.jetzt + p.nr), x.woche, x.wochenGesamt, basis.date.jetzt().toDateString()]);
     if (el.__ebaSig === sig && el.childElementCount) { if (el.__ebaFragen) el.__ebaFragen(); return; }
     el.__ebaSig = sig;
@@ -334,6 +335,8 @@ module.exports = function (ctx) {
       a.createEl("b", { text: folienArt(d) });
       const t = String(d.fm.titel || "").trim();
       if (t) a.createSpan({ text: t });
+      // Zwei Fassungen derselben Folien: deine bearbeitete und die neue, beschriftet (der Titel kürzt sich, die Beschriftung nie)
+      if (d.fassung) a.createSpan({ cls: "eba-vorl-fassung " + d.fassung.rolle, text: d.fassung.text });
     }
     if (x.lv) {
       const a = link(links, x.lv, "eba-vorl-chip plan", "");
@@ -350,7 +353,7 @@ module.exports = function (ctx) {
   // folgenden Vorlesungen, bis neue Folien kommen; „Automatisch“ leert das Feld wieder.
   const folienWaehlen = async (f, x) => {
     if (typeof basis.formular !== "function") return;
-    const text = (d) => [folienArt(d), String(d.fm.titel || d.f.basename).trim()].join(" · ");
+    const text = (d) => [folienArt(d), String(d.fm.titel || d.f.basename).trim()].concat(d.fassung ? [d.fassung.text] : []).join(" · ");
     const jetzt = x.folienGewaehlt && x.folien[0] ? x.folien[0] : null;
     const liste = jetzt && !x.folienAlle.some((d) => d.f.path === jetzt.f.path) ? [jetzt].concat(x.folienAlle) : x.folienAlle;
     const w = await basis.formular({

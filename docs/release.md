@@ -58,11 +58,12 @@ Update-Liste, `notiz`), siehe Schritt 6.
 
 ```
 python werkzeuge/pruefen.py .
-npm ci && npm test && npm run lint
+npm ci && GITHUB_ACTIONS=true CI=true npm test && npm run lint
 python -m ruff check werkzeuge/ server/
 ```
 
-`tests/update.test.js` prüft dabei auch die Update-Liste im Baum (Klassen, Größen, Prüfsummen, keine Datei vergessen).
+Die Tests laufen mit den Variablen der CI: Dort schreibt `pruefen.py` zu jedem Fund eine Anmerkung für GitHub, und ein Test,
+der die Ausgabe liest, kann nur dort scheitern (so geschehen mit 0.6.9). `tests/update.test.js` prüft dabei auch die Update-Liste im Baum (Klassen, Größen, Prüfsummen, keine Datei vergessen).
 Dazu der Testdurchgang in Obsidian (siehe `docs/tests.md`): den Baum als neuen Tresor mit anderem Namen öffnen, iPhone, iPad,
 Android, Windows, Mac, hell und dunkel.
 

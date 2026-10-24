@@ -63,7 +63,8 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   bis TT.MM.JJJJ)“: Es bleibt stehen, und „Zusammenfassen“ ist für die neue Fassung wieder da (`nachErsetzen`; Zu tun, Offene
   Fragen und dein Text bleiben). Von dir verändert → deine bleibt, die neue kommt daneben als „… neue Fassung JJJJ-MM-TT“; ist
   diese Kopie bei der nächsten Fassung noch unverändert, wird sie ersetzt statt einer weiteren. Seit 0.6.9 bekommt die Notiz der
-  Kopie die Zusammenfassung deiner Notiz als frühere Fassung, deine Notiz den Kasten „Neuere Fassung“ (siehe „Neue Fassung einer
+  Kopie die Zusammenfassung deiner Notiz als frühere Fassung; seit 24.10.2026 sagt sie im Kasten „Neue Fassung aus ILIAS“, dass sie
+  die neue ist, und verlinkt deine, deine Notiz im Kasten „Deine bearbeitete Fassung“ die neue (siehe „Neue Fassung einer
   Unterlage“). Gelöscht bleibt gelöscht, auch
   wenn ILIAS dieselbe Datei unter neuer Kennung wieder hochlädt (gleiche Prüfsumme wie ein gelöschter Eintrag). Umbenennen und
   Verschieben im Tresor folgt der Index; in ILIAS umbenannt oder verschoben (gleiche Kennung) → Index (`original`,
@@ -281,11 +282,27 @@ API-Schlüssel. Die Regeln und Helfer dafür stehen an einer Stelle, `fassung.js
   neu oder geändert, 1 Seite entfallen.“, „…, der Text ist gleich geblieben.“, „…, durchgehend neu oder geändert.“; ohne
   passende eigene Textfassung nur „Neue Fassung vom 24.10.2026.“.
 - **Daneben** (deine Datei war verändert, z. B. mit Anmerkungen in der PDF): Die Notiz der neuen Fassung bekommt die Zusammenfassung
-  deiner Notiz als frühere Fassung vor der Datei (`fruehereUebernehmen`), damit sie dort nachgeführt wird. Deine Notiz und ältere
-  Kopien bekommen unter dem Titel den Kasten „Neuere Fassung“ mit Link auf die neueste (`neuereKasten`, ersetzt sich selbst); sonst
-  bleiben sie, wie sie sind. Die Kopie bleibt (Entscheidung 24.10.2026): Ersetzen würde deine Anmerkungen verlieren. Der Lernplan
-  nimmt je Kapitel die neueste Kopie (`folienVon`, Name „… neue Fassung JJJJ-MM-TT“), die Vorlesungsnotiz wie bisher die neueste
-  Fassung je Nummer (`modell.js`, `jeNummer`).
+  deiner Notiz als frühere Fassung vor der Datei (`fruehereUebernehmen`), damit sie dort nachgeführt wird. Es bleiben genau zwei
+  (Entscheidung 24.10.2026): deine bearbeitete Datei und die neueste aus ILIAS. Ersetzen würde deine Anmerkungen verlieren; sie auf
+  die neue PDF zu übertragen ginge schief, weil Folien sich verschieben und ändern. Eine Kopie, die du nicht verändert hast, ersetzt
+  die nächste Fassung (`ilias.js`, letzter Eintrag in `fassungen`); hast du auch sie bearbeitet, bleibt sie, die nächste kommt daneben.
+- **Beide beschriftet** (seit 24.10.2026): Beide Notizen sagen unter dem Titel, welche welche ist, und verlinken die andere. Die Kopie
+  hat den Kasten „Neue Fassung aus ILIAS“ („Das ist die neue Fassung vom …. Deine bearbeitete Fassung bleibt daneben, wie sie ist:
+  [[…]]“, Link auf die Notiz deiner zuletzt bearbeiteten Fassung, das Datum folgt `nachErsetzen`). Deine Notiz und ältere Kopien
+  haben „Deine bearbeitete Fassung“ mit Link auf die neueste (`neuereKasten`; ersetzt sich selbst, den Kasten „Neuere Fassung“ aus
+  0.6.9 und den einer Kopie, die du inzwischen bearbeitet hast); sonst bleiben sie, wie sie sind. Was zusammengehört, steht im
+  Namen (`familien`: gleicher Ordner, gleicher Name ohne „ neue Fassung JJJJ-MM-TT“ bzw. „… (2)“; Folge `fassungFolge`, „(10)“ nach
+  „(9)“): die letzte ist `neu`, die davor `eigen`, ältere `alt`. Beschriftung `fassungText`: „Deine bearbeitete Fassung“, „Deine
+  ältere Fassung“, „Neue Fassung vom …“ (Tag aus `aktualisiert`, sonst aus dem Namen). Alles kommt beim Zeichnen aus den
+  Dateinamen, darum zeigen es bestehende Tresore ohne Zutun; Kästen aus 0.6.9 bleiben, bis die nächste Fassung kommt.
+  - **Vorlesungsnotiz** (`modell.js` `folien`, `vorlesung.js`): je Nummer beide, deine zuerst, jeder Chip mit Beschriftung
+    (`eba-vorl-fassung eigen|neu`, kürzt sich nie, die neue im Akzent); „Andere Folien …“ nennt die Fassung. Die neue gehört zur
+    Sitzung der ersten Fassung, nicht zu der, in der sie ankam. Deine Wahl im Feld `folien` gilt: die neueste allein, eine ältere
+    zusammen mit der neuesten. `FOLIEN_MAX` zählt Nummern, nicht Dateien.
+  - **Modulseite** (`unterlagenliste.js`): beide Zeilen untereinander, deine zuerst, Titel ohne „neue Fassung …“, darunter die
+    Beschriftung (`eba-ul-fassung`).
+  - **Lernplan** (`lernplan.js`, `folienVon`): je Kapitel die neueste mit ihren Seiten; ihre Notiz verlinkt deine. Das Dashboard
+    zeigt keine Folien; zum Kopf unter Übung und Tutorium siehe „Grenzen“.
 - **Eigener Server:** Bei `server_unterlagen: knopf` zählt eine Notiz mit früherer Fassung ab dem Tag der neuen als gewünscht
   (`wunschOderVeraltet`), bei `alle` ohnehin. Sie geht erst, wenn die Textfassung zur PDF passt (`textAktuell`: gleiche `groesse`;
   gleich nach dem Ersetzen ist sie noch die alte), mit dem Feld `fassung` (`kontext`: `frueher` mit den Punkten der früheren
@@ -316,4 +333,4 @@ API-Schlüssel. Die Regeln und Helfer dafür stehen an einer Stelle, `fassung.js
   zusammen (die zweite Lieferung ergänzt nur, was fehlt). Unter Übung und Tutorium steht ein Blatt mit Kopie daneben zweimal im
   Kopf (`kopf.js`, `blaetterFuer`; im Lab einmal je Nummer).
 - **Tests:** `tests/fassung.test.js`, dazu in `volltext.test.js`, `ilias.test.js`, `server-plugin.test.js`, `server.test.js`,
-  `claude.test.js` und `lernplan.test.js`.
+  `claude.test.js`, `lernplan.test.js`, `vorlesungen.test.js` und `unterlagenliste.test.js`.

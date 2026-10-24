@@ -3,7 +3,8 @@
 // Reiter in einer Karte an der Stelle des Blocks (Dashboard: Fristen, Termine, Nacharbeiten, To-dos; auf jedem Gerät, zuerst nur
 // am iPhone). Ein Tipp zeigt die Karte des Reiters darunter, ein Tipp auf einen anderen wechselt, ein Tipp auf den offenen
 // schließt ihn. Welcher offen ist, gilt je Seite, bis Obsidian neu startet; beim ersten Öffnen ist keiner offen. Am Knopf steht,
-// wie viele Einträge die Listen des Reiters gerade zeigen (anzahl), ohne Einträge nichts.
+// wie viele Einträge die Listen des Reiters gerade zeigen (anzahl), ohne Einträge nichts, dahinter ein Pfeil: nach unten, wenn
+// der Reiter zu ist, nach oben, wenn er offen ist (seit 24.10.2026; ohne ihn sah die Reihe nicht aufklappbar aus).
 // Den Inhalt liest der Block aus der Notiz selbst (reiterAus): dieselbe Karte, ohne Klappen (handy-zu, „+“) und ohne „reiter=“,
 // gezeichnet mit Obsidians MarkdownRenderer. Die Listen darin (eba-liste, eba-todos) zeichnen sich also selbst neu. Mehrere
 // Karten mit demselben Namen bilden einen Reiter; ein Raster mit „reiter=“ kommt als Ganzes (Offene Fragen | To-dos, dort
@@ -115,6 +116,33 @@ module.exports = function (ctx) {
     return summe;
   };
 
+  // ---------- Höhe in der Leseansicht ----------
+  // Obsidian rechnet die Länge der Seite aus den Höhen ihrer Abschnitte, gemessen beim Zeichnen und Scrollen (min-height des
+  // Sizers). Ändert sich die Reiterkarte danach (anderer Reiter, Liste darin neu gezeichnet), hielte es unter einem kurzen
+  // Reiter den Platz des längeren frei, bis es wieder misst (gesehen 24.10.2026: 320 px leer unter „Termine“ nach „Fristen“).
+  // Darum misst ein ResizeObserver am Block den Abschnitt nach. Interne Funktionen des Renderers wie start.js Punkt 5
+  // (getSectionForElement, measureSection, updateVirtualDisplay); fehlen sie nach einem Obsidian-Update, bleibt es beim alten.
+  // r = Renderer der Leseansicht, el = Block. true, wenn die Höhe neu war.
+  const abschnittNachmessen = (r, el) => {
+    // weggescrollt (Abschnitt ausgehängt): nicht messen, sonst hielte Obsidian ihn für 0 px hoch; es misst selbst, wenn er kommt
+    if (!el || !el.isConnected || !el.offsetParent) return false;
+    if (!r || typeof r.getSectionForElement !== "function" || typeof r.measureSection !== "function" ||
+      typeof r.updateVirtualDisplay !== "function") return false;
+    const s = r.getSectionForElement(el);
+    if (!s) return false;
+    const vorher = s.height;
+    r.measureSection(s);
+    if (!(Math.abs(s.height - vorher) > 2)) return false;
+    r.updateVirtualDisplay();
+    return true;
+  };
+  const nachmessen = (el) => {
+    for (const l of app.workspace.getLeavesOfType("markdown")) {
+      const r = l.view && l.view.previewMode && l.view.previewMode.renderer;
+      if (r && r.previewEl && r.previewEl.contains(el)) { abschnittNachmessen(r, el); return; }
+    }
+  };
+
   // ---------- Zeichnen ----------
   const offen = ctx.bleibend("offen", () => ({})); // Pfad der Seite → Name des offenen Reiters
 
@@ -133,6 +161,13 @@ module.exports = function (ctx) {
     const reiter = inst.reiter;
     const gewaehlt = reiter.filter((r) => r.name === offen[pfad])[0] || null;
     if (!inst.comp && obs.MarkdownRenderChild) { inst.comp = new obs.MarkdownRenderChild(el); if (inst.ctx && inst.ctx.addChild) inst.ctx.addChild(inst.comp); }
+    const RO = el.ownerDocument.defaultView && el.ownerDocument.defaultView.ResizeObserver; // Popout: dessen Fenster
+    if (!inst.ro && RO) {
+      inst.ro = new RO(() => nachmessen(el));
+      inst.ro.observe(el);
+      const ro = inst.ro;
+      if (inst.comp) inst.comp.register(() => ro.disconnect());
+    }
     // je Zeichnung ein Kind-Component (Codeblöcke und Bases im Reiter), beim nächsten Zeichnen entladen
     const comp = obs.Component ? new obs.Component() : null;
     if (comp) { if (inst.comp) inst.comp.addChild(comp); else comp.load(); }
@@ -145,6 +180,8 @@ module.exports = function (ctx) {
       const an = r === gewaehlt;
       const k = leiste.createDiv({ cls: "eba-rt-reiter" + (an ? " gewaehlt" : ""), text: r.name,
         attr: { role: "button", tabindex: "0", "aria-expanded": String(an), "data-name": r.name } });
+      const pfeil = k.createSpan({ cls: "eba-rt-pfeil", attr: { "aria-hidden": "true" } });
+      if (obs.setIcon) obs.setIcon(pfeil, "chevron-down");
       const los = (e) => {
         e.preventDefault(); e.stopPropagation();
         if (an) delete offen[pfad]; else offen[pfad] = r.name;
@@ -187,7 +224,10 @@ module.exports = function (ctx) {
       const name = k.getAttribute("data-name");
       const n = (inst.zahlen || {})[name];
       let z = k.querySelector(".eba-rt-zahl");
-      if (n) { if (!z) z = k.createSpan({ cls: "eba-rt-zahl" }); z.setText(String(n)); } else if (z) z.remove();
+      if (n) {
+        if (!z) { z = k.createSpan({ cls: "eba-rt-zahl" }); k.insertBefore(z, k.querySelector(".eba-rt-pfeil")); } // vor den Pfeil
+        z.setText(String(n));
+      } else if (z) z.remove();
       k.setAttribute("aria-label", n ? name + ", " + n : name);
     }
   };
@@ -226,5 +266,5 @@ module.exports = function (ctx) {
     ctx.intervall(zaehlenBald, 10 * 60 * 1000);
   };
 
-  return { registrieren, reiterAus, nameAus, bloeckeAus, anzahl };
+  return { registrieren, reiterAus, nameAus, bloeckeAus, anzahl, abschnittNachmessen };
 };

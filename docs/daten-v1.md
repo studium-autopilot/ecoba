@@ -484,7 +484,7 @@ Erzeugt vom Uni-Abgleich (Kurse, in denen der Autor ist), veröffentlicht erst m
 | `abschnitt` | optional, `haupt` (Standard, steht unter „Das Wichtigste“) oder `weitere` („Weitere Literatur“) |
 | `spalte` | optional, reiner Text ≤ 20 Zeichen: Kurzname als Spalte der Lese-Tabelle; nur Werke mit `spalte` bekommen eine Spalte |
 | `hinweis` (Werk) | optional, reiner Text ≤ 200 Zeichen (welche Teile die Vorlesung nutzt) |
-| `katalog` | optional, Nummer des Eintrags im UB-Katalog (PPN, 7–13 Ziffern, am Ende auch `X`) |
+| `katalog` | optional, Nummer des Eintrags im UB-Katalog (PPN, 7–13 Ziffern, am Ende auch `X`); nur gesetzt, wenn genau eine Ausgabe passt, die die UB Tübingen besitzt, und jeden Tag neu geprüft (Export-Regel 9) |
 | `suche` | optional, reiner Text ≤ 120 Zeichen: Suchwörter für den UB-Katalog, wenn es keine Nummer gibt |
 | `links` | optional, höchstens 4 je Werk: `{ text, url }` (Online-Fassung beim Verlag) oder `{ text, unterlage }` (Unterlage des Moduls); `text` reiner Text ≤ 40 Zeichen |
 | `lesen` | optional, höchstens 40 Zeilen `{ zu, beleg, stellen }` |
@@ -676,8 +676,11 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
 9. `literatur.json` (Vertrag seit 24.10.2026): aus den Literaturlisten des Abgleichs (Kurse, in denen der Autor ist); nur die
    Felder oben, nie Text aus Folien oder Mails (ein Hinweis mit Wortlaut aus einer Quelle fällt weg, das Modul bleibt). Dieselben
    Prüfungen wie das Plugin und der Scan auf persönliche Angaben in jedem Feld; ein Treffer hält nur dieses Modul zurück. Vom
-   UB-Katalog nur Katalognummern und Suchwörter. Veröffentlicht erst mit dem Schalter `literatur.veroeffentlichen`, bis dahin
-   private Vorschau. Ein Fehler hält nur `literatur.json` an.
+   UB-Katalog nur Katalognummern und Suchwörter. Die Nummern sucht und prüft ein Skript ohne KI über die SRU-Schnittstelle des
+   K10plus: eingetragen nur bei einem eindeutigen Treffer mit Bestand der UB Tübingen (ISIL `DE-21`, auch `DE-21-…`), geprüft
+   etwa einmal am Tag; passt eine Nummer zweimal hintereinander nicht mehr, fällt sie weg, und das Werk führt wieder zur Suche.
+   Veröffentlicht erst mit dem Schalter `literatur.veroeffentlichen`, bis dahin private Vorschau. Ein Fehler hält nur
+   `literatur.json` an.
 10. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 

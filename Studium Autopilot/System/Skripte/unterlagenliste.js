@@ -11,6 +11,9 @@
 //     wenn sie erledigt ist: abgegeben bzw. ohne Abgabe bearbeitet, ctx.modell.uebung, seit 24.10.2026), Lösung,
 //     Seiten, ↗ öffnet die Datei außerhalb von Obsidian (Aktion oeffnen); ohne Datei führt ↗ zur Online-Fassung im Feld link
 //     (nur https, z. B. das E-Book in der Literaturliste, seit 20.10.2026).
+//  5. Zwei Fassungen derselben Unterlage (seit 24.10.2026, fassung.js familien): Hast du eine Datei bearbeitet und kam eine neue
+//     Fassung daneben, stehen beide untereinander, deine zuerst, unter dem Titel beschriftet („Deine bearbeitete Fassung“, „Neue
+//     Fassung vom …“). Vorher standen zwei Zeilen mit derselben Nummer und demselben Titel da.
 // Reine Logik (artVon, woerter, semesterRang, gliedern) für tests/unterlagenliste.test.js.
 // Stil: eba-core.css Abschnitt 58.8 (eba-ul-*). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast.
 module.exports = function (ctx) {
@@ -59,21 +62,27 @@ module.exports = function (ctx) {
   };
 
   // eintraege: [{ f, fm }], erledigt (Übung → erledigt?; ohne: status bearbeitet) →
-  // [{ art, name, mitNr, mitLoesung, zeilen: [{ f, titel, nr, seiten, gelesen, datei, link, loesungen: [{ f, name, gelesen }] }] }]
+  // [{ art, name, mitNr, mitLoesung, zeilen: [{ f, titel, nr, seiten, gelesen, datei, link, fassung, loesungen: [{ f, name, gelesen }] }] }]
+  // fassung: { rolle, text, i (Platz in der Reihenfolge der Fassungen) } bei zwei Fassungen derselben Datei, sonst null
   const gliedern = (eintraege, code, erledigt) => {
-    const alle = (eintraege || []).filter((x) => x && x.fm).map((x) => {
+    const Fa = ctx.user && ctx.user.fassung;
+    const liste = (eintraege || []).filter((x) => x && x.fm);
+    const fam = Fa ? Fa.familien(liste.filter((x) => x.f && x.f.path).map((x) => x.f.path)) : {};
+    const alle = liste.map((x) => {
       const art = artVon(x.fm.art), nr = nummer(x.fm.nummer);
+      const g = (x.f && fam[x.f.path]) || null;
       let titel = text(x.fm.titel);
       if (!titel) {
-        // aus dem Dateinamen „S100 Übung 01 Blatt“ → „Blatt“; ohne Rest die Art („Übung“)
-        const b = text(x.f && x.f.basename);
+        // aus dem Dateinamen „S100 Übung 01 Blatt“ → „Blatt“; ohne Rest die Art („Übung“); ohne „neue Fassung …“
+        const b = text(x.f && x.f.basename && (Fa ? Fa.fassungVon(x.f.basename).stamm : x.f.basename));
         const rest = b.split(" ").filter((w, i) => !(i === 0 && w === code)).join(" ");
         titel = text(rest.indexOf(art + " ") === 0 ? rest.slice(art.length + 1) : rest === art ? "" : rest).replace(/^\d{1,3}(\s+|$)/, "") || art;
       }
       const gelesen = art !== "Übung" ? !!GELESEN[text(x.fm.status).toLowerCase()]
         : erledigt ? !!erledigt(x) : text(x.fm.status).toLowerCase() === "bearbeitet";
       return { f: x.f, art, titel, nr, seiten: nummer(x.fm.seiten), gelesen,
-        datei: !!text(x.fm.datei), link: webLink(x.fm.link), loesungen: [] };
+        datei: !!text(x.fm.datei), link: webLink(x.fm.link), loesungen: [],
+        fassung: g ? { rolle: g.rolle, text: Fa.fassungText(g, x.fm.aktualisiert), i: g.alle.indexOf(x.f.path) } : null };
     });
     // Lösungen zu ihrer Aufgabe: gleiche Nummer (Übung), sonst Titelwörter als Teilmenge mit eindeutig wenigsten Zusatzwörtern
     const ziele = alle.filter((z) => ZIEL[z.art]);
@@ -111,7 +120,8 @@ module.exports = function (ctx) {
       .map((art) => {
         const zeilen = gruppen[art];
         if (art === "Altklausur") zeilen.sort((a, b) => semesterRang(b.titel) - semesterRang(a.titel) || vergleich(a.titel, b.titel));
-        else zeilen.sort((a, b) => (a.nr == null ? 1 : 0) - (b.nr == null ? 1 : 0) || (a.nr || 0) - (b.nr || 0) || vergleich(a.titel, b.titel));
+        else zeilen.sort((a, b) => (a.nr == null ? 1 : 0) - (b.nr == null ? 1 : 0) || (a.nr || 0) - (b.nr || 0) || vergleich(a.titel, b.titel)
+          || (a.fassung && b.fassung ? a.fassung.i - b.fassung.i : 0));
         for (const z of zeilen) {
           z.loesungen.sort((a, b) => (a.art === "Lösung" ? 0 : 1) - (b.art === "Lösung" ? 0 : 1) || vergleich(a.titel, b.titel));
           const zahl = {};
@@ -157,6 +167,7 @@ module.exports = function (ctx) {
         if (g.mitNr) r.createSpan({ cls: "eba-ul-nr", text: z.nr == null ? "" : pad(z.nr) });
         const t = r.createSpan({ cls: "eba-ul-titel", text: z.titel });
         if (z.gelesen) t.createSpan({ cls: "eba-ul-ok", text: "✓", attr: { "aria-label": g.art === "Übung" ? "erledigt" : "gelesen" } });
+        if (z.fassung) t.createSpan({ cls: "eba-ul-fassung " + z.fassung.rolle, text: z.fassung.text });
         if (g.mitLoesung) {
           const lo = r.createSpan({ cls: "eba-ul-loesung" });
           for (const l of z.loesungen) {

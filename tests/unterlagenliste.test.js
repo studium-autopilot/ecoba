@@ -113,6 +113,17 @@ test("Zeile: Titel ersatzweise aus dem Dateinamen, gelesen/bearbeitet markiert, 
   assert.equal(skr.zeilen[0].datei, true);
 });
 
+test("Zwei Fassungen derselben Unterlage: beide untereinander, deine zuerst, beschriftet; der Titel ohne „neue Fassung …“", () => {
+  const G = U.gliedern([
+    u("Folien 01 Einführung neue Fassung 2026-10-27", { art: "Folien", nummer: 1, titel: "" }),
+    u("Folien 01 Einführung", { art: "Folien", nummer: 1, titel: "", status: "gelesen" }),
+    u("Folien 02 Märkte", { art: "Folien", nummer: 2, titel: "Märkte" }),
+  ], "X100");
+  assert.deepEqual(G[0].zeilen.map((z) => [z.titel, z.nr, z.fassung && z.fassung.text]),
+    [["Einführung", 1, "Deine bearbeitete Fassung"], ["Einführung", 1, "Neue Fassung vom 27.10.2026"], ["Märkte", 2, null]]);
+  assert.deepEqual(G[0].zeilen.slice(0, 2).map((z) => z.fassung.rolle), ["eigen", "neu"]);
+});
+
 test("Übung: ✓ heißt erledigt (Haken der Abgabe aus dem Fachmodell, ohne Abgabe „bearbeitet“), nicht gelesen", () => {
   const blaetter = [
     u("Übung 01 Ableitungen", { art: "Übung", nummer: 1, titel: "Ableitungen", status: "gelesen" }),

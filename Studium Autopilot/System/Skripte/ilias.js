@@ -39,9 +39,9 @@
 //   passende PDF-Ansicht, keine alte Seitenzahl, und ein ausgefülltes „Das Wichtigste“ heißt „… (frühere Fassung, bis …)“
 //   (nachErsetzen; „Zusammenfassen“ ist wieder da). Von dir verändert (Anmerkungen!) → deine bleibt, die neue kommt daneben als
 //   „<Name> neue Fassung JJJJ-MM-TT.<endung>“ mit eigener Notiz; ist diese Kopie beim nächsten Mal noch unverändert, wird sie
-//   ersetzt statt einer weiteren. Die Notiz der Kopie bekommt die Zusammenfassung der Fassung davor als frühere Fassung, die
-//   Notizen der älteren Fassungen den Kasten „Neuere Fassung“ mit Link (fassung.js; docs/architektur/unterlagen.md, „Neue Fassung einer
-//   Unterlage“).
+//   ersetzt statt einer weiteren. Die Notiz der Kopie sagt im Kasten „Neue Fassung aus ILIAS“, dass sie die neue ist, verlinkt
+//   deine bearbeitete und bekommt deren Zusammenfassung als frühere Fassung; die Notizen der älteren Fassungen bekommen den Kasten
+//   „Deine bearbeitete Fassung“ mit Link auf die neue (fassung.js; docs/architektur/unterlagen.md, „Neue Fassung einer Unterlage“).
 // In ILIAS umbenannt oder verschoben (gleiche Kennung): Index und Notiz (original, quelle) ziehen mit, wo noch der alte Wert
 //   steht. Nicht mehr in ILIAS (Kurs ganz durchsucht, Datei nirgends, lag nicht in einem
 //   übersprungenen Behälter wie einer späteren Sitzung; Schutz je Kurs): „entfernt“ im Index, Kasten in der Notiz, die Datei bleibt (entfernteMerken).
@@ -451,7 +451,7 @@ module.exports = function (ctx) {
         .replace(/^\*\*PDF öffnen:\*\* \[\[([^\]\n|]+)\]\] \([^)\n]*, zu groß zum Einbetten\)(.*)$/m,
           (a, name, rest) => (gross ? verlinkt(name, rest) : `> [!eba-pdf]- PDF\n> ![[${name}#height=560]]`));
     }
-    t = t.replace(/(Dies ist die neue Fassung aus ILIAS vom )\d{2}\.\d{2}\.\d{4}\./, (a, vorn) => vorn + datumDe(x.datum) + ".");
+    t = t.replace(/((?:Das ist die neue Fassung|Dies ist die neue Fassung aus ILIAS) vom )\d{2}\.\d{2}\.\d{4}\./, (a, vorn) => vorn + datumDe(x.datum) + ".");
     const z = t.split("\n"), i = z.findIndex((s) => s.trim() === "## Das Wichtigste");
     if (i < 0) return t;
     let e = i + 1;
@@ -1325,7 +1325,10 @@ module.exports = function (ctx) {
       const neuPfad = `${vorne}${name}.${endung}`;
       const plan = await benennen(c, bytes, E, false);
       schreibtSetzen({ id: c.id, pfad: neuPfad, art: "neu" });
-      const hinweis = `Deine veränderte Datei [[${nameVon(pfad)}]] bleibt, wie sie ist. Dies ist die neue Fassung aus ILIAS vom ${datumDe(datum)}.`;
+      // Der Kasten nennt deine zuletzt bearbeitete Fassung (die letzte Kopie, die es noch gibt, sonst deine Datei), als Notiz verlinkt
+      const eigen = [pfad].concat(fassungen).filter((p) => io.existiert(p)).pop() || pfad;
+      const eigenLink = io.existiert(notizPfad(eigen)) ? ohneEndung(nameVon(notizPfad(eigen))) : nameVon(eigen);
+      const hinweis = `Das ist die neue Fassung vom ${datumDe(datum)}. Deine bearbeitete Fassung bleibt daneben, wie sie ist: [[${eigenLink}]].`;
       // Die Zusammenfassung der Fassung davor (letzte Kopie, sonst deine Datei) kommt als frühere Fassung mit (fassung.js); so
       // fasst der eigene Server bzw. der API-Schlüssel auch die Kopie von selbst zusammen
       const Fa = ctx.user && ctx.user.fassung;
@@ -2058,7 +2061,7 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
+    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, nachErsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
     K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, MAX_MB, NEU_MOBIL, NEU_PC, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;

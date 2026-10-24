@@ -119,6 +119,13 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   (darunter bliebe sonst nur die Überschrift) falten, aber nur, solange das Plugin läuft (`body.eba-plugin-an`); ohne Plugin
   bleiben die Karten (eba-core.css Abschnitt 69). Eine `reiter=`-Karte steht darum oben in der Notiz oder in einem Raster nur
   aus `reiter=`-Karten, und die Seite braucht den Block; ohne `reiter=`-Karten blendet er sich aus (`.eba-rt-aus`).
+  Jeder Knopf ist leicht gefüllt und trägt hinten einen Pfeil (`chevron-down`), der beim offenen Reiter nach oben zeigt (seit
+  24.10.2026: ohne beides las sich die Reihe wie eine Legende, nicht wie etwas zum Aufklappen). Zwischen 330 und 365 px Breite
+  der Karte (iPhone mit 375 bis 393 px) rückt alles enger zusammen, damit vier Zahlen und Pfeile in die Reihe passen.
+  Die Leseansicht rechnet die Länge der Seite aus den Höhen ihrer Abschnitte, gemessen beim Zeichnen und Scrollen; nach einem
+  Wechsel hielt sie unter einem kurzen Reiter den Platz des längeren frei (bis 320 px). Ein `ResizeObserver` am Block misst den
+  Abschnitt darum nach (`abschnittNachmessen`: `getSectionForElement`, `measureSection`, `updateVirtualDisplay`, interne
+  Funktionen wie die Messkorrektur in `start.js`); ausgehängte Abschnitte misst er nie, sonst zählten sie als 0 px.
   Am Knopf steht, wie viele Einträge die Listen des Reiters gerade zeigen, bei 0 nichts. `bloeckeAus` findet die Codeblöcke im
   Markdown des Reiters (Sprache, Argument, Ersatztext), `anzahl` zählt sie zusammen. Zählen kann eine Erweiterung, die
   `zaehler: { "<sprache>": (arg, quelle) => Zahl | null }` zurückgibt, gelesen über `plugin.erweiterungen`: `dashboard.js` für

@@ -88,12 +88,6 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
   Begleitnotiz, ein Haken für beides; Agenda, Fristen und Modulseite folgen. Neu gezeichnet bei Änderungen an einer Unterlage
   oder einem Termin und am neuen Tag (Restzeit). Bis 0.6.7 legte „Neues Übungsblatt“ dafür eine zweite Notiz mit eigenem Status
   und eigener Abgabe an, die die Begleitnotiz desselben Blatts von Hand doppelte; solche Notizen behalten ihre Karte.
-- **Vorlesung liest live** (seit 24.10.2026, `vorlesung.js`): Der Dozent kommt aus der Stundenplan-Notiz (`dozent`
-  der Notiz geht vor), der Wochentag der Chips aus `wochentag`. Beides gehört zur Signatur, eine Änderung im Stundenplan zeichnet
-  neu. Alle 5 Minuten prüft der Kopf den Tag und zeichnet bei einem neuen den Block neu („heute“, „gestern“, Perle dieser
-  Woche). Bis dahin schrieb das Anlegen den Dozenten fest in die Notiz. Die Folien wählt `folien(f)` (oben).
-- Tests: `tests/kopf.test.js` (Stufen je Typ, Farbe aus `statusArt`, „Besuche ich nicht“ je Quelle, Unterlagen unter Übung, Tutorium und Lab, Kopf der Termine), `tests/uebungen.test.js` (Übungen). Stil: `eba-core.css` Abschnitt 64.2.
-- **„⋯“ mit Eigenschaften** (seit 19.10.2026): Rechts im Kopf, auch bei der Vorlesung (`ctx.kopf.mehr`; ein drittes
 - **Termine** (seit 24.10.2026): Das Label nennt nur Art · Modul, darunter zeichnet `terminZeichnen` den Tag groß, daneben
   „heute“, „morgen“ oder „läuft“ bzw. die Restzeit, dann Uhrzeit · Ort (`wannVon`, reine Logik: Uhrzeit aus `uhrzeit`, sonst
   aus einem Teil des Orts, der nur eine Uhrzeit ist, damit sie nie doppelt steht). Die Zeile, die `zentral.js` und der
@@ -104,6 +98,12 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
   darin steht). „Quelle: …“ wird eine leise Fußzeile (`eba-termin-quelle`), `##` ein Label wie in der Vorlesungsnotiz
   (`eba-vorl-h`, „Meine Notizen“ mit Stift). Vorher stand der Tag nur im Label, und unter dem Titel stand alles in derselben
   Schrift; die iPhone-Regeln für die Datumszeile griffen in der Bearbeitungsansicht nie, weil die Karte zwischen Titel und Zeile steht.
+- **Vorlesung liest live** (seit 24.10.2026, `vorlesung.js`): Der Dozent kommt aus der Stundenplan-Notiz (`dozent`
+  der Notiz geht vor), der Wochentag der Chips aus `wochentag`. Beides gehört zur Signatur, eine Änderung im Stundenplan zeichnet
+  neu. Alle 5 Minuten prüft der Kopf den Tag und zeichnet bei einem neuen den Block neu („heute“, „gestern“, Perle dieser
+  Woche). Bis dahin schrieb das Anlegen den Dozenten fest in die Notiz. Die Folien wählt `folien(f)` (oben).
+- Tests: `tests/kopf.test.js` (Stufen je Typ, Farbe aus `statusArt`, „Besuche ich nicht“ je Quelle, Unterlagen unter Übung, Tutorium und Lab, Kopf der Termine), `tests/uebungen.test.js` (Übungen). Stil: `eba-core.css` Abschnitt 64.2.
+- **„⋯“ mit Eigenschaften** (seit 19.10.2026): Rechts im Kopf, auch bei der Vorlesung (`ctx.kopf.mehr`; ein drittes
   Argument `[{ titel, aktion }]` hängt weitere Punkte an, bei der Vorlesungsnotiz **Andere Folien …**, siehe `folien(f)`). Die Eigenschaften
   der Notizen des Plugins stehen in keiner Ansicht mehr (Klasse `eba-notiz` aus `start.js` an Termin, Begleitnotiz, Lehrveranstaltung,
   Vorlesung, Übungsblatt, SQ-Kurs, Volltext; `eba-core.css` 25b); vorher stand in der Bearbeitungsansicht ein einsames

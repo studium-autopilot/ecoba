@@ -208,9 +208,10 @@ module.exports = function (ctx) {
       if (fm.typ !== "unterlage" || String(fm.code || "").trim() !== code || fm.art !== "Folien") continue;
       const n = parseInt(fm.nummer, 10);
       if (!isFinite(n) || /anmerkung|video|unbeschrieben/i.test(f.basename)) continue;
-      // Neue Fassung daneben (ilias.js, „<Name> neue Fassung JJJJ-MM-TT“, deine Datei hatte Anmerkungen): die neueste zählt
-      const fassung = (/ neue Fassung (\d{4}-\d{2}-\d{2}(?: \(\d+\))?)$/.exec(f.basename) || [])[1] || "";
-      if (!aus[n] || fassung > aus[n].fassung) aus[n] = { f, seiten: parseInt(fm.seiten, 10) || null, fassung };
+      // Neue Fassung daneben (ilias.js, „<Name> neue Fassung JJJJ-MM-TT“, deine Datei hatte Anmerkungen): Der Plan rechnet mit der
+      // neuesten und verlinkt sie; ihre Notiz zeigt auf deine bearbeitete (fassung.js)
+      const fassung = ctx.user.fassung.fassungVon(f.basename);
+      if (!aus[n] || ctx.user.fassung.fassungFolge(fassung, aus[n].fassung) > 0) aus[n] = { f, seiten: parseInt(fm.seiten, 10) || null, fassung };
     }
     return aus;
   };

@@ -83,6 +83,12 @@ test("Folien je Kapitel: neue Fassung daneben gilt vor deiner älteren, Anmerkun
   assert.deepEqual(Object.keys(f), ["1", "2"]);
   assert.deepEqual([f[1].f.basename, f[1].seiten], ["X100 Folien 01 Grundbegriffe neue Fassung 2026-11-02", 44]);
   assert.equal(f[2].f.basename, "X100 Folien 02 Märkte");
+  // am selben Tag mehrmals: „(10)“ ist neuer als „(9)“
+  const { folienVon: zehn } = laden("lernplan", { notizen: {
+    "Unterlagen/X100/X100 Folien 03 Preise neue Fassung 2026-11-02 (10).md": u("Folien", 3, 12),
+    "Unterlagen/X100/X100 Folien 03 Preise neue Fassung 2026-11-02 (9).md": u("Folien", 3, 11),
+  } }).ergebnis;
+  assert.equal(zehn("X100")[3].seiten, 12);
 });
 
 test("Kapitel lesen: Link im Titel zeigt seinen Text, leere Notiz ergibt nichts", () => {

@@ -154,7 +154,8 @@ test("Geändert in ILIAS, von dir verändert: deine bleibt, neue Fassung daneben
   assert.equal(x.t.text(neu), "%PDF Folien eins, Fassung 2");
   const n = x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.md");
   assert.equal(fm(n, "ilias_id"), '"1001"');
-  assert.match(n, /\[\[B110 Folien 01 Grundlagen\.pdf\]\] bleibt, wie sie ist/);
+  assert.match(n, /^> \[!eba-info\] Neue Fassung aus ILIAS\n> Das ist die neue Fassung vom 16\.10\.2026\. Deine bearbeitete Fassung bleibt daneben, wie sie ist: \[\[B110 Folien 01 Grundlagen\]\]\.$/m,
+    "sagt, welche die neue ist, und verlinkt die Notiz deiner Datei");
   assert.deepEqual(x.t.index().dateien["1001"].fassungen, [neu]);
   assert.equal(x.t.index().dateien["1001"].pfad, p, "Eintrag zeigt weiter auf deine Datei");
   // noch eine Fassung, die Kopie ist unverändert → sie wird ersetzt, keine weitere Kopie
@@ -166,7 +167,7 @@ test("Geändert in ILIAS, von dir verändert: deine bleibt, neue Fassung daneben
   assert.equal(x.t.text(neu), "%PDF Folien eins, Fassung 3");
   assert.equal(x.t.text(p), "%PDF Folien eins MIT MEINEN ANMERKUNGEN");
   const n2 = x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.md");
-  assert.match(n2, /Dies ist die neue Fassung aus ILIAS vom 17\.10\.2026\./);
+  assert.match(n2, /Das ist die neue Fassung vom 17\.10\.2026\./);
   assert.equal(fm(n2, "aktualisiert"), "2026-10-17");
   assert.deepEqual(x.t.index().dateien["1001"].fassungen, [neu]);
   // in der Kopie angemerkt → die nächste Fassung kommt als weitere Kopie, beide bleiben
@@ -179,6 +180,8 @@ test("Geändert in ILIAS, von dir verändert: deine bleibt, neue Fassung daneben
   assert.equal(x.t.text(neu), "%PDF Fassung 3 MIT ANMERKUNGEN");
   assert.equal(x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-17.pdf"), "%PDF Folien eins, Fassung 4");
   assert.equal(x.t.index().dateien["1001"].fassungen.length, 2);
+  assert.match(x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-17.md"), /wie sie ist: \[\[B110 Folien 01 Grundlagen neue Fassung 2026-10-16\]\]\./,
+    "die neue verlinkt deine zuletzt bearbeitete Fassung");
 });
 
 test("Neue Fassung daneben: Zusammenfassung der Fassung davor kommt als frühere Fassung mit, ältere Notizen zeigen auf die neue", async () => {
@@ -200,15 +203,15 @@ test("Neue Fassung daneben: Zusammenfassung der Fassung davor kommt als frühere
   assert.doesNotMatch(k, /Blatt 1|Mein Text/, "nur die Zusammenfassung, keine To-dos, keine eigenen Notizen");
   // deine Notiz: Kasten mit Link auf die neue, sonst wörtlich wie vorher
   const n = x.t.text(np);
-  assert.match(n, /^> \[!eba-info\] Neuere Fassung\n> Am 16\.10\.2026 kam eine neuere Fassung dieser Unterlage: \[\[B110 Folien 01 Grundlagen neue Fassung 2026-10-16\]\]\. Deine Datei hier bleibt, wie sie ist\.$/m);
-  assert.equal(n.replace(/> \[!eba-info\] Neuere Fassung\n[^\n]*\n\n/, ""), mein);
+  assert.match(n, /^> \[!eba-info\] Deine bearbeitete Fassung\n> Am 16\.10\.2026 kam eine neue Fassung aus ILIAS: \[\[B110 Folien 01 Grundlagen neue Fassung 2026-10-16\]\]\. Diese Datei hier bleibt, wie sie ist\.$/m);
+  assert.equal(n.replace(/> \[!eba-info\] Deine bearbeitete Fassung\n[^\n]*\n\n/, ""), mein);
   // noch eine Fassung, die Kopie ist angemerkt: zweite Kopie, beide älteren Notizen zeigen auf sie
   x.t.setzen(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.pdf", "%PDF Fassung 2 MIT ANMERKUNGEN");
   x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 3";
   x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-17T07:00";
   x.u.vor(24 * STUNDE);
   assert.equal((await lauf(x)).fassungen, 1);
-  for (const q of [np, nk]) assert.equal((x.t.text(q).match(/Neuere Fassung/g) || []).length, 1, q);
+  for (const q of [np, nk]) assert.equal((x.t.text(q).match(/\[!eba-info\] Deine bearbeitete Fassung/g) || []).length, 1, q);
   for (const q of [np, nk]) assert.match(x.t.text(q), /\[\[B110 Folien 01 Grundlagen neue Fassung 2026-10-17\]\]/, q);
   assert.match(x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-17.md"), /^## Das Wichtigste \(frühere Fassung, bis 16\.10\.2026\)\n- \*\*Ziel:\*\* Gewinn/m,
     "die Kopie davor hatte nur die frühere Fassung: deren Datum bleibt");
@@ -866,6 +869,16 @@ test("Begleitnotiz: Pflichtfelder auch bei fremdem Notizbauer", () => {
   // seit 19.10.2026: Titel, gleich darunter die Datei; kein Kasten „Eckdaten“, keine leeren Abschnitte, kein Name aus ILIAS im Text
   assert.match(n, /\n# Sonstiges · Info\n\n\*\*PDF öffnen:\*\*/);
   assert.doesNotMatch(n, /Eckdaten|Das Wichtigste|Offene Fragen|^- (\[ \] )?$|aktion=pdf|Info_/m);
+});
+
+test("Nach dem Ersetzen einer Kopie: Datum im Kasten „Neue Fassung aus ILIAS“, auch im Wortlaut bis 0.6.9", () => {
+  const x = { datum: "2026-11-02", groesse: 10, endung: "pdf" };
+  const kopf = "---\ntyp: unterlage\n---\n\n# B110 · Folien 01\n\n> [!eba-info] Neue Fassung aus ILIAS\n> ";
+  const pdf = "\n\n> [!eba-pdf]- PDF\n> ![[a neue Fassung 2026-10-16.pdf#height=560]]\n";
+  assert.match(I.nachErsetzen(kopf + "Das ist die neue Fassung vom 16.10.2026. Deine bearbeitete Fassung bleibt daneben, wie sie ist: [[a]]." + pdf, x),
+    /> Das ist die neue Fassung vom 02\.11\.2026\. Deine bearbeitete/);
+  assert.match(I.nachErsetzen(kopf + "Deine veränderte Datei [[a.pdf]] bleibt, wie sie ist. Dies ist die neue Fassung aus ILIAS vom 16.10.2026." + pdf, x),
+    /Dies ist die neue Fassung aus ILIAS vom 02\.11\.2026\./);
 });
 
 test("Begleitnotiz: „Neue Fassung aus ILIAS“ über der Datei, auch in Notizen eines älteren Notizbauers", () => {

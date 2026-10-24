@@ -422,3 +422,59 @@ test("Kopf einer Vorlesungsnotiz: Links zu den Folien der Sitzung, „⋯“ →
   assert.equal(notizen[VL].folien, "[[Z300 Folien 02 Entscheidungen.pdf]]", "verlinkt wird die PDF");
   assert.deepEqual(chips(), [["Folien 02", "Entscheidungen"]]);
 });
+
+// ---------- Zwei Fassungen derselben Folien (seit 24.10.2026) ----------
+// Neue Fassung neben deinen bearbeiteten Folien, wie ILIAS sie ablegt: „<Name> neue Fassung JJJJ-MM-TT“, datum = Tag der Ablage
+const kopie = (code, nr, titel, tag, fm = {}) => {
+  const name = `${code} Folien ${String(nr).padStart(2, "0")} ${titel} neue Fassung ${tag}`;
+  return { [`Unterlagen/${code}/${name}.md`]: Object.assign({ typ: "unterlage", art: "Folien", code, nummer: nr, titel, datum: tag, datei: `[[${name}.pdf]]` }, fm) };
+};
+
+test("Folien: deine bearbeitete und die neue Fassung nebeneinander, beschriftet; die neue gehört nicht zur Sitzung, in der sie kam", () => {
+  const vls = [notiz("Y200", "2026-10-13", 1), notiz("Y200", "2026-10-20", 2), notiz("Y200", "2026-10-27", 3)];
+  const notizen = Object.assign({}, sitzung("Y200", 2, "10:15"), folie("Y200", 0, "Organisation", "2026-10-13"), folie("Y200", 1, "Märkte", "2026-10-16"),
+    folie("Y200", 2, "Preise", "2026-10-22"), kopie("Y200", 1, "Märkte", "2026-10-27"), ...vls);
+  const { zu, namen } = folienModell(notizen);
+  const paar = ["Y200 Folien 01 Märkte", "Y200 Folien 01 Märkte neue Fassung 2026-10-27"];
+  assert.deepEqual(vls.map((n) => namen(pfad(n))), [["Y200 Folien 00 Organisation"], paar, ["Y200 Folien 02 Preise"]],
+    "die neue Fassung von Kapitel 1 kam zur dritten Sitzung, ist aber nicht deren Kapitel");
+  assert.deepEqual(zu(pfad(vls[1])).folien.map((d) => d.fassung), [{ rolle: "eigen", text: "Deine bearbeitete Fassung" }, { rolle: "neu", text: "Neue Fassung vom 27.10.2026" }]);
+  assert.equal(zu(pfad(vls[0])).folien[0].fassung, null, "eine Fassung: keine Beschriftung");
+  // zur Wahl: je Nummer die neueste zuerst, beide beschriftet
+  assert.deepEqual(zu(pfad(vls[1])).alle.map((d) => [d.f.basename, d.fassung && d.fassung.text]).slice(1, 3),
+    [[paar[1], "Neue Fassung vom 27.10.2026"], [paar[0], "Deine bearbeitete Fassung"]]);
+  // die Kopie wurde später durch eine noch neuere Fassung ersetzt (aktualisiert): ihr Tag
+  Object.assign(notizen[Object.keys(kopie("Y200", 1, "Märkte", "2026-10-27"))[0]], { aktualisiert: "2026-11-03" });
+  assert.equal(zu(pfad(vls[1])).folien[1].fassung.text, "Neue Fassung vom 03.11.2026");
+});
+
+test("Folien mit zwei Fassungen: deine Wahl der neuesten gilt allein, die Wahl deiner bearbeiteten zeigt die neueste mit", () => {
+  const nur = notiz("Y200", "2026-10-20", 2, { folien: "[[Y200 Folien 01 Märkte neue Fassung 2026-10-27]]" });
+  const deine = notiz("Y200", "2026-10-27", 3, { folien: "[[Y200 Folien 01 Märkte.pdf]]" });
+  const notizen = Object.assign({}, sitzung("Y200", 2, "10:15"), folie("Y200", 0, "Organisation", "2026-10-13"), folie("Y200", 1, "Märkte", "2026-10-16"),
+    kopie("Y200", 1, "Märkte", "2026-10-27"), notiz("Y200", "2026-10-13", 1), nur, deine);
+  const { zu, namen } = folienModell(notizen);
+  assert.deepEqual([namen(pfad(nur)), zu(pfad(nur)).gewaehlt], [["Y200 Folien 01 Märkte neue Fassung 2026-10-27"], true]);
+  assert.deepEqual(zu(pfad(nur)).folien[0].fassung.text, "Neue Fassung vom 27.10.2026");
+  assert.deepEqual(namen(pfad(deine)), ["Y200 Folien 01 Märkte", "Y200 Folien 01 Märkte neue Fassung 2026-10-27"], "die neue bleibt nicht hinter deiner Wahl verborgen");
+});
+
+test("Kopf einer Vorlesungsnotiz mit zwei Fassungen: beide Chips beschriftet, deine zuerst; „Andere Folien“ nennt die Fassung", async () => {
+  const vl = notiz("Z300", "2026-10-12", 1), VL = pfad(vl);
+  const notizen = Object.assign({}, folie("Z300", 1, "Grundlagen", "2026-10-12", { quelle: "ILIAS: Z300 / 2026-10-12, 10:15 - 11:45: Vorlesung 1" }),
+    kopie("Z300", 1, "Grundlagen", "2026-10-19", { quelle: "ILIAS: Z300 / 2026-10-12, 10:15 - 11:45: Vorlesung 1" }), vl);
+  const { M } = folienModell(notizen);
+  const menue = [], formulare = [];
+  const L = laden("vorlesung", { heute: "2026-10-19", notizen, kontext: { modell: M, kopf: { mehr: (_el, _f, extra) => menue.push(...extra) },
+    formular: async (o) => { formulare.push(o); return null; } } });
+  verlinken(L.ctx.app, notizen);
+  L.ctx.app.vault.cachedRead = async () => "";
+  const el = knoten("div");
+  L.ergebnis.zeichnen(el, { sourcePath: VL });
+  const chips = el.finde("folien");
+  assert.deepEqual(chips.map((c) => c.texte()), [["Folien 01", "Grundlagen", "Deine bearbeitete Fassung"], ["Folien 01", "Grundlagen", "Neue Fassung vom 19.10.2026"]]);
+  assert.deepEqual(chips.map((c) => c.finde("eba-vorl-fassung")[0].cls), [["eba-vorl-fassung", "eigen"], ["eba-vorl-fassung", "neu"]]);
+  await menue[0].aktion();
+  assert.deepEqual(formulare[0].felder[0].optionen.map((o) => o.text).slice(1),
+    ["Folien 01 · Grundlagen · Neue Fassung vom 19.10.2026", "Folien 01 · Grundlagen · Deine bearbeitete Fassung"]);
+});

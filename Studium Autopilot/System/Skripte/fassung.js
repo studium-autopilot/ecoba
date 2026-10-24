@@ -21,11 +21,18 @@
 // 6. Neue Fassung daneben (deine Datei war verändert, z. B. mit Anmerkungen): fruehereUebernehmen bringt die Zusammenfassung der
 //    alten Notiz als frühere Fassung in die Notiz der neuen (dann gilt 2 auch dort), neuereKasten zeigt in der alten Notiz auf
 //    die neue. Deine Datei und ihre Notiz bleiben sonst, wie sie sind.
+// 7. Beide Fassungen zeigen (seit 24.10.2026): familien erkennt deine bearbeitete und die neueste am Dateinamen („<Name> neue
+//    Fassung JJJJ-MM-TT“), fassungText beschriftet sie. Vorlesungsnotiz, Modulseite und Lernplan nehmen das, auch in älteren
+//    Tresoren und für Dateien eines eigenen Uni-Abgleichs.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const FASSUNG_TAGE = 30;
 const FRUEHER = /^## Das Wichtigste \(frühere Fassung, bis (\d{2}\.\d{2}\.\d{4})\)[ \t]*$/;
 const KASTEN = /^> \[!eba-info\][-+]? Frühere Fassung \(bis \d{2}\.\d{2}\.\d{4}\)/;
-const NEUERE = /^> \[!eba-info\] Neuere Fassung\n(?:>[^\n]*(?:\n|$))*\n?/m;
+const EIGEN = "Deine bearbeitete Fassung";
+// Kasten in der Notiz deiner Datei (bis 24.10.2026 „Neuere Fassung“)
+const NEUERE = /^> \[!eba-info\] (?:Deine bearbeitete Fassung|Neuere Fassung)\n(?:>[^\n]*(?:\n|$))*\n?/m;
+// Kasten in der Notiz einer Kopie daneben (ilias.js)
+const KOPIE = /^> \[!eba-info\] Neue Fassung aus ILIAS\n(?:>[^\n]*(?:\n|$))*\n?/m;
 // leerer Punkt oder Leerzeile (wie PLATZHALTER in server.js)
 const LEER = /^\s*(?:[-*]\s*(?:\[ \]\s*)?)?$/;
 const GRENZE = { punkte: 8, todos: 15, fragen: 10, zeichen: 300 };
@@ -221,21 +228,64 @@ const fruehereUebernehmen = (altText, neuText, datum) => {
   N.zeilen.splice(pos, 0, ...block);
   return N.zeilen.join("\n");
 };
-// Kasten „Neuere Fassung“ in der alten Notiz setzen oder auf die neueste ändern. name: Name der neuen Notiz (ohne .md),
-// datum (JJJJ-MM-TT) → neuer Text (gleich, wenn er schon so dasteht)
+// Kasten „Deine bearbeitete Fassung“ in der alten Notiz setzen oder auf die neueste ändern (ersetzt auch den älteren „Neuere
+// Fassung“ und in einer Kopie, die du inzwischen bearbeitet hast, ihren Kasten „Neue Fassung aus ILIAS“). name: Name der neuen
+// Notiz (ohne .md), datum (JJJJ-MM-TT) → neuer Text (gleich, wenn er schon so dasteht)
 const neuereKasten = (text, name, datum) => {
-  const kasten = `> [!eba-info] Neuere Fassung\n> Am ${datumDe(datum)} kam eine neuere Fassung dieser Unterlage: [[${name}]]. Deine Datei hier bleibt, wie sie ist.\n\n`;
+  const kasten = `> [!eba-info] ${EIGEN}\n> Am ${datumDe(datum)} kam eine neue Fassung aus ILIAS: [[${name}]]. Diese Datei hier bleibt, wie sie ist.\n\n`;
   const t = s(text);
   if (NEUERE.test(t)) return t.replace(NEUERE, () => kasten);
+  if (KOPIE.test(t)) return t.replace(KOPIE, () => kasten);
   const { zeilen, start } = zerlegen(t);
   const i = nachTitel(zeilen, start);
   if (i >= zeilen.length) return t.replace(/\n*$/, "\n\n") + kasten.replace(/\n+$/, "\n");
   return zeilen.slice(0, i).join("\n") + (i ? "\n" : "") + kasten + zeilen.slice(i).join("\n");
 };
 
+// ---------- Beide Fassungen zeigen ----------
+// Hast du eine Datei verändert, bleibt sie, und die neue Fassung kommt als „<Name> neue Fassung JJJJ-MM-TT“ daneben (am selben
+// Tag „ (2)“ …). Eine neue Fassung, die du nicht verändert hast, ersetzt die nächste; so sind es fast immer genau zwei: deine
+// bearbeitete und die neueste.
+const NEUE_FASSUNG = / neue Fassung (\d{4}-\d{2}-\d{2})(?: \((\d+)\))?$/;
+// Name ohne Endung → { stamm, datum (JJJJ-MM-TT, "" = deine Datei), n (Zähler am selben Tag) }
+const fassungVon = (name) => {
+  const t = s(name), m = NEUE_FASSUNG.exec(t);
+  return m ? { stamm: t.slice(0, m.index), datum: m[1], n: m[2] ? Number(m[2]) : 1 } : { stamm: t, datum: "", n: 0 };
+};
+// Reihenfolge: deine Datei, dann die neuen Fassungen nach Datum und Zähler
+const fassungFolge = (a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : a.n - b.n);
+const ohneEndung = (p) => s(p).replace(/\.[^./]+$/, "");
+// Fassungen derselben Datei unter Pfaden (mit Endung, z. B. die der Begleitnotizen): gleicher Ordner, gleicher Name ohne „neue
+// Fassung …“ → { Pfad: { rolle, eigen, neu, alle } } nur für Pfade mit mindestens einer weiteren Fassung. neu: die neueste,
+// eigen: die davor (deine bearbeitete), rolle "neu" | "eigen" | "alt" (noch ältere, auch von dir verändert), alle in Reihenfolge
+const familien = (pfade) => {
+  const je = {}, aus = {};
+  for (const p of pfade || []) {
+    const t = ohneEndung(p), i = t.lastIndexOf("/"), v = fassungVon(t.slice(i + 1)), k = t.slice(0, i + 1) + v.stamm;
+    (je[k] = je[k] || []).push({ p: s(p), v });
+  }
+  for (const k of Object.keys(je)) {
+    if (je[k].length < 2) continue;
+    const alle = je[k].sort((a, b) => fassungFolge(a.v, b.v) || (a.p < b.p ? -1 : a.p > b.p ? 1 : 0)).map((x) => x.p);
+    const neu = alle[alle.length - 1], eigen = alle[alle.length - 2];
+    for (const p of alle) aus[p] = { rolle: p === neu ? "neu" : p === eigen ? "eigen" : "alt", eigen, neu, alle };
+  }
+  return aus;
+};
+// Beschriftung einer Fassung (info aus familien): „Deine bearbeitete Fassung“, „Neue Fassung vom TT.MM.JJJJ“ (Tag im Namen, nach
+// einem Ersetzen aktualisiert der neuesten), „Deine ältere Fassung“; ohne info ""
+const fassungText = (info, aktualisiert) => {
+  if (!info) return "";
+  if (info.rolle === "eigen") return EIGEN;
+  if (info.rolle === "alt") return "Deine ältere Fassung";
+  const n = ohneEndung(info.neu), a = s(aktualisiert).slice(0, 10), d = fassungVon(n.slice(n.lastIndexOf("/") + 1)).datum;
+  const tag = /^\d{4}-\d{2}-\d{2}$/.test(a) && a > d ? a : d;
+  return "Neue Fassung" + (tag ? " vom " + datumDe(tag) : "");
+};
+
 const API = {
-  FASSUNG_TAGE, FRUEHER, veraltet, veraltetSeit, einklappen, kontext, kontextText, textAktuell, seitenVergleichen, seitenText, aenderungSatz,
-  fruehereUebernehmen, neuereKasten, punktRein,
+  FASSUNG_TAGE, FRUEHER, EIGEN, veraltet, veraltetSeit, einklappen, kontext, kontextText, textAktuell, seitenVergleichen, seitenText, aenderungSatz,
+  fruehereUebernehmen, neuereKasten, punktRein, fassungVon, fassungFolge, familien, fassungText,
 };
 module.exports = function () { return API; };
 Object.assign(module.exports, API);

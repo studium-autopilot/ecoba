@@ -4,6 +4,17 @@ Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## Unveröffentlicht
 
+## 0.6.11 – Beide Fassungen klar beschriftet
+
+- **Einfacher:** In der **Literaturliste** führen jetzt mehr Bücher direkt zu ihrem Eintrag in der Unibibliothek, ohne Umweg
+  über die Suche. Diese Links werden jeden Tag geprüft.
+- **Übersichtlicher:** Hast du Folien beschriftet und kommt eine neue Fassung aus ILIAS, zeigt die Vorlesungsnotiz beide, klar
+  beschriftet: deine bearbeitete und die neue. Auch die Modulseite und beide Notizen sagen, welche welche ist.
+- **Übersichtlicher:** **Fristen**, **Termine**, **Nacharbeiten** und **To-dos** auf dem **Dashboard** sehen jetzt wie Knöpfe
+  aus, mit einem kleinen Pfeil: So siehst du gleich, dass sie eine Liste aufklappen.
+- **Behoben:** Nach einer langen Liste wie **Fristen** blieb unter einer kürzeren auf dem **Dashboard** viel leerer Platz.
+  Jetzt endet die Seite gleich unter der offenen Liste.
+
 ## 0.6.10 – Klare Kalenderfarben in jedem Design
 
 - **Übersichtlicher:** Prüfungen, Uni und Veranstaltungen haben im Kalender jetzt in jedem Design klar verschiedene Farben,
