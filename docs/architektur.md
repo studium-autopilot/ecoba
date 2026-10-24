@@ -1338,7 +1338,9 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   (`volltext.js`), schickt der Abruf sie als Text mit `[S. N]` (`volltextText`) verschlüsselt an `POST /v1/unterlagen` (Zweck
   `unterlagen`, mit `modell: "opus"`), bis zu 9 je Abruf in Anfragen zu 3, Gewünschtes zuerst (eine abgelehnte Anfrage beendet den
   Abruf, der Rest kommt beim nächsten). `server.json` `gesendet` (SHA-256 → Minute, bei einem Wunsch mindestens dessen Zeit, falls
-  die Uhr des Geräts nachgeht) verhindert doppeltes Senden; ein späterer Wunsch geht wieder. Der Server legt Gewünschtes nach
+  die Uhr des Geräts nachgeht) verhindert doppeltes Senden; ein späterer Wunsch geht wieder. Ein Server vor 0.6.3 kennt die Art
+  „Lab“ nicht und überspringt sie (Antwort `angenommen` kleiner als gesendet): Lab-Unterlagen stehen dann in `server.json`
+  `nachsenden` und gehen nach einem Tag (`NACHSENDEN_TAGE`, der Server aktualisiert sich täglich) noch einmal; die Zeile sagt es. Der Server legt Gewünschtes nach
   `unterlagen/opus/` und schreibt es vor dem gewöhnlichen Lauf in einem eigenen Lauf mit Opus (höchstens 3 je Lauf, ohne Mails).
   **Mit PDF (seit 0.5.7):** Hat die PDF höchstens 500 MB (`PDF_MAX`), setzt der Knopf dazu `zusammenfassung_pdf: true`, und der
   Abruf schickt vor dem Text die PDF selbst an `POST /v1/pdf`, in Stücken zu 8 MB (`PDF_TEIL`, je Stück ein Paket mit Zweck `pdf`:
@@ -1524,7 +1526,8 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
   Unterlage ändert oder wegfällt (`blaetterFuer`, reine Logik). Seit 24.10.2026 ebenso ein Lab: `art` mit dem Wort „Lab“
   („Lab“, „Data Science Lab“, „R Lab“; nicht „Labor“, „Matlab“) zeigt die Unterlagen der Art „Lab“, eine je Sitzung: Von
   mehreren mit derselben Nummer steht die zum Lesen da (PDF, HTML mit Ausgaben), sonst das Notebook, dann Code, dann Daten; eine
-  Lösung zuletzt (`labRang`, Endungen aus `format`, sonst aus `datei`). „Alle Unterlagen“ zählt die übrigen mit.
+  Lösung zuletzt (`labRang`: „Lösung“, „Lsg“, „Solution“ im Titel oder im Link der Datei samt Alias; Endungen aus `format`, sonst
+  aus `datei`). „Alle Unterlagen“ zählt die übrigen mit.
 - **Vorlesung und Übungsblatt lesen live** (seit 24.10.2026, `vorlesung.js`): Der Dozent kommt aus der Stundenplan-Notiz (`dozent`
   der Notiz geht vor), der Wochentag der Chips aus `wochentag`. Beides gehört zur Signatur, eine Änderung im Stundenplan zeichnet
   neu. Alle 5 Minuten prüft der Kopf den Tag und zeichnet bei einem neuen beide Blöcke neu („heute“, „gestern“, Perle dieser

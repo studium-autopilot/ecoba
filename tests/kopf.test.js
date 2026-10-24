@@ -108,6 +108,11 @@ test("Lab im Stundenplan: ein Chip je Sitzung, zum Lesen vor Notebook, Code und 
   // aus der ILIAS-Ablage: Notebook und HTML-Fassung getrennt, ohne „format“ zählt die Endung der Datei
   const ilias = [u(1, "Notebook Grundlagen", "rmd"), u(1, "Notebook Grundlagen mit Ausgaben", "html"), u(3, "Daten", "", "[[X100 Lab 03 Daten.csv]]"), u(3, "Notebook", "", "[[X100 Lab 03 Notebook.Rmd]]")];
   assert.deepEqual(K.blaetterFuer(serie({ art: "Lab" }), ilias).blaetter.map((b) => b.titel), ["Notebook", "Notebook Grundlagen mit Ausgaben"]);
+  // eine Lösung auch als „Lsg“ oder nur im Link der Datei (mit Alias) zuletzt; „Lsg“ nur als ganzes Wort
+  const lsg = [u(4, "Lsg", "pdf"), u(4, "Aufgaben", "pdf", "[[X100 Lab 04 Loesung.pdf|Aufgaben]]"), u(4, "Notebook", "", "[[X100 Lab 04 Notebook.Rmd|Notebook]]")];
+  assert.deepEqual(K.blaetterFuer(serie({ art: "Lab" }), lsg).blaetter.map((b) => b.titel), ["Notebook"]);
+  const ohne = [u(5, "Notebook", "rmd"), u(5, "Halsgrat", "pdf")];
+  assert.deepEqual(K.blaetterFuer(serie({ art: "Lab" }), ohne).blaetter.map((b) => b.titel), ["Halsgrat"]);
   const ue = [u(3, "A", "pdf"), u(3, "B", "pdf")].map((x) => ({ f: x.f, fm: Object.assign({}, x.fm, { art: "Übung" }) }));
   assert.equal(K.blaetterFuer(serie({ art: "Übung" }), ue).blaetter.length, 2, "Übungen mit gleicher Nummer bleiben einzeln");
 });

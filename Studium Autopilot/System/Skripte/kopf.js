@@ -69,12 +69,15 @@ const klasseVon = (s, ton) => (s.leise ? "leise" : ton === "ok" ? (s.fertig ? "f
 const bereichVon = (art) => (/tutori/i.test(art) ? "Tutorium" : /(ü|ue)bung/i.test(art) ? "Übung"
   : /(^|[^a-zäöüß])labs?([^a-zäöüß]|$)/i.test(art) ? "Lab" : "");
 // Welche Unterlage einer Lab-Sitzung der Chip zeigt: was man liest (PDF, HTML mit Ausgaben) vor dem Notebook, vor Code, vor Daten;
-// eine Lösung nach allem anderen. Endungen aus „format“, sonst aus „datei“ („[[S110 Lab 02.Rmd]]“).
+// eine Lösung nach allem anderen (im Titel oder im Link der Datei samt Alias, auch „Lsg“). Endungen aus „format“, sonst aus „datei“
+// („[[S110 Lab 02.Rmd]]“, „[[S110 Lab 02.Rmd|Notebook]]“).
+const LOESUNG = /l(ö|oe)sung|(^|[^a-zäöüß])lsg([^a-zäöüß]|$)|solution/i;
 const labRang = (fm) => {
-  const e = (txt(fm.format) || (txt(fm.datei).match(/\.([a-z0-9]+)\]*$/i) || ["", ""])[1]).toLowerCase().split(/[\s,]+/);
+  const datei = txt(fm.datei).replace(/^\[\[|\]\]$/g, "");
+  const e = (txt(fm.format) || (datei.split("|")[0].match(/\.([a-z0-9]+)$/i) || ["", ""])[1]).toLowerCase().split(/[\s,]+/);
   const hat = (l) => l.some((x) => e.indexOf(x) >= 0);
   const r = hat(["pdf", "html"]) ? 0 : hat(["ipynb", "rmd", "qmd"]) ? 1 : hat(["r", "py", "do", "jl", "sql"]) ? 2 : 3;
-  return r + (/l(ö|oe)sung|solution/i.test(txt(fm.titel)) ? 10 : 0);
+  return r + (LOESUNG.test(txt(fm.titel)) || LOESUNG.test(datei) ? 10 : 0);
 };
 const blaetterFuer = (lfm, unterlagen, max) => {
   const code = txt(lfm && lfm.code), bereich = bereichVon(txt(lfm && lfm.art));

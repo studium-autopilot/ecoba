@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.4 – Lab auch mit älterem Server
+
+- **Zuverlässiger:** Hat sich dein eigener Server noch nicht aktualisiert, fasst er Unterlagen aus dem **Lab** einen Tag später
+  zusammen, statt sie zu übergehen. Im Stundenplan steht beim Lab eine Lösung hinten, auch als „Lsg“.
+
 ## 0.6.3 – Zusammenfassen ohne eigenen Server
 
 - **Neu:** **Zusammenfassen** bei einer Unterlage geht jetzt ohne eigenen Server, auf jedem Gerät. Dafür verbindest du unter

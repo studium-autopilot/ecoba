@@ -65,9 +65,9 @@
 //   Abruf kommt nach 5 Min. statt im Takt. Was nur du lösen kannst (Gerät neu verbinden, Claude neu verbinden, Uni-Passwort
 //   nicht angenommen), sagt die Zeile selbst (Pille „prüfen“).
 // server.json (System/Daten, synchronisiert, schreibt nur das übernehmende Gerät): { schema, erledigt: { Dateiname: Zeit }
-//   (60 Tage), laeufe: [die letzten 20], hinweise: [die letzten 30], gesendet: { PDF-Kennung: Datum }, begleitet: { PDF-Pfad:
-//   kurzHash } }. Der Grabstein (angewendet: { id: kurzHash }) steht wie bei
-//   den anderen Quellen in der Sperr-Datei server-abruf.json.
+//   (60 Tage), laeufe: [die letzten 20], hinweise: [die letzten 30], gesendet: { PDF-Kennung: Datum }, nachsenden: { PDF-Kennung:
+//   Datum } (ein älterer Server nahm sie nicht an, NACHSENDEN_TAGE), begleitet: { PDF-Pfad: kurzHash } }. Der Grabstein
+//   (angewendet: { id: kurzHash }) steht wie bei den anderen Quellen in der Sperr-Datei server-abruf.json.
 // Für andere Skripte: ctx.server (Zeile und Fenster in verbindungen.js). Testeinstiege: ctx.server.erzeugen(abh) baut den
 //   Ablauf mit Netz und Tresor im Speicher (tests/server-plugin.test.js); plugin.testServerAus schaltet den automatischen
 //   Abruf ab, plugin.testServerLokal erlaubt http://127.0.0.1 als Adresse.
@@ -100,6 +100,7 @@ module.exports = function (ctx) {
   const PRO_FENSTER_USD = 8000 / 20 / 146, PDF_FRAGEN = 0.05;
   const pdfKosten = (seiten, zeichen, mitPdf) => (((mitPdf ? (seiten || 0) * 1500 : 0) + (zeichen || 0) / 3.5) * 4e-6 + 4000 * 20e-6) / PRO_FENSTER_USD;
   const ERLEDIGT_TAGE = 60, LAEUFE = 20, HINWEISE = 30;
+  const NACHSENDEN_TAGE = 1;        // so lange, bis ein älterer Server sich selbst aktualisiert hat (täglich)
   const HINWEIS_NEU_TAGE = 14;      // ältere Hinweise zählen nie als neu (etwa auf einem neuen Gerät)
   const UNERREICHBAR_TAGE = 3;      // so lange nicht erreichbar: Zeile rät zur Einrichtung (Server weg oder neue Adresse)
   // Takt des Servers: Werte wie TAKT in server/dienst.mjs, der erste ist der Standard
@@ -377,7 +378,7 @@ module.exports = function (ctx) {
     // ----- server.json -----
     // Die Zeile fragt synchron: Hinweise aus dem letzten Lesen oder Schreiben von server.json
     let hinweisListe = [];
-    const zustandLeer = () => ({ schema: 1, erledigt: {}, laeufe: [], hinweise: [], gesendet: {}, begleitet: {} });
+    const zustandLeer = () => ({ schema: 1, erledigt: {}, laeufe: [], hinweise: [], gesendet: {}, nachsenden: {}, begleitet: {} });
     const objekt = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
     const zustandLesen = async () => {
       const text = await io.lesenText(DATEI);
@@ -389,15 +390,16 @@ module.exports = function (ctx) {
         for (const k of Object.keys(erl)) if (DATEINAME.test(k)) z.erledigt[k] = String(erl[k]);
         if (Array.isArray(o.laeufe)) z.laeufe = o.laeufe.filter((x) => x && typeof x === "object").slice(-LAEUFE);
         if (Array.isArray(o.hinweise)) z.hinweise = o.hinweise.filter((x) => x && typeof x.text === "string").slice(-HINWEISE);
-        const ges = objekt(o.gesendet), beg = objekt(o.begleitet);
+        const ges = objekt(o.gesendet), nach = objekt(o.nachsenden), beg = objekt(o.begleitet);
         for (const k of Object.keys(ges).slice(-2000)) if (/^[0-9a-f]{64}$/.test(k)) z.gesendet[k] = String(ges[k]).slice(0, 16);
+        for (const k of Object.keys(nach).slice(-200)) if (/^[0-9a-f]{64}$/.test(k)) z.nachsenden[k] = String(nach[k]).slice(0, 16);
         for (const k of Object.keys(beg).slice(-2000)) if (/^Unterlagen\//.test(k) && k.length <= 240) z.begleitet[k] = String(beg[k]).slice(0, 20);
       }
       hinweisListe = z.hinweise;
       return { z, text };
     };
     const zustandText = (z) => JSON.stringify({ schema: z.schema, erledigt: z.erledigt, laeufe: z.laeufe, hinweise: z.hinweise, gesendet: z.gesendet,
-      begleitet: z.begleitet }, null, 1) + "\n";
+      nachsenden: z.nachsenden, begleitet: z.begleitet }, null, 1) + "\n";
     // Grabstein: angewendet in der Sperr-Datei (die Sperrfelder schreibt sperre.js; andere Felder lässt es stehen)
     const sperrDatei = async () => { try { return objekt(JSON.parse((await io.lesenText(SPERR_DATEI)) || "null")); } catch (e) { return {}; } };
     const angewendetLesen = async () => {
@@ -665,8 +667,10 @@ module.exports = function (ctx) {
     // Anfragen zu 3, jede PDF (Kennung = SHA-256) nur einmal, eine gewünschte (angefordert, Knopf „Zusammenfassen“) mit Opus und
     // wieder, wenn sie nach dem letzten Senden noch einmal gewünscht wurde; mit pdf: true zuerst die PDF selbst (POST /v1/pdf;
     // nimmt der Server sie nicht, etwa ein älterer, liest Claude den Text). Klappt eine Anfrage nicht (Netz, schon zu viele
-    // warten), kommt der Rest beim nächsten Abruf. → Anzahl
-    const unterlagenSenden = async (v, z) => {
+    // warten), kommt der Rest beim nächsten Abruf. Ein Server vor 0.6.3 kennt die Art Lab nicht und nimmt sie stillschweigend nicht an
+    // (Antwort angenommen kleiner): die geht nach NACHSENDEN_TAGE noch einmal, dann hat er sich aktualisiert (b.serverAelter). → Anzahl
+    const unterlagenSenden = async (v, z, b) => {
+      for (const k of Object.keys(z.nachsenden)) if (alterMs(z.nachsenden[k]) > NACHSENDEN_TAGE * 1440 * MIN) { delete z.gesendet[k]; delete z.nachsenden[k]; }
       let liste = [];
       try { liste = abh.unterlagen ? await abh.unterlagen({ ohne: z.gesendet, hoechstens: UNTERLAGEN_JE_ABRUF }) : []; } catch (e) { liste = []; }
       const offen = (Array.isArray(liste) ? liste : []).filter((u) => u && /^[0-9a-f]{64}$/.test(String(u.kennung)) &&
@@ -678,6 +682,7 @@ module.exports = function (ctx) {
       let n = 0;
       for (let i = 0; i < offen.length; i += UNTERLAGEN_JE_ANFRAGE) {
         const teil = offen.slice(i, i + UNTERLAGEN_JE_ANFRAGE);
+        let angenommen;
         try {
           for (const u of teil) {
             let pdf = null;
@@ -698,10 +703,16 @@ module.exports = function (ctx) {
           const paket = await verschluesseln(v.schluessel, "unterlagen", { schema: 1, unterlagen: teil.map((u) => { const x = Object.assign({}, u); delete x.angefordert; delete x.pdf; return x; }) });
           const r = await abh.netz({ url: v.adresse + "/v1/unterlagen", method: "POST", headers: { authorization: "Bearer " + v.zugang, "content-type": "application/json" }, body: JSON.stringify(paket) });
           if (r.status !== 200) break;
+          angenommen = objekt(JSON.parse(r.text || "null")).angenommen;
         } catch (e) { break; }
         // gewünschte mindestens mit der Zeit des Wunsches (geht die Uhr dieses Geräts nach, sonst jeder Abruf noch einmal)
         const jetzt = abh.jetzt().toISOString().slice(0, 16);
         for (const u of teil) z.gesendet[u.kennung] = u.angefordert && u.angefordert > jetzt ? u.angefordert : jetzt;
+        const lab = teil.filter((u) => u.art === "Lab");
+        if (lab.length && Number.isInteger(angenommen) && angenommen <= teil.length - lab.length) {
+          for (const u of lab) z.nachsenden[u.kennung] = jetzt;
+          b.serverAelter = true;
+        }
         n += teil.length;
       }
       return n;
@@ -758,7 +769,7 @@ module.exports = function (ctx) {
     // → Bericht { art: ok | nicht-verbunden | laeuft | anderes-geraet | fehler, fehler (netz | zugang | gesperrt | paket | intern),
     //   angelegt, aktualisiert, umbenannt, entfaellt, doppelt, zusammengefuehrt, ausgeblendet, hinweise, begleitnotizen (Pfade),
     //   unterlagen (an den Server geschickt), verworfen, dateien,
-    //   neuereVersion, mehr (Grenze erreicht, Rest beim nächsten Abruf) }; o: { manuell, uebernehmen (Knopf „Hier aktualisieren“) }
+    //   neuereVersion, serverAelter (nahm Lab nicht an), mehr (Grenze erreicht, Rest beim nächsten Abruf) }; o: { manuell, uebernehmen (Knopf „Hier aktualisieren“) }
     const abrufen = async (o) => {
       o = o || {};
       const v = verbindung();
@@ -766,7 +777,7 @@ module.exports = function (ctx) {
       if (laeuft) return { art: "laeuft" };
       laeuft = true;
       const b = { art: "ok", fehler: "", angelegt: [], aktualisiert: [], umbenannt: [], entfaellt: [], doppelt: [], zusammengefuehrt: [], ausgeblendet: 0, hinweise: 0,
-        begleitnotizen: [], todoDoppel: [], unterlagen: 0, verworfen: [], dateien: 0, neuereVersion: false, mehr: false };
+        begleitnotizen: [], todoDoppel: [], unterlagen: 0, verworfen: [], dateien: 0, neuereVersion: false, serverAelter: false, mehr: false };
       // gerätelokaler Stand nach dem Quellen-Vertrag (nachLauf): ein Fehler bleibt stehen, bis ein Lauf klappt
       const ende = (fehler) => {
         if (fehler) { b.art = "fehler"; b.fehler = fehler; }
@@ -774,6 +785,7 @@ module.exports = function (ctx) {
         const warnungen = [];
         if (b.mehr) warnungen.push("Weitere Termine kommen beim nächsten Abruf.");
         if (b.neuereVersion) warnungen.push("Ein Teil braucht eine neuere Fassung von Studium Autopilot.");
+        if (b.serverAelter) warnungen.push("Unterlagen aus dem Lab fasst dein Server erst nach seinem nächsten Update zusammen.");
         if (b.verworfen.length) warnungen.push(`${b.verworfen.length === 1 ? "Ein Eintrag" : b.verworfen.length + " Einträge"} vom Server ${b.verworfen.length === 1 ? "war" : "waren"} ungültig.`);
         const neu = Q.nachLauf(alt, fehler ? { ok: false, fehler: FEHLER[fehler] } : { ok: true, warnungen }, abh.jetzt().toISOString());
         neu.code = fehler || "";
@@ -818,7 +830,7 @@ module.exports = function (ctx) {
         }
         await zentralWeicht(notizen, b);
         for (const k of Object.keys(z.erledigt)) if (alterMs(z.erledigt[k]) > ERLEDIGT_TAGE * 1440 * MIN) delete z.erledigt[k];
-        b.unterlagen = await unterlagenSenden(v, z);
+        b.unterlagen = await unterlagenSenden(v, z, b);
         const neu = zustandText(z);
         if (neu !== text) await io.schreibenText(DATEI, neu);
         hinweisListe = z.hinweise;

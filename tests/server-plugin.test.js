@@ -482,6 +482,30 @@ test("Begleitnotizen vom Server: Übernahme in die Notiz neben der PDF, gleiche 
   } finally { await srv.zu(); }
 });
 
+test("Älterer Server ohne Art Lab: Lab-Unterlagen gehen nach einem Tag noch einmal, die übrigen bleiben gesendet", async () => {
+  const srv = await serverStarten();
+  try {
+    const k = (c) => c.repeat(64), uhr = { t: START };
+    const unterlagen = [
+      { datei: "Unterlagen/S110 Datenanalyse/Lab/S110 Lab 01 Handout.pdf", kennung: k("1"), art: "Lab", titel: "Handout", code: "S110", seiten: 4, text: "[S. 1]\nR" },
+      { datei: "Unterlagen/S110 Datenanalyse/S110 Folien 01.pdf", kennung: k("2"), art: "Folien", titel: "Folien 01", code: "S110", seiten: 30, text: "[S. 1]\nDaten" },
+    ];
+    let alt = true;
+    const netz = (a) => (alt && a.url.endsWith("/v1/unterlagen") ? Promise.resolve({ status: 200, text: JSON.stringify({ angenommen: 1 }) }) : netzEcht(a));
+    const { t, m } = await verbunden(srv, tresor(), { uhr, netz, unterlagen: async (o) => unterlagen.filter((u) => !o.ohne[u.kennung]) });
+    const b1 = await m.abrufen();
+    assert.deepEqual([b1.unterlagen, b1.serverAelter], [2, true]);
+    assert.deepEqual(Object.keys(t.json("System/Daten/server.json").nachsenden), [k("1")]);
+    assert.deepEqual([(await m.abrufen()).unterlagen, (await m.abrufen()).serverAelter], [0, false], "am selben Tag nicht noch einmal");
+    alt = false; // der Server hat sich über Nacht aktualisiert
+    uhr.t = new Date(START.getTime() + 25 * 3600e3);
+    assert.equal((await m.abrufen()).unterlagen, 1, "nur die Lab-Unterlage");
+    assert.deepEqual(fs.readdirSync(path.join(srv.verzeichnis, "unterlagen", "neu")), [k("1") + ".md"]);
+    assert.deepEqual(t.json("System/Daten/server.json").nachsenden, {});
+    assert.equal((await m.abrufen()).unterlagen, 0);
+  } finally { await srv.zu(); }
+});
+
 test("Zusammenfassen auf Wunsch: gewünschte Unterlage geht mit Opus in den eigenen Ordner, wieder nach neuem Wunsch; die Begleitnotiz löscht den Wunsch", async () => {
   const srv = await serverStarten();
   try {

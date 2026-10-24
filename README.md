@@ -59,11 +59,11 @@ Mehrere Geräte? → [Weiteres Gerät verbinden](docs/installation.md#weiteres-g
 
 ## Was drin ist
 
-<img src="docs/bilder/quellen-046.png" width="100%" alt="Verteilte Uni-Infos an einem Ort: Öffentliche Quellen (Uni-Webseiten, Prüfungsamt, Vorlesungsverzeichnis, Fachbereich, Lehrstühle und Fachschaft, Hochschulsport, UB und Vorträge) gehen in einen regelmäßigen Uni-Abgleich, der Neues erkennt; nur Geändertes gleicht eine KI ab, eine Datenschutzprüfung prüft jeden Eintrag. Die geprüften Daten kommen in deinen Tresor in Obsidian. Persönliches holt Obsidian ohne KI direkt von deinem Gerät: den Stundenplan über deinen Alma-Kalender-Link, Kursdateien und Übungsgruppe über deine ILIAS-Anmeldung, Abgabetermine über deinen ILIAS-Kalender-Link. Daraus entstehen Dashboard, Termine und Kalender, Stundenplan, Unterlagen, Noten und ECTS sowie der Studienverlauf.">
+<img src="docs/bilder/quellen-064.png" width="100%" alt="Verteilte Uni-Infos an einem Ort: Öffentliche Quellen (Uni-Webseiten, Prüfungsamt, Vorlesungsverzeichnis, Fachbereich, Lehrstühle und Fachschaft, Hochschulsport, UB und Vorträge) gehen in einen regelmäßigen Uni-Abgleich, der Neues erkennt; nur Geändertes gleicht eine KI ab, eine Datenschutzprüfung prüft jeden Eintrag. Die geprüften Daten kommen in deinen Tresor in Obsidian. Persönliches holt Obsidian ohne KI direkt von deinem Gerät: mit deinem Uni-Login Dateien, Abgaben, Stundenplan und Übungsgruppe aus ILIAS und Alma, mit demselben Login deine Uni-Mails, auch ohne Login über die Kalender-Links von Alma und ILIAS. Daraus entstehen Dashboard, Termine und Kalender, Stundenplan, Unterlagen, Postfach, Noten und ECTS sowie der Studienverlauf.">
 
 <img src="docs/bilder/was-drin-1-046.png" width="100%" alt="Kalender: Monatsansicht mit Uni-Terminen, Fachschaft und den Orientierungswochen als Balken. Termine & Anmeldungen: diese und nächste Woche mit Fristen, Abgaben, Anmeldungen und Angeboten der Uni.">
 
-<img src="docs/bilder/was-drin-2-046.png" width="100%" alt="Stundenplan: eine volle Woche im 3. Semester mit Vorlesungen, Übungen und Tutorien, mit Uhrzeit und Raum. Die Vorlesungen deiner Module stehen von selbst darin, mit deinem Alma-Link deine ganze Woche. Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen.">
+<img src="docs/bilder/was-drin-2-046.png" width="100%" alt="Stundenplan: eine volle Woche im 3. Semester mit Vorlesungen, Übungen und Tutorien, mit Uhrzeit und Raum. Die Vorlesungen deiner Module stehen von selbst darin, mit deinem Uni-Login oder Alma-Link deine ganze Woche. Studienverlauf: Semester bis zum Abschluss, ECTS, Orientierungsprüfung und das laufende Semester mit Prüfungsphasen.">
 
 <img src="docs/bilder/was-drin-3-047.png" width="100%" alt="Modulseite: Status, ECTS, Semester mit Vorlesungswoche, Prüfung, die nächsten Termine des Moduls und deine Vorlesungsnotizen. Unterlagen: Folien, Skripte, Übungen und Altklausuren getrennt, die Lösung neben ihrer Klausur.">
 
@@ -261,12 +261,12 @@ Mehr: [Architektur](docs/architektur.md) · [Datenformat](docs/daten-v1.md) · [
 
 Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business
 Administration (PO 2023) at the University of Tübingen: dashboard, study progress, module pages, grades and ECTS, a
-timetable that fills itself from the public course catalogue (or your Alma link), exercise deadlines from your ILIAS
-calendar, course files from ILIAS, your university inbox, exercise sheets and flashcards with Anki-style scheduling, in several designs,
+timetable that fills itself from the public course catalogue (or from Alma with your university login), exercise deadlines
+and course files from ILIAS, your university inbox, exercise sheets and flashcards with Anki-style scheduling, in several designs,
 light and dark. Dates and deadlines keep themselves up to date: a server regularly checks public university sources,
 lets an AI reconcile only what changed, checks every entry automatically (allowlist, scan for personal data, AI
 review) and publishes the result as plain JSON on GitHub Pages. The bundled plugin fetches only that data, never code, and
-sends nothing back. Only if you enter your university login does it sign in from your device (ILIAS, Alma) and download your own course files,
+sends nothing back. Only if you enter your university login does it sign in from your device (ILIAS, Alma) and download your own course files, deadlines and timetable,
 contacting nothing but the university's servers; the password stays in Obsidian's keychain on that device and is never
 synced. The same login shows your university inbox on the Postfach page, read straight from the university webmail, but only
 after you turn it on; mails stay in memory and are never written to the vault. A new version is installed only when you tap “Neue Version installieren”, straight from this repo, with every file checked
