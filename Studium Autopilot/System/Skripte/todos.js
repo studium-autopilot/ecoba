@@ -147,6 +147,8 @@ module.exports = function (ctx) {
     return aus;
   };
   const lesen = async (modus) => (await lesenBeide())[modus === "fragen" ? "fragen" : "todos"];
+  // Zahl am Reiter (reiter.js, Dashboard): so viele Einträge zeigt ```eba-todos``` bzw. ```eba-todos fragen```
+  const zaehler = { [SPRACHE]: async (arg) => (await lesen(/frage/i.test(arg || "") ? "fragen" : "todos")).length };
 
   // Was ein Block zeigt: seine Liste, leer die Klasse is-leer (das Raster blendet die Karte aus, eba-core.css 37.todos) und
   // einen Satz. Sind auch die Fragen leer, sagt der To-do-Block „Nichts offen.“: Er steht dann allein im Raster.
@@ -319,5 +321,5 @@ module.exports = function (ctx) {
     ctx.intervall(() => alleNeu(false), 30 * 60 * 1000); // Tageswechsel: „bis morgen“ → „bis heute“
   };
 
-  return { registrieren, zeichnen, lesen, lesenBeide, zustand, faellig, kurzname, zerlegen };
+  return { registrieren, zeichnen, lesen, lesenBeide, zustand, faellig, kurzname, zerlegen, zaehler };
 };

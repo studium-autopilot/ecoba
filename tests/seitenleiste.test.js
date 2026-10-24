@@ -15,31 +15,24 @@ const seitenleiste = require(path.join(SKRIPTE, "seitenleiste.js"));
 const { ZIELE } = seitenleiste;
 const pfadVon = (z) => (z === "Dashboard" ? "Dashboard.md" : `Studium/${z}.md`);
 
-test("Seiten: Dashboard zuerst, Stundenplan dabei, jede Seite gibt es in der Vorlage", () => {
+test("Seiten: Dashboard zuerst, jede Seite gibt es in der Vorlage", () => {
   assert.equal(ZIELE[0], "Dashboard", "„Dashboard“ ist der Weg zurück zum Start");
-  assert.ok(ZIELE.indexOf("Stundenplan") >= 0);
   for (const z of ZIELE) assert.ok(fs.existsSync(path.join(VAULT, pfadVon(z))), z);
 });
 
-const IPHONE = { obsidian: { Platform: { isPhone: true, isMobile: true } } };
-const IPAD = { obsidian: { Platform: { isPhone: false, isMobile: true, isTablet: true } } };
-const PC = { obsidian: { Platform: { isPhone: false, isMobile: false } } };
-
 test("Seiten: der Lernplan nur, wenn es ihn gibt", () => {
   const ohne = ZIELE.filter((z) => z !== "Lernplan");
-  assert.deepEqual(seitenleiste.sichtbareZiele(IPHONE), ohne);
-  assert.deepEqual(seitenleiste.sichtbareZiele(Object.assign({ lernplan: { sichtbar: () => false } }, IPHONE)), ohne);
-  assert.deepEqual(seitenleiste.sichtbareZiele(Object.assign({ lernplan: { sichtbar: () => true } }, IPHONE)), ZIELE);
+  assert.deepEqual(seitenleiste.sichtbareZiele({}), ohne);
+  assert.deepEqual(seitenleiste.sichtbareZiele({ lernplan: { sichtbar: () => false } }), ohne);
+  assert.deepEqual(seitenleiste.sichtbareZiele({ lernplan: { sichtbar: () => true } }), ZIELE);
 });
 
-// Am PC und iPad zeigt das Dashboard die Woche als Raster, am iPhone nur einen Tag: die Seite Stundenplan nur dort (24.10.2026)
-test("Seiten: Stundenplan nur am iPhone, die Seite selbst bleibt", () => {
-  const ohne = ZIELE.filter((z) => z !== "Lernplan" && z !== "Stundenplan");
-  assert.deepEqual(seitenleiste.sichtbareZiele(PC), ohne);
-  assert.deepEqual(seitenleiste.sichtbareZiele(IPAD), ohne);
-  assert.deepEqual(seitenleiste.sichtbareZiele({}), ohne, "ohne Platform wie am PC");
-  assert.ok(seitenleiste.sichtbareZiele(IPHONE).indexOf("Stundenplan") === 1, "am iPhone gleich nach dem Dashboard");
-  assert.deepEqual(seitenleiste.sichtbareZiele(Object.assign({ lernplan: { sichtbar: () => true } }, PC)), ZIELE.filter((z) => z !== "Stundenplan"));
+// Das Dashboard zeigt die Woche auf jedem Gerät als Raster (seit 24.10.2026; 0.6.6 führte die Seite Stundenplan noch am iPhone,
+// wo das Dashboard nur einen Tag zeigte). Die Seite selbst bleibt: Lehrveranstaltungen verweisen auf sie (uebersicht).
+test("Seiten: Stundenplan auf keinem Gerät, die Seite selbst bleibt", () => {
+  const PLATTFORMEN = [{ isPhone: true, isMobile: true }, { isPhone: false, isMobile: true, isTablet: true }, { isPhone: false, isMobile: false }];
+  for (const Platform of PLATTFORMEN) assert.ok(seitenleiste.sichtbareZiele({ obsidian: { Platform } }).indexOf("Stundenplan") < 0, JSON.stringify(Platform));
+  assert.ok(fs.existsSync(path.join(VAULT, "Studium", "Stundenplan.md")));
 });
 
 test("Lesezeichen der Vorlage = Seiten der Übersicht (ohne den Lernplan, den es nur mit Lernplan-Notizen gibt)", () => {

@@ -150,7 +150,8 @@ Nach dem [Vertrauen](#vertrauen) begrüßt dich eine kurze Einrichtung: **Studie
 dann **Dein Uni-Login** und das Aussehen. Jeden Schritt kannst du überspringen; mit **Später** geht es beim nächsten Start dort
 weiter. Ohne Angaben gilt das aktuelle Semester als dein erstes.
 
-Ändern kannst du alles unter **Einstellungen & Hilfe** → **Deine Angaben** (**Ändern** oder **Einrichtung erneut starten**).
+Ändern kannst du alles unter **Einstellungen & Hilfe** → **Deine Angaben**: Tipp auf eine Zeile, bei **Einrichtung** startet
+sie erneut.
 
 ### Dein Uni-Login (Unterlagen, Abgaben, Stundenplan)
 

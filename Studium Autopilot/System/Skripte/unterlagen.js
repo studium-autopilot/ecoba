@@ -1,10 +1,13 @@
-// Unterlagen im Vault: Dateien aus „Eingang/“ einordnen.
+// Unterlagen im Vault: gewählte Dateien einordnen.
 // Benennt Dateien nach dem Schema „<Code> <Art> <Nr> <Titel>.<ext>“, legt sie unter „Unterlagen/<Code> <Modultitel>/“ ab
 // und schreibt daneben je Unterlage eine Begleitnotiz (typ: unterlage) mit gleichem Namen.
-// Ablauf: Moduswahl → Plan → Duplikate? → Vorschau (korrigierbar) → ZIP? → Ablegen.
+// Ablauf: Moduswahl → Plan → Duplikate? → Vorschau (korrigierbar) → Ablegen.
 // Dateien in „Unterlagen/“ ohne Begleitnotiz (abgebrochener Lauf, selbst hineinkopiert) trägt es ohne Rückfrage nach.
 // Aufruf in einer Aktion:  await ctx.user.unterlagen(ctx).hinzufuegen();  (Aktion „einordnen“ in System/Skripte/aktionen.js):
-// erst das Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen), dann einordnen().
+// erst das Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen), dann einordnen(). Die gewählten Dateien liegen
+// so lange in „System/Neue Unterlagen/“; was danach noch dort liegt (Esc, „Nicht hinzufügen“), geht in den Papierkorb, das
+// Original bleibt ja, wo es ausgewählt wurde. Bis 0.6.6 gab es dafür den Ordner „Eingang/“, in den man Dateien auch selbst legen
+// konnte (seit 24.10.2026 nicht mehr).
 // Nur Obsidian-API (vault, fileManager, loadPdfJs), keine Node- oder Shell-Befehle: läuft auf Windows, iPad und iPhone.
 module.exports = function (ctx) {
   const eba = ctx.user.eba(ctx);
@@ -15,7 +18,7 @@ module.exports = function (ctx) {
   const wegwerfen = (f) => (ctx.user.quellen && ctx.user.quellen.papierkorb ? ctx.user.quellen.papierkorb(app, f) : app.vault.trash(f, false));
 
   // ---------- Einstellungen ----------
-  const EINGANG = "Eingang";
+  const NEU = "System/Neue Unterlagen"; // gewählte Dateien, bis sie eingeordnet sind
   const ZIEL = "Unterlagen";
   const OHNE = "Ohne Modul";
   const LESEN_MAX_MB_PC = 80, LESEN_MAX_MB_MOBIL = 40; // größere PDFs nicht öffnen (Arbeitsspeicher auf iPhone/iPad)
@@ -139,7 +142,7 @@ module.exports = function (ctx) {
     return w.join(" ");
   };
 
-  // ---------- Dateien im Eingang ----------
+  // ---------- Dateien in einem Ordner ----------
   const alleIn = (pfad) => {
     const o = app.vault.getAbstractFileByPath(pfad);
     const out = [];
@@ -152,7 +155,7 @@ module.exports = function (ctx) {
     if (o instanceof TFolder) lauf(o);
     return out;
   };
-  const alleImEingang = () => alleIn(EINGANG);
+  const alleNeu = () => alleIn(NEU);
 
   // PDF + PPTX mit gleichem Namen gehören zusammen, ebenso ein R-Notebook mit seiner HTML-Fassung („Lab2.Rmd“ + „Lab2.nb.html“; die
   // ILIAS-Ablage stapelt nicht und hängt „mit Ausgaben“ an, ilias.js). Liegt daneben noch „Lab2.html“ (zwei HTML in einem Stapel),
@@ -181,7 +184,7 @@ module.exports = function (ctx) {
   };
 
   // ---------- Erkennen: Art, Nummer, Titel, Code ----------
-  const relPfad = (f) => f.path.slice(EINGANG.length + 1).normalize("NFC");
+  const relPfad = (f) => f.path.slice(NEU.length + 1).normalize("NFC");
   const regelFinden = (s) => REGELN.find(([, re]) => re.test(s)) || null;
   // Art zuerst aus dem Dateinamen, Unterordner (der tiefste zuerst) nur als Rückfall:
   // „Vorlesung und Übung …/VL01“ → Folien. Ausnahmen: „Lösungen/Blatt_05“ → Lösung, „Altklausuren/Aufgaben 2019“ → Altklausur.
@@ -328,8 +331,8 @@ module.exports = function (ctx) {
     const platz = NAME_MAX - zielName(code, art, nr, "").length - zusatz.length - 2;
     return sauber([titel && platz > 0 ? kuerzen(titel, platz) : "", zusatz].filter(Boolean).join(" "));
   };
-  // Vorschlag für eine Datei aus Pfad und Name (auch für Tests ohne Datei). „rel“ ist der Pfad unterhalb des Eingangs bzw.
-  // des ILIAS-Kurses. Ergebnis: art, nr, titel, eigenerCode (Modulcode am Anfang des Dateinamens), code (Code aus dem
+  // Vorschlag für eine Datei aus Pfad und Name (auch für Tests ohne Datei). „rel“ ist der Dateiname bzw. der Pfad
+  // unterhalb des ILIAS-Kurses. Ergebnis: art, nr, titel, eigenerCode (Modulcode am Anfang des Dateinamens), code (Code aus dem
   // Dateinamen, sonst aus dem tiefsten Ordner mit Code, sonst der übergebene; ob es das Modul gibt, prüft der Aufrufer),
   // schwach (Titel aus dem Namen taugt wenig, siehe schwacherTitel) und name (Schema mit diesem code).
   const vorschlag = (rel, endung, code) => {
@@ -580,7 +583,7 @@ module.exports = function (ctx) {
     else if (e === "pdf") ansicht = `> [!eba-pdf]- PDF${n > 0 ? ` (${n} ${n === 1 ? "Seite" : "Seiten"})` : ""}\n> ![[${h.name}#height=560]]`; // eingeklappt, Tipp auf „PDF“ öffnet
     else if (["heic", "heif"].includes(e)) ansicht = `[[${h.name}]]${oeffnenLinks()}\n\n> [!eba-achtung] HEIC zeigt Obsidian nicht an\n> Beim nächsten Mal als PDF oder JPG sichern, zum Beispiel über „Dokumente scannen“ in der Dateien-App.`;
     else if (BILDER.includes(e)) ansicht = `![[${h.name}]]`;
-    else ansicht = `[[${h.name}]]${oeffnenLinks()}\n\n> [!eba-info] Nur als ${e.toUpperCase()} vorhanden\n> Obsidian zeigt diesen Dateityp nicht an. Am PC als PDF exportieren und mit gleichem Namen in \`Eingang\` legen, dann erscheint die PDF hier.`;
+    else ansicht = `[[${h.name}]]${oeffnenLinks()}\n\n> [!eba-info] Nur als ${e.toUpperCase()} vorhanden\n> Obsidian zeigt diesen Dateityp nicht an. Am PC als PDF mit gleichem Namen exportieren und über **Unterlagen hinzufügen** dazulegen, dann erscheint die PDF hier.`;
     if (zuGross) ansicht += `\n\n> [!eba-info] Zu groß zum Auslesen\n> Die Datei hat ${mb(h.stat.size)}, auf diesem Gerät werden PDFs bis ${LESEN_MAX_MB} MB ausgelesen (PC ${LESEN_MAX_MB_PC} MB, iPhone/iPad ${LESEN_MAX_MB_MOBIL} MB). Sie ist vollständig eingeordnet, nur Seitenzahl und Text fehlen in dieser Notiz.`;
     return ansicht;
   };
@@ -701,14 +704,12 @@ module.exports = function (ctx) {
     return name;
   };
 
-  const leereOrdnerAufraeumen = async () => {
-    const wurzel = app.vault.getAbstractFileByPath(EINGANG);
-    if (!(wurzel instanceof TFolder)) return;
-    const lauf = async (o) => {
-      for (const k of [...o.children]) if (k instanceof TFolder) await lauf(k);
-      if (o !== wurzel && o.children.length === 0) { try { await wegwerfen(o); } catch (e) {} }
-    };
-    await lauf(wurzel);
+  // Nach dem Lauf: Was in „System/Neue Unterlagen“ übrig ist (Esc, „Nicht hinzufügen“, doppelte), geht in den Papierkorb; der
+  // leere Ordner selbst verschwindet (nur leer; „true“ braucht Obsidian für Ordner, sonst EISDIR unter Windows)
+  const neuAufraeumen = async () => {
+    for (const f of alleNeu()) { try { await wegwerfen(f); } catch (e) { /* schon weg */ } }
+    const o = app.vault.getAbstractFileByPath(NEU);
+    if (o instanceof TFolder && !o.children.length) { try { await app.vault.delete(o, true); } catch (e) { /* schon weg */ } }
   };
 
   const frage = async (texte, werte, platzhalter) => await ctx.system.suggester(texte, werte, false, platzhalter);
@@ -808,13 +809,13 @@ module.exports = function (ctx) {
     }
   };
   const unsicher = (p) => p.dup || p.art === "Sonstiges" || (["Folien", "Übung", "Tutorium", "Lab", "Lösung"].includes(p.art) && p.nr == null && !p.titel);
-  // Eine Datei der Vorschau ändern: ein Fenster „Neu …“ (ctx.formular) mit Art (oder im Eingang lassen), Nummer und Titel;
+  // Eine Datei der Vorschau ändern: ein Fenster „Neu …“ (ctx.formular) mit Art (oder nicht hinzufügen), Nummer und Titel;
   // Esc lässt alles, wie es war
-  const LASSEN = "im-eingang";
+  const LASSEN = "weglassen";
   const korrigieren = async (p) => {
     if (typeof ctx.formular !== "function") return;
     const w = await ctx.formular({ titel: p.st.haupt.name, knopf: "Übernehmen", felder: [
-      { name: "art", titel: "Art", art: "auswahl", pflicht: true, optionen: ARTEN.map((a) => ({ wert: a, text: a })).concat([{ wert: LASSEN, text: "Im Eingang lassen" }]),
+      { name: "art", titel: "Art", art: "auswahl", pflicht: true, optionen: ARTEN.map((a) => ({ wert: a, text: a })).concat([{ wert: LASSEN, text: "Nicht hinzufügen" }]),
         vorgabe: p.auslassen ? LASSEN : p.art },
       { name: "nummer", titel: "Nummer", art: "zahl", ganz: true, min: 0, max: 99, vorgabe: p.nr != null ? pad(p.nr) : "", wenn: (x) => x.art !== LASSEN },
       { name: "titel", titel: "Titel", art: "text", vorgabe: p.titel || "", platzhalter: "z. B. Optimierung", wenn: (x) => x.art !== LASSEN },
@@ -836,7 +837,7 @@ module.exports = function (ctx) {
       const texte = [`✓ Alle ${n} so übernehmen`], werte = ["ok"];
       for (const p of reihe) {
         const alt = p.st.haupt.name;
-        if (p.auslassen) texte.push(`✗ ${alt} bleibt im Eingang`);
+        if (p.auslassen) texte.push(`✗ ${alt} wird nicht hinzugefügt`);
         else texte.push(`✎ ${unsicher(p) ? "? " : ""}${alt} → ${neuerName(p)}${p.dup ? " (Duplikat)" : ""}${p.paar ? " (zur PowerPoint)" : ""}`);
         werte.push(p);
       }
@@ -859,10 +860,10 @@ module.exports = function (ctx) {
     m.open();
   };
 
-  // ---------- Dateien in den Eingang holen ----------
-  // Freier Name im Eingang: „Blatt.pdf“, „Blatt 2.pdf“, … („vorhanden“ = Namen in Kleinbuchstaben). Zeichen, die Obsidian in
-  // Dateinamen oder Links stören, werden zu Leerzeichen.
-  const eingangName = (vorhanden, roh) => {
+  // ---------- Gewählte Dateien bereitlegen ----------
+  // Freier Name in „System/Neue Unterlagen“: „Blatt.pdf“, „Blatt 2.pdf“, … („vorhanden“ = Namen in Kleinbuchstaben). Zeichen, die
+  // Obsidian in Dateinamen oder Links stören, werden zu Leerzeichen.
+  const neuName = (vorhanden, roh) => {
     const sauber = String(roh || "").normalize("NFC").replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim() || "Datei";
     const p = sauber.lastIndexOf(".");
     const basis = p > 0 ? sauber.slice(0, p).trim() : sauber, endung = p > 0 ? sauber.slice(p) : "";
@@ -871,16 +872,33 @@ module.exports = function (ctx) {
     return name;
   };
 
-  // Gewählte oder hineingezogene Dateien (File aus dem Browser) in den Eingang kopieren; gibt die Zahl zurück
-  const ablegenImEingang = async (dateien) => {
-    if (!app.vault.getAbstractFileByPath(EINGANG)) await app.vault.createFolder(EINGANG);
-    const vorhanden = new Set(alleImEingang().filter((f) => f.parent && f.parent.path === EINGANG).map((f) => f.name.toLowerCase()));
-    const fort = ctx.hinweis(`Lege ${dateien.length === 1 ? "eine Datei" : `${dateien.length} Dateien`} in den Eingang …`, { dauer: 0 });
+  // Auswahl prüfen (Namen der gewählten Dateien): ZIP & Co. kann Obsidian nicht entpacken, Notizen sind keine Unterlagen.
+  // → { nehmen: [Indizes], zip: n, notizen: n }
+  const auswahlPruefen = (namen) => {
+    const r = { nehmen: [], zip: 0, notizen: 0 };
+    namen.forEach((n, i) => {
+      const p = String(n || "").lastIndexOf("."), e = p > 0 ? String(n).slice(p + 1).toLowerCase() : "";
+      if (ARCHIVE.includes(e)) r.zip++;
+      else if (AUSLASSEN.includes(e)) r.notizen++;
+      else r.nehmen.push(i);
+    });
+    return r;
+  };
+  const auswahlHinweis = (r) => [
+    r.zip ? `${r.zip === 1 ? "Eine ZIP-Datei" : `${r.zip} ZIP-Dateien`} nicht übernommen: Obsidian kann sie nicht entpacken. Entpacke sie vorher (iPhone/iPad: in der Dateien-App antippen) und wähle die Dateien darin.` : "",
+    r.notizen ? `${r.notizen === 1 ? "Eine Notiz" : `${r.notizen} Notizen`} nicht übernommen: Hier kommen PDFs, Folien, Scans und Fotos hinzu.` : "",
+  ].filter(Boolean).join(" ");
+
+  // Gewählte oder hineingezogene Dateien (File aus dem Browser) nach „System/Neue Unterlagen“ kopieren; gibt die Zahl zurück
+  const bereitlegen = async (dateien) => {
+    if (!app.vault.getAbstractFileByPath(NEU)) await app.vault.createFolder(NEU);
+    const vorhanden = new Set(alleNeu().map((f) => f.name.toLowerCase()));
+    const fort = ctx.hinweis(`Lese ${dateien.length === 1 ? "eine Datei" : `${dateien.length} Dateien`} ein …`, { dauer: 0 });
     let n = 0;
     try {
       for (const d of dateien) {
-        const name = eingangName(vorhanden, d.name);
-        await app.vault.createBinary(`${EINGANG}/${name}`, await d.arrayBuffer());
+        const name = neuName(vorhanden, d.name);
+        await app.vault.createBinary(`${NEU}/${name}`, await d.arrayBuffer());
         vorhanden.add(name.toLowerCase());
         n++;
       }
@@ -888,11 +906,11 @@ module.exports = function (ctx) {
     return n;
   };
 
-  // Fenster „Unterlagen hinzufügen“: Dateien auswählen (am PC auch hineinziehen) oder liegen gebliebene Dateien im Eingang
-  // einordnen. Ergebnis „gewaehlt“ (Dateien liegen jetzt im Eingang), „eingang“ oder null (abgebrochen).
+  // Fenster „Unterlagen hinzufügen“: Dateien auswählen (am PC auch hineinziehen). Ergebnis true (Dateien liegen jetzt in
+  // „System/Neue Unterlagen“) oder false (abgebrochen). Sind nur ZIP-Dateien oder Notizen gewählt, bleibt das Fenster offen und sagt warum.
   // Die Dateiauswahl öffnet input.click() direkt im Klick des Knopfs: iPhone und iPad zeigen sie nur dann (Fotos, Kamera, Dateien).
-  const hinzufuegenFenster = (imEingang) => new Promise((fertig) => {
-    let ergebnis = null;
+  const hinzufuegenFenster = () => new Promise((fertig) => {
+    let ergebnis = false;
     const m = new Modal(app);
     m.modalEl.addClass("eba-modal");
     m.titleEl.setText("Unterlagen hinzufügen");
@@ -903,19 +921,25 @@ module.exports = function (ctx) {
       : "PDFs, Folien, Scans oder Fotos auswählen oder hierher ziehen. Studium Autopilot benennt sie und legt sie beim passenden Modul ab." });
     const eingabe = c.createEl("input", { cls: "eba-ablage-eingabe", attr: { type: "file", multiple: "", tabindex: "-1", "aria-hidden": "true" } });
     const meldung = c.createEl("p", { cls: "eba-modal-meldung" });
-    c.createEl("p", { cls: "eba-modal-hinweis", text: Platform.isMobile
-      ? "Aus Mail oder Safari: Teilen → In Dateien sichern → Ordner Eingang deines Tresors."
-      : "Du kannst Dateien auch in den Ordner Eingang deines Tresors kopieren." });
+    if (Platform.isMobile) c.createEl("p", { cls: "eba-modal-hinweis", text: "Aus Mail oder Safari: erst Teilen → In Dateien sichern, dann hier auswählen." });
     const nehmen = async (liste) => {
-      const dateien = Array.from(liste || []).filter((d) => d && d.name && !d.name.startsWith("."));
-      if (!dateien.length) return;
+      const alle = Array.from(liste || []).filter((d) => d && d.name && !d.name.startsWith("."));
+      if (!alle.length) return;
+      const pruefung = auswahlPruefen(alle.map((d) => d.name));
+      const dateien = pruefung.nehmen.map((i) => alle[i]);
+      if (!dateien.length) {
+        meldung.addClass("fehler");
+        meldung.setText(auswahlHinweis(pruefung));
+        return;
+      }
       knoepfe.forEach((k) => { k.disabled = true; });
       try {
-        await ablegenImEingang(dateien);
-        ergebnis = "gewaehlt";
+        await bereitlegen(dateien);
+        ergebnis = true;
         m.close();
+        if (pruefung.zip || pruefung.notizen) ctx.hinweis(auswahlHinweis(pruefung));
       } catch (e) {
-        console.error("[unterlagen] Ablegen im Eingang", e);
+        console.error("[unterlagen] Dateien bereitlegen", e);
         meldung.addClass("fehler");
         meldung.setText("Die Dateien ließen sich nicht ablegen. Versuche es noch einmal.");
         knoepfe.forEach((k) => { k.disabled = false; });
@@ -937,9 +961,6 @@ module.exports = function (ctx) {
       return b;
     };
     knopf("Abbrechen", false, () => m.close());
-    if (imEingang) {
-      knopf(`${imEingang === 1 ? "Eine Datei" : `${imEingang} Dateien`} im Eingang einordnen`, false, () => { ergebnis = "eingang"; m.close(); });
-    }
     knopf("Dateien auswählen", true, () => { eingabe.value = ""; eingabe.click(); });
     m.onClose = () => { c.empty(); fertig(ergebnis); };
     m.open();
@@ -948,31 +969,24 @@ module.exports = function (ctx) {
   // Knopf „Unterlagen hinzufügen“: erst das Fenster, dann einordnen (ohne Fenster, wo es keins gibt, etwa in Tests)
   const hinzufuegen = async () => {
     if (!Modal) return einordnen();
-    const imEingang = alleImEingang().filter((f) => !AUSLASSEN.includes(ext(f)) || ARCHIVE.includes(ext(f))).length;
-    const w = await hinzufuegenFenster(imEingang);
-    if (!w) return { eingeordnet: 0 };
+    if (!(await hinzufuegenFenster())) return { eingeordnet: 0 };
     return einordnen();
   };
 
   // ---------- Hauptfunktion ----------
+  // Ordnet ein, was in „System/Neue Unterlagen“ liegt (auch Reste eines Laufs, den die App unterbrochen hat), und trägt Dateien
+  // ohne Begleitnotiz nach. Danach ist der Ordner wieder weg (neuAufraeumen), auch nach Esc.
   const einordnen = async () => {
-    if (!app.vault.getAbstractFileByPath(EINGANG)) await app.vault.createFolder(EINGANG);
-    const abbruch = () => { ctx.hinweis("Abgebrochen. Es wurde nichts verändert."); return { eingeordnet: 0 }; };
-    const roh = alleImEingang();
-    const archive = roh.filter((f) => ARCHIVE.includes(ext(f)));
-    const ausgelassen = roh.filter((f) => AUSLASSEN.includes(ext(f)) && !ARCHIVE.includes(ext(f)));
-    const stapel = stapeln(roh.filter((f) => !AUSLASSEN.includes(ext(f))));
+    const abbruch = async () => { await neuAufraeumen(); ctx.hinweis("Abgebrochen. Es wurde nichts hinzugefügt."); return { eingeordnet: 0 }; };
+    const stapel = stapeln(alleNeu().filter((f) => !AUSLASSEN.includes(ext(f))));
     const fehlend = ohneBegleitnotiz();
 
     // 0. Dateien in „Unterlagen/“ ohne Begleitnotiz (abgebrochener Lauf, selbst in einen Modulordner kopiert): ohne Rückfrage
     //    nachtragen (seit 0.6.3). Die Frage danach verstand niemand, und ohne Notiz fehlt die Datei in allen Listen.
     const nachtragen = fehlend.map(nachtragPlan);
     if (!stapel.length && !nachtragen.length) {
-      // nur ZIP im Eingang: nicht wegwerfen (noch nicht entpackt), Obsidian kann nicht entpacken
-      const zip = archive.length ? `${archive.length === 1 ? "Im Eingang liegt ein ZIP" : `Im Eingang liegen ${archive.length} ZIP-Dateien`}, bitte erst am PC oder in der Dateien-App entpacken und dann noch einmal einordnen.` : "";
-      ctx.hinweis(zip || (ausgelassen.length
-        ? `Im Eingang liegen nur Notizen (${ausgelassen.length}), die verschiebst du selbst.`
-        : "Der Eingang ist leer. Lege PDFs oder Folien in den Ordner „Eingang“."));
+      await neuAufraeumen();
+      ctx.hinweis("Keine Dateien zum Hinzufügen.");
       return { eingeordnet: 0 };
     }
 
@@ -987,7 +1001,7 @@ module.exports = function (ctx) {
       modi.push(`Alle ${n} zu einem Modul`); modiWerte.push("block");
       if (mitCode) { modi.push(`Modul aus dem Dateinamen (${mitCode} von ${n} erkannt)`); modiWerte.push("code"); }
       modi.push("Jede Datei einzeln (Modul, Art, Titel)"); modiWerte.push("einzeln");
-      modus = await frage(modi, modiWerte, `${n} Unterlage(n) im Eingang. Wie einordnen?`);
+      modus = await frage(modi, modiWerte, `${n} Unterlage(n) hinzufügen. Wie einordnen?`);
       if (!modus) return abbruch();
       if (modus === "vorwahl") blockModul = vorwahl;
       if (modus === "block") {
@@ -997,7 +1011,7 @@ module.exports = function (ctx) {
     }
 
     // 2. Plan: Modul, Art, Nummer, Titel, Zielordner je Datei (noch ohne Änderungen im Vault)
-    const bericht = { eingeordnet: 0, uebersprungen: 0, gross: [], duplikate: [], fremd: [], blaetter: 0, ohneSeiten: 0, zuGross: [], nachgetragen: 0, zipPapierkorb: 0, loesungen: 0, ergaenzt: 0 };
+    const bericht = { eingeordnet: 0, uebersprungen: 0, gross: [], duplikate: [], fremd: [], blaetter: 0, ohneSeiten: 0, zuGross: [], nachgetragen: 0, loesungen: 0, ergaenzt: 0 };
     const plan = [];
     let lesen = null; // Hinweis, solange Titel aus PDFs gelesen werden
     try {
@@ -1007,7 +1021,7 @@ module.exports = function (ctx) {
         const eigenerCode = codeAusName(h.basename);
         if (modus === "code") modul = (eigenerCode && eba.modulNachCode(eigenerCode)) || null;
         if (modus === "einzeln" || (modus === "code" && !modul)) {
-          modul = await modulFragen(`${h.name}: Modul? (Esc = Datei im Eingang lassen)`);
+          modul = await modulFragen(`${h.name}: Modul? (Esc = Datei nicht hinzufügen)`);
           if (!modul) { bericht.uebersprungen++; continue; }
         }
         const code = modul?.fm.code ?? "";
@@ -1031,7 +1045,7 @@ module.exports = function (ctx) {
     let dupsWeg = false;
     const dups = await duplikateFinden(plan);
     if (dups.length) {
-      const w = await frage([`${dups.length} doppelte in den Papierkorb`, "Trotzdem einordnen"], ["weg", "behalten"],
+      const w = await frage([`${dups.length} doppelte weglassen`, "Trotzdem einordnen"], ["weg", "behalten"],
         `${dups.length} Datei(en) gibt es schon (gleicher Inhalt): ${dups.slice(0, 3).map((p) => `${p.st.haupt.name} = ${p.dup}`).join(", ")}${dups.length > 3 ? " …" : ""}`);
       if (!w) return abbruch();
       dupsWeg = w === "weg";
@@ -1041,21 +1055,12 @@ module.exports = function (ctx) {
     // 5. Vorschau: alles auf einen Blick, einzelne Einträge korrigierbar, Esc ändert nichts
     if (plan.some((p) => !p.weg) && !(await vorschau(plan))) return abbruch();
 
-    // 6. ZIP im Eingang: einmal fragen (Esc = liegen lassen), nur wenn daneben Dateien aus dem Eingang eingeordnet werden
-    let zipWeg = false;
-    const zipFrage = archive.length > 0 && plan.some((p) => !p.auslassen);
-    if (zipFrage) {
-      const w = await frage(["In den Papierkorb (schon entpackt)", "Liegen lassen"], ["weg", "bleibt"],
-        `${archive.length} ZIP-Datei(en) im Eingang: ${archive.slice(0, 3).map((f) => f.name).join(", ")}. Schon entpackt?`);
-      zipWeg = w === "weg";
-    }
-
     const semester = eba.aktuellesSemester().name;
     const arbeit = [...nachtragen, ...plan.filter((p) => !p.auslassen && !p.dup), ...plan.filter((p) => !p.auslassen && p.dup)];
     const fortschritt = ctx.hinweis(`Ordne ${arbeit.length} ${arbeit.length === 1 ? "Unterlage" : "Unterlagen"} ein …`, { dauer: 0 });
     let erste = null;
 
-    // 7. Jede Unterlage verarbeiten
+    // 6. Jede Unterlage verarbeiten
     try {
       for (const [i, p] of arbeit.entries()) {
         const st = p.st, h = st.haupt;
@@ -1100,23 +1105,18 @@ module.exports = function (ctx) {
         if (p.art === "Eigene Lösung" && (await blattVerknuepfen(p.code, p.nr, h, "eigene_loesung"))) bericht.loesungen++;
         if (p.nachtrag) bericht.nachgetragen++; else bericht.eingeordnet++;
       }
-      if (zipWeg) for (const f of archive) { await wegwerfen(f); bericht.zipPapierkorb++; }
     } finally {
       if (fortschritt) fortschritt.hide();
     }
-    await leereOrdnerAufraeumen();
+    await neuAufraeumen();
 
-    // 8. Zusammenfassung
+    // 7. Zusammenfassung
     const zeilen = bericht.eingeordnet || !bericht.nachgetragen ? [`${bericht.eingeordnet} ${bericht.eingeordnet === 1 ? "Unterlage" : "Unterlagen"} eingeordnet.`] : [];
     if (bericht.ergaenzt) zeilen.push(`${bericht.ergaenzt} PDF(s) zur vorhandenen PowerPoint abgelegt.`);
     if (bericht.nachgetragen) zeilen.push(`${bericht.nachgetragen === 1 ? "Eine Datei, die schon unter Unterlagen lag, steht" : `${bericht.nachgetragen} Dateien, die schon unter Unterlagen lagen, stehen`} jetzt auch in den Listen.`);
-    if (bericht.uebersprungen) zeilen.push(`${bericht.uebersprungen} im Eingang gelassen.`);
-    const auslassenN = plan.filter((p) => p.auslassen).length;
-    if (auslassenN) zeilen.push(`${auslassenN} nach der Vorschau im Eingang gelassen.`);
-    if (bericht.duplikate.length) zeilen.push(`${bericht.duplikate.length} Duplikat(e) ${dupsWeg ? "im Obsidian-Papierkorb" : "trotzdem eingeordnet"}: ${bericht.duplikate.join(", ")}`);
-    if (bericht.zipPapierkorb) zeilen.push(`${bericht.zipPapierkorb} ZIP-Datei(en) im Obsidian-Papierkorb.`);
-    else if (archive.length) zeilen.push(`${archive.length} ZIP-Datei(en) im Eingang gelassen.${zipFrage ? "" : " Obsidian kann sie nicht entpacken (am PC oder in der Dateien-App entpacken)."}`);
-    if (ausgelassen.length) zeilen.push(`${ausgelassen.length} Datei(en) im Eingang nicht angefasst (Notizen).`);
+    const weggelassen = bericht.uebersprungen + plan.filter((p) => p.auslassen).length;
+    if (weggelassen) zeilen.push(`${weggelassen} ${weggelassen === 1 ? "Datei" : "Dateien"} nicht hinzugefügt.`);
+    if (bericht.duplikate.length) zeilen.push(`${bericht.duplikate.length} Duplikat(e) ${dupsWeg ? "nicht hinzugefügt" : "trotzdem eingeordnet"}: ${bericht.duplikate.join(", ")}`);
     if (bericht.blaetter) zeilen.push(`${bericht.blaetter} Übungsblatt-Notiz(en) mit der PDF verknüpft.`);
     if (bericht.loesungen) zeilen.push(`${bericht.loesungen} eigene Lösung(en) mit dem Übungsblatt verknüpft.`);
     if (bericht.fremd.length) zeilen.push(`Achtung, Name nannte ein anderes Modul: ${bericht.fremd.join(", ")}`);
@@ -1131,7 +1131,7 @@ module.exports = function (ctx) {
   };
 
   return {
-    hinzufuegen, einordnen, eingangName, nummerErkennen, titelErkennen, zielName, titelMitZusatz, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL,
+    hinzufuegen, einordnen, neuName, auswahlPruefen, nummerErkennen, titelErkennen, zielName, titelMitZusatz, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, NEU, ZIEL,
     // für die ILIAS-Ablage (ilias.js) und Tests
     schwacherTitel, titelAusPdf, pdfTitelWaehlen, titelMitPdf, vorschlagMitPdf, begleitnotiz, ARTEN, stapeln,
   };

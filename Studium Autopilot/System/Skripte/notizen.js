@@ -131,7 +131,7 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
   // Fenster: Modul (Parameter code wählt vor), Nummer (nächste freie des Moduls), Abgabe (leer = ohne; seit 24.10.2026 ohne Vorgabe,
   // vorher in einer Woche: Die geratene Abgabe stand wie eine echte bei den Fristen und als „überfällig“ da).
   // Aufbau wie die Vorlesungsnotiz: Titel, Kopf-Karte ```eba-uebungsblatt``` (vorlesung.js), dann ## Aufgabe 1, ## Aufgabe 2,
-  // ## Knackpunkte, ## Fürs Tutorium. „datei“ = Aufgaben (setzt das Einordnen aus dem Eingang), „eigene_loesung“ ebenso.
+  // ## Knackpunkte, ## Fürs Tutorium. „datei“ = Aufgaben (setzt das Einordnen), „eigene_loesung“ ebenso.
   const uebungsblatt = async (c) => {
     const eba = ctx.user.eba(c);
     const vorhandene = (m) => (m ? app.vault.getMarkdownFiles().filter((f) => f.path.startsWith("Übungsblätter/")

@@ -24,13 +24,17 @@ Abgaben aus dem ILIAS-Kalender holt Studium Autopilot selbst, ohne dich.
 
 - **Termin:** etwas mit Datum, das für dieses Studium zählt: Prüfung, Abgabe, Anmeldung, Rückmeldung, Sitzung, die vom
   Stundenplan abweicht, Einführung, Vortrag, Fachschaft, Infoveranstaltung.
-- **Jede Gelegenheit, sich anzumelden, einzutragen oder zu bewerben, ist eine Frist** (`kategorie: "Frist"`), auch wenn sie
-  freiwillig ist; dann im Titel „(freiwillig)“. Nennt die Quelle kein Datum, sondern einen Anlass („in der nächsten Übung“),
-  leite das Datum ab (nächster passender Termin bzw. erster Tag des Zeitraums), setze `status: "geschätzt"` und sage in `info`
-  in einem Satz, woraus.
+- **Jede Gelegenheit, sich anzumelden, einzutragen oder zu bewerben, die zum Studium gehört, ist eine Frist**
+  (`kategorie: "Frist"`), auch wenn sie freiwillig ist; dann im Titel „(freiwillig)“. Dazu gehören die Bewerbungsfristen der
+  studentischen Initiativen am Fachbereich (z. B. InOne Consult, BFS Society, iBWLopment). Nennt die Quelle kein Datum,
+  sondern einen Anlass („in der nächsten Übung“), leite das Datum ab (nächster passender Termin bzw. erster Tag des Zeitraums),
+  setze `status: "geschätzt"` und sage in `info` in einem Satz, woraus. Eine Frist aus einem früheren Semester („endet am
+  26. Oktober 2025“) ist kein Datum für dieses.
 - **Was nur die Person tun kann** (antworten, anmelden, bezahlen, entscheiden, mitbringen), ist eine **Frist** mit Datum, kein
   Hinweis. Nennt die Quelle keins: 7 Tage nach der Mail, `status: "geschätzt"`, in `info` ein Satz, woraus.
-- **Kein Termin:** Werbung, Umfragen ohne Anmeldung, allgemeine Infos ohne Datum. Was wichtig ist, aber weder Datum noch
+- **Kein Termin:** Aufrufe zur Teilnahme an Forschung (Studien, Experimente, Befragungen; „Probanden gesucht“, Vergütung,
+  Versuchspersonenstunden), egal wer sie verschickt, auch aus einem Modul; Werbung, Umfragen ohne Anmeldung, allgemeine Infos
+  ohne Datum. Was wichtig ist, aber weder Datum noch
   Handlung hat (neue Unterlagen, Raumänderung ohne Datum), wird ein **Hinweis**.
 
 ## Was nicht in die Ausgabe gehört

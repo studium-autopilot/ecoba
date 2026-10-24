@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
 
-// Datenmodell-Ersatz: heute 17.10.2026; ohne Studienbeginn gilt WS 2026/27, mit Beginn 01.10.2025 ist heute das 3. FS
+// Datenmodell-Ersatz: heute 17.10.2026; ohne Studienbeginn gilt WS 2026/27, mit Beginn 01.10.2025 beginnt das Studium im WS 2025/26
 const SEMESTER = [
   { name: "WS 2025/26", beginn: "2025-10-01", ende: "2026-03-31", fs: 1 },
   { name: "SS 2026", beginn: "2026-04-01", ende: "2026-09-30", fs: 2 },
@@ -17,58 +17,65 @@ const modell = {
 const P = laden("personalisieren", { kontext: { obsidian: { Modal: class {}, Notice: class {} }, modell } }).ctx.personalisieren;
 const nach = (zeilen) => Object.fromEntries(zeilen.map((z) => [z.id, z]));
 
-test("Deine Angaben leer: „Nicht eingetragen.“, Studienbeginn nennt das geltende Semester, Einrichtung starten", () => {
+test("Deine Angaben leer: „Eintragen“ als Wert, jede Zeile öffnet das Formular am Feld, Einrichtung starten", () => {
   const z = nach(P.angabenZeilen({}, { status: "offen", uebersprungen: [] }));
   assert.deepEqual(Object.keys(z), ["name", "studienbeginn", "zielnote", "einrichtung"]);
-  assert.equal(z.name.wert, "");
-  assert.equal(z.name.text, "Nicht eingetragen.");
-  assert.equal(z.name.ton, "leise");
-  assert.equal(z.studienbeginn.text, "Nicht eingetragen, es gilt WS 2026/27.");
-  assert.deepEqual(z.zielnote.knopf, { text: "Ändern", aktion: "personalisieren", parameter: { feld: "zielnote" } });
-  assert.deepEqual(z.einrichtung.pille, { text: "offen", art: "leer" });
-  assert.deepEqual(z.einrichtung.knopf, { text: "Starten", aktion: "einrichtung", parameter: { ab: "2" }, cta: true });
+  for (const id of ["name", "studienbeginn", "zielnote"]) {
+    assert.equal(z[id].wert, "Eintragen", id);
+    assert.equal(z[id].ton, "leise", id);
+    assert.equal(z[id].rechts, "pfeil", id);
+    assert.deepEqual(z[id].aktion, { aktion: "personalisieren", parameter: { feld: id } }, id);
+  }
+  assert.equal(z.einrichtung.wert, "Starten");
+  assert.equal(z.einrichtung.wertArt, "akzent", "etwas wartet auf dich");
+  assert.deepEqual(z.einrichtung.aktion, { aktion: "einrichtung", parameter: { ab: "2" } });
+  assert.ok(!z.einrichtung.unter);
 });
 
-test("Deine Angaben eingetragen: Wert in der Zeile, Studienbeginn mit Fachsemester, Knopf öffnet das Formular am Feld", () => {
+test("Deine Angaben eingetragen: Wert rechts in der Zeile, Studienbeginn als Semester, ohne zweite Zeile", () => {
   const z = nach(P.angabenZeilen({ name: "Lea", studienbeginn: "2025-10-01", zielnote: "1,7" }, { status: "fertig", uebersprungen: [] }));
   assert.equal(z.name.wert, "Lea");
-  assert.equal(z.name.text, "");
   assert.equal(z.name.ton, "akzent");
   assert.equal(z.studienbeginn.wert, "WS 2025/26");
-  assert.equal(z.studienbeginn.text, "heute 3. Fachsemester");
-  assert.deepEqual(z.studienbeginn.knopf.parameter, { feld: "studienbeginn" });
   assert.equal(z.zielnote.wert, "1,7");
-  assert.equal(z.einrichtung.text, "Alle Schritte erledigt.");
-  assert.deepEqual(z.einrichtung.knopf, { text: "Erneut starten", aktion: "einrichtung", parameter: { ab: "2" } });
+  for (const id of ["name", "studienbeginn", "zielnote"]) assert.ok(!z[id].unter, id);
+  assert.equal(z.einrichtung.wert, "Fertig");
+  assert.equal(z.einrichtung.ton, "ok");
+  assert.equal(z.einrichtung.wertArt, undefined, "Fertig ist gedämpft");
+  assert.equal(z.einrichtung.unter, "");
+  assert.deepEqual(z.einrichtung.aktion, { aktion: "einrichtung", parameter: { ab: "2" } }, "ein Tipp startet sie erneut");
 });
 
-test("Einrichtung: übersprungene Schritte in Worten, angefangene geht dort weiter, wo sie stand", () => {
+test("Einrichtung: übersprungene Schritte in der zweiten Zeile, angefangene geht dort weiter, wo sie stand", () => {
   const fertig = nach(P.angabenZeilen({}, { status: "fertig", uebersprungen: ["uni", "unbekannt"] }));
-  assert.equal(fertig.einrichtung.text, "Übersprungen: Uni-Login.");
+  assert.equal(fertig.einrichtung.unter, "Übersprungen: Uni-Login.");
   // aus Einrichtungen bis 0.4.7
-  assert.equal(nach(P.angabenZeilen({}, { status: "fertig", uebersprungen: ["alma", "ilias"] })).einrichtung.text, "Übersprungen: Alma, ILIAS.");
-  assert.deepEqual(fertig.einrichtung.pille, { text: "fertig", art: "ok" });
+  assert.equal(nach(P.angabenZeilen({}, { status: "fertig", uebersprungen: ["alma", "ilias"] })).einrichtung.unter, "Übersprungen: Alma, ILIAS.");
   const laeuft = nach(P.angabenZeilen({}, { status: "laeuft", uebersprungen: [] }));
-  assert.deepEqual(laeuft.einrichtung.knopf, { text: "Fortsetzen", aktion: "einrichtung", parameter: {}, cta: true });
+  assert.equal(laeuft.einrichtung.wert, "Fortsetzen");
+  assert.deepEqual(laeuft.einrichtung.aktion, { aktion: "einrichtung", parameter: {} });
   // ohne einrichtung.js: Zustand aus dem Feld „einrichtung“ der Einstellungen
-  assert.equal(nach(P.angabenZeilen({ einrichtung: "fertig" })).einrichtung.knopf.text, "Erneut starten");
+  assert.equal(nach(P.angabenZeilen({ einrichtung: "fertig" })).einrichtung.wert, "Fertig");
 });
 
-test("Variante: je Variante eine Zeile mit dem, was daraus folgt; die gewählte ohne Knopf", () => {
+test("Variante: je Variante eine Zeile ohne Symbol; die gewählte mit Haken und dem, was daraus folgt, die übrigen wählt ein Tipp", () => {
   const offen = P.varianteZeilen({ variante: "offen" });
   assert.deepEqual(offen.map((z) => z.titel), ["Economics", "Business Administration", "Ohne Spezialisierung", "Noch offen"]);
-  assert.deepEqual(offen.map((z) => z.text), ["Economics", "Business Administration", "ohne Spezialisierung", "offen"].map((v) => P.FOLGE[v]));
-  assert.deepEqual(offen[0].knopf, { text: "Wählen", aktion: "variante", parameter: { wert: "Economics" } });
-  assert.equal(offen[3].knopf, undefined);
-  assert.deepEqual(offen[3].pille, { text: "aktuell", art: "leer" });
+  assert.ok(offen.every((z) => !z.symbol && !z.wert));
+  assert.deepEqual(offen[0].aktion, { aktion: "variante", parameter: { wert: "Economics" } });
+  assert.equal(offen[0].rechts, "");
+  assert.ok(!offen[0].unter, "nicht gewählte ohne zweite Zeile");
+  assert.equal(offen[3].aktion, undefined);
+  assert.equal(offen[3].rechts, "haken");
+  assert.equal(offen[3].unter, P.FOLGE.offen);
   const eco = P.varianteZeilen({ variante: "Economics" });
-  assert.equal(eco[0].knopf, undefined);
-  assert.equal(eco[0].symbol, "haken");
-  assert.deepEqual(eco[0].pille, { text: "gewählt", art: "ok" });
-  assert.deepEqual(eco[3].knopf.parameter, { wert: "offen" }, "zurück auf „noch offen“ geht auch");
+  assert.equal(eco[0].aktion, undefined);
+  assert.equal(eco[0].rechts, "haken");
+  assert.equal(eco[0].unter, P.FOLGE.Economics);
+  assert.deepEqual(eco[3].aktion.parameter, { wert: "offen" }, "zurück auf „noch offen“ geht auch");
   // unbekannter oder leerer Wert gilt als „noch offen“
-  assert.deepEqual(P.varianteZeilen({ variante: "Jura" }).map((z) => !!z.knopf), [true, true, true, false]);
-  assert.deepEqual(P.varianteZeilen({}).map((z) => !!z.knopf), [true, true, true, false]);
+  assert.deepEqual(P.varianteZeilen({ variante: "Jura" }).map((z) => !!z.aktion), [true, true, true, false]);
+  assert.deepEqual(P.varianteZeilen({}).map((z) => !!z.aktion), [true, true, true, false]);
 });
 
 test("Jede Variante hat einen Text, was daraus folgt", () => {

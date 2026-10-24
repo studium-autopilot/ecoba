@@ -23,7 +23,7 @@ Kalender: erscheint, sobald Studium Autopilot läuft.
 Termine: erscheinen, sobald Studium Autopilot läuft.
 ```
 
-<p class="eba-hinweis">Lehrveranstaltungen → <a class="internal-link" data-href="Stundenplan" href="Stundenplan">Stundenplan</a></p>
+<p class="eba-hinweis">Lehrveranstaltungen → <a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a></p>
 
 ## Angebote der Uni
 

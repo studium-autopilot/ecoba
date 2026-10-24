@@ -133,7 +133,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `kalender.js`, `termine.js`, `klausurzeit.js`, `verlauf.js`, `todos.js`, `vorlesung.js`, `gruppen.js`, `angebote.js` | Codeblöcke `eba-kalender`, `eba-agenda`, `eba-anmeldungen`, `eba-klausurzeit`, `eba-verlauf`, `eba-todos`, `eba-vorlesung` und `eba-uebungsblatt`, `eba-gruppen`, `eba-angebote` |
 | `seitenleiste.js` | Seitenleiste „Übersicht“ (seit 19.10.2026, ersetzt das Raster-Menü aus `menue.js`): eigener Tab in Obsidians linker Seitenleiste mit allen Seiten (`ZIELE`) und den Modulen dieses Semesters; siehe „Öffnen und Navigieren“ |
 | `tabellen.js`, `leer.js` | Bases-Tabellen als Liste zum Lesen (seit 0.4.6 überall und auf allen Geräten, `eba-core.css` 37.tabellen), leere Mitschriften und Übungsblätter beim Verlassen in den Papierkorb (nicht beim Wechsel zu Folien/PDF; ein Übungsblatt mit Abgabedatum, Aufgaben oder eigener Lösung bleibt, ebenso eine Vorlesungsnotiz mit Thema) |
-| `eba.js`, `alma.js`, `unterlagen.js`, `meine-gruppe.js` | Helfer: Semester, Module, Datumseingabe, `ablegen()`; Alma-Stundenplan (seit 0.4.5 auch Erweiterung mit Zeitplan, siehe „Alma-Stundenplan“); Eingang einordnen; deine Übungsgruppe im Stundenplan |
+| `eba.js`, `alma.js`, `unterlagen.js`, `meine-gruppe.js` | Helfer: Semester, Module, Datumseingabe, `ablegen()`; Alma-Stundenplan (seit 0.4.5 auch Erweiterung mit Zeitplan, siehe „Alma-Stundenplan“); gewählte Unterlagen einordnen; deine Übungsgruppe im Stundenplan |
 | `modell.js` | Datenmodell und Fachmodell `ctx.modell` (siehe „Fachmodell“), Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
 | `dashboard.js` | Kacheln und Listen aus dem Fachmodell: Codeblöcke `eba-kacheln` (Dashboard) und `eba-liste fristen\|termine\|pruefungen` (Dashboard, Prüfungen) |
 | `verbindungen.js` | Verbindungen und Schloss: Codeblöcke `eba-schloss`, `eba-verbindungen`; Aktionen `verbinden`, `verbindung-aktualisieren`, `trennen` |
@@ -212,14 +212,14 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `variante` | `wert` | `variante` in `System/Einstellungen.md` | Variante wählen (mit Auswahl) |
 | `darstellung` | `wert` (`hell`, `dunkel`, `automatisch`) | Hell, dunkel oder automatisch wie das Gerät | Darstellung wählen (mit Auswahl) |
 | `design` | `wert` (`elfenbein`, `flieder`, `klar`) | Design dieses Geräts (seit 18.10.2026; bis 17.10.2026 schaltete `design` die früheren Farbschemata um) | Design wählen (mit Auswahl) |
-| `einordnen` | `code` | Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen, oder den Eingang nehmen), dann Eingang einordnen | Unterlagen hinzufügen |
+| `einordnen` | `code` | Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen; ZIP-Dateien und Notizen nimmt es nicht), dann einordnen. Bis dahin liegen sie in `System/Neue Unterlagen/`, Übriges geht danach in den Papierkorb (bis 0.6.6 gab es dafür den Ordner `Eingang/`, in den man auch selbst Dateien legen konnte) | Unterlagen hinzufügen |
 | `stundenplan` | `link=neu` | Alma-Stundenplan aktualisieren, ohne Link verbinden | Stundenplan aktualisieren |
 | `verbinden` | `id` (alma, ilias, zentral, vorlage) | Verbinden-Fenster bzw. Erklärung | Verbinden … (mit Auswahl) |
 | `verbindung-aktualisieren` | `id`, `uebernehmen=1` (ILIAS) bzw. `hier=1` (Volltext): hier aktualisieren, obwohl ein anderes Gerät gerade aktualisiert | Verbindung jetzt abrufen | Aktualisieren … (mit Auswahl) |
 | `trennen` | `id` | Link bzw. ILIAS-Zugang auf diesem Gerät löschen (mit Rückfrage) | Trennen … (mit Auswahl) |
 | `ilias-holen` | – | Unterlagen aus ILIAS holen (Knopf auf Unterlagen); nicht verbunden: Fenster ILIAS-Unterlagen | Unterlagen aktualisieren |
 | `personalisieren` | – | Formular Name, Studienbeginn, Variante, Zielnote | Deine Angaben ändern |
-| `einrichtung` | `ab` (optional, `2` = ab Studienbeginn, vorausgefüllt) | Einrichtung öffnen (Knöpfe „Erneut starten“ und „Fortsetzen“ in der Zeile „Einrichtung“) | Einrichtung starten |
+| `einrichtung` | `ab` (optional, `2` = ab Studienbeginn, vorausgefüllt) | Einrichtung öffnen (Zeile „Einrichtung“ in den Einstellungen: „Starten“, „Fortsetzen“, „Fertig“ startet sie erneut) | Einrichtung starten |
 | `alma-link` | – | Alma-Link neu eingeben | Alma-Link ändern |
 | `suchen` | `q` | Obsidian-Suche öffnen | – |
 | `zeigen` | `notiz` | Notiz öffnen (Stundenplan-Raster in Bases) | – |
@@ -448,12 +448,13 @@ Fläche und Kante links in `--eba-warn`, „Fällt aus“ bzw. der neue Wert in 
 (Raster: „Hörsaal 9 statt ~~Hörsaal 1~~“, „12:15 statt ~~10:00~~“, ändert sich nur das Ende „bis 13:45 statt ~~12:00~~“; den Beginn
 bei c.t. lässt das Raster bei einem anderen Raum weg, der Raum braucht den Platz). Ein Ausfall wegen einer Pause oder eines freien
 Tags bleibt leise (neutrale Fläche, „Fällt aus“ gedämpft): Pausen sind keine Überraschung, und Alma trägt die Weihnachtspause auch
-in `ausfall` ein. Keine Symbole, Farbe und Wort (Felder `ausnahme`, `marke`, `raumNeu`, `raumAlt`, `zeitNeu`, `zeitAlt`,
-`zeitStatt`, `grund` am Kasten; CSS Abschnitt 55, „Ausnahmen“). Findet nichts statt, steht ein Satz
+in `ausfall` ein. Keine Symbole, Farbe und Wort (Felder `ausnahme`, `raumNeu`, `raumAlt`, `zeitNeu`,
+`zeitStatt`, `grund` am Kasten; der kurze Text „Anderer Raum“, „Neuer Raum“, „Andere Zeit“, „Geändert“ steht im Tooltip; CSS
+Abschnitt 55, „Ausnahmen“). Findet nichts statt, steht ein Satz
 (Name der Pause, „Vorlesungsbeginn TT.MM.“, „Vorlesungsfrei“, „Keine Lehrveranstaltungen“). Statt „Keine Lehrveranstaltungen“ steht
 „Deine Vorlesungen kommen von selbst, sobald du deinen Studienbeginn eingetragen hast.“ mit Link auf das Formular (Aktion
 `personalisieren`), wenn die zentralen Vorlesungen auf den Studienbeginn warten (`ctx.zentral.stundenplan()`: `verfuegbar` und
-`ohneBeginn`; `wocheBauen` → `beginnFehlt`, gezeichnet von `leerSatz`, im Raster wie in der Tagesansicht). Seit 24.10.2026;
+`ohneBeginn`; `wocheBauen` → `beginnFehlt`, gezeichnet von `leerSatz`). Seit 24.10.2026;
 vorher stand der Satz nur im Alma-Knopf über dem Raster der Seite Stundenplan, das Dashboard sagte „Keine
 Lehrveranstaltungen“. Fällt eine Lehrveranstaltung selbst aus,
 zeigt die Woche trotzdem ihre Kästen, damit man den Ausfall sieht. Stunden von–bis aus allen Serien des
@@ -463,37 +464,23 @@ Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Überschneiden sich
 echten (seit 19.10.2026; vorher halbierte ein Tutorium, das erst in zwei Wochen begann, eine Vorlesung): Überschneidet er
 einen, steht er schmal am rechten Rand (22 %, Klasse `schmal`, nur der Kurzname), die echten Kästen daneben behalten 78 %.
 Wörter brechen nie mitten im Wort, nur an Silben. Reine Logik als Funktionen (`wocheBauen`, `spalten`, `lage`, `kurzname`,
-`artText`, `versatzAus`, `tagAus`, `tagWahl`, `tageAus`, `tagKaesten`, `tagSchritt`, `wischStartOk`, `wischAchse`,
-`wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS: Abschnitte 47 und 55 (Tagesansicht 55b).
-*Tagesansicht (iPhone, seit 19.10.2026; seit 20.10.2026 nur noch auf dem Dashboard):* Unter 520 px Kartenbreite
-(Container-Abfrage auf `eba-kz`, also auch iPad im geteilten Bildschirm) zeigt die Woche einen Tag statt des Rasters; vorher
-standen fünf Spalten à 60 px da, Namen zerbrachen Buchstabe für Buchstabe und Räume fehlten. `zeichnen` legt beide Ansichten
-an (`.eba-wt` und `.eba-woche.hat-tag`), das CSS wählt nach der Breite, so passt es auch nach dem Drehen. Die Seite
-**Stundenplan** zeigt immer das Raster (`mitTag(pfad)`: `Studium/Stundenplan.md` ohne Tagesansicht und ohne `hat-tag`; seit
-20.10.2026). Seit 24.10.2026 ist die Seite nur Kopf und Raster (die eingeklappte Liste aller Lehrveranstaltungen und der
-Alma-Knopf sind weg: Seitenleiste und Modulseiten zeigen die Module und ihre nächsten Sitzungen, Alma holt stündlich) und steht
-in der Seitenleiste nur am iPhone (`sichtbareZiele`, siehe „Öffnen und Navigieren“): Am PC und iPad zeigt das Dashboard dieselbe
-Woche als Raster. Entschieden wird am Pfad, nicht
-an einem Argument im Codeblock: Die Seite hat im Update die Klasse „seite“, eine selbst geänderte bleibt stehen, und ein neues
-Argument käme dort nie an. *Schmales Raster* (Karte unter 480 px, also die Seite Stundenplan auf dem iPhone hochkant): Spalten
+`artText`, `versatzAus`, `raumKnapp`, `wischStartOk`, `wischAchse`,
+`wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS: Abschnitte 47 und 55.
+*Eine Ansicht auf jeder Breite (seit 24.10.2026):* Dashboard und Seite Stundenplan zeichnen dasselbe Raster, auch auf dem
+iPhone hochkant. Vom 19. bis 24.10.2026 zeigte das Dashboard unter 520 px Kartenbreite stattdessen einen Tag als Liste
+(Tagesansicht: Leiste mit fünf Tagen, darunter die Lehrveranstaltungen des gewählten Tags, Wischen von Tag zu Tag), und für
+die ganze Woche brauchte es die Seite Stundenplan, die 0.6.6 darum am iPhone in der Seitenleiste führte. Das waren zwei
+Ansichten derselben Woche und ein Weg mehr; das schmale Raster zeigt Name, Raum und Ausnahmen inzwischen lesbar. Die Seite
+Stundenplan bleibt (Kopf und Raster; die eingeklappte Liste aller Lehrveranstaltungen und der Alma-Knopf sind seit 24.10.2026
+weg, Seitenleiste und Modulseiten zeigen die Module und ihre nächsten Sitzungen, Alma holt stündlich), steht aber in keiner
+Seitenleiste mehr (`sichtbareZiele`, siehe „Öffnen und Navigieren“); Lehrveranstaltungs-Notizen verweisen weiter auf sie
+(`uebersicht`). *Schmales Raster* (Karte unter 480 px, also iPhone hochkant, Dashboard wie Seite Stundenplan): Spalten
 von gut 60 px; der Kurzname in 10,5 px bricht nur an Silben (`hyphens: auto`, `lang="de"`, nie mitten im Wort), darunter die
 knappe Zeile (`zeileZeichnen(el, k, true)`, beide Zeilen stehen im Kasten, das CSS wählt nach der Breite): Raum gekürzt
 (`raumKnapp`: ohne Zusatz in Klammern, auch verschachtelt, „Hörsaal“ als „HS“, „Hörsaal 1 (Keplerstraße 2)“ → „HS 1“), Zeit nur
 bei einer Änderung („18:15 statt ~~16:15~~“) und als „ab TT.MM.“, Ausfall „Fällt aus“; ein hoher Kasten zeigt drei Zeilen
 (`eba-core.css` 55 und 37.stundenplan, Innenabstand seitlich 3 px). Quer (iPhone) und am iPad ist die Karte breiter: das volle
-Raster. Kopf „KW n · 26.–30.10.“ mit ‹ › (dieselbe Aktion `woche`; „KW n“
-in einer anderen Woche zurück), darunter fünf Tage mit Datum (gewählt getönt, heute in Akzentfarbe, Punkt, wenn an dem Tag
-etwas stattfindet; ein kurzer Strich in Warnfarbe statt des Punkts, wenn an dem Tag eine Ausnahme ist, `tageAus`: `ausnahme`,
-`hinweis` „Ausfall“, „Änderung“ oder „Ausfall und Änderung“ für Vorlesesoftware und Tooltip), darunter die Kästen des Tags über
-die ganze Breite: links Beginn und Ende, kräftig der Kurzname, blass die Art (auch „Vorlesung“), darunter der Raum, nichts
-abgeschnitten. Bei einer Ausnahme steht vorn der kurze Text („Fällt aus“, „Anderer Raum“, „Neuer Raum“, „Andere Zeit“, „Geändert“), bei einer
-anderen Zeit „statt ~~10:15–11:45~~“, dann „Hörsaal 9 statt ~~Hörsaal 1~~“; die neue Zeit links in Warnfarbe; ein Ausfall wegen
-einer Pause „Fällt aus (Weihnachtspause)“. Dieselben Klassen wie im Raster (heute, jetzt, ausfall, ausnahme, geaendert,
-konflikt), ein Tipp öffnet wie dort. Was erst beginnt, ist eine leise Zeile
-„Tutorium BWL · ab 04.11. · Mi 14:15“, kein Kasten. Welcher Tag: gewählt (Tipp auf einen Tag oder Wischen) merkt sich nur
-dieses Gerät (`eba-woche-tag`, wie der Versatz: dieselbe Sitzung, 30 Minuten), sonst heute, in einer anderen Woche und am
-Wochenende Montag (Planwoche). Wischen wechselt den Tag, nach Freitag weiter zum Montag der nächsten Woche (`tagSchritt`);
-es darf auf einem Kasten beginnen, nur nicht auf ‹ ›.
+Raster.
 *Andere Woche:* ‹ und › sind Links auf die Aktion `woche` (`schritt` = Wochen ab heute), „KW n“ ist in einer anderen Woche
 der Link zurück (`schritt=0`). Welche Woche, merkt sich nur dieses Gerät: `app.saveLocalStorage("eba-woche-versatz")` mit
 Versatz, Uhrzeit und Sitzung (`ctx.bleibend`, neu bei jedem Start von Obsidian). Gilt nur in derselben Sitzung und höchstens
@@ -970,7 +957,7 @@ hat, fasst ein Update nie an, auch wenn die Liste es nennt (dann lehnt das Plugi
 
 Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal), `abruf.json`, `installiert.json`, `update.json`,
 `.obsidian/appearance.json` (Obsidians Grundfarbschema; Hell, Dunkel, Automatisch speichert jedes Gerät selbst), `workspace*.json`, Plugin-`data.json`, `Termine/`, `Stundenplan/`,
-`Vorlesungen/`, `Übungsblätter/`, `Unterlagen/`, `Eingang/`, `Schlüsselqualifikationen/`, `Anhänge/`, `Karteikarten/`,
+`Vorlesungen/`, `Übungsblätter/`, `Unterlagen/`, `Schlüsselqualifikationen/`, `Anhänge/`, `Karteikarten/`,
 `System/Daten/Karteikarten/` (Lernstände) und alles andere ohne Klasse.
 
 - **„Geändert“** heißt: SHA-256 der Datei ≠ Eintrag in `installiert.json` (Liste der zuletzt installierten Version). Gleicht
@@ -1630,9 +1617,9 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   Raster-Menü, das bis 0.4.6 in Obsidians Kopfleiste jeder Notiz stand (`menue.js`, `view.addAction`); das Update entfernt
   `menue.js`, ein Gerät mit offener App nimmt das Symbol beim Löschen sofort weg (`skriptEntfernen` → `abmelden()`). Oben die
   Seiten aus `sichtbareZiele(ctx)` (`ZIELE`, einzige Liste; die Lesezeichen der Vorlage `.obsidian/bookmarks.json` folgen ihr,
-  jede Seite hat ein eigenes Symbol, `tests/seitenleiste.test.js`; Stundenplan seit 24.10.2026 nur am iPhone,
-  `Platform.isPhone`, weil das Dashboard sonst dieselbe Woche als Raster zeigt; iPad im geteilten Bildschirm zeigt am Dashboard
-  die Tagesansicht und hat die Seite trotzdem nicht in der Seitenleiste, bewusst hingenommen), darunter „Dieses Semester“ mit den Modulen
+  jede Seite hat ein eigenes Symbol, `tests/seitenleiste.test.js`; Stundenplan fehlt seit 24.10.2026, weil das Dashboard
+  die Woche auf jedem Gerät als Raster zeigt; 0.6.6 führte die Seite nur am iPhone, wo das Dashboard damals einen Tag zeigte),
+  darunter „Dieses Semester“ mit den Modulen
   nach `diesesSemester` (`eba.js`, dieselbe Regel wie die Gruppe „Dieses Semester“ im Fenster „Neu …“), Modulcode statt Symbol. Im
   Akzent steht die Seite, die vorn offen ist, bei Notizen mit `code` (Unterlagen, Vorlesungen, Termine …) auch ihr Modul. Ein Tipp
   öffnet über `ctx.oeffnen` (nie in der Seitenleiste) und schließt auf iPhone und iPad die Schublade, wenn sie nicht angeheftet ist.
@@ -1745,7 +1732,16 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   (Callout), blendet CSS (`:has`) den übrigen Inhalt aus, z. B. das Wochenraster auf Dashboard und Stundenplan. Sind
   Stundenplan-Notizen da (etwa per Sync), gibt es kein Schloss; die Übersicht sagt dann „Dein Stundenplan liegt vor (n
   Einträge).“ mit leisem Verbinden.
-- Codeblock `eba-verbindungen`: Übersicht in den Einstellungen (Stand, zuletzt aktualisiert), ohne Satz darüber. Je Zeile
+- Codeblock `eba-verbindungen`: Übersicht in den Einstellungen, ohne Satz darüber. Seit 24.10.2026 je Verbindung eine kompakte
+  Zeile wie in den Einstellungen von iPhone und iPad, auf allen Geräten gleich (`kompakt(v, st)`, CSS `.eba-ez` in eba-core.css
+  43): Symbol, Name, rechts ein kurzer Stand und der Pfeil. Der Stand ist `st.kurz` (Studium Autopilot: die Version; Uni-Login und
+  Volltext von außen: „Über Uni-Abgleich“), sonst die Pille in Worten („Verbunden“, „Aus“, „Neue Version“), sonst das Symbol
+  („An“, „Nicht verbunden“). Ein Problem (Warnsymbol) färbt den Stand, heißt nie „Verbunden“ oder „An“, sondern „Fehler“, und
+  steht als Satz in der einzigen zweiten Zeile (`st.unter` oder der Satz der Zeile). Die ganze Zeile ist ein Link: auf das Ziel
+  des Knopfs, wenn er selbst ein Fenster öffnet (Verbinden, Einschalten, Mehr erfahren), sonst ins Fenster der Verbindung. Dort
+  steht der Knopf der Zeile unten (`zeilenKnopf`: Aktualisieren, Hier aktualisieren, Neu laden, Nach Updates suchen, Neue
+  Version installieren). Bis 0.6.6 standen Satz, Pille und Knopf in der Zeile; die Seite war auf dem iPhone fast doppelt so lang.
+  Das Modell darunter (`statusZeile`) ist unverändert: Je Zeile
   höchstens **ein** Knopf (Verbinden, Aktualisieren, Hier aktualisieren, Einschalten, Neu laden oder Mehr erfahren; Wörter
   nach Entscheidung E1 in `WORT`); führt er nicht ins Fenster, steht „Mehr erfahren“ als Textlink im Status. Das Fenster enthält den Rest: bei Alma
   (verbunden) „Neuen Link eingeben“ und „Trennen“, bei den zentralen Daten die beiden Schalter (Obsidian-`Setting` mit
@@ -2311,6 +2307,8 @@ Server); kein IMAP, weil iOS keine eigenen Verbindungen erlaubt und das Webmail 
 - **Voraussetzung:** Uni-Login auf diesem Gerät, von ILIAS bestätigt und nicht abgelehnt (`ctx.ilias.uniZugang()`:
   `bestaetigt`, nicht `gesperrt`), dazu die Zustimmung je Gerät (`eba-postfach-an`, Knopf **Postfach anzeigen**). Sonst zeigt
   der Block eine Zeile wie unter Verbindungen (Mit Uni-Login verbinden, abgelehnt, wird geprüft, Postfach anzeigen).
+  **Mit Uni-Login verbinden** öffnet gleich die Anmeldung (`verbinden` mit `auch=1`), auch wenn ILIAS über ein anderes Gerät
+  verbunden ist; bis 0.6.6 kam dann das Fenster „Ein Gerät reicht, alles kommt über deinen Sync“, das für Mails nicht stimmt.
 - **Anmeldung:** `/login.php` holen, Formular `#horde_login` nur als POST an `https://webmail.uni-tuebingen.de/login.php`;
   versteckte Felder bleiben, dazu `login_post=1`, `horde_user`, `horde_pass` (erst beim Absenden aus dem Schlüsselbund),
   `horde_select_view=mobile_nojs`, `new_lang=de_DE`. Angemeldet nur mit Abmelde-Link (`horde_logout_token`); die bekannte
@@ -2418,7 +2416,7 @@ auf); Tippflächen ≥ 44 px, Eingaben 16 px; auf dem iPhone bildschirmfüllend 
 
 Geschrieben wird nur nach einem Tipp auf **Los geht’s**, **Weiter** oder **Überspringen**: Antworten des Bildschirms und Stand
 zusammen in einem `processFrontMatter` (Studienbeginn als festes Datum, nicht leer, damit er nicht mit dem Semester wandert).
-Der Schritt zu Fertig (Bildschirm 7) setzt `fertig`. Die Darstellung steht nicht hier, sondern nur auf dem Gerät. „Erneut starten“ (Aktion `einrichtung`, `ab=2`) beginnt bei 2, vorausgefüllt, ohne Zurück zum
+Der Schritt zu Fertig (Bildschirm 7) setzt `fertig`. Die Darstellung steht nicht hier, sondern nur auf dem Gerät. Ein Tipp auf die fertige Zeile „Einrichtung“ (Aktion `einrichtung`, `ab=2`) beginnt bei 2, vorausgefüllt, ohne Zurück zum
 Willkommen; der Status bleibt `fertig`.
 
 **Automatisch** (`start()`, nur beim App-Start): wenn der metadataCache eingelesen ist (`initialized`, sonst `resolved`) und das
@@ -2497,7 +2495,7 @@ schrieb die Wahl `appearance.json` und schaltete damit alle Geräte mit um. `app
 
 ## Personalisieren
 
-Das Formular (Aktion und Befehl `personalisieren`, Knopf „Ändern“ in den Einstellungen) hat Name, Studienbeginn als
+Das Formular (Aktion und Befehl `personalisieren`, Zeilen Name, Studienbeginn und Zielnote in den Einstellungen) hat Name, Studienbeginn als
 Semester-Auswahl (mit Vorschau „1. Fachsemester … · heute n. FS“ und Hinweis bei Beginn im Sommersemester), Variante und
 Zielnote (1,0–4,0, Komma oder Punkt, gespeichert als „2,3“). Speichern schreibt nach `System/Einstellungen.md`; leere Felder
 werden leer (`name:`), nicht `""`. Danach zieht `abgleichen()` die Semesterliste nach. Semester-Auswahl, Vorschau und
@@ -2516,10 +2514,13 @@ neue Eingabe, die an mehr als einer Stelle vorkommt, kommt dorthin. Tests: `test
 Codeblock `eba-personalisieren` (früher die Karte oben auf dem Dashboard) zeichnet seit 0.3.0 nichts mehr; er bleibt, damit
 selbst geänderte ältere Dashboards keine Lücke zeigen.
 
-Codeblock `eba-personalisieren angaben` (Einstellungen & Hilfe, „Deine Angaben“): Zeilen Name, Studienbeginn (Semester und
-heutiges Fachsemester), Zielnote, je mit „Ändern“ (Formular, Cursor im Feld), und Einrichtung (offen: „Starten“, angefangen:
-„Fortsetzen“, fertig: „Erneut starten“ und die übersprungenen Schritte). `eba-personalisieren variante`: je Variante eine Zeile
-mit dem, was daraus folgt (`FOLGE`), die gewählte mit Haken und ohne Knopf, die übrigen mit „Wählen“ (Aktion `variante`). Beim
+Codeblock `eba-personalisieren angaben` (Einstellungen & Hilfe, „Deine Angaben“): kompakte Zeilen wie unter Verbindungen
+(seit 24.10.2026, `.eba-ez`). Name, Studienbeginn (das erste Semester), Zielnote mit dem Wert rechts, leer „Eintragen“ (kurz,
+damit auf dem iPhone mit großer Schrift Titel und Wert in eine Zeile passen); ein Tipp öffnet das Formular am Feld. Einrichtung
+rechts „Starten“ oder „Fortsetzen“ im Akzent, fertig „Fertig“ und darunter die übersprungenen Schritte; ein Tipp startet sie
+(erneut ab Schritt 2). `eba-personalisieren variante`: je Variante eine Zeile ohne Symbol, die gewählte mit Haken rechts und
+dem, was daraus folgt (`FOLGE`), darunter, die übrigen wählt ein Tipp (Aktion `variante`). Bis 0.6.6 hatte jede Zeile einen
+Satz und einen Knopf („Ändern“, „Erneut starten“, „Wählen“). Beim
 Neuzeichnen der Leseansicht (`rerender`) liefert `getSectionInfo` oft nichts, `blockArgument()` gibt dann die Vorgabe zurück;
 bis 16.10.2026 blieb die Karte deshalb unsichtbar. Seitdem gilt wie in `todos.js` ein Rückfall über den Text im Block
 („Variante: …“ → `variante`, „Deine Angaben: …“ → `angaben`), und beide nehmen die Klasse `eba-perso-aus` wieder ab. Für
@@ -2578,17 +2579,39 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   neu gezeichnet nach `Q.meldenNeu`. Sonst bleibt der Block leer
   (`.eba-bp-aus`) und samt Hülle auf Höhe 0 gefaltet (Abschnitt 59, Regel „Einen leeren Block samt Hülle ausblenden“):
   Normale Nutzer:innen sehen nichts, auch keine leere Karte. Geprüft in Obsidian (18.10.2026): Lese- und Bearbeitungsansicht,
-  iPad- und iPhone-Breite, mit und ohne eigenen Abgleich; Obsidians gemessene Abschnittshöhen stimmen, „Im Eingang“ darunter
+  iPad- und iPhone-Breite, mit und ohne eigenen Abgleich; Obsidians gemessene Abschnittshöhen stimmen, die Karte darunter
   erscheint. Tests: `tests/bitte-pruefen.test.js`.
+- **Reiter** (seit 24.10.2026, `reiter.js`, Codeblock ```` ```eba-reiter ```` unter dem Wochenraster): Fristen, Termine,
+  Nachzuarbeiten und das Raster „Offene Fragen | To-dos“ stehen auf jedem Gerät nicht als Karten untereinander, sondern als
+  eine Reihe Knöpfe in einer Karte (zuerst nur am iPhone, am selben Tag auf PC und iPad übernommen). Ein Tipp zeigt die Liste
+  darunter, ein Tipp auf einen anderen wechselt, einer auf den offenen schließt ihn; beim ersten Öffnen ist keiner offen,
+  danach gilt die Wahl je Seite bis zum Neustart (`ctx.bleibend`). Welche Karte ein Reiter ist, steht in ihren Angaben:
+  `reiter=Name` (`[!eba-termin|schlicht|umbruch|handy-zu|reiter=Fristen]+`), im Raster mit Leerzeichen
+  (`[!eba-raster|2 reiter=To-dos]`), denn eba-core.css liest die Spaltenzahl als eigenes Wort (`~="2"`). Mehrere Karten mit
+  demselben Namen bilden einen Reiter. Den Inhalt liest der Block aus der Notiz selbst (`reiterAus`: dieselbe Karte eine Ebene
+  höher, ohne `handy-zu`, `reiter=` und Klappen) und zeichnet ihn mit Obsidians `MarkdownRenderer`; die Listen darin zeichnen
+  sich also selbst, am PC in ihrer breiten Form. Die Abschnitte mit `reiter=`-Karten und auf dem Dashboard „## Zu erledigen“
+  (darunter bliebe sonst nur die Überschrift) falten, aber nur, solange das Plugin läuft (`body.eba-plugin-an`); ohne Plugin
+  bleiben die Karten (eba-core.css Abschnitt 69). Eine `reiter=`-Karte steht darum oben in der Notiz oder in einem Raster nur
+  aus `reiter=`-Karten, und die Seite braucht den Block; ohne `reiter=`-Karten blendet er sich aus (`.eba-rt-aus`).
+  Am Knopf steht, wie viele Einträge die Listen des Reiters gerade zeigen, bei 0 nichts. `bloeckeAus` findet die Codeblöcke im
+  Markdown des Reiters (Sprache, Argument, Ersatztext), `anzahl` zählt sie zusammen. Zählen kann eine Erweiterung, die
+  `zaehler: { "<sprache>": (arg, quelle) => Zahl | null }` zurückgibt, gelesen über `plugin.erweiterungen`: `dashboard.js` für
+  `eba-liste` mit der Grenze der Liste (höchstens 6 Fristen, 8 Termine, 8 Nachzuarbeiten), `todos.js` für `eba-todos`. Fehlt
+  ein Zähler oder kennt er die Zahl nicht (ohne Modell), steht keine Zahl. Neu gezählt wird nach dem Zeichnen, wenn das Modell
+  sich ändert, eine Notiz mit Aufgaben oder eine Vorlesung sich ändert, gelöscht oder umbenannt wird, beim Zurückkehren in die
+  App und alle 10 Minuten. Geprüft in Obsidian (24.10.2026): iPhone 360 und 390 px mit 16 und 20 px Schrift, iPad 820 px, PC
+  1024 px, hell und dunkel, jeder Reiter offen und wieder zu, Zahlen wie die Listen. Tests: `tests/reiter.test.js`, Zähler in
+  `tests/dashboard.test.js` und `tests/todos.test.js`.
 
-## Bereiche (elf Seiten, dazu der Lernplan)
+## Bereiche (zehn Seiten, dazu der Lernplan)
 
-Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt elf Seiten: Dashboard,
-Stundenplan, Studienverlauf, Termine & Anmeldungen, Postfach (seit 0.6.0), Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
+Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt zehn Seiten: Dashboard,
+Studienverlauf, Termine & Anmeldungen, Postfach (seit 0.6.0), Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
 Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`sichtbareZiele`, `ctx.lernplan.sichtbar()`;
-die schreibt nur eine KI, siehe „Lernplan“). Stundenplan steht seit 24.10.2026 nur am iPhone dort (am PC und iPad zeigt das
-Dashboard dieselbe Woche als Raster); die Seite und ihr Lesezeichen bleiben. Die Icons hängen an `li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6;
-Stundenplan seit 0.4.6 mit Wochenspalten statt des Kalenders von Termine & Anmeldungen). Die Lesezeichen der Vorlage folgen `ZIELE`
+die schreibt nur eine KI, siehe „Lernplan“). Stundenplan steht seit 24.10.2026 nicht mehr dort (0.6.6: nur am iPhone), das
+Dashboard zeigt die Woche auf jedem Gerät als Raster; die Seite bleibt, ohne Lesezeichen und Symbol. Die Icons hängen an
+`li:has(> a[data-href$="…"])` (eba-core.css Abschnitt 6). Die Lesezeichen der Vorlage folgen `ZIELE`
 (siehe „Öffnen und Navigieren“).
 
 | Seite | Enthält (früher eigene Seite) |
@@ -2598,7 +2621,7 @@ Stundenplan seit 0.4.6 mit Wochenspalten statt des Kalenders von Termine & Anmel
 | `Studium/Noten & ECTS.md`, `Studium/Studienverlauf.md` | je eine Karte „Regeln“ (Prüfungsordnung) |
 | `Studium/Unterlagen.md` | Abschnitt „Übungsblätter“ oben (Übungsblätter) |
 | `Studium/Kontakte & Links.md` | Abschnitt „Offizielle Dokumente“ (Quellen) |
-| `Studium/Einstellungen & Hilfe.md` | Eine Gestalt für die ganze Seite (seit 17.10.2026): jeder Abschnitt ist eine Zeilenliste wie die Verbindungen (Rahmen, Zeilen mit Haarlinie, rundes Symbol, Titel, gedämpfte Zeile, rechts ein Knopf oder der Klapp-Pfeil). Deine Angaben (Name, Studienbeginn, Zielnote, Einrichtung), Verbindungen, Variante (je Variante eine Zeile mit Pflichtmodulen und „Wählen“); Abschnitt „Hilfe“ als `> [!eba-zeilen]` mit je Thema einer klappbaren Karte `> > [!eba-karte\|hilfe\|<thema>]- Titel <span class="eba-zeile-unter">…</span>` (Symbol je Thema in eba-core.css Abschnitt 5), zuletzt „Stand der Angaben“ (offene Punkte). Bis dahin Kasten, Chips mit Tabelle und einzelne Karten |
+| `Studium/Einstellungen & Hilfe.md` | Eine Gestalt für die ganze Seite (seit 17.10.2026): jeder Abschnitt ist eine Zeilenliste wie die Verbindungen (Rahmen, Zeilen mit Haarlinie, rundes Symbol, Titel, gedämpfte Zeile, rechts ein Knopf oder der Klapp-Pfeil). Deine Angaben (Name, Studienbeginn, Zielnote, Einrichtung), Verbindungen, Variante (je Variante eine Zeile, die gewählte mit Haken); Abschnitt „Hilfe“ als `> [!eba-zeilen]` mit je Thema einer klappbaren Karte `> > [!eba-karte\|hilfe\|<thema>]- Titel` (Symbol je Thema in eba-core.css Abschnitt 5), zuletzt „Stand der Angaben“ (offene Punkte). Seit 24.10.2026 sind alle Zeilen kompakt wie die Einstellungen von iPhone und iPad, auf allen Geräten gleich: eine Zeile je Angabe, rechts der Stand und der Pfeil, Knöpfe im Fenster dahinter, Hilfe ohne Unterzeilen (bis 0.6.6 `<span class="eba-zeile-unter">`, in selbst geänderten Seiten ausgeblendet). Bis 17.10.2026 Kasten, Chips mit Tabelle und einzelne Karten |
 
 - **Regeln:** Die Prüfungsordnung steht nach Thema in Karten `> [!eba-karte|regeln]- <Themen>` unter `## Regeln` (Titel nennt
   die Themen statt „Regeln“ zu wiederholen, seit 18.10.2026; Links
@@ -2854,7 +2877,7 @@ im Codeblock geht vor), auf allen Geräten gleich:
   „02 R Lab“ oder einem ILIAS-Sitzungsordner („…, 14:15 - 15:45: R Lab 1“), bei mehreren die hinter dem Lab-Wort („Kapitel 3 Lab 2“
   → Lab 02); eine Gliederung mit Strich („03 - Data Science Lab“, „03 - R Lab“) zählt nicht. Lab-Wörter sind nur bei der Art Lab
   Nummernwörter (`NUMMER_LAB`): „Mitschrift Lab 2“ und „Tutorium/R Lab 1“ heißen wie vorher. Ein R-Notebook und seine HTML-Fassung
-  („Lab2.Rmd“, „Lab2.nb.html“) sind im Eingang eine Unterlage (gezeigt wird die HTML-Fassung; liegt daneben noch „Lab2.html“, wird
+  („Lab2.Rmd“, „Lab2.nb.html“) sind beim Einordnen eine Unterlage (gezeigt wird die HTML-Fassung; liegt daneben noch „Lab2.html“, wird
   die Notebook-Fassung eine eigene Unterlage, `stapeln` → `ausgaben`); aus ILIAS kommen sie getrennt, die HTML-Fassung als „… mit
   Ausgaben“ (`ilias.js`, `titelMitZusatz` kürzt den Titel, damit der Zusatz bleibt). Die Gliederungsnummer eines Lab-Ordners
   („03 - Data Science Lab“) gilt nur für Dateien der Art Lab (`gliederungsNummer(…, lab)`); Fotos zählen nur mit Lab im Namen,
@@ -2980,7 +3003,7 @@ Regeln für Skript-Autoren:
   `display: none` haben, der Abschnitt selbst bleibt sichtbar: So fällt im Raster „Offene Fragen | To-dos“ des Dashboards
   eine leere Karte weg (`todos.js` setzt `is-leer` am Block, CSS 37.todos mit `:has()`), die andere nimmt die ganze Breite;
   sind beide leer, steht nur die To-do-Karte mit „Nichts offen.“. Geprüft in Obsidian (18.10.2026): Leseansicht und
-  Bearbeitungsansicht, iPad- und iPhone-Breite, „Im Eingang“ darunter erscheint nach dem Scrollen.
+  Bearbeitungsansicht, iPad- und iPhone-Breite, die Karte darunter erscheint nach dem Scrollen.
 
 ## Tests
 
@@ -2991,8 +3014,8 @@ Regeln für Skript-Autoren:
   ILIAS-Skripte (siehe „ILIAS-Unterlagen“), Noten & Anmeldungen und `sperre.js` (siehe „Noten & Anmeldungen (Alma)“), `quellen.js` (siehe „Quellen-Vertrag“),
   `alma.js` (Lebenslauf der Notizen, Grabstein, Sperre, Fehler im Status, Verbinden ohne Erfolg), `leer.js`
   (`istLeer`), `fsrs.js` und `karten.js` (siehe „Karteikarten“), `woche.js` (Wochenraster), `todos.js` (Auswahl,
-  leere Blöcke) sowie `bitte-pruefen.js` (Protokoll lesen, abhaken), `volltext.js` (siehe „Volltext der PDFs“), `ilias-kalender.js`
-  (siehe „ILIAS-Kalender“), `seit-besuch.js` (siehe „Seit deinem letzten Besuch“) und
+  leere Blöcke), `reiter.js` (Reiter mit Zahl) sowie `bitte-pruefen.js` (Protokoll lesen, abhaken), `volltext.js`
+  (siehe „Volltext der PDFs“), `ilias-kalender.js` (siehe „ILIAS-Kalender“), `seit-besuch.js` (siehe „Seit deinem letzten Besuch“) und
   `Dashboard.md` mit `dashboard.js` (Kacheln und Listen), das Fachmodell (`tests/fachmodell.test.js`) und die Bases-Formeln auf
   Noten & ECTS gegen das Modell (`tests/bases-regeln.test.js`, Auswerter `tests/bases-formel.js`). `tests/laden.js` lädt die Skripte mit einem kleinen Ersatz für Obsidian.
 - **In Obsidian** (Entwickler-PC, nicht im Repo): Oberfläche, Knöpfe, Hot-Reload, Datenkanal mit Testquelle, Bases-Formeln.

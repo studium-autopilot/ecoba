@@ -188,6 +188,17 @@ module.exports = function (ctx) {
     return ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-liste", LISTEN, "fristen") : "fristen";
   };
 
+  // Zahl am Reiter (reiter.js, Dashboard): so viele Zeilen zeigt ein Block gerade; Art aus dem Argument der Kopfzeile,
+  // sonst wie der Block aus dem Ersatztext. Ohne Modell null (dann keine Zahl).
+  const zaehler = {
+    "eba-liste": (arg, quelle) => {
+      const M = ctx.modell;
+      if (!M || !M.fristen) return null;
+      const a = String(arg || "").toLowerCase();
+      return zeilenBauen(LISTEN.indexOf(a) >= 0 ? a : artVon(quelle), M, M.zeit.heute()).length;
+    },
+  };
+
   const registrieren = () => {
     const kacheln = ctx.codeblock("eba-kacheln", (_q, el) => {
       try { kachelnZeichnen(el); } catch (e) { console.error("eba-kacheln", e); el.setText("Kacheln: Fehler – " + e.message); }
@@ -217,5 +228,5 @@ module.exports = function (ctx) {
     ctx.intervall(() => { if (document.visibilityState === "visible") alle(); }, 10 * 60 * 1000);
   };
 
-  return { registrieren, kachelnBauen, leisteBauen, zeilenBauen, artVon };
+  return { registrieren, kachelnBauen, leisteBauen, zeilenBauen, artVon, zaehler };
 };

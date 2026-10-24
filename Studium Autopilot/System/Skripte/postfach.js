@@ -233,7 +233,8 @@ module.exports = function (ctx) {
     return b;
   };
   const webmailLink = (eltern, text) => eltern.createEl("a", { cls: "eba-pf-webmail external-link", text, href: "https://webmail.uni-tuebingen.de", attr: { target: "_blank", rel: "noopener" } });
-  // Eine Zeile wie unter Verbindungen: Symbol, Titel, gedämpfte Zeile, rechts ein Knopf
+  // Eine Zeile wie unter Verbindungen: Symbol, Titel, gedämpfte Zeile, rechts ein Knopf. Der Link öffnet gleich die Anmeldung
+  // (auch=1), auch wenn ILIAS über ein anderes Gerät verbunden ist: Mails kommen nie über den Sync, jedes Gerät braucht den Login.
   const zeile = (el, o) => {
     const liste = el.createDiv({ cls: "eba-vb-liste" });
     const z = liste.createDiv({ cls: "eba-vb" });
@@ -244,7 +245,7 @@ module.exports = function (ctx) {
     if (o.knopf || o.link) {
       const k = z.createDiv({ cls: "eba-vb-knoepfe" });
       if (o.knopf) knopf(k, o.knopf, o.fn, "cta");
-      if (o.link) k.createEl("a", { cls: "eba-vb-knopf cta", text: o.link, href: ctx.link("verbinden", { id: "ilias" }) });
+      if (o.link) k.createEl("a", { cls: "eba-vb-knopf cta", text: o.link, href: ctx.link("verbinden", { id: "ilias", auch: "1" }) });
     }
   };
   // Text einer Mail: Zeilen bleiben, Adressen werden zu Links; nie HTML aus der Mail

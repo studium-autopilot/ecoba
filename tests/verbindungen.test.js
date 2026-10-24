@@ -403,6 +403,49 @@ test("Uni-Login: eine Zeile mit allem, was verbunden ist; anderes Gerät, abgele
   assert.deepEqual(y.geholt, [{ uebernehmen: false }, { kalender: true }]);
 });
 
+test("Kompakte Zeile: rechts ein kurzer Stand, darunter nur ein Problem, die ganze Zeile öffnet das Fenster", async () => {
+  const k = (o, id) => aufbau(o).V.kompakt(id);
+  const ziel = (id) => "obsidian://studium-autopilot?aktion=verbinden&id=" + id;
+  const kal = { verbunden: true, zustand: "an", geprueft: vorMin(30), warnungen: [], abgaben: 1 };
+  // alles gut: nur der Stand, ohne zweite Zeile; Aktualisieren steht im Fenster
+  assert.deepEqual(k({ ilias: { verbunden: true, zustand: "an", zuletzt: vorMin(5), text: "Aktualisiert vor 5 Min." }, kalender: kal }, "uni-login"),
+    { wert: "Verbunden", art: "", unter: "", ziel: ziel("uni-login") });
+  // nicht verbunden: der Tipp öffnet gleich die Anmeldung (Ziel des Knopfs)
+  assert.deepEqual(k({}, "uni-login"), { wert: "Nicht verbunden", art: "", unter: "", ziel: ziel("ilias") });
+  // Problem: Warnfarbe, nie „Verbunden“, der Satz darunter
+  assert.deepEqual(k({ alma: { verbunden: true, zustand: "fehler", geprueft: vorMin(120), fehler: "Keine Verbindung zu Alma." } }, "uni-login"),
+    { wert: "Fehler", art: "warn", unter: "Alma-Stundenplan: Keine Verbindung zu Alma. Zuletzt aktualisiert vor 2 Std.", ziel: ziel("uni-login") });
+  assert.deepEqual(k({ ilias: { verbunden: true, gesperrt: true, text: "Benutzername oder Passwort stimmt nicht." } }, "uni-login"),
+    { wert: "Neu verbinden", art: "warn", unter: "Benutzername oder Passwort stimmt nicht.", ziel: ziel("ilias") });
+  assert.deepEqual(k({ zentralStatus: { zustand: "fehler", geprueft: vorMin(60), fehler: "Keine Verbindung zu den zentralen Daten." } }, "zentral"),
+    { wert: "Fehler", art: "warn", unter: "Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert vor 1 Std.", ziel: ziel("zentral") });
+  // an, aus, von außen
+  assert.equal(k({ zentralStatus: { geprueft: vorMin(10) } }, "zentral").wert, "An");
+  assert.equal(k({ zentralStatus: { an: false, zustand: "aus" } }, "zentral").wert, "Aus");
+  assert.equal(k({ volltext: { an: false, zustand: "aus", warnungen: [], text: "" } }, "volltext").wert, "Aus");
+  assert.equal(k({ volltext: { an: true, zustand: "extern", warnungen: [], text: "Kommt über deinen eigenen Abgleich." } }, "volltext").wert, "Über Uni-Abgleich");
+  assert.equal(k({ extern: true, einstellungen: { quellen_extern: ["stundenplan", "ilias-dateien", "ilias-kalender"] }, ilias: { extern: true, text: I.K.TEXT_EXTERN } }, "uni-login").wert,
+    "Über Uni-Abgleich");
+  // über ein anderes Gerät verbunden: verbunden, ohne Problem
+  const x = await mitSperren({ sperren: { ilias: sperre("g-ipad", 20), alma: sperre("g-ipad", 180) } });
+  assert.deepEqual(x.V.kompakt("uni-login"), { wert: "Verbunden", art: "", unter: "", ziel: ziel("uni-login") });
+  assert.equal(aufbau({}).V.kompakt("volltext"), null, "ohne Zeile keine kompakte Zeile");
+});
+
+test("Kompakte Zeile: jeder Stand hat einen Wert, ein Problem immer einen Satz darunter", () => {
+  for (const [name, o] of ALLE) {
+    const { V: W } = aufbau(o);
+    for (const id of Object.keys(W.liste)) {
+      const z = W.zeile(id), k = W.kompakt(id), wo = `${name}: ${id}`;
+      if (!z) continue;
+      assert.ok(k.wert, wo + " – ohne Wert");
+      assert.match(k.ziel, /^obsidian:\/\/studium-autopilot\?aktion=verbinden&id=/, wo);
+      if (z.symbol === "warnung") assert.ok(k.unter && k.art === "warn", wo + " – Problem ohne Satz");
+      else assert.equal(k.unter, "", wo + " – zweite Zeile nur bei einem Problem");
+    }
+  }
+});
+
 test("Claude (claude.js): Zeile im Format der Quellen; zu sehen ohne eigenen Server oder wenn dieses Gerät verbunden ist", () => {
   const C = laden("claude").ctx.claude;
   const z = { verbunden: false, server: false };

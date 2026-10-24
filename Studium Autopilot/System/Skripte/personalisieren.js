@@ -1,14 +1,16 @@
 // Personalisieren (Phase 2b): der Vault ist ohne Angaben sofort nutzbar. Seit 0.3.0 fragt die Einrichtung (einrichtung.js)
-// beim ersten Start; dieses Formular bleibt für „Ändern“.
+// beim ersten Start; dieses Formular öffnen danach die Zeilen unter „Deine Angaben“.
 // Standard ohne Angaben: Studienbeginn = aktuelles Semester (1. FS), Variante „offen“, neutrale Begrüßung.
 //   ```eba-personalisieren```  früher die Karte oben auf dem Dashboard; seit 0.3.0 leer (die Einrichtung ersetzt sie). Der
 //                              Block zeichnet nichts, damit ältere, selbst geänderte Dashboards keine Lücke zeigen.
 //   ```eba-personalisieren angaben```   „Deine Angaben“ (Einstellungen & Hilfe): Zeilen Name, Studienbeginn, Zielnote und
-//                              Einrichtung, je mit einem Knopf („Ändern“ öffnet das Formular am passenden Feld; Einrichtung:
-//                              Starten, Fortsetzen oder Erneut starten).
-//   ```eba-personalisieren variante```  „Variante“: je Variante eine Zeile mit dem, was daraus folgt; die gewählte mit Haken,
-//                              die übrigen mit „Wählen“ (Aktion „variante“ in aktionen.js).
-//   Beide in derselben Zeilenliste wie die Verbindungen (.eba-vb-*, verbindungen.js): Symbol, Titel, gedämpfte Zeile, ein Knopf.
+//                              Einrichtung, rechts der Wert und der Pfeil; Tippen öffnet das Formular am passenden Feld bzw. die
+//                              Einrichtung (Starten, Fortsetzen; ist sie fertig, startet ein Tipp sie erneut).
+//   ```eba-personalisieren variante```  „Variante“: Auswahl wie in den Einstellungen von iPhone und iPad, je Variante eine Zeile,
+//                              die gewählte mit Haken und darunter, was aus ihr folgt; Tippen auf eine andere wählt sie (Aktion
+//                              „variante“ in aktionen.js).
+//   Beide als kompakte Zeilen wie die Verbindungen (seit 24.10.2026, .eba-ez, verbindungen.js kompakt): eine Zeile je Angabe, die
+//   ganze Zeile ist der Knopf. Bis dahin Symbol, Titel, Wert in einer zweiten Zeile und ein Knopf „Ändern“ bzw. „Wählen“.
 //   Inhalt der Zeilen: angabenZeilen() und varianteZeilen() (rein, getestet in tests/personalisieren.test.js).
 //   Aktion „personalisieren“   EIN Formular-Fenster (Name, Studienbeginn als Semester-Auswahl, Variante, Zielnote 1,0–4,0),
 //                              speichert nach System/Einstellungen.md. Auch als Befehl. Parameter feld=name|studienbeginn|
@@ -39,9 +41,8 @@ module.exports = function (ctx) {
     kalender: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
     ziel: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
     hut: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
-    wegweiser: '<path d="M12 3v3"/><path d="M18.5 13h-13L2 9.5 5.5 6h13L22 9.5Z"/><path d="M12 13v8"/>',
     haken: '<path d="M20 6 9 17l-5-5"/>',
-    uhr: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    pfeil: '<path d="m9 18 6-6-6-6"/>',
   };
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
@@ -167,55 +168,49 @@ module.exports = function (ctx) {
     const e = txt(fm.einrichtung).toLowerCase();
     return { status: e === "fertig" || e === "laeuft" ? e : "offen", uebersprungen: [] };
   };
-  // Eine Zeile: { id, symbol, ton ("akzent" | "ok" | "leise"), titel, pille? ({ text, art }), wert (Angabe, in Textfarbe),
-  //   text (Ergänzung, gedämpft), knopf? ({ text, aktion, parameter, cta }) }. Leere Angabe: wert "", text „Nicht eingetragen.“
+  // Eine Zeile: { id, symbol? (ohne: kein Symbol), ton ("akzent" | "ok" | "leise"), titel, wert (rechts, gedämpft), wertArt?
+  //   ("akzent": etwas wartet auf dich), unter? (zweite Zeile, nur wenn sie etwas Neues sagt), aktion? ({ aktion, parameter }: die
+  //   ganze Zeile ist der Knopf; ohne: nicht tippbar), rechts ("pfeil" | "haken" | "") }
   const angabenZeilen = (fm, ez) => {
     fm = fm || {};
     ez = ez || einrichtungVon(fm);
     const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote);
-    const aendern = (feld) => ({ text: "Ändern", aktion: "personalisieren", parameter: { feld } });
+    const aendern = (feld) => ({ aktion: "personalisieren", parameter: { feld } });
     const v = vorschauTeile(beginn);
-    const heute = v.fs ? `heute ${v.fs}. Fachsemester` : v.heute;
+    const LEER = "Eintragen"; // kurz, damit auch auf dem iPhone mit großer Schrift Titel und Wert in eine Zeile passen
     const zeilen = [
-      { id: "name", symbol: "person", ton: name ? "akzent" : "leise", titel: "Name", wert: name, text: name ? "" : "Nicht eingetragen.", knopf: aendern("name") },
-      { id: "studienbeginn", symbol: "kalender", ton: beginn ? "akzent" : "leise", titel: "Studienbeginn",
-        wert: beginn ? v.erstes || dmy(beginn) : "",
-        text: beginn ? heute : v.erstes ? `Nicht eingetragen, es gilt ${v.erstes}.` : "Nicht eingetragen.", knopf: aendern("studienbeginn") },
-      { id: "zielnote", symbol: "ziel", ton: ziel ? "akzent" : "leise", titel: "Zielnote", wert: ziel, text: ziel ? "" : "Nicht eingetragen.", knopf: aendern("zielnote") },
+      { id: "name", symbol: "person", ton: name ? "akzent" : "leise", titel: "Name", wert: name || LEER, aktion: aendern("name"), rechts: "pfeil" },
+      { id: "studienbeginn", symbol: "kalender", ton: beginn ? "akzent" : "leise", titel: "Studienbeginn", wert: beginn ? v.erstes || dmy(beginn) : LEER,
+        aktion: aendern("studienbeginn"), rechts: "pfeil" },
+      { id: "zielnote", symbol: "ziel", ton: ziel ? "akzent" : "leise", titel: "Zielnote", wert: ziel || LEER, aktion: aendern("zielnote"), rechts: "pfeil" },
     ];
     const ueber = (ez.uebersprungen || []).map((p) => SCHRITTE[p]).filter(Boolean);
-    const e = { id: "einrichtung", symbol: "hut", titel: "Einrichtung", wert: "" };
-    if (ez.status === "fertig") Object.assign(e, { ton: "ok", pille: { text: "fertig", art: "ok" }, text: ueber.length ? `Übersprungen: ${ueber.join(", ")}.` : "Alle Schritte erledigt.",
-      knopf: { text: "Erneut starten", aktion: "einrichtung", parameter: { ab: "2" } } });
-    else if (ez.status === "laeuft") Object.assign(e, { ton: "leise", pille: { text: "angefangen", art: "warn" }, text: "Noch nicht abgeschlossen.",
-      knopf: { text: "Fortsetzen", aktion: "einrichtung", parameter: {}, cta: true } });
-    else Object.assign(e, { ton: "leise", pille: { text: "offen", art: "leer" }, text: "Führt durch Studienbeginn, Variante, Name, Uni-Login und Darstellung.",
-      knopf: { text: "Starten", aktion: "einrichtung", parameter: { ab: "2" }, cta: true } });
+    const e = { id: "einrichtung", symbol: "hut", titel: "Einrichtung", rechts: "pfeil" };
+    if (ez.status === "fertig") Object.assign(e, { ton: "ok", wert: "Fertig", unter: ueber.length ? `Übersprungen: ${ueber.join(", ")}.` : "",
+      aktion: { aktion: "einrichtung", parameter: { ab: "2" } } });
+    else if (ez.status === "laeuft") Object.assign(e, { ton: "leise", wert: "Fortsetzen", wertArt: "akzent", aktion: { aktion: "einrichtung", parameter: {} } });
+    else Object.assign(e, { ton: "leise", wert: "Starten", wertArt: "akzent", aktion: { aktion: "einrichtung", parameter: { ab: "2" } } });
     zeilen.push(e);
     return zeilen;
   };
-  // Je Variante eine Zeile; die gewählte ohne Knopf (bei „noch offen“ mit Uhr statt Haken)
+  // Je Variante eine Zeile ohne Symbol; die gewählte mit Haken und dem, was aus ihr folgt, die übrigen wählt ein Tipp
   const varianteZeilen = (fm) => {
     const ist = varianteVon(fm || {});
-    return VARIANTEN.map((v) => {
-      const gewaehlt = v === ist, titel = F().varianteTitel(v);
-      if (!gewaehlt) return { id: v, symbol: "wegweiser", ton: "leise", titel, wert: "", text: FOLGE[v], knopf: { text: "Wählen", aktion: "variante", parameter: { wert: v } } };
-      return v === "offen" ? { id: v, symbol: "uhr", ton: "leise", titel, pille: { text: "aktuell", art: "leer" }, wert: "", text: FOLGE[v] }
-        : { id: v, symbol: "haken", ton: "ok", titel, pille: { text: "gewählt", art: "ok" }, wert: "", text: FOLGE[v] };
-    });
+    return VARIANTEN.map((v) => (v === ist
+      ? { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", unter: FOLGE[v], rechts: "haken" }
+      : { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", aktion: { aktion: "variante", parameter: { wert: v } }, rechts: "" }));
   };
-  // Zeilenliste wie die Übersicht der Verbindungen (verbindungen.js, uebersicht)
+  // Kompakte Zeilen wie unter Verbindungen (verbindungen.js, uebersicht); Stil eba-core.css 43 (.eba-ez)
   const liste = (el, zeilen) => {
-    const l = el.createDiv({ cls: "eba-vb-liste" });
+    const l = el.createDiv({ cls: "eba-vb-liste eba-ez-liste" });
     for (const z of zeilen) {
-      const pille = z.pille ? ` <span class="eba-pill ${z.pille.art}">${esc(z.pille.text)}</span>` : "";
-      const stand = (z.wert ? `<span class="eba-vb-wert">${esc(z.wert)}</span>` : "") + (z.wert && z.text ? " · " : "") + esc(z.text);
-      const knopf = z.knopf ? `<a class="eba-vb-knopf${z.knopf.cta ? " cta" : ""}" href="${ctx.link(z.knopf.aktion, z.knopf.parameter)}">${esc(z.knopf.text)}</a>` : "";
-      const zeile = l.createDiv({ cls: "eba-vb" });
+      const zeile = z.aktion ? l.createEl("a", { cls: "eba-ez", attr: { href: ctx.link(z.aktion.aktion, z.aktion.parameter) } }) : l.createDiv({ cls: "eba-ez" });
       zeile.setAttr("data-id", z.id);
-      zeile.innerHTML = `<span class="eba-vb-symbol ${z.ton}" aria-hidden="true">${svg(z.symbol)}</span>`
-        + `<span class="eba-vb-text"><b>${esc(z.titel)}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${stand}</span></span></span>`
-        + `<span class="eba-vb-knoepfe">${knopf}</span>`;
+      zeile.innerHTML = (z.symbol ? `<span class="eba-vb-symbol ${z.ton}" aria-hidden="true">${svg(z.symbol)}</span>` : "")
+        + `<span class="eba-ez-text"><span class="eba-ez-titel">${esc(z.titel)}</span>${z.unter ? `<span class="eba-ez-unter">${esc(z.unter)}</span>` : ""}</span>`
+        + (z.wert ? `<span class="eba-ez-wert${z.wertArt ? " " + z.wertArt : ""}">${esc(z.wert)}</span>` : "")
+        + (z.rechts ? `<span class="eba-ez-rechts${z.rechts === "haken" ? " gewaehlt" : ""}" aria-hidden="true">${svg(z.rechts)}</span>` : "");
+      if (z.rechts === "haken") zeile.setAttr("aria-current", "true");
     }
   };
 

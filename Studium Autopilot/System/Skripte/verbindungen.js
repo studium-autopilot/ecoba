@@ -19,11 +19,13 @@
 // Codeblöcke:
 //   ```eba-schloss <id>```  Solange gesperrt: Karte mit Schloss-Symbol, einem Satz und Knopf „Verbinden“ (mit vorschau: über dem Beispielraster). Steht der Block in einer Karte
 //                           (Callout), blendet CSS den übrigen Inhalt der Karte aus (z. B. das Wochenraster). Sonst leer.
-//   ```eba-verbindungen```  Übersicht (Einstellungen): je Verbindung Symbol, Status und höchstens EIN Knopf (Verbinden,
-//                           Aktualisieren, Hier aktualisieren, Einschalten, Neu laden oder Mehr erfahren). Zeile „Studium
-//                           Autopilot“ (art vorlage): Version und Update, Text und Knopf aus ctx.update.anzeige() (update.js). Alles Weitere (Trennen, neuer
-//                           Link, Kurswahl, Schalter der zentralen Daten) steht im Fenster hinter dem Textlink „Mehr erfahren“; braucht
-//                           das Fenster nur einen Knopf, steht er selbst als Textlink da (ILIAS nur für Übungsgruppen: „Trennen“).
+//   ```eba-verbindungen```  Übersicht (Einstellungen): seit 24.10.2026 je Verbindung eine kompakte Zeile wie in den Einstellungen
+//                           von iPhone und iPad (kompakt): Symbol, Name, rechts ein kurzer Stand („Verbunden“, „An“, die
+//                           Version) und der Pfeil; nur ein Problem bekommt eine zweite Zeile. Die ganze Zeile öffnet das Fenster;
+//                           der Knopf der Zeile (Verbinden, Aktualisieren, Hier aktualisieren, Einschalten, Neu laden, Neue Version
+//                           installieren) steht dort unten (zeilenKnopf). Zeile „Studium Autopilot“ (art vorlage): Version und
+//                           Update, Text und Knopf aus ctx.update.anzeige() (update.js). Bis dahin stand der Satz in der Zeile und
+//                           der Knopf rechts daneben, dazu der Textlink „Mehr erfahren“ (link). Inhalt der Zeilen weiter so:
 //                           Zeilen (zeile(), seit 18.10.2026): Symbol und Pille widersprechen sich nie. Pille nur, wo der Stand zählt:
 //                           „verbunden“, „nicht verbunden“ (nichts da, Verbinden ist der Weg) oder „Anmeldung prüfen“. Kommt etwas
 //                           ohnehin (Daten per Sync, zentraler Stundenplan, eigener Uni-Abgleich): Haken ohne Pille, Verbinden leise.
@@ -200,6 +202,7 @@ module.exports = function (ctx) {
     aus: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
     laden: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
     "neu-laden": '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
+    pfeil: '<path d="m9 18 6-6-6-6"/>',
   };
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
@@ -569,7 +572,27 @@ module.exports = function (ctx) {
     }
   };
 
-  // Erklärung ohne Eingabe (zentrale Daten mit Schaltern, Studium Autopilot); kein Knopf, schließen über ×
+  // Knopf der Zeile im Fenster (seit 24.10.2026): Unter Verbindungen ist die ganze Zeile der Weg ins Fenster (kompakt), darum steht
+  // ihr Knopf hier unten: Aktualisieren, Hier aktualisieren, Neue Version installieren, Neu laden, Nach Updates suchen, Einschalten
+  // der zentralen Daten, ein Link nach außen. Knöpfe, die selbst ein Fenster öffnen (Aktion verbinden), nicht. k: vorhandene
+  // Knopfleiste des Fensters, sonst eine neue.
+  const zeilenKnopf = (m, v, k) => {
+    const z = statusZeile(v), d = document.createElement("div");
+    d.innerHTML = (z && z.knopf) || "";
+    const a = d.querySelector("a"), href = a ? a.getAttribute("href") || "" : "";
+    if (!href || aktionVon(href) === "verbinden") return null;
+    const b = (k || m.contentEl.createDiv({ cls: "modal-button-container" })).createEl("button", { text: a.textContent, cls: a.classList.contains("cta") ? "mod-cta" : "" });
+    b.addEventListener("click", () => {
+      m.close();
+      if (!/^obsidian:/.test(href)) { window.open(href, "_blank", "noopener"); return; }
+      const p = {};
+      new URLSearchParams(href.split("?")[1] || "").forEach((w, n) => { p[n] = w; });
+      ctx.aktion(p.aktion, p);
+    });
+    return b;
+  };
+
+  // Erklärung ohne Eingabe (zentrale Daten mit Schaltern, Studium Autopilot); unten höchstens der Knopf der Zeile, schließen über ×
   class InfoFenster extends Modal {
     constructor(v) { super(app); this.v = v; }
     onOpen() {
@@ -587,6 +610,7 @@ module.exports = function (ctx) {
       // Studium Autopilot: Schalter „Beta-Versionen“ und „Mitzählen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.zaehlenSchalter) ctx.update.zaehlenSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
+      zeilenKnopf(this, v);
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
@@ -607,6 +631,7 @@ module.exports = function (ctx) {
       const k = c.createDiv({ cls: "modal-button-container" });
       const neu = k.createEl("button", { text: "Neuen Link eingeben" });
       const weg = k.createEl("button", { text: "Trennen", cls: "mod-warning" });
+      zeilenKnopf(this, v, k);
       neu.addEventListener("click", () => { this.close(); const m = new VerbindenFenster(v); fenster = m; m.open(); });
       weg.addEventListener("click", () => { this.close(); ctx.aktion("trennen", { id: v.id }); });
     }
@@ -936,7 +961,10 @@ module.exports = function (ctx) {
         if (q.id === "ilias" && x.s.verbunden) zeile.addButton((k) => k.setButtonText("Kurse").onClick(weiter(() => fensterOeffnen(q))));
       }
       mehrZeigen(c, "Ein Gerät reicht, alles kommt über deinen Sync auf die anderen.");
-      if (teile.some((x) => x.hier)) c.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", weiter(() => ctx.aktion("trennen", { id: v.id })));
+      const k = c.createDiv({ cls: "modal-button-container" });
+      if (teile.some((x) => x.hier)) k.createEl("button", { text: "Trennen", cls: "mod-warning" }).addEventListener("click", weiter(() => ctx.aktion("trennen", { id: v.id })));
+      zeilenKnopf(this, v, k);
+      if (!k.childElementCount) k.remove();
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }
@@ -1011,6 +1039,29 @@ module.exports = function (ctx) {
   const mehrLink = (id) => textLink("verbinden", id, "Mehr erfahren");
   const tonVon = (symbol) => (symbol === "haken" ? "ok" : symbol === "warnung" ? "warn" : "leise");
 
+  // ---------- Kompakte Zeile (Einstellungen & Hilfe, seit 24.10.2026) ----------
+  // Wie die Einstellungen von iPhone und iPad, auf allen Geräten gleich: Symbol, Name, rechts ein kurzer Stand und der Pfeil; die
+  // ganze Zeile öffnet das Fenster der Verbindung, ihr Knopf steht dort (zeilenKnopf). Abgeleitet aus statusZeile (st):
+  //   wert: st.kurz, sonst die Pille in Worten (KURZ_PILLE), sonst das Symbol (KURZ_SYMBOL), bei einem Problem nie „Verbunden“
+  //   oder „An“, sondern „Fehler“; art: „warn“ bei einem Problem (Warnsymbol), „akzent“, wenn etwas auf dich wartet (Ton warn ohne Problem: neue Version, Neu laden); unter: nur bei einem
+  //   Problem, st.unter oder der Satz der Zeile; ziel: der Knopf, wenn er selbst ein Fenster öffnet (Verbinden, Einschalten), sonst
+  //   „Mehr erfahren“, sonst das Fenster der Verbindung. Rein (tests/verbindungen.test.js).
+  const KURZ_PILLE = { verbunden: "Verbunden", "nicht verbunden": "Nicht verbunden", "neu verbinden": "Neu verbinden", an: "An", aus: "Aus",
+    pausiert: "Pausiert", fehler: "Fehler", neu: "Neue Version", "neu laden": "Neu laden", "läuft": "Läuft …", unterbrochen: "Unterbrochen" };
+  const KURZ_SYMBOL = { haken: "An", aus: "Aus", schloss: "Nicht verbunden", extern: "Nicht verbunden", uhr: "Läuft …", pause: "Pausiert", warnung: "Prüfen" };
+  const ENTITAETEN = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
+  const nurText = (html) => String(html || "").replace(/<[^>]*>/g, "").replace(/&(amp|lt|gt|quot|#39);/g, (e) => ENTITAETEN[e]).replace(/\s+/g, " ").trim();
+  const hrefVon = (html) => { const m = /href="([^"]*)"/.exec(html || ""); return m ? m[1].replace(/&amp;/g, "&") : ""; };
+  const aktionVon = (href) => { const m = /[?&]aktion=([^&]*)/.exec(href || ""); return m ? decodeURIComponent(m[1]) : ""; };
+  const kompakt = (v, st) => {
+    const pille = nurText(st.pille).toLowerCase(), problem = st.symbol === "warnung";
+    const w = st.kurz != null ? st.kurz : KURZ_PILLE[pille] || KURZ_SYMBOL[st.symbol] || "";
+    const wert = problem && (w === "Verbunden" || w === "An") ? "Fehler" : w;
+    const knopfZiel = hrefVon(st.knopf), linkZiel = hrefVon(st.link);
+    const ziel = aktionVon(knopfZiel) === "verbinden" ? knopfZiel : aktionVon(linkZiel) === "verbinden" ? linkZiel : ctx.link("verbinden", { id: v.id });
+    return { wert, art: problem ? "warn" : st.ton === "warn" ? "akzent" : "", unter: problem ? st.unter || nurText(st.html != null ? st.html : esc(st.text)) : "", ziel };
+  };
+
   // ---------- Stand einer Quelle: EINE Formatierung (Quellen-Vertrag) ----------
   // Wörter an einer Stelle (Entscheidung E1: Daten holt man mit „Aktualisieren“; die Wortliste übernimmt sie, sobald es sie gibt)
   const WORT = Object.freeze({
@@ -1060,7 +1111,7 @@ module.exports = function (ctx) {
       const a = ctx.update.anzeige();
       // cta: false (Nach Updates suchen) ist ein normaler Knopf; das Angebot, Neu laden und Update fertigstellen sind Hauptknöpfe
       const k = a.knopf ? `<a class="eba-vb-knopf${a.knopf.cta === false ? "" : " cta"}" href="${ctx.link(a.knopf.aktion, {})}">${esc(a.knopf.text)}</a>` : mehr;
-      return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
+      return { zu: false, html: a.html, kurz: a.kurz, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
     }
     if (v.art === "uni") return uniZeile(v);
     if (v.art === "server" || v.art === "claude") {
@@ -1105,12 +1156,12 @@ module.exports = function (ctx) {
       if (si.gruppenZugang) { const sy = si.laeuft ? "uhr" : si.fehler || si.warnung ? "warnung" : "haken"; return { zu: false, text: si.text, pille: PILLE.an, symbol: sy, ton: tonVon(sy), knopf: si.laeuft ? "" : aktualisierenKnopf(v.id, false, {}), link: mehr }; }
       const von = ["deine Unterlagen"].concat(kalenderExtern() ? ["deine Abgaben"] : [], stundenplanExtern() ? ["dein Stundenplan"] : []);
       const satz = `${undListe(von)} kommen über deinen Uni-Abgleich.`;
-      return { zu: false, text: satz.charAt(0).toUpperCase() + satz.slice(1), pille: "", symbol: "haken", ton: "ok", knopf: "", link: hier.length || si.benutzer || von.length < 3 ? mehr : "" };
+      return { zu: false, text: satz.charAt(0).toUpperCase() + satz.slice(1), kurz: "Über Uni-Abgleich", pille: "", symbol: "haken", ton: "ok", knopf: "", link: hier.length || si.benutzer || von.length < 3 ? mehr : "" };
     }
     const aktiv = teile.filter((x) => x.hier || x.anderswo);
     if (!aktiv.length) {
       const zu = VERBINDUNGEN.ilias.gesperrt(), los = uniAnmeldungHier();
-      return { zu, text: VERBINDUNGEN.ilias.kurz, pille: zu ? PILLE.nicht : "", symbol: zu ? "schloss" : "aus", ton: "leise",
+      return { zu, text: VERBINDUNGEN.ilias.kurz, kurz: "Nicht verbunden", pille: zu ? PILLE.nicht : "", symbol: zu ? "schloss" : "aus", ton: "leise",
         knopf: los ? knopf("verbinden", "ilias", "Mit Uni-Login verbinden", "cta") : knopf("verbinden", v.id, "Mehr erfahren", ""), link: los ? mehr : "" };
     }
     const neu = Math.max(0, ...aktiv.map((x) => Date.parse(x.zuletzt || "") || 0)), bis = neu ? vor(new Date(neu).toISOString()) : "";
@@ -1119,7 +1170,7 @@ module.exports = function (ctx) {
     const text = `${hier.length ? "Verbunden" : "Verbunden über ein anderes Gerät"} · ${undListe(aktiv.map((x) => UNI_WORT[x.v.id]))} · `
       + (laeuft ? "aktualisiert gerade …" : bis ? `aktualisiert ${bis}.` : "noch nicht aktualisiert.") + (problem ? ` ${problem.x.v.name}: ${problem.z.text}` : "");
     const symbol = laeuft ? "uhr" : problem ? "warnung" : "haken";
-    return { zu: false, text: text.replace(/\.\./g, "."), pille: PILLE.an, symbol, ton: tonVon(symbol),
+    return { zu: false, text: text.replace(/\.\./g, "."), unter: problem ? `${problem.x.v.name}: ${problem.z.text}` : "", pille: PILLE.an, symbol, ton: tonVon(symbol),
       knopf: !hier.length ? knopf("verbinden", v.id, "Mehr erfahren", "") : laeuft ? "" : aktualisierenKnopf(v.id, hier.some((x) => x.s.zustand === "anderes-geraet"), { uebernehmen: "1" }),
       link: hier.length ? mehr : "" };
   };
@@ -1191,25 +1242,26 @@ module.exports = function (ctx) {
   const volltextZeile = (v) => {
     const s = v.status();
     if (!ctx.volltext) return null;
-    if (s.zustand === "extern" || s.zustand === "fremd") return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: "", link: "" };
+    if (s.zustand === "extern" || s.zustand === "fremd") return { zu: false, text: s.text, kurz: s.zustand === "extern" ? "Über Uni-Abgleich" : "An", pille: "", symbol: "haken", ton: "ok", knopf: "", link: "" };
     if (!s.an) return { zu: false, text: "Aus. Die Suche findet keine Wörter in PDFs.", pille: "", symbol: "aus", ton: "leise", knopf: knopf("verbinden", v.id, "Einschalten", "cta"), link: "" };
     const t = s.laeuft ? { text: s.text, symbol: "uhr", ton: "leise" } : s.fehler || s.zustand === "anderes-geraet" ? standText(s) : { text: s.text, symbol: "haken", ton: "ok" };
     return { zu: false, text: t.text, pille: "", symbol: t.symbol, ton: t.ton, knopf: s.laeuft ? "" : aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", { hier: "1" }), link: mehrLink(v.id) };
   };
 
+  // Übersicht: je Verbindung eine kompakte Zeile (kompakt), die ganze Zeile ist ein Link (eba-core.css 43, .eba-ez)
   const uebersicht = (el) => {
     el.empty();
-    const liste = el.createDiv({ cls: "eba-vb-liste" });
+    const liste = el.createDiv({ cls: "eba-vb-liste eba-ez-liste" });
     for (const v of Object.values(VERBINDUNGEN)) {
       if ((v.sichtbar && !v.sichtbar()) || UNI_TEILE.indexOf(v.id) >= 0) continue; // Teile des Uni-Logins: nur in dessen Fenster
       const st = statusZeile(v);
       if (!st) continue;
-      const zeile = liste.createDiv({ cls: "eba-vb" + (st.zu ? " zu" : "") });
-      zeile.setAttr("data-id", v.id);
+      const k = kompakt(v, st);
+      const zeile = liste.createEl("a", { cls: "eba-ez", attr: { href: k.ziel, "data-id": v.id } });
       zeile.innerHTML = `<span class="eba-vb-symbol ${st.ton || "leise"}" aria-hidden="true">${svg(st.symbol)}</span>`
-        + `<span class="eba-vb-text"><b>${esc(v.name)} ${st.pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${st.html != null ? st.html : esc(st.text)}</span>`
-        + (st.link ? " " + st.link : "") + `</span></span>`
-        + `<span class="eba-vb-knoepfe">${st.knopf}</span>`;
+        + `<span class="eba-ez-text"><span class="eba-ez-titel">${esc(v.name)}</span>${k.unter ? `<span class="eba-ez-unter">${esc(k.unter)}</span>` : ""}</span>`
+        + (k.wert ? `<span class="eba-ez-wert${k.art ? " " + k.art : ""}">${esc(k.wert)}</span>` : "")
+        + `<span class="eba-ez-rechts" aria-hidden="true">${svg("pfeil")}</span>`;
     }
   };
 
@@ -1235,8 +1287,8 @@ module.exports = function (ctx) {
       for (const inst of b.instanzen()) {
         if (inst.art === "ilias-knopf") iliasKnopf(inst);
         else if (inst.art === "uebersicht") {
-          const el = inst.el.querySelector('.eba-vb[data-id="uni-login"] .eba-vb-stand');
-          if (el) el.setText(s.text);
+          const el = inst.el.querySelector('.eba-ez[data-id="uni-login"] .eba-ez-wert');
+          if (el) el.setText(s.fortschritt ? s.fortschritt.knopf : "Lädt …");
         }
       }
     }
@@ -1302,12 +1354,14 @@ module.exports = function (ctx) {
   };
 
   // Für andere Skripte (z. B. ein Raster, das selbst zeichnet)
-  // zeile(id): Inhalt der Zeile unter Verbindungen (statusZeile; für Tests). ALMA_EXTERN: Satz für Alma im eigenen Uni-Abgleich
+  // zeile(id): Inhalt der Zeile unter Verbindungen (statusZeile; für Tests), kompakt(id): was die Übersicht davon zeigt
+  // ({ wert, art, unter, ziel }). ALMA_EXTERN: Satz für Alma im eigenen Uni-Abgleich
   // (auch die Einrichtung). imTresor(id): { art: hier | anderswo | nein, zuletzt } (über ein anderes Gerät verbunden?);
   // sperrenLesen(): Sperren der Quellen neu lesen → true, wenn sich etwas geändert hat.
   ctx.verbindungen = { liste: VERBINDUNGEN, holen, svg, gesperrt: (id) => { const v = holen(id); return v ? v.gesperrt() : false; }, schlossKarte, fensterOeffnen, neuZeichnen, iliasStand, fett, textTeile,
     standText, quelleZeile, WORT, imTresor, sperrenLesen,
     zeile: (id) => { const v = holen(id); return v ? statusZeile(v) : null; }, ALMA_EXTERN,
+    kompakt: (id) => { const v = holen(id), st = v ? statusZeile(v) : null; return st ? kompakt(v, st) : null; },
     ALMA: { start: ALMA_START, stundenplan: ALMA_STUNDENPLAN },
     get fenster() { return fenster; } }; // offenes Verbinden-/Info-Fenster (für Tests)
 

@@ -304,3 +304,36 @@ test("Neuer Tag: der Block zeichnet neu (alle 30 Minuten und beim Zurückkommen,
     if (alt === undefined) delete globalThis.document; else globalThis.document = alt;
   }
 });
+
+// Ohne Uni-Login auf diesem Gerät führt „Mit Uni-Login verbinden“ gleich zur Anmeldung (auch=1), nicht zum Fenster „über ein
+// anderes Gerät verbunden“: Mails kommen nie über den Sync, jedes Gerät braucht den Login.
+test("Mit Uni-Login verbinden öffnet die Anmeldung auch, wenn ILIAS anderswo verbunden ist", () => {
+  const { laden } = require("./laden.js");
+  const element = () => {
+    const e = { kinder: [], attr: {} };
+    const neu = (tag, o) => { const k = element(); k.tag = tag; Object.assign(k.attr, o || {}); e.kinder.push(k); return k; };
+    Object.assign(e, {
+      createDiv: (o) => neu("div", o), createSpan: (o) => neu("span", o), createEl: neu,
+      empty: () => { e.kinder.length = 0; }, setText: () => {}, addEventListener: () => {},
+    });
+    return e;
+  };
+  let zeichnen = null;
+  const { ergebnis } = laden("postfach", { kontext: {
+    user: { "ilias-netz": {}, "postfach-html": P },
+    ilias: { uniZugang: () => null },
+    link: (aktion, p) => aktion + "?" + new URLSearchParams(p),
+    codeblock: (_s, fn) => { zeichnen = fn; return { neu: () => {} }; },
+  } });
+  const alt = globalThis.document;
+  globalThis.document = { visibilityState: "visible" };
+  try { ergebnis.registrieren(); } finally {
+    if (alt === undefined) delete globalThis.document; else globalThis.document = alt;
+  }
+  const el = element();
+  zeichnen("", el);
+  const links = [];
+  const sammeln = (e) => { if (e.tag === "a") links.push(e.attr.href); e.kinder.forEach(sammeln); };
+  sammeln(el);
+  assert.deepEqual(links, ["verbinden?id=ilias&auch=1"]);
+});

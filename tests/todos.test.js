@@ -51,6 +51,12 @@ test("lesen(modus) liefert dieselben Listen wie lesenBeide", async () => {
   assert.equal((await T.lesen("fragen")).length, 5);
 });
 
+test("Zahl am Reiter (reiter.js): zaehler zählt wie lesen, mit Argument „fragen“ die Fragen", async () => {
+  const T = mitNotizen(VIELE);
+  assert.equal(await T.zaehler["eba-todos"]("", "To-dos erscheinen, sobald Studium Autopilot läuft."), 4);
+  assert.equal(await T.zaehler["eba-todos"]("fragen", "Offene Fragen erscheinen, sobald Studium Autopilot läuft."), 5);
+});
+
 test("Leerer Block: Klasse is-leer und eigener Satz; sind beide leer, sagt der To-do-Block „Nichts offen.“", async () => {
   const T = mitNotizen(VIELE);
   const gefuellt = await T.lesenBeide();

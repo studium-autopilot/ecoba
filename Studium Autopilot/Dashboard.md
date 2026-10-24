@@ -38,13 +38,16 @@ cssclasses:
 > ```eba-woche
 > ```
 
+```eba-reiter
+```
+
 > [!eba-raster|2]
-> > [!eba-termin|schlicht|umbruch|handy-zu]+ Fristen · 30 Tage
+> > [!eba-termin|schlicht|umbruch|handy-zu|reiter=Fristen]+ Fristen · 30 Tage
 > > ```eba-liste fristen
 > > Fristen erscheinen, sobald Studium Autopilot läuft.
 > > ```
 >
-> > [!eba-termin|schlicht|umbruch|handy-zu]+ Termine · 14 Tage
+> > [!eba-termin|schlicht|umbruch|handy-zu|reiter=Termine]+ Termine · 14 Tage
 > > ```eba-liste termine
 > > Termine erscheinen, sobald Studium Autopilot läuft.
 > > ```
@@ -59,12 +62,12 @@ cssclasses:
 Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
 ```
 
-> [!eba-tabelle|schlicht|handy-zu]+ Nachzuarbeiten
+> [!eba-tabelle|schlicht|handy-zu|reiter=Nacharbeiten]+ Nachzuarbeiten
 > ```eba-liste nachzuarbeiten
 > Vorlesungen zum Nacharbeiten erscheinen, sobald Studium Autopilot läuft.
 > ```
 
-> [!eba-raster|2]
+> [!eba-raster|2 reiter=To-dos]
 > > [!eba-fragen|handy-zu]+ Offene Fragen
 > > ```eba-todos fragen
 > > Offene Fragen erscheinen, sobald Studium Autopilot läuft.
@@ -74,29 +77,3 @@ Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
 > > ```eba-todos
 > > To-dos erscheinen, sobald Studium Autopilot läuft.
 > > ```
-
-> [!eba-tabelle|schlicht|handy-zu]+ Im Eingang
-> ```base
-> filters:
->   and:
->     - file.inFolder("Eingang")
->     - 'file.ext != "md"'
-> properties:
->   file.name:
->     displayName: Datei
->   file.ctime:
->     displayName: Angekommen
-> views:
->   - type: list
->     name: Im Eingang
->     order:
->       - file.name
->       - file.ctime
->     sort:
->       - property: file.ctime
->         direction: DESC
->     limit: 5
->     columnSize:
->       file.name: 360
->       file.ctime: 150
-> ```

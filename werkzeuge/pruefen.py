@@ -135,7 +135,7 @@ SVG_ZAHLEN = re.compile(r"""(\b(?:d|points|viewBox|transform)\s*=\s*)(?:"[^"]*"|
 HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 
 # Persönliche Ordner der Vorlage (müssen leer sein, höchstens .gitkeep)
-LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen",
+LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Anhänge", "Schlüsselqualifikationen",
                 "Karteikarten", "Lernplan"]
 MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"]
 # zaehlen: in der Vorlage nie gesetzt, sonst zählte nach dem Ausschalten im Entwicklungstresor kein neuer Tresor mit (update.js)

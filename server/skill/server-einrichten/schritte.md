@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.6)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.7)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz

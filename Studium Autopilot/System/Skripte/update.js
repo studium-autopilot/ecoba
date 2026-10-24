@@ -910,7 +910,8 @@ module.exports = function (ctx) {
   };
 
   // ---------- Anzeige (Zeile „Studium Autopilot“ in eba-verbindungen) ----------
-  // → { html, pille, symbol, ton, knopf: { aktion, text, cta? (false: normaler Knopf) } | null }
+  // → { html, pille, symbol, ton, knopf: { aktion, text, cta? (false: normaler Knopf) } | null, kurz? (Stand in der kompakten Zeile:
+  //   die Version, wenn nichts zu tun ist; sonst sagt es die Pille) }
   // Ohne Angebot steht rechts **Nach Updates suchen** (seit 0.4.8), daneben „Mehr erfahren“ als Textlink (verbindungen.js).
   const SUCHEN = { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false };
   const anzeige = () => {
@@ -937,8 +938,8 @@ module.exports = function (ctx) {
       const url = (ctx.zentral && ctx.zentral.RELEASES) || "https://github.com/studium-autopilot/ecoba/releases";
       return { html: `<a class="eba-vb-neu external-link" href="${esc(url)}" target="_blank" rel="noopener">${esc(`Neue Version ${s.aktuell} verfügbar`)}</a>`, pille: `<span class="eba-pill info">neu</span>`, symbol: "laden", ton: "warn", knopf: null };
     }
-    if (rel) return { html: esc(`Version ${inst}. Du hast die neueste Version.${zusatz}`), pille: `<span class="eba-pill ok">aktuell</span>`, symbol: "haken", ton: "ok", knopf: SUCHEN };
-    return { html: esc(`Version ${inst}.${zusatz}`), pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN };
+    if (rel) return { html: esc(`Version ${inst}. Du hast die neueste Version.${zusatz}`), kurz: inst, pille: `<span class="eba-pill ok">aktuell</span>`, symbol: "haken", ton: "ok", knopf: SUCHEN };
+    return { html: esc(`Version ${inst}.${zusatz}`), kurz: inst, pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN };
   };
   const status = () => ({ verbunden: true, version: installiertVersion(), laufend: laufendeVersion(), release: release(), kanal: kanal(), laeuft: !!zustand.laeuft });
   // verbindungen.neuZeichnen() zeichnet auch den Hinweis auf dem Dashboard neu (ctx.update.hinweisNeu)

@@ -78,7 +78,8 @@ test("Wächter: gelöscht wird nur über den einen Papierkorb (Ausnahmen mit Gru
     "quellen.js": ["app.vault.trash(f, !lokal)"],                       // die Regel selbst
     "papierkorb.js": ["app.vault.trash(f, false)"],                     // ohne quellen.js (gemischte Fassungen)
     "alma.js": ["app.vault.trash(f, false)"],                           // Hülle eines eigenen Uni-Abgleichs ohne quellen.js
-    "ilias-kalender.js": ["app.vault.trash(f, false)"], "unterlagen.js": ["app.vault.trash(f, false)"], "meine-gruppe.js": ["V.trash(f, false)"],
+    "ilias-kalender.js": ["app.vault.trash(f, false)"], "meine-gruppe.js": ["V.trash(f, false)"],
+    "unterlagen.js": ["app.vault.trash(f, false)", "app.vault.delete(o, true)"],   // dazu der leere Ordner „System/Neue Unterlagen“
     "volltext.js": ["V.trash(f, true)"], "leer.js": ["app.vault.trash(f, false)"],
     "zentral.js": ["app.vault.trash(f, false)"],                        // ältere quellen.js ohne papierkorb (Sync nach dem Update)
     "eba.js": ["app.vault.delete(datei)"], "notizen.js": ["app.vault.delete(leer)"], // leere Notiz der Ordner-Automatik

@@ -502,7 +502,7 @@ module.exports = function (ctx) {
   const PUNKT_REIHE = ["studienbeginn", "variante", "angaben", "uni", "alma", "ilias"]; // alma, ilias: aus 0.4.7 und früher
 
   let fenster = null;
-  // Öffnen: ab = 2 (Einstellungen: „Einrichtung erneut starten“, vorausgefüllt); sonst am gespeicherten Schritt bzw. Willkommen
+  // Öffnen: ab = 2 (Einstellungen: Tipp auf die Zeile „Einrichtung“, vorausgefüllt); sonst am gespeicherten Schritt bzw. Willkommen
   const oeffnen = (o) => {
     o = o || {};
     if (fenster) return fenster;

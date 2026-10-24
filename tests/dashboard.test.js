@@ -85,6 +85,15 @@ test("Fristen · 30 Tage: Fristen, Prüfungen, Abgaben nach dem gezeigten Tag; l
   assert.deepEqual([z[1].bald, z[3].bald], [true, false]);
 });
 
+test("Zahl am Reiter (reiter.js): so viele Zeilen, wie die Liste zeigt (höchstens 6 bzw. 8); ohne Modell keine Zahl", () => {
+  const { B, M } = dashboard("2026-10-18", NOTIZEN);
+  const heute = M.zeit.heute(), zahl = B.zaehler["eba-liste"];
+  assert.ok(B.zeilenBauen("fristen", M, heute).length > 0);
+  for (const art of ["fristen", "termine", "nachzuarbeiten"]) assert.equal(zahl(art, ""), B.zeilenBauen(art, M, heute).length, art);
+  assert.equal(zahl("", "Termine erscheinen, sobald Studium Autopilot läuft."), B.zeilenBauen("termine", M, heute).length, "ohne Argument: Ersatztext");
+  assert.equal(laden("dashboard").ergebnis.zaehler["eba-liste"]("fristen", ""), null);
+});
+
 test("Termine · 14 Tage: ohne Fristen und Prüfungen, Fachschaft nur heute und morgen, Uhrzeit als Zahl, Entfallenes fehlt", () => {
   const { B, M } = dashboard("2026-10-18", NOTIZEN);
   const z = B.zeilenBauen("termine", M, "2026-10-18");

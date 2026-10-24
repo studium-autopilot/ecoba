@@ -413,7 +413,6 @@ li:has(> a[data-href$="Noten & ECTS"])        { --eba-icon: url("data:image/svg+
 li:has(> a[data-href$="Prüfungen"])           { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 14v2.2l1.6 1'/%3E%3Cpath d='M16 2v4'/%3E%3Cpath d='M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5'/%3E%3Cpath d='M3 10h5'/%3E%3Cpath d='M8 2v4'/%3E%3Ccircle cx='16' cy='16' r='6'/%3E%3C/svg%3E"); }
 li:has(> a[data-href$="Termine & Anmeldungen"]){ --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3Cpath d='M8 14h.01'/%3E%3Cpath d='M12 14h.01'/%3E%3Cpath d='M16 14h.01'/%3E%3Cpath d='M8 18h.01'/%3E%3Cpath d='M12 18h.01'/%3E%3Cpath d='M16 18h.01'/%3E%3C/svg%3E"); }
 li:has(> a[data-href$="Kontakte & Links"])    { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 2v2'/%3E%3Cpath d='M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2'/%3E%3Cpath d='M8 2v2'/%3E%3Ccircle cx='12' cy='11' r='3'/%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3C/svg%3E"); }
-li:has(> a[data-href$="Stundenplan"])         { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='3' width='18' height='18' rx='2'/%3E%3Cpath d='M9 3v18'/%3E%3Cpath d='M15 3v18'/%3E%3C/svg%3E"); } /* Lucide „columns-3“: Wochenspalten, anders als der Kalender von Termine & Anmeldungen */
 li:has(> a[data-href$="Einstellungen & Hilfe"]){ --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E"); }
 li:has(> a[href*="aktion=stundenplan"])      { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 2v4'/%3E%3Cpath d='M16 2v4'/%3E%3Crect x='3' y='4' width='18' height='18' rx='2'/%3E%3Cpath d='M3 10h18'/%3E%3Cpath d='M8 14h.01'/%3E%3Cpath d='M12 14h.01'/%3E%3Cpath d='M16 14h.01'/%3E%3Cpath d='M8 18h.01'/%3E%3Cpath d='M12 18h.01'/%3E%3Cpath d='M16 18h.01'/%3E%3C/svg%3E"); }
 li:has(> a[data-href$="Unterlagen"])          { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8'/%3E%3Cpath d='M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z'/%3E%3Cpath d='M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1'/%3E%3C/svg%3E"); }
@@ -1280,7 +1279,7 @@ a.eba-ev:hover { filter: brightness(0.96); }
 .callout[data-callout="eba-kennzahlen"] .bases-list-group::before { display: none !important; }
 .callout[data-callout="eba-kennzahlen"] .bases-list-container { padding: 0 !important; margin: 0 !important; }
 
-/* Kleine Listen auf dem Dashboard (Fristen, Termine, Nachzuarbeiten, Im Eingang) als Bases-Listenansicht: Höhe je
+/* Kleine Listen auf dem Dashboard (Fristen, Termine, Nachzuarbeiten) als Bases-Listenansicht: Höhe je
    Eintrag aus dem Inhalt (kein Leerraum bei einzeiligen Einträgen, kein Scrollbalken), Spaltenoptik per Raster. */
 .callout:is([data-callout="eba-termin"], [data-callout="eba-tabelle"]) .bases-list-container { padding: 0 !important; margin: 0 !important; }
 .callout:is([data-callout="eba-termin"], [data-callout="eba-tabelle"]) .bases-list-group-list::before,
@@ -2453,7 +2452,7 @@ body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-termin"].is-coll
 body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-termin"].is-collapsible > .callout-title .callout-fold { display: none; }
 body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-termin"].is-collapsible > .callout-content { display: block !important; height: auto !important; }
 
-/* ---------- 5. Kleine Listen (Nachzuarbeiten, Im Eingang): Name nimmt den Platz, Datum und Häkchen rechts daneben
+/* ---------- 5. Kleine Listen (Nachzuarbeiten): Name nimmt den Platz, Datum und Häkchen rechts daneben
    (vorher Name in 30 %, Datum mitten in der Karte, Häkchen ganz rechts). Leere Liste zeigt „Leer.“ ---------- */
 body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-tabelle"] .bases-list-item-properties { grid-template-columns: minmax(0, 1fr) auto auto; column-gap: 18px; }
 body:not(.is-phone) .eba-s-dashboard .callout[data-callout="eba-tabelle"] .bases-list-property:not(:first-child) { color: var(--eba-muted); font-variant-numeric: tabular-nums; }
@@ -3007,7 +3006,7 @@ body.is-phone .eba-td-text { font-size: 14.5px; } /* iPhone: Inhalt 14,5 px */
    Vorher 1861 px (2,45 Bildschirme): Kachel-Titel abgeschnitten („Durchgearb…“), leerer Eingang mit Spaltenkopf und
    Wischleiste, „Zu lesen“ 1018 px hoch (12 Zeilen à 72 px). Jetzt sind alle Tabellen gestapelte Listen
    (tabellen.js + 37.tabellen): Unterlage als Titel, „Öffnen ↗“ rechts, darunter „15 Seiten · neu ·
-   Eingeordnet 12.10.“; Gruppen (Modul) als Label; leerer Eingang nur „Leer.“. Nicht mehr seitlich wischbar. */
+   Eingeordnet 12.10.“; Gruppen (Modul) als Label; leere Tabellen nur „Leer.“. Nicht mehr seitlich wischbar. */
 
 /* Kennzahlen: Kacheln bündig mit den übrigen Karten, flacher, Titel zweizeilig statt abgeschnitten;
    dritte Kachel etwas breiter, damit „Altklausuren“ ganz in eine Zeile passt (Silbentrennung greift ohne lang=de nicht) */
@@ -3779,10 +3778,7 @@ body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk
 .eba-vb-symbol.ok { color: var(--eba-good); background: color-mix(in srgb, var(--eba-good) 13%, transparent); }
 .eba-vb-symbol.warn { color: var(--eba-warn); background: color-mix(in srgb, var(--eba-warn) 16%, transparent); }
 .eba-vb-symbol.akzent { color: var(--eba-accent-text); background: var(--eba-accent-soft); } /* Angabe eingetragen (personalisieren.js) */
-/* Variante: ohne Symbol (jede nicht gewählte Zeile hatte denselben Wegweiser; „gewählt“/„aktuell“ sagt die Pille). Regel: ein
-   Symbol nur, wo es etwas sagt, das der Titel nicht sagt (Abschnitt 5, seit 18.10.2026). */
-.eba-vb-liste:has(> .eba-vb[data-id="Economics"]) > .eba-vb > .eba-vb-symbol { display: none; }
-/* Text ab 150 px: So bleibt ein kurzer Knopf („Ändern“, „Aktualisieren“) auf dem iPhone rechts neben dem Text (bis 24.10.2026
+/* Text ab 150 px: So bleibt ein kurzer Knopf („Aktualisieren“, „Lernen“) auf dem iPhone rechts neben dem Text (bis 24.10.2026
    240 px, da stand er dort in einer eigenen Zeile unter dem Symbol). Ein langer rutscht unter den Text, rechtsbündig. */
 .eba-vb-text { flex: 1 1 150px; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .eba-vb-text b { font-weight: 600; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -3794,10 +3790,33 @@ body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk
 /* „Mehr erfahren“ als Textlink im Status (öffnet das Fenster mit Schaltern, Trennen usw.; in der Zeile höchstens ein Knopf) */
 .eba-vb-status .eba-vb-mehr { font-weight: 500; color: var(--eba-accent-text) !important; white-space: nowrap; text-decoration: none; background-image: none !important; padding-right: 0 !important; }
 .eba-vb-status .eba-vb-mehr:hover { text-decoration: underline; }
+/* Kompakte Zeile (seit 24.10.2026): Einstellungen & Hilfe wie die Einstellungen von iPhone und iPad, auf allen Geräten gleich.
+   Eine Zeile je Angabe: Symbol, Titel, rechts der Wert (gedämpft) und der Pfeil bzw. der Haken der Auswahl; die ganze Zeile ist
+   ein Link (personalisieren.js, verbindungen.js kompakt), ihr Knopf steht im Fenster dahinter. Darunter höchstens eine kurze
+   Zeile (ein Problem, was aus der Variante folgt). Mindestens 44 px hoch: Tippfläche auf iPhone und iPad (Grundsatz 9). */
+.eba-ez-liste { overflow: hidden; }
+.eba-ez {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; box-sizing: border-box; padding: 7px 14px;
+  color: var(--eba-text) !important; text-decoration: none !important; background-image: none !important;
+  -webkit-tap-highlight-color: transparent;
+}
+.eba-ez + .eba-ez { border-top: 1px solid var(--eba-border); }
+a.eba-ez:hover { background-color: color-mix(in srgb, var(--eba-text) 3%, transparent); }
+a.eba-ez:active { background-color: color-mix(in srgb, var(--eba-text) 6%, transparent); }
+.eba-ez-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.eba-ez-titel { font-weight: 500; line-height: 1.3; }
+.eba-ez-unter { font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
+/* Wird es eng (iPhone, große Schrift), gibt erst der Wert nach und bricht zwischen Wörtern um; der Titel bleibt ganz */
+.eba-ez-wert { flex: 0 100 auto; max-width: 55%; text-align: right; line-height: 1.3; color: var(--eba-muted); overflow-wrap: break-word; }
+.eba-ez-wert.akzent { font-weight: 600; color: var(--eba-accent-text); } /* etwas wartet auf dich: Starten, neue Version */
+.eba-ez-wert.warn { font-weight: 600; color: var(--eba-warn); } /* Problem, der Satz steht darunter */
+.eba-ez-rechts { flex: none; display: inline-flex; color: var(--eba-faint); }
+.eba-ez-rechts.gewaehlt { color: var(--eba-accent-text); }
 /* Zeilenliste aus Karten  > [!eba-zeilen]  (Einstellungen & Hilfe → Hilfe): je Zeile eine klappbare Karte
-   > > [!eba-karte|hilfe|<thema>]- Titel <span class="eba-zeile-unter">Unterzeile</span>. Gleiche Maße wie .eba-vb (Rahmen der
-   äußeren Karte = .eba-vb-liste); rechts der Klapp-Pfeil statt eines Knopfs. Aufgeklappt beginnt der Inhalt bündig unter dem
-   Titel (14 + 30 + 12 px), das Symbol wird zum Akzent. Karten darin ohne eigenen Rahmen, getrennt durch eine Haarlinie. */
+   > > [!eba-karte|hilfe|<thema>]- Titel. Gleiche Maße wie die kompakte Zeile .eba-ez (Rahmen der äußeren Karte = .eba-vb-liste);
+   rechts der Klapp-Pfeil. Aufgeklappt beginnt der Inhalt bündig unter dem Titel (14 + 30 + 12 px), das Symbol wird zum Akzent.
+   Karten darin ohne eigenen Rahmen, getrennt durch eine Haarlinie. Bis 0.6.6 hatte jede Zeile eine Unterzeile
+   (<span class="eba-zeile-unter">); in selbst geänderten Seiten bleibt sie ausgeblendet. */
 /* !important bei padding: die iPhone-Regeln für Karten (Abschnitt 36: 11 × 13 px, zugeklappt 9 px) sind spezifischer */
 .callout[data-callout="eba-zeilen"] { padding: 0 !important; overflow: hidden; box-shadow: none; }
 .callout[data-callout="eba-zeilen"] > .callout-title { display: none; }
@@ -3807,8 +3826,8 @@ body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk
 }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout + .callout { border-top: 1px solid var(--eba-border); }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title {
-  display: flex; align-items: center; gap: 12px; margin: 0 !important; padding: 12px 14px; cursor: pointer;
-  font-family: inherit; font-size: inherit; font-weight: 600; letter-spacing: 0; text-transform: none; line-height: 1.35; color: var(--eba-text);
+  display: flex; align-items: center; gap: 12px; min-height: 44px; box-sizing: border-box; margin: 0 !important; padding: 7px 14px; cursor: pointer;
+  font-family: inherit; font-size: inherit; font-weight: 500; letter-spacing: 0; text-transform: none; line-height: 1.3; color: var(--eba-text);
 }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title .callout-icon {
@@ -3818,9 +3837,9 @@ body.is-mobile :is(.eba-vb-knopf, .eba-uh-knopf, .eba-toast-knopf, button.eba-lk
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title .callout-icon .svg-icon { width: 16px; height: 16px; stroke-width: 2; }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout:not(.is-collapsed) > .callout-title .callout-icon { color: var(--eba-accent-text); background: var(--eba-accent-soft); }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title .callout-title-inner {
-  flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-weight: 600;
+  flex: 1 1 auto; min-width: 0; font-weight: 500;
 }
-.callout[data-callout="eba-zeilen"] .eba-zeile-unter { font-size: 13px; line-height: 1.45; font-weight: 400; color: var(--eba-muted); }
+.callout[data-callout="eba-zeilen"] .eba-zeile-unter { display: none; }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-title .callout-fold { flex: none; padding: 0; color: var(--eba-faint); }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-content { padding: 2px 14px 16px 56px; }
 .callout[data-callout="eba-zeilen"] > .callout-content > .callout > .callout-content .callout[data-callout="eba-raster"] { margin: 0; }
@@ -4750,7 +4769,7 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
   body:not(.is-phone) .eba-woche { column-gap: 8px; --eba-wg: 8px; }
 }
 
-/* Schmale Spalten (Karte unter 480 px: die Seite Stundenplan auf dem iPhone hochkant, seit 20.10.2026 wieder als Raster): nur
+/* Schmale Spalten (Karte unter 480 px: iPhone hochkant, Dashboard und Seite Stundenplan; seit 24.10.2026 überall das Raster): nur
    Kurzname und die knappe Zeile (woche.js zeileZeichnen: Raum gekürzt, „HS 1“ statt „Hörsaal 1 (Keplerstraße 2)“; Zeit nur bei
    einer Änderung und „ab TT.MM.“ vor dem Beginn); die Art zeigt die Fläche. Wörter brechen nur an Silben. Ein hoher Kasten
    (ab 64 px) zeigt drei Zeilen, damit eine Änderung mit „statt“ ganz dasteht. */
@@ -4820,86 +4839,20 @@ body.is-phone .eba-woche a.eba-wpfeil:last-child::after { left: 0; right: -6px; 
 .eba-woche .eba-ev.schmal > b { -webkit-line-clamp: 1; white-space: nowrap; hyphens: manual; -webkit-hyphens: manual; font-size: 11px; }
 .eba-woche .eba-ev.schmal > b i, .eba-woche .eba-ev.schmal > span { display: none !important; }
 
-/* 55b. Tagesansicht (woche.js tagZeichnen, seit 19.10.2026): Unter 520 px Kartenbreite (iPhone) zeigt die Woche auf dem
-   Dashboard einen Tag statt fünf Spalten à 60 px (die Seite Stundenplan zeigt seit 20.10.2026 immer das Raster, woche.js
-   mitTag; dort ohne .hat-tag). Gezeichnet werden beide, die Breite der Karte wählt.
-   Kopf „KW n · Spanne“ mit ‹ › (Tippflächen 44 px), fünf Tage als Reihe (gewählt getönt, heute in Akzentfarbe, Punkt bei
-   Lehrveranstaltungen, Strich in Warnfarbe bei einem Ausfall oder einer Änderung), darunter die Kästen des Tags über die ganze
-   Breite: Zeit links, voller Name (Kurzname kräftig, Art blass), Raum; nichts abgeschnitten. Gleiche Klassen wie im Raster (ue,
-   heute, jetzt, ausfall, ausnahme, konflikt), darum gleiche Farben und Rahmen. Was erst beginnt, ist eine leise Zeile, kein Kasten. */
-.eba-wt { display: none; padding: 10px 12px 12px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); }
-@container eba-kz (max-width: 520px) {
-  .eba-woche.hat-tag { display: none; }
-  .eba-wt { display: block; }
-}
-.eba-wt-kopf { display: flex; align-items: center; gap: 8px; min-height: 30px; }
-.eba-wt-kw { font-size: 10.5px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--eba-muted); white-space: nowrap; }
-a.eba-wt-kw.anders { position: relative; color: var(--eba-accent-text); text-decoration: none; cursor: pointer; }
-a.eba-wt-kw.anders::after { content: ""; position: absolute; top: -14px; bottom: -14px; left: -6px; right: -6px; }
-.eba-wt-spanne { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--eba-faint); white-space: nowrap; }
-.eba-wt-pfeile { margin-left: auto; display: flex; align-items: center; gap: 4px; }
-a.eba-wt-pfeil {
-  position: relative; display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 30px;
-  border-radius: var(--eba-radius-s); color: var(--eba-muted); font-size: 19px; line-height: 1; text-decoration: none;
-}
-a.eba-wt-pfeil::after { content: ""; position: absolute; top: -7px; bottom: -7px; left: -4px; right: -4px; }
-.eba-wt-tage { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; margin: 6px 0 10px; }
-.eba-wt-tag {
-  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
-  min-height: 44px; padding: 4px 0 9px; border-radius: var(--eba-radius-s); color: var(--eba-muted); cursor: pointer;
-  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
-}
-.eba-wt-name { font-size: 12px; font-weight: 600; }
-.eba-wt-datum { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--eba-text); }
-.eba-wt-tag.heute .eba-wt-name, .eba-wt-tag.heute .eba-wt-datum { color: var(--eba-accent-text); }
-.eba-wt-tag.heute .eba-wt-datum { font-weight: 700; }
-.eba-wt-tag.gewaehlt { background: var(--eba-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 45%, transparent); }
-.eba-wt-tag.termine::after {
-  content: ""; position: absolute; bottom: 5px; left: 50%; width: 4px; height: 4px; margin-left: -2px; border-radius: 50%;
-  background: var(--eba-faint);
-}
-.eba-wt-tag.heute.termine::after { background: var(--eba-accent-text); }
-/* Tag mit Ausfall oder Änderung: kurzer Strich in Warnfarbe statt des Punkts, so sieht man ihn ohne Durchtippen */
-.eba-wt-tag.ausnahme::after, .eba-wt-tag.heute.termine.ausnahme::after {
-  content: ""; position: absolute; bottom: 4px; left: 50%; width: 14px; height: 3px; margin-left: -7px; border-radius: 2px;
-  background: var(--eba-warn);
-}
-.eba-wt-tag:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
-.eba-wt-liste { display: flex; flex-direction: column; gap: 6px; }
-.eba-wt .eba-ev {
-  display: grid; grid-template-columns: 44px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; align-items: start;
-  margin: 0; padding: 9px 10px; border-left: 0; background: color-mix(in srgb, var(--eba-accent) 13%, var(--eba-bg));
-  font-size: 13px; line-height: 1.3;
-}
-.eba-wt .eba-ev.ue { padding-left: 8px; border-left: 2px solid var(--eba-info); background: color-mix(in srgb, var(--eba-info) 5%, var(--eba-bg)); }
-.eba-wt .eba-wt-uhr { grid-column: 1; grid-row: 1 / span 2; display: flex; flex-direction: column; font-variant-numeric: tabular-nums; }
-.eba-wt .eba-wt-uhr span { font-size: 13px; line-height: 1.35; color: var(--eba-muted); white-space: nowrap; overflow: visible; }
-.eba-wt .eba-wt-uhr span + span { color: var(--eba-faint); }
-.eba-wt .eba-ev > b {
-  grid-column: 2; font-size: 15px; font-weight: 600; line-height: 1.3; color: var(--eba-text);
-  white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: normal; padding-right: 10px;
-}
-.eba-wt .eba-ev > b i { font-style: normal; font-weight: 400; font-size: 13px; color: var(--eba-muted); }
-.eba-wt .eba-ev > .eba-wt-ort { grid-column: 2; font-size: 13px; line-height: 1.3; color: var(--eba-muted); white-space: normal; overflow: visible; text-overflow: clip; }
-.eba-wt .eba-ev.konflikt::after { content: ""; position: absolute; top: 10px; right: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--eba-warn); }
-a.eba-wt-leise { display: block; padding: 2px 10px 2px 64px; font-size: 13px; line-height: 1.35; color: var(--eba-faint); text-decoration: none; }
-.eba-wt-leer { padding: 12px 2px; font-size: 13px; color: var(--eba-muted); }
-
-/* Ausnahmen (seit 20.10.2026, Raster und Tagesansicht): Ausfall dieser Lehrveranstaltung und ein anderer Raum oder eine andere
+/* Ausnahmen (seit 20.10.2026): Ausfall dieser Lehrveranstaltung und ein anderer Raum oder eine andere
    Zeit an diesem Tag (Klasse .ausnahme aus woche.js) in Warnfarbe: getönte Fläche, Kante links, kurzer Text („Fällt aus“,
    „Anderer Raum“ …) und der neue Wert in Warnfarbe, der übliche durchgestrichen daneben („HS 9 statt HS 1“). Vorher sah ein
    Ausfall blass aus wie „ab TT.MM.“ (.spaeter) und eine Änderung hatte nur einen gestrichelten Rand; beides ging unter. Ein
    Ausfall wegen einer Pause oder eines freien Tags (ohne .ausnahme) bleibt leise: neutrale Fläche, Name durchgestrichen,
-   „Fällt aus“ gedämpft. Keine Symbole: Farbe und Wort. Steht nach 55b, damit es die Flächen von Übung und Tutorium dort ersetzt. */
-:is(.eba-woche, .eba-wt) .eba-ev.ausfall { background: color-mix(in srgb, var(--eba-text) 6%, var(--eba-bg)); border-left: 0; }
-:is(.eba-woche, .eba-wt) .eba-ev.ausfall > b { color: var(--eba-muted); text-decoration: line-through; }
-:is(.eba-woche, .eba-wt) .eba-ev.ausnahme { background: color-mix(in srgb, var(--eba-warn) 12%, var(--eba-bg)); border-left: 3px solid var(--eba-warn); }
+   „Fällt aus“ gedämpft. Keine Symbole: Farbe und Wort. Steht nach den Flächen von Übung und Tutorium, damit es sie ersetzt. */
+.eba-woche .eba-ev.ausfall { background: color-mix(in srgb, var(--eba-text) 6%, var(--eba-bg)); border-left: 0; }
+.eba-woche .eba-ev.ausfall > b { color: var(--eba-muted); text-decoration: line-through; }
+.eba-woche .eba-ev.ausnahme { background: color-mix(in srgb, var(--eba-warn) 12%, var(--eba-bg)); border-left: 3px solid var(--eba-warn); }
 .eba-woche .eba-ev.ausnahme { padding-left: 5px; }
-.eba-wt .eba-ev.ausnahme { padding-left: 7px; }
 @container eba-kz (max-width: 480px) { .eba-woche .eba-ev.ausnahme { border-left-width: 2px; } }
 /* Text in einer Zeile des Kastens: Größe und Umbruch der Zeile (sonst 11 px und ohne Umbruch aus Abschnitt 13) */
 .eba-ev .eba-ev-marke, .eba-ev .eba-ev-neu { font-size: inherit; font-weight: 600; white-space: normal; overflow: visible; }
-.eba-ev.ausnahme .eba-ev-marke, .eba-ev .eba-ev-neu, .eba-wt .eba-wt-uhr.eba-ev-neu span { color: var(--eba-warn); font-weight: 600; }
+.eba-ev.ausnahme .eba-ev-marke, .eba-ev .eba-ev-neu { color: var(--eba-warn); font-weight: 600; }
 .eba-ev s { color: var(--eba-muted); }
 /* ---------- Ende Abschnitt 55 ---------- */
 
@@ -5784,3 +5737,65 @@ body.is-phone .eba-pf-offen { padding-left: 14px; }
 .eba-sb-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
 body.is-mobile .eba-sb-knoepfe .eba-vb-knopf { min-height: 44px; box-sizing: border-box; }
 /* ---------- Ende Abschnitt 68 ---------- */
+
+/* ---------- 69. Reiter (reiter.js, ```eba-reiter```; seit 24.10.2026) ----------
+   Karten mit „reiter=Name“ in den Angaben stehen als eine Reihe Reiter in einer Karte an der Stelle des Blocks (Dashboard:
+   Fristen, Termine, Nacharbeiten, To-dos; vorher Karten untereinander, am iPhone zugeklappt). Gestalt: eine Karte, oben eine
+   Reihe Knöpfe, der gewählte in der Akzentfarbe getönt, darunter der Inhalt. Die Karten im Reiter haben keinen eigenen Rahmen
+   und Titel, die Reiterkarte ist ihr Rahmen; nur im Raster „Offene Fragen | To-dos“ bleiben die Titel, solange es offene
+   Fragen gibt (sie trennen dann zwei Listen).
+   Auf jedem Gerät gleich (seit 24.10.2026; zuerst nur am iPhone, PC und iPad zeigten die Karten offen nebeneinander). Die
+   Abschnitte mit reiter-Karten falten, solange das Plugin läuft (body.eba-plugin-an); ohne Plugin bleiben die Karten stehen,
+   am iPhone zugeklappt (handy-zu). Eine reiter-Karte steht darum oben in der Notiz oder in einem Raster nur aus reiter-Karten.
+   Auf dem Dashboard fällt auch „## Zu erledigen“ weg: Die Reiter stehen darüber, darunter bliebe die Überschrift sonst meist
+   allein (Bitte prüfen und fällige Karteikarten sind oft leer). Die Bearbeitungsansicht braucht dafür keine Regel, das
+   Dashboard öffnet nur in der Leseansicht. Nie display:none auf einem Abschnitt (Abschnitt 36, tests/leseansicht.test.js).
+   Jeder Reiter so breit wie sein Wort (flex), damit „Nacharbeiten“ samt Zahl auch bei 360 px in die Reihe passt; schmaler als
+   330 px (Bildschirmzoom auf kleinen iPhones) etwas kleiner. */
+.block-language-eba-reiter { margin: 0; }
+/* Seite ohne reiter-Karten: kein Block */
+.block-language-eba-reiter.eba-rt-aus,
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-reiter.eba-rt-aus) { display: none !important; }
+.el-pre:has(> .block-language-eba-reiter.eba-rt-aus) {
+  display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden;
+}
+/* Die Karten selbst und auf dem Dashboard „Zu erledigen“ falten */
+body.eba-plugin-an .markdown-preview-sizer > div:has(.callout[data-callout-metadata*="reiter="]),
+body.eba-plugin-an .eba-s-dashboard .markdown-preview-sizer > .el-h2:has(> h2[data-heading="Zu erledigen"]) {
+  display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden;
+}
+body.eba-plugin-an .markdown-source-view.is-live-preview .cm-embed-block:has(.callout[data-callout-metadata*="reiter="]) { display: none !important; }
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-reiter) { padding: 0; }
+
+/* Abstand darunter wie unter jeder Karte (--eba-gap, iPhone 8 px); vorher gab ihn die gefaltete Überschrift „Zu erledigen“ */
+.eba-rt {
+  container: eba-rt / inline-size; margin: 0 0 var(--eba-gap, 12px); padding: 4px; border: 1px solid var(--eba-border);
+  border-radius: var(--eba-radius); background: var(--eba-card-bg);
+}
+.eba-rt-leiste { display: flex; gap: 2px; }
+.eba-rt-reiter {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 44px; padding: 0 5px;
+  border-radius: var(--eba-radius-s); color: var(--eba-muted); font-size: 13px; font-weight: 600; line-height: 1.2; white-space: nowrap;
+  cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+.eba-rt-reiter.gewaehlt { color: var(--eba-text); background: var(--eba-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 45%, transparent); }
+.eba-rt-reiter:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
+/* Zahl der Einträge (reiter.js anzahl): kleine Pille wie .eba-pill ohne Ton, am gewählten Reiter kräftiger getönt */
+.eba-rt-zahl {
+  flex: none; min-width: 18px; margin-left: 5px; padding: 0 5px; box-sizing: border-box; border-radius: 999px;
+  color: var(--eba-muted); background: color-mix(in srgb, var(--eba-text) 8%, transparent);
+  font-size: 11px; font-weight: 600; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+}
+.eba-rt-reiter.gewaehlt .eba-rt-zahl { color: var(--eba-accent-text); background: color-mix(in srgb, var(--eba-accent) 24%, transparent); }
+@container eba-rt (max-width: 330px) {
+  .eba-rt-reiter { padding: 0 2px; font-size: 11.5px; }
+  .eba-rt-zahl { min-width: 16px; margin-left: 3px; padding: 0 4px; font-size: 10px; line-height: 16px; }
+}
+.eba-rt-inhalt { padding: 6px 9px 4px; }
+.eba-rt-inhalt .callout[data-callout^="eba-"] {
+  margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important;
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+.eba-rt-inhalt .callout[data-callout^="eba-"] > .callout-title { display: none !important; }
+.eba-rt-inhalt .callout[data-callout="eba-raster"] > .callout-content:has(.eba-td-fragen:not(.is-leer)) > .callout > .callout-title { display: flex !important; margin: 4px 0 6px; }
+/* ---------- Ende Abschnitt 69 ---------- */

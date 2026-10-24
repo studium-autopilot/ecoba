@@ -1,4 +1,4 @@
-// Unterlagen benennen (unterlagen.js): Art, Nummer, Code und Titel aus Pfad und Dateiname (Eingang und ILIAS-Ablage),
+// Unterlagen benennen (unterlagen.js): Art, Nummer, Code und Titel aus Pfad und Dateiname (gewählte Datei und ILIAS-Ablage),
 // schwacher Titel, Titel aus der ersten PDF-Seite (reine Auswahl ohne pdf.js) und die Begleitnotiz.
 // Alle Namen sind erfunden, nach Mustern echter Kursdateien. Läuft ohne Obsidian: node --test tests/
 "use strict";
@@ -11,7 +11,7 @@ const eba = laden("eba").ergebnis;
 kontext.user = { eba: () => eba };
 const U = laden("unterlagen", { kontext }).ergebnis;
 
-// Name nach dem Schema „<Code> <Art> <NN> <Titel>“ für einen Pfad unterhalb des Eingangs bzw. des Kurses
+// Name nach dem Schema „<Code> <Art> <NN> <Titel>“ für einen Dateinamen bzw. einen Pfad unterhalb des Kurses
 const name = (rel, code = "B110") => {
   const endung = ((rel.match(/\.([^.]+)$/) || [])[1] || "").toLowerCase();
   const v = U.vorschlag(rel, endung, code);
@@ -20,7 +20,7 @@ const name = (rel, code = "B110") => {
 const art = (rel, code = "B110") => U.vorschlag(rel, ((rel.match(/\.([^.]+)$/) || [])[1] || "").toLowerCase(), code).art;
 const nr = (rel, code = "B110") => U.vorschlag(rel, ((rel.match(/\.([^.]+)$/) || [])[1] || "").toLowerCase(), code).nr;
 
-test("bisherige Benennung im Eingang bleibt", () => {
+test("bisherige Benennung gewählter Dateien bleibt", () => {
   const faelle = {
     "VL03_Kostenrechnung.pdf": "B110 Folien 03 Kostenrechnung",
     "Vorlesung 5 - Spieltheorie.pdf": "B110 Folien 05 Spieltheorie",
@@ -207,7 +207,7 @@ test("Lab: ändert nichts an Unterlagen außerhalb eines Labs; „Lab 2“ ist n
 });
 
 test("Lab: R-Notebook und seine HTML-Fassung sind eine Unterlage, die HTML-Fassung wird gezeigt", () => {
-  const f = (basename, extension) => ({ basename, extension, name: basename + "." + extension, path: "Eingang/R Lab 2/" + basename + "." + extension, parent: { path: "Eingang/R Lab 2" } });
+  const f = (basename, extension) => ({ basename, extension, name: basename + "." + extension, path: "Kurs/R Lab 2/" + basename + "." + extension, parent: { path: "Kurs/R Lab 2" } });
   const st = U.stapeln([f("Lab2", "Rmd"), f("Lab2.nb", "html"), f("Daten", "csv")]);
   assert.deepEqual(st.map((s) => s.dateien.map((x) => x.name).sort()), [["Daten.csv"], ["Lab2.Rmd", "Lab2.nb.html"]]);
   assert.equal(st[1].haupt.name, "Lab2.nb.html");
@@ -376,12 +376,19 @@ test("Begleitnotiz: Dateiobjekt und Dateiname geben dasselbe, Original und groß
   assert.match(pptx, /\n\n\*\*Weitere Dateien:\*\* \[\[B110 Folien 01\.zip\]\]\n$/);
 });
 
-test("Unterlagen hinzufügen: Name im Eingang", () => {
+test("Unterlagen hinzufügen: Name in System/Neue Unterlagen", () => {
   const vorhanden = new Set(["blatt 1.pdf", "blatt 1 2.pdf", "notiz"]);
-  assert.equal(U.eingangName(vorhanden, "Folien.pdf"), "Folien.pdf");
-  assert.equal(U.eingangName(vorhanden, "Blatt 1.pdf"), "Blatt 1 3.pdf");
-  assert.equal(U.eingangName(vorhanden, "Notiz"), "Notiz 2");
-  assert.equal(U.eingangName(new Set(), "VL #3: Kosten [neu].pdf"), "VL 3 Kosten neu.pdf");
-  assert.equal(U.eingangName(new Set(), "Übung.pdf".normalize("NFD")), "Übung.pdf");
-  assert.equal(U.eingangName(new Set(), ""), "Datei");
+  assert.equal(U.NEU, "System/Neue Unterlagen");
+  assert.equal(U.neuName(vorhanden, "Folien.pdf"), "Folien.pdf");
+  assert.equal(U.neuName(vorhanden, "Blatt 1.pdf"), "Blatt 1 3.pdf");
+  assert.equal(U.neuName(vorhanden, "Notiz"), "Notiz 2");
+  assert.equal(U.neuName(new Set(), "VL #3: Kosten [neu].pdf"), "VL 3 Kosten neu.pdf");
+  assert.equal(U.neuName(new Set(), "Übung.pdf".normalize("NFD")), "Übung.pdf");
+  assert.equal(U.neuName(new Set(), ""), "Datei");
+});
+
+test("Unterlagen hinzufügen: ZIP und Notizen kommen nicht mit", () => {
+  const r = U.auswahlPruefen(["VL01.pdf", "Kurs.ZIP", "Notiz.md", "Folien.pptx", "Scan.HEIC", "Archiv.7z", "Ohne Endung", "Tafel.canvas"]);
+  assert.deepEqual(r, { nehmen: [0, 3, 4, 6], zip: 2, notizen: 2 });
+  assert.deepEqual(U.auswahlPruefen([]), { nehmen: [], zip: 0, notizen: 0 });
 });

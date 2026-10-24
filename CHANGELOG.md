@@ -2,6 +2,23 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.7 – Aufgeräumtes Dashboard
+
+- **Übersichtlicher:** Auf dem **Dashboard** stehen **Fristen**, **Termine**, **Nacharbeiten** und **To-dos** als eine Reihe
+  Knöpfe, jeder mit der Zahl seiner Einträge. Ein Tipp zeigt die Liste darunter, ein zweiter schließt sie.
+- **Übersichtlicher:** Auf dem iPhone zeigt das **Dashboard** jetzt deine ganze Woche wie am PC, nicht mehr nur einen Tag.
+  Darum steht **Stundenplan** links in der Übersicht auf keinem Gerät mehr.
+- **Übersichtlicher:** **Einstellungen & Hilfe** ist auf allen Geräten kompakt wie die Einstellungen am iPhone: je Angabe eine
+  Zeile, rechts ihr Stand wie „Verbunden“ oder „An“. Ein Tipp öffnet sie, Knöpfe wie **Aktualisieren** stehen dort.
+- **Übersichtlicher:** Die Liste **Im Eingang** ist vom **Dashboard** und von **Unterlagen** verschwunden. Neue Dateien kommen nur
+  noch über **Unterlagen hinzufügen** dazu, ZIP-Dateien entpackst du vorher.
+- **Übersichtlicher:** Aufrufe, an Forschungsstudien teilzunehmen, stehen nicht mehr bei deinen Fristen. Dafür kommen die
+  Bewerbungsfristen der studentischen Initiativen am Fachbereich, etwa von InOne Consult.
+- **Behoben:** In **Termine & Anmeldungen** fehlte neben dem Datum der Wochentag und bei laufenden Fristen „läuft“. Jetzt
+  steht beides wieder da.
+- **Behoben:** Auf **Postfach** führte **Mit Uni-Login verbinden** auf einem zweiten Gerät nur zum Hinweis, ein Gerät reiche.
+  Deine Mails kommen aber nicht von selbst auf andere Geräte, darum öffnet der Knopf jetzt gleich die Anmeldung.
+
 ## 0.6.6 – Mehr Platz auf dem iPhone
 
 - **Übersichtlicher:** Auf dem iPhone ist oben auf dem **Dashboard** mehr zu sehen: Gruß und Datum stehen in einer Zeile, und

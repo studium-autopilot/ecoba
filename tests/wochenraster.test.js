@@ -1,6 +1,6 @@
 // Wochenraster auf Dashboard und Stundenplan (woche.js, Codeblock eba-woche): welche Woche (nur aus dem Gerätespeicher, nach
 // 30 Minuten und nach einem Neustart wieder die aktuelle), Kästen der Woche (von/bis, Ausfälle, Pausen, Änderungen, c.t.,
-// Kurzname, Art und Gruppe, Überschneidungen), leere Wochen, Wischen. Semester, Pausen, freie Tage und „findet statt“ kommen
+// Kurzname, Art und Gruppe, Überschneidungen), leere Wochen, Wischen, auf jeder Breite das Raster. Semester, Pausen, freie Tage und „findet statt“ kommen
 // aus dem Fachmodell (Semesterdaten tests/daten/v1). Nur ausgedachte Stundenplan-Daten (Codes X100 …).
 // Läuft ohne Obsidian: node --test tests/
 "use strict";
@@ -209,11 +209,12 @@ test("Änderung in dieser Woche: neue Zeit und neuer Raum, Kasten an der neuen Z
   const d = kasten(woche("2026-10-19"), "Stundenplan/Do X200.md");
   assert.ok(d.klassen.includes("geaendert") && d.klassen.includes("ausnahme"));
   assert.deepEqual([d.zeit, d.zeitStatt, d.raum, d.von, d.bis], ["12:15", "10:00", "Hörsaal 9", 19, 25]);
-  assert.deepEqual([d.marke, d.zeitNeu, d.zeitAlt, d.raumNeu, d.raumAlt], ["Geändert", true, "10:00–12:00", true, "Hörsaal 1"]);
+  assert.deepEqual([d.zeitNeu, d.raumNeu, d.raumAlt], [true, true, "Hörsaal 1"]);
   assert.match(d.titel, /· 12:15–13:45 · Hörsaal 9 · geändert, sonst 10:00–12:00 · Hörsaal 1$/);
   const n = kasten(woche("2026-10-26"), "Stundenplan/Do X200.md");
   assert.ok(!n.klassen.includes("geaendert") && !n.klassen.includes("ausnahme"));
-  assert.deepEqual([n.marke, n.raumAlt, n.zeitAlt], ["", "", ""]);
+  assert.ok(!n.zeitNeu && !n.raumNeu && n.raumAlt === "");
+  assert.match(n.titel, /· 10:00–12:00 · Hörsaal 1$/);
 });
 
 // Ausnahmen (seit 20.10.2026): Ausfall dieser
@@ -224,28 +225,26 @@ const X = (pfad, fm) => lv(pfad, Object.assign({ code: "X400", art: "Vorlesung",
 test("Ausnahmen: Ausfall dieser Lehrveranstaltung in Warnfarbe mit „Fällt aus“, nicht blass wie „ab TT.MM.“", () => {
   const w = ausnahmen("2026-10-19", [X("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", wochentag: 3, ausfall: ["2026-10-21"] })]);
   const k = w.kaesten[0];
-  assert.deepEqual([k.aus, k.ausnahme, k.marke, k.grund, k.ausText], [true, true, "Fällt aus", "", "Fällt aus"]);
+  assert.deepEqual([k.aus, k.ausnahme, k.grund], [true, true, ""]);
   assert.deepEqual(k.klassen, ["eba-ev", "vl", "ausnahme", "ausfall"]);
   assert.ok(!k.klassen.includes("spaeter"));
   assert.match(k.titel, /· fällt aus$/);
-  const t = W.tageAus(w);
-  assert.deepEqual(t.map((d) => [d.termine, d.ausnahme, d.hinweis]), [[false, false, ""], [false, false, ""], [false, true, "Ausfall"], [false, false, ""], [false, false, ""]]);
 });
 
 test("Ausnahmen: nur anderer Raum oder nur andere Zeit, je mit kurzem Text und dem üblichen Wert", () => {
   const raum = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|10:15|11:45|Hörsaal 21"] })]).kaesten[0];
-  assert.deepEqual([raum.marke, raum.raum, raum.raumNeu, raum.raumAlt, raum.zeitNeu, raum.zeitAlt, raum.zeit], ["Anderer Raum", "Hörsaal 21", true, "Hörsaal 1", false, "", ""]);
+  assert.deepEqual([raum.raum, raum.raumNeu, raum.raumAlt, raum.zeitNeu, raum.zeit], ["Hörsaal 21", true, "Hörsaal 1", false, ""]);
+  assert.match(raum.titel, /· anderer Raum, sonst Hörsaal 1$/);
   assert.ok(raum.klassen.includes("ausnahme"));
   const zeit = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|14:15|15:45|Hörsaal 1"] })]).kaesten[0];
-  assert.deepEqual([zeit.marke, zeit.zeit, zeit.zeitStatt, zeit.zeitAlt, zeit.raumNeu, zeit.raumAlt, zeit.beginn, zeit.ende],
-    ["Andere Zeit", "14:15", "10:15", "10:15–11:45", false, "", "14:15", "15:45"]);
+  assert.deepEqual([zeit.zeit, zeit.zeitStatt, zeit.raumNeu, zeit.raumAlt], ["14:15", "10:15", false, ""]);
+  assert.match(zeit.titel, /· 14:15–15:45 · Hörsaal 1 · andere Zeit, sonst 10:15–11:45$/);
   const ende = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|10:15|12:45|Hörsaal 1"] })]).kaesten[0];
   assert.deepEqual([ende.zeit, ende.zeitStatt], ["bis 12:45", "11:45"], "nur das Ende anders");
   // Änderung, die nichts ändert (gleiche Zeit, gleicher Raum): keine Ausnahme
   const gleich = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|10:15|11:45|Hörsaal 1"] })]).kaesten[0];
-  assert.deepEqual([gleich.ausnahme, gleich.marke], [false, ""]);
-  assert.deepEqual(W.tageAus(ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2, aenderungen: ["2026-10-20|14:15|15:45|Hörsaal 1"] })]))[1],
-    { iso: "2026-10-20", name: "Di", lang: "Dienstag", datum: "20.", heute: false, termine: true, ausnahme: true, hinweis: "Änderung" });
+  assert.equal(gleich.ausnahme, false);
+  assert.match(gleich.titel, /· 10:15–11:45 · Hörsaal 1$/);
 });
 
 test("Ausnahmen: dauerhafte Verlegung – in den ersten zwei Wochen „Neuer Raum“ mit dem alten Raum, davor der alte, danach still", () => {
@@ -253,19 +252,20 @@ test("Ausnahmen: dauerhafte Verlegung – in den ersten zwei Wochen „Neuer Rau
   const k = (montag) => ausnahmen(montag, n).kaesten[0];
   assert.deepEqual([k("2026-10-19").raum, k("2026-10-19").ausnahme], ["Hörsaal 1", false]);
   const a = k("2026-10-26");
-  assert.deepEqual([a.raum, a.marke, a.raumNeu, a.raumAlt, a.ausnahme, a.zeit], ["Hörsaal 21, Kupferbau", "Neuer Raum", true, "Hörsaal 1", true, ""]);
+  assert.deepEqual([a.raum, a.raumNeu, a.raumAlt, a.ausnahme, a.zeit], ["Hörsaal 21, Kupferbau", true, "Hörsaal 1", true, ""]);
   assert.match(a.titel, /· neuer Raum, vorher Hörsaal 1$/);
-  assert.equal(k("2026-11-02").marke, "Neuer Raum", "zweite Woche");
-  assert.deepEqual([k("2026-11-09").marke, k("2026-11-09").ausnahme], ["", false]);
+  assert.match(k("2026-11-02").titel, /· neuer Raum, vorher Hörsaal 1$/, "zweite Woche");
+  assert.equal(k("2026-11-09").ausnahme, false);
+  assert.doesNotMatch(k("2026-11-09").titel, /neuer Raum/);
 });
 
 test("Ausnahmen: Ausfall wegen Pause oder freiem Tag bleibt leise, auch wenn er in ausfall steht (Alma trägt die Weihnachtspause ein)", () => {
   const w = ausnahmen("2026-12-21", [X("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", wochentag: 3, ausfall: ["2026-12-23", "2026-12-30"] }),
     X("Stundenplan/Mo X400.md", { titel: "X400 · Übung", art: "Übung", wochentag: 1, beginn: "08:15", ende: "09:45" })]);
   const mi = w.kaesten.find((k) => k.pfad === "Stundenplan/Mi X400.md");
-  assert.deepEqual([mi.aus, mi.ausnahme, mi.grund, mi.ausText], [true, false, "Weihnachtspause", "Fällt aus (Weihnachtspause)"]);
+  assert.deepEqual([mi.aus, mi.ausnahme, mi.grund], [true, false, "Weihnachtspause"]);
+  assert.match(mi.titel, /· fällt aus \(Weihnachtspause\)$/);
   assert.ok(mi.klassen.includes("ausfall") && !mi.klassen.includes("ausnahme"));
-  assert.deepEqual(W.tageAus(w).map((d) => d.ausnahme), [false, false, false, false, false]);
 });
 
 test("Ausfall und Pause durchgestrichen; ganze Woche frei → Satz statt Kästen; vor Vorlesungsbeginn", () => {
@@ -338,8 +338,8 @@ test("Seiten: Dashboard und Stundenplan zeigen das Raster über den Codeblock, k
   }
 });
 
-// Blasse Gruppe neben einer Vorlesung und Tagesansicht für das iPhone (19.10.2026): Am iPhone halbierte ein blasses Tutorium,
-// das erst in zwei Wochen beginnt, eine Vorlesung; fünf Spalten à 60 px zerbrachen Namen und schnitten Räume ab.
+// Blasse Gruppe neben einer Vorlesung (19.10.2026): Am iPhone halbierte ein blasses Tutorium, das erst in zwei Wochen beginnt,
+// eine Vorlesung.
 const TUT = lv("Stundenplan/Di 10.15 X180 Tutorium Gruppe 1 (gewählt).md", { titel: "Beispielabschluss · Tutorium Gruppe 1", code: "X180", art: "Tutorium", gruppe: "Gruppe 1",
   wochentag: 2, beginn: "10:15", ende: "11:45", von: "2026-11-03", bis: "2027-02-02", herkunft: "gruppe-gewaehlt", raum: "Seminarraum E 02" });
 const mitTut = (montag, jetzt = "2026-10-27T10:30:00", extra = []) => W.wocheBauen({ notizen: NOTIZEN.concat([TUT], extra), kurzVonCode: { X180: "Abschluss" }, modulPfad: {},
@@ -361,71 +361,12 @@ test("Blasse Gruppe nimmt nie an der Teilung teil: schmal am Rand, die Vorlesung
   assert.equal(W.lage(kasten(w, "Stundenplan/Mo X110.md")), null);
 });
 
-test("Tagesansicht: fünf Tage mit Datum, heute betont, Punkt nur bei Lehrveranstaltungen, die stattfinden", () => {
-  const w = mitTut("2026-10-26");
-  const t = W.tageAus(w);
-  assert.deepEqual(t.map((d) => d.name + " " + d.datum), ["Mo 26.", "Di 27.", "Mi 28.", "Do 29.", "Fr 30."]);
-  assert.deepEqual(t.map((d) => d.heute), [false, true, false, false, false]);
-  assert.deepEqual(t.map((d) => d.termine), [true, true, true, true, false]);
-  assert.equal(t[1].lang, "Dienstag");
-  // nur Blasses (noch nicht begonnen) oder Ausfall: kein Punkt
-  const frei = W.tageAus(woche("2026-12-21"));
-  assert.deepEqual(frei.map((d) => d.termine), [true, true, false, false, false], "ab Mittwoch Weihnachtspause: durchgestrichen, kein Punkt");
-});
-
-test("Tagesansicht: Kästen des Tags in Reihenfolge, voller Name, Zeit und Raum; was erst beginnt, als leise Zeile", () => {
-  const w = mitTut("2026-10-26");
-  const di = W.tagKaesten(w, 1);
-  assert.deepEqual(di.map((k) => k.pfad), ["Stundenplan/Di X180 Tutorium.md", "Stundenplan/Di X100.md", "Stundenplan/Di X100 Tutorium.md", TUT.pfad]);
-  const [t1, vl] = di;
-  assert.deepEqual([t1.kurz, t1.artLang, t1.beginn, t1.ende, t1.raum], ["Abschluss", "Tutorium 1", "08:15", "09:45", "Hörsaal 1"]);
-  assert.deepEqual([vl.artLang, vl.beginn, vl.ende], ["Vorlesung", "10:00", "12:00"]);
-  assert.equal(di[3].leise, "Tutorium Abschluss · ab 03.11. · Di 10:15");
-  assert.equal(di[3].spaeter, true);
-  // heute und jetzt bleiben (Dienstag 10:30)
-  assert.deepEqual(vl.klassen.slice(-2), ["heute", "jetzt"]);
-  // Änderung: neue Zeit und neuer Raum; Ausfall mit Grund
-  const d = W.tagKaesten(woche("2026-10-19"), 3)[0];
-  assert.deepEqual([d.beginn, d.ende, d.raum, d.klassen.includes("geaendert")], ["12:15", "13:45", "Hörsaal 9", true]);
-  const mi = W.tagKaesten(woche("2026-12-21"), 2).find((k) => k.pfad === "Stundenplan/Mi X101.md");
-  assert.deepEqual([mi.aus, mi.ausText], [true, "Fällt aus (Weihnachtspause)"]);
-  // Alma ohne erkannte Art: kein Wort dazu
-  assert.equal(W.tagKaesten(w, 0)[0].artLang, "");
-});
-
-test("Tagesansicht: welcher Tag (heute, am Wochenende Montag, gewählt nur 30 Minuten in derselben Sitzung), Wischen über die Woche hinaus", () => {
-  assert.equal(W.tagWahl(null, woche("2026-10-19", "2026-10-21T09:00:00")), 2, "heute Mittwoch");
-  assert.equal(W.tagWahl(null, woche("2026-10-26", "2026-10-24T09:00:00")), 0, "Samstag: Montag der Planwoche");
-  assert.equal(W.tagWahl(null, woche("2026-11-02", "2026-10-21T09:00:00")), 0, "andere Woche: Montag");
-  assert.equal(W.tagWahl(4, woche("2026-10-19", "2026-10-21T09:00:00")), 4, "gewählt");
-  const t = tag("2026-10-21").getTime(), s = "sitzung-a";
-  const roh = (x, zeit = t, sitz = s) => JSON.stringify({ tag: x, zeit, sitzung: sitz });
-  assert.equal(W.tagAus(roh(3), t + 60000, s), 3);
-  assert.equal(W.tagAus(roh(3), t + 30 * 60000, s), null);
-  assert.equal(W.tagAus(roh(3), t, "sitzung-b"), null);
-  assert.equal(W.tagAus(roh(5), t, s), null);
-  assert.equal(W.tagAus("kein json", t, s), null);
-  assert.deepEqual(W.tagSchritt(0, 2, 1), { versatz: 0, tag: 3 });
-  assert.deepEqual(W.tagSchritt(0, 4, 1), { versatz: 1, tag: 0 });
-  assert.deepEqual(W.tagSchritt(1, 0, -1), { versatz: 0, tag: 4 });
-});
-
-test("„KW n“ zurück zur aktuellen Woche zeigt in der Tagesansicht wieder heute (Gerätespeicher, keine Datei)", () => {
-  const L = laden("woche", { heute: "2026-10-21" });
-  const speicher = { "eba-woche-tag": JSON.stringify({ tag: 4, zeit: Date.now(), sitzung: "x" }) };
-  L.ctx.app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
-  L.ctx.app.saveLocalStorage = (k, v) => { if (v === null) delete speicher[k]; else speicher[k] = v; };
-  L.ergebnis.aktionen.woche.ausfuehren({ parameter: { schritt: "1" } });
-  assert.ok("eba-woche-tag" in speicher, "eine andere Woche behält den Tag");
-  L.ergebnis.aktionen.woche.ausfuehren({ parameter: { schritt: "0" } });
-  assert.deepEqual(Object.keys(speicher), []);
-});
-
-test("Stil: unter 520 px Tagesansicht statt Raster, Wörter brechen nie mitten im Wort", () => {
+test("Stil: schmal dasselbe Raster (keine Tagesansicht mehr), Wörter brechen nie mitten im Wort", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8");
-  assert.match(css, /@container eba-kz \(max-width: 520px\) \{\s*\.eba-woche\.hat-tag \{ display: none; \}\s*\.eba-wt \{ display: block; \}/);
-  assert.match(css, /\.eba-wt \{ display: none;/);
-  const regeln = css.match(/[^{}]*\.eba-(?:woche|wt) [^{}]*\{[^}]*\}/g) || [];
+  assert.ok(!/\.eba-wt-|hat-tag/.test(css), "keine Regeln der Tagesansicht");
+  // .eba-wt allein trug display: none und versteckte so den Wochentag der Agenda (Termine & Anmeldungen, termine.js)
+  assert.ok(!/^\s*\.eba-wt\s*\{/m.test(css), "keine Regel nur für .eba-wt");
+  const regeln = css.match(/[^{}]*\.eba-woche [^{}]*\{[^}]*\}/g) || [];
   const brechen = regeln.filter((r) => /overflow-wrap:\s*(anywhere|break-word)|word-break:\s*break-all/.test(r));
   assert.deepEqual(brechen, []);
 });
@@ -433,26 +374,45 @@ test("Stil: unter 520 px Tagesansicht statt Raster, Wörter brechen nie mitten i
 test("Stil: Ausnahme in Warnfarbe (Fläche, Kante, Text), Ausfall nie blass wie „ab TT.MM.“, kein gestrichelter Rand mehr", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const regel = (sel) => { const m = css.match(new RegExp("(?:^|\\n)" + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "\\s*\\{([^}]*)\\}")); return m ? m[1] : ""; };
-  const a = regel(":is(.eba-woche, .eba-wt) .eba-ev.ausnahme");
+  const a = regel(".eba-woche .eba-ev.ausnahme");
   assert.match(a, /background: color-mix\(in srgb, var\(--eba-warn\)/);
   assert.match(a, /border-left: 3px solid var\(--eba-warn\)/);
   assert.match(css, /\.eba-ev\.ausnahme \.eba-ev-marke, \.eba-ev \.eba-ev-neu[^{]*\{[^}]*color: var\(--eba-warn\)/);
-  assert.match(css, /\.eba-wt-tag\.ausnahme::after[^{]*\{[^}]*background: var\(--eba-warn\)/);
   assert.ok(!/\.eba-ev\.ausfall[^{]*\{[^}]*opacity/.test(css), "Ausfall nicht blass");
   assert.ok(!/\.eba-ev\.geaendert[^{]*\{[^}]*dashed/.test(css), "kein gestrichelter Rand");
 });
 
-// Seit 20.10.2026: Die Seite Stundenplan
-// zeigt immer das Raster, auch auf dem iPhone hochkant; das Dashboard schmal weiter einen Tag. Am Pfad, damit es auch in Tresoren
-// greift, deren Seite das Update nicht ersetzt (selbst geändert).
-test("Seite Stundenplan immer als Raster, Dashboard und andere Seiten schmal als Tagesansicht", () => {
-  assert.equal(W.mitTag("Studium/Stundenplan.md"), false);
-  assert.equal(W.mitTag("Dashboard.md"), true);
-  assert.equal(W.mitTag(""), true);
+// Seit 24.10.2026 zeichnet der Block auf jeder Seite nur das Raster. Vom 19. bis 24.10.2026 zeigte er auf dem Dashboard daneben
+// eine Tagesansicht, die das CSS unter 520 px Kartenbreite statt des Rasters zeigte (iPhone hochkant).
+const knotenDom = (tag = "div", p = {}) => {
+  const k = { tag, cls: p.cls || "", kinder: [] };
+  const neu = (t, q = {}) => { const c = knotenDom(t, q); k.kinder.push(c); return c; };
+  Object.assign(k, { createDiv: (q) => neu("div", q), createSpan: (q) => neu("span", q), createEl: neu,
+    empty: () => { k.kinder = []; }, appendText: () => {}, setText: () => {}, addEventListener: () => {} });
+  return k;
+};
+const alleKnoten = (k) => [k].concat(...k.kinder.map(alleKnoten));
+
+test("Raster auf Dashboard und Stundenplan, auch schmal: keine Tagesansicht daneben", () => {
+  let zeichnen = null;
+  global.document = { visibilityState: "visible" };
+  try {
+    const L = laden("woche", { heute: "2026-10-21", notizen: Object.fromEntries(NOTIZEN.map((n) => [n.pfad, n.fm])),
+      kontext: { modell: MODELL, link: (aktion) => "obsidian://studium-autopilot?aktion=" + aktion, codeblock: (_s, fn) => { zeichnen = fn; return { neu: () => {} }; } } });
+    L.ergebnis.registrieren();
+  } finally { delete global.document; }
+  for (const sourcePath of ["Dashboard.md", "Studium/Stundenplan.md"]) {
+    const el = knotenDom();
+    zeichnen("", el, { sourcePath });
+    assert.deepEqual(el.kinder.map((k) => k.cls), ["eba-woche"], sourcePath);
+    assert.ok(alleKnoten(el).some((k) => /\beba-ev\b/.test(k.cls)), sourcePath + ": Kästen im Raster");
+    assert.ok(!alleKnoten(el).some((k) => /\beba-wt|hat-tag/.test(k.cls)), sourcePath);
+  }
+  assert.ok(!("mitTag" in W) && !("tagKaesten" in W), "keine Tagesansicht mehr");
 });
 
-// Seit 24.10.2026 ist die Seite Stundenplan nur noch das Raster (am PC und iPad zeigt das Dashboard dieselbe Woche, die Seitenleiste
-// führt die Seite nur am iPhone): keine Liste der Lehrveranstaltungen, kein Alma-Knopf darüber.
+// Seit 24.10.2026 ist die Seite Stundenplan nur noch das Raster (dieselbe Woche wie auf dem Dashboard; in der Seitenleiste steht
+// sie nicht mehr): keine Liste der Lehrveranstaltungen, kein Alma-Knopf darüber.
 test("Seite Stundenplan: nur Kopf und Raster, keine Liste, kein Alma-Knopf", () => {
   const md = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "Studium", "Stundenplan.md"), "utf8").replace(/\r/g, "");
   assert.ok(!md.includes("```base"), "keine Liste");

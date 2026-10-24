@@ -152,6 +152,24 @@ Der wichtigste Baustein. Code: `.eba-vb-liste` mit `.eba-vb` (Skripte), `> [!eba
   haben). Erst ein Knopf, der dann nicht mehr passt, rutscht unter den Text, rechtsbündig. Keine Erklärsätze über einer
   Zeilenliste: Was eine Zeile bedeutet, sagt ihre Metazeile oder das Fenster hinter ihrem Knopf.
 
+**Kompakte Zeile** (`.eba-ez`, seit 24.10.2026): für Einstellungen (Deine Angaben, Verbindungen, Variante, Hilfe), auf allen
+Geräten gleich, so dicht wie die Einstellungen von iPhone und iPad.
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ (◯)  Titel                                    Verbunden   ›  │
+├──────────────────────────────────────────────────────────────┤
+│ (◯)  Titel                                       Fehler   ›  │
+│      Ein Satz, nur bei einem Problem                         │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- 44 px hoch, Titel in 500, rechts ein kurzer Stand gedämpft (ein, zwei Wörter: „An“, „Eintragen“, die Version) und der Pfeil.
+  Im Akzent nur, wenn etwas auf dich wartet („Starten“, „Neue Version“), in `--eba-warn` bei einem Problem.
+- Die ganze Zeile ist der Knopf: Sie öffnet das Fenster, und dort steht, was vorher als Knopf in der Zeile stand.
+- Eine zweite Zeile nur, wenn sie etwas Neues sagt (ein Problem, übersprungene Schritte, was aus der gewählten Variante folgt).
+- Wird es eng, gibt erst der Stand nach und bricht zwischen Wörtern um, der Titel bleibt ganz.
+
 ### Kachel und Kennzahl
 `> [!eba-kennzahlen]`: höchstens vier Kacheln. Label, Wert (Kennzahl), höchstens eine Unterzeile mit neuer Information, optional
 ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent, auf dem Dashboard („Nächste Frist“) die Farbe der Fristen
@@ -189,18 +207,18 @@ für Zustände, höchstens zwei je Zeile. Steht in jeder Zeile derselbe Wert, ge
 ### Ausnahme im Stundenplan
 Fällt eine Lehrveranstaltung aus oder findet sie an einem Tag in einem anderen Raum oder zu einer anderen Zeit statt, muss man es
 sofort sehen, ohne dass der Rest laut wird: Fläche `--eba-warn` 12 %, Kante links 3 px in `--eba-warn`, ein kurzer Text in
-Warnfarbe („Fällt aus“, „Anderer Raum“, „Neuer Raum“, „Andere Zeit“, „Geändert“) und der neue Wert in Warnfarbe, der übliche mit
-„statt“ durchgestrichen daneben („Hörsaal 9 statt ~~Hörsaal 1~~“), wo Platz ist. Bei einem Ausfall ist der Name durchgestrichen.
+Warnfarbe („Fällt aus“) bzw. der neue Wert in Warnfarbe, der übliche mit „statt“ durchgestrichen daneben („Hörsaal 9 statt
+~~Hörsaal 1~~“), wo Platz ist; im Tooltip „Anderer Raum“, „Neuer Raum“, „Andere Zeit“, „Geändert“. Bei einem Ausfall ist der Name durchgestrichen.
 Keine Symbole. Ein Ausfall wegen einer Pause oder eines freien Tags ist keine Ausnahme: neutrale Fläche, „Fällt aus“ gedämpft.
-Nie blass (`opacity`): Blass heißt „beginnt erst“. In der Tagesleiste (Dashboard auf dem iPhone) markiert ein kurzer Strich in
-Warnfarbe einen Tag mit Ausnahme; im schmalen Raster (Seite Stundenplan auf dem iPhone) stehen Fläche, Kante und das kurze Wort
-(„Fällt aus“, „statt“) wie im breiten (`eba-core.css` Abschnitt 55).
+Nie blass (`opacity`): Blass heißt „beginnt erst“. Im schmalen Raster (iPhone hochkant) stehen Fläche, Kante und das kurze
+Wort („Fällt aus“, „statt“) wie im breiten (`eba-core.css` Abschnitt 55).
 
 ### Segmentschalter
 `.eba-ds`: zwei bis vier Möglichkeiten nebeneinander, eine gewählt (Hell · Dunkel · Automatisch). Ohne Untertexte.
 
 ### Auswahl aus Zeilen
-Je Möglichkeit eine Zeile der Zeilenliste: gewählt mit Haken und Pille „gewählt“, die anderen mit „Wählen“ (Variante).
+Je Möglichkeit eine kompakte Zeile: gewählt mit Haken rechts und darunter, was daraus folgt; die anderen wählt ein Tipp auf
+die Zeile (Variante, seit 24.10.2026; vorher Pille „gewählt“ und Knopf „Wählen“).
 **(geplant)** Die Einrichtung zeigt dieselbe Zeile statt eines Optionsfelds links.
 
 ### Vorschau-Kacheln
@@ -281,7 +299,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 | **vorlesungsfrei**; benannte Pausen **Weihnachtspause**, **Pfingstpause** | „Ferien“, „Pfingstferien“ | so sagt es die Uni |
 | **Stundenplan** (Seite), **Woche** (Raster auf Dashboard und Stundenplan) | „Wochenplan“, „Wochenraster“, „Wochenansicht“ | ein Name je Ansicht |
 | **Übersicht** (Seitenleiste mit allen Seiten); **Teil** (Grundstudium, Profil & Vertiefung …); **Schwerpunktbereich** | „Bereiche-Menü“, „Bereich“ für einen Teil | „Bereich“ nur für Schwerpunkte |
-| **Deine Angaben** mit **Ändern**; **Obsidian-Einstellungen** für Obsidians eigene | „Personalisieren“, „Einstellungen →“ für Obsidians | wie die Überschrift in der App; Obsidians Einstellungen sind andere |
+| **Deine Angaben** (leer: **Eintragen**); **Obsidian-Einstellungen** für Obsidians eigene | „Personalisieren“, „Einstellungen →“ für Obsidians | wie die Überschrift in der App; Obsidians Einstellungen sind andere |
 | **Tresor**, einmal erklärt: „(in Obsidian: Vault)“ | „Vault“ | deutsch wie der Rest |
 | **Termin folgt** (Datum fehlt noch) | „noch kein Termin“ | ein Satz für denselben Zustand |
 | **mit Unterlagen**, **ohne Unterlagen**, **handschriftliches A4-Blatt** | „open book“, „closed book“, „Cheat-Sheet“ | ohne Jargon |
@@ -317,8 +335,12 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
   (37.vorlesung 3b); auf dem Dashboard stehen dort Gruß und Datum in einer Zeile, der Gruß in Kennzahlgröße. Ein breites,
   flaches Fenster bleibt sonst in der Telefon-Ansicht: Karten richten sich nach ihrer Breite.
 - iPhone: Was nicht täglich gebraucht wird, ist zu (`|handy-zu`). Raster werden einspaltig, Kacheln zweispaltig, Knopfkacheln
-  zwei je Reihe. Die Woche auf dem Dashboard zeigt dort einen Tag (Tagesansicht, unter 520 px Kartenbreite) statt fünf schmaler
-  Spalten; die Seite Stundenplan zeigt immer die ganze Woche (seit 20.10.2026), schmal mit Kurzname und gekürztem Raum („HS 1“).
+  zwei je Reihe. Die Woche bleibt auch dort ein Raster aus fünf Tagen, schmal mit Kurzname und gekürztem Raum („HS 1“); vom
+  19. bis 24.10.2026 zeigte das Dashboard stattdessen einen Tag als Liste, eine zweite Ansicht, für die Woche brauchte es eine
+  eigene Seite.
+- Fristen, Termine, Nachzuarbeiten und To-dos stehen auf dem Dashboard auf jedem Gerät als eine Reihe Reiter in einer Karte,
+  ein Tipp zeigt eine Liste (`reiter=Name`, architektur.md „Dashboard“). Am Reiter steht klein die Zahl der Einträge, bei 0
+  nichts.
 - Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`). Silbentrennung (`hyphens: auto`) nur in Fließtext;
   Skripte setzen dafür `lang="de"` an ihren Container. In Markdown gilt die Sprache der Obsidian-Oberfläche (Obsidian setzt
   `lang` danach): Mit englischer Oberfläche trennt Safari deutsche Wörter nach englischen Regeln („Vorlesung-snotiz“).

@@ -170,45 +170,6 @@ cssclasses:
 >       note.status: 107
 > ```
 
-## Eingang
-
-> [!eba-tabelle|schlicht|ohne-titel|umbruch]
-> ```base
-> filters:
->   and:
->     - file.inFolder("Eingang")
->     - 'file.ext != "md"'
-> formulas:
->   groesse: 'file.ext.upper() + " · " + (file.size / 1048576).toFixed(1) + " MB"'
->   hinweis: 'if(["zip", "rar", "7z"].contains(file.ext.lower()), "erst entpacken", if(["heic", "heif"].contains(file.ext.lower()), "als PDF oder JPG sichern", ""))'
-> properties:
->   file.name:
->     displayName: Datei
->   formula.groesse:
->     displayName: Typ
->   file.ctime:
->     displayName: Angekommen
->   formula.hinweis:
->     displayName: Hinweis
-> views:
->   - type: table
->     rowHeight: medium
->     name: Im Eingang
->     sort:
->       - property: file.ctime
->         direction: DESC
->     order:
->       - file.name
->       - formula.groesse
->       - file.ctime
->       - formula.hinweis
->     columnSize:
->       file.name: 250
->       formula.groesse: 110
->       file.ctime: 120
->       formula.hinweis: 110
-> ```
-
 ## Neu
 
 > [!eba-tabelle|schlicht|ohne-titel|umbruch]

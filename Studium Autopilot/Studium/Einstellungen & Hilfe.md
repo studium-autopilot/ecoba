@@ -41,7 +41,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 ## Hilfe
 
 > [!eba-zeilen]
-> > [!eba-karte|hilfe|bedienung]- Bedienung <span class="eba-zeile-unter">Knöpfe, Vorlagen, Übersicht</span>
+> > [!eba-karte|hilfe|bedienung]- Bedienung
 > > | Knopf | Wo | Fragt nach | Landet in |
 > > | --- | --- | --- | --- |
 > > | Neue Vorlesungsnotiz | Dashboard, Modulseite (Abschnitt Vorlesungen), **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst Modul und Thema; auf der Modulseite ist das Modul gewählt) | Vorlesungen/Modulcode, Dateiname „Datum Code VL 03“, angezeigt als „Vorlesung 3 · Di 27.10. · Thema“ |
@@ -50,12 +50,12 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
 > >
-> > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite. **Stundenplan** steht dort nur am iPhone, sonst zeigt das **Dashboard** deine Woche.
+> > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite. Deine Woche steht auf dem **Dashboard**.
 > > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
 > > - Jedes Feld hat einen Vorschlag. <kbd>Esc</kbd> oder **Abbrechen** legt nichts an. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche), darunter steht, welcher Tag gemeint ist.
 > > - **Rückgängig:** Was du wegwirfst oder abhakst, passiert sofort; der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.
 >
-> > [!eba-karte|hilfe|vorlesung]- Vorlesung <span class="eba-zeile-unter">Mitschreiben, nacharbeiten</span>
+> > [!eba-karte|hilfe|vorlesung]- Vorlesung
 > > > [!eba-raster|2]
 > > > > [!eba-karte] Schnell mitschreiben
 > > > > 1. Dashboard → **Vorlesung**. Läuft laut Stundenplan gerade etwas, entsteht die Notiz **sofort**; nochmal tippen öffnet **dieselbe Notiz**. Sonst wählst du das Modul.
@@ -69,7 +69,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > > - Handschrift auf den Folien: Abschnitt „Unterlagen“ unten, „Mit dem Stift annotieren“.
 > > > > - **Seitenlink aufs iPad legen (einmal):** Obsidian-Einstellungen → *Werkzeugleiste für Mobilgeräte* → „Studium Autopilot: Seitenlink auf die Folien einfügen“ hinzufügen.
 >
-> > [!eba-karte|hilfe|alltag]- Im Alltag <span class="eba-zeile-unter">Modulstatus, Stundenplan, Fragen</span>
+> > [!eba-karte|hilfe|alltag]- Im Alltag
 > > > [!eba-raster|2]
 > > > > [!eba-karte] Status und Note eines Moduls
 > > > > - Auf der Modulseite unter **Status** auf den Knopf tippen (z. B. **Offen**) und wählen: offen · läuft · angemeldet · bestanden · nicht bestanden · anerkannt.
@@ -107,7 +107,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>O</kbd> | Notiz öffnen |
 > > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>P</kbd> | Befehle |
 >
-> > [!eba-karte|hilfe|unterlagen]- Unterlagen <span class="eba-zeile-unter">Aus ILIAS, einordnen, annotieren</span>
+> > [!eba-karte|hilfe|unterlagen]- Unterlagen
 > > Kursdateien kommen von selbst aus ILIAS, alles andere fügst du selbst hinzu.
 > >
 > > 1. Einmal unter [[#Verbindungen]] **ILIAS-Unterlagen** verbinden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
@@ -120,12 +120,12 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > - **Verbinden klappt nicht:** Fragt die Uni nach deiner Zustimmung, einmal im Browser bei ILIAS anmelden und zustimmen, dann erneut **Verbinden**. Mit zweitem Faktor geht es noch nicht.
 > > > - **Was nicht kommt:** Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder. Umbenennen und Verschieben ist sicher.
 > > > - **Geänderte Dateien:** Hast du eine Datei angemerkt und der Dozent lädt sie neu hoch, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
-> > > - **Über den Ordner Eingang:** Windows: im Explorer in den Ordner **Eingang** deines Tresors kopieren. iPhone/iPad: **Teilen → In Dateien sichern →** Ordner **Eingang**; Papier über die App **Dateien → ⋯ → Dokumente scannen**. Danach **Unterlagen hinzufügen → … im Eingang einordnen**. ZIP vorher antippen, dann entpackt es sich. PowerPoint: als PDF exportieren und beide mit gleichem Namen ablegen.
+> > > - **Aus Mail, Safari oder von Papier:** Auf iPhone/iPad erst **Teilen → In Dateien sichern**, Papier über die App **Dateien → ⋯ → Dokumente scannen**, dann **Dateien auswählen**. ZIP vorher entpacken (in der Dateien-App antippen) und die Dateien darin wählen. PowerPoint: als PDF mit gleichem Namen exportieren und beide wählen.
 > > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`. Daneben liegt je Datei eine Notiz mit gleichem Namen: Darin merkt sich Studium Autopilot Modul, Art und ob du die Datei schon geöffnet hast. Tippst du sie an, siehst du gleich die PDF. **Neu** auf der Seite Unterlagen ist, was in den letzten 14 Tagen dazukam und du noch nicht geöffnet hast. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen im Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
 > > > - **Stift auf dem iPad (einmal einrichten):** Dateien-App → PDF gedrückt halten → **Informationen** → **Immer öffnen mit: Vorschau**; dann **Öffnen mit** → Haken bei **Mit Quick Look anzeigen** entfernen. Danach **Öffnen ↗** → **Markieren** → **Fertig**: Die Anmerkungen stehen in derselben PDF. Nicht über „Teilen“ öffnen, das legt eine Kopie an.
 > > > - **Lesen und zitieren:** `[[Datei.pdf#page=12]]` springt auf Seite 12. Die Suche findet nur Text in Notizen, nicht in PDFs. Jede PDF belegt Platz auf jedem Gerät; ganze Bücher lieber nicht ablegen.
 >
-> > [!eba-karte|hilfe|karteikarten]- Karteikarten <span class="eba-zeile-unter">Anlegen, lernen, wiederholen</span>
+> > [!eba-karte|hilfe|karteikarten]- Karteikarten
 > > Karten stehen als normale Notizen je Modul im Ordner **Karteikarten**, Studium Autopilot plant die Wiederholungen.
 > >
 > > 1. [[Karteikarten]] → **Neuer Kartenstapel** und das Modul wählen.
@@ -140,7 +140,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > - **Kennung:** Beim ersten Lernen bekommt jede Karte am Ende ein Kürzel wie `^k3f9a1b`. Es verbindet Karte und Lernstand: bitte stehen lassen. Den Text davor darfst du jederzeit ändern.
 > > > - **Lernstand:** liegt je Gerät in `System/Daten/Karteikarten` und kommt über deinen Sync auf die anderen Geräte. Ausgesetzte und schwierige Karten findest du unter [[Karteikarten#Alle Karten]].
 >
-> > [!eba-karte|hilfe|aufbau]- Aufbau <span class="eba-zeile-unter">Ordner im Tresor</span>
+> > [!eba-karte|hilfe|aufbau]- Aufbau
 > > | Ordner | Inhalt |
 > > | --- | --- |
 > > | **Dashboard** | Startseite mit Kennzahlen, Knöpfen, Woche, Fristen und To-dos |
@@ -148,13 +148,12 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | **Module** | 86 Module aus dem Modulhandbuch (dazu der Vorkurs SQ888), sortiert nach Grundstudium, Profil & Vertiefung, Schwerpunktkatalog, Schlüsselqualifikation & Abschluss; eigene Module unter Weitere Module |
 > > | **Vorlesungen, Übungsblätter, Schlüsselqualifikationen** | deine Notizen und SQ-Kurse |
 > > | **Termine, Stundenplan** | Fristen, Events und Lehrveranstaltungen, je eine Notiz |
-> > | **Eingang** | neue PDFs, Folien, Scans, bevor sie eingeordnet sind |
 > > | **Unterlagen** | Folien, Skripte, Übungen, Lösungen, Altklausuren je Modul (`Unterlagen/<Code> <Modultitel>/…`), daneben je Datei eine Notiz |
 > > | **Karteikarten** | deine Kartenstapel, je Modul eine oder mehrere Notizen |
 > > | **Anhänge** | Bilder und Screenshots, die du in Notizen ziehst oder einfügst |
 > > | **System** | gespeicherte Einstellungen, Semestertermine und Musterpläne (Daten), Gerüste und Skripte |
 >
-> > [!eba-karte|hilfe|geraete]- Geräte <span class="eba-zeile-unter">Einrichten, Unterschiede</span>
+> > [!eba-karte|hilfe|geraete]- Geräte
 > > > [!eba-raster|2]
 > > > > [!eba-regel] Einmal pro Gerät
 > > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
@@ -170,7 +169,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > [!eba-achtung] Bitte nicht umbenennen
 > > > Die Seiten im Ordner **Studium** (vor allem Noten & ECTS, Prüfungen, Stundenplan, Unterlagen) und die Einstellungen im Ordner **System** nicht umbenennen. Die Eigenschaft **uebersicht** oben in deinen Notizen bitte stehen lassen, über sie finden die Übersichten deine Notizen.
 >
-> > [!eba-karte|hilfe|stand]- Stand der Angaben <span class="eba-zeile-unter">Was geschätzt ist, offene Fragen</span>
+> > [!eba-karte|hilfe|stand]- Stand der Angaben
 > > Termine und Semesterdaten kommen laufend über die zentralen Daten. Was die Uni noch nicht veröffentlicht hat, ist überall als geschätzt markiert; alle Semester mit ihrem Stand stehen unter [[System/Daten/Semester|Semestertermine]]. Die Frist der Orientierungsprüfung rechnet der Studienverlauf aus deinem Studienbeginn, ohne Urlaubssemester.
 > >
 > > **Nicht belegt oder widersprüchlich**
