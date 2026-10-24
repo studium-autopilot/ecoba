@@ -4,6 +4,11 @@ Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## Unveröffentlicht
 
+## 0.6.10 – Klare Kalenderfarben in jedem Design
+
+- **Übersichtlicher:** Prüfungen, Uni und Veranstaltungen haben im Kalender jetzt in jedem Design klar verschiedene Farben,
+  auch im dunklen. Bisher sahen sich Uni und Veranstaltungen in manchen Designs zu ähnlich.
+
 ## 0.6.9 – Literaturliste und neue Fassungen von Unterlagen
 
 - **Neu:** Die Module des ersten Semesters haben unter **Unterlagen** eine **Literaturliste**: welche Bücher die Vorlesung

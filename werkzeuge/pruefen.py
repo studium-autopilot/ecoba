@@ -101,8 +101,9 @@ REGEL_AUSNAHMEN = {
 IP_ERLAUBT = {"127.0.0.1", "0.0.0.0"}
 # Bereiche nur für Beispiele (RFC 5737): gehören niemandem, darum frei für Tests und Doku
 IP_BEISPIEL = ("192.0.2.", "198.51.100.", "203.0.113.")
+# (?<!\d\.): Nachkommastellen wie 0.0040720468 (Konstante in einer Formel) sind keine Vorwahl 0040
 TELEFON = [
-    re.compile(r"(?<![\w+])(?:\+|00)[1-9]\d{0,2}[\s./-]?\(?0?\d{2,5}\)?[\s./-]?\d{2,}(?:[\s./-]?\d{2,})*"),
+    re.compile(r"(?<![\w+])(?<!\d\.)(?:\+|00)[1-9]\d{0,2}[\s./-]?\(?0?\d{2,5}\)?[\s./-]?\d{2,}(?:[\s./-]?\d{2,})*"),
     re.compile(r"(?<![\w.:-])0\d{2,5}(?:\s|\s?/\s?)\d{2,}(?:[\s-]\d{1,6})?(?![\w.:])"),
     re.compile(r"\b(?:tel(?:efon)?|fon|mobil|handy)\b\.?\s*:?\s*\+?\d[\d\s/().-]{5,}\d", re.I),
 ]

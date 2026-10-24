@@ -27,9 +27,10 @@ function repo() {
   return baum;
 }
 
+// GITHUB_ACTIONS leer: in der CI schreibt pruefen.py sonst zu jedem Fund eine Zeile „::error file=…“, die hier als Datei zählte
 function lauf(baum, ...args) {
   const r = spawnSync(python, [PRUEFEN, baum, "--ohne-node", ...args],
-    { encoding: "utf8", env: Object.assign({}, process.env, { PYTHONIOENCODING: "utf-8" }) });
+    { encoding: "utf8", env: Object.assign({}, process.env, { PYTHONIOENCODING: "utf-8", GITHUB_ACTIONS: "" }) });
   const dateien = r.stdout.split(/\r?\n/).filter((z) => z && !z.startsWith(" ") && !/^(Prüfung|Hinweis|Ergebnis):/.test(z));
   return { dateien, hinweis: /Hinweis: git-Arbeitsordner/.test(r.stdout) };
 }

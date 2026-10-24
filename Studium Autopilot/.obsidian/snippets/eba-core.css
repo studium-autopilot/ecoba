@@ -27,7 +27,8 @@ body {
   --eba-bad: #e5484d;
   --eba-info: #5b8def;
   /* Farbe je Art eines Termins in Kalender und Agenda (seit 24.10.2026): drei klar verschiedene Töne, Veranstaltungen grün
-     statt im Akzent (der markiert heute und den gewählten Tag). Zwischentests haben die Farbe der Uni. */
+     statt im Akzent (der markiert heute und den gewählten Tag). Zwischentests haben die Farbe der Uni. Jedes Design setzt
+     eigene Werte; tests/design.test.js prüft je Design den Abstand der drei Töne (OKLab) und die Lesbarkeit im Chip. */
   --eba-art-pruefung: var(--eba-bad);
   --eba-art-uni: var(--eba-info);
   --eba-art-event: var(--eba-good);

@@ -70,6 +70,8 @@
   --eba-warn: #a8660b;
   --eba-bad: #b42318;
   --eba-info: #3b5f86;
+  --eba-art-uni: #2d5f9e; /* Termin-Arten im Kalender (eba-core.css Abschnitt 1): kräftiger als --eba-info */
+  --eba-art-event: #2e8540;
 }
 
 /* Dunkel: Flächen von hinten nach vorn heller (Leisten < Seite < Karte), Schrift Elfenbein statt Weiß. Der Akzent hat zwei
@@ -122,6 +124,8 @@
   --eba-warn: #dea64a;
   --eba-bad: #ec7468;
   --eba-info: #8aa9d0;
+  --eba-art-uni: #7fa6e6;
+  --eba-art-event: #6cc67a;
 }
 
 /* Kopf wie ein Geschäftsbericht: doppelte Linie, Serifen-Titel */

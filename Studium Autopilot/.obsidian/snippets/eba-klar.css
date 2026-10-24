@@ -55,6 +55,8 @@
   --eba-warn: #a3600a;
   --eba-bad: #c0262d;
   --eba-info: #1f6e8c; /* Petrol, eigene Farbe für Lehre und Hinweise; bis 18.10.2026 gleich dem Akzent (wirkte wie Auswahl) */
+  --eba-art-uni: #22639a; /* Kalender: Petrol war neben dem Grün zu ähnlich, Stahlblau bleibt vom Akzent weg */
+  --eba-art-event: #3a8a2a;
 }
 
 /* Abschnitte: Überschrift in normaler Schreibweise statt Label, ohne Linie; Luft trennt die Abschnitte */

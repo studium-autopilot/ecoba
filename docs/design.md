@@ -68,10 +68,20 @@ Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel
 | neutral (`--eba-text` 6–7 %) | freiwillig, geschätzt, neu, leise Marken | Pille „freiwillig“ |
 
 **Farbe je Art eines Termins** (Kalender und Agenda auf **Termine & Anmeldungen**, seit 24.10.2026): eigene Variablen, damit
-man jede Art auf einen Blick erkennt, auch in Chips von 50 px Breite. `--eba-art-pruefung` (= `--eba-bad`, rot),
-`--eba-art-uni` (= `--eba-info`, blau; auch Zwischentests), `--eba-art-event` (= `--eba-good`, grün; Veranstaltung,
-Fachschaft). Veranstaltungen nehmen nicht den Akzent: Der markiert im Kalender heute und den gewählten Tag. Die Legende
-zeigt dieselben Chips wie das Raster, nie eine andere Form.
+man jede Art auf einen Blick erkennt, auch in Chips von 50 px Breite: `--eba-art-pruefung` (rot), `--eba-art-uni` (blau;
+auch Zwischentests), `--eba-art-event` (grün; Veranstaltung, Fachschaft). Der Kern setzt sie auf `--eba-bad`,
+`--eba-info` und `--eba-good`; jedes Design und das dunkle Schema setzen eigene Werte, wo diese zu nah beieinander liegen
+(Petrol neben Grün, Indigo neben Violett). Veranstaltungen nehmen nicht den Akzent: Der markiert im Kalender heute und den
+gewählten Tag. Die Legende zeigt dieselben Chips wie das Raster, nie eine andere Form. `tests/design.test.js` prüft je Design
+(hell und dunkel): OKLab-Abstand der drei Töne untereinander ≥ 0,2, von Uni und Veranstaltung zum Akzent ≥ 0,09, Schrift im
+Chip (82 % Farbe in der Schrift auf 17 % Farbe in der Karte) mit Kontrast ≥ 4,5:1.
+
+| Schema | Prüfung | Uni | Veranstaltung |
+|---|---|---|---|
+| Elfenbein hell | `#b42318` | `#2d5f9e` | `#2e8540` |
+| dunkel (alle Designs) | `#ec7468` | `#7fa6e6` | `#6cc67a` |
+| Flieder | `#b4234a` | `#2f64ad` | `#2a8540` |
+| Klar | `#c0262d` | `#22639a` | `#3a8a2a` |
 
 Getönte Flächen entstehen mit `color-mix(in srgb, var(--eba-…) N%, transparent)`: 6 % für neutrale Flächen, 9–14 % für
 Pillen und Symbole, 45 % für Rahmen. Schrift auf einer Akzentfläche: `var(--text-on-accent, #fff)`.

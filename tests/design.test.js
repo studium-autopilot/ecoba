@@ -161,6 +161,69 @@ test("Erzeugte Notizen: Obsidians Callouts ([!info], [!warning] …) nur, wo es 
   assert.deepEqual(neu, [], "Kopf der Notiz als eba-Karte oder Codeblock, nicht als Standard-Callout");
 });
 
+// Farben der Termin-Arten (eba-core.css Abschnitt 1, Werte je Design): Variablen eines Farbschemas in der Reihenfolge, in der
+// Obsidian sie anwendet (später gewinnt), var(--x) aufgelöst. Abstand in OKLab, Lesbarkeit als WCAG-Kontrast.
+const DATEI = Object.fromEntries(DESIGNS);
+const OHNE_DESIGN = ':where(:not([class*="eba-design-"]))';
+const SCHEMATA = {
+  "Elfenbein hell": [[CORE, "body"], [DATEI["eba-paper-elfenbein.css"], `:is(.theme-light, .theme-dark)${OHNE_DESIGN}`],
+    [DATEI["eba-paper-elfenbein.css"], `.theme-light${OHNE_DESIGN}`]],
+  "Dunkel (alle Designs)": [[CORE, "body"], [DATEI["eba-paper-elfenbein.css"], ".theme-dark"]],
+  "Flieder hell": [[CORE, "body"], [DATEI["eba-flieder.css"], ".eba-design-flieder.theme-light"]],
+  "Klar hell": [[CORE, "body"], [DATEI["eba-klar.css"], ".eba-design-klar.theme-light"]],
+};
+const variablen = (bloecke) => {
+  const v = {};
+  for (const [css, selektor] of bloecke) {
+    for (const d of deklarationen(css)) if (d.selektor === selektor && d.eigenschaft.startsWith("--")) v[d.eigenschaft] = d.wert;
+  }
+  const wert = (n, tiefe = 0) => {
+    const m = /^var\((--[\w-]+)\)$/.exec(v[n] || "");
+    return m && tiefe < 9 ? wert(m[1], tiefe + 1) : v[n];
+  };
+  return wert;
+};
+const rgb = (h) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(String(h));
+  assert.ok(m, `Farbe als #rrggbb erwartet: ${h}`);
+  return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16) / 255);
+};
+const linear = (c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const oklab = (c) => {
+  const [r, g, b] = c.map(linear);
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
+};
+const abstand = (a, b) => { const x = oklab(a), y = oklab(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+const mischen = (a, b, t) => a.map((x, i) => x * t + b[i] * (1 - t)); // color-mix(in srgb, a t, b)
+const helligkeit = (c) => { const [r, g, b] = c.map(linear); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+const kontrast = (a, b) => { const [h, d] = [helligkeit(a), helligkeit(b)].sort((x, y) => y - x); return (h + 0.05) / (d + 0.05); };
+const ARTEN = ["pruefung", "uni", "event"];
+
+test("Kalender: Prüfung, Uni und Veranstaltung sind in jedem Design auf einen Blick verschieden und im Chip lesbar", () => {
+  const funde = [];
+  for (const [name, bloecke] of Object.entries(SCHEMATA)) {
+    const wert = variablen(bloecke);
+    const art = Object.fromEntries(ARTEN.map((a) => [a, rgb(wert("--eba-art-" + a))]));
+    const karte = rgb(wert("--eba-card-bg")), text = rgb(wert("--eba-text")), akzent = rgb(wert("--eba-accent"));
+    // 0,2: so weit wie Rot, Blau und Grün mittlerer Sättigung; Flieder hatte bis 24.10.2026 Uni und Veranstaltung bei 0,08
+    for (const [i, a] of ARTEN.entries()) {
+      for (const b of ARTEN.slice(i + 1)) if (abstand(art[a], art[b]) < 0.2) funde.push(`${name}: ${a}/${b} ${abstand(art[a], art[b]).toFixed(3)}`);
+    }
+    // Uni und Veranstaltung nicht im Akzent (heute, gewählter Tag)
+    for (const a of ["uni", "event"]) if (abstand(art[a], akzent) < 0.09) funde.push(`${name}: ${a} zu nah am Akzent`);
+    // Chip wie in eba-core.css: Fläche 17 % auf der Karte, Schrift 82 % mit der Textfarbe
+    for (const a of ARTEN) {
+      const k = kontrast(mischen(art[a], text, 0.82), mischen(art[a], karte, 0.17));
+      if (k < 4.5) funde.push(`${name}: ${a} im Chip schlecht lesbar (${k.toFixed(1)})`);
+    }
+  }
+  assert.deepEqual(funde, []);
+});
+
 test("Der Wächter erkennt Verstöße", () => {
   const d = deklarationen(".a { color: #fff; --x: #000; } @container k (max-width: 4px) { .b { box-shadow: 0 2px 8px rgba(0,0,0,.2) } }");
   assert.deepEqual(d.map((x) => [x.selektor, x.eigenschaft]), [[".a", "color"], [".a", "--x"], [".b", "box-shadow"]]);
@@ -168,6 +231,8 @@ test("Der Wächter erkennt Verstöße", () => {
   assert.deepEqual(teilen("0 0 0 1px var(--a), inset 0 0 0 2px color-mix(in srgb, red 10%, transparent)"),
     ["0 0 0 1px var(--a)", "inset 0 0 0 2px color-mix(in srgb, red 10%, transparent)"]);
   assert.equal(ohneUrl('url("data:image/svg+xml,%23fff") no-repeat'), "url() no-repeat");
+  assert.ok(abstand(rgb("#4a5ba6"), rgb("#7446a6")) < 0.2, "Indigo und Violett (Flieder bis 24.10.2026) gelten als zu ähnlich");
+  assert.equal(variablen([[".a { --x: var(--y); --y: #123456; }", ".a"]])("--x"), "#123456");
   const k = deklarationen('.callout[data-callout="eba-neu"] li > a { -webkit-hyphens: auto; overflow-wrap: anywhere; } .eba-mod-knopf { hyphens: manual; } .eba-wt b { hyphens: auto; }');
   assert.deepEqual(k.filter(trenntImKnopf).map((x) => x.eigenschaft), ["-webkit-hyphens", "overflow-wrap"]);
   assert.deepEqual(fensterRegelnOhneTelefon("@media (min-width: 600px) { body.is-phone .a, .b { x: 1 } @container k (min-width: 4px) {"

@@ -1,6 +1,6 @@
 // pruefen.py: persönliche Daten aus Alma (Matrikelnummer, Geburtsdatum), Testseiten nur mit Kopf „Erfundene Testseite“ bzw.
-// „Öffentliche Seite ohne Anmeldung“, Dateien, die ein Tresor selbst anlegt, persönliche Felder der Module und IP-Adressen
-// außer Beispieladressen. Braucht Python;
+// „Öffentliche Seite ohne Anmeldung“, Dateien, die ein Tresor selbst anlegt, persönliche Felder der Module, IP-Adressen
+// außer Beispieladressen und Telefonnummern. Braucht Python;
 // ohne Python wird der Test übersprungen.
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -71,6 +71,18 @@ test("IP-Adressen sind Funde, Beispieladressen (RFC 5737) und localhost nicht", 
   assert.match((r.funde["docs/echt.md"] || []).join("\n"), /\[IP-Adresse\]/);
   assert.match((r.funde["docs/nah-dran.md"] || []).join("\n"), /\[IP-Adresse\]/);
   assert.equal(r.funde["docs/beispiel.md"], undefined);
+});
+
+test("Telefonnummern mit Landesvorwahl sind Funde, Nachkommastellen einer Zahl nicht", { skip: !python && "kein Python" }, () => {
+  // zerlegt, damit diese Datei sich selbst nicht meldet
+  const r = pruefen({
+    "docs/plus.md": `Ruf an: ${["+49", "7071", "123456"].join(" ")}\n`,
+    "docs/null.md": `Ruf an: ${["0049", "7071", "123456"].join(" ")}\n`,
+    "tests/formel.test.js": "const l = 0.2104542553 * a - 0.0040720468 * s;\n",
+  });
+  assert.match((r.funde["docs/plus.md"] || []).join("\n"), /\[Telefonnummer\?\]/);
+  assert.match((r.funde["docs/null.md"] || []).join("\n"), /\[Telefonnummer\?\]/);
+  assert.equal(r.funde["tests/formel.test.js"], undefined);
 });
 
 test("Testseiten unter tests/daten/ brauchen den Kopf; andere HTML-Dateien nicht", { skip: !python && "kein Python" }, () => {
