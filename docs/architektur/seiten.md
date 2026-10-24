@@ -120,7 +120,9 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   bleiben die Karten (eba-core.css Abschnitt 69). Eine `reiter=`-Karte steht darum oben in der Notiz oder in einem Raster nur
   aus `reiter=`-Karten, und die Seite braucht den Block; ohne `reiter=`-Karten blendet er sich aus (`.eba-rt-aus`).
   Jeder Knopf ist leicht gefüllt und trägt hinten einen Pfeil (`chevron-down`), der beim offenen Reiter nach oben zeigt (seit
-  24.10.2026: ohne beides las sich die Reihe wie eine Legende, nicht wie etwas zum Aufklappen). Zwischen 330 und 365 px Breite
+  24.10.2026: ohne beides las sich die Reihe wie eine Legende, nicht wie etwas zum Aufklappen). Der offene Knopf und die Liste
+  darunter haben einen gemeinsamen Rahmen wie ein Karteireiter: Der Knopf hat den Grund der Karte, reicht 4 px tiefer
+  (`margin-bottom: -4px`, die Reihe streckt ihn) und deckt so den oberen Rand der Liste unter sich ab. Zwischen 330 und 365 px Breite
   der Karte (iPhone mit 375 bis 393 px) rückt alles enger zusammen, damit vier Zahlen und Pfeile in die Reihe passen.
   Die Leseansicht rechnet die Länge der Seite aus den Höhen ihrer Abschnitte, gemessen beim Zeichnen und Scrollen; nach einem
   Wechsel hielt sie unter einem kurzen Reiter den Platz des längeren frei (bis 320 px). Ein `ResizeObserver` am Block misst den

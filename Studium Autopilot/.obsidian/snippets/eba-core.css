@@ -5778,7 +5778,8 @@ body.is-mobile .eba-sb-knoepfe .eba-vb-knopf { min-height: 44px; box-sizing: bor
 /* ---------- 69. Reiter (reiter.js, ```eba-reiter```; seit 24.10.2026) ----------
    Karten mit „reiter=Name“ in den Angaben stehen als eine Reihe Reiter in einer Karte an der Stelle des Blocks (Dashboard:
    Fristen, Termine, Nacharbeiten, To-dos; vorher Karten untereinander, am iPhone zugeklappt). Gestalt: eine Karte, oben eine
-   Reihe leicht gefüllter Knöpfe mit Pfeil, der gewählte in der Akzentfarbe getönt (Pfeil nach oben), darunter der Inhalt. Die Karten im Reiter haben keinen eigenen Rahmen
+   Reihe leicht gefüllter Knöpfe mit Pfeil, darunter der Inhalt; ein Rahmen in der Akzentfarbe läuft um den gewählten (Pfeil nach
+   oben) und den Inhalt wie bei einem Karteireiter. Die Karten im Reiter haben keinen eigenen Rahmen
    und Titel, die Reiterkarte ist ihr Rahmen; nur im Raster „Offene Fragen | To-dos“ bleiben die Titel, solange es offene
    Fragen gibt (sie trennen dann zwei Listen).
    Auf jedem Gerät gleich (seit 24.10.2026; zuerst nur am iPhone, PC und iPad zeigten die Karten offen nebeneinander). Die
@@ -5816,7 +5817,20 @@ body.eba-plugin-an .markdown-source-view.is-live-preview .cm-embed-block:has(.ca
   cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
   background: color-mix(in srgb, var(--eba-text) 4.5%, transparent); /* jeder Reiter ein Knopf, nicht ein Wort in einer Zeile */
 }
-.eba-rt-reiter.gewaehlt { color: var(--eba-text); background: var(--eba-accent-soft); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 45%, transparent); }
+/* Offener Reiter (seit 24.10.2026): ein Rahmen in der Akzentfarbe läuft um den Knopf und die Liste darunter wie bei einem
+   Karteireiter, unter dem Knopf ohne Linie; vorher war er nur getönt, welche Liste zu ihm gehört, sah man nicht. Der Knopf hat
+   den Grund der Karte (in jedem Design deckend) und deckt den oberen Rand der Liste ab: margin-bottom -4px = Abstand 3px +
+   Rand 1px, die Reihe streckt ihn um so viel länger (align-items: stretch); padding-bottom gleich, damit sein Wort auf einer
+   Höhe mit den anderen steht. Erster und letzter Reiter stehen bündig mit der Liste, deren Ecke darunter ist dann spitz */
+.eba-rt { --eba-rt-rahmen: color-mix(in srgb, var(--eba-accent) 45%, transparent); }
+.eba-rt-reiter.gewaehlt {
+  position: relative; z-index: 1; margin-bottom: -4px; padding-bottom: 4px; border-radius: var(--eba-radius-s) var(--eba-radius-s) 0 0;
+  color: var(--eba-text); background: var(--eba-card-bg);
+}
+.eba-rt-reiter.gewaehlt::before {
+  content: ""; position: absolute; inset: 0; border: 1px solid var(--eba-rt-rahmen); border-bottom: 0; border-radius: inherit;
+  pointer-events: none;
+}
 .eba-rt-reiter:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 1px; }
 /* Zahl der Einträge (reiter.js anzahl): kleine Pille wie .eba-pill ohne Ton, am gewählten Reiter kräftiger getönt */
 .eba-rt-zahl {
@@ -5843,11 +5857,20 @@ body.eba-plugin-an .markdown-source-view.is-live-preview .cm-embed-block:has(.ca
   .eba-rt-pfeil { margin-left: 1px; }
   .eba-rt-pfeil svg { width: 11px; height: 11px; }
 }
-.eba-rt-inhalt { padding: 6px 9px 4px; }
+.eba-rt-inhalt { margin-top: 3px; padding: 6px 9px 4px; border: 1px solid var(--eba-rt-rahmen); border-radius: var(--eba-radius-s); }
+.eba-rt:has(> .eba-rt-leiste > .gewaehlt:first-child) > .eba-rt-inhalt { border-top-left-radius: 0; }
+.eba-rt:has(> .eba-rt-leiste > .gewaehlt:last-child) > .eba-rt-inhalt { border-top-right-radius: 0; }
 .eba-rt-inhalt .callout[data-callout^="eba-"] {
   margin: 0 !important; padding: 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important;
   -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
 }
 .eba-rt-inhalt .callout[data-callout^="eba-"] > .callout-title { display: none !important; }
 .eba-rt-inhalt .callout[data-callout="eba-raster"] > .callout-content:has(.eba-td-fragen:not(.is-leer)) > .callout > .callout-title { display: flex !important; margin: 4px 0 6px; }
+/* Die Haarlinie über der ersten Zeile einer Liste (Abschnitte 37 und 63) lag gleich unter dem Rahmen: doppelt. Unter einem
+   Titel (Regel darüber) bleibt sie, dort trennt sie Titel und Liste */
+.eba-rt-inhalt .eba-li > .eba-li-zeile:first-child,
+.eba-rt-inhalt .eba-td-liste > .eba-td-zeile:first-child { border-top: 0; }
+.eba-rt-inhalt .callout[data-callout="eba-raster"] > .callout-content:has(.eba-td-fragen:not(.is-leer)) .eba-td-liste > .eba-td-zeile:first-child {
+  border-top: 1px solid var(--eba-border);
+}
 /* ---------- Ende Abschnitt 69 ---------- */

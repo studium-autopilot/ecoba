@@ -4,6 +4,11 @@ Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## Unveröffentlicht
 
+## 0.6.12 – Offene Liste klar umrahmt
+
+- **Übersichtlicher:** Auf dem **Dashboard** umrahmt eine Linie die offene Liste samt ihrem Knopf, wie bei einem Karteireiter.
+  So siehst du gleich, ob gerade **Fristen**, **Termine**, **Nacharbeiten** oder **To-dos** offen sind.
+
 ## 0.6.11 – Beide Fassungen klar beschriftet
 
 - **Einfacher:** In der **Literaturliste** führen jetzt mehr Bücher direkt zu ihrem Eintrag in der Unibibliothek, ohne Umweg

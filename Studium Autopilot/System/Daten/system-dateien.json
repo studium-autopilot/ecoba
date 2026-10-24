@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "version": "0.6.11",
+ "version": "0.6.12",
  "ordner": "Studium Autopilot",
- "erstellt": "2026-10-24T17:55:21Z",
+ "erstellt": "2026-10-24T19:16:45Z",
  "dateien": [
   {"pfad": ".obsidian/app.json", "klasse": "einstellung", "groesse": 421, "sha256": "20924393fe3278ce1b209b52300419d4866aa6cec0617f6c36cfb2893e59ac82"},
   {"pfad": ".obsidian/bookmarks.json", "klasse": "einstellung", "groesse": 1398, "sha256": "8d31516f6631847992a229df9f106cd943eda86ca791fdf952e4c7228ac1c29e"},
@@ -10,8 +10,8 @@
   {"pfad": ".obsidian/core-plugins.json", "klasse": "einstellung", "groesse": 698, "sha256": "b06ab63f09578efd584bb3d57c57aca6b6052d6861284919ef2f53f579318a14"},
   {"pfad": ".obsidian/hotkeys.json", "klasse": "einstellung", "groesse": 110, "sha256": "33864b03da9bc6edf5a5f669961f2e041ee92b9d87213057ced8c479296aca69"},
   {"pfad": ".obsidian/plugins/studium-autopilot/main.js", "klasse": "system", "groesse": 37148, "sha256": "f01c37144a0838ecb3a4c0c099e2a4cf641528544801dfb9174007c2eb8febff"},
-  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 313, "sha256": "9a0c98029f9444770b30e63bd2d144a80327b9210d8a745db6581594ba4aa0ea"},
-  {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 469468, "sha256": "64f4d8e2d5f16406ace791d2aa3a9d51b4747c92b76f9b0347d9ba6552952c53"},
+  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 313, "sha256": "82ceb271b0aa002dbe6fbc32b438e67decaa2c5b2def92474c49352135526435"},
+  {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 471296, "sha256": "83e622e02643d8a4237c25133928d0607ba16577ee5bac720ed2d5fb2b8e0352"},
   {"pfad": ".obsidian/snippets/eba-flieder.css", "klasse": "system", "groesse": 3894, "sha256": "b71bc88f32a44aabe6d59cabc7e1a4dd0fa74592fdf904f08cbbf084303f3546"},
   {"pfad": ".obsidian/snippets/eba-klar.css", "klasse": "system", "groesse": 3012, "sha256": "9087c01f2d00e0b5b76209ca7e78726cada2781d8265dc37fafa0245eb765f49"},
   {"pfad": ".obsidian/snippets/eba-paper-elfenbein.css", "klasse": "system", "groesse": 8177, "sha256": "abc39d26aaf5932f13c6149bc254ce768e9e781efc872693f67d7c1b379afd75"},
