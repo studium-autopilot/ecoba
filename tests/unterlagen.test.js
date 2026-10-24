@@ -256,3 +256,13 @@ test("Begleitnotiz: Dateiobjekt und Dateiname geben dasselbe, Original und groß
   assert.match(pptx, /\n\[\[B110 Folien 01\.pptx\]\] · \[Öffnen ↗\]\(obsidian:\/\/studium-autopilot\?aktion=oeffnen\)\n\n> \[!eba-info\] Nur als PPTX vorhanden\n/);
   assert.match(pptx, /\n\n\*\*Weitere Dateien:\*\* \[\[B110 Folien 01\.zip\]\]\n$/);
 });
+
+test("Unterlagen hinzufügen: Name im Eingang", () => {
+  const vorhanden = new Set(["blatt 1.pdf", "blatt 1 2.pdf", "notiz"]);
+  assert.equal(U.eingangName(vorhanden, "Folien.pdf"), "Folien.pdf");
+  assert.equal(U.eingangName(vorhanden, "Blatt 1.pdf"), "Blatt 1 3.pdf");
+  assert.equal(U.eingangName(vorhanden, "Notiz"), "Notiz 2");
+  assert.equal(U.eingangName(new Set(), "VL #3: Kosten [neu].pdf"), "VL 3 Kosten neu.pdf");
+  assert.equal(U.eingangName(new Set(), "Übung.pdf".normalize("NFD")), "Übung.pdf");
+  assert.equal(U.eingangName(new Set(), ""), "Datei");
+});

@@ -30,8 +30,10 @@ termine.md, wie unten unter „Termine in der Unterlage“. Die Person lässt si
 - **Keine doppelten To-dos:** Steht dieselbe Handlung schon offen unter `todos` in `tresor.json` (gleiches Modul, auch anders
   formuliert), kommt sie nicht noch einmal in `zu_tun`. Nennt die Unterlage ein Datum, das dort fehlt, lieferst du es als
   Frist nach termine.md. Ähnlich ist nicht gleich: Blatt 2 und Blatt 3 sind verschiedene Aufgaben.
-- `fragen`: nur Fragen, die die Unterlage selbst offen lässt (Aufgabe ohne Lösung, angekündigte Klärung, Widerspruch), mit
-  Fragezeichen und `seite`. Keine Quizfragen und keine erfundenen Verständnisfragen; gibt es keine, bleibt die Liste leer.
+- `fragen`: nur, was die Unterlage selbst offen lässt (angekündigte Klärung, fehlende Angabe, Widerspruch), mit
+  Fragezeichen und `seite`. Fragen, die die Unterlage ihren Lesern stellt (Denk-, Diskussions-, Quiz- und Übungsfragen,
+  auch ohne Lösung), sind keine offenen Fragen der Person; ebenso keine erfundenen Verständnisfragen. Gibt es keine, bleibt
+  die Liste leer.
 - **Keine Abschrift:** Die Notiz fasst zusammen, sie ersetzt die Folien nicht. Nie die Unterlage Seite für Seite nacherzählen.
 
 ## Regeln

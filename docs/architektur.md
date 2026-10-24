@@ -210,7 +210,7 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `variante` | `wert` | `variante` in `System/Einstellungen.md` | Variante wählen (mit Auswahl) |
 | `darstellung` | `wert` (`hell`, `dunkel`, `automatisch`) | Hell, dunkel oder automatisch wie das Gerät | Darstellung wählen (mit Auswahl) |
 | `design` | `wert` (`elfenbein`, `flieder`, `klar`) | Design dieses Geräts (seit 18.10.2026; bis 17.10.2026 schaltete `design` die früheren Farbschemata um) | Design wählen (mit Auswahl) |
-| `einordnen` | `code` | Eingang einordnen | Unterlagen einordnen |
+| `einordnen` | `code` | Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen, oder den Eingang nehmen), dann Eingang einordnen | Unterlagen hinzufügen |
 | `stundenplan` | `link=neu` | Alma-Stundenplan aktualisieren, ohne Link verbinden | Stundenplan aktualisieren |
 | `verbinden` | `id` (alma, ilias, zentral, vorlage) | Verbinden-Fenster bzw. Erklärung | Verbinden … (mit Auswahl) |
 | `verbindung-aktualisieren` | `id`, `uebernehmen=1` (ILIAS) bzw. `hier=1` (Volltext): hier aktualisieren, obwohl ein anderes Gerät gerade aktualisiert | Verbindung jetzt abrufen | Aktualisieren … (mit Auswahl) |
@@ -2531,7 +2531,7 @@ Frontmatter dieser Modulnotiz:
   Warnfarbe und dem üblichen durchgestrichen („Hörsaal 9 statt ~~Hörsaal 1~~“, `eba-core.css` 58.7). Der Kopf einer
   Stundenplan-Notiz (`kopf.js`) zeigt nur die Serie („Mi 10:15–11:45“), keinen einzelnen Termin; Ausfälle und Änderungen stehen
   darum dort nicht (eine Stelle je Angabe: Woche und Modulseite).
-- *Knöpfe:* Neues Übungsblatt, Karteikarten lernen (nur mit Stapel), Unterlagen einordnen, Suchen.
+- *Knöpfe:* Neues Übungsblatt, Karteikarten lernen (nur mit Stapel), Unterlagen hinzufügen, Suchen.
 
 Die **Vorlesungen** (seit 19.10.2026: die eigenen Notizen gehören zum Meistgenutzten; bis dahin standen sie
 ganz unten unter „Zum Modul“ als „VL 01 · 13.10.“) zeichnet derselbe Codeblock direkt unter dem Modulfeld, über `## Unterlagen`,

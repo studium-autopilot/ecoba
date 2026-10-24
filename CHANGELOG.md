@@ -2,6 +2,13 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.1 – Unterlagen direkt in Obsidian hinzufügen
+
+- **Einfacher:** PDFs, Folien und Fotos bekommst du jetzt direkt in Obsidian in deinen Tresor: **Unterlagen hinzufügen**
+  tippen und **Dateien auswählen**, am Computer auch hineinziehen. Der Umweg über die Dateien-App entfällt.
+- **Behoben:** Unter **Offene Fragen** auf dem **Dashboard** standen Denk- und Übungsfragen von den Folien. Jetzt stehen
+  dort nur Fragen, die die Unterlage wirklich offen lässt.
+
 ## 0.6.0 – Uni-Mails direkt in Obsidian
 
 - **Neu:** Auf der Seite **Postfach** liest du deine Uni-Mails direkt in Obsidian, auf dem Computer, iPhone und iPad. Dafür

@@ -15,7 +15,7 @@
 | `Karteikarten/` | Kartenstapel (`typ: karteikarten`), auch in Unterordnern | Person |
 | `Lernplan/` | Lernpläne je Modul (`typ: lernplan`) | Person bzw. zentral |
 | `Schlüsselqualifikationen/` | SQ-Kurse (`typ: sq_kurs`) | Person |
-| `Eingang/` | abgelegte Dateien, die „Unterlagen einordnen“ verteilt | Person |
+| `Eingang/` | abgelegte Dateien, die „Unterlagen hinzufügen“ verteilt | Person |
 | `Anhänge/` | Bilder und Anhänge | Person |
 | `System/` | Skripte, Gerüste, Daten, `Einstellungen.md` | App: nie ändern |
 

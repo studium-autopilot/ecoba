@@ -14,7 +14,7 @@ cssclasses:
 </div>
 
 > [!eba-neu|ohne-titel]
-> - [Unterlagen einordnen](obsidian://studium-autopilot?aktion=einordnen)
+> - [Unterlagen hinzufügen](obsidian://studium-autopilot?aktion=einordnen)
 > - [Neues Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
 > - [In Unterlagen suchen](obsidian://studium-autopilot?aktion=suchen&q=path%3AUnterlagen%20)
 > - [Unterlagen aktualisieren](obsidian://studium-autopilot?aktion=ilias-holen)

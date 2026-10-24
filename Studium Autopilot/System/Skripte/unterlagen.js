@@ -3,7 +3,8 @@
 // und schreibt daneben je Unterlage eine Begleitnotiz (typ: unterlage) mit gleichem Namen.
 // Ablauf: Moduswahl → Plan → Duplikate? → Vorschau (korrigierbar) → ZIP? → Ablegen.
 // Dateien in „Unterlagen/“ ohne Begleitnotiz (abgebrochener Lauf) bietet es zum Nachtragen an.
-// Aufruf in einer Aktion:  await ctx.user.unterlagen(ctx).einordnen();  (Aktion „einordnen“ in System/Skripte/aktionen.js)
+// Aufruf in einer Aktion:  await ctx.user.unterlagen(ctx).hinzufuegen();  (Aktion „einordnen“ in System/Skripte/aktionen.js):
+// erst das Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen), dann einordnen().
 // Nur Obsidian-API (vault, fileManager, loadPdfJs), keine Node- oder Shell-Befehle: läuft auf Windows, iPad und iPhone.
 module.exports = function (ctx) {
   const eba = ctx.user.eba(ctx);
@@ -807,6 +808,102 @@ module.exports = function (ctx) {
     m.open();
   };
 
+  // ---------- Dateien in den Eingang holen ----------
+  // Freier Name im Eingang: „Blatt.pdf“, „Blatt 2.pdf“, … („vorhanden“ = Namen in Kleinbuchstaben). Zeichen, die Obsidian in
+  // Dateinamen oder Links stören, werden zu Leerzeichen.
+  const eingangName = (vorhanden, roh) => {
+    const sauber = String(roh || "").normalize("NFC").replace(/[\\/:*?"<>|#^[\]]/g, " ").replace(/\s+/g, " ").trim() || "Datei";
+    const p = sauber.lastIndexOf(".");
+    const basis = p > 0 ? sauber.slice(0, p).trim() : sauber, endung = p > 0 ? sauber.slice(p) : "";
+    let name = basis + endung;
+    for (let i = 2; vorhanden.has(name.toLowerCase()); i++) name = `${basis} ${i}${endung}`;
+    return name;
+  };
+
+  // Gewählte oder hineingezogene Dateien (File aus dem Browser) in den Eingang kopieren; gibt die Zahl zurück
+  const ablegenImEingang = async (dateien) => {
+    if (!app.vault.getAbstractFileByPath(EINGANG)) await app.vault.createFolder(EINGANG);
+    const vorhanden = new Set(alleImEingang().filter((f) => f.parent && f.parent.path === EINGANG).map((f) => f.name.toLowerCase()));
+    const fort = ctx.hinweis(`Lege ${dateien.length === 1 ? "eine Datei" : `${dateien.length} Dateien`} in den Eingang …`, { dauer: 0 });
+    let n = 0;
+    try {
+      for (const d of dateien) {
+        const name = eingangName(vorhanden, d.name);
+        await app.vault.createBinary(`${EINGANG}/${name}`, await d.arrayBuffer());
+        vorhanden.add(name.toLowerCase());
+        n++;
+      }
+    } finally { if (fort && fort.hide) fort.hide(); }
+    return n;
+  };
+
+  // Fenster „Unterlagen hinzufügen“: Dateien auswählen (am PC auch hineinziehen) oder liegen gebliebene Dateien im Eingang
+  // einordnen. Ergebnis „gewaehlt“ (Dateien liegen jetzt im Eingang), „eingang“ oder null (abgebrochen).
+  // Die Dateiauswahl öffnet input.click() direkt im Klick des Knopfs: iPhone und iPad zeigen sie nur dann (Fotos, Kamera, Dateien).
+  const hinzufuegenFenster = (imEingang, fehlend) => new Promise((fertig) => {
+    let ergebnis = null;
+    const m = new Modal(app);
+    m.modalEl.addClass("eba-modal");
+    m.titleEl.setText("Unterlagen hinzufügen");
+    const c = m.contentEl;
+    c.addClass("eba-ablage");
+    c.createEl("p", { cls: "eba-modal-text", text: Platform.isMobile
+      ? "PDFs, Folien, Scans oder Fotos auswählen. Studium Autopilot benennt sie und legt sie beim passenden Modul ab."
+      : "PDFs, Folien, Scans oder Fotos auswählen oder hierher ziehen. Studium Autopilot benennt sie und legt sie beim passenden Modul ab." });
+    const eingabe = c.createEl("input", { cls: "eba-ablage-eingabe", attr: { type: "file", multiple: "", tabindex: "-1", "aria-hidden": "true" } });
+    const meldung = c.createEl("p", { cls: "eba-modal-meldung" });
+    c.createEl("p", { cls: "eba-modal-hinweis", text: Platform.isMobile
+      ? "Aus Mail oder Safari: Teilen → In Dateien sichern → Ordner Eingang deines Tresors."
+      : "Du kannst Dateien auch in den Ordner Eingang deines Tresors kopieren." });
+    const nehmen = async (liste) => {
+      const dateien = Array.from(liste || []).filter((d) => d && d.name && !d.name.startsWith("."));
+      if (!dateien.length) return;
+      knoepfe.forEach((k) => { k.disabled = true; });
+      try {
+        await ablegenImEingang(dateien);
+        ergebnis = "gewaehlt";
+        m.close();
+      } catch (e) {
+        console.error("[unterlagen] Ablegen im Eingang", e);
+        meldung.addClass("fehler");
+        meldung.setText("Die Dateien ließen sich nicht ablegen. Versuche es noch einmal.");
+        knoepfe.forEach((k) => { k.disabled = false; });
+      }
+    };
+    eingabe.addEventListener("change", () => { nehmen(eingabe.files); });
+    c.addEventListener("dragover", (e) => { e.preventDefault(); e.stopPropagation(); c.addClass("is-ziehen"); });
+    c.addEventListener("dragleave", (e) => { if (!c.contains(e.relatedTarget)) c.removeClass("is-ziehen"); });
+    c.addEventListener("drop", (e) => {
+      e.preventDefault(); e.stopPropagation(); c.removeClass("is-ziehen");
+      nehmen(e.dataTransfer && e.dataTransfer.files);
+    });
+    const reihe = c.createDiv({ cls: "modal-button-container" });
+    const knoepfe = [];
+    const knopf = (text, cta, tun) => {
+      const b = reihe.createEl("button", { text, cls: cta ? "mod-cta" : "" });
+      b.addEventListener("click", tun);
+      knoepfe.push(b);
+      return b;
+    };
+    knopf("Abbrechen", false, () => m.close());
+    if (imEingang || fehlend) {
+      knopf(imEingang ? `${imEingang === 1 ? "Eine Datei" : `${imEingang} Dateien`} im Eingang einordnen` : "Begleitnotizen nachtragen", false,
+        () => { ergebnis = "eingang"; m.close(); });
+    }
+    knopf("Dateien auswählen", true, () => { eingabe.value = ""; eingabe.click(); });
+    m.onClose = () => { c.empty(); fertig(ergebnis); };
+    m.open();
+  });
+
+  // Knopf „Unterlagen hinzufügen“: erst das Fenster, dann einordnen (ohne Fenster, wo es keins gibt, etwa in Tests)
+  const hinzufuegen = async () => {
+    if (!Modal) return einordnen();
+    const imEingang = alleImEingang().filter((f) => !AUSLASSEN.includes(ext(f)) || ARCHIVE.includes(ext(f))).length;
+    const w = await hinzufuegenFenster(imEingang, ohneBegleitnotiz().length);
+    if (!w) return { eingeordnet: 0 };
+    return einordnen();
+  };
+
   // ---------- Hauptfunktion ----------
   const einordnen = async () => {
     if (!app.vault.getAbstractFileByPath(EINGANG)) await app.vault.createFolder(EINGANG);
@@ -989,7 +1086,7 @@ module.exports = function (ctx) {
   };
 
   return {
-    einordnen, nummerErkennen, titelErkennen, zielName, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL,
+    hinzufuegen, einordnen, eingangName, nummerErkennen, titelErkennen, zielName, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL,
     // für die ILIAS-Ablage (ilias.js) und Tests
     schwacherTitel, titelAusPdf, pdfTitelWaehlen, titelMitPdf, vorschlagMitPdf, begleitnotiz, ARTEN,
   };

@@ -88,10 +88,10 @@ module.exports = function (ctx) {
       },
     },
 
-    // Knopf „Unterlagen einordnen“ (…&code=B110 auf Modulseiten: Modul vorgewählt)
+    // Knopf „Unterlagen hinzufügen“ (…&code=B110 auf Modulseiten: Modul vorgewählt)
     einordnen: {
-      titel: "Unterlagen einordnen",
-      ausfuehren: async (c) => { await ctx.user.unterlagen(c).einordnen(); },
+      titel: "Unterlagen hinzufügen",
+      ausfuehren: async (c) => { await ctx.user.unterlagen(c).hinzufuegen(); },
     },
 
     // Knöpfe auf der Seite Stundenplan: aktualisieren; …&link=neu fragt den Alma-Link neu ab

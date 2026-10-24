@@ -286,7 +286,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 
 ### Knöpfe und Befehle
 
-- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesungsnotiz**, **Neues Übungsblatt**, **Unterlagen einordnen**,
+- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesungsnotiz**, **Neues Übungsblatt**, **Unterlagen hinzufügen**,
   **Unterlagen aktualisieren**, **Neue Karte**. Fehlt dem Knopf auf seiner Seite nichts, der Befehl aber Zusammenhang, kommt
   nur das Ding dazu (Knopf **Lernen** → Befehl **Karteikarten lernen**), nie ein anderes Verb.
 - Befehle ohne „Studium Autopilot“ (Obsidian setzt den Namen davor), ohne Vorsatz mit Doppelpunkt, ohne Erklärung in Klammern;

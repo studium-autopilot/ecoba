@@ -3872,6 +3872,11 @@ body.is-mobile .sa-eingabe input.sa-feld { min-height: 44px; }
 .eba-modal .eba-modal-mehr { margin: 12px 0 0; font-size: 13px; color: var(--eba-muted); }
 .eba-modal .eba-modal-mehr > summary { cursor: pointer; width: fit-content; }
 .eba-modal .eba-modal-mehr > p { margin: 6px 0 0; line-height: 1.5; }
+/* „Unterlagen hinzufügen“ (unterlagen.js): Dateiauswahl unsichtbar, aber nicht display: none (iOS öffnet sie sonst nicht
+   zuverlässig); am PC hebt sich das Fenster ab, solange Dateien darüber gezogen werden. */
+.eba-modal .eba-ablage-eingabe { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.eba-modal .eba-ablage { border-radius: var(--eba-radius-s); outline: 2px dashed transparent; outline-offset: 6px; transition: outline-color .12s; }
+.eba-modal .eba-ablage.is-ziehen { outline-color: var(--eba-accent); }
 /* „Mehr erfahren“ in Notizen (<details class="eba-mehr">, z. B. Einstellungen, Studienverlauf) */
 .eba details.eba-mehr { margin: 4px 0 12px; font-size: 13px; line-height: 1.5; color: var(--eba-muted); }
 .eba details.eba-mehr > summary { cursor: pointer; width: fit-content; }

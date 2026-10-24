@@ -48,7 +48,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | --- | --- | --- | --- |
 > > | Neue Vorlesungsnotiz | Dashboard, Modulseite (Abschnitt Vorlesungen), **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst Modul und Thema; auf der Modulseite ist das Modul gewählt) | Vorlesungen/Modulcode, Dateiname „Datum Code VL 03“, angezeigt als „Vorlesung 3 · Di 27.10. · Thema“ |
 > > | Neues Übungsblatt | Dashboard, Modulseite, [[Unterlagen#Übungsblätter\|Unterlagen]] | Modul, Nummer, Abgabe | Übungsblätter |
-> > | Unterlagen einordnen | Dashboard, Modulseite, [[Unterlagen]] | Vorschau der neuen Namen | Unterlagen/Modul |
+> > | Unterlagen hinzufügen | Dashboard, Modulseite, [[Unterlagen]] | Dateien, dann die Vorschau der neuen Namen | Unterlagen/Modul |
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
 > > | Alma verbinden, danach Stundenplan aktualisieren | [[Stundenplan]] | beim Verbinden nichts, wenn dein Uni-Login gespeichert ist (sonst deinen Alma-Link) | Stundenplan |
@@ -111,11 +111,11 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>P</kbd> | Befehle |
 >
 > > [!eba-karte|hilfe|unterlagen]- Unterlagen <span class="eba-zeile-unter">Aus ILIAS, einordnen, annotieren</span>
-> > Kursdateien kommen von selbst aus ILIAS, alles andere legst du in den Eingang.
+> > Kursdateien kommen von selbst aus ILIAS, alles andere fügst du selbst hinzu.
 > >
 > > 1. Einmal unter [[#Verbindungen]] **ILIAS-Unterlagen** verbinden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
-> > 2. Andere Dateien (Mail, Scan, ZIP) in den Ordner **Eingang** deines Tresors legen.
-> > 3. **Unterlagen einordnen** tippen, in der Vorschau **Alle übernehmen**.
+> > 2. Andere Dateien (Mail, Scan, Foto): **Unterlagen hinzufügen** tippen, dann **Dateien auswählen**. Am PC kannst du sie auch ins Fenster ziehen.
+> > 3. In der Vorschau **Alle übernehmen**.
 > > 4. Zum Lesen und Anmerken in der Unterlage **Öffnen ↗** tippen.
 > >
 > > > [!eba-info]- Mehr erfahren
@@ -123,7 +123,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > - **Verbinden klappt nicht:** Fragt die Uni nach deiner Zustimmung, einmal im Browser bei ILIAS anmelden und zustimmen, dann erneut **Verbinden**. Mit zweitem Faktor geht es noch nicht.
 > > > - **Was nicht kommt:** Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder. Umbenennen und Verschieben ist sicher.
 > > > - **Geänderte Dateien:** Hast du eine Datei angemerkt und der Dozent lädt sie neu hoch, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
-> > > - **In den Eingang:** Windows: im Explorer kopieren. iPhone/iPad: **Teilen → In Dateien sichern →** Ordner **Eingang**; Papier über die App **Dateien → ⋯ → Dokumente scannen**; ZIP vorher antippen, dann entpackt es sich. PowerPoint: als PDF exportieren und beide mit gleichem Namen ablegen.
+> > > - **Über den Ordner Eingang:** Windows: im Explorer in den Ordner **Eingang** deines Tresors kopieren. iPhone/iPad: **Teilen → In Dateien sichern →** Ordner **Eingang**; Papier über die App **Dateien → ⋯ → Dokumente scannen**. Danach **Unterlagen hinzufügen → … im Eingang einordnen**. ZIP vorher antippen, dann entpackt es sich. PowerPoint: als PDF exportieren und beide mit gleichem Namen ablegen.
 > > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`, daneben je Datei eine Notiz mit Status **neu · gelesen · bearbeitet**. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen im Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
 > > > - **Stift auf dem iPad (einmal einrichten):** Dateien-App → PDF gedrückt halten → **Informationen** → **Immer öffnen mit: Vorschau**; dann **Öffnen mit** → Haken bei **Mit Quick Look anzeigen** entfernen. Danach **Öffnen ↗** → **Markieren** → **Fertig**: Die Anmerkungen stehen in derselben PDF. Nicht über „Teilen“ öffnen, das legt eine Kopie an.
 > > > - **Lesen und zitieren:** `[[Datei.pdf#page=12]]` springt auf Seite 12. Die Suche findet nur Text in Notizen, nicht in PDFs. Jede PDF belegt Platz auf jedem Gerät; ganze Bücher lieber nicht ablegen.
