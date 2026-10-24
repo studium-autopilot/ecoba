@@ -97,6 +97,12 @@ test("Stundenplan: Ausfall, Änderung an einem Tag und neuer Raum je einmal, „
   assert.equal(e[1].zeit, "12:15–13:45");
   assert.equal(e[1].raumAlt, "Hörsaal 1");
   assert.equal(e[0].pfad, "Stundenplan/X110 Vorlesung.md");
+  assert.equal(e[2].seit, "", "Raumwechsel erst morgen: „ab“ der nächsten Sitzung");
+  assert.equal(SB.zusammenstellen([], [e[2]], {}, T)[0].meta, "Neuer Raum ab Di 03.11. · Raum 2 statt Raum 1");
+  // Raumwechsel gilt schon: „seit“ dem Wechsel, nicht „ab“ der nächsten Sitzung
+  const [r] = SB.stundenplanEintraege([notiz("Stundenplan/X120 Übung.md", { titel: "X120 Übung", zentral_id: "x120-u", raum_seit: "2026-10-27" })], statt, null, "2026-11-02");
+  assert.equal(r.seit, "2026-10-27");
+  assert.equal(SB.zusammenstellen([], [r], {}, T)[0].meta, "Neuer Raum seit Di 27.10. · Raum 2 statt Raum 1");
 });
 
 test("ILIAS-Kalender: nur offene Abgaben ab heute", () => {
@@ -206,6 +212,43 @@ test("Karte liest alle Gerätedateien; „Alles gesehen“ schreibt nur die Date
   await ergebnis.allesGesehen(d.zeilen);
   assert.deepEqual(Object.keys(JSON.parse(text["System/Daten/seit-besuch/gesehen-g-aaa.json"]).gesehen), d.zeilen[0].keys);
   assert.equal(Object.keys(JSON.parse(text["System/Daten/seit-besuch/gesehen-g-bbb.json"]).gesehen).length, 1, "fremde Datei unberührt");
+  assert.equal(await ergebnis.daten(), null);
+});
+
+test("Aufgeklappt Angezeigtes gilt nach dem Besuch als gesehen, auch nach einem Neustart; Fehler beim Schreiben verliert nichts", async () => {
+  const eintraege = SB.zentralEintraege([{ art: "abgesagt", id: "x120-info", alt: termin({ titel: "Infoabend", datum: "2026-11-20" }) }],
+    { altIds: new Set(), heute: "2026-11-02", t: T });
+  const text = { "System/Daten/seit-besuch/g-aaa.json": JSON.stringify({ version: 1, eintraege }) };
+  const { ctx, ergebnis } = laden("seit-besuch", { kontext: {
+    zentral: { geraetId: () => "g-aaa" },
+    modell: { daten: () => ({ stundenplan: [], termine: [], module: [], einstellungen: {} }), zeit: { heute: () => "2026-11-02" } },
+    date: { jetzt: () => new Date("2026-11-02T12:00:00Z") },
+  } });
+  const speicher = {};
+  ctx.app.loadLocalStorage = (k) => (k in speicher ? JSON.parse(speicher[k]) : null);
+  ctx.app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = JSON.stringify(v); };
+  const V = ctx.app.vault, f = (p) => ({ path: p, name: p.split("/").pop(), extension: "json" });
+  let kaputt = false;
+  V.getAbstractFileByPath = (p) => (p === "System/Daten/seit-besuch" ? { path: p, children: Object.keys(text).map(f) } : p in text ? f(p) : null);
+  V.read = async (x) => text[x.path];
+  V.process = async (x, fn) => { text[x.path] = fn(text[x.path]); };
+  V.create = async (p, t) => { if (kaputt) throw new Error("voll"); text[p] = t; return f(p); };
+  V.createFolder = async () => {};
+
+  assert.equal(await ergebnis.besuchVorbei(), false, "nichts aufgeklappt: nichts einzutragen");
+  const d = await ergebnis.daten();
+  assert.equal(d.zeilen.length, 1);
+  ergebnis.angezeigtMerken(d.zeilen);
+  assert.equal((await ergebnis.daten()).zeilen.length, 1, "während des Besuchs bleibt die Zeile stehen");
+  kaputt = true;
+  const fehler = console.error;
+  console.error = () => {};
+  try { assert.equal(await ergebnis.besuchVorbei(), false); } finally { console.error = fehler; }
+  assert.deepEqual(ctx.app.loadLocalStorage("eba-seit-besuch-angezeigt"), d.zeilen[0].keys, "bleibt gemerkt");
+  kaputt = false;
+  assert.equal(await ergebnis.besuchVorbei(), true);
+  assert.equal(ctx.app.loadLocalStorage("eba-seit-besuch-angezeigt"), null);
+  assert.deepEqual(Object.keys(JSON.parse(text["System/Daten/seit-besuch/gesehen-g-aaa.json"]).gesehen), d.zeilen[0].keys);
   assert.equal(await ergebnis.daten(), null);
 });
 

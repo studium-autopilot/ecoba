@@ -2113,6 +2113,14 @@ geändert hat, je Zeile „Titel · was anders ist“ mit Ziel zum Antippen, unt
 Block leer (`.eba-sb-aus`) und samt Hülle auf Höhe 0 gefaltet wie „Bitte prüfen“ (eba-core.css Abschnitt 68). Eine Karte statt
 einer eigenen Seite: Was neu ist, gehört dahin, wo man ohnehin zuerst hinschaut, und verschwindet, wenn es nichts gibt.
 
+- **Gesehen von selbst** (seit 0.6.2): Was aufgeklappt in der Karte stand, gilt nach dem Besuch als gesehen. Die Schlüssel merkt
+  sich das Gerät beim Aufklappen (und beim Neuzeichnen, solange die Karte offen ist) im Gerätespeicher (`app.saveLocalStorage`
+  „eba-seit-besuch-angezeigt“, übersteht einen Neustart) und trägt sie in die Datei `gesehen-…` ein, sobald der Block neu
+  gezeichnet wird (Dashboard wieder geöffnet), Obsidian in den Hintergrund geht (`visibilitychange`) oder ein Tab ohne die
+  Karte aktiv wird (`active-leaf-change`). Danach ist die Karte wieder eingeklappt. Während des Besuchs bleiben die Zeilen
+  stehen; nur eingeklappt Gesehenes zählt nicht. Vorher blieb jede Zeile, bis jemand **Alles gesehen** in der eingeklappten
+  Karte fand (so stand ein Raumwechsel tagelang da); der Knopf bleibt als Abkürzung und trägt das Gemerkte mit ein.
+
 - **Zentrale Termine** (Protokoll): Nur hier geht der alte Wert beim Schreiben verloren. `termineAnwenden` in `zentral.js`
   meldet im Bericht (`seitBesuch`) neu angelegte, geänderte (Text der Notiz anders, alte Werte aus dem Frontmatter davor) und
   abgesagte Termine; `abrufenIntern` gibt sie mit `erster` (noch nichts angewendet) und den ids des letzten Abrufs (`altIds`,
@@ -2126,9 +2134,10 @@ einer eigenen Seite: Was neu ist, gehört dahin, wo man ohnehin zuerst hinschaut
   nächsten 14 Tagen (`ctx.modell.findetStatt`, wie das Wochenraster; besuchte Veranstaltungen), offene Abgaben aus dem
   ILIAS-Kalender, die noch kommen, und neue oder aktualisierte ILIAS-Dateien der letzten 30 Tage aus `System/Daten/ilias.json`
   (je Modul eine Zeile, Ziel die Modulnotiz; ohne die Dateien vom ersten Tag eines Kurses, das erste Laden ist keine Änderung).
+  Ein Raumwechsel, der schon gilt, heißt „Neuer Raum seit <raum_seit>“, einer, der noch kommt, „ab <nächste Sitzung>“.
 - **Speicher** `System/Daten/seit-besuch/` (synchronisiert): `<Geräte-ID>.json` mit den Einträgen dieses Geräts (jedes Gerät
   schreibt nur seine Datei, die Karte liest alle; gleiche Änderung = gleicher Schlüssel; 60 Tage, höchstens 500) und
-  `gesehen-<Geräte-ID>.json` mit den Schlüsseln, die beim Tippen auf **Alles gesehen** angezeigt waren (je Gerät geschrieben,
+  `gesehen-<Geräte-ID>.json` mit den Schlüsseln, die aufgeklappt angezeigt waren (je Gerät geschrieben,
   gelesen als Vereinigung aller, gilt also auf allen Geräten; 180 Tage). Nie eine
   Uhrzeit „gesehen bis“: Ein Eintrag, der erst später per Sync ankommt, wäre sonst verborgen. Kein Pfad im Protokoll, das Ziel
   wird beim Zeichnen über `zentral_id` aufgelöst. Der Ordner ist persönlich: nicht im Release, nicht in Updates, Fund in

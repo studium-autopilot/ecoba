@@ -1,7 +1,11 @@
 // „Seit deinem letzten Besuch“ (seit 0.6.0, Plan 25.1 Punkt 4): eine Karte auf dem Dashboard,
 // Codeblock ```eba-seit-besuch```, Titel „3 Änderungen seit deinem letzten Besuch“ (eingeklappt, ein Tipp klappt auf). Sie zeigt,
-// was sich von selbst geändert hat, je Zeile mit Ziel zum Antippen, oben der Knopf „Alles gesehen“. Ohne Änderungen zeichnet der
+// was sich von selbst geändert hat, je Zeile mit Ziel zum Antippen, unten der Knopf „Alles gesehen“. Ohne Änderungen zeichnet der
 // Block nichts (Klasse eba-sb-aus, samt Hülle auf Höhe 0 gefaltet wie „Bitte prüfen“, eba-core.css Abschnitt 68).
+// Gesehen von selbst (seit 0.6.2): Was aufgeklappt in der Karte stand, merkt sich das Gerät (ANGEZEIGT) und trägt es als gesehen
+// ein, sobald der Besuch vorbei ist: beim nächsten Zeichnen des Blocks (Dashboard wieder geöffnet, auch nach einem Neustart), wenn
+// Obsidian in den Hintergrund geht oder ein Tab ohne die Karte aktiv wird. Vorher blieb jede Zeile stehen, bis jemand „Alles
+// gesehen“ in der eingeklappten Karte fand; der Knopf bleibt als Abkürzung.
 //
 // Quellen:
 // - Zentrale Termine (zentral.js): Nur hier geht der alte Wert beim Schreiben verloren, darum das Protokoll. Der Abrufer meldet
@@ -23,14 +27,17 @@
 //   beim Schreiben gilt dieselbe Regel: Einträge älter als TAGE zählen nicht, höchstens MAX_GERAET je Datei.
 // - gesehen-<Geräte-ID>.json: { version: 1, gesehen: { <k>: <ISO-Datum> } }. Auch hier schreibt jedes Gerät nur seine Datei
 //   (zwei Geräte, die vor dem Sync tippen, verlieren nichts), gelesen wird die Vereinigung aller: gesehen gilt auf allen Geräten.
-//   Nie eine Uhrzeit „gesehen bis“ (ein Eintrag, der erst nach dem Tippen ankommt, wäre sonst für immer verborgen), sondern genau
-//   die Schlüssel, die beim Tippen auf „Alles gesehen“ angezeigt waren. Schlüssel älter als GESEHEN_TAGE fallen weg.
+//   Nie eine Uhrzeit „gesehen bis“ (ein Eintrag, der erst später ankommt, wäre sonst für immer verborgen), sondern genau die
+//   Schlüssel, die aufgeklappt angezeigt waren. Schlüssel älter als GESEHEN_TAGE fallen weg.
+// - ANGEZEIGT (app.saveLocalStorage, nur dieses Gerät): Schlüssel, die aufgeklappt angezeigt und noch nicht eingetragen sind.
+//   Im Gerätespeicher statt im Arbeitsspeicher, damit ein von iOS beendetes Obsidian sie beim nächsten Start nachträgt.
 // Kein Pfad im Protokoll (Notizen werden umbenannt): Das Ziel wird beim Zeichnen über zentral_id aufgelöst; fehlt die Notiz,
 // steht die Zeile ohne Ziel da. Nichts hiervon kommt ins Release, in Updates oder den Test-Tresor (release.py, pruefen.py).
 // Erweiterung: registrieren() meldet Codeblock und Ereignisse über die Helfer in ctx an (Hot-Reload ohne Neustart).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const ORDNER = "System/Daten/seit-besuch";
 const GESEHEN = "gesehen-"; // Namensanfang der Dateien „gesehen“ in ORDNER
+const ANGEZEIGT = "eba-seit-besuch-angezeigt"; // Gerätespeicher: aufgeklappt gesehen, noch nicht eingetragen
 const ILIAS_INDEX = "System/Daten/ilias.json";
 const TAGE = 60;          // Aufbewahrung der Einträge im Protokoll
 const ILIAS_TAGE = 30;    // ILIAS-Dateien, die so lange neu oder aktualisiert sind
@@ -115,7 +122,8 @@ const gesehenMischen = (alt, schluessel, heute) => {
 
 // ---------- Abgeleitet (rein, testbar) ----------
 // Stundenplan: liste [{ f, fm }] (Notizen typ lehrveranstaltung), findetStatt(fm, iso) wie ctx.modell.findetStatt, besuchtNicht(fm).
-// Je Notiz und Tag der nächsten VORAUS Tage höchstens ein Eintrag; eine dauerhafte Verlegung (neuerRaum) nur einmal.
+// Je Notiz und Tag der nächsten VORAUS Tage höchstens ein Eintrag; eine dauerhafte Verlegung (neuerRaum) nur einmal, mit seit =
+// raum_seit, wenn der neue Raum schon gilt (sonst stünde „ab“ der nächsten Sitzung da, als käme der Wechsel erst).
 const stundenplanEintraege = (liste, findetStatt, besuchtNicht, heute) => {
   const aus = [];
   for (const x of Array.isArray(liste) ? liste : []) {
@@ -132,7 +140,8 @@ const stundenplanEintraege = (liste, findetStatt, besuchtNicht, heute) => {
       if (!s.statt) continue;
       if (s.neuerRaum && !raumGemeldet) {
         raumGemeldet = true;
-        aus.push(Object.assign(basis, { art: "raum", raum: text(s.raum), raumAlt: text(s.raumAlt), k: ["lv", ident, "raum", text(fm.raum_seit), text(s.raum)].join("|") }));
+        const seit = s10(fm.raum_seit) && s10(fm.raum_seit) <= heute ? s10(fm.raum_seit) : "";
+        aus.push(Object.assign(basis, { art: "raum", seit, raum: text(s.raum), raumAlt: text(s.raumAlt), k: ["lv", ident, "raum", text(fm.raum_seit), text(s.raum)].join("|") }));
         continue;
       }
       if (s.neuerRaum || !(s.raumGeaendert || s.zeitGeaendert)) continue;
@@ -232,7 +241,7 @@ const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt) => {
     }
     let meta = "";
     if (e.art === "ausfall") meta = "Fällt aus · " + datumKurz(e.datum);
-    else if (e.art === "raum") meta = `Neuer Raum ab ${datumKurz(e.datum)} · ${e.raum}` + (e.raumAlt ? ` statt ${e.raumAlt}` : "");
+    else if (e.art === "raum") meta = `Neuer Raum ${e.seit ? "seit " + datumKurz(e.seit) : "ab " + datumKurz(e.datum)} · ${e.raum}` + (e.raumAlt ? ` statt ${e.raumAlt}` : "");
     else if (e.art === "verlegt") meta = [datumKurz(e.datum), e.zeit ? `${e.zeit} statt ${e.zeitAlt}` : "", e.raum ? `${e.raum} statt ${e.raumAlt}` : ""].filter(Boolean).join(" · ");
     else if (e.art === "abgabe") meta = "Neue Abgabe · bis " + datumKurz(e.datum);
     zeilen.push({ q: e.q, art: e.art, titel: e.titel, meta, keys: [e.k], datum: e.datum, pfad: e.pfad, code: e.code });
@@ -326,12 +335,37 @@ module.exports = function (ctx) {
     return zeilen.length ? { zeilen } : null;
   };
 
+  // ---------- Gesehen ----------
+  const schluesselVon = (zeilen) => { const keys = []; for (const z of zeilen || []) Array.prototype.push.apply(keys, z.keys || []); return keys; };
+  const angezeigt = () => { const v = app.loadLocalStorage(ANGEZEIGT); return Array.isArray(v) ? v.filter((k) => typeof k === "string" && k) : []; };
+  const angezeigtMerken = (zeilen) => {
+    const alt = angezeigt(), neu = alt.slice();
+    for (const k of schluesselVon(zeilen)) if (neu.indexOf(k) < 0) neu.push(k);
+    if (neu.length !== alt.length) app.saveLocalStorage(ANGEZEIGT, neu.slice(Math.max(0, neu.length - MAX_GESEHEN)));
+  };
+  const gesehenSchreiben = async (keys) => {
+    const pfad = gesehenPfad(), alt = await jsonLesen(pfad);
+    await jsonSchreiben(pfad, { version: 1, gesehen: gesehenMischen(alt && alt.gesehen, keys, heute()) });
+  };
+  // Besuch vorbei: Angezeigtes eintragen (nie zweimal gleichzeitig), die Karte ist beim nächsten Mal wieder zu. Schlägt das
+  // Schreiben fehl, bleibt alles gemerkt und kommt beim nächsten Mal dran.
+  let eintragen = null;
+  const besuchVorbei = () => {
+    if (eintragen) return eintragen;
+    const keys = angezeigt();
+    if (!keys.length) return Promise.resolve(false);
+    eintragen = gesehenSchreiben(keys).then(() => {
+      const rest = angezeigt().filter((k) => keys.indexOf(k) < 0); // was beim Schreiben dazukam, bleibt gemerkt
+      app.saveLocalStorage(ANGEZEIGT, rest.length ? rest : null);
+      auf.wert = false;
+      return true;
+    }, (e) => { console.error(SPRACHE, e); return false; }).then((r) => { eintragen = null; return r; });
+    return eintragen;
+  };
   const allesGesehen = async (zeilen) => {
-    const keys = [];
-    for (const z of zeilen) Array.prototype.push.apply(keys, z.keys);
     try {
-      const pfad = gesehenPfad(), alt = await jsonLesen(pfad);
-      await jsonSchreiben(pfad, { version: 1, gesehen: gesehenMischen(alt && alt.gesehen, keys, heute()) });
+      await gesehenSchreiben(angezeigt().concat(schluesselVon(zeilen)));
+      app.saveLocalStorage(ANGEZEIGT, null);
     } catch (e) { console.error(SPRACHE, e); try { ctx.hinweis("„Alles gesehen“ ließ sich nicht speichern."); } catch (x) { /* ohne Obsidian */ } }
     alleNeu();
   };
@@ -355,6 +389,7 @@ module.exports = function (ctx) {
     if (!auf.wert) inhalt.style.display = "none";
     const klappen = () => {
       auf.wert = !auf.wert;
+      if (auf.wert) angezeigtMerken(d.zeilen);
       for (const x of doc.querySelectorAll('.callout[data-callout="eba-seit-besuch"]')) {
         x.toggleClass("is-collapsed", !auf.wert);
         x.setAttribute("data-callout-fold", auf.wert ? "+" : "-");
@@ -400,6 +435,7 @@ module.exports = function (ctx) {
     el.removeClass("eba-sb-aus");
     el.appendChild(karte(el.ownerDocument, d));
     inst.gezeichnet = true;
+    if (auf.wert) angezeigtMerken(d.zeilen); // offen gezeichnet: auch neue Zeilen stehen sichtbar da
   };
 
   let block = null;
@@ -410,7 +446,8 @@ module.exports = function (ctx) {
       inst.sig = null;
       inst.gezeichnet = false;
       el.addClass("eba-sb-aus"); // bis feststeht, ob es etwas zu zeigen gibt
-      return zeichnen(inst).catch((e) => { console.error(SPRACHE, e); el.empty(); el.addClass("eba-sb-aus"); });
+      // Block neu gezeichnet = neuer Besuch: vorher Angezeigtes erst eintragen
+      return besuchVorbei().then(() => zeichnen(inst)).catch((e) => { console.error(SPRACHE, e); el.empty(); el.addClass("eba-sb-aus"); });
     });
     const bald = ctx.entprellen(alleNeu, 600);
     // Termine, Stundenplan und Module meldet das Modell; die JSON-Dateien (Protokolle, gesehen, ILIAS-Index) sehen wir selbst
@@ -421,10 +458,18 @@ module.exports = function (ctx) {
     ctx.an(V, "delete", (f) => { if (wichtig(f.path)) bald(); });
     // Mitternacht: Ausfälle und Abgaben von gestern fallen weg
     ctx.intervall(bald, 15 * 60e3);
+    // Besuch vorbei: Obsidian im Hintergrund (iOS: andere App) oder ein Tab ohne die Karte aktiv. Das Eintragen ändert die Datei
+    // gesehen-…, „modify“ oben zeichnet die Karte dann neu.
+    ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "hidden") besuchVorbei(); });
+    ctx.an(app.workspace, "active-leaf-change", (leaf) => {
+      if (!block || !angezeigt().length) return;
+      const wo = leaf && leaf.view && leaf.view.containerEl;
+      if (!block.instanzen().some((i) => wo && i.el && wo.contains(i.el))) besuchVorbei();
+    });
   };
 
   ctx.seitBesuch = { zentral, daten, ORDNER, GESEHEN };
-  return { registrieren, zeichnen, daten, zentral, allesGesehen };
+  return { registrieren, zeichnen, daten, zentral, allesGesehen, besuchVorbei, angezeigtMerken };
 };
 module.exports.zentralEintraege = zentralEintraege;
 module.exports.protokollMischen = protokollMischen;

@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.2 – Änderungen verschwinden nach dem Besuch
+
+- **Behoben:** Änderungen seit deinem letzten Besuch blieben auf dem Dashboard stehen, bis du **Alles gesehen** angetippt
+  hast. Jetzt verschwinden sie nach dem Besuch von selbst, sobald du sie einmal aufgeklappt gesehen hast.
+
 ## 0.6.1 – Unterlagen direkt in Obsidian hinzufügen
 
 - **Einfacher:** PDFs, Folien und Fotos bekommst du jetzt direkt in Obsidian in deinen Tresor: **Unterlagen hinzufügen**
