@@ -90,8 +90,9 @@ Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst
 ## 5. GitHub-Release
 
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
-**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`** und **`studium-server.tar.gz`** anhängen (genau diese Namen; alle
-drei aus `release.py --zip`). Fehlt das iOS-ZIP, scheitert der Kurzbefehl auf iPhone und iPad. Das
+**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`**, **`studium-server.tar.gz`** und **`zaehler.txt`** anhängen (genau
+diese Namen; alle vier aus `release.py --zip`). Fehlt das iOS-ZIP, scheitert der Kurzbefehl auf iPhone und iPad. Fehlt
+`zaehler.txt`, wird diese Version nicht mitgezählt (`docs/datenschutz.md`, „Mitzählen“). Das
 Server-Paket lädt die Einrichtung des eigenen Servers und täglich `studium-server aktualisieren`, beide nur mit der Prüfsumme,
 die GitHub zum Asset zeigt; fehlt es, bleibt jeder eigene Server auf seinem Stand. Die Anleitung der Einrichtung im Baum lädt
 genau das Paket ihrer Version (`release.py` setzt `releases/tags/v<version>` ein); bis das Release mit Asset öffentlich ist,
@@ -145,7 +146,7 @@ Für Tests vor dem Release (zum Beispiel im eigenen Test-Tresor mit Kanal „Bet
    die Update-Liste trägt diese Version, gedruckt wird ein Block `beta`.
 2. Commit, nur den Tag `vX.Y.Z-beta.1` pushen, **nie `main`**: `main` zeigt immer die stabile Version.
 3. GitHub-Release mit diesem Tag als **Vorab-Release** („Set as a pre-release“), **nicht** als Latest; Assets
-   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip` und `studium-server.tar.gz`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
+   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip`, `studium-server.tar.gz` und `zaehler.txt`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
    und das Update eigener Server (`releases/latest`) weiter die stabile Version. Die Server-Einrichtung einer Beta testet man
    mit dem Prompt aus dem README, nur mit `vX.Y.Z-beta.1` statt der Version aus `releases/latest`: Die Anleitung dieses Tags
    lädt genau sein Server-Paket.
@@ -155,6 +156,7 @@ Nur Tresore mit `update_kanal: beta` in `System/Einstellungen.md` (Schalter **Be
 unter „Mehr erfahren“) bekommen die Beta angeboten. Nach dem fertigen Release `X.Y.Z` ist `release` wieder höher als die Beta;
 die Beta-Tresore bekommen dann die fertige Version. `beta` kann stehen bleiben oder entfernt werden.
 
-**Drei Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
+**Vier Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
 (gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/` und
-`studium-server.tar.gz` für den eigenen Server. Die Namen sind fest; `release.py --zip` erzeugt alle drei.
+`studium-server.tar.gz` für den eigenen Server und `zaehler.txt` zum Mitzählen. Die Namen sind fest; `release.py --zip` erzeugt
+alle vier.

@@ -57,6 +57,9 @@
 //   schon gesehen hast. Läuft eine neue Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“ mit „Was ist neu“.
 //   Seit 0.5.4 läuft das ganze Update in EINEM Fenster („Neue Version“: Änderungen, Fortschritt, Ergebnis) ohne Hinweis daneben;
 //   es zeigt die Abschnitte aus CHANGELOG.md am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
+// Mitzählen (seit 0.6.5): Einmal je Gerät und Version lädt update.js die kleine Datei zaehler.txt aus dem GitHub-Release der
+//   Version, die hier läuft. GitHub zählt die Abrufe je Datei; so steht dort, auf wie vielen Geräten eine Version lief, ohne
+//   Kennung und ohne Angaben aus dem Tresor (zaehlen, docs/datenschutz.md). Schalter „Mitzählen“ neben „Beta-Versionen“.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt der Frage im Fenster), plugin.testUpdateBasis (andere Basis-URL,
 //   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.toast,
 //   ctx.update.heilen(true) (Reparatur sofort, ohne Merker eba-update-reparatur).
@@ -884,6 +887,28 @@ module.exports = function (ctx) {
       }));
   };
 
+  // Mitzählen (zaehlen): Feld zaehlen in System/Einstellungen.md (gilt für den ganzen Tresor); fehlt es, ist es an
+  const zaehlenAn = () => {
+    try {
+      const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN), c = f && app.metadataCache.getFileCache(f);
+      return !(c && c.frontmatter && c.frontmatter.zaehlen === false);
+    } catch (e) { return true; }
+  };
+  const zaehlenSetzen = async (an) => {
+    const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
+    if (!f) return;
+    await app.fileManager.processFrontMatter(f, (fm) => { fm.zaehlen = !!an; });
+  };
+  // Schalter „Mitzählen“ (unter dem Schalter „Beta-Versionen“, verbindungen.js)
+  const zaehlenSchalter = (el) => {
+    if (!obs.Setting) return;
+    new obs.Setting(el).setName("Mitzählen").setDesc("Zählt ohne Angaben über dich, auf wie vielen Geräten eine Version läuft.")
+      .addToggle((t) => t.setValue(zaehlenAn()).onChange(async (an) => {
+        await zaehlenSetzen(an);
+        ctx.hinweis(an ? "Mitzählen an. Danke!" : "Mitzählen aus. Dieses Gerät wird nicht mehr mitgezählt.");
+      }));
+  };
+
   // ---------- Anzeige (Zeile „Studium Autopilot“ in eba-verbindungen) ----------
   // → { html, pille, symbol, ton, knopf: { aktion, text, cta? (false: normaler Knopf) } | null }
   // Ohne Angebot steht rechts **Nach Updates suchen** (seit 0.4.8), daneben „Mehr erfahren“ als Textlink (verbindungen.js).
@@ -1291,6 +1316,9 @@ module.exports = function (ctx) {
   const CHANGELOG_MAX = 262144;       // Bytes
   const ABSCHNITTE_MAX = 8;
   const L_GEPRUEFT = "eba-update-geprueft", L_TOAST = "eba-update-toast", L_GESEHEN = "eba-update-gesehen";
+  const L_GEZAEHLT = "eba-update-gezaehlt"; // Version, die dieses Gerät schon mitgezählt hat (zaehlen)
+  const ZAEHLER = "zaehler.txt"; // Datei in jedem GitHub-Release (release.py --zip)
+  const NIE = "nie"; // L_GEZAEHLT in Test- und Entwicklungstresoren: nie mitzählen
   const S_TOAST = "eba-update-toast-sitzung"; // sessionStorage: Hinweis in dieser App-Sitzung schon gezeigt
 
   // CHANGELOG.md → [{ version, titel, text }] in Dateireihenfolge. Nur Überschriften „## X.Y.Z – Titel“ (auch X.Y.Z-beta.N);
@@ -1351,7 +1379,7 @@ module.exports = function (ctx) {
   const pruefungFaellig = (geprueftIso, eigeneMs, jetzt) => !(jetzt - Math.max(Date.parse(geprueftIso || "") || 0, Number(eigeneMs) || 0) < PRUEFEN_NACH);
 
   // Zustand (überlebt den Hot-Reload): Start des Fensters, Zeit des Verbergens, der Hinweis zum Update, Changelogs je Version
-  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, toast: null, changelog: {} }));
+  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, toast: null, changelog: {}, zaehlt: false }));
   const lokal = (k, v) => {
     if (v === undefined) { try { return app.loadLocalStorage(k); } catch (e) { return null; } }
     try { app.saveLocalStorage(k, v); } catch (e) { /* egal */ }
@@ -1374,6 +1402,30 @@ module.exports = function (ctx) {
     try { await ctx.zentral.manifestHolen(); } catch (e) { return false; } // kein Netz: letzter Stand bleibt
     neuZeichnen();
     return true;
+  };
+
+  // Mitzählen: GitHub zählt jeden Abruf einer Datei aus einem Release (download_count), der Autor sieht nur diese Zahl je Version.
+  // Gezählt wird der Kern, der hier läuft: auch Geräte, die das Update über den Sync bekommen, und neue Installationen; ein
+  // abgebrochenes oder wiederholtes Update zählt nicht doppelt. Einmal je Gerät und Version (gerätelokal L_GEZAEHLT). Nie bei
+  // zentralen Daten aus (dann ruft das Plugin nichts bei GitHub ab), Mitzählen aus, während der Einrichtung (erst danach lässt
+  // es sich ausschalten) und mit Testeinstiegen. Jede Antwort zählt als erledigt, auch 404 (Version ohne Release, etwa ein
+  // Entwicklungsstand); ohne Netz beim nächsten Start noch einmal. Test- und Entwicklungstresore des Autors zählen nie: dort
+  // steht gerätelokal L_GEZAEHLT = "nie" (app.saveLocalStorage, geht mit keinem Sync und keinem Export mit).
+  // Rein: o = { an, zentral, einrichtung, laufend, gezaehlt } → true, wenn jetzt gezählt werden soll
+  const zaehlenFaellig = (o) => !!(o.an && o.zentral && !o.einrichtung && semver(o.laufend) && o.gezaehlt !== o.laufend && o.gezaehlt !== NIE);
+  const zaehlerUrl = (version) => releasesUrl() + "/download/v" + version + "/" + ZAEHLER;
+  // → true, wenn GitHub geantwortet hat
+  const zaehlen = async () => {
+    const p = plugin(), lauf = laufendeVersion();
+    if (p.testZentralAus || p.testUpdateBasis || neuigkeit.zaehlt || typeof obs.requestUrl !== "function") return false;
+    if (!zaehlenFaellig({ an: zaehlenAn(), zentral: zentralAn(), einrichtung: einrichtungOffen(), laufend: lauf, gezaehlt: lokal(L_GEZAEHLT) })) return false;
+    neuigkeit.zaehlt = true;
+    try {
+      const r = await obs.requestUrl({ url: zaehlerUrl(lauf), method: "GET", throw: false });
+      if (!r || !r.status) return false;
+      lokal(L_GEZAEHLT, lauf);
+      return true;
+    } catch (e) { return false; } finally { neuigkeit.zaehlt = false; } // kein Netz: beim nächsten Start
   };
 
   // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | null
@@ -1493,13 +1545,14 @@ module.exports = function (ctx) {
   ctx.update = {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, zaehlenSetzen, zaehlenSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     markeLage, MARKE, MARKE_STILL, handInstalliertMit,
     // Obsidian
     kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertNeu, installiertAnlegen, heilen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
+    zaehlenFaellig, zaehlerUrl, zaehlen, L_GEZAEHLT, ZAEHLER, NIE,
     get letzterBericht() { return zustand.bericht; },
     get fenster() { return zustand.fenster; }, // Griff des Fensters „Neue Version“ (m = Obsidians Modal) oder null
     get toast() { return neuigkeit.toast; },
@@ -1531,12 +1584,15 @@ module.exports = function (ctx) {
       // Von Hand aktualisiert: Liste und Systemdateien können nach dem Start per Sync kommen (handInstalliertMit)
       else if (f && (f.path === LISTE || (zustand.handWartet && f.path.indexOf("System/") === 0))) bald();
     });
-    // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
+    // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig, und mitzählen. Zurück in der App: nach 15 s (zentral.js holt
     // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund
     // zählt wie ein neuer App-Start (Hinweis darf wieder erscheinen; der Abstand von 12 h je Version gilt weiter).
     const startLauf = () => {
       neuigkeit.start = Date.now();
-      frischPruefen().catch(() => false).then(() => { try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); } });
+      frischPruefen().catch(() => false).then(() => {
+        try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); }
+        zaehlen().catch(() => false);
+      });
     };
     if (app.metadataCache.initialized || app.metadataCache.resolved) ctx.zeit(startLauf, 4000);
     else { const r = ctx.an(app.metadataCache, "resolved", () => { app.metadataCache.offref(r); ctx.zeit(startLauf, 4000); }); }

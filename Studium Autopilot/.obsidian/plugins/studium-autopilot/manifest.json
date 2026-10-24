@@ -1,7 +1,7 @@
 {
   "id": "studium-autopilot",
   "name": "Studium Autopilot",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "minAppVersion": "1.14.4",
   "description": "Kern des Tresors „Studium Autopilot“: Knöpfe, Vorlagen und alles, was sich in deinem Studium von selbst aktualisiert.",
   "author": "Philip Walter",

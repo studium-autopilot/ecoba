@@ -138,7 +138,8 @@ HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen",
                 "Karteikarten", "Lernplan"]
 MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"]
-EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn"]
+# zaehlen: in der Vorlage nie gesetzt, sonst zählte nach dem Ausschalten im Entwicklungstresor kein neuer Tresor mit (update.js)
+EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn", "zaehlen"]
 
 NODE_MODULE = r"(?:node:)?(?:fs|path|child_process|os|crypto|http|https|net|zlib|electron)(?:/[\w/]+)?"
 IOS_REGELN = [

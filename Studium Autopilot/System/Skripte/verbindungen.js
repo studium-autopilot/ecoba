@@ -583,8 +583,9 @@ module.exports = function (ctx) {
       // Claude: nach dem Verbinden neu zeichnen (Texte und Inhalt hängen davon ab)
       if (v.art === "claude" && ctx.claude) ctx.claude.fensterInhalt(this.contentEl.createDiv(), () => { this.contentEl.empty(); this.onOpen(); });
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
-      // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js)
+      // Studium Autopilot: Schalter „Beta-Versionen“ und „Mitzählen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
+      if (v.art === "vorlage" && mehr && ctx.update && ctx.update.zaehlenSchalter) ctx.update.zaehlenSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }
   }

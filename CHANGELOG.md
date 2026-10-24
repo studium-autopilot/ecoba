@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.5 – Mitzählen ohne Angaben über dich
+
+- **Neu:** Studium Autopilot zählt, auf wie vielen Geräten eine Version läuft, ohne Angaben über dich. Ausschalten kannst du
+  das unter **Verbindungen** bei Studium Autopilot unter „Mehr erfahren“ mit **Mitzählen**.
+
 ## 0.6.4 – Lab auch mit älterem Server
 
 - **Zuverlässiger:** Hat sich dein eigener Server noch nicht aktualisiert, fasst er Unterlagen aus dem **Lab** einen Tag später

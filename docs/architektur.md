@@ -1116,6 +1116,19 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
     `MarkdownRenderer` nach `markdownSicher` (kein HTML, keine Einbettungen, Wikilinks oder Codeblöcke, umbrochene Zeilen
     verbunden); danach bleiben nur https-Links. Fehler oder keine Abschnitte → `notiz` aus dem Manifest und Link „Auf GitHub
     ansehen“ auf das Release.
+- **Mitzählen (seit 0.6.5, `zaehlen()`):** Der Autor will wissen, auf wie vielen Geräten eine Version läuft, ohne Telemetrie. Nach
+  der frischen Prüfung ruft `zaehlen()` einmal je Gerät und Version `RELEASES + "/download/v" + laufend + "/zaehler.txt"` ab
+  (`zaehlerUrl`, GET ohne Kopfzeilen); GitHub zählt jeden Abruf einer Release-Datei (`download_count`), sonst bleibt nichts.
+  Gezählt wird der laufende Kern, also auch Geräte, die das Update über den Sync bekommen, und frische Installationen; ein
+  wiederholtes Update zählt nicht doppelt. Merker `eba-update-gezaehlt` (gerätelokal) = gezählte Version; jede Antwort zählt
+  als erledigt (auch 404, Entwicklungsstand ohne Release), ohne Netz beim nächsten Start. Nie bei zentralen Daten aus, Feld
+  `zaehlen: false` in `System/Einstellungen.md` (Schalter **Mitzählen** unter dem Schalter **Beta-Versionen**, `zaehlenSchalter`;
+  fehlt das Feld, ist es an), offener Einrichtung, `plugin.testZentralAus` oder `plugin.testUpdateBasis`
+  (`zaehlenFaellig`). Test- und Entwicklungstresore zählen nie: dort steht gerätelokal `eba-update-gezaehlt` = `"nie"`
+  (`app.saveLocalStorage`, einmal je Tresor und Gerät). `zaehlen` darf in der Vorlage nicht stehen (`pruefen.py`,
+  `EINSTELLUNGEN_LEER`), sonst zählte nach einem Tipp im Entwicklungstresor kein neuer Tresor mehr. `release.py --zip` legt `zaehler.txt` neben die anderen Assets (`docs/release.md`). Grenzen: GitHub
+  fasst Abrufe derselben IP für dasselbe Release in rund 10 Minuten zusammen (zwei Geräte im selben WLAN, die gleichzeitig
+  starten, zählen einmal), und Bots, die Release-Seiten abgrasen, zählen mit. Tests: `tests/update-zaehlen.test.js`.
 - **Fenster „Neue Version“** (seit 0.5.4, `fensterZeigen({ stufe, von, bis, angebot, ohneListe })`, `.eba-modal-update`): ein
   Fenster für das ganze Update, nie zwei übereinander (ein neues schließt das alte). Bis 0.5.2 kamen nacheinander das Fenster
   vor dem Update, der Hinweis „Lade …“ oben rechts und ein Ergebnisfenster, alle Teile gleich laut. Aufbau von oben (Rangfolge,
@@ -1147,6 +1160,7 @@ Nie im Update: `System/Einstellungen.md`, `System/Daten/Semester.md` (Datenkanal
   installiertAnlegen, heilen, pluginNeuLaden, letzterBericht, fenster, changelogAbschnitte, abschnitteZwischen, markdownSicher,
   toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen,
   toastWeg, toast, neuigkeitenZeigen, fensterZeigen, ergebnisZeigen, markeLage, MARKE, MARKE_STILL, markeNeu, suchen,
+  zaehlenFaellig, zaehlerUrl, zaehlen, zaehlenAn, zaehlenSetzen, zaehlenSchalter, L_GEZAEHLT, ZAEHLER,
   handInstalliertMit(io, { lauf }), installiertNeu }`
   (`fenster` = Griff des Fensters „Neue Version“ mit `m` = Obsidians Modal, `toast` = der Hinweis zum Update oder `null`).
   `aktualisierenMit` und `heilenMit` bekommen den Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`, `liste`)

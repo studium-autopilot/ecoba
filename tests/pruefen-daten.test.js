@@ -98,6 +98,7 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
     [`${VAULT}/Module/B110 ausgeblendet.md`]: modul("alma_ausgeblendet:\n  - 1a2b3c4d\n"),
     [`${VAULT}/Module/B111 verzicht.md`]: modul("anmeldung_verzicht: WS 2026/27\n"),
     [`${VAULT}/Module/B112 leer.md`]: modul("alma_ausgeblendet: []\nanmeldung_verzicht: \"\"\n"),
+    [`${VAULT}/System/Einstellungen.md`]: "---\ntyp: einstellungen\nzaehlen: false\n---\n",
   });
   const fund = (p) => (r.funde[`${VAULT}/${p}`] || []).join("\n");
   for (const p of ["alma-konto.json", "alma-konto 2.json", "alma-konto-abruf.json", "alma-konto-aus.json"]) {
@@ -116,4 +117,5 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
   assert.match(fund("Module/B110 ausgeblendet.md"), /persönliches Feld gesetzt\]\s+alma_ausgeblendet/);
   assert.match(fund("Module/B111 verzicht.md"), /persönliches Feld gesetzt\]\s+anmeldung_verzicht/);
   assert.equal(fund("Module/B112 leer.md"), "", "leere Felder sind kein Fund");
+  assert.match(fund("System/Einstellungen.md"), /persönliches Feld gesetzt\]\s+zaehlen: false/, "Mitzählen aus nie in der Vorlage");
 });
