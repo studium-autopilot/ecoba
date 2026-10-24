@@ -28,6 +28,25 @@ test("Aktuelle Woche: Montag bis Freitag diese, Samstag und Sonntag die nächste
   assert.equal(W.kw(tag("2027-01-04")), 1);
 });
 
+test("Name der Woche: wo sie zu heute liegt, nach Kalenderwochen; am Wochenende ist die Planwoche „Nächste Woche“", () => {
+  const n = (montag, jetzt, uhr) => W.wocheText(tag(montag, "00:00:00"), tag(jetzt, uhr));
+  // Samstag 24.10.2026
+  assert.equal(n("2026-10-26", "2026-10-24"), "Nächste Woche");
+  assert.equal(n("2026-10-19", "2026-10-24"), "Diese Woche");
+  assert.equal(n("2026-10-12", "2026-10-24"), "Letzte Woche");
+  assert.equal(n("2026-11-02", "2026-10-24"), "In 2 Wochen");
+  assert.equal(n("2026-10-05", "2026-10-24"), "Vor 2 Wochen");
+  // Sonntag der Zeitumstellung und Wochen danach, Montag kurz nach Mitternacht, Jahreswechsel
+  assert.equal(n("2026-10-26", "2026-10-25", "23:59:00"), "Nächste Woche");
+  assert.equal(n("2026-11-09", "2026-10-25"), "In 3 Wochen");
+  assert.equal(n("2026-10-26", "2026-10-26", "00:01:00"), "Diese Woche");
+  assert.equal(n("2026-10-19", "2026-10-26", "00:01:00"), "Letzte Woche");
+  assert.equal(n("2027-01-04", "2026-12-31"), "Nächste Woche");
+  // Ohne Blättern: Montag bis Freitag „Diese Woche“, Samstag und Sonntag „Nächste Woche“
+  const ohne = (jetzt) => W.wocheText(W.aktuellerMontag(tag(jetzt)), tag(jetzt));
+  assert.deepEqual(["2026-10-19", "2026-10-23", "2026-10-24", "2026-10-25"].map(ohne), ["Diese Woche", "Diese Woche", "Nächste Woche", "Nächste Woche"]);
+});
+
 test("Versatz: gilt nur in derselben Sitzung und höchstens 30 Minuten, Unsinn heißt aktuelle Woche", () => {
   const t = tag("2026-10-17").getTime(), s = "sitzung-a";
   assert.equal(W.versatzAus(W.versatzWert(2, t, s), t + 60000, s), 2);
@@ -385,10 +404,10 @@ test("Stil: Ausnahme in Warnfarbe (Fläche, Kante, Text), Ausfall nie blass wie 
 // Seit 24.10.2026 zeichnet der Block auf jeder Seite nur das Raster. Vom 19. bis 24.10.2026 zeigte er auf dem Dashboard daneben
 // eine Tagesansicht, die das CSS unter 520 px Kartenbreite statt des Rasters zeigte (iPhone hochkant).
 const knotenDom = (tag = "div", p = {}) => {
-  const k = { tag, cls: p.cls || "", kinder: [] };
+  const k = { tag, cls: p.cls || "", text: p.text || "", kinder: [] };
   const neu = (t, q = {}) => { const c = knotenDom(t, q); k.kinder.push(c); return c; };
   Object.assign(k, { createDiv: (q) => neu("div", q), createSpan: (q) => neu("span", q), createEl: neu,
-    empty: () => { k.kinder = []; }, appendText: () => {}, setText: () => {}, addEventListener: () => {} });
+    empty: () => { k.kinder = []; }, appendText: (t) => { k.text += t; }, setText: () => {}, addEventListener: () => {} });
   return k;
 };
 const alleKnoten = (k) => [k].concat(...k.kinder.map(alleKnoten));
@@ -404,11 +423,64 @@ test("Raster auf Dashboard und Stundenplan, auch schmal: keine Tagesansicht dane
   for (const sourcePath of ["Dashboard.md", "Studium/Stundenplan.md"]) {
     const el = knotenDom();
     zeichnen("", el, { sourcePath });
-    assert.deepEqual(el.kinder.map((k) => k.cls), ["eba-woche"], sourcePath);
+    assert.deepEqual(el.kinder.map((k) => k.cls), ["eba-woche mit-leiste"], sourcePath);
     assert.ok(alleKnoten(el).some((k) => /\beba-ev\b/.test(k.cls)), sourcePath + ": Kästen im Raster");
     assert.ok(!alleKnoten(el).some((k) => /\beba-wt|hat-tag/.test(k.cls)), sourcePath);
   }
   assert.ok(!("mitTag" in W) && !("tagKaesten" in W), "keine Tagesansicht mehr");
+});
+
+// Seit 24.10.2026 steht über den Tagen eine Leiste: links der Name der Woche, rechts „‹ KW n ›“. Vorher standen nur die Pfeile
+// rechts neben Freitag (Klasse fr hielt Platz frei), am Wochenende ohne Hinweis, dass schon die nächste Woche dasteht.
+test("Leiste über den Tagen: am Samstag „Nächste Woche“ und KW 44, eine Woche zurück „Diese Woche“ mit Link zurück", () => {
+  let zeichnen = null;
+  global.document = { visibilityState: "visible" };
+  const speicher = {};
+  let L;
+  try {
+    L = laden("woche", { heute: "2026-10-24", notizen: Object.fromEntries(NOTIZEN.map((n) => [n.pfad, n.fm])),
+      kontext: { modell: MODELL, link: (aktion, p) => "obsidian://studium-autopilot?aktion=" + aktion + "&schritt=" + (p && p.schritt), codeblock: (_s, fn) => { zeichnen = fn; return { neu: () => {} }; } } });
+    L.ctx.app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
+    L.ctx.app.saveLocalStorage = (k, v) => { if (v === null) delete speicher[k]; else speicher[k] = v; };
+    L.ergebnis.registrieren();
+  } finally { delete global.document; }
+  const leiste = () => {
+    const el = knotenDom();
+    zeichnen("", el, { sourcePath: "Dashboard.md" });
+    const g = el.kinder[0];
+    assert.ok(!g.kinder.some((k) => /\bfr\b/.test(k.cls)), "Freitag hält keinen Platz mehr frei");
+    assert.ok(!g.kinder.some((k) => k.cls === "eba-wpfeile"), "Pfeile nicht mehr im Raster neben Freitag");
+    const l = g.kinder.find((k) => k.cls === "eba-wleiste");
+    const [name, nav] = l.kinder;
+    assert.equal(name.cls, "eba-wname");
+    assert.equal(nav.cls, "eba-wpfeile");
+    return { name: name.text, kw: nav.kinder[1], tage: g.kinder.filter((k) => k.cls === "eba-tagkopf").map((k) => k.kinder[0].text) };
+  };
+  const ohne = leiste();
+  assert.equal(ohne.name, "Nächste Woche");
+  assert.equal(ohne.kw.text, "44");
+  assert.equal(ohne.kw.cls, "eba-wkw");
+  assert.deepEqual(ohne.tage, ["26.", "27.", "28.", "29.", "30."]);
+  L.ergebnis.aktionen.woche.ausfuehren({ parameter: { schritt: "-1" } });
+  const zurueck = leiste();
+  assert.equal(zurueck.name, "Diese Woche");
+  assert.equal(zurueck.kw.text, "43");
+  assert.equal(zurueck.kw.cls, "eba-wkw anders");
+  L.ergebnis.aktionen.woche.ausfuehren({ parameter: { schritt: "3" } });
+  // Samstag: ohne Blättern die Woche ab 26.10., drei weiter die ab 16.11., von heute aus vier Kalenderwochen
+  assert.equal(leiste().name, "In 4 Wochen");
+});
+
+test("Stil: Leiste im oberen Innenabstand, Freitag ohne Platzhalter, „KW“ auf jeder Breite", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8");
+  assert.ok(!/\.eba-tagkopf\.fr\b/.test(css), "kein Platz neben Freitag mehr");
+  assert.ok(!/\.eba-wkw > span\s*[,{]/.test(css), "„KW“ wird nie ausgeblendet");
+  assert.match(css, /\.eba-wleiste\s*\{[^}]*position:\s*absolute;[^}]*grid-column:\s*2 \/ -1;[^}]*height:\s*var\(--eba-wlh\)/);
+  // Jede Ansicht mit eigenem oberen Innenabstand bekommt die Leiste dazu, und eine absolute Heute-Spalte beginnt darunter
+  for (const sel of ["body:not(.is-phone) .eba-s-dashboard", "body.is-phone .eba-s-dashboard", "body.is-phone .eba-s-stundenplan"]) {
+    assert.match(css, new RegExp(sel.replace(/[.()]/g, "\\$&") + " \\.eba-woche\\.mit-leiste \\{ padding-top: calc\\(\\d+px \\+ var\\(--eba-wlh\\)\\); \\}"), sel);
+    assert.ok(css.includes(sel + " .eba-woche.mit-leiste .eba-tagspalte { top: var(--eba-wlh); }"), sel + ": Heute-Spalte unter der Leiste");
+  }
 });
 
 // Seit 24.10.2026 ist die Seite Stundenplan nur noch das Raster (dieselbe Woche wie auf dem Dashboard; in der Seitenleiste steht

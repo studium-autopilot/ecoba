@@ -28,7 +28,6 @@ cssclasses:
 
 > [!eba-neu|ohne-titel]
 > - [Neue Vorlesungsnotiz](obsidian://studium-autopilot?aktion=vorlesung)
-> - [Neues Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
 > - [Unterlagen hinzufügen](obsidian://studium-autopilot?aktion=einordnen)
 
 

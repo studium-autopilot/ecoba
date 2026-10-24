@@ -33,10 +33,10 @@
 // Am Samstag und Sonntag zählt schon die kommende Woche (planwoche, eine Wochenend-Regel für alle Bildschirme).
 //
 // Fachmodell (seit 18.10.2026, docs/architektur.md „Fachmodell“): Jeder Bildschirm fragt das Modell, statt selbst zu rechnen –
-// Termine (termine), Prüfungen (pruefungen, pruefungVon, naechstePruefung), Fristen (fristen, abgaben), Woche (kalenderwoche,
-// planwoche; am Samstag und Sonntag gilt überall schon die kommende Woche), Stundenplan (findetStatt, naechsteSitzung: Pausen,
-// freie Tage, Ausfall, Änderungen), ECTS und Noten (ects, noten), imPlan, statusArt, istZwischentest. Datum, Uhrzeit, Mehrzahl
-// und HTML-Schutz in einer Schreibweise: ctx.modell.zeit (ctx.zeit selbst ist der Timer-Helfer des Kerns).
+// Termine (termine), Prüfungen (pruefungen, pruefungVon, naechstePruefung), Fristen (fristen, abgaben), Übungen (uebung, uebungen),
+// Woche (kalenderwoche, planwoche; am Samstag und Sonntag gilt überall schon die kommende Woche), Stundenplan (findetStatt,
+// naechsteSitzung: Pausen, freie Tage, Ausfall, Änderungen), ECTS und Noten (ects, noten), imPlan, statusArt, istZwischentest.
+// Datum, Uhrzeit, Mehrzahl und HTML-Schutz in einer Schreibweise: ctx.modell.zeit (ctx.zeit selbst ist der Timer-Helfer des Kerns).
 //
 // Außerdem: Codeblock ```eba-semesterdaten [zentral|persoenlich]``` (Tabelle der Semestertermine).
 // Erweiterung: Das Plugin ruft registrieren() (Codeblock, Ereignisse über die Helfer in ctx) und beim App-Start start() (Abgleich) auf.
@@ -49,7 +49,7 @@ module.exports = function (ctx) {
   const MUSTERPLAN = "System/Daten/Musterplan.md";
   const FS_REGEL = 6;      // Regelstudienzeit
   const FS_MAX = 14;       // längste Liste (Sicherung gegen Endlosschleifen)
-  // Ordner, deren Änderungen das Modell meldet (beiAenderung): dazu Übungsblätter (Abgaben) und SQ-Kurse (ECTS)
+  // Ordner, deren Änderungen das Modell meldet (beiAenderung): dazu Übungsblätter (Abgaben bis 0.6.7) und SQ-Kurse (ECTS)
   const RELEVANT = /^(System\/Einstellungen\.md|System\/Daten\/|Module\/|Termine\/|Stundenplan\/|Übungsblätter\/|Schlüsselqualifikationen\/)/;
 
   // ---------- Datum ----------
@@ -174,7 +174,7 @@ module.exports = function (ctx) {
       const fs = musterFs(fm);
       return fs && liste[fs - 1] ? liste[fs - 1].name : "";
     };
-    const module = [], termine = [], stundenplan = [], sqKurse = [], uebungsblaetter = [];
+    const module = [], termine = [], stundenplan = [], sqKurse = [], uebungsblaetter = [], uebungen = [], loesungen = [];
     for (const f of app.vault.getMarkdownFiles()) {
       const c = app.metadataCache.getFileCache(f), fm = c && c.frontmatter;
       if (!fm) continue;
@@ -191,6 +191,8 @@ module.exports = function (ctx) {
       else if (fm.typ === "lehrveranstaltung" && f.path.startsWith("Stundenplan/")) stundenplan.push({ f, fm });
       else if (fm.typ === "sq_kurs") sqKurse.push({ f, fm });
       else if (fm.typ === "übungsblatt") uebungsblaetter.push({ f, fm });
+      else if (fm.typ === "unterlage" && istUebung(fm)) uebungen.push({ f, fm });
+      else if (fm.typ === "unterlage" && /^(eigene )?l(ö|oe)sung$/i.test(text(fm.art))) loesungen.push({ f, fm });
     }
     return {
       heute, zentral: Z, einstellungen: ein,
@@ -198,7 +200,7 @@ module.exports = function (ctx) {
       studienbeginn, studienbeginnStandard: !studienbeginn, startSemester: liste.length ? liste[0].name : semesterAusDatum(heute),
       semesterliste: liste, aktuell, fachsemester: aktuell ? aktuell.fs : 1, vorStart,
       pausen: Z.pausen, freieTage: Z.freieTage, pruefungsphasen: Z.phasen, rueckmeldung: Z.rueckmeldung,
-      module, termine, stundenplan, sqKurse, uebungsblaetter, musterSemester, musterFs, musterplanVariante: plan ? plan.id : "",
+      module, termine, stundenplan, sqKurse, uebungsblaetter, uebungen, loesungen, musterSemester, musterFs, musterplanVariante: plan ? plan.id : "",
       zwischen: {}, // Zwischenergebnisse je Berechnung (Prüfungen, normierte Termine), fallen mit dem Modell weg
       abgeleitet: zeilen(Z, liste),
       personalisiert: !!(String(ein.name == null ? "" : ein.name).trim() && studienbeginn),
@@ -522,7 +524,8 @@ module.exports = function (ctx) {
       .map((t) => { const laeuft = !!t.bis && t.datum < heute; return Object.assign({}, t, { laeuft, stichtag: laeuft ? t.ende : t.datum }); })
       .sort((a, b) => (a.stichtag < b.stichtag ? -1 : a.stichtag > b.stichtag ? 1 : 0) || nachZeit(a, b));
   };
-  // Abgaben offener Übungsblätter (Status nicht abgegeben/korrigiert, mit Fälligkeit); überfällige bleiben, bis sie abgegeben sind
+  // Abgaben offener Übungsblätter (typ übungsblatt, bis 0.6.7 angelegt; Status nicht abgegeben/korrigiert, mit Fälligkeit);
+  // überfällige bleiben, bis sie abgegeben sind
   const abgaben = (o) => {
     o = o || {};
     const heute = s10(o.heute) || heuteIso(), grenze = o.tage != null ? plusTage(heute, Number(o.tage)) : "";
@@ -531,6 +534,74 @@ module.exports = function (ctx) {
       .filter((u) => u.datum && ["abgegeben", "korrigiert"].indexOf(u.status) < 0 && (!grenze || u.datum <= grenze))
       .map((u) => Object.assign(u, { ueberfaellig: u.datum < heute }))
       .sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0) || a.code.localeCompare(b.code));
+  };
+
+  // ---------- Übungen (seit 24.10.2026) ----------
+  // Ein Übungsblatt ist seine Begleitnotiz (typ unterlage, art Übung). Bis 0.6.7 führte „Neues Übungsblatt“ daneben eine eigene
+  // Notiz (typ übungsblatt), die dasselbe Blatt ein zweites Mal von Hand verwaltete; ältere stehen weiter in abgaben().
+  // Abgabe: die Fristen zu diesem Blatt – gleicher Code, Titel mit „Abgabe“, „Blatt“, „Hausaufgabe“ … und derselben Nummer, nicht
+  // „Feedback“, im Semester der Unterlage (Feld semester); meist aus dem ILIAS-Kalender („B110 Abgabe 3“). Erledigt: mit Abgabe
+  // deren Haken (ein Haken für beides; kopf.js setzt beim Tipp auch status der Begleitnotiz), ohne Abgabe status „bearbeitet“.
+  // „gelesen“ heißt bei einem Blatt: noch nicht bearbeitet. Lösungen: Unterlagen der Art Lösung bzw. Eigene Lösung mit gleicher Nummer.
+  const istUebung = (fm) => !!fm && /^(ü|ue)bung$/i.test(text(fm.art));
+  // Nummer des Blatts im Titel einer Frist („B110 Abgabe 3“, „Abgabe Übungsblatt 03“, „3. Hausaufgabe“) → Zahl, sonst 0
+  const BLATT_NR = [
+    /(?:abgabe|blatt|zettel|hausaufgabe|aufgabe|assignment|sheet|homework|(?:ü|ue)bung)\s*(?:nr\.?\s*|no\.?\s*|#\s*)?0*(\d{1,2})(?!\d)/i,
+    /(?:^|\s)0*(\d{1,2})\.\s*(?:(?:ü|ue)bungs|aufgaben)?(?:blatt|zettel|hausaufgabe|abgabe)/i,
+  ];
+  const blattNummer = (titel) => {
+    for (const r of BLATT_NR) { const m = text(titel).match(r); if (m && Number(m[1]) > 0) return Number(m[1]); }
+    return 0;
+  };
+  const ABGABE = /abgabe|blatt|zettel|hausaufgabe|assignment|einreich|sheet|homework/i;
+  // Fristen zu Abgaben nach „Code|Nummer“, einmal je Berechnung
+  const abgabenIndex = () => {
+    const D = daten();
+    if (D.zwischen.abgaben) return D.zwischen.abgaben;
+    const ix = {};
+    for (const t of termine()) {
+      if (t.kategorie !== "Frist" || !t.code || !ABGABE.test(t.titel) || /feedback/i.test(t.titel)) continue;
+      const nr = blattNummer(t.titel), k = t.code + "|" + nr;
+      if (nr) (ix[k] = ix[k] || []).push(t);
+    }
+    return (D.zwischen.abgaben = ix);
+  };
+  const nummerVon = (v) => (Number(v) > 0 && Math.floor(Number(v)) === Number(v) ? Number(v) : null);
+  // Gleiches Blatt: gleicher Code und gleiche Nummer, gleiches Semester, wenn beide eins haben
+  const gleichesBlatt = (a, b) => text(a.code) === text(b.code) && nummerVon(a.nummer) === nummerVon(b.nummer)
+    && (!text(a.semester) || !text(b.semester) || text(a.semester) === text(b.semester));
+  // Begleitnotiz einer Übung ({ f, fm }) → { f, fm, pfad, code, nummer, titel, semester, abgaben (Fristen, nach Zeit), abgabe (die
+  // erste offene, sonst die letzte), datum, uhr, erledigt, ueberfaellig, loesung, eigene (Begleitnotizen oder null) }
+  const uebungLesen = (x, heute) => {
+    const f = x.f, fm = x.fm || {}, D = daten();
+    const code = text(fm.code), nummer = nummerVon(fm.nummer), semester = text(fm.semester);
+    const imSemester = (t) => { const s = semester ? semesterVon(t.datum) : null; return !s || s.name === semester; };
+    const abgaben = code && nummer ? (abgabenIndex()[code + "|" + nummer] || []).filter(imSemester) : [];
+    const offen = abgaben.filter((t) => !t.erledigt);
+    const a = offen[0] || abgaben[abgaben.length - 1] || null;
+    const erledigt = abgaben.length ? !offen.length : text(fm.status).toLowerCase() === "bearbeitet";
+    const loesung = (art) => (nummer ? D.loesungen.find((l) => text(l.fm.art).toLowerCase() === art && gleichesBlatt(l.fm, fm)) || null : null);
+    return { f, fm, pfad: f ? f.path : "", code, nummer, titel: text(fm.titel), semester, abgaben, abgabe: a, datum: a ? a.ende : "",
+      uhr: a ? a.ab || a.bisZeit || a.zeit : "", erledigt, ueberfaellig: !erledigt && !!a && a.ende < heute,
+      loesung: loesung("lösung"), eigene: loesung("eigene lösung") };
+  };
+  // Die Übung zu einer Begleitnotiz (Datei) oder null, wenn sie keine ist
+  const uebungVon = (f, o) => {
+    const fm = (f && app.metadataCache.getFileCache(f) && app.metadataCache.getFileCache(f).frontmatter) || {};
+    return fm.typ === "unterlage" && istUebung(fm) ? uebungLesen({ f, fm }, s10(o && o.heute) || heuteIso()) : null;
+  };
+  // Übungen, mit Abgabe nach deren Tag zuerst, dann nach Code und Nummer (ohne Nummer danach). o: { heute, semester (Name; Standard das aktuelle,
+  // alle: jedes), code, frist (die Frist, zu der sie gehören: Pfad der Termin-Notiz) }
+  const uebungen = (o) => {
+    o = o || {};
+    const D = daten(), heute = s10(o.heute) || heuteIso();
+    const sem = o.alle || o.frist ? "" : text(o.semester) || (D.aktuell ? D.aktuell.name : "");
+    // ohne Feld semester zählt der Tag, an dem die Unterlage ankam (datum)
+    const imSemester = (fm) => !sem || (text(fm.semester) ? text(fm.semester) === sem : !s10(fm.datum) || (semesterVon(s10(fm.datum)) || {}).name === sem);
+    return D.uebungen.filter((x) => (!o.code || text(x.fm.code) === text(o.code)) && imSemester(x.fm)).map((x) => uebungLesen(x, heute))
+      .filter((u) => !o.frist || u.abgaben.some((t) => t.pfad === o.frist))
+      .sort((a, b) => (!a.datum) - (!b.datum) || (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0) || a.code.localeCompare(b.code)
+        || (!a.nummer) - (!b.nummer) || (a.nummer || 0) - (b.nummer || 0) || a.pfad.localeCompare(b.pfad));
   };
 
   // ---------- Woche: eine Wochenend-Regel ----------
@@ -1049,7 +1120,7 @@ module.exports = function (ctx) {
     blockArgument, daten, ungueltig, semesterVon, semesterNachName, semesterAusDatum, naechster, voriger, modulSemester, semesterAuswahl, vorschau, abgleichen,
     beiAenderung, protokoll, woche, vorlesungswochen, semesterFuer,
     // Fachmodell (docs/architektur.md „Fachmodell“)
-    zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, opFrist, kalenderwoche, planwoche, findetStatt,
+    zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, uebung: uebungVon, uebungen, blattNummer, opFrist, kalenderwoche, planwoche, findetStatt,
     naechsteSitzung, ausfaelle, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
     vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer, folien: folienVon,
   };

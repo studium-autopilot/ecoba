@@ -259,6 +259,88 @@ test("Einstellungen: Reparatur setzt geänderte Vorgaben einmal je Gerät, nur f
   assert.deepEqual(laden("update").ctx.update.vorgabenAnwenden("0.4.6", {}), [], "ohne getConfig: nichts");
 });
 
+// Lesezeichen wie in bookmarks.json: [pfad, ctime] oder { group: titel, items: [...] }
+const lesezeichen = (liste) => JSON.stringify({ items: liste.map((x) => Array.isArray(x)
+  ? { type: "file", ctime: x[1], path: x[0], title: x[0].replace(/^.*\//, "").replace(/\.md$/, "") }
+  : { type: "group", ctime: 1, title: x.group, items: JSON.parse(lesezeichen(x.items)).items }) }, null, 2);
+const lzPfade = (text) => JSON.parse(text).items.map((x) => x.path || x.title);
+const V0 = 1790760000000; // ctime der Vorlage
+const LZ_VORLAGE = path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "bookmarks.json");
+const LZ_042 = [["Dashboard.md", V0], ["Studium/Stundenplan.md", V0 + 1], ["Studium/Prüfungen.md", V0 + 2],
+  ["Studium/Noten & ECTS.md", V0 + 3], ["Studium/Kontakte & Links.md", V0 + 5]]; // Vorlage 0.4.2 bis 0.4.5
+
+test("Lesezeichen: die der Vorlage ergeben sich aus denen von 0.4.2 und LESEZEICHEN_NEU (neuer Eintrag, wenn sie sich ändern)", () => {
+  const vorlage = fs.readFileSync(LZ_VORLAGE, "utf8");
+  assert.deepEqual(lzPfade(U.lesezeichenNachziehen(lesezeichen(LZ_042), U.LESEZEICHEN_NEU)), lzPfade(vorlage),
+    "bookmarks.json der Vorlage geändert? Eintrag { ab, dazu, nach } oder { ab, weg } in LESEZEICHEN_NEU (update.js)");
+  for (const x of JSON.parse(vorlage).items) assert.ok(x.ctime >= V0 && x.ctime < V0 + 100, `${x.path}: ctime der Vorlage (VORLAGE_CTIME)`);
+  assert.equal(U.lesezeichenNachziehen(vorlage, U.LESEZEICHEN_NEU), null, "Vorlage: nichts zu tun");
+});
+
+test("Lesezeichen: eine festgefahrene Liste bekommt, was die Vorlage dazunahm oder strich; Eigenes bleibt", () => {
+  const nach = (liste, ab) => U.lesezeichenNachziehen(lesezeichen(liste), U.LESEZEICHEN_NEU.filter((e) => U.neuer(e.ab, ab)));
+  // Stand 0.4.6 mit einem eigenen Lesezeichen (echte ctime), Karteikarten selbst entfernt
+  const lz046 = [["Dashboard.md", V0], ["Studium/Stundenplan.md", V0 + 1], ["Studium/Studienverlauf.md", V0 + 2],
+    ["Studium/Termine & Anmeldungen.md", V0 + 3], ["Studium/Prüfungen.md", V0 + 4], ["Studium/Noten & ECTS.md", V0 + 5],
+    ["Studium/Unterlagen.md", V0 + 6], ["Studium/Kontakte & Links.md", V0 + 8], ["Studium/Einstellungen & Hilfe.md", V0 + 9],
+    ["Meine Notiz.md", 1792000000000]];
+  const r = nach(lz046, "0.4.6");
+  assert.deepEqual(lzPfade(r), ["Dashboard.md", "Studium/Studienverlauf.md", "Studium/Termine & Anmeldungen.md", "Studium/Postfach.md",
+    "Studium/Prüfungen.md", "Studium/Noten & ECTS.md", "Studium/Unterlagen.md", "Studium/Kontakte & Links.md", "Studium/Einstellungen & Hilfe.md", "Meine Notiz.md"]);
+  const post = JSON.parse(r).items[3];
+  assert.equal(post.title, "Postfach");
+  assert.ok(post.ctime >= V0 && post.ctime < V0 + 1000, "nachgezogen zählt als Lesezeichen der Vorlage");
+  // auch alle Einträge: Karteikarten kommt nicht wieder (ein Lesezeichen von 0.4.6 aus der Vorlage ist da)
+  assert.equal(lzPfade(U.lesezeichenNachziehen(lesezeichen(lz046), U.LESEZEICHEN_NEU)).indexOf("Studium/Karteikarten.md"), -1);
+  // Stundenplan selbst neu gesetzt oder in einer eigenen Gruppe → bleibt; Postfach in einer Gruppe → kein zweites
+  const eigen = [["Dashboard.md", V0], ["Studium/Termine & Anmeldungen.md", V0 + 3], ["Studium/Stundenplan.md", 1792000000000],
+    { group: "Meins", items: [["Studium/Postfach.md", 1792000000001], ["Studium/Stundenplan.md", V0 + 1]] }];
+  assert.equal(nach(eigen, "0.4.6"), null, "nichts zu tun");
+  // festgefahren vor 0.4.6: alles kommt, an seinen Platz
+  assert.deepEqual(lzPfade(nach(LZ_042, "0.4.5")), lzPfade(fs.readFileSync(LZ_VORLAGE, "utf8")));
+  assert.equal(U.lesezeichenNachziehen("{kaputt", U.LESEZEICHEN_NEU), null);
+  assert.equal(U.lesezeichenNachziehen(JSON.stringify({ items: "x" }), U.LESEZEICHEN_NEU), null);
+});
+
+test("Lesezeichen: einmal je Gerät und Version, Obsidian liest die Datei neu; was du danach änderst, bleibt", async () => {
+  const r = laden("update");
+  const speicher = {};
+  r.ctx.app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
+  r.ctx.app.saveLocalStorage = (k, v) => { speicher[k] = v; };
+  const W = r.ctx.update;
+  const dateien = { ".obsidian/bookmarks.json": lesezeichen(LZ_042) };
+  let neuGelesen = 0;
+  const o = {
+    io: { lesen: async (p) => (p in dateien ? enc(dateien[p]) : null), schreiben: async (p, b) => { dateien[p] = new TextDecoder().decode(b); } },
+    plugin: { enabled: true, instance: { onExternalSettingsChange: async () => { neuGelesen++; } } },
+  };
+  const pfade = () => lzPfade(dateien[".obsidian/bookmarks.json"]);
+  assert.equal(await W.lesezeichenAnwenden("0.5.0", o), true);
+  assert.equal(pfade().indexOf("Studium/Postfach.md"), -1, "erst mit der Version, die es mitbringt");
+  assert.ok(pfade().indexOf("Studium/Karteikarten.md") > 0);
+  assert.equal(neuGelesen, 1);
+  assert.equal(await W.lesezeichenAnwenden("0.5.0", o), false, "einmal je Version");
+  assert.equal(await W.lesezeichenAnwenden("0.6.7", o), true);
+  assert.ok(pfade().indexOf("Studium/Postfach.md") > 0);
+  assert.equal(pfade().indexOf("Studium/Stundenplan.md"), -1);
+  // danach selbst entfernt: kommt nicht wieder
+  const d = JSON.parse(dateien[".obsidian/bookmarks.json"]);
+  d.items = d.items.filter((x) => x.path !== "Studium/Postfach.md");
+  dateien[".obsidian/bookmarks.json"] = JSON.stringify(d, null, 2);
+  assert.equal(await W.lesezeichenAnwenden("0.6.8", o), false);
+  assert.equal(pfade().indexOf("Studium/Postfach.md"), -1);
+  assert.equal(neuGelesen, 2);
+  // neues Gerät mit der Vorlage: nichts zu tun; ohne bookmarks.json: nichts
+  const r2 = laden("update"), sp2 = {};
+  r2.ctx.app.loadLocalStorage = (k) => (k in sp2 ? sp2[k] : null);
+  r2.ctx.app.saveLocalStorage = (k, v) => { sp2[k] = v; };
+  const vorlage = { ".obsidian/bookmarks.json": fs.readFileSync(LZ_VORLAGE, "utf8") };
+  assert.equal(await r2.ctx.update.lesezeichenAnwenden("0.6.8", { io: { lesen: async (p) => enc(vorlage[p]), schreiben: async () => assert.fail("nichts schreiben") } }), false);
+  assert.equal(sp2["eba-update-lesezeichen"], "0.6.8");
+  const r3 = laden("update");
+  assert.equal(await r3.ctx.update.lesezeichenAnwenden("0.6.8", { io: { lesen: async () => null, schreiben: async () => assert.fail("nichts schreiben") } }), false);
+});
+
 test("Plan: Entscheidung je Datei", async () => {
   const alt = U.listePruefen(await listeBauen("0.2.0", ALT)).wert;
   const neu = U.listePruefen(await listeBauen("0.3.0", NEU)).wert;
@@ -365,7 +447,8 @@ test("Update: keine Kopie, wenn die Vorlage gleich blieb oder deine Seite schon 
   const P = "Studium/Prüfungen.md", D = "Dashboard.md";
   const ist = Object.assign({}, ALT2, {
     [P]: "# Prüfungen\n\nalte Fußzeile\n",                            // geändert, Vorlage gleich → bleibt, keine Kopie
-    "Studium/Prüfungen (neu 0.1.0).md": ALT2[P],                       // alte Kopie = Vorlage → weg
+    "Studium/Prüfungen (neu 0.1.0).md": ALT2[P],                       // jüngste Kopie = Vorlage, deine Seite bleibt → bleibt
+    "Studium/Prüfungen (neu 0.0.9).md": ALT2[P].replace(/\n/g, "\r\n"), // ältere Kopie = Vorlage (andere Zeilenenden) → weg
     "Studium/Prüfungen (neu 0.1.5).md": "# Prüfungen\n\nmeine Notiz\n", // Kopie, die du geändert hast → bleibt
     [D]: "# Mein Dashboard\n",                                         // geändert, Vorlage neu → Kopie daneben
     "Dashboard (neu 0.2.0).md": ALT2[D],                               // Kopie der alten Vorlage → weg
@@ -376,7 +459,8 @@ test("Update: keine Kopie, wenn die Vorlage gleich blieb oder deine Seite schon 
   assert.equal(b.ok, true, b.fehler);
   assert.equal(sp.text(P), ist[P], "deine Seite bleibt");
   assert.equal(sp.text("Studium/Prüfungen (neu 0.3.0).md"), null, "keine Kopie ohne neue Vorlage");
-  assert.equal(sp.text("Studium/Prüfungen (neu 0.1.0).md"), null);
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.1.0).md"), ALT2[P], "die eine Stelle, an der du die Vorlage siehst");
+  assert.equal(sp.text("Studium/Prüfungen (neu 0.0.9).md"), null);
   assert.equal(sp.text("Studium/Prüfungen (neu 0.1.5).md"), ist["Studium/Prüfungen (neu 0.1.5).md"]);
   assert.equal(sp.text("Dashboard (neu 0.3.0).md"), NEU2[D]);
   assert.equal(sp.text("Dashboard (neu 0.2.0).md"), null);
@@ -384,9 +468,63 @@ test("Update: keine Kopie, wenn die Vorlage gleich blieb oder deine Seite schon 
   assert.equal(sp.text("Studium/Eigene (neu 0.1.0).md"), "# eigene Seite\n");
   assert.equal(sp.text("Module/1 Grundstudium/B110 BWL.md"), ALT2["Module/1 Grundstudium/B110 BWL.md"]);
   assert.deepEqual(b.neuKopien, [{ pfad: D, kopie: "Dashboard (neu 0.3.0).md" }]);
-  assert.deepEqual(b.aufgeraeumt.sort(), ["Dashboard (neu 0.2.0).md", "Studium/Prüfungen (neu 0.1.0).md"]);
-  assert.equal(sp.text(b.sicherung + "/Studium/Prüfungen (neu 0.1.0).md"), ALT2[P], "weggeräumte Kopie liegt in der Sicherung");
+  assert.deepEqual(b.aufgeraeumt.sort(), ["Dashboard (neu 0.2.0).md", "Studium/Prüfungen (neu 0.0.9).md"]);
+  assert.equal(sp.text(b.sicherung + "/Studium/Prüfungen (neu 0.0.9).md"), ist["Studium/Prüfungen (neu 0.0.9).md"], "weggeräumte Kopie liegt in der Sicherung");
   assert.ok(sp.reihe.indexOf("Studium/Noten.md") < 0);
+});
+
+// Befund 24.10.2026 (Studienverlauf.md): Die Vorlage hatte CRLF, im Tresor lag dieselbe Fassung nach einem Konflikt im Sync mit
+// LF. Das Update hielt die Seite für selbst geändert (Kopie „neu 0.6.3“ daneben), das nächste räumte die Kopie weg, weil die
+// Vorlage gleich blieb, und die Seite blieb auf dem alten Stand.
+const CRLF = (t) => t.replace(/\n/g, "\r\n");
+test("Zeilenenden zählen nicht: dieselbe Fassung mit LF oder CRLF gilt als unverändert", async () => {
+  const V = "Studium/Studienverlauf.md", S = "System/Skripte/musterplan.js", M = "Module/1 Grundstudium/B110 BWL.md", H = "Studium/Einstellungen & Hilfe.md";
+  const alt = Object.assign({}, ALT2, { [V]: CRLF("# Studienverlauf\n\nStand 30.09.2026\n"), [S]: CRLF("// muster\n"), [M]: MODUL({}), [H]: SEITE(false) });
+  const neu = Object.assign({}, alt, { [V]: CRLF("# Studienverlauf\n\nStand 20.10.2026\n"), [M]: MODUL({ ects: 9, text: "<div>Neu</div>" }),
+    [H]: SEITE(false, "- [ ] Neu in 0.3.0\n") });
+  const ist = Object.assign({}, alt, {
+    [V]: alt[V].replace(/\r\n/g, "\n"),       // alte Vorlage, aber LF
+    [S]: "// muster\n",                         // Systemdatei gleich, aber LF
+    [M]: CRLF(MODUL({ status: "läuft" })),      // Feld geändert, Text gleich, aber CRLF
+    [H]: CRLF(SEITE(true)),                     // nur abgehakt, aber CRLF
+  });
+  const { b, sp } = await update(alt, neu, ist);
+  assert.equal(b.ok, true, b.fehler);
+  assert.equal(sp.text(V), neu[V], "neue Seite statt Kopie daneben");
+  assert.equal(sp.text("Studium/Studienverlauf (neu 0.3.0).md"), null);
+  assert.deepEqual(b.neuKopien, []);
+  assert.equal(sp.text(S), "// muster\n", "gleich: nichts geschrieben");
+  assert.deepEqual(b.gesichert, [], "keine „deine Fassung“ nur wegen der Zeilenenden");
+  assert.match(sp.text(M), /<div>Neu<\/div>/, "Text des Moduls kommt neu");
+  assert.match(sp.text(M), /status: läuft/, "dein Feld bleibt");
+  assert.match(sp.text(H), /- \[x\] Obsidian öffnen/, "Haken übernommen");
+  assert.match(sp.text(H), /Neu in 0\.3\.0/);
+  // Prüfsummen je Zeilenende
+  const t = await U.istVon("x.md", enc("a\nb\n"), "seite");
+  assert.deepEqual(t.zeilen.sha, [await U.sha256(enc("a\r\nb\r\n"))]);
+  assert.equal(U.passt(t, "sha", await U.sha256(enc("a\r\nb\r\n"))), true);
+  assert.equal(U.passt(t, "sha", await U.sha256(enc("a\nb"))), false);
+  assert.deepEqual((await U.istVon("x.md", enc("ohne Zeilenende"), "seite")).zeilen.sha, []);
+  assert.equal(U.passt({ sha: "abc" }, "sha", "abc"), true, "Ist-Stand ohne zeilen (ältere Aufrufer)");
+});
+
+test("Kopien „neu X“: bleibt deine Seite, bleibt die jüngste mit der Vorlage; trägt sie die Vorlage, gehen alle", async () => {
+  const P = "Studium/Studienverlauf.md", T = "# Studienverlauf 0.6.3\n";
+  const sp = speicher({ [P]: "# meine Fassung\n", "Studium/Studienverlauf (neu 0.6.3).md": T, "Studium/Studienverlauf (neu 0.6.1).md": CRLF(T),
+    "Studium/Studienverlauf (neu 0.6.2).md": "# geändert\n" });
+  const io = { lesen: sp.lesen };
+  const namen = Array.from(sp.m.keys()), sha = await U.sha256(enc(T));
+  assert.deepEqual((await U.kopienAufraeumen(io, P, namen, "0.6.4", [sha], false)).map((k) => k.pfad), ["Studium/Studienverlauf (neu 0.6.1).md"]);
+  assert.deepEqual((await U.kopienAufraeumen(io, P, namen, "0.6.4", [sha], true)).map((k) => k.pfad).sort(),
+    ["Studium/Studienverlauf (neu 0.6.1).md", "Studium/Studienverlauf (neu 0.6.3).md"]);
+  // Eine Kopie dieser Version (ab bis) zählt als jüngste: ältere gleiche gehen, sie selbst bleibt
+  assert.deepEqual((await U.kopienAufraeumen(io, P, namen, "0.6.3", [sha], false)).map((k) => k.pfad), ["Studium/Studienverlauf (neu 0.6.1).md"]);
+  // Der Ablauf vom 24.10.2026 noch einmal: Vorlage gleich, deine Seite bleibt → die Kopie aus dem letzten Update bleibt
+  const alt = Object.assign({}, ALT2, { [P]: T }), ist = Object.assign({}, alt, { [P]: "# meine Fassung\n", "Studium/Studienverlauf (neu 0.1.0).md": T });
+  const r = await update(alt, alt, ist);
+  assert.equal(r.b.ok, true, r.b.fehler);
+  assert.equal(r.sp.text("Studium/Studienverlauf (neu 0.1.0).md"), T);
+  assert.deepEqual(r.b.aufgeraeumt, []);
 });
 
 // ---------- Reparatur nach dem Update auf 0.4.4 (heilenMit) ----------
@@ -482,6 +620,116 @@ test("Reparatur: ohne beiseitegelegte Fassung nichts; Schreibfehler setzt alles 
   assert.equal(r.b.art, "schreiben");
   assert.equal(r.b.zurueckgesetzt, true);
   assert.equal(r.sp.stand(), r.vorher);
+});
+
+// ---------- Ordner, die die Vorlage nicht mehr hat (ordnerAufraeumenMit, seit 0.6.8) ----------
+// Speicher wie oben, dazu Ordner (leere über „leer“) und Verschieben; gesperrt(pfad) = dieses Verschieben scheitert
+function ordnerSpeicher(dateien, leer, gesperrt) {
+  const sp = speicher(dateien);
+  const leere = new Set(leer || []);
+  return Object.assign(sp, {
+    baum: async (o) => {
+      const d = Array.from(sp.m.keys()).filter((k) => k.startsWith(o + "/"));
+      return d.length || leere.has(o) ? { dateien: d } : null;
+    },
+    da: async (p) => sp.m.has(p),
+    verschieben: async (von, nach) => {
+      if (gesperrt && gesperrt(von)) throw new Error("Datei gesperrt");
+      sp.m.set(nach, sp.m.get(von));
+      sp.m.delete(von);
+    },
+    ordnerWeg: async (o) => {
+      for (const k of Array.from(sp.m.keys())) if (k.startsWith(o + "/")) sp.m.delete(k);
+      leere.delete(o);
+      return true;
+    },
+  });
+}
+const aufraeumen = (sp, o) => U.ordnerAufraeumenMit(sp, Object.assign({ version: "0.6.7", synchron: true }, o));
+const erledigt = (sp) => (sp.text(U.AUFGERAEUMT) == null ? null : JSON.parse(sp.text(U.AUFGERAEUMT)).erledigt);
+
+test("Alte Ordner: Eingang wandert nach Unterlagen/Ohne Modul, der Ordner geht weg, einmal je Tresor", async () => {
+  const sp = ordnerSpeicher({
+    "Eingang/.gitkeep": "", "Eingang/VL01.pdf": "pdf", "Eingang/Mail/Scan.jpg": "jpg", "Eingang/Notiz.md": "# meine Notiz\n",
+    "Unterlagen/Ohne Modul/VL01.pdf": "schon da",
+  });
+  let b = await aufraeumen(sp);
+  assert.equal(b.ok, true, b.fehler);
+  assert.deepEqual(b.verschoben.map((v) => v.nach).sort(),
+    ["Unterlagen/Ohne Modul/Mail/Scan.jpg", "Unterlagen/Ohne Modul/Notiz.md", "Unterlagen/Ohne Modul/VL01 2.pdf"]);
+  assert.equal(sp.text("Unterlagen/Ohne Modul/VL01.pdf"), "schon da", "belegter Name: neue Datei bekommt eine Zahl");
+  assert.equal(sp.text("Unterlagen/Ohne Modul/VL01 2.pdf"), "pdf");
+  assert.equal(sp.text("Unterlagen/Ohne Modul/Mail/Scan.jpg"), "jpg", "Unterordner bleiben");
+  assert.equal(sp.text("Unterlagen/Ohne Modul/Notiz.md"), "# meine Notiz\n");
+  assert.equal(sp.text("Unterlagen/Ohne Modul/.gitkeep"), null, ".gitkeep wandert nicht mit");
+  assert.deepEqual(Array.from(sp.m.keys()).filter((k) => k.startsWith("Eingang/")), []);
+  assert.deepEqual(b.entfernt, ["Eingang"]);
+  assert.deepEqual(erledigt(sp), ["Eingang"]);
+  // Später selbst angelegter Ordner gleichen Namens: bleibt, auch nach dem nächsten Update (nur der Eintrag Eingang, spätere
+  // Einträge wären ab 0.7.0 dran)
+  sp.m.set("Eingang/Eigenes.md", enc("# mein Eingang\n"));
+  const n = sp.schreibvorgaenge;
+  b = await aufraeumen(sp, { version: "0.7.0", liste: U.ALTE_ORDNER.filter((a) => a.ordner === "Eingang") });
+  assert.equal(b.ok, true);
+  assert.deepEqual([b.verschoben, b.entfernt, b.erledigt], [[], [], []]);
+  assert.equal(sp.text("Eingang/Eigenes.md"), "# mein Eingang\n");
+  assert.equal(sp.schreibvorgaenge, n, "nichts geschrieben");
+});
+
+test("Alte Ordner: nur auf dem Gerät, das für alle schreibt, ab der Version; fehlt der Ordner, erledigt; Fehler → nächster Lauf", async () => {
+  const VORHER = { "Eingang/a.pdf": "a", "Eingang/b.pdf": "b" };
+  let sp = ordnerSpeicher(VORHER);
+  const vorher = sp.stand();
+  let b = await aufraeumen(sp, { synchron: false });
+  assert.equal(sp.stand(), vorher, "anderes Gerät: nichts");
+  b = await aufraeumen(sp, { version: "0.6.6" });
+  assert.equal(sp.stand(), vorher, "Version davor: nichts");
+  b = await aufraeumen(sp, { version: "0.6.7-beta.1" });
+  assert.equal(sp.stand(), vorher, "Beta vor ab: nichts");
+  // Ein Verschieben scheitert: was ging, liegt am Ziel, der Ordner bleibt, der Eintrag offen
+  let sperre = true;
+  sp = ordnerSpeicher(VORHER, [], (p) => sperre && p === "Eingang/b.pdf");
+  b = await aufraeumen(sp);
+  assert.equal(b.ok, false);
+  assert.match(b.fehler, /^Eingang: Datei gesperrt/);
+  assert.equal(sp.text("Unterlagen/Ohne Modul/a.pdf"), "a");
+  assert.equal(sp.text("Eingang/b.pdf"), "b");
+  assert.deepEqual([b.entfernt, b.erledigt, erledigt(sp)], [[], [], null]);
+  // Nächster Lauf ohne Sperre: Rest wandert, dann erledigt
+  sperre = false;
+  b = await aufraeumen(sp);
+  assert.equal(b.ok, true, b.fehler);
+  assert.deepEqual(b.verschoben, [{ ordner: "Eingang", von: "Eingang/b.pdf", nach: "Unterlagen/Ohne Modul/b.pdf" }]);
+  assert.deepEqual(erledigt(sp), ["Eingang"]);
+  // Kein Ordner (neu installiert oder schon weg): erledigt, ohne etwas anzufassen; kaputte aufgeraeumt.json zählt als leer
+  sp = ordnerSpeicher({ [U.AUFGERAEUMT]: "{kaputt" });
+  b = await aufraeumen(sp);
+  assert.deepEqual([b.ok, b.verschoben, b.entfernt, erledigt(sp)], [true, [], [], ["Eingang"]]);
+  // Leerer Ordner, auch nur mit .gitkeep: weg
+  sp = ordnerSpeicher({}, ["Eingang"]);
+  assert.deepEqual((await aufraeumen(sp)).entfernt, ["Eingang"]);
+  sp = ordnerSpeicher({ "Eingang/.gitkeep": "", "Eingang/Mail/.DS_Store": "" });
+  assert.deepEqual((await aufraeumen(sp)).entfernt, ["Eingang"]);
+  assert.equal(sp.m.size, 1, "nur aufgeraeumt.json");
+});
+
+test("Alte Ordner: Eintrag ohne Ziel räumt nur einen leeren Ordner weg; die Vorlage hat keinen der Ordner mehr", async () => {
+  const ALT = [{ ordner: "Alt", ab: "0.6.7" }];
+  let sp = ordnerSpeicher({ "Alt/x.md": "# bleibt\n" });
+  let b = await aufraeumen(sp, { liste: ALT });
+  assert.deepEqual([b.ok, b.verschoben, b.entfernt, erledigt(sp)], [true, [], [], ["Alt"]]);
+  assert.equal(sp.text("Alt/x.md"), "# bleibt\n");
+  sp = ordnerSpeicher({ "Alt/.DS_Store": "", [U.AUFGERAEUMT]: JSON.stringify({ erledigt: ["Eingang"] }) });
+  b = await aufraeumen(sp, { liste: ALT });
+  assert.deepEqual(b.entfernt, ["Alt"]);
+  assert.deepEqual(erledigt(sp), ["Eingang", "Alt"], "Erledigtes bleibt stehen");
+  // Jeder Eintrag: Ordner fehlt in der Vorlage, ab ist eine Version, das Ziel liegt nicht in einem alten Ordner
+  const VAULT = path.join(__dirname, "..", "Studium Autopilot");
+  for (const a of U.ALTE_ORDNER) {
+    assert.equal(fs.existsSync(path.join(VAULT, a.ordner)), false, a.ordner);
+    assert.match(a.ab, /^\d+\.\d+\.\d+$/, a.ordner);
+    if (a.nach) assert.equal(U.ALTE_ORDNER.some((x) => a.nach === x.ordner || a.nach.startsWith(x.ordner + "/")), false, a.nach);
+  }
 });
 
 test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
@@ -973,6 +1221,9 @@ test("Ergebnis: ein Satz unter dem Titel, Zeilen darunter; was du noch tun musst
   // Kern neu geladen: kein Schritt mehr, dafür der Satz zu den Einstellungen
   assert.deepEqual(U.ergebnisZeilen(bericht({ plugin: true, neuGeladen: true, einstellungen: ["app.json"] })).map((x) => x.titel), ["Einstellungen", "Andere Geräte"]);
   assert.deepEqual(U.ergebnisZeilen(bericht({})).map((x) => x.text), ["Das Update kommt von selbst, dort musst du nichts tun."]);
+  // Mit LiveSync kommt es nur an, solange Obsidian hier offen ist
+  assert.deepEqual(U.ergebnisZeilen(bericht({ livesync: true })).map((x) => x.text),
+    ["Das Update kommt von selbst, dort musst du nichts tun. Lass Obsidian hier noch eine Minute offen, damit alles bei ihnen ankommt."]);
 });
 
 test("Fenster „Neue Version“: Hinweis geht weg, Angebot und Fehler im selben Fenster, danach kein Hinweis mehr", async () => {

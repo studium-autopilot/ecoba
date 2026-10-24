@@ -682,20 +682,6 @@ module.exports = function (ctx) {
     });
   };
 
-  // Übungsblatt-Notiz gleicher Nummer verknüpfen (nur wenn das Feld dort noch leer ist):
-  // Übung → „datei“, Eigene Lösung → „eigene_loesung“
-  const blattVerknuepfen = async (code, nr, datei, feld) => {
-    if (!code || nr == null) return false;
-    const blatt = app.vault.getMarkdownFiles().find((f) => {
-      const fm = app.metadataCache.getFileCache(f)?.frontmatter;
-      return fm?.typ === "übungsblatt" && fm.code === code && Number(fm.nummer) === nr;
-    });
-    if (!blatt) return false;
-    let gesetzt = false;
-    await app.fileManager.processFrontMatter(blatt, (fm) => { if (!fm[feld]) { fm[feld] = `[[${datei.name}]]`; gesetzt = true; } });
-    return gesetzt;
-  };
-
   // freier Name im Ordner; „vergeben“ enthält Namen, die im selben Lauf schon verplant sind
   const freierName = (ordner, basis, exts, vergeben = null) => {
     let name = basis, i = 2;
@@ -1011,7 +997,7 @@ module.exports = function (ctx) {
     }
 
     // 2. Plan: Modul, Art, Nummer, Titel, Zielordner je Datei (noch ohne Änderungen im Vault)
-    const bericht = { eingeordnet: 0, uebersprungen: 0, gross: [], duplikate: [], fremd: [], blaetter: 0, ohneSeiten: 0, zuGross: [], nachgetragen: 0, loesungen: 0, ergaenzt: 0 };
+    const bericht = { eingeordnet: 0, uebersprungen: 0, gross: [], duplikate: [], fremd: [], ohneSeiten: 0, zuGross: [], nachgetragen: 0, ergaenzt: 0 };
     const plan = [];
     let lesen = null; // Hinweis, solange Titel aus PDFs gelesen werden
     try {
@@ -1101,8 +1087,6 @@ module.exports = function (ctx) {
         if (paar) { await notizErgaenzen(paar, h, seiten, zuGross); notiz = paar.notiz; bericht.ergaenzt++; }
         else notiz = await app.vault.create(`${ordner}/${name}.md`, notizInhalt(u));
         erste = erste || notiz;
-        if (p.art === "Übung" && (await blattVerknuepfen(p.code, p.nr, h, "datei"))) bericht.blaetter++;
-        if (p.art === "Eigene Lösung" && (await blattVerknuepfen(p.code, p.nr, h, "eigene_loesung"))) bericht.loesungen++;
         if (p.nachtrag) bericht.nachgetragen++; else bericht.eingeordnet++;
       }
     } finally {
@@ -1117,8 +1101,6 @@ module.exports = function (ctx) {
     const weggelassen = bericht.uebersprungen + plan.filter((p) => p.auslassen).length;
     if (weggelassen) zeilen.push(`${weggelassen} ${weggelassen === 1 ? "Datei" : "Dateien"} nicht hinzugefügt.`);
     if (bericht.duplikate.length) zeilen.push(`${bericht.duplikate.length} Duplikat(e) ${dupsWeg ? "nicht hinzugefügt" : "trotzdem eingeordnet"}: ${bericht.duplikate.join(", ")}`);
-    if (bericht.blaetter) zeilen.push(`${bericht.blaetter} Übungsblatt-Notiz(en) mit der PDF verknüpft.`);
-    if (bericht.loesungen) zeilen.push(`${bericht.loesungen} eigene Lösung(en) mit dem Übungsblatt verknüpft.`);
     if (bericht.fremd.length) zeilen.push(`Achtung, Name nannte ein anderes Modul: ${bericht.fremd.join(", ")}`);
     if (bericht.gross.length) zeilen.push(`Große Dateien: ${bericht.gross.join(", ")}`);
     if (bericht.zuGross.length) zeilen.push(`Zu groß zum Auslesen, eingeordnet ohne Seitenzahl/Text: ${bericht.zuGross.join(", ")}`);

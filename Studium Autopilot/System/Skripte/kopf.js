@@ -3,11 +3,14 @@
 // Status-Knopf. Vorher ging der Status dieser Notizen nur über die Eigenschaften, die in der Leseansicht gar nicht zu sehen sind.
 //   Termin             Offen ⇄ Erledigt (Feld erledigt)
 //   Unterlage          Noch nicht gelesen ⇄ Gelesen (Feld status: neu, gelesen; „bearbeitet“ zählt als gelesen)
+//   Übung (Unterlage)  Offen ⇄ Abgegeben, ohne Abgabe Offen ⇄ Bearbeitet (seit 24.10.2026, ctx.modell.uebung): Mit Abgabe gilt der
+//                      Haken ihrer Frist, ein Tipp setzt ihn und status der Begleitnotiz (bearbeitet bzw. neu) zugleich.
 //   SQ-Kurs            geplant → angemeldet → zugelassen → bestanden (Feld status, Auswahl im Menü)
 //   Lehrveranstaltung  Im Stundenplan ⇄ Besuche ich nicht (ctx.modell.besuchtNicht: Notiz einer Quelle über ihren Schlüssel in
 //                      stundenplan_ausgeblendet der Einstellungen, zentral über die Aktion besuche-nicht; eigene Notiz: Feld
 //                      besuche_nicht); mit Hinweis und „Rückgängig“, weil sie danach im Stundenplan fehlt.
-// Vorlesung und Übungsblatt haben ihre Kopf-Karte schon im Text (Codeblöcke eba-vorlesung, eba-uebungsblatt) und bleiben, wie sie sind.
+// Die Vorlesung hat ihre Kopf-Karte schon im Text (Codeblock eba-vorlesung, vorlesung.js). Ein Übungsblatt (typ übungsblatt, bis 0.6.7
+// angelegt) hat den Codeblock eba-uebungsblatt: Dort zeichnet kopf.js dieselbe Karte, Stand offen → abgegeben → korrigiert im Menü.
 // Die Notiz selbst ändert sich dafür nicht: Leseansicht über den Post-Processor (Karte im Abschnitt des ersten # Titels),
 // Bearbeitungsansicht über eine CodeMirror-Erweiterung (Block unter dem Titel). Farbe des Knopfs aus ctx.modell.statusArt: erledigt
 // gefüllt (wie „Nachgearbeitet“), ein Zwischenstand getönt im Akzent, offen warm, „Besuche ich nicht“ leise. Schreibt nur nach einem
@@ -15,7 +18,7 @@
 // Seit 19.10.2026 außerdem:
 //  - Rechts im Kopf „⋯“ mit „Eigenschaften“: Die Eigenschaften der Notizen des Plugins sind in keiner Ansicht zu sehen (eba-core.css
 //    Abschnitt 25, Klasse eba-notiz aus start.js), geändert wird im Kopf (Entscheidung E4). Der Menüpunkt zeigt sie für diese Notiz
-//    aufgeklappt, bis man ihn noch einmal tippt oder Obsidian neu startet. Vorlesung und Übungsblatt nehmen dasselbe (ctx.kopf.mehr,
+//    aufgeklappt, bis man ihn noch einmal tippt oder Obsidian neu startet. Die Vorlesung nimmt dasselbe (ctx.kopf.mehr,
 //    weitere Menüpunkte als drittes Argument [{ titel, aktion }], z. B. „Andere Folien …“ in der Vorlesungsnotiz).
 //  - Der Modulcode im Kopf öffnet die Modulseite.
 //  - Leere Abschnitte (rein: leereAbschnitte) sind in Notizen des Plugins nicht zu sehen: in der Leseansicht keine Überschrift mit
@@ -29,16 +32,33 @@
 // die einer Übung die Übungen, als Chips wie die Vorlesungsnotiz (höchstens drei, neueste Nummer zuerst; Tipp öffnet die
 // Begleitnotiz), bei mehr „Alle Unterlagen“ zur Modulseite. Vorher fand man ein Blatt aus dem Ordner der eigenen Tutoriumsgruppe
 // vom Tutorium aus nicht. Seit 24.10.2026 ebenso ein Lab („Data Science Lab“): die Unterlagen aus dem Bereich Lab, eine je Sitzung.
+// Seit 24.10.2026 zeigt eine Übung unter dem Kopf ihre Abgabe (Tag, Uhrzeit; Tipp öffnet die Frist), die Musterlösung und deine
+// Lösung mit derselben Nummer; die Frist zeigt umgekehrt ihr Blatt. Vorher stand das in einer eigenen Notiz „Übungsblatt“, die man
+// von Hand anlegen musste und die dasselbe Blatt ein zweites Mal führte.
+// Seit 24.10.2026 ist der Kopf einer Termin-Notiz eine Karte wie der Vorlesungskopf: Tag groß, daneben „heute“, „morgen“ oder die
+// Restzeit, darunter Uhrzeit und Ort (wannVon). Die Datumszeile unter dem Titel, die dasselbe noch einmal sagte, fällt in beiden
+// Ansichten weg, die Zeile „Quelle: …“ wird leise und „## Meine Notizen“ ein Label wie in der Vorlesungsnotiz (terminZeilen).
+// Vorher stand der Tag nur im Label und darunter alles in derselben Schrift, ohne erkennbare Ordnung.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const TYPEN = ["termin", "unterlage", "sq_kurs", "lehrveranstaltung"];
 const SQ = ["geplant", "angemeldet", "zugelassen", "bestanden"];
+const BLATT = ["offen", "abgegeben", "korrigiert"];
 const gross = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1);
 const txt = (v) => String(v == null ? "" : v).replace(/\s+/g, " ").trim();
 
-// Status einer Notiz (rein, Tests): typ, Frontmatter, nicht (Besuche ich nicht, nur Lehrveranstaltung) →
-// { wert, text, wort (für statusArt), fertig (letzte Stufe), neu (Wert nach einem Tipp), menue (Stufen zur Auswahl) } oder null
-const statusVon = (typ, fm, nicht) => {
+// Status einer Notiz (rein, Tests): typ (dazu „übung“ für eine Unterlage der Art Übung), Frontmatter, zusatz (Lehrveranstaltung:
+// Besuche ich nicht; Übung: ctx.modell.uebung) → { wert, text, wort (für statusArt), fertig (letzte Stufe), neu (Wert nach einem
+// Tipp), menue (Stufen zur Auswahl) } oder null
+const statusVon = (typ, fm, zusatz) => {
   fm = fm || {};
+  if (typ === "übung") {
+    const an = !!(zusatz && zusatz.erledigt), wort = an ? (zusatz.abgaben && zusatz.abgaben.length ? "abgegeben" : "bearbeitet") : "offen";
+    return { wert: an, text: gross(wort), wort, fertig: an, neu: !an };
+  }
+  if (typ === "übungsblatt") {
+    const s = BLATT.indexOf(txt(fm.status).toLowerCase()) >= 0 ? txt(fm.status).toLowerCase() : BLATT[0];
+    return { wert: s, text: gross(s), wort: s, fertig: s === "korrigiert", neu: BLATT[(BLATT.indexOf(s) + 1) % BLATT.length], menue: BLATT.slice() };
+  }
   if (typ === "termin") {
     const an = fm.erledigt === true;
     return { wert: an, text: an ? "Erledigt" : "Offen", wort: an ? "erledigt" : "offen", fertig: an, neu: !an };
@@ -53,7 +73,7 @@ const statusVon = (typ, fm, nicht) => {
     return { wert: s, text: gross(s), wort: s, fertig: s === SQ[SQ.length - 1], neu: SQ[(SQ.indexOf(s) + 1) % SQ.length], menue: SQ.slice() };
   }
   if (typ === "lehrveranstaltung") {
-    return nicht ? { wert: false, text: "Besuche ich nicht", wort: "besuche ich nicht", fertig: false, neu: true, leise: true }
+    return zusatz ? { wert: false, text: "Besuche ich nicht", wort: "besuche ich nicht", fertig: false, neu: true, leise: true }
       : { wert: true, text: "Im Stundenplan", wort: "im stundenplan", fertig: true, neu: false };
   }
   return null;
@@ -141,6 +161,48 @@ const hatPdfKasten = (cache) => {
       && e.position.end.line <= s.position.end.line));
 };
 
+// Termin-Notizen: Die Vorlage (zentral.js) und der Uni-Abgleich schreiben unter den Titel „**24.10.2026** · 13:30–17:00 · Ort“,
+// bei einer Schlüsselqualifikation mit der Pille dahinter. Die Zeile zählt nur als erzeugt, wenn Tag, bis und Ort genau den
+// Eigenschaften entsprechen (Ort ohne die Backslashes von mdText); sonst bleibt sie als eigener Text stehen.
+const DATUMSZEILE = /^\*\*(\d{2})\.(\d{2})\.(\d{4})(?: – (\d{2})\.(\d{2})\.(\d{4}))?\*\*(.*)$/;
+const PILLE_AM_ENDE = /\s*·\s*<span class="eba-pill[^"]*">[^<]*<\/span>$/;
+const isoVon = (v) => (String(v == null ? "" : v).match(/^\d{4}-\d{2}-\d{2}/) || [""])[0];
+const datumsZeile = (zeile, fm) => {
+  const m = String(zeile == null ? "" : zeile).trim().match(DATUMSZEILE);
+  if (!m || !fm) return false;
+  const datum = isoVon(fm.datum), bis = isoVon(fm.bis);
+  if (`${m[3]}-${m[2]}-${m[1]}` !== datum || (m[4] ? `${m[6]}-${m[5]}-${m[4]}` !== bis : bis > datum)) return false;
+  return txt(m[7].replace(PILLE_AM_ENDE, "").replace(/^\s*·\s*/, "").replace(/\\(.)/g, "$1")) === txt(fm.ort);
+};
+// Zeilen einer Termin-Notiz (ganze Notiz, 0-basiert) → { datum: die erzeugte Datumszeile als erste Zeile unter dem # Titel oder -1,
+// quelle: Zeilen „Quelle: …“ bzw. „Geprüft am …“ zwischen Titel und erster weiterer Überschrift }
+const terminZeilen = (zeilen, fm) => {
+  const z = zeilen || [], aus = { datum: -1, quelle: [] };
+  let i = 0;
+  if (z.length && z[0].trim() === "---") { i = 1; while (i < z.length && z[i].trim() !== "---") i++; i++; }
+  while (i < z.length && !/^#\s/.test(z[i])) i++;
+  if (i >= z.length) return aus;
+  let j = i + 1;
+  while (j < z.length && !z[j].trim()) j++;
+  if (j < z.length && datumsZeile(z[j], fm)) aus.datum = j;
+  for (let k = i + 1; k < z.length && !/^#{1,6}\s/.test(z[k]); k++) if (/^(?:Quelle: |Geprüft am )/.test(z[k])) aus.quelle.push(k);
+  return aus;
+};
+// Tag, Uhrzeit und Ort eines Termins für die Kopf-Karte. t = ctx.modell.terminLesen, m = ctx.modell. Uhrzeit aus dem Feld uhrzeit,
+// sonst aus einem Teil des Orts, der nur eine Uhrzeit ist („13:30–17:00“, „ab 18:00“, „bis 23:59“); steht sie mitten in einem Teil
+// („Mo 12:15–14:00“), bleibt sie dort, sonst stünde sie doppelt; „ab“ und „bis“ an einem Tag als Spanne, über mehrere Tage getrennt
+// (Beginn am ersten, Schluss am letzten). marke: „heute“ im Akzent, „morgen“ und „läuft“ (Zeitraum) getönt; ab übermorgen statt
+// dessen abstand („in 5 Tagen“), Vergangenes ohne beides.
+const wannVon = (t, m) => {
+  const z = m.zeit, heute = z.heute(), o = m.ortTeilen(t.ort);
+  const n = z.tageBis(t.datum, heute), ende = t.bis ? z.tageBis(t.bis, heute) : n;
+  const zeit = txt(t.fm && t.fm.uhrzeit) || o.zeit || (o.ab && o.bis && !t.bis ? `${o.ab}–${o.bis}`
+    : [o.ab ? "ab " + o.ab : "", o.bis ? "bis " + o.bis : ""].filter(Boolean).join(" · "));
+  const marke = n === 0 ? { text: "heute", alt: false } : n === 1 ? { text: "morgen", alt: true }
+    : n < 0 && ende >= 0 ? { text: "läuft", alt: true } : null;
+  return { tag: t.bis ? z.spanne(t.datum, t.bis) : z.datum(t.datum, { lang: true }), marke, abstand: n > 1 ? z.abstand(t.datum, heute) : "", zeit, wo: o.wo };
+};
+
 module.exports = function (ctx) {
   const app = window.app;
   const O = ctx.obsidian || {};
@@ -149,18 +211,22 @@ module.exports = function (ctx) {
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const pad = (n) => String(n).padStart(2, "0");
 
-  // Linke Seite der Zeile: was die Notiz ist, in Label-Schrift („Frist · B110 · Do 05.11. · 14:00“)
+  // Linke Seite der Zeile: was die Notiz ist, in Label-Schrift („Übung · B110 · Do 10:15–11:45“); beim Termin nur Art und Modul,
+  // Tag und Uhrzeit stehen darunter (terminZeichnen)
   const labelVon = (typ, f, fm) => {
     const m = M(), z = m && m.zeit;
     if (typ === "termin") {
       const t = m && m.terminLesen ? m.terminLesen({ f, fm }) : null;
       if (!t) return [txt(fm.kategorie) || "Termin", txt(fm.code)].filter(Boolean).join(" · ");
-      const tag = z ? (t.bis ? z.spanne(t.datum, t.bis) : z.datum(t.datum)) : t.datum;
-      return [t.art === "zwischentest" ? "Zwischentest" : t.kategorie, t.code, tag, t.zeit].filter(Boolean).join(" · ");
+      return [t.art === "zwischentest" ? "Zwischentest" : t.kategorie, t.code].filter(Boolean).join(" · ");
     }
     if (typ === "unterlage") {
       const nr = fm.nummer != null && fm.nummer !== "" ? " " + pad(fm.nummer) : "";
       return [(txt(fm.art) || "Unterlage") + nr, txt(fm.code), txt(fm.semester)].filter(Boolean).join(" · ");
+    }
+    if (typ === "übungsblatt") {
+      const d = (String(fm.faellig == null ? "" : fm.faellig).match(/^\d{4}-\d{2}-\d{2}/) || [""])[0];
+      return ["Übungsblatt" + (Number(fm.nummer) > 0 ? " " + Number(fm.nummer) : ""), txt(fm.code), d ? "Abgabe " + (z ? z.datum(d) : d) : ""].filter(Boolean).join(" · ");
     }
     if (typ === "sq_kurs") return ["SQ-Kurs", txt(fm.semester), fm.ects != null && fm.ects !== "" ? String(fm.ects).replace(".", ",") + " ECTS" : ""].filter(Boolean).join(" · ");
     // „Veranstaltung“ = Alma ohne erkannte Art, wie im Wochenraster eine Vorlesung (das Wort gilt nur für Events, docs/design.md)
@@ -177,6 +243,9 @@ module.exports = function (ctx) {
     pfeil: [["path", { d: "m6 9 6 6 6-6" }]],
     blatt: [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8" }]],
     ordner: [["path", { d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" }]],
+    frist: [["rect", { x: 3, y: 4, width: 18, height: 18, rx: 2 }], ["path", { d: "M16 2v4M8 2v4M3 10h18" }]],
+    loesung: [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }], ["path", { d: "m9 15 2 2 4-4" }]],
+    stift: [["path", { d: "M12 20h9" }], ["path", { d: "M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9 .9.9-2.9a2 2 0 0 1 .5-.9z" }]],
   };
   const symbol = (eltern, name) => {
     const NS = "http://www.w3.org/2000/svg", doc = eltern.ownerDocument;
@@ -207,9 +276,14 @@ module.exports = function (ctx) {
     ctx.hinweis(nicht ? `${name} steht nicht mehr in deinem Stundenplan.` : `${name} steht wieder in deinem Stundenplan.`,
       nicht ? { aktion: { text: "Rückgängig", ausfuehren: () => besuchen(f, false, true) } } : {});
   };
-  const setzen = async (typ, f, s, wert) => {
+  // Übung (u = ctx.modell.uebung): die Haken ihrer Fristen und status der Begleitnotiz zusammen
+  const setzen = async (typ, f, s, wert, u) => {
     if (typ === "termin") return feldSetzen(f, "erledigt", wert);
-    if (typ === "unterlage" || typ === "sq_kurs") return feldSetzen(f, "status", wert);
+    if (typ === "übung") {
+      for (const t of (u && u.abgaben) || []) await feldSetzen(t.f, "erledigt", wert);
+      return feldSetzen(f, "status", wert ? "bearbeitet" : "neu");
+    }
+    if (typ === "unterlage" || typ === "sq_kurs" || typ === "übungsblatt") return feldSetzen(f, "status", wert);
     if (typ === "lehrveranstaltung") return besuchen(f, !wert);
     return undefined;
   };
@@ -293,15 +367,53 @@ module.exports = function (ctx) {
     const modul = u.mehr ? modulVon(f, fm) : null;
     if (modul) chip(links, modul, "ordner", "Alle Unterlagen", "", f.path);
   };
+  // Übung (u = ctx.modell.uebung): Abgabe mit Tag, Uhrzeit und Restzeit (Tipp öffnet die Frist), Musterlösung, deine Lösung
+  const uebungZeichnen = (karte, f, u) => {
+    if (!u.abgabe && !u.loesung && !u.eigene) return;
+    const links = karte.createDiv({ cls: "eba-vorl-links", attr: { "aria-label": "Zum Blatt" } });
+    if (u.abgabe) {
+      const z = M().zeit, heute = z.heute(), n = z.tageBis(u.datum, heute);
+      const rest = u.erledigt ? "" : n < 0 ? "vorbei" : z.abstand(u.datum, heute);
+      const a = chip(links, u.abgabe.f, "frist", "Abgabe", [z.datum(u.datum, { bezug: heute }) + (u.uhr ? ", " + u.uhr : ""), rest].filter(Boolean).join(" · "), f.path);
+      if (!u.erledigt && n <= 1) a.addClass(n < 0 ? "spaet" : "bald");
+    }
+    if (u.loesung) chip(links, u.loesung.f, "loesung", "Musterlösung", "", f.path);
+    if (u.eigene) chip(links, u.eigene.f, "stift", "Meine Lösung", "", f.path);
+  };
+  // Frist zu einer Abgabe: das Blatt dazu (ctx.modell.uebungen)
+  const blattZurFrist = (karte, f) => {
+    const l = M() && M().uebungen ? M().uebungen({ frist: f.path }) : [];
+    if (!l.length) return;
+    const links = karte.createDiv({ cls: "eba-vorl-links", attr: { "aria-label": "Übungsblatt" } });
+    for (const u of l) chip(links, u.f, "blatt", "Übung " + pad(u.nummer), u.titel, f.path);
+  };
+  // Termin: Tag in der Schrift der Titel, daneben heute/morgen bzw. die Restzeit, darunter Uhrzeit · Ort wie in der Vorlesungsnotiz,
+  // bei einer Schlüsselqualifikation die Pille „freiwillig“
+  const terminZeichnen = (karte, f, fm) => {
+    const m = M(), t = m && m.terminLesen && m.ortTeilen && m.zeit ? m.terminLesen({ f, fm }) : null;
+    if (!t) return;
+    const w = wannVon(t, m);
+    const wann = karte.createDiv({ cls: "eba-vorl-titel eba-kopf-wann" });
+    wann.createSpan({ text: w.tag });
+    if (w.marke) wann.createSpan({ cls: "eba-vorl-heute" + (w.marke.alt ? " alt" : ""), text: w.marke.text });
+    else if (w.abstand) wann.createSpan({ cls: "eba-kopf-abstand", text: w.abstand });
+    if (w.zeit || w.wo) {
+      const meta = karte.createDiv({ cls: "eba-vorl-meta" });
+      if (w.zeit) meta.createSpan({ cls: "eba-vorl-datum", text: w.zeit });
+      if (w.wo) meta.createSpan({ cls: "eba-vorl-ort", text: w.wo });
+    }
+    if (t.freiwillig) karte.createDiv({ cls: "eba-kopf-pillen" }).createSpan({ cls: "eba-pill leer", text: "Schlüsselqualifikation · freiwillig" });
+  };
 
   const angezeigt = new Set(); // { el, pfad } aller gezeichneten Karten (Lese- und Bearbeitungsansicht), zum Neuzeichnen
   const zeichnen = (el, f) => {
     const fm = fmVon(f), typ = txt(fm.typ);
     el.empty();
     el.addClass("eba-vorl", "eba-notizkopf");
-    if (TYPEN.indexOf(typ) < 0) return;
-    const nicht = typ === "lehrveranstaltung" && !!(M() && M().besuchtNicht && M().besuchtNicht(fm));
-    const s = statusVon(typ, fm, nicht);
+    el.toggleClass("eba-kopf-termin", typ === "termin");
+    if (TYPEN.indexOf(typ) < 0 && typ !== "übungsblatt") return;
+    const u = typ === "unterlage" && M() && M().uebung ? M().uebung(f) : null, art = u ? "übung" : typ;
+    const s = statusVon(art, fm, u || (typ === "lehrveranstaltung" && !!(M() && M().besuchtNicht && M().besuchtNicht(fm))));
     const ton = M() && M().statusArt ? M().statusArt(typ, s.wort) : "leer";
     const karte = el.createDiv({ cls: "eba-vorl-karte" });
     const kopf = karte.createDiv({ cls: "eba-vorl-kopf" });
@@ -315,10 +427,12 @@ module.exports = function (ctx) {
     b.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
       if (s.menue) { menue(e, typ, f, s); return; }
-      setzen(typ, f, s, s.neu).catch((x) => console.error("Kopf", x));
+      setzen(art, f, s, s.neu, u).catch((x) => console.error("Kopf", x));
     });
     mehr(kopf, f);
     if (typ === "lehrveranstaltung") blaetterZeichnen(karte, f, fm);
+    else if (u) uebungZeichnen(karte, f, u);
+    else if (typ === "termin") { terminZeichnen(karte, f, fm); blattZurFrist(karte, f); }
   };
   const merken = (el, f) => {
     angezeigt.add({ el, pfad: f.path });
@@ -451,26 +565,50 @@ module.exports = function (ctx) {
       const pdfKasten = kaesten.length ? hatPdfKasten(app.metadataCache.getFileCache(f)) : false;
       for (const k of kaesten) eckdatenAus(k, pdfKasten);
     }
+    // Termin: erzeugte Datumszeile weg (steht in der Karte), Quelle leise (Stil eba-core.css 64.2)
+    if (typ === "termin") {
+      const s = c.getSectionInfo && c.getSectionInfo(el);
+      const t = s && s.text ? terminZeilen(s.text.split("\n"), fmVon(f)) : null;
+      if (t && s.lineStart === t.datum) el.classList.add("eba-termin-datum");
+      if (t && t.quelle.indexOf(s.lineStart) >= 0) el.classList.add("eba-termin-quelle");
+    }
   };
   // Bearbeitungsansicht der Begleitnotizen: leere Abschnitte auf Höhe 0, solange der Cursor nicht darin steht. Andere Notizen zeigen
-  // ihre Überschriften dort weiter: Dort schreibst du hinein.
+  // ihre Überschriften dort weiter: Dort schreibst du hinein. Termin-Notizen wie in der Leseansicht: die erzeugte Datumszeile samt
+  // den Leerzeilen davor auf Höhe 0 (außer der Cursor steht darin), die Quelle leise, ## als Label (eba-vorl-h wie vorlesung.js).
   const leerErweiterung = () => {
     const V = ctx.cm && ctx.cm.view, info = O.editorInfoField, lp = O.editorLivePreviewField;
     if (!V || !V.ViewPlugin || !V.Decoration || !info) return;
     const D = V.Decoration;
     const bauen = (view) => {
       try {
-        const x = view.state.field(info, false), f = x && x.file;
-        if (!f || txt(fmVon(f).typ) !== "unterlage" || (lp && !view.state.field(lp, false))) return D.none;
+        const x = view.state.field(info, false), f = x && x.file, fm = f ? fmVon(f) : {}, typ = txt(fm.typ);
+        if ((typ !== "unterlage" && typ !== "termin") || (lp && !view.state.field(lp, false))) return D.none;
         const doc = view.state.doc, zeilen = [];
         for (let i = 1; i <= doc.lines; i++) zeilen.push(doc.line(i).text);
         const cursor = view.state.selection.ranges.map((r) => doc.lineAt(r.head).number - 1);
         const r = [];
+        const zeile = (k, cls) => r.push(D.line({ class: cls }).range(doc.line(k + 1).from));
+        if (typ === "termin") {
+          const t = terminZeilen(zeilen, fm);
+          if (t.datum >= 0) {
+            let a = t.datum;
+            while (a > 0 && !zeilen[a - 1].trim()) a--;
+            if (!cursor.some((n) => n >= a && n <= t.datum)) for (let k = a; k <= t.datum; k++) zeile(k, "eba-leer-zeile");
+          }
+          for (const k of t.quelle) zeile(k, "eba-termin-quelle");
+          let zaun = false;
+          zeilen.forEach((z, k) => {
+            if (/^\s*(```|~~~)/.test(z)) zaun = !zaun;
+            else if (!zaun && /^##\s/.test(z)) zeile(k, "eba-vorl-h" + (/^##\s+Meine Notizen\s*$/.test(z) ? " eba-vorl-h-notizen" : ""));
+          });
+          return D.set(r, true);
+        }
         for (const [von, bis] of leereAbschnitte(zeilen)) {
           let a = von; // die Leerzeilen davor gleich mit (sonst bleibt eine Lücke, wo der Abschnitt stand)
           while (a > 0 && !zeilen[a - 1].trim()) a--;
           if (cursor.some((n) => n >= a && n <= bis)) continue;
-          for (let k = a; k <= bis; k++) r.push(D.line({ class: "eba-leer-zeile" }).range(doc.line(k + 1).from));
+          for (let k = a; k <= bis; k++) zeile(k, "eba-leer-zeile");
         }
         return D.set(r, true);
       } catch (e) { return D.none; }
@@ -485,17 +623,26 @@ module.exports = function (ctx) {
     ctx.postprozessor((el, c) => { try { nachbearbeiten(el, c); aufraeumen(el, c); } catch (e) { console.error("Kopf", e); } });
     try { editorErweiterung(); } catch (e) { console.error("Kopf Editor", e); }
     try { leerErweiterung(); } catch (e) { console.error("Kopf Editor leer", e); }
-    const bald = ctx.entprellen(() => neu(null), 300);
-    // Neu zeichnen bei Änderungen an einer gezeigten Notiz, den Einstellungen (Besuche ich nicht) oder einer Unterlage (Chips unter Übung, Tutorium und Lab)
-    const unterlage = (cache) => !!(cache && cache.frontmatter && cache.frontmatter.typ === "unterlage");
-    ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
-      if (f && (f.path === EINSTELLUNGEN || unterlage(cache) || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald();
+    // Übungsblatt (typ übungsblatt, bis 0.6.7): die Karte im Codeblock unter dem Titel
+    ctx.codeblock("eba-uebungsblatt", (_q, el, c) => {
+      const f = app.vault.getAbstractFileByPath((c && c.sourcePath) || "");
+      if (f) { try { zeichnen(el, f); merken(el, f); } catch (e) { console.error("Kopf", e); } }
     });
-    ctx.an(app.metadataCache, "deleted", (_f, vorher) => { if (unterlage(vorher)) bald(); });
+    const bald = ctx.entprellen(() => neu(null), 300);
+    // Neu zeichnen bei Änderungen an einer gezeigten Notiz, den Einstellungen (Besuche ich nicht), einer Unterlage (Chips unter Übung,
+    // Tutorium und Lab) oder einem Termin (Abgabe einer Übung)
+    const zaehlt = (cache) => !!(cache && cache.frontmatter && ["unterlage", "termin"].indexOf(cache.frontmatter.typ) >= 0);
+    ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
+      if (f && (f.path === EINSTELLUNGEN || zaehlt(cache) || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald();
+    });
+    ctx.an(app.metadataCache, "deleted", (_f, vorher) => { if (zaehlt(vorher)) bald(); });
+    // Neuer Tag: die Restzeit einer Abgabe („noch 2 Tage“) rückt weiter
+    const tag = ctx.bleibend("tag", () => ({ wert: ctx.date.now("YYYY-MM-DD") }));
+    ctx.intervall(() => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== tag.wert) { tag.wert = h; bald(); } }, 5 * 60 * 1000);
     ctx.an(app.workspace, "file-open", eigenschaftenAnwenden);
     ctx.an(app.workspace, "layout-change", eigenschaftenAnwenden);
     eigenschaftenAnwenden();
-    ctx.kopf = { mehr }; // „⋯“ auch im Kopf von Vorlesung und Übungsblatt (vorlesung.js)
+    ctx.kopf = { mehr }; // „⋯“ auch im Kopf der Vorlesung (vorlesung.js)
   };
   const abmelden = () => {
     for (const l of app.workspace.getLeavesOfType("markdown")) if (l.view && l.view.containerEl) l.view.containerEl.classList.remove("eba-eigenschaften");
@@ -510,3 +657,6 @@ module.exports.TYPEN = TYPEN;
 module.exports.leereAbschnitte = leereAbschnitte;
 module.exports.eckZeileErzeugt = eckZeileErzeugt;
 module.exports.hatPdfKasten = hatPdfKasten;
+module.exports.datumsZeile = datumsZeile;
+module.exports.terminZeilen = terminZeilen;
+module.exports.wannVon = wannVon;

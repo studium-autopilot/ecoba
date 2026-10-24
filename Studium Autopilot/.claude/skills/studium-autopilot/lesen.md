@@ -15,14 +15,17 @@ lesen.
      neuen Raum (die ersten zwei Wochen ab `raum_seit`) nennst du ausdrücklich, mit dem alten Raum bzw. der alten Zeit.
   3. Vorlesungsfreie Tage: `pausen` und `freie_tage` in `System/Daten/Semester.md`.
   4. Offene To-dos mit Frist in dieser Woche (siehe unten).
+- **Welche Übungsblätter muss ich noch abgeben?** Fristen (`kategorie: Frist`) ohne `erledigt: true` mit „Abgabe“, „Blatt“
+  oder „Hausaufgabe“ im Titel; das Blatt dazu ist die Begleitnotiz mit `art: Übung`, demselben `code` und derselben
+  Nummer. Ohne Frist zählt `status: bearbeitet` als erledigt.
 - **Nächste Prüfungen:** Termine mit `kategorie: Prüfung` ab heute; dazu im Modul `klausur` und `status`. Prüfungsphasen:
   `pruefungsphasen` in `System/Daten/Semester.md`.
 - **Noten und ECTS:** Module mit `status: bestanden` oder `anerkannt` zählen ihre `ects`; die Note steht in `ergebnis`. Die
   Gesamtnote rechnest du nur, wenn die Person danach fragt, und sagst dazu, dass die Übersicht **Noten & ECTS** maßgeblich ist.
 - **Welches Fachsemester?** Aus `studienbeginn` in den Einstellungen (leer: das laufende Semester ist das 1.) und den
   Semestern in `System/Daten/Semester.md` (WS 1.10. bis 31.3., SS 1.4. bis 30.9.).
-- **Was hängt an einem Modul?** Alles mit demselben `code`: Termine, Lehrveranstaltungen, Vorlesungsnotizen, Übungsblätter,
-  Unterlagen, Karteikarten, Lernplan.
+- **Was hängt an einem Modul?** Alles mit demselben `code`: Termine, Lehrveranstaltungen, Vorlesungsnotizen, Unterlagen
+  (darunter die Übungsblätter), Karteikarten, Lernplan.
 
 ## Unterlagen und PDFs
 

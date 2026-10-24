@@ -23,6 +23,8 @@
 //      (eba-zentral-angebote); fehlt die Datei im Manifest, wird der Stand gelöscht. Anzeige: angebote.js (eba-angebote).
 //   Kapitellisten (kapitel.json, optional, seit 19.10.2026): genauso, gerätelokal (eba-zentral-kapitel). Die Lernplan-Notizen
 //      daraus schreibt lernplan.js (nur der Abrufer); dieses Skript meldet nur „neu“ an ctx.lernplanAnzeige.
+//   Literaturlisten (literatur.json, optional, seit 24.10.2026): genauso, gerätelokal (eba-zentral-literatur). Die Notizen
+//      „<Code> Literatur 00 Literaturliste“ schreibt literatur.js (nur der Abrufer); „neu“ geht an ctx.literaturAnzeige.
 //   Zentraler Stundenplan (veranstaltungen.json, optional, Plan Abschnitt 27.1): holt und schreibt NUR der Abrufer, mit eigener
 //      Fehlerbehandlung (ein Fehler hält nur den Stundenplan an). Eine Notiz je id in Stundenplan/ (typ lehrveranstaltung,
 //      herkunft: zentral, zentral_id), nur für das aktuelle Fachsemester (stundenplanFilter), ohne Parallelgruppen, ohne
@@ -36,7 +38,8 @@
 //   „Zentrale Daten aktualisieren“.
 // Testeinstiege (docs/architektur.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
 // plugin.testZentralBasis (andere Basis-URL, z. B. lokaler Server). Gerätelokal (app.saveLocalStorage): eba-geraet,
-// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel, eba-zentral-angewendet.
+// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel, eba-zentral-literatur,
+// eba-zentral-angewendet.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -71,10 +74,11 @@ module.exports = function (ctx) {
   const DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de"];
   // bekannte Dateien und Höchstgröße (Bytes)
   const DATEIEN = { "termine.json": 1000000, "semester.json": 262144, "gruppen.json": 524288, "angebote.json": 524288, "veranstaltungen.json": 1500000,
-    "kapitel.json": 524288 };
+    "kapitel.json": 524288, "literatur.json": 524288 };
   const GRUPPEN = "gruppen.json"; // optional, gerätelokal (nicht an die Abrufer-Sperre gebunden)
   const ANGEBOTE = "angebote.json"; // optional, gerätelokal wie die Gruppen
   const KAPITEL = "kapitel.json"; // optional, gerätelokal wie die Gruppen; die Notizen schreibt lernplan.js
+  const LITERATUR = "literatur.json"; // optional, gerätelokal wie die Gruppen; die Notizen schreibt literatur.js
   const LEHRE = "veranstaltungen.json"; // optional, zentraler Stundenplan: nur der Abrufer, eigene Fehlerbehandlung
   const LEHRE_ORDNER = "Stundenplan";
   const MUSTERPLAN = "System/Daten/Musterplan.md";
@@ -82,10 +86,13 @@ module.exports = function (ctx) {
   const G = { manifest: 16384, id: 80, titel: 120, bezeichnung: 30, ort: 120, uhrzeit: 11, info: 200, quelleText: 200, url: 500, hinweis: 200, termine: 2000, name: 60, liste: 100,
     gruppen: 1000, gruppe: 20, raum: 120, leitung: 120, anmeldung: 200, angebote: 1000, reihe: 80, lehre: 3000, ausfall: 100, aenderungen: 100,
     kapitelModule: 60, kapitel: 40, teile: 40, kapitelTitel: 140, quelle: 120 };
+  // Grenzen der Literaturlisten (wie GLIT im Export, docs/daten-v1.md „literatur.json“)
+  const GL = { module: 60, werke: 15, links: 4, lesen: 40, quelle: 200, hinweis: 300, werkHinweis: 200, kopf: 20, rolle: 40, angabe: 300,
+    spalte: 20, suche: 120, linkText: 40, zu: 120, stellen: 80 };
   const DATUM_MIN = "2020-01-01", DATUM_MAX = "2040-12-31";
   const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
   const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten", gruppen: "eba-zentral-gruppen", angebote: "eba-zentral-angebote",
-    kapitel: "eba-zentral-kapitel", angewendet: "eba-zentral-angewendet" };
+    kapitel: "eba-zentral-kapitel", literatur: "eba-zentral-literatur", angewendet: "eba-zentral-angewendet" };
 
   // ---------- Kleine Helfer ----------
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
@@ -477,6 +484,115 @@ module.exports = function (ctx) {
       if (gesehen.has(id)) { aus.verworfen.push({ id, grund: "doppelt" }); continue; }
       gesehen.add(id);
       const r = kapitelModulNormal(roh);
+      if (r.fehler) aus.verworfen.push({ id, grund: r.fehler });
+      else aus.module.push(r.wert);
+    }
+    return aus;
+  };
+
+  // ---------- Prüfen: Literaturlisten (literatur.json, docs/daten-v1.md) ----------
+  // → { stand, module: [gültig], verworfen: [{ id, grund }] } oder { fehler } (ganze Datei abgelehnt). Nur Fakten: Angabe des Werks,
+  // Rolle, Links auf Katalog und Verlag, Stellen je Kapitel, Nummer und Seite der Folien; ein ungültiger Teil verwirft sein ganzes Modul.
+  const LITERATUR_DOMAINS = ["uni-tuebingen.de", "ibs-bw.de", "doi.org", "core-econ.org", "springer.com", "pearson.de", "proquest.com"];
+  const LITERATUR_ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur"];
+  const WERK_ID = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+  const KATALOG_PPN = /^\d{6,12}[\dX]$/;
+  // Links mit Sitzung oder Schlüssel in der Adresse gehören einer Person
+  const LINK_PERSOENLICH = /[?&;](?:[^=&#;]*(?:token|sess|ticket|signature)[^=&#;]*|sid|auth|key|api_?key|sig)=/i;
+  const litText = (v, max, pflicht) => (v != null && v !== "" && !reinerText(v) ? { fehler: "unzulässig" } : textFeld(v, max, pflicht));
+  // Unterlage des Moduls: { art, nummer, seite } (seite optional)
+  const unterlageNormal = (u) => {
+    if (!u || typeof u !== "object" || Array.isArray(u) || LITERATUR_ARTEN.indexOf(u.art) < 0) return { fehler: "ungültig" };
+    const nummer = ganzZahl(u.nummer, 0, 99), seite = ganzZahl(u.seite, 1, 2000);
+    if (nummer.fehler || nummer.wert == null || seite.fehler) return { fehler: "ungültig" };
+    return { wert: { art: u.art, nummer: nummer.wert, seite: seite.wert } };
+  };
+  const literaturLinkNormal = (l) => {
+    if (!l || typeof l !== "object" || Array.isArray(l)) return { fehler: "kein Objekt" };
+    const text = litText(l.text, GL.linkText, true);
+    if (text.fehler) return { fehler: "text " + text.fehler };
+    if (l.url != null && l.url !== "") {
+      const u = urlPruefen(l.url, LITERATUR_DOMAINS);
+      if (u.fehler) return { fehler: u.fehler };
+      if (LINK_PERSOENLICH.test(u.wert)) return { fehler: "Link mit Sitzung oder Schlüssel" };
+      return { wert: { text: text.wert, url: u.wert } };
+    }
+    const u = unterlageNormal(l.unterlage);
+    return u.fehler ? { fehler: "Ziel fehlt" } : { wert: { text: text.wert, unterlage: u.wert } };
+  };
+  const werkNormal = (w) => {
+    if (!w || typeof w !== "object" || Array.isArray(w)) return { fehler: "kein Objekt" };
+    if (typeof w.id !== "string" || !WERK_ID.test(w.id)) return { fehler: "id ungültig" };
+    const f = { rolle: litText(w.rolle, GL.rolle, true), angabe: litText(w.angabe, GL.angabe, true), spalte: litText(w.spalte, GL.spalte, false),
+      hinweis: litText(w.hinweis, GL.werkHinweis, false), suche: litText(w.suche, GL.suche, false) };
+    for (const k of Object.keys(f)) if (f[k].fehler) return { fehler: k + " " + f[k].fehler };
+    const abschnitt = w.abschnitt == null || w.abschnitt === "" ? "haupt" : w.abschnitt;
+    if (abschnitt !== "haupt" && abschnitt !== "weitere") return { fehler: "abschnitt ungültig" };
+    const katalog = w.katalog == null ? "" : w.katalog;
+    if (katalog !== "" && (typeof katalog !== "string" || !KATALOG_PPN.test(katalog))) return { fehler: "katalog ungültig" };
+    if (w.links != null && (!Array.isArray(w.links) || w.links.length > GL.links)) return { fehler: "links ungültig" };
+    const links = [];
+    for (const l of w.links || []) {
+      const r = literaturLinkNormal(l);
+      if (r.fehler) return { fehler: "link: " + r.fehler };
+      links.push(r.wert);
+    }
+    return { wert: { id: w.id, rolle: f.rolle.wert, angabe: f.angabe.wert, abschnitt, spalte: f.spalte.wert, hinweis: f.hinweis.wert,
+      katalog, suche: f.suche.wert, links } };
+  };
+  const lesenNormal = (z, spalten) => {
+    if (!z || typeof z !== "object" || Array.isArray(z)) return { fehler: "kein Objekt" };
+    const zu = litText(z.zu, GL.zu, true);
+    if (zu.fehler) return { fehler: "zu " + zu.fehler };
+    let beleg = null;
+    if (z.beleg != null) { const b = unterlageNormal(z.beleg); if (b.fehler) return { fehler: "beleg ungültig" }; beleg = b.wert; }
+    const st = z.stellen;
+    if (!st || typeof st !== "object" || Array.isArray(st) || !Object.keys(st).length) return { fehler: "stellen fehlt" };
+    const stellen = {};
+    for (const k of Object.keys(st)) {
+      if (spalten.indexOf(k) < 0) return { fehler: "Werk " + k + " ohne Spalte" };
+      const t = litText(st[k], GL.stellen, true);
+      if (t.fehler) return { fehler: k + " " + t.fehler };
+      stellen[k] = t.wert;
+    }
+    return { wert: { zu: zu.wert, beleg, stellen } };
+  };
+  const literaturModulNormal = (e) => {
+    if (!e || typeof e !== "object" || Array.isArray(e)) return { fehler: "kein Objekt" };
+    if (typeof e.code !== "string" || !MODULCODE.test(e.code)) return { fehler: "code ungültig" };
+    if (typeof e.semester !== "string" || !SEMESTER_NAME.test(e.semester)) return { fehler: "semester ungültig" };
+    const f = { quelle: litText(e.quelle, GL.quelle, true), hinweis: litText(e.hinweis, GL.hinweis, false), kopf: litText(e.kopf, GL.kopf, false) };
+    for (const k of Object.keys(f)) if (f[k].fehler) return { fehler: k + " " + f[k].fehler };
+    let beleg = null;
+    if (e.beleg != null) { const b = unterlageNormal(e.beleg); if (b.fehler) return { fehler: "beleg ungültig" }; beleg = b.wert; }
+    if (!Array.isArray(e.werke) || !e.werke.length || e.werke.length > GL.werke) return { fehler: "werke ungültig" };
+    const werke = [];
+    for (const w of e.werke) {
+      const r = werkNormal(w);
+      if (r.fehler) return { fehler: "werk " + (w && typeof w.id === "string" ? w.id : "?") + ": " + r.fehler };
+      werke.push(r.wert);
+    }
+    if (new Set(werke.map((w) => w.id)).size !== werke.length) return { fehler: "doppelte Werk-id" };
+    if (e.lesen != null && (!Array.isArray(e.lesen) || e.lesen.length > GL.lesen)) return { fehler: "lesen ungültig" };
+    const spalten = werke.filter((w) => w.spalte).map((w) => w.id), lesen = [];
+    for (const z of e.lesen || []) {
+      const r = lesenNormal(z, spalten);
+      if (r.fehler) return { fehler: "lesen: " + r.fehler };
+      lesen.push(r.wert);
+    }
+    return { wert: { code: e.code, semester: e.semester, stand: datumOk(e.stand) ? e.stand : "", quelle: f.quelle.wert, hinweis: f.hinweis.wert,
+      kopf: f.kopf.wert || "Kapitel", beleg, werke, lesen } };
+  };
+  const literaturPruefen = (daten) => {
+    if (!daten || typeof daten !== "object" || daten.schema !== 1 || !Array.isArray(daten.module)) return { fehler: "literatur.json: Format ungültig" };
+    if (daten.module.length > GL.module) return { fehler: "literatur.json: zu viele Module" };
+    const aus = { stand: isoZeitOk(daten.stand) ? daten.stand.slice(0, 10) : "", module: [], verworfen: [] };
+    const gesehen = new Set();
+    for (const roh of daten.module) {
+      const id = roh && typeof roh.code === "string" && typeof roh.semester === "string" ? `${roh.code} ${roh.semester}` : "?";
+      if (gesehen.has(id)) { aus.verworfen.push({ id, grund: "doppelt" }); continue; }
+      gesehen.add(id);
+      const r = literaturModulNormal(roh);
       if (r.fehler) aus.verworfen.push({ id, grund: r.fehler });
       else aus.module.push(r.wert);
     }
@@ -1471,6 +1587,12 @@ module.exports = function (ctx) {
       if (g.fehler) warnen(b, "Kapitellisten: " + g.fehler);
       if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
     } else if (manifest && kapitelStand()) { lokal(L.kapitel, null); kapitelNeu(); }
+    // 1e. Literaturlisten (literatur.json): ebenso; die Notizen daraus schreibt literatur.js (nur der Abrufer)
+    if (manifest && manifest.dateien[LITERATUR]) {
+      const g = await literaturHolen(manifest.dateien[LITERATUR], o.manuell);
+      if (g.fehler) warnen(b, "Literaturlisten: " + g.fehler);
+      if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
+    } else if (manifest && literaturStand()) { lokal(L.literatur, null); literaturNeu(); }
     // 2. Abrufer-Sperre: Ein anderes Gerät, das vor höchstens UEBERNAHME abgerufen hat, bleibt Abrufer. „Jetzt aktualisieren“
     // übernimmt (wie „Hier laden“ bei ILIAS), außer das andere Gerät hat vor weniger als GERADE abgerufen.
     const a = await abrufLesen();
@@ -1496,7 +1618,7 @@ module.exports = function (ctx) {
     if (manifest) for (const name of Object.keys(hashes)) if (!manifest.dateien[name]) delete hashes[name];
     if (manifest) {
       for (const name of Object.keys(manifest.dateien)) {
-        if (name === GRUPPEN || name === ANGEBOTE || name === LEHRE) continue; // gerätelokal oben bzw. Stundenplan unten (eigene Fehler)
+        if (name === GRUPPEN || name === ANGEBOTE || name === LITERATUR || name === LEHRE) continue; // gerätelokal oben bzw. Stundenplan unten (eigene Fehler)
         const soll = manifest.dateien[name];
         if (!o.manuell && S0.hashes[name] === soll.sha256 && cache[name]) continue;
         let r;
@@ -1617,7 +1739,7 @@ module.exports = function (ctx) {
     return b;
   };
 
-  // ---------- Optionale Dateien gerätelokal holen (gruppen.json, angebote.json) ----------
+  // ---------- Optionale Dateien gerätelokal holen (gruppen.json, angebote.json, kapitel.json, literatur.json) ----------
   // soll = { sha256, groesse } aus dem Manifest. Unveränderte Prüfsumme und vorhandener Stand → nichts holen (außer manuell).
   // art = { schluessel (gerätelokal), liste (Feldname), pruefen, praefix (für verworfene ids im Bericht), neuZeichnen }
   // → {} | { verworfen: [...] } | { fehler }
@@ -1642,15 +1764,19 @@ module.exports = function (ctx) {
   const gruppenNeuZeichnen = () => anzeigeNeu(ctx.gruppenAnzeige);
   const angeboteNeuZeichnen = () => anzeigeNeu(ctx.angeboteAnzeige);
   const kapitelNeu = () => anzeigeNeu(ctx.lernplanAnzeige);
+  const literaturNeu = () => anzeigeNeu(ctx.literaturAnzeige);
   const gruppenStand = () => lokalerStand(L.gruppen, "gruppen");
   const angeboteStand = () => lokalerStand(L.angebote, "angebote");
   const kapitelStand = () => lokalerStand(L.kapitel, "module");
+  const literaturStand = () => lokalerStand(L.literatur, "module");
   const gruppenHolen = (soll, manuell) => optionalHolen(GRUPPEN, soll, manuell,
     { schluessel: L.gruppen, liste: "gruppen", pruefen: gruppenPruefen, praefix: "gruppe ", neuZeichnen: gruppenNeuZeichnen });
   const angeboteHolen = (soll, manuell) => optionalHolen(ANGEBOTE, soll, manuell,
     { schluessel: L.angebote, liste: "angebote", pruefen: angebotePruefen, praefix: "angebot ", neuZeichnen: angeboteNeuZeichnen });
   const kapitelHolen = (soll, manuell) => optionalHolen(KAPITEL, soll, manuell,
     { schluessel: L.kapitel, liste: "module", pruefen: kapitelPruefen, praefix: "kapitel ", neuZeichnen: kapitelNeu });
+  const literaturHolen = (soll, manuell) => optionalHolen(LITERATUR, soll, manuell,
+    { schluessel: L.literatur, liste: "module", pruefen: literaturPruefen, praefix: "literatur ", neuZeichnen: literaturNeu });
 
   // ---------- Status (Quellen-Vertrag) ----------
   // Gemeinsame Form der Quellen: { zustand (aus | laeuft | pause | fehler | an), geprueft (letzter Lauf ohne Fehler; vor dem ersten
@@ -1752,7 +1878,7 @@ module.exports = function (ctx) {
 
   ctx.zentral = {
     abrufen, status, stand, geraetId, idAusName, notizText, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
-    angebotePruefen, kapitelPruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
+    angebotePruefen, kapitelPruefen, literaturPruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
     aenderungenFelder, lehreDateiName, lehreName,
     // zentraler Stundenplan für Anzeige und Texte: { verfuegbar, anzahl, ohneBeginn, ausgeblendet: [ids] }
     stundenplan: stundenplanStand,
@@ -1761,11 +1887,13 @@ module.exports = function (ctx) {
     // gerätelokaler Stand der Angebote (angebote.js): { stand, geholt, angebote } oder null (nie geholt, zurückgezogen oder zentrale
     // Daten aus; der Stand bleibt fürs Wiedereinschalten)
     angebote: () => { const g = eingeschaltet() && angeboteStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), angebote: g.angebote } : null; },
-    // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt, zurückgezogen oder
-    // zentrale Daten aus)
     // Module, deren Termine aus Unterlagen zentral kommen (modul.js, server.js): { stand, semester, module, gilt } oder null
     abdeckung: abdeckungStand,
+    // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt, zurückgezogen oder
+    // zentrale Daten aus)
     kapitel: () => { const g = eingeschaltet() && kapitelStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
+    // ebenso die Literaturlisten (literatur.js)
+    literatur: () => { const g = eingeschaltet() && literaturStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
     semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, frischUrl, FRISCH_KOPF, RELEASE_ROH, BASIS, RELEASES, ABRUF, MEINE,
     abruferHier, abruferHierAus,
     get laeuft() { return !!laeuft; },

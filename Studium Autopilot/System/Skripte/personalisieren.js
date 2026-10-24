@@ -200,15 +200,17 @@ module.exports = function (ctx) {
       ? { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", unter: FOLGE[v], rechts: "haken" }
       : { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", aktion: { aktion: "variante", parameter: { wert: v } }, rechts: "" }));
   };
-  // Kompakte Zeilen wie unter Verbindungen (verbindungen.js, uebersicht); Stil eba-core.css 43 (.eba-ez)
+  // Kompakte Zeilen wie unter Verbindungen (verbindungen.js, uebersicht; Titel und Wert in einer Kopfzeile, die zweite Zeile
+  // darunter); Stil eba-core.css 43 (.eba-ez)
   const liste = (el, zeilen) => {
     const l = el.createDiv({ cls: "eba-vb-liste eba-ez-liste" });
     for (const z of zeilen) {
       const zeile = z.aktion ? l.createEl("a", { cls: "eba-ez", attr: { href: ctx.link(z.aktion.aktion, z.aktion.parameter) } }) : l.createDiv({ cls: "eba-ez" });
       zeile.setAttr("data-id", z.id);
       zeile.innerHTML = (z.symbol ? `<span class="eba-vb-symbol ${z.ton}" aria-hidden="true">${svg(z.symbol)}</span>` : "")
-        + `<span class="eba-ez-text"><span class="eba-ez-titel">${esc(z.titel)}</span>${z.unter ? `<span class="eba-ez-unter">${esc(z.unter)}</span>` : ""}</span>`
-        + (z.wert ? `<span class="eba-ez-wert${z.wertArt ? " " + z.wertArt : ""}">${esc(z.wert)}</span>` : "")
+        + `<span class="eba-ez-text"><span class="eba-ez-kopf"><span class="eba-ez-titel">${esc(z.titel)}</span>`
+        + (z.wert ? `<span class="eba-ez-wert${z.wertArt ? " " + z.wertArt : ""}">${esc(z.wert)}</span>` : "") + "</span>"
+        + (z.unter ? `<span class="eba-ez-unter">${esc(z.unter)}</span>` : "") + "</span>"
         + (z.rechts ? `<span class="eba-ez-rechts${z.rechts === "haken" ? " gewaehlt" : ""}" aria-hidden="true">${svg(z.rechts)}</span>` : "");
       if (z.rechts === "haken") zeile.setAttr("aria-current", "true");
     }

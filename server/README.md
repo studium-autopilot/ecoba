@@ -328,12 +328,12 @@ Fenster „Eigener Server“ ein Knopf **Prompt kopieren**, aber nur auf einem v
 Der Benutzer ist der Administrator von CouchDB: LiveSync braucht diese Rechte für „Overwrite remote“, und auf dem Server liegt
 nur dieser eine Tresor. In der Datenbank liegt er verschlüsselt, auch die Dateinamen.
 
-**Link für ein Gerät:** `livesync.mjs` baut die Einstellungen (Ende-zu-Ende-Verschlüsselung, Live-Abgleich, versteckte Dateien
-außer LiveSync selbst und der Fensteranordnung) und verschlüsselt sie wie LiveSync 1.0 („persistent“: PBKDF2-SHA-256 mit
-310 000 Runden, HKDF, AES-256-GCM) mit einem neuen Code aus 12 Zeichen. Weil der Setup-Link für einen QR-Code im Terminal zu
-lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (Dateiname nur ihr SHA-256) und zeigt den
-kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf dem Gerät ein; ohne ihn nützt der
-Link nichts. Der Code steht nur im Terminal, nie im Journal.
+**Link für ein Gerät:** `livesync.mjs` baut die Einstellungen (Ende-zu-Ende-Verschlüsselung, Live-Abgleich, am Computer auch mit
+verborgenem Fenster, versteckte Dateien außer LiveSync selbst und der Fensteranordnung) und verschlüsselt sie wie LiveSync 1.0
+(„persistent“: PBKDF2-SHA-256 mit 310 000 Runden, HKDF, AES-256-GCM) mit einem neuen Code aus 12 Zeichen. Weil der Setup-Link
+für einen QR-Code im Terminal zu lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (Dateiname nur
+ihr SHA-256) und zeigt den kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf dem Gerät
+ein; ohne ihn nützt der Link nichts. Der Code steht nur im Terminal, nie im Journal.
 
 **Grenze:** Wie beim Uni-Zugang liegt der Schlüssel der Verschlüsselung auf dem Server (nur root). Wer root auf dem Server ist,
 kann den Tresor lesen.

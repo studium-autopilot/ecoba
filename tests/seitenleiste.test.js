@@ -87,6 +87,59 @@ test("Ansicht: eigener Tab „Übersicht“, öffnet über ctx.oeffnen, Stil in 
   for (const k of ["eba-sl-zeile", "eba-sl-code", "eba-sl-label"]) assert.ok(css.includes("." + k), k);
 });
 
+// Ein kleines Gerüst statt Obsidian: Elemente mit createEl/createSpan/createDiv, die Ansicht gezeichnet wie beim Öffnen des Tabs
+const element = (tag = "div", o = {}) => ({
+  tag, cls: new Set(String(o.cls || "").split(" ").filter(Boolean)), text: o.text || "", attr: Object.assign({}, o.attr), kinder: [],
+  empty() { this.kinder = []; },
+  addClass(c) { this.cls.add(c); },
+  setAttribute(k, v) { this.attr[k] = v; },
+  addEventListener() {},
+  createEl(t, x) { const k = element(t, x); this.kinder.push(k); return k; },
+  createSpan(x) { return this.createEl("span", x); },
+  createDiv(x) { return this.createEl("div", x); },
+});
+const zeichnen = () => {
+  let fabrik = null;
+  const vorher = global.window;
+  global.window = { app: {
+    workspace: { getMostRecentLeaf: () => null },
+    metadataCache: { getFirstLinkpathDest: (ziel) => ({ path: ziel }), getFileCache: () => null },
+  } };
+  try {
+    class ItemView { constructor() { this.contentEl = element(); } }
+    seitenleiste({
+      obsidian: { ItemView, Platform: { isMobile: false }, addIcon() {} },
+      plugin: { registerView: (typ, f) => { fabrik = f; } },
+      lernplan: { sichtbar: () => true }, user: {},
+      aufraeumen() {}, entprellen: (f) => f, an() {}, zeit() {},
+    }).registrieren();
+    const ansicht = fabrik({});
+    ansicht.onOpen();
+    return ansicht.contentEl;
+  } finally {
+    global.window = vorher;
+  }
+};
+
+test("In Entwicklung: diese Seiten abgeblendet mit der Pille „in Entwicklung“, die übrigen nicht", () => {
+  const { IN_ENTWICKLUNG } = seitenleiste;
+  assert.ok(IN_ENTWICKLUNG.length, "Liste leer: dann auch die Prüfung hier streichen");
+  for (const z of IN_ENTWICKLUNG) assert.ok(ZIELE.includes(z), z + " ist keine Seite der Übersicht");
+  const zeilen = zeichnen().kinder[0].kinder;
+  assert.deepEqual(zeilen.map((li) => li.kinder.find((k) => k.tag === "a").attr["data-href"]), ZIELE);
+  for (const li of zeilen) {
+    const ziel = li.kinder.find((k) => k.tag === "a").attr["data-href"];
+    const soll = IN_ENTWICKLUNG.includes(ziel);
+    assert.equal(li.cls.has("is-entwicklung"), soll, ziel);
+    const pille = li.kinder.find((k) => k.cls.has("eba-sl-entwicklung"));
+    assert.equal(pille ? pille.text : null, soll ? "in Entwicklung" : null, ziel);
+  }
+  const css = fs.readFileSync(path.join(VAULT, ".obsidian", "snippets", "eba-core.css"), "utf8");
+  const a66 = css.slice(css.indexOf("66. Seitenleiste „Übersicht“"), css.indexOf("Ende Abschnitt 66"));
+  for (const k of [".eba-sl-zeile.is-entwicklung", ".eba-sl-entwicklung"]) assert.ok(a66.includes(k), k);
+  assert.doesNotMatch(css, /eba-sl-zeile:has\(> a\[data-href=/, "keine Seite fest im CSS, nur über IN_ENTWICKLUNG");
+});
+
 test("Symbol des Tabs: eigenes SVG über addIcon (setIcon blieb auf dem iPad leer), Strich und Farbe als Attribute", () => {
   const code = fs.readFileSync(path.join(SKRIPTE, "seitenleiste.js"), "utf8");
   assert.match(code, /getIcon\(\) \{ return eigenesSymbol \? SYMBOL : "layout-grid"; \}/);

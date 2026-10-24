@@ -7,20 +7,27 @@
 //    Prüfungen; Fachschaft und Veranstaltungen nur heute und morgen), pruefungen = Seite Prüfungen „Prüfungstermine“,
 //    nachzuarbeiten = Dashboard „Nachzuarbeiten“ (seit 19.10.2026, vorher Bases mit dem Dateinamen „S110 VL 01“): Vorlesungsnotizen
 //    ohne Haken, älteste zuerst, links das Modul, dann ihr Name wie überall (ctx.modell.vorlesung, „Vorlesung 1 · Di 13.10. · Thema“).
+//    uebungen = Seite Unterlagen „Übungen“ (seit 24.10.2026, vorher Bases über die Notizen „Übungsblatt“): offene Blätter dieses
+//    Semesters mit Abgabe (ctx.modell.uebungen), nach dem Tag der Abgabe; eine verpasste steht noch 14 Tage als „überfällig“ da.
+//  ```eba-kacheln uebungen``` (Seite Unterlagen, über der Liste): Offen (davon überfällig), Fällig in 7 Tagen, Erledigt von allen
+//    Blättern dieses Semesters.
 // DOM und Klassen der Kacheln wie die frühere Formel (eba-core.css Abschnitte 8, 32, 60); Listen: Abschnitt 63. Schreibt nichts.
 // Jede Kachel öffnet ihre Notiz (ctx.oeffnen, Bedien-Bausteine): Frist und Prüfung ihre Notiz (ohne: Termine & Anmeldungen bzw.
 // Prüfungen), Semester den Studienverlauf, ECTS und Gesamtnote Noten & ECTS.
 // Neu gezeichnet bei Änderungen im Datenmodell, beim Zurückkommen in die App und alle 10 Minuten (Gruß, Tageswechsel).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
-  const LISTEN = ["fristen", "termine", "pruefungen", "nachzuarbeiten"];
-  const GRENZE = { fristen: 6, termine: 8, pruefungen: 0, nachzuarbeiten: 8 };
+  const LISTEN = ["fristen", "termine", "pruefungen", "nachzuarbeiten", "uebungen"];
+  const GRENZE = { fristen: 6, termine: 8, pruefungen: 0, nachzuarbeiten: 8, uebungen: 0 };
   const LEER = {
     fristen: "Keine Fristen in den nächsten 30 Tagen.",
     termine: "Keine Termine in den nächsten 14 Tagen.",
     pruefungen: "Noch keine Prüfungen.",
     nachzuarbeiten: "Nichts offen.",
+    uebungen: "Keine offenen Abgaben.",
   };
+  const VERPASST = 14; // so viele Tage steht eine verpasste Abgabe noch in „Übungen“
+  const pad = (n) => String(n).padStart(2, "0");
 
   // ---------- Kacheln (rein, testbar) ----------
   // M = ctx.modell, jetzt = Date → { gruss, datum, kacheln: [{ cls, k, v (HTML), s, fortschritt: [wert, max] | null, pfad }], leiste }
@@ -57,6 +64,17 @@ module.exports = function (ctx) {
     kacheln.push({ cls: "", k: "ECTS", v: `${zahl(E.ist)}<small>/ ${E.gesamt}</small>`, s: `Orientierungsprüfung ${E.op} / 4`, fortschritt: [Math.min(E.ist, E.gesamt), E.gesamt], pfad: SEITE.noten });
     kacheln.push({ cls: "", k: "Gesamtnote", v: N.note, s: Z.esc(N.unter), pfad: SEITE.noten });
     return { gruss, datum, kacheln, leiste: s ? leisteBauen(M, s, heute) : null };
+  };
+
+  // Kacheln über „Übungen“ (Seite Unterlagen): zählen dieselben Blätter wie die Liste darunter
+  const uebungKachelnBauen = (M, heute) => {
+    const Z = M.zeit, alle = M.uebungen({ heute }), offen = alle.filter((u) => !u.erledigt && u.datum && u.datum >= Z.plus(heute, -VERPASST));
+    const spaet = offen.filter((u) => u.ueberfaellig).length, erledigt = alle.filter((u) => u.erledigt).length;
+    return [
+      { cls: "akzent", k: "Offen", v: String(offen.length), s: spaet ? `${spaet} überfällig` : "" },
+      { cls: "", k: "Fällig in 7 Tagen", v: String(offen.filter((u) => !u.ueberfaellig && u.datum <= Z.plus(heute, 7)).length), s: "" },
+      { cls: "", k: "Erledigt", v: String(erledigt), s: alle.length ? "von " + Z.plural(alle.length, "Blatt", "Blättern") : "" },
+    ];
   };
 
   // Leiste „Semesterverlauf“: eine Zelle je Kalenderwoche des Semesters (ab dem Montag der Woche des Semesterbeginns).
@@ -121,6 +139,14 @@ module.exports = function (ctx) {
         const m = v.code ? M.modul(v.code) : null;
         aus.push({ sort: v.datum, min: null, wann: (m && String(m.fm.kurz || "").trim()) || v.code, bald: false, uhr: "", was: v.titel, pfad: v.f.path, pille: null });
       }
+    } else if (art === "uebungen" && M.uebungen) {
+      const ab = Z.plus(heute, -VERPASST);
+      for (const u of M.uebungen({ heute })) {
+        if (u.erledigt || !u.datum || u.datum < ab) continue;
+        aus.push({ sort: u.datum, min: Z.minuten(u.uhr), wann: u.ueberfaellig ? "überfällig" : tagText(u.datum), bald: !u.ueberfaellig && bald(u.datum), uhr: u.uhr,
+          was: [u.code, "Übung " + pad(u.nummer), u.titel].filter(Boolean).join(" · "), pfad: u.pfad,
+          pille: { ton: u.ueberfaellig ? "bad" : "warn", text: "Abgabe" } });
+      }
     }
     aus.sort((a, b) => (a.sort < b.sort ? -1 : a.sort > b.sort ? 1 : 0) || ((a.min == null ? -1 : a.min) - (b.min == null ? -1 : b.min)));
     return GRENZE[art] ? aus.slice(0, GRENZE[art]) : aus;
@@ -128,18 +154,23 @@ module.exports = function (ctx) {
 
   // ---------- Zeichnen ----------
   const ohneModell = (el) => { el.empty(); el.createDiv({ cls: "eba-li-leer", text: "Erscheint, sobald Studium Autopilot die Daten gelesen hat." }); };
-  const kachelnZeichnen = (el) => {
+  const kachelHtml = (k, esc) => {
+    const ziel = k.pfad ? ` role="link" tabindex="0" data-pfad="${esc(k.pfad)}"` : "";
+    return `<div class="eba-kachel${k.cls ? " " + k.cls : ""}"${ziel}><span class="k">${k.k}</span><span class="v${k.text ? " text" : ""}">${k.v}</span><span class="s">${k.s}</span>`
+      + (k.fortschritt ? `<progress max="${k.fortschritt[1]}" value="${k.fortschritt[0]}"></progress>` : "") + `</div>`;
+  };
+  const kachelnZeichnen = (el, art) => {
     const M = ctx.modell;
     if (!M || !M.fristen) { ohneModell(el); return; }
+    if (art === "uebungen") {
+      el.innerHTML = `<div class="eba-kz"><div class="eba-kz-reihe drei">${uebungKachelnBauen(M, M.zeit.heute()).map((k) => kachelHtml(k, M.zeit.esc)).join("")}</div></div>`;
+      return;
+    }
     const K = kachelnBauen(M, ctx.date.jetzt()), esc = M.zeit.esc;
     // Wochentag und Datum getrennt: am iPhone zweizeilig rechts neben dem Gruß, sonst eine Zeile (Komma per CSS, Abschnitt 8)
     const [wt, tag] = K.datum.split(", ");
     let h = `<div class="eba-kz"><div class="eba-kz-kopf"><h1 class="eba-kz-gruss">${esc(K.gruss)}</h1><span class="eba-kz-datum"><b>${esc(wt)}</b> <b>${esc(tag)}</b></span></div><div class="eba-kz-reihe">`;
-    for (const k of K.kacheln) {
-      const ziel = k.pfad ? ` role="link" tabindex="0" data-pfad="${esc(k.pfad)}"` : "";
-      h += `<div class="eba-kachel${k.cls ? " " + k.cls : ""}"${ziel}><span class="k">${k.k}</span><span class="v${k.text ? " text" : ""}">${k.v}</span><span class="s">${k.s}</span>`
-        + (k.fortschritt ? `<progress max="${k.fortschritt[1]}" value="${k.fortschritt[0]}"></progress>` : "") + `</div>`;
-    }
+    for (const k of K.kacheln) h += kachelHtml(k, esc);
     h += `</div>`;
     const L = K.leiste;
     if (L) {
@@ -181,6 +212,7 @@ module.exports = function (ctx) {
   // den Abschnitt der äußeren Karte, und dort stehen beide Listen des Dashboards; sonst das Argument der Kopfzeile.
   const artVon = (quelle, el, c) => {
     const q = String(quelle || "").toLowerCase();
+    if (/übungen/.test(q)) return "uebungen";
     if (/nacharbeit/.test(q)) return "nachzuarbeiten";
     if (/prüfungstermine|prüfungen erscheinen/.test(q)) return "pruefungen"; // „Prüfungstermine“: Seiten vor 0.4.6
     if (/termine/.test(q)) return "termine";
@@ -200,33 +232,40 @@ module.exports = function (ctx) {
   };
 
   const registrieren = () => {
-    const kacheln = ctx.codeblock("eba-kacheln", (_q, el) => {
-      try { kachelnZeichnen(el); } catch (e) { console.error("eba-kacheln", e); el.setText("Kacheln: Fehler – " + e.message); }
+    // Kacheln: Dashboard oder Übungen („Offene Abgaben erscheinen …“ im Ersatztext bzw. Argument uebungen)
+    const kacheln = ctx.codeblock("eba-kacheln", (quelle, el, c, inst) => {
+      inst.art = /abgaben/i.test(String(quelle || "")) ? "uebungen"
+        : ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-kacheln", ["dashboard", "uebungen"], "dashboard") : "dashboard";
+      try { kachelnZeichnen(el, inst.art); } catch (e) { console.error("eba-kacheln", e); el.setText("Kacheln: Fehler – " + e.message); }
     });
     const listen = ctx.codeblock("eba-liste", (quelle, el, c, inst) => {
       inst.art = artVon(quelle, el, c);
       try { listeZeichnen(el, inst.art, c); } catch (e) { console.error("eba-liste", e); el.setText("Liste: Fehler – " + e.message); }
     });
     const alle = () => {
-      for (const i of kacheln.instanzen()) { try { kachelnZeichnen(i.el); } catch (e) { console.error("eba-kacheln", e); } }
+      for (const i of kacheln.instanzen()) { try { kachelnZeichnen(i.el, i.art); } catch (e) { console.error("eba-kacheln", e); } }
       for (const i of listen.instanzen()) { try { listeZeichnen(i.el, i.art || "fristen", i.ctx); } catch (e) { console.error("eba-liste", e); } }
     };
     // Das Plugin startet die Erweiterungen alphabetisch, modell.js also nach dashboard.js: dann kurz danach anmelden und zeichnen
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(alle));
     else ctx.zeit(() => { if (ctx.modell && ctx.modell.beiAenderung) { ctx.aufraeumen(ctx.modell.beiAenderung(alle)); alle(); } }, 3000);
-    // „Nachzuarbeiten“: Vorlesungsnotizen liegen außerhalb der Ordner, die das Modell meldet (Haken im Kopf der Notiz, neue Notiz,
-    // umbenannt: sonst zeigten die Links bis zum nächsten Zeichnen auf den alten Namen). Nicht über das Modell: Jede Änderung
-    // beim Schreiben einer Mitschrift zeichnete dann alle Bildschirme neu, die sich dort angemeldet haben.
-    const nachBald = ctx.entprellen(() => {
-      for (const i of listen.instanzen()) if (i.art === "nachzuarbeiten") { try { listeZeichnen(i.el, i.art, i.ctx); } catch (e) { console.error("eba-liste", e); } }
+    // „Nachzuarbeiten“ und „Übungen“: Vorlesungsnotizen und Unterlagen liegen außerhalb der Ordner, die das Modell meldet (Haken im
+    // Kopf der Notiz, neue Notiz, umbenannt: sonst zeigten die Links bis zum nächsten Zeichnen auf den alten Namen). Nicht über das
+    // Modell: Jede Änderung beim Schreiben einer Mitschrift zeichnete dann alle Bildschirme neu, die sich dort angemeldet haben.
+    const JE_TYP = { vorlesung: "nachzuarbeiten", unterlage: "uebungen" };
+    const offen = {};
+    const bald = ctx.entprellen(() => {
+      for (const i of listen.instanzen()) if (offen[i.art]) { try { listeZeichnen(i.el, i.art, i.ctx); } catch (e) { console.error("eba-liste", e); } }
+      if (offen.uebungen) for (const i of kacheln.instanzen()) if (i.art === "uebungen") { try { kachelnZeichnen(i.el, i.art); } catch (e) { console.error("eba-kacheln", e); } }
+      for (const k of Object.keys(offen)) delete offen[k];
     }, 600);
-    const vorlesung = (cache) => !!(cache && cache.frontmatter && cache.frontmatter.typ === "vorlesung");
-    ctx.an(window.app.metadataCache, "changed", (_f, _d, cache) => { if (vorlesung(cache)) nachBald(); });
-    ctx.an(window.app.metadataCache, "deleted", (_f, vorher) => { if (vorlesung(vorher)) nachBald(); });
-    ctx.an(window.app.vault, "rename", (f) => { if (vorlesung(window.app.metadataCache.getFileCache(f))) nachBald(); });
+    const merken = (cache) => { const art = JE_TYP[cache && cache.frontmatter && cache.frontmatter.typ]; if (art) { offen[art] = true; bald(); } };
+    ctx.an(window.app.metadataCache, "changed", (_f, _d, cache) => merken(cache));
+    ctx.an(window.app.metadataCache, "deleted", (_f, vorher) => merken(vorher));
+    ctx.an(window.app.vault, "rename", (f) => merken(window.app.metadataCache.getFileCache(f)));
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alle(); });
     ctx.intervall(() => { if (document.visibilityState === "visible") alle(); }, 10 * 60 * 1000);
   };
 
-  return { registrieren, kachelnBauen, leisteBauen, zeilenBauen, artVon, zaehler };
+  return { registrieren, kachelnBauen, uebungKachelnBauen, leisteBauen, zeilenBauen, artVon, zaehler };
 };

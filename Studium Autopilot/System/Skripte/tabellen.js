@@ -90,7 +90,7 @@ module.exports = function (ctx) {
 
   // Leere Liste: Klasse eba-tl-ohne an Karte und Abschnitt der Leseansicht. Auf der Modulseite fällt die Karte dann samt einer
   // Überschrift, unter der sonst nichts steht, weg (eba-core.css 37.modul, seit 19.10.2026; vorher stand dort ein Kartentitel
-  // „Übungsblätter, Stundenplan, Termine“ über einer leeren Liste).
+  // „Stundenplan, Termine“ über einer leeren Liste).
   const ohne = (liste, an) => {
     const k = liste.closest(".callout"), s = liste.closest(".markdown-preview-sizer > div");
     if (k) k.classList.toggle("eba-tl-ohne", an);

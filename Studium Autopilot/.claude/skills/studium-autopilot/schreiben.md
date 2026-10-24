@@ -1,7 +1,7 @@
 # Daten in Obsidian schreiben
 
 Eine neue Notiz legst du als ganze Datei an: Frontmatter, Überschrift und Abschnitte wie unten, mit Inhalt. Das Plugin erkennt
-sie am `typ` und zeigt sie sofort an. Eine leere Notiz in `Vorlesungen/` oder `Übungsblätter/` füllt das Plugin selbst, und
+sie am `typ` und zeigt sie sofort an. Eine leere Notiz in `Vorlesungen/` füllt das Plugin selbst, und
 eine Notiz, die nur das Gerüst enthält, räumt es beim Verlassen weg: Schreib darum nie leere oder halbe Notizen.
 
 ## Vorher
@@ -64,7 +64,7 @@ dem PDF-Kasten an; leere Abschnitte und leere Punkte (`- `, `- [ ] `) gibt es ni
 ## To-do
 
 Eine Zeile `- [ ] Text (bis TT.MM.)` in die passende Notiz: Begleitnotiz unter `## Zu tun`, Vorlesungsnotiz unter
-`## Nacharbeit`, Übungsblatt unter der Aufgabe, sonst eine eigene Notiz der Person. Nie in `System/`, `Module/`, `Studium/`,
+`## Nacharbeit`, sonst eine eigene Notiz der Person. Nie in `System/`, `Module/`, `Studium/`,
 `Lernplan/` oder ins Dashboard, dort zählt es nicht. Abhaken: `- [ ]` → `- [x]` genau in dieser Zeile.
 
 ## Vorlesungsnotiz

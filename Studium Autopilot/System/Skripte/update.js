@@ -1,4 +1,4 @@
-// Update der Vorlage mit einem Knopf (seit 0.2.0). Zeile „Studium Autopilot“ in ```eba-verbindungen``` (verbindungen.js):
+// Update der Vorlage mit einem Knopf (seit 0.2.0). Zeile „Updates“ in ```eba-verbindungen``` (verbindungen.js):
 // Version, „Neue Version X verfügbar“ und Knopf „Neue Version installieren“. Seit 0.3.1 zusätzlich ```eba-update-hinweis``` oben auf dem
 // Dashboard: schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Doku: docs/architektur.md, „Update“.
 //
@@ -24,18 +24,23 @@
 //   modul → Katalogfelder neu, persönliche Felder (PERSOENLICH) und eigene Felder bleiben, Text bleibt, wenn du ihn geändert
 //   hast; einstellung (.obsidian/*.json) → fehlende Einträge ergänzen, deine Werte bleiben. Gelöschte Seiten/Module kommen nicht
 //   wieder. Dateien, die es nicht mehr gibt, wandern unverändert in die Sicherung; geänderte Seiten/Module bleiben, geänderte
-//   Systemdateien gehen mit Sicherung daneben. Lesezeichen auf entfernte Dateien fallen auch aus deiner bookmarks.json weg.
-//   Ältere Kopien „Seite (neu X).md“, die genau der alten oder neuen Vorlage gleichen, räumt das Update weg (keine Stapel).
+//   Systemdateien gehen mit Sicherung daneben. Lesezeichen auf entfernte Dateien fallen auch aus deiner bookmarks.json weg;
+//   Lesezeichen, die die Vorlage dazunimmt oder streicht, zieht jedes Gerät nach (LESEZEICHEN_NEU, seit 0.6.8, lesezeichenAnwenden).
+//   Ältere Kopien „Seite (neu X).md“, die genau der alten oder neuen Vorlage gleichen, räumt das Update weg (keine Stapel);
+//   bleibt deine Seite (Vorlage unverändert), bleibt die jüngste davon (seit 0.6.8, siehe kopienAufraeumen).
+//   Zeilenenden zählen beim Vergleich nicht (seit 0.6.8, istVon): LF und CRLF derselben Fassung gelten als gleich.
 // Reparatur (seit 0.4.4, heilenMit): Das Update auf 0.4.4 plant noch der alte update.js. Darum prüft der neue einmal je Gerät
 //   und Version: Systemdatei ≠ installiert.json, aber eine beiseitegelegte „(neu X)“-Kopie hat genau die Prüfsumme der Liste →
 //   diese wird aktiv, deine Fassung kommt als Sicherung daneben, die Kopien gehen weg. Kopien von Seiten, die genau der jetzigen
-//   Vorlage gleichen und älter als die installierte Version sind, gehen auch weg. Nie aus dem Netz, nie eine Seite selbst.
+//   Vorlage gleichen und älter als die installierte Version sind, gehen auch weg, außer der jüngsten, solange die Seite selbst
+//   von der Vorlage abweicht. Nie aus dem Netz, nie eine Seite selbst.
 //   Synchronisierte Pfade (alles außer .obsidian/) nur auf dem Gerät, das für alle schreibt (ctx.zentral.abruferHier).
-// Nie angefasst: alles, was klasseVon nicht kennt (Einstellungen, Termine, Stundenplan, Vorlesungen, Unterlagen, Eingang,
-//   Anhänge, Semester.md, abruf.json, appearance.json …).
+// Nie angefasst: alles, was klasseVon nicht kennt (Einstellungen, Termine, Stundenplan, Vorlesungen, Unterlagen, Anhänge,
+//   Semester.md, abruf.json, appearance.json …). Ausnahme: Ordner, die die Vorlage nicht mehr hat (ALTE_ORDNER, seit 0.6.8,
+//   ordnerAufraeumenMit): einmal je Tresor weg, Dateien darin wandern vorher an einen neuen Ort, gelöscht wird keine.
 // Kanal: update_kanal in System/Einstellungen.md („stabil“ Standard, „beta“). Das Manifest nennt release (stabil) und optional
 //   beta (X.Y.Z-beta.N); auf Kanal beta wird die höhere von beiden angeboten, nie eine ältere als die installierte.
-//   Schalter „Beta-Versionen“ im Fenster „Studium Autopilot“ unter „Mehr erfahren“.
+//   Schalter „Beta-Versionen“ im Fenster „Updates“ unter „Mehr erfahren“.
 // Unterbrochen (seit 0.4.8): Als erste Datei schreibt das Update System/Daten/update.json (synchronisiert, { version, von,
 //   geraet, seit }) und lässt sie danach liegen; fertig ist es erst mit installiert.json (zuletzt). Neuer als installiert.json
 //   und von diesem Gerät → „Update fertigstellen“ (App beendet, bevor alles geschrieben war; ein zweiter Lauf schreibt nur, was
@@ -62,7 +67,8 @@
 //   Kennung und ohne Angaben aus dem Tresor (zaehlen, docs/datenschutz.md). Schalter „Mitzählen“ neben „Beta-Versionen“.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt der Frage im Fenster), plugin.testUpdateBasis (andere Basis-URL,
 //   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.toast,
-//   ctx.update.heilen(true) (Reparatur sofort, ohne Merker eba-update-reparatur).
+//   ctx.update.heilen(true) (Reparatur sofort, ohne Merker eba-update-reparatur), ctx.update.ordnerAufraeumen(version, true)
+//   (alte Ordner sofort, als wäre dieses Gerät das, das für alle schreibt).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
   const app = window.app;
@@ -86,6 +92,15 @@ module.exports = function (ctx) {
   const G = { dateien: 3000, datei: 4194304, gesamt: 41943040, liste: 2097152, pfad: 300, parallel: 4 };
   const HEX = /^[0-9a-f]{64}$/;
   const SICHERUNG = ".trash/Studium Autopilot Sicherung ";
+  // Ordner der Vorlage, die es nicht mehr gibt (ordnerAufraeumenMit). Neuer Eintrag, wenn eine Version einen Ordner der Vorlage
+  // streicht oder umbenennt: ab = erste Version ohne ihn, nach = wohin Dateien darin wandern (ohne nach: nur ein leerer geht weg).
+  const ALTE_ORDNER = [
+    { ordner: "Eingang", ab: "0.6.7", nach: "Unterlagen/Ohne Modul" }, // Unterlagen kommen nur noch über die Dateiauswahl dazu
+    { ordner: "Übungsblätter", ab: "0.6.8" }, // ein Blatt ist seine Begleitnotiz; ältere Blatt-Notizen bleiben, wo sie sind
+  ];
+  const AUFGERAEUMT = "System/Daten/aufgeraeumt.json"; // erledigte ALTE_ORDNER (synchronisiert, nicht in der Vorlage)
+  const MUELL = [".gitkeep", ".DS_Store", "Thumbs.db", "desktop.ini"]; // zählt nicht als Inhalt eines Ordners
+
 
   // ---------- Kleine Helfer ----------
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -348,9 +363,59 @@ module.exports = function (ctx) {
     d.items = filtern(d.items);
     return n ? JSON.stringify(d, null, 2) : null;
   };
+  // Lesezeichen, die die Vorlage dazunahm oder strich (seit 0.6.8). Ab dem ersten eigenen Lesezeichen ersetzt das Update
+  // bookmarks.json nicht mehr, und Mischen lässt Listen von Objekten, wie sie sind; auf Geräten, die .obsidian/ nicht
+  // synchronisieren, kommt die neue Datei gar nicht an. Neuer Eintrag, wenn die Vorlage ihre Lesezeichen ändert
+  // (tests/update.test.js rechnet ihre Liste aus der von 0.4.2 nach). dazu: hinter das Lesezeichen „nach“, sonst ans Ende.
+  // weg: nur das Lesezeichen, das die Vorlage angelegt hat (VORLAGE_CTIME), keins, das du selbst gesetzt hast, keins in Gruppen.
+  const LESEZEICHEN_NEU = [
+    { ab: "0.4.6", dazu: "Studium/Studienverlauf.md", nach: "Studium/Stundenplan.md" },
+    { ab: "0.4.6", dazu: "Studium/Termine & Anmeldungen.md", nach: "Studium/Studienverlauf.md" },
+    { ab: "0.4.6", dazu: "Studium/Unterlagen.md", nach: "Studium/Noten & ECTS.md" },
+    { ab: "0.4.6", dazu: "Studium/Karteikarten.md", nach: "Studium/Unterlagen.md" },
+    { ab: "0.4.6", dazu: "Studium/Einstellungen & Hilfe.md", nach: "Studium/Kontakte & Links.md" },
+    { ab: "0.6.0", dazu: "Studium/Postfach.md", nach: "Studium/Termine & Anmeldungen.md" },
+    { ab: "0.6.7", weg: "Studium/Stundenplan.md" },
+  ];
+  // ctime der Lesezeichen aus der Vorlage (…000 bis …999, lange vor jeder echten Installation); nachgezogene bekommen auch eine
+  const VORLAGE_CTIME = 1790760000000;
+  const vonVorlage = (x) => typeof x.ctime === "number" && x.ctime >= VORLAGE_CTIME && x.ctime < VORLAGE_CTIME + 1000;
+  // text = deine bookmarks.json, eintraege = Teil von LESEZEICHEN_NEU → Text oder null (nichts zu tun). Ein dazu-Eintrag kommt
+  // nur, wenn du kein Lesezeichen seiner Version aus der Vorlage hast: Hattest du sie, hast du die übrigen selbst entfernt.
+  const lesezeichenNachziehen = (text, eintraege) => {
+    let d;
+    try { d = JSON.parse(text); } catch (e) { return null; }
+    if (!istObj(d) || !Array.isArray(d.items)) return null;
+    const da = []; // { pfad, vorlage } aller Datei-Lesezeichen, auch in Gruppen
+    const sammeln = (items) => {
+      for (const x of items) {
+        if (!istObj(x)) continue;
+        if (Array.isArray(x.items)) sammeln(x.items);
+        if (x.type === "file" && typeof x.path === "string") da.push({ pfad: nfc(x.path), vorlage: vonVorlage(x) });
+      }
+    };
+    sammeln(d.items);
+    const bekommen = {}; // Version → du hattest schon ein Lesezeichen von ihr aus der Vorlage
+    for (const e of LESEZEICHEN_NEU) if (e.dazu && da.some((x) => x.vorlage && x.pfad === nfc(e.dazu))) bekommen[e.ab] = true;
+    const oben = (p) => d.items.findIndex((x) => istObj(x) && x.type === "file" && typeof x.path === "string" && nfc(x.path) === nfc(p));
+    let n = 0;
+    for (const e of eintraege) {
+      if (e.weg) {
+        const i = oben(e.weg);
+        if (i >= 0 && vonVorlage(d.items[i])) { d.items.splice(i, 1); n++; }
+      } else if (e.dazu && !bekommen[e.ab] && !da.some((x) => x.pfad === nfc(e.dazu))) {
+        const neu = { type: "file", ctime: VORLAGE_CTIME + 100 + LESEZEICHEN_NEU.indexOf(e), path: e.dazu, title: nameTeile(e.dazu).basis };
+        const i = e.nach ? oben(e.nach) : -1;
+        if (i >= 0) d.items.splice(i + 1, 0, neu); else d.items.push(neu);
+        da.push({ pfad: nfc(e.dazu), vorlage: true });
+        n++;
+      }
+    }
+    return n ? JSON.stringify(d, null, 2) : null;
+  };
 
   // ---------- Plan (rein, ohne Dateien) ----------
-  // neu, alt: geprüfte Listen (alt darf null sein); ist: pfad → { sha, koerper?, ohneHaken? } (fehlt = Datei fehlt)
+  // neu, alt: geprüfte Listen (alt darf null sein); ist: pfad → { sha, koerper?, ohneHaken?, zeilen? } (fehlt = Datei fehlt)
   // → [{ pfad, klasse, art, eintrag?, koerperNeu? }], art: gleich | anlegen | ersetzen | ersetzen-sichern | behalten-neu |
   //   eigene | modul-mischen | seite-haken | json-mischen | uebersprungen | entfernen | entfernen-sichern | bleibt
   const planen = (neu, alt, ist) => {
@@ -362,36 +427,46 @@ module.exports = function (ctx) {
       const a = hat(A, e.pfad) ? A[e.pfad] : null, c = hat(ist, e.pfad) ? ist[e.pfad] : null;
       let art;
       if (!c) art = a && (e.klasse === "seite" || e.klasse === "modul") ? "uebersprungen" : "anlegen";
-      else if (c.sha === e.sha256) art = "gleich";
-      else if (a && c.sha === a.sha256) art = "ersetzen";
+      else if (passt(c, "sha", e.sha256)) art = "gleich";
+      else if (a && passt(c, "sha", a.sha256)) art = "ersetzen";
       // Darstellung, Programmteile, Gerüste: immer die neue Fassung, deine geänderte vorher als Sicherung daneben
       else if (e.klasse === "system") art = "ersetzen-sichern";
       else if (e.klasse === "einstellung") art = "json-mischen";
       // Vorlage seit der installierten Version gleich: deine Seite bzw. dein Modul bleibt, keine Kopie daneben
       else if (a && e.sha256 === a.sha256) art = "eigene";
       else if (e.klasse === "modul") art = "modul-mischen";
-      else if (e.klasse === "seite" && a && a.ohne_haken && c.ohneHaken === a.ohne_haken) art = "seite-haken";
+      else if (e.klasse === "seite" && a && a.ohne_haken && passt(c, "ohneHaken", a.ohne_haken)) art = "seite-haken";
       else art = "behalten-neu";
       const s = { pfad: e.pfad, klasse: e.klasse, art, eintrag: e };
-      if (art === "modul-mischen") s.koerperNeu = !!(a && a.koerper && c.koerper === a.koerper);
+      if (art === "modul-mischen") s.koerperNeu = !!(a && a.koerper && passt(c, "koerper", a.koerper));
       schritte.push(s);
     }
     if (alt) for (const a of alt.dateien) {
       if (hat(N, a.pfad) || !hat(ist, a.pfad)) continue;
-      const art = ist[a.pfad].sha === a.sha256 ? "entfernen" : a.klasse === "system" ? "entfernen-sichern" : "bleibt";
+      const art = passt(ist[a.pfad], "sha", a.sha256) ? "entfernen" : a.klasse === "system" ? "entfernen-sichern" : "bleibt";
       schritte.push({ pfad: a.pfad, klasse: a.klasse, art });
     }
     return schritte;
   };
   const LADEN = { anlegen: 1, ersetzen: 1, "ersetzen-sichern": 1, "behalten-neu": 1, "modul-mischen": 1, "seite-haken": 1, "json-mischen": 1 };
 
-  // Prüfsummen des Ist-Stands einer Datei (wie in der Liste)
+  // Prüfsummen des Ist-Stands einer Datei (wie in der Liste). Zeilenenden zählen nicht (seit 0.6.8): zeilen.<feld> sind dieselben
+  // Prüfsummen mit LF und mit CRLF. Befund 24.10.2026: Eine Seite der Vorlage mit CRLF kam nach einem Konflikt im Sync mit LF
+  // zurück, das Update hielt sie für selbst geändert und ließ sie auf dem alten Stand.
   const istVon = async (pfad, bytes, klasse) => {
-    const t = { sha: await sha256(bytes) };
-    if (klasse === "modul") t.koerper = await sha256(enc(teilen(dec(bytes)).koerper));
-    if (klasse === "seite") { const x = dec(bytes); if (hatAufgaben(x)) t.ohneHaken = await sha256(enc(ohneHaken(x))); }
+    const x = dec(bytes), lf = x.replace(/\r\n/g, "\n");
+    const fassungen = [x].concat([lf, lf.replace(/\n/g, "\r\n")].filter((v) => v !== x));
+    const werte = async (f) => { const r = []; for (const v of fassungen) r.push(await sha256(enc(f(v)))); return r; };
+    const t = { zeilen: {} };
+    const setzen = async (feld, f) => { const r = await werte(f); t[feld] = r[0]; t.zeilen[feld] = r.slice(1); };
+    t.sha = await sha256(bytes);
+    t.zeilen.sha = fassungen.length > 1 ? (await werte((v) => v)).slice(1) : [];
+    if (klasse === "modul") await setzen("koerper", (v) => teilen(v).koerper);
+    if (klasse === "seite" && hatAufgaben(x)) await setzen("ohneHaken", ohneHaken);
     return t;
   };
+  // c (istVon) hat für feld den Wert soll, mit beliebigen Zeilenenden
+  const passt = (c, feld, soll) => !!c && !!soll && (c[feld] === soll || (!!c.zeilen && (c.zeilen[feld] || []).indexOf(soll) >= 0));
 
   const parallel = async (liste, n, fn) => {
     let i = 0, fehler = null;
@@ -429,6 +504,21 @@ module.exports = function (ctx) {
       if (!hat(merk, o)) { try { merk[o] = (await io.liste(o)) || []; } catch (e) { merk[o] = []; } }
       return merk[o];
     };
+  };
+  // Kopien „Seite (neu X).md“ einer Seite (X vor bis) aus namen, die genau einer der vorlagen (Prüfsummen) gleichen, Zeilenenden
+  // egal. Trägt die Seite danach die neue Vorlage (alleWeg), gehen alle weg (keine Stapel). Bleibt deine Seite, bleibt die jüngste
+  // Kopie mit einer der Vorlagen (auch eine ab bis): Sie ist die eine Stelle, an der du die neue Vorlage siehst. Befund 24.10.2026:
+  // Das Update auf 0.6.4 räumte die Kopie aus 0.6.3 weg, weil sie der unveränderten Vorlage glich; die Seite blieb auf dem alten
+  // Stand, ohne Kopie daneben. Eine Kopie, die du geändert hast, bleibt immer. → [{ pfad, alt }] zum Entfernen
+  const kopienAufraeumen = async (io, pfad, namen, bis, vorlagen, alleWeg) => {
+    const gleiche = [];
+    for (const k of kopienVon(pfad, namen)) {
+      const by = await io.lesen(k.pfad), c = by ? await istVon(k.pfad, by, "") : null;
+      if (c && vorlagen.some((v) => passt(c, "sha", v))) gleiche.push({ pfad: k.pfad, version: k.version, alt: by });
+    }
+    let bleibt = null;
+    if (!alleWeg) for (const g of gleiche) if (!bleibt || neuer(g.version, bleibt.version)) bleibt = g;
+    return gleiche.filter((g) => g !== bleibt && neuer(bis, g.version)).map((g) => ({ pfad: g.pfad, alt: g.alt }));
   };
   // Freier Name für die Sicherung deiner Systemdatei; liegt dort schon genau dieser Inhalt, derselbe Name ohne Schreiben.
   // → { pfad, schreiben } | null (kein freier Name)
@@ -558,7 +648,7 @@ module.exports = function (ctx) {
         const t = modulMischen(alsText(p), dec(n), s.koerperNeu);
         if (t !== alsText(p)) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.gemischt.push(p); }
       } else if (s.art === "seite-haken") {
-        const t = seiteHaken(alsText(p), dec(n));
+        const t = seiteHaken(alsText(p).replace(/\r\n/g, "\n"), dec(n));
         if (t !== alsText(p)) { schreiben.push({ pfad: p, bytes: enc(t), alt: c }); b.haken.push(p); }
       } else if (s.art === "json-mischen") {
         let t = jsonMischenText(alsText(p), dec(n), p, alt && alt.version);
@@ -568,16 +658,16 @@ module.exports = function (ctx) {
       else if (s.art === "entfernen" || s.art === "entfernen-sichern") { loeschen.push({ pfad: p, alt: c }); b.entfernt.push(p); }
       else if (s.art === "bleibt") b.behalten.push(p);
     }
-    // Ältere Kopien „Seite (neu X).md“, die genau der alten oder der neuen Vorlage gleichen, gehen weg (keine Stapel); eine
-    // Kopie, die du geändert hast, bleibt. Die neue Kopie dieses Updates (neu <version>) ist nie dabei.
-    const geschwister = geschwisterLeser(io), A = {};
+    // Ältere Kopien „Seite (neu X).md“ (kopienAufraeumen): Die neue Kopie dieses Updates (neu <version>) ist nie dabei; bleibt
+    // deine Seite, weil die Vorlage gleich blieb (eigene), bleibt die jüngste Kopie.
+    const geschwister = geschwisterLeser(io), A = {}, art = {};
     if (alt) for (const a of alt.dateien) A[a.pfad] = a;
+    for (const s of schritte) art[s.pfad] = s.art;
     for (const e of neu.dateien) {
       if (e.klasse !== "seite") continue;
-      for (const k of kopienVon(e.pfad, await geschwister(e.pfad))) {
-        if (!neuer(rel.version, k.version)) continue;
-        const by = await io.lesen(k.pfad), s = by ? await sha256(by) : "";
-        if (s && (s === e.sha256 || (hat(A, e.pfad) && s === A[e.pfad].sha256))) { loeschen.push({ pfad: k.pfad, alt: by }); b.aufgeraeumt.push(k.pfad); }
+      const vorlagen = [e.sha256].concat(hat(A, e.pfad) ? [A[e.pfad].sha256] : []);
+      for (const k of await kopienAufraeumen(io, e.pfad, await geschwister(e.pfad), rel.version, vorlagen, art[e.pfad] !== "eigene")) {
+        loeschen.push(k); b.aufgeraeumt.push(k.pfad);
       }
     }
     // Plugin-Kern zuletzt (vor den Listen)
@@ -625,11 +715,8 @@ module.exports = function (ctx) {
       const kopien = kopienVon(e.pfad, await geschwister(e.pfad));
       if (!kopien.length) continue;
       if (e.klasse === "seite") {
-        for (const k of kopien) {
-          if (!neuer(V, k.version)) continue;
-          const by = await io.lesen(k.pfad);
-          if (by && (await sha256(by)) === e.sha256) weg(k.pfad, by);
-        }
+        const c = await io.lesen(e.pfad), seiteNeu = !c || passt(await istVon(e.pfad, c, ""), "sha", e.sha256);
+        for (const k of await kopienAufraeumen(io, e.pfad, kopien.map((x) => x.pfad), V, [e.sha256], seiteNeu)) weg(k.pfad, k.alt);
         continue;
       }
       // Kopien einer neueren Version als installiert.json (kommen evtl. gerade per Sync) bleiben unberührt
@@ -662,6 +749,61 @@ module.exports = function (ctx) {
     }
     b.ok = true;
     b.art = "ok";
+    return b;
+  };
+
+  // ---------- Ordner, die die Vorlage nicht mehr hat (seit 0.6.8; Datei-Zugriff über io) ----------
+  // Freier Pfad für eine Datei, die wandert: pfad, sonst „Name 2.ext“, „Name 3.ext“ … → pfad | null
+  const freierPfad = async (io, pfad) => {
+    const t = nameTeile(pfad);
+    for (let nr = 1; nr <= 50; nr++) {
+      const p = nr === 1 ? pfad : t.ordner + t.basis + " " + nr + t.ext;
+      if (!(await io.da(p))) return p;
+    }
+    return null;
+  };
+  // Das Update kennt nur Dateien aus system-dateien.json; einen Ordner der Vorlage, der wegfällt (erster Fall: „Eingang“ in
+  // 0.6.7), ließe es für immer liegen. Je Eintrag in ALTE_ORDNER, sobald installiert.json mindestens „ab“ nennt: Dateien darin
+  // wandern nach „nach“ (Unterordner bleiben, Links ziehen mit, ein belegter Name bekommt eine Zahl), gelöscht wird keine; liegt
+  // danach nur noch MUELL darin, geht der Ordner weg. Fehlt er, ist der Eintrag ebenso erledigt. Einmal je Tresor: Erledigtes
+  // steht in aufgeraeumt.json (synchronisiert), ein Ordner, den du später selbst so nennst, bleibt. Scheitert ein Verschieben,
+  // bleibt der Eintrag offen und kommt beim nächsten Lauf wieder dran (schon Verschobenes liegt am Ziel). Nur auf dem Gerät, das
+  // für alle schreibt (synchronisierte Pfade).
+  // io: { lesen, schreiben, baum(ordner) → { dateien: [pfad] } | null (kein Ordner; alles darunter, auch versteckte Dateien),
+  //   da(pfad) → bool, verschieben(von, nach), ordnerWeg(ordner) → bool }
+  // o: { version (installiert.json), synchron, liste (Standard ALTE_ORDNER) }
+  // → { ok, fehler, verschoben[{ ordner, von, nach }], entfernt[ordner], erledigt[ordner] }
+  const ordnerAufraeumenMit = async (io, o) => {
+    const b = { ok: true, fehler: "", verschoben: [], entfernt: [], erledigt: [] };
+    if (!o.synchron) return b;
+    let merk = null;
+    try { const by = await io.lesen(AUFGERAEUMT); merk = by ? JSON.parse(dec(by)) : null; } catch (e) { merk = null; }
+    const fertig = merk && Array.isArray(merk.erledigt) ? merk.erledigt.filter((x) => typeof x === "string") : [];
+    const muell = (p) => MUELL.indexOf(p.slice(p.lastIndexOf("/") + 1)) >= 0;
+    for (const a of o.liste || ALTE_ORDNER) {
+      if (fertig.indexOf(a.ordner) >= 0 || neuer(a.ab, o.version)) continue;
+      try {
+        const t = await io.baum(a.ordner);
+        if (t) {
+          for (const p of t.dateien) {
+            if (!a.nach || muell(p)) continue;
+            const ziel = await freierPfad(io, a.nach + p.slice(a.ordner.length));
+            if (!ziel) throw new Error("kein freier Name für " + p);
+            await io.verschieben(p, ziel);
+            b.verschoben.push({ ordner: a.ordner, von: p, nach: ziel });
+          }
+          const rest = await io.baum(a.ordner);
+          if (rest && rest.dateien.every(muell) && (await io.ordnerWeg(a.ordner))) b.entfernt.push(a.ordner);
+        }
+        fertig.push(a.ordner);
+        b.erledigt.push(a.ordner);
+      } catch (e) { b.ok = false; b.fehler = a.ordner + ": " + grund(e); }
+    }
+    if (b.erledigt.length) {
+      try { await io.schreiben(AUFGERAEUMT, enc(JSON.stringify({ erledigt: fertig }, null, 2) + "\n")); } catch (e) {
+        b.ok = false; b.fehler = "aufgeraeumt.json: " + grund(e);
+      }
+    }
     return b;
   };
 
@@ -717,11 +859,39 @@ module.exports = function (ctx) {
       const r = await ad().list(ordner);
       return r && Array.isArray(r.files) ? r.files : [];
     },
+    // Für ordnerAufraeumenMit: alles unter einem Ordner über den Adapter (auch .gitkeep, die Obsidian nicht zeigt)
+    baum: async (ordner) => {
+      const st = await ad().stat(ordner);
+      if (!st || st.type !== "folder") return null;
+      const dateien = [];
+      const lauf = async (o) => {
+        const r = await ad().list(o);
+        for (const f of (r && r.files) || []) dateien.push(f);
+        for (const u of (r && r.folders) || []) await lauf(u);
+      };
+      await lauf(ordner);
+      return { dateien };
+    },
+    da: async (pfad) => !!(await ad().exists(pfad)),
+    // über Obsidian, damit Links auf die Datei mitziehen; versteckte Dateien kennt Obsidian nicht, die gehen über den Adapter
+    verschieben: async (von, nach) => {
+      await ordnerAnlegen(nach);
+      const f = app.vault.getAbstractFileByPath(von);
+      if (istDatei(f)) await app.fileManager.renameFile(f, nach);
+      else await ad().rename(von, nach);
+    },
+    // nur, wenn ordnerAufraeumenMit darin nichts außer MUELL gefunden hat („true“: samt .gitkeep und leeren Unterordnern)
+    ordnerWeg: async (ordner) => {
+      const o = app.vault.getAbstractFileByPath(ordner);
+      if (!o || !o.children) return false;
+      await app.vault.delete(o, true);
+      return true;
+    },
   };
 
   // ---------- Zustand ----------
   // bleibend: überlebt den Hot-Reload dieses Skripts (das Update ersetzt update.js womöglich selbst)
-  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, installiert: "", bericht: null, fenster: null, marke: null }));
+  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, raeumt: false, installiert: "", bericht: null, fenster: null, marke: null }));
   const laufendeVersion = () => (ctx.plugin && ctx.plugin.manifest && ctx.plugin.manifest.version) || "0.0.0";
   const installiertVersion = () => zustand.installiert || laufendeVersion();
   const geraetId = () => { try { return ctx.zentral && typeof ctx.zentral.geraetId === "function" ? String(ctx.zentral.geraetId() || "") : ""; } catch (e) { return ""; } };
@@ -827,6 +997,41 @@ module.exports = function (ctx) {
     lokal(L_VORGABE + v.ab, true);
     return geaendert;
   };
+  // Lesezeichen der Vorlage (LESEZEICHEN_NEU) einmal je Gerät und Version, sobald die installierte Version sie mitbringt
+  // (Merker eba-update-lesezeichen = Version; was du danach änderst, bleibt). Danach liest Obsidians Lesezeichen-Plugin die
+  // Datei neu, sonst schriebe es beim nächsten Speichern seine Liste aus dem Speicher zurück. o (Test): { io, plugin }.
+  // → true, wenn sich bookmarks.json geändert hat
+  const L_LESEZEICHEN = "eba-update-lesezeichen";
+  const lesezeichenAnwenden = async (V, o) => {
+    const merk = lokal(L_LESEZEICHEN);
+    if (!semver(V) || merk === V) return false;
+    const d = (o && o.io) || io;
+    const offen = LESEZEICHEN_NEU.filter((e) => !neuer(e.ab, V) && !(semver(merk) && !neuer(e.ab, merk)));
+    const by = offen.length ? await d.lesen(LESEZEICHEN) : null;
+    const t = by ? lesezeichenNachziehen(dec(by), offen) : null;
+    if (t != null) {
+      await d.schreiben(LESEZEICHEN, enc(t));
+      const ip = app && app.internalPlugins && app.internalPlugins.plugins;
+      const b = o ? o.plugin : ip && ip.bookmarks;
+      if (b && b.enabled && b.instance && typeof b.instance.onExternalSettingsChange === "function") await b.instance.onExternalSettingsChange();
+    }
+    lokal(L_LESEZEICHEN, V);
+    return t != null;
+  };
+  // Alte Ordner (ordnerAufraeumenMit) bei jedem Lauf von heilen, vor dessen Merker: Erledigtes steht in aufgeraeumt.json. Sind
+  // Dateien gewandert, sagt ein Hinweis je Ordner, wohin. → Bericht | null (nichts zu prüfen)
+  const ordnerAufraeumen = async (V, synchron) => {
+    if (!synchron || zustand.raeumt || !ALTE_ORDNER.some((a) => !neuer(a.ab, V))) return null;
+    zustand.raeumt = true;
+    let b;
+    try { b = await ordnerAufraeumenMit(io, { version: V, synchron }); } finally { zustand.raeumt = false; }
+    if (!b.ok) console.error("update: alte Ordner", b.fehler);
+    for (const a of ALTE_ORDNER) {
+      const n = b.verschoben.filter((v) => v.ordner === a.ordner).length;
+      if (n) ctx.hinweis(`${n === 1 ? "Eine Datei" : n + " Dateien"} aus dem Ordner „${a.ordner}“, den es nicht mehr gibt, ${n === 1 ? "liegt" : "liegen"} jetzt in „${a.nach}“.`, { dauer: 12000 });
+    }
+    return b;
+  };
   // Reparatur (heilenMit) einmal je Gerät und installierter Version, nicht während eines Updates. Gerätelokal
   // eba-update-reparatur = Version; „Version lokal“, solange dieses Gerät synchronisierte Pfade nicht schreibt (ein Schreiber:
   // ctx.zentral.abruferHier, wie modell.js), dann noch einmal, sobald es darf. immer = true (Test): ohne Merker.
@@ -837,8 +1042,10 @@ module.exports = function (ctx) {
     if (!x) return null;
     const V = x.liste.version;
     try { vorgabenAnwenden(V, app.vault); } catch (e) { console.error("update: Vorgaben", e); }
+    try { await lesezeichenAnwenden(V); } catch (e) { console.error("update: Lesezeichen", e); }
     let synchron = true;
     try { if (ctx.zentral && typeof ctx.zentral.abruferHier === "function") synchron = !!(await ctx.zentral.abruferHier()); } catch (e) { synchron = false; }
+    try { await ordnerAufraeumen(V, synchron); } catch (e) { console.error("update: alte Ordner", e); }
     const merk = lokal(L_REPARATUR);
     if (!immer && (merk === V || (merk === V + " lokal" && !synchron))) return null;
     zustand.heilt = true;
@@ -875,7 +1082,7 @@ module.exports = function (ctx) {
     if (!f) return;
     await app.fileManager.processFrontMatter(f, (fm) => { fm.update_kanal = wert === "beta" ? "beta" : "stabil"; });
   };
-  // Schalter „Beta-Versionen“ (im Fenster „Studium Autopilot“ unter „Mehr erfahren“, verbindungen.js)
+  // Schalter „Beta-Versionen“ (im Fenster „Updates“ unter „Mehr erfahren“, verbindungen.js)
   const kanalSchalter = (el) => {
     if (!obs.Setting) return;
     new obs.Setting(el).setName("Beta-Versionen").setDesc("Neue Versionen früher bekommen, zum Ausprobieren. Sie können noch Fehler haben.")
@@ -909,9 +1116,10 @@ module.exports = function (ctx) {
       }));
   };
 
-  // ---------- Anzeige (Zeile „Studium Autopilot“ in eba-verbindungen) ----------
-  // → { html, pille, symbol, ton, knopf: { aktion, text, cta? (false: normaler Knopf) } | null, kurz? (Stand in der kompakten Zeile:
-  //   die Version, wenn nichts zu tun ist; sonst sagt es die Pille) }
+  // ---------- Anzeige (Zeile „Updates“ in eba-verbindungen) ----------
+  // → { html, pille, symbol, ton, knopf: { aktion, text, cta? (false: normaler Knopf) } | null, kurz? (Stand in der kompakten Zeile,
+  //   wenn nichts zu tun ist: „Aktuell“ bzw. „Nicht geprüft“ ohne Angaben zum Release; sonst sagt es die Pille. Die Version
+  //   steht darunter, verbindungen.js) }
   // Ohne Angebot steht rechts **Nach Updates suchen** (seit 0.4.8), daneben „Mehr erfahren“ als Textlink (verbindungen.js).
   const SUCHEN = { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false };
   const anzeige = () => {
@@ -938,8 +1146,8 @@ module.exports = function (ctx) {
       const url = (ctx.zentral && ctx.zentral.RELEASES) || "https://github.com/studium-autopilot/ecoba/releases";
       return { html: `<a class="eba-vb-neu external-link" href="${esc(url)}" target="_blank" rel="noopener">${esc(`Neue Version ${s.aktuell} verfügbar`)}</a>`, pille: `<span class="eba-pill info">neu</span>`, symbol: "laden", ton: "warn", knopf: null };
     }
-    if (rel) return { html: esc(`Version ${inst}. Du hast die neueste Version.${zusatz}`), kurz: inst, pille: `<span class="eba-pill ok">aktuell</span>`, symbol: "haken", ton: "ok", knopf: SUCHEN };
-    return { html: esc(`Version ${inst}.${zusatz}`), kurz: inst, pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN };
+    if (rel) return { html: esc(`Version ${inst}. Du hast die neueste Version.${zusatz}`), kurz: "Aktuell", pille: `<span class="eba-pill ok">aktuell</span>`, symbol: "haken", ton: "ok", knopf: SUCHEN };
+    return { html: esc(`Version ${inst}.${zusatz}`), kurz: "Nicht geprüft", pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN };
   };
   const status = () => ({ verbunden: true, version: installiertVersion(), laufend: laufendeVersion(), release: release(), kanal: kanal(), laeuft: !!zustand.laeuft });
   // verbindungen.neuZeichnen() zeichnet auch den Hinweis auf dem Dashboard neu (ctx.update.hinweisNeu)
@@ -1032,7 +1240,9 @@ module.exports = function (ctx) {
     if (b.neuKopien.length) z.push({ titel: "Deine Seiten", text: `Deine Fassung bleibt, die neue liegt daneben („neu ${b.version}“): ${b.neuKopien.map((x) => name(x.pfad)).join(", ")}.` });
     if (b.gesichert && b.gesichert.length) z.push({ titel: "Deine Änderungen", text: `Jetzt gilt die neue Fassung, deine liegt als Sicherung daneben („deine Fassung vor ${b.version}“): ${b.gesichert.map((x) => x.pfad.split("/").pop()).join(", ")}.` });
     if (b.behalten.length) z.push({ titel: "Behalten", text: `Nicht mehr in der neuen Version, du hattest sie geändert: ${b.behalten.map(name).join(", ")}.` });
-    z.push({ titel: "Andere Geräte", text: b.plugin ? "Das Update kommt von selbst. Dort einmal auf „Neu laden“ oben auf dem Dashboard tippen." : "Das Update kommt von selbst, dort musst du nichts tun." });
+    z.push({ titel: "Andere Geräte", text: (b.plugin ? "Das Update kommt von selbst. Dort einmal auf „Neu laden“ oben auf dem Dashboard tippen." : "Das Update kommt von selbst, dort musst du nichts tun.")
+      // LiveSync (livesync.js) gleicht nur ab, solange Obsidian hier offen ist
+      + (b.livesync ? " Lass Obsidian hier noch eine Minute offen, damit alles bei ihnen ankommt." : "") });
     if (b.sicherung) z.push({ titel: "Sicherung", text: `Im versteckten Ordner „${b.sicherung}“ deines Tresors, am PC oder Mac zu öffnen.` });
     return z;
   };
@@ -1254,6 +1464,7 @@ module.exports = function (ctx) {
         zustand.installiert = rel.version;
         b.vorher = inst;
         lokal(L_GESEHEN, rel.version); // dieses Gerät sieht das Ergebnis im Fenster, also kein „Aktualisiert auf …“ danach
+        b.livesync = !!(ctx.user && ctx.user.livesync && ctx.user.livesync.aktiv(app));
         if (b.plugin) { melden("", 1); b.neuGeladen = await pluginNeuLaden(); }
       }
     } catch (e) {
@@ -1270,7 +1481,7 @@ module.exports = function (ctx) {
     return b;
   };
 
-  // ---------- Nach Updates suchen (Knopf in der Zeile „Studium Autopilot“ und Befehl, seit 0.4.8) ----------
+  // ---------- Nach Updates suchen (Knopf in der Zeile „Updates“ und Befehl, seit 0.4.8) ----------
   // Holt das Manifest sofort, ohne die Wartezeit der automatischen Prüfung (zählt als Prüfung: eba-update-geprueft), und sagt das
   // Ergebnis: das Angebot im Fenster „Neue Version“ (seit 0.5.4), sonst ein Hinweis: „Du hast die neueste
   // Version.“ → "angebot" | "aktuell" | "laden" | "link" | "fertigstellen" | "anderes" | "fehler" | null (läuft gerade)
@@ -1546,10 +1757,10 @@ module.exports = function (ctx) {
   ctx.update = {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, zaehlenSetzen, zaehlenSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
-    markeLage, MARKE, MARKE_STILL, handInstalliertMit,
+    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, lesezeichenNachziehen, lesezeichenAnwenden, LESEZEICHEN_NEU, planen, aktualisierenMit, heilenMit, ordnerAufraeumenMit, ALTE_ORDNER, AUFGERAEUMT, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, zaehlenSetzen, zaehlenSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    markeLage, MARKE, MARKE_STILL, handInstalliertMit, istVon, passt, kopienAufraeumen,
     // Obsidian
-    kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertNeu, installiertAnlegen, heilen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
+    kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertNeu, installiertAnlegen, heilen, ordnerAufraeumen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,

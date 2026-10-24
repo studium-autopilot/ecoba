@@ -85,6 +85,47 @@ test("planen: Zeitgeber über die Helfer des Skripts, Backoff, kein zweiter Lauf
   assert.equal(timer.length, 0);
 });
 
+test("planen: verborgenes Fenster, in dem LiveSync nicht abgleicht → kein Lauf im Takt, nach der Rückkehr gleich nach", async () => {
+  const timer = [], dom = {};
+  let id = 0, still = true;
+  const ctx = {
+    zeit: (fn, ms) => { const t = { id: ++id, fn, ms }; timer.push(t); return t.id; },
+    stopp: (x) => { const i = timer.findIndex((t) => t.id === x); if (i >= 0) timer.splice(i, 1); },
+    dom: (el, typ, fn) => { dom[typ] = fn; }, an: () => ({}), aufraeumen: () => {},
+    obsidian: { Platform: { isMobile: false } },
+    user: { livesync: { hintergrundStill: (app, dok, mobil) => { assert.equal(mobil, false); return still && dok.visibilityState === "hidden"; } } },
+  };
+  const dok = { visibilityState: "hidden" };
+  const gruende = [];
+  const z = Q.planen(ctx, { takt: 60 * MIN, start: [20e3, 0], dokument: dok, app: { metadataCache: { resolved: true } },
+    lauf: async (x) => { gruende.push(x.grund); return true; } });
+  timer.shift().fn(); await new Promise((r) => setImmediate(r));
+  assert.deepEqual(gruende, [], "verborgen: kein Lauf");
+  assert.deepEqual(timer.map((t) => t.ms), [Q.K.SYNC_WARTEN], "später noch einmal schauen");
+  timer.shift().fn(); await new Promise((r) => setImmediate(r));
+  assert.deepEqual(gruende, []);
+  // Fenster wieder sichtbar: kurz warten (LiveSync holt den Stand), dann laufen
+  dok.visibilityState = "visible";
+  dom.visibilitychange();
+  assert.deepEqual(timer.map((t) => t.ms), [Q.K.SYNC_ZURUECK]);
+  timer.shift().fn(); await new Promise((r) => setImmediate(r));
+  assert.deepEqual(gruende, ["takt"]);
+  // Knopf läuft immer; LiveSync gleicht im Hintergrund ab (still false) → Takt läuft auch verborgen
+  dok.visibilityState = "hidden";
+  await z.jetzt("knopf");
+  still = false;
+  timer.length = 0;
+  z.spaeter(1000);
+  timer.shift().fn(); await new Promise((r) => setImmediate(r));
+  assert.deepEqual(gruende, ["takt", "knopf", "takt"]);
+  // Ohne livesync.js (ältere Fassung auf dem Gerät): wie bisher
+  const ohne = Object.assign({}, ctx, { user: {} });
+  const g2 = [];
+  Q.planen(ohne, { takt: 60 * MIN, start: [20e3, 0], dokument: { visibilityState: "hidden" }, app: { metadataCache: { resolved: true } }, lauf: async () => { g2.push(1); return true; } });
+  timer.pop().fn(); await new Promise((r) => setImmediate(r));
+  assert.deepEqual(g2, [1]);
+});
+
 test("Besitz: herkunft + Id-Feld, ältere Namen bleiben gültig", () => {
   assert.deepEqual(Q.besitz({ herkunft: "zentral", zentral_id: "x-1" }), { quelle: "zentral", id: "x-1" });
   assert.deepEqual(Q.besitz({ herkunft: "alma", alma_schluessel: "WS|B110|1|10:00|12:00" }), { quelle: "alma", id: "WS|B110|1|10:00|12:00" });

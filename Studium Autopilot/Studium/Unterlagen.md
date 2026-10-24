@@ -15,7 +15,6 @@ cssclasses:
 
 > [!eba-neu|ohne-titel]
 > - [Unterlagen hinzufügen](obsidian://studium-autopilot?aktion=einordnen)
-> - [Neues Übungsblatt](obsidian://studium-autopilot?aktion=uebungsblatt)
 > - [In Unterlagen suchen](obsidian://studium-autopilot?aktion=suchen&q=path%3AUnterlagen%20)
 > - [Unterlagen aktualisieren](obsidian://studium-autopilot?aktion=ilias-holen)
 >
@@ -50,124 +49,16 @@ cssclasses:
 >       - formula.karte
 > ```
 
-## Übungsblätter
+## Übungen
 
 > [!eba-kennzahlen|kz-flach|kz-blaetter]
-> ```base
-> filters:
->   and:
->     - file.name == "Unterlagen"
-> formulas:
->   b: |-
->     file("Studium/Unterlagen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "übungsblatt")
->   offen: |-
->     formula.b.filter(!["abgegeben", "korrigiert"].contains(value.properties.status.toString().lower().trim()))
->   woche: |-
->     formula.offen.filter(value.properties.faellig && date(value.properties.faellig) >= today() && date(value.properties.faellig) <= today() + duration("7d")).length
->   spaet: |-
->     formula.offen.filter(value.properties.faellig && date(value.properties.faellig) < today()).length
->   ab: |-
->     formula.b.filter(["abgegeben", "korrigiert"].contains(value.properties.status.toString().lower().trim())).length
->   karte: |-
->     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel akzent'><span class='k'>Offen</span><span class='v'>" + formula.offen.length + "</span>" + if(formula.spaet > 0, "<span class='s'>" + formula.spaet + " überfällig</span>", "") + "</div>" + "<div class='eba-kachel'><span class='k'>Fällig in 7 Tagen</span><span class='v'>" + formula.woche + "</span></div>" + "<div class='eba-kachel'><span class='k'>Abgegeben</span><span class='v'>" + formula.ab + "</span><span class='s'>von " + formula.b.length + " Blättern</span></div>" + "</div></div>")
-> views:
->   - type: list
->     name: Kennzahlen
->     order:
->       - formula.karte
+> ```eba-kacheln uebungen
+> Offene Abgaben erscheinen, sobald Studium Autopilot läuft.
 > ```
 
 > [!eba-tabelle|schlicht|ohne-titel|umbruch]
-> ```base
-> filters:
->   and:
->     - 'typ == "übungsblatt"'
-> formulas:
->   tage: 'if(faellig, ((date(faellig) - today()).days).round(), 999)'
->   wann: 'if(faellig.isEmpty(), "kein Datum", if(["abgegeben", "korrigiert"].contains(status.toString().lower().trim()), "erledigt", if(formula.tage < 0, "überfällig", if(formula.tage == 0, "heute", if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen")))))'
-> properties:
->   file.name:
->     displayName: Blatt
->   note.code:
->     displayName: Modul
->   note.faellig:
->     displayName: Fällig
->   formula.wann:
->     displayName: Wann
->   note.status:
->     displayName: Status
-> views:
->   - type: table
->     name: Offen
->     filters:
->       and:
->         - '!["abgegeben", "korrigiert"].contains(status.toString().lower().trim())'
->     order:
->       - file.name
->       - code
->       - faellig
->       - formula.wann
->       - status
->     sort:
->       - property: faellig
->         direction: ASC
->     rowHeight: medium
->     columnSize:
->       file.name: 243
->       note.code: 69
->       note.faellig: 95
->       formula.wann: 95
->       note.status: 95
-> ```
-
-> [!eba-tabelle|schlicht|umbruch]- Alle Übungsblätter
-> ```base
-> filters:
->   and:
->     - 'typ == "übungsblatt"'
-> properties:
->   file.name:
->     displayName: Blatt
->   note.code:
->     displayName: Modul
->   note.faellig:
->     displayName: Fällig
->   note.status:
->     displayName: Status
-> views:
->   - type: table
->     name: Nach Modul
->     groupBy:
->       property: note.code
->       direction: ASC
->     order:
->       - file.name
->       - faellig
->       - status
->     sort:
->       - property: nummer
->         direction: ASC
->     rowHeight: medium
->     columnSize:
->       file.name: 360
->       note.faellig: 110
->       note.status: 120
->   - type: table
->     name: Alle
->     order:
->       - file.name
->       - code
->       - faellig
->       - status
->     sort:
->       - property: faellig
->         direction: DESC
->     rowHeight: medium
->     columnSize:
->       file.name: 322
->       note.code: 71
->       note.faellig: 98
->       note.status: 107
+> ```eba-liste uebungen
+> Übungen mit Abgabe erscheinen, sobald Studium Autopilot läuft.
 > ```
 
 ## Neu

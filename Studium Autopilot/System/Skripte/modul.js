@@ -16,7 +16,8 @@
 //  3b. Abdeckung (seit 0.5.3): Termine aus Folien und ILIAS-Dateien kommen zentral nur für Module, deren Unterlagen der Autor
 //     liest (ctx.zentral.abdeckung). Im laufenden Semester steht bei jedem anderen Modul ein Satz darüber; mit eigenem Server liest
 //     der die neuen Unterlagen des Moduls nach Terminen (server.js).
-//  4. Knöpfe: Neues Übungsblatt, Karteikarten lernen (wenn es einen Stapel gibt), Unterlagen hinzufügen, Suchen.
+//  4. Knöpfe: Karteikarten lernen (wenn es einen Stapel gibt), Unterlagen hinzufügen, Suchen. „Neues Übungsblatt“ fiel am 24.10.2026
+//     weg: Jedes Blatt ist seine Begleitnotiz (Unterlage der Art Übung, mit Status und Abgabe im Kopf, kopf.js).
 //  5. Vorlesungen (seit 19.10.2026): eigener Abschnitt direkt unter dem Modulfeld, über „Unterlagen“, ohne Codeblock in den
 //     Modulnotizen. Deine Vorlesungsnotizen, neueste zuerst, als Zeilen wie die Unterlagen; Name aus ctx.modell.vorlesung
 //     („Vorlesung 1 · Mo 13.10. · Thema“), „nachgearbeitet“ als Pille. Darunter „Neue Vorlesungsnotiz“ (Fenster mit diesem
@@ -378,7 +379,6 @@ module.exports = function (ctx) {
     const stapel = app.vault.getMarkdownFiles().some((x) => { const m = fmVon(x); return m.typ === "karteikarten" && text(m.code) === code; });
     const q = encodeURIComponent(code);
     const knoepfe = [
-      ["file-pen", "Neues Übungsblatt", `uebungsblatt&code=${q}`],
       stapel ? ["layers", "Karteikarten lernen", `karten-lernen&code=${q}`] : null,
       ["folder-input", "Unterlagen hinzufügen", `einordnen&code=${q}`],
       ["search", `In ${code} suchen`, `suchen&q=${encodeURIComponent("path:" + code + " ")}`],

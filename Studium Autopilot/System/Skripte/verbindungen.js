@@ -13,6 +13,7 @@
 //   „Claude“ mit claude.js, wenn dieses Gerät verbunden ist oder kein Server da ist),
 //   vorschau? ("woche": Schloss liegt auf einem ausgegrauten Beispiel-Stundenplan), anreiz? (Überschrift dazu), schlossKnopf? (Text
 //   des Knopfs der Schloss-Karte), trennenText? (Rückfrage beim Trennen), pruefen(link)?, verbinden(link)?, trennen()?, aktualisieren(parameter)? }
+//   symbol? und beschreibung? (nur Zeilen der Übersicht: Symbol der Sache aus SYMBOLE, was sie tut in wenigen Wörtern)
 // Texte (auch für Nicht-Techniker): satz = ein Satz Nutzen (Schloss-Karte); kurz = höchstens ein Satz im Fenster;
 //   schritte = kurze Schritte, Verb vorn, **fett** = Bedienelement genau wie in Alma/Obsidian; erklaerung = Hintergrund,
 //   nur eingeklappt unter „Mehr erfahren“ (höchstens drei kurze Sätze).
@@ -20,10 +21,12 @@
 //   ```eba-schloss <id>```  Solange gesperrt: Karte mit Schloss-Symbol, einem Satz und Knopf „Verbinden“ (mit vorschau: über dem Beispielraster). Steht der Block in einer Karte
 //                           (Callout), blendet CSS den übrigen Inhalt der Karte aus (z. B. das Wochenraster). Sonst leer.
 //   ```eba-verbindungen```  Übersicht (Einstellungen): seit 24.10.2026 je Verbindung eine kompakte Zeile wie in den Einstellungen
-//                           von iPhone und iPad (kompakt): Symbol, Name, rechts ein kurzer Stand („Verbunden“, „An“, die
-//                           Version) und der Pfeil; nur ein Problem bekommt eine zweite Zeile. Die ganze Zeile öffnet das Fenster;
+//                           von iPhone und iPad (kompakt): Symbol der Sache in der Farbe des Stands, Name, rechts ein kurzer
+//                           Stand in einem Wort („Verbunden“, „An“, „Aus“, „Aktuell“, „Fehler“) und der Pfeil; darunter in
+//                           wenigen Wörtern, was sie tut (beschreibung), bei einem Problem stattdessen das Problem. Die ganze
+//                           Zeile öffnet das Fenster;
 //                           der Knopf der Zeile (Verbinden, Aktualisieren, Hier aktualisieren, Einschalten, Neu laden, Neue Version
-//                           installieren) steht dort unten (zeilenKnopf). Zeile „Studium Autopilot“ (art vorlage): Version und
+//                           installieren) steht dort unten (zeilenKnopf). Zeile „Updates“ (art vorlage): Version und
 //                           Update, Text und Knopf aus ctx.update.anzeige() (update.js). Bis dahin stand der Satz in der Zeile und
 //                           der Knopf rechts daneben, dazu der Textlink „Mehr erfahren“ (link). Inhalt der Zeilen weiter so:
 //                           Zeilen (zeile(), seit 18.10.2026): Symbol und Pille widersprechen sich nie. Pille nur, wo der Stand zählt:
@@ -203,6 +206,14 @@ module.exports = function (ctx) {
     laden: '<path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/>',
     "neu-laden": '<path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>',
     pfeil: '<path d="m9 18 6-6-6-6"/>',
+    // Symbol der Sache in der kompakten Zeile (symbol in der Registry; Lucide key-round, file-search, landmark, sparkles,
+    // server, refresh-cw)
+    schluessel: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+    "pdf-suche": '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><circle cx="11.5" cy="14.5" r="2.5"/><path d="M13.3 16.3 15 18"/>',
+    uni: '<path d="M10 18v-7"/><path d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 0-.695-.716-.22-.949z"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M3 22h18"/><path d="M6 18v-7"/>',
+    ki: '<path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z"/><path d="M20 2v4"/><path d="M22 4h-4"/><circle cx="4" cy="20" r="2"/>',
+    server: '<rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/>',
+    update: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
   };
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
@@ -214,8 +225,10 @@ module.exports = function (ctx) {
     // Uni-Login (seit 0.4.8): EINE Zeile unter Verbindungen für alles, was der Login holt (UNI_TEILE); deren eigene Zeilen stehen
     // nur noch im Fenster (UniFenster). Aktualisieren holt alles, was auf diesem Gerät verbunden ist; Trennen trennt alles hier.
     "uni-login": {
-      id: "uni-login", name: "Uni-Login", art: "uni",
+      id: "uni-login", name: "Uni-Login", art: "uni", symbol: "schluessel",
       satz: "Ein Login für Unterlagen, Abgaben und Stundenplan.",
+      // was der Login holt, in den Wörtern seiner Teile (Noten nur, wenn sichtbar)
+      get beschreibung() { return undListe(uniTeile().map((x) => UNI_WORT[x.v.id])); },
       trennenText: "Passwort, Benutzername und Links werden auf diesem Gerät gelöscht. Deine Daten bleiben, werden aber nicht mehr aktualisiert.",
       status() { return { verbunden: uniTeile().some((x) => x.hier), gesperrt: !!VERBINDUNGEN.ilias.status().gesperrt }; },
       gesperrt() { return false; },
@@ -348,10 +361,12 @@ module.exports = function (ctx) {
       trennen() { return ctx.iliasKalender.trennen(); },
     },
     // Volltext der PDFs (volltext.js, seit 0.4.5): Zeile mit den Zahlen aus ctx.volltext.status(), Fenster mit Schalter
-    // („volltext“ in System/Einstellungen.md, gilt für alle Geräte); ein anderes Gerät liest gerade → „Hier aktualisieren“
+    // („volltext“ in System/Einstellungen.md, gilt für alle Geräte); ein anderes Gerät liest gerade → „Hier aktualisieren“.
+    // Heißt seit 24.10.2026 „Suche in PDFs“ (was es dir bringt; „Volltext“ verstand nicht jede:r).
     volltext: {
-      id: "volltext", name: "Volltext der PDFs", art: "volltext",
+      id: "volltext", name: "Suche in PDFs", art: "volltext", symbol: "pdf-suche",
       satz: "Die Suche findet auch Wörter in deinen PDFs.",
+      beschreibung: "Die Suche findet auch Wörter in PDFs",
       kurz: "Zu jeder PDF unter Unterlagen entsteht eine Textfassung, damit die Suche Wörter aus den PDFs findet, auch auf iPhone und iPad.",
       erklaerung: "Gelesen wird nur auf deinen Geräten, nichts geht ins Netz. Ein Gerät reicht, die Textfassungen kommen über deinen Sync auf die anderen.",
       status() { return ctx.volltext ? ctx.volltext.status() : { an: false, zustand: "" }; },
@@ -362,8 +377,9 @@ module.exports = function (ctx) {
     // Zentrale Daten (zentral.js): ohne Schloss, Standard an. Schalter in System/Einstellungen.md (gilt für alle deine Geräte,
     // weil nur ein Gerät die Termine schreibt – ein Schalter nur auf einem Gerät würde nichts abschalten).
     zentral: {
-      id: "zentral", name: "Zentrale Daten", art: "zentral",
+      id: "zentral", name: "Zentrale Daten", art: "zentral", symbol: "uni",
       satz: "Termine und Fristen für alle kommen automatisch.",
+      beschreibung: "Vorlesungen, Fristen und Termine für alle",
       kurz: "Termine, Fristen und Semesterdaten für alle EcoBA-Studierenden kommen alle 15 Minuten von selbst, solange Obsidian offen ist.",
       schritte: [
         "Nicht warten? **Aktualisieren** tippen.",
@@ -378,8 +394,9 @@ module.exports = function (ctx) {
     // Zu sehen, wenn dieses Gerät verbunden ist oder kein eigener Server da ist (der fasst schon zusammen). Zeile und Fenster
     // (Feld für den Schlüssel, Verbrauch, Trennen) liefert ctx.claude (zeile(), fensterInhalt()).
     claude: {
-      id: "claude", name: "Claude", art: "claude",
+      id: "claude", name: "Claude", art: "claude", symbol: "ki",
       satz: "Claude fasst deine Unterlagen zusammen.",
+      beschreibung: "Fasst deine Unterlagen mit KI zusammen",
       get kurz() {
         return ctx.claude && ctx.claude.verbunden()
           ? "Tipp im PDF-Kasten einer Unterlage auf **Zusammenfassen**, dann füllt Claude „Das Wichtigste“, „Zu tun“ und „Offene Fragen“."
@@ -411,8 +428,9 @@ module.exports = function (ctx) {
     // „Prompt kopieren“ für Claude Desktop. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert
     // ctx.server (zeile(), fensterInhalt()).
     server: {
-      id: "server", name: "Eigener Server", art: "server",
+      id: "server", name: "Eigener Server", art: "server", symbol: "server",
       satz: "Dein Server findet mit Claude Termine in deinen Uni-Mails.",
+      beschreibung: "Findet Termine in deinen Uni-Mails",
       // Ohne Server (kein Gerät verbunden): Weg zur Einrichtung mit Claude Desktop; sonst Stand bzw. Verbinden dieses Geräts
       get kurz() {
         return ctx.server && !ctx.server.sichtbar()
@@ -447,10 +465,13 @@ module.exports = function (ctx) {
       async trennen() { if (ctx.server) await ctx.server.trennen(); },
     },
     // Die Vorlage selbst (update.js, seit 0.2.0): Version und Knopf „Neue Version installieren“, wenn eine neue Version da ist,
-    // sonst „Nach Updates suchen“ (seit 0.4.8)
+    // sonst „Nach Updates suchen“ (seit 0.4.8). Heißt seit 24.10.2026 „Updates“: „Studium Autopilot“ ließ neben „Neue Version“
+    // auf dem iPhone keinen Platz und sagte nicht, worum es in der Zeile geht.
     vorlage: {
-      id: "vorlage", name: "Studium Autopilot", art: "vorlage",
+      id: "vorlage", name: "Updates", art: "vorlage", symbol: "update",
       satz: "Neue Versionen holst du mit einem Tipp.",
+      // rechts steht, ob sie aktuell ist (update.js anzeige), darunter die Version
+      get beschreibung() { const v = ctx.update ? ctx.update.status().version : ""; return v ? `Version ${v} installiert` : ""; },
       kurz: "Gibt es eine neue Version, steht hier **Neue Version installieren**. Ein Tipp holt sie, deine Einträge bleiben.",
       schritte: [
         "Nicht warten? **Nach Updates suchen** tippen.",
@@ -1041,25 +1062,34 @@ module.exports = function (ctx) {
 
   // ---------- Kompakte Zeile (Einstellungen & Hilfe, seit 24.10.2026) ----------
   // Wie die Einstellungen von iPhone und iPad, auf allen Geräten gleich: Symbol, Name, rechts ein kurzer Stand und der Pfeil; die
-  // ganze Zeile öffnet das Fenster der Verbindung, ihr Knopf steht dort (zeilenKnopf). Abgeleitet aus statusZeile (st):
-  //   wert: st.kurz, sonst die Pille in Worten (KURZ_PILLE), sonst das Symbol (KURZ_SYMBOL), bei einem Problem nie „Verbunden“
-  //   oder „An“, sondern „Fehler“; art: „warn“ bei einem Problem (Warnsymbol), „akzent“, wenn etwas auf dich wartet (Ton warn ohne Problem: neue Version, Neu laden); unter: nur bei einem
-  //   Problem, st.unter oder der Satz der Zeile; ziel: der Knopf, wenn er selbst ein Fenster öffnet (Verbinden, Einschalten), sonst
-  //   „Mehr erfahren“, sonst das Fenster der Verbindung. Rein (tests/verbindungen.test.js).
-  const KURZ_PILLE = { verbunden: "Verbunden", "nicht verbunden": "Nicht verbunden", "neu verbinden": "Neu verbinden", an: "An", aus: "Aus",
+  // ganze Zeile öffnet das Fenster der Verbindung, ihr Knopf steht dort (zeilenKnopf). Der Stand ist ein Wort, damit er auch
+  // auf dem iPhone mit großer Schrift neben dem Namen Platz hat (Name und Stand zusammen höchstens 24 Zeichen, Test); bis
+  // 24.10.2026 rutschten „Nicht verbunden“ und „Neue Version“ unter den Namen. Abgeleitet aus statusZeile (st):
+  //   wert: st.kurz, sonst die Pille in Worten (KURZ_PILLE), sonst das Symbol (KURZ_SYMBOL; Haken: „An“ bei einem Schalter wie
+  //   Zentrale Daten, sonst „Verbunden“; nicht verbunden „Aus“), bei einem Problem immer „Fehler“; art: „warn“ bei einem
+  //   Problem (Warnsymbol), „akzent“, wenn etwas auf dich wartet (Ton warn ohne Problem: neue Version, Neu laden); unter (seit
+  //   24.10.2026 immer, damit auch Neue verstehen, wozu die Zeile da ist): bei einem Problem st.unter oder der Satz der Zeile,
+  //   sonst st.unter oder v.beschreibung; symbol: das der Sache (v.symbol), ton: seine Farbe (art, sonst ok bei Ton ok, sonst
+  //   leise); ziel: der Knopf, wenn er selbst ein Fenster öffnet (Verbinden, Einschalten), sonst „Mehr erfahren“, sonst das
+  //   Fenster der Verbindung. Rein (tests/verbindungen.test.js).
+  const KURZ_PILLE = { verbunden: "Verbunden", "nicht verbunden": "Aus", an: "An", aus: "Aus",
     pausiert: "Pausiert", fehler: "Fehler", neu: "Neue Version", "neu laden": "Neu laden", "läuft": "Läuft …", unterbrochen: "Unterbrochen" };
-  const KURZ_SYMBOL = { haken: "An", aus: "Aus", schloss: "Nicht verbunden", extern: "Nicht verbunden", uhr: "Läuft …", pause: "Pausiert", warnung: "Prüfen" };
+  const KURZ_SYMBOL = { aus: "Aus", schloss: "Aus", extern: "Aus", uhr: "Läuft …", pause: "Pausiert" };
+  const SCHALTER = ["zentral", "volltext"]; // man schaltet sie an und aus, statt sie zu verbinden
   const ENTITAETEN = { "&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": '"', "&#39;": "'" };
   const nurText = (html) => String(html || "").replace(/<[^>]*>/g, "").replace(/&(amp|lt|gt|quot|#39);/g, (e) => ENTITAETEN[e]).replace(/\s+/g, " ").trim();
   const hrefVon = (html) => { const m = /href="([^"]*)"/.exec(html || ""); return m ? m[1].replace(/&amp;/g, "&") : ""; };
   const aktionVon = (href) => { const m = /[?&]aktion=([^&]*)/.exec(href || ""); return m ? decodeURIComponent(m[1]) : ""; };
   const kompakt = (v, st) => {
     const pille = nurText(st.pille).toLowerCase(), problem = st.symbol === "warnung";
-    const w = st.kurz != null ? st.kurz : KURZ_PILLE[pille] || KURZ_SYMBOL[st.symbol] || "";
-    const wert = problem && (w === "Verbunden" || w === "An") ? "Fehler" : w;
+    const haken = st.symbol === "haken" ? (SCHALTER.indexOf(v.art) >= 0 ? "An" : "Verbunden") : "";
+    const w = st.kurz != null ? st.kurz : KURZ_PILLE[pille] || haken || KURZ_SYMBOL[st.symbol] || "";
+    const wert = problem ? "Fehler" : w;
+    const art = problem ? "warn" : st.ton === "warn" ? "akzent" : "";
+    const unter = problem ? st.unter || nurText(st.html != null ? st.html : esc(st.text)) : st.unter || v.beschreibung || "";
     const knopfZiel = hrefVon(st.knopf), linkZiel = hrefVon(st.link);
     const ziel = aktionVon(knopfZiel) === "verbinden" ? knopfZiel : aktionVon(linkZiel) === "verbinden" ? linkZiel : ctx.link("verbinden", { id: v.id });
-    return { wert, art: problem ? "warn" : st.ton === "warn" ? "akzent" : "", unter: problem ? st.unter || nurText(st.html != null ? st.html : esc(st.text)) : "", ziel };
+    return { wert, art, unter, symbol: v.symbol || st.symbol, ton: art || (st.ton === "ok" ? "ok" : "leise"), ziel };
   };
 
   // ---------- Stand einer Quelle: EINE Formatierung (Quellen-Vertrag) ----------
@@ -1101,7 +1131,7 @@ module.exports = function (ctx) {
       const pille = s.pause ? `<span class="eba-pill info">pausiert</span>` : s.fehler ? `<span class="eba-pill warn">Fehler</span>` : `<span class="eba-pill ok">an</span>`;
       let html = esc(t.text);
       if (s.hinweis) html += " " + esc(s.hinweis);
-      // Mit update.js (seit 0.2.0) steht die neue Version in der eigenen Zeile „Studium Autopilot“ mit Knopf
+      // Mit update.js (seit 0.2.0) steht die neue Version in der eigenen Zeile „Updates“ mit Knopf
       if (s.neueVersion && !ctx.update) html += ` <a class="eba-vb-neu external-link" href="${esc(s.releases)}" target="_blank" rel="noopener">Neue Version verfügbar</a>`;
       return { zu: false, html, pille, symbol: t.symbol, ton: t.ton, knopf: knopf("zentral-aktualisieren", "", WORT.knopf, "cta"), link: mehrLink(v.id) };
     }
@@ -1155,13 +1185,15 @@ module.exports = function (ctx) {
     if (si.extern) {
       if (si.gruppenZugang) { const sy = si.laeuft ? "uhr" : si.fehler || si.warnung ? "warnung" : "haken"; return { zu: false, text: si.text, pille: PILLE.an, symbol: sy, ton: tonVon(sy), knopf: si.laeuft ? "" : aktualisierenKnopf(v.id, false, {}), link: mehr }; }
       const von = ["deine Unterlagen"].concat(kalenderExtern() ? ["deine Abgaben"] : [], stundenplanExtern() ? ["dein Stundenplan"] : []);
-      const satz = `${undListe(von)} kommen über deinen Uni-Abgleich.`;
-      return { zu: false, text: satz.charAt(0).toUpperCase() + satz.slice(1), kurz: "Über Uni-Abgleich", pille: "", symbol: "haken", ton: "ok", knopf: "", link: hier.length || si.benutzer || von.length < 3 ? mehr : "" };
+      const satz = `${undListe(von)} kommen über deinen Uni-Abgleich.`, text = satz.charAt(0).toUpperCase() + satz.slice(1);
+      // kompakt: anmelden musst du dich hier nicht, darunter woher es kommt
+      return { zu: false, text, kurz: "Nicht nötig", unter: von.length > 2 ? "Alles kommt über deinen Uni-Abgleich." : text, pille: "", symbol: "haken", ton: "ok", knopf: "",
+        link: hier.length || si.benutzer || von.length < 3 ? mehr : "" };
     }
     const aktiv = teile.filter((x) => x.hier || x.anderswo);
     if (!aktiv.length) {
       const zu = VERBINDUNGEN.ilias.gesperrt(), los = uniAnmeldungHier();
-      return { zu, text: VERBINDUNGEN.ilias.kurz, kurz: "Nicht verbunden", pille: zu ? PILLE.nicht : "", symbol: zu ? "schloss" : "aus", ton: "leise",
+      return { zu, text: VERBINDUNGEN.ilias.kurz, kurz: "Aus", pille: zu ? PILLE.nicht : "", symbol: zu ? "schloss" : "aus", ton: "leise",
         knopf: los ? knopf("verbinden", "ilias", "Mit Uni-Login verbinden", "cta") : knopf("verbinden", v.id, "Mehr erfahren", ""), link: los ? mehr : "" };
     }
     const neu = Math.max(0, ...aktiv.map((x) => Date.parse(x.zuletzt || "") || 0)), bis = neu ? vor(new Date(neu).toISOString()) : "";
@@ -1242,13 +1274,15 @@ module.exports = function (ctx) {
   const volltextZeile = (v) => {
     const s = v.status();
     if (!ctx.volltext) return null;
-    if (s.zustand === "extern" || s.zustand === "fremd") return { zu: false, text: s.text, kurz: s.zustand === "extern" ? "Über Uni-Abgleich" : "An", pille: "", symbol: "haken", ton: "ok", knopf: "", link: "" };
+    // von außen (eigener Uni-Abgleich) oder fremde Textfassungen: Die Suche findet die Wörter trotzdem, kompakt also „An“
+    if (s.zustand === "extern" || s.zustand === "fremd") return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: "", link: "" };
     if (!s.an) return { zu: false, text: "Aus. Die Suche findet keine Wörter in PDFs.", pille: "", symbol: "aus", ton: "leise", knopf: knopf("verbinden", v.id, "Einschalten", "cta"), link: "" };
     const t = s.laeuft ? { text: s.text, symbol: "uhr", ton: "leise" } : s.fehler || s.zustand === "anderes-geraet" ? standText(s) : { text: s.text, symbol: "haken", ton: "ok" };
     return { zu: false, text: t.text, pille: "", symbol: t.symbol, ton: t.ton, knopf: s.laeuft ? "" : aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", { hier: "1" }), link: mehrLink(v.id) };
   };
 
-  // Übersicht: je Verbindung eine kompakte Zeile (kompakt), die ganze Zeile ist ein Link (eba-core.css 43, .eba-ez)
+  // Übersicht: je Verbindung eine kompakte Zeile (kompakt), die ganze Zeile ist ein Link (eba-core.css 43, .eba-ez). Titel und
+  // Stand stehen in einer Kopfzeile (.eba-ez-kopf): Passen sie nicht nebeneinander, rutscht der Stand ganz darunter.
   const uebersicht = (el) => {
     el.empty();
     const liste = el.createDiv({ cls: "eba-vb-liste eba-ez-liste" });
@@ -1258,9 +1292,10 @@ module.exports = function (ctx) {
       if (!st) continue;
       const k = kompakt(v, st);
       const zeile = liste.createEl("a", { cls: "eba-ez", attr: { href: k.ziel, "data-id": v.id } });
-      zeile.innerHTML = `<span class="eba-vb-symbol ${st.ton || "leise"}" aria-hidden="true">${svg(st.symbol)}</span>`
-        + `<span class="eba-ez-text"><span class="eba-ez-titel">${esc(v.name)}</span>${k.unter ? `<span class="eba-ez-unter">${esc(k.unter)}</span>` : ""}</span>`
-        + (k.wert ? `<span class="eba-ez-wert${k.art ? " " + k.art : ""}">${esc(k.wert)}</span>` : "")
+      zeile.innerHTML = `<span class="eba-vb-symbol ${k.ton}" aria-hidden="true">${svg(k.symbol)}</span>`
+        + `<span class="eba-ez-text"><span class="eba-ez-kopf"><span class="eba-ez-titel">${esc(v.name)}</span>`
+        + (k.wert ? `<span class="eba-ez-wert${k.art ? " " + k.art : ""}">${esc(k.wert)}</span>` : "") + "</span>"
+        + (k.unter ? `<span class="eba-ez-unter">${esc(k.unter)}</span>` : "") + "</span>"
         + `<span class="eba-ez-rechts" aria-hidden="true">${svg("pfeil")}</span>`;
     }
   };

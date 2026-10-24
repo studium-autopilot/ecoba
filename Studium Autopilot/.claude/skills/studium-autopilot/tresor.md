@@ -9,7 +9,7 @@
 | `Termine/` | Termine und Fristen (`typ: termin`): zentrale für alle, vom Server, aus ILIAS, eigene | je nach `herkunft` |
 | `Stundenplan/` | Lehrveranstaltungen (`typ: lehrveranstaltung`), nur in diesem Ordner gezählt | je nach `herkunft` |
 | `Vorlesungen/<Code>/` | Vorlesungsnotizen (`typ: vorlesung`) | Person |
-| `Übungsblätter/` | Übungsblätter (`typ: übungsblatt`) | Person |
+| `Übungsblätter/` | ältere Übungsblatt-Notizen (`typ: übungsblatt`, bis Version 0.6.7), nur in Tresoren, die sie schon haben | Person |
 | `Unterlagen/<Code> <Modultitel>/` (ohne Modul: `Unterlagen/Ohne Modul/`) | Dateien (PDF …) und daneben je eine Begleitnotiz gleichen Namens (`typ: unterlage`) | Person; aus ILIAS mit `ilias_id` |
 | `Unterlagen/_Volltext/` | Textfassungen der PDFs (`typ: volltext`) | App: nur lesen |
 | `Karteikarten/` | Kartenstapel (`typ: karteikarten`), auch in Unterordnern | Person |
@@ -39,9 +39,12 @@ eigene Notizen können `besuche_nicht: true` haben.
 ILIAS dieser Sitzung zuordnet, Datum in `quelle`, sonst die seit der vorigen Vorlesung angekommenen), `veranstaltung`,
 `nachgearbeitet` (true | false). Abschnitte: `## Mitschrift`, `## Prüfungsrelevant`, `## Offene Fragen`, `## Nacharbeit`.
 
-**Übungsblatt** – `Übungsblätter/<Code> Blatt NN.md`
-`typ: übungsblatt`, `code`, `modul`, `nummer`, `faellig` (JJJJ-MM-TT), `status` (offen | abgegeben | korrigiert), `datei`,
-`eigene_loesung`. Abschnitte: `## Aufgabe 1`, `## Aufgabe 2` …, `## Knackpunkte`, `## Fürs Tutorium`.
+**Übungsblatt** – ist seine Begleitnotiz mit `art: Übung` (unten). Seine Abgabe ist die Frist unter `Termine/` mit demselben
+`code` und derselben Nummer im Titel („B110 Abgabe 3“, meist aus ILIAS; nicht „Feedback“). Erledigt ist das Blatt mit dem
+Haken dieser Frist (`erledigt: true`), ohne Abgabe mit `status: bearbeitet`; `gelesen` heißt bei einem Blatt: noch nicht
+bearbeitet. Musterlösung und eigene Lösung sind Begleitnotizen der Art Lösung bzw. Eigene Lösung mit derselben `nummer`.
+Ältere Tresore haben daneben Notizen `Übungsblätter/<Code> Blatt NN.md` (`typ: übungsblatt`, `nummer`, `faellig`, `status`
+offen | abgegeben | korrigiert): lesen ja, neue legst du nie an.
 
 **Unterlage (Begleitnotiz)** – neben der Datei, gleicher Name: `<Code> <Art> <NN> <Titel>.md` (höchstens 80 Zeichen)
 `typ: unterlage`, `code`, `modul`, `art` (Folien, Skript, Übung, Tutorium, Lab, Lösung, Eigene Lösung, Mitschrift, Altklausur, Literatur,
@@ -51,6 +54,11 @@ Data Science Lab, auch Notebooks, Code und Daten, im Unterordner `Lab/`), `numme
 führt das ↗ in der Liste der Unterlagen dorthin). Neu angelegt: nur der Titel und darunter der PDF-Kasten (ohne weiteren Inhalt gleich offen). Abschnitte kommen
 dazu, sobald es etwas gibt, alle über dem PDF-Kasten: `## Das Wichtigste`, darunter auf Wunsch `## Zu tun`, dann
 `## Offene Fragen`. Nie einen leeren Abschnitt oder leere Punkte (`- `, `- [ ] `) anlegen.
+
+**Literaturliste** – `Unterlagen/<Code> <Modultitel>/Literatur/<Code> Literatur 00 Literaturliste.md`, eine Begleitnotiz ohne Datei
+(`art: Literatur`, `nummer: 0`, `herkunft: zentral`, `literatur_id`): Lehrbücher mit Rolle und Links, was zu welchem Kapitel zu
+lesen ist, weitere Literatur. Studium Autopilot schreibt sie aus den zentralen Literaturlisten; du änderst nur `status` und den
+Text unter `## Meine Notizen`. Hat ein Modul keine, legst du keine mit `literatur_id` an.
 
 **Modul** – `Module/<Teil>/<Code> <Titel>.md`
 Katalog (nicht ändern): `code`, `titel`, `ects`, `fachsemester`, `fs_empfohlen`, `pruefung`, `benotet`, `turnus`,
@@ -81,6 +89,7 @@ Fachsemester), `variante` (Economics | Business Administration | ohne Spezialisi
 | `herkunft` | Id-Feld | Quelle |
 |---|---|---|
 | `zentral` | `zentral_id` | zentrale Daten für alle EcoBA-Studierenden |
+| `zentral` | `literatur_id` | Literaturliste eines Moduls aus den zentralen Daten |
 | `claude` | `claude_id` | eigener Server mit Claude |
 | `alma` | `alma_schluessel` | Alma-Stundenplan |
 | `ilias-gruppe`, `gruppe-gewaehlt` | `ilias_gruppe`, `gruppe_id` | Übungsgruppen |

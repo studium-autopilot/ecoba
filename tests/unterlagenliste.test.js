@@ -113,6 +113,18 @@ test("Zeile: Titel ersatzweise aus dem Dateinamen, gelesen/bearbeitet markiert, 
   assert.equal(skr.zeilen[0].datei, true);
 });
 
+test("Übung: ✓ heißt erledigt (Haken der Abgabe aus dem Fachmodell, ohne Abgabe „bearbeitet“), nicht gelesen", () => {
+  const blaetter = [
+    u("Übung 01 Ableitungen", { art: "Übung", nummer: 1, titel: "Ableitungen", status: "gelesen" }),
+    u("Übung 02 Integrale", { art: "Übung", nummer: 2, titel: "Integrale", status: "bearbeitet" }),
+    u("Übung 03 Reihen", { art: "Übung", nummer: 3, titel: "Reihen" }),
+  ];
+  const haken = (G) => G[0].zeilen.map((z) => [z.nr, z.gelesen]);
+  assert.deepEqual(haken(U.gliedern(blaetter, "X100")), [[1, false], [2, true], [3, false]], "ohne Fachmodell: status");
+  const abgegeben = (x) => x.fm.nummer === 3;
+  assert.deepEqual(haken(U.gliedern(blaetter, "X100", abgegeben)), [[1, false], [2, false], [3, true]], "mit Fachmodell: dessen erledigt");
+});
+
 test("Tutorium: eigener Abschnitt nach den Übungen, Lösungen hängen nicht an Tutoriumsblättern", () => {
   const G = U.gliedern([
     u("Folien 01 Einführung", { art: "Folien", nummer: 1, titel: "Einführung" }),

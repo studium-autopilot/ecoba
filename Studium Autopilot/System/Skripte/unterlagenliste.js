@@ -7,7 +7,8 @@
 //  2. Lösungen stehen bei ihrer Übung bzw. Altklausur statt als eigene Zeile: gleiche Nummer bei Übungen, sonst gleiche Wörter
 //     im Titel ohne „Lösung“, „Kurzlösung“, „Korrektur“ … (eindeutig, sonst bleibt die Lösung im Abschnitt „Lösungen“).
 //  3. Folien und Übungen nach Nummer (Nummer als eigene Spalte), Altklausuren nach Semester, neueste zuerst.
-//  4. Zeile: Titel (Tipp öffnet die Notiz), ✓ bei gelesen/bearbeitet („neu“ ist der Normalfall und steht nicht da), Lösung,
+//  4. Zeile: Titel (Tipp öffnet die Notiz), ✓ bei gelesen/bearbeitet („neu“ ist der Normalfall und steht nicht da; eine Übung erst,
+//     wenn sie erledigt ist: abgegeben bzw. ohne Abgabe bearbeitet, ctx.modell.uebung, seit 24.10.2026), Lösung,
 //     Seiten, ↗ öffnet die Datei außerhalb von Obsidian (Aktion oeffnen); ohne Datei führt ↗ zur Online-Fassung im Feld link
 //     (nur https, z. B. das E-Book in der Literaturliste, seit 20.10.2026).
 // Reine Logik (artVon, woerter, semesterRang, gliedern) für tests/unterlagenliste.test.js.
@@ -57,8 +58,9 @@ module.exports = function (ctx) {
     return Number(m[0]) + (/\b(ws|wise|wintersemester)\b/i.test(text(s)) ? 0.5 : 0);
   };
 
-  // eintraege: [{ f, fm }] → [{ art, name, mitNr, mitLoesung, zeilen: [{ f, titel, nr, seiten, gelesen, datei, link, loesungen: [{ f, name, gelesen }] }] }]
-  const gliedern = (eintraege, code) => {
+  // eintraege: [{ f, fm }], erledigt (Übung → erledigt?; ohne: status bearbeitet) →
+  // [{ art, name, mitNr, mitLoesung, zeilen: [{ f, titel, nr, seiten, gelesen, datei, link, loesungen: [{ f, name, gelesen }] }] }]
+  const gliedern = (eintraege, code, erledigt) => {
     const alle = (eintraege || []).filter((x) => x && x.fm).map((x) => {
       const art = artVon(x.fm.art), nr = nummer(x.fm.nummer);
       let titel = text(x.fm.titel);
@@ -68,7 +70,9 @@ module.exports = function (ctx) {
         const rest = b.split(" ").filter((w, i) => !(i === 0 && w === code)).join(" ");
         titel = text(rest.indexOf(art + " ") === 0 ? rest.slice(art.length + 1) : rest === art ? "" : rest).replace(/^\d{1,3}(\s+|$)/, "") || art;
       }
-      return { f: x.f, art, titel, nr, seiten: nummer(x.fm.seiten), gelesen: !!GELESEN[text(x.fm.status).toLowerCase()],
+      const gelesen = art !== "Übung" ? !!GELESEN[text(x.fm.status).toLowerCase()]
+        : erledigt ? !!erledigt(x) : text(x.fm.status).toLowerCase() === "bearbeitet";
+      return { f: x.f, art, titel, nr, seiten: nummer(x.fm.seiten), gelesen,
         datei: !!text(x.fm.datei), link: webLink(x.fm.link), loesungen: [] };
     });
     // Lösungen zu ihrer Aufgabe: gleiche Nummer (Übung), sonst Titelwörter als Teilmenge mit eindeutig wenigsten Zusatzwörtern
@@ -141,7 +145,8 @@ module.exports = function (ctx) {
     if (!code) { box.createDiv({ cls: "eba-ul-leer", text: "Nur auf Modulseiten." }); return; }
     const eintraege = app.vault.getMarkdownFiles().map((f) => ({ f, fm: fmVon(f) }))
       .filter((x) => x.fm.typ === "unterlage" && text(x.fm.code) === code);
-    const G = gliedern(eintraege, code);
+    const M = ctx.modell;
+    const G = gliedern(eintraege, code, M && M.uebung ? (x) => { const u = M.uebung(x.f); return !!(u && u.erledigt); } : null);
     if (!G.length) { box.createDiv({ cls: "eba-ul-leer", text: "Noch keine Unterlagen." }); return; }
     for (const g of G) {
       const sek = box.createDiv({ cls: "eba-ul-gruppe" + (g.mitNr ? " mit-nr" : "") + (g.mitLoesung ? " mit-loesung" : "") });
@@ -151,7 +156,7 @@ module.exports = function (ctx) {
         tippen(r, (e) => oeffnen(z.f, e));
         if (g.mitNr) r.createSpan({ cls: "eba-ul-nr", text: z.nr == null ? "" : pad(z.nr) });
         const t = r.createSpan({ cls: "eba-ul-titel", text: z.titel });
-        if (z.gelesen) t.createSpan({ cls: "eba-ul-ok", text: "✓", attr: { "aria-label": "gelesen" } });
+        if (z.gelesen) t.createSpan({ cls: "eba-ul-ok", text: "✓", attr: { "aria-label": g.art === "Übung" ? "erledigt" : "gelesen" } });
         if (g.mitLoesung) {
           const lo = r.createSpan({ cls: "eba-ul-loesung" });
           for (const l of z.loesungen) {
@@ -183,7 +188,8 @@ module.exports = function (ctx) {
     const bald = ctx.entprellen(() => block.neu(), 400);
     const wichtig = (f, cache) => {
       const typ = cache && cache.frontmatter && cache.frontmatter.typ;
-      return typ === "unterlage" || typ === "modul" || (f && String(f.path).indexOf("Unterlagen/") === 0);
+      // Termin: Haken der Abgabe einer Übung
+      return typ === "unterlage" || typ === "modul" || typ === "termin" || (f && String(f.path).indexOf("Unterlagen/") === 0);
     };
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (wichtig(f, cache)) bald(); });
     ctx.an(app.metadataCache, "deleted", (f, vorher) => { if (wichtig(f, vorher)) bald(); });

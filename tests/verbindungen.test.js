@@ -30,7 +30,8 @@ test("Alma verbinden: erst Alma, dann der Stundenplan als Link; Menüweg im Hinw
 // ---------- Zeilen je Stand ----------
 // o: { extern (Einstellung ilias_unterlagen: extern), einstellungen (weitere Felder, z. B. quellen_extern), alma (alma.js-Status),
 //   ilias (ctx.ilias.status()), zentral (zentraler Stundenplan da), zentralStatus, volltext (ctx.volltext.status()), kalender (ctx.iliasKalender.status()), stundenplan /
-//   unterlagen (so viele eigene Notizen), kannSpeichern, sperren (Inhalt der Sperre je Quelle; dieses Gerät ist g-hier) }
+//   unterlagen (so viele eigene Notizen), kannSpeichern, sperren (Inhalt der Sperre je Quelle; dieses Gerät ist g-hier),
+//   update ({ anzeige: Ergebnis von ctx.update.anzeige(), version }) }
 const aufbau = (o) => {
   o = o || {};
   const fm = { "System/Einstellungen.md": Object.assign(o.extern ? { ilias_unterlagen: "extern" } : {}, o.einstellungen) };
@@ -60,6 +61,7 @@ const aufbau = (o) => {
       volltext: o.volltext ? { status: () => o.volltext, nachholen: async (x) => { geholt.push(Object.assign({ volltext: true }, x)); } } : undefined,
       iliasKalender: o.kalender ? { status: () => o.kalender, K: { EXTERN: "Deine Abgaben aus ILIAS kommen über deinen Uni-Abgleich." },
         aktualisieren: async (x) => { geholt.push(Object.assign({ kalender: true }, x)); }, linkPruefen: () => "" } : undefined,
+      update: o.update ? { anzeige: () => o.update.anzeige, status: () => ({ version: o.update.version }) } : undefined,
       link: (aktion, p) => "obsidian://studium-autopilot?aktion=" + aktion + (p && p.id ? "&id=" + p.id : ""),
     },
   });
@@ -403,45 +405,74 @@ test("Uni-Login: eine Zeile mit allem, was verbunden ist; anderes Gerät, abgele
   assert.deepEqual(y.geholt, [{ uebernehmen: false }, { kalender: true }]);
 });
 
-test("Kompakte Zeile: rechts ein kurzer Stand, darunter nur ein Problem, die ganze Zeile öffnet das Fenster", async () => {
+test("Kompakte Zeile: rechts der Stand in einem Wort, darunter was die Sache tut oder ihr Problem, die ganze Zeile öffnet das Fenster", async () => {
   const k = (o, id) => aufbau(o).V.kompakt(id);
   const ziel = (id) => "obsidian://studium-autopilot?aktion=verbinden&id=" + id;
   const kal = { verbunden: true, zustand: "an", geprueft: vorMin(30), warnungen: [], abgaben: 1 };
-  // alles gut: nur der Stand, ohne zweite Zeile; Aktualisieren steht im Fenster
+  // alles gut: der Stand, darunter was der Login holt; Symbol der Sache in Grün; Aktualisieren steht im Fenster
   assert.deepEqual(k({ ilias: { verbunden: true, zustand: "an", zuletzt: vorMin(5), text: "Aktualisiert vor 5 Min." }, kalender: kal }, "uni-login"),
-    { wert: "Verbunden", art: "", unter: "", ziel: ziel("uni-login") });
-  // nicht verbunden: der Tipp öffnet gleich die Anmeldung (Ziel des Knopfs)
-  assert.deepEqual(k({}, "uni-login"), { wert: "Nicht verbunden", art: "", unter: "", ziel: ziel("ilias") });
-  // Problem: Warnfarbe, nie „Verbunden“, der Satz darunter
+    { wert: "Verbunden", art: "", unter: "Unterlagen, Abgaben und Stundenplan", symbol: "schluessel", ton: "ok", ziel: ziel("uni-login") });
+  // nicht verbunden: „Aus“, grau; der Tipp öffnet gleich die Anmeldung (Ziel des Knopfs); ohne Kalender keine Abgaben
+  assert.deepEqual(k({}, "uni-login"), { wert: "Aus", art: "", unter: "Unterlagen und Stundenplan", symbol: "schluessel", ton: "leise", ziel: ziel("ilias") });
+  // Problem: Warnfarbe, immer „Fehler“ (auch statt „neu verbinden“), das Problem statt der Beschreibung
   assert.deepEqual(k({ alma: { verbunden: true, zustand: "fehler", geprueft: vorMin(120), fehler: "Keine Verbindung zu Alma." } }, "uni-login"),
-    { wert: "Fehler", art: "warn", unter: "Alma-Stundenplan: Keine Verbindung zu Alma. Zuletzt aktualisiert vor 2 Std.", ziel: ziel("uni-login") });
+    { wert: "Fehler", art: "warn", unter: "Alma-Stundenplan: Keine Verbindung zu Alma. Zuletzt aktualisiert vor 2 Std.", symbol: "schluessel", ton: "warn", ziel: ziel("uni-login") });
   assert.deepEqual(k({ ilias: { verbunden: true, gesperrt: true, text: "Benutzername oder Passwort stimmt nicht." } }, "uni-login"),
-    { wert: "Neu verbinden", art: "warn", unter: "Benutzername oder Passwort stimmt nicht.", ziel: ziel("ilias") });
+    { wert: "Fehler", art: "warn", unter: "Benutzername oder Passwort stimmt nicht.", symbol: "schluessel", ton: "warn", ziel: ziel("ilias") });
   assert.deepEqual(k({ zentralStatus: { zustand: "fehler", geprueft: vorMin(60), fehler: "Keine Verbindung zu den zentralen Daten." } }, "zentral"),
-    { wert: "Fehler", art: "warn", unter: "Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert vor 1 Std.", ziel: ziel("zentral") });
-  // an, aus, von außen
-  assert.equal(k({ zentralStatus: { geprueft: vorMin(10) } }, "zentral").wert, "An");
+    { wert: "Fehler", art: "warn", unter: "Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert vor 1 Std.", symbol: "uni", ton: "warn", ziel: ziel("zentral") });
+  // Schalter: an, aus
+  assert.deepEqual(k({ zentralStatus: { geprueft: vorMin(10) } }, "zentral"),
+    { wert: "An", art: "", unter: "Vorlesungen, Fristen und Termine für alle", symbol: "uni", ton: "ok", ziel: ziel("zentral") });
   assert.equal(k({ zentralStatus: { an: false, zustand: "aus" } }, "zentral").wert, "Aus");
-  assert.equal(k({ volltext: { an: false, zustand: "aus", warnungen: [], text: "" } }, "volltext").wert, "Aus");
-  assert.equal(k({ volltext: { an: true, zustand: "extern", warnungen: [], text: "Kommt über deinen eigenen Abgleich." } }, "volltext").wert, "Über Uni-Abgleich");
-  assert.equal(k({ extern: true, einstellungen: { quellen_extern: ["stundenplan", "ilias-dateien", "ilias-kalender"] }, ilias: { extern: true, text: I.K.TEXT_EXTERN } }, "uni-login").wert,
-    "Über Uni-Abgleich");
+  assert.deepEqual(k({ volltext: { an: false, zustand: "aus", warnungen: [], text: "" } }, "volltext"),
+    { wert: "Aus", art: "", unter: "Die Suche findet auch Wörter in PDFs", symbol: "pdf-suche", ton: "leise", ziel: ziel("volltext") });
+  // von außen: Die Suche findet die Wörter trotzdem; den Uni-Login braucht es hier nicht
+  assert.equal(k({ volltext: { an: true, zustand: "extern", warnungen: [], text: "Kommt über deinen eigenen Abgleich." } }, "volltext").wert, "An");
+  assert.deepEqual(k({ extern: true, einstellungen: { quellen_extern: ["stundenplan", "ilias-dateien", "ilias-kalender"] }, ilias: { extern: true, text: I.K.TEXT_EXTERN } }, "uni-login"),
+    { wert: "Nicht nötig", art: "", unter: "Alles kommt über deinen Uni-Abgleich.", symbol: "schluessel", ton: "ok", ziel: ziel("uni-login") });
+  assert.equal(k({ extern: true, einstellungen: { quellen_extern: ["ilias-dateien"] }, ilias: { extern: true, text: I.K.TEXT_EXTERN } }, "uni-login").unter,
+    "Deine Unterlagen kommen über deinen Uni-Abgleich.");
   // über ein anderes Gerät verbunden: verbunden, ohne Problem
   const x = await mitSperren({ sperren: { ilias: sperre("g-ipad", 20), alma: sperre("g-ipad", 180) } });
-  assert.deepEqual(x.V.kompakt("uni-login"), { wert: "Verbunden", art: "", unter: "", ziel: ziel("uni-login") });
+  assert.deepEqual(x.V.kompakt("uni-login"), { wert: "Verbunden", art: "", unter: "Unterlagen und Stundenplan", symbol: "schluessel", ton: "ok", ziel: ziel("uni-login") });
   assert.equal(aufbau({}).V.kompakt("volltext"), null, "ohne Zeile keine kompakte Zeile");
 });
 
-test("Kompakte Zeile: jeder Stand hat einen Wert, ein Problem immer einen Satz darunter", () => {
+test("Kompakte Zeile „Updates“: rechts ob sie aktuell ist, darunter die installierte Version", () => {
+  const SUCHEN = { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false };
+  const k = (anzeige) => aufbau({ update: { anzeige, version: "0.6.7" } }).V.kompakt("vorlage");
+  assert.equal(aufbau({}).V.liste.vorlage.name, "Updates", "„Studium Autopilot“ ließ neben „Neue Version“ keinen Platz");
+  assert.deepEqual(k({ html: "Version 0.6.7. Du hast die neueste Version.", kurz: "Aktuell", pille: '<span class="eba-pill ok">aktuell</span>', symbol: "haken", ton: "ok", knopf: SUCHEN }),
+    { wert: "Aktuell", art: "", unter: "Version 0.6.7 installiert", symbol: "update", ton: "ok", ziel: "obsidian://studium-autopilot?aktion=verbinden&id=vorlage" });
+  assert.equal(k({ html: "Version 0.6.7.", kurz: "Nicht geprüft", pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN }).wert, "Nicht geprüft");
+  const neu = k({ html: "Neue Version 0.6.8 verfügbar.", pille: '<span class="eba-pill info">neu</span>', symbol: "laden", ton: "warn",
+    knopf: { aktion: "vorlage-aktualisieren", text: "Neue Version installieren" } });
+  assert.deepEqual([neu.wert, neu.art, neu.ton, neu.unter], ["Neue Version", "akzent", "akzent", "Version 0.6.7 installiert"]);
+  // jeder Stand passt neben den Namen (wie im Test unten)
+  const staende = [["läuft", "info", "uhr", "leise"], ["unterbrochen", "warn", "laden", "warn"], ["neu laden", "info", "neu-laden", "warn"]]
+    .map(([p, a, symbol, ton]) => k({ html: "…", pille: `<span class="eba-pill ${a}">${p}</span>`, symbol, ton, knopf: null }).wert);
+  assert.deepEqual(staende, ["Läuft …", "Unterbrochen", "Neu laden"]);
+  for (const w of staende.concat("Aktuell", "Nicht geprüft", "Neue Version")) assert.ok("Updates".length + w.length <= 24, w);
+});
+
+test("Kompakte Zeile: jeder Stand hat einen kurzen Wert und ein Symbol, darunter die Beschreibung oder bei einem Problem der Satz", () => {
   for (const [name, o] of ALLE) {
     const { V: W } = aufbau(o);
     for (const id of Object.keys(W.liste)) {
       const z = W.zeile(id), k = W.kompakt(id), wo = `${name}: ${id}`;
       if (!z) continue;
       assert.ok(k.wert, wo + " – ohne Wert");
+      // Name und Stand passen auf dem iPhone mit 20-px-Schrift nebeneinander („Eigener Server“ + „Verbunden“ = 23 Zeichen);
+      // „Eigener Server“ + „Nicht verbunden“ rutschte bis 24.10.2026 in eine eigene Zeile. Die Teile des Uni-Logins stehen
+      // nur in dessen Fenster.
+      if (["ilias", "ilias-kalender", "alma", "alma-konto"].indexOf(id) < 0)
+        assert.ok(W.liste[id].name.length + k.wert.length <= 24, `${wo} – „${W.liste[id].name}“ und „${k.wert}“ zu lang`);
+      assert.ok(k.symbol === "haken" || W.svg(k.symbol) !== W.svg(""), wo + " – Symbol fehlt in SYMBOLE"); // unbekannt: Haken
+      assert.ok(["ok", "warn", "akzent", "leise"].indexOf(k.ton) >= 0, wo + " – Farbe");
       assert.match(k.ziel, /^obsidian:\/\/studium-autopilot\?aktion=verbinden&id=/, wo);
-      if (z.symbol === "warnung") assert.ok(k.unter && k.art === "warn", wo + " – Problem ohne Satz");
-      else assert.equal(k.unter, "", wo + " – zweite Zeile nur bei einem Problem");
+      if (z.symbol === "warnung") assert.ok(k.wert === "Fehler" && k.unter && k.art === "warn" && k.ton === "warn", wo + " – Problem ohne Satz");
+      else assert.equal(k.unter, z.unter || W.liste[id].beschreibung || "", wo + " – zweite Zeile: was die Sache tut");
     }
   }
 });

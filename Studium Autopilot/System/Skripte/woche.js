@@ -9,7 +9,9 @@
 // ausnahme) in Warnfarbe, Ausfall wegen einer Pause oder eines freien Tags bleibt leise; vorher sah ein Ausfall blass aus wie
 // „ab TT.MM.“ und eine Änderung war nur gestrichelt umrandet. Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
 // sonst Code), blass Art und Gruppe (nur Übung, Tutorium, Seminar; Name aus gruppe), darunter Raum, davor der Beginn, wenn er
-// nicht zur vollen Stunde liegt. Kopfzeile rechts „‹ KW n ›“; Wischen nach links/rechts wechselt am Touch-Gerät die Woche.
+// nicht zur vollen Stunde liegt. Über den Tagen eine Leiste: links, wo die Woche zu heute liegt („Diese Woche“, „Nächste Woche“,
+// „In 2 Wochen“, „Letzte Woche“; wocheText), rechts „‹ KW n ›“ (seit 24.10.2026; vorher standen nur die Pfeile neben Freitag, und
+// am Wochenende sagte nichts, dass schon die nächste Woche dasteht). Wischen nach links/rechts wechselt am Touch-Gerät die Woche.
 // Welche Woche: nur auf diesem Gerät (app.saveLocalStorage, Schlüssel eba-woche-versatz, nie im Vault, nie abgeglichen), so
 // blättern zwei Geräte unabhängig. Nach 30 Minuten ohne Wechsel und nach jedem Neustart von Obsidian wieder die aktuelle Woche
 // (der Wert trägt die Sitzung). „KW n“ ist in einer anderen Woche der Weg zurück.
@@ -54,6 +56,12 @@ module.exports = function (ctx) {
   const aktuellerMontag = (jetzt) => datum(M().planwoche(iso(jetzt)).mo);
   // ISO-Kalenderwoche
   const kw = (d) => M().zeit.kw(iso(d));
+  // Wo die Woche ab montag zu heute liegt, nach Kalenderwochen (Montag bis Sonntag): am Samstag und Sonntag ist die Planwoche
+  // also „Nächste Woche“. Gerundet, weil eine Zeitumstellung dazwischen eine Stunde ausmacht.
+  const wocheText = (montag, jetzt) => {
+    const n = Math.round((montag - plus(jetzt, 1 - (jetzt.getDay() || 7))) / (7 * 864e5));
+    return n === 0 ? "Diese Woche" : n === 1 ? "Nächste Woche" : n === -1 ? "Letzte Woche" : n > 1 ? "In " + n + " Wochen" : "Vor " + -n + " Wochen";
+  };
 
   // ---------- Gezeigte Woche: nur auf diesem Gerät ----------
   // Sitzung: neu bei jedem Start von Obsidian (ctx.bleibend überlebt nur den Hot-Reload dieses Skripts)
@@ -298,16 +306,18 @@ module.exports = function (ctx) {
     const pfad = (c && c.sourcePath) || "";
     const zeileHoehe = Math.round(((HOEHE[pfad] || HOEHE_SONST) / (W.rows + 1)) * 100) / 100;
     el.empty();
-    const g = el.createDiv({ cls: "eba-woche", attr: { lang: "de", style: "grid-template-rows:34px repeat(" + (W.rows + 1) + ", " + zeileHoehe + "px)" } });
+    const g = el.createDiv({ cls: "eba-woche mit-leiste", attr: { lang: "de", style: "grid-template-rows:34px repeat(" + (W.rows + 1) + ", " + zeileHoehe + "px)" } });
     if (W.ht) g.createEl("i", { cls: "eba-tagspalte", attr: { style: "grid-column:" + (W.wt + 1) } });
     g.createDiv({ cls: "eba-tagkopf eba-ecke", attr: { style: "grid-column:1" } });
     TAGE.forEach((t, i) => {
       const d = plus(montag, i);
-      const k = g.createDiv({ cls: "eba-tagkopf" + (W.ht && W.wt === i + 1 ? " heute" : "") + (i === 4 ? " fr" : ""), text: t, attr: { style: "grid-column:" + (i + 2) } });
+      const k = g.createDiv({ cls: "eba-tagkopf" + (W.ht && W.wt === i + 1 ? " heute" : ""), text: t, attr: { style: "grid-column:" + (i + 2) } });
       const s = k.createSpan({ cls: "eba-tagdatum", text: d.getDate() + "." });
       s.createSpan({ cls: "eba-tagmonat", text: d.getMonth() + 1 + "." });
     });
-    const nav = g.createDiv({ cls: "eba-wpfeile", attr: { style: "grid-column:6" } });
+    const leiste = g.createDiv({ cls: "eba-wleiste" });
+    leiste.createSpan({ cls: "eba-wname", text: wocheText(montag, jetzt) });
+    const nav = leiste.createDiv({ cls: "eba-wpfeile" });
     knopf(nav, "eba-wpfeil", "‹", "Woche davor", v - 1);
     const kwEl = v ? knopf(nav, "eba-wkw anders", "", "Zurück zur aktuellen Woche", 0) : nav.createSpan({ cls: "eba-wkw", attr: { title: "Kalenderwoche" } });
     kwEl.createSpan({ text: "KW\u00a0" }); // geschütztes Leerzeichen: bleibt auch in inline-flex (iPhone) stehen
@@ -426,6 +436,6 @@ module.exports = function (ctx) {
     woche: { ausfuehren: (c) => { versatzSetzen(c.parameter.schritt); neu(); } },
   };
 
-  return { registrieren, aktionen, aktuellerMontag, kw, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, raumKnapp, wischStartOk, wischAchse,
+  return { registrieren, aktionen, aktuellerMontag, kw, wocheText, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, raumKnapp, wischStartOk, wischAchse,
     wischRichtung, leerSatz };
 };

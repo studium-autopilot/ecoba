@@ -40,19 +40,14 @@ async function anlegen(aktion, antworten, parameter = {}, codes = ["B110"]) {
 }
 
 test("Esc im Fenster: nichts entsteht, auch keine Vorgabe", async () => {
-  for (const aktion of ["vorlesung", "uebungsblatt", "termin", "lehrveranstaltung", "sq-kurs", "modul"]) {
+  for (const aktion of ["vorlesung", "termin", "lehrveranstaltung", "sq-kurs", "modul"]) {
     const r = await anlegen(aktion, [null]);
     assert.deepEqual([r.angelegt.length, r.abgebrochen, r.rest.length], [0, 1, 0], aktion);
     assert.equal(r.protokoll.length, 1, aktion + ": genau ein Fenster");
   }
 });
 
-test("Ohne Eingabe gelten die Vorgaben (Nummer, Beginn, Ende, ECTS); geraten wird nichts", async () => {
-  const b = await anlegen("uebungsblatt", [{}]);
-  assert.equal(b.angelegt[0].name, "B110 Blatt 01");
-  assert.match(b.angelegt[0].inhalt, /^faellig: ?$/m, "Abgabe leer: eine geratene stünde wie eine echte bei den Fristen (bis 24.10.2026 in einer Woche)");
-  const b2 = await anlegen("uebungsblatt", [{ faellig: "27.10." }]);
-  assert.match(b2.angelegt[0].inhalt, /^faellig: 2026-10-27$/m, "eingetragene Abgabe");
+test("Ohne Eingabe gelten die Vorgaben (Beginn, Ende, ECTS); geraten wird nichts", async () => {
   const l = await anlegen("lehrveranstaltung", [{ wochentag: 2 }]);
   assert.match(l.angelegt[0].inhalt, /^beginn: "10:15"$/m);
   assert.match(l.angelegt[0].inhalt, /^ende: "11:45"$/m, "Ende = Beginn + 90 Min.");
@@ -88,7 +83,6 @@ test("Eingaben werden gelesen: Uhrzeit c.t., Zeitraum, Art aus dem Titel, Modul 
 
 test("Fehler im Fenster legen nichts an und stehen beim Feld", async () => {
   const faelle = [
-    ["uebungsblatt", { nummer: "drei" }, "nummer"],
     ["termin", { titel: "  " }, "titel"],
     ["termin", { titel: "X", wann: "31.02." }, "wann"],
     ["lehrveranstaltung", { beginn: "25:00" }, "beginn"],
@@ -116,6 +110,18 @@ test("Termin mit Titel und Datum aus dem Knopf: ohne Fenster", async () => {
   const r = await anlegen("termin", [], { titel: "Lerngruppe", wann: "20.11." });
   assert.equal(r.protokoll.length, 0);
   assert.equal(r.angelegt[0].name, "2026-11-20 Lerngruppe");
+});
+
+test("„Neues Übungsblatt“ (bis 0.6.7) aus einem alten Knopf: legt nichts an, öffnet Unterlagen und bietet „Unterlagen hinzufügen“ an", async () => {
+  const hinweise = [], geoeffnet = [];
+  const N = laden("notizen", { kontext: { modell,
+    hinweis: (text, o) => hinweise.push([text, o.aktion.text, o.aktion.aktion]), oeffnen: async (p) => { geoeffnet.push(p); } } }).ergebnis;
+  const a = N.aktionen.uebungsblatt;
+  assert.equal(a.titel, undefined, "kein Befehl „Neues Übungsblatt“ mehr");
+  assert.equal(a.ordner, undefined, "Übungsblätter/ ist kein Ordner für Neues mehr");
+  await a.ausfuehren({ parameter: {}, datei: null });
+  assert.deepEqual(hinweise, [["Jedes Übungsblatt hat jetzt seine eigene Notiz unter Unterlagen, mit Status und Abgabe.", "Unterlagen hinzufügen", "einordnen"]]);
+  assert.deepEqual(geoeffnet, ["Studium/Unterlagen.md"]);
 });
 
 test("Anlegen fragt nie in einer Kette: keine Eingabe- und Auswahlfenster in den Anlege-Aktionen", () => {

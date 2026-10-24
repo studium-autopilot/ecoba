@@ -13,7 +13,7 @@ const modell = (heute, einstellungen = {}) => laden("modell", {
 }).ctx.modell;
 const serie = (o) => Object.assign({ typ: "lehrveranstaltung", code: "X100", wochentag: 4, beginn: "10:15", ende: "11:45", von: "2027-04-15", bis: "2027-07-22", semester: "SS 2027" }, o);
 
-test("Genau ein Status je Notiztyp; Vorlesung und Übungsblatt haben ihren Kopf schon im Text", () => {
+test("Genau ein Status je Notiztyp; die Vorlesung zeichnet ihren Kopf selbst (vorlesung.js), Übungen stehen in tests/uebungen.test.js", () => {
   assert.deepEqual(K.TYPEN, ["termin", "unterlage", "sq_kurs", "lehrveranstaltung"]);
   for (const typ of K.TYPEN) assert.ok(K.statusVon(typ, {}, false), typ);
   assert.equal(K.statusVon("vorlesung", {}), null);
@@ -115,4 +115,51 @@ test("Lab im Stundenplan: ein Chip je Sitzung, zum Lesen vor Notebook, Code und 
   assert.deepEqual(K.blaetterFuer(serie({ art: "Lab" }), ohne).blaetter.map((b) => b.titel), ["Halsgrat"]);
   const ue = [u(3, "A", "pdf"), u(3, "B", "pdf")].map((x) => ({ f: x.f, fm: Object.assign({}, x.fm, { art: "Übung" }) }));
   assert.equal(K.blaetterFuer(serie({ art: "Übung" }), ue).blaetter.length, 2, "Übungen mit gleicher Nummer bleiben einzeln");
+});
+
+// Termin-Notizen (seit 24.10.2026): Tag, Uhrzeit und Ort in der Kopf-Karte, die erzeugte Datumszeile unter dem Titel fällt weg
+test("Termin: die Datumszeile gilt nur als erzeugt, wenn Tag, bis und Ort den Eigenschaften entsprechen", () => {
+  const golf = { datum: "2026-10-24", bis: "", ort: "13:30–17:00 · Golfclub Schloss Kressbach, Kressbach Hofgut 11" };
+  assert.equal(K.datumsZeile("**24.10.2026** · 13:30–17:00 · Golfclub Schloss Kressbach, Kressbach Hofgut 11", golf), true);
+  assert.equal(K.datumsZeile("**24.10.2026** · 13:30–17:00 · Golfclub", golf), false, "von Hand geändert: bleibt stehen");
+  assert.equal(K.datumsZeile("**25.10.2026** · 13:30–17:00 · Golfclub Schloss Kressbach, Kressbach Hofgut 11", golf), false);
+  const tcp = { datum: "2026-10-12", bis: "2026-10-19", ort: "Alma · für Kurse ab 06.11." };
+  assert.equal(K.datumsZeile('**12.10.2026 – 19.10.2026** · Alma · für Kurse ab 06.11. · <span class="eba-pill leer">Schlüsselqualifikation · freiwillig</span>', tcp), true);
+  assert.equal(K.datumsZeile("**12.10.2026** · Alma · für Kurse ab 06.11.", tcp), false, "bis fehlt");
+  assert.equal(K.datumsZeile("**05.10.2026** · Raum 1\_2 \[EG\]", { datum: "2026-10-05", ort: "Raum 1_2 [EG]" }), true, "Backslashes von mdText");
+  assert.equal(K.datumsZeile("**05.10.2026**", { datum: "2026-10-05", ort: "" }), true);
+  assert.equal(K.datumsZeile("Am **05.10.2026**", { datum: "2026-10-05", ort: "" }), false);
+});
+
+test("Termin: Datumszeile direkt unter dem Titel und Quelle vor der ersten Überschrift finden (Zeilen der ganzen Notiz)", () => {
+  const fm = { datum: "2026-10-24", ort: "Ort" };
+  const z = ["---", "typ: termin", "---", "", "# Titel", "", "**24.10.2026** · Ort", "", "Info.", "", "Quelle: Flyer · geprüft am 12.10.2026", "",
+    "## Meine Notizen", "", "Quelle: eigener Text"];
+  assert.deepEqual(K.terminZeilen(z, fm), { datum: 6, quelle: [10] });
+  assert.deepEqual(K.terminZeilen(["# Titel", "", "Geprüft am 12.10.2026"], fm), { datum: -1, quelle: [2] });
+  assert.equal(K.terminZeilen(["# Titel", "", "Mein Text", "**24.10.2026** · Ort"], fm).datum, -1, "nur direkt unter dem Titel");
+  assert.equal(K.terminZeilen(["# Titel", "", "## Meine Notizen", "- "], fm).datum, -1, "eigener Termin: ohne Datumszeile");
+  assert.deepEqual(K.terminZeilen([], fm), { datum: -1, quelle: [] });
+});
+
+test("Termin-Kopf: Tag, daneben heute/morgen/läuft oder die Restzeit, Uhrzeit nie doppelt", () => {
+  const m = modell("2026-10-24");
+  const w = (fm) => K.wannVon(m.terminLesen({ f: { path: "Termine/x.md", basename: "x" }, fm: Object.assign({ typ: "termin", kategorie: "Veranstaltung" }, fm) }), m);
+  assert.deepEqual(w({ datum: "2026-10-24", ort: "13:30–17:00 · Golfclub" }),
+    { tag: "Samstag, 24.10.", marke: { text: "heute", alt: false }, abstand: "", zeit: "13:30–17:00", wo: "Golfclub" });
+  assert.deepEqual([w({ datum: "2026-10-25" }).marke, w({ datum: "2026-10-25" }).abstand], [{ text: "morgen", alt: true }, ""]);
+  assert.deepEqual([w({ datum: "2026-10-29" }).marke, w({ datum: "2026-10-29" }).abstand], [null, "in 5 Tagen"]);
+  assert.deepEqual([w({ datum: "2026-10-20" }).marke, w({ datum: "2026-10-20" }).abstand], [null, ""], "vorbei: ohne beides");
+  const lauf = w({ datum: "2026-10-23", bis: "2026-10-29", ort: "ab 17:00 · bis 23:59 · ILIAS-Kurs S110" });
+  assert.deepEqual([lauf.tag, lauf.marke.text, lauf.zeit, lauf.wo], ["23.–29.10.", "läuft", "ab 17:00 · bis 23:59", "ILIAS-Kurs S110"]);
+  assert.equal(w({ datum: "2026-10-27", ort: "ab 18:00 · bis 22:00 · Neckawa" }).zeit, "18:00–22:00", "an einem Tag als Spanne");
+  assert.equal(w({ datum: "2026-10-09", ort: "bis 12:00 · Alma" }).zeit, "bis 12:00");
+  assert.deepEqual([w({ datum: "2026-10-05", ort: "Mo 12:15–14:00 · HS N06" }).zeit, w({ datum: "2026-10-05", ort: "Mo 12:15–14:00 · HS N06" }).wo],
+    ["", "Mo 12:15–14:00 · HS N06"], "Uhrzeit mitten im Ort bleibt dort");
+  assert.deepEqual([w({ datum: "2026-10-27", uhrzeit: "14:00", ort: "Sekretariat" }).zeit, w({ datum: "2026-10-27", uhrzeit: "14:00", ort: "Sekretariat" }).wo], ["14:00", "Sekretariat"]);
+});
+
+test("Termin-Kopf: das Label nennt nur Art und Modul, der Tag steht darunter", () => {
+  const Kx = laden("kopf", { kontext: { modell: modell("2026-10-24") } }).ergebnis;
+  assert.equal(Kx.labelVon("termin", { path: "Termine/x.md", basename: "x" }, { typ: "termin", datum: "2026-10-27", kategorie: "Frist", code: "B110", uhrzeit: "14:00" }), "Frist · B110");
 });

@@ -54,7 +54,7 @@ cssclasses:
 
 ## Zum Modul
 
-> [!eba-tabelle|schlicht|handy-zu]+ Übungsblätter, Stundenplan, Termine
+> [!eba-tabelle|schlicht|handy-zu]+ Stundenplan, Termine
 > ```base
 > filters:
 >   and:

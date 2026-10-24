@@ -334,6 +334,7 @@ test("LiveSync: Setup-Link nur mit dem Code lesbar, Einstellungen wie im Tresor 
   assert.equal(e["pass" + "phrase"], "Geheim7");
   assert.ok(e.encrypt && e.usePathObfuscation && e.liveSync && e.syncInternalFiles && e.isConfigured);
   assert.equal(e.useAdvancedMode, true, "sonst fehlt der Abschnitt „Hidden Files“ zum Wiedereinschalten");
+  assert.equal(e.keepReplicationActiveInBackground, true, "am Computer auch mit verborgenem Fenster abgleichen");
   assert.match(e.syncInternalFilesIgnorePatterns, /obsidian-livesync/, "jedes Gerät behält seine eigene Verbindung");
   await assert.rejects(L.entschluesseln(paket, L.neuerCode()), "falscher Code");
   assert.equal(L.einstellungen({ ...k, adresse: "http://127.0.0.1:8081" })[URI], "http://127.0.0.1:8081", "Testmodus");

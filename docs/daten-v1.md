@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 24.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, `abdeckung` im Manifest seit 0.5.3). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 24.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -18,6 +18,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `gruppen.json` | nein | 512 KB | Übungs- und Tutoriengruppen (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#gruppenjson) |
 | `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, veröffentlicht seit 18.10.2026, siehe [unten](#veranstaltungenjson) |
 | `kapitel.json` | nein | 512 KB | Kapitellisten der Module für den Lernplan (höchstens 60 Module), seit 19.10.2026, siehe [unten](#kapiteljson) |
+| `literatur.json` | nein | 512 KB | Literaturlisten der Module (höchstens 60 Module), Vertrag seit 24.10.2026, siehe [unten](#literaturjson) |
 | `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, UB-Kurse, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); das Plugin liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; das Plugin liest ihn noch nicht |
@@ -426,6 +427,85 @@ entsteht erst wieder, wenn sich ihre Liste ändert, auch wenn inzwischen ein and
 Ältere Notizen (anderes Semester, Modul bestanden oder verschoben) bleiben und heißen im Lernplan „nicht mehr dran“. Fehlt die Datei
 im Manifest, bleiben die Notizen, wie sie sind.
 
+## literatur.json
+
+Vertrag seit 24.10.2026. Optional. Literaturlisten der Module: je Modul und Semester die Werke, die die Lehrveranstaltung nennt,
+mit ihrer Rolle (Lehrbuch, Übungsbuch, zum Vertiefen), dazu, was zu welchem Kapitel oder welcher Sitzung zu lesen ist. Nur Fakten
+(Angabe des Werks mit Auflage und ISBN, Rolle, Links auf Verlag und UB-Katalog, Kapitel- und Seitenzahlen, Nummer und Seite der
+Folien); keine Beschreibungen oder Texte aus den Unterlagen. Plugins vor dieser Fassung kennen den Namen nicht und ignorieren ihn.
+Erzeugt vom Uni-Abgleich (Kurse, in denen der Autor ist), veröffentlicht erst mit dem Schalter `literatur.veroeffentlichen` im Export.
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-10-24T06:30:00Z",
+ "module": [
+  {
+   "code": "X100",
+   "semester": "WS 2026/27",
+   "stand": "2026-10-20",
+   "quelle": "Folien 00 Organisatorisches, S. 4",
+   "hinweis": "Die Folien reichen für die Klausur, das Lehrbuch hilft beim Üben.",
+   "beleg": { "art": "Folien", "nummer": 0, "seite": 4 },
+   "kopf": "Kapitel",
+   "werke": [
+    { "id": "muster", "rolle": "Lehrbuch", "spalte": "Muster", "katalog": "123456789X",
+      "angabe": "Muster, A.: Grundlagen der Beispielkunde. 3. Auflage, Beispielverlag 2025. ISBN 978-3-000-00000-0",
+      "links": [{ "text": "Springer Link", "url": "https://link.springer.com/book/10.1007/978-3-000-00000-0" }] },
+    { "id": "probe", "rolle": "Zum Vertiefen", "abschnitt": "weitere", "suche": "Probe Beispielkunde vertieft",
+      "angabe": "Probe, B.: Beispielkunde vertieft. Beispielverlag 2023." }
+   ],
+   "lesen": [
+    { "zu": "1 Grundlagen", "beleg": { "art": "Folien", "nummer": 1, "seite": 3 }, "stellen": { "muster": "Kap. 1, S. 1–24" } }
+   ]
+  }
+ ]
+}
+```
+
+| Feld | Regel |
+|---|---|
+| `schema` | genau `1`, sonst wird die ganze Datei abgelehnt |
+| `stand` | optional, ISO-Zeit |
+| `module` | höchstens 60; je `code` + `semester` nur einmal (sonst „doppelt“) |
+| `code`, `semester` | wie in `kapitel.json` |
+| `stand` (Modul) | optional, `JJJJ-MM-TT` |
+| `quelle` | reiner Text ≤ 200 Zeichen: woher die Liste stammt (Folie, Modulhandbuch) |
+| `hinweis` | optional, reiner Text ≤ 300 Zeichen: wie die Literatur zur Vorlesung steht, in eigenen Worten |
+| `beleg` | optional, Unterlage des Moduls, in der die Liste steht (siehe unten) |
+| `kopf` | optional, reiner Text ≤ 20 Zeichen: Überschrift der Lese-Tabelle („Kapitel“, „Sitzung“); ohne ihn „Kapitel“ |
+| `werke` | 1–15 Werke, `id` im Modul eindeutig |
+| `id` (Werk) | 1–40 Zeichen `a–z`, `0–9`, `-` (nicht am Rand) |
+| `rolle` | reiner Text ≤ 40 Zeichen („Lehrbuch“, „Übungsbuch“, „Zum Vertiefen“) |
+| `angabe` | reiner Text ≤ 300 Zeichen: Autor:innen, Titel, Auflage, Verlag, Jahr, ISBN |
+| `abschnitt` | optional, `haupt` (Standard, steht unter „Das Wichtigste“) oder `weitere` („Weitere Literatur“) |
+| `spalte` | optional, reiner Text ≤ 20 Zeichen: Kurzname als Spalte der Lese-Tabelle; nur Werke mit `spalte` bekommen eine Spalte |
+| `hinweis` (Werk) | optional, reiner Text ≤ 200 Zeichen (welche Teile die Vorlesung nutzt) |
+| `katalog` | optional, Nummer des Eintrags im UB-Katalog (PPN, 7–13 Ziffern, am Ende auch `X`) |
+| `suche` | optional, reiner Text ≤ 120 Zeichen: Suchwörter für den UB-Katalog, wenn es keine Nummer gibt |
+| `links` | optional, höchstens 4 je Werk: `{ text, url }` (Online-Fassung beim Verlag) oder `{ text, unterlage }` (Unterlage des Moduls); `text` reiner Text ≤ 40 Zeichen |
+| `lesen` | optional, höchstens 40 Zeilen `{ zu, beleg, stellen }` |
+| `zu` | reiner Text ≤ 120 Zeichen: Kapitel oder Sitzung („1 Grundlagen“) |
+| `stellen` | mindestens ein Eintrag Werk-`id` → reiner Text ≤ 80 Zeichen („Kap. 1, S. 1–24“); nur Werke mit `spalte` |
+| Unterlage (`beleg`, `unterlage`) | `{ art, nummer, seite }`: `art` eine der Unterlagen-Arten (`Folien`, `Skript`, `Übung`, `Tutorium`, `Lab`, `Lösung`, `Altklausur`, `Literatur`), `nummer` ganze Zahl 0–99, `seite` optional 1–2000 |
+
+Reiner Text heißt: ohne Zeilenumbruch, ohne `` ` ``, `[`, `]`, `<`, `>`, `{`, `}`, `|`, `\`. Links nur `https` auf
+`uni-tuebingen.de`, `ibs-bw.de`, `doi.org`, `core-econ.org`, `springer.com`, `pearson.de` oder `proquest.com` (jeweils mit
+Subdomains), ohne Sitzung oder Schlüssel in der Adresse (`token`, `sid`, `jsessionid`, `ticket`, `key` …). Links auf den UB-Katalog
+baut das Plugin selbst aus `katalog` bzw. `suche`. Ein ungültiges Werk, ein ungültiger Link oder eine ungültige Zeile verwirft das
+**ganze Modul**, die anderen Module bleiben. Unbekannte Felder werden ignoriert.
+
+**Was das Plugin daraus macht:** Jedes Gerät holt die Datei selbst und merkt sie sich gerätelokal (wie `kapitel.json`). Nur der
+Abrufer schreibt daraus je Modul `Unterlagen/<Code> <Modultitel>/Literatur/<Code> Literatur 00 Literaturliste.md` (`typ: unterlage`,
+`art: Literatur`, `nummer: 0`, `herkunft: zentral`, `literatur_id` = Code klein), für dieselben Module wie die Lernplan-Notizen
+(laufendes Semester, im Plan, laufend oder angemeldet, nicht bestanden). Die Unterlagen-Liste des Moduls zeigt sie als erste Zeile
+unter „Literatur“. Verweise auf Unterlagen werden Links auf das PDF (mit Seite) bzw. die Begleitnotiz, sobald die Unterlage im
+Tresor liegt; bis dahin stehen sie als Text da. `status`, `datum`, `tags`, eigene Eigenschaften und alles unter „## Meine Notizen“
+bleiben bei jeder neuen Liste. Eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert (Stand in `abruf.json`, Feld
+`literatur`). Eine Notiz mit `literatur_id` ohne `herkunft` übernimmt das Plugin an ihrem Ort; Notizen mit anderer `herkunft` fasst
+es nie an. Für ein Modul ohne Liste entsteht keine Notiz. Fehlt die Datei im Manifest, vergessen die Geräte ihren Stand; die Notizen
+bleiben, wie sie sind.
+
 ## veranstaltungen.json
 
 Vertrag seit 17.10.2026, **im Manifest seit 18.10.2026** (Schalter `veranstaltungen.veroeffentlichen` im Export). Optional
@@ -590,7 +670,12 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
    die Hälfte und mehr als 20 Einträge); ist der letzte Abruf älter als drei Tage, bleibt der Stand. Eine leere oder fehlende
    Alma-Seite gilt erst beim zweiten Abruf hintereinander als „entfällt“. Ein Fehler hält nur `veranstaltungen.json` an, nie
    Termine, Semesterdaten, Gruppen oder Angebote. Vor der ersten Veröffentlichung eine Woche Trockenlauf mit privater Vorschau.
-9. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
+9. `literatur.json` (Vertrag seit 24.10.2026): aus den Literaturlisten des Abgleichs (Kurse, in denen der Autor ist); nur die
+   Felder oben, nie Text aus Folien oder Mails (ein Hinweis mit Wortlaut aus einer Quelle fällt weg, das Modul bleibt). Dieselben
+   Prüfungen wie das Plugin und der Scan auf persönliche Angaben in jedem Feld; ein Treffer hält nur dieses Modul zurück. Vom
+   UB-Katalog nur Katalognummern und Suchwörter. Veröffentlicht erst mit dem Schalter `literatur.veroeffentlichen`, bis dahin
+   private Vorschau. Ein Fehler hält nur `literatur.json` an.
+10. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 
 Testquelle mit allen Fällen: lokal beim Autor (nicht im Repo). Öffentliche Tests: `tests/` (siehe `docs/tests.md`).

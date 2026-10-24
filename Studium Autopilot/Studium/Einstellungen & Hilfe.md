@@ -45,7 +45,6 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | Knopf | Wo | Fragt nach | Landet in |
 > > | --- | --- | --- | --- |
 > > | Neue Vorlesungsnotiz | Dashboard, Modulseite (Abschnitt Vorlesungen), **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst Modul und Thema; auf der Modulseite ist das Modul gewählt) | Vorlesungen/Modulcode, Dateiname „Datum Code VL 03“, angezeigt als „Vorlesung 3 · Di 27.10. · Thema“ |
-> > | Neues Übungsblatt | Dashboard, Modulseite, [[Unterlagen#Übungsblätter\|Unterlagen]] | Modul, Nummer, Abgabe | Übungsblätter |
 > > | Unterlagen hinzufügen | Dashboard, Modulseite, [[Unterlagen]] | Dateien, dann die Vorschau der neuen Namen | Unterlagen/Modul |
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
@@ -110,18 +109,18 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > [!eba-karte|hilfe|unterlagen]- Unterlagen
 > > Kursdateien kommen von selbst aus ILIAS, alles andere fügst du selbst hinzu.
 > >
-> > 1. Einmal unter [[#Verbindungen]] **ILIAS-Unterlagen** verbinden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
+> > 1. Einmal unter [[#Verbindungen]] auf **Uni-Login** tippen, dich anmelden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
 > > 2. Andere Dateien (Mail, Scan, Foto): **Unterlagen hinzufügen** tippen, dann **Dateien auswählen**. Am PC kannst du sie auch ins Fenster ziehen.
 > > 3. In der Vorschau **Alle übernehmen**.
 > > 4. Zum Lesen und Anmerken in der Unterlage **Öffnen ↗** tippen.
 > >
 > > > [!eba-info]- Mehr erfahren
-> > > - **ILIAS:** Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Trennen: [[#Verbindungen]] → **ILIAS-Unterlagen** → **Mehr erfahren** → **Trennen**.
+> > > - **ILIAS:** Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Trennen: [[#Verbindungen]] → **Uni-Login** → **Trennen** (trennt alles, was der Uni-Login auf diesem Gerät verbunden hat).
 > > > - **Verbinden klappt nicht:** Fragt die Uni nach deiner Zustimmung, einmal im Browser bei ILIAS anmelden und zustimmen, dann erneut **Verbinden**. Mit zweitem Faktor geht es noch nicht.
 > > > - **Was nicht kommt:** Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder. Umbenennen und Verschieben ist sicher.
 > > > - **Geänderte Dateien:** Hast du eine Datei angemerkt und der Dozent lädt sie neu hoch, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
 > > > - **Aus Mail, Safari oder von Papier:** Auf iPhone/iPad erst **Teilen → In Dateien sichern**, Papier über die App **Dateien → ⋯ → Dokumente scannen**, dann **Dateien auswählen**. ZIP vorher entpacken (in der Dateien-App antippen) und die Dateien darin wählen. PowerPoint: als PDF mit gleichem Namen exportieren und beide wählen.
-> > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`. Daneben liegt je Datei eine Notiz mit gleichem Namen: Darin merkt sich Studium Autopilot Modul, Art und ob du die Datei schon geöffnet hast. Tippst du sie an, siehst du gleich die PDF. **Neu** auf der Seite Unterlagen ist, was in den letzten 14 Tagen dazukam und du noch nicht geöffnet hast. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen im Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
+> > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`. Daneben liegt je Datei eine Notiz mit gleichem Namen: Darin merkt sich Studium Autopilot Modul, Art und ob du die Datei schon geöffnet hast. Tippst du sie an, siehst du gleich die PDF. **Neu** auf der Seite Unterlagen ist, was in den letzten 14 Tagen dazukam und du noch nicht geöffnet hast. Ein Übungsblatt (`Übung 03`) zeigt oben seine Abgabe und einen Knopf **Offen** oder **Abgegeben**, der auch die Frist abhakt. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen beim Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
 > > > - **Stift auf dem iPad (einmal einrichten):** Dateien-App → PDF gedrückt halten → **Informationen** → **Immer öffnen mit: Vorschau**; dann **Öffnen mit** → Haken bei **Mit Quick Look anzeigen** entfernen. Danach **Öffnen ↗** → **Markieren** → **Fertig**: Die Anmerkungen stehen in derselben PDF. Nicht über „Teilen“ öffnen, das legt eine Kopie an.
 > > > - **Lesen und zitieren:** `[[Datei.pdf#page=12]]` springt auf Seite 12. Die Suche findet nur Text in Notizen, nicht in PDFs. Jede PDF belegt Platz auf jedem Gerät; ganze Bücher lieber nicht ablegen.
 >
@@ -144,9 +143,9 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > | Ordner | Inhalt |
 > > | --- | --- |
 > > | **Dashboard** | Startseite mit Kennzahlen, Knöpfen, Woche, Fristen und To-dos |
-> > | **Studium** | Übersichtsseiten: Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen (mit Übungsblättern), Karteikarten, Kontakte & Links, Einstellungen & Hilfe, Stundenplan |
+> > | **Studium** | Übersichtsseiten: Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen (mit Übungen), Karteikarten, Kontakte & Links, Einstellungen & Hilfe, Stundenplan |
 > > | **Module** | 86 Module aus dem Modulhandbuch (dazu der Vorkurs SQ888), sortiert nach Grundstudium, Profil & Vertiefung, Schwerpunktkatalog, Schlüsselqualifikation & Abschluss; eigene Module unter Weitere Module |
-> > | **Vorlesungen, Übungsblätter, Schlüsselqualifikationen** | deine Notizen und SQ-Kurse |
+> > | **Vorlesungen, Schlüsselqualifikationen** | deine Notizen und SQ-Kurse |
 > > | **Termine, Stundenplan** | Fristen, Events und Lehrveranstaltungen, je eine Notiz |
 > > | **Unterlagen** | Folien, Skripte, Übungen, Lösungen, Altklausuren je Modul (`Unterlagen/<Code> <Modultitel>/…`), daneben je Datei eine Notiz |
 > > | **Karteikarten** | deine Kartenstapel, je Modul eine oder mehrere Notizen |
@@ -158,12 +157,12 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > > [!eba-regel] Einmal pro Gerät
 > > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
 > > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
-> > > > 3. Unter [[#Verbindungen]] bei Uni-Login **Mit Uni-Login verbinden** tippen und deinen Uni-Login eingeben: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
+> > > > 3. Unter [[#Verbindungen]] auf **Uni-Login** tippen und deinen Uni-Login eingeben: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
 > > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
 > > > > [!eba-info] Unterschiede je Gerät
 > > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>.
-> > > > - **Neue Version:** Unter [[#Verbindungen]] in der Zeile **Studium Autopilot** auf **Neue Version installieren** tippen; steht dort **Nach Updates suchen**, sieht ein Tipp sofort nach. Deine anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
+> > > > - **Neue Version:** Unter [[#Verbindungen]] auf **Updates** tippen, dann auf **Neue Version installieren**; steht dort **Nach Updates suchen**, sieht ein Tipp sofort nach. Deine anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
 > > > > - **iPad/iPhone:** Aufgaben über das Kästchen-Symbol über der Tastatur. Tabellen stehen auf allen Geräten als Liste untereinander.
 > >
 > > > [!eba-achtung] Bitte nicht umbenennen

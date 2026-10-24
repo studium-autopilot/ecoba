@@ -101,8 +101,14 @@ Auf dem Gerät:
 
 ## Wenn etwas hakt
 
-- **iPhone/iPad gleicht nach dem Aufwachen nichts mehr ab** (Fehlermeldung mit „database connection is closing“): Obsidian im
-  App-Umschalter wegwischen und neu öffnen. Ein bekannter Fehler von LiveSync auf iOS, kein Problem des Servers.
+- **iPhone/iPad gleicht nach dem Aufwachen nichts mehr ab** (Fehlermeldung mit „database connection is closing“): Ein bekannter
+  Fehler von LiveSync auf iOS, kein Problem des Servers. Studium Autopilot öffnet die Datenbank nach der Rückkehr in die App
+  selbst neu (im Protokoll von LiveSync steht dann eine Zeile „Studium Autopilot: …“). Hängt es danach noch: Obsidian im
+  App-Umschalter wegwischen und neu öffnen.
+- **Vom Computer kommt erst etwas an, wenn sein Obsidian-Fenster wieder offen ist** (minimiert gleicht LiveSync dort nicht ab):
+  Links seit Studium Autopilot 0.6.8 lassen LiveSync dort weiterlaufen. Bei einem Computer, der vorher verbunden wurde:
+  **Einstellungen → Self-hosted LiveSync**, Reiter **🔄** (Sync Settings), „Keep replication active in the background“
+  einschalten.
 - **„Link abgelaufen“**: neuer Link mit dem Befehl aus L3.
 - **Code falsch eingetippt**: den Link noch einmal öffnen, er gilt 30 Minuten.
 - **Auf einem Gerät fehlt Studium Autopilot oder das Dashboard sieht roh aus**: Die versteckten Dateien sind dort aus. L3,

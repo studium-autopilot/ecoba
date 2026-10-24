@@ -1,4 +1,4 @@
-// Vorlesungsnotiz (typ: vorlesung) und Übungsblatt (typ: übungsblatt) lebendig gestalten.
+// Vorlesungsnotiz (typ: vorlesung) lebendig gestalten, dazu die Abschnitte eines Übungsblatts (typ: übungsblatt).
 // 1. Codeblock ```eba-vorlesung``` unter dem Titel: Kopf-Karte mit Vorlesungswoche, Status „Nacharbeit offen/Nachgearbeitet“
 //    (Tipp schaltet das Feld `nachgearbeitet`), Modul (Link), Thema, Datum mit Wochentag, Uhrzeit und Raum aus dem Stundenplan
 //    (an diesem Tag, seit 20.10.2026 mit Änderung oder Verlegung: neuer Wert in Warnfarbe, der übliche durchgestrichen),
@@ -9,11 +9,10 @@
 // 2. Abschnitte (## Mitschrift, ## Prüfungsrelevant, ## Offene Fragen, ## Nacharbeit) bekommen Klassen eba-vorl-h-<art> bzw.
 //    eba-vorl-z-<art>: Leseansicht über einen Post-Processor, Bearbeitungsansicht (Live Preview) über eine CodeMirror-
 //    Erweiterung (ViewPlugin, Decoration.line). Der Text bleibt reines Markdown (keine Callout-Präfixe beim Mitschreiben); Stil in eba-core.css.
-// 3. Übungsblatt (typ: übungsblatt) mit derselben Gestalt: Codeblock ```eba-uebungsblatt``` = Kopf-Karte mit Semester und
-//    Blattnummer, Status in drei Stufen (Tipp: offen → abgegeben → korrigiert → offen, Feld `status`), Modul, Thema (Feld
-//    `thema`), Abgabe mit Restzeit oder „überfällig“, Perlen der Blätter dieses Moduls und Links zu Aufgaben, Musterlösung,
-//    eigener Lösung (Felder `datei`, `eigene_loesung`, sonst Unterlagen gleicher Nummer) und Übung/Tutorium im Stundenplan.
-//    Abschnitte: ## Aufgabe …, ## Knackpunkte (Kasten wie „Prüfungsrelevant“), ## Fürs Tutorium (offene Punkte zählen).
+// 3. Übungsblatt (typ: übungsblatt, bis 0.6.7 über „Neues Übungsblatt“ angelegt): Abschnitte ## Aufgabe …, ## Knackpunkte (Kasten
+//    wie „Prüfungsrelevant“), ## Fürs Tutorium. Seine Kopf-Karte (Codeblock ```eba-uebungsblatt```) zeichnet seit 24.10.2026 kopf.js;
+//    die Karte mit Perlen, Restzeit und Links zu Aufgaben und Lösungen gibt es nicht mehr: Das Blatt ist jetzt seine Begleitnotiz
+//    (Unterlage der Art Übung, kopf.js).
 // Erweiterung: registrieren() meldet Codeblock, Post-Processor, Editor-Erweiterung und Ereignisse über die Helfer in ctx an
 // (ctx.codeblock, ctx.postprozessor, ctx.editor, ctx.an); beim Hot-Reload meldet das Plugin die alte Fassung ab.
 // iOS-sicher: keine Node-APIs, keine Lookbehind-Regex, kein .at()/findLast/structuredClone. Fehler → Ersatztext.
@@ -21,7 +20,6 @@ module.exports = function (ctx) {
   const app = window.app;
   const basis = ctx; // zeichnen(el, ctx) überdeckt ctx mit dem Markdown-Kontext
   const SPRACHE = "eba-vorlesung";
-  const SPRACHE_BLATT = "eba-uebungsblatt";
   const TAGE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const TAG = 86400000;
   const pad = (n) => String(n).padStart(2, "0");
@@ -98,10 +96,6 @@ module.exports = function (ctx) {
     plan: [["rect", { x: 3, y: 4, width: 18, height: 18, rx: 2 }], ["path", { d: "M16 2v4M8 2v4M3 10h18" }]],
     frage: [["circle", { cx: 12, cy: 12, r: 10 }], ["path", { d: "M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3" }], ["path", { d: "M12 17h.01" }]],
     person: [["circle", { cx: 12, cy: 8, r: 4 }], ["path", { d: "M5 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1" }]],
-    abgegeben: [["path", { d: "M14.5 21.7a.5.5 0 0 0 .9 0l6.5-19a.5.5 0 0 0-.6-.6l-19 6.5a.5.5 0 0 0 0 .9l7.9 3.2a2 2 0 0 1 1.1 1.1z" }], ["path", { d: "m21.9 2.1-11 11" }]],
-    blatt: [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8" }]],
-    loesung: [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }], ["path", { d: "m9 15 2 2 4-4" }]],
-    stift: [["path", { d: "M12 20h9" }], ["path", { d: "M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9 .9.9-2.9a2 2 0 0 1 .5-.9z" }]],
   };
   const symbol = (eltern, name) => {
     const NS = "http://www.w3.org/2000/svg", doc = eltern.ownerDocument;
@@ -390,145 +384,6 @@ module.exports = function (ctx) {
     el.__ebaFragen();
   };
 
-  // ---------- Übungsblatt ----------
-  const STATUS = ["offen", "abgegeben", "korrigiert"];
-  const STATUS_TEXT = { offen: "Noch offen", abgegeben: "Abgegeben", korrigiert: "Korrigiert" };
-  const STATUS_TIPP = { offen: "Als abgegeben markieren", abgegeben: "Als korrigiert markieren", korrigiert: "Wieder auf offen setzen" };
-  // Unbekannte oder leere Werte gelten als offen (wie auf Unterlagen: erledigt = abgegeben oder korrigiert)
-  const statusVon = (v) => { const s = String(v ?? "").toLowerCase().trim(); return STATUS.indexOf(s) >= 0 ? s : "offen"; };
-  const naechsterStatus = (v) => STATUS[(STATUS.indexOf(statusVon(v)) + 1) % STATUS.length];
-  // Abgabe relativ zu heute (beides Mitternacht): Kennzeichen heute/morgen/überfällig und Restzeit, nur solange das Blatt offen ist
-  const abgabe = (d, heute, status) => {
-    if (!d) return { text: "Ohne Abgabedatum", marke: "", rest: "" };
-    const text = `Abgabe ${TAGE[d.getDay()]}, ${tm(d)}${d.getFullYear()}`;
-    if (statusVon(status) !== "offen") return { text, marke: "", rest: "" };
-    const diff = Math.round((d - heute) / TAG);
-    if (diff < 0) return { text, marke: "überfällig", rest: diff === -1 ? "seit gestern" : `seit ${-diff} Tagen` };
-    if (diff === 0) return { text, marke: "heute", rest: "" };
-    if (diff === 1) return { text, marke: "morgen", rest: "" };
-    return { text, marke: "", rest: `noch ${diff} Tage` };
-  };
-
-  const lesenBlatt = (f, heute) => {
-    const fm = fmVon(f), pfad = f ? f.path : "";
-    const modulF = ziel(fm.modul, pfad), mfm = fmVon(modulF);
-    const code = String(fm.code || mfm.code || "").trim();
-    const nr = Number(fm.nummer) || 0;
-    const d = datum(fm.faellig);
-    const alle = app.vault.getMarkdownFiles().map((x) => ({ x, m: fmVon(x) }));
-    const vomModul = (m) => code && String(m.code ?? "").trim() === code;
-    // Alle Blätter dieses Moduls, nach Nummer
-    const blaetter = alle.filter(({ m }) => m.typ === "übungsblatt" && vomModul(m))
-      .map(({ x, m }) => ({ f: x, nr: Number(m.nummer) || 0, d: datum(m.faellig), status: statusVon(m.status) }))
-      .sort((a, b) => a.nr - b.nr || a.f.basename.localeCompare(b.f.basename));
-    // Unterlagen: Feld der Notiz (eine PDF zeigt auf ihre Begleitnotiz), sonst die Unterlage dieses Moduls mit gleicher Nummer und Art
-    const feld = (wert) => {
-      const z = ziel(wert, pfad);
-      if (!z || z.extension === "md") return z;
-      const b = alle.find(({ x, m }) => m.typ === "unterlage" && m.datei && ziel(m.datei, x.path) === z);
-      return b ? b.x : z;
-    };
-    const unterlage = (art) => (nr && (alle.find(({ m }) => m.typ === "unterlage" && vomModul(m) && Number(m.nummer) === nr && m.art === art) || {}).x) || null;
-    const aufgaben = feld(fm.datei) || unterlage("Übung");
-    const loesung = unterlage("Lösung");
-    const eigene = feld(fm.eigene_loesung) || unterlage("Eigene Lösung");
-    // Übung oder Tutorium dieses Moduls im Stundenplan, die eigene Gruppe (aus ILIAS oder gewählt) zuerst
-    const t = iso(heute);
-    const eigen = (m) => /^(ilias-gruppe|gruppe-gewaehlt)$/.test(String(m.herkunft || ""));
-    const tut = alle.filter(({ m }) => m.typ === "lehrveranstaltung" && vomModul(m) && /(ü|ue)bung|tutori/i.test(String(m.art || "")) && (!m.bis || String(m.bis) >= t))
-      .sort((a, b) => eigen(b.m) - eigen(a.m))[0] || null;
-    const md = basis.modell && basis.modell.semesterVon ? basis.modell : null;
-    const s = md ? md.semesterVon(iso(d || heute)) : null;
-    return { fm, modulF, mfm, code, nr, d, blaetter, aufgaben, afm: fmVon(aufgaben), loesung, eigene,
-      tut: tut ? tut.x : null, tfm: tut ? tut.m : {}, sem: s ? s.name : "" };
-  };
-
-  const zeichnenBlatt = (el, c) => {
-    const quelle = c?.sourcePath || "";
-    const f = app.vault.getAbstractFileByPath(quelle);
-    const j = basis.date.jetzt(), heute = new Date(j.getFullYear(), j.getMonth(), j.getDate());
-    const x = lesenBlatt(f, heute);
-    const { fm, mfm } = x;
-    const status = statusVon(fm.status);
-    const sig = JSON.stringify([fm, x.modulF?.path, mfm.titel, x.blaetter.map((b) => [b.f.path, b.nr, b.status, b.d && iso(b.d)]),
-      x.aufgaben?.path, x.afm.titel, x.loesung?.path, x.eigene?.path, x.tut?.path, x.tfm.art, wtKurz(x.tfm), x.tfm.beginn, x.sem, iso(heute)]);
-    if (el.__ebaSig === sig && el.childElementCount) { if (el.__ebaFragen) el.__ebaFragen(); return; }
-    el.__ebaSig = sig;
-    const link = verlinker(quelle);
-
-    el.empty();
-    el.addClass("eba-vorl");
-    el.addClass("eba-blatt");
-    el.toggleClass("ist-fertig", status !== "offen");
-    const karte = el.createDiv({ cls: "eba-vorl-karte" });
-
-    // Zeile 1: Semester · Blatt  |  Status
-    const kopf = karte.createDiv({ cls: "eba-vorl-kopf" });
-    kopf.createSpan({ cls: "eba-vorl-label", text: [x.sem, x.nr ? `Übungsblatt ${x.nr}` : "Übungsblatt"].filter(Boolean).join(" · ") });
-    if (f) {
-      const b = kopf.createEl("button", { cls: "eba-vorl-status " + (status === "korrigiert" ? "fertig" : status),
-        attr: { type: "button", title: STATUS_TIPP[status], "aria-label": `${STATUS_TEXT[status]}. ${STATUS_TIPP[status]}` } });
-      symbol(b, status === "korrigiert" ? "fertig" : status === "abgegeben" ? "abgegeben" : "status");
-      b.createSpan({ text: STATUS_TEXT[status] });
-      b.addEventListener("mousedown", (e) => e.stopPropagation());
-      b.addEventListener("click", async (e) => {
-        e.preventDefault(); e.stopPropagation();
-        try {
-          await app.fileManager.processFrontMatter(f, (m) => { m.status = naechsterStatus(m.status); });
-        } catch (err) { console.error("Übungsblatt Status", err); }
-      });
-      if (basis.kopf && basis.kopf.mehr) basis.kopf.mehr(kopf, f); // „⋯“ mit Eigenschaften (kopf.js)
-    }
-
-    // Titel: Modul (Link); darunter das Thema, wenn es im Feld „thema“ steht (der Titel der Aufgaben steht im Chip unten)
-    if (x.modulF) link(karte.createDiv({ cls: "eba-vorl-titel" }), x.modulF, "eba-vorl-modul", String(mfm.titel || x.modulF.basename.replace(/^\S+\s+/, "")));
-    const thema = String(fm.thema ?? "").trim();
-    if (thema) karte.createDiv({ cls: "eba-vorl-thema", text: thema });
-
-    // Abgabe mit Kennzeichen und Restzeit
-    const a = abgabe(x.d, heute, status);
-    const meta = karte.createDiv({ cls: "eba-vorl-meta" });
-    const s = meta.createSpan({ cls: x.d ? "eba-vorl-datum" : "eba-vorl-ohne", text: a.text });
-    if (a.marke) s.createEl("b", { cls: "eba-vorl-heute" + (a.marke === "überfällig" ? " spaet" : a.marke === "morgen" ? " alt" : ""), text: a.marke });
-    if (a.rest) meta.createSpan({ cls: "eba-vorl-rest" + (a.marke === "überfällig" ? " spaet" : ""), text: a.rest });
-
-    // Perlen: eine je Blatt dieses Moduls (ab zwei Blättern)
-    if (x.blaetter.length > 1) {
-      const wo = karte.createDiv({ cls: "eba-vorl-wochen" });
-      const reihe = wo.createDiv({ cls: "eba-vorl-perlen", attr: { "aria-label": "Übungsblätter" } });
-      for (const b of x.blaetter) {
-        const cls = ["eba-vorl-perle"];
-        if (b.status === "korrigiert") cls.push("fertig");
-        else if (b.status === "abgegeben") cls.push("da");
-        else if (b.d && b.d < heute) cls.push("spaet");
-        if (b.f === f) cls.push("hier");
-        const text = `Blatt ${pad(b.nr)}${b.d ? " · Abgabe " + tm(b.d) : ""} · ${STATUS_TEXT[b.status]}`;
-        const p = b.f !== f ? link(reihe, b.f, cls.join(" "), "") : reihe.createSpan({ cls: cls.join(" ") });
-        p.setAttr("title", text);
-        p.setAttr("aria-label", text);
-      }
-      const fuss = wo.createDiv({ cls: "eba-vorl-wochen-fuss" });
-      const erledigt = x.blaetter.filter((b) => b.status !== "offen").length;
-      fuss.createSpan({ text: `Blatt ${x.blaetter[0].nr}` });
-      fuss.createSpan({ cls: "mitte", text: `${x.blaetter.length} Blätter · ${erledigt} abgegeben` });
-      fuss.createSpan({ text: `Blatt ${x.blaetter[x.blaetter.length - 1].nr}` });
-    } else karte.addClass("ohne-wochen");
-
-    // Links: Aufgaben, Musterlösung, eigene Lösung, Übung/Tutorium; offene Punkte fürs Tutorium
-    const links = karte.createDiv({ cls: "eba-vorl-links" });
-    const chip = (zielF, sym, fett, text) => {
-      const e = link(links, zielF, "eba-vorl-chip " + sym, "");
-      symbol(e, sym);
-      e.createEl("b", { text: fett });
-      if (text) e.createSpan({ text });
-    };
-    if (x.aufgaben) chip(x.aufgaben, "blatt", "Aufgaben", String(x.afm.titel || "").trim());
-    if (x.loesung) chip(x.loesung, "loesung", "Musterlösung", "");
-    if (x.eigene) chip(x.eigene, "stift", "Meine Lösung", "");
-    if (x.tut) chip(x.tut, "plan", /tutori/i.test(String(x.tfm.art)) ? "Tutorium" : "Übung", wtKurz(x.tfm) && x.tfm.beginn ? `${wtKurz(x.tfm)} ${x.tfm.beginn}` : "");
-    fragenChip(el, links, f, !!(x.aufgaben || x.loesung || x.eigene || x.tut), (n) => (n === 1 ? "1 Frage fürs Tutorium" : `${n} Fragen fürs Tutorium`));
-  };
-
   // ---------- Bearbeitungsansicht: Zeilen-Dekorationen ----------
   // Echte CodeMirror-Erweiterung (ViewPlugin mit Decoration.line) aus ctx.cm (das Plugin reicht @codemirror/view weiter).
   // Hot-Reload: ctx.editor(…) legt die Erweiterung in das eine, vom Plugin angemeldete Array; beim Neuladen nimmt das Plugin
@@ -578,21 +433,18 @@ module.exports = function (ctx) {
     const block = ctx.codeblock(SPRACHE, (quelle, el, c) => {
       try { zeichnen(el, c); } catch (e) { el.setText("Vorlesung: Fehler – " + e.message); console.error("Vorlesung", e); }
     });
-    const blatt = ctx.codeblock(SPRACHE_BLATT, (quelle, el, c) => {
-      try { zeichnenBlatt(el, c); } catch (e) { el.setText("Übungsblatt: Fehler – " + e.message); console.error("Übungsblatt", e); }
-    });
     ctx.postprozessor((el, c) => { try { nachbearbeiten(el, c); } catch (e) {} });
     try { editorErweiterung(); } catch (e) { console.error("Vorlesung Editor", e); }
-    const bald = ctx.entprellen(() => { block.neu(); blatt.neu(); }, 400);
+    const bald = ctx.entprellen(() => block.neu(), 400);
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
       const typ = cache?.frontmatter?.typ;
-      if (["vorlesung", "übungsblatt", "lehrveranstaltung", "unterlage"].includes(typ) || f.path === "System/Einstellungen.md" || f.path.startsWith("System/Daten/")) bald();
+      if (["vorlesung", "lehrveranstaltung", "unterlage"].includes(typ) || f.path === "System/Einstellungen.md" || f.path.startsWith("System/Daten/")) bald();
     });
-    // Neuer Tag: „heute“, „gestern“, die Perle dieser Woche und die Restzeit der Abgabe rücken weiter (seit 24.10.2026; vorher erst,
-    // wenn sich eine Notiz änderte)
+    // Neuer Tag: „heute“, „gestern“ und die Perle dieser Woche rücken weiter (seit 24.10.2026; vorher erst, wenn sich eine Notiz
+    // änderte)
     const tag = ctx.bleibend("tag", () => ({ wert: ctx.date.now("YYYY-MM-DD") }));
-    ctx.intervall(() => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== tag.wert) { tag.wert = h; block.neu(); blatt.neu(); } }, 5 * 60 * 1000);
+    ctx.intervall(() => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== tag.wert) { tag.wert = h; block.neu(); } }, 5 * 60 * 1000);
   };
 
-  return { registrieren, zeichnen, zeichnenBlatt, abschnitte, statusVon, naechsterStatus, abgabe };
+  return { registrieren, zeichnen, abschnitte };
 };

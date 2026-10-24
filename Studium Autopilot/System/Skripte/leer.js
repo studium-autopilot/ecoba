@@ -2,7 +2,7 @@
 // außer dem Gerüst der Vorlage nichts steht (Überschriften, leere Aufzählungspunkte, Beschriftungen wie „Ansatz:“ oder
 // „Kernaussagen:“, der Kopf-Codeblock, Callouts der Vorlage), wandert sie in den Vault-Papierkorb (`.trash/`, wiederherstellbar).
 // Termine, Module, Stundenplan-Einträge, Begleitnotizen sind ausgenommen: ihr Inhalt steht in den Eigenschaften. Ebenso ein
-// Übungsblatt mit Abgabedatum (oder verknüpften Aufgaben bzw. eigener Lösung): Seine Abgabe zählt in Fristen und Unterlagen. Und
+// Übungsblatt (bis 0.6.7) mit Abgabedatum (oder verknüpften Aufgaben bzw. eigener Lösung): Seine Abgabe zählt in den Fristen. Und
 // eine Vorlesungsnotiz mit Thema (das Fenster „Neue Vorlesungsnotiz“ fragt danach): Sie steht so auf der Modulseite.
 // „Verlassen“ = eine andere Notiz wird aktiv oder der Tab schließt (Ereignis file-open; der Wechsel zu Folien, PDFs oder
 // Bildern zählt nicht). Geprüft wird 2,5 s später, und nur,

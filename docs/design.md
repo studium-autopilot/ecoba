@@ -103,11 +103,16 @@ Innenabstand, Karten 16 × 18 px (iPhone 11 × 13 px). **(geplant)** Variablen `
 ### Seitenkopf
 Pfad (Label, Links gedämpft) → Titel (`h1`) → höchstens eine Zeile Eckdaten (Werte mit „ · “ getrennt, auf der Modulseite mit
 feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `cssclasses: eba`. Die Übersicht steht in Obsidians
-linker Seitenleiste (seit 0.4.7, `seitenleiste.js`; bis 0.4.6 ein Symbol in der Kopfleiste jeder Notiz). **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
+linker Seitenleiste (seit 0.4.7, `seitenleiste.js`; bis 0.4.6 ein Symbol in der Kopfleiste jeder Notiz). **(geplant)** Auch Vorlesungsnotiz,
 Begleitnotiz, Termin- und Stundenplan-Notiz bekommen den Pfad (Modul) über dem Titel; ihren Status zeigt schon die Kopf-Karte
 unter dem Titel (`kopf.js`, `eba-core.css` 64.2): Art · Modul (Link) · Tag, rechts der Status-Knopf und „⋯“ (Eigenschaften); bei
-Übung, Tutorium und Lab darunter die Unterlagen aus ihrem Bereich (Übung, Tutorium bzw. Lab) als Chips wie in der Vorlesungsnotiz. Was
-der Kopf zeigt, steht nicht noch einmal darunter: keine Karte „Eckdaten“, keine Eigenschaften über dem Titel.
+Übung, Tutorium und Lab darunter die Unterlagen aus ihrem Bereich (Übung, Tutorium bzw. Lab) als Chips wie in der Vorlesungsnotiz. Beim
+Termin (seit 24.10.2026) nennt das Label nur Art · Modul; darunter steht der Tag in der Display-Schrift („Samstag, 24.10.“, ein
+Zeitraum „22.–25.10.“), daneben die Marke **heute** (Akzent), **morgen** oder **läuft** (getönt) wie in der Vorlesungsnotiz, sonst
+leise der Abstand („in 5 Tagen“), dann Uhrzeit · Ort wie deren Eckdaten, bei einer Schlüsselqualifikation die Pille „freiwillig“.
+Unter der Karte nur noch die Beschreibung, die Quelle als leise Fußzeile (13 px, `--eba-muted`) und „Meine Notizen“ als Label
+mit Stift wie „Mitschrift“. Was der Kopf zeigt, steht nicht noch einmal darunter: keine Karte „Eckdaten“, keine Datumszeile unter
+dem Titel des Termins, keine Eigenschaften über dem Titel.
 
 ### PDF-Kasten
 `> [!eba-pdf]- PDF (37 Seiten)` in Begleitnotizen: eine schlanke Karte, Kopfzeile als Label mit Seitenzahl, rechts leise Knöpfe
@@ -157,25 +162,40 @@ Geräten gleich, so dicht wie die Einstellungen von iPhone und iPad.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
+│ (◯)  Titel                                    Eintragen   ›  │
+├──────────────────────────────────────────────────────────────┤
 │ (◯)  Titel                                    Verbunden   ›  │
+│      Was die Sache tut, in wenigen Wörtern                   │
 ├──────────────────────────────────────────────────────────────┤
 │ (◯)  Titel                                       Fehler   ›  │
-│      Ein Satz, nur bei einem Problem                         │
+│      Das Problem in einem Satz                               │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-- 44 px hoch, Titel in 500, rechts ein kurzer Stand gedämpft (ein, zwei Wörter: „An“, „Eintragen“, die Version) und der Pfeil.
-  Im Akzent nur, wenn etwas auf dich wartet („Starten“, „Neue Version“), in `--eba-warn` bei einem Problem.
+- 44 px hoch, Titel in 500, rechts ein kurzer Stand gedämpft und der Pfeil. Unter Verbindungen ist der Stand ein Wort:
+  „Verbunden“, „An“, „Aus“, „Aktuell“, „Fehler“ („Neue Version“ nur neben dem kurzen „Updates“); unter Deine Angaben der
+  Wert oder „Eintragen“. Im Akzent nur, wenn etwas auf dich wartet („Starten“, „Neue Version“), in `--eba-warn` bei einem
+  Problem.
 - Die ganze Zeile ist der Knopf: Sie öffnet das Fenster, und dort steht, was vorher als Knopf in der Zeile stand.
 - Eine zweite Zeile nur, wenn sie etwas Neues sagt (ein Problem, übersprungene Schritte, was aus der gewählten Variante folgt).
-- Wird es eng, gibt erst der Stand nach und bricht zwischen Wörtern um, der Titel bleibt ganz.
+  Unter Verbindungen steht sie immer (seit 24.10.2026): was die Sache tut, in höchstens etwa 40 Zeichen, damit sie auch mit
+  großer Schrift auf dem iPhone in eine Zeile passt; bei einem Problem steht dort stattdessen das Problem. Ohne Vorwissen
+  sagen Namen wie „Zentrale Daten“ oder „Eigener Server“ allein nicht, wozu sie da sind.
+- Das Symbol zeigt unter Verbindungen die Sache (Schlüssel, PDF mit Lupe, Gebäude, Funken, Server, Pfeile im Kreis) in der
+  Farbe ihres Stands: `--eba-good` verbunden oder an, Akzent wenn etwas wartet, `--eba-warn` bei einem Problem, sonst gedämpft.
+- Der Stand steht immer oben rechts neben dem Titel, jede Zeile hat dieselbe Gestalt. Darum müssen Name und Stand auf dem
+  iPhone mit 20-px-Schrift nebeneinander passen: zusammen höchstens 24 Zeichen (`tests/verbindungen.test.js`). Wird es doch
+  zu eng, kürzt der Stand mit „…“, der Titel bleibt ganz. Bis 24.10.2026 rutschte ein langer Stand („Nicht verbunden“ neben
+  „Eigener Server“, „Neue Version“ neben „Studium Autopilot“) in eine eigene Zeile zwischen Titel und Satz; das sah zerrissen
+  aus. Ist ein Name zu lang, bekommt die Zeile einen kürzeren („Updates“ statt „Studium Autopilot“).
 
 ### Kachel und Kennzahl
 `> [!eba-kennzahlen]`: höchstens vier Kacheln. Label, Wert (Kennzahl), höchstens eine Unterzeile mit neuer Information, optional
 ein Balken (`--eba-bar-h`). Die erste Kachel trägt den Akzent, auf dem Dashboard („Nächste Frist“) die Farbe der Fristen
 (`--eba-warn`).
-iPhone (unter 480 px Kartenbreite): Auf dem Dashboard stehen der Balken und das Datum der Frist rechts in der Label-Zeile, so
-spart jede Kachel eine Zeile; Gruß und Datum teilen sich eine Zeile, das Datum zweizeilig rechts (`eba-core.css` 37.dashboard).
+iPhone (unter 480 px Kartenbreite): Auf dem Dashboard steht der Balken rechts in der Label-Zeile, so spart die Kachel eine
+Zeile; Gruß und Datum teilen sich eine Zeile, das Datum zweizeilig rechts (`eba-core.css` 37.dashboard). Das Datum der Frist
+bleibt unter ihrem Titel: rechts in der Label-Zeile stünde es direkt unter dem Datum des Kopfs.
 
 ### Knöpfe
 
@@ -308,7 +328,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 
 ### Knöpfe und Befehle
 
-- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesungsnotiz**, **Neues Übungsblatt**, **Unterlagen hinzufügen**,
+- Ein Knopf heißt wie sein Befehl in der Befehlspalette: **Neue Vorlesungsnotiz**, **Unterlagen hinzufügen**,
   **Unterlagen aktualisieren**, **Neue Karte**. Fehlt dem Knopf auf seiner Seite nichts, der Befehl aber Zusammenhang, kommt
   nur das Ding dazu (Knopf **Lernen** → Befehl **Karteikarten lernen**), nie ein anderes Verb.
 - Befehle ohne „Studium Autopilot“ (Obsidian setzt den Namen davor), ohne Vorsatz mit Doppelpunkt, ohne Erklärung in Klammern;
@@ -331,7 +351,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
   Breite oder Höhe nur zusammen mit `body.is-phone`: Obsidian nimmt die Telefon-Ansicht, sobald Breite oder Höhe des Fensters
   unter 600 px liegt, also auch im geteilten iPad-Fenster (1376 × 500) und auf dem iPhone quer, und zeigt dort eine Notiz über
   das ganze Fenster. Ab 600 px Breite gilt dort die Breite wie auf dem iPad (`eba-core.css` 37.tablet 1b); unter 600 px Höhe
-  rückt der Kopf von Vorlesungsnotiz und Übungsblatt in drei Zeilen zusammen, damit die Mitschrift ohne Scrollen zu sehen ist
+  rückt der Kopf der Vorlesungsnotiz in drei Zeilen zusammen, damit die Mitschrift ohne Scrollen zu sehen ist
   (37.vorlesung 3b); auf dem Dashboard stehen dort Gruß und Datum in einer Zeile, der Gruß in Kennzahlgröße. Ein breites,
   flaches Fenster bleibt sonst in der Telefon-Ansicht: Karten richten sich nach ihrer Breite.
 - iPhone: Was nicht täglich gebraucht wird, ist zu (`|handy-zu`). Raster werden einspaltig, Kacheln zweispaltig, Knopfkacheln

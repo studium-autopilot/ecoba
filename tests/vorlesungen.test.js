@@ -250,7 +250,7 @@ test("Kopf der Vorlesungsnotiz: Dozent und Wochentag live aus dem Stundenplan, n
   assert.deepEqual(el.finde("plan")[0].texte(), ["Stundenplan", "Di 10:15"], "Wochentag aus wochentag (das Feld tag fällt weg)");
   notizen[VL].dozent = "Gast aus der Praxis";
   assert.deepEqual(kopf().finde("eba-vorl-dozent")[0].texte(), ["Gast aus der Praxis"], "selbst eingetragen geht vor");
-  // Tageswechsel: „heute“, die Perle dieser Woche und die Restzeit der Abgabe zeichnen sich neu
+  // Tageswechsel: „heute“ und die Perle dieser Woche zeichnen sich neu (die Abgabe einer Übung zeichnet kopf.js)
   let tag = "2026-10-20";
   L.ctx.date.now = () => tag;
   L.ergebnis.registrieren();
@@ -258,7 +258,7 @@ test("Kopf der Vorlesungsnotiz: Dozent und Wochentag live aus dem Stundenplan, n
   assert.deepEqual(neu, []);
   tag = "2026-10-21";
   intervalle[0]();
-  assert.deepEqual(neu, ["eba-vorlesung", "eba-uebungsblatt"]);
+  assert.deepEqual(neu, ["eba-vorlesung"]);
 });
 
 // ---------- Folien einer Vorlesungsnotiz (ctx.modell.folien) ----------

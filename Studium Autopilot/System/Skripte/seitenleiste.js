@@ -20,6 +20,9 @@ const SYMBOL_SVG = '<g fill="none" stroke="currentColor" stroke-width="7.5" stro
 // Stundenplan fehlt seit 24.10.2026 (0.6.6: nur am iPhone): Das Dashboard zeigt die Woche auf jedem Gerät als Raster (woche.js).
 const ZIELE = ["Dashboard", "Studienverlauf", "Termine & Anmeldungen", "Postfach", "Prüfungen", "Noten & ECTS",
   "Unterlagen", "Lernplan", "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
+// Seiten, die noch nicht fertig sind: ihre Zeile ist abgeblendet und trägt rechts „in Entwicklung“ (Lernplan seit 19.10.2026, den
+// Warnkasten auf der Seite schaltet lernplan.js IN_ENTWICKLUNG; Karteikarten seit 24.10.2026). Fertig: Namen hier streichen.
+const IN_ENTWICKLUNG = ["Lernplan", "Karteikarten"];
 // Seiten, die gerade gelten: Lernplan nur, wenn es Lernplan-Notizen gibt (lernplan.js sichtbar())
 const sichtbareZiele = (ctx) => ZIELE.filter((z) => z !== "Lernplan" || !!(ctx.lernplan && ctx.lernplan.sichtbar()));
 
@@ -51,10 +54,12 @@ module.exports = function (ctx) {
 
   // Eine Zeile: <li><a data-href="Ziel">…</a></li>, damit die Symbole der Ziele aus eba-core.css greifen (li:has(> a[data-href$=…]))
   const zeile = (ul, o) => {
-    const li = ul.createEl("li", { cls: "eba-sl-zeile" + (o.aktiv ? " aktiv" : "") });
+    const entwicklung = IN_ENTWICKLUNG.includes(o.ziel);
+    const li = ul.createEl("li", { cls: "eba-sl-zeile" + (o.aktiv ? " aktiv" : "") + (entwicklung ? " is-entwicklung" : "") });
     if (o.code) li.createSpan({ cls: "eba-sl-code", text: o.code });
     const a = li.createEl("a", { cls: "eba-sl-text", text: o.text, attr: o.ziel ? { "data-href": o.ziel } : {} });
     if (o.aktiv) a.setAttribute("aria-current", "page");
+    if (entwicklung) li.createSpan({ cls: "eba-sl-entwicklung", text: "in Entwicklung" });
     li.addEventListener("click", (e) => { tippen(e, o.datei).catch((x) => console.error("seitenleiste: öffnen", x)); });
   };
 
@@ -131,5 +136,6 @@ module.exports.TYP = TYP;
 module.exports.SYMBOL = SYMBOL;
 module.exports.SYMBOL_SVG = SYMBOL_SVG;
 module.exports.ZIELE = ZIELE;
+module.exports.IN_ENTWICKLUNG = IN_ENTWICKLUNG;
 module.exports.sichtbareZiele = sichtbareZiele;
 module.exports.moduleJetzt = moduleJetzt;

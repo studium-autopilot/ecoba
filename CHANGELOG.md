@@ -2,6 +2,38 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## Unveröffentlicht
+
+- **Neu:** Die Module des ersten Semesters haben unter **Unterlagen** eine **Literaturliste**: welche Bücher die Vorlesung
+  nennt, was du zu welchem Kapitel liest, mit Links zum Verlag und zur Unibibliothek. Deine Notizen darin bleiben.
+
+## 0.6.8 – Übungsblätter und Abgaben auf einen Blick
+
+- **Einfacher:** Jedes Übungsblatt unter **Unterlagen** zeigt oben seine Abgabe und deine Lösung, ein Tipp auf **Offen** hakt
+  Blatt und Frist zusammen ab. Der Knopf **Neues Übungsblatt** fällt weg, denn damit war dasselbe Blatt zweimal da.
+- **Übersichtlicher:** Auf **Unterlagen** zeigt **Übungen**, welche Blätter du bis wann abgeben musst, auch die aus ILIAS.
+  Eine verpasste Abgabe bleibt dort zwei Wochen lang rot stehen.
+- **Übersichtlicher:** Jeder Termin zeigt oben in einer Karte, wann und wo er ist, groß und mit „heute“, „morgen“ oder „in 5
+  Tagen“. Darunter stehen nur noch die Beschreibung, leise die Quelle und deine Notizen.
+- **Übersichtlicher:** Über deiner Woche auf dem **Dashboard** und im **Stundenplan** steht jetzt, welche Woche du siehst,
+  etwa „Diese Woche“ oder „In 2 Wochen“. Am Wochenende zeigt sie schon die nächste und sagt das auch.
+- **Übersichtlicher:** Unter **Verbindungen** sagt jede Zeile in wenigen Wörtern, was sie tut, und rechts in einem Wort, ob
+  sie an, aus oder aktuell ist. Neue Namen: **Suche in PDFs** (bisher Volltext der PDFs) und **Updates**.
+- **Übersichtlicher:** Auf dem iPhone steht auf dem **Dashboard** das Datum der nächsten Frist wieder unter ihrem Namen. Rechts
+  oben stand es direkt unter dem heutigen Datum und war leicht damit zu verwechseln.
+- **Übersichtlicher:** Die Ordner „Eingang“ und „Übungsblätter“ werden nicht mehr gebraucht und verschwinden. Dateien aus
+  „Eingang“ liegen danach in „Unterlagen/Ohne Modul“, ältere Blätter bleiben im Ordner „Übungsblätter“.
+- **Übersichtlicher:** Die **Karteikarten** sind noch in Entwicklung und können sich ändern. Das steht jetzt links in der
+  Übersicht neben ihnen, wie beim **Lernplan**.
+- **Zuverlässiger:** Gleicht dein Tresor über deinen eigenen Server ab, kommen Änderungen auf iPhone und iPad auch nach einer
+  Pause in einer anderen App wieder an. Bisher half dort manchmal nur, Obsidian neu zu starten.
+- **Zuverlässiger:** Mit eigenem Server gleicht ein Computer jetzt auch ab, wenn Obsidian minimiert ist. Bei einem schon
+  verbundenen Computer schaltest du in LiveSync „Keep replication active in the background“ ein.
+- **Behoben:** Ein Update hielt manche Seiten wie den Studienverlauf für von dir geändert und ließ sie auf dem alten Stand.
+  Jetzt bekommen sie die neue Fassung, und neben einer wirklich geänderten Seite bleibt die neue zum Vergleich stehen.
+- **Behoben:** Manchmal fehlten in den Lesezeichen neue Seiten wie **Postfach**, und **Stundenplan** stand noch drin. Jetzt
+  kommen sie auf jedem Gerät nach, deine eigenen Lesezeichen bleiben.
+
 ## 0.6.7 – Aufgeräumtes Dashboard
 
 - **Übersichtlicher:** Auf dem **Dashboard** stehen **Fristen**, **Termine**, **Nacharbeiten** und **To-dos** als eine Reihe

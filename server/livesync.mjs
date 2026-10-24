@@ -60,6 +60,10 @@ export function einstellungen(k) {
     syncOnStart: false,
     syncOnSave: false,
     periodicReplication: false,
+    // Am Computer weiter abgleichen, wenn das Fenster verborgen ist (minimiert, anderer Schreibtisch). Sonst hält LiveSync an,
+    // und was Studium Autopilot in der Zeit schreibt, sehen die anderen Geräte erst, wenn das Fenster wieder sichtbar ist.
+    // iPhone/iPad übergehen die Einstellung (LiveSync: nur am Computer, seit 1.0.38 geprüft).
+    keepReplicationActiveInBackground: true,
     // Versteckte Dateien: Beim Aufbau („overwrite the remote“) und Beitritt („Join this device“) schaltet LiveSync sie aus
     // (suspendExtraSync); danach schaltet man sie im Reiter „Sync Settings“ wieder ein. Den Abschnitt „Hidden Files“ zeigt
     // LiveSync nur im erweiterten Modus (livesync.md, L2 und L3).

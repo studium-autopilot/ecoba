@@ -83,7 +83,7 @@ test("Wächter: gelöscht wird nur über den einen Papierkorb (Ausnahmen mit Gru
     "volltext.js": ["V.trash(f, true)"], "leer.js": ["app.vault.trash(f, false)"],
     "zentral.js": ["app.vault.trash(f, false)"],                        // ältere quellen.js ohne papierkorb (Sync nach dem Update)
     "eba.js": ["app.vault.delete(datei)"], "notizen.js": ["app.vault.delete(leer)"], // leere Notiz der Ordner-Automatik
-    "update.js": ["app.vault.delete(f)"],                               // Update mit eigener Sicherung
+    "update.js": ["app.vault.delete(f)", "app.vault.delete(o, true)"],  // Update mit eigener Sicherung; alter Ordner ohne Dateien (ALTE_ORDNER)
     "ilias.js": ["V.delete(f)"],                                        // unfertiger Download nach einem Absturz
     "alma-konto.js": ["V.delete(f, true)"],                             // eigene Daten, nach Rückfrage „Daten aus Alma löschen?“
   };

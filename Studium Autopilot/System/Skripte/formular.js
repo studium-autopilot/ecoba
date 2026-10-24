@@ -1,5 +1,5 @@
 // Fenster „Neu …“ (Bedien-Baustein, seit 0.4.6, Konsistenz-Audit Schritt 4): EIN Formular für alle Anlege-Aktionen (Vorlesung,
-// Übungsblatt, Termin, Lehrveranstaltung, SQ-Kurs, Modul, Kartenstapel, Unterlage einordnen). Statt einer Kette aus Fragen ein
+// Termin, Lehrveranstaltung, SQ-Kurs, Modul, Kartenstapel, Unterlage einordnen). Statt einer Kette aus Fragen ein
 // Fenster mit allen Feldern und ihren Vorgaben; Esc, × und „Abbrechen“ legen nichts an. Gestalt wie die übrigen Fenster
 // (eba-modal, eba-form; eba-core.css Abschnitte 43 und 64). Doku: docs/architektur.md, „Bedien-Bausteine“.
 //   ctx.formular({ titel, text?, knopf = "Anlegen", felder, pruefen? }) → Promise<werte | null>

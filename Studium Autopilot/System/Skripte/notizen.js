@@ -127,57 +127,15 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
     return f;
   };
 
-  // ---------- Übungsblatt ----------
-  // Fenster: Modul (Parameter code wählt vor), Nummer (nächste freie des Moduls), Abgabe (leer = ohne; seit 24.10.2026 ohne Vorgabe,
-  // vorher in einer Woche: Die geratene Abgabe stand wie eine echte bei den Fristen und als „überfällig“ da).
-  // Aufbau wie die Vorlesungsnotiz: Titel, Kopf-Karte ```eba-uebungsblatt``` (vorlesung.js), dann ## Aufgabe 1, ## Aufgabe 2,
-  // ## Knackpunkte, ## Fürs Tutorium. „datei“ = Aufgaben (setzt das Einordnen), „eigene_loesung“ ebenso.
-  const uebungsblatt = async (c) => {
-    const eba = ctx.user.eba(c);
-    const vorhandene = (m) => (m ? app.vault.getMarkdownFiles().filter((f) => f.path.startsWith("Übungsblätter/")
-      && ((app.metadataCache.getFileCache(f) || {}).frontmatter || {}).code === m.fm.code).length : 0);
-    const w = await fenster({ titel: "Neues Übungsblatt", felder: [
-      eba.modulFeld(),
-      { name: "nummer", titel: "Nummer", art: "zahl", ganz: true, min: 1, max: 99, pflicht: true, fehlt: "Bitte die Nummer des Blatts.",
-        vorgabe: (x) => String(vorhandene(x.modul) + 1) },
-      { name: "faellig", titel: "Abgabe", art: "datum", platzhalter: "z. B. 27.10. oder +7", hilfe: "Leer lassen, wenn es keine Abgabe gibt oder du sie noch nicht weißt." },
-    ] });
-    if (!w) { eba.abbrechen(); return; }
-    const m = w.modul, code = m.fm.code || "", nr = w.nummer, faellig = w.faellig;
-    const nn = pad2(nr);
-    const inhalt = `---
-typ: übungsblatt
-code: ${eba.J(code)}
-modul: ${eba.J(eba.link(m))}
-nummer: ${nr}
-faellig: ${faellig}
-status: offen
-datei: ""
-eigene_loesung: ""
-uebersicht: "[[Unterlagen]]"
-tags:
-  - übungsblatt
-cssclasses:
-  - eba-s-notizen
-  - eba-s-uebungsblatt
----
-
-# ${code} · Blatt ${nn}
-
-\`\`\`eba-uebungsblatt
-Kopf mit Modul, Abgabe, Status und Unterlagen: erscheint, sobald das Plugin „Studium Autopilot“ geladen ist.
-\`\`\`
-
-## Aufgabe 1
-- ${eba.CURSOR}
-
-## Aufgabe 2
-
-## Knackpunkte
-
-## Fürs Tutorium
-`;
-    return await eba.ablegen("Übungsblätter", `${code} Blatt ${nn}`, inhalt);
+  // ---------- Übungsblatt (bis 0.6.7) ----------
+  // Ein Übungsblatt ist seit 24.10.2026 seine Begleitnotiz (Unterlage der Art Übung; Status, Abgabe und Lösungen im Kopf, kopf.js).
+  // Vorher legte „Neues Übungsblatt“ eine zweite Notiz zum selben Blatt an. Der Knopf kann noch in einem selbst geänderten Dashboard
+  // stehen: Er sagt das und öffnet Unterlagen; ein Blatt auf Papier oder aus einer Mail kommt über „Unterlagen hinzufügen“. Ohne
+  // Titel, also kein Befehl und keine Ordner-Automatik mehr.
+  const uebungsblatt = async () => {
+    ctx.hinweis("Jedes Übungsblatt hat jetzt seine eigene Notiz unter Unterlagen, mit Status und Abgabe.",
+      { aktion: { text: "Unterlagen hinzufügen", aktion: "einordnen" } });
+    await ctx.oeffnen("Studium/Unterlagen.md");
   };
 
   // ---------- Termin ----------
@@ -428,7 +386,7 @@ cssclasses:
   return {
     aktionen: {
       vorlesung: { titel: "Neue Vorlesungsnotiz", ordner: ["Vorlesungen"], ausfuehren: vorlesung },
-      uebungsblatt: { titel: "Neues Übungsblatt", ordner: ["Übungsblätter"], ausfuehren: uebungsblatt },
+      uebungsblatt: { ausfuehren: uebungsblatt },
       termin: { titel: "Neuer Termin", ordner: ["Termine"], ausfuehren: termin },
       lehrveranstaltung: { titel: "Neue Lehrveranstaltung", ordner: ["Stundenplan"], ausfuehren: lehrveranstaltung },
       "sq-kurs": { titel: "Neuer SQ-Kurs", ordner: ["Schlüsselqualifikationen"], ausfuehren: sqKurs },

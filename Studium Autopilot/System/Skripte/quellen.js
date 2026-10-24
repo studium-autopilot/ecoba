@@ -9,7 +9,8 @@
 //    verbindungen.js an einer Stelle (Zeitwörter aus vorText).
 // 2. Zeitplan: planen(ctx, { takt, zurueck, backoff, start, lauf }) – erster Lauf, wenn der Tresor eingelesen ist, nach start
 //    (Vorgabe 20 s + Zufall bis 2 Min.), danach im Takt; nach Fehlern nach backoff (1., 2., … Fehler in Folge; nie länger als
-//    takt); zurück in der App nach mehr als zurueck seit dem letzten Versuch. Rein und testbar: zeitplan().
+//    takt); zurück in der App nach mehr als zurueck seit dem letzten Versuch. Rein und testbar: zeitplan(). Ist das Fenster
+//    verborgen und gleicht LiveSync so lange nicht ab (livesync.js, hintergrundStill; seit 0.6.8), wartet der Takt.
 // 3. Ein Schreiber: sperre.js (ctx.user.sperre), „Hier aktualisieren“ = nehmen({ erzwingen: true }).
 // 4. Quellen außerhalb des Plugins: eba.quelleExtern(schluessel, …) in JEDEM Lauf der Abruf-Funktion, nicht nur in der Oberfläche,
 //    über extern(eba, …): dieselbe Regel auch, wenn auf einem Gerät noch eba.js einer älteren Fassung liegt.
@@ -31,6 +32,8 @@ const K = Object.freeze({
   ENTFAELLT: " (entfällt)",
   START: 20e3, START_ZUFALL: 2 * MIN, // erster Lauf nach dem Einlesen
   ZURUECK_WARTEN: 5e3,                // zurück in der App: so lange warten (Sync und Oberfläche zuerst)
+  SYNC_WARTEN: 10 * MIN,              // Fenster verborgen und LiveSync angehalten: so lange bis zum nächsten Blick (planen)
+  SYNC_ZURUECK: 30e3,                 // Fenster wieder sichtbar nach einem ausgelassenen Lauf: LiveSync holt erst den Stand
   REIHE: ["zentral", "ilias", "ilias-kalender", "alma", "alma-konto", "volltext", "server"], // Reihenfolge der Quellen in „Bitte prüfen“
   VERBUNDEN_GRENZE: 7 * 24 * 60 * MIN, // so lange still, gilt ein anderes Gerät noch als verbunden (verbindung)
 });
@@ -91,18 +94,24 @@ const ergebnisOk = (r) => {
 //       versucht?() → ms des letzten Versuchs (gerätelokal gespeichert; sonst merkt sich planen ihn selbst), dokument?, app? }
 // → { jetzt(grund) (gleich laufen), spaeter(ms) (nächsten Lauf neu setzen), stand() → { versucht, naechster, fehlerSerie, laeuft } }
 // Ein Aufruf, während ein Lauf läuft, zählt nicht. Fehler im Lauf gelten als Fehler (backoff), nie als Absturz.
+// LiveSync (seit 0.6.8): Ist das Fenster verborgen und gleicht LiveSync so lange nicht ab (ctx.user.livesync.hintergrundStill;
+// am Computer ohne „Keep replication active in the background“), läuft der Takt nicht: Was der Lauf schriebe, auch die Sperre,
+// sähen die anderen Geräte nicht; nach 80 Minuten übernähme eins die Quelle, und beide schrieben. Nach SYNC_WARTEN schaut der Takt
+// wieder; wird das Fenster sichtbar, läuft er nach SYNC_ZURUECK nach (erst holt LiveSync den Stand der anderen). Knöpfe laufen immer.
 const planen = (ctx, o) => {
   const p = zeitplan(o);
   const app = o.app || ctx.app || (typeof window !== "undefined" ? window.app : null);
   const dok = o.dokument || (typeof document !== "undefined" ? document : null);
   const start = Array.isArray(o.start) ? o.start : [K.START, K.START_ZUFALL];
-  let id = null, laeuft = false, versucht = 0, serie = 0, naechster = 0, gestartet = false, aus = false;
+  const mobil = !!(ctx.obsidian && ctx.obsidian.Platform && ctx.obsidian.Platform.isMobile);
+  let id = null, laeuft = false, versucht = 0, serie = 0, naechster = 0, gestartet = false, aus = false, verpasst = false;
   const zuletzt = () => { const v = o.versucht ? Number(o.versucht()) || 0 : 0; return Math.max(v, versucht); };
+  const still = () => { const L = ctx.user && ctx.user.livesync; return !!(L && typeof L.hintergrundStill === "function" && L.hintergrundStill(app, dok, mobil)); };
   const spaeter = (ms) => {
     if (aus) return;
     if (id != null) ctx.stopp(id);
     naechster = Date.now() + ms;
-    id = ctx.zeit(() => { id = null; jetzt("takt"); }, ms);
+    id = ctx.zeit(() => { id = null; if (still()) { verpasst = true; spaeter(K.SYNC_WARTEN); } else jetzt("takt"); }, ms);
   };
   const jetzt = async (grund) => {
     if (laeuft || aus) return null;
@@ -120,9 +129,11 @@ const planen = (ctx, o) => {
   const mc = app && app.metadataCache;
   if (!mc || mc.initialized || mc.resolved) los();
   else { const r = ctx.an(mc, "resolved", () => { mc.offref(r); los(); }); }
-  // Zurück in der App (iPhone/iPad holen Obsidian aus dem Hintergrund, ohne neu zu starten): nachholen, wenn lange her
+  // Zurück in der App (iPhone/iPad holen Obsidian aus dem Hintergrund, ohne neu zu starten): nachholen, wenn lange her oder ein
+  // Lauf wegen LiveSync ausgelassen wurde
   if (dok && ctx.dom) ctx.dom(dok, "visibilitychange", () => {
-    if (dok.visibilityState === "visible" && gestartet && !laeuft && p.zurueckFaellig(zuletzt(), Date.now())) spaeter(K.ZURUECK_WARTEN);
+    if (dok.visibilityState !== "visible" || !gestartet || laeuft) return;
+    if (verpasst) { verpasst = false; spaeter(K.SYNC_ZURUECK); } else if (p.zurueckFaellig(zuletzt(), Date.now())) spaeter(K.ZURUECK_WARTEN);
   });
   if (ctx.aufraeumen) ctx.aufraeumen(() => { aus = true; });
   return { jetzt, spaeter, stand: () => ({ versucht: zuletzt(), naechster, fehlerSerie: serie, laeuft }), plan: p };

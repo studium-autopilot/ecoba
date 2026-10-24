@@ -143,7 +143,7 @@ test("Knöpfe: keine neue Knopf-Klasse (vorhandene nehmen, docs/design.md „Kn�
 
 test("Skripte: keine weiteren Zeichen als Symbole (✓ ↗ ● ▶ ⇅ ✎ ✗ …), Linien-Symbole statt Zeichen", () => {
   const ZEICHEN = /[✓✔↗●▶⇅✎✗✕↓▸▾★☆⚠]/g;
-  const HOECHSTENS = { "eba.js": 2, "ilias.js": 2, "karten.js": 4, "modul.js": 1, "musterplan.js": 1, "notizen.js": 4, "tabellen.js": 1,
+  const HOECHSTENS = { "eba.js": 2, "ilias.js": 2, "karten.js": 4, "literatur.js": 1, "modul.js": 1, "musterplan.js": 1, "notizen.js": 4, "tabellen.js": 1,
     "unterlagen.js": 12, "unterlagenliste.js": 2, "verbindungen.js": 2, "verlauf.js": 1 };
   const funde = [];
   for (const n of fs.readdirSync(SKRIPTE).filter((x) => x.endsWith(".js"))) {
