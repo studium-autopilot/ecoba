@@ -87,10 +87,13 @@ es noch nicht gibt (das Update scheitert dann ohne Schaden mit „Keine Verbindu
 setzen.
 
 **system-dateien.json** (im Release-Baum, Pfad oben): `{ "schema": 1, "version", "ordner": "Studium Autopilot", "erstellt",
-"dateien": [{ "pfad", "klasse", "groesse", "sha256", "koerper"?, "ohne_haken"? }] }`. `klasse` ist `system`, `einstellung`,
-`seite` oder `modul` (Regeln: `klasseVon` in `update.js` = `klasse_von` in `werkzeuge/pruefen.py`); `koerper` = SHA-256 des
-Textes nach dem Frontmatter (Module), `ohne_haken` = SHA-256 der Seite mit allen `- [x]` als `- [ ]` (Seiten mit Aufgaben).
-Eine Liste mit einem einzigen unzulässigen Eintrag lehnt das Plugin ganz ab.
+"dateien": [{ "pfad", "klasse", "groesse", "sha256", "koerper"?, "ohne_haken"? }], "weitere"?: [{ "pfad", "klasse", "groesse",
+"sha256" }] }`. `klasse` ist in `dateien` `system`, `einstellung`, `seite` oder `modul` (Regeln: `klasseVon` in `update.js` =
+`klasse_von` in `werkzeuge/pruefen.py`); `koerper` = SHA-256 des Textes nach dem Frontmatter (Module), `ohne_haken` = SHA-256
+der Seite mit allen `- [x]` als `- [ ]` (Seiten mit Aufgaben). Eine Liste mit einem einzigen unzulässigen Eintrag in `dateien`
+lehnt das Plugin ganz ab. `weitere` (seit 0.6.9) nennt Dateien neuer Klassen, bisher `claude` (`.claude/CLAUDE.md` und
+`.claude/skills/studium-autopilot/*.md`): Plugins bis 0.6.8 übergehen den Schlüssel, ab 0.6.9 übergeht es darin nur, was es
+nicht kennt. Eine Klasse für `weitere` steht nie in `dateien`.
 
 ## termine.json
 
@@ -214,7 +217,7 @@ Dateinamen – der Export erzeugt also für sie dieselben ids.
 
 ## semester.json
 
-Gleiche Felder wie das Frontmatter von `System/Daten/Semester.md` (siehe `docs/architektur.md`, „Zentrale Daten“):
+Gleiche Felder wie das Frontmatter von `System/Daten/Semester.md` (siehe `docs/architektur/zentrale-daten.md`):
 
 ```json
 {
@@ -291,7 +294,7 @@ und speichert nur die gültigen Einträge gerätelokal (`eba-zentral-gruppen`). 
 Gruppen beim letzten Stand (Warnung im Bericht); Termine und Semesterdaten werden trotzdem übernommen, wie beim Export
 (Pflicht 6). Eine Notiz in `Stundenplan/` entsteht nur für **deine** Gruppe, nie für die ganze Liste: aus deiner
 ILIAS-Mitgliedschaft (`herkunft: ilias-gruppe`, zugeordnet über Code, Tag und Zeit, nie über die Nummer) oder aus deiner Wahl
-„Meine“ (`herkunft: gruppe-gewaehlt`); Felder aus diesem Eintrag, der Name aus ILIAS (siehe `docs/architektur.md`, „Deine
+„Meine“ (`herkunft: gruppe-gewaehlt`); Felder aus diesem Eintrag, der Name aus ILIAS (siehe `docs/architektur/zentrale-daten.md`, „Deine
 Übungs- oder Tutoriengruppe“). Anzeige: Codeblock `eba-gruppen` (`System/Skripte/gruppen.js`), gefiltert wie die Termine mit
 `code` und auf das aktuelle und das nächste Semester; mit Argument `alle` (```` ```eba-gruppen alle ```` ) ohne Filter.
 Gruppen, die im eigenen Stundenplan stehen (gleicher Code, Semester, Wochentag, Beginn höchstens 15 Min. daneben, bei Notizen
@@ -640,7 +643,7 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
   Einstellungen). Eine eigene Notiz (Alma oder von Hand) mit gleichem Code, Art, Wochentag und Beginn (±15 Min., c.t.) gewinnt.
   `ausfall` und `aenderungen` landen im Wochenraster, `raum_seit`/`raum_vorher` in der Notiz (seit 20.10.2026; die Woche zeigt
   zwei Wochen lang „Neuer Raum“, wie bei Alma). Wegfall mit Schutz (mehr als die Hälfte und mehr als 2 laufende Serien);
-  Notizen eines anderen Semesters bleiben beim Semesterwechsel unverändert und zählen nicht mit. Einzelheiten: `docs/architektur.md`, „Datenkanal“ → „Zentraler Stundenplan“.
+  Notizen eines anderen Semesters bleiben beim Semesterwechsel unverändert und zählen nicht mit. Einzelheiten: `docs/architektur/zentrale-daten.md`, „Datenkanal“ → „Zentraler Stundenplan“.
 
 ## Pflichten des Exports (Seite des Autors, `export-daten.py` im Uni-Abgleich)
 

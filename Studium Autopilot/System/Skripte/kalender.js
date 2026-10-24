@@ -1,14 +1,15 @@
 // Kalender oben auf der Seite Studium/Termine & Anmeldungen.md: Codeblock ```eba-kalender``` (Kalender-Ansicht zuerst, die Liste
 // darunter). Monatsansicht wie in gängigen Kalendern: Raster Mo–So mit Haarlinien, heute als gefüllter Kreis, Wochenende getönt.
-// Termine stehen beschriftet in den Tagen: mehrtägige als getönter Balken über die Tage (Titel darin), eintägige als Zeile
-// mit Farbpunkt, Uhrzeit und Titel. Farbe nach Art (wie die Pillen: Prüfung, Uni, Veranstaltung/Fachschaft).
+// Termine stehen beschriftet in den Tagen als Farbchips: eintägige mit Uhrzeit und Titel, mehrtägige als Balken über die Tage.
+// Farbe nach Art (eba-core.css --eba-art-*: Prüfung rot, Uni und Zwischentest blau, Veranstaltung/Fachschaft grün), die
+// Legende darunter zeigt dieselben Chips.
 // Fristen (kategorie: Frist) stehen NICHT im Kalender (Entscheidung 15.10.2026: Anmeldezeiträume verdeckten die Termine), sondern
 // nur in der Liste darunter (termine.js: Diese Woche, Nächste Woche, Fristen danach).
 // Je Woche Spuren wie bei Google/Apple, nach Relevanz (gewicht), höchstens SPUREN Zeilen je Tag, Rest als „+n weitere“.
 // Ein Tipp auf einen Tag zeigt darunter dessen Termine (Farbpunkt aus dem CSS, Uhrzeit, Titel als Link; Text-Pillen nur für
 // Prüfung, freiwillig, geschätzt, erledigt). Im Kopf neben „Heute“ der Knopf „+ Termin“ (Aktion termin aus notizen.js, seit
 // 17.10.2026; vorher eine eigene Knopf-Karte auf der Seite). Schmale Ansicht (iPhone): Container-Query in eba-core.css, dann
-// auch eintägige als getönte Blöcke ohne Uhrzeit.
+// kleinere Chips ohne Uhrzeit und der Kopf in einer Zeile.
 // Daten live aus dem Fachmodell (ctx.modell.termine(): Termin-Notizen ohne Entfallenes, Uhrzeit als Zahl sortiert, Art wie in
 // Agenda und Dashboard), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
 // Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft). Gewählter
@@ -87,6 +88,15 @@ module.exports = function (ctx) {
   const frisch = (z, jetzt) => !!z.monat && !!z.tag && !!gleich(z.am, jetzt) && jetzt.getTime() - z.zeit < FRISCH_MS;
   const basis = ctx;
 
+  // Einträge der Legende [Klasse, Text] für die Termine eines Monats (rein, Test). Zwischentests haben die Farbe der Uni und
+  // stehen darum im selben Eintrag; Erledigtes (grau, durchgestrichen) erklärt sich selbst.
+  const legendeVon = (ts) => {
+    const hat = (a) => ts.some((t) => t.art === a);
+    const uni = [hat("uni") && "Uni", hat("zwischentest") && "Zwischentest"].filter(Boolean).join(", ");
+    return [["pruefung", "Prüfung"], uni && ["uni", uni], hat("event") && ["event", "Veranstaltung"],
+      ts.some((t) => t.sq) && ["is-freiwillig", "freiwillig"]].filter(Boolean);
+  };
+
   const zeichnen = (el, ctx) => {
     const jetzt = basis.date.jetzt(), heute = tag0(jetzt);
     if (!frisch(zustand, jetzt)) Object.assign(zustand, { monat: new Date(heute.getFullYear(), heute.getMonth(), 1), tag: heute, am: null, zeit: 0 });
@@ -103,7 +113,9 @@ module.exports = function (ctx) {
     el.empty();
     el.addClass("eba-kalender");
     const kopf = el.createDiv({ cls: "eba-kal-kopf" });
-    kopf.createDiv({ cls: "eba-kal-monat", text: `${MONATE[m]} ${y}` });
+    // Jahr eigener Span: schmal (iPhone) fällt es im laufenden Jahr weg, damit „September“ neben die Knöpfe passt
+    const monat = kopf.createDiv({ cls: "eba-kal-monat", text: MONATE[m] });
+    monat.createSpan({ cls: y === heute.getFullYear() ? "eba-kal-jahr is-dieses" : "eba-kal-jahr", text: ` ${y}` });
     const nav = kopf.createDiv({ cls: "eba-kal-nav" });
     // Beim Monatswechsel: heute, wenn im Monat; sonst der erste Tag mit Terminen; sonst der 1.
     const ersterTag = (mo) => {
@@ -161,7 +173,6 @@ module.exports = function (ctx) {
         const ev = woche.createDiv({ cls: cls.join(" "), attr: { "aria-hidden": "true" } });
         ev.style.gridColumn = `${g.s + 1} / ${g.e + 2}`;
         ev.style.gridRow = String(g.z + 2);
-        if (!t.bis) ev.createEl("i");
         if (!t.bis && t.zeit) ev.createSpan({ cls: "eba-kal-ev-zeit", text: t.zeit.split(/\s*[–-]\s*/)[0] });
         ev.createSpan({ cls: "eba-kal-ev-titel", text: t.titel });
       }
@@ -175,17 +186,11 @@ module.exports = function (ctx) {
       });
     }
 
-    // Legende: Farbe = Art; rechts Balken = mehrtägig, gestrichelt = freiwillig. Nur was im Monat vorkommt (Prüfung immer,
-    // damit die Farbe bekannt ist).
+    // Legende: dieselben Chips wie im Raster, je Farbe einer (seit 24.10.2026; vorher Punkte und ein grauer Balken „mehrtägig“,
+    // die im Raster so nicht vorkamen). Nur was im Monat vorkommt, Prüfung immer, damit die Farbe bekannt ist.
     const imRaster = alle.filter((t) => t.von <= new Date(y, m + 1, 0) && (t.bis || t.von) >= new Date(y, m, 1));
     const legende = el.createDiv({ cls: "eba-kal-legende" });
-    for (const [k, t] of [["pruefung", "Prüfung"], ["zwischentest", "Zwischentest"], ["uni", "Uni"], ["event", "Veranstaltung"]]) {
-      if (k !== "pruefung" && !imRaster.some((x) => x.art === k)) continue;
-      const s = legende.createSpan({ cls: k }); s.createEl("i"); s.appendText(t);
-    }
-    const extra = legende.createSpan({ cls: "eba-kal-leg-rechts" });
-    if (imRaster.some((x) => x.bis)) { const s = extra.createSpan({ cls: "eba-kal-leg-lang" }); s.createEl("i"); s.appendText("mehrtägig"); }
-    if (imRaster.some((x) => x.sq)) { const s = extra.createSpan({ cls: "eba-kal-leg-frei" }); s.createEl("i"); s.appendText("freiwillig"); }
+    for (const [cls, text] of legendeVon(imRaster)) legende.createSpan({ cls: `eba-kal-leg ${cls}`, text });
 
     // Termine des gewählten Tags
     const tag = zustand.tag;
@@ -248,5 +253,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
-  return { registrieren, zeichnen, art, frisch }; // art und frisch für tests/kalender.test.js
+  return { registrieren, zeichnen, art, frisch, legendeVon }; // art, frisch und legendeVon für tests/kalender.test.js
 };

@@ -60,6 +60,11 @@ dem PDF-Kasten an; leere Abschnitte und leere Punkte (`- `, `- [ ] `) gibt es ni
   die Fragen, die die Unterlage ihren Lesern stellt (Denk-, Diskussions-, Quiz- und Übungsfragen).
 - Was die Person schon geschrieben hat, bleibt; du ergänzt darunter. Danach `status: bearbeitet` nur, wenn sie es möchte.
 - Nichts wörtlich abschreiben außer Formeln und Bezeichnungen.
+- **Neue Fassung:** Heißt der Abschnitt `## Das Wichtigste (frühere Fassung, bis TT.MM.JJJJ)`, kam die Datei seitdem neu. Fass
+  die neue Fassung zusammen; der erste Punkt ist **Neu in dieser Fassung:** in einem Satz (welche Seiten neu oder geändert
+  sind, steht in der Textfassung unter `geaendert`). Die alten Punkte und was die Person dort schrieb, kommen wörtlich in einen
+  eingeklappten Kasten darunter, `> [!eba-info]- Frühere Fassung (bis TT.MM.JJJJ)`, die Überschrift heißt wieder
+  `## Das Wichtigste`. „Zu tun“ und „Offene Fragen“ ergänzt du nur um Neues, abgehakte Punkte bleiben abgehakt.
 
 ## To-do
 

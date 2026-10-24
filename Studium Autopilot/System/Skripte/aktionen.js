@@ -3,7 +3,7 @@
 // Das Plugin „Studium Autopilot“ fängt den Klick ab und ruft hier ausfuehren(c) auf: Es öffnet sich keine Seite, es
 // entsteht keine Datei, die aktive Notiz bleibt (Ausnahme: „zeigen“ ist ein Link auf eine Notiz, „suchen“ öffnet die Suche).
 // c.parameter = Werte aus dem Link (Strings), c.quelle = Notiz, in der der Knopf steht, c.datei = null.
-// Neue Aktion: Eintrag in AKTIONEN (titel = Befehl in der Befehlspalette, ohne titel kein Befehl). Doku: docs/architektur.md.
+// Neue Aktion: Eintrag in AKTIONEN (titel = Befehl in der Befehlspalette, ohne titel kein Befehl). Doku: docs/architektur/aktionen.md.
 module.exports = function (ctx) {
   const app = window.app;
   const { Platform, MarkdownView } = ctx.obsidian;

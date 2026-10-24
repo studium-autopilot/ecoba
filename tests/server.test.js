@@ -55,7 +55,7 @@ test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliche
   assert.deepEqual(s.fehler, ["claude-abgemeldet"]);
   assert.deepEqual(s.letzter_lauf, { zeit: "2026-10-18T07:30:00.000Z", ok: true });
   assert.equal(s.plugin_abruf, "2026-10-18T08:00:00.000Z");
-  assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "livesync", "plugin_abruf", "letzter_lauf", "claude_lauf", "fehler"]);
+  assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "livesync", "plugin_abruf", "letzter_lauf", "claude_lauf", "aktualisierung", "fehler"]);
   assert.doesNotMatch(JSON.stringify(s), /zxabc01|geheim|Passwort/);
   // claude_lauf: wartet (Anstoß da) | laeuft (seit unter 100 Minuten, der Zeitgrenze des Laufs) | ruht
   const jetzt = new Date("2026-10-18T09:00:00Z");
@@ -67,6 +67,15 @@ test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliche
   // Gmail „nie“ in Obsidian: aus, nicht das Ergebnis der letzten Suche
   assert.equal(oeffentlicherStatus({ gmail: "ok" }, {}, "x", jetzt, false, { uni_postfach: 15, gmail: 0 }).gmail, "aus");
   assert.equal(oeffentlicherStatus({ gmail: "ok" }, {}, "x", jetzt, false, { uni_postfach: 15, gmail: 1 }).gmail, "ok");
+  // letzte neue Version (studium-server aktualisieren): Zeitpunkte, ok, eine Version, ein Grund aus fester Liste; ohne Datei null
+  assert.equal(s.aktualisierung, null, "älterer Server");
+  const akt = (a) => oeffentlicherStatus({}, {}, "x", jetzt, false, {}, a).aktualisierung;
+  assert.deepEqual(akt({ zeit: "2026-10-18T02:10:00Z", ok: false, ziel: "0.6.9", grund: "pruefsumme", erfolg: "2026-10-17T02:05:00Z", text: "geheim" }),
+    { zeit: "2026-10-18T02:10:00.000Z", ok: false, ziel: "0.6.9", grund: "pruefsumme", erfolg: "2026-10-17T02:05:00.000Z" });
+  assert.deepEqual(akt({ zeit: "2026-10-18T02:10:00Z", ok: true, ziel: "<b>x</b>", grund: "github", erfolg: "" }),
+    { zeit: "2026-10-18T02:10:00.000Z", ok: true, ziel: "", grund: "", erfolg: null });
+  assert.equal(akt({ zeit: "2026-10-18T02:10:00Z", ok: false, grund: "Passwort falsch für zxabc01" }).grund, "unbekannt");
+  assert.equal(akt({ ok: false, grund: "github" }), null, "ohne Zeit");
 });
 
 test("Knopf „Mails durchsuchen“: Anstoß mit Grund knopf, höchstens alle 10 Minuten, ein wartender Anstoß bleibt", async () => {
@@ -137,6 +146,28 @@ test("Unterlagen für Begleitnotizen: nur Lehrmaterial mit gültigem Pfad und Ke
   unterlagenAblegen(w, [nurT]);
   assert.match(fs.readFileSync(path.join(w, "unterlagen", "neu", k("c") + ".md"), "utf8"), /\nAuftrag: nur Termine \(keine Begleitnotiz\)\n\n---\n/);
   assert.doesNotMatch(fs.readFileSync(path.join(w, "unterlagen", "neu", k("a") + ".md"), "utf8"), /Auftrag:/);
+});
+
+test("Neue Fassung einer Unterlage: Angaben zur früheren Fassung geprüft im Kopf, mit denselben Zeilen wie im Plugin", async () => {
+  const { unterlagenPruefen, unterlagenAblegen, fassungPruefen } = await laden("dienst.mjs");
+  const F = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "fassung.js"));
+  const k = { frueher: ["Ziel: Gewinn S. 2", "Stakeholder-Ansatz"], bis: "2026-10-16", geaendert: "2, 4–6", entfallen: 1, zu_tun: ["Blatt 1 abgeben"], fragen: ["Wozu fixe Kosten?"] };
+  const u = { datei: "Unterlagen/B110 Einführung/B110 Folien 01.pdf", kennung: "a".repeat(64), art: "Folien", titel: "Folien 01", code: "B110", seiten: 6, text: "[S. 1]\nZiele" };
+  const [mit, ohne, nurT] = unterlagenPruefen({ schema: 1, unterlagen: [{ ...u, fassung: k }, { ...u, kennung: "b".repeat(64) },
+    { ...u, kennung: "c".repeat(64), nur_termine: true, fassung: k }] });
+  assert.deepEqual(mit.fassung, k);
+  assert.deepEqual([ohne.fassung, nurT.fassung], [null, null], "ohne Angaben und bei „nur Termine“ kein Kopf");
+  const v = fs.mkdtempSync(path.join(os.tmpdir(), "studium-unterlagen-"));
+  unterlagenAblegen(v, [mit]);
+  const datei = fs.readFileSync(path.join(v, "unterlagen", "neu", "a".repeat(64) + ".md"), "utf8");
+  assert.ok(datei.includes("Seiten: 6\n\n" + F.kontextText(k) + "\n\n---\n[S. 1]\nZiele"), datei);
+  // was nicht passt, fällt einzeln weg; ohne Datum keine frühere Zusammenfassung
+  assert.deepEqual(fassungPruefen({ frueher: ["ok", 5, "<%tp.x%>", "x".repeat(301)], bis: "16.10.2026", geaendert: "1; rm", entfallen: -1, zu_tun: "kein Array",
+    fragen: ["[[Link]]?"] }), { frueher: [], bis: "", geaendert: "", entfallen: 0, zu_tun: [], fragen: ["Link ?"] });
+  assert.deepEqual(fassungPruefen({ frueher: ["ok", 5, "x".repeat(301)], bis: "2026-10-16" }).frueher, ["ok"]);
+  assert.equal(fassungPruefen({ frueher: ["a"] }), null);
+  assert.equal(fassungPruefen("x"), null);
+  assert.equal(fassungPruefen([k]), null);
 });
 
 test("PDF zum Zusammenfassen: verschlüsselt in Stücken über /v1/pdf, Name = SHA-256, Kopfzeile für Opus, Grenzen, verwaiste verfallen", async () => {
@@ -488,6 +519,49 @@ test("Versionen: nur vorwärts, eine Vorabversion zählt weniger als die fertige
   assert.ok(!neuer("0.5.9", "0.5.9"), "gleich ist nicht neuer");
 });
 
+test("Installer: Dienste, die er nicht mehr schreibt (entfernt, umbenannt), schaltet er ab und löscht sie; Einheiten nur über einheit", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  // Aufbau: jede Einheit über einheit, keine daran vorbei; benutzt wird nur, was er schreibt; aufgeräumt nach der letzten, vor
+  // daemon-reload. Kein anderer Teil des Pakets legt Einheiten studium-server* an (der nächste Lauf entfernte sie).
+  const geschrieben = [...skript.matchAll(/^einheit (studium-server-[\w@.-]+) <<'UNIT'$/gm)].map((m) => m[1]);
+  assert.ok(geschrieben.length >= 12 && new Set(geschrieben).size === geschrieben.length, geschrieben.join(" "));
+  assert.doesNotMatch(skript.replace(/^einheit\(\) .*$/m, ""), /\/etc\/systemd\/system\/|\$EINHEITEN\//, "nur einheit schreibt Einheiten");
+  for (const n of new Set(skript.match(/studium-server-[a-z-]+@?\.(?:service|timer|path|socket)/g))) assert.ok(geschrieben.includes(n), `${n}: benutzt, aber nicht geschrieben`);
+  const letzte = skript.lastIndexOf("\neinheit "), aufraeumen = skript.indexOf('\nalte_einheiten_entfernen "$EINHEITEN"\n');
+  assert.ok(letzte > 0 && letzte < aufraeumen && aufraeumen < skript.indexOf("\nsystemctl daemon-reload\n", aufraeumen) && skript.indexOf("\nsystemctl enable") > aufraeumen);
+  for (const n of fs.readdirSync(SERVER).filter((n) => n !== "installieren.sh" && !n.endsWith(".md") && fs.statSync(path.join(SERVER, n)).isFile())) {
+    assert.doesNotMatch(fs.readFileSync(path.join(SERVER, n), "utf8"), /systemd\/system\/studium-server/, n);
+  }
+  // Ablauf gegen einen Ordner; systemctl schreibt nur auf, was es tun soll
+  const funktion = /^alte_einheiten_entfernen\(\) \{\n[\s\S]*?\n\}\n/m.exec(skript)[0];
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "einheiten-"));
+  try {
+    const bin = path.join(tmp, "bin"), ordner = path.join(tmp, "system"), aufrufe = path.join(tmp, "aufrufe");
+    fs.mkdirSync(bin);
+    fs.writeFileSync(path.join(bin, "systemctl"), "#!/usr/bin/env bash\necho \"$*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
+    const lauf = () => {
+      fs.rmSync(aufrufe, { force: true });
+      const r = spawnSync("bash", ["-c", `set -euo pipefail\n${funktion}GESCHRIEBEN=(studium-server-dienst.service studium-server-gmail.timer)\nalte_einheiten_entfernen "$1"`,
+        "-", ordner.replace(/\\/g, "/")], { encoding: "utf8", env: Object.assign({}, process.env, { AUFRUFE: aufrufe, PATH: bin + path.delimiter + process.env.PATH }) });
+      assert.equal(r.status, 0, r.stderr);
+      return { aus: r.stdout.trim().split("\n").filter(Boolean).sort(), aufrufe: fs.existsSync(aufrufe) ? fs.readFileSync(aufrufe, "utf8").trim().split("\n").sort() : [] };
+    };
+    // erste Installation: noch nichts da
+    fs.mkdirSync(ordner);
+    assert.deepEqual(lauf(), { aus: [], aufrufe: [] });
+    for (const d of ["studium-server-dienst.service.d", "studium-server-alt.service.d", "timers.target.wants"]) fs.mkdirSync(path.join(ordner, d));
+    for (const n of ["studium-server-dienst.service", "studium-server-dienst.service.d/eigen.conf", "studium-server-gmail.timer", "studium-server-alt.service",
+      "studium-server-alt.service.d/eigen.conf", "studium-server-weg.timer", "studium-server-teil@.service", "caddy.service"]) fs.writeFileSync(path.join(ordner, n), "[Unit]\n");
+    assert.deepEqual(lauf(), {
+      aus: ["entfernt: studium-server-alt.service", "entfernt: studium-server-teil@.service", "entfernt: studium-server-weg.timer"],
+      aufrufe: ["disable --now studium-server-alt.service", "disable --now studium-server-weg.timer", "disable studium-server-teil@.service", "stop studium-server-teil@*.service"],
+    });
+    assert.deepEqual(fs.readdirSync(ordner).sort(), ["caddy.service", "studium-server-dienst.service", "studium-server-dienst.service.d", "studium-server-gmail.timer", "timers.target.wants"]);
+    assert.ok(fs.existsSync(path.join(ordner, "studium-server-dienst.service.d", "eigen.conf")), "Drop-in einer Einheit von heute bleibt");
+    assert.deepEqual(lauf(), { aus: [], aufrufe: [] }, "zweiter Lauf: nichts zu tun");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("Claude Code aktualisieren: nie während eines Laufs (oneshot: „activating“), sonst als studium", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
   const funktion = /^claude_aktualisieren\(\) \{\n[\s\S]*?\n\}\n/m.exec(fs.readFileSync(path.join(SERVER, "studium-server"), "utf8"))[0];
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "claude-update-"));
@@ -510,5 +584,86 @@ test("Claude Code aktualisieren: nie während eines Laufs (oneshot: „activatin
       assert.deepEqual(lauf(z), { aus: "Claude Code: Ein Lauf läuft gerade; Update beim nächsten Mal.\n", update: "" }, z);
     }
     for (const z of ["inactive", "failed"]) assert.match(lauf(z).update, /^sudo -u studium -H \S*claude update$/, z);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+// jq nur für die Filter von „aktualisieren“, wo es fehlt (Windows); mit echtem jq (Linux, GitHub Actions) gilt das echte
+const JQ_ATTRAPPE = `#!/usr/bin/env node
+const fs = require("node:fs");
+const [filter, datei] = process.argv.slice(3);
+const d = JSON.parse(fs.readFileSync(datei || 0, "utf8"));
+const paket = (d.assets || []).find((a) => a.name === "studium-server.tar.gz") || {};
+const f = { '.tag_name // "" | ltrimstr("v")': () => String(d.tag_name || "").replace(/^v/, ""), ".ip": () => d.ip,
+  '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url': () => paket.browser_download_url,
+  '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty': () => paket.digest }[filter];
+if (!f) { console.error("jq-Attrappe kennt den Filter nicht: " + filter); process.exit(3); }
+const w = f();
+if (w != null && w !== "") process.stdout.write(w + "\\n");
+`;
+
+test("Neue Version holen: Ergebnis für den Status (Zeit, ok, Ziel, Grund, letzter Erfolg) auch nach Abbruch; Download-Ordner geht weg, Erfolg endet mit 0", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, async () => {
+  const skript = fs.readFileSync(path.join(SERVER, "studium-server"), "utf8");
+  const fn = (name) => new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, "m").exec(skript)[0];
+  // Gründe: dieselben Wörter wie im Status
+  const { AKTUALISIERUNG_GRUENDE } = await laden("dienst.mjs");
+  assert.deepEqual([...new Set([...skript.matchAll(/AKT_GRUND=([a-z-]+)/g)].map((m) => m[1]))].sort(), [...AKTUALISIERUNG_GRUENDE].sort());
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "neue-version-"));
+  const p = (...t) => path.join(tmp, ...t);
+  try {
+    for (const d of ["bin", "daten", "paket", "release/server"]) fs.mkdirSync(p(d), { recursive: true });
+    // Paket des Releases 0.7.0 (der Installer schreibt nur auf) und GitHub: curl antwortet aus info.json (GITHUB=0: gar nicht)
+    fs.writeFileSync(p("release", "server", "VERSION"), "0.7.0\n");
+    fs.writeFileSync(p("release", "server", "installieren.sh"), "echo \"installieren $*\" >> \"$AUFRUFE\"\nexit \"${INSTALLIEREN:-0}\"\n");
+    assert.equal(spawnSync("bash", ["-c", "tar -czf paket.tar.gz server"], { cwd: p("release") }).status, 0);
+    const summe = require("node:crypto").createHash("sha256").update(fs.readFileSync(p("release", "paket.tar.gz"))).digest("hex");
+    const info = (digest) => fs.writeFileSync(p("release", "info.json"), JSON.stringify({ tag_name: "v0.7.0",
+      assets: [{ name: "studium-server.tar.gz", browser_download_url: "https://beispiel.example/studium-server.tar.gz", digest }] }));
+    fs.writeFileSync(p("bin", "curl"), "#!/usr/bin/env bash\n[ \"${GITHUB:-1}\" = 1 ] || exit 6\nziel=\"\"\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && ziel=$2; shift; done\n" +
+      "if [ -n \"$ziel\" ]; then echo \"herunterladen $ziel\" >> \"$AUFRUFE\"; cp \"$RELEASE/paket.tar.gz\" \"$ziel\"; else cat \"$RELEASE/info.json\"; fi\n", { mode: 0o755 });
+    fs.writeFileSync(p("bin", "apt-get"), "#!/usr/bin/env bash\necho \"apt-get $*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
+    if (spawnSync("bash", ["-c", "command -v jq"]).status !== 0) fs.writeFileSync(p("bin", "jq"), JQ_ATTRAPPE, { mode: 0o755 });
+    fs.writeFileSync(p("dienst.json"), JSON.stringify({ ip: "203.0.113.5" }));
+    fs.writeFileSync(p("paket", "VERSION"), "0.6.9\n");
+    const installiert = new Date("2026-10-20T08:00:00Z");
+    fs.utimesSync(p("paket", "VERSION"), installiert, installiert);
+    const ablauf = ["set -euo pipefail", fn("version_neuer") + fn("aktualisierung_merken") + fn("aktualisieren_ende") + fn("aktualisieren"),
+      "root_noetig() { :; }", "claude_aktualisieren() { :; }", 'als_studium() { "$@"; }',
+      'PAKET=$1 DATEN=$2 KONFIG=$3 RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest AKT_ZIEL="" AKT_GRUND="" AKT_TMP=""',
+      "aktualisieren"].join("\n");
+    const lauf = (env) => {
+      fs.rmSync(p("aufrufe"), { force: true });
+      const r = spawnSync("bash", ["-c", ablauf, "-", ...[p("paket"), p("daten"), p("dienst.json")].map((x) => x.replace(/\\/g, "/"))], { encoding: "utf8",
+        env: Object.assign({}, process.env, { AUFRUFE: p("aufrufe"), RELEASE: p("release"), PATH: p("bin") + path.delimiter + process.env.PATH }, env) });
+      const aufrufe = fs.existsSync(p("aufrufe")) ? fs.readFileSync(p("aufrufe"), "utf8").trim().split("\n") : [];
+      const download = aufrufe.filter((z) => z.startsWith("herunterladen ")).map((z) => z.slice(14).replace(/\/paket\.tar\.gz$/, ""))[0];
+      if (download) assert.notEqual(spawnSync("bash", ["-c", '[ -e "$1" ]', "-", download]).status, 0, "Download-Ordner weg");
+      assert.deepEqual(fs.readdirSync(p("daten")), ["aktualisierung.json"], "nichts Halbes liegen geblieben");
+      const akt = JSON.parse(fs.readFileSync(p("daten", "aktualisierung.json"), "utf8"));
+      assert.match(akt.zeit, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
+      return { status: r.status, fehler: r.stderr, akt: { ...akt, zeit: "" }, zeit: akt.zeit, aufrufe: aufrufe.filter((z) => !z.startsWith("herunterladen ")) };
+    };
+    info("sha256:" + summe);
+    // GitHub nicht erreichbar, noch kein Ergebnis da: letzter Erfolg ist die Installation des laufenden Pakets
+    let e = lauf({ GITHUB: "0" });
+    assert.equal(e.status, 1);
+    assert.deepEqual(e.akt, { zeit: "", ok: false, ziel: "", grund: "github", erfolg: "2026-10-20T08:00:00Z" });
+    // neue Version: installiert und Pakete nachgezogen, Exit 0, Erfolg jetzt
+    e = lauf({});
+    assert.equal(e.status, 0, e.fehler);
+    assert.deepEqual(e.akt, { zeit: "", ok: true, ziel: "0.7.0", grund: "", erfolg: e.zeit });
+    assert.deepEqual(e.aufrufe, ["installieren --ip 203.0.113.5", "apt-get install -y --only-upgrade caddy nodejs"]);
+    const erfolg = e.zeit;
+    // falsche Prüfsumme: nichts installiert, der letzte Erfolg bleibt stehen
+    info("sha256:" + "0".repeat(64));
+    e = lauf({});
+    assert.deepEqual([e.status, e.akt, e.aufrufe], [1, { zeit: "", ok: false, ziel: "0.7.0", grund: "pruefsumme", erfolg }, []]);
+    // Installer bricht ab
+    info("sha256:" + summe);
+    e = lauf({ INSTALLIEREN: "3" });
+    assert.deepEqual([e.status, e.akt, e.aufrufe], [3, { zeit: "", ok: false, ziel: "0.7.0", grund: "installieren", erfolg }, ["installieren --ip 203.0.113.5"]]);
+    // schon aktuell: ohne Fehler, nichts installiert
+    fs.writeFileSync(p("paket", "VERSION"), "0.7.0\n");
+    e = lauf({});
+    assert.deepEqual([e.status, e.akt.ok, e.akt.ziel, e.akt.erfolg === e.zeit, e.aufrufe], [0, true, "0.7.0", true, []]);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

@@ -1,7 +1,7 @@
 // Postfach (seit 0.6.0): Seite „Postfach“ (Codeblock ```eba-postfach``` auf Studium/Postfach.md) zeigt deinen Uni-Posteingang.
 // Das Plugin meldet sich dafür mit deinem Uni-Login beim Webmail der Uni an (webmail.uni-tuebingen.de, Horde), liest die Liste
 // und auf deinen Tipp eine Mail. Gleich auf PC, iPhone und iPad: nur https über ilias-netz.js (Dienst „mail“), kein IMAP.
-// Doku: docs/architektur.md, „Postfach“; Datenschutz: docs/datenschutz.md, „Postfach“.
+// Doku: docs/architektur/postfach.md; Datenschutz: docs/datenschutz.md, „Postfach“.
 //
 // Zustimmung je Gerät: Erst nach „Postfach anzeigen“ (gerätelokal eba-postfach-an = Zeitpunkt) nutzt dieses Skript das Passwort
 //   aus dem Schlüsselbund von ILIAS, und nur unmittelbar vor dem Absenden an das Webmail. „Auf diesem Gerät ausschalten“ nimmt

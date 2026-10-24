@@ -5,7 +5,10 @@
 // Mit eigenem Server (seit 0.5.2) davor „Zusammenfassen“, solange „Das Wichtigste“ leer ist: Claude fasst die Unterlage auf dem
 // Server mit Opus zusammen (server.js, zusammenfassen); danach „Wird zusammengefasst“, bis die Zusammenfassung da ist. Ohne
 // Server mit eigenem API-Schlüssel (seit 0.6.3, claude.js): Claude fasst gleich hier zusammen, danach verschwindet der Knopf. Der
-// erste Weg, der einen Stand nennt, gilt (der Server zuerst).
+// erste Weg, der einen Stand nennt, gilt (der Server zuerst). Hat die Notiz nur die Zusammenfassung einer früheren Fassung
+// (seit 24.10.2026, fassung.js), fasst der API-Schlüssel beim Öffnen von selbst neu zusammen (Stand „nachfuehren“, ohne
+// Rückfrage zu den Kosten), der Server ohnehin. Kam die PDF in neuer Fassung (Feld aktualisiert), sagt eine Zeile unter der
+// Kopfzeile bis zu 30 Tage lang, welche Seiten neu oder geändert sind (aenderungSatz, aus der Textfassung).
 // Vorher war es ein gewöhnlicher Callout: In der Bearbeitungsansicht setzte ein Tipp neben den Pfeil den Cursor hinein, der Kasten
 // zeigte seinen Quelltext und auf dem iPad ging die Tastatur auf (bis 19.10.2026).
 // Die Notiz bleibt, wie sie ist (Markdown-Callout, der Link auf die PDF folgt Umbenennungen, ohne Plugin ein normaler Kasten):
@@ -37,6 +40,17 @@ module.exports = function (ctx) {
     const s = String(wert == null ? "" : wert).replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
     return s ? app.metadataCache.getFirstLinkpathDest(s, von || "") : null;
   };
+
+  // Textfassung (volltext.js) einer PDF, solange sie zu ihr passt (Größe, fassung.js textAktuell), sonst null
+  const textfassungVon = (pdf, Fa) => {
+    const o = app.vault.getAbstractFileByPath("Unterlagen/_Volltext");
+    for (const f of (o && o.children) || []) {
+      const v = f.extension === "md" ? (app.metadataCache.getFileCache(f) || {}).frontmatter : null;
+      if (v && v.volltext_von === "plugin" && String(v.quelle || "") === pdf.path) return Fa.textAktuell(v, pdf.stat && pdf.stat.size) ? v : null;
+    }
+    return null;
+  };
+  const heute = () => { const d = new Date(), z = (n) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
 
   // Ohne eigenen Inhalt = nur Überschriften, Kästen und leere Punkte (dieselbe Regel wie leere Mitschriften, leer.js)
   const ohneInhalt = async (pfad) => {
@@ -94,26 +108,38 @@ module.exports = function (ctx) {
     if (pfad && linkZiel(fm.original, pfad)) knopf(leiste, "Original", "Original in einer anderen App öffnen", () => ctx.aktion("oeffnen", { notiz: pfad, original: "1" }));
     const einfuegen = () => { if (!leiste.parentNode && leiste.childElementCount) titel.insertBefore(leiste, fold || null); };
     einfuegen();
+    // Neue Fassung (fassung.js aenderungSatz): eine Zeile unter der Kopfzeile, auch zugeklappt, was sich geändert hat
+    const Fa = ctx.user && ctx.user.fassung, pdf = Fa && fm.aktualisiert && erste ? linkZiel(erste, pfad) : null;
+    const satz = pdf ? Fa.aenderungSatz({ datum: String(fm.aktualisiert), vfm: textfassungVon(pdf, Fa), seiten: fm.seiten, heute: heute() }) : "";
+    if (satz) {
+      const zeile = titel.ownerDocument.createElement("div");
+      zeile.className = "eba-pdf-fassung";
+      zeile.textContent = satz;
+      callout.insertBefore(zeile, inhalt);
+    }
     const wege = [ctx.server, ctx.claude].filter((w) => w && w.zusammenfassenStand);
     if (pfad && wege.length) {
       const erster = async () => { for (const w of wege) { const stand = await w.zusammenfassenStand(pfad); if (stand) return { w, stand }; } return null; };
       erster().then((x) => {
         if (!x) return;
         const W = x.w, WARTET = "Wird zusammengefasst";
-        let gewuenscht = x.stand === "angefordert";
+        let gewuenscht = x.stand === "angefordert" || x.stand === "nachfuehren";
         const warten = () => { gewuenscht = true; b.setText(WARTET); };
         const frei = () => { gewuenscht = false; b.setText("Zusammenfassen"); };
+        // sofort (claude.js): fertig heißt, die Zusammenfassung steht schon in der Notiz
+        const los = (o) => W.zusammenfassen(pfad, warten, o).then((ok) => { if (ok && W.sofort) b.remove(); else if (ok) warten(); else if (W.sofort) frei(); })
+          .catch((e) => { console.error("PDF-Kasten: Zusammenfassen", e); if (W.sofort) frei(); });
         const b = knopf(leiste, gewuenscht ? WARTET : "Zusammenfassen", "Claude fasst die Unterlage mit Opus zusammen: das Wichtigste, Aufgaben und offene Fragen", () => {
           if (gewuenscht) {
             ctx.hinweis(W.sofort ? "Claude arbeitet schon daran. Das dauert meist ein bis zwei Minuten." : "Claude arbeitet schon daran. Die Zusammenfassung kommt in ein paar Minuten.");
             return;
           }
-          // sofort (claude.js): fertig heißt, die Zusammenfassung steht schon in der Notiz
-          W.zusammenfassen(pfad, warten).then((ok) => { if (ok && W.sofort) b.remove(); else if (ok) warten(); else if (W.sofort) frei(); })
-            .catch((e) => { console.error("PDF-Kasten: Zusammenfassen", e); if (W.sofort) frei(); });
+          los();
         });
         leiste.insertBefore(b, leiste.firstChild);
         einfuegen();
+        // Zusammenfassung einer früheren Fassung (claude.js „nachfuehren“): beim Öffnen von selbst neu, ohne Rückfrage
+        if (x.stand === "nachfuehren") los({ still: true });
       }).catch((e) => console.error("PDF-Kasten: Zusammenfassen", e));
     }
 

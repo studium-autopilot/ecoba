@@ -1,6 +1,6 @@
 // Volltext der PDFs (seit 0.4.5): Zu jeder PDF unter „Unterlagen/“ legt das Plugin eine Textfassung
 // „Unterlagen/_Volltext/<Name> (Volltext).md“ an, je Seite eine eingeklappte Karte mit Link auf genau diese Seite. So findet die
-// Suche von Obsidian Wörter aus den PDFs, auch auf iPhone und iPad. Doku: docs/architektur.md, „Volltext der PDFs“.
+// Suche von Obsidian Wörter aus den PDFs, auch auf iPhone und iPad. Doku: docs/architektur/unterlagen.md, „Volltext der PDFs“.
 //
 // Nur eigene Notizen: Jede Textfassung trägt die Besitzmarke „volltext_von: plugin“. Nur solche Notizen schreibt, benennt oder
 //   löscht dieses Skript, und es prüft die Marke vorher im Text der Datei (nie nur im metadataCache). Liegt irgendwo unter
@@ -37,6 +37,9 @@
 //   entfaellt: true; kommt die PDF wieder, verschwindet die Marke. Mehr als die Hälfte und mehr als MASSE auf einmal → nichts.
 //   Neue FASSUNG → nach und nach neu. Kam die Notiz zur PDF (Unterlage) erst nach der Textfassung, bekommt die aktuelle
 //   Textfassung den Link „unterlage“ nachträglich (verknuepfen, ohne die PDF neu zu lesen).
+// Neue Fassung einer PDF (andere Prüfsumme, beide mit Text): vorherVon vergleicht die Seitentexte der alten Textfassung mit der
+//   neuen (fassung.js seitenVergleichen) und schreibt vorher_sha256, geaendert (Seiten „2, 5–7“) und entfallen (Zahl). Gleiche
+//   PDF (neue FASSUNG, anderes Gerät) und Umzug behalten diese Felder. Der PDF-Kasten sagt daraus in einer Zeile, was neu ist.
 // Für andere Skripte: ctx.volltext = { status(), setzen(an), nachholen({ hier }), beobachten(fn) } (siehe api unten).
 // Gerätelokal (app.saveLocalStorage): eba-volltext-cache, eba-volltext-in-arbeit, eba-volltext-zu-schwer, eba-volltext-waisen,
 //   eba-volltext-gesehen, eba-volltext-stand, eba-geraet. Testeinstiege: plugin.testVolltextAus (kein automatischer Lauf); ctx.volltext.erzeugen(abh)
@@ -162,7 +165,7 @@ const kopfLesen = (text) => {
   };
   return ausFm({ typ: wert("typ"), volltext_von: wert("volltext_von"), quelle: wert("quelle"), groesse: wert("groesse"),
     pdf_sha256: wert("pdf_sha256"), fassung: wert("fassung"), ergebnis: wert("ergebnis"), entfaellt: wert("entfaellt"),
-    unterlage: wert("unterlage") });
+    unterlage: wert("unterlage"), vorher_sha256: wert("vorher_sha256"), geaendert: wert("geaendert"), entfallen: wert("entfallen") });
 };
 // Dieselben Felder aus dem Frontmatter des metadataCache
 const ausFm = (fm) => {
@@ -172,7 +175,17 @@ const ausFm = (fm) => {
     quelle: fm.quelle == null ? "" : String(fm.quelle), groesse: zahl(fm.groesse),
     sha: /^[0-9a-f]{64}$/.test(String(fm.pdf_sha256 || "")) ? String(fm.pdf_sha256) : "",
     fassung: zahl(fm.fassung) || 0, ergebnis: fm.ergebnis == null ? "" : String(fm.ergebnis),
-    entfaellt: fm.entfaellt === true || fm.entfaellt === "true", unterlage: fm.unterlage == null ? "" : String(fm.unterlage) };
+    entfaellt: fm.entfaellt === true || fm.entfaellt === "true", unterlage: fm.unterlage == null ? "" : String(fm.unterlage),
+    vorher: /^[0-9a-f]{64}$/.test(String(fm.vorher_sha256 || ""))
+      ? { sha: String(fm.vorher_sha256), geaendert: fm.geaendert == null ? "" : String(fm.geaendert), entfallen: zahl(fm.entfallen) || 0 } : null };
+};
+// Seitentexte einer eigenen Textfassung, wie notizText sie schreibt (entschärft, mit „> “) → [[nr, text]]
+const seitenAus = (text) => {
+  const aus = [], re = /^> \[!eba-quelle\]- [^\n]*?#page=(\d+)[^\n]*\n((?:>[^\n]*(?:\n|$))*)/gm;
+  const t = String(text == null ? "" : text).replace(/\r\n/g, "\n");
+  let m;
+  while ((m = re.exec(t))) aus.push([Number(m[1]), m[2].replace(/\n+$/, "")]);
+  return aus;
 };
 // Marke „(PDF fehlt)“ setzen bzw. wieder entfernen; sonst bleibt der Text, wie er ist (Seitentexte, Hinweise, eigene Zeilen)
 const fehltMarkieren = (text) => {
@@ -300,7 +313,7 @@ const waisenPruefen = (x) => {
 };
 
 // Text der Notiz. o: { titel, quelle, seiten, groesse, sha, ergebnis, dateiFm, unterlageFm, dateiLink, unterlageLink,
-// seitenLink(nr), seitenTexte [[nr, text]] (oder fertige Seitenkarten bloecke), hinweis }
+// seitenLink(nr), seitenTexte [[nr, text]] (oder fertige Seitenkarten bloecke), hinweis, vorher? { sha, geaendert, entfallen } }
 const notizText = (o) => {
   const z = ["---", "typ: volltext", "volltext_von: plugin", "fassung: " + FASSUNG, "datei: " + J("[[" + o.dateiFm + "]]")];
   if (o.unterlageFm) z.push("unterlage: " + J("[[" + o.unterlageFm + "]]"));
@@ -308,6 +321,12 @@ const notizText = (o) => {
   if (o.seiten != null) z.push("seiten: " + o.seiten);
   z.push("groesse: " + o.groesse);
   if (o.sha) z.push("pdf_sha256: " + J(o.sha));
+  // Was sich gegenüber der Fassung davor geändert hat (vorherVon, fassung.js): Prüfsumme der alten PDF, Seiten neu oder geändert, entfallen
+  if (o.vorher && o.vorher.sha) {
+    z.push("vorher_sha256: " + J(o.vorher.sha));
+    if (o.vorher.geaendert) z.push("geaendert: " + J(o.vorher.geaendert));
+    if (o.vorher.entfallen) z.push("entfallen: " + o.vorher.entfallen);
+  }
   z.push("ergebnis: " + o.ergebnis, "cssclasses:", "  - eba-s-begleitnotiz", "  - eba-s-volltext", "---", "",
     "# " + kopfRein(o.titel) + " · Volltext", "",
     "Automatisch erzeugt, nicht bearbeiten. " + (o.unterlageLink ? "Zur Unterlage: " + o.unterlageLink + " · " : "") + "PDF: " + o.dateiLink, "");
@@ -356,7 +375,7 @@ module.exports = function (ctx) {
   //   lokal(k, v?), pdfjs() → pdf.js, sha256(bytes) → hex, einstellungen() → {}, extern() → bool,
   //   jetzt() → Date, mobil, version, geraetId(), pause(ms), wecker(ms)? → { promise, aus() } (Frist für pdf.js),
   //   geaendert(ereignis)?, lese (bleibend: { pfad } während des Lesens), ruhig()? → Tresor ruhig (fehlt: ruhig),
-  //   quellen? (quellen.js; sonst ctx.user.quellen)
+  //   quellen? (quellen.js; sonst ctx.user.quellen), fassung? (fassung.js; sonst ctx.user.fassung)
   const erzeugen = (abh) => {
     const io = abh.io;
     const lokal = abh.lokal;
@@ -562,16 +581,27 @@ module.exports = function (ctx) {
       const alt = fehltEntfernen(await io.lesenText(u.ziel));
       const k = kopfLesen(alt);
       if (!k.eigen) { b.fremd = true; return false; }
-      const bloecke = [];
-      const re = /^> \[!eba-quelle\]- [^\n]*?#page=(\d+)[^\n]*\n((?:>[^\n]*(?:\n|$))*)/gm;
-      let m;
-      while ((m = re.exec(alt))) {
-        const nr = m[1];
-        bloecke.push("> [!eba-quelle]- " + (io.link(u.pdf.pfad, u.ziel, "#page=" + nr, "S. " + nr) || "[[" + nameVon(u.pdf.pfad) + "#page=" + nr + "|S. " + nr + "]]") + "\n" + m[2].replace(/\n+$/, ""));
-      }
+      const bloecke = seitenAus(alt).map(([nr, t]) =>
+        "> [!eba-quelle]- " + (io.link(u.pdf.pfad, u.ziel, "#page=" + nr, "S. " + nr) || "[[" + nameVon(u.pdf.pfad) + "#page=" + nr + "|S. " + nr + "]]") + "\n" + t);
       const hinweis = (/\n(> \[!eba-info\][^\n]*(?:\n>[^\n]*)*)/.exec(alt) || [])[1] || "";
       const seiten = Number((/^seiten: (\d+)$/m.exec(alt) || [])[1]) || null;
-      return schreiben(u.ziel, notizBauen(u.pdf, u.ziel, k.sha, { art: k.ergebnis || "text", seiten }, { bloecke, hinweis }), b);
+      return schreiben(u.ziel, notizBauen(u.pdf, u.ziel, k.sha, { art: k.ergebnis || "text", seiten }, { bloecke, hinweis, vorher: k.vorher }), b);
+    };
+    // Was sich gegenüber der Textfassung davor geändert hat (fassung.js seitenVergleichen): Hat die PDF eine andere Prüfsumme und
+    // haben beide Text → { sha (der alten PDF), geaendert, entfallen }; gleiche Prüfsumme (neue FASSUNG, ein zweites Gerät) → was die
+    // Notiz schon trug; sonst null. Gleiche PDFs ergeben so auf jedem Gerät dieselbe Notiz.
+    const MIT_TEXT = ["text", "gekuerzt"];
+    const vorherVon = async (ziel, sha, r) => {
+      const F = abh.fassung || (ctx.user && ctx.user.fassung);
+      if (!F || !sha || !io.existiert(ziel)) return null;
+      let alt = null;
+      try { alt = await io.lesenText(ziel); } catch (e) { return null; }
+      const k = kopfLesen(alt);
+      if (!k.eigen) return null;
+      if (k.sha === sha) return k.vorher;
+      if (!k.sha || MIT_TEXT.indexOf(k.ergebnis) < 0 || MIT_TEXT.indexOf(r.art) < 0) return null;
+      const v = F.seitenVergleichen(seitenAus(alt), (r.seitenTexte || []).map((x) => [x[0], entschaerfen(x[1])]));
+      return { sha: k.sha, geaendert: F.seitenText(v.neu), entfallen: v.weg };
     };
 
     // Was dieses Gerät gesehen hat (gerätelokal, in jedem Lauf, auch ohne Sperre): die PDFs hier und die Quellen eigener Notizen,
@@ -744,7 +774,8 @@ module.exports = function (ctx) {
             continue;
           }
           if (r.art === "fehler") { auslassen(a.pdf, "absturz"); b.fehler++; standSetzen({ fehler: r.fehler || "fehler" }); continue; }
-          if (await schreiben(a.ziel, notizBauen(a.pdf, a.ziel, sha, r), b)) {
+          const vorher = await vorherVon(a.ziel, sha, r);
+          if (await schreiben(a.ziel, notizBauen(a.pdf, a.ziel, sha, r, vorher ? { vorher } : null), b)) {
             const cc = cache();
             cc[a.pdf.pfad] = [a.pdf.groesse, a.pdf.mtime, sha];
             lokal(L.cache, cc);
@@ -964,7 +995,7 @@ module.exports = function (ctx) {
     stoppen: () => { if (motorInst) motorInst.stoppen(); },
     get laeuft() { return !!(motorInst && motorInst.laeuft); },
     // reine Logik und Tests
-    erzeugen, planen, waisenPruefen, fehltMarkieren, fehltEntfernen, entschaerfen, entschaerfenGrund, seiteText, textRein, kopfLesen, ausFm,
+    erzeugen, planen, waisenPruefen, fehltMarkieren, fehltEntfernen, entschaerfen, entschaerfenGrund, seiteText, textRein, kopfLesen, ausFm, seitenAus,
     notizText, hinweisText, zielName, quelleExternAus, eingeschaltet, istPdf,
     K: { ZIEL, ABRUF, FASSUNG, GRENZEN, SEITE_ZEICHEN, RUHE, STABIL, TAKT, STAPEL_PAUSE, STAPEL_MAX, UEBERNAHME, PULS, WAISE_ALTER, WAISE_LAEUFE, ZEIT_WIEDER,
       MASSE, L, TEXT, FEHLT, FEHLT_KARTE, LESEN_FRIST, ZU_FRIST },

@@ -157,3 +157,21 @@ test("Kein Raster-Menü mehr: kein Skript setzt ein Symbol „Übersicht“ in d
     assert.doesNotMatch(code, /addAction\("layout-grid"|eba-menue-(?:aktion|tafel|knopf)/, n);
   }
 });
+
+test("Schublade nur zum Navigieren: Obsidians Umschalter, Tresor und Zahnrad fehlen nur, solange die Übersicht vorn ist", () => {
+  const css = fs.readFileSync(path.join(VAULT, ".obsidian", "snippets", "eba-core.css"), "utf8");
+  const a66 = css.slice(css.indexOf("66. Seitenleiste „Übersicht“"), css.indexOf("Ende Abschnitt 66"));
+  const VORN = ".workspace-drawer:has(.workspace-drawer-active-tab-content .eba-sl)";
+  for (const k of [".workspace-drawer-tab-options", ".workspace-drawer-header-left", ".workspace-drawer-header-icon.mod-settings"]) {
+    assert.ok(a66.includes(`${VORN} ${k}`), k);
+  }
+  // nie ohne Übersicht vorn: sonst käme man aus Dateien oder Suche nicht mehr zurück
+  const ohneKommentare = css.replace(/\/\*[\s\S]*?\*\//g, "");
+  for (const regel of ohneKommentare.match(/[^{}]*\.workspace-drawer[^{}]*\{[^}]*display:\s*none[^}]*\}/g) || []) {
+    for (const sel of regel.slice(0, regel.indexOf("{")).split(",")) assert.ok(sel.includes(VORN), sel.trim());
+  }
+  assert.doesNotMatch(a66, /mod-pin[^{]*\{[^}]*display:\s*none/, "Anheften bleibt auf dem iPad");
+  // dorthin ist es umgezogen
+  const seite = fs.readFileSync(path.join(VAULT, "Studium", "Einstellungen & Hilfe.md"), "utf8");
+  assert.match(seite, /## Obsidian\n\n```eba-personalisieren obsidian\n/);
+});

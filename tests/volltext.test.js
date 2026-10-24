@@ -447,6 +447,39 @@ test("Inkrementell: unverändert → nichts gelesen; Größe anders → neu; gle
   assert.match(x.text(vollPfad("B110 Folien 01")), /groesse: 3500/);
 });
 
+test("Neue Fassung: Textfassung sagt, welche Seiten neu oder geändert sind und wie viele entfallen; gleiche PDF behält das", async () => {
+  const alt = { seiten: [seite("Ziele"), seite("Stakeholder"), seite("Shareholder"), seite("Fazit")] };
+  // Folie 2 eingeschoben (nur verrutscht: Stakeholder, Fazit), Shareholder entfallen, Fazit-Folie geändert
+  const neu = { seiten: [seite("Ziele"), seite("Eingeschoben"), seite("Stakeholder"), seite("Fazit mit Ausblick")] };
+  const x = aufbau({ specs: { a: alt, n: neu } });
+  const pfad = B110 + "/B110 Folien 01.pdf", ziel = vollPfad("B110 Folien 01");
+  x.pdf(pfad, "a", { groesse: 3000 });
+  await x.m.lauf({});
+  assert.doesNotMatch(x.text(ziel), /vorher_sha256/, "erste Fassung: nichts zu vergleichen");
+  const shaAlt = V.kopfLesen(x.text(ziel)).sha;
+  x.vor(30 * MIN);
+  x.pdf(pfad, "n", { groesse: 3200, mtime: x.uhr.t - 5 * MIN });
+  assert.equal((await x.m.lauf({})).neu, 1);
+  const t = x.text(ziel);
+  assert.match(t, new RegExp("^vorher_sha256: \"" + shaAlt + "\"$", "m"));
+  assert.match(t, /^geaendert: "2, 4"$/m);
+  assert.match(t, /^entfallen: 2$/m, "Shareholder und die alte Fazit-Folie");
+  assert.deepEqual(V.kopfLesen(t).vorher, { sha: shaAlt, geaendert: "2, 4", entfallen: 2 });
+  assert.deepEqual(V.seitenAus(t).map((s) => s[0]), [1, 2, 3, 4]);
+  // dieselbe PDF auf einem anderen Gerät (Notiz kam über den Sync): gleicher Text, der Vergleich bleibt
+  const y = aufbau({ specs: { n: neu }, geraet: "g-anderes" });
+  y.pdf(pfad, "n", { groesse: 3200 });
+  y.notiz(ziel, t.replace(/^fassung: 1$/m, "fassung: 0"));
+  await y.m.lauf({});
+  assert.equal(y.text(ziel), t);
+  // umbenannte PDF: Vergleich zieht mit
+  x.vor(30 * MIN);
+  x.dateien.set(B110 + "/B110 Folien 01 Ziele.pdf", x.dateien.get(pfad));
+  x.dateien.delete(pfad);
+  await x.m.lauf({});
+  assert.match(x.text(vollPfad("B110 Folien 01 Ziele")), /^geaendert: "2, 4"$/m);
+});
+
 test("Inkrementell: auf diesem Gerät geändert bei gleicher Größe → Prüfsumme neu berechnet", async () => {
   const x = aufbau({ specs: { f: folien(), g: { seiten: [seite("Anders")] } } });
   const pfad = B110 + "/B110 Folien 01.pdf";

@@ -11,7 +11,7 @@ sind wiederholbar und legen nichts doppelt an.
 | 2 | Bestand | – (läuft immer) |
 | 3 | Schutz vor Kosten | `stand.mjs` meldet Quota „nur-kostenlos“ und Budget „kostenwarnung“ |
 | 4 | Server anlegen | `stand.mjs` meldet „Server … ist schon angelegt“ |
-| 5 | Paket installieren | `https://<Adresse>/v1/status` antwortet mit einer Version |
+| 5 | Paket installieren | `https://<Adresse>/v1/status` antwortet mit einer Version, mindestens der aus `server/VERSION` |
 | 6 | Claude auf dem Server | Status: `claude` ist `angemeldet` |
 | 7 | Gmail (freiwillig) | Status: `gmail` ist `ok`, oder der Mensch will kein Gmail |
 | 8 | Uni-Mails | Status: `uni_zugang` ist `gespeichert` oder `weiterleitung` ist `ok` |
@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.8)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.9)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -129,7 +129,9 @@ wiederholbar.
   mit „Kein Schlüssel … passt“: anhalten, Meldung an den Autor.
 - Exit 5 „[fern] Der Server antwortet nicht auf ssh“: Ist der Server gerade erst angelegt, braucht er ein bis zwei Minuten.
   Warten, dann die Zeile noch einmal.
-- Fertig ist der Schritt, wenn der Status eine Version meldet.
+- Fertig ist der Schritt, wenn der Status eine Version meldet, mindestens die aus `server/VERSION`. Meldet ein eingerichteter
+  Server eine ältere, kam seine tägliche neue Version nicht an (Obsidian sagt dann „installiert seit mehr als 3 Tagen keine neue
+  Version mehr“): Die Zeile oben installiert das Paket dieser Anleitung, Schlüssel, Uni-Zugang und Verbindungen bleiben.
 
 ## 6. Claude auf dem Server
 

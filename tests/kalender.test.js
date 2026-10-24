@@ -1,5 +1,6 @@
 // Kalender (kalender.js, art, frisch): Farbe des Punkts je Art nach der Regel des Fachmodells (ctx.modell.terminArt). Zwischentests
 // (Titel) sind keine Prüfung und bekommen eine eigene Art. Die Auswahl von Monat und Tag verfällt am nächsten Tag und nach 30 Min.
+// Die Legende (legendeVon) hat je Farbe einen Eintrag, nur für Arten, die im Monat vorkommen.
 // Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
@@ -28,4 +29,14 @@ test("frisch: die Auswahl gilt nur am selben Tag und 30 Minuten nach dem letzten
   assert.equal(frisch(Object.assign({}, z, { zeit: um("2026-10-17T23:50:00").getTime() }), um("2026-10-18T00:05:00")), false, "neuer Tag");
   assert.equal(frisch({ monat: null, tag: null, am: null, zeit: 0 }, um("2026-10-17T10:00:00")), false, "noch nichts gewählt");
   assert.equal(frisch({ monat: z.monat, tag: z.tag }, um("2026-10-17T10:00:00")), false, "Stand vor dem Update (ohne am)");
+});
+
+test("legendeVon: je Farbe ein Eintrag, Prüfung immer, Zwischentest bei der Uni, freiwillig nur wenn vorhanden", () => {
+  const { legendeVon } = laden("kalender", { heute: "2026-10-17", kontext: { modell } }).ergebnis;
+  assert.deepEqual(legendeVon([]), [["pruefung", "Prüfung"]]);
+  assert.deepEqual(legendeVon([{ art: "uni" }, { art: "event", sq: true }, { art: "event" }]),
+    [["pruefung", "Prüfung"], ["uni", "Uni"], ["event", "Veranstaltung"], ["is-freiwillig", "freiwillig"]]);
+  assert.deepEqual(legendeVon([{ art: "zwischentest" }]), [["pruefung", "Prüfung"], ["uni", "Zwischentest"]]);
+  assert.deepEqual(legendeVon([{ art: "uni" }, { art: "zwischentest" }, { art: "pruefung" }]),
+    [["pruefung", "Prüfung"], ["uni", "Uni, Zwischentest"]]);
 });

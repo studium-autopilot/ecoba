@@ -1,6 +1,6 @@
 // Uni-Login (seit 0.4.8): Einmal Benutzername und Passwort der Uni, dann verbindet Studium Autopilot alles, was diesen Login
 // braucht: ILIAS-Unterlagen (ilias.js), die Abgaben aus dem ILIAS-Kalender (ilias-kalender.js) und deinen Alma-Stundenplan
-// (alma.js). Die beiden Abo-Links holt es selbst, statt dass du sie in ILIAS und Alma kopierst. Doku: docs/architektur.md,
+// (alma.js). Die beiden Abo-Links holt es selbst, statt dass du sie in ILIAS und Alma kopierst. Doku: docs/architektur/verbindungen.md,
 // „Uni-Login“. Bibliothek (wie quellen.js): Wer sie braucht, ruft ctx.user["uni-login"](ctx) auf; beim Laden passiert nichts.
 //
 // Zustimmung (Entscheidung vom 19.10.2026): Wer seinen Uni-Login eingibt, stimmt zu, dass Studium Autopilot sich damit bei ILIAS

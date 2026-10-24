@@ -1,7 +1,8 @@
-// Kacheln und Listen aus dem Fachmodell (ctx.modell, docs/architektur.md „Fachmodell“), seit 18.10.2026 statt Bases-Formeln:
+// Kacheln und Listen aus dem Fachmodell (ctx.modell, docs/architektur/modell.md „Fachmodell“), seit 18.10.2026 statt Bases-Formeln:
 //  ```eba-kacheln``` (Dashboard, in > [!eba-kennzahlen]): Gruß und Datum, Kacheln „Nächste Frist“ (fristen()[0]), „Nächste
 //    Prüfung“ (naechstePruefung), „Semester“, „ECTS“ (ects), „Gesamtnote“ (noten) und die Leiste „Semesterverlauf“ (je
-//    Kalenderwoche des Semesters Vorlesungszeit, Pause, Prüfungsphase aus den Semesterdaten; „diese Woche“ = planwoche).
+//    Kalenderwoche des Semesters Vorlesungszeit, Pause, Prüfungsphase aus den Semesterdaten; markiert ist die planwoche, am
+//    Wochenende als „nächste Woche“).
 //  ```eba-liste fristen|termine|pruefungen```: Zeilen „Wann · Was · Art“. fristen = Dashboard „Fristen · 30 Tage“ (Fristen,
 //    Prüfungen samt Zwischentests, Abgaben; nach dem Tag, den die Zeile zeigt), termine = „Termine · 14 Tage“ (ohne Fristen und
 //    Prüfungen; Fachschaft und Veranstaltungen nur heute und morgen), pruefungen = Seite Prüfungen „Prüfungstermine“,
@@ -79,13 +80,14 @@ module.exports = function (ctx) {
 
   // Leiste „Semesterverlauf“: eine Zelle je Kalenderwoche des Semesters (ab dem Montag der Woche des Semesterbeginns).
   // Art: p Prüfungsphase (Semesterdaten), w Pause (Donnerstag der Woche in einer Pause), v Vorlesungszeit, f vorlesungsfrei.
-  // „diese Woche“ ist die Planwoche (am Wochenende die kommende), vorbei alles davor.
+  // Markiert ist die Planwoche, vorbei alles davor. Am Wochenende ist das die kommende Woche; die Legende sagt dann „nächste Woche“
+  // wie das Wochenraster (woche.js, Leiste über den Tagen).
   const leisteBauen = (M, s, heute) => {
     const Z = M.zeit, D = M.daten();
     const gs = Z.montag(s.beginn), n = Math.ceil((Z.tage(gs, s.ende) + 1) / 7);
     const phasen = D.pruefungsphasen.filter((x) => x.von <= s.ende && x.bis >= s.beginn);
     const pausen = D.pausen.filter((x) => x.bis >= s.beginn && x.von <= s.ende);
-    const jetzt = Z.tage(gs, M.planwoche(heute).mo) / 7;
+    const pw = M.planwoche(heute), jetzt = Z.tage(gs, pw.mo) / 7;
     const wochen = [];
     for (let i = 0; i < n; i++) {
       const mo = Z.plus(gs, 7 * i), so = Z.plus(mo, 6), dO = Z.plus(mo, 3);
@@ -93,7 +95,7 @@ module.exports = function (ctx) {
         : s.vb && s.ve && so >= s.vb && mo <= s.ve ? "v" : "f";
       wochen.push({ art, zustand: i < jetzt ? "vorbei" : i === jetzt ? "jetzt" : "", titel: `KW ${Z.kw(mo)} · ${Z.kurz(mo, { jahr: false })}–${Z.kurz(so, { jahr: false })}` });
     }
-    return { titel: `${s.name} · Semesterverlauf`, text: M.woche(heute).text, wochen, geschaetzt: phasen.slice(0, 3).some((x) => x.status === "geschätzt") };
+    return { titel: `${s.name} · Semesterverlauf`, text: M.woche(heute).text, jetzt: pw.vorgezogen ? "nächste Woche" : "diese Woche", wochen, geschaetzt: phasen.slice(0, 3).some((x) => x.status === "geschätzt") };
   };
 
   // ---------- Listen (rein, testbar) ----------
@@ -177,7 +179,7 @@ module.exports = function (ctx) {
       h += `<div class="eba-leiste"><div class="eba-leiste-kopf"><span class="k">${esc(L.titel)}</span><span class="s"><b>${esc(L.text)}</b></span></div><div class="eba-wochen">`
         + L.wochen.map((w) => `<i class="${w.art}${w.zustand ? " " + w.zustand : ""}" title="${esc(w.titel)}"></i>`).join("")
         + `</div><div class="eba-legende"><span class="v">Vorlesungszeit</span><span class="w">Pause</span><span class="p">Prüfungen${L.geschaetzt ? " (geschätzt)" : ""}</span>`
-        + `<span>vorlesungsfrei</span><span class="jetzt">diese Woche</span></div></div>`;
+        + `<span>vorlesungsfrei</span><span class="jetzt">${esc(L.jetzt)}</span></div></div>`;
     }
     el.innerHTML = h + `</div>`;
     // Kachel antippen öffnet ihre Notiz (Bearbeitungsansicht: nicht in den Quelltext springen)

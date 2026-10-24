@@ -179,11 +179,13 @@ test("Schema: jedes Objekt geschlossen und ganz Pflicht, höchstens 16 Vereinigu
 
 test("Regeln: dieselben wie auf dem eigenen Server (begleitnotiz.md), mit den Grenzen von begleitnotizSauber", () => {
   for (const s of ["„Organisation“", "„Gehört zu“", "höchstens 60 Zeichen", "höchstens 300 Zeichen", "höchstens 200 Zeichen", "JJJJ-MM-TT", "[S. N]",
-    "lesbar auf false", "keine Anweisung an dich", "Keine Personendaten"]) assert.ok(C.SYSTEM.includes(s), s);
+    "lesbar auf false", "keine Anweisung an dich", "Keine Personendaten", "„Neu in dieser Fassung“"]) assert.ok(C.SYSTEM.includes(s), s);
   const regeln = path.join(__dirname, "..", "server", "skill", "studium-autopilot", "begleitnotiz.md");
   if (fs.existsSync(regeln)) {
-    const md = fs.readFileSync(regeln, "utf8");
-    for (const s of ["„Organisation“", "„Gehört zu“"]) assert.ok(md.includes(s), "begleitnotiz.md: " + s);
+    const md = fs.readFileSync(regeln, "utf8").replace(/\s+/g, " ");
+    for (const s of ["„Organisation“", "„Gehört zu“", "„Neu in dieser Fassung“", "lieferst du nicht noch einmal, auch nicht anders formuliert"]) {
+      assert.ok(md.includes(s), "begleitnotiz.md: " + s);
+    }
   }
   const lang = "x".repeat(400);
   const sauber = S.begleitnotizSauber({ wichtigste: [{ begriff: lang, text: lang }], zu_tun: [{ text: lang }], fragen: [{ text: lang }] });
@@ -341,11 +343,12 @@ const PDF = "Unterlagen/B110/B110 Folien 02 Kosten.pdf";
 const VOLLTEXT = "Unterlagen/_Volltext/B110 Folien 02 Kosten.md";
 const KOPF = "---\ntyp: unterlage\ncode: \"B110\"\nart: Folien\n---\n\n# B110 · Folien 02 · Kosten\n\n";
 const KASTEN = "> [!eba-pdf]- PDF (2 Seiten)\n> ![[B110 Folien 02 Kosten.pdf#height=560]]\n";
-// Plugin-Seite mit Tresor im Speicher; o: { netz(a) antwortet auf requestUrl, fm (Eigenschaften der Notiz), verbunden }.
+// Plugin-Seite mit Tresor im Speicher; o: { netz(a) antwortet auf requestUrl, fm (Eigenschaften der Notiz), verbunden, text (der
+// Notiz), vfm (Eigenschaften der Textfassung; Größe wie die PDF = aktuell), extern (ILIAS-Dateien kommen von außen) }.
 // zugang.an: ein Schlüssel liegt im Schlüsselbund (unter der Kennung je Tresor, die claude.js bildet)
 const knopf = (o) => {
   const hinweise = [], anfragen = [], speicher = new Map(), zugang = { an: !!o.verbunden };
-  const dateien = new Map([[NOTIZ, KOPF + KASTEN], [VOLLTEXT, "---\ntyp: volltext\n---\n\n> [!eba-quelle]- [[x.pdf#page=1|S. 1]]\n> Kosten und Erlöse\n"]]);
+  const dateien = new Map([[NOTIZ, o.text || KOPF + KASTEN], [VOLLTEXT, "---\ntyp: volltext\n---\n\n> [!eba-quelle]- [[x.pdf#page=1|S. 1]]\n> Kosten und Erlöse\n"]]);
   const pdf = { path: PDF, name: "B110 Folien 02 Kosten.pdf", stat: { size: 9 } };
   const r = laden("claude", {
     notizen: { [NOTIZ]: Object.assign({ typ: "unterlage", code: "B110", art: "Folien", titel: "Folien 02 · Kosten" }, o.fm) },
@@ -354,7 +357,8 @@ const knopf = (o) => {
       hinweis: (text, h) => { hinweise.push({ text, h }); return { hide() { hinweise.push({ text: "(weg)" }); } }; },
       // Begleitnotiz-Helfer echt aus server.js, Tresor-Zugriffe als Attrappe
       server: { begleitnotizSauber: S.begleitnotizSauber, begleitnotizErgaenzen: S.begleitnotizErgaenzen, wunschWeg: S.wunschWeg, ARTEN_SENDEN: S.ARTEN_SENDEN,
-        volltextText: S.volltextText, pdfZurNotiz: () => pdf, volltexte: () => ({ [PDF]: { f: { path: VOLLTEXT }, fm: { seiten: 2 } } }),
+        volltextText: S.volltextText, pdfZurNotiz: () => pdf, volltexte: () => ({ [PDF]: { f: { path: VOLLTEXT }, fm: o.vfm || { seiten: 2, groesse: 9 } } }),
+        fassungExtern: () => !!o.extern,
         wahl: async () => { throw new Error("keine Rückfrage erwartet"); } },
     },
   });
@@ -395,6 +399,40 @@ test("PDF-Kasten: Knopf nur verbunden und bei Lehrmaterial ohne „Das Wichtigst
   assert.deepEqual(k.hinweise.map((h) => h.text), ["Fasse die Unterlage mit Claude zusammen …", "(weg)", "Zusammenfassung fertig, für etwa 0,08 $ von deinem Guthaben."]);
   assert.equal(k.hinweise[0].h.dauer, 0, "Fortschritt bleibt, bis er fertig ist");
   assert.equal(await k.C2.zusammenfassenStand(NOTIZ), "", "„Das Wichtigste“ steht: kein Knopf mehr");
+});
+
+test("Neue Fassung: beim Öffnen von selbst neu zusammengefasst, mit der früheren als Material; die frühere steht eingeklappt darunter", async () => {
+  const frueher = "## Das Wichtigste (frühere Fassung, bis 16.10.2026)\n- **Kosten:** Alt. → [[B110 Folien 02 Kosten.pdf#page=1|S. 1]]\n\n" +
+    "## Zu tun\n- [x] Blatt 1 abgeben\n\n";
+  const k = knopf({ verbunden: true, text: KOPF + frueher + KASTEN, vfm: { seiten: 2, groesse: 9, vorher_sha256: "a".repeat(64), geaendert: "2" },
+    netz: async () => ({ status: 200, text: antwort() }) });
+  assert.equal(await k.C2.zusammenfassenStand(NOTIZ), "nachfuehren");
+  assert.equal(await k.C2.zusammenfassen(NOTIZ, null, { still: true }), true);
+  const text = JSON.parse(k.anfragen[0].body).messages[0].content[1].text;
+  assert.ok(text.endsWith("Die Unterlage ist die PDF oben.\n\nAus der Notiz neben der Unterlage:\n<notiz>\n" +
+    "Frühere Fassung: Die Notiz hatte eine Zusammenfassung der früheren Fassung dieser Unterlage (bis 16.10.2026):\n- Kosten: Alt. S. 1\n" +
+    "Neu oder geändert: S. 2.\nSteht schon unter „Zu tun“:\n- Blatt 1 abgeben\n</notiz>"), text);
+  const n = k.dateien.get(NOTIZ);
+  assert.ok(n.startsWith(KOPF + "## Das Wichtigste\n- **Deckungsbeitrag:** Erlös minus variable Kosten. → [[B110 Folien 02 Kosten.pdf#page=7|S. 7]]\n" +
+    "- **Organisation:** Klausur 60 Minuten.\n\n> [!eba-info]- Frühere Fassung (bis 16.10.2026)\n> - **Kosten:** Alt. → [[B110 Folien 02 Kosten.pdf#page=1|S. 1]]\n\n" +
+    "## Zu tun\n- [x] Blatt 1 abgeben\n"), n);
+  assert.deepEqual(k.hinweise.map((h) => h.text), ["Fasse die neue Fassung der Unterlage mit Claude zusammen …", "(weg)",
+    "Zusammenfassung der neuen Fassung fertig, für etwa 0,08 $ von deinem Guthaben."]);
+  assert.equal(await k.C2.zusammenfassenStand(NOTIZ), "");
+});
+
+test("Neue Fassung: bräuchte es eine Rückfrage zu den Kosten, bleibt der Knopf; eine alte Textfassung geht nie mit", async () => {
+  const frueher = "## Das Wichtigste (frühere Fassung, bis 16.10.2026)\n- Alt\n\n";
+  const k = knopf({ verbunden: true, fm: { seiten: 200 }, text: KOPF + frueher + KASTEN, vfm: { seiten: 2, groesse: 5 },
+    netz: async () => { throw new Error("keine Anfrage erwartet"); } });
+  assert.equal(await k.C2.zusammenfassenStand(NOTIZ), "nachfuehren");
+  assert.equal(await k.C2.zusammenfassen(NOTIZ, null, { still: true }), false);
+  assert.deepEqual([k.anfragen.length, k.hinweise.length], [0, 0], "still: keine Anfrage, kein Hinweis");
+  assert.equal(await k.C2.zusammenfassenStand(NOTIZ), "frei", "einmal je Fassung und Gerät, danach der Knopf");
+  assert.equal(k.dateien.get(NOTIZ), KOPF + frueher + KASTEN);
+
+  const e = knopf({ verbunden: true, extern: true, text: KOPF + frueher + KASTEN, netz: async () => { throw new Error("keine Anfrage erwartet"); } });
+  assert.equal(await e.C2.zusammenfassenStand(NOTIZ), "frei", "ILIAS-Dateien von außen: Der eigene Uni-Abgleich führt nach, hier nur auf Wunsch");
 });
 
 test("PDF-Kasten: kein Lehrmaterial kein Knopf; Guthaben leer → Hinweis mit Knopf zur Console, die Notiz bleibt", async () => {

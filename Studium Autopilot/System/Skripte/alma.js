@@ -1,5 +1,5 @@
 // Stundenplan aus Alma in den Tresor übernehmen (iCalendar-Abo-Link aus Alma). Quelle nach dem Quellen-Vertrag (quellen.js,
-// docs/architektur.md „Quellen-Vertrag“ und „Alma-Stundenplan“).
+// docs/architektur/quellen.md „Quellen-Vertrag“ und docs/architektur/aktionen.md „Alma-Stundenplan“).
 // Uni-Login (seit 0.4.8, uni-login.js): Den Link holt Studium Autopilot mit deinem Uni-Login auch selbst aus Alma. Zeigt ein Abruf
 //   auf den Link (Alma kennt ihn nicht, kein Stundenplan), holt es höchstens einmal am Tag einen neuen und versucht es gleich damit
 //   (ablauf, erneuert); beim Verbinden mit einem eingegebenen Link nie.
@@ -465,7 +465,7 @@ module.exports = function (ctx) {
     }
     if (text != null) return { text };
     let antwort;
-    // Nur für Tests (docs/architektur.md): plugin.testAbruf(url) → { status, text } ersetzt den Abruf (kein Netz)
+    // Nur für Tests (docs/architektur/testeinstiege.md): plugin.testAbruf(url) → { status, text } ersetzt den Abruf (kein Netz)
     const abrufen = ctx.plugin && typeof ctx.plugin.testAbruf === "function" ? ctx.plugin.testAbruf : requestUrl;
     try { antwort = await mitFrist(abrufen({ url: link().replace(/^webcal:/i, "https:"), method: "GET", throw: false }), ANFRAGE_FRIST); }
     catch (e) { antwort = { status: 0, zuLange: !!e && e.message === FRIST }; }

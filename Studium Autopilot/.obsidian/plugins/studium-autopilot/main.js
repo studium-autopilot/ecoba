@@ -88,7 +88,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     this.erweiterungen = {}; // Name → Rückgabe der Fabrik (registrieren, start, aktionen …)
     this.aktionen = {};      // Aktionsname → { titel, ausfuehren, ordner, editor, skript }
     this.laufend = new Set(); // gerade laufende Aktionen (Doppelklick-Schutz)
-    this.testAntworten = [];  // Nur für Tests: vorbereitete Antworten für Eingabe/Auswahl (siehe docs/architektur.md)
+    this.testAntworten = [];  // Nur für Tests: vorbereitete Antworten für Eingabe/Auswahl (siehe docs/architektur/testeinstiege.md)
     this.testProtokoll = [];
     this.stillBis = 0;        // bis zu diesem Zeitpunkt (ms) keine Hinweise beim Hot-Reload (update.js während eines Updates, hinweisSammeln)
     this.testDatum = null;    // Nur für Tests: "YYYY-MM-DD" ersetzt das heutige Datum in ctx.date (Uhrzeit bleibt)
@@ -603,7 +603,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     setTimeout(pruefen, 300);
   }
 
-  // Notiz öffnen: DER Weg für alle Skripte (ctx.oeffnen, Bedien-Bausteine seit 0.4.6; docs/architektur.md).
+  // Notiz öffnen: DER Weg für alle Skripte (ctx.oeffnen, Bedien-Bausteine seit 0.4.6; docs/architektur/bedien-bausteine.md).
   // ziel: TFile, Pfad oder Linktext (mit „#Überschrift“). o = { neu (neuer Tab, Strg/⌘-Klick), quelle (Notiz, von der ein
   // Linktext ausgeht), zeile (0-basiert), cursor ({ line, ch }), modus („preview“ | „source“ erzwingt), von (Element, auf das
   // getippt wurde; sonst der letzte Tipp der letzten 2 s) }.

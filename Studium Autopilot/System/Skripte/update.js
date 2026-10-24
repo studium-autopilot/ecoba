@@ -1,6 +1,6 @@
 // Update der Vorlage mit einem Knopf (seit 0.2.0). Zeile „Updates“ in ```eba-verbindungen``` (verbindungen.js):
 // Version, „Neue Version X verfügbar“ und Knopf „Neue Version installieren“. Seit 0.3.1 zusätzlich ```eba-update-hinweis``` oben auf dem
-// Dashboard: schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Doku: docs/architektur.md, „Update“.
+// Dashboard: schmale Zeile nur, wenn ein Update angeboten wird oder „Neu laden“ nötig ist. Doku: docs/architektur/update.md.
 //
 // Woher: Das Manifest der zentralen Daten (zentral.js, docs/daten-v1.md) nennt im optionalen Feld „release“ die neue Version,
 // die Basisadresse der Dateien (raw.githubusercontent.com, Tag v<version> im Haupt-Repo) und die SHA-256 der Dateiliste
@@ -38,6 +38,12 @@
 // Nie angefasst: alles, was klasseVon nicht kennt (Einstellungen, Termine, Stundenplan, Vorlesungen, Unterlagen, Anhänge,
 //   Semester.md, abruf.json, appearance.json …). Ausnahme: Ordner, die die Vorlage nicht mehr hat (ALTE_ORDNER, seit 0.6.8,
 //   ordnerAufraeumenMit): einmal je Tresor weg, Dateien darin wandern vorher an einen neuen Ort, gelöscht wird keine.
+// Hinweise für Claude (seit 0.6.9, claudeNachholenMit): .claude/CLAUDE.md und der Skill studium-autopilot (Klasse claude)
+//   stehen im Schlüssel „weitere“ der Liste, den Planer bis 0.6.8 übergehen (in „dateien“ lehnten sie die ganze Liste ab).
+//   Das Update behandelt sie wie Systemdateien: immer die neue Fassung, deine geänderte liegt als Sicherung daneben. Danach
+//   holt jeder Computer einmal je Version nach, was bei ihm fehlt oder alt ist (Obsidian Sync nimmt .claude/ nicht mit); aus
+//   dem Netz nur bei eingeschalteten zentralen Daten. Eigene Skills (.claude/skills/<anderer Name>/) und .claude/settings*.json
+//   fasst nichts an.
 // Kanal: update_kanal in System/Einstellungen.md („stabil“ Standard, „beta“). Das Manifest nennt release (stabil) und optional
 //   beta (X.Y.Z-beta.N); auf Kanal beta wird die höhere von beiden angeboten, nie eine ältere als die installierte.
 //   Schalter „Beta-Versionen“ im Fenster „Updates“ unter „Mehr erfahren“.
@@ -67,8 +73,8 @@
 //   Kennung und ohne Angaben aus dem Tresor (zaehlen, docs/datenschutz.md). Schalter „Mitzählen“ neben „Beta-Versionen“.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt der Frage im Fenster), plugin.testUpdateBasis (andere Basis-URL,
 //   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.toast,
-//   ctx.update.heilen(true) (Reparatur sofort, ohne Merker eba-update-reparatur), ctx.update.ordnerAufraeumen(version, true)
-//   (alte Ordner sofort, als wäre dieses Gerät das, das für alle schreibt).
+//   ctx.update.heilen(true) (Reparatur und Hinweise für Claude sofort, ohne die Merker eba-update-reparatur und eba-update-claude),
+//   ctx.update.ordnerAufraeumen(version, true) (alte Ordner sofort, als wäre dieses Gerät das, das für alle schreibt).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
   const app = window.app;
@@ -85,7 +91,7 @@ module.exports = function (ctx) {
   const KERN_DATEIEN = ["main.js", "manifest.json", "styles.css"];
   const EINSTELLUNG = [".obsidian/app.json", ".obsidian/bookmarks.json", ".obsidian/community-plugins.json",
     ".obsidian/core-plugins.json", ".obsidian/hotkeys.json", ".obsidian/types.json"];
-  // Persönliche Felder der Modulnotizen (bleiben beim Update immer): wie pruefen.py (Vorlage leer) und docs/architektur.md
+  // Persönliche Felder der Modulnotizen (bleiben beim Update immer): wie pruefen.py (Vorlage leer) und docs/architektur/update.md
   const PERSOENLICH = ["status", "ergebnis", "versuch", "klausur", "semester_geplant", "gewaehlt", "anrechnung", "zusatz",
     "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"];
   const VEREINIGEN = ["tags", "aliases", "cssclasses"]; // Listen: neue Einträge + deine zusätzlichen
@@ -100,7 +106,29 @@ module.exports = function (ctx) {
   ];
   const AUFGERAEUMT = "System/Daten/aufgeraeumt.json"; // erledigte ALTE_ORDNER (synchronisiert, nicht in der Vorlage)
   const MUELL = [".gitkeep", ".DS_Store", "Thumbs.db", "desktop.ini"]; // zählt nicht als Inhalt eines Ordners
-
+  // Klassen nur im Schlüssel „weitere“ der Liste (seit 0.6.9). Planer bis 0.6.8 lesen nur „dateien“ und lehnen dort die ganze
+  // Liste ab, sobald ein Pfad ohne ihre Klasse darin steht; „weitere“ übergehen sie. Einträge in „weitere“, die dieser Planer
+  // nicht kennt (neue Klasse oder neuer Pfad einer späteren Version), übergeht er ebenso.
+  const WEITERE = ["claude"];
+  // Hinweise für Claude, wie sie 0.4.7 bis 0.6.8 ausgeliefert wurden (SHA-256 aus den Tags, eingefroren): Diese Listen nennen
+  // .claude/ nicht, nur so erkennt das Update, ob du eine Datei geändert hast. Spätere Fassungen stehen in installiert.json.
+  const CLAUDE_FRUEHER = {
+    ".claude/CLAUDE.md": ["bc7d23ec1bfb9f409169a3a92637cd965b3808effa167c603c25c3202a424596"],
+    ".claude/skills/studium-autopilot/SKILL.md": ["30055456f456ca239ecf3bcd93eb51782801b34b5b0b8adcdd75aeb39a40dcf6",
+      "4dd7d8f98d8ebd6e8395cda25dba6624172113853d82ca7ec29ae38aba318f46", "58211a56cb52c54133c991554dcfd72331a3e048c904e4c2c8cff7c92ce1bcd6"],
+    ".claude/skills/studium-autopilot/fehler-melden.md": ["3da17b1e4f2f1cd3fcbf117ad170f2823f6b1e0916827fcd364f7de321ad247c"],
+    ".claude/skills/studium-autopilot/lesefassung.md": ["3457c4aa363163a7fd54a05fe40c5f72341c2fc5f0ef92921c0c4dddfd4b43ff"],
+    ".claude/skills/studium-autopilot/lesen.md": ["d1ab4e10692e323e4dd1ea552e8a495989bd7c62fb7fd91038ca065919a6119a",
+      "65c417d4fef652e6c193287faf149daa3446e670e8fc5cf6e1863a0984bdc52e", "6b5e997d7134afab8d9da883bec68fa9936cb14572df72dc0500177d174ceadb",
+      "75dfa3c2052cbefea4372e2b05389efdd44d53ee6426752c5b7176483726f381", "edb969c1b05425549285c836aec3f551de48bca9a44ca9915424bd76eae7037c"],
+    ".claude/skills/studium-autopilot/schreiben.md": ["254870bdfe82c556bb286866ed21ad0c2ee8a16d5eaa253caaa99f1943d48732",
+      "473a087cd01b8c2ae8e52d41c8eebf4a12699c17fe538f2f9ff747d843a8c840", "47c867b55a0c1cca6ba92cf0e31b859685481a260664f9843ea752ae7a44a5d7",
+      "b89aacaa4ceeee1cebd2c2aa7aaca24df1f1a6fd12c26e79cd966e968e352da8", "d0db8d9c31ddb16680c6cfe40950e3b9be51ce491243327853a4b8f74260c225"],
+    ".claude/skills/studium-autopilot/tresor.md": ["6279bfc04eafaa1c6b3a8660780d70a424fa6d36dd38dbfe515cd9dcc9158256",
+      "26e14e6128c9500bf94b4f2639a65cba40c76209a49d907f1a793a7176d23672", "55c64800c289a8def454564355a7f685145c2bd03f39417c36a21222caa15dc9",
+      "e08c25cc3ad18ea8d37eedda2265275961de93ec1e194f6cd42a603d370b0c75", "4a7943707541604fd6230b272f8535ef8d39b46c694526dadaec1e5cca9fa607",
+      "ee52de90a08c0182afe38c8d5fa416c6716a1b3c767d689be7036bfbc1443c10", "688938dbe254eb9aae955930ccc3c2ec6927a467f089769692ff4d5cafac5167"],
+  };
 
   // ---------- Kleine Helfer ----------
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -150,7 +178,7 @@ module.exports = function (ctx) {
     for (const t of teile) if (!t || t === "." || t === ".." || t === ".trash" || /[ .]$/.test(t)) return false;
     return true;
   };
-  // → "system" | "einstellung" | "seite" | "modul" | "" (nie im Update)
+  // → "system" | "einstellung" | "seite" | "modul" | "claude" (nur in „weitere“, seit 0.6.9) | "" (nie im Update)
   const klasseVon = (pfad) => {
     const p = nfc(pfad);
     if (!pfadOk(p)) return "";
@@ -161,6 +189,7 @@ module.exports = function (ctx) {
     if (EINSTELLUNG.indexOf(p) >= 0) return "einstellung";
     if (p === "Dashboard.md" || p === "System/Daten/Musterplan.md" || /^Studium\/[^/]+\.md$/.test(p)) return "seite";
     if (/^Module\/.+\.md$/.test(p)) return "modul";
+    if (p === ".claude/CLAUDE.md" || /^\.claude\/skills\/studium-autopilot\/[^/]+\.md$/.test(p)) return "claude";
     return "";
   };
   // Pfad → { ordner ("" oder „a/b/“), basis, ext }
@@ -195,6 +224,7 @@ module.exports = function (ctx) {
 
   // ---------- Liste prüfen (system-dateien.json, auch installiert.json) ----------
   // → { wert: { schema, version, ordner, dateien: [{ pfad, klasse, sha256, groesse, koerper?, ohne_haken? }] } } | { fehler }
+  //   Einträge aus „weitere“ (WEITERE), die dieser Planer kennt, stehen mit in dateien.
   const listePruefen = (d, version) => {
     if (!d || typeof d !== "object" || Array.isArray(d)) return { fehler: "Liste ist kein Objekt" };
     if (d.schema !== 1) return { fehler: "Liste: schema unbekannt" };
@@ -208,7 +238,7 @@ module.exports = function (ctx) {
       if (!e || typeof e !== "object" || Array.isArray(e)) return { fehler: "Liste: Eintrag ist kein Objekt" };
       const pfad = typeof e.pfad === "string" ? nfc(e.pfad) : "";
       const k = klasseVon(pfad);
-      if (!k || e.klasse !== k) return { fehler: "Liste: Datei nicht erlaubt: " + String(e.pfad).slice(0, 120) };
+      if (!k || e.klasse !== k || WEITERE.indexOf(k) >= 0) return { fehler: "Liste: Datei nicht erlaubt: " + String(e.pfad).slice(0, 120) };
       if (hat(gesehen, pfad)) return { fehler: "Liste: doppelt: " + pfad };
       if (typeof e.sha256 !== "string" || !HEX.test(e.sha256)) return { fehler: "Liste: sha256 ungültig: " + pfad };
       if (!Number.isInteger(e.groesse) || e.groesse < 0 || e.groesse > G.datei) return { fehler: "Liste: groesse ungültig: " + pfad };
@@ -221,6 +251,15 @@ module.exports = function (ctx) {
       gesehen[pfad] = true;
       summe += e.groesse;
       dateien.push(x);
+    }
+    for (const e of Array.isArray(d.weitere) ? d.weitere : []) {
+      const pfad = e && typeof e === "object" && typeof e.pfad === "string" ? nfc(e.pfad) : "";
+      const k = klasseVon(pfad);
+      if (!k || e.klasse !== k || WEITERE.indexOf(k) < 0 || hat(gesehen, pfad) || typeof e.sha256 !== "string" || !HEX.test(e.sha256)
+        || !Number.isInteger(e.groesse) || e.groesse < 0 || e.groesse > G.datei || dateien.length >= G.dateien) continue;
+      gesehen[pfad] = true;
+      summe += e.groesse;
+      dateien.push({ pfad, klasse: k, sha256: e.sha256, groesse: e.groesse });
     }
     if (summe > G.gesamt) return { fehler: "Liste: zusammen zu groß" };
     if (!hat(gesehen, KERN + "main.js") || !hat(gesehen, KERN + "manifest.json")) return { fehler: "Liste: Plugin-Kern fehlt" };
@@ -415,10 +454,11 @@ module.exports = function (ctx) {
   };
 
   // ---------- Plan (rein, ohne Dateien) ----------
-  // neu, alt: geprüfte Listen (alt darf null sein); ist: pfad → { sha, koerper?, ohneHaken?, zeilen? } (fehlt = Datei fehlt)
+  // neu, alt: geprüfte Listen (alt darf null sein); ist: pfad → { sha, koerper?, ohneHaken?, zeilen? } (fehlt = Datei fehlt);
+  // bekannt (freiwillig, claudeBekannt): pfad → [SHA-256] früher ausgelieferter Hinweise für Claude, zählen wie die alte Liste
   // → [{ pfad, klasse, art, eintrag?, koerperNeu? }], art: gleich | anlegen | ersetzen | ersetzen-sichern | behalten-neu |
   //   eigene | modul-mischen | seite-haken | json-mischen | uebersprungen | entfernen | entfernen-sichern | bleibt
-  const planen = (neu, alt, ist) => {
+  const planen = (neu, alt, ist, bekannt) => {
     const A = {}, N = {};
     if (alt) for (const a of alt.dateien) A[a.pfad] = a;
     const schritte = [];
@@ -429,8 +469,9 @@ module.exports = function (ctx) {
       if (!c) art = a && (e.klasse === "seite" || e.klasse === "modul") ? "uebersprungen" : "anlegen";
       else if (passt(c, "sha", e.sha256)) art = "gleich";
       else if (a && passt(c, "sha", a.sha256)) art = "ersetzen";
-      // Darstellung, Programmteile, Gerüste: immer die neue Fassung, deine geänderte vorher als Sicherung daneben
-      else if (e.klasse === "system") art = "ersetzen-sichern";
+      else if (e.klasse === "claude" && bekanntPasst(c, bekannt, e.pfad)) art = "ersetzen";
+      // Darstellung, Programmteile, Gerüste, Hinweise für Claude: immer die neue Fassung, deine geänderte vorher als Sicherung daneben
+      else if (e.klasse === "system" || e.klasse === "claude") art = "ersetzen-sichern";
       else if (e.klasse === "einstellung") art = "json-mischen";
       // Vorlage seit der installierten Version gleich: deine Seite bzw. dein Modul bleibt, keine Kopie daneben
       else if (a && e.sha256 === a.sha256) art = "eigene";
@@ -443,7 +484,8 @@ module.exports = function (ctx) {
     }
     if (alt) for (const a of alt.dateien) {
       if (hat(N, a.pfad) || !hat(ist, a.pfad)) continue;
-      const art = passt(ist[a.pfad], "sha", a.sha256) ? "entfernen" : a.klasse === "system" ? "entfernen-sichern" : "bleibt";
+      const c = ist[a.pfad], unveraendert = passt(c, "sha", a.sha256) || (a.klasse === "claude" && bekanntPasst(c, bekannt, a.pfad));
+      const art = unveraendert ? "entfernen" : a.klasse === "system" || a.klasse === "claude" ? "entfernen-sichern" : "bleibt";
       schritte.push({ pfad: a.pfad, klasse: a.klasse, art });
     }
     return schritte;
@@ -467,6 +509,8 @@ module.exports = function (ctx) {
   };
   // c (istVon) hat für feld den Wert soll, mit beliebigen Zeilenenden
   const passt = (c, feld, soll) => !!c && !!soll && (c[feld] === soll || (!!c.zeilen && (c.zeilen[feld] || []).indexOf(soll) >= 0));
+  // c gleicht einer früher ausgelieferten Fassung von pfad (bekannt wie in planen)
+  const bekanntPasst = (c, bekannt, pfad) => !!bekannt && hat(bekannt, pfad) && bekannt[pfad].some((s) => passt(c, "sha", s));
 
   const parallel = async (liste, n, fn) => {
     let i = 0, fehler = null;
@@ -564,7 +608,8 @@ module.exports = function (ctx) {
   // io: { holen(url, { frisch }) → Uint8Array (wirft bei Fehler; frisch: nie aus dem Zwischenspeicher), lesen(pfad) →
   //   Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad), liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
   // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text),
-  //   (fortschritt(text, anteil): anteil 0…1 für den Balken im Fenster), marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage) }
+  //   (fortschritt(text, anteil): anteil 0…1 für den Balken im Fenster), marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage),
+  //   bekannt: pfad → [SHA-256] (claudeBekannt, freiwillig; Hinweise für Claude, die dieses Gerät als unverändert erkennt) }
   // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, geaendert[], angelegt[],
   //   neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }] (deine Systemdatei daneben gesichert), gemischt[], haken[],
   //   einstellungen[], uebersprungen[], entfernt[], behalten[], aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert),
@@ -602,7 +647,7 @@ module.exports = function (ctx) {
     }
 
     // 3. Plan, 4. alles laden und prüfen, bevor etwas geschrieben wird
-    const schritte = planen(neu, alt, ist);
+    const schritte = planen(neu, alt, ist, o.bekannt);
     const brauchen = schritte.filter((s) => LADEN[s.art]);
     const geladen = {};
     let fertig = 0;
@@ -807,6 +852,68 @@ module.exports = function (ctx) {
     return b;
   };
 
+  // ---------- Hinweise für Claude nachholen (seit 0.6.9; Datei-Zugriff über io) ----------
+  // .claude/CLAUDE.md und der Skill studium-autopilot kamen bis 0.6.8 nur mit der Installation und blieben danach auf deren
+  // Stand (Befund 24.10.2026: Der Skill nannte noch den Ordner „Eingang“, den es seit 0.6.7 nicht mehr gibt). Das Update auf
+  // 0.6.9 plant noch der alte update.js, der sie übergeht, und Obsidian Sync nimmt .claude/ nicht mit. Darum gleicht jeder
+  // Computer sie nach jedem Update mit installiert.json ab, nach denselben Regeln wie das Update (planen): Fehlt eine oder ist
+  // sie eine früher ausgelieferte Fassung (bekannt), kommt die neue. Hast du sie geändert, kommt die neue auch, deine liegt
+  // vorher als „Name (deine Fassung vor X).md.txt“ daneben (wie bei Systemdateien: Alte Hinweise führten Claude in die Irre).
+  // Eine früher ausgelieferte Datei, die die Liste nicht mehr nennt, geht weg (geändert: mit Sicherung daneben). Geladen wird
+  // vom Tag der installierten Version, geprüft mit Größe und SHA-256 der Liste; geschrieben erst, wenn alles da ist, und alles
+  // Ersetzte liegt danach in der Sicherung (schreibenSicher). Andere Dateien unter .claude/ fasst es nie an.
+  // io: { holen, lesen, schreiben, loeschen } wie aktualisierenMit
+  // o: { liste: geprüfte installiert.json, basis: Adresse am Tag v<liste.version> ("" = nichts laden), bekannt (wie planen), zeit }
+  // → { ok, art (ok | aus (müsste laden, basis leer) | netz | pruefsumme | sicherung | schreiben), fehler, version, geaendert[],
+  //   angelegt[], gesichert[{ pfad, sicherung }], entfernt[], sicherung, zurueckgesetzt }
+  const claudeNachholenMit = async (io, o) => {
+    const V = o.liste.version, bekannt = o.bekannt || {};
+    const b = { ok: false, art: "", fehler: "", version: V, geaendert: [], angelegt: [], gesichert: [], entfernt: [], sicherung: "", zurueckgesetzt: false };
+    const fehler = (art, text) => { b.art = art; b.fehler = text; return b; };
+    const url = (pfad) => o.basis + (ORDNER + "/" + pfad).split("/").map(encodeURIComponent).join("/");
+    const neu = { dateien: o.liste.dateien.filter((e) => e.klasse === "claude") }, N = {};
+    for (const e of neu.dateien) N[e.pfad] = true;
+    // nicht mehr gelistete Dateien als alte Liste ohne Prüfsumme: Unverändert ist dort nur, was bekannt ist
+    const alt = { dateien: Object.keys(bekannt).filter((p) => !hat(N, p) && klasseVon(p) === "claude").map((p) => ({ pfad: p, klasse: "claude", sha256: "" })) };
+    const ist = {}, istBytes = {};
+    for (const e of neu.dateien.concat(alt.dateien)) {
+      const by = await io.lesen(e.pfad);
+      if (by) { istBytes[e.pfad] = by; ist[e.pfad] = await istVon(e.pfad, by, "claude"); }
+    }
+    const schritte = planen(neu, alt, ist, bekannt), geladen = {};
+    const brauchen = schritte.filter((s) => LADEN[s.art]);
+    if (brauchen.length && !o.basis) return fehler("aus", "Laden ist aus");
+    for (const s of brauchen) {
+      let by;
+      try { by = await io.holen(url(s.pfad)); } catch (e) { return fehler("netz", s.pfad + " nicht geladen (" + grund(e) + ")"); }
+      if (by.length !== s.eintrag.groesse || (await sha256(by)) !== s.eintrag.sha256) return fehler("pruefsumme", "Prüfsumme stimmt nicht: " + s.pfad);
+      geladen[s.pfad] = by;
+    }
+    const schreiben = [], loeschen = [];
+    for (const s of schritte) {
+      if (s.art !== "ersetzen-sichern" && s.art !== "entfernen-sichern") continue;
+      const k = await sicherungsName(io, s.pfad, V, istBytes[s.pfad]);
+      if (!k) return fehler("sicherung", "Kein freier Name für die Sicherung: " + s.pfad);
+      if (k.schreiben) schreiben.push({ pfad: k.pfad, bytes: istBytes[s.pfad], alt: null });
+      b.gesichert.push({ pfad: s.pfad, sicherung: k.pfad });
+    }
+    for (const s of schritte) {
+      const p = s.pfad, c = istBytes[p] || null;
+      if (s.art === "anlegen") { schreiben.push({ pfad: p, bytes: geladen[p], alt: null }); b.angelegt.push(p); }
+      else if (s.art === "ersetzen" || s.art === "ersetzen-sichern") { schreiben.push({ pfad: p, bytes: geladen[p], alt: c }); b.geaendert.push(p); }
+      else if (s.art === "entfernen" || s.art === "entfernen-sichern") { loeschen.push({ pfad: p, alt: c }); b.entfernt.push(p); }
+    }
+    if (schreiben.length || loeschen.length) {
+      const w = await schreibenSicher(io, schreiben, loeschen, SICHERUNG + V + " " + stempel(o.zeit || new Date()), () => {});
+      b.sicherung = w.sicherung;
+      b.zurueckgesetzt = w.zurueckgesetzt;
+      if (w.art) { b.geaendert = []; b.angelegt = []; b.gesichert = []; b.entfernt = []; return fehler(w.art, w.fehler); }
+    }
+    b.ok = true;
+    b.art = "ok";
+    return b;
+  };
+
   // ---------- Dateien in Obsidian ----------
   const ad = () => app.vault.adapter;
   const TFile = obs.TFile;
@@ -891,7 +998,7 @@ module.exports = function (ctx) {
 
   // ---------- Zustand ----------
   // bleibend: überlebt den Hot-Reload dieses Skripts (das Update ersetzt update.js womöglich selbst)
-  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, raeumt: false, installiert: "", bericht: null, fenster: null, marke: null }));
+  const zustand = ctx.bleibend("zustand", () => ({ laeuft: false, heilt: false, raeumt: false, claude: false, installiert: "", bericht: null, fenster: null, marke: null }));
   const laufendeVersion = () => (ctx.plugin && ctx.plugin.manifest && ctx.plugin.manifest.version) || "0.0.0";
   const installiertVersion = () => zustand.installiert || laufendeVersion();
   const geraetId = () => { try { return ctx.zentral && typeof ctx.zentral.geraetId === "function" ? String(ctx.zentral.geraetId() || "") : ""; } catch (e) { return ""; } };
@@ -1032,6 +1139,43 @@ module.exports = function (ctx) {
     }
     return b;
   };
+  // Hinweise für Claude (claudeNachholenMit) einmal je Computer und installierter Version, bei jedem Lauf von heilen; nicht
+  // während eines Updates, nicht, solange ein anderes Gerät gerade installiert (lage), und nicht auf iPhone, iPad und Android:
+  // Claude Code läuft nur am Computer. Jeder Computer schreibt selbst (.claude/ ist wie .obsidian/ je Gerät, Obsidian Sync nimmt
+  // es nicht mit; gleichen LiveSync oder iCloud es doch ab, schreiben alle dieselben Bytes). Aus dem Netz nur bei eingeschalteten
+  // zentralen Daten (docs/datenschutz.md); sonst nur, was ohne Laden geht, und beim nächsten Lauf noch einmal. Gerätelokal
+  // eba-update-claude = { version, sha: pfad → SHA-256 der Fassungen, die danach hier liegen }.
+  const L_CLAUDE = "eba-update-claude";
+  // Früher ausgelieferte Fassungen: CLAUDE_FRUEHER und die vom letzten Lauf auf diesem Gerät (installiert.json nennt nur die
+  // jetzige, .claude/ kann hier aber eine Version hinterherhinken). → pfad → [SHA-256]
+  const claudeBekannt = () => {
+    const aus = {}, m = lokal(L_CLAUDE);
+    for (const p of Object.keys(CLAUDE_FRUEHER)) aus[p] = CLAUDE_FRUEHER[p].slice();
+    const sha = m && typeof m === "object" && m.sha && typeof m.sha === "object" ? m.sha : {};
+    for (const p of Object.keys(sha)) {
+      if (typeof sha[p] !== "string" || !HEX.test(sha[p]) || klasseVon(p) !== "claude") continue;
+      if (!hat(aus, p)) aus[p] = [];
+      if (aus[p].indexOf(sha[p]) < 0) aus[p].push(sha[p]);
+    }
+    return aus;
+  };
+  // x: { liste } (installiert.json); immer = true (Test): ohne Merker und auch auf iPhone und iPad. → Bericht | null
+  const claudeNachholen = async (immer, x) => {
+    const V = x.liste.version, m = lokal(L_CLAUDE);
+    if (!immer && ((m && m.version === V) || (obs.Platform && obs.Platform.isMobile))) return null;
+    if (zustand.laeuft || zustand.claude || lage() === "anderes") return null;
+    zustand.claude = true;
+    let b;
+    try {
+      b = await claudeNachholenMit(io, { liste: x.liste, basis: zentralAn() && !plugin().testZentralAus ? tagBasis(V) : "", bekannt: claudeBekannt(), zeit: new Date() });
+    } finally { zustand.claude = false; }
+    if (!b.ok) { if (b.art !== "aus") console.error("update: Hinweise für Claude", b.fehler); return b; }
+    const sha = {};
+    for (const e of x.liste.dateien) if (e.klasse === "claude") sha[e.pfad] = e.sha256;
+    lokal(L_CLAUDE, { version: V, sha });
+    if (b.gesichert.length) ctx.hinweis(`Die Hinweise für Claude sind jetzt auf dem Stand von Version ${V}, deine geänderte Fassung liegt als Sicherung daneben.`, { dauer: 12000 });
+    return b;
+  };
   // Reparatur (heilenMit) einmal je Gerät und installierter Version, nicht während eines Updates. Gerätelokal
   // eba-update-reparatur = Version; „Version lokal“, solange dieses Gerät synchronisierte Pfade nicht schreibt (ein Schreiber:
   // ctx.zentral.abruferHier, wie modell.js), dann noch einmal, sobald es darf. immer = true (Test): ohne Merker.
@@ -1046,6 +1190,7 @@ module.exports = function (ctx) {
     let synchron = true;
     try { if (ctx.zentral && typeof ctx.zentral.abruferHier === "function") synchron = !!(await ctx.zentral.abruferHier()); } catch (e) { synchron = false; }
     try { await ordnerAufraeumen(V, synchron); } catch (e) { console.error("update: alte Ordner", e); }
+    try { await claudeNachholen(immer, x); } catch (e) { console.error("update: Hinweise für Claude", e); }
     const merk = lokal(L_REPARATUR);
     if (!immer && (merk === V || (merk === V + " lokal" && !synchron))) return null;
     zustand.heilt = true;
@@ -1459,7 +1604,7 @@ module.exports = function (ctx) {
       p.stillBis = Date.now() + 120000; // Kern: keine „Aktualisiert: …“-Hinweise beim Hot-Reload der Skripte
       const alt = (await listeLesen(INSTALLIERT)) || (await listeLesen(LISTE));
       b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(),
-        marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null, fortschritt: melden });
+        bekannt: claudeBekannt(), marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null, fortschritt: melden });
       if (b.ok) {
         zustand.installiert = rel.version;
         b.vorher = inst;
@@ -1759,8 +1904,10 @@ module.exports = function (ctx) {
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
     jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, lesezeichenNachziehen, lesezeichenAnwenden, LESEZEICHEN_NEU, planen, aktualisierenMit, heilenMit, ordnerAufraeumenMit, ALTE_ORDNER, AUFGERAEUMT, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, zaehlenSetzen, zaehlenSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     markeLage, MARKE, MARKE_STILL, handInstalliertMit, istVon, passt, kopienAufraeumen,
+    WEITERE, CLAUDE_FRUEHER, claudeNachholenMit,
     // Obsidian
     kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertNeu, installiertAnlegen, heilen, ordnerAufraeumen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
+    claudeNachholen, claudeBekannt, L_CLAUDE,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,

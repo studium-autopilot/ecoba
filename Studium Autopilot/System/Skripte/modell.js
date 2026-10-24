@@ -32,7 +32,7 @@
 // eine Woche, deren Montag bis Freitag ganz in einer Pause liegt (z. B. zwischen Weihnachten und Neujahr), zählt nicht.
 // Am Samstag und Sonntag zählt schon die kommende Woche (planwoche, eine Wochenend-Regel für alle Bildschirme).
 //
-// Fachmodell (seit 18.10.2026, docs/architektur.md „Fachmodell“): Jeder Bildschirm fragt das Modell, statt selbst zu rechnen –
+// Fachmodell (seit 18.10.2026, docs/architektur/modell.md „Fachmodell“): Jeder Bildschirm fragt das Modell, statt selbst zu rechnen –
 // Termine (termine), Prüfungen (pruefungen, pruefungVon, naechstePruefung), Fristen (fristen, abgaben), Übungen (uebung, uebungen),
 // Woche (kalenderwoche, planwoche; am Samstag und Sonntag gilt überall schon die kommende Woche), Stundenplan (findetStatt,
 // naechsteSitzung: Pausen, freie Tage, Ausfall, Änderungen), ECTS und Noten (ects, noten), imPlan, statusArt, istZwischentest.
@@ -1119,7 +1119,7 @@ module.exports = function (ctx) {
   const api = {
     blockArgument, daten, ungueltig, semesterVon, semesterNachName, semesterAusDatum, naechster, voriger, modulSemester, semesterAuswahl, vorschau, abgleichen,
     beiAenderung, protokoll, woche, vorlesungswochen, semesterFuer,
-    // Fachmodell (docs/architektur.md „Fachmodell“)
+    // Fachmodell (docs/architektur/modell.md „Fachmodell“)
     zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, uebung: uebungVon, uebungen, blattNummer, opFrist, kalenderwoche, planwoche, findetStatt,
     naechsteSitzung, ausfaelle, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
     vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer, folien: folienVon,

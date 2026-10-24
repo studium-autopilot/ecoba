@@ -1,7 +1,7 @@
 // Quellen-Vertrag (seit 0.4.5): die gemeinsamen Regeln für jede Quelle, die Daten in den Tresor bringt (zentrale Daten, ILIAS,
 // Alma-Stundenplan, Noten & Anmeldungen aus Alma, Volltext der PDFs; neue Quellen wie der ILIAS-Kalender oder ein eigener Server
 // halten sich ebenso daran). Bibliothek: startet selbst nichts, außer planen() legt Zeitgeber über die Helfer des aufrufenden
-// Skripts an (Hot-Reload räumt sie weg). Doku: docs/architektur.md, „Quellen-Vertrag“. Tests: tests/quellen.test.js.
+// Skripts an (Hot-Reload räumt sie weg). Doku: docs/architektur/quellen.md, „Quellen-Vertrag“. Tests: tests/quellen.test.js.
 //
 // 1. Status: status() jeder Quelle liefert { zustand, geprueft, fehler, fehlerZeit, warnungen } (dazu Eigenes). statusForm()
 //    bringt einen Stand in diese Form; nachLauf() schreibt den gerätelokalen Stand nach einem Lauf fort: Ein Fehler bleibt stehen

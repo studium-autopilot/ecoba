@@ -55,7 +55,7 @@
   --eba-good: #1f7a4d;
   --eba-warn: #a3600a;
   --eba-bad: #b4234a;
-  --eba-info: #4a5ba6;
+  --eba-info: #2f64ad; /* Blau für Lehre und Uni-Termine; bis 24.10.2026 Indigo #4a5ba6, im Kalender kaum vom Violett zu unterscheiden */
 }
 
 /* Form und Schrift: hell und dunkel */

@@ -26,6 +26,11 @@ body {
   --eba-warn: #d9a33a;
   --eba-bad: #e5484d;
   --eba-info: #5b8def;
+  /* Farbe je Art eines Termins in Kalender und Agenda (seit 24.10.2026): drei klar verschiedene Töne, Veranstaltungen grün
+     statt im Akzent (der markiert heute und den gewählten Tag). Zwischentests haben die Farbe der Uni. */
+  --eba-art-pruefung: var(--eba-bad);
+  --eba-art-uni: var(--eba-info);
+  --eba-art-event: var(--eba-good);
   --eba-radius: 8px;
   --eba-radius-s: 6px;
   --eba-radius-l: 12px;
@@ -976,6 +981,9 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
 .callout[data-callout="eba-pdf"] > .callout-title > .callout-title-inner { flex: 1 1 auto; min-width: 0; }
 .callout[data-callout="eba-pdf"] .eba-pdf-leiste { display: flex; flex: none; align-items: center; gap: 2px; margin: -4px 2px -4px 8px; }
 .callout[data-callout="eba-pdf"] .eba-pdf-leiste .eba-vb-knopf { height: 26px; min-height: 0; padding: 0 8px; font-size: 13px; text-transform: none; letter-spacing: 0; }
+/* Neue Fassung (seit 24.10.2026): eine leise Zeile unter der Kopfzeile, auch zugeklappt („Neue Fassung vom …: S. 3–5 neu oder geändert“) */
+.callout[data-callout="eba-pdf"] > .eba-pdf-fassung { margin: -2px 2px 8px; font-size: 13px; line-height: 1.35; color: var(--eba-muted); }
+.callout[data-callout="eba-pdf"].is-collapsed > .eba-pdf-fassung { margin: 6px 2px 0; }
 
 /* ---------- 29. Mehrere PDFs: Gitter ----------
    Mehrere PDFs im Kasten (Zeilen ![[a.pdf]] ![[b.pdf]] direkt untereinander oder durch Leerzeile getrennt): Gitter aus Kacheln mit
@@ -1368,6 +1376,9 @@ body.is-phone .callout[data-callout-metadata*="handy-zu"].is-collapsed > .callou
 body.is-phone .eba .eba-kopf { margin: 0 0 14px; padding-bottom: 12px; }
 body.is-phone .eba .eba-pfad { margin-bottom: 8px; }
 body.is-phone .eba .eba-kopf h1 { font-size: 1.75em; line-height: 1.12; overflow-wrap: normal; }
+/* Übersichtsseiten (Studium/, .eba-weit): Titel in einer Zeile, auch „Termine & Anmeldungen“ (seit 24.10.2026; vorher zwei
+   Zeilen, die über dem Kalender Platz kosteten). Modulseiten behalten den größeren, zweizeiligen Titel. */
+body.is-phone .eba.eba-weit .eba-kopf h1 { font-size: 1.4em; }
 body.is-phone .eba .eba-kopf .eba-lead { display: none; }
 body.is-phone .eba .eba-meta { margin-top: 8px; gap: 0; font-size: 12.5px; line-height: 1.5; color: var(--eba-muted); }
 body.is-phone .eba .eba-meta span { padding: 0; border: 0; border-radius: 0; font-size: inherit; gap: 3px; }
@@ -2517,11 +2528,11 @@ body .eba-s-termine :is(.el-ul, .callout:is([data-callout="eba-t"], [data-callou
 body:not(.is-phone) .eba-s-termine .callout[data-callout-metadata*="pc-flach"] > .callout-content > ul:first-child { margin-top: 0; }
 
 /* Farbe je Art (Punkt vor dem Termin), wie im Kalender; die Art steht an der Tagesspalte, der Punkt gehört zur Zeile */
-body .eba-s-termine :is(li, .cm-line):has(.eba-tag.pruefung) { --kal: var(--eba-bad); }
-body .eba-s-termine :is(li, .cm-line):has(.eba-tag.zwischentest) { --kal: var(--eba-info); }
+body .eba-s-termine :is(li, .cm-line):has(.eba-tag.pruefung) { --kal: var(--eba-art-pruefung); }
+body .eba-s-termine :is(li, .cm-line):has(.eba-tag.zwischentest) { --kal: var(--eba-art-uni); }
 body .eba-s-termine :is(li, .cm-line):has(.eba-tag.frist) { --kal: var(--eba-warn); }
-body .eba-s-termine :is(li, .cm-line):has(.eba-tag.uni) { --kal: var(--eba-info); }
-body .eba-s-termine :is(li, .cm-line):has(.eba-tag.event) { --kal: var(--eba-accent); }
+body .eba-s-termine :is(li, .cm-line):has(.eba-tag.uni) { --kal: var(--eba-art-uni); }
+body .eba-s-termine :is(li, .cm-line):has(.eba-tag.event) { --kal: var(--eba-art-event); }
 body .eba-s-termine :is(li, .cm-line):has(.eba-tag.erledigt) { --kal: var(--eba-faint); }
 
 /* Tagesspalte links: Ziffer in der Schmuckschrift, Wochentag daneben, zweite Zeile („morgen“, Monat) gedämpft; Punkt davor */
@@ -2680,11 +2691,13 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
 
 /* ---- Kalender  ```eba-kalender```  (kalender.js) ----
    Monatsansicht nach gängigem Muster (Google/Apple Kalender): Raster mit Haarlinien, Tageszahl oben links, darunter bis zu
-   SPUREN (kalender.js) beschriftete Terminzeilen. Mehrtägig = getönter Balken, rund an Anfang und Ende, gerade abgeschnitten,
-   wo er in die Vor- oder Folgewoche weiterläuft; eintägig = Farbpunkt + Uhrzeit + Titel. Farbe je Art über --kal (Prüfung rot,
-   Uni blau, Veranstaltung grün; Fristen stehen nicht im Kalender). Freiwilliges gestrichelt. Termine sind reine Anzeige
-   (pointer-events: none), ein Tipp trifft den Tag-Knopf darunter. Schmal (Container unter 560 px, iPhone): eintägige als
-   getönte Blöcke ohne Uhrzeit, kleinere Schrift, Zahlen mittig. Alle Geräte. */
+   SPUREN (kalender.js) beschriftete Terminzeilen. Jeder Termin ist ein Farbchip in der Farbe seiner Art (--kal aus
+   --eba-art-*: Prüfung rot, Uni und Zwischentest blau, Veranstaltung grün; Fristen stehen nicht im Kalender): getönt, Schrift
+   in der Farbe, links ein voller Streifen. Mehrtägig = derselbe Chip als Balken über die Tage, rund an Anfang und Ende, gerade
+   abgeschnitten, wo er in die Vor- oder Folgewoche weiterläuft (Streifen nur am Anfang). Freiwilliges gestrichelt, Farbe
+   bleibt. Die Legende zeigt dieselben Chips (seit 24.10.2026; vorher Punkte, während das iPhone Blöcke zeigte). Termine sind
+   reine Anzeige (pointer-events: none), ein Tipp trifft den Tag-Knopf darunter. Schmal (Container unter 560 px, iPhone): ohne
+   Uhrzeit, kleinere Schrift, Zahlen mittig, Kopf in einer Zeile. Alle Geräte. */
 .eba-kalender {
   container: eba-kal / inline-size;
   margin: 0 0 18px;
@@ -2695,11 +2708,11 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
   font-family: var(--font-interface);
   color: var(--eba-text);
 }
-.eba-kalender .pruefung { --kal: var(--eba-bad); }
-.eba-kalender .zwischentest { --kal: var(--eba-info); }
+.eba-kalender .pruefung { --kal: var(--eba-art-pruefung); }
+.eba-kalender .zwischentest { --kal: var(--eba-art-uni); }
 .eba-kalender .frist { --kal: var(--eba-warn); }
-.eba-kalender .uni { --kal: var(--eba-info); }
-.eba-kalender .event { --kal: var(--eba-accent); }
+.eba-kalender .uni { --kal: var(--eba-art-uni); }
+.eba-kalender .event { --kal: var(--eba-art-event); }
 .eba-kalender .erledigt { --kal: var(--eba-faint); }
 
 /* Kopf: Monat links, „Heute“ und ‹ › als Gruppe rechts */
@@ -2759,41 +2772,35 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
 .eba-kal-ev, .eba-kal-mehr { position: relative; z-index: 1; pointer-events: none; min-width: 0; overflow: hidden; white-space: nowrap; }
 .eba-kal-ev {
   display: flex; align-items: center; gap: 5px;
-  height: 18px; margin: 1px 6px; padding: 0 4px; border-radius: 4px;
-  font-size: 12px; line-height: 18px; color: var(--eba-text);
+  height: 18px; margin: 1px 6px; padding: 0 4px 0 7px; border-radius: 4px;
+  font-size: 12px; line-height: 18px;
+}
+/* Farbchip, im Raster und in der Legende gleich: getönt, Schrift in der Farbe der Art, links ein voller Streifen */
+.eba-kal-ev, .eba-kal-leg {
+  background: color-mix(in srgb, var(--kal) 17%, var(--eba-card-bg));
+  box-shadow: inset 3px 0 0 var(--kal);
+  color: color-mix(in srgb, var(--kal) 82%, var(--eba-text)); font-weight: 550;
 }
 .eba-kal-ev-titel { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.eba-kal-ev-zeit { flex: none; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
-.eba-kal-ev.is-kurz > i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--kal); }
-.eba-kal-ev.is-lang {
-  margin-left: 0; margin-right: 0; padding: 0 8px; border-radius: 0;
-  background: color-mix(in srgb, var(--kal) 14%, var(--eba-card-bg));
-  color: color-mix(in srgb, var(--kal) 72%, var(--eba-text)); font-weight: 550;
-}
-.eba-kal-ev.is-lang.anfang { margin-left: 6px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+.eba-kal-ev-zeit { flex: none; font-weight: 450; opacity: 0.8; font-variant-numeric: tabular-nums; }
+.eba-kal-ev.is-lang { margin-left: 0; margin-right: 0; padding: 0 8px; border-radius: 0; }
+.eba-kal-ev.is-lang:not(.anfang) { box-shadow: none; } /* läuft aus der Vorwoche weiter: Streifen nur am Anfang */
+.eba-kal-ev.is-lang.anfang { margin-left: 6px; padding-left: 9px; border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
 .eba-kal-ev.is-lang.ende { margin-right: 6px; border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
-.eba-kal-ev.is-vorbei { opacity: 0.55; }
+.eba-kal-ev.is-vorbei { opacity: 0.6; }
 .eba-kal-ev.is-fremd { opacity: 0.4; }
 .eba-kal-ev.erledigt .eba-kal-ev-titel { text-decoration: line-through; }
-/* Freiwillig (bereich: schluesselqualifikation): gestrichelter Rahmen statt Farbfläche, Punkt hohl, Text gedämpft */
-.eba-kal-ev.is-freiwillig { color: var(--eba-muted); font-weight: 400; }
-.eba-kal-ev.is-lang.is-freiwillig {
-  background: var(--eba-card-bg); box-shadow: none;
-  outline: 1px dashed color-mix(in srgb, var(--kal) 60%, transparent); outline-offset: -1px;
+/* Freiwillig (bereich: schluesselqualifikation): gestrichelter Rahmen in der Farbe der Art statt Fläche und Streifen */
+.eba-kal-ev.is-freiwillig, .eba-kal-leg.is-freiwillig {
+  background: color-mix(in srgb, var(--kal) 5%, var(--eba-card-bg)); box-shadow: none; font-weight: 450;
+  outline: 1px dashed color-mix(in srgb, var(--kal) 70%, transparent); outline-offset: -1px;
 }
-.eba-kal-ev.is-kurz.is-freiwillig > i { background: transparent; box-shadow: inset 0 0 0 1.5px var(--kal); }
 .eba-kal-mehr { margin: 1px 6px; padding: 0 4px; font-size: 11.5px; line-height: 19px; font-weight: 600; color: var(--eba-muted); }
 
-/* Legende: Farbe = Art, Balken = mehrtägig, gestrichelt = freiwillig */
-.eba-kal-legende { display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); }
-.eba-kal-legende span { display: inline-flex; align-items: center; gap: 6px; }
-.eba-kal-legende i { display: block; width: 8px; height: 8px; border-radius: 50%; background: var(--kal); }
-.eba-kalender .eba-kal-legende .eba-kal-leg-rechts { margin-left: auto; gap: 16px; }
-.eba-kal-legende .eba-kal-leg-lang i {
-  width: 20px; height: 9px; border-radius: 2px;
-  background: color-mix(in srgb, var(--eba-muted) 22%, var(--eba-card-bg));
-}
-.eba-kal-legende .eba-kal-leg-frei i { width: 20px; height: 9px; border-radius: 2px; background: transparent; outline: 1px dashed var(--eba-muted); outline-offset: -1px; }
+/* Legende: dieselben Chips wie im Raster, je Art einer; „freiwillig“ gestrichelt in Grau */
+.eba-kal-legende { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.eba-kal-leg { height: 20px; padding: 0 8px 0 9px; border-radius: 4px; font-size: 12px; line-height: 20px; white-space: nowrap; }
+.eba-kal-leg.is-freiwillig { --kal: var(--eba-muted); padding-left: 8px; }
 
 /* Termine des gewählten Tags */
 .eba-kal-liste { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--eba-border); }
@@ -2824,7 +2831,7 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
 /* Live Preview: Codeblock-Rahmen von Obsidian nicht zusätzlich zeigen */
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-kalender) { padding: 0; }
 
-/* Schmal (iPhone, schmale Spalte): wie Kalender-Apps auf dem Handy – Zahlen mittig, alle Termine als getönte Blöcke */
+/* Schmal (iPhone, schmale Spalte): wie Kalender-Apps auf dem Handy – Zahlen mittig, kleine Chips ohne Uhrzeit */
 /* Mittel (Spalten unter ~110 px): Uhrzeit nur in der Tagesliste, damit der Titel Platz hat */
 @container eba-kal (max-width: 780px) { .eba-kal-ev-zeit { display: none; } }
 @container eba-kal (max-width: 560px) {
@@ -2832,26 +2839,23 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
   .eba-kal-woche { grid-template-rows: 27px repeat(4, 16px) 5px; }
   .eba-kalender button.eba-kal-tag { align-items: center; padding: 3px 0 0; font-size: 13px; }
   .eba-kal-zahl { min-width: 22px; height: 22px; padding: 0 4px; line-height: 22px; }
-  .eba-kal-ev { height: 14px; margin: 1px 2px; padding: 0 3px; gap: 0; border-radius: 3px; font-size: 9.5px; line-height: 14px; }
-  .eba-kal-ev.is-kurz {
-    background: color-mix(in srgb, var(--kal) 14%, var(--eba-card-bg));
-    color: color-mix(in srgb, var(--kal) 72%, var(--eba-text)); font-weight: 550;
-  }
-  .eba-kal-ev.is-kurz > i, .eba-kal-ev-zeit { display: none; }
-  .eba-kal-ev.is-kurz.is-freiwillig {
-    background: var(--eba-card-bg); color: var(--eba-muted); font-weight: 400;
-    outline: 1px dashed color-mix(in srgb, var(--kal) 60%, transparent); outline-offset: -1px;
-  }
+  .eba-kal-ev { height: 14px; margin: 1px 2px; padding: 0 2px 0 5px; gap: 0; border-radius: 3px; font-size: 9.5px; line-height: 14px; }
   .eba-kal-ev-titel { text-overflow: clip; }
+  .eba-kal-ev.is-freiwillig { padding-left: 3px; }
   .eba-kal-ev.is-lang { padding: 0 3px; }
-  .eba-kal-ev.is-lang.anfang { margin-left: 2px; border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
+  .eba-kal-ev.is-lang.anfang { margin-left: 2px; padding-left: 5px; border-top-left-radius: 3px; border-bottom-left-radius: 3px; }
   .eba-kal-ev.is-lang.ende { margin-right: 2px; border-top-right-radius: 3px; border-bottom-right-radius: 3px; }
   .eba-kal-mehr { margin: 1px 2px; padding: 0; font-size: 9.5px; line-height: 14px; text-align: center; }
   .eba-kal-mehr-wort { display: none; }
-  .eba-kal-legende { gap: 4px 12px; font-size: 11.5px; }
-  .eba-kalender .eba-kal-legende .eba-kal-leg-rechts { margin-left: 0; gap: 12px; }
+  .eba-kal-legende { gap: 5px; }
+  .eba-kal-leg { height: 19px; padding: 0 7px 0 8px; font-size: 11.5px; line-height: 19px; }
   .eba-kal-eintrag { grid-template-columns: 74px minmax(0, 1fr); column-gap: 8px; }
-  /* Kopf: „+ Termin“ nur als Plus, damit Monat und Knöpfe in eine Zeile passen (iPhone, iPad geteilt) */
+  /* Kopf in einer Zeile (seit 24.10.2026; vorher brachen die Knöpfe unter den Monat um und kosteten eine Zeile): Monat
+     kleiner, im laufenden Jahr ohne Jahreszahl, notfalls gekürzt; Knöpfe fest rechts, „+ Termin“ nur als Plus */
+  .eba-kal-kopf { flex-wrap: nowrap; gap: 8px; }
+  .eba-kal-monat { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 1.2em; }
+  .eba-kal-jahr.is-dieses { display: none; } /* Jahr nur, wenn es nicht das laufende ist (kalender.js) */
+  .eba-kal-nav { flex: none; gap: 6px; }
   .eba-kalender .eba-kal-nav button.eba-kal-neu { width: 32px; padding: 0; }
   .eba-kal-neu-zeichen { margin: 0; }
   .eba-kal-neu-wort { display: none; }
@@ -2860,7 +2864,6 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
 /* iPhone: Kalender über die volle Breite */
 body.is-phone .eba-s-termine .eba-kalender { margin-bottom: 10px; padding: 12px 8px 10px; }
 body.is-phone .eba-s-termine .eba-kal-kopf { margin: 0 4px 10px; }
-body.is-phone .eba-s-termine .eba-kal-monat { font-size: 1.3em; }
 body.is-phone .eba-s-termine .eba-kalender .eba-kal-nav button { height: 30px; padding: 0 11px; font-size: 12.5px; }
 body.is-phone .eba-s-termine .eba-kalender .eba-kal-pfeile button { width: 32px; padding: 0; font-size: 18px; }
 body.is-phone .eba-s-termine .eba-kal-legende { margin: 8px 4px 0; }
@@ -5547,7 +5550,7 @@ body.is-mobile .eba-mod .eba-mod-alma button.eba-mod-alma-knopf { height: 44px; 
 }
 /* ---------- Ende Abschnitt 63 ---------- */
 
-/* ---------- 64. Bedien-Bausteine (formular.js, kopf.js; seit 0.4.6, docs/architektur.md „Bedien-Bausteine“) ----------
+/* ---------- 64. Bedien-Bausteine (formular.js, kopf.js; seit 0.4.6, docs/architektur/bedien-bausteine.md) ----------
    64.1 Fenster „Neu …“ (formular.js, ctx.formular): EIN Fenster für alle Anlege-Aktionen, Aufbau wie „Deine Angaben“ (eba-form,
    Abschnitt 43). Ein Fehler steht unter seinem Feld in --eba-bad. Auf iPhone und iPad Felder 44 px hoch mit 16 px Schrift (sonst
    zoomt Safari beim Antippen); der Inhalt rollt, damit ein Feld mit Fokus über der Tastatur bleibt. */
@@ -5681,6 +5684,15 @@ body.is-mobile .eba-sl-zeile { min-height: 44px; }
   color: var(--eba-warn); background: color-mix(in srgb, var(--eba-warn) 14%, transparent);
 }
 .eba-sl-label { margin: 18px 10px 6px; font-size: var(--eba-label-size); letter-spacing: var(--eba-label-tracking); font-weight: var(--eba-label-weight); text-transform: uppercase; color: var(--eba-accent-text); }
+/* Schublade nur zum Navigieren (seit 24.10.2026): Solange die Übersicht vorn ist, fehlen Obsidians Umschalter zwischen den Tabs
+   („Übersicht ⇕“), Name und Dateizahl des Tresors und das Zahnrad. Sie stehen jetzt unter Einstellungen & Hilfe → Obsidian
+   (personalisieren.js). Ist ein anderer Tab vorn (Dateien, Suche …), zeigt Obsidian alles wie gewohnt, auch den Weg zurück. Die
+   Stecknadel zum Anheften bleibt auf dem iPad; das iPhone hat keine, dort fällt die ganze Kopfzeile weg. */
+.workspace-drawer:has(.workspace-drawer-active-tab-content .eba-sl) .workspace-drawer-tab-options,
+.workspace-drawer:has(.workspace-drawer-active-tab-content .eba-sl) .workspace-drawer-header-left,
+.workspace-drawer:has(.workspace-drawer-active-tab-content .eba-sl) .workspace-drawer-header-icon.mod-settings { display: none; }
+.workspace-drawer:has(.workspace-drawer-active-tab-content .eba-sl) .workspace-drawer-header { justify-content: flex-end; }
+body.is-phone .workspace-drawer:has(.workspace-drawer-active-tab-content .eba-sl) .workspace-drawer-header { display: none; }
 /* ---------- Ende Abschnitt 66 ---------- */
 
 /* ---------- 67. Postfach (postfach.js, ```eba-postfach```; seit 0.6.0) ----------

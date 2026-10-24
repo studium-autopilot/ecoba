@@ -208,7 +208,9 @@ module.exports = function (ctx) {
       if (fm.typ !== "unterlage" || String(fm.code || "").trim() !== code || fm.art !== "Folien") continue;
       const n = parseInt(fm.nummer, 10);
       if (!isFinite(n) || /anmerkung|video|unbeschrieben/i.test(f.basename)) continue;
-      if (!aus[n]) aus[n] = { f, seiten: parseInt(fm.seiten, 10) || null };
+      // Neue Fassung daneben (ilias.js, „<Name> neue Fassung JJJJ-MM-TT“, deine Datei hatte Anmerkungen): die neueste zählt
+      const fassung = (/ neue Fassung (\d{4}-\d{2}-\d{2}(?: \(\d+\))?)$/.exec(f.basename) || [])[1] || "";
+      if (!aus[n] || fassung > aus[n].fassung) aus[n] = { f, seiten: parseInt(fm.seiten, 10) || null, fassung };
     }
     return aus;
   };
@@ -638,7 +640,7 @@ module.exports = function (ctx) {
   // Semesters), nachdem Fachmodell und zentrale Daten bereit sind
   const start = () => { ctx.zeit(() => { zentralAbgleichen(); }, 45000); };
 
-  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran };
+  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran, folienVon };
   ctx.lernplan = api;
   return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

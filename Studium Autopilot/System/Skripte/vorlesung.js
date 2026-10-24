@@ -88,7 +88,7 @@ module.exports = function (ctx) {
     return erg;
   };
 
-  // ---------- Symbole als eigenes SVG (setIcon blieb auf dem iPad leer, docs/architektur.md) ----------
+  // ---------- Symbole als eigenes SVG (setIcon blieb auf dem iPad leer, docs/architektur/verbindungen.md) ----------
   const SYM = {
     status: [["circle", { cx: 12, cy: 12, r: 9 }]],
     fertig: [["circle", { cx: 12, cy: 12, r: 9 }], ["path", { d: "m8 12.5 2.6 2.5L16 9.5" }]],

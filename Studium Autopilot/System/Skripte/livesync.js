@@ -16,8 +16,7 @@
 // Benutzte Teile von LiveSync (geprüft 1.0.32 bis 1.0.40): app.plugins.plugins["obsidian-livesync"].core.services mit
 // setting.currentSettings(), appLifecycle.isReady/isSuspended/onSuspending, database.localDatabaseDirect.localDatabase.info(),
 // databaseEvents.initialiseDatabase, control.applySettings, API.addLog; Zähler replicator.*, replication.*, fileProcessing.*,
-// conflict.* (nur gelesen). Fehlt etwas davon, macht die Wache nichts. Tests: tests/livesync.test.js. Doku: docs/architektur.md,
-// „LiveSync“. iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
+// conflict.* (nur gelesen). Fehlt etwas davon, macht die Wache nichts. Tests: tests/livesync.test.js. Doku: docs/architektur/livesync.md. iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const ID = "obsidian-livesync";
 const K = Object.freeze({ PAUSE: 3 * 60e3, RUHE: 5000, FRIST: 10000, RUHIG_MAX: 60000, RUHIG_STILL: 5000, NOCHMAL: 60000 });
 

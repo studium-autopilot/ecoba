@@ -19,6 +19,7 @@ const modul = (d) => import(pathToFileURL(path.join(SERVER, d)).href);
 const Z = laden("zentral", { heute: "2026-10-18" }).ctx.zentral;
 const S = laden("server", { heute: "2026-10-18", kontext: { zentral: Z } }).ctx.server;
 const SPERRE = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "sperre.js"));
+const FASSUNG = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "fassung.js"));
 const Q = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "quellen.js"));
 const OBS = { Modal: class {}, Notice: class {}, Platform: {}, Setting: class {} };
 const GEHEIM_ID = "studium-autopilot-server-test";
@@ -439,6 +440,22 @@ test("Begleitnotiz ergänzen: Stichwort fett, Seitenbereich, Seiten auch bei „
     "## Offene Fragen\n- [ ] Gilt das auch für Staaten? → [[B110 Folien 01 Grundlagen.pdf#page=12|S. 12]]\n");
 });
 
+test("Begleitnotiz nach neuer Fassung: neue Zusammenfassung oben, die frühere eingeklappt darunter mit deinem Text; Zu tun und Meine Notizen bleiben", () => {
+  const kopf = "---\ntyp: unterlage\n---\n\n# B110 · Folien 02 · Kosten\n\n";
+  const pdf = "> [!eba-pdf]- PDF\n> ![[B110 Folien 02 Kosten.pdf#height=560]]\n";
+  const name = "B110 Folien 02 Kosten.pdf";
+  const alt = kopf + "## Das Wichtigste (frühere Fassung, bis 16.10.2026)\n- Alt A\nMein Satz dazu\n\n> [!eba-info]- Frühere Fassung (bis 01.10.2026)\n> - Uralt\n\n" +
+    "## Zu tun\n- [x] Blatt 1\n\n" + pdf + "\n## Meine Notizen\nMein Text\n";
+  const bn = { wichtigste: [{ begriff: "Neu in dieser Fassung", text: "Kapitel 3 kam dazu.", seite: 4 }], zu_tun: [{ text: "Blatt 2" }] };
+  const neu = S.begleitnotizErgaenzen(alt, bn, name);
+  assert.equal(neu, kopf + "## Das Wichtigste\n- **Neu in dieser Fassung:** Kapitel 3 kam dazu. → [[B110 Folien 02 Kosten.pdf#page=4|S. 4]]\n\n" +
+    "> [!eba-info]- Frühere Fassung (bis 16.10.2026)\n> - Alt A\n> Mein Satz dazu\n\n> [!eba-info]- Frühere Fassung (bis 01.10.2026)\n> - Uralt\n\n" +
+    "## Zu tun\n- [x] Blatt 1\n- [ ] Blatt 2\n\n" + pdf + "\n## Meine Notizen\nMein Text\n");
+  assert.equal(S.begleitnotizErgaenzen(neu, bn, name), null, "zweimal dasselbe: keine Änderung");
+  // ohne neue Punkte für „Das Wichtigste“ bleibt die frühere Fassung stehen, wie sie ist
+  assert.match(S.begleitnotizErgaenzen(alt, { zu_tun: [{ text: "Blatt 2" }] }, name), /^## Das Wichtigste \(frühere Fassung, bis 16\.10\.2026\)\n- Alt A\n/m);
+});
+
 test("Textfassung → Text mit Seitenmarken für den Server", () => {
   const roh = "---\ntyp: volltext\nquelle: \"Unterlagen/B110/x.pdf\"\n---\n\n# x · Volltext\n\nAutomatisch erzeugt, nicht bearbeiten. PDF: [[x.pdf]]\n\n" +
     "> [!eba-quelle]- [[x.pdf#page=1|S. 1]]\n> Kosten und Erlöse\n> zweite Zeile\n\n> [!eba-quelle]- [[x.pdf#page=2|S. 2]]\n> Deckungsbeitrag\n";
@@ -526,6 +543,19 @@ test("Zusammenfassen auf Wunsch: gewünschte Unterlage geht mit Opus in den eige
     assert.ok(!text.includes("zusammenfassung_angefordert"), "Wunsch erledigt");
     assert.match(text, /^---\ntyp: unterlage\nart: Folien\n---\n/);
     assert.match(text, /## Das Wichtigste\n- Erlös: Menge mal Preis\./);
+  } finally { await srv.zu(); }
+});
+
+test("Neue Fassung: die frühere Zusammenfassung, Zu tun und die geänderten Seiten gehen mit an den Server und stehen im Kopf für Claude", async () => {
+  const srv = await serverStarten();
+  try {
+    const k = "7".repeat(64), pdf = "Unterlagen/B110 Einführung/B110 Folien 05 Markt.pdf";
+    const fassung = { frueher: ["Markt: Angebot und Nachfrage. S. 2"], bis: "2026-10-16", geaendert: "3–4", entfallen: 1, zu_tun: ["Blatt 1 abgeben"] };
+    const { m } = await verbunden(srv, tresor(), { unterlagen: async () => [{ datei: pdf, kennung: k, art: "Folien", titel: "Folien 05", code: "B110", seiten: 6,
+      angefordert: "2026-10-16T00:00", fassung, text: "[S. 1]\nMarkt" }] });
+    assert.equal((await m.abrufen()).unterlagen, 1);
+    const kopf = fs.readFileSync(path.join(srv.verzeichnis, "unterlagen", "opus", k + ".md"), "utf8").split("\n---\n")[0].trimEnd();
+    assert.ok(kopf.endsWith("\n\n" + FASSUNG.kontextText(fassung)), kopf);
   } finally { await srv.zu(); }
 });
 
@@ -789,6 +819,50 @@ test("Zeile: Claude abgemeldet, Uni-Anmeldung abgelehnt, Claude-Limit; nur Werte
     await m.abrufen({ manuell: true });
     assert.equal(m.status().werte.gmail, "aus");
     assert.equal((await m.einzelheiten()).liste.find((x) => x[0] === "Gmail")[1], "aus (in den Einstellungen „nie“)");
+  } finally { await srv.zu(); }
+});
+
+test("Neue Version des Servers: ein Fehlschlag steht nur im Fenster, nach 3 Tagen ohne Erfolg trotz neuerer Version in der Zeile; ein älterer Server sagt nichts", async () => {
+  const srv = await serverStarten();
+  try {
+    srv.konfig.version = "0.6.7";
+    const { a, m } = await verbunden(srv, tresor());
+    // Angebot der zentralen Daten (release im Manifest)
+    let release = "0.6.8";
+    a.zentral = () => Object.assign({}, Z, { stand: () => Object.assign({}, Z.stand(), { release: release ? { version: release } : null }) });
+    const datei = path.join(srv.verzeichnis, "aktualisierung.json");
+    const fall = async (akt) => {
+      if (akt) fs.writeFileSync(datei, JSON.stringify(akt)); else fs.rmSync(datei, { force: true });
+      await m.abrufen({ manuell: true });
+      return { zeile: m.zeile(), fenster: ((await m.einzelheiten()).liste.find((x) => x[0] === "Neue Version") || [])[1] };
+    };
+    const still = (f, warum) => { assert.deepEqual([f.zeile.pille, /Version/.test(f.zeile.text), f.fenster], ["an", false, undefined], warum); };
+    const heuteOk = { zeit: "2026-10-18T02:00:00Z", ok: true, ziel: "0.6.7", grund: "", erfolg: "2026-10-18T02:00:00Z" };
+    const langeOk = { zeit: "2026-10-14T02:00:00Z", ok: true, ziel: "0.6.7", grund: "", erfolg: "2026-10-14T02:00:00Z" };
+    const gescheitert = { zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "0.6.8", grund: "installieren", erfolg: "2026-10-17T02:00:00Z" };
+    const lange = { zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "", grund: "github", erfolg: "2026-10-14T02:00:00Z" };
+    still(await fall(null), "älterer Server ohne Angabe");
+    still(await fall(heuteOk), "heute ohne Fehler");
+    // heute gescheitert: nur im Fenster, er versucht es täglich neu
+    let f = await fall(gescheitert);
+    assert.deepEqual([f.zeile.pille, /Version/.test(f.zeile.text)], ["an", false]);
+    assert.match(f.fenster, /^zuletzt ohne Erfolg \(.+\), dein Server versucht es täglich neu$/);
+    // hat der Server das Ziel schon anders bekommen (etwa über „Weiter mit der Einrichtung“): still
+    srv.konfig.version = "0.6.8";
+    still(await fall(gescheitert), "Ziel schon erreicht");
+    srv.konfig.version = "0.6.7";
+    // seit mehr als 3 Tagen nichts ohne Fehler, und die zentralen Daten bieten 0.6.8: die Zeile sagt, was hilft
+    f = await fall(lange);
+    assert.equal(f.zeile.text, "Dein Server installiert seit mehr als 3 Tagen keine neue Version mehr. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann holt Claude das nach.");
+    assert.deepEqual([f.zeile.symbol, f.zeile.pille, f.fenster], ["warnung", "pruefen", "seit mehr als 3 Tagen keine installiert"]);
+    assert.equal((await fall(langeOk)).zeile.pille, "pruefen", "ebenso, wenn er gar nicht mehr nachsieht");
+    // ohne neuere Version in den zentralen Daten nie in der Zeile, auch wenn es lange her ist
+    release = "0.6.7";
+    f = await fall(lange);
+    assert.equal(f.zeile.pille, "an");
+    assert.match(f.fenster, /^zuletzt ohne Erfolg/, "der Fehlschlag steht trotzdem im Fenster");
+    release = null;
+    still(await fall(langeOk), "ohne Angabe zum Release");
   } finally { await srv.zu(); }
 });
 

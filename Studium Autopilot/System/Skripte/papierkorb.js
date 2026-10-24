@@ -5,7 +5,7 @@
 // Ablauf: Inhalt merken, Datei in den einen Papierkorb (quellen.js papierkorb: Obsidians Einstellung „Gelöschte Dateien“, nie
 // endgültig), Hinweis „„Name“ liegt im Papierkorb.“ (oder text) mit Rückgängig. Rückgängig legt die Datei mit demselben Inhalt am
 // selben Ort wieder an (Ordner notfalls neu; ist der Name inzwischen vergeben, „Name 2“). still: ohne Hinweis.
-// Doku: docs/architektur.md, „Bedien-Bausteine“. iOS-sicher: keine Node-APIs, kein Lookbehind.
+// Doku: docs/architektur/bedien-bausteine.md. iOS-sicher: keine Node-APIs, kein Lookbehind.
 
 // Pfad zum Wiederherstellen: der alte, sonst „Name 2.md“, „Name 3.md“ … (existiert(pfad) → bool); null, wenn keiner frei ist
 const wiederPfad = (pfad, existiert) => {
@@ -42,7 +42,7 @@ module.exports = function (ctx) {
     return true;
   };
 
-  // Für alle Skripte (docs/architektur.md, „Bedien-Bausteine“): beim Laden gesetzt, wie ctx.hinweis
+  // Für alle Skripte (docs/architektur/bedien-bausteine.md): beim Laden gesetzt, wie ctx.hinweis
   ctx.papierkorb = papierkorb;
   return {
     papierkorb, wiederherstellen, wiederPfad,

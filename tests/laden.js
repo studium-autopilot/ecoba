@@ -9,7 +9,8 @@ const WURZEL = path.join(__dirname, "..");
 const SKRIPTE = path.join(WURZEL, "Studium Autopilot", "System", "Skripte");
 const DATEN = path.join(__dirname, "daten", "v1");
 // Bibliotheken ohne Obsidian, die das Plugin jedem Skript in ctx.user gibt (Tests ergänzen weitere über kontext.user)
-const BIBLIOTHEKEN = { sperre: require(path.join(SKRIPTE, "sperre.js")), quellen: require(path.join(SKRIPTE, "quellen.js")), felder: require(path.join(SKRIPTE, "felder.js")) };
+const BIBLIOTHEKEN = { sperre: require(path.join(SKRIPTE, "sperre.js")), quellen: require(path.join(SKRIPTE, "quellen.js")), felder: require(path.join(SKRIPTE, "felder.js")),
+  fassung: require(path.join(SKRIPTE, "fassung.js")) };
 
 // frontmatter: { "System/Daten/Semester.md": { … }, … } – was der metadataCache für diese Notizen liefern würde
 // notizen: { "Termine/x.md": { … }, … } – wie frontmatter, dazu in vault.getMarkdownFiles() (Notizen, die Skripte durchsuchen)

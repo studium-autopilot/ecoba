@@ -8,7 +8,7 @@
 //   per HTTPS (POST /v1/verbinden) gegen Zugangs- und Datenschlüssel und legt beides mit der Adresse in den Schlüsselbund von
 //   Obsidian (app.secretStorage: gerätelokal, verschlüsselt, nie synchronisiert; Eintrag je Tresor wie in ilias.js). Weitere
 //   Geräte verbinden sich mit einem eigenen Code.
-// Quellen-Vertrag (quellen.js, docs/architektur.md): Zeitplan planen(), Status in der gemeinsamen Form ({ zustand, geprueft, fehler,
+// Quellen-Vertrag (quellen.js, docs/architektur/quellen.md): Zeitplan planen(), Status in der gemeinsamen Form ({ zustand, geprueft, fehler,
 //   fehlerZeit, warnungen }, nachLauf), Zeile im Format von verbindungen.js (quelleZeile), Besitz
 //   herkunft: claude + claude_id, Grabstein (angewendet, kurzHash) in der Sperr-Datei, Doppel einer id zusammenführen (dubletten).
 //   Hinweise nur über ctx.hinweis (hinweis.js) und nur nach deinem Tipp, nie vom Zeitplan. Wegwerfen nur über den einen
@@ -49,6 +49,10 @@
 //   Fünf-Stunden-Limits im Pro-Abo (pdfKosten) oder hat die PDF mehr als 20 MB, fragt der Knopf erst: „Mit PDF“ oder „Nur Text“.
 //   Ohne Server (seit 0.6.3): Mit eigenem API-Schlüssel fasst claude.js dieselben Unterlagen direkt zusammen und schreibt sie mit
 //   begleitnotizSauber und begleitnotizErgaenzen von hier; gibt es einen Server, geht er vor (pdfkasten.js).
+//   Neue Fassung (seit 0.6.9): Heißt „Das Wichtigste“ „(frühere Fassung, bis …)“ (ilias.js, fassung.js), zählt die Notiz bei
+//   knopf ab diesem Tag als gewünscht. Sie geht erst mit der Textfassung der neuen Datei (fassung.js textAktuell), mit der
+//   früheren Zusammenfassung, „Zu tun“, „Offene Fragen“ und den geänderten Seiten im Feld fassung; ein Server vor 0.6.9 übergeht
+//   es. Die neue Zusammenfassung kommt nach oben, die frühere eingeklappt darunter („Frühere Fassung (bis …)“).
 // Doppelte To-dos: Claude nennt Paare (behalten, weg) über die Kennung aus dem Auszug (id = „t-“ + Q.kurzHash(Pfad + Zeile)).
 //   Aus „weg“ wird ein einfacher Punkt mit Link auf die Notiz, in der die Aufgabe bleibt: nur eine offene Aufgabe unter „Zu tun“
 //   einer Begleitnotiz (typ: unterlage), nur wenn die Zeile noch genau so dasteht; nie abgehakt, nie gelöscht.
@@ -60,6 +64,9 @@
 //   einmal oder nie am Tag); steht als server_uni_postfach und server_gmail in den Einstellungen (alle Geräte) und geht mit dem
 //   Stand an den Server, der sich ab dem nächsten Abruf danach richtet.
 // Status der Zeile: GET /v1/status (öffentlich, ohne persönliche Daten), höchstens alle 5 Min.; gerätelokal gemerkt.
+// Neue Version des Servers: Er installiert sie täglich selbst und meldet das letzte Mal im Status (aktualisierung). Ging es
+//   zuletzt schief, steht das im Fenster; kam seit mehr als VERSION_TAGE nichts ohne Fehler durch, obwohl die zentralen Daten eine
+//   neuere Version anbieten, sagt es die Zeile (Pille „prüfen“). Ein älterer Server meldet nichts, dann bleibt beides still.
 // Mails durchsuchen: Knopf im Fenster und Befehl starten einen Claude-Lauf auf dem Server (POST /v1/anstoss, höchstens alle
 //   10 Min.); die Zeile zeigt „Claude durchsucht gerade …“, solange der Server „wartet“ oder „laeuft“ meldet, und der nächste
 //   Abruf kommt nach 5 Min. statt im Takt. Was nur du lösen kannst (Gerät neu verbinden, Claude neu verbinden, Uni-Passwort
@@ -103,6 +110,7 @@ module.exports = function (ctx) {
   const NACHSENDEN_TAGE = 1;        // so lange, bis ein älterer Server sich selbst aktualisiert hat (täglich)
   const HINWEIS_NEU_TAGE = 14;      // ältere Hinweise zählen nie als neu (etwa auf einem neuen Gerät)
   const UNERREICHBAR_TAGE = 3;      // so lange nicht erreichbar: Zeile rät zur Einrichtung (Server weg oder neue Adresse)
+  const VERSION_TAGE = 3;           // so lange keine neue Version auf dem Server, obwohl es eine gibt: ebenso
   // Takt des Servers: Werte wie TAKT in server/dienst.mjs, der erste ist der Standard
   const TAKT_WAHL = {
     uni_postfach: [[15, "alle 15 Minuten"], [30, "alle 30 Minuten"], [60, "stündlich"]],
@@ -180,9 +188,11 @@ module.exports = function (ctx) {
   // bn = { wichtigste: [{ begriff, text, seite, bis }], zu_tun: [{ text, frist, seite, bis }], fragen: [{ text, seite, bis }] },
   // pdfName = Dateiname der PDF
   // → neuer Text oder null, wenn sich nichts ändert
+  // Gehört „Das Wichtigste“ zu einer früheren Fassung der Datei, steht die neue Zusammenfassung an seiner Stelle und die frühere
+  // eingeklappt darunter (fassung.js einklappen).
   const PLATZHALTER = /^\s*(?:[-*]\s*(?:\[ \]\s*)?)?$/;
   const begleitnotizErgaenzen = (text, bn, pdfName) => {
-    const zeilen = String(text == null ? "" : text).replace(/\r\n/g, "\n").split("\n");
+    let zeilen = String(text == null ? "" : text).replace(/\r\n/g, "\n").split("\n");
     let start = 0;
     if (zeilen[0] === "---") { const e = zeilen.indexOf("---", 1); if (e > 0) start = e + 1; }
     const istPdf = (z) => /^>\s*\[!eba-pdf\]/.test(z);
@@ -227,8 +237,11 @@ module.exports = function (ctx) {
     const F = (bn.fragen || []).map((p) => `- [ ] ${p.text}${seiten(p)}`);
     const regeln = [["Das Wichtigste", W, [], ["Zu tun", "Offene Fragen"], "nur-leer"], ["Zu tun", T, ["Das Wichtigste"], ["Offene Fragen"], "ergaenzen"],
       ["Offene Fragen", F, ["Das Wichtigste", "Zu tun"], [], "ergaenzen"]];
+    const Fa = ctx.user && ctx.user.fassung;
+    const eingeklappt = W.length && Fa ? Fa.einklappen(zeilen.join("\n"), W) : null;
+    if (eingeklappt != null) { zeilen = eingeklappt.split("\n"); geaendert = true; }
     for (const [name, neu, nach, vor, art] of regeln) {
-      if (!neu.length) continue;
+      if (!neu.length || (name === "Das Wichtigste" && eingeklappt != null)) continue;
       const a = abschnitt(name);
       if (!a) anlegen(name, neu, nach, vor);
       else if (nurPlatzhalter(a)) ersetzen(a, neu);
@@ -415,6 +428,13 @@ module.exports = function (ctx) {
     };
 
     // ----- öffentlicher Status -----
+    // Letztes „studium-server aktualisieren“ (fehlt bei einem älteren Server: null)
+    const aktualisierungNormal = (roh) => {
+      const a = objekt(roh);
+      if (!isoOk(a.zeit)) return null;
+      return { zeit: new Date(a.zeit).toISOString(), ok: a.ok === true, ziel: /^[0-9A-Za-z.+-]{1,40}$/.test(String(a.ziel || "")) ? String(a.ziel) : "",
+        erfolg: isoOk(a.erfolg) ? new Date(a.erfolg).toISOString() : "" };
+    };
     const statusNormal = (o) => ({
       version: String(o.version || "").slice(0, 40),
       claude: wahl(o.claude, ["angemeldet", "abgemeldet"]),
@@ -425,6 +445,7 @@ module.exports = function (ctx) {
       livesync: wahl(o.livesync, ["an", "aus"]),
       letzterLauf: o.letzter_lauf && isoOk(o.letzter_lauf.zeit) ? { zeit: new Date(o.letzter_lauf.zeit).toISOString(), ok: o.letzter_lauf.ok === true } : null,
       claudeLauf: wahl(o.claude_lauf, ["wartet", "laeuft", "ruht"]),
+      aktualisierung: aktualisierungNormal(o.aktualisierung),
       fehler: (Array.isArray(o.fehler) ? o.fehler : []).filter((f) => typeof f === "string" && /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
     });
     const statusHolen = async (v, erzwingen) => {
@@ -678,6 +699,8 @@ module.exports = function (ctx) {
         (u.angefordert ? !(String(z.gesendet[u.kennung] || "") >= String(u.angefordert).slice(0, 16)) : !z.gesendet[u.kennung])).slice(0, UNTERLAGEN_JE_ABRUF)
         .map((u) => ({ datei: String(u.datei), kennung: u.kennung, art: u.art, titel: reinerText(String(u.titel || ""), 160), code: String(u.code || ""),
           seiten: Number.isInteger(u.seiten) ? u.seiten : 0, ...(u.angefordert ? { modell: "opus", angefordert: String(u.angefordert).slice(0, 16), pdf: u.pdf === true } : u.nur_termine === true ? { nur_termine: true } : {}),
+          // frühere Fassung (fassung.js kontext); ein Server vor 0.6.9 übergeht das Feld
+          ...(u.fassung && typeof u.fassung === "object" && !u.nur_termine ? { fassung: u.fassung } : {}),
           text: u.text.slice(0, 400000) }));
       let n = 0;
       for (let i = 0; i < offen.length; i += UNTERLAGEN_JE_ANFRAGE) {
@@ -866,6 +889,16 @@ module.exports = function (ctx) {
       });
     };
     const vor = (iso) => Q.vorText(iso, jetztMs());
+    // Neue Version des Servers → "" | "gescheitert" (der letzte Versuch ging schief, und der Server hat dessen Ziel nicht schon
+    // anders bekommen, etwa über „Weiter mit der Einrichtung“; nur im Fenster, er versucht es täglich neu) | "haengt" (seit mehr als
+    // VERSION_TAGE kein Versuch ohne Fehler, und die zentralen Daten bieten eine neuere Version an, als er hat; auch in der Zeile)
+    const versionLage = (w) => {
+      const a = w.aktualisierung, Z = abh.zentral ? abh.zentral() : null;
+      if (!a || !Z) return "";
+      const rel = Z.stand ? (Z.stand() || {}).release : null;
+      if (rel && Z.neuer(rel.version, w.version) && alterMs(a.erfolg) > VERSION_TAGE * 1440 * MIN) return "haengt";
+      return a.ok || (Z.semver(a.ziel) && Z.semver(w.version) && !Z.neuer(a.ziel, w.version)) ? "" : "gescheitert";
+    };
     // Zeile unter Verbindungen im Format der Quellen (verbindungen.js, quelleZeile): { text, symbol, pille: an | pruefen | "",
     //   knopf: { aktion, text, cta, parameter } | null, link: { aktion, text, parameter } | null }
     const MEHR = { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "server" } };
@@ -897,6 +930,7 @@ module.exports = function (ctx) {
       if (w.uniZugang === "falsch") return { text: "Die Uni nimmt das Passwort auf deinem Server nicht an. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann gibst du es neu ein.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       if (w.claudeLauf === "wartet" || w.claudeLauf === "laeuft") return { text: "Claude durchsucht gerade deine Mails auf deinem Server …", symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
       if (w.fehler && w.fehler.indexOf("claude-limit") >= 0) return { text: "Claude hat gerade sein Limit erreicht. Der nächste Lauf versucht es von selbst.", symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
+      if (versionLage(w) === "haengt") return { text: `Dein Server installiert seit mehr als ${VERSION_TAGE} Tagen keine neue Version mehr. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann holt Claude das nach.`, symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       const n = s.bericht ? s.bericht.neu + s.bericht.geaendert : 0;
       const teile = [stand.text];
       if (w.letzterLauf) teile.push(`Letzter Lauf des Servers ${vor(w.letzterLauf.zeit)}.`.replace(/\.\.$/, ".")); // „vor 5 Min.“ hat schon den Punkt
@@ -927,6 +961,8 @@ module.exports = function (ctx) {
         if (!s.erreichbar) liste.push(["Stand des Servers", "nicht erreichbar" + (s.erreicht ? ", Angaben von " + uhrzeit(s.erreicht) : "")]);
         liste.push(["Claude", WERTE.claude[w.claude] || "unbekannt"], ["Gmail", WERTE.gmail[w.gmail] || "unbekannt"], ["Uni-Postfach", WERTE.uniZugang[w.uniZugang] || "unbekannt"]);
         if (w.letzterLauf) liste.push(["Letzter Lauf", uhrzeit(w.letzterLauf.zeit) + (w.letzterLauf.ok ? "" : " (ohne Ergebnis)")]);
+        const lage = versionLage(w);
+        if (lage) liste.push(["Neue Version", lage === "haengt" ? `seit mehr als ${VERSION_TAGE} Tagen keine installiert` : `zuletzt ohne Erfolg (${uhrzeit(w.aktualisierung.zeit)}), dein Server versucht es täglich neu`]);
       }
       if (s.geprueft) liste.push(["Zuletzt aktualisiert", uhrzeit(s.geprueft)]);
       const { z } = await zustandLesen();
@@ -1064,6 +1100,22 @@ module.exports = function (ctx) {
     return textVon;
   };
   const groesse = (p) => { const f = app.vault.getAbstractFileByPath(p); return f && f.stat ? f.stat.size || 0 : 0; };
+  // Gehört die Textfassung zur PDF, wie sie jetzt ist (fassung.js; ohne fassung.js wie bis 0.6.7: ja)?
+  const textAktuell = (vfm, g) => { const Fa = ctx.user && ctx.user.fassung; return Fa ? Fa.textAktuell(vfm, g) : true; };
+  // Kommen die ILIAS-Dateien von außen (eigener Uni-Abgleich, quellen_extern „ilias-dateien“), führt er ihre Notizen auch nach:
+  // Dann fasst das Plugin eine frühere Fassung nie von selbst neu zusammen (ein Schreiber je Notiz), nur auf deinen Wunsch
+  const fassungExtern = () => { try { return !!(ctx.ilias && ctx.ilias.status().extern); } catch (e) { return false; } };
+  // Zusammenfassung einer früheren Fassung der Datei (Überschrift „Das Wichtigste (frühere Fassung, bis …)“ im metadataCache, kein
+  // „## Das Wichtigste“): zählt wie ein Wunsch vom Tag des Ersetzens, damit die Notiz mit der Datei aktuell bleibt. → Wunsch wie
+  // wunschVon, der spätere von beiden
+  const wunschOderVeraltet = (f, fm) => {
+    const w = wunschVon(fm), Fa = ctx.user && ctx.user.fassung;
+    const h = ((app.metadataCache.getFileCache(f) || {}).headings || []).filter((x) => x.level === 2).map((x) => "## " + String(x.heading).trim());
+    if (!Fa || fassungExtern() || h.indexOf("## Das Wichtigste") >= 0) return w;
+    const m = h.map((z) => Fa.FRUEHER.exec(z)).filter(Boolean)[0];
+    const v = m ? `${m[1].slice(6)}-${m[1].slice(3, 5)}-${m[1].slice(0, 2)}T00:00` : "";
+    return w >= v ? w : v;
+  };
   const unterlagenObs = async (o) => {
     o = o || {};
     const ohne = o.ohne || {}, hoechstens = o.hoechstens || UNTERLAGEN_JE_ABRUF, modus = unterlagenModus();
@@ -1075,13 +1127,14 @@ module.exports = function (ctx) {
       const pfad = io.begleitnotiz(pdfPfad);
       const nf = pfad && app.vault.getAbstractFileByPath(pfad);
       const nfm = nf ? (app.metadataCache.getFileCache(nf) || {}).frontmatter || {} : null;
-      return nfm && ARTEN_SENDEN.indexOf(nfm.art) >= 0 ? { nf, nfm, wunsch: wunschVon(nfm) } : null;
+      return nfm && ARTEN_SENDEN.indexOf(nfm.art) >= 0 ? { nf, nfm, wunsch: modus === "knopf" ? wunschOderVeraltet(nf, nfm) : wunschVon(nfm) } : null;
     };
     const kandidaten = [];
     for (const p of Object.keys(textVon)) {
       if (!/\.pdf$/i.test(p)) continue;
       const n = notizVon(p), k = String(textVon[p].fm.pdf_sha256);
-      if (!n) continue;
+      // Textfassung noch von der alten Fassung der PDF (gerade ersetzt): warten, bis volltext.js sie neu geschrieben hat
+      if (!n || !textAktuell(textVon[p].fm, groesse(p))) continue;
       const termine = !n.wunsch && modus !== "alle" && terminsuche(n.nfm.code, zeit(p));
       if (n.wunsch ? String(ohne[k] || "") >= n.wunsch : (modus !== "alle" && !termine) || ohne[k]) continue;
       kandidaten.push(Object.assign({ p, zeit: zeit(p), termine }, n));
@@ -1089,12 +1142,13 @@ module.exports = function (ctx) {
     kandidaten.sort((a, b) => (b.wunsch ? 1 : 0) - (a.wunsch ? 1 : 0) || b.zeit - a.zeit || (a.p < b.p ? -1 : 1));
     for (const { p: pdfPfad, nf, nfm, wunsch, termine } of kandidaten) {
       if (aus.length >= hoechstens) break;
+      const notiz = await app.vault.cachedRead(nf);
       // „Das Wichtigste“ steht schon: keine Zusammenfassung (Termine sucht der Server trotzdem)
-      if (!termine && begleitnotizErgaenzen(await app.vault.cachedRead(nf), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) continue;
-      const t = textVon[pdfPfad];
+      if (!termine && begleitnotizErgaenzen(notiz, { wichtigste: [{ text: "x" }] }, "x.pdf") == null) continue;
+      const t = textVon[pdfPfad], Fa = ctx.user && ctx.user.fassung, fassung = !termine && Fa ? Fa.kontext(notiz, t.fm) : null;
       aus.push({ datei: pdfPfad, kennung: String(t.fm.pdf_sha256), art: nfm.art, titel: String(nfm.titel || nf.basename), code: String(nfm.code || ""),
         seiten: Number(t.fm.seiten) || 0, ...(wunsch ? { angefordert: wunsch, pdf: nfm[WUNSCH_PDF] === true && groesse(pdfPfad) <= PDF_MAX } : termine ? { nur_termine: true } : {}),
-        text: volltextText(await app.vault.cachedRead(t.f)) });
+        ...(fassung ? { fassung } : {}), text: volltextText(await app.vault.cachedRead(t.f)) });
     }
     return aus;
   };
@@ -1191,7 +1245,8 @@ module.exports = function (ctx) {
     const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter || {};
     if (fm.typ !== "unterlage" || ARTEN_SENDEN.indexOf(fm.art) < 0) return "";
     if (begleitnotizErgaenzen(await app.vault.cachedRead(f), { wichtigste: [{ text: "x" }] }, "x.pdf") == null) return "";
-    const w = wunschVon(fm);
+    // Eine Notiz mit früherer Fassung schickt der Abruf von selbst (wunschOderVeraltet; im Modus alle ohnehin)
+    const w = wunschOderVeraltet(f, fm);
     return w && Date.now() - Date.parse(w + ":00Z") < 24 * 60 * MIN ? "angefordert" : "frei";
   };
   // PDF zur Notiz: gleicher Name mit .pdf, sonst das Feld datei (obsidianIo().begleitnotiz andersherum) → Datei | null
@@ -1319,10 +1374,10 @@ module.exports = function (ctx) {
     },
   };
 
-  // begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz und wahl braucht auch claude.js (Zusammenfassen ohne Server)
+  // begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz, fassungExtern und wahl braucht auch claude.js (Zusammenfassen ohne Server)
   ctx.server = {
     erzeugen, aehnlich, adresseNormal, PROMPT, LIVESYNC_PROMPT, livesyncAngebot, kopieren, begleitnotizErgaenzen, volltextText, taktAus, pdfKosten, PDF_FRAGEN,
-    begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz, wahl: wahlObs,
+    begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz, fassungExtern, wahl: wahlObs,
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
     jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
   };

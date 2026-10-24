@@ -1,7 +1,7 @@
 // Abrufer-Sperre (seit 0.4.5): DER gemeinsame Schreiber-Lock aller Quellen. Eine kleine synchronisierte Datei je Quelle sorgt
 // dafür, dass nur ein Gerät abruft und schreibt („ein Schreiber“). Regeln wie bisher in zentral.js (abruf.json) und ilias.js
 // (ilias-abruf.json); neue Quellen nehmen diese Bibliothek statt eigener Regeln (Noten & Anmeldungen, Volltext, ILIAS-Kalender),
-// die vorhandenen ziehen nach. Doku: docs/architektur.md, „Abrufer-Sperre“.
+// die vorhandenen ziehen nach. Doku: docs/architektur/quellen.md, „Abrufer-Sperre“.
 //
 // Aufruf (Bibliothek, startet nichts, kein Netz, keine Zeitgeber):
 //   const S = ctx.user.sperre.erzeugen({

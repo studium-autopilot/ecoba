@@ -60,11 +60,22 @@ const digest = (text) => createHash("sha256").update(String(text || "")).digest(
 const gleich = (a, b) => timingSafeEqual(digest(a), digest(b));
 const aus = (wert, erlaubt) => (erlaubt.includes(wert) ? wert : "unbekannt");
 
+// Letztes „studium-server aktualisieren“ (aktualisierung.json, schreibt studium-server als studium): zeit, ok, ziel (Version des
+// neuesten Releases), grund (der Schritt, an dem es scheiterte, aus dieser Liste), erfolg (zuletzt ohne Fehler). Fehlt die Datei
+// (ein älterer Server, Testmodus ohne den täglichen Zeitgeber, noch nie gelaufen): null, das Plugin sagt dann nichts.
+export const AKTUALISIERUNG_GRUENDE = ["github", "pruefsumme-fehlt", "herunterladen", "pruefsumme", "paket", "installieren", "pakete"];
+const zeitpunkt = (s) => (typeof s === "string" && !Number.isNaN(Date.parse(s)) ? new Date(s).toISOString() : null);
+export function aktualisierungPruefen(a) {
+  if (!a || typeof a !== "object" || !zeitpunkt(a.zeit)) return null;
+  return { zeit: zeitpunkt(a.zeit), ok: a.ok === true, ziel: typeof a.ziel === "string" && /^[0-9A-Za-z.+-]{1,40}$/.test(a.ziel) ? a.ziel : "",
+    grund: a.ok === true ? "" : aus(a.grund, AKTUALISIERUNG_GRUENDE), erfolg: zeitpunkt(a.erfolg) };
+}
+
 // Öffentlicher Status: nur Werte aus festen Listen und Zeitpunkte, nie Namen, Adressen, Texte oder Schlüssel. Feldnamen klein
 // mit Unterstrich wie in den zentralen Daten (docs/daten-v1.md).
 // claude_lauf: wartet (Anstoß liegt da) | laeuft (seit weniger als LAUF_HOECHSTENS) | ruht. gmail: aus, solange der Takt aus
 // Obsidian (takt.json) Gmail auf „nie“ stellt; sonst stünde dort das Ergebnis der letzten Suche, als liefe sie noch.
-export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(), anstossWartet = false, takt = {}) {
+export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(), anstossWartet = false, takt = {}, aktualisierung = null) {
   const z = zustand || {};
   const seit = Date.parse(z.laeuftSeit || "");
   const claudeLauf = anstossWartet ? "wartet" : !Number.isNaN(seit) && jetzt.getTime() - seit < LAUF_HOECHSTENS ? "laeuft" : "ruht";
@@ -83,6 +94,7 @@ export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(),
     plugin_abruf: abruf && !Number.isNaN(Date.parse(abruf.zuletzt)) ? new Date(abruf.zuletzt).toISOString() : null,
     letzter_lauf: lauf,
     claude_lauf: claudeLauf,
+    aktualisierung: aktualisierungPruefen(aktualisierung),
     fehler: (Array.isArray(z.fehler) ? z.fehler : []).filter((f) => /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
   };
 }
@@ -141,6 +153,32 @@ export function tresorPruefen(roh) {
   return { termine, todos };
 }
 
+// Frühere Fassung einer Unterlage (Plugin, fassung.js kontext): kurze Listen reiner Texte, Datum, Seiten → Objekt oder null.
+// Grenzen wie im Plugin (GRENZE); was nicht passt, fällt einzeln weg.
+const FASSUNG = { frueher: 8, zu_tun: 15, fragen: 10, zeichen: 300 };
+export function fassungPruefen(f) {
+  if (!f || typeof f !== "object" || Array.isArray(f)) return null;
+  const liste = (l, max) => (Array.isArray(l) ? l : []).slice(0, max).map((x) => saeubern(x, FASSUNG.zeichen, true)).filter((x) => !x.fehler).map((x) => x.wert);
+  const bis = datumOk(f.bis) ? f.bis : "";
+  const aus = { frueher: bis ? liste(f.frueher, FASSUNG.frueher) : [], bis,
+    geaendert: typeof f.geaendert === "string" && /^[0-9, –]{1,200}$/.test(f.geaendert) ? f.geaendert.trim() : "",
+    entfallen: Number.isInteger(f.entfallen) && f.entfallen > 0 && f.entfallen < 10000 ? f.entfallen : 0,
+    zu_tun: liste(f.zu_tun, FASSUNG.zu_tun), fragen: liste(f.fragen, FASSUNG.fragen) };
+  return aus.frueher.length || aus.geaendert || aus.entfallen || aus.zu_tun.length || aus.fragen.length ? aus : null;
+}
+// Dieselben Zeilen wie im Plugin (fassung.js kontextText), für den Kopf der Textfassung → [Zeilen]
+export function fassungKopf(f) {
+  if (!f) return [];
+  const z = [], liste = (l) => l.map((x) => "- " + x);
+  if (f.frueher.length) z.push(`Frühere Fassung: Die Notiz hatte eine Zusammenfassung der früheren Fassung dieser Unterlage (bis ${f.bis.slice(8, 10)}.${f.bis.slice(5, 7)}.${f.bis.slice(0, 4)}):`, ...liste(f.frueher));
+  if (f.geaendert || f.entfallen) {
+    z.push([f.geaendert ? `Neu oder geändert: S. ${f.geaendert}.` : "", f.entfallen ? `Entfallen: ${f.entfallen} ${f.entfallen === 1 ? "Seite" : "Seiten"}.` : ""].filter(Boolean).join(" "));
+  }
+  if (f.zu_tun.length) z.push("Steht schon unter „Zu tun“:", ...liste(f.zu_tun));
+  if (f.fragen.length) z.push("Steht schon unter „Offene Fragen“:", ...liste(f.fragen));
+  return z;
+}
+
 // Textfassungen von PDFs für Begleitnotizen: Pfad wie im Eingang (unter Unterlagen/, keine Ausbrüche, .pdf), Kennung = SHA-256
 // der PDF (Dateiname auf dem Server), nur Lehrmaterial (ARTEN), Text ohne Steuerzeichen außer Zeilenumbruch. → [{ … }] oder wirft
 export function unterlagenPruefen(roh) {
@@ -156,13 +194,16 @@ export function unterlagenPruefen(roh) {
     if (!text.trim()) continue;
     const titel = saeubern(u.titel, 160, false);
     aus.push({ datei: pfad, kennung: u.kennung, art: u.art, titel: titel.fehler ? "" : titel.wert, code: typeof u.code === "string" && MODULCODE.test(u.code) ? u.code : "",
-      seiten: Number.isInteger(u.seiten) && u.seiten > 0 && u.seiten < 10000 ? u.seiten : 0, opus: u.modell === "opus", nurTermine: u.modell !== "opus" && u.nur_termine === true, text });
+      seiten: Number.isInteger(u.seiten) && u.seiten > 0 && u.seiten < 10000 ? u.seiten : 0, opus: u.modell === "opus", nurTermine: u.modell !== "opus" && u.nur_termine === true,
+      fassung: u.modell !== "opus" && u.nur_termine === true ? null : fassungPruefen(u.fassung), text });
   }
   return aus;
 }
 
 // Legt geprüfte Textfassungen für den nächsten Lauf ab (unterlagen/neu/<kennung>.md) und stößt ihn an, wenn nicht schon einer
-// wartet (ein wartender Anstoß, z. B. Gmail, bleibt, wie er ist). → Zahl der neuen Dateien; wirft bei zu vielen wartenden
+// wartet (ein wartender Anstoß, z. B. Gmail, bleibt, wie er ist). Im Kopf: Titel, Datei, Modul, Art, Seiten, „Auftrag: nur
+// Termine“, die PDF daneben und die frühere Fassung (fassungKopf; Regel „Neue Fassung“ in skill/studium-autopilot/begleitnotiz.md).
+// → Zahl der neuen Dateien; wirft bei zu vielen wartenden
 export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
   const ordner = (art) => join(verzeichnis, "unterlagen", art);
   for (const art of ["neu", "opus"]) mkdirSync(ordner(art), { recursive: true });
@@ -176,6 +217,7 @@ export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
       `Modul: ${u.code || "–"} · Art: ${u.art}${u.seiten ? ` · Seiten: ${u.seiten}` : ""}`,
       ...(u.nurTermine ? ["Auftrag: nur Termine (keine Begleitnotiz)"] : []),
       ...(u.opus && existsSync(join(ordner("opus"), u.kennung + ".pdf")) ? [`PDF: ${u.kennung}.pdf (liegt daneben; lies die PDF statt dieses Textes)`] : []),
+      ...(u.fassung ? ["", ...fassungKopf(u.fassung)] : []),
       "", "---", ""];
     writeFileSync(ziel + ".neu", kopf.join("\n") + u.text + "\n");
     renameSync(ziel + ".neu", ziel);
@@ -323,7 +365,7 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
         return antwort(res, 200, oeffentlicherStatus(lesen(join(verzeichnis, "zustand.json"), {}),
           lesen(join(verzeichnis, "abruf.json"), {}), konfig.version, jetzt(), existsSync(join(verzeichnis, "anstoss")),
-          lesen(join(verzeichnis, "takt.json"), {})));
+          lesen(join(verzeichnis, "takt.json"), {}), lesen(join(verzeichnis, "aktualisierung.json"), null)));
       }
       const wer = absenderVon(req);
       if (pfad.startsWith("/v1/livesync/")) {

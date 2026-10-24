@@ -3,25 +3,29 @@
 
 Läuft lokal (vor jedem Release) und in GitHub Actions, nur mit der Python-Standardbibliothek.
 
-    python werkzeuge/pruefen.py [BAUM] [--sperrliste DATEI] [--max-mb 2] [--ohne-node]
+    python werkzeuge/pruefen.py [BAUM] [--sperrliste DATEI] [--max-mb 2] [--ohne-node] [--alles]
 
-Geprüft wird jede Datei unter BAUM (Standard: aktueller Ordner), außer .git/ und node_modules/:
+Geprüft wird jede Datei unter BAUM (Standard: aktueller Ordner), außer .git/ und node_modules/. Ist BAUM die Wurzel eines
+git-Arbeitsordners, nur was git veröffentlichen würde: getrackt und neu, ohne Ignoriertes (so prüft die Arbeitskopie in
+Sekunden, ohne ignorierte Sicherungen und Kopien des Tresors); --alles nimmt auch dort jede Datei. Ein Baum ohne eigenes git
+(der Release-Baum, ein Wegwerf-Ordner) wird immer ganz geprüft:
 
 * Pfade: keine privaten Ordner, keine gerätelokalen Obsidian-Dateien, nur das Plugin „studium-autopilot“, keine Dateien, die
   ein Tresor selbst anlegt (Abrufer-Sperren, Indizes, Lernstände, Noten aus Alma, Textfassungen der PDFs).
 * Dateitypen: keine PDF-, Office-, Anki-, Archiv- oder Mediendateien; Bilder nur in docs/bilder/ (png, jpg, svg, webp);
   höchstens --max-mb je Datei.
 * Markdown: keine Mermaid-Codeblöcke (die GitHub-App zeigt nur den Code; Diagramme als PNG unter docs/bilder/).
-* Inhalte: persönliche Pfade, Server-Hinweise, IP-Adressen, E-Mail-Adressen (außer Funktionsadressen der Uni und
-  GitHub-noreply), Telefonnummern, Matrikelnummern und Geburtsdaten mit Wert, geteilte Lehrmaterial-Links, Zugangsdaten und
-  Token, Sync-Konfiguration, der Name des Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur
-  lokal).
+* Inhalte: persönliche Pfade, Server-Hinweise, IP-Adressen (außer Beispieladressen), E-Mail-Adressen (außer
+  Funktionsadressen der Uni und GitHub-noreply), Telefonnummern, Matrikelnummern und Geburtsdaten mit Wert, geteilte
+  Lehrmaterial-Links, Zugangsdaten und Token, Sync-Konfiguration, der Name des Autors außerhalb der Autorenangaben und Namen
+  aus einer optionalen Sperrliste (nur lokal).
 * Testseiten: jede HTML-Datei unter tests/daten/ beginnt mit dem Kopf „<!-- Erfundene Testseite“ (Werte erfunden, Aufbau
   höchstens nachgebaut) oder „<!-- Öffentliche Seite ohne Anmeldung“ (was jeder ohne Konto sieht). Seiten nach einer
   Anmeldung kommen nie roh in den Baum.
 * Vorlage leer: persönliche Felder der Module und Einstellungen leer, persönliche Ordner leer.
 * Update-Liste: System/Daten/system-dateien.json (falls vorhanden) passt zu den Dateien (Klasse, Größe, SHA-256) und
-  enthält jede Datei, die ein Update ersetzen darf (Regeln wie update.js, klasse_von unten).
+  enthält jede Datei, die ein Update ersetzen darf (Regeln wie update.js, klasse_von unten); Klassen aus WEITERE nur im
+  Schlüssel „weitere“, alle anderen nur in „dateien“.
 * JavaScript: Syntax mit „node --check“ (wenn node da ist) und iOS-Regeln (kein Regex-Lookbehind, kein .at(), findLast,
   structuredClone, keine Node-Module; einzige Ausnahme: http/https/zlib in ilias-netz.js hinter Platform.isDesktopApp)
   für die Skripte des Vaults.
@@ -29,6 +33,7 @@ Geprüft wird jede Datei unter BAUM (Standard: aktueller Ordner), außer .git/ u
 Ausgabe: eine lesbare Liste; Exit-Code 1 bei mindestens einem Fund, sonst 0.
 """
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import os
@@ -94,6 +99,8 @@ REGEL_AUSNAHMEN = {
     "LiveSync/CouchDB-Konfiguration": ("server/livesync.mjs", "server/livesync.sh"),
 }
 IP_ERLAUBT = {"127.0.0.1", "0.0.0.0"}
+# Bereiche nur für Beispiele (RFC 5737): gehören niemandem, darum frei für Tests und Doku
+IP_BEISPIEL = ("192.0.2.", "198.51.100.", "203.0.113.")
 TELEFON = [
     re.compile(r"(?<![\w+])(?:\+|00)[1-9]\d{0,2}[\s./-]?\(?0?\d{2,5}\)?[\s./-]?\d{2,}(?:[\s./-]?\d{2,})*"),
     re.compile(r"(?<![\w.:-])0\d{2,5}(?:\s|\s?/\s?)\d{2,}(?:[\s-]\d{1,6})?(?![\w.:])"),
@@ -241,7 +248,7 @@ def ip_pruefen(m):
     teile = [int(x) for x in m.groups()]
     if any(t > 255 for t in teile):
         return False
-    return m.group(0) not in IP_ERLAUBT
+    return m.group(0) not in IP_ERLAUBT and not m.group(0).startswith(IP_BEISPIEL)
 
 
 def text_pruefen(rel, text, sperre, funde):
@@ -415,9 +422,14 @@ def node_pruefen(dateien, wurzel, funde, hinweise, ohne_node):
     if not node:
         hinweise.append("node nicht gefunden: Syntaxprüfung (node --check) übersprungen, läuft in GitHub Actions.")
         return
-    for rel in dateien:
-        r = subprocess.run([node, "--check", os.path.join(wurzel, rel)], capture_output=True, text=True,
-                           encoding="utf-8", errors="replace")
+    def check(rel):
+        return subprocess.run([node, "--check", os.path.join(wurzel, rel)], capture_output=True, text=True,
+                              encoding="utf-8", errors="replace")
+
+    # Ein node-Prozess je Datei; parallel, weil der Start unter Windows den Großteil der Zeit kostet. map behält die Reihenfolge.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 1)) as pool:
+        ergebnisse = list(pool.map(check, dateien))
+    for rel, r in zip(dateien, ergebnisse, strict=True):
         if r.returncode != 0:
             meldung = (r.stderr or r.stdout).strip().splitlines()
             zeile = 0
@@ -498,6 +510,9 @@ KERN = ".obsidian/plugins/studium-autopilot/"
 KERN_DATEIEN = ("main.js", "manifest.json", "styles.css")
 EINSTELLUNG = (".obsidian/app.json", ".obsidian/bookmarks.json", ".obsidian/community-plugins.json",
                ".obsidian/core-plugins.json", ".obsidian/hotkeys.json", ".obsidian/types.json")
+# Klassen nur im Schlüssel „weitere“ (seit 0.6.9): Die Planer bis 0.6.8 lehnen in „dateien“ die ganze Liste ab, sobald ein Pfad
+# ohne ihre Klasse darin steht, und übergehen „weitere“ (update.js, WEITERE).
+WEITERE = ("claude",)
 _PFAD_VERBOTEN = re.compile(r'[\x00-\x1f\x7f\\:*?"<>|]')
 _FM = re.compile(r"^(---\r?\n)([\s\S]*?)(\r?\n---[ \t]*(?:\r?\n|\Z))")
 _HAKEN = re.compile(r"^([ \t>]*[-*+] \[)[xX](\])", re.M)
@@ -511,7 +526,7 @@ def pfad_ok(p):
 
 
 def klasse_von(pfad):
-    """Pfad im Vault → "system" | "einstellung" | "seite" | "modul" | "" (nie im Update)."""
+    """Pfad im Vault → "system" | "einstellung" | "seite" | "modul" | "claude" (nur in „weitere“) | "" (nie im Update)."""
     p = unicodedata.normalize("NFC", pfad)
     if not pfad_ok(p):
         return ""
@@ -527,6 +542,8 @@ def klasse_von(pfad):
         return "seite"
     if re.fullmatch(r"Module/.+\.md", p, re.S):
         return "modul"
+    if p == ".claude/CLAUDE.md" or re.fullmatch(r"\.claude/skills/studium-autopilot/[^/]+\.md", p):
+        return "claude"
     return ""
 
 
@@ -561,10 +578,13 @@ def liste_pruefen(wurzel, alle, vault, funde):
         funde.append(Fund(rel_liste, 0, "Update-Liste unlesbar", kuerzen(str(e))))
         return
     gelistet = set()
-    for e in d.get("dateien", []):
+    for schluessel, e in [("dateien", e) for e in d.get("dateien", [])] + [("weitere", e) for e in d.get("weitere", [])]:
         innen = str(e.get("pfad", ""))
         if not e.get("klasse") or klasse_von(innen) != e.get("klasse"):
             funde.append(Fund(rel_liste, 0, "Update-Liste: Klasse falsch", f"{innen}: {e.get('klasse')}"))
+            continue
+        if (e["klasse"] in WEITERE) != (schluessel == "weitere"):
+            funde.append(Fund(rel_liste, 0, "Update-Liste: falscher Schlüssel", f"{innen}: {e['klasse']} in „{schluessel}“"))
             continue
         pfad = os.path.join(wurzel, *(vault + innen).split("/"))
         if not os.path.isfile(pfad):
@@ -658,13 +678,45 @@ def dateien_sammeln(wurzel):
     return alle
 
 
+def git_dateien(wurzel):
+    """Was git aus wurzel veröffentlichen würde (getrackt und neu, ohne Ignoriertes), wenn wurzel die Wurzel eines
+    git-Arbeitsordners ist; sonst None. Ein Ordner innerhalb eines Repos (etwa der Release-Baum) gilt nicht."""
+    git = shutil.which("git")
+    if not git:
+        return None
+    try:
+        r = subprocess.run([git, "-C", wurzel, "rev-parse", "--show-toplevel"], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+        if r.returncode != 0 or not r.stdout.strip():
+            return None
+        if os.path.normcase(os.path.realpath(r.stdout.strip())) != os.path.normcase(os.path.realpath(wurzel)):
+            return None
+        r = subprocess.run([git, "-C", wurzel, "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+                           capture_output=True)
+    except OSError:
+        return None
+    if r.returncode != 0:
+        return None
+    alle = set()
+    for rel in r.stdout.decode("utf-8", errors="replace").split("\0"):
+        # Getrackt, aber gelöscht: nicht mehr da, nichts zu prüfen.
+        if rel and not IGNORIERTE_ORDNER.intersection(rel.split("/")) and os.path.isfile(os.path.join(wurzel, rel)):
+            alle.add(rel)
+    return sorted(alle)
+
+
 def ist_vault_js(rel):
     return bool(re.search(r"(^|/)System/Skripte/[^/]+\.js$", rel) or re.search(r"(^|/)\.obsidian/plugins/[^/]+/main\.js$", rel))
 
 
-def pruefen(wurzel, sperre, max_bytes, ohne_node=False):
+def pruefen(wurzel, sperre, max_bytes, ohne_node=False, alles=False):
     funde, hinweise = [], []
-    alle = dateien_sammeln(wurzel)
+    alle = None if alles else git_dateien(wurzel)
+    if alle is None:
+        alle = dateien_sammeln(wurzel)
+    else:
+        hinweise.append("git-Arbeitsordner: geprüft wird, was git veröffentlichen würde (getrackt und neu, ohne Ignoriertes); "
+                        "--alles prüft jede Datei.")
     js = []
     for rel in alle:
         pfad = os.path.join(wurzel, rel)
@@ -712,6 +764,8 @@ def main(argv=None):
     ap.add_argument("--sperrliste", help="Datei mit gesperrten Begriffen (eine Zeile je Begriff; nur lokal)")
     ap.add_argument("--max-mb", type=float, default=2.0, help="Größengrenze je Datei in MB (Standard 2)")
     ap.add_argument("--ohne-node", action="store_true", help="node --check auslassen")
+    ap.add_argument("--alles", action="store_true",
+                    help="auch in einem git-Arbeitsordner jede Datei prüfen (Standard dort: getrackt und neu, ohne Ignoriertes)")
     a = ap.parse_args(argv)
 
     try:
@@ -723,7 +777,7 @@ def main(argv=None):
         print(f"Ordner nicht gefunden: {wurzel}")
         return 2
     sperre = sperrliste_laden(a.sperrliste)
-    alle, funde, hinweise, vaults, js = pruefen(wurzel, sperre, int(a.max_mb * 1048576), a.ohne_node)
+    alle, funde, hinweise, vaults, js = pruefen(wurzel, sperre, int(a.max_mb * 1048576), a.ohne_node, a.alles)
 
     print(f"Prüfung: {len(alle)} Dateien, {len(js)} JavaScript-Dateien, Vault: {', '.join(v.rstrip('/') or '.' for v in vaults) or '–'}"
           + (f", Sperrliste: {len(sperre)} Begriffe" if a.sperrliste else ", ohne Sperrliste (nur allgemeine Muster)"))

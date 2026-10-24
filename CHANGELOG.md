@@ -4,8 +4,27 @@ Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## Unveröffentlicht
 
+## 0.6.9 – Literaturliste und neue Fassungen von Unterlagen
+
 - **Neu:** Die Module des ersten Semesters haben unter **Unterlagen** eine **Literaturliste**: welche Bücher die Vorlesung
   nennt, was du zu welchem Kapitel liest, mit Links zum Verlag und zur Unibibliothek. Deine Notizen darin bleiben.
+- **Zuverlässiger:** Lädt der Lehrstuhl eine Unterlage neu hoch, fasst Claude die neue Fassung von selbst zusammen und sagt
+  zuerst, was neu ist. Die frühere Zusammenfassung bleibt zugeklappt darunter, deine Haken und Notizen bleiben.
+- **Übersichtlicher:** Kommt eine Unterlage neu aus ILIAS, steht über der PDF, welche Seiten neu oder geändert sind. Hast du die
+  alte Datei beschriftet, zeigt ihre Notiz auf die neue daneben.
+- **Übersichtlicher:** Im Kalender unter **Termine & Anmeldungen** erkennst du jede Art an ihrer Farbe: Prüfungen rot, Uni
+  blau, Veranstaltungen grün, die Legende zeigt dieselben Farbfelder. Auf dem iPhone beginnt der Kalender weiter oben.
+- **Übersichtlicher:** Die Seitenleiste auf iPhone und iPad zeigt nur noch deine Seiten und Module. Obsidians Einstellungen,
+  alle Dateien und den Tresor findest du jetzt unter **Einstellungen & Hilfe** im Abschnitt **Obsidian**.
+- **Neu:** Installiert dein eigener Server mehr als 3 Tage lang keine neue Version, sagt es dir die Zeile **Eigener Server**
+  unter **Verbindungen**, mit dem nächsten Schritt.
+- **Zuverlässiger:** Arbeitest du mit Claude in deinem Tresor, kennt Claude dessen Regeln jetzt immer auf dem Stand deiner
+  Version, auch an deinen anderen Computern. Hast du die Hinweise für Claude geändert, liegt deine Fassung daneben.
+- **Behoben:** Lag neben deinen beschrifteten Folien eine neue Fassung aus ILIAS, rechnete der **Lernplan** noch mit der alten.
+- **Behoben:** In älteren Vorlesungsnotizen standen noch die Folien, die beim Anlegen geraten wurden, und später
+  hochgeladene kamen nie dazu. Jetzt wählt Studium Autopilot auch dort die Folien der Sitzung selbst.
+- **Behoben:** Am Wochenende nannte der Semesterverlauf auf dem **Dashboard** die kommende Woche noch „diese Woche“. Jetzt
+  heißt sie dort „nächste Woche“, wie über deiner Woche im **Stundenplan**.
 
 ## 0.6.8 – Übungsblätter und Abgaben auf einen Blick
 

@@ -1,5 +1,5 @@
 // ILIAS-Kalender (seit 18.10.2026): Die Abgabetermine deiner Übungen aus dem Kalender-Abo von ILIAS stehen als Fristen unter
-// Termine/. Quelle nach dem Quellen-Vertrag (quellen.js; docs/architektur.md „ILIAS-Kalender“ und „Quellen-Vertrag“).
+// Termine/. Quelle nach dem Quellen-Vertrag (quellen.js; docs/architektur/ilias-kalender.md und „Quellen-Vertrag“).
 //
 // Verbinden wie bei Alma: In ILIAS Persönlicher Arbeitsraum → Kalender → Abonnieren, den Link unter „iCal-URL“ kopieren. Der Link
 //   enthält einen geheimen Schlüssel (wer ihn hat, sieht deinen Kalender). Er liegt NUR im gerätelokalen Speicher von Obsidian
@@ -414,7 +414,7 @@ module.exports = function (ctx) {
     }
     let ics = o.text, vollstaendig = o.vollstaendig !== false;
     if (ics == null) {
-      // Nur für Tests (docs/architektur.md): plugin.testKalenderAbruf({ url }) → { status, text } ersetzt den Abruf (kein Netz)
+      // Nur für Tests (docs/architektur/ilias-kalender.md): plugin.testKalenderAbruf({ url }) → { status, text } ersetzt den Abruf (kein Netz)
       const abrufen = typeof plugin().testKalenderAbruf === "function" ? plugin().testKalenderAbruf : ctx.obsidian.requestUrl;
       let antwort;
       try { antwort = await abrufen({ url: linkAdresse(link()), method: "GET", throw: false }); } catch (e) { antwort = { status: 0 }; }

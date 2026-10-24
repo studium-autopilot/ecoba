@@ -26,7 +26,7 @@
 // Bis 18.10.2026 „angemeldet · Gruppe 4“ (Entscheidung E7: grün sagt schon „angemeldet“). Neu gezeichnet bei Änderungen im
 // Datenmodell (Termine, Stundenplan, Module, Einstellungen) und wie die Agenda. Stil: eba-core.css Abschnitt 57.
 // Erweiterung: registrieren() meldet Codeblöcke, Ereignisse und Uhr über die Helfer in ctx an (Hot-Reload ohne Neustart).
-// Termine, Uhrzeit, Art und Woche kommen aus dem Fachmodell (ctx.modell, docs/architektur.md „Fachmodell“): Entfallenes fehlt,
+// Termine, Uhrzeit, Art und Woche kommen aus dem Fachmodell (ctx.modell, docs/architektur/modell.md „Fachmodell“): Entfallenes fehlt,
 // Uhrzeiten sind als Zahl sortiert (9:15 vor 12:15), „Diese Woche“ ist am Samstag und Sonntag schon die kommende (ab heute).
 // iOS-sicher: keine Node-APIs, keine Lookbehind-Regex.
 module.exports = function (ctx) {

@@ -1,6 +1,6 @@
 // ILIAS-Unterlagen (seit 0.4.0): Das Plugin meldet sich bei ILIAS an (Uni Tübingen, ILIAS 10, Shibboleth), liest deine
 // Kurse und legt Kursdateien (PDF, Office …) unter „Unterlagen/“ ab, jede mit Begleitnotiz wie beim Einordnen
-// (unterlagen.js). Keine Videos, keine Foren, keine Tests. Doku: docs/architektur.md, „ILIAS“.
+// (unterlagen.js). Keine Videos, keine Foren, keine Tests. Doku: docs/architektur/unterlagen.md, „ILIAS“.
 //
 // Bausteine: ilias-netz.js (Sitzung, Kekse, Weiterleitungen), ilias-anmeldung.js (Anmeldung über Shibboleth),
 //   ilias-html.js (Kursliste und Kursinhalt aus dem HTML lesen), unterlagen.js (Dateiname „<Code> <Art> <NN> <Titel>“,
@@ -39,7 +39,9 @@
 //   passende PDF-Ansicht, keine alte Seitenzahl, und ein ausgefülltes „Das Wichtigste“ heißt „… (frühere Fassung, bis …)“
 //   (nachErsetzen; „Zusammenfassen“ ist wieder da). Von dir verändert (Anmerkungen!) → deine bleibt, die neue kommt daneben als
 //   „<Name> neue Fassung JJJJ-MM-TT.<endung>“ mit eigener Notiz; ist diese Kopie beim nächsten Mal noch unverändert, wird sie
-//   ersetzt statt einer weiteren.
+//   ersetzt statt einer weiteren. Die Notiz der Kopie bekommt die Zusammenfassung der Fassung davor als frühere Fassung, die
+//   Notizen der älteren Fassungen den Kasten „Neuere Fassung“ mit Link (fassung.js; docs/architektur/unterlagen.md, „Neue Fassung einer
+//   Unterlage“).
 // In ILIAS umbenannt oder verschoben (gleiche Kennung): Index und Notiz (original, quelle) ziehen mit, wo noch der alte Wert
 //   steht. Nicht mehr in ILIAS (Kurs ganz durchsucht, Datei nirgends, lag nicht in einem
 //   übersprungenen Behälter wie einer späteren Sitzung; Schutz je Kurs): „entfernt“ im Index, Kasten in der Notiz, die Datei bleibt (entfernteMerken).
@@ -1324,12 +1326,25 @@ module.exports = function (ctx) {
       const plan = await benennen(c, bytes, E, false);
       schreibtSetzen({ id: c.id, pfad: neuPfad, art: "neu" });
       const hinweis = `Deine veränderte Datei [[${nameVon(pfad)}]] bleibt, wie sie ist. Dies ist die neue Fassung aus ILIAS vom ${datumDe(datum)}.`;
-      await mitNotiz(neuPfad, bytes, notizBauen(E, notizDaten(c, plan, `${name}.${endung}`, bytes.length, hinweis)));
+      // Die Zusammenfassung der Fassung davor (letzte Kopie, sonst deine Datei) kommt als frühere Fassung mit (fassung.js); so
+      // fasst der eigene Server bzw. der API-Schlüssel auch die Kopie von selbst zusammen
+      const Fa = ctx.user && ctx.user.fassung;
+      const vorige = [pfad].concat(fassungen).filter((p) => io.existiert(notizPfad(p)));
+      let notiz = notizBauen(E, notizDaten(c, plan, `${name}.${endung}`, bytes.length, hinweis));
+      if (Fa && vorige.length) {
+        let alt = null;
+        try { alt = await io.lesenText(notizPfad(vorige[vorige.length - 1])); } catch (e) { alt = null; }
+        const mit = alt && vonDatei(alt, c.id) ? Fa.fruehereUebernehmen(alt, notiz, datum) : null;
+        if (mit) notiz = mit;
+      }
+      await mitNotiz(neuPfad, bytes, notiz);
       r.hashes[neuPfad] = sha;
-      merken({ pfad, sha256: sha, groesse: bytes.length, aktualisiert: datum, fassungen: (Array.isArray(d0.fassungen) ? d0.fassungen : []).concat([neuPfad]) });
+      merken({ pfad, sha256: sha, groesse: bytes.length, aktualisiert: datum, fassungen: fassungen.concat([neuPfad]) });
       plus(b, c.kurs.refId, "fassungen"); b.angelegt.push(neuPfad);
       await speichern();
       schreibtSetzen(null);
+      // Die Notizen der älteren Fassungen zeigen auf die neueste (Kasten „Neuere Fassung“); ihr Text bleibt sonst, wie er ist
+      if (Fa) for (const p of vorige) await notizAendern(notizPfad(p), (t) => (vonDatei(t, c.id) ? Fa.neuereKasten(t, name, datum) : t));
     };
 
     // ----- Ein Lauf -----

@@ -1,7 +1,7 @@
 // Noten & Anmeldungen aus Alma (seit 0.4.5, Beta): Das Plugin meldet sich auf einem deiner Geräte mit deinem Uni-Zugang bei
 // Alma an, liest „Leistungen“ und „Belegungen“ deines Kontos und schlägt dir neue Noten (und Korrekturen, siehe vorschlagAus) auf
 // der Modulseite zum Übernehmen vor. Es schreibt nie selbst in deine Modulnotizen (nur nach deinem Tipp auf Übernehmen). In der
-// Anmeldephase erinnert es dich, wenn laut Alma eine Prüfungsanmeldung fehlt. Doku: docs/architektur.md, „Noten & Anmeldungen (Alma)“.
+// Anmeldephase erinnert es dich, wenn laut Alma eine Prüfungsanmeldung fehlt. Doku: docs/architektur/alma.md.
 //
 // Beta: läuft nur mit update_kanal: beta (System/Einstellungen.md) bzw. ALMA_KONTO_STABIL, bis echte gefüllte Seiten (Prüfungs-
 //   anmeldungen aus einer Anmeldephase, erste Noten) mit dem Leser abgeglichen sind. Ohne Beta keine Anfrage; Zeile und „Daten

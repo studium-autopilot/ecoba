@@ -12,5 +12,6 @@ Das Wichtigste in vier Zeilen:
 - Geht etwas an Studium Autopilot nicht oder stimmt ein zentraler Termin nicht, bereitest du eine Meldung an den Autor vor
   (`fehler-melden.md`): ohne persönliche Daten, erst zeigen, dann schickt die Person sie selbst über GitHub ab.
 
-Eigene Regeln gehören in einen eigenen Skill, z. B. `.claude/skills/meine-regeln/SKILL.md`. Diese Datei und den Skill kann
-eine neue Version von Studium Autopilot ersetzen.
+Eigene Regeln gehören in einen eigenen Skill, z. B. `.claude/skills/meine-regeln/SKILL.md`; den fasst kein Update an. Diese
+Datei und den Skill `studium-autopilot` ersetzt jede neue Version von Studium Autopilot, eine geänderte Fassung liegt danach
+als Sicherung daneben.

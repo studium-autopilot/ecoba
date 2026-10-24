@@ -27,13 +27,15 @@ test("Aufbau: CLAUDE.md verweist auf den Skill, SKILL.md mit Name und Beschreibu
   for (const t of teile) assert.ok(fs.existsSync(path.join(SKILL, t)), t);
 });
 
-// Nicht in der Update-Liste: Die Planer bis 0.4.6 kennen für .claude/ keine Klasse und lehnen dann die ganze Liste ab (kein
-// Update möglich). Ein Update fasst .claude/ darum nie an; der Skill kommt mit einer neuen Installation.
-test("Update: .claude/ steht in keiner Update-Liste, ein Update fasst es nie an", () => {
+// Update (seit 0.6.9): CLAUDE.md und der Skill haben die Klasse claude und stehen nur im Schlüssel „weitere“ der Liste. Die
+// Planer bis 0.6.8 kennen für .claude/ keine Klasse und lehnten in „dateien“ die ganze Liste ab (kein Update möglich); „weitere“
+// übergehen sie. Danach holt jeder Computer den Skill nach (update.js, claudeNachholenMit; tests/update-claude.test.js).
+test("Update: CLAUDE.md und der Skill kommen mit (Klasse claude), eigene Skills und Einstellungen nie", () => {
   const U = laden("update").ctx.update;
-  assert.equal(U.klasseVon(".claude/CLAUDE.md"), "");
-  for (const n of fs.readdirSync(SKILL)) assert.equal(U.klasseVon(".claude/skills/studium-autopilot/" + n), "", n);
-  assert.equal(U.klasseVon(".claude/skills/meine-regeln/SKILL.md"), "");
+  assert.equal(U.klasseVon(".claude/CLAUDE.md"), "claude");
+  for (const n of fs.readdirSync(SKILL)) assert.equal(U.klasseVon(".claude/skills/studium-autopilot/" + n), n.endsWith(".md") ? "claude" : "", n);
+  assert.deepEqual(U.WEITERE, ["claude"]);
+  for (const p of [".claude/skills/meine-regeln/SKILL.md", ".claude/settings.json", ".claude/settings.local.json"]) assert.equal(U.klasseVon(p), "", p);
 });
 
 test("Gleiche Regeln wie im Code: Kategorien, Arten der Unterlagen, Abschnitte, To-dos", () => {

@@ -8,7 +8,8 @@ Stellen werden Schritt für Schritt angeglichen. Wo etwas noch nicht umgesetzt i
 Dateien: `Studium Autopilot/.obsidian/snippets/eba-core.css` (Form und Bausteine, Abschnitte mit Nummern),
 `eba-paper-elfenbein.css` (Farben hell und dunkel), `eba-flieder.css` und `eba-klar.css` (Form und Schrift hell und dunkel,
 Farben nur hell; dunkel gelten die dunklen Farben von Elfenbein, bis beide eigene haben). Wie die Designs gewählt
-werden: [architektur.md](architektur.md), „Darstellung“. Regeln für Skripte und iPhone: dort, „Regeln für Skript-Autoren“.
+werden: [architektur/darstellung.md](architektur/darstellung.md). Regeln für Skripte und iPhone:
+[architektur.md](architektur.md), „Regeln für Skript-Autoren“.
 
 ## Grundsätze
 
@@ -52,7 +53,7 @@ Nur diese Variablen verwenden. Die Werte setzen die Farbschemata; `eba-core.css`
 | `--eba-good` | erledigt | `#1f7a4d` | `#62bf8c` | `#1f7a4d` | `#1a7f4b` |
 | `--eba-warn` | Frist | `#a8660b` | `#dea64a` | `#a3600a` | `#a3600a` |
 | `--eba-bad` | Prüfung, Fehler | `#b42318` | `#ec7468` | `#b4234a` | `#c0262d` |
-| `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#4a5ba6` | `#1f6e8c` |
+| `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#2f64ad` | `#1f6e8c` |
 
 Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel `#d98bab`).
 
@@ -65,6 +66,12 @@ Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel
 | `--eba-bad` | Prüfung, Klausur, Fehler, nicht bestanden | Prüfungstag im Kalender und in der Zeitleiste, Prüfungsphase (getönt) im Semesterverlauf und im Studienverlauf |
 | `--eba-info` | Lehre, Zwischentest, offene Fragen | Pille „Lehre“, „Zwischentest“ |
 | neutral (`--eba-text` 6–7 %) | freiwillig, geschätzt, neu, leise Marken | Pille „freiwillig“ |
+
+**Farbe je Art eines Termins** (Kalender und Agenda auf **Termine & Anmeldungen**, seit 24.10.2026): eigene Variablen, damit
+man jede Art auf einen Blick erkennt, auch in Chips von 50 px Breite. `--eba-art-pruefung` (= `--eba-bad`, rot),
+`--eba-art-uni` (= `--eba-info`, blau; auch Zwischentests), `--eba-art-event` (= `--eba-good`, grün; Veranstaltung,
+Fachschaft). Veranstaltungen nehmen nicht den Akzent: Der markiert im Kalender heute und den gewählten Tag. Die Legende
+zeigt dieselben Chips wie das Raster, nie eine andere Form.
 
 Getönte Flächen entstehen mit `color-mix(in srgb, var(--eba-…) N%, transparent)`: 6 % für neutrale Flächen, 9–14 % für
 Pillen und Symbole, 45 % für Rahmen. Schrift auf einer Akzentfläche: `var(--text-on-accent, #fff)`.
@@ -275,13 +282,13 @@ des Update-Hinweises (`.eba-toast`).
 Markdown-Tabellen nur für Nachschlage-Inhalt (Regeln, Steckbrief): Spaltenköpfe als Label, nur waagerechte Haarlinien, Zahlen
 tabellarisch. Bases-Tabellen sind Datenquelle: `tabellen.js` zeichnet sie als Zeilenliste (`--eba-tliste: 1`), Spaltenköpfe
 ohne Symbole, keine Werkzeugleiste, nur zum Lesen (seit 0.4.6 überall, auf allen Geräten, `eba-core.css` 37.tabellen; ändern im
-Modulfeld und im Kopf der Notiz, architektur.md „Bedien-Bausteine“). Die Listen „Fristen“, „Termine“ (Dashboard und **Prüfungen**) zeichnet
+Modulfeld und im Kopf der Notiz, architektur/bedien-bausteine.md). Die Listen „Fristen“, „Termine“ (Dashboard und **Prüfungen**) zeichnet
 `dashboard.js` als Zeilen (```` ```eba-liste ````, eba-core.css Abschnitt 63), übrige Listenansichten von Bases Obsidian selbst.
 
 ## Daten, Zahlen und Links
 
 Im Code setzen `ctx.modell.zeit` (`datum`, `kurz`, `spanne`, `abstand`, `plural`) und `ctx.modell.statusArt` diese Regeln und
-die Statusfarben oben um (architektur.md, „Fachmodell“); kein Skript formatiert ein Datum oder wählt eine Statusfarbe selbst.
+die Statusfarben oben um (architektur/modell.md, „Fachmodell“); kein Skript formatiert ein Datum oder wählt eine Statusfarbe selbst.
 
 - **Datum in Zeilen:** „Mo 19.10.“. Jahr nur, wenn es nicht im laufenden Studienjahr liegt: „06.02.2028“.
 - **Spannen:** im selben Monat „19.–25.10.“, sonst „12.10. – 06.02.“; Uhrzeit „10:00–12:00“.
@@ -359,7 +366,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
   19. bis 24.10.2026 zeigte das Dashboard stattdessen einen Tag als Liste, eine zweite Ansicht, für die Woche brauchte es eine
   eigene Seite.
 - Fristen, Termine, Nachzuarbeiten und To-dos stehen auf dem Dashboard auf jedem Gerät als eine Reihe Reiter in einer Karte,
-  ein Tipp zeigt eine Liste (`reiter=Name`, architektur.md „Dashboard“). Am Reiter steht klein die Zahl der Einträge, bei 0
+  ein Tipp zeigt eine Liste (`reiter=Name`, architektur/seiten.md „Dashboard“). Am Reiter steht klein die Zahl der Einträge, bei 0
   nichts.
 - Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`). Silbentrennung (`hyphens: auto`) nur in Fließtext;
   Skripte setzen dafür `lang="de"` an ihren Container. In Markdown gilt die Sprache der Obsidian-Oberfläche (Obsidian setzt

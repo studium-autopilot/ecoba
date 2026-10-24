@@ -1,6 +1,6 @@
 // Zentrale Daten (Datenkanal, Plan Abschnitt 18): Termine, Fristen und Semesterdaten kommen als JSON von einer öffentlichen
 // Seite (GitHub Pages, BASIS unten) und werden als Notizen übernommen. Geholt werden NUR Daten, nie Code.
-// Vertrag (Format, Grenzen, id-Regel, Freigabelisten): docs/daten-v1.md. Überblick: docs/architektur.md, „Zentrale Daten“.
+// Vertrag (Format, Grenzen, id-Regel, Freigabelisten): docs/daten-v1.md. Überblick: docs/architektur/zentrale-daten.md.
 //
 // Ablauf eines Abrufs:
 //   1. manifest.json holen (klein). Fehler/kein Netz → letzter Stand bleibt, Status merkt den Fehler, nichts wird geschrieben.
@@ -31,12 +31,12 @@
 //      „Besuche ich nicht“ (stundenplan_ausgeblendet in den Einstellungen). Eigene Notizen (Alma oder von Hand) gewinnen
 //      (eigenePaare). Ausfälle und Änderungen stehen in ausfall/aenderungen, die das Wochenraster liest. Kommt der Stundenplan
 //      von außen (eba.quelleExtern „stundenplan“, ohne Liste in den Einstellungen beim eigenen Uni-Abgleich), gar nicht. Siehe
-//      docs/architektur.md, „Zentraler Stundenplan“.
+//      docs/architektur/zentrale-daten.md, „Zentraler Stundenplan“.
 // Wann: beim Start (nach 20 s + Zufallsversatz 0–2 Min.), dann alle 15 Min. (seit 0.4.2; ohne Änderung nur das kleine Manifest),
 //   beim Zurückkehren in die App (iPhone/iPad: Obsidian bleibt im Hintergrund geladen, Zeitgeber ruhen dort), wenn der letzte
 //   Versuch über 10 Min. her ist, plus Aktion
 //   „Zentrale Daten aktualisieren“.
-// Testeinstiege (docs/architektur.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
+// Testeinstiege (docs/architektur/testeinstiege.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
 // plugin.testZentralBasis (andere Basis-URL, z. B. lokaler Server). Gerätelokal (app.saveLocalStorage): eba-geraet,
 // eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel, eba-zentral-literatur,
 // eba-zentral-angewendet.

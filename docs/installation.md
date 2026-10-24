@@ -234,8 +234,9 @@ Kostenpflichtig (Preis auf [obsidian.md/sync](https://obsidian.md/sync)), dafür
 4. Warten, bis alles geladen ist, Obsidian einmal schließen und wieder öffnen. Fragt Obsidian, ob du vertraust:
    [**Vertrauen**](#vertrauen). Sonst **Einstellungen** → **Externe Erweiterungen** → **Eingeschränkten Modus verlassen**.
 
-Nicht mit kommt der versteckte Ordner `.claude` (Hinweise für Claude zu deinem Tresor). Arbeitest du auch am zweiten Computer
-mit Claude im Tresor-Ordner, kopiere ihn einmal mit.
+Nicht mit kommt der versteckte Ordner `.claude` (Hinweise für Claude zu deinem Tresor). Seit Version 0.6.9 holt jeder Computer
+ihn nach dem nächsten Update selbst nach, wenn die zentralen Daten an sind. Sonst kopiere ihn einmal mit, wenn du auch am
+zweiten Computer mit Claude im Tresor-Ordner arbeitest.
 
 Für Technische geht auch Syncthing (kostenlos, nicht für iPhone und iPad). Die Android-App gibt es nur noch als
 „Syncthing-Fork“ über F-Droid, nicht im Play Store. Den ganzen Tresor-Ordner samt `.obsidian` teilen.

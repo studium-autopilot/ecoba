@@ -22,12 +22,14 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 | Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse steht im Link zum Verbinden) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
 | Eine kleine Datei zum Mitzählen (`zaehler.txt`) | `github.com` (das Release der Version, die bei dir läuft) | einmal je Gerät und Version, nach der Einrichtung; nicht, wenn **Mitzählen** oder die zentralen Daten aus sind ([unten](#mitzählen)) |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
+| Die Hinweise für Claude (`.claude/`) der Version, die du installiert hast | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur am Computer, einmal je Version, wenn dort eine Datei fehlt oder alt ist (etwa auf einem zweiten Computer); nicht, wenn die zentralen Daten aus sind |
 
 - Das sind normale Abrufe wie beim Öffnen einer Webseite. Dabei sieht GitHub bzw. die Uni deine IP-Adresse. Philip als Autor sieht davon nichts, nur die Zahl beim
   [Mitzählen](#mitzählen).
 - Von selbst werden nur Daten abgerufen (JSON, Kalenderdaten und deine Kursdateien, die nur abgelegt und nie ausgeführt
   werden), nie Programmcode. Programmteile einer neuen Version lädt das Plugin nur nach deinem Tipp auf **Neue Version installieren**,
-  aus diesem Repo, und prüft jede Datei mit einer Prüfsumme.
+  aus diesem Repo, und prüft jede Datei mit einer Prüfsumme. Die Hinweise für Claude holt es von selbst nach, aber nur genau die
+  der Version, die du installiert hast, geprüft mit der Prüfsumme aus deren Liste.
 - Mit dem Abruf der zentralen Daten werden keine Angaben über dich mitgeschickt: kein Name, keine Module, keine Noten.
 
 ## Was auf deinem Gerät bleibt

@@ -33,6 +33,27 @@ version_neuer() {
   fi
   [ "$(printf '%s\n%s\n' "$ka" "$kb" | sort -V | tail -n 1)" = "$ka" ]
 }
+# Einheiten, die dieses Paket nicht mehr schreibt (entfernt oder umbenannt), abschalten und löschen: jede Datei studium-server*
+# in $1, deren Name nicht in GESCHRIEBEN steht (einheit unten); sonst liefe ein alter Dienst auf jedem Server für immer weiter.
+# Ordner bleiben (Drop-ins *.d der Einheiten von heute; *.wants räumt systemctl disable auf), nur der Drop-in einer gelöschten
+# Einheit geht mit. Eine Vorlage (name@.service) hat keine Instanz unter ihrem Namen: alle ihre Instanzen anhalten.
+alte_einheiten_entfernen() {
+  local datei name
+  for datei in "$1"/studium-server*; do
+    [ ! -d "$datei" ] || continue
+    [ -e "$datei" ] || [ -L "$datei" ] || continue
+    name=${datei##*/}
+    case " ${GESCHRIEBEN[*]} " in *" $name "*) continue ;; esac
+    if [[ "$name" == *@.* ]]; then
+      systemctl stop "${name%%@*}@*.${name##*.}" || true
+      systemctl disable "$name" || true
+    else
+      systemctl disable --now "$name" || true
+    fi
+    rm -rf "$datei" "$datei.d"
+    echo "entfernt: $name"
+  done
+}
 
 [ "$(id -u)" -eq 0 ] || fehler "bitte mit sudo starten"
 # shellcheck disable=SC1091
@@ -127,7 +148,12 @@ if [ -n "$RESERVE_MB" ]; then
 fi
 
 schritt "Dienste (systemd)"
-cat >/etc/systemd/system/studium-server-dienst.service <<'UNIT'
+# Jede Einheit über einheit: Es merkt sich den Namen für alte_einheiten_entfernen (nach der letzten). Einheiten studium-server*
+# legt nur dieses Skript an (tests/server.test.js prüft das); eine von anderswo entfernte der nächste Lauf.
+EINHEITEN=/etc/systemd/system
+GESCHRIEBEN=()
+einheit() { cat >"$EINHEITEN/$1"; GESCHRIEBEN+=("$1"); }
+einheit studium-server-dienst.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Web-Dienst des eigenen Servers (nur 127.0.0.1)
 After=network-online.target
@@ -151,7 +177,7 @@ InaccessiblePaths=/etc/credstore.encrypted -/run/credentials
 [Install]
 WantedBy=multi-user.target
 UNIT
-cat >/etc/systemd/system/studium-server-speicher.service <<'UNIT'
+einheit studium-server-speicher.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Speicherreserve gegen Anhalten bei Leerlauf
 
@@ -176,7 +202,7 @@ ReadWritePaths=/var/lib/studium-server
 [Install]
 WantedBy=multi-user.target
 UNIT
-cat >/etc/systemd/system/studium-server-zustand.service <<'UNIT'
+einheit studium-server-zustand.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Zustand für den Status prüfen
 
@@ -187,7 +213,7 @@ Group=studium
 Environment=STUDIUM_SERVER_DATEN=/var/lib/studium-server
 ExecStart=/usr/bin/node /opt/studium-server/aktuell/zustand.mjs
 UNIT
-cat >/etc/systemd/system/studium-server-zustand.timer <<'UNIT'
+einheit studium-server-zustand.timer <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Zustand alle 15 Minuten prüfen
 
@@ -198,7 +224,7 @@ OnUnitActiveSec=15min
 [Install]
 WantedBy=timers.target
 UNIT
-cat >/etc/systemd/system/studium-server-aktualisieren.service <<'UNIT'
+einheit studium-server-aktualisieren.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Server-Paket aktualisieren (nur mit passender Prüfsumme)
 After=network-online.target
@@ -208,7 +234,7 @@ Wants=network-online.target
 Type=oneshot
 ExecStart=/usr/local/bin/studium-server aktualisieren
 UNIT
-cat >/etc/systemd/system/studium-server-aktualisieren.timer <<'UNIT'
+einheit studium-server-aktualisieren.timer <<'UNIT'
 [Unit]
 Description=Studium Autopilot: täglich nach einem neuen Server-Paket sehen
 
@@ -223,7 +249,7 @@ UNIT
 # Abruf ohne KI: nur das Uni-Postfach (Termine aus dem ILIAS-Kalender holt das Plugin selbst). Läuft nur mit gespeichertem
 # Uni-Zugang und nie nach einer abgelehnten Anmeldung; den Zugang bekommt nur dieser Dienst. Zeitplan nach der Uhr
 # (OnCalendar), weil ein übersprungener Dienst (Bedingung nicht erfüllt) einen relativen Zeitgeber nicht weiterstellt.
-cat >/etc/systemd/system/studium-server-abruf.service <<'UNIT'
+einheit studium-server-abruf.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Uni-Postfach ohne KI lesen (nur mit gespeichertem Uni-Zugang)
 After=network-online.target
@@ -246,7 +272,7 @@ PrivateTmp=yes
 ProtectProc=invisible
 ReadWritePaths=/var/lib/studium-server
 UNIT
-cat >/etc/systemd/system/studium-server-abruf.timer <<'UNIT'
+einheit studium-server-abruf.timer <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Uni-Postfach ohne KI prüfen (alle 15 Minuten oder seltener laut Takt, ab 06:30 der Sicherheitslauf)
 
@@ -258,7 +284,7 @@ RandomizedDelaySec=1min
 [Install]
 WantedBy=timers.target
 UNIT
-cat >/etc/systemd/system/studium-server-lauf.path <<'UNIT'
+einheit studium-server-lauf.path <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Claude-Lauf, sobald ein Anstoß da ist
 
@@ -272,7 +298,7 @@ UNIT
 # Der Claude-Lauf bekommt nie den Uni-Zugang und sieht weder die Schlüssel noch die Credentials. Zeitgrenze: ein Lauf mit Opus
 # und der gewöhnliche danach, je bis 45 Minuten (lauf.mjs), dazu Luft; bricht systemd trotzdem ab (oder ein Neustart), legt
 # lauf.mjs Rohdaten und Unterlagen zurück.
-cat >/etc/systemd/system/studium-server-lauf.service <<'UNIT'
+einheit studium-server-lauf.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Claude-Lauf mit dem Skill (ohne Zugangsdaten)
 After=network-online.target
@@ -295,7 +321,7 @@ InaccessiblePaths=/etc/credstore.encrypted -/etc/studium-server/dienst.json -/ru
 ProtectProc=invisible
 ProcSubset=pid
 UNIT
-cat >/etc/systemd/system/studium-server-gmail.service <<'UNIT'
+einheit studium-server-gmail.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Anstoß für die Gmail-Suche
 
@@ -306,7 +332,7 @@ Group=studium
 Environment=STUDIUM_SERVER_DATEN=/var/lib/studium-server
 ExecStart=/usr/bin/node /opt/studium-server/aktuell/lauf.mjs --anstoss gmail
 UNIT
-cat >/etc/systemd/system/studium-server-gmail.timer <<'UNIT'
+einheit studium-server-gmail.timer <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Gmail bis zu dreimal am Tag durchsuchen (laut Takt)
 
@@ -318,6 +344,7 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 UNIT
+alte_einheiten_entfernen "$EINHEITEN"
 systemctl daemon-reload
 systemctl enable -q studium-server-dienst.service studium-server-speicher.service studium-server-zustand.timer \
   studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer

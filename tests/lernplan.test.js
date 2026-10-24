@@ -69,6 +69,22 @@ test("Nicht mehr dran: bestanden oder anerkannt, Notiz eines anderen Semesters, 
   assert.equal(nichtMehrDran(fm, null, "WS 2026/27"), "", "ohne Modulnotiz");
 });
 
+test("Folien je Kapitel: neue Fassung daneben gilt vor deiner älteren, Anmerkungen und Videos zählen nie", () => {
+  const u = (art, nummer, seiten) => ({ typ: "unterlage", code: "X100", art, nummer, seiten });
+  const { folienVon } = laden("lernplan", { notizen: {
+    "Unterlagen/X100/X100 Folien 01 Grundbegriffe neue Fassung 2026-11-02.md": u("Folien", 1, 44),
+    "Unterlagen/X100/X100 Folien 01 Grundbegriffe.md": u("Folien", 1, 40),
+    "Unterlagen/X100/X100 Folien 01 Grundbegriffe neue Fassung 2026-10-20.md": u("Folien", 1, 42),
+    "Unterlagen/X100/X100 Folien 02 Märkte.md": u("Folien", 2, 30),
+    "Unterlagen/X100/X100 Folien 02 Märkte mit Anmerkungen neue Fassung 2026-12-01.md": u("Folien", 2, 31),
+    "Unterlagen/X100/X100 Übung 01.md": u("Übung", 1, 3),
+  } }).ergebnis;
+  const f = folienVon("X100");
+  assert.deepEqual(Object.keys(f), ["1", "2"]);
+  assert.deepEqual([f[1].f.basename, f[1].seiten], ["X100 Folien 01 Grundbegriffe neue Fassung 2026-11-02", 44]);
+  assert.equal(f[2].f.basename, "X100 Folien 02 Märkte");
+});
+
 test("Kapitel lesen: Link im Titel zeigt seinen Text, leere Notiz ergibt nichts", () => {
   assert.deepEqual(kapitelLesen("- [ ] 3 [[X100 Folien 03 Kosten|Kosten]] und Erlöse").map((k) => [k.titel, k.links]), [["Kosten und Erlöse", []]]);
   assert.deepEqual(kapitelLesen(""), []);

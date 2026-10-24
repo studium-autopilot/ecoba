@@ -1,5 +1,6 @@
 // pruefen.py: persönliche Daten aus Alma (Matrikelnummer, Geburtsdatum), Testseiten nur mit Kopf „Erfundene Testseite“ bzw.
-// „Öffentliche Seite ohne Anmeldung“, Dateien, die ein Tresor selbst anlegt, und persönliche Felder der Module. Braucht Python;
+// „Öffentliche Seite ohne Anmeldung“, Dateien, die ein Tresor selbst anlegt, persönliche Felder der Module und IP-Adressen
+// außer Beispieladressen. Braucht Python;
 // ohne Python wird der Test übersprungen.
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -57,6 +58,19 @@ test("Matrikelnummer und Geburtsdatum mit Wert: gemeldet, auch über Tabellenzel
   assert.match(r.funde["docs/englisch.md"].join("\n"), /\[Matrikelnummer mit Wert\]/);
   assert.equal(r.funde["docs/ohne-wert.md"], undefined, "Bezeichnung ohne Wert und Zahlen ohne Bezeichnung sind kein Fund");
   for (const wert of ["4123456", "4987654", "01.02.2003", "41234567"]) assert.ok(!r.ausgabe.includes(wert), `${wert} nicht ausgeben`);
+});
+
+test("IP-Adressen sind Funde, Beispieladressen (RFC 5737) und localhost nicht", { skip: !python && "kein Python" }, () => {
+  // zerlegt, damit diese Datei sich selbst nicht meldet
+  const echt = ["10", "20", "30", "40"].join(".");
+  const r = pruefen({
+    "docs/echt.md": `Server unter ${echt}\n`,
+    "docs/beispiel.md": "Beispiele: 192.0.2.10, 198.51.100.7, 203.0.113.5, 127.0.0.1\n",
+    "docs/nah-dran.md": `Nicht reserviert: ${["203", "0", "114", "5"].join(".")}\n`,
+  });
+  assert.match((r.funde["docs/echt.md"] || []).join("\n"), /\[IP-Adresse\]/);
+  assert.match((r.funde["docs/nah-dran.md"] || []).join("\n"), /\[IP-Adresse\]/);
+  assert.equal(r.funde["docs/beispiel.md"], undefined);
 });
 
 test("Testseiten unter tests/daten/ brauchen den Kopf; andere HTML-Dateien nicht", { skip: !python && "kein Python" }, () => {

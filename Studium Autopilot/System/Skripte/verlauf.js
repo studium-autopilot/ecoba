@@ -12,7 +12,7 @@
 //             Monaten und vorlesungsfreien Tagen als schmale Striche (Legende „Frei 01.11.“), Prüfungen als Fähnchen (dicht
 //             liegende werden zu einem Fähnchen „n Klausuren 30.01.–12.02.“ zusammengefasst, Einzelheiten in der Liste),
 //             Module mit Countdown. Die Lupe ersetzt seit 17.10.2026 die Tabelle „Semestertermine“ der Seite.
-// Daten aus dem Fachmodell (ctx.modell, docs/architektur.md „Fachmodell“): Semester, Pausen, Prüfungsphasen, freie Tage,
+// Daten aus dem Fachmodell (ctx.modell, docs/architektur/modell.md „Fachmodell“): Semester, Pausen, Prüfungsphasen, freie Tage,
 // Rückmeldung (die Rückmeldung verlinkt ihre Termin-Notiz), Modulnotizen (typ: modul, semester_geplant, ects, status, ergebnis,
 // gruppe), Prüfungen (pruefungen: Termin-Notizen und Feld klausur, Modulstatus, abgehakt, entfällt; Nachholtermine nur nach
 // „nicht bestanden“), Prüfung je Modul (pruefungVon), ECTS und Orientierungsprüfung (ects), im Plan (imPlan). Fehlendes
@@ -122,7 +122,7 @@ module.exports = function (ctx) {
     let cur = sems.findIndex((s) => s.jetzt);
     const vorStart = sems.length && t < sems[0].sb;
     const nachEnde = sems.length && t > sems[sems.length - 1].se;
-    // Prüfungen (Fähnchen) aus dem Fachmodell: Kürzel + Tag einmal, Zwischentests nie die nächste Prüfung (docs/architektur.md
+    // Prüfungen (Fähnchen) aus dem Fachmodell: Kürzel + Tag einmal, Zwischentests nie die nächste Prüfung (docs/architektur/modell.md
     // „Fachmodell“). haupt: Klausur eines Moduls (kein Zwischentest) – gilt in der Modulliste der Lupe als Prüfungstermin
     const pruef = D.pruefungen.map((x) => {
       const n = x.titel.match(/Zwischentest\s*(\d+)/i);

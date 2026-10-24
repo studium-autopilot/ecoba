@@ -14,7 +14,7 @@
 // Die Notiz selbst ändert sich dafür nicht: Leseansicht über den Post-Processor (Karte im Abschnitt des ersten # Titels),
 // Bearbeitungsansicht über eine CodeMirror-Erweiterung (Block unter dem Titel). Farbe des Knopfs aus ctx.modell.statusArt: erledigt
 // gefüllt (wie „Nachgearbeitet“), ein Zwischenstand getönt im Akzent, offen warm, „Besuche ich nicht“ leise. Schreibt nur nach einem
-// Tipp. Stil: eba-core.css Abschnitt 64. Doku: docs/architektur.md, „Bedien-Bausteine“.
+// Tipp. Stil: eba-core.css Abschnitt 64. Doku: docs/architektur/bedien-bausteine.md.
 // Seit 19.10.2026 außerdem:
 //  - Rechts im Kopf „⋯“ mit „Eigenschaften“: Die Eigenschaften der Notizen des Plugins sind in keiner Ansicht zu sehen (eba-core.css
 //    Abschnitt 25, Klasse eba-notiz aus start.js), geändert wird im Kopf (Entscheidung E4). Der Menüpunkt zeigt sie für diese Notiz

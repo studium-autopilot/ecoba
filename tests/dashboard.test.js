@@ -53,7 +53,7 @@ const NOTIZEN = alle(
   { "Übungsblätter/X100 Blatt 01.md": { typ: "übungsblatt", code: "X100", nummer: 1, faellig: "2026-10-16", status: "offen" } },
 );
 
-test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus gilt), Semester, ECTS, Gesamtnote; Leiste mit Planwoche", () => {
+test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus gilt), Semester, ECTS, Gesamtnote; Leiste mit Planwoche, am Wochenende „nächste Woche“", () => {
   const { B, M } = dashboard("2026-10-18", NOTIZEN, { name: "Alex" });
   const K = B.kachelnBauen(M, new Date("2026-10-18T09:00:00"));
   assert.equal(K.gruss, "Guten Morgen, Alex");
@@ -66,9 +66,14 @@ test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus 
   assert.equal(K.leiste.text, "Vorlesungswoche 2 von 16");
   const jetzt = K.leiste.wochen.findIndex((w) => w.zustand === "jetzt");
   assert.match(K.leiste.wochen[jetzt].titel, /^KW 43 · 19\.10\.–25\.10\.$/, "Sonntag: die kommende Woche");
+  assert.equal(K.leiste.jetzt, "nächste Woche", "Legende wie das Wochenraster");
   assert.equal(K.leiste.wochen[jetzt - 1].zustand, "vorbei");
   assert.deepEqual(K.leiste.wochen.slice(0, 3).map((w) => w.art), ["f", "f", "v"]);
   assert.ok(K.leiste.wochen.some((w) => w.art === "w") && K.leiste.wochen.some((w) => w.art === "p"));
+  const F = dashboard("2026-10-16", NOTIZEN, { name: "Alex" });
+  const L = F.B.kachelnBauen(F.M, new Date("2026-10-16T09:00:00")).leiste;
+  assert.equal(L.jetzt, "diese Woche", "Freitag: die laufende Woche");
+  assert.match(L.wochen.find((w) => w.zustand === "jetzt").titel, /^KW 42 · 12\.10\.–18\.10\.$/);
 });
 
 test("Fristen · 30 Tage: Fristen, Prüfungen, Abgaben nach dem gezeigten Tag; läuft → Ende; Uhrzeit aus „ab …“", () => {

@@ -81,3 +81,20 @@ test("Variante: je Variante eine Zeile ohne Symbol; die gewählte mit Haken und 
 test("Jede Variante hat einen Text, was daraus folgt", () => {
   for (const v of P.VARIANTEN) assert.ok(P.FOLGE[v], v);
 });
+
+test("Obsidian: Einstellungen, Dateien mit ihrer Zahl und der Tresor mit Namen; jede Zeile ruft Obsidians eigenen Befehl", () => {
+  const z = nach(P.obsidianZeilen("Studium Autopilot", 1234));
+  assert.deepEqual(Object.keys(z), ["einstellungen", "dateien", "tresor"]);
+  assert.equal(z.einstellungen.wert, "");
+  assert.equal(z.dateien.wert, "1.234");
+  assert.equal(z.tresor.wert, "Studium Autopilot");
+  for (const id of Object.keys(z)) {
+    assert.ok(z[id].symbol, id);
+    assert.equal(z[id].rechts, "pfeil", id);
+    assert.ok(!z[id].unter, id + ": ohne zweite Zeile");
+    assert.deepEqual(z[id].aktion, { aktion: "obsidian", parameter: { ziel: id } }, id);
+  }
+  // was vorher unten in der Schublade stand: Zahnrad, Umschalter zur Dateiliste, Tresor wechseln
+  assert.deepEqual(P.OBSIDIAN, { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:switch-vault" });
+  assert.equal(nach(P.obsidianZeilen("", 0)).dateien.wert, "0");
+});

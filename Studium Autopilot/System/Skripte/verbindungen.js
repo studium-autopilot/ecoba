@@ -1,7 +1,7 @@
 // Verbindungen und Schloss-System (Phase 2b).
 // Alles, was eine Verbindung braucht, zeigt ein Schloss. Ein Klick erklärt, was fehlt, und verbindet direkt.
 // Symbole (seit 15.10.2026): ruhige Lucide-Linien als inline-SVG in currentColor (SYMBOLE), keine Emojis; setIcon blieb auf
-// dem iPad leer (docs/architektur.md, Verbindungen). Farbe über die Klasse am Rahmen (eba-core.css 43).
+// dem iPad leer (docs/architektur/verbindungen.md). Farbe über die Klasse am Rahmen (eba-core.css 43).
 // Links (z. B. der Alma-Kalenderlink) und der ILIAS-Benutzername liegen NUR gerätelokal (app.saveLocalStorage), nie in einer
 // Datei des Vaults. Passwörter: nur dein Uni-Passwort (seit 0.4.0), und nur im Schlüsselbund von Obsidian auf diesem Gerät
 // (ilias.js, app.secretStorage: verschlüsselt, nie synchronisiert). Dieses Skript reicht es nur als Funktion an

@@ -1,7 +1,7 @@
 // Fenster „Neu …“ (Bedien-Baustein, seit 0.4.6, Konsistenz-Audit Schritt 4): EIN Formular für alle Anlege-Aktionen (Vorlesung,
 // Termin, Lehrveranstaltung, SQ-Kurs, Modul, Kartenstapel, Unterlage einordnen). Statt einer Kette aus Fragen ein
 // Fenster mit allen Feldern und ihren Vorgaben; Esc, × und „Abbrechen“ legen nichts an. Gestalt wie die übrigen Fenster
-// (eba-modal, eba-form; eba-core.css Abschnitte 43 und 64). Doku: docs/architektur.md, „Bedien-Bausteine“.
+// (eba-modal, eba-form; eba-core.css Abschnitte 43 und 64). Doku: docs/architektur/bedien-bausteine.md.
 //   ctx.formular({ titel, text?, knopf = "Anlegen", felder, pruefen? }) → Promise<werte | null>
 //   Feld: { name, titel, art, vorgabe?, optionen?, hilfe?, platzhalter?, pflicht?, fehlt?, wenn?, ct?, ganz?, min?, max?, muster?, falsch? }
 //     art      "text" | "zahl" | "datum" | "zeitraum" | "uhrzeit" | "auswahl"
@@ -274,7 +274,7 @@ module.exports = function (ctx) {
   };
   Object.defineProperty(formular, "fenster", { get: () => fenster });
 
-  // Für alle Skripte (docs/architektur.md, „Bedien-Bausteine“): beim Laden gesetzt, wie ctx.hinweis
+  // Für alle Skripte (docs/architektur/bedien-bausteine.md): beim Laden gesetzt, wie ctx.hinweis
   ctx.formular = formular;
   return {
     formular, lesen, auswerten, testEingaben, uhrLesen, zahlLesen, uhrPlus, optionIndex, vorgabeRoh,

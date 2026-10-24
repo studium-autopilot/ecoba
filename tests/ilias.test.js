@@ -181,6 +181,39 @@ test("Geändert in ILIAS, von dir verändert: deine bleibt, neue Fassung daneben
   assert.equal(x.t.index().dateien["1001"].fassungen.length, 2);
 });
 
+test("Neue Fassung daneben: Zusammenfassung der Fassung davor kommt als frühere Fassung mit, ältere Notizen zeigen auf die neue", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  const p = B110 + "/B110 Folien 01 Grundlagen.pdf", np = B110 + "/B110 Folien 01 Grundlagen.md";
+  const mein = x.t.text(np).replace("> [!eba-pdf]- PDF\n", "## Das Wichtigste\n- **Ziel:** Gewinn → [[B110 Folien 01 Grundlagen.pdf#page=2|S. 2]]\n\n## Zu tun\n- [x] Blatt 1\n\n> [!eba-pdf]- PDF\n")
+    + "\n## Meine Notizen\nMein Text\n";
+  x.t.setzen(np, mein);
+  x.t.setzen(p, "%PDF Folien eins MIT MEINEN ANMERKUNGEN");
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 2";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T07:00";
+  x.u.vor(4 * STUNDE);
+  assert.equal((await lauf(x)).fassungen, 1);
+  const nk = B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.md";
+  const k = x.t.text(nk);
+  assert.match(k, /^## Das Wichtigste \(frühere Fassung, bis 16\.10\.2026\)\n- \*\*Ziel:\*\* Gewinn → \[\[B110 Folien 01 Grundlagen\.pdf#page=2\|S\. 2\]\]\n\n> \[!eba-pdf\]/m);
+  assert.doesNotMatch(k, /Blatt 1|Mein Text/, "nur die Zusammenfassung, keine To-dos, keine eigenen Notizen");
+  // deine Notiz: Kasten mit Link auf die neue, sonst wörtlich wie vorher
+  const n = x.t.text(np);
+  assert.match(n, /^> \[!eba-info\] Neuere Fassung\n> Am 16\.10\.2026 kam eine neuere Fassung dieser Unterlage: \[\[B110 Folien 01 Grundlagen neue Fassung 2026-10-16\]\]\. Deine Datei hier bleibt, wie sie ist\.$/m);
+  assert.equal(n.replace(/> \[!eba-info\] Neuere Fassung\n[^\n]*\n\n/, ""), mein);
+  // noch eine Fassung, die Kopie ist angemerkt: zweite Kopie, beide älteren Notizen zeigen auf sie
+  x.t.setzen(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.pdf", "%PDF Fassung 2 MIT ANMERKUNGEN");
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 3";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-17T07:00";
+  x.u.vor(24 * STUNDE);
+  assert.equal((await lauf(x)).fassungen, 1);
+  for (const q of [np, nk]) assert.equal((x.t.text(q).match(/Neuere Fassung/g) || []).length, 1, q);
+  for (const q of [np, nk]) assert.match(x.t.text(q), /\[\[B110 Folien 01 Grundlagen neue Fassung 2026-10-17\]\]/, q);
+  assert.match(x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-17.md"), /^## Das Wichtigste \(frühere Fassung, bis 16\.10\.2026\)\n- \*\*Ziel:\*\* Gewinn/m,
+    "die Kopie davor hatte nur die frühere Fassung: deren Datum bleibt");
+});
+
 test("Von dir gelöscht: kommt nicht wieder, auch nicht in neuer Fassung", async () => {
   const x = aufbau();
   await verbinden(x);

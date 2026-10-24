@@ -33,7 +33,10 @@ Testen nimmt `--arbeitsstand` den Arbeitsordner statt des Commits; so gebaut wir
 
 Dann schreibt der Export die **Update-Liste** `Studium Autopilot/System/Daten/system-dateien.json`: Version, und je Datei, die
 ein Update ersetzen darf, Pfad, Klasse, Größe und SHA-256 (Regeln in `werkzeuge/pruefen.py`, `klasse_von`, gleich wie
-`klasseVon` in `update.js`). Mit ihr installiert der Knopf **Neue Version installieren** im Plugin die neue Version (siehe `docs/architektur.md`, „Update“).
+`klasseVon` in `update.js`). Mit ihr installiert der Knopf **Neue Version installieren** im Plugin die neue Version (siehe `docs/architektur/update.md`).
+Die Hinweise für Claude (`.claude/CLAUDE.md`, Skill `studium-autopilot`, Klasse `claude`) stehen im eigenen Schlüssel `weitere`
+hinter `dateien`, weil Plugins bis 0.6.8 eine Liste mit ihnen in `dateien` ganz ablehnen; `pruefen.py` meldet es, wenn eine
+Klasse im falschen Schlüssel steht.
 
 Danach läuft **immer** `werkzeuge/pruefen.py` über den Baum, lokal zusätzlich mit einer privaten Sperrliste (Namen, die nie
 veröffentlicht werden dürfen). Sie prüft auch, dass die Update-Liste zu den Dateien passt. Bei einem Fund bricht der Export mit
@@ -116,7 +119,7 @@ gibt (das Update bricht dann ohne Schaden ab). Vertrag: `docs/daten-v1.md`, „U
 
 **Neue Regeln für das Update wirken erst ab dem nächsten Mal.** Ein Update plant immer der `update.js`, der beim Tipp läuft,
 also der der *installierten* Version. Was der alte Planer anders macht, gleicht die Reparatur des neuen `update.js` nach dem
-ersten Laden aus, nur mit Dateien, die schon im Tresor liegen (`docs/architektur.md`, „Update“ → „Reparatur nach dem
+ersten Laden aus, nur mit Dateien, die schon im Tresor liegen (`docs/architektur/update.md` → „Reparatur nach dem
 Update“; erster Fall 0.4.4: von Hand geänderte Darstellung). Ändert ein Release die Update-Regeln, darum auch den Weg „alter
 Planer, dann Reparatur“ prüfen, etwa mit dem Test-Tresor der Vorversion.
 
