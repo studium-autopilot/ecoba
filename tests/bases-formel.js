@@ -1,7 +1,7 @@
 // Kleiner Auswerter für Bases-Formeln (Obsidian Bases), nur für Tests: genug Sprache, um die Formeln der Vorlage, die eine Regel
 // des Fachmodells nachbilden, auf ausgedachten Notizen auszurechnen und mit dem JavaScript des Modells zu vergleichen
 // (tests/bases-regeln.test.js). Kennt: Zahlen, Texte, Listen, Regex-Literale, if() (faul), date(), today(), duration(),
-// number(), min(), max(), html(), file(); Vergleiche, && || !, + - * /; Methoden der Texte, Zahlen, Listen (filter, map, reduce
+// number(), min(), max(), html(), file(), list(); Vergleiche, && || !, + - * /; Methoden der Texte, Zahlen, Listen (filter, map, reduce
 // mit value, index, acc), Daten (format, days) und Dateien (properties, backlinks, asFile, name). Was fehlt, wirft einen Fehler.
 "use strict";
 
@@ -166,6 +166,7 @@ function auswerten(ausdruck, welt, notiz, formeln = {}) {
       case "max": return Math.max(...a().map(zahlVon));
       case "html": return new Html(text(a()[0]));
       case "file": return datei(text(a()[0]));
+      case "list": { const v = a()[0]; return v == null ? [] : Array.isArray(v) ? v : [v]; }
       default: throw new Error("Bases-Formel: Funktion " + e.ruf);
     }
   };

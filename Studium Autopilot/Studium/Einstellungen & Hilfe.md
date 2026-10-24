@@ -124,7 +124,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > - **Was nicht kommt:** Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder. Umbenennen und Verschieben ist sicher.
 > > > - **Geänderte Dateien:** Hast du eine Datei angemerkt und der Dozent lädt sie neu hoch, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
 > > > - **Über den Ordner Eingang:** Windows: im Explorer in den Ordner **Eingang** deines Tresors kopieren. iPhone/iPad: **Teilen → In Dateien sichern →** Ordner **Eingang**; Papier über die App **Dateien → ⋯ → Dokumente scannen**. Danach **Unterlagen hinzufügen → … im Eingang einordnen**. ZIP vorher antippen, dann entpackt es sich. PowerPoint: als PDF exportieren und beide mit gleichem Namen ablegen.
-> > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`, daneben je Datei eine Notiz mit Status **neu · gelesen · bearbeitet**. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen im Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
+> > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`. Daneben liegt je Datei eine Notiz mit gleichem Namen: Darin merkt sich Studium Autopilot Modul, Art und ob du die Datei schon geöffnet hast. Tippst du sie an, siehst du gleich die PDF. **Neu** auf der Seite Unterlagen ist, was in den letzten 14 Tagen dazukam und du noch nicht geöffnet hast. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen im Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
 > > > - **Stift auf dem iPad (einmal einrichten):** Dateien-App → PDF gedrückt halten → **Informationen** → **Immer öffnen mit: Vorschau**; dann **Öffnen mit** → Haken bei **Mit Quick Look anzeigen** entfernen. Danach **Öffnen ↗** → **Markieren** → **Fertig**: Die Anmerkungen stehen in derselben PDF. Nicht über „Teilen“ öffnen, das legt eine Kopie an.
 > > > - **Lesen und zitieren:** `[[Datei.pdf#page=12]]` springt auf Seite 12. Die Suche findet nur Text in Notizen, nicht in PDFs. Jede PDF belegt Platz auf jedem Gerät; ganze Bücher lieber nicht ablegen.
 >
@@ -162,7 +162,7 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > > [!eba-regel] Einmal pro Gerät
 > > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
 > > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
-> > > > 3. Unter [[#Verbindungen]] bei ILIAS-Unterlagen **Verbinden** tippen und deinen Uni-Login eingeben: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
+> > > > 3. Unter [[#Verbindungen]] bei Uni-Login **Mit Uni-Login verbinden** tippen und deinen Uni-Login eingeben: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
 > > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
 > > > > [!eba-info] Unterschiede je Gerät
@@ -173,13 +173,8 @@ Darstellung: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Dars
 > > > [!eba-achtung] Bitte nicht umbenennen
 > > > Die Seiten im Ordner **Studium** (vor allem Noten & ECTS, Prüfungen, Stundenplan, Unterlagen) und die Einstellungen im Ordner **System** nicht umbenennen. Die Eigenschaft **uebersicht** oben in deinen Notizen bitte stehen lassen, über sie finden die Übersichten deine Notizen.
 >
-> > [!eba-karte|hilfe|stand]- Stand der Angaben <span class="eba-zeile-unter">Regeln und Module vom 30.09.2026, manches noch geschätzt</span>
-> > Termine und Semesterdaten kommen laufend über die zentralen Daten und ersetzen nach und nach, was hier noch geschätzt ist.
-> >
-> > **Noch geschätzt**
-> > - Nachholtermin **WS 2026/27** sowie Anmeldefristen und Prüfungsphasen ab **SS 2027**.
-> > - Erasmus-Bewerbung **November 2027** und Bachelorarbeits-Frist **Juli 2028**.
-> > - Orientierungsprüfung bis **30.09.2028**: aus „Ende des 4. Fachsemesters“ abgeleitet, gilt ohne Urlaubssemester.
+> > [!eba-karte|hilfe|stand]- Stand der Angaben <span class="eba-zeile-unter">Was geschätzt ist, offene Fragen</span>
+> > Termine und Semesterdaten kommen laufend über die zentralen Daten. Was die Uni noch nicht veröffentlicht hat, ist überall als geschätzt markiert; alle Semester mit ihrem Stand stehen unter [[System/Daten/Semester|Semestertermine]]. Die Frist der Orientierungsprüfung rechnet der Studienverlauf aus deinem Studienbeginn, ohne Urlaubssemester.
 > >
 > > **Nicht belegt oder widersprüchlich**
 > > - Formale Wahl der Variante: weder PO noch Modulhandbuch regeln Wie und Wann; klärt die Studienfachberatung. Studium Autopilot empfiehlt die Wahl vor dem 3. Fachsemester, weil sich ab dann die Musterpläne unterscheiden.

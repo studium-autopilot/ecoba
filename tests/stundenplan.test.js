@@ -1,14 +1,16 @@
 // Zentraler Stundenplan (zentral.js, veranstaltungen.json): Prüfung, Filter (aktuelles Fachsemester), Auswahl ohne
 // Parallelgruppen, „Alma gewinnt“ (auch Vorlesung und Übung direkt hintereinander, c.t./s.t.), Notiztext mit Ausfällen und
 // Änderungen fürs Wochenraster, „Besuche ich nicht“ und Zurücknehmen, gelöschte Notiz, Schutz gegen Massenwegfall, eigener
-// Uni-Abgleich (kein zentraler Stundenplan).
+// Uni-Abgleich (kein zentraler Stundenplan). Dazu die Liste in Studium/Stundenplan.md (Bases): Filter wie „Besuche ich nicht“.
 // Nur ausgedachte Daten (Codes X100 …). Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const nodeCrypto = require("node:crypto");
 const path = require("node:path");
+const fs = require("node:fs");
 const { laden, json } = require("./laden.js");
+const { auswerten, formelnAus } = require("./bases-formel.js");
 
 const EBA = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "eba.js"));
 
@@ -217,6 +219,84 @@ test("Notiz: c.t.-Zeiten, Ausfälle und Änderungen in den Feldern, die das Woch
   assert.equal(Z.lehreMeine(mitEigenem), "- Kapitel 1 lesen");
 });
 
+test("Notiz: offizieller Name (bezeichnung) statt der Art in Name, Titel und Kopf; ungültig oder fehlend → die Art", () => {
+  const lab = v({ id: "ws-2026-27-x100-praktikum-lab-fr-1415", art: "Praktikum", titel: "Data Science Lab", bezeichnung: "Data Science Lab",
+    tag: "Fr", von: "14:15", bis: "15:45", ct: false, zeitraum: { von: "2026-10-16", bis: "2027-02-05" }, raum: "online per Zoom" });
+  const e = Z.lehrePruefen(datei(lab)).veranstaltungen[0];
+  assert.equal(e.art, "Praktikum", "die Art bleibt für Farbe und Abgleich");
+  assert.equal(Z.lehreDateiName(e), "Fr 14.15 X100 Data Science Lab");
+  const t = Z.lehreNotizText("", e, { kurz: "Beispielanalyse" });
+  for (const z of ['titel: "Beispielanalyse · Data Science Lab"', 'art: "Data Science Lab"', "# X100 · Data Science Lab"]) assert.ok(t.indexOf(z) >= 0, z);
+  for (const schlecht of ["x".repeat(31), "Lab <b>", 7]) {
+    const s = Z.lehrePruefen(datei(Object.assign({}, lab, { bezeichnung: schlecht })));
+    assert.deepEqual(s.verworfen, [], "der Eintrag bleibt");
+    assert.equal(Z.lehreDateiName(s.veranstaltungen[0]), "Fr 14.15 X100 Praktikum", String(schlecht));
+  }
+  assert.equal(Z.lehreDateiName(Z.lehrePruefen(datei(v())).veranstaltungen[0]), "Mo 10.15 X100 Vorlesung", "ohne bezeichnung wie bisher");
+  // nur zu Arten ohne eigene Bedeutung (Vorlesung, Übung, Tutorium und Seminar steuern Gruppen und Raster)
+  const ue = Z.lehrePruefen(datei(Object.assign({}, lab, { art: "Übung" }))).veranstaltungen[0];
+  assert.equal(Z.lehreDateiName(ue), "Fr 14.15 X100 Übung");
+  // und nicht wie eine solche Art heißen (sonst bekäme das Praktikum Gruppen und Chips einer Übung)
+  for (const steuernd of ["Übung", "tutorium", "Vorlesung"]) {
+    assert.equal(Z.lehreDateiName(Z.lehrePruefen(datei(Object.assign({}, lab, { bezeichnung: steuernd }))).veranstaltungen[0]), "Fr 14.15 X100 Praktikum", steuernd);
+  }
+});
+
+test("Abrufer: kommt ein offizieller Name dazu, wird die Notiz umbenannt; einen eigenen Namen lässt er stehen", async () => {
+  const t = tresor(daten());
+  const lab = v({ id: "ws-2026-27-x100-praktikum-lab-fr-1415", art: "Praktikum", titel: "Data Science Lab", tag: "Fr", von: "14:15", bis: "15:45", ct: false,
+    zeitraum: { von: "2026-10-16", bis: "2027-02-05" }, raum: "online per Zoom" });
+  t.veroeffentlichen(datei(lab));
+  assert.equal((await t.abrufen()).art, "ok");
+  assert.deepEqual(t.zentral(), ["Stundenplan/Fr 14.15 X100 Praktikum.md"]);
+  t.veroeffentlichen(datei(Object.assign({}, lab, { bezeichnung: "Data Science Lab" })));
+  const b = await t.abrufen();
+  assert.deepEqual(b.umbenannt, ["Stundenplan/Fr 14.15 X100 Praktikum.md → Stundenplan/Fr 14.15 X100 Data Science Lab.md"]);
+  assert.deepEqual(t.zentral(), ["Stundenplan/Fr 14.15 X100 Data Science Lab.md"]);
+  assert.equal(t.fm("Stundenplan/Fr 14.15 X100 Data Science Lab.md").art, "Data Science Lab");
+  // eigener Name: bleibt
+  t.umbenennen("Stundenplan/Fr 14.15 X100 Data Science Lab.md", "Stundenplan/Mein Lab.md");
+  t.veroeffentlichen(datei(Object.assign({}, lab, { bezeichnung: "R Lab" })));
+  assert.deepEqual((await t.abrufen()).umbenannt, []);
+  assert.deepEqual(t.zentral(), ["Stundenplan/Mein Lab.md"]);
+  assert.equal(t.fm("Stundenplan/Mein Lab.md").art, "R Lab");
+});
+
+test("Abrufer: Umbenennen bleibt im Ordner der Notiz, nimmt neue Zeit und Namen zugleich mit und kennt den Zähler", async () => {
+  const t = tresor(daten());
+  const lab = v({ id: "ws-2026-27-x100-praktikum-lab-fr-1415", art: "Praktikum", titel: "Data Science Lab", tag: "Fr", von: "14:15", bis: "15:45", ct: false,
+    zeitraum: { von: "2026-10-16", bis: "2027-02-05" }, raum: "online per Zoom" });
+  t.veroeffentlichen(datei(lab));
+  await t.abrufen();
+  t.umbenennen("Stundenplan/Fr 14.15 X100 Praktikum.md", "Stundenplan/X100/Fr 14.15 X100 Praktikum 2.md");
+  t.veroeffentlichen(datei(Object.assign({}, lab, { von: "14:30", bis: "16:00", bezeichnung: "Data Science Lab" })));
+  const b = await t.abrufen();
+  assert.deepEqual(b.umbenannt, ["Stundenplan/X100/Fr 14.15 X100 Praktikum 2.md → Stundenplan/X100/Fr 14.30 X100 Data Science Lab.md"]);
+  assert.equal(t.fm("Stundenplan/X100/Fr 14.30 X100 Data Science Lab.md").beginn, "14:30");
+  // offizieller Name fällt weg: zurück zur Art
+  t.veroeffentlichen(datei(Object.assign({}, lab, { von: "14:30", bis: "16:00" })));
+  assert.deepEqual((await t.abrufen()).umbenannt, ["Stundenplan/X100/Fr 14.30 X100 Data Science Lab.md → Stundenplan/X100/Fr 14.30 X100 Praktikum.md"]);
+  // eine Jahreszahl ist kein Zähler: eigener Name, bleibt
+  t.umbenennen("Stundenplan/X100/Fr 14.30 X100 Praktikum.md", "Stundenplan/X100/Fr 14.30 X100 Praktikum 2026.md");
+  t.veroeffentlichen(datei(Object.assign({}, lab, { von: "14:30", bis: "16:00", bezeichnung: "Data Science Lab" })));
+  assert.deepEqual((await t.abrufen()).umbenannt, []);
+});
+
+test("Abrufer: scheitert das Umbenennen, bleibt die Notiz unverändert und der nächste Lauf versucht es wieder", async () => {
+  const t = tresor(daten());
+  const lab = v({ id: "ws-2026-27-x100-praktikum-lab-fr-1415", art: "Praktikum", titel: "Data Science Lab", tag: "Fr", von: "14:15", bis: "15:45", ct: false,
+    zeitraum: { von: "2026-10-16", bis: "2027-02-05" }, raum: "online per Zoom" });
+  t.veroeffentlichen(datei(lab));
+  await t.abrufen();
+  t.veroeffentlichen(datei(Object.assign({}, lab, { bezeichnung: "Data Science Lab" })));
+  const umbenennen = t.app.fileManager.renameFile;
+  t.app.fileManager.renameFile = async () => { throw new Error("gesperrt"); };
+  await t.abrufen().catch(() => null);
+  assert.equal(t.fm("Stundenplan/Fr 14.15 X100 Praktikum.md").art, "Praktikum", "noch die alte Regel");
+  t.app.fileManager.renameFile = umbenennen;
+  assert.deepEqual((await t.abrufen()).umbenannt, ["Stundenplan/Fr 14.15 X100 Praktikum.md → Stundenplan/Fr 14.15 X100 Data Science Lab.md"]);
+});
+
 // ---------- Ablauf beim Abrufer (Tresor im Speicher) ----------
 // Mini-YAML für das Frontmatter, das zentral.js schreibt (Schlüssel: Wert, Listen mit „  - “)
 const wert = (s) => { s = s.trim(); if (s === "") return null; if (s === "[]") return []; if (/^".*"$/.test(s)) return JSON.parse(s); if (s === "true" || s === "false") return s === "true"; if (/^\d+$/.test(s)) return Number(s); return s; };
@@ -253,6 +333,7 @@ function tresor(D) {
   app.vault.getMarkdownFiles = () => Object.keys(text).concat(Object.keys(nurFm)).filter((p) => p.endsWith(".md")).map(datei);
   app.vault.read = async (f) => text[f.path];
   app.vault.modify = async (f, t) => { text[f.path] = t; };
+  app.vault.process = async (f, fn) => { const t = fn(text[f.path]); text[f.path] = t; return t; };
   app.vault.create = async (p, t) => { if (da(p)) throw new Error("gibt es schon: " + p); text[p] = t; return datei(p); };
   app.vault.createFolder = async () => {};
   app.vault.trash = async (f) => { papierkorb.push(f.path); delete text[f.path]; };
@@ -266,25 +347,29 @@ function tresor(D) {
     const fm = fmLesen(text[f.path]) || {};
     fn(fm);
     text[f.path] = fmSchreiben(fm, text[f.path].replace(/^---\n[\s\S]*?\n---\n/, ""));
-  } };
+  }, renameFile: async (f, ziel) => { umbenennen(f.path, ziel); Object.assign(f, datei(ziel)); } }; // wie Obsidian: die Datei zieht mit
+  const umbenennen = (von, ziel) => { if (da(ziel)) throw new Error("gibt es schon: " + ziel); text[ziel] = text[von]; delete text[von]; };
   app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
   app.saveLocalStorage = (k, v2) => { if (v2 == null) delete speicher[k]; else speicher[k] = v2; };
   nurFm["System/Einstellungen.md"] = { typ: "einstellungen" };
   nurFm["System/Daten/Musterplan.md"] = MUSTERPLAN;
-  // Daten veröffentlichen: Manifest mit Prüfsumme über die Bytes
-  const veroeffentlichen = (d, kaputt) => {
+  // Daten veröffentlichen: Manifest mit Prüfsumme über die Bytes; termine (optional) dazu als termine.json
+  const veroeffentlichen = (d, kaputt, termine) => {
     const t = JSON.stringify(d);
     const b = Buffer.from(t, "utf8");
+    const tt = termine ? JSON.stringify({ schema: 1, termine }) : "";
+    const mehr = termine ? { "termine.json": { sha256: nodeCrypto.createHash("sha256").update(Buffer.from(tt, "utf8")).digest("hex"), groesse: Buffer.byteLength(tt, "utf8") } } : {};
     quelle = {
-      "manifest.json": JSON.stringify({ schema: 1, erstellt: "2026-10-17T06:00:00Z", dateien: { "veranstaltungen.json": {
-        sha256: kaputt ? "0".repeat(64) : nodeCrypto.createHash("sha256").update(b).digest("hex"), groesse: b.length } } }),
+      "manifest.json": JSON.stringify({ schema: 1, erstellt: "2026-10-17T06:00:00Z", dateien: Object.assign({ "veranstaltungen.json": {
+        sha256: kaputt ? "0".repeat(64) : nodeCrypto.createHash("sha256").update(b).digest("hex"), groesse: b.length } }, mehr) }),
       "veranstaltungen.json": t,
     };
+    if (termine) quelle["termine.json"] = tt;
   };
   const Zt = L.ctx.zentral;
   const notizen = () => Object.keys(text).filter((p) => p.indexOf("Stundenplan/") === 0).sort();
   const zentral = () => notizen().filter((p) => fmLesen(text[p]).herkunft === "zentral");
-  return { Z: Zt, text, nurFm, papierkorb, speicher, veroeffentlichen, notizen, zentral, abrufen: (o) => Zt.abrufen(o || { manuell: true }), fm: (p) => fmLesen(text[p]) };
+  return { Z: Zt, app, text, nurFm, papierkorb, speicher, veroeffentlichen, notizen, zentral, umbenennen, abrufen: (o) => Zt.abrufen(o || { manuell: true }), fm: (p) => fmLesen(text[p]) };
 }
 
 const FIXTURE = () => datei(
@@ -543,4 +628,152 @@ test("Eigener Uni-Abgleich später eingerichtet: zentrale Notizen bleiben unver�
     assert.ok(t.papierkorb.indexOf("Stundenplan/Mi 08.00 X110 Vorlesung.md") >= 0, fall);
     assert.equal(t.Z.stundenplan().verfuegbar, true, fall);
   }
+});
+
+// ---------- Übernahme, Semesterwechsel, Grabsteine ----------
+const ABRUF = "System/Daten/abruf.json";
+const frist = (i) => ({ id: `2026-11-${10 + i}-frist-${i}`, titel: `Frist ${i}`, datum: `2026-11-${10 + i}`, bis: "", uhrzeit: "", ort: "", kategorie: "Frist",
+  status: "offiziell", code: "", quelle_url: "https://uni-tuebingen.de/studium/", quelle_text: "", info: "", geprueft: "2026-10-14" });
+const grabsteine = (t) => Object.keys(JSON.parse(t.text[ABRUF]).angewendet).sort();
+
+test("Übernahme mit Grabsteinen, aber ohne die Notizen (Sync hängt hinterher): nichts ausgeblendet, nichts doppelt, nichts weggeräumt", async () => {
+  const a = tresor(daten());
+  a.veroeffentlichen(FIXTURE());
+  await a.abrufen();
+  const t = tresor(daten());
+  t.veroeffentlichen(FIXTURE());
+  t.text[ABRUF] = JSON.stringify(Object.assign(JSON.parse(a.text[ABRUF]), { geraet: "g-anderes",
+    seit: new Date(Date.now() - 180 * 60e3).toISOString(), zuletzt: new Date(Date.now() - 81 * 60e3).toISOString() }));
+  await t.abrufen();
+  assert.deepEqual(t.zentral(), [], "keine zweite Notiz neben der, die noch kommt");
+  assert.equal(t.nurFm["System/Einstellungen.md"].stundenplan_ausgeblendet, undefined);
+  assert.deepEqual(grabsteine(t), [ID_VL, ID_UE, ID_X110].sort());
+  for (const p of a.zentral()) t.text[p] = a.text[p]; // der Sync bringt die Notizen
+  await t.abrufen();
+  assert.deepEqual(t.zentral(), a.zentral());
+  assert.deepEqual(t.papierkorb, []);
+  // dieses Gerät hatte die Notiz: gelöscht gilt sie auch kurz nach der Übernahme als „Besuche ich nicht“
+  delete t.text["Stundenplan/Mo 12.15 X100 Übung.md"];
+  await t.abrufen();
+  assert.deepEqual(t.nurFm["System/Einstellungen.md"].stundenplan_ausgeblendet, [ID_UE]);
+});
+
+test("Semesterwechsel: Notizen eines anderen Semesters bleiben unverändert und lösen keinen Schutz aus", async () => {
+  const t = tresor(daten());
+  t.veroeffentlichen(FIXTURE());
+  await t.abrufen();
+  // Notizen des letzten Semesters, der Export nennt nur noch Neues (hier nichts davon gewählt)
+  for (const p of t.zentral()) t.text[p] = t.text[p].replace(/^semester: .*$/m, "semester: SS 2026");
+  const vorher = t.zentral().map((p) => t.text[p]);
+  t.veroeffentlichen(datei(FIXTURE().veranstaltungen[5]));
+  const b = await t.abrufen();
+  assert.equal(b.fehler + b.warnung, "");
+  assert.deepEqual(t.papierkorb, []);
+  assert.deepEqual(t.zentral().map((p) => t.text[p]), vorher, "kein Papierkorb, kein „(entfällt)“");
+});
+
+test("Nicht mehr gewählt, aber mit deinem Text: Raum und Zeiten kommen weiter aus den Daten", async () => {
+  const D = daten();
+  const t = tresor(D);
+  t.veroeffentlichen(FIXTURE());
+  await t.abrufen();
+  const p = "Stundenplan/Mi 08.00 X110 Vorlesung.md";
+  t.text[p] = t.text[p].replace(/## Meine Notizen\n- \n$/, "## Meine Notizen\n- wichtig\n");
+  D.module = D.module.map((m) => (m.code === "X110" ? modul("X110", { status: "bestanden" }) : m));
+  const d = FIXTURE();
+  d.veranstaltungen[4].raum = "Hörsaal 9";
+  t.veroeffentlichen(d);
+  await t.abrufen();
+  assert.equal(t.fm(p).raum, "Hörsaal 9");
+  assert.notEqual(t.fm(p).entfaellt, true);
+  assert.ok(t.text[p].endsWith("## Meine Notizen\n- wichtig\n"));
+});
+
+test("Grabsteine: aufgeräumt, wenn die id weder in den Daten noch im Tresor steht; nie nach einem Massenwegfall", async () => {
+  const t = tresor(daten());
+  const fristen = [];
+  for (let i = 0; i < 16; i++) fristen.push(frist(i));
+  t.veroeffentlichen(FIXTURE(), false, fristen);
+  await t.abrufen();
+  assert.equal(grabsteine(t).length, 19);
+  const termin = (i) => Object.keys(t.text).find((p) => p.indexOf("Termine/") === 0 && fmLesen(t.text[p]).zentral_id === frist(i).id);
+  // Frist 0 von dir gelöscht und aus den Daten verschwunden, Frist 1 von dir gelöscht, aber noch in den Daten
+  delete t.text[termin(0)];
+  delete t.text[termin(1)];
+  t.veroeffentlichen(FIXTURE(), false, fristen.slice(1));
+  await t.abrufen();
+  assert.ok(grabsteine(t).indexOf(frist(0).id) >= 0, "erst einmal weg: Grabstein bleibt (kurzer Fehler im Export)");
+  assert.equal(t.speicher["eba-zentral-stand"].fehltSeit[frist(0).id], "2026-10-17");
+  t.speicher["eba-zentral-stand"].fehltSeit[frist(0).id] = "2026-09-17"; // seit 30 Tagen weg
+  await t.abrufen();
+  assert.equal(grabsteine(t).indexOf(frist(0).id), -1, "weder in den Daten noch im Tresor, seit 30 Tagen");
+  assert.ok(grabsteine(t).indexOf(frist(1).id) >= 0, "noch in den Daten: die gelöschte Notiz kommt nicht zurück");
+  assert.equal(termin(1), undefined);
+  // Massenwegfall: die Daten nennen keinen Termin mehr → nichts aufgeräumt, auch nicht für eine gerade gelöschte Notiz
+  delete t.text[termin(2)];
+  t.veroeffentlichen(FIXTURE(), false, []);
+  const b = await t.abrufen();
+  assert.ok(/Termine fehlen in den Daten/.test(b.warnung));
+  assert.ok(grabsteine(t).indexOf(frist(2).id) >= 0);
+});
+
+test("Tresor neu aufgebaut (abruf.json und Notizen weg, Grabsteine nur im Gerätespeicher): Notizen kommen neu, nichts ausgeblendet", async () => {
+  const t = tresor(daten());
+  t.veroeffentlichen(FIXTURE());
+  await t.abrufen();
+  assert.equal(Object.keys(t.speicher["eba-zentral-angewendet"]).length, 3);
+  for (const p of t.zentral()) delete t.text[p];
+  delete t.text[ABRUF];
+  await t.abrufen();
+  assert.equal(t.zentral().length, 3);
+  assert.equal(t.nurFm["System/Einstellungen.md"].stundenplan_ausgeblendet, undefined);
+  assert.deepEqual(grabsteine(t), [ID_VL, ID_UE, ID_X110].sort());
+});
+
+test("Alle Vorlesungen auf einmal weg: nicht als „Besuche ich nicht“ gewertet, Grabsteine bleiben, Warnung", async () => {
+  const t = tresor(daten());
+  t.veroeffentlichen(FIXTURE());
+  await t.abrufen();
+  for (const p of t.zentral()) delete t.text[p];
+  const b = await t.abrufen();
+  assert.ok(/3 Veranstaltungen fehlen im Tresor/.test(b.warnung));
+  assert.equal(t.nurFm["System/Einstellungen.md"].stundenplan_ausgeblendet, undefined);
+  assert.deepEqual(grabsteine(t), [ID_VL, ID_UE, ID_X110].sort());
+});
+
+// Liste in Studium/Stundenplan.md: Bases kann ctx.modell.besuchtNicht nicht aufrufen, darum bildet der Filter die Regel nach
+// (Schlüssel „<herkunft>:<id>“ bzw. zentral_id in stundenplan_ausgeblendet, eigene Notiz besuche_nicht). Jede Quelle aus quellen.js
+// (außer volltext, die keine Lehrveranstaltungen schreibt) muss darin stehen, sonst zeigte die Liste, was die Woche ausblendet.
+test("Liste im Stundenplan: blendet für jede Quelle aus, was „Besuche ich nicht“ ausblendet; Zeit aus wochentag", () => {
+  const Q = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "quellen.js"));
+  const md = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "Studium", "Stundenplan.md"), "utf8").replace(/\r/g, "");
+  const block = md.split("```base")[1].split("```")[0];
+  const filter = block.split("\n").map((z) => z.replace(/^(> ?)+/, "")).filter((z) => /^ {4}- '.*'$/.test(z)).map((z) => z.replace(/^ {4}- '(.*)'$/, "$1").replace(/''/g, "'"));
+  assert.equal(filter.length, 4);
+  const lv = { typ: "lehrveranstaltung", code: "X100", wochentag: 2, tag: "Di", beginn: "10:15", ende: "11:45", semester: SEM };
+  const notizen = {}, ausgeblendet = [];
+  for (const h of Object.keys(Q.ID_FELD).filter((x) => x !== "volltext")) {
+    const feld = Q.ID_FELD[h];
+    notizen[`Stundenplan/${h} aus.md`] = Object.assign({}, lv, { herkunft: h, [feld]: "id-" + h });
+    notizen[`Stundenplan/${h} an.md`] = Object.assign({}, lv, { herkunft: h, [feld]: "anders-" + h });
+    ausgeblendet.push(h === "zentral" ? "id-" + h : h + ":id-" + h);
+  }
+  Object.assign(notizen, {
+    "Stundenplan/eigen aus.md": Object.assign({}, lv, { besuche_nicht: true }),
+    "Stundenplan/eigen an.md": Object.assign({}, lv),
+    "Stundenplan/alma ohne Schlüssel.md": Object.assign({}, lv, { herkunft: "alma" }),
+    "Stundenplan/entfällt.md": Object.assign({}, lv, { herkunft: "alma", alma_schluessel: "x", entfaellt: true }),
+  });
+  const einst = { stundenplan_ausgeblendet: ausgeblendet };
+  const W = { heute: "2026-10-24", notizen: Object.assign({ "System/Einstellungen.md": einst }, notizen), rueckverweise: {} };
+  const M = laden("modell", { heute: "2026-10-24", notizen, frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": einst } }).ctx.modell;
+  assert.equal(Object.keys(notizen).filter((p) => M.besuchtNicht(notizen[p])).length, ausgeblendet.length + 1);
+  for (const p of Object.keys(notizen)) {
+    assert.equal(filter.every((f) => auswerten(f, W, p) === true), notizen[p].entfaellt !== true && !M.besuchtNicht(notizen[p]), p);
+  }
+  // Spalte Zeit: der Wochentag aus wochentag (wie die Woche), ältere Notizen nur mit tag
+  const F = formelnAus(block);
+  const zeit = (fm) => auswerten("formula.zeit", { heute: "2026-10-24", notizen: { "a.md": fm } }, "a.md", F);
+  assert.equal(zeit({ wochentag: 4, tag: "Di", beginn: "10:15", ende: "11:45" }), "Do 10:15–11:45", "wochentag gilt");
+  assert.equal(zeit({ tag: "Mi", beginn: "08:15", ende: "09:45" }), "Mi 08:15–09:45");
 });

@@ -22,12 +22,14 @@
 //   „bis 24:00 Uhr“.
 // Notiz: dieselbe Form wie zentrale Termine (ctx.zentral.notizText mit herkunft: ilias-kalender, ilias_kalender_id), kategorie
 //   Frist, ort „bis 23:55 Uhr · ILIAS“, quelle = Adresse der Übung (ohne Schlüssel), Datei „Termine/JJJJ-MM-TT <Code> Abgabe in
-//   ILIAS.md“ bzw. „… Feedback in ILIAS.md“. „erledigt“, „## Meine Notizen“ und eigene Felder bleiben bei jedem Schreiben.
+//   ILIAS.md“ bzw. „… Feedback in ILIAS.md“ (neues Datum, neuer Code oder neue Art → umbenannt; einen eigenen Namen benennt nur
+//   ein neues Datum um). „erledigt“, „## Meine Notizen“ und eigene Felder bleiben bei jedem Schreiben.
 // Keine Doppel: Steht am selben Tag mit demselben Code schon eine Frist zu einer Abgabe (zentral, eigener Uni-Abgleich, von Hand)
 //   oder ein Übungsblatt mit Fälligkeit (ctx.modell.termine/abgaben), entsteht keine Notiz; eine unberührte wandert in den
 //   Papierkorb (kommt wieder, wenn die andere verschwindet), eine mit deinem Text bleibt.
 // Lebenslauf (Quellen-Vertrag): von dir gelöscht → Grabstein „angewendet“ in der Sperr-Datei (kommt erst wieder, wenn sich Datum,
-//   Uhrzeit, Art oder Code ändern); in ILIAS weg → nur künftige Abgaben (ILIAS lässt Altes weg): unberührt in den Papierkorb, sonst
+//   Uhrzeit oder Art ändern; nicht der Code, der kommt oft erst mit dem ersten Durchsuchen der Unterlagen; ältere Grabsteine mit
+//   Code gelten weiter, geloeschtVon); in ILIAS weg → nur künftige Abgaben (ILIAS lässt Altes weg): unberührt in den Papierkorb, sonst
 //   „(entfällt)“; nichts entfernt, wenn der Kalender unvollständig ankam (kein END:VCALENDAR oder ab 900 KB; ILIAS bricht bei 1 MB
 //   ab), keine einzige Abgabe kam, obwohl 3 oder mehr künftige bekannt sind, oder mehr als die Hälfte (und mehr als 2) fehlen.
 //   Doppel einer id führt der Schreiber zusammen (Q.dubletten). Keine neue Notiz für Abgaben, die schon vorbei sind.
@@ -311,8 +313,20 @@ module.exports = function (ctx) {
     const unfertig = app.vault.getMarkdownFiles().some((f) => f.path.indexOf(K.ORDNER + "/") === 0 && !app.metadataCache.getFileCache(f));
     const angewendet = o.angewendet || {}, neuAngewendet = {}, behandelt = {};
     if (!app.vault.getAbstractFileByPath(K.ORDNER)) { try { await app.vault.createFolder(K.ORDNER); } catch (e) { /* gibt es schon */ } }
+    // Grabstein ohne Code: Der Code kommt oft erst mit dem ersten Durchsuchen der Unterlagen (Index „objekte“), eine gleich nach
+    // dem Verbinden gelöschte Abgabe käme sonst wieder. Ältere Grabsteine (mit dem Code von damals, auch leer) gelten weiter. Ist
+    // der Code gerade unbekannt (nach neuem Verbinden ist „objekte“ leer), lässt sich ein älterer nicht prüfen: Dann gilt jeder
+    // Grabstein und bleibt unverändert, bis der Code wieder da ist. → zu merkender Grabstein oder ""
+    const geloeschtVon = (x, h) => {
+      if (q.geloescht(angewendet, x.schluessel, h)
+        || [x.code, ""].some((c) => q.geloescht(angewendet, x.schluessel, q.kurzHash([x.datum, x.uhr, x.art, c])))) return h;
+      return !x.code && Object.prototype.hasOwnProperty.call(angewendet, x.schluessel) ? angewendet[x.schluessel] : "";
+    };
+    // Name, den diese Quelle vergeben hat („JJJJ-MM-TT <Code> Abgabe in ILIAS“, bei Gleichstand mit „ 2“); einen eigenen benennt nur
+    // ein neues Datum um
+    const NAME_VON_HIER = /^\d{4}-\d{2}-\d{2} (?:\S+ )?(?:Abgabe|Feedback) in ILIAS$/;
     for (const x of abgaben) {
-      const h = q.kurzHash([x.datum, x.uhr, x.art, x.code]);
+      const h = q.kurzHash([x.datum, x.uhr, x.art]);
       const n = jeId[x.schluessel];
       const doppelt = schonDa(x, fremdeTermine, blaetter);
       const e = eintragVon(x), opt = Object.assign({ modulLink: modulLink(x.code) }, NOTIZ);
@@ -322,16 +336,18 @@ module.exports = function (ctx) {
         if (doppelt && q.unberuehrt(n.fm, alt)) { await papierkorb(n.f); b.doppelt++; continue; }
         const neu = Z.notizText(alt, e, opt);
         if (neu !== alt) { await app.vault.modify(n.f, neu); b.geaendert++; } else b.gleich++;
-        // Datum geändert → umbenennen (Links zieht Obsidian nach); ein eigener Name mit gleichem Datum bleibt
-        if (n.f.basename.slice(0, 10) !== x.datum) {
-          const ziel = freierPfad(dateiTitel(dateiNameVon(x)), n.f);
+        // Datum, Code oder Art geändert → umbenennen (Links zieht Obsidian nach); ein eigener Name mit gleichem Datum bleibt
+        const soll = dateiTitel(dateiNameVon(x)), basis = n.f.basename.replace(/ \d+$/, "");
+        if (n.f.basename.slice(0, 10) !== x.datum || (NAME_VON_HIER.test(basis) && basis !== soll)) {
+          const ziel = freierPfad(soll, n.f);
           if (ziel !== n.f.path) { await app.fileManager.renameFile(n.f, ziel); b.umbenannt++; }
         }
         neuAngewendet[x.schluessel] = h;
         continue;
       }
       if (doppelt) { b.doppelt++; continue; }
-      if (q.geloescht(angewendet, x.schluessel, h)) { neuAngewendet[x.schluessel] = h; b.geloescht++; continue; } // von dir gelöscht
+      const grab = geloeschtVon(x, h);
+      if (grab) { neuAngewendet[x.schluessel] = grab; b.geloescht++; continue; } // von dir gelöscht
       if (x.datum < tag) { b.vorbei++; continue; }
       if (unfertig) continue;
       await app.vault.create(freierPfad(dateiTitel(dateiNameVon(x)), null), Z.notizText("", e, opt));

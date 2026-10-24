@@ -47,6 +47,8 @@
 //   Mit PDF (seit 0.5.7): Der Knopf schickt dazu die PDF selbst (bis 500 MB, zusammenfassung_pdf: true, POST /v1/pdf in Stücken
 //   zu 8 MB vor dem Text), damit Opus auch Abbildungen, Tabellen und Formeln sieht. Kostet das grob geschätzt mehr als 5 % eines
 //   Fünf-Stunden-Limits im Pro-Abo (pdfKosten) oder hat die PDF mehr als 20 MB, fragt der Knopf erst: „Mit PDF“ oder „Nur Text“.
+//   Ohne Server (seit 0.6.3): Mit eigenem API-Schlüssel fasst claude.js dieselben Unterlagen direkt zusammen und schreibt sie mit
+//   begleitnotizSauber und begleitnotizErgaenzen von hier; gibt es einen Server, geht er vor (pdfkasten.js).
 // Doppelte To-dos: Claude nennt Paare (behalten, weg) über die Kennung aus dem Auszug (id = „t-“ + Q.kurzHash(Pfad + Zeile)).
 //   Aus „weg“ wird ein einfacher Punkt mit Link auf die Notiz, in der die Aufgabe bleibt: nur eine offene Aufgabe unter „Zu tun“
 //   einer Begleitnotiz (typ: unterlage), nur wenn die Zeile noch genau so dasteht; nie abgehakt, nie gelöscht.
@@ -92,11 +94,14 @@ module.exports = function (ctx) {
   // Grob geschätzte Kosten einer Zusammenfassung mit Opus 5.5 (4 $ je Mio. Token Eingabe, 20 $ Ausgabe): der Text (etwa 3,5
   // Zeichen je Token), mit PDF dazu je Seite etwa 1500 Token für das Bild (gemessen an Folien und Übungen), etwa 4000 Token
   // Ausgabe. Ein Pro-Abo bekommt grob ein Zwanzigstel von Max 20x (etwa 8000 $ im Monat), verteilt auf etwa 146
-  // Fünf-Stunden-Fenster. → Anteil an einem Fenster (0.05 = 5 %); ab PDF_FRAGEN fragt der Knopf nach
+  // Fünf-Stunden-Fenster. → Anteil an einem Fenster (0.05 = 5 %); ab PDF_FRAGEN fragt der Knopf nach. Preise: Stand 24.10.2026
+  // (Preisliste der Claude-API). lauf.mjs nimmt den Alias „opus“, also das jeweils neueste Opus; bei einem neuen Modell die Preise
+  // hier prüfen (Checkliste in docs/release.md)
   const PRO_FENSTER_USD = 8000 / 20 / 146, PDF_FRAGEN = 0.05;
   const pdfKosten = (seiten, zeichen, mitPdf) => (((mitPdf ? (seiten || 0) * 1500 : 0) + (zeichen || 0) / 3.5) * 4e-6 + 4000 * 20e-6) / PRO_FENSTER_USD;
   const ERLEDIGT_TAGE = 60, LAEUFE = 20, HINWEISE = 30;
   const HINWEIS_NEU_TAGE = 14;      // ältere Hinweise zählen nie als neu (etwa auf einem neuen Gerät)
+  const UNERREICHBAR_TAGE = 3;      // so lange nicht erreichbar: Zeile rät zur Einrichtung (Server weg oder neue Adresse)
   // Takt des Servers: Werte wie TAKT in server/dienst.mjs, der erste ist der Standard
   const TAKT_WAHL = {
     uni_postfach: [[15, "alle 15 Minuten"], [30, "alle 30 Minuten"], [60, "stündlich"]],
@@ -156,7 +161,7 @@ module.exports = function (ctx) {
   const pad2 = (n) => String(n).padStart(2, "0");
   // Kurzer, stabiler Hash (FNV-1a, 32 Bit): Prüfsumme je Termin und Name des Schlüsselbund-Eintrags
   // ---------- Begleitnotizen ----------
-  const ARTEN_SENDEN = ["Folien", "Skript", "Übung", "Tutorium", "Lösung", "Altklausur", "Literatur"]; // Lehrmaterial; nie Mitschriften, Scans, eigene Lösungen
+  const ARTEN_SENDEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur"]; // Lehrmaterial; nie Mitschriften, Scans, eigene Lösungen
   // Text eines Punkts: rein, ohne Links, HTML, Templater oder Code (der Server prüft das auch; hier noch einmal, er könnte fremd sein)
   const punktText = (v, max) => reinerText(String(v == null ? "" : v).replace(/\[\[|\]\]|`|<%|%>|<\/?[a-z!][^>]*>|obsidian:\/\/\S*|javascript:/gi, " "), max);
   // Textfassung (Unterlagen/_Volltext/…, volltext.js) → reiner Text mit „[S. N]“ vor jeder Seite
@@ -229,6 +234,24 @@ module.exports = function (ctx) {
       else if (art === "ergaenzen") { const f = fehlend(a, neu); if (f.length) anhaengen(a, f); }
     }
     return geaendert ? zeilen.join("\n") : null;
+  };
+  // Begleitnotiz von Claude (vom Server oder direkt, claude.js) → nur erlaubte Felder in ihren Grenzen, reiner Text (punktText)
+  const begleitnotizSauber = (bn) => {
+    bn = bn || {};
+    // felder: was außer text und Seiten (seite, bis) erlaubt ist, „frist“ und/oder „begriff“
+    const liste = (l, max, n, felder = []) => (Array.isArray(l) ? l : []).slice(0, n).map((p) => {
+      const text = punktText(p && typeof p === "object" ? p.text : p, max);
+      const x = { text };
+      if (p && Number.isInteger(p.seite) && p.seite > 0 && p.seite < 10000) x.seite = p.seite;
+      if (x.seite && Number.isInteger(p.bis) && p.bis > x.seite && p.bis < 10000) x.bis = p.bis;
+      if (felder.includes("frist") && p && s10(p.frist) === p.frist) x.frist = p.frist;
+      if (felder.includes("begriff") && p && typeof p.begriff === "string") {
+        const b = punktText(p.begriff.replace(/\*/g, " ").replace(/:\s*$/, ""), 60);
+        if (b) x.begriff = b;
+      }
+      return x;
+    }).filter((p) => p.text);
+    return { wichtigste: liste(bn.wichtigste, 300, 12, ["begriff"]), zu_tun: liste(bn.zu_tun, 200, 12, ["frist"]), fragen: liste(bn.fragen, 200, 10) };
   };
 
   // Knopf „Zusammenfassen“: Wunsch in den Eigenschaften der Notiz (zusammenfassung_angefordert: Zeitpunkt UTC, „2026-10-20T17:50Z“)
@@ -393,7 +416,7 @@ module.exports = function (ctx) {
     const statusNormal = (o) => ({
       version: String(o.version || "").slice(0, 40),
       claude: wahl(o.claude, ["angemeldet", "abgemeldet"]),
-      gmail: wahl(o.gmail, ["ok", "fehlt"]),
+      gmail: wahl(o.gmail, ["ok", "fehlt", "aus"]),
       weiterleitung: wahl(o.weiterleitung, ["ok", "fehlt"]),
       uniZugang: wahl(o.uni_zugang, ["gespeichert", "fehlt", "falsch"]),
       speicherReserve: wahl(o.speicher_reserve, ["an", "aus"]),
@@ -592,21 +615,7 @@ module.exports = function (ctx) {
         b.verworfen.push({ id: "begleitnotiz", grund: "datei unzulässig" });
         return false;
       }
-      // felder: was außer text und Seiten (seite, bis) erlaubt ist, „frist“ und/oder „begriff“
-      const liste = (l, max, n, felder = []) => (Array.isArray(l) ? l : []).slice(0, n).map((p) => {
-        const text = punktText(p && typeof p === "object" ? p.text : p, max);
-        const x = { text };
-        if (p && Number.isInteger(p.seite) && p.seite > 0 && p.seite < 10000) x.seite = p.seite;
-        if (x.seite && Number.isInteger(p.bis) && p.bis > x.seite && p.bis < 10000) x.bis = p.bis;
-        if (felder.includes("frist") && p && s10(p.frist) === p.frist) x.frist = p.frist;
-        if (felder.includes("begriff") && p && typeof p.begriff === "string") {
-          const b = punktText(p.begriff.replace(/\*/g, " ").replace(/:\s*$/, ""), 60);
-          if (b) x.begriff = b;
-        }
-        return x;
-      }).filter((p) => p.text);
-      const sauber = { wichtigste: liste(bn.wichtigste, 300, 12, ["begriff"]), zu_tun: liste(bn.zu_tun, 200, 12, ["frist"]),
-        fragen: liste(bn.fragen, 200, 10) };
+      const sauber = begleitnotizSauber(bn);
       const h = Q.kurzHash(sauber);
       if (z.begleitet[pdf] === h) return false;
       const pfad = io.begleitnotiz ? io.begleitnotiz(pdf) : "";
@@ -768,6 +777,9 @@ module.exports = function (ctx) {
         if (b.verworfen.length) warnungen.push(`${b.verworfen.length === 1 ? "Ein Eintrag" : b.verworfen.length + " Einträge"} vom Server ${b.verworfen.length === 1 ? "war" : "waren"} ungültig.`);
         const neu = Q.nachLauf(alt, fehler ? { ok: false, fehler: FEHLER[fehler] } : { ok: true, warnungen }, abh.jetzt().toISOString());
         neu.code = fehler || "";
+        // Beginn der laufenden Fehlerserie (für den Hinweis nach Tagen; der letzte Erfolg allein zählt nicht, das Gerät war vielleicht
+        // nur lange aus)
+        neu.fehlerSeit = !fehler ? "" : neu.fehlerSerie === 1 || !alt.fehlerSeit ? neu.fehlerZeit : String(alt.fehlerSeit);
         neu.anderes = "";
         neu.bericht = fehler ? alt.bericht || null : { neu: b.angelegt.length, geaendert: b.aktualisiert.length + b.entfaellt.length, hinweise: b.hinweise };
         lokal(L.abruf, neu);
@@ -828,7 +840,8 @@ module.exports = function (ctx) {
       return d.toDateString() === j.toDateString() ? hm : `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}., ${hm}`;
     };
     // Status in der Form des Quellen-Vertrags, dazu Eigenes: verbunden, host, laeuft, werte (öffentlicher Status des Servers),
-    // erreichbar, code (Art des Fehlers), bericht (letzte Übernahme), anderes (ein anderes Gerät hält die Sperre)
+    // erreichbar, erreicht (Zeit von werte), code (Art des Fehlers), bericht (letzte Übernahme), anderes (ein anderes Gerät hält
+    // die Sperre)
     const sichtbar = () => !!verbindung() || io.existiert(DATEI);
     const status = () => {
       const v = verbindung(), st = objekt(lokal(L.status)), ab = objekt(lokal(L.abruf));
@@ -836,6 +849,7 @@ module.exports = function (ctx) {
       return Q.statusForm({
         zustand, geprueft: ab.geprueft, fehler: ab.fehler, fehlerZeit: ab.fehlerZeit, warnungen: ab.warnungen,
         verbunden: !!v, host: v ? hostVon(v.adresse) : "", laeuft, werte: st.werte || null, erreichbar: st.erreichbar !== false,
+        erreicht: String(st.erreicht || ""), fehlerSeit: String(ab.fehlerSeit || ""), fehlerSerie: Number(ab.fehlerSerie) || 0,
         code: String(ab.code || ""), bericht: ab.bericht || null, anderes: !!ab.anderes,
       });
     };
@@ -858,6 +872,12 @@ module.exports = function (ctx) {
           knopf: { aktion: "verbindung-aktualisieren", text: "Hier aktualisieren", cta: true, parameter: { id: "server", uebernehmen: "1" } }, link: MEHR };
         case "fehler":
           if (s.code === "zugang" || s.code === "paket") return { text: s.fehler, symbol: "warnung", pille: "pruefen", knopf: null, link: MEHR };
+          // tagelang nicht erreichbar löst sich kaum von selbst (Server gelöscht oder neu angelegt, neue IP): mindestens zwei
+          // Fehlschläge in Folge, der erste vor mehr als UNERREICHBAR_TAGE
+          if (s.code === "netz" && s.fehlerSerie >= 2 && s.fehlerSeit && alterMs(s.fehlerSeit) > UNERREICHBAR_TAGE * 1440 * MIN) {
+            return { text: `Dein Server ist seit mehr als ${UNERREICHBAR_TAGE} Tagen nicht erreichbar. Sag in Claude Desktop „Weiter mit der Einrichtung“; hat er eine neue Adresse, verbindest du ihn danach neu.`,
+              symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
+          }
           return { text: stand.text, symbol: stand.symbol, pille: "an", knopf: AKTUALISIEREN, link: MEHR };
         default: break;
       }
@@ -883,7 +903,7 @@ module.exports = function (ctx) {
     // Stand für das Fenster: [[Bezeichnung, Wert]] (nur feste Texte), Hinweise (neueste zuerst), letzte Übernahmen
     const WERTE = {
       claude: { angemeldet: "verbunden", abgemeldet: "nicht verbunden, bitte neu verbinden" },
-      gmail: { ok: "wird durchsucht", fehlt: "nicht verbunden" },
+      gmail: { ok: "wird durchsucht", fehlt: "nicht verbunden", aus: "aus (in den Einstellungen „nie“)" },
       uniZugang: { gespeichert: "eingerichtet", fehlt: "nicht eingerichtet", falsch: "Passwort nicht angenommen" },
     };
     const einzelheiten = async () => {
@@ -891,6 +911,8 @@ module.exports = function (ctx) {
       const liste = [];
       if (s.verbunden) liste.push(["Adresse", s.host]);
       if (s.werte) {
+        // nicht erreichbar: die Werte unten sind die von damals
+        if (!s.erreichbar) liste.push(["Stand des Servers", "nicht erreichbar" + (s.erreicht ? ", Angaben von " + uhrzeit(s.erreicht) : "")]);
         liste.push(["Claude", WERTE.claude[w.claude] || "unbekannt"], ["Gmail", WERTE.gmail[w.gmail] || "unbekannt"], ["Uni-Postfach", WERTE.uniZugang[w.uniZugang] || "unbekannt"]);
         if (w.letzterLauf) liste.push(["Letzter Lauf", uhrzeit(w.letzterLauf.zeit) + (w.letzterLauf.ok ? "" : " (ohne Ergebnis)")]);
       }
@@ -1285,8 +1307,10 @@ module.exports = function (ctx) {
     },
   };
 
+  // begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz und wahl braucht auch claude.js (Zusammenfassen ohne Server)
   ctx.server = {
     erzeugen, aehnlich, adresseNormal, PROMPT, LIVESYNC_PROMPT, livesyncAngebot, kopieren, begleitnotizErgaenzen, volltextText, taktAus, pdfKosten, PDF_FRAGEN,
+    begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz, wahl: wahlObs,
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
     jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
   };

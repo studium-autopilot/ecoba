@@ -36,7 +36,7 @@
 //   „Zentrale Daten aktualisieren“.
 // Testeinstiege (docs/architektur.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
 // plugin.testZentralBasis (andere Basis-URL, z. B. lokaler Server). Gerätelokal (app.saveLocalStorage): eba-geraet,
-// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel.
+// eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel, eba-zentral-angewendet.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -58,6 +58,7 @@ module.exports = function (ctx) {
   const UEBERNAHME = 80 * MIN; // anderes Gerät übernimmt, wenn der Abrufer so lange still war
   const PULS = 50 * MIN;       // Abrufer erneuert abruf.json höchstens so oft (unter UEBERNAHME, sonst Wechsel trotz Betrieb)
   const GERADE = 2 * MIN;      // „Jetzt aktualisieren“ übernimmt, außer der Abrufer hat vor weniger als GERADE abgerufen
+  const GRABSTEIN_TAGE = 30;   // so lange muss eine id aus Daten und Tresor verschwunden sein, bis ihr Grabstein wegfällt
   const KATEGORIEN = ["Semester", "Vorlesungsfrei", "Prüfung", "Frist", "Einführung", "Lehre", "Fachschaft", "Veranstaltung"];
   const VERANSTALTUNG = ["Fachschaft", "Veranstaltung"];
   const STATUS = ["offiziell", "geschätzt"];
@@ -78,13 +79,13 @@ module.exports = function (ctx) {
   const LEHRE_ORDNER = "Stundenplan";
   const MUSTERPLAN = "System/Daten/Musterplan.md";
   const AUSGEBLENDET = "stundenplan_ausgeblendet"; // Feld in System/Einstellungen.md: ids, die du nicht besuchst
-  const G = { manifest: 16384, id: 80, titel: 120, ort: 120, uhrzeit: 11, info: 200, quelleText: 200, url: 500, hinweis: 200, termine: 2000, name: 60, liste: 100,
+  const G = { manifest: 16384, id: 80, titel: 120, bezeichnung: 30, ort: 120, uhrzeit: 11, info: 200, quelleText: 200, url: 500, hinweis: 200, termine: 2000, name: 60, liste: 100,
     gruppen: 1000, gruppe: 20, raum: 120, leitung: 120, anmeldung: 200, angebote: 1000, reihe: 80, lehre: 3000, ausfall: 100, aenderungen: 100,
     kapitelModule: 60, kapitel: 40, teile: 40, kapitelTitel: 140, quelle: 120 };
   const DATUM_MIN = "2020-01-01", DATUM_MAX = "2040-12-31";
   const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
   const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten", gruppen: "eba-zentral-gruppen", angebote: "eba-zentral-angebote",
-    kapitel: "eba-zentral-kapitel" };
+    kapitel: "eba-zentral-kapitel", angewendet: "eba-zentral-angewendet" };
 
   // ---------- Kleine Helfer ----------
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
@@ -487,6 +488,10 @@ module.exports = function (ctx) {
   // Eintrag bleibt), unbekannte Felder (auch in aenderungen) werden ignoriert statt verworfen.
   // → { stand, veranstaltungen: [gültig], verworfen: [{ id, grund }], ids: Set (alle Einträge mit gültiger id) } oder { fehler }
   const LEHRE_ARTEN = ["Vorlesung", "Übung", "Tutorium", "Seminar", "Kolloquium", "Praktikum", "Kurs", "Sonstige"];
+  const BEZEICHNUNG_ARTEN = ["Kolloquium", "Praktikum", "Kurs", "Sonstige"];
+  // offizieller Name gilt nur zu diesen Arten und darf nicht wie eine steuernde Art heißen („Übung“, „tutorium“)
+  const bezeichnungOk = (art, b) => BEZEICHNUNG_ARTEN.indexOf(art) >= 0
+    && !LEHRE_ARTEN.some((a) => BEZEICHNUNG_ARTEN.indexOf(a) < 0 && a.toLowerCase() === b.toLowerCase());
   const RHYTHMEN = ["wöchentlich", "14-täglich", "Einzeltermin"];
   const WOCHE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   const pad2 = (n) => String(n).padStart(2, "0");
@@ -514,6 +519,11 @@ module.exports = function (ctx) {
     if (titel.fehler) return { fehler: "titel " + titel.fehler };
     const gruppe = kurzText(e.gruppe, G.gruppe, "gruppe");
     if (gruppe.fehler) return { fehler: gruppe.fehler };
+    // Offizieller Name einer Lehrveranstaltung außerhalb von Alma (seit 24.10.2026, optional, z. B. „Data Science Lab“ zur art
+    // „Praktikum“): steht statt der Art in Name, Titel, Kopf und Feld art der Notiz. Nur zu Arten ohne eigene Bedeutung im Plugin
+    // (BEZEICHNUNG_ARTEN; Vorlesung, Übung, Tutorium und Seminar steuern Gruppen und Raster). Sonst oder ungültig → ignoriert,
+    // der Eintrag bleibt.
+    const bez = kurzText(e.bezeichnung, G.bezeichnung, "bezeichnung");
     if (WOCHE.indexOf(e.tag) < 0) return { fehler: "tag ungültig" };
     if (typeof e.von !== "string" || !UHR.test(e.von) || typeof e.bis !== "string" || !UHR.test(e.bis) || e.bis <= e.von) return { fehler: "von/bis ungültig" };
     if (e.ct != null && typeof e.ct !== "boolean") return { fehler: "ct ungültig" };
@@ -562,7 +572,7 @@ module.exports = function (ctx) {
     if (url.fehler) return { fehler: "quelle_url: " + url.fehler };
     // Nur bekannte Felder; unbekannte (neuere optionale) werden ignoriert. Unbekannte Art gilt als „Sonstige“.
     return { wert: { id: e.id, code: e.code, art: LEHRE_ARTEN.indexOf(e.art) >= 0 ? e.art : "Sonstige", titel: titel.wert, gruppe: gruppe.wert,
-      tag: e.tag, von: e.von, bis: e.bis, ct: e.ct === true, rhythmus: e.rhythmus, zeitraum: { von: z.von, bis: z.bis }, raum: raum.wert,
+      bezeichnung: bez.fehler || !bezeichnungOk(e.art, bez.wert) ? "" : bez.wert, tag: e.tag, von: e.von, bis: e.bis, ct: e.ct === true, rhythmus: e.rhythmus, zeitraum: { von: z.von, bis: z.bis }, raum: raum.wert,
       raum_seit: e.raum_seit || "", raum_vorher: vorher.wert, ausfall: ausfall.slice(), aenderungen, semester: e.semester, quelle_url: url.wert } };
   };
   const lehrePruefen = (daten) => {
@@ -648,19 +658,47 @@ module.exports = function (ctx) {
     else { if (!datei("System/Daten")) { try { await app.vault.createFolder("System/Daten"); } catch (e) { /* da */ } } await app.vault.create(ABRUF, text); }
     if (bericht && bericht.geschrieben.indexOf(ABRUF) < 0) bericht.geschrieben.push(ABRUF);
   };
-  // „angewendet“ (Grabsteine) neu: in die Datei, die Felder der Sperre bleiben, wie sperre.js sie geschrieben hat
+  // „angewendet“ (Grabsteine) neu: in die Datei, die Felder der Sperre bleiben, wie sperre.js sie geschrieben hat. In einem Schritt
+  // (process), damit ein gleichzeitiges Feld „lernplan“ (lernplan.js) nicht verloren geht
   const angewendetSchreiben = async (angewendet, bericht) => {
     const f = datei(ABRUF);
-    let o = {};
-    try { o = f ? JSON.parse(await app.vault.read(f)) || {} : {}; } catch (e) { o = {}; }
-    o.angewendet = angewendet || {};
-    await abrufDatei(JSON.stringify(o, null, 1) + "\n", bericht);
+    const mit = (text) => {
+      let o = {};
+      try { o = text ? JSON.parse(text) || {} : {}; } catch (e) { o = {}; }
+      o.angewendet = angewendet || {};
+      return JSON.stringify(o, null, 1) + "\n";
+    };
+    if (!f) return abrufDatei(mit(""), bericht);
+    let geaendert = false;
+    await app.vault.process(f, (text) => { const neu = mit(text); geaendert = neu !== text; return neu; });
+    if (geaendert && bericht && bericht.geschrieben.indexOf(ABRUF) < 0) bericht.geschrieben.push(ABRUF);
+  };
+  // Sperre schreiben: nur ihre Felder in den Stand der Datei von jetzt (process), alle anderen („angewendet“, „lernplan“) bleiben,
+  // wie sie gerade sind, nicht wie sperre.js sie kurz vorher gelesen hat
+  const SPERRFELDER = ["geraet", "seit", "zuletzt", "mobil", "frei"];
+  const sperreSchreiben = async (text, bericht) => {
+    const f = datei(ABRUF);
+    let neu = null;
+    try { neu = JSON.parse(text); } catch (e) { neu = null; }
+    if (!f || !neu || typeof neu !== "object") return abrufDatei(text, bericht);
+    let geaendert = false;
+    await app.vault.process(f, (alt) => {
+      let o = null;
+      try { o = JSON.parse(alt); } catch (e) { o = null; }
+      const rest = o && typeof o === "object" && !Array.isArray(o) ? o : neu, aus = {};
+      for (const k of SPERRFELDER) if (k in neu) aus[k] = neu[k];
+      for (const k of Object.keys(rest)) if (SPERRFELDER.indexOf(k) < 0) aus[k] = rest[k];
+      const t = JSON.stringify(aus, null, 1) + "\n";
+      geaendert = t !== alt;
+      return t;
+    });
+    if (geaendert && bericht && bericht.geschrieben.indexOf(ABRUF) < 0) bericht.geschrieben.push(ABRUF);
   };
   // Übernahme über die gemeinsame Abrufer-Sperre (sperre.js, gleiche Werte): schreibt geraet, seit, zuletzt, mobil; „angewendet“
   // bleibt stehen
   const sperre = (bericht) => ctx.user.sperre.erzeugen({
     pfad: ABRUF, geraetId, jetzt: jetztMs, uebernahme: UEBERNAHME, puls: PULS, mobil: !!(ctx.obsidian.Platform && ctx.obsidian.Platform.isMobile),
-    io: { lesen: async (p) => { const f = datei(p); return f ? app.vault.read(f) : null; }, schreiben: (p, text) => abrufDatei(text, bericht) },
+    io: { lesen: async (p) => { const f = datei(p); return f ? app.vault.read(f) : null; }, schreiben: (p, text) => sperreSchreiben(text, bericht) },
   });
 
   // ---------- Einstellungen und Filter ----------
@@ -922,13 +960,14 @@ module.exports = function (ctx) {
       let f = vorhanden[e.id] || null;
       const h = eintragHash(e);
       if (!F.aufnehmen(e)) {
-        // nicht (mehr) passend: unberührt → Papierkorb, sonst stehen lassen
-        if (f) {
-          const text = await app.vault.read(f);
-          if (unberuehrt(fmVon(f), text)) { await papierkorb(f); bericht.papierkorb.push(f.path); }
+        // nicht (mehr) passend: unberührt → Papierkorb. Erledigt oder mit eigenem Text bleibt sie und wird weiter aktualisiert,
+        // sonst stünde sie mit altem Datum oder Ort in Agenda und Kalender.
+        const text = f ? await app.vault.read(f) : "";
+        if (!f || unberuehrt(fmVon(f), text)) {
+          if (f) { await papierkorb(f); bericht.papierkorb.push(f.path); }
+          delete angewendet[e.id];
+          continue;
         }
-        delete angewendet[e.id];
-        continue;
       }
       const soll = { modulLink: modulLink(F, e.code) };
       // Übergabe: Notiz des eigenen Uni-Abgleichs mit dieser id → übernehmen (erledigt, „Meine Notizen“, eigene Felder bleiben)
@@ -980,7 +1019,7 @@ module.exports = function (ctx) {
       if (neu !== text) { await app.vault.modify(f, neu); bericht.entfaellt.push(f.path); bericht.geschrieben.push(f.path); }
       delete angewendet[id];
     }
-    return { angewendet, filter: F.schluessel };
+    return { angewendet, filter: F.schluessel, geschuetzt: wegfallSperre };
   };
 
   // ---------- Zentraler Stundenplan: Auswahl (rein, testbar) ----------
@@ -1051,7 +1090,7 @@ module.exports = function (ctx) {
   // Art-Klassen: eine Vorlesung wird nie mit einer Übung gleichgesetzt, auch nicht direkt hintereinander im selben Modul.
   // „Übungsteil“ (Titel in Alma, die Daten führen diese Termine als Vorlesung) hat keine Klasse: Er passt wie eine unbestimmte
   // Art zu Vorlesung und Übung, aber nur bei genau passender Zeit.
-  const ART_KLASSE = { "Vorlesung": "v", "Übung": "u", "Tutorium": "u", "Seminar": "s", "Kolloquium": "s", "Praktikum": "p", "Kurs": "k" };
+  const ART_KLASSE = { "Vorlesung": "v", "Übung": "u", "Tutorium": "u", "Seminar": "s", "Kolloquium": "s", "Praktikum": "p", "Lab": "p", "Kurs": "k" };
   const artKlasse = (a) => ART_KLASSE[String(a == null ? "" : a)] || "";
   // „Alma gewinnt“: eigene Notizen (Alma oder von Hand; eigene = [{ f, fm }]) ersetzen zentrale Einträge desselben Termins.
   // Gleich heißt: Code, Semester, Wochentag; Beginn und Ende höchstens 15 Min. daneben (c.t. wie in alma.js: gemessen an der
@@ -1105,7 +1144,8 @@ module.exports = function (ctx) {
   // Fassung der Notiz im Filter-Schlüssel (lehreSchluessel): Kommt ein Feld dazu, schreibt der Abrufer nach dem Update alle
   // zentralen Notizen einmal neu, auch wenn veranstaltungen.json gleich bleibt. 2 = rhythmus (seit 20.10.2026; vorher stand eine
   // 14-tägliche Veranstaltung jede Woche im Raster). 3 = raum_seit/raum_vorher (seit 20.10.2026, dauerhafte Verlegung).
-  const LEHRE_FASSUNG = 3;
+  // 4 = bezeichnung (seit 24.10.2026, offizieller Name statt der Art; die Notiz wird dabei umbenannt, siehe lehreAbrufen).
+  const LEHRE_FASSUNG = 4;
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
   const dm = (s) => `${s.slice(8, 10)}.${s.slice(5, 7)}.`;
   // Kurztitel wie in alma.js (an einer Wortgrenze gekürzt)
@@ -1121,11 +1161,16 @@ module.exports = function (ctx) {
     const z = lehreZeit(e);
     return e.aenderungen.filter((a) => !a.zusatz).map((a) => [a.datum, a.von ? ctVerschieben(a.von, e.ct, 15) : z.beginn, a.bis ? ctVerschieben(a.bis, e.ct, -15) : z.ende, a.raum || e.raum].join("|"));
   };
+  // Was in der Notiz als Art steht: der offizielle Name (bezeichnung), sonst die Art
+  const lehreArt = (e) => e.bezeichnung || e.art;
+  const lehreNameAus = (teil, code, art) => `${teil} ${code} ${art}`.replace(/[\\/:*?"<>|#^\[\]]/g, "-");
   const lehreDateiName = (e) => {
     const z = lehreZeit(e);
-    const teil = e.rhythmus === "Einzeltermin" ? e.zeitraum.von : `${e.tag} ${z.beginn.replace(":", ".")}`;
-    return `${teil} ${e.code} ${e.art}`.replace(/[\\/:*?"<>|#^\[\]]/g, "-");
+    return lehreNameAus(e.rhythmus === "Einzeltermin" ? e.zeitraum.von : `${e.tag} ${z.beginn.replace(":", ".")}`, e.code, lehreArt(e));
   };
+  // Name nach der Regel, den die Notiz nach ihren Eigenschaften hat (vor dem Schreiben gelesen)
+  const lehreNameVorher = (fm) => lehreNameAus(fm.einzeltermin === true ? s10(fm.von) : `${fm.tag || ""} ${String(fm.beginn || "").replace(":", ".")}`,
+    String(fm.code || ""), String(fm.art || ""));
   // Inhalt einer zentralen Stundenplan-Notiz. alt = bisheriger Text (oder ""), e = geprüfter Eintrag, o = { modulLink, kurz }
   const lehreNotizText = (alt, e, o) => {
     o = o || {};
@@ -1136,8 +1181,8 @@ module.exports = function (ctx) {
     const liste = (k, werte) => (werte.length ? [k + ":"].concat(werte.map((w) => "  - " + w)) : [k + ": []"]);
     const vereinigt = (k, pflicht) => { const w = listenWerte(bl.find((b) => b.key === k) || null); pflicht.slice().reverse().forEach((p) => { if (w.indexOf(p) < 0) w.unshift(p); }); return w; };
     const zeilen = [
-      "typ: lehrveranstaltung", "titel: " + J(kurz + " · " + e.art), "code: " + J(e.code), "modul:" + (o.modulLink ? " " + J(o.modulLink) : ""),
-      "art: " + J(e.art), "wochentag: " + (WOCHE.indexOf(e.tag) + 1), "tag: " + e.tag, "beginn: " + J(z.beginn), "ende: " + J(z.ende),
+      "typ: lehrveranstaltung", "titel: " + J(kurz + " · " + lehreArt(e)), "code: " + J(e.code), "modul:" + (o.modulLink ? " " + J(o.modulLink) : ""),
+      "art: " + J(lehreArt(e)), "wochentag: " + (WOCHE.indexOf(e.tag) + 1), "tag: " + e.tag, "beginn: " + J(z.beginn), "ende: " + J(z.ende),
       "raum: " + J(e.raum),
     ].concat(e.raum_seit ? ["raum_seit: " + e.raum_seit, "raum_vorher: " + J(e.raum_vorher)] : [], [
       "semester: " + J(e.semester), "von: " + e.zeitraum.von, "bis: " + e.zeitraum.bis,
@@ -1146,7 +1191,7 @@ module.exports = function (ctx) {
     ], liste("tags", vereinigt("tags", ["stundenplan"])), liste("cssclasses", vereinigt("cssclasses", ["eba-s-notizen"])));
     for (const b of bl) if (b.key && LEHRE_EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
     const wann = einzeln ? `${TAGE_LANG[WOCHE.indexOf(e.tag)]}, ${dmy(e.zeitraum.von)}` : `${TAGE_LANG[WOCHE.indexOf(e.tag)]}s` + (e.rhythmus === "14-täglich" ? ", alle zwei Wochen" : "");
-    const kopf = [`# ${mdText(e.code)} · ${mdText(e.art)}`, "", `${wann}, ${z.beginn}–${z.ende}` + (e.raum ? " · " + mdText(e.raum) : ""), ""];
+    const kopf = [`# ${mdText(e.code)} · ${mdText(lehreArt(e))}`, "", `${wann}, ${z.beginn}–${z.ende}` + (e.raum ? " · " + mdText(e.raum) : ""), ""];
     if (!einzeln) kopf.push(`${dmy(e.zeitraum.von)} – ${dmy(e.zeitraum.bis)}`, "");
     if (e.raum_seit) kopf.push(`Neuer Raum ab ${dm(e.raum_seit)}, vorher ${mdText(e.raum_vorher)}`, "");
     if (e.ausfall.length) kopf.push("Fällt aus: " + e.ausfall.map(dm).join(", "), "");
@@ -1220,7 +1265,9 @@ module.exports = function (ctx) {
     await papierkorb(f);
     b.papierkorb.push(f.path);
   };
-  const lehreAnwenden = async (L, ids, abruf, b) => {
+  // ohneAbruf: abruf.json fehlte oder war unlesbar (Tresor neu aufgebaut, Sicherung ohne System/Daten) – fehlende Notizen sind
+  // dann nie von dir gelöscht
+  const lehreAnwenden = async (L, ids, abruf, b, ohneAbruf) => {
     const F = lehreFilter();
     const heute = heuteIso();
     await doppelZusammenfuehren(true, b);
@@ -1234,6 +1281,11 @@ module.exports = function (ctx) {
     // Liest Obsidian eine Datei in Stundenplan/ noch ein (gerade angelegt oder per Sync), fehlt sie evtl. in „vorhanden“: dann in
     // diesem Lauf nichts neu anlegen und nichts als gelöscht werten (sonst Doppel oder falsches „Besuche ich nicht“)
     const unfertig = app.vault.getMarkdownFiles().some((f) => f.path.startsWith(LEHRE_ORDNER + "/") && !app.metadataCache.getFileCache(f));
+    // Gerade erst Abrufer geworden (seit unter UEBERNAHME): Der Sync dieses Geräts hat vielleicht noch nicht alle Notizen gebracht.
+    // Eine fehlende, schon angelegte Notiz gilt dann nur als von dir gelöscht, wenn dieses Gerät sie beim letzten Lauf hatte
+    // (lehreDa, gerätelokal); sonst „Besuche ich nicht“ auf allen Geräten, und die Notiz käme beim Eintreffen in den Papierkorb.
+    const frisch = alterMs(abruf.seit) < UEBERNAHME;
+    const da = new Set(ohneAbruf ? [] : stand().lehreDa || []);
     if (!datei(LEHRE_ORDNER)) { try { await app.vault.createFolder(LEHRE_ORDNER); } catch (e) { /* da */ } }
     for (const e of sel.notizen) {
       const f = vorhanden[e.id] || null;
@@ -1251,25 +1303,44 @@ module.exports = function (ctx) {
       if (!f) {
         if (unfertig) continue;
         // Schon einmal angelegt und jetzt weg: von dir gelöscht → wie „Besuche ich nicht“ (zurücknehmen im Fenster „Zentrale Daten“)
-        if (angewendet[e.id]) { geloescht.push(e.id); delete angewendet[e.id]; continue; }
+        if (angewendet[e.id]) { if (!ohneAbruf && (!frisch || da.has(e.id))) geloescht.push(e.id); continue; }
         const pfad = freierPfad(lehreDateiName(e), null, LEHRE_ORDNER);
         await app.vault.create(pfad, lehreNotizText("", e, soll));
         b.angelegt.push(pfad); b.geschrieben.push(pfad);
         angewendet[e.id] = eintragHash(e);
+        da.add(e.id);
         continue;
       }
       const alt = await app.vault.read(f);
+      // Name nach der Regel geändert (offizieller Name neu, „Fr 14.15 S110 Praktikum“ → „… Data Science Lab“, oder neue Zeit):
+      // umbenennen, solange die Notiz noch ihren bisherigen Namen nach der Regel trägt (auch mit Zähler „… 2“), im selben Ordner.
+      // Einen eigenen Namen lässt der Abrufer stehen. Links zieht Obsidian nach. Erst umbenennen, dann schreiben: Scheitert das
+      // Umbenennen, steht noch die alte Regel in der Notiz und der nächste Lauf versucht es wieder.
+      const nameVorher = lehreNameVorher(fmVon(f) || {});
+      const sollName = lehreDateiName(e);
+      const zaehler = f.basename.slice(nameVorher.length + 1);
+      const regelName = f.basename === nameVorher || (f.basename.indexOf(nameVorher + " ") === 0 && /^\d{1,2}$/.test(zaehler));
+      if (regelName && nameVorher !== sollName) {
+        const ziel = freierPfad(sollName, f, f.path.slice(0, f.path.lastIndexOf("/")));
+        if (ziel !== f.path) { const von = f.path; await app.fileManager.renameFile(f, ziel); b.umbenannt.push(von + " → " + ziel); b.geschrieben.push(ziel); }
+      }
       const neu = lehreNotizText(alt, e, soll);
       if (neu !== alt) { await app.vault.modify(f, neu); b.aktualisiert.push(f.path); b.geschrieben.push(f.path); }
       angewendet[e.id] = eintragHash(e);
     }
     // Übrige zentrale Notizen: nicht mehr gewählt (Filter, „Besuche ich nicht“, Gruppen) oder aus den Daten verschwunden.
     // Schutz gegen kaputte Exporte: Fehlt auf einmal mehr als die Hälfte (und mehr als 2) der laufenden Serien, gilt keine als
-    // entfallen. Serien, deren Ende über 30 Tage zurückliegt, bleiben unverändert (alte Semester).
-    const laufend = Object.keys(vorhanden).filter((id) => { const ende = s10((fmVon(vorhanden[id]) || {}).bis); return !ende || tageZwischen(ende, heute) <= 30; });
+    // entfallen. Serien, deren Ende über 30 Tage zurückliegt, und Notizen eines anderen Semesters bleiben unverändert (alte
+    // Semester: Beim Semesterwechsel ersetzt der Export das Semester, die Vorlesungen sind dann vorbei, nicht entfallen).
+    const laufend = Object.keys(vorhanden).filter((id) => {
+      const fm = fmVon(vorhanden[id]) || {}, ende = s10(fm.bis);
+      return String(fm.semester || "") === F.semester && (!ende || tageZwischen(ende, heute) <= 30);
+    });
     const fehlend = laufend.filter((id) => !imDatensatz.has(id) && !ids.has(id));
     const sperre = fehlend.length > 2 && fehlend.length > laufend.length / 2;
     if (sperre) warnen(b, `${fehlend.length} Veranstaltungen fehlen in den Daten – nicht als entfallen behandelt.`);
+    const jeId = {};
+    for (const e of L) if (!jeId[e.id]) jeId[e.id] = e;
     for (const id of laufend) {
       if (erledigt.has(id)) continue;
       const weg = !imDatensatz.has(id);
@@ -1277,16 +1348,30 @@ module.exports = function (ctx) {
       const f = vorhanden[id], fm = fmVon(f) || {};
       const text = await app.vault.read(f);
       if (!lehreMeine(text)) { await papierkorb(f); b.papierkorb.push(f.path); delete angewendet[id]; continue; }
-      // Mit eigenem Text: bleibt. Weggefallen → „(entfällt)“, dann zeigen Raster und Liste sie nicht mehr.
-      if (weg && fm.entfaellt !== true) {
+      // Mit eigenem Text und noch in den Daten (nicht mehr gewählt): Zeit, Raum, Ausfälle weiter nach den Daten, dein Text bleibt
+      if (!weg) {
+        const e = jeId[id], mfm = Fm.module[e.code] ? fmVon(Fm.module[e.code]) || {} : {};
+        const neu = lehreNotizText(text, e, { modulLink: modulLink(Fm, e.code), kurz: mfm.titel || e.titel });
+        if (neu !== text) { await app.vault.modify(f, neu); b.aktualisiert.push(f.path); b.geschrieben.push(f.path); }
+        continue;
+      }
+      // Mit eigenem Text und weggefallen: bleibt als „(entfällt)“, dann zeigen Raster und Liste sie nicht mehr.
+      if (fm.entfaellt !== true) {
         await app.fileManager.processFrontMatter(f, (x) => { x.entfaellt = true; if (!/\(entfällt\)$/.test(String(x.titel || ""))) x.titel = String(x.titel || f.basename) + ENTFAELLT; });
         b.entfaellt.push(f.path); b.geschrieben.push(f.path);
       }
-      if (weg) delete angewendet[id];
+      delete angewendet[id];
     }
+    // Schutz wie beim Wegfall: Fehlen auf einmal mehr als die Hälfte (und mehr als 2) der gewählten Notizen, hast du sie kaum alle
+    // gelöscht (Tresor neu aufgebaut, Sync unvollständig): nichts ausblenden, Grabsteine bleiben
+    const massen = geloescht.length > 2 && geloescht.length > sel.notizen.length / 2;
+    if (massen) { warnen(b, `${geloescht.length} Veranstaltungen fehlen im Tresor – nicht als „Besuche ich nicht“ gewertet.`); geloescht.length = 0; }
+    for (const id of geloescht) delete angewendet[id];
     if (geloescht.length) { await ausblendenSetzen(geloescht, true); b.geschrieben.push(EINSTELLUNGEN); }
+    // lehreDa für den nächsten Lauf: die Notizen dieses Geräts, dazu neu angelegte und fehlende, die noch einen Grabstein haben
+    standSetzen({ lehreDa: Object.keys(vorhanden).concat(Array.from(da).filter((id) => !vorhanden[id] && angewendet[id])) });
     b.lehre = { notizen: sel.notizen.length - b.ersetzt.length, gruppen: sel.gruppen, ausgeblendet: sel.ausgeblendet + geloescht.length, ohneBeginn: F.ohneBeginn };
-    return { angewendet };
+    return { angewendet, geschuetzt: sperre || massen };
   };
   // Holen und prüfen (Abrufer): → { d, sha } | { fehler }
   const lehreHolen = async (soll) => {
@@ -1317,7 +1402,7 @@ module.exports = function (ctx) {
     if (fm && fm.code) return `${fm.code} ${fm.art || ""} · ${fm.tag || ""} ${fm.beginn || ""}`.replace(/\s+/g, " ").trim();
     const d = (lokal(L.daten) || {})[LEHRE];
     const e = d && Array.isArray(d.veranstaltungen) ? d.veranstaltungen.find((x) => x && x.id === id) : null;
-    if (e && typeof e.code === "string") return `${e.code} ${e.art || ""} · ${e.tag || ""} ${e.von || ""}`.replace(/\s+/g, " ").trim();
+    if (e && typeof e.code === "string") return `${e.code} ${(lehreNormal(e).wert || {}).bezeichnung || e.art || ""} · ${e.tag || ""} ${e.von || ""}`.replace(/\s+/g, " ").trim();
     const m = id.match(/^(?:ws-\d{4}-\d{2}|ss-\d{4})-([a-z0-9]+)-([a-z]+)-.*?(mo|di|mi|do|fr|sa|so)-(\d{2})(\d{2})(?:-\d+)?$/);
     return m ? `${m[1].toUpperCase()} ${m[2]} · ${m[3].charAt(0).toUpperCase() + m[3].slice(1)} ${m[4]}:${m[5]}` : id;
   };
@@ -1389,6 +1474,9 @@ module.exports = function (ctx) {
     // 2. Abrufer-Sperre: Ein anderes Gerät, das vor höchstens UEBERNAHME abgerufen hat, bleibt Abrufer. „Jetzt aktualisieren“
     // übernimmt (wie „Hier laden“ bei ILIAS), außer das andere Gerät hat vor weniger als GERADE abgerufen.
     const a = await abrufLesen();
+    // Grabsteine gerätelokal mitschreiben: Fehlt abruf.json später beim Übernehmen (Sync noch nicht da) oder ist sie unlesbar,
+    // gilt dieser Stand statt eines leeren (unten), sonst kämen alle gelöschten Notizen zurück
+    if (a && JSON.stringify(a.angewendet) !== JSON.stringify(lokal(L.angewendet) || {})) lokal(L.angewendet, a.angewendet);
     const fremd = (x) => !!x && x.geraet !== ich && alterMs(x.zuletzt) <= UEBERNAHME;
     const anderesGeraet = () => {
       b.art = "anderes-geraet"; standSetzen({ fehler: "", fehlerZeit: "", warnung: "", erfolg: new Date().toISOString(), abrufer: false });
@@ -1401,6 +1489,11 @@ module.exports = function (ctx) {
     const cache = lokal(L.daten) || {};
     const neu = {};
     const hashes = Object.assign({}, S0.hashes);
+    // Fehlt eine Datei im Manifest, bleiben ihre Notizen beim letzten Stand (docs/daten-v1.md): nicht aus dem gerätelokalen Stand
+    // neu anwenden, sonst wendete jedes Gerät seinen verschieden alten Stand an. Ohne Netz (nurCache) gilt das letzte Manifest:
+    // In hashes stehen nur Dateien, die es nannte.
+    const gelistet = (name) => (manifest ? !!manifest.dateien[name] : !!S0.hashes[name]);
+    if (manifest) for (const name of Object.keys(hashes)) if (!manifest.dateien[name]) delete hashes[name];
     if (manifest) {
       for (const name of Object.keys(manifest.dateien)) {
         if (name === GRUPPEN || name === ANGEBOTE || name === LEHRE) continue; // gerätelokal oben bzw. Stundenplan unten (eigene Fehler)
@@ -1416,13 +1509,13 @@ module.exports = function (ctx) {
     }
     // Prüfen (erst alles, dann schreiben)
     let T = null, ids = new Set(), S = null;
-    const tRoh = neu["termine.json"] ? neu["termine.json"].d : cache["termine.json"];
+    const tRoh = neu["termine.json"] ? neu["termine.json"].d : gelistet("termine.json") ? cache["termine.json"] : null;
     if (tRoh) {
       const tp = terminePruefen(tRoh);
       if (tp.fehler) return fehler(tp.fehler);
       T = tp.termine; ids = tp.ids; b.verworfen = b.verworfen.concat(tp.verworfen);
     }
-    const sRoh = neu["semester.json"] ? neu["semester.json"].d : cache["semester.json"];
+    const sRoh = neu["semester.json"] ? neu["semester.json"].d : gelistet("semester.json") ? cache["semester.json"] : null;
     if (sRoh) {
       const sp = semesterPruefen(sRoh);
       if (sp.fehler) return fehler(sp.fehler);
@@ -1438,7 +1531,7 @@ module.exports = function (ctx) {
       const r = await lehreHolen(manifest.dateien[LEHRE]);
       if (r.fehler) warnen(b, "Stundenplan: " + r.fehler); else lehreNeu = r;
     }
-    const lRoh = lehreNeu ? lehreNeu.d : lehreAn ? cache[LEHRE] : null;
+    const lRoh = lehreNeu ? lehreNeu.d : lehreAn && gelistet(LEHRE) ? cache[LEHRE] : null;
     if (lRoh) {
       const lp = lehrePruefen(lRoh);
       if (lp.fehler) warnen(b, "Stundenplan: " + lp.fehler);
@@ -1458,6 +1551,17 @@ module.exports = function (ctx) {
     if (wechsel) await sperre(b).nehmen({ erzwingen: true });
     const abruf = (wechsel ? await abrufLesen() : a2) || { geraet: ich, seit: new Date().toISOString(), zuletzt: "", angewendet: (a2 && a2.angewendet) || {} };
     let angewendetNeu = false;
+    // abruf.json fehlte oder war unlesbar: Die Sperre steht jetzt neu da, ohne „angewendet“. Dann gelten die Grabsteine, die dieses
+    // Gerät zuletzt gesehen hat (oben), und kommen gleich wieder in die Datei. Nur, wenn noch die meisten dieser ids als zentrale
+    // Notiz im Tresor stehen: Fehlen auch die Notizen (Tresor neu aufgebaut, Sicherung ohne System/Daten), sind sie nicht von dir
+    // gelöscht, und der Lauf legt sie neu an wie beim ersten Abruf.
+    const gemerkt = lokal(L.angewendet);
+    const gemerktIds = gemerkt && typeof gemerkt === "object" ? Object.keys(gemerkt) : [];
+    if (!a2 && !Object.keys(abruf.angewendet || {}).length && gemerktIds.length) {
+      const notizen = Object.assign({}, zentraleNotizen(), zentraleNotizen(true));
+      if (gemerktIds.filter((id) => notizen[id]).length > gemerktIds.length / 2) { abruf.angewendet = Object.assign({}, gemerkt); angewendetNeu = true; }
+    }
+    let geschuetzt = false; // Schutz gegen Massenwegfall hat gegriffen: keine Grabsteine aufräumen
     if (anwenden) {
       if (T) {
         // „Seit deinem letzten Besuch“: erster Lauf des Tresors (nichts angewendet) meldet nichts; ids aus dem letzten Stand dieses
@@ -1466,6 +1570,7 @@ module.exports = function (ctx) {
         const altT = cache["termine.json"];
         const altIds = altT && Array.isArray(altT.termine) ? new Set(altT.termine.map((x) => x && x.id).filter(Boolean)) : null;
         const r = await termineAnwenden(T, ids, abruf, b);
+        geschuetzt = r.geschuetzt;
         if (JSON.stringify(r.angewendet) !== JSON.stringify(abruf.angewendet || {})) { abruf.angewendet = r.angewendet; angewendetNeu = true; }
         if (ctx.seitBesuch && b.seitBesuch.length) {
           try { await ctx.seitBesuch.zentral(b.seitBesuch, { erster, altIds }); } catch (e) { console.error("zentral: Seit deinem letzten Besuch", e); }
@@ -1474,14 +1579,31 @@ module.exports = function (ctx) {
       if (S) await semesterSchreiben(S, b);
       if (LP) {
         try {
-          const r = await lehreAnwenden(LP.veranstaltungen, LP.ids, abruf, b);
+          const r = await lehreAnwenden(LP.veranstaltungen, LP.ids, abruf, b, !a2);
+          geschuetzt = geschuetzt || r.geschuetzt;
           if (JSON.stringify(r.angewendet) !== JSON.stringify(abruf.angewendet || {})) { abruf.angewendet = r.angewendet; angewendetNeu = true; }
-        } catch (e) { console.error("zentral: Stundenplan", e); warnen(b, "Stundenplan: " + ((e && e.message) || e)); }
+        } catch (e) { geschuetzt = true; console.error("zentral: Stundenplan", e); warnen(b, "Stundenplan: " + ((e && e.message) || e)); }
+      }
+      // Grabsteine aufräumen (sonst wüchse abruf.json um jedes Semester): Eine id, die weder in den Daten (auch als verworfener
+      // Eintrag) noch als zentrale Notiz im Tresor steht, braucht keinen mehr, sobald das GRABSTEIN_TAGE so ist (fehltSeit,
+      // gerätelokal: ein kurz fehlender oder neu veröffentlichter Eintrag behält ihn). Nur mit Terminen und Stundenplan in diesem
+      // Lauf, weil beide in „angewendet“ stehen, und nicht nach einem Massenwegfall (ein kaputter Export soll keine Grabsteine kosten).
+      if (T && LP && !geschuetzt) {
+        const bleibt = new Set(Object.keys(zentraleNotizen()).concat(Object.keys(zentraleNotizen(true)), T.map((e) => e.id), Array.from(ids),
+          LP.veranstaltungen.map((e) => e.id), Array.from(LP.ids)));
+        const alt = abruf.angewendet || {}, rest = {}, seit = stand().fehltSeit || {}, fehlt = {}, heute = heuteIso();
+        for (const id of Object.keys(alt)) {
+          if (bleibt.has(id)) { rest[id] = alt[id]; continue; }
+          const ab = /^\d{4}-\d{2}-\d{2}$/.test(seit[id] || "") ? seit[id] : heute;
+          if (tageZwischen(ab, heute) < GRABSTEIN_TAGE) { rest[id] = alt[id]; fehlt[id] = ab; }
+        }
+        standSetzen({ fehltSeit: fehlt });
+        if (Object.keys(rest).length !== Object.keys(alt).length) { abruf.angewendet = rest; angewendetNeu = true; }
       }
     } else b.art = "unveraendert";
     // Puls über sperre.js (höchstens alle PULS); neue Grabsteine dazu, solange dieses Gerät die Sperre hält
-    if (!wechsel && (await sperre(b).puls()) && angewendetNeu) await angewendetSchreiben(abruf.angewendet, b);
-    else if (wechsel && angewendetNeu) await angewendetSchreiben(abruf.angewendet, b);
+    if (!wechsel && (await sperre(b).puls()) && angewendetNeu) { await angewendetSchreiben(abruf.angewendet, b); lokal(L.angewendet, abruf.angewendet); }
+    else if (wechsel && angewendetNeu) { await angewendetSchreiben(abruf.angewendet, b); lokal(L.angewendet, abruf.angewendet); }
     // Stand merken (Prüfsummen nur, wenn übernommen)
     for (const name of Object.keys(neu)) { hashes[name] = neu[name].sha; cache[name] = neu[name].d; }
     if (lehreNeu) { hashes[LEHRE] = lehreNeu.sha; cache[LEHRE] = lehreNeu.d; }
@@ -1544,7 +1666,7 @@ module.exports = function (ctx) {
       zustand, geprueft: s.erfolg || s.geprueft, fehler: s.fehler ? fehlerSatz(s.fehler) : "", fehlerZeit: s.fehler ? s.fehlerZeit : "",
       warnungen: s.warnung ? [s.warnung] : [], grund: s.fehler,
       an: !aus, verbunden: !aus, pause: !!s.pause, hinweis: s.hinweis,
-      neueVersion: neuer(s.plugin_aktuell, version) ? s.plugin_aktuell : "", releases: RELEASES,
+      neueVersion: !aus && neuer(s.plugin_aktuell, version) ? s.plugin_aktuell : "", releases: RELEASES, // aus: kein altes Angebot
       veranstaltungen: veranstaltungenZeigen(), abrufer: !!s.abrufer,
     };
   };
@@ -1636,12 +1758,14 @@ module.exports = function (ctx) {
     stundenplan: stundenplanStand,
     // gerätelokaler Stand der Gruppen (gruppen.js): { stand, geholt, gruppen } oder null (noch nie geholt)
     gruppen: () => { const g = gruppenStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), gruppen: g.gruppen } : null; },
-    // gerätelokaler Stand der Angebote (angebote.js): { stand, geholt, angebote } oder null (nie geholt bzw. zurückgezogen)
-    angebote: () => { const g = angeboteStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), angebote: g.angebote } : null; },
-    // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt bzw. zurückgezogen)
+    // gerätelokaler Stand der Angebote (angebote.js): { stand, geholt, angebote } oder null (nie geholt, zurückgezogen oder zentrale
+    // Daten aus; der Stand bleibt fürs Wiedereinschalten)
+    angebote: () => { const g = eingeschaltet() && angeboteStand(); return g ? { stand: String(g.stand || ""), geholt: String(g.geholt || ""), angebote: g.angebote } : null; },
+    // gerätelokaler Stand der Kapitellisten (lernplan.js): { stand, sha256, module } oder null (nie geholt, zurückgezogen oder
+    // zentrale Daten aus)
     // Module, deren Termine aus Unterlagen zentral kommen (modul.js, server.js): { stand, semester, module, gilt } oder null
     abdeckung: abdeckungStand,
-    kapitel: () => { const g = kapitelStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
+    kapitel: () => { const g = eingeschaltet() && kapitelStand(); return g ? { stand: String(g.stand || ""), sha256: String(g.sha256 || ""), module: g.module } : null; },
     semKanon, sha256, protokoll, filterBauen, manifestHolen, releasePruefen, semver, neuer, frischUrl, FRISCH_KOPF, RELEASE_ROH, BASIS, RELEASES, ABRUF, MEINE,
     abruferHier, abruferHierAus,
     get laeuft() { return !!laeuft; },

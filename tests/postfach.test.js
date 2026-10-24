@@ -1,7 +1,8 @@
 // Postfach (postfach.js): Zustimmung je Gerät, Uni-Login nur bestätigt und nicht abgelehnt, Anmeldung mit dem Passwort nur im
 // POST an das Webmail, Ablehnung schreibt den Marker (Dienst „mail“), abgelaufene Sitzung einmal neu, Zahl ungelesener Mails
 // mit Seite 1 (fehlt sie, bleibt die Liste), Mail öffnen = gelesen,
-// Abmelden nach Leerlauf und beim Ausschalten, nichts im Tresor. Webmail als Attrappe (tests/daten/postfach/). Ohne Obsidian.
+// Abmelden nach Leerlauf und beim Ausschalten, anderer Uni-Login meldet ab und vergisst die Mails, Datum der Mails von heute bleibt
+// nach Mitternacht richtig, nichts im Tresor. Webmail als Attrappe (tests/daten/postfach/). Ohne Obsidian.
 "use strict";
 const fs = require("node:fs");
 const path = require("node:path");
@@ -33,7 +34,7 @@ function webmail(o) {
       if (u === "/login.php") return { status: 200, text: w.angemeldet ? seite("portal") : seite("login") };
       if (u.indexOf("/login.php?horde_logout_token=") === 0) { w.angemeldet = false; return { status: 200, text: seite("login") }; }
       if (!w.angemeldet) return { status: 200, text: seite("login") };
-      if (u.indexOf("/imp/basic.php?page=mailbox") === 0) return { status: 200, text: o.liste || seite("posteingang") };
+      if (u.indexOf("/imp/basic.php?page=mailbox") === 0) { if (o.beiListe) o.beiListe(); return { status: 200, text: o.liste || seite("posteingang") }; }
       if (u === "/imp/minimal.php?page=mailbox&mailbox=SU5CT1g") return o.zahlen === null ? { status: 500, text: "" } : { status: 200, text: o.zahlen || seite("zahlen") };
       if (u.indexOf("/imp/minimal.php?mailbox=SU5CT1g&buid=64&page=message") === 0) return { status: 200, text: seite("nachricht") };
       return { status: 404, text: "" };
@@ -53,6 +54,7 @@ function aufbau(o) {
     ablehnen: async (d) => { t.abgelehnt.push(d); },
     lokal: (k, v) => { if (v === undefined) return lokal[k] || null; if (v == null) delete lokal[k]; else lokal[k] = v; return v; },
     jetzt: () => t.jetzt,
+    heute: () => o.heute || "2026-10-22",
     zeit: (fn, ms) => { t.timer.push({ fn, ms }); return t.timer.length; },
     stopp: () => {},
     geaendert: () => { t.gezeichnet++; },
@@ -204,4 +206,101 @@ test("Leerlauf und Ausschalten melden ab; Ausschalten vergisst alles im Speicher
   assert.deepEqual(M.zustand().mails, {});
   assert.equal(M.zustand().ungelesen, null);
   assert.equal(M.status(), "aus");
+});
+
+test("Anderer Uni-Login: alte Sitzung abgemeldet, Mails vergessen; ein Abruf unterwegs verwirft seine Liste", async () => {
+  const o = { lokal: AN };
+  const { M, w } = aufbau(o);
+  await M.laden({ seite: 1 });
+  await M.oeffnen(64);
+  assert.equal(M.zustand().benutzer, "zx123");
+  assert.equal(M.status(), "bereit", "gleicher Benutzer: nichts passiert");
+  assert.equal(w.angemeldet, true);
+  o.zugang = { benutzer: "zy999", gesperrt: false, bestaetigt: true };
+  assert.equal(M.status(), "bereit");
+  assert.equal(w.anfragen[w.anfragen.length - 1].url, W + "/login.php?horde_logout_token=AbC123-x_Yz&logout_reason=4");
+  assert.equal(w.angemeldet, false);
+  const z = M.zustand();
+  assert.deepEqual([z.seiten, z.mails, z.ungelesen, z.benutzer, z.sitzung, z.abmelden], [{}, {}, null, "", null, ""]);
+  // Kurz kein Uni-Login (ilias.js lädt neu): alles bleibt; ausdrücklich entfernt (Trennen): ebenso abgemeldet und vergessen
+  const p = { lokal: AN };
+  const b = aufbau(p);
+  await b.M.laden({ seite: 1 });
+  p.zugang = null;
+  assert.equal(b.M.status(), "ohne-login");
+  assert.equal(b.M.kontoPruefen(), false);
+  assert.equal(b.w.angemeldet, true);
+  assert.equal(b.M.zustand().seiten[1].mails.length, 3);
+  p.zugang = undefined;
+  assert.equal(b.M.status(), "bereit", "derselbe Benutzer wieder da: Liste und Sitzung wie vorher");
+  assert.equal(b.M.zustand().benutzer, "zx123");
+  p.zugang = null;
+  assert.equal(b.M.kontoPruefen({ entfernt: true }), true);
+  assert.equal(b.w.angemeldet, false);
+  assert.deepEqual(b.M.zustand().seiten, {});
+  // Wechsel, während die Liste unterwegs ist: verworfen, kein zweiter Abruf zugleich
+  const q = { lokal: AN };
+  const c = aufbau(q);
+  await c.M.laden({ seite: 1 });
+  q.beiListe = () => { q.beiListe = null; q.zugang = { benutzer: "zy999", gesperrt: false, bestaetigt: true }; assert.equal(c.M.status(), "bereit"); assert.equal(c.M.zustand().laeuft, true); };
+  assert.equal(await c.M.laden({ seite: 2 }), false);
+  assert.deepEqual(c.M.zustand().seiten, {});
+  assert.equal(c.M.zustand().fehler, "");
+  assert.equal(c.M.zustand().laeuft, false);
+});
+
+test("Datum: Mails von heute (nur Uhrzeit) behalten ihr Datum, nach Mitternacht Tag und Monat", async () => {
+  const { M } = aufbau({ lokal: AN });
+  await M.laden({ seite: 1 });
+  const m = M.zustand().seiten[1].mails[0];
+  assert.equal(m.datum, "22.10.2026 08:40:00");
+  assert.equal(P.datumKurz(m.datum, "2026-10-22"), "08:40");
+  assert.equal(P.datumKurz(m.datum, "2026-10-23"), "22.10.");
+});
+
+test("Neuer Tag: der Block zeichnet neu (alle 30 Minuten und beim Zurückkommen, nur sichtbar); Wechsel des Uni-Logins meldet ab", async () => {
+  const { laden } = require("./laden.js");
+  const alt = globalThis.document;
+  globalThis.document = { visibilityState: "visible" };
+  try {
+    let tag = "2026-10-22", neu = 0, hoerer = null, zugang = { benutzer: "zx123", gesperrt: false, bestaetigt: true };
+    const intervalle = [], dom = [], w = webmail();
+    const zustand = {};
+    const r = laden("postfach", { kontext: {
+      date: { now: () => tag, jetzt: () => new Date("2026-10-22T10:00:00Z") },
+      codeblock: () => ({ neu: () => { neu++; } }),
+      intervall: (fn, ms) => { intervalle.push({ fn, ms }); return 0; },
+      dom: (_ziel, art, fn) => { dom.push({ art, fn }); },
+      bleibend: () => zustand,
+      ilias: { beobachten: (fn) => { hoerer = fn; return () => {}; }, uniZugang: () => zugang },
+      user: { "ilias-netz": { sitzung: w.sitzung, drossel: () => undefined }, "postfach-html": P },
+    } });
+    r.ergebnis.registrieren();
+    assert.deepEqual(intervalle.map((x) => x.ms), [30 * 60e3]);
+    assert.deepEqual(dom.map((x) => x.art), ["visibilitychange"]);
+    intervalle[0].fn();
+    assert.equal(neu, 0, "gleicher Tag");
+    tag = "2026-10-23";
+    globalThis.document.visibilityState = "hidden";
+    dom[0].fn();
+    assert.equal(neu, 0, "verborgen: nichts");
+    globalThis.document.visibilityState = "visible";
+    dom[0].fn();
+    assert.equal(neu, 1);
+    intervalle[0].fn();
+    assert.equal(neu, 1, "nur einmal je Tag");
+    // Uni-Login gewechselt, Seite nicht offen: der Hörer von ilias.js meldet die alte Sitzung ab
+    Object.assign(zustand, { benutzer: "zx123", sitzung: w.sitzung(), abmelden: "/login.php?horde_logout_token=AbC123-x_Yz&logout_reason=4",
+      seiten: { 1: { mails: [{ buid: 64 }], seiten: 1, gesamt: 1, zeit: 0 } }, mails: {} });
+    assert.equal(r.ergebnis.status(), "aus");
+    zugang = null;
+    hoerer({ art: "fertig" });
+    assert.equal(zustand.seiten[1].mails.length, 1, "kurz leer, ohne Meldung „zugang“: bleibt");
+    zugang = { benutzer: "zy999", gesperrt: false, bestaetigt: true };
+    hoerer({ art: "zugang" });
+    assert.deepEqual(zustand.seiten, {});
+    assert.equal(w.anfragen[w.anfragen.length - 1].url, W + "/login.php?horde_logout_token=AbC123-x_Yz&logout_reason=4");
+  } finally {
+    if (alt === undefined) delete globalThis.document; else globalThis.document = alt;
+  }
 });

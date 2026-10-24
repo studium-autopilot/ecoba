@@ -73,6 +73,47 @@ test("Leerer Block: Klasse is-leer und eigener Satz; sind beide leer, sagt der T
   assert.deepEqual(z(nichts, "fragen"), ["eba-td eba-td-fragen is-leer", "Keine offenen Fragen.", 0]);
 });
 
+test("Datum ohne Jahr zählt ab dem Tag der Notiz: Ein offenes „bis 05.10.“ bleibt im Dezember überfällig (24.10.2026)", async () => {
+  const heute = "2026-12-05", VL = "Vorlesungen/X100/2026-10-01 X100 VL 01.md";
+  const fm = { [VL]: { typ: "vorlesung", code: "X100", datum: "2026-10-01", nummer: 1, thema: "Einführung" } };
+  const M = laden("modell", { heute, notizen: fm }).ctx.modell;
+  const { ctx, ergebnis: T } = laden("todos", { heute, kontext: { modell: M } });
+  const notizen = { [VL]: "- [ ] Blatt abgeben bis 05.10.", "Notizen/Alt.md": "- [ ] Anmelden bis 03.10.", "Notizen/Neu.md": "- [ ] Lesen bis 01.10." };
+  const ctime = { "Notizen/Alt.md": new Date(2026, 9, 1, 9).getTime() };
+  ctx.app.vault.getMarkdownFiles = () => Object.keys(notizen).map((p) => ({ path: p, basename: path.basename(p, ".md"), stat: ctime[p] ? { ctime: ctime[p] } : undefined }));
+  ctx.app.vault.cachedRead = async (f) => notizen[f.path];
+  ctx.app.metadataCache.getFileCache = (f) => ({ frontmatter: fm[f.path], listItems: [{ task: " ", position: { start: { line: 0 } } }] });
+  const iso = (d) => M.zeit.iso(d);
+  const t = (await T.lesenBeide()).todos;
+  assert.deepEqual(t.map((x) => [x.text, iso(x.faellig)]), [
+    ["Anmelden bis 03.10.", "2026-10-03"], // ohne datum: Tag, an dem die Notiz entstand
+    ["Blatt abgeben bis 05.10.", "2026-10-05"], // Feld datum der Notiz; bis 24.10.2026: 2027-10-05, nicht mehr überfällig, ganz hinten
+    ["Lesen bis 01.10.", "2027-10-01"], // weder noch: wie bisher ab heute (mehr als 60 Tage zurück: nächstes Jahr)
+  ]);
+  assert.equal(iso(T.faellig("bis 05.10.", new Date(2026, 11, 5), "2026-10-01")), "2026-10-05");
+  // Der Kurzname der Quellnotiz trägt das Thema und gehört zur Signatur des Blocks: Ändert sich das Thema, zeichnet er neu
+  assert.equal(t[1].quelle, "X100 · Vorlesung 1 · Do 01.10. · Einführung");
+  fm[VL].thema = "Grundbegriffe";
+  assert.equal((await T.lesenBeide()).todos[1].quelle, "X100 · Vorlesung 1 · Do 01.10. · Grundbegriffe");
+});
+
+test("Notiz, die du über Jahre führst: ein neues „bis 15.11.“ zählt ab heute, nicht ab dem Anlegen; ein Datum im Dateinamen gilt", async () => {
+  const heute = "2027-10-20";
+  const M = laden("modell", { heute }).ctx.modell;
+  const { ctx, ergebnis: T } = laden("todos", { heute, kontext: { modell: M } });
+  const notizen = { "Notizen/Notizen.md": "- [ ] Bericht bis 15.11.", "Notizen/2027-07-01 Treffen.md": "- [ ] Protokoll bis 03.07.", "Notizen/Sommer.md": "- [ ] Lesen bis 05.08." };
+  const ctime = { "Notizen/Notizen.md": new Date(2026, 9, 1, 9).getTime(), "Notizen/2027-07-01 Treffen.md": new Date(2025, 0, 1).getTime(), "Notizen/Sommer.md": new Date(2027, 7, 1, 9).getTime() };
+  ctx.app.vault.getMarkdownFiles = () => Object.keys(notizen).map((p) => ({ path: p, basename: path.basename(p, ".md"), stat: { ctime: ctime[p] } }));
+  ctx.app.vault.cachedRead = async (f) => notizen[f.path];
+  ctx.app.metadataCache.getFileCache = () => ({ frontmatter: {}, listItems: [{ task: " ", position: { start: { line: 0 } } }] });
+  const t = (await T.lesenBeide()).todos;
+  assert.deepEqual(t.map((x) => [x.text, M.zeit.iso(x.faellig)]), [
+    ["Protokoll bis 03.07.", "2027-07-03"], // Datum im Dateinamen geht der Anlegezeit vor (ab heute: 2028)
+    ["Lesen bis 05.08.", "2027-08-05"], // angelegt vor 80 Tagen: ab da (ab heute: 2028)
+    ["Bericht bis 15.11.", "2027-11-15"], // angelegt vor über 300 Tagen: ab heute, nicht 2026-11-15 (ein Jahr überfällig)
+  ]);
+});
+
 // Das Raster blendet nach den Klassen aus, die zustand() setzt (eba-core.css, 37.todos). Benennt jemand eine Klasse um, bleibt
 // sonst wieder die leere Karte stehen.
 test("Raster: CSS blendet leere Karten nach is-leer aus, nur Karten in der Raster-Karte, nie einen Abschnitt", () => {

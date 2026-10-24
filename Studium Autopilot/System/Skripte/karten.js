@@ -6,8 +6,8 @@
 //   Frage / ? / Antwort           über mehrere Zeilen (?? = mit umgekehrter Karte)
 //   … {{c1::Text::Hinweis}} …     Lückentext, eine Karte je Nummer
 // Überschriften gliedern (Kapitel). Code, Kommentare (%% %%, <!-- -->), Zitate, Callouts, Tabellen und HTML zählen nicht.
-// Kennung: Block-ID am Ende („ ^k1a2b3c“). Fehlt sie, setzt das Plugin sie beim Start einer Lernrunde; sonst schreibt es in
-// Kartennotizen nur bei „Neue Karte“ und „Bearbeiten“.
+// Kennung: Block-ID am Ende („ ^k1a2b3c“). Fehlt sie (oder steht sie in einer anderen Zeile der Karte), setzt das Plugin sie
+// beim Start einer Lernrunde ans Ende; sonst schreibt es in Kartennotizen nur bei „Neue Karte“ und „Bearbeiten“.
 // Lernstände: System/Daten/Karteikarten/<Gerät>.jsonl, eine JSON-Zeile je Bewertung { k, t, b (1–4), d (ms) } oder Aktion
 // { k, t, a }: aus = aussetzen, an = fortsetzen, neu = zurücksetzen, zur = bis morgen zurückstellen. Jedes Gerät hängt nur an
 // seine eigene Datei an, darum gibt es keine Sync-Konflikte. Der Stand jeder Karte wird aus allen Dateien neu berechnet
@@ -37,6 +37,7 @@ module.exports = function (ctx) {
   const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
   const CODE_VORN = /^([A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?)(?:\s|$)/;
   const ID_AM_ENDE = /\s\^([A-Za-z0-9-]+)\s*$/;
+  const ID_DAZWISCHEN = /\s\^(k[0-9a-z]{6})\s*$/; // vor der letzten Zeile einer Karte nur eine Kennung, wie neueIdMacher sie macht
   const LUECKE_DA = /\{\{c(\d+)::/;
   const LUECKE = /\{\{c(\d+)::([\s\S]*?)(?:::([\s\S]*?))?\}\}/g;
   const LISTE = /^\s*(?:[-*+]|\d+[.)])\s+/;
@@ -136,9 +137,15 @@ module.exports = function (ctx) {
   const blockLesen = (block, kapitel, pfad, notizen) => {
     const erste = block[0].text.trim();
     if (/^[>|<]/.test(erste) || /^(-{3,}|\*{3,}|_{3,})$/.test(erste)) return;
-    const zeilen = block.map((b) => { const m = b.text.match(ID_AM_ENDE); return { nr: b.nr, id: m ? m[1] : null, text: m ? b.text.slice(0, m.index) : b.text }; });
+    const ohneId = (t, muster) => { const m = t.match(muster); return { id: m ? m[1] : null, text: m ? t.slice(0, m.index) : t }; };
+    const zeilen = block.map((b, j) => Object.assign({ nr: b.nr }, ohneId(b.text, j === block.length - 1 ? ID_AM_ENDE : ID_DAZWISCHEN)));
     const letzte = zeilen[zeilen.length - 1];
-    const basis = { pfad, kapitel, von: block[0].nr, bis: letzte.nr, idZeile: letzte.nr, id: letzte.id, roh: block.map((b) => b.text).join("\n") };
+    // Kennung einer Karte über mehrere Zeilen: am Ende, sonst die letzte in einer anderen Zeile (Karte in der Notiz um eine Zeile
+    // verlängert; dort zählt nur die Form der Kennungen, „r ^2“ bleibt Text); idStelle = ihre Zeile, kennungenEinfuegen schiebt sie
+    // ans Ende
+    const mitId = zeilen.filter((z) => z.id).pop() || null;
+    const basis = { pfad, kapitel, von: block[0].nr, bis: letzte.nr, idZeile: letzte.nr, id: mitId && mitId.id, idStelle: mitId ? mitId.nr : letzte.nr,
+      roh: block.map((b) => b.text).join("\n") };
     const text = (liste) => liste.map((z) => z.text).join("\n").trim();
     const sep = zeilen.findIndex((z) => z.text.trim() === "?" || z.text.trim() === "??");
     if (sep >= 0) {
@@ -151,8 +158,9 @@ module.exports = function (ctx) {
     const tr = zeilen.map((z) => trenner(z.text));
     if (zeilen.length > 1 && tr.every(Boolean)) {
       zeilen.forEach((z, j) => {
-        const v = z.text.slice(0, tr[j].pos).replace(LISTE, "").trim(), h = z.text.slice(tr[j].pos + tr[j].laenge).trim();
-        if (v && h) notizen.push(notizBauen({ pfad, kapitel, von: z.nr, bis: z.nr, idZeile: z.nr, id: z.id, roh: block[j].text }, tr[j].umgekehrt ? "umgekehrt" : "einfach", v, h));
+        const e = ohneId(block[j].text, ID_AM_ENDE); // jede Zeile eine Karte: ihre Kennung steht am Ende der Zeile
+        const v = e.text.slice(0, tr[j].pos).replace(LISTE, "").trim(), h = e.text.slice(tr[j].pos + tr[j].laenge).trim();
+        if (v && h) notizen.push(notizBauen({ pfad, kapitel, von: z.nr, bis: z.nr, idZeile: z.nr, id: e.id, idStelle: z.nr, roh: block[j].text }, tr[j].umgekehrt ? "umgekehrt" : "einfach", v, h));
       });
       return;
     }
@@ -202,11 +210,12 @@ module.exports = function (ctx) {
     .replace(/!\[\[[^\]]*\]\]/g, "[Bild]").replace(/!\[[^\]]*\]\([^)]*\)/g, "[Bild]")
     .replace(/\[\[(?:[^\]|]*\|)?([^\]]*)\]\]/g, "$1").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/<[^>]+>/g, "").replace(/[*_~`=$]+/g, "").replace(/\s+/g, " ").trim();
-  const rohOhneId = (roh) => { const z = String(roh).split("\n"); z[z.length - 1] = z[z.length - 1].replace(ID_AM_ENDE, ""); return z.join("\n"); };
+  const rohOhneId = (roh) => { const z = String(roh).split("\n"); return z.map((x, j) => x.replace(j === z.length - 1 ? ID_AM_ENDE : ID_DAZWISCHEN, "")).join("\n"); };
 
   // ---------- Kennungen (rein) ----------
   // Fehlende Kennungen anhängen; Kennungen, die einer anderen Notiz gehören (fremd) oder in dieser Notiz doppelt sind, ersetzen.
-  // neueId() liefert eine unbenutzte Kennung. Rückgabe { text, neu: Anzahl }.
+  // Steht eine Kennung nicht in der letzten Zeile ihrer Karte, kommt sie dorthin. neueId() liefert eine unbenutzte Kennung.
+  // Rückgabe { text, neu: Anzahl geänderter Karten }.
   const kennungenEinfuegen = (text, pfad, fremd, neueId) => {
     const roh = String(text);
     const nl = roh.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
@@ -214,9 +223,11 @@ module.exports = function (ctx) {
     const gesehen = new Set();
     let neu = 0;
     for (const n of parsen(roh, pfad)) {
-      if (n.id && !(fremd && fremd.has(n.id)) && !gesehen.has(n.id)) { gesehen.add(n.id); continue; }
-      const id = neueId();
+      const behalten = !!n.id && !(fremd && fremd.has(n.id)) && !gesehen.has(n.id);
+      if (behalten && n.idStelle === n.idZeile) { gesehen.add(n.id); continue; }
+      const id = behalten ? n.id : neueId();
       gesehen.add(id);
+      if (n.idStelle !== n.idZeile) zeilen[n.idStelle] = zeilen[n.idStelle].replace(ID_DAZWISCHEN, "");
       zeilen[n.idZeile] = zeilen[n.idZeile].replace(ID_AM_ENDE, "").replace(/\s+$/, "") + " ^" + id;
       neu++;
     }
@@ -353,6 +364,15 @@ module.exports = function (ctx) {
     if (lernt(v.vorher)) s.lernen.set(v.schluessel, v.vorher.faellig);
     else s.lernen.delete(v.schluessel);
   };
+  // Runde aus einem neuen Tagesplan (Lernstand eines anderen Geräts, geänderte Notizen, neuer Lerntag); Zähler und Verlauf
+  // bleiben. art: Warteschlange der gezeigten Karte in der neuen Runde, "" wenn sie nicht mehr dran ist.
+  const sitzungAuffrischen = (alt, plan, stand, schluessel, jetzt) => {
+    const s = Object.assign(sitzungBauen(plan, stand), { gezeigt: alt.gezeigt, verlauf: alt.verlauf, gelernt: alt.gelernt, richtig: alt.richtig, zeit: alt.zeit });
+    s.start = { neu: s.neu.length + alt.gezeigt.neu, faellig: s.faellig.length + alt.gezeigt.faellig };
+    const art = !schluessel ? "" : s.neu.indexOf(schluessel) >= 0 ? "neu" : s.faellig.indexOf(schluessel) >= 0 ? "faellig"
+      : s.lernen.get(schluessel) <= jetzt + VORAUS ? "lernen" : "";
+    return { s, art };
+  };
 
   // ---------- Statistik (rein) ----------
   const statistik = (karten, stand, log, o, jetzt) => {
@@ -470,7 +490,7 @@ module.exports = function (ctx) {
           for (const k of n.karten) {
             k.schluessel = ersatz ? ersatz + k.suffix : k.basis;
             k.nid = ersatz || (n.id || k.basis.slice(0, k.basis.length - k.suffix.length));
-            k.ohneId = !n.id || doppelt;
+            k.ohneId = !n.id || doppelt || n.idStelle !== n.idZeile; // Kennung nicht am Ende: kennungenSetzen schiebt sie dorthin
             k.code = code; k.gruppe = st.gruppe; k.pfad = f.path; k.reihe = karten.length;
             st.karten.push(k); karten.push(k);
           }
@@ -521,6 +541,9 @@ module.exports = function (ctx) {
   const eigenerPfad = () => `${DATEN}/${geraet()}.jsonl`;
   const fremdeLogs = new Map(); // Pfad → { mtime, size, eintraege }
   let eigene = null;            // Einträge dieses Geräts (im Speicher, nur dieses Gerät schreibt die Datei)
+  let eigeneAlt = false;        // eigene Datei von außen geändert oder gelöscht (Sync, Hand): beim nächsten Laden neu lesen
+  let schreibend = 0, bekannt = ""; // eigene Schreibvorgänge: laufende und Stand der Datei nach dem letzten
+  const dateiStand = (f) => (f && f.stat ? f.stat.mtime + "|" + f.stat.size : "");
   let alle = [], logVersion = 0, logsAlt = true, logsLaeuft = null;
   const zusammenfuehren = () => {
     const quellen = [[eigenerPfad(), eigene || []]];
@@ -536,24 +559,31 @@ module.exports = function (ctx) {
     alle = liste; logVersion++;
   };
   const logsLaden = () => {
-    if (!logsAlt && eigene) return Promise.resolve(alle);
+    if (!logsAlt && eigene && !eigeneAlt) return Promise.resolve(alle);
     if (logsLaeuft) return logsLaeuft;
     logsLaeuft = (async () => {
       logsAlt = false;
+      const neuLesen = eigeneAlt;
+      eigeneAlt = false;
+      // Was bis hier bewertet ist, steht nach kette in der Datei; was danach kommt, bleibt aus dem Speicher dabei (doppelte
+      // Einträge fallen in zusammenfuehren weg)
+      const vorher = eigene, n = vorher ? vorher.length : 0;
+      if (neuLesen) await kette;
       const ordner = app.vault.getAbstractFileByPath(DATEN);
       const dateien = ordner && ordner.children ? ordner.children.filter((f) => f.extension === "jsonl") : [];
       const pfad = eigenerPfad(), da = new Set();
       for (const f of dateien) {
         da.add(f.path);
-        if (f.path === pfad && eigene) continue;
+        if (f.path === pfad && eigene && !neuLesen) continue;
         const c = fremdeLogs.get(f.path);
         if (c && c.mtime === f.stat.mtime && c.size === f.stat.size) continue;
         let text = "";
         try { text = await app.vault.cachedRead(f); } catch (e) { text = ""; }
-        if (f.path === pfad) eigene = zeilenLesen(text);
+        if (f.path === pfad) eigene = zeilenLesen(text).concat(vorher ? vorher.slice(n) : []);
         else fremdeLogs.set(f.path, { mtime: f.stat.mtime, size: f.stat.size, eintraege: zeilenLesen(text) });
       }
       for (const p of Array.from(fremdeLogs.keys())) if (!da.has(p)) fremdeLogs.delete(p);
+      if (neuLesen && !da.has(pfad)) eigene = vorher ? vorher.slice(n) : [];
       if (!eigene) eigene = [];
       zusammenfuehren();
       return alle;
@@ -562,18 +592,25 @@ module.exports = function (ctx) {
   };
   let kette = Promise.resolve();
   const fehlerMelden = (x) => { console.error(SPRACHE, x); ctx.hinweis("Dein Lernstand ließ sich nicht speichern. Bitte noch einmal versuchen."); };
+  // Schreiben in die eigene Datei, nacheinander; geaendert erkennt die eigenen Ereignisse an schreibend und bekannt
+  const eigeneSchreiben = (fn) => {
+    kette = kette.then(async () => {
+      schreibend++;
+      try { await fn(); } finally { schreibend--; bekannt = dateiStand(app.vault.getAbstractFileByPath(eigenerPfad())); }
+    }).catch(fehlerMelden);
+    return kette;
+  };
   const anhaengen = (e) => {
     (eigene || (eigene = [])).push(e);
     alle.push(e); logVersion++;
     const zeile = JSON.stringify(e) + "\n";
-    kette = kette.then(async () => {
+    return eigeneSchreiben(async () => {
       const pfad = eigenerPfad();
       const f = app.vault.getAbstractFileByPath(pfad);
       if (f) { await app.vault.append(f, zeile); return; }
       if (!app.vault.getAbstractFileByPath(DATEN)) { try { await app.vault.createFolder(DATEN); } catch (x) { /* gibt es schon */ } }
       await app.vault.create(pfad, JSON.stringify({ v: 1, geraet: geraet(), inhalt: "Lernstand der Karteikarten (Studium Autopilot)" }) + "\n" + zeile);
-    }).catch(fehlerMelden);
-    return kette;
+    });
   };
   const zuruecknehmen = (e) => {
     if (eigene) { const i = eigene.lastIndexOf(e); if (i >= 0) eigene.splice(i, 1); }
@@ -581,7 +618,7 @@ module.exports = function (ctx) {
     if (j >= 0) alle.splice(j, 1);
     logVersion++;
     const zeile = JSON.stringify(e);
-    kette = kette.then(async () => {
+    return eigeneSchreiben(async () => {
       const f = app.vault.getAbstractFileByPath(eigenerPfad());
       if (!f) return;
       await app.vault.process(f, (text) => {
@@ -591,8 +628,7 @@ module.exports = function (ctx) {
         if (k >= 0 && z[k].trim() === zeile) z.splice(k, 1);
         return z.join("\n");
       });
-    }).catch(fehlerMelden);
-    return kette;
+    });
   };
 
   let stand = null, standSig = "";
@@ -702,9 +738,11 @@ module.exports = function (ctx) {
     for (let i = 2; app.vault.getAbstractFileByPath(pfad); i++) pfad = `${ORDNER}/${eba.sauber(name)} ${i}.md`;
     return app.vault.create(pfad, inhalt.split(ctx.CURSOR || "").join(""));
   };
+  // Zeile aus dem jetzigen Stand der Notiz (darüber können inzwischen Zeilen dazugekommen sein)
   const notizZeigen = async (karte) => {
-    const f = app.vault.getAbstractFileByPath(karte.pfad);
-    if (f && ctx.oeffnen) await ctx.oeffnen(f, { cursor: { line: karte.notiz.von, ch: 0 } });
+    const k = (await indexLaden()).nach.get(karte.schluessel) || karte;
+    const f = app.vault.getAbstractFileByPath(k.pfad);
+    if (f && ctx.oeffnen) await ctx.oeffnen(f, { cursor: { line: k.notiz.von, ch: 0 } });
   };
 
   // ---------- Anzeige: Hilfen ----------
@@ -740,7 +778,7 @@ module.exports = function (ctx) {
   // ---------- Lernfenster ----------
   let fenster = null; // offenes Lernfenster (Tests: ctx.karten.fenster)
   class Lernfenster extends Fenster {
-    constructor(umfang) { super(app); this.umfang = umfang || {}; }
+    constructor(umfang) { super(app); this.umfang = umfang || {}; this.zug = 0; }
     onOpen() {
       fenster = this;
       this.modalEl.addClass("eba-modal", "eba-lk-fenster");
@@ -776,6 +814,25 @@ module.exports = function (ctx) {
       this.s = sitzungBauen(tp, d.stand);
       this.weiter();
       this.modalEl.focus();
+    }
+    // Runde neu bauen, wenn sich Lernstände, Karten oder der Lerntag geändert haben. Die gezeigte Karte bleibt, solange es sie
+    // gibt und sie dran ist (sonst kommt die nächste); hat sich ihr Text geändert, kommt die Frage neu. Beim Bearbeiten nicht.
+    async auffrischen() {
+      if (!this.s || this.bearbeitet) return;
+      let d, zug;
+      do { zug = this.zug; d = await datenLaden(); } while (zug !== this.zug); // inzwischen bewertet: Stand noch einmal
+      if (!this.s || this.bearbeitet) return;
+      // Karten ohne feste Kennung (inzwischen dazugekommen) erst in der nächsten Runde: Kennungen setzt nur starten
+      const a = this.aktuell, karten = imUmfang(d.idx, this.umfang), mitId = karten.filter((k) => !k.ohneId);
+      const tp = tagesplan(mitId, d.stand, d.log, d.o, d.jetzt, extraLesen(tagVon(d.jetzt, d.o.tagesbeginn)));
+      const r = sitzungAuffrischen(this.s, tp, d.stand, a && a.karte.schluessel, d.jetzt);
+      this.d = d; this.plan = planerFuer(d.o); this.leer = !karten.length; this.s = r.s;
+      if (!a || !r.art) { this.aktuell = null; this.fertig = false; this.weiter(); return; }
+      const k = this.s.karten.get(a.karte.schluessel), anders = k.notiz.roh !== a.karte.notiz.roh;
+      a.karte = k; a.art = r.art;
+      this.zahlenZeigen(a.art);
+      if (anders) { a.offen = false; this.frageZeigen(); }
+      else if (a.offen) this.knoepfeZeigen();
     }
     weiter() {
       const n = naechsteKarte(this.s, jetztMs());
@@ -813,6 +870,7 @@ module.exports = function (ctx) {
     rendern(md, el, pfad) { return mdRendern(md, el, pfad, this.kind); }
     async frageZeigen() {
       const a = this.aktuell, k = a.karte;
+      this.bearbeitet = false;
       if (this.komp && O.Component) { if (this.kind) this.komp.removeChild(this.kind); this.kind = this.komp.addChild(new O.Component()); }
       this.flaeche.empty();
       const kasten = this.flaeche.createDiv({ cls: "eba-lk-karte" });
@@ -871,7 +929,7 @@ module.exports = function (ctx) {
       const e = { k: k.schluessel, t: jetzt, b, d: Math.min(MAX_DAUER, Date.now() - a.start) };
       this.d.stand.set(k.schluessel, neu);
       this.d.log.push(logEintrag(e, alt, neu, o));
-      anhaengen(e);
+      anhaengen(e); this.zug++;
       sitzungNehmen(this.s, k.schluessel, a.art, neu, true);
       this.s.verlauf.push({ e, schluessel: k.schluessel, art: a.art, vorher, karte: k, gezaehlt: true });
       this.s.gelernt++; this.s.zeit += e.d;
@@ -888,7 +946,7 @@ module.exports = function (ctx) {
       const e = { k: k.schluessel, t: jetzt, a: art };
       const neu = Object.assign({}, vorher || this.plan.leer(), art === "aus" ? { ausgesetzt: true } : { zurueck: tagVon(jetzt, this.d.o.tagesbeginn) });
       this.d.stand.set(k.schluessel, neu);
-      anhaengen(e);
+      anhaengen(e); this.zug++;
       sitzungNehmen(this.s, k.schluessel, a.art, null, false);
       this.s.verlauf.push({ e, schluessel: k.schluessel, art: a.art, vorher, karte: k, gezaehlt: false });
       ctx.hinweis(art === "aus" ? "Karte ausgesetzt." : "Karte bis morgen zurückgestellt.", { dauer: 2500 });
@@ -906,16 +964,19 @@ module.exports = function (ctx) {
         if (v.e.b > 1) this.s.richtig--;
       }
       sitzungZurueck(this.s, v);
-      zuruecknehmen(v.e);
+      zuruecknehmen(v.e); this.zug++;
       this.fertig = false;
       this.aktuell = { karte: v.karte, art: v.art, start: Date.now(), offen: false };
       this.zahlenZeigen(v.art);
       this.frageZeigen();
     }
-    bearbeiten() {
+    async bearbeiten() {
       const a = this.aktuell;
       if (!a) return;
-      const k = a.karte;
+      // Block aus dem jetzigen Stand der Notiz: Zeilen davor können sich seit dem Start der Runde verschoben haben
+      const k = (await indexLaden()).nach.get(a.karte.schluessel) || a.karte;
+      if (this.aktuell !== a) return;
+      this.bearbeitet = true;
       this.flaeche.empty(); this.fuss.empty();
       const feld = this.flaeche.createEl("textarea", { cls: "eba-lk-text", attr: { "aria-label": "Karte bearbeiten", spellcheck: "true" } });
       feld.value = rohOhneId(k.notiz.roh);
@@ -934,7 +995,7 @@ module.exports = function (ctx) {
       setTimeout(() => feld.focus(), 30);
     }
     fertigZeigen(n) {
-      this.fertig = true; this.aktuell = null;
+      this.fertig = true; this.aktuell = null; this.bearbeitet = false;
       this.flaeche.empty(); this.fuss.empty();
       const box = this.flaeche.createDiv({ cls: "eba-lk-fertig" });
       const s = this.s;
@@ -1589,6 +1650,7 @@ module.exports = function (ctx) {
       return zeichnen(el, inst.art, pfad).catch((e) => { console.error(SPRACHE, e); el.empty(); el.createDiv({ cls: "sa-block-fehler", text: `${SPRACHE}: ${(e && e.message) || e}` }); });
     });
     anzeigeNeu = ctx.entprellen(() => block.neu(), 400);
+    const fensterNeu = ctx.entprellen(() => { if (fenster) fenster.auffrischen().catch((e) => console.error(SPRACHE, e)); }, 1000);
     // „Karten anzeigen“ aus dem Stapel-Menü: Kartenliste auf die Gruppe stellen, neu zeichnen, hinscrollen
     listeBlockZeigen = (gruppe) => {
       const z = ctx.bleibend("liste", LISTE_ANFANG);
@@ -1598,29 +1660,39 @@ module.exports = function (ctx) {
       if (inst) inst.el.scrollIntoView({ block: "start", behavior: "smooth" });
       else ctx.hinweis("Die Kartenliste steht auf der Seite Karteikarten.", { dauer: 3000 });
     };
-    const geaendert = (f, alt) => {
+    const geaendert = (art, f, alt) => {
       const p = String((f && f.path) || ""), a = String(alt || "");
       const karten = p.startsWith(ORDNER + "/") || a.startsWith(ORDNER + "/");
-      const logs = (p.startsWith(DATEN + "/") || a.startsWith(DATEN + "/")) && p !== eigenerPfad();
+      // Die eigene Datei: nur neu lesen, wenn nicht dieses Skript sie gerade geschrieben hat
+      const eigen = p === eigenerPfad() || a === eigenerPfad();
+      if (eigen && (art === "delete" || art === "rename" || !(schreibend > 0 || dateiStand(f) === bekannt))) eigeneAlt = true;
+      const logs = (p.startsWith(DATEN + "/") || a.startsWith(DATEN + "/")) && (!eigen || eigeneAlt);
       if (karten) indexAlt = true;
       if (logs) logsAlt = true;
-      if (karten || logs) anzeigeNeu();
+      if (karten || logs) { anzeigeNeu(); fensterNeu(); }
     };
-    for (const n of ["modify", "create", "delete"]) ctx.an(app.vault, n, (f) => geaendert(f));
-    ctx.an(app.vault, "rename", (f, alt) => geaendert(f, alt));
+    for (const n of ["modify", "create", "delete"]) ctx.an(app.vault, n, (f) => geaendert(n, f));
+    ctx.an(app.vault, "rename", (f, alt) => geaendert("rename", f, alt));
     ctx.an(app.metadataCache, "changed", (f) => {
-      if (f && f.path === EINSTELLUNGEN) anzeigeNeu();
-      else if (f && f.path && f.path.startsWith(ORDNER + "/")) { indexAlt = true; anzeigeNeu(); }
+      if (f && f.path === EINSTELLUNGEN) { anzeigeNeu(); fensterNeu(); }
+      else if (f && f.path && f.path.startsWith(ORDNER + "/")) { indexAlt = true; anzeigeNeu(); fensterNeu(); }
     });
-    // Lernschritte werden fällig und um 4 Uhr beginnt ein neuer Tag: Zahlen alle 5 Minuten neu (die Kartenliste nicht)
-    ctx.intervall(() => block.neu((i) => i.art !== "liste"), 5 * MIN);
+    // Lernschritte werden fällig: Zahlen alle 5 Minuten neu. Die Kartenliste (lang, beim Blättern) nur, wenn um 4 Uhr ein neuer
+    // Lerntag beginnt; dann baut auch ein offenes Lernfenster seine Runde neu, ebenso eins, das gerade „fertig“ zeigt.
+    let lerntag = tagVon(jetztMs(), optionen().tagesbeginn);
+    ctx.intervall(() => {
+      const tag = tagVon(jetztMs(), optionen().tagesbeginn), neuerTag = tag !== lerntag;
+      lerntag = tag;
+      block.neu((i) => neuerTag || i.art !== "liste");
+      if (fenster && (neuerTag || fenster.fertig)) fensterNeu();
+    }, 5 * MIN);
     ctx.postprozessor((el, c) => {
       if (!c || !c.sourcePath || !c.sourcePath.startsWith(ORDNER + "/") || el.closest(".eba-lk-k-seite")) return; // nie in den eigenen Zeilen
       if (!kartenZeilen(el, c)) schmuecken(el);
     });
   };
 
-  ctx.karten = { lernen, neuOeffnen, datenLaden, namenPruefen, get fenster() { return fenster; }, get neuFenster() { return neuFenster; } };
+  ctx.karten = { lernen, neuOeffnen, datenLaden, namenPruefen, anhaengen, get fenster() { return fenster; }, get neuFenster() { return neuFenster; } };
 
   // Einmal beim App-Start, wenn der metadataCache fertig ist: Stapel mit dem Namen einer anderen Notiz umbenennen
   const start = () => {
@@ -1636,7 +1708,7 @@ module.exports = function (ctx) {
     registrieren, start, aktionen: AKTIONEN,
     // rein, für Tests (tests/karten.test.js)
     parsen, trenner, seiten, luecke, klartext, kennungenEinfuegen, karteText, zeileLesen, zeilenLesen, nachspielen, tagesplan,
-    sitzungBauen, naechsteKarte, sitzungNehmen, sitzungZurueck, statistik, optionenAus, tagVon, tagBeginnVon, planerFuer, statusVon,
+    sitzungBauen, naechsteKarte, sitzungNehmen, sitzungZurueck, sitzungAuffrischen, statistik, optionenAus, tagVon, tagBeginnVon, planerFuer, statusVon,
     stapelName, stapelUmbenennung, abschnittKarten, zeilenSeiten,
   };
 };

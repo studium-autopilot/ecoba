@@ -799,17 +799,20 @@ function geraet(o) {
     },
     plugin: Object.assign({ manifest: { version: o.lauf || "0.4.8" } }, o.plugin),
     zentral: {
-      geraetId: () => o.ich || "g-ich", stand: () => ({ release: rel(o.release), beta: null, plugin_aktuell: "" }),
+      geraetId: () => o.ich || "g-ich", stand: () => ({ release: rel(o.release), beta: null, plugin_aktuell: "" }), status: () => ({ an: !o.zentralAus }),
       manifestHolen: async () => { zaehler.manifest++; if (o.offline) throw new Error("offline"); return { release: rel(o.release), beta: null }; },
+      abruferHier: async () => o.abrufer !== false,
       frischUrl: (u) => u + "?t=7", FRISCH_KOPF: { "Cache-Control": "no-cache" },
     },
   } });
   const hat = (p) => Object.prototype.hasOwnProperty.call(dateien, p);
-  L.ctx.app.vault.adapter = { stat: async (p) => (hat(p) ? { type: "file" } : null), readBinary: async (p) => enc(dateien[p]).buffer };
+  L.ctx.app.vault.adapter = { stat: async (p) => (hat(p) ? { type: "file" } : null), readBinary: async (p) => enc(dateien[p]).buffer,
+    exists: async (p) => hat(p) || Object.keys(dateien).some((k) => k.startsWith(p + "/")), mkdir: async () => {},
+    writeBinary: async (p, b) => { dateien[p] = dec(new Uint8Array(b)); } };
   L.ctx.app.loadLocalStorage = (k) => (speicher.has(k) ? speicher.get(k) : null);
   L.ctx.app.saveLocalStorage = (k, v) => { speicher.set(k, v); };
   L.ctx.app.metadataCache.initialized = true;
-  return { U: L.ctx.update, aktionen: L.ergebnis.aktionen, hinweise, notices, anfragen, zaehler, fenster, speicher };
+  return { U: L.ctx.update, aktionen: L.ergebnis.aktionen, hinweise, notices, anfragen, zaehler, fenster, speicher, dateien };
 }
 const vorMin = (min) => new Date(Date.now() - min * 60e3).toISOString();
 const markeText = (geraetId, version, seit) => JSON.stringify({ version, von: "0.4.8", geraet: geraetId, seit });
@@ -882,6 +885,71 @@ test("Unterbrochen: Zeile, Dashboard und Knöpfe auf diesem und auf einem andere
   await G.U.markeNeu();
   assert.equal(await G.U.aktualisieren(), null, "Frage mit Nein beantwortet");
   assert.deepEqual(G.hinweise, []);
+});
+
+test("Unterbrochen: bietet das Manifest eine andere Version an (zurückgezogen oder neuer), gibt es nichts fertigzustellen", async () => {
+  const jetzt = Date.parse("2026-10-19T12:00:00Z");
+  const m = { version: "0.4.9", von: "0.4.8", geraet: "g-a", seit: "2026-10-19T11:40:00Z" };
+  const o = (angeboten) => ({ installiert: "0.4.8", ich: "g-a", jetzt, laeuft: false, angeboten });
+  assert.equal(U.markeLage(m, o("0.4.9")), "fertigstellen");
+  assert.equal(U.markeLage(m, o("")), "fertigstellen", "unbekannt (zentrale Daten aus, noch nie geholt): wie bisher");
+  assert.equal(U.markeLage(m, o("0.4.8")), null, "zurückgezogen, das Manifest bietet wieder die alte an");
+  assert.equal(U.markeLage(m, o("0.5.0")), null, "schon eine neuere: die wird angeboten");
+  // Zeile und Dashboard: kein „nicht fertig geworden“ mehr für eine zurückgezogene Version
+  const G = geraet({ release: "0.4.8", dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(300)) } });
+  await G.U.markeNeu();
+  assert.equal(G.U.anzeige().html, "Version 0.4.8. Du hast die neueste Version.");
+  assert.equal(G.U.hinweis(), null);
+});
+
+test("Zentrale Daten aus: keine Angaben zum Release, Nach Updates suchen holt trotzdem", async () => {
+  const G = geraet({ release: "0.4.9", zentralAus: true });
+  const a = G.U.anzeige();
+  assert.equal(a.html, "Version 0.4.8.", "kein altes Angebot, kein „neueste Version“");
+  assert.deepEqual(a.knopf, { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false });
+  assert.equal(G.U.hinweis(), null);
+  assert.equal(G.U.status().release, null);
+  assert.equal(G.U.toastPruefen(), null);
+  // Ein Tipp holt das Manifest und zeigt, was es anbietet
+  assert.equal(await G.U.suchen(), "angebot");
+  assert.equal(G.zaehler.manifest, 1);
+  assert.equal(ansicht(G.fenster[0]).titel, "Neue Version 0.4.9");
+});
+
+test("Von Hand aktualisiert (ZIP entpackt): laufende Version gilt, wenn Kern, Liste und Systemdateien übereinstimmen", async () => {
+  const altListe = JSON.stringify(await listeBauen("0.2.0", ALT)), neuListe = JSON.stringify(await listeBauen("0.3.0", NEU));
+  const tresor = (anders) => Object.assign({}, NEU, { [U.INSTALLIERT]: altListe, [U.LISTE]: neuListe }, anders);
+  const hand = (dateien, lauf) => U.handInstalliertMit(speicher(dateien), { lauf: lauf || "0.3.0" });
+  const h = await hand(tresor());
+  assert.equal(h && h.version, "0.3.0");
+  assert.equal(dec(h.bytes), neuListe);
+  assert.ok(await hand(tresor({ "Dashboard.md": "# Mein Dashboard\n" })), "eine eigene Seite zählt nicht");
+  assert.equal(await hand(tresor({ "System/Skripte/zentral.js": "// zentral alt\n" })), null, "eine Systemdatei fehlt noch (Sync)");
+  const ohne = tresor(); delete ohne["System/Skripte/neu.js"];
+  assert.equal(await hand(ohne), null, "eine neue Systemdatei fehlt");
+  assert.equal(await hand(tresor(), "0.2.0"), null, "der alte Kern läuft noch");
+  assert.equal(await hand(tresor({ [U.INSTALLIERT]: neuListe })), null, "schon eingetragen");
+  assert.equal(await hand(tresor({ [U.MARKE]: markeText("g-a", "0.3.0", vorMin(5)) })), null, "Update dieser Version unterbrochen: fertigstellen");
+  assert.ok(await hand(tresor({ [U.MARKE]: markeText("g-a", "0.2.0", vorMin(500)) })), "Marke eines früheren Updates");
+  // Was die neue Version nicht mehr hat und ein Update entfernen würde, ließ das Entpacken liegen: weiter anbieten
+  assert.equal(await hand(tresor({ "System/Skripte/weg.js": "// fällt weg\n" })), null, "altes Skript noch da");
+  assert.equal(await hand(tresor({ "System/Skripte/weg2.js": "// von dir geändert\n" })), null, "auch geändert (käme als Sicherung weg)");
+  const mitSeite = JSON.stringify(await listeBauen("0.2.0", Object.assign({}, ALT, { "Studium/Alt.md": "# Alt\n" })));
+  assert.equal(await hand(tresor({ [U.INSTALLIERT]: mitSeite, "Studium/Alt.md": "# Alt\n" })), null, "unveränderte alte Seite");
+  assert.ok(await hand(tresor({ [U.INSTALLIERT]: mitSeite, "Studium/Alt.md": "# Meine Seite\n" })), "deine geänderte Seite bleibt ohnehin");
+  // Zeile: die laufende Version, kein Angebot derselben; das Gerät, das für alle schreibt, trägt sie in installiert.json ein
+  let G = geraet({ lauf: "0.3.0", release: "0.3.0", dateien: tresor() });
+  await G.U.installiertNeu();
+  assert.equal(G.U.anzeige().html, "Version 0.3.0. Du hast die neueste Version.");
+  assert.equal(G.dateien[U.INSTALLIERT], neuListe);
+  G = geraet({ lauf: "0.3.0", release: "0.3.0", abrufer: false, dateien: tresor() });
+  await G.U.installiertNeu();
+  assert.equal(G.U.anzeige().html, "Version 0.3.0. Du hast die neueste Version.", "andere Geräte zeigen sie gleich");
+  assert.equal(G.dateien[U.INSTALLIERT], altListe, "und schreiben nichts");
+  // Ohne Übereinstimmung bleibt es beim Eintrag in installiert.json
+  G = geraet({ lauf: "0.3.0", release: "0.3.0", dateien: tresor({ "System/Skripte/zentral.js": "// zentral alt\n" }) });
+  await G.U.installiertNeu();
+  assert.equal(G.U.anzeige().html, "Neue Version 0.3.0 verfügbar.");
 });
 
 // ---------- Fenster „Neue Version“ (seit 0.5.4): ein Fenster für das ganze Update, höchstens ein Hinweis ----------

@@ -109,3 +109,52 @@ test("Note, Titel ohne Kürzel, Zeitraum", () => {
   assert.equal(M.spanne(tag("2026-10-28", "00:00"), tag("2026-11-03", "00:00"), h), "28.10. – 03.11.");
   assert.equal(M.spanne(h, tag("2026-10-25", "00:00"), h), "bis So 25.10.");
 });
+
+// Ersatz für Obsidians Elemente, Menü und Fenster (wie tests/vorlesungen.test.js), dazu die Lage des Ankers fürs Menü
+const knoten = (tag, o = {}) => {
+  const k = { tag, o, cls: String(o.cls || "").split(" ").filter(Boolean), text: o.text || "", kinder: [], an: {} };
+  k.createEl = (t, p) => { const c = knoten(t, p); k.kinder.push(c); return c; };
+  k.createDiv = (p) => k.createEl("div", p);
+  k.createSpan = (p) => k.createEl("span", p);
+  k.empty = () => { k.kinder = []; };
+  k.setText = (t) => { k.text = t; };
+  k.addClass = (c) => { k.cls.push(c); };
+  k.toggleClass = () => {};
+  k.setAttr = () => {};
+  k.addEventListener = (e, f) => { k.an[e] = f; };
+  k.getBoundingClientRect = () => ({ left: 0, bottom: 0 });
+  k.alle = () => k.kinder.flatMap((c) => [c, ...c.alle()]);
+  return k;
+};
+const klick = (k) => k.an.click({ preventDefault() {}, stopPropagation() {} });
+
+test("Status bestanden ⇄ nicht bestanden: Eine Note, die nicht passt, fällt weg, und das Fenster fragt neu (24.10.2026)", async () => {
+  assert.equal(M.notePasst("bestanden", "1,7"), true);
+  assert.equal(M.notePasst("bestanden", "5,0"), false);
+  assert.equal(M.notePasst("nicht bestanden", "5,0"), true);
+  assert.equal(M.notePasst("nicht bestanden", "1.7"), false);
+  assert.equal(M.notePasst("läuft", "5,0"), true, "andere Status lassen die Note stehen");
+  assert.equal(M.notePasst("bestanden", ""), true);
+  const statusWaehlen = async (fm, neu) => {
+    const pfad = "Module/1 Grundstudium/X100 Beispiel.md";
+    const notizen = { [pfad]: Object.assign({ typ: "modul", code: "X100", titel: "Beispiel", benotet: true }, fm) };
+    const menues = [], fenster = [], geschrieben = [];
+    class Menu { constructor() { this.punkte = []; menues.push(this); } addItem(f) { const p = {}; f({ setTitle: (t) => { p.titel = t; }, setChecked() {}, setIcon() {}, onClick: (g) => { p.tun = g; } }); this.punkte.push(p); } addSeparator() {} showAtPosition() {} }
+    class Modal { constructor() { this.contentEl = knoten("div"); } open() { fenster.push(this); this.onOpen(); } close() {} }
+    const L = laden("modul", { heute: "2026-10-15", notizen, kontext: { modell: modell("2026-10-15", notizen), obsidian: { Menu, Modal } } });
+    L.ctx.app.fileManager = { processFrontMatter: async (f, fn) => { const m = {}; fn(m); geschrieben.push(m); } };
+    const el = knoten("div");
+    L.ergebnis.zeichnen(el, { sourcePath: pfad });
+    klick(el.alle().find((k) => k.cls.includes("eba-mod-status")));
+    await menues[0].punkte.find((p) => p.titel === neu).tun();
+    return { geschrieben, fenster: fenster.map((x) => x.contentEl.alle().find((k) => k.tag === "input").o.value) };
+  };
+  assert.deepEqual(await statusWaehlen({ status: "nicht bestanden", ergebnis: "5,0" }, "Bestanden"),
+    { geschrieben: [{ status: "bestanden", ergebnis: "" }], fenster: [""] }, "Wiederholung bestanden: 5,0 fällt weg");
+  assert.deepEqual(await statusWaehlen({ status: "bestanden", ergebnis: "1,7" }, "Nicht bestanden"),
+    { geschrieben: [{ status: "nicht bestanden", ergebnis: "" }], fenster: [""] });
+  assert.deepEqual(await statusWaehlen({ status: "läuft", ergebnis: "2,3" }, "Bestanden"), { geschrieben: [{ status: "bestanden" }], fenster: [] },
+    "passende Note bleibt, kein Fenster");
+  assert.deepEqual(await statusWaehlen({ status: "läuft" }, "Bestanden"), { geschrieben: [{ status: "bestanden" }], fenster: [""] }, "ohne Note: Fenster wie bisher");
+  assert.deepEqual(await statusWaehlen({ status: "bestanden", ergebnis: "5,0" }, "Läuft"), { geschrieben: [{ status: "läuft" }], fenster: [] });
+});

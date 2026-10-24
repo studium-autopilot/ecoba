@@ -721,6 +721,21 @@ test("Fehler: fremder Zugang, verändertes Paket, kein Netz; Status nach dem Ver
     assert.match(m.zeile().text, /^Aktualisiert vor 20 Min\./);
     await ohneNetz.abrufen({ manuell: true });
     assert.equal(ohneNetz.zeile().text, "Dein Server ist gerade nicht erreichbar. Zuletzt aktualisiert vor 20 Min.", "Wortlaut wie bei allen Quellen");
+    const stand = (await ohneNetz.einzelheiten()).liste.find((x) => x[0] === "Stand des Servers");
+    assert.match(stand[1], /^nicht erreichbar, Angaben von \d\d:\d\d$/, "alte Angaben gekennzeichnet");
+    // tagelang nicht erreichbar (zweiter Fehlschlag, der erste vor über 3 Tagen): rät zur Einrichtung (Server weg oder neue Adresse)
+    a.uhr.t = new Date(START.getTime() + 4 * 24 * 3600e3);
+    await ohneNetz.abrufen({ manuell: true });
+    assert.equal(ohneNetz.zeile().pille, "pruefen");
+    assert.match(ohneNetz.zeile().text, /seit mehr als 3 Tagen nicht erreichbar.*Weiter mit der Einrichtung/);
+    // Gerät war nur lange aus: letzter Erfolg vor 8 Tagen, aber der erste Fehlschlag (und der zweite kurz danach) zählt nicht
+    a.uhr.t = START;
+    assert.equal((await m.abrufen({ manuell: true })).art, "ok");
+    for (const stunden of [8 * 24, 8 * 24 + 1]) {
+      a.uhr.t = new Date(START.getTime() + stunden * 3600e3);
+      await ohneNetz.abrufen({ manuell: true });
+      assert.equal(ohneNetz.zeile().pille, "an", `nach ${stunden} Stunden`);
+    }
   } finally { await srv.zu(); }
 });
 
@@ -744,6 +759,12 @@ test("Zeile: Claude abgemeldet, Uni-Anmeldung abgelehnt, Claude-Limit; nur Werte
     assert.deepEqual([s.claude, s.uniZugang, s.fehler], ["unbekannt", "unbekannt", ["claude-limit"]]);
     const d = await m.einzelheiten();
     assert.deepEqual(d.liste.map((x) => x[0]), ["Adresse", "Claude", "Gmail", "Uni-Postfach", "Zuletzt aktualisiert"]);
+    // Gmail in den Einstellungen „nie“ (takt.json): aus, nicht „wird durchsucht“
+    srv.zustand({ claude: "angemeldet", gmail: "ok" });
+    fs.writeFileSync(path.join(srv.verzeichnis, "takt.json"), JSON.stringify({ uni_postfach: 15, gmail: 0 }));
+    await m.abrufen({ manuell: true });
+    assert.equal(m.status().werte.gmail, "aus");
+    assert.equal((await m.einzelheiten()).liste.find((x) => x[0] === "Gmail")[1], "aus (in den Einstellungen „nie“)");
   } finally { await srv.zu(); }
 });
 

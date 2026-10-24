@@ -15,7 +15,7 @@
 // Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“; „offiziell“ ohne Chip, markiert wird nur
 // „geschätzt“), sonst
 // „Öffnen ↗“; in einer Gruppe überall gleiche Werte (z. B. „Block 34 %“) einmal im Gruppenkopf; „–“ entfällt; ein in der
-// ganzen Ansicht gleicher Status neben „Öffnen ↗“ entfällt („neu“ in „Zu lesen“). Dazu ein Post-Processor, der in
+// ganzen Ansicht gleicher Status neben „Öffnen ↗“ entfällt (z. B. „offen“ bei lauter offenen Blättern). Dazu ein Post-Processor, der in
 // Markdown-Tabellen ab 4 Spalten jeder Zelle ihren Spaltenkopf mitgibt (data-eba-k, für die gestapelte iPhone-Ansicht).
 // iOS: keine Node-APIs, kein Lookbehind/.at()/findLast; jeder Schritt in try/catch, ohne CSS-Schalter bleibt die Tabelle.
 module.exports = function (ctx) {
@@ -111,7 +111,7 @@ module.exports = function (ctx) {
     const statusSp = rest.find((p) => STATUS.has(name[p]));
     const noteSp = rest.find((p) => NOTE.has(name[p]));
     const hatSummen = Object.keys(cfg.summaries || {}).length > 0;
-    // Status, der in der ganzen Ansicht gleich ist (z. B. „neu“ in „Zu lesen“): neben „Öffnen ↗“ nicht wiederholen
+    // Status, der in der ganzen Ansicht gleich ist (z. B. lauter offene Blätter): neben „Öffnen ↗“ nicht wiederholen
     let statusGleich = false;
     if (statusSp && alle.length >= 3) {
       try { const t0 = textVon(alle[0].getValue(statusSp), doc); statusGleich = !!t0 && alle.every((e) => textVon(e.getValue(statusSp), doc) === t0); } catch (e) {}
@@ -231,7 +231,7 @@ module.exports = function (ctx) {
     if (!an) { if (liste) { view.__ebaTlRO?.disconnect(); view.__ebaTlRO = null; liste.remove(); view.__ebaTlEl = null; } return; }
     if (!liste) {
       liste = view.__ebaTlEl = box.doc.createElement("div"); liste.className = "eba-tl"; klick(liste, view);
-      // Eingeklappte Karten (z. B. „Ohne Begleitnotiz“) erst beim Aufklappen zeichnen: der Beobachter meldet die neue Größe
+      // Eingeklappte Karten (z. B. „Nach Modul“) erst beim Aufklappen zeichnen: der Beobachter meldet die neue Größe
       // vor dem Zeichnen des Bildschirms, die Tabelle blitzt also nicht auf.
       try {
         const ro = new (box.win || window).ResizeObserver(() => { if (view.__ebaTlOffen && box.offsetParent) { view.__ebaTlOffen = false; malen(view, liste); } });

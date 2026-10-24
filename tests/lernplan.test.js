@@ -48,6 +48,27 @@ test("Kapitel lesen: Frontmatter und Codeblöcke zählen nicht, Nummern, Links, 
   assert.equal(K[0].roh, "- [x] 1 Grundbegriffe · [[X100 Folien 01 Grundbegriffe]] · 40 S.");
 });
 
+test("Kapitel lesen: Nummern in jeder Form der Kapitellisten (E1, 1a, A.1, 2.3b), ein gewöhnliches Wort ist keine", () => {
+  const K = kapitelLesen(["- [ ] E1 Einstieg", "- [ ] 1a Teil A", "- [ ] A.1 Anhang", "- [ ] 2.3b Rest", "- [ ] 1. Mit Punkt", "- [ ] IV) Steuern",
+    "- [ ] Ohne Nummer", "- [ ] KI und Recht", "- [ ] Anhang Literatur"].join("\n"));
+  assert.deepEqual(K.map((k) => [k.nr, k.titel]), [["E1", "Einstieg"], ["1a", "Teil A"], ["A.1", "Anhang"], ["2.3b", "Rest"], ["1", "Mit Punkt"],
+    ["IV", "Steuern"], ["", "Ohne Nummer"], ["", "KI und Recht"], ["", "Anhang Literatur"]]);
+});
+
+test("Nicht mehr dran: bestanden oder anerkannt, Notiz eines anderen Semesters, Modul liegt jetzt anderswo", () => {
+  const { nichtMehrDran } = laden("lernplan").ergebnis;
+  const fm = { semester: "WS 2026/27" }, m = (o) => Object.assign({ code: "X100", status: "offen", semester: "WS 2026/27" }, o);
+  assert.equal(nichtMehrDran(fm, m(), "WS 2026/27"), "");
+  assert.equal(nichtMehrDran(fm, m({ status: "anerkannt" }), "WS 2026/27"), "Modul anerkannt");
+  assert.equal(nichtMehrDran({}, m({ status: "bestanden" }), "WS 2026/27"), "Modul bestanden", "auch ohne semester (eigene KI)");
+  assert.equal(nichtMehrDran(fm, m(), "SS 2027"), "Plan für WS 2026/27", "Semesterwechsel");
+  assert.equal(nichtMehrDran(fm, m({ semester: "SS 2027" }), "WS 2026/27"), "liegt jetzt in SS 2027");
+  assert.equal(nichtMehrDran(fm, m({ semester: "SS 2027", status: "läuft" }), "WS 2026/27"), "", "läuft: bleibt dran");
+  assert.equal(nichtMehrDran(fm, m({ semester: "" }), "WS 2026/27"), "nicht mehr in deinem Plan");
+  assert.equal(nichtMehrDran({}, m({ semester: "SS 2027" }), "WS 2026/27"), "", "ohne semester (eigene KI) nur bestanden/anerkannt");
+  assert.equal(nichtMehrDran(fm, null, "WS 2026/27"), "", "ohne Modulnotiz");
+});
+
 test("Kapitel lesen: Link im Titel zeigt seinen Text, leere Notiz ergibt nichts", () => {
   assert.deepEqual(kapitelLesen("- [ ] 3 [[X100 Folien 03 Kosten|Kosten]] und Erlöse").map((k) => [k.titel, k.links]), [["Kosten und Erlöse", []]]);
   assert.deepEqual(kapitelLesen(""), []);
@@ -146,4 +167,20 @@ test("Registrieren vor dem Fachmodell: kein Fehler beim Start, das Abo kommt kur
   ctx.modell = { beiAenderung: (fn) => { abo = fn; return () => {}; } };
   spaeter();
   assert.equal(typeof abo, "function", "Lernplan zeichnet bei Änderungen im Fachmodell neu");
+});
+
+test("Neuer Tag (auch Semesterwechsel): Bereich neu zeichnen und die Notizen mit den Kapitellisten abgleichen", () => {
+  let tag = "2027-03-31", takt = null, abgleiche = 0;
+  const { ergebnis } = laden("lernplan", { kontext: {
+    date: { jetzt: () => new Date(tag + "T12:00:00"), now: () => tag },
+    intervall: (fn) => { takt = fn; return 0; },
+    zentral: { kapitel: () => { abgleiche++; return null; }, abruferHier: async () => true },
+    modell: { daten: () => ({ module: [] }), semesterFuer: () => null, beiAenderung: () => () => {} },
+  } });
+  ergebnis.registrieren();
+  takt();
+  assert.equal(abgleiche, 0, "gleicher Tag: nichts");
+  tag = "2027-04-01";
+  takt();
+  assert.equal(abgleiche, 1, "neuer Tag: Abgleich");
 });

@@ -80,6 +80,16 @@ function tresor(start, ordnerListe) {
       schreiben(p, enc("---\n" + kopf + "\n---" + x.slice(fm[0].length)));
       return true;
     },
+    // wie vault.process, nur Notizen mit typ: unterlage
+    notizAendern: async (p, fn) => {
+      if (!m.has(p)) return false;
+      const x = dec(m.get(p)), fm = x.match(/^---\n([\s\S]*?)\n---/);
+      if (!fm || !/^typ: unterlage$/m.test(fm[1])) return false;
+      const neu = fn(x);
+      if (neu === x) return false;
+      schreiben(p, enc(neu));
+      return true;
+    },
   };
   t.text = (p) => (m.has(p) ? dec(m.get(p)) : null);
   t.setzen = (p, x) => m.set(p, typeof x === "string" ? enc(x) : x);

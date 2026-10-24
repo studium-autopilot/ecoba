@@ -52,4 +52,4 @@ Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 > > > - Ergebnisse in **Alma**. Einsicht in die korrigierte Prüfung in der Regel **innerhalb von 4 Wochen** nach Bekanntgabe, organisiert vom Lehrstuhl.
 > > > - Antrag auf **Überdenkung** der Bewertung möglich (§ 19 Abs. 5 BRPO).
 >
-> Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Stand 30.09.2026
+> Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021

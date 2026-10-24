@@ -2,8 +2,10 @@
 // 1. Codeblock ```eba-vorlesung``` unter dem Titel: Kopf-Karte mit Vorlesungswoche, Status „Nacharbeit offen/Nachgearbeitet“
 //    (Tipp schaltet das Feld `nachgearbeitet`), Modul (Link), Thema, Datum mit Wochentag, Uhrzeit und Raum aus dem Stundenplan
 //    (an diesem Tag, seit 20.10.2026 mit Änderung oder Verlegung: neuer Wert in Warnfarbe, der übliche durchgestrichen),
-//    Dozent, einer Perlenreihe der Vorlesungswochen dieses Moduls (Tipp öffnet die Notiz der Woche) und Links zu Folien
-//    (Begleitnotiz) und Stundenplan-Eintrag. Daten live aus dem metadataCache; schreibt nur beim Tipp auf den Status.
+//    Dozent (Feld der Notiz, sonst aus dem Stundenplan-Eintrag), einer Perlenreihe der Vorlesungswochen dieses Moduls (Tipp öffnet
+//    die Notiz der Woche) und Links zu den Folien dieser Sitzung (Begleitnotizen, gewählt von ctx.modell.folien; „⋯“ → „Andere
+//    Folien …“, falls die Wahl danebenliegt) und zum Stundenplan-Eintrag. Daten live aus dem metadataCache, neu gezeichnet auch beim
+//    Tageswechsel; schreibt nur beim Tipp auf den Status oder bei „Andere Folien“.
 // 2. Abschnitte (## Mitschrift, ## Prüfungsrelevant, ## Offene Fragen, ## Nacharbeit) bekommen Klassen eba-vorl-h-<art> bzw.
 //    eba-vorl-z-<art>: Leseansicht über einen Post-Processor, Bearbeitungsansicht (Live Preview) über eine CodeMirror-
 //    Erweiterung (ViewPlugin, Decoration.line). Der Text bleibt reines Markdown (keine Callout-Präfixe beim Mitschreiben); Stil in eba-core.css.
@@ -29,6 +31,8 @@ module.exports = function (ctx) {
   const montag = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate() - ((d.getDay() + 6) % 7));
   const wochen = (a, b) => Math.round((montag(b) - montag(a)) / (7 * TAG));
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f)?.frontmatter) || {};
+  // Wochentag einer Lehrveranstaltung kurz („Di“): Feld wochentag (1 = Montag), ältere Notizen ohne es aus dem Feld tag
+  const wtKurz = (m) => { const n = Number(m.wochentag); return n >= 1 && n <= 7 ? TAGE[n % 7].slice(0, 2) : String(m.tag ?? "").trim(); };
   const ziel = (wert, von) => {
     const s = String(wert ?? "").trim();
     if (!s) return null;
@@ -134,14 +138,9 @@ module.exports = function (ctx) {
       lv = kand.length ? kand[0].x : null;
     }
     const lfm = fmVon(lv);
-    // Folien: Begleitnotiz zur PDF (Feld „datei“), sonst die PDF selbst
-    let folien = ziel(fm.folien, pfad), ffm = {};
-    if (folien && folien.extension !== "md") {
-      const pdf = folien;
-      const b = app.vault.getMarkdownFiles().find((x) => { const m = fmVon(x); return m.typ === "unterlage" && m.datei && ziel(m.datei, x.path) === pdf; });
-      if (b) folien = b;
-    }
-    if (folien && folien.extension === "md") ffm = fmVon(folien);
+    // Folien aus dem Fachmodell (modell.js, „Folien einer Vorlesungsnotiz“): deine Wahl im Feld folien, sonst die zu dieser
+    // Sitzung, bei jedem Zeichnen neu (später angekommene Folien erscheinen von selbst)
+    const fo = ctx.modell && ctx.modell.folien ? ctx.modell.folien(f) : { folien: [], gewaehlt: false, alle: [] };
     // Semester und Wochen der Vorlesungszeit
     const ein = fmVon(app.vault.getAbstractFileByPath("System/Einstellungen.md"));
     let sem = null;
@@ -191,7 +190,7 @@ module.exports = function (ctx) {
         if (p && !p.nr && !pauseHier) for (const q of perlen) if (q.w < p.w && q.nr) woche = q.nr;
       }
     }
-    return { f, fm, modulF, mfm, code, d, lv, lfm, folien, ffm, sem, perlen, woche, wochenGesamt, pauseHier };
+    return { f, fm, modulF, mfm, code, d, lv, lfm, folien: fo.folien, folienGewaehlt: fo.gewaehlt, folienAlle: fo.alle, sem, perlen, woche, wochenGesamt, pauseHier };
   };
 
   // Offene Fragen: unerledigte Aufgaben mit Text im Abschnitt „Offene Fragen“
@@ -219,7 +218,8 @@ module.exports = function (ctx) {
     // Zeit und Raum an diesem Tag (seit 20.10.2026 aus dem Fachmodell: Änderung, Verlegung; vorher immer die üblichen)
     const st = x.lfm.typ === "lehrveranstaltung" && d && basis.modell && basis.modell.findetStatt ? basis.modell.findetStatt(x.lfm, iso(d)) : null;
     // Nichts neu zeichnen, wenn sich nichts geändert hat (beim Tippen meldet der metadataCache jede Speicherung)
-    const sig = JSON.stringify([fm, x.lv?.path, x.lfm.beginn, x.lfm.ende, x.lfm.raum, st, x.folien?.path, x.mfm.titel,
+    const sig = JSON.stringify([fm, x.lv?.path, x.lfm.beginn, x.lfm.ende, x.lfm.raum, x.lfm.dozent, wtKurz(x.lfm), st,
+      x.folien.map((d) => d.f.path + (d.fm.titel || "")), x.folienAlle.length, x.mfm.titel,
       (x.perlen || []).map((p) => p.drin.map((n) => n.f.path + n.fertig).join() + p.jetzt + p.nr), x.woche, x.wochenGesamt, basis.date.jetzt().toDateString()]);
     if (el.__ebaSig === sig && el.childElementCount) { if (el.__ebaFragen) el.__ebaFragen(); return; }
     el.__ebaSig = sig;
@@ -251,7 +251,9 @@ module.exports = function (ctx) {
           await app.fileManager.processFrontMatter(f, (m) => { m.nachgearbeitet = !(m.nachgearbeitet === true); });
         } catch (err) { console.error("Vorlesung Status", err); }
       });
-      if (basis.kopf && basis.kopf.mehr) basis.kopf.mehr(kopf, f); // „⋯“ mit Eigenschaften (kopf.js)
+      // „⋯“ mit Eigenschaften (kopf.js), dazu „Andere Folien …“, falls das Modul Folien hat (nur nötig, wenn die Wahl danebenliegt)
+      const extra = x.folienAlle.length ? [{ titel: "Andere Folien …", aktion: () => folienWaehlen(f, x) }] : [];
+      if (basis.kopf && basis.kopf.mehr) basis.kopf.mehr(kopf, f, extra);
     }
 
     // Titel: Modul (Link) bzw. Thema; darunter das Thema, wenn es etwas anderes sagt
@@ -300,7 +302,8 @@ module.exports = function (ctx) {
         : String(x.lfm.ort ?? "").trim();
       if (ort) meta.createSpan({ cls: "eba-vorl-ort", text: ort });
     }
-    const dozent = String(fm.dozent ?? "").trim();
+    // Dozent: Feld der Notiz (selbst eingetragen), sonst live aus dem Stundenplan-Eintrag (seit 24.10.2026; vorher beim Anlegen kopiert)
+    const dozent = String(fm.dozent ?? "").trim() || (x.lfm.typ === "lehrveranstaltung" ? String(x.lfm.dozent ?? "").trim() : "");
     if (dozent) { const p = karte.createDiv({ cls: "eba-vorl-dozent" }); symbol(p, "person"); p.createSpan({ text: dozent }); }
 
     // Perlen: eine je Vorlesungswoche dieses Moduls
@@ -331,21 +334,40 @@ module.exports = function (ctx) {
 
     // Links: Folien, Stundenplan; offene Fragen
     const links = karte.createDiv({ cls: "eba-vorl-links" });
-    if (x.folien) {
-      const a = link(links, x.folien, "eba-vorl-chip folien", "");
+    for (const d of x.folien) {
+      const a = link(links, d.f, "eba-vorl-chip folien", "");
       symbol(a, "folien");
-      const art = x.ffm.art ? `${x.ffm.art}${x.ffm.nummer != null && x.ffm.nummer !== "" ? " " + pad(x.ffm.nummer) : ""}` : "Folien";
-      a.createEl("b", { text: art });
-      const t = String(x.ffm.titel || "").trim();
+      a.createEl("b", { text: folienArt(d) });
+      const t = String(d.fm.titel || "").trim();
       if (t) a.createSpan({ text: t });
     }
     if (x.lv) {
       const a = link(links, x.lv, "eba-vorl-chip plan", "");
       symbol(a, "plan");
       a.createEl("b", { text: x.lfm.typ === "termin" ? "Termin" : "Stundenplan" });
-      if (x.lfm.tag && x.lfm.beginn) a.createSpan({ text: `${x.lfm.tag} ${x.lfm.beginn}` });
+      if (wtKurz(x.lfm) && x.lfm.beginn) a.createSpan({ text: `${wtKurz(x.lfm)} ${x.lfm.beginn}` });
     }
-    fragenChip(el, links, f, !!(x.folien || x.lv), (n) => (n === 1 ? "1 Frage offen" : `${n} Fragen offen`));
+    fragenChip(el, links, f, !!(x.folien.length || x.lv), (n) => (n === 1 ? "1 Frage offen" : `${n} Fragen offen`));
+  };
+
+  // „Folien 01“ (Art und Nummer der Begleitnotiz), ohne Begleitnotiz „Folien“
+  const folienArt = (d) => (d.fm.art ? `${d.fm.art}${d.fm.nummer != null && d.fm.nummer !== "" ? " " + pad(d.fm.nummer) : ""}` : "Folien");
+  // „⋯“ → „Andere Folien …“: Fenster mit allen Folien des Moduls. Die Wahl steht danach im Feld folien und gilt, auch für die
+  // folgenden Vorlesungen, bis neue Folien kommen; „Automatisch“ leert das Feld wieder.
+  const folienWaehlen = async (f, x) => {
+    if (typeof basis.formular !== "function") return;
+    const text = (d) => [folienArt(d), String(d.fm.titel || d.f.basename).trim()].join(" · ");
+    const jetzt = x.folienGewaehlt && x.folien[0] ? x.folien[0] : null;
+    const liste = jetzt && !x.folienAlle.some((d) => d.f.path === jetzt.f.path) ? [jetzt].concat(x.folienAlle) : x.folienAlle;
+    const w = await basis.formular({
+      titel: "Folien zu dieser Vorlesung", knopf: "Übernehmen",
+      felder: [{ name: "folien", titel: "Folien", art: "auswahl", vorgabe: jetzt ? jetzt.f.path : "",
+        optionen: [{ wert: "", text: "Automatisch (passend zu dieser Vorlesung)" }].concat(liste.map((d) => ({ wert: d.f.path, text: text(d) }))) }],
+    });
+    if (!w) return;
+    const d = liste.find((y) => y.f.path === w.folien);
+    const wert = !d ? "" : d.f.extension === "md" ? String(d.fm.datei || "").trim() || `[[${d.f.basename}]]` : `[[${d.f.name || d.f.basename}]]`;
+    try { await app.fileManager.processFrontMatter(f, (m) => { m.folien = wert; }); } catch (e) { console.error("Vorlesung Folien", e); }
   };
 
   // Chip mit der Zahl offener Punkte im Fragen-Abschnitt (zählt nach jeder Speicherung neu, ohne die Karte neu zu zeichnen).
@@ -429,7 +451,7 @@ module.exports = function (ctx) {
     const { fm, mfm } = x;
     const status = statusVon(fm.status);
     const sig = JSON.stringify([fm, x.modulF?.path, mfm.titel, x.blaetter.map((b) => [b.f.path, b.nr, b.status, b.d && iso(b.d)]),
-      x.aufgaben?.path, x.afm.titel, x.loesung?.path, x.eigene?.path, x.tut?.path, x.tfm.art, x.tfm.tag, x.tfm.beginn, x.sem, iso(heute)]);
+      x.aufgaben?.path, x.afm.titel, x.loesung?.path, x.eigene?.path, x.tut?.path, x.tfm.art, wtKurz(x.tfm), x.tfm.beginn, x.sem, iso(heute)]);
     if (el.__ebaSig === sig && el.childElementCount) { if (el.__ebaFragen) el.__ebaFragen(); return; }
     el.__ebaSig = sig;
     const link = verlinker(quelle);
@@ -503,7 +525,7 @@ module.exports = function (ctx) {
     if (x.aufgaben) chip(x.aufgaben, "blatt", "Aufgaben", String(x.afm.titel || "").trim());
     if (x.loesung) chip(x.loesung, "loesung", "Musterlösung", "");
     if (x.eigene) chip(x.eigene, "stift", "Meine Lösung", "");
-    if (x.tut) chip(x.tut, "plan", /tutori/i.test(String(x.tfm.art)) ? "Tutorium" : "Übung", x.tfm.tag && x.tfm.beginn ? `${x.tfm.tag} ${x.tfm.beginn}` : "");
+    if (x.tut) chip(x.tut, "plan", /tutori/i.test(String(x.tfm.art)) ? "Tutorium" : "Übung", wtKurz(x.tfm) && x.tfm.beginn ? `${wtKurz(x.tfm)} ${x.tfm.beginn}` : "");
     fragenChip(el, links, f, !!(x.aufgaben || x.loesung || x.eigene || x.tut), (n) => (n === 1 ? "1 Frage fürs Tutorium" : `${n} Fragen fürs Tutorium`));
   };
 
@@ -566,6 +588,10 @@ module.exports = function (ctx) {
       const typ = cache?.frontmatter?.typ;
       if (["vorlesung", "übungsblatt", "lehrveranstaltung", "unterlage"].includes(typ) || f.path === "System/Einstellungen.md" || f.path.startsWith("System/Daten/")) bald();
     });
+    // Neuer Tag: „heute“, „gestern“, die Perle dieser Woche und die Restzeit der Abgabe rücken weiter (seit 24.10.2026; vorher erst,
+    // wenn sich eine Notiz änderte)
+    const tag = ctx.bleibend("tag", () => ({ wert: ctx.date.now("YYYY-MM-DD") }));
+    ctx.intervall(() => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== tag.wert) { tag.wert = h; block.neu(); blatt.neu(); } }, 5 * 60 * 1000);
   };
 
   return { registrieren, zeichnen, zeichnenBlatt, abschnitte, statusVon, naechsterStatus, abgabe };

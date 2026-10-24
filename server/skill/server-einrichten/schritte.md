@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.2)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.6.3)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -64,7 +64,8 @@ Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopil
 Ab Schritt 5 geht alles auf dem Server über **`bash ~/studium-autopilot/server/fern.sh <befehl>`**: Es holt die Adresse selbst,
 prüft den Schlüssel und ruft ssh auf; keine IP und kein ssh-Befehl von Hand, auch nicht in einer neuen Sitzung. Exit 4: Der
 Server läuft nicht (Schritt 5, Zustand). Exit 5: Er antwortet nicht auf ssh; eine Minute warten, dann denselben Befehl noch
-einmal, beim dritten Mal wie eine unbekannte Meldung. Exit 2 oder 1 mit einer Zeile `[…]` von `adresse` und ohne Ausgabe vom
+einmal, beim dritten Mal wie eine unbekannte Meldung. Exit 6: Der Server meldet sich mit einem anderen Schlüssel als beim
+letzten Mal; den genannten Befehl `ssh-keygen -R <IP>` einmal ausführen, dann denselben Befehl noch einmal. Exit 2 oder 1 mit einer Zeile `[…]` von `adresse` und ohne Ausgabe vom
 Server: Schritt 5. Sonst ist es der Exit des Befehls auf dem Server.
 
 ## 3. Schutz vor Kosten
@@ -155,8 +156,8 @@ steht. Sonst:
 - Erklären: Claude sucht und liest auf dem Server nur; Senden, Entwürfe, Labels und Löschen sind dort gesperrt.
 - Fertig, wenn der Status nach dem ersten Lauf `gmail: ok` meldet (Schritt 10).
 - **Ohne Gmail:** Wer kein Gmail hat oder nicht verbinden will, überspringt diesen Schritt. Uni-Mails gehen dann nur über das
-  Uni-Postfach direkt (Schritt 8), und im Fenster „Eigener Server“ steht Gmail auf „nie“. Der Status meldet `gmail` dann nicht
-  als `ok`; das ist so gewollt.
+  Uni-Postfach direkt (Schritt 8), und im Fenster „Eigener Server“ steht Gmail auf „nie“. Der Status meldet dann `gmail: aus`
+  (sobald Obsidian den Takt geschickt hat); das ist so gewollt.
 
 ## 8. Uni-Mails
 

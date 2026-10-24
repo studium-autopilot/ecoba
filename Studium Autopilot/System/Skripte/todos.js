@@ -42,6 +42,18 @@ module.exports = function (ctx) {
     return false;
   };
   const ausgeschlossen = (pfad) => { const p = pfad.toLowerCase(); return AUSSCHLUSS.some((a) => p.startsWith(a)); };
+  // Tag einer Notiz (ISO) für Daten ohne Jahr: Feld datum, sonst ein Datum im Dateinamen, sonst der Tag, an dem sie entstand, aber
+  // nur, wenn das weniger als 300 Tage her ist, sonst "" (dann heute). In einer Notiz, die du über Jahre führst, wäre ein neues
+  // „bis 15.11.“ sonst im Jahr ihres Anlegens; die Anlegezeit übernimmt auch nicht jedes Gerät beim Abgleich.
+  const tagDerNotiz = (f, fm, heute) => {
+    const z = ctx.modell.zeit, h = z.iso(heute);
+    const d = z.iso(fm && fm.datum);
+    if (d) return d;
+    const n = String(f.basename || "").match(/\b(\d{4}-\d{2}-\d{2})\b/);
+    if (n && z.iso(n[1])) return z.iso(n[1]);
+    const c = f.stat && f.stat.ctime ? z.iso(new Date(f.stat.ctime)) : "";
+    return c && z.tage(c, h) >= 0 && z.tage(c, h) < 300 ? c : "";
+  };
 
   // Kurzname der Quellnotiz: „E101 Folien 01 Einführung“ → „E101 · Folien 01“; eine Vorlesungsnotiz mit ihrem Namen wie überall
   // (ctx.modell.vorlesung): „2026-10-13 S110 VL 01“ → „S110 · Vorlesung 1 · Di 13.10. · Thema“
@@ -66,9 +78,11 @@ module.exports = function (ctx) {
     return { text: t || roh.trim(), belege };
   };
 
-  // Fälligkeit aus dem Text: Datum nach „bis“ bevorzugt, sonst das erste Datum mit Wochentag, Jahr oder „ab/am/vor/(“ davor
+  // Fälligkeit aus dem Text: Datum nach „bis“ bevorzugt, sonst das erste Datum mit Wochentag, Jahr oder „ab/am/vor/(“ davor.
+  // Ohne Jahr zählt der Tag der Notiz (bezug, ISO; sonst heute), nicht heute: Bis 24.10.2026 sprang ein offenes „bis 05.10.“ nach
+  // 60 Tagen ins nächste Jahr und war nicht mehr überfällig.
   const klartext = (s) => s.replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, "$2").replace(/\[\[([^\]]*)\]\]/g, "$1").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
-  const faellig = (text, heute) => {
+  const faellig = (text, heute, bezug) => {
     const s = klartext(text);
     const kand = [];
     const re = /(?:(Mo|Di|Mi|Do|Fr|Sa|So)\.?,?\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2}(?!\d))?/g;
@@ -79,8 +93,9 @@ module.exports = function (ctx) {
       const davor = s.slice(Math.max(0, m.index - 12), m.index);
       const bis = /\bbis\s*$/i.test(davor);
       if (!m[1] && !m[4] && !bis && !/(\b(ab|am|vor|zum|spätestens)\s*|\(\s*)$/i.test(davor)) continue;
-      // Ohne Jahr: dieselbe Regel wie bei der Eingabe eines Datums (ctx.modell.zeit.jahrRaten: höchstens 60 Tage zurück)
-      const d = m[4] ? new Date(m[4].length === 2 ? 2000 + +m[4] : +m[4], mo - 1, tg) : ctx.modell.zeit.tag(ctx.modell.zeit.jahrRaten(tg, mo, { bezug: ctx.modell.zeit.iso(heute) }));
+      // Ohne Jahr: dieselbe Regel wie bei der Eingabe eines Datums (ctx.modell.zeit.jahrRaten: höchstens 60 Tage vor dem Bezugstag)
+      const d = m[4] ? new Date(m[4].length === 2 ? 2000 + +m[4] : +m[4], mo - 1, tg)
+        : ctx.modell.zeit.tag(ctx.modell.zeit.jahrRaten(tg, mo, { bezug: bezug || ctx.modell.zeit.iso(heute) }));
       if (!d) continue;
       kand.push({ d, bis });
     }
@@ -103,10 +118,11 @@ module.exports = function (ctx) {
     const aus = { todos: [], fragen: [] };
     for (const f of app.vault.getMarkdownFiles()) {
       if (ausgeschlossen(f.path)) continue;
-      const items = app.metadataCache.getFileCache(f)?.listItems;
+      const cache = app.metadataCache.getFileCache(f), items = cache?.listItems;
       if (!items || !items.some((li) => li.task === " ")) continue;
       let zeilen;
       try { zeilen = (await app.vault.cachedRead(f)).split("\n"); } catch (e) { continue; }
+      const quelle = kurzname(f), bezug = tagDerNotiz(f, cache.frontmatter, heute);
       for (const li of items) {
         if (li.task !== " ") continue;
         const nr = li.position.start.line;
@@ -115,10 +131,10 @@ module.exports = function (ctx) {
         if (!m) continue;
         const modus = istFrage(m[2]) || unterFragen(zeilen, nr) ? "fragen" : "todos";
         const z = zerlegen(m[2], modus);
-        const fl = modus === "fragen" ? null : faellig(z.text, heute);
+        const fl = modus === "fragen" ? null : faellig(z.text, heute, bezug);
         // reines „(bis 02.11.)“ am Ende steht schon in der Fälligkeits-Pille
         const text = fl ? z.text.replace(/\s*\(bis\s+(?:(?:Mo|Di|Mi|Do|Fr|Sa|So)\.?,?\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2,4})?\)\s*$/, "") || z.text : z.text;
-        aus[modus].push({ f, nr, roh, text, belege: z.belege, faellig: fl });
+        aus[modus].push({ f, nr, roh, text, belege: z.belege, faellig: fl, quelle });
       }
     }
     const ordnen = (a, b) => {
@@ -222,7 +238,8 @@ module.exports = function (ctx) {
     const modus = inst.modus;
     const { liste, leer, klasse } = zustand(await lesenBeide(), modus);
     const heute = tag0(basis.date.jetzt());
-    const sig = heute.getTime() + "|" + leer + "|" + liste.map((t) => t.f.path + ":" + t.nr + ":" + t.roh + ":" + (warte.has(schluessel(t.f.path, t.nr)) ? 1 : 0)).join("\n");
+    // Mit dem Kurznamen der Quellnotiz: Bei einer Vorlesungsnotiz trägt er das Thema (Feld thema oder Folien)
+    const sig = heute.getTime() + "|" + leer + "|" + liste.map((t) => t.f.path + ":" + t.nr + ":" + t.roh + ":" + t.quelle + ":" + (warte.has(schluessel(t.f.path, t.nr)) ? 1 : 0)).join("\n");
     if (!erzwingen && inst.sig === sig && el.querySelector(".eba-td-liste, .eba-td-leer")) return;
     inst.sig = sig;
     if (!inst.comp) { inst.comp = obs.MarkdownRenderChild ? new obs.MarkdownRenderChild(el) : null; if (inst.comp && ctx && ctx.addChild) ctx.addChild(inst.comp); }
@@ -252,7 +269,7 @@ module.exports = function (ctx) {
           const art = n < 0 ? "bad" : n <= 2 ? "akzent" : "leer";
           meta.createSpan({ cls: "eba-pill eba-td-frist " + art, text: n === 0 ? "bis heute" : n === 1 ? "bis morgen" : "bis " + kurz(t.faellig), attr: { title: n < 0 ? "überfällig" : "" } });
         }
-        meta.createEl("a", { cls: "internal-link eba-td-quelle", text: kurzname(t.f), href: t.f.path, attr: { "data-href": t.f.path, title: t.f.basename } });
+        meta.createEl("a", { cls: "internal-link eba-td-quelle", text: t.quelle, href: t.f.path, attr: { "data-href": t.f.path, title: t.f.basename } });
         if (t.belege) { const b = meta.createSpan({ cls: "eba-td-belege" }); warten.push(md(t.belege, b, t.f.path, comp || inst.comp)); }
         // Klick: Link im Text folgen, sonst die Quellnotiz an dieser Zeile öffnen
         stopp(inhalt);

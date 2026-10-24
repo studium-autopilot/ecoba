@@ -183,7 +183,8 @@ const iliasEintraege = (index, heute) => {
 };
 
 // ---------- Zusammenstellen (rein, testbar) ----------
-// protokolle: Listen aus allen Gerätedateien, abgeleitet: Einträge von oben, gesehen: { k: Datum }, jetzt: ISO-Zeit.
+// protokolle: Listen aus allen Gerätedateien, abgeleitet: Einträge von oben, gesehen: { k: Datum }, jetzt: ISO-Zeit, heute:
+// JJJJ-MM-TT (optional; zentrale Termine, die inzwischen vorbei sind, fallen weg, wie beim Schreiben des Protokolls).
 // → [{ art, q, titel, meta, keys, datum, id?, pfad?, code? }] ungesehen, sortiert: Termine, Stundenplan, Abgaben, ILIAS.
 const zahl = (n, eins, mehr) => `${n} ${n === 1 ? eins : mehr}`;
 const metaZentral = (e) => {
@@ -207,8 +208,8 @@ const metaZentral = (e) => {
   return teile.join(" · ");
 };
 const RANG = { zentral: 0, stundenplan: 1, "ilias-kalender": 2, ilias: 3 };
-const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt) => {
-  const ms = Date.parse(jetzt), g = gesehen || {}, seen = {}, zeilen = [];
+const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt, heute) => {
+  const ms = Date.parse(jetzt), g = gesehen || {}, seen = {}, zeilen = [], h = s10(heute);
   const neu = (e) => e && typeof e.k === "string" && !g[e.k] && !seen[e.k] && (seen[e.k] = true);
   // Zentrale Termine: je id zählt nur die neueste Meldung (hin und zurück zeigt den Stand von jetzt). Ist sie gesehen, steht der
   // Termin nicht da; sonst nimmt die Zeile alle ungesehenen Schlüssel der id mit, und ein ungesehenes „neu“ bleibt „Neu“.
@@ -222,8 +223,8 @@ const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt) => {
   }
   for (const id of Object.keys(jeId)) {
     const liste = jeId[id].sort((a, b) => String(a.t || "").localeCompare(String(b.t || "")));
-    const letzte = liste[liste.length - 1];
-    if (g[letzte.k]) continue;
+    const letzte = liste[liste.length - 1], ende = s10(letzte.bis) || s10(letzte.datum);
+    if (g[letzte.k] || (h && ende && ende < h)) continue; // gesehen oder inzwischen vorbei
     const keys = liste.filter((e) => !g[e.k]).map((e) => e.k).filter((k, i, alle) => alle.indexOf(k) === i);
     const e = letzte.art !== "abgesagt" && liste.some((x) => x.art === "neu" && !g[x.k]) ? Object.assign({}, letzte, { art: "neu" }) : letzte;
     zeilen.push({ q: "zentral", art: e.art, id: e.id, titel: e.titel, meta: metaZentral(e), keys, datum: e.datum, code: e.code, t: e.t });
@@ -323,7 +324,7 @@ module.exports = function (ctx) {
     abgeleitet = abgeleitet.concat(abgabenEintraege(D.termine, h));
     abgeleitet = abgeleitet.concat(iliasEintraege(await jsonLesen(ILIAS_INDEX), h));
     const alle = await lesenAlle();
-    const zeilen = zusammenstellen(alle.protokolle, abgeleitet, alle.gesehen, jetztIso());
+    const zeilen = zusammenstellen(alle.protokolle, abgeleitet, alle.gesehen, jetztIso(), h);
     // Ziele erst jetzt: zentrale Termine über zentral_id (Notizen werden umbenannt), ILIAS über die Modulnotiz
     const termin = {};
     for (const x of D.termine) if (x.fm.herkunft === "zentral" && x.fm.zentral_id && !termin[x.fm.zentral_id]) termin[x.fm.zentral_id] = x.f.path;

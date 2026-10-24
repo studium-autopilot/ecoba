@@ -23,8 +23,9 @@ START = datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc)
 class Attrappe:
     """OCI-Kommandozeile: launch antwortet nach Liste (je Aufruf ein Eintrag), list liefert vorhandene Instanzen."""
 
-    def __init__(self, antworten=(), vorhanden=(), liste_fehler=None, beenden=None):
+    def __init__(self, antworten=(), vorhanden=(), liste_fehler=None, beenden=None, abbilder=None):
         self.antworten = list(antworten)
+        self.abbilder = abbilder
         self.vorhanden = list(vorhanden)
         self.liste_fehler = liste_fehler
         self.beenden = beenden
@@ -39,6 +40,8 @@ class Attrappe:
             if a == "ok":
                 return {"ok": True, "data": {"data": {"id": "ocid1.instance.oc1.eu-frankfurt-1.neu", "lifecycle-state": "PROVISIONING"}}}
             return a
+        if args[:3] == ["compute", "image", "list"] and self.abbilder is not None:
+            return {"ok": True, "data": {"data": self.abbilder}}
         if args[:3] == ["compute", "instance", "terminate"] and self.beenden:
             return self.beenden
         return {"ok": True, "data": None}
@@ -105,6 +108,21 @@ class Runde(unittest.TestCase):
         self.assertEqual(json.loads(Attrappe.wert(a, "--metadata"))["user_data"], KONFIG["user_data"])
         self.assertNotIn("--boot-volume-size-in-gbs", a, "Größe nur einmal (source-details)")
         self.assertEqual(json.loads(Attrappe.wert(a, "--instance-options")), {"areLegacyImdsEndpointsDisabled": True})
+
+    def test_neuestes_abbild_je_runde(self):
+        neu = "ocid1.image.oc1.eu-frankfurt-1.aaaaneu"
+        oci = Attrappe(["ok"], abbilder=[{"id": neu, "display-name": "Canonical-Ubuntu-24.04-aarch64-2026.10.01-0"}])
+        P.runde(oci, KONFIG, {}, START)
+        liste = oci.von("compute", "image", "list")[0]
+        self.assertEqual([Attrappe.wert(liste, "--operating-system-version"), Attrappe.wert(liste, "--shape"), Attrappe.wert(liste, "--sort-order")],
+                         ["24.04", "VM.Standard.A1.Flex", "DESC"])
+        a = oci.von("compute", "instance", "launch")[0]
+        self.assertEqual(json.loads(Attrappe.wert(a, "--source-details"))["imageId"], neu)
+        for kaputt in ([], [{"id": "kein-ocid"}]):
+            oci = Attrappe(["ok"], abbilder=kaputt)
+            P.runde(oci, KONFIG, {}, START)
+            a = oci.von("compute", "instance", "launch")[0]
+            self.assertEqual(json.loads(Attrappe.wert(a, "--source-details"))["imageId"], KONFIG["image"], "sonst das aus der Konfiguration")
 
     def test_kein_platz_alle_bereiche_dann_weiter(self):
         oci = Attrappe([KAPAZITAET] * 3)

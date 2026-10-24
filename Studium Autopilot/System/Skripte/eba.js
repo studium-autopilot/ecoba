@@ -147,7 +147,7 @@ module.exports = function (ctx) {
   // nur Beginn = 90 min; ohne Fristen und Prüfungen, z. B. Vorkurs und Einführungsveranstaltungen). Bei Überlappung
   // gewinnt, was gerade läuft, sonst der nächstliegende Beginn. Rückgabe: das Modul ({ f, fm }, bei Terminen ohne Modul
   // f = null) mit „modul“ (Modul oder null), „quelle“ (Datei der Lehrveranstaltung bzw. des Termins), „lv“ (deren
-  // Frontmatter), „titel“, „dozent“ und „eindeutig“ (nur ein Treffer, oder nur einer läuft gerade): Dann fragt die Vorlage
+  // Frontmatter), „titel“ und „eindeutig“ (nur ein Treffer, oder nur einer läuft gerade): Dann fragt die Vorlage
   // „Vorlesung“ gar nicht erst. „jetzt“ nur zum Testen.
   const zuMin = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
   const terminZeit = (ort) => {
@@ -183,7 +183,7 @@ module.exports = function (ctx) {
     if (!k) return null;
     return {
       f: k.m?.f ?? null, fm: k.m?.fm ?? {}, modul: k.m, quelle: k.f, lv: k.fm,
-      titel: String(k.fm.titel || k.f.basename).replace(/\s+/g, " ").trim(), dozent: String(k.fm.dozent ?? "").trim(),
+      titel: String(k.fm.titel || k.f.basename).replace(/\s+/g, " ").trim(),
       eindeutig: treffer.length === 1 || (laeuft(k) && !treffer.slice(1).some(laeuft)),
     };
   };
@@ -203,27 +203,6 @@ module.exports = function (ctx) {
       .filter((fm) => fm.typ === "vorlesung" && fm.code === code && (!sem || (String(fm.datum) >= sem[2] && String(fm.datum) <= sem[3])))
       .map((fm) => Number(fm.nummer) || 0);
     return (nummern.length ? Math.max(nummern.length, ...nummern) : 0) + 1;
-  };
-
-  // Folien-PDF zur Vorlesung (Dateiname ohne [[ ]]): gleiche Nummer; sonst die Folien der zuletzt angelegten
-  // Vorlesungsnotiz desselben Moduls im selben Semester; sonst die Folien mit der kleinsten Nummer.
-  const folienZu = (code, nr) => {
-    const ohneKlammern = (s) => String(s).replace(/^\[\[|\]\]$/g, "");
-    const alleFm = app.vault.getMarkdownFiles().map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} }));
-    const alle = alleFm.map((x) => x.fm).filter((fm) => fm.typ === "unterlage" && fm.code === code && fm.art === "Folien" && fm.datei);
-    const gleich = alle.find((fm) => Number(fm.nummer) === nr);
-    if (gleich) return ohneKlammern(gleich.datei);
-    const sem = semesterZeile(heute);
-    const vorige = alleFm
-      .filter((x) => x.fm.typ === "vorlesung" && x.fm.code === code && x.fm.folien
-        && (!sem || (String(x.fm.datum ?? "") >= sem[2] && String(x.fm.datum ?? "") <= sem[3])))
-      .sort((a, b) => String(b.fm.datum ?? "").localeCompare(String(a.fm.datum ?? ""))
-        || (Number(b.fm.nummer) || 0) - (Number(a.fm.nummer) || 0)
-        || (b.f.stat.ctime - a.f.stat.ctime))[0];
-    if (vorige) return ohneKlammern(vorige.fm.folien);
-    const nrSort = (fm) => (Number.isFinite(Number(fm.nummer)) && fm.nummer !== "" && fm.nummer != null ? Number(fm.nummer) : Infinity);
-    const kleinste = [...alle].sort((a, b) => (nrSort(a) - nrSort(b)) || String(a.datum ?? "").localeCompare(String(b.datum ?? "")))[0];
-    return kleinste ? ohneKlammern(kleinste.datei) : "";
   };
 
   // Ein Datum lesen: „15.10“, „15.10.“, „15.10.26“, „15.10.2026“, „2026-10-15“, „+7“ (Tage ab heute).
@@ -297,7 +276,7 @@ module.exports = function (ctx) {
     ctx.hinweis("Abgebrochen, es ist nichts entstanden.", { dauer: 3000 });
   };
 
-  return { app, heute, sauber, J, neu, datei, CURSOR, MODULCODE, codeImText, codeAusTitel, einstellungen, modell, semesterZeile, aktuellesSemester, alleModule, modulNachCode, diesesSemester, modulFeld, link, ablegen, jetztLaufend, heutigeNotiz, naechsteVlNr, folienZu, zeitraumLesen, datumLesen, abbrechen };
+  return { app, heute, sauber, J, neu, datei, CURSOR, MODULCODE, codeImText, codeAusTitel, einstellungen, modell, semesterZeile, aktuellesSemester, alleModule, modulNachCode, diesesSemester, modulFeld, link, ablegen, jetztLaufend, heutigeNotiz, naechsteVlNr, zeitraumLesen, datumLesen, abbrechen };
 };
 module.exports.MODULCODE = MODULCODE;
 module.exports.codeImText = codeImText;

@@ -160,12 +160,21 @@ export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
 
 // Vergleicht mit dem Bestand (id → Termin): Nur neue oder geänderte Termine gehen ins Eingang. `geprueft` zählt nicht als Änderung.
 // Ein Termin, der schon vorbei ist (Ende vor dem Tag des Laufs), kommt nur als Änderung eines bekannten Termins durch (z. B. Absage).
+// Im Bestand bleibt ein vergangener Termin BESTAND_TAGE (Tage nach seinem Ende).
+const BESTAND_TAGE = 60;
 export function nurNeueOderGeaenderte(eingang, bestand) {
   const heute = String(eingang.erstellt || "").slice(0, 10);
   const ohneZeit = (t) => JSON.stringify({ ...t, geprueft: "" });
   const termine = eingang.termine.filter((t) => (bestand[t.id] ? ohneZeit(bestand[t.id]) !== ohneZeit(t) : (t.bis || t.datum) >= heute));
   const neuerBestand = { ...bestand };
   for (const t of eingang.termine) if (bestand[t.id] || termine.includes(t)) neuerBestand[t.id] = t;
+  // Vergangenes nach BESTAND_TAGE fällt weg (sonst wüchse termine.json und bisher.json im Auftrag mit jedem Semester); meldet
+  // Claude so einen Termin noch einmal, bleibt er draußen wie jeder neue in der Vergangenheit
+  const zeit = Date.parse(heute);
+  if (Number.isFinite(zeit)) {
+    const grenze = new Date(zeit - BESTAND_TAGE * 864e5).toISOString().slice(0, 10);
+    for (const [id, t] of Object.entries(neuerBestand)) if (String((t && (t.bis || t.datum)) || "") < grenze) delete neuerBestand[id];
+  }
   return { eingang: { ...eingang, termine }, bestand: neuerBestand };
 }
 

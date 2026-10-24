@@ -90,6 +90,29 @@ test("Kennungen einfügen: fehlende, doppelte und fremde ersetzen, sonst nichts 
   assert.equal(K.kennungenEinfuegen(r.text, "Karteikarten/X.md", new Set(["fremd"]), neueId).neu, 0, "zweiter Lauf ändert nichts");
 });
 
+test("Kennung in einer anderen Zeile der Karte: bleibt die Kennung und wandert ans Ende", () => {
+  let n = 0;
+  const neueId = () => "kneu" + ++n;
+  const text = "Frage :: Antwort ^k00a001\nund noch ein Satz\n\nG ^k00a002\n?\nH\n\nI :: J ^k00a001\nweiter";
+  const vorher = K.parsen(text, "Karteikarten/X.md");
+  assert.deepEqual(vorher.map((x) => [x.id, x.idStelle, x.idZeile]), [["k00a001", 0, 1], ["k00a002", 3, 5], ["k00a001", 7, 8]]);
+  assert.equal(vorher[0].hinten, "Antwort\nund noch ein Satz", "die Kennung steht nicht in der Antwort");
+  const r = K.kennungenEinfuegen(text, "Karteikarten/X.md", new Set(), neueId);
+  assert.equal(r.neu, 3);
+  assert.equal(r.text, "Frage :: Antwort\nund noch ein Satz ^k00a001\n\nG\n?\nH ^k00a002\n\nI :: J\nweiter ^kneu1", "doppelte Kennung: neue am Ende, die alte fällt weg");
+  assert.equal(K.kennungenEinfuegen(r.text, "Karteikarten/X.md", new Set(), neueId).neu, 0, "zweiter Lauf ändert nichts");
+});
+
+test("Vor der letzten Zeile ist nur eine Kennung des Plugins eine Kennung: „r ^2“ bleibt Text", () => {
+  const text = "Frage\n?\nFläche = pi r ^2\nmit r = Radius";
+  const [n] = K.parsen(text, "Karteikarten/X.md");
+  assert.equal(n.id, null);
+  assert.equal(n.hinten, "Fläche = pi r ^2\nmit r = Radius");
+  const r = K.kennungenEinfuegen(text, "Karteikarten/X.md", new Set(), () => "k00b001");
+  assert.equal(r.text, "Frage\n?\nFläche = pi r ^2\nmit r = Radius ^k00b001");
+  assert.equal(K.parsen("A :: B ^eigen\nC :: D ^auch-eigen", "Karteikarten/X.md").map((x) => x.id).join(), "eigen,auch-eigen", "je Zeile eine Karte: Kennung jeder Form");
+});
+
 test("Karte hinzufügen: Text, der wieder als dieselbe Karte gelesen wird", () => {
   assert.equal(K.karteText("einfach", "Frage", "Antwort", "k9"), "Frage :: Antwort ^k9");
   assert.equal(K.karteText("umgekehrt", "Frage", "Antwort", "k9"), "Frage ::: Antwort ^k9");
@@ -194,6 +217,86 @@ test("Lernrunde: neue und fällige gemischt, Lernschritte kommen zurück, Ende m
   // Nur noch Lernschritte in über 20 Min.: fertig mit Zeitpunkt
   const s3 = { neu: [], faellig: [], lernen: new Map([["n0", JETZT + 30 * MIN]]), start: { neu: 0, faellig: 0 }, gezeigt: { neu: 0, faellig: 0 } };
   assert.deepEqual(K.naechsteKarte(s3, JETZT), { fertig: true, spaeter: JETZT + 30 * MIN, anzahl: 1 });
+});
+
+test("Lernrunde auffrischen: Stand eines anderen Geräts zählt, Zähler bleiben, gezeigte Karte bleibt, solange sie dran ist", () => {
+  const ks = karten(Array.from({ length: 3 }, (_, i) => `F${i} :: A${i} ^n${i}`).join("\n\n"));
+  const p = planer();
+  const g = K.nachspielen([], p, O);
+  const s = K.sitzungBauen(K.tagesplan(ks, g.stand, g.log, O, JETZT, {}), g.stand);
+  const erste = K.naechsteKarte(s, JETZT);
+  assert.equal(erste.schluessel, "n0", "neue Karten in der Reihenfolge der Notiz");
+  const neu = p.bewerten(p.leer(), 3, JETZT, erste.schluessel);
+  K.sitzungNehmen(s, erste.schluessel, erste.art, neu, true);
+  s.gelernt = 1; s.verlauf.push({ schluessel: erste.schluessel });
+  // Auf dem iPad gelernt: n1 ist dort mit „Einfach“ bewertet und damit erst in Tagen wieder dran
+  const g2 = K.nachspielen([{ k: erste.schluessel, t: JETZT, b: 3 }, { k: "n1", t: JETZT + 1000, b: 4 }], p, O);
+  const tp = K.tagesplan(ks, g2.stand, g2.log, O, JETZT + 2000, {});
+  const r = K.sitzungAuffrischen(s, tp, g2.stand, "n1", JETZT + 2000);
+  assert.equal(r.art, "", "n1 ist nicht mehr dran");
+  assert.deepEqual(r.s.neu, ["n2"]);
+  assert.ok(r.s.lernen.has(erste.schluessel), "die eben bewertete Karte bleibt im Lernschritt");
+  assert.equal(r.s.gelernt, 1); assert.equal(r.s.verlauf.length, 1); assert.deepEqual(r.s.gezeigt, { neu: 1, faellig: 0 });
+  assert.deepEqual(r.s.start, { neu: r.s.neu.length + 1, faellig: 0 });
+  assert.equal(K.sitzungAuffrischen(s, tp, g2.stand, "n2", JETZT + 2000).art, "neu", "noch dran: bleibt mit ihrer Warteschlange");
+  assert.equal(K.sitzungAuffrischen(s, tp, g2.stand, erste.schluessel, JETZT + 2000).art, "lernen", "Lernschritt in 1 Minute");
+  assert.equal(K.sitzungAuffrischen(s, tp, g2.stand, null, JETZT + 2000).art, "");
+});
+
+test("Eigener Lernstand: von außen geändert oder gelöscht wird neu gelesen, eigenes Schreiben nicht", async () => {
+  const DATEN = "System/Daten/Karteikarten", EIGEN = DATEN + "/g-1.jsonl";
+  const inhalt = new Map(), stat = new Map(), an = {};
+  let uhr = 0, gelesen = 0;
+  const datei = (p) => (inhalt.has(p) ? { path: p, extension: "jsonl", stat: stat.get(p) } : null);
+  const setzen = (p, t) => { inhalt.set(p, t); stat.set(p, { mtime: ++uhr, size: t.length }); };
+  const L = laden("karten", { kontext: { user: { fsrs: () => FSRS }, zentral: { geraetId: () => "g-1" }, an: (_q, name, fn) => { an[name] = fn; return {}; } } });
+  const v = L.ctx.app.vault;
+  v.getAbstractFileByPath = (p) => (p === DATEN ? { path: p, children: Array.from(inhalt.keys()).map(datei) } : datei(p));
+  v.cachedRead = async (f) => { gelesen++; return inhalt.get(f.path); };
+  let tor = null; // hält das Anhängen auf, bis der Test es freigibt
+  v.append = async (f, z) => { if (tor) await tor; setzen(f.path, inhalt.get(f.path) + z); an.modify(datei(f.path)); };
+  setzen(EIGEN, '{"v":1}\n{"k":"k1","t":1,"b":3}\n');
+  setzen(DATEN + "/g-2.jsonl", '{"v":1}\n{"k":"x1","t":5,"b":3}\n');
+  L.ergebnis.registrieren();
+  const schluessel = async () => (await L.ctx.karten.datenLaden()).log.map((e) => e.k);
+  assert.deepEqual(await schluessel(), ["k1", "x1"]);
+  // Eigene Bewertung: das modify (während und nach dem Schreiben) kommt von hier, gelesen wird nichts
+  await L.ctx.karten.anhaengen({ k: "k2", t: 6, b: 3 });
+  an.modify(datei(EIGEN));
+  const vorher = gelesen;
+  assert.deepEqual(await schluessel(), ["k1", "x1", "k2"]);
+  assert.equal(gelesen, vorher);
+  // Von außen geändert (Sync, Sicherung zurückgespielt): neu gelesen
+  setzen(EIGEN, '{"v":1}\n{"k":"k3","t":3,"b":3}\n');
+  an.modify(datei(EIGEN));
+  assert.deepEqual(await schluessel(), ["k3", "x1"]);
+  // Bewertet, während die Datei neu gelesen wird (und bevor sie in der Datei steht): bleibt im Speicher
+  setzen(EIGEN, '{"v":1}\n{"k":"k4","t":4,"b":3}\n');
+  an.modify(datei(EIGEN));
+  let auf = null;
+  tor = new Promise((r) => { auf = r; });
+  const laeuft = L.ctx.karten.datenLaden();
+  const geschrieben = L.ctx.karten.anhaengen({ k: "k5", t: 7, b: 3 });
+  assert.deepEqual((await laeuft).log.map((e) => e.k), ["k4", "x1", "k5"]);
+  auf(); tor = null;
+  await geschrieben;
+  assert.ok(inhalt.get(EIGEN).includes('"k5"'));
+  // Gelöscht: kein eigener Lernstand mehr
+  inhalt.delete(EIGEN);
+  an.delete({ path: EIGEN });
+  assert.deepEqual(await schluessel(), ["x1"]);
+});
+
+test("Neuer Lerntag: Kartenliste neu, sonst alle 5 Minuten nur die Zahlen", () => {
+  let jetzt = new Date(2026, 9, 18, 3, 50).getTime(), takt = null;
+  const gezeichnet = [];
+  const L = laden("karten", { kontext: { user: { fsrs: () => FSRS }, date: { jetzt: () => new Date(jetzt) }, intervall: (fn) => { takt = fn; },
+    codeblock: () => ({ instanzen: () => [], neu: (wahl) => gezeichnet.push(["liste", "heute"].filter((art) => !wahl || wahl({ art }))) }) } });
+  L.ergebnis.registrieren();
+  takt();
+  jetzt += 15 * MIN; takt(); // 4:05 Uhr: neuer Lerntag
+  takt();
+  assert.deepEqual(gezeichnet, [["heute"], ["liste", "heute"], ["heute"]]);
 });
 
 test("Statistik: heute, Behaltensquote, Bestand, Prognose", () => {

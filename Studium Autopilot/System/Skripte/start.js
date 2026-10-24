@@ -173,10 +173,24 @@ module.exports = function (ctx) {
 
   // 4. Kapitel (##) der Folien-Notizen (cssclasses eba-folien) beim ersten Öffnen zuklappen, auf allen Geräten (bis 19.10.2026 nur
   //    iPhone; auf dem iPad lief ein langer Foliensatz ohne erkennbare Kapitel durch). Obsidian merkt sich Faltungen je Gerät
-  //    (foldManager, lokaler Speicher); jede Notiz wird je Gerät nur einmal vorgefaltet.
+  //    (foldManager, lokaler Speicher); jede Notiz wird je Gerät nur einmal vorgefaltet. Der Merker (eba-vorgefaltet, Pfade)
+  //    folgt Umbenennungen; gelöschte Notizen fallen heraus (beim Löschen und beim App-Start), sonst wüchse er ohne Ende, und eine
+  //    neue Notiz unter demselben Namen bliebe offen. Keine Prüfsumme des Inhalts: Jede Änderung an der Notiz faltete sie dann
+  //    wieder zu, auch Kapitel, die du aufgeklappt hast.
   const OFFEN = ["Das Wichtigste", "Zu tun", "Offene Fragen"];
+  const VORGEFALTET = "eba-vorgefaltet";
+  // Merker nach Umbenennen (neu = neuer Pfad) oder Löschen (neu = null) einer Notiz oder eines Ordners (alt) → neue Liste
+  const merkerNach = (liste, alt, neu) => (Array.isArray(liste) ? liste : []).flatMap((p) => {
+    const drin = p === alt ? "" : p.indexOf(alt + "/") === 0 ? p.slice(alt.length) : null;
+    if (drin === null) return [p];
+    return neu ? [neu + drin] : [];
+  });
+  const merkerAendern = (alt, neu) => {
+    const vorher = app.loadLocalStorage(VORGEFALTET) || [], liste = merkerNach(vorher, alt, neu);
+    if (liste.length !== vorher.length || liste.some((p, i) => p !== vorher[i])) app.saveLocalStorage(VORGEFALTET, liste);
+  };
   const vorfalten = async (f) => {
-    const liste = app.loadLocalStorage("eba-vorgefaltet") || [];
+    const liste = app.loadLocalStorage(VORGEFALTET) || [];
     if (!f || liste.indexOf(f.path) >= 0) return null;
     const c = app.metadataCache.getFileCache(f);
     if (((c && c.frontmatter && c.frontmatter.cssclasses) || []).indexOf("eba-folien") < 0) return null;
@@ -185,7 +199,7 @@ module.exports = function (ctx) {
     const folds = h2.map((h, i) => ({ h, from: h.position.start.line, to: (h2[i + 1] ? h2[i + 1].position.start.line : zeilen) - 1 }))
       .filter((x) => !OFFEN.some((o) => x.h.heading.startsWith(o))).map((x) => ({ from: x.from, to: x.to }));
     if (folds.length) await app.foldManager.save(f, { folds, lines: zeilen });
-    liste.push(f.path); app.saveLocalStorage("eba-vorgefaltet", liste);
+    liste.push(f.path); app.saveLocalStorage(VORGEFALTET, liste);
     return folds.length ? { folds, lines: zeilen } : null;
   };
   // Die Leseansicht faltet erst, wenn sie ihre Abschnitte kennt. Direkt nach file-open griff applyFoldInfo dort ins Leere, und
@@ -269,7 +283,11 @@ module.exports = function (ctx) {
     an(app.metadataCache, "changed", ctx.entprellen(leseansicht, 300)); // Feld `ansicht` oder `typ` geändert (ILIAS schreibt viele Dateien: entprellt)
     an(ws, "layout-change", klassen);
     an(ws, "file-open", () => ctx.zeit(klassen, 50));
-    if (FOLIEN_VORFALTEN && app.foldManager) an(ws, "file-open", vorfaltenBeimOeffnen);
+    if (FOLIEN_VORFALTEN && app.foldManager) {
+      an(ws, "file-open", vorfaltenBeimOeffnen);
+      an(app.vault, "rename", (f, alt) => { if (f && alt) merkerAendern(alt, f.path); });
+      an(app.vault, "delete", (f) => { if (f) merkerAendern(f.path, null); });
+    }
     if (FOLIEN_VORFALTEN) ctx.dom(document, "click", kapitelTipp);
     if (MESSKORREKTUR) { an(ws, "layout-change", flicken); ctx.zeit(flicken, 1000); }
     ctx.zeit(klassen, 500);
@@ -280,9 +298,16 @@ module.exports = function (ctx) {
   const start = async () => {
     ctx.zeit(() => { dashboardOeffnen().catch((e) => console.error("Start: Dashboard", e)); }, 300);
     if (FOLIEN_VORFALTEN && app.foldManager) {
-      ctx.zeit(async () => { for (const f of app.vault.getMarkdownFiles()) { try { await vorfalten(f); } catch (e) { /* nächste */ } } }, 4000);
+      ctx.zeit(async () => {
+        const merk = app.loadLocalStorage(VORGEFALTET);
+        if (Array.isArray(merk)) {
+          const da = merk.filter((p) => app.vault.getAbstractFileByPath(p));
+          if (da.length !== merk.length) app.saveLocalStorage(VORGEFALTET, da);
+        }
+        for (const f of app.vault.getMarkdownFiles()) { try { await vorfalten(f); } catch (e) { /* nächste */ } }
+      }, 4000);
     }
   };
 
-  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); document.body.classList.remove("eba-plugin-an"); }, klassenVon };
+  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); document.body.classList.remove("eba-plugin-an"); }, klassenVon, merkerNach };
 };

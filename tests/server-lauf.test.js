@@ -283,6 +283,40 @@ require("node:test")("Fehlschlag: zurückgelegte Ordner bleiben für den Abruf (
   } finally { process.umask(alt); }
 });
 
+test("Abgebrochener Lauf (Zeitgrenze, Neustart): Rohdaten und Unterlagen zurück, „läuft“ weg, kein neuer Anstoß; der nächste Lauf holt sie", async () => {
+  const { laufen, anstossSchreiben, verwaisteZurueck } = await laden("lauf.mjs");
+  const { v, skill, claude } = umgebung();
+  // Zustand mitten im Lauf nachgestellt: Ordner wie von einLauf, ohne protokoll.json
+  const arbeit = path.join(v, "laeufe", "20261018T053000Z");
+  fs.mkdirSync(path.join(arbeit, "unterlagen"), { recursive: true });
+  fs.renameSync(path.join(v, "roh"), path.join(arbeit, "roh"));
+  fs.writeFileSync(path.join(arbeit, ".lauf.json"), JSON.stringify({ opus: true }));
+  fs.writeFileSync(path.join(arbeit, "unterlagen", "a".repeat(64) + ".md"), "# Folien");
+  fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify({ laeuftSeit: JETZT.toISOString(), gmail: "ok" }));
+  assert.deepEqual(verwaisteZurueck(v, JETZT), ["20261018T053000Z"]);
+  assert.ok(fs.existsSync(path.join(v, "roh", "uni-postfach", "9.txt")), "Rohdaten zurück");
+  assert.deepEqual(fs.readdirSync(path.join(v, "unterlagen", "opus")), ["a".repeat(64) + ".md"], "Unterlage zurück nach opus/");
+  const z = lesen(path.join(v, "zustand.json"));
+  assert.deepEqual([z.laeuftSeit, z.fehler, z.letzterLauf.ok, z.gmail], [undefined, ["claude-lauf"], false, "ok"]);
+  assert.equal(lesen(path.join(arbeit, "protokoll.json")).code, "abgebrochen");
+  assert.ok(!fs.existsSync(path.join(v, "anstoss")), "kein neuer Anstoß");
+  assert.deepEqual(verwaisteZurueck(v, JETZT), [], "nur einmal");
+
+  // ein Abbruch ohne SIGTERM (Absturz): laufen holt es vor dem nächsten Lauf nach
+  fs.rmSync(path.join(v, "unterlagen"), { recursive: true });
+  fs.rmSync(path.join(arbeit, "protokoll.json"));
+  fs.rmSync(path.join(arbeit, "roh"), { recursive: true });
+  fs.renameSync(path.join(v, "roh"), path.join(arbeit, "roh"));
+  process.env.ATTRAPPE = "ok";
+  anstossSchreiben(v, "quellen", JETZT);
+  const r = await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 60e3), claude, skill, holen: async () => ({ ok: false }) });
+  delete process.env.ATTRAPPE;
+  assert.equal(r.status, "ok");
+  const neuer = ordner(v).sort().pop();
+  assert.ok(fs.existsSync(path.join(v, "laeufe", neuer, "roh", "uni-postfach", "9.txt")), "die Mails im nächsten Lauf");
+  assert.equal(lesen(path.join(v, "laeufe", neuer, ".lauf.json")).opus, false);
+});
+
 test("Zentrale Termine: ohne Netz oder bei Fehler leere Liste, der Lauf geht weiter", async () => {
   const { zentralHolen } = await laden("lauf.mjs");
   assert.deepEqual(await zentralHolen(async () => { throw new Error("offline"); }), []);

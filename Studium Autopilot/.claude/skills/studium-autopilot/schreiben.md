@@ -69,11 +69,12 @@ Eine Zeile `- [ ] Text (bis TT.MM.)` in die passende Notiz: Begleitnotiz unter `
 
 ## Vorlesungsnotiz
 
-`Vorlesungen/<Code>/JJJJ-MM-TT <Code> VL NN.md` mit `typ: vorlesung`, `datum`, `code`, `modul`, `nummer`, `thema`,
-`dozent`, `folien: "[[…]]"`, `veranstaltung`, `nachgearbeitet: false`, `tags: [vorlesung]`,
+`Vorlesungen/<Code>/JJJJ-MM-TT <Code> VL NN.md` mit `typ: vorlesung`, `datum` (Tag der Vorlesung), `code`, `modul`, `nummer`,
+`thema`, `dozent`, `folien: ""`, `veranstaltung`, `nachgearbeitet: false`, `tags: [vorlesung]`,
 `cssclasses: [eba-s-notizen, eba-s-vorlesung]`; Überschrift `# Vorlesung 3 · Mo 19.10. · <Thema>`, dann der Block
 `eba-vorlesung` (Kopf, schreibt das Plugin) und die Abschnitte `## Mitschrift`, `## Prüfungsrelevant`, `## Offene Fragen`,
-`## Nacharbeit` mit Inhalt. Die Abschnitte nicht umbenennen.
+`## Nacharbeit` mit Inhalt. Die Abschnitte nicht umbenennen. `folien` bleibt leer: Die Folien dieser Vorlesung sucht Studium
+Autopilot selbst heraus, auch später hochgeladene. Nur wenn die Person bestimmte Folien will, `folien: "[[<Name>.pdf]]"`.
 
 ## Karteikarten
 

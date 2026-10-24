@@ -15,7 +15,8 @@
 // Seit 19.10.2026 außerdem:
 //  - Rechts im Kopf „⋯“ mit „Eigenschaften“: Die Eigenschaften der Notizen des Plugins sind in keiner Ansicht zu sehen (eba-core.css
 //    Abschnitt 25, Klasse eba-notiz aus start.js), geändert wird im Kopf (Entscheidung E4). Der Menüpunkt zeigt sie für diese Notiz
-//    aufgeklappt, bis man ihn noch einmal tippt oder Obsidian neu startet. Vorlesung und Übungsblatt nehmen dasselbe (ctx.kopf.mehr).
+//    aufgeklappt, bis man ihn noch einmal tippt oder Obsidian neu startet. Vorlesung und Übungsblatt nehmen dasselbe (ctx.kopf.mehr,
+//    weitere Menüpunkte als drittes Argument [{ titel, aktion }], z. B. „Andere Folien …“ in der Vorlesungsnotiz).
 //  - Der Modulcode im Kopf öffnet die Modulseite.
 //  - Leere Abschnitte (rein: leereAbschnitte) sind in Notizen des Plugins nicht zu sehen: in der Leseansicht keine Überschrift mit
 //    nur leeren Punkten („- “, „- [ ] “) darunter, in der Bearbeitungsansicht der Begleitnotizen auch nicht, solange der Cursor
@@ -27,7 +28,7 @@
 // Seit 20.10.2026: Die Stundenplan-Notiz eines Tutoriums zeigt unter dem Kopf die Unterlagen aus dem Bereich Tutorium ihres Moduls,
 // die einer Übung die Übungen, als Chips wie die Vorlesungsnotiz (höchstens drei, neueste Nummer zuerst; Tipp öffnet die
 // Begleitnotiz), bei mehr „Alle Unterlagen“ zur Modulseite. Vorher fand man ein Blatt aus dem Ordner der eigenen Tutoriumsgruppe
-// vom Tutorium aus nicht.
+// vom Tutorium aus nicht. Seit 24.10.2026 ebenso ein Lab („Data Science Lab“): die Unterlagen aus dem Bereich Lab, eine je Sitzung.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const TYPEN = ["termin", "unterlage", "sq_kurs", "lehrveranstaltung"];
 const SQ = ["geplant", "angemeldet", "zugelassen", "bestanden"];
@@ -60,11 +61,21 @@ const statusVon = (typ, fm, nicht) => {
 // Klasse des Knopfs aus dem Ton (statusArt): gefüllt, getönt, leise oder warm (offen)
 const klasseVon = (s, ton) => (s.leise ? "leise" : ton === "ok" ? (s.fertig ? "fertig" : "zwischen") : "");
 
-// Unterlagen zu einer Übung oder einem Tutorium im Stundenplan, jeweils aus dem eigenen Bereich: Tutorium → Unterlagen der Art
-// „Tutorium“, Übung (auch „Übungsteil“) → Art „Übung“, desselben Moduls. Höchste Nummer zuerst (das neueste Blatt), ohne Nummer
-// (Aufgabenkatalog, Vorlage) danach. lfm = Eigenschaften der Stundenplan-Notiz, unterlagen = [{ f, fm }] → { art, blaetter:
-// [{ f, nr, titel }] (höchstens max), mehr: wie viele darüber hinaus } oder null, wenn die Notiz keine Übung und kein Tutorium ist.
-const bereichVon = (art) => (/tutori/i.test(art) ? "Tutorium" : /(ü|ue)bung/i.test(art) ? "Übung" : "");
+// Unterlagen zu einer Übung, einem Tutorium oder einem Lab im Stundenplan, jeweils aus dem eigenen Bereich: Tutorium → Unterlagen
+// der Art „Tutorium“, Übung (auch „Übungsteil“) → Art „Übung“, Lab („Lab“, „Data Science Lab“, „R Lab“) → Art „Lab“, desselben
+// Moduls. Höchste Nummer zuerst (das neueste Blatt), ohne Nummer (Aufgabenkatalog, Vorlage) danach; beim Lab eine je Sitzung. lfm = Eigenschaften der
+// Stundenplan-Notiz, unterlagen = [{ f, fm }] → { art, blaetter: [{ f, nr, titel }] (höchstens max), mehr: wie viele darüber
+// hinaus } oder null, wenn die Notiz keine Übung, kein Tutorium und kein Lab ist.
+const bereichVon = (art) => (/tutori/i.test(art) ? "Tutorium" : /(ü|ue)bung/i.test(art) ? "Übung"
+  : /(^|[^a-zäöüß])labs?([^a-zäöüß]|$)/i.test(art) ? "Lab" : "");
+// Welche Unterlage einer Lab-Sitzung der Chip zeigt: was man liest (PDF, HTML mit Ausgaben) vor dem Notebook, vor Code, vor Daten;
+// eine Lösung nach allem anderen. Endungen aus „format“, sonst aus „datei“ („[[S110 Lab 02.Rmd]]“).
+const labRang = (fm) => {
+  const e = (txt(fm.format) || (txt(fm.datei).match(/\.([a-z0-9]+)\]*$/i) || ["", ""])[1]).toLowerCase().split(/[\s,]+/);
+  const hat = (l) => l.some((x) => e.indexOf(x) >= 0);
+  const r = hat(["pdf", "html"]) ? 0 : hat(["ipynb", "rmd", "qmd"]) ? 1 : hat(["r", "py", "do", "jl", "sql"]) ? 2 : 3;
+  return r + (/l(ö|oe)sung|solution/i.test(txt(fm.titel)) ? 10 : 0);
+};
 const blaetterFuer = (lfm, unterlagen, max) => {
   const code = txt(lfm && lfm.code), bereich = bereichVon(txt(lfm && lfm.art));
   if (!code || !bereich) return null;
@@ -79,11 +90,15 @@ const blaetterFuer = (lfm, unterlagen, max) => {
   };
   const alle = (unterlagen || []).filter((x) => x && x.fm && txt(x.fm.typ) === "unterlage" && txt(x.fm.code) === code
     && txt(x.fm.art).toLowerCase() === bereich.toLowerCase())
-    .map((x) => ({ f: x.f, nr: nummer(x.fm.nummer), titel: txt(x.fm.titel) || ausName(x.f && x.f.basename) }));
-  alle.sort((a, b) => (a.nr == null) - (b.nr == null) || (b.nr || 0) - (a.nr || 0)
+    .map((x) => ({ f: x.f, nr: nummer(x.fm.nummer), titel: txt(x.fm.titel) || ausName(x.f && x.f.basename), rang: labRang(x.fm) }));
+  alle.sort((a, b) => (a.nr == null) - (b.nr == null) || (b.nr || 0) - (a.nr || 0) || (bereich === "Lab" ? a.rang - b.rang : 0)
     || a.titel.localeCompare(b.titel, "de", { numeric: true, sensitivity: "base" }));
+  // Lab: ein Chip je Sitzung (Notebook, Code und Daten von „Lab 2“ sind mehrere Unterlagen mit derselben Nummer, labRang). „mehr“
+  // zählt alle übrigen Unterlagen, damit „Alle Unterlagen“ zu Code und Daten führt.
+  const zahl = alle.length;
+  if (bereich === "Lab") for (let i = alle.length - 1; i > 0; i--) if (alle[i].nr != null && alle[i].nr === alle[i - 1].nr) alle.splice(i, 1);
   const n = max == null ? 3 : max;
-  return { art: bereich, blaetter: alle.slice(0, n), mehr: Math.max(0, alle.length - n) };
+  return { art: bereich, blaetter: alle.slice(0, n), mehr: Math.max(0, zahl - Math.min(n, alle.length)) };
 };
 
 // Leere Abschnitte: „## …“ mit nichts als leeren Punkten und Leerzeilen darunter, bis zur nächsten Überschrift (Ebene 1 oder 2), zum
@@ -218,8 +233,8 @@ module.exports = function (ctx) {
     if (i >= 0) gezeigt.pfade.splice(i, 1); else gezeigt.pfade.push(f.path);
     eigenschaftenAnwenden();
   };
-  // Knopf „⋯“ rechts im Kopf (Gestalt wie in der Kartenliste, eba-lk-mehr); Obsidians Menü mit „Eigenschaften“
-  const mehr = (eltern, f) => {
+  // Knopf „⋯“ rechts im Kopf (Gestalt wie in der Kartenliste, eba-lk-mehr); Obsidians Menü mit „Eigenschaften“, danach extra
+  const mehr = (eltern, f, extra) => {
     if (!f || !O.Menu) return null;
     const b = eltern.createEl("button", { cls: "eba-lk-mehr eba-kopf-mehr", text: "⋯", attr: { type: "button", title: "Mehr", "aria-label": "Mehr", "aria-haspopup": "menu" } });
     b.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
@@ -227,6 +242,7 @@ module.exports = function (ctx) {
       e.preventDefault(); e.stopPropagation();
       const m = new O.Menu();
       m.addItem((i) => { i.setTitle("Eigenschaften"); i.setChecked(gezeigt.pfade.indexOf(f.path) >= 0); i.onClick(() => eigenschaftenUmschalten(f)); });
+      for (const x of extra || []) m.addItem((i) => { i.setTitle(x.titel); i.onClick(() => x.aktion()); });
       const r = b.getBoundingClientRect();
       m.showAtPosition({ x: r.left, y: r.bottom + 4 });
     });
@@ -265,11 +281,11 @@ module.exports = function (ctx) {
     a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(ziel, { quelle, neu: e.ctrlKey || e.metaKey }); });
     return a;
   };
-  // Übung oder Tutorium im Stundenplan: die Unterlagen aus ihrem Bereich unter dem Kopf (neueste zuerst), sonst nichts
+  // Übung, Tutorium oder Lab im Stundenplan: die Unterlagen aus ihrem Bereich unter dem Kopf (neueste zuerst), sonst nichts
   const blaetterZeichnen = (karte, f, fm) => {
     const u = blaetterFuer(fm, app.vault.getMarkdownFiles().map((x) => ({ f: x, fm: fmVon(x) })).filter((x) => x.fm.typ === "unterlage"));
     if (!u || !u.blaetter.length) return;
-    const links = karte.createDiv({ cls: "eba-vorl-links", attr: { "aria-label": u.art === "Tutorium" ? "Unterlagen zum Tutorium" : "Übungsblätter" } });
+    const links = karte.createDiv({ cls: "eba-vorl-links", attr: { "aria-label": u.art === "Übung" ? "Übungsblätter" : "Unterlagen zum " + u.art } });
     for (const b of u.blaetter) chip(links, b.f, "blatt", b.nr == null ? u.art : u.art + " " + pad(b.nr), b.titel, f.path);
     const modul = u.mehr ? modulVon(f, fm) : null;
     if (modul) chip(links, modul, "ordner", "Alle Unterlagen", "", f.path);
@@ -467,7 +483,7 @@ module.exports = function (ctx) {
     try { editorErweiterung(); } catch (e) { console.error("Kopf Editor", e); }
     try { leerErweiterung(); } catch (e) { console.error("Kopf Editor leer", e); }
     const bald = ctx.entprellen(() => neu(null), 300);
-    // Neu zeichnen bei Änderungen an einer gezeigten Notiz, den Einstellungen (Besuche ich nicht) oder einer Unterlage (Chips unter Übung und Tutorium)
+    // Neu zeichnen bei Änderungen an einer gezeigten Notiz, den Einstellungen (Besuche ich nicht) oder einer Unterlage (Chips unter Übung, Tutorium und Lab)
     const unterlage = (cache) => !!(cache && cache.frontmatter && cache.frontmatter.typ === "unterlage");
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
       if (f && (f.path === EINSTELLUNGEN || unterlage(cache) || Array.from(angezeigt).some((x) => x.pfad === f.path))) bald();

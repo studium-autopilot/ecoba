@@ -12,8 +12,8 @@ Nur Standardbibliothek und die OCI-Kommandozeile.
   python3 platzsucher.py --einmal   eine Runde (alle Verfügbarkeitsbereiche), Ergebnis als JSON
 
 Konfiguration $PLATZSUCHER_KONFIG (Standard /etc/studium-platzsucher/konfig.json, schreibt die Einrichtung):
-  { "compartment": OCID, "ads": [Namen der Verfügbarkeitsbereiche], "subnet": OCID, "image": OCID (Ubuntu 24.04, aarch64),
-    "boot_gb": 150, "ssh_schluessel": "ssh-rsa …", "user_data": base64 (cloud-init des Servers), "thema": OCID }
+  { "compartment": OCID, "ads": [Namen der Verfügbarkeitsbereiche], "subnet": OCID,
+    "image": OCID (Ubuntu 24.04, aarch64; nur Ersatz, jede Runde sucht das neueste), "boot_gb": 150, "ssh_schluessel": "ssh-rsa …", "user_data": base64 (cloud-init des Servers), "thema": OCID }
 Stand $PLATZSUCHER_STAND (Standard /var/lib/studium-platzsucher/stand.json):
   { seit, versuche, tag, versuche_heute, letzter_fehler, erfolg, instanz, gemeldet_14 }
 
@@ -157,7 +157,17 @@ def server_vorhanden(oci, k):
     return r if isinstance(r, dict) else (r[0] if r else None)
 
 
-def anlegen(oci, k, ad):
+def neuestes_abbild(oci, k):
+    """Neuestes Ubuntu 24.04 für FORM (wie bild in einrichten.mjs): Oracle zieht ältere Abbilder nach einigen Monaten zurück, und
+    der Platzsucher sucht oft wochenlang. Bei Fehler oder ohne Treffer das aus der Konfiguration. → OCID"""
+    r = oci(["compute", "image", "list", "--compartment-id", k["compartment"], "--operating-system", "Canonical Ubuntu",
+             "--operating-system-version", "24.04", "--shape", FORM, "--sort-by", "TIMECREATED", "--sort-order", "DESC", "--limit", "1"])
+    d = r["data"].get("data") if r["ok"] and isinstance(r["data"], dict) else None
+    neu = d[0].get("id") if isinstance(d, list) and d and isinstance(d[0], dict) else None
+    return neu if isinstance(neu, str) and OCID.match(neu) else k["image"]
+
+
+def anlegen(oci, k, ad, abbild=None):
     metadaten = {"ssh_authorized_keys": k["ssh_schluessel"]}
     if k.get("user_data"):
         metadaten["user_data"] = k["user_data"]
@@ -165,7 +175,7 @@ def anlegen(oci, k, ad):
         "compute", "instance", "launch",
         "--availability-domain", ad, "--compartment-id", k["compartment"],
         "--shape", FORM, "--shape-config", json.dumps({"ocpus": OCPUS, "memoryInGBs": SPEICHER_GB}),
-        "--source-details", json.dumps({"sourceType": "image", "imageId": k["image"], "bootVolumeSizeInGBs": k["boot_gb"], "bootVolumeVpusPerGB": VPU}),
+        "--source-details", json.dumps({"sourceType": "image", "imageId": abbild or k["image"], "bootVolumeSizeInGBs": k["boot_gb"], "bootVolumeVpusPerGB": VPU}),
         "--subnet-id", k["subnet"], "--assign-public-ip", "true",
         "--display-name", NAME, "--freeform-tags", json.dumps(KENNZEICHEN), "--metadata", json.dumps(metadaten),
         "--instance-options", json.dumps({"areLegacyImdsEndpointsDisabled": True}),
@@ -196,12 +206,13 @@ def runde(oci, k, stand, jetzt=None, anlauf=False):
         return ("erfolg", vorhanden)
     ads = list(k["ads"])
     random.shuffle(ads)
+    abbild = neuestes_abbild(oci, k) if stand.get("versuche_heute", 0) < VERSUCHE_TAG else k["image"]
     for ad in ads:
         if stand.get("versuche_heute", 0) >= VERSUCHE_TAG:
             return ("weiter", "Tagesgrenze erreicht")
         stand["versuche"] = stand.get("versuche", 0) + 1
         stand["versuche_heute"] = stand.get("versuche_heute", 0) + 1
-        r = anlegen(oci, k, ad)
+        r = anlegen(oci, k, ad, abbild)
         if r["ok"]:
             return ("erfolg", (r["data"] or {}).get("data", {}))
         art = einordnen(r)

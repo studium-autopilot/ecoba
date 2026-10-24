@@ -101,3 +101,14 @@ test("Prüfung selbst: erkennt ausgeblendete Abschnitte, lässt Blöcke darin un
   // Am 18.10.2026 in Obsidian geprüft: „Im Eingang“ darunter erscheint nach dem Scrollen, Leseansicht und Bearbeitungsansicht.
   assert.deepEqual(funde('.callout[data-callout="eba-raster"] > .callout-content > .callout:has(.eba-td.is-leer) { display: none; }'), []);
 });
+
+test("Vorgefaltete Folien (start.js): der Merker folgt Umbenennungen, Gelöschtes fällt heraus", () => {
+  const { merkerNach } = laden("start").ergebnis;
+  const liste = ["Unterlagen/B110/VL 01.md", "Unterlagen/B110/VL 02.md", "Unterlagen/B1100/VL 01.md", "Notiz.md"];
+  assert.deepEqual(merkerNach(liste, "Notiz.md", "Neu.md"), ["Unterlagen/B110/VL 01.md", "Unterlagen/B110/VL 02.md", "Unterlagen/B1100/VL 01.md", "Neu.md"]);
+  assert.deepEqual(merkerNach(liste, "Unterlagen/B110", "Unterlagen/BWL"),
+    ["Unterlagen/BWL/VL 01.md", "Unterlagen/BWL/VL 02.md", "Unterlagen/B1100/VL 01.md", "Notiz.md"], "Ordner: nur seine Notizen");
+  assert.deepEqual(merkerNach(liste, "Unterlagen/B110/VL 02.md", null), ["Unterlagen/B110/VL 01.md", "Unterlagen/B1100/VL 01.md", "Notiz.md"]);
+  assert.deepEqual(merkerNach(liste, "Unterlagen/B110", null), ["Unterlagen/B1100/VL 01.md", "Notiz.md"]);
+  assert.deepEqual(merkerNach(null, "x.md", null), [], "ohne Merker");
+});

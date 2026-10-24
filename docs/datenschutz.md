@@ -2,7 +2,9 @@
 
 Kurz: Studium Autopilot holt Daten, schickt aber nichts über dich an den Autor oder an Dritte. Es gibt kein Konto, keine
 Statistik und keine Telemetrie. Nur wenn du deinen Uni-Login eingibst, meldet sich das Plugin damit an, direkt von deinem Gerät
-bei der Uni (ILIAS und Alma). Richtest du dir einen eigenen Server mit Claude ein (freiwillig), holt das Plugin
+bei der Uni (ILIAS und Alma, mit dem [Postfach](#postfach) auch beim Webmail). Verbindest du Claude mit deinem eigenen
+API-Schlüssel (freiwillig), geht eine Unterlage an Anthropic, wenn du bei ihr auf **Zusammenfassen** tippst
+([unten](#claude-mit-eigenem-api-schlüssel)). Richtest du dir einen eigenen Server mit Claude ein (freiwillig), holt das Plugin
 zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 
 ## Was das Plugin abruft
@@ -16,6 +18,7 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 | Deine Noten und Prüfungsanmeldungen (Beta) | direkt von Alma (`alma.uni-tuebingen.de`, Seiten „Leistungen“ und „Belegungen“) | nur wenn du **Noten & Anmeldungen (Alma)** eingeschaltet hast: höchstens zweimal am Tag, in der Anmeldephase alle 3 Stunden, und auf Knopfdruck; nur eines deiner Geräte |
 | Abgabetermine deiner Übungen | direkt von ILIAS (`ovidius.uni-tuebingen.de`, dein Kalender-Abo) | nur wenn du den **ILIAS-Kalender** verbunden hast: beim Start, dann alle 2 Stunden, solange Obsidian offen ist, und auf Knopfdruck; nur eines deiner Geräte |
 | Dein Uni-Posteingang und die Mails, die du öffnest | direkt vom Webmail der Uni (`webmail.uni-tuebingen.de`) | nur wenn du auf der Seite **Postfach** **Postfach anzeigen** getippt hast: beim Öffnen der Seite, wenn die Liste älter als 5 Minuten ist, und auf Knopfdruck; nie im Hintergrund |
+| Die Zusammenfassung einer Unterlage (dafür geht die PDF oder ihr Text hin) | Anthropic (`api.anthropic.com`), mit deinem eigenen API-Schlüssel | nur wenn du Claude verbunden hast und bei der Unterlage auf **Zusammenfassen** tippst; beim Verbinden einmal die Prüfung des Schlüssels |
 | Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse steht im Link zum Verbinden) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
 
@@ -27,18 +30,18 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 
 ## Was auf deinem Gerät bleibt
 
-- **Dein Alma-Link** liegt nur im Speicher von Obsidian auf diesem Gerät. Er steht in keiner Notiz und wird nicht synchronisiert. In Alma kannst du ihn jederzeit erneuern; in Obsidian löschst du ihn unter **Einstellungen & Hilfe** → **Verbindungen** → Alma → **Trennen**.
+- **Dein Alma-Link** liegt nur im Speicher von Obsidian auf diesem Gerät. Er steht in keiner Notiz und wird nicht synchronisiert. In Alma kannst du ihn jederzeit erneuern; in Obsidian löschst du ihn unter **Einstellungen & Hilfe** → **Verbindungen** → Uni-Login → **Mehr erfahren** → Schalter bei „Alma-Stundenplan“ aus.
 - **Dein Link zum ILIAS-Kalender** ist geheim wie ein Passwort. Wer ihn hat, sieht deinen Kalender. Er liegt wie der Alma-Link nur
   im Speicher von Obsidian auf diesem Gerät, steht in keiner Notiz und in keiner Meldung. Von deinem Kalender übernimmt das
   Plugin nur die Abgabetermine deiner Übungen, nie die Titel aus ILIAS (Kurstitel können Beitrittspasswörter enthalten). In
   ILIAS erneuerst du ihn unter **Kalender** → **Abonnieren**; in Obsidian löschst du ihn unter **Einstellungen & Hilfe** →
-  **Verbindungen** → ILIAS-Kalender → **Trennen**.
+  **Verbindungen** → Uni-Login → **Mehr erfahren** → Schalter bei „ILIAS-Kalender“ aus.
 - **Dein Uni-Passwort** ist dasselbe für ILIAS und Alma. Du gibst es beim Verbinden von ILIAS ein, und es liegt nur im
   Schlüsselbund von Obsidian auf diesem Gerät, vom Betriebssystem verschlüsselt. Es steht in keiner Notiz, wird nicht
   synchronisiert und erscheint in keinem Protokoll und keiner Fehlermeldung. Auf jedem Gerät gibst du es selbst ein. Seit 0.4.8
   gilt dein Uni-Login für alles: Das Fenster sagt vor der Eingabe, was er holt und wo er sich anmeldet; mit der Eingabe stimmst du
   zu, dass sich das Plugin damit auch bei Alma anmeldet, um den Link zu deinem Stundenplan zu holen (siehe „Uni-Login“). Hast du
-  dein Passwort vor 0.4.8 eingegeben, meldet es sich bei Alma erst nach deinem Tipp auf **Verbinden** an. Für **Noten &
+  dein Passwort vor 0.4.8 eingegeben, meldet es sich bei Alma erst an, wenn du im Fenster hinter „Uni-Login“ den Schalter bei „Alma-Stundenplan“ einschaltest. Für **Noten &
   Anmeldungen (Alma)** braucht es weiter dein **Einschalten**.
   Deinen Benutzernamen speichert Obsidian wie den Alma-Link nur auf diesem Gerät.
 - **Deine Karteikarten und Lernstände** sind normale Dateien in deinem Tresor (`Karteikarten/` und
@@ -51,6 +54,9 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 - **Deine Angaben, Noten und Notizen** sind normale Dateien in deinem Tresor. Sie verlassen das Gerät nur, wenn du selbst einen Sync-Dienst einrichtest (dann gelten dessen Regeln).
 - **Ein eigenes Passwort für deine Mails** speichert das Plugin nie; das **Postfach** nutzt deinen Uni-Login. **Deine Mails**
   speichert es auch nicht: Sie stehen nur im Speicher dieses Geräts, solange Obsidian offen ist (siehe „Postfach“).
+- **Dein API-Schlüssel für Claude** liegt wie das Uni-Passwort nur im Schlüsselbund von Obsidian auf diesem Gerät. Er steht in
+  keiner Notiz, wird nicht synchronisiert und erscheint in keiner Meldung; jedes Gerät verbindest du selbst. Löschen: unter
+  **Verbindungen** → Claude → **Dieses Gerät trennen**; ungültig machst du ihn in der Claude Console unter **API keys**.
 
 ## Uni-Login
 
@@ -114,7 +120,8 @@ Freiwillig und nur mit Beta-Versionen: Ohne dein **Einschalten** fragt das Plugi
   Prüfungsanmeldungen im aktuellen Semester. Nie dein Name, deine Matrikelnummer, Prüfer:innen oder Vermerke. Die Datei kommt mit
   deinem Sync auf deine anderen Geräte (bei Obsidian Sync nur mit „andere Dateitypen“). Noten stehen nie in Hinweisen, im
   Protokoll, in Fehlermeldungen oder in Bildschirmen außer dem Vorschlag auf der Modulseite. In deine Modulnotiz kommt eine Note
-  nur, wenn du **Übernehmen** tippst; **Ausblenden** merkt sich eine Prüfsumme statt der Note.
+  nur, wenn du **Übernehmen** tippst; dabei kommt eine Prüfsumme der übernommenen Werte dazu (`alma_uebernommen`), damit ein
+  späterer Vorschlag eine Korrektur aus Alma erkennt. **Ausblenden** merkt sich eine Prüfsumme statt der Note.
 - **Löschen:** **Einstellungen & Hilfe** → **Verbindungen** → Noten & Anmeldungen (Alma) → **Mehr erfahren** → **Daten aus Alma
   löschen**. Das löscht die Datei und Kopien davon endgültig (nicht im Papierkorb) und schaltet die Funktion auf allen deinen
   Geräten aus. Was du in Modulseiten übernommen hast, bleibt. Ältere Fassungen im Verlauf deines Sync-Dienstes (z. B.
@@ -135,9 +142,28 @@ Freiwillig und je Gerät: Ohne deinen Tipp auf **Postfach anzeigen** meldet sich
   beantwortet und markiert sonst nichts; die Adressen dafür baut es gar nicht.
 - **Was gespeichert wird:** nichts. Deine Mails stehen nur im Speicher dieses Geräts, solange Obsidian offen ist; nie im
   Tresor, in Hinweisen, im Protokoll oder bei Claude. Nach 10 Minuten ohne Abruf meldet sich das Plugin beim Webmail ab.
+  Änderst du den Benutzernamen deines Uni-Logins oder trennst ihn, meldet es die alte Sitzung gleich ab und vergisst deren Mails.
 - **Abgelehnt:** Lehnt das Webmail dein Passwort ab, halten alle deine Geräte an wie bei ILIAS (siehe „Abgelehnt“ oben).
 
 **Ausschalten:** auf der Seite **Postfach** → **Auf diesem Gerät ausschalten**. Das meldet ab und vergisst die geladenen Mails.
+
+## Claude mit eigenem API-Schlüssel
+
+Nur wenn du Claude unter **Einstellungen & Hilfe** → **Verbindungen** → Claude mit einem eigenen API-Schlüssel aus der
+[Claude Console](https://platform.claude.com) verbindest. Dafür braucht es keinen Server und kein Konto bei Studium Autopilot.
+
+- **Was das Plugin schickt:** nur, wenn du bei einer Unterlage auf **Zusammenfassen** tippst, direkt von deinem Gerät an
+  Anthropic (`api.anthropic.com`): die PDF (oder nur ihren Text, wenn die PDF zu groß ist oder du **Nur Text** wählst), dazu
+  Titel, Modulcode, Art und Seitenzahl der Unterlage und das heutige Datum. Keine anderen Notizen, keine Noten, keinen Namen.
+- **Nur Lehrmaterial:** Folien, Skripte, Übungen, Tutorien, Lösungen, Altklausuren und Literatur; nie Mitschriften oder Scans.
+- **Was zurückkommt:** die Punkte für „Das Wichtigste“, „Zu tun“ und „Offene Fragen“. Das Plugin schreibt sie als reinen Text
+  in die Notiz neben der PDF; Links, Code und Ähnliches fallen weg.
+- **Bei Anthropic:** Die Anfrage läuft über dein Konto und dein Guthaben; Anthropic verarbeitet sie nach den Bedingungen deines
+  Kontos. Der Autor sieht davon nichts und bekommt kein Geld.
+- **Auf diesem Gerät:** der Schlüssel (siehe „Was auf deinem Gerät bleibt“) und was die Zusammenfassungen diesen Monat gekostet
+  haben, damit die Zeile unter **Verbindungen** es nennen kann.
+- **Warum kein Claude-Abo:** Anthropic erlaubt Apps anderer Anbieter nicht, sich mit Claude Free, Pro oder Max anzumelden
+  ([Bedingungen](https://code.claude.com/docs/en/legal-and-compliance)).
 
 ## Eigener Server mit Claude
 

@@ -165,6 +165,15 @@ test("Texte einer Zeile: Uhrzeit, Ort und online, Anmeldung, Buchungsbeginn", ()
   assert.equal(A.anmeldeText(a({ anmeldung: { ab: "2026-10-10", bis: "2026-10-26T23:59" } }), "2026-10-17"), "Anmeldung bis 26.10., 23:59");
   assert.equal(A.anmeldeText(a({ anmeldung: { ab: "", bis: "2026-10-16" } }), "2026-10-17"), "", "Anmeldung vorbei");
   assert.equal(A.anmeldeText(a({ kategorie: "sport", anmeldung: { ab: "2026-10-19T17:00", bis: "2026-10-25" } }), "2026-10-17"), "Buchung bis 25.10.");
+  // mit Uhrzeit von jetzt: heute abgelaufene Anmeldung fällt weg, heute beginnende steht bis zu ihrer Uhrzeit als „ab“ da
+  const heute = (anmeldung, jetzt) => A.anmeldeText(a({ anmeldung }), "2026-10-17", jetzt);
+  assert.equal(heute({ ab: "", bis: "2026-10-17T12:00" }, "11:59"), "Anmeldung bis 17.10., 12:00");
+  assert.equal(heute({ ab: "", bis: "2026-10-17T12:00" }, "12:00"), "");
+  assert.equal(heute({ ab: "", bis: "2026-10-17T12:00" }), "Anmeldung bis 17.10., 12:00", "ohne Uhrzeit von jetzt bis Tagesende");
+  assert.equal(heute({ ab: "", bis: "2026-10-17" }, "23:00"), "Anmeldung bis 17.10.", "Tag ohne Uhrzeit gilt bis zu seinem Ende");
+  assert.equal(heute({ ab: "2026-10-17T14:00", bis: "2026-10-20" }, "13:00"), "Anmeldung ab 17.10., 14:00");
+  assert.equal(heute({ ab: "2026-10-17T14:00", bis: "2026-10-20" }, "14:00"), "Anmeldung bis 20.10.");
+  assert.equal(A.metaText(zeile("u1"), "2026-10-19", "23:00"), "UB-Kurse · UB, Schulungsraum · Anmeldung bis 19.10.");
 });
 
 test("Monatstrenner: nur der erste Tag je neuem Monat", () => {

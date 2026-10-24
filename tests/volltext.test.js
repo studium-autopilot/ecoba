@@ -496,6 +496,33 @@ test("Umbenannte PDF: Notiz zieht mit (Name, Quelle, Links), ohne die PDF neu zu
   assert.equal((await x.m.lauf({})).art, "aktuell");
 });
 
+test("Notiz zur PDF kommt erst nach der Textfassung: Link „unterlage“ wird nachgetragen, ohne die PDF neu zu lesen", async () => {
+  const x = aufbau({ specs: { f: folien() } });
+  x.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 3000 });
+  await x.m.lauf({});
+  const ohne = x.text(vollPfad("B110 Folien 01"));
+  assert.doesNotMatch(ohne, /^unterlage:/m);
+  assert.doesNotMatch(ohne, /Zur Unterlage/);
+  assert.equal((await x.m.lauf({})).art, "aktuell", "ohne Unterlage nichts zu tun");
+  x.notiz(B110 + "/B110 Folien 01.md", "---\ntyp: unterlage\n---\n");
+  const n = x.gelesen.length;
+  x.vor(5 * MIN);
+  const b = await x.m.lauf({});
+  assert.equal(b.verknuepft, 1, JSON.stringify(b));
+  assert.equal(x.gelesen.length, n, "nicht neu gelesen");
+  const mit = x.text(vollPfad("B110 Folien 01"));
+  assert.match(mit, /^unterlage: "\[\[B110 Folien 01\]\]"$/m);
+  assert.match(mit, /^Automatisch erzeugt, nicht bearbeiten\. Zur Unterlage: \[\[B110 Folien 01\]\] · PDF: /m);
+  assert.match(mit, /\[\[B110 Folien 01\.pdf#page=2\|S\. 2\]\]\n> Stakeholder-Ansatz/);
+  // dieselbe Notiz wie bei einer PDF, deren Unterlage von Anfang an da war
+  const y = aufbau({ specs: { f: folien() } });
+  y.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 3000 });
+  y.notiz(B110 + "/B110 Folien 01.md", "---\ntyp: unterlage\n---\n");
+  await y.m.lauf({});
+  assert.equal(mit, y.text(vollPfad("B110 Folien 01")));
+  assert.equal((await x.m.lauf({})).art, "aktuell");
+});
+
 // Läufe, bis eine Notiz ohne PDF reif ist: WAISE_LAEUFE Läufe mit ruhigem Tresor und WAISE_ALTER seit dem ersten Fehlen
 const reifen = async (x) => {
   const b = [];
@@ -807,6 +834,33 @@ test("Seite kommt nicht zurück → Frist je Seite, PDF auf diesem Gerät übers
   await x.m.lauf({});
   s = x.m.status();
   assert.deepEqual(s.warnungen, [], "nächster Lauf ohne Frist: keine Warnung mehr");
+});
+
+test("Zu lange gebraucht: nach einem Tag versucht dieses Gerät die PDF noch einmal; zu viele Seiten am iPhone wartet weiter", async () => {
+  const x = aufbau({ specs: { s: { seiten: 3, seiteHaengt: 2 } }, wecker: true });
+  x.pdf(B110 + "/Hängt auf Seite 2.pdf", "s", { groesse: 1000 });
+  await x.m.lauf({});
+  const z = x.lokalSpeicher[K.L.zuSchwer][B110 + "/Hängt auf Seite 2.pdf"];
+  assert.equal(z.grund, "zeit");
+  assert.ok(z.seit >= START, "Zeitpunkt gemerkt");
+  x.vor(K.ZEIT_WIEDER - MIN);
+  let b = await x.m.lauf({});
+  assert.deepEqual([b.warten, b.neu, x.zerstoert], [1, 0, 1], "vor Ablauf: übersprungen, nicht geöffnet");
+  // jetzt liest die PDF in der Frist
+  x.specs.s = { seiten: 3 };
+  x.vor(MIN);
+  b = await x.m.lauf({});
+  assert.deepEqual([b.warten, b.neu], [0, 1], JSON.stringify(b));
+  assert.match(x.text(vollPfad("Hängt auf Seite 2")), /Seite 3 x/);
+  // Einträge aus älteren Fassungen ohne Zeitpunkt: einmal neu versuchen
+  const y = aufbau({ specs: { f: folien() }, lokal: { [K.L.zuSchwer]: { [B110 + "/B110 Folien 01.pdf"]: { groesse: 2000, version: "0.4.5", grund: "zeit", abstuerze: 0 } } } });
+  y.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 2000 });
+  assert.equal((await y.m.lauf({})).neu, 1);
+  // „computer“ (iPhone/iPad: zu viele Seiten) bleibt, bis ein Computer die PDF liest oder sie sich ändert
+  const m = aufbau({ specs: { f: folien() }, mobil: true, lokal: { [K.L.zuSchwer]: { [B110 + "/B110 Folien 01.pdf"]: { groesse: 2000, version: "0.4.5", grund: "computer", abstuerze: 0 } } } });
+  m.pdf(B110 + "/B110 Folien 01.pdf", "f", { groesse: 2000 });
+  m.vor(3 * K.ZEIT_WIEDER);
+  assert.deepEqual([(await m.m.lauf({})).warten, m.gelesen.length], [1, 0]);
 });
 
 test("Schließen oder Laden von pdf.js kommt nicht zurück → der Lauf endet trotzdem; pdf.js fehlt: Fehler, keine PDF ausgelassen", async () => {

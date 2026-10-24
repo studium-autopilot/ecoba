@@ -103,6 +103,125 @@ test("Tutorium ist ein eigener Bereich: alles aus Tutoriumsordnern und mit „Tu
   assert.equal(nr("Übungsgruppen/Gruppe 2/Blatt.pdf", "E101"), null);
 });
 
+test("Lab ist ein eigener Bereich: alles aus Lab-Ordnern und mit „Lab“ im Namen, auch Daten, Aufzeichnungen und Lösungen", () => {
+  const LAB1 = "03 - Data Science Lab/Codes-Skripte-Daten-Aufzeichnungen aus dem Data Science Lab/R Lab 1/";
+  assert.equal(name(LAB1 + "Lab1.Rmd", "S110"), "S110 Lab 01", "nicht Skript (Ordner „Codes-Skripte-…“), Nummer aus „Lab1“");
+  assert.equal(name(LAB1 + "WS2012_HT_HF_U20_BW.csv", "S110"), "S110 Lab 01 WS 2012 HT HF U20 BW", "Daten: Nummer aus dem Ordner „R Lab 1“");
+  assert.equal(name("03 - Data Science Lab/Aufzeichnung R Lab 2.mp4", "S110"), "S110 Lab 02 Aufzeichnung", "„R Lab“ ist kein Titel");
+  assert.equal(name("03 - Data Science Lab/Einführung.pdf", "S110"), "S110 Lab Einführung", "03 ist die Gliederung des Kurses");
+  assert.equal(nr("02 R Lab/Notebook.Rmd", "S110"), 2, "„02 R Lab“ ist das zweite Lab");
+  assert.equal(name("R_Lab_3_Loesung.R", "S110"), "S110 Lab 03 Loesung", "Lösung bleibt im Lab");
+  assert.equal(name("Python Labs/Lab02 Pandas.ipynb", "S110"), "S110 Lab 02 Pandas");
+  assert.equal(art("2026-10-23, 14:15 - 15:45: Data Science Lab/Folien.pdf", "S110"), "Lab", "Folien aus dem Lab");
+  for (const kein of ["Matlab Einführung.pdf", "Syllabus.pdf", "Label Guide.pdf", "Labor 3.pdf", "Experimente im Labor/Versuch.pdf",
+    "Falk_Heckman_2009_Lab_Experiments.pdf", "Lab vs Field.pdf", "Paper/Lab-in-the-field evidence.pdf", "Collaboration.pdf"]) {
+    assert.notEqual(art(kein, "S110"), "Lab", kein);
+  }
+});
+
+test("Lab: nur ein Name, der das Lab nennt; eigene Arbeit, Lesestoff und Laborexperimente bleiben, was sie sind", () => {
+  const faelle = {
+    // zusammengeschrieben, mit Sprache davor, als erstes Wort
+    "RLab1.Rmd": "S110 Lab 01",
+    "DataScienceLab_03.Rmd": "S110 Lab 03",
+    "RLab_2.R": "S110 Lab 02",
+    "R Lab Organisatorisches.pdf": "S110 Lab Organisatorisches",
+    "Lab Orga.pdf": "S110 Lab Orga",
+    "Lab VS Code Setup.pdf": "S110 Lab VS Code Setup",
+    "R Lab Settings.pdf": "S110 Lab Settings",
+    // ILIAS-Sitzungsordner: Nummer auch fürs Lab
+    "2026-10-23, 14:15 - 15:45: R Lab 1/script.R": "S110 Lab 01 script",
+    // Gliederung des Kurses mit Strich, „02 R Lab“ ohne Strich ist das zweite Lab
+    "03 - R Lab/Einführung.pdf": "S110 Lab Einführung",
+    "03 - Data Science Lab Materialien/Einführung.pdf": "S110 Lab Einführung",
+    "05 - Labs/Einführung.pdf": "S110 Lab Einführung",
+    "02 Python Lab/Einführung.pdf": "S110 Lab 02 Einführung",
+    // R-Notebook: „.nb“ ist kein Titel
+    "R Lab 1/Lab1.nb.html": "S110 Lab 01",
+  };
+  for (const [rel, soll] of Object.entries(faelle)) assert.equal(name(rel, "S110"), soll, rel);
+  const andere = {
+    "Literatur/Charness 2012 Lab Participants.pdf": "Literatur",
+    "Evidence from the Lab.pdf": "Sonstiges",
+    "Online_vs_Lab.pdf": "Sonstiges",
+    "Experimente im Lab.pdf": "Sonstiges",
+    "Scan Lab Notizen.jpg": "Scan",
+    "Meine Lösung Lab 3.pdf": "Eigene Lösung",
+    "Mitschrift Lab 3.pdf": "Mitschrift",
+    "Data Science Lab/Mitschrift R Lab 2.pdf": "Mitschrift",
+    "Altklausur WS2425/Aufgabe 3 Lab.pdf": "Altklausur",
+    "Python Labs/Reading/Pandas Paper.pdf": "Literatur",
+    "Lab Experiments.pdf": "Sonstiges",
+    "Charness Lab 2012.pdf": "Sonstiges",
+  };
+  for (const [rel, soll] of Object.entries(andere)) assert.equal(art(rel, "S110"), soll, rel);
+});
+
+test("Lab: ändert nichts an Unterlagen außerhalb eines Labs; „Lab 2“ ist nur im Lab eine Nummer", () => {
+  // Namen wie vor dem Bereich Lab (Stand 0.6.1)
+  const gleich = {
+    "Mitschrift Lab 2.pdf": "S110 Mitschrift Lab 2",
+    "eigene Lösung Lab 3.pdf": "S110 Eigene Lösung Lab 3",
+    "Tutorium/Lab 1.pdf": "S110 Tutorium 01 Lab",
+    "Tutorium/R Lab 1.R": "S110 Tutorium R Lab 1",
+    "Literatur/Smith 2019 Lab 5 results.pdf": "S110 Literatur Smith 2019 Lab 5 results",
+    "Altklausuren/Klausur Lab 3.pdf": "S110 Altklausur Lab 3",
+    "Scan Lab 3.jpg": "S110 Scan Lab 3",
+    "Lab 3 Scan.pdf": "S110 Scan Lab 3",
+    "Lab Participants.pdf": "S110 Sonstiges Lab Participants",
+    "Lab meets Field.pdf": "S110 Sonstiges Lab meets Field",
+    "Lab 2012 Annual Report.pdf": "S110 Sonstiges Lab 2012 Annual Report",
+  };
+  for (const [rel, soll] of Object.entries(gleich)) assert.equal(name(rel, "S110"), soll, rel);
+  // eigene Arbeit in einem Ordner bleibt eigene Arbeit (geht nie an den eigenen Server)
+  const eigen = { "Mitschriften/R Lab 2.pdf": "Mitschrift", "Notizen/Lab 3.pdf": "Mitschrift", "Meine Lösungen/Lab 3.R": "Eigene Lösung",
+    "Meine Lösungen/Data Science Lab/Lab 2.pdf": "Eigene Lösung", "Data Science Lab/Eigene Lösungen/Lab 2.pdf": "Eigene Lösung", "Scans/Lab 3.jpg": "Scan" };
+  for (const [rel, soll] of Object.entries(eigen)) assert.equal(art(rel, "S110"), soll, rel);
+  // im Lab zählt die Nummer hinter dem Lab-Wort; Lesestoff über dem Lab-Ordner ändert nichts (alles im Ordner gleich)
+  assert.equal(name("Kapitel 3 Lab 2.pdf", "S110"), "S110 Lab 02 Kapitel 3");
+  assert.equal(name("VL 3 Lab 2.pdf", "S110"), "S110 Lab 02 VL 3");
+  assert.equal(name("Literatur/R Lab 2/Lab2.Rmd", "S110"), "S110 Lab 02");
+  assert.equal(name("Literatur/R Lab 2/Notebook.Rmd", "S110"), "S110 Lab 02 Notebook");
+  // ILIAS-Sitzung „…: Lab“, SPSS
+  assert.equal(name("2026-10-23, 14:15 - 15:45: Lab/script.R", "S110"), "S110 Lab script");
+  assert.equal(name("SPSS Lab 2.sav", "S110"), "S110 Lab 02");
+  // Gliederung eines Lab-Ordners zählt nur für das Lab; was nicht Lab ist, heißt wie vorher (Stand 0.6.2)
+  const ordner = {
+    "05 Lab/Mitschrift.pdf": "S110 Mitschrift " + eba.heute,
+    "5 Lab/Literatur/Paper.pdf": "S110 Literatur Paper",
+    "Tutorium/03 - Data Science Lab/Blatt.pdf": "S110 Tutorium 03 Blatt",
+    "03 - Data Science Lab/Literatur/Paper.pdf": "S110 Literatur 03 Paper",
+    "02 - Python Lab/Altklausuren/Klausur.pdf": "S110 Altklausur 02",
+    // Fotos ohne Lab im Namen, eigene Notizen und Abgaben bleiben, was sie sind
+    "R Lab 3/IMG_0012.jpg": "S110 Scan " + eba.heute,
+    "Data Science Lab/My Notes.pdf": "S110 Sonstiges My Notes",
+    "Data Science Lab/Abgaben/Lab 2.R": "S110 Folien 02 Lab",
+    // „&“, „+“ und „,“ wie „und“: Laborexperimente als Thema
+    "Lab & Field Experiments.pdf": "S110 Sonstiges Lab & Field Experiments",
+    "Lab, Field and Evidence.pdf": "S110 Sonstiges Lab, Field and Evidence",
+    "Lab + Feld.pdf": "S110 Sonstiges Lab + Feld",
+  };
+  for (const [rel, soll] of Object.entries(ordner)) assert.equal(name(rel, "S110"), soll, rel);
+  assert.equal(name("Lab 1 bis 3.pdf", "S110"), "S110 Lab 01 bis 03");
+  assert.equal(name("R Lab 3/Lab 3 Tafel.jpg", "S110"), "S110 Lab 03 Tafel", "ein Bild mit Lab im Namen gehört zum Lab");
+});
+
+test("Lab: R-Notebook und seine HTML-Fassung sind eine Unterlage, die HTML-Fassung wird gezeigt", () => {
+  const f = (basename, extension) => ({ basename, extension, name: basename + "." + extension, path: "Eingang/R Lab 2/" + basename + "." + extension, parent: { path: "Eingang/R Lab 2" } });
+  const st = U.stapeln([f("Lab2", "Rmd"), f("Lab2.nb", "html"), f("Daten", "csv")]);
+  assert.deepEqual(st.map((s) => s.dateien.map((x) => x.name).sort()), [["Daten.csv"], ["Lab2.Rmd", "Lab2.nb.html"]]);
+  assert.equal(st[1].haupt.name, "Lab2.nb.html");
+  assert.equal(st[1].ausgaben, false);
+  // „Lab2.html“ (Knit) und „Lab2.nb.html“ (Vorschau) zugleich: zwei HTML gehören nicht in einen Stapel (gleicher Zielname),
+  // die Notebook-Fassung wird eine eigene Unterlage „… mit Ausgaben“
+  const zwei = U.stapeln([f("Lab2", "Rmd"), f("Lab2", "html"), f("Lab2.nb", "html")]);
+  assert.deepEqual(zwei.map((s) => [s.dateien.map((x) => x.name).sort(), s.ausgaben]), [[["Lab2.nb.html"], true], [["Lab2.Rmd", "Lab2.html"], false]]);
+  assert.equal(U.titelMitZusatz("S110", "Lab", 2, "", "mit Ausgaben"), "mit Ausgaben");
+  const lang = U.titelMitZusatz("S110", "Lab", 2, "Explorative Datenanalyse mit dem Tidyverse und ggplot2 für Fortgeschrittene", "mit Ausgaben");
+  assert.match(U.zielName("S110", "Lab", 2, lang), /^S110 Lab 02 Explorative .+ mit Ausgaben$/);
+  assert.ok(U.zielName("S110", "Lab", 2, lang).length <= 80);
+});
+
 test("Nummern: Kürzel mit Nummer, Tag N, Sitzungs- und Sammelordner", () => {
   assert.equal(name("EBWL_0.pdf"), "B110 Folien 00");
   assert.equal(name("Mikro_05.pdf"), "B110 Folien 05 Mikro");

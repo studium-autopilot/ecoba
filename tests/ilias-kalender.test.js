@@ -240,6 +240,67 @@ test("Von dir gelöscht: kommt nicht wieder, bis sich Datum oder Uhrzeit in ILIA
   assert.deepEqual([b2.neu, b2.geloescht], [1, 0]);
 });
 
+test("Von dir gelöscht, bevor der Code bekannt war: kommt auch mit Code nicht wieder; ältere Grabsteine mit Code gelten weiter", async () => {
+  const t = tresor();
+  await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500")));
+  const p = t.notizen()[0];
+  assert.equal(p, "Termine/2026-11-03 Abgabe in ILIAS.md", "ohne Code");
+  delete t.fm[p]; delete t.text[p];
+  // Das erste Durchsuchen der Unterlagen kennt jetzt den Code der Übung
+  t.dateien["System/Daten/ilias.json"] = JSON.stringify({ version: 1, objekte: { 9001: { typ: "exc", code: "B110" } } });
+  const b = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500")));
+  assert.deepEqual([b.neu, b.geloescht], [0, 1]);
+  assert.deepEqual(t.notizen(), []);
+  // Grabstein einer älteren Fassung (mit Code): gilt weiter und wird in die neue Form gebracht
+  const id = Object.keys(t.sperre().angewendet)[0];
+  const Q = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "quellen.js"));
+  const neu = t.sperre().angewendet[id];
+  t.dateien[SPERRE] = JSON.stringify(Object.assign(t.sperre(), { angewendet: { [id]: Q.kurzHash(["2026-11-03", "23:55", "abgabe", "B110"]) } }));
+  const b2 = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500")));
+  assert.deepEqual([b2.neu, b2.geloescht], [0, 1]);
+  assert.equal(t.sperre().angewendet[id], neu);
+});
+
+test("Älterer Grabstein mit Code, Code gerade unbekannt (neu verbunden): kommt nicht wieder, bis der Code wieder da ist", async () => {
+  const t = tresor({ objekte: { 9001: { typ: "exc", code: "S100" } } });
+  await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500")));
+  const p = t.notizen()[0];
+  delete t.fm[p]; delete t.text[p];
+  const id = Object.keys(t.sperre().angewendet)[0];
+  const Q = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "quellen.js"));
+  const alt = Q.kurzHash(["2026-11-03", "23:55", "abgabe", "S100"]);
+  t.dateien[SPERRE] = JSON.stringify(Object.assign(t.sperre(), { angewendet: { [id]: alt } }));
+  // Neu verbunden: der Index „objekte“ ist leer, der Code also unbekannt
+  t.dateien["System/Daten/ilias.json"] = JSON.stringify({ version: 1, objekte: {} });
+  const b = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500")));
+  assert.deepEqual([b.neu, b.geloescht], [0, 1]);
+  assert.deepEqual(t.notizen(), []);
+  assert.equal(t.sperre().angewendet[id], alt, "Grabstein bleibt, wie er war");
+  // Code wieder bekannt: der ältere Grabstein greift wie gewohnt, ein neues Datum bringt die Abgabe zurück
+  t.dateien["System/Daten/ilias.json"] = JSON.stringify({ version: 1, objekte: { 9001: { typ: "exc", code: "S100" } } });
+  const b2 = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500")));
+  assert.deepEqual([b2.neu, b2.geloescht], [0, 1]);
+  const b3 = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261104T120000")));
+  assert.deepEqual([b3.neu, b3.geloescht], [1, 0]);
+});
+
+test("Neuer Code: die Notiz wird umbenannt (Links ziehen mit); einen eigenen Namen benennt nur ein neues Datum um", async () => {
+  const t = tresor();
+  await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500"), abgabe(9002, "Blatt 1", "20261110T235500")));
+  assert.deepEqual(t.notizen(), ["Termine/2026-11-03 Abgabe in ILIAS.md", "Termine/2026-11-10 Abgabe in ILIAS.md"]);
+  t.fm["Termine/2026-11-10 Mein Blatt.md"] = t.fm["Termine/2026-11-10 Abgabe in ILIAS.md"];
+  t.text["Termine/2026-11-10 Mein Blatt.md"] = t.text["Termine/2026-11-10 Abgabe in ILIAS.md"];
+  delete t.fm["Termine/2026-11-10 Abgabe in ILIAS.md"]; delete t.text["Termine/2026-11-10 Abgabe in ILIAS.md"];
+  t.dateien["System/Daten/ilias.json"] = JSON.stringify({ version: 1, objekte: { 9001: { typ: "exc", code: "B110" }, 9002: { typ: "exc", code: "B110" } } });
+  const b = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500"), abgabe(9002, "Blatt 1", "20261110T235500")));
+  assert.deepEqual([b.neu, b.umbenannt], [0, 1]);
+  assert.deepEqual(t.notizen(), ["Termine/2026-11-03 B110 Abgabe in ILIAS.md", "Termine/2026-11-10 Mein Blatt.md"]);
+  assert.equal(t.fm["Termine/2026-11-03 B110 Abgabe in ILIAS.md"].titel, "B110 Abgabe 1");
+  // unverändert: kein zweites Umbenennen
+  const b2 = await lauf(t, kalender(abgabe(9001, "Blatt 1", "20261103T235500"), abgabe(9002, "Blatt 1", "20261110T235500")));
+  assert.equal(b2.umbenannt, 0);
+});
+
 test("Wegfall: nur künftige Abgaben; unberührt → Papierkorb, mit deinem Text → „(entfällt)“; vergangene bleiben", async () => {
   const t = tresor({ heute: "2026-10-20", objekte: { 9001: { typ: "exc", code: "B110" } } });
   const ics = kalender(abgabe(9001, "Blatt 1", "20261103T235500"), abgabe(9001, "Blatt 2", "20261110T235500"), abgabe(9001, "Blatt 3", "20261117T235500"),

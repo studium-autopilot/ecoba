@@ -29,9 +29,10 @@ Alma verbinden: Einstellungen & Hilfe → Verbindungen.
 >   and:
 >     - 'typ == "lehrveranstaltung"'
 >     - 'entfaellt != true'
->     - '!(herkunft == "zentral" && list(file("System/Einstellungen.md").properties.stundenplan_ausgeblendet).contains(zentral_id))'
+>     - 'besuche_nicht != true'
+>     - '!list(file("System/Einstellungen.md").properties.stundenplan_ausgeblendet).contains(if(herkunft == "zentral", zentral_id, if(herkunft == "alma", "alma:" + alma_schluessel, if(herkunft == "ilias-gruppe", "ilias-gruppe:" + ilias_gruppe, if(herkunft == "gruppe-gewaehlt", "gruppe-gewaehlt:" + gruppe_id, if(herkunft == "abgleich", "abgleich:" + abgleich_id, if(herkunft == "claude", "claude:" + claude_id, if(herkunft == "ilias-kalender", "ilias-kalender:" + ilias_kalender_id, ""))))))))'
 > formulas:
->   zeit: 'tag + " " + beginn + "–" + ende'
+>   zeit: 'if(wochentag.isTruthy(), ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"][number(wochentag) - 1], tag) + " " + beginn + "–" + ende'
 >   zeitraum: 'if(einzeltermin == true && von.isTruthy(), date(von).format("DD.MM."), if(von.isTruthy() && bis.isTruthy(), date(von).format("DD.MM.") + "–" + date(bis).format("DD.MM."), if(von.isTruthy(), "ab " + date(von).format("DD.MM."), if(bis.isTruthy(), "bis " + date(bis).format("DD.MM."), ""))))'
 >   was: 'file.asLink(titel)'
 >   semester: 'if(file("System/Einstellungen.md").properties.semesterliste.filter(value.split("|")[1] == semester).length > 0, file("System/Einstellungen.md").properties.semesterliste.filter(value.split("|")[1] == semester)[0].split("|")[0] + ". FS · " + semester, semester)'

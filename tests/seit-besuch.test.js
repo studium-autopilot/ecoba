@@ -186,6 +186,17 @@ test("Hin und zurück: je Termin die neueste Meldung; zurückverlegt ist eine ne
   assert.notEqual(ab("2026-11-02T09:00:00.000Z"), ab("2026-11-05T09:00:00.000Z"));
 });
 
+test("Zusammenstellen mit heute: inzwischen vorbei fällt weg, mehrtägig bis zum letzten Tag, ohne heute wie bisher", () => {
+  const z = SB.zentralEintraege([
+    { art: "geaendert", id: "a", alt: termin({ datum: "2026-11-03", ort: "Hörsaal 1" }), neu: termin({ datum: "2026-11-04", ort: "Hörsaal 9" }) },
+    { art: "geaendert", id: "b", alt: termin({ datum: "2026-11-05", ort: "Hörsaal 1" }), neu: termin({ datum: "2026-11-05", bis: "2026-11-09", ort: "Hörsaal 9" }) },
+  ], { altIds: new Set(), heute: "2026-11-02", t: T });
+  const jetzt = "2026-11-06T09:00:00.000Z";
+  assert.deepEqual(SB.zusammenstellen([z], [], {}, jetzt).map((x) => x.id), ["a", "b"]);
+  assert.deepEqual(SB.zusammenstellen([z], [], {}, jetzt, "2026-11-06").map((x) => x.id), ["b"]);
+  assert.deepEqual(SB.zusammenstellen([z], [], {}, jetzt, "2026-11-10"), []);
+});
+
 test("Karte liest alle Gerätedateien; „Alles gesehen“ schreibt nur die Datei dieses Geräts", async () => {
   const dateien = {
     "System/Daten/seit-besuch/g-aaa.json": { version: 1, eintraege: SB.zentralEintraege([{ art: "abgesagt", id: "x120-info", alt: termin({ titel: "Infoabend", datum: "2026-11-20" }) }],

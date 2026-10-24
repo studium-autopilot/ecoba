@@ -3,7 +3,9 @@
 // er springt nie in den Quelltext und öffnet keine Tastatur. Rechts in der Kopfzeile „Öffnen“ (die PDF in der App des Geräts,
 // Aktion oeffnen) und, wenn es eine Office-Datei daneben gibt, „Original“. Die PDF lädt erst beim ersten Aufklappen.
 // Mit eigenem Server (seit 0.5.2) davor „Zusammenfassen“, solange „Das Wichtigste“ leer ist: Claude fasst die Unterlage auf dem
-// Server mit Opus zusammen (server.js, zusammenfassen); danach „Wird zusammengefasst“, bis die Zusammenfassung da ist.
+// Server mit Opus zusammen (server.js, zusammenfassen); danach „Wird zusammengefasst“, bis die Zusammenfassung da ist. Ohne
+// Server mit eigenem API-Schlüssel (seit 0.6.3, claude.js): Claude fasst gleich hier zusammen, danach verschwindet der Knopf. Der
+// erste Weg, der einen Stand nennt, gilt (der Server zuerst).
 // Vorher war es ein gewöhnlicher Callout: In der Bearbeitungsansicht setzte ein Tipp neben den Pfeil den Cursor hinein, der Kasten
 // zeigte seinen Quelltext und auf dem iPad ging die Tastatur auf (bis 19.10.2026).
 // Die Notiz bleibt, wie sie ist (Markdown-Callout, der Link auf die PDF folgt Umbenennungen, ohne Plugin ein normaler Kasten):
@@ -34,6 +36,13 @@ module.exports = function (ctx) {
   const linkZiel = (wert, von) => {
     const s = String(wert == null ? "" : wert).replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
     return s ? app.metadataCache.getFirstLinkpathDest(s, von || "") : null;
+  };
+
+  // Ohne eigenen Inhalt = nur Überschriften, Kästen und leere Punkte (dieselbe Regel wie leere Mitschriften, leer.js)
+  const ohneInhalt = async (pfad) => {
+    const f = app.vault.getAbstractFileByPath(pfad || "");
+    if (!f || f.extension !== "md" || !ctx.user || !ctx.user.leer) return false;
+    return ctx.user.leer(ctx).istLeer(await app.vault.cachedRead(f));
   };
 
   // Einbettungen je Absatz (src ohne Leerzeichen am Rand); ein Absatz mit anderem Inhalt → leerer Eintrag (dann null oben)
@@ -85,15 +94,23 @@ module.exports = function (ctx) {
     if (pfad && linkZiel(fm.original, pfad)) knopf(leiste, "Original", "Original in einer anderen App öffnen", () => ctx.aktion("oeffnen", { notiz: pfad, original: "1" }));
     const einfuegen = () => { if (!leiste.parentNode && leiste.childElementCount) titel.insertBefore(leiste, fold || null); };
     einfuegen();
-    const S = ctx.server;
-    if (pfad && S && S.zusammenfassenStand) {
-      S.zusammenfassenStand(pfad).then((stand) => {
-        if (!stand) return;
-        const WARTET = "Wird zusammengefasst";
-        let gewuenscht = stand === "angefordert";
+    const wege = [ctx.server, ctx.claude].filter((w) => w && w.zusammenfassenStand);
+    if (pfad && wege.length) {
+      const erster = async () => { for (const w of wege) { const stand = await w.zusammenfassenStand(pfad); if (stand) return { w, stand }; } return null; };
+      erster().then((x) => {
+        if (!x) return;
+        const W = x.w, WARTET = "Wird zusammengefasst";
+        let gewuenscht = x.stand === "angefordert";
+        const warten = () => { gewuenscht = true; b.setText(WARTET); };
+        const frei = () => { gewuenscht = false; b.setText("Zusammenfassen"); };
         const b = knopf(leiste, gewuenscht ? WARTET : "Zusammenfassen", "Claude fasst die Unterlage mit Opus zusammen: das Wichtigste, Aufgaben und offene Fragen", () => {
-          if (gewuenscht) { ctx.hinweis("Claude arbeitet schon daran. Die Zusammenfassung kommt in ein paar Minuten."); return; }
-          S.zusammenfassen(pfad).then((ok) => { if (ok) { gewuenscht = true; b.setText(WARTET); } }).catch((e) => console.error("PDF-Kasten: Zusammenfassen", e));
+          if (gewuenscht) {
+            ctx.hinweis(W.sofort ? "Claude arbeitet schon daran. Das dauert meist ein bis zwei Minuten." : "Claude arbeitet schon daran. Die Zusammenfassung kommt in ein paar Minuten.");
+            return;
+          }
+          // sofort (claude.js): fertig heißt, die Zusammenfassung steht schon in der Notiz
+          W.zusammenfassen(pfad, warten).then((ok) => { if (ok && W.sofort) b.remove(); else if (ok) warten(); else if (W.sofort) frei(); })
+            .catch((e) => { console.error("PDF-Kasten: Zusammenfassen", e); if (W.sofort) frei(); });
         });
         leiste.insertBefore(b, leiste.firstChild);
         einfuegen();
@@ -122,6 +139,12 @@ module.exports = function (ctx) {
       messen(callout);
     };
     zeigen(!callout.classList.contains("is-collapsed"));
+    // Unterlage ohne eigenen Inhalt (seit 0.6.3): Steht außer Titel und Kasten nichts in der Notiz (keine Zusammenfassung, keine
+    // eigenen Notizen), ist die PDF das Einzige, was man sehen will. Dann ist der Kasten gleich offen, statt dass ein Tipp in einer
+    // Liste auf einer leeren Seite endet. Mit Inhalt bleibt er zu; der Inhalt steht dann zuerst.
+    if (callout.classList.contains("is-collapsed") && fm.typ === "unterlage") {
+      ohneInhalt(pfad).then((ja) => { if (ja && callout.isConnected) zeigen(true); }).catch((e) => console.error("PDF-Kasten", e));
+    }
 
     // Kopfzeile: vor Obsidian (Einfangen am Kasten), damit weder der Callout noch der Editor den Tipp bekommt
     for (const n of FANGEN) {

@@ -108,6 +108,17 @@ test("datumKurz: heute die Uhrzeit, dieses Jahr Tag und Monat, sonst wie geliefe
   assert.equal(P.datumKurz("1.2.2026", "2026-10-22"), "01.02.");
   assert.equal(P.datumKurz("30.12.2025", "2026-10-22"), "30.12.2025");
   assert.equal(P.datumKurz("Gestern", "2026-10-22"), "Gestern");
+  // Mit Datum ergänzte Uhrzeit (liste mit heute): heute die Uhrzeit, ab Mitternacht Tag und Monat, im neuen Jahr mit Jahr
+  assert.equal(P.datumKurz("22.10.2026 08:40:00", "2026-10-22"), "08:40");
+  assert.equal(P.datumKurz("22.10.2026 08:40:00", "2026-10-23"), "22.10.");
+  assert.equal(P.datumKurz("31.12.2026 23:05", "2027-01-01"), "31.12.2026");
+});
+
+test("liste mit heute: die reine Uhrzeit von heute bekommt das Datum, ältere Daten bleiben", () => {
+  const l = P.liste(seite("posteingang"), "2026-10-22");
+  assert.equal(l.mails[0].datum, "22.10.2026 08:40:00");
+  assert.deepEqual(l.mails.slice(1).map((m) => m.datum), P.liste(seite("posteingang")).mails.slice(1).map((m) => m.datum));
+  assert.equal(P.liste(seite("posteingang"), "").mails[0].datum, "08:40:00", "ohne heute wie geliefert");
 });
 
 test("Adressen: nur Posteingang, Seite und Mail als Zahl; nie ein Link aus der Seite", () => {

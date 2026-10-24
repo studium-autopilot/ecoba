@@ -3,14 +3,16 @@
 //   System/Einstellungen.md    persönliche Angaben (name, studienbeginn, variante, zielnote)
 //   Module/, Termine/, Stundenplan/
 // und bei Änderungen im metadataCache nachgezogen: Jede Änderung markiert das Modell als veraltet, der nächste Zugriff
-// rechnet neu (nie veraltete Daten). Wer neu zeichnen will, meldet sich mit beiAenderung(fn) an (entprellt, 600 ms).
+// rechnet neu (nie veraltete Daten). Wer neu zeichnen will, meldet sich mit beiAenderung(fn) an (entprellt, 600 ms; auch an
+// einem neuen Tag).
 //
 // Persönliche Semesterliste: ABGELEITET aus studienbeginn + zentralen Daten (1.–6. Fachsemester, bei längerem Studium bis
 // zum aktuellen Semester). Leerer studienbeginn = das aktuelle Semester (aus dem Datum) ist das 1. Fachsemester.
 // Bases-Formeln können kein Plugin-JS aufrufen, darum schreibt abgleichen() die abgeleiteten Felder semesterliste, pausen,
 // pruefungsphasen (altes Format „a|b|c“) nach System/Einstellungen.md – aber nur, wenn sich der berechnete Inhalt vom
-// vorhandenen unterscheidet. Ausgelöst wird das, wenn sich Einstellungen.md oder Semester.md ändern, und einmal beim
-// App-Start (nach dem Einlesen); im Normalfall ist dann alles gleich und es wird nichts geschrieben.
+// vorhandenen unterscheidet. Ausgelöst wird das, wenn sich Einstellungen.md oder Semester.md ändern, einmal beim App-Start
+// (nach dem Einlesen) und an jedem neuen Tag (dann melden auch die Hörer); im Normalfall ist alles gleich und es wird nichts
+// geschrieben.
 // Ein Schreiber (seit 17.10.2026): Von selbst (Start, Änderung) schreibt nur das Gerät, das die zentralen Daten abruft
 // (ctx.zentral.abruferHier(): Abrufer, noch keiner oder der Abrufer seit 80 Min. still). So schreiben nicht mehrere Geräte
 // zugleich dieselbe Datei, in der auch deine Angaben stehen (iCloud: zuletzt gespeichert gewinnt; LiveSync: Konflikt).
@@ -205,7 +207,11 @@ module.exports = function (ctx) {
 
   const daten = () => {
     const h = heuteIso();
-    if (!cache || cacheTag !== h) { cache = berechnen(); cacheTag = h; }
+    if (!cache || cacheTag !== h) {
+      const neuerTag = !!cacheTag && cacheTag !== h;
+      cache = berechnen(); cacheTag = h;
+      if (neuerTag) tagWechsel();
+    }
     return cache;
   };
 
@@ -747,7 +753,24 @@ module.exports = function (ctx) {
     if (text(x.thema)) teile.push(text(x.thema));
     return teile.join(" · ");
   };
-  // Titel der Folien einer Vorlesungsnotiz (Feld folien: Begleitnotiz oder PDF; zur PDF die Begleitnotiz mit datei darauf)
+  // ---------- Folien einer Vorlesungsnotiz (seit 24.10.2026) ----------
+  // Bis 0.6.2 riet notizen.js die Folien einmal beim Anlegen (gleiche Nummer wie die Vorlesung, sonst die der letzten Notiz) und
+  // schrieb sie ins Feld folien. Das traf oft daneben: Folien sind nach Kapiteln nummeriert, nicht nach Vorlesungen (Folien 00
+  // zur ersten Vorlesung, ein Kapitel über mehrere Wochen, alle Kapitel schon zu Semesterbeginn online), und was nach dem Anlegen
+  // ankam, erschien nie. Jetzt wählt das Modell bei jedem Zeichnen aus dem, was gerade im Tresor liegt; wählen muss niemand.
+  // Feld folien = deine Wahl („⋯“ → „Andere Folien“), sie gilt immer. Sonst zur Sitzung der Notiz (ihr Tag, sonst die letzte
+  // Sitzung des Moduls in den 6 Tagen davor; Sitzungen laut Stundenplan ohne Übung und Tutorium, ohne Stundenplan die Tage der
+  // Vorlesungsnotizen):
+  //   1. die Folien, die ILIAS dieser Sitzung zuordnet: ein Datum im Sitzungs- oder Ordnernamen (quelle), sonst im Dateinamen
+  //      (original), z. B. „ILIAS: B110 / 2026-10-19, 10:15 - 11:45: Vorlesung 2“ oder „VL_1_Vektoren_22.10.2026.pdf“
+  //   2. sonst die Folien, die seit der vorigen Sitzung angekommen sind (datum der Begleitnotiz); mehr als FOLIEN_MAX Nummern auf
+  //      einmal sind ein Upload fürs ganze Semester und sagen nichts über diese Sitzung
+  //   3. sonst die Folien der vorigen Sitzung (deine Wahl dort oder dieselbe Regel), davon die mit der höchsten Nummer
+  //   4. erste Sitzung: die mit der kleinsten Nummer, die vor der nächsten Sitzung ankam
+  // Folien mit dem Datum einer anderen Sitzung gehören nur zu ihr; ein Datum außerhalb des Semesters (kommentierte Fassung aus
+  // dem Vorjahr) und ein anderes Semester (Feld semester) zählen nie von selbst. Ein Datum, an dem das Modul laut Stundenplan keine Sitzung hat (etwa ein Upload-Tag), ist
+  // kein Sitzungsdatum. Je Nummer eine Fassung: die neueste, dann die mit mehr Seiten.
+  const FOLIEN_MAX = 3; // höchstens so viele Folien je Sitzung
   const linkZiel = (wert, von) => {
     const s = text(wert);
     if (!s) return null;
@@ -755,21 +778,104 @@ module.exports = function (ctx) {
     const mc = app.metadataCache;
     return (mc.getFirstLinkpathDest && mc.getFirstLinkpathDest(p, von || "")) || app.vault.getAbstractFileByPath(p) || app.vault.getAbstractFileByPath(p + ".md");
   };
-  const begleitnotizen = () => {
-    const aus = {};
+  // Erstes Datum „22.10.2026“ oder „2026-10-22“ in einem Text → ISO, sonst ""
+  const DATUM_IM_TEXT = /(\d{4})-(\d{2})-(\d{2})|(\d{1,2})\.(\d{1,2})\.(\d{4})/;
+  const datumImText = (s) => {
+    const m = text(s).match(DATUM_IM_TEXT);
+    if (!m) return "";
+    const iso = m[1] ? `${m[1]}-${m[2]}-${m[3]}` : `${m[6]}-${pad(m[5])}-${pad(m[4])}`;
+    return isoVon(tagObj(iso)) === iso ? iso : "";
+  };
+  // Einmal je Berechnung: Folien (art Folien) und Vorlesungsnotizen je Modulcode; die Begleitnotiz zu einer Datei
+  // (begleitnotiz(pfad)) erst, wenn eine Wahl auf eine PDF zeigt (löst dann einmal alle Links auf)
+  const folienIndex = () => {
+    const unterlagen = [], folien = {}, notizen = {};
+    let datei = null;
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
-      if (!fm || fm.typ !== "unterlage" || !fm.datei) continue;
-      const z = linkZiel(fm.datei, f.path);
-      if (z) aus[z.path] = fm;
+      if (!fm) continue;
+      const code = text(fm.code);
+      if (fm.typ === "vorlesung" && code) { (notizen[code] = notizen[code] || []).push({ f, fm, t: s10(fm.datum) || s10(f.basename) }); continue; }
+      if (fm.typ !== "unterlage" || !fm.datei) continue;
+      unterlagen.push({ f, fm });
+      if (!code || text(fm.art) !== "Folien") continue;
+      const nr = fm.nummer === "" || fm.nummer == null || !isFinite(Number(fm.nummer)) ? null : Number(fm.nummer);
+      (folien[code] = folien[code] || []).push({ f, fm, nr, datum: s10(fm.datum), semester: text(fm.semester),
+        tag: datumImText(fm.quelle) || datumImText(fm.original), seiten: Number(fm.seiten) || 0 });
     }
-    return aus;
+    const begleitnotiz = (pfad) => {
+      if (!datei) { datei = {}; for (const u of unterlagen) { const z = linkZiel(u.fm.datei, u.f.path); if (z) datei[z.path] = u; } }
+      return datei[pfad] || null;
+    };
+    return { folien, notizen, begleitnotiz };
   };
-  const folienTitel = (fm, von, index) => {
+  // Tage mit einer Sitzung des Moduls in der Vorlesungszeit (alles außer Übung und Tutorium), aufsteigend
+  const sitzungsTage = (code, sem) => {
+    const D = daten(), k = "sitzungen|" + code + "|" + sem.name;
+    if (D.zwischen[k]) return D.zwischen[k];
+    const lv = D.stundenplan.filter((x) => text(x.fm.code) === code && !/tutori|(ü|ue)bung/i.test(text(x.fm.art)));
+    const tage = [];
+    if (lv.length && sem.vb && sem.ve) for (let d = sem.vb; d <= sem.ve; d = plusTage(d, 1)) if (lv.some((x) => findetStatt(x.fm, d).statt)) tage.push(d);
+    D.zwischen[k] = tage;
+    return tage;
+  };
+  // Deine Wahl im Feld folien → { f, fm, nr } (zu einer PDF ihre Begleitnotiz) oder null (leer, Link ins Leere)
+  const folienWahl = (fm, von, ix) => {
     const z = linkZiel(fm.folien, von);
-    if (!z) return "";
-    const b = z.extension === "md" ? (app.metadataCache.getFileCache(z) || {}).frontmatter || {} : (index || begleitnotizen())[z.path] || null;
-    return text(b ? b.titel || "" : "") || String(z.basename || "");
+    if (!z) return null;
+    const b = z.extension === "md" ? { f: z, fm: (app.metadataCache.getFileCache(z) || {}).frontmatter || {} } : ix.begleitnotiz(z.path) || { f: z, fm: {} };
+    const nr = Number(b.fm.nummer);
+    return { f: b.f, fm: b.fm, nr: b.fm.nummer === "" || b.fm.nummer == null || !isFinite(nr) ? null : nr };
+  };
+  const nachNummer = (a, b) => (a.nr == null ? 1e9 : a.nr) - (b.nr == null ? 1e9 : b.nr);
+  const nachPfad = (a, b) => (a.f.path < b.f.path ? -1 : a.f.path > b.f.path ? 1 : 0);
+  // Je Nummer eine Fassung (siehe oben), nach Nummer sortiert
+  const jeNummer = (liste) => {
+    const je = {};
+    for (const d of liste) { const k = d.nr == null ? "?" : String(d.nr); (je[k] = je[k] || []).push(d); }
+    return Object.keys(je).map((k) => je[k].sort((a, b) => (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0) || (b.seiten - a.seiten) || nachPfad(a, b))[0])
+      .sort(nachNummer);
+  };
+  // Vorlesungsnotiz → { folien: [{ f, fm }] (höchstens FOLIEN_MAX, nach Nummer), gewaehlt (Feld folien gilt), alle (Folien des
+  // Moduls zum Wählen: nach Nummer, je Nummer neueste zuerst) }
+  const folienVon = (f, index) => {
+    const ix = index || folienIndex();
+    const fm = (f && (app.metadataCache.getFileCache(f) || {}).frontmatter) || {};
+    const code = text(fm.code), alle = ix.folien[code] || [];
+    const aus = (liste, gewaehlt) => ({ folien: liste.slice(0, FOLIEN_MAX).map((d) => ({ f: d.f, fm: d.fm })), gewaehlt,
+      alle: alle.slice().sort((a, b) => nachNummer(a, b) || (a.datum < b.datum ? 1 : a.datum > b.datum ? -1 : 0) || nachPfad(a, b)).map((d) => ({ f: d.f, fm: d.fm })) });
+    const wahl = folienWahl(fm, f ? f.path : "", ix);
+    if (wahl) return aus([wahl], true);
+    const t = s10(fm.datum) || s10(f && f.basename), sem = t && code && alle.length ? semesterVon(t) : null;
+    if (!sem) return aus([], false);
+    const plan = sitzungsTage(code, sem);
+    // Sitzung zu einem Tag: der Tag selbst, sonst die letzte Sitzung in den 6 Tagen davor (Notiz erst später angelegt)
+    const sitzungZu = (d) => { let s = ""; if (plan.indexOf(d) < 0) for (const p of plan) if (p < d && p >= plusTage(d, -6)) s = p; return s || d; };
+    const notizen = (ix.notizen[code] || []).filter((n) => n.t && n.t >= sem.beginn && n.t <= sem.ende)
+      .map((n) => ({ s: sitzungZu(n.t), wahl: folienWahl(n.fm, n.f.path, ix) }));
+    const sitzungen = plan.length ? plan : notizen.map((n) => n.s).concat([t]).filter((d, i, a) => a.indexOf(d) === i).sort();
+    const istSitzung = (d) => (plan.length ? plan.indexOf(d) >= 0 : true);
+    const gebunden = (d) => !!d.tag && (d.tag < sem.beginn || d.tag > sem.ende || istSitzung(d.tag));
+    const frei = alle.filter((d) => !gebunden(d) && (d.semester ? d.semester === sem.name : !d.datum || (d.datum >= sem.beginn && d.datum <= sem.ende)));
+    const merk = {};
+    const fuer = (S) => {
+      if (merk[S]) return merk[S];
+      // deine Wahl in einer Notiz dieser Sitzung (zwei Vorlesungen an einem Tag: beide, nach Nummer)
+      const gewaehlt = notizen.filter((x) => x.s === S && x.wahl).map((x) => x.wahl).sort((a, b) => nachNummer(a, b) || nachPfad(a, b))
+        .filter((w, i, a) => !i || a[i - 1].f.path !== w.f.path);
+      if (gewaehlt.length) return (merk[S] = gewaehlt);
+      const genau = alle.filter((d) => d.tag === S);
+      if (genau.length) return (merk[S] = jeNummer(genau));
+      const vor = sitzungen.filter((d) => d < S).pop() || "", danach = sitzungen.filter((d) => d > S)[0] || "";
+      const neu = jeNummer(frei.filter((d) => d.datum && d.datum <= S && (!vor || d.datum > vor)));
+      let r = neu.length && neu.length <= FOLIEN_MAX ? neu : [];
+      if (!r.length && vor) { const v = fuer(vor); r = v.length ? [v[v.length - 1]] : []; }
+      if (!r.length && neu.length) r = [neu[0]];
+      // erste Sitzung, Folien erst danach angekommen: die kleinste Nummer bis zur nächsten Sitzung
+      if (!r.length && !vor) r = jeNummer(frei.filter((d) => !danach || !d.datum || d.datum < danach)).slice(0, 1);
+      return (merk[S] = r);
+    };
+    return aus(fuer(sitzungZu(t)), false);
   };
   // Eine Vorlesungsnotiz → { f, code, nummer, datum, thema, titel, nachgearbeitet }
   const vorlesungVon = (f, index) => {
@@ -777,13 +883,16 @@ module.exports = function (ctx) {
     const code = text(fm.code), m = code ? modulNach(code) : null;
     const nummer = vorlesungNummer(fm.nummer, f && f.basename);
     const datum = s10(fm.datum) || s10(f && f.basename);
-    const thema = vorlesungThema({ thema: fm.thema, ueberschrift: ((c.headings || [])[0] || {}).heading, folien: fm.folien ? folienTitel(fm, f.path, index) : "",
-      modulTitel: m ? m.titel : "" });
+    const modulTitel = m ? m.titel : "";
+    let thema = vorlesungThema({ thema: fm.thema, ueberschrift: ((c.headings || [])[0] || {}).heading, modulTitel });
+    // Titel der Folien nur, wenn Feld und Überschrift nichts sagen (die Wahl der Folien durchsucht den Tresor)
+    const erste = thema ? null : folienVon(f, index).folien[0];
+    if (erste) thema = vorlesungThema({ folien: text(erste.fm.titel) || String(erste.f.basename || ""), modulTitel });
     return { f, code, nummer, datum, thema, titel: vorlesungTitel({ nummer, datum, thema, code }), nachgearbeitet: fm.nachgearbeitet === true };
   };
   // Alle Vorlesungsnotizen (eines Moduls), neueste zuerst (Datum, dann Nummer)
   const vorlesungen = (o) => {
-    const code = text(o && o.code), index = begleitnotizen(), aus = [];
+    const code = text(o && o.code), index = folienIndex(), aus = [];
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
       if (fm && fm.typ === "vorlesung" && (!code || text(fm.code) === code)) aus.push(vorlesungVon(f, index));
@@ -793,8 +902,9 @@ module.exports = function (ctx) {
 
   // ---------- Abgleich mit System/Einstellungen.md ----------
   const protokoll = ctx.bleibend("protokoll", () => []); // Schreibvorgänge (für Tests), überlebt den Hot-Reload
-  // grund: „start“ und „änderung …“ = von selbst (nur der Abrufer schreibt), sonst ein Tipp auf diesem Gerät (schreibt sofort)
-  const vonSelbst = (grund) => /^(start|änderung)/.test(String(grund || ""));
+  // grund: „start“, „änderung …“ und „tag“ (neuer Tag) = von selbst (nur der Abrufer schreibt), sonst ein Tipp auf diesem Gerät
+  // (schreibt sofort)
+  const vonSelbst = (grund) => /^(start|änderung|tag)/.test(String(grund || ""));
   const abgleichen = async (grund) => {
     const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
     if (!f) return false;
@@ -817,6 +927,14 @@ module.exports = function (ctx) {
   const hoerer = ctx.bleibend("hoerer", () => new Set());
   const beiAenderung = (fn) => { hoerer.add(fn); return () => hoerer.delete(fn); };
   const melden = ctx.entprellen(() => { for (const fn of Array.from(hoerer)) { try { fn(); } catch (e) { console.error("modell: Hörer", e); } } }, 600);
+  // Neuer Tag (daten() rechnet zum ersten Mal mit einem anderen Datum; sonst prüft registrieren() alle 10 Minuten): Was nur am
+  // Datum hängt, ändert sich ohne Dateiänderung – die Zeile „jetzt“, „heute N. FS“, Datumsangaben, bei leerem studienbeginn die
+  // ganze Semesterliste (am 1.4. und 1.10.), sonst ihre Verlängerung über das 6. FS hinaus. Darum einmal melden und die Kopien in
+  // den Einstellungen nachziehen (von selbst: nur der Abrufer schreibt, und nur bei Abweichung). Erst nach dem laufenden
+  // Aufruf, nie mitten in einer Berechnung.
+  const tagWechsel = () => {
+    Promise.resolve().then(() => { melden(); return abgleichen("tag"); }).catch((e) => console.error("modell: neuer Tag", e));
+  };
 
   // ---------- Codeblock eba-semesterdaten ----------
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -933,7 +1051,7 @@ module.exports = function (ctx) {
     // Fachmodell (docs/architektur.md „Fachmodell“)
     zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, opFrist, kalenderwoche, planwoche, findetStatt,
     naechsteSitzung, ausfaelle, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
-    vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer,
+    vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer, folien: folienVon,
   };
   ctx.modell = api;
 
@@ -962,6 +1080,8 @@ module.exports = function (ctx) {
     ctx.an(app.metadataCache, "resolved", () => { ungueltig(); if (!eingelesen.ja) { eingelesen.ja = true; melden(); } });
     // Semesterdaten-Blöcke bei Änderungen neu zeichnen
     ctx.aufraeumen(beiAenderung(() => block.neu()));
+    // Neuer Tag, ohne dass ein Bildschirm daten() fragt (Obsidian über Nacht offen): daten() bemerkt ihn und meldet (tagWechsel)
+    ctx.intervall(() => { if (cacheTag && heuteIso() !== cacheTag) daten(); }, 10 * 60e3);
   };
 
   // Einmal beim App-Start: wenn der metadataCache fertig ist, abgleichen (schreibt nur bei Abweichung).

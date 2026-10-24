@@ -8,8 +8,9 @@
 // ctx.ilias.zugangSpeichern weiter und leert danach das Feld. Noten & Anmeldungen (alma-konto.js, seit 0.4.5, Beta) nutzt
 // denselben Eintrag für Alma, erst nach „Einschalten“ in seinem Fenster. Kein Mail-Passwort (kein IMAP), nichts davon im Vault.
 //
-// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "konto" | "zentral" | "server" | "vorlage"), status(), gesperrt(),
-//   sichtbar()? (fehlt = immer; „Noten & Anmeldungen“ unter ihren Bedingungen, „Eigener Server“, wenn server.js geladen ist),
+// Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "konto" | "zentral" | "claude" | "server" | "vorlage"), status(), gesperrt(),
+//   sichtbar()? (fehlt = immer; „Noten & Anmeldungen“ unter ihren Bedingungen, „Eigener Server“, wenn server.js geladen ist,
+//   „Claude“ mit claude.js, wenn dieses Gerät verbunden ist oder kein Server da ist),
 //   vorschau? ("woche": Schloss liegt auf einem ausgegrauten Beispiel-Stundenplan), anreiz? (Überschrift dazu), schlossKnopf? (Text
 //   des Knopfs der Schloss-Karte), trennenText? (Rückfrage beim Trennen), pruefen(link)?, verbinden(link)?, trennen()?, aktualisieren(parameter)? }
 // Texte (auch für Nicht-Techniker): satz = ein Satz Nutzen (Schloss-Karte); kurz = höchstens ein Satz im Fenster;
@@ -369,6 +370,38 @@ module.exports = function (ctx) {
       gesperrt() { return false; },
       async aktualisieren() { if (ctx.zentral) await ctx.zentral.abrufen({ manuell: true }); },
     },
+    // Claude ohne Server (claude.js, seit 0.6.3): eigener API-Schlüssel aus der Claude Console für „Zusammenfassen“ im PDF-Kasten.
+    // Zu sehen, wenn dieses Gerät verbunden ist oder kein eigener Server da ist (der fasst schon zusammen). Zeile und Fenster
+    // (Feld für den Schlüssel, Verbrauch, Trennen) liefert ctx.claude (zeile(), fensterInhalt()).
+    claude: {
+      id: "claude", name: "Claude", art: "claude",
+      satz: "Claude fasst deine Unterlagen zusammen.",
+      get kurz() {
+        return ctx.claude && ctx.claude.verbunden()
+          ? "Tipp im PDF-Kasten einer Unterlage auf **Zusammenfassen**, dann füllt Claude „Das Wichtigste“, „Zu tun“ und „Offene Fragen“."
+          : "Mit deinem eigenen API-Schlüssel fasst Claude deine Unterlagen zusammen, ohne Server und auch auf iPhone und iPad.";
+      },
+      // Schritte zum Schlüssel, solange keiner da ist oder Anthropic ihn nicht mehr annimmt
+      get schritte() {
+        const s = ctx.claude ? ctx.claude.status() : null;
+        if (!s || (s.verbunden && s.problem !== "schluessel")) return [];
+        return [
+          "Auf [platform.claude.com](https://platform.claude.com) ein Konto anlegen und unter [Billing](https://platform.claude.com/settings/billing) Guthaben kaufen.",
+          "Unter [API keys](https://platform.claude.com/settings/keys) auf **Create key** tippen, einen Namen eingeben und den Schlüssel kopieren.",
+          "Den Schlüssel unten einfügen und **Verbinden** tippen.",
+        ];
+      },
+      get erklaerung() {
+        return ctx.claude && ctx.claude.verbunden()
+          ? "Der Schlüssel liegt nur im Schlüsselbund dieses Geräts, die Unterlage geht nur an Anthropic. Ein Ausgabenlimit stellst du in der Console unter Billing ein."
+          : "Der Schlüssel bleibt im Schlüsselbund dieses Geräts, die Unterlage geht nur an Anthropic. Eine Zusammenfassung kostet meist 0,05 bis 0,50 $ von deinem Guthaben, Studium Autopilot bekommt nichts davon. Ein Claude-Abo geht hier nicht: Anthropic erlaubt es nur in Claude selbst.";
+      },
+      trennenText: "Der Schlüssel wird auf diesem Gerät gelöscht. Deine Zusammenfassungen bleiben.",
+      sichtbar() { return !!ctx.claude && (ctx.claude.verbunden() || !(ctx.server && ctx.server.sichtbar())); },
+      status() { return ctx.claude ? ctx.claude.status() : { verbunden: false }; },
+      gesperrt() { return false; },
+      async trennen() { if (ctx.claude) await ctx.claude.trennen(); },
+    },
     // Eigener Server mit Claude (server.js): Termine und Hinweise aus Uni-Mails und Kursdaten. Ohne Server (kein Gerät verbunden,
     // keine server.json per Sync) eine leise Zeile „Für Technische“ mit „Mehr erfahren“: Fenster mit Schritten und dem Knopf
     // „Prompt kopieren“ für Claude Desktop. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert
@@ -547,6 +580,8 @@ module.exports = function (ctx) {
       if (v.art === "zentral") zentralSchalter(this.contentEl);
       if (v.art === "volltext") volltextSchalter(this.contentEl);
       if (v.art === "server" && ctx.server) ctx.server.fensterInhalt(this.contentEl.createDiv()).catch((e) => console.error("Eigener Server: Fenster", e));
+      // Claude: nach dem Verbinden neu zeichnen (Texte und Inhalt hängen davon ab)
+      if (v.art === "claude" && ctx.claude) ctx.claude.fensterInhalt(this.contentEl.createDiv(), () => { this.contentEl.empty(); this.onOpen(); });
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
       // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
@@ -1026,9 +1061,10 @@ module.exports = function (ctx) {
       return { zu: false, html: a.html, pille: a.pille, symbol: a.symbol, ton: a.ton, knopf: k, link: a.knopf ? mehrLink(v.id) : "" };
     }
     if (v.art === "uni") return uniZeile(v);
-    if (v.art === "server") {
-      if (!ctx.server) return { zu: false, text: "Wird geladen …", pille: "", symbol: "uhr", ton: "leise", knopf: "", link: "" };
-      return quelleZeile(ctx.server.zeile());
+    if (v.art === "server" || v.art === "claude") {
+      const q = v.art === "server" ? ctx.server : ctx.claude;
+      if (!q) return { zu: false, text: "Wird geladen …", pille: "", symbol: "uhr", ton: "leise", knopf: "", link: "" };
+      return quelleZeile(q.zeile());
     }
     if (v.art === "anmeldung") return iliasZeile(v);
     if (v.art === "konto") {

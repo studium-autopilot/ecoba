@@ -374,4 +374,4 @@ cssclasses:
 > > > - Beim Schließen des Kontos: Wahl, welche Module zählen. Pflichtmodule müssen zählen.
 > > > - So lassen sich schwächere Wahlmodule durch bessere ersetzen.
 >
-> Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Stand 30.09.2026
+> Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021

@@ -21,6 +21,18 @@ done
 
 schritt() { printf '\n==> %s\n' "$*"; }
 fehler() { echo "Fehler: $*" >&2; exit 1; }
+# Ist Version $1 neuer als $2? Wie bei SemVer zählt eine Vorabversion weniger als die fertige mit derselben Nummer
+# (0.5.9-beta.1 < 0.5.9 < 0.5.10); sort -V allein sähe 0.5.9-beta.1 nach 0.5.9. Gleiche Fassung in studium-server.
+version_neuer() {
+  local a=$1 b=$2 ka=${1%%-*} kb=${2%%-*}
+  [ "$a" != "$b" ] || return 1
+  if [ "$ka" = "$kb" ]; then
+    [ "$a" != "$ka" ] || return 0
+    [ "$b" != "$kb" ] || return 1
+    ka=${a#*-} kb=${b#*-}
+  fi
+  [ "$(printf '%s\n%s\n' "$ka" "$kb" | sort -V | tail -n 1)" = "$ka" ]
+}
 
 [ "$(id -u)" -eq 0 ] || fehler "bitte mit sudo starten"
 # shellcheck disable=SC1091
@@ -35,6 +47,12 @@ fi
 [ -z "$RESERVE_MB" ] || [[ "$RESERVE_MB" =~ ^[0-9]+$ ]] || fehler "--reserve-mb erwartet eine Zahl"
 VERSION=$(tr -d '[:space:]' <"$QUELLE/VERSION")
 ZIEL="/opt/studium-server/$VERSION"
+# Nur vorwärts: Eine ältere Kopie des Pakets (etwa aus einer früheren Cloud-Shell-Sitzung) ersetzt nie einen neueren Stand.
+INSTALLIERT=""
+[ ! -f /opt/studium-server/aktuell/VERSION ] || INSTALLIERT=$(tr -d '[:space:]' </opt/studium-server/aktuell/VERSION)
+if [ -n "$INSTALLIERT" ] && version_neuer "$INSTALLIERT" "$VERSION"; then
+  fehler "installiert ist $INSTALLIERT, dieses Paket ist älter ($VERSION); nichts geändert. Das neueste holt: sudo studium-server aktualisieren (Cloud Shell: bash ~/studium-autopilot/server/fern.sh aktualisieren)"
+fi
 export DEBIAN_FRONTEND=noninteractive
 
 schritt "Pakete"
@@ -79,6 +97,8 @@ rm -rf "$ZIEL/skill"
 cp -r "$QUELLE/skill" "$ZIEL/skill"
 chmod -R a+rX "$ZIEL/skill"
 install -d -m 0750 -o studium -g studium /var/lib/studium-server/laeufe
+# bisher laufende Version: bleibt bei „Alte Pakete“ zum Zurückgehen von Hand
+VORHER=$(readlink -f /opt/studium-server/aktuell 2>/dev/null || true)
 ln -sfn "$ZIEL" /opt/studium-server/aktuell
 install -m 0755 "$ZIEL/studium-server" /usr/local/bin/studium-server
 echo "Paket $VERSION unter $ZIEL"
@@ -249,7 +269,9 @@ Unit=studium-server-lauf.service
 [Install]
 WantedBy=paths.target
 UNIT
-# Der Claude-Lauf bekommt nie den Uni-Zugang und sieht weder die Schlüssel noch die Credentials.
+# Der Claude-Lauf bekommt nie den Uni-Zugang und sieht weder die Schlüssel noch die Credentials. Zeitgrenze: ein Lauf mit Opus
+# und der gewöhnliche danach, je bis 45 Minuten (lauf.mjs), dazu Luft; bricht systemd trotzdem ab (oder ein Neustart), legt
+# lauf.mjs Rohdaten und Unterlagen zurück.
 cat >/etc/systemd/system/studium-server-lauf.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Claude-Lauf mit dem Skill (ohne Zugangsdaten)
@@ -263,7 +285,7 @@ Group=studium
 Environment=STUDIUM_SERVER_DATEN=/var/lib/studium-server HOME=/var/lib/studium
 EnvironmentFile=-/etc/studium-server/lauf.env
 ExecStart=/usr/bin/node /opt/studium-server/aktuell/lauf.mjs
-TimeoutStartSec=50min
+TimeoutStartSec=100min
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -330,6 +352,8 @@ CADDY
 caddy validate --config "$CADDYFILE" --adapter caddyfile >/dev/null
 systemctl enable -q caddy
 if systemctl is-active --quiet caddy; then systemctl reload caddy; else systemctl start caddy; fi
+# Mit LiveSync: dessen Adresse und Caddy-Teil auf die IP von eben (nach einem Wechsel zeigten sie sonst auf die alte)
+[ ! -f /etc/caddy/studium-server.d/livesync.caddy ] || bash "$ZIEL/livesync.sh" adresse
 
 schritt "Firewall des Servers (Port 443)"
 if iptables -L INPUT -n >/dev/null 2>&1; then
@@ -390,6 +414,15 @@ for i in $(seq 1 20); do
 done
 systemctl start studium-server-zustand.service || true
 studium-server status
+
+schritt "Alte Pakete"
+# Es bleiben dieses und das bisher laufende (zum Zurückgehen von Hand); alle anderen fallen weg
+alte=$(find /opt/studium-server -mindepth 1 -maxdepth 1 -type d ! -path "$ZIEL" ! -path "${VORHER:-$ZIEL}")
+if [ -n "$alte" ]; then
+  while IFS= read -r d; do rm -rf "$d"; echo "entfernt: ${d##*/}"; done <<<"$alte"
+else
+  echo "nichts zu tun"
+fi
 
 cat <<TEXT
 

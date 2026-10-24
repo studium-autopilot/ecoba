@@ -127,6 +127,18 @@ test("Tutorium: eigener Abschnitt nach den Übungen, Lösungen hängen nicht an 
   assert.equal(U.artVon("TUTORIUM"), "Tutorium");
 });
 
+test("Lab: eigener Abschnitt nach dem Tutorium, vor den Altklausuren", () => {
+  const G = U.gliedern([
+    u("Altklausur WS 2025-26", { art: "Altklausur", titel: "WS 2025-26" }),
+    u("Lab 02 Regression", { art: "Lab", nummer: 2, titel: "Regression" }),
+    u("Lab 01 Notebook Grundlagen", { art: "Lab", nummer: 1, titel: "Notebook Grundlagen" }),
+    u("Tutorium 01 Aufgabenblatt", { art: "Tutorium", nummer: 1, titel: "Aufgabenblatt" }),
+  ], "X100");
+  assert.deepEqual(namen(G), ["Tutorium", "Lab", "Altklausuren"]);
+  assert.deepEqual(titel(G[1]), ["Notebook Grundlagen", "Regression"]);
+  assert.equal(U.artVon("lab"), "Lab");
+});
+
 test("Online-Fassung: link nur mit https, auch ohne Datei", () => {
   const ohne = (name, fm) => ({ f: { basename: "X100 " + name, path: `Unterlagen/X100 Beispiel/X100 ${name}.md` },
     fm: Object.assign({ typ: "unterlage", code: "X100", art: "Literatur", datei: "" }, fm) });

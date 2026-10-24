@@ -4,7 +4,8 @@
 # jedem Ordner, auch in einer neuen Cloud-Shell-Sitzung.
 #   bash ~/studium-autopilot/server/fern.sh <befehl>
 # Exit: wie `einrichten.mjs adresse` (1 Fehler, 2 anderer Schlüssel oder kein Konto), 3 unbekannter Befehl, 4 Server läuft
-# nicht (RUNNING), 5 Server antwortet nicht auf ssh, sonst der Exit des Befehls auf dem Server.
+# nicht (RUNNING), 5 Server antwortet nicht auf ssh, 6 Server meldet sich mit einem anderen Schlüssel als beim letzten Mal (neu
+# angelegt unter derselben IP), sonst der Exit des Befehls auf dem Server.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -60,10 +61,29 @@ case "$1" in
   *) EINGABE=(-n) ;;
 esac
 NICHT_ERREICHBAR="Ist er gerade erst angelegt oder neu gestartet: eine Minute warten, dann noch einmal."
+# Meldungen von ssh und scp gehen wie immer auf stderr und zugleich in eine Datei: Ein anderer Schlüssel des Servers (neu
+# angelegt, und Oracle gab ihm eine IP, die ~/.ssh/known_hosts schon kennt) sähe sonst aus wie „antwortet nicht“, und
+# Warten hülfe nie.
+MELDUNG=$(mktemp)
+trap 'rm -f "$MELDUNG"' EXIT
+# (stdout über Kanal 3 unverändert, stderr durch tee; mit pipefail bleibt der Exit der des Befehls)
+mitschreiben() {
+  local c=0
+  { "$@" 2>&1 1>&3 3>&- | tee "$MELDUNG" >&2; } 3>&1 || c=$?
+  return "$c"
+}
+anderer_schluessel() {
+  if grep -q -e "REMOTE HOST IDENTIFICATION HAS CHANGED" -e "Host key verification failed" "$MELDUNG"; then
+    echo "[fern] Der Server meldet sich mit einem anderen Schlüssel als beim letzten Mal. So ist es, wenn er neu angelegt wurde;" \
+      "dann den alten Eintrag löschen und noch einmal: ssh-keygen -R $IP" >&2
+    exit 6
+  fi
+}
 fern() {
   local c=0
-  ssh "${SSH[@]}" "${EINGABE[@]}" "ubuntu@$IP" "$1" || c=$?
+  mitschreiben ssh "${SSH[@]}" "${EINGABE[@]}" "ubuntu@$IP" "$1" || c=$?
   if [ "$c" -eq 255 ]; then
+    anderer_schluessel
     echo "[fern] Der Server antwortet nicht auf ssh. $NICHT_ERREICHBAR" >&2
     exit 5
   fi
@@ -72,7 +92,8 @@ fern() {
 
 case "$1" in
   installieren)
-    scp "${SSH[@]}" studium-server.tar.gz "ubuntu@$IP:" || {
+    mitschreiben scp "${SSH[@]}" studium-server.tar.gz "ubuntu@$IP:" || {
+      anderer_schluessel
       echo "[fern] Das Paket ließ sich nicht auf den Server kopieren (Meldung von scp darüber). $NICHT_ERREICHBAR" >&2
       exit 5
     }

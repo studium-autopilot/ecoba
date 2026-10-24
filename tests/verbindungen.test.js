@@ -402,3 +402,30 @@ test("Uni-Login: eine Zeile mit allem, was verbunden ist; anderes Gerät, abgele
   await y.aktionen["verbindung-aktualisieren"].ausfuehren({ parameter: { id: "uni-login" } });
   assert.deepEqual(y.geholt, [{ uebernehmen: false }, { kalender: true }]);
 });
+
+test("Claude (claude.js): Zeile im Format der Quellen; zu sehen ohne eigenen Server oder wenn dieses Gerät verbunden ist", () => {
+  const C = laden("claude").ctx.claude;
+  const z = { verbunden: false, server: false };
+  const m = C.erzeugen({
+    netz: async () => { throw new Error("kein Netz im Test"); }, geheimId: () => "t", lokal: () => null, jetzt: () => new Date("2026-10-24T10:00:00"),
+    geheim: { lesen: () => (z.verbunden ? JSON.stringify({ schluessel: "sk-ant-test", workspace: "" }) : null), schreiben: async () => {}, loeschen: async () => {} },
+  });
+  const W = laden("verbindungen", { kontext: {
+    obsidian: OBS, link: (aktion, p) => "obsidian://studium-autopilot?aktion=" + aktion + (p && p.id ? "&id=" + p.id : ""),
+    claude: { verbunden: m.verbunden, status: m.status, zeile: m.zeile }, server: { sichtbar: () => z.server },
+  } }).ctx.verbindungen;
+  const v = W.liste.claude;
+  assert.equal(v.sichtbar(), true);
+  assert.deepEqual(lesen(W.zeile("claude")), { text: "Mit deinem eigenen API-Schlüssel fasst Claude deine Unterlagen zusammen, ohne Server.", symbol: "extern", ton: "leise",
+    pille: "", knopf: "Mehr erfahren", knopfAktion: "verbinden", link: "", linkAktion: "" });
+  assert.equal(v.schritte.length, 3);
+  assert.match(v.schritte[1], /\[API keys\]\(https:\/\/platform\.claude\.com\/settings\/keys\)/);
+  assert.match(v.erklaerung, /Ein Claude-Abo geht hier nicht/);
+  z.server = true;
+  assert.equal(v.sichtbar(), false, "der eigene Server fasst schon zusammen");
+  z.verbunden = true;
+  assert.equal(v.sichtbar(), true, "dieses Gerät ist verbunden");
+  assert.deepEqual(v.schritte, []);
+  assert.deepEqual(lesen(W.zeile("claude")), { text: "Tipp im PDF-Kasten einer Unterlage auf „Zusammenfassen“.", symbol: "haken", ton: "ok",
+    pille: "verbunden", knopf: "", knopfAktion: "", link: "Mehr erfahren", linkAktion: "verbinden" });
+});

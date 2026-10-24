@@ -157,12 +157,27 @@ test("Geändert in ILIAS, von dir verändert: deine bleibt, neue Fassung daneben
   assert.match(n, /\[\[B110 Folien 01 Grundlagen\.pdf\]\] bleibt, wie sie ist/);
   assert.deepEqual(x.t.index().dateien["1001"].fassungen, [neu]);
   assert.equal(x.t.index().dateien["1001"].pfad, p, "Eintrag zeigt weiter auf deine Datei");
-  // noch eine Fassung am selben Tag → „(2)“
+  // noch eine Fassung, die Kopie ist unverändert → sie wird ersetzt, keine weitere Kopie
   x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 3";
   x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T09:00";
+  x.u.vor(24 * STUNDE);
+  let b2 = await lauf(x);
+  assert.deepEqual([b2.ersetzt, b2.fassungen], [1, 0]);
+  assert.equal(x.t.text(neu), "%PDF Folien eins, Fassung 3");
+  assert.equal(x.t.text(p), "%PDF Folien eins MIT MEINEN ANMERKUNGEN");
+  const n2 = x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.md");
+  assert.match(n2, /Dies ist die neue Fassung aus ILIAS vom 17\.10\.2026\./);
+  assert.equal(fm(n2, "aktualisiert"), "2026-10-17");
+  assert.deepEqual(x.t.index().dateien["1001"].fassungen, [neu]);
+  // in der Kopie angemerkt → die nächste Fassung kommt als weitere Kopie, beide bleiben
+  x.t.setzen(neu, "%PDF Fassung 3 MIT ANMERKUNGEN");
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 4";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-17T09:00";
   x.u.vor(4 * STUNDE);
-  await lauf(x);
-  assert.equal(x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16 (2).pdf"), "%PDF Folien eins, Fassung 3");
+  b2 = await lauf(x);
+  assert.equal(b2.fassungen, 1);
+  assert.equal(x.t.text(neu), "%PDF Fassung 3 MIT ANMERKUNGEN");
+  assert.equal(x.t.text(B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-17.pdf"), "%PDF Folien eins, Fassung 4");
   assert.equal(x.t.index().dateien["1001"].fassungen.length, 2);
 });
 
@@ -234,6 +249,202 @@ test("Videos und Dateien über 50 MB werden nicht geladen", async () => {
   x.u.vor(4 * STUNDE); x.il.leeren();
   await lauf(x);
   assert.equal(x.il.anzahl("laden"), 0, "nicht jedes Mal neu versucht");
+});
+
+test("Ersetzt: Notiz passt sich an (PDF-Ansicht, Seiten, frühere Zusammenfassung), dein Text bleibt", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  const np = B110 + "/B110 Folien 01 Grundlagen.md";
+  x.t.setzen(np, x.t.text(np).replace("seiten:\n", "seiten: 12\n").replace("> [!eba-pdf]- PDF\n",
+    "## Das Wichtigste\n- **Ziel:** Gewinn → [[B110 Folien 01 Grundlagen.pdf#page=2|S. 2]]\n\n## Zu tun\n- [ ] Blatt 1\n\n> [!eba-pdf]- PDF (12 Seiten)\n") + "\n## Meine Notizen\nMein Text\n");
+  x.il.def.dateien["1001"] = new Uint8Array(11 * 1048576);
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T07:00";
+  x.u.vor(4 * STUNDE);
+  assert.equal((await lauf(x)).ersetzt, 1);
+  let n = x.t.text(np);
+  assert.equal(fm(n, "aktualisiert"), "2026-10-16");
+  assert.match(n, /^seiten:$/m, "Seitenzahl der alten Fassung weg");
+  assert.match(n, /^## Das Wichtigste \(frühere Fassung, bis 16\.10\.2026\)\n- \*\*Ziel:\*\* Gewinn/m);
+  assert.doesNotMatch(n, /^## Das Wichtigste$/m, "„Zusammenfassen“ wieder da");
+  assert.match(n, /^\*\*PDF öffnen:\*\* \[\[B110 Folien 01 Grundlagen\.pdf\]\] \(11,0 MB, zu groß zum Einbetten\) · \[Öffnen ↗\]\(obsidian:\/\/studium-autopilot\?aktion=oeffnen\)$/m);
+  assert.doesNotMatch(n, /eba-pdf/);
+  assert.match(n, /## Zu tun\n- \[ \] Blatt 1\n/);
+  assert.match(n, /## Meine Notizen\nMein Text\n$/);
+  // wieder klein: eingebettet; die frühere Zusammenfassung bleibt, wie sie ist
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 3";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-17T07:00";
+  x.u.vor(24 * STUNDE);
+  assert.equal((await lauf(x)).ersetzt, 1);
+  n = x.t.text(np);
+  assert.equal(fm(n, "aktualisiert"), "2026-10-17");
+  assert.match(n, /^> \[!eba-pdf\]- PDF\n> !\[\[B110 Folien 01 Grundlagen\.pdf#height=560\]\]$/m);
+  assert.doesNotMatch(n, /PDF öffnen/);
+  assert.match(n, /^## Das Wichtigste \(frühere Fassung, bis 16\.10\.2026\)$/m);
+});
+
+test("In ILIAS umbenannt oder verschoben: Index und Notiz ziehen mit, ohne Download; eine von dir geänderte Quelle bleibt", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  const S = x.il.def.seiten;
+  S[B + "kurs/100"][0].titel = "Folien VL01 Grundlagen korrigiert";
+  S[B + "ordner/110"][0].titel = "Blatt 1 neu";
+  S[B + "kurs/300"].push(S[B + "ordner/310"].pop()); // Leitfaden aus dem Ordner SQ888 direkt in den Kurs
+  const nb = B110 + "/B110 Übung 01.md", nl = "Unterlagen/SQ888 Schreibwerkstatt/SQ888 Sonstiges Leitfaden Hausarbeit.md";
+  x.t.setzen(nb, x.t.text(nb).replace(/^quelle: .*$/m, 'quelle: "Mein Ordner"'));
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  const b = await lauf(x);
+  assert.equal(x.il.anzahl("laden"), 0, "nichts neu geladen");
+  assert.equal(b.art, "unveraendert");
+  const idx = x.t.index().dateien;
+  assert.equal(idx["1001"].original, "Folien VL01 Grundlagen korrigiert.pdf");
+  assert.equal(fm(x.t.text(B110 + "/B110 Folien 01 Grundlagen.md"), "original"), '"Folien VL01 Grundlagen korrigiert.pdf"');
+  assert.equal(idx["3101"].iliasPfad, "S100 Mathematische Methoden");
+  assert.equal(fm(x.t.text(nl), "quelle"), '"ILIAS: S100 Mathematische Methoden"');
+  assert.equal(fm(x.t.text(nb), "quelle"), '"Mein Ordner"', "deine Quelle bleibt");
+  assert.equal(fm(x.t.text(nb), "original"), '"Blatt 1 neu.pdf"');
+  assert.ok(!Object.keys(idx).some((id) => idx[id].entfernt), "nichts als entfernt gemerkt");
+  // nächster Lauf: nichts mehr zu tun
+  x.t.schreibvorgaenge.length = 0;
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  assert.deepEqual(x.t.schreibvorgaenge.filter((p) => /\.md$/.test(p)), []);
+});
+
+test("Nicht mehr in ILIAS: Marke im Index, Kasten in der Notiz, Datei bleibt; wieder da → Marke und Kasten weg", async () => {
+  const def = standardIlias();
+  def.seiten[B + "kurs/100"].push(datei("1301", "Riesig laut Liste", "pdf", "2026-10-10T08:00", { groesse: 60 * 1048576 }));
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  assert.equal(x.m.status().zuGross, 1);
+  const S = x.il.def.seiten, nb = B110 + "/B110 Übung 01.md", vorher = x.t.text(nb);
+  const blatt = S[B + "ordner/110"].shift(), riesig = S[B + "kurs/100"].pop();
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  let idx = x.t.index();
+  assert.equal(idx.dateien["1101"].entfernt, "2026-10-16");
+  assert.equal(idx.ignoriert["1301"].entfernt, "2026-10-16");
+  assert.equal(idx.ignoriert["1301"].kurs, "100");
+  assert.ok(!idx.dateien["1001"].entfernt && !idx.dateien["1101"].geloescht);
+  assert.equal(x.t.text(B110 + "/B110 Übung 01.pdf"), "%PDF Blatt eins", "deine Datei bleibt");
+  assert.match(x.t.text(nb), /\n> \[!eba-info\] Nicht mehr in ILIAS\n> Am 16\.10\.2026 war diese Datei in ILIAS nicht mehr zu finden\. Deine Datei bleibt/);
+  assert.equal(x.m.status().zuGross, 0, "zu groß zählt nur, solange die Datei in ILIAS ist");
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  assert.equal(x.t.text(nb).split("Nicht mehr in ILIAS").length, 2, "Kasten nur einmal");
+  S[B + "ordner/110"].unshift(blatt); S[B + "kurs/100"].push(riesig);
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  idx = x.t.index();
+  assert.ok(!idx.dateien["1101"].entfernt && !idx.ignoriert["1301"].entfernt);
+  assert.equal(x.t.text(nb), vorher, "Kasten wieder weg, sonst alles wie vorher");
+  assert.equal(x.m.status().zuGross, 1);
+  await x.m.kursSetzen("100", false);
+  assert.equal(x.m.status().zuGross, 0, "Kurs aus: zählt nicht");
+  // Kurs, in dem gar nichts zu sehen ist (geänderte Seite?): nichts gemerkt
+  const nur300 = S[B + "kurs/300"];
+  S[B + "kurs/300"] = [];
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  idx = x.t.index();
+  assert.ok(!idx.dateien["3001"].entfernt && !idx.dateien["3101"].entfernt);
+  S[B + "kurs/300"] = nur300;
+});
+
+test("Nicht mehr in ILIAS: mehr als die Hälfte (und mehr als 10) auf einmal → nichts gemerkt, Hinweis", async () => {
+  const def = standardIlias();
+  for (let i = 10; i < 22; i++) { def.seiten[B + "kurs/100"].push(datei("15" + i, "Zusatz " + i, "pdf", "2026-10-09T08:00")); def.dateien["15" + i] = "%PDF Zusatz " + i; }
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  const S = x.il.def.seiten;
+  S[B + "kurs/100"] = S[B + "kurs/100"].filter((e) => !/^15/.test(e.refId));
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  const idx = x.t.index().dateien;
+  assert.ok(!Object.keys(idx).some((id) => idx[id].entfernt), "nichts als entfernt gemerkt");
+  assert.match(b.warnung, /12 Dateien waren in ILIAS gerade nicht zu finden/);
+});
+
+test("Nicht mehr in ILIAS: der Schutz gilt je Kurs; ein großer Kurs daneben hebt ihn nicht auf", async () => {
+  const def = standardIlias();
+  for (let i = 10; i < 22; i++) { def.seiten[B + "kurs/100"].push(datei("15" + i, "Zusatz " + i, "pdf", "2026-10-09T08:00")); def.dateien["15" + i] = "%PDF Zusatz " + i; }
+  for (let i = 10; i < 40; i++) { def.seiten[B + "kurs/300"].push(datei("35" + i, "Skript " + i, "pdf", "2026-10-09T08:00")); def.dateien["35" + i] = "%PDF Skript " + i; }
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  assert.ok(x.t.index().dateien["1521"] && x.t.index().dateien["3539"], "alles geladen");
+  const S = x.il.def.seiten;
+  S[B + "kurs/100"] = S[B + "kurs/100"].filter((e) => !/^15/.test(e.refId));
+  S[B + "kurs/300"] = S[B + "kurs/300"].filter((e) => e.refId !== "3001");
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  const idx = x.t.index().dateien;
+  assert.ok(!Object.keys(idx).some((id) => /^15/.test(id) && idx[id].entfernt), "im falsch gelesenen Kurs nichts gemerkt");
+  assert.equal(idx["3001"].entfernt, "2026-10-16", "im anderen Kurs schon");
+  assert.match(b.warnung, /12 Dateien waren in ILIAS gerade nicht zu finden/);
+});
+
+test("Nicht mehr in ILIAS: was in einer übersprungenen Sitzung oder fremden Gruppe liegt, zählt nicht als weg", async () => {
+  const def = standardIlias();
+  const sitzung = { art: "sitzung", typ: "sess", refId: "140", titel: "Sitzung 3", url: B + "sitzung/140", sitzung: { name: "2026-10-22 Sitzung 3", datum: "2026-10-22" } };
+  const gruppe = { art: "ordner", typ: "grp", refId: "150", titel: "Tutorium A", url: B + "gruppe/150", mitglied: true };
+  def.seiten[B + "kurs/100"].push(sitzung, gruppe);
+  def.seiten[B + "sitzung/140"] = [datei("1401", "Folien VL03", "pdf", "2026-10-15T08:00")];
+  def.seiten[B + "gruppe/150"] = [datei("1501", "Tutorium Blatt", "pdf", "2026-10-15T08:00")];
+  def.dateien["1401"] = "%PDF Folien drei"; def.dateien["1501"] = "%PDF Tutorium";
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  assert.ok(x.t.index().dateien["1401"] && x.t.index().dateien["1501"]);
+  // Sitzung um zwei Wochen verschoben (wird jetzt nicht geholt), aus der Gruppe ausgetreten; eine Datei ist wirklich weg
+  sitzung.sitzung.datum = "2026-11-05"; gruppe.mitglied = false;
+  x.il.def.seiten[B + "ordner/110"].shift();
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  const idx = x.t.index().dateien;
+  assert.ok(b.jeKurs["100"].spaeter && b.jeKurs["100"].fremdeGruppe, "beide übersprungen");
+  assert.ok(!idx["1401"].entfernt && !idx["1501"].entfernt, "nicht gelesen ist nicht weg");
+  assert.equal(idx["1101"].entfernt, "2026-10-16");
+});
+
+test("Von dir gelöscht, in ILIAS unverändert neu hochgeladen (neue Kennung): bleibt gelöscht", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  x.t.m.delete(B110 + "/B110 Übung 01.pdf"); x.t.m.delete(B110 + "/B110 Übung 01.md");
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  const S = x.il.def.seiten;
+  S[B + "ordner/110"][0] = datei("1105", "Blatt 1", "pdf", "2026-10-16T09:00");
+  x.il.def.dateien["1105"] = "%PDF Blatt eins";
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  assert.equal(b.neu, 0);
+  assert.equal(x.t.index().dateien["1105"].geloescht, true);
+  assert.deepEqual(x.t.pfade(B110 + "/B110 Übung"), [], "nichts angelegt");
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  await lauf(x);
+  assert.equal(x.il.anzahl("laden"), 0, "nicht wieder geladen");
+});
+
+test("Gemerkte Funde, die es in ILIAS nicht mehr gibt (404): kein Fehler, fallen aus den Funden", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  x.abh.grenzen = { neu: 2 };
+  await lauf(x);
+  assert.deepEqual(x.lok.lokal("eba-ilias-funde").map((c) => c.id).sort(), ["1001", "3001", "3101"]);
+  for (const id of ["1001", "3001", "3101"]) delete x.il.def.dateien[id];
+  x.abh.grenzen = { neu: 25 };
+  x.u.vor(STUNDE); x.il.leeren();
+  const b = await lauf(x);
+  assert.deepEqual(x.il.geholt(), [], "Kurse vor kurzem durchsucht");
+  assert.notEqual(b.art, "fehler", b.fehler);
+  assert.deepEqual(b.fehlerDateien, []);
+  assert.equal(b.uebersprungen, 3);
+  assert.deepEqual(x.lok.lokal("eba-ilias-funde"), []);
 });
 
 test("Abrufer-Sperre: anderes Gerät aktiv → nichts; still → übernehmen; ohne Zugang → nicht beteiligt", async () => {
@@ -664,6 +875,9 @@ test("Ganzer Lauf mit dem echten unterlagen.js: Namen, Ordner, Notizen, Modul au
   const def = standardIlias();
   def.seiten[B + "kurs/100"].push(datei("1401", "S100_Formelsammlung", "pdf", "2026-10-09T08:00"));
   def.dateien["1401"] = "%PDF Formelsammlung";
+  // R-Notebook und seine HTML-Fassung: zwei Unterlagen im Bereich Lab, die HTML-Fassung „mit Ausgaben“ statt „ (2)“
+  def.seiten[B + "kurs/100"].push(datei("1402", "Lab1", "rmd", "2026-10-09T08:00"), datei("1403", "Lab1.nb", "html", "2026-10-09T08:00"));
+  def.dateien["1402"] = "# Lab 1"; def.dateien["1403"] = "<html>Lab 1</html>";
   const x = aufbau({ ilias: def });
   x.abh.einordner = () => I.einordnerAus(echteUnterlagen());
   await verbinden(x);
@@ -681,6 +895,8 @@ test("Ganzer Lauf mit dem echten unterlagen.js: Namen, Ordner, Notizen, Modul au
   // Datei „S100_…“ im B110-Kurs: Modul aus dem Dateinamen (unterlagen.js), weil es S100 als Modul gibt
   assert.match(idx.dateien["1401"].pfad, /^Unterlagen\/S100 Mathematische Methoden\/S100 /);
   assert.equal(fm(x.t.text(idx.dateien["1401"].pfad.replace(/\.pdf$/, ".md")), "code"), '"S100"');
+  assert.equal(idx.dateien["1402"].pfad, "Unterlagen/B110 Einführung in die Betriebswirtschaftslehre/Lab/B110 Lab 01.rmd");
+  assert.equal(idx.dateien["1403"].pfad, "Unterlagen/B110 Einführung in die Betriebswirtschaftslehre/Lab/B110 Lab 01 mit Ausgaben.html");
 });
 
 test("Anschluss an Netz und HTML: abgelaufene Sitzung → einmal neu anmelden, dann aufgeben", async () => {

@@ -106,6 +106,21 @@ test("Bestand: Vergangenes kommt nur als Änderung eines bekannten Termins durch
   assert.ok(!Object.values(r.bestand).some((t) => t.schluessel === "neu-vorbei"), "nicht in den Bestand");
 });
 
+test("Bestand: Vergangenes fällt 60 Tage nach seinem Ende weg; meldet Claude es noch einmal, bleibt es draußen", async () => {
+  const { eingangNormal, nurNeueOderGeaenderte } = await laden();
+  const bestand = nurNeueOderGeaenderte(eingangNormal({ termine: [
+    termin({ schluessel: "lange-vorbei", datum: "2026-08-18" }),
+    termin({ schluessel: "grenze", datum: "2026-08-19" }),
+    termin({ schluessel: "mehrtaegig", datum: "2026-08-01", bis: "2026-09-30" }),
+  ] }, { jetzt: new Date("2026-08-01T07:30:00Z") }).eingang, {}).bestand;
+  const e = eingangNormal({ termine: [termin({ schluessel: "neu" })] }, { jetzt: JETZT }).eingang;
+  const r = nurNeueOderGeaenderte(e, bestand);
+  assert.deepEqual(Object.values(r.bestand).map((t) => t.schluessel).sort(), ["grenze", "mehrtaegig", "neu"]);
+  const wieder = eingangNormal({ termine: [termin({ schluessel: "lange-vorbei", datum: "2026-08-18" })] }, { jetzt: JETZT }).eingang;
+  const r2 = nurNeueOderGeaenderte(wieder, r.bestand);
+  assert.deepEqual([r2.eingang.termine.length, Object.keys(r2.bestand).length], [0, 3]);
+});
+
 test("Eine Regel: Server und Plugin nehmen dieselben Termine an und säubern sie gleich", async () => {
   const { terminNormal, idAus } = await laden();
   const Z = skriptLaden("zentral").ctx.zentral;

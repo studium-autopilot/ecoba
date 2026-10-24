@@ -22,7 +22,8 @@
 //   „Gekürzt“), Lauf 120 s. Je Seite höchstens SEITE_ZEICHEN. Alle LUFT_SEITEN Seiten eine kurze Pause für die Oberfläche.
 // Fristen (nichts hängt bis zum Neustart): pdf.js laden und jede Anfrage an pdf.js innerhalb der Frist der PDF, eine Seite
 //   höchstens GRENZEN.seite, Schließen ZU_FRIST, Datei lesen LESEN_FRIST. Zu lange → die PDF wird auf diesem Gerät
-//   übersprungen (wie „zu schwer“), der Lauf geht weiter und endet sauber; der Status nennt es als Warnung.
+//   übersprungen (wie „zu schwer“), der Lauf geht weiter und endet sauber; der Status nennt es als Warnung. Nach ZEIT_WIEDER
+//   versucht dieses Gerät sie noch einmal (die Frist kann an einem gerade beschäftigten Gerät gelegen haben).
 // Absturz-Schutz: Vor dem Öffnen einer PDF merkt sich das Gerät { pfad, groesse, version } (eba-volltext-in-arbeit), danach
 //   ist es leer. Steht der Merker beim nächsten Start noch da und war die App dabei im Vordergrund (iOS beendet Obsidian z. B.
 //   bei Speichermangel), kommt die PDF in eba-volltext-zu-schwer: iPhone/iPad lassen sie ab dem ersten, ein Computer ab dem
@@ -34,7 +35,8 @@
 //   nicht als vorhanden, der Tresor ist ruhig, sie fehlt seit WAISE_LAEUFE Läufen und WAISE_ALTER. Dann Lebenslauf der Quellen
 //   (quellen.js wegfall): unberührt und am Computer in den Papierkorb, sonst (iPhone/iPad, eigener Text) „(PDF fehlt)“ mit
 //   entfaellt: true; kommt die PDF wieder, verschwindet die Marke. Mehr als die Hälfte und mehr als MASSE auf einmal → nichts.
-//   Neue FASSUNG → nach und nach neu.
+//   Neue FASSUNG → nach und nach neu. Kam die Notiz zur PDF (Unterlage) erst nach der Textfassung, bekommt die aktuelle
+//   Textfassung den Link „unterlage“ nachträglich (verknuepfen, ohne die PDF neu zu lesen).
 // Für andere Skripte: ctx.volltext = { status(), setzen(an), nachholen({ hier }), beobachten(fn) } (siehe api unten).
 // Gerätelokal (app.saveLocalStorage): eba-volltext-cache, eba-volltext-in-arbeit, eba-volltext-zu-schwer, eba-volltext-waisen,
 //   eba-volltext-gesehen, eba-volltext-stand, eba-geraet. Testeinstiege: plugin.testVolltextAus (kein automatischer Lauf); ctx.volltext.erzeugen(abh)
@@ -53,6 +55,7 @@ const GRENZEN = {
   mobil: { mb: 25, seiten: 300, zeichen: 500000, lauf: 45e3, pdf: 120e3, seite: 20e3, abstuerze: 1 },
   pc: { mb: 80, seiten: 600, zeichen: 1000000, lauf: 120e3, pdf: 300e3, seite: 30e3, abstuerze: 2 },
 };
+const ZEIT_WIEDER = 24 * 60 * MIN; // eine PDF, die auf diesem Gerät zu lange brauchte, wird nach so langer Zeit erneut versucht
 const LESEN_FRIST = 30e3;       // Datei lesen (PDF für Text oder Prüfsumme); hängt sie (Platzhalter), nächster Lauf
 const ZU_FRIST = 5e3;           // pdf.js-Dokument schließen
 const SEITE_ZEICHEN = 20000;    // je Seite höchstens so viele Zeichen (der Rest der Seite fällt weg)
@@ -158,7 +161,8 @@ const kopfLesen = (text) => {
     return v;
   };
   return ausFm({ typ: wert("typ"), volltext_von: wert("volltext_von"), quelle: wert("quelle"), groesse: wert("groesse"),
-    pdf_sha256: wert("pdf_sha256"), fassung: wert("fassung"), ergebnis: wert("ergebnis"), entfaellt: wert("entfaellt") });
+    pdf_sha256: wert("pdf_sha256"), fassung: wert("fassung"), ergebnis: wert("ergebnis"), entfaellt: wert("entfaellt"),
+    unterlage: wert("unterlage") });
 };
 // Dieselben Felder aus dem Frontmatter des metadataCache
 const ausFm = (fm) => {
@@ -168,7 +172,7 @@ const ausFm = (fm) => {
     quelle: fm.quelle == null ? "" : String(fm.quelle), groesse: zahl(fm.groesse),
     sha: /^[0-9a-f]{64}$/.test(String(fm.pdf_sha256 || "")) ? String(fm.pdf_sha256) : "",
     fassung: zahl(fm.fassung) || 0, ergebnis: fm.ergebnis == null ? "" : String(fm.ergebnis),
-    entfaellt: fm.entfaellt === true || fm.entfaellt === "true" };
+    entfaellt: fm.entfaellt === true || fm.entfaellt === "true", unterlage: fm.unterlage == null ? "" : String(fm.unterlage) };
 };
 // Marke „(PDF fehlt)“ setzen bzw. wieder entfernen; sonst bleibt der Text, wie er ist (Seitentexte, Hinweise, eigene Zeilen)
 const fehltMarkieren = (text) => {
@@ -200,16 +204,18 @@ const zielName = (pdfPfad, belegt) => {
 
 // Plan eines Laufs (rein). pdfs [{ pfad, groesse, mtime }], eigene [{ pfad, quelle, groesse, sha, fassung, ergebnis }] (nur Notizen
 // mit Besitzmarke in _Volltext/), hashes { <pdf-Pfad klein>: sha } (Prüfsumme der PDF, wie sie jetzt ist, wenn bekannt),
-// belegt [Pfade in _Volltext/], grenze (GRENZEN.mobil|pc), mobil, ausgelassen(pdf) → true (auf diesem Gerät zu schwer).
+// belegt [Pfade in _Volltext/], grenze (GRENZEN.mobil|pc), mobil, ausgelassen(pdf) → true (auf diesem Gerät zu schwer),
+// unterlage(pdf) → true (die Notiz zur PDF gibt es; optional).
 // → { aufgaben [{ art: neu|aendern|fassung|zu-gross, pdf, ziel }], umbenennen [{ notiz, pdf, ziel }], waisen [Notiz],
-//     doppelt [Notiz], zurueck [Notiz mit „(PDF fehlt)“, deren PDF wieder da ist], warten [pdf], aktuell }
+//     doppelt [Notiz], zurueck [Notiz mit „(PDF fehlt)“, deren PDF wieder da ist], warten [pdf], aktuell,
+//     verknuepfen [{ notiz, pdf, ziel }: aktuelle Notiz ohne Link „unterlage“, deren Unterlage es inzwischen gibt] }
 const planen = (x) => {
   const pdfs = (x.pdfs || []).slice().sort((a, b) => (a.pfad < b.pfad ? -1 : a.pfad > b.pfad ? 1 : 0));
   const hashes = x.hashes || {};
   const grenze = x.grenze || GRENZEN.pc;
   const belegt = {};
   for (const p of x.belegt || []) belegt[klein(p)] = true;
-  const plan = { aufgaben: [], umbenennen: [], waisen: [], doppelt: [], zurueck: [], warten: [], aktuell: 0 };
+  const plan = { aufgaben: [], umbenennen: [], waisen: [], doppelt: [], zurueck: [], warten: [], aktuell: 0, verknuepfen: [] };
   // je PDF genau eine eigene Notiz; weitere mit derselben Quelle sind Doppel (z. B. Konfliktkopien)
   const nachQuelle = {};
   const eigene = (x.eigene || []).slice().sort((a, b) => (a.pfad.length - b.pfad.length) || (a.pfad < b.pfad ? -1 : 1));
@@ -236,7 +242,10 @@ const planen = (x) => {
     if (n.groesse !== p.groesse || (h && n.sha && h !== n.sha)) aufgabe("aendern", p, n.pfad);
     else if (n.entfaellt) { plan.zurueck.push(n); plan.aktuell++; }
     else if ((n.fassung || 0) < FASSUNG) aufgabe("fassung", p, n.pfad);
-    else plan.aktuell++;
+    else {
+      plan.aktuell++;
+      if (!n.unterlage && x.unterlage && x.unterlage(p)) plan.verknuepfen.push({ notiz: n, pdf: p, ziel: n.pfad });
+    }
   }
   // Notizen ohne PDF: Partner gleicher Größe und Prüfsumme (umbenannt oder verschoben) → umbenennen, sonst Waise
   const frei = ohneNotiz.slice();
@@ -369,6 +378,7 @@ module.exports = function (ctx) {
     const ausgelassen = (pdf) => {
       const z = zuSchwer()[pdf.pfad];
       if (!z || z.groesse !== pdf.groesse || z.version !== abh.version) return false;
+      if (z.grund === "zeit") return typeof z.seit === "number" && ms() - z.seit < ZEIT_WIEDER;
       return z.grund !== "absturz" || (z.abstuerze || 0) >= grenze.abstuerze;
     };
     const auslassen = (pdf, grund) => {
@@ -376,6 +386,7 @@ module.exports = function (ctx) {
       for (const k of Object.keys(vorher)) if (vorher[k] && vorher[k].version === abh.version) alle[k] = vorher[k];
       const gleich = z && z.groesse === pdf.groesse && z.version === abh.version;
       alle[pdf.pfad] = { groesse: pdf.groesse, version: abh.version, grund, abstuerze: (gleich ? z.abstuerze || 0 : 0) + (grund === "absturz" ? 1 : 0) };
+      if (grund === "zeit") alle[pdf.pfad].seit = ms();
       lokal(L.zuSchwer, alle);
     };
     // Merker aus dem letzten Start: stand er noch da, hat die App beim Lesen aufgehört. Im Hintergrund oder beim Beenden zählt
@@ -597,13 +608,13 @@ module.exports = function (ctx) {
     };
 
     // ----- Ein Lauf -----
-    // o: { manuell, hier (Sperre herholen) } → Bericht { art, neu, aktuell, warten, rest, umbenannt, geloescht, markiert, zurueck,
-    //   fehler }
+    // o: { manuell, hier (Sperre herholen) } → Bericht { art, neu, aktuell, warten, rest, umbenannt, verknuepft, geloescht, markiert,
+    //   zurueck, fehler }
     const lauf = async (o) => {
       o = o || {};
       if (laeuft) return { art: "laeuft" };
       laeuft = true; stopp = false;
-      const b = { art: "ok", neu: 0, aktuell: 0, warten: 0, rest: 0, umbenannt: 0, geloescht: 0, markiert: 0, zurueck: 0, ohneText: 0, fehler: 0, zeit: 0, fremd: false, manuell: !!o.manuell };
+      const b = { art: "ok", neu: 0, aktuell: 0, warten: 0, rest: 0, umbenannt: 0, verknuepft: 0, geloescht: 0, markiert: 0, zurueck: 0, ohneText: 0, fehler: 0, zeit: 0, fremd: false, manuell: !!o.manuell };
       const start = ms();
       let gemeldet = false;
       fortschritt = null;
@@ -646,7 +657,8 @@ module.exports = function (ctx) {
         const sauber = {};
         for (const k of Object.keys(c)) if (pdfDa[klein(k)]) sauber[k] = c[k];
         lokal(L.cache, sauber);
-        const plan = planen({ pdfs, eigene: nz.eigene, hashes, belegt: io.belegt(), grenze, mobil: !!abh.mobil, ausgelassen });
+        const plan = planen({ pdfs, eigene: nz.eigene, hashes, belegt: io.belegt(), grenze, mobil: !!abh.mobil, ausgelassen,
+          unterlage: (p) => io.existiert(elternVon(p.pfad) + "/" + ohnePdf(nameVon(p.pfad)) + ".md") });
         b.aktuell = plan.aktuell; b.warten = plan.warten.length;
         // Notizen ohne PDF: Doppel sofort; Waisen nur, wenn die PDF wirklich weg ist (waisenPruefen, gemerkt auf diesem Gerät),
         // nie viele auf einmal (quellen.js zuViel); ohne quellen.js bleiben sie
@@ -654,7 +666,8 @@ module.exports = function (ctx) {
         const wp = waisenPruefen({ waisen: plan.waisen, alt: objekt(L.waisen), gesehen, vorhanden: ilias.vorhanden, ruhig: abh.ruhig ? !!abh.ruhig() : true, jetzt: ms() });
         let reif = Q ? wp.reif : [];
         if (Q && Q.zuViel(reif.length, nz.eigene.length, MASSE)) { reif = []; b.massenwegfall = true; }
-        const etwas = plan.aufgaben.length || plan.umbenennen.length || plan.doppelt.length || plan.zurueck.length || reif.length;
+        const etwas = plan.aufgaben.length || plan.umbenennen.length || plan.doppelt.length || plan.zurueck.length || reif.length
+          || plan.verknuepfen.length;
         // Sperre: wer schreibt, hält sie (auch ohne Arbeit, damit andere Geräte nicht doppelt anfangen)
         if (!(await sperre.nehmen({ erzwingen: !!o.hier }))) { b.art = "anderes-geraet"; standSetzen({ anderes: true }); return b; }
         standSetzen({ anderes: false });
@@ -662,6 +675,11 @@ module.exports = function (ctx) {
         for (const u of plan.umbenennen) {
           if (stopp || b.fremd) break;
           try { if (await umziehen(u, b)) b.umbenannt++; } catch (e) { b.fehler++; }
+        }
+        // Unterlage inzwischen da: Link nachtragen (wie beim Umziehen am selben Pfad; Seitentexte und Hinweis bleiben)
+        for (const u of plan.verknuepfen) {
+          if (stopp || b.fremd) break;
+          try { if (await umziehen(u, b)) b.verknuepft++; } catch (e) { b.fehler++; }
         }
         for (const n of plan.doppelt) {
           if (stopp || b.fremd) break;
@@ -948,7 +966,7 @@ module.exports = function (ctx) {
     // reine Logik und Tests
     erzeugen, planen, waisenPruefen, fehltMarkieren, fehltEntfernen, entschaerfen, entschaerfenGrund, seiteText, textRein, kopfLesen, ausFm,
     notizText, hinweisText, zielName, quelleExternAus, eingeschaltet, istPdf,
-    K: { ZIEL, ABRUF, FASSUNG, GRENZEN, SEITE_ZEICHEN, RUHE, STABIL, TAKT, STAPEL_PAUSE, STAPEL_MAX, UEBERNAHME, PULS, WAISE_ALTER, WAISE_LAEUFE,
+    K: { ZIEL, ABRUF, FASSUNG, GRENZEN, SEITE_ZEICHEN, RUHE, STABIL, TAKT, STAPEL_PAUSE, STAPEL_MAX, UEBERNAHME, PULS, WAISE_ALTER, WAISE_LAEUFE, ZEIT_WIEDER,
       MASSE, L, TEXT, FEHLT, FEHLT_KARTE, LESEN_FRIST, ZU_FRIST },
   };
   ctx.volltext = api;

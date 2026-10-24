@@ -4,6 +4,7 @@
 #   livesync.sh               einschalten (falls nötig), dann Link und Code für ein Gerät
 #   livesync.sh einschalten   CouchDB aus dem Paketarchiv von Apache, nur auf 127.0.0.1; Caddy unter https://obsidian.<IP>.sslip.io
 #   livesync.sh verbinden     Link (30 Minuten) und QR-Code für ein Gerät, dazu der Code zum Eintippen
+#   livesync.sh adresse       Adresse und Caddy-Teil auf die IP aus dienst.json (ruft installieren.sh nach einem IP-Wechsel auf)
 # Auf einem Server aus `installieren.sh --test` (ohne IP) ohne HTTPS: CouchDB über Caddy auf http://127.0.0.1:8081 (nur für Tests).
 # Wiederholbar: Zugangsdaten bleiben in /etc/studium-server/livesync.json (nur root), jeder Schritt prüft, ob er schon erledigt ist.
 # Passwörter gehen nur über Pipes und Dateien, nie über eine Befehlszeile.
@@ -24,8 +25,9 @@ wert() { jq -r ".$1" "$LS_KONFIG"; }
 # curl mit den Zugangsdaten aus der Datei (über -K von stdin, nicht in der Befehlszeile)
 couch() { printf 'user = "%s:%s"\n' "$(wert benutzer)" "$(wert passwort)" | curl -sS -K - "$@"; }
 
-einschalten() {
-  local ip adresse seite
+# Adresse für LiveSync aus der IP in dienst.json: setzt $adresse und $seite (Kopf des Caddy-Teils)
+ziel() {
+  local ip
   ip=$(jq -r '.ip // empty' "$KONFIG" 2>/dev/null || true)
   if [[ "$ip" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}$ ]]; then
     adresse="https://obsidian.${ip//./-}.sslip.io"
@@ -36,6 +38,35 @@ einschalten() {
   else
     fehler "keine öffentliche IP in $KONFIG (Server mit --ip installiert?)"
   fi
+}
+
+# Adresse in livesync.json und Caddy-Teil auf die aktuelle IP; nach einem IP-Wechsel zeigten Link und HTTPS sonst auf die alte.
+# Lädt Caddy nur neu, wenn sich der Teil geändert hat.
+adresse_nachziehen() {
+  local adresse seite
+  ziel
+  [ ! -f "$LS_KONFIG" ] || [ "$(wert adresse)" = "$adresse" ] \
+    || { (umask 077; jq --arg a "$adresse" '.adresse = $a' "$LS_KONFIG" >"$LS_KONFIG.neu") && mv "$LS_KONFIG.neu" "$LS_KONFIG" && chmod 0600 "$LS_KONFIG"; }
+  install -d -m 0755 /etc/caddy/studium-server.d
+  cat >"$CADDY_TEIL.neu" <<CADDY
+# studium-server (livesync.sh): CouchDB für LiveSync, wird bei jedem Lauf neu geschrieben
+$seite {
+	reverse_proxy 127.0.0.1:5984
+}
+CADDY
+  if cmp -s "$CADDY_TEIL" "$CADDY_TEIL.neu"; then
+    rm -f "$CADDY_TEIL.neu"
+  else
+    mv "$CADDY_TEIL.neu" "$CADDY_TEIL"
+    caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
+    systemctl reload caddy
+    echo "LiveSync-Adresse: $adresse"
+  fi
+}
+
+einschalten() {
+  local adresse seite
+  ziel
   grep -q '^import /etc/caddy/studium-server.d/' /etc/caddy/Caddyfile 2>/dev/null \
     || fehler "das Server-Paket ist zu alt; erst aktualisieren (Cloud Shell: bash ~/studium-autopilot/server/fern.sh aktualisieren)"
 
@@ -57,8 +88,6 @@ einschalten() {
   fi
   chown root:root "$LS_KONFIG"
   chmod 0600 "$LS_KONFIG"
-  # Adresse nachziehen, falls sich die IP geändert hat
-  jq --arg a "$adresse" '.adresse = $a' "$LS_KONFIG" >"$LS_KONFIG.neu" && mv "$LS_KONFIG.neu" "$LS_KONFIG" && chmod 0600 "$LS_KONFIG"
 
   schritt "CouchDB (Paketarchiv von Apache)"
   if dpkg -s couchdb >/dev/null 2>&1; then
@@ -144,15 +173,7 @@ INI
   esac
 
   schritt "Caddy ($adresse)"
-  install -d -m 0755 /etc/caddy/studium-server.d
-  cat >"$CADDY_TEIL" <<CADDY
-# studium-server (livesync.sh): CouchDB für LiveSync, wird bei jedem Lauf neu geschrieben
-$seite {
-	reverse_proxy 127.0.0.1:5984
-}
-CADDY
-  caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
-  systemctl reload caddy
+  adresse_nachziehen
   # Das Zertifikat holt Caddy beim ersten Aufruf; bis zu 2 Minuten
   for i in $(seq 1 24); do
     [ "$(couch -o /dev/null -w '%{http_code}' --max-time 10 "$adresse/_up" 2>/dev/null || true)" = 200 ] && break
@@ -167,6 +188,7 @@ CADDY
 
 verbinden() {
   [ -f "$LS_KONFIG" ] && [ -f "$DATEN/livesync-an" ] || fehler "LiveSync ist noch nicht eingeschaltet; erst einschalten (Cloud Shell: bash ~/studium-autopilot/server/fern.sh livesync)"
+  adresse_nachziehen
   local paket code kennung link
   paket=$(node "$PAKET/livesync.mjs" link "$LS_KONFIG")
   code=$(jq -r '.code' <<<"$paket")
@@ -189,5 +211,6 @@ case "${1:-}" in
   "") [ -f "$DATEN/livesync-an" ] || einschalten; verbinden ;;
   einschalten) einschalten ;;
   verbinden) verbinden ;;
-  *) echo "Aufruf: sudo studium-server livesync [einschalten|verbinden]" >&2; exit 2 ;;
+  adresse) adresse_nachziehen ;;
+  *) echo "Aufruf: sudo studium-server livesync [einschalten|verbinden|adresse]" >&2; exit 2 ;;
 esac

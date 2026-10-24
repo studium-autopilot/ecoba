@@ -137,7 +137,7 @@ HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 # Persönliche Ordner der Vorlage (müssen leer sein, höchstens .gitkeep)
 LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Übungsblätter", "Unterlagen", "Eingang", "Anhänge", "Schlüsselqualifikationen",
                 "Karteikarten", "Lernplan"]
-MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht"]
+MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"]
 EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn"]
 
 NODE_MODULE = r"(?:node:)?(?:fs|path|child_process|os|crypto|http|https|net|zlib|electron)(?:/[\w/]+)?"

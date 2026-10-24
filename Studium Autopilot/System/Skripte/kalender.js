@@ -11,7 +11,8 @@
 // auch eintägige als getönte Blöcke ohne Uhrzeit.
 // Daten live aus dem Fachmodell (ctx.modell.termine(): Termin-Notizen ohne Entfallenes, Uhrzeit als Zahl sortiert, Art wie in
 // Agenda und Dashboard), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
-// Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft).
+// Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft). Gewählter
+// Monat und Tag gelten nur auf diesem Gerät und bis zum Tageswechsel oder 30 Minuten ohne Tipp, dann wieder heute.
 // Erweiterung: Das Plugin ruft registrieren() beim Start und nach jeder Änderung dieser Datei auf (Hot-Reload); Codeblock und
 // Ereignisse laufen über ctx.codeblock/ctx.an, das Plugin meldet die alte Fassung vorher ab. Stil: eba-core.css Abschnitt 37, Klassen eba-kal-*.
 module.exports = function (ctx) {
@@ -77,14 +78,19 @@ module.exports = function (ctx) {
     return { segs: segs.filter((g) => g.zeigen), mehr };
   };
 
-  // Gewählter Monat/Tag je Gerät und Sitzung (nicht im Vault)
-  const zustand = ctx.bleibend("zustand", () => ({ monat: null, tag: null }));
+  // Gewählter Monat/Tag je Gerät und Sitzung (nicht im Vault). am = Tag, an dem du gewählt hast, zeit = wann (ms): An einem neuen
+  // Tag oder nach 30 Minuten ohne Tipp zeigt der Kalender wieder heute (wie die Woche, woche.js; seit 24.10.2026). Vorher blieb
+  // die Auswahl von gestern stehen, und am Monatsersten zeigte er noch den alten Monat.
+  const FRISCH_MS = 30 * 60 * 1000;
+  const zustand = ctx.bleibend("zustand", () => ({ monat: null, tag: null, am: null, zeit: 0 }));
+  // Gilt die Auswahl noch? (rein, Test) z = zustand, jetzt = Date
+  const frisch = (z, jetzt) => !!z.monat && !!z.tag && !!gleich(z.am, jetzt) && jetzt.getTime() - z.zeit < FRISCH_MS;
   const basis = ctx;
 
   const zeichnen = (el, ctx) => {
-    const heute = tag0(basis.date.jetzt());
-    if (!zustand.monat) zustand.monat = new Date(heute.getFullYear(), heute.getMonth(), 1);
-    if (!zustand.tag) zustand.tag = heute;
+    const jetzt = basis.date.jetzt(), heute = tag0(jetzt);
+    if (!frisch(zustand, jetzt)) Object.assign(zustand, { monat: new Date(heute.getFullYear(), heute.getMonth(), 1), tag: heute, am: null, zeit: 0 });
+    const waehlen = (monat, tag) => Object.assign(zustand, { monat, tag, am: heute, zeit: basis.date.jetzt().getTime() });
     const neu = () => zeichnen(el, ctx);
     const y = zustand.monat.getFullYear(), m = zustand.monat.getMonth();
     const alle = lesen().filter((t) => t.art !== "frist"); // Fristen nur in der Liste darunter
@@ -113,10 +119,10 @@ module.exports = function (ctx) {
     neuKnopf.createSpan({ cls: "eba-kal-neu-zeichen", text: "+" });
     neuKnopf.createSpan({ cls: "eba-kal-neu-wort", text: "Termin" });
     klick(neuKnopf, () => basis.aktion("termin", {}, { quelle: app.workspace.getActiveFile() }));
-    knopf(nav, "Heute", "Heute", () => { zustand.monat = new Date(heute.getFullYear(), heute.getMonth(), 1); zustand.tag = heute; });
+    knopf(nav, "Heute", "Heute", () => waehlen(new Date(heute.getFullYear(), heute.getMonth(), 1), heute));
     const pfeile = nav.createDiv({ cls: "eba-kal-pfeile" });
-    knopf(pfeile, "‹", "Voriger Monat", () => { zustand.monat = new Date(y, m - 1, 1); zustand.tag = ersterTag(zustand.monat); });
-    knopf(pfeile, "›", "Nächster Monat", () => { zustand.monat = new Date(y, m + 1, 1); zustand.tag = ersterTag(zustand.monat); });
+    knopf(pfeile, "‹", "Voriger Monat", () => { const mo = new Date(y, m - 1, 1); waehlen(mo, ersterTag(mo)); });
+    knopf(pfeile, "›", "Nächster Monat", () => { const mo = new Date(y, m + 1, 1); waehlen(mo, ersterTag(mo)); });
 
     const raster = el.createDiv({ cls: "eba-kal-raster" });
     const wtage = raster.createDiv({ cls: "eba-kal-wtage" });
@@ -138,8 +144,7 @@ module.exports = function (ctx) {
         if (gleich(d, zustand.tag)) zelle.addClass("is-gewaehlt");
         zelle.createSpan({ cls: "eba-kal-zahl", text: String(d.getDate()) });
         klick(zelle, () => {
-          zustand.tag = d;
-          if (d.getMonth() !== m) zustand.monat = new Date(d.getFullYear(), d.getMonth(), 1);
+          waehlen(d.getMonth() !== m ? new Date(d.getFullYear(), d.getMonth(), 1) : zustand.monat, d);
           neu();
         });
       }
@@ -243,5 +248,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
-  return { registrieren, zeichnen, art }; // art für tests/kalender.test.js
+  return { registrieren, zeichnen, art, frisch }; // art und frisch für tests/kalender.test.js
 };

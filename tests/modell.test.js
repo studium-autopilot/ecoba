@@ -183,3 +183,30 @@ test("Ein Schreiber: von selbst (Start, Änderung) schreibt nur der Abrufer, ein
   const ohneZentral = mitSchreiber(null);
   assert.equal(await ohneZentral.M.abgleichen("start"), true, "ohne zentral.js wie bisher");
 });
+
+test("Neuer Tag: einmal melden und die Kopien in den Einstellungen nachziehen, von selbst nur der Abrufer", async () => {
+  const warten = () => new Promise((r) => setImmediate(r));
+  for (const hier of [true, false]) {
+    let heute = "2027-03-31";
+    const { ctx } = laden("modell", {
+      frontmatter: { "System/Daten/Semester.md": SEMESTER, "System/Einstellungen.md": {} },
+      kontext: { zentral: { abruferHier: async () => hier } },
+    });
+    ctx.date = Object.assign({}, ctx.date, { now: () => heute });
+    const geschrieben = [];
+    ctx.app.fileManager = { processFrontMatter: async (f, fn) => { const x = {}; fn(x); geschrieben.push(x.semesterliste[0]); } };
+    const M = ctx.modell;
+    let gemeldet = 0;
+    M.beiAenderung(() => { gemeldet++; });
+    assert.equal(M.daten().semesterliste[0].name, "WS 2026/27", "ohne Studienbeginn: das laufende Semester ist das erste");
+    M.ungueltig(); M.daten();
+    await warten();
+    assert.deepEqual([gemeldet, geschrieben], [0, []], "derselbe Tag: nichts");
+    heute = "2027-04-01";
+    assert.equal(M.daten().semesterliste[0].name, "SS 2027");
+    M.daten();
+    await warten();
+    assert.equal(gemeldet, 1, "einmal je Tag");
+    assert.deepEqual(geschrieben, hier ? ["1|SS 2027|2027-04-01|2027-09-30|2027-04-12|2027-07-24"] : [], hier ? "Abrufer schreibt" : "anderes Gerät nicht");
+  }
+});

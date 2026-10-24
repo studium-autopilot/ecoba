@@ -39,11 +39,15 @@
 // Unterbrochen (seit 0.4.8): Als erste Datei schreibt das Update System/Daten/update.json (synchronisiert, { version, von,
 //   geraet, seit }) und lässt sie danach liegen; fertig ist es erst mit installiert.json (zuletzt). Neuer als installiert.json
 //   und von diesem Gerät → „Update fertigstellen“ (App beendet, bevor alles geschrieben war; ein zweiter Lauf schreibt nur, was
-//   fehlt). Von einem anderen Gerät, vor weniger als 1 Std. → „Ein Update wird gerade auf einem anderen Gerät installiert“
+//   fehlt; bietet das Manifest inzwischen eine andere Version an, nicht mehr). Von einem anderen Gerät, vor weniger als 1 Std. → „Ein Update wird gerade auf einem anderen Gerät installiert“
 //   statt eines zweiten Updates (seine Dateien kommen noch über den Sync). Gilt ab dem Update, das 0.4.8 plant.
 // Nach Updates suchen (seit 0.4.8): Knopf in der Zeile und Befehl; holt das Manifest sofort, Ergebnis als ein Hinweis. Das
 //   Manifest und die Liste kommen mit Minuten-Zeitstempel und „no-cache“ (zentral.js frischUrl), nie aus dem Zwischenspeicher.
 // Erstinstallation: Fehlt installiert.json, legt das Plugin sie einmal aus system-dateien.json an (sonst keine Datei).
+// Von Hand aktualisiert (neuere ZIP entpackt): Laufen Kern und system-dateien.json auf einer neueren Version als installiert.json
+//   und gleichen alle Systemdateien der Liste, gilt sie; das Gerät, das für alle schreibt, kopiert die Liste nach installiert.json.
+//   Nicht, solange noch etwas der alten Version da ist, das ein Update entfernen würde: Dann bleibt das Angebot, installieren räumt auf.
+// Zentrale Daten aus: keine Angaben zum Release (kein Angebot, kein „neueste Version“); Nach Updates suchen holt trotzdem.
 // Andere Geräte: Das Update kommt über den Sync. installiert.json zeigt dort die neue Version → kein zweites Update; läuft
 //   noch der alte Kern im Speicher, zeigt die Zeile „Neu laden“. Die Skripte, die dabei ankommen, lädt der Kern ohne
 //   „Aktualisiert: …“-Hinweise neu (mehrere auf einmal oder nach einer neuen installiert.json: stillBis).
@@ -74,7 +78,7 @@ module.exports = function (ctx) {
     ".obsidian/core-plugins.json", ".obsidian/hotkeys.json", ".obsidian/types.json"];
   // Persönliche Felder der Modulnotizen (bleiben beim Update immer): wie pruefen.py (Vorlage leer) und docs/architektur.md
   const PERSOENLICH = ["status", "ergebnis", "versuch", "klausur", "semester_geplant", "gewaehlt", "anrechnung", "zusatz",
-    "alma_ausgeblendet", "anmeldung_verzicht"];
+    "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"];
   const VEREINIGEN = ["tags", "aliases", "cssclasses"]; // Listen: neue Einträge + deine zusätzlichen
   const G = { dateien: 3000, datei: 4194304, gesamt: 41943040, liste: 2097152, pfad: 300, parallel: 4 };
   const HEX = /^[0-9a-f]{64}$/;
@@ -98,11 +102,13 @@ module.exports = function (ctx) {
   // Unterbrochenes Update? m = Inhalt von update.json (MARKE), o = { installiert, ich (Geräte-ID), jetzt (ms), laeuft }.
   // Fertig ist ein Update, sobald installiert.json seine Version zeigt; bis dahin: begonnen auf diesem Gerät → "fertigstellen"
   // (nicht, solange es hier läuft), auf einem anderen vor weniger als MARKE_STILL → "anderes" (Dateien kommen noch über den
-  // Sync; danach gilt das Gerät als weg, und hier darf wieder installiert werden). Sonst null.
+  // Sync; danach gilt das Gerät als weg, und hier darf wieder installiert werden). Sonst null. o.angeboten = Version, die das
+  // Manifest gerade anbietet ("" = unbekannt, z. B. zentrale Daten aus): Ist es eine andere (zurückgezogen oder schon eine
+  // neuere), gibt es nichts mehr fertigzustellen; sonst stünde „nicht fertig geworden“ für immer da.
   const markeLage = (m, o) => {
     if (!m || typeof m !== "object" || !semver(m.version) || typeof m.geraet !== "string" || !m.geraet) return null;
     if (o.laeuft || !neuer(m.version, o.installiert)) return null;
-    if (o.ich && m.geraet === o.ich) return "fertigstellen";
+    if (o.ich && m.geraet === o.ich) return o.angeboten && o.angeboten !== m.version ? null : "fertigstellen";
     const seit = Date.parse(m.seit || "");
     return seit && Math.abs(o.jetzt - seit) < MARKE_STILL ? "anderes" : null;
   };
@@ -726,21 +732,70 @@ module.exports = function (ctx) {
     if (anders) neuZeichnen();
     return m;
   };
-  // → "fertigstellen" | "anderes" | null (markeLage mit dem Stand dieses Geräts)
-  const lage = () => markeLage(zustand.marke, { installiert: installiertVersion(), ich: geraetId(), jetzt: Date.now(), laeuft: !!zustand.laeuft });
+  // → "fertigstellen" | "anderes" | null (markeLage mit dem Stand dieses Geräts; s = Angaben aus dem Manifest, Standard stand())
+  const lage = (s) => {
+    const x = s || stand(), a = angebot(x.release, x.beta, kanal(), "0.0.0");
+    return markeLage(zustand.marke, { installiert: installiertVersion(), ich: geraetId(), jetzt: Date.now(), laeuft: !!zustand.laeuft, angeboten: a ? a.version : "" });
+  };
   const ANDERES = "Ein Update wird gerade auf einem anderen Gerät installiert.";
   const fertigText = () => `Das Update auf Version ${zustand.marke && zustand.marke.version} ist nicht fertig geworden.`;
-  const listeLesen = async (pfad) => {
+  const listeAus = async (quelle, pfad) => {
     try {
-      const by = await io.lesen(pfad);
+      const by = await quelle.lesen(pfad);
       if (!by) return null;
       const lp = listePruefen(JSON.parse(dec(by)));
       return lp.wert ? { liste: lp.wert, bytes: by } : null;
     } catch (e) { return null; }
   };
+  const listeLesen = (pfad) => listeAus(io, pfad);
+  // Von Hand aktualisiert (neuere ZIP über den Tresor entpackt, docs/installation.md): installiert.json liegt nicht in der ZIP und
+  // nennt weiter die alte Version; die Zeile zeigte sie und böte die schon laufende Version noch einmal an. Nennen der laufende
+  // Kern (o.lauf) und system-dateien.json dieselbe neuere Version und gleicht jede Systemdatei der Liste (Größe und SHA-256),
+  // gilt sie als installiert. Nicht, solange update.json ein Update genau dieser Version nennt: Das stellt „Update
+  // fertigstellen“ fertig (entfernt auch, was die Version nicht mehr hat). Auch nicht, solange noch etwas da ist, das ein Update
+  // entfernen würde (planen: entfernen, entfernen-sichern), etwa ein Skript, das die neue Version nicht mehr hat: Das Entpacken
+  // löscht nichts, und mit der neuen Liste stünde es in keiner Liste mehr, kein Update räumte es je weg. Die Zeile bietet die
+  // Version dann weiter an; installieren räumt auf. io wie aktualisierenMit, nur lesen.
+  // → { version, bytes (system-dateien.json) } | null
+  const handInstalliertMit = async (quelle, o) => {
+    const inst = await listeAus(quelle, INSTALLIERT), neu = await listeAus(quelle, LISTE);
+    if (!inst || !neu || neu.liste.version !== o.lauf || !neuer(neu.liste.version, inst.liste.version)) return null;
+    let m = null;
+    try { const by = await quelle.lesen(MARKE); m = by ? JSON.parse(dec(by)) : null; } catch (e) { m = null; }
+    if (m && m.version === neu.liste.version) return null;
+    const N = {};
+    for (const e of neu.liste.dateien) {
+      N[e.pfad] = true;
+      if (e.klasse !== "system") continue;
+      const by = await quelle.lesen(e.pfad);
+      if (!by || by.length !== e.groesse || (await sha256(by)) !== e.sha256) return null;
+    }
+    for (const a of inst.liste.dateien) {
+      if (hat(N, a.pfad)) continue;
+      const by = await quelle.lesen(a.pfad);
+      if (by && (a.klasse === "system" || (await sha256(by)) === a.sha256)) return null;
+    }
+    return { version: neu.liste.version, bytes: neu.bytes };
+  };
+  // Die Liste schreibt danach nur das Gerät, das für alle schreibt (ctx.zentral.abruferHier, wie heilen); sie ist dieselbe Kopie
+  // von system-dateien.json wie bei der Erstinstallation. So gilt für das nächste Update der Stand, der wirklich da ist: Eine
+  // Seite, die von der neuen Vorlage abweicht, gilt als deine und bleibt; ohne neue Liste sähe jede Systemdatei geändert aus und
+  // bekäme eine Sicherung daneben. Andere Geräte zeigen die Version gleich, ohne zu schreiben.
   const installiertNeu = async () => {
     const x = await listeLesen(INSTALLIERT);
-    const v = x ? x.liste.version : "";
+    let v = x ? x.liste.version : "";
+    if (x && !zustand.laeuft && neuer(laufendeVersion(), v)) {
+      const h = await handInstalliertMit(io, { lauf: laufendeVersion() });
+      if (h) {
+        v = h.version;
+        let hier = true;
+        try { if (ctx.zentral && typeof ctx.zentral.abruferHier === "function") hier = !!(await ctx.zentral.abruferHier()); } catch (e) { hier = false; }
+        if (hier && !zustand.laeuft) { try { await io.schreiben(INSTALLIERT, h.bytes); } catch (e) { console.error("update: installiert.json", e); } }
+      }
+    }
+    // Läuft ein neuerer Kern als eingetragen, kommen die übrigen Dateien vielleicht noch per Sync: registrieren prüft dann bei
+    // jeder Änderung unter System/ noch einmal
+    zustand.handWartet = !!x && neuer(laufendeVersion(), v);
     if (v !== zustand.installiert) { zustand.installiert = v; neuZeichnen(); }
     return x;
   };
@@ -797,7 +852,10 @@ module.exports = function (ctx) {
     }
     return b;
   };
+  // Angaben zum Release aus dem letzten Manifest (gerätelokal in zentral.js). Zentrale Daten aus → keine: Der Stand bliebe sonst
+  // beim Ausschalten stehen, die Zeile sagte weiter „Du hast die neueste Version.“ oder böte ein altes Angebot an.
   const stand = () => {
+    if (!zentralAn()) return { release: null, beta: null, aktuell: "" };
     try { const s = ctx.zentral && ctx.zentral.stand ? ctx.zentral.stand() : null; return { release: (s && s.release) || null, beta: (s && s.beta) || null, aktuell: (s && s.plugin_aktuell) || "" }; } catch (e) { return { release: null, beta: null, aktuell: "" }; }
   };
   const release = () => stand().release;
@@ -1194,14 +1252,17 @@ module.exports = function (ctx) {
     if (zustand.laeuft) return null;
     if (!ctx.zentral || !ctx.zentral.manifestHolen) { ctx.hinweis("Das geht gerade nicht. Bitte später noch einmal versuchen."); return "fehler"; }
     lokal(L_GEPRUEFT, Date.now());
-    try { await ctx.zentral.manifestHolen(); } catch (e) {
+    let m;
+    try { m = (await ctx.zentral.manifestHolen()) || {}; } catch (e) {
       console.error("update: Nach Updates suchen", e);
       ctx.hinweis("Keine Verbindung. Versuch es später noch einmal.");
       return "fehler";
     }
     await markeNeu();
     neuZeichnen();
-    const inst = installiertVersion(), lauf = laufendeVersion(), s = stand(), l = lage();
+    // Das eben geholte Manifest zählt, auch bei ausgeschalteten zentralen Daten (dann zeigt die Zeile danach keine Angaben)
+    const s = { release: m.release || null, beta: m.beta || null, aktuell: m.plugin_aktuell || "" };
+    const inst = installiertVersion(), lauf = laufendeVersion(), l = lage(s);
     if (l === "anderes") { ctx.hinweis(ANDERES + " Öffne Obsidian dort, dann kommt es hierher."); return l; }
     if (l === "fertigstellen") { ctx.hinweis(fertigText(), { aktion: { text: "Update fertigstellen", ausfuehren: () => aktualisieren() } }); return l; }
     if (neuer(inst, lauf)) { ctx.hinweis(`Version ${inst} ist da. Einmal neu laden.`, { aktion: { text: "Neu laden", aktion: "vorlage-neu-laden" } }); return "laden"; }
@@ -1433,9 +1494,9 @@ module.exports = function (ctx) {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
     jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, planen, aktualisierenMit, heilenMit, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
-    markeLage, MARKE, MARKE_STILL,
+    markeLage, MARKE, MARKE_STILL, handInstalliertMit,
     // Obsidian
-    kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertAnlegen, heilen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
+    kernNachholen, io, anzeige, status, aktualisieren, suchen, markeNeu, installiertNeu, installiertAnlegen, heilen, pluginNeuLaden, neuLaden, ergebnisZeigen, hinweis, hinweisNeu, SPAETER, L_REPARATUR,
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
@@ -1467,6 +1528,8 @@ module.exports = function (ctx) {
     const baldMarke = ctx.entprellen(() => { markeNeu().catch(() => {}); }, 1500);
     for (const ev of ["create", "modify", "delete"]) ctx.an(app.vault, ev, (f) => {
       if (f && f.path === INSTALLIERT) { syncStill(); bald(); reparatur(); } else if (f && f.path === MARKE) baldMarke();
+      // Von Hand aktualisiert: Liste und Systemdateien können nach dem Start per Sync kommen (handInstalliertMit)
+      else if (f && (f.path === LISTE || (zustand.handWartet && f.path.indexOf("System/") === 0))) bald();
     });
     // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
     // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund

@@ -475,6 +475,26 @@ test("Ein Schreiber: dieses Gerät schreibt für alle, wenn es Abrufer ist, es n
   assert.equal(Z.abruferHierAus({ geraet: "g-b", zuletzt: "" }, "g-a", jetzt), true, "ohne Zeit gilt der Abrufer als still");
 });
 
+test("Zentrale Daten aus: Angebote, Kapitel und ein Update-Angebot aus dem letzten Stand werden nicht mehr gezeigt", () => {
+  const einst = {};
+  const speicher = {
+    "eba-zentral-angebote": { stand: "2026-10-17", angebote: [angebot()] },
+    "eba-zentral-kapitel": { stand: "2026-10-17", sha256: "a".repeat(64), module: [] },
+    "eba-zentral-stand": { plugin_aktuell: "99.0.0" },
+  };
+  const L = laden("zentral", { frontmatter: { "System/Einstellungen.md": einst }, kontext: { plugin: { testZentralAus: true } } });
+  L.ctx.app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
+  const ZZ = L.ctx.zentral;
+  assert.equal(ZZ.angebote().angebote.length, 1);
+  assert.equal(ZZ.kapitel().stand, "2026-10-17");
+  assert.equal(ZZ.status().neueVersion, "99.0.0");
+  einst.zentrale_daten = false;
+  assert.equal(ZZ.angebote(), null);
+  assert.equal(ZZ.kapitel(), null);
+  assert.equal(ZZ.status().neueVersion, "");
+  assert.ok(speicher["eba-zentral-angebote"], "der Stand bleibt für das Wiedereinschalten");
+});
+
 // ---------- Übergabe nach id: Notizen eines eigenen Uni-Abgleichs (abgleich_id, docs/daten-v1.md) – nur ausgedachte Daten ----------
 
 // Tresor im Speicher für einen ganzen Abruf: Pfad → Datei, Frontmatter wie der metadataCache (stundenplan-attrappe.js)
@@ -502,6 +522,7 @@ function tresorAbruf(start, mehr) {
   app.vault.getMarkdownFiles = () => Array.from(dateien.values()).filter((f) => f.path.endsWith(".md"));
   app.vault.read = async (f) => f.text;
   app.vault.modify = async (f, t) => { geschrieben.push(f.path); f.text = t; };
+  app.vault.process = async (f, fn) => { const t = fn(f.text); if (t !== f.text) await app.vault.modify(f, t); return t; };
   app.vault.create = async (p, t) => { if (dateien.has(p)) throw new Error("gibt es schon: " + p); geschrieben.push(p); return neueDatei(p, t); };
   app.vault.createFolder = async (p) => { ordner.add(p); };
   app.vault.trash = async (f) => { dateien.delete(f.path); papierkorb.push(f.path); };
@@ -522,8 +543,10 @@ function tresorAbruf(start, mehr) {
     quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-18T09:00:00Z",
       dateien: { "termine.json": { sha256: crypto.createHash("sha256").update(b).digest("hex"), groesse: b.length } } });
   };
+  // Manifest ohne termine.json (Datei zurückgezogen oder Export unvollständig)
+  const ohneTermine = () => { quelle["manifest.json"] = JSON.stringify({ schema: 1, erstellt: "2026-10-18T10:00:00Z", dateien: {} }); };
   return {
-    Z: L.ctx.zentral, daten, papierkorb, haken, hinweise, geschrieben,
+    Z: L.ctx.zentral, app, daten, ohneTermine, papierkorb, haken, hinweise, geschrieben, speicher,
     text: (p) => (dateien.get(p) ? dateien.get(p).text : null),
     fm: (p) => frontmatter(dateien.get(p).text),
     pfade: () => Array.from(dateien.keys()).filter((p) => p.startsWith("Termine/")).sort(),
@@ -807,4 +830,75 @@ test("Seit deinem letzten Besuch: eine Übergabe aus dem eigenen Abgleich ist ke
   const b = await T.Z.abrufen({ manuell: true });
   assert.deepEqual(b.uebernommen, ["Termine/2026-11-02 Tutorien starten.md"]);
   assert.deepEqual(meldungen.flat().filter((x) => x.id === "2026-11-02-tutorien-starten"), []);
+});
+
+test("termine.json fehlt im Manifest: Notizen bleiben beim letzten Stand, nichts aus dem Gerätespeicher neu angewendet", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA]);
+  await T.Z.abrufen({});
+  const p = "Termine/2026-11-02 Frist A.md";
+  const vorher = T.text(p).replace(/^ort: .*$/m, "ort: \"Hörsaal 1\"");
+  assert.notEqual(vorher, T.text(p));
+  T.schreiben(p, vorher);
+  T.ohneTermine();
+  T.geschrieben.length = 0;
+  const b = await T.Z.abrufen({ manuell: true });
+  assert.equal(b.fehler, "");
+  assert.equal(T.text(p), vorher);
+  assert.deepEqual(T.geschrieben.filter((x) => x.startsWith("Termine/")), []);
+  assert.equal(T.Z.stand().hashes["termine.json"], undefined, "auch ohne Netz gilt das letzte Manifest");
+});
+
+test("abruf.json fehlt beim nächsten Lauf: die zuletzt gesehenen Grabsteine gelten, gelöschte Notizen kommen nicht zurück", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA, fristB, fristC]);
+  await T.Z.abrufen({});
+  T.loeschen("Termine/2026-11-03 Frist B.md");
+  T.loeschen(ABRUF);
+  const b = await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(b.ausgeblendet, [fristB.id]);
+  assert.deepEqual(T.pfade(), ["Termine/2026-11-02 Frist A.md", "Termine/2026-11-04 Frist C.md"]);
+  assert.deepEqual(Object.keys(sperreVon(T).angewendet).sort(), [fristA.id, fristB.id, fristC.id]);
+  // fehlen auch die meisten Notizen (Tresor neu aufgebaut), gelten die gemerkten Grabsteine nicht: alles kommt neu
+  T.loeschen("Termine/2026-11-02 Frist A.md");
+  T.loeschen(ABRUF);
+  await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(T.pfade(), ["Termine/2026-11-02 Frist A.md", "Termine/2026-11-03 Frist B.md", "Termine/2026-11-04 Frist C.md"]);
+});
+
+test("Übernahme: die Sperre schreibt nur ihre Felder, ein gleichzeitig von lernplan.js geschriebenes Feld bleibt", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA]);
+  fremdeSperre(T, 81);
+  // lernplan.js schreibt genau zwischen dem Lesen der Sperre und ihrem Schreiben
+  const v = T.app.vault, modify = v.modify, process = v.process;
+  let dazwischen = true;
+  const lernplan = (f) => {
+    if (f.path !== ABRUF || !dazwischen) return;
+    dazwischen = false;
+    f.text = JSON.stringify(Object.assign(JSON.parse(f.text), { lernplan: { stand: "2026-10-18" } }));
+  };
+  v.modify = async (f, t) => { lernplan(f); return modify(f, t); };
+  v.process = async (f, fn) => { lernplan(f); return process(f, fn); };
+  assert.equal((await T.Z.abrufen({ manuell: true })).art, "ok");
+  assert.equal(dazwischen, false);
+  const s = sperreVon(T);
+  assert.equal(s.geraet, T.Z.geraetId());
+  assert.deepEqual(s.lernplan, { stand: "2026-10-18" });
+  assert.deepEqual(Object.keys(s.angewendet), [fristA.id]);
+});
+
+test("Nicht mehr in deiner Auswahl: unberührt in den Papierkorb, erledigt oder mit deinem Text weiter aktualisiert", async () => {
+  const T = tresorAbruf();
+  T.daten([fristA, fristB]);
+  await T.Z.abrufen({});
+  const pA = "Termine/2026-11-02 Frist A.md";
+  T.schreiben(pA, T.text(pA).replace(/^erledigt: false$/m, "erledigt: true"));
+  // beide jetzt mit einem Modul, das nicht in deinem Plan ist; Frist A zudem verschoben
+  T.daten([Object.assign({}, fristA, { datum: "2026-11-05", code: "Z999" }), Object.assign({}, fristB, { code: "Z999" })]);
+  await T.Z.abrufen({ manuell: true });
+  assert.deepEqual(T.papierkorb, ["Termine/2026-11-03 Frist B.md"]);
+  assert.deepEqual(T.pfade(), ["Termine/2026-11-05 Frist A.md"]);
+  const fm = T.fm("Termine/2026-11-05 Frist A.md");
+  assert.deepEqual([String(fm.datum), fm.erledigt], ["2026-11-05", true]);
 });

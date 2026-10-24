@@ -10,11 +10,12 @@
 //       postfach.js erst beim Absenden ein). null, wenn das Formular nicht genau zum Webmail passt.
 //   fehler(html) → "zugang-falsch" | "unerwartet"
 //   abmeldeAdresse(html) → "/login.php?horde_logout_token=…" | ""
-//   liste(html) → { art: "ok" | "leer" | "unsicher", mails: [{ buid, von, betreff, datum, ungelesen, markiert, groesse }],
-//       seiten, gesamt }   (gesamt: Zahl aus der Zeile über der Liste, sonst null)
+//   liste(html, heute?) → { art: "ok" | "leer" | "unsicher", mails: [{ buid, von, betreff, datum, ungelesen, markiert, groesse }],
+//       seiten, gesamt }   (gesamt: Zahl aus der Zeile über der Liste, sonst null; mit heute „YYYY-MM-DD“ wird die reine Uhrzeit
+//       von heute zu „22.10.2026 08:40:00“)
 //   zahlen(html) → { ungelesen, gesamt } | null   (Titel der Liste in der Ansicht minimal; nur dort steht die Zahl ungelesener)
 //   nachricht(html) → { betreff, datum, von, an, kopie, text } | null
-//   datumKurz(datum, heute) → „08:40“ (heute), „21.10.“ (dieses Jahr), sonst wie geliefert
+//   datumKurz(datum, heute) → „08:40“ (heute), „21.10.“ (dieses Jahr), „30.12.2025“ (früher), sonst wie geliefert
 //   listeAdresse(seite), zahlenAdresse(), nachrichtAdresse(buid): die einzigen Adressen, die postfach.js holt. Sie entstehen hier aus Zahlen,
 //       nie aus Links der Seite: Die Seiten tragen auch Links wie „Löschen“, „Ordner leeren“ und „Endgültig löschen“.
 //
@@ -51,13 +52,23 @@ const KOPF = { "betreff": "betreff", "subject": "betreff", "datum": "datum", "da
   "an": "an", "to": "an", "kopie": "kopie", "cc": "kopie" };
 const BLOCK = { div: 1, p: 1, br: 1, li: 1, tr: 1, blockquote: 1, pre: 1, h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, table: 1, hr: 1 };
 
+const UHRZEIT = /^(\d{1,2}):(\d{2})(?::\d{2})?$/;
+// Datum einer Mail für die Liste: heute die Uhrzeit, dieses Jahr Tag und Monat, sonst das Datum. liste(html, heute) ergänzt die
+// reine Uhrzeit von heute um das Datum („22.10.2026 08:40:00“), damit sie nach Mitternacht nicht mehr als heute gilt.
 const datumKurz = (datum, heute) => {
-  const d = String(datum || "").trim();
-  let m = d.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  const d = String(datum || "").trim(), h = String(heute || "");
+  let m = d.match(UHRZEIT);
   if (m) return m[1].padStart(2, "0") + ":" + m[2];
-  m = d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
-  if (m && String(heute || "").slice(0, 4) === m[3]) return m[1].padStart(2, "0") + "." + m[2].padStart(2, "0") + ".";
-  return d;
+  m = d.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::\d{2})?)?$/);
+  if (!m) return d;
+  const tag = m[1].padStart(2, "0"), monat = m[2].padStart(2, "0");
+  if (m[4] && h === m[3] + "-" + monat + "-" + tag) return m[4].padStart(2, "0") + ":" + m[5];
+  return tag + "." + monat + "." + (h.slice(0, 4) === m[3] ? "" : m[3]);
+};
+// „08:40:00“ (Horde: heute) → „22.10.2026 08:40:00“; alles andere bleibt
+const datumVoll = (datum, heute) => {
+  const h = String(heute || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return h && UHRZEIT.test(datum) ? h[3] + "." + h[2] + "." + h[1] + " " + datum : datum;
 };
 
 const erzeugen = (H) => {
@@ -97,7 +108,7 @@ const erzeugen = (H) => {
   };
 
   // ---------- Posteingang ----------
-  const liste = (html) => {
+  const liste = (html, heute) => {
     const b = baumVon(html);
     const tabelle = erstes(b, (e) => e.name === "table" && hatKlasse(e, "messageList"));
     const zeilen = tabelle ? alle(tabelle, (e) => e.name === "tr" && /^row\d+$/.test(attr(e, "id"))) : [];
@@ -110,7 +121,7 @@ const erzeugen = (H) => {
         buid: +attr(z, "id").slice(3),
         von: norm(text(zellen[1])),
         betreff: norm(attr(a, "title")) || norm(text(zellen[2])),
-        datum: norm(text(zellen[3])),
+        datum: datumVoll(norm(text(zellen[3])), heute),
         groesse: zellen[4] ? norm(text(zellen[4])) : "",
         ungelesen: hatKlasse(z, "flagUnseen"),
         markiert: hatKlasse(z, "flagFlagged"),

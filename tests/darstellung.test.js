@@ -11,7 +11,7 @@ const { laden } = require("./laden.js");
 // body mit classList (contains, toggle) wie im Browser
 const body = (dunkel) => {
   const k = new Set([dunkel ? "theme-dark" : "theme-light"]);
-  return { k, classList: { contains: (n) => k.has(n), toggle: (n, an) => { if (an) k.add(n); else k.delete(n); } } };
+  return { k, classList: { contains: (n) => k.has(n), toggle: (n, an) => { if (an) k.add(n); else k.delete(n); }, add: (n) => k.add(n), remove: (n) => k.delete(n) } };
 };
 // Ersatz für app.vault.getConfig("theme"), app.changeTheme, Gerätespeicher und app.customCss; protokolliert, was geschah
 const mitObsidian = (theme, an, { gespeichert = null, design = null, dunkel = false } = {}) => {
@@ -200,6 +200,25 @@ test("Design: Unbekanntes ändert nichts; beim Durchsetzen gilt das gespeicherte
   assert.equal(g.D.anwenden(), true);
   assert.deepEqual(g.klassen(), ["theme-dark", "eba-design-klar"], "dunkel entscheidet weiter Obsidian");
   assert.equal(g.D.anwenden(), false, "schon richtig: kein zweites css-change");
+});
+
+test("Start-Klassen: die Klasse eines entfernten oder umbenannten Designs fällt heraus und geht vom body ab, andere bleiben", () => {
+  const { D } = mitObsidian("system", ALLE);
+  assert.deepEqual(D.startKlassenFuer(["eba-design-graphite"], "elfenbein"), []);
+  assert.deepEqual(D.startKlassenFuer(["eba-design-graphite", "eba-x"], "klar"), ["eba-x", "eba-design-klar"]);
+  assert.deepEqual(D.startKlassenFuer(null, "flieder"), ["eba-design-flieder"]);
+  // Gespeichert war ein Design, das es nicht mehr gibt: main.js hat seine Klasse schon gesetzt
+  const o = mitObsidian("system", ALLE, { design: "graphite" });
+  o.speicher.set("eba-start-klassen", ["eba-design-graphite"]);
+  global.document.body.classList.add("eba-design-graphite");
+  assert.deepEqual(o.D.startKlassenPruefen(), []);
+  assert.deepEqual(o.speicher.get("eba-start-klassen"), []);
+  assert.deepEqual(o.klassen(), ["theme-light"]);
+  // Passt die Liste schon, wird nichts geschrieben
+  const p = mitObsidian("system", ALLE, { design: "klar" });
+  p.speicher.set("eba-start-klassen", ["eba-design-klar"]);
+  p.D.startKlassenPruefen();
+  assert.deepEqual(p.log, []);
 });
 
 test("Snippets: kein „tnum“ aus in font-feature-settings (vererbt hebt es jedes tabular-nums auf, Spalten stünden nicht bündig)", () => {

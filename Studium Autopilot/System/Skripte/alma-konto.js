@@ -1,11 +1,11 @@
 // Noten & Anmeldungen aus Alma (seit 0.4.5, Beta): Das Plugin meldet sich auf einem deiner Geräte mit deinem Uni-Zugang bei
-// Alma an, liest „Leistungen“ und „Belegungen“ deines Kontos und schlägt dir neue Noten auf der Modulseite zum Übernehmen vor.
-// Es schreibt nie selbst in deine Modulnotizen (nur nach deinem Tipp auf Übernehmen). In der Anmeldephase erinnert es dich,
-// wenn laut Alma eine Prüfungsanmeldung fehlt. Doku: docs/architektur.md, „Noten & Anmeldungen (Alma)“.
+// Alma an, liest „Leistungen“ und „Belegungen“ deines Kontos und schlägt dir neue Noten (und Korrekturen, siehe vorschlagAus) auf
+// der Modulseite zum Übernehmen vor. Es schreibt nie selbst in deine Modulnotizen (nur nach deinem Tipp auf Übernehmen). In der
+// Anmeldephase erinnert es dich, wenn laut Alma eine Prüfungsanmeldung fehlt. Doku: docs/architektur.md, „Noten & Anmeldungen (Alma)“.
 //
-// Beta: läuft nur mit update_kanal: beta (System/Einstellungen.md) bzw. ALMA_KONTO_STABIL, bis echte gefüllte Seiten (Anmeldungen
-//   ab 07.12.2026, erste Noten) mit dem Leser abgeglichen sind. Ohne Beta keine Anfrage; Zeile und „Daten aus Alma löschen“
-//   bleiben, solange es eine Zustimmung oder Daten gibt.
+// Beta: läuft nur mit update_kanal: beta (System/Einstellungen.md) bzw. ALMA_KONTO_STABIL, bis echte gefüllte Seiten (Prüfungs-
+//   anmeldungen aus einer Anmeldephase, erste Noten) mit dem Leser abgeglichen sind. Ohne Beta keine Anfrage; Zeile und „Daten
+//   aus Alma löschen“ bleiben, solange es eine Zustimmung oder Daten gibt.
 // Bausteine: alma-konto-html.js (Seiten lesen, rein), ilias-netz.js (Sitzung, Dienst „alma“: nur alma.uni-tuebingen.de),
 //   sperre.js (ein Schreiber), ilias.js (Uni-Zugang: Benutzername, Passwort im Schlüsselbund, Ablehnungs-Marker).
 // Zustimmung je Gerät: Fenster mit deinem Benutzernamen und „Einschalten“ (gerätelokal eba-alma-konto-an = Zeitpunkt). Erst dann
@@ -134,29 +134,60 @@ const zustandBauen = ({ alt, L, B, codes, jetzt, geraet, A }) => {
   };
 };
 
-// Vorschlag für eine Modulnotiz: { code, felder, text, satz, schluessel } | null. Nur eindeutige Aussagen (Modulzeile oder genau eine
-// Prüfung); nichts, was schon so in der Notiz steht oder ausgeblendet ist. Note nur im Text des Modulfelds, nie in Hinweisen.
+// Vorschlag für eine Modulnotiz: { code, felder, text, satz, schluessel, marke } | null. Nur eindeutige Aussagen (Modulzeile oder
+// genau eine Prüfung); nichts, was schon so in der Notiz steht oder ausgeblendet ist. Note nur im Text des Modulfelds, nie in
+// Hinweisen. Korrekturen (nie still, immer als Vorschlag): eine geänderte Note oder ein geänderter Status in Alma wie jede neue
+// Angabe; „angemeldet“ in der Notiz, aber laut Alma zurückgetreten oder abgemeldet → „läuft“; „bestanden“/„anerkannt“ aus Alma
+// übernommen (alma_uebernommen passt noch zu Status, Note und Versuch der Notiz), aber in Alma kein Ergebnis mehr → zurück auf
+// „angemeldet“ bzw. „läuft“ ohne Note, nur wenn Alma noch andere Ergebnisse zeigt und höchstens ein Modul zugleich betroffen ist
+// (eine gekürzte Liste in Alma soll nie viele Noten auf einmal zum Löschen anbieten). Was du selbst eingetragen hast, ohne dass
+// Alma ausdrücklich widerspricht, bleibt.
 const STATUS_TEXT = { "bestanden": "bestanden", "nicht bestanden": "nicht bestanden", "endgültig nicht bestanden": "endgültig nicht bestanden",
-  "anerkannt": "anerkannt", "angemeldet": "angemeldet" };
-const vorschlagAus = (fm, z) => {
+  "anerkannt": "anerkannt", "angemeldet": "angemeldet", "zurückgetreten": "zurückgetreten", "abgemeldet": "abgemeldet", "": "kein Ergebnis mehr" };
+const ERGEBNIS = ["bestanden", "nicht bestanden", "endgültig nicht bestanden", "anerkannt"];
+const ZURUECK = ["zurückgetreten", "abgemeldet"];
+// Schlüssel der Werte einer Modulnotiz (Status, Note, Versuch), nach Übernehmen in alma_uebernommen; keine lesbare Note
+const notizSchluessel = (code, fm) => sha256([code, text(fm.status).toLowerCase() || "offen", text(fm.ergebnis).replace(".", ","),
+  Number(fm.versuch) || 1].join("|")).slice(0, 8);
+// Ergebnis aus Alma übernommen, in Leistungen (ok, mit mindestens einem Ergebnis) aber keins mehr für den Code? Teure Prüfsumme zuletzt.
+const ergebnisWeg = (fm, z) => {
+  const code = text(fm && fm.code), st = text(fm && fm.status).toLowerCase();
+  const l = z && z.leistungen, mod = (l && l.module) || {}, m = mod[code];
+  if (!code || ["bestanden", "anerkannt"].indexOf(st) < 0 || !text(fm.alma_uebernommen) || !l || l.art !== "ok") return false;
+  if (m && !(m.eindeutig && ["angemeldet"].concat(ZURUECK).indexOf(m.status) >= 0)) return false;
+  if (!Object.keys(mod).some((c) => ERGEBNIS.indexOf(mod[c].status) >= 0)) return false;
+  return text(fm.alma_uebernommen) === notizSchluessel(code, fm);
+};
+// alle() → Frontmatter aller Modulnotizen (optional; ohne nur diese Notiz): für die Grenze „höchstens ein Modul zugleich“
+const vorschlagAus = (fm, z, alle) => {
   const code = text(fm && fm.code);
   if (!code || !z) return null;
   const st = text(fm.status).toLowerCase() || "offen";
+  const offen = ["offen", "läuft"].indexOf(st) >= 0;
   const m = z.leistungen && z.leistungen.module ? z.leistungen.module[code] : null;
   const p = z.belegungen && z.belegungen.pruefungen ? z.belegungen.pruefungen[code] : null;
   let quelle = null, felder = null, satz = "";
-  if (m && m.eindeutig && STATUS_TEXT[m.status]) {
+  if (m && m.eindeutig && ERGEBNIS.indexOf(m.status) >= 0) {
     quelle = m;
-    if (m.status === "angemeldet") felder = ["offen", "läuft"].indexOf(st) >= 0 ? { status: "angemeldet" } : null;
-    else {
-      felder = { status: m.status === "endgültig nicht bestanden" ? "nicht bestanden" : m.status };
-      if (m.note) felder.ergebnis = m.note;
-      if (m.versuch) felder.versuch = m.versuch;
-      if (m.status === "endgültig nicht bestanden") satz = "Endgültig: bitte mit dem Prüfungsamt sprechen.";
-    }
-  } else if (p && GILT.indexOf(p.status) >= 0 && ["offen", "läuft"].indexOf(st) >= 0) {
+    felder = { status: m.status === "endgültig nicht bestanden" ? "nicht bestanden" : m.status };
+    if (m.note) felder.ergebnis = m.note;
+    if (m.versuch) felder.versuch = m.versuch;
+    if (m.status === "endgültig nicht bestanden") satz = "Endgültig: bitte mit dem Prüfungsamt sprechen.";
+  } else if (m && m.eindeutig && m.status === "angemeldet" && offen) {
+    quelle = m;
+    felder = { status: "angemeldet" };
+  } else if (p && GILT.indexOf(p.status) >= 0 && offen) {
     quelle = { status: "angemeldet", note: "", versuch: 0, datum: "" };
     felder = { status: "angemeldet" };
+  } else if (st === "angemeldet" && m && m.eindeutig && ZURUECK.indexOf(m.status) >= 0 && !(p && GILT.indexOf(p.status) >= 0)) {
+    quelle = m;
+    felder = { status: "läuft" };
+  } else if (st === "angemeldet" && p && ZURUECK.indexOf(p.status) >= 0 && !(m && (m.stati || []).some((s) => s.status === "angemeldet"))) {
+    quelle = { status: p.status, note: "", versuch: 0, datum: "" };
+    felder = { status: "läuft" };
+  } else if (ergebnisWeg(fm, z) && (typeof alle === "function" ? alle() : [fm]).filter((x) => ergebnisWeg(x, z)).length <= 1) {
+    quelle = { status: m ? m.status : "", note: "", versuch: 0, datum: m ? m.datum : "" };
+    felder = { status: (m && m.status === "angemeldet") || (p && GILT.indexOf(p.status) >= 0) ? "angemeldet" : "läuft", ergebnis: "" };
   }
   if (!felder) return null;
   // Nur, was sich ändert (Versuch 1 = leeres Feld)
@@ -171,7 +202,8 @@ const vorschlagAus = (fm, z) => {
   if (quelle.note) teile.push(quelle.note);
   if (quelle.versuch > 1) teile.push(quelle.versuch + ". Versuch");
   if (d) teile.push("Stand " + d.slice(8, 10) + "." + d.slice(5, 7) + ".");
-  return { code, felder, text: teile.join(" · "), satz, schluessel };
+  // Marke für die Notiz nach Übernehmen: so erkennt ein späterer Vorschlag Werte, die aus Alma kamen
+  return { code, felder, text: teile.join(" · "), satz, schluessel, marke: notizSchluessel(code, Object.assign({}, fm, felder)) };
 };
 
 // Anmeldephase: zentrale Frist „Prüfungsanmeldung … Haupttermin“, heute offen → { datum, bis } | null (Nachholtermine nicht)
@@ -226,7 +258,8 @@ const fehlendeAnmeldungen = ({ module, termine, zustand, heute, jetzt, aktuell, 
 //   lokal(k, v?), sperre: sperre.js (erzeugen), zugang() → ctx.ilias.uniZugang(), kennwort() → Text (erst beim Absenden),
 //   abgelehnt(dienst) → Marker schreiben (ctx.ilias.zugangAbgelehnt), quelleExtern(schluessel) → bool (eba.quelleExtern, bei
 //   jedem Lauf gefragt), beta() → bool, phase() → bool,
-//   netz() → ilias-netz.js, html() → alma-konto-html.js, codes() → [Modulcodes des Tresors], jetzt() → Date, warten(ms)?,
+//   netz() → ilias-netz.js, html() → alma-konto-html.js, codes() → [Modulcodes des Tresors], notizen()? → [Frontmatter der
+//   Modulnotizen] (Grenze für „kein Ergebnis mehr“), jetzt() → Date, warten(ms)?,
 //   mobil, geraetId(), melden(text)?, geaendert(x)? }
 const erzeugen = (abh) => {
   const io = abh.io, lokal = abh.lokal;
@@ -561,7 +594,7 @@ const erzeugen = (abh) => {
   return {
     jetztPruefen, faellig, einschalten, ausschalten, loeschen, lesen, status, protokoll, sichtbar, beta, extern, stundenplanLink,
     zustand: () => zustand, an, lstand,
-    vorschlag: (fm) => (extern() ? null : vorschlagAus(fm, zustand)),
+    vorschlag: (fm) => (extern() ? null : vorschlagAus(fm, zustand, () => sicher(() => abh.notizen(), null) || [fm])),
     get laeuft() { return !!laeuft; },
   };
 };
@@ -635,6 +668,7 @@ module.exports = function (ctx) {
     phase: () => { const d = modell(); return !!(d && anmeldeFenster(d.termine, heute())); },
     netz: () => modulVon("ilias-netz"), html: () => modulVon("alma-konto-html"),
     codes: () => { const d = modell(); return d ? d.module.map((m) => m.code).filter(Boolean) : []; },
+    notizen: () => { const d = modell(); return d ? d.module.map((m) => m.fm || {}) : null; },
     jetzt, mobil: !!(obs.Platform && obs.Platform.isMobile), geraetId,
     melden: (t) => ctx.hinweis(t),
     geaendert: () => neuZeichnen(),
@@ -645,7 +679,10 @@ module.exports = function (ctx) {
   // ---------- Vorschläge im Modulfeld (modul.js) und Zeiger in „Bitte prüfen“ (bitte-pruefen.js) ----------
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f) && app.metadataCache.getFileCache(f).frontmatter) || {};
   const uebernehmen = async (f, v) => {
-    await app.fileManager.processFrontMatter(f, (m) => { for (const k of Object.keys(v.felder)) m[k] = v.felder[k]; });
+    await app.fileManager.processFrontMatter(f, (m) => {
+      for (const k of Object.keys(v.felder)) m[k] = v.felder[k];
+      if (v.marke) m.alma_uebernommen = v.marke;
+    });
     ctx.hinweis(`${v.code} aus Alma übernommen.`);
   };
   const ausblenden = async (f, v) => {

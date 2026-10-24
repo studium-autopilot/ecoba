@@ -127,12 +127,12 @@ cssclasses:
 > > - **Praktikum:** Bericht beim Career Service, dessen Bescheinigung ans Prüfungsamt.
 > > - **Engagement** in einer Hochschulgruppe: ECTS-Nachweis ans Prüfungsamt.
 >
-> > [!eba-regel|handy-zu]+ Fristen WS 2026/27
-> > - **Sprachkurse (Fremdsprachenzentrum):** Anmeldung in Alma bis **Fr 09.10., 12:00**; mit Vorkenntnissen vorher Einstufungstest (bis 09.10.). Intensivkurse: Anmeldung 24.12.–22.01.
-> > - **TCP 2. Belegung:** 12.–19.10. (Kurse ab 06.11.), Abmeldung 22.–25.10.
-> > - **TCP 3. Belegung:** 09.–16.11. (Kurse ab 04.12.), Abmeldung 19.–22.11.
-> > - **TCP-Studienleistung** in Alma anmelden: 12.10.2026–21.02.2027, sonst keine ECTS.
+> > [!eba-regel|handy-zu]+ Fristen
+> > - **Sprachkurse (Fremdsprachenzentrum):** Anmeldung in Alma bis kurz vor Vorlesungsbeginn; mit Vorkenntnissen vorher Einstufungstest. Intensivkurse in der vorlesungsfreien Zeit haben eine eigene Anmeldung.
+> > - **TCP:** mehrere Belegungszeiträume je Semester, spätere für später beginnende Kurse; nach jedem Zeitraum einige Tage zum Abmelden.
+> > - **TCP-Studienleistung** zusätzlich in Alma anmelden, sonst keine ECTS.
 > > - Unentschuldigt fehlen bei TCP: im nächsten Semester keine TCP-Kurse.
+> > - Die Fristen dieses Semesters stehen von selbst unter [[Termine & Anmeldungen]].
 
 
 ## Unterlagen

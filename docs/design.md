@@ -106,7 +106,7 @@ feinen Trennstrichen) → Linie (Elfenbein doppelt). Auf jeder Seite mit `csscla
 linker Seitenleiste (seit 0.4.7, `seitenleiste.js`; bis 0.4.6 ein Symbol in der Kopfleiste jeder Notiz). **(geplant)** Auch Vorlesungsnotiz, Übungsblatt,
 Begleitnotiz, Termin- und Stundenplan-Notiz bekommen den Pfad (Modul) über dem Titel; ihren Status zeigt schon die Kopf-Karte
 unter dem Titel (`kopf.js`, `eba-core.css` 64.2): Art · Modul (Link) · Tag, rechts der Status-Knopf und „⋯“ (Eigenschaften); bei
-Übung und Tutorium darunter die Unterlagen aus ihrem Bereich (Übung bzw. Tutorium) als Chips wie in der Vorlesungsnotiz. Was
+Übung, Tutorium und Lab darunter die Unterlagen aus ihrem Bereich (Übung, Tutorium bzw. Lab) als Chips wie in der Vorlesungsnotiz. Was
 der Kopf zeigt, steht nicht noch einmal darunter: keine Karte „Eckdaten“, keine Eigenschaften über dem Titel.
 
 ### PDF-Kasten

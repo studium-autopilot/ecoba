@@ -57,12 +57,16 @@ test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliche
   assert.equal(s.plugin_abruf, "2026-10-18T08:00:00.000Z");
   assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "livesync", "plugin_abruf", "letzter_lauf", "claude_lauf", "fehler"]);
   assert.doesNotMatch(JSON.stringify(s), /zxabc01|geheim|Passwort/);
-  // claude_lauf: wartet (Anstoß da) | laeuft (seit unter einer Stunde) | ruht
+  // claude_lauf: wartet (Anstoß da) | laeuft (seit unter 100 Minuten, der Zeitgrenze des Laufs) | ruht
   const jetzt = new Date("2026-10-18T09:00:00Z");
   assert.equal(s.claude_lauf, "ruht");
   assert.equal(oeffentlicherStatus({}, {}, "x", jetzt, true).claude_lauf, "wartet");
   assert.equal(oeffentlicherStatus({ laeuftSeit: "2026-10-18T08:30:00Z" }, {}, "x", jetzt).claude_lauf, "laeuft");
-  assert.equal(oeffentlicherStatus({ laeuftSeit: "2026-10-18T07:30:00Z" }, {}, "x", jetzt).claude_lauf, "ruht", "hängt nicht für immer");
+  assert.equal(oeffentlicherStatus({ laeuftSeit: "2026-10-18T07:30:00Z" }, {}, "x", jetzt).claude_lauf, "laeuft", "Opus und gewöhnlicher Lauf");
+  assert.equal(oeffentlicherStatus({ laeuftSeit: "2026-10-18T07:10:00Z" }, {}, "x", jetzt).claude_lauf, "ruht", "hängt nicht für immer");
+  // Gmail „nie“ in Obsidian: aus, nicht das Ergebnis der letzten Suche
+  assert.equal(oeffentlicherStatus({ gmail: "ok" }, {}, "x", jetzt, false, { uni_postfach: 15, gmail: 0 }).gmail, "aus");
+  assert.equal(oeffentlicherStatus({ gmail: "ok" }, {}, "x", jetzt, false, { uni_postfach: 15, gmail: 1 }).gmail, "ok");
 });
 
 test("Knopf „Mails durchsuchen“: Anstoß mit Grund knopf, höchstens alle 10 Minuten, ein wartender Anstoß bleibt", async () => {
@@ -440,9 +444,16 @@ test("Zustand: Proben setzen Claude, Uni-Zugang und Reserve; Felder anderer Teil
   const { reserveLaeuft } = await laden("zustand.mjs");
   assert.equal(reserveLaeuft(v), "aus", "ohne Meldung");
   fs.writeFileSync(path.join(v, "speicher-reserve.json"), JSON.stringify({ pid: process.pid }));
-  assert.equal(reserveLaeuft(v), "an", "lebende PID");
+  // /proc nachgestellt: die PID dieses Tests einmal als Reserve, einmal als fremder Prozess (nach einem Neustart)
+  const proc = path.join(v, "proc");
+  fs.mkdirSync(path.join(proc, String(process.pid)), { recursive: true });
+  const cmdline = (befehl) => fs.writeFileSync(path.join(proc, String(process.pid), "cmdline"), befehl.split(" ").join("\0") + "\0");
+  cmdline("/usr/bin/node /opt/studium-server/aktuell/speicher-reserve.mjs");
+  assert.equal(reserveLaeuft(v, proc), "an", "lebende PID der Reserve");
+  cmdline("/usr/sbin/cron -f");
+  assert.equal(reserveLaeuft(v, proc), "aus", "PID gehört einem anderen Prozess");
   fs.writeFileSync(path.join(v, "speicher-reserve.json"), JSON.stringify({ pid: 2 ** 22 + 12345 }));
-  assert.equal(reserveLaeuft(v), "aus", "PID lebt nicht");
+  assert.equal(reserveLaeuft(v, proc), "aus", "PID lebt nicht");
   fs.rmSync(v, { recursive: true, force: true });
 });
 
@@ -458,8 +469,45 @@ test("Speicherreserve: 25 % des Arbeitsspeichers, feste Größe oder Anteil eins
 });
 
 test("Shell-Skripte: Syntax gültig (bash -n)", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
-  for (const datei of ["installieren.sh", "studium-server", "fern.sh"]) {
+  for (const datei of ["installieren.sh", "studium-server", "fern.sh", "livesync.sh"]) {
     const r = spawnSync("bash", ["-n", path.join(SERVER, datei)], { encoding: "utf8" });
     assert.equal(r.status, 0, `${datei}: ${r.stderr}`);
   }
+});
+
+test("Versionen: nur vorwärts, eine Vorabversion zählt weniger als die fertige; gleiche Fassung in studium-server und installieren.sh", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
+  const fassung = (datei) => /^version_neuer\(\) \{\n[\s\S]*?\n\}\n/m.exec(fs.readFileSync(path.join(SERVER, datei), "utf8"))[0];
+  const funktion = fassung("studium-server");
+  assert.equal(fassung("installieren.sh"), funktion);
+  const neuer = (a, b) => spawnSync("bash", ["-c", funktion + 'version_neuer "$1" "$2"', "-", a, b]).status === 0;
+  for (const [a, b] of [["0.5.10", "0.5.9"], ["0.5.9", "0.5.9-beta.1"], ["0.5.9-beta.10", "0.5.9-beta.2"], ["0.6.0-beta.1", "0.5.9"], ["1.0.0", "0.9.9"]]) {
+    assert.ok(neuer(a, b), `${a} neuer als ${b}`);
+    assert.ok(!neuer(b, a), `${b} nicht neuer als ${a}`);
+  }
+  assert.ok(!neuer("0.5.9", "0.5.9"), "gleich ist nicht neuer");
+});
+
+test("Claude Code aktualisieren: nie während eines Laufs (oneshot: „activating“), sonst als studium", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
+  const funktion = /^claude_aktualisieren\(\) \{\n[\s\S]*?\n\}\n/m.exec(fs.readFileSync(path.join(SERVER, "studium-server"), "utf8"))[0];
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "claude-update-"));
+  try {
+    const bin = path.join(tmp, "bin");
+    fs.mkdirSync(bin);
+    // systemctl nennt den Zustand aus ZUSTAND, sudo schreibt nur auf, was es ausführen soll
+    fs.writeFileSync(path.join(bin, "systemctl"), "#!/usr/bin/env bash\n[ \"$*\" = \"show -P ActiveState studium-server-lauf.service\" ] && echo \"$ZUSTAND\"\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "sudo"), "#!/usr/bin/env bash\necho \"sudo $*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(tmp, "claude"), "#!/usr/bin/env bash\n", { mode: 0o755 });
+    const aufrufe = path.join(tmp, "aufrufe");
+    const lauf = (zustand) => {
+      fs.rmSync(aufrufe, { force: true });
+      const r = spawnSync("bash", ["-c", `${funktion}CLAUDE="$1"; claude_aktualisieren`, "-", path.join(tmp, "claude")], {
+        encoding: "utf8", env: Object.assign({}, process.env, { ZUSTAND: zustand, AUFRUFE: aufrufe, PATH: bin + path.delimiter + process.env.PATH }) });
+      assert.equal(r.status, 0, r.stderr);
+      return { aus: r.stdout, update: fs.existsSync(aufrufe) ? fs.readFileSync(aufrufe, "utf8").trim() : "" };
+    };
+    for (const z of ["activating", "active", "deactivating", "reloading"]) {
+      assert.deepEqual(lauf(z), { aus: "Claude Code: Ein Lauf läuft gerade; Update beim nächsten Mal.\n", update: "" }, z);
+    }
+    for (const z of ["inactive", "failed"]) assert.match(lauf(z).update, /^sudo -u studium -H \S*claude update$/, z);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

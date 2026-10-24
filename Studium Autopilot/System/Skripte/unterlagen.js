@@ -2,7 +2,7 @@
 // Benennt Dateien nach dem Schema „<Code> <Art> <Nr> <Titel>.<ext>“, legt sie unter „Unterlagen/<Code> <Modultitel>/“ ab
 // und schreibt daneben je Unterlage eine Begleitnotiz (typ: unterlage) mit gleichem Namen.
 // Ablauf: Moduswahl → Plan → Duplikate? → Vorschau (korrigierbar) → ZIP? → Ablegen.
-// Dateien in „Unterlagen/“ ohne Begleitnotiz (abgebrochener Lauf) bietet es zum Nachtragen an.
+// Dateien in „Unterlagen/“ ohne Begleitnotiz (abgebrochener Lauf, selbst hineinkopiert) trägt es ohne Rückfrage nach.
 // Aufruf in einer Aktion:  await ctx.user.unterlagen(ctx).hinzufuegen();  (Aktion „einordnen“ in System/Skripte/aktionen.js):
 // erst das Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen), dann einordnen().
 // Nur Obsidian-API (vault, fileManager, loadPdfJs), keine Node- oder Shell-Befehle: läuft auf Windows, iPad und iPhone.
@@ -31,11 +31,22 @@ module.exports = function (ctx) {
   const ARCHIVE = ["zip", "rar", "7z"];
   const LESEFORMATE = ["", "pdf", "epub", "djvu", "doc", "docx", "odt", "rtf", "txt", "htm", "html"];
   const AUSLASSEN = ["md", "base", "canvas", ...ARCHIVE];
-  const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lösung", "Eigene Lösung", "Mitschrift", "Altklausur", "Literatur", "Scan", "Sonstiges"];
+  const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Eigene Lösung", "Mitschrift", "Altklausur", "Literatur", "Scan", "Sonstiges"];
   // Tutorium ist ein eigener Bereich (seit 20.10.2026): Nennt der Dateiname oder ein Ordner das Tutorium („Tutoriumsunterlagen“,
   // „Tutoriengruppen/Gruppe 4“, „JA_Tutorium10“), ist alles darin Tutorium, auch Blätter, Lösungen und Folien. Nicht „Tutorin“
   // (Chatbot) und nicht „Tutorial“ (Anleitung).
   const TUTORIUM = /tutori(um|en)/i;
+  // Lab ist ebenso ein eigener Bereich (seit 24.10.2026): Sitzungen, in denen Code vorgeführt wird („Data Science Lab“,
+  // „R Lab 1/Lab1.Rmd“, „Python Labs“, „RLab2.R“). Ein Name oder Ordner nennt ein Lab mit Sprache oder Kurs davor („R Lab“,
+  // „DataScienceLab_03“), mit Nummer („Lab 3“, „Lab02“) oder als erstes Wort („Labs“, „05 - Labs“, „Lab Orga“), dann nicht im Sinn von
+  // Laborexperimenten („Lab Experiments“, „Lab vs. Field“, „Lab-in-the-field“). „Experimente im Lab“, „Evidence from the Lab“,
+  // „Matlab“, „Syllabus“, „Label“ und „Labor“ zählen nicht. Was darin liegt, ist Lab (Notebooks, Daten, Lösungen; laborArt).
+  const LAB_NAME = new RegExp(`(^|[^a-zäöüß])(r|python|stata|julia|spss|coding|data[\\s._-]?science)[\\s._-]?labs?(?![a-zäöüß])|(^|[^a-zäöüß])labs?[\\s._-]*\\d{1,2}(?!\\d)`, "i");
+  const LAB_ANFANG = /^(\d{1,2}[\s._\-–)]*)?labs?(?![a-zäöüß])(?![\s._,-]*([&+]|(experiment|studie|stud(y|ies)|evidence|setting|participant|subject|meets|(19|20)\d{2})|(exp|vs(?![\s._-]*code)|versus|and|und|or|oder|field|feld|in[\s._-]+the)(?![a-zäöüß])))/i;
+  const labArtig = (s) => {
+    const i = s.indexOf(": "), t = i >= 0 && SITZUNGSORDNER.test(s) ? s.slice(i + 2) : s; // ILIAS-Sitzung „…, 14:15 - 15:45: Lab“
+    return LAB_NAME.test(t) || LAB_ANFANG.test(t);
+  };
   // Ordner einer Gruppe („Gruppe 4: Dienstag 10 - 12“, „Tutorium 5 | … | Mittwoch 14-16“): Die Zahl darin ist keine Blattnummer
   const GRUPPENORDNER = /(^|[^a-zäöüß])(gruppe|group)[\s._-]*\d|montag|dienstag|mittwoch|donnerstag|freitag/i;
 
@@ -70,8 +81,10 @@ module.exports = function (ctx) {
   const MIT_LOESUNG = /(mit|inkl\.?|inklusive|samt|with|incl\.?|und|and|\+)[\s._-]*(muster)?(l(ö|oe)sung|solution)/i;
   const SCAN_ANFANG = /^scan(ned|s)?([^a-z]|$)/i; // „Scan …“ ist immer ein Scan (auch „Scan Buchkapitel“)
   const NR_WORTE = "vl|vorlesung|lecture|folien?|slides?|handout|kapitel|chapter|kap|session|sitzung|einheit|lektion|week|woche|tag|(?:ü|ue)bung(?:sblatt)?|pr(?:ä|ae)senz(?:ü|ue)bung(?:sblatt)?|aufgabenblatt|aufgaben|hausaufgaben?|ha|ü|ue|blatt|sheet|exercise|tutoriums?blatt|tutorium|tutorial|problem[\\s._-]?sets?|l(?:ö|oe)sung(?:en)?|solutions?|ps|nr|no";
-  // Nummer nach einem Art-Wort; ein Bereich „VL5-6“ / „Kap 1 bis 3“ gehört mit zum Treffer (Ende in Gruppe 2)
+  // Nummer nach einem Art-Wort; ein Bereich „VL5-6“ / „Kap 1 bis 3“ gehört mit zum Treffer (Ende in Gruppe 2).
+  // Lab-Wörter („R Lab 2“, „Lab02“) zählen nur bei der Art Lab, dort vor allen anderen („Kapitel 3 Lab 2“ ist Lab 02).
   const NUMMER = new RegExp(`(?:^|[^a-zäöüß])(?:${NR_WORTE})\\.?[\\s._\\-]*(\\d{1,2})(?!\\d)(?:(?:\\s?[-–]\\s?|[\\s._]+bis[\\s._]+)(\\d{1,2})(?!\\d))?`, "i");
+  const NUMMER_LAB = new RegExp(`(?:^|[^a-zäöüß])(?:(?:r|python|stata|julia|spss|coding|data[\\s._-]?science)[\\s._-]?)?labs?\\.?[\\s._\\-]*(\\d{1,2})(?!\\d)(?:(?:\\s?[-–]\\s?|[\\s._]+bis[\\s._]+)(\\d{1,2})(?!\\d))?`, "i");
   const NUMMER_ANFANG = /^(\d{1,2})(?!\d)(?:\s?[-–]\s?(\d{1,2})(?!\d))?[\s._\-]/;
   // Kürzel und Nummer als ganzer Name („EBWL_0“, „Mikro 05“); „Teil 2“, „Kopie 2“ zählen nicht
   const NUMMER_KURZ = /^([A-Za-zÄÖÜäöü]{2,6})[\s._-]+(\d{1,2})$/;
@@ -99,6 +112,7 @@ module.exports = function (ctx) {
     Skript: "lecture notes|([a-zäöüß]*s)?skript(um|e|en)?|script|reader|vorlesungsunterlagen",
     Übung: WU,
     Tutorium: "tutori(um|ums|en)", // was es ist („Aufgabenblatt“, „Lösung“, „Folien“), bleibt im Titel
+    Lab: "(r|python|stata|julia|spss|coding|data[\\s._-]?science)[\\s._-]?labs?|labs?", // „R Lab“ ist der Bereich, kein Titel
     Lösung: `${WL}|${WU}|kl`, // „…_KL“ (Klausurlösung)
     "Eigene Lösung": `(meine|eigene) (${WL})|my solutions?|mitschrift|${WL}|${WU}`,
     Mitschrift: `mitschrift|annotiert|annotated|handschrift|notizen|${WF}`,
@@ -140,19 +154,29 @@ module.exports = function (ctx) {
   };
   const alleImEingang = () => alleIn(EINGANG);
 
-  // PDF + PPTX mit gleichem Namen gehören zusammen
+  // PDF + PPTX mit gleichem Namen gehören zusammen, ebenso ein R-Notebook mit seiner HTML-Fassung („Lab2.Rmd“ + „Lab2.nb.html“; die
+  // ILIAS-Ablage stapelt nicht und hängt „mit Ausgaben“ an, ilias.js). Liegt daneben noch „Lab2.html“ (zwei HTML in einem Stapel),
+  // wird die Notebook-Fassung eine eigene Unterlage „… mit Ausgaben“ (ausgaben: true).
+  const nbWeg = (basis, endung) => (endung === "html" ? basis.replace(/\.nb$/i, "") : basis);
+  const istNb = (f) => ext(f) === "html" && nbWeg(f.basename, "html") !== f.basename;
   const stapeln = (dateien) => {
     const m = new Map();
     for (const f of dateien) {
-      const key = `${f.parent?.path ?? ""}/${f.basename.normalize("NFC").toLowerCase()}`;
+      const key = `${f.parent?.path ?? ""}/${nbWeg(f.basename, ext(f)).normalize("NFC").toLowerCase()}`;
       if (!m.has(key)) m.set(key, []);
       m.get(key).push(f);
     }
-    return [...m.values()].map((fs) => {
+    const gruppen = [];
+    for (const fs of m.values()) {
+      const doppelt = fs.filter((f) => ext(f) === "html").length > 1;
+      if (doppelt && fs.some(istNb)) gruppen.push({ fs: fs.filter((f) => !istNb(f)) }, ...fs.filter(istNb).map((f) => ({ fs: [f], ausgaben: true })));
+      else gruppen.push({ fs });
+    }
+    return gruppen.map(({ fs, ausgaben = false }) => {
       const pdf = fs.find((f) => ext(f) === "pdf");
       const bild = fs.find((f) => BILDER.includes(ext(f)));
-      const haupt = pdf || bild || fs[0];
-      return { dateien: fs, haupt, original: fs.find((f) => f !== haupt && ORIGINALE.includes(ext(f))) || null };
+      const haupt = pdf || bild || fs.find(istNb) || fs[0];
+      return { dateien: fs, haupt, original: fs.find((f) => f !== haupt && ORIGINALE.includes(ext(f))) || null, ausgaben };
     }).sort((a, b) => a.haupt.path.localeCompare(b.haupt.path, "de", { numeric: true }));
   };
 
@@ -167,6 +191,8 @@ module.exports = function (ctx) {
   const artBestimmen = (rel, endung, basis) => {
     if (TUTORIUM.test(basis)) return { art: "Tutorium", quelle: "name", schwach: false };
     if (rel.split("/").slice(0, -1).some((o) => TUTORIUM.test(o))) return { art: "Tutorium", quelle: "ordner", schwach: false };
+    const lab = laborArt(rel.split("/").slice(0, -1), basis, endung);
+    if (lab) return lab;
     if (SCAN_ANFANG.test(basis)) return { art: "Scan", quelle: "name", schwach: false };
     let r = KL_ENDE.test(basis) ? ["Lösung"] : regelFinden(basis);
     if (r && r[0] === "Altklausur" && !MIT_LOESUNG.test(basis)) r = REGELN.find(([a, re]) => (a === "Eigene Lösung" || a === "Lösung") && re.test(basis)) || r;
@@ -181,15 +207,33 @@ module.exports = function (ctx) {
     if (BILDER.includes(endung)) return { art: "Scan", quelle: "rest", schwach: false };
     return { art: "Sonstiges", quelle: "rest", schwach: false };
   };
+  // Lab aus Name oder Ordner (siehe LAB_NAME). Eigene Arbeit bleibt, was sie ist, ob im Namen oder im Ordner („Meine Lösung Lab 3“,
+  // „Mitschriften/R Lab 2“, „Scans/Lab 3“; sie geht nie an den eigenen Server), ebenso Lesestoff und Altklausuren aus einem eigenen
+  // Ordner unterhalb des tiefsten Lab-Ordners („Python Labs/Reading/…“, „Literatur/Charness Lab 1“). Ein Bild ist nur Lab, wenn sein
+  // Name ein Lab nennt („R Lab 3/IMG_0012.jpg“ bleibt ein Scan). → { art: "Lab", … } oder null
+  const regelArt = (a) => REGELN.find(([x]) => x === a)[1];
+  const EIGENE_ARBEIT = ["Eigene Lösung", "Mitschrift", "Scan"];
+  const EIGEN_LAB = /(^|[^a-zäöüß])(my|meine)[\s._-]*notes?([^a-zäöüß]|$)|abgabe|submission/i; // „My Notes“, „Abgaben/“
+  const laborArt = (ordner, basis, endung = "") => {
+    if (SCAN_ANFANG.test(basis) || regelArt("Eigene Lösung").test(basis) || regelArt("Mitschrift").test(basis)) return null;
+    if ([basis, ...ordner].some((s) => EIGEN_LAB.test(s))) return null;
+    if (EIGENE_ARBEIT.includes((regelFinden(basis) || [])[0])) return null; // „Lab 3 Scan“
+    if (ordner.some((o) => SCAN_ANFANG.test(o) || EIGENE_ARBEIT.includes((regelFinden(o) || [])[0]))) return null;
+    const imNamen = labArtig(basis), tiefster = ordner.map(labArtig).lastIndexOf(true);
+    if (!imNamen && (tiefster < 0 || BILDER.includes(endung))) return null;
+    const vorrang = (o) => { const x = regelFinden(o); return !!x && (x[0] === "Literatur" || x[0] === "Altklausur"); };
+    if (ordner.some((o, i) => i > tiefster && vorrang(o))) return null;
+    return { art: "Lab", quelle: imNamen ? "name" : "ordner", schwach: false };
+  };
   // gültige Datumsangaben durch „§“ gleicher Länge ersetzen (Positionen bleiben gleich)
   const datumOk = (mo, t) => +mo >= 1 && +mo <= 12 && +t >= 1 && +t <= 31;
   const ohneDatum = (s) => s
     .replace(DATUM_ISO, (m, vor, j, mo, t) => (datumOk(mo, t) ? vor + "§".repeat(m.length - vor.length) : m))
     .replace(DATUM_DE, (m, vor, t, mo) => (datumOk(mo, t) ? vor + "§".repeat(m.length - vor.length) : m));
   // Nummer (und Ende eines Bereichs „VL3-4“) aus einem Namen; Datumsangaben zählen nicht
-  const nummerErkennen = (basis) => {
+  const nummerErkennen = (basis, lab = false) => {
     const s = basis.normalize("NFC"), o = ohneDatum(s);
-    const m = o.match(NUMMER) || o.match(NUMMER_ANFANG);
+    const m = (lab && o.match(NUMMER_LAB)) || o.match(NUMMER) || o.match(NUMMER_ANFANG);
     if (m) {
       const nr = Number(m[1]);
       return { nr, bis: m[2] != null && Number(m[2]) > nr ? Number(m[2]) : null, treffer: s.substr(m.index, m[0].length), idx: m.index };
@@ -200,11 +244,13 @@ module.exports = function (ctx) {
   };
   // Nummer eines Ordners, die keine Nummer der Unterlage ist: Gliederung eines Sammelordners („00 - Vorlesung“,
   // „01 - Übungsmaterialien“, „02 Unterlagen zur Vorlesung“). „1. Übung“ (Ordinalzahl) und „03_Kostenrechnung“ (Thema) zählen.
-  const gliederungsNummer = (name, n) => {
+  // Lab: „03 - Data Science Lab“, „05 - Labs“ (mit Strich) gliedern den Kurs, „02 R Lab“ ist das zweite Lab.
+  const gliederungsNummer = (name, n, lab = false) => {
     if (n.idx !== 0 || !/^\d/.test(n.treffer)) return false;
-    const m = name.match(/^\d{1,2}(\.?)[\s._\-–)]*(.*)$/);
+    const m = name.match(/^\d{1,2}(\.?)([\s._\-–)]*)(.*)$/);
     if (!m || m[1]) return false;
-    const woerter = m[2].split(/[\s._\-–&,+]+/).filter(Boolean);
+    if (lab && labArtig(m[3])) return /[-–)]/.test(m[2]);
+    const woerter = m[3].split(/[\s._\-–&,+]+/).filter(Boolean);
     return woerter.length > 0 && woerter.every((w) => FUELL.test(w) || ORDNER_ALLGEMEIN.test(w) || !!regelFinden(w));
   };
   const codeAusName = (basis) => { const m = basis.normalize("NFC").match(CODE); return m ? m[1] : null; };
@@ -277,12 +323,17 @@ module.exports = function (ctx) {
     if (name.length > NAME_MAX) name = sauber(kuerzen(name, NAME_MAX));
     return name || sauber(`${code || "Unterlage"} ${eba.heute}`);
   };
+  // Titel mit Zusatz („… mit Ausgaben“), so gekürzt, dass der Zusatz im Dateinamen nicht der Kürzung zum Opfer fällt
+  const titelMitZusatz = (code, art, nr, titel, zusatz) => {
+    const platz = NAME_MAX - zielName(code, art, nr, "").length - zusatz.length - 2;
+    return sauber([titel && platz > 0 ? kuerzen(titel, platz) : "", zusatz].filter(Boolean).join(" "));
+  };
   // Vorschlag für eine Datei aus Pfad und Name (auch für Tests ohne Datei). „rel“ ist der Pfad unterhalb des Eingangs bzw.
   // des ILIAS-Kurses. Ergebnis: art, nr, titel, eigenerCode (Modulcode am Anfang des Dateinamens), code (Code aus dem
   // Dateinamen, sonst aus dem tiefsten Ordner mit Code, sonst der übergebene; ob es das Modul gibt, prüft der Aufrufer),
   // schwach (Titel aus dem Namen taugt wenig, siehe schwacherTitel) und name (Schema mit diesem code).
   const vorschlag = (rel, endung, code) => {
-    const pfad = rel.normalize("NFC").replace(/\.[^.]+$/, "");
+    const pfad = nbWeg(rel.normalize("NFC").replace(/\.[^.]+$/, ""), endung);
     const ordner = pfad.split("/");
     const basis = ordner.pop();
     const eigenerCode = codeAusName(basis);
@@ -290,15 +341,15 @@ module.exports = function (ctx) {
     const codeNeu = eigenerCode || ordnerCode || code || "";
     const a = artBestimmen(pfad, endung, basis);
     let art = a.art;
-    let { nr, bis, treffer, idx } = nummerErkennen(basis);
+    let { nr, bis, treffer, idx } = nummerErkennen(basis, art === "Lab");
     const ausName = nr != null;
     // nummerierte Dateien ohne erkannte Art („01_Einfuehrung“, „01_Organisatorisches“) sind meist Folien
     if (art === "Sonstiges" && ausName && (a.quelle === "rest" || a.schwach) && !BILDER.includes(endung)) art = "Folien";
     // ohne Nummer im Namen: Nummer aus dem Unterordner („Woche 3/slides.pdf“, „03_Kostenrechnung/Folien.pdf“), der tiefste zuerst;
-    // nicht aus der Gliederung eines Sammelordners und nicht aus dem Ordner einer Gruppe, aus einem Sitzungsordner nur für Folien
+    // nicht aus der Gliederung eines Sammelordners und nicht aus dem Ordner einer Gruppe, aus einem Sitzungsordner nur für Folien und Lab
     if (!ausName) for (const o of ordner.slice().reverse()) {
-      const n = nummerErkennen(o);
-      if (n.nr == null || gliederungsNummer(o, n) || GRUPPENORDNER.test(o) || (SITZUNGSORDNER.test(o) && art !== "Folien")) continue;
+      const n = nummerErkennen(o, art === "Lab");
+      if (n.nr == null || gliederungsNummer(o, n, art === "Lab") || GRUPPENORDNER.test(o) || (SITZUNGSORDNER.test(o) && art !== "Folien" && art !== "Lab")) continue;
       nr = n.nr; bis = n.bis; break;
     }
     let titel = titelErkennen(basis, eigenerCode || codeNeu, treffer, art, idx);
@@ -756,7 +807,7 @@ module.exports = function (ctx) {
       vergeben.add(`${p.ordner}/${p.name}`.toLowerCase());
     }
   };
-  const unsicher = (p) => p.dup || p.art === "Sonstiges" || (["Folien", "Übung", "Tutorium", "Lösung"].includes(p.art) && p.nr == null && !p.titel);
+  const unsicher = (p) => p.dup || p.art === "Sonstiges" || (["Folien", "Übung", "Tutorium", "Lab", "Lösung"].includes(p.art) && p.nr == null && !p.titel);
   // Eine Datei der Vorschau ändern: ein Fenster „Neu …“ (ctx.formular) mit Art (oder im Eingang lassen), Nummer und Titel;
   // Esc lässt alles, wie es war
   const LASSEN = "im-eingang";
@@ -840,7 +891,7 @@ module.exports = function (ctx) {
   // Fenster „Unterlagen hinzufügen“: Dateien auswählen (am PC auch hineinziehen) oder liegen gebliebene Dateien im Eingang
   // einordnen. Ergebnis „gewaehlt“ (Dateien liegen jetzt im Eingang), „eingang“ oder null (abgebrochen).
   // Die Dateiauswahl öffnet input.click() direkt im Klick des Knopfs: iPhone und iPad zeigen sie nur dann (Fotos, Kamera, Dateien).
-  const hinzufuegenFenster = (imEingang, fehlend) => new Promise((fertig) => {
+  const hinzufuegenFenster = (imEingang) => new Promise((fertig) => {
     let ergebnis = null;
     const m = new Modal(app);
     m.modalEl.addClass("eba-modal");
@@ -886,9 +937,8 @@ module.exports = function (ctx) {
       return b;
     };
     knopf("Abbrechen", false, () => m.close());
-    if (imEingang || fehlend) {
-      knopf(imEingang ? `${imEingang === 1 ? "Eine Datei" : `${imEingang} Dateien`} im Eingang einordnen` : "Begleitnotizen nachtragen", false,
-        () => { ergebnis = "eingang"; m.close(); });
+    if (imEingang) {
+      knopf(`${imEingang === 1 ? "Eine Datei" : `${imEingang} Dateien`} im Eingang einordnen`, false, () => { ergebnis = "eingang"; m.close(); });
     }
     knopf("Dateien auswählen", true, () => { eingabe.value = ""; eingabe.click(); });
     m.onClose = () => { c.empty(); fertig(ergebnis); };
@@ -899,7 +949,7 @@ module.exports = function (ctx) {
   const hinzufuegen = async () => {
     if (!Modal) return einordnen();
     const imEingang = alleImEingang().filter((f) => !AUSLASSEN.includes(ext(f)) || ARCHIVE.includes(ext(f))).length;
-    const w = await hinzufuegenFenster(imEingang, ohneBegleitnotiz().length);
+    const w = await hinzufuegenFenster(imEingang);
     if (!w) return { eingeordnet: 0 };
     return einordnen();
   };
@@ -914,18 +964,13 @@ module.exports = function (ctx) {
     const stapel = stapeln(roh.filter((f) => !AUSLASSEN.includes(ext(f))));
     const fehlend = ohneBegleitnotiz();
 
-    // 0. Abgebrochener Lauf? Dateien ohne Begleitnotiz nachtragen
-    let nachtragen = [];
-    if (fehlend.length) {
-      const t = `${fehlend.length} Datei(en) in „${ZIEL}“ ohne Notiz: ${fehlend.slice(0, 3).map((s) => s.haupt.name).join(", ")}${fehlend.length > 3 ? " …" : ""}`;
-      const w = await frage(stapel.length ? ["Begleitnotizen nachtragen, dann Eingang einordnen", "Nur den Eingang einordnen"] : ["Begleitnotizen nachtragen", "Jetzt nicht"], ["ja", "nein"], t);
-      if (!w) return abbruch();
-      if (w === "ja") nachtragen = fehlend.map(nachtragPlan);
-    }
+    // 0. Dateien in „Unterlagen/“ ohne Begleitnotiz (abgebrochener Lauf, selbst in einen Modulordner kopiert): ohne Rückfrage
+    //    nachtragen (seit 0.6.3). Die Frage danach verstand niemand, und ohne Notiz fehlt die Datei in allen Listen.
+    const nachtragen = fehlend.map(nachtragPlan);
     if (!stapel.length && !nachtragen.length) {
       // nur ZIP im Eingang: nicht wegwerfen (noch nicht entpackt), Obsidian kann nicht entpacken
       const zip = archive.length ? `${archive.length === 1 ? "Im Eingang liegt ein ZIP" : `Im Eingang liegen ${archive.length} ZIP-Dateien`}, bitte erst am PC oder in der Dateien-App entpacken und dann noch einmal einordnen.` : "";
-      ctx.hinweis(zip || (fehlend.length ? "Nichts eingeordnet." : ausgelassen.length
+      ctx.hinweis(zip || (ausgelassen.length
         ? `Im Eingang liegen nur Notizen (${ausgelassen.length}), die verschiebst du selbst.`
         : "Der Eingang ist leer. Lege PDFs oder Folien in den Ordner „Eingang“."));
       return { eingeordnet: 0 };
@@ -968,7 +1013,7 @@ module.exports = function (ctx) {
         const code = modul?.fm.code ?? "";
         const v = vorschlag(relPfad(h), ext(h), code);
         // schwacher Titel im Dateinamen („EBWL_1“, „VL_3_Opt_1Var“): Titel von der ersten PDF-Seite, wenn er eindeutig ist
-        let titel = v.titel;
+        let titel = st.ausgaben ? titelMitZusatz(code, v.art, v.nr, v.titel, "mit Ausgaben") : v.titel;
         if (v.schwach && ext(h) === "pdf") {
           if (!lesen) lesen = ctx.hinweis("Lese Titel aus den PDFs …", { dauer: 0 });
           titel = titelMitPdf(v.titel, await titelAusPdf(h, { code }));
@@ -1023,10 +1068,10 @@ module.exports = function (ctx) {
           ordner = await modulOrdner(p.modul, p.code);
           if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
           // Modulordner mit Unterordnern „Vorlesung“/„Übung“ (z. B. B110): Datei nach Art dorthin, sonst in den Modulordner.
-          // Tutorium hat immer seinen eigenen Unterordner (getrennt von Vorlesung und Übung).
+          // Tutorium und Lab haben immer ihren eigenen Unterordner (getrennt von Vorlesung und Übung).
           const unter = { Folien: "Vorlesung", Skript: "Vorlesung", Mitschrift: "Vorlesung", Übung: "Übung", Lösung: "Übung", "Eigene Lösung": "Übung" }[p.art];
-          if (p.art === "Tutorium") {
-            ordner = `${ordner}/Tutorium`;
+          if (p.art === "Tutorium" || p.art === "Lab") {
+            ordner = `${ordner}/${p.art}`;
             if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
           } else if (unter && app.vault.getAbstractFileByPath(`${ordner}/${unter}`) instanceof TFolder) ordner = `${ordner}/${unter}`;
           const wunsch = zielName(p.code, p.art, p.nr, p.titel);
@@ -1063,8 +1108,8 @@ module.exports = function (ctx) {
 
     // 8. Zusammenfassung
     const zeilen = bericht.eingeordnet || !bericht.nachgetragen ? [`${bericht.eingeordnet} ${bericht.eingeordnet === 1 ? "Unterlage" : "Unterlagen"} eingeordnet.`] : [];
-    if (bericht.ergaenzt) zeilen.push(`${bericht.ergaenzt} PDF(s) zur vorhandenen PowerPoint abgelegt, Begleitnotiz ergänzt.`);
-    if (bericht.nachgetragen) zeilen.push(`${bericht.nachgetragen} Begleitnotiz(en) nachgetragen.`);
+    if (bericht.ergaenzt) zeilen.push(`${bericht.ergaenzt} PDF(s) zur vorhandenen PowerPoint abgelegt.`);
+    if (bericht.nachgetragen) zeilen.push(`${bericht.nachgetragen === 1 ? "Eine Datei, die schon unter Unterlagen lag, steht" : `${bericht.nachgetragen} Dateien, die schon unter Unterlagen lagen, stehen`} jetzt auch in den Listen.`);
     if (bericht.uebersprungen) zeilen.push(`${bericht.uebersprungen} im Eingang gelassen.`);
     const auslassenN = plan.filter((p) => p.auslassen).length;
     if (auslassenN) zeilen.push(`${auslassenN} nach der Vorschau im Eingang gelassen.`);
@@ -1086,8 +1131,8 @@ module.exports = function (ctx) {
   };
 
   return {
-    hinzufuegen, einordnen, eingangName, nummerErkennen, titelErkennen, zielName, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL,
+    hinzufuegen, einordnen, eingangName, nummerErkennen, titelErkennen, zielName, titelMitZusatz, codeAusName, akzenteReparieren, vorschlag, ohneBegleitnotiz, EINGANG, ZIEL,
     // für die ILIAS-Ablage (ilias.js) und Tests
-    schwacherTitel, titelAusPdf, pdfTitelWaehlen, titelMitPdf, vorschlagMitPdf, begleitnotiz, ARTEN,
+    schwacherTitel, titelAusPdf, pdfTitelWaehlen, titelMitPdf, vorschlagMitPdf, begleitnotiz, ARTEN, stapeln,
   };
 };

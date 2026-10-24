@@ -30,13 +30,14 @@ Frist | Einführung | Lehre | Fachschaft | Veranstaltung), `status` (offiziell |
 dazu `herkunft: zentral`, `zentral_id`, `info`, `geprueft`, `entfaellt`.
 
 **Lehrveranstaltung** – `Stundenplan/<Mo> <10.15> <Code> <Art>.md`
-`typ: lehrveranstaltung`, `titel` („<Code> · <Art>“), `code`, `modul`, `art` (Vorlesung, Übung, Tutorium …), `wochentag`
+`typ: lehrveranstaltung`, `titel` („<Code> · <Art>“), `code`, `modul`, `art` (Vorlesung, Übung, Tutorium, Lab …; bei Veranstaltungen außerhalb von Alma der offizielle Name wie „Data Science Lab“), `wochentag`
 (1 = Montag … 5), `beginn`, `ende`, `raum`, `dozent`, `semester`, `von`, `bis`, `ausfall` (Liste von Daten), `aenderungen`
 („Datum|Beginn|Ende|Raum“), aus Alma auch `raum_seit` und `raum_vorher` (dauerhaft verlegt) und `rhythmus` (14-täglich);
 eigene Notizen können `besuche_nicht: true` haben.
 
 **Vorlesungsnotiz** – `Vorlesungen/<Code>/JJJJ-MM-TT <Code> VL NN.md`
-`typ: vorlesung`, `datum`, `code`, `modul`, `nummer`, `thema`, `dozent`, `folien` („[[…]]“), `veranstaltung`,
+`typ: vorlesung`, `datum`, `code`, `modul`, `nummer`, `thema`, `dozent`, `folien` („[[…]]“; leer: die Folien des Moduls, die
+ILIAS dieser Sitzung zuordnet, Datum in `quelle`, sonst die seit der vorigen Vorlesung angekommenen), `veranstaltung`,
 `nachgearbeitet` (true | false). Abschnitte: `## Mitschrift`, `## Prüfungsrelevant`, `## Offene Fragen`, `## Nacharbeit`.
 
 **Übungsblatt** – `Übungsblätter/<Code> Blatt NN.md`
@@ -44,10 +45,11 @@ eigene Notizen können `besuche_nicht: true` haben.
 `eigene_loesung`. Abschnitte: `## Aufgabe 1`, `## Aufgabe 2` …, `## Knackpunkte`, `## Fürs Tutorium`.
 
 **Unterlage (Begleitnotiz)** – neben der Datei, gleicher Name: `<Code> <Art> <NN> <Titel>.md` (höchstens 80 Zeichen)
-`typ: unterlage`, `code`, `modul`, `art` (Folien, Skript, Übung, Tutorium, Lösung, Eigene Lösung, Mitschrift, Altklausur, Literatur,
-Scan, Sonstiges; Tutorium: alles aus dem Tutorium, im Unterordner `Tutorium/` des Modulordners), `nummer`, `titel`, `datei` („[[x.pdf]]“), `seiten`, `semester`, `status` (neu | gelesen | bearbeitet),
-`datum`, `quelle`, aus ILIAS `ilias_id`; `link` = Online-Fassung (nur `https://`, etwa E-Book oder Online-Buch; ohne Datei
-führt das ↗ in der Liste der Unterlagen dorthin). Neu angelegt: nur der Titel und darunter der eingeklappte PDF-Kasten. Abschnitte kommen
+`typ: unterlage`, `code`, `modul`, `art` (Folien, Skript, Übung, Tutorium, Lab, Lösung, Eigene Lösung, Mitschrift, Altklausur, Literatur,
+Scan, Sonstiges; Tutorium: alles aus dem Tutorium, im Unterordner `Tutorium/` des Modulordners; Lab: alles aus einem Lab wie dem
+Data Science Lab, auch Notebooks, Code und Daten, im Unterordner `Lab/`), `nummer`, `titel`, `datei` („[[x.pdf]]“), `seiten`, `semester`, `status` (neu | gelesen | bearbeitet),
+`datum`, `geoeffnet` (Datum des ersten Öffnens, schreibt Studium Autopilot; nicht anfassen), `quelle`, aus ILIAS `ilias_id`; `link` = Online-Fassung (nur `https://`, etwa E-Book oder Online-Buch; ohne Datei
+führt das ↗ in der Liste der Unterlagen dorthin). Neu angelegt: nur der Titel und darunter der PDF-Kasten (ohne weiteren Inhalt gleich offen). Abschnitte kommen
 dazu, sobald es etwas gibt, alle über dem PDF-Kasten: `## Das Wichtigste`, darunter auf Wunsch `## Zu tun`, dann
 `## Offene Fragen`. Nie einen leeren Abschnitt oder leere Punkte (`- `, `- [ ] `) anlegen.
 
@@ -67,9 +69,13 @@ Katalog (nicht ändern): `code`, `titel`, `ects`, `fachsemester`, `fs_empfohlen`
 `typ: volltext`, `volltext_von: plugin`, `quelle` (Pfad der PDF), `unterlage`, `seiten`, `ergebnis` (text | gekuerzt |
 kein-text | geschuetzt | nicht-lesbar | zu-gross). Je Seite ein Kasten `> [!eba-quelle]- [[X.pdf#page=N|S. N]]` mit dem Text.
 
-**Einstellungen** – `System/Einstellungen.md` (nur lesen): `name`, `studienbeginn`, `variante` (Economics | Business
-Administration | ohne Spezialisierung | offen), `zielnote`, `po`, `semesterliste` (`FS|Name|Beginn|Ende|Vorlesungsbeginn|
-Vorlesungsende`), `pausen` (`von|bis|Name`), `pruefungsphasen` (`von|bis|Art|Status`).
+**Einstellungen** – `System/Einstellungen.md` (nur lesen): `name`, `studienbeginn` (leer: das laufende Semester ist das 1.
+Fachsemester), `variante` (Economics | Business Administration | ohne Spezialisierung | offen), `zielnote`, `po`.
+`semesterliste`, `pausen` und `pruefungsphasen` dort sind Kopien für die Tabellen und können hinterherhinken.
+
+**Semesterdaten** – `System/Daten/Semester.md` (nur lesen): `semester` (`name`, `beginn`, `ende`, `vorlesung_beginn`,
+`vorlesung_ende`), `pausen` (`name`, `von`, `bis`), `freie_tage` (`name`, `datum`), `pruefungsphasen` (`art`, `semester`, `von`,
+`bis`), jeweils mit `status` (offiziell | geschätzt). Geschätztes nennst du als geschätzt.
 
 ## Wem eine Notiz gehört
 

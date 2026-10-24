@@ -13,13 +13,14 @@ lesen.
      Tage aus `ausfall`, ohne `besuche_nicht: true`; `aenderungen` (`Datum|Beginn|Ende|Raum`) gehen vor. Vor `raum_seit` gilt
      `raum_vorher` als Raum; `rhythmus: 14-täglich` heißt: nur jede zweite Woche ab `von`. Einen Ausfall, eine Änderung und einen
      neuen Raum (die ersten zwei Wochen ab `raum_seit`) nennst du ausdrücklich, mit dem alten Raum bzw. der alten Zeit.
-  3. Vorlesungsfreie Tage: `pausen` in `System/Einstellungen.md`.
+  3. Vorlesungsfreie Tage: `pausen` und `freie_tage` in `System/Daten/Semester.md`.
   4. Offene To-dos mit Frist in dieser Woche (siehe unten).
 - **Nächste Prüfungen:** Termine mit `kategorie: Prüfung` ab heute; dazu im Modul `klausur` und `status`. Prüfungsphasen:
-  `pruefungsphasen` in den Einstellungen.
+  `pruefungsphasen` in `System/Daten/Semester.md`.
 - **Noten und ECTS:** Module mit `status: bestanden` oder `anerkannt` zählen ihre `ects`; die Note steht in `ergebnis`. Die
   Gesamtnote rechnest du nur, wenn die Person danach fragt, und sagst dazu, dass die Übersicht **Noten & ECTS** maßgeblich ist.
-- **Welches Fachsemester?** Aus `studienbeginn` und `semesterliste` in den Einstellungen.
+- **Welches Fachsemester?** Aus `studienbeginn` in den Einstellungen (leer: das laufende Semester ist das 1.) und den
+  Semestern in `System/Daten/Semester.md` (WS 1.10. bis 31.3., SS 1.4. bis 30.9.).
 - **Was hängt an einem Modul?** Alles mit demselben `code`: Termine, Lehrveranstaltungen, Vorlesungsnotizen, Übungsblätter,
   Unterlagen, Karteikarten, Lernplan.
 

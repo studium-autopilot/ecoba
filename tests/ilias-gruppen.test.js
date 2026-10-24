@@ -286,13 +286,13 @@ test("Gruppen: Doppel derselben Gruppe und gewählte Notizen desselben Moduls we
   assert.match(t, /- gewählt/);
 });
 
-test("Gruppen: Überschneidung mit einer anderen Stundenplan-Notiz steht still im Feld konflikt", async () => {
+test("Gruppen: Überschneidung mit einer anderen Stundenplan-Notiz steht nicht in der Notiz (die Woche rechnet sie selbst)", async () => {
   const vl = "---\ntyp: lehrveranstaltung\ncode: \"S110\"\nart: \"Vorlesung\"\nwochentag: 2\nbeginn: \"11:15\"\nende: \"12:45\"\nsemester: \"WS 2026/27\"\n---\n\n## Notizen\n- \n";
   const x = gruppenAufbau({ notizen: { "Stundenplan/Di 11.15 S110 Vorlesung.md": vl }, mitglieder: ["351", "901"] });
   await verbinden(x);
   await x.m.jetztHolen({ manuell: true });
-  assert.equal(x.sp.fm(S100).konflikt, "Di 11.15 S110 Vorlesung");
-  assert.equal(x.sp.fm(B110).konflikt, undefined, "Di 8:15–9:45 überschneidet nichts");
+  assert.equal(x.sp.fm(S100).konflikt, undefined, "Di 10:15–11:45 neben der Vorlesung Di 11:15");
+  assert.equal(x.sp.fm(B110).konflikt, undefined);
 });
 
 test("Gruppen: Quelle ohne Mitgliederseite (ältere Fassung) lässt Notizen in Ruhe", async () => {

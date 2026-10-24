@@ -95,8 +95,12 @@ test("Notiz: Felder fürs Wochenraster (echte Zeit bei c.t.), eigene Felder und 
   assert.deepEqual([fm.typ, fm.code, fm.art, fm.wochentag, fm.tag, fm.beginn, fm.ende, fm.semester, fm.herkunft, fm.ilias_gruppe, fm.gruppe_id, fm.uebersicht, fm.von, fm.bis],
     ["lehrveranstaltung", "X100", "Tutorium", 2, "Di", "10:15", "11:45", SEM, "ilias-gruppe", "351", "ws-2026-27-x100-tutorium-5", "[[Stundenplan]]", "2026-10-20", "2027-02-09"]);
   assert.deepEqual([fm.titel, fm.gruppe, fm.gruppe_alma], ["Beispielökonomik · Tutorium Gruppe 5", "Gruppe 5", "5"], "ohne ILIAS-Name: Nummer der Liste");
-  const mitName = frontmatter(M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4", kurz: "Beispielökonomik", konflikt: "Di 10.15 X200 Vorlesung" }));
-  assert.deepEqual([mitName.titel, mitName.gruppe, mitName.gruppe_alma, mitName.konflikt], ["Beispielökonomik · Tutorium Gruppe 4", "Gruppe 4", "5", "Di 10.15 X200 Vorlesung"]);
+  const mitName = frontmatter(M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "351", name: "Gruppe 4", kurz: "Beispielökonomik" }));
+  assert.deepEqual([mitName.titel, mitName.gruppe, mitName.gruppe_alma], ["Beispielökonomik · Tutorium Gruppe 4", "Gruppe 4", "5"]);
+  // Überschneidungen rechnet die Woche selbst: ein altes Feld konflikt fällt beim nächsten Schreiben weg
+  const mitKonflikt = t.replace("gruppe_id:", "konflikt: \"Di 10.15 X200 Vorlesung\"\ngruppe_id:");
+  assert.equal(frontmatter(mitKonflikt).konflikt, "Di 10.15 X200 Vorlesung");
+  assert.equal(frontmatter(M.notizText(mitKonflikt, g(), { herkunft: M.ILIAS, iliasGruppe: "351", modulLink: "[[X100 Beispiel]]", kurz: "Beispielökonomik" })).konflikt, undefined);
   assert.equal(frontmatter(M.notizText("", g(), { herkunft: M.ILIAS, name: "Tutorium 1" })).titel, "X100 · Tutorium 1", "Name beginnt mit der Art");
   assert.match(t, /^> \[!info\] Aus ILIAS: /m);
   // Dateiname nie wie eine Alma-, Oracle- oder zentrale Notiz („Di 10.15 X100 Tutorium“)
@@ -185,7 +189,7 @@ test("Meine Gruppe: wählen, ändern, abwählen; nicht, wenn ILIAS oder Alma die
   assert.equal((await M.waehlen(v.io, g())).art, "gedeckt");
 });
 
-test("Aufräumen: gewählte Notiz weicht, wenn ILIAS oder Alma die Gruppe liefert; Meine Gruppe mit Überschneidung", async () => {
+test("Aufräumen: gewählte Notiz weicht, wenn ILIAS oder Alma die Gruppe liefert; Überschneidung steht nicht in der Notiz", async () => {
   const gw = M.notizText("", LISTE[1], { herkunft: M.GEWAEHLT }).replace("## Meine Notizen\n- \n", "## Meine Notizen\n- meine Frage\n");
   const t = notizenIo({ "Stundenplan/Di 08.15 X100 Tutorium.md": gw, "Stundenplan/Di 10.15 X100 Tutorium.md": M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "9" }) });
   assert.deepEqual(await M.gewaehltAufraeumen(t.io, "2026-10-17"), ["Stundenplan/Di 08.15 X100 Tutorium.md"]);
@@ -194,10 +198,10 @@ test("Aufräumen: gewählte Notiz weicht, wenn ILIAS oder Alma die Gruppe liefer
   assert.deepEqual(await M.gewaehltAufraeumen(u.io, "2026-10-17"), ["Stundenplan/a.md"], "Alma liefert dieselbe Zeit");
   const v = notizenIo({ "Stundenplan/a.md": gw });
   assert.deepEqual(await M.gewaehltAufraeumen(v.io, "2026-10-17"), [], "nichts deckt sie: bleibt");
-  // Überschneidung beim Wählen
+  // Überschneidung beim Wählen: rechnet die Woche (woche.js), die Notiz bleibt ohne Feld konflikt
   const w = notizenIo({ "Stundenplan/Di 11.15 Y300 Vorlesung.md": notiz({ typ: "lehrveranstaltung", code: "Y300", art: "Vorlesung", wochentag: 2, beginn: "11:15", ende: "12:45", semester: SEM }) });
   await M.waehlen(w.io, g());
-  assert.equal(w.fm("Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (gewählt).md").konflikt, "Di 11.15 Y300 Vorlesung");
+  assert.equal(w.fm("Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (gewählt).md").konflikt, undefined);
 });
 
 test("Aufräumen auf zwei Geräten: dein Text kommt nur einmal in die andere Notiz", async () => {
@@ -395,7 +399,97 @@ test("Doppelte Gruppen: es gilt ILIAS, dann die jüngere Wahl, dann die zur Grup
   assert.doesNotMatch(M.notizText(s, T1, { herkunft: M.ILIAS, iliasGruppe: "11" }), /gewaehlt_am/);
 });
 
-test("Alma-Notiz einer anderen Gruppe deines Kurses: deine Gruppe gilt, keine Überschneidung mit ihr (nur mit Gruppenliste)", async () => {
+test("Gewählte Notiz folgt der Gruppenliste (nur mit aktualisieren): Tag, Zeit, Raum und Name ziehen mit, dein Text bleibt", async () => {
+  const P5 = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (gewählt).md", P5NEU = "Stundenplan/Do 14.15 X100 Tutorium Gruppe 5 (gewählt).md";
+  const AM = "2026-10-19T09:00:00.000Z";
+  const alt = mitText(M.notizText("", g(), { herkunft: M.GEWAEHLT, modulLink: "[[X100 Beispiel]]", kurz: "Beispielökonomik", gewaehltAm: AM }), "meine Frage");
+  const verlegt = g({ tag: "Do", von: "14:00", bis: "16:00", raum: "Hörsaal 22 (Beispielbau)" });
+  const modul = () => ({ name: "X100 Beispiel", titel: "Beispielökonomik" });
+  const a = notizenIo({ [P5]: alt });
+  assert.deepEqual(await M.gewaehltAufraeumen(a.io, "2026-10-24", { liste: [verlegt], modul }), []);
+  assert.equal(a.text(P5), alt, "ohne aktualisieren (jedes andere Gerät): nichts");
+  const b = notizenIo({ [P5]: alt });
+  assert.deepEqual(await M.gewaehltAufraeumen(b.io, "2026-10-24", { liste: [verlegt], aktualisieren: true, modul }), []);
+  assert.deepEqual(b.pfade(), [P5NEU]);
+  const fm = b.fm(P5NEU);
+  assert.deepEqual([fm.wochentag, fm.tag, fm.beginn, fm.ende, fm.raum, fm.gewaehlt_am, fm.modul, fm.titel],
+    [4, "Do", "14:15", "15:45", "Hörsaal 22 (Beispielbau)", AM, "[[X100 Beispiel]]", "Beispielökonomik · Tutorium Gruppe 5"]);
+  assert.match(b.text(P5NEU), /^Donnerstags, 14:15–15:45 · Hörsaal 22 \(Beispielbau\)$/m);
+  assert.match(b.text(P5NEU), /- meine Frage/);
+  const fertig = b.text(P5NEU);
+  await M.gewaehltAufraeumen(b.io, "2026-10-24", { liste: [verlegt], aktualisieren: true, modul });
+  assert.deepEqual([b.pfade(), b.text(P5NEU)], [[P5NEU], fertig], "zweiter Lauf: nichts zu tun");
+  // ohne Modulnotiz bleiben Link und Kurztitel, ein Name aus ILIAS (freigegebene Notiz) bleibt
+  const c = notizenIo({ "Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (gewählt).md": M.notizText("", g(), { herkunft: M.GEWAEHLT, name: "Gruppe 4", modulLink: "[[X100 Beispiel]]", kurz: "Beispielökonomik" }) });
+  await M.gewaehltAufraeumen(c.io, "2026-10-24", { liste: [g({ raum: "Hörsaal 9" })], aktualisieren: true, modul: () => null });
+  const fc = c.fm("Stundenplan/Di 10.15 X100 Tutorium Gruppe 4 (gewählt).md");
+  assert.deepEqual([fc.raum, fc.gruppe, fc.modul, fc.titel], ["Hörsaal 9", "Gruppe 4", "[[X100 Beispiel]]", "Beispielökonomik · Tutorium Gruppe 4"]);
+});
+
+test("Gewählte Notiz, deren Gruppe aus der Liste fällt: „(entfällt)“ statt Papierkorb, zurück, sobald sie wieder da ist", async () => {
+  const P5 = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (gewählt).md", P2 = "Stundenplan/Mi 08.15 Y200 Übung Gruppe 2 (gewählt).md";
+  const g5 = mitText(M.notizText("", g(), { herkunft: M.GEWAEHLT, kurz: "Beispielökonomik" }), "meine Frage");
+  const andere = g({ id: "ws-2026-27-z300-uebung-1", code: "Z300", art: "Übung", gruppe: "1", tag: "Mi", von: "08:00", bis: "10:00" });
+  const STAND = "2026-10-20";
+  const t = notizenIo({ [P5]: g5 });
+  await M.gewaehltAufraeumen(t.io, "2026-10-24", { liste: [andere], stand: STAND, aktualisieren: true });
+  assert.deepEqual([t.pfade(), t.papierkorb], [[P5], []]);
+  assert.deepEqual([t.fm(P5).entfaellt, t.fm(P5).titel], [true, "Beispielökonomik · Tutorium Gruppe 5 (entfällt)"]);
+  assert.match(t.text(P5), /- meine Frage/);
+  const einmal = t.text(P5);
+  await M.gewaehltAufraeumen(t.io, "2026-10-24", { liste: [andere], stand: STAND, aktualisieren: true });
+  assert.equal(t.text(P5), einmal, "schon entfallen: nicht noch einmal");
+  await M.gewaehltAufraeumen(t.io, "2026-10-24", { liste: [andere, g()], stand: STAND, aktualisieren: true, modul: () => ({ name: "X100 Beispiel", titel: "Beispielökonomik" }) });
+  assert.deepEqual([t.fm(P5).entfaellt, t.fm(P5).titel], [undefined, "Beispielökonomik · Tutorium Gruppe 5"], "Gruppe wieder da");
+  assert.match(t.text(P5), /- meine Frage/);
+  // ohne Liste, ein Semester, das die Liste nicht nennt, oder mehr als die Hälfte auf einmal weg (kaputte Liste): nichts
+  const g2 = M.notizText("", LISTE[4], { herkunft: M.GEWAEHLT });
+  for (const [liste, grund] of [[null, "ohne Liste"], [[g({ semester: "SS 2027", id: "ss-2027-x100-tutorium-5" })], "anderes Semester"], [[andere], "beide weg"]]) {
+    const u = notizenIo({ [P5]: g5, [P2]: g2 });
+    await M.gewaehltAufraeumen(u.io, "2026-10-24", { liste, stand: STAND, aktualisieren: true });
+    assert.deepEqual([u.text(P5), u.text(P2)], [g5, g2], grund);
+  }
+  // halb synchronisierte Freigabe (ILIAS-Notiz und ihre gewählte Fassung zugleich da): die gewählte bleibt unverändert
+  const IL = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (ILIAS).md", il = M.notizText("", g(), { herkunft: M.ILIAS, iliasGruppe: "9" });
+  const f = notizenIo({ [IL]: il });
+  const [frei] = await M.iliasFreigeben(f.io);
+  const v = notizenIo({ [IL]: il, [frei]: f.text(frei) });
+  await M.gewaehltAufraeumen(v.io, "2026-10-24", { liste: [andere], stand: STAND, aktualisieren: true });
+  assert.deepEqual([v.pfade(), v.text(frei)], [[IL, frei].sort(), f.text(frei)]);
+});
+
+test("Gewählte Notiz und Gruppenliste: dein Ausfall und dein Name bleiben, eine neuere Wahl als die Liste entfällt nicht", async () => {
+  const P5 = "Stundenplan/Di 10.15 X100 Tutorium Gruppe 5 (gewählt).md";
+  const basis = M.notizText("", g(), { herkunft: M.GEWAEHLT, kurz: "Beispielökonomik", gewaehltAm: "2026-10-19T09:00:00.000Z" });
+  const mitAusfall = basis.replace("ausfall: []\neinzeltermin: false", "ausfall:\n  - 2026-11-03\neinzeltermin: true");
+  // nichts aus der Liste geändert: kein Schreiben, dein Ausfall bleibt
+  const a = notizenIo({ [P5]: mitAusfall });
+  await M.gewaehltAufraeumen(a.io, "2026-10-24", { liste: [g()], stand: "2026-10-20", aktualisieren: true });
+  assert.equal(a.text(P5), mitAusfall, "gleiche Felder: nichts geschrieben");
+  // Raum verlegt: der Raum zieht mit, Ausfall und Einzeltermin bleiben
+  await M.gewaehltAufraeumen(a.io, "2026-10-24", { liste: [g({ raum: "Hörsaal 9" })], stand: "2026-10-20", aktualisieren: true });
+  assert.deepEqual([a.fm(P5).raum, a.fm(P5).ausfall, a.fm(P5).einzeltermin], ["Hörsaal 9", ["2026-11-03"], true]);
+  // eine andere Gruppe (neue Wahl) beginnt ohne die Ausfälle der alten
+  assert.match(M.notizText(mitAusfall, LISTE[1], { herkunft: M.GEWAEHLT }), /^ausfall: \[\]\neinzeltermin: false$/m);
+  // von dir umbenannt: der Name bleibt, die Felder ziehen trotzdem mit
+  const EIGEN = "Stundenplan/Mein Tutorium.md";
+  const b = notizenIo({ [EIGEN]: basis });
+  await M.gewaehltAufraeumen(b.io, "2026-10-24", { liste: [g({ tag: "Do" })], stand: "2026-10-20", aktualisieren: true });
+  assert.deepEqual([b.pfade(), b.fm(EIGEN).tag], [[EIGEN], "Do"]);
+  // erzeugter Name eines früheren Stands (älterer Name aus ILIAS) folgt dagegen
+  const c = notizenIo({ [P5]: basis });
+  await M.gewaehltAufraeumen(c.io, "2026-10-24", { liste: [g({ tag: "Do" })], stand: "2026-10-20", aktualisieren: true });
+  assert.deepEqual(c.pfade(), ["Stundenplan/Do 10.15 X100 Tutorium Gruppe 5 (gewählt).md"]);
+  // nach dem Stand der Liste gewählt (das Gerät der Wahl hatte eine neuere): fehlt nur hier, entfällt nicht
+  const andere = g({ id: "ws-2026-27-z300-uebung-1", code: "Z300", art: "Übung" });
+  for (const [stand, entfaellt] of [["2026-10-17", undefined], ["", undefined], ["2026-10-19", true], ["2026-10-22", true]]) {
+    const d = notizenIo({ [P5]: basis });
+    await M.gewaehltAufraeumen(d.io, "2026-10-24", { liste: [andere], stand, aktualisieren: true });
+    assert.equal(d.fm(P5).entfaellt, entfaellt, "Stand " + (stand || "fehlt"));
+  }
+});
+
+test("Alma-Notiz einer anderen Gruppe deines Kurses: deine Gruppe gilt, die Alma-Notiz ist verdeckt (nur mit Gruppenliste)", async () => {
   // Alma-Abo mit Tutorium 1 (Alma: „Übung zu …“, Art Übung, Zeit wie in Alma), deine Gruppe ist Tutorium 7
   const Y2 = g({ id: "ws-2026-27-y200-tutorium-2", code: "Y200", gruppe: "2", tag: "Di", von: "10:00", bis: "12:00" });
   const Y3 = g({ id: "ws-2026-27-y200-tutorium-3", code: "Y200", gruppe: "3", tag: "Mi", von: "14:00", bis: "16:00" });
@@ -414,18 +508,4 @@ test("Alma-Notiz einer anderen Gruppe deines Kurses: deine Gruppe gilt, keine Ü
     "Stundenplan/Mo 14.00 X100 Übungsteil.md": alma({ art: "Übungsteil", wochentag: 1, beginn: "14:00", ende: "16:00" }),
     "Stundenplan/Mi 14.00 Y200 Übung.md": alma({ code: "Y200", wochentag: 3, beginn: "14:00", ende: "16:00" }) });
   assert.deepEqual(M.doppelt(b.io.notizen(), LI).verdeckt, {});
-  // Überschneidung: dein Y200-Tutorium liegt zur Zeit von X100-Tutorium 1 und meldet sie nicht mehr (ILIAS-Abgleich und Wählen)
-  const soll = [{ refId: "17", g: T7 }, { refId: "22", g: Y2 }], mitglieder = new Set(["17", "22"]);
-  const c = notizenIo({ [AL1]: alma() });
-  const n = await M.iliasAbgleichen(c.io, soll, mitglieder, { liste: LI });
-  assert.equal(c.fm(n.notizen["22"]).konflikt, undefined, "auch im ersten Lauf, in dem Tutorium 7 erst entsteht");
-  const d = notizenIo({ [AL1]: alma() });
-  const o = await M.iliasAbgleichen(d.io, soll, mitglieder, {});
-  assert.equal(d.fm(o.notizen["22"]).konflikt, "Di 10.00 X100 Übung", "ohne Gruppenliste wie bisher");
-  const e = notizenIo({ [AL1]: alma(), [IL7]: il7 });
-  await M.waehlen(e.io, Y2, { liste: LI });
-  assert.equal(e.fm("Stundenplan/Di 10.15 Y200 Tutorium Gruppe 2 (gewählt).md").konflikt, undefined);
-  const f = notizenIo({ [AL1]: alma(), [IL7]: il7 });
-  await M.waehlen(f.io, Y2, {});
-  assert.equal(f.fm("Stundenplan/Di 10.15 Y200 Tutorium Gruppe 2 (gewählt).md").konflikt, "Di 10.00 X100 Übung");
 });

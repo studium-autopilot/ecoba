@@ -154,18 +154,19 @@ weiter. Ohne Angaben gilt das aktuelle Semester als dein erstes.
 
 ### Dein Uni-Login (Unterlagen, Abgaben, Stundenplan)
 
-1. In der Einrichtung bei **Dein Uni-Login** (später: **Einstellungen & Hilfe** → **Verbindungen** → bei „ILIAS-Unterlagen“
-   **Verbinden**).
+1. In der Einrichtung bei **Dein Uni-Login** (später: **Einstellungen & Hilfe** → **Verbindungen** → bei „Uni-Login“
+   **Mit Uni-Login verbinden**).
 2. Benutzername und Passwort der Uni eingeben, wie bei ILIAS.
 3. **Verbinden** tippen.
 
 Danach kommen deine Kursdateien aus ILIAS, die Abgabetermine deiner Übungen aus dem ILIAS-Kalender und dein Stundenplan aus Alma
 von selbst. Die Links zu Kalender und Stundenplan holt Studium Autopilot selbst. Dein Passwort bleibt verschlüsselt auf diesem
-Gerät und geht nur an die Uni (ILIAS und Alma). Ein Gerät reicht, alles kommt über deinen Sync auf die anderen. Hast du ILIAS
-schon früher verbunden, tippst du bei „ILIAS-Kalender“ bzw. „Alma-Stundenplan“ einmal auf **Verbinden**.
+Gerät und geht nur an die Uni (ILIAS, Alma und, wenn du das Postfach einschaltest, das Webmail). Ein Gerät reicht, alles kommt
+über deinen Sync auf die anderen. Fehlt dir etwas, tippst du bei „Uni-Login“ auf **Mehr erfahren**: Dort hat jede Quelle
+(ILIAS-Unterlagen, ILIAS-Kalender, Alma-Stundenplan) eine eigene Zeile mit Schalter.
 
-**Ohne Passwort:** Kalender und Stundenplan kannst du auch mit einem kopierten Link verbinden. Bei „Alma-Stundenplan“ bzw.
-„ILIAS-Kalender“ **Verbinden** tippen und den Schritten im Fenster folgen: in Alma **Mein Studium** → **Stundenplan** →
+**Ohne Passwort:** Kalender und Stundenplan kannst du auch mit einem kopierten Link verbinden. Bei „Uni-Login“ **Mehr erfahren**
+tippen, dann bei „Alma-Stundenplan“ bzw. „ILIAS-Kalender“ **Link selbst einfügen** und den Schritten im Fenster folgen: in Alma **Mein Studium** → **Stundenplan** →
 **Daten für iCalendar (ics) exportieren** → **Link kopieren**, in ILIAS **Persönlicher Arbeitsraum** → **Kalender** →
 **Abonnieren** → Link unter **iCal-URL**. Die Links bleiben nur auf diesem Gerät; der Link zum ILIAS-Kalender ist geheim wie ein
 Passwort. Steht eine Abgabe schon bei deinen Fristen, kommt sie nicht doppelt.
@@ -269,13 +270,28 @@ Datei wird mit einer Prüfsumme geprüft; erst wenn alles da und richtig ist, wi
 Sicherung der geänderten Dateien im versteckten Ordner `.trash/Studium Autopilot Sicherung …` deines Tresors an (am PC und Mac
 sichtbar, wenn versteckte Dateien eingeblendet sind).
 
-Den Hinweis auf neue Versionen bringen die zentralen Daten mit. Sind sie ausgeschaltet, siehst du keinen Knopf – dann wie bei der
-Installation die neueste ZIP-Datei laden.
+Den Hinweis auf neue Versionen bringen die zentralen Daten mit. Sind sie ausgeschaltet, siehst du von selbst keinen Hinweis und
+keinen Knopf **Neue Version installieren** – dann auf **Nach Updates suchen** tippen oder wie bei der Installation die neueste
+ZIP-Datei laden.
 
 Neue Versionen früher ausprobieren: In der Zeile **Studium Autopilot** auf **Mehr erfahren** tippen, im Fenster noch einmal
 **Mehr erfahren** öffnen und **Beta-Versionen** einschalten. Betas können noch Fehler haben.
 
 </details>
+
+## Zusammenfassen mit Claude (freiwillig)
+
+Damit **Zusammenfassen** bei einer Unterlage ohne eigenen Server geht, verbindest du Claude mit einem eigenen API-Schlüssel:
+
+1. Auf [platform.claude.com](https://platform.claude.com) ein Konto anlegen und unter
+   [Billing](https://platform.claude.com/settings/billing) Guthaben kaufen.
+2. Unter [API keys](https://platform.claude.com/settings/keys) auf **Create key** tippen, einen Namen eingeben und den Schlüssel
+   kopieren.
+3. In Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** in der Zeile **Claude** auf **Mehr erfahren** tippen, den
+   Schlüssel einfügen und **Verbinden** tippen.
+
+Jedes Gerät verbindest du selbst; der Schlüssel kommt nicht über deinen Sync mit. Ein Ausgabenlimit stellst du in der Console
+unter Billing ein. Mit einem Abo (Claude Pro oder Max) geht es nicht, das erlaubt Anthropic nur in Claude selbst.
 
 ## Eigener Server mit Claude (für Technische)
 

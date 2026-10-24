@@ -1,7 +1,7 @@
 # Begleitnotizen zu Unterlagen
 
 Nennt `auftrag.md` neue Unterlagen, liegt in `unterlagen/` je Datei die Textfassung einer Unterlage aus dem Tresor (Folien,
-Skript, Übung, Tutorium, Lösung, Altklausur, Literatur). Oben steht der Kopf: Titel, `Datei:` (der Pfad im Tresor), Modul, Art, Seiten;
+Skript, Übung, Tutorium, Lab, Lösung, Altklausur, Literatur). Oben steht der Kopf: Titel, `Datei:` (der Pfad im Tresor), Modul, Art, Seiten;
 darunter der Text, Seite für Seite. Aus deinem Eintrag macht das Plugin die Abschnitte „Das Wichtigste“, „Zu tun“ und
 „Offene Fragen“ in der Notiz neben der Datei; was die Person dort schon geschrieben hat, bleibt.
 

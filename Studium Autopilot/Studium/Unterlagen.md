@@ -34,15 +34,15 @@ cssclasses:
 >   u: |-
 >     file("Studium/Unterlagen.md").backlinks.map(value.asFile()).filter(value.properties.typ == "unterlage")
 >   neu: |-
->     formula.u.filter(value.properties.status == "neu" || !value.properties.status).length
->   fertig: |-
->     formula.u.filter(["gelesen", "bearbeitet"].contains(value.properties.status)).length
+>     formula.u.filter(value.properties.geoeffnet.isEmpty() && value.properties.datum && date(value.properties.datum) >= today() - duration("14d")).length
 >   module: |-
 >     formula.u.map(value.properties.code).filter(value.isTruthy()).unique().length
->   quote: |-
->     if(formula.u.length > 0, (formula.fertig / formula.u.length * 100).round(), 0)
+>   alt: |-
+>     formula.u.filter(value.properties.art == "Altklausur")
+>   altmodule: |-
+>     formula.alt.map(value.properties.code).filter(value.isTruthy()).unique().length
 >   karte: |-
->     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Unterlagen" + "</span><span class='v'>" + formula.u.length + "</span><span class='s'>" + formula.module + if(formula.module == 1, " Modul", " Module") + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Noch nicht gelesen" + "</span><span class='v'>" + formula.neu + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Durchgearbeitet" + "</span><span class='v'>" + formula.quote + " %" + "</span>" + "<progress max='100' value='" + formula.quote + "'></progress>" + "</div>" + "</div></div>")
+>     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Unterlagen" + "</span><span class='v'>" + formula.u.length + "</span><span class='s'>" + formula.module + if(formula.module == 1, " Modul", " Module") + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Neu" + "</span><span class='v'>" + formula.neu + "</span><span class='s'>noch nicht geöffnet</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Altklausuren" + "</span><span class='v'>" + formula.alt.length + "</span>" + if(formula.altmodule > 0, "<span class='s'>" + formula.altmodule + if(formula.altmodule == 1, " Modul", " Module") + "</span>", "") + "</div>" + "</div></div>")
 > views:
 >   - type: list
 >     name: Kennzahlen
@@ -84,7 +84,7 @@ cssclasses:
 >     - 'typ == "übungsblatt"'
 > formulas:
 >   tage: 'if(faellig, ((date(faellig) - today()).days).round(), 999)'
->   wann: 'if(!faellig, "kein Datum", if(["abgegeben", "korrigiert"].contains(status.toString().lower().trim()), "erledigt", if(formula.tage < 0, "überfällig", if(formula.tage == 0, "heute", if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen")))))'
+>   wann: 'if(faellig.isEmpty(), "kein Datum", if(["abgegeben", "korrigiert"].contains(status.toString().lower().trim()), "erledigt", if(formula.tage < 0, "überfällig", if(formula.tage == 0, "heute", if(formula.tage == 1, "morgen", "in " + formula.tage + " Tagen")))))'
 > properties:
 >   file.name:
 >     displayName: Blatt
@@ -209,7 +209,7 @@ cssclasses:
 >       formula.hinweis: 110
 > ```
 
-## Zu lesen
+## Neu
 
 > [!eba-tabelle|schlicht|ohne-titel|umbruch]
 > ```base
@@ -228,8 +228,6 @@ cssclasses:
 >     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
->   note.status:
->     displayName: Status
 >   formula.oeffnen:
 >     displayName: Datei
 >   note.semester:
@@ -239,11 +237,11 @@ cssclasses:
 > views:
 >   - type: table
 >     rowHeight: medium
->     name: Noch nicht gelesen
->     limit: 12
+>     name: Neu
+>     limit: 30
 >     filters:
 >       and:
->         - 'status == "neu" || !status'
+>         - 'geoeffnet.isEmpty() && datum && date(datum) >= today() - duration("14d")'
 >     groupBy:
 >       property: note.code
 >       direction: ASC
@@ -251,18 +249,18 @@ cssclasses:
 >       - formula.was
 >       - formula.oeffnen
 >       - seiten
->       - status
 >       - datum
 >     sort:
+>       - property: datum
+>         direction: DESC
 >       - property: art
 >         direction: ASC
 >       - property: nummer
 >         direction: ASC
 >     columnSize:
->       formula.was: 260
+>       formula.was: 300
 >       formula.oeffnen: 78
 >       note.seiten: 60
->       note.status: 104
 >       note.datum: 95
 > ```
 
@@ -283,8 +281,6 @@ cssclasses:
 >     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
->   note.status:
->     displayName: Status
 >   formula.oeffnen:
 >     displayName: Datei
 >   note.semester:
@@ -302,7 +298,6 @@ cssclasses:
 >       - formula.was
 >       - formula.oeffnen
 >       - seiten
->       - status
 >     sort:
 >       - property: art
 >         direction: ASC
@@ -312,7 +307,6 @@ cssclasses:
 >       formula.was: 300
 >       formula.oeffnen: 90
 >       note.seiten: 80
->       note.status: 100
 > ```
 
 > [!eba-tabelle|schlicht|umbruch]- Zuletzt eingeordnet
@@ -332,8 +326,6 @@ cssclasses:
 >     displayName: Art
 >   note.seiten:
 >     displayName: Seiten
->   note.status:
->     displayName: Status
 >   formula.oeffnen:
 >     displayName: Datei
 >   note.semester:
@@ -352,7 +344,6 @@ cssclasses:
 >       - formula.oeffnen
 >       - code
 >       - datum
->       - status
 >     sort:
 >       - property: datum
 >         direction: DESC
@@ -362,53 +353,6 @@ cssclasses:
 >       formula.oeffnen: 78
 >       note.code: 69
 >       note.datum: 95
->       note.status: 95
-> ```
-
-> [!eba-tabelle|schlicht|umbruch]- Ohne Begleitnotiz
-> ```base
-> filters:
->   and:
->     - file.inFolder("Unterlagen")
->     - 'file.ext != "md"'
-> formulas:
->   modul: 'file.folder.split("/")[1]'
->   groesse: '(file.size / 1048576).toFixed(1) + " MB"'
->   notiz: 'file(file.folder + "/" + file.basename + ".md")'
->   begleitnotiz: 'if(formula.notiz.isType("null"), "fehlt", formula.notiz.asLink("Notiz"))'
-> properties:
->   file.name:
->     displayName: Datei
->   formula.modul:
->     displayName: Modul
->   file.ext:
->     displayName: Typ
->   formula.groesse:
->     displayName: Größe
->   file.mtime:
->     displayName: Geändert
->   formula.begleitnotiz:
->     displayName: Begleitnotiz
-> views:
->   - type: table
->     rowHeight: medium
->     name: Ohne Begleitnotiz
->     filters:
->       and:
->         - 'formula.notiz.isType("null")'
->     groupBy:
->       property: formula.modul
->       direction: ASC
->     order:
->       - file.name
->       - file.ext
->       - formula.groesse
->       - file.mtime
->     columnSize:
->       file.name: 322
->       file.ext: 62
->       formula.groesse: 80
->       file.mtime: 134
 > ```
 
 <p class="eba-hinweis">ILIAS, einordnen und annotieren: <a class="internal-link" data-href="Einstellungen & Hilfe#Hilfe" href="Einstellungen & Hilfe#Hilfe">Hilfe</a></p>

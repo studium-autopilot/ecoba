@@ -238,9 +238,12 @@ export async function server(oci, { tenancy, a, ads, schluessel }) {
 // ---------- Platzsucher ----------
 // Oracle nimmt höchstens 32 000 Byte Metadaten je Instanz (user_data base64 und SSH-Schlüssel zusammen)
 const METADATEN_MAX = 32000;
-// Fassung des Helfers: Prüfsumme über cloud-init-Vorlage und platzsucher.py, als zweites Kennzeichen am Helfer
+// Fassung des Helfers: Prüfsumme über cloud-init-Vorlage, platzsucher.py und die festen Teile seiner Konfiguration (Bereiche,
+// SSH-Schlüssel: ein neuer Schlüssel in der Cloud Shell käme sonst nie auf den Server), als zweites Kennzeichen am Helfer. Nicht
+// darin: das Boot-Volume (ändert sich, solange ein alter Helfer noch zählt) und das Abbild (sucht der Helfer jede Runde neu).
 const FASSUNG = KENNZEICHEN + "-fassung";
-export const helferFassung = (vorlage, skript) => createHash("sha256").update(vorlage).update("\0").update(skript).digest("hex").slice(0, 16);
+export const helferFassung = (vorlage, skript, { ads = [], ssh = "" } = {}) => createHash("sha256").update(vorlage).update("\0").update(skript)
+  .update("\0").update(JSON.stringify({ ads, ssh })).digest("hex").slice(0, 16);
 
 export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorlage, skript }) {
   const { schritte, merken, muss } = ablauf(oci);
@@ -251,7 +254,8 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
   const PLATZ = "content: KONFIG_JSON_BASE64", PLATZ_SKRIPT = "content: PLATZSUCHER_GZ_BASE64";
   if (!vorlage || vorlage.indexOf(PLATZ) < 0 || vorlage.indexOf(PLATZ_SKRIPT) < 0) throw new Error("vorlage: platzsucher-helfer.yaml fehlt");
   if (!skript || skript.indexOf("#!/usr/bin/env python3") !== 0) throw new Error("skript: platzsucher.py fehlt");
-  const fassung = helferFassung(vorlage, skript);
+  const ssh = schluesselPruefen(schluessel);
+  const fassung = helferFassung(vorlage, skript, { ads, ssh });
   const t = ["--compartment-id", tenancy];
   // Nur Eigenes anfassen: Thema, Gruppe oder Richtlinie gleichen Namens ohne unser Kennzeichen → abbrechen
   const eigenesOder = async (was, abfrage, name) => {
@@ -269,14 +273,13 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     const auftrag = await muss("helfer", ["compute", "instance", "terminate", "--instance-id", helfer.id, "--preserve-boot-volume", "false", "--force",
       "--wait-for-state", "SUCCEEDED", "--wait-for-state", "FAILED"]);
     if ((auftrag || {}).status === "FAILED") throw Object.assign(new Error("helfer: Oracle konnte den alten Helfer nicht beenden"), { schritt: "helfer" });
-    merken("helfer", "ersetzt", "Helfer einer früheren Version beendet; ein neuer sucht mit diesem Stand weiter.");
+    merken("helfer", "ersetzt", "Helfer einer früheren Version beendet (oder mit einem anderen Schlüssel); ein neuer sucht mit diesem Stand weiter.");
     helfer = null;
   }
   if (helfer) merken("helfer", "da", "Der Platzsucher läuft schon.");
   else {
     if (a.plan.status !== "passt") { merken("helfer", "fehler", a.plan.text); return { schritte, exit: 1 }; }
-    const ssh = schluesselPruefen(schluessel);
-    const sub = await eigenesSubnetz(muss, tenancy);
+    const sub =await eigenesSubnetz(muss, tenancy);
     // Bescheid per Mail: Thema und Abo (die Mail von Oracle einmal bestätigen)
     let thema = await eigenesOder("thema", ["ons", "topic", "list", ...t, "--name", NAMEN.thema, "--all"], NAMEN.thema);
     if (!thema) {

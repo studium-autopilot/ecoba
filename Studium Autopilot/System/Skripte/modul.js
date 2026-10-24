@@ -23,7 +23,7 @@
 //     Modul vorgewählt, im laufenden Semester hervorgehoben); ohne Notizen ein Satz davor. Ab sechs Notizen erst die fünf neuesten.
 //  Unter dem Stand (seit 0.4.5, Beta): ein offener Vorschlag aus Alma („Alma: bestanden · 1,7 · Stand 12.02.“ mit Übernehmen und
 //     Ausblenden), gezeichnet von alma-konto.js (ctx.almaKonto.modulFeld); neu gezeichnet, wenn sich die Daten aus Alma ändern.
-// Reine Logik (naechstes, band, noteOk, titelOhne, spanne) für tests/modul.test.js.
+// Reine Logik (naechstes, band, noteOk, notePasst, titelOhne, spanne) für tests/modul.test.js.
 // Stil: eba-core.css Abschnitt 58.7 (eba-mod-*). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -55,6 +55,14 @@ module.exports = function (ctx) {
   // ---------- Reine Logik ----------
   // Note wie 1,7: 1,0 bis 4,0 in Zehnteln oder 5,0 (Feld-Register felder.js, eine Regel)
   const noteOk = (s) => { const r = ctx.user.felder.notePruefen(s); return r.ok && !!r.wert; };
+  // Passt die Note zum Ergebnis? Bestanden heißt 1,0 bis 4,0, nicht bestanden schlechter als 4,0; andere Status und Text, der keine
+  // Zahl ist, passen immer. Beim Wechsel auf bestanden bzw. nicht bestanden fällt eine Note weg, die nicht passt (5,0 aus dem ersten
+  // Versuch, dann bestanden), und das Fenster fragt nach der neuen; bis 24.10.2026 blieb sie stehen und zählte in die Gesamtnote.
+  const notePasst = (status, note) => {
+    const n = Number(text(note).replace(",", "."));
+    if (!text(note) || !isFinite(n)) return true;
+    return status === "bestanden" ? n <= 4 : status === "nicht bestanden" ? n > 4 : true;
+  };
   // Titel ohne das Kürzel des Moduls („Tutorien starten: B110 BWL“ → „Tutorien starten: BWL“)
   const titelOhne = (s, code) => text(text(s).split(code + " ").join("").split(" " + code).join(""));
 
@@ -164,13 +172,17 @@ module.exports = function (ctx) {
   const statusMenue = (anker, f, fm, D) => {
     const st = text(fm.status).toLowerCase() || "offen";
     const benotet = fm.benotet !== false;
-    const note = () => new NotenFenster(text(fm.ergebnis), (v) => schreiben(f, { ergebnis: v })).open();
+    const note = (alt) => new NotenFenster(alt, (v) => schreiben(f, { ergebnis: v })).open();
     const e = STATUS.map((s) => ({
       titel: s.charAt(0).toUpperCase() + s.slice(1), an: s === st,
-      tun: async () => { await schreiben(f, { status: s }); if (benotet && (s === "bestanden" || s === "nicht bestanden") && !text(fm.ergebnis)) note(); },
+      tun: async () => {
+        const fragen = benotet && (s === "bestanden" || s === "nicht bestanden"), weg = fragen && !notePasst(s, fm.ergebnis);
+        await schreiben(f, weg ? { status: s, ergebnis: "" } : { status: s });
+        if (fragen && (weg || !text(fm.ergebnis))) note("");
+      },
     }));
     e.push(null);
-    if (benotet) e.push({ titel: text(fm.ergebnis) ? `Note ${text(fm.ergebnis)} ändern …` : "Note eintragen …", symbol: "pencil", tun: note });
+    if (benotet) e.push({ titel: text(fm.ergebnis) ? `Note ${text(fm.ergebnis)} ändern …` : "Note eintragen …", symbol: "pencil", tun: () => note(text(fm.ergebnis)) });
     e.push({ titel: `${Number(fm.versuch) || 1}. Versuch …`, symbol: "rotate-ccw", tun: () => menue(anker, [1, 2, 3].map((n) => ({
       titel: n + ". Versuch", an: (Number(fm.versuch) || 1) === n, tun: () => schreiben(f, { versuch: n }),
     }))) });
@@ -390,9 +402,10 @@ module.exports = function (ctx) {
       try { zeichnen(el, c); } catch (e) { el.setText("Modul: Fehler – " + e.message); console.error("Modul", e); }
     });
     const bald = ctx.entprellen(() => block.neu(), 400);
+    // unterlage: Der Name einer Vorlesungsnotiz nimmt das Thema aus ihren Folien, auch wenn sie nach der Notiz kommen
     const wichtig = (f, cache) => {
       const typ = cache && cache.frontmatter && cache.frontmatter.typ;
-      return ["modul", "lehrveranstaltung", "termin", "vorlesung", "karteikarten"].indexOf(typ) >= 0
+      return ["modul", "lehrveranstaltung", "termin", "vorlesung", "unterlage", "karteikarten"].indexOf(typ) >= 0
         || (f && (f.path === "System/Einstellungen.md" || String(f.path).indexOf("System/Daten/") === 0));
     };
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (wichtig(f, cache)) bald(); });
@@ -403,5 +416,5 @@ module.exports = function (ctx) {
     if (ctx.almaKonto && ctx.almaKonto.beobachten) ctx.aufraeumen(ctx.almaKonto.beobachten(bald));
   };
 
-  return { registrieren, zeichnen, vorlesungenZeichnen, naechstes, band, noteOk, titelOhne, spanne };
+  return { registrieren, zeichnen, vorlesungenZeichnen, naechstes, band, noteOk, notePasst, titelOhne, spanne };
 };

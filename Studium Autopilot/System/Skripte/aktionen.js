@@ -54,6 +54,7 @@ module.exports = function (ctx) {
           || app.vault.getFiles().find((f) => f.basename === name && f.extension !== "md") || null;
         if (!ziel) { ctx.hinweis(`Keine Datei zu „${name || "dieser Notiz"}“ gefunden.`); return; }
         extern(ziel);
+        if (ctx.user.gesehen) ctx.user.gesehen(c).vermerken(notiz || ziel).catch((e) => console.error("eba gesehen", e)); // zählt nicht mehr als neu
       },
     },
 
@@ -130,8 +131,10 @@ module.exports = function (ctx) {
       ausfuehren: async () => {
         const view = app.workspace.getActiveViewOfType(MarkdownView);
         const f = view && view.file;
-        const folien = String(fmVon(f).folien || "").replace(/^\[\[|\]\]$/g, "");
-        if (!view || !folien) { ctx.hinweis("Diese Notiz hat keine Folien. Trag sie in den Eigenschaften der Notiz ein."); return; }
+        // dieselben Folien wie im Kopf der Notiz (ctx.modell.folien: deine Wahl, sonst die zu dieser Sitzung); verlinkt wird die PDF
+        const d = f && ctx.modell && ctx.modell.folien ? ctx.modell.folien(f).folien[0] : null;
+        const folien = !d ? "" : d.f.extension === "md" ? String(d.fm.datei || "").replace(/^\[\[|\]\]$/g, "") : d.f.name || d.f.path;
+        if (!view || !folien) { ctx.hinweis("Zu dieser Vorlesung gibt es noch keine Folien."); return; }
         const s = String((await ctx.system.prompt("Seite der Folien", "")) || "").trim();
         if (/^\d+$/.test(s)) view.editor.replaceSelection(`[[${folien}#page=${s}|S. ${s}]]`);
       },

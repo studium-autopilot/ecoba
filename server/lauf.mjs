@@ -9,7 +9,8 @@
 //   2. claude -p mit engen Rechten: lesen nur im Arbeitsordner, schreiben nur ausgabe.json, kein Bash, kein Web, keine
 //      Unteragenten; Gmail nur lesend und nur, wenn Gmail dran ist; nie der Uni-Zugang, die Schlüssel oder ~/.claude
 //   3. ausgabe.json prüfen (eingang.mjs), nur Neues bzw. Geändertes nach eingang/, Bestand und Zustand nachziehen
-// Schlägt der Lauf fehl, kommen die Rohdaten zurück nach roh/ (nichts geht verloren).
+// Schlägt der Lauf fehl, kommen die Rohdaten zurück nach roh/ (nichts geht verloren); ebenso nach einem Abbruch (Zeitgrenze von
+// systemd, Neustart): beim Beenden und beim nächsten Start (verwaisteZurueck).
 //   node lauf.mjs                 ein Lauf (vom Dienst gestartet)
 //   node lauf.mjs --anstoss <grund>   nur den Anstoß schreiben (gmail: nur wenn der Takt es will | knopf)
 import { spawn } from "node:child_process";
@@ -157,6 +158,29 @@ function rohZurueck(arbeitRoh, roh) {
   }
 }
 
+// Abgebrochene Läufe (Lauf-Ordner ohne protokoll.json: systemd hat nach der Zeitgrenze beendet, Neustart, Absturz): Rohdaten und
+// Unterlagen zurück wie bei einem Fehlschlag, „läuft“ aus dem Zustand. Kein neuer Anstoß (ein Lauf, der jedes Mal zu lange
+// braucht, liefe sonst im Kreis); die Daten kommen mit dem nächsten. → Namen der Lauf-Ordner
+export function verwaisteZurueck(verzeichnis, jetzt = new Date()) {
+  const laeufe = join(verzeichnis, "laeufe");
+  const verwaist = existsSync(laeufe) ? readdirSync(laeufe).filter((n) => !existsSync(join(laeufe, n, "protokoll.json"))) : [];
+  for (const n of verwaist) {
+    const arbeit = join(laeufe, n);
+    const opus = (lesen(join(arbeit, ".lauf.json"), {}) || {}).opus === true;
+    rohZurueck(join(arbeit, "roh"), join(verzeichnis, "roh"));
+    unterlagenZurueck(join(arbeit, "unterlagen"), join(verzeichnis, "unterlagen", opus ? "opus" : "neu"));
+    writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok: false, code: "abgebrochen", opus }, null, 2));
+  }
+  if (verwaist.length) {
+    const z = lesen(join(verzeichnis, "zustand.json"), {});
+    delete z.laeuftSeit;
+    z.fehler = [...new Set([...(z.fehler || []), "claude-lauf"])];
+    z.letzterLauf = { zeit: jetzt.toISOString(), ok: false };
+    schreiben(join(verzeichnis, "zustand.json"), z);
+  }
+  return verwaist;
+}
+
 const ausfuehren = (befehl, args, optionen) => new Promise((fertig) => {
   const p = spawn(befehl, args, { ...optionen, stdio: ["ignore", "pipe", "pipe"] });
   let aus = "";
@@ -189,6 +213,7 @@ const wartet = (ordner) => existsSync(ordner) && readdirSync(ordner).some((n) =>
 export async function laufen(o = {}) {
   const { verzeichnis } = o;
   const anstossDatei = join(verzeichnis, "anstoss");
+  verwaisteZurueck(verzeichnis);
   const anstoss = lesen(anstossDatei, null);
   if (!anstoss) return { status: "kein-anstoss" };
   rmSync(anstossDatei, { force: true });
@@ -209,6 +234,8 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   for (let i = 2; existsSync(join(verzeichnis, "laeufe", name)); i++) name = `${stempel(jetzt)}-${i}`;
   const arbeit = join(verzeichnis, "laeufe", name);
   mkdirSync(arbeit, { recursive: true });
+  // für verwaisteZurueck: wohin die Unterlagen nach einem Abbruch zurückgehen
+  writeFileSync(join(arbeit, ".lauf.json"), JSON.stringify({ opus }));
   if (opus) mkdirSync(join(arbeit, "roh"));
   else rohUebernehmen(join(verzeichnis, "roh"), join(arbeit, "roh"));
   const unterlagenNeu = join(verzeichnis, "unterlagen", opus ? "opus" : "neu");
@@ -302,6 +329,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
     } else anstossSchreiben(verzeichnis, grund);
   } else {
     const claude = process.env.STUDIUM_CLAUDE || join(process.env.HOME || "/var/lib/studium", ".local", "bin", "claude");
+    // systemd beendet nach TimeoutStartSec (oder beim Herunterfahren) mit SIGTERM: Rohdaten und Unterlagen gleich zurück
+    process.on("SIGTERM", () => { verwaisteZurueck(verzeichnis); process.exit(143); });
     laufen({ verzeichnis, claude: [claude] }).then((r) => console.log("lauf:", JSON.stringify(r)));
   }
 }

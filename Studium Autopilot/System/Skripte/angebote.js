@@ -12,8 +12,8 @@
 // Beim Hochschulsport steht der Buchungsbeginn als eigene Zeile („ab 17:00“) an dem Tag, an dem die Buchung öffnet.
 // Erweiterung: registrieren() meldet den Codeblock an und setzt ctx.angeboteAnzeige (zentral.js zeichnet damit neu, sobald
 // neue Angebote da sind). zentral.js lädt nach diesem Skript, darum alles erst beim Zeichnen nachschlagen. Neu gezeichnet
-// auch, wenn sich die Einstellungen ändern (z. B. Auswahl auf einem anderen Gerät), und bei einem neuen Tag (zurück in der
-// App, alle 15 Min.).
+// auch, wenn sich die Einstellungen ändern (z. B. Auswahl auf einem anderen Gerät), und (Prüfung alle 5 Min. und zurück in
+// der App) sobald ein neuer Tag ist oder die Liste 15 Min. alt ist (vergangene Vorträge, abgelaufene Anmeldungen verschwinden).
 // Stil: eba-core.css, Klassen eba-ang-* (Farben je Art setzt das CSS). iOS-sicher: kein Lookbehind, kein .at()/findLast/
 // structuredClone.
 module.exports = function (ctx) {
@@ -155,20 +155,22 @@ module.exports = function (ctx) {
   };
   const ortText = (a) => [a.ort, a.online ? "online" : ""].filter(Boolean).join(" · ");
   // Anmeldung beim Termin: „Anmeldung ab 19.10.“ (noch nicht offen; beim Hochschulsport steht dafür eine eigene Zeile),
-  // sonst „Anmeldung bis 26.10., 23:59“ (noch offen); Hochschulsport sagt „Buchung“
-  const anmeldeText = (a, heute) => {
+  // sonst „Anmeldung bis 26.10., 23:59“ (noch offen); Hochschulsport sagt „Buchung“. jetzt („HH:MM“, optional): Zeitpunkte mit
+  // Uhrzeit zählen heute erst ab dieser Uhrzeit als erreicht; ein Tag ohne Uhrzeit gilt bis zu seinem Ende.
+  const spaeterAls = (s, heute, jetzt) => s.slice(0, 10) > heute || (s.slice(0, 10) === heute && s.length > 10 && !!jetzt && s.slice(11, 16) > jetzt);
+  const anmeldeText = (a, heute, jetzt) => {
     const m = a.anmeldung;
     if (!m) return "";
     const wort = a.kategorie === "sport" ? "Buchung" : "Anmeldung";
-    if (m.ab && m.ab.slice(0, 10) > heute && a.kategorie !== "sport") return `${wort} ab ${zeitpunktText(m.ab)}`;
-    if (m.bis && m.bis.slice(0, 10) >= heute) return `${wort} bis ${zeitpunktText(m.bis)}`;
+    if (m.ab && spaeterAls(m.ab, heute, jetzt) && a.kategorie !== "sport") return `${wort} ab ${zeitpunktText(m.ab)}`;
+    if (m.bis && (spaeterAls(m.bis, heute, jetzt) || (m.bis.slice(0, 10) === heute && (m.bis.length <= 10 || !jetzt)))) return `${wort} bis ${zeitpunktText(m.bis)}`;
     return "";
   };
   // Zeile unter dem Titel: Reihe · Ort · online · Anmeldung; beim Buchungsbeginn: Buchungsstart · Reihe · Kursbeginn
-  const metaText = (z, heute) => {
+  const metaText = (z, heute, jetzt) => {
     const a = z.angebot;
     if (z.art === "buchung") return ["Buchungsstart", a.reihe, a.datum !== z.tag ? `Kurs ab ${wochentag(a.datum)} ${dm(a.datum)}` : ""].filter(Boolean).join(" · ");
-    return [a.reihe, ortText(a), anmeldeText(a, heute)].filter(Boolean).join(" · ");
+    return [a.reihe, ortText(a), anmeldeText(a, heute, jetzt)].filter(Boolean).join(" · ");
   };
 
   // ---------- Zustand bis zum Neustart (für alle Blöcke gleich) ----------
@@ -193,6 +195,7 @@ module.exports = function (ctx) {
   // ---------- Zeichnen ----------
   let griff = null;
   let gezeichnetAm = "";
+  let gezeichnetMs = 0; // letzte Zeichnung der Liste (0: Karte „Welche Angebote …“ offen oder nichts gezeichnet)
   const alleNeu = () => { if (griff) griff.neu(); };
   // Nach dem Neuzeichnen den Fokus auf dasselbe Bedienelement setzen (Tastatur, Bildschirmleser)
   const fokus = (el, schluessel) => {
@@ -252,7 +255,7 @@ module.exports = function (ctx) {
     return marken;
   };
 
-  const zeilenZeichnen = (liste, tage, heute) => {
+  const zeilenZeichnen = (liste, tage, heute, jetzt) => {
     const marken = monatsMarke(tage, heute);
     for (const t of tage) {
       const tag = liste.createDiv({ cls: "eba-ang-tag" + (t.tag === heute ? " is-heute" : "") + (marken[t.tag] ? " is-monat" : "") });
@@ -266,7 +269,7 @@ module.exports = function (ctx) {
         const e = eintraege.createDiv({ cls: `eba-ang-eintrag ${a.kategorie}` + (z.art === "buchung" ? " is-buchung" : "") });
         e.createSpan({ cls: "eba-ang-zeit", text: zeitText(z) });
         e.createEl("a", { cls: "eba-ang-titel external-link", text: a.titel, href: a.url, attr: { target: "_blank", rel: "noopener" } });
-        const meta = metaText(z, heute);
+        const meta = metaText(z, heute, jetzt);
         if (meta) e.createSpan({ cls: "eba-ang-meta", text: meta });
       }
     }
@@ -275,8 +278,9 @@ module.exports = function (ctx) {
   const zeichnen = (el) => {
     el.empty();
     const jetzt = ctx.date.jetzt();
-    const heute = isoVon(jetzt);
+    const heute = isoVon(jetzt), uhr = `${pad(jetzt.getHours())}:${pad(jetzt.getMinutes())}`;
     gezeichnetAm = heute;
+    gezeichnetMs = 0;
     const Z = ctx.zentral;
     const daten = Z && Z.angebote ? Z.angebote() : null;
     const box = el.createDiv({ cls: "eba-ang", attr: { lang: "de" } });
@@ -290,12 +294,13 @@ module.exports = function (ctx) {
     }
     const w = wahlAktuell();
     if (!w.gewaehlt || ansicht.waehlen) { wahlZeichnen(box, el, w, daten.angebote); return; }
+    gezeichnetMs = jetzt.getTime();
 
     // Chips: nur die gewählten Arten, und nur ab zwei (ein- und ausblenden bis zum Neustart)
     const arten = artenDerAuswahl(w.auswahl);
     const chips = arten.length > 1;
     const artenAus = chips ? ansicht.aus.filter((k) => arten.indexOf(k) >= 0) : [];
-    const r = auswaehlen(daten.angebote, { heute, jetzt: `${pad(jetzt.getHours())}:${pad(jetzt.getMinutes())}`, auswahl: w.auswahl, aus: artenAus });
+    const r = auswaehlen(daten.angebote, { heute, jetzt: uhr, auswahl: w.auswahl, aus: artenAus });
     if (chips) {
       const filter = box.createDiv({ cls: "eba-ang-filter", attr: { role: "group", "aria-label": "Angebote filtern" } });
       for (const k of ARTEN) {
@@ -316,7 +321,7 @@ module.exports = function (ctx) {
     else if (artenAus.length === arten.length) box.createDiv({ cls: "eba-ang-leer", text: "Alles ausgeblendet. Tippe oben auf eine Art, um sie wieder zu sehen." });
     else if (!r.nah.length) box.createDiv({ cls: "eba-ang-leer", text: "Gerade keine Angebote in den nächsten zwei Wochen." });
     const tage = r.nah.concat(ansicht.mehr ? r.spaeter : []);
-    if (tage.length) zeilenZeichnen(box.createDiv({ cls: "eba-ang-liste" }), tage, heute);
+    if (tage.length) zeilenZeichnen(box.createDiv({ cls: "eba-ang-liste" }), tage, heute, uhr);
     if (r.spaeterZeilen) {
       const mehr = box.createEl("button", { cls: "eba-ang-mehr", text: ansicht.mehr ? "Weniger anzeigen" : `Mehr anzeigen (${r.spaeterZeilen})`,
         attr: { type: "button", "aria-expanded": String(ansicht.mehr), "data-eba-fokus": "mehr" } });
@@ -343,10 +348,15 @@ module.exports = function (ctx) {
     // Auswahl oder Fachschaft-Schalter geändert (auch per Sync von einem anderen Gerät)
     const bald = ctx.entprellen(() => griff.neu(), 300);
     ctx.an(app.metadataCache, "changed", (f) => { if (f && f.path === EINSTELLUNGEN) bald(); });
-    // Neuer Tag (Obsidian über Nacht offen, iPhone/iPad aus dem Hintergrund): neu zeichnen
-    const tagPruefen = () => { if (gezeichnetAm && isoVon(ctx.date.jetzt()) !== gezeichnetAm) griff.neu(); };
-    ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagPruefen(); });
-    ctx.intervall(tagPruefen, 15 * 60e3);
+    // Neuer Tag (Obsidian über Nacht offen, iPhone/iPad aus dem Hintergrund) oder Liste älter als 15 Min.: neu zeichnen,
+    // damit vergangene Vorträge und abgelaufene Anmeldungen verschwinden. Nicht im Hintergrund, nicht bei offener Auswahlkarte.
+    const pruefen = () => {
+      if (!gezeichnetAm || document.visibilityState === "hidden") return;
+      const jetzt = ctx.date.jetzt();
+      if (isoVon(jetzt) !== gezeichnetAm || (gezeichnetMs && jetzt.getTime() - gezeichnetMs >= 15 * 60e3)) griff.neu();
+    };
+    ctx.dom(document, "visibilitychange", pruefen);
+    ctx.intervall(pruefen, 5 * 60e3);
   };
 
   return { registrieren, auswaehlen, wahlLesen, wahlSchreiben, wahlNeu, wahlEintraege, wahlSchluessel, artenDerAuswahl, VORGABE, zeitText, ortText,

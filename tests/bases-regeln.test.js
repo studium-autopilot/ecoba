@@ -1,7 +1,8 @@
 // Bases-Formeln, die eine Regel des Fachmodells nachbilden (Noten & ECTS: Kennzahlen ECTS, Orientierungsprüfung, Gesamtnote;
 // Spalten Termin, Stand, Block und der Filter „im Plan“), gegen das JavaScript des Modells (ctx.modell) auf ausgedachten
 // Notizen. Bases-Formeln können kein Plugin-JS aufrufen; dieser Test hält beide Fassungen gleich. Ausgewertet mit dem kleinen
-// Auswerter tests/bases-formel.js. Läuft ohne Obsidian: node --test tests/
+// Auswerter tests/bases-formel.js. Dazu eine Falle von Bases selbst, die der Auswerter nicht nachbildet (letzter Test).
+// Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -107,4 +108,29 @@ test("Fälle, an denen sich beide Fassungen früher unterschieden", () => {
   assert.equal(auswerten(BESTANDEN_FILTER, W, pfad("SQ100"), BESTANDEN), true);
   assert.equal(auswerten("formula.zaehlt", W, pfad("SQ100"), BESTANDEN), 9, "SQ-Kurse 6 + 4, höchstens 9");
   assert.equal(auswerten(BESTANDEN_FILTER, W, pfad("X100"), BESTANDEN), false, "offen");
+});
+
+// Bases wertet „!feld“ für ein fehlendes Feld falsch aus (geprüft in Obsidian am 24.10.2026: Filter „!geoeffnet“ fand keine
+// Notiz, „if(!faellig, …)“ nahm bei einem Übungsblatt ohne Datum den falschen Zweig). Richtig ist „feld.isEmpty()“.
+// Verneinte Formeln (formula.x) und Methodenaufrufe (!x.contains(…)) sind davon nicht betroffen.
+test("Kein verneintes Feld in Bases-Blöcken", () => {
+  const TRESOR = path.join(__dirname, "..", "Studium Autopilot");
+  const funde = [];
+  const durchsuchen = (ordner) => {
+    for (const e of fs.readdirSync(ordner, { withFileTypes: true })) {
+      if (e.name.startsWith(".")) continue;
+      const voll = path.join(ordner, e.name);
+      if (e.isDirectory()) { durchsuchen(voll); continue; }
+      if (!/\.(md|base)$/.test(e.name)) continue;
+      const text = fs.readFileSync(voll, "utf8");
+      const teile = e.name.endsWith(".base") ? [text] : text.split("```base").slice(1).map((b) => b.slice(0, b.indexOf("```")));
+      for (const b of teile) {
+        for (const m of b.matchAll(/!((?:value\.properties\.|note\.)?[A-Za-z_]\w*)(?![\w.(=])/g)) {
+          funde.push(path.relative(TRESOR, voll).split(path.sep).join("/") + ": !" + m[1]);
+        }
+      }
+    }
+  };
+  durchsuchen(TRESOR);
+  assert.deepEqual(funde, []);
 });

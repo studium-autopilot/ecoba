@@ -18,7 +18,10 @@
 // Wann: beim Öffnen der Seite, wenn die Liste älter als 5 Minuten ist (nach einem Fehler erst nach 5 Minuten wieder von selbst),
 //   und mit Aktualisieren (frühestens 15 s nach dem letzten Abruf). Kein Abruf im Hintergrund.
 // Datenschutz: Mails nur im Speicher dieses Geräts, solange Obsidian läuft. Nie im Tresor, in Hinweisen (Notice), Konsole,
-//   Protokoll, Fehlern oder im Datenkanal. Fehler nennen nur die Art (zugang-falsch, netz, unerwartet).
+//   Protokoll, Fehlern oder im Datenkanal. Fehler nennen nur die Art (zugang-falsch, netz, unerwartet). Ein anderer Benutzername
+//   im Uni-Login oder Trennen meldet die alte Sitzung ab und vergisst ihre Mails.
+// Datum: Die Liste zeigt Mails von heute nur mit Uhrzeit; beim Lesen kommt das Datum dazu, und an einem neuen Tag zeichnet der
+//   Block neu (wie kalender.js), damit gestrige Mails nicht mehr als heute erscheinen.
 // Für andere Skripte: ctx.postfach = { status, laden, oeffnen, einschalten, ausschalten }. Testeinstieg: erzeugen(abh)
 //   (tests/postfach.test.js, Webmail als Attrappe).
 // Stil: eba-core.css Abschnitt 67, Klassen eba-pf-*; Zeilen wie die Verbindungen (.eba-vb-liste).
@@ -41,16 +44,31 @@ const artVon = (e) => (e && TEXTE[e.art] ? e.art : e && e.grund && e.grund !== "
 
 // ---------- Ablauf (ohne Obsidian, tests/postfach.test.js) ----------
 // abh: { sitzung() → { anfrage }, html: postfach-html, zugang() → { benutzer, gesperrt, bestaetigt } | null, kennwort() → Text,
-//   ablehnen(dienst), lokal(k, v?), jetzt() → ms, zeit(fn, ms) → id, stopp(id), geaendert(), z (Zustand, überlebt Hot-Reload) }
+//   ablehnen(dienst), lokal(k, v?), jetzt() → ms, heute() → „YYYY-MM-DD“, zeit(fn, ms) → id, stopp(id), geaendert(),
+//   z (Zustand, überlebt Hot-Reload; benutzer = Uni-Login, mit dem Sitzung und Mails geholt wurden) }
 const erzeugen = (abh) => {
   const P = abh.html;
   const z = abh.z || {};
-  const neuerZustand = () => Object.assign(z, { sitzung: null, abmelden: "", seiten: {}, mails: {}, seite: 1, offen: 0, ungelesen: null,
-    laeuft: false, fehler: "", versuch: 0, timer: null });
-  if (!z.seiten) neuerZustand();
+  const neuerZustand = () => Object.assign(z, { sitzung: null, abmelden: "", benutzer: "", seiten: {}, mails: {}, seite: 1, offen: 0,
+    ungelesen: null, laeuft: false, fehler: "", versuch: 0, timer: null });
+  if (!z.seiten || z.benutzer === undefined) neuerZustand(); // ohne benutzer: Stand einer älteren Fassung, Konto unbekannt
   const geaendert = () => { try { abh.geaendert(); } catch (e) { /* Anzeige egal */ } };
+  const benutzer = () => { const u = abh.zugang(); return (u && u.benutzer) || ""; };
+
+  // Anderer Uni-Login: die Sitzung des alten abmelden und seine Mails vergessen. Ein leerer Benutzername zählt nur mit entfernt
+  // (Meldung „zugang“ von ilias.js, z. B. nach Trennen); kurz leer beim Neuladen von ilias.js lässt alles stehen.
+  const kontoPruefen = (o) => {
+    const jetzt = benutzer();
+    if (!z.benutzer || z.benutzer === jetzt || (!jetzt && !(o && o.entfernt))) return false;
+    const laeuft = z.laeuft; // ein Abruf unterwegs verwirft sein Ergebnis selbst (laden, oeffnen); bis dahin kein zweiter
+    abmelden();
+    neuerZustand();
+    z.laeuft = laeuft;
+    return true;
+  };
 
   const status = () => {
+    kontoPruefen();
     const u = abh.zugang();
     if (!u || !u.benutzer) return "ohne-login";
     if (u.gesperrt) return "gesperrt";
@@ -75,7 +93,7 @@ const erzeugen = (abh) => {
     if (!u || !u.benutzer || u.gesperrt || !u.bestaetigt) throw fehlerArt("gesperrt");
     const s = abh.sitzung();
     const r = await s.anfrage({ url: P.BASIS + "/login.php" });
-    if (P.seite(r.text) === "angemeldet") { z.sitzung = s; z.abmelden = P.abmeldeAdresse(r.text); return; }
+    if (P.seite(r.text) === "angemeldet") { z.sitzung = s; z.abmelden = P.abmeldeAdresse(r.text); z.benutzer = u.benutzer; return; }
     const f = P.anmeldeFormular(r.text);
     if (!f) throw fehlerArt("unerwartet");
     const felder = f.felder.filter((x) => EIGENE.indexOf(x[0]) < 0);
@@ -85,7 +103,7 @@ const erzeugen = (abh) => {
     geheim = "";
     const a = await s.anfrage({ url: f.action, methode: "POST", formular: felder });
     felder.length = 0;
-    if (P.seite(a.text) === "angemeldet") { z.sitzung = s; z.abmelden = P.abmeldeAdresse(a.text); return; }
+    if (P.seite(a.text) === "angemeldet") { z.sitzung = s; z.abmelden = P.abmeldeAdresse(a.text); z.benutzer = u.benutzer; return; }
     if (P.fehler(a.text) === "zugang-falsch") {
       try { await abh.ablehnen("mail"); } catch (e) { /* Marker egal, der Fehler zählt */ }
       throw fehlerArt("zugang-falsch");
@@ -111,12 +129,14 @@ const erzeugen = (abh) => {
     o = o || {};
     const nr = Math.max(1, Math.floor(+o.seite || z.seite || 1));
     if (z.laeuft || status() !== "bereit") return false;
-    const jetzt = abh.jetzt();
+    const jetzt = abh.jetzt(), wer = benutzer();
     if (o.manuell && jetzt - z.versuch < KNOPF_ABSTAND && z.seiten[nr] && nr === z.seite) return false;
     z.laeuft = true; z.versuch = jetzt; z.fehler = "";
     geaendert();
     try {
-      const l = P.liste(await holen(P.listeAdresse(nr)));
+      const l = P.liste(await holen(P.listeAdresse(nr)), abh.heute());
+      // Uni-Login inzwischen gewechselt: Liste des alten Kontos verwerfen
+      if (wer !== z.benutzer || wer !== benutzer()) return false;
       if (l.art === "unsicher") throw fehlerArt("unerwartet");
       z.seiten[nr] = { mails: l.mails, seiten: l.seiten, gesamt: l.gesamt, zeit: abh.jetzt() };
       z.seite = nr;
@@ -140,8 +160,9 @@ const erzeugen = (abh) => {
   const oeffnen = async (buid) => {
     if (z.mails[buid]) return z.mails[buid];
     if (status() !== "bereit") throw fehlerArt("gesperrt");
+    const wer = benutzer();
     const n = P.nachricht(await holen(P.nachrichtAdresse(buid)));
-    if (!n) throw fehlerArt("unerwartet");
+    if (!n || wer !== z.benutzer || wer !== benutzer()) throw fehlerArt("unerwartet");
     z.mails[buid] = n;
     let war = false;
     for (const k of Object.keys(z.seiten)) for (const m of z.seiten[k].mails) if (m.buid === buid && m.ungelesen) { m.ungelesen = false; war = true; }
@@ -165,7 +186,7 @@ const erzeugen = (abh) => {
     geaendert();
   };
 
-  return { status, laden, oeffnen, faellig, einschalten, ausschalten, abmelden, zustand: () => z, TEXTE, K: { FRISCH, WIEDER, KNOPF_ABSTAND, LEERLAUF } };
+  return { status, laden, oeffnen, faellig, einschalten, ausschalten, abmelden, kontoPruefen, zustand: () => z, TEXTE, K: { FRISCH, WIEDER, KNOPF_ABSTAND, LEERLAUF } };
 };
 
 module.exports = function (ctx) {
@@ -196,6 +217,7 @@ module.exports = function (ctx) {
       ablehnen: (dienst) => (ctx.ilias && ctx.ilias.zugangAbgelehnt ? ctx.ilias.zugangAbgelehnt(dienst) : null),
       lokal,
       jetzt: () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date()).getTime(),
+      heute,
       zeit: (fn, ms) => ctx.zeit(fn, ms),
       stopp: (id) => { if (ctx.stopp) ctx.stopp(id); },
       geaendert: neuZeichnen,
@@ -329,10 +351,27 @@ module.exports = function (ctx) {
     block = ctx.codeblock(SPRACHE, (quelle, el) => {
       try { zeichnen(el); } catch (e) { console.error(SPRACHE, e && e.name); el.empty(); el.setText(String(quelle)); }
     });
-    // Uni-Login gespeichert, bestätigt oder abgelehnt (ilias.js): neu zeichnen. Das Plugin startet die Erweiterungen alphabetisch,
-    // ilias.js also vor diesem Skript.
-    if (ctx.ilias && ctx.ilias.beobachten) ctx.aufraeumen(ctx.ilias.beobachten((x) => { if (!x || x.art === "zugang" || x.art === "fertig") neuZeichnen(); }));
+    // Uni-Login gespeichert, bestätigt, abgelehnt oder getrennt (ilias.js): ein anderer oder entfernter Benutzername meldet die
+    // alte Sitzung gleich ab und vergisst ihre Mails (auch ohne offene Seite), dann neu zeichnen. Das Plugin startet die
+    // Erweiterungen alphabetisch, ilias.js also vor diesem Skript.
+    if (ctx.ilias && ctx.ilias.beobachten) {
+      ctx.aufraeumen(ctx.ilias.beobachten((x) => {
+        if (x && x.art !== "zugang" && x.art !== "fertig") return;
+        if (motorInst) motorInst.kontoPruefen({ entfernt: !!x && x.art === "zugang" });
+        neuZeichnen();
+      }));
+    }
     ctx.aufraeumen(() => { const M = motorInst; if (M) M.abmelden(); });
+    // Neuer Tag: „08:40“ von gestern wird zu „23.10.“ (alle 30 Minuten und beim Zurückkommen in die App, nur sichtbar)
+    let gezeichnetAm = heute();
+    const tagNeu = () => {
+      const h = heute();
+      if (h === gezeichnetAm || document.visibilityState !== "visible") return;
+      gezeichnetAm = h;
+      neuZeichnen();
+    };
+    ctx.intervall(tagNeu, 30 * MIN);
+    ctx.dom(document, "visibilitychange", tagNeu);
   };
 
   const api = {

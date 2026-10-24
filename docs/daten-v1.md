@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 18.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 24.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, `abdeckung` im Manifest seit 0.5.3). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -19,8 +19,8 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, veröffentlicht seit 18.10.2026, siehe [unten](#veranstaltungenjson) |
 | `kapitel.json` | nein | 512 KB | Kapitellisten der Module für den Lernplan (höchstens 60 Module), seit 19.10.2026, siehe [unten](#kapiteljson) |
 | `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, UB-Kurse, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
-| `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); Plugin 0.1 liest ihn noch nicht |
-| `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; Plugin 0.1 liest ihn noch nicht |
+| `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); das Plugin liest ihn noch nicht |
+| `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; das Plugin liest ihn noch nicht |
 
 Alle Dateien: UTF-8 ohne BOM, gültiges JSON. Die Formatierung (Einrückung) ist frei, die Prüfsumme gilt für die Bytes, wie
 sie ausgeliefert werden.
@@ -418,10 +418,13 @@ Unbekannte Felder werden ignoriert.
 
 **Was das Plugin daraus macht:** Jedes Gerät holt die Datei selbst und merkt sie sich gerätelokal (wie `angebote.json`). Nur der
 Abrufer schreibt daraus `Lernplan/<Code> Lernplan.md` (`herkunft: zentral`), nur für Module des laufenden Semesters, die in deinem
-Plan liegen (oder laufen bzw. angemeldet sind) und nicht bestanden sind. Häkchen (nach Kapitel- und Unterkapitelnummer), `seit`,
-`verstanden_bis` und alles unter „## Meine Notizen“ bleiben bei jeder neuen Liste. Notizen mit anderer `herkunft` (eigene KI) fasst
-das Plugin nie an. Eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert. Fehlt die Datei im Manifest, bleiben die
-Notizen, wie sie sind.
+Plan liegen (oder laufen bzw. angemeldet sind) und nicht bestanden sind. Häkchen gehen mit dem Titel des (Unter-)Kapitels, nicht
+mit seiner Nummer: Wird ein Kapitel eingeschoben oder umnummeriert, bleibt es abgehakt, und ein neues Kapitel unter alter Nummer
+erbt kein Häkchen. Eigene Eigenschaften (`seit`, `verstanden_bis` …), eigene Zeilen und Aufgaben unter „## Kapitel“ (auch mit
+Nummer vorn) und alles unter „## Meine Notizen“ bleiben bei jeder neuen Liste. Notizen mit anderer `herkunft` (eigene KI) fasst das Plugin nie an. Eine gelöschte Notiz
+entsteht erst wieder, wenn sich ihre Liste ändert, auch wenn inzwischen ein anderes Gerät abruft (der Stand steht in `abruf.json`).
+Ältere Notizen (anderes Semester, Modul bestanden oder verschoben) bleiben und heißen im Lernplan „nicht mehr dran“. Fehlt die Datei
+im Manifest, bleiben die Notizen, wie sie sind.
 
 ## veranstaltungen.json
 
@@ -435,7 +438,9 @@ Gelesen werden nur die Detailseiten der Veranstaltungen zu den Modulen im Modulk
 Bei Fehlern oder einer Überlastungsantwort ruht der Abruf bis zum nächsten Tag. Übernommen werden nur Fakten: Titel, Art,
 Parallelgruppe, Rhythmus, Wochentag, Zeit, Zeitraum, Ausfalltermine, Raum und Raum- oder Zeitänderungen je Datum. Seit
 20.10.2026 kommen Räume dazu, die nur eine Ankündigung an alle Teilnehmenden nennt (Kursmail, ILIAS-Kurs, Uni-Seite), nie Angaben
-nur zur eigenen Gruppe des Autors; einen eigenen Termin „Raumwechsel“ gibt es dafür nicht mehr. **Keine
+nur zur eigenen Gruppe des Autors; einen eigenen Termin „Raumwechsel“ gibt es dafür nicht mehr. Seit 24.10.2026 kommen
+regelmäßige Lehrveranstaltungen dazu, die Alma nicht kennt (z. B. das Data Science Lab in S110, nur im ILIAS-Kurs), wenn die
+Kursseite oder eine Ankündigung an alle Teilnehmenden Tag und Zeit nennt; `quelle_url` ist dann die Kursseite. **Keine
 Namen und kein Freitext:** Verantwortliche, Durchführende, Vertretungen, Bemerkungen und Teilnehmerzahlen werden nie gespeichert.
 
 ```json
@@ -478,6 +483,7 @@ Ein Eintrag ist eine **Termin-Serie** (eine Zeile der Alma-Terminliste), nicht e
 | `code` | ja | Modulcode wie bei Terminen |
 | `art` | ja | `Vorlesung`, `Übung`, `Tutorium`, `Seminar`, `Kolloquium`, `Praktikum`, `Kurs` oder `Sonstige`. Übungsgruppen heißen `Tutorium`, wenn der Kurs sie so nennt (Alma sagt meist „Übung“). Ein unbekannter Wert gilt im Plugin als `Sonstige` (der Eintrag bleibt). |
 | `titel` | ja | 1–120 Zeichen, Regeln wie `titel` bei Terminen; der offizielle Titel aus Alma, sonst `<code> <art>` |
+| `bezeichnung` | nein | seit 24.10.2026: offizieller Name einer Lehrveranstaltung außerhalb von Alma, wie ihn Kursseite, ILIAS-Ordner oder Folien nennen (z. B. „Data Science Lab“ zur `art` `Praktikum`), ≤ 30 Zeichen, reiner Text, nur zur `art` Kolloquium, Praktikum, Kurs oder Sonstige (Vorlesung, Übung, Tutorium und Seminar steuern Gruppen und Raster). Das Plugin schreibt ihn statt der Art in Dateiname, Titel und Kopf der Notiz und ins Feld `art` der Notiz (so zeigt ihn auch das Wochenraster); der Abgleich mit eigenen Notizen folgt weiter `art` aus den Daten. Kommt er dazu oder ändert er sich, benennt das Plugin die Notiz um, solange sie noch ihren Namen nach der Regel trägt. Ungültig, zu einer anderen Art oder selbst eine dieser vier Arten („Übung“, ohne Rücksicht auf Groß- und Kleinschreibung) → ignoriert (der Eintrag bleibt); ältere Plugins zeigen die Art. |
 | `gruppe` | nein | Nummer der Parallelgruppe in Alma, ≤ 20 Zeichen, reiner Text; bei Vorlesungen meist `1`. Nicht dieselbe Nummer wie in ILIAS. |
 | `tag` | ja | `Mo` bis `So`; immer der Wochentag von `zeitraum.von` (sonst wird der Eintrag verworfen) |
 | `von`, `bis` | ja | `HH:MM`, `bis` nach `von`, wie in Alma (meist volle Stunden) |
@@ -518,7 +524,7 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
 - **„Besuche ich nicht“** je id: bleibt auf den Geräten des Nutzers, auch wenn sich der Eintrag später ändert.
 - **Ausfälle und Raumänderungen** nur im Wochenraster und in der Notiz, keine eigenen `Lehre`-Termine.
 - **Wegfall** wie bei Terminen, mit Schutz: Fehlen auf einmal mehr als die Hälfte der zentralen Veranstaltungen, gilt keine als
-  entfallen.
+  entfallen. Nur Notizen des aktuellen Semesters zählen: Der Export darf beim Semesterwechsel das alte Semester weglassen.
 
 ## Was das Plugin daraus macht (Kurzfassung)
 
@@ -528,7 +534,10 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
   übernimmt erst, wenn `zuletzt` älter als 80 Min. ist; der Abrufer erneuert die Datei höchstens alle 50 Min., bei Läufen alle
   15 Min. also etwa stündlich. Der Knopf **Aktualisieren** übernimmt sofort, außer der Abrufer hat vor weniger als 2 Min.
   abgerufen. Wer übernimmt, schreibt `abruf.json` vor den Notizen; jeder Lauf liest sie direkt vor dem Schreiben neu und schreibt
-  nichts, wenn inzwischen ein anderes Gerät übernommen hat.
+  nichts, wenn inzwischen ein anderes Gerät übernommen hat. `angewendet` (Grabsteine gelöschter Notizen) verliert eine id erst,
+  wenn sie seit 30 Tagen weder in den Daten noch als zentrale Notiz im Tresor steht (nicht nach einem Massenwegfall).
+- **Fehlende Datei im Manifest:** Ihre Notizen bleiben beim letzten Stand; das Plugin wendet auch keinen älteren, auf dem Gerät
+  gespeicherten Stand davon neu an.
 - **Notizen:** `Termine/JJJJ-MM-TT Titel.md` mit `herkunft: zentral` und `zentral_id`. Felder aus den Daten werden aktualisiert;
   `erledigt`, alles unter `## Meine Notizen`, eigene Felder und Tags nie. Notizen ohne `herkunft: zentral` nie, außer bei der
   Übergabe nach id (nächster Punkt).
@@ -550,8 +559,8 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
   für das aktuelle Fachsemester, ohne Parallelgruppen und ohne „Besuche ich nicht“ (`stundenplan_ausgeblendet` in den
   Einstellungen). Eine eigene Notiz (Alma oder von Hand) mit gleichem Code, Art, Wochentag und Beginn (±15 Min., c.t.) gewinnt.
   `ausfall` und `aenderungen` landen im Wochenraster, `raum_seit`/`raum_vorher` in der Notiz (seit 20.10.2026; die Woche zeigt
-  zwei Wochen lang „Neuer Raum“, wie bei Alma). Wegfall mit Schutz (mehr als die Hälfte und mehr als 2 laufende Serien).
-  Einzelheiten: `docs/architektur.md`, „Datenkanal“ → „Zentraler Stundenplan“.
+  zwei Wochen lang „Neuer Raum“, wie bei Alma). Wegfall mit Schutz (mehr als die Hälfte und mehr als 2 laufende Serien);
+  Notizen eines anderen Semesters bleiben beim Semesterwechsel unverändert und zählen nicht mit. Einzelheiten: `docs/architektur.md`, „Datenkanal“ → „Zentraler Stundenplan“.
 
 ## Pflichten des Exports (Seite des Autors, `export-daten.py` im Uni-Abgleich)
 

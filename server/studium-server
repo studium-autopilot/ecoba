@@ -7,6 +7,7 @@ PAKET=/opt/studium-server/aktuell
 KONFIG=/etc/studium-server/dienst.json
 DATEN=/var/lib/studium-server
 ZUGANG=/etc/credstore.encrypted/uni-zugang
+CLAUDE=/var/lib/studium/.local/bin/claude
 RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest
 
 hilfe() {
@@ -20,7 +21,7 @@ studium-server zustand                 Zustand für den Status jetzt neu prüfen
 studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell für die Claude-Läufe (Standard: sonnet, schont das Limit)
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
-studium-server aktualisieren           neuestes Server-Paket aus dem Release holen (Prüfsumme) und installieren
+studium-server aktualisieren           Claude Code aktualisieren, neuestes Server-Paket aus dem Release holen (Prüfsumme) und installieren
 studium-server livesync                LiveSync einschalten (falls nötig), dann Link und Code für ein Gerät (30 Minuten)
 studium-server livesync einschalten    nur einschalten: CouchDB für den Tresor, HTTPS unter obsidian.<IP>.sslip.io
 studium-server livesync verbinden      nur Link und Code für ein weiteres Gerät
@@ -74,8 +75,35 @@ uni_zugang() {
   esac
 }
 
+# Ist Version $1 neuer als $2? Wie bei SemVer zählt eine Vorabversion weniger als die fertige mit derselben Nummer
+# (0.5.9-beta.1 < 0.5.9 < 0.5.10); sort -V allein sähe 0.5.9-beta.1 nach 0.5.9. Gleiche Fassung in installieren.sh.
+version_neuer() {
+  local a=$1 b=$2 ka=${1%%-*} kb=${2%%-*}
+  [ "$a" != "$b" ] || return 1
+  if [ "$ka" = "$kb" ]; then
+    [ "$a" != "$ka" ] || return 0
+    [ "$b" != "$kb" ] || return 1
+    ka=${a#*-} kb=${b#*-}
+  fi
+  [ "$(printf '%s\n%s\n' "$ka" "$kb" | sort -V | tail -n 1)" = "$ka" ]
+}
+
+# Claude Code aktuell halten: Eine alte Fassung kennt neuere Schalter oder Modellnamen nicht. Nie während eines Claude-Laufs,
+# damit der laufende nicht mitten im Wechsel steckt; dann beim nächsten Mal. Der Lauf ist Type=oneshot: Während er läuft, ist
+# er „activating“, nicht „active“ (systemctl is-active sähe ihn nicht).
+claude_aktualisieren() {
+  [ -x "$CLAUDE" ] || return 0
+  case "$(systemctl show -P ActiveState studium-server-lauf.service 2>/dev/null || true)" in
+    activating|active|deactivating|reloading)
+      echo "Claude Code: Ein Lauf läuft gerade; Update beim nächsten Mal."
+      return 0 ;;
+  esac
+  sudo -u studium -H "$CLAUDE" update || echo "Claude Code ließ sich nicht aktualisieren; nächster Versuch beim nächsten Mal." >&2
+}
+
 aktualisieren() {
   root_noetig aktualisieren
+  claude_aktualisieren
   local info url pruefsumme tmp neu alt
   info=$(curl -fsSL "$RELEASES") || { echo "GitHub nicht erreichbar." >&2; exit 1; }
   url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
@@ -91,7 +119,7 @@ aktualisieren() {
   alt=$(cat "$PAKET/VERSION" 2>/dev/null || true)
   if [ "$neu" = "$alt" ]; then echo "Schon aktuell ($alt)."; exit 0; fi
   # Nur vorwärts: Ein Server mit neuerem Stand (z. B. aus einem Testpaket) geht nie auf ein älteres Release zurück.
-  if [ -n "$alt" ] && [ "$(printf '%s\n%s\n' "$alt" "$neu" | sort -V | tail -n 1)" != "$neu" ]; then
+  if [ -n "$alt" ] && ! version_neuer "$neu" "$alt"; then
     echo "Installiert ist $alt, neuer als das Release ($neu); nichts zu tun."; exit 0
   fi
   bash "$tmp/server/installieren.sh" --ip "$(jq -r '.ip' "$KONFIG")"

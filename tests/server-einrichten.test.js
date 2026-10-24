@@ -360,7 +360,7 @@ test("Platzsucher: Helfer einer früheren Version wird ersetzt, nicht nur neu ge
   assert.deepEqual([x.w(ende, "--instance-id"), x.w(ende, "--preserve-boot-volume"), x.w(ende, "--wait-for-state")], [alt.id, "false", "SUCCEEDED"]);
   assert.ok(x.k.aufrufe.indexOf(ende) < x.k.aufrufe.findIndex((y) => y[2] === "launch"), "erst beendet, dann neu angelegt");
   const neu = x.k.instanzen.find((i) => i.id !== alt.id);
-  assert.deepEqual([alt["lifecycle-state"], neu["freeform-tags"]], ["TERMINATED", { "studium-autopilot": "helfer", "studium-autopilot-fassung": helferFassung(VORLAGE, SKRIPT) }]);
+  assert.deepEqual([alt["lifecycle-state"], neu["freeform-tags"]], ["TERMINATED", { "studium-autopilot": "helfer", "studium-autopilot-fassung": helferFassung(VORLAGE, SKRIPT, { ads: ADS, ssh: SSH }) }]);
   // Boot-Volume des Servers: der freie Rest ohne beide Helfer, solange das alte Volume noch zählen kann (abschliessen vergrößert)
   const cloudInit = Buffer.from(neu.metadaten.user_data, "base64").toString("utf8");
   assert.equal(JSON.parse(Buffer.from(/content: (\S+)/.exec(cloudInit.slice(cloudInit.indexOf("konfig.json")))[1], "base64").toString("utf8")).boot_gb, 100);
@@ -371,6 +371,13 @@ test("Platzsucher: Helfer einer früheren Version wird ersetzt, nicht nur neu ge
   const vorher = x.angelegt().length;
   const r2 = await platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
   assert.deepEqual([r2.exit, r2.schritte[0].text, x.angelegt().length], [0, "Der Platzsucher läuft schon.", vorher]);
+  // neuer Schlüssel in der Cloud Shell: Helfer ersetzt, der neue legt den Server mit diesem Schlüssel an
+  const neuerSchluessel = SSH.replace("Itest", "Ineu");
+  const r4 = await platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: neuerSchluessel, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
+  assert.deepEqual([r4.exit, r4.schritte[0].status, neu["lifecycle-state"]], [0, "ersetzt", "TERMINATED"]);
+  const dritter = x.k.instanzen[x.k.instanzen.length - 1];
+  const init3 = Buffer.from(dritter.metadaten.user_data, "base64").toString("utf8");
+  assert.equal(JSON.parse(Buffer.from(/content: (\S+)/.exec(init3.slice(init3.indexOf("konfig.json")))[1], "base64").toString("utf8")).ssh_schluessel, neuerSchluessel);
   // ohne Platz für einen neuen Helfer bleibt der alte, statt ersatzlos zu verschwinden
   const y = konto();
   await netz(y.oci, { tenancy: T });
@@ -498,7 +505,8 @@ const fernLaufen = (adresse, ...args) => {
       `if (process.argv.slice(2).join(" ") !== "adresse --json") { console.error("falscher Aufruf"); process.exit(9); }\n` +
       `console.log(${JSON.stringify(ausgabe)}); process.exitCode = ${adresse.exit};\n`);
     for (const n of ["ssh", "scp"]) {
-      fs.writeFileSync(path.join(tmp, "bin", n), `#!/usr/bin/env bash\necho "${n} $*" >> "$HOME/aufrufe"\nexit ${adresse[n + "Exit"] || 0}\n`, { mode: 0o755 });
+      const meldung = adresse[n + "Meldung"] ? `echo ${JSON.stringify(adresse[n + "Meldung"])} >&2\n` : "";
+      fs.writeFileSync(path.join(tmp, "bin", n), `#!/usr/bin/env bash\necho "${n} $*" >> "$HOME/aufrufe"\n${meldung}exit ${adresse[n + "Exit"] || 0}\n`, { mode: 0o755 });
     }
     const r = spawnSync("bash", [path.join(tmp, "server", "fern.sh"), ...args], {
       encoding: "utf8", cwd: os.tmpdir(), input: "",
@@ -543,6 +551,15 @@ fernTest("fern.sh: Server antwortet nicht auf ssh → Exit 5 mit Hinweis; Fehler
   assert.equal(kopie.status, 5);
   assert.equal(kopie.aufrufe.length, 1, "nach gescheitertem scp nicht installieren");
   assert.equal(fernLaufen({ ...LAEUFT, sshExit: 1 }, "status").status, 1);
+  // Server neu angelegt unter einer IP, die known_hosts schon kennt: kein „eine Minute warten“, sondern der Befehl zum Löschen
+  const geaendert = "@@@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED! @@@\nHost key verification failed.";
+  for (const r of [fernLaufen({ ...LAEUFT, sshExit: 255, sshMeldung: geaendert }, "status"),
+    fernLaufen({ ...LAEUFT, scpExit: 1, scpMeldung: geaendert }, "installieren")]) {
+    assert.equal(r.status, 6, r.aus);
+    assert.match(r.aus, /REMOTE HOST IDENTIFICATION HAS CHANGED/, "Meldung von ssh bleibt sichtbar");
+    assert.match(r.aus, /\[fern\] Der Server meldet sich mit einem anderen Schlüssel.*ssh-keygen -R 127\.0\.0\.1/);
+    assert.doesNotMatch(r.aus, /eine Minute warten/);
+  }
 });
 
 fernTest("fern.sh: Server nicht RUNNING, Fehler von adresse, unbekannter Befehl → nichts per ssh", () => {

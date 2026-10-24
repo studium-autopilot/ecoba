@@ -40,7 +40,7 @@ cssclasses:
 <div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Weitere Module</span></div>
 <h1><span class="eba-code">SQ888</span> Mathe-Vorkurs</h1>
 <p class="eba-lead">Mathematisches Propädeutikum vor Semesterbeginn: frischt die Schulmathematik auf, die S100 voraussetzt.</p>
-<div class="eba-meta"><span><b>0</b> ECTS</span><span>05.–07.10.2026</span><span>keine Prüfung</span><span>keine Anmeldung</span><span>Deutsch</span></div>
+<div class="eba-meta"><span><b>0</b> ECTS</span><span>vor Vorlesungsbeginn</span><span>keine Prüfung</span><span>keine Anmeldung</span><span>Deutsch</span></div>
 </div>
 
 ```eba-modul
@@ -98,7 +98,7 @@ cssclasses:
 
 > [!eba-raster|2]
 > > [!eba-karte|handy-zu]+ Veranstaltung
-> > - **Termine:** Mo–Mi, 05.–07.10.2026, 9:15–12:00 · Audimax, Neue Aula ([[2026-10-05 Mathe-Vorkurs für Wirtschaftswissenschaftler|Termin]])
+> > - **Termine:** einige Vormittage vor Vorlesungsbeginn im Wintersemester; die aktuellen stehen von selbst unter [[Termine & Anmeldungen]].
 > > - **Leitung:** Dr. Julie Schnaitmann
 > > - **Material:** [ILIAS-Kurs](https://vitruv.uni-tuebingen.de/ilias3/goto_pr01_crs_4803.html)
 > > - **Inhalt:** Mengenlehre, Zahlenbereiche, Potenzen/Wurzeln, Ungleichungen, Gleichungen, Funktionen, Umkehr-, Exponential- und Logarithmusfunktionen

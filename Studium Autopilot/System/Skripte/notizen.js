@@ -77,10 +77,8 @@ module.exports = function (ctx) {
     const termin = !m && quelle && quelle.lv.typ === "termin" ? quelle : null;
     const nr = code ? eba.naechsteVlNr(code) : 1;
     const nn = pad2(nr);
-    const folien = code ? eba.folienZu(code, nr) : "";
-    // Dozent: nur aus deinem Stundenplan (Feld dozent der laufenden Lehrveranstaltung). Bis 0.4.6 sonst „verantwortlich“ der Modulseite
-    // aus dem Modulhandbuch; seit 19.10.2026 steht ein Name im Kopf der Notiz nur, wenn du ihn selbst eingetragen hast.
-    const dozent = (quelle && quelle.dozent) || "";
+    // Dozent: Das Feld bleibt leer für einen Namen, den du selbst einträgst; sonst zeigt der Kopf den aus deinem Stundenplan
+    // (vorlesung.js, live seit 24.10.2026; vorher beim Anlegen kopiert, bis 0.4.6 „verantwortlich“ der Modulseite).
     const veranstaltung = quelle ? `[[${quelle.quelle.path.replace(/\.md$/, "")}]]` : "";
     const kurztitel = termin ? (termin.titel.length > 70 ? termin.titel.slice(0, 70).replace(/\s+\S*$/, "") : termin.titel) : "";
     if (!thema && termin) thema = termin.titel;
@@ -94,8 +92,8 @@ code: ${eba.J(code)}
 modul: ${eba.J(eba.link(m))}
 nummer: ${termin ? "" : nr}
 thema: ${eba.J(thema)}
-dozent: ${eba.J(dozent)}
-folien: ${eba.J(folien ? `[[${folien}]]` : "")}
+dozent: ""
+folien: ""
 veranstaltung: ${eba.J(veranstaltung)}
 nachgearbeitet: false
 tags:
@@ -130,7 +128,8 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
   };
 
   // ---------- Übungsblatt ----------
-  // Fenster: Modul (Parameter code wählt vor), Nummer (nächste freie des Moduls), Abgabe (in einer Woche, leer = ohne).
+  // Fenster: Modul (Parameter code wählt vor), Nummer (nächste freie des Moduls), Abgabe (leer = ohne; seit 24.10.2026 ohne Vorgabe,
+  // vorher in einer Woche: Die geratene Abgabe stand wie eine echte bei den Fristen und als „überfällig“ da).
   // Aufbau wie die Vorlesungsnotiz: Titel, Kopf-Karte ```eba-uebungsblatt``` (vorlesung.js), dann ## Aufgabe 1, ## Aufgabe 2,
   // ## Knackpunkte, ## Fürs Tutorium. „datei“ = Aufgaben (setzt das Einordnen aus dem Eingang), „eigene_loesung“ ebenso.
   const uebungsblatt = async (c) => {
@@ -141,7 +140,7 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
       eba.modulFeld(),
       { name: "nummer", titel: "Nummer", art: "zahl", ganz: true, min: 1, max: 99, pflicht: true, fehlt: "Bitte die Nummer des Blatts.",
         vorgabe: (x) => String(vorhandene(x.modul) + 1) },
-      { name: "faellig", titel: "Abgabe", art: "datum", vorgabe: tm(7), platzhalter: "z. B. 27.10. oder +7", hilfe: "Leer lassen, wenn es keine Abgabe gibt." },
+      { name: "faellig", titel: "Abgabe", art: "datum", platzhalter: "z. B. 27.10. oder +7", hilfe: "Leer lassen, wenn es keine Abgabe gibt oder du sie noch nicht weißt." },
     ] });
     if (!w) { eba.abbrechen(); return; }
     const m = w.modul, code = m.fm.code || "", nr = w.nummer, faellig = w.faellig;
@@ -247,8 +246,11 @@ tags:
 
   // ---------- Lehrveranstaltung (von Hand im Stundenplan, z. B. Tutorium) ----------
   // Fenster: Modul (Parameter code wählt vor), Art, Wochentag, Beginn („14“ = 14:15, c.t.), Ende (Beginn + 90 Min.), Raum.
-  // Semester, von, bis, ausfall aus dem Datenmodell bzw. den Einstellungen.
-  const ARTEN = ["Tutorium", "Übung", "Übungsteil", "Vorlesung", "Seminar"];
+  // Semester, von, bis aus dem Datenmodell bzw. den Einstellungen; von und bis bleiben, sonst stünde die Lehrveranstaltung in jedem
+  // späteren Semester. Pausen und freie Tage prüft ctx.modell.findetStatt bei jedem Lesen: Bis 24.10.2026 standen die Pausentage
+  // beim Anlegen in „ausfall“ und fielen nach einer Korrektur der Pausen weiter aus. Den Wochentag zeigt jede Ansicht aus
+  // „wochentag“ (das Feld tag fällt weg); „ausfall“ ist für Termine, die du selbst als ausgefallen einträgst.
+  const ARTEN = ["Tutorium", "Übung", "Übungsteil", "Lab", "Vorlesung", "Seminar"];
   const TAGE = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
   const lehrveranstaltung = async (c) => {
     const eba = ctx.user.eba(c);
@@ -264,7 +266,6 @@ tags:
     if (!w) { eba.abbrechen(); return; }
     const m = w.modul, art = w.art, wt = w.wochentag, beginn = w.beginn, ende = w.ende || uhrPlus(w.beginn, 90), raum = w.raum;
     // Semester: das erste aus der semesterliste, dessen Vorlesungsende noch nicht vorbei ist.
-    const iso = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
     // Semesterdaten aus dem Datenmodell (modell.js), sonst aus der semesterliste der Einstellungen
     const md = eba.modell ? eba.modell() : null;
     const semZeilen = md ? md.semesterliste.map((s) => [String(s.fs), s.name, s.beginn, s.ende, s.vb, s.ve]) : (eba.einstellungen().semesterliste || []).map((s) => String(s).split("|"));
@@ -272,15 +273,6 @@ tags:
     const sem = semZeile ? semZeile[1] : eba.aktuellesSemester().name;
     const von = semZeile && semZeile[4] > eba.heute ? semZeile[4] : eba.heute;
     const bis = semZeile ? semZeile[5] : "";
-    const ausfall = [];
-    if (bis) {
-      const pausen = md ? md.pausen.map((p) => [p.von, p.bis, p.name]) : (eba.einstellungen().pausen || []).map((p) => String(p).split("|"));
-      const t = von.split("-").map(Number);
-      for (let d = new Date(t[0], t[1] - 1, t[2]); iso(d) <= bis; d.setDate(d.getDate() + 1)) {
-        const tag = iso(d);
-        if (((d.getDay() + 6) % 7) + 1 === wt && pausen.some((p) => p[0] <= tag && tag <= p[1])) ausfall.push(tag);
-      }
-    }
     const kurz = ["Mo", "Di", "Mi", "Do", "Fr"][wt - 1];
     const code = m.fm.code || "";
     const inhalt = `---
@@ -290,7 +282,6 @@ code: ${eba.J(code)}
 modul: ${eba.J(eba.link(m))}
 art: ${art}
 wochentag: ${wt}
-tag: ${kurz}
 beginn: ${eba.J(beginn)}
 ende: ${eba.J(ende)}
 raum: ${eba.J(raum)}
@@ -298,7 +289,7 @@ dozent: ""
 semester: ${eba.J(sem)}
 von: ${von}
 bis: ${bis}
-ausfall:${ausfall.length ? ausfall.map((d) => "\n  - " + d).join("") : " []"}
+ausfall: []
 uebersicht: "[[Stundenplan]]"
 tags:
   - stundenplan
@@ -339,6 +330,8 @@ cssclasses:
     if (!w) { eba.abbrechen(); return; }
     const { titel, anbieter, ects, status } = w;
     const semester = eba.aktuellesSemester().name;
+    // ECTS und Semester zeigt der Kopf der Notiz (kopf.js) aus den Eigenschaften; im Text stünden sie nach einer Änderung falsch
+    // (bis 24.10.2026 in der Zeile unter dem Titel)
     const inhalt = `---
 typ: sq_kurs
 code: SQ100
@@ -356,7 +349,7 @@ tags:
 
 # ${titel}
 
-**${anbieter}** · ${String(ects).replace(".", ",")} ECTS · ${semester} · für [[SQ100 Schlüsselqualifikation|SQ100]]
+**${anbieter}** · für [[SQ100 Schlüsselqualifikation|SQ100]]
 
 > [!eba-regel] Damit die ECTS zählen
 > ${REGELN[anbieter]}

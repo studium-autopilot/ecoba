@@ -11,7 +11,9 @@
 //   (prefers-color-scheme) und in neuen Fenstern (window-open). Bis 17.10.2026 schrieb die Wahl appearance.json und schaltete
 //   damit alle Geräte mit um.
 //   Beim Start: Die Klasse des Designs steht zusätzlich in „eba-start-klassen“. Die setzt das Plugin (main.js) schon beim
-//   Laden, nicht erst nach den Skripten; sonst zeigte jeder Start erst Elfenbein und spränge dann um.
+//   Laden, nicht erst nach den Skripten; sonst zeigte jeder Start erst Elfenbein und spränge dann um. Beim Laden gleicht
+//   darstellung.js die Liste an das gewählte Design an (startKlassenPruefen): Die Klasse eines Designs, das ein Update entfernt
+//   oder umbenannt hat, fällt heraus und geht vom body wieder ab.
 //   ```eba-darstellung```  „Darstellung“ (Einstellungen & Hilfe): ein Umschalter Hell · Dunkel · Automatisch, ohne Untertexte
 //                          (Stil eba-core.css Abschnitt 43, .eba-ds), darunter die Designs als drei gleiche Vorschau-Kacheln
 //                          ohne Namen (designWahl(), .eba-dk; seit 18.10.2026, bis dahin Zeilen mit Namen): eine Mini-Karte in
@@ -24,8 +26,9 @@
 //   Designs (Befehl „Design wechseln“: Graphite, Paper, Paper Tübingen, Paper Schiefer) aus. Sonst sähe ein Tresor, in dem
 //   eines davon gewählt war, nach dem Update ungestaltet aus. Beim Start nur, wenn eba-core an ist.
 // Für die Einrichtung (einrichtung.js) und Tests: ctx.darstellung = { MODI, DESIGNS, modusAus, modus, dunkelFuer, setzen, segmente,
-// schalter, design, designKacheln, designNachTaste, designSetzen, designWahl, anwenden, schemaSichern }. modusAus(), dunkelFuer(),
-// segmente(), designKacheln() und designNachTaste() sind rein (tests/darstellung.test.js).
+// schalter, design, designKacheln, designNachTaste, designSetzen, designWahl, anwenden, schemaSichern, startKlassenFuer,
+// startKlassenPruefen }. modusAus(), dunkelFuer(), segmente(), designKacheln(), designNachTaste() und startKlassenFuer() sind rein
+// (tests/darstellung.test.js).
 module.exports = function (ctx) {
   const app = window.app;
   const Platform = ctx.obsidian.Platform || {};
@@ -64,6 +67,20 @@ module.exports = function (ctx) {
   // Design dieses Geräts (ohne Wahl Elfenbein) und die Klasse dafür am body (Elfenbein: keine)
   const design = () => { const w = app.loadLocalStorage(DESIGN_SPEICHER); return DESIGNS.some((d) => d.wert === w) ? w : "elfenbein"; };
   const klasseVon = (wert) => (wert === "elfenbein" ? null : "eba-design-" + wert);
+  // Liste für eba-start-klassen mit der Klasse des Designs wert: andere Design-Klassen fallen heraus (auch die eines Designs, das
+  // ein Update entfernt oder umbenannt hat; main.js setzte sie sonst bei jedem Start), andere Klassen bleiben. Rein.
+  const startKlassenFuer = (liste, wert) => {
+    const rest = (Array.isArray(liste) ? liste : []).filter((k) => !/^eba-design-/.test(String(k))), k = klasseVon(wert);
+    return k ? rest.concat([k]) : rest;
+  };
+  // Beim Laden dieses Skripts: eba-start-klassen an das Design dieses Geräts angleichen und eine überholte Klasse, die main.js
+  // schon gesetzt hat, wieder abnehmen
+  const startKlassenPruefen = () => {
+    const ist = app.loadLocalStorage(START_KLASSEN), soll = startKlassenFuer(ist, design());
+    for (const k of Array.isArray(ist) ? ist : []) if (soll.indexOf(k) < 0) document.body.classList.remove(String(k));
+    if (JSON.stringify(Array.isArray(ist) ? ist : []) !== JSON.stringify(soll)) app.saveLocalStorage(START_KLASSEN, soll);
+    return soll;
+  };
   // Kacheln für Einstellungen & Hilfe und Einrichtung, genau eine gewählt
   const designKacheln = (ist) => DESIGNS.map((d) => ({ wert: d.wert, titel: d.titel, gewaehlt: d.wert === ist }));
   // Pfeiltasten in den Kacheln wie in einer Optionsgruppe: rechts/unten weiter, links/oben zurück (rundum), Pos1/Ende;
@@ -138,7 +155,7 @@ module.exports = function (ctx) {
     if (!d) return null;
     schemaSichern();
     app.saveLocalStorage(DESIGN_SPEICHER, d.wert);
-    app.saveLocalStorage(START_KLASSEN, klasseVon(d.wert) ? [klasseVon(d.wert)] : []);
+    app.saveLocalStorage(START_KLASSEN, startKlassenFuer(app.loadLocalStorage(START_KLASSEN), d.wert));
     anwenden();
     neuZeichnen();
     return d;
@@ -210,7 +227,7 @@ module.exports = function (ctx) {
   };
 
   ctx.darstellung = { MODI, DESIGNS, modusAus, modus, dunkelFuer, setzen, segmente, schalter, design, designKacheln, designNachTaste,
-    designSetzen, designWahl, anwenden, schemaSichern };
+    designSetzen, designWahl, anwenden, schemaSichern, startKlassenFuer, startKlassenPruefen };
 
   const registrieren = () => {
     block = ctx.codeblock("eba-darstellung", (quelle, el) => {
@@ -234,6 +251,7 @@ module.exports = function (ctx) {
       for (const doc of [document, ...fenster]) designKlassen(doc, "elfenbein");
       if (typeof app.updateTheme === "function") app.updateTheme();
     });
+    startKlassenPruefen();
     anwenden();
   };
   const start = () => {

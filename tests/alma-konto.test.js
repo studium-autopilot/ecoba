@@ -561,6 +561,61 @@ test("Vorschläge: nur Abweichungen, nur eindeutige; endgültig mit Satz; ausgeb
   assert.ok(v({ code: "B110", status: "offen", alma_ausgeblendet: [s.schluessel] }, Z({ B110: M("bestanden", "2,3") })), "neue Note: neuer Vorschlag");
 });
 
+test("Korrekturen: Rücktritt laut Alma, geänderte Note, Ergebnis aus Alma verschwunden; eigene Werte ohne Widerspruch bleiben", () => {
+  const v = K.vorschlagAus;
+  // Angemeldet in der Notiz, Alma meldet den Rücktritt (Belegungen oder eindeutige Leistung) → „läuft“
+  const r = v({ code: "B180", status: "angemeldet" }, Z({}, { B180: { status: "zurückgetreten" } }));
+  assert.deepEqual(r.felder, { status: "läuft" });
+  assert.equal(r.text, "Alma: zurückgetreten");
+  assert.deepEqual(v({ code: "B180", status: "angemeldet" }, Z({}, { B180: { status: "abgemeldet" } })).felder, { status: "läuft" });
+  assert.deepEqual(v({ code: "B110", status: "angemeldet" }, Z({ B110: M("zurückgetreten") })).felder, { status: "läuft" });
+  assert.equal(v({ code: "B110", status: "angemeldet" }, Z({ B110: M("zurückgetreten") }, { B110: { status: "angemeldet" } })), null, "neu angemeldet: kein Rücktritt");
+  assert.equal(v({ code: "B110", status: "angemeldet" }, Z({ B110: M("angemeldet", "", 2, { eindeutig: false, stati: [{ status: "angemeldet", semester: "WS 2026/27" }] }) },
+    { B110: { status: "zurückgetreten" } })), null, "Leistungen zeigen noch eine Anmeldung");
+  assert.equal(v({ code: "B180", status: "angemeldet" }, Z()), null, "fehlt nur in Alma: kein Widerspruch");
+  assert.equal(v({ code: "B180", status: "offen" }, Z({}, { B180: { status: "zurückgetreten" } })), null);
+  // Geänderte Note in Alma: wie jede neue Angabe
+  assert.deepEqual(v({ code: "B110", status: "bestanden", ergebnis: "1,7" }, Z({ B110: M("bestanden", "2,0") })).felder, { ergebnis: "2,0" });
+  // Übernommen (Marke passt): Alma zeigt kein Ergebnis mehr → zurück, ohne Note; Marke nach der Korrektur neu
+  const neu = v({ code: "B110", status: "offen" }, Z({ B110: M("bestanden", "1,7") }));
+  const fm = Object.assign({ code: "B110", status: "offen" }, neu.felder, { alma_uebernommen: neu.marke });
+  assert.equal(v(fm, Z({ B110: M("bestanden", "1,7") })), null, "steht so da");
+  const weg = v(fm, Z({ S100: M("bestanden", "2,3") }));
+  assert.deepEqual(weg.felder, { status: "läuft", ergebnis: "" });
+  assert.equal(weg.text, "Alma: kein Ergebnis mehr");
+  const danach = Object.assign({}, fm, weg.felder, { alma_uebernommen: weg.marke });
+  assert.equal(v(danach, Z({})), null, "nach Übernehmen nichts mehr");
+  assert.deepEqual(v(danach, Z({ B110: M("bestanden", "1,7") })).felder, { status: "bestanden", ergebnis: "1,7" }, "Ergebnis wieder da");
+  assert.deepEqual(v(fm, Z({ B110: M("angemeldet", "", 1), S100: M("bestanden", "2,3") })).felder, { status: "angemeldet", ergebnis: "" });
+  assert.deepEqual(v(fm, Z({ S100: M("bestanden", "2,3") }, { B110: { status: "zugelassen" } })).felder, { status: "angemeldet", ergebnis: "" });
+  assert.equal(v(fm, Z({}, {}, { leistungen: { art: "leer", module: {} } })), null, "Seite leer: im Zweifel nichts");
+  assert.equal(v(fm, Z({}, {}, { leistungen: { art: "unsicher", module: {} } })), null);
+  assert.equal(v(Object.assign({}, fm, { ergebnis: "1,3" }), Z({})), null, "seither selbst geändert: bleibt");
+  assert.equal(v({ code: "B110", status: "bestanden", ergebnis: "1,7" }, Z({})), null, "selbst eingetragen (ohne Marke): bleibt");
+  assert.equal(v(Object.assign({}, fm, { alma_ausgeblendet: [weg.schluessel] }), Z({ S100: M("bestanden", "2,3") })), null, "ausblendbar");
+});
+
+test("Kein Ergebnis mehr: nie bei einer Liste ohne Ergebnisse, höchstens ein Modul zugleich (gekürzte Liste in Alma)", () => {
+  const v = K.vorschlagAus;
+  const uebernommen = (code, note) => {
+    const n = v({ code, status: "offen" }, Z({ [code]: M("bestanden", note) }));
+    return Object.assign({ code, status: "offen" }, n.felder, { alma_uebernommen: n.marke });
+  };
+  const b110 = uebernommen("B110", "1,7"), s100 = uebernommen("S100", "2,3"), e101 = uebernommen("E101", "3,0");
+  // Alma zeigt nur Anmeldungen, kein einziges Ergebnis: nichts
+  assert.equal(v(b110, Z({ B180: M("angemeldet") })), null);
+  assert.equal(v(b110, Z({})), null);
+  // Nur B110 fehlt, S100 und E101 stehen noch da: ein Vorschlag
+  const z1 = Z({ S100: M("bestanden", "2,3"), E101: M("bestanden", "3,0") });
+  assert.deepEqual(v(b110, z1, () => [b110, s100, e101]).felder, { status: "läuft", ergebnis: "" });
+  // Zwei Module zugleich ohne Ergebnis: keins von beiden
+  const z2 = Z({ E101: M("bestanden", "3,0") });
+  assert.equal(v(b110, z2, () => [b110, s100, e101]), null);
+  assert.equal(v(s100, z2, () => [b110, s100, e101]), null);
+  // Andere Vorschläge zählen nicht mit: E101 mit neuer Note bleibt ein Vorschlag
+  assert.deepEqual(v(e101, Z({ E101: M("bestanden", "2,7") }), () => [b110, s100, e101]).felder, { ergebnis: "2,7" });
+});
+
 test("sha256 (synchron) stimmt mit node:crypto überein", () => {
   for (const x of ["", "abc", "B110|bestanden|1,7|1", "ü€😀".repeat(40), "x".repeat(1000)]) {
     assert.equal(K.sha256(x), crypto.createHash("sha256").update(x, "utf8").digest("hex"), x.slice(0, 10));

@@ -18,8 +18,10 @@
 // ab), macht ilias.js aus der ILIAS-Notiz eine gewählte: „Meine“ ist dann wieder da. Gruppen aus ILIAS heißen wie in ILIAS
 // („in ILIAS Gruppe 4“), weil ILIAS und Alma anders zählen. Ist ILIAS nicht eindeutig (ctx.ilias.gruppen(): Status
 // mehrdeutig, ohne Treffer, ohne Zeit, ohne Code), sagt die Karte das und markiert die möglichen Gruppen.
+// Gewählte Notizen folgen der Gruppenliste (meine-gruppe.js gewaehltAufraeumen mit aktualisieren, nur auf dem Gerät, das für
+// alle schreibt): verlegt die Fakultät Tag, Zeit oder Raum, zieht die Notiz mit; fehlt die Gruppe, steht sie als „(entfällt)“ da.
 // Erweiterung: registrieren() meldet den Codeblock an und setzt ctx.gruppenAnzeige (zentral.js zeichnet damit neu, sobald neue
-// Gruppen da sind). zentral.js und modell.js laden nach diesem Skript, darum alles erst beim Zeichnen nachschlagen.
+// Gruppen da sind, und das Aufräumen läuft). zentral.js und modell.js laden nach diesem Skript, darum alles erst beim Zeichnen nachschlagen.
 // Stil: eba-core.css, Klassen eba-gr-*. iOS-sicher: kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const SPRACHE = "eba-gruppen";
@@ -129,7 +131,9 @@ module.exports = function (ctx) {
   const heuteIso = () => { try { return ctx.date.now("YYYY-MM-DD"); } catch (e) { return ""; } };
   // Gewählte Notizen, die inzwischen ILIAS, Alma oder eine eigene Notiz liefert, und ältere Wahlen desselben Moduls weichen
   // (meine-gruppe.js); höchstens einmal je Minute (sonst eine Minute später), auf jedem Gerät. Zwei Geräte zugleich schaden nicht:
-  // Beide wählen dieselbe Notiz, und steht dein Text schon in ihr, übernimmt ihn das zweite nicht noch einmal.
+  // Beide wählen dieselbe Notiz, und steht dein Text schon in ihr, übernimmt ihn das zweite nicht noch einmal. Danach folgen die
+  // übrigen gewählten Notizen der Gruppenliste (Tag, Zeit, Raum; fehlt die Gruppe: „(entfällt)“), aber nur auf dem Gerät, das für
+  // alle schreibt (ctx.zentral.abruferHier, ein Schreiber wie bei den zentralen Terminen).
   let aufgeraeumt = 0, nachher = false;
   const aufraeumen = () => {
     const warten = 60000 - (Date.now() - aufgeraeumt);
@@ -141,7 +145,14 @@ module.exports = function (ctx) {
     const L = bibliothek();
     if (!L || !L.gewaehltAufraeumen) return;
     const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
-    L.gewaehltAufraeumen(L.obsidianIo(), heuteIso(), { liste: Z ? Z.gruppen : null }).then((weg) => { if (weg.length) neuZeichnen(); }, (e) => console.error(SPRACHE, e));
+    const hier = ctx.zentral && typeof ctx.zentral.abruferHier === "function" ? ctx.zentral.abruferHier() : false;
+    Promise.resolve(hier).then((ja) => {
+      const D = md(), modul = (code) => {
+        const m = D ? D.module.find((x) => x.code === code) : null;
+        return m && m.f ? { name: m.f.basename, titel: m.titel || "" } : null;
+      };
+      return L.gewaehltAufraeumen(L.obsidianIo(), heuteIso(), { liste: Z ? Z.gruppen : null, stand: Z ? Z.stand : "", aktualisieren: !!ja, modul });
+    }).then((weg) => { if (weg.length) neuZeichnen(); }, (e) => console.error(SPRACHE, e));
   };
   // Knopf „Meine“ bzw. „Abwählen“: Notiz mit herkunft gruppe-gewaehlt (meine-gruppe.js), geschrieben auf diesem Gerät
   const waehlen = async (g, ab, D) => {
@@ -157,9 +168,8 @@ module.exports = function (ctx) {
       return;
     }
     const m = D ? D.module.find((x) => x.code === g.code) : null;
-    const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
     const r = await L.waehlen(L.obsidianIo(), g, { modul: () => (m && m.f ? { name: m.f.basename, titel: m.titel || "" } : null),
-      jetzt: ctx.date.jetzt().toISOString(), heute: heuteIso(), liste: Z ? Z.gruppen : null });
+      jetzt: ctx.date.jetzt().toISOString(), heute: heuteIso() });
     if (r.art === "ilias") melden("Deine Gruppe kommt schon aus ILIAS. Wechseln kannst du sie dort.");
     else if (r.art === "gedeckt") melden(`${nr} steht schon in deinem Stundenplan.`);
     else melden(`${nr} steht jetzt in deinem Stundenplan.`);
@@ -268,15 +278,15 @@ module.exports = function (ctx) {
       const arg = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, SPRACHE, ["alle", "meine"], "meine") : "meine";
       try { zeichnen(el, arg); } catch (e) { console.error(SPRACHE, e); el.setText(String(quelle)); }
     });
-    const anzeige = { neu: () => block.neu() };
-    ctx.gruppenAnzeige = anzeige;
-    ctx.aufraeumen(() => { if (ctx.gruppenAnzeige === anzeige) ctx.gruppenAnzeige = null; });
-    // Doppelte Gruppen: Aufräumen nach jeder Änderung in Stundenplan/ (auch per Sync), nicht erst, wenn Termine & Anmeldungen
-    // offen ist
+    // Doppelte Gruppen: Aufräumen nach jeder Änderung in Stundenplan/ (auch per Sync) und nach neuen Gruppen (gewählte Notizen
+    // folgen der Liste), nicht erst, wenn Termine & Anmeldungen offen ist
     const bald = ctx.entprellen(() => {
       const D = md();
       if (D && D.stundenplan.some((x) => x.fm && x.fm.herkunft === "gruppe-gewaehlt")) aufraeumen();
     }, 3000);
+    const anzeige = { neu: () => { block.neu(); bald(); } };
+    ctx.gruppenAnzeige = anzeige;
+    ctx.aufraeumen(() => { if (ctx.gruppenAnzeige === anzeige) ctx.gruppenAnzeige = null; });
     const app = window.app;
     ctx.an(app.metadataCache, "changed", (f) => { if (f && String(f.path).indexOf("Stundenplan/") === 0) bald(); });
     ctx.an(app.vault, "delete", (f) => { if (f && String(f.path).indexOf("Stundenplan/") === 0) bald(); });

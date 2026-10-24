@@ -41,11 +41,13 @@ export const PDF = { teil: 8 * 1024 * 1024, bytes: 500 * 1024 * 1024, gesamt: 10
 const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/anstoss": 1024,
   "/v1/pdf": Math.ceil((PDF.teil + 1024) * 4 / 3) + 4096 };
 const KNOPF_ABSTAND = 10 * 60e3; // Knopf „Mails durchsuchen“: höchstens so oft (jeder Lauf kostet Abo-Limit)
-const LAUF_HOECHSTENS = 60 * 60e3; // „läuft“ gilt höchstens so lange (ein abgebrochener Lauf hängt nicht für immer)
+// „läuft“ gilt höchstens so lange wie die Zeitgrenze des Laufs (TimeoutStartSec in installieren.sh; ein abgebrochener Lauf hängt
+// nicht für immer)
+const LAUF_HOECHSTENS = 100 * 60e3;
 // Textfassungen: höchstens 3 je Anfrage (das Plugin schickt bis zu 3 Anfragen je Abruf), je 400 000 Zeichen, höchstens 30 warten
 // auf einen Lauf
 const UNTERLAGEN = { anfrage: 3, zeichen: 400000, warten: 30 };
-const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lösung", "Altklausur", "Literatur"];
+const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur"];
 // Je Absender höchstens 10 Fehlversuche in 10 Minuten, dann 429. Ein gültiger Zugangsschlüssel wird nie gesperrt (sonst könnte
 // jeder das Plugin aussperren). Absender = letzter Eintrag in X-Forwarded-For (setzt Caddy; der Dienst lauscht nur auf 127.0.0.1).
 const SPERRE = { fehler: 10, fenster: 10 * 60e3, absender: 5000 };
@@ -60,8 +62,9 @@ const aus = (wert, erlaubt) => (erlaubt.includes(wert) ? wert : "unbekannt");
 
 // Öffentlicher Status: nur Werte aus festen Listen und Zeitpunkte, nie Namen, Adressen, Texte oder Schlüssel. Feldnamen klein
 // mit Unterstrich wie in den zentralen Daten (docs/daten-v1.md).
-// claude_lauf: wartet (Anstoß liegt da) | laeuft (seit weniger als einer Stunde) | ruht
-export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(), anstossWartet = false) {
+// claude_lauf: wartet (Anstoß liegt da) | laeuft (seit weniger als LAUF_HOECHSTENS) | ruht. gmail: aus, solange der Takt aus
+// Obsidian (takt.json) Gmail auf „nie“ stellt; sonst stünde dort das Ergebnis der letzten Suche, als liefe sie noch.
+export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(), anstossWartet = false, takt = {}) {
   const z = zustand || {};
   const seit = Date.parse(z.laeuftSeit || "");
   const claudeLauf = anstossWartet ? "wartet" : !Number.isNaN(seit) && jetzt.getTime() - seit < LAUF_HOECHSTENS ? "laeuft" : "ruht";
@@ -72,7 +75,7 @@ export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(),
     version: String(version || "").slice(0, 40),
     zeit: jetzt.toISOString(),
     claude: aus(z.claude, ["angemeldet", "abgemeldet"]),
-    gmail: aus(z.gmail, ["ok", "fehlt"]),
+    gmail: taktPruefen(takt).gmail === 0 ? "aus" : aus(z.gmail, ["ok", "fehlt"]),
     weiterleitung: aus(z.weiterleitung, ["ok", "fehlt"]),
     uni_zugang: aus(z.uniZugang, ["gespeichert", "fehlt", "falsch"]),
     speicher_reserve: aus(z.speicherReserve, ["an", "aus"]),
@@ -319,7 +322,8 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
       if (pfad === "/v1/status") {
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
         return antwort(res, 200, oeffentlicherStatus(lesen(join(verzeichnis, "zustand.json"), {}),
-          lesen(join(verzeichnis, "abruf.json"), {}), konfig.version, jetzt(), existsSync(join(verzeichnis, "anstoss"))));
+          lesen(join(verzeichnis, "abruf.json"), {}), konfig.version, jetzt(), existsSync(join(verzeichnis, "anstoss")),
+          lesen(join(verzeichnis, "takt.json"), {})));
       }
       const wer = absenderVon(req);
       if (pfad.startsWith("/v1/livesync/")) {

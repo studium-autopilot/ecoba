@@ -69,7 +69,9 @@ Mehrere Geräte? → [Weiteres Gerät verbinden](docs/installation.md#weiteres-g
 
 <img src="docs/bilder/was-drin-4-046.png" width="100%" alt="Noten & ECTS: Gesamtnote, Notenblöcke, ECTS und die Note, die du für deine Zielnote noch brauchst. Übungsblatt auf dem iPad: Abgabe, Status, Knackpunkte und Fragen fürs Tutorium.">
 
-<img src="docs/bilder/was-drin-5-046.png" width="100%" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten. Einstellungen & Hilfe: Verbindungen zu Alma, ILIAS-Unterlagen und ILIAS-Kalender, der Volltext der PDFs, die zentralen Daten und Updates, darunter die Wahl der Variante.">
+<img src="docs/bilder/was-drin-5-062.png" width="100%" alt="Karteikarten auf dem iPhone: fällige Karten je Stapel, Statistik und ein Stapel mit aufgedeckten Antworten. Einstellungen & Hilfe: Verbindungen mit dem Uni-Login für Abgaben und Stundenplan, der Volltext der PDFs, die zentralen Daten, der eigene Server und Updates, darunter die Wahl der Variante.">
+
+<p align="center"><b>Postfach:</b> deine Uni-Mails direkt in Obsidian, mit demselben Uni-Login</p>
 
 <img src="docs/bilder/designs-047.png" width="100%" alt="Dieselbe Modulseite auf dem iPhone in verschiedenen Designs, hell und dunkel">
 
@@ -92,6 +94,19 @@ prüft sie noch einmal und legt daraus Termin- und Stundenplan-Notizen an.
 Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der letzten Prüfung; Angaben, die die Uni noch
 nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das
 Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
+
+## Zusammenfassen mit Claude (freiwillig)
+
+Bei jeder Unterlage füllt **Zusammenfassen** die Abschnitte „Das Wichtigste“, „Zu tun“ und „Offene Fragen“, mit Seitenangaben,
+die in die PDF springen. Dafür verbindest du Claude mit einem eigenen API-Schlüssel aus der
+[Claude Console](https://platform.claude.com/settings/keys): unter **Einstellungen & Hilfe** → **Verbindungen** → Claude. Das geht
+auf jedem Gerät, auch auf iPhone und iPad, ohne Server.
+
+- **Kostet:** meist 0,05 bis 0,50 $ je Zusammenfassung von deinem Guthaben bei Anthropic; bei dicken Unterlagen fragt Obsidian
+  vorher. Studium Autopilot bekommt nichts davon.
+- **Kein Abo:** Claude Pro oder Max geht dafür nicht, Anthropic erlaubt Abos nur in Claude selbst.
+- **Deine Daten:** Nur die Unterlage, die du zusammenfassen lässt, geht an Anthropic. Mehr in
+  [docs/datenschutz.md](docs/datenschutz.md#claude-mit-eigenem-api-schlüssel).
 
 ## Für Technische: eigener Server mit Claude
 
@@ -127,10 +142,14 @@ Der Tresor bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du m
   diesem Repo, jede Datei mit Prüfsumme geprüft, vorher mit Sicherung. Deine Einträge bleiben.
 - **Kein Konto, keine Statistik, keine Telemetrie.** Nichts über dich geht an den Autor oder an Dritte. GitHub sieht beim
   Abruf deine IP-Adresse, wie bei jeder Webseite.
-- **ILIAS nur, wenn du es verbindest.** Dann meldet sich das Plugin von deinem Gerät aus bei der Uni an und lädt deine
-  Kursdateien, nur von den Servern der Uni. Das Passwort liegt verschlüsselt im Schlüsselbund von Obsidian auf diesem Gerät
-  und wird nie synchronisiert.
+- **Uni-Login nur, wenn du ihn eingibst.** Dann meldet sich das Plugin von deinem Gerät aus bei der Uni an (ILIAS und Alma)
+  und lädt deine Kursdateien, Abgaben und deinen Stundenplan, nur von den Servern der Uni. Das Passwort liegt verschlüsselt im
+  Schlüsselbund von Obsidian auf diesem Gerät und wird nie synchronisiert.
+- **Dein Postfach nur, wenn du es einschaltest.** Dann zeigt die Seite **Postfach** deinen Uni-Posteingang direkt aus dem
+  Webmail der Uni. Deine Mails stehen nur im Speicher des Geräts, nie im Tresor.
 - **Deine Kalender-Links (Alma, ILIAS) bleiben auf dem Gerät.** Sie werden nicht synchronisiert und nirgends hin geschickt.
+- **Claude nur, wenn du es verbindest.** Dann geht eine Unterlage, wenn du bei ihr auf **Zusammenfassen** tippst, mit deinem
+  eigenen Schlüssel direkt an Anthropic. Der Schlüssel bleibt im Schlüsselbund von Obsidian auf diesem Gerät.
 - **Deine Einträge bleiben deine.** Häkchen und „Meine Notizen“ in einem Termin überschreibt der Abruf nie, Noten und
   Status deiner Module bleiben auch bei einem Update.
 
@@ -243,13 +262,14 @@ Mehr: [Architektur](docs/architektur.md) · [Datenformat](docs/daten-v1.md) · [
 Studium Autopilot is a ready-to-use [Obsidian](https://obsidian.md) vault for students of the B.Sc. Economics and Business
 Administration (PO 2023) at the University of Tübingen: dashboard, study progress, module pages, grades and ECTS, a
 timetable that fills itself from the public course catalogue (or your Alma link), exercise deadlines from your ILIAS
-calendar, course files from ILIAS, exercise sheets and flashcards with Anki-style scheduling, in several designs,
+calendar, course files from ILIAS, your university inbox, exercise sheets and flashcards with Anki-style scheduling, in several designs,
 light and dark. Dates and deadlines keep themselves up to date: a server regularly checks public university sources,
 lets an AI reconcile only what changed, checks every entry automatically (allowlist, scan for personal data, AI
 review) and publishes the result as plain JSON on GitHub Pages. The bundled plugin fetches only that data, never code, and
-sends nothing back. Only if you connect ILIAS does it sign in from your device and download your own course files,
+sends nothing back. Only if you enter your university login does it sign in from your device (ILIAS, Alma) and download your own course files,
 contacting nothing but the university's servers; the password stays in Obsidian's keychain on that device and is never
-synced. A new version is installed only when you tap “Neue Version installieren”, straight from this repo, with every file checked
+synced. The same login shows your university inbox on the Postfach page, read straight from the university webmail, but only
+after you turn it on; mails stay in memory and are never written to the vault. A new version is installed only when you tap “Neue Version installieren”, straight from this repo, with every file checked
 against a SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip).
 Architecture notes: [docs/architektur.md](docs/architektur.md), data contract: [docs/daten-v1.md](docs/daten-v1.md).
 

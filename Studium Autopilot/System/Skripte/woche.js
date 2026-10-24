@@ -18,8 +18,9 @@
 // Änderungen an Stundenplan-, Modul- und Einstellungsnotizen und an den Semesterdaten, beim Zurückkommen in die App und alle
 // 10 Minuten.
 // Je Modul und Art steht nur eine Gruppe da (meine-gruppe.js doppelt, dieselbe Reihenfolge wie beim Zusammenführen); eine
-// Alma-Notiz zu einer anderen Gruppe deines Kurses fehlt ebenso (seit 20.10.2026). Den Warnpunkt einer Überschneidung (Feld
-// konflikt) gibt es nur, wenn die andere Notiz im Raster steht, nie für eine verdeckte oder eine mit „Besuche ich nicht“.
+// Alma-Notiz zu einer anderen Gruppe deines Kurses fehlt ebenso (seit 20.10.2026). Den Warnpunkt einer Überschneidung hat eine
+// Gruppen-Notiz (ILIAS, gewählt), deren übliche Zeit sich mit einer anderen Notiz im Raster überschneidet, nie mit einer
+// verdeckten, entfallenen oder einer mit „Besuche ich nicht“; gerechnet beim Zeichnen (seit 24.10.2026, vorher Feld konflikt).
 // Ein blasser Kasten (beginnt erst) teilt sich nie die Breite mit einem echten: Überschneidet er einen, steht er schmal am
 // rechten Rand, eine Vorlesung wird nie halbiert (spalten).
 // Schmale Karte (iPhone, unter 520 px, eba-core.css 55): Tagesansicht statt Raster (seit 19.10.2026). Kopf „KW n“ mit ‹ ›, fünf
@@ -183,10 +184,18 @@ module.exports = function (ctx) {
     // nie: entfallen oder „Besuche ich nicht“ (findetStatt prüft das vor dem Tag)
     const nie = (fm) => ["entfaellt", "ausgeblendet"].indexOf(modell.findetStatt(fm, tage[0]).grund) >= 0;
     const lv = notizen.filter(({ pfad, fm }) => sem && fm.semester === sem.name && !(verdeckt && verdeckt[pfad]) && !nie(fm) && zeit(fm.beginn) && zeit(fm.ende));
-    // Überschneidung (konflikt: Name der anderen Notiz) nur mit einer Notiz, die das Raster zeigt
-    const imRaster = {};
-    for (const { pfad } of lv) imRaster[String(pfad).split("/").pop().replace(/\.md$/, "")] = true;
-    const konfliktMit = (fm) => (fm.konflikt && imRaster[String(fm.konflikt)] ? String(fm.konflikt) : "");
+    // Überschneidung einer Gruppen-Notiz (ILIAS, gewählt) mit einer anderen Notiz, die das Raster zeigt: gleicher Wochentag,
+    // übliche Zeiten überlappen, kein Einzeltermin, nicht dieselbe Gruppe → Name der anderen Notiz oder "". Hier gerechnet (seit
+    // 24.10.2026); vorher stand sie beim Schreiben im Feld konflikt und blieb, auch wenn die andere Notiz die Zeit wechselte.
+    const GRUPPE = ["ilias-gruppe", "gruppe-gewaehlt"];
+    const minuten = (s) => { const z = zeit(s); return z ? z.h * 60 + z.m : null; };
+    const konfliktMit = (pfad, fm) => {
+      if (GRUPPE.indexOf(String(fm.herkunft || "")) < 0) return "";
+      const b = minuten(fm.beginn), e = minuten(fm.ende), id = String(fm.gruppe_id || "");
+      const x = lv.find((y) => y.pfad !== pfad && y.fm.einzeltermin !== true && Number(y.fm.wochentag) === Number(fm.wochentag)
+        && !(id && String(y.fm.gruppe_id || "") === id) && minuten(y.fm.beginn) < e && b < minuten(y.fm.ende));
+      return x ? String(x.pfad).split("/").pop().replace(/\.md$/, "") : "";
+    };
     // Größe des Rasters aus allen Serien des Semesters (dazu Einzeltermine und geänderte Zeiten dieser Woche), damit es von
     // Woche zu Woche gleich bleibt
     const aenderungIn = (fm) => liste(fm.aenderungen).map((x) => String(x).split("|")).filter((x) => x.length >= 4 && tage.indexOf(x[0]) >= 0 && zeit(x[1]) && zeit(x[2]))[0] || null;
@@ -235,7 +244,7 @@ module.exports = function (ctx) {
       const raumNeu = !aus && !ab && s.raumGeaendert, zeitNeu = !aus && !ab && s.zeitGeaendert;
       const ausnahme = (aus && s.grund === "ausfall") || raumNeu || zeitNeu;
       const marke = aus ? "Fällt aus" : raumNeu && zeitNeu ? "Geändert" : raumNeu ? (s.neuerRaum ? "Neuer Raum" : "Anderer Raum") : zeitNeu ? "Andere Zeit" : "";
-      const klassen = ["eba-ev", istUebung(fm) ? "ue" : "vl"], konflikt = konfliktMit(fm);
+      const klassen = ["eba-ev", istUebung(fm) ? "ue" : "vl"], konflikt = konfliktMit(pfad, fm);
       if (konflikt) klassen.push("konflikt");
       if (aen) klassen.push("geaendert");
       if (ausnahme) klassen.push("ausnahme");

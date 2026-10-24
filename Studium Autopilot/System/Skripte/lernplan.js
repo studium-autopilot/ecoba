@@ -3,8 +3,9 @@
 // ganze Stoff verstanden (nicht beherrscht), danach bleibt die Zeit für die Klausurvorbereitung (Übungen, Altklausuren, Karteikarten).
 // Kapitel: Notizen unter Lernplan/ (typ: lernplan, code), je Modul eine, „<Code> Lernplan“. Quellen: die zentralen Kapitellisten
 // (kapitel.json, zentral.js holt sie gerätelokal; dieses Skript schreibt daraus die Notizen mit herkunft: zentral, nur auf dem
-// Abrufer, nur für Module des laufenden Semesters, Häkchen und „## Meine Notizen“ bleiben) oder eine eigene KI (andere herkunft,
-// nie überschrieben). Gibt es keine Notiz, fehlt der Lernplan in der Übersicht (sichtbar()).
+// Abrufer, nur für Module des laufenden Semesters, Häkchen und Eigenes bleiben) oder eine eigene KI (andere herkunft,
+// nie überschrieben). Gibt es keine Notiz, fehlt der Lernplan in der Übersicht (sichtbar()). Ist ein Lernplan nicht mehr dran (Modul
+// bestanden oder anerkannt, Notiz für ein anderes Semester, Modul liegt jetzt anderswo), steht er ohne Plan am Ende (nichtMehrDran).
 // Je Kapitel eine Aufgabe `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Unterlage (`[[B110 Folien 01 …]]`), die
 // Nummer der Folien (`Folien 1`, wenn sie von der Kapitelnummer abweicht) und die Seitenzahl (`118 S.`); eingerückte Aufgaben
 // darunter sind Unterkapitel. Abgehakt = verstanden (bei Unterkapiteln anteilig).
@@ -43,7 +44,10 @@ module.exports = function (ctx) {
 
   // ---------- Kapitel lesen (rein) ----------
   const AUFGABE = /^([ \t]*)[-*+] \[([ xX])\] (.*)$/;
-  const NUMMER = /^(\d+(?:\.\d+)*|[IVXLC]+|[A-Z])[.:)]?\s+(.*)$/;
+  // Erstes Wort in der Form der Kapitelnummern von kapitel.json (zentral.js, KAPITEL_NR), ohne Punkt am Ende; Nummer ist es nur
+  // mit Ziffer (1, 2.3, 1a, E1, A.1), als römische Zahl oder als einzelner Großbuchstabe, nie ein gewöhnliches Wort („Ohne“)
+  const NUMMER = /^([0-9A-Z](?:[0-9A-Za-z.]{0,6}[0-9A-Za-z])?)[.:)]?\s+(.*)$/;
+  const nummerOk = (s) => /\d/.test(s) || /^(?:[IVXLC]+|[A-Z])$/.test(s);
   const LINK = /\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|([^\]]*))?\]\]/g;
   const WEB = /\[[^\]]*\]\((https:\/\/[^)\s]+)\)/g;
   const SEITEN = /^(\d{1,4})\s*S\.?$/;
@@ -62,6 +66,7 @@ module.exports = function (ctx) {
     const teile = rest.replace(/\s+\^[A-Za-z0-9-]+$/, "").split(" · ");
     const kopf = teile.shift().trim();
     const m = kopf.match(NUMMER);
+    const nr = m && nummerOk(m[1]) ? m[1] : "";
     const links = [], web = [];
     let seiten = null, folien = null;
     for (const t of teile) {
@@ -75,8 +80,8 @@ module.exports = function (ctx) {
       WEB.lastIndex = 0;
       while ((l = WEB.exec(t))) web.push(l[1]);
     }
-    const titel = (m ? m[2] : kopf).replace(LINK, (_, z, a) => a || z).trim();
-    return { nr: m ? m[1] : "", titel, links, web, seiten, folien };
+    const titel = (nr ? m[2] : kopf).replace(LINK, (_, z, a) => a || z).trim();
+    return { nr, titel, links, web, seiten, folien };
   };
   // Markdown einer Lernplan-Notiz → [{ zeile, roh, nr, titel, fertig, links, seiten, teile: [{ zeile, roh, nr, titel, fertig }] }]
   // Nur Aufgaben außerhalb von Frontmatter und Codeblöcken; ohne Einrückung = Kapitel, eingerückt = Unterkapitel des letzten.
@@ -208,7 +213,25 @@ module.exports = function (ctx) {
     return aus;
   };
 
-  // Alles für einen Lernplan: Kapitel mit Gewicht und „da“, Klausur, Ziel, Plan, Stand. null, wenn nichts zu planen ist.
+  // Ein Modul ist im Semester dran, wenn es laut deinem Plan dort liegt, läuft oder angemeldet ist (eine Regel für das Anlegen der
+  // Notizen und die Anzeige)
+  const FERTIG = ["bestanden", "anerkannt"];
+  const imSemester = (m, name) => m.semester === name || ["läuft", "angemeldet"].indexOf(m.status) >= 0;
+  // Warum ein Lernplan nicht mehr dran ist, sonst "": Modul bestanden oder anerkannt (dann gibt es keine kommende Klausur mehr), die
+  // Notiz gehört zu einem anderen Semester (Feld `semester`) oder das Modul ist nicht mehr in diesem Semester dran. Notizen ohne
+  // `semester` (eigene KI) prüft nur das Erste.
+  const nichtMehrDran = (fm, modul, semesterName) => {
+    if (modul && FERTIG.indexOf(modul.status) >= 0) return `Modul ${modul.status}`;
+    const sem = String((fm && fm.semester) || "").trim();
+    if (!sem || !semesterName) return "";
+    if (sem !== semesterName) return `Plan für ${sem}`;
+    if (modul && !imSemester(modul, sem)) return modul.semester ? `liegt jetzt in ${modul.semester}` : "nicht mehr in deinem Plan";
+    return "";
+  };
+  const AUS = { art: "aus", pille: { art: "leer", text: "nicht mehr dran" }, woche: [], naechstes: -1 };
+
+  // Alles für einen Lernplan: Kapitel mit Gewicht und „da“, Klausur, Ziel, Plan, Stand. Ein Lernplan, der nicht mehr dran ist, hat
+  // keinen Plan (aus = Grund, Stand „nicht mehr dran“).
   const sammeln = async (f, D, heute) => {
     const text = await app.vault.cachedRead(f);
     const fm = fmVon(f), code = codeVon(f);
@@ -226,9 +249,12 @@ module.exports = function (ctx) {
         seitenWert: k.seiten || verlinkt || (fol && fol.seiten) || null, ziel: ziele[0] || (fol && fol.f) || null, webZiel: k.web[0] || null });
     });
     gewichte(kapitel).forEach((g, i) => { kapitel[i].gewicht = g; });
+    // Beginn: das laufende Semester (eine Notiz für ein anderes Semester sortiert nichtMehrDran aus)
+    const sem = ctx.modell.semesterFuer(heute);
+    const aus = nichtMehrDran(fm, modul, sem && sem.name);
+    if (aus) return Object.assign(basis, { kapitel, aus, stand: AUS });
     const kl = klausurVon(D, code, heute);
     if (!kl) return Object.assign(basis, { kapitel, fehlt: "keine Klausur" });
-    const sem = ctx.modell.semesterFuer(heute);
     const vb = (sem && sem.vb) || heute;
     const seit = s10(fm.seit);
     const beginn = seit && seit > vb ? seit : vb;
@@ -269,6 +295,7 @@ module.exports = function (ctx) {
     if (P.fehlt === "keine Kapitel") return "Noch keine Kapitel eingetragen.";
     const fertig = P.kapitel.filter((k) => k.anteil >= 1 - EPS).length;
     const teile = [`${fertig} von ${P.kapitel.length} Kapiteln${P.vorlaeufig ? " (Liste vorläufig)" : ""}`];
+    if (P.aus) { teile.push(P.aus); return teile.join(" · "); }
     if (P.fehlt === "keine Klausur") { teile.push("Datum der Klausur fehlt"); return teile.join(" · "); }
     const S = P.stand;
     if (S.art === "vorbei") teile.push(`Klausur war am ${wtm(P.klausur.datum)}`);
@@ -360,7 +387,7 @@ module.exports = function (ctx) {
     kopf.createEl("strong", { text: ENTWICKLUNG_TITEL });
     h.createDiv({ text: ENTWICKLUNG });
   };
-  const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1 };
+  const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1, aus: 5 };
   const zeichnen = async (el, mdCtx, art, neu) => {
     const D = ctx.modell.daten(), heute = heuteIso(), quelle = (mdCtx && mdCtx.sourcePath) || "";
     if (art === "modul") {
@@ -387,32 +414,102 @@ module.exports = function (ctx) {
 
   // ---------- Lernplan-Notizen aus den zentralen Kapitellisten (kapitel.json) ----------
   // Notiztext für einen Eintrag { code, semester, quelle, stand, vorlaeufig, kapitel: [{ nr, titel, seiten, folien, url, teile }] }.
-  // alt = bisheriger Text oder "": Häkchen bleiben (Kapitel und Unterkapitel nach Nummer), ebenso `seit`, `verstanden_bis` und alles
-  // unter „## Meine Notizen“.
+  // alt = bisheriger Text oder "". Häkchen gehen mit dem Titel (ohne Groß-/Kleinschreibung und Satzzeichen; bei gleichem Titel zuerst
+  // das mit gleicher Nummer): Ein Kapitel mit neuer Nummer bleibt abgehakt, ein anderes Kapitel unter derselben Nummer erbt das
+  // Häkchen nicht (die Liste wird mit jeder Vorlesung berichtigt). Es bleiben auch eigene Eigenschaften (`seit`, `verstanden_bis`,
+  // Tags …), eigener Text und eigene Aufgaben unter „## Kapitel“ (hinter dem Kapitel, hinter dem sie standen) und alles unter
+  // „## Meine Notizen“. Eine Aufgabe gehört der Liste nur, wenn sie zu einem Kapitel der neuen Liste passt oder in der zuletzt
+  // geschriebenen stand (frueher = listeZeilen dieser Liste); sonst ist sie deine, auch mit Nummer („3 Altklausuren rechnen“).
   const MEINE = "## Meine Notizen";
-  const zentralNotiz = (e, alt) => {
-    const vorher = kapitelLesen(alt || ""), fertig = {};
-    for (const k of vorher) { fertig["k" + k.nr] = k.fertig; for (const t of k.teile) fertig["t" + t.nr] = t.fertig; }
-    const fmAlt = {};
-    const fmBlock = String(alt || "").match(/^---\n([\s\S]*?)\n---/);
-    if (fmBlock) for (const z of fmBlock[1].split("\n")) { const m = z.match(/^(seit|verstanden_bis):\s*(\d{4}-\d{2}-\d{2})\s*$/); if (m) fmAlt[m[1]] = m[2]; }
+  const KAPITEL = "## Kapitel";
+  const LISTE_FELDER = ["typ", "code", "herkunft", "semester", "quelle", "stand", "vorlaeufig", "cssclasses"];
+  const titelSchluessel = (t) => String(t == null ? "" : t).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  // Kurz-Prüfsumme einer Kapitelzeile („Anhang Literatur“ liest kapitelLesen ohne Nummer, ergibt aber dieselbe Summe)
+  const zeilenHash = (nr, titel) => ctx.user.quellen.kurzHash(titelSchluessel(`${nr} ${titel}`));
+  // Alle (Unter-)Kapitel eines Eintrags als Prüfsummen: was die Notiz nach dem Schreiben an Aufgaben aus der Liste enthält
+  const listeZeilen = (e) => [].concat(...e.kapitel.map((k) => [zeilenHash(k.nr, k.titel)].concat((k.teile || []).map((t) => zeilenHash(t.nr, t.titel)))));
+  // Altes (Unter-)Kapitel zu nr und titel aus kandidaten: gleicher Titel, bei mehreren das mit gleicher Nummer; jedes nur einmal
+  const partner = (kandidaten, nr, titel, vergeben) => {
+    const t = titelSchluessel(titel);
+    const gleich = kandidaten.filter((k) => !vergeben.has(k) && titelSchluessel(k.titel) === t);
+    const k = gleich.filter((x) => x.nr === nr)[0] || gleich[0] || null;
+    if (k) vergeben.add(k);
+    return k;
+  };
+  // Eigene Eigenschaften der alten Notiz: die Zeilen jedes Felds, das nicht aus der Liste kommt, samt Folgezeilen
+  const eigeneFelder = (alt) => {
+    const m = String(alt || "").match(/^---\r?\n([\s\S]*?)\r?\n---/);
+    const aus = [];
+    let behalten = false;
+    if (m) for (const roh of m[1].split("\n")) {
+      const z = roh.replace(/\r$/, ""), feld = z.match(/^([^\s:#-][^:]*):/);
+      if (feld) behalten = LISTE_FELDER.indexOf(feld[1].trim()) < 0;
+      if (behalten) aus.push(z);
+    }
+    return aus;
+  };
+  // Eigenes unter „## Kapitel“ (Zeilen von–bis): alles außer den Zeilen der Liste (ausListe) und den Unterkapiteln der Liste in
+  // ihren Kapiteln. → { vor: [Zeilen vor dem ersten Kapitel], nach: Map(altes Kapitel → [Zeilen dahinter]) }
+  const eigenesLesen = (zeilen, von, bis, kapitel, ausListe) => {
+    const an = {};
+    for (const k of kapitel) { an[k.zeile] = { k, unter: false }; for (const t of k.teile) an[t.zeile] = { k: t, unter: true }; }
+    const vor = [], nach = new Map();
+    let anker = null, eigen = false;
+    for (let i = von; i < bis; i++) {
+      const x = an[i], liste = !!x && ausListe(x.k);
+      if (x && !x.unter) { eigen = !liste; if (liste) { anker = x.k; continue; } } else if (x && !eigen && liste) continue;
+      const z = zeilen[i].replace(/\r$/, "");
+      if (!anker) vor.push(z);
+      else { if (!nach.has(anker)) nach.set(anker, []); nach.get(anker).push(z); }
+    }
+    return { vor, nach };
+  };
+  const zentralNotiz = (e, alt, frueher) => {
+    const zeilenAlt = String(alt || "").split("\n");
+    const kopf = zeilenAlt.findIndex((z) => z.replace(/\s+$/, "") === KAPITEL);
+    const ende = kopf < 0 ? -1 : zeilenAlt.findIndex((z, j) => j > kopf && z.startsWith(MEINE));
+    const von = kopf + 1, bis = ende < 0 ? zeilenAlt.length : ende;
+    const vorher = kapitelLesen(alt || "").filter((k) => kopf < 0 || (k.zeile >= von && k.zeile < bis));
+    const vergeben = new Set();
+    const paare = e.kapitel.map((k) => { const z = zeileLesen(`${k.nr} ${k.titel}`); return partner(vorher, z.nr, z.titel, vergeben); });
+    const bekannt = new Set(frueher || []);
+    const ausListe = (k) => vergeben.has(k) || bekannt.has(zeilenHash(k.nr, k.titel));
+    const unterAlt = vorher.filter(ausListe);
     const fm = ["---", "typ: lernplan", `code: ${e.code}`, "herkunft: zentral", `semester: ${JSON.stringify(e.semester)}`];
     if (e.quelle) fm.push(`quelle: ${JSON.stringify(e.quelle)}`);
     if (e.stand) fm.push(`stand: ${e.stand}`);
     if (e.vorlaeufig) fm.push("vorlaeufig: true");
-    if (fmAlt.seit) fm.push(`seit: ${fmAlt.seit}`);
-    if (fmAlt.verstanden_bis) fm.push(`verstanden_bis: ${fmAlt.verstanden_bis}`);
-    fm.push("cssclasses:", "  - eba", "  - eba-s-lernplan-notiz", "---");
-    const haken = (an) => (an ? "[x]" : "[ ]");
+    fm.push(...eigeneFelder(alt), "cssclasses:", "  - eba", "  - eba-s-lernplan-notiz", "---");
+    const haken = (x) => (x && x.fertig ? "[x]" : "[ ]");
+    const T = e.kapitel.map((k, j) => (k.teile || []).map((t) => {
+      const z = zeileLesen(`${t.nr} ${t.titel}`), eltern = paare[j] ? paare[j].teile : [];
+      return partner(eltern.concat(...unterAlt.filter((x) => x !== paare[j]).map((x) => x.teile)), z.nr, z.titel, vergeben);
+    }));
+    const eigenes = kopf < 0 ? { vor: [], nach: new Map() } : eigenesLesen(zeilenAlt, von, bis, vorher, ausListe);
     const zeilen = [];
-    for (const k of e.kapitel) {
+    // Eigene Zeilen wie gefunden, ohne Leerzeilen am Ende; nach Text eine Leerzeile vor dem nächsten Kapitel
+    const eigeneDazu = (g) => {
+      const z = g.slice();
+      while (z.length && !z[z.length - 1].trim()) z.pop();
+      zeilen.push(...z);
+      if (z.length && !/^\s/.test(z[z.length - 1])) zeilen.push("");
+    };
+    eigeneDazu(eigenes.vor);
+    e.kapitel.forEach((k, j) => {
       const teile = [`${k.nr} ${k.titel}`];
       if (k.url) teile.push(`[online](${k.url})`);
       if (k.folien != null && k.folien !== nrZahl(k.nr)) teile.push(`Folien ${k.folien}`);
       if (k.seiten) teile.push(`${k.seiten} S.`);
-      zeilen.push(`- ${haken(fertig["k" + k.nr])} ${teile.join(" · ")}`);
-      for (const t of k.teile || []) zeilen.push(`  - ${haken(fertig["t" + t.nr])} ${t.nr} ${t.titel}`);
-    }
+      zeilen.push(`- ${haken(paare[j])} ${teile.join(" · ")}`);
+      (k.teile || []).forEach((t, n) => zeilen.push(`  - ${haken(T[j][n])} ${t.nr} ${t.titel}`));
+      if (paare[j] && eigenes.nach.has(paare[j])) { eigeneDazu(eigenes.nach.get(paare[j])); eigenes.nach.delete(paare[j]); }
+    });
+    // Eigenes hinter einem Kapitel, das es nicht mehr gibt: ans Ende
+    for (const rest of eigenes.nach.values()) { zeilen.push(""); eigeneDazu(rest); }
+    // Leerzeilen: höchstens eine am Stück, keine am Anfang und am Ende
+    const abschnitt = [];
+    for (const z of zeilen) if (z.trim() || (abschnitt.length && abschnitt[abschnitt.length - 1])) abschnitt.push(z.trim() ? z : "");
+    while (abschnitt.length && !abschnitt[abschnitt.length - 1]) abschnitt.pop();
     const i = String(alt || "").indexOf("\n" + MEINE);
     const meine = i >= 0 ? String(alt).slice(i + 1).replace(/\s+$/, "") : MEINE;
     return fm.join("\n") + "\n\n"
@@ -420,50 +517,95 @@ module.exports = function (ctx) {
       + '<a class="internal-link" data-href="Lernplan" href="Lernplan">Lernplan</a></div>\n'
       + `<h1>${e.code} Lernplan</h1>\n</div>\n\n`
       + "```eba-lernplan modul\nDer Stand erscheint, sobald Studium Autopilot läuft.\n```\n\n"
-      + "## Kapitel\n\n" + zeilen.join("\n") + "\n\n" + meine + "\n";
+      + KAPITEL + "\n\n" + abschnitt.join("\n") + "\n\n" + meine + "\n";
   };
-  // Welche Einträge zählen: Semester = das laufende, das Modul liegt laut deinem Plan in diesem Semester (bzw. läuft oder ist
-  // angemeldet) und ist nicht bestanden oder anerkannt
+  // Welche Einträge zählen: Semester = das laufende, das Modul ist dran (imSemester) und nicht bestanden oder anerkannt
   const zentralAuswahl = (eintraege, D, semesterName) => eintraege.filter((e) => {
     if (e.semester !== semesterName) return false;
     const m = D.module.find((x) => x.code === e.code);
-    if (!m || ["bestanden", "anerkannt"].indexOf(m.status) >= 0) return false;
-    return m.semester === e.semester || ["läuft", "angemeldet"].indexOf(m.status) >= 0;
+    if (!m || FERTIG.indexOf(m.status) >= 0) return false;
+    return imSemester(m, e.semester);
   });
   // Notizen schreiben: nur auf dem Abrufer (ctx.zentral.abruferHier, ein Schreiber wie bei den Terminen), nur wenn sich die Liste des
-  // Moduls geändert hat (gerätelokal gemerkt, eba-lernplan-zentral); dann bleiben Häkchen, seit, verstanden_bis und „Meine Notizen“.
-  // Bei gleicher Liste fasst es die Notiz nicht an, also bleibt auch anderes Eigenes (Zeilen unter „## Kapitel“, eigene
-  // Eigenschaften); vorher schrieb jeder Start sie neu, sobald der Text abwich. Eine Notiz mit anderer herkunft (eigene KI) bleibt
-  // unberührt. Eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert.
+  // Moduls seit dem letzten Schreiben geändert hat; dann bleiben Häkchen und Eigenes (zentralNotiz). Was geschrieben ist, steht wie
+  // die Grabsteine der Termine im Tresor (Sperr-Datei des Abrufers, Feld „lernplan“: { angewendet: Code → kurzHash der Liste,
+  // zeilen: Code → listeZeilen }), damit jeder Abrufer (auch nach einem Wechsel PC ↔ iPad) dasselbe weiß: Bei gleicher Liste
+  // bleibt die Notiz, wie sie ist, und eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert. Eine Notiz mit
+  // anderer herkunft (eigene KI) bleibt unberührt. Jedes Gerät hebt eine Kopie auf (KOPIE, wie eba-zentral-angewendet): Fehlt das
+  // Feld (Datei eben neu angelegt, Sync noch nicht da), gilt sie statt eines leeren Stands; fehlt die Datei oder ist sie unlesbar,
+  // schreibt der Lauf nichts. Bis 24.10.2026 stand das nur gerätelokal (eba-lernplan-zentral); das wird einmal übernommen.
+  const STAND = "System/Daten/abruf.json";
   const GEMERKT = "eba-lernplan-zentral";
+  const KOPIE = "eba-lernplan-angewendet";
+  const standForm = (x) => {
+    const o = x && typeof x === "object" && !Array.isArray(x) ? x : {};
+    const map = (m) => Object.assign({}, m && typeof m === "object" && !Array.isArray(m) ? m : {});
+    return { angewendet: map(o.angewendet), zeilen: map(o.zeilen) };
+  };
+  // Feld „lernplan“ der Sperr-Datei ({ angewendet, zeilen }, leer, wenn es fehlt); null, wenn die Datei fehlt oder unlesbar ist
+  const standLesen = async () => {
+    const f = app.vault.getAbstractFileByPath(STAND);
+    if (!f) return null;
+    try {
+      const o = JSON.parse(await app.vault.read(f));
+      return o && typeof o === "object" && !Array.isArray(o) ? standForm(o.lernplan) : null;
+    } catch (e) { return null; }
+  };
+  // Nur das Feld „lernplan“ neu, alles andere (Sperre, Grabsteine der Termine) bleibt; false, wenn nichts geschrieben wurde
+  const standSchreiben = async (lernplan) => {
+    const f = app.vault.getAbstractFileByPath(STAND);
+    let ok = false;
+    if (f) await app.vault.process(f, (text) => {
+      let o = null;
+      try { o = JSON.parse(text); } catch (e) { o = null; }
+      if (!o || typeof o !== "object" || Array.isArray(o)) return text;
+      o.lernplan = lernplan; ok = true;
+      return JSON.stringify(o, null, 1) + "\n";
+    });
+    return ok;
+  };
   let gleicht = false;
   const zentralAbgleichen = async () => {
-    const Z = ctx.zentral;
-    if (gleicht || !Z || !Z.kapitel || !ctx.modell || !ctx.modell.daten) return;
+    const Z = ctx.zentral, Q = ctx.user && ctx.user.quellen;
+    if (gleicht || !Z || !Z.kapitel || !Q || !ctx.modell || !ctx.modell.daten) return;
     const daten = Z.kapitel();
     if (!daten || !daten.module.length || !(await Z.abruferHier())) return;
     gleicht = true;
     try {
       const D = ctx.modell.daten(), heute = heuteIso(), sem = ctx.modell.semesterFuer(heute);
       if (!sem) return;
-      const gemerkt = app.loadLocalStorage(GEMERKT) || {};
+      const gelesen = await standLesen();
+      if (!gelesen) return; // ohne lesbaren Stand nichts schreiben, sonst kämen gelöschte Notizen zurück
+      const kopie = standForm(app.loadLocalStorage(KOPIE));
+      const s = { angewendet: Object.assign(kopie.angewendet, gelesen.angewendet), zeilen: Object.assign(kopie.zeilen, gelesen.zeilen) };
+      const vorher = JSON.stringify(gelesen), angewendet = s.angewendet;
+      const lokalAlt = app.loadLocalStorage(GEMERKT) || null;
       if (!app.vault.getAbstractFileByPath(ORDNER.slice(0, -1))) await app.vault.createFolder(ORDNER.slice(0, -1)).catch(() => {});
       for (const e of zentralAuswahl(daten.module, D, sem.name)) {
-        const pfad = `${ORDNER}${e.code} Lernplan.md`, schluessel = JSON.stringify(e);
+        const pfad = `${ORDNER}${e.code} Lernplan.md`, h = Q.kurzHash(e);
+        // Übergang: Was dieses Gerät früher mit derselben Liste geschrieben hat, gilt als angewendet; die alte Liste sagt, welche
+        // Aufgaben der Notiz aus ihr stammen
+        let alteListe = null;
+        try { alteListe = lokalAlt && lokalAlt[e.code] ? JSON.parse(lokalAlt[e.code]) : null; } catch (x) { alteListe = null; }
+        if (!Object.prototype.hasOwnProperty.call(angewendet, e.code) && lokalAlt && lokalAlt[e.code] === JSON.stringify(e)) angewendet[e.code] = h;
+        const frueher = s.zeilen[e.code] || (alteListe && Array.isArray(alteListe.kapitel) ? listeZeilen(alteListe) : null);
         const f = app.vault.getAbstractFileByPath(pfad);
         if (!f) {
-          if (gemerkt[e.code] === schluessel) continue;
+          if (Q.geloescht(angewendet, e.code, h)) continue; // von dir gelöscht, Liste unverändert
           await app.vault.create(pfad, zentralNotiz(e, ""));
         } else {
           if (fmVon(f).herkunft !== "zentral") continue;
-          if (gemerkt[e.code] !== schluessel) {
+          if (angewendet[e.code] !== h) {
             const alt = await app.vault.read(f);
-            if (zentralNotiz(e, alt) !== alt) await app.vault.process(f, (x) => zentralNotiz(e, x));
+            if (zentralNotiz(e, alt, frueher) !== alt) await app.vault.process(f, (x) => zentralNotiz(e, x, frueher));
           }
         }
-        gemerkt[e.code] = schluessel;
+        angewendet[e.code] = h;
+        s.zeilen[e.code] = listeZeilen(e);
       }
-      app.saveLocalStorage(GEMERKT, gemerkt);
+      app.saveLocalStorage(KOPIE, s);
+      const gemerkt = JSON.stringify(s) === vorher || (await standSchreiben(s));
+      if (gemerkt && lokalAlt) app.saveLocalStorage(GEMERKT, null);
     } catch (err) { console.error("Lernplan aus den Kapitellisten", err); } finally { gleicht = false; }
   };
 
@@ -483,11 +625,11 @@ module.exports = function (ctx) {
     // noch, meldet sich der Lernplan kurz danach an (wie dashboard.js)
     const abo = () => { if (!ctx.modell || !ctx.modell.beiAenderung) return false; ctx.aufraeumen(ctx.modell.beiAenderung(bald)); return true; };
     if (!abo()) ctx.zeit(abo, 3000);
-    // Neuer Tag: Wochenziele und Stand rücken weiter
-    const tag = ctx.bleibend("tag", () => ({ wert: heuteIso() }));
-    ctx.intervall(() => { const h = heuteIso(); if (h !== tag.wert) { tag.wert = h; neuZeichnen(); } }, 5 * 60 * 1000);
     // Neue Kapitellisten (zentral.js meldet sich über ctx.lernplanAnzeige): Notizen abgleichen
     const abgleichBald = ctx.entprellen(() => { zentralAbgleichen(); }, 2000);
+    // Neuer Tag: Wochenziele und Stand rücken weiter; im neuen Semester (oder nach einer Änderung deines Plans) fehlen Notizen
+    const tag = ctx.bleibend("tag", () => ({ wert: heuteIso() }));
+    ctx.intervall(() => { const h = heuteIso(); if (h !== tag.wert) { tag.wert = h; neuZeichnen(); abgleichBald(); } }, 5 * 60 * 1000);
     ctx.lernplanAnzeige = { neu: abgleichBald };
     ctx.aufraeumen(() => { if (ctx.lernplanAnzeige && ctx.lernplanAnzeige.neu === abgleichBald) ctx.lernplanAnzeige = null; });
   };
@@ -496,7 +638,7 @@ module.exports = function (ctx) {
   // Semesters), nachdem Fachmodell und zentrale Daten bereit sind
   const start = () => { ctx.zeit(() => { zentralAbgleichen(); }, 45000); };
 
-  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl };
+  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran };
   ctx.lernplan = api;
   return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

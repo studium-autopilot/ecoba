@@ -144,7 +144,8 @@ bash ~/studium-autopilot/server/fern.sh <befehl …>          sonst: sudo studiu
 
 Jeder Aufruf holt die Adresse mit `einrichten.mjs adresse` und prüft dabei den Schlüssel; er läuft aus jedem Ordner, auch in
 einer neuen Cloud-Shell-Sitzung. Exit wie `adresse` (1, 2), `3` unbekannter Befehl, `4` Server nicht `RUNNING`, `5` keine
-Antwort auf ssh (`ConnectTimeout=15`), sonst der Exit auf dem Server. Nur `claude-anmelden` und `uni-zugang` lesen von der
+Antwort auf ssh (`ConnectTimeout=15`), `6` anderer Schlüssel des Servers als in `~/.ssh/known_hosts` (neu angelegt unter einer
+schon bekannten IP; die Meldung nennt `ssh-keygen -R <IP>`), sonst der Exit auf dem Server. Nur `claude-anmelden` und `uni-zugang` lesen von der
 Tastatur (im Terminal mit `-t`); alle anderen laufen mit `ssh -n`, damit ssh keine Zeilen schluckt, die danach in der Cloud
 Shell laufen sollen. `neustart` startet den Server über `systemd-run` erst nach zwei Sekunden neu, damit ssh sauber
 zurückkommt. Angaben sind nur Kleinbuchstaben und Bindestriche, damit nichts Fremdes in die ssh-Zeile kommt. Tests in
@@ -206,34 +207,36 @@ sudo bash installieren.sh --test                  ohne HTTPS und ohne Claude Cod
 ```
 
 Der Installer ist wiederholbar: Jeder Schritt prüft zuerst, ob er schon erledigt ist; Schlüssel und Uni-Zugang bleiben bei
-jedem weiteren Lauf erhalten. Er richtet ein:
+jedem weiteren Lauf erhalten. Nur vorwärts: Ist schon eine neuere Version installiert (eine Vorabversion wie `0.6.0-beta.1`
+zählt weniger als `0.6.0`), bricht er ab, ohne etwas zu ändern; so ersetzt eine alte Kopie des Pakets in der Cloud Shell nie
+einen neueren Stand. Er richtet ein:
 
 | Teil | Was |
 |---|---|
 | Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `poppler-utils` (Claude liest damit Seitenbereiche aus PDFs), `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht), Caddy aus dessen offiziellem Paketarchiv |
 | Benutzer `studium` | führt die Dienste aus (Web-Dienst, Claude-Lauf, Zustand); Claude Code liegt in `/var/lib/studium/.local/bin/claude` |
 | Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium` für die Rohdaten) |
-| `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version |
+| `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückgehen von Hand), alle anderen entfernt der Installer |
 | `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte, nur root und `studium` lesen) |
 | `/var/lib/studium-server` | Zustand, Eingang (Ergebnisse für das Plugin), Einmal-Codes |
 | `studium-server-dienst` | Web-Dienst `dienst.mjs`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404 |
-| `studium-server-speicher` | Speicherreserve `speicher-reserve.mjs` (25 % des Arbeitsspeichers), damit Oracle den Server nicht wegen Leerlaufs anhält |
+| `studium-server-speicher` | Speicherreserve `speicher-reserve.mjs` (25 % des Arbeitsspeichers), damit Oracle den Server nicht wegen Leerlaufs anhält; „an“ meldet der Zustand nur, wenn die PID in `speicher-reserve.json` lebt und laut `/proc/<pid>/cmdline` die Reserve ist (nach einem Neustart kann sie einem anderen Prozess gehören) |
 | `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet, Uni-Zugang, Reserve, LiveSync |
 | `studium-server-abruf.timer` | alle 15 Minuten `abrufen.py` ohne KI: das Uni-Postfach, nur mit gespeichertem Uni-Zugang (nach der Uhr, weil ein übersprungener Dienst einen relativen Zeitgeber nicht weiterstellt). Steht in Obsidian ein Takt von 30 oder 60 Minuten, fallen die Zwischenzeiten aus, außer nach „Mails durchsuchen“. Beim ersten Start ab 06:30 Uhr der tägliche Sicherheitslauf: die Uni-Mails der letzten 24 Stunden noch einmal und ein Anstoß (Grund `taeglich`), auch ohne neue Mail |
-| `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt |
+| `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt; Zeitgrenze 100 Minuten (ein Lauf mit Opus und der gewöhnliche, je bis 45 Minuten) |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
-| `studium-server-aktualisieren.timer` | täglich: neues Server-Paket aus dem Release, nur mit passender Prüfsumme und nur vorwärts (nie auf eine ältere Version zurück) |
+| `studium-server-aktualisieren.timer` | täglich: Claude Code (`claude update`, nicht während eines Laufs), dann neues Server-Paket aus dem Release, nur mit passender Prüfsumme und nur vorwärts (nie auf eine ältere Version zurück) |
 | Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an; die Standardliste, die Oracle mit dem Netz anlegt und die dessen Kennzeichen erbt, erlaubt nur 22 und zählt nicht als eigene) |
 
 ### Web-Dienst (`dienst.mjs`)
 
 | Weg | Wer | Was |
 |---|---|---|
-| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail, Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
+| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
 | `POST /v1/anstoss` | mit Zugangsschlüssel | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 10 Minuten (sonst 429 mit `wieder`); ein wartender Anstoß bleibt |
 | `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180 |
 | `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
-| `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
+| `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lab, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
 | `POST /v1/pdf` | mit Zugangsschlüssel | verschlüsselt ein Stück (8 MB, Zweck `pdf`) einer PDF zu einer gewünschten Zusammenfassung, der Reihe nach (sonst 409); nach dem letzten und geprüftem SHA-256 liegt sie als `unterlagen/opus/<SHA-256>.pdf` da. Die Textfassung kommt gleich danach und nennt sie im Kopf, Opus liest dann die PDF. Je PDF bis 500 MB (sonst 413), höchstens 6 und zusammen 1 GB warten (sonst 429), ohne Textfassung oder halb hochgeladen verfällt eine nach einem Tag; nach einem erfolgreichen Lauf gelöscht |
 | `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät |
 | `GET /v1/livesync/<kennung>` | mit Kennung (20 Zeichen, 30 Minuten) | Seite mit dem Knopf „In Obsidian öffnen“ für den Setup-Link von LiveSync; unbekannte Kennungen zählen als Fehlversuch (siehe „LiveSync“) |
@@ -279,10 +282,14 @@ mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben
 - **Prüfung (`eingang.mjs`):** Jeder Termin muss die Regeln des Plugins für zentrale Termine erfüllen (Kategorien, Modulcode,
   Datum, keine Links oder Markdown im Titel); ungültige fallen einzeln weg. Die id leitet der Server aus Claudes `schluessel`
   ab, damit eine Änderung denselben Termin trifft. Ins Eingang kommt nur, was neu oder geändert ist; Vergangenes nur als
-  Änderung eines bekannten Termins.
+  Änderung eines bekannten Termins. Im Bestand (`termine.json`, daraus `bisher.json` im Auftrag) bleibt ein Termin bis 60 Tage
+  nach seinem Ende.
 - **Fehler:** Bei Limit oder ungültiger Ausgabe kommen die Rohdaten zurück und der nächste Lauf versucht es erneut; der Status
   meldet `claude-limit` bzw. `ausgabe-ungueltig`. Der Lauf übernimmt `roh/` in einem Schritt; was der Abruf währenddessen
   holt, wartet auf den nächsten, und beim Zurücklegen wird Datei für Datei zusammengeführt. Die letzten 10 Läufe bleiben.
+  Bricht ein Lauf ab (Zeitgrenze von systemd, Neustart, Absturz), legt `lauf.mjs` Rohdaten und Unterlagen ebenso zurück: bei
+  SIGTERM sofort, sonst beim nächsten Start für jeden Lauf-Ordner ohne `protokoll.json` (Protokoll `abgebrochen`, Status
+  `claude-lauf`). Neu angestoßen wird dabei nicht, damit ein Lauf, der jedes Mal zu lange braucht, nicht im Kreis läuft.
 
 ### Uni-Zugang (freiwillig)
 
@@ -314,7 +321,7 @@ Fenster „Eigener Server“ ein Knopf **Prompt kopieren**, aber nur auf einem v
 | Teil | Was |
 |---|---|
 | CouchDB | aus dem Paketarchiv von Apache (`couchdb-deb`, Arm und x86), ein Knoten, nur auf 127.0.0.1, Anmeldung immer nötig, CORS nur für die Obsidian-Apps (Computer, iPhone/iPad, Android) |
-| Caddy | `https://obsidian.<IP mit Bindestrichen>.sslip.io` → CouchDB (`/etc/caddy/studium-server.d/livesync.caddy`, eingebunden vom Caddyfile) |
+| Caddy | `https://obsidian.<IP mit Bindestrichen>.sslip.io` → CouchDB (`/etc/caddy/studium-server.d/livesync.caddy`, eingebunden vom Caddyfile). Nach einem IP-Wechsel zieht `livesync.sh adresse` Adresse und Caddy-Teil nach; das ruft der Installer auf, und `verbinden` tut es auch |
 | `/etc/studium-server/livesync.json` | Benutzer, Passwort (32 Zeichen), Datenbank, Schlüssel der Ende-zu-Ende-Verschlüsselung von LiveSync (32 Zeichen); nur root |
 | `/var/lib/studium-server/livesync-an` | Marke für den Status (`livesync: an`) |
 
@@ -349,7 +356,7 @@ studium-server zustand                 Zustand neu prüfen
 studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell der Claude-Läufe
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
-studium-server aktualisieren           Server-Paket aus dem Release (Prüfsumme) installieren
+studium-server aktualisieren           Claude Code aktualisieren, Server-Paket aus dem Release (Prüfsumme) installieren
 studium-server livesync                LiveSync einschalten und ein Gerät verbinden (siehe „LiveSync“)
 ```
 

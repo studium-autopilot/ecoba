@@ -12,8 +12,8 @@
 //   Fehlertexten oder Konsole (Fehlertexte werden zusätzlich davon gereinigt).
 // Index (System/Daten/ilias.json, synchronisiert): welche ILIAS-Datei wo im Tresor liegt, damit kein Gerät doppelt lädt.
 //   { version: 1, kurse: { <refId>: { titel, code, aktiv, zuletzt, t } }, dateien: { <ILIAS-id>: { pfad, sha256, groesse,
-//   geaendert, iliasGroesse, original, iliasPfad, kurs, seit, wie, aktualisiert?, geloescht?, fassungen?, t } },
-//   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, t } }, gruppen: { <ref_id der Gruppe>:
+//   geaendert, iliasGroesse, original, iliasPfad, kurs, seit, wie, aktualisiert?, geloescht?, fassungen?, entfernt?, t } },
+//   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, iliasPfad, kurs, entfernt?, t } }, gruppen: { <ref_id der Gruppe>:
 //   { code, kurs, tag, beginn, ende, raum, mitglied, status, zentral, kandidaten, notiz (Grabstein, siehe gruppenAbgleichen),
 //   t } }, objekte: { <ref_id einer Übung>: { typ: "exc", code, kurs, t } } }. Kurstitel und ILIAS-Pfade nur ohne Kurspasswort
 //   (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von Gruppen nie Titel oder Beschreibung (dort stehen Namen), nur
@@ -35,9 +35,16 @@
 // Neue Datei: SHA-256 → gleiche Datei schon unter Unterlagen/ (erst Größe, dann Prüfsumme)? Dann nur merken. Sonst Name über
 //   den Einordner, Ordner wie unterlagen.js, freier Name (nie überschreiben, sonst „ (2)“), Datei + Begleitnotiz
 //   (typ: unterlage, original, quelle „ILIAS: Kurs / Ordner“, ilias_id).
-// Geänderte Datei auf ILIAS: Datei im Tresor unverändert → ersetzen, die Notiz bekommt „aktualisiert“. Von dir verändert
-//   (Anmerkungen!) → deine bleibt, die neue kommt daneben als „<Name> neue Fassung JJJJ-MM-TT.<endung>“ mit eigener Notiz.
-// Gelöscht bleibt gelöscht: Eine Datei, die du gelöscht hast, kommt nie wieder, auch nicht in neuer Fassung.
+// Geänderte Datei auf ILIAS: Datei im Tresor unverändert → ersetzen, die Notiz bekommt „aktualisiert“, eine zur neuen Größe
+//   passende PDF-Ansicht, keine alte Seitenzahl, und ein ausgefülltes „Das Wichtigste“ heißt „… (frühere Fassung, bis …)“
+//   (nachErsetzen; „Zusammenfassen“ ist wieder da). Von dir verändert (Anmerkungen!) → deine bleibt, die neue kommt daneben als
+//   „<Name> neue Fassung JJJJ-MM-TT.<endung>“ mit eigener Notiz; ist diese Kopie beim nächsten Mal noch unverändert, wird sie
+//   ersetzt statt einer weiteren.
+// In ILIAS umbenannt oder verschoben (gleiche Kennung): Index und Notiz (original, quelle) ziehen mit, wo noch der alte Wert
+//   steht. Nicht mehr in ILIAS (Kurs ganz durchsucht, Datei nirgends, lag nicht in einem
+//   übersprungenen Behälter wie einer späteren Sitzung; Schutz je Kurs): „entfernt“ im Index, Kasten in der Notiz, die Datei bleibt (entfernteMerken).
+// Gelöscht bleibt gelöscht: Eine Datei, die du gelöscht hast, kommt nie wieder, auch nicht in neuer Fassung und nicht, wenn
+//   ILIAS sie unverändert neu hochlädt (gleiche Prüfsumme wie eine gelöschte).
 // Übungs- und Tutoriengruppen (seit 17.10.2026): Die Seite „Meine Kurse und Gruppen“ (dieselbe Anfrage wie die Kursliste) nennt
 //   die Gruppen, in denen du Mitglied bist. Je Gruppe: Modulcode aus dem durchsuchten Kurs bzw. den Brotkrumen der Gruppenseite,
 //   Zeitfenster aus Titel und Beschreibung, Zuordnung zu gruppen.json und eine Notiz in Stundenplan/ (meine-gruppe.js,
@@ -237,6 +244,7 @@ module.exports = function (ctx) {
   const nameVon = (p) => p.slice(p.lastIndexOf("/") + 1);
   const notizPfad = (p) => ohneEndung(p) + ".md";
   const mb = (bytes) => (bytes / 1048576).toFixed(1).replace(".", ",") + " MB";
+  const datumDe = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`; // JJJJ-MM-TT → TT.MM.JJJJ
   const vergleich = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   const codeAm = (titel) => { const m = String(titel || "").match(CODE_ANFANG); return m ? m[1] : ""; };
   const fehlerArt = (art, text) => { const e = new Error(text); e.art = art; return e; };
@@ -385,10 +393,11 @@ module.exports = function (ctx) {
     return zeilen.concat([ansicht, ""]).join("\n");
   };
   // Kasten „Neue Fassung aus ILIAS“ in einen Notiztext, der ihn noch nicht hat (Begleitnotiz eines älteren unterlagen.js): vor
-  // „## Das Wichtigste“ (bis 0.4.6), sonst vor dem PDF-Kasten bzw. der Datei nach dem Titel, sonst ans Ende
-  const hinweisEinsetzen = (text, hinweis) => {
+  // „## Das Wichtigste“ (bis 0.4.6), sonst vor dem PDF-Kasten bzw. der Datei nach dem Titel, sonst ans Ende. titel: anderer Kasten
+  // an derselben Stelle (z. B. „Nicht mehr in ILIAS“)
+  const hinweisEinsetzen = (text, hinweis, titel) => {
     if (!hinweis || String(text).indexOf(hinweis) >= 0) return text;
-    const kasten = "> [!eba-info] Neue Fassung aus ILIAS\n> " + hinweis + "\n\n";
+    const kasten = "> [!eba-info] " + (titel || "Neue Fassung aus ILIAS") + "\n> " + hinweis + "\n\n";
     const z = String(text).split("\n");
     let i = z.findIndex((x) => /^## Das Wichtigste/.test(x));
     if (i < 0) {
@@ -397,6 +406,57 @@ module.exports = function (ctx) {
     }
     if (i < 0) return String(text).replace(/\n*$/, "\n\n") + kasten.replace(/\n+$/, "\n");
     return z.slice(0, i).join("\n") + (i ? "\n" : "") + kasten + z.slice(i).join("\n");
+  };
+  // Die folgenden Änderungen gelten nur in der Begleitnotiz genau dieser ILIAS-Datei (Feld ilias_id); sonst bleibt der Text.
+  const fmVon = (text) => { const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(String(text)); return m ? m[1] : null; };
+  const vonDatei = (text, id) => {
+    const m = /^ilias_id:[ \t]*(.*)$/m.exec(fmVon(text) || "");
+    return !!m && m[1].trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1") === String(id);
+  };
+  // Felder (Werte als Text, im Frontmatter mit J) nur tauschen, wo noch der alte Wert steht: paare [[feld, alt, neu]]
+  const felderTauschen = (text, id, paare) => {
+    if (!vonDatei(text, id)) return text;
+    const fm = fmVon(text);
+    let neu = fm;
+    for (const [feld, alt, wert] of paare) {
+      if (alt === wert) continue;
+      const zeilen = neu.split("\n"), i = zeilen.indexOf(feld + ": " + J(alt));
+      if (i >= 0) { zeilen[i] = feld + ": " + J(wert); neu = zeilen.join("\n"); }
+    }
+    return neu === fm ? text : String(text).replace(fm, () => neu);
+  };
+  // Kasten „Nicht mehr in ILIAS“ setzen (datum JJJJ-MM-TT) bzw. entfernen (datum leer)
+  const ENTFERNT = /^> \[!eba-info\] Nicht mehr in ILIAS\n> Am \d{2}\.\d{2}\.\d{4} war diese Datei in ILIAS nicht mehr zu finden\.[^\n]*(?:\n|$)\n?/m;
+  const entferntKasten = (text, id, datum) => {
+    if (!vonDatei(text, id)) return text;
+    if (!datum) return String(text).replace(ENTFERNT, "");
+    if (ENTFERNT.test(String(text))) return text;
+    return hinweisEinsetzen(text, `Am ${datumDe(datum)} war diese Datei in ILIAS nicht mehr zu finden. Deine Datei bleibt; brauchst du sie nicht mehr, lösch sie.`, "Nicht mehr in ILIAS");
+  };
+  // Begleitnotiz nach dem Ersetzen durch eine neue Fassung aus ILIAS (x: { datum, groesse, endung }): „aktualisiert“, keine alte
+  // Seitenzahl, PDF-Ansicht passend zur neuen Größe (eingebettet oder nur verlinkt), Datum im Kasten „Neue Fassung aus ILIAS“.
+  // Eine Zusammenfassung der alten Fassung heißt danach „Das Wichtigste (frühere Fassung, bis TT.MM.JJJJ)“: Sie bleibt stehen,
+  // und „Zusammenfassen“ (server.js) ist wieder da. Zu tun, Offene Fragen und eigener Text bleiben, wie sie sind.
+  const nachErsetzen = (text, x) => {
+    let t = pflichtfelder(String(text), { aktualisiert: x.datum });
+    const fm = fmVon(t), ohneSeiten = fm == null ? null : fm.replace(/^seiten:[ \t]*\d+[ \t]*$/m, "seiten:");
+    if (ohneSeiten !== fm) t = t.replace(fm, () => ohneSeiten);
+    if (x.endung === "pdf") {
+      const gross = x.groesse >= EINBETTEN_MAX_MB * 1048576;
+      const verlinkt = (name, rest) => `**PDF öffnen:** [[${name}]] (${mb(x.groesse)}, zu groß zum Einbetten)${rest}`;
+      t = t.replace(/^> \[!eba-pdf\]([-+]?) PDF(?: \(\d+ Seiten?\))?[ \t]*\n> !\[\[([^\]\n#|]+)#height=560\]\]$/m,
+        (a, falte, name) => (gross ? verlinkt(name, " · [Öffnen ↗](obsidian://studium-autopilot?aktion=oeffnen)") : `> [!eba-pdf]${falte} PDF\n> ![[${name}#height=560]]`))
+        .replace(/^\*\*PDF öffnen:\*\* \[\[([^\]\n|]+)\]\] \([^)\n]*, zu groß zum Einbetten\)(.*)$/m,
+          (a, name, rest) => (gross ? verlinkt(name, rest) : `> [!eba-pdf]- PDF\n> ![[${name}#height=560]]`));
+    }
+    t = t.replace(/(Dies ist die neue Fassung aus ILIAS vom )\d{2}\.\d{2}\.\d{4}\./, (a, vorn) => vorn + datumDe(x.datum) + ".");
+    const z = t.split("\n"), i = z.findIndex((s) => s.trim() === "## Das Wichtigste");
+    if (i < 0) return t;
+    let e = i + 1;
+    while (e < z.length && !/^#{1,2} /.test(z[e]) && !/^>\s*\[!eba-pdf\]/.test(z[e])) e++;
+    if (!z.slice(i + 1, e).some((s) => !/^\s*(?:[-*]\s*(?:\[ \]\s*)?)?$/.test(s))) return t; // leer: bleibt für die neue Fassung
+    z[i] = `## Das Wichtigste (frühere Fassung, bis ${datumDe(x.datum)})`;
+    return z.join("\n");
   };
 
   // ---------- Einordner (unterlagen.js) ----------
@@ -423,7 +483,8 @@ module.exports = function (ctx) {
   // ---------- Motor (ohne Obsidian testbar) ----------
   // abh: {
   //   io: Tresor (lesenText, schreibenText, lesenBinaer, anlegenBinaer, anlegenText, ersetzenBinaer, loeschen, existiert,
-  //       dateien(unter) → [{ pfad, groesse }] ohne .md, unterordner(pfad) → [Name], ordnerAnlegen, notizMarkieren(pfad, felder))
+  //       dateien(unter) → [{ pfad, groesse }] ohne .md, unterordner(pfad) → [Name], ordnerAnlegen, notizMarkieren(pfad, felder),
+  //       notizAendern(pfad, fn(text) → text) → true, wenn geändert; beide nur in Notizen mit typ: unterlage)
   //   lokal(k, v?), geheim: { lesen(id) → Text | null (synchron), schreiben(id, w), loeschen(id) }, geheimId(),
   //   anmeldung() → anmelden(sitzung, zugang, optionen) → { ok, grund?, hinweis? } | null (dann „folgt später“),
   //   quelle(zugang, anmelden, { wiederverwenden }?) → { kurse(), inhalt(behaelter), laden(eintrag), name(eintrag) } (meldet
@@ -597,10 +658,15 @@ module.exports = function (ctx) {
     const zaehlen = () => {
       if (!mem) { const s = stand(); return { dateien: s.dateien, kurse: s.kurse, zuGross: s.zuGross }; }
       const d = mem.dateien, k = mem.kurse, g = mem.ignoriert;
+      // zu groß zählt nur, solange die Datei in ILIAS ist und ihr Kurs an (Kurs aus dem Eintrag, bei älteren aus dem ILIAS-Pfad)
+      const kursVon = (e) => e.kurs || Object.keys(k).filter((id) => { const p = String(e.iliasPfad || ""), t = k[id].titel; return !!t && (p === t || p.indexOf(t + " / ") === 0); })[0];
       return {
         dateien: Object.keys(d).filter((id) => !d[id].geloescht).length,
         kurse: Object.keys(k).filter((id) => k[id].aktiv).length,
-        zuGross: Object.keys(g).filter((id) => g[id].grund === "zu groß" && !hat(d, id)).length,
+        zuGross: Object.keys(g).filter((id) => {
+          const e = g[id], kurs = kursVon(e);
+          return e.grund === "zu groß" && !hat(d, id) && !e.entfernt && !(kurs && k[kurs] && !k[kurs].aktiv);
+        }).length,
       };
     };
 
@@ -662,6 +728,65 @@ module.exports = function (ctx) {
         else { setzen("dateien", id, { geloescht: true, geloeschtAm: heute() }); plus(b, e.kurs, "geloescht"); }
       }
       await speichern();
+    };
+    const notizAendern = async (pfad, fn) => {
+      try { return io.notizAendern ? await io.notizAendern(pfad, fn) : false; } catch (e) { return false; } // Notiz fehlt oder ist nicht unsere
+    };
+    // In ILIAS umbenannt oder verschoben (gleiche Kennung, beim Durchsuchen gesehen): Index nimmt Name, ILIAS-Pfad und Kurs; die
+    // Notiz Name und Quelle nach dem Durchsuchen (notizenNachziehen), nur wo dort noch die alten Werte stehen
+    const umbenanntInIlias = (c, r) => {
+      const d = mem.dateien[c.id];
+      if (!d || d.geloescht || (d.original === c.original && d.iliasPfad === c.iliasPfad && d.kurs === c.kurs.refId)) return;
+      if (d.pfad) r.umbenannt.push({ id: c.id, pfad: d.pfad, paare: [["original", d.original, c.original], ["quelle", "ILIAS: " + d.iliasPfad, "ILIAS: " + c.iliasPfad]] });
+      setzen("dateien", c.id, { original: c.original, iliasPfad: c.iliasPfad, kurs: c.kurs.refId });
+    };
+    // Nicht mehr in ILIAS: Ein Eintrag, dessen Kurs dieser Lauf ganz und ohne Ordnerfehler durchsucht hat und den er nirgends
+    // gesehen hat, bekommt „entfernt“ (Datum); die Datei im Tresor bleibt, ihre Notiz bekommt den Kasten „Nicht mehr in ILIAS“.
+    // Wieder gesehen → Marke und Kasten weg. Zu große Dateien (ignoriert) genauso, ohne Notiz. Was in einem nicht gelesenen
+    // Behälter lag (spätere Sitzung, Sitzung ohne Materialien, fremde Gruppe, zu tief; r.ausgelassen), zählt nicht als nicht
+    // gesehen. Ein Kurs, in dem gar nichts zu sehen war, und in einem Kurs mehr als die Hälfte (und mehr als 10) auf einmal sehen
+    // eher nach einer geänderten ILIAS-Seite aus: in diesem Kurs nichts.
+    const entfernteMerken = (b, r, fertig) => {
+      const ganz = {}, sichtbar = {};
+      for (const id of Object.keys(r.gefunden)) sichtbar[r.gefunden[id]] = true;
+      for (const id of fertig) if (sichtbar[id] && !(b.jeKurs[id] && b.jeKurs[id].ordnerFehler)) ganz[id] = true;
+      const ausgelassen = (e) => { const p = pfadOhneKennwort(e.iliasPfad); return r.ausgelassen.some((a) => p === a || p.indexOf(a + " / ") === 0); };
+      const weg = {}, alle = {}, wieder = [];
+      for (const bereich of ["dateien", "ignoriert"]) {
+        const m = mem[bereich];
+        for (const id of Object.keys(m)) {
+          const e = m[id];
+          if (bereich === "dateien" ? e.geloescht : e.grund !== "zu groß" || hat(mem.dateien, id)) continue;
+          const kurs = r.gefunden[id];
+          if (kurs) {
+            if (ganz[kurs]) alle[kurs] = (alle[kurs] || 0) + 1;
+            if (e.entfernt) wieder.push([bereich, id]);
+            if (bereich === "ignoriert" && e.kurs !== kurs) setzen(bereich, id, { kurs });
+            continue;
+          }
+          if (!ganz[e.kurs] || ausgelassen(e)) continue;
+          alle[e.kurs] = (alle[e.kurs] || 0) + 1;
+          if (!e.entfernt) (weg[e.kurs] || (weg[e.kurs] = [])).push([bereich, id]);
+        }
+      }
+      for (const [bereich, id] of wieder) {
+        setzen(bereich, id, { entfernt: "" });
+        if (bereich === "dateien" && mem.dateien[id].pfad) r.notizen.push({ id, pfad: mem.dateien[id].pfad, entfernt: "" });
+      }
+      let zuViele = 0;
+      for (const kurs of Object.keys(weg)) {
+        if (weg[kurs].length > 10 && weg[kurs].length > alle[kurs] / 2) { zuViele += weg[kurs].length; continue; }
+        for (const [bereich, id] of weg[kurs]) {
+          setzen(bereich, id, { entfernt: heute() });
+          if (bereich === "dateien" && mem.dateien[id].pfad) r.notizen.push({ id, pfad: mem.dateien[id].pfad, entfernt: heute() });
+        }
+      }
+      if (zuViele) warnen(b, `${zuViele} Dateien waren in ILIAS gerade nicht zu finden.`, "In diesen Kursen nichts als entfernt gemerkt.");
+    };
+    // Notizen nach dem Durchsuchen: Name und Quelle (umbenanntInIlias), Kasten „Nicht mehr in ILIAS“ (entfernteMerken)
+    const notizenNachziehen = async (r) => {
+      for (const u of r.umbenannt) { gestoppt(r); await notizAendern(notizPfad(u.pfad), (t) => felderTauschen(t, u.id, u.paare)); }
+      for (const n of r.notizen) { gestoppt(r); await notizAendern(notizPfad(n.pfad), (t) => entferntKasten(t, n.id, n.entfernt)); }
     };
 
     // ----- Anfragen an ILIAS (zählen; Abstand und Gleichzeitigkeit regelt die Drossel der Sitzung) -----
@@ -800,7 +925,7 @@ module.exports = function (ctx) {
         // Grabstein (Lebenslauf der Quellen): „notiz“ im Index = Gruppe aus gruppen.json, für die schon eine ILIAS-Notiz da war.
         // Fehlt sie jetzt, hast du sie gelöscht: nicht wieder anlegen, bis die Zuordnung wechselt oder du die Gruppe verlässt.
         const geloescht = (id, zid) => !!zid && (mem.gruppen[id] || {}).notiz === zid;
-        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen, geloescht, liste: zentral });
+        const n = await G.iliasAbgleichen(sp, soll, mitglieder, { modul: abh.modul, heute: heute(), wegErlaubt: verlassen, geloescht });
         b.gruppen.neu = n.angelegt.length + n.uebernommen.length;
         b.gruppen.notizen = n;
         for (const s of soll) if (n.notizen && n.notizen[s.refId] && (mem.gruppen[s.refId] || {}).notiz !== s.g.id) gruppeMerken(s.refId, { notiz: s.g.id });
@@ -927,12 +1052,15 @@ module.exports = function (ctx) {
       if (!/^[a-z0-9]{1,8}$/.test(endung) || NIE.indexOf(endung) >= 0) { plus(b, kurs.refId, "uebersprungen"); return; }
       const geaendert = e.geaendert ? String(e.geaendert) : "";
       const lg = typeof e.groesse === "number" && isFinite(e.groesse) && e.groesse >= 0 ? Math.round(e.groesse) : null;
+      const zuerst = !hat(r.gefunden, id);
+      r.gefunden[id] = kurs.refId; // gesehen (entfernteMerken)
       if (r.imLauf[id]) return; // dieselbe Datei an zwei Stellen im Kurs
       const c = { id, eintrag: e, kurs, code: k.code, ordner: k.pfad, original, endung, geaendert, lg, reihe: kandidaten.length, iliasPfad: [kurs.titel].concat(k.anzeige).join(" / ") };
+      if (zuerst) umbenanntInIlias(c, r);
       c.art = artFuer(c);
       if (!c.art) return;
       if (c.art === "neu" && lg != null && lg > MAX_MB * 1048576) {
-        setzen("ignoriert", id, { grund: "zu groß", groesse: lg, geaendert, iliasGroesse: lg, original, iliasPfad: c.iliasPfad });
+        setzen("ignoriert", id, { grund: "zu groß", groesse: lg, geaendert, iliasGroesse: lg, original, iliasPfad: c.iliasPfad, kurs: kurs.refId });
         plus(b, kurs.refId, "zuGross");
         return;
       }
@@ -975,11 +1103,14 @@ module.exports = function (ctx) {
         // Übung: nur Code des Behälters und Kurs merken (Index „objekte“, für den ILIAS-Kalender), nie ihr Titel
         if (e.typ === "exc" && e.refId && r.uebungenGesehen) r.uebungenGesehen[String(e.refId)] = { code: k.code || "", kurs: String(kurs.refId) };
         if (BEHAELTER.indexOf(art) >= 0) {
-          if (!e.url || k.tiefe >= TIEFE_MAX || (art === "sitzung" && aufgeklappt[String(e.refId)])) continue;
+          if (!e.url || (art === "sitzung" && aufgeklappt[String(e.refId)])) continue;
+          // nicht gelesen: was früher darin lag, gilt nicht als „nicht mehr in ILIAS“ (entfernteMerken)
+          const auslassen = () => { r.ausgelassen.push(pfadOhneKennwort([kurs.titel].concat(k.anzeige, [lesbar(e)]).join(" / "))); };
+          if (k.tiefe >= TIEFE_MAX) { auslassen(); continue; }
           const tag = art === "sitzung" && e.sitzung && e.sitzung.datum ? String(e.sitzung.datum).slice(0, 10) : "";
-          if (tag && tag > grenze) { plus(b, kurs.refId, "spaeter"); continue; }
-          if (art === "sitzung" && Array.isArray(e.eigenschaften) && !e.eigenschaften.length) { plus(b, kurs.refId, "ohneMaterial"); continue; }
-          if (e.typ === "grp" && e.mitglied === false) { plus(b, kurs.refId, "fremdeGruppe"); continue; }
+          if (tag && tag > grenze) { plus(b, kurs.refId, "spaeter"); auslassen(); continue; }
+          if (art === "sitzung" && Array.isArray(e.eigenschaften) && !e.eigenschaften.length) { plus(b, kurs.refId, "ohneMaterial"); auslassen(); continue; }
+          if (e.typ === "grp" && e.mitglied === false) { plus(b, kurs.refId, "fremdeGruppe"); auslassen(); continue; }
           const titel = textRein(e.titel);
           const c = codeAm(titel); // Unterordner „SQ888 …“ im Kurs S100 → Modul SQ888
           unter.push({ url: e.url, refId: e.refId != null ? String(e.refId) : "", titel, pfad: k.pfad.concat([segment(lesbar(e))]), anzeige: k.anzeige.concat([lesbar(e)]), code: c && abh.modul(c) ? c : k.code, tiefe: k.tiefe + 1 });
@@ -1034,14 +1165,17 @@ module.exports = function (ctx) {
       v = v || {};
       const code = v.code && v.code !== c.code && abh.modul(v.code) ? String(v.code) : c.code;
       const art = v.art || "Sonstiges", nr = v.nr == null ? null : v.nr;
-      const titel = sauber(v.titel || "");
+      // R-Notebook als HTML („Lab1.nb.html“ neben „Lab1.Rmd“): eigene Unterlage „… mit Ausgaben“, nicht „… (2)“ wie ein Doppel
+      // (Titel so gekürzt, dass der Zusatz im Namen bleibt)
+      const zusatz = (t) => (E.titelMitZusatz ? E.titelMitZusatz(code, art, nr, t, "mit Ausgaben") : sauber(`${t} mit Ausgaben`));
+      const titel = /\.nb\.html$/i.test(c.original) ? zusatz(v.titel || "") : sauber(v.titel || "");
       let name = "";
       try { name = E.zielName(code, art, nr, titel); } catch (e) { name = ""; }
       name = sauber(name) || sauber(ohneEndung(c.original)) || "Unterlage " + heute();
       return { art, nr, titel, name, code };
     };
     // Ordner wie unterlagen.js: vorhandener „Unterlagen/<Code> …“, sonst „<Code> <Modultitel>“; ohne Code der Kurstitel.
-    // Hat der Modulordner „Vorlesung“/„Übung“, kommt die Datei je nach Art dorthin; Tutorium immer nach „Tutorium“.
+    // Hat der Modulordner „Vorlesung“/„Übung“, kommt die Datei je nach Art dorthin; Tutorium immer nach „Tutorium“, Lab nach „Lab“.
     const zielOrdner = (code, kurs, art) => {
       let o;
       if (code) {
@@ -1054,7 +1188,7 @@ module.exports = function (ctx) {
         }
       } else o = ZIEL + "/" + (sauber(kuerzen(sauber(kurs.titel), ORDNER_TITEL_MAX)) || "ILIAS");
       const unter = { Folien: "Vorlesung", Skript: "Vorlesung", Mitschrift: "Vorlesung", "Übung": "Übung", "Lösung": "Übung", "Eigene Lösung": "Übung" }[art];
-      if (art === "Tutorium") o += "/Tutorium"; // eigener Bereich, immer (angelegt beim Schreiben)
+      if (art === "Tutorium" || art === "Lab") o += "/" + art; // eigener Bereich, immer (angelegt beim Schreiben)
       else if (unter && io.unterordner(o).indexOf(unter) >= 0) o += "/" + unter;
       return o;
     };
@@ -1093,7 +1227,8 @@ module.exports = function (ctx) {
       const d = s.id ? mem.dateien[s.id] : null;
       if (s.art === "neu" && !(d && d.pfad === s.pfad)) {
         for (const p of [s.pfad, notizPfad(s.pfad)]) if (io.existiert(p)) await io.loeschen(p);
-      } else if (s.art === "ersetzen" && d && d.pfad === s.pfad && io.existiert(s.pfad)) {
+      } else if (s.art === "ersetzen" && d && (d.pfad === s.pfad || (Array.isArray(d.fassungen) && d.fassungen.indexOf(s.pfad) >= 0)) && io.existiert(s.pfad)) {
+        // halb ersetzt (deine Datei oder die neue Fassung daneben): gilt als unverändert, der nächste Abruf ersetzt sie
         const by = await io.lesenBinaer(s.pfad);
         const h = by ? await sha256(by) : "";
         if (h && h !== d.sha256) { setzen("dateien", s.id, { sha256: h, groesse: by.length }); await speichern(); }
@@ -1108,7 +1243,7 @@ module.exports = function (ctx) {
       try { await io.anlegenText(notizPfad(pfad), notiz); }
       catch (e) { try { await io.loeschen(pfad); } catch (x) { /* bleibt; nächster Lauf findet sie als gleiche Datei */ } throw e; }
     };
-    const zuGrossMerken = (c, groesse, b) => { setzen("ignoriert", c.id, { grund: "zu groß", groesse, geaendert: c.geaendert, iliasGroesse: c.lg, original: c.original, iliasPfad: c.iliasPfad }); plus(b, c.kurs.refId, "zuGross"); };
+    const zuGrossMerken = (c, groesse, b) => { setzen("ignoriert", c.id, { grund: "zu groß", groesse, geaendert: c.geaendert, iliasGroesse: c.lg, original: c.original, iliasPfad: c.iliasPfad, kurs: c.kurs.refId }); plus(b, c.kurs.refId, "zuGross"); };
 
     const neuAblegen = async (c, bytes, b, r, E) => {
       if (bytes.length > MAX_MB * 1048576) { zuGrossMerken(c, bytes.length, b); await speichern(); return; }
@@ -1116,6 +1251,12 @@ module.exports = function (ctx) {
       const basis = { sha256: sha, groesse: bytes.length, geaendert: c.geaendert, iliasGroesse: c.lg, original: c.original, iliasPfad: c.iliasPfad, kurs: c.kurs.refId, seit: heute() };
       const gleich = await gleicheDatei(r, unterlagen(r), bytes.length, sha);
       if (gleich) { setzen("dateien", c.id, Object.assign(basis, { pfad: gleich, wie: "vorhanden" })); plus(b, c.kurs.refId, "vorhanden"); await speichern(); return; }
+      // In ILIAS gelöscht und neu hochgeladen (neue Kennung), dieselbe Datei hast du hier gelöscht: bleibt gelöscht
+      const d = mem.dateien;
+      if (Object.keys(d).some((id) => d[id].geloescht && d[id].sha256 === sha && d[id].groesse === bytes.length)) {
+        setzen("dateien", c.id, Object.assign(basis, { pfad: "", wie: "geloescht", geloescht: true, geloeschtAm: heute() }));
+        plus(b, c.kurs.refId, "geloescht"); await speichern(); return;
+      }
       const plan = await benennen(c, bytes, E, true);
       const ordner = zielOrdner(plan.code, c.kurs, plan.art);
       const stem = freierName(ordner, plan.name, c.endung);
@@ -1154,10 +1295,25 @@ module.exports = function (ctx) {
         plus(b, c.kurs.refId, "ersetzt"); b.ersetztePfade.push(pfad);
         await speichern();
         schreibtSetzen(null);
-        try { await io.notizMarkieren(notizPfad(pfad), { aktualisiert: datum }); } catch (e) { /* Notiz fehlt oder ist nicht unsere */ }
+        await notizAendern(notizPfad(pfad), (t) => nachErsetzen(t, { datum, groesse: bytes.length, endung: endungVon(pfad) }));
         return;
       }
       if (ist === sha) { merken({ sha256: sha, groesse: bytes.length }); plus(b, c.kurs.refId, "gleich"); await speichern(); return; } // hast du schon
+      // Die letzte neue Fassung daneben ist noch unverändert (Prüfsumme = letzte Fassung aus ILIAS): sie wird ersetzt, statt eine
+      // weitere Kopie anzulegen
+      const fassungen = Array.isArray(d0.fassungen) ? d0.fassungen : [];
+      const letzte = fassungen[fassungen.length - 1];
+      if (letzte && io.existiert(letzte) && (await hashVon(r, letzte)) === d0.sha256) {
+        schreibtSetzen({ id: c.id, pfad: letzte, art: "ersetzen" });
+        await io.ersetzenBinaer(letzte, bytes);
+        r.hashes[letzte] = sha;
+        merken({ sha256: sha, groesse: bytes.length, aktualisiert: datum });
+        plus(b, c.kurs.refId, "ersetzt"); b.ersetztePfade.push(letzte);
+        await speichern();
+        schreibtSetzen(null);
+        await notizAendern(notizPfad(letzte), (t) => nachErsetzen(t, { datum, groesse: bytes.length, endung: endungVon(letzte) }));
+        return;
+      }
       // Von dir verändert: deine Datei bleibt, die neue Fassung kommt daneben
       const ordner = elternVon(pfad), stem = ohneEndung(nameVon(pfad)), endung = endungVon(pfad) || c.endung;
       const basisName = `${stem} neue Fassung ${datum}`;
@@ -1167,7 +1323,7 @@ module.exports = function (ctx) {
       const neuPfad = `${vorne}${name}.${endung}`;
       const plan = await benennen(c, bytes, E, false);
       schreibtSetzen({ id: c.id, pfad: neuPfad, art: "neu" });
-      const hinweis = `Deine veränderte Datei [[${nameVon(pfad)}]] bleibt, wie sie ist. Dies ist die neue Fassung aus ILIAS vom ${datum.slice(8, 10)}.${datum.slice(5, 7)}.${datum.slice(0, 4)}.`;
+      const hinweis = `Deine veränderte Datei [[${nameVon(pfad)}]] bleibt, wie sie ist. Dies ist die neue Fassung aus ILIAS vom ${datumDe(datum)}.`;
       await mitNotiz(neuPfad, bytes, notizBauen(E, notizDaten(c, plan, `${name}.${endung}`, bytes.length, hinweis)));
       r.hashes[neuPfad] = sha;
       merken({ pfad, sha256: sha, groesse: bytes.length, aktualisiert: datum, fassungen: (Array.isArray(d0.fassungen) ? d0.fassungen : []).concat([neuPfad]) });
@@ -1206,7 +1362,8 @@ module.exports = function (ctx) {
       const geheimId = abh.geheimId();
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
-      const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {}, uebungenGesehen: {} };
+      const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {}, uebungenGesehen: {},
+        gefunden: {}, ausgelassen: [], umbenannt: [], notizen: [] };
       await indexLesen();
       if (!o.nurKurse && !nurGruppen) {
         await nachAbbruch(r); await nachziehen(b, r);
@@ -1247,7 +1404,7 @@ module.exports = function (ctx) {
         const kurs = String(c.kurs.refId);
         if (!bekannt[kurs] || frisch[kurs] || !kursAn(kurs) || r.imLauf[c.id]) continue;
         c.art = artFuer(c);
-        if (c.art) { c.reihe = kandidaten.length; kandidaten.push(c); r.imLauf[c.id] = true; }
+        if (c.art) { c.reihe = kandidaten.length; c.frueher = true; kandidaten.push(c); r.imLauf[c.id] = true; }
       }
       const darf = () => b.seiten < seitenBudget;
       r.kurseGesamt = aktive.length; r.kurseFertig = 0;
@@ -1271,7 +1428,9 @@ module.exports = function (ctx) {
         const x = r.uebungenGesehen[id], alt = mem.objekte[id] || {};
         if (alt.typ !== "exc" || alt.code !== x.code || alt.kurs !== x.kurs) setzen("objekte", id, { typ: "exc", code: x.code, kurs: x.kurs });
       }
-      await speichern(); // ignoriert (zu groß), Übungen
+      entfernteMerken(b, r, fertig);
+      await speichern(); // ignoriert (zu groß), Übungen, umbenannt oder nicht mehr in ILIAS
+      await notizenNachziehen(r);
 
       // 1b. Gruppen in den Stundenplan (nicht, wenn sie von außen kommen); ein Fehler hier hält die Unterlagen nicht an
       if (!ohneGruppen) {
@@ -1313,6 +1472,9 @@ module.exports = function (ctx) {
             if (!bytes) throw fehlerArt("datei", "leere Antwort");
           } catch (e) {
             if (!einzeln(e)) throw e;
+            // Fund eines früheren Laufs, den es in ILIAS nicht mehr gibt (404/410): kein Fehler, aus den Funden (findet ihn das
+            // nächste Durchsuchen wieder, kommt er wieder)
+            if (c.frueher && (Number(e.status) === 404 || Number(e.status) === 410)) { c.weg = true; plus(b, c.kurs.refId, "uebersprungen"); continue; }
             fehlerN++;
             b.fehlerDateien.push(c.original);
             plus(b, c.kurs.refId, "fehler");
@@ -1325,7 +1487,7 @@ module.exports = function (ctx) {
       };
       await zugleich(r, abh.mobil ? LADER_MOBIL : LADER_PC, lader);
       // was noch fehlt (Grenze je Lauf, einzelne Fehler), lädt der nächste Lauf ohne neues Durchsuchen
-      fundeSpeichern(r, kandidaten.filter((c) => kursAn(c.kurs.refId) && artFuer(c)));
+      fundeSpeichern(r, kandidaten.filter((c) => !c.weg && kursAn(c.kurs.refId) && artFuer(c)));
       // „zuletzt“ je Kurs (synchronisiert) nur bei Änderungen oder spätestens nach einem Tag schreiben (Sync-Verkehr)
       for (const id of fertig) { const k = mem.kurse[id]; if (k && (geaenderteKurse[id] || alter(k.zuletzt) > KURS_ZULETZT)) setzen("kurse", id, { zuletzt: iso() }); }
       await speichern();
@@ -1575,6 +1737,15 @@ module.exports = function (ctx) {
         const f = datei(p), c = f && app.metadataCache.getFileCache(f);
         if (!c || !c.frontmatter || c.frontmatter.typ !== "unterlage") return false;
         await app.fileManager.processFrontMatter(f, (x) => { Object.assign(x, felder); });
+        return true;
+      },
+      // in einem Zug (vault.process): was du gerade in der Notiz tippst, geht nicht verloren
+      notizAendern: async (p, fn) => {
+        const f = datei(p), c = f && app.metadataCache.getFileCache(f);
+        if (!c || !c.frontmatter || c.frontmatter.typ !== "unterlage") return false;
+        const t = await V.read(f);
+        if (fn(t) === t) return false;
+        await V.process(f, fn);
         return true;
       },
     };

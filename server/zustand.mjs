@@ -16,11 +16,14 @@ const ausfuehren = (befehl, args) => new Promise((fertig) => {
   execFile(befehl, args, { timeout: 60e3 }, (err, stdout) => fertig({ ok: !err, ausgabe: String(stdout || "") }));
 });
 
-// Speicherreserve läuft, wenn ihre Meldung eine lebende PID nennt (ohne systemctl: braucht als Benutzer kein D-Bus).
-export function reserveLaeuft(verzeichnis) {
+// Speicherreserve läuft, wenn ihre Meldung eine lebende PID nennt (ohne systemctl: braucht als Benutzer kein D-Bus) und diese
+// PID die Reserve ist: Nach einem Neustart bleibt die Meldung liegen, und ihre PID kann einem anderen Prozess gehören. proc: in
+// Tests ein eigener Ordner; ohne /proc (nicht Linux) nur die PID.
+export function reserveLaeuft(verzeichnis, proc = "/proc") {
   try {
     const { pid } = JSON.parse(readFileSync(join(verzeichnis, "speicher-reserve.json"), "utf8"));
     process.kill(Number(pid), 0);
+    if (existsSync(proc) && !readFileSync(join(proc, String(Number(pid)), "cmdline"), "utf8").includes("speicher-reserve")) return "aus";
     return "an";
   } catch (e) {
     return "aus";

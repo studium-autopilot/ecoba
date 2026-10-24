@@ -86,3 +86,28 @@ test("Übung und Tutorium im Stundenplan: Unterlagen aus dem eigenen Bereich, ne
   assert.equal(K.blaetterFuer(serie({ art: "Tutorium", code: "" }), unterlagen), null, "ohne Modul: nichts");
   assert.deepEqual(K.blaetterFuer(serie({ art: "Tutorium", code: "Z300" }), unterlagen), { art: "Tutorium", blaetter: [], mehr: 0 });
 });
+
+test("Lab im Stundenplan: Unterlagen aus dem Bereich Lab, auch unter dem offiziellen Namen („Data Science Lab“)", () => {
+  const u = (art, nummer, titel) => ({ f: { basename: `X100 ${art} ${titel}` }, fm: { typ: "unterlage", code: "X100", art, nummer, titel } });
+  const unterlagen = [u("Lab", 1, "Notebook Grundlagen"), u("Lab", 2, "Regression"), u("Übung", 3, "Integrale"), u("Sonstiges", "", "Lab Daten")];
+  for (const art of ["Lab", "Data Science Lab", "R Lab", "Python Labs"]) {
+    const r = K.blaetterFuer(serie({ art }), unterlagen);
+    assert.equal(r.art, "Lab", art);
+    assert.deepEqual(r.blaetter.map((b) => [b.nr, b.titel]), [[2, "Regression"], [1, "Notebook Grundlagen"]], art);
+  }
+  for (const art of ["Praktikum", "Laborpraktikum", "Matlab-Kurs", "Kollaboration"]) assert.equal(K.blaetterFuer(serie({ art }), unterlagen), null, art);
+  assert.equal(K.blaetterFuer(serie({ art: "Übung" }), unterlagen).art, "Übung");
+});
+
+test("Lab im Stundenplan: ein Chip je Sitzung, zum Lesen vor Notebook, Code und Daten, Lösung zuletzt; der Rest über „Alle Unterlagen“", () => {
+  const u = (nummer, titel, format, datei) => ({ f: { basename: `X100 Lab ${nummer} ${titel}` }, fm: { typ: "unterlage", code: "X100", art: "Lab", nummer, titel, format, datei } });
+  const unterlagen = [u(2, "Daten", "csv"), u(2, "Lösung", "pdf"), u(2, "Code", "r"), u(2, "", "html, rmd"), u(1, "Daten", "csv"), u(1, "Grundlagen", "html, rmd"), u("", "Einrichtung", "pdf")];
+  const r = K.blaetterFuer(serie({ art: "Data Science Lab" }), unterlagen);
+  assert.deepEqual(r.blaetter.map((b) => [b.nr, b.titel]), [[2, ""], [1, "Grundlagen"], [null, "Einrichtung"]]);
+  assert.equal(r.mehr, 4, "Daten, Lösung und Code bleiben über die Modulseite erreichbar");
+  // aus der ILIAS-Ablage: Notebook und HTML-Fassung getrennt, ohne „format“ zählt die Endung der Datei
+  const ilias = [u(1, "Notebook Grundlagen", "rmd"), u(1, "Notebook Grundlagen mit Ausgaben", "html"), u(3, "Daten", "", "[[X100 Lab 03 Daten.csv]]"), u(3, "Notebook", "", "[[X100 Lab 03 Notebook.Rmd]]")];
+  assert.deepEqual(K.blaetterFuer(serie({ art: "Lab" }), ilias).blaetter.map((b) => b.titel), ["Notebook", "Notebook Grundlagen mit Ausgaben"]);
+  const ue = [u(3, "A", "pdf"), u(3, "B", "pdf")].map((x) => ({ f: x.f, fm: Object.assign({}, x.fm, { art: "Übung" }) }));
+  assert.equal(K.blaetterFuer(serie({ art: "Übung" }), ue).blaetter.length, 2, "Übungen mit gleicher Nummer bleiben einzeln");
+});

@@ -58,10 +58,17 @@ function tresor({ testAbruf, prompt, eba = {}, sperre = false, ohneBibliotheken 
     app.vault.process = async (f, fn) => { text[f.path] = fn(text[f.path] || ""); };
     speicher["eba-geraet"] = "g-ich";
   }
+  // renameFile wie Obsidian (Links ziehen mit); die Hülle eines eigenen Uni-Abgleichs hat es nicht
+  const umbenannt = [];
   app.fileManager = { processFrontMatter: async (f, fn) => fn(fm[f.path]) };
+  if (!ohneBibliotheken) {
+    app.fileManager.renameFile = async (f, neu) => {
+      fm[neu] = fm[f.path]; text[neu] = text[f.path]; delete fm[f.path]; delete text[f.path]; umbenannt.push([f.path, neu]);
+    };
+  }
   app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
   app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = v; };
-  return { A: L.ergebnis, ctx: L.ctx, fm, text, papierkorb, speicher, dateien };
+  return { A: L.ergebnis, ctx: L.ctx, fm, text, papierkorb, speicher, dateien, umbenannt };
 }
 
 const ereignis = (uid, titel, start, ende, raum) => [
@@ -514,4 +521,67 @@ test("Hülle eines eigenen Uni-Abgleichs (ohne Bibliotheken): Änderungen und Ve
   const n = notizVon(t, /X480/);
   assert.deepEqual([n.raum, n.raum_vorher, n.raum_seit], ["Hörsaal 21", "Hörsaal 1", "2026-11-11"]);
   assert.deepEqual(Object.keys(t.dateien), []);
+});
+
+test("Alma verlegt Tag oder Zeit: Felder, Kopfzeile und Name ziehen mit, dein Text bleibt; umbenannt oder von Hand: Name bleibt", async () => {
+  const t = tresor({ sperre: true });
+  const serie = (start, ende) => kalender(ve({ UID: "v", SUMMARY: "X490 Beispiel Vorlesung", DTSTART: start, DTEND: ende, RRULE: "FREQ=WEEKLY;COUNT=8", LOCATION: "Hörsaal 1" }));
+  await t.A.aktualisieren({ still: true, text: serie("20261019T100000", "20261019T120000") });
+  const alt = "Stundenplan/Mo 10.00 X490 Vorlesung.md";
+  assert.match(t.text[alt], /^Montags, 10:00–12:00 · Hörsaal 1$/m);
+  t.text[alt] = t.text[alt].replace("## Meine Notizen\n- \n", "## Meine Notizen\n- Montags, 10:00–12:00 · Hörsaal 1 war voll\n");
+  const b = await t.A.aktualisieren({ still: true, text: serie("20261020T140000", "20261020T160000") });
+  const p = "Stundenplan/Di 14.00 X490 Vorlesung.md";
+  assert.deepEqual([b.neu, b.geaendert, t.umbenannt], [0, 1, [[alt, p]]]);
+  assert.deepEqual([t.fm[p].wochentag, t.fm[p].tag, t.fm[p].beginn, t.fm[p].ende], [2, "Di", "14:00", "16:00"]);
+  assert.match(t.text[p], /^Dienstags, 14:00–16:00 · Hörsaal 1$/m);
+  assert.doesNotMatch(t.text[p].split("## Meine Notizen")[0], /Montags/);
+  assert.match(t.text[p], /^- Montags, 10:00–12:00 · Hörsaal 1 war voll$/m, "dein Text bleibt, auch wenn er so aussieht");
+  // umbenannt (eigener Name): Felder und Kopfzeile ja, Name nein
+  const eigen = "Stundenplan/Mathe am Dienstag.md";
+  t.fm[eigen] = t.fm[p]; t.text[eigen] = t.text[p]; delete t.fm[p]; delete t.text[p];
+  await t.A.aktualisieren({ still: true, text: serie("20261021T080000", "20261021T100000") });
+  assert.equal(t.umbenannt.length, 1);
+  assert.deepEqual([t.fm[eigen].wochentag, t.fm[eigen].beginn], [3, "08:00"]);
+  assert.match(t.text[eigen], /^Mittwochs, 08:00–10:00 · Hörsaal 1$/m);
+  // von Hand angelegt (Alma hat sie nur verknüpft): Felder ja, Kopf und Name bleiben deine
+  const u = tresor({ sperre: true });
+  const hand = "Stundenplan/Mo 10.00 X490 Vorlesung.md";
+  u.fm[hand] = { typ: "lehrveranstaltung", code: "X490", art: "Vorlesung", wochentag: 1, beginn: "10:00", ende: "12:00", semester: SEM, titel: "Beispiel · Vorlesung" };
+  u.text[hand] = "---\n---\n\n# Meine Vorlesung\n\nMontags, 10:00–12:00 · Hörsaal 1\n";
+  await u.A.aktualisieren({ still: true, text: serie("20261019T100000", "20261019T120000") });
+  await u.A.aktualisieren({ still: true, text: serie("20261020T140000", "20261020T160000") });
+  assert.deepEqual([u.fm[hand].wochentag, u.fm[hand].beginn, u.umbenannt], [2, "14:00", []]);
+  assert.match(u.text[hand], /^Montags, 10:00–12:00 · Hörsaal 1$/m);
+});
+
+test("Modul noch leer: sobald es die Modulnotiz gibt, verknüpft Alma ihre eigene Notiz (nie eine von Hand)", async () => {
+  const t = tresor();
+  await t.A.aktualisieren({ still: true, text: kalender(B110) });
+  const p = Object.keys(t.fm).find((x) => /B110/.test(x));
+  assert.equal(String(t.fm[p].modul), "");
+  const hand = "Stundenplan/Di 14.00 B130 Übung.md";
+  t.fm[hand] = { typ: "lehrveranstaltung", code: "B130", art: "Übung", wochentag: 2, beginn: "14:00", ende: "16:00", semester: SEM, modul: "" };
+  t.text[hand] = "---\n---\n\n# B130 · Übung\n";
+  t.fm["Module/1 Grundstudium/B110 Einführung in die BWL.md"] = { typ: "modul", code: "B110", titel: "Einführung in die BWL" };
+  t.fm["Module/1 Grundstudium/B130 Internes Rechnungswesen.md"] = { typ: "modul", code: "B130", titel: "Internes Rechnungswesen" };
+  await t.A.aktualisieren({ still: true, text: kalender(B110, B130) });
+  assert.equal(t.fm[p].modul, "[[B110 Einführung in die BWL]]");
+  assert.equal(t.fm[hand].modul, "", "von Hand: bleibt");
+  const b = await t.A.aktualisieren({ still: true, text: kalender(B110, B130) });
+  assert.equal(b.geaendert, 0, "danach nichts mehr zu tun");
+});
+
+test("Ohne Semester (Datenmodell noch nicht geladen, Datum nicht in der Semesterliste): kein Doppel, nichts entfernt", async () => {
+  const t = tresor();
+  await t.A.aktualisieren({ still: true, text: kalender(B110, B130) });
+  const vorher = Object.keys(t.fm).sort();
+  t.ctx.modell.semesterVon = () => null;
+  const b = await t.A.aktualisieren({ still: true, text: kalender(B110, B130) });
+  assert.deepEqual([b.termine, b.neu, b.entfernt, Object.keys(t.fm).sort()], [0, 0, 0, vorher]);
+  // nur einzelne Termine ohne Semester: die übrigen wie immer
+  t.ctx.modell.semesterVon = (d) => (d >= "2026-10-20" ? { name: SEM } : null);
+  const c = await t.A.aktualisieren({ still: true, text: kalender(S100) });
+  assert.deepEqual([c.termine, c.neu], [1, 1]);
+  assert.ok(Object.keys(t.fm).every((x) => !/^Stundenplan\//.test(x) || t.fm[x].semester === SEM));
 });

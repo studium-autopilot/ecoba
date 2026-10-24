@@ -12,11 +12,20 @@ In der Arbeitskopie (nicht in diesem Repo) baut ein Export-Skript den Baum in ei
 Commit** der Arbeitskopie (`git archive`):
 
 - `Studium Autopilot/` ohne Papierkorb, gerätelokale Obsidian-Dateien, fremde Plugins und ohne die Dateien, die ein Tresor
-  selbst anlegt (Abrufer-Sperren, `installiert.json`, ILIAS-Index, Lernstände, Noten aus Alma, Textfassungen der PDFs);
-- `docs/`, `tests/` (ohne die Tests für Teile, die nicht im Release sind, etwa `server/`), `.github/`, `README.md`, `LICENSE`,
-  `LICENSE-INHALTE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`;
+  selbst anlegt (Abrufer-Sperren, `installiert.json`, ILIAS-Index, Lernstände, Noten aus Alma, Textfassungen der PDFs); ohne
+  zentrale Termine in `Termine/`, deren Ende mehr als 30 Tage vor dem Export liegt (gleiche Grenze wie `zentral.js`, das solche
+  Notizen nie mehr anfasst; sonst bekäme jede neue Installation sie für immer). Bestehende Tresore verlieren dabei nichts:
+  Termine stehen nicht in der Update-Liste, ein Update fasst sie nie an;
+- `docs/`, `.github/` (ohne Dateien mit „privat“ oder „intern“ im Namen) und `server/` (der eigene Server; `server/VERSION`
+  wird die Plugin-Version);
+- `tests/` ohne den Test für den Export selbst (`release.test.js`; `release.py` ist nicht im Release);
+- an der Wurzel `README.md`, `LICENSE`, `LICENSE-INHALTE.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `SECURITY.md`,
+  `THIRD_PARTY_NOTICES.md` (dazu `CODE_OF_CONDUCT.md` und `CITATION.cff`, falls vorhanden) und für Tests und Lint
+  `package.json`, `package-lock.json`, `eslint.config.mjs`, `ruff.toml`;
 - `werkzeuge/pruefen.py`, eine eigene `.gitignore` und eine `.gitattributes` (`* -text`: Dateien byte-genau, sonst stimmen die
   Prüfsummen der Update-Liste nicht).
+
+Die vollständige Freigabeliste steht am Anfang von `werkzeuge/release.py`.
 
 Geänderte, aber nicht committete und neue, ungetrackte Dateien kommen nie in den Baum, auch nicht unter `docs/` oder
 `tests/`. Der Export nennt sie als **WARNUNG** („nicht committet“); vor einem Release darf sie nicht erscheinen. Nur zum
@@ -47,12 +56,19 @@ Update-Liste, `notiz`), siehe Schritt 6.
 ```
 python werkzeuge/pruefen.py .
 npm ci && npm test && npm run lint
-python -m ruff check werkzeuge/
+python -m ruff check werkzeuge/ server/
 ```
 
 `tests/update.test.js` prüft dabei auch die Update-Liste im Baum (Klassen, Größen, Prüfsummen, keine Datei vergessen).
 Dazu der Testdurchgang in Obsidian (siehe `docs/tests.md`): den Baum als neuen Tresor mit anderem Namen öffnen, iPhone, iPad,
 Android, Windows, Mac, hell und dunkel.
+
+Feste Werte, die Dependabot nicht sieht (je Release kurz prüfen, bei Bedarf anheben und den Stand im Kommentar daneben):
+- `oci-cli==…` in `server/platzsucher-helfer.yaml` (neueste Version auf PyPI; der Helfer installiert genau diese).
+- Always-Free-Grenzen in `server/stand.mjs` (`FREI`) und `server/README.md` gegen die Seite „Always Free Resources“ von Oracle.
+- `RUFF_VERSION` und `ESBUILD_VERSION` in `.github/workflows/pruefen.yml`.
+- Preise von Opus in `Studium Autopilot/System/Skripte/server.js` (`pdfKosten`, Stand im Kommentar): Der Server-Lauf nimmt den
+  Alias `opus`, ein neues Modell kann andere Preise haben.
 
 ## 3. Commit
 

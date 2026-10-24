@@ -47,18 +47,23 @@ test("Esc im Fenster: nichts entsteht, auch keine Vorgabe", async () => {
   }
 });
 
-test("Ohne Eingabe gelten die Vorgaben (Nummer, Abgabe, Beginn, Ende, ECTS)", async () => {
+test("Ohne Eingabe gelten die Vorgaben (Nummer, Beginn, Ende, ECTS); geraten wird nichts", async () => {
   const b = await anlegen("uebungsblatt", [{}]);
   assert.equal(b.angelegt[0].name, "B110 Blatt 01");
-  assert.match(b.angelegt[0].inhalt, /^faellig: 2026-10-15$/m, "Abgabe: Vorgabe aus dem Fenster");
+  assert.match(b.angelegt[0].inhalt, /^faellig: ?$/m, "Abgabe leer: eine geratene stünde wie eine echte bei den Fristen (bis 24.10.2026 in einer Woche)");
+  const b2 = await anlegen("uebungsblatt", [{ faellig: "27.10." }]);
+  assert.match(b2.angelegt[0].inhalt, /^faellig: 2026-10-27$/m, "eingetragene Abgabe");
   const l = await anlegen("lehrveranstaltung", [{ wochentag: 2 }]);
   assert.match(l.angelegt[0].inhalt, /^beginn: "10:15"$/m);
   assert.match(l.angelegt[0].inhalt, /^ende: "11:45"$/m, "Ende = Beginn + 90 Min.");
   assert.match(l.angelegt[0].inhalt, /^wochentag: 2$/m);
+  assert.match(l.angelegt[0].inhalt, /^ausfall: \[\]$/m, "Pausen prüft das Fachmodell beim Lesen, nicht beim Anlegen");
+  assert.doesNotMatch(l.angelegt[0].inhalt, /^tag:/m, "Wochentag nur einmal (wochentag)");
   assert.match(l.angelegt[0].inhalt, /^## Meine Notizen$/m);
   const s = await anlegen("sq-kurs", [{ titel: "Spanisch A1" }]);
   assert.match(s.angelegt[0].inhalt, /^ects: 3$/m);
   assert.match(s.angelegt[0].inhalt, /^status: geplant$/m);
+  assert.match(s.angelegt[0].inhalt, /^\*\*Transdisciplinary Course Program \(TCP\)\*\* · für \[\[SQ100/m, "ECTS und Semester zeigt der Kopf, nicht der Text");
   assert.doesNotMatch(s.angelegt[0].inhalt, /Eigenschaften/, "Stand ändert der Kopf der Notiz, nicht die Eigenschaften");
   const a = await anlegen("sq-kurs", [{ titel: "Semester in Lyon", anbieter: "Auslandssemester" }]);
   assert.match(a.angelegt[0].inhalt, /^ects: 6$/m, "ECTS folgen dem Anbieter, solange du sie nicht änderst");

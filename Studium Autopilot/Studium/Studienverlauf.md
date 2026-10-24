@@ -82,4 +82,4 @@ Schwerpunkte: erscheinen, sobald Studium Autopilot läuft.
 > > > - **IEco** (International Economics): andere Pflichtmodule, International Profile.
 > > > - Gleiche Modulcodes, andere Pläne. Studium Autopilot nutzt nur die **EcoBA**-Tabellen.
 >
-> Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Stand 30.09.2026 · Prüfungen und Noten: [[Prüfungen#Regeln|Prüfungen]], [[Noten & ECTS#Regeln|Noten & ECTS]]
+> Maßgeblich: Besonderer Teil EcoBA (AmtlBek 24/2023) und BRPO 2021 · Prüfungen und Noten: [[Prüfungen#Regeln|Prüfungen]], [[Noten & ECTS#Regeln|Noten & ECTS]]

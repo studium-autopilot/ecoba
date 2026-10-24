@@ -2,6 +2,33 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.6.3 – Zusammenfassen ohne eigenen Server
+
+- **Neu:** **Zusammenfassen** bei einer Unterlage geht jetzt ohne eigenen Server, auf jedem Gerät. Dafür verbindest du unter
+  **Verbindungen** Claude mit deinem eigenen Schlüssel von Anthropic (meist 0,05 bis 0,50 $ je Zusammenfassung).
+- **Behoben:** Vorlesungsnotizen zeigten oft falsche oder gar keine Folien. Jetzt sucht Studium Autopilot sie selbst heraus,
+  auch später hochgeladene, und unter **⋯** → **Andere Folien …** wählst du andere.
+- **Einfacher:** Tippst du eine Unterlage an, siehst du gleich die PDF. Dateien, die du selbst in einen Modulordner unter
+  **Unterlagen** kopierst, nimmt **Unterlagen hinzufügen** ohne Rückfrage auf.
+- **Übersichtlicher:** Die Seite **Unterlagen** zeigt unter **Neu**, was in den letzten 14 Tagen dazukam und du noch nicht
+  geöffnet hast. Abhaken musst du dafür nichts.
+- **Behoben:** Ein neues Übungsblatt bekommt keine ausgedachte Abgabe mehr. Ohne Abgabedatum steht es auf der Seite
+  **Unterlagen** mit „kein Datum“ da statt mit einer unsinnigen Frist.
+- **Neu:** Lehrveranstaltungen außerhalb des Vorlesungsverzeichnisses, etwa das Data Science Lab, stehen unter ihrem
+  offiziellen Namen im **Stundenplan**. Notebooks, Code und Daten eines Labs haben auf der Modulseite einen Bereich **Lab**.
+- **Behoben:** Verlegen Uni oder Alma eine Veranstaltung oder deine Übungsgruppe, ziehen **Stundenplan**, Notiz und ihr Name
+  mit, einen eigenen Namen behältst du. Die Liste blendet aus, was du nicht besuchst.
+- **Zuverlässiger:** Was du gelöscht hast, bleibt gelöscht: Termine, Abgaben, Unterlagen und Lernpläne kommen nicht zurück,
+  auch wenn ein anderes Gerät die Daten holt oder die Uni eine Datei neu hochlädt.
+- **Behoben:** Entfernt die Uni eine Unterlage aus ILIAS oder benennt sie um, steht das jetzt in ihrer Notiz. Kommt eine neue
+  Fassung, passt sich die Notiz an, und **Zusammenfassen** ist wieder da.
+- **Zuverlässiger:** Bleibt Obsidian über Nacht offen, springen Kalender, Vorlesungen, To-dos, Angebote, Postfach und
+  Karteikarten morgens auf den neuen Tag. Ein To-do „bis 05.10.“ bleibt überfällig, statt ins nächste Jahr zu rutschen.
+- **Behoben:** Im **Lernplan** bleiben Häkchen beim richtigen Kapitel, verlängerte Karteikarten behalten ihren Lernstand.
+  Nach einer bestandenen Wiederholung fragt das Modul nach der neuen Note, statt die 5,0 zu behalten.
+- **Zuverlässiger:** Bricht ein Durchgang deines eigenen Servers ab, gehen keine Mails und Unterlagen mehr verloren. Ist er
+  länger nicht erreichbar, sagt dir die Zeile unter Verbindungen, was zu tun ist.
+
 ## 0.6.2 – Änderungen verschwinden nach dem Besuch
 
 - **Behoben:** Änderungen seit deinem letzten Besuch blieben auf dem Dashboard stehen, bis du **Alles gesehen** angetippt

@@ -367,3 +367,34 @@ test("Absturz beim Ersetzen: halb ersetzte Datei gilt nicht als deine Änderung,
   assert.equal(x.t.text(p), "%PDF Folien eins, Fassung 2");
   assert.equal(x.t.pfade(B110).filter((q) => /neue Fassung/.test(q)).length, 0);
 });
+
+test("Absturz beim Ersetzen der neuen Fassung daneben: keine weitere Kopie, der nächste Lauf ersetzt sie", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await knopf(x);
+  const p = B110 + "/B110 Folien 01 Grundlagen.pdf", kopie = B110 + "/B110 Folien 01 Grundlagen neue Fassung 2026-10-16.pdf";
+  x.t.setzen(p, "%PDF Folien eins MIT MEINEN ANMERKUNGEN");
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 2";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T07:00";
+  x.u.vor(MIN);
+  await knopf(x);
+  assert.equal(x.t.text(kopie), "%PDF Folien eins, Fassung 2");
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 3";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T09:00";
+  const echt = x.t.io.ersetzenBinaer;
+  let einmal = true;
+  x.t.io.ersetzenBinaer = async (q, by) => {
+    if (einmal) { einmal = false; x.t.setzen(q, by.slice(0, 6)); throw new Error("Obsidian beendet"); }
+    return echt(q, by);
+  };
+  x.u.vor(MIN);
+  let b = await knopf(x);
+  assert.equal(b.art, "fehler");
+  assert.equal(x.t.text(kopie), "%PDF F");
+  x.u.vor(MIN);
+  b = await knopf(x, { weiter: true });
+  assert.equal(b.ersetzt, 1, b.fehler); assert.equal(b.fassungen, 0);
+  assert.equal(x.t.text(kopie), "%PDF Folien eins, Fassung 3");
+  assert.equal(x.t.text(p), "%PDF Folien eins MIT MEINEN ANMERKUNGEN");
+  assert.equal(x.t.pfade(B110).filter((q) => /neue Fassung.*\.pdf$/.test(q)).length, 1);
+});

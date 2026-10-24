@@ -25,9 +25,15 @@
 //   stehen in aenderungen („Datum|Beginn|Ende|Raum“, c.t. wie die Notiz), abgesagte Termine in ausfall, 14-tägliche Serien haben
 //   rhythmus statt eines Ausfalls jede zweite Woche. Zieht die Serie dauerhaft um (zwei Läufe im Kalender, oder ein Abruf ändert
 //   den Raum der Notiz), stehen raum_seit und raum_vorher in der Notiz; die Woche zeigt dann zwei Wochen lang „Neuer Raum“.
+// Notizen, die Alma angelegt hat, folgen Alma ganz (seit 24.10.2026): Verlegt Alma Tag oder Zeit, ziehen Kopfzeile („Montags,
+//   10:00–12:00 · Raum“, nur vor „## Meine Notizen“ und nur in der Form, die Alma schreibt) und Dateiname mit (nur, solange die
+//   Notiz noch ihren abgeleiteten Namen trägt; Links ziehen mit); ein leeres modul wird verknüpft, sobald es die Modulnotiz gibt.
+//   Vorher blieben Name und Kopfzeile bei der alten Zeit und modul leer. Von Hand angelegte Notizen behalten Name und Kopf.
+// Ohne Semester zu einem Termin (Datenmodell noch nicht geladen, Datum nicht in deiner Semesterliste) übernimmt Alma ihn nicht
+//   (gruppieren); vorher entstand ein Doppel mit leerem Semester, das kein Lauf mehr wegräumte.
 // Läuft das Skript außerhalb des Plugins (eine Hülle ruft nur aktualisieren({ text }) mit window.app aus Dateien und ohne
 //   ctx.user.sperre/quellen), gibt es keine Sperre, keine Grabsteine und keinen Meldekanal; geschrieben wird dann nur über
-//   vault.create, vault.trash und fileManager.processFrontMatter.
+//   vault.create, vault.trash und fileManager.processFrontMatter (Namen bleiben dort, wie sie sind).
 const LAUF = { p: null }; // laufender Abruf, geteilt von allen Aufrufern dieser Fassung (Zeitplan, Knöpfe, Verbindungen)
 module.exports = function (ctx) {
   const app = window.app;
@@ -290,6 +296,9 @@ module.exports = function (ctx) {
       const raum = klartext(e.LOCATION), aus = /CANCELLED/i.test(e.STATUS || "");
       for (const t of termine(e, e["RECURRENCE-ID"] ? null : verschoben.get(e.UID))) {
         const semester = semesterVon(t.datum);
+        // Ohne Semester (Datenmodell noch nicht geladen und das Datum fehlt in deiner Semesterliste) kein Termin: Schlüssel und
+        // Semester passten nicht zur Notiz, der Lauf legte ein Doppel an, das kein späterer Lauf mehr wegräumte (seit 24.10.2026)
+        if (!semester) continue;
         const schluessel = [semester, titel, wochentag(t.datum), t.beginn, t.ende].join("|");
         if (aus) { abgesagt.push({ schluessel, datum: t.datum }); continue; }
         if (!gruppen.has(schluessel)) {
@@ -409,6 +418,17 @@ module.exports = function (ctx) {
   // Text einer Notiz ändern, wo es geht (Plugin: vault.process); außerhalb des Plugins nur das Frontmatter
   const textAendern = async (f, fn) => { if (app.vault.process) await app.vault.process(f, fn); };
   const ENTFAELLT = " (entfällt)";
+  // Kopfzeile, wie Alma sie schreibt: „Montags, 10:00–12:00 · Raum“ bzw. einzeln „Montag, 12.10.2026, 10:00–12:00 · Raum“
+  const KOPFZEILE = /^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)(s|, \d{2}\.\d{2}\.\d{4}), \d{1,2}:\d{2}–\d{1,2}:\d{2}( · .*)?$/;
+  // Notiz umbenennen, wenn sie noch ihren abgeleiteten Namen alt trägt (auch „alt 2“), auf den ersten freien Namen wie beim
+  // Anlegen; Links ziehen mit (fileManager.renameFile). Die Hülle eines eigenen Uni-Abgleichs hat renameFile nicht: Name bleibt.
+  const umbenennen = async (f, alt, neu) => {
+    const b = f.basename, ordner = f.path.slice(0, f.path.lastIndexOf("/"));
+    if (alt === neu || !app.fileManager.renameFile || !(b === alt || (b.indexOf(alt + " ") === 0 && /^\d+$/.test(b.slice(alt.length + 1))))) return;
+    let name = neu, i = 2;
+    while (app.vault.getAbstractFileByPath(`${ordner}/${name}.md`)) name = `${neu} ${i++}`;
+    await app.fileManager.renameFile(f, `${ordner}/${name}.md`);
+  };
 
   // ---------- Hauptfunktion ----------
   // optionen: still (keine Meldung ohne Änderung), automatisch (Zeitplan: nie ein Hinweis, übernimmt nie die Sperre), text
@@ -597,6 +617,9 @@ module.exports = function (ctx) {
         .sort((a, b) => (a.fm.art === art ? 0 : 1) - (b.fm.art === art ? 0 : 1))[0];
       const kurz = m && m.fm.titel ? kuerzen(String(m.fm.titel)) : vorbild ? String(vorbild.fm.titel).split(" · ")[0].replace(/ \(entfällt\)$/, "")
         : kuerzen(g.titel.replace(code, "").replace(/^[\s\-–:·]+/, ""));
+      // Dateiname und Kopfzeile („Montags, 10:00–12:00 · Raum“, einzeln „Montag, 12.10.2026, …“) aus Tag und Zeit
+      const nameVon = (einzeln, von, wt, beginn) => sauber(einzeln ? `${von} ${code || kurz} ${art}` : `${TAGE[wt - 1]} ${String(beginn).replace(":", ".")} ${code || kurz} ${art}`);
+      const kopfzeile = (einzeln, von, wt, beginn, ende, raum) => `${TAGE_LANG[wt - 1]}${einzeln ? ", " + deutsch(von) : "s"}, ${beginn}–${ende}${raum ? " · " + raum : ""}`;
       // Änderungen als „Datum|Beginn|Ende|Raum“ (findetStatt); ct: die Notiz ist c.t., dann beginnt auch eine Änderung zur vollen
       // Stunde 15 Minuten später und endet 15 Minuten früher (wie die Serie). null = Feld fällt weg (leer, nicht 14-täglich …).
       const aenderungenText = (ct) => {
@@ -645,6 +668,13 @@ module.exports = function (ctx) {
         if (treffer.eigen && titelKaputt(fm.titel)) neu.titel = `${kurz} · ${fm.art || art}`;
         // Alma-Notiz kommt wieder (war „entfällt“): Titel ohne „(entfällt)“
         if (fm.entfaellt === true) neu.titel = String(neu.titel || fm.titel || "").replace(/ \(entfällt\)$/, "");
+        // Modul noch leer (die Modulnotiz kam erst nach der Notiz): jetzt verknüpfen, nur in Notizen, die Alma angelegt hat
+        if (treffer.eigen && m && !String(fm.modul == null ? "" : fm.modul).trim()) neu.modul = `[[${m.f.basename}]]`;
+        // Alma hat Tag oder Zeit verlegt: Kopfzeile und Name ziehen mit (nur Notizen, die Alma angelegt hat). Der alte Name aus den
+        // alten Feldern (Beginn wie in Alma: aus dem bisherigen alma_schluessel)
+        const verlegt = treffer.eigen && (Number(fm.wochentag) !== neu.wochentag || String(fm.beginn || "") !== neu.beginn || String(fm.ende || "") !== neu.ende
+          || (neu.einzeltermin && String(fm.von || "").slice(0, 10) !== neu.von));
+        const nameAlt = nameVon(fm.einzeltermin === true, String(fm.von || "").slice(0, 10), Number(fm.wochentag), kb);
         const aenderung = Object.entries(neu).some(([k, v]) => k === "ausfall" || k === "aenderungen" ? !gleich(liste(fm[k]), liste(v)) : !gleich(fm[k] == null ? null : String(fm[k]), v == null ? null : String(v)))
           || fm.entfaellt === true || fm.alma_fehlt != null || (treffer.eigen && fm.herkunft !== HERKUNFT);
         if (!aenderung) bericht.gleich++;
@@ -656,11 +686,20 @@ module.exports = function (ctx) {
             delete x.entfaellt; delete x.alma_fehlt;
             if (treffer.eigen) x.herkunft = HERKUNFT; // Besitzmarke (ältere Alma-Notizen hatten keine)
           });
-          // Kopfzeile unter der Überschrift („Montags, 10:00–12:00 · Raum“) zieht mit, sonst bleibt dein Text unangetastet
-          if (neu.raum && raumAlt && neu.raum !== raumAlt) {
+          // Kopfzeile unter der Überschrift („Montags, 10:00–12:00 · Raum“) zieht mit, sonst bleibt dein Text unangetastet. Verlegt:
+          // die Zeile ganz neu, aber nur vor dem ersten Abschnitt (## Meine Notizen) und nur, wenn sie so aussieht, wie Alma sie schreibt
+          if (verlegt) {
+            const zeile = kopfzeile(neu.einzeltermin, neu.von, neu.wochentag, neu.beginn, neu.ende, neu.raum || raumAlt);
+            await textAendern(treffer.f, (t) => {
+              const i = t.search(/^## /m), kopf = i < 0 ? t : t.slice(0, i);
+              return kopf.split("\n").map((z) => (KOPFZEILE.test(z) ? zeile : z)).join("\n") + (i < 0 ? "" : t.slice(i));
+            });
+          } else if (neu.raum && raumAlt && neu.raum !== raumAlt) {
             await textAendern(treffer.f, (t) => t.split("\n").map((z) => (TAGE_LANG.some((w) => z.indexOf(w) === 0) && z.indexOf(`· ${raumAlt}`) >= 0 ? z.replace(`· ${raumAlt}`, `· ${neu.raum}`) : z)).join("\n"));
           }
           if (warEntfallen) await textAendern(treffer.f, (t) => t.replace(/^(# .*?) \(entfällt\)$/m, "$1"));
+          // Name („Mo 10.00 B110 Vorlesung“) nur, solange die Notiz noch so heißt; Links ziehen mit (umbenennen)
+          if (verlegt) await umbenennen(treffer.f, nameAlt, nameVon(neu.einzeltermin, neu.von, neu.wochentag, g.beginn));
           bericht.geaendert++;
         }
         if (angewendet) neuAngewendet[g.schluessel] = h;
@@ -673,7 +712,7 @@ module.exports = function (ctx) {
       if (unfertig) continue;
       // neu anlegen (nie leer, damit die Ordner-Automatik des Plugins nichts befüllt)
       if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
-      const basis = sauber(g.einzeln ? `${g.von} ${code || kurz} ${art}` : `${TAGE[g.wt - 1]} ${g.beginn.replace(":", ".")} ${code || kurz} ${art}`);
+      const basis = nameVon(g.einzeln, g.von, g.wt, g.beginn);
       let name = basis, i = 2;
       while (app.vault.getAbstractFileByPath(`${ordner}/${name}.md`)) name = `${basis} ${i++}`;
       const yaml = {
@@ -683,8 +722,7 @@ module.exports = function (ctx) {
       const kopf = Object.entries(yaml).filter(([, v]) => v != null).map(([k, v]) => Array.isArray(v)
         ? (v.length ? `${k}:\n${v.map((x) => `  - ${x}`).join("\n")}` : `${k}: []`)
         : `${k}: ${typeof v === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? JSON.stringify(v) : v}`).join("\n");
-      const wann = g.einzeln ? `${TAGE_LANG[g.wt - 1]}, ${deutsch(g.von)}` : `${TAGE_LANG[g.wt - 1]}s`;
-      const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${code || kurz} · ${art}\n\n${wann}, ${g.beginn}–${g.ende}${g.raum ? " · " + g.raum : ""}\n\n`
+      const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${code || kurz} · ${art}\n\n${kopfzeile(g.einzeln, g.von, g.wt, g.beginn, g.ende, g.raum)}\n\n`
         + `> [!info] Aus Alma (${g.titel}). Änderungen in Alma kommen von selbst.\n\n## Meine Notizen\n- \n`;
       await app.vault.create(`${ordner}/${name}.md`, inhalt);
       if (angewendet) neuAngewendet[g.schluessel] = h;

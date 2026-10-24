@@ -201,13 +201,16 @@ module.exports = function (ctx) {
     // Das Plugin startet die Erweiterungen alphabetisch, modell.js also nach dashboard.js: dann kurz danach anmelden und zeichnen
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(alle));
     else ctx.zeit(() => { if (ctx.modell && ctx.modell.beiAenderung) { ctx.aufraeumen(ctx.modell.beiAenderung(alle)); alle(); } }, 3000);
-    // „Nachzuarbeiten“: Vorlesungsnotizen liegen außerhalb der Ordner, die das Modell meldet (Haken im Kopf der Notiz, neue Notiz)
+    // „Nachzuarbeiten“: Vorlesungsnotizen liegen außerhalb der Ordner, die das Modell meldet (Haken im Kopf der Notiz, neue Notiz,
+    // umbenannt: sonst zeigten die Links bis zum nächsten Zeichnen auf den alten Namen). Nicht über das Modell: Jede Änderung
+    // beim Schreiben einer Mitschrift zeichnete dann alle Bildschirme neu, die sich dort angemeldet haben.
     const nachBald = ctx.entprellen(() => {
       for (const i of listen.instanzen()) if (i.art === "nachzuarbeiten") { try { listeZeichnen(i.el, i.art, i.ctx); } catch (e) { console.error("eba-liste", e); } }
     }, 600);
     const vorlesung = (cache) => !!(cache && cache.frontmatter && cache.frontmatter.typ === "vorlesung");
     ctx.an(window.app.metadataCache, "changed", (_f, _d, cache) => { if (vorlesung(cache)) nachBald(); });
     ctx.an(window.app.metadataCache, "deleted", (_f, vorher) => { if (vorlesung(vorher)) nachBald(); });
+    ctx.an(window.app.vault, "rename", (f) => { if (vorlesung(window.app.metadataCache.getFileCache(f))) nachBald(); });
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alle(); });
     ctx.intervall(() => { if (document.visibilityState === "visible") alle(); }, 10 * 60 * 1000);
   };

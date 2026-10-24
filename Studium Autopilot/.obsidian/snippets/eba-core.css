@@ -2995,7 +2995,7 @@ body.is-phone .eba-td-text { font-size: 14.5px; } /* iPhone: Inhalt 14,5 px */
    Eingeordnet 12.10.“; Gruppen (Modul) als Label; leerer Eingang nur „Leer.“. Nicht mehr seitlich wischbar. */
 
 /* Kennzahlen: Kacheln bündig mit den übrigen Karten, flacher, Titel zweizeilig statt abgeschnitten;
-   dritte Kachel etwas breiter, damit „Durchgearbeitet“ ganz in eine Zeile passt (Silbentrennung greift ohne lang=de nicht) */
+   dritte Kachel etwas breiter, damit „Altklausuren“ ganz in eine Zeile passt (Silbentrennung greift ohne lang=de nicht) */
 body.is-phone .eba-s-unterlagen .callout[data-callout="eba-kennzahlen"] { padding: 0 !important; }
 /* Obsidian misst die Höhe der Kennzahlen-Liste selbst (Inline-Höhe); war sie nach einem Breitenwechsel ein paar px
    zu klein, erschien ein Scrollbalken in der Karte. Kein Scrollbalken; die Höhe selbst nicht überschreiben. */
