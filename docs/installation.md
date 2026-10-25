@@ -147,7 +147,7 @@ App deinen Studienbeginn aus der Einrichtung). Mit deinem Uni-Login kommt dein g
 ## Einrichtung beim ersten Start
 
 Nach dem [Vertrauen](#vertrauen) begrüßt dich eine kurze Einrichtung: **Studienbeginn**, **Variante**, Name und Zielnote,
-dann **Dein Uni-Login** und das Aussehen. Jeden Schritt kannst du überspringen; mit **Später** geht es beim nächsten Start dort
+dann **Dein Uni-Login**, welche Angebote der Uni du sehen willst, und das Aussehen. Jeden Schritt kannst du überspringen; mit **Später** geht es beim nächsten Start dort
 weiter. Ohne Angaben gilt das aktuelle Semester als dein erstes.
 
 Ändern kannst du alles unter **Einstellungen & Hilfe** → **Deine Angaben**: Tipp auf eine Zeile, bei **Einrichtung** startet

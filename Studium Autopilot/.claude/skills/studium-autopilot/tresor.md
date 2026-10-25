@@ -68,7 +68,8 @@ Katalog (nicht ändern): `code`, `titel`, `ects`, `fachsemester`, `fs_empfohlen`
 **SQ-Kurs** – `Schlüsselqualifikationen/SQ <Titel>.md`
 `typ: sq_kurs`, `code`, `titel`, `anbieter`, `ects`, `semester`, `status` (geplant | angemeldet | zugelassen | bestanden), `nachweis`.
 
-**Karteikarten** – `Karteikarten/<Code> Karteikarten.md`, `typ: karteikarten`, `code`; Gerüst `System/Gerüste/Karteikarten.md`.
+**Karteikarten** – `Karteikarten/<Code> Karteikarten.md`, `typ: karteikarten`, `code`, optional `pausiert: true` (Stapel nicht im
+Tagesplan, wie **Pausieren** im Menü); Gerüst `System/Gerüste/Karteikarten.md`.
 
 **Lernplan** – `Lernplan/<Code> Lernplan.md`, `typ: lernplan`, `code`; Gerüst `System/Gerüste/Lernplan.md`.
 

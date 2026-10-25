@@ -963,8 +963,8 @@ li:has(> a[href*="studiengang"])              { --eba-icon: url("data:image/svg+
    Die lesbare Zeilenlänge (ca. 700 px) bleibt für reine Textnotizen. Notizen mit PDF (Unterlagen, Vorlesungen mit Folien)
    nutzen die volle Tab-Breite. Die eingebettete PDF hat von Obsidian eine feste Höhe als Inline-Style (#height=560),
    hier überstimmt: Bildschirmhöhe abzüglich Kopfzeile, mindestens 560 px (iPhone: 37.begleitnotiz). Eine Höhe je Gerät, seit
-   19.10.2026 ohne Knopf „Größe“ (der sah aus wie Sortieren). Im zugeklappten PDF-Kasten liegt noch keine PDF (pdfkasten.js lädt sie
-   beim ersten Aufklappen); volle Breite gilt darum erst, wenn sie aufgeklappt da ist. */
+   19.10.2026 ohne Knopf „Größe“ (der sah aus wie Sortieren). Im zugeklappten PDF-Kasten ist die PDF verborgen (Obsidian lädt sie
+   erst beim Aufklappen, pdfkasten.js); volle Breite gilt darum erst, wenn sie aufgeklappt ist. */
 :is(.markdown-preview-view, .markdown-source-view).is-readable-line-width:has(.pdf-embed):not(:has(.callout[data-callout="eba-pdf"].is-collapsed)) { --file-line-width: 100%; } /* volle Breite erst, wenn die PDF aufgeklappt ist */
 :is(.markdown-preview-view, .markdown-source-view) .internal-embed.pdf-embed { height: max(560px, calc(100vh - 170px)) !important; height: max(560px, calc(100dvh - 170px)) !important; }
 
@@ -4097,6 +4097,9 @@ body.is-phone .eba-mp-gabel .eba-mp-gabelung, body.is-phone .eba-mp-gabel .eba-m
 .eba-ei-option-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .eba-ei-option-text b { font-size: 15px; font-weight: 600; }
 .eba-ei-option-text span { font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
+/* Angebote der Uni: dieselben Zeilen wie die Karte auf Termine & Anmeldungen (Abschnitt 53), hier mit 44 px Tippfläche */
+.eba-ei .eba-ang-wahl { max-width: none; font-size: 15px; line-height: 1.4; }
+.eba-ei .eba-ang-wahl-zeile { min-height: 44px; align-content: center; }
 .eba-ei-form { display: flex; flex-direction: column; gap: 18px; }
 .eba-ei-zeile { display: flex; flex-direction: column; gap: 6px; }
 .eba-ei-label { font-size: 14px; font-weight: 600; }
@@ -4373,7 +4376,11 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { white-space: normal; overflow-wrap: no
    Übersicht der Stapel (.eba-lk-tabelle), Block in der Kartennotiz (.eba-lk-stapel), Dashboard-Zeile (.eba-lk-heute; nichts
    fällig: .eba-lk-aus, samt Hülle unsichtbar), Statistik (.eba-lk-kacheln, Prognose als eine Reihe in einem Farbton), Kartenliste
    (.eba-lk-liste), Lernfenster (.eba-lk-fenster; iPhone: ganzer Bildschirm, Knöpfe unten, ≥ 44 px), „Karte hinzufügen“
-   (.eba-lk-neu) und Leseansicht der Kartennotizen (.eba-lk-k, eine Zeile je Karte). Nur --eba-*-Variablen. */
+   (.eba-lk-neu, auch „Üben“) und Leseansicht der Kartennotizen (.eba-lk-k, eine Zeile je Karte). Seit 25.10.2026: pausierte
+   Stapel (.pausiert), Zeile „schwierige Karten“ (.eba-lk-schwer), „So schreibst du Karten“ (.eba-lk-format), Auswahlleiste der
+   Kartenliste (.eba-lk-auswahl), Üben mit zwei Knöpfen (.eba-lk-bewerten.zwei); die Übersicht ordnet sich nach der eigenen
+   Breite (Container eba-lk-u), nicht nach body.is-phone. Statistik je Modul (.eba-lk-mzeile) und Fenster „Verlauf“ einer Karte
+   (.eba-lk-verlauf, Container eba-lk-v). Nur --eba-*-Variablen. */
 
 /* Symbole: Seite in der Übersicht, Knöpfe auf der Seite Karteikarten („Karte hinzufügen“ behält das Plus) */
 li:has(> a[data-href$="Karteikarten"])         { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='7' width='14' height='14' rx='2'/%3E%3Cpath d='M7 3h12a2 2 0 0 1 2 2v12'/%3E%3C/svg%3E"); }
@@ -4428,6 +4435,28 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
 .eba-lk-z { text-align: right; font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .eba-lk-kopfzeile .eba-lk-z { font-size: inherit; font-weight: inherit; }
 .eba-lk-z.null { color: var(--eba-faint); font-weight: 400; }
+/* Pausierter Stapel: leise, ohne Zahlen (er ist nicht im Tagesplan) */
+.eba-lk-zeile.pausiert .eba-lk-name { color: var(--eba-muted); }
+.eba-lk-zeile.pausiert .eba-lk-z { visibility: hidden; }
+/* Schmal (iPhone, schmale Seitenleiste): Name über die ganze Breite, ⋯ rechts, darunter nur die Zahlen, die nicht 0 sind, mit
+   Namen („3 neu · 12 fällig“), bündig mit dem Namen. Vorher drei 46-px-Spalten: lange Modulnamen brachen nach wenigen Zeichen um. */
+.eba-lk-uebersicht { container: eba-lk-u / inline-size; }
+@container eba-lk-u (max-width: 520px) {
+  .eba-lk-zeile { display: flex; flex-wrap: wrap; align-items: center; column-gap: 12px; row-gap: 0; padding: 8px 6px 8px 12px; }
+  .eba-lk-zeile .eba-lk-name { flex: 1 1 calc(100% - 44px); align-items: flex-start; line-height: 1.3; }
+  .eba-lk-zeile.kind .eba-lk-name { flex-basis: calc(100% - 54px); }
+  .eba-lk-zeile.kind:not(.letzte):has(.eba-lk-z:not(.null)) .eba-lk-name::before { bottom: -32px; }
+  .eba-lk-zeile .eba-lk-name > span.eba-lk-titel { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
+  .eba-lk-zeile .eba-lk-mehr { order: 1; }
+  .eba-lk-zeile:not(.eba-lk-kopfzeile)::before { content: ""; order: 2; width: 12px; height: 0; }
+  .eba-lk-zeile:not(:has(.eba-lk-z:not(.null)))::before { display: none; }
+  .eba-lk-zeile .eba-lk-z { order: 3; margin-top: 2px; font-size: 13px; text-align: left; }
+  .eba-lk-zeile .eba-lk-z::after { content: " " attr(data-name); font-weight: 400; color: var(--eba-muted); }
+  .eba-lk-zeile .eba-lk-z.null, .eba-lk-kopfzeile :is(.eba-lk-z, .eba-lk-platz) { display: none; }
+}
+/* Zeile „3 schwierige Karten · Üben · Ansehen“ unter der Kopfzeile */
+.eba-lk-schwer { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; margin: -4px 2px 12px; font-size: 13px; color: var(--eba-muted); }
+.eba-lk-schwer a { color: var(--eba-accent-text); }
 
 /* Block oben in einer Kartennotiz */
 .eba-lk-stapel {
@@ -4437,6 +4466,18 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
 .eba-lk-stapel .eba-vb-knoepfe { margin-left: auto; }
 .eba-lk-zahlen { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; font-size: 13.5px; color: var(--eba-muted); }
 .eba-lk-zahl b { color: var(--eba-text); font-weight: 650; font-variant-numeric: tabular-nums; }
+/* „So schreibst du Karten“: im leeren Stapel offen, sonst eingeklappt; Beispiel links, Erklärung rechts, schmal untereinander */
+.eba-lk-stapel { container: eba-lk-st / inline-size; }
+details.eba-lk-format { flex: 1 0 100%; font-size: 13px; color: var(--eba-muted); }
+details.eba-lk-format > summary { cursor: pointer; width: fit-content; padding: 2px 0; }
+details.eba-lk-format > summary:hover { color: var(--eba-text); }
+.eba-lk-format-liste { display: grid; grid-template-columns: fit-content(60%) minmax(0, 1fr); align-items: baseline; gap: 6px 14px; margin: 8px 0 6px; }
+.eba-lk-format-liste code { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; color: var(--eba-text); }
+details.eba-lk-format > p { margin: 6px 0 0; }
+@container eba-lk-st (max-width: 460px) {
+  .eba-lk-format-liste { grid-template-columns: minmax(0, 1fr); row-gap: 2px; }
+  .eba-lk-format-liste > span { margin-bottom: 8px; }
+}
 
 /* Dashboard: Zeile „Karteikarten · 12 fällig“, sonst samt Hülle unsichtbar (wie Abschnitt 46, Hülle auf Höhe 0 gefaltet) */
 .block-language-eba-karten.eba-lk-aus,
@@ -4472,6 +4513,73 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
 .eba-lk-p-achse span:last-child { transform: translateX(-80%); }
 .eba-lk-bestand { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 10px 2px 0; font-size: 13px; color: var(--eba-muted); }
 .eba-lk-bestand b { color: var(--eba-text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.eba-lk-stat-wahl { max-width: 100%; margin: 0 0 12px; }
+.eba-lk-prognose + .eba-lk-prognose { margin-top: 12px; }
+/* Je Modul: eine Zeile je Modul, antippen zeigt dieses Modul. Schmal wie die Übersicht: Name über die ganze Breite, darunter die
+   Zahlen mit Namen („64 % gelernt“, „zuletzt heute“), leere Werte fallen weg. */
+.eba-lk-module { margin: 0 0 12px; }
+.eba-lk-module > .eba-lk-p-kopf { padding: 0 2px; }
+.eba-lk-mzeile {
+  display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 64px) 92px; align-items: center; column-gap: 4px;
+  box-sizing: border-box; min-height: 44px; padding: 6px 14px; color: var(--eba-text); cursor: pointer;
+}
+.eba-lk-mzeile + .eba-lk-mzeile { border-top: 1px solid var(--eba-border); }
+.eba-lk-mzeile.eba-lk-kopfzeile { min-height: 0; padding-top: 7px; padding-bottom: 7px; cursor: default; }
+.eba-lk-mzeile:not(.eba-lk-kopfzeile):hover { background: color-mix(in srgb, var(--eba-accent) 5%, transparent); }
+.eba-lk-mzeile:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: -2px; }
+.eba-lk-mzeile:not(.eba-lk-kopfzeile) .eba-lk-z { font-weight: 500; }
+.eba-lk-mzeile.pausiert .eba-lk-name { color: var(--eba-muted); }
+.eba-lk-mzeile .eba-lk-name > .eba-pill { flex: none; margin-left: 8px; }
+/* Lange Modulnamen brechen um (höchstens zwei Zeilen), statt nach wenigen Zeichen abzubrechen */
+.eba-lk-mzeile:not(.eba-lk-kopfzeile) .eba-lk-name { align-items: baseline; line-height: 1.3; }
+.eba-lk-mzeile .eba-lk-name > span.eba-lk-titel { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@container eba-lk (max-width: 600px) {
+  .eba-lk-mzeile { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; padding: 8px 12px; }
+  .eba-lk-mzeile .eba-lk-name { flex: 1 0 100%; align-items: flex-start; }
+  .eba-lk-mzeile .eba-lk-z { margin-top: 2px; font-size: 13px; font-weight: 600; text-align: left; }
+  .eba-lk-mzeile .eba-lk-z:not([data-vor=""])::before { content: attr(data-vor) " "; font-weight: 400; color: var(--eba-muted); }
+  .eba-lk-mzeile .eba-lk-z:not([data-name=""])::after { content: " " attr(data-name); font-weight: 400; color: var(--eba-muted); }
+  .eba-lk-mzeile .eba-lk-z.null, .eba-lk-mzeile.eba-lk-kopfzeile { display: none; }
+}
+
+/* Fenster „Verlauf“: Frage, Stand in kleinen Feldern, Tabelle der Bewertungen; schmal zwei Zeilen je Bewertung */
+.modal.eba-lk-verlauf-fenster { width: min(620px, calc(100vw - 24px)); }
+.eba-lk-verlauf { container: eba-lk-v / inline-size; color: var(--eba-text); }
+.eba-lk-v-karte { margin: 0 0 14px; }
+.eba-lk-v-karte .eba-lk-ort { margin: 0 0 4px; text-align: left; }
+.eba-lk-v-karte .eba-lk-vorne { font-size: 15px; }
+.eba-lk-v-fakten {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px 14px; margin: 0 0 16px; padding: 12px 14px;
+  border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg);
+}
+.eba-lk-v-fakten > div { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.eba-lk-v-fakten .k { font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--eba-muted); }
+.eba-lk-v-fakten .v { font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.eba-lk-v-tabelle { border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); overflow: hidden; }
+.eba-lk-v-zeile {
+  display: grid; grid-template-columns: 96px minmax(0, 1fr) minmax(0, 1fr) 76px 48px; grid-template-areas: "datum art bew iv zeit";
+  align-items: baseline; column-gap: 10px; padding: 7px 14px; font-size: 13.5px; font-variant-numeric: tabular-nums;
+}
+.eba-lk-v-zeile + .eba-lk-v-zeile { border-top: 1px solid var(--eba-border); }
+.eba-lk-v-zeile.eba-lk-kopfzeile { font-size: var(--eba-label-size); }
+.eba-lk-v-zeile.eba-lk-kopfzeile > span { font-weight: inherit; color: inherit; }
+.eba-lk-v-datum { grid-area: datum; color: var(--eba-muted); white-space: nowrap; }
+.eba-lk-v-art { grid-area: art; color: var(--eba-muted); }
+.eba-lk-v-bew { grid-area: bew; font-weight: 600; }
+.eba-lk-v-bew.b1 { color: var(--eba-bad); }
+.eba-lk-v-bew.b3 { color: var(--eba-good); }
+.eba-lk-v-bew.b4 { color: var(--eba-info); }
+.eba-lk-v-schwer { font-weight: 400; color: var(--eba-muted); }
+.eba-lk-v-iv { grid-area: iv; text-align: right; white-space: nowrap; }
+.eba-lk-v-zeit { grid-area: zeit; text-align: right; color: var(--eba-muted); white-space: nowrap; }
+.eba-lk-v-text { grid-column: art-start / zeit-end; color: var(--eba-muted); }
+@container eba-lk-v (max-width: 440px) {
+  .eba-lk-v-fakten { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .eba-lk-v-zeile { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "bew iv datum" "art art zeit"; row-gap: 1px; }
+  .eba-lk-v-iv { text-align: left; color: var(--eba-muted); }
+  .eba-lk-v-text { grid-column: 1 / 3; grid-row: 1; color: var(--eba-text); }
+  .eba-lk-v-zeile.eba-lk-kopfzeile { display: none; }
+}
 
 /* Kartenliste */
 .eba-lk-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
@@ -4484,6 +4592,10 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
 .eba-lk-eintrag:hover { background: color-mix(in srgb, var(--eba-accent) 5%, transparent); }
 .eba-lk-vorne { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
 .eba-lk-meta { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); }
+/* Über der Liste: „Auswahl: 12 Karten“, Üben, ⋯ (Aktionen für alle Karten der Auswahl) */
+.eba-lk-auswahl { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; margin: 0 0 8px; font-size: 13px; color: var(--eba-muted); }
+.eba-lk-auswahl:empty { display: none; }
+.eba-lk-auswahl-text { margin-right: auto; }
 
 /* Lernfenster: Kopf (Zahlen, ⋯), Karte (scrollt), Knöpfe unten */
 /* Fenster so hoch wie nötig (mindestens eine Karte hoch), die Karte mittig als eigene Fläche */
@@ -4499,6 +4611,10 @@ button.eba-lk-auf.offen { transform: rotate(90deg); }
   box-shadow: var(--eba-shadow); /* kein Schatten (Designsprache), bis 18.10.2026 der einzige feste Schatten */
   font-size: 1.3em; line-height: 1.5; color: var(--eba-text);
 }
+/* Frage: ein Tippen auf die Karte zeigt die Antwort */
+.eba-lk-karte.zu { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+/* Beim Bearbeiten kein ⋯ (Speichern oder Abbrechen zuerst) */
+.modal.eba-lk-fenster.eba-lk-bearbeiten .eba-lk-kopf .eba-lk-mehr { visibility: hidden; }
 .eba-lk-ort { margin-bottom: 18px; text-align: center; font-size: var(--eba-label-size); font-weight: var(--eba-label-weight); letter-spacing: var(--eba-label-tracking); text-transform: uppercase; color: var(--eba-muted); }
 .eba-lk-frage, .eba-lk-antwort { text-align: center; overflow-wrap: anywhere; }
 .eba-lk-frage :is(ul, ol, table, pre, blockquote), .eba-lk-antwort :is(ul, ol, table, pre, blockquote) { text-align: left; }
@@ -4515,6 +4631,7 @@ hr.eba-lk-linie { margin: 22px 0; border: 0; border-top: 1px solid var(--eba-bor
 .eba-lk-fuss { flex: none; }
 button.eba-lk-zeigen { width: 100%; min-height: 48px; font-size: 15px; }
 .eba-lk-bewerten { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.eba-lk-bewerten.zwei { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 button.eba-lk-b {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: auto; min-height: 56px; padding: 6px 4px;
   border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s); background: var(--eba-bg); color: var(--eba-text); box-shadow: none; cursor: pointer;
@@ -4534,14 +4651,19 @@ body.is-phone .modal.eba-lk-fenster { width: 100vw; height: 100%; min-height: 0;
 body.is-phone .eba-lk-karte { padding: 22px 18px 24px; font-size: 1.18em; }
 body.is-phone .eba-lk-fuss { padding-bottom: env(safe-area-inset-bottom, 0px); }
 body.is-phone button.eba-lk-b { min-height: 60px; }
-body.is-phone .eba-lk-zeile { grid-template-columns: minmax(0, 1fr) repeat(3, 46px) 32px; padding-left: 12px; }
-body.is-phone .eba-lk-name > span:not(.eba-lk-slot):not(.eba-lk-anz) { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.3; }
 
 /* Fenster „Karte hinzufügen“ */
 .eba-lk-neu textarea.eba-lk-eingabe { width: 100%; min-height: 72px; resize: vertical; }
 .eba-lk-neu .eba-form-zeile { align-items: start; }
 .eba-lk-neu .eba-form-label { padding-top: 6px; }
 .eba-lk-neu .eba-lk-hilfe { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+
+/* Lernoptionen: Prozent neben dem Regler, falsches Feld rot, „Standard“ links */
+.eba-lk-prozent { min-width: 3.2em; margin-left: 10px; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--eba-text); }
+/* Neuere Obsidian-Versionen (1.14) zeigen die Zahl selbst links vom Regler, ohne %: dann nur eine Anzeige */
+.setting-item-control:has(> .eba-lk-prozent) > .slider-value { display: none; }
+.eba-modal input.eba-lk-falsch, .eba-modal input.eba-lk-falsch:focus { border-color: var(--eba-bad); box-shadow: 0 0 0 1px var(--eba-bad); }
+.eba-modal .modal-button-container .eba-lk-standard { margin-right: auto; }
 
 /* Rückfall, wo es keinen Abschnitt gibt: Trenner als Pfeil, Lücken markiert (Zeilen der Leseansicht: weiter unten) */
 .eba-lk-trenner { padding: 0 2px; font-weight: 600; color: var(--eba-accent-text); }

@@ -201,7 +201,9 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   Tab). Ist ein anderer Tab vorn, zeigt Obsidian alles wie gewohnt, auch den Weg zurück. Die Stecknadel zum Anheften bleibt auf
   dem iPad. Was dort stand, steht unter Einstellungen & Hilfe → Obsidian (`eba-personalisieren obsidian`, `personalisieren.js`):
   Obsidian-Einstellungen, Dateien mit ihrer Zahl, Tresor mit seinem Namen; jede Zeile ruft Obsidians eigenen Befehl auf
-  (`app:open-settings`, `file-explorer:open`, `app:switch-vault`).
+  (`app:open-settings`, `file-explorer:open`, `app:open-vault`). Für den Tresor ist das „Tresore verwalten“, wie der Eintrag
+  im Auswahlmenü unter dem Tresornamen: `app:switch-vault` öffnet auf iPhone und iPad nur eine Liste zum Wechseln, löschen
+  und umbenennen geht nur in der Verwaltung (Obsidian 1.14.5, 25.10.2026).
 
 ### PDF-Kasten (`pdfkasten.js`, seit 19.10.2026)
 
@@ -211,7 +213,10 @@ hinein, der Kasten zeigte seinen Quelltext, und auf dem iPad ging die Tastatur a
 Umbenennungen, ohne Plugin ein normaler Kasten): Der Post-Processor übernimmt den Kasten, wo Obsidian ihn zeichnet, auch in der
 Bearbeitungsansicht (Obsidian zeichnet Callouts dort mit denselben Post-Processoren). Die Kopfzeile fängt Tipps am Kasten ab (Einfangen),
 bevor Obsidian oder der Editor sie sehen; im Inhalt behält die PDF ihre Bedienung, nichts geht weiter an den Editor. Zugeklappt ist der
-Kasten leer, die PDF lädt beim ersten Aufklappen (`MarkdownRenderer`, Kind der Notiz). Rechts in der Kopfzeile leise Knöpfe **Öffnen**
+Inhalt verborgen; die PDF-Einbettung, die Obsidian gezeichnet hat, bleibt darin und öffnet ihre Datei erst, wenn sie sichtbar wird
+(Obsidian selbst, beim ersten Aufklappen). Bis 25.10.2026 leerte der Kasten den Inhalt und lud die PDF beim Aufklappen mit
+`MarkdownRenderer` nach. Der lädt Einbettungen aber im Anzeigemodus (`displayMode`): Eine PDF ist dort ein festes Bild ihrer ersten
+Seite, ohne Blättern. `tests/notizbild.test.js` prüft, dass der Kasten Obsidians Einbettung behält. Rechts in der Kopfzeile leise Knöpfe **Öffnen**
 (Aktion `oeffnen` mit `datei`) und **Original** (wenn `original` auf eine Datei zeigt); die Seitenzahl steht im Titel („PDF (37 Seiten)“,
 sonst aus `seiten`). Eine Höhe je Gerät (`eba-core.css` 27, iPhone 37.begleitnotiz); den Knopf „Größe ⇅“ (Aktion `pdf`, `eba-pdf-klein`,
 `eba-pdf-gross`) gibt es nicht mehr, er sah aus wie Sortieren. Tests: `tests/notizbild.test.js`.

@@ -1,7 +1,10 @@
 // PDF-Kasten der Begleitnotizen (Bedien-Baustein, seit 19.10.2026): Der Kasten „> [!eba-pdf]- PDF“ mit der eingebetteten PDF
 // verhält sich in Lese- und Bearbeitungsansicht wie ein Knopf. Ein Tipp auf die Kopfzeile klappt auf oder zu, so oft man will;
 // er springt nie in den Quelltext und öffnet keine Tastatur. Rechts in der Kopfzeile „Öffnen“ (die PDF in der App des Geräts,
-// Aktion oeffnen) und, wenn es eine Office-Datei daneben gibt, „Original“. Die PDF lädt erst beim ersten Aufklappen.
+// Aktion oeffnen) und, wenn es eine Office-Datei daneben gibt, „Original“. Die PDF lädt erst beim ersten Aufklappen: Das macht
+// Obsidian selbst, eine verborgene PDF-Einbettung öffnet ihre Datei erst, wenn sie sichtbar wird. Nie selbst mit MarkdownRenderer
+// nachladen: Der lädt Einbettungen im Anzeigemodus (displayMode), eine PDF ist dort ein festes Bild der ersten Seite ohne Blättern
+// (bis 25.10.2026 hier so, der Kasten zeigte nur Seite 1).
 // Mit eigenem Server (seit 0.5.2) davor „Zusammenfassen“, solange „Das Wichtigste“ leer ist: Claude fasst die Unterlage auf dem
 // Server mit Opus zusammen (server.js, zusammenfassen); danach „Wird zusammengefasst“, bis die Zusammenfassung da ist. Ohne
 // Server mit eigenem API-Schlüssel (seit 0.6.3, claude.js): Claude fasst gleich hier zusammen, danach verschwindet der Knopf. Der
@@ -18,11 +21,10 @@
 // Stil: eba-core.css Abschnitt 28. iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const FANGEN = ["pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend", "click", "dblclick"];
 
-// Markdown eines Kasteninhalts, der nur aus Einbettungen besteht (Absätze bleiben getrennt: mehrere PDFs als Gitter, Abschnitt 29),
-// sonst null (dann bleibt der Inhalt, wie Obsidian ihn gezeichnet hat). absaetze: [[src, …], …]
-const nurEinbettungen = (absaetze) => {
-  if (!absaetze || !absaetze.length || absaetze.some((a) => !a.length || a.some((s) => !s))) return null;
-  return absaetze.map((a) => a.map((s) => "![[" + s + "]]").join("\n")).join("\n\n");
+// Erste Datei eines Kasteninhalts, der nur aus Einbettungen besteht (für „Öffnen“), ohne „#…“; sonst "". absaetze: [[src, …], …]
+const ersteEinbettung = (absaetze) => {
+  if (!absaetze || !absaetze.length || absaetze.some((a) => !a.length || a.some((s) => !s))) return "";
+  return absaetze[0][0].split("#")[0];
 };
 // Titel mit Seitenzahl: „PDF“ + seiten 37 → „PDF (37 Seiten)“; steht schon eine Zahl mit „Seite“ darin, bleibt er
 const titelMitSeiten = (titel, seiten) => {
@@ -34,7 +36,6 @@ const titelMitSeiten = (titel, seiten) => {
 
 module.exports = function (ctx) {
   const app = window.app;
-  const O = ctx.obsidian || {};
   const fmVon = (pfad) => { const f = app.vault.getAbstractFileByPath(pfad || ""); const c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || {}; };
   const linkZiel = (wert, von) => {
     const s = String(wert == null ? "" : wert).replace(/^\[\[|\]\]$/g, "").split("|")[0].split("#")[0].trim();
@@ -96,9 +97,7 @@ module.exports = function (ctx) {
     const fm = fmVon(pfad);
     const innen = titel.querySelector(".callout-title-inner");
     if (innen) innen.setText(titelMitSeiten(innen.textContent, fm.seiten));
-    const absaetze = absaetzeVon(inhalt);
-    const md = nurEinbettungen(absaetze);
-    const erste = md ? absaetze[0][0].split("#")[0] : "";
+    const erste = ersteEinbettung(absaetzeVon(inhalt));
 
     // Kopfzeile: Knöpfe vor dem Pfeil
     const fold = titel.querySelector(".callout-fold");
@@ -143,17 +142,6 @@ module.exports = function (ctx) {
       }).catch((e) => console.error("PDF-Kasten: Zusammenfassen", e));
     }
 
-    // Spätes Laden: zugeklappt bleibt der Kasten leer, die PDF kommt beim ersten Aufklappen (nur, wenn er nur Einbettungen hat)
-    let geladen = true;
-    const kind = O.MarkdownRenderChild && c && typeof c.addChild === "function" ? new O.MarkdownRenderChild(callout) : null;
-    if (kind) c.addChild(kind);
-    if (md && kind && callout.classList.contains("is-collapsed") && O.MarkdownRenderer) { inhalt.empty(); geladen = false; }
-    const laden = () => {
-      if (geladen) return;
-      geladen = true;
-      O.MarkdownRenderer.render(app, md, inhalt, pfad, kind).then(() => messen(callout)).catch((e) => console.error("PDF-Kasten", e));
-    };
-
     titel.setAttribute("role", "button");
     titel.setAttribute("tabindex", "0");
     const zeigen = (auf) => {
@@ -161,7 +149,6 @@ module.exports = function (ctx) {
       if (fold) fold.classList.toggle("is-collapsed", !auf);
       inhalt.style.display = auf ? "" : "none";
       titel.setAttribute("aria-expanded", String(auf));
-      if (auf) laden();
       messen(callout);
     };
     zeigen(!callout.classList.contains("is-collapsed"));
@@ -198,7 +185,7 @@ module.exports = function (ctx) {
     });
   };
 
-  return { registrieren, nurEinbettungen, titelMitSeiten };
+  return { registrieren, ersteEinbettung, titelMitSeiten };
 };
-module.exports.nurEinbettungen = nurEinbettungen;
+module.exports.ersteEinbettung = ersteEinbettung;
 module.exports.titelMitSeiten = titelMitSeiten;

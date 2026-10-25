@@ -110,6 +110,15 @@ test("Auswahl: Schalter „Fachschaft & Veranstaltungen“ liest und schreibt ze
   assert.equal(unveraendert.zentrale_veranstaltungen, "false", "gleicher Wert: nicht anfassen");
 });
 
+test("Auswahl für die Einrichtung: nur die Felder, die sich ändern, ohne das Frontmatter anzufassen", () => {
+  const fm = { name: "", zentrale_veranstaltungen: false };
+  assert.deepEqual(A.wahlFelder(fm, ["ub"], false), { angebote_auswahl: ["ub"], angebote_gewaehlt: true });
+  assert.deepEqual(A.wahlFelder(fm, [], true), { angebote_auswahl: [], angebote_gewaehlt: true, zentrale_veranstaltungen: true });
+  assert.deepEqual(A.wahlFelder({}, ["sport"], true), { angebote_auswahl: ["sport"], angebote_gewaehlt: true }, "fehlt = an");
+  assert.deepEqual(A.wahlFelder(null, [], false).zentrale_veranstaltungen, false);
+  assert.deepEqual(fm, { name: "", zentrale_veranstaltungen: false });
+});
+
 test("Auswahl: Vortragsreihen aus den Daten – bekannte erkannt, unbekannte zunächst aus und in der Karte", () => {
   assert.equal(A.wahlSchluessel(a({ reihe: "Wirtschafts- und Sozialwissenschaftliche Fakultät" })), "vortrag-wiso");
   assert.equal(A.wahlSchluessel(a({ reihe: "WiSo-Kolloquium" })), "vortrag-wiso");

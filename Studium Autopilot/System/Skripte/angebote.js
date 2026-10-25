@@ -1,12 +1,13 @@
 // Angebote der Uni aus den zentralen Daten: Codeblock ```eba-angebote``` (Seite Termine & Anmeldungen). Vorträge (Studium
-// Generale, WiSo-Fakultät), UB-Kurse, Hochschulsport und Welcome Center der nächsten Wochen. Daten: angebote.json der zentralen
+// Generale, WiSo-Fakultät), Kurse der Unibibliothek, Hochschulsport und Welcome Center der nächsten Wochen. Daten: angebote.json der zentralen
 // Daten (docs/daten-v1.md), geholt und geprüft von zentral.js, nur gerätelokal gespeichert (ctx.zentral.angebote()).
 // Auswahl: Beim ersten Mal (noch keine Auswahl gespeichert) zeigt der Block statt der Liste eine Karte „Welche Angebote willst
-// du sehen?“ mit Häkchen und „Fertig“. Vorgabe: Hochschulsport, UB-Kurse und Vorträge der WiSo-Fakultät an; Studium Generale,
+// du sehen?“ mit Häkchen und „Fertig“. Vorgabe: Hochschulsport, Kurse der Unibibliothek und Vorträge der WiSo-Fakultät an; Studium Generale,
 // Welcome Center und unbekannte Vortragsreihen aus.
 // Dazu der Schalter „Fachschaft & Veranstaltungen“, der dasselbe Feld setzt wie im Fenster „Zentrale Daten“. Gespeichert wird
 // synchronisiert in System/Einstellungen.md (angebote_auswahl, angebote_gewaehlt, zentrale_veranstaltungen); „Auswahl ändern“
-// im Fuß öffnet die Karte wieder. Sonst schreibt das Skript nichts.
+// im Fuß öffnet die Karte wieder. Sonst schreibt das Skript nichts. Dieselben Häkchen zeigt die Einrichtung als eigenen
+// Bildschirm (seit 25.10.2026, ctx.angeboteAnzeige.wahl); sie schreibt die Auswahl zusammen mit ihrem Stand.
 // Anzeige: Chips je gewählter Art mit Anzahl (schnelles Ein- und Ausblenden, nur bis zum Neustart), Liste nach Tagen für die
 // nächsten 14 Tage, der Rest hinter „Mehr anzeigen“. Je Zeile Uhrzeit · Titel (Link zur Seite der Uni) · Reihe, Ort, online.
 // Beim Hochschulsport steht der Buchungsbeginn als eigene Zeile („ab 17:00“) an dem Tag, an dem die Buchung öffnet.
@@ -23,7 +24,7 @@ module.exports = function (ctx) {
   const FELD = { auswahl: "angebote_auswahl", gewaehlt: "angebote_gewaehlt", veranstaltungen: "zentrale_veranstaltungen" };
   const ARTEN = [
     { id: "vortrag", name: "Vorträge" },
-    { id: "ub", name: "UB-Kurse" },
+    { id: "ub", name: "Unibibliothek" },
     { id: "sport", name: "Hochschulsport" },
     { id: "welcome", name: "Welcome Center" },
   ];
@@ -49,7 +50,9 @@ module.exports = function (ctx) {
     { schluessel: "vortrag-wiso", name: "Vorträge der WiSo-Fakultät", muster: /wiso|wirtschafts\W*und\W*sozialwiss/i, an: true },
     { schluessel: "vortrag-studium-generale", name: "Studium Generale", muster: /studium\W*generale/i, an: false },
   ];
-  const VORN = [{ schluessel: "sport", name: "Hochschulsport", an: true }, { schluessel: "ub", name: "UB-Kurse", an: true }];
+  // „UB“ kennt am Anfang des Studiums kaum jemand: ausgeschrieben, mit einem Satz, worum es geht
+  const VORN = [{ schluessel: "sport", name: "Hochschulsport", an: true },
+    { schluessel: "ub", name: "Kurse der Unibibliothek", hinweis: "Literatur finden, richtig zitieren, Lerntechniken", an: true }];
   const WELCOME = { schluessel: "welcome", name: "Welcome Center", hinweis: "vor allem für Promovierende und Postdocs", an: false };
   const FACHSCHAFT = { schluessel: "fachschaft", name: "Fachschaft & Veranstaltungen", hinweis: "Partys und Infoabende als Termine im Kalender" };
   const VORGABE = VORN.concat(VORTRAG_REIHEN, [WELCOME]).filter((e) => e.an).map((e) => e.schluessel);
@@ -93,14 +96,15 @@ module.exports = function (ctx) {
     for (const k of alt || []) if (gezeigt.indexOf(k) < 0 && aus.indexOf(k) < 0) aus.push(k);
     return aus;
   };
-  // In das Frontmatter schreiben (innerhalb von processFrontMatter). zentrale_veranstaltungen nur bei geändertem Wert, damit
-  // ein fehlendes Feld (= an) nicht ohne Grund dazukommt.
-  const wahlSchreiben = (fm, auswahl, veranstaltungen) => {
-    fm[FELD.auswahl] = auswahl.slice();
-    fm[FELD.gewaehlt] = true;
-    if (istAn(fm[FELD.veranstaltungen]) !== veranstaltungen) fm[FELD.veranstaltungen] = veranstaltungen;
-    return fm;
+  // Zu schreibende Felder gegenüber dem Frontmatter fm. zentrale_veranstaltungen nur bei geändertem Wert, damit ein fehlendes
+  // Feld (= an) nicht ohne Grund dazukommt.
+  const wahlFelder = (fm, auswahl, veranstaltungen) => {
+    const x = { [FELD.auswahl]: auswahl.slice(), [FELD.gewaehlt]: true };
+    if (istAn((fm || {})[FELD.veranstaltungen]) !== veranstaltungen) x[FELD.veranstaltungen] = veranstaltungen;
+    return x;
   };
+  // In das Frontmatter schreiben (innerhalb von processFrontMatter)
+  const wahlSchreiben = (fm, auswahl, veranstaltungen) => Object.assign(fm, wahlFelder(fm, auswahl, veranstaltungen));
 
   // ---------- Liste (rein, testbar) ----------
   // Zeilen eines Angebots: der Termin selbst; beim Hochschulsport zusätzlich der Buchungsbeginn (anmeldung.ab) als eigene Zeile
@@ -204,43 +208,71 @@ module.exports = function (ctx) {
   };
   const handeln = (el, schluessel, fn) => { fn(); alleNeu(); fokus(el, schluessel); };
 
-  // Karte „Welche Angebote willst du sehen?“
-  const wahlZeichnen = (box, el, w, liste) => {
-    const karte = box.createDiv({ cls: "eba-ang-wahl", attr: { role: "group", "aria-label": "Angebote auswählen" } });
-    karte.createEl("p", { cls: "eba-ang-wahl-frage", text: "Welche Angebote willst du sehen?" });
+  // Häkchen „Welche Angebote willst du sehen?“ in gruppe: für die Karte hier und den Bildschirm der Einrichtung. Haken der
+  // Einstellungen, darüber der Entwurf (gemeinsam, so überlebt er Neuzeichnen und Zurück in der Einrichtung).
+  // → { werte() → { auswahl, veranstaltungen }, gespeichert() (nach dem Schreiben: gilt sofort, Blöcke neu) }
+  const wahlListe = (gruppe, w, liste) => {
     const eintraege = wahlEintraege(liste);
     const haken = {};
     for (const e of eintraege) haken[e.schluessel] = w.auswahl.indexOf(e.schluessel) >= 0;
     haken[FACHSCHAFT.schluessel] = w.veranstaltungen;
     Object.keys(ansicht.entwurf).forEach((k) => { if (Object.prototype.hasOwnProperty.call(haken, k)) haken[k] = !!ansicht.entwurf[k]; });
     eintraege.concat([FACHSCHAFT]).forEach((e, i) => {
-      const z = karte.createEl("label", { cls: "eba-ang-wahl-zeile", attr: { "data-wahl": e.schluessel } });
+      const z = gruppe.createEl("label", { cls: "eba-ang-wahl-zeile", attr: { "data-wahl": e.schluessel } });
       const cb = z.createEl("input", { attr: { type: "checkbox", "data-eba-fokus": i ? "wahl-" + e.schluessel : "wahl-erste" } });
       cb.checked = haken[e.schluessel];
       z.createSpan({ text: e.name });
       if (e.hinweis) z.createEl("small", { cls: "eba-ang-wahl-hinweis", text: e.hinweis });
       cb.addEventListener("change", () => { haken[e.schluessel] = cb.checked; ansicht.entwurf[e.schluessel] = cb.checked; });
     });
+    const werte = () => ({ auswahl: wahlNeu(w.auswahl, eintraege, haken), veranstaltungen: !!haken[FACHSCHAFT.schluessel] });
+    const gespeichert = () => {
+      ansicht.gespeichert = Object.assign(werte(), { zeit: Date.now() });
+      ansicht.waehlen = false;
+      ansicht.entwurf = {};
+      ansicht.aus = [];
+      alleNeu();
+    };
+    return { werte, gespeichert };
+  };
+  const gruppeAnlegen = (el) => el.createDiv({ cls: "eba-ang-wahl", attr: { role: "group", "aria-label": "Angebote auswählen" } });
+  const datenListe = () => { const Z = ctx.zentral, d = Z && Z.angebote ? Z.angebote() : null; return d ? d.angebote : []; };
+
+  // Karte „Welche Angebote willst du sehen?“
+  const wahlZeichnen = (box, w, liste) => {
+    const karte = gruppeAnlegen(box);
+    karte.createEl("p", { cls: "eba-ang-wahl-frage", text: "Welche Angebote willst du sehen?" });
+    const wahl = wahlListe(karte, w, liste);
     const fertig = karte.createEl("button", { cls: "eba-ang-wahl-fertig", text: "Fertig", attr: { type: "button" } });
     fertig.addEventListener("click", async () => {
       fertig.disabled = true;
-      const auswahl = wahlNeu(w.auswahl, eintraege, haken), veranstaltungen = !!haken[FACHSCHAFT.schluessel];
+      const x = wahl.werte();
       try {
         const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
         if (!f) throw new Error(EINSTELLUNGEN + " fehlt");
-        await app.fileManager.processFrontMatter(f, (x) => { wahlSchreiben(x, auswahl, veranstaltungen); });
+        await app.fileManager.processFrontMatter(f, (fm) => { wahlSchreiben(fm, x.auswahl, x.veranstaltungen); });
       } catch (e) {
         console.error(SPRACHE, e);
         ctx.hinweis("Deine Auswahl konnte nicht gespeichert werden. Versuch es bitte noch einmal.");
         fertig.disabled = false;
         return;
       }
-      ansicht.gespeichert = { auswahl, veranstaltungen, zeit: Date.now() };
-      ansicht.waehlen = false;
-      ansicht.entwurf = {};
-      ansicht.aus = [];
-      alleNeu();
+      wahl.gespeichert();
     });
+  };
+
+  // Bildschirm der Einrichtung (einrichtung.js): dieselben Häkchen in el, ohne eigenen Knopf. Die Einrichtung schreibt felder()
+  // zusammen mit ihrem Stand und ruft danach gespeichert().
+  const wahlFuerEinrichtung = (el) => {
+    const wahl = wahlListe(gruppeAnlegen(el), wahlAktuell(), datenListe());
+    return { felder: () => { const x = wahl.werte(); return wahlFelder(einstellungen(), x.auswahl, x.veranstaltungen); }, gespeichert: wahl.gespeichert };
+  };
+  // Gesetzte Häkchen (Zusammenfassung der Einrichtung): gezeigte Einträge und „Fachschaft & Veranstaltungen“; null, solange
+  // nichts gewählt ist
+  const wahlZahl = () => {
+    const w = wahlAktuell();
+    if (!w.gewaehlt) return null;
+    return wahlEintraege(datenListe()).filter((e) => w.auswahl.indexOf(e.schluessel) >= 0).length + (w.veranstaltungen ? 1 : 0);
   };
 
   // Monatstrenner: nur der erste Tag je neuem Monat (nicht der laufende Monat) bekommt die Kurzform des Monats
@@ -293,7 +325,7 @@ module.exports = function (ctx) {
       return;
     }
     const w = wahlAktuell();
-    if (!w.gewaehlt || ansicht.waehlen) { wahlZeichnen(box, el, w, daten.angebote); return; }
+    if (!w.gewaehlt || ansicht.waehlen) { wahlZeichnen(box, w, daten.angebote); return; }
     gezeichnetMs = jetzt.getTime();
 
     // Chips: nur die gewählten Arten, und nur ab zwei (ein- und ausblenden bis zum Neustart)
@@ -342,7 +374,7 @@ module.exports = function (ctx) {
     griff = ctx.codeblock(SPRACHE, (quelle, el) => {
       try { zeichnen(el); } catch (e) { console.error(SPRACHE, e); el.setText(String(quelle)); }
     });
-    const anzeige = { neu: () => griff.neu() };
+    const anzeige = { neu: () => griff.neu(), wahl: wahlFuerEinrichtung, wahlZahl };
     ctx.angeboteAnzeige = anzeige;
     ctx.aufraeumen(() => { if (ctx.angeboteAnzeige === anzeige) ctx.angeboteAnzeige = null; });
     // Auswahl oder Fachschaft-Schalter geändert (auch per Sync von einem anderen Gerät)
@@ -359,6 +391,6 @@ module.exports = function (ctx) {
     ctx.intervall(pruefen, 5 * 60e3);
   };
 
-  return { registrieren, auswaehlen, wahlLesen, wahlSchreiben, wahlNeu, wahlEintraege, wahlSchluessel, artenDerAuswahl, VORGABE, zeitText, ortText,
+  return { registrieren, auswaehlen, wahlLesen, wahlFelder, wahlSchreiben, wahlNeu, wahlEintraege, wahlSchluessel, artenDerAuswahl, VORGABE, zeitText, ortText,
     anmeldeText, metaText, monatsMarke, ARTEN };
 };

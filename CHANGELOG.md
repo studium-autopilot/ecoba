@@ -4,6 +4,33 @@ Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
 ## Unveröffentlicht
 
+## 0.6.13 – Karteikarten üben, PDFs wieder ganz lesbar
+
+- **Neu:** Mit **Üben** gehst du die Karten eines Moduls, eines Kapitels oder nur die mit Fehlern noch einmal durch, etwa vor
+  einer Prüfung. Dein Lernstand bleibt dabei, wie er war.
+- **Neu:** Nach einer Prüfung nimmst du einen Stapel im Menü ⋯ mit **Pausieren** aus deinem Tagesplan. Mit **Fortsetzen**
+  kommt er zurück, dein Lernstand bleibt.
+- **Einfacher:** Neue Karten kommen jetzt höchstens 20 am Tag über alle Module zusammen, abwechselnd aus jedem Modul. Bisher
+  waren es 20 je Modul; die Zahl stellst du in den **Lernoptionen** ein.
+- **Zuverlässiger:** Karten, die du oft vergisst, werden nur noch als schwierig markiert und weiter wiederholt, statt aus dem
+  Lernen zu verschwinden. Auf der Seite **Karteikarten** übst du sie gezielt.
+- **Neu:** Die Statistik zeigt jedes Modul in einer eigenen Zeile und, was du an jedem der letzten 30 Tage gelernt hast.
+  **Verlauf** im Menü einer Karte zeigt jede ihrer Bewertungen.
+- **Übersichtlicher:** In der Kartenliste wählst du jetzt auch ein Kapitel und kannst alle angezeigten Karten auf einmal
+  üben, aussetzen oder zurückstellen.
+- **Einfacher:** Beim Lernen zeigt ein Tippen auf die Karte die Antwort. Ein leerer Stapel erklärt, wie du Karten schreibst,
+  und auf dem iPhone sind lange Modulnamen in der Übersicht wieder lesbar.
+- **Zuverlässiger:** Die **Lernoptionen** nehmen keine falschen Eingaben mehr an, sondern zeigen, welches Feld nicht stimmt.
+  **Standard** setzt alle Werte zurück.
+- **Behoben:** In einer Unterlage zeigte die aufgeklappte PDF nur ihre erste Seite, und du konntest nicht blättern. Jetzt
+  scrollst du wieder durch alle Seiten.
+- **Behoben:** Esc beim Bearbeiten einer Karte schloss das Lernfenster, und deine Änderung war weg. Jetzt bleibt es offen,
+  und auch **Neue Karte** verliert keinen angefangenen Text mehr.
+- **Behoben:** Mit @ ließ sich auf deutschen Tastaturen keine Karte aussetzen, doppeltes Tippen bewertete zwei Karten,
+  **Rückgängig** nahm nicht alles zurück. Nach **Alles lernen** kamen zu viele neue Karten, die Zahlen hingen nach.
+- **Behoben:** Die Zeile **Tresor** unter **Einstellungen & Hilfe** konnte auf iPhone und iPad nur den Tresor wechseln. Jetzt
+  öffnet sie die Tresorverwaltung, dort kannst du einen Tresor auch umbenennen oder löschen.
+
 ## 0.6.12 – Offene Liste klar umrahmt
 
 - **Übersichtlicher:** Auf dem **Dashboard** umrahmt eine Linie die offene Liste samt ihrem Knopf, wie bei einem Karteireiter.

@@ -165,14 +165,14 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `modell.js` | Datenmodell und Fachmodell `ctx.modell` (siehe [„Fachmodell“](architektur/modell.md)), Abgleich der abgeleiteten Felder in den Einstellungen, Codeblock `eba-semesterdaten` |
 | `dashboard.js` | Kacheln und Listen aus dem Fachmodell: Codeblöcke `eba-kacheln` (Dashboard) und `eba-liste fristen\|termine\|pruefungen` (Dashboard, Prüfungen) |
 | `verbindungen.js` | Verbindungen und Schloss: Codeblöcke `eba-schloss`, `eba-verbindungen`; Aktionen `verbinden`, `verbindung-aktualisieren`, `trennen` |
-| `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit sieben Bildschirmen (seit 0.4.8, vorher acht), Zustand in den Einstellungen, Aktion `einrichtung`; siehe [„Einrichtung“](architektur/einrichtung.md) |
+| `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit acht Bildschirmen (seit 25.10.2026 mit den Angeboten der Uni; von 0.4.8 an sieben, vorher acht), Zustand in den Einstellungen, Aktion `einrichtung`; siehe [„Einrichtung“](architektur/einrichtung.md) |
 | `darstellung.js` | Hell, dunkel oder automatisch (seit 17.10.2026) und Design (seit 18.10.2026, intern `elfenbein`, `flieder`, `klar`), je Gerät (`ctx.darstellung`): Umschalter und Design-Kacheln `eba-darstellung`, Aktionen `darstellung` und `design`; siehe [„Darstellung“](architektur/darstellung.md) |
 | `personalisieren.js` | Formular (Aktion `personalisieren`, Parameter `feld` setzt den Cursor), Zeilen „Deine Angaben“ und „Variante“ (`eba-personalisieren angaben` bzw. `variante`, gleiche Zeilenliste wie die Verbindungen; Inhalt aus `angabenZeilen`/`varianteZeilen`); die Karte auf dem Dashboard entfällt seit 0.3.0 |
 | `musterplan.js` | Musterstudienpläne als eigene Darstellung, Codeblock `eba-musterplan` |
 | `zentral.js` | Datenkanal „Zentrale Daten“: Abruf, Prüfung, Übernahme als Termin-Notizen, Semesterdaten, Abrufer-Sperre (`ctx.zentral`), Aktionen `zentral-aktualisieren`, `zentral-schalter` |
 | `update.js` | Update der Vorlage mit einem Knopf (seit 0.2.0, `ctx.update`): Zeile „Updates“ (bis 24.10.2026 „Studium Autopilot“) in `eba-verbindungen`, Hinweis `eba-update-hinweis` auf dem Dashboard (seit 0.3.1), Aktionen `vorlage-aktualisieren`, `vorlage-neu-laden`; siehe [„Update“](architektur/update.md) |
 | `fsrs.js` | Helfer: FSRS-6 und Lernschritte wie in Anki (`ctx.user.fsrs(ctx).planer`), siehe [„Karteikarten“](architektur/lernen.md) |
-| `karten.js` | Karteikarten: Codeblock `eba-karten` (Übersicht, `stapel`, `statistik`, `liste`, `heute`), Lernfenster, Fenster „Neue Karte“ und „Optionen“, Lernstände je Gerät (`ctx.karten`); siehe [„Karteikarten“](architektur/lernen.md) |
+| `karten.js` | Karteikarten: Codeblock `eba-karten` (Übersicht, `stapel`, `statistik`, `liste`, `heute`), Lernfenster, Üben, Verlauf einer Karte, Fenster „Neue Karte“ und „Optionen“, Pausieren, Lernstände je Gerät (`ctx.karten`); siehe [„Karteikarten“](architektur/lernen.md) |
 | `schwerpunkte.js` | Abschnitt „Schwerpunkte“ im Studienverlauf (seit 17.10.2026, vorher Seite „Schwerpunkt-Planer“): Codeblock `eba-schwerpunkte`, Regeln der PO für die Schwerpunktbereiche, `ctx.schwerpunkte` (`rechnen`, `sichtbar`); siehe [„Bereiche“](architektur/seiten.md) |
 | `lernplan.js` | Lernplan (seit 18.10.2026): Codeblock `eba-lernplan` (Bereich, Argument `modul` in der Lernplan-Notiz), Abhaken der Kapitel, `ctx.lernplan` (`kapitelLesen`, `planen`, `zielVon`, `stand`, `kapazitaet`, `sichtbar`); siehe [„Lernplan“](architektur/lernen.md) |
 | `literatur.js` | Literaturlisten (seit 24.10.2026): schreibt auf dem Abrufer aus `literatur.json` je Modul die Notiz „<Code> Literatur 00 Literaturliste“ in den Ordner Literatur des Moduls (`ctx.literaturAnzeige`); siehe [„Literaturliste“](architektur/lernen.md) |
@@ -278,6 +278,9 @@ Regeln für Skript-Autoren:
 - Prüfungen, Fristen, „diese Woche“, Sitzungen, ECTS, Noten, „im Plan“, Statusfarben und Datumstexte nur über das Fachmodell
   (`ctx.modell`, Abschnitt [„Fachmodell“](architektur/modell.md)), nie eine eigene Regel; fehlt etwas, kommt es mit Test ins Modell.
 - `registrieren()` darf annehmen, dass die alte Fassung abgemeldet ist; offene Seiten zeichnet der Kern danach selbst neu.
+- PDFs nie mit `MarkdownRenderer` einbetten: Er lädt Einbettungen im Anzeigemodus, eine PDF ist dort ein festes Bild ihrer ersten
+  Seite ohne Blättern (der PDF-Kasten bis 25.10.2026). Eine verborgene PDF-Einbettung, die Obsidian gezeichnet hat, öffnet ihre
+  Datei ohnehin erst, wenn sie sichtbar wird; sie darf also bleiben.
 - Erzeugte Notizen haben keine leeren Punkte (`- `, `- [ ] `) und keine leeren Abschnitte (seit 19.10.2026); ein Abschnitt kommt dazu,
   sobald es etwas gibt. Ausnahme: der Punkt, in dem nach dem Anlegen der Cursor steht. `## Meine Notizen` der Quellen bleibt als
   Grenze für deinen Text; ist er leer, blendet ihn die Leseansicht aus (`kopf.js`). `tests/notizbild.test.js` prüft `notizen.js`,

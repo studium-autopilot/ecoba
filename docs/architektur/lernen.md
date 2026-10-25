@@ -41,7 +41,9 @@ damit Text wie „r ^2“ Text bleibt. Sonst schreibt `karten.js` in Kartennotiz
 **Lernstände:** `System/Daten/Karteikarten/<Gerät>.jsonl` (Geräte-ID `eba-geraet` wie `zentral.js`). Erste Zeile `{ v: 1, geraet }`,
 dann je Ereignis eine Zeile: Bewertung `{ k, t, b: 1–4, d }` (Antwortzeit in ms, höchstens 60 s) oder Aktion `{ k, t, a }` mit `aus`
 (aussetzen), `an` (fortsetzen), `neu` (zurücksetzen), `zur` (bis morgen zurückstellen). Jedes Gerät hängt nur an seine eigene Datei
-an (`vault.append`); Rückgängig nimmt die letzte eigene Zeile wieder heraus. Die eigene Datei wird einmal gelesen und dann im
+an (`vault.append`; eine Aktion für mehrere Karten ist ein Schreibvorgang). Rückgängig nimmt genau die Zeilen dieser Bewertung oder
+Aktion heraus, auch wenn danach weitere kamen (`zuruecknehmen`, nach Inhalt `k|t|b|a`: `ereignisSchluessel`, `zeilenOhne`, in
+`vault.process`). Die eigene Datei wird einmal gelesen und dann im
 Speicher geführt; neu gelesen nur, wenn sie gelöscht oder von außen geändert wurde (Ereignisse während des eigenen Schreibens oder
 mit dem danach gemerkten Stand `mtime|size` zählen nicht). Dateien anderer Geräte werden bei jeder Änderung neu gelesen. Kaputte Zeilen fallen weg (`zeileLesen`), doppelte Ereignisse
 zählen einmal. `nachspielen` rechnet aus allen Ereignissen (nach Zeit) den Stand jeder Karte und das Protokoll für Tageslimits und
@@ -55,30 +57,77 @@ Einfach → Abschluss. Am selben Tag gilt die kurzfristige Stabilität, sonst di
 Streuung wie Anki ab 2,5 Tagen, aber reproduzierbar (Zufall aus Kartenschlüssel und Zahl der Wiederholungen), damit jedes Gerät
 denselben Stand rechnet. `vorschau` liefert alle vier Folgezustände für die Beschriftung der Knöpfe.
 
-**Tagesplan und Lernrunde:** `tagesplan` zählt je Modul: neue Karten bis `karten_neu_pro_tag` (20, dazu „Heute mehr neue Karten“,
-gerätelokal `eba-karten-extra`), Wiederholungen bis `karten_wdh_pro_tag` (200), Lernschritte ohne Grenze. Fälliges nach Fälligkeit,
-dann zufällig je Tag; neue Karten in der Reihenfolge der Notiz oder zufällig (`karten_neu_reihenfolge`). Geschwister
-(`karten_geschwister`): höchstens eine Karte je Notiz am Tag. Ausgesetzte und zurückgestellte Karten fehlen. `naechsteKarte`:
-fällige Lernschritte zuerst, sonst neue und fällige gleichmäßig gemischt, sonst Lernschritte bis 20 Min. im Voraus. Schwierige Karten
-(`karten_schwierig_ab`, beim 8. Fehler, dann bei jedem weiteren halben Schwellenwert) werden markiert und ausgesetzt
-(`karten_schwierig_aussetzen`).
+**Tagesplan und Lernrunde:** `tagesplan` zählt neue Karten je Modul bis `karten_neu_pro_tag` (20) und über alle Module bis
+`karten_neu_gesamt` (20; seit 25.10.2026, vorher kamen bei fünf Modulen 100 neue Karten am Tag). Die Grenze über alle zählt jede
+heute zum ersten Mal gelernte Karte, auch aus Stapeln außerhalb der Auswahl; neue Karten kommen abwechselnd aus den Modulen (erste
+jedes Moduls, dann die zweite …). Wiederholungen bis `karten_wdh_pro_tag` (200) je Modul, Lernschritte ohne Grenze. Fälliges nach
+Fälligkeit, dann zufällig je Tag; neue Karten in der Reihenfolge der Notiz oder zufällig (`karten_neu_reihenfolge`). Geschwister
+(`karten_geschwister`): höchstens eine Karte je Notiz am Tag. Ausgesetzte und zurückgestellte Karten fehlen, ebenso alle Karten
+eines pausierten Stapels (`pausiert: true` im Frontmatter der Kartennotiz, `k.pausiert`; ein Modul ist pausiert, wenn alle seine
+Notizen es sind). `gesperrt` sind die neuen Karten, die nur ein Limit aufhält (Geschwister zählen einmal). „N neue Karten mehr“
+(`mehrNeu`, gerätelokal `eba-karten-extra` für den Tag) gibt genau die nächsten höchstens 10 davon frei: je Modul so viele mehr, wie
+von dort kommen, und ebenso viele über alle (`gesamt`); vorher gab **Alles lernen** 10 je Modul. `naechsteKarte`: fällige Lernschritte
+zuerst, sonst neue und fällige gleichmäßig gemischt, sonst Lernschritte bis 20 Min. im Voraus (die Zahl „Lernen“ im Fenster zählt
+dasselbe, `lernenJetzt`). Schwierige Karten (`karten_schwierig_ab`, beim 8. Fehler, dann bei jedem weiteren halben Schwellenwert)
+werden nur markiert und weiter wiederholt; ausgesetzt wird nie von selbst (bis 25.10.2026 `karten_schwierig_aussetzen`, beim
+Speichern der Optionen gelöscht; weil der Stand nachgespielt wird, sind so ausgesetzte Karten wieder da). Aktion `an` nimmt die
+Markierung weg.
+
+**Üben** (`Uebungsfenster`, Unterklasse des Lernfensters): eine feste Auswahl ohne Tagesplan, etwa vor einer Prüfung. `auswahlVon`
+wählt nach Modul, Notiz oder Kapitel und Art (`UEBEN_ARTEN`: alle, schon einmal mit Nochmal bewertet, schwierig), ohne ausgesetzte
+Karten; die Kartenliste und die Zeile „schwierige Karten“ geben Schlüssel direkt mit. `uebungBauen` mischt mit einem Samen,
+`uebungNehmen` legt „Nochmal“ nach 4 anderen Karten wieder ein (`WIEDER`), `uebungZurueck` nimmt den letzten Schritt zurück. Üben
+schreibt nichts in die Lernstände: Wann eine Karte wieder dran ist, bleibt, wie es war (Anki: „Benutzerdefinierte Lernsitzung“ ohne
+Neuplanung).
+
+**Statistik und Verlauf** (seit 25.10.2026): `statistik` liefert außer Kacheln, Bestand und Prognose `verlauf`, die letzten 30
+Lerntage (heute zuletzt) mit Bewertungen, davon neu und gewusst, und Antwortzeit. Das Diagramm „Gelernt in den letzten 30 Tagen“
+hat dieselbe Form wie die Prognose (`tageBalken`). Bei „Alle Stapel“ und mehr als einem Modul steht darüber „Je Modul“ (`jeModul`,
+`modulTabelle`): Karten, Anteil schon gelernter (Zustand nicht Neu), Behalten (Wiederholungen der letzten 30 Tage, die nicht
+Nochmal waren) und Lernzeit der letzten 30 Tage, zuletzt gelernt; pausierte Module zählen mit, ihr Lernstand bleibt. Eine Zeile
+antippen stellt die Auswahl auf dieses Modul. Schmal (Container `eba-lk` ≤ 600 px) stehen die Zahlen mit Namen unter dem Modulnamen.
+Fenster **Verlauf** einer Karte (`VerlaufFenster`, `ctx.karten.verlauf`; im Menü je Karte der Liste und unter ⋯ im Lern- und
+Übungsfenster): Ort und Frage, Stand (Status, Fällig, Intervall, wie oft bewertet, Fehler, Lernzeit) und jede Bewertung und Aktion,
+die neueste oben. `kartenVerlauf` spielt nur die Ereignisse dieser Karte nach (`anwenden`, derselbe Schritt wie in `nachspielen`:
+Der Stand einer Karte hängt nur an ihren eigenen Ereignissen) und gibt je Bewertung den Zustand vorher (Neu, Lernen, Wiederholung,
+Erneut lernen) und den Stand danach (Intervall bzw. nächster Lernschritt, `intervallText`); `an` bei einer nur schwierigen Karte
+heißt „Nicht mehr als schwierig markiert“. Geht das Fenster über dem Lernfenster zu, holt dieses den Fokus zurück (`fokusHalten`),
+damit die Tasten weiter wirken. Schmal (Container `eba-lk-v` ≤ 440 px) zwei Zeilen je Bewertung.
 
 **Oberfläche:** Seite `Studium/Karteikarten.md` mit den Codeblöcken `eba-karten` (Übersicht: Kopfzeile „11 fällig · 12 neu ·
-etwa 5 Min.“ mit **Alles lernen**, Dauer aus der eigenen mittleren Antwortzeit; Tabelle „Heute dran“ nach Fälligkeit, Stapel ohne
-fällige Karten eingeklappt; Suche ab 6 Stapeln; Zeile je Modul mit Neu · Lernen · Fällig und Kartenzahl, antippen = lernen, ⋯ = Menü
-mit „Karten anzeigen“, das die Liste filtert und hinscrollt), den Knöpfen, `eba-karten statistik` (vier Kacheln, Prognose für 30
-Tage, Bestand) und `eba-karten liste` (Suche, Stapel, Status mit Anzahl, Sortierung nach Notiz/Fälligkeit/Fehlern; nach Stapel
-gruppiert, Status als Pille, 50 je Schritt und „Alle anzeigen“, Menü je Karte). In jeder Kartennotiz steht `eba-karten stapel` (Gerüst
-`System/Gerüste/Karteikarten.md`), auf dem Dashboard `eba-karten heute` (nur sichtbar, wenn etwas fällig ist; sonst `.eba-lk-aus`).
+etwa 5 Min.“ mit **Alles lernen**, Dauer aus der eigenen mittleren Antwortzeit; darunter „N schwierige Karten“ mit **Üben** und
+**Ansehen**; Tabelle „Heute dran“ nach Fälligkeit, Stapel ohne fällige Karten und pausierte Stapel je eingeklappt; Suche ab 6
+Stapeln; Zeile je Modul mit Neu · Lernen · Fällig und Kartenzahl, antippen = lernen, ⋯ = Menü mit Lernen, Üben …, Neue Karte,
+Karten anzeigen (filtert die Liste und scrollt hin), „Heute N neue Karten mehr“ (nur wenn ein Limit Karten aufhält), Pausieren bzw.
+Fortsetzen (`pausieren`, mit Rückgängig im Hinweis) und Öffnen; schmal (Container `eba-lk-u` ≤ 520 px) stehen die Zahlen mit Namen
+unter dem Modulnamen), den Knöpfen, `eba-karten statistik` (Auswahl eines Moduls, vier Kacheln, „Je Modul“, Gelerntes der letzten
+30 Tage, Prognose für 30 Tage, Bestand mit Pausiert und Schwierig; siehe unten) und `eba-karten liste` (Suche, Stapel, Kapitel, Status mit Anzahl, Sortierung nach Notiz/Fälligkeit/Fehlern;
+nach Stapel gruppiert, Status als Pille, 50 je Schritt und „Alle anzeigen“, Menü je Karte; darüber „Auswahl: N Karten“ mit **Üben**
+und ⋯ für alle Treffer: aussetzen, fortsetzen, bis morgen zurückstellen, nicht mehr als schwierig markieren, als neu zurücksetzen
+nach Rückfrage; `aktionFuer` setzt erst fehlende Kennungen, dann ein Schreibvorgang, Hinweis mit Rückgängig). Fenster **Üben**
+(`UebenWahl`, Aktion `karten-ueben`): Stapel, Teil (ganzes Modul, eine Notiz, ein Kapitel), Karten, mit Anzahl. In jeder
+Kartennotiz steht `eba-karten stapel` (Gerüst `System/Gerüste/Karteikarten.md`; Zahlen, **Lernen** bzw. bei pausiertem Stapel
+**Fortsetzen**, **Üben**, **Neue Karte** und „So schreibst du Karten“, im leeren Stapel offen, weil der Kasten im Gerüst in der
+Leseansicht nicht zu sehen ist), auf dem Dashboard `eba-karten heute` (nur sichtbar, wenn etwas fällig oder neu ist; sonst
+`.eba-lk-aus`). **Lernoptionen** prüfen vor dem Speichern (`optionenPruefen`: ganze Zahlen in `GRENZEN`, jede Lernschritt-Angabe
+eine Zeit bis 30 Tage, leer = Standard) und markieren das falsche Feld; **Standard** füllt die Werte wie in Anki ein, gespeichert
+wird erst mit **Speichern**.
 `artVon` liest das Argument, sonst Ort und Ersatztext des Blocks. In der Leseansicht einer Kartennotiz zeichnet ein Post-Processor
 jede Karte als Zeile (`kartenZeilen`): Abschnitt per `getSectionInfo`, Karten daraus mit `parsen` (`abschnittKarten`; ein
 Abschnitt mit anderem Text bleibt, wie Obsidian ihn zeichnet, der Rest einer Karte, die Obsidian in zwei Abschnitte teilt, wird
 leer), Vorder- und Rückseite per `MarkdownRenderer`. Die Rückseite (bei Lücken die Lösung statt „[…]“, `zeilenSeiten`) erscheint
 erst beim Antippen; **Antworten zeigen** im Stapel-Block setzt `.eba-lk-k-alle` an der Ansicht. Ohne Abschnitt (Lernfenster)
 bleibt der Rückfall: Trenner als Pfeil, Lücken markiert. Das Lernfenster (Modal, auf dem iPhone ganzer Bildschirm) zeichnet die Karte mit `MarkdownRenderer` (Formeln,
-Bilder, Links), darunter ein Fortschrittsbalken der Runde; Tasten Leertaste/Enter, 1–4, Strg/⌘+Z, E, `-`, `@`. Neu gezeichnet wird bei Änderungen in `Karteikarten/`, an
+Bilder, Links), darunter ein Fortschrittsbalken der Runde; ein Tippen auf die Frage zeigt die Antwort (nicht auf Links oder mit
+markiertem Text), Knöpfe nehmen ein Tippen erst 400 ms nach dem Wechsel an (`SPERRE`, `getippt`), damit ein doppeltes Tippen keine
+Bewertung auslöst. Tasten Leertaste/Enter, 1–4, Strg/⌘+Z, E, `-`, `@` (auch mit AltGr, das Windows als Strg+Alt meldet), beim
+Bearbeiten Strg/⌘+Enter = Speichern. Esc und ein Tippen daneben schließen nichts, solange eine Änderung ungespeichert ist
+(`canDismiss`, `onEscapeKey`; ohne Änderung führt Esc zurück zur Karte); dasselbe im Fenster **Neue Karte**. Bei einem pausierten
+Stapel sagt das Fenster es und bietet **Fortsetzen**. Neu gezeichnet wird bei Änderungen in `Karteikarten/`, an
 Lernständen anderer Geräte und an den Einstellungen, außerdem alle 5 Minuten (Lernschritte); die Kartenliste dabei nur, wenn ein
-neuer Lerntag beginnt. Ein offenes Lernfenster baut seine Runde bei denselben Änderungen, an einem neuen Lerntag und, solange es
+neuer Lerntag beginnt. Alle Blöcke, die zugleich neu zeichnen, warten auf denselben Neuaufbau (`indexLaden`, `logsLaden`); kam
+während des Aufbaus eine Änderung, folgt danach noch einer. Bis 25.10.2026 bekam jeder Block außer dem ersten das alte
+Verzeichnis, und die Seite zeigte nach einer Änderung bis zu 5 Minuten alte Zahlen. Ein offenes Lernfenster baut seine Runde bei denselben Änderungen, an einem neuen Lerntag und, solange es
 „fertig“ zeigt, alle 5 Minuten neu (`auffrischen`, `sitzungAuffrischen`): Zähler und Verlauf bleiben, die gezeigte Karte bleibt,
 solange es sie gibt und sie dran ist; Karten ohne Kennung kommen erst in der nächsten Runde, beim Bearbeiten wartet es. Bearbeiten
 und „In der Notiz zeigen“ nehmen den Block aus dem jetzigen Stand der Notiz.

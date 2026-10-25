@@ -93,6 +93,9 @@ In `Karteikarten/<Code> Karteikarten.md` (Gerüst `System/Gerüste/Karteikarten.
 Keine Kennungen `^k…` ausdenken (das Plugin setzt sie), vorhandene nie ändern oder doppeln. Lernstände liegen in
 `System/Daten/Karteikarten/`; dort schreibst du nie.
 
+Nach einer Prüfung kann die Person einen Stapel pausieren: `pausiert: true` im Frontmatter der Kartennotiz, nur auf ihren Wunsch;
+Fortsetzen heißt, das Feld zu löschen. Die Lernstände bleiben dabei, wie sie sind.
+
 ## Was du nicht schreibst
 
 - Nichts in `System/`, `Dashboard.md`, `Studium/`, `Unterlagen/_Volltext/`, `.obsidian/`.

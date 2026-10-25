@@ -163,7 +163,7 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Vorher blieben die Notizen eines eigenen Abgleichs ohne `herkunft` bei „offen“. Neu gezeichnet bei
   `ctx.modell.beiAenderung` und wie die Agenda. Reine Logik (`anmeldungen`, `ortTeilen`, `anmeldeStand`) in
   `tests/termine.test.js`. CSS: Abschnitt 57.
-- **Angebote der Uni** (optional `angebote.json`, seit 17.10.2026): Vorträge, UB-Kurse, Hochschulsport, Welcome Center. Geholt
+- **Angebote der Uni** (optional `angebote.json`, seit 17.10.2026): Vorträge, Kurse der Unibibliothek, Hochschulsport, Welcome Center. Geholt
   und gespeichert wie die Gruppen (gemeinsamer Helfer `optionalHolen`; `angebotePruefen`, `eba-zentral-angebote`,
   `ctx.zentral.angebote()`); ein Fehler hält nur die Angebote an. Anders als bei den Gruppen gilt eine Datei, die im Manifest
   fehlt, als zurückgezogen: Der gerätelokale Stand wird gelöscht (nicht bei `pause`). Sind die zentralen Daten aus, liefern
@@ -172,7 +172,10 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   `eba-angebote` (meldet sich als `ctx.angeboteAnzeige` an).
   *Auswahl* (synchronisiert in `System/Einstellungen.md`, für alle Geräte gleich): Solange `angebote_gewaehlt` nicht `true` ist,
   zeigt der Block statt der Liste die Karte „Welche Angebote willst du sehen?“ (`.eba-ang-wahl`) mit Häkchen und **Fertig**;
-  „Auswahl ändern“ im Fuß öffnet sie wieder. Nicht Teil der Einrichtung. `angebote_auswahl` = Liste der gewählten Schlüssel:
+  „Auswahl ändern“ im Fuß öffnet sie wieder. Seit 25.10.2026 fragt auch die Einrichtung (Bildschirm 6) mit denselben Häkchen
+  (`wahlListe`, für die Einrichtung `ctx.angeboteAnzeige.wahl(el)` → `{ felder(), gespeichert() }`; sie schreibt `felder()`
+  zusammen mit ihrem Stand, `wahlFelder`), wer sie dort abschließt, sieht die Karte nicht mehr. Der Entwurf der Häkchen ist für
+  beide derselbe. `angebote_auswahl` = Liste der gewählten Schlüssel:
   `sport`, `ub`, `welcome` (ganze Art) und je Vortragsreihe `vortrag-wiso`, `vortrag-studium-generale` (am Namen erkannt) bzw.
   `vortrag-<name>` für jede andere Reihe aus den Daten. Vorgabe: `sport`, `ub`, `vortrag-wiso`; Studium Generale, Welcome Center
   und unbekannte Reihen sind aus. Gewählte Schlüssel, die die Karte gerade nicht zeigt, bleiben beim Speichern erhalten. Die
@@ -185,7 +188,7 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   Buchung. „Anmeldung ab/bis“ rechnet mit der Uhrzeit von jetzt (heute abgelaufen → weg). Neu gezeichnet bei einem neuen Tag
   oder wenn die Liste 15 Min. alt ist (Prüfung alle 5 Min. und beim Zurückkehren in die App; nicht im Hintergrund, nicht bei
   offener Auswahlkarte), so verschwinden vergangene Vorträge und abgelaufene Anmeldungen am selben Tag. Reine Logik (`auswaehlen`, `wahlLesen`,
-  `wahlSchreiben`, `wahlNeu`, `wahlEintraege`, Texte) in `tests/angebote.test.js`. CSS: Abschnitt 53 in `eba-core.css`
+  `wahlFelder`, `wahlSchreiben`, `wahlNeu`, `wahlEintraege`, Texte) in `tests/angebote.test.js`. CSS: Abschnitt 53 in `eba-core.css`
   (Klassen `eba-ang-*`, Farbe je Art über `--kal`).
 - **Zentraler Stundenplan** (optional `veranstaltungen.json`, Vertrag in `docs/daten-v1.md`, seit 17.10.2026; Plan 27.1, Antwort
   auf die Befunde 6, 7 und 18 der Prüfung): Anders als Gruppen und Angebote schreibt er Notizen, darum **nur der Abrufer**.

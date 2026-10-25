@@ -55,11 +55,11 @@ test("Eckdaten ganz weg nur mit PDF-Kasten: ohne ist „Öffnen ↗“ dort der 
   assert.equal(K.hatPdfKasten(null), false, "ohne Metadaten bleiben die Eckdaten");
 });
 
-test("PDF-Kasten: Inhalt nur aus Einbettungen lädt spät, Seitenzahl im Titel", () => {
-  assert.equal(PK.nurEinbettungen([["a.pdf#height=560"]]), "![[a.pdf#height=560]]");
-  assert.equal(PK.nurEinbettungen([["a.pdf", "b.pdf"], ["c.pdf"]]), "![[a.pdf]]\n![[b.pdf]]\n\n![[c.pdf]]", "Absätze bleiben (Gitter)");
-  assert.equal(PK.nurEinbettungen([[""]]), null, "anderer Inhalt: bleibt, wie Obsidian ihn zeichnet");
-  assert.equal(PK.nurEinbettungen([]), null);
+test("PDF-Kasten: „Öffnen“ für die erste Einbettung, Seitenzahl im Titel", () => {
+  assert.equal(PK.ersteEinbettung([["a.pdf#height=560"]]), "a.pdf");
+  assert.equal(PK.ersteEinbettung([["a.pdf", "b.pdf"], ["c.pdf"]]), "a.pdf", "mehrere PDFs (Gitter): die erste");
+  assert.equal(PK.ersteEinbettung([[""]]), "", "anderer Inhalt im Kasten: kein „Öffnen“");
+  assert.equal(PK.ersteEinbettung([]), "");
   assert.equal(PK.titelMitSeiten("PDF", 37), "PDF (37 Seiten)");
   assert.equal(PK.titelMitSeiten("PDF", 1), "PDF (1 Seite)");
   assert.equal(PK.titelMitSeiten("Folien als PDF (164 Seiten)", 164), "Folien als PDF (164 Seiten)");
@@ -69,6 +69,77 @@ test("PDF-Kasten: Inhalt nur aus Einbettungen lädt spät, Seitenzahl im Titel",
   const code = fs.readFileSync(path.join(SKRIPTE, "pdfkasten.js"), "utf8");
   assert.match(code, /callout\.addEventListener\(n, \(e\) => \{[\s\S]*?e\.stopPropagation\(\);[\s\S]*?\}, true\);/);
   assert.match(code, /eba-vb-knopf leise eba-pdf-knopf/);
+});
+
+// Kleinstes DOM für einen gezeichneten Kasten: nur, was pdfkasten.js an Elementen anfasst
+const knoten = (tag, cls = "", attr = {}) => {
+  const k = {
+    tagName: tag.toUpperCase(), nodeName: tag.toUpperCase(), nodeType: 1, parentNode: null, children: [], style: {}, textContent: "",
+    hoerer: [], attr: Object.assign({}, attr),
+    classList: {
+      liste: new Set(cls.split(" ").filter(Boolean)),
+      contains(c) { return this.liste.has(c); },
+      toggle(c, an) { if (an === undefined ? !this.liste.has(c) : an) this.liste.add(c); else this.liste.delete(c); },
+    },
+    get childNodes() { return this.children; },
+    get childElementCount() { return this.children.length; },
+    ownerDocument: { createElement: (t) => knoten(t) },
+    getAttribute(n) { return n in this.attr ? this.attr[n] : null; },
+    setAttribute(n, w) { this.attr[n] = String(w); },
+    addEventListener(typ, fn, fangen) { this.hoerer.push({ typ, fn, fangen: !!fangen }); },
+    append(...ks) { for (const x of ks) { x.parentNode = this; this.children.push(x); } return this; },
+    insertBefore(x, vor) { x.parentNode = this; const i = this.children.indexOf(vor); this.children.splice(i < 0 ? this.children.length : i, 0, x); },
+    contains(x) { return x === this || this.children.some((c) => c.contains(x)); },
+    closest(sel) { return sel.startsWith(".") && this.classList.contains(sel.slice(1)) ? this : this.parentNode && this.parentNode.closest ? this.parentNode.closest(sel) : null; },
+    querySelector(sel) {
+      const direkt = sel.startsWith(":scope > "), c = sel.replace(/^:scope > /, "").slice(1);
+      for (const x of this.children) {
+        if (x.classList.contains(c)) return x;
+        const tiefer = !direkt && x.querySelector(sel);
+        if (tiefer) return tiefer;
+      }
+      return null;
+    },
+    createEl(t, o = {}) { const x = knoten(t, o.cls || "", o.attr || {}); x.textContent = o.text || ""; this.append(x); return x; },
+    setText(t) { this.textContent = t; },
+    empty() { this.children = []; },
+  };
+  return k;
+};
+
+test("PDF-Kasten: Aufklappen zeigt die PDF, die Obsidian eingebettet hat, und zeichnet sie nie neu", () => {
+  // MarkdownRenderer lädt Einbettungen im Anzeigemodus: Eine PDF ist dort ein festes Bild der ersten Seite ohne Blättern.
+  // Bis 25.10.2026 leerte der Kasten zugeklappt seinen Inhalt und lud die PDF beim Aufklappen so nach (nur Seite 1 zu sehen).
+  const gezeichnet = [];
+  let pp = null;
+  const { ergebnis } = laden("pdfkasten", {
+    frontmatter: { "Unterlagen/a.md": { typ: "unterlage", seiten: 10 } },
+    kontext: {
+      postprozessor: (fn) => { pp = fn; },
+      obsidian: { MarkdownRenderer: { render: async (...a) => { gezeichnet.push(a); } }, MarkdownRenderChild: class {} },
+    },
+  });
+  ergebnis.registrieren();
+  const pdf = knoten("span", "internal-embed pdf-embed", { src: "a.pdf#height=560" });
+  const titel = knoten("div", "callout-title").append(knoten("div", "callout-title-inner"), knoten("div", "callout-fold is-collapsed"));
+  titel.children[0].textContent = "PDF";
+  const inhalt = knoten("div", "callout-content").append(knoten("p").append(pdf));
+  const kasten = knoten("div", "callout is-collapsed", { "data-callout": "eba-pdf" }).append(titel, inhalt);
+  pp({ querySelectorAll: () => [kasten] }, { sourcePath: "Unterlagen/a.md", addChild: () => {} });
+
+  assert.equal(titel.children[0].textContent, "PDF (10 Seiten)");
+  assert.equal(inhalt.style.display, "none", "zugeklappt: verborgen, Obsidian öffnet die PDF erst, wenn sie sichtbar wird");
+  assert.ok(inhalt.contains(pdf), "zugeklappt bleibt Obsidians Einbettung im Kasten");
+  const tipp = kasten.hoerer.find((h) => h.typ === "click" && h.fangen).fn;
+  tipp({ target: titel, stopPropagation() {}, preventDefault() {} });
+  assert.equal(kasten.classList.contains("is-collapsed"), false);
+  assert.equal(inhalt.style.display, "");
+  assert.ok(inhalt.contains(pdf), "aufgeklappt: dieselbe Einbettung, zum Blättern durch alle Seiten");
+  assert.deepEqual(gezeichnet, [], "nie mit MarkdownRenderer nachladen");
+  tipp({ target: titel, stopPropagation() {}, preventDefault() {} });
+  tipp({ target: titel, stopPropagation() {}, preventDefault() {} });
+  assert.equal(inhalt.style.display, "", "zu und wieder auf: weiter dieselbe PDF");
+  assert.deepEqual(gezeichnet, []);
 });
 
 test("Eigenschaften: eba-notiz an jeder Notiz des Plugins, nie an deinen; Klassen einer vorigen Notiz gehen wieder ab", () => {

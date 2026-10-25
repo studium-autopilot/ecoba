@@ -57,6 +57,7 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `wieder-zeigen` | `id` | id aus `stundenplan_ausgeblendet` nehmen | – |
 | `karten-lernen` | `stapel` (Pfad) oder `code`; ohne: die Kartennotiz, in der der Knopf steht, sonst alle | Lernfenster | Karteikarten lernen |
 | `karte-neu` | `stapel` (Pfad, optional) | Fenster „Neue Karte“ | Neue Karte |
+| `karten-ueben` | `stapel` (Pfad) oder `code`; ohne: die Kartennotiz, in der der Knopf steht | Fenster „Üben“ (Stapel, Teil, Karten), dann Lernfenster ohne Lernplan | Karteikarten üben |
 | `kartenstapel` | – | neuer Stapel aus `System/Gerüste/Karteikarten.md` (Modul wählen; auch Ordner-Automatik in `Karteikarten/`) | Neuer Kartenstapel |
 | `karten-optionen` | – | Fenster „Lernoptionen“ (Felder `karten_*` in `System/Einstellungen.md`) | Lernoptionen |
 

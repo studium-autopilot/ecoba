@@ -208,8 +208,9 @@ module.exports = function (ctx) {
       : { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", aktion: { aktion: "variante", parameter: { wert: v } }, rechts: "" }));
   };
   // „Obsidian“: was unten in der Schublade stand (Zahnrad, Umschalter zur Dateiliste, Tresor mit Zahl der Dateien). tresor: Name
-  // des Tresors, dateien: Zahl aller Dateien. Ziel der Zeile → Obsidians Befehl (Aktion „obsidian“)
-  const OBSIDIAN = { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:switch-vault" };
+  // des Tresors, dateien: Zahl aller Dateien. Ziel der Zeile → Obsidians Befehl (Aktion „obsidian“). tresor ist „Tresore
+  // verwalten“, nicht app:switch-vault: Das wechselt auf iPhone und iPad nur, löschen und umbenennen geht nur in der Verwaltung
+  const OBSIDIAN = { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:open-vault" };
   const obsidianZeilen = (tresor, dateien) => {
     const oeffnen = (ziel) => ({ aktion: "obsidian", parameter: { ziel } });
     return [

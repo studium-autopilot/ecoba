@@ -94,7 +94,8 @@ test("Obsidian: Einstellungen, Dateien mit ihrer Zahl und der Tresor mit Namen; 
     assert.ok(!z[id].unter, id + ": ohne zweite Zeile");
     assert.deepEqual(z[id].aktion, { aktion: "obsidian", parameter: { ziel: id } }, id);
   }
-  // was vorher unten in der Schublade stand: Zahnrad, Umschalter zur Dateiliste, Tresor wechseln
-  assert.deepEqual(P.OBSIDIAN, { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:switch-vault" });
+  // was vorher unten in der Schublade stand: Zahnrad, Umschalter zur Dateiliste, Tresore verwalten (wechseln, umbenennen,
+  // löschen; app:switch-vault kann auf iPhone und iPad nur wechseln)
+  assert.deepEqual(P.OBSIDIAN, { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:open-vault" });
   assert.equal(nach(P.obsidianZeilen("", 0)).dateien.wert, "0");
 });

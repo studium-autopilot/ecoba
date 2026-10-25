@@ -19,7 +19,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, veröffentlicht seit 18.10.2026, siehe [unten](#veranstaltungenjson) |
 | `kapitel.json` | nein | 512 KB | Kapitellisten der Module für den Lernplan (höchstens 60 Module), seit 19.10.2026, siehe [unten](#kapiteljson) |
 | `literatur.json` | nein | 512 KB | Literaturlisten der Module (höchstens 60 Module), Vertrag seit 24.10.2026, siehe [unten](#literaturjson) |
-| `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, UB-Kurse, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
+| `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, Kurse der Unibibliothek, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); das Plugin liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; das Plugin liest ihn noch nicht |
 
@@ -354,7 +354,7 @@ keine Beschreibungen, keine Namen von Personen. Plugins vor dieser Fassung kenne
 | Wert | Chip in der App | Inhalt |
 |---|---|---|
 | `vortrag` | Vorträge | Studium Generale, Vortragsreihen der Fakultät |
-| `ub` | UB-Kurse | Kurse und Führungen der Universitätsbibliothek |
+| `ub` | Unibibliothek (in der Auswahl „Kurse der Unibibliothek“) | Kurse und Führungen der Universitätsbibliothek |
 | `sport` | Hochschulsport | Kurse; `anmeldung.ab` erscheint als eigene Zeile „ab 17:00 · Buchungsstart“ am Tag der Buchung |
 | `welcome` | Welcome Center | Veranstaltungen des Welcome Centers; laut Uni vor allem für internationale Promovierende und Postdocs (darum steht das in `reihe`) |
 

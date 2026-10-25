@@ -1,20 +1,22 @@
-// Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit sieben Bildschirmen:
+// Einrichtung beim ersten Start (seit 0.3.0, ersetzt die Personalisieren-Karte). Ein Fenster mit acht Bildschirmen:
 //   1 Willkommen · 2 Studienbeginn · 3 Variante · 4 Über dich (Name, Zielnote) · 5 Dein Uni-Login (seit 0.4.8, freiwillig:
 //   verbindet ILIAS-Unterlagen, ILIAS-Kalender und Alma-Stundenplan auf einmal, uni-login.js; bis 0.4.7 je ein Bildschirm für
-//   Alma mit kopiertem Link und für ILIAS) · 6 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu
-//   das Design als drei Vorschau-Kacheln ohne Namen; darstellung.js) · 7 Fertig
-// Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 6“ mit Punkten (ab Bildschirm 2);
-// Zurück jederzeit, Überspringen auf 2–5 (die Darstellung hat immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
+//   Alma mit kopiertem Link und für ILIAS) · 6 Angebote der Uni (seit 25.10.2026: dieselben Häkchen wie die Karte auf Termine &
+//   Anmeldungen, angebote.js) · 7 Darstellung (seit 17.10.2026: Hell · Dunkel · Automatisch, seit 18.10.2026 dazu das Design
+//   als drei Vorschau-Kacheln ohne Namen; darstellung.js) · 8 Fertig
+// Regeln: je Bildschirm ein Satz und eine Hauptaktion; Fortschritt „Schritt n von 7“ mit Punkten (ab Bildschirm 2);
+// Zurück jederzeit, Überspringen auf 2–5 (Angebote und Darstellung haben immer einen Wert, dort nur Weiter); Esc, „Später“ oder ×
 // beenden ohne Verlust (Gespeichertes bleibt, nichts wird geschrieben; Darstellung und Design gelten sofort beim Antippen und
 // bleiben, sie stehen nur auf diesem Gerät, nicht in den Einstellungen); kein Autofokus (auf dem iPhone spränge sonst die
 // Tastatur auf); Tippflächen mindestens 44 px; auf dem iPhone bildschirmfüllend (eba-core.css Abschnitt 45).
 //
 // Zustand im synchronisierten System/Einstellungen.md (gilt für alle Geräte):
 //   einrichtung: offen | laeuft | fertig      (leer = offen)
-//   einrichtung_schritt: 1–7                  Bildschirm, an dem es beim nächsten Start weitergeht
-//   einrichtung_fassung: 2                    Zählung der Bildschirme (seit 0.4.8, bei jedem Speichern geschrieben). Fehlt sie,
+//   einrichtung_schritt: 1–8                  Bildschirm, an dem es beim nächsten Start weitergeht
+//   einrichtung_fassung: 3                    Zählung der Bildschirme (bei jedem Speichern geschrieben; 3 seit 25.10.2026 mit den
+//                                             Angeboten). 2 (seit 0.4.8): sieben Bildschirme, 6 Darstellung, 7 Fertig. Fehlt sie,
 //                                             stammt der Schritt aus 0.4.7 oder früher (5 Alma, 6 ILIAS, 7 Darstellung, 8 Fertig;
-//                                             0.3.x: Fertig war 6, 0.4.0–0.4.4: 7) und zustand() rechnet ihn um (ab 6 eins weniger).
+//                                             0.3.x: Fertig war 6, 0.4.0–0.4.4: 7). zustand() rechnet beides um (umrechnen).
 //   einrichtung_uebersprungen: [studienbeginn, variante, angaben, uni]   was übersprungen wurde (Fertig: „Später nachholen“);
 //                                             alma und ilias stammen aus Einrichtungen bis 0.4.7 und gelten weiter
 // Geschrieben wird nur nach einem Tipp auf Weiter/Überspringen/Los geht’s (Antworten sofort, kein Verlust beim Abbrechen).
@@ -37,11 +39,13 @@ module.exports = function (ctx) {
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const DASHBOARD = "Dashboard.md";
   const SITZUNG = "eba-einrichtung-gezeigt"; // sessionStorage: in dieser App-Sitzung schon automatisch gezeigt
-  const LETZTER = 7;
+  const LETZTER = 8;
   const UNI = 5; // Bildschirm Dein Uni-Login
-  const DARSTELLUNG = 6; // Bildschirm Darstellung
-  const FASSUNG = 2; // Zählung der Bildschirme seit 0.4.8 (einrichtung_fassung); ohne Feld: Zählung bis 0.4.7 (acht Bildschirme)
-  const ALT_MAX = 8; // höchster gespeicherter Schritt der alten Zählung (0.4.5–0.4.7: Fertig war 8)
+  const ANGEBOTE = 6; // Bildschirm Angebote der Uni
+  const DARSTELLUNG = 7; // Bildschirm Darstellung
+  const FASSUNG = 3; // Zählung der Bildschirme seit 25.10.2026 (einrichtung_fassung)
+  const FASSUNG_UNI = 2; // Zählung von 0.4.8 an (sieben Bildschirme, Fertig war 7); ohne Feld: Zählung bis 0.4.7
+  const ALT_MAX = 8; // höchster gespeicherter Schritt der Zählung bis 0.4.7 (0.4.5–0.4.7: Fertig war 8)
   const OHNE_ILIAS_BIS = 6; // fertig ohne Fassung bei Schritt ≤ 6: Einrichtung aus 0.3.x, damals ohne ILIAS-Schritt
   const PUNKT = { 2: "studienbeginn", 3: "variante", 4: "angaben", 5: "uni" }; // Schlüssel für einrichtung_uebersprungen
   // Variante: Werte, Reihenfolge und Wörter aus dem Feld-Register (felder.js), gleich wie Formular und Zeilen „Variante“. Erst bei
@@ -66,12 +70,20 @@ module.exports = function (ctx) {
   const pause = (ms) => new Promise((r) => ctx.zeit(r, ms));
 
   // ---------- Zustand ----------
+  // Gespeicherter Schritt einer älteren Zählung → Bildschirm heute (0 = ungültig). Fertig bleibt Fertig; wer bei der Darstellung
+  // stand, kommt zu den Angeboten, die jetzt davor liegen. Fassung 2: 7 Fertig → 8, sonst gleich. Ohne Fassung (bis 0.4.7):
+  // 5 Alma und 6 ILIAS → 5 Uni-Login, 7 Darstellung → 6, 8 Fertig → 8.
+  const umrechnen = (roh, fassung) => {
+    if (fassung >= FASSUNG) return roh >= 1 && roh <= LETZTER ? roh : 0;
+    const fertig = fassung >= FASSUNG_UNI ? 7 : ALT_MAX;
+    if (roh < 1 || roh > fertig) return 0;
+    if (roh === fertig) return LETZTER;
+    return fassung >= FASSUNG_UNI || roh < 6 ? roh : roh - 1;
+  };
   const zustand = () => {
     const fm = fmVon(), e = txt(fm.einrichtung).toLowerCase();
     const roh = Math.round(Number(fm.einrichtung_schritt) || 0), fassung = Math.round(Number(fm.einrichtung_fassung) || 0);
-    // Alte Zählung (bis 0.4.7): 5 Alma → 5 Uni-Login, 6 ILIAS → 5 Uni-Login, 7 Darstellung → 6, 8 Fertig → 7
-    const s = fassung >= FASSUNG ? (roh >= 1 && roh <= LETZTER ? roh : 0) : roh >= 1 && roh <= ALT_MAX ? (roh >= 6 ? roh - 1 : roh) : 0;
-    return { status: e === "fertig" || e === "laeuft" ? e : "offen", schritt: s, roh, fassung, uebersprungen: liste(fm.einrichtung_uebersprungen) };
+    return { status: e === "fertig" || e === "laeuft" ? e : "offen", schritt: umrechnen(roh, fassung), roh, fassung, uebersprungen: liste(fm.einrichtung_uebersprungen) };
   };
   const stundenplanDa = () => app.vault.getMarkdownFiles().some((f) => f.path.indexOf("Stundenplan/") === 0);
   // Offensichtlich schon eingerichtet (z. B. 0.2.0 mit Angaben, oder Stundenplan per Sync): Name oder Studienbeginn oder Stundenplan
@@ -88,7 +100,7 @@ module.exports = function (ctx) {
   const uebersprungen = (z, p) => z.uebersprungen.indexOf(p) >= 0;
   const almaOffen = () => { const z = zustand(); return z.status !== "fertig" || uebersprungen(z, "uni") || uebersprungen(z, "alma"); };
   // Schloss für ILIAS: ebenso, und wenn die Einrichtung vor 0.4.0 fertig wurde (nie bis hinter den ILIAS-Bildschirm gekommen)
-  const iliasOffen = () => { const z = zustand(); return z.status !== "fertig" || uebersprungen(z, "uni") || uebersprungen(z, "ilias") || (z.fassung < FASSUNG && z.roh <= OHNE_ILIAS_BIS); };
+  const iliasOffen = () => { const z = zustand(); return z.status !== "fertig" || uebersprungen(z, "uni") || uebersprungen(z, "ilias") || (z.fassung < FASSUNG_UNI && z.roh <= OHNE_ILIAS_BIS); };
 
   const schreiben = async (werte) => {
     const f = datei();
@@ -121,7 +133,7 @@ module.exports = function (ctx) {
       this.uebersprungen = z.uebersprungen.slice();
       // Einrichtung aus 0.3.x (fertig ohne Fassung bei Schritt ≤ 6, nie ein ILIAS-Bildschirm): gilt als Uni-Login übersprungen, damit
       // das Schloss auf Unterlagen bleibt, auch wenn ein erneuter Start vor Bildschirm 5 endet (mit Fassung entfiele die Erkennung)
-      if (z.status === "fertig" && z.fassung < FASSUNG && z.roh <= OHNE_ILIAS_BIS && this.uebersprungen.indexOf("uni") < 0) this.uebersprungen.push("uni");
+      if (z.status === "fertig" && z.fassung < FASSUNG_UNI && z.roh <= OHNE_ILIAS_BIS && this.uebersprungen.indexOf("uni") < 0) this.uebersprungen.push("uni");
       const heute = ctx.modell ? ctx.modell.daten().heute : "";
       const jetzt = heute ? ctx.modell.semesterNachName(ctx.modell.semesterAusDatum(heute)) : null;
       this.werte = {
@@ -433,6 +445,24 @@ module.exports = function (ctx) {
         return;
       }
 
+      if (s === ANGEBOTE) {
+        // Dieselben Häkchen wie die Karte auf Termine & Anmeldungen (angebote.js), angehakt die Vorgabe oder die gespeicherte
+        // Auswahl; darum nur Weiter. Weiter schreibt die Auswahl zusammen mit dem Stand. Ohne angebote.js (Update kommt gerade
+        // über den Sync) nur der Satz: Die Karte auf der Seite fragt später.
+        titel("Welche Angebote willst du sehen?", "Vorträge, Kurse und Sport der Uni erscheinen unter **Termine & Anmeldungen**.");
+        const A = ctx.angeboteAnzeige;
+        const wahl = A && A.wahl ? A.wahl(haupt.createDiv({ cls: "eba-ei-feld" })) : null;
+        this.felder.angebote = wahl;
+        this.aktion = async () => {
+          const ok = await this.speichernUndWeiter(wahl ? wahl.felder() : null, false);
+          if (ok && wahl) wahl.gespeichert();
+          return ok;
+        };
+        unten();
+        knopf("Weiter", "haupt", () => this.weiter());
+        return;
+      }
+
       if (s === DARSTELLUNG) {
         // Derselbe Umschalter und dieselben Design-Kacheln wie in Einstellungen & Hilfe (darstellung.js): Antippen schaltet
         // sofort um; Weiter speichert nur den Stand der Einrichtung
@@ -476,6 +506,8 @@ module.exports = function (ctx) {
       const vk = V("ilias-kalender"), sk = vk && ctx.iliasKalender ? vk.status() : { verbunden: false, extern: false };
       if (sk.extern) zeile("Abgaben", "über deinen Uni-Abgleich");
       else if (sk.verbunden) zeile("Abgaben", "ILIAS-Kalender verbunden");
+      const angebote = ctx.angeboteAnzeige && ctx.angeboteAnzeige.wahlZahl ? ctx.angeboteAnzeige.wahlZahl() : null;
+      if (angebote != null) zeile("Angebote der Uni", angebote ? `${angebote} gewählt` : "keine");
       const dm = ctx.darstellung ? ctx.darstellung.MODI.find((m) => m.wert === ctx.darstellung.modus()) : null;
       if (dm) zeile("Darstellung", dm.titel);
       // Übersprungenes: „Später nachholen“ mit Knopf (springt zu dem Bildschirm); Alma oder ILIAS aus 0.4.7 und früher holt der
