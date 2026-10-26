@@ -477,7 +477,9 @@ test("Kompakte Zeile: jeder Stand hat einen kurzen Wert und ein Symbol, darunter
   }
 });
 
-test("Claude (claude.js): Zeile im Format der Quellen; zu sehen ohne eigenen Server oder wenn dieses Gerät verbunden ist", () => {
+// Seit 26.10.2026 nur für Fortgeschrittene: Der API-Schlüssel soll nie wie der empfohlene Weg aussehen (der eigene Server fasst über
+// das Claude-Abo zusammen, der Schlüssel kostet je Zusammenfassung extra). Keine Zeile, solange dieses Gerät nicht verbunden ist.
+test("Claude (claude.js): Zeile nur, wenn dieses Gerät verbunden ist; Fenster warnt vor den Kosten und empfiehlt den eigenen Server", () => {
   const C = laden("claude").ctx.claude;
   const z = { verbunden: false, server: false };
   const m = C.erzeugen({
@@ -489,12 +491,12 @@ test("Claude (claude.js): Zeile im Format der Quellen; zu sehen ohne eigenen Ser
     claude: { verbunden: m.verbunden, status: m.status, zeile: m.zeile }, server: { sichtbar: () => z.server },
   } }).ctx.verbindungen;
   const v = W.liste.claude;
-  assert.equal(v.sichtbar(), true);
-  assert.deepEqual(lesen(W.zeile("claude")), { text: "Mit deinem eigenen API-Schlüssel fasst Claude deine Unterlagen zusammen, ohne Server.", symbol: "extern", ton: "leise",
-    pille: "", knopf: "Mehr erfahren", knopfAktion: "verbinden", link: "", linkAktion: "" });
+  assert.equal(v.sichtbar(), false, "ohne Server keine Zeile: der API-Schlüssel ist nicht der empfohlene Weg");
+  assert.match(v.kurz, /^\*\*Für Fortgeschrittene\.\*\* .*extra.*Empfohlen ist ein eigener Server: Er fasst über dein Claude-Abo zusammen/);
   assert.equal(v.schritte.length, 3);
   assert.match(v.schritte[1], /\[API keys\]\(https:\/\/platform\.claude\.com\/settings\/keys\)/);
-  assert.match(v.erklaerung, /Ein Claude-Abo geht hier nicht/);
+  assert.match(v.erklaerung, /Ein Claude-Abo geht mit dem Schlüssel nicht/);
+  assert.match(W.liste.server.beschreibung, /Claude-Abo/, "die Zeile des Servers sagt, dass er über das Abo zusammenfasst");
   z.server = true;
   assert.equal(v.sichtbar(), false, "der eigene Server fasst schon zusammen");
   z.verbunden = true;
@@ -502,4 +504,61 @@ test("Claude (claude.js): Zeile im Format der Quellen; zu sehen ohne eigenen Ser
   assert.deepEqual(v.schritte, []);
   assert.deepEqual(lesen(W.zeile("claude")), { text: "Tipp im PDF-Kasten einer Unterlage auf „Zusammenfassen“.", symbol: "haken", ton: "ok",
     pille: "verbunden", knopf: "", knopfAktion: "", link: "Mehr erfahren", linkAktion: "verbinden" });
+});
+
+// Fenster „Claude“ und „Eigener Server“ ohne Server: Der Schlüssel liegt eingeklappt hinter „Trotzdem …“, davor der Weg zum
+// eigenen Server; im Fenster des Servers führt nur ein leiser Link mit den Kosten zum Schlüssel (seit 26.10.2026)
+test("Fenster ohne Server: API-Schlüssel nur eingeklappt und über einen leisen Link, der eigene Server zuerst", () => {
+  const knoten = (tag) => {
+    const k = { tag, text: "", cls: "", kinder: [], hoerer: {} };
+    Object.assign(k, {
+      createEl(t, o) { const n = knoten(t); o = o || {}; n.text = o.text || ""; n.cls = o.cls || ""; k.kinder.push(n); return n; },
+      createDiv(o) { return k.createEl("div", o); },
+      addClass() {}, setText(t) { k.text = t; }, appendText(t) { k.kinder.push(Object.assign(knoten("#text"), { text: t })); },
+      addEventListener(n, f) { k.hoerer[n] = f; }, empty() { k.kinder = []; },
+    });
+    return k;
+  };
+  const alle = (k) => [k].concat(...k.kinder.map(alle));
+  const finde = (k, f) => alle(k).find(f);
+  const z = { verbunden: false }, aktionen = [], inhalt = [];
+  const W = laden("verbindungen", { kontext: {
+    obsidian: Object.assign({}, OBS, { Modal: class {
+      constructor() { this.contentEl = knoten("div"); this.titleEl = knoten("div"); this.modalEl = knoten("div"); }
+      open() { this.onOpen(); } close() { this.zu = true; } } }),
+    link: (aktion, p) => "obsidian://studium-autopilot?aktion=" + aktion + (p && p.id ? "&id=" + p.id : ""),
+    aktion: (name, p) => { aktionen.push([name, p.id]); },
+    claude: { verbunden: () => z.verbunden, status: () => ({ verbunden: z.verbunden, problem: "" }), fensterInhalt: (el) => { inhalt.push(el); },
+      zeile: () => ({ text: "x", symbol: "extern", pille: "", knopf: null, link: null }) },
+    server: { sichtbar: () => false, verbunden: () => false, status: () => ({ verbunden: false }), fensterInhalt: async () => {},
+      zeile: () => ({ text: "x", symbol: "extern", pille: "", knopf: null, link: null }) },
+  } }).ctx.verbindungen;
+  const vorher = global.document;
+  global.document = { createElement: () => ({ querySelector: () => null }) };
+  try {
+    const c = W.fensterOeffnen(W.liste.claude, { id: "claude" });
+    const kinder = c.contentEl.kinder;
+    assert.match(kinder[0].kinder.map((k) => k.text).join(""), /^Für Fortgeschrittene\. /, "zuerst die Warnung");
+    const server = finde(c.contentEl, (k) => k.tag === "a" && k.text === "Lieber einen eigenen Server einrichten");
+    const klappe = kinder.find((k) => k.tag === "details");
+    assert.ok(server && klappe && kinder.indexOf(klappe) > 1, "der Weg zum Server vor dem eingeklappten Schlüssel");
+    assert.equal(klappe.kinder[0].text, "Trotzdem mit API-Schlüssel verbinden");
+    assert.ok(finde(klappe, (k) => k.tag === "ol") && alle(klappe).indexOf(inhalt[0]) >= 0, "Schritte und Feld nur eingeklappt");
+    server.hoerer.click({ preventDefault() {} });
+    assert.ok(c.zu);
+    assert.deepEqual(aktionen.pop(), ["verbinden", "server"]);
+
+    const s = W.fensterOeffnen(W.liste.server, { id: "server" });
+    const zuletzt = s.contentEl.kinder[s.contentEl.kinder.length - 1].kinder[0];
+    assert.match(zuletzt.text, /^Für Fortgeschrittene: ohne Server mit API-Schlüssel, kostet je Zusammenfassung extra$/, "ganz unten und leise");
+    zuletzt.hoerer.click({ preventDefault() {} });
+    assert.deepEqual(aktionen.pop(), ["verbinden", "claude"]);
+
+    z.verbunden = true;
+    const v = W.fensterOeffnen(W.liste.claude, { id: "claude" });
+    assert.ok(!finde(v.contentEl, (k) => k.tag === "details"), "verbunden: nichts eingeklappt");
+    assert.ok(!finde(v.contentEl, (k) => k.text === "Lieber einen eigenen Server einrichten"));
+    const s2 = W.fensterOeffnen(W.liste.server, { id: "server" });
+    assert.ok(!finde(s2.contentEl, (k) => /^Für Fortgeschrittene/.test(k.text)), "verbunden steht die Zeile „Claude“ schon da");
+  } finally { global.document = vorher; }
 });

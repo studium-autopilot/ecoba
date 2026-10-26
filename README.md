@@ -98,20 +98,21 @@ Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
 ## Zusammenfassen mit Claude (freiwillig)
 
 Bei jeder Unterlage füllt **Zusammenfassen** die Abschnitte „Das Wichtigste“, „Zu tun“ und „Offene Fragen“, mit Seitenangaben,
-die in die PDF springen. Dafür verbindest du Claude mit einem eigenen API-Schlüssel aus der
-[Claude Console](https://platform.claude.com/settings/keys): unter **Einstellungen & Hilfe** → **Verbindungen** → Claude. Das geht
-auf jedem Gerät, auch auf iPhone und iPad, ohne Server.
+die in die PDF springen. Das macht Claude auf deinem eigenen Server (siehe unten) über dein Claude-Abo, ohne Kosten je
+Unterlage.
 
-- **Kostet:** meist 0,05 bis 0,50 $ je Zusammenfassung von deinem Guthaben bei Anthropic; bei dicken Unterlagen fragt Obsidian
-  vorher. Studium Autopilot bekommt nichts davon.
-- **Kein Abo:** Claude Pro oder Max geht dafür nicht, Anthropic erlaubt Abos nur in Claude selbst.
-- **Deine Daten:** Nur die Unterlage, die du zusammenfassen lässt, geht an Anthropic. Mehr in
-  [docs/datenschutz.md](docs/datenschutz.md#claude-mit-eigenem-api-schlüssel).
+- **Für Fortgeschrittene, ohne Server:** Mit einem eigenen API-Schlüssel aus der Claude Console geht es auch, auf jedem Gerät.
+  Dann kostet aber jede Zusammenfassung extra, meist 0,05 bis 0,50 $ von deinem Guthaben bei Anthropic; dein Claude-Abo zählt
+  dabei nicht, Anthropic erlaubt Abos nur in Claude selbst. Der Weg steht ganz unten im Fenster **Eigener Server**, Anleitung in
+  [docs/installation.md](docs/installation.md#api-schlüssel-für-claude-für-fortgeschrittene).
+- **Deine Daten:** Nur die Unterlage, die du zusammenfassen lässt, geht an Claude. Mehr in
+  [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
 
 ## Für Technische: eigener Server mit Claude
 
-Wer mehr will als die Termine für alle, lässt sich einen eigenen, kostenlosen Server einrichten. Darauf sucht Claude mit deinem
-eigenen Abo in deinen Uni-Mails und in Gmail nach Terminen, Fristen und Hinweisen, die nur dich betreffen.
+Wer mehr will als die Termine für alle, lässt sich einen eigenen, kostenlosen Server einrichten. Darauf fasst Claude mit deinem
+eigenen Abo deine Unterlagen zusammen und sucht in deinen Uni-Mails und in Gmail nach Terminen, Fristen und Hinweisen, die nur
+dich betreffen.
 Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an, ohne Doppel zu den Terminen für alle.
 
 - **Kostet nichts:** ein Server im Always-Free-Angebot von Oracle (2 OCPU, 12 GB), ohne Upgrade auf Pay-As-You-Go. Ein Budget

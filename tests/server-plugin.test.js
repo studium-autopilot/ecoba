@@ -910,12 +910,13 @@ test("Verbindungen: ohne Server leise „Für Technische“ mit Mehr erfahren, v
   const echt = S.erzeugen(abhBauen(tresor()));
   const ohne = aufbau({ sichtbar: echt.sichtbar, verbunden: echt.verbunden, status: echt.status, zeile: echt.zeile });
   const z0 = ohne.zeile("server");
-  assert.match(z0.text, /^Für Technische: Claude sucht auf einem eigenen, kostenlosen Server/);
+  assert.match(z0.text, /^Für Technische: Ein eigener, kostenloser Server fasst mit deinem Claude-Abo Unterlagen zusammen/);
   assert.deepEqual([z0.pille, z0.symbol, z0.ton, z0.link], ["", "extern", "leise", ""]);
   assert.match(z0.knopf, /aktion=verbinden&id=server">Mehr erfahren</);
   assert.doesNotMatch(z0.knopf, /cta/, "leise, kein Hauptknopf");
   assert.match(ohne.liste.server.schritte[0], /\*\*Prompt kopieren\*\*/);
-  assert.match(ohne.liste.server.erklaerung, /Claude Pro oder Max und ein Oracle-Konto, Gmail ist freiwillig/);
+  assert.match(ohne.liste.server.erklaerung, /^Kostet nichts extra: Claude läuft über dein Abo \(Claude Pro oder Max\)/);
+  assert.match(ohne.liste.server.erklaerung, /ein Oracle-Konto, Gmail ist freiwillig/);
   const anderswo = aufbau({ sichtbar: () => true, verbunden: () => false, status: () => ({ verbunden: false }),
     zeile: () => ({ text: "Auf einem anderen Gerät verbunden.", symbol: "haken", pille: "", knopf: null, link: MEHR }) });
   assert.match(anderswo.liste.server.schritte[0], /fern\.sh verbinden/, "anderes Gerät: Schritte zum Verbinden");

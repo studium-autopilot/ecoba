@@ -910,7 +910,7 @@ module.exports = function (ctx) {
       const s = status(), w = s.werte || {};
       const stand = abh.standText(s);
       switch (s.zustand) {
-        case "nicht-verbunden": return { text: "Für Technische: Claude sucht auf einem eigenen, kostenlosen Server in deinen Uni-Mails nach Terminen.", symbol: "extern", pille: "", knopf: { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "server" } }, link: null };
+        case "nicht-verbunden": return { text: "Für Technische: Ein eigener, kostenloser Server fasst mit deinem Claude-Abo Unterlagen zusammen und sucht in deinen Uni-Mails nach Terminen.", symbol: "extern", pille: "", knopf: { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "server" } }, link: null };
         case "anderswo": return { text: "Auf einem anderen Gerät verbunden. Neue Termine kommen über deinen Sync.", symbol: "haken", pille: "", knopf: null, link: neueHinweise() ? HINWEISE_ANSEHEN : MEHR };
         case "laeuft": return { text: stand.text, symbol: stand.symbol, pille: "an", knopf: null, link: MEHR };
         case "anderes-geraet": return { text: stand.text, symbol: stand.symbol, pille: "an",

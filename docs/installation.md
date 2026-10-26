@@ -281,16 +281,19 @@ Neue Versionen früher ausprobieren: In der Zeile **Studium Autopilot** auf **Me
 
 </details>
 
-## Zusammenfassen mit Claude (freiwillig)
+## API-Schlüssel für Claude (für Fortgeschrittene)
 
-Damit **Zusammenfassen** bei einer Unterlage ohne eigenen Server geht, verbindest du Claude mit einem eigenen API-Schlüssel:
+Empfohlen ist der eigene Server (unten): Er fasst deine Unterlagen über dein Claude-Abo zusammen, ohne Kosten je Unterlage. Ohne
+Server geht **Zusammenfassen** auch mit einem eigenen API-Schlüssel, dann kostet aber jede Zusammenfassung extra (meist 0,05 bis
+0,50 $ von deinem Guthaben bei Anthropic):
 
 1. Auf [platform.claude.com](https://platform.claude.com) ein Konto anlegen und unter
    [Billing](https://platform.claude.com/settings/billing) Guthaben kaufen.
 2. Unter [API keys](https://platform.claude.com/settings/keys) auf **Create key** tippen, einen Namen eingeben und den Schlüssel
    kopieren.
-3. In Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** in der Zeile **Claude** auf **Mehr erfahren** tippen, den
-   Schlüssel einfügen und **Verbinden** tippen.
+3. In Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server** öffnen, ganz unten
+   **Für Fortgeschrittene: ohne Server mit API-Schlüssel** tippen, dann **Trotzdem mit API-Schlüssel verbinden**, den Schlüssel
+   einfügen und **Verbinden** tippen. Danach steht die Zeile **Claude** unter Verbindungen.
 
 Jedes Gerät verbindest du selbst; der Schlüssel kommt nicht über deinen Sync mit. Ein Ausgabenlimit stellst du in der Console
 unter Billing ein. Mit einem Abo (Claude Pro oder Max) geht es nicht, das erlaubt Anthropic nur in Claude selbst.
@@ -298,6 +301,6 @@ unter Billing ein. Mit einem Abo (Claude Pro oder Max) geht es nicht, das erlaub
 ## Eigener Server mit Claude (für Technische)
 
 Freiwillig und erst, wenn die Einrichtung in Obsidian fertig ist. Claude richtet dir einen kostenlosen Server bei Oracle ein,
-der in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop und was du dafür brauchst, findest du im
+der deine Unterlagen über dein Claude-Abo zusammenfasst und in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop und was du dafür brauchst, findest du im
 README unter „Für Technische: eigener Server mit Claude“. Verbunden wird jedes Gerät mit einem eigenen Link vom Server;
 danach steht unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**.

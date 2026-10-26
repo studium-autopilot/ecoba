@@ -207,4 +207,10 @@ cssclasses:
 >       note.datum: 95
 > ```
 
+## Ohne Modul
+
+```eba-unterlagen ohne-modul
+Unterlagen ohne Modul erscheinen hier, sobald Studium Autopilot läuft.
+```
+
 <p class="eba-hinweis">ILIAS, einordnen und annotieren: <a class="internal-link" data-href="Einstellungen & Hilfe#Hilfe" href="Einstellungen & Hilfe#Hilfe">Hilfe</a></p>

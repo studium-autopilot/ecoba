@@ -14,11 +14,16 @@
 //  5. Zwei Fassungen derselben Unterlage (seit 24.10.2026, fassung.js familien): Hast du eine Datei bearbeitet und kam eine neue
 //     Fassung daneben, stehen beide untereinander, deine zuerst, unter dem Titel beschriftet („Deine bearbeitete Fassung“, „Neue
 //     Fassung vom …“). Vorher standen zwei Zeilen mit derselben Nummer und demselben Titel da.
-// Reine Logik (artVon, woerter, semesterRang, gliedern) für tests/unterlagenliste.test.js.
+//  6. Ohne Modul (seit 26.10.2026): ```eba-unterlagen ohne-modul``` (Argument der Kopfzeile, blockArgument) auf der Seite
+//     Unterlagen zeigt alle Unterlagen ohne Kürzel
+//     (Ordner „Unterlagen/Ohne Modul“), etwa Prüfungsordnung, Modulhandbuch oder Folien einer Infoveranstaltung. Vorher standen
+//     sie nirgends als Liste.
+// Reine Logik (artVon, woerter, semesterRang, gliedern, gehoert) für tests/unterlagenliste.test.js.
 // Stil: eba-core.css Abschnitt 58.8 (eba-ul-*). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast.
 module.exports = function (ctx) {
   const app = window.app;
   const SPRACHE = "eba-unterlagen";
+  const OHNE_MODUL = "ohne-modul"; // Wort im Codeblock statt eines Kürzels
   const LINK = "obsidian://studium-autopilot?aktion=";
   // Reihenfolge und Name des Abschnitts (wie ARTEN in unterlagen.js)
   const ARTEN = [
@@ -54,6 +59,8 @@ module.exports = function (ctx) {
     for (const w of text(s).toLowerCase().split(/[^0-9a-zäöüß]+/)) if (w && w !== c && !FUELL.test(w) && aus.indexOf(w) < 0) aus.push(w);
     return aus;
   };
+  // Steht die Notiz in der Liste? code = Kürzel des Moduls oder OHNE_MODUL (dann alle Unterlagen ohne Kürzel)
+  const gehoert = (fm, code) => !!fm && fm.typ === "unterlage" && (code === OHNE_MODUL ? !text(fm.code) : text(fm.code) === code);
   // Rang eines Semesters im Titel zum Sortieren (neueste zuerst): „WS 2018-19“ → 2018,5, „SS 2019“ → 2019; ohne Jahr -1
   const semesterRang = (s) => {
     const m = text(s).match(/(19|20)\d{2}/);
@@ -150,14 +157,18 @@ module.exports = function (ctx) {
     el.empty();
     const notiz = app.vault.getAbstractFileByPath(c.sourcePath);
     const fm = fmVon(notiz);
-    const code = text(quelle) || text(fm.code) || (notiz && fm.typ === "modul" ? notiz.basename.split(" ")[0] : "");
+    const M = ctx.modell;
+    // Argument der Kopfzeile; findet blockArgument beim Neuzeichnen den Abschnitt nicht, erkennt der Ersatztext im Block ihn
+    const ohne = (M && M.blockArgument && M.blockArgument(el, c, SPRACHE, [OHNE_MODUL], "") === OHNE_MODUL) || /^Unterlagen ohne Modul/.test(text(quelle));
+    const code = ohne ? OHNE_MODUL : text(quelle) || text(fm.code) || (notiz && fm.typ === "modul" ? notiz.basename.split(" ")[0] : "");
     const box = el.createDiv({ cls: "eba-ul" });
     if (!code) { box.createDiv({ cls: "eba-ul-leer", text: "Nur auf Modulseiten." }); return; }
-    const eintraege = app.vault.getMarkdownFiles().map((f) => ({ f, fm: fmVon(f) }))
-      .filter((x) => x.fm.typ === "unterlage" && text(x.fm.code) === code);
-    const M = ctx.modell;
-    const G = gliedern(eintraege, code, M && M.uebung ? (x) => { const u = M.uebung(x.f); return !!(u && u.erledigt); } : null);
-    if (!G.length) { box.createDiv({ cls: "eba-ul-leer", text: "Noch keine Unterlagen." }); return; }
+    const eintraege = app.vault.getMarkdownFiles().map((f) => ({ f, fm: fmVon(f) })).filter((x) => gehoert(x.fm, code));
+    const G = gliedern(eintraege, ohne ? "" : code, M && M.uebung ? (x) => { const u = M.uebung(x.f); return !!(u && u.erledigt); } : null);
+    if (!G.length) {
+      box.createDiv({ cls: "eba-ul-leer", text: ohne ? "Unterlagen ohne Modul, etwa Prüfungsordnung oder Modulhandbuch, erscheinen hier." : "Noch keine Unterlagen." });
+      return;
+    }
     for (const g of G) {
       const sek = box.createDiv({ cls: "eba-ul-gruppe" + (g.mitNr ? " mit-nr" : "") + (g.mitLoesung ? " mit-loesung" : "") });
       sek.createDiv({ cls: "eba-ul-kopf", text: g.name });
@@ -210,5 +221,5 @@ module.exports = function (ctx) {
     ctx.an(app.metadataCache, "resolved", () => { if (!einmal) { einmal = true; bald(); } });
   };
 
-  return { registrieren, zeichnen, artVon, woerter, semesterRang, gliedern };
+  return { registrieren, zeichnen, artVon, woerter, semesterRang, gliedern, gehoert, OHNE_MODUL };
 };

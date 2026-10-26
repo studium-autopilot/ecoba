@@ -11,6 +11,11 @@ geht dafür nicht: Anthropic erlaubt Apps anderer Anbieter weder die Anmeldung m
 ([Legal and compliance](https://code.claude.com/docs/en/legal-and-compliance)); ein Schlüssel aus der Console ist dafür gedacht und
 rechnet über das Guthaben dieses Kontos ab. Gibt es einen eigenen Server, geht er vor (siehe [„PDF-Kasten“](bedien-bausteine.md)).
 
+Seit 26.10.2026 ist der Schlüssel nur für Fortgeschrittene und soll nie wie der empfohlene Weg aussehen: Jede Zusammenfassung
+kostet extra, der eigene Server fasst über das Claude-Abo zusammen. Die Zeile „Claude“ steht darum nur da, wenn dieses Gerät
+verbunden ist; sonst erreicht man das Fenster über den leisen Link ganz unten im Fenster „Eigener Server“, und Schritte und Feld
+liegen dort eingeklappt unter „Trotzdem mit API-Schlüssel verbinden“ (`InfoFenster` in `verbindungen.js`).
+
 - **Verbinden** (Zeile und Fenster „Claude“ unter Verbindungen, `ctx.claude.fensterInhalt`): Schlüssel einfügen, Leerraum fällt weg
   (`schluesselNormal`); `schluesselFehler` lehnt ohne Anfrage ab, was nicht mit `sk-ant-` beginnt, Abo-Token (`sk-ant-oat…`) und
   Admin-Schlüssel. Dann `GET /v1/models?limit=1` (kostet nichts). Antwortet Anthropic „not scoped to a workspace“, holt das Plugin

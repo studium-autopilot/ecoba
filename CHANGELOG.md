@@ -2,7 +2,12 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
-## Unveröffentlicht
+## 0.6.14 – Zusammenfassen mit deinem Claude-Abo
+
+- **Neu:** Unterlagen, die zu keinem Modul gehören, etwa Modulhandbuch, Prüfungsordnung oder Folien einer Infoveranstaltung,
+  stehen auf der Seite **Unterlagen** jetzt in einer eigenen Liste „Ohne Modul“.
+- **Übersichtlicher:** **Eigener Server** sagt jetzt, dass er deine Unterlagen über dein Claude-Abo zusammenfasst. Ein
+  Schlüssel bei Anthropic, der je Zusammenfassung extra kostet, steht nur noch für Fortgeschrittene in seinem Fenster.
 
 ## 0.6.13 – Karteikarten üben, PDFs wieder ganz lesbar
 

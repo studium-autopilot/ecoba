@@ -10,7 +10,7 @@
 //
 // Registry VERBINDUNGEN: { id, name, satz, kurz?, erklaerung, schritte, art ("link" | "anmeldung" | "konto" | "zentral" | "claude" | "server" | "vorlage"), status(), gesperrt(),
 //   sichtbar()? (fehlt = immer; „Noten & Anmeldungen“ unter ihren Bedingungen, „Eigener Server“, wenn server.js geladen ist,
-//   „Claude“ mit claude.js, wenn dieses Gerät verbunden ist oder kein Server da ist),
+//   „Claude“ mit claude.js nur, wenn dieses Gerät verbunden ist; sonst über einen leisen Link im Fenster „Eigener Server“),
 //   vorschau? ("woche": Schloss liegt auf einem ausgegrauten Beispiel-Stundenplan), anreiz? (Überschrift dazu), schlossKnopf? (Text
 //   des Knopfs der Schloss-Karte), trennenText? (Rückfrage beim Trennen), pruefen(link)?, verbinden(link)?, trennen()?, aktualisieren(parameter)? }
 //   symbol? und beschreibung? (nur Zeilen der Übersicht: Symbol der Sache aus SYMBOLE, was sie tut in wenigen Wörtern)
@@ -391,8 +391,10 @@ module.exports = function (ctx) {
       async aktualisieren() { if (ctx.zentral) await ctx.zentral.abrufen({ manuell: true }); },
     },
     // Claude ohne Server (claude.js, seit 0.6.3): eigener API-Schlüssel aus der Claude Console für „Zusammenfassen“ im PDF-Kasten.
-    // Zu sehen, wenn dieses Gerät verbunden ist oder kein eigener Server da ist (der fasst schon zusammen). Zeile und Fenster
-    // (Feld für den Schlüssel, Verbrauch, Trennen) liefert ctx.claude (zeile(), fensterInhalt()).
+    // Seit 26.10.2026 nur für Fortgeschrittene, nie als empfohlener Weg: Der eigene Server fasst über das Claude-Abo zusammen, der
+    // Schlüssel kostet je Zusammenfassung extra. Darum steht die Zeile nur da, wenn dieses Gerät verbunden ist; sonst führt nur ein
+    // leiser Link im Fenster „Eigener Server“ hierher, und Schritte und Feld liegen unter „Trotzdem mit API-Schlüssel verbinden“
+    // (InfoFenster). Zeile und Fenster (Feld für den Schlüssel, Verbrauch, Trennen) liefert ctx.claude (zeile(), fensterInhalt()).
     claude: {
       id: "claude", name: "Claude", art: "claude", symbol: "ki",
       satz: "Claude fasst deine Unterlagen zusammen.",
@@ -400,7 +402,7 @@ module.exports = function (ctx) {
       get kurz() {
         return ctx.claude && ctx.claude.verbunden()
           ? "Tipp im PDF-Kasten einer Unterlage auf **Zusammenfassen**, dann füllt Claude „Das Wichtigste“, „Zu tun“ und „Offene Fragen“."
-          : "Mit deinem eigenen API-Schlüssel fasst Claude deine Unterlagen zusammen, ohne Server und auch auf iPhone und iPad.";
+          : "**Für Fortgeschrittene.** Mit einem API-Schlüssel zahlst du jede Zusammenfassung extra, meist 0,05 bis 0,50 $ von einem Guthaben bei Anthropic. Dein Claude-Abo zählt hier nicht. Empfohlen ist ein eigener Server: Er fasst über dein Claude-Abo zusammen, ohne Kosten je Unterlage.";
       },
       // Schritte zum Schlüssel, solange keiner da ist oder Anthropic ihn nicht mehr annimmt
       get schritte() {
@@ -415,27 +417,28 @@ module.exports = function (ctx) {
       get erklaerung() {
         return ctx.claude && ctx.claude.verbunden()
           ? "Der Schlüssel liegt nur im Schlüsselbund dieses Geräts, die Unterlage geht nur an Anthropic. Ein Ausgabenlimit stellst du in der Console unter Billing ein."
-          : "Der Schlüssel bleibt im Schlüsselbund dieses Geräts, die Unterlage geht nur an Anthropic. Eine Zusammenfassung kostet meist 0,05 bis 0,50 $ von deinem Guthaben, Studium Autopilot bekommt nichts davon. Ein Claude-Abo geht hier nicht: Anthropic erlaubt es nur in Claude selbst.";
+          : "Der Schlüssel bleibt im Schlüsselbund dieses Geräts, die Unterlage geht nur an Anthropic, Studium Autopilot bekommt nichts davon. Ein Claude-Abo geht mit dem Schlüssel nicht: Anthropic erlaubt Abos nur in Claude selbst, und auf deinem eigenen Server läuft Claude selbst.";
       },
       trennenText: "Der Schlüssel wird auf diesem Gerät gelöscht. Deine Zusammenfassungen bleiben.",
-      sichtbar() { return !!ctx.claude && (ctx.claude.verbunden() || !(ctx.server && ctx.server.sichtbar())); },
+      sichtbar() { return !!ctx.claude && ctx.claude.verbunden(); },
       status() { return ctx.claude ? ctx.claude.status() : { verbunden: false }; },
       gesperrt() { return false; },
       async trennen() { if (ctx.claude) await ctx.claude.trennen(); },
     },
-    // Eigener Server mit Claude (server.js): Termine und Hinweise aus Uni-Mails und Kursdaten. Ohne Server (kein Gerät verbunden,
-    // keine server.json per Sync) eine leise Zeile „Für Technische“ mit „Mehr erfahren“: Fenster mit Schritten und dem Knopf
-    // „Prompt kopieren“ für Claude Desktop. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert
-    // ctx.server (zeile(), fensterInhalt()).
+    // Eigener Server mit Claude (server.js): Zusammenfassungen über das Claude-Abo, Termine und Hinweise aus Uni-Mails und
+    // Kursdaten. Seit 26.10.2026 der empfohlene Weg zum Zusammenfassen (der API-Schlüssel kostet je Unterlage extra); die Texte
+    // nennen das Abo zuerst. Ohne Server (kein Gerät verbunden, keine server.json per Sync) eine leise Zeile „Für Technische“ mit
+    // „Mehr erfahren“: Fenster mit Schritten, dem Knopf „Prompt kopieren“ für Claude Desktop und ganz unten dem leisen Link zum
+    // API-Schlüssel. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert ctx.server (zeile(), fensterInhalt()).
     server: {
       id: "server", name: "Eigener Server", art: "server", symbol: "server",
-      satz: "Dein Server findet mit Claude Termine in deinen Uni-Mails.",
-      beschreibung: "Findet Termine in deinen Uni-Mails",
+      satz: "Dein Server fasst mit deinem Claude-Abo Unterlagen zusammen und findet Termine in deinen Uni-Mails.",
+      beschreibung: "Fasst Unterlagen mit deinem Claude-Abo zusammen",
       // Ohne Server (kein Gerät verbunden): Weg zur Einrichtung mit Claude Desktop; sonst Stand bzw. Verbinden dieses Geräts
       get kurz() {
         return ctx.server && !ctx.server.sichtbar()
-          ? "Claude richtet dir am Computer einen eigenen, kostenlosen Server ein, der in deinen Uni-Mails nach Terminen für dich sucht."
-          : "Dein eigener Server sucht mit Claude in deinen Uni-Mails nach Terminen, neue landen von selbst unter Termine.";
+          ? "Claude richtet dir am Computer einen eigenen, kostenlosen Server ein. Er fasst deine Unterlagen über dein Claude-Abo zusammen, ohne Kosten je Unterlage, und sucht in deinen Uni-Mails nach Terminen für dich."
+          : "Dein eigener Server fasst deine Unterlagen über dein Claude-Abo zusammen und sucht in deinen Uni-Mails nach Terminen, neue landen von selbst unter Termine.";
       },
       get schritte() {
         if (!ctx.server || ctx.server.verbunden()) return [];
@@ -453,7 +456,7 @@ module.exports = function (ctx) {
       },
       get erklaerung() {
         return ctx.server && !ctx.server.sichtbar()
-          ? "Kostet nichts: ein Server im Always-Free-Angebot von Oracle ohne Upgrade, ein Budget warnt ab dem ersten Cent. Du brauchst Claude Pro oder Max und ein Oracle-Konto, Gmail ist freiwillig."
+          ? "Kostet nichts extra: Claude läuft über dein Abo (Claude Pro oder Max), der Server im Always-Free-Angebot von Oracle ohne Upgrade, ein Budget warnt ab dem ersten Cent. Du brauchst dazu ein Oracle-Konto, Gmail ist freiwillig."
           : "Die Schlüssel liegen nur im Schlüsselbund dieses Geräts, die Daten kommen verschlüsselt. Ein Gerät reicht, die Termine kommen über deinen Sync auf die anderen.";
       },
       trennenText: "Die Schlüssel werden auf diesem Gerät gelöscht. Deine Termine bleiben, dein Server läuft weiter.",
@@ -613,6 +616,12 @@ module.exports = function (ctx) {
     return b;
   };
 
+  // Leiser Link zu einer anderen Verbindung (Eigener Server ↔ API-Schlüssel): schließt dieses Fenster und öffnet das andere
+  const wechselLink = (m, text, id) => {
+    const a = m.contentEl.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text, href: "#" });
+    a.addEventListener("click", (e) => { e.preventDefault(); m.close(); ctx.aktion("verbinden", { id }); });
+  };
+
   // Erklärung ohne Eingabe (zentrale Daten mit Schaltern, Studium Autopilot); unten höchstens der Knopf der Zeile, schließen über ×
   class InfoFenster extends Modal {
     constructor(v) { super(app); this.v = v; }
@@ -621,16 +630,25 @@ module.exports = function (ctx) {
       this.modalEl.addClass("eba-modal", "eba-modal-verbinden");
       this.titleEl.setText(v.name);
       if (v.kurz) fett(this.contentEl.createEl("p", { cls: "eba-modal-text" }), v.kurz);
-      schritteZeigen(this.contentEl, v);
+      // Claude nicht verbunden (seit 26.10.2026): erst der Weg zum eigenen Server, Schritte und Feld für den Schlüssel nur
+      // eingeklappt, damit niemand den API-Schlüssel für den empfohlenen Weg hält
+      const claudeZu = v.art === "claude" && !!ctx.claude && !ctx.claude.verbunden();
+      if (claudeZu && ctx.server) wechselLink(this, "Lieber einen eigenen Server einrichten", "server");
+      const unten = claudeZu ? this.contentEl.createEl("details", { cls: "eba-modal-mehr" }) : this.contentEl;
+      if (claudeZu) unten.createEl("summary", { text: "Trotzdem mit API-Schlüssel verbinden" });
+      schritteZeigen(unten, v);
       if (v.art === "zentral") zentralSchalter(this.contentEl);
       if (v.art === "volltext") volltextSchalter(this.contentEl);
       if (v.art === "server" && ctx.server) ctx.server.fensterInhalt(this.contentEl.createDiv()).catch((e) => console.error("Eigener Server: Fenster", e));
       // Claude: nach dem Verbinden neu zeichnen (Texte und Inhalt hängen davon ab)
-      if (v.art === "claude" && ctx.claude) ctx.claude.fensterInhalt(this.contentEl.createDiv(), () => { this.contentEl.empty(); this.onOpen(); });
+      if (v.art === "claude" && ctx.claude) ctx.claude.fensterInhalt(unten.createDiv(), () => { this.contentEl.empty(); this.onOpen(); });
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
       // Studium Autopilot: Schalter „Beta-Versionen“ und „Mitzählen“ bewusst nur unter „Mehr erfahren“ (update.js)
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.zaehlenSchalter) ctx.update.zaehlenSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
+      // Noch kein Server: ganz unten und leise der Weg ohne Server, mit den Kosten im Text (die Zeile „Claude“ steht dann nicht da)
+      if (v.art === "server" && ctx.server && !ctx.server.sichtbar() && ctx.claude && !ctx.claude.verbunden())
+        wechselLink(this, "Für Fortgeschrittene: ohne Server mit API-Schlüssel, kostet je Zusammenfassung extra", "claude");
       zeilenKnopf(this, v);
     }
     onClose() { this.contentEl.empty(); if (fenster === this) fenster = null; }

@@ -297,7 +297,7 @@ test("Zusammenfassen: lehnt Anthropic die PDF ab, geht dieselbe Anfrage einmal n
 test("Zeile: nicht verbunden, verbunden, Verbrauch, Guthaben leer und Schlüssel abgelehnt bis zum nächsten Erfolg, Trennen", async () => {
   const MEHR = { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "claude" } };
   let x = motor([]);
-  assert.deepEqual(x.m.zeile(), { text: "Mit deinem eigenen API-Schlüssel fasst Claude deine Unterlagen zusammen, ohne Server.", symbol: "extern", pille: "", knopf: MEHR, link: null });
+  assert.deepEqual(x.m.zeile(), { text: "Für Fortgeschrittene: Mit einem eigenen API-Schlüssel kostet jede Zusammenfassung extra.", symbol: "extern", pille: "", knopf: MEHR, link: null });
 
   x = await verbunden([fehler(400, GUTHABEN), { status: 200, text: antwort() }, fehler(401, "invalid x-api-key", { type: "authentication_error" })]);
   assert.deepEqual(x.m.zeile(), { text: "Tipp im PDF-Kasten einer Unterlage auf „Zusammenfassen“.", symbol: "haken", pille: "an", knopf: null, link: MEHR });

@@ -162,6 +162,23 @@ test("Lab: eigener Abschnitt nach dem Tutorium, vor den Altklausuren", () => {
   assert.equal(U.artVon("lab"), "Lab");
 });
 
+test("Ohne Modul: alle Unterlagen ohne Kürzel, ein Kürzel nimmt nur seine eigenen", () => {
+  const fm = (code) => ({ typ: "unterlage", code, art: "Sonstiges" });
+  assert.equal(U.gehoert(fm(""), U.OHNE_MODUL), true);
+  assert.equal(U.gehoert({ typ: "unterlage", art: "Folien" }, U.OHNE_MODUL), true, "Feld fehlt ganz");
+  assert.equal(U.gehoert(fm("X100"), U.OHNE_MODUL), false);
+  assert.equal(U.gehoert({ typ: "modul" }, U.OHNE_MODUL), false, "nur typ: unterlage");
+  assert.equal(U.gehoert(fm("X100"), "X100"), true);
+  assert.equal(U.gehoert(fm(""), "X100"), false);
+  assert.equal(U.gehoert(null, U.OHNE_MODUL), false);
+  const ohne = (name, f) => ({ f: { basename: name, path: `Unterlagen/Ohne Modul/${name}.md` }, fm: Object.assign({ typ: "unterlage", status: "neu", datei: `[[${name}.pdf]]` }, f) });
+  const G = U.gliedern([
+    ohne("Modulhandbuch", { art: "Sonstiges", titel: "Modulhandbuch" }),
+    ohne("Folien Infoveranstaltung", { art: "Folien", titel: "Infoveranstaltung" }),
+  ], "");
+  assert.deepEqual(G.map((g) => [g.name, titel(g)]), [["Folien", ["Infoveranstaltung"]], ["Sonstiges", ["Modulhandbuch"]]]);
+});
+
 test("Online-Fassung: link nur mit https, auch ohne Datei", () => {
   const ohne = (name, fm) => ({ f: { basename: "X100 " + name, path: `Unterlagen/X100 Beispiel/X100 ${name}.md` },
     fm: Object.assign({ typ: "unterlage", code: "X100", art: "Literatur", datei: "" }, fm) });

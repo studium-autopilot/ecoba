@@ -1,6 +1,8 @@
 // Claude ohne Server (seit 0.6.3): Mit einem eigenen API-Schlüssel aus der Claude Console fasst Claude eine Unterlage direkt
 // zusammen, ohne eigenen Server und auf jedem Gerät, auch auf iPhone und iPad. Der Knopf „Zusammenfassen“ im PDF-Kasten
 // (pdfkasten.js) nimmt diesen Weg, wenn kein eigener Server zusammenfasst (server.js geht vor).
+// Nur für Fortgeschrittene (seit 26.10.2026): Jede Zusammenfassung kostet extra, der eigene Server fasst über das Claude-Abo
+//   zusammen. Darum keine Zeile unter Verbindungen, solange dieses Gerät nicht verbunden ist (verbindungen.js).
 // Warum ein API-Schlüssel und kein Abo: Anthropic erlaubt Apps anderer Anbieter nicht, sich mit Claude Free, Pro oder Max
 //   anzumelden oder Anfragen über ein Abo zu schicken (code.claude.com/docs/en/legal-and-compliance). Ein eigener Schlüssel aus
 //   der Console ist erlaubt: Anthropic rechnet jede Anfrage über das Guthaben seines Kontos ab, Studium Autopilot bekommt nichts.
@@ -291,7 +293,7 @@ module.exports = function (ctx) {
     const MEHR = { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "claude" } };
     const zeile = () => {
       const s = status();
-      if (!s.verbunden) return { text: "Mit deinem eigenen API-Schlüssel fasst Claude deine Unterlagen zusammen, ohne Server.", symbol: "extern", pille: "", knopf: MEHR, link: null };
+      if (!s.verbunden) return { text: "Für Fortgeschrittene: Mit einem eigenen API-Schlüssel kostet jede Zusammenfassung extra.", symbol: "extern", pille: "", knopf: MEHR, link: null };
       if (s.problem === "schluessel") {
         return { text: "Anthropic nimmt deinen API-Schlüssel nicht mehr an.", symbol: "warnung", pille: "pruefen", knopf: { aktion: "verbinden", text: "Verbinden", cta: true, parameter: { id: "claude" } }, link: null };
       }

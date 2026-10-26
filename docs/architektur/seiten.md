@@ -153,7 +153,7 @@ Dashboard zeigt die Woche auf jedem Gerät als Raster; die Seite bleibt, ohne Le
 | `Studium/Termine & Anmeldungen.md` | Kalender, Agenda, Angebote der Uni; Abschnitte „Anmeldungen“ (`eba-anmeldungen`, aus den zentralen Fristen, seit 17.10.2026; vorher eine Tabelle mit Spalte „Stand“ zum Eintragen) und „Übungen und Tutorien“ (`eba-gruppen`, darunter eine Karte „Hinweise je Modul“). cssclasses `eba-s-termine` + `eba-s-anmeldungen`, Stil `eba-core.css` Abschnitte 37 und 57 |
 | `Studium/Prüfungen.md` | Zeitleiste, Karte „Termine“ (eintägige Prüfungen; Phasen zeigt die Zeitleiste als Band); Karte „Regeln“ |
 | `Studium/Noten & ECTS.md`, `Studium/Studienverlauf.md` | je eine Karte „Regeln“ (Prüfungsordnung) |
-| `Studium/Unterlagen.md` | Abschnitt „Übungen“ (Übungsblätter) |
+| `Studium/Unterlagen.md` | Abschnitt „Übungen“ (Übungsblätter); Abschnitt „Ohne Modul“ (seit 26.10.2026, ```` ```eba-unterlagen ohne-modul````, siehe unten) |
 | `Studium/Kontakte & Links.md` | Abschnitt „Offizielle Dokumente“ (Quellen) |
 | `Studium/Einstellungen & Hilfe.md` | Eine Gestalt für die ganze Seite (seit 17.10.2026): jeder Abschnitt ist eine Zeilenliste wie die Verbindungen (Rahmen, Zeilen mit Haarlinie, rundes Symbol, Titel, gedämpfte Zeile, rechts ein Knopf oder der Klapp-Pfeil). Deine Angaben (Name, Studienbeginn, Zielnote, Einrichtung), Verbindungen, Variante (je Variante eine Zeile, die gewählte mit Haken); Abschnitt „Hilfe“ als `> [!eba-zeilen]` mit je Thema einer klappbaren Karte `> > [!eba-karte\|hilfe\|<thema>]- Titel` (Symbol je Thema in eba-core.css Abschnitt 5), zuletzt „Stand der Angaben“ (offene Punkte). Seit 24.10.2026 sind alle Zeilen kompakt wie die Einstellungen von iPhone und iPad, auf allen Geräten gleich: eine Zeile je Angabe, rechts der Stand und der Pfeil, Knöpfe im Fenster dahinter, Hilfe ohne Unterzeilen (bis 0.6.6 `<span class="eba-zeile-unter">`, in selbst geänderten Seiten ausgeblendet). Bis 17.10.2026 Kasten, Chips mit Tabelle und einzelne Karten |
 
@@ -268,5 +268,13 @@ im Codeblock geht vor), auf allen Geräten gleich:
 
 Ab 860 px Breite zwei Spalten, ein Abschnitt bricht nie um; unter 480 px ohne Seiten. Neu gezeichnet wird bei Änderungen an
 Unterlagen- und Modulnotizen und beim Umbenennen. Was neu ist (in 14 Tagen eingeordnet, nie geöffnet), zeigt die Seite
-Unterlagen. Reine Logik (`artVon`, `woerter`, `semesterRang`, `gliedern`) in `tests/unterlagenliste.test.js`. CSS:
+Unterlagen. Reine Logik (`artVon`, `woerter`, `semesterRang`, `gliedern`, `gehoert`) in `tests/unterlagenliste.test.js`. CSS:
 `eba-core.css` Abschnitt 58.8.
+
+*Ohne Modul* (seit 26.10.2026): Derselbe Block mit dem Argument `ohne-modul` (```` ```eba-unterlagen ohne-modul````, gelesen mit
+`blockArgument`; findet es den Abschnitt beim Neuzeichnen nicht, erkennt der Ersatztext „Unterlagen ohne Modul …“ im Block ihn)
+steht auf der Seite Unterlagen unter `## Ohne Modul` und zeigt alle Notizen mit `typ: unterlage` ohne `code`, gegliedert wie
+oben. Sie liegen in `Unterlagen/Ohne Modul/`: von Hand ohne Modul eingeordnet oder von einem eigenen Uni-Abgleich abgelegt,
+etwa öffentliche Unterlagen des Studiengangs (Folien von Infoveranstaltungen, Modulhandbuch, Prüfungs- und Studienordnung,
+Anleitungen zu Alma oder ILIAS; Art Folien, sonst Sonstiges). Vorher standen sie nur in den Tabellen „Neu“ und „Nach Modul“
+(ohne Gruppe) und nirgends als Liste.

@@ -153,8 +153,8 @@ Freiwillig und je Gerät: Ohne deinen Tipp auf **Postfach anzeigen** meldet sich
 
 ## Claude mit eigenem API-Schlüssel
 
-Nur wenn du Claude unter **Einstellungen & Hilfe** → **Verbindungen** → Claude mit einem eigenen API-Schlüssel aus der
-[Claude Console](https://platform.claude.com) verbindest. Dafür braucht es keinen Server und kein Konto bei Studium Autopilot.
+Nur wenn du Claude mit einem eigenen API-Schlüssel aus der [Claude Console](https://platform.claude.com) verbindest (für
+Fortgeschrittene: **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server**, ganz unten). Dafür braucht es keinen Server und kein Konto bei Studium Autopilot.
 
 - **Was das Plugin schickt:** nur, wenn du bei einer Unterlage auf **Zusammenfassen** tippst, direkt von deinem Gerät an
   Anthropic (`api.anthropic.com`): die PDF (oder nur ihren Text, wenn die PDF zu groß ist oder du **Nur Text** wählst), dazu
