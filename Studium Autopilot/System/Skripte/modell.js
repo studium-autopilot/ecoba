@@ -35,13 +35,23 @@
 // Fachmodell (seit 18.10.2026, docs/architektur/modell.md „Fachmodell“): Jeder Bildschirm fragt das Modell, statt selbst zu rechnen –
 // Termine (termine), Prüfungen (pruefungen, pruefungVon, naechstePruefung), Fristen (fristen, abgaben), Übungen (uebung, uebungen),
 // Woche (kalenderwoche, planwoche; am Samstag und Sonntag gilt überall schon die kommende Woche), Stundenplan (findetStatt,
-// naechsteSitzung: Pausen, freie Tage, Ausfall, Änderungen), ECTS und Noten (ects, noten), imPlan, statusArt, istZwischentest.
+// naechsteSitzung: Pausen, freie Tage, Ausfall, Änderungen; istOnline), ECTS und Noten (ects, noten), imPlan, statusArt, istZwischentest.
 // Datum, Uhrzeit, Mehrzahl und HTML-Schutz in einer Schreibweise: ctx.modell.zeit (ctx.zeit selbst ist der Timer-Helfer des Kerns).
 //
 // Außerdem: Codeblock ```eba-semesterdaten [zentral|persoenlich]``` (Tabelle der Semestertermine).
 // Erweiterung: Das Plugin ruft registrieren() (Codeblock, Ereignisse über die Helfer in ctx) und beim App-Start start() (Abgleich) auf.
 // Zugriff aus anderen Skripten: ctx.modell.daten() (Rückfall auf System/Einstellungen.md, falls dieses Skript fehlt).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
+
+// Findet eine Sitzung online statt (rein, Tests; seit 27.10.2026)? fm: Notiz typ lehrveranstaltung (Feld online: true), raum: ihr
+// Raum an diesem Tag (findetStatt, naechsteSitzung; fehlt er, der übliche). Erkannt am Feld oder am Raum: „online“, „Zoom“,
+// „Webex“, „Teams“, „BigBlueButton“ oder „BBB“ als eigenes Wort („per Zoom“, „Online-Sitzung“, auch hybrid „HS 1 und online“,
+// nicht „Onlinekurs“ oder „Projektteams“) oder ein Link. Eine Regel für alle Bildschirme: Das Wochenraster zeigt so eine Sitzung
+// gestrichelt (woche.js, eba-core.css 55), die Modulseite mit einem Kamerasymbol vor dem Ort (modul.js). Anlass: das Data Science
+// Lab von S110, per Zoom, sah im Raster aus wie jede Übung im Hörsaal (Rückmeldung vom 27.10.2026).
+const ONLINE = /\b(?:online|zoom|webex|teams|bigbluebutton|bbb)\b|https?:\/\//i;
+const istOnline = (fm, raum) => (!!fm && fm.online === true) || ONLINE.test(String(raum != null ? raum : (fm && fm.raum) || ""));
+
 module.exports = function (ctx) {
   const app = window.app;
   const EINSTELLUNGEN = "System/Einstellungen.md";
@@ -421,6 +431,10 @@ module.exports = function (ctx) {
   // Art eines Termins (Farbe im Kalender, in der Agenda und auf dem Dashboard): pruefung, zwischentest, frist, event, uni
   const EVENT = ["Fachschaft", "Veranstaltung"];
   const terminArt = (kategorie, zt) => (kategorie === "Prüfung" ? (zt ? "zwischentest" : "pruefung") : kategorie === "Frist" ? "frist" : EVENT.indexOf(kategorie) >= 0 ? "event" : "uni");
+  // Gehört der Termin zur Lehre eines Moduls (kategorie Lehre mit Kürzel: Übungen starten, Data Science Lab, Raumwechsel, Ausfall,
+  // verlegte Sitzung)? Solche Termine stehen auf der Modulseite, im Dashboard und als Ausnahme in der Woche, nicht im Kalender und
+  // in der Agenda auf Termine & Anmeldungen (seit 0.7.0; dort „Lehrveranstaltungen → Dashboard“). t = normierter Termin.
+  const lehreDesModuls = (t) => !!t && t.kategorie === "Lehre" && !!String(t.code || "").trim();
   // Termin-Notiz ({ f, fm }) → normierter Termin. Uhrzeit: eigenes Feld „uhrzeit“ (neue eigene Termine, „10:00–11:30“), sonst wie
   // bisher aus „ort“ (zentrale Notizen schreiben sie weiter dorthin, damit Bases-Formeln bearbeiteter Dashboards sie finden).
   // wo: der Ort ohne Uhrzeit und ohne angehängtes „bis 18.10.“.
@@ -761,7 +775,7 @@ module.exports = function (ctx) {
     const gesamt = b34.w > 0 && b66.w > 0 ? 0.66 * d66 + 0.34 * d34 : b34.w > 0 ? d34 : d66;
     const zwei = (x) => (Math.floor(x * 100 + 0.000001) / 100).toFixed(2).replace(".", ",");
     const unter = ungueltig.length ? (ungueltig.length === 1 ? "Note ungültig: " : "Noten ungültig: ") + ungueltig.join(", ")
-      : b34.w + b66.w === 0 ? "noch keine Noten eingetragen" : b66.w === 0 ? "vorläufig · nur 34 %-Block" : b34.w === 0 ? "vorläufig · nur 66 %-Block" : "gewichtet nach § 13 PO";
+      : b34.w + b66.w === 0 ? "" : b66.w === 0 ? "vorläufig · nur 34 %-Block" : b34.w === 0 ? "vorläufig · nur 66 %-Block" : "gewichtet nach § 13 PO";
     return { note: b34.w + b66.w === 0 ? "–" : zwei(gesamt), unter, d34, d66, w34: b34.w, w66: b66.w, ungueltig };
   };
   // Farbe (Ton einer Pille) für einen Zustand, überall gleich (docs/design.md „Bedeutung der Statusfarben“): ok erledigt,
@@ -1155,8 +1169,8 @@ module.exports = function (ctx) {
     blockArgument, daten, ungueltig, semesterVon, semesterNachName, semesterAusDatum, naechster, voriger, modulSemester, semesterAuswahl, vorschau, abgleichen,
     beiAenderung, protokoll, woche, vorlesungswochen, semesterFuer,
     // Fachmodell (docs/architektur/modell.md „Fachmodell“)
-    zeit, termine, terminLesen, terminArt, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, uebung: uebungVon, uebungen, blattNummer, opFrist, kalenderwoche, planwoche, findetStatt,
-    naechsteSitzung, ausfaelle, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
+    zeit, termine, terminLesen, terminArt, lehreDesModuls, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, uebung: uebungVon, uebungen, blattNummer, opFrist, kalenderwoche, planwoche, findetStatt,
+    naechsteSitzung, ausfaelle, istOnline, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
     vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer, folien: folienVon,
   };
   ctx.modell = api;
@@ -1199,3 +1213,4 @@ module.exports = function (ctx) {
 
   return { registrieren, start };
 };
+module.exports.istOnline = istOnline;

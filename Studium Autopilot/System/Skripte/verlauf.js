@@ -20,7 +20,7 @@
 // Nur richtige Daten (Vorgabe vom 17.10.2026): Semester, Pausen und Prüfungsphasen tragen aus den zentralen Daten status
 // (offiziell | geschätzt) und hinweis. Geschätztes ist überall markiert – „ca.“ vor Daten und Zahlen, die daraus folgen
 // (Abschluss, Resttage, Vorlesungswochen, Frist der Orientierungsprüfung), Streifen und „(geschätzt)“ in Band und Legende
-// der Lupe, der Hinweis als Tooltip und als Zeile in der Lupe (auch ohne Maus lesbar). Offizielles bleibt unmarkiert.
+// der Lupe, der Hinweis als Tooltip (bis 0.6.14 auch als Zeile unter der Legende). Offizielles bleibt unmarkiert.
 // iOS: Das Plugin lädt jedes Skript einzeln; ein Syntaxfehler legt trotzdem dieses Skript lahm. Daher keine Syntax neuer als Safari 16.0
 // (kein Lookbehind, kein .at()/findLast/structuredClone). Die Bahn rechnet ihre Geometrie selbst (misst nichts im DOM).
 // Jeder Fehler beim Zeichnen zeigt den Text des Codeblocks (Fallback), die Seite läuft weiter.
@@ -405,7 +405,7 @@ module.exports = function (ctx) {
     fl.sort((a, c) => a.x - c.x || (a.heute ? -1 : 1));
     const fahnen = fl.map((q) => q.html.replace("<span class=\"eba-vl-fahne", `<span style="left:${pct(q.x)}" class="eba-vl-fahne`)).join("");
     const punkt = s.jetzt ? `<span class="eba-vl-hierpunkt" style="left:${pct(b.weg)}"><i></i></span>` : "";
-    // Legende: Geschätztes mit Streifen und „(geschätzt)“, der Hinweis als Tooltip; darunter die Hinweise als Zeile (auch auf Touch)
+    // Legende: Geschätztes mit Streifen und „(geschätzt)“, der Hinweis als Tooltip
     const leg = (cls, txt, o) => `<span class="eba-vl-leg"${o && o.geschaetzt && o.hinweis ? ` title="${esc(o.hinweis)}"` : ""}><i class="eba-vl-b ${cls}${o && o.geschaetzt ? " geschaetzt" : ""}"></i>${txt}${o && o.geschaetzt ? " (geschätzt)" : ""}</span>`;
     let legende = s.vb && s.ve ? leg("vl", `Vorlesungen ${dm(s.vb)} – ${dm(s.ve)}`, s) : leg("", "Vorlesungszeit offen");
     const pa = D.pausen.filter((p) => p.bis >= s.sb && p.von <= s.se);
@@ -417,15 +417,6 @@ module.exports = function (ctx) {
     for (const p of ph) legende += leg("pruef", `${esc(p.art)} ${dm(p.von)} – ${dm(p.bis)}`, p);
     if (!ph.some((p) => /haupt/i.test(p.art) && p.von >= s.sb)) legende += leg("pruef geschaetzt", "Prüfungsphase noch offen");
     const r = s.rueck, rTitel = r ? `Rückmeldung${r.fuer ? ` fürs ${r.fuer}` : ""}` : "";
-    const hinweise = []; // { text, was: [...] }: gleicher Hinweis nur einmal, davor alle Einträge, für die er gilt
-    const quellen = [[s, s.name]].concat(pa.map((p) => [p, `${p.name} ${dm(p.von)} – ${dm(p.bis)}`]), fr.map((x) => [x, `${x.name} ${dm(x.datum)}`]),
-      ph.map((p) => [p, `${p.art} ${dm(p.von)} – ${dm(p.bis)}`]), r ? [[r, rTitel]] : []);
-    for (const [o, was] of quellen) {
-      if (!o.geschaetzt || !o.hinweis) continue;
-      let h = hinweise.find((x) => x.text === o.hinweis);
-      if (!h) { h = { text: o.hinweis, was: [] }; hinweise.push(h); }
-      if (h.was.indexOf(was) < 0) h.was.push(was);
-    }
     const hinweis = !s.module.length ? "noch nichts geplant" : s.plan < 30 && s.variante.length ? `${s.plan} geplant · Rest je nach Variante` : s.plan < 30 ? `${s.plan} geplant · Rest offen` : `${s.plan} geplant`;
     // Laufendes Semester: Vorlesungswoche und Resttage der Vorlesungszeit (die Woche stand bis 17.10.2026 als Satz im Kopf)
     const woche = s.jetzt ? vorlesungswoche(D, R) : "";
@@ -433,14 +424,14 @@ module.exports = function (ctx) {
     // Meilensteine dieses Semesters als Zeile: auf der Bahn tragen die Rauten ihre Erklärung nur als Tooltip (nicht auf Touch).
     // Dazu, nur hier, die Rückmeldung fürs nächste Semester (gefüllt, sobald abgehakt oder das Fenster vorbei ist)
     const msS = R.ms.filter((m) => m.fs === s.fs);
-    if (r) msS.push({ datum: r.von, titel: rTitel, info: `${dm(r.von)} – ${dm(r.bis)}${r.geschaetzt ? " (geschätzt)" : ""}`, ok: r.erledigt || r.bis < R.t, art: "frist", pfad: r.pfad });
-    const ms = msS.sort((a, b) => a.datum - b.datum).map((m) => `<span${m.pfad ? ` data-pfad="${esc(m.pfad)}" role="link" tabindex="0"` : ""}><i class="raute${m.ok ? " ok" : ""}${m.art === "option" ? " option" : ""}"></i><b>${esc(m.titel)}</b>: ${esc(m.info)}</span>`).join("");
+    if (r) msS.push({ datum: r.von, titel: rTitel, info: `${dm(r.von)} – ${dm(r.bis)}${r.geschaetzt ? " (geschätzt)" : ""}`, ok: r.erledigt || r.bis < R.t, art: "frist", pfad: r.pfad,
+      hinweis: r.geschaetzt ? r.hinweis : "" });
+    const ms = msS.sort((a, b) => a.datum - b.datum).map((m) => `<span${m.hinweis ? ` title="${esc(m.hinweis)}"` : ""}${m.pfad ? ` data-pfad="${esc(m.pfad)}" role="link" tabindex="0"` : ""}><i class="raute${m.ok ? " ok" : ""}${m.art === "option" ? " option" : ""}"></i><b>${esc(m.titel)}</b>: ${esc(m.info)}</span>`).join("");
     return `<div class="eba-vl-lupe" data-sem="${s.i}">`
       + `<div class="eba-vl-lkopf"><div class="eba-vl-ltitel"><span class="t">${s.fs}. Fachsemester · ${esc(s.name)}</span></div>`
       + `<div class="eba-vl-lects"><b>${s.ist}</b> / 30 ECTS · ${hinweis}${rest}</div>`
       + (ms ? `<div class="eba-vl-lms">${ms}</div>` : "")
-      + `<div class="eba-vl-ldaten">${legende}</div>`
-      + (hinweise.length ? `<div class="eba-vl-lhinweis">${hinweise.map((h) => `<span><b>${esc(h.was.join(", "))}</b> (geschätzt): ${esc(h.text)}</span>`).join("")}</div>` : "") + `</div>`
+      + `<div class="eba-vl-ldaten">${legende}</div></div>`
       + `<div class="eba-vl-fahnen" data-anzahl="${fl.length}">${fahnen}</div>`
       + `<div class="eba-vl-lband">${b.html}${punkt}</div>`
       + `<div class="eba-vl-monate">${mon}</div>`
@@ -452,7 +443,7 @@ module.exports = function (ctx) {
     if (st === "nicht bestanden") return `<span class="eba-pill bad">nicht bestanden</span>`;
     // Farbe wie überall (ctx.modell.statusArt, docs/design.md): angemeldet grün, läuft blau
     if (st === "angemeldet" || st === "läuft") return `<span class="eba-pill ${ctx.modell.statusArt("modul", st)}">${st}</span>`;
-    return `<span class="eba-vl-offen">${esc(st || "offen")}</span>`;
+    return ""; // offen: in jeder Zeile gleich, keine Angabe (bis 0.6.14 stand „offen“ in jeder Zeile)
   };
 
   // Prüfungstermin eines Moduls nach der einen Regel (ctx.modell.pruefungVon, in lesen): Date oder null → „Termin folgt“
@@ -460,7 +451,7 @@ module.exports = function (ctx) {
   const modulZeile = (R, m) => {
     let pr;
     const kl = klausurVon(m);
-    if (m.zusatz) pr = "Zusatz, zählt nicht";
+    if (m.zusatz) pr = "Zusatz";
     else if (m.fertig) pr = kl ? `${wdm(kl)}${String(kl.getFullYear()).slice(2)}` : "";
     else if (kl && m.pr.offen) { const d = tage(R.t, kl); pr = `${wdm(kl)} · <b>${relativ(d)}</b>`; }
     else if (kl) pr = `${wdm(kl)}${m.pr.erledigt ? " · erledigt" : ""}`;

@@ -426,7 +426,7 @@ test("Kompakte Zeile: rechts der Stand in einem Wort, darunter was die Sache tut
     { wert: "An", art: "", unter: "Vorlesungen, Fristen und Termine für alle", symbol: "uni", ton: "ok", ziel: ziel("zentral") });
   assert.equal(k({ zentralStatus: { an: false, zustand: "aus" } }, "zentral").wert, "Aus");
   assert.deepEqual(k({ volltext: { an: false, zustand: "aus", warnungen: [], text: "" } }, "volltext"),
-    { wert: "Aus", art: "", unter: "Die Suche findet auch Wörter in PDFs", symbol: "pdf-suche", ton: "leise", ziel: ziel("volltext") });
+    { wert: "Aus", art: "", unter: "Macht Folien und Skripte durchsuchbar", symbol: "pdf-suche", ton: "leise", ziel: ziel("volltext") });
   // von außen: Die Suche findet die Wörter trotzdem; den Uni-Login braucht es hier nicht
   assert.equal(k({ volltext: { an: true, zustand: "extern", warnungen: [], text: "Kommt über deinen eigenen Abgleich." } }, "volltext").wert, "An");
   assert.deepEqual(k({ extern: true, einstellungen: { quellen_extern: ["stundenplan", "ilias-dateien", "ilias-kalender"] }, ilias: { extern: true, text: I.K.TEXT_EXTERN } }, "uni-login"),
@@ -442,7 +442,7 @@ test("Kompakte Zeile: rechts der Stand in einem Wort, darunter was die Sache tut
 test("Kompakte Zeile „Updates“: rechts ob sie aktuell ist, darunter die installierte Version", () => {
   const SUCHEN = { aktion: "vorlage-suchen", text: "Nach Updates suchen", cta: false };
   const k = (anzeige) => aufbau({ update: { anzeige, version: "0.6.7" } }).V.kompakt("vorlage");
-  assert.equal(aufbau({}).V.liste.vorlage.name, "Updates", "„Studium Autopilot“ ließ neben „Neue Version“ keinen Platz");
+  assert.equal(aufbau({}).V.liste.vorlage.name, "Updates", "sagt, wozu die Zeile da ist");
   assert.deepEqual(k({ html: "Version 0.6.7. Du hast die neueste Version.", kurz: "Aktuell", pille: '<span class="eba-pill ok">aktuell</span>', symbol: "haken", ton: "ok", knopf: SUCHEN }),
     { wert: "Aktuell", art: "", unter: "Version 0.6.7 installiert", symbol: "update", ton: "ok", ziel: "obsidian://studium-autopilot?aktion=verbinden&id=vorlage" });
   assert.equal(k({ html: "Version 0.6.7.", kurz: "Nicht geprüft", pille: "", symbol: "haken", ton: "leise", knopf: SUCHEN }).wert, "Nicht geprüft");
@@ -453,7 +453,6 @@ test("Kompakte Zeile „Updates“: rechts ob sie aktuell ist, darunter die inst
   const staende = [["läuft", "info", "uhr", "leise"], ["unterbrochen", "warn", "laden", "warn"], ["neu laden", "info", "neu-laden", "warn"]]
     .map(([p, a, symbol, ton]) => k({ html: "…", pille: `<span class="eba-pill ${a}">${p}</span>`, symbol, ton, knopf: null }).wert);
   assert.deepEqual(staende, ["Läuft …", "Unterbrochen", "Neu laden"]);
-  for (const w of staende.concat("Aktuell", "Nicht geprüft", "Neue Version")) assert.ok("Updates".length + w.length <= 24, w);
 });
 
 test("Kompakte Zeile: jeder Stand hat einen kurzen Wert und ein Symbol, darunter die Beschreibung oder bei einem Problem der Satz", () => {
@@ -463,11 +462,6 @@ test("Kompakte Zeile: jeder Stand hat einen kurzen Wert und ein Symbol, darunter
       const z = W.zeile(id), k = W.kompakt(id), wo = `${name}: ${id}`;
       if (!z) continue;
       assert.ok(k.wert, wo + " – ohne Wert");
-      // Name und Stand passen auf dem iPhone mit 20-px-Schrift nebeneinander („Eigener Server“ + „Verbunden“ = 23 Zeichen);
-      // „Eigener Server“ + „Nicht verbunden“ rutschte bis 24.10.2026 in eine eigene Zeile. Die Teile des Uni-Logins stehen
-      // nur in dessen Fenster.
-      if (["ilias", "ilias-kalender", "alma", "alma-konto"].indexOf(id) < 0)
-        assert.ok(W.liste[id].name.length + k.wert.length <= 24, `${wo} – „${W.liste[id].name}“ und „${k.wert}“ zu lang`);
       assert.ok(k.symbol === "haken" || W.svg(k.symbol) !== W.svg(""), wo + " – Symbol fehlt in SYMBOLE"); // unbekannt: Haken
       assert.ok(["ok", "warn", "akzent", "leise"].indexOf(k.ton) >= 0, wo + " – Farbe");
       assert.match(k.ziel, /^obsidian:\/\/studium-autopilot\?aktion=verbinden&id=/, wo);

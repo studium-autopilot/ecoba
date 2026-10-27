@@ -1,6 +1,8 @@
 // Kalender (kalender.js, art, frisch): Farbe des Punkts je Art nach der Regel des Fachmodells (ctx.modell.terminArt). Zwischentests
 // (Titel) sind keine Prüfung und bekommen eine eigene Art. Die Auswahl von Monat und Tag verfällt am nächsten Tag und nach 30 Min.
-// Die Legende (legendeVon) hat je Farbe einen Eintrag, nur für Arten, die im Monat vorkommen.
+// Die Legende (legendeVon) hat je Farbe einen Eintrag, nur für Arten, die im Monat vorkommen. Im Raster (gewicht) Pflicht vor
+// Freiwilligem, dann die Angebote der Uni, Erledigtes zuletzt. Die Liste unter dem Raster (listeZeigen) steht für heute erst
+// nach einem Tipp.
 // Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
@@ -31,6 +33,15 @@ test("frisch: die Auswahl gilt nur am selben Tag und 30 Minuten nach dem letzten
   assert.equal(frisch({ monat: z.monat, tag: z.tag }, um("2026-10-17T10:00:00")), false, "Stand vor dem Update (ohne am)");
 });
 
+test("listeZeigen: die Termine eines Tags unter dem Raster, für heute erst nach einem Tipp", () => {
+  const { listeZeigen } = laden("kalender", { heute: "2026-10-17", kontext: { modell } }).ergebnis;
+  const heute = new Date(2026, 9, 17);
+  assert.equal(listeZeigen({ tag: heute, am: null }, heute), false, "ohne Tipp: die Agenda darunter beginnt mit heute");
+  // Rückmeldung vom 27.10.2026: Ein Tipp auf heute ließ die Liste verschwinden
+  assert.equal(listeZeigen({ tag: heute, am: heute }, heute), true, "heute angetippt");
+  assert.equal(listeZeigen({ tag: new Date(2026, 9, 18), am: heute }, heute), true, "anderer Tag");
+});
+
 test("legendeVon: je Farbe ein Eintrag, Prüfung immer, Zwischentest bei der Uni, freiwillig nur wenn vorhanden", () => {
   const { legendeVon } = laden("kalender", { heute: "2026-10-17", kontext: { modell } }).ergebnis;
   assert.deepEqual(legendeVon([]), [["pruefung", "Prüfung"]]);
@@ -39,4 +50,11 @@ test("legendeVon: je Farbe ein Eintrag, Prüfung immer, Zwischentest bei der Uni
   assert.deepEqual(legendeVon([{ art: "zwischentest" }]), [["pruefung", "Prüfung"], ["uni", "Zwischentest"]]);
   assert.deepEqual(legendeVon([{ art: "uni" }, { art: "zwischentest" }, { art: "pruefung" }]),
     [["pruefung", "Prüfung"], ["uni", "Uni, Zwischentest"]]);
+});
+
+test("gewicht: Pflicht vor Freiwilligem, dann Angebote der Uni (rücken bei Platzmangel zuerst in „+n weitere“), Erledigtes zuletzt", () => {
+  const { gewicht } = laden("kalender", { heute: "2026-10-17", kontext: { modell } }).ergebnis;
+  const reihe = [{ art: "event", angebot: true }, { art: "uni", erledigt: true }, { art: "event", sq: true }, { art: "event" }, { art: "pruefung" }]
+    .sort((x, y) => gewicht(x) - gewicht(y));
+  assert.deepEqual(reihe.map((t) => (t.erledigt ? "erledigt" : t.angebot ? "angebot" : t.sq ? "freiwillig" : t.art)), ["pruefung", "event", "freiwillig", "angebot", "erledigt"]);
 });

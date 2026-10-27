@@ -140,9 +140,19 @@ Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Überschneiden sich
 (`spalten`, `lage`: Breite und Abstand links im Stil). Ein blasser Kasten (`spaeter`) teilt sich die Breite nie mit einem
 echten (seit 19.10.2026; vorher halbierte ein Tutorium, das erst in zwei Wochen begann, eine Vorlesung): Überschneidet er
 einen, steht er schmal am rechten Rand (22 %, Klasse `schmal`, nur der Kurzname), die echten Kästen daneben behalten 78 %.
-Wörter brechen nie mitten im Wort, nur an Silben. Reine Logik als Funktionen (`wocheBauen`, `spalten`, `lage`, `kurzname`,
-`artText`, `versatzAus`, `wocheText`, `raumKnapp`, `wischStartOk`, `wischAchse`,
-`wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS: Abschnitte 47 und 55.
+Wörter brechen nie mitten im Wort, nur an Silben.
+*Farbe je Modul (seit 27.10.2026):* Jeder Kasten hat die Farbe seines Moduls (Klasse `modul-1` … `modul-6`, Feld `farbe`).
+`farbenBauen` sortiert die Codes der Notizen des gezeigten Semesters, die das Raster je zeigt (nicht entfallen, nicht „Besuche
+ich nicht“, mit Zeit), der n-te nimmt Farbe n, nach sechs wieder von vorn. So bleibt die Farbe eines Moduls das ganze Semester
+gleich, auch in einer Woche, in der andere Module fehlen, und ein ausgeblendetes Modul verbraucht keinen Ton. Ohne `code` bleibt
+der Kasten neutral. Vorher war jede Vorlesung grau gefüllt und jede Übung blau umrandet; dunkel verschwamm beides mit der Karte
+(Rückmeldung vom 27.10.2026). Unter dem Raster, in derselben Karte, die Legende (`legendeBauen`, `.eba-wlegende`): die Module der Woche
+mit Farbe, nach Farbe geordnet, Text der Kurzname (sonst der Titel der Modulnotiz, sonst der Code), Tooltip Code und Titel
+(`modulName`); ein Modul, das in dieser Woche nur ausfällt oder nur als Ausnahme (Warnfarbe) dasteht, fehlt dort. Welche Töne
+und warum: [Designsprache](../design.md), „Farbe je Modul im Wochenraster“.
+Reine Logik als Funktionen (`wocheBauen`, `spalten`, `lage`, `kurzname`, `artText`, `farbenBauen`, `legendeBauen`, `versatzAus`,
+`wocheText`, `raumKnapp`, `wischStartOk`, `wischAchse`, `wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS:
+Abschnitte 47 und 55.
 *Eine Ansicht auf jeder Breite (seit 24.10.2026):* Dashboard und Seite Stundenplan zeichnen dasselbe Raster, auch auf dem
 iPhone hochkant. Vom 19. bis 24.10.2026 zeigte das Dashboard unter 520 px Kartenbreite stattdessen einen Tag als Liste
 (Tagesansicht: Leiste mit fünf Tagen, darunter die Lehrveranstaltungen des gewählten Tags, Wischen von Tag zu Tag), und für
@@ -164,7 +174,8 @@ Versatz, Uhrzeit und Sitzung (`ctx.bleibend`, neu bei jedem Start von Obsidian).
 30 Minuten nach dem letzten Wechsel, sonst wieder die aktuelle Woche, ohne Schreiben. Zwei Geräte blättern so unabhängig (bis
 zum 17.10.2026 stand die Woche in einer abgeglichenen Notiz, und ein Gerät blätterte das andere mit). Auf Touch-Geräten,
 vor allem am iPhone, blättert man durch Wischen über das Raster: waagerecht mehr als 50 px und mehr als doppelt so weit wie
-senkrecht; nicht in den äußeren 30 px des Bildschirms begonnen (dort zieht Obsidian die Seitenleisten auf) und nicht auf einem
+senkrecht; nicht in den äußeren 30 px des Bildschirms begonnen (dort gehört das Wischen Obsidian: nach rechts zurück, nach
+links die rechte Seitenleiste) und nicht auf einem
 Link oder Kasten. Die erste Bewegung über 10 px entscheidet die Richtung; erst wenn sie waagerecht ist, ruft `woche.js`
 `preventDefault()` (Listener `touchmove` nicht passiv) und reicht das Ereignis nicht weiter, senkrechtes Scrollen bleibt
 unberührt (am Gerät noch nicht geprüft).
@@ -179,8 +190,9 @@ dasteht (kein Tag hervorgehoben), und nach dem Wischen nur die Nummer, wie weit 
 passt am iPhone nicht neben Freitag, darum die Leiste.
 *Kästen:* Oben kräftig der Kurzname: `kurz` der Stundenplan-Notiz, sonst `kurz` der Modulnotiz (Grundstudium-Module haben
 ihn, z. B. „VWL“, „Mathe“), sonst der Code. Daneben blass Art und Gruppe, aber nur für Übung, Tutorium, Seminar: `art`
-„Vorlesung“ und „Veranstaltung“ (Alma ohne erkannte Art) gelten als Vorlesung (Klasse `vl`, gefüllte Fläche, kein Wort), alles
-andere als `ue` (helle Fläche, Farbkante). Die Gruppe ist `gruppe` (Anzeigename wie in ILIAS, nie `gruppe_alma`): beginnt sie
+„Vorlesung“ und „Veranstaltung“ (Alma ohne erkannte Art) gelten als Vorlesung (Klasse `vl`, kräftiger getönt, Kante 3 px, kein
+Wort), alles andere als `ue` (leiser getönt, Kante 2 px; beides in der Farbe des Moduls). Die Gruppe ist `gruppe` (Anzeigename
+wie in ILIAS, nie `gruppe_alma`): beginnt sie
 mit der Art („Tutorium 1“), steht nur sie da, eine bloße Zahl wird „Gruppe n“, sonst Art und Name („Tutorium Gruppe 4“).
 Klasse `konflikt` (nur Gruppen-Notizen, `herkunft` ilias-gruppe oder gruppe-gewaehlt): Warnpunkt und „überschneidet sich mit …“
 im Tooltip, wenn sich ihre übliche Zeit am selben Wochentag mit einer anderen Notiz im Raster überschneidet (nicht verdeckt,
@@ -217,6 +229,7 @@ Bases für ein fehlendes Feld falsch aus (Filter ohne Treffer, `if()` im falsche
 | `ects()`, `noten()`, `blockVon(fm, variante)` | ECTS = bestandene und anerkannte Module ohne Zusatz + SQ-Kurse (höchstens 9, solange SQ100 offen), `op` (höchstens 4), `opFrist` (Ende des 4. Fachsemesters); Gesamtnote nach § 13 BT wie Noten & ECTS. |
 | `statusArt(typ, wert)` | Ton einer Pille nach docs/design.md: ok (bestanden, anerkannt, angemeldet, erledigt, gelesen …), warn (Frist, in Arbeit, Abgabe), bad (Prüfung, nicht bestanden, überfällig), info (läuft, Lehre, Zwischentest), akzent (Fachschaft, Veranstaltung), sonst leer (offen, neu, geschätzt). |
 | `istZwischentest(x)`, `istNachhol(x)`, `terminArt(kategorie, zt)`, `ortTeilen(ort)`, `modul(code)`, `opFrist()` | Einzelregeln; Zwischentest = „Zwischentest“ (auch „Zwischen-Test“) im Titel oder Dateinamen. |
+| `istOnline(fm, raum)` | Findet die Sitzung online statt (seit 27.10.2026, rein, auch als `require("modell.js").istOnline`)? Feld `online: true` oder der Raum an dem Tag (fehlt er, `fm.raum`) enthält „online“, „Zoom“, „Webex“, „Teams“, „BigBlueButton“ oder „BBB“ als eigenes Wort oder einen Link. Wochenraster (Klasse `online`, Legende „online“) und „Als Nächstes“ der Modulseite (Kamera vor dem Ort) nutzen sie; Gestaltung in [design.md](../design.md), „Farbe je Modul im Wochenraster“. |
 | `besuchtNicht(fm)`, `besuchSchluessel(fm)` | „Besuche ich nicht“ für jede Lehrveranstaltung (seit 0.4.6): Notiz einer Quelle über ihren Schlüssel in `stundenplan_ausgeblendet` der Einstellungen (zentral die `zentral_id`, sonst `<herkunft>:<id>`, z. B. `alma:…`, weil die Quelle ihre Notiz neu schreibt), deine eigene über das Feld `besuche_nicht: true`. `findetStatt` gibt dann `ausgeblendet`. Bis 0.4.5 nur für zentrale Notizen. |
 | `vorlesung(f)`, `vorlesungen({ code })`, `vorlesungTitel(o)`, `vorlesungThema(o)` | Der eine Name einer Vorlesungsnotiz (seit 19.10.2026): „Vorlesung 1 · Mo 13.10. · Thema“ (ohne Nummer „Vorlesung“, ohne Modul „Mitschrift“). Nummer aus `nummer`, sonst aus dem Dateinamen („… VL 03“); Thema aus `thema`, sonst die erste Überschrift, wenn sie mehr sagt als Kürzel, Nummer, Datum und Modultitel, sonst der Titel der Folien dieser Sitzung (`folien(f)`, ohne Semester); nie erfunden. `vorlesungen` neueste zuerst. Nutzer: Modulseite, „Nachzuarbeiten“, To-dos, Kopf der Vorlesungsnotiz, neue Notizen. Dateinamen bleiben. |
 | `folien(f)` | Die Folien einer Vorlesungsnotiz (seit 24.10.2026) → `{ folien, gewaehlt, alle }`, bei jedem Zeichnen neu aus dem, was gerade im Tresor liegt; wählen muss niemand. Feld `folien` = deine Wahl (Kopf → „⋯“ → **Andere Folien …**, „Automatisch“ leert es), sie gilt immer. Sonst zur Sitzung der Notiz (ihr Tag, sonst die letzte Sitzung in den 6 Tagen davor; Sitzungen laut Stundenplan ohne Übung und Tutorium, ohne Stundenplan die Tage der Vorlesungsnotizen): 1. Folien mit dem Datum dieser Sitzung in `quelle` (Sitzung oder Ordner in ILIAS), sonst in `original` (Dateiname); 2. sonst, was seit der vorigen Sitzung ankam (`datum` der Begleitnotiz), höchstens 3 Nummern (mehr ist ein Upload fürs ganze Semester); 3. sonst die Folien der vorigen Sitzung (deine Wahl dort oder dieselbe Regel), davon die höchste Nummer; 4. erste Sitzung: die kleinste Nummer, die vor der nächsten Sitzung ankam. Zwei Notizen einer Sitzung mit verschiedener Wahl: beide. Ein Datum außerhalb des Semesters (Vorjahr) und ein anderes `semester` zählen nie von selbst; je Nummer die neueste Fassung, dann die mit mehr Seiten. Liegt deine bearbeitete Fassung neben einer neuen aus ILIAS (seit 24.10.2026, `fassung.js` `familien`), kommen beide, deine zuerst, je mit `fassung` = `{ rolle, text }` (sonst `null`); die neue zählt zur Sitzung der ersten Fassung, deine Wahl der neuesten zeigt sie allein (siehe „Neue Fassung einer Unterlage“ in [unterlagen.md](unterlagen.md)). `alle` = Folien des Moduls fürs Wählen, nach Nummer, je Nummer die neueste Fassung zuerst. Bis 0.6.2 riet `notizen.js` beim Anlegen (`eba.folienZu`: gleiche Nummer wie die Vorlesung, sonst die der letzten Notiz) und schrieb das Feld; das traf bei Kapitel-Nummern oft daneben, und Späteres erschien nie. Solche älteren Werte gelten als Wahl. Nutzer: Kopf der Vorlesungsnotiz (ein Chip je Folien, höchstens 3 Nummern, je Nummer bis zu zwei Fassungen), `seitenlink` (die erste), Thema im Namen. Tests: `tests/vorlesungen.test.js`. |

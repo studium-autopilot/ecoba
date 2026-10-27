@@ -38,6 +38,7 @@ const TEXTE = {
 };
 // Felder, die dieses Skript selbst setzt (alles andere aus dem Formular bleibt, wie die Uni es schickt)
 const EIGENE = ["login_post", "horde_user", "horde_pass", "horde_select_view", "new_lang"];
+const BRIEF = '<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>';
 
 const fehlerArt = (art) => { const e = new Error(TEXTE[art] || TEXTE.unerwartet); e.art = art; return e; };
 const artVon = (e) => (e && TEXTE[e.art] ? e.art : e && e.grund && e.grund !== "fremder-host" && e.grund !== "kodierung" ? "netz" : "unerwartet");
@@ -238,7 +239,8 @@ module.exports = function (ctx) {
   const zeile = (el, o) => {
     const liste = el.createDiv({ cls: "eba-vb-liste" });
     const z = liste.createDiv({ cls: "eba-vb" });
-    z.createSpan({ cls: "eba-vb-symbol" + (o.warn ? " warn" : "") });
+    // Brief (Lucide „mail“) wie die Symbole unter Verbindungen; bis 0.6.14 blieb der Kreis leer
+    z.createSpan({ cls: "eba-vb-symbol" + (o.warn ? " warn" : "") }).innerHTML = BRIEF;
     const t = z.createDiv({ cls: "eba-vb-text" });
     t.createEl("b", { text: "Uni-Postfach" });
     t.createDiv({ cls: "eba-vb-status", text: o.text });

@@ -1,17 +1,20 @@
 // Agenda als Codeblock ```eba-agenda``` (Seite Studium/Termine & Anmeldungen.md, unter dem Kalender). Wird live gezeichnet wie
 // ```eba-kalender```, schreibt KEINE Datei (früher stand die Liste zwischen den Markierungen termine:anfang/termine:ende
 // in der Termine-Seite selbst; das gab Sync-Konflikte, wenn mehrere Geräte gleichzeitig schrieben).
-// Liest alle Notizen mit typ: termin und zeigt eine nach Tagen geordnete Liste: diese Woche, nächste Woche, Fristen danach,
-// „Später“ (eingeklappt, nach Monaten) und „Vergangen“. Erzeugt dafür Markdown (Callouts eba-t und eba-karte, Klassen eba-tag,
+// Liest alle Notizen mit typ: termin, dazu die gewählten Angebote der Uni (seit 0.7.0, ctx.angeboteAnzeige.termine(): Punkt
+// wie Veranstaltungen, Link zur Seite der Uni, nie unter „Vergangen“), und zeigt eine nach Tagen geordnete Liste: diese Woche,
+// nächste Woche, Fristen danach, „Später“ (eingeklappt, nach Monaten) und „Vergangen“. Erzeugt dafür Markdown (Callouts eba-t und eba-karte, Klassen eba-tag,
 // eba-wt, eba-rel, eba-jetzt, eba-pill) und rendert es mit Obsidians MarkdownRenderer in den Block.
 // Aussehen (seit 17.10.2026, eba-core.css Abschnitt 37.termine): links je Tag eine Tagesspalte mit Ziffer und Wochentag
 // (<span class="eba-tag frist"><b>19</b><span class="eba-wt">Mo</span></span>, darunter „heute“/„morgen“ oder der Monat), nur
 // beim ersten Termin des Tags; Folgezeilen desselben Tags tragen „gleich“ und bleiben ohne Spalte. Die Art (pruefung, frist,
 // uni, event, erledigt) steht als Klasse an der Tagesspalte, das CSS zeichnet daraus den Farbpunkt vor dem Termin, wie im
-// Kalender. Text-Pillen nur dort, wo der Punkt allein nicht reicht: Frist, Prüfung, freiwillig, geschätzt, erledigt.
+// Kalender. Text-Pillen nur dort, wo der Punkt allein nicht reicht: Frist, Prüfung, freiwillig, geschätzt. Erledigtes steht grau
+// und durchgestrichen da, ohne Pille (seit 0.7.0, vorher in voller Schrift mit „Frist“ und grüner Pille „erledigt“).
 // „Diese Woche“: begonnene, noch laufende Zeiträume stehen zuerst unter „läuft“, dann die Marke „Heute · Sa 17.10.“
 // (eba-jetzt), darunter alles ab heute; Termine von heute brauchen darum keine eigene Tagesspalte.
-// Neu gezeichnet bei Änderungen an Termin-Notizen, beim Zurückkehren in die App und alle 30 Minuten (Tageswechsel).
+// Neu gezeichnet bei Änderungen an Termin-Notizen, bei neuen Angeboten oder anderer Auswahl (Ereignis „eba-angebote“), beim
+// Zurückkehren in die App und alle 30 Minuten (Tageswechsel).
 // Anmeldungen als Codeblock ```eba-anmeldungen``` (seit 17.10.2026, ersetzt die Tabelle zum Eintragen auf derselben Seite):
 // Tabelle Was · Wann · Wo aus den zentralen Fristen (herkunft: zentral, kategorie: Frist), deren Titel eine Anmeldung, Belegung
 // oder Buchung nennt (die Daten haben dafür kein eigenes Feld). Gefiltert wie beim Übernehmen der zentralen Termine
@@ -43,21 +46,21 @@ module.exports = function (ctx) {
   // „Mo 19.10.“, das Jahr nur außerhalb des Studienjahrs (eine Schreibweise, ctx.modell.zeit)
   const kurz = (d) => M().zeit.datum(d);
   const tage = (a, b) => Math.round((b - a) / 86400000);
-  const relativ = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : n < 0 ? "läuft" : `in ${n} Tagen`);
   const minutenSort = (z) => { const n = M().zeit.minuten(z); return n == null ? -1 : n; }; // ohne Uhrzeit zuerst
   const einzeilig = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 
   // Art wie in kalender.js (Farbe des Punkts, ctx.modell.terminArt): Erledigtes gedämpft, Prüfung rot, Zwischentest blau, Frist
   // ocker, Veranstaltung/Fachschaft Akzent, Rest Uni
   const zwischentest = (t) => t.kategorie === "Prüfung" && M().istZwischentest(t.titel);
-  const art = (t) => (t.erledigt ? "erledigt" : M().terminArt(t.kategorie, zwischentest(t)));
-  // Zentrale Termine mit bereich: schluesselqualifikation (zentral.js): ruhige Pille, damit klar ist: keine Pflicht
-  const pillen = (t) => [
-    t.kategorie === "Prüfung" ? (zwischentest(t) ? '<span class="eba-pill info">Zwischentest</span>' : '<span class="eba-pill bad">Prüfung</span>') : t.kategorie === "Frist" ? '<span class="eba-pill warn">Frist</span>' : "",
-    t.sq ? '<span class="eba-pill leer">freiwillig</span>' : "",
+  const art = (t) => (t.erledigt ? "erledigt" : t.angebot ? "event" : M().terminArt(t.kategorie, zwischentest(t)));
+  // Zentrale Termine mit bereich: schluesselqualifikation (zentral.js): ruhige Pille, damit klar ist: keine Pflicht. Was der Titel
+  // schon sagt, wiederholt keine Pille (seit 0.7.0): Zwischentests heißen immer so (der blaue Punkt bleibt), „(freiwillig)“ ebenso.
+  const freiwillig = (t) => t.sq && !/freiwillig/i.test(t.titel);
+  const pillen = (t) => (t.erledigt ? "" : [
+    t.kategorie === "Prüfung" ? (zwischentest(t) ? "" : '<span class="eba-pill bad">Prüfung</span>') : t.kategorie === "Frist" ? '<span class="eba-pill warn">Frist</span>' : "",
+    freiwillig(t) ? '<span class="eba-pill leer">freiwillig</span>' : "",
     t.geschaetzt ? '<span class="eba-pill leer">geschätzt</span>' : "",
-    t.erledigt ? '<span class="eba-pill ok">erledigt</span>' : "",
-  ].filter(Boolean).join(" ");
+  ].filter(Boolean).join(" "));
   // Termin-Notizen aus dem Fachmodell (ctx.modell.termine(): ohne Entfallenes, nach Tag und Uhrzeit als Zahl), als Einträge der
   // Agenda mit Date-Werten. Uhrzeit: Feld „uhrzeit“, sonst wie bisher aus „ort“ (z. B. „Mo 12:15–14:00 · HS N06“).
   const lesen = () => M().termine().map((t) => ({
@@ -65,8 +68,23 @@ module.exports = function (ctx) {
     geschaetzt: t.geschaetzt, erledigt: t.erledigt, sq: t.freiwillig, ort: t.ort, zeit: t.zeit, quelle: t.quelle,
     geprueft: String(t.fm.geprueft ?? "").slice(0, 10), code: t.code, bereich: t.bereich, zentral: t.zentral, entfaellt: t.entfaellt,
   }));
+  // Dazu die gewählten Angebote der Uni (angebote.js, seit 0.7.0; vorher eine eigene Liste unter der Agenda): Punkt wie
+  // Veranstaltungen, Link zur Seite der Uni. angebote = ctx.angeboteAnzeige.termine(); Reihenfolge wie im Fachmodell
+  // (Tag, Uhrzeit als Zahl ohne Uhrzeit zuerst, Titel).
+  const mitAngeboten = (ts, angebote) => {
+    if (!angebote || !angebote.length) return ts;
+    const neu = angebote.map((a) => ({
+      url: a.url, von: datum(a.datum), bis: null, titel: a.titel, kategorie: "Angebot", geschaetzt: false, erledigt: false, sq: false,
+      ort: "", zeit: a.zeit, quelle: a.url, angebot: true,
+    }));
+    return ts.concat(neu).sort((x, y) => x.von - y.von || minutenSort(x.zeit) - minutenSort(y.zeit) || x.titel.localeCompare(y.titel, "de"));
+  };
 
-  const link = (t, text) => `[[${t.f.path.replace(/\.md$/, "")}|${text}]]`;
+  // Markdown-Link: Termin-Notiz als Wiki-Link, ein Angebot als Link zur Seite der Uni (Klammern im Titel und in der Adresse maskiert)
+  const URL_ZEICHEN = { " ": "%20", "(": "%28", ")": "%29" };
+  const link = (t, text) => (t.url
+    ? `[${String(text).replace(/[\\[\]*_`<>|]/g, "\\$&")}](${String(t.url).replace(/[ ()]/g, (z) => URL_ZEICHEN[z])})`
+    : `[[${t.f.path.replace(/\.md$/, "")}|${text}]]`);
 
   // Tagesspalte. o: { art, gleich, laeuft, monat, rel }. Fett als <b>, nicht **: in der Bearbeitungsansicht (Live Preview)
   // wird Markdown innerhalb von HTML nicht ausgewertet (sonst stünden dort Sternchen).
@@ -95,67 +113,71 @@ module.exports = function (ctx) {
     }).join("\n");
   };
 
-  const erzeugen = (alle, heute) => {
+  // Termine je Teil der Agenda: Diese Woche (Planwoche, ctx.modell.planwoche: am Samstag und Sonntag schon die kommende), Nächste
+  // Woche, Später (ab übernächster Woche, nach Tag) und Vergangen (jüngstes zuerst, ohne Angebote der Uni). alle sortiert wie lesen().
+  const gliedern = (alle, heute) => {
     const ende = (t) => t.bis || t.von;
+    const Z = M().zeit, pw = M().planwoche(iso(heute));
+    const naechste = datum(Z.plus(pw.mo, 7)), uebernaechste = datum(Z.plus(pw.mo, 14));
     const kommend = alle.filter((t) => ende(t) >= heute);
-    const vergangen = alle.filter((t) => ende(t) < heute).reverse();
+    return {
+      pw, naechste,
+      dieseWoche: kommend.filter((t) => t.von < naechste),
+      naechsteWoche: kommend.filter((t) => t.von >= naechste && t.von < uebernaechste),
+      spaeter: kommend.filter((t) => t.von >= uebernaechste),
+      vergangen: alle.filter((t) => ende(t) < heute && !t.angebot).reverse(), // vorbei: Angebote der Uni nicht mehr
+    };
+  };
+  const anzahl = (n) => (n === 0 ? "keine Termine" : n === 1 ? "1 Termin" : `${n} Termine`);
+  // Später nach Monaten (fetter Monatsname, davor eine Leerzeile, sonst hängt er als Fortsetzung an der Zeile davor)
+  const spaeterZeilen = (ts, heute, prefix) => {
+    const aus = [];
+    let monat = null;
+    const stand = { tag: null };
+    for (const t of ts) {
+      const m = `${MONATE[t.von.getMonth()]} ${t.von.getFullYear()}`;
+      if (m !== monat) { if (monat || prefix) aus.push(prefix ? ">" : ""); aus.push(`${prefix}**${m}**`); monat = m; }
+      aus.push(liste([t], heute, { prefix, stand }));
+    }
+    return aus;
+  };
+  const vergangenZeilen = (ts, heute, prefix) => {
+    const stand = { tag: null };
+    return ts.map((t) => liste([t], heute, { prefix, monat: true, stand }));
+  };
+
+  // Markdown der Agenda. o.teil: "" (Diese Woche und Nächste Woche), "spaeter" oder "vergangen" (je eine schlichte Liste für den
+  // gleichnamigen Reiter der Seite, seit 0.7.0). o.sammel: Später und Vergangen unter der Hauptliste als eingeklappte Karten
+  // (Vorgabe; bis 0.6.14 die einzige Form, bleibt für selbst geänderte Seiten ohne die Reiter). Bis 0.6.14 stand dazu „Fristen
+  // danach“ (die nächsten vier Fristen nach den zwei Wochen) offen auf der Seite; sie stehen unter Später und im Dashboard.
+  const erzeugen = (alle, heute, o) => {
+    o = Object.assign({ teil: "", sammel: true }, o || {});
+    const g = gliedern(alle, heute);
+    if (o.teil === "spaeter") return g.spaeter.length ? spaeterZeilen(g.spaeter, heute, "").join("\n") : "- Keine späteren Termine.";
+    if (o.teil === "vergangen") return g.vergangen.length ? vergangenZeilen(g.vergangen, heute, "").join("\n") : "- Keine vergangenen Termine.";
+    const Z = M().zeit, pw = g.pw;
+    const spanne = (a) => Z.spanne(a, Z.plus(iso(a), 6));
     const teile = [];
 
-    // Kompakt: sichtbar nur diese und nächste Woche, je Termin eine Zeile (mehrtägige mit „bis …“); alles danach und
-    // Vergangenes in eingeklappten Karten. Details stehen in der Termin-Notiz. Diese Woche = Planwoche (ctx.modell.planwoche):
-    // am Samstag und Sonntag schon die kommende, dann ab heute („Diese Woche · 17.–25.10.“).
-    const Z = M().zeit, pw = M().planwoche(iso(heute));
-    const wo = datum(pw.mo), naechste = datum(Z.plus(pw.mo, 7)), uebernaechste = datum(Z.plus(pw.mo, 14));
-    const spanne = (a) => Z.spanne(a, Z.plus(iso(a), 6));
-
+    // Kompakt: sichtbar nur diese und nächste Woche, je Termin eine Zeile (mehrtägige mit „bis …“). Details stehen in der Termin-Notiz.
     // Diese Woche: erst, was läuft (begonnen, noch nicht vorbei), dann die Marke „Heute“, dann alles ab heute bis Sonntag
-    const dieseWoche = kommend.filter((t) => t.von < naechste);
-    const laufend = dieseWoche.filter((t) => t.von < heute);
-    const abHeute = dieseWoche.filter((t) => t.von >= heute);
+    const laufend = g.dieseWoche.filter((t) => t.von < heute);
+    const abHeute = g.dieseWoche.filter((t) => t.von >= heute);
     const zeilen = laufend.map((t, i) => zeile(t, tagHtml(t.von, { art: art(t), laeuft: true, gleich: i > 0 })));
     if (abHeute.length) zeilen.push(`- <span class="eba-jetzt">Heute · ${kurz(heute)}</span>`, liste(abHeute, heute, { heuteOhneSpalte: true }));
-    teile.push(`## Diese Woche · ${pw.vorgezogen ? Z.spanne(heute, pw.so) : spanne(wo)}`, "", zeilen.length ? zeilen.join("\n") : "- Keine Termine diese Woche.");
+    teile.push(`## Diese Woche · ${pw.vorgezogen ? Z.spanne(heute, pw.so) : spanne(datum(pw.mo))}`, "", zeilen.length ? zeilen.join("\n") : "- Keine Termine diese Woche.");
 
-    // „Nächste Woche“ und „Fristen danach“: Inhalt in einer Karte |handy-zu|pc-flach (eba-core.css vor 36b): am PC/iPad
-    // ohne Rahmen und Titel unter der Überschrift, auf dem iPhone eine zugeklappte Karte.
-    const naechsteWoche = kommend.filter((t) => t.von >= naechste && t.von < uebernaechste);
-    const anzahl = (n) => (n === 0 ? "keine Termine" : n === 1 ? "1 Termin" : `${n} Termine`);
-    // Kartentitel mit Zeitraum: auf dem iPhone ist die ##-Überschrift ausgeblendet (eba-core.css), die Karte trägt den Titel
-    teile.push("", `## Nächste Woche · ${spanne(naechste)}`, "", `> [!eba-karte|handy-zu|pc-flach]+ Nächste Woche · ${spanne(naechste)} · ${anzahl(naechsteWoche.length)}`,
-      naechsteWoche.length ? liste(naechsteWoche, heute, { prefix: "> " }) : "> - Keine Termine nächste Woche.");
+    // „Nächste Woche“: Inhalt in einer Karte |handy-zu|pc-flach (eba-core.css vor 36b): am PC/iPad ohne Rahmen und Titel unter der
+    // Überschrift, auf dem iPhone eine zugeklappte Karte. Kartentitel mit Zeitraum: auf dem iPhone ist die ##-Überschrift
+    // ausgeblendet (eba-core.css), die Karte trägt den Titel
+    const nw = g.naechsteWoche;
+    teile.push("", `## Nächste Woche · ${spanne(g.naechste)}`, "", `> [!eba-karte|handy-zu|pc-flach]+ Nächste Woche · ${spanne(g.naechste)} · ${anzahl(nw.length)}`,
+      nw.length ? liste(nw, heute, { prefix: "> " }) : "> - Keine Termine nächste Woche.");
 
-    // Fristen danach: die nächsten offenen Fristen/Prüfungen nach den zwei Wochen (die der zwei Wochen stehen oben), mit Monat
-    const fristen = kommend.filter((t) => t.von >= uebernaechste && ["Frist", "Prüfung"].includes(t.kategorie) && !t.erledigt).slice(0, 4);
-    if (fristen.length) {
-      const stand = { tag: null };
-      teile.push("", "## Fristen danach", "", `> [!eba-karte|handy-zu|pc-flach]+ Fristen danach · ${fristen.length === 1 ? "1 Frist" : `${fristen.length} Fristen`}`,
-        fristen.map((t) => {
-          const gleich = t.von.getTime() === stand.tag;
-          stand.tag = t.von.getTime();
-          const extra = [t.sq ? '<span class="eba-pill leer">freiwillig</span>' : "", t.geschaetzt ? '<span class="eba-pill leer">geschätzt</span>' : ""].filter(Boolean).join(" ");
-          return `> - ${tagHtml(t.von, { art: art(t), gleich, monat: true })}${link(t, t.titel)} · ${relativ(tage(heute, t.von))}${extra ? " " + extra : ""}`;
-        }).join("\n"));
-    }
-
-    // Später: nach Monaten, eingeklappt (|sammel: ruhige Karte ohne Farbkante)
-    const spaeter = kommend.filter((t) => t.von >= uebernaechste);
-    if (spaeter.length) {
-      teile.push("", `> [!eba-t|sammel]- Später · ${anzahl(spaeter.length)}`);
-      let monat = null;
-      const stand = { tag: null };
-      for (const t of spaeter) {
-        const m = `${MONATE[t.von.getMonth()]} ${t.von.getFullYear()}`;
-        // Leerzeile davor, sonst hängt der Monatsname als Fortsetzung an der letzten Zeile des Vormonats
-        if (m !== monat) { teile.push(">", `> **${m}**`); monat = m; }
-        teile.push(liste([t], heute, { prefix: "> ", stand }));
-      }
-    }
-
-    if (vergangen.length) {
-      teile.push("", `> [!eba-t|sammel]- Vergangen · ${anzahl(vergangen.length)}`);
-      const stand = { tag: null };
-      for (const t of vergangen) teile.push(liste([t], heute, { prefix: "> ", monat: true, stand }));
-    }
+    if (!o.sammel) return teile.join("\n");
+    // Später nach Monaten und Vergangen: eingeklappt (|sammel: ruhige Karte ohne Farbkante)
+    if (g.spaeter.length) teile.push("", `> [!eba-t|sammel]- Später · ${anzahl(g.spaeter.length)}`, ...spaeterZeilen(g.spaeter, heute, "> "));
+    if (g.vergangen.length) teile.push("", `> [!eba-t|sammel]- Vergangen · ${anzahl(g.vergangen.length)}`, ...vergangenZeilen(g.vergangen, heute, "> "));
     return teile.join("\n");
   };
 
@@ -235,7 +257,7 @@ module.exports = function (ctx) {
       const z = {
         t, wann: wannText(t, teile), wo: teile.wo, status: anmeldeStand(t, o.gruppen, o.semester, o.zentraleGruppen),
         vorbei: a === "spanne" ? t.bis < o.heute : a === "bis" ? t.von < o.heute : false,
-        pillen: [t.sq && !/freiwillig/i.test(t.titel) ? "freiwillig" : "", t.geschaetzt ? "geschätzt" : ""].filter(Boolean),
+        pillen: [freiwillig(t) ? "freiwillig" : "", t.geschaetzt ? "geschätzt" : ""].filter(Boolean),
       };
       (z.vorbei ? vorbei : offen).push(z);
     }
@@ -245,14 +267,34 @@ module.exports = function (ctx) {
 
   // ---------- Codeblock ```eba-agenda``` ----------
   const SPRACHE = "eba-agenda";
+  const TEILE = ["spaeter", "vergangen"];
   const { MarkdownRenderer, MarkdownRenderChild, Keymap } = ctx.obsidian;
+
+  const heuteVon = () => { const j = ctx.date.jetzt(); return new Date(j.getFullYear(), j.getMonth(), j.getDate()); };
+  // Termine der Agenda: Termin-Notizen ohne Lehre eines Moduls (ctx.modell.lehreDesModuls, seit 0.7.0: Übungen starten, Lab,
+  // Raumwechsel stehen in Woche, Dashboard und auf der Modulseite), dazu die gewählten Angebote der Uni
+  const agendaTermine = () => {
+    const A = ctx.angeboteAnzeige;
+    return mitAngeboten(lesen().filter((t) => !M().lehreDesModuls(t)), A && A.termine ? A.termine() : []);
+  };
+  // Teil eines Blocks: Argument der Kopfzeile (```eba-agenda spaeter```) oder, wo Obsidian die Zeilen nicht kennt (im Reiter), der
+  // Ersatztext („Später: …“, „Vergangen: …“); sonst die Hauptliste ("")
+  const teilAus = (quelle) => (/^\s*Später/i.test(quelle || "") ? "spaeter" : /^\s*Vergangen/i.test(quelle || "") ? "vergangen" : "");
+  const teilVon = (q, el, c) => teilAus(q) || (ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, SPRACHE, TEILE, "") : "");
+  // Hat die Seite eigene Blöcke für Später und Vergangen (Reiter der Vorlage seit 0.7.0)? Sonst zeigt die Hauptliste beide als
+  // eingeklappte Karten wie bis 0.6.14, damit auf einer selbst geänderten Seite nichts fehlt.
+  const mitSammel = async (pfad) => {
+    const f = app.vault.getAbstractFileByPath(pfad);
+    const text = f && f.extension === "md" ? await app.vault.cachedRead(f) : "";
+    return !/(```|~~~)\s*eba-agenda\s+spaeter/i.test(text) || !/(```|~~~)\s*eba-agenda\s+vergangen/i.test(text);
+  };
 
   const zeichnen = async (inst) => {
     const { el } = inst;
     const quelle = (inst.ctx && inst.ctx.sourcePath) || SEITE;
-    const jetzt = ctx.date.jetzt();
-    const heute = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
-    const md = erzeugen(lesen(), heute);
+    const heute = heuteVon();
+    const teil = inst.teil || "";
+    const md = erzeugen(agendaTermine(), heute, { teil, sammel: !teil && await mitSammel(quelle) });
     if (md === inst.zuletzt && el.childElementCount) return;
     inst.zuletzt = md;
     // Je Zeichnung ein eigenes Kind-Objekt (räumt Links/Unterelemente der vorigen Zeichnung auf)
@@ -276,7 +318,7 @@ module.exports = function (ctx) {
   const linksOeffnen = (el, quelle) => {
     if (el.__ebaAgendaKlick) return;
     el.__ebaAgendaKlick = true;
-    el.addEventListener("mousedown", (e) => { if (e.target.closest && e.target.closest("a.internal-link, .callout-title")) e.stopPropagation(); });
+    el.addEventListener("mousedown", (e) => { if (e.target.closest && e.target.closest("a.internal-link, a.external-link, .callout-title")) e.stopPropagation(); });
     el.addEventListener("click", (e) => {
       const a = e.target.closest && e.target.closest("a.internal-link");
       if (!a) return;
@@ -287,11 +329,9 @@ module.exports = function (ctx) {
 
   // ---------- Codeblock ```eba-anmeldungen``` ----------
   const SPRACHE_AN = "eba-anmeldungen";
-  const anmeldungenZeichnen = (inst) => {
-    const { el } = inst;
-    const quelle = (inst.ctx && inst.ctx.sourcePath) || SEITE;
-    const jetzt = ctx.date.jetzt();
-    const heute = new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate());
+  // Zeilen der Anmeldungen mit den Daten von jetzt (Modell, Filter der zentralen Termine, Gruppen)
+  const anmeldungenJetzt = () => {
+    const heute = heuteVon();
     let D = null, aufnehmen = null;
     try { D = ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null; } catch (e) { D = null; }
     // zentral.js lädt nach diesem Skript: Filter erst beim Zeichnen nachschlagen (ohne ihn: alle Notizen, die es gibt)
@@ -299,7 +339,12 @@ module.exports = function (ctx) {
     const s = D && D.aktuell;
     let zentraleGruppen = [];
     try { const z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null; zentraleGruppen = z && Array.isArray(z.gruppen) ? z.gruppen : []; } catch (e) { zentraleGruppen = []; }
-    const zeilen = anmeldungen(lesen(), { heute, ende: s ? datum(s.ende) : null, aufnehmen, gruppen: D ? D.stundenplan : [], semester: s ? s.name : "", zentraleGruppen });
+    return anmeldungen(lesen(), { heute, ende: s ? datum(s.ende) : null, aufnehmen, gruppen: D ? D.stundenplan : [], semester: s ? s.name : "", zentraleGruppen });
+  };
+  const anmeldungenZeichnen = (inst) => {
+    const { el } = inst;
+    const quelle = (inst.ctx && inst.ctx.sourcePath) || SEITE;
+    const zeilen = anmeldungenJetzt();
     const schluessel = JSON.stringify(zeilen.map((z) => [z.t.f.path, z.t.titel, z.wann, z.wo, z.t.quelle, z.status, z.vorbei, z.pillen]));
     if (schluessel === inst.zuletzt && el.childElementCount) return;
     inst.zuletzt = schluessel;
@@ -342,6 +387,7 @@ module.exports = function (ctx) {
       inst.zuletzt = null;
       // Das Plugin startet die Erweiterungen alphabetisch, modell.js erst danach: bis dahin der Ersatztext des Blocks
       if (!ctx.modell || !ctx.modell.termine) { el.setText(String(q || "").trim()); return undefined; }
+      inst.teil = teilVon(q, el, c);
       return zeichnen(inst).catch((e) => { el.setText("Agenda: Fehler – " + e.message); console.error("Agenda", e); });
     });
     const anBlock = ctx.codeblock(SPRACHE_AN, (q, el, c, inst) => {
@@ -361,7 +407,21 @@ module.exports = function (ctx) {
     // Tageswechsel: alle 30 Minuten und beim Zurückkommen in die App
     ctx.intervall(alleNeu, 30 * 60 * 1000);
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") alleNeu(); });
+    // Neue Angebote der Uni oder eine andere Auswahl (angebote.js meldet es schon entprellt)
+    ctx.dom(document, "eba-angebote", () => { for (const i of block.instanzen()) zeichnen(i).catch((e) => console.error("Agenda", e)); });
   };
 
-  return { registrieren, lesen, erzeugen, zeichnen, art, anmeldungen, ortTeilen, anmeldeStand };
+  // Zahl am Reiter (reiter.js): Später so viele Termine, wie der Teil zeigt; Anmeldungen die offenen (ohne die grauen, die schon
+  // vorbei sind). Vergangen ohne Zahl: ein Archiv, nichts davon wartet (und am iPhone passt die Reihe so mit Luft). Die
+  // Hauptliste steht in keinem Reiter. Ohne Modell null (dann keine Zahl).
+  const zaehler = {
+    [SPRACHE]: (arg, quelle) => {
+      const teil = TEILE.indexOf(String(arg || "").toLowerCase()) >= 0 ? String(arg).toLowerCase() : teilAus(quelle);
+      if (teil !== "spaeter" || !ctx.modell || !ctx.modell.termine) return null;
+      return gliedern(agendaTermine(), heuteVon()).spaeter.length;
+    },
+    [SPRACHE_AN]: () => (ctx.modell && ctx.modell.termine ? anmeldungenJetzt().filter((z) => !z.vorbei).length : null),
+  };
+
+  return { registrieren, zaehler, teilAus, lesen, mitAngeboten, link, erzeugen, zeichnen, art, anmeldungen, ortTeilen, anmeldeStand };
 };

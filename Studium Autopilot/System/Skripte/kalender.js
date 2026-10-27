@@ -1,18 +1,21 @@
 // Kalender oben auf der Seite Studium/Termine & Anmeldungen.md: Codeblock ```eba-kalender``` (Kalender-Ansicht zuerst, die Liste
 // darunter). Monatsansicht wie in gängigen Kalendern: Raster Mo–So mit Haarlinien, heute als gefüllter Kreis, Wochenende getönt.
 // Termine stehen beschriftet in den Tagen als Farbchips: eintägige mit Uhrzeit und Titel, mehrtägige als Balken über die Tage.
-// Farbe nach Art (eba-core.css --eba-art-*: Prüfung rot, Uni und Zwischentest blau, Veranstaltung/Fachschaft grün), die
+// Farbe nach Art (eba-core.css --eba-art-*: Prüfung rot, Uni und Zwischentest blau, Veranstaltung/Fachschaft lila), die
 // Legende darunter zeigt dieselben Chips.
 // Fristen (kategorie: Frist) stehen NICHT im Kalender (Entscheidung 15.10.2026: Anmeldezeiträume verdeckten die Termine), sondern
 // nur in der Liste darunter (termine.js: Diese Woche, Nächste Woche, Fristen danach).
 // Je Woche Spuren wie bei Google/Apple, nach Relevanz (gewicht), höchstens SPUREN Zeilen je Tag, Rest als „+n weitere“.
 // Ein Tipp auf einen Tag zeigt darunter dessen Termine (Farbpunkt aus dem CSS, Uhrzeit, Titel als Link; Text-Pillen nur für
-// Prüfung, freiwillig, geschätzt, erledigt). Im Kopf neben „Heute“ der Knopf „+ Termin“ (Aktion termin aus notizen.js, seit
-// 17.10.2026; vorher eine eigene Knopf-Karte auf der Seite). Schmale Ansicht (iPhone): Container-Query in eba-core.css, dann
-// kleinere Chips ohne Uhrzeit und der Kopf in einer Zeile.
+// Prüfung, freiwillig, geschätzt, erledigt); für heute erst nach einem Tipp, ohne steht heute in der Agenda direkt darunter
+// (listeZeigen; seit 27.10.2026, vorher nie: ein Tipp auf heute ließ die Liste verschwinden, Rückmeldung vom 27.10.2026). Im Kopf
+// vor „Heute“ das Filter-Symbol (Fenster „Im Kalender zeigen“, angebote.js, seit 0.7.0) und der Knopf „+ Termin“ (Aktion
+// termin aus notizen.js, seit 17.10.2026; vorher eine eigene Knopf-Karte auf der Seite). Schmale Ansicht (iPhone):
+// Container-Query in eba-core.css, dann kleinere Chips ohne Uhrzeit und der Kopf in einer Zeile.
 // Daten live aus dem Fachmodell (ctx.modell.termine(): Termin-Notizen ohne Entfallenes, Uhrzeit als Zahl sortiert, Art wie in
-// Agenda und Dashboard), schreibt keine Datei; zeichnet bei Änderungen, Löschen und
-// Umbenennen von Termin-Notizen neu, dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft). Gewählter
+// Agenda und Dashboard), dazu die gewählten Angebote der Uni (ctx.angeboteAnzeige.termine(): lila wie Veranstaltungen, Link zur
+// Seite der Uni); schreibt keine Datei. Zeichnet bei Änderungen, Löschen und Umbenennen von Termin-Notizen neu, bei neuen
+// Angeboten oder anderer Auswahl (Ereignis „eba-angebote“), dazu an einem neuen Tag (alle 30 Min. und beim Zurückkommen in die App geprüft). Gewählter
 // Monat und Tag gelten nur auf diesem Gerät und bis zum Tageswechsel oder 30 Minuten ohne Tipp, dann wieder heute.
 // Erweiterung: Das Plugin ruft registrieren() beim Start und nach jeder Änderung dieser Datei auf (Hot-Reload); Codeblock und
 // Ereignisse laufen über ctx.codeblock/ctx.an, das Plugin meldet die alte Fassung vorher ab. Stil: eba-core.css Abschnitt 37, Klassen eba-kal-*.
@@ -36,15 +39,37 @@ module.exports = function (ctx) {
   // Art (Farbe) nach der einen Regel des Fachmodells; Zwischentests (Titel enthält „Zwischentest“) sind keine Prüfung
   const art = (k, titel = "") => M().terminArt(k, k === "Prüfung" && M().istZwischentest(titel));
   const tage = (g) => Array.from({ length: g.e - g.s + 1 }, (_, i) => g.s + i);
+  // Trichter (Lucide „funnel“) als eigenes SVG wie in kopf.js: setIcon blieb auf dem iPad leer
+  const trichter = (eltern) => {
+    const NS = "http://www.w3.org/2000/svg", doc = eltern.ownerDocument;
+    const svg = doc.createElementNS(NS, "svg");
+    for (const [k, v] of Object.entries({ viewBox: "0 0 24 24", width: "15", height: "15", fill: "none", stroke: "currentColor", "stroke-width": "2",
+      "stroke-linecap": "round", "stroke-linejoin": "round", "aria-hidden": "true" })) svg.setAttribute(k, v);
+    const p = doc.createElementNS(NS, "path");
+    p.setAttribute("d", "M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z");
+    svg.appendChild(p);
+    eltern.appendChild(svg);
+  };
 
-  const lesen = () => M().termine().map((t) => ({
+  // Angebote der Uni, die du gewählt hast (angebote.js, seit 0.7.0): wie Veranstaltungen, mit Link zur Seite der Uni statt Notiz
+  const angebote = () => {
+    const A = ctx.angeboteAnzeige;
+    return (A && A.termine ? A.termine() : []).map((a) => ({
+      url: a.url, von: M().zeit.tag(a.datum), bis: null, kat: "Angebot", art: "event", erledigt: false, sq: false, geschaetzt: false,
+      zeit: a.zeit, minuten: a.minuten == null ? -1 : a.minuten, titel: a.titel, angebot: true,
+    }));
+  };
+  // Ohne Lehre eines Moduls (ctx.modell.lehreDesModuls: Übungen starten, Lab, Raumwechsel; die stehen in Woche, Dashboard und
+  // auf der Modulseite)
+  const lesen = () => M().termine().filter((t) => !M().lehreDesModuls(t)).map((t) => ({
     f: t.f, von: M().zeit.tag(t.datum), bis: t.bis ? M().zeit.tag(t.bis) : null, kat: t.kategorie, art: t.art, erledigt: t.erledigt,
     sq: t.freiwillig, geschaetzt: t.geschaetzt, zeit: t.zeit, minuten: t.minuten == null ? -1 : t.minuten, titel: t.titel,
-  }));
+  })).concat(angebote());
 
-  // Relevanz für die Reihenfolge im Raster: Pflicht vor Kür. Freiwilliges (bereich: schluesselqualifikation, z. B. TCP-Belegung)
-  // und Erledigtes rücken nach hinten und landen bei Platzmangel zuerst in „+n weitere“; die Tagesliste zeigt immer alles.
-  const gewicht = (t) => (t.erledigt ? 9 : t.sq ? 5 : RANG[t.art]);
+  // Relevanz für die Reihenfolge im Raster: Pflicht vor Kür. Freiwilliges (bereich: schluesselqualifikation, z. B. TCP-Belegung),
+  // Angebote der Uni und Erledigtes rücken nach hinten und landen bei Platzmangel zuerst in „+n weitere“; die Tagesliste zeigt
+  // immer alles.
+  const gewicht = (t) => (t.erledigt ? 9 : t.angebot ? 6 : t.sq ? 5 : RANG[t.art]);
 
   // Spuren einer Woche (start = Montag): jeder Termin bekommt die niedrigste Zeile, die an all seinen Tagen frei ist.
   // Reihenfolge: Relevanz (gewicht), dann mehrtägige vor eintägigen (früher Beginn, dann länger), eintägige ganztägig vor
@@ -86,6 +111,9 @@ module.exports = function (ctx) {
   const zustand = ctx.bleibend("zustand", () => ({ monat: null, tag: null, am: null, zeit: 0 }));
   // Gilt die Auswahl noch? (rein, Test) z = zustand, jetzt = Date
   const frisch = (z, jetzt) => !!z.monat && !!z.tag && !!gleich(z.am, jetzt) && jetzt.getTime() - z.zeit < FRISCH_MS;
+  // Steht unter dem Raster die Liste des gewählten Tags? (rein, Test) Für heute nur nach einem Tipp (z.am): Ohne Tipp beginnt
+  // die Agenda direkt darunter mit heute, getippt zeigt der Kalender heute wie jeden anderen Tag.
+  const listeZeigen = (z, heute) => !gleich(z.tag, heute) || !!z.am;
   const basis = ctx;
 
   // Einträge der Legende [Klasse, Text] für die Termine eines Monats (rein, Test). Zwischentests haben die Farbe der Uni und
@@ -125,6 +153,14 @@ module.exports = function (ctx) {
       return mo;
     };
     const knopf = (ort, text, label, fn) => klick(ort.createEl("button", { text, attr: { type: "button", "aria-label": label, title: label } }), () => { fn(); neu(); });
+    // Filter-Symbol (seit 0.7.0): Fenster „Im Kalender zeigen“ mit den Angeboten der Uni und „Fachschaft & Veranstaltungen“
+    // (angebote.js; bis 0.6.14 eine Karte mit den Häkchen mitten auf der Seite). Kein neu(): Speichern meldet „eba-angebote“.
+    const A = basis.angeboteAnzeige;
+    if (A && A.filter) {
+      const filter = nav.createEl("button", { cls: "eba-kal-filter", attr: { type: "button", "aria-label": "Im Kalender zeigen", title: "Im Kalender zeigen" } });
+      trichter(filter);
+      klick(filter, () => A.filter());
+    }
     // „+ Termin“: dieselbe Aktion wie der Link obsidian://studium-autopilot?aktion=termin (fragt Titel und Datum ab);
     // auf dem iPhone nur das Plus (eba-core.css). Kein neu(): die neue Notiz löst das Neuzeichnen über den metadataCache aus.
     const neuKnopf = nav.createEl("button", { cls: "eba-kal-neu", attr: { type: "button", "aria-label": "Neuer Termin", title: "Neuer Termin" } });
@@ -192,13 +228,20 @@ module.exports = function (ctx) {
     const legende = el.createDiv({ cls: "eba-kal-legende" });
     for (const [cls, text] of legendeVon(imRaster)) legende.createSpan({ cls: `eba-kal-leg ${cls}`, text });
 
-    // Termine des gewählten Tags
+    // Termine des gewählten Tags, für heute nur nach einem Tipp (listeZeigen)
     const tag = zustand.tag;
+    if (!listeZeigen(zustand, heute)) return;
     const liste = el.createDiv({ cls: "eba-kal-liste" });
     const n = abstand(tag, heute);
     liste.createDiv({ cls: "eba-kal-datum", text: `${lang(tag)}${tag.getFullYear() !== heute.getFullYear() ? " " + tag.getFullYear() : ""}${n === 0 ? " · heute" : n === 1 ? " · morgen" : ""}` });
     const ts = amTag(tag);
+    // Termin-Notiz öffnen; ein Angebot der Uni führt zu ihrer Seite (Obsidian öffnet den Link im Browser)
     const link = (ort, t) => {
+      if (t.url) {
+        const a = ort.createEl("a", { cls: "external-link eba-kal-link", text: t.titel, href: t.url, attr: { target: "_blank", rel: "noopener" } });
+        a.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
+        return;
+      }
       const a = ort.createEl("a", { cls: "internal-link eba-kal-link", text: t.titel, href: t.f.path, attr: { "data-href": t.f.path } });
       klick(a, (e) => basis.oeffnen(t.f, { neu: e.ctrlKey || e.metaKey }));
     };
@@ -214,9 +257,9 @@ module.exports = function (ctx) {
       if (t.bis) text.appendText(gleich(t.von, tag) ? ` · bis ${kurz(t.bis)}` : ` · seit ${kurz(t.von)}`);
       // Art als Farbpunkt (CSS, --kal); Text nur für Prüfung und Frist (Fristen stehen nicht im Kalender, der Fall bleibt für die Vollständigkeit)
       if (t.art === "pruefung" || t.art === "frist") { text.appendText(" "); text.createSpan({ cls: `eba-pill ${PILLE[t.art]}`, text: t.kat }); }
-      if (t.art === "zwischentest") { text.appendText(" "); text.createSpan({ cls: "eba-pill info", text: "Zwischentest" }); }
-      // Schlüsselqualifikation (zentral.js, bereich): ruhige Pille, keine Pflicht
-      if (t.sq) { text.appendText(" "); text.createSpan({ cls: "eba-pill leer", text: "freiwillig" }); }
+      // Schlüsselqualifikation (zentral.js, bereich): ruhige Pille, keine Pflicht. Was der Titel schon sagt, wiederholt keine Pille
+      // (seit 0.7.0): Zwischentests heißen immer so (Art und Farbe kommen aus dem Titel), „(freiwillig)“ ebenso
+      if (t.sq && !/freiwillig/i.test(t.titel)) { text.appendText(" "); text.createSpan({ cls: "eba-pill leer", text: "freiwillig" }); }
       if (t.geschaetzt) { text.appendText(" "); text.createSpan({ cls: "eba-pill leer", text: "geschätzt" }); }
       if (t.erledigt) { text.appendText(" "); text.createSpan({ cls: "eba-pill ok", text: "erledigt" }); }
     }
@@ -246,6 +289,8 @@ module.exports = function (ctx) {
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (termin(f, cache)) bald(); });
     ctx.an(app.metadataCache, "deleted", (f, vorher) => { if (termin(f, vorher)) bald(); });
     ctx.an(app.vault, "rename", (f, alt) => { if (termin(f, app.metadataCache.getFileCache(f)) || String(alt).startsWith("Termine/")) bald(); });
+    // Neue Angebote der Uni oder eine andere Auswahl (angebote.js meldet es schon entprellt)
+    ctx.dom(document, "eba-angebote", () => block.neu());
     // Tageswechsel (Markierung „heute“): alle 30 Minuten und beim Zurückkommen in die App, nur wenn ein neuer Tag ist
     let gezeichnetAm = ctx.date.now("YYYY-MM-DD");
     const tagNeu = () => { const h = ctx.date.now("YYYY-MM-DD"); if (h !== gezeichnetAm) { gezeichnetAm = h; block.neu(); } };
@@ -253,5 +298,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
-  return { registrieren, zeichnen, art, frisch, legendeVon }; // art, frisch und legendeVon für tests/kalender.test.js
+  return { registrieren, zeichnen, art, frisch, listeZeigen, legendeVon, gewicht }; // art bis gewicht für tests/kalender.test.js
 };

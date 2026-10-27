@@ -296,7 +296,7 @@ test("Noten: 66 %- und 34 %-Block nach ECTS, abgeschnitten; Elective Studies zä
   assert.equal(N.note, "1,72"); // 0,66 · 1,58 + 0,34 · 2,0 = 1,7228 → abgeschnitten
   assert.equal(N.unter, "Note ungültig: X500");
   assert.equal(modell("2026-10-18").noten().note, "–");
-  assert.equal(modell("2026-10-18").noten().unter, "noch keine Noten eingetragen");
+  assert.equal(modell("2026-10-18").noten().unter, "", "ohne Noten keine Unterzeile: der Strich sagt es");
 });
 
 test("statusArt: eine Farbe je Zustand (docs/design.md), „angemeldet“ grün, „neu“ neutral", () => {
@@ -308,11 +308,16 @@ test("statusArt: eine Farbe je Zustand (docs/design.md), „angemeldet“ grün,
   assert.deepEqual(["neu", "gelesen", "in Arbeit", "überfällig", "geschätzt"].map((s) => M.statusArt(s)), ["leer", "ok", "warn", "bad", "leer"]);
 });
 
-test("Tabellen: Datum ohne Jahr im Studienjahr, „heute“ zur Zeit des Zeichnens (Fehler 18); Chip-Farbe aus statusArt", () => {
+test("Tabellen: Datum ohne Jahr im Studienjahr, „heute“ zur Zeit des Zeichnens (Fehler 18); Chip-Farbe aus statusArt; Teile in Studienreihenfolge; Uhrzeit mit Doppelpunkt", () => {
   const T = laden("tabellen", { kontext: { modell: modell("2026-12-30") } }).ergebnis;
   assert.equal(T.datumText("2027-02-06"), "06.02.", "nach Neujahr im selben Studienjahr kein Jahr");
   assert.equal(T.datumText("2027-10-06"), "06.10.2027");
   assert.deepEqual(["angemeldet", "neu", "überfällig"].map(T.chipArt), ["ok", "leer", "bad"]);
+  assert.deepEqual(T.gruppenOrdnen(["Profil & Vertiefung", "Grundstudium", "Abschluss"]), [1, 0, 2], "Teile in der Reihenfolge des Studiums");
+  assert.deepEqual(T.gruppenOrdnen(["B110", "Altklausur"]), [0, 1], "andere Gruppen wie in der Ansicht");
+  assert.equal(T.uhrText("Mi 14.15 Tutorium"), "Mi 14:15 Tutorium", "Dateiname mit Punkt, Anzeige mit Doppelpunkt");
+  assert.equal(T.uhrText("Mo 8.30 Vorlesung"), "Mo 8:30 Vorlesung");
+  assert.equal(T.uhrText("Folien 01.02 Grundlagen"), "Folien 01.02 Grundlagen", "ohne Wochentag bleibt der Punkt");
 });
 
 test("Neuer Termin: „Zwischentest“ im Titel wird eine Prüfung (Fehler 19), Jahr nach jahrRaten, Feld uhrzeit", async () => {

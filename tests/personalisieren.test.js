@@ -99,3 +99,8 @@ test("Obsidian: Einstellungen, Dateien mit ihrer Zahl und der Tresor mit Namen; 
   assert.deepEqual(P.OBSIDIAN, { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:open-vault" });
   assert.equal(nach(P.obsidianZeilen("", 0)).dateien.wert, "0");
 });
+
+test("Hilfe: oben die Zeile Rundgang, neutral wie die Themen darunter; ein Tipp zeigt ihn noch einmal", () => {
+  assert.deepEqual(P.hilfeZeilen(), [{ id: "rundgang", symbol: "kompass", ton: "leise", titel: "Rundgang", wert: "",
+    aktion: { aktion: "rundgang", parameter: {} }, rechts: "pfeil" }]);
+});

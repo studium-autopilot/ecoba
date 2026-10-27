@@ -110,9 +110,9 @@ test("Woche 19.10.: was noch nicht begonnen hat, blass mit „ab TT.MM.“; Ausg
   assert.equal(woche("2026-10-26").h1, 12);
   // das Tutorium ab 27.10. steht schon da: blass, sein Beginn statt der Uhrzeit, nie „heute“ oder „jetzt“
   const t = kasten(w, "Stundenplan/Di X180 Tutorium.md");
-  assert.deepEqual([t.zeit, t.raum, t.klassen.join(" ")], ["ab 27.10.", "Hörsaal 1", "eba-ev ue spaeter"]);
+  assert.deepEqual([t.zeit, t.raum, t.klassen.join(" ")], ["ab 27.10.", "Hörsaal 1", "eba-ev ue modul-4 spaeter"]);
   assert.match(t.titel, /· beginnt am 27\.10\.$/);
-  assert.deepEqual(kasten(woche("2026-10-19", "2026-10-20T09:00:00"), "Stundenplan/Di X180 Tutorium.md").klassen, ["eba-ev", "ue", "spaeter"]);
+  assert.deepEqual(kasten(woche("2026-10-19", "2026-10-20T09:00:00"), "Stundenplan/Di X180 Tutorium.md").klassen, ["eba-ev", "ue", "modul-4", "spaeter"]);
   // eine Woche später findet es statt
   const t2 = kasten(woche("2026-10-26"), "Stundenplan/Di X180 Tutorium.md");
   assert.deepEqual([t2.zeit, t2.klassen.includes("spaeter")], ["08:15", false]);
@@ -133,7 +133,7 @@ test("Nach bis kein Kasten; vor von nur in Wochen, in denen etwas stattfindet", 
 test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Beginn nur bei c.t., Lage im Raster", () => {
   const w = woche("2026-10-26");
   const mo = kasten(w, "Stundenplan/Mo X110.md");
-  assert.deepEqual([mo.kurz, mo.art, mo.zeit, mo.von, mo.bis, mo.klassen.join(" ")], ["Daten", "", "", 2, 10, "eba-ev vl"]);
+  assert.deepEqual([mo.kurz, mo.art, mo.zeit, mo.von, mo.bis, mo.klassen.join(" ")], ["Daten", "", "", 2, 10, "eba-ev vl modul-3"]);
   assert.equal(mo.notiz, "Module/1 Grundstudium/X110 Beispieldatenanalyse.md", "Modul über den vollen Pfad, nicht über den Namen");
   assert.equal(kasten(w, "Stundenplan/Mi X101.md").notiz, "Stundenplan/Mi X101.md", "ohne Modul-Link die Notiz selbst");
   assert.equal(kasten(woche("2026-10-26", undefined, {}), "Stundenplan/Mo X110.md").notiz, "Stundenplan/Mo X110.md", "Modulnotiz fehlt: nie nur der Name");
@@ -144,6 +144,69 @@ test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Begi
   assert.equal(kasten(w, "Stundenplan/Di X100.md").kurz, "X100"); // ohne Kurznamen der Code
   assert.equal(W.kurzname({ titel: "Ohne Code · Vorlesung" }, {}), "Ohne Code");
   assert.equal(W.artText({ art: "Veranstaltung", gruppe: "3" }), "");
+});
+
+// Seit 27.10.2026: Farbe je Modul. Vorher waren Vorlesungen grau gefüllt und Übungen nur blau umrandet; dunkel sah jeder Kasten
+// gleich aus (Rückmeldung: „Timetable Colors aren't distinguishable too faint“).
+test("Farbe je Modul: der n-te Code des Semesters, von Woche zu Woche gleich, ohne Code neutral, nach sechs von vorn", () => {
+  // Codes des WS sortiert; X902 liegt im SoSe
+  assert.deepEqual(W.farbenBauen(NOTIZEN.slice(0, 7), "WS 2026/27"), { X100: 1, X101: 2, X110: 3, X180: 4, X200: 5 });
+  assert.deepEqual(W.farbenBauen(NOTIZEN, "SoSe 2027"), { X902: 1 });
+  const sieben = ["A1", "A2", "A3", "A4", "A5", "A6", "A7"].map((code) => lv("Stundenplan/" + code + ".md", { code }));
+  assert.deepEqual([W.farbenBauen(sieben, "WS 2026/27").A6, W.farbenBauen(sieben, "WS 2026/27").A7], [6, 1]);
+  const farbe = (w, pfad) => kasten(w, pfad).klassen.filter((c) => /^modul-/.test(c));
+  for (const montag of ["2026-10-19", "2026-11-02", "2027-01-11"]) {
+    assert.deepEqual(farbe(woche(montag), "Stundenplan/Mi X101.md"), ["modul-2"], montag);
+    assert.deepEqual(farbe(woche(montag), "Stundenplan/Mi X101 Übung.md"), ["modul-2"], montag + ": Übung in der Farbe ihres Moduls");
+  }
+  // Was das Raster nie zeigt (entfällt, „Besuche ich nicht“, ohne Zeit), nimmt keinen Ton: X100 bleibt 1, obwohl X010 bis X030 davor
+  // sortiert wären (X900 und X901 in NOTIZEN ebenso)
+  const nie = [
+    lv("Stundenplan/Mo X010.md", { code: "X010", wochentag: 1, beginn: "12:00", ende: "13:00", entfaellt: true }),
+    lv("Stundenplan/Mo X020.md", { code: "X020", wochentag: 1, beginn: "12:00", ende: "13:00", herkunft: "zentral", zentral_id: "ws-2026-27-x900-vorlesung-1-fr-1000" }),
+    lv("Stundenplan/Mo X030.md", { code: "X030", wochentag: 1 }),
+  ];
+  const mit = W.wocheBauen({ notizen: NOTIZEN.concat(nie), kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });
+  assert.deepEqual(farbe(mit, "Stundenplan/Di X100.md"), ["modul-1"]);
+  assert.deepEqual(farbe(mit, "Stundenplan/Do X200.md"), ["modul-5"]);
+  const ohne = W.wocheBauen({ notizen: [lv("Stundenplan/Mo.md", { titel: "Einführung", wochentag: 1, beginn: "10:00", ende: "12:00", von: "2026-10-12", bis: "2027-02-01" })],
+    kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-19"), jetzt: new Date("2026-10-17T12:00:00") });
+  assert.deepEqual(ohne.kaesten[0].klassen, ["eba-ev", "vl"], "ohne Modul keine Farbe");
+  assert.deepEqual(ohne.legende, []);
+  // so viele Töne, wie das CSS hat
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8");
+  const js = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "woche.js"), "utf8");
+  assert.equal(Number(/const FARBEN = (\d+);/.exec(js)[1]), (css.slice(0, css.indexOf("/* ---------- 2.")).match(/--eba-modul-\d+:/g) || []).length);
+});
+
+test("Legende: Module der Woche in der Reihenfolge der Farben, Name aus der Modulnotiz, ohne Ausfall und Ausnahme", () => {
+  const w = W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: { X110: "Daten" }, modulPfad: {}, modulName: { X100: "Beispielmathematik", X110: "Beispieldatenanalyse" },
+    modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") });
+  assert.deepEqual(w.legende.map((x) => [x.farbe, x.text, x.titel]), [[1, "Beispielmathematik", "X100 Beispielmathematik"], [2, "X101", "X101"],
+    [3, "Daten", "X110 Beispieldatenanalyse"], [4, "X180", "X180"], [5, "X200", "X200"]]);
+  // Woche 19.10.: X200 kommt nur als Ausnahme (andere Zeit, anderer Raum, Warnfarbe) vor, X180 erst blass ab 27.10.
+  assert.deepEqual(woche("2026-10-19").legende.map((x) => x.code), ["X100", "X101", "X110", "X180"]);
+  // Fällt das einzige Modul der Woche aus, zeigt kein Kasten seine Farbe: keine Legende
+  const ausfall = lv("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", code: "X400", art: "Vorlesung", wochentag: 3, beginn: "10:15", ende: "11:45",
+    von: "2026-10-12", bis: "2027-02-05", ausfall: ["2026-10-21"] });
+  const aus = W.wocheBauen({ notizen: [ausfall], kurzVonCode: {}, modulPfad: {}, modulName: { X400: "Beispiel" }, modell: MODELL, montag: tag("2026-10-19"),
+    jetzt: new Date("2026-10-19T08:00:00") });
+  assert.deepEqual([aus.kaesten.length, aus.kaesten[0].klassen.includes("modul-1"), aus.legende], [1, true, []]);
+});
+
+test("Stil: Kante und Fläche in der Farbe des Moduls, Übung leiser, ohne Modul neutral, Legende in derselben Form", () => {
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
+  const regel = (sel) => { const m = css.match(new RegExp("(?:^|\\n)" + sel.replace(/[.*+?^${}()|[\]\\:]/g, "\\$&") + "\\s*\\{([^}]*)\\}")); return m ? m[1] : ""; };
+  assert.match(regel(".eba-woche .eba-ev, .eba-wlegende span"), /--eba-ev-farbe: var\(--eba-faint\)/);
+  for (let n = 1; n <= 6; n++) assert.match(css, new RegExp(`\\.eba-woche \\.modul-${n}, \\.eba-wlegende \\.modul-${n} \\{ --eba-ev-farbe: var\\(--eba-modul-${n}\\); \\}`));
+  const flaeche = /background: color-mix\(in srgb, var\(--eba-ev-farbe\) var\(--eba-modul-ton\), var\(--eba-bg\)\)/;
+  for (const sel of [".eba-woche .eba-ev", ".eba-legende.eba-wlegende span::before"]) {
+    assert.match(regel(sel), /border-left: 3px solid var\(--eba-ev-farbe\)/, sel);
+    assert.match(regel(sel), flaeche, sel);
+  }
+  assert.match(regel(".eba-woche .eba-ev.ue"), /border-left-width: 2px;[^}]*background: color-mix\(in srgb, var\(--eba-ev-farbe\) var\(--eba-modul-ton-ue\), var\(--eba-bg\)\)/);
+  assert.ok(!/\.ue\.heute/.test(css), "kein eigener Rahmen in --eba-info für Übungen heute");
+  assert.ok(!/\.eba-woche \.eba-ev[^{]*\{[^}]*var\(--eba-(accent|info)\) \d+%/.test(css), "Kästen nicht mehr im Akzent oder in --eba-info");
 });
 
 test("Eine Gruppe je Modul und Art: eine zweite Gruppen-Notiz desselben Tutoriums fehlt im Raster (meine-gruppe.js doppelt)", () => {
@@ -245,7 +308,7 @@ test("Ausnahmen: Ausfall dieser Lehrveranstaltung in Warnfarbe mit „Fällt aus
   const w = ausnahmen("2026-10-19", [X("Stundenplan/Mi X400.md", { titel: "X400 · Vorlesung", wochentag: 3, ausfall: ["2026-10-21"] })]);
   const k = w.kaesten[0];
   assert.deepEqual([k.aus, k.ausnahme, k.grund], [true, true, ""]);
-  assert.deepEqual(k.klassen, ["eba-ev", "vl", "ausnahme", "ausfall"]);
+  assert.deepEqual(k.klassen, ["eba-ev", "vl", "modul-1", "ausnahme", "ausfall"]);
   assert.ok(!k.klassen.includes("spaeter"));
   assert.match(k.titel, /· fällt aus$/);
 });
@@ -332,7 +395,7 @@ test("Jetzt nach der Zeit dieses Tages: eine geänderte Zeit zählt, die üblich
 });
 
 test("Wischen: nicht vom Bildschirmrand, Richtung erst nach 10 px, nur deutlich waagerecht und weiter als 50 px", () => {
-  assert.equal(W.wischStartOk(20, 390), false); // linker Rand: Seitenleiste von Obsidian
+  assert.equal(W.wischStartOk(20, 390), false); // linker Rand: Obsidian (zurück, seitenleiste.js)
   assert.equal(W.wischStartOk(375, 390), false); // rechter Rand
   assert.equal(W.wischStartOk(200, 390), true);
   assert.equal(W.wischAchse(6, 4), ""); // noch offen
@@ -342,6 +405,24 @@ test("Wischen: nicht vom Bildschirmrand, Richtung erst nach 10 px, nur deutlich 
   assert.equal(W.wischRichtung(80, -10), -1);
   assert.equal(W.wischRichtung(-50, 0), 0); // nicht weiter als 50 px
   assert.equal(W.wischRichtung(-80, 50), 0); // eher senkrecht
+});
+
+// Blättern und Zurück vom Rand teilen sich den Rand ohne Spalt und ohne Überlappung: Das Raster blättert genau dort nicht, wo
+// Zurück (seitenleiste.js amRand, links) bzw. derselbe Streifen rechts gilt, auch mit sicherem Rand (iPhone quer neben der
+// Notch). Bis 27.10.2026 zählte das Raster ab dem Bildschirmrand: links 47 px Notch → ab 47 bis 77 px beides zugleich.
+test("Wischen: Blättern beginnt genau dort, wo der Streifen für Zurück endet, auch neben der Notch", () => {
+  const { amRand } = require(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "seitenleiste.js"));
+  for (const breite of [390, 844, 1376]) {
+    for (const [links, rechts] of [[0, 0], [47, 47], [59, 0], [0, 59]]) {
+      for (let x = 0; x <= breite; x += 1) {
+        const rand = amRand(x, { richtung: 1, breite, sicher: links }) || amRand(x, { richtung: -1, breite, sicher: rechts });
+        assert.equal(W.wischStartOk(x, breite, { links, rechts }), !rand, `${breite} px, sicher ${links}/${rechts}, x ${x}`);
+      }
+    }
+  }
+  assert.equal(W.wischStartOk(60, 844, { links: 47, rechts: 47 }), false, "iPhone quer: 60 px gehören noch Zurück");
+  assert.equal(W.wischStartOk(80, 844, { links: 47, rechts: 47 }), true);
+  assert.equal(W.wischStartOk(200, 0), true, "Breite unbekannt: nur links geprüft");
 });
 
 test("Seiten: Dashboard und Stundenplan zeigen das Raster über den Codeblock, keine Bases-Formeln mehr", () => {
@@ -423,7 +504,7 @@ test("Raster auf Dashboard und Stundenplan, auch schmal: keine Tagesansicht dane
   for (const sourcePath of ["Dashboard.md", "Studium/Stundenplan.md"]) {
     const el = knotenDom();
     zeichnen("", el, { sourcePath });
-    assert.deepEqual(el.kinder.map((k) => k.cls), ["eba-woche mit-leiste"], sourcePath);
+    assert.deepEqual(el.kinder.map((k) => k.cls), ["eba-woche mit-leiste", "eba-legende eba-wlegende"], sourcePath);
     assert.ok(alleKnoten(el).some((k) => /\beba-ev\b/.test(k.cls)), sourcePath + ": Kästen im Raster");
     assert.ok(!alleKnoten(el).some((k) => /\beba-wt|hat-tag/.test(k.cls)), sourcePath);
   }
@@ -543,4 +624,43 @@ test("Stil: schmal die knappe Zeile statt der langen, Wörter brechen nur an Sil
   assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > b i, \.eba-ev \.eba-ev-lang \{ display: none; \}\s*\.eba-ev \.eba-ev-knapp \{ display: inline; \}/);
   assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > b \{[^}]*hyphens: auto;[^}]*overflow-wrap: normal;/);
   assert.match(css, /@container eba-kz \(max-width: 480px\) \{ \.eba-woche \.eba-ev\.ausnahme \{ border-left-width: 2px; \} \}/);
+});
+
+// Online (seit 27.10.2026): Das Data Science Lab von S110 per Zoom sah im Raster aus wie jede Übung im Hörsaal (Rückmeldung: „R Lab
+// or Science Lab isn't distinct in timetable but should be since it's online“). Eine Regel (ctx.modell.istOnline), nicht der eine Fall.
+test("Online-Sitzung: Klasse online nach Feld oder Raum, an dem Tag; Legende „online“ nur in einer Woche mit so einer Sitzung", () => {
+  const I = MODELL.istOnline;
+  for (const r of ["online per Zoom", "Zoom", "Online-Sitzung", "per Webex", "MS Teams", "BigBlueButton", "BBB", "https://zoom.us/j/1", "HS 1 und online"]) {
+    assert.equal(I({}, r), true, r);
+  }
+  for (const r of ["Kupferbau HS 25", "Onlinekurs-Raum 3", "Projektteams-Raum", "", "Hörsaal 1 (Keplerstraße 2)"]) assert.equal(I({}, r), false, r);
+  assert.equal(I({ online: true }, "HS 1"), true, "Feld online");
+  assert.equal(I({ raum: "online per Zoom" }), true, "ohne Raum des Tages: der übliche");
+  assert.equal(I({ raum: "online per Zoom" }, "Hörsaal 9"), false, "an diesem Tag im Hörsaal");
+  const S = require("../Studium Autopilot/System/Skripte/modell.js").istOnline; // dieselbe Regel ohne Obsidian (rein)
+  for (const r of ["online per Zoom", "Kupferbau HS 25"]) assert.equal(S({}, r), I({}, r), r);
+
+  const lab = { pfad: "Stundenplan/Fr 14.15 X110 Lab.md", fm: { typ: "lehrveranstaltung", titel: "Daten · Data Science Lab", code: "X110", art: "Data Science Lab",
+    wochentag: 5, beginn: "14:15", ende: "15:45", raum: "online per Zoom", semester: "WS 2026/27", von: "2026-10-23", bis: "2027-02-05",
+    ausfall: ["2026-12-25"], aenderungen: ["2026-11-06|14:15|15:45|Hörsaal 9"] } };
+  const bauen = (montag) => W.wocheBauen({ notizen: NOTIZEN.concat([lab]), kurzVonCode: { X110: "Daten" }, modulPfad: {}, modell: MODELL, montag: tag(montag), jetzt: new Date("2026-10-17T12:00:00") });
+  const k = (w) => w.kaesten.find((x) => x.pfad === lab.pfad);
+  const w1 = bauen("2026-10-26");
+  assert.ok(k(w1).online && k(w1).klassen.indexOf("online") >= 0, "online per Zoom");
+  assert.ok(k(w1).klassen.indexOf("modul-" + k(w1).farbe) >= 0, "bleibt in der Farbe seines Moduls");
+  assert.equal(w1.online, true, "Legende: „online“");
+  const w2 = bauen("2026-11-02");
+  assert.ok(!k(w2).online && k(w2).klassen.indexOf("online") < 0, "an dem Tag im Hörsaal (Änderung): nicht online");
+  assert.equal(w2.online, false, "ohne Sitzung online keine Legende „online“");
+  const w3 = bauen("2026-12-21");
+  assert.ok(!k(w3) || !k(w3).online, "Ausfall: nicht online");
+  assert.equal(W.wocheBauen({ notizen: NOTIZEN, kurzVonCode: {}, modulPfad: {}, modell: MODELL, montag: tag("2026-10-26"), jetzt: new Date("2026-10-17T12:00:00") }).online, false);
+  // Zeichnen: der Eintrag „online“ hinter den Modulen, in derselben Form wie der Kasten (eba-core.css 55)
+  const code = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "woche.js"), "utf8");
+  assert.match(code, /if \(W\.online\) l\.createSpan\(\{ cls: "online", text: "online"/);
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8");
+  assert.match(css, /\.eba-legende\.eba-wlegende span\.online::before \{\s*border-left-style: dashed;\s*background: repeating-linear-gradient\(135deg/);
+  assert.match(css, /\.eba-woche \.eba-ev\.online :is\(\.eba-ev-lang, \.eba-ev-knapp\)::before \{[^}]*-webkit-mask: var\(--eba-online-symbol\)[^}]*mask: var\(--eba-online-symbol\)/,
+    "Kamera vor der Zeile mit dem Raum, breit und schmal");
+  assert.match(css, /\.eba-mod-wo\.online::before \{[^}]*mask: var\(--eba-online-symbol\)/, "Modulseite: dieselbe Kamera vor dem Ort");
 });

@@ -36,12 +36,13 @@ test("SQ-Kurs: vier Stufen im Menü, unbekannt = geplant; Lehrveranstaltung: Im 
   assert.deepEqual([K.statusVon("lehrveranstaltung", {}, false).text, K.statusVon("lehrveranstaltung", {}, true).text], ["Im Stundenplan", "Besuche ich nicht"]);
 });
 
-test("Farbe aus statusArt: erledigt gefüllt, Zwischenstand getönt, offen warm, Besuche ich nicht leise", () => {
+test("Farbe aus statusArt: erledigt gefüllt, Zwischenstand getönt, offen warm, Besuche ich nicht und ungelesen leise", () => {
   const M = modell("2026-10-18");
   const klasse = (typ, fm, nicht) => { const s = K.statusVon(typ, fm, nicht); return K.klasseVon(s, M.statusArt(typ, s.wort)); };
   assert.equal(klasse("termin", { erledigt: true }), "fertig");
   assert.equal(klasse("termin", { erledigt: false }), "");
   assert.equal(klasse("unterlage", { status: "gelesen" }), "fertig");
+  assert.equal(klasse("unterlage", { status: "neu" }), "leise", "jede neue Unterlage ist ungelesen, das ist keine Warnung");
   assert.equal(klasse("sq_kurs", { status: "angemeldet" }), "zwischen");
   assert.equal(klasse("sq_kurs", { status: "bestanden" }), "fertig");
   assert.equal(klasse("sq_kurs", { status: "geplant" }), "");
@@ -162,4 +163,14 @@ test("Termin-Kopf: Tag, daneben heute/morgen/läuft oder die Restzeit, Uhrzeit n
 test("Termin-Kopf: das Label nennt nur Art und Modul, der Tag steht darunter", () => {
   const Kx = laden("kopf", { kontext: { modell: modell("2026-10-24") } }).ergebnis;
   assert.equal(Kx.labelVon("termin", { path: "Termine/x.md", basename: "x" }, { typ: "termin", datum: "2026-10-27", kategorie: "Frist", code: "B110", uhrzeit: "14:00" }), "Frist · B110");
+});
+
+test("Unterlage: das Label nennt das Modul mit Namen und das Semester (ohne Umbruch); Kürzel, Art und Nummer stehen schon im Titel", () => {
+  const Kx = laden("kopf").ergebnis;
+  const f = { path: "Unterlagen/X100/X100 Folien 00 Einführung.md", basename: "X100 Folien 00 Einführung" };
+  const fm = { typ: "unterlage", code: "X100", art: "Folien", nummer: 0, semester: "WS 2026/27" };
+  assert.equal(Kx.labelVon("unterlage", f, fm, "Einführung in die Welt"), "Einführung in die Welt · WS\u00a02026/27");
+  assert.equal(Kx.labelVon("unterlage", f, fm, ""), "X100 · WS\u00a02026/27", "Modulseite fehlt: das Kürzel");
+  assert.equal(Kx.labelVon("unterlage", f, { typ: "unterlage", art: "Sonstiges", semester: "WS 2026/27" }), "Sonstiges · WS\u00a02026/27", "ohne Modul");
+  assert.equal(Kx.labelVon("unterlage", f, { typ: "unterlage", art: "Folien", nummer: 3 }), "Folien 03");
 });

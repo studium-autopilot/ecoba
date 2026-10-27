@@ -9,7 +9,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Unterlagen</h1>
 </div>
 
@@ -41,7 +40,7 @@ cssclasses:
 >   altmodule: |-
 >     formula.alt.map(value.properties.code).filter(value.isTruthy()).unique().length
 >   karte: |-
->     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Unterlagen" + "</span><span class='v'>" + formula.u.length + "</span><span class='s'>" + formula.module + if(formula.module == 1, " Modul", " Module") + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Neu" + "</span><span class='v'>" + formula.neu + "</span><span class='s'>noch nicht geöffnet</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Altklausuren" + "</span><span class='v'>" + formula.alt.length + "</span>" + if(formula.altmodule > 0, "<span class='s'>" + formula.altmodule + if(formula.altmodule == 1, " Modul", " Module") + "</span>", "") + "</div>" + "</div></div>")
+>     html("<div class='eba-kz'><div class='eba-kz-reihe drei'>" + "<div class='eba-kachel'><span class='k'>" + "Gesamt" + "</span><span class='v'>" + formula.u.length + "</span><span class='s'>" + formula.module + if(formula.module == 1, " Modul", " Module") + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Neu" + "</span><span class='v'>" + formula.neu + "</span></div>" + "<div class='eba-kachel'><span class='k'>" + "Altklausuren" + "</span><span class='v'>" + formula.alt.length + "</span>" + if(formula.altmodule > 0, "<span class='s'>" + formula.altmodule + if(formula.altmodule == 1, " Modul", " Module") + "</span>", "") + "</div>" + "</div></div>")
 > views:
 >   - type: list
 >     name: Kennzahlen
@@ -213,4 +212,4 @@ cssclasses:
 Unterlagen ohne Modul erscheinen hier, sobald Studium Autopilot läuft.
 ```
 
-<p class="eba-hinweis">ILIAS, einordnen und annotieren: <a class="internal-link" data-href="Einstellungen & Hilfe#Hilfe" href="Einstellungen & Hilfe#Hilfe">Hilfe</a></p>
+<p class="eba-hinweis">ILIAS, Einordnen, Annotieren → <a class="internal-link" data-href="Einstellungen & Hilfe#Hilfe" href="Einstellungen & Hilfe#Hilfe">Hilfe</a></p>

@@ -9,7 +9,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Prüfungen</h1>
 </div>
 
@@ -17,7 +16,7 @@ cssclasses:
 Zeitleiste: erscheint, sobald Studium Autopilot läuft.
 ```
 
-> [!eba-tabelle|schlicht|umbruch] Termine
+> [!eba-tabelle|schlicht|ohne-titel|umbruch]
 > ```eba-liste pruefungen
 > Prüfungen erscheinen, sobald Studium Autopilot läuft.
 > ```

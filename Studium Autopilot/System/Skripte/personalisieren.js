@@ -10,12 +10,15 @@
 //                              die gewählte mit Haken und darunter, was aus ihr folgt; Tippen auf eine andere wählt sie (Aktion
 //                              „variante“ in aktionen.js).
 //   ```eba-personalisieren obsidian```  „Obsidian“ (seit 24.10.2026): Zeilen Obsidian-Einstellungen, Dateien (Zahl) und Tresor
-//                              (Name). Das stand bis dahin unten in der Schublade auf iPhone und iPad; eba-core.css Abschnitt 66
-//                              blendet es dort aus, solange die Übersicht vorn ist. Tippen ruft Obsidians Befehl auf (Aktion
+//                              (Name). Das stand bis dahin unten in der Schublade auf iPhone und iPad (bis 26.10.2026 dort
+//                              ausgeblendet, solange die Übersicht vorn war). Tippen ruft Obsidians Befehl auf (Aktion
 //                              „obsidian“, Parameter ziel=einstellungen|dateien|tresor, OBSIDIAN).
+//   ```eba-personalisieren hilfe```  „Hilfe“ (seit 27.10.2026): die Zeile Rundgang, oben in der Liste der Hilfe-Themen
+//                              (> [!eba-zeilen]); Tippen zeigt den Rundgang noch einmal (Aktion „rundgang“, rundgang.js).
 //   Alle als kompakte Zeilen wie die Verbindungen (seit 24.10.2026, .eba-ez, verbindungen.js kompakt): eine Zeile je Angabe, die
 //   ganze Zeile ist der Knopf. Bis dahin Symbol, Titel, Wert in einer zweiten Zeile und ein Knopf „Ändern“ bzw. „Wählen“.
-//   Inhalt der Zeilen: angabenZeilen(), varianteZeilen() und obsidianZeilen() (rein, getestet in tests/personalisieren.test.js).
+//   Inhalt der Zeilen: angabenZeilen(), varianteZeilen(), obsidianZeilen() und hilfeZeilen() (rein, getestet in
+//   tests/personalisieren.test.js).
 //   Aktion „personalisieren“   EIN Formular-Fenster (Name, Studienbeginn als Semester-Auswahl, Variante, Zielnote 1,0–4,0),
 //                              speichert nach System/Einstellungen.md. Auch als Befehl. Parameter feld=name|studienbeginn|
 //                              zielnote setzt den Cursor in dieses Feld.
@@ -35,7 +38,7 @@ module.exports = function (ctx) {
     "Economics": "Pflicht: E230, E210, S220, B240 · Schwerpunkte 75 ECTS, mind. 2 VWL-Bereiche",
     "Business Administration": "Pflicht: B220, J200, B250, B240 · Profil 12 ECTS · Schwerpunkte 63 ECTS, mind. 2 BWL-Bereiche",
     "ohne Spezialisierung": "Profil 18 ECTS VWL + 18 ECTS BWL · Schwerpunkte 63 ECTS, je mind. 1 VWL- und BWL-Bereich",
-    "offen": "Vor dem 3. Fachsemester wählen; bis dahin rechnet Studium Autopilot ohne Variante",
+    "offen": "Bis zum 3. Fachsemester wählen",
   };
   // Übersprungene Schritte der Einrichtung (einrichtung_uebersprungen) in Worten; alma und ilias aus Einrichtungen bis 0.4.7
   const SCHRITTE = { studienbeginn: "Studienbeginn", variante: "Variante", angaben: "Name und Zielnote", uni: "Uni-Login", alma: "Alma", ilias: "ILIAS" };
@@ -50,6 +53,7 @@ module.exports = function (ctx) {
     zahnrad: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
     ordner: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
     tresor: '<rect x="3" y="3" width="8" height="18" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
+    kompass: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/>',
   };
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
 
@@ -219,6 +223,8 @@ module.exports = function (ctx) {
       { id: "tresor", symbol: "tresor", ton: "akzent", titel: "Tresor", wert: txt(tresor), aktion: oeffnen("tresor"), rechts: "pfeil" },
     ];
   };
+  // „Hilfe“: oben in der Liste der Hilfe-Themen der Rundgang (rundgang.js), neutral wie die Themen darunter
+  const hilfeZeilen = () => [{ id: "rundgang", symbol: "kompass", ton: "leise", titel: "Rundgang", wert: "", aktion: { aktion: "rundgang", parameter: {} }, rechts: "pfeil" }];
   // Kompakte Zeilen wie unter Verbindungen (verbindungen.js, uebersicht; Titel und Wert in einer Kopfzeile, die zweite Zeile
   // darunter); Stil eba-core.css 43 (.eba-ez)
   const liste = (el, zeilen) => {
@@ -242,6 +248,7 @@ module.exports = function (ctx) {
   const angaben = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, angabenZeilen(fmVon())); };
   const variante = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, varianteZeilen(fmVon())); };
   const obsidian = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, obsidianZeilen(app.vault.getName(), app.vault.getFiles().length)); };
+  const hilfe = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, hilfeZeilen()); };
   const neuZeichnen = () => { if (block) block.neu(); };
 
   const AKTIONEN = {
@@ -260,18 +267,19 @@ module.exports = function (ctx) {
   };
 
   ctx.personalisieren = { zielnotePruefen, semesterOptionen, vorschauTeile, vorschauText, VARIANTEN, FOLGE, OBSIDIAN, Formular, angabenZeilen, varianteZeilen,
-    obsidianZeilen, angaben, variante, obsidian, neuZeichnen, get fenster() { return fenster; } };
+    obsidianZeilen, hilfeZeilen, angaben, variante, obsidian, hilfe, neuZeichnen, get fenster() { return fenster; } };
 
   const registrieren = () => {
     block = ctx.codeblock("eba-personalisieren", (quelle, el, c, inst) => {
-      inst.art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-personalisieren", ["karte", "angaben", "variante", "obsidian"], "karte") : "karte";
+      inst.art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, "eba-personalisieren", ["karte", "angaben", "variante", "obsidian", "hilfe"], "karte") : "karte";
       // Beim Neuzeichnen der Leseansicht (rerender) liefert getSectionInfo oft nichts, dann käme „karte“ (leer, unsichtbar).
-      // Rückfall wie todos.js über den Text im Block: „Variante: …“, „Deine Angaben: …“ bzw. „Obsidian: …“, der alte
-      // Dashboard-Block hat keinen.
+      // Rückfall wie todos.js über den Text im Block: „Variante: …“, „Deine Angaben: …“, „Obsidian: …“ bzw. „Rundgang: …“, der
+      // alte Dashboard-Block hat keinen. In einer Karte (Hilfe) liefert getSectionInfo die Karte, dort zählt nur der Text.
       const q = String(quelle || "");
-      if (inst.art === "karte") inst.art = /variante/i.test(q) ? "variante" : /angaben/i.test(q) ? "angaben" : /obsidian/i.test(q) ? "obsidian" : "karte";
+      if (inst.art === "karte") inst.art = /variante/i.test(q) ? "variante" : /angaben/i.test(q) ? "angaben" : /obsidian/i.test(q) ? "obsidian" : /rundgang/i.test(q) ? "hilfe" : "karte";
+      const zeichner = { angaben, variante, obsidian, hilfe };
       try {
-        if (inst.art === "angaben") angaben(el); else if (inst.art === "variante") variante(el); else if (inst.art === "obsidian") obsidian(el); else karte(el);
+        (zeichner[inst.art] || karte)(el);
       } catch (e) { console.error("eba-personalisieren", e); }
     });
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(() => neuZeichnen()));

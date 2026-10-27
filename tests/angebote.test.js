@@ -1,6 +1,6 @@
-// Angebote der Uni (angebote.js, Codeblock eba-angebote): Auswahl (Vorgabe, Einstellungen ohne die neuen Felder, Schalter
-// „Fachschaft & Veranstaltungen“, unbekannte Vortragsreihen), Zeitfenster, Gruppieren nach Tagen, Filter nach Art,
-// Buchungsbeginn beim Hochschulsport und die Texte einer Zeile. Nur ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
+// Angebote der Uni (angebote.js): Termine für Kalender und Agenda (nur Gewähltes, Art vorn im Titel, Buchungsstart beim
+// Hochschulsport, nichts doppelt zu Termin-Notizen) und die Auswahl (Vorgabe, Einstellungen ohne die neuen Felder, Schalter
+// „Fachschaft & Veranstaltungen“, unbekannte Vortragsreihen). Nur ausgedachte Daten. Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -14,67 +14,78 @@ const a = (anders = {}) => Object.assign({
   ort: "", online: false, url: "https://uni-tuebingen.de/beispiel", anmeldung: null,
 }, anders);
 
-// Heute: Samstag, 17.10.2026, 12:00. Fenster 14 Tage → bis Freitag 30.10., ab 31.10. „Mehr anzeigen“
-const HEUTE = { heute: "2026-10-17", jetzt: "12:00" };
+// Ein Teil der Daten: je Art ein Angebot, dazu eine zweite Vortragsreihe
 const LISTE = [
-  a({ id: "v1", titel: "Vortrag Montag", von: "18:15", bis: "19:45", ort: "Hörsaal 9" }),
-  a({ id: "v2", titel: "Vortrag November", datum: "2026-11-10", von: "18:15" }),
-  a({ id: "v3", reihe: "Fachbereich", titel: "Heute vorbei", datum: "2026-10-17", von: "10:00", bis: "11:00" }),
-  a({ id: "v4", reihe: "Fachbereich", titel: "Heute noch", datum: "2026-10-17", von: "14:00", bis: "15:00", online: true }),
-  a({ id: "v5", titel: "Gestern", datum: "2026-10-16" }),
-  a({ id: "u1", kategorie: "ub", reihe: "UB-Kurse", titel: "Literatur finden", datum: "2026-10-20", ort: "UB, Schulungsraum", anmeldung: { ab: "", bis: "2026-10-19" } }),
+  a({ id: "v1", titel: "Restitution in Europa", datum: "2026-10-26", von: "18:15", bis: "19:45" }),
+  a({ id: "v2", reihe: "WiSo-Kolloquium", titel: "Märkte", datum: "2026-10-26", von: "12:15" }),
+  a({ id: "u1", kategorie: "ub", reihe: "Informationen finden", titel: "Zotero", datum: "2026-10-23", von: "10:00", bis: "11:30" }),
   a({ id: "s1", kategorie: "sport", reihe: "Hochschulsport", titel: "Badminton", datum: "2026-11-02", von: "18:00", bis: "20:00", anmeldung: { ab: "2026-10-19T17:00", bis: "" } }),
-  a({ id: "w1", kategorie: "welcome", reihe: "Welcome Center", titel: "Stadtführung", datum: "2026-10-30" }),
-  a({ id: "w2", kategorie: "welcome", reihe: "Welcome Center", titel: "Spieleabend", datum: "2026-10-31" }),
+  a({ id: "w1", kategorie: "welcome", reihe: "Welcome Center", titel: "Stammtisch", datum: "2026-10-29" }),
 ];
-const kurz = (tage) => tage.map((t) => [t.tag, t.zeilen.map((z) => z.angebot.id + (z.art === "buchung" ? ":buchung" : ""))]);
+const ids = (ts) => ts.map((t) => t.id);
 
-test("Zeitfenster: heute bis 14 Tage sofort, danach „Mehr anzeigen“; Vergangenes fällt weg", () => {
-  const r = A.auswaehlen(LISTE, HEUTE);
-  assert.deepEqual(kurz(r.nah), [
-    ["2026-10-17", ["v4"]],
-    ["2026-10-19", ["s1:buchung", "v1"]],
-    ["2026-10-20", ["u1"]],
-    ["2026-10-30", ["w1"]],
-  ]);
-  assert.deepEqual(kurz(r.spaeter), [["2026-10-31", ["w2"]], ["2026-11-02", ["s1"]], ["2026-11-10", ["v2"]]]);
-  assert.equal(r.spaeterZeilen, 3);
-  // ohne Uhrzeit „jetzt“ bleibt ein heutiger Termin stehen; kürzeres Fenster
-  assert.deepEqual(kurz(A.auswaehlen(LISTE, { heute: "2026-10-17" }).nah)[0], ["2026-10-17", ["v3", "v4"]]);
-  assert.deepEqual(kurz(A.auswaehlen(LISTE, Object.assign({ tage: 3 }, HEUTE)).nah).map((t) => t[0]), ["2026-10-17", "2026-10-19"]);
+test("Termine: nur gewählte Arten und Vortragsreihen, nach Tag, Uhrzeit (ohne zuerst) und Titel", () => {
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: A.VORGABE })), ["s1-buchung", "u1", "v2", "s1"], "Vorgabe: Sport, Unibibliothek, WiSo");
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: ["vortrag-studium-generale", "welcome"] })), ["v1", "w1"]);
+  assert.deepEqual(A.termineVon(LISTE, { auswahl: [] }), [], "nichts gewählt");
+  assert.deepEqual(A.termineVon(null, { auswahl: A.VORGABE }), [], "keine Daten");
+  assert.deepEqual(ids(A.termineVon([a({ id: "b", titel: "B", von: "09:00" }), a({ id: "c", titel: "A", von: "09:00" }), a({ id: "x", titel: "Z" })],
+    { auswahl: ["vortrag-studium-generale"] })), ["x", "c", "b"]);
+  // unbekannte Art (die Prüfung in zentral.js lässt sie nicht durch) bleibt draußen
+  assert.deepEqual(A.termineVon([a({ kategorie: "party" })], { auswahl: ["party"] }), []);
 });
 
-test("Gruppieren: je Tag sortiert – ohne Uhrzeit zuerst, dann Uhrzeit, Buchungsbeginn vor Terminen gleicher Zeit", () => {
-  const r = A.auswaehlen([
-    a({ id: "c", titel: "C", von: "18:00" }),
-    a({ id: "b", titel: "B" }),
-    a({ id: "s", kategorie: "sport", titel: "Kurs", datum: "2026-11-02", anmeldung: { ab: "2026-10-19T18:00", bis: "" } }),
-    a({ id: "a", titel: "A", von: "09:00" }),
-  ], HEUTE);
-  assert.deepEqual(kurz(r.nah), [["2026-10-19", ["b", "a", "s:buchung", "c"]]]);
+test("Termine: Uhrzeit wie bei Termin-Notizen, Art vorn im Titel, Link zur Seite der Uni", () => {
+  const [u] = A.termineVon(LISTE, { auswahl: ["ub"] });
+  assert.deepEqual(u, { id: "u1", datum: "2026-10-23", zeit: "10:00–11:30", minuten: 600, titel: "Unibibliothek: Zotero",
+    url: "https://uni-tuebingen.de/beispiel", kategorie: "ub", buchung: false });
+  const [w] = A.termineVon(LISTE, { auswahl: ["welcome"] });
+  assert.equal(w.zeit, "");
+  assert.equal(w.minuten, null);
+  assert.equal(w.titel, "Welcome Center: Stammtisch");
+  assert.equal(A.termineVon(LISTE, { auswahl: ["vortrag-wiso"] })[0].zeit, "12:15");
+  assert.equal(A.titelVon(a({ titel: "Restitution in Europa" })), "Vortrag: Restitution in Europa");
+  assert.equal(A.titelVon(a({ titel: "Vortrag „Confronting Science Denial“" })), "Vortrag „Confronting Science Denial“", "Art steht schon drin");
+  assert.equal(A.titelVon(a({ kategorie: "sport", titel: "Hochschulsport-Party" })), "Hochschulsport-Party");
 });
 
-test("Filter nach Art: ausgeschaltete Arten fehlen in der Liste, ihre Anzahl bleibt am Chip", () => {
-  const alle = A.auswaehlen(LISTE, HEUTE);
-  assert.deepEqual(alle.zahlen, { vortrag: 3, ub: 1, sport: 1, welcome: 2 });
-  const r = A.auswaehlen(LISTE, Object.assign({ aus: ["sport", "welcome"] }, HEUTE));
-  assert.deepEqual(r.zahlen, alle.zahlen);
-  assert.deepEqual(kurz(r.nah), [["2026-10-17", ["v4"]], ["2026-10-19", ["v1"]], ["2026-10-20", ["u1"]]]);
-  assert.deepEqual(kurz(r.spaeter), [["2026-11-10", ["v2"]]]);
-  const keine = A.auswaehlen(LISTE, Object.assign({ aus: A.ARTEN.map((k) => k.id) }, HEUTE));
-  assert.equal(keine.nah.length + keine.spaeter.length, 0);
+test("Termine: Hochschulsport mit Buchungsstart als eigenem Termin am Tag der Buchung", () => {
+  const [b, s] = A.termineVon(LISTE, { auswahl: ["sport"] });
+  assert.deepEqual(b, { id: "s1-buchung", datum: "2026-10-19", zeit: "17:00", minuten: 1020, titel: "Hochschulsport: Badminton – Buchungsstart",
+    url: "https://uni-tuebingen.de/beispiel", kategorie: "sport", buchung: true });
+  assert.equal(s.titel, "Hochschulsport: Badminton");
+  assert.equal(s.zeit, "18:00–20:00");
+  const ganzerTag = A.termineVon([a({ id: "s", kategorie: "sport", datum: "2026-11-02", anmeldung: { ab: "2026-10-19", bis: "" } })], { auswahl: ["sport"] });
+  assert.deepEqual(ganzerTag.map((t) => [t.datum, t.zeit, t.minuten]), [["2026-10-19", "", null], ["2026-11-02", "", null]]);
+  // nur beim Hochschulsport; die Anmeldung anderer Arten steht auf der Seite der Uni
+  assert.deepEqual(ids(A.termineVon([a({ id: "u", kategorie: "ub", anmeldung: { ab: "2026-10-12", bis: "" } })], { auswahl: ["ub"] })), ["u"]);
 });
 
-test("Auswahl: nur gewählte Arten und Vortragsreihen, Anzahl je Art aus der Auswahl", () => {
-  const r = A.auswaehlen(LISTE, Object.assign({ auswahl: ["sport", "ub", "vortrag-wiso"] }, HEUTE));
-  assert.deepEqual(r.zahlen, { vortrag: 0, ub: 1, sport: 1, welcome: 0 }, "Reihe „Fachbereich“ ist nicht die WiSo-Fakultät");
-  assert.deepEqual(kurz(r.nah), [["2026-10-19", ["s1:buchung"]], ["2026-10-20", ["u1"]]]);
-  const sg = A.auswaehlen(LISTE, Object.assign({ auswahl: ["vortrag-studium-generale", "vortrag-fachbereich"] }, HEUTE));
-  assert.deepEqual(kurz(sg.nah), [["2026-10-17", ["v4"]], ["2026-10-19", ["v1"]]]);
-  assert.deepEqual(kurz(sg.spaeter), [["2026-11-10", ["v2"]]]);
-  assert.equal(A.auswaehlen(LISTE, Object.assign({ auswahl: [] }, HEUTE)).nah.length, 0, "nichts gewählt");
-  assert.deepEqual(A.artenDerAuswahl(["welcome", "vortrag-wiso", "sport"]), ["vortrag", "sport", "welcome"]);
-  assert.deepEqual(A.artenDerAuswahl([]), []);
+test("Termine: was schon als Termin-Notiz dasteht, kommt nicht doppelt", () => {
+  const vorhanden = [
+    { datum: "2026-10-23", titel: "UB-Kurs: Zotero", minuten: 600 },
+    { datum: "2026-10-26", titel: "Restitution in Europa", minuten: null },
+    { datum: "2026-10-29", titel: "Stammtisch der Fachschaft", minuten: 1200 },
+  ];
+  const alle = ["sport", "ub", "vortrag-studium-generale", "vortrag-wiso", "welcome"];
+  // Zotero (gleiche Uhrzeit, Titel steckt drin) und der Vortrag (ohne Uhrzeit, gleicher Titel) stehen schon da; der Stammtisch
+  // ohne Uhrzeit ist nicht der Stammtisch der Fachschaft
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: alle, vorhanden })), ["s1-buchung", "v2", "w1", "s1"]);
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: ["vortrag-studium-generale"], vorhanden: [{ datum: "2026-10-26", titel: "Vortrag: Restitution", minuten: null }] })),
+    ["v1"], "ohne Uhrzeit reicht ein Teil des Titels nicht");
+  // andere Uhrzeit oder anderer Tag: nicht derselbe
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: ["ub"], vorhanden: [{ datum: "2026-10-23", titel: "UB-Kurs: Zotero", minuten: 840 }] })), ["u1"]);
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: ["ub"], vorhanden: [{ datum: "2026-10-24", titel: "UB-Kurs: Zotero", minuten: 600 }] })), ["u1"]);
+  // der Buchungsstart bleibt, auch wenn der Kurs selbst schon dasteht
+  assert.deepEqual(ids(A.termineVon(LISTE, { auswahl: ["sport"], vorhanden: [{ datum: "2026-11-02", titel: "Badminton", minuten: 1080 }] })), ["s1-buchung"]);
+});
+
+test("Gleicher Titel: der kürzere steckt als ganze Wörter im längeren, mindestens 4 Zeichen, Umlaute und Zeichen egal", () => {
+  assert.equal(A.gleicherTitel("UB-Kurs: Zotero", "Zotero"), true);
+  assert.equal(A.gleicherTitel("Vortrag „Märkte im Wandel“", "Maerkte im Wandel"), true);
+  assert.equal(A.gleicherTitel("Rotes Kreuz", "Rot"), false, "kürzer als 4 Zeichen");
+  assert.equal(A.gleicherTitel("Zoterokurs", "Zotero"), false, "nur ganze Wörter");
+  assert.equal(A.gleicherTitel("Einführung in R", "Einführung in Python"), false);
 });
 
 test("Auswahl: Vorgabe und Einstellungen ohne die neuen Felder (Tresor vor dieser Version)", () => {
@@ -135,59 +146,12 @@ test("Auswahl: Vortragsreihen aus den Daten – bekannte erkannt, unbekannte zun
     ["sport", true], ["ub", true], ["vortrag-wiso", true], ["vortrag-studium-generale", false],
     ["vortrag-antrittsvorlesungen", false], ["vortrag-ringvorlesung-nachhaltigkeit", false], ["welcome", false],
   ]);
-  assert.equal(e[6].hinweis, "vor allem für Promovierende und Postdocs");
+  assert.equal(e[6].name, "Welcome Center");
+  assert.ok(e.every((x) => !("hinweis" in x)), "nur Namen, kein Satz darunter");
   assert.equal(e[4].name, "Antrittsvorlesungen");
   // nach „Fertig“: Angehakte in Reihenfolge der Karte; früher gewählte Reihe, die gerade fehlt, bleibt
   const haken = { sport: true, "vortrag-antrittsvorlesungen": true, welcome: false };
   assert.deepEqual(A.wahlNeu(["vortrag-alte-reihe", "welcome", "ub"], e, haken), ["sport", "vortrag-antrittsvorlesungen", "vortrag-alte-reihe"]);
-  // eine neue Reihe, die nicht gewählt ist, erscheint nicht in der Liste
-  const r = A.auswaehlen([a({ id: "neu", reihe: "Antrittsvorlesungen" })], Object.assign({ auswahl: A.VORGABE }, HEUTE));
-  assert.equal(r.nah.length, 0);
-});
-
-test("Hochschulsport: Buchungsbeginn als eigene Zeile, nur solange er nicht vorbei ist", () => {
-  const sport = (ab) => a({ id: "s", kategorie: "sport", reihe: "Hochschulsport", titel: "Kurs", datum: "2026-10-26", von: "18:00", anmeldung: { ab, bis: "" } });
-  assert.deepEqual(kurz(A.auswaehlen([sport("2026-10-19T17:00")], HEUTE).nah), [["2026-10-19", ["s:buchung"]], ["2026-10-26", ["s"]]]);
-  assert.deepEqual(kurz(A.auswaehlen([sport("2026-10-17")], HEUTE).nah), [["2026-10-17", ["s:buchung"]], ["2026-10-26", ["s"]]], "heute ohne Uhrzeit");
-  assert.deepEqual(kurz(A.auswaehlen([sport("2026-10-10T08:00")], HEUTE).nah), [["2026-10-26", ["s"]]], "Buchung schon offen");
-  // nur beim Hochschulsport; andere Arten nennen den Beginn der Anmeldung in der Zeile
-  const ub = a({ id: "u", kategorie: "ub", datum: "2026-10-26", anmeldung: { ab: "2026-10-19", bis: "" } });
-  assert.deepEqual(kurz(A.auswaehlen([ub], HEUTE).nah), [["2026-10-26", ["u"]]]);
-  // Buchungszeile zählt das Angebot nur einmal
-  assert.equal(A.auswaehlen([sport("2026-10-19T17:00")], HEUTE).zahlen.sport, 1);
-});
-
-test("Texte einer Zeile: Uhrzeit, Ort und online, Anmeldung, Buchungsbeginn", () => {
-  const r = A.auswaehlen(LISTE, HEUTE);
-  const zeile = (id, art) => r.nah.concat(r.spaeter).reduce((x, t) => x.concat(t.zeilen), []).find((z) => z.angebot.id === id && z.art === (art || "termin"));
-  assert.equal(A.zeitText(zeile("v1")), "18:15–19:45");
-  assert.equal(A.zeitText(zeile("v2")), "18:15");
-  assert.equal(A.zeitText(zeile("w1")), "");
-  assert.equal(A.zeitText(zeile("s1", "buchung")), "ab 17:00");
-  assert.equal(A.zeitText({ art: "termin", zeit: "08:30", ende: "", angebot: a() }), "8:30");
-  assert.equal(A.metaText(zeile("v1"), HEUTE.heute), "Studium Generale · Hörsaal 9");
-  assert.equal(A.metaText(zeile("v4"), HEUTE.heute), "Fachbereich · online");
-  assert.equal(A.metaText(zeile("u1"), HEUTE.heute), "UB-Kurse · UB, Schulungsraum · Anmeldung bis 19.10.");
-  assert.equal(A.metaText(zeile("s1", "buchung"), HEUTE.heute), "Buchungsstart · Hochschulsport · Kurs ab Mo 02.11.");
-  assert.equal(A.ortText(a({ ort: "Neue Aula", online: true })), "Neue Aula · online");
-  assert.equal(A.anmeldeText(a({ anmeldung: { ab: "2026-10-19", bis: "2026-10-26T23:59" } }), "2026-10-17"), "Anmeldung ab 19.10.");
-  assert.equal(A.anmeldeText(a({ anmeldung: { ab: "2026-10-10", bis: "2026-10-26T23:59" } }), "2026-10-17"), "Anmeldung bis 26.10., 23:59");
-  assert.equal(A.anmeldeText(a({ anmeldung: { ab: "", bis: "2026-10-16" } }), "2026-10-17"), "", "Anmeldung vorbei");
-  assert.equal(A.anmeldeText(a({ kategorie: "sport", anmeldung: { ab: "2026-10-19T17:00", bis: "2026-10-25" } }), "2026-10-17"), "Buchung bis 25.10.");
-  // mit Uhrzeit von jetzt: heute abgelaufene Anmeldung fällt weg, heute beginnende steht bis zu ihrer Uhrzeit als „ab“ da
-  const heute = (anmeldung, jetzt) => A.anmeldeText(a({ anmeldung }), "2026-10-17", jetzt);
-  assert.equal(heute({ ab: "", bis: "2026-10-17T12:00" }, "11:59"), "Anmeldung bis 17.10., 12:00");
-  assert.equal(heute({ ab: "", bis: "2026-10-17T12:00" }, "12:00"), "");
-  assert.equal(heute({ ab: "", bis: "2026-10-17T12:00" }), "Anmeldung bis 17.10., 12:00", "ohne Uhrzeit von jetzt bis Tagesende");
-  assert.equal(heute({ ab: "", bis: "2026-10-17" }, "23:00"), "Anmeldung bis 17.10.", "Tag ohne Uhrzeit gilt bis zu seinem Ende");
-  assert.equal(heute({ ab: "2026-10-17T14:00", bis: "2026-10-20" }, "13:00"), "Anmeldung ab 17.10., 14:00");
-  assert.equal(heute({ ab: "2026-10-17T14:00", bis: "2026-10-20" }, "14:00"), "Anmeldung bis 20.10.");
-  assert.equal(A.metaText(zeile("u1"), "2026-10-19", "23:00"), "UB-Kurse · UB, Schulungsraum · Anmeldung bis 19.10.");
-});
-
-test("Monatstrenner: nur der erste Tag je neuem Monat", () => {
-  const { monatsMarke } = A;
-  const tage = ["2026-10-28", "2026-10-30", "2026-11-02", "2026-11-05", "2026-12-01", "2027-03-03"].map((tag) => ({ tag }));
-  assert.deepEqual(monatsMarke(tage, "2026-10-27"), { "2026-11-02": "Nov.", "2026-12-01": "Dez.", "2027-03-03": "März" });
-  assert.deepEqual(monatsMarke([], "2026-10-27"), {});
+  // eine neue Reihe, die nicht gewählt ist, erscheint nicht im Kalender
+  assert.deepEqual(A.termineVon([a({ id: "neu", reihe: "Antrittsvorlesungen" })], { auswahl: A.VORGABE }), []);
 });

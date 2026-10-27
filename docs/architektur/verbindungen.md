@@ -53,7 +53,8 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   43): Symbol der Sache (`v.symbol`), Name, rechts ein kurzer Stand und der Pfeil, darunter in wenigen Wörtern, was die Sache
   tut (`v.beschreibung`, z. B. „Fasst deine Unterlagen mit KI zusammen“; Uni-Login: was hier verbunden ist; Updates:
   „Version 0.6.7 installiert“). Das Symbol ist grün bei verbunden oder an, im Akzent, wenn etwas wartet, sonst gedämpft. Der
-  Stand ist ein Wort und steht immer neben dem Namen (Name und Stand höchstens 24 Zeichen, Test; CSS kürzt sonst mit „…“):
+  Stand ist kurz und steht immer neben dem Namen; wird es eng, bricht erst der Name, dann der Stand um (seit 0.7.0, vorher höchstens
+  24 Zeichen zusammen, sonst kürzte das CSS mit „…“):
   `st.kurz` (Updates: „Aktuell“, ohne Release-Angaben „Nicht geprüft“; Uni-Login im eigenen Uni-Abgleich: „Nicht nötig“,
   darunter, was von dort kommt), sonst die Pille in Worten („Verbunden“, „Aus“, „Neue Version“), sonst das Symbol: ein Haken
   heißt bei Schaltern (`SCHALTER`: Zentrale Daten, Suche in PDFs, auch von außen) „An“, sonst „Verbunden“; Schloss und extern

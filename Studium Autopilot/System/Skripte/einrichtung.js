@@ -446,10 +446,10 @@ module.exports = function (ctx) {
       }
 
       if (s === ANGEBOTE) {
-        // Dieselben Häkchen wie die Karte auf Termine & Anmeldungen (angebote.js), angehakt die Vorgabe oder die gespeicherte
+        // Dieselben Häkchen wie das Fenster „Im Kalender zeigen“ (angebote.js), angehakt die Vorgabe oder die gespeicherte
         // Auswahl; darum nur Weiter. Weiter schreibt die Auswahl zusammen mit dem Stand. Ohne angebote.js (Update kommt gerade
-        // über den Sync) nur der Satz: Die Karte auf der Seite fragt später.
-        titel("Welche Angebote willst du sehen?", "Vorträge, Kurse und Sport der Uni erscheinen unter **Termine & Anmeldungen**.");
+        // über den Sync) nur der Satz: Bis du im Kalender filterst, gilt die Vorgabe.
+        titel("Welche Angebote willst du sehen?", "Vorträge, Kurse und Sport der Uni erscheinen im Kalender unter **Termine & Anmeldungen**.");
         const A = ctx.angeboteAnzeige;
         const wahl = A && A.wahl ? A.wahl(haupt.createDiv({ cls: "eba-ei-feld" })) : null;
         this.felder.angebote = wahl;

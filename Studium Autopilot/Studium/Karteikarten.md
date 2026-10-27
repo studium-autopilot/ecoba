@@ -9,7 +9,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Karteikarten</h1>
 </div>
 

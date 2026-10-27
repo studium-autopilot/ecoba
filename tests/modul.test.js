@@ -66,6 +66,10 @@ test("Als Nächstes: Ausfall der nächsten 14 Tage mit „fällt aus“, Änderu
   const v = mit({ raum: "Hörsaal 21", raum_vorher: "Hörsaal 1", raum_seit: "2026-10-19" })[0];
   assert.deepEqual([v.marke, v.wo, v.raumAlt], ["neuer Raum", "Hörsaal 21", "Hörsaal 1"]);
   assert.equal(mit({})[0].marke, "");
+  // Online (seit 27.10.2026, ctx.modell.istOnline wie im Wochenraster): die Kamera vor dem Ort (eba-core.css 58.7), an dem Tag
+  assert.equal(mit({ raum: "online per Zoom" })[0].online, true);
+  assert.equal(mit({})[0].online, false);
+  assert.equal(mit({ raum: "online per Zoom", aenderungen: ["2026-10-19|10:00|12:00|Hörsaal 21"] })[0].online, false, "an dem Tag im Hörsaal");
 });
 
 test("Semesterband: Wochen vorbei/jetzt/Pause, Notizen (offen/nachgearbeitet), Monate, Prüfung in oder nach der Vorlesungszeit", () => {

@@ -106,16 +106,29 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
 - **Nachträge in Notizen (seit 0.6.9, `nachtraege.js`, `NACHTRAEGE`, `nachtragenMit`):** Das Update fasst Notizen nie an.
   Schrieb eine ältere Version beim Anlegen einen geratenen Wert in ein Feld, das heute als deine Wahl gilt, bliebe er für
   immer. Je Fall nennt `NACHTRAEGE` eine feste `id` und `aendern(notizen, modell)` → `[{ f, felder }]` (oder `null`: geht noch
-  nicht, später wieder). Bisher zwei Fälle: `folien-geraten` leert `folien` in Vorlesungsnotizen bis zum 24.10.2026, wenn der
+  nicht, später wieder). Zwei Fälle mit Feldern: `folien-geraten` leert `folien` in Vorlesungsnotizen bis zum 24.10.2026, wenn der
   Wert einer der Regeln von `eba.folienZu` (bis 0.6.2) entspricht: Folien gleicher Nummer, kleinste Nummer oder die Folien
   einer früheren Notiz des Moduls; seitdem wählt das Modell die Folien der Sitzung selbst, auch später hochgeladene.
   `ausfall-pausen` nimmt aus `ausfall` von Hand angelegter Lehrveranstaltungen (ohne `quelle`, `herkunft`, `zentral_id`) die
   Tage, die in eine Pause fallen: „Neue Lehrveranstaltung“ trug sie bis 24.10.2026 dort ein, `findetStatt` prüft Pausen ohnehin,
   und nach einer Korrektur der Pausen fielen sie sonst weiter aus. Einmal je Tresor, eine Minute nach dem Start, dann
   stündlich, bis alles durch ist; nur auf dem Gerät, das für alle schreibt (`ctx.zentral.abruferHier()`). Erledigtes steht in
-  `System/Daten/nachtraege.json` (synchronisiert, nicht in der Vorlage). Geschrieben wird nur über `processFrontMatter`, ohne
+  `System/Daten/nachtraege.json` (synchronisiert, nicht in der Vorlage). Felder schreibt ein Nachtrag nur über `processFrontMatter`, ohne
   Hinweis: Sichtbar ändert sich nur, was falsch war. Scheitert ein Schreiben, bleibt der Fall offen. Neuer Fall, wenn eine
   Version aufhört, einen Wert in Notizen zu raten: lieber gar nicht erst raten (leer lassen, das Modell rechnet).
+  Text statt Felder (seit 0.7.0, `{ f, text }` mit `text` = alter Text → neuer Text): nur für einen Block, der noch genau so
+  dasteht, wie eine ältere Version ihn erzeugt hat; was du geschrieben hast, bleibt. Erst gelesen, geschrieben (`vault.process`)
+  nur, wenn sich etwas ändert, sonst ginge jede Notiz des Falls durch den Sync. Erster Fall `folien-kopf`: Die Lesefassung der
+  Folien schrieb bis 19.10.2026 einen eigenen Seitenkopf aus HTML (Pfad mit „Folien 00 · …“, als Titel der Name des Moduls,
+  darunter Dozent und Lehrstuhl). Seit 0.7.0 steht über einem Titel kein Pfad und Obsidians Kopfleiste nennt den Namen nicht
+  noch einmal; welche Folien man liest, stand dort also nirgends mehr. Der Block wird der Titel jeder Begleitnotiz
+  („# B110 · Folien 00 · Einführung“), das Modul nennt darunter `kopf.js`. Getroffen werden nur Begleitnotizen mit
+  `eba-folien`, und nur, wenn der Block direkt nach den Eigenschaften steht und keine eigene Zeile enthält (`KOPF_ALT`); in
+  im Entwicklungstresor die vier Lesefassungen bis 19.10.2026. Zweiter Fall `modul-notizspalte` (seit 0.7.0): Die Spalte „Notiz“ in
+  „Zum Modul“ jeder Modulnotiz zeigte den Dateinamen, mit „–“ statt „:“ („Tutorien starten – BWL“) und „Mo 14.15“; jetzt den
+  Titel eines Termins und die Uhrzeit mit Doppelpunkt. Ersetzt wird nur die Formel, die noch genau so dasteht (`NOTIZ_ALT`).
+  Dritter Fall `modul-reihenfolge` (seit 0.7.0): „Zum Modul“ war nach Datum absteigend sortiert, Termine standen rückwärts und
+  der Stundenplan (ohne Datum) in zufälliger Folge; jetzt nach Datum aufsteigend, dann Wochentag und Beginn (`REIHE_ALT`).
 - **Hinweise für Claude (seit 0.6.9, Klasse `claude`, `claudeNachholenMit`, `claudeNachholen`):** `.claude/CLAUDE.md` und der
   Skill `studium-autopilot` kamen bis 0.6.8 nur mit der Installation und blieben dann auf deren Stand. Befund 24.10.2026: Der
   Skill nannte noch den Ordner `Eingang/`, den es seit 0.6.7 nicht mehr gibt. Drei Hürden:

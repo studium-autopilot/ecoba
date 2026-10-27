@@ -2,6 +2,32 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.0 – Großes Update für Bedienung und Design
+
+- **Übersichtlicher:** Überall steht unten rechts dieselbe Leiste mit Zurück, Suche, Tabs, Zahnrad und ≡ für alle Seiten;
+  ein Rundgang zeigt sie. Auf iPhone und iPad wischst du vom linken Rand zurück, Modulseiten änderst du nie aus Versehen.
+- **Übersichtlicher:** Der Name einer Seite steht nur einmal, als Titel, immer an derselben Stelle. Auf iPad und Computer zeigt
+  ihn die Leiste darüber erst beim Scrollen, Tabs erst ab dem zweiten, Notizen nennen ihr Modul beim Namen.
+- **Übersichtlicher:** Auf **Kontakte & Links** hat jede Kachel ihr eigenes Symbol, etwa einen Stempel fürs Prüfungsamt oder
+  eine Sanduhr für Fristen, statt zehnmal dasselbe Gebäude. Der Text steht mittig, auch ohne zweite Zeile.
+- **Übersichtlicher:** Jede Farbe sagt nur eines: Grün heißt erledigt, Lila Veranstaltung, Knöpfe und Links sind tintenblau.
+  Hervorgehoben ist, was wartet, Erledigtes ist grau; in deiner Woche hat jedes Modul seine Farbe, online gestreift.
+- **Übersichtlicher:** Solange du keine Noten hast, zeigt **Noten & ECTS** nur Gesamtnote und ECTS.
+- **Übersichtlicher:** Auf der Startseite liegt alles gleich weit auseinander, auf iPad und Computer sind ihre Fristen gleich
+  offen. Fenster heben sich leicht ab, und am Seitenende zeigt das iPhone seine Leiste statt einer leeren Fläche.
+- **Übersichtlicher:** Was ein Titel oder Reiter schon sagt, etwa „Zwischentest“, „Frist“ oder „freiwillig“, steht nicht noch
+  einmal daneben. Auch Untertitel unter Modulen, Links und Angeboten, die nichts Neues sagen, sind weg.
+- **Übersichtlicher:** **Termine & Anmeldungen** ist nur noch halb so lang: Später, Vergangen, Anmeldungen und Übungen öffnest
+  du über Reiter. Vorträge, Kurse und Sport der Uni stehen im Kalender, was du siehst, wählst du im Filter.
+- **Übersichtlicher:** Übungsbeginn, Raumwechsel und Ausfälle eines Moduls stehen nicht mehr im Kalender, sondern wie deine
+  Woche im **Dashboard** und auf der Modulseite. Dort stehen Termine nach Datum, der Stundenplan nach Wochentag.
+- **Übersichtlicher:** Kleine graue Schrift ist in jedem Design dunkler und leichter zu lesen, kleine Überschriften stehen
+  nicht mehr in Großbuchstaben.
+- **Einheitlicher:** Uhrzeiten stehen überall mit Doppelpunkt, etwa „Mi 14:15“, Fristen um Mitternacht als 23:59 und Semester
+  als „WS 2026/27“. Es heißt „1 Seite“ statt „1 Seiten“, und Symbole stehen überall in Kreisen.
+- **Behoben:** Auf iPad und iPhone bleibt eine angetippte Zeile nicht mehr grau hinterlegt. **Unterlagen** zeigt keine Kacheln
+  mit lauter Nullen und keine leere Liste „Ohne Modul“ mehr, eingeplante ECTS sehen nicht mehr wie Fortschritt aus.
+
 ## 0.6.14 – Zusammenfassen mit deinem Claude-Abo
 
 - **Neu:** Unterlagen, die zu keinem Modul gehören, etwa Modulhandbuch, Prüfungsordnung oder Folien einer Infoveranstaltung,

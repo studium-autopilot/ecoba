@@ -1,6 +1,7 @@
 // Vorlesungsnotiz (typ: vorlesung) lebendig gestalten, dazu die Abschnitte eines Übungsblatts (typ: übungsblatt).
-// 1. Codeblock ```eba-vorlesung``` unter dem Titel: Kopf-Karte mit Vorlesungswoche, Status „Nacharbeit offen/Nachgearbeitet“
-//    (Tipp schaltet das Feld `nachgearbeitet`), Modul (Link), Thema, Datum mit Wochentag, Uhrzeit und Raum aus dem Stundenplan
+// 1. Codeblock ```eba-vorlesung``` unter dem Titel: Kopf-Karte mit Modul (Link) und Vorlesungswoche im Label, Status „Nacharbeit
+//    offen/Nachgearbeitet“ (Tipp schaltet das Feld `nachgearbeitet`), Thema (nur wenn der Titel es nicht nennt), Datum mit
+//    Wochentag, Uhrzeit und Raum aus dem Stundenplan
 //    (an diesem Tag, seit 20.10.2026 mit Änderung oder Verlegung: neuer Wert in Warnfarbe, der übliche durchgestrichen),
 //    Dozent (Feld der Notiz, sonst aus dem Stundenplan-Eintrag), einer Perlenreihe der Vorlesungswochen dieses Moduls (Tipp öffnet
 //    die Notiz der Woche) und Links zu den Folien dieser Sitzung (Begleitnotizen, gewählt von ctx.modell.folien; „⋯“ → „Andere
@@ -225,15 +226,20 @@ module.exports = function (ctx) {
     el.toggleClass("ist-fertig", nachgearbeitet);
     const karte = el.createDiv({ cls: "eba-vorl-karte" });
 
-    // Zeile 1: Semester · Woche  |  Status
+    // Zeile 1: Modul (Link) · Woche  |  Status. Das Modul steht hier einmal mit Namen wie im Kopf der Begleitnotiz (kopf.js), nicht
+    // mehr als zweite große Überschrift unter dem Titel (seit 26.10.2026); die Woche sagt, wann im Semester, das Datum steht
+    // darunter. Außerhalb der Vorlesungszeit (Vorkurs) das Semester, ohne Modul (Mitschrift zu einem Termin) Semester · Woche.
     const kopf = karte.createDiv({ cls: "eba-vorl-kopf" });
     const lab = kopf.createSpan({ cls: "eba-vorl-label" });
-    const teile = [];
-    if (x.sem) teile.push(x.sem.name);
-    if (x.pauseHier) teile.push(x.pauseHier.name);
-    else if (x.woche > 0 && x.woche <= x.wochenGesamt) teile.push(`Vorlesungswoche ${x.woche} von ${x.wochenGesamt}`);
-    else if (!code) teile.push("Mitschrift");
-    lab.setText(teile.join(" · ") || "Vorlesung");
+    const wann = x.pauseHier ? x.pauseHier.name : x.woche > 0 && x.woche <= x.wochenGesamt ? `Vorlesungswoche ${x.woche} von ${x.wochenGesamt}` : "";
+    if (x.modulF) {
+      link(lab, x.modulF, "eba-kopf-modul", String(mfm.titel || x.modulF.basename.replace(/^\S+\s+/, "")));
+      const rest = wann || (x.sem ? x.sem.name.replace(/ /g, " ") : "");
+      if (rest) lab.appendText(" · " + rest);
+    } else {
+      const teile = [x.sem ? x.sem.name : "", wann || (code ? "" : "Mitschrift")].filter(Boolean);
+      lab.setText(teile.join(" · ") || "Vorlesung");
+    }
     if (f) {
       const b = kopf.createEl("button", { cls: "eba-vorl-status" + (nachgearbeitet ? " fertig" : ""), attr: { type: "button", "aria-pressed": String(nachgearbeitet),
         title: nachgearbeitet ? "Als nicht nachgearbeitet markieren" : "Als nachgearbeitet markieren" } });
@@ -251,20 +257,13 @@ module.exports = function (ctx) {
       if (basis.kopf && basis.kopf.mehr) basis.kopf.mehr(kopf, f, extra);
     }
 
-    // Titel: Modul (Link) bzw. Thema; darunter das Thema, wenn es etwas anderes sagt
-    // Ohne Modul (Mitschrift zu einem Termin): Titel = Thema bzw. Termin, aber nicht, wenn die Überschrift # dasselbe sagt
+    // Unter dem Kopf nichts, was der Titel # schon sagt (seit 26.10.2026; bis dahin der Modulname groß und darunter der Name der
+    // Notiz, in älteren Notizen beides unter einem Titel, der dasselbe Thema nannte). Mit Modul: das Thema der Notiz
+    // (ctx.modell.vorlesung), nur wenn der Titel es nicht nennt (der Name „Vorlesung 1 · Mo 13.10. · Thema“ wiederholte Nummer und
+    // Tag, die Datum und Woche schon sagen). Ohne Modul (Mitschrift zu einem Termin): Thema bzw. Termin, wenn der Titel anders lautet.
     const h1 = String(((f && app.metadataCache.getFileCache(f)?.headings) || []).filter((h) => h.level === 1).map((h) => h.heading)[0] || "").trim();
-    const titelText = x.modulF ? String(mfm.titel || x.modulF.basename.replace(/^\S+\s+/, "")) : String(fm.thema || x.lfm.titel || "").trim();
-    if (x.modulF || (titelText && titelText !== h1)) {
-      const titel = karte.createDiv({ cls: "eba-vorl-titel" });
-      if (x.modulF) link(titel, x.modulF, "eba-vorl-modul", titelText); else titel.setText(titelText);
-    }
-    // Darunter der Name der Notiz wie überall („Vorlesung 1 · Mo 13.10. · Thema“, ctx.modell.vorlesung), außer der Titel # sagt
-    // dasselbe (neue Notizen); ohne Modul (Mitschrift zu einem Termin) nur das Thema, wenn es etwas anderes sagt
-    const thema = String(fm.thema ?? "").trim();
-    const name = code && f && basis.modell && basis.modell.vorlesung ? basis.modell.vorlesung(f).titel : "";
-    if (name) { if (name !== h1) karte.createDiv({ cls: "eba-vorl-thema", text: name }); }
-    else if (thema && thema !== titelText && thema !== h1) karte.createDiv({ cls: "eba-vorl-thema", text: thema });
+    const thema = code && f && basis.modell && basis.modell.vorlesung ? basis.modell.vorlesung(f).thema : String(fm.thema || x.lfm.titel || "").trim();
+    if (thema && h1.indexOf(thema) < 0) karte.createDiv({ cls: code ? "eba-vorl-thema" : "eba-vorl-titel", text: thema });
 
     // Datum · Uhrzeit · Raum
     const meta = karte.createDiv({ cls: "eba-vorl-meta" });

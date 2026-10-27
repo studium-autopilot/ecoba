@@ -28,6 +28,16 @@
 // Schmale Karte (iPhone hochkant, unter 480 px, eba-core.css 55): dasselbe Raster mit knapper Zeile (zeileZeichnen). Vom 19. bis
 // 24.10.2026 stand auf dem Dashboard dort stattdessen ein Tag als Liste (Tagesansicht), und für die Woche brauchte es die Seite
 // Stundenplan; jetzt ist es überall eine Ansicht.
+// Farbe je Modul (seit 27.10.2026): Jedes Modul hat das ganze Semester dieselbe Farbe (farbenBauen: der n-te Code des Semesters
+// nimmt modul-n, nach sechs von vorn), als Kante und Fläche des Kastens; eine Sitzung ohne Modul bleibt neutral. Unter dem Raster
+// eine Legende der Module dieser Woche (legendeBauen). Vorher waren Vorlesungen grau gefüllt und Übungen nur blau umrandet, dunkel
+// verschwamm beides mit der Karte (Rückmeldung: „Timetable Colors aren't distinguishable too faint“). Welche Töne und warum:
+// docs/design.md, „Farbe je Modul im Wochenraster“.
+// Online (seit 27.10.2026): Eine Sitzung, die an diesem Tag online stattfindet (ctx.modell.istOnline: Feld online oder der Raum
+// sagt „online“, „Zoom“ …), trägt die Klasse online; eba-core.css 55 zeichnet sie in der Farbe ihres Moduls, aber mit
+// gestrichelter Kante, schraffierter Fläche und einer Kamera vor der Zeile mit dem Raum. Die Legende hat dann den Eintrag
+// „online“ in derselben Form, nur in Wochen mit so einer Sitzung. Anlass: das Data Science Lab von S110 („R Lab or Science Lab
+// isn't distinct in timetable but should be since it's online“). Ein Ausfall bleibt ein Ausfall, ohne Kamera.
 module.exports = function (ctx) {
   const app = window.app;
   const SPRACHE = "eba-woche";
@@ -36,12 +46,16 @@ module.exports = function (ctx) {
   const SCHMAL = 22; // % der Tagesspalte für einen blassen Kasten neben einem echten
   const WEIT = 60; // Wochen in jede Richtung
   const WISCHEN = 50; // px Mindestweg
-  const RAND = 30; // px: Wischen vom Bildschirmrand gehört Obsidian (Seitenleisten)
+  // px ab dem sicheren Rand: Wischen vom Rand gehört Obsidian (nach rechts zurück, nach links die rechte Seitenleiste); derselbe
+  // Streifen wie amRand in seitenleiste.js (ZURUECK_RAND ab safe-area-inset), damit dazwischen weder ein Spalt bleibt noch
+  // beides zugleich geschieht (tests/wochenraster.test.js prüft das Verhältnis Pixel für Pixel)
+  const RAND = 30;
   const HOEHE = { "Dashboard.md": 497 }; // Höhe des Rasters in px (am PC/iPad nur Stundenplan, Dashboard hat feste Viertelstunden)
   const HOEHE_SONST = 697;
   const TAGE = ["Mo", "Di", "Mi", "Do", "Fr"];
   const VORLESUNG = ["Vorlesung", "Veranstaltung"]; // „Veranstaltung“ = Alma ohne erkannte Art
   const KEINE = "Keine Lehrveranstaltungen";
+  const FARBEN = 6; // Modulfarben --eba-modul-1 … -6 (eba-core.css Abschnitt 1)
 
   // ---------- Datum (Ortszeit, ganze Tage auch über die Zeitumstellung) ----------
   const M = () => ctx.modell; // Fachmodell (modell.js), beim Zeichnen nachgeschlagen
@@ -100,6 +114,16 @@ module.exports = function (ctx) {
     if (/^[0-9]+$/.test(g)) return art + " Gruppe " + g;
     return g.toLowerCase().indexOf(art.toLowerCase()) === 0 ? g : art + " " + g;
   };
+  // Farbe je Modul: Code → 1 … FARBEN. notizen: die das Raster im Semester je zeigt (wocheBauen lässt entfallene und „Besuche ich
+  // nicht“ weg, die nähmen sonst einen Ton); ihre Codes sortiert, so behält ein Modul von Woche zu Woche seine Farbe, auch in einer
+  // Woche, in der ein anderes fehlt. Nach FARBEN Codes wieder von vorn.
+  const farbenBauen = (notizen, semName) => {
+    const codes = notizen.filter(({ fm }) => fm.semester === semName).map(({ fm }) => (fm.code ? String(fm.code) : ""))
+      .filter((c, i, a) => c && a.indexOf(c) === i).sort();
+    const farbe = {};
+    codes.forEach((c, i) => { farbe[c] = (i % FARBEN) + 1; });
+    return farbe;
+  };
 
   // ---------- Kasten: Lage ----------
   const zeit = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? { h: +m[1], m: +m[2] } : null; };
@@ -156,11 +180,11 @@ module.exports = function (ctx) {
 
   // ---------- Woche berechnen (reine Logik, ohne DOM) ----------
   // notizen: [{ pfad, fm }] mit typ lehrveranstaltung; kurzVonCode: { Code: Kurzname }; modulPfad: { Name der Modulnotiz: Pfad };
-  // modell: ctx.modell (Semester, Pausen, freie Tage, findetStatt); montag: Date; jetzt: Date; verdeckt: { Pfad: … } (eine Gruppe
-  // je Modul und Art, meine-gruppe.js doppelt: weitere Gruppen-Notizen fehlen im Raster); ohneBeginn: Die zentralen Vorlesungen
-  // warten auf den Studienbeginn (ctx.zentral.stundenplan(), verfuegbar und ohneBeginn) → beginnFehlt, wenn sonst „Keine
-  // Lehrveranstaltungen“ dastünde
-  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modell, montag, jetzt, verdeckt, ohneBeginn }) => {
+  // modulName: { Code: Titel der Modulnotiz } (Tooltip der Legende); modell: ctx.modell (Semester, Pausen, freie Tage,
+  // findetStatt); montag: Date; jetzt: Date; verdeckt: { Pfad: … } (eine Gruppe je Modul und Art, meine-gruppe.js doppelt:
+  // weitere Gruppen-Notizen fehlen im Raster); ohneBeginn: Die zentralen Vorlesungen warten auf den Studienbeginn
+  // (ctx.zentral.stundenplan(), verfuegbar und ohneBeginn) → beginnFehlt, wenn sonst „Keine Lehrveranstaltungen“ dastünde
+  const wocheBauen = ({ notizen, kurzVonCode, modulPfad, modulName, modell, montag, jetzt, verdeckt, ohneBeginn }) => {
     const tage = [0, 1, 2, 3, 4].map((i) => iso(plus(montag, i)));
     const heute = iso(jetzt), wt = jetzt.getDay() || 7;
     const ht = wt <= 5 && tage[wt - 1] === heute;
@@ -169,7 +193,8 @@ module.exports = function (ctx) {
     const pw = modell.daten().pausen.filter((p) => p.von <= tage[4] && p.bis >= tage[0]);
     // nie: entfallen oder „Besuche ich nicht“ (findetStatt prüft das vor dem Tag)
     const nie = (fm) => ["entfaellt", "ausgeblendet"].indexOf(modell.findetStatt(fm, tage[0]).grund) >= 0;
-    const lv = notizen.filter(({ pfad, fm }) => sem && fm.semester === sem.name && !(verdeckt && verdeckt[pfad]) && !nie(fm) && zeit(fm.beginn) && zeit(fm.ende));
+    const zeigbar = ({ fm }) => !nie(fm) && zeit(fm.beginn) && zeit(fm.ende);
+    const lv = notizen.filter((n) => sem && n.fm.semester === sem.name && !(verdeckt && verdeckt[n.pfad]) && zeigbar(n));
     // Überschneidung einer Gruppen-Notiz (ILIAS, gewählt) mit einer anderen Notiz, die das Raster zeigt: gleicher Wochentag,
     // übliche Zeiten überlappen, kein Einzeltermin, nicht dieselbe Gruppe → Name der anderen Notiz oder "". Hier gerechnet (seit
     // 24.10.2026); vorher stand sie beim Schreiben im Feld konflikt und blieb, auch wenn die andere Notiz die Zeit wechselte.
@@ -217,6 +242,7 @@ module.exports = function (ctx) {
       else leer = KEINE;
     }
     const nun = jetzt.getHours() * 60 + jetzt.getMinutes();
+    const farbeVon = sem ? farbenBauen(notizen.filter(zeigbar), sem.name) : {};
     const kaesten = !gehalten.length ? [] : wl.map(({ pfad, fm, s, ab }) => {
       const tag = Number(fm.wochentag);
       const aen = s.geaendert;
@@ -231,6 +257,10 @@ module.exports = function (ctx) {
       const ausnahme = (aus && s.grund === "ausfall") || raumNeu || zeitNeu;
       const marke = aus ? "Fällt aus" : raumNeu && zeitNeu ? "Geändert" : raumNeu ? (s.neuerRaum ? "Neuer Raum" : "Anderer Raum") : zeitNeu ? "Andere Zeit" : "";
       const klassen = ["eba-ev", istUebung(fm) ? "ue" : "vl"], konflikt = konfliktMit(pfad, fm);
+      const farbe = (fm.code && farbeVon[String(fm.code)]) || 0;
+      const online = !aus && modell.istOnline(fm, raum);
+      if (farbe) klassen.push("modul-" + farbe);
+      if (online) klassen.push("online");
       if (konflikt) klassen.push("konflikt");
       if (aen) klassen.push("geaendert");
       if (ausnahme) klassen.push("ausnahme");
@@ -259,15 +289,27 @@ module.exports = function (ctx) {
         zeit: ab ? "ab " + tagMonat(ab) : zeitNeu ? (nurEnde ? "bis " + s.ende : s.beginn) : !raumNeu && String(fm.beginn).slice(-2) !== "00" ? String(fm.beginn) : "",
         zeitStatt: zeitNeu ? (nurEnde ? alt[1] || "" : alt[0]) : "",
         raum,
-        ausnahme, raumNeu, zeitNeu, raumAlt: raumNeu ? s.raumAlt : "", grund: aus ? s.name : "", spaeter: !!ab, aus,
+        ausnahme, raumNeu, zeitNeu, raumAlt: raumNeu ? s.raumAlt : "", grund: aus ? s.name : "", spaeter: !!ab, aus, online,
+        farbe, code: fm.code ? String(fm.code) : "",
       };
     });
     for (const k of kaesten) if (k.bis <= k.von) k.bis = k.von + 1;
-    return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, beginnFehlt: !!ohneBeginn && leer === KEINE, kw: modell.zeit.kw(tage[0]) };
+    return { tage, ht, wt, h0, h1, rows, kaesten: spalten(kaesten), leer, beginnFehlt: !!ohneBeginn && leer === KEINE, kw: modell.zeit.kw(tage[0]),
+      legende: legendeBauen(kaesten, modulName || {}, kurzVonCode || {}), online: kaesten.some((k) => k.online) };
+  };
+  // Legende unter dem Raster: je Modul, dessen Farbe ein Kasten dieser Woche zeigt (nicht ausgefallen, keine Ausnahme in
+  // Warnfarbe), in der Reihenfolge der Farben. Text: Kurzname des Moduls, sonst sein Name, sonst der Code; Tooltip Code und Name.
+  const legendeBauen = (kaesten, modulName, kurzVonCode) => {
+    const codes = kaesten.filter((k) => k.farbe && !k.aus && !k.ausnahme).map((k) => k.code).filter((c, i, a) => a.indexOf(c) === i);
+    const farbe = (c) => kaesten.find((k) => k.code === c).farbe;
+    return codes.sort((a, b) => farbe(a) - farbe(b) || (a < b ? -1 : 1)).map((c) => {
+      const name = modulName[c] ? String(modulName[c]) : "";
+      return { farbe: farbe(c), code: c, text: kurzVonCode[c] ? String(kurzVonCode[c]) : name || c, titel: name ? c + " " + name : c };
+    });
   };
   // ---------- Lesen (metadataCache) ----------
   const lesen = () => {
-    const notizen = [], kurzVonCode = {}, modulPfad = {}; // Semester, Pausen und „Besuche ich nicht“ kommen aus dem Modell
+    const notizen = [], kurzVonCode = {}, modulPfad = {}, modulName = {}; // Semester, Pausen und „Besuche ich nicht“ kommen aus dem Modell
     for (const f of app.vault.getMarkdownFiles()) {
       const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
       if (!fm) continue;
@@ -276,9 +318,10 @@ module.exports = function (ctx) {
         modulPfad[f.basename] = f.path;
         modulPfad[f.path.replace(/\.md$/, "")] = f.path;
         if (fm.code && fm.kurz) kurzVonCode[String(fm.code)] = String(fm.kurz);
+        if (fm.code && fm.titel) modulName[String(fm.code)] = String(fm.titel);
       }
     }
-    return { notizen, kurzVonCode, modulPfad };
+    return { notizen, kurzVonCode, modulPfad, modulName };
   };
 
   // ---------- Zeichnen ----------
@@ -341,6 +384,13 @@ module.exports = function (ctx) {
       zeileZeichnen(s.createSpan({ cls: "eba-ev-knapp" }), k, true);
     }
     if (W.leer) leerSatz(g.createDiv({ cls: "eba-woche-leer", attr: { style: "grid-row:2 / span " + W.rows } }).createSpan(), W);
+    // Legende in derselben Karte: je Modul ein Kästchen wie ein Kasten (eba-core.css 55), dahinter „online“, wenn eine Sitzung
+    // dieser Woche online stattfindet
+    if (W.legende.length || W.online) {
+      const l = el.createDiv({ cls: "eba-legende eba-wlegende" });
+      for (const x of W.legende) l.createSpan({ cls: "modul-" + x.farbe, text: x.text, attr: { title: x.titel } });
+      if (W.online) l.createSpan({ cls: "online", text: "online", attr: { title: "Findet online statt (Zoom, Webex …)" } });
+    }
     wischen(g, v);
   };
 
@@ -373,16 +423,25 @@ module.exports = function (ctx) {
   };
 
   // Wischen (Touch, Hauptweg zum Blättern am iPhone): waagerecht mehr als 50 px und mehr als doppelt so weit wie senkrecht →
-  // Woche danach (nach links) bzw. davor. Nicht vom Bildschirmrand (30 px, dort zieht Obsidian die Seitenleisten auf) und
+  // Woche danach (nach links) bzw. davor. Nicht im Streifen am Rand (RAND px ab dem sicheren Rand, dort gehört es Obsidian:
+  // nach rechts zurück, seitenleiste.js, nach links die rechte Seitenleiste) und
   // nicht auf einem Link oder Kasten begonnen. Ob waagerecht, entscheidet die erste Bewegung über 10 px; erst danach
   // preventDefault (und nicht weiterreichen), senkrechtes Scrollen bleibt also unberührt.
   const wischen = (g, v) => {
     let start = null, achse = "";
-    const breite = () => (g.ownerDocument && g.ownerDocument.defaultView ? g.ownerDocument.defaultView.innerWidth : 0);
+    const fenster = () => (g.ownerDocument && g.ownerDocument.defaultView) || null;
+    // Sicherer Rand links und rechts (iPhone quer neben der Notch), wie seitenleiste.js ihn liest
+    const sicher = () => {
+      const f = fenster(), b = g.ownerDocument && g.ownerDocument.body;
+      if (!f || !b || typeof f.getComputedStyle !== "function") return { links: 0, rechts: 0 };
+      const st = f.getComputedStyle(b), px = (n) => parseFloat(st.getPropertyValue(n)) || 0;
+      return { links: px("--safe-area-inset-left"), rechts: px("--safe-area-inset-right") };
+    };
     g.addEventListener("touchstart", (e) => {
       const t = e.touches && e.touches[0];
       const aufLink = !!(e.target && e.target.closest && e.target.closest("a"));
-      start = t && e.touches.length === 1 && !aufLink && wischStartOk(t.clientX, breite()) ? { x: t.clientX, y: t.clientY } : null;
+      const f = fenster();
+      start = t && e.touches.length === 1 && !aufLink && wischStartOk(t.clientX, f ? f.innerWidth : 0, sicher()) ? { x: t.clientX, y: t.clientY } : null;
       achse = "";
     }, { passive: true });
     g.addEventListener("touchmove", (e) => {
@@ -402,8 +461,14 @@ module.exports = function (ctx) {
       neu();
     }, { passive: true });
   };
-  // Beginnt das Wischen weit genug vom linken und rechten Bildschirmrand?
-  const wischStartOk = (x, breite) => x >= RAND && (!breite || x <= breite - RAND);
+  // Beginnt das Wischen außerhalb der Streifen am Rand? x: clientX, breite: Fenster (0: unbekannt, dann nur links), sicher:
+  // { links, rechts } sicherer Rand in px (fehlt: 0). Bis 27.10.2026 zählte der Streifen ab dem Bildschirmrand, Zurück aber ab
+  // dem sicheren Rand: Auf dem iPhone quer mit der Notch links (etwa 47 px) blätterte ein Wischen ab 47 bis 77 px die Woche, und
+  // zugleich blitzte der Hinweis „Zurück“ auf.
+  const wischStartOk = (x, breite, sicher) => {
+    const s = sicher || {};
+    return x >= (s.links || 0) + RAND && (!breite || x <= breite - (s.rechts || 0) - RAND);
+  };
   // Erste deutliche Bewegung (über 10 px): "h" waagerecht (mehr als doppelt so weit wie senkrecht), "v" sonst, "" noch offen
   const wischAchse = (dx, dy) => (Math.max(Math.abs(dx), Math.abs(dy)) <= 10 ? "" : Math.abs(dx) > 2 * Math.abs(dy) ? "h" : "v");
   // Wischweg → +1 (nach links: Woche danach), −1 (nach rechts: Woche davor), 0 (kein Wischen)
@@ -437,5 +502,5 @@ module.exports = function (ctx) {
   };
 
   return { registrieren, aktionen, aktuellerMontag, kw, wocheText, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, raumKnapp, wischStartOk, wischAchse,
-    wischRichtung, leerSatz };
+    wischRichtung, leerSatz, farbenBauen, legendeBauen };
 };

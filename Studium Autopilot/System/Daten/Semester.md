@@ -81,7 +81,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Einstellungen & Hilfe" href="Einstellungen & Hilfe">Einstellungen</a><span>Daten</span></div>
 <h1>Semestertermine</h1>
 <p class="eba-lead">Semester, Ferien, Prüfungsphasen und Rückmeldefristen für alle EcoBA-Studierenden. Du trägst hier nichts ein.</p>
 </div>

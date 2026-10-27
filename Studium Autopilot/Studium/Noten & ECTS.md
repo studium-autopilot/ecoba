@@ -9,7 +9,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Noten & ECTS</h1>
 </div>
 
@@ -62,7 +61,7 @@ cssclasses:
 >   n66: |-
 >     if(formula.w66 == 0, "–", ((formula.d66 * 100 + 0.000001).floor() / 100).toFixed(2).replace(".", ","))
 >   notesub: |-
->     if(formula.ungueltig.length > 0, if(formula.ungueltig.length == 1, "Note ungültig: ", "Noten ungültig: ") + formula.ungueltig.map(value.properties.code).join(", "), if(formula.w34 + formula.w66 == 0, "noch keine Noten eingetragen", if(formula.w66 == 0, "vorläufig · nur 34 %-Block", if(formula.w34 == 0, "vorläufig · nur 66 %-Block", "gewichtet nach § 13 PO"))))
+>     if(formula.ungueltig.length > 0, if(formula.ungueltig.length == 1, "Note ungültig: ", "Noten ungültig: ") + formula.ungueltig.map(value.properties.code).join(", "), if(formula.w34 + formula.w66 == 0, "", if(formula.w66 == 0, "vorläufig · nur 34 %-Block", if(formula.w34 == 0, "vorläufig · nur 66 %-Block", "gewichtet nach § 13 PO"))))
 >   op: |-
 >     min(4, formula.m.filter(value.properties.op_modul == true && ["bestanden", "anerkannt"].contains(value.properties.status.toString().lower().trim())).length)
 >   ziel: |-
@@ -86,11 +85,9 @@ cssclasses:
 >   zieltxt: |-
 >     if(((formula.ziel * 10).round() - formula.ziel * 10).abs() < 0.000001, formula.ziel.toFixed(1), formula.ziel.toFixed(2)).replace(".", ",")
 >   rechner: |-
->     if(!formula.zielok, if(formula.c.zielnote, "Keine gültige Zielnote eingetragen. Du stellst sie in den Einstellungen ein.", "Noch keine Zielnote eingetragen. Du stellst sie in den Einstellungen ein."), if(formula.rest <= 0, if(formula.ist <= formula.ziel + 0.000001, "Die Zielnote <b>" + formula.zieltxt + "</b> ist erreicht: Gesamtnote <b>" + formula.note + "</b>.", "Die Zielnote " + formula.zieltxt + " ist nicht erreicht: Gesamtnote <b>" + formula.note + "</b>."), if(formula.noetig < 1, "Mit dem bisherigen Stand ist die Zielnote " + formula.zieltxt + " rechnerisch nicht mehr erreichbar.", if(formula.noetig >= 4, "Die Zielnote " + formula.zieltxt + " ist sicher, solange du die restlichen Module bestehst.", "Für die Zielnote <b>" + formula.zieltxt + "</b> brauchst du in den restlichen Modulen im Schnitt <b>" + formula.noetigtxt + "</b>."))))
->   annahme: |-
->     "Annahme: Variante " + if(formula.var == "offen", "noch offen", formula.var) + ", restliche Module benotet"
+>     if(!formula.zielok, if(formula.c.zielnote, "Die eingetragene Zielnote ist keine Note von 1,0 bis 4,0.", ""), if(formula.rest <= 0, if(formula.ist <= formula.ziel + 0.000001, "Die Zielnote <b>" + formula.zieltxt + "</b> ist erreicht: Gesamtnote <b>" + formula.note + "</b>.", "Die Zielnote " + formula.zieltxt + " ist nicht erreicht: Gesamtnote <b>" + formula.note + "</b>."), if(formula.noetig < 1, "Mit dem bisherigen Stand ist die Zielnote " + formula.zieltxt + " rechnerisch nicht mehr erreichbar.", if(formula.noetig >= 4, "Die Zielnote " + formula.zieltxt + " ist sicher, solange du die restlichen Module bestehst.", "Für die Zielnote <b>" + formula.zieltxt + "</b> brauchst du in den restlichen Modulen im Schnitt <b>" + formula.noetigtxt + "</b>."))))
 >   karte: |-
->     html("<div class='eba-kz'><div class='eba-kz-reihe vier'>" + "<div class='eba-kachel akzent'><span class='k'>" + "Gesamtnote" + "</span><span class='v'>" + formula.note + "</span><span class='s'>" + formula.notesub + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Ø 34 %-Block" + "</span><span class='v'>" + formula.n34 + "</span><span class='s'>" + formula.w34 + " ECTS gewichtet" + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Ø 66 %-Block" + "</span><span class='v'>" + formula.n66 + "</span><span class='s'>" + formula.w66 + " ECTS gewichtet" + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "ECTS" + "</span><span class='v'>" + formula.ects + "<small>/ 180</small>" + "</span><span class='s'>" + "Orientierungsprüfung " + formula.op + " / 4" + "</span>" + "<progress max='180' value='" + formula.ects + "'></progress>" + "</div>" + "</div><div class='eba-leiste eba-rechner'><div class='eba-leiste-kopf'><span class='k'>Zielnote</span><span class='s'>" + formula.annahme + "</span></div><p>" + formula.rechner + "</p></div></div>")
+>     html("<div class='eba-kz'><div class='eba-kz-reihe " + if(formula.w34 + formula.w66 == 0, "zwei", "vier") + "'>" + "<div class='eba-kachel'><span class='k'>" + "Gesamtnote" + "</span><span class='v'>" + formula.note + "</span><span class='s'>" + formula.notesub + "</span>" + "" + "</div>" + if(formula.w34 + formula.w66 == 0, "", "<div class='eba-kachel'><span class='k'>" + "Ø 34 %-Block" + "</span><span class='v'>" + formula.n34 + "</span><span class='s'>" + if(formula.w34 > 0, formula.w34 + " ECTS gewichtet", "") + "</span>" + "" + "</div>" + "<div class='eba-kachel'><span class='k'>" + "Ø 66 %-Block" + "</span><span class='v'>" + formula.n66 + "</span><span class='s'>" + if(formula.w66 > 0, formula.w66 + " ECTS gewichtet", "") + "</span>" + "" + "</div>") + "<div class='eba-kachel'><span class='k'>" + "ECTS" + "</span><span class='v'>" + formula.ects + "<small>/ 180</small>" + "</span><span class='s'>" + "Orientierungsprüfung " + formula.op + " / 4" + "</span>" + "<progress max='180' value='" + formula.ects + "'></progress>" + "</div>" + "</div>" + if(formula.zielok && formula.w34 + formula.w66 == 0, "", "<div class='eba-leiste eba-rechner'><div class='eba-leiste-kopf'><span class='k'>Zielnote</span><a href='obsidian://studium-autopilot?aktion=personalisieren&feld=zielnote'>" + if(formula.c.zielnote, "Ändern", "Eintragen") + "</a></div>" + if(formula.rechner == "", "", "<p>" + formula.rechner + "</p>") + "</div>") + "</div>")
 > views:
 >   - type: list
 >     name: Kennzahlen

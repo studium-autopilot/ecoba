@@ -154,7 +154,7 @@ den Eintrag verwerfen – so etwas gehört nach `v2/`.
 
 | Wert | Bedeutung | Wirkung im Plugin |
 |---|---|---|
-| `schluesselqualifikation` | Termin zu den Schlüsselqualifikationen (SQ100: TCP-Kurse, Sprachkurse …). **Freiwillig, keine Pflicht.** | gilt für alle wie ein Termin ohne `code`; Notiz bekommt `bereich: schluesselqualifikation` und den Tag `schlüsselqualifikation`; ruhige Pille „Schlüsselqualifikation · freiwillig“ im Notizkopf, in der Agenda und in der Kalender-Tagesliste, im Dashboard (Fristen/Termine) „Frist · freiwillig“ |
+| `schluesselqualifikation` | Termin zu den Schlüsselqualifikationen (SQ100: TCP-Kurse, Sprachkurse …). **Freiwillig, keine Pflicht.** | gilt für alle wie ein Termin ohne `code`; Notiz bekommt `bereich: schluesselqualifikation` und den Tag `schlüsselqualifikation`; ruhige Pille „Schlüsselqualifikation · freiwillig“ im Notizkopf, in der Agenda und in der Kalender-Tagesliste, im Dashboard unter Fristen leise „freiwillig“ (seit 0.7.0; vorher „Frist · freiwillig“), unter Termine „<Art> · freiwillig“ |
 
 Export: Termine, deren Code mit `SQ1` beginnt (SQ100), gehen **ohne** `code` und mit diesem Bereich; der Titel bleibt
 unverändert (kein Zusatz). `SQ888` (Mathematisches Propädeutikum, Mathe-Vorkurs) ist kein SQ-Kurs und behält seinen Code.

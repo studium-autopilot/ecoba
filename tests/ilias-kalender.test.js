@@ -137,7 +137,7 @@ test("Erkennen: Art am Zusatz (deutsch und englisch), Ziel an der Adresse, Numme
   assert.deepEqual(n, [3, 3, 2, 4, 3, 7, 5, 0, 0, 0]);
 });
 
-test("Zeit: Berlin und UTC; fremde Zone, ohne Zone und ganztägig fallen weg; 00:00 → Vortag bis 24:00", async () => {
+test("Zeit: Berlin und UTC; fremde Zone, ohne Zone und ganztägig fallen weg; 00:00 → Vortag bis 23:59 (intern 24:00)", async () => {
   const K = tresor().K;
   const z = (start, tz) => K.zeitpunktAus(ALMA.lesen(kalender(abgabe(9001, "Blatt 1", start, { tz })))[0], ALMA.zeit);
   assert.deepEqual(z("20261103T235500", "Europe/Berlin"), { datum: "2026-11-03", uhr: "23:55" });
@@ -149,6 +149,8 @@ test("Zeit: Berlin und UTC; fremde Zone, ohne Zone und ganztägig fallen weg; 00
   const r = await K.eintraegeAus(ALMA.lesen(kalender(abgabe(9001, "Blatt 1", "20261104T000000"), abgabe(9001, "Blatt 2", "20261103T235500", { tz: "Asia/Tokyo" }))),
     { zeit: ALMA.zeit, klartext: ALMA.klartext });
   assert.deepEqual(r.abgaben.map((x) => [x.datum, x.uhr, x.tag]), [["2026-11-03", "24:00", "2026-11-04"]]);
+  assert.equal(K.eintragVon(Object.assign({ schluessel: "exc/9001/abgabe/x", ref: "9001", art: "abgabe" }, r.abgaben[0])).ort, "bis 23:59 Uhr · ILIAS",
+    "angezeigt wie in den zentralen Daten; intern 24:00, denn die Uhrzeit steckt in den Grabsteinen");
   assert.equal(r.zaehler.zeitzone, 1);
 });
 

@@ -37,7 +37,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Noten & ECTS" href="Noten & ECTS">Module</a><span>Weitere Module</span></div>
 <h1><span class="eba-code">SQ888</span> Mathe-Vorkurs</h1>
 <p class="eba-lead">Mathematisches Propädeutikum vor Semesterbeginn: frischt die Schulmathematik auf, die S100 voraussetzt.</p>
 <div class="eba-meta"><span><b>0</b> ECTS</span><span>vor Vorlesungsbeginn</span><span>keine Prüfung</span><span>keine Anmeldung</span><span>Deutsch</span></div>
@@ -64,7 +63,7 @@ cssclasses:
 > formulas:
 >   wann: 'if(faellig, faellig, datum)'
 >   art: 'if(typ == "übungsblatt", "Übungsblätter", if(typ == "lehrveranstaltung", "Stundenplan", if(typ == "termin", "Termine", if(typ == "karteikarten", "Karteikarten", typ))))'
->   notiz: 'file.asLink(file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(code + " ", ""))'
+>   notiz: 'file.asLink(if(typ == "termin" && titel, titel.toString().replace(code + " ", ""), file.basename.replace(/^\d{4}-\d{2}-\d{2}\s+/, "").replace(/^(\S+ \d{1,2})\.(\d{2}) /, "$1:$2 ").replace(code + " ", "")))'
 > properties:
 >   formula.notiz:
 >     displayName: Notiz
@@ -86,7 +85,11 @@ cssclasses:
 >       - status
 >     sort:
 >       - property: formula.wann
->         direction: DESC
+>         direction: ASC
+>       - property: wochentag
+>         direction: ASC
+>       - property: beginn
+>         direction: ASC
 >     columnSize:
 >       formula.notiz: 330
 >       formula.wann: 120

@@ -129,7 +129,12 @@ test("Kopf einer Übung: Abgabe mit Tag, Uhrzeit und Restzeit, Musterlösung und
   const N = NOTIZEN(), K1 = kopf(N);
   const u1 = K1.zeichnen(PFAD("X100", "Übung 01 Ableitungen"));
   assert.deepEqual(knopf(u1).texte(), ["Offen"]);
-  assert.deepEqual(u1.finde("eba-vorl-label")[0].texte(), ["Übung 01 · X100 · WS 2026/27"]);
+  // Art und Nummer nennt schon der Titel („X100 · Übung 01 · Ableitungen“); ohne Modulseite steht das Kürzel für das Modul
+  assert.deepEqual(u1.finde("eba-vorl-label")[0].texte(), ["X100 · WS\u00a02026/27"]);
+  const mitModul = Object.assign(NOTIZEN(), { "Module/X100 Beispielmodul.md": { typ: "modul", code: "X100", titel: "Beispielmodul" } });
+  const lab = kopf(mitModul).zeichnen(PFAD("X100", "Übung 01 Ableitungen")).finde("eba-vorl-label")[0];
+  assert.deepEqual(lab.texte(), ["Beispielmodul", " · WS\u00a02026/27"], "mit Modulseite: ihr Name");
+  assert.equal(lab.finde("eba-kopf-modul")[0].attr.href, "Module/X100 Beispielmodul.md", "der Name öffnet die Modulseite");
   assert.deepEqual(chips(u1), [["frist spaet", "Abgabe Di 27.10., 23:55 · vorbei"], ["loesung", "Musterlösung"], ["stift", "Meine Lösung"]]);
   assert.equal(u1.finde("frist")[0].attr.href, "Termine/2026-10-27 X100 Abgabe 1.md", "Tipp öffnet die Frist");
   const u4 = K1.zeichnen(PFAD("X100", "Übung 04 Reihen"));
@@ -153,7 +158,7 @@ test("Kopf einer Abgabe-Frist: das Blatt dazu", () => {
 });
 
 // ---------- Seite Unterlagen, Abschnitt „Übungen“ (dashboard.js) ----------
-test("Abschnitt Übungen: offene Abgaben nach Tag, überfällige 14 Tage lang; Kacheln zählen dieselben Blätter", () => {
+test("Abschnitt Übungen: offene Abgaben nach Tag, überfällige 14 Tage lang; Kacheln zählen dieselben Blätter, ohne Blätter keine", () => {
   const M = modell(NOTIZEN());
   const B = laden("dashboard", { heute: HEUTE, kontext: { modell: M } }).ergebnis;
   const z = B.zeilenBauen("uebungen", M, HEUTE);
@@ -162,10 +167,13 @@ test("Abschnitt Übungen: offene Abgaben nach Tag, überfällige 14 Tage lang; K
     ["Do 05.11.", "23:55", "X100 · Übung 04 · Reihen", "warn"],
   ], "Blatt 05 ist seit 17 Tagen vorbei, Blatt 02 abgegeben");
   assert.equal(z[0].pfad, PFAD("X100", "Übung 01 Ableitungen"), "Tipp öffnet das Blatt");
-  assert.deepEqual(B.uebungKachelnBauen(M, HEUTE).map((k) => [k.k, k.v, k.s]),
-    [["Offen", "2", "1 überfällig"], ["Fällig in 7 Tagen", "1", ""], ["Erledigt", "2", "von 6 Blättern"]]);
+  assert.deepEqual(B.uebungKachelnBauen(M, HEUTE).map((k) => [k.cls, k.k, k.v, k.s]),
+    [["akzent", "Offen", "2", "1 überfällig"], ["", "Fällig in 7 Tagen", "1", ""], ["", "Erledigt", "2", "von 6 Blättern"]]);
+  const E = modell(unterlage("X100", "Übung 03 Matrizen", { art: "Übung", nummer: 3, titel: "Matrizen", semester: WS, status: "bearbeitet" }));
+  assert.deepEqual(laden("dashboard", { heute: HEUTE, kontext: { modell: E } }).ergebnis.uebungKachelnBauen(E, HEUTE).map((k) => [k.cls, k.k, k.v]),
+    [["", "Offen", "0"], ["", "Fällig in 7 Tagen", "0"], ["", "Erledigt", "1"]], "nichts offen: kein Akzent");
   const L = modell({}), BL = laden("dashboard", { heute: HEUTE, kontext: { modell: L } }).ergebnis;
-  assert.deepEqual(BL.uebungKachelnBauen(L, HEUTE).map((k) => [k.v, k.s]), [["0", ""], ["0", ""], ["0", ""]]);
+  assert.deepEqual(BL.uebungKachelnBauen(L, HEUTE), [], "nichts offen, nichts erledigt: keine Kacheln, nur die leere Liste");
   assert.equal(B.artVon("Übungen mit Abgabe erscheinen, sobald Studium Autopilot läuft."), "uebungen");
 });
 

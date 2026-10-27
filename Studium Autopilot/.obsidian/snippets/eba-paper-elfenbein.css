@@ -39,14 +39,17 @@
   --color-base-70: #4a4236;
   --color-base-100: #2a2119;
 
-  --accent-h: 150;
-  --accent-s: 33%;
-  --accent-l: 27%;
-  --text-accent: #2f5d46;
-  --text-accent-hover: #3d7559;
-  --interactive-accent: #2f5d46;
-  --interactive-accent-hover: #3d7559;
-  --text-selection: rgba(47, 93, 70, 0.16);
+  /* Akzent Tinte (seit 0.7.0; bis 0.6.14 Waldgrün #2f5d46, dieselbe Farbfamilie wie „erledigt“ und die Veranstaltungen):
+     dunkles Blaugrau, fast neutral, damit jede Farbe der App nur eine Bedeutung hat. Links tragen dafür eine feine Linie
+     (--link-decoration unten), sonst sähen sie aus wie Text. */
+  --accent-h: 215;
+  --accent-s: 19%;
+  --accent-l: 21%;
+  --text-accent: #2c3440;
+  --text-accent-hover: #44505f;
+  --interactive-accent: #2c3440;
+  --interactive-accent-hover: #3a4555;
+  --text-selection: rgba(44, 52, 64, 0.14);
   --text-highlight-bg: rgba(222, 184, 92, 0.40);
 
   --titlebar-background: #efe9dc;
@@ -62,21 +65,24 @@
   --eba-border-strong: #cbbfa8;
   --eba-text: #2a2119;
   --eba-muted: #65594a;
-  --eba-faint: #8c8272;
-  --eba-accent: #2f5d46;
-  --eba-accent-text: #2f5d46;
-  --eba-accent-soft: rgba(47, 93, 70, 0.08);
+  --eba-faint: #776e61; /* seit 0.7.0 dunkler: mindestens 4,5 : 1 auf Seite und Karte (vorher #8c8272, 3,4–3,5 : 1) */
+  --eba-accent: #2c3440;
+  --eba-accent-text: #2c3440;
+  --eba-accent-soft: rgba(44, 52, 64, 0.07);
   --eba-good: #1f7a4d;
   --eba-warn: #a8660b;
   --eba-bad: #b42318;
   --eba-info: #3b5f86;
   --eba-art-uni: #2d5f9e; /* Termin-Arten im Kalender (eba-core.css Abschnitt 1): kräftiger als --eba-info */
-  --eba-art-event: #2e8540;
+  /* Pflaume (seit 0.7.0, kurz vorher Magenta #b33fbe): Veranstaltungen sind die unwichtigste Art im Kalender und waren die lauteste
+     Farbe der App. Dunkel statt blasser, denn nur so bleibt sie 0,2 von Rot und Blau entfernt (tests/design.test.js); wie Flieder */
+  --eba-art-event: #6c0069;
 }
 
 /* Dunkel: Flächen von hinten nach vorn heller (Leisten < Seite < Karte), Schrift Elfenbein statt Weiß. Der Akzent hat zwei
    Stufen: --eba-accent als Fläche mit weißer Schrift (Knöpfe, Balken), --eba-accent-text hell für Links und Text. */
 .theme-dark {
+  --eba-shadow-schwebend: 0 1px 2px rgb(0 0 0 / 0.35), 0 14px 36px rgb(0 0 0 / 0.5); /* auf dunklem Grund trägt nur ein kräftiger */
   --color-base-00: #1b1813;
   --color-base-05: #1e1b16;
   --color-base-10: #211d18;
@@ -92,13 +98,15 @@
 
   --accent-h: 147;
   --accent-s: 32%;
-  --accent-l: 37%;
-  --text-accent: #8cbf9f;
-  --text-accent-hover: #a7d1b6;
-  --interactive-accent: #417d5f;
-  --interactive-accent-hover: #4b8b6a;
+  --accent-h: 217;
+  --accent-s: 15%;
+  --accent-l: 35%;
+  --text-accent: #b9c3d3;
+  --text-accent-hover: #cfd7e3;
+  --interactive-accent: #4b5566;
+  --interactive-accent-hover: #566173;
   --text-on-accent: #ffffff;
-  --text-selection: rgba(140, 191, 159, 0.24);
+  --text-selection: rgba(185, 195, 211, 0.22);
   --text-highlight-bg: rgba(222, 184, 92, 0.30);
 
   --background-modifier-hover: rgba(236, 228, 212, 0.05);
@@ -116,20 +124,31 @@
   --eba-border-strong: #4f4637;
   --eba-text: #ece4d4;
   --eba-muted: #b3a892;
-  --eba-faint: #867c6a;
-  --eba-accent: #417d5f;
-  --eba-accent-text: #8cbf9f;
-  --eba-accent-soft: rgba(140, 191, 159, 0.12);
+  --eba-faint: #918672; /* seit 0.7.0 heller: mindestens 4,5 : 1 auf Seite und Karte (vorher #867c6a, 4,0–4,3 : 1) */
+  --eba-accent: #4b5566;
+  --eba-accent-text: #b9c3d3;
+  --eba-accent-soft: rgba(185, 195, 211, 0.12);
   --eba-good: #62bf8c;
   --eba-warn: #dea64a;
   --eba-bad: #ec7468;
   --eba-info: #8aa9d0;
   --eba-art-uni: #7fa6e6;
-  --eba-art-event: #6cc67a;
+  --eba-art-event: #fb80fc;
+  /* Modulfarben im Wochenraster (eba-core.css Abschnitt 1), dunkel für alle Designs: dieselben Töne heller, Flächen kräftiger */
+  --eba-modul-1: #678dee;
+  --eba-modul-2: #349794;
+  --eba-modul-3: #b09ef9;
+  --eba-modul-4: #3ac1f0;
+  --eba-modul-5: #82bf57;
+  --eba-modul-6: #e380a9;
+  --eba-modul-ton: 28%;
+  --eba-modul-ton-ue: 20%;
+  --eba-ev-raum-anteil: 25%;
 }
 
-/* Kopf wie ein Geschäftsbericht: doppelte Linie, Serifen-Titel */
-:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-kopf { border-bottom: 3px double var(--eba-text); padding-bottom: 1.2rem; }
+/* Kopf: Serifen-Titel über einer feinen Linie (seit 0.7.0; bis 0.6.14 eine doppelte Linie in Textfarbe, die schwerste Linie
+   der App, sie stritt mit dem Titel) */
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-kopf { border-bottom: 1px solid var(--eba-border-strong); padding-bottom: 1.1rem; }
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-kopf h1,
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kz-gruss { font-size: 2.5em; }
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba .eba-meta span { border-radius: 2px; }
@@ -155,6 +174,19 @@
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel { border-top: 2px solid var(--eba-text); }
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel.akzent::before { display: none; }
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel.akzent { border-top-color: var(--eba-accent); }
+/* Die Linie in Tinte unterscheidet sich kaum von der der anderen Kacheln (Textfarbe): Die Kachel, bei der etwas wartet, ist
+   zusätzlich getönt (seit 0.7.0) */
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel.akzent:not(.frist) { background: var(--eba-accent-soft); }
+/* Links mit feiner Linie: Tinte liegt nah an der Textfarbe (seit 0.7.0). Nur über Obsidians Variablen, so bleiben Listen,
+   Kacheln und Zeilen, die Links ausdrücklich ohne Linie zeigen, wie sie sind. Auf denselben Elementen wie im Kern (eba-core.css
+   Abschnitt 2 setzt dort none), sonst gewinnt der Kern. */
+:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) :is(.markdown-rendered, .markdown-source-view.mod-cm6) {
+  --link-decoration: underline;
+  --link-external-decoration: underline;
+}
+:where(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .markdown-rendered a:where(.internal-link, .external-link) {
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px;
+}
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel .v { font-weight: 500; }
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel .v:not(.text) { font-size: 2em; }
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) .eba-kachel .v.text { font-family: var(--font-interface); font-weight: 600; font-size: 1.08em; }

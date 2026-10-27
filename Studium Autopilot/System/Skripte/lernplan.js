@@ -312,6 +312,12 @@ module.exports = function (ctx) {
     return teile.join(" · ");
   };
   const titelVon = (P) => (P.modul ? `${P.code} ${P.modul.titel}` : P.f.basename);
+  // Titel der Zeile als HTML. In der Lernplan-Notiz (inNotiz) nennt ihr Titel Kürzel und „Lernplan“ schon: Die Zeile nennt das
+  // Modul mit Namen, als Link zur Modulseite, wie der Kopf einer Begleitnotiz (seit 26.10.2026; vorher stand „B110“ unter
+  // „B110 Lernplan“ noch einmal). In der Übersicht Kürzel und Name.
+  const titelHtml = (P, inNotiz) => (inNotiz && P.modul && P.modul.f
+    ? `<a class="internal-link eba-kopf-modul" data-href="${esc(P.modul.f.path)}" href="${esc(P.modul.f.path)}">${esc(P.modul.titel)}</a>`
+    : esc(titelVon(P)));
 
   // Kapitel eines Moduls: Kästchen wie bei den To-dos (.eba-td-haken, ganze Zeilenhöhe als Tippfläche; halb verstanden =
   // unbestimmt), Nummer und Titel, rechts „bis Fr 23.10.“ bzw. „noch nicht da“
@@ -353,7 +359,12 @@ module.exports = function (ctx) {
     z.setAttr("data-code", P.code);
     const p = P.stand && P.stand.pille;
     const pille = p ? ` <span class="eba-pill ${p.art}">${esc(p.text)}</span>` : "";
-    z.innerHTML = `<span class="eba-vb-text"><b>${esc(titelVon(P))}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${esc(standText(P))}</span></span></span>`;
+    z.innerHTML = `<span class="eba-vb-text"><b>${titelHtml(P, !aufklappbar)}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${esc(standText(P))}</span></span></span>`;
+    const modul = z.querySelector("a.eba-kopf-modul");
+    if (modul) {
+      nurStoppen(modul);
+      modul.addEventListener("click", (e) => oeffnen(P.modul.f, e, quelle));
+    }
     if (!aufklappbar) return;
     const offen = !!auf[P.code];
     z.toggleClass("is-offen", offen);
@@ -516,9 +527,7 @@ module.exports = function (ctx) {
     const i = String(alt || "").indexOf("\n" + MEINE);
     const meine = i >= 0 ? String(alt).slice(i + 1).replace(/\s+$/, "") : MEINE;
     return fm.join("\n") + "\n\n"
-      + '<div class="eba-kopf">\n<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a>'
-      + '<a class="internal-link" data-href="Lernplan" href="Lernplan">Lernplan</a></div>\n'
-      + `<h1>${e.code} Lernplan</h1>\n</div>\n\n`
+      + `<div class="eba-kopf">\n<h1>${e.code} Lernplan</h1>\n</div>\n\n`
       + "```eba-lernplan modul\nDer Stand erscheint, sobald Studium Autopilot läuft.\n```\n\n"
       + KAPITEL + "\n\n" + abschnitt.join("\n") + "\n\n" + meine + "\n";
   };
@@ -641,7 +650,7 @@ module.exports = function (ctx) {
   // Semesters), nachdem Fachmodell und zentrale Daten bereit sind
   const start = () => { ctx.zeit(() => { zentralAbgleichen(); }, 45000); };
 
-  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran, folienVon };
+  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran, folienVon, titelHtml };
   ctx.lernplan = api;
   return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

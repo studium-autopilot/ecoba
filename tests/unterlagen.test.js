@@ -354,6 +354,9 @@ test("Begleitnotiz: Eigenschaften in fester Reihenfolge, Zusatzfelder nach „qu
   const text = md.slice(md.indexOf("\n---\n") + 5);
   assert.equal(text, "\n# S100 · Folien 03 · Optimierung\n\n> [!eba-pdf]- PDF (37 Seiten)\n> ![[S100 Folien 03 Optimierung.pdf#height=560]]\n");
   assert.doesNotMatch(md, /Eckdaten|Das Wichtigste|Offene Fragen|aktion=pdf|^- (\[ \] )?$/m);
+  const ws = U.begleitnotiz({ code: "B180", art: "Folien", nummer: 0, titel: "JA Einführung WS 2026-27", datei: "B180 Folien 00 JA Einführung WS 2026-27.pdf", groesse: 1 });
+  assert.ok(ws.includes('titel: "JA Einführung WS 2026/27"') && ws.includes("# B180 · Folien 00 · JA Einführung WS 2026/27"), "Semester im Titel mit /");
+  assert.ok(ws.includes('datei: "[[B180 Folien 00 JA Einführung WS 2026-27.pdf]]"'), "der Dateiname bleibt");
   const hinweis = U.begleitnotiz({ code: "B110", art: "Folien", nummer: 1, titel: "T", datei: "a.pdf", groesse: 1, hinweis: "Geändert\nin ILIAS." });
   assert.match(hinweis, /\n# B110 · Folien 01 · T\n\n> \[!eba-info\] Neue Fassung aus ILIAS\n> Geändert in ILIAS\.\n\n> \[!eba-pdf\]- PDF\n/);
 });

@@ -11,7 +11,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Termine & Anmeldungen</h1>
 </div>
 
@@ -23,31 +22,35 @@ Kalender: erscheint, sobald Studium Autopilot läuft.
 Termine: erscheinen, sobald Studium Autopilot läuft.
 ```
 
-<p class="eba-hinweis">Lehrveranstaltungen → <a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a></p>
+```eba-reiter
+```
 
-## Angebote der Uni
-
-> [!eba-karte|handy-zu|pc-flach]+ Angebote der Uni
-> ```eba-angebote
-> Angebote: erscheinen, sobald Studium Autopilot läuft.
+> [!eba-karte|handy-zu|reiter=Später]+ Später
+> ```eba-agenda spaeter
+> Später: erscheint, sobald Studium Autopilot läuft.
 > ```
 
-## Anmeldungen
+> [!eba-karte|handy-zu|reiter=Vergangen]+ Vergangen
+> ```eba-agenda vergangen
+> Vergangen: erscheint, sobald Studium Autopilot läuft.
+> ```
 
-```eba-anmeldungen
-Anmeldungen: erscheinen, sobald Studium Autopilot läuft.
-```
+> [!eba-karte|handy-zu|reiter=Anmeldungen]+ Anmeldungen
+> ```eba-anmeldungen
+> Anmeldungen: erscheinen, sobald Studium Autopilot läuft.
+> ```
 
-## Übungen und Tutorien
+> [!eba-karte|handy-zu|reiter=Übungen]+ Übungen und Tutorien
+> ```eba-gruppen
+> Gruppen: erscheinen, sobald Studium Autopilot läuft.
+> ```
 
-```eba-gruppen
-Gruppen: erscheinen, sobald Studium Autopilot läuft.
-```
+<p class="eba-hinweis">Lehrveranstaltungen → <a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a></p>
 
 > [!eba-regel]- Hinweise je Modul
 > **Termine**
-> - Klausuren und Zwischentests kommen von selbst unter [[Prüfungen]], der Start der Übungen in den Kalender oben; Dauer und Hilfsmittel stehen im Termin der Klausur
-> - Zeiten und Räume der Gruppen stehen oben unter „Übungen und Tutorien“; maßgeblich ist ILIAS
+> - Klausuren und Zwischentests kommen von selbst unter [[Prüfungen]], der Start der Übungen auf die Modulseite und ins [[Dashboard]]; Dauer und Hilfsmittel stehen im Termin der Klausur
+> - Zeiten und Räume der Gruppen stehen oben im Reiter „Übungen“; maßgeblich ist ILIAS
 >
 > **E101 VWL**
 > - Gleicher Stoff in allen Übungsgruppen

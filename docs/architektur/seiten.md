@@ -50,10 +50,13 @@ Begleitnotizen (`typ: unterlage`, auch Folien als Markdown) und Volltexte öffne
 (`ctx.leseansicht.zuerstLesen`, im Kern `notizOeffnen`; `ansicht: bearbeiten` geht vor): Sie sind zum Lesen da, das Buch oben schaltet
 zum Bearbeiten. Vorher öffneten sie in der Bearbeitungsansicht, wo ein Tipp auf den PDF-Kasten in den Quelltext sprang.
 
-Seit 17.10.2026 (`start.js`, Punkt 2): Notizen mit `typ` `dashboard`, `übersicht`, `einstellungen` oder `daten` bleiben in der
-Leseansicht (auch `Studium/Termine & Anmeldungen.md`, seit die Anmeldungen sich selbst füllen). Das Feld `ansicht` geht vor (`lesen`
+Seit 17.10.2026 (`start.js`, Punkt 2): Notizen mit `typ` `dashboard`, `übersicht`, `einstellungen`, `daten` oder `modul` bleiben in
+der Leseansicht (auch `Studium/Termine & Anmeldungen.md`, seit die Anmeldungen sich selbst füllen; Modulseiten seit 26.10.2026: Alles
+darauf zeichnen Skripte, seit 0.4.5 „Meine Notizen“ zu „Zum Modul“ wurde, Status und Eigenschaften ändern Knöpfe und Fenster). Das Feld `ansicht` geht vor (`lesen`
 sperrt jede Notiz, `bearbeiten` gibt sie frei; in der Seitenleiste „Eigenschaften“ auch bei gesperrter Notiz änderbar). Der Knopf
-zum Bearbeiten im Kopf der Ansicht (`view.modeButtonEl`) ist dort ausgeblendet; wer umschaltet (Strg/⌘ E, Befehl), landet mit
+zum Bearbeiten im Kopf der Ansicht (`view.modeButtonEl`) ist dort ausgeblendet, der Tab trägt dann `eba-gesperrt` (seit 26.10.2026:
+auf iPhone und iPad ist die Kopfleiste damit leer, `eba-core.css` 66 nimmt dort Obsidians leere Glasfläche weg, auf dem iPhone
+beginnt die Seite gleich unter der Statusleiste, 70.1); wer umschaltet (Strg/⌘ E, Befehl), landet mit
 Hinweis wieder in der Leseansicht. Geht ein Tab von einer gesperrten Seite zu einer freien Notiz, öffnet sie in der Bearbeitung
 (seit 0.4.6; vorher nur, wenn der Tab vorher eine Notiz bearbeitet hatte). Regel: `ctx.leseansicht.nurLesen(datei)`
 (`tests/leseansicht.test.js`); `ctx.oeffnen` nutzt dieselbe Regel (siehe [„Bedien-Bausteine“](bedien-bausteine.md)).
@@ -66,12 +69,14 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 - **Kacheln** (seit 18.10.2026 Codeblock ```` ```eba-kacheln ```` aus `dashboard.js` auf dem Fachmodell, vorher eine
   Bases-Formel; gleiche Klassen und Gestalt): Gruß und Datum (ohne „KW n“, die steht im Wochenraster), dann immer zuerst
   „Nächste Frist“ (Klassen `akzent frist`: breiter, getönt, Titel groß; eba-core.css Abschnitt 60), danach Nächste Prüfung
-  (`naechstePruefung`), Semester, ECTS (`ects`), Gesamtnote (`noten`) und die Leiste „Semesterverlauf“ (Woche „jetzt“ =
+  (`naechstePruefung`), Semester (Unterzeile nur die Phase, etwa „noch 111 Tage Vorlesungen“), ECTS (`ects`; Unterzeile der
+  Stand der Orientierungsprüfung), Gesamtnote (`noten`; ohne Noten „–“, damit klar ist, dass sie mitgezählt wird) und die
+  Leiste „Semesterverlauf“ (Woche „jetzt“ =
   Planwoche; die Legende nennt sie am Wochenende „nächste Woche“ wie die Leiste über dem Wochenraster, sonst „diese
   Woche“). Nächste Frist = `ctx.modell.fristen()[0]`: offene Fristen, die noch laufen oder kommen, nach dem nächsten
   Stichtag (läuft schon: Ende, sonst Beginn); Unterzeile „läuft · bis 25.10.“ bzw. „19.10. · morgen“, dazu „geschätzt“.
   Prüfungen zeigt die Kachel daneben, darum hier nur Fristen. Breit eine Reihe; bis 980 px die Frist über die ganze Breite
-  und die vier darunter (zu fünft wären sie auf dem iPad hochkant nur 123 px breit), bis 760 px 2 × 2. Vom 15. bis
+  und die drei darunter, bis 760 px auch die Prüfung über die ganze Breite, darunter Semester und ECTS. Vom 15. bis
   18.10.2026 fehlte die Kachel („Keine Dopplungen“). Tests: `tests/dashboard.test.js`.
 - **Fristen · 30 Tage** und **Termine · 14 Tage** (seit 18.10.2026 ```` ```eba-liste fristen ```` bzw. `termine` aus
   `dashboard.js`, vorher Bases; Zeilen „Wann · Was · Art“, eba-core.css Abschnitt 63): Fristen, Prüfungen samt Zwischentests
@@ -89,7 +94,7 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   `dashboard.js`, vorher Kennzahlen und zwei Bases über die Übungsblatt-Notizen): offene Übungen mit Abgabe aus
   `ctx.modell.uebungen`, nach Tag und Uhrzeit, überfällige noch 14 Tage lang (Pille „Abgabe“ in Rot); erledigte und solche ohne
   Abgabe stehen nur auf der Modulseite (✓). Kacheln: Offen (davon überfällig), Fällig in 7 Tagen, Erledigt von allen Blättern des
-  Semesters. Neu gezeichnet, wenn sich eine Unterlage ändert, wie Nachzuarbeiten (`Unterlagen/` steht nicht in `RELEVANT`); eine
+  Semesters; ohne offene und erledigte Blätter keine Kacheln (die Karte fällt weg, bis 0.6.14 dreimal „0“); „Offen“ im Akzent nur mit offenem Blatt (seit 0.7.0). Neu gezeichnet, wenn sich eine Unterlage ändert, wie Nachzuarbeiten (`Unterlagen/` steht nicht in `RELEVANT`); eine
   abgehakte Frist meldet das Modell. Leer: „Keine offenen Abgaben.“.
 - **Bitte prüfen** (`bitte-pruefen.js`, Codeblock `eba-bitte-pruefen`, erster Block unter „Zu erledigen“, ohne Karte im
   Markdown): nur im eigenen Uni-Abgleich (`eba.eigenerAbgleich`) und nur, wenn `System/Abgleich/Protokoll.md` einen Abschnitt
@@ -109,8 +114,10 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 - **Reiter** (seit 24.10.2026, `reiter.js`, Codeblock ```` ```eba-reiter ```` unter dem Wochenraster): Fristen, Termine,
   Nachzuarbeiten und das Raster „Offene Fragen | To-dos“ stehen auf jedem Gerät nicht als Karten untereinander, sondern als
   eine Reihe Knöpfe in einer Karte (zuerst nur am iPhone, am selben Tag auf PC und iPad übernommen). Ein Tipp zeigt die Liste
-  darunter, ein Tipp auf einen anderen wechselt, einer auf den offenen schließt ihn; beim ersten Öffnen ist keiner offen,
-  danach gilt die Wahl je Seite bis zum Neustart (`ctx.bleibend`). Welche Karte ein Reiter ist, steht in ihren Angaben:
+  darunter, ein Tipp auf einen anderen wechselt, einer auf den offenen schließt ihn. Beim ersten Öffnen ist auf iPad und PC der
+  Reiter offen, dessen Karte `reiter-offen` in den Angaben trägt (Dashboard: Fristen, seit 0.7.0; vorher keiner, die Startseite
+  wirkte leer), auf dem iPhone keiner (`offenerName`). Danach gilt die Wahl je Seite bis zum Neustart (`ctx.bleibend`), auch
+  „selbst geschlossen“. Welche Karte ein Reiter ist, steht in ihren Angaben:
   `reiter=Name` (`[!eba-termin|schlicht|umbruch|handy-zu|reiter=Fristen]+`), im Raster mit Leerzeichen
   (`[!eba-raster|2 reiter=To-dos]`), denn eba-core.css liest die Spaltenzahl als eigenes Wort (`~="2"`). Mehrere Karten mit
   demselben Namen bilden einen Reiter. Den Inhalt liest der Block aus der Notiz selbst (`reiterAus`: dieselbe Karte eine Ebene
@@ -131,7 +138,9 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
   Am Knopf steht, wie viele Einträge die Listen des Reiters gerade zeigen, bei 0 nichts. `bloeckeAus` findet die Codeblöcke im
   Markdown des Reiters (Sprache, Argument, Ersatztext), `anzahl` zählt sie zusammen. Zählen kann eine Erweiterung, die
   `zaehler: { "<sprache>": (arg, quelle) => Zahl | null }` zurückgibt, gelesen über `plugin.erweiterungen`: `dashboard.js` für
-  `eba-liste` mit der Grenze der Liste (höchstens 6 Fristen, 8 Termine, 8 Nachzuarbeiten), `todos.js` für `eba-todos`. Fehlt
+  `eba-liste` mit der Grenze der Liste (höchstens 6 Fristen, 8 Termine, 8 Nachzuarbeiten), `todos.js` für `eba-todos`, seit 0.7.0
+  `termine.js` für `eba-agenda` (nur Später; Vergangen ohne Zahl) und `eba-anmeldungen` (die offenen) und `gruppen.js` für
+  `eba-gruppen` (Karten je Modul und Art); neu gezählt auch bei geänderten Angeboten der Uni (Ereignis `eba-angebote`). Fehlt
   ein Zähler oder kennt er die Zahl nicht (ohne Modell), steht keine Zahl. Neu gezählt wird nach dem Zeichnen, wenn das Modell
   sich ändert, eine Notiz mit Aufgaben oder eine Vorlesung sich ändert, gelöscht oder umbenannt wird, beim Zurückkehren in die
   App und alle 10 Minuten. Geprüft in Obsidian (24.10.2026): iPhone 360 und 390 px mit 16 und 20 px Schrift, iPad 820 px, PC
@@ -140,7 +149,7 @@ Stil aller neuen Teile: `eba-core.css` Abschnitte 43 (Personalisieren, Schloss, 
 
 ## Bereiche (zehn Seiten, dazu der Lernplan)
 
-Die Seitenleiste „Übersicht“ (seit 19.10.2026; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt zehn Seiten: Dashboard,
+Die Übersicht (seit 19.10.2026; seit 26.10.2026 als Menü hinter ≡ unten rechts, vorher in der linken Seitenleiste; bis 0.4.6 ein Raster-Menü, bis 0.4.5 „Bereiche“; `seitenleiste.js`, `ZIELE`, einzige Quelle) zeigt zehn Seiten: Dashboard,
 Studienverlauf, Termine & Anmeldungen, Postfach (seit 0.6.0), Prüfungen, Noten & ECTS, Unterlagen, Karteikarten, Kontakte & Links, Einstellungen & Hilfe.
 Seit 18.10.2026 steht vor Karteikarten der Lernplan, aber nur, wenn es Lernplan-Notizen gibt (`sichtbareZiele`, `ctx.lernplan.sichtbar()`;
 die schreibt nur eine KI, siehe [„Lernplan“](lernen.md)). Stundenplan steht seit 24.10.2026 nicht mehr dort (0.6.6: nur am iPhone), das
@@ -150,9 +159,9 @@ Dashboard zeigt die Woche auf jedem Gerät als Raster; die Seite bleibt, ohne Le
 
 | Seite | Enthält (früher eigene Seite) |
 |---|---|
-| `Studium/Termine & Anmeldungen.md` | Kalender, Agenda, Angebote der Uni; Abschnitte „Anmeldungen“ (`eba-anmeldungen`, aus den zentralen Fristen, seit 17.10.2026; vorher eine Tabelle mit Spalte „Stand“ zum Eintragen) und „Übungen und Tutorien“ (`eba-gruppen`, darunter eine Karte „Hinweise je Modul“). cssclasses `eba-s-termine` + `eba-s-anmeldungen`, Stil `eba-core.css` Abschnitte 37 und 57 |
+| `Studium/Termine & Anmeldungen.md` | Kalender und Agenda (Diese Woche, Nächste Woche), beide mit den Angeboten der Uni (seit 0.7.0; vorher ein eigener Abschnitt „Angebote der Uni“ mit `eba-angebote`; welche, wählt das Filter-Symbol im Kopf des Kalenders) und ohne die Lehre eines Moduls (`ctx.modell.lehreDesModuls`: Übungen starten, Lab, Raumwechsel, Ausfall; die stehen in Woche, Dashboard und auf der Modulseite). Darunter seit 0.7.0 die Reiter Später (```` ```eba-agenda spaeter```` ), Vergangen (```` ```eba-agenda vergangen```` ), Anmeldungen (`eba-anmeldungen`, aus den zentralen Fristen, seit 17.10.2026; vorher eine Tabelle mit Spalte „Stand“ zum Eintragen) und Übungen (`eba-gruppen`); bis 0.6.14 standen sie untereinander (Später und Vergangen als Karten der Agenda, dazu offen „Fristen danach“), die Seite war auf dem iPad 3,4 statt 1,9 Bildschirmhöhen lang. Ohne die Blöcke `spaeter` und `vergangen` (selbst geänderte Seite) zeigt die Agenda beide wie bis 0.6.14 als Karten. Ganz unten die Karte „Hinweise je Modul“. cssclasses `eba-s-termine` + `eba-s-anmeldungen`, Stil `eba-core.css` Abschnitte 37 und 57 |
 | `Studium/Prüfungen.md` | Zeitleiste, Karte „Termine“ (eintägige Prüfungen; Phasen zeigt die Zeitleiste als Band); Karte „Regeln“ |
-| `Studium/Noten & ECTS.md`, `Studium/Studienverlauf.md` | je eine Karte „Regeln“ (Prüfungsordnung) |
+| `Studium/Noten & ECTS.md`, `Studium/Studienverlauf.md` | je eine Karte „Regeln“ (Prüfungsordnung); auf Noten & ECTS rechts im Kasten „Zielnote“ ein Link „Eintragen“ bzw. „Ändern“ (Aktion `personalisieren`, Feld `zielnote`, seit 0.7.0; vorher ohne Zielnote der Satz, man stelle sie in den Einstellungen ein) |
 | `Studium/Unterlagen.md` | Abschnitt „Übungen“ (Übungsblätter); Abschnitt „Ohne Modul“ (seit 26.10.2026, ```` ```eba-unterlagen ohne-modul````, siehe unten) |
 | `Studium/Kontakte & Links.md` | Abschnitt „Offizielle Dokumente“ (Quellen) |
 | `Studium/Einstellungen & Hilfe.md` | Eine Gestalt für die ganze Seite (seit 17.10.2026): jeder Abschnitt ist eine Zeilenliste wie die Verbindungen (Rahmen, Zeilen mit Haarlinie, rundes Symbol, Titel, gedämpfte Zeile, rechts ein Knopf oder der Klapp-Pfeil). Deine Angaben (Name, Studienbeginn, Zielnote, Einrichtung), Verbindungen, Variante (je Variante eine Zeile, die gewählte mit Haken); Abschnitt „Hilfe“ als `> [!eba-zeilen]` mit je Thema einer klappbaren Karte `> > [!eba-karte\|hilfe\|<thema>]- Titel` (Symbol je Thema in eba-core.css Abschnitt 5), zuletzt „Stand der Angaben“ (offene Punkte). Seit 24.10.2026 sind alle Zeilen kompakt wie die Einstellungen von iPhone und iPad, auf allen Geräten gleich: eine Zeile je Angabe, rechts der Stand und der Pfeil, Knöpfe im Fenster dahinter, Hilfe ohne Unterzeilen (bis 0.6.6 `<span class="eba-zeile-unter">`, in selbst geänderten Seiten ausgeblendet). Bis 17.10.2026 Kasten, Chips mit Tabelle und einzelne Karten |
@@ -178,8 +187,9 @@ Dashboard zeigt die Woche auf jedem Gerät als Raster; die Seite bleibt, ohne Le
 
 ## Modulseite (seit 17.10.2026, `modul.js`)
 
-Jede Modulnotiz (und das Gerüst `System/Gerüste/Modul.md`) hat den Aufbau Kopf (HTML: Pfad, Kürzel als eigene Zeile
-`<span class="eba-code">` im `<h1>`, englischer Titel als `eba-untertitel`, Eckdaten) → Codeblock ```` ```eba-modul```` (Modulfeld
+Jede Modulnotiz (und das Gerüst `System/Gerüste/Modul.md`) hat den Aufbau Kopf (HTML: Kürzel als eigene Zeile
+`<span class="eba-code">` im `<h1>`, Eckdaten; bis 0.6.14 dazu Pfad und englischer Titel als `eba-untertitel`, die `eba-core.css` in
+älteren Notizen ausblendet) → Codeblock ```` ```eba-modul```` (Modulfeld
 und darunter der Abschnitt „Vorlesungen“) → `## Unterlagen` (Codeblock ```` ```eba-unterlagen````) → `## Zum Modul` (bis 0.4.5 „Meine Notizen“) → `## Steckbrief` (Lehrveranstaltung, Prüfung, Ergänzungen wie Rolle je Variante,
 Anrechenbar in, Hinweise) → Fußzeile. Die Tabelle „Mein Stand“ und die Knopfreihen gibt es nicht mehr; Modulnotizen, deren
 Text du selbst geändert hast, behalten sie (das Update ersetzt nur unveränderten Text, siehe [„Update“](update.md)), ihr Stil bleibt in
@@ -225,7 +235,10 @@ Neu gezeichnet wird bei Änderungen an Modul-, Stundenplan-, Termin-, Vorlesungs
 `System/Daten/`, beim Zurückkommen in die App und alle 10 Minuten. Prüfung, nächste Sitzung, Termine und Statusfarbe kommen
 seit 18.10.2026 aus dem Fachmodell (`pruefungVon`, `naechsteSitzung`, `termine`, `statusArt`): Eine abgehakte Klausur steht ohne
 Countdown mit „erledigt“, ein bestandenes oder anerkanntes Modul hat keine kommende Prüfung mehr. Reine Logik (`naechstes`,
-`band`, `noteOk`, `titelOhne`, `spanne`) in `tests/modul.test.js`. Die Tabelle „Zum Modul“ zeichnet
+`band`, `noteOk`, `titelOhne`, `spanne`) in `tests/modul.test.js`. Die Spalte „Notiz“ zeigt bei Terminen ihren Titel ohne
+Kürzel, sonst den Dateinamen ohne Datum und Kürzel, die Uhrzeit mit Doppelpunkt (seit 0.7.0, Nachtrag `modul-notizspalte`; vorher
+immer den Dateinamen: „Tutorien starten – BWL“, „Mo 14.15 Vorlesung“). Reihenfolge je Gruppe: nach Datum aufsteigend, der
+Stundenplan nach Wochentag und Beginn (seit 0.7.0, Nachtrag `modul-reihenfolge`; vorher nach Datum absteigend). Die Tabelle „Zum Modul“ zeichnet
 `tabellen.js` auf allen Geräten als Liste zum Lesen (`--eba-tliste: 1`); ein gesetztes Kontrollkästchen steht als
 Pille da, nur bei Notizen, die das Feld haben, „offiziell“ ohne Chip. CSS: `eba-core.css` Abschnitt 58.
 
@@ -277,4 +290,5 @@ steht auf der Seite Unterlagen unter `## Ohne Modul` und zeigt alle Notizen mit 
 oben. Sie liegen in `Unterlagen/Ohne Modul/`: von Hand ohne Modul eingeordnet oder von einem eigenen Uni-Abgleich abgelegt,
 etwa öffentliche Unterlagen des Studiengangs (Folien von Infoveranstaltungen, Modulhandbuch, Prüfungs- und Studienordnung,
 Anleitungen zu Alma oder ILIAS; Art Folien, sonst Sonstiges). Vorher standen sie nur in den Tabellen „Neu“ und „Nach Modul“
-(ohne Gruppe) und nirgends als Liste.
+(ohne Gruppe) und nirgends als Liste. Gibt es keine, bleibt der Block leer (Klasse `eba-ul-aus`, seit 0.7.0) und `eba-core.css`
+Abschnitt 58.8 blendet ihn samt Überschrift aus wie die Schwerpunkte; bis 0.6.14 stand dort ein Satz, was hier erscheinen würde.

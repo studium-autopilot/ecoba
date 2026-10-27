@@ -1,6 +1,7 @@
 // Kacheln und Listen aus dem Fachmodell (ctx.modell, docs/architektur/modell.md „Fachmodell“), seit 18.10.2026 statt Bases-Formeln:
 //  ```eba-kacheln``` (Dashboard, in > [!eba-kennzahlen]): Gruß und Datum, Kacheln „Nächste Frist“ (fristen()[0]), „Nächste
-//    Prüfung“ (naechstePruefung), „Semester“, „ECTS“ (ects), „Gesamtnote“ (noten) und die Leiste „Semesterverlauf“ (je
+//    Prüfung“ (naechstePruefung), „Semester“, „ECTS“ (ects; darunter die Orientierungsprüfung), „Gesamtnote“ (noten; auch
+//    ohne Noten mit „–“, damit klar ist, dass sie mitgezählt wird) und die Leiste „Semesterverlauf“ (je
 //    Kalenderwoche des Semesters Vorlesungszeit, Pause, Prüfungsphase aus den Semesterdaten; markiert ist die planwoche, am
 //    Wochenende als „nächste Woche“).
 //  ```eba-liste fristen|termine|pruefungen```: Zeilen „Wann · Was · Art“. fristen = Dashboard „Fristen · 30 Tage“ (Fristen,
@@ -42,7 +43,7 @@ module.exports = function (ctx) {
     // Nächste Frist
     const f = M.fristen({ heute })[0];
     kacheln.push({ cls: "akzent frist", k: "Nächste Frist", v: f ? Z.esc(f.titel.replace(" (ILIAS)", "")) : "–", text: true, pfad: (f && f.pfad) || SEITE.termine,
-      s: f ? (f.laeuft ? `läuft · bis ${Z.kurz(f.ende)}` : `${Z.kurz(f.datum)} · ${sub(f.datum)}`) + (f.geschaetzt ? " · geschätzt" : "") : "keine offenen Fristen" });
+      s: f ? (f.laeuft ? `bis ${Z.kurz(f.ende)}` : `${Z.kurz(f.datum)} · ${sub(f.datum)}`) + (f.geschaetzt ? " · geschätzt" : "") : "keine offenen Fristen" });
     // Nächste Prüfung
     const p = M.naechstePruefung({ heute });
     kacheln.push({ cls: "", k: "Nächste Prüfung", v: p ? Z.esc(p.titel) : "Termin folgt", text: true, pfad: (p && p.pfad) || SEITE.pruefungen,
@@ -52,27 +53,31 @@ module.exports = function (ctx) {
     if (s) {
       const tb = Z.tageBis(s.vb, heute), te = Z.tageBis(s.ve, heute), tse = Z.tageBis(s.ende, heute);
       const tag = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : n < 0 ? "vorbei" : `in ${n} Tagen`);
-      const phase = D.vorStart ? "vor Studienbeginn" : heute < s.vb ? "Vorlesungsfrei" : heute <= s.ve ? "Vorlesungszeit" : "Vorlesungsfreie Zeit";
       const phaseSub = heute < s.vb ? `Vorlesungsbeginn ${tag(tb)}` : heute <= s.ve ? `noch ${Z.plural(te, "Tag", "Tage")} Vorlesungen` : `Semesterende ${tag(tse)}`;
       const pct = Math.max(0, Math.min(100, Math.round((Z.tage(s.beginn, heute) / Math.max(1, Z.tage(s.beginn, s.ende))) * 100)));
       kacheln.push(D.vorStart
         ? { cls: "", k: "Semester", v: `Start <small>${tag(Z.tageBis(s.beginn, heute))}</small>`, s: phaseSub, fortschritt: [pct, 100], pfad: SEITE.verlauf }
-        : { cls: "", k: "Semester", v: `${s.fs}. FS <small>${Z.esc(s.name)}</small>`, s: `${phase} · ${phaseSub}`, fortschritt: [pct, 100], pfad: SEITE.verlauf });
+        : { cls: "", k: "Semester", v: `${s.fs}. FS <small>${Z.esc(s.name)}</small>`, s: phaseSub, fortschritt: [pct, 100], pfad: SEITE.verlauf });
     } else kacheln.push({ cls: "", k: "Semester", v: "–", s: "Semesterdaten fehlen", pfad: SEITE.verlauf });
     // ECTS und Note
     const E = M.ects(), N = M.noten();
     const zahl = (x) => String(Math.round(x * 100) / 100).replace(".", ",");
-    kacheln.push({ cls: "", k: "ECTS", v: `${zahl(E.ist)}<small>/ ${E.gesamt}</small>`, s: `Orientierungsprüfung ${E.op} / 4`, fortschritt: [Math.min(E.ist, E.gesamt), E.gesamt], pfad: SEITE.noten });
+    kacheln.push({ cls: "", k: "ECTS", v: `${zahl(E.ist)}<small>/ ${E.gesamt}</small>`, s: `Orientierungsprüfung ${E.op} / 4`,
+      fortschritt: [Math.min(E.ist, E.gesamt), E.gesamt], pfad: SEITE.noten });
+    // Gesamtnote als eigene Kachel: Vom 26.10.2026 stand sie kurz unter ECTS, die Startseite zeigte so weniger auf einen Blick
     kacheln.push({ cls: "", k: "Gesamtnote", v: N.note, s: Z.esc(N.unter), pfad: SEITE.noten });
     return { gruss, datum, kacheln, leiste: s ? leisteBauen(M, s, heute) : null };
   };
 
-  // Kacheln über „Übungen“ (Seite Unterlagen): zählen dieselben Blätter wie die Liste darunter
+  // Kacheln über „Übungen“ (Seite Unterlagen): zählen dieselben Blätter wie die Liste darunter. Nichts offen und nichts erledigt:
+  // keine Kacheln (leere Liste), die Zeile „Keine offenen Abgaben.“ darunter reicht (bis 0.6.14 dazu dreimal „0“). Den Akzent
+  // trägt „Offen“ nur, wenn ein Blatt auf dich wartet (seit 0.7.0, vorher immer als erste Kachel)
   const uebungKachelnBauen = (M, heute) => {
     const Z = M.zeit, alle = M.uebungen({ heute }), offen = alle.filter((u) => !u.erledigt && u.datum && u.datum >= Z.plus(heute, -VERPASST));
     const spaet = offen.filter((u) => u.ueberfaellig).length, erledigt = alle.filter((u) => u.erledigt).length;
+    if (!offen.length && !erledigt) return [];
     return [
-      { cls: "akzent", k: "Offen", v: String(offen.length), s: spaet ? `${spaet} überfällig` : "" },
+      { cls: offen.length ? "akzent" : "", k: "Offen", v: String(offen.length), s: spaet ? `${spaet} überfällig` : "" },
       { cls: "", k: "Fällig in 7 Tagen", v: String(offen.filter((u) => !u.ueberfaellig && u.datum <= Z.plus(heute, 7)).length), s: "" },
       { cls: "", k: "Erledigt", v: String(erledigt), s: alle.length ? "von " + Z.plural(alle.length, "Blatt", "Blättern") : "" },
     ];
@@ -95,7 +100,7 @@ module.exports = function (ctx) {
         : s.vb && s.ve && so >= s.vb && mo <= s.ve ? "v" : "f";
       wochen.push({ art, zustand: i < jetzt ? "vorbei" : i === jetzt ? "jetzt" : "", titel: `KW ${Z.kw(mo)} · ${Z.kurz(mo, { jahr: false })}–${Z.kurz(so, { jahr: false })}` });
     }
-    return { titel: `${s.name} · Semesterverlauf`, text: M.woche(heute).text, jetzt: pw.vorgezogen ? "nächste Woche" : "diese Woche", wochen, geschaetzt: phasen.slice(0, 3).some((x) => x.status === "geschätzt") };
+    return { titel: "Semesterverlauf", text: M.woche(heute).text, jetzt: pw.vorgezogen ? "nächste Woche" : "diese Woche", wochen, geschaetzt: phasen.slice(0, 3).some((x) => x.status === "geschätzt") };
   };
 
   // ---------- Listen (rein, testbar) ----------
@@ -104,17 +109,22 @@ module.exports = function (ctx) {
     const Z = M.zeit, aus = [];
     const tagText = (iso) => { const n = Z.tageBis(iso, heute); return n === 0 ? "Heute" : n === 1 ? "Morgen" : Z.datum(iso, { bezug: heute }); };
     const bald = (iso) => { const n = Z.tageBis(iso, heute); return n === 0 || n === 1; };
-    const pille = (ton, wort, t) => ({ ton: ton + (t && t.geschaetzt ? " leer" : ""), text: wort + (t && t.freiwillig ? " · freiwillig" : "") + (t && t.geschaetzt ? " · geschätzt" : "") });
+    // Was der Titel schon sagt („Zwischentest 1 B120“, „Workshop (freiwillig)“), steht nicht noch einmal in der Pille (seit 0.7.0),
+    // ebenso was der Reiter sagt: Fristen unter „Fristen“ ohne Pille, nur „freiwillig“ und „geschätzt“ leise
+    const pille = (ton, wort, t) => {
+      const text = [wort, t && t.freiwillig && !/freiwillig/i.test(t.titel || "") ? "freiwillig" : "", t && t.geschaetzt ? "geschätzt" : ""].filter(Boolean).join(" · ");
+      return text ? { ton: ton + (t && t.geschaetzt ? " leer" : ""), text } : null;
+    };
     if (art === "fristen") {
       const bis = Z.plus(heute, 30);
       for (const f of M.fristen({ heute, tage: 30 })) {
         aus.push({ sort: f.stichtag, min: f.minuten, wann: f.laeuft ? `läuft bis ${Z.datum(f.ende, { bezug: heute })}` : tagText(f.datum), bald: !f.laeuft && bald(f.datum),
-          uhr: f.laeuft ? f.bisZeit : f.ab || f.zeit, was: f.titel.replace(" (ILIAS)", ""), pfad: f.pfad, pille: pille("warn", "Frist", f) });
+          uhr: f.laeuft ? f.bisZeit : f.ab || f.zeit, was: f.titel.replace(" (ILIAS)", ""), pfad: f.pfad, pille: pille("", "", f) });
       }
       for (const p of M.pruefungen({ heute, ab: heute, bis })) {
         if (!p.offen) continue;
         aus.push({ sort: p.datum, min: p.minuten, wann: tagText(p.datum), bald: bald(p.datum), uhr: p.zeit, was: p.titel, pfad: p.pfad,
-          pille: p.zwischentest ? pille("info", "Zwischentest", p) : pille("bad", "Prüfung", p) });
+          pille: p.zwischentest ? pille("info", M.istZwischentest(p.titel) ? "" : "Zwischentest", p) : pille("bad", "Prüfung", p) });
       }
       for (const a of M.abgaben({ heute, tage: 30 })) {
         aus.push({ sort: a.datum, min: null, wann: a.ueberfaellig ? "überfällig" : tagText(a.datum), bald: !a.ueberfaellig && bald(a.datum), uhr: "",
@@ -133,7 +143,8 @@ module.exports = function (ctx) {
       for (const p of M.pruefungen({ heute, ab: heute })) {
         if (p.erledigt) continue;
         aus.push({ sort: p.datum, min: p.minuten, wann: `${Z.datum(p.datum, { bezug: heute })} · ${Z.abstand(p.datum, heute)}`, bald: bald(p.datum), uhr: "",
-          was: p.titel, pfad: p.pfad, pille: p.zwischentest ? { ton: "info", text: "Zwischentest" } : p.geschaetzt ? { ton: "leer", text: "geschätzt" } : null });
+          was: p.titel, pfad: p.pfad, pille: p.zwischentest && !M.istZwischentest(p.titel) ? { ton: "info", text: "Zwischentest" }
+            : p.geschaetzt ? { ton: "leer", text: "geschätzt" } : null });
       }
     } else if (art === "nachzuarbeiten" && M.vorlesungen) {
       for (const v of M.vorlesungen()) {
@@ -165,7 +176,9 @@ module.exports = function (ctx) {
     const M = ctx.modell;
     if (!M || !M.fristen) { ohneModell(el); return; }
     if (art === "uebungen") {
-      el.innerHTML = `<div class="eba-kz"><div class="eba-kz-reihe drei">${uebungKachelnBauen(M, M.zeit.heute()).map((k) => kachelHtml(k, M.zeit.esc)).join("")}</div></div>`;
+      // ohne Kacheln blendet das CSS die ganze Karte aus (eba-kz-ohne, Abschnitt 60)
+      const U = uebungKachelnBauen(M, M.zeit.heute());
+      el.innerHTML = U.length ? `<div class="eba-kz"><div class="eba-kz-reihe drei">${U.map((k) => kachelHtml(k, M.zeit.esc)).join("")}</div></div>` : `<div class="eba-kz-ohne"></div>`;
       return;
     }
     const K = kachelnBauen(M, ctx.date.jetzt()), esc = M.zeit.esc;

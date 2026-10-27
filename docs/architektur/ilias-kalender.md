@@ -25,8 +25,9 @@ eigene zu bauen.
   Anmeldefenster von Gruppen (`grp`, stehen zentral) werden nur gezählt (`zaehler`). Tests legt ILIAS nie in den Kalender, darum
   entsteht hieraus nie eine Prüfung. Persönliche Abgabetermine und Übungen in Ordnern fehlen im Abo (ILIAS).
 - **Zeit:** nur `TZID=Europe/Berlin` und UTC („Z“); fremde Zonen, Zeiten ohne Zone und ganztägige Einträge fallen weg (fremde
-  Zone: Warnung „… Stell in ILIAS die Zeitzone Berlin ein.“). Abgabe um 00:00 → am Vortag „bis 24:00 Uhr“ (das Fachmodell
-  kennt 24:00 als Ende des Tages).
+  Zone: Warnung „… Stell in ILIAS die Zeitzone Berlin ein.“). Abgabe um 00:00 → am Vortag „bis 23:59 Uhr“ (seit 0.7.0 wie in
+  den zentralen Daten; bis 0.6.14 „bis 24:00 Uhr“). Intern bleibt 24:00 (das Fachmodell kennt es als Ende des Tages), denn die
+  Uhrzeit steckt in den Grabsteinen gelöschter Abgaben; nur die Notiz zeigt 23:59 (`uhrText`).
 - **Schlüssel** `ilias_kalender_id` = `exc/<ref>/<abgabe|feedback>/<8 Zeichen SHA-256 des gesäuberten, kleingeschriebenen
   Aufgabentitels>`, nie die UID (ILIAS legt beim Ändern einer Aufgabe neue Einträge an). Gesäubert heißt: ohne Zusatz, ohne
   Kurspasswort (`ctx.ilias.ohneKennwort`), Leerraum einfach. Zwei Aufgaben mit gleichem Titel in einer Übung: nach Datum „#2“.

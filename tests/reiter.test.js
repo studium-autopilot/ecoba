@@ -51,6 +51,19 @@ test("Gleicher Name: ein Reiter mit beiden Karten; Karten in Codeblöcken zähle
   assert.deepEqual(R.reiterAus(""), []);
 });
 
+test("Offen beim ersten Öffnen: auf iPad und PC der Reiter mit reiter-offen (Dashboard: Fristen), auf dem iPhone keiner", () => {
+  const text = "> [!eba-karte|reiter=A] Eins\n> 1\n\n> [!eba-karte|schlicht|reiter=B|reiter-offen]+ Zwei\n> 2\n";
+  const reiter = R.reiterAus(text);
+  assert.deepEqual(reiter, [{ name: "A", md: "> [!eba-karte] Eins\n> 1" }, { name: "B", md: "> [!eba-karte|schlicht] Zwei\n> 2", offen: true }],
+    "reiter-offen fällt aus der Kopfzeile wie reiter=");
+  assert.equal(R.offenerName(reiter, undefined, false), "B");
+  assert.equal(R.offenerName(reiter, undefined, true), "", "iPhone: keiner");
+  assert.equal(R.offenerName(reiter, "A", false), "A", "die eigene Wahl geht vor");
+  assert.equal(R.offenerName(reiter, "", false), "", "selbst geschlossen bleibt zu");
+  assert.equal(R.offenerName([{ name: "A", md: "" }], undefined, false), "", "ohne reiter-offen keiner");
+  assert.deepEqual(R.reiterAus(DASH).filter((r) => r.offen).map((r) => r.name), ["Fristen"]);
+});
+
 test("Blöcke eines Reiters: Sprache, Argument und Text, auch in einem Raster", () => {
   const md = (n) => R.reiterAus(DASH).filter((r) => r.name === n)[0].md;
   assert.deepEqual(R.bloeckeAus(md("Fristen")), [{ sprache: "eba-liste", arg: "fristen", quelle: "Fristen erscheinen, sobald Studium Autopilot läuft." }]);

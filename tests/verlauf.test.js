@@ -85,14 +85,13 @@ test("Lupe zeigt Rückmeldung (mit Link auf die Termin-Notiz) und freie Tage", (
   assert.doesNotMatch(html, /geschätzt/);
 });
 
-test("Lupe: geschätzte Rückmeldung und freie Tage tragen „(geschätzt)“ und ihren Hinweis; abgehakt = gefüllte Raute", () => {
+test("Lupe: geschätzte Rückmeldung und freie Tage tragen „(geschätzt)“, der Hinweis als Tooltip; abgehakt = gefüllte Raute", () => {
   const D = mitTerminen({
     frei: [frei("Allerheiligen", d(1, 11), true, "Liste der Uni noch nicht veröffentlicht")],
     rueck: [rueck("SS 2027", d(15, 1, 2027), d(15, 2, 2027), { geschaetzt: true, hinweis: "Regelmäßige Frist fortgeschrieben", erledigt: true })],
   });
   const R = rechnen(D), html = lupe(D, R, R.sems[0]);
-  assert.match(html, /<i class="raute ok"><\/i><b>Rückmeldung fürs SS 2027<\/b>: 15\.01\. – 15\.02\. \(geschätzt\)/);
-  assert.match(html, /Frei 01\.11\. \(geschätzt\)/);
-  assert.match(html, /<b>Allerheiligen 01\.11\.<\/b> \(geschätzt\): Liste der Uni noch nicht veröffentlicht/);
-  assert.match(html, /<b>Rückmeldung fürs SS 2027<\/b> \(geschätzt\): Regelmäßige Frist fortgeschrieben/);
+  assert.match(html, /title="Regelmäßige Frist fortgeschrieben"><i class="raute ok"><\/i><b>Rückmeldung fürs SS 2027<\/b>: 15\.01\. – 15\.02\. \(geschätzt\)/);
+  assert.match(html, /title="Liste der Uni noch nicht veröffentlicht"><i class="eba-vl-b pause frei geschaetzt"><\/i>Frei 01\.11\. \(geschätzt\)/);
+  assert.doesNotMatch(html, /eba-vl-lhinweis/, "keine Zeile mit Hinweisen unter der Legende (bis 0.6.14)");
 });

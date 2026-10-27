@@ -69,6 +69,15 @@ test("Nicht mehr dran: bestanden oder anerkannt, Notiz eines anderen Semesters, 
   assert.equal(nichtMehrDran(fm, null, "WS 2026/27"), "", "ohne Modulnotiz");
 });
 
+test("Zeile eines Moduls: in der Lernplan-Notiz der Name als Link zur Modulseite, in der Übersicht Kürzel und Name (26.10.2026)", () => {
+  const { titelHtml } = laden("lernplan").ergebnis;
+  const P = { code: "X100", f: { basename: "X100 Lernplan" }, modul: { titel: "Märkte & Preise", f: { path: "Module/X100 Märkte & Preise.md" } } };
+  assert.equal(titelHtml(P, true), '<a class="internal-link eba-kopf-modul" data-href="Module/X100 Märkte &amp; Preise.md" '
+    + 'href="Module/X100 Märkte &amp; Preise.md">Märkte &amp; Preise</a>', "der Titel „X100 Lernplan“ nennt das Kürzel schon");
+  assert.equal(titelHtml(P, false), "X100 Märkte &amp; Preise");
+  assert.equal(titelHtml({ code: "X100", f: { basename: "X100 Lernplan" }, modul: null }, true), "X100 Lernplan", "ohne Modulnotiz der Name der Notiz");
+});
+
 test("Folien je Kapitel: neue Fassung daneben gilt vor deiner älteren, Anmerkungen und Videos zählen nie", () => {
   const u = (art, nummer, seiten) => ({ typ: "unterlage", code: "X100", art, nummer, seiten });
   const { folienVon } = laden("lernplan", { notizen: {

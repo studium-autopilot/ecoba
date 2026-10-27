@@ -235,6 +235,31 @@ test("Neue Vorlesungsnotiz: Dozent nicht kopiert, der Kopf liest ihn live aus de
   assert.match(angelegt[0].inhalt, /^veranstaltung: "\[\[Stundenplan\/Di 10\.15 X100 Vorlesung\]\]"$/m);
 });
 
+test("Kopf der Vorlesungsnotiz: Modul einmal, mit Namen als Link im Label; darunter nichts, was der Titel schon sagt (26.10.2026)", () => {
+  const VL = "Vorlesungen/X100/2026-10-20 X100 VL 02.md";
+  const notizen = notizenMit(vl("2026-10-20", 2, { thema: "Lagemaße", modul: "[[X100 Beispielmodul]]" }));
+  const L = laden("vorlesung", { heute: "2026-10-20", notizen, kontext: { modell: modell("2026-10-20", notizen) } });
+  L.ctx.app.vault.cachedRead = async () => "";
+  let h1 = "Vorlesung 2 · Di 20.10. · Lagemaße";
+  const mc = L.ctx.app.metadataCache, alt = mc.getFileCache;
+  mc.getFirstLinkpathDest = (p) => (p === "X100 Beispielmodul" ? L.ctx.app.vault.getAbstractFileByPath(MODUL) : null);
+  mc.getFileCache = (f) => { const c = alt(f); return c && f.path === VL ? Object.assign({ headings: [{ heading: h1, level: 1 }] }, c) : c; };
+  const kopf = () => { const el = knoten("div"); L.ergebnis.zeichnen(el, { sourcePath: VL }); return el; };
+  let el = kopf();
+  const label = el.finde("eba-vorl-label")[0];
+  assert.deepEqual(label.finde("eba-kopf-modul")[0].texte(), ["Beispielmodul"], "Link zur Modulseite");
+  assert.match(label.texte().join(""), /^Beispielmodul · Vorlesungswoche \d+ von \d+$/);
+  assert.equal(el.finde("eba-vorl-titel").length, 0, "kein Modulname mehr als zweite große Überschrift");
+  assert.equal(el.finde("eba-vorl-thema").length, 0, "der Titel nennt Nummer, Tag und Thema schon");
+  // Ältere Notiz: Der Titel nennt das Thema nicht, es steht unter dem Kopf (ohne Nummer und Tag, die sagen Woche und Datum)
+  h1 = "X100 VL 02";
+  el = kopf();
+  assert.deepEqual(el.finde("eba-vorl-thema")[0].texte(), ["Lagemaße"]);
+  // Ohne Modulseite: kein Link, das Label wie bisher
+  delete notizen[MODUL];
+  assert.equal(kopf().finde("eba-kopf-modul").length, 0);
+});
+
 test("Kopf der Vorlesungsnotiz: Dozent und Wochentag live aus dem Stundenplan, neu am nächsten Tag", () => {
   const VL = "Vorlesungen/X100/2026-10-20 X100 VL 02.md";
   const notizen = notizenMit(vl("2026-10-20", 2), { "Stundenplan/Di 10.15 X100 Vorlesung.md": {

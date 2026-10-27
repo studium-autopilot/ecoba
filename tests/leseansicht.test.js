@@ -22,15 +22,25 @@ const frontmatter = {
 const L = laden("start", { frontmatter }).ctx.leseansicht;
 const datei = (path) => ({ path });
 
-test("Gesperrt: Dashboard, Übersichten, Einstellungen und Daten", () => {
-  for (const p of ["Dashboard.md", "Studium/Noten & ECTS.md", "Studium/Prüfungen.md", "System/Einstellungen.md", "System/Daten/Semester.md"]) {
+// Gesperrt heißt auch: eba-gesperrt am Tab, ohne Umschalter ist die Kopfleiste auf iPhone und iPad leer (eba-core.css 66, 70.1)
+test("Gesperrt: Klasse eba-gesperrt am Tab mit dem Umschalter, beim Abmelden weg; leere Glasfläche oben rechts ohne Rand", () => {
+  const code = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "start.js"), "utf8");
+  assert.match(code, /v\.containerEl\.classList\.toggle\("eba-gesperrt", aus\)/);
+  assert.match(code, /knoepfeZeigen = \(\) => \{[^\n]*knopf\(l\.view, false\)/, "abgemeldet: Knopf und Klasse zurück");
+  const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8");
+  assert.ok(css.includes("body.eba-plugin-an.is-mobile .workspace-leaf-content.eba-gesperrt > .view-header .view-actions { --raised: none; }"));
+});
+
+test("Gesperrt: Dashboard, Übersichten, Einstellungen, Daten und Modulseiten", () => {
+  for (const p of ["Dashboard.md", "Studium/Noten & ECTS.md", "Studium/Prüfungen.md", "System/Einstellungen.md", "System/Daten/Semester.md",
+    "Module/1 Grundstudium/B110 BWL.md"]) {
     assert.equal(L.nurLesen(datei(p)), true, p);
   }
 });
 
-test("Frei: Module, deine Notizen, Notizen ohne Eigenschaften; Termine & Anmeldungen ist gesperrt", () => {
+test("Frei: deine Notizen, Notizen ohne Eigenschaften; Termine & Anmeldungen ist gesperrt", () => {
   assert.equal(L.nurLesen(datei("Studium/Termine & Anmeldungen.md")), true);
-  for (const p of ["Module/1 Grundstudium/B110 BWL.md", "Vorlesungen/B110/VL 01.md", "Neu.md"]) {
+  for (const p of ["Vorlesungen/B110/VL 01.md", "Neu.md"]) {
     assert.equal(L.nurLesen(datei(p)), false, p);
   }
 });

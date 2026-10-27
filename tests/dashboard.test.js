@@ -25,7 +25,7 @@ test("Seiten: Kacheln und Listen sind Codeblöcke aus dem Fachmodell, keine Base
   assert.match(DASH, /\n> \[!eba-kennzahlen\]\n> ```eba-kacheln\n/);
   assert.match(DASH, /> > \[!eba-termin\|[^\n]*\]\+ Fristen · 30 Tage\n> > ```eba-liste fristen\n> > Fristen erscheinen/);
   assert.match(DASH, /> > \[!eba-termin\|[^\n]*\]\+ Termine · 14 Tage\n> > ```eba-liste termine\n> > Termine erscheinen/);
-  assert.match(PRUEF, /> \[!eba-tabelle\|[^\n]*\] Termine\n> ```eba-liste pruefungen\n> Prüfungen erscheinen/);
+  assert.match(PRUEF, /> \[!eba-tabelle\|[^\n]*ohne-titel[^\n]*\]\n> ```eba-liste pruefungen\n> Prüfungen erscheinen/, "unter dem Titel Prüfungen kein Label");
   for (const f of ["formula.tf", "formula.kl", "formula.wochetext", "eba-kz-reihe"]) assert.ok(!DASH.includes(f), "Formel noch da: " + f);
 });
 
@@ -61,8 +61,10 @@ test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus 
   assert.deepEqual(K.kacheln.map((k) => (k.cls ? k.cls + "|" : "|") + k.k), ["akzent frist|Nächste Frist", "|Nächste Prüfung", "|Semester", "|ECTS", "|Gesamtnote"]);
   assert.deepEqual([K.kacheln[0].v, K.kacheln[0].s], ["Belegfrist Kolloquium", "18.10. · heute"]);
   assert.deepEqual([K.kacheln[1].v, K.kacheln[1].s], ["X100 · Beispielmathematik", "08.02. · in 113 Tagen"], "X180 ist anerkannt");
-  assert.equal(K.kacheln[2].s, "Vorlesungszeit · noch 111 Tage Vorlesungen");
+  assert.equal(K.kacheln[2].s, "noch 111 Tage Vorlesungen");
   assert.match(K.kacheln[3].v, /^6<small>/, "anerkanntes Modul zählt");
+  assert.equal(K.kacheln[3].s, "Orientierungsprüfung 0 / 4");
+  assert.deepEqual([K.kacheln[4].v, K.kacheln[4].s], ["–", ""], "ohne Noten ein Strich: die Note wird mitgezählt, es gibt nur noch keine");
   assert.equal(K.leiste.text, "Vorlesungswoche 2 von 16");
   const jetzt = K.leiste.wochen.findIndex((w) => w.zustand === "jetzt");
   assert.match(K.leiste.wochen[jetzt].titel, /^KW 43 · 19\.10\.–25\.10\.$/, "Sonntag: die kommende Woche");
@@ -79,13 +81,14 @@ test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus 
 test("Fristen · 30 Tage: Fristen, Prüfungen, Abgaben nach dem gezeigten Tag; läuft → Ende; Uhrzeit aus „ab …“", () => {
   const { B, M } = dashboard("2026-10-18", NOTIZEN);
   const z = B.zeilenBauen("fristen", M, "2026-10-18");
-  assert.deepEqual(z.map((x) => `${x.wann}|${x.was}|${x.pille.text}`), [
+  assert.deepEqual(z.map((x) => `${x.wann}|${x.was}|${x.pille ? x.pille.text : ""}`), [
     "überfällig|X100 · Blatt 1|Abgabe",
-    "Heute|Belegfrist Kolloquium|Frist",
-    "Morgen|Tutorien-Anmeldung X110|Frist",
-    "läuft bis So 25.10.|TCP-Kurse – Belegung|Frist · freiwillig",
-    "Fr 13.11.|Zwischentest 1 X100|Zwischentest",
-  ]);
+    "Heute|Belegfrist Kolloquium|",
+    "Morgen|Tutorien-Anmeldung X110|",
+    "läuft bis So 25.10.|TCP-Kurse – Belegung|freiwillig",
+    "Fr 13.11.|Zwischentest 1 X100|",
+  ], "was Titel („Zwischentest“) oder Reiter („Frist“) sagen, steht nicht noch einmal in der Pille");
+  assert.equal(z[3].pille.ton, "", "„freiwillig“ leise, nicht in der Farbe der Fristen");
   assert.equal(z[2].uhr, "17:00");
   assert.deepEqual([z[1].bald, z[3].bald], [true, false]);
 });
@@ -109,11 +112,11 @@ test("Termine · 14 Tage: ohne Fristen und Prüfungen, Fachschaft nur heute und 
   ]);
 });
 
-test("Prüfungstermine: kommende Prüfungen samt Modulfeld, ohne Erledigtes und Anerkanntes, Zwischentest markiert", () => {
+test("Prüfungstermine: kommende Prüfungen samt Modulfeld, ohne Erledigtes und Anerkanntes, Zwischentest ohne doppelte Pille", () => {
   const { B, M } = dashboard("2026-10-18", NOTIZEN);
   const z = B.zeilenBauen("pruefungen", M, "2026-10-18");
   assert.deepEqual(z.map((x) => `${x.wann}|${x.was}|${x.pille ? x.pille.text : ""}`), [
-    "Fr 13.11. · in 26 Tagen|Zwischentest 1 X100|Zwischentest",
+    "Fr 13.11. · in 26 Tagen|Zwischentest 1 X100|",
     "Mo 08.02. · in 113 Tagen|X100 · Beispielmathematik|",
-  ]);
+  ], "der Titel sagt „Zwischentest“ (bis 0.6.14 dazu die Pille)");
 });

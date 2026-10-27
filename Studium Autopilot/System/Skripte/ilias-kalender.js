@@ -19,7 +19,8 @@
 //   Datum, ist das dieselbe Abgabe mit neuem Titel (Haken und Text bleiben). Ändern sich Titel und Datum zugleich, entsteht
 //   „(entfällt)“ bzw. Papierkorb und eine neue Notiz.
 // Zeit: nur TZID=Europe/Berlin und UTC („Z“), andere Zeitzonen werden ausgelassen (Warnung). Eine Abgabe um 00:00 steht am Vortag
-//   „bis 24:00 Uhr“.
+//   „bis 23:59 Uhr“ (seit 0.7.0 wie in den zentralen Daten; bis 0.6.14 „bis 24:00 Uhr“). Intern bleibt sie 24:00: Die Uhrzeit
+//   steckt in den Grabsteinen gelöschter Abgaben, eine andere ließe sie wiederkommen.
 // Notiz: dieselbe Form wie zentrale Termine (ctx.zentral.notizText mit herkunft: ilias-kalender, ilias_kalender_id), kategorie
 //   Frist, ort „bis 23:55 Uhr · ILIAS“, quelle = Adresse der Übung (ohne Schlüssel), Datei „Termine/JJJJ-MM-TT <Code> Abgabe in
 //   ILIAS.md“ bzw. „… Feedback in ILIAS.md“ (neues Datum, neuer Code oder neue Art → umbenannt; einen eigenen Namen benennt nur
@@ -123,7 +124,7 @@ const zeitpunktAus = (e, zeit) => {
   const z = zeit(wert);
   return z && z.uhr ? { datum: z.datum, uhr: z.uhr } : { fehlt: "zeit" };
 };
-// Abgabe um 00:00 → am Vortag „bis 24:00“
+// Abgabe um 00:00 → am Vortag 24:00 (angezeigt 23:59, uhrText)
 const tagVorher = (iso) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() - 1); return d.toISOString().slice(0, 10); };
 const frist = (z) => (z.uhr === "00:00" ? { datum: tagVorher(z.datum), uhr: "24:00" } : z);
 
@@ -182,9 +183,10 @@ const eintraegeAus = async (events, h) => {
 const artWort = (x) => (x.art === "feedback" ? "Feedback" : "Abgabe");
 const titelVon = (x) => [x.code, artWort(x), x.nummer ? String(x.nummer) : ""].filter(Boolean).join(" ") + (x.code ? "" : " in ILIAS");
 const dateiNameVon = (x) => `${x.datum} ${x.code ? x.code + " " : ""}${artWort(x)} in ILIAS`;
+const uhrText = (uhr) => (uhr === "24:00" ? "23:59" : uhr);
 // Eintrag in der Form der zentralen Termine (ctx.zentral.notizText)
 const eintragVon = (x) => ({
-  id: x.schluessel, titel: titelVon(x), datum: x.datum, bis: "", uhrzeit: "", ort: `bis ${x.uhr} Uhr · ILIAS`, kategorie: "Frist",
+  id: x.schluessel, titel: titelVon(x), datum: x.datum, bis: "", uhrzeit: "", ort: `bis ${uhrText(x.uhr)} Uhr · ILIAS`, kategorie: "Frist",
   status: "offiziell", code: x.code, quelle_url: `${K.ILIAS}goto.php/exc/${x.ref}`, quelle_text: "", info: K.INFO, geprueft: "",
 });
 

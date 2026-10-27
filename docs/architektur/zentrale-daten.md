@@ -168,28 +168,35 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   `ctx.zentral.angebote()`); ein Fehler hält nur die Angebote an. Anders als bei den Gruppen gilt eine Datei, die im Manifest
   fehlt, als zurückgezogen: Der gerätelokale Stand wird gelöscht (nicht bei `pause`). Sind die zentralen Daten aus, liefern
   `angebote()` und `kapitel()` `null` (der Stand bleibt fürs Wiedereinschalten) und `status().neueVersion` ist leer; `gruppen()`
-  liefert weiter den letzten Stand (Markierung „deine Gruppe“ in ILIAS, Raster und Agenda). Anzeige: `angebote.js`, Codeblock
-  `eba-angebote` (meldet sich als `ctx.angeboteAnzeige` an).
-  *Auswahl* (synchronisiert in `System/Einstellungen.md`, für alle Geräte gleich): Solange `angebote_gewaehlt` nicht `true` ist,
-  zeigt der Block statt der Liste die Karte „Welche Angebote willst du sehen?“ (`.eba-ang-wahl`) mit Häkchen und **Fertig**;
-  „Auswahl ändern“ im Fuß öffnet sie wieder. Seit 25.10.2026 fragt auch die Einrichtung (Bildschirm 6) mit denselben Häkchen
-  (`wahlListe`, für die Einrichtung `ctx.angeboteAnzeige.wahl(el)` → `{ felder(), gespeichert() }`; sie schreibt `felder()`
-  zusammen mit ihrem Stand, `wahlFelder`), wer sie dort abschließt, sieht die Karte nicht mehr. Der Entwurf der Häkchen ist für
-  beide derselbe. `angebote_auswahl` = Liste der gewählten Schlüssel:
+  liefert weiter den letzten Stand (Markierung „deine Gruppe“ in ILIAS, Raster und Agenda). Anzeige: `angebote.js` (meldet sich
+  als `ctx.angeboteAnzeige` an).
+  *Anzeige (seit 0.7.0):* Die gewählten Angebote stehen als Termine im Kalender und in der Agenda auf **Termine & Anmeldungen**
+  (`ctx.angeboteAnzeige.termine()` → `termineVon`; `kalender.js`, `termine.js` → `mitAngeboten`), lila wie Veranstaltungen, der
+  Titel mit der Art vorn („Vortrag: …“, „Unibibliothek: …“), als Link zur Seite der Uni. Im Raster rücken sie hinter Pflicht und
+  Freiwilliges (eher in „+n weitere“), unter „Vergangen“ stehen sie nicht. Hochschulsport: `anmeldung.ab` als eigener Termin
+  „… – Buchungsstart“ am Tag der Buchung. Was schon als Termin-Notiz dasteht, kommt nicht doppelt: gleicher Tag und gleiche Uhrzeit,
+  der kürzere Titel steckt als ganze Wörter im längeren (z. B. „UB-Kurs: Zotero“ aus `termine.json`); fehlt eine Uhrzeit, nur bei
+  gleichem Titel. Bis 0.6.14 stand
+  eine eigene Liste im Codeblock `eba-angebote` unter der Agenda (Chips je Art, 14 Tage, „Mehr anzeigen“); die Seite hatte dafür
+  einen Abschnitt „Angebote der Uni“, und wer nie gewählt hatte, sah dort statt der Liste die Karte mit den Häkchen. Steht der
+  Block noch auf einer selbst geänderten Seite, zeigt er nur „Angebote der Uni stehen jetzt im Kalender oben.“
+  *Auswahl* (synchronisiert in `System/Einstellungen.md`, für alle Geräte gleich): Häkchen im Fenster **Im Kalender zeigen**
+  (Filter-Symbol im Kopf des Kalenders, `ctx.angeboteAnzeige.filter()`, `.eba-modal-angebote`) und in der Einrichtung
+  (Bildschirm 6, seit 25.10.2026), beide mit `wahlListe`; für die Einrichtung `ctx.angeboteAnzeige.wahl(el)` →
+  `{ felder(), gespeichert() }`, sie schreibt `felder()` zusammen mit ihrem Stand (`wahlFelder`). Nur Namen, kein Satz darunter.
+  **Fertig** im Fenster schreibt nur, wenn sich etwas ändert oder noch nie gewählt wurde; Schließen ohne **Fertig** verwirft die
+  Häkchen. Solange `angebote_gewaehlt` nicht `true` ist, gilt die Vorgabe. `angebote_auswahl` = Liste der gewählten Schlüssel:
   `sport`, `ub`, `welcome` (ganze Art) und je Vortragsreihe `vortrag-wiso`, `vortrag-studium-generale` (am Namen erkannt) bzw.
   `vortrag-<name>` für jede andere Reihe aus den Daten. Vorgabe: `sport`, `ub`, `vortrag-wiso`; Studium Generale, Welcome Center
-  und unbekannte Reihen sind aus. Gewählte Schlüssel, die die Karte gerade nicht zeigt, bleiben beim Speichern erhalten. Die
-  Karte setzt auch **Fachschaft & Veranstaltungen**, also dasselbe Feld `zentrale_veranstaltungen` wie das Fenster „Zentrale
-  Daten“ (nur bei geändertem Wert geschrieben; `zentral.js` wendet den Filter danach neu an). Geändert auf einem anderen Gerät →
-  neu gezeichnet (`changed` der Einstellungen).
-  *Anzeige:* Chips nur für gewählte Arten (ab zwei) mit Anzahl; ein- und ausblenden gilt bis zum Neustart (`ctx.bleibend`),
-  gerätelokal wird nichts gespeichert. Liste nach Tagen für 14 Tage ab heute, der Rest hinter „Mehr anzeigen“; vorbei ist, was
-  vor heute liegt oder heute nach `bis`. Hochschulsport: `anmeldung.ab` als eigene Zeile „ab 17:00 · Buchungsstart“ am Tag der
-  Buchung. „Anmeldung ab/bis“ rechnet mit der Uhrzeit von jetzt (heute abgelaufen → weg). Neu gezeichnet bei einem neuen Tag
-  oder wenn die Liste 15 Min. alt ist (Prüfung alle 5 Min. und beim Zurückkehren in die App; nicht im Hintergrund, nicht bei
-  offener Auswahlkarte), so verschwinden vergangene Vorträge und abgelaufene Anmeldungen am selben Tag. Reine Logik (`auswaehlen`, `wahlLesen`,
-  `wahlFelder`, `wahlSchreiben`, `wahlNeu`, `wahlEintraege`, Texte) in `tests/angebote.test.js`. CSS: Abschnitt 53 in `eba-core.css`
-  (Klassen `eba-ang-*`, Farbe je Art über `--kal`).
+  und unbekannte Reihen sind aus. Gewählte Schlüssel, die das Fenster gerade nicht zeigt, bleiben beim Speichern erhalten. Die
+  Häkchen setzen auch **Fachschaft & Veranstaltungen**, also dasselbe Feld `zentrale_veranstaltungen` wie das Fenster „Zentrale
+  Daten“ (nur bei geändertem Wert geschrieben; `zentral.js` wendet den Filter danach neu an).
+  *Neu zeichnen:* `angebote.js` meldet das Ereignis `eba-angebote` am `document`, wenn neue Angebote da sind (`zentral.js` ruft
+  `ctx.angeboteAnzeige.neu()`), nach **Fertig** und wenn sich die Auswahl in den Einstellungen ändert (auch per Sync, andere
+  Felder nicht); Kalender und Agenda hören darauf (`ctx.dom`, übersteht das Neuladen eines Skripts in beliebiger Reihenfolge).
+  Reine Logik (`termineVon`, `titelVon`, `gleicherTitel`, `wahlLesen`, `wahlFelder`, `wahlSchreiben`, `wahlNeu`, `wahlEintraege`)
+  in `tests/angebote.test.js`, `mitAngeboten` und `link` in `tests/termine.test.js`. CSS: Abschnitt 53 in `eba-core.css`
+  (Häkchen, Fenster), Filter-Symbol in Abschnitt 37 (`.eba-kal-filter`).
 - **Zentraler Stundenplan** (optional `veranstaltungen.json`, Vertrag in `docs/daten-v1.md`, seit 17.10.2026; Plan 27.1, Antwort
   auf die Befunde 6, 7 und 18 der Prüfung): Anders als Gruppen und Angebote schreibt er Notizen, darum **nur der Abrufer**.
   Eigener Abruf nach den anderen Dateien (`lehreHolen`, `lehrePruefen` wie `veranstaltung_pruefen` im Export, aber unbekannte

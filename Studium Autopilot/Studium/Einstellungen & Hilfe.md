@@ -10,7 +10,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Einstellungen & Hilfe</h1>
 </div>
 
@@ -47,6 +46,10 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 ## Hilfe
 
 > [!eba-zeilen]
+> ```eba-personalisieren hilfe
+> Rundgang: erscheint, sobald Studium Autopilot läuft. Starten: Befehl „Rundgang zeigen“.
+> ```
+>
 > > [!eba-karte|hilfe|bedienung]- Bedienung
 > > | Knopf | Wo | Fragt nach | Landet in |
 > > | --- | --- | --- | --- |
@@ -55,7 +58,8 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 > > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
 > > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
 > >
-> > - **Übersicht:** steht links in der Seitenleiste, mit allen Seiten und den Modulen dieses Semesters. Auf iPhone und iPad öffnest du sie mit dem Symbol oben links. **Dashboard** darin führt zurück zum Start, **Zurück** zur vorigen Seite. Deine Woche steht auf dem **Dashboard**. Obsidians Einstellungen, alle Dateien und den Tresor findest du unter [[#Obsidian]].
+> > - **Seiten:** alle Seiten und die Module dieses Semesters stehen auf jedem Gerät unten rechts hinter ≡. In derselben Leiste öffnet das Zahnrad diese Seite, ‹ › führen zur vorigen und nächsten Seite (auf iPhone und iPad zurück auch Wischen vom linken Rand), dazu die Suche, „+“ für einen neuen Tab und deine offenen Tabs. **Dashboard** hinter ≡ führt zurück zum Start. Deine Woche steht auf dem **Dashboard**. Obsidians Einstellungen, alle Dateien und den Tresor findest du unter [[#Obsidian]].
+> > - **Befehle:** Auf iPhone und iPad öffnet langes Drücken auf ≡ Obsidians Menü, darin **Befehlspalette öffnen**. Mit Tastatur: <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd>.
 > > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
 > > - Jedes Feld hat einen Vorschlag. <kbd>Esc</kbd> oder **Abbrechen** legt nichts an. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche), darunter steht, welcher Tag gemeint ist.
 > > - **Rückgängig:** Was du wegwirfst oder abhakst, passiert sofort; der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.
@@ -93,9 +97,9 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 > > > > - `/` am Zeilenanfang öffnet die Befehle.
 > > >
 > > > > [!eba-karte] Stundenplan, Gruppen, Angebote
-> > > > - **Übungsgruppe:** Unter [[Termine & Anmeldungen#Übungen und Tutorien]] bei deiner Gruppe **Meine** tippen, sie steht dann im Stundenplan. Mit ILIAS kommt sie von selbst.
+> > > > - **Übungsgruppe:** Unter [[Termine & Anmeldungen]] im Reiter **Übungen** bei deiner Gruppe **Meine** tippen, sie steht dann im Stundenplan. Mit ILIAS kommt sie von selbst.
 > > > > - **Besuche ich nicht:** Im Kopf der Lehrveranstaltung auf **Im Stundenplan** tippen, dann fehlt sie im Stundenplan. Der Hinweis danach hat **Rückgängig**.
-> > > > - **Angebote der Uni:** Kurse, Vorträge und Sport stehen unter [[Termine & Anmeldungen#Angebote der Uni]]. Mit **Auswahl ändern** wählst du, was du siehst.
+> > > > - **Angebote der Uni:** Kurse, Vorträge und Sport stehen im Kalender unter [[Termine & Anmeldungen]]. Mit dem Filter oben im Kalender wählst du, was du siehst.
 > > > > - **Lernplan:** Mit eigenem Uni-Abgleich zeigt die Seite **Lernplan** je Modul, welches Kapitel diese Woche dran ist.
 > > >
 > > > > [!eba-rechner] Was sich selbst rechnet

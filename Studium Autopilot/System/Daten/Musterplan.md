@@ -89,7 +89,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><a class="internal-link" data-href="Studienverlauf" href="Studienverlauf">Studienverlauf</a><span>Daten</span></div>
 <h1>Musterstudienpläne</h1>
 <p class="eba-lead">Die drei Musterpläne des Fachbereichs (PO 2023). Du trägst hier nichts ein.</p>
 </div>

@@ -8,8 +8,6 @@ cssclasses:
   - "eba-s-dashboard"
 ---
 
-<div class="eba-pfad eba-pfad-start"><span>Economics and Business Administration (B.Sc.)</span><span>Universität Tübingen</span><span>PO 2023</span></div>
-
 > [!eba-achtung|plugin-aus] Studium Autopilot ist noch aus
 > Darum fehlen hier Fristen, Termine und Knöpfe. **Einstellungen** öffnen (Zahnrad unten links, am Handy erst ☰) → **Externe Erweiterungen** → **Eingeschränkten Modus verlassen**. Steht dort bei „Studium Autopilot“ ein Schalter, ihn einschalten. Danach verschwindet dieser Hinweis.
 >
@@ -41,7 +39,7 @@ cssclasses:
 ```
 
 > [!eba-raster|2]
-> > [!eba-termin|schlicht|umbruch|handy-zu|reiter=Fristen]+ Fristen · 30 Tage
+> > [!eba-termin|schlicht|umbruch|handy-zu|reiter=Fristen|reiter-offen]+ Fristen · 30 Tage
 > > ```eba-liste fristen
 > > Fristen erscheinen, sobald Studium Autopilot läuft.
 > > ```

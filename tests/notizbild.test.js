@@ -176,10 +176,14 @@ test("Erzeugte Notizen: keine leeren Punkte („- “, „- [ ] “) außer dort
   }
 });
 
-test("Wortliste: eine Lehrveranstaltung aus Alma ohne erkannte Art heißt im Kopf Vorlesung, nie „Veranstaltung“", () => {
+test("Stundenplan-Notiz: das Label nennt das Modul mit Namen, Gruppe und Zeit; die Art steht schon im Titel, nie „Veranstaltung“", () => {
   const Kx = laden("kopf").ergebnis;
-  assert.equal(Kx.labelVon("lehrveranstaltung", { path: "S/x.md" }, { art: "Veranstaltung", code: "S110" }), "Vorlesung · S110");
-  assert.equal(Kx.labelVon("lehrveranstaltung", { path: "S/x.md" }, { art: "Tutorium", code: "S110", gruppe: "4" }), "Tutorium · Gruppe 4 · S110");
+  const f = { path: "S/x.md" };
+  assert.equal(Kx.labelVon("lehrveranstaltung", f, { art: "Veranstaltung", code: "S110" }, "Explorative Datenanalyse"), "Explorative Datenanalyse");
+  assert.equal(Kx.labelVon("lehrveranstaltung", f, { art: "Tutorium", code: "S110", gruppe: "4", titel: "S110 · Tutorium" }), "S110 · Gruppe 4",
+    "ohne Modulseite das Kürzel");
+  assert.equal(Kx.labelVon("lehrveranstaltung", f, { art: "Tutorium", code: "S100", gruppe: "Gruppe 4", titel: "S100 · Tutorium Gruppe 4" }, "Mathe"), "Mathe",
+    "Gruppe schon im Titel");
 });
 
 test("Modulseite: eine leere Liste fällt samt Überschrift weg, auf Höhe 0 gefaltet", () => {
@@ -235,7 +239,8 @@ test("Folien als Markdown: Kapitel beim ersten Öffnen zu, auf jedem Gerät; die
 });
 
 test("Wochenraster: Rahmen der laufenden Lehrveranstaltung innen (auch iPhone), nie bei einem Kasten vor seinem Beginn", () => {
-  assert.match(CSS, /\.eba-ev\.jetzt:not\(\.spaeter\) \{ box-shadow: inset 0 0 0 2px var\(--eba-accent\); \}/);
+  // in --eba-accent-text, nicht --eba-accent (dunkel ein dunkles Grau, 1,33 : 1 auf den Flächen; tests/design.test.js prüft den Kontrast)
+  assert.match(CSS, /\.eba-ev\.jetzt:not\(\.spaeter\) \{ box-shadow: inset 0 0 0 2px var\(--eba-accent-text\); \}/);
   assert.doesNotMatch(CSS, /\.eba-ev\.jetzt \{ box-shadow: 0 0 0/, "kein Rahmen außen (am iPhone ohne Platz)");
   assert.match(CSS, /\.eba-ev \.eba-ev-knapp \{ display: inline; \}/, "schmal die knappe Zeile, mit „ab TT.MM.“ und einer anderen Zeit (woche.js zeileZeichnen)");
 });

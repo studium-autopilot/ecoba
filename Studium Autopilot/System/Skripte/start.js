@@ -62,14 +62,15 @@ module.exports = function (ctx) {
   };
 
   // 2. Übersichtsseiten bleiben in der Leseansicht: Sie zeigen nur, was Skripte und Tabellen zeichnen; getippt wird dort nichts.
-  //    Gesperrt sind Notizen mit `typ` dashboard, übersicht, einstellungen oder daten (auch Termine & Anmeldungen: die
-  //    Anmeldungen füllen sich seit 17.10.2026 selbst). Das Feld `ansicht` geht vor: `lesen` sperrt jede Notiz,
+  //    Gesperrt sind Notizen mit `typ` dashboard, übersicht, einstellungen, daten oder modul (auch Termine & Anmeldungen: die
+  //    Anmeldungen füllen sich seit 17.10.2026 selbst; Modulseiten seit 26.10.2026: alles darauf zeichnen Skripte, seit 0.4.5
+  //    „Meine Notizen“ zu „Zum Modul“ wurde, Status und Eigenschaften ändern Knöpfe und Fenster, Rückmeldung: „nothing I can edit“). Das Feld `ansicht` geht vor: `lesen` sperrt jede Notiz,
   //    `bearbeiten` gibt sie frei (in der Seitenleiste „Eigenschaften“ änderbar, auch wenn die Notiz gesperrt ist).
   //    Gesperrt: Der Knopf zum Bearbeiten im Kopf der Ansicht ist ausgeblendet; wer trotzdem umschaltet (Strg/⌘ E, Befehl),
   //    landet sofort wieder in der Leseansicht, mit Hinweis. Geht ein Tab von einer gesperrten Seite zu deiner Notiz (Link, Liste,
   //    Kachel), öffnet sie in der Bearbeitungsansicht: Übersichten lesen, eigene Notizen bearbeiten (wie ctx.oeffnen, seit 0.4.6;
   //    vorher nur, wenn der Tab vorher eine Notiz bearbeitet hatte).
-  const GESPERRT = ["dashboard", "übersicht", "einstellungen", "daten"];
+  const GESPERRT = ["dashboard", "übersicht", "einstellungen", "daten", "modul"];
   const nurLesen = (f) => {
     if (!f || !/\.md$/.test(f.path)) return false;
     const c = app.metadataCache.getFileCache(f);
@@ -93,7 +94,12 @@ module.exports = function (ctx) {
   const modusSetzen = (l, mode) => { const vs = l.getViewState(); vs.state = Object.assign({}, vs.state, { mode }); return l.setViewState(vs); };
   const gelesen = new WeakMap();   // Ansicht → Pfad, der zuletzt gesperrt in der Leseansicht stand (Umschalten erkennen)
   const umgestellt = new WeakSet(); // Ansichten, die eine gesperrte Seite zeigen (danach: deine Notiz in der Bearbeitung)
-  const knopf = (v, aus) => { if (v.modeButtonEl) v.modeButtonEl.style.display = aus ? "none" : ""; };
+  // Gesperrt: ohne Umschalter Lesen/Bearbeiten, dazu eba-gesperrt am Tab. Auf iPhone und iPad steht oben in der Kopfleiste dann
+  // nichts mehr (eba-core.css 66: keine leere Glasfläche; 70.1: das iPhone beginnt die Seite gleich unter der Statusleiste).
+  const knopf = (v, aus) => {
+    if (v.modeButtonEl) v.modeButtonEl.style.display = aus ? "none" : "";
+    if (v.containerEl) v.containerEl.classList.toggle("eba-gesperrt", aus);
+  };
   const leseansicht = () => {
     for (const l of app.workspace.getLeavesOfType("markdown")) {
       const v = l.view, f = v && v.file;

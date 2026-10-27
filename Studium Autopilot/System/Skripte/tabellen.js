@@ -12,8 +12,8 @@
 // ließ es sich hier antippen und schrieb ins Frontmatter.
 // Erweiterung: registrieren() erweitert die Tabellenansicht (Fabrik und Prototyp, Merker __ebaTl/__ebaTlPatch), abmelden()
 // nimmt das beim Hot-Reload und beim Entladen des Plugins vollständig zurück. Post-Processor über ctx.postprozessor.
-// Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“; „offiziell“ ohne Chip, markiert wird nur
-// „geschätzt“), sonst
+// Listen auf iOS: rechts Note („1,7“, Spalte „Note“) bzw. Status-Chip (Spalte „Status“/„Stand“; „offen“ und „offiziell“ ohne Chip,
+// markiert wird nur, was davon abweicht), sonst
 // „Öffnen ↗“; in einer Gruppe überall gleiche Werte (z. B. „Block 34 %“) einmal im Gruppenkopf; „–“ entfällt; ein in der
 // ganzen Ansicht gleicher Status neben „Öffnen ↗“ entfällt (z. B. „offen“ bei lauter offenen Blättern). Dazu ein Post-Processor, der in
 // Markdown-Tabellen ab 4 Spalten jeder Zelle ihren Spaltenkopf mitgibt (data-eba-k, für die gestapelte iPhone-Ansicht).
@@ -24,8 +24,20 @@ module.exports = function (ctx) {
   // Spaltennamen, deren Wert ohne Bezeichnung verständlich ist bzw. deren Bezeichnung als Einheit dahinter steht
   const OHNE = new Set(["Status", "Stand", "Modul", "Art", "Typ", "Teil", "Bereich", "Bereiche", "Datum", "Termin", "Wann", "Fällig", "Hinweis",
     "Datei", "Unterlage", "Blatt", "Notiz", "Lehrveranstaltung", "Veranstaltung", "Raum", "Zeit", "Kurs", "Anbieter", "Turnus", "Sprache", "Größe", "Name",
-    "Prüfungstermin", "Prüfung", "Was daraus folgt", "Aktuell"]);
+    "Prüfungstermin", "Prüfung", "Was daraus folgt", "Aktuell", "Eingeordnet"]);
   const EINHEIT = new Set(["ECTS", "Seiten"]);
+  const EINS = { Seiten: "Seite" }; // „1 Seite“, nicht „1 Seiten“ (bis 0.6.14)
+  // Teile des Studiums in der Reihenfolge des Studiums: Gruppen danach statt nach dem Alphabet (Noten & ECTS: Grundstudium
+  // zuerst; bis 0.6.14 stand „Profil & Vertiefung“ davor). Nur wenn jede Gruppe ein Teil ist, sonst bleibt die Reihenfolge der Ansicht.
+  const TEILE = ["Grundstudium", "Profil & Vertiefung", "Schwerpunkt", "Weitere", "Abschluss"];
+  const gruppenOrdnen = (namen) => {
+    const rang = namen.map((n) => TEILE.indexOf(String(n || "").trim()));
+    if (!namen.length || rang.some((r) => r < 0)) return namen.map((_, i) => i);
+    return namen.map((_, i) => i).sort((a, b) => rang[a] - rang[b] || a - b);
+  };
+  // Ein Status, der nichts Besonderes sagt, bekommt keine Pille: „offen“ ist der Anfang jedes Moduls und Blatts (bis 0.6.14 stand
+  // die Pille in jeder Zeile), „offiziell“ jedes Termins ohne Schätzung
+  const OHNE_PILLE = new Set(["offen", "offiziell"]);
   const ZUSAMMEN = { Sum: "", Average: "Ø ", Median: "Median ", Min: "min. ", Max: "max. " };
 
   // Datum wie überall (ctx.modell.zeit): „06.02.“, das Jahr nur außerhalb des laufenden Studienjahrs („06.02.2028“); „heute“ zur
@@ -34,6 +46,13 @@ module.exports = function (ctx) {
     const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})/);
     if (!m) return null;
     return ctx.modell && ctx.modell.zeit ? ctx.modell.zeit.kurz(m[0]) : `${m[3]}.${m[2]}.${m[1]}`;
+  };
+  // Uhrzeit mit Doppelpunkt wie überall: Notizen des Stundenplans heißen „Mi 14.15 Tutorium“, weil ein Dateiname keinen
+  // Doppelpunkt tragen kann; die Liste zeigt „Mi 14:15 Tutorium“ (bis 0.6.14 mit Punkt)
+  const uhrText = (s) => String(s).replace(/\b(Mo|Di|Mi|Do|Fr|Sa|So) (\d{1,2})\.(\d{2})\b/g, "$1 $2:$3");
+  const uhrIn = (el) => {
+    const w = el.doc.createTreeWalker(el, 4); // 4 = NodeFilter.SHOW_TEXT
+    for (let n = w.nextNode(); n; n = w.nextNode()) { const neu = uhrText(n.nodeValue); if (neu !== n.nodeValue) n.nodeValue = neu; }
   };
   const typ = (v) => (v && v.type ? String(v.type) : "Null"); // type ist teils eine Funktion mit Namen als Text
   const leer = (el) => !el.textContent.trim() && !el.querySelector("input, img, svg");
@@ -52,7 +71,10 @@ module.exports = function (ctx) {
     const tmp = w.doc.createElement("span");
     wertIn(tmp, v);
     if (leer(tmp) || /^[–-]$/.test(tmp.textContent.trim())) return false; // „–“ (kein Wert) nicht als „Block –“ zeigen
-    if (EINHEIT.has(name)) { w.appendText(vorsatz); while (tmp.firstChild) w.appendChild(tmp.firstChild); w.appendText(" " + name); }
+    if (EINHEIT.has(name)) {
+      const eins = !vorsatz && EINS[name] && tmp.textContent.trim() === "1";
+      w.appendText(vorsatz); while (tmp.firstChild) w.appendChild(tmp.firstChild); w.appendText(" " + (eins ? EINS[name] : name));
+    }
     else {
       if (!OHNE.has(name) || vorsatz) w.createSpan({ cls: "eba-tl-k", text: (vorsatz + name).trim() });
       while (tmp.firstChild) w.appendChild(tmp.firstChild);
@@ -100,11 +122,12 @@ module.exports = function (ctx) {
     const cfg = view.config, data = view.data, doc = liste.doc || document;
     liste.empty();
     const order = cfg.getOrder() || [];
-    const gruppen = data.groupedData || [];
+    let gruppen = data.groupedData || [];
     const alle = gruppen.flatMap((g) => g.entries || []);
     ohne(liste, !alle.length || !order.length);
     if (!alle.length || !order.length) { liste.createDiv({ cls: "eba-tl-leer", text: "Leer." }); return; }
     const gb = cfg.groupBy?.property;
+    if (gb && gruppen.length > 1) { const g0 = gruppen; gruppen = gruppenOrdnen(g0.map((g) => (g.key ? textVon(g.key, doc) : ""))).map((i) => g0[i]); }
     const titel = titelSpalte(view, order, alle[0]);
     const rest = order.filter((p) => p !== titel && p !== gb);
     const name = {}; for (const p of rest) { try { name[p] = cfg.getDisplayName(p); } catch (e) { name[p] = p; } }
@@ -129,8 +152,9 @@ module.exports = function (ctx) {
           } catch (e) {}
         }
       }
+      let kopf = null;
       if (gb && g.key) {
-        const kopf = liste.createDiv("eba-tl-gruppe");
+        kopf = liste.createDiv("eba-tl-gruppe");
         const n = kopf.createSpan("eba-tl-gname"); wertIn(n, g.key); if (leer(n)) n.setText("Ohne Angabe");
         for (const p of gleich) { const sp = kopf.createSpan("eba-tl-gwert"); if (!beschriftet(sp, name[p], g.entries[0].getValue(p))) sp.remove(); }
         if (hatSummen) for (const sp of summenText(view, g.entries)) { sp.addClass("eba-tl-summe"); kopf.appendChild(sp); }
@@ -145,6 +169,9 @@ module.exports = function (ctx) {
           else wertIn(t, e.getValue(titel));
         } catch (x) {}
         if (leer(t)) t.setText(e.file?.basename || "–");
+        try { uhrIn(t); } catch (x) {}
+        // Eine Gruppe mit nur einer Zeile, die so heißt wie die Gruppe („Lernplan“ unter dem Label „Lernplan“): ohne Label (bis 0.6.14 mit)
+        if (kopf && g.entries.length === 1 && !gleich.size && !hatSummen && t.textContent.trim().toLowerCase() === kopf.textContent.trim().toLowerCase()) kopf.remove();
         const meta = txt.createDiv("eba-tl-meta");
         const ende = z.createDiv("eba-tl-ende");
         let aktion = null, chip = null, note = null;
@@ -156,8 +183,10 @@ module.exports = function (ctx) {
             const v = e.getValue(statusSp);
             const tmp = doc.createElement("span"); wertIn(tmp, v);
             const p = tmp.querySelector(".eba-pill");
-            if (p) chip = p;
-            else { const s = tmp.textContent.trim(); if (s && s.toLowerCase() !== "offiziell") { chip = doc.createElement("span"); chip.className = "eba-pill " + chipArt(s); chip.textContent = s; } }
+            const s = tmp.textContent.trim();
+            if (!s || OHNE_PILLE.has(s.toLowerCase())) chip = null;
+            else if (p) chip = p;
+            else { chip = doc.createElement("span"); chip.className = "eba-pill " + chipArt(s); chip.textContent = s; }
           } catch (x) {}
         }
         for (const p of rest) {
@@ -322,5 +351,6 @@ module.exports = function (ctx) {
     for (const P of Array.from(gepatcht)) entpatchen(P);
   };
 
-  return { registrieren, abmelden, aktualisieren, zeichnen, datumText, chipArt }; // datumText, chipArt für tests/fachmodell.test.js
+  // datumText, chipArt, gruppenOrdnen, uhrText für tests/fachmodell.test.js
+  return { registrieren, abmelden, aktualisieren, zeichnen, datumText, chipArt, gruppenOrdnen, uhrText };
 };

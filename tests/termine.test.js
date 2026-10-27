@@ -1,5 +1,5 @@
 // Agenda (termine.js, erzeugen): Tagesspalte mit Ziffer und Wochentag nur beim ersten Termin eines Tags, Art als Klasse für
-// den Farbpunkt, Text-Pillen nur für Frist/Prüfung/freiwillig/geschätzt/erledigt, in „Diese Woche“ erst Laufendes unter
+// den Farbpunkt, Text-Pillen nur für Frist/Prüfung/freiwillig/geschätzt (Erledigtes zeigt die Art), in „Diese Woche“ erst Laufendes unter
 // „läuft“, dann die Marke „Heute“, dann alles ab heute. „Diese Woche“ ist am Wochenende schon die kommende (Planwoche des
 // Fachmodells). Nur ausgedachte Termine. Läuft ohne Obsidian: node --test tests/
 "use strict";
@@ -19,7 +19,7 @@ const T = (von, titel, kategorie, extra) => Object.assign({
 }, extra || {});
 // erzeugen erwartet die Termine sortiert wie lesen() (Datum, Uhrzeit als Zahl, Titel)
 const min = (z) => { const n = MODELL.zeit.minuten(z); return n == null ? -1 : n; };
-const erzeugen = (alle, heute) => TM.erzeugen(alle.slice().sort((a, b) => a.von - b.von || min(a.zeit) - min(b.zeit) || a.titel.localeCompare(b.titel)), heute);
+const erzeugen = (alle, heute, o) => TM.erzeugen(alle.slice().sort((a, b) => a.von - b.von || min(a.zeit) - min(b.zeit) || a.titel.localeCompare(b.titel)), heute, o);
 const zeilen = (md) => md.split("\n");
 // Zeilen eines Abschnitts bis zur nächsten Überschrift oder Sammelkarte, ohne die Leerzeile davor
 const abschnitt = (md, titel) => {
@@ -78,7 +78,7 @@ test("Woche an einem Werktag: Montag bis Sonntag dieser Woche", () => {
   assert.equal(abschnitt(md, "## Nächste Woche")[0], "## Nächste Woche · 19.–25.10.");
 });
 
-test("nächste Woche: Karte handy-zu|pc-flach, gleicher Tag nur einmal, Pillen nur für Prüfung, freiwillig, geschätzt, erledigt", () => {
+test("nächste Woche: Karte handy-zu|pc-flach, gleicher Tag nur einmal, Pillen nur für Prüfung, freiwillig, geschätzt; erledigt ohne Pille", () => {
   const md = erzeugen([
     T(d(26), "Übungen starten", "Lehre"),
     T(d(26), "Tutorien-Anmeldung", "Frist", { zeit: "17:00", sq: true, geschaetzt: true }),
@@ -89,21 +89,53 @@ test("nächste Woche: Karte handy-zu|pc-flach, gleicher Tag nur einmal, Pillen n
   assert.equal(w[2], "> [!eba-karte|handy-zu|pc-flach]+ Nächste Woche · 26.10. – 01.11. · 3 Termine", "Kartentitel mit Zeitraum (iPhone blendet die ## aus)");
   assert.match(w[3], /^> - <span class="eba-tag uni"><b>26<\/b><span class="eba-wt">Mo<\/span><\/span>\[\[.*Übungen starten\]\]$/);
   assert.match(w[4], /^> - <span class="eba-tag frist gleich">.*17:00 · \[\[.*Tutorien-Anmeldung\]\] <span class="eba-pill warn">Frist<\/span> <span class="eba-pill leer">freiwillig<\/span> <span class="eba-pill leer">geschätzt<\/span>$/);
-  assert.match(w[5], /^> - <span class="eba-tag erledigt"><b>28<\/b><span class="eba-wt">Mi<\/span><\/span>\[\[.*Klausur Probe\]\] <span class="eba-pill bad">Prüfung<\/span> <span class="eba-pill ok">erledigt<\/span>$/);
+  assert.match(w[5], /^> - <span class="eba-tag erledigt"><b>28<\/b><span class="eba-wt">Mi<\/span><\/span>\[\[.*Klausur Probe\]\]$/, "erledigt: Art an der Tagesspalte, keine Pille, das CSS streicht durch");
   assert.equal(abschnitt(erzeugen([], HEUTE), "## Nächste Woche")[3], "> - Keine Termine nächste Woche.");
 });
 
-test("Fristen danach: höchstens vier offene Fristen/Prüfungen ab übernächster Woche, mit Monat und „in n Tagen“", () => {
-  const alle = [3, 5, 9, 11, 13, 20].map((t) => T(d(t, 11), `Frist ${t}`, "Frist"));
-  alle.push(T(d(3, 11), "Erledigt", "Frist", { erledigt: true }), T(d(4, 11), "Vortrag", "Veranstaltung"), T(d(2, 11), "Zwischentest", "Prüfung"));
-  const w = abschnitt(erzeugen(alle, HEUTE), "## Fristen danach");
-  assert.equal(w[2], "> [!eba-karte|handy-zu|pc-flach]+ Fristen danach · 4 Fristen");
-  assert.match(w[3], /^> - <span class="eba-tag zwischentest"><b>2<\/b><span class="eba-wt">Mo<\/span><span class="eba-rel">Nov\.<\/span><\/span>\[\[.*Zwischentest\]\] · in 16 Tagen$/);
-  assert.match(w[4], /^> - <span class="eba-tag frist"><b>3<\/b><span class="eba-wt">Di<\/span><span class="eba-rel">Nov\.<\/span><\/span>\[\[.*Frist 3\]\] · in 17 Tagen$/);
-  assert.equal(w.length, 7, "vier Zeilen, Erledigtes und Veranstaltungen nicht dabei");
+test("Reiter der Seite (seit 0.7.0): Hauptliste nur diese und nächste Woche, Später und Vergangen als schlichte Listen", () => {
+  const alle = [
+    T(d(5), "Vorkurs", "Lehre", { bis: d(9) }),
+    T(d(10), "Wasen", "Fachschaft"),
+    T(d(19), "Übung", "Lehre"),
+    T(d(4, 11), "Infoabend", "Veranstaltung"),
+    T(d(5, 11), "Frist 5", "Frist"),
+    T(d(2, 12), "Klausur", "Prüfung"),
+  ];
+  // Hauptliste ohne Sammelkarten und ohne „Fristen danach“ (bis 0.6.14 offen auf der Seite; die Fristen stehen unter Später)
+  const haupt = erzeugen(alle, HEUTE, { sammel: false });
+  assert.ok(haupt.includes("## Diese Woche"));
+  assert.ok(haupt.includes("## Nächste Woche"));
+  assert.ok(!/Später|Vergangen|Fristen danach/.test(haupt));
+  // Später: nach Monaten, ohne Karte, kein Leerzeichen vor dem ersten Monat
+  const sp = zeilen(erzeugen(alle, HEUTE, { teil: "spaeter" }));
+  assert.equal(sp[0], "**November 2026**");
+  assert.match(sp[1], /^- <span class="eba-tag event"><b>4<\/b><span class="eba-wt">Mi<\/span><\/span>\[\[.*Infoabend\]\]$/);
+  assert.match(sp[2], /^- <span class="eba-tag frist"><b>5<\/b>.*\[\[.*Frist 5\]\] <span class="eba-pill warn">Frist<\/span>$/);
+  assert.deepEqual(sp.slice(3, 5), ["", "**Dezember 2026**"]);
+  // Vergangen: jüngstes zuerst, Monat in der Spalte, ohne Karte
+  const v = zeilen(erzeugen(alle, HEUTE, { teil: "vergangen" }));
+  assert.equal(v.length, 2);
+  assert.match(v[0], /^- <span class="eba-tag event"><b>10<\/b><span class="eba-wt">Sa<\/span><span class="eba-rel">Okt\.<\/span><\/span>\[\[.*Wasen\]\]$/);
+  // leer
+  assert.equal(erzeugen([T(d(19), "Übung", "Lehre")], HEUTE, { teil: "spaeter" }), "- Keine späteren Termine.");
+  assert.equal(erzeugen([T(d(19), "Übung", "Lehre")], HEUTE, { teil: "vergangen" }), "- Keine vergangenen Termine.");
+  // Teil eines Blocks im Reiter aus dem Ersatztext (dort kennt Obsidian die Kopfzeile nicht)
+  assert.equal(TM.teilAus("Später: erscheint, sobald Studium Autopilot läuft."), "spaeter");
+  assert.equal(TM.teilAus("Vergangen: erscheint, sobald Studium Autopilot läuft."), "vergangen");
+  assert.equal(TM.teilAus("Termine: erscheinen, sobald Studium Autopilot läuft."), "");
+  assert.equal(TM.teilAus(""), "");
 });
 
-test("Später und Vergangen: ruhige Sammelkarten (|sammel), Später nach Monaten, Vergangen mit Monat in der Spalte", () => {
+test("Lehre eines Moduls (Übungen starten, Lab, Raumwechsel) gehört nicht in Kalender und Agenda", () => {
+  assert.equal(MODELL.lehreDesModuls({ kategorie: "Lehre", code: "S110" }), true);
+  assert.equal(MODELL.lehreDesModuls({ kategorie: "Lehre", code: "" }), false, "ohne Modul bleibt es");
+  assert.equal(MODELL.lehreDesModuls({ kategorie: "Prüfung", code: "S110" }), false);
+  assert.equal(MODELL.lehreDesModuls({ kategorie: "Frist", code: "S110" }), false);
+  assert.equal(MODELL.lehreDesModuls(null), false);
+});
+
+test("Später und Vergangen auf einer Seite ohne Reiter: ruhige Sammelkarten (|sammel), Später nach Monaten, Vergangen mit Monat in der Spalte", () => {
   const md = erzeugen([
     T(d(5), "Vorkurs", "Lehre", { bis: d(9) }),
     T(d(10), "Wasen", "Fachschaft"),
@@ -134,9 +166,16 @@ test("kein Markdown-Fett in HTML (Live Preview zeigt sonst Sternchen), keine eba
   for (const z of zeilen(md)) if (z.includes("<span class=\"eba-tag")) assert.ok(!z.includes("**"), z);
 });
 
-test("Zwischentest: Pille „Zwischentest“ statt „Prüfung“", () => {
+test("Zwischentest: blauer Punkt, keine Pille „Prüfung“ und keine, die den Titel wiederholt (bis 0.6.14 „Zwischentest“)", () => {
   const w = abschnitt(erzeugen([T(d(27), "Zwischentest 1 X100", "Prüfung")], HEUTE), "## Nächste Woche");
-  assert.match(w[3], /^> - <span class="eba-tag zwischentest">.*\[\[.*Zwischentest 1 X100\]\] <span class="eba-pill info">Zwischentest<\/span>$/);
+  assert.match(w[3], /^> - <span class="eba-tag zwischentest">.*\[\[.*Zwischentest 1 X100\]\]$/);
+});
+
+test("freiwillig: Pille nur, wenn der Titel es nicht schon sagt", () => {
+  const md = erzeugen([T(d(27), "Workshop (freiwillig)", "Frist", { sq: true }), T(d(28), "TCP-Belegung", "Frist", { sq: true })], HEUTE);
+  const w = abschnitt(md, "## Nächste Woche").join("\n");
+  assert.equal((w.match(/eba-pill leer">freiwillig/g) || []).length, 1, w);
+  assert.match(w, /TCP-Belegung\]\] <span class="eba-pill warn">Frist<\/span> <span class="eba-pill leer">freiwillig/);
 });
 
 // ---------- Anmeldungen (termine.js, anmeldungen; Codeblock eba-anmeldungen) ----------
@@ -314,4 +353,33 @@ test("Anmeldungen: Pillen nur für freiwillig (sofern nicht schon im Titel) und 
 test("Uhrzeiten als Zahl sortiert (9:15 vor 12:15), nicht als Text (Fehler 9)", () => {
   const z = auswahl([F(d(20), "Anmeldung spät", { zeit: "12:15" }), F(d(20), "Anmeldung früh", { zeit: "9:15" })]);
   assert.deepEqual(titel(z), ["Anmeldung früh", "Anmeldung spät"]);
+});
+
+test("Angebote der Uni: in der Reihenfolge der Termine, Punkt der Veranstaltungen, Link zur Seite der Uni, nie unter „Vergangen“", () => {
+  const angebot = (datum, zeit, titel, url) => ({ id: titel, datum, zeit, minuten: MODELL.zeit.minuten(zeit), titel, url: url || "https://uni-tuebingen.de/x", kategorie: "vortrag" });
+  const alle = TM.mitAngeboten([
+    T(d(19), "Übung", "Lehre", { zeit: "10:00–12:00" }),
+    T(d(19), "Fachschaftssitzung", "Fachschaft", { zeit: "20:15" }),
+    T(d(10), "Wasen", "Fachschaft"),
+  ], [angebot("2026-10-19", "18:15", "Vortrag: Restitution [Teil 1]", "https://uni-tuebingen.de/a b(c)"), angebot("2026-10-19", "", "Welcome Center: Stammtisch"),
+    angebot("2026-10-12", "", "Vortrag: Vorbei")]);
+  assert.deepEqual(alle.map((t) => t.titel), ["Wasen", "Vortrag: Vorbei", "Welcome Center: Stammtisch", "Übung", "Vortrag: Restitution [Teil 1]", "Fachschaftssitzung"]);
+  assert.equal(TM.art(alle[4]), "event");
+  const md = TM.erzeugen(alle, HEUTE);
+  assert.ok(md.includes("18:15 · [Vortrag: Restitution \\[Teil 1\\]](https://uni-tuebingen.de/a%20b%28c%29)"), "Klammern im Titel und Leerzeichen in der Adresse maskiert");
+  assert.match(md, /^- <span class="eba-tag event"><b>19<\/b>.*<\/span>\[Welcome Center: Stammtisch\]\(https:\/\/uni-tuebingen\.de\/x\)$/m, "ohne Uhrzeit zuerst");
+  assert.ok(!md.includes("Vortrag: Vorbei"), "vorbei: Angebote nicht mehr");
+  assert.ok(md.includes("> [!eba-t|sammel]- Vergangen · 1 Termin"));
+  // ohne Angebote dieselbe Liste
+  const ts = [T(d(19), "Übung", "Lehre")];
+  assert.equal(TM.mitAngeboten(ts, []), ts);
+  assert.equal(TM.link(ts[0], "Übung"), `[[${ts[0].f.path.replace(/\.md$/, "")}|Übung]]`);
+});
+
+test("Zahl am Reiter: Später zählt, Vergangen und die Hauptliste nicht", () => {
+  const z = TM.zaehler["eba-agenda"];
+  assert.equal(typeof z("spaeter"), "number");
+  assert.equal(typeof z("", "Später: erscheint, sobald Studium Autopilot läuft."), "number", "Teil aus dem Ersatztext");
+  assert.equal(z("vergangen"), null, "Archiv ohne Zahl");
+  assert.equal(z("", "Termine: erscheinen, sobald Studium Autopilot läuft."), null);
 });

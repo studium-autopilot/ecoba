@@ -86,7 +86,8 @@ module.exports = function (ctx) {
       aus.push({ d: x.d, bis: null, zeit: x.beginn + (x.ende ? "–" + x.ende : ""), sort: minuten(x.beginn) || 0, was: x.art,
         wo: x.raum, f: s.f || null, art: "sitzung", geschaetzt: false, geaendert: x.geaendert, ausfall: false,
         marke: raumNeu && zeitNeu ? "geändert" : raumNeu ? (x.neuerRaum ? "neuer Raum" : "anderer Raum") : zeitNeu ? "andere Zeit" : "",
-        raumNeu, raumAlt: raumNeu ? x.raumAlt || "" : "", zeitNeu, zeitAlt: zeitNeu ? x.zeitAlt || "" : "" });
+        raumNeu, raumAlt: raumNeu ? x.raumAlt || "" : "", zeitNeu, zeitAlt: zeitNeu ? x.zeitAlt || "" : "",
+        online: !!(M.istOnline && M.istOnline(s.fm, x.raum)) });
     }
     for (const t of termine || []) {
       if (!t || t.code !== code || t.erledigt) continue;
@@ -277,7 +278,6 @@ module.exports = function (ctx) {
       fsem.createDiv({ cls: "eba-mod-v", text: semName });
       let unter = sem ? `${sem.fs}. Fachsemester` : "";
       if (sem && D.aktuell && D.aktuell.name === semName) { const w = M.woche(); if (w && w.text) unter = w.text; }
-      if (text(fm.semester_geplant)) unter = unter ? unter + " · eigene Planung" : "eigene Planung";
       if (unter) fsem.createDiv({ cls: "eba-mod-z", text: unter });
     } else fsem.createDiv({ cls: "eba-mod-v eba-mod-blass", text: "Nicht geplant" });
     if (mitPlan(fm)) {
@@ -355,8 +355,9 @@ module.exports = function (ctx) {
         w.createSpan({ cls: "eba-mod-text", text: x.was });
         if (x.geschaetzt) w.createSpan({ cls: "eba-pill leer", text: "geschätzt" });
         if (x.marke) w.createSpan({ cls: "eba-pill warn", text: x.marke });
-        // Ort: bei einer Änderung „statt“ und die übliche Zeit, dann der neue Raum in Warnfarbe und der übliche durchgestrichen
-        const wo = z.createSpan({ cls: "eba-mod-wo" });
+        // Ort: bei einer Änderung „statt“ und die übliche Zeit, dann der neue Raum in Warnfarbe und der übliche durchgestrichen;
+        // online (ctx.modell.istOnline, seit 27.10.2026) mit einer Kamera davor wie im Wochenraster (eba-core.css 58.7)
+        const wo = z.createSpan({ cls: "eba-mod-wo" + (x.online ? " online" : "") });
         if (x.zeitAlt) { wo.appendText("statt "); wo.createEl("s", { text: x.zeitAlt }); if (x.wo) wo.appendText(" · "); }
         if (x.raumNeu && x.wo) {
           wo.createSpan({ cls: "eba-mod-neu", text: x.wo });

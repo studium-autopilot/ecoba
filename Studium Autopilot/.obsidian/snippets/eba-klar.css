@@ -47,7 +47,7 @@
   --eba-border-strong: #cdd2d9;
   --eba-text: #16191f;
   --eba-muted: #5a616c;
-  --eba-faint: #868d98;
+  --eba-faint: #6f757e; /* seit 0.7.0 dunkler: mindestens 4,5 : 1 auf Seite und Karte (vorher #868d98, 3,4–3,5 : 1) */
   --eba-accent: #2a5bd7;
   --eba-accent-text: #2453c9;
   --eba-accent-soft: rgba(42, 91, 215, 0.08);
@@ -56,7 +56,8 @@
   --eba-bad: #c0262d;
   --eba-info: #1f6e8c; /* Petrol, eigene Farbe für Lehre und Hinweise; bis 18.10.2026 gleich dem Akzent (wirkte wie Auswahl) */
   --eba-art-uni: #22639a; /* Kalender: Petrol war neben dem Grün zu ähnlich, Stahlblau bleibt vom Akzent weg */
-  --eba-art-event: #3a8a2a;
+  --eba-art-event: #b24acf; /* Veranstaltungen lila statt grün (seit 0.7.0): Grün heißt erledigt */
+  --eba-modul-1: #1f5587; /* Wochenraster: Marineblau statt Blau, das wäre fast der Akzent (Auswahl, jetzt) */
 }
 
 /* Abschnitte: Überschrift in normaler Schreibweise statt Label, ohne Linie; Luft trennt die Abschnitte */

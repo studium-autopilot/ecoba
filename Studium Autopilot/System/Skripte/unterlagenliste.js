@@ -17,7 +17,8 @@
 //  6. Ohne Modul (seit 26.10.2026): ```eba-unterlagen ohne-modul``` (Argument der Kopfzeile, blockArgument) auf der Seite
 //     Unterlagen zeigt alle Unterlagen ohne Kürzel
 //     (Ordner „Unterlagen/Ohne Modul“), etwa Prüfungsordnung, Modulhandbuch oder Folien einer Infoveranstaltung. Vorher standen
-//     sie nirgends als Liste.
+//     sie nirgends als Liste. Ohne solche Unterlagen bleibt der Block leer (.eba-ul-aus, seit 0.7.0), und eba-core.css blendet
+//     ihn samt Überschrift „Ohne Modul“ aus.
 // Reine Logik (artVon, woerter, semesterRang, gliedern, gehoert) für tests/unterlagenliste.test.js.
 // Stil: eba-core.css Abschnitt 58.8 (eba-ul-*). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast.
 module.exports = function (ctx) {
@@ -84,6 +85,7 @@ module.exports = function (ctx) {
         const b = text(x.f && x.f.basename && (Fa ? Fa.fassungVon(x.f.basename).stamm : x.f.basename));
         const rest = b.split(" ").filter((w, i) => !(i === 0 && w === code)).join(" ");
         titel = text(rest.indexOf(art + " ") === 0 ? rest.slice(art.length + 1) : rest === art ? "" : rest).replace(/^\d{1,3}(\s+|$)/, "") || art;
+        titel = titel.replace(/\bWS (\d{4})-(\d{2})\b/g, "WS $1/$2"); // Semester wie im Titel (seit 0.7.0), der Dateiname hat „-“
       }
       const gelesen = art !== "Übung" ? !!GELESEN[text(x.fm.status).toLowerCase()]
         : erledigt ? !!erledigt(x) : text(x.fm.status).toLowerCase() === "bearbeitet";
@@ -155,6 +157,7 @@ module.exports = function (ctx) {
 
   const zeichnen = (el, quelle, c) => {
     el.empty();
+    el.classList.remove("eba-ul-aus");
     const notiz = app.vault.getAbstractFileByPath(c.sourcePath);
     const fm = fmVon(notiz);
     const M = ctx.modell;
@@ -166,7 +169,9 @@ module.exports = function (ctx) {
     const eintraege = app.vault.getMarkdownFiles().map((f) => ({ f, fm: fmVon(f) })).filter((x) => gehoert(x.fm, code));
     const G = gliedern(eintraege, ohne ? "" : code, M && M.uebung ? (x) => { const u = M.uebung(x.f); return !!(u && u.erledigt); } : null);
     if (!G.length) {
-      box.createDiv({ cls: "eba-ul-leer", text: ohne ? "Unterlagen ohne Modul, etwa Prüfungsordnung oder Modulhandbuch, erscheinen hier." : "Noch keine Unterlagen." });
+      // Ohne Modul und leer (seit 0.7.0): Block samt Überschrift unsichtbar (eba-core.css), bis 0.6.14 stand dort ein Satz
+      if (ohne) el.classList.add("eba-ul-aus");
+      else box.createDiv({ cls: "eba-ul-leer", text: "Noch keine Unterlagen." });
       return;
     }
     for (const g of G) {

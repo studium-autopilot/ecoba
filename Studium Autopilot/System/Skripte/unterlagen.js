@@ -604,8 +604,12 @@ module.exports = function (ctx) {
     return { name, basename: i > 0 ? name.slice(0, i) : name, extension: i > 0 ? name.slice(i + 1) : "", stat: { size: groesse || 0 } };
   };
   const yamlWert = (v) => (v == null ? "" : typeof v === "number" || typeof v === "boolean" ? String(v) : typeof v === "string" ? J(v) : JSON.stringify(v));
-  const begleitnotiz = ({ code = "", modul = null, art = "Sonstiges", nummer = null, titel = "", datei, original = null, format, seiten = null,
-    semester = "", quelle = "", extra = null, weitere = [], zuGross = false, groesse = 0, hinweis = "" } = {}) => {
+  // Semester im Titel wie überall in der App: „WS 2026/27“. Der Dateiname behält „WS 2026-27“ (kein „/“ in Dateinamen); bis
+  // 0.6.14 kam diese Form auch in Feld und Überschrift
+  const semesterImTitel = (s) => String(s || "").replace(/\bWS (\d{4})-(\d{2})\b/g, "WS $1/$2");
+  const begleitnotiz = ({ code = "", modul = null, art = "Sonstiges", nummer = null, titel: titelRoh = "", datei, original = null, format,
+    seiten = null, semester = "", quelle = "", extra = null, weitere = [], zuGross = false, groesse = 0, hinweis = "" } = {}) => {
+    const titel = semesterImTitel(titelRoh);
     const h = alsDatei(datei, groesse), orig = alsDatei(original), mehr = (weitere || []).map((f) => alsDatei(f));
     const modulName = !modul ? "" : typeof modul === "string" ? modul.replace(/^\[\[|\]\]$/g, "") : modul.f?.basename || "";
     const titelZeile = [code, [art, nummer != null ? pad(nummer) : ""].filter(Boolean).join(" "), titel].filter(Boolean).join(" · ");

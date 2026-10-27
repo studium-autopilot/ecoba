@@ -104,10 +104,13 @@ test("Zeile: Titel ersatzweise aus dem Dateinamen, gelesen/bearbeitet markiert, 
   const G = U.gliedern([
     u("Übung 01", { art: "Übung", nummer: 1, titel: "" }),
     u("Skript Kapitel 4", { art: "Skript", titel: "", status: "bearbeitet", seiten: 30 }),
+    u("Skript Formeln WS 2018-19", { art: "Skript", titel: "" }),
     { f: { basename: "X100 Sonstiges Lehrvideos", path: "Unterlagen/X100 Beispiel/X100 Sonstiges Lehrvideos.md" }, fm: { typ: "unterlage", code: "X100", art: "Sonstiges", titel: "Lehrvideos" } },
   ], "X100");
   const [skr, ueb, so] = G;
-  assert.deepEqual([skr.zeilen[0].titel, skr.zeilen[0].gelesen, skr.zeilen[0].seiten], ["Kapitel 4", true, 30]);
+  assert.deepEqual(skr.zeilen.map((z) => z.titel).sort(), ["Formeln WS 2018/19", "Kapitel 4"], "Semester mit / wie im Titel");
+  const k4 = skr.zeilen.find((z) => z.titel === "Kapitel 4");
+  assert.deepEqual([k4.gelesen, k4.seiten], [true, 30]);
   assert.deepEqual([ueb.zeilen[0].titel, ueb.zeilen[0].nr, ueb.zeilen[0].gelesen], ["Übung", 1, false]);
   assert.equal(so.zeilen[0].datei, false);
   assert.equal(skr.zeilen[0].datei, true);
@@ -177,6 +180,37 @@ test("Ohne Modul: alle Unterlagen ohne Kürzel, ein Kürzel nimmt nur seine eige
     ohne("Folien Infoveranstaltung", { art: "Folien", titel: "Infoveranstaltung" }),
   ], "");
   assert.deepEqual(G.map((g) => [g.name, titel(g)]), [["Folien", ["Infoveranstaltung"]], ["Sonstiges", ["Modulhandbuch"]]]);
+});
+
+test("Ohne Modul ohne Unterlagen: Block leer und als aus markiert (das CSS blendet ihn samt Überschrift aus), ein Modul sagt es", () => {
+  const knoten = (o = {}) => {
+    const k = { cls: o.cls || "", text: o.text || "", kinder: [], klassen: new Set() };
+    k.classList = { add: (c) => k.klassen.add(c), remove: (c) => k.klassen.delete(c) };
+    k.empty = () => { k.kinder = []; };
+    k.createDiv = (p) => { const n = knoten(p); k.kinder.push(n); return n; };
+    k.createSpan = k.createDiv;
+    k.createEl = (_tag, p) => k.createDiv(p);
+    k.addEventListener = () => {};
+    return k;
+  };
+  const texte = (k) => [k.text].concat(...k.kinder.map(texte)).filter(Boolean);
+  const SATZ = "Unterlagen ohne Modul erscheinen hier, sobald Studium Autopilot läuft.";
+  const seite = { sourcePath: "Studium/Unterlagen.md" };
+  const leer = laden("unterlagenliste", { frontmatter: { "Studium/Unterlagen.md": { typ: "übersicht" } } }).ergebnis;
+  const el = knoten();
+  leer.zeichnen(el, SATZ, seite);
+  assert.ok(el.klassen.has("eba-ul-aus"));
+  assert.deepEqual(texte(el), [], "kein Satz, der nur erklärt, was hier stehen könnte");
+  const modul = knoten();
+  leer.zeichnen(modul, "X100", seite);
+  assert.ok(!modul.klassen.has("eba-ul-aus"));
+  assert.deepEqual(texte(modul), ["Noch keine Unterlagen."]);
+
+  const voll = laden("unterlagenliste", { frontmatter: { "Studium/Unterlagen.md": { typ: "übersicht" } },
+    notizen: { "Unterlagen/Ohne Modul/Modulhandbuch.md": { typ: "unterlage", art: "Sonstiges", titel: "Modulhandbuch", status: "neu" } } }).ergebnis;
+  voll.zeichnen(el, SATZ, seite);
+  assert.ok(!el.klassen.has("eba-ul-aus"), "beim Neuzeichnen mit Unterlagen wieder sichtbar");
+  assert.ok(texte(el).includes("Modulhandbuch"));
 });
 
 test("Online-Fassung: link nur mit https, auch ohne Datei", () => {

@@ -47,7 +47,7 @@
   --eba-border-strong: #cdbbdf;
   --eba-text: #2a2133;
   --eba-muted: #66597a;
-  --eba-faint: #8a7c9c;
+  --eba-faint: #756985; /* seit 0.7.0 dunkler: mindestens 4,5 : 1 auf Seite und Karte (vorher #8a7c9c, 3,4–3,5 : 1) */
   --eba-accent: #7446a6;
   --eba-accent-text: #6c3f9e;
   --eba-accent-soft: rgba(116, 70, 166, 0.09);
@@ -56,7 +56,12 @@
   --eba-warn: #a3600a;
   --eba-bad: #b4234a;
   --eba-info: #2f64ad; /* Blau für Lehre und Uni-Termine; bis 24.10.2026 Indigo #4a5ba6, im Kalender kaum vom Violett zu unterscheiden */
-  --eba-art-event: #2a8540;
+  /* Termin-Arten: Veranstaltungen pflaume statt grün (seit 0.7.0). Neben dem Violett des Akzents braucht es dafür ein röteres
+     Rot für Prüfungen und ein helleres Blau für die Uni, sonst lägen die drei Töne zu nah beieinander (tests/design.test.js). */
+  --eba-art-pruefung: #c92132;
+  --eba-art-uni: #2c71b7;
+  --eba-art-event: #711378;
+  --eba-modul-3: #7276f8; /* Wochenraster: Iris statt Violett, das wäre fast der Akzent (Auswahl, jetzt) */
 }
 
 /* Form und Schrift: hell und dunkel */

@@ -9,7 +9,6 @@ cssclasses:
 ---
 
 <div class="eba-kopf">
-<div class="eba-pfad"><a class="internal-link" data-href="Dashboard" href="Dashboard">Dashboard</a><span>Studium</span></div>
 <h1>Kontakte & Links</h1>
 </div>
 
@@ -18,11 +17,11 @@ cssclasses:
 > [!eba-links|ohne-titel]
 > - [Alma](https://alma.uni-tuebingen.de) *Prüfungsanmeldung, Noten, Bescheinigungen*
 > - [ILIAS](https://ovidius.uni-tuebingen.de/ilias3/) *Unterlagen der Lehrstühle*
-> - [Webmail](https://webmail.uni-tuebingen.de) *Uni-Mail, offizielle Infos*
+> - [Webmail](https://webmail.uni-tuebingen.de)
 > - [Universitäts­bibliothek](https://uni-tuebingen.de/einrichtungen/universitaetsbibliothek/) *E-Books, Datenbanken, Kurse*
 > - [Fachbibliothek WiWi](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/fb-wiwi/einrichtungen-wirtschaftswissenschaft/bibliothek/bibliothek/) *Mohlstraße 36, 1. OG*
 > - [ZDV für Studierende](https://uni-tuebingen.de/einrichtungen/zentrum-fuer-datenverarbeitung/oft-gefragt/studierende/) *Login, Drucken, Microsoft 365*
-> - [WLAN eduroam](https://uni-tuebingen.de/einrichtungen/zentrum-fuer-datenverarbeitung/dienstleistungen/netze/netzzugang/wlan-eduroam/) *Einrichtung je Gerät*
+> - [WLAN eduroam](https://uni-tuebingen.de/einrichtungen/zentrum-fuer-datenverarbeitung/dienstleistungen/netze/netzzugang/wlan-eduroam/)
 > - [Campus-Software](https://campussoftware.zdv.uni-tuebingen.de/) *Stata, SPSS, MATLAB*
 > - [Studierendenwerk](https://www.my-stuwe.de/) *Mensa, BAföG, Wohnen*
 > - [Semesterticket](https://uni-tuebingen.de/studium/rund-ums-studium/semesterticket/) *naldo und Deutschlandticket*
@@ -32,18 +31,18 @@ cssclasses:
 ## Fachbereich & Prüfungsamt
 
 > [!eba-links|ohne-titel|handy-zu]+ Alle Links
-> - [Studiengang EcoBA](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/studiengaenge/bachelor/economics-and-business-administration-bsc/) *Seite des Fachbereichs*
-> - [Studienbeginn Bachelor](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienbeginn/studienbeginn-bachelorstudiengaenge/) *Infos für Erstis*
-> - [FAQ Bachelor](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienfachberatung/faqs-bachelor/) *Antworten auf fast alles*
+> - [Studiengang EcoBA](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/studiengaenge/bachelor/economics-and-business-administration-bsc/)
+> - [Studienbeginn Bachelor](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienbeginn/studienbeginn-bachelorstudiengaenge/)
+> - [FAQ Bachelor](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienfachberatung/faqs-bachelor/)
 > - [Aktuelles zum Studium](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienorganisation/aktuelles-zum-studium/) *Änderungen am Lehrangebot*
-> - [Modulhandbuch & Pläne](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/downloads-links-studienplaene/downloads-bachelor/) *Downloads Bachelor*
+> - [Modulhandbuch & Pläne](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/downloads-links-studienplaene/downloads-bachelor/)
 > - [Prüfungsamt WiWi](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/) *Fristen, Termine, Formulare*
 > - [Prüfungstermine Pflichtmodule](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/pruefungstermine-pflicht-und-profilbildungsmodule/) *ab ca. Mitte Nov./Mai*
 > - [Fristen Prüfungsanmeldung](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/fachbereich-wirtschaftswissenschaft/fristen/) *Haupt- und Nachholtermin*
 > - [Fachschaft FFW](https://www.ffwtuebingen.de/) *Ersti-Woche, Altklausuren-Infos*
-> - [Auslandsstudium](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/international/outgoing-students/studying-in-europe-erasmus/) *Erasmus am Fachbereich*
+> - [Auslandsstudium](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/international/outgoing-students/studying-in-europe-erasmus/)
 > - [Career Service](https://uni-tuebingen.de/einrichtungen/verwaltung/iii-studium-und-lehre/ueberfachliche-bildung-und-berufliche-orientierung/career-service/) *Praktikum, Bewerbung*
-> - [Newsletter wiwinews](https://listserv.uni-tuebingen.de/mailman/listinfo/wiwinews) *Infos des Fachbereichs*
+> - [Newsletter wiwinews](https://listserv.uni-tuebingen.de/mailman/listinfo/wiwinews)
 > - [Veranstaltungen & WiWi-Netzwerk](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/praxis-und-alumni/studierende/veranstaltungen/) *Karriere-Events, Anmeldung*
 > - [WiWi Tübingen auf Instagram](https://www.instagram.com/wiwituebingen/) *@wiwituebingen, Events und News*
 
@@ -57,7 +56,9 @@ cssclasses:
 > > - [Termin buchen](http://www.supersaas.de/schedule/StudienfachberatungWiwi/Terminevergabe_Beratung_Wiwi) · [Ansprechpartner](https://uni-tuebingen.de/fakultaeten/wirtschafts-und-sozialwissenschaftliche-fakultaet/faecher/fachbereich-wirtschaftswissenschaft/wirtschaftswissenschaft/studium/service-beratung/studienfachberatung/ansprechpartner/)
 >
 > > [!eba-kontakt|handy-zu]+ Prüfungsamt Wirtschafts­wissenschaft
-> > - Leitung Rainer Bauer · Sachbearbeitung Ann-Kathrin Münsinger · Vertretung Daniela Junk
+> > - Leitung: Rainer Bauer
+> > - Sachbearbeitung: Ann-Kathrin Münsinger
+> > - Vertretung: Daniela Junk
 > > - **Wilhelmstraße 19**, Service Point Raum 0.01, Mo–Do 10–12
 > > - Sprechstunde nach Anmeldung per Mail
 > > - [Zuständigkeiten](https://uni-tuebingen.de/einrichtungen/verwaltung/iv-studierende/zentrales-pruefungsamt/wirtschafts-und-sozialwissenschaftliche-faecher-und-theologien/zustaendigkeiten-und-sprechzeiten/)
@@ -86,22 +87,26 @@ cssclasses:
 
 > [!eba-raster|3]
 > > [!eba-ort|handy-zu]+ Kupferbau
-> > Hölderlinstraße 5 · große Vorlesungen · Hörsäle 21–25: Klausuren, Hörsaal je Nachname einige Tage vorher
+> > - **Hölderlinstraße 5**, große Vorlesungen
+> > - Hörsäle 21–25: Klausuren, Hörsaal je Nachname einige Tage vorher
 >
 > > [!eba-ort|handy-zu]+ Neue Aula
-> > Geschwister-Scholl-Platz · Audimax · Hörsäle 10 und 06
+> > - **Geschwister-Scholl-Platz**
+> > - Audimax, Hörsäle 10 und 06
 >
 > > [!eba-ort|handy-zu]+ Mohlstraße 36
-> > Wirtschaftswissenschaftliches Seminar · Übungsräume, auch Klausuren · **Fachbibliothek** 1. OG, Mo–Fr 9–20 Uhr
+> > - Wirtschaftswissenschaftliches Seminar: Übungsräume, auch Klausuren
+> > - **Fachbibliothek** 1. OG, Mo–Fr 9–20 Uhr
 >
 > > [!eba-ort|handy-zu]+ Nauklerstraße 47
-> > Fachbereich · Studienfachberatung · Fachschaft · Auslandsbüro
+> > - Fachbereich, Studienfachberatung, Fachschaft, Auslandsbüro
 >
 > > [!eba-ort|handy-zu]+ Wilhelmstraße 19
-> > Prüfungsamt · Studierendensekretariat · Zentrale Studienberatung
+> > - Prüfungsamt, Studierendensekretariat, Zentrale Studienberatung
 >
 > > [!eba-ort|handy-zu]+ Morgenstelle
-> > Hörsaalzentrum, Auf der Morgenstelle 16 · zentrale Veranstaltungen der Uni, kaum WiWi-Lehre
+> > - **Auf der Morgenstelle 16**, Hörsaalzentrum
+> > - zentrale Veranstaltungen der Uni, kaum WiWi-Lehre
 
 ## Offizielle Dokumente
 

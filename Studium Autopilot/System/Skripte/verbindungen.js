@@ -366,7 +366,7 @@ module.exports = function (ctx) {
     volltext: {
       id: "volltext", name: "Suche in PDFs", art: "volltext", symbol: "pdf-suche",
       satz: "Die Suche findet auch Wörter in deinen PDFs.",
-      beschreibung: "Die Suche findet auch Wörter in PDFs",
+      beschreibung: "Macht Folien und Skripte durchsuchbar",
       kurz: "Zu jeder PDF unter Unterlagen entsteht eine Textfassung, damit die Suche Wörter aus den PDFs findet, auch auf iPhone und iPad.",
       erklaerung: "Gelesen wird nur auf deinen Geräten, nichts geht ins Netz. Ein Gerät reicht, die Textfassungen kommen über deinen Sync auf die anderen.",
       status() { return ctx.volltext ? ctx.volltext.status() : { an: false, zustand: "" }; },
@@ -1300,7 +1300,7 @@ module.exports = function (ctx) {
   };
 
   // Übersicht: je Verbindung eine kompakte Zeile (kompakt), die ganze Zeile ist ein Link (eba-core.css 43, .eba-ez). Titel und
-  // Stand stehen in einer Kopfzeile (.eba-ez-kopf): Passen sie nicht nebeneinander, rutscht der Stand ganz darunter.
+  // Stand stehen im Markup in einer Kopfzeile (.eba-ez-kopf); eba-core.css legt den Stand rechts in die Mitte der Zeile.
   const uebersicht = (el) => {
     el.empty();
     const liste = el.createDiv({ cls: "eba-vb-liste eba-ez-liste" });

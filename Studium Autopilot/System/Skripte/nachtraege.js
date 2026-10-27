@@ -4,12 +4,14 @@
 // bleibt er für immer. Dafür nennt NACHTRAEGE je Fall, welche Notizen welche Felder zurückbekommen.
 // Jeder Nachtrag läuft einmal je Tresor: auf dem Gerät, das für alle schreibt (ctx.zentral.abruferHier, wie modell.js), eine
 // Minute nach dem Start, danach stündlich, bis er durch ist (ein anderes Gerät schrieb gerade, Daten fehlten noch); erledigte
-// stehen in System/Daten/nachtraege.json (synchronisiert, nicht in der Vorlage). Geändert wird nur über processFrontMatter,
-// gelöscht wird nichts, der Text der Notiz bleibt. Scheitert ein Schreiben, bleibt der Nachtrag offen und läuft beim nächsten
-// Mal noch einmal (schon Geändertes trifft er dann nicht mehr).
-// Neuer Fall: Eintrag in NACHTRAEGE mit id (nie ändern) und aendern(notizen, M) → [{ f, felder }] oder null (geht noch nicht,
-// später wieder); notizen = alle Notizen [{ f, fm }], vor dem Nachtrag gelesen, M = ctx.modell. Doku: docs/architektur/update.md,
-// „Nachträge in Notizen“. Kein Node-API, keine Lookbehind-Regex.
+// stehen in System/Daten/nachtraege.json (synchronisiert, nicht in der Vorlage). Felder ändert er über processFrontMatter. Den Text
+// einer Notiz nur dort, wo ein Block noch genau so dasteht, wie eine ältere Version ihn erzeugt hat (seit 0.7.0, erst
+// folien-kopf); was du geschrieben hast, bleibt. Scheitert ein Schreiben, bleibt der Nachtrag offen und läuft beim nächsten Mal
+// noch einmal (schon Geändertes trifft er dann nicht mehr).
+// Neuer Fall: Eintrag in NACHTRAEGE mit id (nie ändern) und aendern(notizen, M) → [{ f, felder }] bzw. [{ f, text }] (text =
+// Funktion alter Text → neuer Text; gibt sie ihn unverändert zurück, schreibt nichts) oder null (geht noch nicht, später wieder);
+// notizen = alle Notizen [{ f, fm }], vor dem Nachtrag gelesen, M = ctx.modell. Doku: docs/architektur/update.md, „Nachträge in
+// Notizen“. Kein Node-API, keine Lookbehind-Regex.
 module.exports = function (ctx) {
   const app = window.app;
   const DATEI = "System/Daten/nachtraege.json";
@@ -23,6 +25,24 @@ module.exports = function (ctx) {
   // Link oder Pfad → vergleichbarer Name: ohne [[ ]], Anzeigetext und Abschnitt
   const linkName = (v) => { const s = text(v), m = s.match(/^\[\[([^\]|#]+)/); return nfc((m ? m[1] : s).trim()); };
   const nummer = (fm) => { const z = Number(fm.nummer); return text(fm.nummer) !== "" && isFinite(z) ? z : Infinity; };
+  const klassen = (fm) => liste(fm.cssclasses).join(" ").split(/[\s,]+/).filter(Boolean);
+  // Seitenkopf aus HTML, wie ihn die Lesefassung der Folien bis 19.10.2026 schrieb, direkt nach den Eigenschaften: Pfad (Modul,
+  // Unterlagen, „Folien 00 · Einführung“), als Titel der Name des Moduls, darunter Dozent und Lehrstuhl
+  const KOPF_ALT = /^(---\r?\n[\s\S]*?\r?\n---\r?\n\s*)<div class="eba-kopf">\r?\n<div class="eba-pfad">.*<\/div>\r?\n<h1>[^<\n]*<\/h1>\r?\n(?:<div class="eba-meta">.*<\/div>\r?\n)?<\/div>\r?\n/;
+  // Titel einer Begleitnotiz wie unterlagen.js (begleitnotiz): „B110 · Folien 00 · Einführung“
+  const titelZeile = (fm) => [text(fm.code), [text(fm.art), text(fm.nummer) !== "" ? text(fm.nummer).padStart(2, "0") : ""].filter(Boolean).join(" "),
+    text(fm.titel)].filter(Boolean).join(" · ");
+  const folienKopf = (t, fm) => { const z = titelZeile(fm); return z ? String(t).replace(KOPF_ALT, (alles, vorn) => vorn + "# " + z + "\n") : t; };
+  // Spalte „Notiz“ in „Zum Modul“ auf der Modulseite, wie sie bis 0.6.14 jede Modulnotiz bekam: Name aus dem Dateinamen, darin
+  // „–“ statt „:“ („Tutorien starten – BWL“) und „Mo 14.15“. Seit 0.7.0 der Titel eines Termins, die Uhrzeit mit Doppelpunkt.
+  const NOTIZ_ALT = `notiz: 'file.asLink(file.basename.replace(/^\\d{4}-\\d{2}-\\d{2}\\s+/, "").replace(code + " ", ""))'`;
+  const NOTIZ_NEU = `notiz: 'file.asLink(if(typ == "termin" && titel, titel.toString().replace(code + " ", ""), file.basename.replace(/^\\d{4}-\\d{2}-\\d{2}\\s+/, "").replace(/^(\\S+ \\d{1,2})\\.(\\d{2}) /, "$1:$2 ").replace(code + " ", "")))'`;
+  const notizSpalte = (t) => String(t).split(NOTIZ_ALT).join(NOTIZ_NEU);
+  // Reihenfolge in „Zum Modul“: bis 0.6.14 nach Datum absteigend, also Termine rückwärts und der Stundenplan (ohne Datum) in
+  // zufälliger Folge. Seit 0.7.0 nach Datum aufsteigend, dann nach Wochentag und Beginn.
+  const REIHE_ALT = ">     sort:\n>       - property: formula.wann\n>         direction: DESC\n>     columnSize:";
+  const REIHE_NEU = ">     sort:\n>       - property: formula.wann\n>         direction: ASC\n>       - property: wochentag\n>         direction: ASC\n>       - property: beginn\n>         direction: ASC\n>     columnSize:";
+  const reihenfolge = (t) => String(t).split(REIHE_ALT).join(REIHE_NEU);
 
   const NACHTRAEGE = [
     // Bis 0.6.2 riet notizen.js die Folien beim Anlegen (eba.folienZu): die Folien gleicher Nummer, sonst die der vorigen
@@ -64,10 +84,26 @@ module.exports = function (ctx) {
       }
       return aus;
     } },
+    // Bis 19.10.2026 schrieb die Lesefassung der Folien (Skill lesefassung.md) über den Text einen eigenen Seitenkopf: als Titel den
+    // Namen des Moduls, welche Folien es sind, nur im Pfad darüber. Seit 0.7.0 steht über einem Titel kein Pfad mehr und
+    // Obsidians Kopfleiste nennt den Namen der Notiz nicht noch einmal; dort stand also nirgends mehr, welche Folien man liest. Der
+    // Kopf wird der Titel jeder Begleitnotiz („# B110 · Folien 00 · Einführung“), darunter zeigt kopf.js das Modul mit Namen, das
+    // Semester und „Gelesen“. Dozent und Lehrstuhl stehen auf der Modulseite. Nur der Block, wie er erzeugt wurde.
+    { id: "folien-kopf", aendern: (notizen) => notizen
+      .filter((n) => text(n.fm.typ) === "unterlage" && klassen(n.fm).indexOf("eba-folien") >= 0 && titelZeile(n.fm))
+      .map((n) => ({ f: n.f, text: (t) => folienKopf(t, n.fm) })) },
+    // Spalte „Notiz“ der Modulseite (seit 0.7.0): nur wo die Formel noch genau so dasteht, wie sie bis 0.6.14 kam
+    { id: "modul-notizspalte", aendern: (notizen) => notizen
+      .filter((n) => text(n.fm.typ) === "modul")
+      .map((n) => ({ f: n.f, text: notizSpalte })) },
+    // Reihenfolge in „Zum Modul“ (seit 0.7.0): nur wo die Sortierung noch genau so dasteht, wie sie bis 0.6.14 kam
+    { id: "modul-reihenfolge", aendern: (notizen) => notizen
+      .filter((n) => text(n.fm.typ) === "modul")
+      .map((n) => ({ f: n.f, text: reihenfolge })) },
   ];
 
-  // Ein Lauf ohne Dateien. o: { notizen, erledigt (ids), M, setzen(f, felder), liste? (Test: statt NACHTRAEGE) }
-  // → { geaendert: [{ id, pfad }], neu: [ids], erledigt: [ids], fehler }
+  // Ein Lauf ohne Dateien. o: { notizen, erledigt (ids), M, setzen(f, felder), textSetzen(f, fn) → geändert?, liste? (Test: statt
+  // NACHTRAEGE) } → { geaendert: [{ id, pfad }], neu: [ids], erledigt: [ids], fehler }
   const nachtragenMit = async (o) => {
     const erledigt = o.erledigt.slice(), b = { geaendert: [], neu: [], erledigt, fehler: "" };
     for (const n of o.liste || NACHTRAEGE) {
@@ -75,7 +111,11 @@ module.exports = function (ctx) {
       const aenderungen = n.aendern(o.notizen, o.M);
       if (!aenderungen) continue;
       try {
-        for (const a of aenderungen) { await o.setzen(a.f, a.felder); b.geaendert.push({ id: n.id, pfad: a.f.path }); }
+        for (const a of aenderungen) {
+          let geaendert = true;
+          if (a.text) geaendert = await o.textSetzen(a.f, a.text); else await o.setzen(a.f, a.felder);
+          if (geaendert) b.geaendert.push({ id: n.id, pfad: a.f.path });
+        }
       } catch (e) { b.fehler = n.id + ": " + ((e && e.message) || e); continue; }
       erledigt.push(n.id);
       b.neu.push(n.id);
@@ -107,7 +147,14 @@ module.exports = function (ctx) {
       if (alleErledigt(erledigt)) { fertig = true; return null; }
       const notizen = app.vault.getMarkdownFiles().map((f) => ({ f, fm: ((app.metadataCache.getFileCache(f) || {}).frontmatter) || {} }));
       const b = await nachtragenMit({ notizen, erledigt, M: ctx.modell,
-        setzen: (f, felder) => app.fileManager.processFrontMatter(f, (fm) => { for (const k of Object.keys(felder)) fm[k] = felder[k]; }) });
+        setzen: (f, felder) => app.fileManager.processFrontMatter(f, (fm) => { for (const k of Object.keys(felder)) fm[k] = felder[k]; }),
+        // Erst lesen: Bleibt der Text gleich, wird nicht geschrieben (sonst ginge jede Notiz des Falls durch den Sync)
+        textSetzen: async (f, fn) => {
+          const alt = await app.vault.read(f);
+          if (fn(alt) === alt) return false;
+          await app.vault.process(f, fn);
+          return true;
+        } });
       if (b.neu.length) await erledigtSchreiben(b.erledigt);
       if (b.fehler) console.error("Nachträge", b.fehler);
       fertig = alleErledigt(b.erledigt);
@@ -117,5 +164,5 @@ module.exports = function (ctx) {
 
   const registrieren = () => { ctx.zeit(lauf, WARTEN); ctx.intervall(lauf, WIEDER); };
 
-  return { registrieren, lauf, nachtragenMit, NACHTRAEGE, linkName, DATEI };
+  return { registrieren, lauf, nachtragenMit, NACHTRAEGE, linkName, folienKopf, notizSpalte, NOTIZ_ALT, NOTIZ_NEU, reihenfolge, REIHE_ALT, REIHE_NEU, DATEI };
 };

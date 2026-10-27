@@ -4,9 +4,11 @@
 // Modul-Chips (verlinkt auf die Modulnotiz, ✓ wenn bestanden/anerkannt, „OP“ = Orientierungsprüfung), Platzhalter für
 // Schwerpunkt- und Profilbildungsbereiche, ECTS-Summe je Semester; auf schmalen Bildschirmen untereinander.
 // Mehrere Pläne (Variante offen, „alle“, „andere“; seit 17.10.2026): Die Semester, die in allen gezeigten Plänen gleich
-// sind (der Stamm, bei EcoBA das 1. und 2. Fachsemester), stehen einmal; daneben steht, ab wann sich die Pläne trennen.
-// Darunter je Variante nur ihre eigenen Semester (die Zweige). Ohne gemeinsamen Stamm steht jeder Plan ganz.
-// Hinweise stehen einmal unter allen Plänen: erst die für alle, dann je Variante ihre eigenen.
+// sind (der Stamm, bei EcoBA das 1. und 2. Fachsemester), stehen einmal, der Titel sagt „in allen Varianten gleich“ (bis 0.6.14
+// stand daneben in einem gestrichelten Kasten, ab wann sich die Pläne trennen). Darunter je Variante nur ihre eigenen Semester
+// (die Zweige). Ohne gemeinsamen Stamm steht jeder Plan ganz. „Zusammen 180 ECTS“ nur, wenn ein Plan davon abweicht.
+// Hinweise stehen nur auf der Datenseite und mit Argument „alle“ einmal unter allen Plänen: erst die für alle, dann je Variante
+// ihre eigenen. Im Studienverlauf nicht: Dort stehen die Regeln darunter (bis 0.6.14 dort auch als Sätze unter den Plänen).
 // Ohne Argument: die Variante aus den Einstellungen (bei „offen“ alle drei), mit gewählter Variante darunter der Link
 // „Andere Varianten ansehen →“ (System/Daten/Musterplan). Schreibt keine Datei.
 // Erweiterung: Das Plugin ruft registrieren() auf (Codeblock über ctx.codeblock). Stil: eba-core.css Abschnitt 44 (Klassen eba-mp-*).
@@ -66,7 +68,7 @@ module.exports = function (ctx) {
     for (const e of es) {
       const m = e.code ? K.module.get(e.code) : null;
       const fertig = m && ["bestanden", "anerkannt"].indexOf(m.status) >= 0;
-      const chip = liste.createEl(m ? "a" : "div", { cls: `eba-mp-chip ${e.art}${e.op ? " op" : ""}${fertig ? " fertig" : ""}` });
+      const chip = liste.createEl(m ? "a" : "div", { cls: `eba-mp-chip ${e.art}${fertig ? " fertig" : ""}` });
       if (m) {
         chip.setAttr("href", "#"); chip.setAttr("title", `${e.code} öffnen`);
         chip.addEventListener("click", (ev) => { ev.preventDefault(); ctx.oeffnen(m.f, { neu: ev.ctrlKey || ev.metaKey }); });
@@ -91,26 +93,23 @@ module.exports = function (ctx) {
     const raster = box.createDiv({ cls: "eba-mp-raster" });
     let gesamt = 0;
     for (let fs = 1; fs <= SEMESTER; fs++) gesamt += spalteZeichnen(raster, M, plan, fs, K);
-    box.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${gesamt} ECTS` });
+    if (gesamt !== 180) box.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${gesamt} ECTS` });
   };
 
   // Mehrere Pläne mit gemeinsamem Stamm (bis = letztes gemeinsames Fachsemester): der Stamm einmal, daneben die Gabelung,
-  // darunter je Variante ihre Zweige. mitWahl: Satz mit Link zur Wahl der Variante (nur ohne Argument, nicht auf der Datenseite).
+  // darunter je Variante ihre Zweige. mitWahl: Zeile „Variante wählen → Einstellungen & Hilfe“ unter dem Stamm (nur ohne Argument,
+  // nicht auf der Datenseite).
   const gabelZeichnen = (el, M, bis, quellePfad, mitWahl) => {
     const K = modulKarte();
-    const box = el.createDiv({ cls: "eba-mp eba-mp-gabel", attr: { lang: "de", style: `--mp-stamm:${bis};--mp-stamm1:${bis + 1};--mp-zweig:${SEMESTER - bis}` } });
+    const box = el.createDiv({ cls: "eba-mp eba-mp-gabel", attr: { lang: "de", style: `--mp-stamm:${bis};--mp-zweig:${SEMESTER - bis};--mp-mittel:${Math.max(bis, SEMESTER - bis)}` } });
     box.createDiv({ cls: "eba-mp-titel", text: bis === 1 ? "1. Fachsemester – in allen Varianten gleich" : `1. bis ${bis}. Fachsemester – in allen Varianten gleich` });
     const stammRaster = box.createDiv({ cls: "eba-mp-raster eba-mp-stamm" });
     let stammSumme = 0;
     for (let fs = 1; fs <= bis; fs++) stammSumme += spalteZeichnen(stammRaster, M, M.plaene[0], fs, K);
-    const gabel = stammRaster.createDiv({ cls: "eba-mp-gabelung" });
-    gabel.createEl("p", { text: `Ab dem ${bis + 1}. Fachsemester trennen sich die ${M.plaene.length} Pläne: ${M.plaene.map((p) => p.name).join(", ")}.` });
     if (mitWahl) {
-      const p = gabel.createEl("p");
-      p.appendText("Wähle deine Variante vorher unter ");
+      const p = box.createEl("p", { cls: "eba-hinweis eba-mp-wahl", text: "Variante wählen → " });
       const a = p.createEl("a", { text: "Einstellungen & Hilfe", href: "#", cls: "internal-link" });
       a.addEventListener("click", (ev) => { ev.preventDefault(); ctx.oeffnen(EINSTELLUNGEN, { quelle: quellePfad || "", neu: ev.ctrlKey || ev.metaKey }); });
-      p.appendText("; dann steht hier nur noch dein Plan.");
     }
     for (const plan of M.plaene) {
       const zweig = box.createDiv({ cls: "eba-mp-zweig" });
@@ -118,7 +117,7 @@ module.exports = function (ctx) {
       raster.createDiv({ cls: "eba-mp-zweigkopf" }).createDiv({ cls: "eba-mp-titel", text: `Variante ${plan.name}` });
       let summe = stammSumme;
       for (let fs = bis + 1; fs <= SEMESTER; fs++) summe += spalteZeichnen(raster, M, plan, fs, K);
-      zweig.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${summe} ECTS` });
+      if (summe !== 180) zweig.createDiv({ cls: "eba-mp-gesamt", text: `Zusammen ${summe} ECTS` });
     }
   };
 
@@ -166,7 +165,7 @@ module.exports = function (ctx) {
     const bis = stamm(M.eintraege, plaene);
     if (plaene.length > 1 && bis > 0 && bis < SEMESTER) gabelZeichnen(el, M2, bis, quellePfad, !a && quellePfad !== DATEN);
     else for (const p of plaene) planZeichnen(el, M2, p);
-    hinweiseZeichnen(el, M, plaene);
+    if (a === "alle" || quellePfad === DATEN) hinweiseZeichnen(el, M, plaene);
     const fuss = el.createEl("p", { cls: "eba-mp-quelle" });
     const dmy = M.stand ? `${M.stand.slice(8, 10)}.${M.stand.slice(5, 7)}.${M.stand.slice(0, 4)}` : "";
     fuss.appendText(`Quelle: Musterstudienplan des Fachbereichs${dmy ? ` (Stand ${dmy})` : ""}, eigene Darstellung · `);

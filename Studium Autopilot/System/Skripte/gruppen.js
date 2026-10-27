@@ -175,6 +175,27 @@ module.exports = function (ctx) {
     else melden(`${nr} steht jetzt in deinem Stundenplan.`);
   };
 
+  // Karten des Blocks mit den Daten von jetzt: daten = ctx.zentral.gruppen(), D = Datenmodell, alle = auch Module außerhalb des
+  // Plans → { karten, semester }
+  const kartenJetzt = (daten, D, alle) => {
+    const Z = ctx.zentral;
+    let codes = null;
+    if (!alle && Z && Z.filterBauen && ctx.modell) { try { codes = Z.filterBauen().codes; } catch (e) { codes = null; } }
+    const semester = semesterWahl(D);
+    const titel = {};
+    if (D) for (const m of D.module) if (!titel[m.code]) titel[m.code] = m.titel;
+    let ilias = [];
+    try { ilias = ctx.ilias && ctx.ilias.gruppen ? ctx.ilias.gruppen() : []; } catch (e) { ilias = []; }
+    return { karten: auswaehlen(daten.gruppen, { codes, semester, stundenplan: D ? D.stundenplan : [], titel, ilias }), semester };
+  };
+  // Zahl am Reiter (reiter.js, Termine & Anmeldungen, seit 0.7.0): so viele Karten (Modul und Art) zeigt der Block; ohne Daten null
+  const zaehler = {
+    [SPRACHE]: (arg) => {
+      const Z = ctx.zentral, daten = Z && Z.gruppen ? Z.gruppen() : null;
+      return daten ? kartenJetzt(daten, md(), String(arg || "").toLowerCase() === "alle").karten.length : null;
+    },
+  };
+
   const zeichnen = (el, arg) => {
     el.empty();
     const Z = ctx.zentral;
@@ -188,15 +209,8 @@ module.exports = function (ctx) {
     }
     const D = md();
     const alle = arg === "alle";
-    let codes = null;
-    if (!alle && Z.filterBauen && ctx.modell) { try { codes = Z.filterBauen().codes; } catch (e) { codes = null; } }
-    const semester = semesterWahl(D);
-    const titel = {};
-    if (D) for (const m of D.module) if (!titel[m.code]) titel[m.code] = m.titel;
-    let ilias = [];
-    try { ilias = ctx.ilias && ctx.ilias.gruppen ? ctx.ilias.gruppen() : []; } catch (e) { ilias = []; }
     if (D && D.stundenplan.some((x) => x.fm && x.fm.herkunft === "gruppe-gewaehlt")) aufraeumen();
-    const karten = auswaehlen(daten.gruppen, { codes, semester, stundenplan: D ? D.stundenplan : [], titel, ilias });
+    const { karten, semester } = kartenJetzt(daten, D, alle);
     if (!karten.length) {
       const wann = semester ? " im " + semester.join(" und ") : "";
       hinweis(box, (alle ? "Für" + wann : "Für deine Module" + wann) + " sind noch keine Gruppen veröffentlicht.");
@@ -210,10 +224,10 @@ module.exports = function (ctx) {
       kopf.createEl("b", { text: k.code });
       kopf.appendText(" " + (k.titel ? k.titel + " · " : "") + (TITEL[k.art] || k.art) + (mehrereSemester ? " · " + k.semester : ""));
       const dein = k.gruppen.filter((g) => g.dein);
-      const wo = dein.some((g) => g.woher === "ilias") ? "aus ILIAS" : dein.some((g) => g.woher === "gewaehlt") ? "deine Gruppe" : "im Stundenplan";
-      // ILIAS zählt anders als Alma: für Gruppen aus ILIAS deren Name („Gruppe 4“), sonst die Nummer der Liste
+      // ILIAS zählt anders als Alma: für Gruppen aus ILIAS deren Name („Gruppe 4“), sonst die Nummer der Liste. Woher die Gruppe
+      // kommt, sagt die Pille in ihrer Zeile (bis 0.6.14 auch hier: „im Stundenplan: Gruppe 5“)
       const nameVon = (g) => (g.woher === "ilias" && g.iliasName ? g.iliasName : g.gruppe ? "Gruppe " + g.gruppe : g.tag);
-      sum.createSpan({ cls: "eba-gr-zahl", text: dein.length ? `${wo}: ${dein.map(nameVon).join(", ")}` : `${k.gruppen.length} ${k.gruppen.length === 1 ? "Gruppe" : "Gruppen"}` });
+      sum.createSpan({ cls: "eba-gr-zahl", text: dein.length ? dein.map(nameVon).join(", ") : `${k.gruppen.length} ${k.gruppen.length === 1 ? "Gruppe" : "Gruppen"}` });
       const inhalt = det.createDiv({ cls: "eba-gr-inhalt" });
       if (k.iliasOffen) inhalt.createEl("p", { cls: "eba-gr-ilias", text: OFFEN[k.iliasOffen] || OFFEN["ohne-treffer"] });
       for (const a of k.anmeldung) { const p = inhalt.createEl("p", { cls: "eba-gr-anmeldung" }); p.createEl("b", { text: "Anmeldung: " }); p.appendText(a); }
@@ -293,5 +307,5 @@ module.exports = function (ctx) {
     ctx.zeit(bald, 30000); // einmal nach dem Start: Doppel aus der Zeit vor diesem Update
   };
 
-  return { registrieren, auswaehlen, zeitText, imStundenplan, deinVon };
+  return { registrieren, zaehler, auswaehlen, zeitText, imStundenplan, deinVon };
 };

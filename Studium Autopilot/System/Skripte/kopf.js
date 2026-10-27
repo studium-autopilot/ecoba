@@ -28,6 +28,8 @@
 //    Titel des PDF-Kastens, „Öffnen“ in dessen Kopfzeile (pdfkasten.js). Nur Zeilen, die das Plugin selbst geschrieben hat
 //    (eckZeileErzeugt); eigener Text darin bleibt stehen. Nur in Notizen mit PDF-Kasten (hatPdfKasten): Ohne (Word, PowerPoint,
 //    Excel, ZIP, sehr große PDF) ist „Öffnen ↗“ dort der einzige Weg zur Datei, darum bleibt der Kasten; nur „Größe ⇅“ fällt weg.
+//    Bleibt nach den erzeugten Zeilen nur eigener Text (etwa ein Link auf die Fassung mit Anmerkungen), steht er ohne die
+//    Überschrift „Eckdaten“ da (seit 0.7.0, Klasse eba-eck-rest): Eckdaten sind es dann nicht mehr.
 // Seit 20.10.2026: Die Stundenplan-Notiz eines Tutoriums zeigt unter dem Kopf die Unterlagen aus dem Bereich Tutorium ihres Moduls,
 // die einer Übung die Übungen, als Chips wie die Vorlesungsnotiz (höchstens drei, neueste Nummer zuerst; Tipp öffnet die
 // Begleitnotiz), bei mehr „Alle Unterlagen“ zur Modulseite. Vorher fand man ein Blatt aus dem Ordner der eigenen Tutoriumsgruppe
@@ -66,7 +68,9 @@ const statusVon = (typ, fm, zusatz) => {
   if (typ === "unterlage") {
     const s = txt(fm.status).toLowerCase();
     const gelesen = s === "gelesen" || s === "bearbeitet";
-    return { wert: gelesen ? s : "neu", text: gelesen ? gross(s) : "Noch nicht gelesen", wort: gelesen ? s : "neu", fertig: gelesen, neu: gelesen ? "neu" : "gelesen" };
+    // Ungelesen ist der Normalfall jeder neuen Unterlage, keine Frist: leise statt warm (bis 0.6.14 orange wie „Nacharbeit offen“)
+    return { wert: gelesen ? s : "neu", text: gelesen ? gross(s) : "Noch nicht gelesen", wort: gelesen ? s : "neu", fertig: gelesen, neu: gelesen ? "neu" : "gelesen",
+      leise: !gelesen };
   }
   if (typ === "sq_kurs") {
     const s = SQ.indexOf(txt(fm.status).toLowerCase()) >= 0 ? txt(fm.status).toLowerCase() : SQ[0];
@@ -211,9 +215,13 @@ module.exports = function (ctx) {
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const pad = (n) => String(n).padStart(2, "0");
 
-  // Linke Seite der Zeile: was die Notiz ist, in Label-Schrift („Übung · B110 · Do 10:15–11:45“); beim Termin nur Art und Modul,
-  // Tag und Uhrzeit stehen darunter (terminZeichnen)
-  const labelVon = (typ, f, fm) => {
+  // Linke Seite der Zeile: was die Notiz ist, in Label-Schrift; beim Termin nur Art und Modul („Frist · B110“), Tag und Uhrzeit
+  // stehen darunter (terminZeichnen). Bei Unterlage und Stundenplan-Notiz nennt der Titel schon Kürzel und Art („B110 · Folien 00 ·
+  // Einführung“, „B180 · Tutorium“): Das Label sagt darum, zu welchem Modul sie gehört, mit seinem Namen (modulName, ohne
+  // Modulseite das Kürzel), dazu das Semester bzw. Gruppe und Zeit (seit 0.7.0; bis 0.6.14 „Folien 00 · B110 · WS 2026/27“ und
+  // „Tutorium · B180 · Di 08:15–09:45“, das wiederholte den Titel und nannte das Modul nur als Kürzel). Das Semester bricht nicht
+  // um (geschütztes Leerzeichen): Neben einem langen Modulnamen stand auf dem iPhone sonst „WS“ allein am Ende.
+  const labelVon = (typ, f, fm, modulName) => {
     const m = M(), z = m && m.zeit;
     if (typ === "termin") {
       const t = m && m.terminLesen ? m.terminLesen({ f, fm }) : null;
@@ -222,18 +230,18 @@ module.exports = function (ctx) {
     }
     if (typ === "unterlage") {
       const nr = fm.nummer != null && fm.nummer !== "" ? " " + pad(fm.nummer) : "";
-      return [(txt(fm.art) || "Unterlage") + nr, txt(fm.code), txt(fm.semester)].filter(Boolean).join(" · ");
+      return [txt(modulName) || txt(fm.code) || (txt(fm.art) || "Unterlage") + nr, txt(fm.semester).replace(/ /g, "\u00a0")].filter(Boolean).join(" · ");
     }
     if (typ === "übungsblatt") {
       const d = (String(fm.faellig == null ? "" : fm.faellig).match(/^\d{4}-\d{2}-\d{2}/) || [""])[0];
       return ["Übungsblatt" + (Number(fm.nummer) > 0 ? " " + Number(fm.nummer) : ""), txt(fm.code), d ? "Abgabe " + (z ? z.datum(d) : d) : ""].filter(Boolean).join(" · ");
     }
     if (typ === "sq_kurs") return ["SQ-Kurs", txt(fm.semester), fm.ects != null && fm.ects !== "" ? String(fm.ects).replace(".", ",") + " ECTS" : ""].filter(Boolean).join(" · ");
-    // „Veranstaltung“ = Alma ohne erkannte Art, wie im Wochenraster eine Vorlesung (das Wort gilt nur für Events, docs/design.md)
-    const gruppe = txt(fm.gruppe), art = txt(fm.art) === "Veranstaltung" ? "Vorlesung" : txt(fm.art) || "Lehrveranstaltung";
+    // Die Gruppe nur, wenn der Titel sie nicht schon nennt („S100 · Tutorium Gruppe 4“ aus meine-gruppe.js)
+    const g = txt(fm.gruppe), gruppe = !g ? "" : /^\d+$/.test(g) ? "Gruppe " + g : g;
     const tag = z && Number(fm.wochentag) >= 1 && Number(fm.wochentag) <= 7 ? z.WT[Number(fm.wochentag) % 7] : "";
     const zeit = [tag, txt(fm.beginn) + (fm.ende ? "–" + txt(fm.ende) : "")].filter(Boolean).join(" ");
-    return [art, gruppe ? (/^\d+$/.test(gruppe) ? "Gruppe " + gruppe : gruppe) : "", txt(fm.code), zeit].filter(Boolean).join(" · ");
+    return [txt(modulName) || txt(fm.code), txt(fm.titel).indexOf(gruppe) < 0 ? gruppe : "", zeit].filter(Boolean).join(" · ");
   };
 
   // ---------- Symbole als eigenes SVG (wie vorlesung.js; setIcon blieb auf dem iPad leer) ----------
@@ -335,13 +343,15 @@ module.exports = function (ctx) {
     const code = txt(fm.code);
     return code ? app.vault.getMarkdownFiles().find((x) => x.path.indexOf("Module/") === 0 && ist(x) && txt(fmVon(x).code) === code) || null : null;
   };
-  // Label mit dem Modulcode als Link (öffnet die Modulseite im selben Tab)
-  const labelZeichnen = (lab, text, code, ziel) => {
+  // Name des Moduls für das Label einer Unterlage: Feld titel der Modulseite, sonst ihr Dateiname ohne Kürzel
+  const modulNameVon = (modul) => (modul ? txt(fmVon(modul).titel) || modul.basename.replace(/^\S+\s+/, "") : "");
+  // Label mit dem Modul als Link (Kürzel bzw. bei einer Unterlage der Name; öffnet die Modulseite im selben Tab)
+  const labelZeichnen = (lab, text, modul, ziel) => {
     const teile = text.split(" · ");
-    const i = code && ziel ? teile.indexOf(code) : -1;
+    const i = modul && ziel ? teile.indexOf(modul) : -1;
     if (i < 0) { lab.setText(text); return; }
     if (i > 0) lab.appendText(teile.slice(0, i).join(" · ") + " · ");
-    const a = lab.createEl("a", { cls: "internal-link eba-kopf-modul", text: code, attr: { href: ziel.path, "data-href": ziel.path } });
+    const a = lab.createEl("a", { cls: "internal-link eba-kopf-modul", text: modul, attr: { href: ziel.path, "data-href": ziel.path } });
     a.addEventListener("mousedown", (e) => e.stopPropagation());
     a.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(ziel, { von: a, neu: e.ctrlKey || e.metaKey }); });
     if (i < teile.length - 1) lab.appendText(" · " + teile.slice(i + 1).join(" · "));
@@ -417,7 +427,8 @@ module.exports = function (ctx) {
     const ton = M() && M().statusArt ? M().statusArt(typ, s.wort) : "leer";
     const karte = el.createDiv({ cls: "eba-vorl-karte" });
     const kopf = karte.createDiv({ cls: "eba-vorl-kopf" });
-    labelZeichnen(kopf.createSpan({ cls: "eba-vorl-label" }), labelVon(typ, f, fm), txt(fm.code), modulVon(f, fm));
+    const modul = modulVon(f, fm), name = typ === "unterlage" || typ === "lehrveranstaltung" ? modulNameVon(modul) : "";
+    labelZeichnen(kopf.createSpan({ cls: "eba-vorl-label" }), labelVon(typ, f, fm, name), name || txt(fm.code), modul);
     const b = kopf.createEl("button", { cls: ("eba-vorl-status " + klasseVon(s, ton)).trim(),
       attr: { type: "button", "aria-label": s.menue ? `Stand: ${s.text}. Ändern` : s.text, "aria-pressed": s.menue ? null : String(!!s.fertig) } });
     symbol(b, s.fertig ? "fertig" : "status");
@@ -518,14 +529,15 @@ module.exports = function (ctx) {
       a.remove();
     }
   };
-  // Kasten „Eckdaten“: erzeugte Zeilen weg (Knoten zwischen <br>); bleibt nichts, ist der Kasten unsichtbar (Klasse eba-eck-leer).
+  // Kasten „Eckdaten“: erzeugte Zeilen weg (Knoten zwischen <br>); bleibt nichts, ist der Kasten unsichtbar (Klasse eba-eck-leer),
+  // bleibt eigener Text, fällt nur die Überschrift weg (eba-eck-rest).
   // Ohne PDF-Kasten bleibt er samt „Öffnen ↗“, nur „Größe ⇅“ fällt weg.
   const eckdatenAus = (k, pdfKasten) => {
     const t = k.querySelector(":scope > .callout-title .callout-title-inner"), inhalt = k.querySelector(":scope > .callout-content");
     if (!t || !inhalt || t.textContent.trim() !== "Eckdaten" || k.getAttribute("data-eba-eck") === "1") return;
     k.setAttribute("data-eba-eck", "1");
     if (!pdfKasten) { groesseWeg(inhalt); return; }
-    let rest = 0;
+    let rest = 0, weg = 0;
     for (const p of Array.from(inhalt.children)) {
       if (p.tagName !== "P") { rest++; continue; }
       const zeilen = [{ knoten: [], br: null }];
@@ -540,6 +552,7 @@ module.exports = function (ctx) {
           for (const a of as) if (/^obsidian:\/\/studium-autopilot\?aktion=/.test(a.getAttribute("href") || "")) knoepfe.push(a.textContent.trim());
         }
         if (!eckZeileErzeugt(z.knoten.map((n) => n.textContent).join(""), knoepfe)) { bleibt++; continue; }
+        weg++;
         for (const n of z.knoten) n.remove();
         if (z.br) z.br.remove();
       }
@@ -547,6 +560,7 @@ module.exports = function (ctx) {
       if (bleibt) rest++; else p.remove();
     }
     if (!rest) k.classList.add("eba-eck-leer");
+    else if (weg) k.classList.add("eba-eck-rest");
   };
   // Leseansicht: Überschriften der Notizen des Plugins (eba-abschnitt) und Listen nur aus leeren Punkten (eba-leer); ob eine Überschrift
   // verschwindet, entscheidet das CSS am Nachbarn (bleibt richtig, wenn Obsidian nur die geänderte Liste neu zeichnet)

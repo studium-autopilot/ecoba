@@ -1,8 +1,10 @@
 // Reiter (seit 24.10.2026, Codeblock ```eba-reiter```): Karten einer Seite mit „reiter=Name“ in ihren Angaben
 // (`> [!eba-termin|schlicht|handy-zu|reiter=Fristen]+ Fristen · 30 Tage`) stehen nicht untereinander, sondern als eine Reihe
-// Reiter in einer Karte an der Stelle des Blocks (Dashboard: Fristen, Termine, Nacharbeiten, To-dos; auf jedem Gerät, zuerst nur
-// am iPhone). Ein Tipp zeigt die Karte des Reiters darunter, ein Tipp auf einen anderen wechselt, ein Tipp auf den offenen
-// schließt ihn. Welcher offen ist, gilt je Seite, bis Obsidian neu startet; beim ersten Öffnen ist keiner offen. Am Knopf steht,
+// Reiter in einer Karte an der Stelle des Blocks (Dashboard: Fristen, Termine, Nacharbeiten, To-dos; Termine & Anmeldungen seit
+// 0.7.0: Später, Vergangen, Anmeldungen, Übungen; auf jedem Gerät, zuerst nur am iPhone). Ein Tipp zeigt die Karte des Reiters
+// darunter, ein Tipp auf einen anderen wechselt, ein Tipp auf den offenen schließt ihn. Welcher offen ist, gilt je Seite, bis
+// Obsidian neu startet. Beim ersten Öffnen ist auf iPad und PC der Reiter offen, dessen Karte „reiter-offen“ in den Angaben trägt
+// (Dashboard: Fristen, seit 0.7.0), auf dem iPhone keiner; vorher war überall keiner offen und das Dashboard wirkte leer. Am Knopf steht,
 // wie viele Einträge die Listen des Reiters gerade zeigen (anzahl), ohne Einträge nichts, dahinter ein Pfeil: nach unten, wenn
 // der Reiter zu ist, nach oben, wenn er offen ist (seit 24.10.2026; ohne ihn sah die Reihe nicht aufklappbar aus).
 // Den Inhalt liest der Block aus der Notiz selbst (reiterAus): dieselbe Karte, ohne Klappen (handy-zu, „+“) und ohne „reiter=“,
@@ -34,11 +36,12 @@ module.exports = function (ctx) {
   // Kopfzeile für den Reiter: ohne handy-zu und reiter=, nicht klappbar
   const kopfOhneKlappen = (m) => {
     const angaben = m[2].slice(1).split("|")
-      .map((t) => t.split(/\s+/).filter((w) => w && w !== "handy-zu" && !/^reiter=/i.test(w)).join(" ")).filter(Boolean);
+      .map((t) => t.split(/\s+/).filter((w) => w && w !== "handy-zu" && w !== "reiter-offen" && !/^reiter=/i.test(w)).join(" ")).filter(Boolean);
     return "[!" + m[1] + (angaben.length ? "|" + angaben.join("|") : "") + "]" + m[4];
   };
 
-  // Notiztext → [{ name, md }] in der Reihenfolge der Seite. md = Markdown der Karte(n) als Karte oberster Ebene.
+  // Notiztext → [{ name, md, offen? }] in der Reihenfolge der Seite. md = Markdown der Karte(n) als Karte oberster Ebene; offen: true,
+  // wenn eine Karte des Reiters „reiter-offen“ in den Angaben trägt.
   const reiterAus = (text) => {
     const zeilen = String(text || "").replace(/\r/g, "").split("\n");
     const aus = [], nach = {};
@@ -69,9 +72,13 @@ module.exports = function (ctx) {
       i = j - 1;
       if (!nach[name]) { nach[name] = { name, karten: [] }; aus.push(nach[name]); }
       nach[name].karten.push(karte.map((x) => x.replace(/ +$/, "")).join("\n"));
+      if (m[2].split(/[|\s]+/).indexOf("reiter-offen") >= 0) nach[name].offen = true;
     }
-    return aus.map((r) => ({ name: r.name, md: r.karten.join("\n\n") }));
+    return aus.map((r) => (r.offen ? { name: r.name, md: r.karten.join("\n\n"), offen: true } : { name: r.name, md: r.karten.join("\n\n") }));
   };
+  // Welcher Reiter offen ist: die Wahl auf dieser Seite (auch "" = selbst geschlossen), sonst beim ersten Öffnen der mit
+  // „reiter-offen“, auf dem iPhone keiner
+  const offenerName = (reiter, wahl, telefon) => (wahl !== undefined ? wahl : telefon ? "" : ((reiter.filter((r) => r.offen)[0] || {}).name || ""));
 
   // Codeblöcke im Markdown eines Reiters → [{ sprache, arg, quelle }] (arg = Rest der Kopfzeile, quelle = Text im Block)
   const bloeckeAus = (md) => {
@@ -159,7 +166,9 @@ module.exports = function (ctx) {
       inst.reiter = f && f.extension === "md" ? reiterAus(await app.vault.cachedRead(f)) : [];
     }
     const reiter = inst.reiter;
-    const gewaehlt = reiter.filter((r) => r.name === offen[pfad])[0] || null;
+    const telefon = el.ownerDocument.body.classList.contains("is-phone");
+    const name = offenerName(reiter, Object.prototype.hasOwnProperty.call(offen, pfad) ? offen[pfad] : undefined, telefon);
+    const gewaehlt = reiter.filter((r) => r.name === name)[0] || null;
     if (!inst.comp && obs.MarkdownRenderChild) { inst.comp = new obs.MarkdownRenderChild(el); if (inst.ctx && inst.ctx.addChild) inst.ctx.addChild(inst.comp); }
     const RO = el.ownerDocument.defaultView && el.ownerDocument.defaultView.ResizeObserver; // Popout: dessen Fenster
     if (!inst.ro && RO) {
@@ -184,7 +193,7 @@ module.exports = function (ctx) {
       if (obs.setIcon) obs.setIcon(pfeil, "chevron-down");
       const los = (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (an) delete offen[pfad]; else offen[pfad] = r.name;
+        offen[pfad] = an ? "" : r.name; // "" statt löschen: selbst geschlossen bleibt zu, auch der Reiter mit „reiter-offen“
         alleNeu((i) => pfadVon(i) === pfad, false);
       };
       k.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
@@ -263,8 +272,9 @@ module.exports = function (ctx) {
     ctx.an(app.metadataCache, "deleted", zaehlenBald);
     ctx.an(app.vault, "rename", zaehlenBald);
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") zaehlenBald(); });
+    ctx.dom(document, "eba-angebote", zaehlenBald); // Angebote der Uni oder ihre Auswahl geändert (zählen unter Später mit)
     ctx.intervall(zaehlenBald, 10 * 60 * 1000);
   };
 
-  return { registrieren, reiterAus, nameAus, bloeckeAus, anzahl, abschnittNachmessen };
+  return { registrieren, reiterAus, nameAus, offenerName, bloeckeAus, anzahl, abschnittNachmessen };
 };
