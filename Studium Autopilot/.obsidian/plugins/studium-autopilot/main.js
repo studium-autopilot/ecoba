@@ -603,6 +603,21 @@ module.exports = class StudiumAutopilot extends Plugin {
     setTimeout(pruefen, 300);
   }
 
+  // Tab für ctx.oeffnen, wenn nicht im getippten Tab (keiner, angeheftet oder Seitenleiste): der aktive, wenn er navigieren kann,
+  // sonst der zuletzt benutzte der Hauptfläche, der es kann, auch hinter einem anderen (im Hintergrund noch nicht geladene zählen,
+  // solange sie nicht angeheftet sind); erst ohne einen solchen ein neuer. Obsidians getLeaf(false) nimmt nur den vorderen Tab einer
+  // Gruppe: Aus einem angehefteten Tab (etwa dem Dashboard) legte so jeder Tipp einen neuen Tab an (seit 27.10.2026, Rückmeldung:
+  // „Still too many tabs open after a few clicks around“).
+  freiesBlatt() {
+    const ws = this.app.workspace, a = ws.activeLeaf;
+    const wurzel = (l) => (l && l.getRoot ? l.getRoot() : null);
+    const frei = (l) => !l.getViewState().pinned && (l.isDeferred || l.canNavigate());
+    if (a && wurzel(a) !== ws.leftSplit && wurzel(a) !== ws.rightSplit && frei(a)) return a;
+    let bestes = null;
+    ws.iterateAllLeaves((l) => { if (wurzel(l) === ws.rootSplit && frei(l) && (!bestes || (l.activeTime || 0) > (bestes.activeTime || 0))) bestes = l; });
+    return bestes || ws.getLeaf("tab");
+  }
+
   // Notiz öffnen: DER Weg für alle Skripte (ctx.oeffnen, Bedien-Bausteine seit 0.4.6; docs/architektur/bedien-bausteine.md).
   // ziel: TFile, Pfad oder Linktext (mit „#Überschrift“). o = { neu (neuer Tab, Strg/⌘-Klick), quelle (Notiz, von der ein
   // Linktext ausgeht), zeile (0-basiert), cursor ({ line, ch }), modus („preview“ | „source“ erzwingt), von (Element, auf das
@@ -624,7 +639,7 @@ module.exports = class StudiumAutopilot extends Plugin {
         || this.app.metadataCache.getFirstLinkpathDest(pfad, o.quelle || "");
     }
     if (!(datei instanceof TFile)) return null;
-    if (datei.extension !== "md") { const b = this.app.workspace.getLeaf(o.neu ? "tab" : false); await b.openFile(datei, { active: true }); return b; }
+    if (datei.extension !== "md") { const b = o.neu ? this.app.workspace.getLeaf("tab") : this.freiesBlatt(); await b.openFile(datei, { active: true }); return b; }
     const L = this.ctx.leseansicht;
     const lesen = o.modus ? o.modus === "preview" : !!(L && ((typeof L.nurLesen === "function" && L.nurLesen(datei))
       || (typeof L.zuerstLesen === "function" && L.zuerstLesen(datei))));
@@ -635,7 +650,7 @@ module.exports = class StudiumAutopilot extends Plugin {
       const ws = this.app.workspace, wurzel = blatt && blatt.getRoot ? blatt.getRoot() : null;
       if (blatt && (blatt.getViewState().pinned || wurzel === ws.leftSplit || wurzel === ws.rightSplit)) blatt = null; // nie in der Seitenleiste
     }
-    if (!blatt) blatt = this.app.workspace.getLeaf(o.neu ? "tab" : false);
+    if (!blatt) blatt = o.neu ? this.app.workspace.getLeaf("tab") : this.freiesBlatt();
     const eState = o.zeile != null ? { line: Number(o.zeile) } : anker ? { subpath: anker } : undefined;
     await blatt.openFile(datei, { active: true, state: lesen ? { mode: "preview" } : { mode: "source", source: false }, eState });
     this.app.workspace.setActiveLeaf(blatt, { focus: !!o.cursor });

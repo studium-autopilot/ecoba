@@ -15,6 +15,12 @@ test("Start: das Dashboard im zuletzt benutzten Tab, wenn er navigieren kann (au
   assert.doesNotMatch(START, /art === "markdown" \|\| art === "empty"/, "nach einer PDF kam bei jedem Start ein Tab dazu");
 });
 
+test("Start: ein angeheftetes Dashboard wird jedes Mal gelöst, der alte Merker einmal gelöscht", () => {
+  assert.match(START, /\n {4}if \(blatt\.getViewState\(\)\.pinned\) blatt\.setPinned\(false\);\n/);
+  assert.match(START, /if \(app\.loadLocalStorage\(FREI\) != null\) app\.saveLocalStorage\(FREI, null\);/);
+  assert.doesNotMatch(START, /if \(!app\.loadLocalStorage\(FREI\)\)/, "nicht mehr nur einmal je Gerät");
+});
+
 test("Leere Tabs: schließen, wenn ein anderer vorn ist und die Gruppe weitere Tabs hat", () => {
   const { leereZuSchliessen } = laden("start").ergebnis;
   const b = (leer, aktiv, geschwister) => ({ leer, aktiv, geschwister });

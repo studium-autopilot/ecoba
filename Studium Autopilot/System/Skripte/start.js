@@ -33,8 +33,10 @@ module.exports = function (ctx) {
   //    zuletzt benutzte Tab, wenn er navigieren kann wie bei Obsidians getLeaf (die Notiz oder PDF darin bleibt über Zurück
   //    erreichbar), sonst ein neuer; Links öffnen im selben Tab, und die Übersicht (seitenleiste.js) führt mit „Dashboard“ jederzeit
   //    zurück. Bis 27.10.2026 nur ein Tab mit Notiz oder ein leerer: Lag zuletzt eine PDF vorn, kam bei jedem Kaltstart ein Tab dazu
-  //    (Rückmeldung: „Es entstehen zuviele offene tabs“). Die Anheftung früherer Fassungen nimmt es einmal je Gerät zurück.
-  const FREI = "eba-dashboard-frei"; // Gerätespeicher: Anheftung schon zurückgenommen (danach bleibt eine eigene Anheftung)
+  //    (Rückmeldung: „Es entstehen zuviele offene tabs“). Ist das Dashboard angeheftet, löst der Start es jedes Mal (seit 27.10.2026;
+  //    bis dahin einmal je Gerät, damit eine eigene Anheftung blieb: Sie kam aber meist aus Versehen, durch langes Drücken in der
+  //    Tab-Übersicht oder einen alten Stand per Sync, und jeder Tipp legte dann einen Tab an). Den Merker dafür löscht er einmal.
+  const FREI = "eba-dashboard-frei"; // bis 27.10.2026: Anheftung auf diesem Gerät schon einmal gelöst
   const dashboardOeffnen = async () => {
     const ziel = app.vault.getAbstractFileByPath(DASHBOARD);
     if (!ziel) return;
@@ -50,7 +52,8 @@ module.exports = function (ctx) {
     if (blatt.view && blatt.view.getMode && blatt.view.getMode() === "source") {
       const vs = blatt.getViewState(); vs.state = Object.assign({}, vs.state, { mode: "preview" }); await blatt.setViewState(vs);
     }
-    if (!app.loadLocalStorage(FREI)) { if (blatt.getViewState().pinned) blatt.setPinned(false); app.saveLocalStorage(FREI, true); }
+    if (blatt.getViewState().pinned) blatt.setPinned(false);
+    if (app.loadLocalStorage(FREI) != null) app.saveLocalStorage(FREI, null);
     const tabs = blatt.parent;
     if (tabs && tabs.children && tabs.children.indexOf(blatt) > 0) {
       tabs.children.splice(tabs.children.indexOf(blatt), 1);

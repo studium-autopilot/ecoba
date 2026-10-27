@@ -163,7 +163,10 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   erzwingt eine Ansicht. Geöffnet wird im Tab, in dem getippt wurde (`von` bzw. der letzte
   Tipp, den der Kern im Capture-Modus merkt, weil Skripte `mousedown` oft selbst stoppen; nie in der Seitenleiste), sonst im aktiven;
   Zurück führt zurück, auch wenn die Notiz schon in einem anderen Tab offen ist (seit 27.10.2026; vorher wechselte `ctx.oeffnen` in
-  jenen Tab, und dort führte Zurück nicht dorthin, wo man herkam). Strg/⌘ (`neu`) öffnet einen neuen Tab. Fokus und Cursor nur mit `cursor` (sonst springt auf iPhone und iPad die
+  jenen Tab, und dort führte Zurück nicht dorthin, wo man herkam). Strg/⌘ (`neu`) öffnet einen neuen Tab. Ist der getippte Tab
+  angeheftet (oder keiner), nimmt `freiesBlatt` den zuletzt benutzten freien Tab der Hauptfläche, auch hinter einem anderen, und legt
+  nur ohne einen solchen einen neuen an (seit 27.10.2026: Aus einem angehefteten Dashboard legte jeder Tipp einen Tab an, weil
+  Obsidians `getLeaf(false)` nur den vorderen Tab einer Gruppe nimmt). Fokus und Cursor nur mit `cursor` (sonst springt auf iPhone und iPad die
   Tastatur auf). Vorher gab es sechs Wege (`openLinkText`, `getLeaf().openFile`, `blatt.openFile`, `ctx.oeffnen` …) mit
   verschiedener Ansicht; `tests/oeffnen.test.js` findet jeden anderen. Ausnahme: das Dashboard beim Start (`start.js`).
   Übergang nach dem Update: Auf Geräten, die das Update per Sync bekommen, läuft bis „Neu laden“ noch der alte Kern, dessen
@@ -181,8 +184,8 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
 - **Start**: Das Dashboard ist die Startseite, aber nicht mehr angeheftet (Entscheidung E6). Angeheftet hatte es schon das Startskript
   des Templater-Tresors, damit es bei jedem Start da ist; ein angehefteter Tab öffnet aber jeden Link in einem neuen Tab, Tabs stapelten
   sich, und Zurück führte nicht zum Dashboard. Beim Start zeigt der zuletzt benutzte Tab das Dashboard, wenn es nicht schon offen ist
-  (die Notiz darin bleibt über Zurück erreichbar); die Anheftung früherer Fassungen nimmt `start.js` einmal je Gerät zurück
-  (`eba-dashboard-frei`). Zurück zum Start geht jederzeit über **Dashboard** in der Übersicht. Seit 27.10.2026 nimmt der Start jeden
+  (die Notiz darin bleibt über Zurück erreichbar); ist das Dashboard angeheftet, löst `start.js` es bei jedem Start (seit 27.10.2026;
+  bis dahin einmal je Gerät mit dem Merker `eba-dashboard-frei`, eine eigene Anheftung blieb, kam aber meist aus Versehen). Zurück zum Start geht jederzeit über **Dashboard** in der Übersicht. Seit 27.10.2026 nimmt der Start jeden
   Tab, der navigieren kann (`canNavigate`, auch eine PDF); bis dahin kam nach einer PDF bei jedem Kaltstart ein Tab dazu.
 - **Leere Tabs** (seit 27.10.2026, `start.js`, `leereSchliessen`): Ein leerer Tab (Obsidians „Neuer Tab“, etwa nach „+“) schließt,
   sobald ein anderer Tab der Hauptfläche vorn ist und seine Gruppe noch andere Tabs hat; eine leere Hälfte einer geteilten Fläche

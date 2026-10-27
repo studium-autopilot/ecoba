@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.3 – Keine neuen Tabs vom Dashboard
+
+- **Behoben:** War das **Dashboard** angeheftet, öffnete jeder Tipp darauf einen neuen Tab. Jetzt öffnet es im zuletzt benutzten Tab,
+  und beim Start löst sich das Dashboard von selbst.
+
 ## 0.7.2 – Weniger offene Tabs
 
 - **Behoben:** Lag beim Öffnen von Obsidian zuletzt eine PDF vorn, kam jedes Mal ein neuer Tab dazu. Leere Tabs schließen jetzt

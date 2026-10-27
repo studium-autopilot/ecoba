@@ -27,7 +27,13 @@ test("Kern: ctx.oeffnen nimmt Datei, Pfad oder Linktext, Ansicht nach ctx.lesean
   assert.match(f, /nurLesen\(datei\)/);
   assert.match(f, /zuerstLesen\(datei\)/, "Begleitnotizen in der Leseansicht (seit 19.10.2026)");
   assert.match(f, /focus: !!o\.cursor/);
-  assert.match(f, /getLeaf\(o\.neu \? "tab" : false\)/, "derselbe Tab, Zurück geht; Strg/⌘ neuer Tab");
+  assert.match(f, /blatt = o\.neu \? this\.app\.workspace\.getLeaf\("tab"\) : this\.freiesBlatt\(\)/, "derselbe Tab, Zurück geht; Strg/⌘ neuer Tab");
+  // Aus einem angehefteten Tab: der zuletzt benutzte freie, kein neuer (Rückmeldung vom 27.10.2026: zu viele Tabs)
+  const fb = kern.slice(kern.indexOf("  freiesBlatt() {"), kern.indexOf("async notizOeffnen("));
+  assert.match(fb, /const frei = \(l\) => !l\.getViewState\(\)\.pinned && \(l\.isDeferred \|\| l\.canNavigate\(\)\);/);
+  assert.match(fb, /activeTime/, "der zuletzt benutzte, auch hinter einem anderen Tab");
+  assert.match(fb, /return bestes \|\| ws\.getLeaf\("tab"\);/, "neu nur ohne freien Tab");
+  assert.doesNotMatch(f, /getLeaf\(o\.neu \? "tab" : false\)/, "nicht Obsidians getLeaf(false): nimmt nur den vorderen Tab");
   // Auch wenn die Notiz in einem anderen Tab offen ist: nie dorthin wechseln, sonst führt Zurück nicht zurück (Rückmeldung vom 27.10.2026)
   assert.doesNotMatch(f, /getLeavesOfType\("markdown"\)\.find/);
   const start = fs.readFileSync(path.join(SKRIPTE, "start.js"), "utf8");
