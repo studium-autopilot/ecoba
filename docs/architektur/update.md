@@ -12,7 +12,8 @@ Tipp auf „Neue Version installieren“** und Bestätigung, aus dem Haupt-Repo 
 manifest.json (ecoba-daten) ── release / beta: version, url_basis, sha256 der Liste
         │ Tipp „Neue Version installieren“ → Manifest frisch holen → Bestätigung
         ▼
-url_basis + Studium Autopilot/System/Daten/system-dateien.json ── SHA-256 = release.sha256? Liste streng prüfen
+Liste: zuerst <RELEASES>/download/v<version>/system-dateien.json (Release), sonst url_basis + Studium Autopilot/System/Daten/
+system-dateien.json (Tag) ── nur mit SHA-256 = release.sha256; Liste streng prüfen
         ▼
 Ist-Stand lesen, Plan je Datei (gegen installiert.json) → nur geänderte Dateien laden, Größe + SHA-256 prüfen
         ▼  (alles geladen und geprüft – vorher wird nichts geschrieben)
@@ -274,19 +275,27 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
     `MarkdownRenderer` nach `markdownSicher` (kein HTML, keine Einbettungen, Wikilinks oder Codeblöcke, umbrochene Zeilen
     verbunden); danach bleiben nur https-Links. Fehler oder keine Abschnitte → `notiz` aus dem Manifest und Link „Auf GitHub
     ansehen“ auf das Release.
-- **Mitzählen (seit 0.6.5, `zaehlen()`):** Der Autor will wissen, auf wie vielen Geräten eine Version läuft, ohne Telemetrie. Nach
-  der frischen Prüfung ruft `zaehlen()` einmal je Gerät und Version `RELEASES + "/download/v" + laufend + "/zaehler.txt"` ab
-  (`zaehlerUrl`, GET ohne Kopfzeilen); GitHub zählt jeden Abruf einer Release-Datei (`download_count`), sonst bleibt nichts.
-  Gezählt wird der laufende Kern, also auch Geräte, die das Update über den Sync bekommen, und frische Installationen; ein
-  wiederholtes Update zählt nicht doppelt. Merker `eba-update-gezaehlt` (gerätelokal) = gezählte Version; jede Antwort zählt
-  als erledigt (auch 404, Entwicklungsstand ohne Release), ohne Netz beim nächsten Start. Nie bei zentralen Daten aus, Feld
-  `zaehlen: false` in `System/Einstellungen.md` (Schalter **Mitzählen** unter dem Schalter **Beta-Versionen**, `zaehlenSchalter`;
-  fehlt das Feld, ist es an), offener Einrichtung, `plugin.testZentralAus` oder `plugin.testUpdateBasis`
-  (`zaehlenFaellig`). Test- und Entwicklungstresore zählen nie: dort steht gerätelokal `eba-update-gezaehlt` = `"nie"`
-  (`app.saveLocalStorage`, einmal je Tresor und Gerät). `zaehlen` darf in der Vorlage nicht stehen (`pruefen.py`,
-  `EINSTELLUNGEN_LEER`), sonst zählte nach einem Tipp im Entwicklungstresor kein neuer Tresor mehr. `release.py --zip` legt `zaehler.txt` neben die anderen Assets (`docs/release.md`). Grenzen: GitHub
-  fasst Abrufe derselben IP für dasselbe Release in rund 10 Minuten zusammen (zwei Geräte im selben WLAN, die gleichzeitig
-  starten, zählen einmal), und Bots, die Release-Seiten abgrasen, zählen mit. Tests: `tests/update-zaehlen.test.js`.
+- **Mitzählen (seit 0.7.1 ohne eigenen Abruf):** Der Autor will wissen, wie viele Tresore eine Version nutzen, ohne Telemetrie.
+  Schritt 1 des Updates (`aktualisierenMit`) lädt die Liste zuerst aus dem GitHub-Release der neuen Version,
+  `RELEASES + "/download/v" + version + "/system-dateien.json"` (`listeReleaseUrl`, im Aufruf `o.listeRelease`; ohne `frisch`,
+  Releases sind unveränderlich), und prüft sie wie die vom Tag: höchstens 2 MB, SHA-256 = `release.sha256`. GitHub zählt jeden
+  Abruf einer Release-Datei (`download_count`); die Zahl einer Version ist also die der Tresore, die auf sie aktualisiert haben
+  (ein Gerät installiert, die anderen bekommen es über den Sync). Scheitert der Abruf (kein Netz, 404 bei einem älteren Release
+  oder einer Beta ohne die Datei, Weiterleitung) oder stimmt die Prüfsumme nicht, lädt das Update still wie bisher vom Tag
+  (`url_basis`, `frisch`); der Bericht sagt, woher die Liste kam (`listeQuelle`: `release` | `raw`). Verwendet wird nur eine Liste
+  mit genau der Prüfsumme aus dem Manifest, die Sicherheit bleibt also gleich. Nur vom Tag lädt es mit `plugin.testUpdateBasis`
+  und mit `zaehlen: false` in `System/Einstellungen.md` (`zaehlenAn`, fehlt das Feld, ist es an): Wer den Schalter
+  **Mitzählen** bis 0.7.0 ausgeschaltet hat, wird weiter nicht gezählt; Test- und Entwicklungstresore, die nicht zählen sollen,
+  setzen das Feld in ihren eigenen Einstellungen. `zaehlen` darf darum nicht in der Vorlage stehen (`pruefen.py`,
+  `EINSTELLUNGEN_LEER`), sonst zählte kein Tresor mit. Neue Installationen zählen die Downloads der beiden ZIPs.
+  `release.py --zip` legt die Liste Byte für Byte als `system-dateien.json` neben die anderen Assets (`docs/release.md`);
+  auswerten: `werkzeuge/zaehler.py`. Übergang: Das Update auf 0.7.1 plant noch der `update.js` von 0.7.0, der die Liste vom
+  Tag lädt; Updates zählen darum erst ab 0.7.2, für 0.7.1 nur die Installationen. Grenzen: Ein unterbrochenes Update, das
+  fertiggestellt wird, zählt zweimal; GitHub fasst Abrufe derselben IP für dasselbe Release in rund 10 Minuten zusammen, und
+  Bots, die Release-Seiten abgrasen, zählen mit. Tests: `tests/update-liste.test.js`.
+  Bis 0.7.0 rief `zaehlen()` einmal je Gerät und Version `…/download/v<laufend>/zaehler.txt` ab, mit Merker
+  `eba-update-gezaehlt` (gerätelokal) und dem Schalter **Mitzählen** unter **Beta-Versionen**. Seit 0.7.1 nimmt `registrieren`
+  den Merker beim Start weg (`app.saveLocalStorage(…, null)`); sonst blieb davon nichts im Tresor.
 - **Fenster „Neue Version“** (seit 0.5.4, `fensterZeigen({ stufe, von, bis, angebot, ohneListe })`, `.eba-modal-update`): ein
   Fenster für das ganze Update, nie zwei übereinander (ein neues schließt das alte). Bis 0.5.2 kamen nacheinander das Fenster
   vor dem Update, der Hinweis „Lade …“ oben rechts und ein Ergebnisfenster, alle Teile gleich laut. Aufbau von oben (Rangfolge,
@@ -318,11 +327,12 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   installiertAnlegen, heilen, pluginNeuLaden, letzterBericht, fenster, changelogAbschnitte, abschnitteZwischen, markdownSicher,
   toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen,
   toastWeg, toast, neuigkeitenZeigen, fensterZeigen, ergebnisZeigen, markeLage, MARKE, MARKE_STILL, markeNeu, suchen,
-  zaehlenFaellig, zaehlerUrl, zaehlen, zaehlenAn, zaehlenSetzen, zaehlenSchalter, L_GEZAEHLT, ZAEHLER,
+  zaehlenAn, listeReleaseUrl, LISTE_ASSET,
   handInstalliertMit(io, { lauf }), installiertNeu, WEITERE, CLAUDE_FRUEHER, claudeNachholenMit(io, o), claudeNachholen,
   claudeBekannt, L_CLAUDE }`
   (`fenster` = Griff des Fensters „Neue Version“ mit `m` = Obsidians Modal, `toast` = der Hinweis zum Update oder `null`).
   `aktualisierenMit` und `heilenMit` bekommen den Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`, `liste`)
-  und sind darum ohne Obsidian testbar (`tests/update.test.js`, Neuigkeiten: `tests/update-neuigkeiten.test.js`).
+  und sind darum ohne Obsidian testbar (`tests/update.test.js`, Neuigkeiten: `tests/update-neuigkeiten.test.js`, Liste aus dem
+  Release: `tests/update-liste.test.js`).
   `heilen(true)` startet die Reparatur und das Nachholen der Hinweise für Claude sofort, ohne die Merker des Geräts
   (`claudeNachholenMit`: `tests/update-claude.test.js`).

@@ -1,7 +1,7 @@
 # Datenschutz
 
 Kurz: Studium Autopilot holt Daten, schickt aber nichts über dich an den Autor oder an Dritte. Es gibt kein Konto und
-keine Telemetrie; gezählt wird nur, auf wie vielen Geräten eine Version läuft ([Mitzählen](#mitzählen)). Nur wenn du deinen Uni-Login eingibst, meldet sich das Plugin damit an, direkt von deinem Gerät
+keine Telemetrie. Nur wenn du deinen Uni-Login eingibst, meldet sich das Plugin damit an, direkt von deinem Gerät
 bei der Uni (ILIAS und Alma, mit dem [Postfach](#postfach) auch beim Webmail). Verbindest du Claude mit deinem eigenen
 API-Schlüssel (freiwillig), geht eine Unterlage an Anthropic, wenn du bei ihr auf **Zusammenfassen** tippst
 ([unten](#claude-mit-eigenem-api-schlüssel)). Richtest du dir einen eigenen Server mit Claude ein (freiwillig), holt das Plugin
@@ -20,12 +20,12 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 | Dein Uni-Posteingang und die Mails, die du öffnest | direkt vom Webmail der Uni (`webmail.uni-tuebingen.de`) | nur wenn du auf der Seite **Postfach** **Postfach anzeigen** getippt hast: beim Öffnen der Seite, wenn die Liste älter als 5 Minuten ist, und auf Knopfdruck; nie im Hintergrund |
 | Die Zusammenfassung einer Unterlage (dafür geht die PDF oder ihr Text hin) | Anthropic (`api.anthropic.com`), mit deinem eigenen API-Schlüssel | nur wenn du Claude verbunden hast und bei der Unterlage auf **Zusammenfassen** tippst; beim Verbinden einmal die Prüfung des Schlüssels |
 | Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse steht im Link zum Verbinden) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
-| Eine kleine Datei zum Mitzählen (`zaehler.txt`) | `github.com` (das Release der Version, die bei dir läuft) | einmal je Gerät und Version, nach der Einrichtung; nicht, wenn **Mitzählen** oder die zentralen Daten aus sind ([unten](#mitzählen)) |
-| Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
+| Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `github.com` (die Liste der Dateien, aus dem Release der neuen Version) und `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
 | Die Hinweise für Claude (`.claude/`) der Version, die du installiert hast | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur am Computer, einmal je Version, wenn dort eine Datei fehlt oder alt ist (etwa auf einem zweiten Computer); nicht, wenn die zentralen Daten aus sind |
 
-- Das sind normale Abrufe wie beim Öffnen einer Webseite. Dabei sieht GitHub bzw. die Uni deine IP-Adresse. Philip als Autor sieht davon nichts, nur die Zahl beim
-  [Mitzählen](#mitzählen).
+- Das sind normale Abrufe wie beim Öffnen einer Webseite. Dabei sieht GitHub bzw. die Uni deine IP-Adresse. Der Autor sieht
+  davon nichts, nur wie oft eine Datei eines Releases heruntergeladen wurde (etwa die Liste der Dateien beim Update), eine Zahl,
+  die GitHub bei jedem Release öffentlich zeigt. Wer **Mitzählen** vor 0.7.1 ausgeschaltet hat, wird weiter nicht mitgezählt.
 - Von selbst werden nur Daten abgerufen (JSON, Kalenderdaten und deine Kursdateien, die nur abgelegt und nie ausgeführt
   werden), nie Programmcode. Programmteile einer neuen Version lädt das Plugin nur nach deinem Tipp auf **Neue Version installieren**,
   aus diesem Repo, und prüft jede Datei mit einer Prüfsumme. Die Hinweise für Claude holt es von selbst nach, aber nur genau die
@@ -208,26 +208,13 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
 - **Abschalten:** in Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server** → **Trennen**; den
   Server selbst beendest du in der Oracle-Konsole.
 
-## Mitzählen
-
-Damit der Autor sieht, ob und wie viel Studium Autopilot genutzt wird, ruft jedes Gerät einmal je Version die Datei `zaehler.txt` aus
-dem GitHub-Release dieser Version ab (seit 0.6.5). GitHub zählt, wie oft jede Datei eines Releases abgerufen wurde. Diese Zahl
-sieht der Autor, und sie ist für alle öffentlich.
-
-- **Was mitgeht:** nichts über dich. Kein Name, keine Kennung des Geräts, nichts aus deinem Tresor; die Adresse nennt nur die
-  Version, die bei dir läuft. GitHub sieht wie bei jedem Abruf deine IP-Adresse, der Autor sieht sie nicht.
-- **Wann:** einmal, wenn eine neue Version zum ersten Mal auf diesem Gerät läuft, auch wenn sie über einen Sync-Dienst kam.
-  Nie während der Einrichtung, nie bei ausgeschalteten zentralen Daten. Ohne Netz beim nächsten Öffnen noch einmal.
-- **Abschalten:** im Fenster „Studium Autopilot“ (**Einstellungen & Hilfe** → **Verbindungen**) unter „Mehr erfahren“ den
-  Schalter **Mitzählen** ausschalten. Er gilt für den ganzen Tresor, also für alle Geräte mit demselben Sync.
-
 ## Zentrale Daten ausschalten
 
 1. **Einstellungen & Hilfe** → **Verbindungen** öffnen.
 2. Bei „Zentrale Daten“ auf **Mehr erfahren** tippen.
 3. Den Schalter **Zentrale Daten** ausschalten.
 
-Danach ruft das Plugin nichts mehr von selbst bei GitHub ab (auch nicht zum [Mitzählen](#mitzählen)), nur noch, wenn du auf **Nach Updates suchen** oder **Neue Version
+Danach ruft das Plugin nichts mehr von selbst bei GitHub ab, nur noch, wenn du auf **Nach Updates suchen** oder **Neue Version
 installieren** tippst. Vorhandene Termine bleiben stehen. Mit dem Schalter **Fachschaft & Veranstaltungen** blendest du nur Partys, Vorträge und Ähnliches aus.
 
 Obsidian selbst und ein Sync-Dienst haben eigene Datenschutzregeln; die beschreibt diese Seite nicht.

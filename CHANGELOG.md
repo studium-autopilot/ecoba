@@ -2,6 +2,16 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.1 – Kompakter Kalender, Kacheln öffnen Seiten
+
+- **Übersichtlicher:** Der Kalender ist kompakter: Jeder Tag zeigt bis zu drei Termine, sonst zwei und wie viele noch dazukommen.
+  Darunter stehen gleich die Termine von heute, ohne erst darauf zu tippen.
+- **Einfacher:** Jede Kachel auf dem **Dashboard** öffnet ihre Seite, etwa **Nächste Prüfung** die Seite **Prüfungen**. Auch der
+  Semesterverlauf lässt sich antippen und öffnet den **Studienverlauf**.
+- **Einfacher:** Prüfungen, Fristen und andere Termine, die von selbst kommen, öffnen nur zum Lesen, wie Modulseiten. Den Status
+  änderst du weiter mit dem Knopf oben.
+- **Behoben:** War eine Notiz schon in einem anderen Tab offen, führte Zurück danach nicht dorthin, wo du herkamst.
+
 ## 0.7.0 – Großes Update für Bedienung und Design
 
 - **Übersichtlicher:** Überall steht unten rechts dieselbe Leiste mit Zurück, Suche, Tabs, Zahnrad und ≡ für alle Seiten;

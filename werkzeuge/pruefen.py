@@ -146,7 +146,8 @@ HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Unterlagen", "Anhänge", "Schlüsselqualifikationen",
                 "Karteikarten", "Lernplan"]
 MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"]
-# zaehlen: in der Vorlage nie gesetzt, sonst zählte nach dem Ausschalten im Entwicklungstresor kein neuer Tresor mit (update.js)
+# zaehlen: in der Vorlage nie gesetzt. zaehlen: false (Schalter „Mitzählen“ bis 0.7.0) lässt das Update die Liste nur vom Tag
+# laden, ohne den Abruf aus dem Release, den GitHub je Version zählt (update.js); stünde es in der Vorlage, zählte kein Tresor mit.
 EINSTELLUNGEN_LEER = ["name", "zielnote", "studienbeginn", "zaehlen"]
 
 NODE_MODULE = r"(?:node:)?(?:fs|path|child_process|os|crypto|http|https|net|zlib|electron)(?:/[\w/]+)?"

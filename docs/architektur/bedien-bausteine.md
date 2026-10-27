@@ -162,7 +162,8 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   (`ctx.leseansicht.zuerstLesen`, seit 19.10.2026) öffnen in der Leseansicht, deine Notizen in der Bearbeitungsansicht; `modus`
   erzwingt eine Ansicht. Geöffnet wird im Tab, in dem getippt wurde (`von` bzw. der letzte
   Tipp, den der Kern im Capture-Modus merkt, weil Skripte `mousedown` oft selbst stoppen; nie in der Seitenleiste), sonst im aktiven;
-  Zurück führt zurück, Strg/⌘ (`neu`) öffnet einen neuen Tab. Fokus und Cursor nur mit `cursor` (sonst springt auf iPhone und iPad die
+  Zurück führt zurück, auch wenn die Notiz schon in einem anderen Tab offen ist (seit 27.10.2026; vorher wechselte `ctx.oeffnen` in
+  jenen Tab, und dort führte Zurück nicht dorthin, wo man herkam). Strg/⌘ (`neu`) öffnet einen neuen Tab. Fokus und Cursor nur mit `cursor` (sonst springt auf iPhone und iPad die
   Tastatur auf). Vorher gab es sechs Wege (`openLinkText`, `getLeaf().openFile`, `blatt.openFile`, `ctx.oeffnen` …) mit
   verschiedener Ansicht; `tests/oeffnen.test.js` findet jeden anderen. Ausnahme: das Dashboard beim Start (`start.js`).
   Übergang nach dem Update: Auf Geräten, die das Update per Sync bekommen, läuft bis „Neu laden“ noch der alte Kern, dessen
@@ -172,8 +173,9 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   Obsidians eigene Links, öffnet sie in der Bearbeitungsansicht (`start.js`, Punkt 2; vorher nur, wenn der Tab vorher eine Notiz
   bearbeitet hatte).
 - **Zeile antippen öffnet ihre Notiz**: Listen, Kalender, Zeitleiste, Raster, Tabellen als Liste und die **Kacheln des Dashboards**
-  (`dashboard.js`, `data-pfad`: Frist und Prüfung ihre Notiz, ohne Frist Termine & Anmeldungen, ohne Prüfung Prüfungen, Semester den
-  Studienverlauf, ECTS und Gesamtnote Noten & ECTS; vorher öffneten sie nichts), ebenso eine **Übungsgruppe** mit Notiz im Stundenplan
+  (`dashboard.js`, `data-pfad`: jede Kachel ihre Seite, Frist Termine & Anmeldungen, Prüfung Prüfungen, Semester und die Leiste
+  „Semesterverlauf“ den Studienverlauf, ECTS und Gesamtnote Noten & ECTS; bis 27.10.2026 öffneten Frist und Prüfung ihre eigene Notiz
+  und die Leiste nichts, davor keine Kachel etwas), ebenso eine **Übungsgruppe** mit Notiz im Stundenplan
   (`gruppen.js`, `pfad`). Eine Nebenaktion steht als ein Knopf rechts in der Zeile („Meine“, „Abwählen“, „Lernen“), mehrere hinter
   „⋯“ mit Obsidians Menü (wie in der Kartenliste, `eba-lk-mehr`). Angebote öffnen ihre Seite im Browser, weil es dazu keine Notiz gibt.
 - **Start**: Das Dashboard ist die Startseite, aber nicht mehr angeheftet (Entscheidung E6). Angeheftet hatte es schon das Startskript

@@ -7,8 +7,8 @@
 // nur in der Liste darunter (termine.js: Diese Woche, Nächste Woche, Fristen danach).
 // Je Woche Spuren wie bei Google/Apple, nach Relevanz (gewicht), höchstens SPUREN Zeilen je Tag, Rest als „+n weitere“.
 // Ein Tipp auf einen Tag zeigt darunter dessen Termine (Farbpunkt aus dem CSS, Uhrzeit, Titel als Link; Text-Pillen nur für
-// Prüfung, freiwillig, geschätzt, erledigt); für heute erst nach einem Tipp, ohne steht heute in der Agenda direkt darunter
-// (listeZeigen; seit 27.10.2026, vorher nie: ein Tipp auf heute ließ die Liste verschwinden, Rückmeldung vom 27.10.2026). Im Kopf
+// Prüfung, freiwillig, geschätzt, erledigt), ohne Tipp die von heute. Seit 27.10.2026 steht die Liste für heute immer da
+// (Rückmeldung vom 27.10.2026: „die Detail Ansicht unten von heute soll ausgeklappt sein“); vorher erst nach einem Tipp. Im Kopf
 // vor „Heute“ das Filter-Symbol (Fenster „Im Kalender zeigen“, angebote.js, seit 0.7.0) und der Knopf „+ Termin“ (Aktion
 // termin aus notizen.js, seit 17.10.2026; vorher eine eigene Knopf-Karte auf der Seite). Schmale Ansicht (iPhone):
 // Container-Query in eba-core.css, dann kleinere Chips ohne Uhrzeit und der Kopf in einer Zeile.
@@ -22,7 +22,9 @@
 module.exports = function (ctx) {
   const app = window.app;
   const SPRACHE = "eba-kalender";
-  const SPUREN = 4; // sichtbare Terminzeilen je Tag (eba-core.css: grid-template-rows der .eba-kal-woche)
+  // Sichtbare Terminzeilen je Tag (eba-core.css: grid-template-rows der .eba-kal-woche). Drei seit 27.10.2026, vorher vier:
+  // Rückmeldung vom 27.10.2026, die Zellen eine Reihe weniger hoch. Ein voller Tag zeigt zwei Chips und „+n weitere“.
+  const SPUREN = 3;
   const WTAGE = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
   const LANGTAG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
@@ -111,9 +113,6 @@ module.exports = function (ctx) {
   const zustand = ctx.bleibend("zustand", () => ({ monat: null, tag: null, am: null, zeit: 0 }));
   // Gilt die Auswahl noch? (rein, Test) z = zustand, jetzt = Date
   const frisch = (z, jetzt) => !!z.monat && !!z.tag && !!gleich(z.am, jetzt) && jetzt.getTime() - z.zeit < FRISCH_MS;
-  // Steht unter dem Raster die Liste des gewählten Tags? (rein, Test) Für heute nur nach einem Tipp (z.am): Ohne Tipp beginnt
-  // die Agenda direkt darunter mit heute, getippt zeigt der Kalender heute wie jeden anderen Tag.
-  const listeZeigen = (z, heute) => !gleich(z.tag, heute) || !!z.am;
   const basis = ctx;
 
   // Einträge der Legende [Klasse, Text] für die Termine eines Monats (rein, Test). Zwischentests haben die Farbe der Uni und
@@ -228,9 +227,8 @@ module.exports = function (ctx) {
     const legende = el.createDiv({ cls: "eba-kal-legende" });
     for (const [cls, text] of legendeVon(imRaster)) legende.createSpan({ cls: `eba-kal-leg ${cls}`, text });
 
-    // Termine des gewählten Tags, für heute nur nach einem Tipp (listeZeigen)
+    // Termine des gewählten Tags, ohne Tipp heute
     const tag = zustand.tag;
-    if (!listeZeigen(zustand, heute)) return;
     const liste = el.createDiv({ cls: "eba-kal-liste" });
     const n = abstand(tag, heute);
     liste.createDiv({ cls: "eba-kal-datum", text: `${lang(tag)}${tag.getFullYear() !== heute.getFullYear() ? " " + tag.getFullYear() : ""}${n === 0 ? " · heute" : n === 1 ? " · morgen" : ""}` });
@@ -298,5 +296,5 @@ module.exports = function (ctx) {
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") tagNeu(); });
   };
 
-  return { registrieren, zeichnen, art, frisch, listeZeigen, legendeVon, gewicht }; // art bis gewicht für tests/kalender.test.js
+  return { registrieren, zeichnen, art, frisch, legendeVon, gewicht, spuren, SPUREN }; // zeichnen bis SPUREN für tests/kalender.test.js
 };

@@ -609,7 +609,8 @@ module.exports = class StudiumAutopilot extends Plugin {
   // getippt wurde; sonst der letzte Tipp der letzten 2 s) }.
   // Ansicht: Übersichtsseiten (Dashboard, Studium/, Einstellungen, Daten; ctx.leseansicht.nurLesen aus start.js) und Begleitnotizen
   // (ctx.leseansicht.zuerstLesen, seit 19.10.2026) in der Leseansicht, deine Notizen in der Bearbeitungsansicht (Live Preview). Im Tab, in dem getippt wurde (sonst der aktive), Zurück führt
-  // zurück; schon offen: dorthin wechseln.
+  // zurück, auch wenn die Notiz schon in einem anderen Tab offen ist (seit 27.10.2026; vorher wechselte es dorthin, und in jenem Tab
+  // führte Zurück nicht dorthin, wo du herkamst).
   // Fokus und Cursor nur mit cursor (sonst springt auf iPhone und iPad die Tastatur auf). Andere Dateien (PDF, Bild) wie ein Link.
   async notizOeffnen(ziel, optionen) {
     const o = optionen || {};
@@ -627,8 +628,8 @@ module.exports = class StudiumAutopilot extends Plugin {
     const L = this.ctx.leseansicht;
     const lesen = o.modus ? o.modus === "preview" : !!(L && ((typeof L.nurLesen === "function" && L.nurLesen(datei))
       || (typeof L.zuerstLesen === "function" && L.zuerstLesen(datei))));
-    let blatt = o.neu ? null : this.app.workspace.getLeavesOfType("markdown").find((l) => l.view && l.view.file === datei);
-    if (!blatt && !o.neu) {
+    let blatt = null;
+    if (!o.neu) {
       const t = this.letzterTipp, von = o.von || (t && Date.now() - t.zeit < 2000 ? t.el : null);
       if (von) this.app.workspace.iterateAllLeaves((l) => { if (!blatt && l.view && l.view.containerEl && l.view.containerEl.contains(von)) blatt = l; });
       const ws = this.app.workspace, wurzel = blatt && blatt.getRoot ? blatt.getRoot() : null;

@@ -7,7 +7,8 @@
 // system-dateien.json. Geladen wird NUR nach einem Tipp auf „Neue Version installieren“ und Bestätigung.
 //
 // Ablauf (alles oder nichts):
-//   1. system-dateien.json laden, Prüfsumme gegen das Manifest, Liste streng prüfen (nur erlaubte Pfade, siehe klasseVon).
+//   1. system-dateien.json laden (zuerst aus dem Release, siehe Mitzählen), Prüfsumme gegen das Manifest, Liste streng prüfen
+//      (nur erlaubte Pfade, siehe klasseVon).
 //   2. Jede Datei, die sich ändern soll, laden und mit Größe und SHA-256 prüfen. Erst wenn ALLES geladen und geprüft ist,
 //      wird geschrieben. Kein Netz, falsche Prüfsumme, Abbruch → nichts geschrieben.
 //   3. Sicherung: jede Datei, die überschrieben oder entfernt wird, nach .trash/Studium Autopilot Sicherung <alt> <Zeit>/.
@@ -53,7 +54,8 @@
 //   fehlt; bietet das Manifest inzwischen eine andere Version an, nicht mehr). Von einem anderen Gerät, vor weniger als 1 Std. → „Ein Update wird gerade auf einem anderen Gerät installiert“
 //   statt eines zweiten Updates (seine Dateien kommen noch über den Sync). Gilt ab dem Update, das 0.4.8 plant.
 // Nach Updates suchen (seit 0.4.8): Knopf in der Zeile und Befehl; holt das Manifest sofort, Ergebnis als ein Hinweis. Das
-//   Manifest und die Liste kommen mit Minuten-Zeitstempel und „no-cache“ (zentral.js frischUrl), nie aus dem Zwischenspeicher.
+//   Manifest und die Liste vom Tag kommen mit Minuten-Zeitstempel und „no-cache“ (zentral.js frischUrl), nie aus dem
+//   Zwischenspeicher; die Liste aus dem Release ändert sich nie (Releases sind unveränderlich), sie kommt ohne.
 // Erstinstallation: Fehlt installiert.json, legt das Plugin sie einmal aus system-dateien.json an (sonst keine Datei).
 // Von Hand aktualisiert (neuere ZIP entpackt): Laufen Kern und system-dateien.json auf einer neueren Version als installiert.json
 //   und gleichen alle Systemdateien der Liste, gilt sie; das Gerät, das für alle schreibt, kopiert die Liste nach installiert.json.
@@ -68,9 +70,14 @@
 //   schon gesehen hast. Läuft eine neue Version zum ersten Mal auf diesem Gerät, einmal „Aktualisiert auf X“ mit „Was ist neu“.
 //   Seit 0.5.4 läuft das ganze Update in EINEM Fenster („Neue Version“: Änderungen, Fortschritt, Ergebnis) ohne Hinweis daneben;
 //   es zeigt die Abschnitte aus CHANGELOG.md am Tag der Version. Nicht während der Einrichtung. Gerätelokal: eba-update-geprueft, eba-update-toast, eba-update-gesehen.
-// Mitzählen (seit 0.6.5): Einmal je Gerät und Version lädt update.js die kleine Datei zaehler.txt aus dem GitHub-Release der
-//   Version, die hier läuft. GitHub zählt die Abrufe je Datei; so steht dort, auf wie vielen Geräten eine Version lief, ohne
-//   Kennung und ohne Angaben aus dem Tresor (zaehlen, docs/datenschutz.md). Schalter „Mitzählen“ neben „Beta-Versionen“.
+// Mitzählen (seit 0.7.1 ohne eigenen Abruf): Das Update lädt die Dateiliste zuerst als Datei system-dateien.json aus dem
+//   GitHub-Release der neuen Version (o.listeRelease, release.py legt sie dort ab) und prüft sie wie die vom Tag gegen die
+//   SHA-256 aus dem Manifest. GitHub zählt die Abrufe je Datei eines Releases; so steht dort, wie viele Tresore auf eine Version
+//   aktualisiert haben (ein Gerät installiert, die anderen bekommen es über den Sync), ohne Kennung und ohne Angaben aus dem
+//   Tresor (docs/datenschutz.md). Scheitert der Abruf (kein Netz, ältere Version oder Beta ohne diese Datei) oder stimmt die
+//   Prüfsumme nicht, still wie bisher vom Tag (url_basis, frisch). Bis 0.7.0 rief jedes Gerät einmal je Version zaehler.txt
+//   aus dem Release ab, mit dem Schalter „Mitzählen“. Wer ihn ausgeschaltet hat (zaehlen: false in System/Einstellungen.md),
+//   lädt die Liste weiter nur vom Tag und wird nicht gezählt (zaehlenAn). Den alten Merker eba-update-gezaehlt räumt der Start weg.
 // Testeinstiege: plugin.testUpdateAntwort (true/false statt der Frage im Fenster), plugin.testUpdateBasis (andere Basis-URL,
 //   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.toast,
 //   ctx.update.heilen(true) (Reparatur und Hinweise für Claude sofort, ohne die Merker eba-update-reparatur und eba-update-claude),
@@ -609,24 +616,34 @@ module.exports = function (ctx) {
   //   Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad), liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
   // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text),
   //   (fortschritt(text, anteil): anteil 0…1 für den Balken im Fenster), marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage),
-  //   bekannt: pfad → [SHA-256] (claudeBekannt, freiwillig; Hinweise für Claude, die dieses Gerät als unverändert erkennt) }
-  // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, geaendert[], angelegt[],
-  //   neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }] (deine Systemdatei daneben gesichert), gemischt[], haken[],
-  //   einstellungen[], uebersprungen[], entfernt[], behalten[], aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert),
-  //   zurueckgesetzt }
+  //   bekannt: pfad → [SHA-256] (claudeBekannt, freiwillig; Hinweise für Claude, die dieses Gerät als unverändert erkennt),
+  //   listeRelease: Adresse der Liste im GitHub-Release (listeReleaseUrl) | null (dann nur vom Tag) }
+  // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, listeQuelle (release | raw,
+  //   woher die geprüfte Liste kam; "" ohne), geaendert[], angelegt[], neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }]
+  //   (deine Systemdatei daneben gesichert), gemischt[], haken[], einstellungen[], uebersprungen[], entfernt[], behalten[],
+  //   aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert), zurueckgesetzt }
   const aktualisierenMit = async (io, o) => {
     const rel = o.release;
-    const b = { ok: false, art: "", fehler: "", version: rel.version, geaendert: [], angelegt: [], neuKopien: [], gesichert: [], gemischt: [],
+    const b = { ok: false, art: "", fehler: "", version: rel.version, listeQuelle: "", geaendert: [], angelegt: [], neuKopien: [], gesichert: [], gemischt: [],
       haken: [], einstellungen: [], uebersprungen: [], entfernt: [], behalten: [], aufgeraeumt: [], sicherung: "", plugin: false, zurueckgesetzt: false };
     const melden = o.fortschritt || (() => {});
     const fehler = (art, text) => { b.art = art; b.fehler = text; return b; };
     const url = (pfad) => rel.url_basis + (ORDNER + "/" + pfad).split("/").map(encodeURIComponent).join("/");
 
-    // 1. Dateiliste
+    // 1. Dateiliste: zuerst aus dem Release (zählt die Updates je Version, siehe Mitzählen oben; Releases sind unveränderlich,
+    // also ohne frisch), sonst still vom Tag. Verwendet wird nur eine Liste mit genau der Prüfsumme aus dem Manifest.
     melden("Prüfe die neue Version …", 0.03);
-    let lb;
-    try { lb = await io.holen(url(LISTE), { frisch: true }); } catch (e) { return fehler("netz", "Dateiliste nicht geladen (" + ((e && e.message) || e) + ")"); }
-    if (lb.length > G.liste || (await sha256(lb)) !== rel.sha256) return fehler("pruefsumme", "Prüfsumme der Dateiliste stimmt nicht");
+    const listeOk = async (by) => by.length <= G.liste && (await sha256(by)) === rel.sha256;
+    let lb = null;
+    if (o.listeRelease) {
+      try { const by = await io.holen(o.listeRelease); if (await listeOk(by)) lb = by; } catch (e) { lb = null; }
+    }
+    if (lb) b.listeQuelle = "release";
+    else {
+      try { lb = await io.holen(url(LISTE), { frisch: true }); } catch (e) { return fehler("netz", "Dateiliste nicht geladen (" + ((e && e.message) || e) + ")"); }
+      if (!(await listeOk(lb))) return fehler("pruefsumme", "Prüfsumme der Dateiliste stimmt nicht");
+      b.listeQuelle = "raw";
+    }
     let d;
     try { d = JSON.parse(dec(lb)); } catch (e) { return fehler("liste", "Dateiliste unlesbar"); }
     const lp = listePruefen(d, rel.version);
@@ -930,7 +947,7 @@ module.exports = function (ctx) {
   };
   const puffer = (bytes) => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const io = {
-    // frisch (Liste, Manifest): Minuten-Zeitstempel und „no-cache“ wie zentral.js, damit nie ein alter Stand zurückkommt
+    // frisch (Liste vom Tag, Manifest): Minuten-Zeitstempel und „no-cache“ wie zentral.js, damit nie ein alter Stand zurückkommt
     holen: async (url, o) => {
       const Z = o && o.frisch && ctx.zentral && typeof ctx.zentral.frischUrl === "function" ? ctx.zentral : null;
       let r = await obs.requestUrl(Z ? { url: Z.frischUrl(url), method: "GET", headers: Object.assign({}, Z.FRISCH_KOPF), throw: false } : { url, method: "GET", throw: false });
@@ -1239,26 +1256,13 @@ module.exports = function (ctx) {
       }));
   };
 
-  // Mitzählen (zaehlen): Feld zaehlen in System/Einstellungen.md (gilt für den ganzen Tresor); fehlt es, ist es an
+  // Mitzählen: Feld zaehlen in System/Einstellungen.md (gilt für den ganzen Tresor); fehlt es, ist es an. Seit 0.7.1 ohne
+  // Schalter; wer „Mitzählen“ bis 0.7.0 ausgeschaltet hat (zaehlen: false), lädt die Liste beim Update nur vom Tag.
   const zaehlenAn = () => {
     try {
       const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN), c = f && app.metadataCache.getFileCache(f);
       return !(c && c.frontmatter && c.frontmatter.zaehlen === false);
     } catch (e) { return true; }
-  };
-  const zaehlenSetzen = async (an) => {
-    const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
-    if (!f) return;
-    await app.fileManager.processFrontMatter(f, (fm) => { fm.zaehlen = !!an; });
-  };
-  // Schalter „Mitzählen“ (unter dem Schalter „Beta-Versionen“, verbindungen.js)
-  const zaehlenSchalter = (el) => {
-    if (!obs.Setting) return;
-    new obs.Setting(el).setName("Mitzählen").setDesc("Zählt ohne Angaben über dich, auf wie vielen Geräten eine Version läuft.")
-      .addToggle((t) => t.setValue(zaehlenAn()).onChange(async (an) => {
-        await zaehlenSetzen(an);
-        ctx.hinweis(an ? "Mitzählen an. Danke!" : "Mitzählen aus. Dieses Gerät wird nicht mehr mitgezählt.");
-      }));
   };
 
   // ---------- Anzeige (Zeile „Updates“ in eba-verbindungen) ----------
@@ -1603,7 +1607,9 @@ module.exports = function (ctx) {
     try {
       p.stillBis = Date.now() + 120000; // Kern: keine „Aktualisiert: …“-Hinweise beim Hot-Reload der Skripte
       const alt = (await listeLesen(INSTALLIERT)) || (await listeLesen(LISTE));
-      b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(),
+      // Liste aus dem Release (Mitzählen): nicht mit einer anderen Basis (Testeinstieg) und nicht, wenn „Mitzählen“ aus ist
+      const listeRelease = p.testUpdateBasis || !zaehlenAn() ? null : listeReleaseUrl(rel.version);
+      b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(), listeRelease,
         bekannt: claudeBekannt(), marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null, fortschritt: melden });
       if (b.ok) {
         zustand.installiert = rel.version;
@@ -1673,9 +1679,8 @@ module.exports = function (ctx) {
   const CHANGELOG_MAX = 262144;       // Bytes
   const ABSCHNITTE_MAX = 8;
   const L_GEPRUEFT = "eba-update-geprueft", L_TOAST = "eba-update-toast", L_GESEHEN = "eba-update-gesehen";
-  const L_GEZAEHLT = "eba-update-gezaehlt"; // Version, die dieses Gerät schon mitgezählt hat (zaehlen)
-  const ZAEHLER = "zaehler.txt"; // Datei in jedem GitHub-Release (release.py --zip)
-  const NIE = "nie"; // L_GEZAEHLT in Test- und Entwicklungstresoren: nie mitzählen
+  const L_GEZAEHLT = "eba-update-gezaehlt"; // bis 0.7.0: Version, die dieses Gerät mitgezählt hatte; der Start räumt ihn weg
+  const LISTE_ASSET = "system-dateien.json"; // die Liste als Datei in jedem GitHub-Release seit 0.7.1 (release.py --zip)
   const S_TOAST = "eba-update-toast-sitzung"; // sessionStorage: Hinweis in dieser App-Sitzung schon gezeigt
 
   // CHANGELOG.md → [{ version, titel, text }] in Dateireihenfolge. Nur Überschriften „## X.Y.Z – Titel“ (auch X.Y.Z-beta.N);
@@ -1736,7 +1741,7 @@ module.exports = function (ctx) {
   const pruefungFaellig = (geprueftIso, eigeneMs, jetzt) => !(jetzt - Math.max(Date.parse(geprueftIso || "") || 0, Number(eigeneMs) || 0) < PRUEFEN_NACH);
 
   // Zustand (überlebt den Hot-Reload): Start des Fensters, Zeit des Verbergens, der Hinweis zum Update, Changelogs je Version
-  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, toast: null, changelog: {}, zaehlt: false }));
+  const neuigkeit = ctx.bleibend("neuigkeit", () => ({ start: 0, versteckt: 0, verdeckt: false, toast: null, changelog: {} }));
   const lokal = (k, v) => {
     if (v === undefined) { try { return app.loadLocalStorage(k); } catch (e) { return null; } }
     try { app.saveLocalStorage(k, v); } catch (e) { /* egal */ }
@@ -1761,29 +1766,9 @@ module.exports = function (ctx) {
     return true;
   };
 
-  // Mitzählen: GitHub zählt jeden Abruf einer Datei aus einem Release (download_count), der Autor sieht nur diese Zahl je Version.
-  // Gezählt wird der Kern, der hier läuft: auch Geräte, die das Update über den Sync bekommen, und neue Installationen; ein
-  // abgebrochenes oder wiederholtes Update zählt nicht doppelt. Einmal je Gerät und Version (gerätelokal L_GEZAEHLT). Nie bei
-  // zentralen Daten aus (dann ruft das Plugin nichts bei GitHub ab), Mitzählen aus, während der Einrichtung (erst danach lässt
-  // es sich ausschalten) und mit Testeinstiegen. Jede Antwort zählt als erledigt, auch 404 (Version ohne Release, etwa ein
-  // Entwicklungsstand); ohne Netz beim nächsten Start noch einmal. Test- und Entwicklungstresore des Autors zählen nie: dort
-  // steht gerätelokal L_GEZAEHLT = "nie" (app.saveLocalStorage, geht mit keinem Sync und keinem Export mit).
-  // Rein: o = { an, zentral, einrichtung, laufend, gezaehlt } → true, wenn jetzt gezählt werden soll
-  const zaehlenFaellig = (o) => !!(o.an && o.zentral && !o.einrichtung && semver(o.laufend) && o.gezaehlt !== o.laufend && o.gezaehlt !== NIE);
-  const zaehlerUrl = (version) => releasesUrl() + "/download/v" + version + "/" + ZAEHLER;
-  // → true, wenn GitHub geantwortet hat
-  const zaehlen = async () => {
-    const p = plugin(), lauf = laufendeVersion();
-    if (p.testZentralAus || p.testUpdateBasis || neuigkeit.zaehlt || typeof obs.requestUrl !== "function") return false;
-    if (!zaehlenFaellig({ an: zaehlenAn(), zentral: zentralAn(), einrichtung: einrichtungOffen(), laufend: lauf, gezaehlt: lokal(L_GEZAEHLT) })) return false;
-    neuigkeit.zaehlt = true;
-    try {
-      const r = await obs.requestUrl({ url: zaehlerUrl(lauf), method: "GET", throw: false });
-      if (!r || !r.status) return false;
-      lokal(L_GEZAEHLT, lauf);
-      return true;
-    } catch (e) { return false; } finally { neuigkeit.zaehlt = false; } // kein Netz: beim nächsten Start
-  };
+  // Mitzählen: Adresse der Liste im GitHub-Release einer Version (RELEASES aus zentral.js, ein Fork setzt seine eigene). GitHub
+  // zählt jeden Abruf einer Datei aus einem Release (download_count); der Autor sieht nur diese Zahl je Version.
+  const listeReleaseUrl = (version) => releasesUrl() + "/download/v" + version + "/" + LISTE_ASSET;
 
   // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | null
   // Entscheidung (rein). o = { angebot, neuLaden, merk, jetzt, nach, bannerSichtbar } → "angebot" | "aktualisiert" | "verdeckt"
@@ -1902,7 +1887,7 @@ module.exports = function (ctx) {
   ctx.update = {
     // reine Logik (Node-Tests)
     klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, lesezeichenNachziehen, lesezeichenAnwenden, LESEZEICHEN_NEU, planen, aktualisierenMit, heilenMit, ordnerAufraeumenMit, ALTE_ORDNER, AUFGERAEUMT, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, zaehlenSetzen, zaehlenSchalter, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, lesezeichenNachziehen, lesezeichenAnwenden, LESEZEICHEN_NEU, planen, aktualisierenMit, heilenMit, ordnerAufraeumenMit, ALTE_ORDNER, AUFGERAEUMT, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
     markeLage, MARKE, MARKE_STILL, handInstalliertMit, istVon, passt, kopienAufraeumen,
     WEITERE, CLAUDE_FRUEHER, claudeNachholenMit,
     // Obsidian
@@ -1911,7 +1896,7 @@ module.exports = function (ctx) {
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
-    zaehlenFaellig, zaehlerUrl, zaehlen, L_GEZAEHLT, ZAEHLER, NIE,
+    listeReleaseUrl, LISTE_ASSET,
     get letzterBericht() { return zustand.bericht; },
     get fenster() { return zustand.fenster; }, // Griff des Fensters „Neue Version“ (m = Obsidians Modal) oder null
     get toast() { return neuigkeit.toast; },
@@ -1943,14 +1928,15 @@ module.exports = function (ctx) {
       // Von Hand aktualisiert: Liste und Systemdateien können nach dem Start per Sync kommen (handInstalliertMit)
       else if (f && (f.path === LISTE || (zustand.handWartet && f.path.indexOf("System/") === 0))) bald();
     });
-    // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig, und mitzählen. Zurück in der App: nach 15 s (zentral.js holt
+    // Merker des Mitzählens bis 0.7.0 (gerätelokal): einmal weg, seit 0.7.1 zählt nur der Abruf der Liste beim Update
+    if (lokal(L_GEZAEHLT) != null) lokal(L_GEZAEHLT, null);
+    // Neuigkeiten: 4 s nach dem Einlesen frisch prüfen, dann Hinweis, wenn fällig. Zurück in der App: nach 15 s (zentral.js holt
     // nach 5 s nach, wenn es lange her ist; danach ist die Prüfung frisch, also kein zweiter Abruf). Über 6 h im Hintergrund
     // zählt wie ein neuer App-Start (Hinweis darf wieder erscheinen; der Abstand von 12 h je Version gilt weiter).
     const startLauf = () => {
       neuigkeit.start = Date.now();
       frischPruefen().catch(() => false).then(() => {
         try { toastPruefen(); } catch (e) { console.error("update: Hinweis", e); }
-        zaehlen().catch(() => false);
       });
     };
     if (app.metadataCache.initialized || app.metadataCache.resolved) ctx.zeit(startLauf, 4000);

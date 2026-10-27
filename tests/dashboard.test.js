@@ -59,6 +59,10 @@ test("Kacheln: Nächste Frist zuerst (akzent frist), dann Prüfung (Modulstatus 
   assert.equal(K.gruss, "Guten Morgen, Alex");
   assert.equal(K.datum, "Sonntag, 18. Oktober 2026");
   assert.deepEqual(K.kacheln.map((k) => (k.cls ? k.cls + "|" : "|") + k.k), ["akzent frist|Nächste Frist", "|Nächste Prüfung", "|Semester", "|ECTS", "|Gesamtnote"]);
+  // Jede Kachel und die Leiste öffnen ihre Seite, auch Frist und Prüfung (Rückmeldung vom 27.10.2026)
+  assert.deepEqual(K.kacheln.map((k) => k.pfad), ["Studium/Termine & Anmeldungen.md", "Studium/Prüfungen.md", "Studium/Studienverlauf.md",
+    "Studium/Noten & ECTS.md", "Studium/Noten & ECTS.md"]);
+  assert.equal(K.leiste.pfad, "Studium/Studienverlauf.md");
   assert.deepEqual([K.kacheln[0].v, K.kacheln[0].s], ["Belegfrist Kolloquium", "18.10. · heute"]);
   assert.deepEqual([K.kacheln[1].v, K.kacheln[1].s], ["X100 · Beispielmathematik", "08.02. · in 113 Tagen"], "X180 ist anerkannt");
   assert.equal(K.kacheln[2].s, "noch 111 Tage Vorlesungen");

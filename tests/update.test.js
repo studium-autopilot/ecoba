@@ -1124,10 +1124,13 @@ test("Unterbrochen: Zeile, Dashboard und Knöpfe auf diesem und auf einem andere
   assert.deepEqual(G.hinweise, [], "Fortschritt und Ergebnis im Fenster, kein Hinweis");
   assert.equal(G.fenster.length, 1);
   assert.deepEqual([ansicht(G.fenster[0]).stufe, ansicht(G.fenster[0]).titel, ansicht(G.fenster[0]).knoepfe], ["fehler", "Nicht installiert", ["Fertig*"]]);
-  // Die Liste kommt frisch; das Fenster holt daneben die Änderungen (CHANGELOG.md am Tag)
-  const liste = eineVon(G.anfragen.filter((x) => x.url.includes("system-dateien.json")));
-  assert.equal(liste.url, BASIS("0.4.9") + "Studium%20Autopilot/System/Daten/system-dateien.json?t=7");
-  assert.deepEqual(liste.headers, { "Cache-Control": "no-cache" });
+  // Die Liste kommt zuerst aus dem Release (unveränderlich, ohne frisch; tests/update-liste.test.js), ohne Netz dann frisch vom
+  // Tag; das Fenster holt daneben die Änderungen (CHANGELOG.md am Tag)
+  const listen = G.anfragen.filter((x) => x.url.includes("system-dateien.json"));
+  assert.deepEqual(listen.map((x) => x.url), ["https://github.com/studium-autopilot/ecoba/releases/download/v0.4.9/system-dateien.json",
+    BASIS("0.4.9") + "Studium%20Autopilot/System/Daten/system-dateien.json?t=7"]);
+  assert.equal(listen[0].headers, undefined);
+  assert.deepEqual(listen[1].headers, { "Cache-Control": "no-cache" });
   assert.deepEqual(G.anfragen.map((x) => x.url).filter((u) => u.endsWith("CHANGELOG.md")), [BASIS("0.4.9") + "CHANGELOG.md"]);
   // Bietet das Manifest inzwischen eine andere Version an, wird wie sonst gefragt
   G = geraet({ release: "0.5.0", plugin: { testUpdateAntwort: false }, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(5)) } });

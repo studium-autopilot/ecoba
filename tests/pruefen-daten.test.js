@@ -143,5 +143,5 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
   assert.match(fund("Module/B110 ausgeblendet.md"), /persönliches Feld gesetzt\]\s+alma_ausgeblendet/);
   assert.match(fund("Module/B111 verzicht.md"), /persönliches Feld gesetzt\]\s+anmeldung_verzicht/);
   assert.equal(fund("Module/B112 leer.md"), "", "leere Felder sind kein Fund");
-  assert.match(fund("System/Einstellungen.md"), /persönliches Feld gesetzt\]\s+zaehlen: false/, "Mitzählen aus nie in der Vorlage");
+  assert.match(fund("System/Einstellungen.md"), /persönliches Feld gesetzt\]\s+zaehlen: false/, "zaehlen: false nie in der Vorlage, sonst zählte kein Update");
 });

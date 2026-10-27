@@ -18,6 +18,9 @@ const frontmatter = {
   "Eigene Übersicht.md": { typ: "übersicht", ansicht: "bearbeiten" },
   "Meine Liste.md": { ansicht: "Lesen" },
   "Studium/Prüfungen.md": { typ: "Übersicht" },
+  "Termine/2027-01-30 Klausur B180 Jahresabschluss.md": { typ: "termin", herkunft: "zentral" },
+  "Termine/2026-11-02 Abgabe Blatt 3.md": { typ: "termin", herkunft: "ilias-kalender" },
+  "Termine/2026-11-05 Lerngruppe.md": { typ: "termin" },
 };
 const L = laden("start", { frontmatter }).ctx.leseansicht;
 const datei = (path) => ({ path });
@@ -50,6 +53,12 @@ test("Feld „ansicht“ geht vor: lesen sperrt, bearbeiten gibt frei; Dashboard
   assert.equal(L.nurLesen(datei("Eigene Übersicht.md")), false);
   assert.equal(L.nurLesen(datei("Dashboard.md")), true);
   assert.equal(laden("start", { frontmatter: { "Dashboard.md": {} } }).ctx.leseansicht.nurLesen(datei("Dashboard.md")), true);
+});
+
+test("Termine: gelieferte (mit herkunft) gesperrt, eigene frei (Rückmeldung vom 27.10.2026: „why can edit mode be selected“)", () => {
+  assert.equal(L.nurLesen(datei("Termine/2027-01-30 Klausur B180 Jahresabschluss.md")), true, "zentrale Daten");
+  assert.equal(L.nurLesen(datei("Termine/2026-11-02 Abgabe Blatt 3.md")), true, "ILIAS-Kalender");
+  assert.equal(L.nurLesen(datei("Termine/2026-11-05 Lerngruppe.md")), false, "eigener Termin (+ Termin)");
 });
 
 test("Nur Markdown: Bilder, PDFs und leere Angaben nie", () => {

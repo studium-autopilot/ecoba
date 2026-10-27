@@ -643,9 +643,9 @@ module.exports = function (ctx) {
       // Claude: nach dem Verbinden neu zeichnen (Texte und Inhalt hängen davon ab)
       if (v.art === "claude" && ctx.claude) ctx.claude.fensterInhalt(unten.createDiv(), () => { this.contentEl.empty(); this.onOpen(); });
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));
-      // Studium Autopilot: Schalter „Beta-Versionen“ und „Mitzählen“ bewusst nur unter „Mehr erfahren“ (update.js)
+      // Studium Autopilot: Schalter „Beta-Versionen“ bewusst nur unter „Mehr erfahren“ (update.js). Bis 0.7.0 stand darunter
+      // „Mitzählen“; seit 0.7.1 zählt das Update ohne eigenen Abruf und ohne Schalter.
       if (v.art === "vorlage" && mehr && ctx.update && ctx.update.kanalSchalter) ctx.update.kanalSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
-      if (v.art === "vorlage" && mehr && ctx.update && ctx.update.zaehlenSchalter) ctx.update.zaehlenSchalter(mehr.createDiv({ cls: "eba-modal-schalter" }));
       // Noch kein Server: ganz unten und leise der Weg ohne Server, mit den Kosten im Text (die Zeile „Claude“ steht dann nicht da)
       if (v.art === "server" && ctx.server && !ctx.server.sichtbar() && ctx.claude && !ctx.claude.verbunden())
         wechselLink(this, "Für Fortgeschrittene: ohne Server mit API-Schlüssel, kostet je Zusammenfassung extra", "claude");

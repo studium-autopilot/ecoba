@@ -64,7 +64,10 @@ module.exports = function (ctx) {
   // 2. Übersichtsseiten bleiben in der Leseansicht: Sie zeigen nur, was Skripte und Tabellen zeichnen; getippt wird dort nichts.
   //    Gesperrt sind Notizen mit `typ` dashboard, übersicht, einstellungen, daten oder modul (auch Termine & Anmeldungen: die
   //    Anmeldungen füllen sich seit 17.10.2026 selbst; Modulseiten seit 26.10.2026: alles darauf zeichnen Skripte, seit 0.4.5
-  //    „Meine Notizen“ zu „Zum Modul“ wurde, Status und Eigenschaften ändern Knöpfe und Fenster, Rückmeldung: „nothing I can edit“). Das Feld `ansicht` geht vor: `lesen` sperrt jede Notiz,
+  //    „Meine Notizen“ zu „Zum Modul“ wurde, Status und Eigenschaften ändern Knöpfe und Fenster, Rückmeldung: „nothing I can edit“),
+  //    ebenso gelieferte Termine: typ termin mit Besitzmarke `herkunft` (zentrale Daten, ILIAS-Kalender, eigener Server …; seit
+  //    27.10.2026, Rückmeldung: „why can edit mode be selected“). Alles darauf kommt aus der Quelle, den Status ändert der Knopf im
+  //    Kopf; eigene Termine (ohne herkunft) bleiben frei. Das Feld `ansicht` geht vor: `lesen` sperrt jede Notiz,
   //    `bearbeiten` gibt sie frei (in der Seitenleiste „Eigenschaften“ änderbar, auch wenn die Notiz gesperrt ist).
   //    Gesperrt: Der Knopf zum Bearbeiten im Kopf der Ansicht ist ausgeblendet; wer trotzdem umschaltet (Strg/⌘ E, Befehl),
   //    landet sofort wieder in der Leseansicht, mit Hinweis. Geht ein Tab von einer gesperrten Seite zu deiner Notiz (Link, Liste,
@@ -78,7 +81,8 @@ module.exports = function (ctx) {
     const a = String(fm.ansicht == null ? "" : fm.ansicht).trim().toLowerCase();
     if (a === "lesen") return true;
     if (a === "bearbeiten") return false;
-    return f.path === DASHBOARD || (GESPERRT.indexOf(String(fm.typ || "").trim().toLowerCase()) >= 0);
+    const typ = String(fm.typ || "").trim().toLowerCase();
+    return f.path === DASHBOARD || GESPERRT.indexOf(typ) >= 0 || (typ === "termin" && !!String(fm.herkunft || "").trim());
   };
   // Begleitnotizen (typ unterlage, auch Folien als Markdown) und Volltexte sind zum Lesen da: Sie öffnen in der Leseansicht (ctx.oeffnen,
   // auch von einer gesperrten Seite aus), sind aber nicht gesperrt; das Buch oben schaltet zum Bearbeiten. `ansicht: bearbeiten` geht

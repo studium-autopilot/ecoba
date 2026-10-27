@@ -2864,7 +2864,8 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
 .eba-kalender .eba-kal-nav button.eba-kal-filter { display: inline-flex; align-items: center; justify-content: center; width: 34px; padding: 0; color: var(--eba-muted); }
 .eba-kal-filter svg { display: block; }
 
-/* Raster: Wochentage, dann je Woche ein Grid (Zeile 1 Tageszahl, Zeilen 2–5 Termine = SPUREN, Zeile 6 Luft) */
+/* Raster: Wochentage, dann je Woche ein Grid (Zeile 1 Tageszahl, Zeilen 2–4 Termine = SPUREN, Zeile 5 Luft). Drei
+   Terminzeilen seit 27.10.2026, vorher vier: die Zellen eine Reihe weniger hoch (Rückmeldung vom 27.10.2026), auf allen Geräten. */
 .eba-kal-raster { border: 1px solid var(--eba-border); border-radius: var(--eba-radius-s, 6px); overflow: hidden; }
 .eba-kal-wtage, .eba-kal-woche { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
 .eba-kal-wtage { border-bottom: 1px solid var(--eba-border); }
@@ -2874,7 +2875,7 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
   letter-spacing: var(--eba-label-tracking, 0.09em); text-transform: var(--eba-label-case); color: var(--eba-muted);
 }
 .eba-kal-wt.is-we { color: var(--eba-faint); }
-.eba-kal-woche { grid-template-rows: 30px repeat(4, 20px) 6px; }
+.eba-kal-woche { grid-template-rows: 30px repeat(3, 20px) 6px; }
 .eba-kal-woche + .eba-kal-woche { border-top: 1px solid var(--eba-border); }
 .eba-kalender button.eba-kal-tag {
   grid-row: 1 / -1; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start;
@@ -2968,7 +2969,7 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-termine .cm-scro
 @container eba-kal (max-width: 780px) { .eba-kal-ev-zeit { display: none; } }
 @container eba-kal (max-width: 560px) {
   .eba-kal-wt { padding: 6px 0 5px; text-align: center; letter-spacing: 0.04em; }
-  .eba-kal-woche { grid-template-rows: 27px repeat(4, 16px) 5px; }
+  .eba-kal-woche { grid-template-rows: 27px repeat(3, 16px) 5px; }
   .eba-kalender button.eba-kal-tag { align-items: center; padding: 3px 0 0; font-size: 13px; }
   .eba-kal-zahl { min-width: 22px; height: 22px; padding: 0 4px; line-height: 22px; }
   .eba-kal-ev { height: 14px; margin: 1px 2px; padding: 0 2px 0 5px; gap: 0; border-radius: 3px; font-size: 9.5px; line-height: 14px; }
@@ -5914,10 +5915,10 @@ body.is-mobile .eba-vorl button.eba-vorl-status::after {
 .markdown-preview-view .el-p.eba-termin-quelle > p,
 .markdown-source-view.is-live-preview .cm-content > .cm-line.eba-termin-quelle { font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
 
-/* 64.3 Antippen öffnet (ctx.oeffnen): Kacheln des Dashboards (dashboard.js, data-pfad) und Zeilen der Übungsgruppen mit Notiz im
-   Stundenplan (gruppen.js) öffnen ihre Notiz; der Knopf der Zeile bleibt die Nebenaktion */
-:is(.eba-kachel[data-pfad], tr.eba-gr-nav) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-:is(.eba-kachel[data-pfad], tr.eba-gr-nav):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+/* 64.3 Antippen öffnet (ctx.oeffnen): Kacheln und die Leiste „Semesterverlauf“ des Dashboards (dashboard.js, data-pfad) öffnen
+   ihre Seite, Zeilen der Übungsgruppen mit Notiz im Stundenplan (gruppen.js) ihre Notiz; der Knopf der Zeile bleibt die Nebenaktion */
+:is(.eba-kachel[data-pfad], .eba-leiste[data-pfad], tr.eba-gr-nav) { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+:is(.eba-kachel[data-pfad], .eba-leiste[data-pfad], tr.eba-gr-nav):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
 /* 64.4 Leere Abschnitte und Eckdaten (kopf.js, seit 19.10.2026): Notizen des Plugins zeigen keine Überschrift mit nur leeren Punkten
    („- “, „- [ ] “) darunter und keine leere Überschrift; Begleitnotizen keinen erzeugten Kasten „Eckdaten“. Leseansicht: kopf.js
    markiert Überschriften (eba-abschnitt) und Listen aus nur leeren Punkten (eba-leer); ob eine Überschrift wegfällt, sagt ihr Nachbar

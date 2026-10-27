@@ -14,8 +14,9 @@
 //  ```eba-kacheln uebungen``` (Seite Unterlagen, über der Liste): Offen (davon überfällig), Fällig in 7 Tagen, Erledigt von allen
 //    Blättern dieses Semesters.
 // DOM und Klassen der Kacheln wie die frühere Formel (eba-core.css Abschnitte 8, 32, 60); Listen: Abschnitt 63. Schreibt nichts.
-// Jede Kachel öffnet ihre Notiz (ctx.oeffnen, Bedien-Bausteine): Frist und Prüfung ihre Notiz (ohne: Termine & Anmeldungen bzw.
-// Prüfungen), Semester den Studienverlauf, ECTS und Gesamtnote Noten & ECTS.
+// Jede Kachel öffnet ihre Seite (ctx.oeffnen, Bedien-Bausteine): Frist Termine & Anmeldungen, Prüfung Prüfungen, Semester und die
+// Leiste „Semesterverlauf“ den Studienverlauf, ECTS und Gesamtnote Noten & ECTS (seit 27.10.2026; bis dahin öffneten Frist und
+// Prüfung ihre eigene Notiz und die Leiste nichts, Rückmeldung vom 27.10.2026: „Und nächste Prüfung zu Prüfungen“).
 // Neu gezeichnet bei Änderungen im Datenmodell, beim Zurückkommen in die App und alle 10 Minuten (Gruß, Tageswechsel).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
@@ -42,11 +43,11 @@ module.exports = function (ctx) {
     const kacheln = [];
     // Nächste Frist
     const f = M.fristen({ heute })[0];
-    kacheln.push({ cls: "akzent frist", k: "Nächste Frist", v: f ? Z.esc(f.titel.replace(" (ILIAS)", "")) : "–", text: true, pfad: (f && f.pfad) || SEITE.termine,
+    kacheln.push({ cls: "akzent frist", k: "Nächste Frist", v: f ? Z.esc(f.titel.replace(" (ILIAS)", "")) : "–", text: true, pfad: SEITE.termine,
       s: f ? (f.laeuft ? `bis ${Z.kurz(f.ende)}` : `${Z.kurz(f.datum)} · ${sub(f.datum)}`) + (f.geschaetzt ? " · geschätzt" : "") : "keine offenen Fristen" });
     // Nächste Prüfung
     const p = M.naechstePruefung({ heute });
-    kacheln.push({ cls: "", k: "Nächste Prüfung", v: p ? Z.esc(p.titel) : "Termin folgt", text: true, pfad: (p && p.pfad) || SEITE.pruefungen,
+    kacheln.push({ cls: "", k: "Nächste Prüfung", v: p ? Z.esc(p.titel) : "Termin folgt", text: true, pfad: SEITE.pruefungen,
       s: p ? `${Z.kurz(p.datum)} · ${sub(p.datum)}` + (p.geschaetzt ? " · geschätzt" : "") : "Termine ab ca. Mitte Nov. bzw. Mai" });
     // Semester
     const s = D.aktuell;
@@ -100,7 +101,8 @@ module.exports = function (ctx) {
         : s.vb && s.ve && so >= s.vb && mo <= s.ve ? "v" : "f";
       wochen.push({ art, zustand: i < jetzt ? "vorbei" : i === jetzt ? "jetzt" : "", titel: `KW ${Z.kw(mo)} · ${Z.kurz(mo, { jahr: false })}–${Z.kurz(so, { jahr: false })}` });
     }
-    return { titel: "Semesterverlauf", text: M.woche(heute).text, jetzt: pw.vorgezogen ? "nächste Woche" : "diese Woche", wochen, geschaetzt: phasen.slice(0, 3).some((x) => x.status === "geschätzt") };
+    return { titel: "Semesterverlauf", text: M.woche(heute).text, jetzt: pw.vorgezogen ? "nächste Woche" : "diese Woche", wochen,
+      geschaetzt: phasen.slice(0, 3).some((x) => x.status === "geschätzt"), pfad: SEITE.verlauf };
   };
 
   // ---------- Listen (rein, testbar) ----------
@@ -189,14 +191,14 @@ module.exports = function (ctx) {
     h += `</div>`;
     const L = K.leiste;
     if (L) {
-      h += `<div class="eba-leiste"><div class="eba-leiste-kopf"><span class="k">${esc(L.titel)}</span><span class="s"><b>${esc(L.text)}</b></span></div><div class="eba-wochen">`
+      h += `<div class="eba-leiste" role="link" tabindex="0" data-pfad="${esc(L.pfad)}"><div class="eba-leiste-kopf"><span class="k">${esc(L.titel)}</span><span class="s"><b>${esc(L.text)}</b></span></div><div class="eba-wochen">`
         + L.wochen.map((w) => `<i class="${w.art}${w.zustand ? " " + w.zustand : ""}" title="${esc(w.titel)}"></i>`).join("")
         + `</div><div class="eba-legende"><span class="v">Vorlesungszeit</span><span class="w">Pause</span><span class="p">Prüfungen${L.geschaetzt ? " (geschätzt)" : ""}</span>`
         + `<span>vorlesungsfrei</span><span class="jetzt">${esc(L.jetzt)}</span></div></div>`;
     }
     el.innerHTML = h + `</div>`;
-    // Kachel antippen öffnet ihre Notiz (Bearbeitungsansicht: nicht in den Quelltext springen)
-    for (const k of el.querySelectorAll(".eba-kachel[data-pfad]")) {
+    // Kachel oder Leiste antippen öffnet ihre Seite (Bearbeitungsansicht: nicht in den Quelltext springen)
+    for (const k of el.querySelectorAll(":is(.eba-kachel, .eba-leiste)[data-pfad]")) {
       const los = (e) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(k.getAttribute("data-pfad"), { neu: !!(e.ctrlKey || e.metaKey) }); };
       k.addEventListener("mousedown", (e) => e.stopPropagation());
       k.addEventListener("click", los);

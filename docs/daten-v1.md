@@ -86,7 +86,9 @@ Beta: Vorab-Release) mit `Studium-Autopilot.zip` veröffentlicht ist – sonst b
 es noch nicht gibt (das Update scheitert dann ohne Schaden mit „Keine Verbindung“). `plugin_aktuell` gleichzeitig mit `release`
 setzen.
 
-**system-dateien.json** (im Release-Baum, Pfad oben): `{ "schema": 1, "version", "ordner": "Studium Autopilot", "erstellt",
+**system-dateien.json** (im Release-Baum, Pfad oben; seit 0.7.1 dieselben Bytes auch als Datei im GitHub-Release `v<version>`,
+das Update lädt sie zuerst von dort und nimmt sie nur mit genau dieser `sha256`, sonst von `url_basis`): `{ "schema": 1, "version",
+"ordner": "Studium Autopilot", "erstellt",
 "dateien": [{ "pfad", "klasse", "groesse", "sha256", "koerper"?, "ohne_haken"? }], "weitere"?: [{ "pfad", "klasse", "groesse",
 "sha256" }] }`. `klasse` ist in `dateien` `system`, `einstellung`, `seite` oder `modul` (Regeln: `klasseVon` in `update.js` =
 `klasse_von` in `werkzeuge/pruefen.py`); `koerper` = SHA-256 des Textes nach dem Frontmatter (Module), `ohne_haken` = SHA-256
