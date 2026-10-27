@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.2 – Weniger offene Tabs
+
+- **Behoben:** Lag beim Öffnen von Obsidian zuletzt eine PDF vorn, kam jedes Mal ein neuer Tab dazu. Leere Tabs schließen jetzt
+  von selbst, sobald du in einen anderen wechselst.
+
 ## 0.7.1 – Kompakter Kalender, Kacheln öffnen Seiten
 
 - **Übersichtlicher:** Der Kalender ist kompakter: Jeder Tag zeigt bis zu drei Termine, sonst zwei und wie viele noch dazukommen.

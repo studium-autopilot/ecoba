@@ -1,6 +1,7 @@
 // Start des Vaults (früher Templater-Startskript System/Vorlagen/Start.md). Geladen vom Plugin „Studium Autopilot“ auf
 // jedem Gerät, ohne Schalter. Schreibt keine Notizen. Punkte:
-//  1. Dashboard als Startseite in der Leseansicht zeigen (nur beim App-Start: start()); seit 0.4.6 nicht mehr angeheftet.
+//  1. Dashboard als Startseite in der Leseansicht zeigen (nur beim App-Start: start()); seit 0.4.6 nicht mehr angeheftet. Leere
+//     Tabs schließen, sobald ein anderer vorn ist (leereSchliessen, seit 27.10.2026).
 //  2. Übersichtsseiten bleiben in der Leseansicht (Dashboard, Seiten in Studium/, Einstellungen, Daten; seit 17.10.2026), deine
 //     Notizen öffnen von dort in der Bearbeitungsansicht (seit 0.4.6, wie ctx.oeffnen). Begleitnotizen und Volltexte öffnen in der
 //     Leseansicht, ohne Sperre (zuerstLesen, seit 19.10.2026).
@@ -29,8 +30,10 @@ module.exports = function (ctx) {
   // 1. Dashboard als Startseite. Bis 0.4.5 ein angehefteter erster Tab (so schon im Startskript des Templater-Tresors, damit das
   //    Dashboard bei jedem Start da ist). Ein angehefteter Tab öffnet aber jeden Link in einem neuen Tab: Tabs stapelten sich, und
   //    Zurück führte nicht zum Dashboard (Konsistenz-Audit E6). Darum seit 0.4.6: Ist das Dashboard nicht schon offen, zeigt es der
-  //    zuletzt benutzte Tab (die Notiz darin bleibt über Zurück erreichbar), sonst ein neuer; Links öffnen im selben Tab, und die
-  //    Übersicht (seitenleiste.js) führt mit „Dashboard“ jederzeit zurück. Die Anheftung früherer Fassungen nimmt es einmal je Gerät zurück.
+  //    zuletzt benutzte Tab, wenn er navigieren kann wie bei Obsidians getLeaf (die Notiz oder PDF darin bleibt über Zurück
+  //    erreichbar), sonst ein neuer; Links öffnen im selben Tab, und die Übersicht (seitenleiste.js) führt mit „Dashboard“ jederzeit
+  //    zurück. Bis 27.10.2026 nur ein Tab mit Notiz oder ein leerer: Lag zuletzt eine PDF vorn, kam bei jedem Kaltstart ein Tab dazu
+  //    (Rückmeldung: „Es entstehen zuviele offene tabs“). Die Anheftung früherer Fassungen nimmt es einmal je Gerät zurück.
   const FREI = "eba-dashboard-frei"; // Gerätespeicher: Anheftung schon zurückgenommen (danach bleibt eine eigene Anheftung)
   const dashboardOeffnen = async () => {
     const ziel = app.vault.getAbstractFileByPath(DASHBOARD);
@@ -41,8 +44,7 @@ module.exports = function (ctx) {
     if (blatt && blatt.loadIfDeferred) await blatt.loadIfDeferred();
     if (!blatt) {
       const zuletzt = app.workspace.getMostRecentLeaf ? app.workspace.getMostRecentLeaf(app.workspace.rootSplit) : null;
-      const art = zuletzt && zuletzt.view && zuletzt.view.getViewType ? zuletzt.view.getViewType() : "";
-      blatt = zuletzt && !zuletzt.getViewState().pinned && (art === "markdown" || art === "empty") ? zuletzt : app.workspace.getLeaf("tab");
+      blatt = zuletzt && typeof zuletzt.canNavigate === "function" && zuletzt.canNavigate() ? zuletzt : app.workspace.getLeaf("tab");
       await blatt.openFile(ziel, { state: { mode: "preview" } });
     }
     if (blatt.view && blatt.view.getMode && blatt.view.getMode() === "source") {
@@ -286,8 +288,27 @@ module.exports = function (ctx) {
     };
   };
 
+  // Leere Tabs (Obsidians „Neuer Tab“, etwa nach „+“) schließen, sobald ein anderer vorn ist: Wer von dort in einen anderen Tab
+  // wechselte, ließ ihn liegen, Tabs sammelten sich (seit 27.10.2026, Rückmeldung: „Es entstehen zuviele offene tabs“). Nur in der
+  // Hauptfläche, nur wenn der vordere Tab auch dort ist, und nur, solange die Gruppe noch andere Tabs hat: Eine leere Hälfte einer
+  // geteilten Fläche bleibt. Art aus getViewState (im Hintergrund noch nicht geladene Tabs sind nicht leer).
+  // Rein (Test): blaetter [{ leer, aktiv, geschwister }] → die zu schließenden
+  const leereZuSchliessen = (blaetter) => blaetter.filter((b) => b.leer && !b.aktiv && b.geschwister > 1);
+  const leereSchliessen = () => {
+    const ws = app.workspace, aktiv = ws.activeLeaf;
+    if (!aktiv || !aktiv.getRoot || aktiv.getRoot() !== ws.rootSplit) return;
+    const blaetter = [];
+    ws.iterateAllLeaves((l) => {
+      if (!l.getRoot || l.getRoot() !== ws.rootSplit) return;
+      const vs = l.getViewState ? l.getViewState() : {};
+      blaetter.push({ l, leer: vs.type === "empty", aktiv: l === aktiv, geschwister: l.parent && l.parent.children ? l.parent.children.length : 1 });
+    });
+    for (const b of leereZuSchliessen(blaetter)) { if (b.l.parent && b.l.parent.children && b.l.parent.children.length > 1) b.l.detach(); }
+  };
+
   const registrieren = () => {
     const ws = app.workspace;
+    an(ws, "active-leaf-change", ctx.entprellen(leereSchliessen, 400));
     document.body.classList.add("eba-plugin-an");
     an(ws, "layout-change", leseansicht);
     an(app.metadataCache, "changed", ctx.entprellen(leseansicht, 300)); // Feld `ansicht` oder `typ` geändert (ILIAS schreibt viele Dateien: entprellt)
@@ -319,5 +340,6 @@ module.exports = function (ctx) {
     }
   };
 
-  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); document.body.classList.remove("eba-plugin-an"); }, klassenVon, merkerNach };
+  return { registrieren, start, abmelden: () => { entflicken(); knoepfeZeigen(); document.body.classList.remove("eba-plugin-an"); }, klassenVon, merkerNach,
+    leereZuSchliessen };
 };

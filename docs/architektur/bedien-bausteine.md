@@ -182,7 +182,12 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   des Templater-Tresors, damit es bei jedem Start da ist; ein angehefteter Tab öffnet aber jeden Link in einem neuen Tab, Tabs stapelten
   sich, und Zurück führte nicht zum Dashboard. Beim Start zeigt der zuletzt benutzte Tab das Dashboard, wenn es nicht schon offen ist
   (die Notiz darin bleibt über Zurück erreichbar); die Anheftung früherer Fassungen nimmt `start.js` einmal je Gerät zurück
-  (`eba-dashboard-frei`). Zurück zum Start geht jederzeit über **Dashboard** in der Übersicht.
+  (`eba-dashboard-frei`). Zurück zum Start geht jederzeit über **Dashboard** in der Übersicht. Seit 27.10.2026 nimmt der Start jeden
+  Tab, der navigieren kann (`canNavigate`, auch eine PDF); bis dahin kam nach einer PDF bei jedem Kaltstart ein Tab dazu.
+- **Leere Tabs** (seit 27.10.2026, `start.js`, `leereSchliessen`): Ein leerer Tab (Obsidians „Neuer Tab“, etwa nach „+“) schließt,
+  sobald ein anderer Tab der Hauptfläche vorn ist und seine Gruppe noch andere Tabs hat; eine leere Hälfte einer geteilten Fläche
+  bleibt. Anlass: Tabs sammelten sich auf iPhone und iPad, wo man sie kaum sieht. Nicht von uns und nicht abgefangen: Obsidian öffnet
+  nach einem eigenen Update die Versionshinweise und auf dem iPhone eine neue Notiz aus einer Base in einem neuen Tab.
 - **Übersicht** (seit 19.10.2026, `seitenleiste.js`): seit 26.10.2026 ein Menü hinter ≡ unten rechts auf jedem Gerät (siehe
   unten); bis dahin ein eigener Tab (`ItemView`, Typ `eba-uebersicht`) in Obsidians linker Seitenleiste, am PC neben der Notiz,
   auf iPhone und iPad in der Schublade hinter dem Symbol oben links. Sie ersetzt das
