@@ -4,14 +4,15 @@
 // Kostenregeln ein: nur Always Free, Reste aus stand.mjs, nichts Fremdes anfassen, alles Eigene mit Kennzeichen studium-autopilot.
 //   node einrichten.mjs schutz --mail <adresse> [--ja]       Quota „nur-kostenlos“ und Budget „kostenwarnung“
 //   node einrichten.mjs netz                                 eigenes Netz (Ports 22 und 443)
-//   node einrichten.mjs server --schluessel <datei.pub>      der Server (A1, 2 OCPU, 12 GB); Exit 3 = gerade kein Platz
+//   node einrichten.mjs server --schluessel <datei.pub>      der Server (A1, 2 OCPU, 12 GB); Exit 3 = gerade kein Platz, Oracle
+//                                                            bremst, oder der Platzsucher sucht schon (dann kein eigener Versuch)
 //   node einrichten.mjs platzsucher --mail <adresse> --schluessel <datei.pub> [--vorlage <platzsucher-helfer.yaml>]
 //                                                            (platzsucher.py daneben kommt gepackt in die Vorlage)
 //   node einrichten.mjs abschliessen                         Rechte des Platzsuchers weg, Boot-Volume auf den freien Rest, Quota fest
 //   node einrichten.mjs platzsucher-beenden                  Helfer beenden, seine Rechte und das Mail-Thema entfernen
 //   node einrichten.mjs adresse                              öffentliche IP, Adresse und SSH-Befehl des Servers
 //   --oci <pfad>  --tenancy <ocid>  --json
-// Exit: 0 erledigt, 1 Fehler oder Kostenregel verletzt, 2 Rückfrage nötig (--ja) bzw. falscher Aufruf, 3 kein Platz.
+// Exit: 0 erledigt, 1 Fehler oder Kostenregel verletzt, 2 Rückfrage nötig (--ja) bzw. falscher Aufruf, 3 kein Platz oder Oracle bremst.
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
@@ -30,6 +31,8 @@ const WEG = new Set(["TERMINATED", "TERMINATING", "DELETED", "DELETING"]);
 const MAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const SSH = /^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp256) [A-Za-z0-9+/=]+( [^\n]{0,80})?$/;
 const KAPAZITAET = /out of (host )?capacity/i;
+// „Too many requests“: Oracle bremst die Anfragen des Kontos. Kein Fehler, nur später (platzsucher.py wartet dann länger).
+const GEDROSSELT = /TooManyRequests|\(429\)/;
 
 const liste = (d) => (Array.isArray(d) ? d : d && Array.isArray(d.items) ? d.items : []);
 const lebt = (x) => !WEG.has(x["lifecycle-state"]);
@@ -191,6 +194,7 @@ const eigenesSubnetz = async (muss, tenancy) => {
   return sub.id;
 };
 // Anlegen in jedem Verfügbarkeitsbereich der Reihe nach; „Out of host capacity“ → nächster. → { instanz } | { kapazitaet: true }
+// | { gedrosselt: true } (Oracle bremst: sofort aufhören, jeder weitere Bereich würde nur weiter gebremst)
 // weiter: Fehler, bei denen der nächste Bereich dran ist (Standard: kein Platz; beim Helfer auch LimitExceeded, denn E2.1.Micro
 // gibt es oft nur in einem Bereich). Jeder andere Fehler bricht ab, ohne einen weiteren Bereich zu versuchen.
 const anlegenIrgendwo = async (oci, args, ads, weiter = KAPAZITAET) => {
@@ -198,6 +202,7 @@ const anlegenIrgendwo = async (oci, args, ads, weiter = KAPAZITAET) => {
   for (const ad of ads) {
     const r = await oci([...args, "--availability-domain", ad]);
     if (r.ok) return { instanz: r.data, ad };
+    if (GEDROSSELT.test(r.fehler || "")) return { gedrosselt: true };
     if (!weiter.test(r.fehler || "")) throw new Error("anlegen: " + r.fehler);
     letzter = r.fehler || "";
   }
@@ -218,6 +223,11 @@ const quelle = (image, gb) => JSON.stringify({ sourceType: "image", imageId: ima
 export async function server(oci, { tenancy, a, ads, schluessel }) {
   const { schritte, merken, muss } = ablauf(oci);
   if (a.plan.status === "da") { merken("server", "da", a.plan.text); return { schritte, exit: 0 }; }
+  // Der Platzsucher versucht es alle paar Minuten. Ein Versuch daneben bringt nichts, Oracle bremst dann nur beide (429).
+  if (a.platzsucher) {
+    merken("server", "platzsucher", "Der Platzsucher sucht schon nach Platz für den Server; kein zweiter Versuch daneben.");
+    return { schritte, exit: 3 };
+  }
   if (a.plan.status !== "passt") { merken("server", "fehler", a.plan.text); return { schritte, exit: 1 }; }
   if (schutzFehlt(a)) throw schutzFehlt(a);
   const ssh = schluesselPruefen(schluessel);
@@ -229,6 +239,10 @@ export async function server(oci, { tenancy, a, ads, schluessel }) {
     "--freeform-tags", kennzeichen("server"), "--metadata", JSON.stringify({ ssh_authorized_keys: ssh }), ...NUR_IMDS2], ads);
   if (r.kapazitaet) {
     merken("server", "kein-platz", "Oracle hat gerade in keinem Verfügbarkeitsbereich Platz für den Server. Der Platzsucher kann es weiter versuchen.");
+    return { schritte, exit: 3 };
+  }
+  if (r.gedrosselt) {
+    merken("server", "gedrosselt", "Oracle bremst gerade (zu viele Anfragen). Der Platzsucher kann es mit Pausen weiter versuchen.");
     return { schritte, exit: 3 };
   }
   merken("server", "angelegt", `Server angelegt: A1 ${ZIEL.ocpu} OCPU / ${ZIEL.gb} GB, Boot-Volume ${a.plan.bootGb} GB, ${image["display-name"]}.`);
@@ -263,6 +277,17 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     if (x && !gehoert(x, "helfer")) throw new Error(`${was}: „${name}“ gibt es schon, aber nicht von der Einrichtung; nichts geändert`);
     return x || null;
   };
+  // Mail-Abo anlegen, wenn es fehlt. Unbestätigt (PENDING) kommt keine Mail an, auch nicht „Dein Server ist da“.
+  const aboSicherstellen = async (themaId) => {
+    const meins = liste(await muss("abo", ["ons", "subscription", "list", ...t, "--topic-id", themaId, "--all"]))
+      .find((x) => String(x.endpoint).toLowerCase() === mail.toLowerCase() && lebt(x));
+    if (!meins) {
+      await muss("abo", ["ons", "subscription", "create", ...t, "--topic-id", themaId, "--protocol", "EMAIL", "--subscription-endpoint", mail]);
+      merken("abo", "angelegt", `Mail-Abo für ${mail} angelegt. Bitte den Link „Confirm subscription“ in der Mail von Oracle anklicken.`);
+    } else if (meins["lifecycle-state"] === "PENDING") {
+      merken("abo", "offen", `Mail-Abo für ${mail} noch nicht bestätigt: den Link „Confirm subscription“ in der Mail von Oracle anklicken (auch im Spam nachsehen). Vorher kommt keine Mail vom Platzsucher.`);
+    } else merken("abo", "da", "Mail-Abo besteht.");
+  };
   let helfer = liste(await muss("helfer", ["compute", "instance", "list", ...t, "--all"])).find((i) => lebt(i) && gehoert(i, "helfer"));
   // Helfer einer früheren Fassung ersetzen: cloud-init läuft nur beim ersten Start, ein Neustart brächte weder das neue Skript noch
   // eine damals gescheiterte Installation. Sein Boot-Volume zählt in a.plan noch mit; der neue sucht darum mit entsprechend
@@ -276,8 +301,15 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
     merken("helfer", "ersetzt", "Helfer einer früheren Version beendet (oder mit einem anderen Schlüssel); ein neuer sucht mit diesem Stand weiter.");
     helfer = null;
   }
-  if (helfer) merken("helfer", "da", "Der Platzsucher läuft schon.");
-  else {
+  if (helfer) {
+    // Angehalten (in der Konsole oder von Oracle) sucht er nicht; Starten kostet nichts, er sucht dann mit seinem Stand weiter
+    if (helfer["lifecycle-state"] === "STOPPED") {
+      await muss("helfer", ["compute", "instance", "action", "--instance-id", helfer.id, "--action", "START"]);
+      merken("helfer", "gestartet", "Der Helfer war angehalten und sucht jetzt wieder.");
+    } else merken("helfer", "da", "Der Platzsucher läuft schon.");
+    const thema = await eigenesOder("thema", ["ons", "topic", "list", ...t, "--name", NAMEN.thema, "--all"], NAMEN.thema);
+    if (thema) await aboSicherstellen(thema["topic-id"]);
+  } else {
     if (a.plan.status !== "passt") { merken("helfer", "fehler", a.plan.text); return { schritte, exit: 1 }; }
     const sub =await eigenesSubnetz(muss, tenancy);
     // Bescheid per Mail: Thema und Abo (die Mail von Oracle einmal bestätigen)
@@ -288,11 +320,7 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
       merken("thema", "angelegt", "Thema für den Bescheid per Mail angelegt.");
     } else merken("thema", "da", "Thema für den Bescheid besteht.");
     const themaId = thema["topic-id"];
-    const abos = liste(await muss("abo", ["ons", "subscription", "list", ...t, "--topic-id", themaId, "--all"]));
-    if (!abos.some((x) => String(x.endpoint).toLowerCase() === mail.toLowerCase() && lebt(x))) {
-      await muss("abo", ["ons", "subscription", "create", ...t, "--topic-id", themaId, "--protocol", "EMAIL", "--subscription-endpoint", mail]);
-      merken("abo", "angelegt", `Mail-Abo für ${mail} angelegt. Bitte den Link „Confirm subscription“ in der Mail von Oracle anklicken.`);
-    } else merken("abo", "da", "Mail-Abo besteht.");
+    await aboSicherstellen(themaId);
     const serverBild = await bild(muss, tenancy, "24.04", A1);
     const helferBild = await bild(muss, tenancy, "24.04 Minimal", MICRO);
     const konfig = { compartment: tenancy, ads, subnet: sub, image: serverBild.id, boot_gb: a.plan.bootGb, ssh_schluessel: ssh, user_data: "", thema: themaId };
@@ -306,6 +334,7 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
       "--freeform-tags", JSON.stringify({ [KENNZEICHEN]: "helfer", [FASSUNG]: fassung }),
       "--metadata", JSON.stringify(metadaten), ...NUR_IMDS2], ads, /out of (host )?capacity|LimitExceeded/i);
     if (r.kapazitaet) { merken("helfer", "kein-platz", "Auch für den kleinen Helfer ist gerade kein Platz. Später noch einmal versuchen."); return { schritte, exit: 3 }; }
+    if (r.gedrosselt) { merken("helfer", "gedrosselt", "Oracle bremst gerade (zu viele Anfragen). Später noch einmal versuchen."); return { schritte, exit: 3 }; }
     if (r.fehler) { merken("helfer", "fehler", "Der Helfer ließ sich in keinem Bereich anlegen: " + r.fehler); return { schritte, exit: 1 }; }
     helfer = r.instanz;
     merken("helfer", "angelegt", `Helfer angelegt (${MICRO}, ${ZIEL.helferBootGb} GB). Er sucht für den Server mit ${a.plan.bootGb} GB Boot-Volume.`);
@@ -339,6 +368,10 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorl
   if (geaendert && schritte.some((s) => s.was === "helfer" && s.status === "da")) {
     await muss("helfer", ["compute", "instance", "action", "--instance-id", helfer.id, "--action", "SOFTRESET"]);
     merken("helfer", "neustart", "Helfer neu gestartet, damit er mit den Rechten weitersucht.");
+  } else if (a.platzsucher && a.platzsucher.id === helfer.id && schritte.some((s) => s.was === "helfer" && s.status === "da")) {
+    // Stand des laufenden Helfers (stand.mjs): angehalten oder ohne Meldung braucht er einen Menschen
+    merken("stand", a.platzsucher.status, a.platzsucher.text);
+    if (["angehalten", "still"].includes(a.platzsucher.status)) return { schritte, exit: 1, helfer: helfer.id };
   }
   return { schritte, exit: 0, helfer: helfer.id };
 }

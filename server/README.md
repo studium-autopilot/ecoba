@@ -183,6 +183,18 @@ auf einem kleinen Helfer weiter, nicht am Rechner der Nutzerin oder des Nutzers:
   an und schickt eine Mail.
 - **Mails** über Oracle Notifications (Thema mit E-Mail-Abo, einmal bestätigen): „Dein Server ist da“, „Platzsucher angehalten“
   und nach 14 Tagen ohne Erfolg „Platzsucher sucht weiter“.
+- **Stand am Helfer:** Stündlich und bei einem Halt sofort schreibt er Zeit, Versuche und die letzte Antwort von Oracle als
+  Kennzeichen `studium-autopilot-stand` an sich selbst (`zeit=…;versuche=…;art=…;grund=…`, höchstens 256 Zeichen; seine OCID aus
+  den Metadaten über IMDSv2, die anderen Kennzeichen bleiben). `stand.mjs` zeigt daraus die Zeile „Platzsucher: …“: sucht,
+  startet (bis 3 Stunden nach dem Anlegen ohne Meldung), angehalten, aus (gestoppt) oder still (3 Stunden ohne Meldung: er sucht
+  nicht, oder er ist von einer Version vor diesem Kennzeichen). Ohne das sah man in der Cloud Shell nur, dass der Helfer existiert.
+- **Neben dem Helfer:** `einrichten.mjs server` versucht es nicht selbst, solange ein Helfer da ist (Exit 3, `[platzsucher]`):
+  Ein Versuch daneben bringt nichts, und Oracle bremst dann beide. „Too many requests“ (429) beim Anlegen gilt wie kein Platz
+  (Exit 3, `[gedrosselt]`), ohne weiteren Bereich. Bis 0.7.3 brach `server` dort mit `[fehler] anlegen: TooManyRequests …` ab,
+  und „Weiter mit der Einrichtung“ versuchte es neben einem laufenden Helfer jedes Mal selbst.
+- **`platzsucher` bei laufendem Helfer:** ersetzt ihn bei anderer Fassung (siehe oben), startet einen gestoppten (in der Konsole
+  oder von Oracle angehalten), nennt ein unbestätigtes Mail-Abo (`[offen]`) und den Stand des Helfers. Angehalten oder still:
+  Exit 1, das braucht einen Menschen.
 - **Nach dem Erfolg** beendet der Platzsucher die Instanzen mit dem Kennzeichen des Helfers samt Boot-Volume. Danach vergrößert die Einrichtung das Boot-Volume des
   Servers auf den ganzen freien Rest.
 

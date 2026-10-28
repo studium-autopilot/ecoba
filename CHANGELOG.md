@@ -2,6 +2,13 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.4 – Platzsucher zeigt, wie weit er ist
+
+- **Behoben:** „Weiter mit der Einrichtung“ brach mit „Too many requests“ ab, während der Platzsucher noch nach Platz suchte. Jetzt
+  sucht nur der Platzsucher, und die Einrichtung geht weiter.
+- **Neu:** Claude sagt dir, ob der Platzsucher wirklich sucht, wie oft er es schon versucht hat und ob du die Mail von Oracle
+  schon bestätigt hast.
+
 ## 0.7.3 – Keine neuen Tabs vom Dashboard
 
 - **Behoben:** War das **Dashboard** angeheftet, öffnete jeder Tipp darauf einen neuen Tab. Jetzt öffnet es im zuletzt benutzten Tab,

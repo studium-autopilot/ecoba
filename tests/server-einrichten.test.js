@@ -31,10 +31,11 @@ const geschuetzt = (extra) => bestand(Object.assign({ quota: [{ name: "nur-koste
   budgets: [{ "display-name": "kostenwarnung", id: "b" }], budgetRegeln: [{ type: "ACTUAL", "lifecycle-state": "ACTIVE" }] }, extra));
 
 // Nachgebautes Konto: Aufrufe nach Befehl, Angelegtes bleibt (zweiter Lauf sieht es). o.kapazitaet = so viele Anlegeversuche
-// scheitern mit „Out of host capacity“.
+// scheitern mit „Out of host capacity“, o.drossel = so viele mit „Too many requests“ (429).
 function konto(o = {}) {
   const k = { instanzen: [], vcns: [], gateways: [], routen: {}, listen: [], subnetze: [], themen: [], abos: [], gruppen: [], richtlinien: [],
-    quota: o.quota || [], budgets: [], regeln: [], volumes: {}, anhaenge: [], aufrufe: [], kapazitaet: o.kapazitaet || 0, grenze: o.grenze || 0 };
+    quota: o.quota || [], budgets: [], regeln: [], volumes: {}, anhaenge: [], aufrufe: [], kapazitaet: o.kapazitaet || 0, grenze: o.grenze || 0,
+    drossel: o.drossel || 0 };
   let n = 0;
   const neu = (art) => `ocid1.${art}.oc1..${++n}`;
   const w = (args, name) => (args.indexOf(name) >= 0 ? args[args.indexOf(name) + 1] : undefined);
@@ -81,6 +82,7 @@ function konto(o = {}) {
     "compute image list": (a) => ok([{ id: "img-" + w(a, "--shape"), "display-name": `Canonical-Ubuntu-${w(a, "--operating-system-version").replace(" ", "-")}-2026.09.18-0` }]),
     "compute instance launch": (a) => {
       if (k.kapazitaet > 0) { k.kapazitaet--; return { ok: false, fehler: 'ServiceError: { "code": "InternalError", "message": "Out of host capacity.", "status": 500 }' }; }
+      if (k.drossel > 0) { k.drossel--; return { ok: false, fehler: 'ServiceError: { "code": "TooManyRequests", "message": "Too many requests for user", "status": 429 }' }; }
       if (k.grenze > 0) { k.grenze--; return { ok: false, fehler: 'ServiceError: { "code": "LimitExceeded", "message": "The following service limits were exceeded: standard-e2-micro-core-count", "status": 400 }' }; }
       const i = mitTags(a, { id: neu("instance"), shape: w(a, "--shape"), "availability-domain": w(a, "--availability-domain"), "display-name": w(a, "--display-name"),
         "lifecycle-state": "PROVISIONING", quelle: JSON.parse(w(a, "--source-details")), metadaten: JSON.parse(w(a, "--metadata")),
@@ -281,6 +283,31 @@ test("Fehler der OCI-Kommandozeile: Code, Status und Nachricht bleiben lesbar; �
   assert.deepEqual([r.exit, frei.k.instanzen.length], [0, 1]);
 });
 
+test("Server: Oracle bremst (429) → Exit 3 ohne weiteren Bereich; sucht der Platzsucher schon, kein eigener Versuch", async () => {
+  const { fehlerText, ociAufrufer, netz, server, auswerten } = await laden();
+  const meldung = ociAusgabe("TooManyRequests", 429, "Too many requests for user");
+  assert.equal(fehlerText(meldung), "TooManyRequests (429): Too many requests for user");
+  const x = konto();
+  await netz(x.oci, { tenancy: T });
+  let versuche = 0;
+  const gebremst = (pfad, args, optionen, fertig) => {
+    const a = args.slice(0, args.indexOf("--output"));
+    if (a.slice(0, 3).join(" ") === "compute instance launch") { versuche++; return fertig(Object.assign(new Error("Exit 1"), { code: 1 }), "", meldung); }
+    x.oci(a).then((r) => fertig(null, JSON.stringify({ data: r.data }), ""));
+  };
+  const r = await server(ociAufrufer("oci", gebremst), { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH });
+  assert.deepEqual([r.exit, r.schritte.at(-1).status, versuche, x.k.instanzen.length], [3, "gedrosselt", 1, 0]);
+  assert.match(r.schritte.at(-1).text, /Oracle bremst gerade/);
+  // Helfer im Bestand (auch ein gestoppter): kein Aufruf bei Oracle, nur der Hinweis
+  const helfer = { id: "ocid1.instance.oc1..helfer", shape: "VM.Standard.E2.1.Micro", "lifecycle-state": "RUNNING", "freeform-tags": { "studium-autopilot": "helfer" } };
+  for (const zustand of ["RUNNING", "STOPPED"]) {
+    const y = konto();
+    const a = auswerten(geschuetzt({ instanzen: [{ ...helfer, "lifecycle-state": zustand }], freierTopf: { used: 50, available: 150 } }));
+    const p = await server(y.oci, { tenancy: T, a, ads: ADS, schluessel: SSH });
+    assert.deepEqual([p.exit, p.schritte.map((s) => s.status), y.k.aufrufe], [3, ["platzsucher"], []]);
+  }
+});
+
 test("Platzsucher: Mail-Thema, Helfer (Micro, 50 GB) mit fertiger Konfiguration, Rechte nur für ihn; läuft er, nichts Neues", async () => {
   const { netz, platzsucher, auswerten, PLATZSUCHER_RECHTE } = await laden();
   const x = konto();
@@ -387,6 +414,43 @@ test("Platzsucher: Helfer einer früheren Version wird ersetzt, nicht nur neu ge
   const davor = y.angelegt().length;
   const r3 = await platzsucher(y.oci, { tenancy: T, a: voll, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
   assert.deepEqual([r3.exit, alt2["lifecycle-state"], y.angelegt().length], [1, "RUNNING", davor]);
+});
+
+test("Platzsucher: Stand des laufenden Helfers, gestoppter startet wieder, unbestätigtes Mail-Abo; 429 beim Anlegen → Exit 3", async () => {
+  const { netz, platzsucher, auswerten, STAND_KENNZEICHEN } = await laden();
+  const x = konto();
+  await netz(x.oci, { tenancy: T });
+  const lauf = (a) => platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
+  assert.equal((await lauf(auswerten(geschuetzt(), { helfer: true }))).exit, 0);
+  const h = x.k.instanzen[0];
+  // Bestand mit diesem Helfer (Stand 2026-10-18 10:00 UTC), seit einem Tag da, mit oder ohne Meldung
+  const mit = (stand, zustand = "RUNNING") => {
+    Object.assign(h, { "lifecycle-state": zustand, "time-created": "2026-10-17T10:00:00.000000+00:00" });
+    h["freeform-tags"] = { ...h["freeform-tags"], [STAND_KENNZEICHEN]: stand };
+    return auswerten(geschuetzt({ instanzen: [h], freierTopf: { used: 50, available: 150 } }), { helfer: true });
+  };
+  const vorher = x.angelegt().length;
+  const sucht = await lauf(mit("zeit=2026-10-18T09:30:00+00:00;versuche=96;art=weiter;grund=kein Platz"));
+  assert.deepEqual(sucht.schritte.map((s) => [s.was, s.status]), [["helfer", "da"], ["abo", "offen"], ["rechte", "da"], ["stand", "sucht"]]);
+  assert.equal(sucht.exit, 0);
+  assert.match(sucht.schritte[1].text, /noch nicht bestätigt.*Confirm subscription/);
+  assert.equal(x.angelegt().length, vorher, "nichts Neues angelegt, kein zweites Abo");
+  // angehalten oder ohne Meldung: Exit 1 mit dem Stand (braucht einen Menschen)
+  for (const [stand, status] of [["zeit=2026-10-18T08:00:00+00:00;versuche=4;art=halt;grund=LimitExceeded: x", "angehalten"], ["", "still"]]) {
+    const r = await lauf(mit(stand));
+    assert.deepEqual([r.exit, r.schritte.at(-1).was, r.schritte.at(-1).status], [1, "stand", status]);
+  }
+  // bestätigtes Abo
+  x.k.abos[0]["lifecycle-state"] = "ACTIVE";
+  assert.deepEqual((await lauf(mit("zeit=2026-10-18T09:30:00+00:00;versuche=96;art=weiter;grund=kein Platz"))).schritte[1].status, "da");
+  // gestoppt: wird gestartet, sonst nichts
+  const gestoppt = await lauf(mit("", "STOPPED"));
+  assert.deepEqual([gestoppt.exit, gestoppt.schritte[0].status, x.k.aktionen, x.angelegt().length], [0, "gestartet", [[h.id, "START"]], vorher]);
+  // Oracle bremst beim Anlegen des Helfers: Exit 3, kein weiterer Bereich
+  const y = konto({ drossel: 1 });
+  await netz(y.oci, { tenancy: T });
+  const r = await platzsucher(y.oci, { tenancy: T, a: auswerten(geschuetzt(), { helfer: true }), ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
+  assert.deepEqual([r.exit, r.schritte.at(-1).status, y.k.aufrufe.filter((a) => a[2] === "launch").length, y.k.instanzen.length], [3, "gedrosselt", 1, 0]);
 });
 
 test("Abschließen: wartet auf den Helfer, entfernt nur eigene Rechte, Boot-Volume auf den Rest, eigene Quota fest", async () => {

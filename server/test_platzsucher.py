@@ -23,8 +23,9 @@ START = datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc)
 class Attrappe:
     """OCI-Kommandozeile: launch antwortet nach Liste (je Aufruf ein Eintrag), list liefert vorhandene Instanzen."""
 
-    def __init__(self, antworten=(), vorhanden=(), liste_fehler=None, beenden=None, abbilder=None):
+    def __init__(self, antworten=(), vorhanden=(), liste_fehler=None, beenden=None, abbilder=None, zeigen_fehler=0):
         self.antworten = list(antworten)
+        self.zeigen_fehler = zeigen_fehler  # so viele Kennzeichen-Updates scheitern (fehlende Rechte im Anlauf)
         self.abbilder = abbilder
         self.vorhanden = list(vorhanden)
         self.liste_fehler = liste_fehler
@@ -44,6 +45,16 @@ class Attrappe:
             return {"ok": True, "data": {"data": self.abbilder}}
         if args[:3] == ["compute", "instance", "terminate"] and self.beenden:
             return self.beenden
+        if args[:3] in (["compute", "instance", "get"], ["compute", "instance", "update"]):
+            i = next((x for x in self.vorhanden if x.get("id") == self.wert(args, "--instance-id")), None)
+            if i is not None and args[2] == "update" and self.zeigen_fehler:
+                self.zeigen_fehler -= 1
+                i = None
+            if i is None:
+                return {"ok": False, "status": 404, "code": "NotAuthorizedOrNotFound", "nachricht": "Authorization failed"}
+            if args[2] == "get":
+                return {"ok": True, "data": {"data": i}}
+            i["freeform-tags"] = json.loads(self.wert(args, "--freeform-tags"))
         return {"ok": True, "data": None}
 
     def von(self, *praefix):
@@ -245,6 +256,82 @@ class Suchen(unittest.TestCase):
         self.assertEqual(titel, ["Platzsucher sucht weiter", "Dein Server ist da"])
         self.assertTrue(json.loads(self.stand.read_text(encoding="utf-8"))["gemeldet_14"])
 
+
+class StandAmHelfer(unittest.TestCase):
+    HELFER = "ocid1.instance.oc1.eu-stockholm-1.helfer"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.stand = Path(self.tmp.name) / "stand.json"
+        self.helfer = {"id": self.HELFER, "freeform-tags": {"studium-autopilot": "helfer", "studium-autopilot-fassung": "abc"}, "lifecycle-state": "RUNNING"}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    uhr = Suchen.uhr
+
+    def test_gleich_beim_start_dann_stuendlich_andere_kennzeichen_bleiben(self):
+        oci = Attrappe([KAPAZITAET] * 12 + ["ok"], vorhanden=[self.helfer])
+        P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(minutes=25)), ich=lambda: self.HELFER)
+        # Runden nach 50, 75, 100 und 125 Minuten: Stand in der ersten und in der ersten nach einer Stunde, beim Erfolg keiner
+        self.assertEqual(len(oci.von("compute", "instance", "update")), 2)
+        tags = self.helfer["freeform-tags"]
+        self.assertEqual([tags["studium-autopilot"], tags["studium-autopilot-fassung"]], ["helfer", "abc"])
+        self.assertEqual(tags[P.STAND_KENNZEICHEN], "zeit=2026-10-18T10:05:00+00:00;versuche=12;art=weiter;grund=kein Platz")
+        self.assertTrue(all("--force" in a for a in oci.von("compute", "instance", "update")), "ohne Rückfrage der Kommandozeile")
+
+    def test_halt_sofort_vor_der_mail(self):
+        oci = Attrappe([KAPAZITAET] * 3 + [GRENZE], vorhanden=[self.helfer])
+        self.assertEqual(P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(minutes=1)), ich=lambda: self.HELFER), "halt")
+        stand = self.helfer["freeform-tags"][P.STAND_KENNZEICHEN]
+        self.assertRegex(stand, r"^zeit=[^;]+;versuche=4;art=halt;grund=LimitExceeded: The following service limits")
+        zuletzt = oci.aufrufe.index(oci.von("compute", "instance", "update")[-1])
+        self.assertLess(zuletzt, oci.aufrufe.index(oci.von("ons", "message", "publish")[0]))
+
+    def test_ohne_rechte_wieder_in_der_naechsten_runde(self):
+        oci = Attrappe([KAPAZITAET] * 6 + ["ok"], vorhanden=[self.helfer], zeigen_fehler=1)
+        P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(minutes=1)), ich=lambda: self.HELFER)
+        self.assertEqual(len(oci.von("compute", "instance", "update")), 2)
+        self.assertIn("versuche=6;", self.helfer["freeform-tags"][P.STAND_KENNZEICHEN])
+
+    def test_nur_am_eigenen_helfer(self):
+        fremd = {"id": "ocid1.instance.oc1.eu-stockholm-1.fremd", "freeform-tags": {"anderes": "x"}, "lifecycle-state": "RUNNING"}
+        for ich in (lambda: fremd["id"], lambda: None, None):
+            oci = Attrappe([KAPAZITAET] * 3 + ["ok"], vorhanden=[fremd])
+            P.suchen(oci, KONFIG, self.stand, schlafen=lambda s: None, jetzt=self.uhr(timedelta(minutes=1)), ich=ich)
+            self.assertEqual(oci.von("compute", "instance", "update"), [])
+            self.assertEqual(fremd["freeform-tags"], {"anderes": "x"})
+            self.stand.unlink()
+
+    def test_text_hoechstens_256_zeichen(self):
+        t = P.stand_text({"versuche": 3}, "drossel", "Too many; requests=\n" + "x" * 400, START)
+        self.assertEqual(len(t), 256)
+        self.assertTrue(t.startswith("zeit=2026-10-18T08:00:00+00:00;versuche=3;art=drossel;grund=Too many requests x"))
+
+    def test_eigene_id_aus_den_metadaten(self):
+        import threading
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+        class Metadaten(BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802 (Name von http.server)
+                ok = self.path == "/opc/v2/instance/id" and self.headers.get("Authorization") == "Bearer Oracle"
+                self.send_response(200 if ok else 401)
+                self.end_headers()
+                self.wfile.write(StandAmHelfer.HELFER.encode() if ok else b"")
+
+            def log_message(self, *a):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Metadaten)
+        threading.Thread(target=server.serve_forever, daemon=True).start()
+        try:
+            basis = f"http://127.0.0.1:{server.server_address[1]}"
+            self.assertEqual(P.eigene_id(basis + "/opc/v2/instance/id"), self.HELFER)
+            self.assertIsNone(P.eigene_id(basis + "/opc/v1/instance/id"), "401: keine OCID")
+        finally:
+            server.shutdown()
+            server.server_close()
+        self.assertIsNone(P.eigene_id(basis + "/opc/v2/instance/id"), "nicht erreichbar")
 
 
 class HelferVorlage(unittest.TestCase):

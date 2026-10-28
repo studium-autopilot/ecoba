@@ -26,6 +26,8 @@ beenden, die nächste prüft zuerst, ob es den Server schon gibt (nie ein zweite
 Fehlende Rechte erst nach ANLAUF_MIN Minuten: Die Einrichtung legt dynamische Gruppe und Richtlinie an, nachdem der Helfer
 gestartet ist, und Oracle verteilt neue Rechte mit Verzögerung.
 Nach 14 Tagen ohne Erfolg eine Mail mit dem Stand; gesucht wird weiter, bis jemand den Helfer beendet.
+Den Stand schreibt er als Kennzeichen STAND_KENNZEICHEN an sich selbst (stündlich und bei einem Halt sofort; seine OCID aus
+den Metadaten der Instanz), stand.mjs zeigt ihn. Bleibt das Kennzeichen aus, sucht er nicht (Installation oder Rechte).
 """
 import argparse
 import json
@@ -36,6 +38,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -51,6 +54,11 @@ PAUSE = (120, 300)               # Sekunden zwischen zwei Runden (zufällig)
 PAUSE_GEDROSSELT = 1800          # höchstens so lange nach „Too many requests“
 MELDUNG_NACH_TAGEN = 14
 ANLAUF_MIN = 30                  # so lange gelten fehlende Rechte als „noch nicht verteilt“
+STAND_KENNZEICHEN = "studium-autopilot-stand"   # Stand am eigenen Helfer (stand.mjs liest ihn)
+STAND_ALLE = timedelta(hours=1)
+# Metadaten der Instanz, nur IMDSv2 (die alten Endpunkte sind beim Helfer aus). Als Zahlen geschrieben, weil
+# werkzeuge/pruefen.py jede IP-Adresse meldet (wie die Netzbereiche in einrichten.mjs).
+IMDS = "http://{}.{}.{}.{}/opc/v2/instance/id".format(169, 254, 169, 254)
 RECHTE = ("NotAuthorizedOrNotFound", "NotAuthenticated", "NotAuthorized")
 OCID = re.compile(r"^ocid1\.[a-z0-9]+\.[a-z0-9-]*\.[a-z0-9-]*\.[a-z0-9]+$")
 
@@ -182,6 +190,34 @@ def anlegen(oci, k, ad, abbild=None):
     ])
 
 
+def eigene_id(url=IMDS):
+    """OCID dieses Helfers aus den Metadaten der Instanz. → OCID oder None"""
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers={"Authorization": "Bearer Oracle"}), timeout=10) as r:
+            text = r.read(300).decode("ascii", "replace").strip()
+    except OSError:
+        return None
+    return text if OCID.match(text) else None
+
+
+def stand_text(stand, art, grund, jetzt):
+    """Wert des Kennzeichens: „zeit=…;versuche=…;art=…;grund=…“, höchstens 256 Zeichen (Grenze von Oracle)."""
+    kopf = f"zeit={jetzt_iso(jetzt)};versuche={stand.get('versuche', 0)};art={art};grund="
+    return kopf + re.sub(r"[;=\s]+", " ", str(grund)).strip()[:256 - len(kopf)]
+
+
+def stand_zeigen(oci, instanz, wert):
+    """Schreibt wert als STAND_KENNZEICHEN an den eigenen Helfer. Oracle ersetzt immer alle Kennzeichen; die anderen (Helfer,
+    Fassung) kommen darum unverändert mit. Nur an eine Instanz mit dem Kennzeichen des Helfers. → True, wenn geschrieben"""
+    r = oci(["compute", "instance", "get", "--instance-id", instanz])
+    d = r["data"].get("data") if r["ok"] and isinstance(r["data"], dict) else None
+    tags = dict(d.get("freeform-tags") or {}) if isinstance(d, dict) else {}
+    if tags.get("studium-autopilot") != "helfer":
+        return False
+    tags[STAND_KENNZEICHEN] = wert
+    return oci(["compute", "instance", "update", "--instance-id", instanz, "--freeform-tags", json.dumps(tags), "--force"])["ok"]
+
+
 def melden(oci, k, titel, text):
     r = oci(["ons", "message", "publish", "--topic-id", k["thema"], "--title", titel, "--body", text])
     return r["ok"]
@@ -244,11 +280,13 @@ def nach_erfolg(oci, k, stand, instanz):
                "Boot-Volume; sonst belegt er 50 GB des kostenlosen Speichers.")
 
 
-def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetime.now(timezone.utc)):
-    """Sucht, bis der Server da ist (→ "erfolg") oder ein Mensch gebraucht wird (→ "halt")."""
+def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetime.now(timezone.utc), ich=None):
+    """Sucht, bis der Server da ist (→ "erfolg") oder ein Mensch gebraucht wird (→ "halt").
+    ich: liefert die OCID dieses Helfers (eigene_id); dann steht der Stand am Helfer, sonst nicht."""
     stand = lesen(stand_datei, {})
     stand.setdefault("seit", jetzt_iso(jetzt()))
     warte_drossel = PAUSE[1]
+    instanz, gezeigt = None, None
     while True:
         zeit = jetzt()
         anlauf = zeit - datetime.fromisoformat(stand["seit"]) < timedelta(minutes=ANLAUF_MIN)
@@ -257,6 +295,11 @@ def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetim
             nach_erfolg(oci, k, stand, wert)
             schreiben(stand_datei, stand)
             return "erfolg"
+        # Scheitert das Schreiben (im Anlauf fehlen oft noch Rechte), versucht er es nach der nächsten Runde wieder
+        if ich and (art == "halt" or gezeigt is None or zeit - gezeigt >= STAND_ALLE):
+            instanz = instanz or ich()
+            if instanz and stand_zeigen(oci, instanz, stand_text(stand, art, wert, zeit)):
+                gezeigt = zeit
         if art == "halt":
             stand["angehalten"] = wert[:300]
             schreiben(stand_datei, stand)
@@ -298,7 +341,7 @@ def main():
         schreiben(STAND, stand)
         print(json.dumps({"ergebnis": art, "wert": wert if isinstance(wert, str) else wert.get("id", "")}, ensure_ascii=False))
         return 0
-    return 0 if suchen(oci, k) in ("erfolg", "halt") else 1
+    return 0 if suchen(oci, k, ich=eigene_id) in ("erfolg", "halt") else 1
 
 
 if __name__ == "__main__":

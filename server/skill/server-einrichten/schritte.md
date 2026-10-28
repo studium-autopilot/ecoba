@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.7.3)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.7.4)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -58,8 +58,8 @@ node server/stand.mjs
 ```
 
 Meldet `sha256sum` einen Fehler: nichts ausführen, neu laden, sonst anhalten. Das Ergebnis von `stand.mjs` erklärst du in zwei
-Sätzen (Kontotyp, was frei ist, was von Studium Autopilot schon da ist). Bei „Ich klicke selbst“ kopiert der Mensch die
-Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
+Sätzen (Kontotyp, was frei ist, was von Studium Autopilot schon da ist, dazu die Zeile „Platzsucher: …“, falls einer sucht).
+Bei „Ich klicke selbst“ kopiert der Mensch die Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
 
 Ab Schritt 5 geht alles auf dem Server über **`bash ~/studium-autopilot/server/fern.sh <befehl>`**: Es holt die Adresse selbst,
 prüft den Schlüssel und ruft ssh auf; keine IP und kein ssh-Befehl von Hand, auch nicht in einer neuen Sitzung. Exit 4: Der
@@ -92,20 +92,32 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
   außen nicht erreichbar (bis 0.5.3); ein laufender Server muss dafür nicht neu angelegt werden.
 - Exit 1 mit „Neuer Server passt nicht“: Die freie Menge ist belegt (z. B. von einem eigenen Server). Erklären, nichts anlegen
   ([kosten.md](kosten.md), Regel 2).
-- **Exit 3 (kein Platz):** Oracle hat in keinem Verfügbarkeitsbereich Platz. Das ist normal und kein Fehler des Kontos. Erklären
-  und den **Platzsucher** einrichten, nicht zum Warten oder Wiederholen raten: Ein kleiner kostenloser Helfer versucht es weiter,
-  alle paar Minuten, auch wenn der Rechner aus ist, und schickt eine Mail, sobald der Server da ist.
+- **Exit 3:** Oracle hat in keinem Verfügbarkeitsbereich Platz (`[kein-platz]`), bremst gerade die Anfragen (`[gedrosselt]`,
+  „Too many requests“), oder ein Platzsucher sucht schon (`[platzsucher]`; dann versucht `server` es gar nicht erst, ein
+  Versuch daneben bremst nur beide). Das ist normal und kein Fehler des Kontos. Erklären und den **Platzsucher** einrichten
+  bzw. prüfen, nicht zum Warten oder Wiederholen raten: Ein kleiner kostenloser Helfer versucht es weiter, alle paar Minuten,
+  auch wenn der Rechner aus ist, und schickt eine Mail, sobald der Server da ist. Mail-Adresse wie in Schritt 3.
 
   ```bash
   node server/einrichten.mjs platzsucher --mail <Mail-Adresse> --schluessel ~/.ssh/studium_autopilot.pub
   ```
 
-  Danach: „Bestätige die Mail von Oracle (‚Confirm subscription‘). Du kannst den Rechner jetzt ausmachen. Kommt die Mail ‚Dein
-  Server ist da‘, sag mir ‚Weiter mit der Einrichtung‘.“
+  Exit 0: die Zeilen in einem oder zwei Sätzen erklären, dann: „Du kannst den Rechner jetzt ausmachen. Kommt die Mail ‚Dein
+  Server ist da‘, sag mir ‚Weiter mit der Einrichtung‘.“ Dabei:
+  - `[angelegt]` oder `[offen]` beim Mail-Abo: „Bestätige die Mail von Oracle (‚Confirm subscription‘), schau auch im Spam
+    nach.“ Ohne Bestätigung kommt keine Mail vom Platzsucher.
+  - `[ersetzt] Helfer einer früheren Version beendet`: Es lief schon ein Platzsucher aus einer älteren Version; jetzt sucht ein
+    neuer. Das dauert ein bis zwei Minuten länger und ist kein Fehler. Neu ist nur der Helfer; das Mail-Abo bleibt. Wurde die
+    Mail von Oracle schon früher bestätigt, kommt keine neue.
+  - `[gestartet]`: Der Helfer war angehalten und sucht jetzt wieder.
+  - `[aus]`: Der Helfer hält gerade an. Eine Minute warten, dann denselben Befehl noch einmal; er startet ihn dann.
+  - `[sucht]` oder `[startet]`: der Stand des Helfers (seit wann, wie viele Versuche, letzte Antwort von Oracle).
 
-  Meldet `platzsucher` „[ersetzt] Helfer einer früheren Version beendet“, lief schon ein Platzsucher aus einer älteren Version;
-  jetzt sucht ein neuer. Das dauert ein bis zwei Minuten länger und ist kein Fehler. Neu ist nur der Helfer; das Mail-Abo
-  bleibt. Wurde die Mail von Oracle schon früher bestätigt, kommt keine neue.
+  Exit 1 mit `[angehalten]` oder `[still]`: Der Helfer sucht nicht. Die Zeile wörtlich zeigen, eine Meldung an den Autor
+  vorbereiten (SKILL.md, „Fehler an den Autor melden“) und anhalten.
+
+  Exit 3 (auch für den kleinen Helfer gerade kein Platz, oder Oracle bremst): „Sag mir in einer Stunde noch einmal ‚Weiter mit
+  der Einrichtung‘.“ Nicht selbst wiederholen.
 
 ## 5. Paket installieren
 

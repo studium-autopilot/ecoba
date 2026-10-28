@@ -124,6 +124,35 @@ export async function erheben(oci, { tenancy, jetzt = new Date() }) {
   return b;
 }
 
+// Stand des Platzsuchers: Der Helfer schreibt ihn stündlich als Kennzeichen an sich selbst (platzsucher.py, stand_text).
+// Ohne Meldung seit STILL_STUNDEN sucht er nicht (Installation, Rechte) oder ist von einer Version, die nichts meldet.
+export const STAND_KENNZEICHEN = KENNZEICHEN + "-stand";
+const STILL_STUNDEN = 3;
+const uhrzeit = (iso) => String(iso || "").slice(0, 16).replace("T", " ") + " UTC";
+export function helferStand(h, zeit) {
+  const m = /^zeit=([^;]*);versuche=(\d+);art=([a-z]+);grund=(.*)$/.exec(String((h["freeform-tags"] || {})[STAND_KENNZEICHEN] || ""));
+  const meldung = m && Number.isFinite(Date.parse(m[1])) ? { zeit: m[1], versuche: Number(m[2]), art: m[3], grund: m[4] } : null;
+  const stunden = (iso) => (Date.parse(zeit) - Date.parse(iso)) / 36e5;
+  const zustand = h["lifecycle-state"] || "";
+  const seit = h["time-created"] || "";
+  const p = { zustand, seit, meldung };
+  if (zustand === "STOPPED" || zustand === "STOPPING") {
+    return { ...p, status: "aus", text: `Platzsucher: Der Helfer ist angehalten (${zustand}) und sucht nicht.` };
+  }
+  if (meldung && meldung.art === "halt") {
+    return { ...p, status: "angehalten", text: `Platzsucher: angehalten am ${uhrzeit(meldung.zeit)} nach ${meldung.versuche} Versuchen: ${meldung.grund}` };
+  }
+  if (meldung && stunden(meldung.zeit) <= STILL_STUNDEN) {
+    const grund = meldung.art === "drossel" ? "Oracle bremst (zu viele Anfragen)" : meldung.grund;
+    return { ...p, status: "sucht", text: `Platzsucher: sucht seit ${uhrzeit(seit)}, ${meldung.versuche} Versuche, zuletzt ${uhrzeit(meldung.zeit)}: ${grund}.` };
+  }
+  if (!meldung && (!seit || stunden(seit) <= STILL_STUNDEN)) {
+    return { ...p, status: "startet", text: "Platzsucher: Der Helfer startet und meldet sich in der ersten Stunde." };
+  }
+  const wann = meldung ? `seit ${uhrzeit(meldung.zeit)} keinen Stand mehr` : "keinen Stand";
+  return { ...p, status: "still", text: `Platzsucher: Der Helfer läuft seit ${uhrzeit(seit)}, meldet aber ${wann} (ältere Version, oder er sucht nicht).` };
+}
+
 // Kontotyp: Abo-Daten zuerst (payment-model), sonst die Grenze bezahlter Formen (Free Tier: 0).
 export function kontotyp(b) {
   const modelle = liste(b.abos).map((a) => String(a["payment-model"] || "").toUpperCase()).filter(Boolean);
@@ -207,9 +236,12 @@ export function auswerten(b, { helfer = false } = {}) {
       : { status: "passt", ocpu: ZIEL.ocpu, gb: ZIEL.gb, bootGb,
         text: `Neuer Server passt: A1 ${ZIEL.ocpu} OCPU / ${ZIEL.gb} GB, Boot-Volume ${bootGb} GB${helfer ? " (später auf " + Math.min(FREI.speicherGb, topf.rest) + " GB)" : ""}.` };
 
+  const helferInstanz = instanzen.find((i) => (i["freeform-tags"] || {})[KENNZEICHEN] === "helfer");
+  const platzsucher = helferInstanz ? { id: helferInstanz.id, ...helferStand(helferInstanz, b.zeit) } : null;
+
   const exit = befunde.some((x) => x.art === "kosten" || x.art === "grenze") ? 1 : b.fehler.length ? 2 : 0;
   return {
-    zeit: b.zeit, konto: kontotyp(b), heimat, exit, befunde, plan,
+    zeit: b.zeit, konto: kontotyp(b), heimat, exit, befunde, plan, platzsucher,
     belegt: { ocpu, gb, micro, speicherGb: topf.belegt, backups, objektGb: Math.round(objektGb * 10) / 10 },
     rest: { ...rest, speicherGb: topf.rest, speicherQuelle: topf.quelle },
     kosten, schutz: { quota: !!quota, budget: budgetMail },
@@ -232,6 +264,7 @@ export function text(a) {
   z.push(`Schutz: Quota „nur-kostenlos“ ${a.schutz.quota ? "ja" : "fehlt"} · Budget „kostenwarnung“ ${a.schutz.budget ? "ja" : "fehlt"}`);
   z.push(`Studium Autopilot: ${a.studiumAutopilot.length ? a.studiumAutopilot.map((r) => `${r.typ} „${r.name}“`).join(", ") : "noch nichts angelegt"}`);
   z.push(a.plan.text);
+  if (a.platzsucher) z.push(a.platzsucher.text);
   if (a.befunde.length) {
     z.push("Befunde:");
     for (const f of a.befunde) z.push(`  [${f.art}] ${f.text}`);

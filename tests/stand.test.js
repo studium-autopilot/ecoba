@@ -114,6 +114,29 @@ test("schon angelegter Server wird erkannt, nicht neu geplant", async () => {
   assert.deepEqual(a.studiumAutopilot, [{ typ: "Instance", name: "studium-server" }]);
 });
 
+test("Platzsucher: Stand aus dem Kennzeichen des Helfers; angehalten, ohne Meldung, gestoppt", async () => {
+  const { auswerten, text, STAND_KENNZEICHEN } = await laden();
+  const helfer = (stand, extra = {}) => ({ id: "h", shape: "VM.Standard.E2.1.Micro", "lifecycle-state": "RUNNING",
+    "time-created": "2026-10-17T10:00:00.123000+00:00", "freeform-tags": { "studium-autopilot": "helfer", ...(stand ? { [STAND_KENNZEICHEN]: stand } : {}) }, ...extra });
+  const mit = (h) => auswerten(bestand({ instanzen: [h] })); // Stand 2026-10-17 18:00 UTC
+  const s = mit(helfer("zeit=2026-10-17T17:30:00+00:00;versuche=96;art=weiter;grund=kein Platz"));
+  assert.deepEqual([s.platzsucher.status, s.platzsucher.meldung.versuche, s.plan.status], ["sucht", 96, "passt"]);
+  assert.match(text(s), /^Platzsucher: sucht seit 2026-10-17 10:00 UTC, 96 Versuche, zuletzt 2026-10-17 17:30 UTC: kein Platz\.$/m);
+  assert.match(mit(helfer("zeit=2026-10-17T17:30:00+00:00;versuche=9;art=drossel;grund=Too many requests for user")).platzsucher.text,
+    /zuletzt 2026-10-17 17:30 UTC: Oracle bremst \(zu viele Anfragen\)\.$/);
+  const halt = mit(helfer("zeit=2026-10-17T11:00:00+00:00;versuche=4;art=halt;grund=LimitExceeded: x"));
+  assert.deepEqual([halt.platzsucher.status, halt.platzsucher.text], ["angehalten", "Platzsucher: angehalten am 2026-10-17 11:00 UTC nach 4 Versuchen: LimitExceeded: x"]);
+  // ohne Meldung: in den ersten drei Stunden startet er; danach (oder mit alter Meldung) sucht er nicht oder ist zu alt dafür
+  assert.equal(mit(helfer("", { "time-created": "2026-10-17T16:00:00.000000+00:00" })).platzsucher.status, "startet");
+  assert.match(mit(helfer("")).platzsucher.text, /^Platzsucher: Der Helfer läuft seit 2026-10-17 10:00 UTC, meldet aber keinen Stand \(ältere Version, oder er sucht nicht\)\.$/);
+  assert.match(mit(helfer("zeit=2026-10-17T12:00:00+00:00;versuche=5;art=weiter;grund=kein Platz")).platzsucher.text, /seit 2026-10-17 12:00 UTC keinen Stand mehr/);
+  assert.equal(mit(helfer("kaputt")).platzsucher.status, "still");
+  assert.equal(mit(helfer("zeit=2026-10-17T17:30:00+00:00;versuche=96;art=weiter;grund=kein Platz", { "lifecycle-state": "STOPPED" })).platzsucher.status, "aus");
+  const ohne = auswerten(bestand());
+  assert.equal(ohne.platzsucher, null);
+  assert.doesNotMatch(text(ohne), /Platzsucher/);
+});
+
 test("Budget ohne Mail-Regel für echte Kosten zählt nicht als Schutz", async () => {
   const { auswerten } = await laden();
   const ohne = auswerten(bestand({ budgets: [{ "display-name": "kostenwarnung", id: "b" }], budgetRegeln: [{ type: "FORECAST", "lifecycle-state": "ACTIVE" }] }));
