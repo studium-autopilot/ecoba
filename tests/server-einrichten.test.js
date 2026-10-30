@@ -366,6 +366,36 @@ test("Platzsucher: Mail-Thema, Helfer (Micro, 50 GB) mit fertiger Konfiguration,
   assert.equal(w.k.instanzen.length, 0);
 });
 
+test("Platzsucher ohne --mail: nimmt die Adresse aus dem Schutz, die Einrichtung fragt nur einmal danach", async () => {
+  const { netz, platzsucher, auswerten } = await laden();
+  const ZWEITE = "zweite" + "@example.org";
+  const regeln = [{ type: "FORECAST", recipients: ZWEITE, "lifecycle-state": "ACTIVE" }, { type: "ACTUAL", recipients: MAIL, "lifecycle-state": "ACTIVE" }];
+  const a = auswerten(geschuetzt({ budgetRegeln: regeln }), { helfer: true });
+  assert.equal(a.schutz.mail, MAIL, "die Adresse der Warnung ab dem ersten Cent");
+  const x = konto();
+  await netz(x.oci, { tenancy: T });
+  const r = await platzsucher(x.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, vorlage: VORLAGE, skript: SKRIPT });
+  assert.equal(r.exit, 0, JSON.stringify(r.schritte));
+  assert.deepEqual(x.k.abos.map((y) => y.endpoint), [MAIL]);
+  // mehrere Empfänger: die erste gültige; --mail geht vor
+  assert.equal(auswerten(geschuetzt({ budgetRegeln: [{ type: "ACTUAL", recipients: ` kaputt, ${MAIL}, ${ZWEITE}`, "lifecycle-state": "ACTIVE" }] })).schutz.mail, MAIL);
+  const y = konto();
+  await netz(y.oci, { tenancy: T });
+  await platzsucher(y.oci, { tenancy: T, a, ads: ADS, schluessel: SSH, mail: ZWEITE, vorlage: VORLAGE, skript: SKRIPT });
+  assert.deepEqual(y.k.abos.map((z) => z.endpoint), [ZWEITE]);
+  // keine Adresse im Schutz und kein --mail: Exit 2 wie bisher
+  await assert.rejects(platzsucher(konto().oci, { tenancy: T, a: auswerten(geschuetzt(), { helfer: true }), ads: ADS, schluessel: SSH, vorlage: VORLAGE, skript: SKRIPT }),
+    (e) => e.exit === 2 && /--mail <adresse> fehlt/.test(e.message));
+});
+
+test("Skill: nur eine Frage nach der Mail-Adresse, in Alltagssprache; der Platzsucher läuft ohne --mail", () => {
+  const schritte = fs.readFileSync(path.join(SERVER, "skill", "server-einrichten", "schritte.md"), "utf8");
+  assert.match(schritte, /node server\/einrichten\.mjs platzsucher --schluessel ~\/\.ssh\/studium_autopilot\.pub/);
+  assert.doesNotMatch(schritte, /platzsucher --mail/, "kein zweites Mal nach der Adresse fragen");
+  assert.match(schritte, /„An welche Mail-Adresse soll Oracle\s+dir schreiben\?/);
+  assert.match(fs.readFileSync(path.join(SERVER, "skill", "server-einrichten", "SKILL.md"), "utf8"), /\*\*Fragen ohne Technik\.\*\*/);
+});
+
 test("Platzsucher: Helfer einer früheren Version wird ersetzt, nicht nur neu gestartet; Richtlinie mit --version-date", async () => {
   const { netz, platzsucher, auswerten, helferFassung, PLATZSUCHER_RECHTE } = await laden();
   const x = konto();

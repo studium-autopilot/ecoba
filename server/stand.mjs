@@ -212,6 +212,9 @@ export function auswerten(b, { helfer = false } = {}) {
   const budget = b.budgets.find((x) => x["display-name"] === "kostenwarnung");
   // Ein Budget schützt nur mit Mail-Regel für echte Kosten (ACTUAL); ohne Regel kommt nie eine Mail
   const budgetMail = !!budget && (b.budgetRegeln || []).some((r) => r.type === "ACTUAL" && lebt(r));
+  // Ihre Adresse (Schritt 3) nimmt auch der Platzsucher, damit die Einrichtung nicht ein zweites Mal nach einer Mail-Adresse fragt
+  const regel = budget && (b.budgetRegeln || []).find((r) => r.type === "ACTUAL" && lebt(r));
+  const schutzMail = String((regel || {}).recipients || "").split(/[\s,;]+/).find((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) || "";
   if (!quota) fund("hinweis", "Schutz fehlt: Quota-Richtlinie „nur-kostenlos“.");
   if (!budget) fund("hinweis", "Schutz fehlt: Budget „kostenwarnung“ mit Mail ab dem ersten Cent.");
   else if (!budgetMail) fund("hinweis", "Schutz unvollständig: Budget „kostenwarnung“ ohne Mail ab dem ersten Cent.");
@@ -244,7 +247,7 @@ export function auswerten(b, { helfer = false } = {}) {
     zeit: b.zeit, konto: kontotyp(b), heimat, exit, befunde, plan, platzsucher,
     belegt: { ocpu, gb, micro, speicherGb: topf.belegt, backups, objektGb: Math.round(objektGb * 10) / 10 },
     rest: { ...rest, speicherGb: topf.rest, speicherQuelle: topf.quelle },
-    kosten, schutz: { quota: !!quota, budget: budgetMail },
+    kosten, schutz: { quota: !!quota, budget: budgetMail, mail: schutzMail },
     studiumAutopilot: b.markiert.filter(lebt).map((r) => ({ typ: r["resource-type"], name: r["display-name"] || "" })),
   };
 }

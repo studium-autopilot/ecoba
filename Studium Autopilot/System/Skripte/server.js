@@ -1,7 +1,7 @@
 // Eigener Server mit Claude: Ein kostenloser Server der Studentin oder des Studenten findet mit Claude Termine und Hinweise in
 // Uni-Mails und Gmail (Server-Paket in server/ des Projekts). Dieses Skript holt die Ergebnisse ab, entschlüsselt sie und
 // legt die Termine als Notizen an. Ohne Verbindung geht nichts ins Netz; unter Verbindungen steht dann nur eine leise Zeile
-// „Für Technische“ mit dem Knopf „Prompt kopieren“ (Text zum Einfügen in Claude Desktop, PROMPT).
+// „Für Technische“ mit dem Knopf „Prompt kopieren“ (Text zum Einfügen in Claude Code, Tab „Code“ in Claude Desktop, PROMPT).
 //
 // Verbinden: Der Server zeigt einen Link obsidian://studium-autopilot?aktion=server-verbinden&adresse=…&code=… mit einem
 //   Einmal-Code (30 Minuten). Jede Webseite könnte so einen Link bauen, darum immer mit Rückfrage. Das Plugin tauscht den Code
@@ -138,12 +138,16 @@ module.exports = function (ctx) {
   };
   const ENTFAELLT_ZENTRAL = "> Dieser Termin steht nicht mehr in den zentralen Daten. Deine Notizen unten bleiben.";
   const ENTFAELLT_SERVER = "> Laut deinem Server entfällt dieser Termin. Deine Notizen unten bleiben.";
-  // Text zum Einfügen in Claude Desktop, Knopf „Prompt kopieren“ (gleicher Wortlaut wie im README, „Für Technische“). Die
-  // Anleitung kommt aus dem Tag des neuesten Releases, nie von main: Sie lädt dann genau das Server-Paket ihrer Version.
+  // Text zum Einfügen in Claude Code (Tab „Code“ in Claude Desktop), Knopf „Prompt kopieren“ (gleicher Wortlaut wie im README,
+  // „Für Technische“). Die Anleitung kommt aus dem Tag des neuesten Releases, nie von main: Sie lädt dann genau das Server-Paket
+  // ihrer Version. Landet der Prompt im Chat statt in Claude Code, sagt Claude nur, wie man wechselt (Skill, „Zuerst“): Die
+  // Einrichtung braucht den eingebauten Browser von Claude Code.
   const PROMPT = "Richte mir den eigenen Server für Studium Autopilot ein oder setz die Einrichtung fort (github.com/studium-autopilot/ecoba).\n" +
     "Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die Versionsnummer daraus (vX.Y.Z) und lies aus\n" +
     "genau dieser Version https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die\n" +
-    "Dateien daneben. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich Schritt für Schritt.";
+    "Dateien daneben. Bist du nicht Claude Code (Tab „Code“ in Claude Desktop), sag mir nur, wie ich dorthin wechsle, wie es\n" +
+    "dort unter „Zuerst“ steht, und fang nicht an. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich\n" +
+    "Schritt für Schritt.";
   // LiveSync (seit 0.5.7): Der Server gleicht auf Wunsch den Tresor zwischen Windows, iPhone und iPad ab. Nur auf einem
   // verbundenen Gerät, und nur solange LiveSync hier noch nicht läuft, steht im Fenster „Eigener Server“ der Knopf
   // „Prompt kopieren“ mit diesem Text (Ablauf im Skill: server/skill/server-einrichten/livesync.md).
@@ -151,15 +155,16 @@ module.exports = function (ctx) {
     "(github.com/studium-autopilot/ecoba). Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die\n" +
     "Versionsnummer daraus (vX.Y.Z) und lies aus genau dieser Version\n" +
     "https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die Dateien daneben,\n" +
-    "dann „LiveSync einrichten“. Führe mich Schritt für Schritt.";
+    "dann „LiveSync einrichten“. Bist du nicht Claude Code (Tab „Code“ in Claude Desktop), sag mir nur, wie ich dorthin\n" +
+    "wechsle, wie es in SKILL.md unter „Zuerst“ steht, und fang nicht an. Führe mich Schritt für Schritt.";
   // Was das Fenster zu LiveSync zeigt: null (nicht verbunden, oder LiveSync läuft hier schon) | { titel, text }.
   // livesync: Wert des Servers („an“, „aus“, „unbekannt“ bei älteren Servern; die Anleitung aktualisiert sie zuerst)
   const livesyncAngebot = ({ verbunden, hier, livesync }) => {
     if (!verbunden || hier) return null;
     if (livesync === "an") {
-      return { titel: "Dieses Gerät abgleichen", text: "LiveSync läuft schon auf deinem Server. Kopier den Prompt und füg ihn in Claude Desktop ein: Claude bringt deinen Tresor auch auf dieses Gerät." };
+      return { titel: "Dieses Gerät abgleichen", text: "LiveSync läuft schon auf deinem Server. Kopier den Prompt und füg ihn in Claude Desktop im Tab „Code“ ein: Claude bringt deinen Tresor auch auf dieses Gerät." };
     }
-    return { titel: "Windows und iPhone abgleichen", text: "Dein Server kann deinen Tresor zwischen Windows, iPhone und iPad abgleichen, kostenlos und ohne iCloud. Kopier den Prompt und füg ihn in Claude Desktop ein: Claude richtet alles ein und sagt dir, wo du tippen musst." };
+    return { titel: "Windows und iPhone abgleichen", text: "Dein Server kann deinen Tresor zwischen Windows, iPhone und iPad abgleichen, kostenlos und ohne iCloud. Kopier den Prompt und füg ihn in Claude Desktop im Tab „Code“ ein: Claude richtet alles ein und sagt dir, wo du tippen musst." };
   };
 
   // ---------- Kleine Helfer ----------
@@ -920,17 +925,17 @@ module.exports = function (ctx) {
           // tagelang nicht erreichbar löst sich kaum von selbst (Server gelöscht oder neu angelegt, neue IP): mindestens zwei
           // Fehlschläge in Folge, der erste vor mehr als UNERREICHBAR_TAGE
           if (s.code === "netz" && s.fehlerSerie >= 2 && s.fehlerSeit && alterMs(s.fehlerSeit) > UNERREICHBAR_TAGE * 1440 * MIN) {
-            return { text: `Dein Server ist seit mehr als ${UNERREICHBAR_TAGE} Tagen nicht erreichbar. Sag in Claude Desktop „Weiter mit der Einrichtung“; hat er eine neue Adresse, verbindest du ihn danach neu.`,
+            return { text: `Dein Server ist seit mehr als ${UNERREICHBAR_TAGE} Tagen nicht erreichbar. Sag in Claude Code „Weiter mit der Einrichtung“; hat er eine neue Adresse, verbindest du ihn danach neu.`,
               symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
           }
           return { text: stand.text, symbol: stand.symbol, pille: "an", knopf: AKTUALISIEREN, link: MEHR };
         default: break;
       }
-      if (w.claude === "abgemeldet") return { text: "Claude ist auf deinem Server nicht mehr verbunden. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann verbindest du es neu.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
-      if (w.uniZugang === "falsch") return { text: "Die Uni nimmt das Passwort auf deinem Server nicht an. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann gibst du es neu ein.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
+      if (w.claude === "abgemeldet") return { text: "Claude ist auf deinem Server nicht mehr verbunden. Sag in Claude Code „Weiter mit der Einrichtung“, dann verbindest du es neu.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
+      if (w.uniZugang === "falsch") return { text: "Die Uni nimmt das Passwort auf deinem Server nicht an. Sag in Claude Code „Weiter mit der Einrichtung“, dann gibst du es neu ein.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       if (w.claudeLauf === "wartet" || w.claudeLauf === "laeuft") return { text: "Claude durchsucht gerade deine Mails auf deinem Server …", symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
       if (w.fehler && w.fehler.indexOf("claude-limit") >= 0) return { text: "Claude hat gerade sein Limit erreicht. Der nächste Lauf versucht es von selbst.", symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
-      if (versionLage(w) === "haengt") return { text: `Dein Server installiert seit mehr als ${VERSION_TAGE} Tagen keine neue Version mehr. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann holt Claude das nach.`, symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
+      if (versionLage(w) === "haengt") return { text: `Dein Server installiert seit mehr als ${VERSION_TAGE} Tagen keine neue Version mehr. Sag in Claude Code „Weiter mit der Einrichtung“, dann holt Claude das nach.`, symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       const n = s.bericht ? s.bericht.neu + s.bericht.geaendert : 0;
       const teile = [stand.text];
       if (w.letzterLauf) teile.push(`Letzter Lauf des Servers ${vor(w.letzterLauf.zeit)}.`.replace(/\.\.$/, ".")); // „vor 5 Min.“ hat schon den Punkt
@@ -1295,7 +1300,7 @@ module.exports = function (ctx) {
   const kopieren = async (text) => {
     try {
       await navigator.clipboard.writeText(typeof text === "string" ? text : PROMPT);
-      ctx.hinweis("Kopiert. Füg den Text in Claude Desktop ein.");
+      ctx.hinweis("Kopiert. Füg den Text in Claude Desktop im Tab „Code“ ein.");
     } catch (e) {
       ctx.hinweis("Kopieren ging nicht. Den Text findest du im README unter „Für Technische“.");
     }

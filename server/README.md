@@ -9,8 +9,10 @@ mit verschlüsseltem Datenkanal, Speicherreserve, Uni-Zugang, Befehle), der Abru
 der Claude-Lauf mit dem Skill (`lauf.mjs`, `skill/studium-autopilot/`, Prüfung `eingang.mjs`). Die Gegenstelle im Plugin ist
 `server.js` (Zeile „Eigener Server“). Noch nicht: Abrufe von ILIAS-Dateien und Alma.
 
-**Einrichtung:** Ein Claude-Skill (`skill/server-einrichten/`: `SKILL.md`, `schritte.md`, `kosten.md`) führt in Claude Desktop durch
-die Schritte 0 bis 12, wahlweise mit Computer Use („Claude klickt“) oder mit Ansagen („Ich klicke selbst“). Angelegt wird im
+**Einrichtung:** Ein Claude-Skill (`skill/server-einrichten/`: `SKILL.md`, `schritte.md`, `kosten.md`) führt in Claude Code (Tab
+„Code“ in Claude Desktop) durch die Schritte 0 bis 12, im eingebauten Browser von Claude Code, wahlweise klickt Claude („Claude
+klickt“) oder sagt an („Ich klicke selbst“). Läuft der Prompt woanders (Chat, Cowork, claude.ai, Handy), sagt Claude nur, wie
+man in den Tab „Code“ wechselt; Claude in Chrome und Computer Use braucht die Einrichtung nicht. Angelegt wird im
 Konto nur über `einrichten.mjs`; jeder Schritt erkennt am Stand, ob er schon erledigt ist. `tests/server-einrichten.test.js`
 prüft, dass jeder im Skill genannte Befehl existiert.
 
@@ -92,8 +94,8 @@ denselben Befehl in die Cloud Shell ein.
 node einrichten.mjs schutz --mail <adresse> [--ja]    Quota „nur-kostenlos“ (Kennzeichen schutz) und Budget „kostenwarnung“
 node einrichten.mjs netz                              Netz, Internet-Zugang, Route, Regeln (von außen nur 22 und 443), Teilnetz
 node einrichten.mjs server --schluessel <datei.pub>   A1 2 OCPU / 12 GB, Ubuntu 24.04, Boot-Volume = Rest des freien Topfs
-node einrichten.mjs platzsucher --mail <adresse> --schluessel <datei.pub>
-                                                      Mail-Thema mit Abo, Helfer (Micro, 50 GB) mit platzsucher-helfer.yaml,
+node einrichten.mjs platzsucher [--mail <adresse>] --schluessel <datei.pub>
+                                                      Mail-Thema mit Abo (ohne --mail an die Adresse des Budgets), Helfer (Micro, 50 GB) mit platzsucher-helfer.yaml,
                                                       dynamische Gruppe und Richtlinie nur für ihn
 node einrichten.mjs abschliessen                      Rechte des Platzsuchers weg, Boot-Volume auf den freien Rest,
                                                       Blockspeicher der Quota auf den Stand danach

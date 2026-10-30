@@ -2,6 +2,13 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.5 – Eigenen Server leichter einrichten
+
+- **Einfacher:** Den eigenen Server richtet Claude jetzt im Tab **Code** von Claude Desktop ein und klickt im eingebauten
+  Browser, ohne Erweiterung für Chrome. Fügst du den Prompt im normalen Chat ein, sagt Claude dir, wie du wechselst.
+- **Behoben:** Bei der Einrichtung des eigenen Servers fragte Claude manchmal mit Wörtern, die niemand kennt, etwa nach einer
+  Mail-Adresse „für den Platzsucher“. Jetzt fragt Claude nur einmal nach deiner Mail-Adresse und sagt dabei, wofür.
+
 ## 0.7.4 – Platzsucher zeigt, wie weit er ist
 
 - **Behoben:** „Weiter mit der Einrichtung“ brach mit „Too many requests“ ab, während der Platzsucher noch nach Platz suchte. Jetzt

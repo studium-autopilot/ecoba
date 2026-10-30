@@ -853,7 +853,7 @@ test("Neue Version des Servers: ein Fehlschlag steht nur im Fenster, nach 3 Tage
     srv.konfig.version = "0.6.7";
     // seit mehr als 3 Tagen nichts ohne Fehler, und die zentralen Daten bieten 0.6.8: die Zeile sagt, was hilft
     f = await fall(lange);
-    assert.equal(f.zeile.text, "Dein Server installiert seit mehr als 3 Tagen keine neue Version mehr. Sag in Claude Desktop „Weiter mit der Einrichtung“, dann holt Claude das nach.");
+    assert.equal(f.zeile.text, "Dein Server installiert seit mehr als 3 Tagen keine neue Version mehr. Sag in Claude Code „Weiter mit der Einrichtung“, dann holt Claude das nach.");
     assert.deepEqual([f.zeile.symbol, f.zeile.pille, f.fenster], ["warnung", "pruefen", "seit mehr als 3 Tagen keine installiert"]);
     assert.equal((await fall(langeOk)).zeile.pille, "pruefen", "ebenso, wenn er gar nicht mehr nachsieht");
     // ohne neuere Version in den zentralen Daten nie in der Zeile, auch wenn es lange her ist
@@ -944,6 +944,22 @@ test("Prompt kopieren: derselbe Text wie im README unter „Für Technische“, 
   assert.match(S.PROMPT, /releases\/latest/, "Anleitung aus dem neuesten Release");
   assert.doesNotMatch(S.PROMPT, /\/(blob|raw|tree)\/main\//, "nie von main");
   assert.ok(fs.existsSync(path.join(SERVER, "skill", "server-einrichten", "SKILL.md")), "der Skill liegt dort");
+});
+
+test("Prompts außerhalb von Claude Code: Claude sagt nur, wie man wechselt; die Einrichtung nutzt den eingebauten Browser", () => {
+  const skill = fs.readFileSync(path.join(SERVER, "skill", "server-einrichten", "SKILL.md"), "utf8");
+  const abschnitt = skill.match(/^## (Zuerst: [^\n]*Claude Code[^\n]*)$/m);
+  assert.ok(abschnitt, "SKILL.md hat den Abschnitt „Zuerst“");
+  for (const p of [S.PROMPT, S.LIVESYNC_PROMPT]) {
+    assert.match(p, /Bist du nicht Claude Code \(Tab „Code“ in Claude Desktop\), sag mir nur, wie ich dorthin\s+wechsle/);
+    assert.match(p, /unter „Zuerst“ steht, und fang nicht an/);
+  }
+  assert.match(skill, /Tab \*\*Code\*\*/, "der Weg zum Tab steht im Skill");
+  const schritte = fs.readFileSync(path.join(SERVER, "skill", "server-einrichten", "schritte.md"), "utf8");
+  for (const t of [skill, schritte]) {
+    assert.doesNotMatch(t.replace(/Claude in Chrome und Computer Use brauchst du nicht[^\n]*/, ""), /Claude in Chrome|Computer Use/,
+      "kein Weg über die Chrome-Erweiterung oder Computer Use");
+  }
 });
 
 test("LiveSync im Fenster „Eigener Server“: nur verbunden und ohne LiveSync hier, Prompt führt zum Abschnitt im Skill", () => {

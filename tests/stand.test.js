@@ -76,7 +76,7 @@ test("älteres Pay-As-You-Go-Konto: Kosten, A1 über der freien Menge, loses Boo
   assert.ok(a.befunde.some((f) => f.art === "hinweis" && f.text.includes("„alt“")));
   assert.deepEqual([a.belegt.speicherGb, a.rest.speicherGb, a.belegt.backups], [94, 106, 4]);
   assert.equal(a.plan.status, "passt-nicht");
-  assert.deepEqual(a.schutz, { quota: true, budget: true });
+  assert.deepEqual(a.schutz, { quota: true, budget: true, mail: "" }, "Regel ohne Empfänger: keine Adresse");
   const t = text(a);
   assert.match(t, /Kosten diesen Monat: 3,25 EUR/);
   assert.ok(a.befunde.some((f) => f.text.includes("1,95 EUR")));

@@ -117,20 +117,22 @@ Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an
 
 - **Kostet nichts:** ein Server im Always-Free-Angebot von Oracle (2 OCPU, 12 GB), ohne Upgrade auf Pay-As-You-Go. Ein Budget
   warnt ab dem ersten Cent, eine Quota sperrt alles, was Geld kosten könnte.
-- **Claude richtet ihn ein:** In Claude Desktop führt ein Skill durch alle Schritte und klickt auf Wunsch selbst (Computer
-  Use). Anmeldungen, Kreditkarte und Zustimmungen machst du. Hat Oracle gerade keinen Platz, sucht ein kleiner Helfer weiter
+- **Claude richtet ihn ein:** In Claude Code führt ein Skill durch alle Schritte und klickt auf Wunsch selbst, im eingebauten
+  Browser. Anmeldungen, Kreditkarte und Zustimmungen machst du. Hat Oracle gerade keinen Platz, sucht ein kleiner Helfer weiter
   und schickt dir eine Mail, sobald der Server da ist.
-- **Du brauchst:** Claude Pro oder Max und ein Oracle-Konto. Gmail ist freiwillig.
+- **Du brauchst:** Claude Pro oder Max, Claude Desktop auf Windows oder Mac und ein Oracle-Konto. Gmail ist freiwillig.
 - **Deine Daten** bleiben auf deinem Server und in deinem Tresor, der Weg dazwischen ist verschlüsselt. Mehr in
   [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
 
-In Claude Desktop einfügen:
+In Claude Desktop oben **Code** wählen (nicht den Chat), als Ordner deinen Tresor, dann einfügen:
 
 ```
 Richte mir den eigenen Server für Studium Autopilot ein oder setz die Einrichtung fort (github.com/studium-autopilot/ecoba).
 Öffne dazu https://github.com/studium-autopilot/ecoba/releases/latest, nimm die Versionsnummer daraus (vX.Y.Z) und lies aus
 genau dieser Version https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die
-Dateien daneben. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich Schritt für Schritt.
+Dateien daneben. Bist du nicht Claude Code (Tab „Code“ in Claude Desktop), sag mir nur, wie ich dorthin wechsle, wie es
+dort unter „Zuerst“ steht, und fang nicht an. Steht in diesem Chat schon eine ältere Anleitung, gilt nur diese. Führe mich
+Schritt für Schritt.
 ```
 
 Wie es gebaut ist: [server/README.md](server/README.md).

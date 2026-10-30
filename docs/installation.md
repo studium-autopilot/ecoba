@@ -246,7 +246,7 @@ Für Technische geht auch Syncthing (kostenlos, nicht für iPhone und iPad). Die
 Kostenlos, alle Geräte (Windows, Mac, iPhone, iPad, Android), ohne iCloud. Hast du deinen
 [eigenen Server](#eigener-server-mit-claude-für-technische) verbunden, tippe unter **Einstellungen & Hilfe** →
 **Verbindungen** in der Zeile „Eigener Server“ auf **Mehr erfahren**. Unter „Windows und iPhone abgleichen“ **Prompt kopieren**
-tippen und in Claude Desktop einfügen. Claude richtet den Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das
+tippen und in Claude Desktop im Tab **Code** einfügen. Claude richtet den Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das
 Community-Plugin Self-hosted LiveSync auf jedes Gerät; iCloud und andere Abgleiche für den Tresor schaltest du danach aus.
 
 ## Update auf eine neue Version
@@ -301,6 +301,6 @@ unter Billing ein. Mit einem Abo (Claude Pro oder Max) geht es nicht, das erlaub
 ## Eigener Server mit Claude (für Technische)
 
 Freiwillig und erst, wenn die Einrichtung in Obsidian fertig ist. Claude richtet dir einen kostenlosen Server bei Oracle ein,
-der deine Unterlagen über dein Claude-Abo zusammenfasst und in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop und was du dafür brauchst, findest du im
+der deine Unterlagen über dein Claude-Abo zusammenfasst und in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop (Tab **Code**, nicht der Chat) und was du dafür brauchst, findest du im
 README unter „Für Technische: eigener Server mit Claude“. Verbunden wird jedes Gerät mit einem eigenen Link vom Server;
 danach steht unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**.

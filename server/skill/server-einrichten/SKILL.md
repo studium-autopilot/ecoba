@@ -20,6 +20,24 @@ Abo in Uni-Mails und Gmail nach Terminen, und Obsidian holt die Ergebnisse versc
 Lies vor dem ersten Schritt schritte.md und kosten.md (für LiveSync dazu livesync.md), aus derselben Version wie diese Datei. Schritt 2 lädt das Server-Paket genau dieser
 Version; Anleitung und Paket passen so immer zusammen.
 
+## Zuerst: Läuft das hier in Claude Code?
+
+Die Einrichtung läuft nur in **Claude Code**, dem Tab **Code** in Claude Desktop: Dort gibt es den eingebauten Browser, in dem
+du die Oracle-Konsole bedienst. Prüfe das vor allem anderen, auch vor Schritt 0, und bei jedem Auslöser unten.
+
+- **Du bist nicht Claude Code** (Chat oder Cowork in Claude Desktop, claude.ai im Browser, die Handy-App): Fang nichts an, lies
+  keine weiteren Dateien und gib keine Schritte oder Befehle zum Abtippen. Sag nur, wie man wechselt, und halte an:
+  1. Claude Desktop öffnen (fehlt es: [claude.com/download](https://claude.com/download), auf Windows oder Mac). Auf dem Handy
+     geht die Einrichtung nicht.
+  2. Oben auf den Tab **Code** klicken.
+  3. Unter dem Eingabefeld als Umgebung **Local** wählen und als Ordner den Ordner deines Tresors.
+  4. Den Prompt aus Obsidian dort noch einmal einfügen und senden.
+- **Du bist Claude Code, aber ohne eingebauten Browser** (im Terminal, in VS Code oder einer anderen IDE, in einer Cloud- oder
+  SSH-Umgebung): Empfiehl denselben Wechsel (Schritte oben). Will der Mensch bleiben, geht nur „Ich klicke selbst“ in seinem
+  eigenen Browser; was dort steht, kopiert er dann in den Chat.
+
+Claude in Chrome und Computer Use brauchst du nicht; nutze sie auch nicht, wenn sie da sind.
+
 ## Grundregeln
 
 - **Nie Kosten.** Vor jedem Anlegen gelten die Regeln in [kosten.md](kosten.md). Nie auf Pay-As-You-Go umstellen, nie ein
@@ -29,6 +47,10 @@ Version; Anleitung und Paket passen so immer zusammen.
 - **Anmeldungen, Kreditkarte, Zwei-Faktor und Zustimmungen macht immer der Mensch.** Du hältst an und sagst, was zu tun ist.
 - **Keine Geheimnisse im Chat.** Passwörter, Codes aus Mails, Kartendaten und das Uni-Passwort gehören nie in den Chat. Fügt
   jemand so etwas ein: nicht verwenden, sagen, dass es nicht hierher gehört, und bei einem Passwort raten, es zu ändern.
+- **Fragen ohne Technik.** Frag nur, was der Mensch ohne Vorwissen beantworten kann, und sag in einem Satz, wofür du es
+  brauchst. Wörter aus dieser Anleitung (Platzsucher, Quota, Budget, Cloud Shell, Boot-Volume, Schlüssel, OCPU) erklärst du beim
+  ersten Mal in Alltagssprache oder lässt sie weg. Was die Anleitung oder der Stand schon festlegt, fragst du nicht: keine Wahl
+  zwischen technischen Möglichkeiten, keine Frage nach Werten, die ein Befehl selbst findet.
 - **Ein Schritt je Nachricht.** Vorher ein Satz, was jetzt passiert („Ich lege jetzt den Server an, das dauert etwa 2
   Minuten.“), danach ein Satz zum Ergebnis. „du“, kurze Sätze, keine Fachwörter ohne Erklärung.
 - **Stand statt Erinnerung.** Was erledigt ist, entscheiden `stand.mjs`, die Schritte von `einrichten.mjs` und der Status des
@@ -52,24 +74,24 @@ Version; Anleitung und Paket passen so immer zusammen.
   URL-kodiert, ohne `labels=`); abschicken tut er selbst mit seinem GitHub-Konto. Sicherheitslücken nie öffentlich, nur:
   <https://github.com/studium-autopilot/ecoba/security/advisories/new>
 
-## Zwei Arten, im geteilten Bildschirm
+## Zwei Arten, im eingebauten Browser
 
-Beide Arten laufen gleich ab, mit denselben Prüfungen. Die Wahl fällt in Schritt 0 und lässt sich jederzeit wechseln
-(„Mach du weiter“, „Ich mache selbst weiter“); der Stand kommt dann aus den Prüfungen, nicht von vorn.
+Beide Arten laufen gleich ab, mit denselben Prüfungen, und beide im eingebauten Browser von Claude Code: links der Chat, rechts
+der Browser, im selben Fenster. Öffnen mit **Browser** in der Titelleiste der Sitzung oder `Strg+Umschalt+B` (Mac:
+`Cmd+Umschalt+B`). Die Wahl der Art fällt in Schritt 0 und lässt sich jederzeit wechseln („Mach du weiter“, „Ich mache selbst
+weiter“); der Stand kommt dann aus den Prüfungen, nicht von vorn.
 
-- **„Claude klickt“** (Standard): Du bedienst den Browser mit Computer Use bzw. Claude in Chrome. Ist Computer Use aus, führst du
-  durch das Einschalten (Claude Desktop → Einstellungen → Allgemein → Computer Use), statt ohne weiterzumachen. Du arbeitest im
-  Hintergrund-Modus: nur die freigegebenen Apps, der Chat bleibt sichtbar. Volle Kontrolle nur, wenn ein Schritt sie wirklich
-  braucht, und nur mit Zustimmung.
-- **„Ich klicke selbst“**: Du sagst jeden Klick mit der genauen Beschriftung an, höchstens drei je Nachricht („Klick oben rechts
-  auf das Symbol **>_** (Cloud Shell)“), dann: „Sag ‚fertig‘ oder schick mir ein Bildschirmfoto, wenn etwas anders aussieht.“
-  Befehle stehen als Codeblock zum Kopieren; die Ausgabe von `stand.mjs` und `einrichten.mjs` kopiert der Mensch zurück. Werte
-  zum Eintragen nennst du fertig zum Kopieren. Vor jedem Klick auf „Create“ eine Kontrollzeile („Steht da 2 OCPU, 12 GB und
-  ‚Always Free-eligible‘? Dann klicken.“).
-
-**Bildschirm geteilt:** links Claude Desktop mit dem Chat, rechts der Browser. Windows: Claude-Fenster `Win+←`, Browser `Win+→`.
-Mac: im Menü **Fenster → Bewegen & Größe ändern → Links** bzw. **Rechts**. Bei „Claude klickt“ ordnest du die Fenster selbst,
-sonst sagst du die Tasten an.
+- **„Claude klickt“** (Standard): Du öffnest die Seiten selbst im eingebauten Browser, klickst und tippst dort. Der Browser
+  startet ohne gespeicherte Anmeldungen: Bei Oracle, claude.ai und der Uni meldet sich der Mensch dort selbst an. Fragt Claude
+  Desktop beim ersten Klick auf einer Seite, ob du dort handeln darfst, sagst du: „Klick auf **Immer erlauben**.“ Damit die
+  Anmeldung bei Oracle ein Neustart der App übersteht, im Menü **⋮** des Browsers **Keep cookies** einschalten lassen. Ist der
+  Browser aus: Claude Desktop → Einstellungen → **Code** → **Browser tools** einschalten.
+- **„Ich klicke selbst“**: Der Mensch klickt im eingebauten Browser, du sagst jeden Klick mit der genauen Beschriftung an,
+  höchstens drei je Nachricht („Klick oben rechts auf das Symbol **>_** (Cloud Shell)“), dann: „Sag ‚fertig‘, wenn du so weit
+  bist.“ Was auf der Seite steht, auch die Ausgabe von `stand.mjs` und `einrichten.mjs`, liest du selbst im Browser; der Mensch
+  muss nichts abschreiben oder fotografieren. Befehle stehen als Codeblock zum Kopieren, Werte zum Eintragen nennst du fertig
+  zum Kopieren. Vor jedem Klick auf „Create“ eine Kontrollzeile („Steht da 2 OCPU, 12 GB und ‚Always Free-eligible‘? Dann
+  klicken.“).
 
 ## Auslöser
 

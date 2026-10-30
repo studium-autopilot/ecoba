@@ -428,7 +428,7 @@ module.exports = function (ctx) {
     // Eigener Server mit Claude (server.js): Zusammenfassungen über das Claude-Abo, Termine und Hinweise aus Uni-Mails und
     // Kursdaten. Seit 26.10.2026 der empfohlene Weg zum Zusammenfassen (der API-Schlüssel kostet je Unterlage extra); die Texte
     // nennen das Abo zuerst. Ohne Server (kein Gerät verbunden, keine server.json per Sync) eine leise Zeile „Für Technische“ mit
-    // „Mehr erfahren“: Fenster mit Schritten, dem Knopf „Prompt kopieren“ für Claude Desktop und ganz unten dem leisen Link zum
+    // „Mehr erfahren“: Fenster mit Schritten, dem Knopf „Prompt kopieren“ für Claude Code und ganz unten dem leisen Link zum
     // API-Schlüssel. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert ctx.server (zeile(), fensterInhalt()).
     server: {
       id: "server", name: "Eigener Server", art: "server", symbol: "server",
@@ -445,7 +445,7 @@ module.exports = function (ctx) {
         if (!ctx.server.sichtbar()) {
           return [
             "Unten **Prompt kopieren** tippen.",
-            "Claude Desktop öffnen, den Text einfügen und senden. Claude führt dich durch alles Weitere.",
+            "Claude Desktop öffnen, oben **Code** wählen und als Ordner deinen Tresor, dann den Text einfügen und senden. Claude führt dich durch alles Weitere.",
             "Zum Schluss auf jedem Gerät den Link öffnen, den dein Server zeigt.",
           ];
         }

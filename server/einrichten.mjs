@@ -6,7 +6,7 @@
 //   node einrichten.mjs netz                                 eigenes Netz (Ports 22 und 443)
 //   node einrichten.mjs server --schluessel <datei.pub>      der Server (A1, 2 OCPU, 12 GB); Exit 3 = gerade kein Platz, Oracle
 //                                                            bremst, oder der Platzsucher sucht schon (dann kein eigener Versuch)
-//   node einrichten.mjs platzsucher --mail <adresse> --schluessel <datei.pub> [--vorlage <platzsucher-helfer.yaml>]
+//   node einrichten.mjs platzsucher [--mail <adresse>] --schluessel <datei.pub> [--vorlage <platzsucher-helfer.yaml>]
 //                                                            (platzsucher.py daneben kommt gepackt in die Vorlage)
 //   node einrichten.mjs abschliessen                         Rechte des Platzsuchers weg, Boot-Volume auf den freien Rest, Quota fest
 //   node einrichten.mjs platzsucher-beenden                  Helfer beenden, seine Rechte und das Mail-Thema entfernen
@@ -259,9 +259,11 @@ const FASSUNG = KENNZEICHEN + "-fassung";
 export const helferFassung = (vorlage, skript, { ads = [], ssh = "" } = {}) => createHash("sha256").update(vorlage).update("\0").update(skript)
   .update("\0").update(JSON.stringify({ ads, ssh })).digest("hex").slice(0, 16);
 
-export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail, vorlage, skript }) {
+export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail: angegeben, vorlage, skript }) {
   const { schritte, merken, muss } = ablauf(oci);
-  if (!MAIL.test(String(mail || ""))) throw Object.assign(new Error("--mail <adresse> fehlt"), { exit: 2 });
+  // ohne --mail die Adresse aus dem Schutz (Budget „kostenwarnung“): Die Einrichtung fragt nur einmal danach
+  const mail = angegeben || (a.schutz || {}).mail;
+  if (!MAIL.test(String(mail || ""))) throw Object.assign(new Error("--mail <adresse> fehlt (das Budget hat keine Mail-Adresse)"), { exit: 2 });
   if (a.plan.status === "da") { merken("platzsucher", "da", a.plan.text + " Kein Platzsucher nötig."); return { schritte, exit: 0 }; }
   if (schutzFehlt(a)) throw schutzFehlt(a);
   // die Zeilen in write_files (die Platzhalter stehen auch im Kopfkommentar)

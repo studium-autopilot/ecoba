@@ -45,3 +45,8 @@ Hinweise im Fenster „Eigener Server“. Diese Termine legst du nicht noch einm
 doppelt. Zusammenfassungen von Folien und Skripten kommen von dort in die Notiz neben der PDF, solange „Das Wichtigste“ leer
 ist; schreibst du selbst eine, schickt Obsidian die Unterlage nicht mehr hin. Beginnt ein Hinweis des Servers mit
 „Zentraler Termin wohl falsch:“, bietest du an, ihn nach `fehler-melden.md` mit der Vorlage `termin.yml` zu melden.
+
+Den Server einrichten, „Weiter mit der Einrichtung“, „Prüf meine Oracle-Kosten“ oder LiveSync: Dafür gilt nur die Anleitung des
+neuesten Releases. Nimm die Versionsnummer aus https://github.com/studium-autopilot/ecoba/releases/latest (vX.Y.Z), lies
+https://github.com/studium-autopilot/ecoba/blob/vX.Y.Z/server/skill/server-einrichten/SKILL.md und die Dateien daneben und
+folge ihr.

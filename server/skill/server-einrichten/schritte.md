@@ -26,10 +26,10 @@ Den Status liest du selbst (Webabruf, öffentlich, ohne persönliche Daten), der
 ## 0. Voraussetzungen und Art
 
 - Fragen: „Soll ich klicken (‚Claude klickt‘), oder klickst du selbst und ich sage an?“
-- Nötig: Claude Pro oder Max (Claude läuft auf dem Server mit diesem Abo), Claude Desktop, Studium Autopilot in Obsidian
-  eingerichtet. Bei „Claude klickt“ zusätzlich Computer Use und auf Windows Claude in Chrome. Fehlt etwas: sagen, wie man es
-  einschaltet, und warten.
-- Fenster nebeneinander anordnen (SKILL.md, „Bildschirm geteilt“).
+- Nötig: Claude Pro oder Max (Claude läuft auf dem Server mit diesem Abo), dieser Chat in Claude Code mit eingebautem Browser
+  (SKILL.md, „Zuerst: Läuft das hier in Claude Code?“), Studium Autopilot in Obsidian eingerichtet. Fehlt etwas: sagen, wie man
+  es einschaltet, und warten.
+- Den eingebauten Browser öffnen (SKILL.md, „Zwei Arten, im eingebauten Browser“).
 
 ## 1. Oracle-Konto
 
@@ -50,7 +50,7 @@ eingesetzt); den Block genau so kopieren:
 
 ```bash
 mkdir -p ~/studium-autopilot && cd ~/studium-autopilot
-info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.7.4)
+info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.7.5)
 url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
 summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
 curl -fsSL "$url" -o studium-server.tar.gz && echo "${summe#sha256:}  studium-server.tar.gz" | sha256sum -c - && rm -rf server && tar -xzf studium-server.tar.gz
@@ -59,7 +59,7 @@ node server/stand.mjs
 
 Meldet `sha256sum` einen Fehler: nichts ausführen, neu laden, sonst anhalten. Das Ergebnis von `stand.mjs` erklärst du in zwei
 Sätzen (Kontotyp, was frei ist, was von Studium Autopilot schon da ist, dazu die Zeile „Platzsucher: …“, falls einer sucht).
-Bei „Ich klicke selbst“ kopiert der Mensch die Ausgabe zurück. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
+Bei „Ich klicke selbst“ liest du die Ausgabe im eingebauten Browser. In jeder neuen Cloud-Shell-Sitzung zuerst `cd ~/studium-autopilot`.
 
 Ab Schritt 5 geht alles auf dem Server über **`bash ~/studium-autopilot/server/fern.sh <befehl>`**: Es holt die Adresse selbst,
 prüft den Schlüssel und ruft ssh auf; keine IP und kein ssh-Befehl von Hand, auch nicht in einer neuen Sitzung. Exit 4: Der
@@ -74,9 +74,11 @@ Server: Schritt 5. Sonst ist es der Exit des Befehls auf dem Server.
 node server/einrichten.mjs schutz --mail <Mail-Adresse>
 ```
 
-Die Mail-Adresse fragst du ab (Warnungen von Oracle gehen dorthin). Exit 2 heißt: Im Konto läuft schon etwas, das nicht
-kostenlos ist. Dann nennst du es, erklärst, dass die Quota weitere bezahlte Ressourcen blockiert, und fragst. Nur mit Zustimmung
-noch einmal mit `--ja`.
+Die Mail-Adresse ist die einzige, nach der die Einrichtung fragt, und nur hier. Frag so: „An welche Mail-Adresse soll Oracle
+dir schreiben? Dorthin kommt eine Warnung, falls je etwas Geld kosten würde, und später die Nachricht, dass dein Server fertig
+ist. Am besten die Adresse, die du jeden Tag liest.“ Exit 2 heißt: Im Konto läuft schon etwas, das nicht kostenlos ist. Dann
+nennst du es, erklärst, dass ab jetzt nichts Bezahltes mehr dazukommen kann, und fragst. Nur mit Zustimmung noch einmal mit
+`--ja`.
 
 ## 4. Server anlegen
 
@@ -96,11 +98,17 @@ node server/einrichten.mjs server --schluessel ~/.ssh/studium_autopilot.pub
   „Too many requests“), oder ein Platzsucher sucht schon (`[platzsucher]`; dann versucht `server` es gar nicht erst, ein
   Versuch daneben bremst nur beide). Das ist normal und kein Fehler des Kontos. Erklären und den **Platzsucher** einrichten
   bzw. prüfen, nicht zum Warten oder Wiederholen raten: Ein kleiner kostenloser Helfer versucht es weiter, alle paar Minuten,
-  auch wenn der Rechner aus ist, und schickt eine Mail, sobald der Server da ist. Mail-Adresse wie in Schritt 3.
+  auch wenn der Rechner aus ist, und schickt eine Mail, sobald der Server da ist. Sag es so, ohne Frage: „Oracle hat gerade
+  keinen Platz für deinen Server. Das ist normal und dauert meist Stunden bis wenige Tage. Ich starte jetzt einen kleinen
+  kostenlosen Helfer, den Platzsucher: Er versucht es für dich weiter und schreibt dir eine Mail, sobald dein Server da ist.“
+  Die Mail-Adresse nimmt er selbst aus Schritt 3; du fragst nicht noch einmal danach.
 
   ```bash
-  node server/einrichten.mjs platzsucher --mail <Mail-Adresse> --schluessel ~/.ssh/studium_autopilot.pub
+  node server/einrichten.mjs platzsucher --schluessel ~/.ssh/studium_autopilot.pub
   ```
+
+  Exit 2 mit „--mail <adresse> fehlt“: Im Schutz steht keine Mail-Adresse. Dann fragst du wie in Schritt 3 und hängst
+  `--mail <Mail-Adresse>` an.
 
   Exit 0: die Zeilen in einem oder zwei Sätzen erklären, dann: „Du kannst den Rechner jetzt ausmachen. Kommt die Mail ‚Dein
   Server ist da‘, sag mir ‚Weiter mit der Einrichtung‘.“ Dabei:
@@ -151,8 +159,8 @@ wiederholbar.
 bash ~/studium-autopilot/server/fern.sh claude-anmelden
 ```
 
-Claude Code zeigt einen Link. Bei „Claude klickt“ öffnest du ihn im Browser; anmelden und **Autorisieren** klickt der Mensch.
-Den angezeigten Code kopierst du mit dem Kopier-Knopf auf der Seite und fügst ihn in die Cloud Shell ein, nie
+Claude Code auf dem Server zeigt einen Link. Bei „Claude klickt“ öffnest du ihn in einem neuen Tab des eingebauten
+Browsers; anmelden und **Autorisieren** klickt der Mensch. Den angezeigten Code kopierst du mit dem Kopier-Knopf auf der Seite und fügst ihn in die Cloud Shell ein, nie
 abgetippt: Ein falsches Zeichen, und die Anmeldung scheitert (bei „Ich klicke selbst“ kopiert und fügt der Mensch). Gleich
 nach dem Link einfügen, der Code gilt nur ein paar Minuten, nur einmal und nur für den Link desselben Befehls.
 
