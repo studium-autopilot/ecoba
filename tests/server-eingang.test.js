@@ -63,14 +63,16 @@ test("Begleitnotizen und Hinweise: nur Pfade unter Unterlagen/, Listen begrenzt,
         zu_tun: [{ text: "Blatt 2 lösen", frist: "2026-10-30", seite: 9, begriff: "x" }], fragen: ["Was ist X?", { text: "Warum?", seite: 2, frist: "2026-10-30" }] },
       { datei: "../System/Einstellungen.md", wichtigste: ["x"] }, { datei: "Unterlagen/a.pdf" }, { datei: "Notizen/a.pdf", fragen: ["y"] },
     ],
-    hinweise: [{ text: "Raumänderung prüfen", quelle: "Mail, 17.10.2026" }, "nur Text", { text: "" }],
+    hinweise: [{ text: "Raumänderung prüfen", quelle: "Mail, 17.10.2026" }, "nur Text", { text: "" },
+      { text: "Übung E101 diese Woche online", code: "E101" }, { text: "Code falsch", code: "e101; rm" }],
   }, { jetzt: JETZT });
   assert.equal(eingang.begleitnotizen.length, 1);
   assert.deepEqual(eingang.begleitnotizen[0].wichtigste, [{ text: "Begriff: Ziel", seite: 5 }, { text: "Zweiter Punkt" },
     { text: "90 Minuten", seite: 3, bis: 4, begriff: "Organisation" }, { text: "Bereich verkehrt", seite: 6 }]);
   assert.deepEqual(eingang.begleitnotizen[0].zu_tun, [{ text: "Blatt 2 lösen", seite: 9, frist: "2026-10-30" }]);
   assert.deepEqual(eingang.begleitnotizen[0].fragen, [{ text: "Was ist X?" }, { text: "Warum?", seite: 2 }]);
-  assert.deepEqual(eingang.hinweise, [{ text: "Raumänderung prüfen", quelle: "Mail, 17.10.2026" }, { text: "nur Text" }]);
+  assert.deepEqual(eingang.hinweise, [{ text: "Raumänderung prüfen", quelle: "Mail, 17.10.2026" }, { text: "nur Text" },
+    { text: "Übung E101 diese Woche online", code: "E101" }, { text: "Code falsch" }], "ein ungültiger Modulcode fällt weg, der Hinweis bleibt");
   assert.deepEqual(verworfen.map((v) => `${v.art}:${v.grund}`).sort(),
     ["begleitnotiz:datei unzulässig", "begleitnotiz:datei unzulässig", "begleitnotiz:leer", "hinweis:fehlt"]);
 });
@@ -167,4 +169,86 @@ test("Doppelte To-dos: nur Paare aus Kennungen, keine Ketten, jedes To-do höchs
   assert.equal(istLeer(eingang), false, "ein Paar ist ein Ergebnis");
   assert.deepEqual(eingangNormal({ termine: [] }).eingang.todo_doppel, []);
   assert.equal(istLeer(eingangNormal({ termine: [] }).eingang), true);
+});
+
+// ---------- Kapitellisten (Lernplan) ----------
+const liste = (x = {}) => ({ code: "B110", semester: "WS 2026/27", quelle: "Folien 00 Einführung, S. 9", stand: "2026-10-16",
+  kapitel: [{ nr: "1", titel: "Grundlagen", seiten: 42, folien: 1, vorlesung: "2026-10-14", teile: [{ nr: "1.1", titel: "Grundbegriffe" }] },
+    { nr: "2", titel: "Kosten und Erlöse", folien: 2, zwischentest: "2026-12-02" },
+    { nr: "E", titel: "Lehrbuch", url: "https://books.core-econ.org/the-economy-v1/book/de/text/03.html" }], ...x });
+
+test("Kapitellisten: Form von kapitel.json (leere Felder weg), ungültiges Kapitel verwirft sein Modul; das Plugin nimmt sie an", async () => {
+  const { eingangNormal, istLeer } = await laden();
+  const { eingang, verworfen } = eingangNormal({ termine: [], kapitel: [
+    liste(),
+    liste({ code: "E101", stand: "", vorlaeufig: true, kapitel: [{ nr: "1", titel: "Märkte", vorlesung: "2026-10-30" }, { nr: "2", titel: "Preise", seiten: null }] }),
+    liste({ code: "S100", kapitel: [{ nr: "1", titel: "Ok" }, { nr: "2", titel: "Mit [[Link]]" }] }),
+    liste({ code: "S110", kapitel: [{ nr: "1", titel: "A" }, { nr: "1", titel: "B" }] }),
+    liste({ code: "B180", kapitel: [{ nr: "1", titel: "A", url: "https://example.com/buch" }] }),
+    liste(), liste({ code: "B111", semester: "WiSe 26" }),
+  ] }, { jetzt: JETZT });
+  assert.deepEqual(eingang.kapitel.map((e) => e.code), ["B110", "E101"]);
+  assert.deepEqual(eingang.kapitel[0], { code: "B110", semester: "WS 2026/27", quelle: "Folien 00 Einführung, S. 9", stand: "2026-10-16", vorlaeufig: false,
+    kapitel: [{ nr: "1", titel: "Grundlagen", seiten: 42, folien: 1, teile: [{ nr: "1.1", titel: "Grundbegriffe" }], vorlesung: "2026-10-14" },
+      { nr: "2", titel: "Kosten und Erlöse", folien: 2, zwischentest: "2026-12-02" },
+      { nr: "E", titel: "Lehrbuch", url: "https://books.core-econ.org/the-economy-v1/book/de/text/03.html" }] });
+  assert.deepEqual(eingang.kapitel[1].kapitel, [{ nr: "1", titel: "Märkte" }, { nr: "2", titel: "Preise" }], "Vorlesung nach dem Lauf fällt weg, nicht das Kapitel");
+  assert.deepEqual([eingang.kapitel[1].stand, eingang.kapitel[1].vorlaeufig], ["2026-10-18", true], "ohne stand: Tag des Laufs");
+  assert.deepEqual(verworfen.map((v) => `${v.id}: ${v.grund}`), ["S100 WS 2026/27: kapitel 2: titel unzulässig", "S110 WS 2026/27: doppelte Kapitelnummer",
+    "B180 WS 2026/27: kapitel 1: url: Domain nicht erlaubt", "B110 WS 2026/27: doppelt", "B111 WiSe 26: semester ungültig"]);
+  assert.ok(verworfen.every((v) => v.art === "kapitel"));
+  assert.equal(istLeer(eingang), false, "eine Liste ist ein Ergebnis");
+
+  const Z = skriptLaden("zentral").ctx.zentral;
+  const p = Z.kapitelPruefen({ schema: 1, module: eingang.kapitel });
+  assert.deepEqual(p.verworfen, [], "Plugin verwirft nichts");
+  assert.deepEqual(p.module.map((e) => e.kapitel.map((k) => [k.nr, k.titel, k.seiten, k.folien, k.url, k.vorlesung, k.zwischentest])),
+    eingang.kapitel.map((e) => e.kapitel.map((k) => [k.nr, k.titel, k.seiten == null ? null : k.seiten, k.folien == null ? null : k.folien, k.url || "",
+      k.vorlesung || "", k.zwischentest || ""])));
+});
+
+test("Eine Regel für Kapitellisten: Server und Plugin nehmen dieselben Module an und säubern Titel und Quelle gleich", async () => {
+  const { kapitelModulNormal } = await laden();
+  const Z = skriptLaden("zentral").ctx.zentral;
+  const k = (x) => liste({ kapitel: [Object.assign({ nr: "1", titel: "Grundlagen" }, x)] });
+  const faelle = [
+    liste(), liste({ quelle: "" }), liste({ quelle: "q".repeat(121) }), liste({ quelle: "Folie <b>3</b>" }), liste({ code: "b110" }), liste({ semester: "SS 2027" }),
+    liste({ semester: "WS 2026" }), liste({ kapitel: [] }), liste({ kapitel: Array.from({ length: 41 }, (_, i) => ({ nr: String(i + 1), titel: "K" + i })) }),
+    k({ nr: "IV" }), k({ nr: "2.3b" }), k({ nr: "a1" }), k({ nr: "123456789" }), k({ nr: 1 }), k({ titel: "" }), k({ titel: "t".repeat(141) }),
+    k({ titel: "A  \t B" }), k({ titel: "A | B" }), k({ titel: "A {B}" }), k({ titel: "A \\ B" }), k({ seiten: 0 }), k({ seiten: 2001 }), k({ seiten: 1.5 }),
+    k({ folien: 0 }), k({ folien: 100 }), k({ vorlesung: "2026-02-30" }), k({ zwischentest: "morgen" }), k({ url: "http://uni-tuebingen.de/x" }),
+    k({ url: "https://uni-tuebingen.de:8443/x" }), k({ url: "https://www.wiwi.uni-tuebingen.de/x(1)" }), k({ url: "https://uni-tuebingen.de.example.com/" }),
+    k({ teile: [{ nr: "1.1", titel: "Teil" }] }), k({ teile: [{ nr: "1.1", titel: "<i>x</i>" }] }), k({ teile: "1.1" }),
+    k({ teile: Array.from({ length: 41 }, (_, i) => ({ nr: "1." + i, titel: "T" })) }),
+  ];
+  for (const f of faelle) {
+    const server = kapitelModulNormal(f, "2026-10-18");
+    const plugin = Z.kapitelPruefen({ schema: 1, module: [f] });
+    const wo = JSON.stringify(f).slice(0, 160);
+    assert.equal(!server.fehler, plugin.module.length === 1, "gleich angenommen bzw. verworfen: " + wo);
+    if (server.fehler) continue;
+    assert.equal(server.wert.quelle, plugin.module[0].quelle, "quelle gleich: " + wo);
+    assert.deepEqual(server.wert.kapitel.map((x) => [x.titel, x.url || "", (x.teile || []).map((t) => t.titel)]),
+      plugin.module[0].kapitel.map((x) => [x.titel, x.url, x.teile.map((t) => t.titel)]), "Titel und Link gleich: " + wo);
+  }
+});
+
+test("Kapitellisten: nur gefragte Module, nur neue oder geänderte (stand zählt nicht), im Bestand nur das laufende Semester", async () => {
+  const { eingangNormal, nurNeueKapitel } = await laden();
+  const lernplan = { semester: "WS 2026/27", module: ["B110", "E101"] };
+  const a = eingangNormal({ kapitel: [liste(), liste({ code: "E101" }), liste({ code: "S100" }), liste({ code: "B180", semester: "SS 2027" })] }, { jetzt: JETZT }).eingang;
+  const alt = { "B110 SS 2026": liste({ semester: "SS 2026" }) };
+  const erst = nurNeueKapitel(a.kapitel, alt, lernplan);
+  assert.deepEqual(erst.kapitel.map((e) => e.code), ["B110", "E101"]);
+  assert.deepEqual(erst.verworfen.map((v) => `${v.id}: ${v.grund}`), ["S100 WS 2026/27: nicht gefragt", "B180 SS 2027: nicht gefragt"]);
+  assert.deepEqual(Object.keys(erst.bestand).sort(), ["B110 WS 2026/27", "E101 WS 2026/27"], "anderes Semester fällt weg");
+  const gleich = eingangNormal({ kapitel: [liste({ stand: "2026-10-17" })] }, { jetzt: JETZT }).eingang;
+  const zweit = nurNeueKapitel(gleich.kapitel, erst.bestand, lernplan);
+  assert.deepEqual([zweit.kapitel, zweit.bestand["B110 WS 2026/27"].stand], [[], "2026-10-16"], "nur stand anders: keine Änderung, alter Stand bleibt");
+  const umbenannt = liste();
+  umbenannt.kapitel[1] = Object.assign({}, umbenannt.kapitel[1], { titel: "Kosten, Erlöse und Gewinn" });
+  const dritt = nurNeueKapitel(eingangNormal({ kapitel: [umbenannt] }, { jetzt: JETZT }).eingang.kapitel, zweit.bestand, lernplan);
+  assert.equal(dritt.kapitel.length, 1);
+  assert.equal(dritt.bestand["B110 WS 2026/27"].kapitel[1].titel, "Kosten, Erlöse und Gewinn");
+  assert.deepEqual(nurNeueKapitel(a.kapitel, {}, null).kapitel, [], "ohne lernplan im Stand (älteres Plugin) nichts");
 });

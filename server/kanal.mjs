@@ -1,11 +1,11 @@
 // Privater Datenkanal zwischen dem eigenen Server und dem Plugin: AES-256-GCM über Web Crypto, damit das Plugin
 // (Obsidian, auch iPhone/iPad) mit derselben API entschlüsselt. Ein Paket ist { schema, zweck, iv, daten } (base64url).
-// Der Zweck („eingang“, „stand“, „unterlagen“, „pdf“) steckt als Zusatzdaten in der Verschlüsselung: Ein Paket für den einen Zweck lässt sich
-// nicht als das andere ausgeben. Der Schlüssel (32 Byte) kennen nur Server und Plugin; er geht nie über den Kanal selbst.
+// Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“, „verbinden“) steckt als Zusatzdaten in der Verschlüsselung: Ein
+// Paket für den einen Zweck lässt sich nicht als das andere ausgeben. Der Schlüssel (32 Byte) kennen nur Server und Plugin; er geht nie über den Kanal selbst.
 import { webcrypto } from "node:crypto";
 
 export const KANAL_SCHEMA = 1;
-const ZWECKE = new Set(["eingang", "stand", "unterlagen", "pdf"]);
+const ZWECKE = new Set(["eingang", "stand", "unterlagen", "kapitel", "pdf", "verbinden"]);
 const kodieren = new TextEncoder();
 const dekodieren = new TextDecoder();
 const b64 = (bytes) => Buffer.from(bytes).toString("base64url");

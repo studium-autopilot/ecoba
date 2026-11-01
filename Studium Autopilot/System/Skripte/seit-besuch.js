@@ -19,6 +19,8 @@
 //   VORAUS Tagen (ctx.modell.findetStatt, wie das Wochenraster), neue Abgaben aus dem ILIAS-Kalender (herkunft ilias-kalender,
 //   noch offen, nicht vorbei) und neue oder aktualisierte ILIAS-Dateien der letzten ILIAS_TAGE Tage aus dem Index
 //   System/Daten/ilias.json, je Modul eine Zeile; ohne die Dateien vom ersten Tag eines Kurses (erstes Laden ist keine Änderung).
+//   Seit 01.11.2026 auch die Hinweise von Claude (eigener Server, ctx.server.hinweise aus server.json, 14 Tage), je Hinweis eine
+//   Zeile mit Quelle; Ziel die Modulnotiz, wenn der Hinweis zu einem Modul gehört.
 //
 // Speicher (synchronisiert, Ordner ORDNER):
 // - <Geräte-ID>.json: { version: 1, eintraege: [{ k, t, q, art, id, titel, datum, code, aenderung: [{ feld, alt, neu }] }] }. Jedes
@@ -39,6 +41,7 @@ const ORDNER = "System/Daten/seit-besuch";
 const GESEHEN = "gesehen-"; // Namensanfang der Dateien „gesehen“ in ORDNER
 const ANGEZEIGT = "eba-seit-besuch-angezeigt"; // Gerätespeicher: aufgeklappt gesehen, noch nicht eingetragen
 const ILIAS_INDEX = "System/Daten/ilias.json";
+const SERVER_JSON = "System/Daten/server.json"; // server.js DATEI: Hinweise von Claude
 const TAGE = 60;          // Aufbewahrung der Einträge im Protokoll
 const ILIAS_TAGE = 30;    // ILIAS-Dateien, die so lange neu oder aktualisiert sind
 const VORAUS = 14;        // Stundenplan: Ausfälle und Änderungen ab heute
@@ -182,10 +185,16 @@ const iliasEintraege = (index, heute) => {
   return aus;
 };
 
+// Hinweise von Claude (ctx.server.hinweise: { text, quelle, zeit, code }, schon auf die letzten Tage begrenzt): je Hinweis ein
+// Eintrag; der Schlüssel aus Tag und Text ist auf allen Geräten gleich (server.json kommt über den Sync)
+const claudeEintraege = (hinweise) => (Array.isArray(hinweise) ? hinweise : []).filter((h) => h && text(h.text) && s10(h.zeit))
+  .map((h) => ({ q: "claude", art: "hinweis", titel: text(h.text), quelle: text(h.quelle), code: text(h.code), datum: s10(h.zeit),
+    k: ["cl", s10(h.zeit), kurz(text(h.text))].join("|") }));
+
 // ---------- Zusammenstellen (rein, testbar) ----------
 // protokolle: Listen aus allen Gerätedateien, abgeleitet: Einträge von oben, gesehen: { k: Datum }, jetzt: ISO-Zeit, heute:
 // JJJJ-MM-TT (optional; zentrale Termine, die inzwischen vorbei sind, fallen weg, wie beim Schreiben des Protokolls).
-// → [{ art, q, titel, meta, keys, datum, id?, pfad?, code? }] ungesehen, sortiert: Termine, Stundenplan, Abgaben, ILIAS.
+// → [{ art, q, titel, meta, keys, datum, id?, pfad?, code? }] ungesehen, sortiert: Termine, Stundenplan, Abgaben, Claude, ILIAS.
 const zahl = (n, eins, mehr) => `${n} ${n === 1 ? eins : mehr}`;
 const metaZentral = (e) => {
   if (e.art === "neu") return "Neu · " + datumKurz(e.datum);
@@ -207,7 +216,7 @@ const metaZentral = (e) => {
   if (e.bestaetigt) teile.unshift(e.aenderung && e.aenderung.some((a) => a.feld === "datum") ? "Jetzt offiziell" : "Jetzt offiziell · " + datumKurz(e.datum));
   return teile.join(" · ");
 };
-const RANG = { zentral: 0, stundenplan: 1, "ilias-kalender": 2, ilias: 3 };
+const RANG = { zentral: 0, stundenplan: 1, "ilias-kalender": 2, claude: 3, ilias: 4 };
 const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt, heute) => {
   const ms = Date.parse(jetzt), g = gesehen || {}, seen = {}, zeilen = [], h = s10(heute);
   const neu = (e) => e && typeof e.k === "string" && !g[e.k] && !seen[e.k] && (seen[e.k] = true);
@@ -245,6 +254,7 @@ const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt, heute) => {
     else if (e.art === "raum") meta = `Neuer Raum ${e.seit ? "seit " + datumKurz(e.seit) : "ab " + datumKurz(e.datum)} · ${e.raum}` + (e.raumAlt ? ` statt ${e.raumAlt}` : "");
     else if (e.art === "verlegt") meta = [datumKurz(e.datum), e.zeit ? `${e.zeit} statt ${e.zeitAlt}` : "", e.raum ? `${e.raum} statt ${e.raumAlt}` : ""].filter(Boolean).join(" · ");
     else if (e.art === "abgabe") meta = "Neue Abgabe · bis " + datumKurz(e.datum);
+    else if (e.art === "hinweis") meta = ["Von Claude", e.quelle].filter(Boolean).join(" · ");
     zeilen.push({ q: e.q, art: e.art, titel: e.titel, meta, keys: [e.k], datum: e.datum, pfad: e.pfad, code: e.code });
   }
   for (const c of Object.keys(ilias).sort()) {
@@ -323,6 +333,9 @@ module.exports = function (ctx) {
     try { abgeleitet = abgeleitet.concat(stundenplanEintraege(D.stundenplan, M.findetStatt, (fm) => M.besuchtNicht(fm, D.einstellungen), h)); } catch (e) { console.error(SPRACHE, e); }
     abgeleitet = abgeleitet.concat(abgabenEintraege(D.termine, h));
     abgeleitet = abgeleitet.concat(iliasEintraege(await jsonLesen(ILIAS_INDEX), h));
+    if (ctx.server && ctx.server.hinweise) {
+      try { abgeleitet = abgeleitet.concat(claudeEintraege(await ctx.server.hinweise())); } catch (e) { console.error(SPRACHE, e); }
+    }
     const alle = await lesenAlle();
     const zeilen = zusammenstellen(alle.protokolle, abgeleitet, alle.gesehen, jetztIso(), h);
     // Ziele erst jetzt: zentrale Termine über zentral_id (Notizen werden umbenannt), ILIAS über die Modulnotiz
@@ -331,7 +344,7 @@ module.exports = function (ctx) {
     for (const z of zeilen) {
       if (z.q === "zentral" && z.id) z.pfad = termin[z.id] || "";
       else if (z.q === "zentral" && z.art === "mehr") z.pfad = "Studium/Termine & Anmeldungen.md";
-      else if (z.q === "ilias") { const m = z.code && D.module.find((x) => x.code === z.code); z.pfad = m ? m.f.path : ""; }
+      else if (z.q === "ilias" || z.q === "claude") { const m = z.code && D.module.find((x) => x.code === z.code); z.pfad = m ? m.f.path : ""; }
     }
     return zeilen.length ? { zeilen } : null;
   };
@@ -451,9 +464,10 @@ module.exports = function (ctx) {
       return besuchVorbei().then(() => zeichnen(inst)).catch((e) => { console.error(SPRACHE, e); el.empty(); el.addClass("eba-sb-aus"); });
     });
     const bald = ctx.entprellen(alleNeu, 600);
-    // Termine, Stundenplan und Module meldet das Modell; die JSON-Dateien (Protokolle, gesehen, ILIAS-Index) sehen wir selbst
+    // Termine, Stundenplan und Module meldet das Modell; die JSON-Dateien (Protokolle, gesehen, ILIAS-Index, Hinweise von Claude)
+    // sehen wir selbst
     if (ctx.modell && ctx.modell.beiAenderung) ctx.aufraeumen(ctx.modell.beiAenderung(bald));
-    const wichtig = (p) => String(p).indexOf(ORDNER + "/") === 0 || p === ILIAS_INDEX;
+    const wichtig = (p) => String(p).indexOf(ORDNER + "/") === 0 || p === ILIAS_INDEX || p === SERVER_JSON;
     ctx.an(V, "modify", (f) => { if (wichtig(f.path)) bald(); });
     ctx.an(V, "create", (f) => { if (wichtig(f.path)) bald(); });
     ctx.an(V, "delete", (f) => { if (wichtig(f.path)) bald(); });
@@ -478,6 +492,7 @@ module.exports.gesehenMischen = gesehenMischen;
 module.exports.stundenplanEintraege = stundenplanEintraege;
 module.exports.abgabenEintraege = abgabenEintraege;
 module.exports.iliasEintraege = iliasEintraege;
+module.exports.claudeEintraege = claudeEintraege;
 module.exports.zusammenstellen = zusammenstellen;
 module.exports.ORDNER = ORDNER;
 module.exports.GESEHEN = GESEHEN;

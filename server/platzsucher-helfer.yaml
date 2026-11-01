@@ -31,6 +31,46 @@ write_files:
 
       [Install]
       WantedBy=multi-user.target
+  # Die OCI-Kommandozeile und jedes Paket, das sie braucht: genau diese Version, genau dieses Wheel (x86_64, Python 3.12). Der
+  # Helfer darf alle Instanzen des Kontos verwalten; eine neue Version auf PyPI ändert darum nichts an ihm (docs/release.md).
+  - path: /opt/studium-platzsucher/oci-pakete.txt
+    permissions: "0644"
+    content: |
+      aiohappyeyeballs==2.7.1 --hash=sha256:9243213661e29250eb41368e5daa826fc017156c3b8a11440826b2e3ed376472
+      aiohttp==3.14.5 --hash=sha256:20f085697d7e911f1f73c43ed03fafbed1e7121797e2eb5428efa80398060584
+      aiosignal==1.4.0 --hash=sha256:053243f8b92b990551949e63930a839ff0cf0b0ebbe0597b0f3fb19e1a0fe82e
+      arrow==1.4.0 --hash=sha256:749f0769958ebdc79c173ff0b0670d59051a535fa26e8eba02953dc19eb43205
+      asn1crypto==1.5.1 --hash=sha256:db4e40728b728508912cbb3d44f19ce188f218e9eba635821bb4b68564f8fd67
+      attrs==26.1.0 --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
+      certifi==2025.11.12 --hash=sha256:97de8790030bbd5c2d96b7ec782fc2f7820ef8dba6db909ccf95449f2d062d4b
+      cffi==2.1.1 --hash=sha256:c1453022f490d2459a11819d83ad1d586e9ff65a12ac3e705ffebd46d3685dcf
+      circuitbreaker==2.1.3 --hash=sha256:87ba6a3ed03fdc7032bc175561c2b04d52ade9d5faf94ca2b035fbdc5e6b1dd1
+      click==8.4.2 --hash=sha256:e6f9f66136c816745b9d65817da91d61d957fb16e02e4dcd0552553c5a197b76
+      crc32c==2.8 --hash=sha256:6dde035f91ffbfe23163e68605ee5a4bb8ceebd71ed54bb1fb1d0526cdd125a2
+      cryptography==50.0.2 --hash=sha256:9dab55f57c74c3cad24c323bacbbd04be4705ba6eb0d92e920b1fc4837ed5079
+      frozenlist==1.8.0 --hash=sha256:494a5952b1c597ba44e0e78113a7266e656b9794eec897b19ead706bd7074383
+      idna==3.20 --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+      jmespath==1.0.1 --hash=sha256:02e2e4cc71b5bcab88332eebf907519190dd9e6e82107fa7f83b1003a6252980
+      multidict==7.2.1 --hash=sha256:1fb8c1a3480c130c3a6422d5f16f3cad6552bf08c2089dd288ba7134649183b5
+      oci==2.189.0 --hash=sha256:134e7cc634d4963ffc0c5411e9c2b2d8695d2f154fd5f8b873dd9fa8a4cb36a6
+      oci-cli==3.95.1 --hash=sha256:d71ef956f66e667e3f4815c8dfb84619f1d984f7cf34e7842d04f7b92a569508
+      prompt-toolkit==3.0.43 --hash=sha256:a11a29cb3bf0a28a387fe5122cdb649816a957cd9261dcedf8c9f1fef33eacf6
+      propcache==0.5.4 --hash=sha256:2814ecd8e818f487bee4b0f921bc4d1c176cc5fc71ac0f072d0fa67eda4ac14b
+      pycparser==3.12 --hash=sha256:a076f3f489b39b43ed13563a1dafe42447445bec2e294154ec5c57fcdda4c85e
+      pyjwt==2.15.1 --hash=sha256:42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193
+      pyopenssl==26.4.0 --hash=sha256:f0eb0cb2d581d3ad2b9c489468485e7f2ab6727d08401bcf9d824c3caddf3c1c
+      python-dateutil==2.9.0.post0 --hash=sha256:a8b2bc7bffae282281c8140a97d3aa9c14da0b136dfe83f850eea9a5f7470427
+      python-pkcs11==0.9.4 --hash=sha256:0f49715b81b7afaaa8efaa9d91ed0c1eaac34f190a908347e42d4530da1bc5eb
+      pytz==2026.2 --hash=sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126
+      pyyaml==6.0.2 --hash=sha256:80bab7bfc629882493af4aa31a4cfa43a4c57c83813253626916b8c7ada83476
+      setuptools==83.0.0 --hash=sha256:29b23c360f22f414dc7336bb39178cc7bcbf6021ed2733cde173f09dba19abb3
+      six==1.17.0 --hash=sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274
+      terminaltables==3.1.10 --hash=sha256:e4fdc4179c9e4aab5f674d80f09d76fa436b96fdc698a8505e0a36bf0804a874
+      typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+      tzdata==2026.6 --hash=sha256:0a10eec6e13ef16b627fabed9a5f2ba61a62b1c67f327305f4e7e412a70b4aec
+      urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
+      wcwidth==0.9.4 --hash=sha256:b185c8b927b23af2721be1783499d1cfa5c028b098b0858951b4ae224477f1c2
+      yarl==1.25.1 --hash=sha256:c6f117789d22dce188e5754e8bc65b7e6ebf8cb73963b9fa761f672a5883769d
 # 1 GB Arbeitsspeicher: 1 GB Auslagerung, damit pip nicht abbricht; Installation bis zu fünfmal (Netz, Paketquelle). Nur mit
 # lauffähiger Kommandozeile startet der Dienst, sonst würde er jede Runde als unklar werten und nie melden.
 runcmd:
@@ -40,7 +80,9 @@ runcmd:
       set -u
       if [ ! -e /swapfile ]; then fallocate -l 1G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile; fi
       for i in 1 2 3 4 5; do
-        { [ -x /opt/oci/bin/pip ] || python3 -m venv /opt/oci; } && /opt/oci/bin/pip install --quiet oci-cli==3.95.1 && /opt/oci/bin/oci --version && break
+        { [ -x /opt/oci/bin/pip ] || python3 -m venv /opt/oci; } \
+          && /opt/oci/bin/pip install --quiet --require-hashes --no-deps --only-binary=:all: -r /opt/studium-platzsucher/oci-pakete.txt \
+          && /opt/oci/bin/oci --version && break
         sleep 60
       done
       /opt/oci/bin/oci --version || { echo "Platzsucher: OCI-Kommandozeile nicht installierbar" >&2; exit 1; }

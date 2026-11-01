@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 24.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 31.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3, `vorlesung` und `zwischentest` in `kapitel.json` seit 31.10.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -376,8 +376,9 @@ selbst aus.
 
 Seit 19.10.2026 (Plan Abschnitt 31). Optional. Kapitellisten der Module für den Lernplan: je Modul und Semester die Kapitel aus
 der Gliederung der Vorlesung bzw. die Einheiten des Lehrbuchs, die die Vorlesung nennt. Nur Fakten (Nummer, Titel, Seitenzahl der
-Folien, Nummer der Folien, Link auf ein frei zugängliches Lehrbuch); keine Beschreibungen, keine Lernziele, keine Namen. Plugins
-vor dieser Fassung kennen den Namen nicht und ignorieren ihn. Erzeugt vom Uni-Abgleich (Kurse, in denen der Autor ist), veröffentlicht
+Folien, Nummer der Folien, Link auf ein frei zugängliches Lehrbuch, seit 31.10.2026 Tag der ersten Vorlesung zum Kapitel und des
+ersten Zwischentests, der es abfragt); keine Beschreibungen, keine Lernziele, keine Namen. Plugins vor dieser Fassung kennen den
+Namen nicht und ignorieren ihn. Erzeugt vom Uni-Abgleich (Kurse, in denen der Autor ist), veröffentlicht
 erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
 
 ```json
@@ -392,7 +393,8 @@ erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
    "stand": "2026-10-18",
    "vorlaeufig": false,
    "kapitel": [
-    { "nr": "1", "titel": "Grundlagen", "seiten": 42, "folien": 1, "teile": [{ "nr": "1.1", "titel": "Grundbegriffe" }] },
+    { "nr": "1", "titel": "Grundlagen", "seiten": 42, "folien": 1, "vorlesung": "2026-10-19", "zwischentest": "2026-11-13",
+      "teile": [{ "nr": "1.1", "titel": "Grundbegriffe" }] },
     { "nr": "2", "titel": "Märkte", "folien": 2 },
     { "nr": "3", "titel": "Knappheit", "url": "https://books.core-econ.org/the-economy-v1/book/de/text/03.html" }
    ]
@@ -417,6 +419,8 @@ erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
 | `seiten` | optional, ganze Zahl 1–2000 (Folien des Kapitels, Gewicht im Plan) |
 | `folien` | optional, ganze Zahl 0–99: Nummer der Folien-Unterlage dieses Kapitels (`art: Folien`, Feld `nummer`); ohne sie gilt die Kapitelnummer |
 | `url` | optional, `https` auf `uni-tuebingen.de` oder `core-econ.org` (jeweils mit Subdomains) |
+| `vorlesung` | optional, seit 31.10.2026 (ältere Plugins ignorieren es), `JJJJ-MM-TT`: Tag der ersten Vorlesung dieses Semesters, die das Kapitel behandelt hat, nur belegt (Ordner der Sitzung in ILIAS, beschriftete Folien, Vorlesungsnotiz), nie in der Zukunft. Fehlt = die Vorlesung ist noch nicht so weit. Hat ein Modul bei keinem Kapitel einen Tag, gilt jedes als behandelt (wie vorher) |
+| `zwischentest` | optional, seit 31.10.2026, `JJJJ-MM-TT`: Tag des ersten Zwischentests (Online-Test, Testat mit Bonuspunkten), der das Kapitel abfragt; nur, wenn die Veranstaltung das sagt. Derselbe Tag wie ein Prüfungstermin des Moduls in `termine.json` |
 | `teile` | optional, höchstens 40 Unterkapitel `{ nr, titel }` mit denselben Regeln |
 
 Ein ungültiges Kapitel oder Unterkapitel verwirft sein **ganzes Modul** (keine halbe Liste im Lernplan), die anderen Module bleiben.
@@ -424,7 +428,10 @@ Unbekannte Felder werden ignoriert.
 
 **Was das Plugin daraus macht:** Jedes Gerät holt die Datei selbst und merkt sie sich gerätelokal (wie `angebote.json`). Nur der
 Abrufer schreibt daraus `Lernplan/<Code> Lernplan.md` (`herkunft: zentral`), nur für Module des laufenden Semesters, die in deinem
-Plan liegen (oder laufen bzw. angemeldet sind) und nicht bestanden sind. Häkchen gehen mit dem Titel des (Unter-)Kapitels, nicht
+Plan liegen (oder laufen bzw. angemeldet sind) und nicht bestanden sind. Seit 31.10.2026 zeigt jede Kapitelzeile auf die Folien des
+Kapitels, sobald sie im Tresor liegen, dazu „Vorlesung TT.MM.JJJJ“ und „Zwischentest TT.MM.JJJJ“; der eigene Server liefert Listen
+derselben Form für Module ohne zentrale Liste (Eingang, Feld `kapitel`, Notizen mit `herkunft: server`), und eine spätere zentrale
+Liste übernimmt eine solche Notiz. Häkchen gehen mit dem Titel des (Unter-)Kapitels, nicht
 mit seiner Nummer: Wird ein Kapitel eingeschoben oder umnummeriert, bleibt es abgehakt, und ein neues Kapitel unter alter Nummer
 erbt kein Häkchen. Eigene Eigenschaften (`seit`, `verstanden_bis` …), eigene Zeilen und Aufgaben unter „## Kapitel“ (auch mit
 Nummer vorn) und alles unter „## Meine Notizen“ bleiben bei jeder neuen Liste. Notizen mit anderer `herkunft` (eigene KI) fasst das Plugin nie an. Eine gelöschte Notiz

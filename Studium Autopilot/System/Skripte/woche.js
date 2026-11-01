@@ -291,6 +291,8 @@ module.exports = function (ctx) {
         raum,
         ausnahme, raumNeu, zeitNeu, raumAlt: raumNeu ? s.raumAlt : "", grund: aus ? s.name : "", spaeter: !!ab, aus, online,
         farbe, code: fm.code ? String(fm.code) : "",
+        // Zeit an diesem Tag (bei einer Änderung die neue) und Vorlesung oder Übung: für das Widget (widget.js), das ohne Raster zeichnet
+        beginn: zwei(b.h) + ":" + zwei(b.m), ende: zwei(e.h) + ":" + zwei(e.m), ue: istUebung(fm), marke,
       };
     });
     for (const k of kaesten) if (k.bis <= k.von) k.bis = k.von + 1;
@@ -324,6 +326,16 @@ module.exports = function (ctx) {
     return { notizen, kurzVonCode, modulPfad, modulName };
   };
 
+  // Alles, was wocheBauen außer Woche und Uhrzeit braucht: Notizen, Namen, verdeckte Gruppen, wartet auf den Studienbeginn.
+  // Auch für das Widget (widget.js), damit es dieselbe Woche zeigt wie das Raster.
+  const eingaben = () => {
+    const daten = lesen(), L = ctx.user && ctx.user["meine-gruppe"];
+    const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
+    const verdeckt = L && L.doppelt ? L.doppelt(daten.notizen, Z ? Z.gruppen : null).verdeckt : null;
+    const zp = ctx.zentral && ctx.zentral.stundenplan ? ctx.zentral.stundenplan() : null;
+    return Object.assign(daten, { verdeckt, ohneBeginn: !!(zp && zp.verfuegbar && zp.ohneBeginn) });
+  };
+
   // ---------- Zeichnen ----------
   // Satz einer leeren Woche; fehlt der Studienbeginn (beginnFehlt), stattdessen die Bitte mit Link (seit
   // 24.10.2026 hier, auf Dashboard und Stundenplan; vorher nur im Knopf über dem Raster der Seite Stundenplan)
@@ -341,11 +353,7 @@ module.exports = function (ctx) {
     const jetzt = ctx.date.jetzt();
     const v = versatz();
     const montag = plus(aktuellerMontag(jetzt), v * 7);
-    const daten = lesen(), L = ctx.user && ctx.user["meine-gruppe"];
-    const Z = ctx.zentral && ctx.zentral.gruppen ? ctx.zentral.gruppen() : null;
-    const verdeckt = L && L.doppelt ? L.doppelt(daten.notizen, Z ? Z.gruppen : null).verdeckt : null;
-    const zp = ctx.zentral && ctx.zentral.stundenplan ? ctx.zentral.stundenplan() : null;
-    const W = wocheBauen(Object.assign(daten, { modell: M(), montag, jetzt, verdeckt, ohneBeginn: !!(zp && zp.verfuegbar && zp.ohneBeginn) }));
+    const W = wocheBauen(Object.assign(eingaben(), { modell: M(), montag, jetzt }));
     const pfad = (c && c.sourcePath) || "";
     const zeileHoehe = Math.round(((HOEHE[pfad] || HOEHE_SONST) / (W.rows + 1)) * 100) / 100;
     el.empty();
@@ -496,11 +504,23 @@ module.exports = function (ctx) {
     ctx.intervall(() => { if (document.visibilityState === "visible") neu(); }, 10 * 60 * 1000);
   };
 
+  // Farbe je Modul wie im Raster der Planwoche ({ Code: 1–6 }; Semester nach ihrem Freitag, gezeigt wie in wocheBauen), damit ein
+  // Modul auch anderswo seine Farbe trägt (Lernplan, seit 1.11.2026: ctx.woche.modulFarben)
+  const modulFarben = () => {
+    const modell = M();
+    if (!modell || !modell.planwoche) return {};
+    const montag = aktuellerMontag(new Date()), sem = modell.semesterFuer(iso(plus(montag, 4)));
+    if (!sem) return {};
+    const zeigbar = ({ fm }) => ["entfaellt", "ausgeblendet"].indexOf(modell.findetStatt(fm, iso(montag)).grund) < 0 && zeit(fm.beginn) && zeit(fm.ende);
+    return farbenBauen(lesen().notizen.filter(zeigbar), sem.name);
+  };
+  ctx.woche = { modulFarben };
+
   const aktionen = {
     // ‹ › und „KW n“ (Links im Raster): schritt = Versatz in Wochen (0 = aktuelle Woche)
     woche: { ausfuehren: (c) => { versatzSetzen(c.parameter.schritt); neu(); } },
   };
 
-  return { registrieren, aktionen, aktuellerMontag, kw, wocheText, versatzAus, versatzWert, versatz, wocheBauen, spalten, lage, kurzname, artText, raumKnapp, wischStartOk, wischAchse,
+  return { registrieren, aktionen, aktuellerMontag, kw, wocheText, versatzAus, versatzWert, versatz, wocheBauen, eingaben, spalten, lage, kurzname, artText, raumKnapp, wischStartOk, wischAchse,
     wischRichtung, leerSatz, farbenBauen, legendeBauen };
 };

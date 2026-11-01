@@ -1,5 +1,6 @@
 """Tests für platzsucher.py (ohne Oracle: die OCI-Kommandozeile ist eine Attrappe). Start: python -m unittest discover -s server -p "test_*.py"."""
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -340,7 +341,19 @@ class HelferVorlage(unittest.TestCase):
         self.assertTrue(t.startswith("#cloud-config\n"))
         self.assertIn("content: KONFIG_JSON_BASE64", t)
         self.assertIn("ExecStart=/usr/bin/python3 /opt/studium-platzsucher/platzsucher.py --oci /opt/oci/bin/oci", t)
-        self.assertRegex(t, r"oci-cli==\d+\.\d+\.\d+", "Version fest")
+        # Jedes Paket fest: genau eine Version und die SHA-256 genau eines Wheels; pip installiert nur diese Liste, ohne
+        # Abhängigkeiten nachzuladen und ohne Quellpakete (deren setup.py liefe auf dem Helfer mit seinen Rechten)
+        liste = re.search(r"^  - path: /opt/studium-platzsucher/oci-pakete\.txt\n(?:    \S.*\n)*?    content: \|\n((?:      .*\n)+)", t, re.M)
+        self.assertIsNotNone(liste, "Paketliste in write_files")
+        zeilen = [z.strip() for z in liste.group(1).splitlines()]
+        for z in zeilen:
+            self.assertRegex(z, r"^[a-z0-9-]+==[0-9][0-9A-Za-z.+!-]* --hash=sha256:[0-9a-f]{64}$")
+        namen = [z.split("==")[0] for z in zeilen]
+        self.assertEqual(namen, sorted(set(namen)), "jedes Paket einmal, sortiert")
+        self.assertIn("oci-cli", namen)
+        self.assertGreater(len(namen), 20, "auch die Abhängigkeiten der Abhängigkeiten")
+        aufrufe = re.findall(r"pip install [^\n]*", t)
+        self.assertEqual(aufrufe, ["pip install --quiet --require-hashes --no-deps --only-binary=:all: -r /opt/studium-platzsucher/oci-pakete.txt \\"])
         self.assertIn("swapon /swapfile", t, "1 GB Arbeitsspeicher reicht pip nicht sicher")
         self.assertLess(t.index("/opt/oci/bin/oci --version ||"), t.index("systemctl enable --now studium-platzsucher.service"),
                         "Dienst nur mit lauffähiger Kommandozeile")

@@ -2,6 +2,31 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.6 – Widgets, Lernplan, Server mit einem Befehl
+
+- **Neu:** Dein Stundenplan, Fristen und Prüfungen als Widgets auf dem Home- und Sperrbildschirm von iPhone und iPad, in den
+  Farben deines Designs. Einrichten unter **Einstellungen & Hilfe** → **Widgets**, mit der kostenlosen App Scriptable.
+- **Behoben:** Der **Lernplan** meldete „hinterher“ schon bei Kapiteln, die die Vorlesung noch gar nicht hatte. Jetzt steht dort
+  „vorlernen“, und wer lieber erst nach der Vorlesung lernt, schaltet das je Modul aus.
+- **Übersichtlicher:** Der **Lernplan** zeigt oben, ob du im Plan liegst und wie du aufholst, darunter dein Semester, jedes
+  Modul in seiner Farbe. Deine Zielnote stellst du gleich dort ein und siehst, wie sie den Plan verschiebt.
+- **Neu:** Der **Lernplan** richtet sich nach deiner Zielnote, zieht Kapitel vor einem Zwischentest vor und führt mit einem Tipp
+  zu den Folien jedes Kapitels.
+- **Neu:** Im **Lernplan** steht je Modul, was du für die Klausur hast: Altklausuren, Übungsblätter und heute fällige
+  Karteikarten. In der Klausurvorbereitung verteilt er die Altklausuren auf die Wochen bis zur Klausur.
+- **Neu:** Was diese Woche im **Lernplan** dran ist, steht jetzt auch auf dem **Dashboard** und auf der Seite jedes Moduls.
+- **Neu:** Mit eigenem Server bekommst du einen **Lernplan** auch für Module, für die es keine fertige Kapitelliste gibt.
+- **Zuverlässiger:** Erreicht Claude auf deinem eigenen Server das Limit deines Abos, versucht der Server es von selbst wieder,
+  und unter Verbindungen steht, um wie viel Uhr. Nichts geht dabei verloren.
+- **Übersichtlicher:** Hinweise von Claude aus deinen Mails stehen jetzt auch auf der Seite ihres Moduls und bei den Änderungen
+  seit deinem letzten Besuch, nicht mehr nur im Fenster deines Servers.
+- **Neu:** Dein eigener Server liest auch Kalender und PDFs im Anhang deiner Uni-Mails, etwa einen Prüfungsplan, und trägt die
+  Termine daraus ein.
+- **Einfacher:** Den eigenen Server richtet Claude jetzt mit einem einzigen Befehl ein. Hat Oracle erst später Platz, bereitet sich
+  dein Server schon selbst vor, und danach bleibt kaum noch etwas zu tun.
+- **Neu:** Weitere Geräte verbindest du ohne Claude: im Fenster **Eigener Server** auf **Weiteres Gerät verbinden** tippen und den
+  Code auf dem neuen Gerät bei **Mit Code verbinden** eingeben.
+
 ## 0.7.5 – Eigenen Server leichter einrichten
 
 - **Einfacher:** Den eigenen Server richtet Claude jetzt im Tab **Code** von Claude Desktop ein und klickt im eingebauten

@@ -83,27 +83,31 @@ function abhBauen(t, o) {
     jetzt: () => new Date(uhr.t),
     geraetId: () => o.geraet || "g-pc",
     zentral: () => Z,
-    stand: () => ({ module: ["B110", "E101"], studienbeginn: "2026-10-01", variante: "offen" }),
+    stand: o.stand || (() => ({ module: ["B110", "E101"], studienbeginn: "2026-10-01", variante: "offen" })),
     modulLink: (code) => (code === "B110" ? "[[B110 Einführung in die BWL]]" : ""),
     bestaetigen: async (titel, text) => { (o.fragen || []).push(text); return o.ja !== false; },
     sperre: SPERRE, quellen: Q, standText: standTextMit(uhr), mobil: false,
     tresor: o.tresor || (async () => ({ termine: [], todos: [] })),
     unterlagen: o.unterlagen || (async () => []),
     pdf: o.pdf || (async () => null),
+    kapitelUnterlagen: o.kapitelUnterlagen || (async () => []),
+    lernplan: () => o.lernplan || null,
+    lernplanNotizen: o.lernplanNotizen || (async () => []),
     lokalErlaubt: true,
     geheimMap: geheim, lokalMap: lokal, uhr,
   };
 }
 
-// Echter Web-Dienst in einem Wegwerf-Ordner; Eingang-Dateien über eingang.mjs wie nach einem Claude-Lauf
-async function serverStarten() {
+// Echter Web-Dienst in einem Wegwerf-Ordner; Eingang-Dateien über eingang.mjs wie nach einem Claude-Lauf. o: { jetzt } (Uhr des
+// Dienstes, sonst die echte)
+async function serverStarten(o) {
   const { erzeugeDienst } = await modul("dienst.mjs");
   const { neuerCode } = await modul("verbinden.mjs");
   const { neuerSchluessel } = await modul("kanal.mjs");
   const { eingangNormal } = await modul("eingang.mjs");
   const verzeichnis = fs.mkdtempSync(path.join(os.tmpdir(), "studium-plugin-"));
   const konfig = { zugang: neuerSchluessel(), schluessel: neuerSchluessel(), adresse: "", version: "0.0.0-test" };
-  const dienst = erzeugeDienst({ konfig, verzeichnis });
+  const dienst = erzeugeDienst({ konfig, verzeichnis, jetzt: o && o.jetzt });
   await new Promise((fertig) => dienst.listen(0, "127.0.0.1", fertig));
   konfig.adresse = `http://127.0.0.1:${dienst.address().port}`;
   fs.writeFileSync(path.join(verzeichnis, "zustand.json"), JSON.stringify({ claude: "angemeldet", gmail: "ok", uniZugang: "gespeichert", letzterLauf: { zeit: "2026-10-18T07:30:00Z", ok: true } }));
@@ -172,6 +176,93 @@ test("Verbinden: Rückfrage, Einmal-Code gegen Schlüssel, Code danach verbrauch
     await m.trennen();
     assert.equal(m.verbunden(), false);
     assert.deepEqual(await m.abrufen(), { art: "nicht-verbunden" });
+  } finally { await srv.zu(); }
+});
+
+test("Weiteres Gerät verbinden: Code vom Server nur im Speicher; das neue Gerät verbindet sich mit Code und der Adresse aus server.json; „Zuletzt verbunden“", async () => {
+  const uhr = { t: START };
+  const srv = await serverStarten({ jetzt: () => new Date(uhr.t) });
+  try {
+    const t = tresor();
+    const A = await verbunden(srv, t, { uhr });
+    assert.equal((await A.m.abrufen()).art, "ok");
+    const text = t.m.get("System/Daten/server.json");
+    assert.deepEqual([t.json("System/Daten/server.json").adresse, t.json("System/Daten/server.json").verbunden.herkunft], [srv.konfig.adresse, "cloud-shell"],
+      "Adresse und letztes Verbinden für die anderen Geräte");
+    assert.ok(!text.includes(srv.konfig.zugang) && !text.includes(srv.konfig.schluessel), "keine Schlüssel in server.json");
+
+    const r = await A.m.geraetCode();
+    assert.equal(r.ok, true, r.fehler);
+    assert.match(r.code, /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/);
+    assert.equal(r.ablauf, new Date(START.getTime() + 10 * 60e3).toISOString(), "10 Minuten");
+    const gespeichert = JSON.stringify([[...t.m.entries()], [...A.a.lokalMap.entries()], [...A.a.geheimMap.entries()]]);
+    assert.ok(!gespeichert.includes(r.code) && !gespeichert.includes(r.code.replace("-", "")), "Code weder im Tresor noch im Gerätespeicher oder Schlüsselbund");
+    assert.match(S.codeAnleitung(r, START), /^Gilt bis 10:10 und nur einmal\. .*„Eigener Server“ auf „Mehr erfahren“.* Adresse: http:\/\/127\.0\.0\.1:\d+$/);
+
+    // das neue Gerät: derselbe Tresor (über den Sync), eigener Schlüsselbund
+    uhr.t = new Date(START.getTime() + 60e3);
+    const fragen = [];
+    const bA = abhBauen(t, { uhr, fragen, geraet: "g-handy" }), B = S.erzeugen(bA);
+    assert.deepEqual([B.verbunden(), B.sichtbar(), await B.adresseBekannt()], [false, true, srv.konfig.adresse]);
+    assert.match((await B.codeVerbinden("ABCDE")).fehler, /10 Zeichen/);
+    const rb = await B.codeVerbinden(" " + r.code.toLowerCase().replace("-", " ") + " ");
+    assert.equal(rb.ok, true, rb.fehler);
+    assert.match(fragen[0], /^Studium Autopilot holt dann Termine und Hinweise von 127\.0\.0\.1:\d+\. Nur bestätigen, wenn du den Code gerade selbst erzeugt hast/);
+    assert.equal(B.verbunden(), true);
+    assert.deepEqual(JSON.parse(bA.geheimMap.get(GEHEIM_ID)), { adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel });
+    assert.match((await S.erzeugen(abhBauen(tresor(), { uhr })).codeVerbinden(r.code, srv.konfig.adresse)).fehler, /gilt nicht mehr/, "nur einmal");
+
+    // das abrufende Gerät bringt das Verbinden in server.json, jedes Gerät zeigt es im Fenster
+    await A.m.abrufen();
+    assert.deepEqual(t.json("System/Daten/server.json").verbunden, { zeit: uhr.t.toISOString(), herkunft: "obsidian" });
+    assert.deepEqual((await B.einzelheiten()).liste.find((x) => x[0] === "Zuletzt verbunden"), ["Zuletzt verbunden", "10:01 (über Obsidian)"]);
+
+    // ein neuer Code zieht den vorigen zurück; höchstens 3 je Stunde
+    const c1 = await A.m.geraetCode(), c2 = await A.m.geraetCode();
+    assert.match((await S.erzeugen(abhBauen(tresor(), { uhr })).codeVerbinden(c1.code, srv.konfig.adresse)).fehler, /gilt nicht mehr/, "zurückgezogen");
+    assert.deepEqual(await A.m.geraetCode(), { fehler: "zu-viele", wieder: new Date(START.getTime() + 3600e3).toISOString() });
+
+    // ältere server.json ohne Adresse: das Gerät fragt nach ihr
+    const C = S.erzeugen(abhBauen(tresor({ "System/Daten/server.json": JSON.stringify({ schema: 1, erledigt: {} }) }), { uhr }));
+    assert.equal(await C.adresseBekannt(), "");
+    assert.deepEqual([(await C.codeVerbinden(c2.code)).adresse, (await C.codeVerbinden(c2.code, "keine adresse")).adresse], [true, true]);
+    const rc = await C.codeVerbinden(c2.code, srv.konfig.adresse + "/");
+    assert.equal(rc.ok, true, rc.fehler);
+    assert.equal(C.verbunden(), true);
+  } finally { await srv.zu(); }
+});
+
+test("Weiteres Gerät verbinden: nicht verbunden, Uhr falsch, älterer Server, fremde Antwort; abgelehnte Schlüssel (neue auf dem Server) mit Code neu verbinden", async () => {
+  const { neuerSchluessel, verschluesseln } = await modul("kanal.mjs");
+  const uhr = { t: START };
+  const srv = await serverStarten({ jetzt: () => new Date(START) });
+  try {
+    assert.deepEqual(await S.erzeugen(abhBauen(tresor())).geraetCode(), { fehler: "nicht-verbunden" });
+    const t = tresor();
+    const A = await verbunden(srv, t, { uhr });
+    uhr.t = new Date(START.getTime() + 5 * 60e3);
+    assert.deepEqual(await A.m.geraetCode(), { fehler: "uhr" }, "Uhr des Geräts 5 Minuten vor");
+    uhr.t = START;
+    const mitAntwort = (antwort) => S.erzeugen(abhBauen(t, { uhr, geheim: A.a.geheimMap,
+      netz: async (a) => (a.url.endsWith("/v1/geraet") ? antwort() : netzEcht(a)) }));
+    assert.deepEqual(await mitAntwort(() => ({ status: 404, text: "{\"fehler\":\"unbekannt\"}" })).geraetCode(), { fehler: "alt" }, "Server vor diesem Weg");
+    const fremd = await verschluesseln(neuerSchluessel(), "verbinden", { code: "ABCDE-FGHJK", ablauf: "2026-10-18T08:10:00.000Z" });
+    assert.deepEqual(await mitAntwort(() => ({ status: 200, text: JSON.stringify(fremd) })).geraetCode(), { fehler: "paket" }, "fremder Schlüssel");
+    assert.deepEqual(await mitAntwort(() => ({ status: 200, text: JSON.stringify({ code: "ABCDE-FGHJK", ablauf: "2026-10-18T08:10:00.000Z" }) })).geraetCode(),
+      { fehler: "paket" }, "unverschlüsselt");
+    // neue Schlüssel auf dem Server (studium-server schluessel-erneuern): Code holen geht nicht mehr, das Gerät verbindet sich mit Code neu
+    srv.konfig.zugang = neuerSchluessel();
+    srv.konfig.schluessel = neuerSchluessel();
+    assert.deepEqual(await A.m.geraetCode(), { fehler: "zugang" });
+    await A.m.abrufen();
+    assert.equal(A.m.status().code, "zugang");
+    assert.equal(await A.m.adresseBekannt(), srv.konfig.adresse, "Adresse aus dem Schlüsselbund");
+    const fragen = [];
+    const A2 = S.erzeugen(abhBauen(t, { uhr, fragen, geheim: A.a.geheimMap }));
+    assert.equal((await A2.codeVerbinden(srv.code())).ok, true);
+    assert.doesNotMatch(fragen[0], /ersetzt/, "dieselbe Adresse");
+    assert.equal(JSON.parse(A.a.geheimMap.get(GEHEIM_ID)).zugang, srv.konfig.zugang, "neue Schlüssel");
+    assert.equal((await A2.abrufen()).art, "ok");
   } finally { await srv.zu(); }
 });
 
@@ -637,6 +728,122 @@ test("Textfassungen: sagt der Server „zu viele warten“, kommt der Rest beim 
   } finally { await srv.zu(); }
 });
 
+test("Textfassung für Kapitellisten: die ersten Seiten ganz, danach je Seite nur die erste Zeile", () => {
+  const text = ["[S. 1]", "Gliederung", "1 Grundlagen", "", "[S. 2]", "Inhalt", "", "[S. 3]", "", "Kapitel 2: Kosten", "Mehr Text", "", "[S. 4]", "Fazit", "Rest"].join("\n");
+  assert.equal(S.kapitelText(text, 2), "[S. 1]\nGliederung\n1 Grundlagen\n\n[S. 2]\nInhalt\n\n[S. 3] Kapitel 2: Kosten\n[S. 4] Fazit");
+  assert.equal(S.kapitelText("x".repeat(70000), 8).length, 60000, "höchstens 60 000 Zeichen");
+});
+
+test("Lernplan: Stand nennt Semester und Module, danach gehen deren Folien gekürzt an den Server, jede einmal; Kapitellisten aus dem Eingang über lernplan.js", async () => {
+  const srv = await serverStarten();
+  try {
+    const k = (c) => c.repeat(64);
+    const lang = Array.from({ length: 12 }, (_, i) => `[S. ${i + 1}]\nFolie ${i + 1}\nText ${i + 1}`).join("\n\n");
+    const folien = [
+      { datei: "Unterlagen/S100/S100 Folien 00 Einführung.pdf", kennung: k("a"), titel: "S100 Folien 00 Einführung", code: "S100", nummer: 0, seiten: 12, datum: "2026-10-14",
+        quelle: "ILIAS-Kurs S100", text: lang },
+      { datei: "Unterlagen/S100/S100 Folien 01.pdf", kennung: k("b"), titel: "S100 Folien 01", code: "S100", nummer: 1, seiten: 30, datum: "2026-10-16", text: "[S. 1]\nKapitel 1" },
+      { datei: "Unterlagen/S100/S100 Folien 02.pdf", kennung: k("c"), titel: "S100 Folien 02", code: "S100", nummer: 2, text: "[S. 1]\nKapitel 2" },
+      { datei: "Unterlagen/S100/S100 Folien 03.pdf", kennung: k("d"), titel: "S100 Folien 03", code: "S100", nummer: 3, text: "[S. 1]\nKapitel 3" },
+      { datei: "Unterlagen/X/kaputt.pdf", kennung: k("e"), code: "s100", text: "x" },
+    ];
+    const aufrufe = [], listen = [];
+    const lernplan = { serverListen: async (module) => { listen.push(module); return { geschrieben: 1, verworfen: [{ id: "E101 WS 2026/27", grund: "zentrale Liste" }] }; } };
+    const stand = () => ({ module: ["S100", "E101"], studienbeginn: "2026-10-01", variante: "offen", lernplan: { semester: "WS 2026/27", module: ["S100", "e101"] } });
+    const kapitelUnterlagen = async (o) => { aufrufe.push(JSON.parse(JSON.stringify(o))); return folien.filter((u) => !o.ohne[u.kennung]); };
+    const t = tresor();
+    const { m } = await verbunden(srv, t, { stand, lernplan, kapitelUnterlagen });
+    const b1 = await m.abrufen();
+    assert.deepEqual([b1.art, b1.kapitelFolien], ["ok", 4], "zwei Anfragen, ohne die kaputte");
+    assert.deepEqual(srv.stand().lernplan, { semester: "WS 2026/27", module: ["S100"] }, "der Stand kam zuerst, nur gültige Codes");
+    const ordnerK = path.join(srv.verzeichnis, "unterlagen", "kapitel");
+    assert.deepEqual(fs.readdirSync(ordnerK).sort(), ["a", "b", "c", "d"].map((c) => k(c) + ".md"));
+    assert.ok(!fs.existsSync(path.join(srv.verzeichnis, "unterlagen", "neu")) || !fs.readdirSync(path.join(srv.verzeichnis, "unterlagen", "neu")).length, "keine Begleitnotizen");
+    const erste = fs.readFileSync(path.join(ordnerK, k("a") + ".md"), "utf8");
+    assert.match(erste, /\nModul: S100 · Art: Folien · Nummer: 0 · Seiten: 12\nDatum: 2026-10-14 · Quelle: ILIAS-Kurs S100\nAuftrag: nur Kapitelliste \(Lernplan\); ab Seite 9 steht nur die erste Zeile jeder Seite\n/);
+    assert.match(erste, /\[S\. 8\]\nFolie 8\nText 8\n\n\[S\. 9\] Folie 9\n\[S\. 10\] Folie 10\n/, "ab Seite 9 nur die erste Zeile");
+    assert.deepEqual(Object.keys(t.json("System/Daten/server.json").lernplan).sort(), [k("a"), k("b"), k("c"), k("d")]);
+    assert.equal(aufrufe[0].hoechstens, 6);
+    assert.equal((await m.abrufen()).kapitelFolien, 0, "jede PDF nur einmal");
+
+    // Kapitellisten aus dem Eingang: an lernplan.js, gezählt wie die anderen Teile
+    srv.eingang({ kapitel: [{ code: "S100", semester: "WS 2026/27", quelle: "Folien 00, S. 2", kapitel: [{ nr: "1", titel: "Mengen", folien: 1 }] }] });
+    const b2 = await m.abrufen();
+    assert.equal(b2.lernplaene, 1);
+    assert.deepEqual(listen, [[{ code: "S100", semester: "WS 2026/27", quelle: "Folien 00, S. 2", stand: "2026-10-18", vorlaeufig: false, kapitel: [{ nr: "1", titel: "Mengen", folien: 1 }] }]]);
+    assert.deepEqual(b2.verworfen, [{ id: "E101 WS 2026/27", grund: "zentrale Liste" }]);
+    const lauf = t.json("System/Daten/server.json").laeufe.pop();
+    assert.deepEqual([lauf.lernplaene, lauf.verworfen], [1, 1]);
+
+    // lernplan.js scheitert: ein Eintrag verworfen, der Rest der Datei kommt trotzdem
+    lernplan.serverListen = async () => { throw new Error("kaputt"); };
+    const fehler = console.error;
+    console.error = () => {};
+    try {
+      srv.eingang({ hinweise: [{ text: "Neue Folien in S100." }], kapitel: [{ code: "S100", semester: "WS 2026/27", kapitel: [{ nr: "1", titel: "Mengen" }] }] });
+      const b3 = await m.abrufen();
+      assert.deepEqual([b3.lernplaene, b3.hinweise, b3.verworfen], [0, 1, [{ id: "kapitel", grund: "nicht übernommen" }]]);
+    } finally { console.error = fehler; }
+    // älteres lernplan.js ohne serverListen: Listen bleiben aus, nichts geht schief
+    delete lernplan.serverListen;
+    srv.eingang({ kapitel: [{ code: "S100", semester: "WS 2026/27", kapitel: [{ nr: "1", titel: "Mengen" }] }] });
+    const b4 = await m.abrufen();
+    assert.deepEqual([b4.art, b4.lernplaene, b4.verworfen], ["ok", 0, []]);
+    assert.deepEqual(srv.imEingang(), [], "übernommen");
+  } finally { await srv.zu(); }
+});
+
+// Lernplan-Notiz vom Server mit Häkchen, Links, Seiten, eigener Aufgabe ohne Nummer und „Meine Notizen“
+const LERNPLAN_NOTIZ = ["---", "typ: lernplan", "code: S100", "herkunft: server", "---", "", "# S100 Lernplan", "", "```eba-lernplan modul", "- [ ] 9 im Codeblock", "```", "",
+  "## Kapitel", "", "- [x] 1 Mengen und Zahlen · [[S100 Folien 01|Folien]] · 23 S.", "  - [x] 1.1 Mengen", "  - [ ] 1.2 Zahlen", "- [ ] Altklausur 2025 rechnen",
+  "- [ ] 2 Funktionen · Folien 2", "- [ ] 2 Funktionen doppelt", "- [ ] 3 Mit <Klammer>", "", "## Meine Notizen", "- [ ] 4 Eigene Wiederholung"].join("\n");
+
+test("Lernplan-Notiz für den Stand: nur Kapitel mit Nummer unter „## Kapitel“, nur Nummer, Titel und Unterkapitel; Grenzen wie kapitel.json", () => {
+  const L = laden("lernplan").ctx.lernplan;
+  assert.deepEqual(S.listeAusNotiz(LERNPLAN_NOTIZ, L.kapitelLesen), [
+    { nr: "1", titel: "Mengen und Zahlen", teile: [{ nr: "1.1", titel: "Mengen" }, { nr: "1.2", titel: "Zahlen" }] }, { nr: "2", titel: "Funktionen" }]);
+  const viele = ["## Kapitel", ...Array.from({ length: 45 }, (_, i) => `- [ ] ${i + 1} Kapitel ${i + 1}`), `- [ ] 50 ${"x".repeat(141)}`].join("\n");
+  assert.equal(S.listeAusNotiz(viele, L.kapitelLesen).length, 40, "höchstens 40 Kapitel");
+  assert.deepEqual(S.listeAusNotiz("", L.kapitelLesen), []);
+});
+
+test("Lernplan: der Stand bringt die Listen der Lernplan-Notizen vom Server mit, der Dienst prüft sie", async () => {
+  const srv = await serverStarten();
+  try {
+    const L = laden("lernplan").ctx.lernplan;
+    const lernplan = { serverListen: async () => ({ geschrieben: 0, verworfen: [] }), kapitelLesen: L.kapitelLesen };
+    const stand = () => ({ module: ["S100"], studienbeginn: "2026-10-01", variante: "offen", lernplan: { semester: "WS 2026/27", module: ["S100", "E101"] } });
+    const gefragt = [];
+    const lernplanNotizen = async (codes) => { gefragt.push(codes); return [{ code: "S100", text: LERNPLAN_NOTIZ }, { code: "B110", text: LERNPLAN_NOTIZ }]; };
+    const { m } = await verbunden(srv, tresor(), { stand, lernplan, lernplanNotizen });
+    assert.equal((await m.abrufen()).art, "ok");
+    assert.deepEqual(gefragt, [["S100", "E101"]]);
+    assert.deepEqual(srv.stand().lernplan, { semester: "WS 2026/27", module: ["S100", "E101"], listen: [{ code: "S100", kapitel: [
+      { nr: "1", titel: "Mengen und Zahlen", teile: [{ nr: "1.1", titel: "Mengen" }, { nr: "1.2", titel: "Zahlen" }] }, { nr: "2", titel: "Funktionen" }] }] },
+    "nur gefragte Module, ohne Häkchen und eigene Zeilen");
+    // ohne kapitelLesen (älteres lernplan.js) keine Listen
+    delete lernplan.kapitelLesen;
+    const { m: m2 } = await verbunden(srv, tresor(), { stand: () => Object.assign(stand(), { variante: "anders" }), lernplan, lernplanNotizen });
+    await m2.abrufen();
+    assert.deepEqual(srv.stand().lernplan, { semester: "WS 2026/27", module: ["S100", "E101"] });
+  } finally { await srv.zu(); }
+});
+
+test("Lernplan, älterer Server ohne /v1/kapitel: nichts gemerkt, nach seinem Update gehen die Folien", async () => {
+  const srv = await serverStarten();
+  try {
+    const k = "f".repeat(64);
+    let alt = true;
+    const netz = (a) => (alt && a.url.endsWith("/v1/kapitel") ? Promise.resolve({ status: 404, text: "{\"fehler\":\"unbekannt\"}" }) : netzEcht(a));
+    const t = tresor();
+    const { m } = await verbunden(srv, t, { netz, kapitelUnterlagen: async (o) => (o.ohne[k] ? [] : [{ datei: "Unterlagen/S100/S100 Folien 01.pdf", kennung: k, code: "S100", nummer: 1, text: "[S. 1]\nKapitel 1" }]) });
+    assert.deepEqual([(await m.abrufen()).kapitelFolien, t.json("System/Daten/server.json").lernplan], [0, {}]);
+    alt = false;
+    assert.equal((await m.abrufen()).kapitelFolien, 1);
+    assert.deepEqual(Object.keys(t.json("System/Daten/server.json").lernplan), [k]);
+  } finally { await srv.zu(); }
+});
+
 test("Mails durchsuchen: Anstoß auf dem Server, die Zeile zeigt den Lauf, ein zweiter Tipp gleich danach ist zu früh", async () => {
   const srv = await serverStarten();
   try {
@@ -807,12 +1014,20 @@ test("Zeile: Claude abgemeldet, Uni-Anmeldung abgelehnt, Claude-Limit; nur Werte
     assert.equal(uni.pille, "pruefen");
     const limit = await fall({ claude: "angemeldet", fehler: ["claude-limit"] });
     assert.deepEqual([limit.symbol, limit.pille], ["uhr", "an"], "Limit löst sich selbst");
+    assert.match(limit.text, /versucht es von selbst/, "ein älterer Server nennt keine Zeit");
+    // der Server nennt den nächsten Versuch (limit_wieder): die Zeile sagt die Uhrzeit; ist sie vorbei, „gleich“
+    const wieder = new Date(START.getTime() + 90 * 60e3);
+    const mitZeit = await fall({ claude: "angemeldet", fehler: ["claude-limit"], limit: { versuche: 2, wieder: wieder.toISOString() } });
+    assert.equal(mitZeit.text, `Claude hat das Limit deines Abos erreicht. Dein Server versucht es um ${String(wieder.getHours()).padStart(2, "0")}:${String(wieder.getMinutes()).padStart(2, "0")} wieder, nichts geht verloren.`);
+    assert.equal(m.status().werte.limitWieder, wieder.toISOString());
+    const vorbei = await fall({ claude: "angemeldet", fehler: ["claude-limit"], limit: { versuche: 2, wieder: new Date(START.getTime() - 60e3).toISOString() } });
+    assert.match(vorbei.text, /versucht es gleich wieder/);
     srv.zustand({ claude: "<b>x</b>", uniZugang: "irgendwas", fehler: ["<script>", "claude-limit"] });
     await m.abrufen({ manuell: true });
     const s = m.status().werte;
     assert.deepEqual([s.claude, s.uniZugang, s.fehler], ["unbekannt", "unbekannt", ["claude-limit"]]);
     const d = await m.einzelheiten();
-    assert.deepEqual(d.liste.map((x) => x[0]), ["Adresse", "Claude", "Gmail", "Uni-Postfach", "Zuletzt aktualisiert"]);
+    assert.deepEqual(d.liste.map((x) => x[0]), ["Adresse", "Claude", "Gmail", "Uni-Postfach", "Zuletzt aktualisiert", "Zuletzt verbunden"]);
     // Gmail in den Einstellungen „nie“ (takt.json): aus, nicht „wird durchsucht“
     srv.zustand({ claude: "angemeldet", gmail: "ok" });
     fs.writeFileSync(path.join(srv.verzeichnis, "takt.json"), JSON.stringify({ uni_postfach: 15, gmail: 0 }));
@@ -887,6 +1102,14 @@ test("Neue Hinweise: Link „Hinweise ansehen“ in der Zeile, kein „Bitte pr�
     m.hinweiseGesehen();
     assert.equal(m.zeile().link.text, "Mehr erfahren", "im Fenster gesehen: wieder „Mehr erfahren“");
     assert.equal(ipad.neueHinweise(), 2, "gesehen gilt nur auf diesem Gerät");
+    // je Modul (Modulfeld) und alle der letzten 14 Tage (Seit deinem letzten Besuch); auch auf dem zweiten Gerät
+    srv.eingang({ termine: [], hinweise: [{ text: "Übung E101 diese Woche online.", quelle: "Kursmail, 18.10.2026", code: "E101" }, { text: "Falscher Code", code: "<b>" }] });
+    a.uhr.t = new Date(a.uhr.t.getTime() + 60e3);
+    assert.equal((await m.abrufen()).art, "ok");
+    assert.deepEqual((await m.hinweise({ code: "E101" })).map((h) => [h.text, h.quelle, h.code]), [["Übung E101 diese Woche online.", "Kursmail, 18.10.2026", "E101"]]);
+    assert.deepEqual((await ipad.hinweise()).map((h) => h.code).sort(), ["", "", "", "E101"], "alle vier, ungültiger Code fällt weg");
+    assert.equal((t.json("System/Daten/server.json").hinweise.find((h) => h.text === "Falscher Code") || {}).code, undefined);
+    m.hinweiseGesehen();
     // ein weiterer Hinweis zählt allein; derselbe Text noch einmal kommt nicht dazu
     srv.eingang({ termine: [], hinweise: [{ text: "Tutorium verschoben." }, { text: "Neue Folien in E101." }] });
     assert.equal((await m.abrufen()).art, "ok");
@@ -919,7 +1142,9 @@ test("Verbindungen: ohne Server leise „Für Technische“ mit Mehr erfahren, v
   assert.match(ohne.liste.server.erklaerung, /ein Oracle-Konto, Gmail ist freiwillig/);
   const anderswo = aufbau({ sichtbar: () => true, verbunden: () => false, status: () => ({ verbunden: false }),
     zeile: () => ({ text: "Auf einem anderen Gerät verbunden.", symbol: "haken", pille: "", knopf: null, link: MEHR }) });
-  assert.match(anderswo.liste.server.schritte[0], /fern\.sh verbinden/, "anderes Gerät: Schritte zum Verbinden");
+  assert.match(anderswo.liste.server.schritte[0], /\*\*Weiteres Gerät verbinden\*\*/, "anderes Gerät: Code von einem verbundenen Gerät");
+  assert.match(anderswo.liste.server.schritte[1], /\*\*Mit Code verbinden\*\*/);
+  assert.match(anderswo.liste.server.schritte[2], /fern\.sh verbinden/, "ohne verbundenes Gerät: Link aus der Cloud Shell");
   assert.equal(anderswo.zeile("server").knopf, "");
   const hier = aufbau({ sichtbar: () => true, verbunden: () => true, status: () => ({ verbunden: true }),
     zeile: () => ({ text: "Ein anderes Gerät holt die Termine ab.", symbol: "haken", pille: "an",

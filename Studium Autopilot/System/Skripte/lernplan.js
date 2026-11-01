@@ -1,31 +1,48 @@
-// Lernplan (seit 18.10.2026): Bereich „Lernplan“ (Codeblock ```eba-lernplan``` auf Studium/Lernplan.md) und die Zeile oben in
-// jeder Lernplan-Notiz (```eba-lernplan modul```). Regel „70/100“: Nach 70 % der Zeit von Vorlesungsbeginn bis zur Klausur ist der
+// Lernplan (seit 18.10.2026): Bereich „Lernplan“ (Codeblock ```eba-lernplan``` auf Studium/Lernplan.md), die Zeile oben in
+// jeder Lernplan-Notiz (```eba-lernplan modul```), seit 31.10.2026 die Zeile auf dem Dashboard (```eba-lernplan woche```) und die
+// auf der Modulseite (modulZeile, modul.js). Regel „70/100“: Nach 70 % der Zeit von Vorlesungsbeginn bis zur Klausur ist der
 // ganze Stoff verstanden (nicht beherrscht), danach bleibt die Zeit für die Klausurvorbereitung (Übungen, Altklausuren, Karteikarten).
+// Mit Zielnote bis 1,5 schon nach 60 %, ab 2,6 erst nach 80 % (anteilAusZielnote).
 // Kapitel: Notizen unter Lernplan/ (typ: lernplan, code), je Modul eine, „<Code> Lernplan“. Quellen: die zentralen Kapitellisten
 // (kapitel.json, zentral.js holt sie gerätelokal; dieses Skript schreibt daraus die Notizen mit herkunft: zentral, nur auf dem
-// Abrufer, nur für Module des laufenden Semesters, Häkchen und Eigenes bleiben) oder eine eigene KI (andere herkunft,
-// nie überschrieben). Gibt es keine Notiz, fehlt der Lernplan in der Übersicht (sichtbar()). Ist ein Lernplan nicht mehr dran (Modul
-// bestanden oder anerkannt, Notiz für ein anderes Semester, Modul liegt jetzt anderswo), steht er ohne Plan am Ende (nichtMehrDran).
-// Je Kapitel eine Aufgabe `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Unterlage (`[[B110 Folien 01 …]]`), die
-// Nummer der Folien (`Folien 1`, wenn sie von der Kapitelnummer abweicht) und die Seitenzahl (`118 S.`); eingerückte Aufgaben
-// darunter sind Unterkapitel. Abgehakt = verstanden (bei Unterkapiteln anteilig).
+// Abrufer, nur für Module des laufenden Semesters, Häkchen und Eigenes bleiben), seit 31.10.2026 die Listen des eigenen Servers
+// (serverListen, herkunft: server, nur für Module ohne zentrale Liste; eine spätere zentrale Liste übernimmt die Notiz) oder eine
+// eigene KI (andere herkunft, nie überschrieben). Gibt es keine Notiz, fehlt der Lernplan in der Übersicht (sichtbar()). Ist ein
+// Lernplan nicht mehr dran (Modul bestanden oder anerkannt, Notiz für ein anderes Semester, Modul liegt jetzt anderswo), steht er
+// ohne Plan am Ende (nichtMehrDran).
+// Je Kapitel eine Aufgabe `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Unterlage (`[[B110 Folien 01 …|Folien]]`),
+// die Nummer der Folien (`Folien 1`, wenn es noch keine Folien gibt und sie von der Kapitelnummer abweicht), die Seitenzahl
+// (`118 S.`), der Tag der ersten Vorlesung zum Kapitel (`Vorlesung 19.10.2026`) und des ersten Zwischentests, der es abfragt
+// (`Zwischentest 13.11.2026`); eingerückte Aufgaben darunter sind Unterkapitel. Abgehakt = verstanden (bei Unterkapiteln anteilig).
 // Gewicht eines Kapitels = Seiten (Angabe in der Zeile, sonst Feld `seiten` der verlinkten oder gleich nummerierten Folien, sonst
 // der Mittelwert); „da“ = eine verlinkte Datei oder Folien mit dieser Nummer existieren. Wochen: Montag bis Freitag ohne Pausen und
-// freie Tage aus dem Datenmodell, eine Woche ganz in einer Pause zählt 30 %. Jedes Kapitel bekommt die Woche, in der der Plan es
-// erreicht (gleicher Aufwand je Woche); Stand je Modul: im Plan, voraus, hinterher, wartet (fällige Kapitel noch nicht hochgeladen),
-// Klausurvorbereitung, vorbei. Klausur: die eine Regel des Datenmodells (ctx.modell.pruefungVon), ohne Prüfungstermin der Beginn
-// der nächsten Prüfungsphase (geschätzt), damit der Plan ein Ende hat. Beginn: Vorlesungsbeginn, frühestens `seit`.
+// freie Tage aus dem Datenmodell, eine Woche ganz in einer Pause zählt 30 %, dazu deine Wochen mit weniger Zeit (System/Einstellungen.md,
+// lernplan_wochen). Der Plan verteilt die Kapitel so gleichmäßig, wie die Zwischentests es erlauben (planen); Stand je Modul: im Plan,
+// voraus, hinterher (nur Kapitel, die die Vorlesung schon hatte), vorlernen (fällig, aber noch vor seiner Vorlesung), wartet
+// (fällige Kapitel noch nicht hochgeladen), Klausurvorbereitung, vorbei. Klausur: die eine Regel des Datenmodells
+// (ctx.modell.pruefungVon), ohne Prüfungstermin der Beginn der nächsten Prüfungsphase (geschätzt), damit der Plan ein Ende hat.
+// Beginn: Vorlesungsbeginn, frühestens `seit`.
 // Frontmatter der Notiz (optional): `seit` (Plan beginnt in dieser Woche), `verstanden_bis` (Ziel statt 70 %), `vorlaeufig: true`
-// (Kapitelliste teils geschätzt, z. B. Lehrbuch-Einheiten, die die Vorlesung erst nach und nach nennt). Ein https-Link in der Zeile
-// (frei zugängliches Lehrbuch) macht ein Kapitel „da“; ohne Seiten im ganzen Modul zählt die Zahl der Unterkapitel als Gewicht.
-// Schreibt nur beim Tipp auf ein Kapitel: genau diese Zeile `- [ ]` ↔ `- [x]`, nur wenn ihr Text noch stimmt (wie todos.js).
-// Für andere Skripte und Tests: ctx.lernplan = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar }.
-// Stil: eba-core.css Abschnitt 61, Klassen eba-lp-*; Zeilen wie die Verbindungen (.eba-vb-liste).
+// (Kapitelliste teils geschätzt, z. B. Lehrbuch-Einheiten, die die Vorlesung erst nach und nach nennt), `vorlernen: false` (ein
+// Kapitel ist frühestens eine Woche nach seiner Vorlesung dran; Schalter im Bereich). Ein https-Link in der Zeile (frei zugängliches
+// Lehrbuch) macht ein Kapitel „da“; ohne Seiten im ganzen Modul zählt die Zahl der Unterkapitel als Gewicht.
+// Klausurvorbereitung (Für die Klausur): Altklausuren des Moduls (bearbeitet = status bearbeitet), nach dem Ziel auf die Wochen bis
+// zur Klausur verteilt, die neueste offene für den Tag davor; Übungsblätter dieses Semesters; heute fällige Karteikarten (ctx.karten).
+// Schreibt beim Tipp auf ein Kapitel genau diese Zeile `- [ ]` ↔ `- [x]`, nur wenn ihr Text noch stimmt (wie todos.js), beim Schalter
+// „Vor der Vorlesung lernen“ das Feld vorlernen der Notiz, bei „Zeit“ einer Woche lernplan_wochen in System/Einstellungen.md.
+// Für andere Skripte und Tests: ctx.lernplan = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, modulZeile,
+// serverListen, … }.
+// Stil: eba-core.css Abschnitt 61, Klassen eba-lp-*; Zeilen wie die Verbindungen (.eba-vb-liste), Dashboard-Zeile wie die der
+// Karteikarten (.eba-lk-heute, Abschnitt 52).
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Fehler → Ersatztext des Blocks.
 module.exports = function (ctx) {
   const app = window.app;
+  const O = ctx.obsidian || {};
   const SPRACHE = "eba-lernplan";
   const ORDNER = "Lernplan/";
+  const BEREICH = "Studium/Lernplan.md";
+  const EINSTELLUNGEN = "System/Einstellungen.md";
+  const FELD_WOCHEN = "lernplan_wochen";
   const ANTEIL = 0.7;
   const MIN_KAPAZITAET = 0.3;
   const EPS = 1e-6;
@@ -41,6 +58,11 @@ module.exports = function (ctx) {
   const tm = (s) => `${+s.slice(8, 10)}.${+s.slice(5, 7)}.`;
   const wtm = (s) => `${WTAG[tagObj(s).getDay()]} ${tm(s)}`;
   const heuteIso = () => isoVon(ctx.date.jetzt());
+  // „19.10.2026“ ↔ „2026-10-19“ (Tag der Vorlesung, des Zwischentests in der Kapitelzeile)
+  const deVon = (iso) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+  const isoAusDe = (s) => { const m = String(s).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/); return m ? `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}` : ""; };
+  // „2.–8.11.“ bzw. „28.12.–3.1.“: Montag bis Sonntag einer Woche
+  const wocheText = (mo) => { const so = plusTage(mo, 6); return mo.slice(5, 7) === so.slice(5, 7) ? `${+mo.slice(8, 10)}.–${tm(so)}` : `${tm(mo)}–${tm(so)}`; };
 
   // ---------- Kapitel lesen (rein) ----------
   const AUFGABE = /^([ \t]*)[-*+] \[([ xX])\] (.*)$/;
@@ -52,6 +74,8 @@ module.exports = function (ctx) {
   const WEB = /\[[^\]]*\]\((https:\/\/[^)\s]+)\)/g;
   const SEITEN = /^(\d{1,4})\s*S\.?$/;
   const FOLIEN = /^Folien (\d{1,2})$/;
+  const VORLESUNG = /^Vorlesung (\d{1,2}\.\d{1,2}\.\d{4})$/;
+  const ZWISCHENTEST = /^Zwischentest (\d{1,2}\.\d{1,2}\.\d{4})$/;
   const ROEMISCH = { I: 1, V: 5, X: 10, L: 50, C: 100 };
   const roemisch = (s) => {
     let n = 0;
@@ -60,20 +84,26 @@ module.exports = function (ctx) {
   };
   // Nummer als Zahl (für den Abgleich mit dem Feld `nummer` der Folien): 3 → 3, IV → 4, sonst null (E, 1.2)
   const nrZahl = (nr) => (/^\d+$/.test(nr) ? +nr : /^[IVXLC]+$/.test(nr) ? roemisch(nr) : null);
-  // Text einer Kapitelzeile ohne Häkchen: „1 Grundlagen · [[B110 Folien 01 Grundlagen]] · 42 S.“ → Nummer, Titel, Links, Seiten;
-  // web = https-Links (`[online](https://…)`, z. B. ein frei zugängliches Lehrbuch): Das Kapitel ist dann da.
+  // Text einer Kapitelzeile ohne Häkchen: „1 Grundlagen · [[B110 Folien 01 Grundlagen|Folien]] · 42 S. · Vorlesung 19.10.2026“ →
+  // Nummer, Titel, Links, Seiten, Tag der Vorlesung und des Zwischentests (ISO); web = https-Links (`[online](https://…)`, z. B. ein
+  // frei zugängliches Lehrbuch): Das Kapitel ist dann da.
   const zeileLesen = (rest) => {
     const teile = rest.replace(/\s+\^[A-Za-z0-9-]+$/, "").split(" · ");
     const kopf = teile.shift().trim();
     const m = kopf.match(NUMMER);
     const nr = m && nummerOk(m[1]) ? m[1] : "";
     const links = [], web = [];
-    let seiten = null, folien = null;
+    let seiten = null, folien = null, vorlesung = "", zwischentest = "";
     for (const t of teile) {
-      const s = t.trim().match(SEITEN);
+      const x = t.trim();
+      const s = x.match(SEITEN);
       if (s) { seiten = +s[1]; continue; }
-      const f = t.trim().match(FOLIEN);
+      const f = x.match(FOLIEN);
       if (f) { folien = +f[1]; continue; }
+      const v = x.match(VORLESUNG);
+      if (v) { vorlesung = isoAusDe(v[1]); continue; }
+      const z = x.match(ZWISCHENTEST);
+      if (z) { zwischentest = isoAusDe(z[1]); continue; }
       let l;
       LINK.lastIndex = 0;
       while ((l = LINK.exec(t))) links.push(l[1].trim());
@@ -81,10 +111,11 @@ module.exports = function (ctx) {
       while ((l = WEB.exec(t))) web.push(l[1]);
     }
     const titel = (nr ? m[2] : kopf).replace(LINK, (_, z, a) => a || z).trim();
-    return { nr, titel, links, web, seiten, folien };
+    return { nr, titel, links, web, seiten, folien, vorlesung, zwischentest };
   };
-  // Markdown einer Lernplan-Notiz → [{ zeile, roh, nr, titel, fertig, links, seiten, teile: [{ zeile, roh, nr, titel, fertig }] }]
-  // Nur Aufgaben außerhalb von Frontmatter und Codeblöcken; ohne Einrückung = Kapitel, eingerückt = Unterkapitel des letzten.
+  // Markdown einer Lernplan-Notiz → [{ zeile, roh, nr, titel, fertig, links, seiten, vorlesung, zwischentest, teile: [{ zeile, roh,
+  // nr, titel, fertig }] }]. Nur Aufgaben außerhalb von Frontmatter und Codeblöcken; ohne Einrückung = Kapitel, eingerückt =
+  // Unterkapitel des letzten.
   const kapitelLesen = (text) => {
     const zeilen = String(text == null ? "" : text).split("\n");
     const kapitel = [];
@@ -116,16 +147,17 @@ module.exports = function (ctx) {
 
   // ---------- Wochen und Plan (rein) ----------
   // Anteil einer Woche am üblichen Pensum: Montag–Freitag ohne Pausen ([{ von, bis }]) und freie Tage ([ISO] oder [{ datum }]);
-  // ganz frei → 30 %
-  const kapazitaet = (mo, pausen, freie) => {
+  // ganz frei → 30 %; faktor (0–1, deine Angabe „weniger Zeit“) nimmt davon noch einen Teil
+  const arbeitstage = (mo, pausen, freie) => {
     const frei = new Set((freie || []).map((t) => s10(t && t.datum ? t.datum : t)));
     let n = 0;
     for (let i = 0; i < 5; i++) {
       const d = plusTage(mo, i);
       if (!frei.has(d) && !(pausen || []).some((p) => p.von <= d && d <= p.bis)) n++;
     }
-    return Math.max(MIN_KAPAZITAET, n / 5);
+    return n;
   };
+  const kapazitaet = (mo, pausen, freie, faktor) => Math.max(MIN_KAPAZITAET, arbeitstage(mo, pausen, freie) / 5) * (faktor == null ? 1 : faktor);
   // „Alles verstanden bis“: Sonntag der Woche, in der anteil (70 %) der Zeit von beginn bis klausur vorbei ist, höchstens der
   // Sonntag vor der Klausurwoche
   const zielVon = (beginn, klausur, anteil) => {
@@ -134,34 +166,107 @@ module.exports = function (ctx) {
     const so = plusTage(montagVon(tag), 6), spaetestens = plusTage(montagVon(klausur), -1);
     return so < spaetestens ? so : spaetestens;
   };
-  // kapitel: [{ gewicht, anteil (0–1), da }], Daten als ISO. Gleicher Aufwand je Woche: Bis Ende der Woche w ist der Anteil der
-  // Kapazität bis w am gesamten Gewicht fällig. → { wochen: [{ mo, kap, soll }], faellig: [ISO-Sonntag je Kapitel], gesamt, ist, w }
-  // (w = Index der Woche von heute, -1 davor, wochen.length danach)
-  const planen = ({ kapitel, beginn, ziel, heute, pausen, freie }) => {
+  // Strenge nach der Zielnote (Döbele: Priorität der Noten): bis 1,5 alles verstanden nach 60 % der Zeit (mehr Zeit für
+  // Altklausuren), bis 2,5 nach 70 %, schlechter nach 80 %; ohne gültige Zielnote 70 %
+  const anteilAusZielnote = (zielnote) => {
+    const n = parseFloat(String(zielnote == null ? "" : zielnote).replace(",", "."));
+    if (!isFinite(n) || n < 1 || n > 4) return ANTEIL;
+    return n <= 1.5 ? 0.6 : n <= 2.5 ? 0.7 : 0.8;
+  };
+  // Deine Wochen mit weniger Zeit aus System/Einstellungen.md (lernplan_wochen: ["2026-11-16 50", …], Montag und Prozent) →
+  // { ISO-Montag: 0–1 }; anderes fällt weg
+  const faktorenLesen = (liste) => {
+    const aus = {};
+    for (const x of Array.isArray(liste) ? liste : []) {
+      const m = String(x == null ? "" : x).trim().match(/^(\d{4}-\d{2}-\d{2})\s+(\d{1,3})\s*%?$/);
+      if (m && +m[2] <= 100 && isFinite(tagObj(m[1]).getTime())) aus[montagVon(m[1])] = +m[2] / 100;
+    }
+    return aus;
+  };
+  // kapitel: [{ gewicht, anteil (0–1), da, frist? (ISO-Sonntag: bis dahin verstanden, etwa vor einem Zwischentest) }], Daten als
+  // ISO, faktoren wie faktorenLesen. Gleicher Aufwand je Woche, so weit die Fristen es zulassen: Vom erreichten Stand aus nimmt
+  // der Plan die Frist (oder das Ziel), die den höchsten Takt verlangt (Gewicht je Kapazität), verteilt bis dorthin gleichmäßig
+  // und macht von dort aus weiter. Ohne Fristen ist bis Ende der Woche w der Anteil der Kapazität bis w am Gesamtgewicht fällig.
+  // Deine Wochen mit weniger Zeit zählen nur ab ihrer eigenen Woche, in drei Läufen: die Wochen vor dieser mit voller Zeit für
+  // alles, was noch kommt, dann diese Woche ebenso, dann der Rest mit deinen Angaben. So rückt eine spätere Woche mit weniger Zeit
+  // nichts in vergangene Wochen und nichts in diese, die schon läuft. Jedes Kapitel bekommt den Sonntag der Woche, in der der Plan
+  // es erreicht.
+  // → { wochen: [{ mo, kap, soll }], faellig: [ISO-Sonntag je Kapitel], gesamt, ist, w } (w = Index der Woche von heute, -1 davor,
+  // wochen.length danach)
+  const planen = ({ kapitel, beginn, ziel, heute, pausen, freie, faktoren }) => {
+    const F = faktoren || {};
     const wochen = [];
     const ende = montagVon(ziel);
-    for (let mo = montagVon(beginn); mo <= ende; mo = plusTage(mo, 7)) wochen.push({ mo, kap: kapazitaet(mo, pausen, freie), soll: 0 });
-    if (!wochen.length) wochen.push({ mo: ende, kap: 1, soll: 0 });
+    for (let mo = montagVon(beginn); mo <= ende; mo = plusTage(mo, 7)) wochen.push({ mo, kap: kapazitaet(mo, pausen, freie, F[mo]), voll: kapazitaet(mo, pausen, freie), soll: 0 });
+    if (!wochen.length) wochen.push({ mo: ende, kap: 1, voll: 1, soll: 0 });
+    if (!wochen.some((x) => x.kap > EPS)) wochen.forEach((x) => { x.kap = 1; });
     const gesamt = kapitel.reduce((s, k) => s + k.gewicht, 0);
-    const kapSumme = wochen.reduce((s, x) => s + x.kap, 0);
-    let lauf = 0;
-    for (const x of wochen) { lauf += x.kap; x.soll = gesamt * lauf / kapSumme; }
+    const letzte = wochen.length - 1;
+    const mo = montagVon(heute);
+    const w = mo < wochen[0].mo ? -1 : mo > wochen[letzte].mo ? wochen.length : wochen.findIndex((x) => x.mo === mo);
+    const wocheVon = (so) => { const m = montagVon(so); let i = letzte; while (i > 0 && wochen[i].mo > m) i--; return i; };
+    const marken = [];
     let kum = 0;
+    for (const k of kapitel) { kum += k.gewicht; if (k.frist) marken.push({ w: wocheVon(k.frist), summe: kum }); }
+    marken.push({ w: letzte, summe: gesamt });
+    // Verteilt ab Woche w0 + 1 (Stand c0 bis w0) mit der Kapazität kap(Woche, Index)
+    const verteilen = (kap, w0, c0) => {
+      const C = [0]; // C[i + 1] = Kapazität der Wochen 0 bis i
+      wochen.forEach((x, i) => C.push(C[i] + kap(x, i)));
+      while (w0 < letzte) {
+        let beste = null;
+        for (const m of marken) {
+          if (m.w <= w0) continue;
+          const spanne = C[m.w + 1] - C[w0 + 1];
+          const takt = spanne > EPS ? (m.summe - c0) / spanne : (m.summe > c0 + EPS ? Infinity : 0);
+          if (!beste || takt > beste.takt + EPS || (Math.abs(takt - beste.takt) <= EPS && m.w > beste.w)) beste = { w: m.w, takt, summe: Math.max(m.summe, c0), spanne };
+        }
+        for (let i = w0 + 1; i <= beste.w; i++) {
+          wochen[i].soll = beste.spanne > EPS ? c0 + (beste.summe - c0) * (C[i + 1] - C[w0 + 1]) / beste.spanne : beste.summe;
+        }
+        w0 = beste.w; c0 = beste.summe;
+      }
+    };
+    // Bis Woche bis mit deinen Angaben, danach volle Zeit; ab Woche w0 + 1
+    const lauf = (bis, w0) => verteilen((x, i) => (i <= bis ? x.kap : x.voll), w0, w0 < 0 ? 0 : wochen[w0].soll);
+    if (w >= 0 && w < letzte) { lauf(w - 1, -1); lauf(w, w - 1); lauf(letzte, w); } else lauf(letzte, -1);
+    kum = 0;
     const faellig = kapitel.map((k) => {
       kum += k.gewicht;
-      const x = wochen.find((y) => y.soll >= kum - EPS) || wochen[wochen.length - 1];
+      const x = wochen.find((y) => y.soll >= kum - EPS) || wochen[letzte];
       return plusTage(x.mo, 6);
     });
-    const mo = montagVon(heute);
-    const w = mo < wochen[0].mo ? -1 : mo > wochen[wochen.length - 1].mo ? wochen.length : wochen.findIndex((x) => x.mo === mo);
     const ist = kapitel.reduce((s, k) => s + k.gewicht * k.anteil, 0);
     return { wochen, faellig, gesamt, ist, w };
   };
+  // Ohne Vorlernen (vorlernen: false): Ein Kapitel ist frühestens am Sonntag der Woche nach seiner Vorlesung dran. Kapitel ohne
+  // Vorlesung schätzt der Plan: Die Vorlesung schafft den Rest gleichmäßig nach Gewicht bis zum Vorlesungsende, das Kapitel, an
+  // dem sie gerade ist, zählt mit; ein übersprungenes Kapitel vor der letzten Vorlesung gilt mit dem nächsten als behandelt.
+  // kapitel: [{ gewicht, vorlesung }], vb/ve: Vorlesungsbeginn und -ende → [{ tag: ISO-Sonntag, geschaetzt }]
+  const nachVorlesung = (kapitel, vb, ve) => {
+    let letzte = -1;
+    kapitel.forEach((k, i) => { if (k.vorlesung) letzte = i; });
+    const ab = letzte >= 0 ? kapitel[letzte].vorlesung : vb;
+    const vorn = letzte >= 0 ? kapitel[letzte].gewicht : 0;
+    const rest = kapitel.slice(letzte + 1).reduce((s, k) => s + k.gewicht, 0);
+    const spanne = Math.max(0, tageZwischen(ab, ve || ab));
+    const sonntagDanach = (tag) => plusTage(montagVon(tag), 13);
+    let lauf = vorn;
+    return kapitel.map((k, i) => {
+      if (k.vorlesung) return { tag: sonntagDanach(k.vorlesung), geschaetzt: false };
+      if (i < letzte) { const n = kapitel.slice(i + 1).filter((x) => x.vorlesung)[0]; return { tag: sonntagDanach(n.vorlesung), geschaetzt: false }; }
+      const tag = plusTage(ab, Math.round(spanne * lauf / ((vorn + rest) || 1)));
+      lauf += k.gewicht;
+      return { tag: sonntagDanach(tag), geschaetzt: true };
+    });
+  };
   // Stand eines Moduls heute: { art, pille: { art, text } | null, woche: [Index der Kapitel bis Sonntag], naechstes: Index | -1 }
-  // Pillen nach docs/design.md (Farbe = Bedeutung): ok erledigt/voraus, warn offen mit Datum, info wartet auf die Vorlesung,
-  // leer neutral; „im Plan“ ist der ruhige Normalfall ohne Pille.
-  // art: vorbei | vorbereitung | fertig | hinterher | wartet | voraus | plan
-  const stand = ({ kapitel, plan, heute, ziel, klausur }) => {
+  // Pillen nach docs/design.md (Farbe = Bedeutung): ok erledigt/voraus, warn offen mit Datum, info wartet auf die Vorlesung oder
+  // kann vorgelernt werden, leer neutral; „im Plan“ ist der ruhige Normalfall ohne Pille. Hinterher ist nur, wer ein Kapitel offen
+  // hat, das da ist und das die Vorlesung schon hatte (kapitel[i].erreicht; ohne Angabe gilt es als erreicht); ist es noch vor
+  // seiner Vorlesung, heißt es „vorlernen“ (mit vorlernen: false „wartet“). Die Pille sagt „überfällig“ wie die Kapitelzeilen.
+  // art: vorbei | vorbereitung | fertig | hinterher | vorlernen | wartet | voraus | plan
+  const stand = ({ kapitel, plan, heute, ziel, klausur, vorlernen }) => {
     const so = plusTage(montagVon(heute), 6), mo = montagVon(heute);
     const offen = kapitel.map((k, i) => i).filter((i) => kapitel[i].anteil < 1 - EPS);
     const naechstes = offen.length ? offen[0] : -1;
@@ -174,14 +279,168 @@ module.exports = function (ctx) {
     if (!offen.length) return { art: "fertig", pille: { art: "ok", text: "alles verstanden" }, woche: [], naechstes };
     const ueberfaellig = offen.filter((i) => plan.faellig[i] < mo);
     if (ueberfaellig.length) {
-      const fehlt = ueberfaellig.filter((i) => !kapitel[i].da);
-      if (fehlt.length === ueberfaellig.length) return { art: "wartet", pille: { art: "info", text: `wartet auf Kapitel ${kapitel[fehlt[0]].nr || fehlt[0] + 1}` }, woche, naechstes };
-      const n = ueberfaellig.length - fehlt.length;
-      return { art: "hinterher", pille: { art: "warn", text: n === 1 ? "1 Kapitel hinterher" : `${n} Kapitel hinterher` }, woche, naechstes };
+      const hinter = ueberfaellig.filter((i) => kapitel[i].da && kapitel[i].erreicht !== false);
+      if (hinter.length) return { art: "hinterher", pille: { art: "warn", text: hinter.length === 1 ? "1 Kapitel überfällig" : `${hinter.length} Kapitel überfällig` }, woche, naechstes };
+      const vor = vorlernen === false ? [] : ueberfaellig.filter((i) => kapitel[i].da);
+      if (vor.length) return { art: "vorlernen", pille: { art: "info", text: vor.length === 1 ? "1 Kapitel vorlernen" : `${vor.length} Kapitel vorlernen` }, woche, naechstes };
+      const i = ueberfaellig[0];
+      return { art: "wartet", pille: { art: "info", text: `wartet auf Kapitel ${kapitel[i].nr || i + 1}` }, woche, naechstes };
     }
     const voraus = kapitel.filter((k, i) => k.anteil >= 1 - EPS && plan.faellig[i] > so).length;
     if (voraus) return { art: "voraus", pille: { art: "ok", text: voraus === 1 ? "1 Kapitel voraus" : `${voraus} Kapitel voraus` }, woche, naechstes };
     return { art: "plan", pille: null, woche, naechstes };
+  };
+  // Altklausuren in der Klausurvorbereitung (Döbele, Notencoach: auf Zeit, am Tag vor der Klausur eine ungesehene): die offenen von
+  // alt nach neu auf die Wochen bis zur Klausur verteilt, die neueste offene bleibt für den Vortag. alt: [{ titel, fertig, … }] von
+  // alt nach neu. → { offen, fertig, dieseWoche, naechste, vortag }
+  const altklausurPlan = (alt, heute, klausur) => {
+    const offen = alt.filter((a) => !a.fertig);
+    const vortag = offen.length > 1 ? offen[offen.length - 1] : null;
+    const rest = vortag ? offen.slice(0, -1) : offen;
+    const wochen = klausur ? Math.max(1, Math.round(tageZwischen(montagVon(heute), montagVon(klausur)) / 7)) : 1;
+    return { offen, fertig: alt.length - offen.length, dieseWoche: rest.length ? Math.ceil(rest.length / wochen) : 0, naechste: rest[0] || vortag || null, vortag };
+  };
+  // Reihenfolge der Altklausuren von alt nach neu aus dem Titel („WS 2023/24 Haupttermin“, „SS 2020 Nachtermin“), sonst nach Titel
+  const altersSchluessel = (titel) => {
+    const t = String(titel || ""), m = t.match(/(WS|SS|WiSe|SoSe)\s*(\d{4})/i), j = t.match(/(\d{4})/);
+    const jahr = m ? +m[2] + (/^(WS|WiSe)$/i.test(m[1]) ? 0.75 : 0.25) : j ? +j[1] : 0;
+    return jahr + (/nach|wiederhol/i.test(t) ? 0.1 : 0);
+  };
+  // Bild des Semesters für den Semesterplan: Zeitachse von Montag der ersten Planwoche bis Sonntag der Woche der letzten Klausur,
+  // Lagen als Anteil 0–1 davon. Je Woche, was in ihr fällig ist, als Last: Anteil des Kapitels an seinem Modul mal dessen ECTS
+  // (Döbele: Fächer nach ECTS gewichtet), geteilt in verstanden, offen und überfällig (vor dieser Woche fällig, da und von der
+  // Vorlesung erreicht), insgesamt und je Modul (module[j], mit seiner Farbe). Je Modul eine Bahn: Beginn, Stand (wo der Plan bei deinem Fortschritt ist, innerhalb einer Woche
+  // gleichmäßig), überfällig bis heute (nur wenn der Stand des Moduls es sagt), Ziel (Ende seines Sonntags), Klausur, Zwischentests.
+  // module: aktive Lernpläne ({ ects, ziel, klausur, stand, plan: { wochen, gesamt, ist, faellig }, kapitel }), pausen: [{ von, bis,
+  // name }] → { von, tage, heute (null außerhalb), jetzt (Index dieser Woche, -1 außerhalb), wochen: [{ mo, fertig, offen, ueber, module }],
+  // max, monate: [{ x, text }], pausen: [{ a, b, name }], bahnen: [{ P, beginn, stand, ueber (bis wohin, sonst null), ziel, klausur,
+  // tests }] } oder null ohne Module
+  const MONAT =["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+  const planBild = (module, heute, pausen) => {
+    if (!module.length) return null;
+    let von = module[0].plan.wochen[0].mo, bis = montagVon(module[0].klausur.datum);
+    for (const P of module) {
+      if (P.plan.wochen[0].mo < von) von = P.plan.wochen[0].mo;
+      if (montagVon(P.klausur.datum) > bis) bis = montagVon(P.klausur.datum);
+    }
+    const tage = tageZwischen(von, bis) + 7, ende = plusTage(bis, 6), mo0 = montagVon(heute);
+    const x = (tag, plus) => Math.min(1, Math.max(0, (tageZwischen(von, tag) + (plus || 0)) / tage));
+    const wochen = [];
+    for (let mo = von; mo <= bis; mo = plusTage(mo, 7)) wochen.push({ mo, fertig: 0, offen: 0, ueber: 0, module: [] });
+    const bahnen = module.map((P, j) => {
+      const g = P.plan.gesamt || 1, e = P.ects || 5;
+      P.kapitel.forEach((k, i) => {
+        const mo = montagVon(P.plan.faellig[i]), w = wochen[tageZwischen(von, mo) / 7];
+        if (!w) return;
+        const last = (k.gewicht / g) * e, rest = last * (1 - k.anteil), ueber = mo < mo0 && k.da && k.erreicht !== false;
+        const m = w.module[j] || (w.module[j] = { farbe: P.farbe || 0, fertig: 0, offen: 0, ueber: 0 });
+        w.fertig += last * k.anteil; m.fertig += last * k.anteil;
+        if (ueber) { w.ueber += rest; m.ueber += rest; } else { w.offen += rest; m.offen += rest; }
+      });
+      const W = P.plan.wochen, ist = P.plan.ist, ziel = x(P.ziel, 1), jetzt = x(heute, 0.5);
+      let stand = x(W[0].mo), vorher = 0;
+      if (ist >= P.plan.gesamt - EPS) stand = ziel;
+      else for (const w of W) {
+        if (w.soll > vorher + EPS && w.soll >= ist - EPS) { stand = x(w.mo, (7 * (ist - vorher)) / (w.soll - vorher)); break; }
+        vorher = w.soll;
+      }
+      const hinterher = P.stand.art === "hinterher" || (P.stand.art === "vorbereitung" && ist < P.plan.gesamt - EPS);
+      const tests = [];
+      P.kapitel.forEach((k) => { if (k.zwischentest && tests.indexOf(k.zwischentest) < 0) tests.push(k.zwischentest); });
+      return { P, beginn: x(W[0].mo), stand, ueber: hinterher && jetzt > stand + EPS ? Math.min(jetzt, ziel) : null, ziel,
+        klausur: x(P.klausur.datum, 0.5), tests: tests.sort().map((t) => x(t, 0.5)) };
+    });
+    // Monate: je Monatsanfang eine Marke, der erste Monat am Anfang nur, wenn bis zum nächsten mindestens zwei Wochen Platz sind
+    const monate = [], naechster = (d) => plusTage(d.slice(0, 8) + "01", 32).slice(0, 8) + "01";
+    let d = naechster(von);
+    if (tageZwischen(von, d) >= 14) monate.push({ x: 0, text: MONAT[+von.slice(5, 7) - 1] });
+    for (; d <= ende; d = naechster(d)) monate.push({ x: x(d), text: MONAT[+d.slice(5, 7) - 1] });
+    const P2 = (pausen || []).filter((p) => p.von <= ende && p.bis >= von)
+      .map((p) => ({ a: x(p.von < von ? von : p.von), b: x(p.bis > ende ? ende : p.bis, 1), name: p.name || "" }));
+    const max = Math.max.apply(null, wochen.map((w) => w.fertig + w.offen + w.ueber).concat([EPS]));
+    const drin = heute >= von && heute <= ende;
+    return { von, tage, heute: drin ? x(heute, 0.5) : null, jetzt: wochen.findIndex((w) => w.mo === mo0), wochen, max, monate, pausen: P2, bahnen };
+  };
+  // Wo der Plan eines Moduls heute steht (Gewicht 0 bis gesamt): innerhalb einer Woche gleichmäßig
+  const sollHeute = (P, heute) => {
+    const W = P.plan.wochen;
+    let vorher = 0;
+    for (const w of W) {
+      const tag = tageZwischen(w.mo, heute);
+      if (tag < 0) return vorher;
+      if (tag < 7) return vorher + ((w.soll - vorher) * (tag + 0.5)) / 7;
+      vorher = w.soll;
+    }
+    return P.plan.gesamt;
+  };
+  // Stand über alle Module für den Kopf des Bereichs. module: aktive Lernpläne (wie planBild), ueberfaellig(P, i): Kapitel i ist
+  // überfällig (bisText). → { ist, soll (Anteil 0–1, je Modul nach ECTS gewichtet; soll = wo der Plan heute steht), rueckstand
+  // (Kapitel überfällig), vorsprung (verstanden, aber erst nach diesem Sonntag fällig), woche: { fertig, gesamt } (in dieser Woche
+  // fällig), aufholen: { extra (Kapitel je Woche), bis (Sonntag) } | null, klausur: { P, datum, tage } | null (die nächste),
+  // alleFertig }
+  const heldDaten = (module, heute, ueberfaellig) => {
+    let e = 0, ist = 0, soll = 0, rueckstand = 0, vorsprung = 0, alleFertig = true;
+    const mo = montagVon(heute), so = plusTage(mo, 6), woche = { fertig: 0, gesamt: 0 };
+    let klausur = null;
+    for (const P of module) {
+      const g = P.plan.gesamt || 1, ects = P.ects || 5;
+      e += ects; ist += (ects * P.plan.ist) / g; soll += (ects * sollHeute(P, heute)) / g;
+      P.kapitel.forEach((k, i) => {
+        const fertig = k.anteil >= 1 - EPS, d = P.plan.faellig[i];
+        if (!fertig) alleFertig = false;
+        if (!fertig && ueberfaellig(P, i)) rueckstand++;
+        if (fertig && d > so) vorsprung++;
+        if (d >= mo && d <= so) { woche.gesamt++; if (fertig) woche.fertig++; }
+      });
+      if (P.klausur.datum >= heute && (!klausur || P.klausur.datum < klausur.datum)) klausur = { P, datum: P.klausur.datum, tage: tageZwischen(heute, P.klausur.datum) };
+    }
+    // Aufholen: bis drei Kapitel in dieser Woche, mehr verteilt auf diese und die zwei nächsten
+    const aufholen = !rueckstand ? null : rueckstand <= 2 ? { extra: rueckstand, bis: so } : { extra: Math.ceil(rueckstand / 3), bis: plusTage(so, 14) };
+    return { ist: e ? ist / e : 0, soll: e ? soll / e : 0, rueckstand, vorsprung, woche, aufholen, klausur, alleFertig: module.length > 0 && alleFertig };
+  };
+  // Die Lage als Überschrift und Satz: Rückstand mit dem Weg zurück in den Plan, Vorsprung, im Plan, alles verstanden → { titel, satz }
+  const heldText = (H) => {
+    if (H.alleFertig) return { titel: "Alles verstanden.", satz: "Jetzt zählen Altklausuren auf Zeit und deine Karteikarten." };
+    if (H.rueckstand) {
+      const A = H.aufholen;
+      return { titel: `${H.rueckstand} Kapitel im Rückstand`, satz: H.rueckstand <= 2
+        ? `Hol ${H.rueckstand === 1 ? "es" : "sie"} bis ${wtm(A.bis)} nach, dann bist du wieder im Plan.`
+        : `Mit ${A.extra} ${A.extra === 1 ? "Kapitel" : "Kapiteln"} mehr pro Woche bist du bis ${wtm(A.bis)} wieder im Plan.` };
+    }
+    const rest = H.woche.gesamt - H.woche.fertig;
+    const woche = !H.woche.gesamt ? "" : rest === 1 ? "Diese Woche ist noch 1 Kapitel dran." : rest ? `Diese Woche sind noch ${rest} Kapitel dran.` : "Diese Woche ist geschafft.";
+    if (H.vorsprung) return { titel: `${H.vorsprung} Kapitel Vorsprung`, satz: woche || "Was du früher verstehst, bleibt dir an Zeit für Altklausuren." };
+    return { titel: "Du liegst im Plan.", satz: woche };
+  };
+  // Zielnote auf der Skala des Bereichs; die Stufen wie anteilAusZielnote
+  const NOTEN = ["1,0", "1,3", "1,7", "2,0", "2,3", "2,7", "3,0", "3,3", "3,7", "4,0"];
+  const STUFEN = [{ name: "sehr gut", bis: 1.5 }, { name: "gut", bis: 2.5 }, { name: "bestanden", bis: 4 }];
+  const stufeVon = (note) => { const n = parseFloat(String(note).replace(",", ".")); return STUFEN.findIndex((s) => n <= s.bis + EPS); };
+  // „Verstanden bis“ eines Moduls bei einem Anteil; hält die Vorlesung das Ziel schon später (vorlernen aus), nicht früher als jetzt
+  const zielBei = (P, anteil) => {
+    const z = zielVon(P.beginn, P.klausur.datum, anteil);
+    return P.zielPlan && P.ziel > P.zielPlan && P.ziel > z ? P.ziel : z;
+  };
+  // Was ein Anteil für die Module hieße: frühestes und spätestes „verstanden bis“ und wie viele Wochen danach bis zur Klausur
+  // bleiben (Module mit eigenem verstanden_bis zählen nicht). → { von, bis, wochenVon, wochenBis } | null
+  const zielVorschau = (module, anteil) => {
+    const Z = module.filter((P) => !P.eigenesZiel && P.beginn).map((P) => {
+      const z = zielBei(P, anteil);
+      return { z, w: Math.max(0, Math.round(tageZwischen(z, P.klausur.datum) / 7)) };
+    });
+    if (!Z.length) return null;
+    const zs = Z.map((x) => x.z).sort(), ws = Z.map((x) => x.w).sort((a, b) => a - b);
+    return { von: zs[0], bis: zs[zs.length - 1], wochenVon: ws[0], wochenBis: ws[ws.length - 1] };
+  };
+  // Satz zur Zielnote in Teilen ({ text, wert }; wert = fett): „Alles verstanden nach 60 % der Zeit, bis So 3.1., danach 4 Wochen
+  // Klausurvorbereitung.“ Mehrere Module: Spannen, die Tage ohne Wochentag. V wie zielVorschau.
+  const spanne = (a, b) => (a === b ? String(a) : `${a}–${b}`);
+  const zielTeile = (V, anteil) => {
+    if (!V) return [{ text: "Deine Module haben ein eigenes Datum, bis wann alles verstanden sein soll." }];
+    const bis = V.von === V.bis ? wtm(V.bis) : spanne(tm(V.von), tm(V.bis));
+    const wochen = V.wochenVon === V.wochenBis && V.wochenBis === 1 ? "1 Woche" : `${spanne(V.wochenVon, V.wochenBis)} Wochen`;
+    return [{ text: "Alles verstanden nach " }, { text: `${Math.round(anteil * 100)} % der Zeit`, wert: true }, { text: ", bis " },
+      { text: bis, wert: true }, { text: ", danach " }, { text: wochen, wert: true }, { text: " Klausurvorbereitung." }];
   };
 
   // ---------- Daten aus dem Tresor ----------
@@ -190,6 +449,7 @@ module.exports = function (ctx) {
   const lernplaene = () => app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(ORDNER) && fmVon(f).typ === "lernplan")
     .sort((a, b) => codeVon(a).localeCompare(codeVon(b), "de"));
   const sichtbar = () => app.vault.getMarkdownFiles().some((f) => f.path.startsWith(ORDNER) && fmVon(f).typ === "lernplan");
+  const einstellungen = () => fmVon(app.vault.getAbstractFileByPath(EINSTELLUNGEN));
 
   // Klausur eines Moduls: ctx.modell.pruefungVon (eine Regel für alle Seiten); ohne Prüfungstermin der Beginn der nächsten
   // Prüfungsphase (geschätzt)
@@ -199,21 +459,56 @@ module.exports = function (ctx) {
     const phase = D.pruefungsphasen.filter((x) => x.bis >= heute).sort((x, y) => (x.von < y.von ? -1 : 1))[0];
     return phase ? { datum: phase.von, geschaetzt: true, f: null } : null;
   };
-  // Folien eines Moduls je Nummer: { nummer: { f, seiten } } (erste Datei je Nummer, Varianten „mit Anmerkungen“ zählen nicht)
-  const folienVon = (code) => {
-    const aus = {};
+  // Folien eines Moduls: { nr: { nummer: { f, seiten, fassung } }, ohne: [{ f, seiten }] } (je Nummer die neueste Fassung,
+  // Varianten „mit Anmerkungen“, „unbeschrieben“, „zum Video“ zählen nicht; ohne = Folien ohne Nummer)
+  const folienSammeln = (code) => {
+    const aus = { nr: {}, ohne: [] };
     for (const f of app.vault.getMarkdownFiles()) {
       if (!f.path.startsWith("Unterlagen/")) continue;
       const fm = fmVon(f);
       if (fm.typ !== "unterlage" || String(fm.code || "").trim() !== code || fm.art !== "Folien") continue;
-      const n = parseInt(fm.nummer, 10);
-      if (!isFinite(n) || /anmerkung|video|unbeschrieben/i.test(f.basename)) continue;
+      if (/anmerkung|video|unbeschrieben/i.test(f.basename)) continue;
+      const n = parseInt(fm.nummer, 10), seiten = parseInt(fm.seiten, 10) || null;
+      const titel = String(fm.titel || f.basename.replace(/^\S+\s+Folien\s+\d*\s*/, ""));
+      if (!isFinite(n)) { aus.ohne.push({ f, seiten, titel }); continue; }
       // Neue Fassung daneben (ilias.js, „<Name> neue Fassung JJJJ-MM-TT“, deine Datei hatte Anmerkungen): Der Plan rechnet mit der
       // neuesten und verlinkt sie; ihre Notiz zeigt auf deine bearbeitete (fassung.js)
       const fassung = ctx.user.fassung.fassungVon(f.basename);
-      if (!aus[n] || ctx.user.fassung.fassungFolge(fassung, aus[n].fassung) > 0) aus[n] = { f, seiten: parseInt(fm.seiten, 10) || null, fassung };
+      if (!aus.nr[n] || ctx.user.fassung.fassungFolge(fassung, aus.nr[n].fassung) > 0) aus.nr[n] = { f, seiten, fassung, titel };
     }
     return aus;
+  };
+  const folienVon = (code) => folienSammeln(code).nr;
+  // Folien zur Nummer n; hat das Modul gar keine nummerierten Folien, aber genau eine Folien-Unterlage ohne Nummer (eine PDF für
+  // alle Kapitel, etwa aus dem ILIAS-Abruf des Plugins), gilt sie für jedes Kapitel
+  const folieZu = (S, n) => (n != null && S.nr[n]) || (!Object.keys(S.nr).length && S.ohne.length === 1 ? S.ohne[0] : null);
+  // Folien je Kapitel. Zuerst nach dem Titel: Folien gehören zu dem Kapitel, mit dem ihr Titel die meisten Wörter ab vier
+  // Buchstaben teilt, wenn das genau eines ist. Dann nach der Nummer (Feld folien bzw. Kapitelnummer, folieZu), aber nie Folien,
+  // die nach ihrem Titel zu einem anderen Kapitel gehören: Der ILIAS-Abruf des Plugins nummeriert nach den Dateien der Vorlesung
+  // („EBWL_2_post.pdf“ → Folien 02, noch Kapitel 1), die Kapitellisten zählen Kapitel. Trägt die Liste `folien` nur an manchen
+  // Kapiteln (E101: Lehrbuch, Folien je Vorlesung), haben die übrigen keine nach der Nummer. nurTitel: ohne Nummer (Notizen aus
+  // Kapitellisten: Der Abgleich hat die Folien mit der ganzen Liste schon verlinkt). kapitel: [{ nr, titel, folien }] →
+  // [Folien | null] je Kapitel
+  const NICHT_WORT = ["oder", "einer", "eines", "einem", "über", "unter", "folien", "kapitel", "teil", "vorlesung", "anmerkungen", "fassung"];
+  const woerter = (t) => titelSchluessel(t).split(" ").filter((w) => w.length >= 4 && NICHT_WORT.indexOf(w) < 0);
+  const folienZuordnen = (kapitel, S, nurTitel) => {
+    const alle = Object.keys(S.nr).map((n) => S.nr[n]).concat(S.ohne);
+    const kw = kapitel.map((k) => woerter(k.titel));
+    const nachTitel = new Map();
+    for (const x of alle) {
+      const fw = woerter(x.titel);
+      const treffer = kw.map((w) => fw.filter((a) => w.indexOf(a) >= 0).length);
+      const max = Math.max.apply(null, [0].concat(treffer));
+      if (max && treffer.filter((n) => n === max).length === 1) nachTitel.set(x, treffer.indexOf(max));
+    }
+    const teils = kapitel.some((k) => k.folien != null) && kapitel.some((k) => k.folien == null);
+    return kapitel.map((k, i) => {
+      const eigene = alle.filter((x) => nachTitel.get(x) === i)[0];
+      if (eigene) return eigene;
+      if (nurTitel || (teils && k.folien == null)) return null;
+      const x = folieZu(S, k.folien != null ? k.folien : nrZahl(k.nr));
+      return x && !nachTitel.has(x) ? x : null;
+    });
   };
 
   // Ein Modul ist im Semester dran, wenn es laut deinem Plan dort liegt, läuft oder angemeldet ist (eine Regel für das Anlegen der
@@ -233,22 +528,40 @@ module.exports = function (ctx) {
   };
   const AUS = { art: "aus", pille: { art: "leer", text: "nicht mehr dran" }, woche: [], naechstes: -1 };
 
-  // Alles für einen Lernplan: Kapitel mit Gewicht und „da“, Klausur, Ziel, Plan, Stand. Ein Lernplan, der nicht mehr dran ist, hat
-  // keinen Plan (aus = Grund, Stand „nicht mehr dran“).
-  const sammeln = async (f, D, heute) => {
+  // Material für die Klausur: Altklausuren des Moduls (von alt nach neu; bearbeitet = status bearbeitet) und Übungsblätter dieses
+  // Semesters (bearbeitet oder erledigt). Lösungen zählen nicht.
+  const vorbereitungVon = (code, semesterName) => {
+    const alt = [], uebung = [];
+    for (const f of app.vault.getMarkdownFiles()) {
+      if (!f.path.startsWith("Unterlagen/")) continue;
+      const fm = fmVon(f);
+      if (fm.typ !== "unterlage" || String(fm.code || "").trim() !== code) continue;
+      const fertig = fm.status === "bearbeitet" || fm.erledigt === true;
+      if (fm.art === "Altklausur") alt.push({ f, titel: String(fm.titel || f.basename).trim(), fertig });
+      else if (fm.art === "Übung" && (!semesterName || !fm.semester || String(fm.semester).trim() === semesterName)) uebung.push({ f, fertig });
+    }
+    alt.sort((a, b) => altersSchluessel(a.titel) - altersSchluessel(b.titel) || a.titel.localeCompare(b.titel, "de"));
+    return { alt, uebung };
+  };
+
+  // Alles für einen Lernplan: Kapitel mit Gewicht, „da“ und „erreicht“, Klausur, Ziel, Plan, Stand, Material für die Klausur. Ein
+  // Lernplan, der nicht mehr dran ist, hat keinen Plan (aus = Grund, Stand „nicht mehr dran“). o: { faktoren, anteil }
+  const sammeln = async (f, D, heute, o) => {
     const text = await app.vault.cachedRead(f);
     const fm = fmVon(f), code = codeVon(f);
     const modul = D.module.find((m) => m.code === code) || null;
-    const basis = { f, code, modul, vorlaeufig: fm.vorlaeufig === true };
+    const basis = { f, code, modul, heute, vorlaeufig: fm.vorlaeufig === true, vorlernen: fm.vorlernen !== false, ects: (modul && modul.ects) || 5 };
     const roh = kapitelLesen(text);
     if (!roh.length) return Object.assign(basis, { kapitel: [], fehlt: "keine Kapitel" });
-    const folien = folienVon(code);
-    const kapitel = roh.map((k) => {
+    const folien = folienZuordnen(roh, folienSammeln(code), !!fm.herkunft);
+    // Führt die Liste Vorlesungstage, hat die Vorlesung ein Kapitel ohne Tag noch nicht erreicht; sonst gilt jedes als erreicht
+    const verfolgt = roh.some((k) => k.vorlesung);
+    const kapitel = roh.map((k, i) => {
       const ziele = k.links.map((l) => app.metadataCache.getFirstLinkpathDest(l, f.path)).filter(Boolean);
-      const n = k.folien != null ? k.folien : nrZahl(k.nr);
-      const fol = n != null ? folien[n] : null;
+      const fol = folien[i];
       const verlinkt = ziele.map((z) => parseInt(fmVon(z).seiten, 10)).filter((x) => x > 0)[0] || null;
       return Object.assign({}, k, { anteil: anteilVon(k), da: ziele.length > 0 || k.web.length > 0 || !!fol,
+        erreicht: verfolgt ? !!k.vorlesung && k.vorlesung <= heute : true,
         seitenWert: k.seiten || verlinkt || (fol && fol.seiten) || null, ziel: ziele[0] || (fol && fol.f) || null, webZiel: k.web[0] || null });
     });
     gewichte(kapitel).forEach((g, i) => { kapitel[i].gewicht = g; });
@@ -261,12 +574,48 @@ module.exports = function (ctx) {
     const vb = (sem && sem.vb) || heute;
     const seit = s10(fm.seit);
     const beginn = seit && seit > vb ? seit : vb;
-    const ziel = s10(fm.verstanden_bis) || zielVon(beginn, kl.datum);
-    const plan = planen({ kapitel, beginn, ziel, heute, pausen: D.pausen, freie: D.freieTage });
-    return Object.assign(basis, { kapitel, klausur: kl, ziel, plan, stand: stand({ kapitel, plan, heute, ziel, klausur: kl.datum }) });
+    const eigenesZiel = s10(fm.verstanden_bis);
+    const ziel = eigenesZiel || zielVon(beginn, kl.datum, o.anteil);
+    // Zwischentest: verstanden bis zum Sonntag vor seiner Woche
+    kapitel.forEach((k) => { k.frist = k.zwischentest ? plusTage(montagVon(k.zwischentest), -1) : ""; });
+    let plan = planen({ kapitel, beginn, ziel, heute, pausen: D.pausen, freie: D.freieTage, faktoren: o.faktoren });
+    let geschaetzt = null, zielAnzeige = ziel;
+    if (!basis.vorlernen) {
+      const ve = sem && sem.ve && sem.ve < kl.datum ? sem.ve : kl.datum;
+      const grenze = nachVorlesung(kapitel, vb, ve), spaetestens = plusTage(montagVon(kl.datum), -1);
+      const faellig = plan.faellig.map((d, i) => { const x = d > grenze[i].tag ? d : grenze[i].tag; return x < spaetestens ? x : spaetestens; });
+      geschaetzt = faellig.map((d, i) => grenze[i].geschaetzt && d === grenze[i].tag);
+      plan = Object.assign({}, plan, { faellig });
+      faellig.forEach((d) => { if (d > zielAnzeige) zielAnzeige = d; });
+    }
+    const S = stand({ kapitel, plan, heute, ziel: zielAnzeige, klausur: kl.datum, vorlernen: basis.vorlernen });
+    const V = vorbereitungVon(code, sem && sem.name);
+    return Object.assign(basis, { kapitel, klausur: kl, beginn, ziel: zielAnzeige, zielPlan: ziel, eigenesZiel: !!eigenesZiel, plan, geschaetzt, stand: S,
+      vorb: V, alt: altklausurPlan(V.alt, heute, kl.datum) });
+  };
+  // Was für alle Lernpläne gilt: deine Wochen mit weniger Zeit, Ziel nach der Zielnote
+  const optionen = (D) => ({ faktoren: faktorenLesen(einstellungen()[FELD_WOCHEN]), anteil: anteilAusZielnote(D.zielnote) });
+  const allesSammeln = async (D, heute) => {
+    const o = optionen(D);
+    const alle = [];
+    for (const f of lernplaene()) alle.push(await sammeln(f, D, heute, o));
+    const farbe = modulFarben(alle.map((P) => P.code));
+    for (const P of alle) P.farbe = farbe[P.code] || 0;
+    return { alle, o };
+  };
+  const aktiv = (P) => !!(P.plan && P.stand && P.stand.art !== "vorbei" && P.stand.art !== "aus");
+  // Farbe je Modul wie im Stundenplan (woche.js; 1–6, --eba-modul-n); Module ohne Stundenplan bekommen die nächsten Farben, in der
+  // Reihenfolge ihrer Kürzel
+  const modulFarben = (codes) => {
+    let farbe = {};
+    try { farbe = Object.assign({}, ctx.woche && ctx.woche.modulFarben ? ctx.woche.modulFarben() : {}); } catch (e) { farbe = {}; }
+    let n = Object.keys(farbe).length;
+    for (const c of codes.slice().sort()) if (!farbe[c]) farbe[c] = (n++ % 6) + 1;
+    return farbe;
   };
 
-  // ---------- Schreiben: ein Kapitel abhaken oder zurücknehmen ----------
+  // ---------- Schreiben ----------
+  // Ein Kapitel abhaken oder zurücknehmen
   const schreiben = async (f, k) => {
     let ok = false;
     await app.vault.process(f, (data) => {
@@ -282,34 +631,64 @@ module.exports = function (ctx) {
     });
     if (!ok) try { ctx.hinweis(`„${f.basename}“ hat sich inzwischen geändert und ist nicht abgehakt. Bitte noch einmal tippen.`); } catch (e) { /* ohne Obsidian */ }
   };
+  // Zeit einer Woche (Anteil 0–1; 1 = volle Zeit, Eintrag fällt weg) in System/Einstellungen.md
+  const zeitSchreiben = async (mo, anteil) => {
+    const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
+    if (!f) return;
+    await app.fileManager.processFrontMatter(f, (fm) => {
+      const liste = (Array.isArray(fm[FELD_WOCHEN]) ? fm[FELD_WOCHEN] : []).filter((x) => !String(x).trim().startsWith(mo));
+      if (anteil < 1) liste.push(`${mo} ${Math.round(anteil * 100)}`);
+      liste.sort();
+      if (liste.length) fm[FELD_WOCHEN] = liste; else delete fm[FELD_WOCHEN];
+    });
+  };
 
   // ---------- Zeichnen ----------
   const auf = ctx.bleibend("auf", () => ({}));
   const nurStoppen = (knoten) => knoten.addEventListener("mousedown", (e) => e.stopPropagation()); // Live Preview: nicht in den Quelltext
   const oeffnen = (f, e, quelle) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(f, { quelle: quelle || "", neu: e.ctrlKey || e.metaKey }); };
+  const linkZu = (el, text, f, quelle) => {
+    const a = el.createEl("a", { cls: "internal-link", text, href: f.path, attr: { "data-href": f.path } });
+    nurStoppen(a);
+    a.addEventListener("click", (e) => oeffnen(f, e, quelle));
+    return a;
+  };
 
   const kapitelName = (k, i) => (k.nr ? `Kapitel ${k.nr}` : `Kapitel ${i + 1}`);
+  const nummern = (P, idx) => idx.map((i) => P.kapitel[i].nr || String(i + 1));
   const namenListe = (P, idx) => {
-    const n = idx.map((i) => P.kapitel[i].nr || String(i + 1));
+    const n = nummern(P, idx);
     return n.length === 1 ? `Kapitel ${n[0]}` : `Kapitel ${n.slice(0, -1).join(", ")} und ${n[n.length - 1]}`;
   };
-  // Eine Zeile Stand: „2 von 7 · diese Woche Kapitel 3 · verstanden bis So 3.1. · Klausur Sa 6.2.“
-  const standText = (P) => {
-    if (P.fehlt === "keine Kapitel") return "Noch keine Kapitel eingetragen.";
+  const altText = (n) => (n === 1 ? "1 Altklausur" : `${n} Altklausuren`);
+  // Teile einer Zeile verbinden: Der Punkt hängt am Teil davor, bricht die Zeile um, steht kein „·“ am Zeilenanfang
+  const verbinden = (teile) => teile.join("\u00a0· ");
+  // Stand in Teilen: „2 von 7 Kapiteln“, „diese Woche Kapitel 3“, „verstanden bis So 3.1.“, „Klausur Sa 6.2.“; klausur = auf der
+  // Modulseite weggelassen (dort steht die Prüfung). Jeder Teil bricht nicht mitten um (feste Leerzeichen), nur der Satz ohne Kapitel.
+  const standTeile = (P) => standRoh(P).map((x) => (x.satz ? x : Object.assign({}, x, { text: x.text.split(" ").join("\u00a0") })));
+  const standRoh = (P) => {
+    if (P.fehlt === "keine Kapitel") return [{ text: "Noch keine Kapitel eingetragen.", satz: true }];
     const fertig = P.kapitel.filter((k) => k.anteil >= 1 - EPS).length;
-    const teile = [`${fertig} von ${P.kapitel.length} Kapiteln${P.vorlaeufig ? " (Liste vorläufig)" : ""}`];
-    if (P.aus) { teile.push(P.aus); return teile.join(" · "); }
-    if (P.fehlt === "keine Klausur") { teile.push("Datum der Klausur fehlt"); return teile.join(" · "); }
+    const teile = [{ text: `${fertig} von ${P.kapitel.length} Kapiteln${P.vorlaeufig ? " (Liste vorläufig)" : ""}` }];
+    if (P.aus) return teile.concat({ text: P.aus });
+    if (P.fehlt === "keine Klausur") return teile.concat({ text: "Datum der Klausur fehlt" });
     const S = P.stand;
-    if (S.art === "vorbei") teile.push(`Klausur war am ${wtm(P.klausur.datum)}`);
-    else {
-      if (S.art === "vorbereitung") teile.push(`Klausurvorbereitung seit ${tm(plusTage(P.ziel, 1))}`);
-      else if (S.woche.length) teile.push(`diese Woche ${namenListe(P, S.woche)}`);
-      else if (S.naechstes >= 0) teile.push(`${kapitelName(P.kapitel[S.naechstes], S.naechstes)} bis ${wtm(P.plan.faellig[S.naechstes])}`);
-      if (S.art !== "vorbereitung") teile.push(`verstanden bis ${wtm(P.ziel)}`);
-      teile.push(`Klausur ${wtm(P.klausur.datum)}${P.klausur.geschaetzt ? " (geschätzt)" : ""}`);
+    if (S.art === "vorbei") return teile.concat({ text: `Klausur war am ${wtm(P.klausur.datum)}` });
+    if (S.art === "vorbereitung") {
+      // Sagt die Pille schon „Klausurvorbereitung“, nur seit wann
+      const seit = wtm(plusTage(P.ziel, 1));
+      teile.push({ text: S.pille && S.pille.text === "Klausurvorbereitung" ? `seit ${seit}` : `Klausurvorbereitung seit ${seit}` });
+      if (P.vorb.alt.length) teile.push({ text: `${P.alt.fertig} von ${altText(P.vorb.alt.length)}` });
+    } else {
+      // Was diese Woche fällig wird; Überfälliges sagt die Pille, sonst das nächste Kapitel mit Datum
+      const mo = montagVon(P.heute), so = plusTage(mo, 6);
+      const jetzt = S.woche.filter((i) => P.plan.faellig[i] >= mo);
+      const spaeter = P.kapitel.map((k, i) => i).filter((i) => P.kapitel[i].anteil < 1 - EPS && P.plan.faellig[i] > so)[0];
+      if (jetzt.length) teile.push({ text: `diese Woche ${namenListe(P, jetzt)}` });
+      else if (spaeter != null) teile.push({ text: `${kapitelName(P.kapitel[spaeter], spaeter)} bis ${wtm(P.plan.faellig[spaeter])}` });
+      teile.push({ text: `verstanden bis ${wtm(P.ziel)}` });
     }
-    return teile.join(" · ");
+    return teile.concat({ text: `Klausur ${wtm(P.klausur.datum)}${P.klausur.geschaetzt ? " (geschätzt)" : ""}`, klausur: true });
   };
   const titelVon = (P) => (P.modul ? `${P.code} ${P.modul.titel}` : P.f.basename);
   // Titel der Zeile als HTML. In der Lernplan-Notiz (inNotiz) nennt ihr Titel Kürzel und „Lernplan“ schon: Die Zeile nennt das
@@ -319,76 +698,643 @@ module.exports = function (ctx) {
     ? `<a class="internal-link eba-kopf-modul" data-href="${esc(P.modul.f.path)}" href="${esc(P.modul.f.path)}">${esc(P.modul.titel)}</a>`
     : esc(titelVon(P)));
 
-  // Kapitel eines Moduls: Kästchen wie bei den To-dos (.eba-td-haken, ganze Zeilenhöhe als Tippfläche; halb verstanden =
-  // unbestimmt), Nummer und Titel, rechts „bis Fr 23.10.“ bzw. „noch nicht da“
-  const kapitelZeilen = (el, P, quelle, neu) => {
-    const l = el.createDiv({ cls: "eba-lp-kapitel" });
-    P.kapitel.forEach((k, i) => {
-      const z = l.createDiv({ cls: "eba-lp-k" + (k.anteil >= 1 - EPS ? " is-fertig" : "") });
-      const haken = z.createEl("label", { cls: "eba-td-haken" });
-      const box = haken.createEl("input", { attr: { type: "checkbox", "aria-label": "Verstanden: " + k.titel } });
-      box.checked = k.anteil >= 1 - EPS;
-      box.indeterminate = k.anteil > EPS && k.anteil < 1 - EPS;
-      nurStoppen(haken);
-      haken.addEventListener("click", (e) => e.stopPropagation());
-      box.addEventListener("change", async (e) => {
-        e.stopPropagation();
-        z.toggleClass("is-fertig", box.checked);
-        try { await schreiben(P.f, k); } catch (err) { console.error("Lernplan abhaken", err); }
-        neu();
-      });
-      const t = z.createDiv({ cls: "eba-lp-k-text" });
-      t.createSpan({ cls: "eba-lp-k-nr", text: k.nr || String(i + 1) });
-      const titel = t.createSpan({ cls: "eba-lp-k-titel", text: k.titel });
-      if (k.teile.length && k.anteil < 1 - EPS) titel.createSpan({ cls: "eba-lp-k-teil", text: ` ${k.teile.filter((x) => x.fertig).length}/${k.teile.length}` });
-      if (k.ziel || k.webZiel) {
-        titel.addClass("is-link");
-        nurStoppen(titel);
-        titel.addEventListener("click", (e) => {
-          if (k.ziel) { oeffnen(k.ziel, e, quelle); return; }
-          e.preventDefault(); e.stopPropagation(); window.open(k.webZiel);
-        });
+  // Neben einem offenen Kapitel: „bis So 8.11.“ (geschätzt „bis ca.“), „überfällig seit So 18.10.“ (fällig, da und die Vorlesung
+  // hatte es), dazu „noch nicht da“, bis Sonntag „vor der Vorlesung“ und der Zwischentest → { text, ueberfaellig }
+  const bisText = (P, i) => {
+    const k = P.kapitel[i], d = P.plan.faellig[i], mo = montagVon(P.heute);
+    const ueberfaellig = d < mo && k.da && k.erreicht !== false;
+    const teile = [ueberfaellig ? `überfällig seit ${wtm(d)}` : `bis ${P.geschaetzt && P.geschaetzt[i] ? "ca. " : ""}${wtm(d)}`];
+    if (!k.da) teile.push("noch nicht da");
+    else if (k.erreicht === false && P.vorlernen && d <= plusTage(mo, 6)) teile.push("vor der Vorlesung");
+    if (k.zwischentest && k.zwischentest >= P.heute) teile.push(`Zwischentest ${wtm(k.zwischentest)}`);
+    return { text: verbinden(teile), ueberfaellig };
+  };
+  // Heute in „Diese Woche“ abgehakte Kapitel bleiben dort bis morgen stehen (zum Zurücknehmen), gerätelokal; zuletzt: das eben
+  // abgehakte Kapitel und wann (es leuchtet kurz auf, auch über das neue Zeichnen hinweg)
+  const abgehakt = ctx.bleibend("abgehakt", () => ({ tag: "", keys: {}, zuletzt: null }));
+  const LEUCHTEN = 1600;
+  const abgehaktKey = (P, k) => `${P.f.path}|${titelSchluessel(k.titel)}`;
+  const abgehaktHeute = (P, k) => abgehakt.tag === P.heute && !!abgehakt.keys[abgehaktKey(P, k)];
+  // Fälligkeit neben dem Titel (PC, iPad) bzw. darunter (iPhone); auf dem iPhone steht dort auch das Kürzel, vorn hätte der Titel
+  // sonst kaum Platz
+  const unterTitel = (inhalt, code, text, ueberfaellig) => {
+    const s = inhalt.createSpan({ cls: "eba-lp-k-bis" + (ueberfaellig ? " is-ueberfaellig" : "") + (text ? "" : " is-leer") });
+    if (code) s.createSpan({ cls: "eba-lp-k-code-unten", text: code });
+    if (text) s.appendText(text);
+  };
+  // Ein Kapitel: Kästchen wie bei den To-dos (.eba-td-haken, ganze Zeilenhöhe als Tippfläche; halb verstanden = unbestimmt),
+  // Kürzel des Moduls mit seiner Farbe (mitCode, in der gewählten Woche), Nummer, dann Titel (Tipp öffnet die Folien bzw. das
+  // Lehrbuch) und bisText. Eben abgehakt: Die Zeile leuchtet auf (.is-frisch; nach dem neuen Zeichnen läuft das Leuchten weiter).
+  const kapitelZeile = (l, P, i, quelle, neu, mitCode) => {
+    const k = P.kapitel[i];
+    const z = l.createDiv({ cls: `eba-lp-k modul-${P.farbe || 0}` + (k.anteil >= 1 - EPS ? " is-fertig" : "") });
+    const Z = abgehakt.zuletzt, seit = Z && Z.key === abgehaktKey(P, k) && k.anteil >= 1 - EPS ? Date.now() - Z.zeit : LEUCHTEN;
+    if (seit < LEUCHTEN) { z.addClass("is-frisch"); z.style.animationDelay = `-${seit}ms`; }
+    const haken = z.createEl("label", { cls: "eba-td-haken" });
+    const box = haken.createEl("input", { attr: { type: "checkbox", "aria-label": "Verstanden: " + (mitCode ? P.code + " " : "") + k.titel } });
+    box.checked = k.anteil >= 1 - EPS;
+    box.indeterminate = k.anteil > EPS && k.anteil < 1 - EPS;
+    nurStoppen(haken);
+    haken.addEventListener("click", (e) => e.stopPropagation());
+    box.addEventListener("change", async (e) => {
+      e.stopPropagation();
+      z.toggleClass("is-fertig", box.checked);
+      if (box.checked) {
+        abgehakt.zuletzt = { key: abgehaktKey(P, k), zeit: Date.now() };
+        z.addClass("is-frisch");
       }
-      const r = z.createSpan({ cls: "eba-lp-k-bis" });
-      if (P.plan && k.anteil < 1 - EPS) r.setText(k.da ? `bis ${wtm(P.plan.faellig[i])}` : `bis ${wtm(P.plan.faellig[i])} · noch nicht da`);
+      if (box.checked && mitCode) {
+        if (abgehakt.tag !== P.heute) { abgehakt.tag = P.heute; abgehakt.keys = {}; }
+        abgehakt.keys[abgehaktKey(P, k)] = true;
+      }
+      try { await schreiben(P.f, k); } catch (err) { console.error("Lernplan abhaken", err); }
+      neu();
+    });
+    const t = z.createDiv({ cls: "eba-lp-k-text" });
+    if (mitCode) t.createSpan({ cls: "eba-lp-k-code", text: P.code });
+    t.createSpan({ cls: "eba-lp-k-nr", text: k.nr || String(i + 1) });
+    const inhalt = t.createDiv({ cls: "eba-lp-k-inhalt" });
+    // Name eigens (nur er ist als Link unterstrichen), davor ein Leerzeichen statt Rand: Bricht die Zahl der Unterkapitel um,
+    // steht sie bündig
+    const titel = inhalt.createSpan({ cls: "eba-lp-k-titel" });
+    titel.createSpan({ cls: "eba-lp-k-name", text: k.titel });
+    if (k.teile.length && k.anteil < 1 - EPS) { titel.appendText(" "); titel.createSpan({ cls: "eba-lp-k-teil", text: `${k.teile.filter((x) => x.fertig).length}/${k.teile.length}` }); }
+    if (k.ziel || k.webZiel) {
+      titel.addClass("is-link");
+      nurStoppen(titel);
+      titel.addEventListener("click", (e) => {
+        if (k.ziel) { oeffnen(k.ziel, e, quelle); return; }
+        e.preventDefault(); e.stopPropagation(); window.open(k.webZiel);
+      });
+    }
+    const b = P.plan && k.anteil < 1 - EPS ? bisText(P, i) : null;
+    if (b || mitCode) unterTitel(inhalt, mitCode && P.code, b ? b.text : "", !!(b && b.ueberfaellig));
+  };
+
+  // Für die Klausur (aufgeklapptes Modul): Altklausuren (wie viele bearbeitet, in der Klausurvorbereitung wie viele diese Woche
+  // und welche als Nächstes, die neueste für den Vortag), Übungsblätter, heute fällige Karteikarten mit „Lernen“
+  const vorbereitungZeichnen = (el, P, karten, quelle) => {
+    if (!P.vorb) return;
+    const V = P.vorb, A = P.alt, kz = karten && karten[P.code];
+    if (!V.alt.length && !V.uebung.length && !kz) return;
+    const box = el.createDiv({ cls: "eba-lp-vorb" });
+    box.createDiv({ cls: "eba-lp-vorb-titel", text: "Für die Klausur" });
+    const zeile = (titel, text) => {
+      const z = box.createDiv({ cls: "eba-lp-v" });
+      z.createSpan({ cls: "eba-lp-v-titel", text: titel });
+      return z.createSpan({ cls: "eba-lp-v-text", text });
+    };
+    if (V.alt.length) {
+      const vorbereitung = P.stand && P.stand.art === "vorbereitung";
+      const teile = [`${A.fertig} von ${V.alt.length} bearbeitet`];
+      if (vorbereitung && A.dieseWoche) teile.push(`diese Woche ${A.dieseWoche} auf Zeit`);
+      else if (!vorbereitung && A.offen.length && P.stand && P.stand.art !== "vorbei") teile.push(`auf Zeit ab ${wtm(plusTage(P.ziel, 1))}`);
+      const t = zeile("Altklausuren", verbinden(teile));
+      if (A.naechste) { t.appendText("\u00a0· als Nächstes "); linkZu(t, A.naechste.titel, A.naechste.f, quelle); }
+      if (A.vortag) box.createDiv({ cls: "eba-lp-v-hilfe", text: `Die neueste, ${A.vortag.titel}, bleibt für den Tag vor der Klausur.` });
+    }
+    if (V.uebung.length) zeile("Übungsblätter", `${V.uebung.filter((u) => u.fertig).length} von ${V.uebung.length} bearbeitet`);
+    if (kz) {
+      const n = kz.faellig + kz.lernen + kz.neu;
+      const t = zeile("Karteikarten", n ? `${n} heute dran` : "heute nichts dran");
+      if (n) { t.appendText("\u00a0· "); const a = t.createEl("a", { text: "Lernen", href: ctx.link("karten-lernen", { code: P.code }) }); nurStoppen(a); }
+    }
+  };
+  // vorlernen: false setzen (an = false) oder löschen, nur diese Zeile im Frontmatter: processFrontMatter schriebe das ganze
+  // Frontmatter neu (Anführungszeichen um semester und quelle fielen weg). Ohne Frontmatter → null
+  const VORN = /^---\r?\n([\s\S]*?)\r?\n---(?=\r?\n|$)/;
+  const vorlernenSetzen = (text, an) => {
+    const m = VORN.exec(text);
+    if (!m) return null;
+    const zeilen = m[1].split(/\r?\n/).filter((z) => !/^vorlernen\s*:/.test(z));
+    if (!an) zeilen.push("vorlernen: false");
+    const nl = m[0].indexOf("\r\n") >= 0 ? "\r\n" : "\n";
+    return `---${nl}${zeilen.join(nl)}${nl}---${text.slice(m[0].length)}`;
+  };
+  // Schalter „Vor der Vorlesung lernen“ (aufgeklapptes Modul): aus = vorlernen: false in der Notiz
+  const schalterZeichnen = (el, P, neu) => {
+    const z = el.createEl("label", { cls: "eba-lp-schalter" });
+    const haken = z.createSpan({ cls: "eba-td-haken" });
+    const box = haken.createEl("input", { attr: { type: "checkbox" } });
+    box.checked = P.vorlernen;
+    const t = z.createSpan({ cls: "eba-lp-schalter-text" });
+    t.createSpan({ text: "Vor der Vorlesung lernen" });
+    const spaeter = !P.vorlernen && P.zielPlan && P.ziel > P.zielPlan ? ` Alles verstanden erst am ${wtm(P.ziel)} statt am ${wtm(P.zielPlan)}` : "";
+    t.createSpan({ cls: "eba-lp-schalter-hilfe", text: P.vorlernen ? "Die Kapitel sind gleichmäßig verteilt, auch vor ihrer Vorlesung."
+      : "Ein Kapitel ist frühestens eine Woche nach seiner Vorlesung dran." + spaeter });
+    nurStoppen(z);
+    z.addEventListener("click", (e) => e.stopPropagation());
+    box.addEventListener("change", async () => {
+      try {
+        let ok = true;
+        await app.vault.process(P.f, (t) => { const n = vorlernenSetzen(t, box.checked); ok = n != null; return ok ? n : t; });
+        if (!ok) await app.fileManager.processFrontMatter(P.f, (fm) => { if (box.checked) delete fm.vorlernen; else fm.vorlernen = false; });
+      }
+      catch (err) { console.error("Lernplan vorlernen", err); }
+      neu();
     });
   };
 
-  const zeile = (l, P, quelle, neu, aufklappbar) => {
-    const z = l.createDiv({ cls: "eba-vb eba-lp-modul" + (aufklappbar ? " is-klappbar" : "") });
-    z.setAttr("data-code", P.code);
+  // Die Zeile in der Lernplan-Notiz: Modul, Pille und Stand
+  const zeile = (l, P, quelle) => {
+    const z = l.createDiv({ cls: "eba-vb eba-lp-modul" });
     const p = P.stand && P.stand.pille;
     const pille = p ? ` <span class="eba-pill ${p.art}">${esc(p.text)}</span>` : "";
-    z.innerHTML = `<span class="eba-vb-text"><b>${titelHtml(P, !aufklappbar)}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${esc(standText(P))}</span></span></span>`;
+    const stand = standTeile(P).map((x) => `<span class="eba-lp-st">${esc(x.text)}</span>`).join("");
+    z.innerHTML = `<span class="eba-vb-text"><b>${titelHtml(P, true)}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${stand}</span></span></span>`;
     const modul = z.querySelector("a.eba-kopf-modul");
     if (modul) {
       nurStoppen(modul);
       modul.addEventListener("click", (e) => oeffnen(P.modul.f, e, quelle));
     }
-    if (!aufklappbar) return;
-    const offen = !!auf[P.code];
-    z.toggleClass("is-offen", offen);
-    z.setAttr("role", "button"); z.setAttr("tabindex", "0"); z.setAttr("aria-expanded", String(offen));
-    const unten = l.createDiv({ cls: "eba-lp-unten" + (offen ? "" : " is-zu") });
-    if (P.kapitel.length) kapitelZeilen(unten, P, quelle, neu);
-    const fuss = unten.createDiv({ cls: "eba-lp-fuss" });
-    const a = fuss.createEl("a", { cls: "internal-link", text: P.f.basename, href: P.f.path, attr: { "data-href": P.f.path } });
-    nurStoppen(a);
-    a.addEventListener("click", (e) => oeffnen(P.f, e, quelle));
+  };
+  // Was ein aufgeklapptes Modul zeigt: seine Kapitel zum Abhaken, „Für die Klausur“, den Schalter und den Link auf die Notiz
+  const modulInhalt = (unten, P, quelle, neu, karten) => {
+    if (P.kapitel.length) { const kl = unten.createDiv({ cls: "eba-lp-kapitel" }); P.kapitel.forEach((k, i) => kapitelZeile(kl, P, i, quelle, neu, false)); }
+    vorbereitungZeichnen(unten, P, karten, quelle);
+    if (P.plan) schalterZeichnen(unten, P, neu);
+    linkZu(unten.createDiv({ cls: "eba-lp-fuss" }), P.f.basename, P.f, quelle);
+  };
+
+  // Was diese Woche dran ist, über alle Module: offene Kapitel bis Sonntag (auch überfällige), in der Klausurvorbereitung die
+  // Altklausuren; mitAbgehakten: dazu die heute hier abgehakten (bleiben bis morgen stehen)
+  const dieseWoche = (alle, mitAbgehakten) => {
+    const kapitel = [], vorbereitung = [];
+    for (const P of alle.filter(aktiv)) {
+      if (P.stand.art === "vorbereitung" && P.alt.dieseWoche) vorbereitung.push(P);
+      const so = plusTage(montagVon(P.heute), 6);
+      const fertig = mitAbgehakten ? P.kapitel.map((k, i) => i).filter((i) => P.kapitel[i].anteil >= 1 - EPS && P.plan.faellig[i] <= so && abgehaktHeute(P, P.kapitel[i])) : [];
+      P.stand.woche.concat(fertig).sort((a, b) => a - b).forEach((i) => kapitel.push({ P, i }));
+    }
+    return { kapitel, vorbereitung };
+  };
+  // Kurz fürs Dashboard, in Teilen: bis zu drei Kapitel mit Namen („B110 Kapitel 2“, „S100 Kapitel 1 und 2“), mehr als Zahl („8
+  // Kapitel, davon 4 überfällig“); dazu die Altklausuren der Klausurvorbereitung („2 Altklausuren S100“)
+  const kurzTeile = (W) => {
+    const teile = [];
+    if (W.kapitel.length > 3) {
+      const ueber = W.kapitel.filter((x) => bisText(x.P, x.i).ueberfaellig).length;
+      teile.push(`${W.kapitel.length} Kapitel${ueber ? `, davon ${ueber} überfällig` : ""}`);
+    } else {
+      const je = [];
+      for (const x of W.kapitel) {
+        const g = je.filter((y) => y.P === x.P)[0];
+        if (g) g.idx.push(x.i); else je.push({ P: x.P, idx: [x.i] });
+      }
+      for (const g of je) teile.push(`${g.P.code} ${namenListe(g.P, g.idx)}`);
+    }
+    for (const P of W.vorbereitung) teile.push(`${altText(P.alt.dieseWoche)} ${P.code}`);
+    return teile;
+  };
+  // Teile als Stücke, die nicht mitten umbrechen (CSS inline-block); der Punkt hängt am Stück davor, umbrochen wird dahinter.
+  // → das letzte Stück (oder null)
+  const stuecke = (el, teile, cls) => {
+    let s = null;
+    teile.forEach((x, j) => {
+      s = el.createSpan({ cls: cls + (x.cls ? " " + x.cls : ""), text: x.text });
+      if (j < teile.length - 1) { s.createSpan({ cls: "eba-lp-punkt", text: " ·" }); el.appendText(" "); }
+    });
+    return s;
+  };
+
+  // Zeit einer Woche mit Menü (volle, ¾, halbe, ¼, keine Zeit): volle Zeit als leise Uhr, weniger als Wahlpille (docs/design.md:
+  // Derselbe Wert in jeder Woche gehört nicht in eine Pille)
+  const ZEIT = [[1, "volle Zeit"], [0.75, "¾ Zeit"], [0.5, "halbe Zeit"], [0.25, "¼ Zeit"], [0, "keine Zeit"]];
+  const zeitText = (a) => (ZEIT.filter((x) => Math.abs(x[0] - a) < EPS)[0] || [a, `${Math.round(a * 100)} % Zeit`])[1];
+  const zeitKnopf = (el, mo, o, neu) => {
+    const a = o.faktoren[mo] == null ? 1 : o.faktoren[mo];
+    const zeit = el.createEl("button", { cls: "eba-lp-zeit" + (a < 1 ? " is-weniger" : ""), attr: { type: "button", "aria-haspopup": "menu", "aria-label": `Zeit in der Woche ${wocheText(mo)}: ${zeitText(a)}`, title: zeitText(a) } });
+    if (a < 1) zeit.createSpan({ text: zeitText(a) });
+    else zeit.createSpan({ cls: "eba-lp-zeit-uhr" }).innerHTML = UHR;
+    zeit.createSpan({ cls: "eba-lp-zeit-pfeil" }).innerHTML = PFEIL;
+    nurStoppen(zeit);
+    zeit.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!O.Menu) return;
+      const m = new O.Menu();
+      for (const x of ZEIT) m.addItem((i) => { i.setTitle(x[1]); if (Math.abs(x[0] - a) < EPS && i.setChecked) i.setChecked(true); i.onClick(async () => { try { await zeitSchreiben(mo, x[0]); } catch (err) { console.error("Lernplan Zeit", err); } neu(); }); });
+      const r = zeit.getBoundingClientRect();
+      m.showAtPosition({ x: r.left, y: r.bottom + 4 });
+    });
+  };
+
+  // Was beim letzten Zeichnen stand (gerätelokal): Bahnen und Ring gleiten nach einer Änderung (Häkchen, Zielnote) von dort zum
+  // neuen Stand
+  const vorher = ctx.bleibend("vorher", () => ({ bahnen: null, ring: null }));
+  const planGezeigt = ctx.bleibend("planGezeigt", () => ({ ja: false }));
+  const nachKlausur = (a, b) => (a.klausur.datum < b.klausur.datum ? -1 : a.klausur.datum > b.klausur.datum ? 1 : 0);
+  const pct = (v) => `${(v * 100).toFixed(3)}%`;
+  const lage = (div, a, breite) => { div.style.left = pct(a); if (breite != null) div.style.width = pct(Math.max(0, breite)); return div; };
+  const tageText = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : `in ${n} Tagen`);
+  const balken = (el, anteil) => { const b = el.createSpan({ cls: "eba-lp-balken" }); b.createSpan({ cls: "eba-lp-balken-voll" }).style.width = pct(Math.min(1, anteil)); return b; };
+  const wocheName = (B, i) => (i === B.jetzt ? "Diese Woche" : B.jetzt >= 0 && i === B.jetzt + 1 ? "Nächste Woche"
+    : B.jetzt >= 0 && i === B.jetzt - 1 ? "Letzte Woche" : wocheText(B.wochen[i].mo));
+  // Was in einer Woche fällig ist, kurz für Tooltip und Vorlesesoftware: „B110 Kapitel 2 · S100 Kapitel 1“
+  const wocheKurz = (A, mo) => A.map((P) => {
+    const idx = P.kapitel.map((k, i) => i).filter((i) => montagVon(P.plan.faellig[i]) === mo);
+    return idx.length ? `${P.code} ${namenListe(P, idx)}` : "";
+  }).filter(Boolean).join(" · ");
+
+  // Kopf des Bereichs (seit 1.11.2026): ein Ring mit deinem Stand über alle Module (nach ECTS gewichtet), daneben die Lage als Satz
+  // (heldText), diese Woche als Balken und die nächste Klausur
+  const heldZeichnen = (wurzel, A, heute) => {
+    if (!A.length) return;
+    const H = heldDaten(A, heute, (P, i) => bisText(P, i).ueberfaellig), T = heldText(H);
+    const karte = wurzel.createDiv({ cls: "eba-lp-held" + (H.rueckstand ? " is-hinterher" : H.alleFertig ? " is-fertig" : ""), attr: { role: "group", "aria-label": "Dein Stand" } });
+    ringZeichnen(karte, H.ist, H.soll);
+    const text = karte.createDiv({ cls: "eba-lp-held-text" });
+    text.createDiv({ cls: "eba-lp-held-titel", text: T.titel });
+    if (T.satz) text.createDiv({ cls: "eba-lp-held-satz", text: T.satz });
+    const zahlen = karte.createDiv({ cls: "eba-lp-held-zahlen" });
+    const zahl = (name) => { const z = zahlen.createDiv({ cls: "eba-lp-held-zahl" }); z.createDiv({ cls: "eba-lp-held-zahl-name", text: name }); return z.createDiv({ cls: "eba-lp-held-zahl-wert" }); };
+    if (H.woche.gesamt) {
+      const w = zahl("Diese Woche");
+      balken(w, H.woche.fertig / H.woche.gesamt);
+      w.createSpan({ text: `${H.woche.fertig} von ${H.woche.gesamt} Kapiteln` });
+    }
+    if (H.klausur) {
+      const w = zahl("Nächste Klausur"), P = H.klausur.P;
+      w.createSpan({ cls: `eba-lp-farbpunkt modul-${P.farbe || 0}`, attr: { "aria-hidden": "true" } });
+      w.createSpan({ text: `${P.code} ${tageText(H.klausur.tage)}` });
+      w.createSpan({ cls: "eba-lp-held-zahl-datum", text: wtm(H.klausur.datum) });
+    }
+  };
+  // Ring: verstanden (ab 12 Uhr im Uhrzeigersinn), dahinter bis zum Plan der Rückstand in Warnfarbe, Strich = wo der Plan heute
+  // steht; in der Mitte der Anteil. Gleitet vom letzten Stand (vorher.ring) zum neuen.
+  const SVG_NS = "http://www.w3.org/2000/svg", RING_R = 42, RING_U = 2 * Math.PI * RING_R;
+  const ringZeichnen = (el, ist, soll) => {
+    const box = el.createDiv({ cls: "eba-lp-ring", attr: { role: "img", "aria-label": `${Math.round(ist * 100)} % verstanden, laut Plan heute ${Math.round(soll * 100)} %` } });
+    const svg = document.createElementNS(SVG_NS, "svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("aria-hidden", "true");
+    const g = document.createElementNS(SVG_NS, "g");
+    g.setAttribute("transform", "rotate(-90 50 50)");
+    svg.appendChild(g);
+    const kreis = (cls) => {
+      const c = document.createElementNS(SVG_NS, "circle");
+      for (const [a, v] of [["cx", 50], ["cy", 50], ["r", RING_R], ["class", cls]]) c.setAttribute(a, String(v));
+      g.appendChild(c);
+      return c;
+    };
+    kreis("eba-lp-ring-spur");
+    const rueck = kreis("eba-lp-ring-rueck"), voll = kreis("eba-lp-ring-voll");
+    const strich = document.createElementNS(SVG_NS, "line");
+    for (const [a, v] of [["x1", 50 + RING_R - 9], ["x2", 50 + RING_R + 9], ["y1", 50], ["y2", 50], ["class", "eba-lp-ring-soll"]]) strich.setAttribute(a, String(v));
+    g.appendChild(strich);
+    box.appendChild(svg);
+    const mitte = box.createDiv({ cls: "eba-lp-ring-mitte", attr: { "aria-hidden": "true" } });
+    mitte.createDiv({ cls: "eba-lp-ring-zahl", text: `${Math.round(ist * 100)} %` });
+    mitte.createDiv({ cls: "eba-lp-ring-name", text: "verstanden" });
+    const setzen = (i, s) => {
+      voll.style.strokeDasharray = `${i * RING_U} ${RING_U}`;
+      voll.style.opacity = i > 0.002 ? "1" : "0";
+      rueck.style.strokeDasharray = `${Math.max(0, s - i) * RING_U} ${RING_U}`;
+      rueck.style.strokeDashoffset = String(-i * RING_U);
+      strich.style.transform = `rotate(${s * 360}deg)`;
+    };
+    const alt = vorher.ring;
+    setzen(alt ? alt.ist : ist, alt ? alt.soll : soll);
+    if (alt && (Math.abs(alt.ist - ist) > EPS || Math.abs(alt.soll - soll) > EPS)) void box.getBoundingClientRect();
+    setzen(ist, soll);
+    vorher.ring = { ist, soll };
+  };
+
+  // Semesterplan (seit 1.11.2026; vorher „Diese Woche“ als Liste und „Wochen“ als Zeilen): eine Karte mit dem Bild aus planBild,
+  // oben die Zielnote (zielZeichnen). Je Woche eine Säule, gestapelt je Modul in seiner Farbe (verstanden voll, offen getönt,
+  // überfällig in Warnfarbe), je Modul eine Bahn in seiner Farbe (dicker Balken = Kapitel verstehen, gefüllt bis zu deinem Stand,
+  // dahinter bis heute überfällig; Strich = alles verstanden; dünne Linie = Klausurvorbereitung; Raute = Klausur; Ring =
+  // Zwischentest), dahinter Pausen, diese Woche, die gewählte Woche und die Linie „heute“; Achse mit Monaten, Legende in derselben
+  // Form wie die Marken. Darunter die gewählte Woche (gerätelokal bis morgen; sonst diese). Eine Woche wählt ein Tipp auf ihre
+  // Säule, ‹ › oder die Pfeiltasten; ein Tipp auf eine Bahn klappt das Modul unter „Module“ auf. Beim ersten Zeichnen je Start
+  // wachsen Säulen und Bahnen einmal, danach gleiten die Bahnen vom letzten Stand zum neuen.
+  const planZeichnen = (wurzel, A, alle, o, D, heute, quelle, neu) => {
+    const B = planBild(A, heute, D.pausen);
+    if (!B) return;
+    const karte = wurzel.createDiv({ cls: "eba-lp-plan", attr: { role: "group", "aria-label": "Semesterplan" } });
+    if (!planGezeigt.ja) { karte.addClass("is-anim"); planGezeigt.ja = true; }
+    const kopf = karte.createDiv({ cls: "eba-lp-plan-kopf" });
+    kopf.createSpan({ cls: "eba-lp-plan-titel", text: "Semesterplan" });
+    const ziel = kopf.createDiv({ cls: "eba-lp-ziel" });
+    const satz = karte.createDiv({ cls: "eba-lp-ziel-satz", attr: { "aria-live": "polite" } });
+
+    const flaeche = karte.createDiv({ cls: "eba-lp-plan-flaeche" });
+    const baender = flaeche.createDiv({ cls: "eba-lp-plan-baender", attr: { "aria-hidden": "true" } });
+    const breite = 7 / B.tage;
+    for (const p of B.pausen) lage(baender.createDiv({ cls: "eba-lp-plan-pause" }), p.a, p.b - p.a);
+    if (B.jetzt >= 0) lage(baender.createDiv({ cls: "eba-lp-plan-jetzt" }), B.jetzt * breite, breite);
+    const wahlBand = baender.createDiv({ cls: "eba-lp-plan-wahl" });
+    if (B.heute != null) lage(baender.createDiv({ cls: "eba-lp-plan-heute" }), B.heute);
+
+    const saeulen = flaeche.createDiv({ cls: "eba-lp-saeulen", attr: { role: "group", "aria-label": "Wochen" } });
+    const knoepfe = B.wochen.map((w, i) => {
+      const kurz = wocheKurz(A, w.mo), name = wocheName(B, i);
+      const titel = `${name}${name === wocheText(w.mo) ? "" : ` (${wocheText(w.mo)})`}: ${kurz || "nichts fällig"}`;
+      const b = saeulen.createEl("button", { cls: "eba-lp-s", attr: { type: "button", "aria-pressed": "false", "aria-label": titel, title: titel } });
+      const summe = w.fertig + w.offen + w.ueber;
+      if (summe > EPS) {
+        const stapel = b.createDiv({ cls: "eba-lp-s-stapel" });
+        stapel.style.height = pct(summe / B.max);
+        w.module.forEach((m) => {
+          const s = m.fertig + m.offen + m.ueber;
+          if (s <= EPS) return;
+          const gruppe = stapel.createDiv({ cls: `eba-lp-s-modul modul-${m.farbe}` });
+          gruppe.style.flexGrow = String(s);
+          for (const [wert, cls] of [[m.fertig, "is-fertig"], [m.ueber, "is-ueber"], [m.offen, "is-offen"]]) {
+            if (wert > EPS) gruppe.createDiv({ cls: "eba-lp-s-teil " + cls }).style.flexGrow = String(wert);
+          }
+        });
+      }
+      return b;
+    });
+
+    // Teile einer Bahn von a bis b (b null: eine Marke), erst an ihrer Stelle vom letzten Mal (alt), dann an der neuen
+    const bahnen = flaeche.createDiv({ cls: "eba-lp-bahnen" });
+    const wege = [], geister = [];
+    const teil = (z, cls, a, b, altA, altB) => { const d = z.createDiv({ cls }); wege.push({ d, a, b, altA, altB }); return d; };
+    for (const x of B.bahnen) {
+      const P = x.P, stand = verbinden(standTeile(P).map((t) => t.text)), v = (vorher.bahnen && vorher.bahnen[P.code]) || x;
+      const z = bahnen.createDiv({ cls: `eba-lp-bahn modul-${P.farbe || 0}`, attr: { role: "button", tabindex: "0", "aria-label": `${P.code}: ${stand}`, title: `${titelVon(P)}: ${stand}` } });
+      z.createSpan({ cls: "eba-lp-bahn-code", text: P.code });
+      teil(z, "eba-lp-bahn-lernen", x.beginn, x.ziel, v.beginn, v.ziel);
+      teil(z, "eba-lp-bahn-ist", x.beginn, Math.max(x.beginn, x.stand), v.beginn, Math.max(v.beginn, v.stand));
+      teil(z, "eba-lp-bahn-ueber", x.stand, x.ueber == null ? x.stand : x.ueber, v.stand, v.ueber == null ? v.stand : v.ueber);
+      teil(z, "eba-lp-bahn-vorb", x.ziel, Math.max(x.ziel, x.klausur), v.ziel, Math.max(v.ziel, v.klausur));
+      const geist = lage(z.createDiv({ cls: "eba-lp-bahn-geist is-zu" }), x.beginn, x.ziel - x.beginn);
+      geister.push({ P, x, geist });
+      teil(z, "eba-lp-bahn-ziel", x.ziel, null, v.ziel, null);
+      for (const t of x.tests) lage(z.createDiv({ cls: "eba-lp-bahn-test" }), t);
+      teil(z, "eba-lp-bahn-klausur", x.klausur, null, v.klausur, null);
+      const zeigen = (e) => { e.preventDefault(); e.stopPropagation(); modulZeigen(wurzel, P.code); };
+      nurStoppen(z);
+      z.addEventListener("click", zeigen);
+      z.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") zeigen(e); });
+    }
+    // Erst die alte Lage, ein Stil-Durchlauf, dann die neue: Die Übergänge in CSS spielen den Weg
+    const setzen = (w, a, b) => lage(w.d, a, b == null ? null : b - a);
+    for (const w of wege) setzen(w, w.altA, w.altB);
+    if (wege.some((w) => Math.abs(w.a - w.altA) > EPS || (w.b != null && Math.abs(w.b - w.altB) > EPS))) void karte.getBoundingClientRect();
+    for (const w of wege) setzen(w, w.a, w.b);
+    vorher.bahnen = {};
+    for (const x of B.bahnen) vorher.bahnen[x.P.code] = { beginn: x.beginn, stand: x.stand, ueber: x.ueber, ziel: x.ziel, klausur: x.klausur };
+    zielZeichnen(ziel, satz, A, B, D, o, karte, geister);
+
+    // Ein Monat weicht der Pille „heute“: davor braucht er Platz für sich und die halbe Pille, dahinter für die halbe Pille (in px;
+    // noch ohne Breite 5 % der Achse)
+    const achse = karte.createDiv({ cls: "eba-lp-plan-achse", attr: { "aria-hidden": "true" } });
+    const px = achse.getBoundingClientRect().width;
+    const frei = (m) => B.heute == null || (px ? (m.x < B.heute ? (B.heute - m.x) * px > 80 : (m.x - B.heute) * px > 44) : Math.abs(m.x - B.heute) > 0.05);
+    for (const m of B.monate) if (frei(m)) lage(achse.createSpan({ text: m.text }), m.x);
+    if (B.heute != null) lage(achse.createSpan({ cls: "is-heute" + (B.heute < 0.05 ? " is-links" : B.heute > 0.95 ? " is-rechts" : ""), text: "heute" }), B.heute);
+
+    const leg = karte.createDiv({ cls: "eba-lp-plan-legende" });
+    const eintrag = (cls, text) => { const s = leg.createSpan({ cls: "eba-lp-leg" }); s.createSpan({ cls: "eba-lp-leg-zeichen " + cls }); s.appendText(text); };
+    eintrag("is-fertig", "verstanden");
+    eintrag("is-offen", "offen");
+    if (B.bahnen.some((x) => x.ueber != null) || B.wochen.some((w) => w.ueber > EPS)) eintrag("is-ueber", "überfällig");
+    eintrag("is-ziel", "alles verstanden");
+    eintrag("is-vorb", "Klausurvorbereitung");
+    eintrag("is-klausur", "Klausur");
+    if (B.bahnen.some((x) => x.tests.length)) eintrag("is-test", "Zwischentest");
+    const pausen = B.pausen.map((p) => p.name).filter((p, j, l) => p && l.indexOf(p) === j);
+    if (B.pausen.length) eintrag("is-pause", pausen.join(", ") || "Pause");
+
+    const woche = karte.createDiv({ cls: "eba-lp-plan-woche" });
+    const waehlen = (i, fokus) => {
+      i = Math.max(0, Math.min(B.wochen.length - 1, i));
+      auf[":woche"] = { mo: B.wochen[i].mo, tag: heute };
+      knoepfe.forEach((k, j) => { k.toggleClass("is-wahl", j === i); k.setAttr("aria-pressed", String(j === i)); });
+      lage(wahlBand, i * breite, breite);
+      wocheZeichnen(woche, alle, A, B, i, o, D, quelle, neu, waehlen);
+      if (fokus) knoepfe[i].focus();
+    };
+    knoepfe.forEach((k, i) => {
+      nurStoppen(k);
+      k.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); waehlen(i); });
+      k.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault(); waehlen(i + (e.key === "ArrowRight" ? 1 : -1), true);
+      });
+    });
+    const gemerkt = auf[":woche"] && auf[":woche"].tag === heute ? B.wochen.findIndex((w) => w.mo === auf[":woche"].mo) : -1;
+    waehlen(gemerkt >= 0 ? gemerkt : B.jetzt >= 0 ? B.jetzt : 0);
+  };
+
+  // Zielnote im Kopf des Semesterplans (seit 1.11.2026): Sie bestimmt, nach welchem Anteil der Zeit alles verstanden sein soll
+  // (anteilAusZielnote), und damit jede Bahn. Zehn Noten in drei Stufen, darunter ein Satz, was das heißt (zielTeile). Zeigen oder
+  // Fokus auf einer Note zeigt, was sie hieße: der Satz und gestrichelt die Bahnen, die sich ändern würden. Ein Tipp schreibt sie in
+  // System/Einstellungen.md (dasselbe Feld wie „Personalisieren“); der Bereich zeichnet sich danach neu, die Bahnen gleiten.
+  const zielnoteSchreiben = async (wert) => {
+    const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
+    if (f) await app.fileManager.processFrontMatter(f, (fm) => { fm.zielnote = wert; });
+  };
+  const zielZeichnen = (el, satz, A, B, D, o, karte, geister) => {
+    const roh = String(D.zielnote || "").trim(), note = NOTEN.indexOf(roh) >= 0 ? roh : "", stufe = roh ? stufeVon(roh) : -1;
+    el.createSpan({ cls: "eba-lp-ziel-label", text: "Zielnote" });
+    const skala = el.createDiv({ cls: "eba-lp-ziel-skala", attr: { role: "group", "aria-label": "Zielnote" } });
+    const stufen = [], knoepfe = [];
+    STUFEN.forEach((S, s) => {
+      const g = skala.createDiv({ cls: "eba-lp-ziel-stufe" + (s === stufe ? " is-an" : "") });
+      const reihe = g.createDiv({ cls: "eba-lp-ziel-noten" }), noten = NOTEN.filter((x) => stufeVon(x) === s);
+      g.style.flexGrow = String(noten.length);
+      for (const n of noten) {
+        const b = reihe.createEl("button", { cls: "eba-lp-note" + (n === note ? " is-an" : ""), text: n, attr: { type: "button", "aria-pressed": String(n === note), "aria-label": `Zielnote ${n}, ${S.name}` } });
+        knoepfe.push({ b, n });
+      }
+      g.createDiv({ cls: "eba-lp-ziel-name", text: S.name });
+      stufen.push(g);
+    });
+    const satzZeigen = (n) => {
+      satz.empty();
+      const a = n ? anteilAusZielnote(n) : o.anteil, andere = n && n !== note;
+      if (andere && Math.abs(a - o.anteil) < EPS) { satz.appendText("Mit "); satz.createEl("b", { text: n }); satz.appendText(" bleibt der Plan gleich."); return; }
+      if (andere) { satz.appendText("Mit "); satz.createEl("b", { text: n }); satz.appendText(": "); }
+      else if (!roh) satz.appendText("Ohne Zielnote wie für „gut“: ");
+      for (const t of zielTeile(zielVorschau(A, a), a)) { if (t.wert) satz.createEl("b", { text: t.text }); else satz.appendText(t.text); }
+    };
+    // Gestrichelt, wie lange das Verstehen bei dieser Note dauerte; ohne Unterschied (oder mit eigenem Ziel) unsichtbar
+    const geisterZeigen = (a) => {
+      const an = a != null && Math.abs(a - o.anteil) > EPS;
+      karte.toggleClass("is-vorschau", an);
+      for (const g of geister) {
+        const z = an && !g.P.eigenesZiel ? zielBei(g.P, a) : "";
+        const bis = z ? Math.min(1, Math.max(0, (tageZwischen(B.von, z) + 1) / B.tage)) : g.x.ziel;
+        g.geist.toggleClass("is-zu", !z);
+        lage(g.geist, g.x.beginn, bis - g.x.beginn);
+      }
+    };
+    let fokus = null;
+    const zeigen = (n) => {
+      satzZeigen(n);
+      stufen.forEach((g, s) => g.toggleClass("is-vorschau", !!n && n !== note && stufeVon(n) === s));
+      geisterZeigen(n ? anteilAusZielnote(n) : null);
+    };
+    knoepfe.forEach((k, j) => {
+      nurStoppen(k.b);
+      k.b.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") zeigen(k.n); });
+      k.b.addEventListener("focus", () => { fokus = k; zeigen(k.n); });
+      k.b.addEventListener("blur", () => { fokus = null; zeigen(null); });
+      k.b.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault();
+        knoepfe[Math.max(0, Math.min(knoepfe.length - 1, j + (e.key === "ArrowRight" ? 1 : -1)))].b.focus();
+      });
+      k.b.addEventListener("click", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (k.n === note) return;
+        knoepfe.forEach((x) => { x.b.toggleClass("is-an", x === k); x.b.setAttr("aria-pressed", String(x === k)); });
+        stufen.forEach((g, s) => g.toggleClass("is-an", s === stufeVon(k.n)));
+        zeigen(k.n);
+        try { await zielnoteSchreiben(k.n); } catch (err) { console.error("Lernplan Zielnote", err); }
+      });
+    });
+    skala.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") zeigen(fokus ? fokus.n : null); });
+    zeigen(null);
+  };
+
+  // Die gewählte Woche unter dem Bild: ‹ Name ›, rechts wie viel ihrer Kapitel verstanden sind (diese und frühere Wochen; geschafft:
+  // ein Haken) und ihre Zeit, dann Klausurvorbereitung, Pausen und Klausuren als Stücke, ihre Kapitel als Zeilen zum Abhaken (diese
+  // Woche wie bisher „Diese Woche“: auch Überfälliges und heute Abgehaktes, in der Klausurvorbereitung die Altklausuren)
+  const wocheZeichnen = (el, alle, A, B, i, o, D, quelle, neu, waehlen) => {
+    el.empty();
+    const w = B.wochen[i], mo = w.mo, so = plusTage(mo, 6), jetzt = i === B.jetzt;
+    const kopf = el.createDiv({ cls: "eba-lp-pw-kopf" });
+    const nav = (svg, label, an, j) => {
+      const b = kopf.createEl("button", { cls: "eba-lp-pw-nav", attr: { type: "button", "aria-label": label } });
+      b.innerHTML = svg;
+      if (!an) b.setAttr("disabled", "");
+      nurStoppen(b);
+      b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); waehlen(j, false); });
+    };
+    nav(LINKS, "Woche davor", i > 0, i - 1);
+    const t = kopf.createDiv({ cls: "eba-lp-pw-titel" });
+    const name = wocheName(B, i);
+    t.createSpan({ cls: "eba-lp-pw-name" + (jetzt ? " is-jetzt" : ""), text: name });
+    if (name !== wocheText(mo)) t.createSpan({ cls: "eba-lp-pw-datum", text: wocheText(mo) });
+    nav(RECHTS, "Woche danach", i < B.wochen.length - 1, i + 1);
+    const W = jetzt ? dieseWoche(alle, true) : null;
+    const faellig = [];
+    for (const P of A) P.kapitel.forEach((k, j) => { if (montagVon(P.plan.faellig[j]) === mo) faellig.push(k); });
+    const fertig = faellig.filter((k) => k.anteil >= 1 - EPS).length;
+    const altOffen = W ? W.kapitel.filter((x) => x.P.kapitel[x.i].anteil < 1 - EPS && montagVon(x.P.plan.faellig[x.i]) < mo).length : 0;
+    const rechts = kopf.createDiv({ cls: "eba-lp-pw-rechts" });
+    if (faellig.length) {
+      const stand = rechts.createSpan({ cls: "eba-lp-pw-stand" });
+      if (B.jetzt >= 0 && i > B.jetzt) stand.setText(`${faellig.length} Kapitel`);
+      else if (fertig === faellig.length && !altOffen) { stand.addClass("is-geschafft"); stand.createSpan({ cls: "eba-lp-pw-haken" }).innerHTML = HAKEN; stand.appendText("geschafft"); }
+      else { balken(stand, fertig / faellig.length); stand.appendText(`${fertig}/${faellig.length}`); stand.setAttr("aria-label", `${fertig} von ${faellig.length} Kapiteln verstanden`); }
+    }
+    if (B.jetzt < 0 || i >= B.jetzt) zeitKnopf(rechts, mo, o, neu);
+    // Was die Woche sonst prägt: Klausurvorbereitung, Pausen, Klausuren (nach Datum); „viel“, wenn sie mehr als anderthalbmal so
+    // viel trägt wie der Schnitt der Wochen mit Last
+    const teile = [];
+    const vorb = A.filter((P) => P.ziel < mo && P.klausur.datum > so).map((P) => P.code);
+    if (vorb.length) teile.push({ text: `Klausurvorbereitung ${vorb.join(", ")}` });
+    for (const p of (D.pausen || []).filter((x) => x.von <= so && x.bis >= mo)) teile.push({ text: p.name, cls: "is-pause" });
+    for (const P of A) if (P.klausur.datum >= mo && P.klausur.datum <= so) teile.push({ text: `Klausur ${P.code} ${wtm(P.klausur.datum)}`, cls: "is-klausur" });
+    const lasten = B.wochen.map((x) => x.fertig + x.offen + x.ueber).filter((x) => x > EPS);
+    const schnitt = lasten.length ? lasten.reduce((s, x) => s + x, 0) / lasten.length : 0;
+    const viel = schnitt && w.fertig + w.offen + w.ueber > 1.5 * schnitt;
+    if (teile.length || viel) {
+      const was = el.createDiv({ cls: "eba-lp-pw-was" });
+      const letztes = stuecke(was, teile, "eba-lp-w-teil");
+      // „viel“ im letzten Stück: Bricht die Zeile um, geht die Pille mit
+      if (viel) { const s = letztes || was; if (letztes) s.appendText(" "); s.createSpan({ cls: "eba-pill warn", text: "viel" }); }
+    }
+    const kl = el.createDiv({ cls: "eba-lp-woche" }).createDiv({ cls: "eba-lp-kapitel" });
+    let zeilen = 0;
+    if (W) {
+      for (const x of W.kapitel) { kapitelZeile(kl, x.P, x.i, quelle, neu, true); zeilen++; }
+      for (const P of W.vorbereitung) { vorbereitungZeile(kl, P, quelle); zeilen++; }
+    } else {
+      for (const P of A) P.kapitel.forEach((k, j) => { if (montagVon(P.plan.faellig[j]) === mo) { kapitelZeile(kl, P, j, quelle, neu, true); zeilen++; } });
+    }
+    if (!zeilen) kl.createDiv({ cls: "eba-lp-k eba-lp-k-leer", text: faellig.length ? "Alles für diese Woche verstanden." : arbeitstage(mo, D.pausen, D.freieTage) ? "Nichts fällig." : "Vorlesungsfrei, nichts fällig." });
+  };
+  // In der Klausurvorbereitung diese Woche: „2 Altklausuren auf Zeit, zuerst …“ (ohne Kästchen, der Platz bleibt)
+  const vorbereitungZeile = (kl, P, quelle) => {
+    const z = kl.createDiv({ cls: `eba-lp-k eba-lp-k-vorb modul-${P.farbe || 0}` });
+    z.createSpan({ cls: "eba-td-haken", attr: { "aria-hidden": "true" } }).createEl("input", { attr: { type: "checkbox", tabindex: "-1", disabled: "" } });
+    const t = z.createDiv({ cls: "eba-lp-k-text" });
+    t.createSpan({ cls: "eba-lp-k-code", text: P.code });
+    t.createSpan({ cls: "eba-lp-k-nr" });
+    const inhalt = t.createDiv({ cls: "eba-lp-k-inhalt" });
+    const titel = inhalt.createSpan({ cls: "eba-lp-k-titel", text: `${altText(P.alt.dieseWoche)} auf Zeit` });
+    if (P.alt.naechste) { titel.appendText(", zuerst "); linkZu(titel, P.alt.naechste.titel, P.alt.naechste.f, quelle); }
+    unterTitel(inhalt, P.code, `Klausur ${wtm(P.klausur.datum)}`, false);
+  };
+
+  // Module als Karten (seit 1.11.2026; vorher aufklappbare Zeilen): Kürzel in der Farbe des Moduls und Pille, darunter der Name,
+  // womit es weitergeht (das nächste offene Kapitel mit Link auf die Folien und seiner Frist; alles verstanden: die nächste Altklausur), der
+  // Stand kurz, unten ein Balken in der Farbe des Moduls mit dem Strich, wo der Plan heute steht. Ein Tipp klappt darunter über die
+  // ganze Breite das Modul auf (modulInhalt; gerätelokal gemerkt).
+  const modulAnteil = (P) => {
+    if (P.plan) return P.plan.gesamt ? P.plan.ist / P.plan.gesamt : 0;
+    const g = P.kapitel.reduce((s, k) => s + (k.gewicht || 0), 0);
+    return g ? P.kapitel.reduce((s, k) => s + (k.gewicht || 0) * k.anteil, 0) / g : 0;
+  };
+  const karteZeichnen = (gitter, P, quelle, neu, karten, heute) => {
+    const an = aktiv(P), offen = !!auf[P.code];
+    const k = gitter.createDiv({ cls: `eba-lp-mk modul-${P.farbe || 0}` + (an ? "" : " is-ruhig") + (offen ? " is-offen" : ""),
+      attr: { role: "button", tabindex: "0", "aria-expanded": String(offen), "data-code": P.code } });
+    const kopf = k.createDiv({ cls: "eba-lp-mk-kopf" });
+    kopf.createSpan({ cls: "eba-lp-mk-code", text: P.code });
+    const p = P.stand && P.stand.pille;
+    if (p) kopf.createSpan({ cls: "eba-pill " + p.art, text: p.text });
+    kopf.createSpan({ cls: "eba-lp-mk-pfeil", attr: { "aria-hidden": "true" } });
+    k.createDiv({ cls: "eba-lp-mk-name", text: P.modul ? P.modul.titel : P.f.basename });
+    const n = an ? P.kapitel.findIndex((x) => x.anteil < 1 - EPS) : -1;
+    if (n >= 0) {
+      const kap = P.kapitel[n], b = bisText(P, n);
+      const w = k.createDiv({ cls: "eba-lp-mk-weiter" });
+      w.createDiv({ cls: "eba-lp-mk-weiter-name", text: "Weiter mit" });
+      const t = w.createDiv({ cls: "eba-lp-mk-kapitel" });
+      t.createSpan({ cls: "eba-lp-mk-nr", text: kap.nr || String(n + 1) });
+      const name = t.createSpan({ cls: "eba-lp-mk-titel", text: kap.titel });
+      if (kap.ziel || kap.webZiel) {
+        name.addClass("is-link");
+        nurStoppen(name);
+        name.addEventListener("click", (e) => {
+          if (kap.ziel) { oeffnen(kap.ziel, e, quelle); return; }
+          e.preventDefault(); e.stopPropagation(); window.open(kap.webZiel);
+        });
+      }
+      w.createDiv({ cls: "eba-lp-mk-bis" + (b.ueberfaellig ? " is-ueberfaellig" : ""), text: b.text });
+    } else if (an && P.alt && P.alt.naechste) {
+      const w = k.createDiv({ cls: "eba-lp-mk-weiter" });
+      w.createDiv({ cls: "eba-lp-mk-weiter-name", text: "Als Nächstes" });
+      linkZu(w.createDiv({ cls: "eba-lp-mk-kapitel" }), P.alt.naechste.titel, P.alt.naechste.f, quelle);
+    }
+    const fertig = P.kapitel.filter((x) => x.anteil >= 1 - EPS).length;
+    const stand = an ? [`${fertig} von ${P.kapitel.length} Kapiteln`, `Klausur ${tageText(tageZwischen(heute, P.klausur.datum))}`] : standRoh(P).map((x) => x.text);
+    k.createDiv({ cls: "eba-lp-mk-stand", text: verbinden(stand) });
+    const bal = k.createDiv({ cls: "eba-lp-mk-balken", attr: { "aria-hidden": "true" } });
+    bal.createDiv({ cls: "eba-lp-mk-voll" }).style.width = pct(Math.min(1, modulAnteil(P)));
+    if (an) lage(bal.createDiv({ cls: "eba-lp-mk-soll" }), Math.min(1, sollHeute(P, heute) / (P.plan.gesamt || 1)));
+    const mehr = gitter.createDiv({ cls: `eba-lp-unten eba-lp-mk-mehr modul-${P.farbe || 0}` + (offen ? "" : " is-zu") });
+    modulInhalt(mehr, P, quelle, neu, karten);
     const klappen = (e) => {
       e.preventDefault(); e.stopPropagation();
       auf[P.code] = !auf[P.code];
-      z.toggleClass("is-offen", auf[P.code]); z.setAttr("aria-expanded", String(auf[P.code]));
-      unten.toggleClass("is-zu", !auf[P.code]);
+      k.toggleClass("is-offen", auf[P.code]); k.setAttr("aria-expanded", String(auf[P.code]));
+      mehr.toggleClass("is-zu", !auf[P.code]);
     };
-    nurStoppen(z);
-    z.addEventListener("click", klappen);
-    z.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") klappen(e); });
+    nurStoppen(k);
+    k.addEventListener("click", klappen);
+    k.addEventListener("keydown", (e) => { if (e.target === k && (e.key === "Enter" || e.key === " ")) klappen(e); });
+  };
+  // Tipp auf eine Bahn: das Modul unter „Module“ aufklappen und dorthin rollen
+  const modulZeigen = (wurzel, code) => {
+    const k = Array.prototype.filter.call(wurzel.querySelectorAll(".eba-lp-mk"), (x) => x.getAttribute("data-code") === code)[0];
+    if (!k) return;
+    if (!k.classList.contains("is-offen")) k.click();
+    const ruhig = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    k.scrollIntoView({ block: "start", behavior: ruhig ? "auto" : "smooth" });
   };
 
   const LEER = "Noch kein Lernplan für deine Module.";
   // In Entwicklung (seit 19.10.2026): Bereich und Lernplan-Notizen tragen oben einen Warnkasten, der Inhalt ist abgeblendet, bleibt
-  // aber bedienbar (eba-core.css Abschnitt 61, .is-entwicklung). Ist der Lernplan fertig: IN_ENTWICKLUNG = false.
+  // aber bedienbar (eba-core.css Abschnitt 61, .is-entwicklung); Dashboard und Modulseite tragen die Pille „in Entwicklung“. Ist der
+  // Lernplan fertig: IN_ENTWICKLUNG = false.
   const IN_ENTWICKLUNG = true;
   const ENTWICKLUNG_TITEL = "Noch nicht fertig: Lern nicht danach.";
   const ENTWICKLUNG = "Kapitel, Fristen und Fortschritt können fehlen oder falsch sein, und alles kann sich noch ändern. Plane dein Lernen weiter selbst.";
@@ -401,6 +1347,12 @@ module.exports = function (ctx) {
     kopf.createEl("strong", { text: ENTWICKLUNG_TITEL });
     h.createDiv({ text: ENTWICKLUNG });
   };
+  const entwicklungPille = (el) => { if (IN_ENTWICKLUNG) el.createSpan({ cls: "eba-pill leer", text: "in Entwicklung" }); };
+  // Heute fällige Karteikarten je Modul (karten.js), ohne Karteikarten leer
+  const kartenHeute = async () => {
+    try { return ctx.karten && ctx.karten.heuteJeModul ? await ctx.karten.heuteJeModul() : {}; } catch (e) { return {}; }
+  };
+
   const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1, aus: 5 };
   const zeichnen = async (el, mdCtx, art, neu) => {
     const D = ctx.modell.daten(), heute = heuteIso(), quelle = (mdCtx && mdCtx.sourcePath) || "";
@@ -408,31 +1360,94 @@ module.exports = function (ctx) {
       const f = app.vault.getAbstractFileByPath(quelle);
       el.empty(); el.addClass("eba-lp", "eba-lp-eine");
       if (!f || fmVon(f).typ !== "lernplan") { el.setText("Dieser Block gehört in eine Lernplan-Notiz."); return; }
-      const P = await sammeln(f, D, heute);
+      const P = await sammeln(f, D, heute, optionen(D));
       el.empty();
       entwicklungHinweis(el);
-      zeile(el.createDiv({ cls: "eba-vb-liste" }), P, quelle, neu, false);
+      zeile(el.createDiv({ cls: "eba-vb-liste" }), P, quelle);
       return;
     }
-    const alle = [];
-    for (const f of lernplaene()) alle.push(await sammeln(f, D, heute));
+    if (art === "woche") return dashboardZeichnen(el, D, heute);
+    const { alle, o } = await allesSammeln(D, heute);
+    const karten = alle.length ? await kartenHeute() : {};
     el.empty(); el.addClass("eba-lp");
     entwicklungHinweis(el);
     if (!alle.length) { el.createDiv({ cls: "eba-lp-leer", text: LEER }); return; }
-    // Reihenfolge: was jetzt zu tun ist zuerst, dann nach Klausurdatum; vorbei ans Ende
+    // Oben dein Stand, dann das Semester mit Zielnote und gewählter Woche, darunter die Module
+    const A = alle.filter(aktiv).sort(nachKlausur);
+    heldZeichnen(el, A, heute);
+    planZeichnen(el, A, alle, o, D, heute, quelle, neu);
+    // Reihenfolge der Module: was jetzt zu tun ist zuerst, dann nach Klausurdatum; vorbei ans Ende
+    el.createDiv({ cls: "eba-lp-label", text: "Module" });
     const rang = (P) => (P.stand ? NACH_KLAUSUR[P.stand.art] || 0 : 3);
     alle.sort((a, b) => rang(a) - rang(b) || String(a.klausur ? a.klausur.datum : "9").localeCompare(String(b.klausur ? b.klausur.datum : "9")) || a.code.localeCompare(b.code, "de"));
-    const l = el.createDiv({ cls: "eba-vb-liste" });
-    for (const P of alle) zeile(l, P, quelle, neu, true);
+    const gitter = el.createDiv({ cls: "eba-lp-module" });
+    for (const P of alle) karteZeichnen(gitter, P, quelle, neu, karten, heute);
   };
 
-  // ---------- Lernplan-Notizen aus den zentralen Kapitellisten (kapitel.json) ----------
-  // Notiztext für einen Eintrag { code, semester, quelle, stand, vorlaeufig, kapitel: [{ nr, titel, seiten, folien, url, teile }] }.
-  // alt = bisheriger Text oder "". Häkchen gehen mit dem Titel (ohne Groß-/Kleinschreibung und Satzzeichen; bei gleichem Titel zuerst
+  // Dashboard (```eba-lernplan woche```): eine Zeile wie die der Karteikarten, nur wenn diese Woche etwas dran ist; Tipp öffnet den
+  // Lernplan. Sonst samt Hülle unsichtbar (.eba-lp-aus).
+  const dashboardZeichnen = async (el, D, heute) => {
+    const { alle } = sichtbar() ? await allesSammeln(D, heute) : { alle: [] };
+    const W = dieseWoche(alle, false);
+    el.empty();
+    if (!W.kapitel.length && !W.vorbereitung.length) { el.addClass("eba-lp-aus"); return; }
+    el.removeClass("eba-lp-aus");
+    const box = el.createDiv({ cls: "eba-lk-heute eba-lp-heute" + (IN_ENTWICKLUNG ? " is-entwicklung" : "") });
+    box.createSpan({ cls: "eba-uh-symbol" }).innerHTML = SYMBOL;
+    const t = box.createSpan({ cls: "eba-lk-heute-text" });
+    // Leerzeichen statt Rand: Bricht die Zeile um, beginnt die neue bündig
+    t.createEl("b", { text: "Lernplan" });
+    t.appendText(" ");
+    stuecke(t.createSpan({ cls: "eba-lp-heute-was" }), kurzTeile(W).map((text) => ({ text })), "eba-lp-heute-teil");
+    if (IN_ENTWICKLUNG) t.appendText(" ");
+    entwicklungPille(t);
+    const f = app.vault.getAbstractFileByPath(BEREICH);
+    if (!f) return;
+    const a = box.createEl("a", { cls: "eba-vb-knopf", text: "Öffnen", href: f.path });
+    nurStoppen(a);
+    a.addEventListener("click", (e) => oeffnen(f, e, "Dashboard.md"));
+  };
+  // Pfeile der Wahlpille und der Wochen, Uhr (volle Zeit), Haken (Woche geschafft) als eigenes SVG (setIcon blieb auf dem iPad
+  // leer, wie kopf.js)
+  const HAKEN = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+  const LINKS = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
+  const RECHTS = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
+  const UHR = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+  const PFEIL ='<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+  const SYMBOL = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>';
+
+  // Modulseite (modul.js): Abschnitt „Lernplan“ mit dem Stand wie im Bereich, Tipp öffnet die Lernplan-Notiz; ohne Notiz nichts.
+  // Zeichnet in einen eigenen Kasten, der sich füllt, sobald die Notiz gelesen ist.
+  const modulZeile = (el, code, quelle) => {
+    const f = lernplaene().filter((x) => codeVon(x) === code)[0];
+    if (!f || !ctx.modell || !ctx.modell.daten) return;
+    const box = el.createDiv({ cls: "eba-mod-lernplan" });
+    const D = ctx.modell.daten();
+    sammeln(f, D, heuteIso(), optionen(D)).then((P) => {
+      const k = box.createDiv({ cls: "eba-mod-k" });
+      k.appendText("Lernplan");
+      entwicklungPille(k);
+      const z = box.createDiv({ cls: "eba-mod-lp-zeile" });
+      const p = P.stand && P.stand.pille;
+      const inhalt = z.createDiv({ cls: "eba-mod-lp-inhalt" });
+      if (p) inhalt.createSpan({ cls: "eba-pill " + p.art, text: p.text });
+      inhalt.createSpan({ cls: "eba-mod-lp-text", text: verbinden(standTeile(P).filter((x) => !x.klausur).map((x) => x.text)) });
+      z.createSpan({ cls: "eba-mod-lp-pfeil", attr: { "aria-hidden": "true" } });
+      z.setAttr("role", "link"); z.setAttr("tabindex", "0");
+      nurStoppen(z);
+      z.addEventListener("click", (e) => oeffnen(f, e, quelle));
+      z.addEventListener("keydown", (e) => { if (e.key === "Enter") oeffnen(f, e, quelle); });
+    }).catch((e) => { console.error("Lernplan Modulseite", e); box.remove(); });
+  };
+
+  // ---------- Lernplan-Notizen aus Kapitellisten (kapitel.json, eigener Server) ----------
+  // Notiztext für einen Eintrag { code, semester, quelle, stand, vorlaeufig, kapitel: [{ nr, titel, seiten, folien, url, vorlesung,
+  // zwischentest, teile }] }. alt = bisheriger Text oder "", ziele = je Kapitel der Name der Folien-Notiz oder "" (zieleVon),
+  // herkunft = zentral | server. Häkchen gehen mit dem Titel (ohne Groß-/Kleinschreibung und Satzzeichen; bei gleichem Titel zuerst
   // das mit gleicher Nummer): Ein Kapitel mit neuer Nummer bleibt abgehakt, ein anderes Kapitel unter derselben Nummer erbt das
   // Häkchen nicht (die Liste wird mit jeder Vorlesung berichtigt). Es bleiben auch eigene Eigenschaften (`seit`, `verstanden_bis`,
-  // Tags …), eigener Text und eigene Aufgaben unter „## Kapitel“ (hinter dem Kapitel, hinter dem sie standen) und alles unter
-  // „## Meine Notizen“. Eine Aufgabe gehört der Liste nur, wenn sie zu einem Kapitel der neuen Liste passt oder in der zuletzt
+  // `vorlernen`, Tags …), eigener Text und eigene Aufgaben unter „## Kapitel“ (hinter dem Kapitel, hinter dem sie standen) und alles
+  // unter „## Meine Notizen“. Eine Aufgabe gehört der Liste nur, wenn sie zu einem Kapitel der neuen Liste passt oder in der zuletzt
   // geschriebenen stand (frueher = listeZeilen dieser Liste); sonst ist sie deine, auch mit Nummer („3 Altklausuren rechnen“).
   const MEINE = "## Meine Notizen";
   const KAPITEL = "## Kapitel";
@@ -478,7 +1493,9 @@ module.exports = function (ctx) {
     }
     return { vor, nach };
   };
-  const zentralNotiz = (e, alt, frueher) => {
+  // Link auf die Folien nur mit einem Namen, den Obsidian als Link lesen kann
+  const LINK_OK = /^[^[\]|#^]+$/;
+  const zentralNotiz = (e, alt, frueher, ziele, herkunft) => {
     const zeilenAlt = String(alt || "").split("\n");
     const kopf = zeilenAlt.findIndex((z) => z.replace(/\s+$/, "") === KAPITEL);
     const ende = kopf < 0 ? -1 : zeilenAlt.findIndex((z, j) => j > kopf && z.startsWith(MEINE));
@@ -489,7 +1506,7 @@ module.exports = function (ctx) {
     const bekannt = new Set(frueher || []);
     const ausListe = (k) => vergeben.has(k) || bekannt.has(zeilenHash(k.nr, k.titel));
     const unterAlt = vorher.filter(ausListe);
-    const fm = ["---", "typ: lernplan", `code: ${e.code}`, "herkunft: zentral", `semester: ${JSON.stringify(e.semester)}`];
+    const fm = ["---", "typ: lernplan", `code: ${e.code}`, `herkunft: ${herkunft || "zentral"}`, `semester: ${JSON.stringify(e.semester)}`];
     if (e.quelle) fm.push(`quelle: ${JSON.stringify(e.quelle)}`);
     if (e.stand) fm.push(`stand: ${e.stand}`);
     if (e.vorlaeufig) fm.push("vorlaeufig: true");
@@ -511,9 +1528,13 @@ module.exports = function (ctx) {
     eigeneDazu(eigenes.vor);
     e.kapitel.forEach((k, j) => {
       const teile = [`${k.nr} ${k.titel}`];
+      const ziel = ziele && ziele[j] && LINK_OK.test(ziele[j]) ? ziele[j] : "";
       if (k.url) teile.push(`[online](${k.url})`);
-      if (k.folien != null && k.folien !== nrZahl(k.nr)) teile.push(`Folien ${k.folien}`);
+      if (ziel) teile.push(`[[${ziel}|Folien]]`);
+      else if (k.folien != null && k.folien !== nrZahl(k.nr)) teile.push(`Folien ${k.folien}`);
       if (k.seiten) teile.push(`${k.seiten} S.`);
+      if (k.vorlesung) teile.push(`Vorlesung ${deVon(k.vorlesung)}`);
+      if (k.zwischentest) teile.push(`Zwischentest ${deVon(k.zwischentest)}`);
       zeilen.push(`- ${haken(paare[j])} ${teile.join(" · ")}`);
       (k.teile || []).forEach((t, n) => zeilen.push(`  - ${haken(T[j][n])} ${t.nr} ${t.titel}`));
       if (paare[j] && eigenes.nach.has(paare[j])) { eigeneDazu(eigenes.nach.get(paare[j])); eigenes.nach.delete(paare[j]); }
@@ -531,6 +1552,8 @@ module.exports = function (ctx) {
       + "```eba-lernplan modul\nDer Stand erscheint, sobald Studium Autopilot läuft.\n```\n\n"
       + KAPITEL + "\n\n" + abschnitt.join("\n") + "\n\n" + meine + "\n";
   };
+  // Je Kapitel eines Eintrags der Name der Folien-Notiz, auf die die Zeile zeigt (folienZuordnen), oder ""
+  const zieleVon = (e) => folienZuordnen(e.kapitel, folienSammeln(e.code)).map((x) => (x ? x.f.basename : ""));
   // Welche Einträge zählen: Semester = das laufende, das Modul ist dran (imSemester) und nicht bestanden oder anerkannt
   const zentralAuswahl = (eintraege, D, semesterName) => eintraege.filter((e) => {
     if (e.semester !== semesterName) return false;
@@ -538,25 +1561,22 @@ module.exports = function (ctx) {
     if (!m || FERTIG.indexOf(m.status) >= 0) return false;
     return imSemester(m, e.semester);
   });
-  // Notizen schreiben: nur auf dem Abrufer (ctx.zentral.abruferHier, ein Schreiber wie bei den Terminen), nur wenn sich die Liste des
-  // Moduls seit dem letzten Schreiben geändert hat; dann bleiben Häkchen und Eigenes (zentralNotiz). Was geschrieben ist, steht wie
-  // die Grabsteine der Termine im Tresor (Sperr-Datei des Abrufers, Feld „lernplan“: { angewendet: Code → kurzHash der Liste,
-  // zeilen: Code → listeZeilen }), damit jeder Abrufer (auch nach einem Wechsel PC ↔ iPad) dasselbe weiß: Bei gleicher Liste
-  // bleibt die Notiz, wie sie ist, und eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert. Eine Notiz mit
-  // anderer herkunft (eigene KI) bleibt unberührt. Jedes Gerät hebt eine Kopie auf (KOPIE, wie eba-zentral-angewendet): Fehlt das
-  // Feld (Datei eben neu angelegt, Sync noch nicht da), gilt sie statt eines leeren Stands; fehlt die Datei oder ist sie unlesbar,
-  // schreibt der Lauf nichts. Bis 24.10.2026 stand das nur gerätelokal (eba-lernplan-zentral); das wird einmal übernommen.
+  // Was geschrieben ist, steht im Tresor in der Sperr-Datei der Quelle (zentral: abruf.json, Server: server-abruf.json; je ein
+  // Schreiber), Feld „lernplan“: { angewendet: Code → kurzHash der Liste, zeilen: Code → listeZeilen, ziele: Code → kurzHash der
+  // Folien-Links }. So weiß jeder Abrufer (auch nach einem Wechsel PC ↔ iPad) dasselbe: Bei gleicher Liste und gleichen Folien
+  // bleibt die Notiz, wie sie ist, und eine gelöschte Notiz entsteht erst wieder, wenn sich ihre Liste ändert.
   const STAND = "System/Daten/abruf.json";
+  const SERVER_STAND = "System/Daten/server-abruf.json";
   const GEMERKT = "eba-lernplan-zentral";
   const KOPIE = "eba-lernplan-angewendet";
   const standForm = (x) => {
     const o = x && typeof x === "object" && !Array.isArray(x) ? x : {};
     const map = (m) => Object.assign({}, m && typeof m === "object" && !Array.isArray(m) ? m : {});
-    return { angewendet: map(o.angewendet), zeilen: map(o.zeilen) };
+    return { angewendet: map(o.angewendet), zeilen: map(o.zeilen), ziele: map(o.ziele) };
   };
-  // Feld „lernplan“ der Sperr-Datei ({ angewendet, zeilen }, leer, wenn es fehlt); null, wenn die Datei fehlt oder unlesbar ist
-  const standLesen = async () => {
-    const f = app.vault.getAbstractFileByPath(STAND);
+  // Feld „lernplan“ einer Sperr-Datei ({ angewendet, zeilen, ziele }, leer, wenn es fehlt); null, wenn die Datei fehlt oder unlesbar ist
+  const standLesen = async (pfad) => {
+    const f = app.vault.getAbstractFileByPath(pfad);
     if (!f) return null;
     try {
       const o = JSON.parse(await app.vault.read(f));
@@ -564,8 +1584,8 @@ module.exports = function (ctx) {
     } catch (e) { return null; }
   };
   // Nur das Feld „lernplan“ neu, alles andere (Sperre, Grabsteine der Termine) bleibt; false, wenn nichts geschrieben wurde
-  const standSchreiben = async (lernplan) => {
-    const f = app.vault.getAbstractFileByPath(STAND);
+  const standSchreiben = async (pfad, lernplan) => {
+    const f = app.vault.getAbstractFileByPath(pfad);
     let ok = false;
     if (f) await app.vault.process(f, (text) => {
       let o = null;
@@ -576,69 +1596,142 @@ module.exports = function (ctx) {
     });
     return ok;
   };
+  const ordnerAnlegen = async () => { if (!app.vault.getAbstractFileByPath(ORDNER.slice(0, -1))) await app.vault.createFolder(ORDNER.slice(0, -1)).catch(() => {}); };
+  // Eine Notiz nach einem Eintrag: anlegen (außer du hast sie gelöscht und die Liste ist dieselbe), sonst neu schreiben, wenn sich
+  // Liste oder Folien geändert haben. Notizen anderer Herkunft bleiben; nur die zentrale Liste übernimmt eine vom Server
+  // (frueherServer = deren listeZeilen). s = Stand der Quelle, wird nachgeführt. → true, wenn geschrieben
+  const notizAbgleichen = async (e, s, herkunft, frueherServer) => {
+    const Q = ctx.user.quellen;
+    const pfad = `${ORDNER}${e.code} Lernplan.md`, h = Q.kurzHash(e), ziele = zieleVon(e), zh = Q.kurzHash(ziele);
+    const f = app.vault.getAbstractFileByPath(pfad);
+    let geschrieben = false;
+    if (!f) {
+      if (Q.geloescht(s.angewendet, e.code, h)) return false; // von dir gelöscht, Liste unverändert
+      await app.vault.create(pfad, zentralNotiz(e, "", null, ziele, herkunft));
+      geschrieben = true;
+    } else {
+      const her = fmVon(f).herkunft, uebernahme = herkunft === "zentral" && her === "server";
+      if (her !== herkunft && !uebernahme) return false;
+      if (uebernahme || s.angewendet[e.code] !== h || s.ziele[e.code] !== zh) {
+        const frueher = uebernahme ? frueherServer : s.zeilen[e.code];
+        const alt = await app.vault.read(f);
+        if (zentralNotiz(e, alt, frueher, ziele, herkunft) !== alt) {
+          await app.vault.process(f, (x) => zentralNotiz(e, x, frueher, ziele, herkunft));
+          geschrieben = true;
+        }
+      }
+    }
+    s.angewendet[e.code] = h; s.zeilen[e.code] = listeZeilen(e); s.ziele[e.code] = zh;
+    return geschrieben;
+  };
+  // Nur die (Unter-)Kapitel einer Notiz, die aus der zuletzt geschriebenen Liste stammen (zeilen = listeZeilen dieser Liste, etwa aus
+  // serverStand()); ohne zeilen alle. Für server.js: Nach einer Neueinrichtung bekommt der Server seine Listen aus den Notizen zurück,
+  // eigene Aufgaben mit Nummer vorn („3 Altklausuren rechnen“) gehen dabei nicht als Kapitel mit.
+  const listeLesen = (text, zeilen) => {
+    const K = kapitelLesen(text);
+    if (!Array.isArray(zeilen)) return K;
+    const z = new Set(zeilen), drin = (k) => z.has(zeilenHash(k.nr, k.titel));
+    return K.filter(drin).map((k) => Object.assign({}, k, { teile: k.teile.filter(drin) }));
+  };
+  // Stand der Listen des eigenen Servers ({ angewendet, zeilen, ziele } aus server-abruf.json) oder null
+  const serverStand = () => standLesen(SERVER_STAND);
+  // Läufe nacheinander (zentral und Server schreiben in denselben Ordner)
+  let kette = Promise.resolve();
+  const einzeln = (fn) => { const p = kette.then(fn, fn); kette = p.catch(() => {}); return p; };
+
+  // Notizen aus den zentralen Listen: nur auf dem Abrufer (ctx.zentral.abruferHier, ein Schreiber wie bei den Terminen). Jedes
+  // Gerät hebt eine Kopie des Stands auf (KOPIE, wie eba-zentral-angewendet): Fehlt das Feld (Datei eben neu angelegt, Sync noch
+  // nicht da), gilt sie statt eines leeren Stands; fehlt die Datei oder ist sie unlesbar, schreibt der Lauf nichts. Bis 24.10.2026
+  // stand das nur gerätelokal (eba-lernplan-zentral); das wird einmal übernommen.
+  const zentralLauf = async (daten) => {
+    const Z = ctx.zentral, Q = ctx.user.quellen;
+    if (!(await Z.abruferHier())) return;
+    const D = ctx.modell.daten(), heute = heuteIso(), sem = ctx.modell.semesterFuer(heute);
+    if (!sem) return;
+    const gelesen = await standLesen(STAND);
+    if (!gelesen) return; // ohne lesbaren Stand nichts schreiben, sonst kämen gelöschte Notizen zurück
+    const kopie = standForm(app.loadLocalStorage(KOPIE));
+    const s = { angewendet: Object.assign(kopie.angewendet, gelesen.angewendet), zeilen: Object.assign(kopie.zeilen, gelesen.zeilen),
+      ziele: Object.assign(kopie.ziele, gelesen.ziele) };
+    const vorher = JSON.stringify(gelesen);
+    const lokalAlt = app.loadLocalStorage(GEMERKT) || null;
+    const server = (await standLesen(SERVER_STAND)) || standForm(null);
+    await ordnerAnlegen();
+    for (const e of zentralAuswahl(daten.module, D, sem.name)) {
+      // Übergang: Was dieses Gerät früher mit derselben Liste geschrieben hat, gilt als angewendet; die alte Liste sagt, welche
+      // Aufgaben der Notiz aus ihr stammen
+      let alteListe = null;
+      try { alteListe = lokalAlt && lokalAlt[e.code] ? JSON.parse(lokalAlt[e.code]) : null; } catch (x) { alteListe = null; }
+      if (!Object.prototype.hasOwnProperty.call(s.angewendet, e.code) && lokalAlt && lokalAlt[e.code] === JSON.stringify(e)) s.angewendet[e.code] = Q.kurzHash(e);
+      if (!s.zeilen[e.code] && alteListe && Array.isArray(alteListe.kapitel)) s.zeilen[e.code] = listeZeilen(alteListe);
+      await notizAbgleichen(e, s, "zentral", server.zeilen[e.code]);
+    }
+    app.saveLocalStorage(KOPIE, s);
+    const gemerkt = JSON.stringify(s) === vorher || (await standSchreiben(STAND, s));
+    if (gemerkt && lokalAlt) app.saveLocalStorage(GEMERKT, null);
+  };
   let gleicht = false;
   const zentralAbgleichen = async () => {
     const Z = ctx.zentral, Q = ctx.user && ctx.user.quellen;
     if (gleicht || !Z || !Z.kapitel || !Q || !ctx.modell || !ctx.modell.daten) return;
     const daten = Z.kapitel();
-    if (!daten || !daten.module.length || !(await Z.abruferHier())) return;
+    if (!daten || !daten.module.length) return;
     gleicht = true;
-    try {
-      const D = ctx.modell.daten(), heute = heuteIso(), sem = ctx.modell.semesterFuer(heute);
+    try { await einzeln(() => zentralLauf(daten)); } catch (err) { console.error("Lernplan aus den Kapitellisten", err); } finally { gleicht = false; }
+  };
+
+  // Listen des eigenen Servers (server.js, Eingang „kapitel“, Form wie kapitel.json): geprüft wie die zentralen
+  // (ctx.zentral.kapitelPruefen), Notizen mit herkunft: server nur für Module des laufenden Semesters ohne zentrale Liste. Aufruf nur
+  // auf dem Gerät, das den Eingang übernimmt (Abrufer des Servers); der Stand steht in dessen Sperr-Datei.
+  // → { geschrieben, verworfen: [{ id, grund }] }
+  const serverListen = async (module) => {
+    const aus = { geschrieben: 0, verworfen: [] };
+    const Z = ctx.zentral, Q = ctx.user && ctx.user.quellen;
+    if (!Z || !Z.kapitelPruefen || !Q || !ctx.modell || !ctx.modell.daten) return aus;
+    const g = Z.kapitelPruefen({ schema: 1, module: Array.isArray(module) ? module : [] });
+    if (g.fehler) { aus.verworfen.push({ id: "kapitel", grund: g.fehler }); return aus; }
+    aus.verworfen = g.verworfen.slice();
+    await einzeln(async () => {
+      const D = ctx.modell.daten(), sem = ctx.modell.semesterFuer(heuteIso());
       if (!sem) return;
-      const gelesen = await standLesen();
-      if (!gelesen) return; // ohne lesbaren Stand nichts schreiben, sonst kämen gelöschte Notizen zurück
-      const kopie = standForm(app.loadLocalStorage(KOPIE));
-      const s = { angewendet: Object.assign(kopie.angewendet, gelesen.angewendet), zeilen: Object.assign(kopie.zeilen, gelesen.zeilen) };
-      const vorher = JSON.stringify(gelesen), angewendet = s.angewendet;
-      const lokalAlt = app.loadLocalStorage(GEMERKT) || null;
-      if (!app.vault.getAbstractFileByPath(ORDNER.slice(0, -1))) await app.vault.createFolder(ORDNER.slice(0, -1)).catch(() => {});
-      for (const e of zentralAuswahl(daten.module, D, sem.name)) {
-        const pfad = `${ORDNER}${e.code} Lernplan.md`, h = Q.kurzHash(e);
-        // Übergang: Was dieses Gerät früher mit derselben Liste geschrieben hat, gilt als angewendet; die alte Liste sagt, welche
-        // Aufgaben der Notiz aus ihr stammen
-        let alteListe = null;
-        try { alteListe = lokalAlt && lokalAlt[e.code] ? JSON.parse(lokalAlt[e.code]) : null; } catch (x) { alteListe = null; }
-        if (!Object.prototype.hasOwnProperty.call(angewendet, e.code) && lokalAlt && lokalAlt[e.code] === JSON.stringify(e)) angewendet[e.code] = h;
-        const frueher = s.zeilen[e.code] || (alteListe && Array.isArray(alteListe.kapitel) ? listeZeilen(alteListe) : null);
-        const f = app.vault.getAbstractFileByPath(pfad);
-        if (!f) {
-          if (Q.geloescht(angewendet, e.code, h)) continue; // von dir gelöscht, Liste unverändert
-          await app.vault.create(pfad, zentralNotiz(e, ""));
-        } else {
-          if (fmVon(f).herkunft !== "zentral") continue;
-          if (angewendet[e.code] !== h) {
-            const alt = await app.vault.read(f);
-            if (zentralNotiz(e, alt, frueher) !== alt) await app.vault.process(f, (x) => zentralNotiz(e, x, frueher));
-          }
-        }
-        angewendet[e.code] = h;
-        s.zeilen[e.code] = listeZeilen(e);
+      const s = await standLesen(SERVER_STAND);
+      if (!s) return;
+      const vorher = JSON.stringify(s);
+      const zentral = Z.kapitel ? Z.kapitel() : null;
+      const zentralCodes = new Set(zentral ? zentralAuswahl(zentral.module, D, sem.name).map((e) => e.code) : []);
+      await ordnerAnlegen();
+      for (const e of zentralAuswahl(g.module, D, sem.name)) {
+        if (zentralCodes.has(e.code)) { aus.verworfen.push({ id: `${e.code} ${e.semester}`, grund: "zentrale Liste" }); continue; }
+        if (await notizAbgleichen(e, s, "server")) aus.geschrieben++;
       }
-      app.saveLocalStorage(KOPIE, s);
-      const gemerkt = JSON.stringify(s) === vorher || (await standSchreiben(s));
-      if (gemerkt && lokalAlt) app.saveLocalStorage(GEMERKT, null);
-    } catch (err) { console.error("Lernplan aus den Kapitellisten", err); } finally { gleicht = false; }
+      if (JSON.stringify(s) !== vorher) await standSchreiben(SERVER_STAND, s);
+    });
+    return aus;
   };
 
   let block = null;
   const neuZeichnen = () => { if (block) block.neu(); };
   const registrieren = () => {
     block = ctx.codeblock(SPRACHE, (quelle, el, c) => {
-      const art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, SPRACHE, ["modul"], "") : "";
+      const art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, SPRACHE, ["modul", "woche"], "") : "";
       zeichnen(el, c, art, neuZeichnen).catch((e) => { console.error(SPRACHE, e); el.empty(); el.setText(String(quelle)); });
     });
-    const relevant = (p) => p.startsWith(ORDNER) || p.startsWith("Unterlagen/") || p.startsWith("Termine/") || p.startsWith("Module/");
+    const relevant = (p) => p.startsWith(ORDNER) || p.startsWith("Unterlagen/") || p.startsWith("Termine/") || p.startsWith("Module/") || p === EINSTELLUNGEN;
     const bald = ctx.entprellen(neuZeichnen, 600);
-    ctx.an(app.metadataCache, "changed", (f) => { if (relevant(f.path)) bald(); });
+    // Neue Kapitellisten (zentral.js meldet sich über ctx.lernplanAnzeige) und neue Folien (Links in den Notizen): abgleichen
+    const abgleichBald = ctx.entprellen(() => { zentralAbgleichen(); }, 2000);
+    ctx.an(app.metadataCache, "changed", (f, _d, cache) => {
+      if (!relevant(f.path)) return;
+      bald();
+      const fm = cache && cache.frontmatter;
+      if (fm && fm.typ === "unterlage" && fm.art === "Folien") abgleichBald();
+    });
     ctx.an(app.vault, "delete", (f) => { if (relevant(f.path)) bald(); });
     ctx.an(app.vault, "rename", (f, alt) => { if (relevant(f.path) || relevant(alt)) bald(); });
     // Fachmodell: Das Plugin startet die Erweiterungen alphabetisch, modell.js also erst nach lernplan.js; fehlt ctx.modell
     // noch, meldet sich der Lernplan kurz danach an (wie dashboard.js)
     const abo = () => { if (!ctx.modell || !ctx.modell.beiAenderung) return false; ctx.aufraeumen(ctx.modell.beiAenderung(bald)); return true; };
     if (!abo()) ctx.zeit(abo, 3000);
-    // Neue Kapitellisten (zentral.js meldet sich über ctx.lernplanAnzeige): Notizen abgleichen
-    const abgleichBald = ctx.entprellen(() => { zentralAbgleichen(); }, 2000);
     // Neuer Tag: Wochenziele und Stand rücken weiter; im neuen Semester (oder nach einer Änderung deines Plans) fehlen Notizen
     const tag = ctx.bleibend("tag", () => ({ wert: heuteIso() }));
     ctx.intervall(() => { const h = heuteIso(); if (h !== tag.wert) { tag.wert = h; neuZeichnen(); abgleichBald(); } }, 5 * 60 * 1000);
@@ -650,7 +1743,9 @@ module.exports = function (ctx) {
   // Semesters), nachdem Fachmodell und zentrale Daten bereit sind
   const start = () => { ctx.zeit(() => { zentralAbgleichen(); }, 45000); };
 
-  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran, folienVon, titelHtml };
+  const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran,
+    folienVon, titelHtml, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild, modulZeile, serverListen,
+    listeLesen, serverStand, vorlernenSetzen, sollHeute, heldDaten, heldText, NOTEN, stufeVon, zielBei, zielVorschau, zielTeile, modulFarben };
   ctx.lernplan = api;
   return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

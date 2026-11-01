@@ -53,6 +53,7 @@ module.exports = function (ctx) {
     zahnrad: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
     ordner: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
     tresor: '<rect x="3" y="3" width="8" height="18" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
+    widget: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
     kompass: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/>',
   };
   const svg = (name) => `<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SYMBOLE[name] || SYMBOLE.haken}</svg>`;
@@ -223,8 +224,10 @@ module.exports = function (ctx) {
       { id: "tresor", symbol: "tresor", ton: "akzent", titel: "Tresor", wert: txt(tresor), aktion: oeffnen("tresor"), rechts: "pfeil" },
     ];
   };
-  // „Hilfe“: oben in der Liste der Hilfe-Themen der Rundgang (rundgang.js), neutral wie die Themen darunter
-  const hilfeZeilen = () => [{ id: "rundgang", symbol: "kompass", ton: "leise", titel: "Rundgang", wert: "", aktion: { aktion: "rundgang", parameter: {} }, rechts: "pfeil" }];
+  // „Hilfe“: oben in der Liste der Hilfe-Themen der Rundgang (rundgang.js), neutral wie die Themen darunter; auf iPhone und iPad
+  // (ios) danach „Widgets“ (widget.js, seit 28.10.2026), sonst nicht: Widgets gibt es nur dort
+  const hilfeZeilen = (ios) => [{ id: "rundgang", symbol: "kompass", ton: "leise", titel: "Rundgang", wert: "", aktion: { aktion: "rundgang", parameter: {} }, rechts: "pfeil" }]
+    .concat(ios ? [{ id: "widget", symbol: "widget", ton: "leise", titel: "Widgets", wert: "", aktion: { aktion: "widget", parameter: {} }, rechts: "pfeil" }] : []);
   // Kompakte Zeilen wie unter Verbindungen (verbindungen.js, uebersicht; Titel und Wert in einer Kopfzeile, die zweite Zeile
   // darunter); Stil eba-core.css 43 (.eba-ez)
   const liste = (el, zeilen) => {
@@ -248,7 +251,7 @@ module.exports = function (ctx) {
   const angaben = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, angabenZeilen(fmVon())); };
   const variante = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, varianteZeilen(fmVon())); };
   const obsidian = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, obsidianZeilen(app.vault.getName(), app.vault.getFiles().length)); };
-  const hilfe = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, hilfeZeilen()); };
+  const hilfe = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, hilfeZeilen(!!(ctx.obsidian.Platform && ctx.obsidian.Platform.isIosApp))); };
   const neuZeichnen = () => { if (block) block.neu(); };
 
   const AKTIONEN = {

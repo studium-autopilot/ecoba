@@ -29,7 +29,8 @@ werden: [architektur/darstellung.md](architektur/darstellung.md). Regeln für Sk
    iPhone ordnet untereinander und klappt ein, ein schmales Monatsraster darf Punkte statt Titeln zeigen; der Inhalt bleibt
    derselbe. Der Stundenplan ist immer ein Raster. (Bis 26.10.2026 durfte das iPhone keinen Baustein austauschen.)
 7. **Farbe hat eine Bedeutung.** Statusfarben nur für Zustände (Tabelle unten), der Akzent für Auswahl, „jetzt“, Links und die
-   eine Haupthandlung, Modulfarben nur für das Modul im Wochenraster (mit Legende).
+   eine Haupthandlung, Modulfarben nur für das Modul: im Wochenraster (mit Legende) und im Lernplan (seit 1.11.2026, dieselbe
+   Farbe je Modul, das Kürzel steht immer daneben).
 8. **Nur Variablen.** Keine festen Farben im CSS. Sonst passen dunkel, Flieder und Klar nicht.
 9. **Symbole nur mit Bedeutung.** Ein Symbol steht nur, wo es etwas sagt, das der Titel nicht sagt (Ort, Kontakt, Achtung,
    ein Zustand, verschiedene Themen in einer Zeilenliste). Schmückende Symbole entfallen. Wenn, dann Lucide (24er-Raster,

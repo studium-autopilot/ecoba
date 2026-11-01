@@ -35,6 +35,7 @@ const geschuetzt = (extra) => bestand(Object.assign({ quota: [{ name: "nur-koste
 function konto(o = {}) {
   const k = { instanzen: [], vcns: [], gateways: [], routen: {}, listen: [], subnetze: [], themen: [], abos: [], gruppen: [], richtlinien: [],
     quota: o.quota || [], budgets: [], regeln: [], volumes: {}, anhaenge: [], aufrufe: [], kapazitaet: o.kapazitaet || 0, grenze: o.grenze || 0,
+    buckets: o.buckets || [], objekte: {},
     drossel: o.drossel || 0 };
   let n = 0;
   const neu = (art) => `ocid1.${art}.oc1..${++n}`;
@@ -128,6 +129,20 @@ function konto(o = {}) {
     "compute boot-volume-attachment list": (a) => ok(k.anhaenge.filter((x) => x["instance-id"] === w(a, "--instance-id"))),
     "bv boot-volume get": (a) => ok(k.volumes[w(a, "--boot-volume-id")]),
     "bv boot-volume update": (a) => { k.volumes[w(a, "--boot-volume-id")]["size-in-gbs"] = Number(w(a, "--size-in-gbs")); return ok({}); },
+    // Objektspeicher wie OCI CLI 3.95: fehlendes als ServiceError 404, get schreibt in --file
+    "os ns get": () => ok("testns"),
+    "os bucket get": (a) => {
+      const b = k.buckets.find((x) => x.name === w(a, "--bucket-name"));
+      return b ? ok(b) : { ok: false, fehler: "BucketNotFound (404): Either the bucket does not exist in the namespace or you are not authorized to access it" };
+    },
+    "os bucket create": (a) => { const b = mitTags(a, { name: w(a, "--name"), "public-access-type": w(a, "--public-access-type") }); k.buckets.push(b); return ok(b); },
+    "os object head": (a) => (k.objekte[w(a, "--name")] ? ok({}) : { ok: false, fehler: "ObjectNotFound (404): The object does not exist" }),
+    "os object put": (a) => {
+      if (a.includes("--no-overwrite") && k.objekte[w(a, "--name")]) return { ok: false, fehler: "IfNoneMatchFailed (412): The object already exists" };
+      k.objekte[w(a, "--name")] = fs.readFileSync(w(a, "--file"));
+      return ok({});
+    },
+    "os object get": (a) => { fs.writeFileSync(w(a, "--file"), k.objekte[w(a, "--name")]); return ok(null); },
   };
   const oci = async (args) => {
     k.aufrufe.push(args);
@@ -324,7 +339,12 @@ test("Platzsucher: Mail-Thema, Helfer (Micro, 50 GB) mit fertiger Konfiguration,
   assert.ok(!cloudInit.includes("content: PLATZSUCHER_GZ_BASE64") && !cloudInit.includes("api.github.com"));
   const gepackt = /content: (\S+)/.exec(cloudInit.slice(cloudInit.indexOf("/opt/studium-platzsucher/platzsucher.py")))[1];
   assert.equal(require("node:zlib").gunzipSync(Buffer.from(gepackt, "base64")).toString("utf8"), SKRIPT, "genau platzsucher.py aus dem Paket");
-  assert.ok(JSON.stringify(h.metadaten).length < 32000, "Metadaten unter 32 000 Byte: " + JSON.stringify(h.metadaten).length);
+  // Reserve: Im echten Konto sind der Schlüssel aus der Cloud Shell (RSA 4096, steht zweimal darin) und die OCIDs länger als
+  // hier, zusammen etwa 3 000 Byte mehr
+  assert.ok(JSON.stringify(h.metadaten).length < 32000 - 4000, "Metadaten unter 32 000 Byte mit Reserve: " + JSON.stringify(h.metadaten).length);
+  // Die OCI-Kommandozeile nur aus der festen Liste: jede Version und jedes Wheel mit Prüfsumme, nichts nachgeladen
+  assert.match(cloudInit, /\/opt\/oci\/bin\/pip install --quiet --require-hashes --no-deps --only-binary=:all: -r \/opt\/studium-platzsucher\/oci-pakete\.txt /);
+  assert.match(cloudInit, /^ {6}oci-cli==\d+\.\d+\.\d+ --hash=sha256:[0-9a-f]{64}$/m);
   const konfig = JSON.parse(Buffer.from(/content: (\S+)/.exec(cloudInit.slice(cloudInit.indexOf("konfig.json")))[1], "base64").toString("utf8"));
   assert.deepEqual([konfig.boot_gb, konfig.image, konfig.thema, konfig.ads, konfig.compartment], [150, "img-VM.Standard.A1.Flex", x.k.themen[0]["topic-id"], ADS, T]);
   assert.deepEqual(x.k.abos.map((y) => [y.endpoint, y.protokoll]), [[MAIL, "EMAIL"]]);
@@ -388,12 +408,107 @@ test("Platzsucher ohne --mail: nimmt die Adresse aus dem Schutz, die Einrichtung
     (e) => e.exit === 2 && /--mail <adresse> fehlt/.test(e.message));
 });
 
-test("Skill: nur eine Frage nach der Mail-Adresse, in Alltagssprache; der Platzsucher läuft ohne --mail", () => {
+test("Skill: eine Zeile mit start.sh, nur eine Frage nach der Mail-Adresse, in Alltagssprache", () => {
   const schritte = fs.readFileSync(path.join(SERVER, "skill", "server-einrichten", "schritte.md"), "utf8");
-  assert.match(schritte, /node server\/einrichten\.mjs platzsucher --schluessel ~\/\.ssh\/studium_autopilot\.pub/);
-  assert.doesNotMatch(schritte, /platzsucher --mail/, "kein zweites Mal nach der Adresse fragen");
+  // genau eine Zeile, die start.sh aus dem Tag lädt, in eine Datei statt in eine Pipe; im Arbeits-Repo steht main, im Release
+  // der Tag (release.py setzt die Version ein, ebenso in start.sh)
+  const ref = "(main|v\\d+\\.\\d+\\.\\d+(-beta\\.\\d+)?)";
+  const zeilen = schritte.split("\n").filter((z) => z.includes("/server/start.sh"));
+  assert.equal(zeilen.length, 1, zeilen.join("\n"));
+  assert.match(zeilen[0], new RegExp("^mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start\\.sh " +
+    `https://raw\\.githubusercontent\\.com/studium-autopilot/ecoba/${ref}/server/start\\.sh && bash ~/studium-autopilot/start\\.sh --mail <Mail-Adresse>$`));
+  const paket = new RegExp(`repos/studium-autopilot/ecoba/releases/(latest|tags/${ref.replace("main|", "")})\\)`, "g");
+  assert.equal(fs.readFileSync(path.join(SERVER, "start.sh"), "utf8").match(paket)?.length, 1,
+    "start.sh lädt das Paket genau einmal");
+  assert.doesNotMatch(schritte, /platzsucher --mail|\| *bash|bash <\(/, "keine zweite Frage nach der Adresse, kein curl | bash");
   assert.match(schritte, /„An welche Mail-Adresse soll Oracle\s+dir schreiben\?/);
   assert.match(fs.readFileSync(path.join(SERVER, "skill", "server-einrichten", "SKILL.md"), "utf8"), /\*\*Fragen ohne Technik\.\*\*/);
+});
+
+test("Schutz: ein weiterer Lauf braucht keine Mail-Adresse, wenn das Budget sie schon hat", async () => {
+  const { schutz, auswerten } = await laden();
+  const { oci, k } = konto();
+  const r = await schutz(oci, { tenancy: T, a: auswerten(geschuetzt({ budgetRegeln: [{ type: "ACTUAL", recipients: MAIL, "lifecycle-state": "ACTIVE" }] })) });
+  assert.equal(r.exit, 0, JSON.stringify(r.schritte));
+  assert.ok(k.regeln.every((x) => x.an === MAIL));
+  await assert.rejects(schutz(konto().oci, { tenancy: T, a: auswerten(bestand()) }), (e) => e.exit === 2 && /--mail/.test(e.message));
+});
+
+test("Selbst vorbereiten: Startdaten laden das geprüfte Paket und installieren ohne Adresse; ohne gültiges Paket keine", async () => {
+  const { serverStart, server, platzsucher, netz, auswerten } = await laden();
+  const summe = "a".repeat(64);
+  const paket = { version: "0.7.6", summe };
+  const start = serverStart(paket);
+  assert.match(start, /^#cloud-config\nruncmd:\n/);
+  assert.ok(start.includes("'https://github.com/studium-autopilot/ecoba/releases/download/v0.7.6/studium-server.tar.gz'"));
+  assert.ok(start.includes(`echo '${summe}  '"$d/paket.tar.gz" | sha256sum -c - || exit 1`), "erst prüfen, dann auspacken");
+  assert.match(start, /mktemp -d \/root\/studium-paket\.XXXXXX/);
+  assert.match(start, /installieren\.sh" --vorbereiten\n$/);
+  assert.doesNotMatch(start, /--ip|ifconfig|ipify|zugang|schluessel/, "keine IP von außen, keine Geheimnisse");
+  for (const p of [null, { version: "0.7.6" }, { version: "0.7.6'; rm -rf /", summe }, { version: "0.7.6", summe: "A".repeat(64) }, { version: "x", summe }]) {
+    assert.equal(serverStart(p), "", JSON.stringify(p));
+  }
+  const x = konto();
+  await netz(x.oci, { tenancy: T });
+  assert.equal((await server(x.oci, { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH, paket })).exit, 0);
+  assert.equal(Buffer.from(x.k.instanzen[0].metadaten.user_data, "base64").toString("utf8"), start);
+  const y = konto();
+  await netz(y.oci, { tenancy: T });
+  await server(y.oci, { tenancy: T, a: auswerten(geschuetzt()), ads: ADS, schluessel: SSH, paket: null });
+  assert.deepEqual(Object.keys(y.k.instanzen[0].metadaten), ["ssh_authorized_keys"], "ohne Paket wie bisher");
+  // Der Platzsucher gibt dem Server dieselben Startdaten mit, und alles bleibt unter Oracles Grenze
+  const z = konto();
+  await netz(z.oci, { tenancy: T });
+  const r = await platzsucher(z.oci, { tenancy: T, a: auswerten(geschuetzt(), { helfer: true }), ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT, paket });
+  assert.equal(r.exit, 0, JSON.stringify(r.schritte));
+  const cloudInit = Buffer.from(z.k.instanzen[0].metadaten.user_data, "base64").toString("utf8");
+  const konfig = JSON.parse(Buffer.from(/content: (\S+)/.exec(cloudInit.slice(cloudInit.indexOf("/etc/studium-platzsucher/konfig.json")))[1], "base64").toString("utf8"));
+  assert.equal(Buffer.from(konfig.user_data, "base64").toString("utf8"), start);
+  assert.ok(JSON.stringify(z.k.instanzen[0].metadaten).length < 32000);
+});
+
+test("Schlüssel: Kopie im privaten Bucket des Kontos, nie überschrieben; zurück, wenn die Cloud Shell ihn verloren hat", async () => {
+  const { schluesselSichern, schluesselHolen, BUCKET } = await laden();
+  const ordner = fs.mkdtempSync(path.join(require("node:os").tmpdir(), "ssh-"));
+  const datei = (n) => path.join(ordner, n);
+  try {
+    const x = konto();
+    assert.equal((await schluesselSichern(x.oci, { tenancy: T, ordner })).exit, 1, "ohne Schlüssel nichts zu sichern");
+    fs.writeFileSync(datei("studium_autopilot"), "privat\n");
+    fs.writeFileSync(datei("studium_autopilot.pub"), SSH + "\n");
+    const r = await schluesselSichern(x.oci, { tenancy: T, ordner });
+    assert.equal(r.exit, 0, JSON.stringify(r.schritte));
+    assert.deepEqual(x.k.buckets.map((b) => [b.name, b["public-access-type"], b["freeform-tags"]["studium-autopilot"]]), [[BUCKET, "NoPublicAccess", "schluessel"]]);
+    assert.deepEqual([x.k.objekte.studium_autopilot.toString(), x.k.objekte["studium_autopilot.pub"].toString()], ["privat\n", SSH + "\n"]);
+    const vorher = x.k.aufrufe.length;
+    assert.equal((await schluesselSichern(x.oci, { tenancy: T, ordner })).exit, 0);
+    assert.ok(!x.k.aufrufe.slice(vorher).some((a) => ["put", "create"].includes(a[2])), "zweiter Lauf lädt nichts hoch");
+    assert.deepEqual(fs.readdirSync(ordner).sort(), ["studium_autopilot", "studium_autopilot.pub"], "keine Vergleichsdateien liegen geblieben");
+    // ein anderer Schlüssel in der Cloud Shell: keiner wird überschrieben
+    fs.writeFileSync(datei("studium_autopilot"), "neu\n");
+    assert.equal((await schluesselSichern(x.oci, { tenancy: T, ordner })).exit, 2);
+    assert.equal(x.k.objekte.studium_autopilot.toString(), "privat\n");
+    assert.equal((await schluesselHolen(x.oci, { tenancy: T, ordner })).schritte[0].status, "da", "einer in der Cloud Shell bleibt");
+    assert.equal(fs.readFileSync(datei("studium_autopilot"), "utf8"), "neu\n");
+    // Cloud Shell gelöscht: zurückholen, privat nur für den Besitzer
+    for (const n of fs.readdirSync(ordner)) fs.rmSync(datei(n));
+    const h = await schluesselHolen(x.oci, { tenancy: T, ordner });
+    assert.deepEqual([h.exit, h.schritte[0].status], [0, "geholt"]);
+    assert.deepEqual([fs.readFileSync(datei("studium_autopilot"), "utf8"), fs.readFileSync(datei("studium_autopilot.pub"), "utf8")], ["privat\n", SSH + "\n"]);
+    if (process.platform !== "win32") assert.equal(fs.statSync(datei("studium_autopilot")).mode & 0o777, 0o600);
+    // neues Konto ohne Kopie: kein Fehler; fremder oder öffentlicher Bucket gleichen Namens: nichts übertragen
+    for (const n of fs.readdirSync(ordner)) fs.rmSync(datei(n));
+    assert.deepEqual((await schluesselHolen(konto().oci, { tenancy: T, ordner })).schritte.map((s) => [s.status]), [["keine-kopie"]]);
+    fs.writeFileSync(datei("studium_autopilot"), "privat\n");
+    fs.writeFileSync(datei("studium_autopilot.pub"), SSH + "\n");
+    const fremd = konto({ buckets: [{ name: BUCKET, "freeform-tags": {}, "public-access-type": "NoPublicAccess" }] });
+    await assert.rejects(schluesselSichern(fremd.oci, { tenancy: T, ordner }), /nicht von der Einrichtung/);
+    const offen = konto({ buckets: [{ name: BUCKET, "freeform-tags": { "studium-autopilot": "schluessel" }, "public-access-type": "ObjectRead" }] });
+    await assert.rejects(schluesselSichern(offen.oci, { tenancy: T, ordner }), /öffentlich/);
+    assert.deepEqual([fremd.k.objekte, offen.k.objekte], [{}, {}]);
+  } finally {
+    fs.rmSync(ordner, { recursive: true, force: true });
+  }
 });
 
 test("Platzsucher: Helfer einer früheren Version wird ersetzt, nicht nur neu gestartet; Richtlinie mit --version-date", async () => {
@@ -501,6 +616,8 @@ test("Abschließen: wartet auf den Helfer, entfernt nur eigene Rechte, Boot-Volu
   assert.deepEqual(x.k.richtlinien.map((p) => p.id), ["fremd"], "fremde Richtlinie gleichen Namens bleibt");
   assert.deepEqual(x.k.gruppen, []);
   assert.equal(x.k.volumes.bvs["size-in-gbs"], 200);
+  assert.equal(x.w(x.k.aufrufe.find((a) => a.slice(0, 3).join(" ") === "bv boot-volume update"), "--wait-for-state"), "AVAILABLE",
+    "erst groß, dann der Neustart");
   assert.deepEqual(x.k.instanzen[1]["instance-options"], { "are-legacy-imds-endpoints-disabled": true }, "Server von 0.5.3: nur noch IMDSv2");
   assert.ok(x.k.quota[0].statements.includes("set block-storage quota total-storage-gb to 200 in tenancy"));
   // fremde Quota gleichen Namens bleibt unverändert
@@ -561,9 +678,11 @@ test("Skill server-einrichten: jeder genannte Befehl von einrichten.mjs und stud
   const E = await import(pathToFileURL(path.join(SERVER, "einrichten.mjs")).href);
   const ordner = path.join(SERVER, "skill", "server-einrichten");
   const text = fs.readdirSync(ordner).map((d) => fs.readFileSync(path.join(ordner, d), "utf8")).join("\n");
-  const schritte = new Set([...text.matchAll(/einrichten\.mjs ([a-z][a-z-]*)/g)].map((m) => m[1]));
+  // start.sh ruft die Schritte über seine Helfer `einrichten …` und `fern …` auf
+  const start = fs.readFileSync(path.join(SERVER, "start.sh"), "utf8");
+  const schritte = new Set([...text.matchAll(/einrichten\.mjs ([a-z][a-z-]*)/g), ...start.matchAll(/^\s*(?:lauf )?einrichten ([a-z][a-z-]*)/gm)].map((m) => m[1]));
   const vorhanden = new Set(Object.keys(E).filter((k) => typeof E[k] === "function").map((k) => k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())));
-  assert.ok(schritte.size >= 6);
+  assert.ok(schritte.size >= 9, [...schritte].join(" "));
   for (const s of schritte) assert.ok(vorhanden.has(s), "einrichten.mjs " + s);
   const cli = fs.readFileSync(path.join(SERVER, "studium-server"), "utf8");
   const befehle = new Set([...cli.matchAll(/^ {2}([a-z|-]+)\)/gm)].flatMap((m) => m[1].split("|")));
@@ -576,7 +695,8 @@ test("Skill server-einrichten: jeder genannte Befehl von einrichten.mjs und stud
   const weitere = [path.join(skripte, "verbindungen.js"), path.join(skripte, "server.js"), path.join(SERVER, "README.md"),
     path.join(SERVER, "installieren.sh"), path.join(SERVER, "livesync.sh"), path.join(SERVER, "abrufen.py"),
     path.join(__dirname, "..", "docs", "installation.md")].filter((p) => fs.existsSync(p)).map((p) => fs.readFileSync(p, "utf8"));
-  const ueberFern = new Set([text, ...weitere].flatMap((t) => [...t.matchAll(/fern\.sh ([a-z][a-z-]*)/g)].map((m) => m[1])));
+  const ueberFern = new Set([text, ...weitere].flatMap((t) => [...t.matchAll(/fern\.sh ([a-z][a-z-]*)/g)].map((m) => m[1]))
+    .concat([...start.matchAll(/^\s*(?:lauf )?fern ([a-z][a-z-]*)/gm)].map((m) => m[1])));
   for (const b of ueberFern) {
     assert.ok(erlaubt.has(b), "fern.sh " + b);
     assert.ok(["installieren", "neustart", "claude-anmelden"].includes(b) || befehle.has(b), "studium-server " + b);

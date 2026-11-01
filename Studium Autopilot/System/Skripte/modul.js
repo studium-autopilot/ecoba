@@ -13,6 +13,10 @@
 //     die nicht erledigt sind. Tipp öffnet die Notiz. Seit 20.10.2026 auch Ausfälle der nächsten 14 Tage (ctx.modell.ausfaelle;
 //     vorher übersprang die Liste sie still) mit Pille „fällt aus“, und eine geänderte Sitzung mit Pille „anderer Raum“, „neuer
 //     Raum“, „andere Zeit“ oder „geändert“, neuem Wert in Warnfarbe und dem üblichen durchgestrichen (wie die Woche).
+//     Darunter „Von Claude“ (seit 01.11.2026): Hinweise des eigenen Servers zu diesem Modul aus den letzten 14 Tagen, höchstens
+//     zwei, die neuesten zuerst, je mit Quelle und Tag (ctx.server.hinweise; ohne Server oder Hinweise nichts).
+//  3a. Lernplan (seit 31.10.2026): gibt es eine Lernplan-Notiz des Moduls, ihr Stand wie im Bereich Lernplan (ctx.lernplan.modulZeile);
+//     Tipp öffnet sie.
 //  3b. Abdeckung (seit 0.5.3): Termine aus Folien und ILIAS-Dateien kommen zentral nur für Module, deren Unterlagen der Autor
 //     liest (ctx.zentral.abdeckung). Im laufenden Semester steht bei jedem anderen Modul ein Satz darüber; mit eigenem Server liest
 //     der die neuen Unterlagen des Moduls nach Terminen (server.js).
@@ -36,6 +40,8 @@ module.exports = function (ctx) {
   const ES = "Elective Studies";
   const MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   const TAG = 86400000;
+  const HINWEISE_JE_MODUL = 2; // Von Claude: höchstens so viele Hinweise, die neuesten
+  const SERVER_JSON = "System/Daten/server.json"; // server.js DATEI: Hinweise des eigenen Servers
 
   const pad = (n) => String(n).padStart(2, "0");
   const text = (v) => String(v == null ? "" : v).trim();
@@ -367,6 +373,24 @@ module.exports = function (ctx) {
       }
     }
 
+    // Von Claude (zu 3.): Hinweise des eigenen Servers zu diesem Modul (server.js, ctx.server.hinweise), erst gelesen, dann
+    // gezeichnet; ohne Hinweise bleibt der Platz leer
+    if (ctx.server && ctx.server.hinweise) {
+      const hz = box.createDiv({ cls: "eba-mod-claude" });
+      ctx.server.hinweise({ code }).then((liste) => {
+        if (!liste.length) return;
+        hz.createDiv({ cls: "eba-mod-k", text: "Von Claude" });
+        for (const h of liste.slice(0, HINWEISE_JE_MODUL)) {
+          const z = hz.createDiv({ cls: "eba-mod-hinweis" });
+          z.createSpan({ text: h.text });
+          z.createSpan({ cls: "eba-mod-hinweis-quelle", text: [h.quelle, tagText(datum(new Date(h.zeit)))].filter(Boolean).join(" · ") });
+        }
+      }).catch((e) => console.warn("Modul: Hinweise " + ((e && e.message) || e)));
+    }
+
+    // 3a. Lernplan (seit 31.10.2026): Stand wie im Bereich, Tipp öffnet die Lernplan-Notiz; ohne Notiz nichts (lernplan.js)
+    if (ctx.lernplan && ctx.lernplan.modulZeile) ctx.lernplan.modulZeile(box, code, f.path);
+
     // 3b. Abdeckung
     const A = laeuft && ctx.zentral && ctx.zentral.abdeckung ? ctx.zentral.abdeckung() : null;
     if (A && !(A.gilt && A.module.indexOf(code) >= 0)) {
@@ -406,13 +430,16 @@ module.exports = function (ctx) {
     // unterlage: Der Name einer Vorlesungsnotiz nimmt das Thema aus ihren Folien, auch wenn sie nach der Notiz kommen
     const wichtig = (f, cache) => {
       const typ = cache && cache.frontmatter && cache.frontmatter.typ;
-      return ["modul", "lehrveranstaltung", "termin", "vorlesung", "unterlage", "karteikarten"].indexOf(typ) >= 0
+      return ["modul", "lehrveranstaltung", "termin", "vorlesung", "unterlage", "karteikarten", "lernplan"].indexOf(typ) >= 0
         || (f && (f.path === "System/Einstellungen.md" || String(f.path).indexOf("System/Daten/") === 0));
     };
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (wichtig(f, cache)) bald(); });
     ctx.an(app.metadataCache, "deleted", (f, vorher) => { if (wichtig(f, vorher)) bald(); });
     ctx.dom(document, "visibilitychange", () => { if (document.visibilityState === "visible") bald(); });
     ctx.intervall(() => { if (document.visibilityState === "visible") block.neu(); }, 10 * 60 * 1000);
+    // Hinweise des eigenen Servers (JSON, kein metadataCache-Ereignis; auch per Sync)
+    ctx.an(app.vault, "modify", (f) => { if (f.path === SERVER_JSON) bald(); });
+    ctx.an(app.vault, "create", (f) => { if (f.path === SERVER_JSON) bald(); });
     // Daten aus Alma (JSON, kein metadataCache-Ereignis): alma-konto.js meldet Änderungen
     if (ctx.almaKonto && ctx.almaKonto.beobachten) ctx.aufraeumen(ctx.almaKonto.beobachten(bald));
   };

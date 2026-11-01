@@ -13,6 +13,24 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   `POST /v1/verbinden` an den Server, zurück kommen Zugangs- und Datenschlüssel (je 32 Byte). Beides liegt mit der Adresse im
   Schlüsselbund (`app.secretStorage`, Eintrag je Tresor wie in `ilias.js`). Adresse nur `https://<host>` ohne Pfad, Port oder
   Anmeldung (Test: `plugin.testServerLokal` erlaubt `http://127.0.0.1`).
+- **Weiteres Gerät verbinden (seit 01.11.2026):** Auf einem verbundenen Gerät steht im Fenster der Knopf **Weiteres Gerät
+  verbinden**. Nach der Rückfrage („Wer diesen Code hat, kann alles lesen, was dein Server für dich findet. …“) holt
+  `geraetCode` einen Code über `POST /v1/geraet`: Die Anfrage `{ schema: 1, zeit, nonce }` (16 Zufallsbytes) ist mit dem
+  Datenschlüssel verschlüsselt (Zweck `verbinden`), denn den Zugangsschlüssel trägt jede Anfrage im Kopf; die Antwort
+  `{ code, ablauf }` ebenso. Der Code steht groß (`.eba-server-code`, Festbreitenschrift) mit „Gilt bis …“ und der Anleitung für
+  das neue Gerät samt Adresse (`codeAnleitung`) nur im Fenster und verschwindet zu seinem Ablauf (`ctx.zeit`); er kommt nie in den
+  Tresor, `data.json`, `server.json` oder den Gerätespeicher. Fehler stehen im Fenster: Uhr des Geräts falsch (über 2 Minuten),
+  zu viele Codes („Wieder möglich ab …“), Server zu alt (404), Schlüssel abgelehnt. Grenzen setzt der Server (10 Minuten, einer
+  offen, 3 je Stunde, 10 je Tag; `server/README.md`, „Weiteres Gerät ohne Cloud Shell“).
+- **Mit Code verbinden:** Ist dieses Gerät nicht verbunden, aber `server.json` da (oder lehnt der Server seine Schlüssel ab, Code
+  `zugang` oder `paket`, etwa nach `studium-server schluessel-erneuern`), steht oben im Fenster ein Feld für den Code und der Knopf
+  **Mit Code verbinden** (`codeVerbinden`: Code mit `codeForm` in die Form `ABCDE-FGHJK`, Prüfung mit `CODE`). Die Adresse kommt
+  aus dem Schlüsselbund oder aus `server.json` → `adresse`; fehlt sie (ältere Daten), fragt ein zweites Feld nach ihr
+  (`adresseEingabe`: ohne `https://` ergänzt, dann `adresseNormal`). Danach wie beim Link `verbinden` mit eigener Rückfrage und
+  eigenen Sätzen (`getippt`). Die Schritte unter Verbindungen nennen erst diesen Weg, dann den Link aus der Cloud Shell.
+- **Zuletzt verbunden:** Der Eingang bringt unter `verbunden` die letzten Verbindungen des Servers (Zeit, Herkunft `cloud-shell`
+  oder `obsidian`; nie im öffentlichen Status). Das abrufende Gerät schreibt die neueste nach `server.json` → `verbunden`, und das
+  Fenster zeigt auf jedem Gerät „Zuletzt verbunden: … (über Obsidian)“ bzw. „(über die Cloud Shell)“. So fällt ein fremdes Gerät auf.
 - **Abruf** (`Q.planen`: nach 30 s bis 2,5 Min., dann alle 15 Min., nach Fehlern nach 2 bzw. 5 Min., zurück in der App nach
   über 10 Min.; Knopf **Aktualisieren**): `GET /v1/eingang` mit dem
   Zugangsschlüssel → Paket `{ schema, zweck, iv, daten }`, AES-256-GCM über Web Crypto, Zusatzdaten
@@ -77,7 +95,29 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   liest den Auszug frisch und ändert nur „weg“, wenn es eine offene Aufgabe unter „Zu tun“ einer Begleitnotiz ist und die Zeile
   noch genau so dasteht: aus `- [ ] Text` wird `- Text – steht schon in [[Pfad|Name]]`. Keine Ketten, nie abgehakt, nie
   gelöscht; die Zahl steht im Lauf (`todos`) und im Hinweis nach **Aktualisieren**.
-- **`server.json`** (synchronisiert, schreibt nur das übernehmende Gerät): `{ schema, erledigt, laeufe, hinweise }`.
+- **Kapitellisten für den Lernplan (seit 31.10.2026, nicht bei `server_unterlagen: aus`):** Der Stand nennt dem Server unter
+  `lernplan` das laufende Semester und die Module, die dran sind wie bei den zentralen Listen (`ctx.lernplan.zentralAuswahl`) und
+  für dieses Semester keine zentrale Liste haben (`ctx.zentral.kapitel()`); ohne `ctx.lernplan.serverListen` fehlt das Feld.
+  Erst wenn der Stand angekommen ist, gehen die Folien dieser Module an `POST /v1/kapitel` (Zweck `kapitel`): die, mit denen der
+  Plan rechnet (`ctx.lernplan.folienVon`, je Nummer eine, die neueste Fassung), niedrige Nummern zuerst, bis zu 6 je Abruf in
+  Anfragen zu 3, jede PDF einmal (`server.json` `lernplan`: Kennung → Minute), mit `nummer`, `datum`, `quelle` und `seiten` der
+  Unterlage. Der Text (`kapitelText`) hat die ersten 8 Seiten ganz (Gliederung), danach je Seite nur die erste Zeile (meist der
+  Folientitel), höchstens 60 000 Zeichen. Der Server legt sie nach `unterlagen/kapitel/`; Claude liest sie im gewöhnlichen Lauf mit
+  dem Modell des Servers (kein Opus: eine Gliederung lesen ist einfach, und niemand hat darum gebeten), und nur, wenn neue Folien
+  da sind. Es bekommt dazu die Listen, die es schon geliefert hat (`kapitel-bisher.json` aus `kapitel.json` des Servers), und
+  berichtigt sie, statt neu zu bauen (Skill `lernplan.md`): Nummern und Titel bleiben, an ihnen hängen die Häkchen. Damit das
+  auch nach einer Neueinrichtung des Servers gilt, bringt der Stand unter `lernplan.listen` die Listen der Lernplan-Notizen mit
+  `herkunft: server` mit (`listeAusNotiz` über `ctx.lernplan.kapitelLesen`: nur zwischen „## Kapitel“ und „## Meine Notizen“,
+  nur Kapitel mit Nummer, je Kapitel `nr`, `titel` und `teile`; keine Häkchen, Links oder Seiten; Grenzen wie `kapitel.json`,
+  zusammen höchstens 150 000 Zeichen). Fehlt dem Server die eigene Liste eines Moduls, steht die aus der Notiz mit
+  `herkunft: notiz` in `kapitel-bisher.json`; die eigene geht vor. Ins Eingang kommt
+  unter `kapitel` je Modul die ganze Liste in der Form von `kapitel.json` → `module` ([daten-v1.md](../daten-v1.md#kapiteljson)),
+  nur neu oder geändert und nur für gefragte Module. Der Abruf gibt sie an `ctx.lernplan.serverListen`; lernplan.js prüft sie wie
+  `kapitel.json` und schreibt `Lernplan/<Code> Lernplan.md` mit `herkunft: server`. Die Zahl steht im Lauf (`lernplaene`) und im
+  Hinweis nach **Aktualisieren**, Verworfenes zählt wie bei den Terminen. Ein Server vor dieser Fassung kennt den Weg nicht (404):
+  Dann bleibt nichts gemerkt, und die Folien gehen nach seinem täglichen Update.
+- **`server.json`** (synchronisiert, schreibt nur das übernehmende Gerät): `{ schema, erledigt, laeufe, hinweise, …, adresse,
+  verbunden }` (`adresse` und `verbunden` ohne Schlüssel, für „Mit Code verbinden“ und „Zuletzt verbunden“).
   Persönlich (Hinweise aus Mails): wie `server-abruf.json` nie im Release (`server*.json` in `release.py`, `pruefen.py`,
   `.gitignore`).
 - **Status, Zeile und Fenster:** `ctx.server.status()` in der Form des Vertrags (`zustand`: `nicht-verbunden` | `anderswo` |
@@ -86,17 +126,21 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   `verbindungen.js`), aus dem öffentlichen `GET /v1/status` (höchstens alle 5 Min., nur Werte aus festen Listen) und dem letzten
   Abruf; Fehler zuerst (Gerät unbekannt → neu verbinden, länger als 3 Tage nicht erreichbar (mindestens zwei Fehlschläge in Folge, der erste vor über 3 Tagen, `fehlerSeit`; der
   letzte Erfolg allein zählt nicht, das Gerät war vielleicht nur aus) → „Weiter mit der Einrichtung“ und
-  bei neuer Adresse neu verbinden, Claude nicht verbunden, Uni-Passwort nicht angenommen, Limit), der Stand-Satz aus
+  bei neuer Adresse neu verbinden, Claude nicht verbunden, Uni-Passwort nicht angenommen, Limit des Abos mit der Uhrzeit des
+  nächsten Versuchs aus `limit_wieder`, seit 01.11.2026; ein älterer Server nennt keine), der Stand-Satz aus
   `ctx.verbindungen.standText` wie bei allen Quellen, dahinter der letzte Lauf des Servers und neue Termine. Was nur du lösen kannst, sagt die Zeile selbst (Pille „prüfen“);
   der Server meldet sich nicht in „Bitte prüfen“ (neue Funktionen schieben Nutzern keine Prüf-Listen zu, sie zeigen ihren Zustand selbst). Neue Hinweise von Claude
   (noch nicht im Fenster gesehen, höchstens 14 Tage alt; „gesehen“ merkt sich jedes Gerät selbst, Kurz-Hashes in
   `eba-server-gesehen`, denn `server.json` schreibt nur das übernehmende Gerät): Der Link der Zeile heißt dann „Hinweise ansehen“;
-  das Fenster setzt sie auf gesehen.
+  das Fenster setzt sie auf gesehen. Gehört ein Hinweis zu einem Modul (`code`, seit 01.11.2026; ein ungültiger Code fällt weg,
+  der Hinweis bleibt), steht er 14 Tage lang auch im Modulfeld unter „Von Claude“ (höchstens zwei, die neuesten), und jeder neue
+  Hinweis steht in „Seit deinem letzten Besuch“ (Ziel: die Modulnotiz). Beide lesen `ctx.server.hinweise({ code })`: frisch aus
+  `server.json`, also auf jedem Gerät, die der letzten 14 Tage, neueste zuerst.
   **Mails durchsuchen** (Knopf im Fenster und Befehl `server-durchsuchen`) startet einen Claude-Lauf auf dem Server
   (`POST /v1/anstoss`, höchstens alle 10 Min., sonst „Wieder möglich ab …“); solange der Status `claude_lauf` „wartet“ oder
   „laeuft“ meldet, sagt die Zeile „Claude durchsucht gerade …“, und der nächste Abruf kommt nach 5 Min. (`plan.spaeter`).
-  Hinweise (`ctx.hinweis`) nur nach **Aktualisieren**, nie vom Zeitplan; Notizen weg nur über den einen Papierkorb. `ctx.server.fensterInhalt(el)`: Stand, Hinweise, letzte
-  Übernahmen, „Dieses Gerät trennen“. Ist der Server gerade nicht erreichbar, steht über den Werten „Stand des Servers: nicht
+  Hinweise (`ctx.hinweis`) nur nach **Aktualisieren**, nie vom Zeitplan; Notizen weg nur über den einen Papierkorb. `ctx.server.fensterInhalt(el, neu)`: Stand, Hinweise, letzte
+  Übernahmen, **Weiteres Gerät verbinden** bzw. **Mit Code verbinden** (danach zeichnet `neu()` das Fenster neu), „Dieses Gerät trennen“. Ist der Server gerade nicht erreichbar, steht über den Werten „Stand des Servers: nicht
   erreichbar, Angaben von …“ (`erreicht`: letzter geholter Status). Gmail `aus` meldet der Server, solange `server_gmail` 0 ist.
   Neue Version des Servers: Er installiert sie täglich selbst (`studium-server aktualisieren`, Ergebnis im Status unter
   `aktualisierung`). Ging der letzte Versuch schief und hat der Server dessen Ziel nicht schon anders bekommen, steht im Fenster

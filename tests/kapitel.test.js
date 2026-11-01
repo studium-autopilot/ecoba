@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
 
 const { kapitelPruefen } = laden("zentral").ctx.zentral;
-const { zentralNotiz, zentralAuswahl, kapitelLesen, listeZeilen } = laden("lernplan").ergebnis;
+const { zentralNotiz, zentralAuswahl, kapitelLesen, listeZeilen, listeLesen } = laden("lernplan").ergebnis;
 
 const modul = (o) => Object.assign({ code: "X100", semester: "WS 2026/27", quelle: "Folien 00, S. 3", stand: "2026-10-18",
   kapitel: [{ nr: "1", titel: "Grundbegriffe", seiten: 40, folien: 1, teile: [{ nr: "1.1", titel: "Erster Teil" }, { nr: "1.2", titel: "Zweiter Teil" }] },
@@ -18,8 +18,8 @@ test("Prüfung: gültige Liste, Felder normalisiert, unbekannte Felder fallen we
   assert.equal(R.stand, "2026-10-19");
   assert.deepEqual(R.verworfen, []);
   assert.deepEqual(R.module[0], { code: "X100", semester: "WS 2026/27", quelle: "Folien 00, S. 3", stand: "2026-10-18", vorlaeufig: false,
-    kapitel: [{ nr: "1", titel: "Grundbegriffe", seiten: 40, folien: 1, url: "", teile: [{ nr: "1.1", titel: "Erster Teil" }, { nr: "1.2", titel: "Zweiter Teil" }] },
-      { nr: "2", titel: "Märkte", seiten: null, folien: 2, url: "", teile: [] }] });
+    kapitel: [{ nr: "1", titel: "Grundbegriffe", seiten: 40, folien: 1, url: "", vorlesung: "", zwischentest: "", teile: [{ nr: "1.1", titel: "Erster Teil" }, { nr: "1.2", titel: "Zweiter Teil" }] },
+      { nr: "2", titel: "Märkte", seiten: null, folien: 2, url: "", vorlesung: "", zwischentest: "", teile: [] }] });
 });
 
 test("Prüfung: ein schlechtes Kapitel verwirft sein Modul, die anderen bleiben; ganze Datei nur bei falschem Format", () => {
@@ -134,17 +134,21 @@ const LISTE = { code: "X100", semester: "WS 2026/27", quelle: "Folien", stand: "
   kapitel: [{ nr: "1", titel: "Einführung", seiten: 30, folien: 1, url: "", teile: [] }, { nr: "2", titel: "Märkte", seiten: null, folien: 2, url: "", teile: [] }] };
 const geraet = (tresor, o) => {
   const { dateien, frontmatter } = tresor, schritte = [];
-  const lokal = { speicher: Object.assign({}, o && o.speicher), liste: (o && o.liste) || LISTE };
-  const { ctx, ergebnis: L } = laden("lernplan", { heute: "2026-10-19", frontmatter, kontext: {
-    zentral: { kapitel: () => ({ module: [lokal.liste] }), abruferHier: async () => true },
+  const lokal = { speicher: Object.assign({}, o && o.speicher), liste: o && "liste" in o ? o.liste : LISTE };
+  const { ctx, ergebnis: L } = laden("lernplan", { heute: "2026-10-19", frontmatter, notizen: tresor.notizen || {}, kontext: {
+    zentral: { kapitel: () => (lokal.liste ? { module: [lokal.liste] } : null), abruferHier: async () => true, kapitelPruefen },
     modell: { daten: () => ({ module: [{ code: "X100", status: "geplant", semester: "WS 2026/27" }] }), semesterFuer: () => ({ name: "WS 2026/27" }) },
   } });
   const V = ctx.app.vault;
   V.getAbstractFileByPath = (p) => (p in dateien ? { path: p, basename: p.split("/").pop().replace(/\.\w+$/, ""), extension: "md" } : p === "Lernplan" ? { path: p } : null);
   V.createFolder = async () => {};
-  V.create = async (p, t) => { dateien[p] = t; frontmatter[p] = { typ: "lernplan", herkunft: "zentral" }; schritte.push("neu"); };
+  const herkunft = (t) => { frontmatter[P] = { typ: "lernplan", herkunft: (String(t).match(/\nherkunft: (\w+)/) || [])[1] }; };
+  V.create = async (p, t) => { dateien[p] = t; herkunft(t); schritte.push("neu"); };
   V.read = async (f) => dateien[f.path];
-  V.process = async (f, fn) => { dateien[f.path] = fn(dateien[f.path]); if (f.path !== ABRUF) schritte.push("neu geschrieben"); };
+  V.process = async (f, fn) => {
+    dateien[f.path] = fn(dateien[f.path]);
+    if (f.path === P) { herkunft(dateien[P]); schritte.push("neu geschrieben"); }
+  };
   ctx.app.loadLocalStorage = (k) => (k in lokal.speicher ? lokal.speicher[k] : null);
   ctx.app.saveLocalStorage = (k, v) => { if (v == null) delete lokal.speicher[k]; else lokal.speicher[k] = JSON.parse(JSON.stringify(v)); };
   return { L, schritte, lokal };
@@ -248,4 +252,120 @@ test("Auswahl: nur das laufende Semester und Module deines Plans (oder läuft/an
   ] };
   const E = ["X100", "X200", "X300", "X400", "X999"].map((code) => ({ code, semester: "WS 2026/27" })).concat([{ code: "X100", semester: "SS 2027" }]);
   assert.deepEqual(zentralAuswahl(E, D, "WS 2026/27").map((e) => e.code + " " + e.semester), ["X100 WS 2026/27", "X200 WS 2026/27"]);
+});
+
+test("Prüfung: Tag der Vorlesung und des Zwischentests je Kapitel (seit 31.10.2026), ein ungültiger verwirft das Modul", () => {
+  const R = kapitelPruefen({ schema: 1, module: [
+    modul({ kapitel: [{ nr: "1", titel: "A", vorlesung: "2026-10-19", zwischentest: "2026-11-13" }, { nr: "2", titel: "B", vorlesung: "" }] }),
+    modul({ code: "X200", kapitel: [{ nr: "1", titel: "A", vorlesung: "19.10.2026" }] }),
+    modul({ code: "X300", kapitel: [{ nr: "1", titel: "A", zwischentest: "2026-02-30" }] }),
+  ] });
+  assert.deepEqual(R.module[0].kapitel.map((k) => [k.vorlesung, k.zwischentest]), [["2026-10-19", "2026-11-13"], ["", ""]]);
+  assert.deepEqual(R.verworfen.map((v) => v.id + ": " + v.grund), ["X200 WS 2026/27: kapitel 1: vorlesung ungültig", "X300 WS 2026/27: kapitel 1: zwischentest ungültig"]);
+});
+
+test("Notiz: Folien als Link, Tag der Vorlesung und des Zwischentests in der Zeile; liest sich mit kapitelLesen zurück", () => {
+  const e = kapitelPruefen({ schema: 1, module: [modul({ kapitel: [
+    { nr: "1", titel: "Grundbegriffe", seiten: 40, folien: 1, vorlesung: "2026-10-19", zwischentest: "2026-11-13" },
+    { nr: "II", titel: "Märkte", folien: 1 },
+    { nr: "3", titel: "Preise", folien: 3 }] })] }).module[0];
+  const text = zentralNotiz(e, "", null, ["X100 Folien 01 Grundbegriffe", "X100 Folien 01 Grundbegriffe", "Kaputt | Name"]);
+  assert.ok(text.includes("\n- [ ] 1 Grundbegriffe · [[X100 Folien 01 Grundbegriffe|Folien]] · 40 S. · Vorlesung 19.10.2026 · Zwischentest 13.11.2026\n"));
+  assert.ok(text.includes("\n- [ ] II Märkte · [[X100 Folien 01 Grundbegriffe|Folien]]\n"), "der Link ersetzt „Folien 1“");
+  assert.ok(text.includes("\n- [ ] 3 Preise\n"), "ein Name, den Obsidian nicht verlinken kann, fällt weg");
+  const K = kapitelLesen(text);
+  assert.deepEqual(K.map((k) => [k.nr, k.titel, k.links, k.seiten, k.vorlesung, k.zwischentest]), [
+    ["1", "Grundbegriffe", ["X100 Folien 01 Grundbegriffe"], 40, "2026-10-19", "2026-11-13"],
+    ["II", "Märkte", ["X100 Folien 01 Grundbegriffe"], null, "", ""],
+    ["3", "Preise", [], null, "", ""],
+  ]);
+  assert.match(zentralNotiz(e, "", null, null, "server"), /\nherkunft: server\n/);
+});
+
+test("Abgleich: kommen Folien dazu, bekommt die Zeile den Link (gleiche Liste); Häkchen bleiben", async () => {
+  const tresor = Object.assign(neuerTresor(), { notizen: {} }), { dateien } = tresor;
+  const pc = geraet(tresor);
+  await pc.L.zentralAbgleichen();
+  assert.ok(dateien[P].includes("\n- [ ] 1 Einführung · 30 S.\n"));
+  dateien[P] = dateien[P].replace("- [ ] 1 Einführung", "- [x] 1 Einführung");
+  tresor.notizen["Unterlagen/X100/X100 Folien 01 Einführung.md"] = { typ: "unterlage", code: "X100", art: "Folien", nummer: 1, seiten: 30 };
+  tresor.notizen["Unterlagen/X100/X100 Folien 01 Einführung mit Anmerkungen.md"] = { typ: "unterlage", code: "X100", art: "Folien", nummer: 1 };
+  await pc.L.zentralAbgleichen();
+  assert.deepEqual(pc.schritte, ["neu", "neu geschrieben"]);
+  assert.ok(dateien[P].includes("\n- [x] 1 Einführung · [[X100 Folien 01 Einführung|Folien]] · 30 S.\n"), "Link auf die Folien ohne Anmerkungen");
+  await pc.L.zentralAbgleichen();
+  assert.deepEqual(pc.schritte, ["neu", "neu geschrieben"], "danach nichts mehr");
+});
+
+test("Abgleich: eine PDF ohne Nummer für alle Kapitel (ILIAS-Abruf des Plugins) gilt für jedes Kapitel", async () => {
+  const tresor = Object.assign(neuerTresor(), { notizen: {
+    "Unterlagen/X100/X100 Folien Explorative Datenanalyse.md": { typ: "unterlage", code: "X100", art: "Folien", nummer: "", seiten: 160 } } });
+  const pc = geraet(tresor);
+  await pc.L.zentralAbgleichen();
+  const text = tresor.dateien[P];
+  assert.ok(text.includes("1 Einführung · [[X100 Folien Explorative Datenanalyse|Folien]]") && text.includes("2 Märkte · [[X100 Folien Explorative Datenanalyse|Folien]]"));
+});
+
+test("Server: Listen nur für Module ohne zentrale Liste (herkunft: server); die zentrale Liste übernimmt die Notiz mit Häkchen", async () => {
+  const SERVER = "System/Daten/server-abruf.json";
+  const tresor = neuerTresor(), { dateien } = tresor;
+  dateien[SERVER] = JSON.stringify({ geraet: "g-pc", zuletzt: "2026-10-19T10:00:00Z" });
+  const ohneZentral = geraet(tresor, { liste: null });
+  const roh = Object.assign({}, LISTE, { kapitel: [{ nr: "1", titel: "Einführung" }, { nr: "2", titel: "Märkte" }, { nr: "3", titel: "Eigenes Thema" }] });
+  let R = await ohneZentral.L.serverListen([roh, { code: "kaputt" }]);
+  assert.equal(R.geschrieben, 1);
+  assert.deepEqual(R.verworfen.map((v) => v.grund), ["code ungültig"]);
+  assert.match(dateien[P], /\nherkunft: server\n/);
+  assert.deepEqual(Object.keys(JSON.parse(dateien[SERVER]).lernplan.angewendet), ["X100"], "Stand in der Sperr-Datei des Servers");
+  R = await ohneZentral.L.serverListen([roh]);
+  assert.equal(R.geschrieben, 0, "gleiche Liste: nichts");
+  dateien[P] = dateien[P].replace("- [ ] 2 Märkte", "- [x] 2 Märkte");
+  const mitZentral = geraet(tresor);
+  R = await mitZentral.L.serverListen([roh]);
+  assert.deepEqual([R.geschrieben, R.verworfen.map((v) => v.grund)], [0, ["zentrale Liste"]], "zentrale Liste hat Vorrang");
+  await mitZentral.L.zentralAbgleichen();
+  assert.match(dateien[P], /\nherkunft: zentral\n/, "übernommen");
+  assert.ok(dateien[P].includes("- [x] 2 Märkte"), "Häkchen bleibt");
+  assert.ok(!dateien[P].includes("Eigenes Thema"), "Kapitel der Server-Liste fallen weg");
+});
+
+test("Liste aus der Notiz (für den eigenen Server): nur Zeilen der zuletzt geschriebenen Liste, eigene Aufgaben mit Nummer nicht", () => {
+  const e = kapitelPruefen({ schema: 1, module: [modul()] }).module[0];
+  const text = zentralNotiz(e, "", null, null, "server").replace("- [ ] 2 Märkte", "- [ ] 2 Märkte\n- [x] 3 Altklausuren rechnen");
+  assert.deepEqual(listeLesen(text, listeZeilen(e)).map((k) => [k.nr, k.titel, k.teile.map((t) => t.nr)]),
+    [["1", "Grundbegriffe", ["1.1", "1.2"]], ["2", "Märkte", []]]);
+  assert.equal(listeLesen(text).length, 3, "ohne bekannte Liste alles");
+});
+
+test("Abgleich: Folien gehören zuerst nach dem Titel zum Kapitel (ILIAS-Abruf nummeriert nach Vorlesungen), dann nach der Nummer", async () => {
+  const u = (nummer, titel) => ({ typ: "unterlage", code: "X100", art: "Folien", nummer, titel });
+  const tresor = Object.assign(neuerTresor(), { notizen: {
+    "Unterlagen/X100/X100 Folien 02 Einführung.md": u(2, "Einführung"),
+    "Unterlagen/X100/X100 Folien 03 Einführung Teil zwei.md": u(3, "Einführung Teil zwei"),
+  } });
+  const pc = geraet(tresor, { liste: mitKapitel3(LISTE) });
+  await pc.L.zentralAbgleichen();
+  const text = tresor.dateien[P];
+  assert.ok(text.includes("\n- [ ] 1 Einführung · [[X100 Folien 02 Einführung|Folien]] · 30 S.\n"), "Vorlesung 2 gehört zu Kapitel 1 (Titel)");
+  assert.ok(text.includes("\n- [ ] 2 Märkte\n"), "Folien 02 sind nicht Kapitel 2");
+  assert.ok(text.includes("\n- [ ] 3 Preise\n"), "Folien 03 gehören nach dem Titel zu Kapitel 1, nicht zu 3");
+  // Ohne passenden Titel gilt die Nummer
+  tresor.notizen["Unterlagen/X100/X100 Folien 03 Kosten und Erlöse.md"] = u(3, "Kosten und Erlöse");
+  delete tresor.notizen["Unterlagen/X100/X100 Folien 03 Einführung Teil zwei.md"];
+  await pc.L.zentralAbgleichen();
+  assert.ok(tresor.dateien[P].includes("\n- [ ] 3 Preise · [[X100 Folien 03 Kosten und Erlöse|Folien]]\n"));
+});
+
+test("Abgleich: Trägt die Liste folien nur an manchen Kapiteln (Lehrbuch, Folien je Vorlesung), haben die übrigen keine nach der Nummer", async () => {
+  const u = (nummer, titel) => ({ typ: "unterlage", code: "X100", art: "Folien", nummer, titel });
+  const tresor = Object.assign(neuerTresor(), { notizen: {
+    "Unterlagen/X100/X100 Folien 02 Markt.md": u(2, "Markt"),
+    "Unterlagen/X100/X100 Folien 03 Wachstum 2.11.md": u(3, "Wachstum 2.11"),
+  } });
+  const liste = { ...LISTE, kapitel: [{ nr: "1", titel: "Einführung", seiten: null, url: "", teile: [] },
+    { nr: "2", titel: "Märkte", seiten: null, folien: 2, url: "", teile: [] }, { nr: "3", titel: "Preise", seiten: null, url: "", teile: [] }] };
+  await geraet(tresor, { liste }).L.zentralAbgleichen();
+  const text = tresor.dateien[P];
+  assert.ok(text.includes("\n- [ ] 2 Märkte · [[X100 Folien 02 Markt|Folien]]\n"), "folien: 2 gilt");
+  assert.ok(text.includes("\n- [ ] 1 Einführung\n- [ ] 2 Märkte") && text.includes("\n- [ ] 3 Preise\n"), "Folien 03 gehören nicht zu Kapitel 3");
 });

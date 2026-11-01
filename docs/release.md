@@ -49,7 +49,32 @@ der selbst der Tresor ist. (Bis 0.5.7 lag der Ordner im Archiv; unter Windows un
 ohne Version: Die Anleitung und der grüne Knopf der README laden
 `https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip`, der iOS-Kurzbefehl daneben
 `Studium-Autopilot-iOS.zip` (der Tresor zwei Ebenen tief, siehe unten). **Beide Assets müssen bei jedem Release genau so
-heißen.**
+heißen.** Daneben entstehen `studium-server.tar.gz` mit seiner Signatur `studium-server.tar.gz.sig` (siehe „Signatur des
+Server-Pakets“) und `system-dateien.json`.
+
+### Signatur des Server-Pakets
+
+Jeder eigene Server installiert täglich das neueste Server-Paket als root (`studium-server aktualisieren`). Die Prüfsumme, die
+GitHub zum Asset zeigt, schützt nur vor einem kaputten Download: Wer das GitHub-Konto oder ein Token des Repos hätte, könnte ein
+Release mit eigenem Paket anlegen, und GitHub zeigte die passende Prüfsumme dazu. Darum signiert der Export das Paket, und der
+Server installiert nur, was einer der Schlüssel in `server/allowed_signers` **des laufenden Pakets** signiert hat (nie die Datei
+aus dem Download):
+
+- `release.py --zip` signiert mit `ssh-keygen -Y sign -n studium-server` und dem Schlüssel, der auch die Commits signiert
+  (`git config user.signingkey`, Pfad der `.pub`-Datei; ssh-keygen nimmt den privaten Schlüssel daneben oder aus dem ssh-agent).
+  Danach prüft er die frische Signatur mit `ssh-keygen -Y verify` gegen `server/allowed_signers` im Baum, genau wie der Server.
+- `server/allowed_signers` muss den Signierschlüssel nennen (Prinzipal `release@studium-autopilot`, `namespaces="studium-server"`).
+  Fehlt der Schlüssel, passt die Datei nicht oder scheitert eine der Prüfungen, bricht `--zip` ab und löscht das Paket: Es gibt
+  nie ein Release ohne gültige Signatur. Die Meldung nennt die Zeile, die in die Datei gehört.
+- `studium-server aktualisieren` lädt `studium-server.tar.gz.sig` mit, prüft Prüfsumme und Signatur und installiert sonst nichts;
+  der Grund steht im Status (`signatur-fehlt`, `signatur`).
+- **Übergang:** Server mit 0.7.5 oder älter haben noch das alte `aktualisieren` ohne Signatur. Sie installieren das erste
+  signierte Release wie bisher nur mit der Prüfsumme; erst ab dann prüft jeder Server jedes weitere Paket. Die Ersteinrichtung
+  (Cloud Shell) prüft das Paket weiterhin nur mit der Prüfsumme.
+- **Schlüssel wechseln:** Server prüfen mit der Datei ihres laufenden Pakets. Ein neuer Schlüssel kommt darum zuerst als zweite
+  Zeile in `server/allowed_signers` und geht mit einem Release hinaus, das noch der alte signiert (`release.py` warnt dabei);
+  ab dem nächsten Release signiert der neue, danach die alte Zeile löschen. Ist der alte Schlüssel verloren, nehmen Server neue
+  Pakete nur noch über eine neue Einrichtung an.
 
 Am Ende druckt der Export den Block für das Manifest der zentralen Daten (`release` mit `version`, `url_basis`, `sha256` der
 Update-Liste, `notiz`), siehe Schritt 6.
@@ -68,7 +93,15 @@ Dazu der Testdurchgang in Obsidian (siehe `docs/tests.md`): den Baum als neuen T
 Android, Windows, Mac, hell und dunkel.
 
 Feste Werte, die Dependabot nicht sieht (je Release kurz prüfen, bei Bedarf anheben und den Stand im Kommentar daneben):
-- `oci-cli==…` in `server/platzsucher-helfer.yaml` (neueste Version auf PyPI; der Helfer installiert genau diese).
+- Die Pakete der OCI-Kommandozeile in `server/platzsucher-helfer.yaml` (`oci-pakete.txt`: `oci-cli` und jedes Paket, das es
+  braucht, je genau eine Version und die SHA-256 genau eines Wheels für den Helfer, x86_64 mit Python 3.12). Neueste Version
+  von `oci-cli` auf PyPI; neu schreiben mit `python -X utf8 werkzeuge/oci_pakete.py --version X.Y.Z`. Das Skript lädt mit
+  `pip download oci-cli==X.Y.Z --only-binary=:all: --python-version 3.12 --implementation cp --abi cp312 --platform
+  manylinux_2_39_x86_64 … --platform manylinux_2_17_x86_64 --platform manylinux2014_x86_64` nur Wheels (es läuft kein Code der
+  Pakete), rechnet die Abhängigkeiten aus deren Metadaten für den Helfer nach (pip wertet Bedingungen wie
+  `python_version < "3.13"` für den eigenen Rechner aus), lädt Fehlendes nach und schreibt Namen, Versionen und SHA-256 der
+  Wheels. Der Helfer installiert mit `pip install --require-hashes --no-deps --only-binary=:all:` genau diese Liste. Eine neue
+  Liste ändert die Fassung des Helfers: Der nächste Aufruf von `platzsucher` ersetzt einen laufenden.
 - Always-Free-Grenzen in `server/stand.mjs` (`FREI`) und `server/README.md` gegen die Seite „Always Free Resources“ von Oracle.
 - `RUFF_VERSION` und `ESBUILD_VERSION` in `.github/workflows/pruefen.yml`.
 - Preise von Opus in `Studium Autopilot/System/Skripte/server.js` (`pdfKosten`, Stand im Kommentar): Der Server-Lauf nimmt den
@@ -94,12 +127,13 @@ Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst
 ## 5. GitHub-Release
 
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
-**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`**, **`studium-server.tar.gz`** und **`system-dateien.json`** anhängen
-(genau diese Namen; alle vier aus `release.py --zip`). Fehlt das iOS-ZIP, scheitert der Kurzbefehl auf iPhone und iPad. Fehlt
-`system-dateien.json`, lädt das Update die Liste vom Tag, und GitHub zählt die Updates auf diese Version nicht
-(`docs/architektur/update.md`, „Mitzählen“). Das
-Server-Paket lädt die Einrichtung des eigenen Servers und täglich `studium-server aktualisieren`, beide nur mit der Prüfsumme,
-die GitHub zum Asset zeigt; fehlt es, bleibt jeder eigene Server auf seinem Stand. Die Anleitung der Einrichtung im Baum lädt
+**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`**, **`studium-server.tar.gz`**, **`studium-server.tar.gz.sig`** und
+**`system-dateien.json`** anhängen (genau diese Namen; alle fünf aus `release.py --zip`). Fehlt das iOS-ZIP, scheitert der
+Kurzbefehl auf iPhone und iPad. Fehlt `system-dateien.json`, lädt das Update die Liste vom Tag, und GitHub zählt die Updates auf
+diese Version nicht (`docs/architektur/update.md`, „Mitzählen“). Das
+Server-Paket lädt die Einrichtung des eigenen Servers mit der Prüfsumme, die GitHub zum Asset zeigt, und täglich `studium-server
+aktualisieren`, das zusätzlich die Signatur prüft; fehlt das Paket oder seine Signatur, bleibt jeder eigene Server auf seinem
+Stand. Die Anleitung der Einrichtung im Baum lädt
 genau das Paket ihrer Version (`release.py` setzt `releases/tags/v<version>` ein); bis das Release mit Asset öffentlich ist,
 scheitert dort der Download, statt ein Paket einer anderen Version zu nehmen. Titel wie die Überschrift im Changelog:
 `0.3.1 – Update-Hinweis auf dem Dashboard`. Als **Latest release** veröffentlichen. Releases sind unveränderlich (Immutable
@@ -151,7 +185,7 @@ Für Tests vor dem Release (zum Beispiel im eigenen Test-Tresor mit Kanal „Bet
    die Update-Liste trägt diese Version, gedruckt wird ein Block `beta`.
 2. Commit, nur den Tag `vX.Y.Z-beta.1` pushen, **nie `main`**: `main` zeigt immer die stabile Version.
 3. GitHub-Release mit diesem Tag als **Vorab-Release** („Set as a pre-release“), **nicht** als Latest; Assets
-   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip`, `studium-server.tar.gz` und `system-dateien.json`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
+   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip`, `studium-server.tar.gz`, `studium-server.tar.gz.sig` und `system-dateien.json`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
    und das Update eigener Server (`releases/latest`) weiter die stabile Version. Die Server-Einrichtung einer Beta testet man
    mit dem Prompt aus dem README, nur mit `vX.Y.Z-beta.1` statt der Version aus `releases/latest`: Die Anleitung dieses Tags
    lädt genau sein Server-Paket.
@@ -161,8 +195,8 @@ Nur Tresore mit `update_kanal: beta` in `System/Einstellungen.md` (Schalter **Be
 unter „Mehr erfahren“) bekommen die Beta angeboten. Nach dem fertigen Release `X.Y.Z` ist `release` wieder höher als die Beta;
 die Beta-Tresore bekommen dann die fertige Version. `beta` kann stehen bleiben oder entfernt werden.
 
-**Vier Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
-(gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/` und
-`studium-server.tar.gz` für den eigenen Server und `system-dateien.json`, die Update-Liste mit der Prüfsumme aus dem Block
-`release` (das Update lädt sie zuerst von hier, GitHub zählt die Abrufe je Version; bis 0.7.0 lag hier `zaehler.txt`). Die
-Namen sind fest; `release.py --zip` erzeugt alle vier.
+**Fünf Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
+(gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/`,
+`studium-server.tar.gz` für den eigenen Server mit seiner Signatur `studium-server.tar.gz.sig` und `system-dateien.json`, die
+Update-Liste mit der Prüfsumme aus dem Block `release` (das Update lädt sie zuerst von hier, GitHub zählt die Abrufe je Version;
+bis 0.7.0 lag hier `zaehler.txt`). Die Namen sind fest; `release.py --zip` erzeugt alle fünf.

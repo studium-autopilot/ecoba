@@ -10,15 +10,16 @@ der Claude-Lauf mit dem Skill (`lauf.mjs`, `skill/studium-autopilot/`, Prüfung 
 `server.js` (Zeile „Eigener Server“). Noch nicht: Abrufe von ILIAS-Dateien und Alma.
 
 **Einrichtung:** Ein Claude-Skill (`skill/server-einrichten/`: `SKILL.md`, `schritte.md`, `kosten.md`) führt in Claude Code (Tab
-„Code“ in Claude Desktop) durch die Schritte 0 bis 12, im eingebauten Browser von Claude Code, wahlweise klickt Claude („Claude
-klickt“) oder sagt an („Ich klicke selbst“). Läuft der Prompt woanders (Chat, Cowork, claude.ai, Handy), sagt Claude nur, wie
-man in den Tab „Code“ wechselt; Claude in Chrome und Computer Use braucht die Einrichtung nicht. Angelegt wird im
-Konto nur über `einrichten.mjs`; jeder Schritt erkennt am Stand, ob er schon erledigt ist. `tests/server-einrichten.test.js`
-prüft, dass jeder im Skill genannte Befehl existiert.
+„Code“ in Claude Desktop) durch die Schritte 0 bis 7, im eingebauten Browser von Claude Code; standardmäßig klickt Claude, auf
+Wunsch sagt es an („Ich klicke selbst“). Läuft der Prompt woanders (Chat, Cowork, claude.ai, Handy), sagt Claude nur, wie man in
+den Tab „Code“ wechselt; Claude in Chrome und Computer Use braucht die Einrichtung nicht. Alles im Konto und auf dem Server
+erledigt ein Befehl in der Cloud Shell, `start.sh` (unten); angelegt wird nur über `einrichten.mjs`, jeder Schritt erkennt am
+Stand, ob er schon erledigt ist. `tests/server-einrichten.test.js` prüft, dass jeder im Skill und in `start.sh` genannte Befehl
+existiert, `tests/server-start.test.js` jeden Halt von `start.sh`.
 
 **Eine Version für alles:** Der Prompt (README und Knopf **Prompt kopieren**) lässt Claude die Anleitung aus dem Tag des
-neuesten Releases lesen, nie von `main`. `release.py` setzt in `schritte.md` (Schritt 2) genau diese Version für den Download
-des Server-Pakets ein. So passen Anleitung und Paket immer zusammen, auch wenn während einer Einrichtung ein neues Release
+neuesten Releases lesen, nie von `main`. `release.py` setzt genau diese Version ein: in `schritte.md` (Schritt 2) für den
+Download von `start.sh`, in `start.sh` für den Download des Server-Pakets. So passen Anleitung und Paket immer zusammen, auch wenn während einer Einrichtung ein neues Release
 erscheint. Ältere Prompts, die noch `main` lesen, bekommen dort die Anleitung des neuesten Releases mit derselben Bindung; der
 Pfad `server/skill/server-einrichten/` bleibt darum, wo er ist.
 
@@ -101,7 +102,50 @@ node einrichten.mjs abschliessen                      Rechte des Platzsuchers we
                                                       Blockspeicher der Quota auf den Stand danach
 node einrichten.mjs adresse                           öffentliche IP, https://<IP>.sslip.io und SSH-Befehl
 node einrichten.mjs platzsucher-beenden               Helfer beenden, seine Rechte und das Mail-Thema entfernen
+node einrichten.mjs schluessel-sichern                ~/.ssh/studium_autopilot in den privaten Bucket des Kontos (siehe unten)
+node einrichten.mjs schluessel-holen                  fehlt er in der Cloud Shell: aus dem Bucket zurück
+--paket <studium-server.tar.gz>                       server, platzsucher: Startdaten zum Selbst-Vorbereiten (Standard: das
+                                                      Paket neben server/; siehe „Server-Paket“)
 ```
+
+`schutz` braucht `--mail` nur, solange das Budget noch keine Mail-Regel mit Adresse hat; danach nehmen weitere Läufe und der
+Platzsucher die Adresse aus dem Budget (`stand.mjs`, `schutz.mail`). `abschliessen` wartet, bis Oracle das größere Boot-Volume
+bereitgestellt hat (`--wait-for-state AVAILABLE`); erst danach startet `start.sh` den Server neu, damit Ubuntu das Dateisystem
+vergrößert.
+
+- **Schlüssel im Konto:** Den Schlüssel zum Server gibt es sonst nur in der Cloud Shell, und Oracle löscht deren Ordner nach
+  sechs Monaten ohne Nutzung (60 Tage nach einer Mail an den Administrator des Kontos). `schluessel-sichern` legt darum eine
+  Kopie in den Bucket `studium-autopilot-schluessel` (Objektspeicher, ein paar KB der freien 20 GB): nur mit Kennzeichen
+  `schluessel` und `NoPublicAccess` (ein fremder oder öffentlicher Bucket gleichen Namens: nichts übertragen), mit
+  `--no-overwrite`; liegt dort schon ein anderer Schlüssel als in der Cloud Shell, überschreibt er keinen (Exit 2).
+  `schluessel-holen` holt ihn zurück, wenn er in der Cloud Shell fehlt (Rechte 600). Geschützt ist die Kopie wie das Konto
+  selbst (Anmeldung, Zwei-Faktor); der Platzsucher hat keine Rechte auf Objektspeicher. Ein Schlüssel auf dem PC der Nutzerin
+  oder des Nutzers wurde verworfen: Er wäre root auf dem Server ohne Passphrase, erreichbar für jede spätere Sitzung dort.
+
+### Alles mit einem Befehl: `server/start.sh`
+
+Die Einrichtung in der Cloud Shell als eine Zeile, die Claude tippt (Skill, Schritt 2); weiter geht es immer mit derselben Zeile,
+auch Tage später in einer neuen Sitzung:
+
+```
+mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start.sh https://raw.githubusercontent.com/studium-autopilot/ecoba/vX.Y.Z/server/start.sh && bash ~/studium-autopilot/start.sh [--mail <adresse>] [--paket-da]
+```
+
+- **Laden:** erst in eine Datei, dann ausführen (bei `bash <(curl …)` liefe nach einem Abbruch ein leeres oder halbes Skript, und
+  `curl | bash` nähme der Claude-Anmeldung die Eingabe); der ganze Inhalt steht in `main()`, das erst die letzte Zeile aufruft.
+  `start.sh` lädt das Server-Paket desselben Tags und prüft es gegen die SHA-256 im Release, bevor es etwas auspackt.
+  `--paket-da` nimmt das Paket in `~/studium-autopilot/server` (Testpaket vor einem Release, Tests).
+- **Reihenfolge:** Paket, `stand.mjs`, `schutz`, `netz`, Schlüssel (`schluessel-holen`, sonst `ssh-keygen` RSA 4096, dann
+  `schluessel-sichern`), `server` (Exit 3: `platzsucher`), `abschliessen`, `fern.sh installieren` (danach `neustart`, wenn das
+  Boot-Volume wuchs), Claude auf dem Server (nur in einem Terminal), Obsidian verbinden (nur, solange noch kein Gerät abholt), erster
+  Lauf, `stand.mjs --kosten`. Den Status liest es öffentlich über `https://<Adresse>/v1/status`.
+- **Ende:** genau eine letzte Zeile, `[fertig]` (Exit 0) oder `[halt:<schritt>:<grund>]` (Exit 3; Exit 1 bei `…:fehler`). Jede
+  steht mit dem, was Claude dann tut, in `schritte.md`, Schritt 4.
+- **Entscheidungen bleiben beim Menschen:** nie `--ja`, nie `ssh-keygen -R`, nie der `cp`-Befehl von `adresse` (er könnte einen
+  vorhandenen Schlüssel überschreiben), nie eigene `oci … create`, nie das Uni-Passwort.
+- **Warten mit Grenze:** auf den Helfer (`abschliessen`), auf ssh (`installieren`) und nach dem Neustart je höchstens zehn
+  Versuche im Minutenabstand, auf den ersten Lauf höchstens 15 Minuten; danach ein Halt statt endlosen Wartens. Zwei Läufe
+  zugleich (zwei Tabs) verhindert `flock` (`[halt:start:laeuft-schon]`).
 
 Exit-Code: `0` erledigt, `1` Fehler oder eine Kostenregel lässt es nicht zu (z. B. die freie A1-Menge ist belegt), `2`
 Rückfrage nötig bzw. falscher Aufruf, `3` Oracle hat gerade keinen Platz (dann der Platzsucher).
@@ -162,13 +206,18 @@ auf einem kleinen Helfer weiter, nicht am Rechner der Nutzerin oder des Nutzers:
   Kennzeichen `studium-autopilot=helfer`. Die
   Einrichtung gibt ihm `platzsucher-helfer.yaml` als cloud-init mit (Platzhalter `KONFIG_JSON_BASE64` = Konfiguration,
   `PLATZSUCHER_GZ_BASE64` = `platzsucher.py` gepackt, aus dem Paket in der Cloud Shell, das schon mit seiner Prüfsumme geprüft
-  ist). Er installiert nur die OCI-Kommandozeile in fester Version und lädt sonst nichts nach; so läuft er auch mit einem
-  Testpaket vor einem Release. Oracle nimmt höchstens 32 000 Byte Startdaten, die Einrichtung prüft das vorher.
+  ist). Er installiert nur die OCI-Kommandozeile und lädt sonst nichts nach; so läuft er auch mit einem Testpaket vor einem
+  Release. Weil er alle Instanzen des Kontos verwalten darf, installiert er sie samt allen Abhängigkeiten nur aus der festen
+  Liste `oci-pakete.txt` in der Vorlage: je Paket genau eine Version und die SHA-256 genau eines Wheels (x86_64, Python 3.12),
+  `pip install --require-hashes --no-deps --only-binary=:all:`. Eine neue Version auf PyPI oder ein übernommenes Konto dort
+  ändert so nichts am Helfer; wie die Liste entsteht, steht in `docs/release.md`. Oracle nimmt höchstens 32 000 Byte
+  Startdaten (mit der Liste etwa 23 000), die Einrichtung prüft das vorher.
 - **Fassung:** Das zweite Kennzeichen `studium-autopilot-fassung` ist eine Prüfsumme über Vorlage und `platzsucher.py`. Läuft
   ein Helfer ohne dieses Kennzeichen oder mit einer anderen Prüfsumme, beendet `platzsucher` ihn samt Boot-Volume (wartet auf
   den Arbeitsauftrag) und legt einen neuen an: cloud-init läuft nur beim ersten Start, ein Neustart brächte weder das neue
-  Skript noch eine damals gescheiterte Installation (bis 0.5.0 ohne Auslagerung). Thema und Mail-Abo bleiben. Der neue Helfer
-  sucht mit 50 GB weniger Boot-Volume, weil das alte beim Anlegen noch zählen kann; `abschliessen` gleicht das aus.
+  Skript noch eine damals gescheiterte Installation (bis 0.5.0 ohne Auslagerung). Das gilt auch für eine neue Paketliste: Die
+  erste Version mit fester Liste ersetzt einen laufenden Helfer beim nächsten Aufruf, gewollt. Thema und Mail-Abo bleiben. Der
+  neue Helfer sucht mit 50 GB weniger Boot-Volume, weil das alte beim Anlegen noch zählen kann; `abschliessen` gleicht das aus.
 - **Rechte nur für den Helfer:** dynamische Gruppe `studium-platzsucher` mit der Regel `instance.id = '<OCID des Helfers>'` und
   eine Richtlinie im Compartment:
   `manage instance-family`, `use volume-family`, `use virtual-network-family`, `use ons-topics`, dazu `manage volume-family`
@@ -218,7 +267,20 @@ Ubuntu 24.04 (Arm oder x86) auf einer A1-Instanz mit 2 OCPU und 12 GB. Installie
 ```
 sudo bash installieren.sh --ip <öffentliche IP>   Adresse https://<IP mit Bindestrichen>.sslip.io (Zertifikat von Let's Encrypt)
 sudo bash installieren.sh --test                  ohne HTTPS und ohne Claude Code, Caddy auf :8080 (nur für Tests)
+sudo bash installieren.sh --vorbereiten           alles außer Adresse und HTTPS (erster Start); eine gesetzte Adresse bleibt
 ```
+
+**Selbst vorbereiten:** Legt `einrichten.mjs server` oder der Platzsucher den Server an, bekommt er Startdaten (cloud-init,
+`serverStart`) mit: das Paket genau der Version aus der Cloud Shell aus dem Release laden (fünf Versuche), gegen dessen SHA-256
+prüfen (die Cloud Shell hat dasselbe Paket schon gegen die Prüfsumme im Release geprüft), in einen frischen Ordner von root
+auspacken und `installieren.sh --vorbereiten` (Protokoll `/var/log/studium-server-vorbereiten.log`). So ist alles Lange schon
+erledigt (Pakete, Claude Code, Dienste), wenn die Mail „Dein Server ist da“ kommt. Adresse und HTTPS setzt erst `fern.sh
+installieren` mit der IP aus dem Konto: Eine IP, die der Server selbst bei einem fremden Dienst erfragt, könnte falsch sein, und
+an diese Adresse schickte jedes Gerät seinen Zugangsschlüssel. Bis dahin läuft Caddy nicht (nichts auf 80 und 443), `verbinden`
+lehnt ohne Adresse ab, und das tägliche `aktualisieren` bereitet nur vor. Keine Geheimnisse in den Startdaten: Jeder Prozess auf
+dem Server kann sie lesen. Ohne gültige Version und Prüfsumme (Testpaket) gibt es keine Startdaten; dann installiert `fern.sh
+installieren` alles wie bisher, ebenso bei Servern von einem Platzsucher einer älteren Version. Zwei Läufe des Installers
+zugleich (Vorbereiten und Einrichtung) verhindert eine Sperre (`flock`); der zweite wartet.
 
 Der Installer ist wiederholbar: Jeder Schritt prüft zuerst, ob er schon erledigt ist; Schlüssel und Uni-Zugang bleiben bei
 jedem weiteren Lauf erhalten. Nur vorwärts: Ist schon eine neuere Version installiert (eine Vorabversion wie `0.6.0-beta.1`
@@ -231,29 +293,31 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 | Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `poppler-utils` (Claude liest damit Seitenbereiche aus PDFs), `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht), Caddy aus dessen offiziellem Paketarchiv |
 | Benutzer `studium` | führt die Dienste aus (Web-Dienst, Claude-Lauf, Zustand); Claude Code liegt in `/var/lib/studium/.local/bin/claude` |
 | Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium` für die Rohdaten) |
-| `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückgehen von Hand), alle anderen entfernt der Installer |
+| `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückgehen von Hand), alle anderen entfernt der Installer. Darin `allowed_signers`: die Schlüssel, mit denen `aktualisieren` die Signatur des nächsten Pakets prüft |
 | `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte, nur root und `studium` lesen) |
-| `/var/lib/studium-server` | Zustand, Eingang (Ergebnisse für das Plugin), Einmal-Codes |
+| `/var/lib/studium-server` | Zustand, Eingang (Ergebnisse für das Plugin), Einmal-Codes, `geraete.json` (Codes aus Obsidian der letzten 24 Stunden, Zufallswerte gegen Wiederholung, die letzten 20 Verbindungen) |
 | `studium-server-dienst` | Web-Dienst `dienst.mjs`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404 |
 | `studium-server-speicher` | Speicherreserve `speicher-reserve.mjs` (25 % des Arbeitsspeichers), damit Oracle den Server nicht wegen Leerlaufs anhält; „an“ meldet der Zustand nur, wenn die PID in `speicher-reserve.json` lebt und laut `/proc/<pid>/cmdline` die Reserve ist (nach einem Neustart kann sie einem anderen Prozess gehören) |
 | `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet, Uni-Zugang, Reserve, LiveSync |
 | `studium-server-abruf.timer` | alle 15 Minuten `abrufen.py` ohne KI: das Uni-Postfach, nur mit gespeichertem Uni-Zugang (nach der Uhr, weil ein übersprungener Dienst einen relativen Zeitgeber nicht weiterstellt). Steht in Obsidian ein Takt von 30 oder 60 Minuten, fallen die Zwischenzeiten aus, außer nach „Mails durchsuchen“. Beim ersten Start ab 06:30 Uhr der tägliche Sicherheitslauf: die Uni-Mails der letzten 24 Stunden noch einmal und ein Anstoß (Grund `taeglich`), auch ohne neue Mail |
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt; Zeitgrenze 100 Minuten (ein Lauf mit Opus und der gewöhnliche, je bis 45 Minuten) |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
-| `studium-server-aktualisieren.timer` | täglich: Claude Code (`claude update`, nicht während eines Laufs), dann neues Server-Paket aus dem Release, nur mit passender Prüfsumme und nur vorwärts (nie auf eine ältere Version zurück). Das Ergebnis (Zeit, `ok`, Zielversion, bei einem Fehler der Schritt, letzter Erfolg) steht in `aktualisierung.json` und im Status unter `aktualisierung`; Obsidian sagt es, wenn seit mehr als 3 Tagen nichts ohne Fehler durchkam, obwohl es eine neuere Version gibt |
+| `studium-server-aktualisieren.timer` | täglich: Claude Code (`claude update`, nicht während eines Laufs), dann neues Server-Paket aus dem Release, nur mit passender Prüfsumme, nur mit gültiger Signatur (`studium-server.tar.gz.sig`, `ssh-keygen -Y verify` mit `allowed_signers` des laufenden Pakets, nie aus dem Download; siehe `docs/release.md`, „Signatur des Server-Pakets“) und nur vorwärts (nie auf eine ältere Version zurück). Die Prüfsumme nennt GitHub selbst; erst die Signatur verhindert, dass ein Release, das jemand mit dem GitHub-Konto oder einem Token anlegt, auf jedem Server als root läuft. Server mit 0.7.5 oder älter installieren das erste signierte Paket noch ohne diese Prüfung, ab dann jedes mit. Das Ergebnis (Zeit, `ok`, Zielversion, bei einem Fehler der Schritt, etwa `signatur-fehlt` oder `signatur`, letzter Erfolg) steht in `aktualisierung.json` und im Status unter `aktualisierung`; Obsidian sagt es, wenn seit mehr als 3 Tagen nichts ohne Fehler durchkam, obwohl es eine neuere Version gibt |
 | Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an; die Standardliste, die Oracle mit dem Netz anlegt und die dessen Kennzeichen erbt, erlaubt nur 22 und zählt nicht als eigene) |
 
 ### Web-Dienst (`dienst.mjs`)
 
 | Weg | Wer | Was |
 |---|---|---|
-| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, `erfolg`; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
+| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), am Limit des Claude-Abos der nächste Versuch (`limit_wieder`, sonst `null`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, `erfolg`; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
 | `POST /v1/anstoss` | mit Zugangsschlüssel | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 10 Minuten (sonst 429 mit `wieder`); ein wartender Anstoß bleibt |
-| `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180 |
-| `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
+| `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180. Dazu `verbunden`: die letzten 20 Verbindungen von Geräten (Zeit, Herkunft `cloud-shell` oder `obsidian`), nur hier und nie im Status |
+| `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, laufendes Semester und die Module ohne zentrale Kapitelliste (`lernplan`), Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
 | `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lab, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, mit `fassung` (neue Fassung einer schon zusammengefassten Unterlage: frühere Zusammenfassung, geänderte Seiten, was unter „Zu tun“ und „Offene Fragen“ schon steht; geprüft) mit diesen Zeilen im Kopf, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
+| `POST /v1/kapitel` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Folien (je höchstens 60 000 Zeichen, mit Nummer, Datum und Quelle der Unterlage) der Module, für die der Stand eine Kapitelliste für den Lernplan wünscht, nach `unterlagen/kapitel/`; höchstens 30 warten (sonst 429); stößt einen Lauf an, wenn keiner wartet |
 | `POST /v1/pdf` | mit Zugangsschlüssel | verschlüsselt ein Stück (8 MB, Zweck `pdf`) einer PDF zu einer gewünschten Zusammenfassung, der Reihe nach (sonst 409); nach dem letzten und geprüftem SHA-256 liegt sie als `unterlagen/opus/<SHA-256>.pdf` da. Die Textfassung kommt gleich danach und nennt sie im Kopf, Opus liest dann die PDF. Je PDF bis 500 MB (sonst 413), höchstens 6 und zusammen 1 GB warten (sonst 429), ohne Textfassung oder halb hochgeladen verfällt eine nach einem Tag; nach einem erfolgreichen Lauf gelöscht |
-| `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät |
+| `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät; der Code gilt einmal, auch bei gleichzeitigen Anfragen |
+| `POST /v1/geraet` | mit Zugangsschlüssel und Datenschlüssel | Knopf „Weiteres Gerät verbinden“ in Obsidian: Die Anfrage ist ein Paket mit Zweck `verbinden` und `{ schema: 1, zeit, nonce }` (Zeit höchstens 2 Minuten neben der Uhr des Servers, sonst 400 `uhr`; jeder Zufallswert nur einmal, sonst 409). Zurück kommt ebenso verschlüsselt `{ code, ablauf }`: ein Einmal-Code für 10 Minuten, der den vorigen aus Obsidian zurückzieht; höchstens 3 je Stunde und 10 je Tag (sonst 429 mit `wieder`) |
 | `GET /v1/livesync/<kennung>` | mit Kennung (20 Zeichen, 30 Minuten) | Seite mit dem Knopf „In Obsidian öffnen“ für den Setup-Link von LiveSync; unbekannte Kennungen zählen als Fehlversuch (siehe „LiveSync“) |
 
 Je Absender (letzter Eintrag in `X-Forwarded-For`, den Caddy setzt) antworten die geschützten Wege nach 10 Fehlversuchen in
@@ -261,12 +325,31 @@ Je Absender (letzter Eintrag in `X-Forwarded-For`, den Caddy setzt) antworten di
 Anfragen über 64 KB werden abgelehnt.
 
 **Datenkanal (`kanal.mjs`):** AES-256-GCM über Web Crypto, dieselbe Schnittstelle wie im Plugin. Ein Paket ist
-`{ schema, zweck, iv, daten }`. Der Zweck („eingang“ oder „stand“) ist Teil der Verschlüsselung, damit sich ein Paket nicht als
+`{ schema, zweck, iv, daten }`. Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“ oder „verbinden“) ist Teil der Verschlüsselung, damit sich ein Paket nicht als
 das andere ausgeben lässt.
 
 **Verbinden:** `sudo studium-server verbinden` zeigt einen Link `obsidian://studium-autopilot?aktion=server-verbinden&…` und
 einen QR-Code. Darin steht nur ein Code, der einmal und 30 Minuten gilt. Die Schlüssel holt das Plugin über HTTPS und legt sie
-in den Schlüsselbund des Geräts. Auf dem Server liegt nur der SHA-256 des Codes.
+in den Schlüsselbund des Geräts. Auf dem Server liegt nur der SHA-256 des Codes. Wer einlöst, legt zuerst exklusiv eine Marke
+`<SHA-256>.json.eingeloest` an (`O_EXCL`); lösen zwei Anfragen denselben Code zugleich ein, bekommt nur eine die Schlüssel. Ein
+`rename` reichte dafür nicht: Unter Windows gelingen zwei gleichzeitige `rename` derselben Datei beide (der Test lief dort rot).
+
+**Weiteres Gerät ohne Cloud Shell:** Ein verbundenes Gerät holt im Fenster „Eigener Server“ mit **Weiteres Gerät verbinden**
+(nach einer Rückfrage) einen Code über `POST /v1/geraet` und zeigt ihn groß, bis er abläuft; das neue Gerät tippt ihn unter
+**Mit Code verbinden** ein und löst ihn wie oben ein. Die Anfrage muss mit dem Datenschlüssel verschlüsselt sein: Den
+Zugangsschlüssel trägt jede Anfrage im Kopf, und wer nur ihn kennt, bekäme über einen Code sonst den Datenschlüssel. Zeit und
+Zufallswert verhindern, dass eine mitgeschnittene Anfrage noch einmal einen Code holt (die Zufallswerte bleiben in
+`geraete.json` bis zum Ende ihres Fensters gemerkt, auch über einen Neustart). Codes aus Obsidian gelten 10 Minuten, höchstens
+einer ist offen, höchstens 3 je Stunde und 10 je Tag; Codes aus der Cloud Shell zählen dabei nicht und bleiben. Jedes Einlösen
+steht mit Zeit und Herkunft in `geraete.json` (die letzten 20); Obsidian zeigt das letzte im Fenster als „Zuletzt verbunden“.
+
+**Gerät verloren:** `sudo studium-server schluessel-erneuern`
+(aus der Cloud Shell: `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`) hält den Web-Dienst an, löscht alle offenen
+Codes, schreibt neue Zugangs- und Datenschlüssel (32 Byte wie beim Installieren) in eine neue `dienst.json` (root:studium, 0640),
+die die alte in einem Schritt ersetzt, und startet den Dienst wieder, auch nach einem Fehler. Danach kennt der Server kein Gerät mehr: das erste mit `studium-server verbinden`, jedes weitere
+mit **Weiteres Gerät verbinden**; ein Gerät mit alten Schlüsseln bietet im Fenster selbst **Mit Code verbinden** an. Der Installer
+behält die neuen Schlüssel bei jedem weiteren Lauf. **Grenze:** LiveSync hat eigene Zugangsdaten (`livesync.json`); die erneuert
+dieser Befehl nicht.
 
 ### Abruf ohne KI (`abrufen.py`)
 
@@ -275,8 +358,14 @@ Claude. Der Server gibt Claude nur, wofür es KI braucht: Mails. Abgaben aus dem
 KI (ein Schreiber je Quelle, `eba.quelleExtern`); Kurstitel mit Kurs-Passwörtern gehen so nie an Claude.
 
 - **Uni-Postfach:** IMAP über TLS, nur lesend (`EXAMINE`, `BODY.PEEK`, nichts wird als gelesen markiert). Beim ersten Abruf
-  die letzten 14 Tage, danach nur neue Mails (UID), höchstens 30 je Abruf. Mails werden zu Text (HTML ohne Skripte, Anhänge nur
-  mit Namen). Den Uni-Zugang bekommt nur dieser Dienst über `LoadCredentialEncrypted`.
+  die letzten 14 Tage, danach nur neue Mails (UID), höchstens 30 je Abruf. Mails werden zu Text (HTML ohne Skripte). Den
+  Uni-Zugang bekommt nur dieser Dienst über `LoadCredentialEncrypted`.
+- **Anhänge:** Kalender (`.ics`) stehen als eine Zeile je Termin am Ende des Texts (Titel, Beginn, Ende, Ort; höchstens 40 je
+  Anhang). PDFs legt der Abruf unverändert neben die Mail (`roh/uni-postfach/<UID>-anhang-<n>.pdf`, höchstens 3 je Mail, je bis
+  10 MB, zusammen bis 40 MB je Abruf; der Text nennt sie), gelesen werden sie erst im Claude-Lauf und nur, wenn eine nach
+  Terminen aussieht: Dieser Dienst hat den Uni-Zugang, ein PDF-Leser hier hätte mit einer präparierten Datei Zugriff darauf.
+  Nach einem erfolgreichen Lauf sind die PDFs weg. Andere Anhänge nur mit Namen; beim Nachlesen im Sicherheitslauf nur der Text.
+  Über die Weiterleitung an Gmail kommen Anhänge nicht auf den Server.
 
 ### Claude-Lauf (`lauf.mjs` und `skill/`)
 
@@ -294,13 +383,33 @@ mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben
 - **Werkzeuge:** nur Lesen, Suchen und Schreiben von `ausgabe.json`; kein Bash, kein Web, keine Unteragenten, nichts außerhalb
   des Lauf-Ordners (Glob und Grep ohne eigene Freigabe; mit Claude Code im Modus `dontAsk` geprüft: außerhalb verweigert). Gmail nur lesend und nur, wenn die Gmail-Suche dran ist (Uhrzeiten oben, Knopf, Sicherheitslauf, oder letzte Suche
   laut Takt lange genug her); mit Takt „nie“ gar nicht. Der Lauf sieht weder Uni-Zugang noch Schlüssel des Dienstes.
+- **Kapitellisten für den Lernplan:** Für Module des laufenden Semesters ohne zentrale Kapitelliste (`kapitel.json` der
+  zentralen Daten) schickt das Plugin die Folien (die ersten 8 Seiten ganz, danach je Seite die erste Zeile). Liegen neue in
+  `unterlagen/kapitel/`, kommen bis zu 12 (zusammen höchstens 150 000 Zeichen) in den gewöhnlichen Lauf (Ordner `kapitel/`, mit
+  dem Modell des Servers, nie in den Lauf mit Opus), dazu die bisher gelieferten Listen (`kapitel-bisher.json`); Folien von Modulen,
+  nach denen der Stand nicht mehr fragt, fallen vorher weg. Claude liefert je Modul die ganze Liste (Skill `lernplan.md`); der
+  Server prüft sie mit denselben Regeln wie das Plugin `kapitel.json`, nimmt nur gefragte Module, legt nur Neues oder Geändertes
+  ins Eingang und merkt sich die Listen in `kapitel.json` (nur das laufende Semester), damit der nächste Lauf sie berichtigt.
+  Fehlt dort eine (Server neu eingerichtet), nimmt der Lauf die aus dem Stand: Nummern, Titel und Unterkapitel der
+  Lernplan-Notizen, die schon vom Server stammen (geprüft wie das Eingang, zusammen höchstens 150 000 Zeichen). So bleiben die
+  Titel gleich, an denen die Häkchen hängen.
 - **Prüfung (`eingang.mjs`):** Jeder Termin muss die Regeln des Plugins für zentrale Termine erfüllen (Kategorien, Modulcode,
   Datum, keine Links oder Markdown im Titel); ungültige fallen einzeln weg. Die id leitet der Server aus Claudes `schluessel`
   ab, damit eine Änderung denselben Termin trifft. Ins Eingang kommt nur, was neu oder geändert ist; Vergangenes nur als
   Änderung eines bekannten Termins. Im Bestand (`termine.json`, daraus `bisher.json` im Auftrag) bleibt ein Termin bis 60 Tage
   nach seinem Ende.
 - **Fehler:** Bei Limit oder ungültiger Ausgabe kommen die Rohdaten zurück und der nächste Lauf versucht es erneut; der Status
-  meldet `claude-limit` bzw. `ausgabe-ungueltig`. Der Lauf übernimmt `roh/` in einem Schritt; was der Abruf währenddessen
+  meldet `claude-limit` bzw. `ausgabe-ungueltig`. Gescheitert ist ein Lauf auch, wenn Claude Code mit 0 endet, aber `is_error`
+  meldet (so am Limit).
+- **Limit des Claude-Abos:** Der Lauf merkt sich in `zustand.json` unter `limit`, wann der nächste Versuch dran ist: nach 30
+  Minuten, nach dem zweiten Treffer in Folge nach einer Stunde, dann alle zwei Stunden (wann das Limit endet, sagt Claude Code
+  nur als Satz für Menschen). Bis dahin startet kein Lauf, außer auf Knopfdruck; neue Mails und Unterlagen warten in `roh/` und
+  `unterlagen/`. Hängt der Lauf mit Opus am Limit, wartet auch der gewöhnliche. Ist der Zeitpunkt da, stößt der Dienst den Lauf an
+  (Grund `wiederholung`, alle 5 Minuten geprüft, nicht während eines Laufs); hing eine Gmail-Suche am Limit, sucht er Gmail mit.
+  Jeder andere Ausgang beendet die Versuche. Obsidian nennt die Uhrzeit (`limit_wieder` im Status).
+- **Verbrauch:** `protokoll.json` jedes Laufs hat unter `nutzung` die Token aus der JSON-Ausgabe von `claude -p` (Eingabe,
+  Ausgabe, Cache, Runden, Dauer, Listenpreis der API zum Vergleich; mit dem Abo kostet es nichts extra), `nutzung.json` je Tag
+  (Berlin) Läufe, Läufe mit Opus, Treffer am Limit und die Token, 30 Tage lang (`studium-server nutzung`). Der Lauf übernimmt `roh/` in einem Schritt; was der Abruf währenddessen
   holt, wartet auf den nächsten, und beim Zurücklegen wird Datei für Datei zusammengeführt. Die letzten 10 Läufe bleiben.
   Bricht ein Lauf ab (Zeitgrenze von systemd, Neustart, Absturz), legt `lauf.mjs` Rohdaten und Unterlagen ebenso zurück: bei
   SIGTERM sofort, sonst beim nächsten Start für jeden Lauf-Ordner ohne `protokoll.json` (Protokoll `abgebrochen`, Status
@@ -364,6 +473,7 @@ sudo studium-server livesync verbinden     nur einen neuen Link für ein Gerät
 ```
 studium-server status                  Stand und Dienste
 studium-server verbinden               Einmal-Link und QR-Code für ein Gerät
+studium-server schluessel-erneuern     neue Schlüssel, wenn ein Gerät verloren ist (siehe „Gerät verloren“)
 studium-server uni-zugang setzen       Uni-Zugang verschlüsselt speichern
 studium-server uni-zugang loeschen     Uni-Zugang löschen
 studium-server uni-zugang pruefen      gespeichert oder nicht
@@ -371,7 +481,8 @@ studium-server zustand                 Zustand neu prüfen
 studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell der Claude-Läufe
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
-studium-server aktualisieren           Claude Code aktualisieren, Server-Paket aus dem Release (Prüfsumme) installieren
+studium-server nutzung                 Claude-Läufe und Token je Tag (letzte 7 Tage), Treffer am Limit
+studium-server aktualisieren           Claude Code aktualisieren, Server-Paket aus dem Release (Prüfsumme, Signatur) installieren
 studium-server livesync                LiveSync einschalten und ein Gerät verbinden (siehe „LiveSync“)
 ```
 

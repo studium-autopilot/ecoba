@@ -100,7 +100,9 @@ test("Obsidian: Einstellungen, Dateien mit ihrer Zahl und der Tresor mit Namen; 
   assert.equal(nach(P.obsidianZeilen("", 0)).dateien.wert, "0");
 });
 
-test("Hilfe: oben die Zeile Rundgang, neutral wie die Themen darunter; ein Tipp zeigt ihn noch einmal", () => {
+test("Hilfe: oben die Zeile Rundgang, neutral wie die Themen darunter; ein Tipp zeigt ihn noch einmal; Widgets nur auf iPhone und iPad", () => {
   assert.deepEqual(P.hilfeZeilen(), [{ id: "rundgang", symbol: "kompass", ton: "leise", titel: "Rundgang", wert: "",
     aktion: { aktion: "rundgang", parameter: {} }, rechts: "pfeil" }]);
+  assert.deepEqual(P.hilfeZeilen(true)[1], { id: "widget", symbol: "widget", ton: "leise", titel: "Widgets", wert: "",
+    aktion: { aktion: "widget", parameter: {} }, rechts: "pfeil" });
 });

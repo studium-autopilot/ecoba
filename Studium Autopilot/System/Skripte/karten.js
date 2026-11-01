@@ -815,6 +815,12 @@ module.exports = function (ctx) {
     const heute = tagVon(d.jetzt, d.o.tagesbeginn);
     return tagesplan(karten, d.stand, d.log, d.o, d.jetzt, extraLesen(heute));
   };
+  // Für den Lernplan (lernplan.js, „Für die Klausur“): je Modul, was heute dran ist → { Code: { neu, lernen, faellig } }
+  const heuteJeModul = async () => {
+    const d = await datenLaden(), aus = {};
+    for (const g of gruppenVon(d.idx)) if (g.code) aus[g.code] = zahlenFuer(g.karten, d).zahlen;
+    return aus;
+  };
 
   // ---------- Schreiben in Kartennotizen ----------
   const neueIdMacher = (vergeben) => () => {
@@ -2341,7 +2347,7 @@ module.exports = function (ctx) {
     });
   };
 
-  ctx.karten = { lernen, ueben, verlauf: verlaufZeigen, neuOeffnen, datenLaden, namenPruefen, anhaengen, zuruecknehmen, get fenster() { return fenster; }, get neuFenster() { return neuFenster; } };
+  ctx.karten = { lernen, ueben, verlauf: verlaufZeigen, neuOeffnen, datenLaden, heuteJeModul, namenPruefen, anhaengen, zuruecknehmen, get fenster() { return fenster; }, get neuFenster() { return neuFenster; } };
 
   // Einmal beim App-Start, wenn der metadataCache fertig ist: Stapel mit dem Namen einer anderen Notiz umbenennen
   const start = () => {

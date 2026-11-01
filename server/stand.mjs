@@ -212,7 +212,7 @@ export function auswerten(b, { helfer = false } = {}) {
   const budget = b.budgets.find((x) => x["display-name"] === "kostenwarnung");
   // Ein Budget schützt nur mit Mail-Regel für echte Kosten (ACTUAL); ohne Regel kommt nie eine Mail
   const budgetMail = !!budget && (b.budgetRegeln || []).some((r) => r.type === "ACTUAL" && lebt(r));
-  // Ihre Adresse (Schritt 3) nimmt auch der Platzsucher, damit die Einrichtung nicht ein zweites Mal nach einer Mail-Adresse fragt
+  // Ihre Adresse (start.sh, Schutz vor Kosten) nehmen auch weitere Läufe und der Platzsucher, damit die Einrichtung nicht ein zweites Mal nach einer Mail-Adresse fragt
   const regel = budget && (b.budgetRegeln || []).find((r) => r.type === "ACTUAL" && lebt(r));
   const schutzMail = String((regel || {}).recipients || "").split(/[\s,;]+/).find((x) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(x)) || "";
   if (!quota) fund("hinweis", "Schutz fehlt: Quota-Richtlinie „nur-kostenlos“.");

@@ -1,0 +1,2 @@
+# Wer Server-Pakete signieren darf: „studium-server aktualisieren“ installiert nur, was einer dieser Schlüssel signiert hat (docs/release.md)
+release@studium-autopilot namespaces="studium-server" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBVvg98K+YQb1YhQFh5w2EE4QEs8QG7gN3jRK6G8pzjc

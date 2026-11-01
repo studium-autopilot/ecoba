@@ -14,6 +14,7 @@ hilfe() {
   cat <<'TEXT'
 studium-server status                  Stand des Servers (wie /v1/status) und der Dienste
 studium-server verbinden               Einmal-Link und QR-Code, um ein Gerät mit Obsidian zu verbinden (30 Minuten gültig)
+studium-server schluessel-erneuern     neue Schlüssel (Gerät verloren): offene Codes weg, jedes Gerät muss sich neu verbinden
 studium-server uni-zugang setzen       Uni-Benutzername und -Passwort verschlüsselt speichern (verdeckte Eingabe)
 studium-server uni-zugang loeschen     gespeicherten Uni-Zugang löschen
 studium-server uni-zugang pruefen      zeigt nur, ob ein Zugang gespeichert und entschlüsselbar ist
@@ -21,7 +22,8 @@ studium-server zustand                 Zustand für den Status jetzt neu prüfen
 studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell für die Claude-Läufe (Standard: sonnet, schont das Limit)
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
-studium-server aktualisieren           Claude Code aktualisieren, neuestes Server-Paket aus dem Release holen (Prüfsumme) und installieren
+studium-server nutzung                 Claude-Läufe und Token je Tag (letzte 7 Tage), Treffer am Limit des Abos
+studium-server aktualisieren           Claude Code aktualisieren, neuestes Server-Paket aus dem Release holen (Prüfsumme, Signatur) und installieren
 studium-server livesync                LiveSync einschalten (falls nötig), dann Link und Code für ein Gerät (30 Minuten)
 studium-server livesync einschalten    nur einschalten: CouchDB für den Tresor, HTTPS unter obsidian.<IP>.sslip.io
 studium-server livesync verbinden      nur Link und Code für ein weiteres Gerät
@@ -41,6 +43,34 @@ als_studium() {
 }
 
 port() { jq -r '.port // 8743' "$KONFIG" 2>/dev/null || echo 8743; }
+
+# Gerät verloren: neuer Zugangs- und Datenschlüssel (32 Byte, base64url wie in installieren.sh), alle offenen Einmal-Codes weg.
+# Der Web-Dienst steht dabei still, damit niemand mit den alten Schlüsseln einen Code holt oder einen offenen einlöst; der trap
+# startet ihn auch nach einem Fehler wieder. dienst.json entsteht daneben (erst nur root, dann root:studium 0640) und ersetzt die
+# alte in einem Schritt (mv). Adresse, Port und Version bleiben; installieren.sh behält die neuen Schlüssel bei jedem weiteren Lauf.
+schluessel_erneuern() {
+  root_noetig schluessel-erneuern
+  local neu="$KONFIG.neu"
+  systemctl stop studium-server-dienst.service
+  trap 'systemctl start studium-server-dienst.service' EXIT
+  als_studium sh -c 'rm -f -- "$1"/verbinden/*' - "$DATEN"
+  rm -f "$neu"
+  STUDIUM_KONFIG="$KONFIG" STUDIUM_NEU="$neu" node --input-type=module -e '
+    import { readFileSync, writeFileSync } from "node:fs";
+    import { randomBytes } from "node:crypto";
+    const k = JSON.parse(readFileSync(process.env.STUDIUM_KONFIG, "utf8"));
+    if (!k || typeof k !== "object" || !k.zugang || !k.schluessel) throw new Error("dienst.json ohne Schlüssel");
+    k.zugang = randomBytes(32).toString("base64url");
+    k.schluessel = randomBytes(32).toString("base64url");
+    writeFileSync(process.env.STUDIUM_NEU, JSON.stringify(k, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+  '
+  chown root:studium "$neu"
+  chmod 0640 "$neu"
+  mv -f "$neu" "$KONFIG"
+  echo "Neue Schlüssel gelten ab jetzt, die alten und alle offenen Codes nicht mehr."
+  echo "Jedes Gerät muss sich neu verbinden: das erste mit sudo studium-server verbinden (in der Cloud Shell:"
+  echo "bash ~/studium-autopilot/server/fern.sh verbinden), jedes weitere in Obsidian unter Eigener Server mit „Weiteres Gerät verbinden“."
+}
 
 uni_zugang() {
   case "${1:-}" in
@@ -131,10 +161,14 @@ aktualisieren_ende() {
   aktualisierung_merken "$1"
 }
 
+# Signatur: Die Prüfsumme nennt GitHub selbst; sie schützt vor einem kaputten Download, nicht vor einem fremden Paket. Wer das
+# Konto oder ein Token des Repos hätte, könnte ein Release mit eigenem Paket anlegen, und jeder Server installierte es als root.
+# Darum nur ein Paket mit gültiger Signatur (ssh-keygen -Y, Namensraum studium-server) eines Schlüssels aus allowed_signers des
+# LAUFENDEN Pakets, nie aus dem Download. Signiert wird beim Bauen des Releases (docs/release.md, „Signatur des Server-Pakets“).
 aktualisieren() {
   root_noetig aktualisieren
   claude_aktualisieren
-  local info url pruefsumme neu alt
+  local info url signatur pruefsumme neu alt
   trap 'aktualisieren_ende $?' EXIT
   AKT_GRUND=github
   info=$(curl -fsSL "$RELEASES") || { echo "GitHub nicht erreichbar." >&2; exit 1; }
@@ -144,13 +178,20 @@ aktualisieren() {
   AKT_GRUND=pruefsumme-fehlt
   pruefsumme=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
   [ -n "$pruefsumme" ] || { echo "Keine Prüfsumme im Release; nichts installiert." >&2; exit 1; }
+  AKT_GRUND=signatur-fehlt
+  signatur=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz.sig") | .browser_download_url' <<<"$info")
+  [ -n "$signatur" ] || { echo "Keine Signatur im Release; nichts installiert." >&2; exit 1; }
   # Global statt local: Der trap läuft erst nach der Rückkehr aus dieser Funktion. Mit local war der Ordner dort schon unbekannt,
   # set -u brach ab, und jedes erfolgreiche Update endete mit Exit 1 und ließ den Download liegen.
   AKT_TMP=$(mktemp -d)
   AKT_GRUND=herunterladen
   curl -fsSL "$url" -o "$AKT_TMP/paket.tar.gz"
+  curl -fsSL "$signatur" -o "$AKT_TMP/paket.tar.gz.sig"
   AKT_GRUND=pruefsumme
   echo "${pruefsumme#sha256:}  $AKT_TMP/paket.tar.gz" | sha256sum -c --quiet - || { echo "Prüfsumme stimmt nicht; nichts installiert." >&2; exit 1; }
+  AKT_GRUND=signatur
+  ssh-keygen -Y verify -f "$PAKET/allowed_signers" -I release@studium-autopilot -n studium-server -s "$AKT_TMP/paket.tar.gz.sig" \
+    <"$AKT_TMP/paket.tar.gz" || { echo "Signatur ungültig oder kein Schlüssel im laufenden Paket; nichts installiert." >&2; exit 1; }
   AKT_GRUND=paket
   tar -xzf "$AKT_TMP/paket.tar.gz" -C "$AKT_TMP"
   neu=$(cat "$AKT_TMP/server/VERSION")
@@ -162,7 +203,10 @@ aktualisieren() {
     echo "Installiert ist $alt, neuer als das Release ($neu); nichts zu tun."; exit 0
   fi
   AKT_GRUND=installieren
-  bash "$AKT_TMP/server/installieren.sh" --ip "$(jq -r '.ip' "$KONFIG")"
+  # Noch ohne Adresse (vorbereitet, die Einrichtung in der Cloud Shell kam noch nicht): nur vorbereiten
+  local ip
+  ip=$(jq -r '.ip // empty' "$KONFIG")
+  if [ -n "$ip" ]; then bash "$AKT_TMP/server/installieren.sh" --ip "$ip"; else bash "$AKT_TMP/server/installieren.sh" --vorbereiten; fi
   AKT_GRUND=pakete
   apt-get install -y --only-upgrade caddy nodejs >/dev/null
 }
@@ -176,12 +220,14 @@ case "${1:-hilfe}" in
     ;;
   verbinden)
     root_noetig verbinden
+    [ -n "$(jq -r '.adresse // empty' "$KONFIG")" ] || { echo "Der Server hat noch keine Adresse. Erst die Einrichtung in der Cloud Shell abschließen: bash ~/studium-autopilot/start.sh" >&2; exit 1; }
     ausgabe=$(als_studium node "$PAKET/verbinden.mjs")
     link=$(jq -r '.link' <<<"$ausgabe")
     echo "Code: $(jq -r '.code' <<<"$ausgabe") (gültig bis $(jq -r '.ablauf' <<<"$ausgabe"), einmal verwendbar)"
     echo "Link: $link"
     qrencode -t ANSIUTF8 "$link"
     ;;
+  schluessel-erneuern) schluessel_erneuern ;;
   uni-zugang) shift; uni_zugang "$@" ;;
   zustand) als_studium node "$PAKET/zustand.mjs" ;;
   jetzt) als_studium node "$PAKET/lauf.mjs" --anstoss knopf; echo "Angestoßen; das Ergebnis zeigt: studium-server lauf" ;;
@@ -193,6 +239,12 @@ case "${1:-hilfe}" in
   lauf)
     letzter=$(ls -1d "$DATEN"/laeufe/*/ 2>/dev/null | tail -1)
     [ -n "$letzter" ] && jq . "$letzter/protokoll.json" 2>/dev/null || echo "Noch kein Claude-Lauf."
+    ;;
+  nutzung)
+    # nutzung.json schreibt lauf.mjs je Tag (Berlin); Token rein = Eingabe samt Cache
+    als_studium cat "$DATEN/nutzung.json" 2>/dev/null | jq -r 'to_entries | sort_by(.key) | .[-7:][]
+      | "\(.key)  \(.value.laeufe) Läufe (\(.value.opus) mit Opus, \(.value.limit) am Limit)  Token: \(.value.eingabe + .value.cache_lesen + .value.cache_schreiben) rein, \(.value.ausgabe) raus"' \
+      || echo "Noch kein Claude-Lauf."
     ;;
   aktualisieren) aktualisieren ;;
   livesync) shift; root_noetig livesync; bash "$PAKET/livesync.sh" "$@" ;;

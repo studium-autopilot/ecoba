@@ -13,7 +13,7 @@
 | `Unterlagen/<Code> <Modultitel>/` (ohne Modul: `Unterlagen/Ohne Modul/`) | Dateien (PDF …) und daneben je eine Begleitnotiz gleichen Namens (`typ: unterlage`) | Person; aus ILIAS mit `ilias_id` |
 | `Unterlagen/_Volltext/` | Textfassungen der PDFs (`typ: volltext`) | App: nur lesen |
 | `Karteikarten/` | Kartenstapel (`typ: karteikarten`), auch in Unterordnern | Person |
-| `Lernplan/` | Lernpläne je Modul (`typ: lernplan`) | Person bzw. zentral |
+| `Lernplan/` | Lernpläne je Modul (`typ: lernplan`) | Person, zentral oder eigener Server |
 | `Schlüsselqualifikationen/` | SQ-Kurse (`typ: sq_kurs`) | Person |
 | `Anhänge/` | Bilder und Anhänge | Person |
 | `System/` | Skripte, Gerüste, Daten, `Einstellungen.md` | App: nie ändern |
@@ -71,7 +71,8 @@ Katalog (nicht ändern): `code`, `titel`, `ects`, `fachsemester`, `fs_empfohlen`
 **Karteikarten** – `Karteikarten/<Code> Karteikarten.md`, `typ: karteikarten`, `code`, optional `pausiert: true` (Stapel nicht im
 Tagesplan, wie **Pausieren** im Menü); Gerüst `System/Gerüste/Karteikarten.md`.
 
-**Lernplan** – `Lernplan/<Code> Lernplan.md`, `typ: lernplan`, `code`; Gerüst `System/Gerüste/Lernplan.md`.
+**Lernplan** – `Lernplan/<Code> Lernplan.md`, `typ: lernplan`, `code`; Gerüst `System/Gerüste/Lernplan.md` (dort auch die Form
+der Kapitelzeilen mit Folien, Seiten, Vorlesung und Zwischentest).
 
 **Textfassung einer PDF** – `Unterlagen/_Volltext/<PDF-Name> (Volltext).md`
 `typ: volltext`, `volltext_von: plugin`, `quelle` (Pfad der PDF), `unterlage`, `seiten`, `ergebnis` (text | gekuerzt |

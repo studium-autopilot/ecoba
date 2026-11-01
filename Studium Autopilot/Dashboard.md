@@ -59,6 +59,10 @@ cssclasses:
 Fällige Karteikarten erscheinen, sobald Studium Autopilot läuft.
 ```
 
+```eba-lernplan woche
+Was diese Woche im Lernplan dran ist, erscheint, sobald Studium Autopilot läuft.
+```
+
 > [!eba-tabelle|schlicht|handy-zu|reiter=Nacharbeiten]+ Nachzuarbeiten
 > ```eba-liste nachzuarbeiten
 > Vorlesungen zum Nacharbeiten erscheinen, sobald Studium Autopilot läuft.

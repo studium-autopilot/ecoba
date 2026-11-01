@@ -6,8 +6,15 @@
 // Verbinden: Der Server zeigt einen Link obsidian://studium-autopilot?aktion=server-verbinden&adresse=…&code=… mit einem
 //   Einmal-Code (30 Minuten). Jede Webseite könnte so einen Link bauen, darum immer mit Rückfrage. Das Plugin tauscht den Code
 //   per HTTPS (POST /v1/verbinden) gegen Zugangs- und Datenschlüssel und legt beides mit der Adresse in den Schlüsselbund von
-//   Obsidian (app.secretStorage: gerätelokal, verschlüsselt, nie synchronisiert; Eintrag je Tresor wie in ilias.js). Weitere
-//   Geräte verbinden sich mit einem eigenen Code.
+//   Obsidian (app.secretStorage: gerätelokal, verschlüsselt, nie synchronisiert; Eintrag je Tresor wie in ilias.js).
+// Weitere Geräte (seit 01.11.2026): Ein verbundenes Gerät holt im Fenster mit „Weiteres Gerät verbinden“ nach einer Rückfrage einen
+//   Code (geraetCode, POST /v1/geraet; die Anfrage ist mit dem Datenschlüssel verschlüsselt, Zweck „verbinden“, mit Zeit und
+//   Zufallswert, denn den Zugangsschlüssel zeigt jede Anfrage im Kopf; 10 Minuten, einmal) und zeigt ihn groß, bis er abläuft. Er
+//   steht nur im Fenster, nie im Tresor, in data.json, server.json oder im Gerätespeicher. Das neue Gerät tippt ihn unter „Mit Code
+//   verbinden“ ein (codeVerbinden); die Adresse kommt aus server.json (adresse), bei älteren Daten tippt man sie dazu. Dann wie
+//   beim Link: Rückfrage, POST /v1/verbinden. So verbindet sich auch ein Gerät neu, dessen Schlüssel der Server nicht mehr kennt
+//   (sudo studium-server schluessel-erneuern, wenn ein Gerät verloren ist). Wann zuletzt ein Gerät verbunden wurde und wie (Cloud
+//   Shell oder Obsidian), bringt der Eingang mit (nie der öffentliche Status); das Fenster zeigt es.
 // Quellen-Vertrag (quellen.js, docs/architektur/quellen.md): Zeitplan planen(), Status in der gemeinsamen Form ({ zustand, geprueft, fehler,
 //   fehlerZeit, warnungen }, nachLauf), Zeile im Format von verbindungen.js (quelleZeile), Besitz
 //   herkunft: claude + claude_id, Grabstein (angewendet, kurzHash) in der Sperr-Datei, Doppel einer id zusammenführen (dubletten).
@@ -53,6 +60,15 @@
 //   knopf ab diesem Tag als gewünscht. Sie geht erst mit der Textfassung der neuen Datei (fassung.js textAktuell), mit der
 //   früheren Zusammenfassung, „Zu tun“, „Offene Fragen“ und den geänderten Seiten im Feld fassung; ein Server vor 0.6.9 übergeht
 //   es. Die neue Zusammenfassung kommt nach oben, die frühere eingeklappt darunter („Frühere Fassung (bis …)“).
+// Lernplan (seit 31.10.2026): Für Module des laufenden Semesters ohne zentrale Kapitelliste (kapitel.json) baut Claude auf dem
+//   Server die Liste aus den Folien. Der Stand nennt dem Server Semester und Module (lernplan); danach gehen die Textfassungen der
+//   Folien dieser Module (die der Plan zählt, ctx.lernplan.folienVon; die ersten KAPITEL_GANZ Seiten ganz, danach nur die erste
+//   Zeile jeder Seite) mit Nummer, Datum und Quelle der Unterlage an POST /v1/kapitel, jede PDF einmal (server.json „lernplan“),
+//   niedrige Nummern zuerst. Claude liest sie im gewöhnlichen Lauf mit dem Modell des Servers, nur wenn neue Folien da sind, und
+//   berichtigt die Listen, die es schon geliefert hat (fehlen sie dem Server, etwa nach einer Neueinrichtung, nimmt er die aus dem
+//   Stand: Nummern, Titel und Unterkapitel der Lernplan-Notizen mit herkunft: server, listeAusNotiz). Das Eingang bringt sie als „kapitel“ (Form von kapitel.json → module);
+//   lernplan.js prüft und schreibt sie (ctx.lernplan.serverListen, herkunft: server, Häkchen und eigener Text bleiben). Nicht bei
+//   server_unterlagen: aus.
 // Doppelte To-dos: Claude nennt Paare (behalten, weg) über die Kennung aus dem Auszug (id = „t-“ + Q.kurzHash(Pfad + Zeile)).
 //   Aus „weg“ wird ein einfacher Punkt mit Link auf die Notiz, in der die Aufgabe bleibt: nur eine offene Aufgabe unter „Zu tun“
 //   einer Begleitnotiz (typ: unterlage), nur wenn die Zeile noch genau so dasteht; nie abgehakt, nie gelöscht.
@@ -60,6 +76,9 @@
 //   Gibt es neue (noch nicht im Fenster gesehen, höchstens 14 Tage alt), heißt der Link der Zeile unter Verbindungen „Hinweise
 //   ansehen“. Gesehen merkt sich jedes Gerät selbst (Kurz-Hashes, gerätelokal), denn server.json schreibt nur das übernehmende
 //   Gerät. Kein Eintrag in „Bitte prüfen“: Eine Liste schöbe dir Arbeit zu, die das System selbst erledigen oder zeigen kann.
+//   Gehört ein Hinweis zu einem Modul (code, seit 01.11.2026), steht er 14 Tage lang auch im Modulfeld unter „Von Claude“
+//   (modul.js); jeder neue steht in „Seit deinem letzten Besuch“ (seit-besuch.js). Beide lesen ctx.server.hinweise().
+// Am Limit des Claude-Abos meldet der Server im Status, wann er es wieder versucht (limit_wieder); die Zeile nennt die Uhrzeit.
 // Takt: Im Fenster stellst du ein, wie oft dein Server nachsieht (Uni-Postfach alle 15, 30 oder 60 Minuten, Gmail dreimal,
 //   einmal oder nie am Tag); steht als server_uni_postfach und server_gmail in den Einstellungen (alle Geräte) und geht mit dem
 //   Stand an den Server, der sich ab dem nächsten Abruf danach richtet.
@@ -72,8 +91,10 @@
 //   Abruf kommt nach 5 Min. statt im Takt. Was nur du lösen kannst (Gerät neu verbinden, Claude neu verbinden, Uni-Passwort
 //   nicht angenommen), sagt die Zeile selbst (Pille „prüfen“).
 // server.json (System/Daten, synchronisiert, schreibt nur das übernehmende Gerät): { schema, erledigt: { Dateiname: Zeit }
-//   (60 Tage), laeufe: [die letzten 20], hinweise: [die letzten 30], gesendet: { PDF-Kennung: Datum }, nachsenden: { PDF-Kennung:
-//   Datum } (ein älterer Server nahm sie nicht an, NACHSENDEN_TAGE), begleitet: { PDF-Pfad: kurzHash } }. Der Grabstein
+//   (60 Tage), laeufe: [die letzten 20], hinweise: [die letzten 30, { text, quelle?, zeit, code? }], gesendet: { PDF-Kennung: Datum }, nachsenden: { PDF-Kennung:
+//   Datum } (ein älterer Server nahm sie nicht an, NACHSENDEN_TAGE), begleitet: { PDF-Pfad: kurzHash }, lernplan: { PDF-Kennung:
+//   Datum } (Folien für Kapitellisten), adresse (des Servers, ohne Schlüssel, für „Mit Code verbinden“), verbunden: { zeit,
+//   herkunft: cloud-shell | obsidian } (zuletzt verbundenes Gerät) }. Der Grabstein
 //   (angewendet: { id: kurzHash }) steht wie bei den anderen Quellen in der Sperr-Datei server-abruf.json.
 // Für andere Skripte: ctx.server (Zeile und Fenster in verbindungen.js). Testeinstiege: ctx.server.erzeugen(abh) baut den
 //   Ablauf mit Netz und Tresor im Speicher (tests/server-plugin.test.js); plugin.testServerAus schaltet den automatischen
@@ -95,6 +116,12 @@ module.exports = function (ctx) {
   const NEU_JE_ABRUF = 50;          // höchstens so viele neue Notizen je Abruf
   const TERMINSUCHE_TAGE = 21; // nur neue Unterlagen nach Terminen durchsuchen, nicht den ganzen Bestand
   const UNTERLAGEN_JE_ABRUF = 9, UNTERLAGEN_JE_ANFRAGE = 3; // Textfassungen an den Server (Anfrage: wie UNTERLAGEN in server/dienst.mjs)
+  // Folien für Kapitellisten: je Abruf bis zu 6 (Anfrage zu 3 wie KAPITEL in server/dienst.mjs), die ersten 8 Seiten ganz (dort steht
+  // die Gliederung), danach je Seite nur die erste Zeile (meist der Folientitel, zeigt, wo ein Kapitel beginnt), höchstens 60 000 Zeichen
+  const KAPITEL_JE_ABRUF = 6, KAPITEL_GANZ = 8, KAPITEL_ZEICHEN = 60000;
+  // Bisherige Listen aus den Lernplan-Notizen im Stand: Grenzen wie kapitel.json (docs/daten-v1.md), zusammen höchstens 150 000
+  // Zeichen, damit der Stand unter der Grenze des Dienstes bleibt (512 KB verschlüsselt, mit dem Auszug aus dem Tresor)
+  const KAPITEL_NR = /^[0-9A-Z][0-9A-Za-z.]{0,7}$/, KAPITEL_MAX = 40, LISTEN_ZEICHEN = 150000;
   // PDFs zum Knopf „Zusammenfassen“: Stücke und Grenze wie PDF.teil und PDF.bytes in server/dienst.mjs; ab PDF_GROSS fragt der
   // Knopf (das Hochladen dauert)
   const PDF_TEIL = 8 * 1024 * 1024, PDF_MAX = 500 * 1024 * 1024, PDF_GROSS = 20 * 1024 * 1024;
@@ -188,6 +215,38 @@ module.exports = function (ctx) {
       aus.push(z.replace(/^>\s?/, ""));
     }
     return aus.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  };
+  // Text mit Seitenmarken (volltextText) → für eine Kapitelliste: bis Seite ganz alles, danach je Seite „[S. N] <erste Zeile>“
+  const kapitelText = (text, ganz) => {
+    const aus = [];
+    let seite = 0, erste = false;
+    for (const z of String(text == null ? "" : text).split("\n")) {
+      const m = z.match(/^\[S\. (\d+)\]$/);
+      if (m) { seite = Number(m[1]); erste = true; aus.push(z); continue; }
+      if (seite <= ganz) aus.push(z);
+      else if (erste && z.trim()) { aus[aus.length - 1] += " " + z.trim().slice(0, 120); erste = false; }
+    }
+    return aus.join("\n").replace(/\n{3,}/g, "\n\n").trim().slice(0, KAPITEL_ZEICHEN);
+  };
+  // Kapitelliste einer Lernplan-Notiz für den Stand (lesen = ctx.lernplan.kapitelLesen): nur zwischen „## Kapitel“ und „## Meine
+  // Notizen“, nur Kapitel mit Nummer, je Kapitel nr, titel und Unterkapitel; ohne Häkchen, Links, Seiten und eigene Zeilen ohne
+  // Nummer. Titel ohne die Zeichen, die kapitel.json verbietet; Grenzen wie dort. → [{ nr, titel, teile? }]
+  const titelOk = (t) => t.length > 0 && t.length <= 140 && !/[[\]<>{}|\\`]/.test(t);
+  const listeAusNotiz = (text, lesen) => {
+    const z = String(text == null ? "" : text).replace(/\r\n/g, "\n");
+    const ab = z.search(/^## Kapitel[ \t]*$/m), bis = z.search(/^## Meine Notizen/m);
+    const teil = z.slice(Math.max(ab, 0), bis > ab ? bis : z.length);
+    const kapitel = [], nrn = [];
+    for (const k of lesen(teil)) {
+      const titel = reinerText(String(k.titel || ""), 200);
+      if (!KAPITEL_NR.test(String(k.nr)) || !titelOk(titel) || nrn.indexOf(k.nr) >= 0) continue;
+      nrn.push(k.nr);
+      const teile = (k.teile || []).map((t) => ({ nr: String(t.nr || ""), titel: reinerText(String(t.titel || ""), 200) }))
+        .filter((t) => KAPITEL_NR.test(t.nr) && titelOk(t.titel)).slice(0, KAPITEL_MAX);
+      kapitel.push(teile.length ? { nr: k.nr, titel, teile } : { nr: k.nr, titel });
+      if (kapitel.length >= KAPITEL_MAX) break;
+    }
+    return kapitel;
   };
   // Notiz neben der PDF ergänzen (Regeln wie unterlagen.js: Abschnitte über dem PDF-Kasten, nie leere Abschnitte oder Punkte).
   // bn = { wichtigste: [{ begriff, text, seite, bis }], zu_tun: [{ text, frist, seite, bis }], fragen: [{ text, seite, bis }] },
@@ -310,6 +369,28 @@ module.exports = function (ctx) {
     return u.protocol + "//" + u.host;
   };
   const hostVon = (adresse) => String(adresse || "").replace(/^https?:\/\//, "");
+  // Eingetippte Adresse („Mit Code verbinden“): ohne https:// davor ergänzt, sonst wie adresseNormal → Ursprung oder ""
+  const adresseEingabe = (s, lokal) => {
+    const t = String(s == null ? "" : s).trim();
+    return adresseNormal(/^[a-z][a-z0-9+.-]*:\/\//i.test(t) ? t : "https://" + t, lokal);
+  };
+  // Eingetippter Code → „ABCDE-FGHJK“ (groß, ohne Leer- und Trennzeichen; ob er gilt, prüft CODE)
+  const codeForm = (s) => {
+    const c = String(s == null ? "" : s).toUpperCase().replace(/[^A-Z0-9]/g, "");
+    return c.length === 10 ? c.slice(0, 5) + "-" + c.slice(5) : c;
+  };
+  // Wie ein Gerät zuletzt verbunden wurde (Herkunft des Codes, server/verbinden.mjs)
+  const HERKUNFT = ["cloud-shell", "obsidian"];
+  const HERKUNFT_TEXT = { "cloud-shell": "über die Cloud Shell", obsidian: "über Obsidian" };
+  // Uhrzeit, an einem anderen Tag mit Datum: „14:23“ | „02.11., 09:15“
+  const zeitText = (d, jetzt) => {
+    const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    return d.toDateString() === jetzt.toDateString() ? hm : `${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}., ${hm}`;
+  };
+  // Text unter dem Code für ein weiteres Gerät (r: { ablauf, adresse }): bis wann er gilt, was das neue Gerät tut, und die Adresse,
+  // falls es danach fragt (ältere server.json ohne adresse)
+  const codeAnleitung = (r, jetzt) => `Gilt bis ${zeitText(new Date(r.ablauf), jetzt)} und nur einmal. Tippe auf dem neuen Gerät unter ` +
+    `Verbindungen bei „Eigener Server“ auf „Mehr erfahren“ und gib den Code dort ein. Fragt es nach der Adresse: ${r.adresse}`;
 
   // ---------- Datenkanal (Gegenstück zu server/kanal.mjs) ----------
   const kodieren = (s) => new TextEncoder().encode(s);
@@ -372,7 +453,10 @@ module.exports = function (ctx) {
   //   quellen (ctx.user.quellen), standText(status) → { text, symbol } (ctx.verbindungen.standText), mobil, lokalErlaubt,
   //   tresor() → Promise<{ termine: [{ titel, datum, bis, kategorie, code, herkunft, erledigt }], todos: [{ text, code, frist }] }>,
   //   unterlagen() → Promise<[{ datei (PDF), kennung (SHA-256), art, titel, code, seiten, text, angefordert?, pdf?, nur_termine? }]>
-  //   (ohne Zusammenfassung), pdf(datei) → Promise<Uint8Array | null> (die PDF selbst, für pdf: true) }
+  //   (ohne Zusammenfassung), pdf(datei) → Promise<Uint8Array | null> (die PDF selbst, für pdf: true),
+  //   kapitelUnterlagen({ ohne, hoechstens }) → Promise<[{ datei, kennung, titel, code, nummer, seiten, datum, quelle, text }]> (Folien
+  //   für Kapitellisten, Text wie volltextText), lernplan() → ctx.lernplan | null, lernplanNotizen(codes) → Promise<[{ code, text }]>
+  //   (Lernplan-Notizen mit herkunft: server); stand() dazu lernplan: { semester, module } | null }
   //   io.begleitnotiz(pdfPfad) → Pfad der Notiz neben der PDF oder ""
   const erzeugen = (abh) => {
     const io = abh.io;
@@ -396,7 +480,7 @@ module.exports = function (ctx) {
     // ----- server.json -----
     // Die Zeile fragt synchron: Hinweise aus dem letzten Lesen oder Schreiben von server.json
     let hinweisListe = [];
-    const zustandLeer = () => ({ schema: 1, erledigt: {}, laeufe: [], hinweise: [], gesendet: {}, nachsenden: {}, begleitet: {} });
+    const zustandLeer = () => ({ schema: 1, erledigt: {}, laeufe: [], hinweise: [], gesendet: {}, nachsenden: {}, begleitet: {}, lernplan: {} });
     const objekt = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
     const zustandLesen = async () => {
       const text = await io.lesenText(DATEI);
@@ -408,16 +492,21 @@ module.exports = function (ctx) {
         for (const k of Object.keys(erl)) if (DATEINAME.test(k)) z.erledigt[k] = String(erl[k]);
         if (Array.isArray(o.laeufe)) z.laeufe = o.laeufe.filter((x) => x && typeof x === "object").slice(-LAEUFE);
         if (Array.isArray(o.hinweise)) z.hinweise = o.hinweise.filter((x) => x && typeof x.text === "string").slice(-HINWEISE);
-        const ges = objekt(o.gesendet), nach = objekt(o.nachsenden), beg = objekt(o.begleitet);
+        const ges = objekt(o.gesendet), nach = objekt(o.nachsenden), beg = objekt(o.begleitet), lp = objekt(o.lernplan);
         for (const k of Object.keys(ges).slice(-2000)) if (/^[0-9a-f]{64}$/.test(k)) z.gesendet[k] = String(ges[k]).slice(0, 16);
+        for (const k of Object.keys(lp).slice(-2000)) if (/^[0-9a-f]{64}$/.test(k)) z.lernplan[k] = String(lp[k]).slice(0, 16);
         for (const k of Object.keys(nach).slice(-200)) if (/^[0-9a-f]{64}$/.test(k)) z.nachsenden[k] = String(nach[k]).slice(0, 16);
         for (const k of Object.keys(beg).slice(-2000)) if (/^Unterlagen\//.test(k) && k.length <= 240) z.begleitet[k] = String(beg[k]).slice(0, 20);
       }
+      // Adresse für „Mit Code verbinden“, zuletzt verbundenes Gerät (beides ohne Schlüssel)
+      const geraete = objekt(o), vb = objekt(geraete.verbunden);
+      z.adresse = adresseNormal(geraete.adresse, abh.lokalErlaubt);
+      z.verbunden = isoOk(vb.zeit) && HERKUNFT.indexOf(vb.herkunft) >= 0 ? { zeit: new Date(vb.zeit).toISOString(), herkunft: vb.herkunft } : null;
       hinweisListe = z.hinweise;
       return { z, text };
     };
-    const zustandText = (z) => JSON.stringify({ schema: z.schema, erledigt: z.erledigt, laeufe: z.laeufe, hinweise: z.hinweise, gesendet: z.gesendet,
-      nachsenden: z.nachsenden, begleitet: z.begleitet }, null, 1) + "\n";
+    const zustandText = (z) => JSON.stringify(Object.assign({ schema: z.schema, erledigt: z.erledigt, laeufe: z.laeufe, hinweise: z.hinweise, gesendet: z.gesendet,
+      nachsenden: z.nachsenden, begleitet: z.begleitet, lernplan: z.lernplan }, z.adresse ? { adresse: z.adresse } : {}, z.verbunden ? { verbunden: z.verbunden } : {}), null, 1) + "\n";
     // Grabstein: angewendet in der Sperr-Datei (die Sperrfelder schreibt sperre.js; andere Felder lässt es stehen)
     const sperrDatei = async () => { try { return objekt(JSON.parse((await io.lesenText(SPERR_DATEI)) || "null")); } catch (e) { return {}; } };
     const angewendetLesen = async () => {
@@ -450,6 +539,8 @@ module.exports = function (ctx) {
       livesync: wahl(o.livesync, ["an", "aus"]),
       letzterLauf: o.letzter_lauf && isoOk(o.letzter_lauf.zeit) ? { zeit: new Date(o.letzter_lauf.zeit).toISOString(), ok: o.letzter_lauf.ok === true } : null,
       claudeLauf: wahl(o.claude_lauf, ["wartet", "laeuft", "ruht"]),
+      // am Limit des Claude-Abos: nächster Versuch des Servers (ein Server vor dem 01.11.2026 meldet es nicht)
+      limitWieder: isoOk(o.limit_wieder) ? new Date(o.limit_wieder).toISOString() : "",
       aktualisierung: aktualisierungNormal(o.aktualisierung),
       fehler: (Array.isArray(o.fehler) ? o.fehler : []).filter((f) => typeof f === "string" && /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
     });
@@ -469,24 +560,33 @@ module.exports = function (ctx) {
     };
 
     // ----- Verbinden und Trennen -----
-    const verbinden = async (adresseRoh, codeRoh) => {
+    // o.getippt: Code von Hand eingegeben („Mit Code verbinden“) statt Link; dann nur andere Sätze
+    const verbinden = async (adresseRoh, codeRoh, o) => {
+      const getippt = !!(o && o.getippt);
       const adresse = adresseNormal(adresseRoh, abh.lokalErlaubt);
       const code = String(codeRoh || "").trim().toUpperCase();
-      if (!adresse || !CODE.test(code)) return { ok: false, fehler: "Der Link ist unvollständig. Bitte in der Cloud Shell von Oracle einen neuen erzeugen: bash ~/studium-autopilot/server/fern.sh verbinden" };
+      if (!adresse || !CODE.test(code)) {
+        return { ok: false, fehler: getippt ? "Code oder Adresse stimmen nicht." : "Der Link ist unvollständig. Bitte in der Cloud Shell von Oracle einen neuen erzeugen: bash ~/studium-autopilot/server/fern.sh verbinden" };
+      }
       const bisher = verbindung();
       const ersetzt = bisher && bisher.adresse !== adresse ? ` Die Verbindung zu ${hostVon(bisher.adresse)} wird dabei ersetzt.` : "";
       const ja = await abh.bestaetigen("Mit deinem Server verbinden?",
-        `Studium Autopilot holt dann Termine und Hinweise von ${hostVon(adresse)}.${ersetzt} Nur bestätigen, wenn du diesen Link gerade selbst auf deinem eigenen Server erzeugt hast.`, "Verbinden");
+        `Studium Autopilot holt dann Termine und Hinweise von ${hostVon(adresse)}.${ersetzt} ` + (getippt
+          ? "Nur bestätigen, wenn du den Code gerade selbst erzeugt hast, auf einem deiner Geräte oder auf deinem Server."
+          : "Nur bestätigen, wenn du diesen Link gerade selbst auf deinem eigenen Server erzeugt hast."), "Verbinden");
       if (!ja) return { ok: false, abgebrochen: true };
       let r;
       try { r = await abh.netz({ url: adresse + "/v1/verbinden", method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) }); }
-      catch (e) { return { ok: false, fehler: "Dein Server ist nicht erreichbar. Läuft er, und stimmt die Adresse im Link?" }; }
-      if (r.status === 403) return { ok: false, fehler: "Der Code gilt nicht mehr (einmal verwendbar, 30 Minuten). Bitte auf deinem Server einen neuen erzeugen." };
+      catch (e) { return { ok: false, fehler: getippt ? "Dein Server ist nicht erreichbar. Stimmt die Adresse?" : "Dein Server ist nicht erreichbar. Läuft er, und stimmt die Adresse im Link?" }; }
+      if (r.status === 403) {
+        return { ok: false, fehler: getippt ? "Der Code stimmt nicht oder gilt nicht mehr. Erzeuge auf einem verbundenen Gerät einen neuen."
+          : "Der Code gilt nicht mehr (einmal verwendbar, 30 Minuten). Bitte auf deinem Server einen neuen erzeugen." };
+      }
       if (r.status === 429) return { ok: false, fehler: "Zu viele Versuche. Bitte in 10 Minuten noch einmal." };
       let d = null;
       try { d = r.status === 200 ? JSON.parse(r.text) : null; } catch (e) { d = null; }
       if (!d || adresseNormal(d.adresse, abh.lokalErlaubt) !== adresse || !SCHLUESSEL.test(String(d.zugang)) || !SCHLUESSEL.test(String(d.schluessel))) {
-        return { ok: false, fehler: "Die Antwort deines Servers passt nicht zum Link. Nichts gespeichert." };
+        return { ok: false, fehler: getippt ? "Die Antwort deines Servers passt nicht zur Adresse. Nichts gespeichert." : "Die Antwort deines Servers passt nicht zum Link. Nichts gespeichert." };
       }
       try { await abh.geheim.schreiben(abh.geheimId(), JSON.stringify({ adresse, zugang: d.zugang, schluessel: d.schluessel })); }
       catch (e) { return { ok: false, fehler: "Der Schlüsselbund von Obsidian fehlt auf diesem Gerät (ab Obsidian 1.11.4). Bitte Obsidian aktualisieren." }; }
@@ -497,6 +597,49 @@ module.exports = function (ctx) {
       try { await sperre().freigeben(); } catch (e) { /* keine Sperre */ }
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       for (const k of Object.keys(L)) lokal(L[k], null);
+    };
+    // Weiteres Gerät verbinden: Code vom Server (POST /v1/geraet). Die Anfrage ist mit dem Datenschlüssel verschlüsselt (Zweck
+    // „verbinden“) und trägt Zeit und Zufallswert gegen Wiederholung: Wer nur den Zugangsschlüssel kennt, bekommt so keinen Code.
+    // Die Antwort ist ebenso verschlüsselt. Der Code wird nirgends gespeichert. → { ok, code, ablauf, adresse } | { fehler:
+    // nicht-verbunden | zugang | zu-viele (mit wieder) | uhr | alt (Server ohne diesen Weg) | paket | netz }
+    const geraetCode = async () => {
+      const v = verbindung();
+      if (!v) return { fehler: "nicht-verbunden" };
+      let r;
+      try {
+        const anfrage = { schema: 1, zeit: abh.jetzt().toISOString(), nonce: b64(crypto.getRandomValues(new Uint8Array(16))) };
+        const paket = await verschluesseln(v.schluessel, "verbinden", anfrage);
+        r = await abh.netz({ url: v.adresse + "/v1/geraet", method: "POST", headers: { authorization: "Bearer " + v.zugang, "content-type": "application/json" }, body: JSON.stringify(paket) });
+      } catch (e) { return { fehler: "netz" }; }
+      if (r.status === 401) return { fehler: "zugang" };
+      if (r.status === 404) return { fehler: "alt" };
+      let o = null;
+      try { o = JSON.parse(r.text); } catch (e) { o = null; }
+      if (r.status === 429) return o && isoOk(o.wieder) ? { fehler: "zu-viele", wieder: o.wieder } : { fehler: "zu-viele" };
+      if (r.status === 400 && o && o.fehler === "uhr") return { fehler: "uhr" };
+      if (r.status !== 200) return { fehler: "netz" };
+      let d = null;
+      try { d = await entschluesseln(v.schluessel, "verbinden", o); } catch (e) { return { fehler: "paket" }; }
+      if (!d || !CODE.test(String(d.code || "")) || !isoOk(d.ablauf)) return { fehler: "paket" };
+      return { ok: true, code: codeForm(d.code), ablauf: new Date(d.ablauf).toISOString(), adresse: v.adresse };
+    };
+    // Adresse des Servers für „Mit Code verbinden“: aus dem Schlüsselbund (Schlüssel abgelehnt), sonst aus server.json → Ursprung | ""
+    const adresseBekannt = async () => {
+      const v = verbindung();
+      return v ? v.adresse : (await zustandLesen()).z.adresse;
+    };
+    // Mit Code verbinden: Code von „Weiteres Gerät verbinden“ (oder aus der Cloud Shell) eingetippt, die Adresse eingetippt oder
+    // bekannt; dann wie beim Link (Rückfrage, Einlösen). → wie verbinden; fehlt die Adresse: { ok: false, adresse: true, fehler }
+    const codeVerbinden = async (codeRoh, adresseRoh) => {
+      const code = codeForm(codeRoh);
+      if (!CODE.test(code)) return { ok: false, fehler: "Der Code hat 10 Zeichen, etwa ABCDE-FGHJK." };
+      const eingabe = String(adresseRoh == null ? "" : adresseRoh).trim();
+      const adresse = eingabe ? adresseEingabe(eingabe, abh.lokalErlaubt) : await adresseBekannt();
+      if (!adresse) {
+        return { ok: false, adresse: true, fehler: eingabe ? "Die Adresse stimmt nicht. Sie steht auf deinem verbundenen Gerät unter dem Code."
+          : "Gib dazu die Adresse deines Servers ein. Sie steht auf deinem verbundenen Gerät unter dem Code." };
+      }
+      return verbinden(adresse, code, { getippt: true });
     };
 
     // ----- Notizen -----
@@ -601,7 +744,7 @@ module.exports = function (ctx) {
     // Hinweise und Lauf erst dann, damit nichts doppelt erscheint)
     const dateiAnwenden = async (name, inhalt, z, b, notizen) => {
       const zeit = isoOk(inhalt.erstellt) ? new Date(inhalt.erstellt).toISOString() : abh.jetzt().toISOString();
-      const lauf = { datei: name, zeit, termine: 0, hinweise: 0, begleitnotizen: 0, doppelt: 0, todos: 0, verworfen: 0 };
+      const lauf = { datei: name, zeit, termine: 0, hinweise: 0, begleitnotizen: 0, lernplaene: 0, doppelt: 0, todos: 0, verworfen: 0 };
       const roh = Array.isArray(inhalt.termine) ? inhalt.termine.slice(0, 300) : [];
       const p = abh.zentral().terminePruefen({ schema: 1, termine: roh });
       if (p.fehler) { b.verworfen.push({ id: name, grund: p.fehler }); lauf.verworfen++; }
@@ -622,8 +765,10 @@ module.exports = function (ctx) {
         const text = reinerText(h && h.text, 300);
         if (!text) continue;
         const quelle = reinerText(h && h.quelle, 200);
+        // Modul, zu dem der Hinweis gehört (seit 01.11.2026; ein älterer Server schickt keins): Modulfeld und „Seit deinem letzten Besuch“
+        const code = MODULCODE_SERVER.test(String((h && h.code) || "")) ? String(h.code) : "";
         if (z.hinweise.some((x) => x.text === text)) continue; // schon da (ein älterer Server sortiert Wiederholungen nicht aus)
-        z.hinweise.push(quelle ? { text, quelle, zeit } : { text, zeit });
+        z.hinweise.push(Object.assign(quelle ? { text, quelle, zeit } : { text, zeit }, code ? { code } : {}));
         lauf.hinweise++; b.hinweise++;
       }
       z.hinweise = z.hinweise.slice(-HINWEISE);
@@ -631,6 +776,8 @@ module.exports = function (ctx) {
         if (await begleitnotizAnwenden(bn, z, b)) lauf.begleitnotizen++;
       }
       lauf.todos = await todoDoppelAnwenden((Array.isArray(inhalt.todo_doppel) ? inhalt.todo_doppel : []).slice(0, 50), b);
+      const listen = Array.isArray(inhalt.kapitel) ? inhalt.kapitel.slice(0, 60) : [];
+      if (listen.length) await kapitelAnwenden(listen, lauf, b);
       z.laeufe.push(lauf);
       z.laeufe = z.laeufe.slice(-LAEUFE);
       return true;
@@ -746,6 +893,54 @@ module.exports = function (ctx) {
       return n;
     };
 
+    // Kapitellisten aus dem Eingang (Form von kapitel.json → module): lernplan.js prüft sie wie kapitel.json und schreibt
+    // Lernplan/<Code> Lernplan.md (herkunft: server) nur für Module des laufenden Semesters ohne zentrale Liste; Häkchen und
+    // eigener Text bleiben. Fehlt serverListen (älteres lernplan.js), bleiben sie aus; der Server schickt dann auch keine, denn der
+    // Stand fragt nicht danach (lernplanAuswahl). Zählt in lauf.lernplaene und b.lernplaene, Verworfenes wie bei den Terminen.
+    const kapitelAnwenden = async (listen, lauf, b) => {
+      const L = abh.lernplan ? abh.lernplan() : null;
+      if (!L || typeof L.serverListen !== "function") return;
+      let r;
+      try { r = objekt(await L.serverListen(listen)); } catch (e) {
+        console.error("server: Lernplan", e);
+        b.verworfen.push({ id: "kapitel", grund: "nicht übernommen" }); lauf.verworfen++;
+        return;
+      }
+      for (const x of Array.isArray(r.verworfen) ? r.verworfen.slice(0, 60) : []) {
+        b.verworfen.push({ id: reinerText(String((x && x.id) || "kapitel"), 80), grund: reinerText(String((x && x.grund) || ""), 200) });
+        lauf.verworfen++;
+      }
+      const n = Number.isInteger(r.geschrieben) && r.geschrieben > 0 ? r.geschrieben : 0;
+      lauf.lernplaene += n; b.lernplaene += n;
+    };
+
+    // Folien für Kapitellisten an den Server (POST /v1/kapitel): je Abruf bis zu KAPITEL_JE_ABRUF in Anfragen zu 3, jede PDF
+    // (Kennung) einmal (server.json „lernplan“), der Text gekürzt (kapitelText). Erst nach dem Stand, denn der Server legt Folien
+    // von Modulen beiseite, nach denen der Stand nicht fragt. Kennt ein älterer Server den Weg nicht (404) oder warten dort schon
+    // zu viele, bleibt alles ungemerkt und geht beim nächsten Abruf. → Anzahl
+    const kapitelSenden = async (v, z) => {
+      let liste = [];
+      try { liste = abh.kapitelUnterlagen ? await abh.kapitelUnterlagen({ ohne: z.lernplan, hoechstens: KAPITEL_JE_ABRUF }) : []; } catch (e) { liste = []; }
+      const offen = (Array.isArray(liste) ? liste : []).filter((u) => u && /^[0-9a-f]{64}$/.test(String(u.kennung)) && !z.lernplan[u.kennung] &&
+        MODULCODE_SERVER.test(String(u.code)) && typeof u.text === "string" && u.text.trim()).slice(0, KAPITEL_JE_ABRUF)
+        .map((u) => ({ datei: String(u.datei), kennung: u.kennung, art: "Folien", titel: reinerText(String(u.titel || ""), 160), code: u.code,
+          nummer: Number.isInteger(u.nummer) && u.nummer >= 0 && u.nummer <= 99 ? u.nummer : null, seiten: Number.isInteger(u.seiten) ? u.seiten : 0,
+          datum: s10(u.datum), quelle: reinerText(String(u.quelle || ""), 200), ganz: KAPITEL_GANZ, text: kapitelText(u.text, KAPITEL_GANZ) }));
+      let n = 0;
+      for (let i = 0; i < offen.length; i += UNTERLAGEN_JE_ANFRAGE) {
+        const teil = offen.slice(i, i + UNTERLAGEN_JE_ANFRAGE);
+        try {
+          const paket = await verschluesseln(v.schluessel, "kapitel", { schema: 1, unterlagen: teil });
+          const r = await abh.netz({ url: v.adresse + "/v1/kapitel", method: "POST", headers: { authorization: "Bearer " + v.zugang, "content-type": "application/json" }, body: JSON.stringify(paket) });
+          if (r.status !== 200) break;
+        } catch (e) { break; }
+        const jetzt = abh.jetzt().toISOString().slice(0, 16);
+        for (const u of teil) z.lernplan[u.kennung] = jetzt;
+        n += teil.length;
+      }
+      return n;
+    };
+
     // Auszug aus dem Tresor (tresor.json für Claude auf dem Server): nur diese Felder, Grenzen wie der Dienst (400 Termine,
     // 200 To-dos), nichts mit Zugangsdaten
     const tresorKurz = (t) => ({
@@ -756,6 +951,27 @@ module.exports = function (ctx) {
         frist: s10(e && e.frist) }, e && TODO_ID.test(String(e.id)) ? { id: e.id } : {}, e && typeof e.pfad === "string" && e.pfad.length <= 240 ? { pfad: e.pfad } : {},
         e && e.aenderbar === true ? { aenderbar: true } : {})).filter((e) => e.text && !GEHEIM.test(e.text)).slice(0, 200),
     });
+    // Bisherige Kapitellisten aus den Lernplan-Notizen vom Server (herkunft: server; abh.lernplanNotizen), für den Stand: Fehlt dem
+    // Server sein Bestand (neu eingerichtet), behält Claude damit Nummern und Titel, an denen die Häkchen hängen. Höchstens
+    // LISTEN_ZEICHEN zusammen. → [{ code, kapitel }]
+    const lernplanListen = async (codes) => {
+      const L = abh.lernplan ? abh.lernplan() : null;
+      if (!codes.length || !L || typeof L.kapitelLesen !== "function" || !abh.lernplanNotizen) return [];
+      let notizen = [], zeilen = {};
+      try { notizen = await abh.lernplanNotizen(codes); } catch (e) { notizen = []; }
+      // Nur Zeilen der zuletzt geschriebenen Liste (lernplan.js kennt sie), eigene Aufgaben mit Nummer vorn bleiben im Tresor
+      try { const st = L.serverStand ? await L.serverStand() : null; zeilen = objekt(st && st.zeilen); } catch (e) { zeilen = {}; }
+      const aus = [];
+      let zeichen = 0;
+      for (const n of Array.isArray(notizen) ? notizen : []) {
+        if (!n || codes.indexOf(n.code) < 0 || aus.some((x) => x.code === n.code)) continue;
+        const kapitel = listeAusNotiz(n.text, L.listeLesen ? (t) => L.listeLesen(t, zeilen[n.code]) : L.kapitelLesen);
+        zeichen += JSON.stringify(kapitel).length;
+        if (zeichen > LISTEN_ZEICHEN) break;
+        if (kapitel.length) aus.push({ code: n.code, kapitel });
+      }
+      return aus;
+    };
     // Stand ans Server-Gerät: übernommene Dateien sofort, sonst nur bei Änderung oder nach STAND_ALTER
     const standSenden = async (v, quittung) => {
       let s, t;
@@ -763,6 +979,13 @@ module.exports = function (ctx) {
       try { t = abh.tresor ? objekt(await abh.tresor()) : {}; } catch (e) { t = {}; }
       const stand = { schema: 1, module: (Array.isArray(s.module) ? s.module : []).slice(0, 80), studienbeginn: String(s.studienbeginn || "").slice(0, 20), variante: String(s.variante || "").slice(0, 40),
         takt: taktAus({ server_uni_postfach: objekt(s.takt).uni_postfach, server_gmail: objekt(s.takt).gmail }), tresor: tresorKurz(t) };
+      // Für welche Module Claude eine Kapitelliste bauen soll (ein Server vor 31.10.2026 übergeht das Feld)
+      const lp = objekt(s.lernplan);
+      if (typeof lp.semester === "string" && Array.isArray(lp.module)) {
+        stand.lernplan = { semester: lp.semester.slice(0, 20), module: lp.module.filter((c) => MODULCODE_SERVER.test(String(c))).slice(0, 60) };
+        const listen = await lernplanListen(stand.lernplan.module);
+        if (listen.length) stand.lernplan.listen = listen;
+      }
       const kennung = hash32(JSON.stringify(stand));
       const g = objekt(lokal(L.gesendet));
       if (!quittung.length && g.kennung === kennung && alterMs(g.zeit) < STAND_ALTER) return true;
@@ -796,7 +1019,7 @@ module.exports = function (ctx) {
 
     // → Bericht { art: ok | nicht-verbunden | laeuft | anderes-geraet | fehler, fehler (netz | zugang | gesperrt | paket | intern),
     //   angelegt, aktualisiert, umbenannt, entfaellt, doppelt, zusammengefuehrt, ausgeblendet, hinweise, begleitnotizen (Pfade),
-    //   unterlagen (an den Server geschickt), verworfen, dateien,
+    //   lernplaene (geschriebene Lernplan-Notizen), unterlagen und kapitelFolien (an den Server geschickt), verworfen, dateien,
     //   neuereVersion, serverAelter (nahm Lab nicht an), mehr (Grenze erreicht, Rest beim nächsten Abruf) }; o: { manuell, uebernehmen (Knopf „Hier aktualisieren“) }
     const abrufen = async (o) => {
       o = o || {};
@@ -805,7 +1028,7 @@ module.exports = function (ctx) {
       if (laeuft) return { art: "laeuft" };
       laeuft = true;
       const b = { art: "ok", fehler: "", angelegt: [], aktualisiert: [], umbenannt: [], entfaellt: [], doppelt: [], zusammengefuehrt: [], ausgeblendet: 0, hinweise: 0,
-        begleitnotizen: [], todoDoppel: [], unterlagen: 0, verworfen: [], dateien: 0, neuereVersion: false, serverAelter: false, mehr: false };
+        begleitnotizen: [], todoDoppel: [], lernplaene: 0, unterlagen: 0, kapitelFolien: 0, verworfen: [], dateien: 0, neuereVersion: false, serverAelter: false, mehr: false };
       // gerätelokaler Stand nach dem Quellen-Vertrag (nachLauf): ein Fehler bleibt stehen, bis ein Lauf klappt
       const ende = (fehler) => {
         if (fehler) { b.art = "fehler"; b.fehler = fehler; }
@@ -843,6 +1066,11 @@ module.exports = function (ctx) {
         let buendel;
         try { buendel = await entschluesseln(v.schluessel, "eingang", JSON.parse(r.text)); } catch (e) { return ende("paket"); }
         if (!buendel || buendel.schema !== 1 || !Array.isArray(buendel.dateien)) return ende("paket");
+        // Für die anderen Geräte (server.json): die Adresse für „Mit Code verbinden“ und das zuletzt verbundene Gerät (ein Server vor
+        // dem 01.11.2026 schickt verbunden nicht, dann bleibt der bisherige Eintrag)
+        z.adresse = v.adresse;
+        z.verbunden = (Array.isArray(buendel.verbunden) ? buendel.verbunden : []).filter((e) => e && isoOk(e.zeit) && HERKUNFT.indexOf(e.herkunft) >= 0)
+          .map((e) => ({ zeit: new Date(e.zeit).toISOString(), herkunft: e.herkunft })).sort((a, b) => (a.zeit < b.zeit ? -1 : a.zeit > b.zeit ? 1 : 0)).pop() || z.verbunden;
         let notizen = notizenLesen();
         if (notizen.gruppen.length) { await doppelZusammen(notizen.gruppen, b); notizen = notizenLesen(); }
         const quittung = [];
@@ -863,7 +1091,11 @@ module.exports = function (ctx) {
         if (neu !== text) await io.schreibenText(DATEI, neu);
         hinweisListe = z.hinweise;
         await angewendetSchreiben(z.angewendet);
-        await standSenden(v, quittung);
+        // Folien für Kapitellisten erst, wenn der Server den Stand hat (er fragt nach den Modulen)
+        if (await standSenden(v, quittung)) {
+          b.kapitelFolien = await kapitelSenden(v, z);
+          if (b.kapitelFolien) await io.schreibenText(DATEI, zustandText(z));
+        }
         return ende("");
       } catch (e) {
         console.error("server: Abruf", e);
@@ -894,6 +1126,13 @@ module.exports = function (ctx) {
       });
     };
     const vor = (iso) => Q.vorText(iso, jetztMs());
+    // Limit des Claude-Abos: wann der Server es wieder versucht (Status limit_wieder); ohne Zeit (älterer Server) der alte Satz
+    const limitText = (wieder) => {
+      if (!wieder) return "Claude hat gerade sein Limit erreicht. Der nächste Lauf versucht es von selbst.";
+      return new Date(wieder).getTime() > jetztMs()
+        ? `Claude hat das Limit deines Abos erreicht. Dein Server versucht es um ${uhrzeit(wieder)} wieder, nichts geht verloren.`
+        : "Claude hat das Limit deines Abos erreicht. Dein Server versucht es gleich wieder, nichts geht verloren.";
+    };
     // Neue Version des Servers → "" | "gescheitert" (der letzte Versuch ging schief, und der Server hat dessen Ziel nicht schon
     // anders bekommen, etwa über „Weiter mit der Einrichtung“; nur im Fenster, er versucht es täglich neu) | "haengt" (seit mehr als
     // VERSION_TAGE kein Versuch ohne Fehler, und die zentralen Daten bieten eine neuere Version an, als er hat; auch in der Zeile)
@@ -934,7 +1173,7 @@ module.exports = function (ctx) {
       if (w.claude === "abgemeldet") return { text: "Claude ist auf deinem Server nicht mehr verbunden. Sag in Claude Code „Weiter mit der Einrichtung“, dann verbindest du es neu.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       if (w.uniZugang === "falsch") return { text: "Die Uni nimmt das Passwort auf deinem Server nicht an. Sag in Claude Code „Weiter mit der Einrichtung“, dann gibst du es neu ein.", symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       if (w.claudeLauf === "wartet" || w.claudeLauf === "laeuft") return { text: "Claude durchsucht gerade deine Mails auf deinem Server …", symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
-      if (w.fehler && w.fehler.indexOf("claude-limit") >= 0) return { text: "Claude hat gerade sein Limit erreicht. Der nächste Lauf versucht es von selbst.", symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
+      if (w.fehler && w.fehler.indexOf("claude-limit") >= 0) return { text: limitText(w.limitWieder), symbol: "uhr", pille: "an", knopf: AKTUALISIEREN, link: MEHR };
       if (versionLage(w) === "haengt") return { text: `Dein Server installiert seit mehr als ${VERSION_TAGE} Tagen keine neue Version mehr. Sag in Claude Code „Weiter mit der Einrichtung“, dann holt Claude das nach.`, symbol: "warnung", pille: "pruefen", knopf: AKTUALISIEREN, link: MEHR };
       const n = s.bericht ? s.bericht.neu + s.bericht.geaendert : 0;
       const teile = [stand.text];
@@ -951,6 +1190,18 @@ module.exports = function (ctx) {
     };
     const hinweiseGesehen = () => { lokal(L.gesehen, hinweisListe.map(hinweisSchluessel)); };
     const hinweiseLaden = async () => { await zustandLesen(); };
+    // Hinweise der letzten HINWEIS_NEU_TAGE Tage, neueste zuerst, frisch aus server.json (synchronisiert, also auf jedem Gerät);
+    // mit code nur die zu diesem Modul. Für das Modulfeld (modul.js) und „Seit deinem letzten Besuch“ (seit-besuch.js)
+    const hinweise = async (o) => {
+      const code = (o && o.code) || "", jetzt = jetztMs();
+      const { z } = await zustandLesen();
+      return z.hinweise.filter((h) => {
+        const t = Date.parse(h.zeit);
+        return !isNaN(t) && t <= jetzt && jetzt - t <= HINWEIS_NEU_TAGE * 1440 * MIN && (!code || h.code === code);
+      }).map((h) => ({ text: reinerText(h.text, 300), quelle: reinerText(h.quelle, 200), zeit: String(h.zeit),
+        code: MODULCODE_SERVER.test(String(h.code || "")) ? String(h.code) : "" }))
+        .filter((h) => h.text).sort((a, b) => Date.parse(b.zeit) - Date.parse(a.zeit));
+    };
     // Stand für das Fenster: [[Bezeichnung, Wert]] (nur feste Texte), Hinweise (neueste zuerst), letzte Übernahmen
     const WERTE = {
       claude: { angemeldet: "verbunden", abgemeldet: "nicht verbunden, bitte neu verbinden" },
@@ -971,11 +1222,13 @@ module.exports = function (ctx) {
       }
       if (s.geprueft) liste.push(["Zuletzt aktualisiert", uhrzeit(s.geprueft)]);
       const { z } = await zustandLesen();
+      if (z.verbunden) liste.push(["Zuletzt verbunden", `${uhrzeit(z.verbunden.zeit)} (${HERKUNFT_TEXT[z.verbunden.herkunft]})`]);
       return { liste, hinweise: z.hinweise.slice().reverse().slice(0, 10), laeufe: z.laeufe.slice().reverse().slice(0, 5).map((l) => Object.assign({}, l, { wann: uhrzeit(l.zeit) })) };
     };
 
     return {
-      verbinden, trennen, abrufen, anstossen, status, zeile, einzelheiten, sichtbar, neueHinweise, hinweiseGesehen, hinweiseLaden,
+      verbinden, trennen, abrufen, anstossen, status, zeile, einzelheiten, sichtbar, neueHinweise, hinweiseGesehen, hinweiseLaden, hinweise,
+      geraetCode, adresseBekannt, codeVerbinden,
       verbunden: () => !!verbindung(),
       get laeuft() { return laeuft; },
     };
@@ -1157,6 +1410,44 @@ module.exports = function (ctx) {
     }
     return aus;
   };
+  // Lernplan: laufendes Semester und die Module, für die Claude eine Kapitelliste bauen soll: dran wie bei den zentralen Listen
+  // (ctx.lernplan.zentralAuswahl: in deinem Plan in diesem Semester, laufend oder angemeldet, nicht bestanden), ohne zentrale Liste
+  // für dieses Semester. null, wenn lernplan.js Listen vom Server nicht übernehmen kann (dann fragt der Stand nicht danach).
+  const lernplanAuswahl = () => {
+    const L = ctx.lernplan, M = ctx.modell;
+    if (!L || typeof L.serverListen !== "function" || typeof L.zentralAuswahl !== "function" || !M || !M.daten || !M.semesterFuer) return null;
+    const sem = M.semesterFuer(tagIso(Date.now()));
+    if (!sem || !sem.name) return null;
+    const D = M.daten(), Z = ctx.zentral && ctx.zentral.kapitel ? ctx.zentral.kapitel() : null;
+    const zentral = (Z && Array.isArray(Z.module) ? Z.module : []).filter((e) => e.semester === sem.name).map((e) => e.code);
+    const module = L.zentralAuswahl((D.module || []).map((m) => ({ code: m.code, semester: sem.name })), D, sem.name).map((e) => e.code)
+      .filter((c, i, a) => MODULCODE_SERVER.test(String(c)) && zentral.indexOf(c) < 0 && a.indexOf(c) === i).sort().slice(0, 60);
+    return { semester: sem.name, module };
+  };
+  // Folien für Kapitellisten: je Modul aus lernplanAuswahl die Folien, mit denen auch der Plan rechnet (ctx.lernplan.folienVon: je
+  // Nummer eine, ohne Varianten, die neueste Fassung), deren Textfassung zur PDF passt; niedrige Nummern zuerst (dort steht die
+  // Gliederung). Nicht bei server_unterlagen: aus. o: { ohne: { Kennung: Zeit } (schon gesendet), hoechstens }
+  const kapitelUnterlagenObs = async (o) => {
+    o = o || {};
+    const L = ctx.lernplan, A = lernplanAuswahl(), ohne = o.ohne || {};
+    if (unterlagenModus() === "aus" || !A || !A.module.length || typeof L.folienVon !== "function") return [];
+    const textVon = volltexte(), fmVon = (f) => (app.metadataCache.getFileCache(f) || {}).frontmatter || {}, kandidaten = [];
+    for (const code of A.module) {
+      const F = L.folienVon(code) || {};
+      for (const nr of Object.keys(F)) {
+        const nf = F[nr] && F[nr].f, fm = nf ? fmVon(nf) : null, pdf = nf ? pdfZurNotiz(nf, fm) : null, t = pdf && textVon[pdf.path];
+        if (!t || ohne[String(t.fm.pdf_sha256)] || !textAktuell(t.fm, groesse(pdf.path))) continue;
+        kandidaten.push({ nr: Number(nr), code, nf, fm, pdf, t });
+      }
+    }
+    kandidaten.sort((a, b) => a.nr - b.nr || (a.code < b.code ? -1 : a.code > b.code ? 1 : 0));
+    const aus = [];
+    for (const k of kandidaten.slice(0, o.hoechstens || KAPITEL_JE_ABRUF)) {
+      aus.push({ datei: k.pdf.path, kennung: String(k.t.fm.pdf_sha256), titel: String(k.fm.titel || k.nf.basename), code: k.code, nummer: k.nr,
+        seiten: Number(k.t.fm.seiten) || 0, datum: s10(k.fm.datum), quelle: String(k.fm.quelle || ""), text: volltextText(await app.vault.cachedRead(k.t.f)) });
+    }
+    return aus;
+  };
   const tresorObs = async () => {
     const jetzt = Date.now(), von = tagIso(jetzt - 30 * 864e5), bis = tagIso(jetzt + 365 * 864e5);
     const termine = obsidianIo().terminNotizen().map(({ pfad, fm }) => ({
@@ -1186,7 +1477,8 @@ module.exports = function (ctx) {
     // was zählt: Module in deinem Plan bzw. laut Musterplan jetzt oder im nächsten Fachsemester (wie die zentralen Termine)
     stand: () => {
       const D = ctx.modell.daten();
-      return { module: Object.keys(ctx.zentral.filterBauen().codes).sort(), studienbeginn: D.studienbeginn || "", variante: D.variante || "", takt: taktAus(einstellungenFm()) };
+      return { module: Object.keys(ctx.zentral.filterBauen().codes).sort(), studienbeginn: D.studienbeginn || "", variante: D.variante || "", takt: taktAus(einstellungenFm()),
+        lernplan: unterlagenModus() === "aus" ? null : lernplanAuswahl() };
     },
     modulLink: (code) => { const e = eba(), m = e && code && e.modulNachCode(code); return m ? `[[${m.f.basename}]]` : ""; },
     bestaetigen: bestaetigenObs,
@@ -1195,6 +1487,18 @@ module.exports = function (ctx) {
     standText: (s) => ctx.verbindungen.standText(s), // nur die Zeile unter Verbindungen fragt danach, also ist verbindungen.js geladen
     tresor: tresorObs,
     unterlagen: unterlagenObs,
+    kapitelUnterlagen: kapitelUnterlagenObs,
+    lernplan: () => ctx.lernplan || null,
+    // Lernplan-Notizen vom Server zu diesen Modulen (herkunft: server) → [{ code, text }]
+    lernplanNotizen: async (codes) => {
+      const aus = [];
+      for (const code of codes) {
+        const f = app.vault.getAbstractFileByPath(`Lernplan/${code} Lernplan.md`);
+        const fm = f && !f.children ? (app.metadataCache.getFileCache(f) || {}).frontmatter || {} : null;
+        if (fm && fm.herkunft === "server") aus.push({ code, text: await app.vault.cachedRead(f) });
+      }
+      return aus;
+    },
     pdf: async (p) => { const f = app.vault.getAbstractFileByPath(p); return f && !f.children ? new Uint8Array(await app.vault.readBinary(f)) : null; },
     mobil: !!(obs.Platform && obs.Platform.isMobile),
     lokalErlaubt: !!plugin().testServerLokal,
@@ -1218,6 +1522,7 @@ module.exports = function (ctx) {
       if (n) teile.push(zahl(n, "neuer Termin", "neue Termine"));
       if (g) teile.push(zahl(g, "Termin geändert", "Termine geändert"));
       if (b.begleitnotizen.length) teile.push(zahl(b.begleitnotizen.length, "Begleitnotiz", "Begleitnotizen"));
+      if (b.lernplaene) teile.push(zahl(b.lernplaene, "Lernplan", "Lernpläne"));
       if (b.hinweise) teile.push(zahl(b.hinweise, "Hinweis", "Hinweise"));
       if (b.todoDoppel.length) teile.push(zahl(b.todoDoppel.length, "doppeltes To-do zusammengeführt", "doppelte To-dos zusammengeführt"));
       text = teile.length ? "Neu von deinem Server: " + teile.join(", ") + "." : "Nichts Neues von deinem Server.";
@@ -1324,13 +1629,86 @@ module.exports = function (ctx) {
     zeile("Uni-Postfach", "uni_postfach");
     zeile("Gmail", "gmail");
   };
-  const fensterInhalt = async (el) => {
+  // Nach dem Verbinden (Link oder Code): Hinweis, Zeile neu, gleich abrufen
+  const nachVerbinden = async () => {
+    ctx.hinweis("Mit deinem Server verbunden. Die Termine kommen gleich.");
+    neuZeichnen();
+    await jetztHolen();
+  };
+  // Weiteres Gerät verbinden: erst die Rückfrage, dann der Code groß im Fenster mit Ablauf und Anleitung, bis er abläuft. Er steht
+  // nur hier (nie im Tresor, in data.json, server.json oder im Gerätespeicher); ein neuer Code ersetzt ihn auch auf dem Server.
+  const GERAET_FEHLER = {
+    "nicht-verbunden": "Verbinde zuerst deinen Server.",
+    zugang: FEHLER.zugang,
+    uhr: "Die Uhr dieses Geräts geht falsch. Stell sie richtig und versuch es noch einmal.",
+    alt: "Dein Server kann das erst nach seinem nächsten Update. Er aktualisiert sich täglich.",
+    paket: FEHLER.paket,
+    netz: FEHLER.netz,
+  };
+  const geraetFehler = (r, jetzt) => {
+    if (r.fehler !== "zu-viele") return GERAET_FEHLER[r.fehler] || FEHLER.netz;
+    const d = new Date(r.wieder || "");
+    return "Du hast gerade schon mehrere Codes erzeugt." + (isNaN(d.getTime()) ? " Versuch es später wieder." : ` Wieder möglich ab ${zeitText(d, jetzt)}.`);
+  };
+  let codeNr = 0; // nur der zuletzt gezeigte Code verschwindet zu seiner Zeit
+  const codeZeigen = async (platz, knopf) => {
+    const ja = await bestaetigenObs("Weiteres Gerät verbinden?",
+      "Wer diesen Code hat, kann alles lesen, was dein Server für dich findet. Gib ihn nur auf deinem eigenen Gerät ein.", "Code erzeugen");
+    if (!ja) return;
+    knopf.disabled = true;
+    const r = await motor().geraetCode();
+    knopf.disabled = false;
+    const nr = ++codeNr;
+    platz.empty();
+    if (!r.ok) { platz.createEl("p", { cls: "eba-modal-meldung fehler", text: geraetFehler(r, new Date()) }); return; }
+    platz.createEl("p", { cls: "eba-modal-abschnitt", text: "Code für dein neues Gerät" });
+    platz.createDiv({ cls: "eba-server-code", text: r.code });
+    platz.createEl("p", { cls: "eba-modal-text", text: codeAnleitung(r, new Date()) });
+    ctx.zeit(() => { if (nr === codeNr) platz.empty(); }, Math.max(0, Date.parse(r.ablauf) - Date.now()));
+  };
+  // Mit Code verbinden (Gerät ohne gültige Verbindung, aber mit Server im Tresor): Feld für den Code, ohne bekannte Adresse (ältere
+  // server.json) auch für sie; dann Rückfrage und Einlösen wie beim Link. neu(): Fenster neu zeichnen
+  const codeFelder = async (box, neu) => {
+    const bekannt = await motor().adresseBekannt();
+    box.createEl("p", { cls: "eba-modal-abschnitt", text: "Mit Code verbinden" });
+    const zeilen = box.createDiv({ cls: "eba-modal-zugang" });
+    const feld = (name, attr) => {
+      const z = zeilen.createDiv({ cls: "eba-modal-zeile" });
+      z.createEl("label", { cls: "eba-modal-label", text: name });
+      return z.createEl("input", { type: "text", cls: "eba-modal-feld",
+        attr: Object.assign({ autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false", "aria-label": name }, attr) });
+    };
+    const code = feld("Code", { placeholder: "ABCDE-FGHJK", autocapitalize: "characters", enterkeyhint: bekannt ? "go" : "next" });
+    const adresse = bekannt ? null : feld("Adresse deines Servers", { placeholder: "https://…", inputmode: "url", enterkeyhint: "go" });
+    const meldung = box.createEl("p", { cls: "eba-modal-meldung" });
+    const knopf = box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Mit Code verbinden", cls: "mod-cta" });
+    const los = async () => {
+      knopf.disabled = true;
+      meldung.removeClass("fehler");
+      meldung.setText("");
+      const r = await motor().codeVerbinden(code.value, adresse ? adresse.value : "");
+      knopf.disabled = false;
+      if (r.abgebrochen) return;
+      if (!r.ok) { meldung.addClass("fehler"); meldung.setText(r.fehler); return; }
+      code.value = "";
+      if (neu) neu();
+      await nachVerbinden();
+    };
+    knopf.addEventListener("click", () => { los().catch((e) => { console.error("server: Mit Code verbinden", e); knopf.disabled = false; }); });
+    for (const f of [code, adresse]) if (f) f.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); knopf.click(); } });
+  };
+  // neu(): Fenster neu zeichnen (nach „Mit Code verbinden“)
+  const fensterInhalt = async (el, neu) => {
     const box = el.createDiv({ cls: "eba-server" });
     // Noch kein Server: nur der Knopf zum Kopieren des Prompts (Schritte und Hintergrund stehen im Fenster darüber)
     if (!motor().sichtbar()) {
       box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Prompt kopieren", cls: "mod-cta" }).addEventListener("click", () => kopieren());
       return;
     }
+    // Server da, dieses Gerät nicht verbunden oder seine Schlüssel abgelehnt (etwa nach „schluessel-erneuern“): zuerst der Code
+    const s = motor().status();
+    const abgelehnt = s.verbunden && (s.code === "zugang" || s.code === "paket");
+    if (!s.verbunden || abgelehnt) await codeFelder(box, neu);
     const d = await motor().einzelheiten();
     if (d.liste.length) {
       const ul = box.createEl("ul", { cls: "eba-server-stand" });
@@ -1345,7 +1723,7 @@ module.exports = function (ctx) {
     if (d.laeufe.length) {
       box.createEl("h4", { text: "Zuletzt übernommen" });
       const ul = box.createEl("ul", { cls: "eba-server-laeufe" });
-      for (const l of d.laeufe) ul.createEl("li", { text: [l.wann, zahl(l.termine || 0, "Termin", "Termine"), zahl(l.hinweise || 0, "Hinweis", "Hinweise")].concat(l.begleitnotizen ? [zahl(l.begleitnotizen, "Begleitnotiz", "Begleitnotizen")] : []).concat(l.doppelt ? [zahl(l.doppelt, "Doppel", "Doppel") + " übersprungen"] : []).concat(l.todos ? [zahl(l.todos, "To-do", "To-dos") + " zusammengeführt"] : []).join(" · ") });
+      for (const l of d.laeufe) ul.createEl("li", { text: [l.wann, zahl(l.termine || 0, "Termin", "Termine"), zahl(l.hinweise || 0, "Hinweis", "Hinweise")].concat(l.begleitnotizen ? [zahl(l.begleitnotizen, "Begleitnotiz", "Begleitnotizen")] : []).concat(l.lernplaene ? [zahl(l.lernplaene, "Lernplan", "Lernpläne")] : []).concat(l.doppelt ? [zahl(l.doppelt, "Doppel", "Doppel") + " übersprungen"] : []).concat(l.todos ? [zahl(l.todos, "To-do", "To-dos") + " zusammengeführt"] : []).join(" · ") });
     }
     taktZeigen(box);
     const plugins = app.plugins;
@@ -1356,10 +1734,14 @@ module.exports = function (ctx) {
       box.createEl("p", { cls: "eba-modal-text", text: angebot.text });
       box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Prompt kopieren", cls: "mod-cta" }).addEventListener("click", () => kopieren(LIVESYNC_PROMPT));
     }
-    if (motor().verbunden()) {
-      box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Mails durchsuchen" }).addEventListener("click", () => durchsuchen());
-      box.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Dieses Gerät trennen", href: ctx.link("trennen", { id: "server" }) });
+    if (s.verbunden && !abgelehnt) {
+      const k = box.createDiv({ cls: "modal-button-container" });
+      k.createEl("button", { text: "Mails durchsuchen" }).addEventListener("click", () => durchsuchen());
+      const weiteres = k.createEl("button", { text: "Weiteres Gerät verbinden" });
+      const platz = box.createDiv();
+      weiteres.addEventListener("click", () => { codeZeigen(platz, weiteres).catch((e) => { console.error("server: Weiteres Gerät", e); weiteres.disabled = false; }); });
     }
+    if (s.verbunden) box.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Dieses Gerät trennen", href: ctx.link("trennen", { id: "server" }) });
   };
 
   // ---------- Erweiterung ----------
@@ -1372,19 +1754,18 @@ module.exports = function (ctx) {
         const r = await motor().verbinden(c.parameter.adresse, c.parameter.code);
         if (r.abgebrochen) return;
         if (!r.ok) { ctx.hinweis(r.fehler); return; }
-        ctx.hinweis("Mit deinem Server verbunden. Die Termine kommen gleich.");
-        neuZeichnen();
-        await jetztHolen();
+        await nachVerbinden();
       },
     },
   };
 
   // begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz, fassungExtern und wahl braucht auch claude.js (Zusammenfassen ohne Server)
   ctx.server = {
-    erzeugen, aehnlich, adresseNormal, PROMPT, LIVESYNC_PROMPT, livesyncAngebot, kopieren, begleitnotizErgaenzen, volltextText, taktAus, pdfKosten, PDF_FRAGEN,
+    erzeugen, aehnlich, adresseNormal, adresseEingabe, codeForm, codeAnleitung, PROMPT, LIVESYNC_PROMPT, livesyncAngebot, kopieren, begleitnotizErgaenzen, volltextText, kapitelText, listeAusNotiz, taktAus, pdfKosten, PDF_FRAGEN,
     begleitnotizSauber, wunschWeg, ARTEN_SENDEN, volltexte, pdfZurNotiz, fassungExtern, wahl: wahlObs,
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
     jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
+    hinweise: (o) => motor().hinweise(o), DATEI,
   };
 
   // Gemeinsamer Zeitplan (quellen.js): nach 30 s + Zufall bis 2 Min., dann alle 15 Min., nach Fehlern früher; zurück in der App

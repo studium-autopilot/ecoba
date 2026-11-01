@@ -302,5 +302,8 @@ unter Billing ein. Mit einem Abo (Claude Pro oder Max) geht es nicht, das erlaub
 
 Freiwillig und erst, wenn die Einrichtung in Obsidian fertig ist. Claude richtet dir einen kostenlosen Server bei Oracle ein,
 der deine Unterlagen über dein Claude-Abo zusammenfasst und in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop (Tab **Code**, nicht der Chat) und was du dafür brauchst, findest du im
-README unter „Für Technische: eigener Server mit Claude“. Verbunden wird jedes Gerät mit einem eigenen Link vom Server;
-danach steht unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**.
+README unter „Für Technische: eigener Server mit Claude“. Das erste Gerät verbindest du mit einem Link vom Server; danach steht
+unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**. Jedes weitere Gerät verbindest du ohne Claude:
+dort auf dem verbundenen Gerät **Weiteres Gerät verbinden** tippen und den Code auf dem neuen Gerät unter **Mit Code verbinden**
+eingeben. Ist ein Gerät verloren, gib in der Cloud Shell von Oracle `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`
+ein: Dein Server bekommt neue Schlüssel, das verlorene Gerät kommt nicht mehr an deine Daten, und du verbindest deine Geräte neu.

@@ -3,6 +3,8 @@
 // daraus ab (nie das Modell). Die Regeln entsprechen termineNormal in zentral.js (docs/daten-v1.md, termine.json), damit das
 // Plugin die Termine mit derselben Prüfung übernimmt (tests/server-eingang.test.js prüft das gegen zentral.js).
 // Gleicher Schlüssel in einem späteren Lauf = Änderung desselben Termins.
+// Kapitellisten für den Lernplan (seit 31.10.2026, Feld „kapitel“): dieselbe Form und dieselben Regeln wie kapitel.json →
+// module[] (docs/daten-v1.md, kapitelPruefen in zentral.js); ein ungültiges Kapitel verwirft sein ganzes Modul.
 import { createHash } from "node:crypto";
 
 export const EINGANG_SCHEMA = 1;
@@ -14,7 +16,8 @@ const STATUS = ["offiziell", "geschätzt"];
 export const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/;
 const GEFAEHRLICH = /<\s*\/?\s*[a-z!]|<%|%>|obsidian:\/\/|\[\[|\]\]|`|[\r\n]|javascript:/i;
 const G = { titel: 120, ort: 120, info: 200, quelleText: 200, schluessel: 200, hinweis: 300, punkt: 300, begriff: 60, aufgabe: 200, frage: 200,
-  termine: 300, hinweise: 50, begleitnotizen: 50, punkte: 12, aufgaben: 12, fragen: 10, pfad: 240, todoDoppel: 50 };
+  termine: 300, hinweise: 50, begleitnotizen: 50, punkte: 12, aufgaben: 12, fragen: 10, pfad: 240, todoDoppel: 50,
+  kapitelModule: 60, kapitel: 40, teile: 40, kapitelTitel: 140, kapitelQuelle: 120, url: 500 };
 // Kennung eines To-dos im Auszug aus dem Tresor (tresor.json, vom Plugin: „t-“ und eine Kurz-Prüfsumme aus Notiz und Zeile)
 export const TODO_ID = /^t-[0-9a-z]{1,13}$/;
 
@@ -114,6 +117,79 @@ function begleitnotizNormal(b, verworfen) {
   return { wert };
 }
 
+// ---------- Kapitellisten (wie kapitelPruefen in zentral.js) ----------
+export const SEMESTER = /^(WS \d{4}\/\d{2}|SS \d{4})$/;
+const KAPITEL_NR = /^[0-9A-Z][0-9A-Za-z.]{0,7}$/;
+const KAPITEL_DOMAINS = ["uni-tuebingen.de", "core-econ.org"]; // Uni und das freie Lehrbuch von CORE
+const reinerText = (v) => typeof v === "string" && !GEFAEHRLICH.test(v) && !/[\[\]<>{}|\\]/.test(v); // wie titel bei Terminen
+const kapitelTitel = (v) => (reinerText(v) ? saeubern(v, G.kapitelTitel, true) : { fehler: "unzulässig" });
+const ganzZahl = (v, min, max) => (v == null || v === "" ? { wert: null } : Number.isInteger(v) && v >= min && v <= max ? { wert: v } : { fehler: "ungültig" });
+const tagFeld = (v) => (v == null || v === "" ? { wert: "" } : datumOk(v) ? { wert: v } : { fehler: "ungültig" });
+// Link nur https auf die Domains (auch Subdomains), ohne Anmeldung und Port; Klammern kodiert wie im Plugin
+function urlPruefen(v) {
+  if (typeof v !== "string" || v.length > G.url || /[\s"'<>`\\]/.test(v)) return { fehler: "Link ungültig" };
+  let u;
+  try { u = new URL(v); } catch (e) { return { fehler: "Link ungültig" }; }
+  if (u.protocol !== "https:" || u.username || u.password || u.port) return { fehler: "Link nicht https" };
+  const h = u.hostname.toLowerCase();
+  if (!KAPITEL_DOMAINS.some((d) => h === d || h.endsWith("." + d))) return { fehler: "Domain nicht erlaubt" };
+  return { wert: v.replace(/\(/g, "%28").replace(/\)/g, "%29") };
+}
+// Ein Kapitel → { wert } in der Form von kapitel.json (leere Felder weggelassen) oder { fehler }. vorlesung ist ein Beleg, nie
+// ein Tag nach dem Lauf: ein späterer fällt weg (das Kapitel bleibt).
+function kapitelNormal(k, heute) {
+  if (!istObjekt(k)) return { fehler: "kein Objekt" };
+  if (typeof k.nr !== "string" || !KAPITEL_NR.test(k.nr)) return { fehler: "nr ungültig" };
+  const titel = kapitelTitel(k.titel);
+  if (titel.fehler) return { fehler: "titel " + titel.fehler };
+  const seiten = ganzZahl(k.seiten, 1, 2000), folien = ganzZahl(k.folien, 0, 99);
+  if (seiten.fehler) return { fehler: "seiten ungültig" };
+  if (folien.fehler) return { fehler: "folien ungültig" };
+  const vorlesung = tagFeld(k.vorlesung), zwischentest = tagFeld(k.zwischentest);
+  if (vorlesung.fehler) return { fehler: "vorlesung ungültig" };
+  if (zwischentest.fehler) return { fehler: "zwischentest ungültig" };
+  const url = k.url == null || k.url === "" ? { wert: "" } : urlPruefen(k.url);
+  if (url.fehler) return { fehler: "url: " + url.fehler };
+  const teile = [];
+  if (k.teile != null) {
+    if (!Array.isArray(k.teile) || k.teile.length > G.teile) return { fehler: "teile ungültig" };
+    for (const t of k.teile) {
+      if (!istObjekt(t) || typeof t.nr !== "string" || !KAPITEL_NR.test(t.nr)) return { fehler: "teil ungültig" };
+      const tt = kapitelTitel(t.titel);
+      if (tt.fehler) return { fehler: "teil " + t.nr + " titel " + tt.fehler };
+      teile.push({ nr: t.nr, titel: tt.wert });
+    }
+  }
+  const wert = { nr: k.nr, titel: titel.wert };
+  if (seiten.wert != null) wert.seiten = seiten.wert;
+  if (folien.wert != null) wert.folien = folien.wert;
+  if (url.wert) wert.url = url.wert;
+  if (teile.length) wert.teile = teile;
+  if (vorlesung.wert && vorlesung.wert <= heute) wert.vorlesung = vorlesung.wert;
+  if (zwischentest.wert) wert.zwischentest = zwischentest.wert;
+  return { wert };
+}
+// Ein Modul → { wert: { code, semester, quelle, stand, vorlaeufig, kapitel } } oder { fehler }; ohne stand (oder mit einem Tag
+// nach dem Lauf) gilt der Tag des Laufs
+export function kapitelModulNormal(e, heute) {
+  if (!istObjekt(e)) return { fehler: "kein Objekt" };
+  if (typeof e.code !== "string" || !MODULCODE.test(e.code)) return { fehler: "code ungültig" };
+  if (typeof e.semester !== "string" || !SEMESTER.test(e.semester)) return { fehler: "semester ungültig" };
+  if (!reinerText(e.quelle == null ? "" : e.quelle)) return { fehler: "quelle unzulässig" };
+  const quelle = saeubern(e.quelle, G.kapitelQuelle, false);
+  if (quelle.fehler) return { fehler: "quelle " + quelle.fehler };
+  if (!Array.isArray(e.kapitel) || !e.kapitel.length || e.kapitel.length > G.kapitel) return { fehler: "kapitel ungültig" };
+  const kapitel = [];
+  for (const k of e.kapitel) {
+    const r = kapitelNormal(k, heute);
+    if (r.fehler) return { fehler: "kapitel " + (istObjekt(k) && typeof k.nr === "string" ? k.nr.slice(0, 8) : "?") + ": " + r.fehler };
+    kapitel.push(r.wert);
+  }
+  if (new Set(kapitel.map((k) => k.nr)).size !== kapitel.length) return { fehler: "doppelte Kapitelnummer" };
+  return { wert: { code: e.code, semester: e.semester, quelle: quelle.wert, stand: datumOk(e.stand) && e.stand <= heute ? e.stand : heute,
+    vorlaeufig: e.vorlaeufig === true, kapitel } };
+}
+
 // Claudes Ausgabe eines Laufs → { eingang, verworfen }. Einzelne ungültige Einträge fallen weg, der Rest bleibt.
 export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
   const heute = jetzt.toISOString().slice(0, 10);
@@ -139,7 +215,9 @@ export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
     const text = saeubern(istObjekt(h) ? h.text : h, G.hinweis, true);
     const quelle = saeubern(istObjekt(h) ? h.quelle : "", G.quelleText, false);
     if (text.fehler || quelle.fehler) { verworfen.push({ art: "hinweis", grund: text.fehler || quelle.fehler }); continue; }
-    hinweise.push(quelle.wert ? { text: text.wert, quelle: quelle.wert } : { text: text.wert });
+    // Modul, zu dem der Hinweis gehört (Modulfeld in Obsidian); ein ungültiger Code fällt weg, der Hinweis bleibt
+    const code = istObjekt(h) && typeof h.code === "string" && MODULCODE.test(h.code) ? h.code : "";
+    hinweise.push(Object.assign(quelle.wert ? { text: text.wert, quelle: quelle.wert } : { text: text.wert }, code ? { code } : {}));
   }
   // Doppelte To-dos: Paare { behalten, weg } aus Kennungen des Auszugs; jedes To-do höchstens einmal als „weg“, nie beides
   const todo_doppel = [];
@@ -150,10 +228,21 @@ export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
     wegSchon.add(p.weg); behaltenSchon.add(p.behalten);
     todo_doppel.push({ behalten: p.behalten, weg: p.weg });
   }
+  // Kapitellisten: je Code und Semester eine, immer die ganze Liste
+  const kapitel = [];
+  const kapitelSchon = new Set();
+  for (const e of Array.isArray(roh.kapitel) ? roh.kapitel.slice(0, G.kapitelModule) : []) {
+    const id = istObjekt(e) ? `${String(e.code || "").slice(0, 8)} ${String(e.semester || "").slice(0, 12)}` : "?";
+    if (kapitelSchon.has(id)) { verworfen.push({ art: "kapitel", id, grund: "doppelt" }); continue; }
+    kapitelSchon.add(id);
+    const r = kapitelModulNormal(e, heute);
+    if (r.fehler) verworfen.push({ art: "kapitel", id, grund: r.fehler });
+    else kapitel.push(r.wert);
+  }
   const quellen = (Array.isArray(roh.quellen) ? roh.quellen : []).filter((q) => QUELLEN.includes(q));
   return {
     eingang: { schema: EINGANG_SCHEMA, erstellt: jetzt.toISOString(), lauf: String(lauf).slice(0, 80), quellen: [...new Set(quellen)], termine, begleitnotizen, hinweise,
-      todo_doppel },
+      todo_doppel, kapitel },
     verworfen,
   };
 }
@@ -197,4 +286,24 @@ export function nurNeueHinweise(hinweise, bisher, jetzt = new Date()) {
   return { hinweise: neu, bisher: neuBisher };
 }
 
-export const istLeer = (e) => !e.termine.length && !e.begleitnotizen.length && !e.hinweise.length && !(e.todo_doppel || []).length;
+// Kapitellisten nur, wenn neu oder geändert, und nur für Module, nach denen das Plugin fragt (stand.json „lernplan“: laufendes
+// Semester, keine zentrale Liste). bestand: { „<Code> <Semester>“: Liste } (kapitel.json des Servers; daraus bekommt Claude die
+// bisherigen Listen, damit es berichtigt statt neu baut). `stand` zählt nicht als Änderung. Im Bestand bleibt nur das laufende
+// Semester. → { kapitel, bestand, verworfen }
+export function nurNeueKapitel(kapitel, bestand, lernplan) {
+  const gefragt = istObjekt(lernplan) && SEMESTER.test(String(lernplan.semester)) && Array.isArray(lernplan.module) ? lernplan : { semester: "", module: [] };
+  const neuerBestand = {};
+  for (const [k, e] of Object.entries(istObjekt(bestand) ? bestand : {})) if (istObjekt(e) && e.semester === gefragt.semester) neuerBestand[k] = e;
+  const ohneStand = (e) => JSON.stringify({ ...e, stand: "" });
+  const neu = [], verworfen = [];
+  for (const e of Array.isArray(kapitel) ? kapitel : []) {
+    const id = `${e.code} ${e.semester}`;
+    if (e.semester !== gefragt.semester || !gefragt.module.includes(e.code)) { verworfen.push({ art: "kapitel", id, grund: "nicht gefragt" }); continue; }
+    if (neuerBestand[id] && ohneStand(neuerBestand[id]) === ohneStand(e)) continue;
+    neuerBestand[id] = e;
+    neu.push(e);
+  }
+  return { kapitel: neu, bestand: neuerBestand, verworfen };
+}
+
+export const istLeer = (e) => !e.termine.length && !e.begleitnotizen.length && !e.hinweise.length && !(e.todo_doppel || []).length && !(e.kapitel || []).length;

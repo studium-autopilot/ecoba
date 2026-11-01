@@ -134,6 +134,21 @@ test("ILIAS-Dateien: neu geladene und aktualisierte der letzten 30 Tage, nie vom
   assert.deepEqual(SB.iliasEintraege(null, "2026-11-02"), []);
 });
 
+test("Hinweise von Claude: je Hinweis eine Zeile mit Quelle, Ziel über das Modul, gleicher Schlüssel auf allen Geräten", () => {
+  const h = [{ text: "Übung X110 diese Woche online.", quelle: "Mail des Lehrstuhls, 30.10.2026", zeit: "2026-10-30T09:15:00.000Z", code: "X110" },
+    { text: "Rundmail: Bibliothek länger offen.", quelle: "", zeit: "2026-10-31T10:00:00.000Z", code: "" }, { text: "", zeit: "2026-10-31T10:00:00.000Z" }];
+  const e = SB.claudeEintraege(h);
+  assert.equal(e.length, 2, "ohne Text keine Zeile");
+  assert.deepEqual(SB.claudeEintraege(h).map((x) => x.k), e.map((x) => x.k), "Schlüssel fest");
+  const zeilen = SB.zusammenstellen([], e.concat([{ q: "ilias", art: "datei", code: "X110", datum: "2026-10-30", k: "if|a|neu" }]), {}, T);
+  assert.deepEqual(zeilen.map((x) => x.q), ["claude", "claude", "ilias"], "nach den Abgaben, vor den ILIAS-Dateien");
+  assert.deepEqual([zeilen[0].titel, zeilen[0].meta, zeilen[0].code], ["Übung X110 diese Woche online.", "Von Claude · Mail des Lehrstuhls, 30.10.2026", "X110"]);
+  assert.equal(zeilen[1].meta, "Von Claude");
+  const g = SB.gesehenMischen({}, zeilen[0].keys, "2026-11-02");
+  assert.deepEqual(SB.zusammenstellen([], e, g, T).map((x) => x.titel), ["Rundmail: Bibliothek länger offen."], "gesehen bleibt weg");
+  assert.deepEqual(SB.claudeEintraege(null), []);
+});
+
 test("Zusammenstellen: zwei Geräte mit derselben Änderung einmal, Gesehenes nie, ILIAS je Modul eine Zeile", () => {
   const z = SB.zentralEintraege([
     { art: "geaendert", id: "x110-klausur", alt: termin({ datum: "2027-02-08", ort: "Hörsaal 1" }), neu: termin({ ort: "Hörsaal 9" }) },

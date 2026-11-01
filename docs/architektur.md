@@ -21,6 +21,7 @@ passende Datei; ein neues Thema bekommt eine eigene Datei und eine Zeile in dies
 | [server.md](architektur/server.md) | Eigener Server (`server.js`) |
 | [claude.md](architektur/claude.md) | Claude ohne Server (`claude.js`), Claude im Tresor (`.claude/`) |
 | [livesync.md](architektur/livesync.md) | LiveSync-Wache (`livesync.js`) |
+| [widget.md](architektur/widget.md) | Widgets für iPhone und iPad über Scriptable (`widget.js`) |
 | [bedien-bausteine.md](architektur/bedien-bausteine.md) | Fenster „Neu …“, Kopf-Karte, Öffnen und Navigieren, Rundgang, PDF-Kasten, Rückgängig und Papierkorb |
 | [verbindungen.md](architektur/verbindungen.md) | Verbindungen, Schloss, Uni-Login |
 | [unterlagen.md](architektur/unterlagen.md) | ILIAS-Unterlagen, Volltext der PDFs, neue Fassung einer Unterlage |
@@ -175,7 +176,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `fsrs.js` | Helfer: FSRS-6 und Lernschritte wie in Anki (`ctx.user.fsrs(ctx).planer`), siehe [„Karteikarten“](architektur/lernen.md) |
 | `karten.js` | Karteikarten: Codeblock `eba-karten` (Übersicht, `stapel`, `statistik`, `liste`, `heute`), Lernfenster, Üben, Verlauf einer Karte, Fenster „Neue Karte“ und „Optionen“, Pausieren, Lernstände je Gerät (`ctx.karten`); siehe [„Karteikarten“](architektur/lernen.md) |
 | `schwerpunkte.js` | Abschnitt „Schwerpunkte“ im Studienverlauf (seit 17.10.2026, vorher Seite „Schwerpunkt-Planer“): Codeblock `eba-schwerpunkte`, Regeln der PO für die Schwerpunktbereiche, `ctx.schwerpunkte` (`rechnen`, `sichtbar`); siehe [„Bereiche“](architektur/seiten.md) |
-| `lernplan.js` | Lernplan (seit 18.10.2026): Codeblock `eba-lernplan` (Bereich, Argument `modul` in der Lernplan-Notiz), Abhaken der Kapitel, `ctx.lernplan` (`kapitelLesen`, `planen`, `zielVon`, `stand`, `kapazitaet`, `sichtbar`); siehe [„Lernplan“](architektur/lernen.md) |
+| `lernplan.js` | Lernplan (seit 18.10.2026): Codeblock `eba-lernplan` (Bereich, Argument `modul` in der Lernplan-Notiz, `woche` auf dem Dashboard), Abhaken der Kapitel, Zeit je Woche, Schalter „Vor der Vorlesung lernen“, Notizen aus den Kapitellisten (zentral und eigener Server), `ctx.lernplan` (`kapitelLesen`, `planen`, `zielVon`, `stand`, `kapazitaet`, `sichtbar`, `modulZeile` für die Modulseite, `serverListen` für `server.js`); siehe [„Lernplan“](architektur/lernen.md) |
 | `literatur.js` | Literaturlisten (seit 24.10.2026): schreibt auf dem Abrufer aus `literatur.json` je Modul die Notiz „<Code> Literatur 00 Literaturliste“ in den Ordner Literatur des Moduls (`ctx.literaturAnzeige`); siehe [„Literaturliste“](architektur/lernen.md) |
 | `bitte-pruefen.js` | „Bitte prüfen“ auf dem Dashboard (seit 18.10.2026): Protokoll des eigenen Uni-Abgleichs und (seit 0.4.5) die Punkte aller Quellen aus dem Meldekanal (Quellen-Vertrag); Codeblock `eba-bitte-pruefen`; siehe [„Dashboard“](architektur/seiten.md) |
 | `alma-konto.js`, `alma-konto-html.js` | Noten & Anmeldungen aus Alma (seit 0.4.5, Beta, `ctx.almaKonto`): Ablauf, Zustand, Zeile und Fenster bzw. reiner Leser der Seiten; siehe [„Noten & Anmeldungen (Alma)“](architektur/alma.md) |
@@ -194,6 +195,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `volltext.js` | Volltext der PDFs (seit 0.4.5): Textfassungen unter `Unterlagen/_Volltext/` für die Suche, `ctx.volltext`; siehe [„Volltext der PDFs“](architektur/unterlagen.md) |
 | `claude.js` | Claude ohne Server (seit 0.6.3, `ctx.claude`): eigener API-Schlüssel aus der Claude Console, **Zusammenfassen** im PDF-Kasten direkt über die Messages API, Zeile und Fenster „Claude“ unter Verbindungen (seit 26.10.2026 nur für Fortgeschrittene, Zeile erst nach dem Verbinden); siehe [„Claude ohne Server“](architektur/claude.md) |
 | `ilias-kalender.js` | ILIAS-Kalender (seit 18.10.2026): Abgaben deiner Übungen aus dem Kalender-Abo als Fristen unter `Termine/`, `ctx.iliasKalender`; siehe [„ILIAS-Kalender“](architektur/ilias-kalender.md) |
+| `widget.js` | Widgets für Home- und Sperrbildschirm von iPhone und iPad (seit 28.10.2026): schreibt dort Stundenplan, Fristen und Prüfungen samt Zeichner für die App Scriptable in den Ordner des Plugins, Aktion `widget` (Fenster zum Einrichten, Zeile „Widgets“ unter Hilfe); siehe [„Widgets“](architektur/widget.md) |
 | `uni-login.js` | Helfer: Uni-Login (seit 0.4.8, `ctx.user["uni-login"](ctx)`): verbindet nach der Anmeldung ILIAS-Kalender und Alma-Stundenplan ohne kopierten Link, holt einen neuen Link, wenn der alte nicht mehr gilt; siehe [„Uni-Login“](architektur/verbindungen.md) |
 
 Beim Start schreibt das Plugin keine Datei. Die Agenda (`eba-agenda`) wird live gerendert, wie der Kalender. Einzige
@@ -202,7 +204,9 @@ Daten“](architektur/zentrale-daten.md)), werden sie einmal nachgezogen. Im Nor
 (`zentral.js`) ruft frühestens 20 s nach dem Einlesen ab und schreibt nur nach einem erfolgreichen Abruf mit geänderten Daten
 (siehe [„Datenkanal“](architektur/zentrale-daten.md)). `update.js` legt 20 s nach dem Einlesen einmal `System/Daten/installiert.json` an, wenn sie fehlt
 (Erstinstallation, siehe [„Update“](architektur/update.md)); sonst schreibt es nur nach dem Tipp auf „Neue Version installieren“. `einrichtung.js` öffnet beim
-ersten Start höchstens ein Fenster und schreibt dabei nichts; geschrieben wird erst nach einem Tipp in der Einrichtung.
+ersten Start höchstens ein Fenster und schreibt dabei nichts; geschrieben wird erst nach einem Tipp in der Einrichtung. `widget.js`
+schreibt auf iPhone und iPad 15 s nach dem Start die Daten der Widgets, nur bei Änderungen und nur in den Ordner des Plugins, nie
+unter die Notizen (siehe [„Widgets“](architektur/widget.md)).
 
 **Codeblock-Argumente:** Obsidian übergibt einem Codeblock-Prozessor nur den Inhalt. Das Argument in der Kopfzeile
 (z. B. `eba-schloss alma`) liest `ctx.modell.blockArgument(el, c, sprache, erlaubt, vorgabe)` aus dem Abschnitt. Der Inhalt

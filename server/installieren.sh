@@ -3,17 +3,21 @@
 # Wiederholbar: Jeder Schritt prüft zuerst, ob er schon erledigt ist; Schlüssel und Uni-Zugang bleiben erhalten.
 #   sudo bash installieren.sh --ip <öffentliche IP>   Adresse wird https://<IP mit Bindestrichen>.sslip.io (Let's Encrypt)
 #   sudo bash installieren.sh --test                  ohne HTTPS und ohne Claude Code (Caddy auf :8080, nur für Tests)
+#   sudo bash installieren.sh --vorbereiten           alles außer Adresse und HTTPS (erster Start, einrichten.mjs serverStart);
+#                                                     eine schon gesetzte Adresse bleibt. Den Rest macht ein Lauf mit --ip.
 #   --reserve-mb <n>                                  feste Speicherreserve statt 25 % (speicher-reserve.mjs)
 set -euo pipefail
 
 QUELLE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 IP=""
 TEST=0
+VORBEREITEN=0
 RESERVE_MB=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --ip) IP="${2:-}"; shift 2 ;;
     --test) TEST=1; shift ;;
+    --vorbereiten) VORBEREITEN=1; shift ;;
     --reserve-mb) RESERVE_MB="${2:-}"; shift 2 ;;
     *) echo "Unbekannte Option: $1" >&2; exit 2 ;;
   esac
@@ -56,14 +60,22 @@ alte_einheiten_entfernen() {
 }
 
 [ "$(id -u)" -eq 0 ] || fehler "bitte mit sudo starten"
+# Nie zwei Läufe zugleich (der erste Start bereitet vor, während die Einrichtung schon installiert): der zweite wartet
+exec 9>/run/studium-server-installieren.lock
+flock 9
 # shellcheck disable=SC1091
 . /etc/os-release
 [ "${ID:-}" = ubuntu ] && [ "${VERSION_ID:-}" = 24.04 ] || fehler "nur für Ubuntu 24.04 (gefunden: ${PRETTY_NAME:-unbekannt})"
-if [ "$TEST" -eq 0 ]; then
+if [ "$TEST" -eq 1 ]; then
+  ADRESSE="http://127.0.0.1:8080"
+elif [ "$VORBEREITEN" -eq 1 ]; then
+  # Ohne IP aus dem Konto keine neue Adresse; eine schon gesetzte (Lauf mit --ip vorher) bleibt mit ihrer IP
+  [ -z "$IP" ] || fehler "--vorbereiten ohne --ip"
+  IP=$(jq -r '.ip // empty' /etc/studium-server/dienst.json 2>/dev/null || true)
+  ADRESSE=$(jq -r '.adresse // empty' /etc/studium-server/dienst.json 2>/dev/null || true)
+else
   [[ "$IP" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] || fehler "--ip <öffentliche IP> fehlt oder ist ungültig"
   ADRESSE="https://${IP//./-}.sslip.io"
-else
-  ADRESSE="http://127.0.0.1:8080"
 fi
 [ -z "$RESERVE_MB" ] || [[ "$RESERVE_MB" =~ ^[0-9]+$ ]] || fehler "--reserve-mb erwartet eine Zahl"
 VERSION=$(tr -d '[:space:]' <"$QUELLE/VERSION")
@@ -111,7 +123,8 @@ install -d -m 0750 -o studium -g studium /var/lib/studium-server/eingang
 install -d -m 0700 -o studium -g studium /var/lib/studium-server/verbinden
 install -d -m 0755 /etc/credstore.encrypted
 install -d -m 0755 "$ZIEL"
-for datei in VERSION README.md kanal.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh; do
+# allowed_signers: Mit diesen Schlüsseln prüft „studium-server aktualisieren“ die Signatur des nächsten Pakets
+for datei in VERSION README.md kanal.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers; do
   install -m 0644 "$QUELLE/$datei" "$ZIEL/$datei"
 done
 rm -rf "$ZIEL/skill"
@@ -362,6 +375,11 @@ fi
 if [ "$TEST" -eq 1 ]; then SEITE=":8080"; else SEITE="${ADRESSE#https://}"; fi
 # Weitere Adressen (LiveSync, livesync.sh) legen ihre Teile in studium-server.d/ ab; sie bleiben bei jeder Installation
 install -d -m 0755 /etc/caddy/studium-server.d
+if [ -z "$SEITE" ]; then
+  # Vorbereitet ohne Adresse: nichts auf 80 oder 443 (Caddys Standardseite eingeschlossen), bis der Lauf mit --ip kommt
+  systemctl disable -q --now caddy 2>/dev/null || true
+  echo "noch keine Adresse: Caddy aus, bis die Einrichtung sie setzt"
+else
 cat >"$CADDYFILE" <<CADDY
 # studium-server (installieren.sh): wird bei jeder Installation neu geschrieben
 $SEITE {
@@ -381,6 +399,7 @@ systemctl enable -q caddy
 if systemctl is-active --quiet caddy; then systemctl reload caddy; else systemctl start caddy; fi
 # Mit LiveSync: dessen Adresse und Caddy-Teil auf die IP von eben (nach einem Wechsel zeigten sie sonst auf die alte)
 [ ! -f /etc/caddy/studium-server.d/livesync.caddy ] || bash "$ZIEL/livesync.sh" adresse
+fi
 
 schritt "Firewall des Servers (Port 443)"
 if iptables -L INPUT -n >/dev/null 2>&1; then
@@ -451,6 +470,11 @@ else
   echo "nichts zu tun"
 fi
 
+if [ -z "$ADRESSE" ]; then
+  echo
+  echo "Vorbereitet (ohne Adresse). Den Rest erledigt die Einrichtung in der Cloud Shell: bash ~/studium-autopilot/start.sh"
+  exit 0
+fi
 cat <<TEXT
 
 Fertig. Adresse: $ADRESSE

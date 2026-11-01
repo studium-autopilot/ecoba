@@ -11,10 +11,14 @@
 //   node einrichten.mjs abschliessen                         Rechte des Platzsuchers weg, Boot-Volume auf den freien Rest, Quota fest
 //   node einrichten.mjs platzsucher-beenden                  Helfer beenden, seine Rechte und das Mail-Thema entfernen
 //   node einrichten.mjs adresse                              öffentliche IP, Adresse und SSH-Befehl des Servers
+//   node einrichten.mjs schluessel-sichern                   ~/.ssh/studium_autopilot in den privaten Bucket des Kontos
+//   node einrichten.mjs schluessel-holen                     fehlt er in der Cloud Shell: aus dem Bucket zurück
+//   --paket <studium-server.tar.gz>                          server und platzsucher: der Server richtet sich damit beim ersten
+//                                                            Start selbst vor (Standard: das Paket neben server/)
 //   --oci <pfad>  --tenancy <ocid>  --json
 // Exit: 0 erledigt, 1 Fehler oder Kostenregel verletzt, 2 Rückfrage nötig (--ja) bzw. falscher Aufruf, 3 kein Platz oder Oracle bremst.
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, realpathSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { gzipSync } from "node:zlib";
 import { dirname, join } from "node:path";
@@ -80,8 +84,10 @@ function ablauf(oci) {
 }
 
 // ---------- Schutz: Quota und Budget ----------
-export async function schutz(oci, { tenancy, mail, a, ja = false }) {
+export async function schutz(oci, { tenancy, mail: angegeben, a, ja = false }) {
   const { schritte, merken, muss } = ablauf(oci);
+  // Ohne --mail die Adresse des Budgets: Ist der Schutz schon ganz da, braucht ein weiterer Lauf (start.sh) keine Adresse
+  const mail = angegeben || (a.schutz || {}).mail;
   if (!MAIL.test(String(mail || ""))) throw Object.assign(new Error("--mail <adresse> fehlt"), { exit: 2 });
   const t = ["--compartment-id", tenancy];
   let frage = false;
@@ -219,8 +225,30 @@ const schluesselPruefen = (s) => {
 // Metadaten nur über IMDSv2 (CIS OCI 3.1): Die alten Endpunkte ohne Kopfzeile lassen sich über SSRF auslesen
 const NUR_IMDS2 = ["--instance-options", JSON.stringify({ areLegacyImdsEndpointsDisabled: true })];
 const quelle = (image, gb) => JSON.stringify({ sourceType: "image", imageId: image, bootVolumeSizeInGBs: gb, bootVolumeVpusPerGB: FREI.vpu });
+// Selbst vorbereiten (server/README.md): Der Server lädt beim ersten Start das Paket dieser Version aus dem Release, prüft es
+// gegen die SHA-256 des Pakets, das die Cloud Shell schon geprüft hat, und installiert alles ohne Adresse (installieren.sh
+// --vorbereiten). Adresse und HTTPS setzt erst `fern.sh installieren` mit der IP aus dem Konto: Eine IP, die der Server selbst
+// erfragt, könnte falsch sein. Keine Geheimnisse hier, die Startdaten liest jeder Prozess auf dem Server. Ohne gültiges Paket
+// (etwa ein Testpaket ohne Release) keine Startdaten; dann installiert `fern.sh installieren` alles wie bisher.
+export const PAKET_VERSION = /^\d+\.\d+\.\d+(-beta\.\d+)?$/;
+export function serverStart(paket) {
+  const { version, summe } = paket || {};
+  if (!PAKET_VERSION.test(String(version || "")) || !/^[0-9a-f]{64}$/.test(String(summe || ""))) return "";
+  const url = `https://github.com/studium-autopilot/ecoba/releases/download/v${version}/studium-server.tar.gz`;
+  return ["#cloud-config", "runcmd:", "  - - bash", "    - -c", "    - |",
+    "      set -u",
+    "      exec >>/var/log/studium-server-vorbereiten.log 2>&1",
+    "      d=$(mktemp -d /root/studium-paket.XXXXXX)",
+    `      for i in 1 2 3 4 5; do curl -fsSL -o "$d/paket.tar.gz" '${url}' && break; sleep 60; done`,
+    `      echo '${summe}  '"$d/paket.tar.gz" | sha256sum -c - || exit 1`,
+    "      tar -xzf \"$d/paket.tar.gz\" -C \"$d\" && bash \"$d/server/installieren.sh\" --vorbereiten", ""].join("\n");
+}
+export const serverMetadaten = (ssh, paket) => {
+  const start = serverStart(paket);
+  return start ? { ssh_authorized_keys: ssh, user_data: Buffer.from(start).toString("base64") } : { ssh_authorized_keys: ssh };
+};
 
-export async function server(oci, { tenancy, a, ads, schluessel }) {
+export async function server(oci, { tenancy, a, ads, schluessel, paket }) {
   const { schritte, merken, muss } = ablauf(oci);
   if (a.plan.status === "da") { merken("server", "da", a.plan.text); return { schritte, exit: 0 }; }
   // Der Platzsucher versucht es alle paar Minuten. Ein Versuch daneben bringt nichts, Oracle bremst dann nur beide (429).
@@ -236,7 +264,7 @@ export async function server(oci, { tenancy, a, ads, schluessel }) {
   const r = await anlegenIrgendwo(oci, ["compute", "instance", "launch", "--compartment-id", tenancy, "--shape", A1,
     "--shape-config", JSON.stringify({ ocpus: ZIEL.ocpu, memoryInGBs: ZIEL.gb }), "--source-details", quelle(image.id, a.plan.bootGb),
     "--subnet-id", sub, "--assign-public-ip", "true", "--display-name", "studium-autopilot-server",
-    "--freeform-tags", kennzeichen("server"), "--metadata", JSON.stringify({ ssh_authorized_keys: ssh }), ...NUR_IMDS2], ads);
+    "--freeform-tags", kennzeichen("server"), "--metadata", JSON.stringify(serverMetadaten(ssh, paket)), ...NUR_IMDS2], ads);
   if (r.kapazitaet) {
     merken("server", "kein-platz", "Oracle hat gerade in keinem Verfügbarkeitsbereich Platz für den Server. Der Platzsucher kann es weiter versuchen.");
     return { schritte, exit: 3 };
@@ -259,7 +287,7 @@ const FASSUNG = KENNZEICHEN + "-fassung";
 export const helferFassung = (vorlage, skript, { ads = [], ssh = "" } = {}) => createHash("sha256").update(vorlage).update("\0").update(skript)
   .update("\0").update(JSON.stringify({ ads, ssh })).digest("hex").slice(0, 16);
 
-export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail: angegeben, vorlage, skript }) {
+export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail: angegeben, vorlage, skript, paket }) {
   const { schritte, merken, muss } = ablauf(oci);
   // ohne --mail die Adresse aus dem Schutz (Budget „kostenwarnung“): Die Einrichtung fragt nur einmal danach
   const mail = angegeben || (a.schutz || {}).mail;
@@ -325,7 +353,7 @@ export async function platzsucher(oci, { tenancy, a, ads, schluessel, mail: ange
     await aboSicherstellen(themaId);
     const serverBild = await bild(muss, tenancy, "24.04", A1);
     const helferBild = await bild(muss, tenancy, "24.04 Minimal", MICRO);
-    const konfig = { compartment: tenancy, ads, subnet: sub, image: serverBild.id, boot_gb: a.plan.bootGb, ssh_schluessel: ssh, user_data: "", thema: themaId };
+    const konfig = { compartment: tenancy, ads, subnet: sub, image: serverBild.id, boot_gb: a.plan.bootGb, ssh_schluessel: ssh, user_data: serverMetadaten(ssh, paket).user_data || "", thema: themaId };
     // platzsucher.py aus diesem Paket (in der Cloud Shell schon mit der Prüfsumme geprüft) statt eines Downloads auf dem Helfer
     const cloudInit = vorlage.replace(PLATZ, "content: " + Buffer.from(JSON.stringify(konfig)).toString("base64"))
       .replace(PLATZ_SKRIPT, "content: " + gzipSync(Buffer.from(skript, "utf8"), { level: 9 }).toString("base64"));
@@ -436,8 +464,10 @@ export async function abschliessen(oci, { tenancy, a }) {
     const alt = Number(bv["size-in-gbs"]) || 0;
     zuwachs = Math.max(0, Math.floor(a.rest.speicherGb));
     if (zuwachs > 0) {
-      await muss("volume", ["bv", "boot-volume", "update", "--boot-volume-id", bv.id, "--size-in-gbs", String(alt + zuwachs), "--force"]);
-      merken("volume", "vergroessert", `Boot-Volume von ${alt} auf ${alt + zuwachs} GB vergrößert. Auf dem Server danach das Dateisystem anpassen (Einrichtung, Schritt 5).`);
+      // Erst nach dem Arbeitsauftrag ist das Volume groß; ein Neustart davor sähe beim Start noch die alte Größe
+      await muss("volume", ["bv", "boot-volume", "update", "--boot-volume-id", bv.id, "--size-in-gbs", String(alt + zuwachs), "--force",
+        "--wait-for-state", "AVAILABLE"]);
+      merken("volume", "vergroessert", `Boot-Volume von ${alt} auf ${alt + zuwachs} GB vergrößert. start.sh startet den Server danach neu, damit Ubuntu das Dateisystem vergrößert.`);
     } else merken("volume", "da", `Boot-Volume hat ${alt} GB, der freie Blockspeicher ist ganz genutzt.`);
   }
   // Quota: Blockspeicher auf den Stand danach, damit nichts Neues mehr hinzukommt (nur unsere Quota)
@@ -484,14 +514,97 @@ export async function adresse(oci, { tenancy, schluessel }) {
   return { schritte, exit: 1, ...wert };
 }
 
+// ---------- Schlüssel sichern ----------
+// Den Schlüssel zum Server gibt es nur in der Cloud Shell, und Oracle löscht ihren Ordner nach sechs Monaten ohne Nutzung. Eine
+// Kopie liegt darum im eigenen Konto: privater Bucket (Objektspeicher, ein paar KB der freien 20 GB), geschützt wie das Konto
+// selbst (Anmeldung, Zwei-Faktor). Der Platzsucher hat keine Rechte auf Objektspeicher. Nur ein Bucket mit Kennzeichen
+// „schluessel“ und ohne öffentlichen Zugriff; ein Schlüssel im Bucket wird nie überschrieben, einer in der Cloud Shell auch nicht.
+export const BUCKET = "studium-autopilot-schluessel";
+const OBJEKTE = ["studium_autopilot", "studium_autopilot.pub"];
+const NICHT_DA = /NotFound|\(404\)/;
+
+async function bucketFinden(oci, muss, tenancy, anlegen) {
+  const ns = await muss("bucket", ["os", "ns", "get"]);
+  if (typeof ns !== "string" || !/^[a-z0-9]{1,64}$/i.test(ns)) throw new Error("bucket: Namensraum des Objektspeichers unbekannt");
+  const r = await oci(["os", "bucket", "get", "--namespace-name", ns, "--bucket-name", BUCKET]);
+  if (!r.ok && !NICHT_DA.test(r.fehler || "")) throw Object.assign(new Error("bucket: " + r.fehler), { schritt: "bucket" });
+  let bucket = r.ok ? r.data : null;
+  let neu = false;
+  if (!bucket && anlegen) {
+    bucket = await muss("bucket", ["os", "bucket", "create", "--compartment-id", tenancy, "--namespace-name", ns, "--name", BUCKET,
+      "--public-access-type", "NoPublicAccess", "--freeform-tags", kennzeichen("schluessel")]);
+    neu = true;
+  }
+  if (bucket && !gehoert(bucket, "schluessel")) throw new Error(`bucket: „${BUCKET}“ gibt es schon, aber nicht von der Einrichtung; nichts geändert`);
+  if (bucket && bucket["public-access-type"] !== "NoPublicAccess") throw new Error(`bucket: „${BUCKET}“ ist öffentlich lesbar; nichts übertragen`);
+  return { ns, bucket, neu };
+}
+const objektDa = async (oci, ns, name) => {
+  const r = await oci(["os", "object", "head", "--namespace-name", ns, "--bucket-name", BUCKET, "--name", name]);
+  if (!r.ok && !NICHT_DA.test(r.fehler || "")) throw Object.assign(new Error("schluessel: " + r.fehler), { schritt: "schluessel" });
+  return r.ok;
+};
+const holen = (muss, ns, name, datei) => muss("schluessel", ["os", "object", "get", "--namespace-name", ns, "--bucket-name", BUCKET, "--name", name, "--file", datei]);
+
+export async function schluesselSichern(oci, { tenancy, ordner = join(homedir(), ".ssh") }) {
+  const { schritte, merken, muss } = ablauf(oci);
+  if (!OBJEKTE.every((n) => existsSync(join(ordner, n)))) { merken("schluessel", "fehlt", "~/.ssh/studium_autopilot fehlt; nichts zu sichern."); return { schritte, exit: 1 }; }
+  const { ns, neu } = await bucketFinden(oci, muss, tenancy, true);
+  if (neu) merken("bucket", "angelegt", `Privater Bucket „${BUCKET}“ für die Kopie des Schlüssels angelegt.`);
+  let abweichend = false;
+  for (const name of OBJEKTE) {
+    if (!(await objektDa(oci, ns, name))) {
+      await muss("schluessel", ["os", "object", "put", "--namespace-name", ns, "--bucket-name", BUCKET, "--name", name, "--file", join(ordner, name), "--no-overwrite"]);
+      continue;
+    }
+    const tmp = join(ordner, `.${name}.vergleich`);
+    try {
+      await holen(muss, ns, name, tmp);
+      abweichend ||= !readFileSync(tmp).equals(readFileSync(join(ordner, name)));
+    } finally {
+      rmSync(tmp, { force: true });
+    }
+  }
+  if (abweichend) {
+    merken("schluessel", "abweichend", `Im Bucket „${BUCKET}“ liegt ein anderer Schlüssel als in der Cloud Shell; keiner wurde überschrieben.`);
+    return { schritte, exit: 2 };
+  }
+  merken("schluessel", "gesichert", `Schlüssel im privaten Bucket „${BUCKET}“ gesichert.`);
+  return { schritte, exit: 0 };
+}
+
+export async function schluesselHolen(oci, { tenancy, ordner = join(homedir(), ".ssh") }) {
+  const { schritte, merken, muss } = ablauf(oci);
+  if (OBJEKTE.some((n) => existsSync(join(ordner, n)))) { merken("schluessel", "da", "~/.ssh/studium_autopilot ist in der Cloud Shell."); return { schritte, exit: 0 }; }
+  const { ns, bucket } = await bucketFinden(oci, muss, tenancy, false);
+  const da = bucket ? await Promise.all(OBJEKTE.map((n) => objektDa(oci, ns, n))) : [];
+  // Keine Kopie ist kein Fehler (neues Konto): Exit 0, die Einrichtung legt dann einen Schlüssel an
+  if (!bucket || !da.every(Boolean)) { merken("schluessel", "keine-kopie", "Es gibt keine Kopie des Schlüssels im Konto."); return { schritte, exit: 0 }; }
+  mkdirSync(ordner, { recursive: true, mode: 0o700 });
+  for (const name of OBJEKTE) {
+    const tmp = join(ordner, `.${name}.neu`);
+    await holen(muss, ns, name, tmp);
+    chmodSync(tmp, name.endsWith(".pub") ? 0o644 : 0o600);
+    renameSync(tmp, join(ordner, name));
+  }
+  merken("schluessel", "geholt", "Schlüssel aus dem privaten Bucket nach ~/.ssh/studium_autopilot zurückgeholt.");
+  return { schritte, exit: 0 };
+}
+
 // ---------- Aufruf ----------
-const SCHRITTE = { schutz, netz, server, platzsucher, abschliessen, adresse, "platzsucher-beenden": platzsucherBeenden };
+// Version und SHA-256 des Pakets für die Startdaten des Servers (serverStart); ohne Datei keine
+function paketVon(datei, version) {
+  try { return { version: version.trim(), summe: createHash("sha256").update(readFileSync(datei)).digest("hex") }; } catch (e) { return null; }
+}
+const SCHRITTE = { schutz, netz, server, platzsucher, abschliessen, adresse, "platzsucher-beenden": platzsucherBeenden,
+  "schluessel-sichern": schluesselSichern, "schluessel-holen": schluesselHolen };
 
 async function main(argv) {
   const [befehl] = argv;
   const wert = (n) => { const i = argv.indexOf(n); return i >= 0 ? argv[i + 1] : undefined; };
   if (!SCHRITTE[befehl]) {
-    console.error("Aufruf: node einrichten.mjs schutz|netz|server|platzsucher|abschliessen|adresse|platzsucher-beenden [--mail …] [--schluessel …] [--ja] [--json]");
+    console.error("Aufruf: node einrichten.mjs schutz|netz|server|platzsucher|abschliessen|adresse|platzsucher-beenden|schluessel-sichern|schluessel-holen" +
+      " [--mail …] [--schluessel …] [--paket …] [--ja] [--json]");
     return 2;
   }
   const tenancy = tenancyFinden(wert("--tenancy"));
@@ -516,6 +629,7 @@ async function main(argv) {
       schluessel: befehl === "adresse" ? alleSchluessel() : wert("--schluessel") ? lesen(wert("--schluessel")) : "",
       vorlage: lesen(wert("--vorlage") || join(hier, "platzsucher-helfer.yaml")),
       skript: befehl === "platzsucher" ? lesen(join(hier, "platzsucher.py")) : "",
+      paket: ["server", "platzsucher"].includes(befehl) ? paketVon(wert("--paket") || join(hier, "..", "studium-server.tar.gz"), lesen(join(hier, "VERSION"))) : null,
     });
   } catch (e) {
     ergebnis = { schritte: [{ was: e.schritt || befehl, status: "fehler", text: e.message }], exit: e.exit || 1 };

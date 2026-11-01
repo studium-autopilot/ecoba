@@ -18,6 +18,8 @@ const fs = require("node:fs");
 fs.writeFileSync("argumente.json", JSON.stringify(process.argv.slice(2)));
 const modus = process.env.ATTRAPPE || "ok";
 if (modus === "limit") { console.log(JSON.stringify({ is_error: true, result: "You've hit your session limit" })); process.exit(1); }
+// Claude Code endet am Limit nicht immer mit einem Fehlercode
+if (modus === "limit-ohne-code") { console.log(JSON.stringify({ is_error: true, result: "You've hit your limit · resets 7pm (Europe/Berlin)" })); process.exit(0); }
 if (modus === "limit-neu") {
   // während des Laufs holt abrufen.py neue Mails und legt roh/ neu an, dann scheitert der Lauf
   fs.mkdirSync("../../roh/uni-postfach", { recursive: true });
@@ -34,6 +36,15 @@ if (modus === "begleitnotiz") {
   }));
   fs.writeFileSync("ausgabe.json", JSON.stringify({ quellen: [], termine: [], hinweise: [], begleitnotizen }));
 }
+if (modus === "kapitel") {
+  // merkt sich, was es sah (Folien, bisherige Listen); liefert eine Liste für B110 (Vorlesung in der Zukunft) und eine ungefragte
+  fs.writeFileSync("gesehen.json", JSON.stringify({ kapitel: fs.readdirSync("kapitel"), bisher: JSON.parse(fs.readFileSync("kapitel-bisher.json", "utf8")) }));
+  fs.writeFileSync("ausgabe.json", JSON.stringify({ quellen: [], termine: [], hinweise: [], kapitel: [
+    { code: "B110", semester: "WS 2026/27", quelle: "Folien 00, S. 3", kapitel: [{ nr: "1", titel: "Grundlagen", seiten: 20, folien: 1, vorlesung: "2026-10-14" },
+      { nr: "2", titel: "Kosten", vorlesung: "2027-01-01" }] },
+    { code: "E101", semester: "WS 2026/27", quelle: "", kapitel: [{ nr: "1", titel: "Märkte" }] },
+  ] }));
+}
 if (modus === "ok") fs.writeFileSync("ausgabe.json", JSON.stringify({
   quellen: ["gmail", "uni-postfach"], gmail: "ok", weiterleitung: "fehlt",
   termine: [
@@ -42,7 +53,8 @@ if (modus === "ok") fs.writeFileSync("ausgabe.json", JSON.stringify({
   ],
   hinweise: [{ text: "Neue Folien in E101.", quelle: "Kursmail, 17.10.2026" }]
 }));
-console.log(JSON.stringify({ is_error: false, result: "fertig" }));
+console.log(JSON.stringify({ is_error: false, result: "fertig", num_turns: 3, duration_ms: 1200, total_cost_usd: 0.123456,
+  usage: { input_tokens: 10, output_tokens: 200, cache_read_input_tokens: 3000, cache_creation_input_tokens: 400 } }));
 `;
 
 function umgebung() {
@@ -185,10 +197,65 @@ test("Unterlagen: bis 6 je Lauf (älteste zuerst) in den Arbeitsordner, Begleitn
   }
   process.env.ATTRAPPE = "begleitnotiz";
   anstossSchreiben(v, "unterlagen", JETZT);
-  await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 120e3), claude, skill, holen: async () => ({ ok: false }) });
+  await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 36e5), claude, skill, holen: async () => ({ ok: false }) }); // nach dem Limit
   assert.deepEqual(fs.readdirSync(neu).sort(), ["b".repeat(64) + ".md", "c".repeat(64) + ".md"], "150 000 + 150 000 Zeichen passen nicht zusammen");
-  await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 180e3), claude, skill, holen: async () => ({ ok: false }) });
+  await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 36e5 + 60e3), claude, skill, holen: async () => ({ ok: false }) });
   assert.deepEqual(fs.readdirSync(neu), [], "150 000 + 1 000 schon");
+});
+
+test("Kapitellisten: Folien gefragter Module in den gewöhnlichen Lauf, ungefragte weg; nur neue oder geänderte Listen ins Eingang, bisherige für Claude", async () => {
+  const { laufen, anstossSchreiben } = await laden("lauf.mjs");
+  const { v, skill, claude } = umgebung();
+  fs.rmSync(path.join(v, "roh"), { recursive: true, force: true });
+  const lernplan = { semester: "WS 2026/27", module: ["B110"] };
+  // aus der Lernplan-Notiz (Server neu eingerichtet, kapitel.json fehlt); S100 ist nicht gefragt
+  const listen = [{ code: "B110", kapitel: [{ nr: "1", titel: "Grundlagen der BWL" }] }, { code: "S100", kapitel: [{ nr: "1", titel: "Mengen" }] }];
+  fs.writeFileSync(path.join(v, "stand-plugin.json"), JSON.stringify({ schema: 1, module: ["B110", "S100"], lernplan: { ...lernplan, listen }, tresor: { termine: [], todos: [] } }));
+  fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify({ gmailZuletzt: JETZT.toISOString() })); // Gmail gerade durchsucht
+  const ordnerK = path.join(v, "unterlagen", "kapitel");
+  fs.mkdirSync(ordnerK, { recursive: true });
+  const folien = (c, code, nr) => fs.writeFileSync(path.join(ordnerK, c.repeat(64) + ".md"),
+    `# ${code} Folien 0${nr}\n\nDatei: Unterlagen/${code}/${code} Folien 0${nr}.pdf\nModul: ${code} · Art: Folien · Nummer: ${nr}\nAuftrag: nur Kapitelliste (Lernplan)\n\n---\n[S. 1]\nGliederung`);
+  folien("a", "B110", 0);
+  folien("b", "S100", 0);
+  process.env.ATTRAPPE = "kapitel";
+  anstossSchreiben(v, "lernplan", JETZT);
+  const r = await laufen({ verzeichnis: v, jetzt: JETZT, claude, skill, holen: async () => ({ ok: false }) });
+  assert.deepEqual([r.status, r.kapitel, r.verworfen], ["ok", 1, 1], "E101 ist nicht gefragt");
+  const arbeit = path.join(v, "laeufe", ordner(v)[0]);
+  assert.deepEqual(lesen(path.join(arbeit, "gesehen.json")), { kapitel: ["a".repeat(64) + ".md"],
+    bisher: [{ code: "B110", semester: "WS 2026/27", herkunft: "notiz", kapitel: [{ nr: "1", titel: "Grundlagen der BWL" }] }] }, "ohne eigene Liste die aus der Notiz");
+  assert.deepEqual(fs.readdirSync(ordnerK), [], "S100 ist nicht gefragt: weg, ohne Lauf");
+  const auftrag = fs.readFileSync(path.join(arbeit, "auftrag.md"), "utf8");
+  assert.match(auftrag, /Neue Folien für Kapitellisten \(Lernplan\): 1 \(Ordner kapitel\/, bisherige Listen in kapitel-bisher\.json\)\./);
+  assert.match(auftrag, /für die Kapitellisten auch skill\/lernplan\.md/);
+  assert.deepEqual(lesen(path.join(arbeit, "stand.json")).lernplan, lernplan, "die Listen nur in kapitel-bisher.json");
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(arbeit, ".rechte.json"), "utf8")).permissions.allow.filter((x) => x.startsWith("Write")).length, 1, "schreibt nur ausgabe.json");
+  const eingang = lesen(path.join(v, "eingang", fs.readdirSync(path.join(v, "eingang"))[0]));
+  assert.deepEqual(eingang.kapitel, [{ code: "B110", semester: "WS 2026/27", quelle: "Folien 00, S. 3", stand: "2026-10-18", vorlaeufig: false,
+    kapitel: [{ nr: "1", titel: "Grundlagen", seiten: 20, folien: 1, vorlesung: "2026-10-14" }, { nr: "2", titel: "Kosten" }] }]);
+  assert.deepEqual(Object.keys(lesen(path.join(v, "kapitel.json"))), ["B110 WS 2026/27"], "Bestand auf dem Server");
+  assert.equal(lesen(path.join(arbeit, "protokoll.json")).modell, "sonnet", "Modell des Servers, kein Opus");
+
+  // neue Folien, dieselbe Liste: Claude sieht die bisherige, ins Eingang kommt nichts
+  fs.rmSync(path.join(v, "eingang"), { recursive: true, force: true });
+  folien("c", "B110", 1);
+  anstossSchreiben(v, "lernplan", JETZT);
+  const r2 = await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 60e3), claude, skill, holen: async () => ({ ok: false }) });
+  assert.deepEqual([r2.status, r2.kapitel], ["ok", 0]);
+  const zweiter = path.join(v, "laeufe", ordner(v).sort()[1]);
+  assert.deepEqual(lesen(path.join(zweiter, "gesehen.json")).bisher.map((e) => [e.code, e.herkunft, e.kapitel[0].titel]), [["B110", undefined, "Grundlagen"]],
+    "die eigene Liste geht vor");
+  assert.deepEqual(fs.readdirSync(path.join(v, "eingang")), [], "nichts Neues");
+
+  // ohne neue Folien und ohne Mails läuft Claude nicht; ein Fehlschlag legt die Folien zurück
+  anstossSchreiben(v, "lernplan", JETZT);
+  assert.equal((await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 120e3), claude, skill, holen: async () => ({ ok: false }) })).status, "nichts-zu-tun");
+  folien("d", "B110", 2);
+  process.env.ATTRAPPE = "limit";
+  anstossSchreiben(v, "lernplan", JETZT);
+  assert.equal((await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 180e3), claude, skill, holen: async () => ({ ok: false }) })).status, "claude-limit");
+  assert.deepEqual(fs.readdirSync(ordnerK), ["d".repeat(64) + ".md"], "zurück in unterlagen/kapitel");
 });
 
 test("Zusammenfassen auf Wunsch: eigener Lauf mit Opus vor dem gewöhnlichen, nur diese Unterlagen, ohne Mails; PDFs mit und danach weg; Fehlschlag legt sie zurück", async () => {
@@ -228,12 +295,18 @@ Text`);
   assert.deepEqual(fs.readdirSync(opus), ["d".repeat(64) + ".md"], "eine wartet noch");
   assert.equal(lesen(path.join(v, "anstoss")).grund, "unterlagen", "nächster Lauf gleich angestoßen");
 
-  // Fehlschlag des Opus-Laufs: Unterlage mit PDF zurück nach opus/, der gewöhnliche Lauf läuft trotzdem
+  // Fehlschlag des Opus-Laufs am Limit: Unterlage mit PDF zurück nach opus/; der gewöhnliche Lauf hinge ebenso und wartet auf den
+  // nächsten Versuch, neue Mails bleiben in roh/
   fs.writeFileSync(path.join(opus, "d".repeat(64) + ".pdf"), "%PDF-1.7\n");
+  fs.mkdirSync(path.join(v, "roh", "uni-postfach"), { recursive: true });
+  fs.writeFileSync(path.join(v, "roh", "uni-postfach", "10.txt"), "Betreff: Neu");
   process.env.ATTRAPPE = "limit";
   const r2 = await laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + 60e3), claude, skill, holen: async () => ({ ok: false }) });
   assert.equal(r2.status, "claude-limit");
   assert.deepEqual(fs.readdirSync(opus).sort(), ["d".repeat(64) + ".md", "d".repeat(64) + ".pdf"]);
+  assert.equal(ordner(v).length, 3, "kein gewöhnlicher Lauf nach dem Opus-Lauf am Limit");
+  assert.deepEqual(fs.readdirSync(path.join(v, "roh", "uni-postfach")), ["10.txt"]);
+  assert.equal(lesen(path.join(v, "zustand.json")).limit.versuche, 1);
   delete process.env.ATTRAPPE;
 });
 
@@ -247,11 +320,61 @@ test("Fehlschläge: Rohdaten kommen zurück, Zustand meldet Limit bzw. ungültig
   let z = lesen(path.join(v, "zustand.json"));
   assert.deepEqual([z.letzterLauf.ok, z.fehler], [false, ["claude-limit"]]);
   process.env.ATTRAPPE = "keine-ausgabe";
-  anstossSchreiben(v, "gmail", JETZT);
+  anstossSchreiben(v, "knopf", JETZT); // am Limit startet nur der Knopf einen Lauf
   assert.equal((await laufen({ verzeichnis: v, jetzt: JETZT, claude, skill })).status, "ausgabe-ungueltig");
   z = lesen(path.join(v, "zustand.json"));
   assert.deepEqual(z.fehler, ["ausgabe-ungueltig"], "alter Fehler ersetzt");
+  assert.equal(z.limit, undefined, "ein anderer Fehler beendet die Versuche");
   assert.match(fs.readFileSync(path.join(v, "roh", "INDEX.md"), "utf8"), /1 neue Mail/);
+});
+
+test("Limit des Claude-Abos: nächster Versuch nach 30 Min., 1 Std., dann alle 2 Std.; bis dahin nur der Knopf; Gmail kommt mit; Verbrauch je Lauf und Tag", async () => {
+  const { laufen, anstossSchreiben, limitWarten, nutzungBuchen } = await laden("lauf.mjs");
+  const { v, skill, claude } = umgebung();
+  const MIN = 60e3, zustand = () => lesen(path.join(v, "zustand.json"));
+  const lauf = (grund, minuten, modus) => {
+    process.env.ATTRAPPE = modus;
+    anstossSchreiben(v, grund, JETZT);
+    return laufen({ verzeichnis: v, jetzt: new Date(JETZT.getTime() + minuten * MIN), claude, skill, holen: async () => ({ ok: false }) });
+  };
+  assert.deepEqual([1, 2, 3, 7].map(limitWarten), [30 * MIN, 60 * MIN, 120 * MIN, 120 * MIN]);
+
+  // Gmail-Zeit am Limit
+  const r = await lauf("gmail", 0, "limit");
+  assert.deepEqual([r.status, r.wieder], ["claude-limit", "2026-10-18T06:00:00.000Z"]);
+  assert.deepEqual(zustand().limit, { seit: JETZT.toISOString(), versuche: 1, wieder: "2026-10-18T06:00:00.000Z", gmail: true });
+  assert.ok(fs.existsSync(path.join(v, "roh", "uni-postfach", "9.txt")), "Rohdaten zurück");
+
+  // neue Mail vor dem nächsten Versuch: kein Lauf, nichts angefasst
+  assert.deepEqual(await lauf("quellen", 10, "ok"), { status: "limit-wartet", wieder: "2026-10-18T06:00:00.000Z" });
+  assert.equal(ordner(v).length, 1, "kein Lauf-Ordner");
+  assert.ok(fs.existsSync(path.join(v, "roh", "uni-postfach", "9.txt")));
+  assert.ok(!fs.existsSync(path.join(v, "anstoss")), "Anstoß verbraucht, kein Kreis");
+
+  // der Knopf versucht es trotzdem; wieder am Limit (ohne Fehlercode): länger warten
+  assert.equal((await lauf("knopf", 15, "limit-ohne-code")).status, "claude-limit");
+  assert.deepEqual([zustand().limit.versuche, zustand().limit.wieder, zustand().limit.seit], [2, "2026-10-18T06:45:00.000Z", JETZT.toISOString()]);
+
+  // nächster Versuch (vom Dienst angestoßen): mit Gmail, weil eine Gmail-Suche am Limit hing; danach ist das Limit vorbei
+  const ok = await lauf("wiederholung", 76, "ok");
+  assert.equal(ok.status, "ok");
+  const letzter = path.join(v, "laeufe", ordner(v).sort().pop());
+  assert.equal(lesen(path.join(letzter, "protokoll.json")).gmail, true);
+  assert.equal(zustand().limit, undefined);
+  assert.deepEqual(lesen(path.join(letzter, "protokoll.json")).nutzung,
+    { eingabe: 10, ausgabe: 200, cache_lesen: 3000, cache_schreiben: 400, runden: 3, dauer_ms: 1200, listenpreis_usd: 0.1235 });
+  assert.deepEqual(lesen(path.join(v, "nutzung.json")), { "2026-10-18": { laeufe: 3, opus: 0, limit: 2, eingabe: 10, ausgabe: 200, cache_lesen: 3000, cache_schreiben: 400 } });
+
+  // nichts mehr zu tun beim nächsten Versuch (ohne Gmail): das Limit ist trotzdem vorbei
+  fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify({ ...zustand(), limit: { versuche: 1, wieder: JETZT.toISOString(), gmail: false } }));
+  assert.equal((await lauf("wiederholung", 90, "ok")).status, "nichts-zu-tun");
+  assert.equal(zustand().limit, undefined);
+
+  // Verbrauch: Tage in Berlin, nach 30 Tagen weg
+  fs.writeFileSync(path.join(v, "nutzung.json"), JSON.stringify({ "2026-09-19": { laeufe: 1 }, "2026-09-20": { laeufe: 1 } }));
+  nutzungBuchen(v, new Date("2026-10-18T22:30:00Z"), { opus: true, limit: false, nutzung: null });
+  assert.deepEqual(Object.keys(lesen(path.join(v, "nutzung.json"))), ["2026-09-20", "2026-10-19"], "30 Tage; 00:30 in Berlin ist schon der 19.");
+  delete process.env.ATTRAPPE;
 });
 
 test("Fehlschlag, während neue Mails kommen: die alten kommen zurück in den neu angelegten Ordner, nichts geht verloren", async () => {
@@ -369,4 +492,15 @@ test("Skill: Beispiel aus ausgabe.md besteht die Prüfung, Kategorien gleich wie
   assert.deepEqual(b.verworfen, []);
   assert.equal(b.eingang.begleitnotizen.length, 1);
   assert.deepEqual(b.eingang.begleitnotizen[0].wichtigste[0], { begriff: "Deckungsbeitrag", text: "Erlös minus variable Kosten.", seite: 7, bis: 8 });
+  // drittes Beispiel: Kapitellisten, ganz übernommen
+  const kap = JSON.parse("{" + [...text.matchAll(/```json\n([\s\S]*?)\n```/g)][2][1] + "}");
+  const c = eingangNormal(Object.assign({ termine: [], hinweise: [] }, kap), { jetzt: JETZT });
+  assert.deepEqual(c.verworfen, []);
+  assert.deepEqual(c.eingang.kapitel, kap.kapitel.map((e) => Object.assign({ vorlaeufig: false }, e)));
+  // lernplan.md nennt dieselben Felder wie ausgabe.md
+  const lernplan = fs.readFileSync(path.join(SERVER, "skill", "studium-autopilot", "lernplan.md"), "utf8");
+  for (const f of ["code", "semester", "quelle", "stand", "nr", "titel", "teile", "seiten", "folien", "vorlesung", "zwischentest", "url", "vorlaeufig"]) {
+    assert.ok(lernplan.includes("`" + f + "`"), "lernplan.md: " + f);
+  }
+  assert.match(fs.readFileSync(path.join(SERVER, "skill", "studium-autopilot", "SKILL.md"), "utf8"), /\[lernplan\.md\]\(lernplan\.md\)/);
 });

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 // Web-Dienst des eigenen Servers. Lauscht nur auf 127.0.0.1; Caddy stellt ihn per HTTPS unter /v1/ bereit.
 //   GET  /v1/status     öffentlich: Stand ohne persönliche Daten (nur feste Werte aus einer Freigabeliste)
-//   GET  /v1/eingang    mit Zugangsschlüssel: noch nicht übernommene Ergebnisse als verschlüsseltes Paket (kanal.mjs)
+//   GET  /v1/eingang    mit Zugangsschlüssel: noch nicht übernommene Ergebnisse als verschlüsseltes Paket (kanal.mjs), dazu unter
+//                       verbunden die letzten Verbindungen von Geräten (Zeit, Herkunft; nur hier, nie im Status)
 //   POST /v1/stand      mit Zugangsschlüssel: verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, ein
 //                       Auszug aus dem Tresor gegen Doppel: Termine mit Titel und Datum, offene To-dos; der Takt aus den
 //                       Einstellungen, auch als takt.json für abrufen.py und lauf.mjs; schon übernommene Eingang-Dateien, diese
-//                       werden danach auf dem Server gelöscht)
+//                       werden danach auf dem Server gelöscht; dazu lernplan: laufendes Semester und die Module, für die eine
+//                       Kapitelliste fehlt)
 //   POST /v1/unterlagen mit Zugangsschlüssel: verschlüsselt bis zu 3 Textfassungen von PDFs (Folien, Skripte …), zu denen
 //                       Claude eine Begleitnotiz schreiben soll; landen in unterlagen/neu/ (mit modell: "opus", auf Wunsch per
 //                       Knopf: unterlagen/opus/, eigener Lauf mit Opus; mit nur_termine nur nach Terminen durchsuchen, ohne
@@ -13,9 +15,14 @@
 //   POST /v1/pdf        mit Zugangsschlüssel: verschlüsselt ein Stück (8 MB) einer PDF zu einer gewünschten Zusammenfassung;
 //                       zusammengesetzt und geprüft (SHA-256) landet sie als unterlagen/opus/<SHA-256>.pdf neben der Textfassung,
 //                       die gleich danach kommt, und Opus liest sie
+//   POST /v1/kapitel    mit Zugangsschlüssel: verschlüsselt bis zu 3 Textfassungen von Folien der Module, für die das Plugin eine
+//                       Kapitelliste für den Lernplan braucht (Stand: lernplan), mit Nummer, Datum und Quelle der Unterlage;
+//                       landen in unterlagen/kapitel/, ein Anstoß startet den Lauf
 //   POST /v1/anstoss    mit Zugangsschlüssel: Knopf „Mails durchsuchen“ in Obsidian startet einen Claude-Lauf (mit Gmail),
 //                       höchstens einmal in 10 Minuten; wartet schon ein Anstoß, bleibt er
 //   POST /v1/verbinden  Einmal-Code (verbinden.mjs) gegen Adresse, Zugangs- und Datenschlüssel
+//   POST /v1/geraet     mit Zugangsschlüssel und einer Anfrage, verschlüsselt mit dem Datenschlüssel (Zweck „verbinden“, Zeit und
+//                       Zufallswert): Einmal-Code für ein weiteres Gerät (verbinden.mjs geraetCode), die Antwort ebenso verschlüsselt
 //   GET  /v1/livesync/<kennung>  Seite mit dem Setup-Link für LiveSync (livesync.mjs, 30 Minuten; verschlüsselt mit einem Code,
 //                       den nur das Terminal zeigt)
 // Konfiguration $STUDIUM_SERVER_KONFIG (Standard /etc/studium-server/dienst.json: zugang, schluessel, adresse, port,
@@ -25,10 +32,10 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSyn
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { datumOk, KATEGORIEN, MODULCODE, saeubern, TODO_ID } from "./eingang.mjs";
+import { datumOk, kapitelModulNormal, KATEGORIEN, MODULCODE, saeubern, SEMESTER, TODO_ID } from "./eingang.mjs";
 import { entschluesseln, entschluesselnRoh, verschluesseln } from "./kanal.mjs";
 import { abholen, seite } from "./livesync.mjs";
-import { codeEinloesen } from "./verbinden.mjs";
+import { codeEinloesen, geraetCode, verbundenLesen } from "./verbinden.mjs";
 
 const TAG = 864e5;
 const EINGANG_TAGE = 30, EINGANG_HOECHSTENS = 180;
@@ -38,15 +45,20 @@ const EINGANG_TAGE = 30, EINGANG_HOECHSTENS = 180;
 export const PDF = { teil: 8 * 1024 * 1024, bytes: 500 * 1024 * 1024, gesamt: 1024 * 1024 * 1024, warten: 6, verfall: TAG };
 // Größte Anfrage je Weg (verschlüsselt, base64): Stand mit Auszug aus dem Tresor bis 512 KB, Textfassungen bis 4 MB, ein Stück
 // einer PDF mit Kopfzeile und dem Aufschlag von base64
-const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/anstoss": 1024,
+const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/geraet": 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/kapitel": 1024 * 1024, "/v1/anstoss": 1024,
   "/v1/pdf": Math.ceil((PDF.teil + 1024) * 4 / 3) + 4096 };
 const KNOPF_ABSTAND = 10 * 60e3; // Knopf „Mails durchsuchen“: höchstens so oft (jeder Lauf kostet Abo-Limit)
 // „läuft“ gilt höchstens so lange wie die Zeitgrenze des Laufs (TimeoutStartSec in installieren.sh; ein abgebrochener Lauf hängt
 // nicht für immer)
 const LAUF_HOECHSTENS = 100 * 60e3;
+// so oft sieht der Dienst nach, ob nach dem Limit des Claude-Abos der nächste Versuch dran ist (limitWiederholen)
+export const LIMIT_PRUEFEN = 5 * 60e3;
 // Textfassungen: höchstens 3 je Anfrage (das Plugin schickt bis zu 3 Anfragen je Abruf), je 400 000 Zeichen, höchstens 30 warten
 // auf einen Lauf
 const UNTERLAGEN = { anfrage: 3, zeichen: 400000, warten: 30 };
+// Folien für Kapitellisten: höchstens 3 je Anfrage, je 60 000 Zeichen (das Plugin schickt die ersten Seiten ganz, danach nur die
+// erste Zeile jeder Seite), höchstens 30 warten
+const KAPITEL = { anfrage: 3, zeichen: 60000, warten: 30 };
 const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur"];
 // Je Absender höchstens 10 Fehlversuche in 10 Minuten, dann 429. Ein gültiger Zugangsschlüssel wird nie gesperrt (sonst könnte
 // jeder das Plugin aussperren). Absender = letzter Eintrag in X-Forwarded-For (setzt Caddy; der Dienst lauscht nur auf 127.0.0.1).
@@ -63,7 +75,8 @@ const aus = (wert, erlaubt) => (erlaubt.includes(wert) ? wert : "unbekannt");
 // Letztes „studium-server aktualisieren“ (aktualisierung.json, schreibt studium-server als studium): zeit, ok, ziel (Version des
 // neuesten Releases), grund (der Schritt, an dem es scheiterte, aus dieser Liste), erfolg (zuletzt ohne Fehler). Fehlt die Datei
 // (ein älterer Server, Testmodus ohne den täglichen Zeitgeber, noch nie gelaufen): null, das Plugin sagt dann nichts.
-export const AKTUALISIERUNG_GRUENDE = ["github", "pruefsumme-fehlt", "herunterladen", "pruefsumme", "paket", "installieren", "pakete"];
+export const AKTUALISIERUNG_GRUENDE = ["github", "pruefsumme-fehlt", "signatur-fehlt", "herunterladen", "pruefsumme", "signatur", "paket", "installieren",
+  "pakete"];
 const zeitpunkt = (s) => (typeof s === "string" && !Number.isNaN(Date.parse(s)) ? new Date(s).toISOString() : null);
 export function aktualisierungPruefen(a) {
   if (!a || typeof a !== "object" || !zeitpunkt(a.zeit)) return null;
@@ -94,6 +107,8 @@ export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(),
     plugin_abruf: abruf && !Number.isNaN(Date.parse(abruf.zuletzt)) ? new Date(abruf.zuletzt).toISOString() : null,
     letzter_lauf: lauf,
     claude_lauf: claudeLauf,
+    // am Limit des Claude-Abos: wann der Server es wieder versucht (lauf.mjs, zustand.limit), sonst null
+    limit_wieder: zeitpunkt(z.limit && z.limit.wieder),
     aktualisierung: aktualisierungPruefen(aktualisierung),
     fehler: (Array.isArray(z.fehler) ? z.fehler : []).filter((f) => /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
   };
@@ -179,18 +194,25 @@ export function fassungKopf(f) {
   return z;
 }
 
-// Textfassungen von PDFs für Begleitnotizen: Pfad wie im Eingang (unter Unterlagen/, keine Ausbrüche, .pdf), Kennung = SHA-256
-// der PDF (Dateiname auf dem Server), nur Lehrmaterial (ARTEN), Text ohne Steuerzeichen außer Zeilenumbruch. → [{ … }] oder wirft
+// Pfad einer PDF wie im Eingang (unter Unterlagen/, keine Ausbrüche, .pdf) → Pfad oder ""
+const pdfPfad = (datei) => {
+  const pfad = datei.replace(/\\/g, "/").trim();
+  return !pfad.startsWith("Unterlagen/") || !/\.pdf$/i.test(pfad) || pfad.length > 240 || pfad.split("/").some((t) => !t || t === "." || t === "..") ||
+    /[\u0000-\u001f<>:"|?*]/.test(pfad) ? "" : pfad;
+};
+// Text einer Textfassung ohne Steuerzeichen außer Zeilenumbruch, gekürzt
+const textfassung = (text, max) => text.replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, " ").slice(0, max);
+
+// Textfassungen von PDFs für Begleitnotizen: Pfad wie im Eingang, Kennung = SHA-256 der PDF (Dateiname auf dem Server), nur
+// Lehrmaterial (ARTEN), Text ohne Steuerzeichen außer Zeilenumbruch. → [{ … }] oder wirft
 export function unterlagenPruefen(roh) {
   if (!roh || roh.schema !== 1 || !Array.isArray(roh.unterlagen)) throw new Error("Unterlagen: unbekanntes Schema");
   const aus = [];
   for (const u of roh.unterlagen.slice(0, UNTERLAGEN.anfrage)) {
     if (!u || typeof u !== "object" || typeof u.datei !== "string" || typeof u.text !== "string") continue;
-    const pfad = u.datei.replace(/\\/g, "/").trim();
-    if (!pfad.startsWith("Unterlagen/") || !/\.pdf$/i.test(pfad) || pfad.length > 240 || pfad.split("/").some((t) => !t || t === "." || t === "..") ||
-      /[\u0000-\u001f<>:"|?*]/.test(pfad)) continue;
-    if (typeof u.kennung !== "string" || !/^[0-9a-f]{64}$/.test(u.kennung) || !ARTEN.includes(u.art)) continue;
-    const text = u.text.replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, " ").slice(0, UNTERLAGEN.zeichen);
+    const pfad = pdfPfad(u.datei);
+    if (!pfad || typeof u.kennung !== "string" || !/^[0-9a-f]{64}$/.test(u.kennung) || !ARTEN.includes(u.art)) continue;
+    const text = textfassung(u.text, UNTERLAGEN.zeichen);
     if (!text.trim()) continue;
     const titel = saeubern(u.titel, 160, false);
     aus.push({ datei: pfad, kennung: u.kennung, art: u.art, titel: titel.fehler ? "" : titel.wert, code: typeof u.code === "string" && MODULCODE.test(u.code) ? u.code : "",
@@ -223,12 +245,69 @@ export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
     renameSync(ziel + ".neu", ziel);
     n++;
   }
-  const anstoss = join(verzeichnis, "anstoss");
-  if (n && !existsSync(anstoss)) {
-    writeFileSync(anstoss + ".neu", JSON.stringify({ zeit: jetzt.toISOString(), grund: "unterlagen" }));
-    renameSync(anstoss + ".neu", anstoss);
-  }
+  if (n) anstossWennFrei(verzeichnis, "unterlagen", jetzt);
   return n;
+}
+// Anstoß für den nächsten Lauf, wenn nicht schon einer wartet
+function anstossWennFrei(verzeichnis, grund, jetzt) {
+  const anstoss = join(verzeichnis, "anstoss");
+  if (existsSync(anstoss)) return;
+  writeFileSync(anstoss + ".neu", JSON.stringify({ zeit: jetzt.toISOString(), grund }));
+  renameSync(anstoss + ".neu", anstoss);
+}
+
+// Nach dem Limit des Claude-Abos (zustand.limit, lauf.mjs): Ist der nächste Versuch dran, ein Anstoß „wiederholung“. Nicht, wenn
+// schon einer wartet, ein Lauf läuft oder seit dem Zeitpunkt schon einer gestartet ist (der hat das Limit dann neu gesetzt oder
+// gelöscht). Der Dienst liest den Zustand nur; schreiben tut ihn der Lauf. → true, wenn angestoßen
+export function limitWiederholen(verzeichnis, jetzt = new Date()) {
+  const z = lesen(join(verzeichnis, "zustand.json"), {}) || {};
+  const wieder = Date.parse((z.limit && z.limit.wieder) || "");
+  if (!Number.isFinite(wieder) || wieder > jetzt.getTime() || existsSync(join(verzeichnis, "anstoss"))) return false;
+  const seit = Date.parse(z.laeuftSeit || "");
+  if (Number.isFinite(seit) && jetzt.getTime() - seit < LAUF_HOECHSTENS) return false;
+  const zuletzt = Date.parse((z.letzterLauf && z.letzterLauf.zeit) || "");
+  if (Number.isFinite(zuletzt) && zuletzt >= wieder) return false;
+  anstossWennFrei(verzeichnis, "wiederholung", jetzt);
+  return true;
+}
+
+// Folien für Kapitellisten (Lernplan): wie die Unterlagen, nur Art Folien mit Modulcode, dazu Nummer, Datum und Quelle der Unterlage
+// (daraus setzt Claude folien und vorlesung) und wie viele Seiten ganz im Text stehen (danach nur die erste Zeile jeder Seite).
+// → [{ … }] oder wirft
+export function kapitelUnterlagenPruefen(roh) {
+  if (!roh || roh.schema !== 1 || !Array.isArray(roh.unterlagen)) throw new Error("Kapitel: unbekanntes Schema");
+  const aus = [];
+  for (const u of roh.unterlagen.slice(0, KAPITEL.anfrage)) {
+    if (!u || typeof u !== "object" || typeof u.datei !== "string" || typeof u.text !== "string" || u.art !== "Folien") continue;
+    const pfad = pdfPfad(u.datei);
+    if (!pfad || typeof u.kennung !== "string" || !/^[0-9a-f]{64}$/.test(u.kennung) || typeof u.code !== "string" || !MODULCODE.test(u.code)) continue;
+    const text = textfassung(u.text, KAPITEL.zeichen);
+    if (!text.trim()) continue;
+    const titel = saeubern(u.titel, 160, false), quelle = saeubern(u.quelle, 200, false);
+    const zahl = (x, max) => (Number.isInteger(x) && x >= 0 && x <= max ? x : null);
+    aus.push({ datei: pfad, kennung: u.kennung, titel: titel.fehler ? "" : titel.wert, code: u.code, nummer: zahl(u.nummer, 99),
+      seiten: zahl(u.seiten, 9999) || 0, ganz: zahl(u.ganz, 9999) || 0, datum: datumOk(u.datum) ? u.datum : "", quelle: quelle.fehler ? "" : quelle.wert, text });
+  }
+  return aus;
+}
+// Legt sie für den nächsten gewöhnlichen Lauf ab (unterlagen/kapitel/<kennung>.md) und stößt ihn an. Im Kopf: Titel, Datei,
+// Modul, Nummer, Seiten, Datum, Quelle und der Auftrag (skill/studium-autopilot/lernplan.md). → Zahl; wirft bei zu vielen wartenden
+export function kapitelAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
+  const ordner = join(verzeichnis, "unterlagen", "kapitel");
+  mkdirSync(ordner, { recursive: true });
+  if (readdirSync(ordner).filter((n) => n.endsWith(".md")).length + unterlagen.length > KAPITEL.warten) throw Object.assign(new Error("zu viele"), { status: 429 });
+  for (const u of unterlagen) {
+    const ziel = join(ordner, u.kennung + ".md");
+    const kopf = [`# ${u.titel || u.datei.slice(u.datei.lastIndexOf("/") + 1)}`, "", `Datei: ${u.datei}`,
+      `Modul: ${u.code} · Art: Folien${u.nummer != null ? ` · Nummer: ${u.nummer}` : ""}${u.seiten ? ` · Seiten: ${u.seiten}` : ""}`,
+      ...(u.datum || u.quelle ? [[u.datum ? `Datum: ${u.datum}` : "", u.quelle ? `Quelle: ${u.quelle}` : ""].filter(Boolean).join(" · ")] : []),
+      "Auftrag: nur Kapitelliste (Lernplan)" + (u.ganz ? `; ab Seite ${u.ganz + 1} steht nur die erste Zeile jeder Seite` : ""),
+      "", "---", ""];
+    writeFileSync(ziel + ".neu", kopf.join("\n") + u.text + "\n");
+    renameSync(ziel + ".neu", ziel);
+  }
+  if (unterlagen.length) anstossWennFrei(verzeichnis, "lernplan", jetzt);
+  return unterlagen.length;
 }
 
 // PDFs ohne Textfassung daneben und halb hochgeladene, älter als PDF.verfall, löschen (auch lauf.mjs vor einem Lauf mit Opus)
@@ -312,8 +391,32 @@ export function standPruefen(roh) {
   const module = Array.isArray(roh.module) ? roh.module.filter((m) => MODULCODE.test(m)).slice(0, 80) : [];
   const text = (w, n) => (typeof w === "string" ? w.slice(0, n) : "");
   const erledigt = Array.isArray(roh.erledigt) ? roh.erledigt.filter((n) => typeof n === "string" && DATEINAME.test(n)).slice(0, 500) : [];
-  return { stand: { schema: 1, module, studienbeginn: text(roh.studienbeginn, 20), variante: text(roh.variante, 40), takt: taktPruefen(roh.takt),
-    tresor: tresorPruefen(roh.tresor) }, erledigt };
+  const stand = { schema: 1, module, studienbeginn: text(roh.studienbeginn, 20), variante: text(roh.variante, 40), takt: taktPruefen(roh.takt),
+    tresor: tresorPruefen(roh.tresor) };
+  const lernplan = lernplanPruefen(roh.lernplan);
+  if (lernplan) stand.lernplan = lernplan;
+  return { stand, erledigt };
+}
+// Für welche Module das Plugin eine Kapitelliste vom Server will: laufendes Semester, Module ohne zentrale Liste, dazu die Listen
+// der Lernplan-Notizen, die schon vom Server stammen (listen: nur nr, titel, teile; für lauf.mjs, falls kapitel.json sie nicht hat).
+// Jede Liste geprüft wie im Eingang (kapitelModulNormal; ungültig → weg), nur für gefragte Module, zusammen höchstens
+// LISTEN_ZEICHEN. → Objekt oder null (älteres Plugin ohne das Feld)
+const LISTEN_ZEICHEN = 150000;
+export function lernplanPruefen(l, heute = new Date().toISOString().slice(0, 10)) {
+  if (!l || typeof l !== "object" || typeof l.semester !== "string" || !SEMESTER.test(l.semester)) return null;
+  const module = Array.isArray(l.module) ? [...new Set(l.module.filter((m) => typeof m === "string" && MODULCODE.test(m)))].slice(0, 60) : [];
+  const listen = [];
+  let zeichen = 0;
+  for (const x of Array.isArray(l.listen) ? l.listen.slice(0, 60) : []) {
+    if (!x || typeof x !== "object" || !module.includes(x.code) || listen.some((y) => y.code === x.code) || !Array.isArray(x.kapitel)) continue;
+    const r = kapitelModulNormal({ code: x.code, semester: l.semester, kapitel: x.kapitel.map((k) => (k && typeof k === "object" ? { nr: k.nr, titel: k.titel, teile: k.teile } : k)) }, heute);
+    if (r.fehler) continue;
+    const kapitel = r.wert.kapitel.map((k) => (k.teile ? { nr: k.nr, titel: k.titel, teile: k.teile } : { nr: k.nr, titel: k.titel }));
+    zeichen += JSON.stringify(kapitel).length;
+    if (zeichen > LISTEN_ZEICHEN) break;
+    listen.push({ code: x.code, kapitel });
+  }
+  return listen.length ? { semester: l.semester, module, listen } : { semester: l.semester, module };
 }
 
 export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() }) {
@@ -377,7 +480,7 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
           "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", "referrer-policy": "no-referrer" });
         return res.end(seite(setupLink));
       }
-      if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/pdf", "/v1/anstoss", "/v1/verbinden"].includes(pfad)) return antwort(res, 404, { fehler: "unbekannt" });
+      if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/kapitel", "/v1/pdf", "/v1/anstoss", "/v1/verbinden", "/v1/geraet"].includes(pfad)) return antwort(res, 404, { fehler: "unbekannt" });
 
       if (pfad === "/v1/verbinden") {
         if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
@@ -394,14 +497,22 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
 
       if (pfad === "/v1/eingang") {
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
-        const paket = await verschluesseln(konfig.schluessel, "eingang", eingangBuendel(verzeichnis, jetzt()));
+        const paket = await verschluesseln(konfig.schluessel, "eingang", { ...eingangBuendel(verzeichnis, jetzt()), verbunden: verbundenLesen(verzeichnis, jetzt()) });
         writeFileSync(join(verzeichnis, "abruf.json"), JSON.stringify({ zuletzt: jetzt().toISOString() }));
         return antwort(res, 200, paket);
       }
       if (req.method !== "POST") return antwort(res, 405, { fehler: "methode" });
       if (pfad === "/v1/anstoss") return antwort(res, ...knopfAnstoss(verzeichnis, jetzt()));
+      if (pfad === "/v1/geraet") {
+        const [status, aus] = geraetCode(verzeichnis, await entschluesseln(konfig.schluessel, "verbinden", await koerper(req, MAX_KOERPER[pfad])), jetzt());
+        return antwort(res, status, status === 200 ? await verschluesseln(konfig.schluessel, "verbinden", aus) : aus);
+      }
       if (pfad === "/v1/unterlagen") {
         const n = unterlagenAblegen(verzeichnis, unterlagenPruefen(await entschluesseln(konfig.schluessel, "unterlagen", await koerper(req, MAX_KOERPER[pfad]))), jetzt());
+        return antwort(res, 200, { angenommen: n });
+      }
+      if (pfad === "/v1/kapitel") {
+        const n = kapitelAblegen(verzeichnis, kapitelUnterlagenPruefen(await entschluesseln(konfig.schluessel, "kapitel", await koerper(req, MAX_KOERPER[pfad]))), jetzt());
         return antwort(res, 200, { angenommen: n });
       }
       if (pfad === "/v1/pdf") {
@@ -426,4 +537,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   const verzeichnis = process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server";
   const port = Number(konfig.port) || 8743;
   erzeugeDienst({ konfig, verzeichnis }).listen(port, "127.0.0.1", () => console.log(`studium-server-dienst lauscht auf 127.0.0.1:${port}`));
+  setInterval(() => {
+    try {
+      if (limitWiederholen(verzeichnis)) console.log("Limit des Claude-Abos: nächster Versuch angestoßen");
+    } catch (e) {
+      console.error("Limit: " + (e && e.message));
+    }
+  }, LIMIT_PRUEFEN);
 }

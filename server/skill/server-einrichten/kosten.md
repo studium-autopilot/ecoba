@@ -19,10 +19,10 @@ zusätzlich bei allem ein, was du sagst oder in der Konsole zeigst.
 5. **Schutz (Schritt 3):** Quota-Richtlinie „nur-kostenlos“ (keine bezahlten Formen, Blockspeicher begrenzt, keine weiteren
    Volumes, höchstens 5 Backups) und Budget „kostenwarnung“ (Mail ab dem ersten Cent und bei einer Prognose über 1 Euro).
    Läuft schon Bezahltes, die Quota erst nach Zustimmung.
-6. **Platzsucher:** nur die feste Größe aus Schritt 4, Helfer und seine Rechte danach weg (`abschliessen` bzw.
+6. **Platzsucher:** nur die feste Größe des Servers (2 OCPU, 12 GB), Helfer und seine Rechte danach weg (`abschliessen` bzw.
    `platzsucher-beenden`).
 7. **Leerlauf:** Der Server hält ein Viertel seines Arbeitsspeichers belegt, damit Oracle ihn nicht als ungenutzt anhält.
-8. **Kostenprüfung am Ende** (Schritt 11) und auf Wunsch jederzeit („Prüf meine Oracle-Kosten“). Alles über 0 nennst du mit
+8. **Kostenprüfung am Ende** (`start.sh` zum Schluss) und auf Wunsch jederzeit („Prüf meine Oracle-Kosten“). Alles über 0 nennst du mit
    Ursache.
 
 ## Was du nie tust

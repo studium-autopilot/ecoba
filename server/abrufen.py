@@ -5,6 +5,11 @@ Holt neue Mails, legt sie als Text nach roh/ und schreibt dann den Anstoß für 
 Standardbibliothek. Termine aus dem ILIAS-Kalender holt das Plugin selbst, ohne KI; der Server gibt Claude nur, wofür es KI
 braucht (Mails).
 
+Anhänge: Kalender (.ics) stehen als eine Zeile je Termin im Text. PDFs (Prüfungsplan, Übungsplan) legt das Skript unverändert
+neben die Mail (roh/uni-postfach/<UID>-anhang-<n>.pdf, Grenzen unten), der Text nennt sie; Claude liest eine davon nur, wenn sie
+nach Terminen aussieht (Skill termine.md). Gelesen wird die PDF erst im Claude-Lauf, nicht hier: Dieser Prozess hat den
+Uni-Zugang, und ein PDF-Leser hätte mit einer präparierten Datei sonst Zugriff darauf. Andere Anhänge nur mit Namen.
+
   python3 abrufen.py      braucht den Uni-Zugang als systemd-Credential ($CREDENTIALS_DIRECTORY/uni-zugang, JSON oder
                           Zeilen username=/password=)
 
@@ -39,6 +44,12 @@ ERSTE_TAGE = 14          # beim ersten Abruf: Mails der letzten 14 Tage
 TAKT_MINUTEN = (15, 30, 60)
 SICHERHEIT = (6, 30)     # täglicher Sicherheitslauf ab 06:30 Uhr (Berlin)
 NACHLESEN = timedelta(hours=24)
+PDF_ANHANG_MAX = 10 * 1024 * 1024     # PDF-Anhang höchstens so groß, sonst nur sein Name
+PDF_ANHAENGE_JE_MAIL = 3
+PDF_ANHAENGE_JE_ABRUF = 40 * 1024 * 1024  # zusammen je Abruf (Platz auf dem Server, Claudes Kontext)
+KALENDER_TERMINE = 40    # Termine aus einem Kalender-Anhang
+KALENDER_ZEICHEN = 6_000  # Zeichen je Kalender-Anhang
+ANHANG_NAME = 120        # Zeichen eines Anhangnamens im Text
 
 
 def jetzt():
@@ -66,6 +77,15 @@ def json_schreiben(pfad, daten):
     text_schreiben(pfad, json.dumps(daten, ensure_ascii=False, indent=2))
 
 
+def bytes_schreiben(pfad, daten):
+    """Wie text_schreiben, für Bytes (PDF-Anhänge)."""
+    pfad = Path(pfad)
+    pfad.parent.mkdir(parents=True, exist_ok=True)
+    neu = pfad.with_name(pfad.name + ".neu")
+    neu.write_bytes(daten)
+    neu.replace(pfad)
+
+
 # ---------- Uni-Postfach ----------
 
 def kopf(nachricht, name):
@@ -83,17 +103,73 @@ def html_zu_text(s):
     return html.unescape(s)
 
 
-def mail_text(roh_bytes):
-    """Mail → kurzer Text (Betreff, Absender, Datum, Text). Anhänge nur als Name."""
+def anhang_name(name):
+    """Name eines Anhangs für den Text: eine Zeile, ohne Steuerzeichen, gekürzt (kommt von außen)."""
+    return re.sub(r"[\x00-\x1f\x7f]+", " ", str(name)).strip()[:ANHANG_NAME] or "Anhang"
+
+
+def kalender_text(daten):
+    """Kalender-Anhang (.ics) → eine Zeile je Termin: Titel | Beginn | Ende | Ort. Beginn und Ende wie in der Datei, mit Zeitzone
+    davor (TZID=…:20261105T101500) oder Z für UTC. Gefaltete Zeilen (RFC 5545) werden zusammengesetzt."""
+    text = daten.decode("utf-8", errors="replace") if isinstance(daten, bytes) else str(daten)
+    text = re.sub(r"\r?\n[ \t]", "", text)
+    termine, akt = [], None
+    for zeile in text.splitlines():
+        zeile = zeile.strip()
+        if zeile.upper() == "BEGIN:VEVENT":
+            akt = {}
+        elif zeile.upper() == "END:VEVENT":
+            if akt and (akt.get("SUMMARY") or akt.get("DTSTART")):
+                termine.append(akt)
+            akt = None
+        elif akt is not None and ":" in zeile:
+            name, wert = zeile.split(":", 1)
+            feld, _, parameter = name.partition(";")
+            feld = feld.upper()
+            if feld in ("SUMMARY", "DTSTART", "DTEND", "LOCATION") and feld not in akt:
+                wert = wert.replace("\\n", " ").replace("\\,", ",").replace("\\;", ";").strip()
+                if feld in ("DTSTART", "DTEND") and parameter:
+                    wert = f"{parameter}:{wert}"
+                akt[feld] = anhang_name(wert)
+    zeilen = [" | ".join(t.get(f, "") for f in ("SUMMARY", "DTSTART", "DTEND", "LOCATION")) for t in termine[:KALENDER_TERMINE]]
+    return "\n".join(zeilen)[:KALENDER_ZEICHEN]
+
+
+def anhang_art(name, art, daten):
+    """pdf | kalender | "" (alles andere: nur der Name)."""
+    n = str(name).lower()
+    if (art == "application/pdf" or n.endswith(".pdf")) and daten.startswith(b"%PDF-"):
+        return "pdf"
+    if art == "text/calendar" or n.endswith(".ics"):
+        return "kalender"
+    return ""
+
+
+def mail_text(roh_bytes, pdf_ablegen=None):
+    """Mail → kurzer Text (Betreff, Absender, Datum, Text, Anhänge). Kalender-Anhänge stehen als Zeilen im Text. Einen
+    PDF-Anhang gibt der Text an pdf_ablegen(Bytes) → Pfad im Lauf-Ordner oder None (zu groß, Grenze erreicht); ohne
+    pdf_ablegen und bei None steht nur sein Name da, wie bei allen anderen Anhängen."""
     n = email.message_from_bytes(roh_bytes, policy=email.policy.default)
-    teile, anhaenge = [], []
+    teile, namen, pdfs, kalender = [], [], [], []
     for teil in n.walk():
         if teil.is_multipart():
             continue
         name = teil.get_filename()
         art = teil.get_content_type()
         if name or teil.get_content_disposition() == "attachment":
-            anhaenge.append(name or art)
+            name = anhang_name(name or art)
+            try:
+                daten = teil.get_payload(decode=True) or b""
+            except (LookupError, ValueError):
+                daten = b""
+            welche = anhang_art(name, art, daten)
+            pfad = pdf_ablegen(daten) if welche == "pdf" and pdf_ablegen else None
+            if pfad:
+                pdfs.append(f"- {name} ({max(1, len(daten) // 1024)} KB): {pfad}")
+            elif welche == "kalender" and len(kalender) < 3:
+                kalender.append(f"Kalender {name}:\n" + (kalender_text(daten) or "(keine Termine)"))
+            else:
+                namen.append(name)
             continue
         if art not in ("text/plain", "text/html"):
             continue
@@ -105,9 +181,30 @@ def mail_text(roh_bytes):
     text = next((t for a, t in teile if a == "text/plain"), "") or next((html_zu_text(t) for a, t in teile if a == "text/html"), "")
     text = re.sub(r"[ \t]+", " ", re.sub(r"\n{3,}", "\n\n", text)).strip()[:MAX_TEXT]
     zeilen = [f"Betreff: {kopf(n, 'Subject')}", f"Von: {kopf(n, 'From')}", f"Datum: {kopf(n, 'Date')}"]
-    if anhaenge:
-        zeilen.append("Anhänge: " + ", ".join(anhaenge[:20]))
-    return "\n".join(zeilen) + "\n\n" + text + "\n"
+    if namen:
+        zeilen.append("Anhänge: " + ", ".join(namen[:20]))
+    ende = ""
+    if pdfs:
+        ende += "\n\nPDF-Anhänge (nur lesen, wenn sie nach Terminen aussehen):\n" + "\n".join(pdfs)
+    if kalender:
+        ende += "\n\nKalender-Anhänge (Titel | Beginn | Ende | Ort):\n" + "\n\n".join(kalender)
+    return "\n".join(zeilen) + "\n\n" + text + ende + "\n"
+
+
+def pdf_ablage(ordner, uid, rest):
+    """Ablage für die PDF-Anhänge einer Mail: höchstens PDF_ANHAENGE_JE_MAIL, je bis PDF_ANHANG_MAX, zusammen bis rest["bytes"]
+    (je Abruf). → Funktion Bytes → Pfad im Lauf-Ordner (roh/uni-postfach/…) oder None"""
+    nr = [0]
+
+    def ablegen(daten):
+        if nr[0] >= PDF_ANHAENGE_JE_MAIL or len(daten) > PDF_ANHANG_MAX or len(daten) > rest["bytes"]:
+            return None
+        nr[0] += 1
+        name = f"{uid}-anhang-{nr[0]}.pdf"
+        bytes_schreiben(ordner / name, daten)
+        rest["bytes"] -= len(daten)
+        return f"roh/uni-postfach/{name}"
+    return ablegen
 
 
 class AnmeldungAbgelehnt(Exception):
@@ -212,12 +309,14 @@ def uni_postfach(stand, roh, zugang, imap_klasse=imaplib.IMAP4_SSL, nachlesen=Fa
             return None
         ordner = roh / "uni-postfach"
         geholt = wieder = 0
+        rest = {"bytes": PDF_ANHAENGE_JE_ABRUF}
         for uid in uids[:MAX_MAILS]:
             typ, d = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
             if typ != "OK" or not d or not isinstance(d[0], tuple):
                 continue
-            text_schreiben(ordner / f"{uid}.txt", mail_text(d[0][1]))
+            text_schreiben(ordner / f"{uid}.txt", mail_text(d[0][1], pdf_ablage(ordner, uid, rest)))
             geholt += 1
+        # Nachlesen (Sicherheitslauf): diese Mails kamen schon einmal, samt ihren PDF-Anhängen; jetzt nur der Text
         for uid in nochmal:
             typ, d = imap.uid("FETCH", str(uid), "(BODY.PEEK[])")
             if typ != "OK" or not d or not isinstance(d[0], tuple):

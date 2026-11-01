@@ -4377,6 +4377,10 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 .eba-modal .eba-modal-zeile { display: flex; flex-direction: column; gap: 5px; }
 .eba-modal .eba-modal-label { font-size: 13px; font-weight: 600; }
 .eba-modal-ilias .eba-modal-feld { min-height: 44px; font-size: 16px; }
+/* Eigener Server: Feld für den Code (16 px, sonst zoomt iOS) und der Code für ein weiteres Gerät groß in Festbreitenschrift, damit
+   man ihn auf dem anderen Gerät sicher abtippt (server.js, „Weiteres Gerät verbinden“) */
+.eba-server .eba-modal-feld { min-height: 44px; font-size: 16px; }
+.eba-modal .eba-server-code { margin: 4px 0 8px; font-family: var(--font-monospace); font-size: 2em; font-weight: 600; letter-spacing: 0.08em; user-select: all; -webkit-user-select: all; }
 .eba-modal-datenschutz, .eba-ei-datenschutz { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
 .eba-modal-datenschutz .eba-sym, .eba-ei-datenschutz .eba-sym { flex: none; width: 15px; height: 15px; margin-top: 2px; }
 .eba-ei-datenschutz { margin-top: 14px; }
@@ -5578,6 +5582,14 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-h
 .eba-mod :is(button, a, .eba-mod-tipp):focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
 .eba-mod-leer { font-size: 14px; color: var(--eba-muted); }
 .eba-mod-abdeckung { margin-top: 14px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+/* Von Claude (modul.js, seit 01.11.2026): Hinweise des eigenen Servers zu diesem Modul, Zeilen mit Haarlinie wie „Als Nächstes“,
+   Quelle und Tag gedämpft darunter; ohne Hinweise bleibt der Platz leer */
+.eba-mod-claude { margin-top: 22px; }
+.eba-mod-claude:empty { display: none; }
+.eba-mod-hinweis { padding: 8px 0; border-top: 1px solid var(--eba-border); font-size: 15px; line-height: 1.4; }
+.eba-mod-hinweis:last-child { border-bottom: 1px solid var(--eba-border); }
+.eba-mod-hinweis-quelle { display: block; margin-top: 2px; font-size: 12.5px; color: var(--eba-muted); }
+.eba-mod-hinweis-quelle:empty { display: none; }
 
 /* Schmal (iPhone, geteiltes iPad) */
 @container eba-mod (max-width: 560px) {
@@ -5731,44 +5743,57 @@ body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-t
 /* ---------- Ende Abschnitt 60 ---------- */
 
 /* ---------- 61. Lernplan (lernplan.js, ```eba-lernplan```; seit 18.10.2026) ----------
-   Bereich Lernplan: je Modul eine Zeile der Zeilenliste (.eba-vb-liste, ohne Symbol, Pille nur bei einem Zustand), Tipp klappt
-   die Kapitel auf (.eba-lp-unten): Kästchen wie bei den To-dos (.eba-td-haken, ganze Zeilenhöhe als Tippfläche, auf iPhone und
-   iPad mindestens 44 px), Nummer, Titel (Link auf die Folien), rechts „bis So 25.10.“. In der Lernplan-Notiz nur die Zeile
-   (.eba-lp-eine). Ohne Lernplan-Notizen ein Satz (.eba-lp-leer). Nur --eba-*-Variablen. */
+   Bereich Lernplan: Kopf mit deinem Stand, Semesterplan mit Zielnote, Module als Karten (unten beschrieben). Ein Modul klappt die
+   Kapitel auf (.eba-lp-unten): Kästchen wie bei den To-dos (.eba-td-haken, ganze Zeilenhöhe als Tippfläche, auf iPhone und iPad
+   mindestens 44 px), Nummer, Titel (Link auf die Folien), rechts „bis So 25.10.“. In der Lernplan-Notiz nur eine Zeile der
+   Zeilenliste (.eba-lp-eine, .eba-vb-liste). Ohne Lernplan-Notizen ein Satz (.eba-lp-leer). Nur --eba-*-Variablen. */
 li:has(> a[data-href$="Lernplan"]) { --eba-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m3 17 2 2 4-4'/%3E%3Cpath d='m3 7 2 2 4-4'/%3E%3Cpath d='M13 6h8'/%3E%3Cpath d='M13 12h8'/%3E%3Cpath d='M13 18h8'/%3E%3C/svg%3E"); }
-.eba-lp-leer { padding: 14px 16px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); color: var(--eba-muted); font-size: 14px; line-height: 1.5; }
-.eba-lp-modul.is-klappbar { cursor: pointer; -webkit-tap-highlight-color: transparent; }
-.eba-lp-modul.is-klappbar::after {
-  content: ""; flex: none; width: 8px; height: 8px; margin: 0 4px 0 auto; border-right: 1.75px solid var(--eba-faint);
-  border-bottom: 1.75px solid var(--eba-faint); transform: rotate(-45deg); transition: transform 0.15s ease;
-}
-.eba-lp-modul.is-klappbar.is-offen::after { transform: rotate(45deg); }
-.eba-lp-modul.is-klappbar:hover .eba-vb-text b { color: var(--eba-accent-text); }
+.eba-lp-leer { padding: 14px 16px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); color: var(--eba-muted); font-size: 13px; line-height: 1.5; }
 .eba-lp-unten { border-top: 1px solid var(--eba-border); padding: 0 14px 10px; }
 .eba-lp-unten.is-zu { display: none; }
-.eba-lp-unten + .eba-vb { border-top: 1px solid var(--eba-border); }
 .eba-lp-kapitel { display: flex; flex-direction: column; }
 .eba-lp-k { display: flex; align-items: center; gap: 10px; min-height: 40px; }
 .eba-lp-k + .eba-lp-k { border-top: 1px solid var(--eba-border); }
-.eba-lp-k > .eba-td-haken { align-self: stretch; align-items: center; margin: 0 0 0 -14px; padding: 0 10px 0 14px; }
-.eba-lp-k-text { flex: 1 1 auto; display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: 14px; line-height: 1.4; }
-.eba-lp-k-nr { flex: none; min-width: 1.6em; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
-.eba-lp-k-titel { min-width: 0; overflow-wrap: anywhere; color: var(--eba-text); }
+.eba-lp-k > .eba-td-haken { flex: none; align-self: stretch; align-items: center; margin: 0 0 0 -14px; padding: 0 10px 0 14px; }
+/* Seit 31.10.2026 nach docs/design.md: Titel in der Grundschrift, Nummer, Kürzel und Fälligkeit 13 bzw. 12 px; Titel mit Link
+   leise unterstrichen (auf iPhone und iPad gibt es kein Hover); Wörter brechen nicht mitten im Wort. Titel und Fälligkeit stehen
+   in .eba-lp-k-inhalt: am PC und iPad nebeneinander, auf dem iPhone untereinander, die Fälligkeit also unter dem Titel. */
+.eba-lp-k-text { flex: 1 1 auto; display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 8px 0; line-height: 1.4; }
+.eba-lp-k-nr { flex: none; min-width: 2em; font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-lp-k-inhalt { flex: 1 1 auto; display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; min-width: 0; }
+.eba-lp-k-titel { flex: 1 1 12em; min-width: 0; color: var(--eba-text); }
 .eba-lp-k-titel.is-link { cursor: pointer; }
-.eba-lp-k-titel.is-link:hover { color: var(--eba-accent-text); text-decoration: underline; text-underline-offset: 2px; }
-.eba-lp-k-teil { color: var(--eba-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.eba-lp-k-titel.is-link > .eba-lp-k-name {
+  text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px;
+}
+.eba-lp-k-titel.is-link:hover > .eba-lp-k-name { color: var(--eba-accent-text); text-decoration-color: currentColor; }
+.eba-lp-k-teil { display: inline-block; color: var(--eba-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .eba-lp-k.is-fertig .eba-lp-k-titel { color: var(--eba-muted); }
-.eba-lp-k-bis { flex: none; color: var(--eba-muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.eba-lp-fuss { padding-top: 8px; font-size: 13px; }
+.eba-lp-woche .eba-lp-k.is-fertig .eba-lp-k-titel { text-decoration: line-through; text-decoration-color: var(--eba-muted); }
+.eba-lp-woche .eba-lp-k.is-fertig .eba-lp-k-name { text-decoration: none; } /* abgehakt nur durchgestrichen, nicht auch unterstrichen */
+.eba-lp-k-bis { flex: none; margin-left: auto; color: var(--eba-muted); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.eba-lp-k-bis.is-ueberfaellig { color: var(--eba-warn-text, var(--eba-warn)); }
+.eba-lp-k-code-unten { display: none; }
+body:not(.is-phone) .eba-lp-k-bis.is-leer { display: none; }
+.eba-lp-fuss { padding: 8px 0 0 var(--eba-lp-titel-x); font-size: 13px; }
 .eba-lp-fuss a.internal-link { color: var(--eba-muted); text-decoration: none; }
 .eba-lp-fuss a.internal-link:hover { color: var(--eba-accent-text); text-decoration: underline; }
 .eba-lp-eine { margin: 0 0 18px; }
-/* iPhone und iPad: Zeilen mindestens 44 px (das Kästchen nimmt die ganze Höhe); iPhone: Fälligkeit unter den Titel */
+/* Spalte der Titel im aufgeklappten Modul (Kästchen + Abstand + Nummer + Abstand): „Für die Klausur“, Schalter und Link fluchten mit ihr */
+.eba-lp-unten { --eba-lp-titel-x: calc(var(--checkbox-size) + 54px); }
+body.is-mobile .eba-lp-unten { --eba-lp-titel-x: 74px; }
+/* iPhone und iPad: Zeilen mindestens 44 px (das Kästchen nimmt die ganze Höhe); iPhone: Fälligkeit unter dem Titel */
 body.is-mobile .eba-lp-k { min-height: 44px; }
 body.is-mobile .eba-lp-k > .eba-td-haken { box-sizing: border-box; width: 44px; padding-right: 0; }
-body.is-phone .eba-lp-k { flex-wrap: wrap; row-gap: 0; padding: 4px 0; }
-body.is-phone .eba-lp-k-text { flex: 1 1 calc(100% - 40px); }
-body.is-phone .eba-lp-k-bis { flex: 1 1 100%; padding: 0 0 6px 40px; margin-top: -6px; }
+body.is-phone .eba-lp-k-inhalt { flex-direction: column; align-items: flex-start; gap: 2px; }
+/* iPhone: Zeilen oft mehrzeilig, das Kästchen steht auf Höhe der ersten Zeile (wie bei den To-dos) */
+body.is-phone .eba-lp-k { align-items: flex-start; }
+body.is-phone .eba-lp-k > .eba-td-haken { align-items: flex-start; padding-top: calc(8px + (1.4em - var(--checkbox-size)) / 2); }
+body.is-phone .eba-lp-k-titel { flex: none; }
+body.is-phone .eba-lp-k-bis { margin-left: 0; white-space: normal; }
+/* iPhone: Kürzel des Moduls vor der Fälligkeit statt vor der Nummer, der Titel hat so die ganze Breite */
+body.is-phone .eba-lp-k-text > .eba-lp-k-code { display: none; }
+body.is-phone .eba-lp-k-code-unten { display: inline; margin-right: 8px; font-size: 12px; font-weight: 600; color: var(--eba-muted); }
 /* In Entwicklung (lernplan.js IN_ENTWICKLUNG, seit 19.10.2026): oben ein Warnkasten (Pille, fetter Satz, Erklärung), der Inhalt
    stark abgeblendet und grau, bleibt bedienbar; die Zeile in der Übersicht (Seitenleiste) markiert Abschnitt 66 */
 .eba-lp-entwicklung {
@@ -5781,8 +5806,391 @@ body.is-phone .eba-lp-k-bis { flex: 1 1 100%; padding: 0 0 6px 40px; margin-top:
 }
 .eba-lp-entwicklung-kopf { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 8px; margin: 0 0 4px; }
 .eba-lp-entwicklung-kopf > strong { font-weight: 650; color: var(--eba-warn-text, var(--eba-warn)); }
-.eba-lp.is-entwicklung > .eba-vb-liste, .eba-lp.is-entwicklung > .eba-lp-leer { opacity: 0.4; filter: grayscale(1); transition: opacity 0.15s ease; }
-.eba-lp.is-entwicklung > .eba-vb-liste:hover, .eba-lp.is-entwicklung > .eba-vb-liste:focus-within { opacity: 0.75; }
+.eba-lp.is-entwicklung > :not(.eba-lp-entwicklung) { opacity: 0.4; filter: grayscale(1); transition: opacity 0.15s ease; }
+.eba-lp.is-entwicklung > :is(.eba-vb-liste, .eba-lp-held, .eba-lp-plan, .eba-lp-module):hover,
+.eba-lp.is-entwicklung > :is(.eba-vb-liste, .eba-lp-held, .eba-lp-plan, .eba-lp-module):focus-within { opacity: 0.75; }
+/* Seit 31.10.2026. Bereich: oben dein Stand (.eba-lp-held) und der Semesterplan (.eba-lp-plan), darunter „Module“ (.eba-lp-label:
+   Gruppenlabel nach docs/design.md) als Karten. Kapitelzeilen der gewählten Woche (.eba-lp-woche) mit dem Kürzel des Moduls vor
+   jedem Kapitel, heute Abgehaktes durchgestrichen, in der Klausurvorbereitung eine Zeile je Modul (ohne Kästchen, der Platz
+   bleibt); im aufgeklappten Modul „Für die Klausur“ (.eba-lp-vorb) und der Schalter „Vor der Vorlesung lernen“ (Kästchen der
+   To-dos), beide in der Spalte der Titel. Dashboard: Zeile wie die der Karteikarten (.eba-lk-heute, Abschnitt 52), nichts dran: .eba-lp-aus samt
+   Hülle unsichtbar. Modulseite: Abschnitt „Lernplan“ wie „Als Nächstes“ (Abschnitt 58), mit Pfeil. */
+.eba-lp-label {
+  margin: 24px 0 8px; font-family: var(--font-interface); font-size: var(--eba-label-size); font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking); text-transform: var(--eba-label-case); color: var(--eba-accent-text);
+}
+.eba-lp > .eba-lp-label:first-child, .eba-lp-entwicklung + .eba-lp-label { margin-top: 0; }
+.eba-lp-k-code { flex: none; min-width: 3em; font-size: 12px; font-weight: 600; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-lp-k-vorb > .eba-td-haken { visibility: hidden; }
+.eba-lp-k-vorb .eba-lp-k-titel a.internal-link { color: var(--eba-accent-text); }
+.eba-lp-k-leer { padding: 12px 0; color: var(--eba-muted); font-size: 13px; }
+/* Farben (seit 1.11.2026): Jedes Modul trägt die Farbe aus dem Stundenplan (.modul-N → --lp-farbe, ctx.woche.modulFarben), in
+   Bahn, Säule, Kapitelzeile und Karte; Texte bleiben in Text- und Grautönen, die Farbe steht als Punkt oder Fläche daneben.
+   --lp-fuell ist dein Stand über alles (Ring, Balken, gewählte Note): der Akzent, dunkel --eba-accent-text (der dunkle Akzent
+   hätte auf der Karte kaum 2 : 1). Der Bereich ist ein Container (eba-lp): Schmal (iPhone) stapeln Kopf und Zielnote. */
+.eba-lp { --lp-fuell: var(--eba-accent); --lp-ton: 30%; }
+.theme-dark .eba-lp { --lp-fuell: var(--eba-accent-text); --lp-ton: 38%; }
+.eba-lp:not(.eba-lp-eine) { container: eba-lp / inline-size; }
+.eba-lp .modul-0 { --lp-farbe: var(--eba-muted); }
+.eba-lp .modul-1 { --lp-farbe: var(--eba-modul-1); }
+.eba-lp .modul-2 { --lp-farbe: var(--eba-modul-2); }
+.eba-lp .modul-3 { --lp-farbe: var(--eba-modul-3); }
+.eba-lp .modul-4 { --lp-farbe: var(--eba-modul-4); }
+.eba-lp .modul-5 { --lp-farbe: var(--eba-modul-5); }
+.eba-lp .modul-6 { --lp-farbe: var(--eba-modul-6); }
+.eba-lp-farbpunkt { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--lp-farbe); }
+.eba-lp-balken { position: relative; flex: none; display: inline-block; width: 72px; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--eba-text) 10%, transparent); }
+.eba-lp-balken-voll { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; background: var(--lp-fuell); }
+/* Kopf: Ring (dein Stand nach ECTS; Strich = wo der Plan heute steht, dazwischen der Rückstand in Warnfarbe), daneben die Lage in
+   der Schrift der Überschriften und ein Satz, darunter (breit: rechts, hinter einer Linie) diese Woche als Balken und die nächste
+   Klausur. Alles verstanden: Ring grün. */
+.eba-lp-held {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 14px 22px;
+  margin: 0 0 14px; padding: 18px 20px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg);
+}
+.eba-lp-ring { position: relative; width: 116px; height: 116px; }
+.eba-lp-ring > svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.eba-lp-ring circle { fill: none; stroke-width: 10; }
+.eba-lp-ring-spur { stroke: color-mix(in srgb, var(--eba-text) 9%, transparent); }
+.eba-lp-ring-rueck { stroke: var(--eba-warn); }
+.eba-lp-ring-voll { stroke: var(--lp-fuell); stroke-linecap: round; }
+.eba-lp-held.is-fertig .eba-lp-ring-voll { stroke: var(--eba-good); }
+.eba-lp-ring-soll { stroke: var(--eba-text); stroke-width: 2.5; stroke-linecap: round; transform-origin: 50px 50px; }
+.eba-lp-ring-mitte { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.eba-lp-ring-zahl {
+  font-family: var(--eba-font-display); font-size: 1.6em; font-weight: var(--eba-display-weight); letter-spacing: var(--eba-display-tracking);
+  line-height: 1; color: var(--eba-text); font-variant-numeric: tabular-nums;
+}
+.eba-lp-ring-name { margin-top: 4px; font-size: 11px; line-height: 1; color: var(--eba-muted); }
+.eba-lp-held-titel {
+  font-family: var(--eba-font-display); font-size: 1.65em; font-weight: var(--eba-display-weight); letter-spacing: var(--eba-display-tracking);
+  line-height: 1.15; color: var(--eba-text); text-wrap: balance;
+}
+.eba-lp-held-satz { margin-top: 6px; font-size: 15px; line-height: 1.45; color: var(--eba-muted); text-wrap: pretty; }
+.eba-lp-held-zahlen { grid-column: 2; display: flex; flex-wrap: wrap; gap: 10px 32px; }
+.eba-lp-held-zahl-name { font-size: 12px; line-height: 1.4; color: var(--eba-muted); }
+.eba-lp-held-zahl-wert {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; margin-top: 3px; font-size: 14px; font-weight: 600; line-height: 1.4;
+  color: var(--eba-text); font-variant-numeric: tabular-nums;
+}
+.eba-lp-held-zahl-datum { font-weight: 400; color: var(--eba-muted); }
+@container eba-lp (max-width: 520px) {
+  .eba-lp-held { gap: 14px 16px; padding: 16px; }
+  .eba-lp-ring { width: 92px; height: 92px; }
+  .eba-lp-ring-zahl { font-size: 1.3em; }
+  .eba-lp-held-titel { font-size: 1.35em; }
+  .eba-lp-held-zahlen { grid-column: 1 / -1; gap: 10px 24px; }
+}
+@container eba-lp (min-width: 760px) {
+  .eba-lp-held { grid-template-columns: auto minmax(0, 1fr) auto; padding: 20px 24px; }
+  .eba-lp-held-zahlen { grid-column: 3; flex-direction: column; gap: 14px; align-self: stretch; justify-content: center; padding-left: 24px; border-left: 1px solid var(--eba-border); }
+}
+/* Semesterplan (seit 1.11.2026; vorher „Diese Woche“ als Liste und „Wochen“ als Zeilen mit „Alle Wochen“): eine Karte. Kopf: links
+   der Name als Label, rechts die Zielnote (zehn Noten in drei Stufen; die gewählte voll in --lp-fuell, ihre Stufe getönt; Zeigen
+   tönt die Stufe der gezeigten), darunter der Satz, was sie heißt (Werte fett). Fläche: links die Kürzel mit Farbpunkt (--lp-lab),
+   oben je Woche eine Säule, gestapelt je Modul (2 px Fuge zwischen Modulen; verstanden voll, offen getönt, überfällig in
+   Warnfarbe; oben rund; Ring um die gewählte), darunter je Modul eine Bahn: dicker Balken = Kapitel verstehen (getönt, gefüllt
+   bis zum Stand, dahinter bis heute schraffiert in Warnfarbe), Strich = alles verstanden, dünne Linie = Klausurvorbereitung,
+   Raute = Klausur, Ring = Zwischentest (Marken in Textfarbe mit 2 px Ring in der Kartenfläche; nach dem Skill dataviz: Balken
+   ≤ 24 px, Ringe statt Rahmen). Zeigt man eine andere Zielnote, steht gestrichelt, wie lang das Verstehen dann dauerte
+   (.eba-lp-bahn-geist), der Balken tritt zurück. Zeigt man auf eine Bahn, treten die anderen Bahnen und Säulenteile zurück.
+   Dahinter Pausen (--eba-info 11 %), diese Woche (Akzent getönt), die gewählte Woche (Text 5 %) und die Linie „heute“. Achse mit
+   Monaten und „heute“; Legende in derselben Form wie die Marken (neutral grau: die Farbe sagt das Modul). Darunter die gewählte
+   Woche: ‹ Name ›, rechts wie viel ihrer Kapitel verstanden sind (oder ein Haken) und ihre Zeit, Stücke, Kapitelzeilen. Beim
+   ersten Zeichnen wachsen Säulen und Bahnen, danach gleiten Bahnen und Ring vom letzten Stand zum neuen (nicht bei reduzierter
+   Bewegung). */
+.eba-lp-plan {
+  container: eba-lp-plan / inline-size;
+  margin: 0; padding: 14px 16px 0; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg);
+}
+.eba-lp-plan-kopf { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px 20px; }
+.eba-lp-plan-titel {
+  padding-top: 6px; font-family: var(--font-interface); font-size: var(--eba-label-size); font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking); text-transform: var(--eba-label-case); color: var(--eba-muted);
+}
+.eba-lp-ziel { display: flex; align-items: flex-start; gap: 6px 12px; }
+.eba-lp-ziel-label { padding-top: 5px; font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--eba-text); white-space: nowrap; }
+.eba-lp-ziel-skala { display: flex; gap: 6px; }
+.eba-lp-ziel-stufe { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.eba-lp-ziel-noten { display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: color-mix(in srgb, var(--eba-text) 6%, transparent); transition: background-color 0.15s ease; }
+.eba-lp-ziel-stufe.is-an > .eba-lp-ziel-noten { background: var(--eba-accent-soft); }
+.eba-lp-ziel-stufe.is-vorschau > .eba-lp-ziel-noten { background: color-mix(in srgb, var(--eba-text) 12%, transparent); }
+.eba-lp .eba-lp-ziel-noten > button.eba-lp-note {
+  position: relative; flex: 1 1 0; min-width: 34px; height: 26px; margin: 0; padding: 0 6px; border: 0; border-radius: 999px;
+  background: transparent; box-shadow: none; font-family: var(--font-interface); font-size: 13px; font-weight: 500; line-height: 26px;
+  color: var(--eba-muted); font-variant-numeric: tabular-nums; cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.eba-lp .eba-lp-ziel-noten > button.eba-lp-note::before { content: ""; position: absolute; inset: -9px -1px; } /* 44 px Tippfläche */
+.eba-lp .eba-lp-ziel-noten > button.eba-lp-note.is-an { background: var(--lp-fuell); color: var(--eba-card-bg); font-weight: 650; }
+.eba-lp .eba-lp-ziel-noten > button.eba-lp-note:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 1px; }
+@media (hover: hover) {
+  .eba-lp .eba-lp-ziel-noten > button.eba-lp-note:not(.is-an):hover { background: var(--eba-card-bg); color: var(--eba-text); }
+}
+.eba-lp-ziel-name { padding-left: 10px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); white-space: nowrap; }
+.eba-lp-ziel-stufe.is-an > .eba-lp-ziel-name { font-weight: 600; color: var(--eba-accent-text); }
+.eba-lp-ziel-satz { margin: 6px 0 12px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); text-wrap: pretty; }
+.eba-lp-ziel-satz b { font-weight: 600; color: var(--eba-text); font-variant-numeric: tabular-nums; }
+.eba-lp-plan-flaeche, .eba-lp-plan-achse { --lp-lab: 50px; }
+.eba-lp-plan-flaeche { position: relative; margin-left: var(--lp-lab); }
+.eba-lp-plan-baender { position: absolute; inset: 0; pointer-events: none; }
+.eba-lp-plan-baender > div { position: absolute; top: 0; bottom: 0; }
+.eba-lp-plan-pause { background: color-mix(in srgb, var(--eba-info) 11%, transparent); }
+.eba-lp-plan-jetzt { background: var(--eba-accent-soft); }
+.eba-lp-plan-wahl { background: color-mix(in srgb, var(--eba-text) 5%, transparent); }
+.eba-lp-plan-heute { width: 0; border-left: 1.5px solid var(--eba-accent-text); }
+/* Säulen */
+.eba-lp-saeulen { position: relative; display: flex; height: 64px; border-bottom: 1px solid var(--eba-border-strong); }
+.eba-lp .eba-lp-saeulen > button.eba-lp-s {
+  flex: 1 1 0; min-width: 0; display: flex; align-items: flex-end; justify-content: center; height: auto; margin: 0; padding: 4px 1px 0;
+  border: 0; border-radius: 3px 3px 0 0; background: transparent; box-shadow: none; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.eba-lp .eba-lp-saeulen > button.eba-lp-s.is-wahl { box-shadow: inset 0 0 0 1.5px var(--eba-text); }
+.eba-lp .eba-lp-saeulen > button.eba-lp-s:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: -2px; }
+.eba-lp-s-stapel { display: flex; flex-direction: column-reverse; gap: 2px; width: 100%; max-width: 16px; min-height: 3px; }
+.eba-lp-s-modul { display: flex; flex-direction: column-reverse; flex: 1 1 0; min-height: 2px; transition: opacity 0.15s ease; }
+.eba-lp-s-stapel > .eba-lp-s-modul:last-child { overflow: hidden; border-radius: 3px 3px 0 0; }
+.eba-lp-s-teil { flex: 1 1 0; min-height: 1px; }
+.eba-lp-s-teil.is-fertig { background: var(--lp-farbe); }
+.eba-lp-s-teil.is-offen { background: color-mix(in srgb, var(--lp-farbe) var(--lp-ton), transparent); }
+.eba-lp-s-teil.is-ueber { background: var(--eba-warn); }
+/* Bahnen */
+.eba-lp-bahnen { padding: 8px 0 4px; }
+.eba-lp-bahn { position: relative; height: 26px; cursor: pointer; transition: opacity 0.15s ease; -webkit-tap-highlight-color: transparent; }
+.eba-lp-bahn:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 0; border-radius: 4px; }
+.eba-lp-bahn-code {
+  position: absolute; top: 0; bottom: 0; left: calc(-1 * var(--lp-lab)); width: calc(var(--lp-lab) - 8px); display: flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; color: var(--eba-text); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.eba-lp-bahn-code::before { content: ""; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--lp-farbe); }
+.eba-lp-bahn > div { position: absolute; top: 50%; }
+.eba-lp-bahn-lernen, .eba-lp-bahn-ist, .eba-lp-bahn-ueber { height: 10px; margin-top: -5px; border-radius: 5px; }
+.eba-lp-bahn-lernen { background: color-mix(in srgb, var(--lp-farbe) var(--lp-ton), transparent); transition: opacity 0.15s ease; }
+.eba-lp-bahn-ist { background: var(--lp-farbe); transform-origin: left center; }
+.eba-lp-bahn-ueber {
+  border-radius: 0 5px 5px 0; box-shadow: -2px 0 0 var(--eba-card-bg); transform-origin: left center;
+  background: repeating-linear-gradient(-45deg, var(--eba-warn) 0 3px, color-mix(in srgb, var(--eba-warn) 45%, transparent) 3px 6px);
+}
+.eba-lp-bahn-vorb { height: 2px; margin-top: -1px; border-radius: 1px; background: color-mix(in srgb, var(--lp-farbe) 60%, transparent); }
+.eba-lp-bahn-ziel { width: 2px; height: 18px; margin: -9px 0 0 -1px; border-radius: 1px; background: var(--eba-text); box-shadow: 0 0 0 1.5px var(--eba-card-bg); }
+.eba-lp-bahn-klausur { width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 1.5px; background: var(--eba-text); box-shadow: 0 0 0 2px var(--eba-card-bg); transform: rotate(45deg); }
+.eba-lp-bahn-test { box-sizing: border-box; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border: 2px solid var(--eba-text); border-radius: 50%; background: var(--eba-card-bg); box-shadow: 0 0 0 2px var(--eba-card-bg); }
+.eba-lp-bahn-geist {
+  box-sizing: border-box; height: 18px; margin-top: -9px; border: 1.5px dashed var(--eba-text); border-radius: 9px; pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.eba-lp-bahn-geist.is-zu { opacity: 0; }
+.eba-lp-plan.is-vorschau .eba-lp-bahn-lernen, .eba-lp-plan.is-vorschau .eba-lp-bahn-vorb { opacity: 0.45; }
+@media (hover: hover) {
+  .eba-lp .eba-lp-saeulen > button.eba-lp-s:hover { background: color-mix(in srgb, var(--eba-text) 6%, transparent); }
+  .eba-lp-bahnen:has(> .eba-lp-bahn:hover) > .eba-lp-bahn:not(:hover) { opacity: 0.35; }
+  .eba-lp-plan-flaeche:has(.eba-lp-bahn.modul-1:hover) .eba-lp-s-modul:not(.modul-1),
+  .eba-lp-plan-flaeche:has(.eba-lp-bahn.modul-2:hover) .eba-lp-s-modul:not(.modul-2),
+  .eba-lp-plan-flaeche:has(.eba-lp-bahn.modul-3:hover) .eba-lp-s-modul:not(.modul-3),
+  .eba-lp-plan-flaeche:has(.eba-lp-bahn.modul-4:hover) .eba-lp-s-modul:not(.modul-4),
+  .eba-lp-plan-flaeche:has(.eba-lp-bahn.modul-5:hover) .eba-lp-s-modul:not(.modul-5),
+  .eba-lp-plan-flaeche:has(.eba-lp-bahn.modul-6:hover) .eba-lp-s-modul:not(.modul-6) { opacity: 0.25; }
+}
+/* Achse und Legende */
+.eba-lp-plan-achse { position: relative; height: 22px; margin-left: var(--lp-lab); font-size: 12px; line-height: 18px; color: var(--eba-muted); }
+.eba-lp-plan-achse > span { position: absolute; top: 2px; padding-left: 4px; border-left: 1px solid var(--eba-border-strong); white-space: nowrap; }
+.eba-lp-plan-achse > span.is-heute {
+  top: 1px; padding: 0 7px; border: 0; border-radius: 999px; background: var(--eba-accent-text); font-weight: 600; line-height: 19px;
+  color: var(--eba-card-bg); transform: translateX(-50%);
+}
+.eba-lp-plan-achse > span.is-heute.is-links { transform: none; }
+.eba-lp-plan-achse > span.is-heute.is-rechts { transform: translateX(-100%); }
+.eba-lp-plan-legende { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 8px 0 12px; font-size: 12px; line-height: 1.5; color: var(--eba-muted); }
+.eba-lp-leg { display: inline-flex; align-items: center; gap: 6px; }
+.eba-lp-leg-zeichen { flex: none; width: 14px; height: 8px; border-radius: 4px; }
+.eba-lp-leg-zeichen.is-fertig { background: var(--eba-muted); }
+.eba-lp-leg-zeichen.is-offen { background: color-mix(in srgb, var(--eba-muted) var(--lp-ton), transparent); }
+.eba-lp-leg-zeichen.is-ueber { background: repeating-linear-gradient(-45deg, var(--eba-warn) 0 3px, color-mix(in srgb, var(--eba-warn) 45%, transparent) 3px 6px); }
+.eba-lp-leg-zeichen.is-ziel { width: 2px; height: 12px; margin: 0 6px; border-radius: 1px; background: var(--eba-text); }
+.eba-lp-leg-zeichen.is-vorb { height: 2px; border-radius: 1px; background: var(--eba-muted); }
+.eba-lp-leg-zeichen.is-klausur { width: 8px; height: 8px; margin: 0 3px; border-radius: 1px; background: var(--eba-text); transform: rotate(45deg); }
+.eba-lp-leg-zeichen.is-test { box-sizing: border-box; width: 9px; height: 9px; margin: 0 3px; border: 2px solid var(--eba-text); border-radius: 50%; }
+.eba-lp-leg-zeichen.is-pause { width: 12px; height: 12px; border-radius: 2px; background: color-mix(in srgb, var(--eba-info) 11%, transparent); }
+/* Die gewählte Woche */
+.eba-lp-plan-woche { margin: 0 -16px; border-top: 1px solid var(--eba-border); }
+.eba-lp-pw-kopf { display: flex; align-items: center; gap: 4px; min-height: 48px; padding: 4px 16px 4px 10px; }
+.eba-lp-pw-titel { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; min-width: 0; padding: 0 4px; }
+.eba-lp-pw-name { font-weight: 600; color: var(--eba-text); }
+.eba-lp-pw-name.is-jetzt { color: var(--eba-accent-text); }
+.eba-lp-pw-datum { font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-lp .eba-lp-pw-kopf > button.eba-lp-pw-nav {
+  position: relative; flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  margin: 0; padding: 0; border: 0; border-radius: 999px; background: transparent; box-shadow: none; color: var(--eba-muted);
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.eba-lp .eba-lp-pw-kopf > button.eba-lp-pw-nav::before { content: ""; position: absolute; inset: -8px; } /* 44 px Tippfläche */
+.eba-lp .eba-lp-pw-kopf > button.eba-lp-pw-nav:disabled { opacity: 0.35; cursor: default; }
+.eba-lp-pw-nav .eba-sym { width: 18px; height: 18px; }
+@media (hover: hover) {
+  .eba-lp .eba-lp-pw-kopf > button.eba-lp-pw-nav:not(:disabled):hover { background: color-mix(in srgb, var(--eba-text) 6%, transparent); color: var(--eba-text); }
+}
+.eba-lp-pw-rechts { display: flex; align-items: center; gap: 14px; margin-left: auto; padding-left: 8px; }
+.eba-lp-pw-stand { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-lp-pw-stand > .eba-lp-balken { width: 48px; }
+.eba-lp-pw-stand.is-geschafft { gap: 4px; font-weight: 600; color: color-mix(in srgb, var(--eba-good) 62%, var(--eba-text)); }
+.eba-lp-pw-haken { display: inline-flex; }
+.eba-lp-pw-haken .eba-sym { width: 16px; height: 16px; }
+.eba-lp-pw-was { padding: 0 16px 10px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+.eba-lp-plan-woche > .eba-lp-woche { padding: 0 16px; border-top: 1px solid var(--eba-border); }
+.eba-lp-w-teil { display: inline-block; }
+.eba-lp-punkt { font-weight: 400; color: var(--eba-muted); }
+.eba-lp-w-teil.is-klausur { color: var(--eba-text); font-weight: 600; }
+/* Kürzel vor einem Kapitel mit dem Punkt in der Farbe des Moduls; eben abgehakt: Die Zeile leuchtet grün auf, das Kästchen
+   springt (läuft nach dem neuen Zeichnen mit negativer Verzögerung weiter, lernplan.js) */
+.eba-lp-k-code::before, .eba-lp-k-code-unten::before {
+  content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 5px; border-radius: 50%; background: var(--lp-farbe); vertical-align: 1px;
+}
+/* Schmal (iPhone): Kürzel und Säulen etwas knapper, die Zielnote unter dem Namen über die ganze Breite */
+@container eba-lp-plan (max-width: 520px) {
+  .eba-lp-plan-flaeche, .eba-lp-plan-achse { --lp-lab: 44px; }
+  .eba-lp-saeulen { height: 52px; }
+  .eba-lp-bahn { height: 24px; }
+  .eba-lp-plan-kopf, .eba-lp-ziel { flex-direction: column; align-items: stretch; }
+  .eba-lp-ziel-label { padding-top: 0; }
+  .eba-lp-ziel-skala { gap: 4px; }
+  .eba-lp-ziel-stufe { flex: 1 1 0; } /* 2, 3 und 5 Noten: je Note gleich breit (lernplan.js setzt flex-grow) */
+  .eba-lp .eba-lp-ziel-noten > button.eba-lp-note { min-width: 0; padding: 0; }
+  .eba-lp-ziel-name { padding-left: 6px; }
+}
+body.is-mobile .eba-lp .eba-lp-ziel-noten > button.eba-lp-note { height: 30px; line-height: 30px; }
+body.is-mobile .eba-lp .eba-lp-ziel-noten > button.eba-lp-note::before { inset: -7px -1px; }
+/* Module als Karten (seit 1.11.2026; vorher aufklappbare Zeilen): Raster, das sich nach der Breite füllt (iPhone eine Spalte).
+   Kopf: Kürzel mit Farbpunkt, Pille, Pfeil (dreht sich offen); der Name; „Weiter mit“ und das nächste Kapitel (Link wie in den
+   Kapitelzeilen) mit Frist; Stand kurz; unten am Rand ein Balken in der Farbe des Moduls mit dem Strich, wo der Plan heute steht.
+   Aufgeklappt (.eba-lp-mk-mehr) über die ganze Breite direkt unter der Reihe der Karte (grid-auto-flow: dense rückt die übrigen
+   Karten nach), oben ein Rand in der Farbe des Moduls. Nicht mehr dran: leiser. */
+.eba-lp-module { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); grid-auto-flow: row dense; gap: 12px; }
+.eba-lp-mk {
+  position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px 19px; overflow: hidden;
+  border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg); cursor: pointer;
+  transition: border-color 0.15s ease; -webkit-tap-highlight-color: transparent;
+}
+.eba-lp-mk.is-ruhig { opacity: 0.7; }
+.eba-lp-mk.is-offen { border-color: color-mix(in srgb, var(--lp-farbe) 60%, var(--eba-border)); }
+.eba-lp-mk:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 2px; }
+@media (hover: hover) { .eba-lp-mk:not(.is-offen):hover { border-color: var(--eba-border-strong); } }
+.eba-lp-mk-kopf { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.eba-lp-mk-code {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--lp-farbe) 13%, transparent); font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--eba-text);
+  font-variant-numeric: tabular-nums;
+}
+.eba-lp-mk-code::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--lp-farbe); }
+.eba-lp-mk-name {
+  margin-top: -2px; font-family: var(--eba-font-display); font-size: 1.2em; font-weight: var(--eba-display-weight);
+  letter-spacing: var(--eba-display-tracking); line-height: 1.2; color: var(--eba-text); overflow-wrap: break-word; text-wrap: balance;
+}
+.eba-lp-mk-pfeil { flex: none; margin-left: auto; padding: 0 2px 0 4px; }
+.eba-lp-mk-pfeil::after {
+  content: ""; display: block; width: 7px; height: 7px; border-right: 1.75px solid var(--eba-faint); border-bottom: 1.75px solid var(--eba-faint);
+  transform: translateY(-2px) rotate(45deg); transition: transform 0.15s ease;
+}
+.eba-lp-mk.is-offen .eba-lp-mk-pfeil::after { transform: translateY(2px) rotate(-135deg); }
+.eba-lp-mk-weiter-name { font-size: 12px; line-height: 1.4; color: var(--eba-muted); }
+.eba-lp-mk-kapitel { display: flex; align-items: baseline; gap: 8px; margin-top: 2px; font-size: 15px; line-height: 1.35; color: var(--eba-text); }
+.eba-lp-mk-kapitel a.internal-link { color: var(--eba-text); }
+.eba-lp-mk-nr { flex: none; font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-lp-mk-titel { min-width: 0; overflow-wrap: break-word; }
+.eba-lp-mk-titel.is-link { cursor: pointer; text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+@media (hover: hover) { .eba-lp-mk-titel.is-link:hover { color: var(--eba-accent-text); text-decoration-color: currentColor; } }
+.eba-lp-mk-bis { margin-top: 3px; font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
+.eba-lp-mk-bis.is-ueberfaellig { color: var(--eba-warn-text, var(--eba-warn)); }
+.eba-lp-mk-stand { margin-top: auto; font-size: 13px; line-height: 1.4; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-lp-mk-balken { position: absolute; right: 0; bottom: 0; left: 0; height: 5px; background: color-mix(in srgb, var(--lp-farbe) var(--lp-ton), transparent); }
+.eba-lp-mk-voll { position: absolute; top: 0; bottom: 0; left: 0; background: var(--lp-farbe); }
+.eba-lp-mk-soll { position: absolute; top: -4px; bottom: 0; width: 2px; margin-left: -1px; border-radius: 1px 1px 0 0; background: var(--eba-text); }
+.eba-lp-unten.eba-lp-mk-mehr {
+  grid-column: 1 / -1; padding: 2px 16px 12px; border: 1px solid var(--eba-border); border-top: 3px solid var(--lp-farbe);
+  border-radius: var(--eba-radius-l); background: var(--eba-card-bg);
+}
+.eba-lp-mk-mehr .eba-lp-k > .eba-td-haken, .eba-lp-mk-mehr .eba-lp-schalter > .eba-td-haken { margin-left: -16px; padding-left: 16px; }
+@media (prefers-reduced-motion: no-preference) {
+  .eba-lp-plan.is-anim .eba-lp-s-stapel { transform-origin: bottom; animation: eba-lp-wachsen-h 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+  .eba-lp-plan.is-anim .eba-lp-bahn-ist, .eba-lp-plan.is-anim .eba-lp-bahn-ueber { animation: eba-lp-wachsen-b 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) 0.1s both; }
+  .eba-lp-bahn > div:not(.eba-lp-bahn-geist) { transition: left 0.7s cubic-bezier(0.2, 0.7, 0.2, 1), width 0.7s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .eba-lp-bahn > .eba-lp-bahn-geist { transition: opacity 0.15s ease, left 0.35s cubic-bezier(0.2, 0.7, 0.2, 1), width 0.35s cubic-bezier(0.2, 0.7, 0.2, 1); }
+  .eba-lp-ring circle, .eba-lp-ring-soll {
+    transition: stroke-dasharray 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), stroke-dashoffset 0.9s cubic-bezier(0.2, 0.7, 0.2, 1), transform 0.9s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .eba-lp-k.is-frisch { animation: eba-lp-frisch 1.6s ease-out both; }
+  .eba-lp-k.is-frisch > .eba-td-haken { animation-delay: inherit; }
+  .eba-lp-k.is-frisch > .eba-td-haken input { animation: eba-lp-springen 0.45s cubic-bezier(0.3, 1.6, 0.5, 1) both; animation-delay: inherit; }
+}
+@keyframes eba-lp-wachsen-h { from { transform: scaleY(0); } }
+@keyframes eba-lp-wachsen-b { from { transform: scaleX(0); } }
+@keyframes eba-lp-frisch { from { background-color: color-mix(in srgb, var(--eba-good) 24%, transparent); } to { background-color: transparent; } }
+@keyframes eba-lp-springen { 0% { transform: scale(1); } 45% { transform: scale(1.28); } 100% { transform: scale(1); } }
+button.eba-lp-zeit {
+  position: relative; flex: none; display: inline-flex; align-items: center; gap: 4px; height: auto; margin: -3px 0;
+  padding: 2px 8px 2px 10px; border: 1px solid var(--eba-border-strong); border-radius: 999px; background: var(--eba-card-bg);
+  box-shadow: none; font-family: var(--font-interface); font-size: 13px; font-weight: 500; line-height: 1.4; color: var(--eba-muted);
+  white-space: nowrap; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+button.eba-lp-zeit::before { content: ""; position: absolute; inset: -10px -4px; } /* Tippfläche größer als die Pille */
+/* Volle Zeit (in fast jeder Woche gleich): nur eine leise Uhr mit Pfeil, ohne Rahmen */
+.eba-lp .eba-lp-pw-rechts > button.eba-lp-zeit:not(.is-weniger) { padding: 2px 2px 2px 4px; border-color: transparent; background: transparent; color: var(--eba-muted); }
+.eba-lp-zeit-uhr { display: inline-flex; }
+.eba-lp-zeit-uhr .eba-sym { width: 15px; height: 15px; }
+body.is-mobile button.eba-lp-zeit::before { inset: -12px -8px; } /* Uhr 21 px hoch → 45 px */
+button.eba-lp-zeit.is-weniger {
+  border-color: color-mix(in srgb, var(--eba-accent) 45%, transparent); background: var(--eba-accent-soft); color: var(--eba-accent-text);
+  font-weight: 600;
+}
+.eba-lp-zeit-pfeil { display: inline-flex; color: var(--eba-faint); }
+.eba-lp-zeit-pfeil .eba-sym { width: 13px; height: 13px; }
+@media (hover: hover) { button.eba-lp-zeit:hover { border-color: var(--eba-muted); } }
+.eba-lp-vorb { margin-top: 4px; padding: 12px 0 4px var(--eba-lp-titel-x); border-top: 1px solid var(--eba-border); }
+.eba-lp-vorb-titel {
+  margin: 0 0 4px; font-family: var(--font-interface); font-size: var(--eba-label-size); font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking); text-transform: var(--eba-label-case); color: var(--eba-accent-text);
+}
+.eba-lp-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; padding: 4px 0; font-size: 13px; line-height: 1.45; }
+.eba-lp-v-titel { flex: none; min-width: 8.5em; font-weight: 600; color: var(--eba-text); }
+.eba-lp-v-text { flex: 1 1 200px; min-width: 0; color: var(--eba-muted); }
+.eba-lp-v-text a { color: var(--eba-accent-text); }
+.eba-lp-v-hilfe { padding: 0 0 4px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); }
+.eba-lp-schalter { display: flex; align-items: center; gap: 10px; min-height: 40px; margin-top: 4px; border-top: 1px solid var(--eba-border); cursor: pointer; }
+.eba-lp-schalter > .eba-td-haken { flex: none; align-self: stretch; align-items: center; margin: 0 0 0 -14px; padding: 0 10px 0 14px; }
+.eba-lp-schalter-text { display: flex; flex-direction: column; gap: 2px; padding: 8px 0 8px 34px; line-height: 1.4; } /* 34 px = Nummer + Abstand */
+.eba-lp-schalter-hilfe { font-size: 13px; color: var(--eba-muted); }
+/* Stand eines Moduls in Teilen: der Punkt mit festem Leerzeichen davor, so steht kein „·“ am Zeilenanfang */
+.eba-lp-st + .eba-lp-st::before { content: "\a0· "; }
+.block-language-eba-lernplan.eba-lp-aus,
+.markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-lernplan.eba-lp-aus) { display: none !important; }
+.el-pre:has(> .block-language-eba-lernplan.eba-lp-aus) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden; }
+/* Dashboard: „Lernplan“ und der Text fließen in einer Zeile, jedes Stück bricht nicht mitten um */
+.eba-lp-heute .eba-lk-heute-text { display: block; }
+/* Der Punkt hinter einem Stück zählt nicht zu dessen Breite (hängt rechts daneben): Sonst rutschte ein Stück, das gerade noch
+   neben „Lernplan“ passt, wegen des Punkts in die nächste Zeile. Der Abstand zwischen den Stücken ist breiter als der Punkt. */
+.eba-lp-heute-was { word-spacing: 0.45em; }
+.eba-lp-heute .eba-lk-heute-text > b { margin-right: 4px; } /* mit dem Leerzeichen so weit wie bei „Karteikarten“; wirkt nur in Zeile 1 */
+.eba-lp-heute-teil { position: relative; display: inline-block; word-spacing: normal; }
+.eba-lp-heute-teil > .eba-lp-punkt { position: absolute; left: 100%; white-space: pre; }
+.eba-lp-heute .eba-lk-heute-text > .eba-pill { vertical-align: 1px; }
+.eba-mod-lernplan { margin-top: 22px; }
+.eba-mod-lernplan .eba-mod-k .eba-pill { margin-left: 6px; }
+.eba-mod-lp-zeile {
+  display: flex; align-items: baseline; gap: 4px 8px; padding: 8px 0; border-top: 1px solid var(--eba-border);
+  border-bottom: 1px solid var(--eba-border); font-size: 15px; line-height: 1.4; color: var(--eba-text); cursor: pointer;
+}
+/* Pille und Stand; wird es eng (iPhone), rutscht der Stand unter die Pille */
+.eba-mod-lp-inhalt { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; min-width: 0; }
+.eba-mod-lp-text { flex: 1 1 14em; min-width: 0; }
+.eba-mod-lp-pfeil { flex: none; align-self: center; padding: 0 6px 0 4px; }
+.eba-mod-lp-pfeil::after {
+  content: ""; display: block; width: 7px; height: 7px; border-right: 1.75px solid var(--eba-faint); border-bottom: 1.75px solid var(--eba-faint);
+  transform: rotate(-45deg);
+}
+@media (hover: hover) { .eba-mod-lp-zeile:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); } }
+/* iPhone und iPad: Tippflächen mindestens 44 px */
+body.is-mobile .eba-lp-schalter { min-height: 44px; }
+body.is-mobile .eba-lp-schalter > .eba-td-haken { box-sizing: border-box; width: 44px; padding-right: 0; }
+body.is-phone .eba-lp-schalter > .eba-td-haken { align-items: flex-start; padding-top: calc(8px + (1.4em - var(--checkbox-size)) / 2); }
 /* ---------- Ende Abschnitt 61 ---------- */
 
 /* ---------- 62. Noten & Anmeldungen aus Alma (alma-konto.js; seit 0.4.5, Beta) ----------

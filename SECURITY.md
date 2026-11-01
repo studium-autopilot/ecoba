@@ -17,8 +17,9 @@ Bitte schick keine echten Zugangsdaten, Matrikelnummern oder Noten mit, auch nic
   könnte).
 - Die Anmeldung mit dem Uni-Login (ILIAS, Alma, Webmail für das Postfach) und der Umgang mit Zugangsdaten: Das Passwort darf
   nur im Schlüsselbund des Geräts liegen und nur an die Anmeldeseiten der Uni gehen.
-- Der eigene Server (`server/`, im Release `studium-server.tar.gz`): Einrichtung, Web-Dienst mit verschlüsseltem Datenkanal und
-  seinen Schlüsseln, der dort gespeicherte Uni-Zugang und was Claude auf dem Server darf.
+- Der eigene Server (`server/`, im Release `studium-server.tar.gz`): Einrichtung, das tägliche Update (nur signierte Pakete),
+  Web-Dienst mit verschlüsseltem Datenkanal und seinen Schlüsseln, der dort gespeicherte Uni-Zugang und was Claude auf dem Server
+  darf.
 
 Nicht dazu gehören Obsidian selbst, Alma, ILIAS und andere Systeme der Universität sowie die Dienste von Oracle und Claude.
 Lücken dort bitte an die jeweiligen Betreiber melden.

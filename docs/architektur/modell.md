@@ -149,7 +149,8 @@ der Kasten neutral. Vorher war jede Vorlesung grau gefüllt und jede Übung blau
 (Rückmeldung vom 27.10.2026). Unter dem Raster, in derselben Karte, die Legende (`legendeBauen`, `.eba-wlegende`): die Module der Woche
 mit Farbe, nach Farbe geordnet, Text der Kurzname (sonst der Titel der Modulnotiz, sonst der Code), Tooltip Code und Titel
 (`modulName`); ein Modul, das in dieser Woche nur ausfällt oder nur als Ausnahme (Warnfarbe) dasteht, fehlt dort. Welche Töne
-und warum: [Designsprache](../design.md), „Farbe je Modul im Wochenraster“.
+und warum: [Designsprache](../design.md), „Farbe je Modul im Wochenraster“. Der Lernplan nimmt dieselben Farben (seit 1.11.2026):
+`ctx.woche.modulFarben()` gibt `{ Code: 1–6 }` für das Semester von heute (siehe [„Lernplan“](lernen.md)).
 Reine Logik als Funktionen (`wocheBauen`, `spalten`, `lage`, `kurzname`, `artText`, `farbenBauen`, `legendeBauen`, `versatzAus`,
 `wocheText`, `raumKnapp`, `wischStartOk`, `wischAchse`, `wischRichtung`), getestet in `tests/wochenraster.test.js`. CSS:
 Abschnitte 47 und 55.

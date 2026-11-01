@@ -16,9 +16,11 @@ Ausgabe geprüft hat.
 |---|---|---|
 | Termine und Hinweise aus Quellen | jeder Lauf des Servers, „Prüf meine Uni-Mails“ | [termine.md](termine.md) |
 | Begleitnotizen zu Unterlagen (oder nur Termine daraus) | wenn auftrag.md neue Unterlagen nennt | [begleitnotiz.md](begleitnotiz.md) |
+| Kapitellisten für den Lernplan | wenn auftrag.md neue Folien für Kapitellisten nennt | [lernplan.md](lernplan.md) |
 | Ausgabeformat (Eingang v1) | immer, bevor du schreibst | [ausgabe.md](ausgabe.md) |
 
-Lies vor jedem Lauf termine.md und ausgabe.md, bei neuen Unterlagen auch begleitnotiz.md.
+Lies vor jedem Lauf termine.md und ausgabe.md, bei neuen Unterlagen auch begleitnotiz.md, bei Folien für Kapitellisten auch
+lernplan.md.
 
 ## Was du im Lauf vorfindest
 
@@ -27,13 +29,16 @@ Der Server startet dich in einem Arbeitsordner. Darin:
 - `auftrag.md`: was dieser Lauf soll (welche Quellen fällig sind, ob Gmail durchsucht wird, Zeitraum), Datum und Uhrzeit.
 - `roh/`: frisch geholte Rohdaten, nur lesen. `roh/INDEX.md` sagt, was neu ist.
 - `bisher.json`: alle Termine, die schon geliefert wurden (mit `schluessel`). Damit vermeidest du Doppel und erkennst Änderungen.
-- `stand.json`: was das Plugin über das Studium meldet (Modulcodes, Studienbeginn, Variante). Keine Namen.
+- `stand.json`: was das Plugin über das Studium meldet (Modulcodes, Studienbeginn, Variante; `lernplan`: das laufende Semester
+  und die Module, die eine Kapitelliste von dir brauchen). Keine Namen.
 - `tresor.json`: was schon in Obsidian steht. `termine`: Titel, Datum, Kategorie, Modulcode, Herkunft (`zentral`, `claude` = von
   dir, `ilias-kalender`, leer = selbst eingetragen …) und `erledigt`; `todos`: offene Aufgaben mit Text, Modulcode, Frist,
   Kennung `id`, Notiz `pfad` und `aenderbar` (siehe termine.md, „Doppelte To-dos“).
 - `zentral.json`: öffentliche Termine, die alle EcoBA-Studierenden schon über das Plugin bekommen (Semester, Prüfungsplan,
   Rundmails, Veranstaltungen der Uni). Diese lieferst du nicht noch einmal.
 - `unterlagen/`: Textfassungen von Unterlagen, zu denen du eine Begleitnotiz schreibst (nur wenn auftrag.md sie nennt).
+- `kapitel/` und `kapitel-bisher.json`: Folien und deine bisherigen Kapitellisten für den Lernplan (nur wenn auftrag.md sie
+  nennt, siehe lernplan.md).
 - `ausgabe.json`: hierhin schreibst du dein Ergebnis, sonst nirgendwohin.
 
 ## Grundregeln

@@ -18,6 +18,7 @@ Aufruf: bash ~/studium-autopilot/server/fern.sh <befehl>
   neustart                         Server neu starten (nach „Boot-Volume … vergrößert“)
   claude-anmelden                  Claude Code auf dem Server mit deinem Abo anmelden, danach den Zustand prüfen
   status | zustand | verbinden | jetzt | lauf | aktualisieren
+  schluessel-erneuern              neue Schlüssel, wenn ein Gerät verloren ist (danach jedes Gerät neu verbinden)
   uni-zugang setzen|loeschen|pruefen
   livesync [einschalten|verbinden]
   modell sonnet|opus
@@ -26,7 +27,7 @@ TEXT
 
 [ $# -gt 0 ] || { hilfe; exit 3; }
 case "$1" in
-  installieren|neustart|claude-anmelden|status|zustand|verbinden|jetzt|lauf|aktualisieren|uni-zugang|livesync|modell) ;;
+  installieren|neustart|claude-anmelden|status|zustand|verbinden|jetzt|lauf|aktualisieren|uni-zugang|livesync|modell|schluessel-erneuern) ;;
   *) echo "Unbekannter Befehl: $1" >&2; hilfe; exit 3 ;;
 esac
 for a in "$@"; do

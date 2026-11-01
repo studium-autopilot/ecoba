@@ -429,7 +429,8 @@ module.exports = function (ctx) {
     // Kursdaten. Seit 26.10.2026 der empfohlene Weg zum Zusammenfassen (der API-Schlüssel kostet je Unterlage extra); die Texte
     // nennen das Abo zuerst. Ohne Server (kein Gerät verbunden, keine server.json per Sync) eine leise Zeile „Für Technische“ mit
     // „Mehr erfahren“: Fenster mit Schritten, dem Knopf „Prompt kopieren“ für Claude Code und ganz unten dem leisen Link zum
-    // API-Schlüssel. Verbinden geht nur über den Einmal-Link des Servers; Zeile und Fenster liefert ctx.server (zeile(), fensterInhalt()).
+    // API-Schlüssel. Verbinden über den Einmal-Link des Servers, weitere Geräte mit einem Code von einem verbundenen Gerät; Zeile und
+    // Fenster liefert ctx.server (zeile(), fensterInhalt()).
     server: {
       id: "server", name: "Eigener Server", art: "server", symbol: "server",
       satz: "Dein Server fasst mit deinem Claude-Abo Unterlagen zusammen und findet Termine in deinen Uni-Mails.",
@@ -449,9 +450,12 @@ module.exports = function (ctx) {
             "Zum Schluss auf jedem Gerät den Link öffnen, den dein Server zeigt.",
           ];
         }
+        // Server da, dieses Gerät nicht verbunden: Code von einem verbundenen Gerät (seit 01.11.2026), sonst wie bisher der Link aus
+        // der Cloud Shell (etwa nach „schluessel-erneuern“, wenn noch kein Gerät die neuen Schlüssel hat)
         return [
-          "In der Cloud Shell von Oracle **bash ~/studium-autopilot/server/fern.sh verbinden** eingeben.",
-          "Den Link auf diesem Gerät öffnen oder den QR-Code scannen.",
+          "Auf einem Gerät, das schon verbunden ist, hier bei „Eigener Server“ auf **Weiteres Gerät verbinden** tippen.",
+          "Den Code unten eingeben und **Mit Code verbinden** tippen.",
+          "Ist noch kein Gerät verbunden: in der Cloud Shell von Oracle **bash ~/studium-autopilot/server/fern.sh verbinden** eingeben und den Link auf diesem Gerät öffnen.",
         ];
       },
       get erklaerung() {
@@ -639,7 +643,8 @@ module.exports = function (ctx) {
       schritteZeigen(unten, v);
       if (v.art === "zentral") zentralSchalter(this.contentEl);
       if (v.art === "volltext") volltextSchalter(this.contentEl);
-      if (v.art === "server" && ctx.server) ctx.server.fensterInhalt(this.contentEl.createDiv()).catch((e) => console.error("Eigener Server: Fenster", e));
+      // Eigener Server: nach „Mit Code verbinden“ neu zeichnen (Schritte und Inhalt hängen davon ab)
+      if (v.art === "server" && ctx.server) ctx.server.fensterInhalt(this.contentEl.createDiv(), () => { this.contentEl.empty(); this.onOpen(); }).catch((e) => console.error("Eigener Server: Fenster", e));
       // Claude: nach dem Verbinden neu zeichnen (Texte und Inhalt hängen davon ab)
       if (v.art === "claude" && ctx.claude) ctx.claude.fensterInhalt(unten.createDiv(), () => { this.contentEl.empty(); this.onOpen(); });
       const mehr = mehrZeigen(this.contentEl, v.erklaerung, v.art === "vorlage" && !!(ctx.update && ctx.update.kanalSchalter));

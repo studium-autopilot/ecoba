@@ -5,12 +5,17 @@
 // stellst du in Obsidian ein (takt.json vom Dienst: 3-, 1- oder 0-mal am Tag).
 //   1. Anstoß und roh/ übernehmen, Arbeitsordner laeufe/<zeit>/ mit auftrag.md, roh/, bisher.json, stand.json, tresor.json,
 //      Textfassungen von Unterlagen (unterlagen/, vom Dienst; bis zu 6, zusammen höchstens 200 000 Zeichen; auf Wunsch mit der PDF
-//      daneben, die nach einem erfolgreichen Lauf gelöscht wird) und dem Skill
+//      daneben, die nach einem erfolgreichen Lauf gelöscht wird), Folien für Kapitellisten (kapitel/, vom Dienst; nur Module, nach
+//      denen der Stand des Plugins fragt; bis zu 12, zusammen höchstens 150 000 Zeichen) mit den bisher gelieferten Listen
+//      (kapitel-bisher.json) und dem Skill
 //   2. claude -p mit engen Rechten: lesen nur im Arbeitsordner, schreiben nur ausgabe.json, kein Bash, kein Web, keine
 //      Unteragenten; Gmail nur lesend und nur, wenn Gmail dran ist; nie der Uni-Zugang, die Schlüssel oder ~/.claude
-//   3. ausgabe.json prüfen (eingang.mjs), nur Neues bzw. Geändertes nach eingang/, Bestand und Zustand nachziehen
+//   3. ausgabe.json prüfen (eingang.mjs), nur Neues bzw. Geändertes nach eingang/, Bestand (termine.json, kapitel.json) und
+//      Zustand nachziehen
 // Schlägt der Lauf fehl, kommen die Rohdaten zurück nach roh/ (nichts geht verloren); ebenso nach einem Abbruch (Zeitgrenze von
-// systemd, Neustart): beim Beenden und beim nächsten Start (verwaisteZurueck).
+// systemd, Neustart): beim Beenden und beim nächsten Start (verwaisteZurueck). Am Limit des Claude-Abos wartet der Server und
+// versucht es von selbst wieder (LIMIT_WARTEN, dienst.mjs limitWiederholen). Den Verbrauch je Lauf schreibt protokoll.json, je Tag
+// nutzung.json.
 //   node lauf.mjs                 ein Lauf (vom Dienst gestartet)
 //   node lauf.mjs --anstoss <grund>   nur den Anstoß schreiben (gmail: nur wenn der Takt es will | knopf)
 import { spawn } from "node:child_process";
@@ -18,7 +23,7 @@ import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, re
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { pdfAufraeumen } from "./dienst.mjs";
-import { eingangNormal, istLeer, nurNeueHinweise, nurNeueOderGeaenderte } from "./eingang.mjs";
+import { eingangNormal, istLeer, nurNeueHinweise, nurNeueKapitel, nurNeueOderGeaenderte } from "./eingang.mjs";
 
 const PAKET = dirname(fileURLToPath(import.meta.url));
 const STUNDE = 36e5;
@@ -35,6 +40,18 @@ const UNTERLAGEN_ZEICHEN = 200000;
 // Auf Wunsch (Knopf „Zusammenfassen“ in Obsidian, unterlagen/opus/): ein eigener Lauf mit Opus vor dem gewöhnlichen, nur diese
 // Unterlagen, ohne Mails; je Lauf höchstens 3, damit Opus jede gründlich liest
 const UNTERLAGEN_OPUS_JE_LAUF = 3;
+// Kapitellisten (Lernplan): Folien der Module ohne zentrale Liste im gewöhnlichen Lauf mit dem Modell des Servers (Gliederung
+// lesen braucht kein Opus, und niemand hat darum gebeten), nur wenn neue da sind; je Lauf bis zu 12, zusammen höchstens
+// 150 000 Zeichen (das Plugin schickt die ersten Seiten ganz, danach nur die erste Zeile jeder Seite)
+const KAPITEL_JE_LAUF = 12;
+const KAPITEL_ZEICHEN = 150000;
+// Limit des Claude-Abos: Der Lauf legt alles zurück und merkt sich in zustand.json unter limit, wann der nächste Versuch dran ist;
+// bis dahin startet kein Lauf (außer auf Knopfdruck), danach stößt ihn der Dienst an (dienst.mjs limitWiederholen). Wann das
+// Limit endet, sagt Claude Code nur als Satz für Menschen; darum feste Abstände, mit jedem weiteren Treffer länger. Ein Versuch
+// am Limit bricht gleich ab.
+export const LIMIT_WARTEN = [30 * 60e3, 60 * 60e3, 2 * STUNDE];
+// Verbrauch je Tag (nutzung.json, aus der JSON-Ausgabe von claude -p): so lange aufheben
+const NUTZUNG_TAGE = 30;
 // Öffentliche zentrale Termine (für alle EcoBA-Studierenden): kommen über das Plugin ohnehin, Claude liefert sie nicht doppelt.
 export const ZENTRAL = "https://studium-autopilot.github.io/ecoba-daten/v1/termine.json";
 const GMAIL_SCHREIBEND = ["create_draft", "update_draft", "delete_draft", "send_message", "reply", "forward", "create_label", "update_label",
@@ -63,11 +80,13 @@ export function taktLesen(verzeichnis) {
   return { uni_postfach: [15, 30, 60].includes(t.uni_postfach) ? t.uni_postfach : 15, gmail: [3, 1, 0].includes(t.gmail) ? t.gmail : 3 };
 }
 
-// Gmail ist dran bei Gmail-Zeit, Knopf und Sicherheitslauf, sonst wenn die letzte Suche länger her ist (GMAIL_NACH); bei Takt 0
-// nie.
+// Gmail ist dran bei Gmail-Zeit, Knopf und Sicherheitslauf, beim Versuch nach dem Limit, wenn einer davon am Limit hing, sonst
+// wenn die letzte Suche länger her ist (GMAIL_NACH); bei Takt 0 nie.
+const GMAIL_GRUENDE = ["gmail", "knopf", "taeglich"];
 export function gmailDran(anstoss, zustand, jetzt, takt = 3) {
   if (!takt) return false;
-  if (["gmail", "knopf", "taeglich"].includes(anstoss.grund)) return true;
+  if (GMAIL_GRUENDE.includes(anstoss.grund)) return true;
+  if (anstoss.grund === "wiederholung" && zustand.limit && zustand.limit.gmail === true) return true;
   const zuletzt = Date.parse(zustand.gmailZuletzt || "");
   return !Number.isFinite(zuletzt) || jetzt - zuletzt > GMAIL_NACH[takt];
 }
@@ -91,7 +110,7 @@ export function rechte(arbeit, gmail) {
   };
 }
 
-export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterlagen = 0, opus = false }) {
+export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterlagen = 0, kapitel = 0, opus = false }) {
   const zeit = jetzt.toLocaleString("de-DE", { timeZone: "Europe/Berlin", dateStyle: "full", timeStyle: "short" });
   return [
     "# Auftrag für diesen Lauf", "",
@@ -99,11 +118,13 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterla
     `Gmail durchsuchen: ${gmail ? `ja, Zeitraum newer_than:${gmailTage}d` : "nein (nicht öffnen)"}.`,
     "Neue Rohdaten: " + (meldungen.length ? meldungen.join("; ") : "keine") + ".",
     `Neue Unterlagen für Begleitnotizen: ${unterlagen ? `${unterlagen} (Ordner unterlagen/)` : "keine"}.`,
+    ...(opus ? [] : [`Neue Folien für Kapitellisten (Lernplan): ${kapitel ? `${kapitel} (Ordner kapitel/, bisherige Listen in kapitel-bisher.json)` : "keine"}.`]),
     ...(opus ? ["Dieser Lauf schreibt nur die Begleitnotizen zu den Unterlagen, die die Person ausgewählt hat. Sie wünscht sich besonders " +
       "gründliche Zusammenfassungen: lies jede Unterlage ganz, und nennt ihr Kopf eine PDF, die PDF (skill/begleitnotiz.md, „Mit PDF“)."] : []),
     ...(grund === "taeglich" ? ["Täglicher Sicherheitslauf: Die Uni-Mails in roh/ sind die der letzten 24 Stunden, einige kennst du schon. " +
       "Liefere nur, was in bisher.json fehlt oder sich geändert hat."] : []), "",
     "Lies skill/SKILL.md, skill/termine.md und skill/ausgabe.md" + (unterlagen ? ", für die Unterlagen auch skill/begleitnotiz.md" : "") +
+      (kapitel ? ", für die Kapitellisten auch skill/lernplan.md" : "") +
       ", arbeite danach und schreibe das Ergebnis nach ausgabe.json.",
     "",
   ].join("\n");
@@ -112,14 +133,14 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, meldungen, unterla
 // Textfassungen für Begleitnotizen (der Dienst legt sie nach unterlagen/neu/): die ältesten im Rahmen der Grenzen in den
 // Lauf-Ordner, eine PDF gleichen Namens (auf Wunsch, nur unterlagen/opus/) mit; scheitert der Lauf, zurück (unterlagenZurueck).
 // → Namen der Textfassungen
-function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF) {
+function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF, zeichen = UNTERLAGEN_ZEICHEN) {
   if (!existsSync(von)) return [];
   const alle = readdirSync(von).filter((n) => /^[0-9a-f]{64}\.md$/.test(n)).map((n) => ({ n, s: statSync(join(von, n)) }))
     .sort((a, b) => a.s.mtimeMs - b.s.mtimeMs || (a.n < b.n ? -1 : 1));
   const namen = [];
   let summe = 0;
   for (const { n, s } of alle) {
-    if (namen.length >= hoechstens || (namen.length && summe + s.size > UNTERLAGEN_ZEICHEN)) break;
+    if (namen.length >= hoechstens || (namen.length && summe + s.size > zeichen)) break;
     namen.push(n);
     summe += s.size;
   }
@@ -130,6 +151,16 @@ function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF) {
     if (existsSync(join(von, pdf))) renameSync(join(von, pdf), join(nach, pdf));
   }
   return namen;
+}
+// Folien für Kapitellisten von Modulen, nach denen der Stand nicht (mehr) fragt (inzwischen zentrale Liste, anderes Semester),
+// kosten nur: weg, bevor ein Lauf startet. Modul steht in der Kopfzeile „Modul: <Code> · …“ (dienst.mjs kapitelAblegen).
+function kapitelAussortieren(ordner, lernplan) {
+  if (!existsSync(ordner)) return;
+  const gefragt = lernplan && Array.isArray(lernplan.module) ? lernplan.module : [];
+  for (const n of readdirSync(ordner).filter((x) => x.endsWith(".md"))) {
+    const m = /^Modul: (\S+) ·/m.exec(readFileSync(join(ordner, n), "utf8").slice(0, 2000));
+    if (!m || !gefragt.includes(m[1])) rmSync(join(ordner, n), { force: true });
+  }
 }
 function unterlagenZurueck(arbeitU, neu) {
   if (!existsSync(arbeitU)) return;
@@ -169,6 +200,7 @@ export function verwaisteZurueck(verzeichnis, jetzt = new Date()) {
     const opus = (lesen(join(arbeit, ".lauf.json"), {}) || {}).opus === true;
     rohZurueck(join(arbeit, "roh"), join(verzeichnis, "roh"));
     unterlagenZurueck(join(arbeit, "unterlagen"), join(verzeichnis, "unterlagen", opus ? "opus" : "neu"));
+    unterlagenZurueck(join(arbeit, "kapitel"), join(verzeichnis, "unterlagen", "kapitel"));
     writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok: false, code: "abgebrochen", opus }, null, 2));
   }
   if (verwaist.length) {
@@ -208,19 +240,84 @@ export async function zentralHolen(holen = fetch) {
 
 const wartet = (ordner) => existsSync(ordner) && readdirSync(ordner).some((n) => n.endsWith(".md"));
 
+// Limit: n-ter Treffer in Folge → Wartezeit
+export const limitWarten = (versuche) => LIMIT_WARTEN[Math.min(Math.max(1, versuche), LIMIT_WARTEN.length) - 1];
+// Neuer Treffer: seit (erster Treffer), versuche, wieder (nächster Versuch), gmail (ein Anstoß mit Gmail hing am Limit)
+export function limitNeu(alt, jetzt, gmail) {
+  const versuche = (alt && Number.isInteger(alt.versuche) ? alt.versuche : 0) + 1;
+  return { seit: alt && alt.seit ? alt.seit : jetzt.toISOString(), versuche, wieder: new Date(jetzt.getTime() + limitWarten(versuche)).toISOString(),
+    gmail: gmail || (alt ? alt.gmail === true : false) };
+}
+const zustandAendern = (verzeichnis, fn) => {
+  const z = lesen(join(verzeichnis, "zustand.json"), {}) || {};
+  fn(z);
+  schreiben(join(verzeichnis, "zustand.json"), z);
+};
+
 // Ein Anstoß: zuerst die gewünschten Zusammenfassungen mit Opus (falls welche warten), dann der gewöhnliche Lauf. → Ergebnis des
 // gewöhnlichen Laufs, mit opus: Ergebnis des Opus-Laufs (hatte der gewöhnliche nichts zu tun, das Ergebnis des Opus-Laufs)
+// Am Limit (zustand.limit, nächster Versuch noch nicht dran) startet nur der Knopf einen Lauf; Rohdaten und Unterlagen bleiben
+// liegen. Hängt der Opus-Lauf am Limit, wartet auch der gewöhnliche (er hinge ebenso).
 export async function laufen(o = {}) {
   const { verzeichnis } = o;
+  const jetzt = o.jetzt || new Date();
   const anstossDatei = join(verzeichnis, "anstoss");
   verwaisteZurueck(verzeichnis);
   const anstoss = lesen(anstossDatei, null);
   if (!anstoss) return { status: "kein-anstoss" };
   rmSync(anstossDatei, { force: true });
-  const opus = wartet(join(verzeichnis, "unterlagen", "opus")) ? await einLauf({ ...o, anstoss, opus: true }) : null;
-  const r = await einLauf({ ...o, anstoss, opus: false });
+  const limit = (lesen(join(verzeichnis, "zustand.json"), {}) || {}).limit;
+  const gmailGrund = GMAIL_GRUENDE.includes(anstoss.grund);
+  if (limit && Date.parse(limit.wieder) > jetzt.getTime() && anstoss.grund !== "knopf") {
+    if (gmailGrund && limit.gmail !== true) zustandAendern(verzeichnis, (z) => { if (z.limit) z.limit.gmail = true; });
+    return { status: "limit-wartet", wieder: limit.wieder };
+  }
+  const opus = wartet(join(verzeichnis, "unterlagen", "opus")) ? await einLauf({ ...o, jetzt, anstoss, opus: true }) : null;
+  if (opus && opus.status === "claude-limit") {
+    if (gmailGrund) zustandAendern(verzeichnis, (z) => { if (z.limit) z.limit.gmail = true; });
+    return opus;
+  }
+  const r = await einLauf({ ...o, jetzt, anstoss, opus: false });
+  // nichts mehr zu tun: auch kein Versuch nach dem Limit mehr nötig
+  if (r.status === "nichts-zu-tun" && !opus && limit) zustandAendern(verzeichnis, (z) => { delete z.limit; });
   if (!opus) return r;
   return r.status === "nichts-zu-tun" ? opus : { ...r, opus };
+}
+
+// JSON-Ausgabe von claude -p (--output-format json: ein Objekt mit is_error, result, usage …) → Objekt oder null
+export function ergebnisLesen(aus) {
+  try {
+    const o = JSON.parse(String(aus || "").trim());
+    return o && typeof o === "object" && !Array.isArray(o) ? o : null;
+  } catch (e) {
+    return null;
+  }
+}
+// Verbrauch daraus (usage, total_cost_usd: Listenpreis der API, beim Abo nur zum Vergleich) → Zahlen oder null
+const zahl = (x) => (Number.isFinite(x) && x >= 0 ? x : 0);
+export function nutzungLesen(o) {
+  if (!o || !o.usage || typeof o.usage !== "object") return null;
+  const u = o.usage;
+  return { eingabe: zahl(u.input_tokens), ausgabe: zahl(u.output_tokens), cache_lesen: zahl(u.cache_read_input_tokens),
+    cache_schreiben: zahl(u.cache_creation_input_tokens), runden: zahl(o.num_turns), dauer_ms: zahl(o.duration_ms),
+    listenpreis_usd: Math.round(zahl(o.total_cost_usd) * 1e4) / 1e4 };
+}
+// Tag in Berlin (YYYY-MM-DD)
+const tagBerlin = (d) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+// nutzung.json: je Tag Läufe, Läufe mit Opus, Treffer am Limit und die Token; NUTZUNG_TAGE lang (studium-server nutzung)
+export function nutzungBuchen(verzeichnis, jetzt, { opus, limit, nutzung }) {
+  const datei = join(verzeichnis, "nutzung.json");
+  const alle = lesen(datei, {}) || {};
+  const tag = tagBerlin(jetzt);
+  const t = alle[tag] || { laeufe: 0, opus: 0, limit: 0, eingabe: 0, ausgabe: 0, cache_lesen: 0, cache_schreiben: 0 };
+  t.laeufe++;
+  if (opus) t.opus++;
+  if (limit) t.limit++;
+  if (nutzung) for (const k of ["eingabe", "ausgabe", "cache_lesen", "cache_schreiben"]) t[k] += nutzung[k];
+  alle[tag] = t;
+  const grenze = tagBerlin(new Date(jetzt.getTime() - NUTZUNG_TAGE * 24 * STUNDE));
+  for (const k of Object.keys(alle)) if (k <= grenze) delete alle[k];
+  schreiben(datei, alle);
 }
 
 async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], skill = join(PAKET, "skill", "studium-autopilot"), modell, timeout, holen = fetch, anstoss, opus }) {
@@ -241,9 +338,15 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   const unterlagenNeu = join(verzeichnis, "unterlagen", opus ? "opus" : "neu");
   if (opus) pdfAufraeumen(unterlagenNeu, jetzt);
   const unterlagen = unterlagenUebernehmen(unterlagenNeu, join(arbeit, "unterlagen"), opus ? UNTERLAGEN_OPUS_JE_LAUF : UNTERLAGEN_JE_LAUF);
+  // Stand des Plugins: stand.json (Modulcodes, Studienbeginn, Variante, lernplan) und tresor.json (was schon in Obsidian steht)
+  const { tresor, ...stand } = lesen(join(verzeichnis, "stand-plugin.json"), { schema: 1, module: [] });
+  // Folien für Kapitellisten nur im gewöhnlichen Lauf und nur für Module, nach denen der Stand fragt
+  const kapitelNeu = join(verzeichnis, "unterlagen", "kapitel");
+  if (!opus) kapitelAussortieren(kapitelNeu, stand.lernplan);
+  const kapitel = opus ? [] : unterlagenUebernehmen(kapitelNeu, join(arbeit, "kapitel"), KAPITEL_JE_LAUF, KAPITEL_ZEICHEN);
   const index = existsSync(join(arbeit, "roh", "INDEX.md")) ? readFileSync(join(arbeit, "roh", "INDEX.md"), "utf8") : "";
   const meldungen = index.split("\n").filter((z) => z.startsWith("- ")).map((z) => z.replace(/^- [\d.]+ [\d:]+ UTC: /, "").trim());
-  if (!gmail && !meldungen.length && !unterlagen.length) {
+  if (!gmail && !meldungen.length && !unterlagen.length && !kapitel.length) {
     rmSync(arbeit, { recursive: true, force: true });
     return { status: "nichts-zu-tun" };
   }
@@ -251,12 +354,22 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   const vorher = lesen(join(verzeichnis, "zustand.json"), {});
   schreiben(join(verzeichnis, "zustand.json"), { ...vorher, laeuftSeit: jetzt.toISOString() });
   const bestand = lesen(join(verzeichnis, "termine.json"), {});
-  writeFileSync(join(arbeit, "auftrag.md"), auftragText({ jetzt, grund: opus ? "Zusammenfassungen auf Wunsch" : anstoss.grund, gmail, gmailTage: tage, meldungen, unterlagen: unterlagen.length, opus }));
+  writeFileSync(join(arbeit, "auftrag.md"), auftragText({ jetzt, grund: opus ? "Zusammenfassungen auf Wunsch" : anstoss.grund, gmail, gmailTage: tage, meldungen,
+    unterlagen: unterlagen.length, kapitel: kapitel.length, opus }));
   writeFileSync(join(arbeit, "bisher.json"), JSON.stringify(Object.values(bestand).map((t) => ({ schluessel: t.schluessel, titel: t.titel,
     datum: t.datum, bis: t.bis, uhrzeit: t.uhrzeit, ort: t.ort, kategorie: t.kategorie, status: t.status, code: t.code, entfaellt: t.entfaellt === true })), null, 1));
-  // Stand des Plugins: stand.json (Modulcodes, Studienbeginn, Variante) und tresor.json (was schon in Obsidian steht)
-  const { tresor, ...stand } = lesen(join(verzeichnis, "stand-plugin.json"), { schema: 1, module: [] });
-  writeFileSync(join(arbeit, "stand.json"), JSON.stringify(stand));
+  // Kapitellisten, die Claude schon geliefert hat (kapitel.json), für die gefragten Module: Claude berichtigt sie, statt neu zu bauen.
+  // Fehlt dem Server eine (neu eingerichtet, Datei verloren), gilt die aus der Lernplan-Notiz (Stand: lernplan.listen, nur Nummern,
+  // Titel und Unterkapitel, herkunft: notiz); die eigene geht vor.
+  const kapitelBestand = lesen(join(verzeichnis, "kapitel.json"), {});
+  const { listen: notizListen, ...lernplanKurz } = stand.lernplan || {};
+  if (kapitel.length) {
+    const eigene = Object.values(kapitelBestand).filter((e) => e && e.semester === lernplanKurz.semester && lernplanKurz.module.includes(e.code));
+    const ausNotiz = (Array.isArray(notizListen) ? notizListen : []).filter((x) => lernplanKurz.module.includes(x.code) && !eigene.some((e) => e.code === x.code))
+      .map((x) => ({ code: x.code, semester: lernplanKurz.semester, herkunft: "notiz", kapitel: x.kapitel }));
+    writeFileSync(join(arbeit, "kapitel-bisher.json"), JSON.stringify([...eigene, ...ausNotiz], null, 1));
+  }
+  writeFileSync(join(arbeit, "stand.json"), JSON.stringify(stand.lernplan ? { ...stand, lernplan: lernplanKurz } : stand));
   writeFileSync(join(arbeit, "tresor.json"), JSON.stringify(tresor || { termine: [], todos: [] }, null, 1));
   writeFileSync(join(arbeit, "zentral.json"), JSON.stringify(await zentralHolen(holen), null, 1));
   cpSync(skill, join(arbeit, "skill"), { recursive: true });
@@ -271,35 +384,54 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   const env = { ...process.env };
   delete env.ANTHROPIC_API_KEY;
   const r = await ausfuehren(claude[0], args, { cwd: arbeit, env, timeout });
+  const ergebnis = ergebnisLesen(r.aus), nutzung = nutzungLesen(ergebnis);
 
   const neuerZustand = lesen(join(verzeichnis, "zustand.json"), {});
   const fehler = new Set((neuerZustand.fehler || []).filter((f) => !["claude-lauf", "claude-limit", "ausgabe-ungueltig"].includes(f)));
   const ende = (ok, code, mehr = {}) => {
-    if (!ok) { fehler.add(code); rohZurueck(join(arbeit, "roh"), join(verzeichnis, "roh")); unterlagenZurueck(join(arbeit, "unterlagen"), unterlagenNeu); }
-    // PDFs nicht aufheben (der Lauf-Ordner bleibt eine Weile zur Fehlersuche, die Textfassung reicht dafür)
-    else if (existsSync(join(arbeit, "unterlagen"))) {
-      for (const n of readdirSync(join(arbeit, "unterlagen"))) if (n.endsWith(".pdf")) rmSync(join(arbeit, "unterlagen", n), { force: true });
+    // am Limit: nächster Versuch später (limitNeu); jeder andere Ausgang beendet die Versuche (ein anderer Fehler liefe sonst im
+    // Kreis)
+    if (code === "claude-limit") neuerZustand.limit = limitNeu(neuerZustand.limit, jetzt, gmail);
+    else delete neuerZustand.limit;
+    if (!ok) {
+      fehler.add(code);
+      rohZurueck(join(arbeit, "roh"), join(verzeichnis, "roh"));
+      unterlagenZurueck(join(arbeit, "unterlagen"), unterlagenNeu);
+      unterlagenZurueck(join(arbeit, "kapitel"), kapitelNeu);
+    }
+    // PDFs nicht aufheben (der Lauf-Ordner bleibt eine Weile zur Fehlersuche, die Textfassung reicht dafür), auch die
+    // PDF-Anhänge von Mails nicht (abrufen.py)
+    else {
+      for (const o of [join(arbeit, "unterlagen"), join(arbeit, "roh", "uni-postfach")]) {
+        if (existsSync(o)) for (const n of readdirSync(o)) if (n.endsWith(".pdf")) rmSync(join(o, n), { force: true });
+      }
     }
     // warten noch Unterlagen, gleich der nächste Lauf (nur nach Erfolg, sonst liefe ein Fehler im Kreis)
-    if (ok && ["neu", "opus"].some((u) => wartet(join(verzeichnis, "unterlagen", u))) && !existsSync(join(verzeichnis, "anstoss"))) {
+    if (ok && ["neu", "opus", "kapitel"].some((u) => wartet(join(verzeichnis, "unterlagen", u))) && !existsSync(join(verzeichnis, "anstoss"))) {
       anstossSchreiben(verzeichnis, "unterlagen", jetzt);
     }
     neuerZustand.fehler = [...fehler];
     neuerZustand.letzterLauf = { zeit: jetzt.toISOString(), ok };
     delete neuerZustand.laeuftSeit;
     schreiben(join(verzeichnis, "zustand.json"), neuerZustand);
-    writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok, code, exit: r.code, modell: modellLauf, gmail, unterlagen: unterlagen.length, ...mehr }, null, 2));
+    writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok, code, exit: r.code, modell: modellLauf, gmail, unterlagen: unterlagen.length, kapitelFolien: kapitel.length,
+      ...(nutzung ? { nutzung } : {}), ...mehr }, null, 2));
+    nutzungBuchen(verzeichnis, jetzt, { opus, limit: code === "claude-limit", nutzung });
     aufraeumen(join(verzeichnis, "laeufe"));
-    return { status: ok ? "ok" : code, ...mehr };
+    return { status: ok ? "ok" : code, ...(code === "claude-limit" ? { wieder: neuerZustand.limit.wieder } : {}), ...mehr };
   };
-  if (r.code !== 0) return ende(false, /limit/i.test(r.aus + r.err) ? "claude-limit" : "claude-lauf");
+  // gescheitert: Code ungleich 0 oder is_error in der Ausgabe (Claude Code endet am Limit nicht immer mit einem Fehlercode)
+  if (r.code !== 0 || (ergebnis && ergebnis.is_error === true)) return ende(false, /limit/i.test(r.aus + r.err) ? "claude-limit" : "claude-lauf");
   const ausgabe = lesen(join(arbeit, "ausgabe.json"), null);
   if (!ausgabe) return ende(false, "ausgabe-ungueltig");
   const { eingang, verworfen, fehler: formfehler } = eingangNormal(ausgabe, { jetzt, lauf: name });
   if (formfehler) return ende(false, "ausgabe-ungueltig");
   const { eingang: nurNeu, bestand: neuerBestand } = nurNeueOderGeaenderte(eingang, bestand);
   const { hinweise, bisher: hinweiseBisher } = nurNeueHinweise(nurNeu.hinweise, lesen(join(verzeichnis, "hinweise-bisher.json"), {}), jetzt);
-  const neu = { ...nurNeu, hinweise };
+  // Kapitellisten: nur gefragte Module, nur Neues oder Geändertes
+  const k = nurNeueKapitel(eingang.kapitel, kapitelBestand, stand.lernplan);
+  const neu = { ...nurNeu, hinweise, kapitel: k.kapitel };
+  if (eingang.kapitel.length) schreiben(join(verzeichnis, "kapitel.json"), k.bestand);
   schreiben(join(verzeichnis, "termine.json"), neuerBestand);
   schreiben(join(verzeichnis, "hinweise-bisher.json"), hinweiseBisher);
   mkdirSync(join(verzeichnis, "eingang"), { recursive: true });
@@ -309,7 +441,8 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
     if (ausgabe.gmail === "ok") neuerZustand.gmailZuletzt = jetzt.toISOString();
   }
   if (["ok", "fehlt"].includes(ausgabe.weiterleitung)) neuerZustand.weiterleitung = ausgabe.weiterleitung;
-  return ende(true, "ok", { termine: neu.termine.length, begleitnotizen: neu.begleitnotizen.length, hinweise: neu.hinweise.length, verworfen: verworfen.length });
+  return ende(true, "ok", { termine: neu.termine.length, begleitnotizen: neu.begleitnotizen.length, hinweise: neu.hinweise.length, kapitel: neu.kapitel.length,
+    verworfen: verworfen.length + k.verworfen.length });
 }
 
 function aufraeumen(laeufe) {

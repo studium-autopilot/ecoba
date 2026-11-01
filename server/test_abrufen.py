@@ -88,7 +88,8 @@ class UniPostfach(Grundlage):
         self.assertEqual(stand["uni_postfach"], {"uidvalidity": "777", "letzte_uid": 9})
         text = (self.roh / "uni-postfach" / "9.txt").read_text(encoding="utf-8")
         self.assertIn("Betreff: Klausur", text)
-        self.assertIn("Anhänge: info.pdf", text)
+        self.assertIn("- info.pdf (1 KB): roh/uni-postfach/9-anhang-1.pdf", text, "PDF-Anhang daneben, der Text nennt ihn")
+        self.assertEqual((self.roh / "uni-postfach" / "9-anhang-1.pdf").read_bytes(), b"%PDF-1.4")
         self.assertIsNone(abrufen.uni_postfach(stand, self.roh, self.ZUGANG, imap), "nichts Neues (n:* liefert die letzte)")
         self.assertEqual(imap.suchen[-1], "UID 10:*")
         mails[12] = mail("Neu", "Text")
@@ -135,6 +136,60 @@ class MailText(unittest.TestCase):
         self.assertIn("Betreff: Prüfungsanmeldung", t)
         self.assertIn("Frist: 07.12.", t)
         self.assertNotIn("alert", t)
+
+
+class Anhaenge(Grundlage):
+    ZUGANG = {"username": "probe01", "password": "x"}
+
+    @staticmethod
+    def mit_anhaengen(anhaenge, betreff="Prüfungsplan"):
+        m = EmailMessage()
+        m["Subject"] = betreff
+        m["From"] = "Prüfungsamt <pa@uni-tuebingen.de>"
+        m["Date"] = "Sat, 17 Oct 2026 10:00:00 +0200"
+        m.set_content("Im Anhang der Plan.")
+        for name, haupt, unter, daten in anhaenge:
+            m.add_attachment(daten, maintype=haupt, subtype=unter, filename=name)
+        return m.as_bytes()
+
+    def test_kalender_als_zeilen(self):
+        ics = (b"BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Klausur B110\\, Teil 1\r\nDTSTART;TZID=Europe/Berlin:20270208T100000\r\n"
+               b"DTEND;TZID=Europe/Berlin:20270208T120000\r\nLOCATION:Audimax\r\nDESCRIPTION:lang\r\n  weiter\r\nEND:VEVENT\r\n"
+               b"BEGIN:VEVENT\r\nSUMMARY:Einsicht mit sehr langem\r\n  Titel\r\nDTSTART:20270301T090000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+        t = abrufen.mail_text(self.mit_anhaengen([("termine.ics", "text", "calendar", ics)]))
+        self.assertIn("Kalender-Anhänge (Titel | Beginn | Ende | Ort):\nKalender termine.ics:\n"
+                      "Klausur B110, Teil 1 | TZID=Europe/Berlin:20270208T100000 | TZID=Europe/Berlin:20270208T120000 | Audimax\n"
+                      "Einsicht mit sehr langem Titel | 20270301T090000Z |  | ", t)
+        self.assertNotIn("Anhänge: termine.ics", t)
+
+    def test_pdf_grenzen_je_mail_und_abruf(self):
+        pdf = b"%PDF-1.7 " + b"x" * 2000
+        anhaenge = [(f"plan{i}.pdf", "application", "pdf", pdf) for i in range(4)]
+        anhaenge += [("kaputt.pdf", "application", "pdf", b"kein pdf"), ("folien.pptx", "application", "octet-stream", b"PK"),
+                     ("gross.pdf", "application", "pdf", b"%PDF-" + b"x" * (abrufen.PDF_ANHANG_MAX + 1))]
+        ordner = self.roh / "uni-postfach"
+        rest = {"bytes": abrufen.PDF_ANHAENGE_JE_ABRUF}
+        t = abrufen.mail_text(self.mit_anhaengen(anhaenge), abrufen.pdf_ablage(ordner, 7, rest))
+        self.assertEqual(sorted(p.name for p in ordner.iterdir()), ["7-anhang-1.pdf", "7-anhang-2.pdf", "7-anhang-3.pdf"])
+        self.assertIn("Anhänge: plan3.pdf, kaputt.pdf, folien.pptx, gross.pdf", t, "über der Grenze, keine PDF oder zu groß: nur der Name")
+        self.assertEqual(rest["bytes"], abrufen.PDF_ANHAENGE_JE_ABRUF - 3 * len(pdf))
+        # Grenze je Abruf: was nicht mehr passt, nur mit Namen
+        rest["bytes"] = len(pdf) - 1
+        t = abrufen.mail_text(self.mit_anhaengen(anhaenge[:1]), abrufen.pdf_ablage(ordner, 8, rest))
+        self.assertIn("Anhänge: plan0.pdf", t)
+        self.assertFalse((ordner / "8-anhang-1.pdf").exists())
+
+    def test_name_aus_einer_zeile(self):
+        self.assertEqual(abrufen.anhang_name("a\nb\x07.docx"), "a b .docx")
+        self.assertEqual(abrufen.anhang_name(""), "Anhang")
+
+    def test_nachlesen_ohne_pdf(self):
+        jetzt = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+        mails = {4: mail("Alt", "schon gesehen", anhang="alt.pdf", datum=jetzt)}
+        stand = {"uni_postfach": {"uidvalidity": "777", "letzte_uid": 4}}
+        abrufen.uni_postfach(stand, self.roh, self.ZUGANG, imap_attrappe(mails), nachlesen=True)
+        self.assertEqual([p.name for p in (self.roh / "uni-postfach").iterdir()], ["4.txt"])
+        self.assertIn("Anhänge: alt.pdf", (self.roh / "uni-postfach" / "4.txt").read_text(encoding="utf-8"))
 
 
 class Ablauf(Grundlage):

@@ -194,7 +194,10 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten.
 - **Auf dem Server:** Claude Code läuft mit deinem Claude-Konto. Was Claude dort liest (deine Mails), verarbeitet
   Anthropic nach den Bedingungen deines Kontos. Gmail nur lesend: Senden, Entwürfe, Labels und Löschen sind gesperrt.
-  Personennamen schreibt Claude nicht in die Ergebnisse, Absender nur als Einrichtung und Datum.
+  Personennamen schreibt Claude nicht in die Ergebnisse, Absender nur als Einrichtung und Datum. Anhänge deiner Uni-Mails: Kalender
+  liest der Server als Text, PDFs legt er neben die Mail, und Claude öffnet eine davon nur, wenn sie nach Terminen aussieht
+  (etwa ein Prüfungsplan); nach dem Lauf löscht der Server sie. Über die Weiterleitung an Gmail kommen Anhänge nicht auf den
+  Server.
 - **Uni-Mails:** Empfohlen ist eine Weiterleitung deiner Uni-Mails an Gmail. Dann liegt dein Uni-Passwort, das auch für
   ILIAS, Alma und Noten gilt, nicht auf dem Server; die Mails kommen dafür erst mit der nächsten Gmail-Suche an.
 - **Uni-Passwort (freiwillig, statt der Weiterleitung):** Du tippst es selbst auf dem Server ein. Es liegt dort nur verschlüsselt. Entschlüsselt bekommt

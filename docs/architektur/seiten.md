@@ -34,6 +34,9 @@ einer eigenen Seite: Was neu ist, gehört dahin, wo man ohnehin zuerst hinschaut
   ILIAS-Kalender, die noch kommen, und neue oder aktualisierte ILIAS-Dateien der letzten 30 Tage aus `System/Daten/ilias.json`
   (je Modul eine Zeile, Ziel die Modulnotiz; ohne die Dateien vom ersten Tag eines Kurses, das erste Laden ist keine Änderung).
   Ein Raumwechsel, der schon gilt, heißt „Neuer Raum seit <raum_seit>“, einer, der noch kommt, „ab <nächste Sitzung>“.
+  Seit 01.11.2026 auch die Hinweise von Claude (eigener Server, `ctx.server.hinweise()`, 14 Tage): der Text des Hinweises,
+  darunter „Von Claude · <Quelle>“, Ziel die Modulnotiz, wenn er zu einem Modul gehört (Schlüssel aus Tag und Text, auf allen
+  Geräten gleich; `server.json` wird bei Änderungen neu gelesen).
 - **Speicher** `System/Daten/seit-besuch/` (synchronisiert): `<Geräte-ID>.json` mit den Einträgen dieses Geräts (jedes Gerät
   schreibt nur seine Datei, die Karte liest alle; gleiche Änderung = gleicher Schlüssel; 60 Tage, höchstens 500) und
   `gesehen-<Geräte-ID>.json` mit den Schlüsseln, die aufgeklappt angezeigt waren (je Gerät geschrieben,
@@ -221,6 +224,11 @@ Frontmatter dieser Modulnotiz:
   Warnfarbe und dem üblichen durchgestrichen („Hörsaal 9 statt ~~Hörsaal 1~~“, `eba-core.css` 58.7). Der Kopf einer
   Stundenplan-Notiz (`kopf.js`) zeigt nur die Serie („Mi 10:15–11:45“), keinen einzelnen Termin; Ausfälle und Änderungen stehen
   darum dort nicht (eine Stelle je Angabe: Woche und Modulseite).
+- *Von Claude* (seit 01.11.2026, direkt unter „Als Nächstes“): Hinweise des eigenen Servers zu diesem Modul aus den letzten 14
+  Tagen, höchstens zwei, die neuesten, je mit Quelle und Tag (`ctx.server.hinweise({ code })`, siehe [„Eigener Server“](server.md));
+  ohne Hinweise nichts. Neu gezeichnet, wenn sich `System/Daten/server.json` ändert (auch per Sync).
+- *Lernplan* (seit 31.10.2026): gibt es eine Lernplan-Notiz des Moduls, ihr Stand mit Pille wie im Bereich Lernplan, Tipp öffnet
+  die Notiz (`ctx.lernplan.modulZeile`, siehe [„Lernplan“](lernen.md)).
 - *Knöpfe:* Karteikarten lernen (nur mit Stapel), Unterlagen hinzufügen, Suchen (bis 24.10.2026 auch Neues Übungsblatt).
 
 Die **Vorlesungen** (seit 19.10.2026: die eigenen Notizen gehören zum Meistgenutzten; bis dahin standen sie

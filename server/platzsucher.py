@@ -266,7 +266,7 @@ def nach_erfolg(oci, k, stand, instanz):
     stand.update(erfolg=jetzt_iso(), instanz=str(instanz.get("id", "")))
     melden(oci, k, "Dein Server ist da",
            "Oracle hat deinen kostenlosen Server für Studium Autopilot angelegt. "
-           "Öffne Claude und sag „Weiter mit der Einrichtung“, dann richtet Claude ihn ein.")
+           "Öffne Claude Desktop im Tab „Code“ (nicht im Chat) und sag „Weiter mit der Einrichtung“, dann richtet Claude ihn ein.")
     # Helfer samt Boot-Volume beenden (nur Instanzen mit dem Kennzeichen des Platzsuchers)
     # Klappt das nicht, belegt der Helfer weiter 50 GB des kostenlosen Speichers: Mail, damit ihn ein Mensch beendet.
     helfer = gekennzeichnet(oci, k, "helfer")
@@ -305,7 +305,7 @@ def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetim
             schreiben(stand_datei, stand)
             melden(oci, k, "Platzsucher angehalten",
                    "Der Platzsucher für deinen Server von Studium Autopilot hat angehalten, weil Oracle ablehnt: " + wert[:300]
-                   + " Öffne Claude und sag „Weiter mit der Einrichtung“.")
+                   + " Öffne Claude Desktop im Tab „Code“ (nicht im Chat) und sag „Weiter mit der Einrichtung“.")
             return "halt"
         if not stand.get("gemeldet_14") and (zeit - datetime.fromisoformat(stand["seit"])).days >= MELDUNG_NACH_TAGEN:
             if melden(oci, k, "Platzsucher sucht weiter",

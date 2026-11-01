@@ -429,12 +429,14 @@ module.exports = function (ctx) {
 
   // ---------- Prüfen: Kapitellisten (kapitel.json, docs/daten-v1.md) ----------
   // → { stand, module: [gültig], verworfen: [{ id, grund }] } oder { fehler } (ganze Datei abgelehnt). Nur Fakten: Nummer, Titel,
-  // Seiten, Nummer der Folien, Link aufs Lehrbuch; ein ungültiges Kapitel verwirft sein ganzes Modul (keine halben Listen).
+  // Seiten, Nummer der Folien, Link aufs Lehrbuch, seit 31.10.2026 Tag der ersten Vorlesung zum Kapitel und des ersten
+  // Zwischentests, der es abfragt; ein ungültiges Kapitel verwirft sein ganzes Modul (keine halben Listen).
   const KAPITEL_DOMAINS = ["uni-tuebingen.de", "core-econ.org"]; // Uni und das freie Lehrbuch von CORE
   const KAPITEL_NR = /^[0-9A-Z][0-9A-Za-z.]{0,7}$/;
   const SEMESTER_NAME = /^(WS \d{4}\/\d{2}|SS \d{4})$/;
   const kapitelTitel = (v) => (reinerText(v) ? textFeld(v, G.kapitelTitel, true) : { fehler: "unzulässig" });
   const ganzZahl = (v, min, max) => (v == null || v === "" ? { wert: null } : Number.isInteger(v) && v >= min && v <= max ? { wert: v } : { fehler: "ungültig" });
+  const tagFeld = (v) => (v == null || v === "" ? { wert: "" } : datumOk(v) ? { wert: v } : { fehler: "ungültig" });
   const kapitelNormal = (k) => {
     if (!k || typeof k !== "object" || Array.isArray(k)) return { fehler: "kein Objekt" };
     if (typeof k.nr !== "string" || !KAPITEL_NR.test(k.nr)) return { fehler: "nr ungültig" };
@@ -443,6 +445,9 @@ module.exports = function (ctx) {
     const seiten = ganzZahl(k.seiten, 1, 2000), folien = ganzZahl(k.folien, 0, 99);
     if (seiten.fehler) return { fehler: "seiten ungültig" };
     if (folien.fehler) return { fehler: "folien ungültig" };
+    const vorlesung = tagFeld(k.vorlesung), zwischentest = tagFeld(k.zwischentest);
+    if (vorlesung.fehler) return { fehler: "vorlesung ungültig" };
+    if (zwischentest.fehler) return { fehler: "zwischentest ungültig" };
     let url = "";
     if (k.url != null && k.url !== "") { const u = urlPruefen(k.url, KAPITEL_DOMAINS); if (u.fehler) return { fehler: "url: " + u.fehler }; url = u.wert; }
     const teile = [];
@@ -455,7 +460,7 @@ module.exports = function (ctx) {
         teile.push({ nr: t.nr, titel: tt.wert });
       }
     }
-    return { wert: { nr: k.nr, titel: titel.wert, seiten: seiten.wert, folien: folien.wert, url, teile } };
+    return { wert: { nr: k.nr, titel: titel.wert, seiten: seiten.wert, folien: folien.wert, url, vorlesung: vorlesung.wert, zwischentest: zwischentest.wert, teile } };
   };
   const kapitelModulNormal = (e) => {
     if (!e || typeof e !== "object" || Array.isArray(e)) return { fehler: "kein Objekt" };

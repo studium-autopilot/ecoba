@@ -106,7 +106,8 @@ module.exports = function (ctx) {
   };
 
   // ---------- Listen (rein, testbar) ----------
-  // → [{ sort, wann, bald, uhr, was, pfad, pille: { ton, text } }]
+  // → [{ sort, wann, bald, uhr, was, pfad, pille: { ton, text } }]; fristen dazu art (frist, pruefung, abgabe), tag (der Tag, den
+  // die Zeile zeigt) und laeuft bzw. ueberfaellig, damit das Widget (widget.js) „Heute“ und „Morgen“ selbst rechnen kann
   const zeilenBauen = (art, M, heute) => {
     const Z = M.zeit, aus = [];
     const tagText = (iso) => { const n = Z.tageBis(iso, heute); return n === 0 ? "Heute" : n === 1 ? "Morgen" : Z.datum(iso, { bezug: heute }); };
@@ -120,16 +121,16 @@ module.exports = function (ctx) {
     if (art === "fristen") {
       const bis = Z.plus(heute, 30);
       for (const f of M.fristen({ heute, tage: 30 })) {
-        aus.push({ sort: f.stichtag, min: f.minuten, wann: f.laeuft ? `läuft bis ${Z.datum(f.ende, { bezug: heute })}` : tagText(f.datum), bald: !f.laeuft && bald(f.datum),
+        aus.push({ art: "frist", tag: f.laeuft ? f.ende : f.datum, laeuft: !!f.laeuft, sort: f.stichtag, min: f.minuten, wann: f.laeuft ? `läuft bis ${Z.datum(f.ende, { bezug: heute })}` : tagText(f.datum), bald: !f.laeuft && bald(f.datum),
           uhr: f.laeuft ? f.bisZeit : f.ab || f.zeit, was: f.titel.replace(" (ILIAS)", ""), pfad: f.pfad, pille: pille("", "", f) });
       }
       for (const p of M.pruefungen({ heute, ab: heute, bis })) {
         if (!p.offen) continue;
-        aus.push({ sort: p.datum, min: p.minuten, wann: tagText(p.datum), bald: bald(p.datum), uhr: p.zeit, was: p.titel, pfad: p.pfad,
+        aus.push({ art: "pruefung", tag: p.datum, sort: p.datum, min: p.minuten, wann: tagText(p.datum), bald: bald(p.datum), uhr: p.zeit, was: p.titel, pfad: p.pfad,
           pille: p.zwischentest ? pille("info", M.istZwischentest(p.titel) ? "" : "Zwischentest", p) : pille("bad", "Prüfung", p) });
       }
       for (const a of M.abgaben({ heute, tage: 30 })) {
-        aus.push({ sort: a.datum, min: null, wann: a.ueberfaellig ? "überfällig" : tagText(a.datum), bald: !a.ueberfaellig && bald(a.datum), uhr: "",
+        aus.push({ art: "abgabe", tag: a.datum, ueberfaellig: !!a.ueberfaellig, sort: a.datum, min: null, wann: a.ueberfaellig ? "überfällig" : tagText(a.datum), bald: !a.ueberfaellig && bald(a.datum), uhr: "",
           was: `${a.code} · Blatt ${a.nummer}`, pfad: a.pfad, pille: { ton: "warn", text: "Abgabe" } });
       }
     } else if (art === "termine") {

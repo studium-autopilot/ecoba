@@ -23,7 +23,7 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
     }
   ],
   "hinweise": [
-    { "text": "Für E101 sind neue Folien zu Kapitel 3 angekündigt.", "quelle": "Kursmail, 17.10.2026" }
+    { "text": "Für E101 sind neue Folien zu Kapitel 3 angekündigt.", "quelle": "Kursmail, 17.10.2026", "code": "E101" }
   ],
   "todo_doppel": [
     { "behalten": "t-1k3x9q", "weg": "t-7p2m0a" }
@@ -46,7 +46,7 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 | `code` | Modulcode wie `B110`, `E101`, `SQ888` oder `""` |
 | `quelle_text`, `info` | je höchstens 200 Zeichen, reiner Text, eigene Worte |
 | `entfaellt` | nur bei abgesagten Terminen: `true` |
-| `hinweise[]` | `text` höchstens 300 Zeichen, `quelle` höchstens 200 |
+| `hinweise[]` | `text` höchstens 300 Zeichen, `quelle` höchstens 200; `code`: Modulcode, wenn der Hinweis zu genau einem Modul gehört (er steht dann auch auf dessen Seite), sonst weglassen |
 | `todo_doppel[]` | höchstens 50 Paare aus `id`s von `tresor.json` (termine.md, „Doppelte To-dos“); weglassen, wenn es keine gibt |
 
 **Begleitnotizen** (nur wenn `auftrag.md` neue Unterlagen nennt, Inhalt nach begleitnotiz.md): ein weiteres Feld
@@ -69,6 +69,42 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 | `zu_tun[]` | höchstens 12, `text` höchstens 200 Zeichen, `frist` `JJJJ-MM-TT` oder weglassen |
 | `fragen[]` | höchstens 10, `text` höchstens 200 Zeichen |
 | `seite`, `bis` | in allen drei Listen: erste und letzte Seite als Zahl; `bis` nur bei mehreren Seiten, sonst weglassen |
+
+**Kapitellisten** (nur wenn `auftrag.md` neue Folien für Kapitellisten nennt, Inhalt nach lernplan.md): ein weiteres Feld, je
+Modul die ganze Liste, nur wenn sie neu ist oder sich geändert hat
+
+```json
+"kapitel": [
+  {
+    "code": "B110",
+    "semester": "WS 2026/27",
+    "quelle": "Folien 00 Einführung, S. 9",
+    "stand": "2026-10-16",
+    "kapitel": [
+      { "nr": "1", "titel": "Grundlagen", "seiten": 42, "folien": 1, "vorlesung": "2026-10-14", "teile": [{ "nr": "1.1", "titel": "Grundbegriffe" }] },
+      { "nr": "2", "titel": "Kosten und Erlöse", "folien": 2, "zwischentest": "2026-12-02" },
+      { "nr": "3", "titel": "Investition" }
+    ]
+  }
+]
+```
+
+| Feld | Regel |
+|---|---|
+| `code`, `semester` | ein Code aus `lernplan.module` in `stand.json`, `semester` genau wie dort; je Modul ein Eintrag (höchstens 60) |
+| `quelle` | höchstens 120 Zeichen, reiner Text |
+| `stand` | `JJJJ-MM-TT`, nie nach heute; weglassen = heute |
+| `vorlaeufig` | `true` oder weglassen |
+| `kapitel[]` | 1–40, `nr` je Modul nur einmal |
+| `nr` | 1–8 Zeichen: Ziffer oder Großbuchstabe, dann Buchstaben, Ziffern, Punkte (`1`, `IV`, `E`, `2.3`) |
+| `titel` | 1–140 Zeichen, eine Zeile, ohne `[ ] < > { } \| \` und ohne Links |
+| `seiten` | ganze Zahl 1–2000 oder weglassen |
+| `folien` | ganze Zahl 0–99 (`Nummer:` der Folien) oder weglassen |
+| `vorlesung`, `zwischentest` | `JJJJ-MM-TT` oder weglassen; `vorlesung` nie nach heute |
+| `url` | `https` auf `uni-tuebingen.de` oder `core-econ.org` oder weglassen |
+| `teile[]` | höchstens 40 `{ nr, titel }` mit denselben Regeln |
+
+Ein ungültiges Kapitel oder Unterkapitel verwirft das ganze Modul, die anderen bleiben.
 
 Der Server prüft jede Zeile. Was die Regeln verletzt, fällt einzeln weg; die id jedes Termins bildet der Server aus dem
 `schluessel`. Gibt es nichts Neues, schreibe `{ "quellen": [...], "termine": [], "hinweise": [] }`.

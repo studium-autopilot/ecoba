@@ -36,12 +36,151 @@ test("Einmal-Code: gilt einmal, läuft nach 30 Minuten ab, falsche Codes scheite
   assert.match(code, /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/);
   assert.equal(ablauf, "2026-10-18T10:30:00.000Z");
   assert.ok(!fs.readdirSync(path.join(v, "verbinden")).some((n) => n.includes(code.replace("-", ""))), "nur der Hash liegt ab");
-  assert.equal(codeEinloesen(v, code.toLowerCase().replace("-", " "), jetzt), true, "Schreibweise egal");
-  assert.equal(codeEinloesen(v, code, jetzt), false, "nur einmal");
+  assert.equal(codeEinloesen(v, code.toLowerCase().replace("-", " "), jetzt), "cloud-shell", "Schreibweise egal; Herkunft des Codes");
+  assert.equal(codeEinloesen(v, code, jetzt), "", "nur einmal");
   const alt = neuerCode(v, { jetzt });
-  assert.equal(codeEinloesen(v, alt.code, new Date("2026-10-18T10:31:00Z")), false, "abgelaufen");
-  assert.equal(codeEinloesen(v, "AAAAA-AAAAA", jetzt), false);
+  assert.equal(codeEinloesen(v, alt.code, new Date("2026-10-18T10:31:00Z")), "", "abgelaufen");
+  assert.deepEqual(fs.readdirSync(path.join(v, "verbinden")), [], "auch ein abgelaufener ist danach weg");
+  assert.equal(codeEinloesen(v, "AAAAA-AAAAA", jetzt), "");
   assert.match(link("https://beispiel.example", code), /^obsidian:\/\/studium-autopilot\?aktion=server-verbinden&adresse=https%3A%2F%2Fbeispiel\.example&code=/);
+});
+
+test("Einmal-Code: lösen mehrere zugleich denselben Code ein, bekommt nur einer die Schlüssel (exklusive Marke)", async () => {
+  const { Worker } = require("node:worker_threads");
+  const { neuerCode } = await laden("verbinden.mjs");
+  const v = ordner();
+  const GERAETE = 6, CODES = 20;
+  const codes = Array.from({ length: CODES }, () => neuerCode(v).code);
+  // Alle warten an derselben Stelle (Atomics) und lösen dann dieselben Codes in derselben Reihenfolge ein
+  const start = new Int32Array(new SharedArrayBuffer(4));
+  const skripte = ordner(), geraet = path.join(skripte, "geraet.mjs");
+  fs.writeFileSync(geraet, ['import { workerData as w, parentPort } from "node:worker_threads";', "const { codeEinloesen } = await import(w.modul);",
+    'parentPort.postMessage("bereit");', "Atomics.wait(new Int32Array(w.start), 0, 0);", "parentPort.postMessage(w.codes.map((c) => codeEinloesen(w.v, c)));", ""].join("\n"));
+  try {
+    let bereit = 0;
+    const ergebnisse = await Promise.all(Array.from({ length: GERAETE }, () => new Promise((fertig, fehler) => {
+      const w = new Worker(geraet, { workerData: { modul: pathToFileURL(path.join(SERVER, "verbinden.mjs")).href, v, codes, start: start.buffer } });
+      w.on("message", (m) => {
+        if (m !== "bereit") { fertig(m); return; }
+        if (++bereit === GERAETE) { Atomics.store(start, 0, 1); Atomics.notify(start, 0); }
+      });
+      w.once("error", fehler);
+    })));
+    for (let i = 0; i < CODES; i++) {
+      assert.deepEqual(ergebnisse.map((e) => e[i]).filter(Boolean), ["cloud-shell"], `Code ${i}: genau einmal eingelöst`);
+    }
+    assert.deepEqual(fs.readdirSync(path.join(v, "verbinden")), [], "nichts Halbes liegen geblieben");
+  } finally { for (const o of [v, skripte]) fs.rmSync(o, { recursive: true, force: true }); }
+});
+
+test("Code für ein weiteres Gerät (Obsidian): 10 Minuten, ein neuer zieht den vorigen zurück, 3 je Stunde und 10 je Tag; Codes der Cloud Shell bleiben", async () => {
+  const { geraetCode, neuerCode, codeEinloesen, verbundenLesen, GERAET } = await laden("verbinden.mjs");
+  assert.deepEqual([GERAET.minuten, GERAET.stunde, GERAET.tag], [10, 3, 10]);
+  const v = ordner();
+  const t0 = new Date("2026-11-01T08:00:00Z");
+  const um = (min) => new Date(t0.getTime() + min * 60e3);
+  let n = 0;
+  const holen = (min) => geraetCode(v, { schema: 1, zeit: um(min).toISOString(), nonce: "zufallswert-" + String(n++).padStart(8, "0") }, um(min));
+  try {
+    const shell = neuerCode(v, { jetzt: t0 });
+    const codes = [0, 1, 2].map((min) => {
+      const [status, c] = holen(min);
+      assert.equal(status, 200);
+      assert.match(c.code, /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/);
+      return c;
+    });
+    assert.equal(codes[0].ablauf, um(10).toISOString(), "gilt 10 Minuten");
+    assert.equal(codeEinloesen(v, codes[0].code, um(2)), "", "zurückgezogen");
+    assert.equal(codeEinloesen(v, codes[1].code, um(2)), "", "zurückgezogen");
+    assert.deepEqual(holen(3), [429, { fehler: "zu-viele", wieder: um(60).toISOString() }], "höchstens 3 je Stunde");
+    assert.equal(codeEinloesen(v, shell.code, um(3)), "cloud-shell", "Code der Cloud Shell bleibt und zählt nicht mit");
+    assert.equal(codeEinloesen(v, codes[2].code, um(12)), "", "nach 10 Minuten abgelaufen");
+    const [s60, c60] = holen(60);
+    assert.equal(s60, 200, "eine Stunde nach dem ersten wieder");
+    assert.equal(codeEinloesen(v, c60.code, um(69)), "obsidian");
+    for (const min of [61, 62, 120, 121, 122, 180]) assert.equal(holen(min)[0], 200, `um ${min}`);
+    assert.deepEqual(holen(181), [429, { fehler: "zu-viele", wieder: um(24 * 60).toISOString() }], "höchstens 10 je Tag");
+    assert.equal(holen(24 * 60)[0], 200, "ein Tag nach dem ersten wieder");
+    assert.deepEqual(verbundenLesen(v, um(24 * 60)), [{ zeit: um(3).toISOString(), herkunft: "cloud-shell" }, { zeit: um(69).toISOString(), herkunft: "obsidian" }]);
+    assert.doesNotMatch(fs.readFileSync(path.join(v, "geraete.json"), "utf8"), new RegExp(c60.code.replace("-", "-?")), "kein Code in geraete.json");
+  } finally { fs.rmSync(v, { recursive: true, force: true }); }
+});
+
+test("Code für ein weiteres Gerät: nur mit frischer Zeit und neuem Zufallswert, auch nach einem Neustart des Dienstes", async () => {
+  const { geraetCode, GERAET } = await laden("verbinden.mjs");
+  const v = ordner();
+  const jetzt = new Date("2026-11-01T08:00:00Z");
+  const zeit = (ms) => new Date(jetzt.getTime() + ms).toISOString();
+  try {
+    for (const falsch of [null, {}, { schema: 1, zeit: zeit(0) }, { schema: 2, zeit: zeit(0), nonce: "a".repeat(22) },
+      { schema: 1, zeit: "gestern", nonce: "a".repeat(22) }, { schema: 1, zeit: zeit(0), nonce: "kurz" }, { schema: 1, zeit: zeit(0), nonce: "<b>".repeat(8) }]) {
+      assert.deepEqual(geraetCode(v, falsch, jetzt), [400, { fehler: "anfrage" }], JSON.stringify(falsch));
+    }
+    assert.deepEqual(geraetCode(v, { schema: 1, zeit: zeit(-GERAET.uhr - 1000), nonce: "alt-".padEnd(22, "x") }, jetzt), [400, { fehler: "uhr" }], "zu alt");
+    assert.deepEqual(geraetCode(v, { schema: 1, zeit: zeit(GERAET.uhr + 1000), nonce: "zukunft-".padEnd(22, "x") }, jetzt), [400, { fehler: "uhr" }], "aus der Zukunft");
+    const anfrage = { schema: 1, zeit: zeit(-GERAET.uhr + 1000), nonce: "einmal-".padEnd(22, "x") };
+    assert.equal(geraetCode(v, anfrage, jetzt)[0], 200, "knapp 2 Minuten alt geht");
+    // geraete.json ist der Speicher: ein neuer Aufruf (wie nach einem Neustart) kennt den Zufallswert noch
+    assert.deepEqual(geraetCode(v, anfrage, new Date(jetzt.getTime() + 500)), [409, { fehler: "wiederholt" }], "Wiederholung abgelehnt");
+    // nach seinem Zeitfenster ist die Anfrage ohnehin zu alt, und der nächste Code vergisst den Zufallswert
+    const spaeter = new Date(jetzt.getTime() + 2000);
+    assert.deepEqual(geraetCode(v, anfrage, spaeter), [400, { fehler: "uhr" }]);
+    assert.equal(geraetCode(v, { schema: 1, zeit: spaeter.toISOString(), nonce: "danach-".padEnd(22, "x") }, spaeter)[0], 200);
+    assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(v, "geraete.json"), "utf8")).nonces), ["danach-".padEnd(22, "x")], "abgelaufener Zufallswert weg");
+    // höchstens GERAET.nonces offene Zufallswerte
+    const voll = {};
+    for (let i = 0; i < GERAET.nonces; i++) voll["voll-" + String(i).padStart(17, "0")] = zeit(60e3);
+    fs.writeFileSync(path.join(v, "geraete.json"), JSON.stringify({ ausgestellt: [], nonces: voll, verbunden: [] }));
+    assert.deepEqual(geraetCode(v, { schema: 1, zeit: zeit(0), nonce: "noch-einer-".padEnd(22, "x") }, jetzt), [429, { fehler: "zu-viele" }]);
+  } finally { fs.rmSync(v, { recursive: true, force: true }); }
+});
+
+test("Dienst: Code für ein weiteres Gerät nur mit Zugangsschlüssel und einer Anfrage mit dem Datenschlüssel, Antwort verschlüsselt; Verbinden steht nur im verschlüsselten Eingang", async () => {
+  const { erzeugeDienst } = await laden("dienst.mjs");
+  const { neuerSchluessel, verschluesseln, entschluesseln } = await laden("kanal.mjs");
+  const v = ordner();
+  const uhr = { t: new Date("2026-11-01T08:00:00Z") };
+  const konfig = { zugang: neuerSchluessel(), schluessel: neuerSchluessel(), adresse: "https://beispiel.example", version: "0.0.0-test" };
+  const server = erzeugeDienst({ konfig, verzeichnis: v, jetzt: () => new Date(uhr.t) });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const basis = `http://127.0.0.1:${server.address().port}`;
+  const mit = { authorization: `Bearer ${konfig.zugang}` };
+  let n = 0;
+  const anfrage = (o) => Object.assign({ schema: 1, zeit: new Date(uhr.t).toISOString(), nonce: "anfrage-".padEnd(20, "x") + String(n++).padStart(4, "0") }, o);
+  const holen = async (paket, kopf) => fetch(`${basis}/v1/geraet`, { method: "POST", headers: kopf === undefined ? mit : kopf, body: JSON.stringify(paket) });
+  try {
+    const gut = await verschluesseln(konfig.schluessel, "verbinden", anfrage());
+    assert.equal((await holen(gut, {})).status, 401, "ohne Zugangsschlüssel");
+    assert.equal((await holen(anfrage())).status, 400, "unverschlüsselt");
+    assert.equal((await holen(await verschluesseln(konfig.schluessel, "stand", anfrage()))).status, 400, "anderer Zweck");
+    assert.equal((await holen(await verschluesseln(neuerSchluessel(), "verbinden", anfrage()))).status, 400, "anderer Datenschlüssel");
+    const alt = await holen(await verschluesseln(konfig.schluessel, "verbinden", anfrage({ zeit: new Date(uhr.t.getTime() - 5 * 60e3).toISOString() })));
+    assert.deepEqual([alt.status, await alt.json()], [400, { fehler: "uhr" }], "veraltete Anfrage");
+    const antwort = await holen(gut);
+    assert.equal(antwort.status, 200);
+    const paket = await antwort.json();
+    assert.deepEqual(Object.keys(paket).sort(), ["daten", "iv", "schema", "zweck"], "Antwort nur verschlüsselt");
+    const { code, ablauf } = await entschluesseln(konfig.schluessel, "verbinden", paket);
+    assert.match(code, /^[A-HJ-NP-Z2-9]{5}-[A-HJ-NP-Z2-9]{5}$/);
+    assert.equal(ablauf, new Date(uhr.t.getTime() + 10 * 60e3).toISOString());
+    assert.equal((await holen(gut)).status, 409, "dieselbe Anfrage noch einmal");
+    assert.equal((await fetch(`${basis}/v1/geraet`, { headers: mit })).status, 405);
+    // Einlösen wie ein Code aus der Cloud Shell; danach steht das Verbinden nur im verschlüsselten Eingang
+    const verbunden = await fetch(`${basis}/v1/verbinden`, { method: "POST", body: JSON.stringify({ code: code.toLowerCase() }) });
+    assert.deepEqual(await verbunden.json(), { adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel });
+    const status = await (await fetch(`${basis}/v1/status`)).text();
+    assert.doesNotMatch(status, /obsidian|cloud-shell|verbunden/, "nicht im öffentlichen Status");
+    const eingang = await (await fetch(`${basis}/v1/eingang`, { headers: mit })).text();
+    assert.doesNotMatch(eingang, /obsidian/);
+    assert.deepEqual((await entschluesseln(konfig.schluessel, "eingang", JSON.parse(eingang))).verbunden, [{ zeit: uhr.t.toISOString(), herkunft: "obsidian" }]);
+    // höchstens 3 je Stunde, mit dem Zeitpunkt, ab dem es wieder geht
+    for (let i = 0; i < 2; i++) assert.equal((await holen(await verschluesseln(konfig.schluessel, "verbinden", anfrage()))).status, 200);
+    const zuViele = await holen(await verschluesseln(konfig.schluessel, "verbinden", anfrage()));
+    assert.deepEqual([zuViele.status, await zuViele.json()], [429, { fehler: "zu-viele", wieder: new Date(uhr.t.getTime() + 3600e3).toISOString() }]);
+  } finally {
+    await new Promise((r) => server.close(r));
+    fs.rmSync(v, { recursive: true, force: true });
+  }
 });
 
 test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliches", async () => {
@@ -55,7 +194,7 @@ test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliche
   assert.deepEqual(s.fehler, ["claude-abgemeldet"]);
   assert.deepEqual(s.letzter_lauf, { zeit: "2026-10-18T07:30:00.000Z", ok: true });
   assert.equal(s.plugin_abruf, "2026-10-18T08:00:00.000Z");
-  assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "livesync", "plugin_abruf", "letzter_lauf", "claude_lauf", "aktualisierung", "fehler"]);
+  assert.deepEqual(Object.keys(s), ["schema", "version", "zeit", "claude", "gmail", "weiterleitung", "uni_zugang", "speicher_reserve", "livesync", "plugin_abruf", "letzter_lauf", "claude_lauf", "limit_wieder", "aktualisierung", "fehler"]);
   assert.doesNotMatch(JSON.stringify(s), /zxabc01|geheim|Passwort/);
   // claude_lauf: wartet (Anstoß da) | laeuft (seit unter 100 Minuten, der Zeitgrenze des Laufs) | ruht
   const jetzt = new Date("2026-10-18T09:00:00Z");
@@ -76,6 +215,35 @@ test("Öffentlicher Status: nur Werte aus der Freigabeliste, nichts Persönliche
     { zeit: "2026-10-18T02:10:00.000Z", ok: true, ziel: "", grund: "", erfolg: null });
   assert.equal(akt({ zeit: "2026-10-18T02:10:00Z", ok: false, grund: "Passwort falsch für zxabc01" }).grund, "unbekannt");
   assert.equal(akt({ ok: false, grund: "github" }), null, "ohne Zeit");
+  // am Limit des Claude-Abos: nur der Zeitpunkt des nächsten Versuchs
+  assert.equal(s.limit_wieder, null);
+  assert.equal(oeffentlicherStatus({ limit: { seit: "2026-10-18T08:00:00Z", versuche: 2, wieder: "2026-10-18T09:30:00Z", gmail: true } }, {}, "x", jetzt).limit_wieder,
+    "2026-10-18T09:30:00.000Z");
+  assert.equal(oeffentlicherStatus({ limit: { wieder: "bald" } }, {}, "x", jetzt).limit_wieder, null);
+});
+
+test("Limit des Claude-Abos: Der Dienst stößt den nächsten Versuch an, wenn er dran ist, und nur einmal", async () => {
+  const { limitWiederholen } = await laden("dienst.mjs");
+  const v = fs.mkdtempSync(path.join(os.tmpdir(), "studium-limit-"));
+  const t0 = new Date("2026-10-18T09:00:00Z");
+  const zustand = (z) => fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify(z));
+  const anstoss = () => fs.existsSync(path.join(v, "anstoss"));
+  assert.equal(limitWiederholen(v, t0), false, "ohne Zustand");
+  zustand({ limit: { seit: "2026-10-18T08:00:00Z", versuche: 1, wieder: "2026-10-18T09:30:00Z" }, letzterLauf: { zeit: "2026-10-18T09:00:00Z", ok: false } });
+  assert.equal(limitWiederholen(v, t0), false, "noch nicht dran");
+  const dran = new Date("2026-10-18T09:31:00Z");
+  zustand({ limit: { versuche: 1, wieder: "2026-10-18T09:30:00Z" }, letzterLauf: { zeit: "2026-10-18T09:00:00Z", ok: false }, laeuftSeit: "2026-10-18T09:29:00Z" });
+  assert.equal(limitWiederholen(v, dran), false, "ein Lauf läuft gerade");
+  zustand({ limit: { versuche: 1, wieder: "2026-10-18T09:30:00Z" }, letzterLauf: { zeit: "2026-10-18T09:30:30Z", ok: false } });
+  assert.equal(limitWiederholen(v, dran), false, "seit dem Zeitpunkt schon gelaufen");
+  zustand({ limit: { versuche: 1, wieder: "2026-10-18T09:30:00Z" }, letzterLauf: { zeit: "2026-10-18T09:00:00Z", ok: false } });
+  assert.equal(limitWiederholen(v, dran), true);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "wiederholung");
+  assert.equal(limitWiederholen(v, new Date(dran.getTime() + 5 * 60e3)), false, "der Anstoß wartet noch");
+  fs.rmSync(path.join(v, "anstoss"));
+  zustand({ letzterLauf: { zeit: "2026-10-18T09:31:00Z", ok: true } });
+  assert.equal(limitWiederholen(v, new Date(dran.getTime() + 10 * 60e3)), false, "Limit vorbei");
+  assert.ok(!anstoss());
 });
 
 test("Knopf „Mails durchsuchen“: Anstoß mit Grund knopf, höchstens alle 10 Minuten, ein wartender Anstoß bleibt", async () => {
@@ -587,21 +755,81 @@ test("Claude Code aktualisieren: nie während eines Laufs (oneshot: „activatin
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von dienst.json bleibt, offene Codes weg, der Dienst steht dabei still; installieren.sh behält sie", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
+  const skript = fs.readFileSync(path.join(SERVER, "studium-server"), "utf8");
+  assert.match(skript, /^ {2}schluessel-erneuern\) schluessel_erneuern ;;$/m, "Befehl");
+  assert.match(skript, /^studium-server schluessel-erneuern {5}\S/m, "in der Hilfe");
+  const funktion = /^schluessel_erneuern\(\) \{\n[\s\S]*?\n\}\n/m.exec(skript)[0];
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "schluessel-"));
+  const p = (...t) => path.join(tmp, ...t);
+  const vorwaerts = (x) => x.replace(/\\/g, "/");
+  try {
+    fs.mkdirSync(p("bin"));
+    fs.mkdirSync(p("daten", "verbinden"), { recursive: true });
+    // systemctl und chown schreiben nur auf, was sie tun sollen
+    for (const b of ["systemctl", "chown"]) fs.writeFileSync(p("bin", b), `#!/usr/bin/env bash\necho "${b} $*" >> "$AUFRUFE"\n`, { mode: 0o755 });
+    const ablauf = ["set -euo pipefail", funktion, "root_noetig() { :; }", 'als_studium() { "$@"; }', "KONFIG=$1 DATEN=$2", "schluessel_erneuern"].join("\n");
+    const lauf = () => {
+      fs.rmSync(p("aufrufe"), { force: true });
+      const r = spawnSync("bash", ["-c", ablauf, "-", vorwaerts(p("dienst.json")), vorwaerts(p("daten"))], { encoding: "utf8",
+        env: Object.assign({}, process.env, { AUFRUFE: p("aufrufe"), PATH: p("bin") + path.delimiter + process.env.PATH }) });
+      return { status: r.status, aus: r.stdout, fehler: r.stderr, aufrufe: fs.existsSync(p("aufrufe")) ? fs.readFileSync(p("aufrufe"), "utf8").trim().split("\n") : [] };
+    };
+    const bisher = { zugang: "z".repeat(43), schluessel: "s".repeat(43), adresse: "https://203-0-113-5.ss" + "lip.io", ip: "203.0.113.5", port: 8743, version: "0.7.5" };
+    fs.writeFileSync(p("dienst.json"), JSON.stringify(bisher));
+    for (const n of ["a".repeat(64) + ".json", "b".repeat(64) + ".json.eingeloest"]) fs.writeFileSync(p("daten", "verbinden", n), "{}");
+    let e = lauf();
+    assert.equal(e.status, 0, e.fehler);
+    const neu = JSON.parse(fs.readFileSync(p("dienst.json"), "utf8"));
+    for (const k of ["zugang", "schluessel"]) {
+      assert.match(neu[k], /^[A-Za-z0-9_-]{43}$/, k + ": 32 Byte, base64url");
+      assert.notEqual(neu[k], bisher[k], k + " neu");
+    }
+    assert.notEqual(neu.zugang, neu.schluessel);
+    assert.deepEqual({ ...neu, zugang: "", schluessel: "" }, { ...bisher, zugang: "", schluessel: "" }, "Adresse, IP, Port und Version bleiben");
+    assert.deepEqual(fs.readdirSync(p("daten", "verbinden")), [], "offene Codes weg");
+    assert.ok(!fs.existsSync(p("dienst.json.neu")));
+    assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", `chown root:studium ${vorwaerts(p("dienst.json"))}.neu`,
+      "systemctl start studium-server-dienst.service"], "erst still, dann die neue Datei, dann wieder an");
+    assert.match(e.aus, /Jedes Gerät muss sich neu verbinden/);
+    // dienst.json unlesbar: nichts ersetzt, Exit nicht 0, der Dienst läuft wieder
+    fs.writeFileSync(p("dienst.json"), "{");
+    e = lauf();
+    assert.notEqual(e.status, 0);
+    assert.equal(fs.readFileSync(p("dienst.json"), "utf8"), "{");
+    assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", "systemctl start studium-server-dienst.service"]);
+    // installieren.sh (wiederholbar) behält die neuen Schlüssel: sein Schritt „Schlüssel und Konfiguration“ gegen diese Datei
+    const inst = /STUDIUM_KONFIG="\$KONFIG" [^\n]* node --input-type=module -e '\n([\s\S]*?)\n'\n/.exec(fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8"))[1];
+    fs.writeFileSync(p("dienst.json"), JSON.stringify(neu));
+    const r = spawnSync(process.execPath, ["--input-type=module", "-e", inst], { encoding: "utf8", env: Object.assign({}, process.env,
+      { STUDIUM_KONFIG: p("dienst.json"), STUDIUM_ADRESSE: neu.adresse, STUDIUM_IP: neu.ip, STUDIUM_VERSION: "0.7.6" }) });
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stdout, /Schlüssel unverändert/);
+    const danach = JSON.parse(fs.readFileSync(p("dienst.json"), "utf8"));
+    assert.deepEqual([danach.zugang, danach.schluessel, danach.version], [neu.zugang, neu.schluessel, "0.7.6"]);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 // jq nur für die Filter von „aktualisieren“, wo es fehlt (Windows); mit echtem jq (Linux, GitHub Actions) gilt das echte
 const JQ_ATTRAPPE = `#!/usr/bin/env node
 const fs = require("node:fs");
 const [filter, datei] = process.argv.slice(3);
 const d = JSON.parse(fs.readFileSync(datei || 0, "utf8"));
-const paket = (d.assets || []).find((a) => a.name === "studium-server.tar.gz") || {};
-const f = { '.tag_name // "" | ltrimstr("v")': () => String(d.tag_name || "").replace(/^v/, ""), ".ip": () => d.ip,
+const asset = (name) => (d.assets || []).find((a) => a.name === name) || {};
+const paket = asset("studium-server.tar.gz"), signatur = asset("studium-server.tar.gz.sig");
+const f = { '.tag_name // "" | ltrimstr("v")': () => String(d.tag_name || "").replace(/^v/, ""), ".ip": () => d.ip, ".ip // empty": () => d.ip,
   '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url': () => paket.browser_download_url,
-  '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty': () => paket.digest }[filter];
+  '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty': () => paket.digest,
+  '.assets[] | select(.name == "studium-server.tar.gz.sig") | .browser_download_url': () => signatur.browser_download_url }[filter];
 if (!f) { console.error("jq-Attrappe kennt den Filter nicht: " + filter); process.exit(3); }
 const w = f();
 if (w != null && w !== "") process.stdout.write(w + "\\n");
 `;
 
-test("Neue Version holen: Ergebnis für den Status (Zeit, ok, Ziel, Grund, letzter Erfolg) auch nach Abbruch; Download-Ordner geht weg, Erfolg endet mit 0", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, async () => {
+const OHNE_BASH = spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash";
+const OHNE_SSH_KEYGEN = OHNE_BASH || (spawnSync("bash", ["-c", "command -v ssh-keygen"]).status !== 0 && "kein ssh-keygen");
+
+test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur; Ergebnis für den Status (Zeit, ok, Ziel, Grund, letzter Erfolg) auch nach Abbruch; Download-Ordner geht weg, Erfolg endet mit 0", { skip: OHNE_SSH_KEYGEN }, async () => {
   const skript = fs.readFileSync(path.join(SERVER, "studium-server"), "utf8");
   const fn = (name) => new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, "m").exec(skript)[0];
   // Gründe: dieselben Wörter wie im Status
@@ -615,11 +843,27 @@ test("Neue Version holen: Ergebnis für den Status (Zeit, ok, Ziel, Grund, letzt
     fs.writeFileSync(p("release", "server", "VERSION"), "0.7.0\n");
     fs.writeFileSync(p("release", "server", "installieren.sh"), "echo \"installieren $*\" >> \"$AUFRUFE\"\nexit \"${INSTALLIEREN:-0}\"\n");
     assert.equal(spawnSync("bash", ["-c", "tar -czf paket.tar.gz server"], { cwd: p("release") }).status, 0);
-    const summe = require("node:crypto").createHash("sha256").update(fs.readFileSync(p("release", "paket.tar.gz"))).digest("hex");
-    const info = (digest) => fs.writeFileSync(p("release", "info.json"), JSON.stringify({ tag_name: "v0.7.0",
-      assets: [{ name: "studium-server.tar.gz", browser_download_url: "https://beispiel.example/studium-server.tar.gz", digest }] }));
+    const echt = fs.readFileSync(p("release", "paket.tar.gz"));
+    const sha = (b) => require("node:crypto").createHash("sha256").update(b).digest("hex");
+    const summe = sha(echt);
+    // Signatur wie beim Release: Wegwerf-Schlüssel; allowed_signers liegt im LAUFENDEN Paket (nie aus dem Download)
+    const keygen = (...a) => {
+      const r = spawnSync("bash", ["-c", 'ssh-keygen "$@"', "-", ...a.map((x) => x.replace(/\\/g, "/"))], { encoding: "utf8" });
+      assert.equal(r.status, 0, r.stderr);
+    };
+    for (const n of ["signierer", "fremd"]) keygen("-q", "-t", "ed25519", "-N", "", "-C", n, "-f", p(n));
+    const signierer = fs.readFileSync(p("signierer.pub"), "utf8").split(" ").slice(0, 2).join(" ");
+    fs.writeFileSync(p("paket", "allowed_signers"), `# Kommentar\nrelease@studium-autopilot namespaces="studium-server" ${signierer}\n`);
+    const signieren = (schluessel, namensraum = "studium-server") => {
+      fs.rmSync(p("release", "paket.tar.gz.sig"), { force: true });
+      keygen("-Y", "sign", "-f", p(schluessel), "-n", namensraum, p("release", "paket.tar.gz"));
+    };
+    signieren("signierer");
+    const info = (digest, mitSignatur = true) => fs.writeFileSync(p("release", "info.json"), JSON.stringify({ tag_name: "v0.7.0",
+      assets: [{ name: "studium-server.tar.gz", browser_download_url: "https://beispiel.example/studium-server.tar.gz", digest },
+        ...(mitSignatur ? [{ name: "studium-server.tar.gz.sig", browser_download_url: "https://beispiel.example/studium-server.tar.gz.sig" }] : [])] }));
     fs.writeFileSync(p("bin", "curl"), "#!/usr/bin/env bash\n[ \"${GITHUB:-1}\" = 1 ] || exit 6\nziel=\"\"\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && ziel=$2; shift; done\n" +
-      "if [ -n \"$ziel\" ]; then echo \"herunterladen $ziel\" >> \"$AUFRUFE\"; cp \"$RELEASE/paket.tar.gz\" \"$ziel\"; else cat \"$RELEASE/info.json\"; fi\n", { mode: 0o755 });
+      "if [ -n \"$ziel\" ]; then echo \"herunterladen $ziel\" >> \"$AUFRUFE\"; cp \"$RELEASE/${ziel##*/}\" \"$ziel\"; else cat \"$RELEASE/info.json\"; fi\n", { mode: 0o755 });
     fs.writeFileSync(p("bin", "apt-get"), "#!/usr/bin/env bash\necho \"apt-get $*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
     if (spawnSync("bash", ["-c", "command -v jq"]).status !== 0) fs.writeFileSync(p("bin", "jq"), JQ_ATTRAPPE, { mode: 0o755 });
     fs.writeFileSync(p("dienst.json"), JSON.stringify({ ip: "203.0.113.5" }));
@@ -640,30 +884,114 @@ test("Neue Version holen: Ergebnis für den Status (Zeit, ok, Ziel, Grund, letzt
       assert.deepEqual(fs.readdirSync(p("daten")), ["aktualisierung.json"], "nichts Halbes liegen geblieben");
       const akt = JSON.parse(fs.readFileSync(p("daten", "aktualisierung.json"), "utf8"));
       assert.match(akt.zeit, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
-      return { status: r.status, fehler: r.stderr, akt: { ...akt, zeit: "" }, zeit: akt.zeit, aufrufe: aufrufe.filter((z) => !z.startsWith("herunterladen ")) };
+      return { status: r.status, fehler: r.stderr, akt: { ...akt, zeit: "" }, zeit: akt.zeit, aufrufe: aufrufe.filter((z) => !z.startsWith("herunterladen ")),
+        geladen: aufrufe.length - aufrufe.filter((z) => !z.startsWith("herunterladen ")).length };
     };
     info("sha256:" + summe);
     // GitHub nicht erreichbar, noch kein Ergebnis da: letzter Erfolg ist die Installation des laufenden Pakets
     let e = lauf({ GITHUB: "0" });
     assert.equal(e.status, 1);
     assert.deepEqual(e.akt, { zeit: "", ok: false, ziel: "", grund: "github", erfolg: "2026-10-20T08:00:00Z" });
-    // neue Version: installiert und Pakete nachgezogen, Exit 0, Erfolg jetzt
+    // neue Version: Paket und Signatur geladen, installiert und Pakete nachgezogen, Exit 0, Erfolg jetzt
     e = lauf({});
     assert.equal(e.status, 0, e.fehler);
     assert.deepEqual(e.akt, { zeit: "", ok: true, ziel: "0.7.0", grund: "", erfolg: e.zeit });
-    assert.deepEqual(e.aufrufe, ["installieren --ip 203.0.113.5", "apt-get install -y --only-upgrade caddy nodejs"]);
+    assert.deepEqual([e.geladen, e.aufrufe], [2, ["installieren --ip 203.0.113.5", "apt-get install -y --only-upgrade caddy nodejs"]]);
     const erfolg = e.zeit;
     // falsche Prüfsumme: nichts installiert, der letzte Erfolg bleibt stehen
     info("sha256:" + "0".repeat(64));
     e = lauf({});
     assert.deepEqual([e.status, e.akt, e.aufrufe], [1, { zeit: "", ok: false, ziel: "0.7.0", grund: "pruefsumme", erfolg }, []]);
-    // Installer bricht ab
+    // keine Signatur im Release (etwa ein Release, das jemand mit dem Konto oder einem Token angelegt hat): nichts geladen
+    info("sha256:" + summe, false);
+    e = lauf({});
+    assert.deepEqual([e.status, e.akt, e.geladen, e.aufrufe], [1, { zeit: "", ok: false, ziel: "0.7.0", grund: "signatur-fehlt", erfolg }, 0, []]);
     info("sha256:" + summe);
+    // Signatur eines anderen Schlüssels, eines anderen Namensraums, oder ein anderes Paket mit passender Prüfsumme (die nennt
+    // GitHub selbst): nichts installiert
+    const ungueltig = (was) => {
+      e = lauf({});
+      assert.deepEqual([e.status, e.akt, e.aufrufe], [1, { zeit: "", ok: false, ziel: "0.7.0", grund: "signatur", erfolg }, []], was);
+    };
+    signieren("fremd");
+    ungueltig("fremder Schlüssel");
+    signieren("signierer", "git");
+    ungueltig("anderer Namensraum");
+    signieren("signierer");
+    const getauscht = Buffer.concat([echt, Buffer.from("fremd")]);
+    fs.writeFileSync(p("release", "paket.tar.gz"), getauscht);
+    info("sha256:" + sha(getauscht));
+    ungueltig("anderes Paket mit passender Prüfsumme");
+    fs.writeFileSync(p("release", "paket.tar.gz"), echt);
+    info("sha256:" + summe);
+    // ohne allowed_signers im laufenden Paket lässt sich nichts prüfen, also nichts installieren
+    const erlaubt = fs.readFileSync(p("paket", "allowed_signers"));
+    fs.rmSync(p("paket", "allowed_signers"));
+    ungueltig("allowed_signers fehlt im laufenden Paket");
+    fs.writeFileSync(p("paket", "allowed_signers"), erlaubt);
+    // Installer bricht ab
     e = lauf({ INSTALLIEREN: "3" });
     assert.deepEqual([e.status, e.akt, e.aufrufe], [3, { zeit: "", ok: false, ziel: "0.7.0", grund: "installieren", erfolg }, ["installieren --ip 203.0.113.5"]]);
+    // noch ohne Adresse (der Server hat sich selbst vorbereitet, die Einrichtung in der Cloud Shell kam noch nicht): nur vorbereiten
+    fs.writeFileSync(p("dienst.json"), JSON.stringify({ zugang: "z" }));
+    e = lauf({});
+    assert.deepEqual([e.status, e.aufrufe[0]], [0, "installieren --vorbereiten"], e.fehler);
+    fs.writeFileSync(p("dienst.json"), JSON.stringify({ ip: "203.0.113.5" }));
     // schon aktuell: ohne Fehler, nichts installiert
     fs.writeFileSync(p("paket", "VERSION"), "0.7.0\n");
     e = lauf({});
     assert.deepEqual([e.status, e.akt.ok, e.akt.ziel, e.akt.erfolg === e.zeit, e.aufrufe], [0, true, "0.7.0", true, []]);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("Signatur des Server-Pakets: allowed_signers nennt Schlüssel genau für Prinzipal und Namensraum, die „aktualisieren“ prüft; der Installer legt sie mit ab", () => {
+  const m = /ssh-keygen -Y verify -f "\$PAKET\/allowed_signers" -I ([\w@.-]+) -n ([\w-]+) /.exec(fs.readFileSync(path.join(SERVER, "studium-server"), "utf8"));
+  assert.ok(m, "aktualisieren prüft mit allowed_signers des laufenden Pakets");
+  const zeilen = fs.readFileSync(path.join(SERVER, "allowed_signers"), "utf8").split("\n").filter((z) => z.trim() && !z.trim().startsWith("#"));
+  assert.ok(zeilen.length >= 1, "mindestens ein Schlüssel");
+  for (const z of zeilen) assert.match(z, new RegExp(`^${m[1]} namespaces="${m[2]}" (?:ssh|ecdsa|sk)-[a-z0-9@.-]+ [A-Za-z0-9+/]+=*$`));
+  // fehlt sie im installierten Paket, scheitert jedes weitere Update an der Signatur
+  assert.match(fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8"), /^for datei in [^\n]* allowed_signers[ ;][^\n]*do$/m);
+});
+
+test("Folien für Kapitellisten: nur Folien mit Modulcode und gültigem Pfad, Nummer, Datum und Quelle geprüft, Kopf für Claude, Anstoß, Grenze; Stand nennt die Module", async () => {
+  const { kapitelUnterlagenPruefen, kapitelAblegen, standPruefen } = await laden("dienst.mjs");
+  const k = (c) => c.repeat(64);
+  const u = (x) => Object.assign({ datei: "Unterlagen/B110 Einführung/B110 Folien 00 Einführung.pdf", kennung: k("a"), art: "Folien", titel: "B110 Folien 00 Einführung",
+    code: "B110", nummer: 0, seiten: 30, ganz: 8, datum: "2026-10-14", quelle: "ILIAS-Kurs B110", text: "[S. 1]\nGliederung\u0007\n[S. 9] Kapitel 2" }, x);
+  const geprueft = kapitelUnterlagenPruefen({ schema: 1, unterlagen: [u(), u({ kennung: k("b"), art: "Skript" }), u({ kennung: k("c"), code: "" })] });
+  assert.equal(geprueft.length, 1, "nur Folien mit Modulcode");
+  assert.equal(geprueft[0].text, "[S. 1]\nGliederung \n[S. 9] Kapitel 2", "Steuerzeichen weg, Zeilen bleiben");
+  const [schief] = kapitelUnterlagenPruefen({ schema: 1, unterlagen: [u({ nummer: 100, datum: "gestern", quelle: "<b>x</b>", ganz: -1 })] });
+  assert.deepEqual([schief.nummer, schief.datum, schief.quelle, schief.ganz], [null, "", "x", 0]);
+  assert.deepEqual(kapitelUnterlagenPruefen({ schema: 1, unterlagen: [u({ datei: "Unterlagen/../x.pdf" }), u({ kennung: "kurz" }), u({ text: " " })] }), []);
+  assert.throws(() => kapitelUnterlagenPruefen({ schema: 2, unterlagen: [] }), /Schema/);
+
+  const v = ordner();
+  assert.equal(kapitelAblegen(v, geprueft, new Date("2026-10-18T07:30:00Z")), 1);
+  const datei = fs.readFileSync(path.join(v, "unterlagen", "kapitel", k("a") + ".md"), "utf8");
+  assert.ok(datei.startsWith("# B110 Folien 00 Einführung\n\nDatei: Unterlagen/B110 Einführung/B110 Folien 00 Einführung.pdf\n" +
+    "Modul: B110 · Art: Folien · Nummer: 0 · Seiten: 30\nDatum: 2026-10-14 · Quelle: ILIAS-Kurs B110\n" +
+    "Auftrag: nur Kapitelliste (Lernplan); ab Seite 9 steht nur die erste Zeile jeder Seite\n\n---\n[S. 1]"), datei.slice(0, 400));
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "lernplan");
+  assert.ok(!fs.existsSync(path.join(v, "unterlagen", "neu", k("a") + ".md")), "keine Begleitnotiz");
+  const viele = Array.from({ length: 30 }, (_, i) => Object.assign({}, geprueft[0], { kennung: String(i).padStart(64, "0") }));
+  assert.throws(() => kapitelAblegen(v, viele), (e) => e.status === 429, "höchstens 30 warten");
+
+  const lp = (l) => standPruefen({ schema: 1, lernplan: l }).stand.lernplan;
+  assert.deepEqual(lp({ semester: "WS 2026/27", module: ["B110", "b110", "<x>", "B110", "E101"] }), { semester: "WS 2026/27", module: ["B110", "E101"] });
+  assert.equal(lp({ semester: "Winter", module: ["B110"] }), undefined, "unbekanntes Semester: kein Feld");
+  assert.equal(lp(undefined), undefined, "älteres Plugin ohne Feld");
+
+  // Listen aus den Lernplan-Notizen: nur gefragte Module, je eines, geprüft wie das Eingang, nur nr, titel, teile; zusammen begrenzt
+  const kap = [{ nr: "1", titel: "Mengen", seiten: 23, fertig: true, teile: [{ nr: "1.1", titel: "Teil", fertig: true }] }, { nr: "2", titel: "Funktionen" }];
+  assert.deepEqual(lp({ semester: "WS 2026/27", module: ["S100", "E101", "B110"], listen: [
+    { code: "S100", kapitel: kap }, { code: "S100", kapitel: [{ nr: "9", titel: "Doppelt" }] }, { code: "B180", kapitel: kap },
+    { code: "E101", kapitel: [{ nr: "1", titel: "Mit [[Link]]" }] }, { code: "B110", kapitel: "1 Mengen" }, "S100",
+  ] }), { semester: "WS 2026/27", module: ["S100", "E101", "B110"], listen: [{ code: "S100", kapitel: [{ nr: "1", titel: "Mengen", teile: [{ nr: "1.1", titel: "Teil" }] },
+    { nr: "2", titel: "Funktionen" }] }] });
+  const gross = Array.from({ length: 40 }, (_, i) => ({ nr: String(i + 1), titel: "t".repeat(140), teile: Array.from({ length: 10 }, (_, j) => ({ nr: `${i + 1}.${j + 1}`, titel: "u".repeat(140) })) })); // je Liste etwa 70 000 Zeichen
+  const codes = ["B110", "B180", "E101", "S100", "S110"];
+  const viel = lp({ semester: "WS 2026/27", module: codes, listen: codes.map((code) => ({ code, kapitel: gross })) });
+  assert.ok(viel.listen.length >= 1 && viel.listen.length < codes.length && JSON.stringify(viel.listen).length <= 150000, "höchstens 150 000 Zeichen");
 });

@@ -4,9 +4,15 @@ Danach gleicht der eigene Server den Tresor zwischen Windows, Mac, iPhone, iPad 
 Dafür gibt es in Obsidian das kostenlose Community-Plugin **Self-hosted LiveSync**; der Server bekommt eine eigene Datenbank nur
 für diesen Tresor. Der Tresor liegt dort verschlüsselt, auch die Dateinamen.
 
-Voraussetzung: Der Server ist eingerichtet (Schritt 5 in [schritte.md](schritte.md)). Die Grundregeln aus [SKILL.md](SKILL.md)
-gelten auch hier, vor allem: **ein Schritt je Nachricht**, und **Codes gehören nicht in den Chat**. Der Code für ein Gerät
-erscheint in der Cloud Shell; der Mensch tippt ihn auf dem Gerät selbst ein und schickt ihn dir nicht.
+Voraussetzung: Der Server ist eingerichtet (`start.sh` aus [schritte.md](schritte.md) ist mindestens über „Installieren“
+hinaus). Die Grundregeln aus [SKILL.md](SKILL.md) gelten auch hier, vor allem: **ein Schritt je Nachricht**, und **Codes gehören
+nicht in den Chat**.
+
+**Link und Code von LiveSync liest du nie.** Zusammen geben sie dauerhaft den Zugang zur Datenbank und den Schlüssel, mit dem
+der Tresor verschlüsselt ist. Darum: Du tippst den Befehl in die Cloud Shell, dann sagst du „Lies Link und Code jetzt selbst ab“
+und machst kein Bildschirmfoto und liest die Seite nicht, bis der Mensch „fertig“ sagt. Den Link öffnet der Mensch selbst (am
+Computer in seinem normalen Browser, nicht im eingebauten), den Code tippt er auf dem Gerät ein und schickt ihn dir nicht. Du
+rufst die Seite des Links nie ab und öffnest ihn nicht für ihn.
 
 | # | Schritt | Schon erledigt, wenn … |
 |---|---|---|
@@ -31,7 +37,8 @@ bash ~/studium-autopilot/server/fern.sh livesync
 ```
 
 Das Einschalten dauert beim ersten Mal 2 bis 4 Minuten (Datenbank installieren, Zertifikat holen). Am Ende stehen ein Link,
-ein **Code** (`xxxx-xxxx-xxxx`) und ein QR-Code; beide gelten 30 Minuten. Ein neuer Link: nur die letzte Zeile noch einmal.
+ein **Code** (`xxxx-xxxx-xxxx`) und ein QR-Code; beide gelten 30 Minuten. Ab hier liest du nicht mit (siehe oben). Ein neuer
+Link: nur die letzte Zeile noch einmal.
 
 Meldungen:
 - „das Server-Paket ist zu alt; erst aktualisieren …“: die erste Zeile ist nicht durchgelaufen. Ihre
@@ -54,7 +61,8 @@ Dann in Obsidian:
    verlassen**: tippen. Nicht „Einschalten“ beim Eingeschränkten Modus, das schaltet alle Erweiterungen aus.
 2. **Durchsuchen**, nach **Self-hosted LiveSync** suchen (Autor vorotamoroz), **Installieren**, dann **Aktivieren**. Fragt
    LiveSync gleich nach einer Einrichtung: **schließen**; die Einrichtung kommt über den Link.
-3. Am Computer den **Link** aus der Cloud Shell im Browser öffnen, am Handy den **QR-Code** mit der Kamera scannen. Auf der Seite
+3. Am Computer den **Link** aus der Cloud Shell im normalen Browser öffnen (der Mensch, nicht du), am Handy den **QR-Code** mit
+   der Kamera scannen. Auf der Seite
    **In Obsidian öffnen** tippen, Obsidian erlauben, den Link zu öffnen.
 4. Obsidian fragt (englisch) nach einer „passphrase“. Hier den **Code** aus der Cloud Shell eintippen (mit Bindestrichen).
 5. Am Ende fragt LiveSync (englisch) „Mostly Complete: Decision Required“: hier **„Initialise or overwrite the remote“** wählen
@@ -88,8 +96,8 @@ Auf dem Gerät:
    Autopilot, Darstellung und Einstellungen vom Server. Danach Obsidian ganz schließen (iPhone/iPad: im App-Umschalter
    wegwischen) und neu öffnen; erst dann läuft Studium Autopilot. Am iPhone/iPad läuft der Abgleich nur, solange Obsidian im
    Vordergrund ist.
-5. Mit dem eigenen Server verbinden (Schritt 9 in [schritte.md](schritte.md)) muss man das neue Gerät nur, wenn es selbst Termine
-   abholen soll; der Abgleich bringt sie ohnehin mit.
+5. Mit dem eigenen Server verbinden (Schritt 6 in [schritte.md](schritte.md), auf dem neuen Gerät **Mit Code verbinden**) muss
+   man das neue Gerät nur, wenn es selbst Termine abholen soll; der Abgleich bringt sie ohnehin mit.
 
 ## L4. Aufräumen
 
