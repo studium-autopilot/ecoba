@@ -254,7 +254,8 @@ aufbau_oeffnen() {
   name=$(wert geraet_benutzer)
   [ -n "$name" ] || return 0
   d=$(mktemp -d)
-  (umask 077 && wert geraet_passwort | jq -Rj . >"$d/passwort.json")
+  # als JSON-Text ("…"): -r oder -j gäben das Passwort roh aus, das nimmt CouchDB nicht an
+  (umask 077 && wert geraet_passwort | jq -R . >"$d/passwort.json")
   if [ "$(code -X PUT -H 'Content-Type: application/json' --data-binary "@$d/passwort.json" "$COUCH/_node/_local/_config/admins/$name")" != 200 ]; then
     rm -rf "$d"
     fehler "Aufbau-Fenster ließ sich nicht öffnen"

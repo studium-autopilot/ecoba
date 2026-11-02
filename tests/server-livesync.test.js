@@ -141,7 +141,8 @@ const argI = a.indexOf("--arg"), argv = argI >= 0 ? { [a[argI + 1]]: a[argI + 2]
 const rest = a.filter((x, i) => !/^-[a-zA-Z]+$/.test(x) && (argI < 0 || i < argI || i > argI + 2));
 const [filter, datei] = rest;
 const roh = fs.readFileSync(datei || 0, "utf8");
-if (flags.includes("R")) { process.stdout.write(JSON.stringify(roh.replace(/\\n$/, "")) + (flags.includes("j") ? "" : "\\n")); process.exit(0); }
+// -R: jede Zeile ein String; mit -r oder -j roh ausgegeben wie beim echten jq (-j heißt -r ohne Zeilenumbruch), sonst als JSON
+if (flags.includes("R")) { const s = roh.replace(/\\n$/, ""); process.stdout.write((/[rj]/.test(flags) ? s : JSON.stringify(s)) + (flags.includes("j") ? "" : "\\n")); process.exit(0); }
 const d = JSON.parse(roh || "null");
 let m;
 if ((m = /^\\.(\\w+) = \\$(\\w+)$/.exec(filter))) { d[m[1]] = argv[m[2]]; process.stdout.write(JSON.stringify(d, null, 2) + "\\n"); process.exit(0); }

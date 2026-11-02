@@ -2,7 +2,7 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.7.8 – Übungen sichtbar, Lernplan breiter, sicherer Server
+## 0.7.9 – Übungen sichtbar, Lernplan breiter, sicherer Server
 
 - **Übersichtlicher:** Im **Stundenplan** siehst du Vorlesung und Übung auf einen Blick: Vorlesungen sind gefüllt, Übungen und
   Tutorien umrandet und tragen oben rechts ein kleines Etikett „Tutorium“ oder „Übung“.
