@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<!-- Erfundene Testseite: Dashboard eines anderen Kontos (Kürzel „xy“ im Profilbild der Metaleiste), mit Benutzermenü samt
+     „Abmelden“ (Token erfunden) und einem Beitrag mit dem Profilbild einer dritten Person außerhalb der Metaleiste. Aufbau wie
+     ILIAS 10 (Ovidius, Oktober 2026). -->
+<html lang="de" dir="ltr">
+<head><meta charset="utf-8" /><title>Dashboard - ILIAS</title></head>
+<body>
+<div class="il-layout-page">
+<header><ul class="il-maincontrols-metabar" role="menubar" style="visibility: hidden" aria-label="Metaleiste" id="il_ui_fw_100000001001_1">
+	<li role="none"><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de" id="il_ui_fw_100000001002_1"><span class="bulky-label">Hilfe</span></a></li>
+	<li role="none">
+		<button class="btn btn-bulky" id="il_ui_fw_100000001003_1" role="menuitem" aria-haspopup="true"><span class="il-avatar il-avatar-letter il-avatar-size-large il-avatar-letter-color-4" aria-label="Profilbild" role="img">
+	<span class="abbreviation">xy</span>
+</span>
+<span class="bulky-label">Benutzermenü</span></button>
+		<div class="il-metabar-slates">
+			<div class="il-maincontrols-slate disengaged" id="il_ui_fw_100000001004_1">
+	<div class="il-maincontrols-slate-content" data-replace-marker="content">
+		<ul>
+			<li><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilDashboardGUI&amp;cmd=jumpToProfile"><span class="bulky-label">Profil und Privatsphäre</span></a></li>
+			<li><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilDashboardGUI&amp;cmd=jumpToSettings"><span class="bulky-label">Einstellungen</span></a></li>
+			<li><a class="il-link link-bulky" href="https://ovidius.uni-tuebingen.de/ilias.php?baseClass=ilstartupgui&amp;cmd=doLogout&amp;rtoken=0erfunden0token0fuer0tests0000000&amp;lang=de"><span class="glyph" role="img"><span class="glyphicon glyphicon-logout" aria-hidden="true"></span></span><span class="bulky-label">Abmelden</span></a></li>
+		</ul>
+	</div>
+			</div>
+		</div>
+	</li>
+</ul></header>
+<main class="il-layout-page-content"><div id="ilContentContainer"><div class="row"><div id="il_center_col" class="col-sm-12">
+<div class="ilFrmPostRow"><span class="il-avatar il-avatar-letter il-avatar-size-large il-avatar-letter-color-2" aria-label="Profilbild" role="img"><span class="abbreviation">mn</span></span>
+<a href="https://ovidius.uni-tuebingen.de/logout.php?lang=de">Ein Link im Inhalt, der wie Abmelden aussieht</a></div>
+<div class="alert alert-info" role="status"><div class="ilAccHeadingHidden">Informationsmeldung</div>Sie haben aktuell noch keine Favoriten ausgewählt.</div>
+</div></div></div></main>
+</div>
+</body>
+</html>

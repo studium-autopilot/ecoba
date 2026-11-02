@@ -248,6 +248,8 @@ Kostenlos, alle Geräte (Windows, Mac, iPhone, iPad, Android), ohne iCloud. Hast
 **Verbindungen** in der Zeile „Eigener Server“ auf **Mehr erfahren**. Unter „Windows und iPhone abgleichen“ **Prompt kopieren**
 tippen und in Claude Desktop im Tab **Code** einfügen. Claude richtet den Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das
 Community-Plugin Self-hosted LiveSync auf jedes Gerät; iCloud und andere Abgleiche für den Tresor schaltest du danach aus.
+Plugins gleicht LiveSync nicht ab, damit kein fremdes Gerät sie verändern kann: Ein weiteres Community-Plugin installierst du
+auf jedem Gerät selbst, Studium Autopilot holt sich jedes Gerät beim Update selbst (**Neu laden**).
 
 ## Update auf eine neue Version
 
@@ -304,6 +306,7 @@ Freiwillig und erst, wenn die Einrichtung in Obsidian fertig ist. Claude richtet
 der deine Unterlagen über dein Claude-Abo zusammenfasst und in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop (Tab **Code**, nicht der Chat) und was du dafür brauchst, findest du im
 README unter „Für Technische: eigener Server mit Claude“. Das erste Gerät verbindest du mit einem Link vom Server; danach steht
 unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**. Jedes weitere Gerät verbindest du ohne Claude:
-dort auf dem verbundenen Gerät **Weiteres Gerät verbinden** tippen und den Code auf dem neuen Gerät unter **Mit Code verbinden**
+dort auf dem verbundenen Gerät **Weiteres Gerät verbinden** tippen und Code und Adresse auf dem neuen Gerät unter **Mit Code verbinden**
 eingeben. Ist ein Gerät verloren, gib in der Cloud Shell von Oracle `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`
 ein: Dein Server bekommt neue Schlüssel, das verlorene Gerät kommt nicht mehr an deine Daten, und du verbindest deine Geräte neu.
+Hat dein Server eine neue Adresse bekommen, trägst du sie unter **Mit Code verbinden** statt der alten ein.

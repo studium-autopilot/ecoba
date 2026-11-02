@@ -2,7 +2,8 @@
 //   obsidian://studium-autopilot?aktion=<name>&<parameter>=<wert>
 // Das Plugin „Studium Autopilot“ fängt den Klick ab und ruft hier ausfuehren(c) auf: Es öffnet sich keine Seite, es
 // entsteht keine Datei, die aktive Notiz bleibt (Ausnahme: „zeigen“ ist ein Link auf eine Notiz, „suchen“ öffnet die Suche).
-// c.parameter = Werte aus dem Link (Strings), c.quelle = Notiz, in der der Knopf steht, c.datei = null.
+// c.parameter = Werte aus dem Link (Strings), c.quelle = Notiz, in der der Knopf steht, c.datei = null, c.extern = true nur für
+// einen Link von außerhalb der App (Browser, andere App).
 // Neue Aktion: Eintrag in AKTIONEN (titel = Befehl in der Befehlspalette, ohne titel kein Befehl). Doku: docs/architektur/aktionen.md.
 module.exports = function (ctx) {
   const app = window.app;
@@ -61,13 +62,36 @@ module.exports = function (ctx) {
     window.open("shareddocuments://" + encodeURI(p).replace(/#/g, "%23"));
   };
 
+  // Ein Link von außerhalb der App (c.extern: Browser, Mail, andere App) öffnet nie direkt: nur Dateien unter Unterlagen/, und erst
+  // nach einer Rückfrage mit Name und Art der Datei. Der Knopf „Abbrechen“ hat den Fokus, Enter öffnet also nichts.
+  // → Promise<true>, wenn „Öffnen“ getippt wurde
+  const vonAussenFragen = (f) => new Promise((fertig) => {
+    const m = new ctx.obsidian.Modal(app);
+    let ja = false;
+    m.modalEl.addClass("eba-modal");
+    m.titleEl.setText("Datei öffnen?");
+    const endung = art(f);
+    m.contentEl.createEl("p", { cls: "eba-modal-text", text: `Ein Link von außerhalb von Obsidian will „${f.name}“ öffnen (${endung ? endung.toUpperCase() + "-Datei" : "Datei ohne Endung"}). ` +
+      "Tippe nur auf Öffnen, wenn du den Link gerade selbst angetippt hast und weißt, woher die Datei kommt." });
+    const k = m.contentEl.createDiv({ cls: "modal-button-container" });
+    k.createEl("button", { text: "Öffnen" }).addEventListener("click", () => { ja = true; m.close(); });
+    const ab = k.createEl("button", { text: "Abbrechen", cls: "mod-cta" });
+    ab.addEventListener("click", () => m.close());
+    m.onClose = () => { m.contentEl.empty(); fertig(ja); };
+    m.open();
+    ab.focus();
+  });
+  // Lässt sich die Datei am PC überhaupt öffnen oder im Ordner zeigen (EXTERN_ARTEN, ORDNER_ARTEN)? Sonst sagt extern() es ohne Rückfrage.
+  const oeffenbar = (f) => !Platform.isDesktopApp || EXTERN_ARTEN.indexOf(art(f)) >= 0 || ORDNER_ARTEN.indexOf(art(f)) >= 0;
+
   // Variante: Werte, Reihenfolge und Wörter aus dem Feld-Register (felder.js); gespeichert bleibt „offen“
   const F = () => ctx.user.felder;
 
   const AKTIONEN = {
     // Knopf „Öffnen“ (Kopfzeile des PDF-Kastens, pdfkasten.js; Unterlagen-Tabellen): Datei aus „datei“ (mit original=1: aus
     // „original“) extern öffnen; der PDF-Kasten nennt die eingebettete Datei selbst (Parameter datei, Link relativ zur Notiz).
-    // Ohne Notiz sucht er eine Datei gleichen Namens nur unter Unterlagen/, nie irgendwo im Tresor.
+    // Ohne Notiz sucht er eine Datei gleichen Namens nur unter Unterlagen/, nie irgendwo im Tresor. Von außen (c.extern, seit
+    // 02.11.2026) nur eine Datei unter Unterlagen/ und nur nach der Rückfrage (vonAussenFragen); in der App wie bisher ohne.
     oeffnen: {
       titel: "Unterlage öffnen",
       ausfuehren: async (c) => {
@@ -79,6 +103,10 @@ module.exports = function (ctx) {
           || ausLink(original ? fm.original : fm.datei, notiz ? notiz.path : "")
           || app.vault.getFiles().find((f) => f.path.indexOf("Unterlagen/") === 0 && f.basename === name && f.extension !== "md") || null;
         if (!ziel) { ctx.hinweis(`Keine Datei zu „${name || "dieser Notiz"}“ gefunden.`); return; }
+        if (c.extern === true) {
+          if (ziel.path.indexOf("Unterlagen/") !== 0) { ctx.hinweis(`Links von außerhalb von Obsidian öffnen nur Unterlagen, „${ziel.name}“ liegt woanders.`); return; }
+          if (oeffenbar(ziel) && !(await vonAussenFragen(ziel))) return;
+        }
         extern(ziel);
         if (ctx.user.gesehen) ctx.user.gesehen(c).vermerken(notiz || ziel).catch((e) => console.error("eba gesehen", e)); // zählt nicht mehr als neu
       },

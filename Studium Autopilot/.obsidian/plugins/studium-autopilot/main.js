@@ -388,6 +388,8 @@ const SIG_FRIST = 10000; // ms höchstens für einen Abruf aus dem Release von s
 const REPARIEREN_FRIST = 30000; // ms höchstens für einen Abruf aus dem Release nach einem Tipp auf Reparieren
 const ABLEHNUNG_START = 5000; // ms nach dem Start bis zum Hinweis auf gesperrte Skripte
 const ABLEHNUNG_SYNC = 60000; // ms Ruhe nach einem gesperrten Hot-Reload (Liste und Signatur kommen vielleicht noch über den Sync)
+// Mobil (ohne Statusleiste): Wer eine dieser Seiten öffnet, sieht den geschlossenen Hinweis auf gesperrte Skripte wieder
+const ABLEHNUNG_SEITEN = ["Dashboard.md", "Studium/Einstellungen & Hilfe.md"];
 // Gerätespeicher (app.loadLocalStorage: je Gerät und Tresor, nie in einer Datei des Tresors)
 const L_LISTEN = "eba-skripte-listen";       // angenommene Listen (behalten) [{ art: signiert, version, liste (SHA-256), skripte, kern: pfad → { sha256, groesse } }]
 const L_HOECHSTE = "eba-skripte-hoechste";   // neueste fertige Version (X.Y.Z), deren Liste dieses Gerät angenommen hat
@@ -603,6 +605,8 @@ module.exports = class StudiumAutopilot extends Plugin {
       checkCallback: (pruefen) => { if (!this.kernAufholbar()) return false; if (!pruefen) this.kernAufholenFragen(); return true; } });
     this.addCommand({ id: "entwicklermodus-aus", name: "Entwicklermodus ausschalten",
       checkCallback: (pruefen) => { if (!this.entwickler()) return false; if (!pruefen) this.entwicklerAus(); return true; } });
+    // Weg zurück zum Hinweis auf gesperrte Skripte, mobil (ablehnungSeite)
+    this.registerEvent(this.app.workspace.on("file-open", (f) => this.ablehnungSeite(f)));
 
     this.wischenBeimStart();
     this.app.workspace.onLayoutReady(() => this.starten());
@@ -642,6 +646,10 @@ module.exports = class StudiumAutopilot extends Plugin {
     this.entladen = true;
     clearTimeout(this.hinweisTimer);
     clearTimeout(this.ablehnungTimer);
+    // Der Hinweis auf gesperrte Skripte steht ohne Zeitgrenze: seine Knöpfe gehören zu dieser Instanz (nach „Neu laden“ zeigt die
+    // nächste ihren eigenen)
+    this.ablehnungHinweisWeg();
+    this.ablehnungZeichenSetzen("");
     // Je Skript: abmelden() der Erweiterung, dann alles, was über die Helfer in ctx angemeldet wurde.
     // Codeblock-Prozessoren, Post-Processor, Editor-Array und Befehle meldet Obsidian beim Entladen des Plugins selbst ab.
     for (const name of Object.keys(this.erweiterungen).concat(Object.keys(this.aufraeumer))) this.skriptAbmelden(name);
@@ -941,6 +949,7 @@ module.exports = class StudiumAutopilot extends Plugin {
     if (fehler.length) new Notice(`Ein Teil der App ließ sich nicht laden (${fehler.map((x) => x.split(" (")[0]).join(", ")}). Bitte Obsidian einmal neu starten.`, 10000);
     if (start && this.entwickler()) new Notice("Der Entwicklermodus ist an. Skripte laufen auf diesem Gerät ohne Prüfung.", 8000);
     if (Object.keys(this.abgelehnt).length) this.ablehnungPlanen(ABLEHNUNG_START);
+    else this.ablehnungErledigt(); // z. B. „Erweiterungen neu laden“: was vorher gesperrt war, läuft jetzt
     this.neuZeichnen();
     return fehler;
   }
@@ -1163,14 +1172,18 @@ module.exports = class StudiumAutopilot extends Plugin {
     this.ablehnungTimer = setTimeout(() => this.ablehnungZeigen(), ms);
   }
 
-  ablehnungZeigen() {
+  // Der Hinweis bleibt stehen (Dauer 0), bis nichts mehr gesperrt ist (ablehnungErledigt) oder du ihn schließt, und kommt für
+  // dieselben Fassungen nur einmal je Lauf. erneut: auf Wunsch (Statusleiste, mobil eine der ABLEHNUNG_SEITEN), auch für dieselben
+  // Fassungen und während eines Updates. Ein neuer Hinweis ersetzt den alten, nie zwei.
+  ablehnungZeigen(erneut) {
     clearTimeout(this.ablehnungTimer);
     this.ablehnungTimer = null;
     if (this.entladen) return null;
-    if (this.stillBis > Date.now()) { this.ablehnungPlanen(this.stillBis - Date.now() + 1000); return null; }
+    if (!erneut && this.stillBis > Date.now()) { this.ablehnungPlanen(this.stillBis - Date.now() + 1000); return null; }
     const namen = Object.keys(this.abgelehnt).sort();
+    if (!namen.length) { this.ablehnungErledigt(); return null; }
     const merk = namen.map((n) => n + ":" + this.abgelehnt[n].sha).join(",");
-    if (!namen.length || merk === this.ablehnungGezeigt) return null;
+    if (!erneut && merk === this.ablehnungGezeigt) return null;
     this.ablehnungGezeigt = merk;
     const p = this.pruefung || { mengen: [], zustand: "keine-liste", version: "" }, ohneListe = !p.mengen.length;
     let text;
@@ -1200,18 +1213,67 @@ module.exports = class StudiumAutopilot extends Plugin {
       text += ` Auf diesem Gerät läuft noch Version ${this.kernVersion()}; „Neu laden“ holt Version ${auf.version}.`;
       knoepfe.push({ text: "Neu laden", tun: () => this.kernAufholenFragen() });
     }
-    this.ablehnungHinweis = this.knopfHinweis(text, knoepfe, 20000);
-    return this.ablehnungHinweis;
+    this.ablehnungHinweisWeg();
+    const hinweis = this.knopfHinweis(text, knoepfe, 0), el = hinweis && (hinweis.containerEl || hinweis.noticeEl || hinweis.messageEl);
+    this.ablehnungHinweis = hinweis;
+    this.ablehnungZu = false;
+    // Ein Tipp auf den Hinweis schließt ihn (Obsidian); dann holen ihn die Statusleiste oder eine der ABLEHNUNG_SEITEN zurück
+    try { if (el) el.addEventListener("click", () => { if (this.ablehnungHinweis === hinweis) this.ablehnungZu = true; }); } catch (e) { /* ohne */ }
+    this.ablehnungZeichenSetzen(ohneListe && p.zustand === "ohne-signatur" ? "Studium Autopilot wartet" : "Studium Autopilot prüfen");
+    return hinweis;
   }
 
-  // Alles Gesperrte ist geladen: Hinweis weg
+  // Alles Gesperrte ist geladen: Hinweis und Eintrag in der Statusleiste weg
   ablehnungErledigt() {
     if (Object.keys(this.abgelehnt).length) return;
     this.ablehnungGezeigt = "";
     clearTimeout(this.ablehnungTimer);
     this.ablehnungTimer = null;
+    this.ablehnungHinweisWeg();
+    this.ablehnungZeichenSetzen("");
+  }
+
+  ablehnungHinweisWeg() {
     try { if (this.ablehnungHinweis) this.ablehnungHinweis.hide(); } catch (e) { /* schon weg */ }
     this.ablehnungHinweis = null;
+  }
+
+  // Steht der Hinweis noch? Geschlossen hat ihn ein Tipp darauf; sonst nimmt Obsidian sein Element aus dem Dokument.
+  ablehnungOffen() {
+    const n = this.ablehnungHinweis, el = n && (n.containerEl || n.noticeEl || n.messageEl);
+    return !!el && !this.ablehnungZu && el.isConnected !== false;
+  }
+
+  // Weg zurück, solange etwas gesperrt ist (den Hinweis kann man schließen, erst der nächste Start zeigt ihn von selbst wieder):
+  // am Computer ein Eintrag in der Statusleiste, ein Klick zeigt den Hinweis mit seinen Knöpfen noch einmal. Nur der Kern, geht also
+  // auch, wenn update.js selbst gesperrt ist. text "" nimmt ihn weg. Mobil gibt es keine Statusleiste (dort ablehnungSeite).
+  ablehnungZeichenSetzen(text) {
+    if (!text) {
+      try { if (this.ablehnungZeichen) this.ablehnungZeichen.remove(); } catch (e) { /* schon weg */ }
+      this.ablehnungZeichen = null;
+      return null;
+    }
+    if ((obsidian.Platform && obsidian.Platform.isMobile) || typeof this.addStatusBarItem !== "function") return null;
+    if (!this.ablehnungZeichen) {
+      const el = this.addStatusBarItem();
+      el.addClass("mod-clickable");
+      el.setAttr("aria-label", "Hinweis noch einmal zeigen");
+      el.setAttr("data-tooltip-position", "top");
+      el.addEventListener("click", () => this.ablehnungZeigen(true));
+      this.ablehnungZeichen = el;
+    }
+    this.ablehnungZeichen.setText(text);
+    return this.ablehnungZeichen;
+  }
+
+  // Mobil, ohne Statusleiste: Wer das Dashboard oder Einstellungen & Hilfe öffnet (ABLEHNUNG_SEITEN), sieht den geschlossenen
+  // Hinweis wieder, solange etwas gesperrt ist. Über das Ereignis file-open des Kerns, also auch, wenn seitenleiste.js oder
+  // update.js gesperrt sind (ein Symbol in der Seitenleiste stünde auf dem iPhone im Menü hinter ≡, das seitenleiste.js ersetzt).
+  // Erst nachdem der Hinweis in diesem Lauf einmal kam, nie während eines Updates, nie ein zweiter neben einem offenen.
+  ablehnungSeite(f) {
+    if (!obsidian.Platform || !obsidian.Platform.isMobile || !f || ABLEHNUNG_SEITEN.indexOf(f.path) < 0) return null;
+    if (!this.ablehnungGezeigt || this.stillBis > Date.now() || this.ablehnungOffen()) return null;
+    return this.ablehnungZeigen(true);
   }
 
   // Hinweis mit Knöpfen in der Gestalt von ctx.hinweis (.eba-toast); hinweis.js kann selbst gesperrt sein. knoepfe: [{ text, tun }],

@@ -50,7 +50,6 @@ module.exports = function (ctx) {
   const EPS = 1e-6;
   const WTAG = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
-  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
   const tagObj = (s) => new Date(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
   const isoVon = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -752,12 +751,6 @@ module.exports = function (ctx) {
     return teile.concat({ text: `Klausur ${wtm(P.klausur.datum)}${P.klausur.geschaetzt ? " (geschätzt)" : ""}`, klausur: true });
   };
   const titelVon = (P) => (P.modul ? `${P.code} ${P.modul.titel}` : P.f.basename);
-  // Titel der Zeile als HTML. In der Lernplan-Notiz (inNotiz) nennt ihr Titel Kürzel und „Lernplan“ schon: Die Zeile nennt das
-  // Modul mit Namen, als Link zur Modulseite, wie der Kopf einer Begleitnotiz (seit 26.10.2026; vorher stand „B110“ unter
-  // „B110 Lernplan“ noch einmal). In der Übersicht Kürzel und Name.
-  const titelHtml = (P, inNotiz) => (inNotiz && P.modul && P.modul.f
-    ? `<a class="internal-link eba-kopf-modul" data-href="${esc(P.modul.f.path)}" href="${esc(P.modul.f.path)}">${esc(P.modul.titel)}</a>`
-    : esc(titelVon(P)));
 
   // Neben einem offenen Kapitel: „bis So 8.11.“ (geschätzt „bis ca.“), „überfällig seit So 18.10.“ (fällig, da und die Vorlesung
   // hatte es), dazu „noch nicht da“, bis Sonntag „vor der Vorlesung“ und der Zwischentest. Vor dieser Woche fällig, aber nicht
@@ -817,11 +810,11 @@ module.exports = function (ctx) {
     if (mitCode) t.createSpan({ cls: "eba-lp-k-code", text: P.code });
     t.createSpan({ cls: "eba-lp-k-nr", text: k.nr || String(i + 1) });
     const inhalt = t.createDiv({ cls: "eba-lp-k-inhalt" });
-    // Name eigens (nur er ist als Link unterstrichen), davor ein Leerzeichen statt Rand: Bricht die Zahl der Unterkapitel um,
-    // steht sie bündig
+    // Name eigens (nur er ist als Link unterstrichen), davor ein festes Leerzeichen statt Rand: Die Zahl der Unterkapitel bricht
+    // mit dem letzten Wort um (seit 2.11.2026; vorher stand „0 von 10“ allein in einer Zeile)
     const titel = inhalt.createSpan({ cls: "eba-lp-k-titel" });
     titel.createSpan({ cls: "eba-lp-k-name", text: k.titel });
-    if (k.teile.length && k.anteil < 1 - EPS) { titel.appendText(" "); titel.createSpan({ cls: "eba-lp-k-teil", text: `${k.teile.filter((x) => x.fertig).length}/${k.teile.length}` }); }
+    if (k.teile.length && k.anteil < 1 - EPS) { titel.appendText("\u00a0"); titel.createSpan({ cls: "eba-lp-k-teil", text: `${k.teile.filter((x) => x.fertig).length} von ${k.teile.length}` }); }
     if (k.ziel || k.webZiel) {
       titel.addClass("is-link");
       nurStoppen(titel);
@@ -831,13 +824,7 @@ module.exports = function (ctx) {
       });
     }
     const b = P.plan && k.anteil < 1 - EPS ? bisText(P, i) : null;
-    // Im aufgeklappten Modul: beim Anpassen woher der Vorschlag kommt und die Wahl, sonst „mehr Zeit“ bzw. „weniger Zeit“ hinter der Frist
-    if (!mitCode && P.zeitAn && auf[":zeit:" + P.code]) {
-      const a = k.altklausuren;
-      unterTitel(inhalt, false, a ? `in ${a.in} von ${a.von} Altklausuren` : "", false);
-      if (k.nr && k.zeit) zeitWahlZeichnen(inhalt, P, k, neu);
-      return;
-    }
+    // Im aufgeklappten Modul „mehr Zeit“ bzw. „weniger Zeit“ hinter der Frist (die Wahl steht seit 2.11.2026 unter „Lernplan einstellen“)
     const teile = [b ? b.text : "", !mitCode && k.zeit && k.zeit.stufe !== "normal" ? `${k.zeit.stufe} Zeit` : ""].filter(Boolean);
     if (teile.length || mitCode) unterTitel(inhalt, mitCode && `${P.code} ${k.nr || String(i + 1)}`, verbinden(teile), !!(b && b.ueberfaellig));
   };
@@ -858,20 +845,18 @@ module.exports = function (ctx) {
       });
     }
   };
-  // Schalter „Zeit je Kapitel“ im aufgeklappten Modul (seit 1.11.2026, aus, bis du ihn einschaltest; Form wie „Vor der Vorlesung
-  // lernen“): darunter, woher die Zeit kommt bzw. was „an“ hieße, eingeschaltet rechts „Anpassen“; dann trägt jedes Kapitel Weniger,
-  // Normal, Mehr (gerätelokal, bis „Fertig“)
+  // Schalter „Zeit je Kapitel“ (seit 1.11.2026, aus, bis du ihn einschaltest; seit 2.11.2026 unter „Lernplan einstellen“, vorher im
+  // aufgeklappten Modul mit „Anpassen“, das die Wahl unter jedes Kapitel legte): darunter, woher die Zeit kommt bzw. was „an“ hieße;
+  // eingeschaltet folgt im Fenster je Kapitel Weniger, Normal, Mehr
   const zeitZeile = (el, P, neu) => {
-    const anpassen = P.zeitAn && !!auf[":zeit:" + P.code];
     const z = el.createEl("label", { cls: "eba-lp-schalter eba-lp-zeitje" });
     const t = z.createSpan({ cls: "eba-lp-schalter-text" });
     t.createSpan({ text: "Zeit je Kapitel" });
-    t.createSpan({ cls: "eba-lp-schalter-hilfe", text: anpassen ? "„Mehr“ ist anderthalbmal so viel Zeit, „Weniger“ halb so viel." : zeitSatz(P.kapitel, P.zeitAn) });
+    t.createSpan({ cls: "eba-lp-schalter-hilfe", text: zeitSatz(P.kapitel, P.zeitAn) });
     const box = umschalter(z, P.zeitAn);
     nurStoppen(z);
     z.addEventListener("click", (e) => e.stopPropagation());
     box.addEventListener("change", async () => {
-      if (!box.checked) auf[":zeit:" + P.code] = false;
       try {
         let ok = true;
         await app.vault.process(P.f, (x) => { const n = zeitAnSetzen(x, box.checked); ok = n != null; return ok ? n : x; });
@@ -880,12 +865,6 @@ module.exports = function (ctx) {
       catch (err) { console.error("Lernplan Zeit je Kapitel", err); }
       neu();
     });
-    if (!P.zeitAn) return;
-    // „Fertig“ beendet das Anpassen: die eine Handlung dieser Zeile, Haupt (docs/design.md, Knöpfe; als Empfohlen war es in Elfenbein
-    // eine graue Fläche und sah gesperrt aus), „Anpassen“ normal
-    const b = z.createEl("button", { cls: "eba-vb-knopf" + (anpassen ? " is-haupt" : ""), text: anpassen ? "Fertig" : "Anpassen", attr: { type: "button" } });
-    nurStoppen(b);
-    b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); auf[":zeit:" + P.code] = !anpassen; neu(); });
   };
   // Der Satz dazu. Eingeschaltet aus den Kapiteln mit ihrer Zeit (zeitStufe): „Nach 12 Altklausuren: mehr Zeit für 4 und 7, weniger
   // für 1. Von dir geändert: 3.“ bzw. „Nach den Seiten der Kapitel.“; aus, was das Einschalten brächte
@@ -911,13 +890,13 @@ module.exports = function (ctx) {
     return teile.join(" ");
   };
 
-  // Für die Klausur (aufgeklapptes Modul): Altklausuren (wie viele bearbeitet, in der Klausurvorbereitung wie viele diese Woche
+  // Üben (aufgeklapptes Modul; bis 2.11.2026 „Für die Klausur“, zu nah an „Klausur“, dem Termin darüber): Altklausuren (wie viele bearbeitet, in der Klausurvorbereitung wie viele diese Woche
   // und welche als Nächstes, die neueste für den Vortag), Übungsblätter, heute fällige Karteikarten mit „Lernen“
   const vorbereitungZeichnen = (el, P, karten, quelle) => {
     const V = P.vorb, A = P.alt, kz = karten && karten[P.code];
     if (!V || (!V.alt.length && !V.uebung.length && !kz)) return;
     const box = el.createDiv({ cls: "eba-lp-vorb" });
-    box.createDiv({ cls: "eba-lp-vorb-titel", text: "Für die Klausur" });
+    box.createDiv({ cls: "eba-lp-vorb-titel", text: "Üben" });
     const zeile = (titel, text) => {
       const z = box.createDiv({ cls: "eba-lp-v" });
       z.createSpan({ cls: "eba-lp-v-titel", text: titel });
@@ -927,7 +906,7 @@ module.exports = function (ctx) {
       const vorbereitung = P.stand && P.stand.art === "vorbereitung";
       const teile = [`${A.fertig} von ${V.alt.length} bearbeitet`];
       if (vorbereitung && A.dieseWoche) teile.push(`diese Woche ${A.dieseWoche} auf Zeit`);
-      else if (!vorbereitung && A.offen.length && P.stand && P.stand.art !== "vorbei") teile.push(`auf Zeit ab ${wtm(plusTage(P.ziel, 1))}`);
+      else if (!vorbereitung && A.offen.length && P.stand && P.stand.art !== "vorbei") teile.push(`auf Zeit ab\u00a0${wtm(plusTage(P.ziel, 1)).replace(/ /g, "\u00a0")}`);
       const t = zeile("Altklausuren", verbinden(teile));
       if (A.naechste) { t.appendText("\u00a0· als Nächstes "); linkZu(t, A.naechste.titel, A.naechste.f, quelle); }
       if (A.vortag) box.createDiv({ cls: "eba-lp-v-hilfe", text: `Die neueste, ${A.vortag.titel}, bleibt für den Tag vor der Klausur.` });
@@ -1027,30 +1006,15 @@ module.exports = function (ctx) {
     });
   };
 
-  // Die Zeile in der Lernplan-Notiz: Modul, Pille und Stand
-  const zeile = (l, P, quelle) => {
-    const z = l.createDiv({ cls: "eba-vb eba-lp-modul" });
-    const p = P.stand && P.stand.pille;
-    const pille = p ? ` <span class="eba-pill ${p.art}">${esc(p.text)}</span>` : "";
-    const stand = standTeile(P).map((x) => `<span class="eba-lp-st">${esc(x.text)}</span>`).join("");
-    z.innerHTML = `<span class="eba-vb-text"><b>${titelHtml(P, true)}${pille}</b><span class="eba-vb-status"><span class="eba-vb-stand">${stand}</span></span></span>`;
-    const modul = z.querySelector("a.eba-kopf-modul");
-    if (modul) {
-      nurStoppen(modul);
-      modul.addEventListener("click", (e) => oeffnen(P.modul.f, e, quelle));
-    }
-  };
-  // Was ein aufgeklapptes Modul zeigt: seine Kapitel zum Abhaken, „Für die Klausur“, den Schalter und den Link auf die Notiz
   // Aufgeklappt (Lernplan-Seite und Lernplan-Notiz): zuerst der Klausurtermin (seit 2.11.2026 wieder oben: unter „Für die Klausur“
-  // nach allen Kapiteln war er auf dem iPhone 920 px unter dem Tipp vergraben), dann die Kapitel, „Für die Klausur“, die
-  // Einstellungen; auf der Seite zuletzt der Verweis auf die Notiz (inNotiz: ohne, er zeigte auf sich selbst)
+  // nach allen Kapiteln war er auf dem iPhone 920 px unter dem Tipp vergraben), dann die Kapitel und „Üben“; auf der Seite zuletzt
+  // der Verweis auf die Notiz (inNotiz: ohne, er zeigte auf sich selbst). Die Einstellungen des Moduls stehen seit 2.11.2026 unter
+  // „Lernplan einstellen“ (Regler im Kopf)
   const modulInhalt = (unten, P, quelle, neu, karten, inNotiz) => {
     const wahl = terminWahl(P);
     if (wahl) wahlZeichnen(unten.createDiv({ cls: "eba-lp-termin" }), P, wahl);
     if (P.kapitel.length) { const kl = unten.createDiv({ cls: "eba-lp-kapitel" }); P.kapitel.forEach((k, i) => kapitelZeile(kl, P, i, quelle, neu, false)); }
     vorbereitungZeichnen(unten, P, karten, quelle);
-    if (P.kapitel.length && P.plan) zeitZeile(unten, P, neu);
-    if (P.plan) schalterZeichnen(unten, P, neu);
     if (inNotiz) return;
     // „Thema → Seite“ wie Verweise sonst (docs/design.md, Grundsatz 2; bis 2.11.2026 nur der Name, kaum als Link zu erkennen)
     const fuss = unten.createDiv({ cls: "eba-lp-fuss" });
@@ -1370,9 +1334,12 @@ module.exports = function (ctx) {
     if (B.bahnen.some((x) => x.tests.length)) eintrag("is-test", "Zwischentest");
     const pausen = B.pausen.map((p) => p.name).filter((p, j, l) => p && l.indexOf(p) === j);
     if (B.pausen.length) eintrag("is-pause", pausen.join(", ") || "Pause");
+    eintrag("is-fenster", "Wochen unten");
 
     const leiste = karte.createDiv({ cls: "eba-lp-wl", attr: { role: "group", "aria-label": "Wochen" } });
-    const woche = karte.createDiv({ cls: "eba-lp-plan-woche" });
+    // Die gewählte Woche unter der Karte in einem eigenen Raster (seit 2.11.2026): breit stehen rechts daneben die Module, sonst
+    // schließt sie bündig an die Karte an wie vorher in ihr (eba-core.css Abschnitt 61)
+    const woche = wurzel.createDiv({ cls: "eba-lp-raster" }).createDiv({ cls: "eba-lp-plan-woche", attr: { role: "group", "aria-label": "Woche" } });
     const waehlen = (i, fokus) => {
       i = Math.max(0, Math.min(B.wochen.length - 1, i));
       auf[":woche"] = { mo: B.wochen[i].mo, tag: heute };
@@ -1544,6 +1511,18 @@ module.exports = function (ctx) {
       for (const P of A) P.kapitel.forEach((k, j) => { if (montagVon(P.plan.faellig[j]) === mo) { kapitelZeile(kl, P, j, quelle, neu, true); zeilen++; } });
     }
     if (!zeilen) kl.createDiv({ cls: "eba-lp-k eba-lp-k-leer", text: faellig.length ? "Alles für diese Woche verstanden." : arbeitstage(mo, D.pausen, D.freieTage) ? "Nichts fällig." : "Vorlesungsfrei, nichts fällig." });
+    haftenPruefen(el);
+  };
+  // Zwei Spalten (iPad quer): Die Woche bleibt beim Scrollen oben stehen, solange rechts ein langes Modul offen ist, aber nur, wenn
+  // sie ganz ins Fenster passt (is-passt; sonst wäre ihr Ende erst am Schluss der Seite zu sehen). Seit 2.11.2026: links blieb sonst
+  // eine Fläche von 725 × 860 px leer
+  const haftenPruefen = (w) => {
+    const fenster = w.ownerDocument && w.ownerDocument.defaultView;
+    if (!fenster) return;
+    fenster.requestAnimationFrame(() => {
+      const s = w.closest(".markdown-preview-view");
+      w.toggleClass("is-passt", !!s && w.offsetHeight + 80 <= s.clientHeight);
+    });
   };
   // In der Klausurvorbereitung diese Woche: „2 Altklausuren auf Zeit, zuerst …“ (ohne Kästchen, der Platz bleibt)
   const vorbereitungZeile = (kl, P, quelle) => {
@@ -1568,16 +1547,26 @@ module.exports = function (ctx) {
     const g = P.kapitel.reduce((s, k) => s + (k.gewicht || 0), 0);
     return g ? P.kapitel.reduce((s, k) => s + (k.gewicht || 0) * k.anteil, 0) / g : 0;
   };
-  // Rechts in der Zeile, was du für die Klausur gewählt hast: „Haupttermin Mo 8.2.“, „Nachholtermin ab 30.3.“, „verschoben“
-  const terminKurz = (P, wahl) => (wahl === "haupt" ? `Haupttermin ${terminText(P.termine && P.termine.haupt)}`
-    : wahl === "nachhol" ? `Nachholtermin ${terminText(P.termine && P.termine.nachhol)}` : wahl === "spaeter" ? "verschoben" : "");
-  const modulZeileZeichnen = (liste, P, quelle, neu, karten, heute) => {
-    const an = aktiv(P), offen = !!auf[P.code], wahl = terminWahl(P);
-    const z = liste.createDiv({ cls: `eba-lp-mz modul-${P.farbe || 0}` + (an ? "" : " is-ruhig") + (offen ? " is-offen" : ""),
-      attr: { role: "button", tabindex: "0", "aria-expanded": String(offen), "data-code": P.code } });
-    z.createSpan({ cls: "eba-lp-mk-code eba-lp-mz-code", text: P.code });
+  // Rechts in der Zeile, was du für die Klausur gewählt hast, einmal mit den Tagen bis dahin (seit 2.11.2026 abends; vorher stand
+  // „Klausur in 98 Tagen“ links im Stand und der Tag rechts): „Haupttermin Mo 8.2. · in 98 Tagen“, „Nachholtermin ab 30.3. · …“,
+  // „verschoben“
+  const terminKurz = (P, wahl, heute) => {
+    const t = wahl === "haupt" ? `Haupttermin ${terminText(P.termine && P.termine.haupt)}`
+      : wahl === "nachhol" ? `Nachholtermin ${terminText(P.termine && P.termine.nachhol)}` : wahl === "spaeter" ? "verschoben" : "";
+    return t && wahl !== "spaeter" && heute && aktiv(P) ? `${t} · ${tageText(tageZwischen(heute, P.klausur.datum))}` : t;
+  };
+  // Kopf eines Moduls: Kürzel, Name mit Pille, Balken und Stand, rechts der Termin. In der Lernplan-Notiz (inNotiz, seit 2.11.2026;
+  // vorher eine eigene Zeile mit „·“-Kette über einer zweiten Karte) fest offen, ohne Pfeil und ohne Kürzel (der Titel der Notiz
+  // nennt es), der Name ein Link zur Modulseite → die Zeile
+  const modulKopf = (liste, P, quelle, heute, inNotiz) => {
+    const an = aktiv(P), offen = inNotiz || !!auf[P.code], wahl = terminWahl(P);
+    const z = liste.createDiv({ cls: `eba-lp-mz modul-${P.farbe || 0}` + (an ? "" : " is-ruhig") + (offen ? " is-offen" : "") + (inNotiz ? " is-fest" : ""),
+      attr: inNotiz ? { "data-code": P.code } : { role: "button", tabindex: "0", "aria-expanded": String(offen), "data-code": P.code } });
+    if (!inNotiz) z.createSpan({ cls: "eba-lp-mk-code eba-lp-mz-code", text: P.code });
     const titel = z.createDiv({ cls: "eba-lp-mz-titel" });
-    titel.createSpan({ cls: "eba-lp-mz-name", text: P.modul ? P.modul.titel : P.f.basename });
+    const name = titel.createSpan({ cls: "eba-lp-mz-name" });
+    if (inNotiz && P.modul && P.modul.f) linkZu(name, P.modul.titel, P.modul.f, quelle);
+    else name.setText(P.modul ? P.modul.titel : P.f.basename);
     // „nicht mehr dran“ sagt bei einem Modul, das du verschoben hast, schon „verschoben“ rechts
     const p = P.stand && P.stand.pille;
     if (p && wahl !== "spaeter") titel.createSpan({ cls: "eba-pill " + p.art, text: p.text });
@@ -1586,11 +1575,18 @@ module.exports = function (ctx) {
     bal.createSpan({ cls: "eba-lp-mk-voll" }).style.width = pct(Math.min(1, modulAnteil(P)));
     if (an) lage(bal.createSpan({ cls: "eba-lp-mk-soll" }), Math.min(1, sollHeute(P, heute) / (P.plan.gesamt || 1)));
     const fertig = P.kapitel.filter((x) => x.anteil >= 1 - EPS).length;
-    const stand = an ? [`${fertig} von ${P.kapitel.length}\u00a0Kapiteln`, `Klausur ${tageText(tageZwischen(heute, P.klausur.datum))}`] : standRoh(P).map((x) => x.text);
-    stuecke(meta.createSpan({ cls: "eba-lp-mz-stand" }), stand.map((text) => ({ text })), "eba-lp-w-teil");
-    const wert = terminKurz(P, wahl);
+    const stand = (an ? [`${fertig} von ${P.kapitel.length}\u00a0Kapiteln`] : standRoh(P).map((x) => x.text)).map((text) => ({ text }));
+    // Schmal steht der Zustand in seiner Farbe hinter dem Stand statt als Pille neben dem Namen (seit 2.11.2026; eine Zeile weniger),
+    // breit bleibt die Pille (eba-core.css Abschnitt 61, Module)
+    if (an && p && wahl !== "spaeter") stand.push({ text: p.text, cls: "eba-lp-mz-zustand is-" + p.art });
+    stuecke(meta.createSpan({ cls: "eba-lp-mz-stand" }), stand, "eba-lp-w-teil");
+    const wert = terminKurz(P, wahl, heute);
     if (wert) z.createSpan({ cls: "eba-lp-mz-wert", text: wert });
-    z.createSpan({ cls: "eba-lp-mk-pfeil", attr: { "aria-hidden": "true" } });
+    if (!inNotiz) z.createSpan({ cls: "eba-lp-mk-pfeil", attr: { "aria-hidden": "true" } });
+    return z;
+  };
+  const modulZeileZeichnen = (liste, P, quelle, neu, karten, heute) => {
+    const z = modulKopf(liste, P, quelle, heute, false), offen = !!auf[P.code];
     const mehr = liste.createDiv({ cls: `eba-lp-unten eba-lp-mz-mehr modul-${P.farbe || 0}` + (offen ? "" : " is-zu"), attr: { "data-code": P.code } });
     modulInhalt(mehr, P, quelle, neu, karten);
     const klappen = (e) => {
@@ -1611,8 +1607,10 @@ module.exports = function (ctx) {
   };
   // Wann du die Klausur schreibst (seit 1.11.2026; seit 2.11. oben im Aufgeklappten): Haupttermin oder Nachholtermin mit ihrem Tag
   // als zwei Knöpfe, daneben leise „Ins WS 2027/28 verschieben“ (das nächste Semester, in dem es angeboten wird). Ein verschobenes Modul fällt aus
-  // dem Plan; keiner der zwei Knöpfe ist dann gewählt, einer holt es mit seinem Termin zurück. Ein Tipp schreibt die Modulnotiz
-  // (terminSchreiben); der Bereich zeichnet sich danach neu, Plan und Bahnen gleiten zum neuen Termin.
+  // dem Plan; keiner der zwei Knöpfe ist dann gewählt, einer holt es mit seinem Termin zurück, und statt „Ins … verschieben“ steht
+  // „Zurück ins WS 2026/27“ (holt es in den Haupttermin). Gleich nach dem Verschieben sagt ein Hinweis, wohin es ging, mit
+  // „Rückgängig“ (seit 2.11.2026: Wer sich vertippt hatte, sah nicht, dass die zwei Knöpfe ohne Wahl es zurückholen). Ein Tipp
+  // schreibt die Modulnotiz (terminSchreiben); der Bereich zeichnet sich danach neu, Plan und Bahnen gleiten zum neuen Termin.
   const wahlZeichnen = (el, P, wahl) => {
     const box = el.createDiv({ cls: "eba-lp-v eba-lp-mk-wahl" });
     box.createSpan({ cls: "eba-lp-v-titel", text: "Klausur" });
@@ -1634,11 +1632,23 @@ module.exports = function (ctx) {
     };
     knopf("haupt", "Haupttermin", P.termine && P.termine.haupt);
     knopf("nachhol", "Nachholtermin", P.termine && P.termine.nachhol);
-    const spaeter = wahl === "spaeter" ? "" : spaeterSemester(P.modul.fm && P.modul.fm.turnus, P.semester, ctx.modell.daten().semesterliste);
+    if (wahl === "spaeter") {
+      const z = box.createEl("button", { cls: "eba-lp-verschieben is-zurueck", text: `Zurück ins ${P.semester}`, attr: { type: "button" } });
+      nurStoppen(z);
+      z.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); z.setAttr("disabled", ""); waehlen("haupt", knoepfe[0].b); });
+      return;
+    }
+    const spaeter = spaeterSemester(P.modul.fm && P.modul.fm.turnus, P.semester, ctx.modell.daten().semesterliste);
     if (!spaeter) return;
     const v = box.createEl("button", { cls: "eba-lp-verschieben", text: `Ins ${spaeter} verschieben`, attr: { type: "button" } });
     nurStoppen(v);
-    v.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); v.setAttr("disabled", ""); waehlen("spaeter", null); });
+    v.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation(); v.setAttr("disabled", "");
+      waehlen("spaeter", null);
+      ctx.hinweis(`${P.code} liegt jetzt im ${spaeter}.`, { aktion: { text: "Rückgängig", ausfuehren: () => {
+        terminSchreiben(P, wahl).catch((err) => console.error("Lernplan Prüfung", err));
+      } } });
+    });
   };
   // Neben „Module“, wie viele Klausuren wann: „4 im Haupttermin, 1 im Nachholtermin, 1 verschoben“
   const wahlText = (alle) => {
@@ -1699,6 +1709,93 @@ module.exports = function (ctx) {
   };
 
   const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1, aus: 5 };
+  // Reihenfolge der Module: was jetzt zu tun ist zuerst, dann nach Klausurdatum; vorbei ans Ende
+  const nachRang = (a, b) => {
+    const rang = (P) => (P.stand ? NACH_KLAUSUR[P.stand.art] || 0 : 3);
+    return rang(a) - rang(b) || String(a.klausur ? a.klausur.datum : "9").localeCompare(String(b.klausur ? b.klausur.datum : "9")) || a.code.localeCompare(b.code, "de");
+  };
+
+  // ---------- Lernplan einstellen (seit 2.11.2026) ----------
+  // Ein eigener Bereich für die Einstellungen je Modul, ein Fenster hinter dem Regler rechts neben dem Titel des Lernplans (in einer
+  // Lernplan-Notiz nur ihr Modul): „Vor der Vorlesung lernen“, „Zeit je Kapitel“ und eingeschaltet je Kapitel Weniger, Normal, Mehr.
+  // Bis dahin standen sie im aufgeklappten Modul, und „Anpassen“ legte die Wahl unter jedes Kapitel (am iPhone etwa 3700 px).
+  // Jede Änderung schreibt sofort in die Notiz; das Fenster zeichnet sich neu, sobald Obsidian sie neu gelesen hat.
+  // Bis die Notiz neu gelesen ist (metadataCache „changed“), höchstens 1,5 s
+  const nachAenderung = (f) => new Promise((fertig) => {
+    let ref = null;
+    const ende = () => { if (ref) app.metadataCache.offref(ref); ref = null; fertig(); };
+    ref = app.metadataCache.on("changed", (g) => { if (g === f) ende(); });
+    setTimeout(ende, 1500);
+  });
+  // Ein Kapitel im Fenster: Nummer, Titel, wie oft es in Altklausuren vorkam, daneben Weniger, Normal, Mehr
+  const kapitelWahl = (l, P, k, i, neu) => {
+    const z = l.createDiv({ cls: "eba-lp-einst-k" });
+    const t = z.createDiv({ cls: "eba-lp-einst-k-text" });
+    t.createSpan({ cls: "eba-lp-k-nr", text: k.nr || String(i + 1) });
+    const n = t.createDiv({ cls: "eba-lp-einst-k-name" });
+    n.createSpan({ text: k.titel });
+    const a = k.altklausuren;
+    if (a) n.createSpan({ cls: "eba-lp-schalter-hilfe", text: `in ${a.in} von ${a.von} Altklausuren` });
+    zeitWahlZeichnen(z, P, k, neu);
+  };
+  // Inhalt des Fensters: je Modul mit Plan (nur = ein Kürzel) Kopf, die zwei Schalter, eingeschaltet die Kapitel
+  const einstellungenZeichnen = async (c, nur, neu) => {
+    const D = ctx.modell.daten(), heute = heuteIso();
+    const { alle } = await allesSammeln(D, heute);
+    const liste = alle.filter((P) => P.plan && !P.aus && (!nur || P.code === nur)).sort(nachRang);
+    c.empty();
+    const box = c.createDiv({ cls: "eba-lp eba-lp-einst" });
+    if (!liste.length) { box.createDiv({ cls: "eba-lp-leer", text: "Kein Modul hat gerade einen Plan." }); return; }
+    for (const P of liste) {
+      const m = box.createDiv({ cls: `eba-lp-einst-modul modul-${P.farbe || 0}` });
+      const kopf = m.createDiv({ cls: "eba-lp-einst-kopf" });
+      kopf.createSpan({ cls: "eba-lp-mk-code", text: P.code });
+      kopf.createSpan({ cls: "eba-lp-einst-name", text: P.modul ? P.modul.titel : P.f.basename });
+      const n = () => neu(P.f);
+      schalterZeichnen(m, P, n);
+      if (!P.kapitel.length) continue;
+      zeitZeile(m, P, n);
+      if (!P.zeitAn) continue;
+      m.createDiv({ cls: "eba-lp-einst-hilfe", text: "„Mehr“ ist anderthalbmal so viel Zeit, „Weniger“ halb so viel." });
+      const kl = m.createDiv({ cls: "eba-lp-einst-kapitel" });
+      P.kapitel.forEach((k, i) => { if (k.nr && k.zeit) kapitelWahl(kl, P, k, i, n); });
+    }
+  };
+  const Modal = O.Modal;
+  class EinstellFenster extends (Modal || class {}) {
+    constructor(nur) { super(app); this.nur = nur || ""; this.offen = false; }
+    onOpen() {
+      this.offen = true;
+      this.modalEl.addClass("eba-modal", "eba-lp-einst-fenster");
+      this.titleEl.setText(this.nur ? `Lernplan ${this.nur} einstellen` : "Lernplan einstellen");
+      this.inhalt = this.contentEl.createDiv();
+      const k = this.contentEl.createDiv({ cls: "modal-button-container" });
+      k.createEl("button", { cls: "mod-cta", text: "Fertig" }).addEventListener("click", () => this.close());
+      this.zeichnen();
+    }
+    async zeichnen() {
+      const oben = this.modalEl.scrollTop;
+      try { await einstellungenZeichnen(this.inhalt, this.nur, (f) => { nachAenderung(f).then(() => { if (this.offen) this.zeichnen(); }); }); }
+      catch (e) { console.error("Lernplan einstellen", e); }
+      this.modalEl.scrollTop = oben;
+    }
+    onClose() { this.offen = false; this.contentEl.empty(); }
+  }
+  // Regler rechts neben dem Titel (.eba-kopf derselben Leseansicht); bei jedem Zeichnen wieder eingesetzt, falls Obsidian den Kopf
+  // neu gezeichnet hat. nur: Kürzel in einer Lernplan-Notiz
+  const kopfRegler = (el, nur) => {
+    const sizer = el.closest ? el.closest(".markdown-preview-sizer") : null;
+    const kopf = sizer && sizer.querySelector(".eba-kopf");
+    if (!kopf || !Modal) return;
+    let b = kopf.querySelector("button.eba-lp-einst");
+    if (!b) {
+      b = kopf.createEl("button", { cls: "eba-lp-einst", attr: { type: "button", "aria-label": "Lernplan einstellen", title: "Lernplan einstellen" } });
+      b.innerHTML = REGLER;
+      // Vor dem Titel: rechts schwebend wie der Platzhalter für Obsidians Knopf (eba-core.css 70.1/70.2), der Titel bricht davor um
+      kopf.insertBefore(b, kopf.firstChild);
+    }
+    b.onclick = (e) => { e.preventDefault(); e.stopPropagation(); new EinstellFenster(nur).open(); };
+  };
   const zeichnen = async (el, mdCtx, art, neu) => {
     zeitMenueZu();
     const D = ctx.modell.daten(), heute = heuteIso(), quelle = (mdCtx && mdCtx.sourcePath) || "";
@@ -1710,10 +1807,13 @@ module.exports = function (ctx) {
       const karten = await kartenHeute();
       el.empty();
       if (!P.aus && P.herkunft !== "zentral") warnungZeichnen(el, { ungeprueft: [P.code], ohne: [] }, true);
-      zeile(el.createDiv({ cls: "eba-vb-liste" }), P, quelle);
-      // Darunter dasselbe wie aufgeklappt auf der Lernplan-Seite (seit 2.11.2026); die Liste unter „Kapitel“ ist die Quelle und steht
-      // nur beim Bearbeiten (eba-core.css Abschnitt 61, Lernplan-Notiz)
-      if (P.plan || P.kapitel.length) modulInhalt(el.createDiv({ cls: "eba-lp-unten eba-lp-notiz-inhalt" }), P, quelle, neu, karten, true);
+      // Dasselbe wie das aufgeklappte Modul auf der Lernplan-Seite, in seiner Farbe (seit 2.11.2026); die Liste unter „Kapitel“ ist die
+      // Quelle und steht nur beim Bearbeiten (eba-core.css Abschnitt 61, Lernplan-Notiz)
+      P.farbe = modulFarben(lernplaene().map(codeVon))[P.code] || 0;
+      const rahmen = el.createDiv({ cls: "eba-lp-module eba-lp-notiz-modul" });
+      modulKopf(rahmen, P, quelle, heute, true);
+      if (P.plan || P.kapitel.length) modulInhalt(rahmen.createDiv({ cls: `eba-lp-unten eba-lp-mz-mehr modul-${P.farbe}` }), P, quelle, neu, karten, true);
+      if (P.plan && !P.aus) kopfRegler(el, P.code);
       return;
     }
     if (art === "woche") return dashboardZeichnen(el, D, heute);
@@ -1727,14 +1827,17 @@ module.exports = function (ctx) {
     const A = alle.filter(aktiv).sort(nachKlausur);
     heldZeichnen(el, A, heute);
     planZeichnen(el, A, alle, o, D, heute, quelle, neu);
-    // Reihenfolge der Module: was jetzt zu tun ist zuerst, dann nach Klausurdatum; vorbei ans Ende
-    const label = el.createDiv({ cls: "eba-lp-label eba-lp-module-kopf" });
-    label.createSpan({ text: "Module" });
+    kopfRegler(el, "");
+    const raster = el.querySelector(":scope > .eba-lp-raster");
+    const spalte = (raster || el).createDiv({ cls: "eba-lp-spalte" });
+    // „Module“ als Kopf im Rahmen der Liste wie „Semesterplan“ in seiner Karte (seit 2.11.2026; davor ein Label darüber, in zwei
+    // Spalten begann die Liste so 36 px tiefer als die Woche)
+    const liste = spalte.createDiv({ cls: "eba-lp-module" });
+    const label = liste.createDiv({ cls: "eba-lp-module-kopf" });
+    label.createSpan({ cls: "eba-lp-module-titel", text: "Module" });
     const w = wahlText(alle);
     if (w) label.createSpan({ cls: "eba-lp-module-wahl", text: w });
-    const rang = (P) => (P.stand ? NACH_KLAUSUR[P.stand.art] || 0 : 3);
-    alle.sort((a, b) => rang(a) - rang(b) || String(a.klausur ? a.klausur.datum : "9").localeCompare(String(b.klausur ? b.klausur.datum : "9")) || a.code.localeCompare(b.code, "de"));
-    const liste = el.createDiv({ cls: "eba-lp-module" });
+    alle.sort(nachRang);
     for (const P of alle) modulZeileZeichnen(liste, P, quelle, neu, karten, heute);
     const offen = alle.filter((P) => auf[P.code])[0];
     offenSetzen(liste, offen ? offen.code : "");
@@ -1776,6 +1879,9 @@ module.exports = function (ctx) {
   const LINKS = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
   const RECHTS = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
   const UHR = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+  // Regler (Lucide sliders-horizontal, seit 2.11.2026): das Zahnrad unten rechts öffnet Einstellungen & Hilfe der ganzen App, ein
+  // zweites Zahnrad im Kopf sah aus wie derselbe Weg
+  const REGLER = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg>';
   const INFO = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
   const PFEIL ='<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   const SYMBOL = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>';
@@ -1971,6 +2077,8 @@ module.exports = function (ctx) {
     let geschrieben = false;
     if (!f) {
       if (Q.geloescht(s.angewendet, e.code, h)) return false; // von dir gelöscht, Liste unverändert
+      // Derselbe Name in anderer Groß- und Kleinschreibung oder Unicode-Form (ctx.zentral.existiert): nicht daneben anlegen
+      if (ctx.zentral && ctx.zentral.existiert && ctx.zentral.existiert(pfad)) return false;
       await app.vault.create(pfad, zentralNotiz(e, "", null, ziele, herkunft));
       geschrieben = true;
     } else {
@@ -2100,6 +2208,7 @@ module.exports = function (ctx) {
     const tag = ctx.bleibend("tag", () => ({ wert: heuteIso() }));
     ctx.intervall(() => { const h = heuteIso(); if (h !== tag.wert) { tag.wert = h; neuZeichnen(); abgleichBald(); } }, 5 * 60 * 1000);
     ctx.lernplanAnzeige = { neu: abgleichBald };
+    ctx.an(app.workspace, "resize", () => document.querySelectorAll(".eba-lp-plan-woche").forEach(haftenPruefen));
     ctx.aufraeumen(() => { if (ctx.lernplanAnzeige && ctx.lernplanAnzeige.neu === abgleichBald) ctx.lernplanAnzeige = null; });
   };
 
@@ -2108,7 +2217,7 @@ module.exports = function (ctx) {
   const start = () => { ctx.zeit(() => { zentralAbgleichen(); }, 45000); };
 
   const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran,
-    folienVon, titelHtml, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild, modulZeile, serverListen,
+    folienVon, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild, modulZeile, serverListen,
     listeLesen, serverStand, vorlernenSetzen, sollHeute, heldDaten, heldText, ANTEILE, anteilWahl, zielBei, zielVorschau, zielTeile, modulFarben,
     planSemester, spaeterSemester, terminWahl, terminText, bisText, leisteFenster, ungeprueft, warnungTeile,
     ZEIT_FAKTOR, relevanzStufe, zeitStufe, zeitWahlLesen, zeitSetzen, zeitAnSetzen, zeitSatz };

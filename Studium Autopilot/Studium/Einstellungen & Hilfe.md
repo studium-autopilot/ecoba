@@ -152,10 +152,10 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 > >
 > > 1. Was diese Woche dran ist, steht im Lernplan, auf dem Dashboard und auf der Modulseite.
 > > 2. Hast du ein Kapitel verstanden, hak es ab. **Folien** daneben öffnet seine Folien.
-> > 3. Oben stellst du ein, nach wie viel der Zeit bis zur Prüfung alles verstanden sein soll. Danach beginnt die Klausurvorbereitung: Altklausuren, Übungsblätter und Karteikarten stehen je Modul unter **Für die Klausur**.
+> > 3. Oben stellst du ein, nach wie viel der Zeit bis zur Prüfung alles verstanden sein soll. Danach beginnt die Klausurvorbereitung: Altklausuren, Übungsblätter und Karteikarten stehen je Modul unter **Üben**.
 > >
 > > > [!eba-info]- Mehr erfahren
-> > > - **Vor der Vorlesung lernen:** Lernst du lieber erst nach der Vorlesung, schalte es je Modul aus.
+> > > - **Vor der Vorlesung lernen** und **Zeit je Kapitel** stellst du je Modul hinter dem Regler oben rechts im Lernplan ein.
 > > > - **Abhaken** heißt verstanden, nicht auswendig gelernt. Das Üben kommt in der Klausurvorbereitung.
 >
 > > [!eba-karte|hilfe|aufbau]- Aufbau

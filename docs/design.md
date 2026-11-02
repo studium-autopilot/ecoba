@@ -114,9 +114,17 @@ zusätzlich getönt.
 aren't distinguishable too faint“): Bis dahin war jede Vorlesung grau gefüllt und jede Übung nur blau umrandet, dunkel verschwamm
 beides mit der Karte. Jetzt hat jedes Modul das ganze Semester dieselbe Farbe, `--eba-modul-1` bis `--eba-modul-6` (`woche.js`
 vergibt sie nach dem Code, ab dem siebten Modul von vorn). Eine Vorlesung hat links eine Kante von 3 px in der Farbe und eine
-Fläche aus `--eba-modul-ton` Farbe auf `--eba-bg` (hell 35 %, dunkel 28 %), Übung, Tutorium und Lab eine Kante von 2 px und eine
-leisere Fläche `--eba-modul-ton-ue` (hell 26 %, dunkel 20 %); so bleibt der Unterschied sichtbar, und auch die Übungen tragen
-ihr Modul in der Fläche, nicht nur in der Kante. Ohne Modul: `--eba-faint`. Unter dem Raster, in derselben Karte, eine Legende der
+Fläche aus `--eba-modul-ton` Farbe auf `--eba-bg` (hell 35 %, dunkel 28 %). Übung, Tutorium und Lab sind umrandet (seit
+2.11.2026): Rahmen 1 px und Kante 3 px in der Farbe des Moduls, eine Fläche fast wie die Seite, `--eba-modul-ton-ue` (hell 8 %,
+dunkel 12 %), und oben rechts die Art als neutrale Pille (8 % `--eba-text`, Schrift im Grau des Raums, mindestens 4,5 : 1; der
+Kasten ist dafür ein Raster: Kurzname links, Pille rechts, Raum darunter über die ganze Breite). In der Pille
+steht nur die Art („Tutorium“, „Übung“), ohne Gruppe: Eine Pille in der Farbe des Moduls mit einem anderen Text je Kasten
+(„Tutorium 1“, „Tutorium Gruppe 5“) wirkte unruhig; die Gruppe steht im Tooltip. Gefüllt heißt Vorlesung, umrandet Übung, auf einen Blick und auch auf dem iPhone, wo die
+Art nicht dasteht. Bis dahin hatte die Übung eine Kante von 2 px und eine nur wenig leisere Fläche (26 % statt 35 %) und die Art
+grau daneben; Rückmeldung vom iPad: „Tutorium and lectures aren't differentiated enough“. Das Modul einer Übung sagen jetzt
+Rahmen und Pille, nicht mehr die Fläche. Eine Ausnahme färbt auch den Rahmen in Warnfarbe, ein Ausfall macht ihn neutral, online
+ist er gestrichelt. Die Pille steht neben dem Kurznamen, nicht in ihm: In seiner Zeile hängte Safari in einzeiligen Kästen „…“
+an. Sie ist so hoch wie seine erste Zeile und damit mittig zu ihr. Ohne Modul: `--eba-faint`. Unter dem Raster, in derselben Karte, eine Legende der
 Module der Woche mit demselben Kästchen (Kante und Fläche einer Vorlesung). Heute (getönte Spalte, Rahmen, „jetzt“) und
 [Ausnahmen](#ausnahme-im-stundenplan) bleiben, wie sie waren; eine Ausnahme ersetzt die Farbe des Moduls. Der Ring „jetzt“ ist
 `--eba-accent-text` (seit 27.10.2026; in `--eba-accent` war er dunkel auf den Flächen 1,33 : 1), mindestens 3 : 1 auf jeder Fläche.
@@ -450,10 +458,11 @@ im Akzent (Rahmen Akzent 45 %, Schrift `--eba-accent-text`, 600), die anderen in
 unterschied nur eine hellere Fläche die Wahl).
 
 ### Schalter
-An oder aus in einer Zeile, die etwas einstellt (Lernplan: „Zeit je Kapitel“, „Vor der Vorlesung lernen“, seit 2.11.2026):
+An oder aus in einer Zeile, die etwas einstellt (Lernplan: „Zeit je Kapitel“, „Vor der Vorlesung lernen“, seit 2.11.2026 im Fenster
+„Lernplan einstellen“ hinter dem Regler neben dem Titel):
 links der Name, darunter leise, was gerade gilt; rechts eine Schiene mit Knopf (ein Kästchen mit `role="switch"`), an im Akzent
 (dunkel `--eba-accent-text`, der dunkle Akzent war blasser als aus), aus in `--eba-muted` 70 % (mindestens 3 : 1). Die ganze Zeile schaltet. Nicht das Kästchen der To-dos: Ein eingeschalteter Schalter sah sonst aus wie
-etwas Erledigtes. Braucht eine Einstellung einen Knopf dazu („Anpassen“), steht er links vom Schalter.
+etwas Erledigtes. Braucht eine Einstellung einen Knopf dazu, steht er links vom Schalter.
 
 ### Auswahl aus Zeilen
 Je Möglichkeit eine kompakte Zeile: gewählt mit Haken rechts und darunter, was daraus folgt; die anderen wählt ein Tipp auf

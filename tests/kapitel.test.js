@@ -136,7 +136,7 @@ const geraet = (tresor, o) => {
   const { dateien, frontmatter } = tresor, schritte = [];
   const lokal = { speicher: Object.assign({}, o && o.speicher), liste: o && "liste" in o ? o.liste : LISTE };
   const { ctx, ergebnis: L } = laden("lernplan", { heute: "2026-10-19", frontmatter, notizen: tresor.notizen || {}, kontext: {
-    zentral: { kapitel: () => (lokal.liste ? { module: [lokal.liste] } : null), abruferHier: async () => true, kapitelPruefen },
+    zentral: { kapitel: () => (lokal.liste ? { module: [lokal.liste] } : null), abruferHier: async () => true, kapitelPruefen, existiert: o && o.existiert },
     modell: { daten: () => ({ module: [{ code: "X100", status: "geplant", semester: "WS 2026/27" }] }), semesterFuer: () => ({ name: "WS 2026/27" }) },
   } });
   const V = ctx.app.vault;
@@ -241,6 +241,23 @@ test("Abgleich: ohne lesbaren Stand schreibt kein Gerät; fehlt nur das Feld, gi
   await pc.L.zentralAbgleichen();
   assert.deepEqual(pc.schritte, ["neu"], "die Kopie weiß: von dir gelöscht");
   assert.deepEqual(JSON.parse(dateien[ABRUF]).lernplan, JSON.parse(sicherung).lernplan, "und schreibt den Stand zurück");
+});
+
+test("Abgleich: steht die Notiz in anderer Groß- und Kleinschreibung da, legt kein Gerät eine zweite daneben an", async () => {
+  const tresor = neuerTresor(), { dateien } = tresor;
+  const anders = "Lernplan/x100 lernplan.md";
+  dateien[anders] = "eigene Notiz";
+  const gefragt = [];
+  const pc = geraet(tresor, { existiert: (p) => { gefragt.push(p); return p.toLowerCase() === anders.toLowerCase(); } });
+  await pc.L.zentralAbgleichen();
+  assert.deepEqual(gefragt, [P], "gefragt wird nach dem Namen der Notiz");
+  assert.deepEqual(pc.schritte, [], "nichts angelegt");
+  assert.equal(dateien[P], undefined);
+  assert.equal(dateien[anders], "eigene Notiz", "die andere bleibt");
+  delete dateien[anders];
+  const neu = geraet(tresor, { existiert: () => false });
+  await neu.L.zentralAbgleichen();
+  assert.deepEqual(neu.schritte, ["neu"], "ohne sie wird die Notiz angelegt");
 });
 
 test("Auswahl: nur das laufende Semester und Module deines Plans (oder läuft/angemeldet), nie bestandene", () => {

@@ -914,3 +914,97 @@ test("Nicht mehr in deiner Auswahl: unberührt in den Papierkorb, erledigt oder 
   const fm = T.fm("Termine/2026-11-05 Frist A.md");
   assert.deepEqual([String(fm.datum), fm.erledigt], ["2026-11-05", true]);
 });
+
+test("existiert: ein Name gilt als belegt auch in anderer Groß- und Kleinschreibung oder Unicode-Form, die eigene Datei zählt nicht", () => {
+  const L = laden("zentral");
+  const V = L.ctx.app.vault;
+  const NFD = "Termine/2026-11-02 U\u0308bung.md"; // „Ü“ als „U“ mit Punkten, wie macOS und iOS Namen ablegen
+  const datei = (p) => ({ path: p, name: p.split("/").pop() });
+  const pfade = ["Termine/2026-11-02 Frist A.md", NFD, "Wurzel.md"];
+  V.getAbstractFileByPath = (p) => (p === "Termine" ? { path: p, children: pfade.filter((x) => x.indexOf("Termine/") === 0).map(datei) }
+    : pfade.indexOf(p) >= 0 ? datei(p) : null);
+  V.getRoot = () => ({ path: "/", children: [datei("Wurzel.md")] });
+  const E = L.ctx.zentral.existiert;
+  assert.equal(E("Termine/2026-11-02 Frist A.md"), true, "genau so");
+  assert.equal(E("Termine/2026-11-02 frist a.md"), true, "klein");
+  assert.equal(E("Termine/2026-11-02 FRIST A.md"), true, "groß");
+  assert.equal(E("Termine/2026-11-02 \u00dcbung.md"), true, "NFC gegen NFD");
+  assert.equal(E("Termine/2026-11-02 \u00fcbung.md"), true, "NFC klein gegen NFD");
+  assert.equal(E("Termine/2026-11-02 Frist B.md"), false);
+  assert.equal(E("wurzel.md"), true, "ohne Ordner: die Wurzel des Tresors");
+  assert.equal(E("Fehlt/x.md"), false, "Ordner fehlt");
+  assert.equal(E("Termine/2026-11-02 frist a.md", datei("Termine/2026-11-02 Frist A.md")), false, "die eigene Datei, nur anders geschrieben");
+  assert.equal(E("Termine/2026-11-02 Frist A.md", datei("Termine/2026-11-02 Frist A.md")), false, "die eigene Datei");
+});
+
+test("Neue zentrale Notiz neben einer gleich lautenden in anderer Schreibweise: eigener Name, die andere bleibt", async () => {
+  const T = tresorAbruf({ "Termine/2026-11-02 frist a.md": "---\ntyp: termin\n---\n\n# Meine Frist\n" });
+  const V = T.app.vault, holen = V.getAbstractFileByPath;
+  V.getAbstractFileByPath = (p) => (p === "Termine"
+    ? { path: p, children: T.pfade().map((x) => ({ path: x, name: x.split("/").pop() })) } : holen(p));
+  T.daten([fristA]);
+  await T.Z.abrufen({});
+  assert.deepEqual(T.pfade(), ["Termine/2026-11-02 Frist A 2.md", "Termine/2026-11-02 frist a.md"]);
+  assert.equal(T.text("Termine/2026-11-02 frist a.md"), "---\ntyp: termin\n---\n\n# Meine Frist\n");
+});
+
+// Die Regel für Titel (GEFAEHRLICH und Klammern), wie zentral.js sie für Titel prüft
+const TITELREGEL = /<\s*\/?\s*[a-z!]|<%|%>|obsidian:\/\/|\[\[|\]\]|`|[\r\n]|javascript:|[[\]<>{}|\\]/i;
+const FEINDLICH = ["<b>fett</b> im Text", "<b ohne Ende", "Siehe [[Notiz]] und ![[Bild.png]]", "[Hier](obsidian://open?vault=x)", "<% tp.file %> Templater",
+  "a | b \\ c", "{{Platzhalter}}", "`Code` und ```Zaun```", "javascript:alert(1)", "Zeile 1\nZeile 2", "> [!warning] Kasten", "]] und [[",
+  "<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "Raum [N6] <neu>"];
+
+test("Textfelder der zentralen Daten halten die Regel für Titel: Ort, Info und Quelle von Terminen, Raum von Gruppen, Ort von Angeboten", () => {
+  for (const s of FEINDLICH) {
+    const r = pruefe(termin({ id: "x-1", ort: s, info: s, quelle_text: s, quelle_url: "" }));
+    assert.deepEqual(r.verworfen, [], s);
+    const e = r.termine[0];
+    for (const k of ["ort", "info", "quelle_text"]) assert.doesNotMatch(e[k], TITELREGEL, k + ": " + s);
+    const g = gruppenPruefe(gruppe({ raum: s, leitung: s, anmeldung: s }));
+    assert.deepEqual(g.verworfen, [], s);
+    for (const k of ["raum", "leitung", "anmeldung"]) assert.doesNotMatch(g.gruppen[0][k], TITELREGEL, k + ": " + s);
+    const a = angebotePruefe(angebot({ ort: s }));
+    if (a.angebote.length) assert.doesNotMatch(a.angebote[0].ort, TITELREGEL, "angebot ort: " + s);
+  }
+  // was übrig bleibt, ist lesbar: Klammern werden runde, „|“ und „\“ Schrägstriche
+  assert.equal(pruefe(termin({ id: "x-2", ort: "Raum [N6] {neu} a|b" })).termine[0].ort, "Raum (N6) (neu) a/b");
+  // gewöhnlicher Text bleibt, wie er ist
+  const ok = pruefe(termin({ id: "x-3", ort: "Hörsaal 25 (Kupferbau), 10:15–11:45", info: "Anmeldung über Alma: 50 % der Plätze.",
+    quelle_text: "Mail des Prüfungsamts, 17.10.2026" })).termine[0];
+  assert.deepEqual([ok.ort, ok.info, ok.quelle_text], ["Hörsaal 25 (Kupferbau), 10:15–11:45", "Anmeldung über Alma: 50 % der Plätze.", "Mail des Prüfungsamts, 17.10.2026"]);
+});
+
+test("Titel der zentralen Daten: feindliche Titel werden verworfen, Namen in den Semesterdaten entschärft (oder verworfen), nie eine Notiz", () => {
+  for (const s of FEINDLICH) {
+    const r = pruefe(termin({ id: "y-1", titel: s }));
+    assert.equal(r.termine.length, 0, s);
+    const d = { schema: 1, semester: [{ name: "WS 2026/27", beginn: "2026-10-01", ende: "2027-03-31", vorlesung_beginn: "2026-10-12", vorlesung_ende: "2027-02-06", status: "offiziell" }],
+      pausen: [{ name: s, von: "2026-12-21", bis: "2027-01-06", status: "offiziell" }], freie_tage: [{ name: s, datum: "2026-11-01", status: "offiziell" }],
+      pruefungsphasen: [{ art: s, semester: "WS 2026/27", von: "2027-02-08", bis: "2027-03-31", status: "offiziell" }] };
+    const sp = Z.semesterPruefen(d);
+    const namen = sp.wert.pausen.map((x) => x.name).concat(sp.wert.freie_tage.map((x) => x.name), sp.wert.pruefungsphasen.map((x) => x.art));
+    assert.equal(namen.length + sp.verworfen.length, 3, s);
+    for (const n of namen) assert.doesNotMatch(n, /[[\]<>{}|\\]|obsidian:|javascript:|<%|`/i, s + " → " + n);
+  }
+  // gesäubert statt verworfen: ein Name mit HTML bleibt als Text
+  const html = Z.semesterPruefen({ schema: 1, semester: [{ name: "WS 2026/27", beginn: "2026-10-01", ende: "2027-03-31", vorlesung_beginn: "2026-10-12", vorlesung_ende: "2027-02-06", status: "offiziell" }], pausen: [{ name: "Weihnachtspause <b>Ferien</b>", von: "2026-12-21", bis: "2027-01-06", status: "offiziell" }] });
+  assert.deepEqual(html.wert.pausen.map((x) => x.name), ["Weihnachtspause Ferien"]);
+  const gut = Z.semesterPruefen({ schema: 1, semester: [{ name: "WS 2026/27", beginn: "2026-10-01", ende: "2027-03-31", vorlesung_beginn: "2026-10-12",
+    vorlesung_ende: "2027-02-06", status: "offiziell" }], pausen: [{ name: "Weihnachtspause (vorlesungsfrei)", von: "2026-12-21", bis: "2027-01-06", status: "offiziell",
+    hinweis: "Bibliothek [eingeschränkt] geöffnet" }] });
+  assert.deepEqual(gut.wert.pausen, [{ name: "Weihnachtspause (vorlesungsfrei)", von: "2026-12-21", bis: "2027-01-06", status: "offiziell", hinweis: "Bibliothek (eingeschränkt) geöffnet" }]);
+
+  // Pfeile bleiben Pfeile, übrige spitze Klammern fallen weg
+  const pfeil = Z.semesterPruefen({ schema: 1, semester: [{ name: "WS 2026/27", beginn: "2026-10-01", ende: "2027-03-31", vorlesung_beginn: "2026-10-12", vorlesung_ende: "2027-02-06", status: "offiziell" }], pausen: [{ name: "Pause", von: "2026-12-21", bis: "2027-01-06", status: "offiziell",
+    hinweis: "Hörsaal 1 -> Hörsaal 2, Mensa => Cafeteria, mehr als > 50" }, { name: "Pause 2", von: "2027-01-07", bis: "2027-01-08", status: "offiziell",
+    hinweis: "zurück <- hier" }] });
+  assert.deepEqual(pfeil.wert.pausen.map((x) => x.hinweis), ["Hörsaal 1 → Hörsaal 2, Mensa → Cafeteria, mehr als 50", "zurück ← hier"]);
+});
+
+test("Schnappschuss: kein Textfeld der echten Daten ändert sich durch die Regel für Titel", () => {
+  const roh = JSON.stringify([json("termine.json"), json("semester.json")]);
+  const texte = [];
+  JSON.parse(roh, (k, v) => { if (typeof v === "string" && !/url$/.test(k)) texte.push(v); return v; });
+  assert.ok(texte.length > 50);
+  assert.deepEqual(texte.filter((t) => /[[\]<>{}|\\]/.test(t)), []);
+});

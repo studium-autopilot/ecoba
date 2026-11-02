@@ -146,9 +146,12 @@ kann die Signatur trotzdem nicht fälschen.
 | `info` | nein | ≤ 200 Zeichen, reiner Text **für alle** (nie der Notiztext aus dem Tresor des Autors) |
 | `geprueft` | nein | ISO-Datum oder -Zeit der letzten Prüfung durch den Abgleich; die Notiz zeigt „geprüft am TT.MM.JJJJ“ |
 
-**Säubern** (für `ort`, `info`, `quelle_text`, `hinweis`, Namen in `semester.json`): Zuerst fallen Steuer- und unsichtbare
-Zeichen weg (Richtung, Zeilen- und Worttrenner, weiches Trennzeichen, Variantenwähler, Hangul-Füller, Unicode-Tags
-U+E0000–E007F), dann HTML-Tags, `<% … %>`, `obsidian://…`, `javascript:`, `[[`/`]]` und Backticks. Links im Text, wie Obsidian
+**Säubern** (für `ort`, `info`, `quelle_text`, `hinweis`, Namen in `semester.json`): Zuerst werden Zeichenreferenzen für
+Buchstaben, Ziffern, `+`, `.`, `-` und `:` zu ihrem Zeichen, für Leerraum zu einem Leerzeichen (`&colon;`, `&#106;`). Dann fallen
+Steuer- und unsichtbare Zeichen weg (Richtung, Zeilen- und Worttrenner, weiches Trennzeichen, Variantenwähler, Hangul-Füller,
+Unicode-Tags U+E0000–E007F), dann HTML-Tags, `<% … %>`, `obsidian://…`, `[[`/`]]` und Backticks. Ein Linkziel in
+Markdown-Schreibweise (hinter `](`, `]:` oder `<`) bleibt nur mit `http(s)`; bei jedem anderen Schema wird daraus reiner Text
+(`] (`, `] :`, ohne `<`). Danach fallen `javascript:` und `vbscript:` auch im übrigen Text weg. Links im Text, wie Obsidian
 sie erkennt (`http(s):…` mit oder ohne `//`, andere Schemata mit `://`, `www.…` auch mitten im Wort, `domain.tld/…`), bleiben nur
 stehen, wenn sie `http(s)` sind, ohne Name, Kennwort und Port vor dem Host, der Host nur aus a–z, 0–9, `.` und `-`, auf
 `uni-tuebingen.de` oder `ffwtuebingen.de` (mit Subdomains), und dann in der Form, die der Browser liest (`new URL`), mit
@@ -157,8 +160,9 @@ hintereinander, abgesetzt vom Wort davor; bei `domain.tld/…` ohne Schema bekom
 `file:…`, `data:…` und `jar:…` fallen ganz weg (Obsidian öffnet `file:` auf eine Datei im Tresor ohne Rückfrage). Satzzeichen am
 Ende gehören nicht zum Link (kein Klickziel; Links gehören in `quelle_url`). Teams und Zoom sind keine Uni-Domains: Dort kann
 jede:r Seiten anlegen. Leerraum wird zusammengefasst. Ist der Text danach zu lang, wird der **Eintrag verworfen** (nicht
-gekürzt). Im Notiztext werden Markdown-Zeichen zusätzlich maskiert, als zweite Sicherung auch jedes Zeichen, an dem Obsidian
-sonst noch einen Link erkennen könnte (Doppelpunkt hinter `http(s)`, `file`, `data`, `jar` und vor `/`, Punkt hinter `www` und vor
+gekürzt). Was danach noch unter die Regel für `titel` fiele (eine einzelne eckige, spitze oder geschweifte Klammer, `|`, `\`),
+wird zu `(`, `)` bzw. `/` (seit 02.11.2026); gewöhnlicher Text bleibt, wie er ist. Im Notiztext werden Markdown-Zeichen
+zusätzlich maskiert, als zweite Sicherung auch jedes Zeichen, an dem Obsidian sonst noch einen Link erkennen könnte (Doppelpunkt hinter `http(s)`, `file`, `data`, `jar` und vor `/`, Punkt hinter `www` und vor
 `tld/`); Obsidian zeigt diese `\` nicht. „1. …“ am Anfang wird keine Liste.
 
 Ungültige Einträge werden **einzeln** verworfen; der Rest wird übernommen. Ein verworfener Eintrag mit gültiger id gilt nicht als
@@ -253,7 +257,8 @@ Gleiche Felder wie das Frontmatter von `System/Daten/Semester.md` (siehe `docs/a
 ```
 
 Regeln: Semesternamen `WS JJJJ/JJ` oder `SS JJJJ`; alle Daten wie oben (2020–2040, `ende > beginn`, `bis ≥ von`); `status`
-`offiziell`/`geschätzt`; `hinweis` optional ≤ 200 Zeichen; `name`/`art` ≤ 60 Zeichen; je Liste höchstens 100 Einträge;
+`offiziell`/`geschätzt`; `hinweis` optional ≤ 200 Zeichen; `name`/`art` ≤ 60 Zeichen, abgelehnt wie `titel` bei Terminen (seit
+02.11.2026, der Eintrag wird verworfen); je Liste höchstens 100 Einträge;
 `quellen` höchstens 10, Schlüssel `[a-z_]{1,30}`, Werte wie `quelle_url`. Ungültige Listeneinträge werden einzeln verworfen;
 ohne ein einziges gültiges Semester wird die Datei abgelehnt. Das Plugin schreibt `Semester.md` nur, wenn der Inhalt sich
 unterscheidet (Vergleich der Felder, nicht der Formatierung); den Text unter dem Frontmatter lässt es stehen. `modell.js` leitet

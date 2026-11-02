@@ -429,7 +429,7 @@ module.exports = function (ctx) {
     // Kursdaten. Seit 26.10.2026 der empfohlene Weg zum Zusammenfassen (der API-Schlüssel kostet je Unterlage extra); die Texte
     // nennen das Abo zuerst. Ohne Server (kein Gerät verbunden, keine server.json per Sync) eine leise Zeile „Für Technische“ mit
     // „Mehr erfahren“: Fenster mit Schritten, dem Knopf „Prompt kopieren“ für Claude Code und ganz unten dem leisen Link zum
-    // API-Schlüssel. Verbinden über den Einmal-Link des Servers, weitere Geräte mit einem Code von einem verbundenen Gerät; Zeile und
+    // API-Schlüssel. Verbinden mit dem Einmal-Code des Servers, weitere Geräte mit einem Code von einem verbundenen Gerät; Zeile und
     // Fenster liefert ctx.server (zeile(), fensterInhalt()).
     server: {
       id: "server", name: "Eigener Server", art: "server", symbol: "server",
@@ -447,15 +447,15 @@ module.exports = function (ctx) {
           return [
             "Unten **Prompt kopieren** tippen.",
             "Claude Desktop öffnen, oben **Code** wählen und als Ordner deinen Tresor, dann den Text einfügen und senden. Claude führt dich durch alles Weitere.",
-            "Zum Schluss auf jedem Gerät den Link öffnen, den dein Server zeigt.",
+            "Zum Schluss auf jedem Gerät unten bei **Mit Code verbinden** den Code und die Adresse eingeben, die dein Server zeigt.",
           ];
         }
-        // Server da, dieses Gerät nicht verbunden: Code von einem verbundenen Gerät (seit 01.11.2026), sonst wie bisher der Link aus
+        // Server da, dieses Gerät nicht verbunden: Code von einem verbundenen Gerät (seit 01.11.2026), sonst der Code aus
         // der Cloud Shell (etwa nach „schluessel-erneuern“, wenn noch kein Gerät die neuen Schlüssel hat)
         return [
           "Auf einem Gerät, das schon verbunden ist, hier bei „Eigener Server“ auf **Weiteres Gerät verbinden** tippen.",
           "Den Code unten eingeben und **Mit Code verbinden** tippen.",
-          "Ist noch kein Gerät verbunden: in der Cloud Shell von Oracle **bash ~/studium-autopilot/server/fern.sh verbinden** eingeben und den Link auf diesem Gerät öffnen.",
+          "Ist noch kein Gerät verbunden: in der Cloud Shell von Oracle **bash ~/studium-autopilot/server/fern.sh verbinden** eingeben und den Code, den es zeigt, unten eingeben.",
         ];
       },
       get erklaerung() {
@@ -1367,10 +1367,17 @@ module.exports = function (ctx) {
     }
     return v || null;
   };
+  // Das Fenster „Eigener Server“ öffnet ein Link von außerhalb der App (c.extern) nie (seit 02.11.2026): Darin verbindet „Mit Code
+  // verbinden“ dieses Gerät, und eine Webseite könnte es so mit fertigem Code auf einen fremden Server lenken. Nur der Hinweis.
+  const serverVonAussen = (c, v) => {
+    if (!(c && c.extern === true && v && v.id === "server")) return false;
+    ctx.hinweis((ctx.server && ctx.server.VON_AUSSEN) || "Links von außerhalb von Obsidian verbinden keinen Server.");
+    return true;
+  };
   const AKTIONEN = {
     verbinden: {
       titel: "Verbinden …",
-      ausfuehren: async (c) => { const v = await waehlen(c, "Was verbinden?"); if (v) fensterOeffnen(v, c.parameter); },
+      ausfuehren: async (c) => { const v = await waehlen(c, "Was verbinden?"); if (v && !serverVonAussen(c, v)) fensterOeffnen(v, c.parameter); },
     },
     "verbindung-aktualisieren": {
       titel: "Aktualisieren …",
@@ -1380,7 +1387,7 @@ module.exports = function (ctx) {
         const st = v.status();
         // ILIAS im eigenen Uni-Abgleich: „Aktualisieren“ (gruppenZugang) prüft die Übungsgruppen; Volltext, wenn er an ist
         const bereit = v.art === "volltext" ? st.an && ["extern", "fremd"].indexOf(st.zustand) < 0 : (st.verbunden || st.gruppenZugang) && !st.gesperrt;
-        if (!v.aktualisieren || !bereit) { fensterOeffnen(v); return; }
+        if (!v.aktualisieren || !bereit) { if (!serverVonAussen(c, v)) fensterOeffnen(v); return; }
         await v.aktualisieren(c.parameter || {});
         neuZeichnen();
       },

@@ -8,6 +8,11 @@ eine dynamische Gruppe), schickt bei Erfolg eine Mail über Oracle Notifications
 erkennt es an seinem Kennzeichen studium-autopilot=helfer (setzt die Einrichtung beim Anlegen, wie stand.mjs).
 Nur Standardbibliothek und die OCI-Kommandozeile.
 
+Klein zuerst: Ist für 2 OCPU / 12 GB kein Platz, versucht er in derselben Runde 1 OCPU / 6 GB; das passt öfter auf einen fast
+vollen Host. Ist der Server klein da, kommt die Mail „Dein Server ist da“ sofort, und der Helfer bleibt: Er vergrößert den
+Server nachts (FENSTER, Uhrzeit UTC) auf 2 OCPU / 12 GB, sobald Oracle Platz hat. Oracle startet ihn dabei neu (wie bei den
+nächtlichen Updates); Adresse und Daten bleiben. Danach beendet er sich wie sonst.
+
   python3 platzsucher.py            sucht, bis der Server da ist oder ein Mensch gebraucht wird
   python3 platzsucher.py --einmal   eine Runde (alle Verfügbarkeitsbereiche), Ergebnis als JSON
 
@@ -15,12 +20,17 @@ Konfiguration $PLATZSUCHER_KONFIG (Standard /etc/studium-platzsucher/konfig.json
   { "compartment": OCID, "ads": [Namen der Verfügbarkeitsbereiche], "subnet": OCID,
     "image": OCID (Ubuntu 24.04, aarch64; nur Ersatz, jede Runde sucht das neueste), "boot_gb": 150, "ssh_schluessel": "ssh-rsa …", "user_data": base64 (cloud-init des Servers), "thema": OCID }
 Stand $PLATZSUCHER_STAND (Standard /var/lib/studium-platzsucher/stand.json):
-  { seit, versuche, tag, versuche_heute, letzter_fehler, erfolg, instanz, gemeldet_14 }
+  { seit, versuche, tag, versuche_heute, letzter_fehler, abbild, abbild_tag, klein, klein_seit, angestossen, aus_gemeldet, erfolg, instanz,
+    gemeldet_14 }
 
-Kostenregeln: genau diese Form und Größe, nichts Kleineres; Boot-Volume „Balanced“ (10 VPU) mit boot_gb (der Rest des freien
-Blockspeichers, solange der Helfer lebt); Kennzeichen studium-autopilot=server. Vor jedem Versuch wird geprüft, ob es den
-Server schon gibt, damit nichts doppelt entsteht. Höchstens VERSUCHE_TAG Versuche am Tag.
-Antworten von Oracle: „Out of host capacity“ → nächster Verfügbarkeitsbereich, dann warten; „Too many requests“ → länger
+Kostenregeln: genau diese Form, nur die Größen aus GROESSEN (nie mehr als die freie Menge 2 OCPU / 12 GB); Boot-Volume
+„Balanced“ (10 VPU) mit boot_gb (der Rest des freien Blockspeichers, solange der Helfer lebt); Kennzeichen
+studium-autopilot=server. Vor jedem Versuch wird geprüft, ob es den Server schon gibt, damit nichts doppelt entsteht. Höchstens
+VERSUCHE_TAG Versuche am Tag.
+Anlegen und Vergrößern laufen mit --no-retry: Ohne wiederholt die Kommandozeile jede 5xx-Antwort, also auch „Out of host
+capacity“, und 429 selbst (bis zu 8 Anfragen in etwa 90 Sekunden); dann zählte ein Versuch acht, und „Too many requests“ käme
+hier nie an. Das Wiederholen ist Sache dieser Schleife.
+Antworten von Oracle: „Out of host capacity“ → kleinere Größe bzw. nächster Verfügbarkeitsbereich, dann warten; „Too many requests“ → länger
 warten; eine unklare Antwort (Zeitüberschreitung, 5xx, unlesbare Ausgabe: der Server könnte trotzdem entstanden sein) → Runde
 beenden, die nächste prüft zuerst, ob es den Server schon gibt (nie ein zweiter); Grenze oder Quota überschritten, fehlende Rechte, falsche Konfiguration → anhalten und Mail (das braucht einen Menschen).
 Fehlende Rechte erst nach ANLAUF_MIN Minuten: Die Einrichtung legt dynamische Gruppe und Richtlinie an, nachdem der Helfer
@@ -45,12 +55,17 @@ from pathlib import Path
 KONFIG = Path(os.environ.get("PLATZSUCHER_KONFIG", "/etc/studium-platzsucher/konfig.json"))
 STAND = Path(os.environ.get("PLATZSUCHER_STAND", "/var/lib/studium-platzsucher/stand.json"))
 FORM = "VM.Standard.A1.Flex"
-OCPUS, SPEICHER_GB = 2, 12
+GROESSEN = ((2, 12), (1, 6))     # (OCPU, GB): erst die ganze freie Menge, ohne Platz die Hälfte
+VOLL = GROESSEN[0]
 VPU = 10                         # „Balanced“, im Always Free enthalten
 KENNZEICHEN = {"studium-autopilot": "server"}
 NAME = "studium-autopilot-server"
-VERSUCHE_TAG = 1500
-PAUSE = (120, 300)               # Sekunden zwischen zwei Runden (zufällig)
+VERSUCHE_TAG = 6000              # Runden mit 6 Anfragen (3 Bereiche) alle 1 bis 2 Minuten: bis gut 5.700 am Tag
+PAUSE = (60, 120)                # Sekunden zwischen zwei Runden (zufällig)
+FENSTER = (1, 5)                 # Stunden (UTC), in denen er einen kleinen Server vergrößert; Oracle startet ihn dabei neu
+NEU_GENUG = timedelta(hours=3)   # so lange nach dem Anlegen nicht vergrößern (der Server bereitet sich selbst vor)
+ANSTOSS = timedelta(hours=1)     # so lange startet er einen Server wieder, der nach dem Vergrößern aus blieb
+WARTEN_HOECHSTENS = 3000         # Sekunden: auch vor der Nacht meldet er sich (STAND_ALLE, stand.mjs „still“ nach 3 Stunden)
 PAUSE_GEDROSSELT = 1800          # höchstens so lange nach „Too many requests“
 MELDUNG_NACH_TAGEN = 14
 ANLAUF_MIN = 30                  # so lange gelten fehlende Rechte als „noch nicht verteilt“
@@ -175,19 +190,40 @@ def neuestes_abbild(oci, k):
     return neu if isinstance(neu, str) and OCID.match(neu) else k["image"]
 
 
-def anlegen(oci, k, ad, abbild=None):
+def anlegen(oci, k, ad, abbild=None, groesse=VOLL):
     metadaten = {"ssh_authorized_keys": k["ssh_schluessel"]}
     if k.get("user_data"):
         metadaten["user_data"] = k["user_data"]
     return oci([
         "compute", "instance", "launch",
         "--availability-domain", ad, "--compartment-id", k["compartment"],
-        "--shape", FORM, "--shape-config", json.dumps({"ocpus": OCPUS, "memoryInGBs": SPEICHER_GB}),
+        "--shape", FORM, "--shape-config", json.dumps({"ocpus": groesse[0], "memoryInGBs": groesse[1]}),
         "--source-details", json.dumps({"sourceType": "image", "imageId": abbild or k["image"], "bootVolumeSizeInGBs": k["boot_gb"], "bootVolumeVpusPerGB": VPU}),
         "--subnet-id", k["subnet"], "--assign-public-ip", "true",
         "--display-name", NAME, "--freeform-tags", json.dumps(KENNZEICHEN), "--metadata", json.dumps(metadaten),
-        "--instance-options", json.dumps({"areLegacyImdsEndpointsDisabled": True}),
+        "--instance-options", json.dumps({"areLegacyImdsEndpointsDisabled": True}), "--no-retry",
     ])
+
+
+def klein(instanz):
+    """Hat der Server weniger als VOLL (OCPU aus shape-config)? Ohne Angabe: nein."""
+    try:
+        return float((instanz.get("shape-config") or {}).get("ocpus")) < VOLL[0]
+    except (TypeError, ValueError):
+        return False
+
+
+def im_fenster(zeit):
+    return FENSTER[0] <= zeit.astimezone(timezone.utc).hour < FENSTER[1]
+
+
+def bis_zum_fenster(zeit):
+    """Sekunden bis zum nächsten FENSTER, höchstens WARTEN_HOECHSTENS, mindestens PAUSE[0]."""
+    z = zeit.astimezone(timezone.utc)
+    beginn = z.replace(hour=FENSTER[0], minute=0, second=0, microsecond=0)
+    if beginn <= z:
+        beginn += timedelta(days=1)
+    return int(max(PAUSE[0], min(WARTEN_HOECHSTENS, (beginn - z).total_seconds())))
 
 
 def eigene_id(url=IMDS):
@@ -223,16 +259,31 @@ def melden(oci, k, titel, text):
     return r["ok"]
 
 
+def neuer_tag(stand, jetzt):
+    tag = jetzt.astimezone(timezone.utc).date().isoformat()
+    if stand.get("tag") != tag:
+        stand["tag"], stand["versuche_heute"] = tag, 0
+    return tag
+
+
+def versuch_zaehlen(stand):
+    """→ False, wenn die Tagesgrenze erreicht ist; sonst zählt er den Versuch."""
+    if stand.get("versuche_heute", 0) >= VERSUCHE_TAG:
+        return False
+    stand["versuche"] = stand.get("versuche", 0) + 1
+    stand["versuche_heute"] = stand.get("versuche_heute", 0) + 1
+    return True
+
+
 def runde(oci, k, stand, jetzt=None, anlauf=False):
-    """Eine Runde über alle Verfügbarkeitsbereiche. → ("erfolg", instanz) | ("weiter", grund) | ("drossel", grund) | ("halt", grund).
+    """Eine Runde: erst VOLL in allen Verfügbarkeitsbereichen, dann die kleinere Größe.
+    → ("erfolg", instanz) | ("weiter", grund) | ("drossel", grund) | ("halt", grund).
     anlauf: fehlende Rechte noch nicht als Halt werten (ANLAUF_MIN)."""
     def halt_oder_weiter(art):
         return "halt" if art == "halt" or (art == "rechte" and not anlauf) else "weiter"
 
     jetzt = jetzt or datetime.now(timezone.utc)
-    tag = jetzt.astimezone(timezone.utc).date().isoformat()
-    if stand.get("tag") != tag:
-        stand["tag"], stand["versuche_heute"] = tag, 0
+    tag = neuer_tag(stand, jetzt)
     vorhanden = server_vorhanden(oci, k)
     if isinstance(vorhanden, dict) and "fehler" in vorhanden:
         art = einordnen(vorhanden["fehler"])
@@ -242,31 +293,107 @@ def runde(oci, k, stand, jetzt=None, anlauf=False):
         return ("erfolg", vorhanden)
     ads = list(k["ads"])
     random.shuffle(ads)
-    abbild = neuestes_abbild(oci, k) if stand.get("versuche_heute", 0) < VERSUCHE_TAG else k["image"]
-    for ad in ads:
-        if stand.get("versuche_heute", 0) >= VERSUCHE_TAG:
-            return ("weiter", "Tagesgrenze erreicht")
-        stand["versuche"] = stand.get("versuche", 0) + 1
-        stand["versuche_heute"] = stand.get("versuche_heute", 0) + 1
-        r = anlegen(oci, k, ad, abbild)
-        if r["ok"]:
-            return ("erfolg", (r["data"] or {}).get("data", {}))
-        art = einordnen(r)
-        stand["letzter_fehler"] = r.get("code", "")
-        if art == "drossel":
-            return ("drossel", r.get("nachricht", ""))
-        if art == "unklar":
-            return ("weiter", "unklar: " + r.get("nachricht", ""))
-        if art in ("halt", "rechte"):
-            return (halt_oder_weiter(art), f'{r.get("code", "")}: {r.get("nachricht", "")}')
+    # Das neueste Abbild einmal am Tag: Jede Abfrage startet die Kommandozeile, auf dem Micro dauert das
+    if stand.get("abbild_tag") != tag and stand.get("versuche_heute", 0) < VERSUCHE_TAG:
+        stand["abbild"], stand["abbild_tag"] = neuestes_abbild(oci, k), tag
+    abbild = stand.get("abbild") or k["image"]
+    for groesse in GROESSEN:
+        for ad in ads:
+            if not versuch_zaehlen(stand):
+                return ("weiter", "Tagesgrenze erreicht")
+            r = anlegen(oci, k, ad, abbild, groesse)
+            if r["ok"]:
+                instanz = (r["data"] or {}).get("data") or {}
+                instanz.setdefault("shape-config", {"ocpus": groesse[0], "memory-in-gbs": groesse[1]})
+                return ("erfolg", instanz)
+            art = einordnen(r)
+            stand["letzter_fehler"] = r.get("code", "")
+            if art == "drossel":
+                return ("drossel", r.get("nachricht", ""))
+            if art == "unklar":
+                return ("weiter", "unklar: " + r.get("nachricht", ""))
+            if art in ("halt", "rechte"):
+                return (halt_oder_weiter(art), f'{r.get("code", "")}: {r.get("nachricht", "")}')
     return ("weiter", "kein Platz")
 
 
+def vergroessern(oci, k, stand, jetzt=None, anlauf=False):
+    """Der Server ist da, aber klein (stand["klein"]): nachts auf VOLL vergrößern.
+    → ("erfolg", instanz) wenn groß | ("klein", grund) | ("drossel", grund) | ("halt", grund)."""
+    jetzt = jetzt or datetime.now(timezone.utc)
+    neuer_tag(stand, jetzt)
+    r = oci(["compute", "instance", "get", "--instance-id", stand["klein"]])
+    if not r["ok"]:
+        art = einordnen(r)
+        stand["letzter_fehler"] = r.get("code", "")
+        if art == "halt" or (art == "rechte" and not anlauf):
+            return ("halt", f'Server: {r.get("code", "")}: {r.get("nachricht", "")}')
+        return ("drossel" if art == "drossel" else "klein", r.get("nachricht", ""))
+    d = (r["data"] or {}).get("data") or {}
+    zustand = d.get("lifecycle-state", "")
+    if zustand in ("TERMINATING", "TERMINATED"):
+        # Neu gestartet sucht der Helfer dann wieder (wie vor dem Server), statt jedes Mal hier anzuhalten
+        for feld in ("klein", "klein_seit", "angestossen", "aus_gemeldet"):
+            stand.pop(feld, None)
+        return ("halt", "Der Server wurde beendet.")
+    angestossen = stand.get("angestossen")
+    seit_anstoss = jetzt - datetime.fromisoformat(angestossen) if angestossen else None
+    if zustand == "STOPPED" and angestossen:
+        # Nach einem Vergrößern (auch einem mit unklarer Antwort) nie aus lassen: Ein A1 kann auch beim Starten „Out of host
+        # capacity“ bekommen. angestossen bleibt, bis er wieder läuft.
+        if oci(["compute", "instance", "action", "--instance-id", stand["klein"], "--action", "START"])["ok"]:
+            return ("klein", "Server nach dem Vergrößern wieder gestartet")
+        if seit_anstoss >= ANSTOSS and not stand.get("aus_gemeldet"):
+            stand["aus_gemeldet"] = melden(oci, k, "Dein Server ist aus",
+                                           "Der Platzsucher hat deinen Server von Studium Autopilot nachts vergrößert, aber Oracle hat ihn "
+                                           "danach nicht wieder gestartet. Der Platzsucher versucht es weiter. Du kannst ihn auch selbst "
+                                           "starten: Oracle-Konsole, Compute, Instanzen, „studium-autopilot-server“, Start.")
+        return ("klein", "Server ist aus, Starten scheiterte")
+    if zustand != "RUNNING":
+        return ("klein", f"Server ist {zustand}, kein Vergrößern")
+    if not klein(d):
+        return ("erfolg", d)
+    # Nimmt Oracle das Vergrößern an und bringt es nicht zu Ende, läuft er weiter klein: höchstens ein Versuch je ANSTOSS, sonst
+    # startete er die ganze Nacht alle paar Minuten neu
+    if angestossen and seit_anstoss < ANSTOSS:
+        return ("klein", "wartet auf das Ergebnis des letzten Versuchs")
+    for feld in ("angestossen", "aus_gemeldet"):
+        stand.pop(feld, None)
+    if not im_fenster(jetzt):
+        return ("klein", "wartet auf die Nacht")
+    if jetzt - datetime.fromisoformat(stand.get("klein_seit") or jetzt_iso(jetzt)) < NEU_GENUG:
+        return ("klein", "Server ist noch neu")
+    if not versuch_zaehlen(stand):
+        return ("klein", "Tagesgrenze erreicht")
+    u = oci(["compute", "instance", "update", "--instance-id", stand["klein"], "--shape-config",
+             json.dumps({"ocpus": VOLL[0], "memoryInGBs": VOLL[1]}), "--force", "--no-retry"])
+    if u["ok"]:
+        stand["angestossen"] = jetzt_iso(jetzt)
+        return ("klein", "Vergrößern angestoßen")
+    art = einordnen(u)
+    stand["letzter_fehler"] = u.get("code", "")
+    if art == "kapazitaet":
+        return ("klein", "kein Platz zum Vergrößern")
+    if art == "drossel":
+        return ("drossel", u.get("nachricht", ""))
+    if art == "halt" or (art == "rechte" and not anlauf):
+        return ("halt", f'Vergrößern: {u.get("code", "")}: {u.get("nachricht", "")}')
+    stand["angestossen"] = jetzt_iso(jetzt)  # unklar: Oracle könnte trotzdem vergrößern und neu starten
+    return ("klein", "unklar: " + u.get("nachricht", ""))
+
+
 def nach_erfolg(oci, k, stand, instanz):
+    vergroessert = bool(stand.get("klein"))
     stand.update(erfolg=jetzt_iso(), instanz=str(instanz.get("id", "")))
-    melden(oci, k, "Dein Server ist da",
-           "Oracle hat deinen kostenlosen Server für Studium Autopilot angelegt. "
-           "Öffne Claude Desktop im Tab „Code“ (nicht im Chat) und sag „Weiter mit der Einrichtung“, dann richtet Claude ihn ein.")
+    if vergroessert:
+        melden(oci, k, "Dein Server ist jetzt groß",
+               "Der Platzsucher hat deinen Server von Studium Autopilot auf die volle kostenlose Größe gebracht (2 statt 1 Kern, "
+               "12 statt 6 GB Arbeitsspeicher). Er hat sich dafür kurz neu gestartet. Wenn du Zeit hast, öffne Claude Desktop im Tab "
+               "„Code“ und sag „Weiter mit der Einrichtung“: Dann bekommt er auch den restlichen kostenlosen Speicher.")
+    else:
+        melden(oci, k, "Dein Server ist da",
+               "Oracle hat deinen kostenlosen Server für Studium Autopilot angelegt. "
+               "Öffne Claude Desktop im Tab „Code“ (nicht im Chat) und sag „Weiter mit der Einrichtung“, dann richtet Claude ihn ein.")
     # Helfer samt Boot-Volume beenden (nur Instanzen mit dem Kennzeichen des Platzsuchers)
     # Klappt das nicht, belegt der Helfer weiter 50 GB des kostenlosen Speichers: Mail, damit ihn ein Mensch beendet.
     helfer = gekennzeichnet(oci, k, "helfer")
@@ -281,25 +408,37 @@ def nach_erfolg(oci, k, stand, instanz):
 
 
 def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetime.now(timezone.utc), ich=None):
-    """Sucht, bis der Server da ist (→ "erfolg") oder ein Mensch gebraucht wird (→ "halt").
+    """Sucht, bis der Server da ist (→ "erfolg") oder ein Mensch gebraucht wird (→ "halt"). Ist er klein da, vergrößert er ihn
+    erst noch (vergroessern) und meldet sich solange mit art=klein.
     ich: liefert die OCID dieses Helfers (eigene_id); dann steht der Stand am Helfer, sonst nicht."""
     stand = lesen(stand_datei, {})
     stand.setdefault("seit", jetzt_iso(jetzt()))
     warte_drossel = PAUSE[1]
-    instanz, gezeigt = None, None
+    instanz, gezeigt, zuletzt = None, None, None
     while True:
         zeit = jetzt()
         anlauf = zeit - datetime.fromisoformat(stand["seit"]) < timedelta(minutes=ANLAUF_MIN)
-        art, wert = runde(oci, k, stand, zeit, anlauf)
+        if stand.get("klein"):
+            art, wert = vergroessern(oci, k, stand, zeit, anlauf)
+        else:
+            art, wert = runde(oci, k, stand, zeit, anlauf)
+            if art == "erfolg" and klein(wert):
+                stand.update(klein=str(wert.get("id", "")), klein_seit=jetzt_iso(zeit))
+                melden(oci, k, "Dein Server ist da",
+                       "Oracle hat deinen kostenlosen Server für Studium Autopilot angelegt, vorerst in halber Größe (1 Kern, 6 GB "
+                       "Arbeitsspeicher; das reicht für alles). Öffne Claude Desktop im Tab „Code“ (nicht im Chat) und sag „Weiter mit "
+                       "der Einrichtung“, dann richtet Claude ihn ein. Der Platzsucher bringt ihn nachts auf die volle Größe, sobald "
+                       "Oracle Platz hat; dabei startet er kurz neu. Dafür musst du nichts tun.")
+                art, wert = "klein", "Server da (1 OCPU / 6 GB), wird nachts vergrößert"
         if art == "erfolg":
             nach_erfolg(oci, k, stand, wert)
             schreiben(stand_datei, stand)
             return "erfolg"
         # Scheitert das Schreiben (im Anlauf fehlen oft noch Rechte), versucht er es nach der nächsten Runde wieder
-        if ich and (art == "halt" or gezeigt is None or zeit - gezeigt >= STAND_ALLE):
+        if ich and (art in ("halt", "klein") and art != zuletzt or gezeigt is None or zeit - gezeigt >= STAND_ALLE):
             instanz = instanz or ich()
             if instanz and stand_zeigen(oci, instanz, stand_text(stand, art, wert, zeit)):
-                gezeigt = zeit
+                gezeigt, zuletzt = zeit, art
         if art == "halt":
             stand["angehalten"] = wert[:300]
             schreiben(stand_datei, stand)
@@ -307,7 +446,7 @@ def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetim
                    "Der Platzsucher für deinen Server von Studium Autopilot hat angehalten, weil Oracle ablehnt: " + wert[:300]
                    + " Öffne Claude Desktop im Tab „Code“ (nicht im Chat) und sag „Weiter mit der Einrichtung“.")
             return "halt"
-        if not stand.get("gemeldet_14") and (zeit - datetime.fromisoformat(stand["seit"])).days >= MELDUNG_NACH_TAGEN:
+        if not stand.get("klein") and not stand.get("gemeldet_14") and (zeit - datetime.fromisoformat(stand["seit"])).days >= MELDUNG_NACH_TAGEN:
             if melden(oci, k, "Platzsucher sucht weiter",
                       f'Seit {MELDUNG_NACH_TAGEN} Tagen hat Oracle in deiner Region keinen Platz frei ({stand.get("versuche", 0)} Versuche). '
                       "Der Platzsucher sucht weiter. Willst du aufhören, sag Claude „Platzsucher beenden“."):
@@ -316,6 +455,9 @@ def suchen(oci, k, stand_datei=STAND, schlafen=time.sleep, jetzt=lambda: datetim
         if art == "drossel":
             warte_drossel = min(warte_drossel * 2, PAUSE_GEDROSSELT)
             schlafen(warte_drossel)
+        elif art == "klein" and not im_fenster(zeit):
+            warte_drossel = PAUSE[1]
+            schlafen(bis_zum_fenster(zeit))
         else:
             warte_drossel = PAUSE[1]
             schlafen(random.randint(*PAUSE))

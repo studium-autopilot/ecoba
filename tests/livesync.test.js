@@ -151,7 +151,7 @@ test("Wache: hilft das Neuöffnen nicht, wird LiveSync neu geladen; Fehler enden
   assert.equal(m.fehler.length, 1);
 });
 
-test("Erweiterung: am Computer nichts, auf iPhone/iPad Rückkehr in die App entprellt prüfen", () => {
+test("Erweiterung: am Computer keine Wache, auf iPhone/iPad Rückkehr in die App entprellt prüfen", () => {
   const dom = [];
   laden("livesync", { kontext: { obsidian: { Platform: { isMobile: false } }, dom: (...a) => dom.push(a) } }).ergebnis.registrieren();
   assert.equal(dom.length, 0);
@@ -164,4 +164,126 @@ test("Erweiterung: am Computer nichts, auf iPhone/iPad Rückkehr in die App entp
     assert.equal(dom[0][1], "visibilitychange");
     assert.equal(entprellt, L.K.RUHE);
   } finally { global.document = vorher; }
+});
+
+// Plugins nicht als versteckte Dateien abgleichen: Nachbau mit Einstellungen, die applyPartial übernimmt und speichert
+function mitMustern(cfg, o = {}) {
+  const n = nachbau({ angehalten: o.angehalten });
+  const stand = Object.assign({ isConfigured: true, liveSync: true, syncInternalFiles: true }, cfg);
+  const gespeichert = [];
+  n.s.setting = {
+    currentSettings: () => stand,
+    applyPartial: async (teil, sofort) => { if (o.speichertNicht) return; Object.assign(stand, teil); gespeichert.push([teil, sofort]); },
+  };
+  if (o.ohneApply) delete n.s.setting.applyPartial;
+  n.app.vault = { configDir: o.configDir || ".obsidian" };
+  const lokal = new Map(o.lokal || []);
+  const hinweise = [], logs = [];
+  const opt = { app: n.app, lokal: (k, v) => { if (v === undefined) return lokal.get(k) || null; lokal.set(k, v); return v; },
+    log: (z) => logs.push(z), hinweis: (t) => hinweise.push(t) };
+  return { n, stand, gespeichert, lokal, hinweise, logs, opt };
+}
+
+test("Muster für versteckte Dateien: Plugins und community-plugins.json einmal je Gerät dazu, Schreibweise wie der Server, die eigenen bleiben", async () => {
+  assert.deepEqual(L.MUSTER, ["/plugins/", "/community-plugins.json$"]);
+  // so prüft LiveSync: jedes Muster als regulärer Ausdruck gegen den Pfad ohne führenden Schrägstrich, Groß- und Kleinschreibung egal
+  const re = L.MUSTER.map((m) => new RegExp(m, "i"));
+  const trifft = (p) => re.some((r) => r.test(p));
+  for (const p of [".obsidian/plugins/studium-autopilot/main.js", ".obsidian/plugins/dataview/manifest.json", ".obsidian/community-plugins.json",
+    ".obsidian/Plugins/x/data.json"]) assert.equal(trifft(p), true, p);
+  for (const p of [".obsidian/app.json", ".obsidian/snippets/plugins.css", ".obsidian/community-plugins.json.bak", ".obsidian/core-plugins.json"]) assert.equal(trifft(p), false, p);
+
+  // ein Gerät mit altem Link (nur der Kern): beide dazu
+  const vorlage = "/node_modules/, /.git/, /obsidian-livesync/, /workspace(-mobile)?.json$, /plugins/studium-autopilot/";
+  const m = mitMustern({ syncInternalFilesIgnorePatterns: vorlage });
+  assert.equal(await L.pluginsNichtAbgleichen(m.opt), "ergänzt");
+  assert.equal(m.stand.syncInternalFilesIgnorePatterns, vorlage + ", /plugins/, /community-plugins.json$");
+  assert.deepEqual(m.gespeichert.map((g) => g[1]), [true], "über LiveSyncs eigenes Speichern, einmal");
+  assert.equal(m.hinweise.length, 1);
+  assert.match(m.hinweise[0], /Ein neues Plugin installierst du auf jedem Gerät selbst\.$/);
+  assert.ok(m.n.protokoll.some((z) => /^log 32 Studium Autopilot: Plugins/.test(z)), "Vermerk im Protokoll von LiveSync");
+  // einmal je Gerät: Nimmt jemand sie wieder heraus, bleibt das so
+  m.stand.syncInternalFilesIgnorePatterns = vorlage;
+  assert.equal(await L.pluginsNichtAbgleichen(m.opt), "schon");
+  assert.equal(m.stand.syncInternalFilesIgnorePatterns, vorlage);
+
+  // neuer Link des Servers (dieselben Muster, andere Leerzeichen): nichts geschrieben, kein Hinweis, gemerkt
+  const da = mitMustern({ syncInternalFilesIgnorePatterns: "/node_modules/, /.git/, /workspace(-mobile)?.json$,/plugins/ , /community-plugins.json$" });
+  assert.equal(await L.pluginsNichtAbgleichen(da.opt), "da");
+  assert.deepEqual([da.gespeichert.length, da.hinweise.length, !!da.lokal.get("eba-livesync-plugins-ignoriert")], [0, 0, true]);
+  // eins fehlt, Komma am Ende
+  const halb = mitMustern({ syncInternalFilesIgnorePatterns: "/x/, /plugins/, " });
+  assert.equal(await L.pluginsNichtAbgleichen(halb.opt), "ergänzt");
+  assert.equal(halb.stand.syncInternalFilesIgnorePatterns, "/x/, /plugins/, /community-plugins.json$");
+  // leer oder nie gesetzt; versteckte Dateien aus (etwa gleich nach dem Beitritt): Muster trotzdem, aber ohne Hinweis
+  const leer = mitMustern({ syncInternalFiles: false });
+  assert.equal(await L.pluginsNichtAbgleichen(leer.opt), "ergänzt");
+  assert.deepEqual([leer.stand.syncInternalFilesIgnorePatterns, leer.hinweise.length], ["/plugins/, /community-plugins.json$", 0]);
+  // LiveSync noch nicht ganz bereit (oder angehalten), seine Einstellungen aber geladen: schon jetzt, vor dem ersten Abgleich
+  const frueh = mitMustern({}, { angehalten: true });
+  assert.equal(await L.pluginsNichtAbgleichen(frueh.opt), "ergänzt");
+});
+
+test("Muster für versteckte Dateien: ohne LiveSync, nicht eingerichtet oder ohne applyPartial nichts; nicht gespeichert heißt später noch einmal", async () => {
+  const ohne = mitMustern({});
+  ohne.n.app.plugins.enabledPlugins = new Set();
+  assert.equal(await L.pluginsNichtAbgleichen(ohne.opt), "aus");
+  const nicht = mitMustern({ isConfigured: false });
+  assert.equal(await L.pluginsNichtAbgleichen(nicht.opt), "aus");
+  assert.equal(nicht.lokal.size, 0, "nichts gemerkt");
+  assert.equal(await L.pluginsNichtAbgleichen(mitMustern({}, { ohneApply: true }).opt), "aus");
+  assert.equal(await L.pluginsNichtAbgleichen(mitMustern({ syncInternalFilesIgnorePatterns: ["/x/"] }).opt), "aus", "unbekannte Form");
+  const fest = mitMustern({ syncInternalFilesIgnorePatterns: "/x/" }, { speichertNicht: true });
+  assert.equal(await L.pluginsNichtAbgleichen(fest.opt), "nicht gespeichert");
+  assert.deepEqual([fest.lokal.size, fest.hinweise.length], [0, 0]);
+});
+
+test("Erweiterung: Muster gleich beim Laden; ohne eingerichtetes LiveSync 15-mal alle 2 s, dann jede Minute, eine Stunde lang", async () => {
+  const m = mitMustern({ isConfigured: false });
+  const zeiten = [];
+  let naechster = null;
+  m.n.app.loadLocalStorage = (k) => m.lokal.get(k) || null;
+  m.n.app.saveLocalStorage = (k, v) => { m.lokal.set(k, v); };
+  laden("livesync", { kontext: { app: m.n.app, obsidian: { Platform: { isMobile: false } }, zeit: (f, ms) => { zeiten.push(ms); naechster = f; return zeiten.length; } } }).ergebnis.registrieren();
+  await new Promise((ok) => setImmediate(ok));
+  assert.equal(zeiten.length, 1, "der erste Versuch lief gleich, ohne Wartezeit");
+  for (let i = 0; i < 80; i++) { const f = naechster; naechster = null; if (f) f(); await new Promise((ok) => setImmediate(ok)); }
+  assert.deepEqual(zeiten, Array(15).fill(2000).concat(Array(60).fill(60e3)));
+  // in dieser Sitzung eingerichtet: beim nächsten Versuch dazu
+  const n = mitMustern({ isConfigured: false });
+  const z2 = [];
+  let f2 = null;
+  n.n.app.loadLocalStorage = (k) => n.lokal.get(k) || null;
+  n.n.app.saveLocalStorage = (k, v) => { n.lokal.set(k, v); };
+  laden("livesync", { kontext: { app: n.n.app, obsidian: { Platform: { isMobile: false } }, zeit: (f, ms) => { z2.push(ms); f2 = f; return z2.length; } } }).ergebnis.registrieren();
+  await new Promise((ok) => setImmediate(ok));
+  n.stand.isConfigured = true;
+  f2();
+  await new Promise((ok) => setImmediate(ok));
+  assert.equal(n.stand.syncInternalFilesIgnorePatterns, "/plugins/, /community-plugins.json$");
+  assert.equal(z2.length, 1, "danach kein weiterer Versuch");
+});
+
+test("Muster für versteckte Dateien: beim nächsten Start einmal nachsehen, verlorene still nachtragen, danach nie wieder", async () => {
+  const vorlage = "/node_modules/, /.git/";
+  const m = mitMustern({ syncInternalFilesIgnorePatterns: vorlage });
+  const start = (sitzung) => Object.assign({}, m.opt, { sitzung });
+  assert.equal(await L.pluginsNichtAbgleichen(start("s1")), "ergänzt");
+  assert.equal(m.hinweise.length, 1);
+  // LiveSync speichert danach ein älteres Einstellungsobjekt: die Muster sind weg
+  m.stand.syncInternalFilesIgnorePatterns = vorlage;
+  assert.equal(await L.pluginsNichtAbgleichen(start("s1")), "schon", "in derselben Sitzung nicht noch einmal");
+  assert.equal(await L.pluginsNichtAbgleichen(start("s2")), "ergänzt", "beim nächsten Start nachgetragen");
+  assert.equal(m.stand.syncInternalFilesIgnorePatterns, vorlage + ", /plugins/, /community-plugins.json$");
+  assert.equal(m.hinweise.length, 1, "ohne zweiten Hinweis");
+  // danach fertig: wer sie jetzt herausnimmt, behält das
+  m.stand.syncInternalFilesIgnorePatterns = vorlage;
+  assert.equal(await L.pluginsNichtAbgleichen(start("s3")), "schon");
+  assert.equal(m.stand.syncInternalFilesIgnorePatterns, vorlage);
+  // sind sie bei der Probe noch da: nur fertig, nichts geschrieben
+  const n = mitMustern({ syncInternalFilesIgnorePatterns: vorlage });
+  await L.pluginsNichtAbgleichen(Object.assign({}, n.opt, { sitzung: "a" }));
+  const vorher = n.gespeichert.length;
+  assert.equal(await L.pluginsNichtAbgleichen(Object.assign({}, n.opt, { sitzung: "b" })), "da");
+  assert.deepEqual([n.gespeichert.length, n.lokal.get("eba-livesync-plugins-ignoriert").fertig], [vorher, true]);
 });

@@ -2,7 +2,8 @@
 // Claude liefert nur Inhalte mit einem stabilen Schlüssel je Termin (z. B. Quelle + laufende Nummer); die id leitet der Server
 // daraus ab (nie das Modell). Die Regeln entsprechen termineNormal in zentral.js (docs/daten-v1.md, termine.json), damit das
 // Plugin die Termine mit derselben Prüfung übernimmt (tests/server-eingang.test.js prüft das gegen zentral.js).
-// Gleicher Schlüssel in einem späteren Lauf = Änderung desselben Termins.
+// Gleicher Schlüssel in einem späteren Lauf = Änderung desselben Termins. Woher ein Termin stammt (herkunft), prüft der Server für
+// Mails aus dem Uni-Postfach selbst (herkunftNormal, herkunftAnwenden); ins Eingang geht sie nicht.
 // Kapitellisten für den Lernplan (seit 31.10.2026, Feld „kapitel“): dieselbe Form und dieselben Regeln wie kapitel.json →
 // module[] (docs/daten-v1.md, kapitelPruefen in zentral.js); ein ungültiges Kapitel verwirft sein ganzes Modul.
 import { createHash } from "node:crypto";
@@ -97,6 +98,27 @@ const linksEntschaerfen = (s, domains) => {
   }
   return aus + t.slice(bis);
 };
+// Zeichenreferenzen für Buchstaben, Ziffern, „+“, „.“, „-“ und „:“ werden das Zeichen, für Leerraum und Steuerzeichen ein
+// Leerzeichen: Obsidian entschlüsselt sie in einem Link, ein Browser übergeht Leerraum vor dem Schema. Der Text sieht danach gleich
+// aus, und LINK und ZIEL sehen das Schema so, wie es wirkt („javascript&colon;“, „&#106;avascript:“). Andere Referenzen bleiben.
+const ZEICHEN_REF = /&#(?:(\d{1,7})|[xX]([0-9a-fA-F]{1,6}));?|&(colon|period|plus|Tab|NewLine);/g;
+const REF_NAME = { colon: ":", period: ".", plus: "+", Tab: " ", NewLine: " " };
+const zeichenRefs = (s) => String(s).replace(ZEICHEN_REF, (m, d, h, name) => {
+  if (name) return REF_NAME[name];
+  const c = d ? Number(d) : parseInt(h, 16);
+  if (c <= 0x20 || (c >= 0x7f && c <= 0x9f)) return " ";
+  return c < 0x7f && /[a-z0-9+.:-]/i.test(String.fromCharCode(c)) ? String.fromCharCode(c) : m;
+});
+// Linkziele: Markdown liest ein Ziel hinter „](“ und „]:“ (Link, Definition, auch in „<…>“) und direkt hinter „<“ (Link in
+// spitzen Klammern), davor Leerraum. Dort bleibt nur http(s), das linksEntschaerfen schon geprüft hat; jedes andere Schema
+// (javascript:, vbscript:, data:, file:, obsidian: …) wird reiner Text: „](“ und „]:“ bekommen ein Leerzeichen nach dem „]“, ein
+// „<“ davor wird ein Leerzeichen. Ein „\“ vor „+“, „.“, „-“ oder „:“ zählt nicht (Obsidian liest „\:“ im Ziel als „:“). Außerhalb
+// eines Ziels macht Obsidian aus „wort:x“ keinen Link (nur http(s), www. und domain.tld/, siehe LINK); dort fallen danach nur
+// „javascript:“ und „vbscript:“ weg (wie GEFAEHRLICH für Titel), „Hinweis:x“ bleibt. Gleicher Code in zentral.js, server.js und
+// server/eingang.mjs (tests/link-filter.test.js prüft alle drei).
+const ZIEL = /(\]\(|\]:|<)(\s*(?:<\s*)?)([a-z](?:[a-z0-9]|\\?[+.-])*)\\?:/gi;
+const fremdeZiele = (s) => String(s).replace(ZIEL, (m, auf, ws, schema) => (/^https?$/i.test(schema) ? m
+  : (auf === "<" ? " " : auf[0] + " " + auf[1]) + ws.replace(/</g, " ") + m.slice(auf.length + ws.length)));
 export { linksEntschaerfen };
 // Wie STEUER und WEG in zentral.js: Steuer- und unsichtbare Zeichen → Leerzeichen; Zeichen, die nur unsichtbar Text tragen können
 // (weiches Trennzeichen, Variantenwähler, Hangul-Füller, Unicode-Tags), fallen ganz weg
@@ -111,9 +133,9 @@ export function saeubern(v, max, pflicht, links = TEXT_DOMAINS) {
   if (typeof v !== "string") return { fehler: "kein Text" };
   // viel zu lang schon vorher: Fehler, bevor die Muster laufen (wie textFeld in zentral.js)
   if (v.length > max * 4 + 1000) return { fehler: "zu lang" };
-  const roh = v.replace(WEG, "").replace(STEUER, " ").replace(/<%[\s\S]*?%>/g, " ").replace(/<\/?[a-z!][^>]*>/gi, " ").replace(/obsidian:\/\/\S*/gi, " ").replace(/javascript:/gi, " ")
+  const roh = zeichenRefs(v).replace(WEG, "").replace(STEUER, " ").replace(/<%[\s\S]*?%>/g, " ").replace(/<\/?[a-z!][^>]*>/gi, " ").replace(/obsidian:\/\/\S*/gi, " ")
     .replace(/\[\[|\]\]|`/g, " ");
-  const s = (links ? linksEntschaerfen(roh, links) : roh).replace(/\s+/g, " ").trim();
+  const s = fremdeZiele(links ? linksEntschaerfen(roh, links) : roh).replace(/(?:java|vb)script:/gi, " ").replace(/\s+/g, " ").trim();
   if (!s) return pflicht ? { fehler: "leer" } : { wert: "" };
   if (s.length > max) return { fehler: "zu lang" };
   return { wert: s };
@@ -126,6 +148,138 @@ export const ohneLinks = (v) => (typeof v === "string" ? v.replace(/\b(?:https?:
 // Was ohneLinks übrig lässt („domain.de/…“, andere Schemata), entschärft linksEntschaerfen ohne erlaubte Domain: Der Server
 // macht nie selbst einen Link daraus, auch nicht zur Uni.
 const lesetext = (v, max, pflicht) => saeubern(ohneLinks(v), max, pflicht, []);
+
+// ---------- Zugangsdaten erkennen (nach bestem Bemühen) ----------
+// Eine Heuristik, keine Garantie: Was der Server in tresor.json an Claude gibt (Titel und To-dos aus dem Tresor), soll nichts
+// enthalten, was nach Kennwort, Zugangscode, Konto oder Schlüssel aussieht. Gleiche Regeln wie ohneKennwort in ilias.js
+// (Kurstitel), dazu weitere Wörter und Formen (MUSTER_EXTRA); die Liste steht in docs/architektur/server.md, „Zugangsdaten“.
+// Erkannt wird auf einer gefalteten Fassung: unsichtbare Zeichen (Breiten-, Richtungs-, Trennzeichen, Variantenwähler) und
+// Steuerzeichen ohne Leerraum zuerst ganz weg, damit ein getrenntes Wort („Pass<U+200B>wort“) zusammenbleibt, dann Zeilenwechsel zu
+// Leerzeichen, Entitäten aufgelöst (auch doppelt kodiert), NFKC, Doppelgänger lateinisch (kyrillisch, griechisch, armenisch,
+// Kapitälchen, IPA), klein; für die Marken eines Kennworts dazu „@“ als a und „$“ als s („P@ssw0rt“ ohne die Null).
+// Die Rolle ist begrenzt: Dieselben Texte erreichen Claude ohnehin über die Mails selbst, und der Skill behandelt alles als Daten.
+const UNSICHTBAR = /[\u00ad\u061c\u115f\u1160\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\uffa0]|\u034f|\u17b4|\u17b5|[\u180b-\u180d]|\u180f|[\ufe00-\ufe0f]|\udb40[\udc00-\udc7f\udd00-\uddef]/g;
+const ENT = { amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'", nbsp: " ", colon: ":", period: ".", lowbar: "_", hyphen: "-", sol: "/", num: "#", shy: "" };
+const entitaeten = (s) => {
+  let t = String(s);
+  for (let i = 0; i < 3 && t.includes("&"); i++) {
+    t = t.replace(/&(#\d{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z]{2,8});/g, (m, e) => {
+      if (e[0] !== "#") return Object.prototype.hasOwnProperty.call(ENT, e.toLowerCase()) ? ENT[e.toLowerCase()] : m;
+      const n = e[1] === "x" || e[1] === "X" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return n > 0 && n < 0x110000 && !(n >= 0xd800 && n <= 0xdfff) ? String.fromCodePoint(n) : "";
+    });
+  }
+  return t;
+};
+const HOMOGLYPHE = { "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "у": "y", "х": "x", "к": "k", "м": "m", "т": "t", "н": "h", "в": "b",
+  "і": "i", "ј": "j", "ѕ": "s", "ԁ": "d", "ԝ": "w", "ԛ": "q", "ӏ": "l", "А": "A", "В": "B", "Е": "E", "К": "K", "М": "M", "Н": "H",
+  "О": "O", "Р": "P", "С": "C", "Т": "T", "Х": "X", "У": "Y", "І": "I", "Ј": "J", "Ѕ": "S", "Ԝ": "W", "α": "a", "ο": "o", "ρ": "p",
+  "ε": "e", "κ": "k", "ν": "v", "τ": "t", "υ": "u", "ι": "i", "ω": "w", "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I",
+  "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Υ": "Y", "Χ": "X",
+  // lateinische Sonderformen (punktloses i, IPA, Kapitälchen), armenische Doppelgänger, Punkte aus CJK-Schriften
+  "\u0131": "i", "\u0237": "j", "\u0251": "a", "\u0261": "g", "\u0269": "i", "\u026a": "i", "\u0274": "n", "\u0280": "r", "\u028f": "y", "\u0299": "b", "\u029c": "h", "\u029f": "l", "\u0561": "w", "\u0563": "q", "\u0566": "q", "\u0570": "h", "\u0578": "n", "\u057c": "n", "\u057d": "u", "\u0581": "g", "\u0584": "f", "\u0585": "o", "\u1d00": "a", "\u1d04": "c", "\u1d05": "d", "\u1d07": "e", "\u1d0a": "j", "\u1d0b": "k", "\u1d0d": "m", "\u1d0f": "o", "\u1d18": "p", "\u1d1b": "t", "\u1d1c": "u", "\u1d20": "v", "\u1d21": "w", "\u1d22": "z", "\ua731": "s", "\ua730": "f", "\u3002": ".", "\uff61": ".", "\ufe12": "." };
+const falten = (t) => t.replace(/[Ͱ-ϿЀ-ԯ\u0131\u0237\u0250-\u02af\u0530-\u058f\u1d00-\u1d7f\ua730\ua731\u3002\ufe12\uff61]/g, (c) => HOMOGLYPHE[c] || c);
+// Steuerzeichen ohne Leerraum (U+0000 bis U+001F außer Tab und Zeilenwechsel, U+007F bis U+009F) ganz weg, damit sie kein Wort
+// trennen („ig<U+0000>nore“); Zeilenwechsel und die übrigen aus STEUER werden Leerzeichen
+const STEUER_WEG = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f]/g;
+const ohneUnsichtbare = (s) => String(s).normalize("NFC").replace(UNSICHTBAR, "").replace(STEUER_WEG, "").replace(STEUER, " ");
+// gefaltete Fassung zum Prüfen: NFKC, Doppelgänger lateinisch, klein (auch Sonderfälle wie „ẞ“, die /i nicht abdeckt)
+const gefaltet = (s) => {
+  let t = ohneUnsichtbare(entitaeten(ohneUnsichtbare(s)));
+  try { t = t.normalize("NFKC"); } catch (e) { /* bleibt NFC */ }
+  return falten(ohneUnsichtbare(t)).replace(/\s+/g, " ");
+};
+const klein = (d) => falten(d.toLowerCase());
+// Wie ilias.js: starke Marken zählen immer (nicht als Wortanfang: „Passwortsicherheit“), PW-Formen mit Ziffer, „:“/„=“ oder nach
+// einem Trenner, schwache Wörter nur mit „:“/„=“ und einem Wert, der wie ein Kennwort aussieht
+const LUECKE = "[\\s._\\-]?";
+const zeichenweise = (w) => w.split("").join(LUECKE);
+const BUCHSTABE = /[A-Za-zÄÖÜäöüß]/;
+const STARK = new RegExp("(?:" + [
+  zeichenweise("passw") + LUECKE + "(?:o|ö|oe)" + LUECKE + "r" + LUECKE + "[td](?:e?r|e?s|e)?",
+  zeichenweise("kennw") + LUECKE + "(?:o|ö|oe)" + LUECKE + "r" + LUECKE + "t(?:e?r|e?s|e)?",
+  "(?:pass|kenn|zugangs|einschreibe|beitritts)" + LUECKE + "code", "passwd", "pwd", "passw\\.", "kennw\\.", "mot de passe",
+  "enrol+ment" + LUECKE + "key", "zugangsdaten", "(?:einschreibe|beitritts|zugangs|kurs)" + LUECKE + "schl(?:ü|ue|u)ssel",
+  "schl(?:ü|ue|u)sselwort",
+].join("|") + ")(?![A-Za-zÄÖÜäöüß])", "gi");
+const PW = /p[\s./_-]?w\.?(?![A-Za-zÄÖÜäöüß])/gi;
+const SCHWACH = /(?:key|code|pin|pass|zugang|login|secret|kw|schl(?:ü|ue|u)ssel)(?=\s*[:=])/gi;
+const TRENNER = /[([{|,;:–—\-/·]$/;
+const wertWiePasswort = (rest) => {
+  const w = (/^\s*[:=]\s*([^\s)\]}]+)/.exec(rest) || [])[1] || "";
+  return !!w && (/\d/.test(w) || /[^A-Za-zÄÖÜäöüß]/.test(w) || /[a-zäöüß][A-ZÄÖÜ]/.test(w));
+};
+function markeDa(d) {
+  let m;
+  STARK.lastIndex = 0;
+  if (STARK.test(d)) return true;
+  PW.lastIndex = 0;
+  while ((m = PW.exec(d))) {
+    const vor = d.slice(0, m.index), nach = d.slice(m.index + m[0].length);
+    const kompositum = /(?:kurs|beitritts)[\s._-]?$/i.test(vor);
+    if (!kompositum && vor && BUCHSTABE.test(vor[vor.length - 1])) continue;
+    if (/^\d/.test(nach) || /^\s*[:=]/.test(nach) || kompositum || TRENNER.test(vor.replace(/\s+$/, "")) || !vor.trim()) return true;
+  }
+  SCHWACH.lastIndex = 0;
+  while ((m = SCHWACH.exec(d))) {
+    if (m.index > 0 && BUCHSTABE.test(d[m.index - 1])) continue;
+    if (wertWiePasswort(d.slice(m.index + m[0].length))) return true;
+  }
+  return false;
+}
+// Dazu auf dem Server: Wörter für Zugänge, Konten und Kennungen (auch ohne Wert, wie bisher PIN) und Formen geheimer Werte
+const WORT = (w, schalter = "i") => new RegExp("(?<![A-Za-zÄÖÜäöüß])(?:" + w + ")(?![A-Za-zÄÖÜäöüß])", schalter);
+export const MUSTER_EXTRA = [
+  WORT("log-?in(?:daten|name)|anmeldedaten"), WORT("pass" + LUECKE + "code|passcodes?|pins?|tokens?|iban|bic"),
+  WORT("einschreibe" + LUECKE + "schl(?:ü|ue|u)ssel"), WORT("matrikel(?:nummer|nr\\.?|-nr\\.?)?|matr\\.?\\s?-?\\s?nr\\.?"),
+  WORT("TANs?", ""), WORT("(?:i|m|push|sms|chip|photo|foto)-?tans?"),
+  /\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){3,7}(?: ?[A-Z0-9]{1,3})?\b/, // IBAN
+  /sk-ant-[A-Za-z0-9_-]{8,}/, /\bsk-(?:proj-)?[A-Za-z0-9_-]{20,}/, /\bgh[pousr]_[A-Za-z0-9]{20,}/, /\bgithub_pat_[A-Za-z0-9_]{20,}/,
+  /\bglpat-[A-Za-z0-9_-]{20,}/, /\bxox[abprs]-[A-Za-z0-9-]{10,}/, /\bAKIA[0-9A-Z]{16}\b/, /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
+];
+// → true, wenn der Text nach Zugangsdaten aussieht
+export function hatZugangsdaten(s) {
+  if (s == null || s === "") return false;
+  const d = gefaltet(String(s).slice(0, 5000));
+  return markeDa(d) || markeDa(klein(d).replace(/@/g, "a").replace(/\$/g, "s")) || MUSTER_EXTRA.some((re) => re.test(d) || (re.flags.includes("i") && re.test(klein(d))));
+}
+
+// ---------- Text, der wie eine Anweisung an Claude aussieht ----------
+// Was der Server aus dem Tresor an Claude gibt (tresor.json), kommt in späteren Läufen wieder: Ein To-do, das Claude aus einer
+// präparierten Unterlage in eine Begleitnotiz geschrieben hat, wäre sonst jedes Mal neu im Lauf. Darum fallen Einträge mit einem
+// Link (Schema, „www.“, Domain mit Pfad oder bekannter Endung; eine Mail-Adresse zählt nicht) oder mit Wörtern einer Anweisung an
+// ein Modell weg (ignorieren, vergessen, „du bist“, „you are“, Rollen wie „System:“, Anweisung, „System-Prompt“, „lösche alle“,
+// „neue Regel“, „für Claude“, Namen von Dateien des Laufs und von Werkzeugen). „Prompt“ allein zählt nicht („Prompt Engineering“). Auch das ist eine Heuristik; sie nimmt lieber einen harmlosen Eintrag zu viel heraus, denn der Auszug
+// dient nur gegen doppelte Einträge.
+const TLD = "de|com|org|net|io|ai|eu|info|app|dev|me|co|ly|gl|to|xyz|ru|cn|uk|at|ch|fr|nl|it|es|edu|gov|biz|online|site|link|click|top";
+const LINK_ARTIG = new RegExp("\\b[a-z][a-z0-9+.-]{1,30}:\\/\\/|\\b(?:mailto|obsidian|file|data|javascript):|\\bwww\\d{0,3}\\.|(?<![@\\w.-])(?:[a-z0-9-]+\\.)+[a-z]{2,24}\\/" +
+  "|(?<![@\\w.-])(?:[a-z0-9-]*[a-z][a-z0-9-]*\\.)+(?:" + TLD + ")(?![a-z0-9-])", "i");
+// Wortteile zählen überall („Arbeitsanweisung“, „ignoriere“), kurze Wörter und Wendungen nur als ganzes Wort
+const ANWEISUNG_TEIL = /anweisung|instruction|jailbreak|ignorier|ignore|disregard/i;
+const ANWEISUNG = new RegExp("(?<![A-Za-zÄÖÜäöüß])(?:" + [
+  "vergiss (?:alle|alles|deine|die (?:vorherigen|bisherigen))", "forget (?:all|everything|previous|prior|your)", "override", "du bist (?:jetzt|nun|ab jetzt|ein|eine)", "ab jetzt bist du", "you are", "you(?:'|’)?re",
+  "act as", "pretend", "roleplay", "deine (?:regeln|vorgaben)", "your rules", "system\\s*:", "assistant\\s*:", "user\\s*:", "human\\s*:",
+  "system[- ]?prompts?", "prompt[- ]?injection", "(?:dein|deinen|deine|your|neuer|neuen|new) prompts?", "neue regeln?", "new (?:rules?|instructions?)",
+  "(?:lösche|loesche|entferne|delete|remove|erase) (?:alle|alles|sämtliche|saemtliche|all|every)", "(?:an|für|fuer|for|to) claude", "claude\\s*[:,]",
+  "ausgabe\\.json", "tresor\\.json", "auftrag\\.md", "bisher\\.json", "zentral\\.json", "stand\\.json", "todo_doppel", "mcp__\\w*",
+  "get_thread", "get_message", "search_threads", "send_message", "create_draft", "webfetch", "websearch", "notebookedit", "bash",
+  "(?:read|write|edit|glob|grep)\\s*\\(",
+].join("|") + ")(?![A-Za-zÄÖÜäöüß])|<\\||\\|>|\\[/?inst\\]|<\\/?(?:system|assistant|user)>", "i");
+// → true, wenn der Text einen Link enthält oder wie eine Anweisung an ein Modell aussieht
+export function wieAnweisung(s) {
+  if (s == null || s === "") return false;
+  const d = klein(gefaltet(String(s).slice(0, 5000)));
+  return LINK_ARTIG.test(d) || ANWEISUNG_TEIL.test(d) || ANWEISUNG.test(d);
+}
+
+// Titel eines zentralen Termins (termine.json der zentralen Daten, für zentral.json im Lauf) wie im Plugin (termineNormal in
+// zentral.js): kein HTML, Templater, Wikilink, Backtick, Zeilenumbruch, javascript:, keine Klammern [ ] < > { } | \, dann gesäubert
+// höchstens 120 Zeichen; dazu nichts, was wie eine Anweisung an Claude aussieht. → { wert } oder { fehler }
+export function zentralTitel(v) {
+  if (typeof v !== "string" || GEFAEHRLICH.test(v) || /[[\]<>{}|\\]/.test(v)) return { fehler: "titel unzulässig" };
+  const t = saeubern(v, G.titel, true);
+  return t.fehler || !(wieAnweisung(v) || wieAnweisung(t.wert)) ? t : { fehler: "titel wie eine Anweisung" };
+}
 
 export const idAus = (schluessel) => "c-" + createHash("sha256").update(String(schluessel)).digest("hex").slice(0, 20);
 
@@ -276,19 +430,130 @@ export function kapitelModulNormal(e, heute) {
     vorlaeufig: e.vorlaeufig === true, kapitel } };
 }
 
-// Claudes Ausgabe eines Laufs → { eingang, verworfen }. Einzelne ungültige Einträge fallen weg, der Rest bleibt.
-export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
+// ---------- Herkunft eines Termins ----------
+// Woher die Angaben eines Termins stammen (Feld „herkunft“ in Claudes Ausgabe, skill ausgabe.md): { mail: "uni-postfach/<Datei>" }
+// (eine Mail in roh/), { gmail: "<Thread-ID>", domain, datum } oder { unterlage: "<Datei>" }. Für Mails aus roh/ nimmt der
+// Server Domain, Urteil und Datum nie von Claude, sondern aus dem Kopf der Datei (mails, lauf.mjs mailsLesen; abrufen.py schreibt
+// ihn); für Gmail gilt, was Claude angibt, mit Urteil „unbekannt“. Die Herkunft geht nie ins Eingang. → Objekt oder null
+export const URTEILE = ["pass", "fehlgeschlagen", "unbekannt"];
+export const DOMAIN = /^[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+export const domainNormal = (d) => {
+  const s = typeof d === "string" ? d.trim().toLowerCase().replace(/^(?:www\d{0,3}\.)+/, "") : "";
+  return s.length <= 100 && DOMAIN.test(s) ? s : "";
+};
+export function herkunftNormal(h, mails = {}) {
+  if (!istObjekt(h)) return null;
+  if (typeof h.mail === "string") {
+    const m = Object.prototype.hasOwnProperty.call(mails, h.mail) && istObjekt(mails[h.mail]) ? mails[h.mail] : null;
+    return m ? { art: "mail", domain: domainNormal(m.domain), urteil: URTEILE.includes(m.urteil) ? m.urteil : "unbekannt", datum: datumOk(m.datum) ? m.datum : "" } : null;
+  }
+  if (typeof h.gmail === "string") return { art: "mail", domain: domainNormal(h.domain), urteil: "unbekannt", datum: datumOk(h.datum) ? h.datum : "" };
+  if (typeof h.unterlage === "string") return { art: "unterlage", domain: "", urteil: "unbekannt", datum: "" };
+  return null;
+}
+
+// Quelle eines Termins für den Vergleich (herkunftAnwenden): „mail:<Domain>“ (registrierbare Domain aus From, quelleDomain; mit Urteil
+// „fehlgeschlagen“ eine eigene Quelle „mail:<Domain>:nicht-bestaetigt“, sonst gälte eine gefälschte Mail als derselbe Absender),
+// „unterlage“ oder "" (unbekannt: keine oder eine ungültige Herkunft, Mail ohne Domain). Bestätigt ist die Domain nur bei Urteil
+// „pass“; bei „unbekannt“ ist es die Domain, die die Mail angibt, bei Gmail die, die Claude nennt. Der Vergleich ist darum nur so
+// stark wie das Urteil (abrufen.py authentifiziert): Ohne Urteil der Uni gilt eine Mail mit gefälschtem From als derselbe Absender.
+// Registrierbar: die letzten zwei Teile, unter einer zweiteiligen Endung wie co.uk drei (eine Näherung ohne die Liste öffentlicher
+// Endungen). So ist wiwi.uni-tuebingen.de dieselbe Quelle wie uni-tuebingen.de. Ausnahme EIGENE_QUELLEN: Unter
+// student.uni-tuebingen.de hat jede und jeder Studierende eine Adresse, darum bleibt das eine eigene Quelle.
+const ZWEITE_EBENE = ["ac", "co", "com", "edu", "gov", "net", "org", "or", "ne", "go", "gv"];
+const EIGENE_QUELLEN = ["student.uni-tuebingen.de"];
+export function quelleDomain(d) {
+  const domain = domainNormal(d);
+  if (!domain) return "";
+  const eigen = EIGENE_QUELLEN.find((e) => domain === e || domain.endsWith("." + e));
+  if (eigen) return eigen;
+  const teile = domain.split(".");
+  const n = teile.length >= 3 && teile[teile.length - 1].length === 2 && ZWEITE_EBENE.includes(teile[teile.length - 2]) ? 3 : 2;
+  return teile.slice(-n).join(".");
+}
+export const quelleVon = (h) => (!h ? "" : h.art === "unterlage" ? "unterlage"
+  : h.art === "mail" && quelleDomain(h.domain) ? "mail:" + quelleDomain(h.domain) + (h.urteil === "fehlgeschlagen" ? ":nicht-bestaetigt" : "") : "");
+// Gemerkte Quellen einer früheren Fassung nennen die ganze Domain (mail:wiwi.uni-tuebingen.de): vor dem Vergleich ebenso gekürzt
+const quelleGekuerzt = (q) => {
+  const m = /^mail:([^:]+)(:nicht-bestaetigt)?$/.exec(String(q || ""));
+  return m ? "mail:" + quelleDomain(m[1]) + (m[2] || "") : String(q || "");
+};
+
+// Hinweise des Servers vor der info eines Termins. Was davon schon in Claudes info steht (abgeschrieben aus bisher.json), fällt dort
+// erst weg; dann die Hinweise, dann Claudes info, zusammen höchstens G.info Zeichen (die info an einer Wortgrenze gekürzt).
+export const NICHT_BESTAETIGT = "Absender nicht bestätigt.";
+const SERVER_HINWEIS = /(?:Geändert durch (?:Mail von [a-z0-9.-]+|eine Unterlage|eine nicht genannte Quelle) vom \d{2}\.\d{2}\.\d{4}\.|Absender nicht bestätigt\.)\s*/g;
+function infoMit(hinweise, info) {
+  const eigen = String(info || "").replace(SERVER_HINWEIS, "").trim();
+  if (!hinweise.length) return eigen;
+  const vorn = hinweise.join(" ");
+  const platz = G.info - vorn.length - 1;
+  let rest = eigen;
+  if (rest.length > platz) {
+    const t = rest.slice(0, Math.max(0, platz - 1)), i = t.lastIndexOf(" ");
+    rest = platz > 1 ? (i > platz / 2 ? t.slice(0, i) : t).trim() + "…" : "";
+  }
+  const r = lesetext(rest ? vorn + " " + rest : vorn, G.info, false);
+  return r.fehler ? vorn : r.wert;
+}
+const datumDeutsch = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
+// „Geändert durch Mail von <Domain> vom <Datum der Mail>.“ (ohne Datum der Tag des Laufs)
+function geaendertDurch(h, heute) {
+  const tag = datumDeutsch(h && h.datum ? h.datum : heute);
+  if (h && h.art === "mail" && h.domain) return `Geändert durch Mail von ${h.domain} vom ${tag}.`;
+  return h && h.art === "unterlage" ? `Geändert durch eine Unterlage vom ${tag}.` : `Geändert durch eine nicht genannte Quelle vom ${tag}.`;
+}
+
+// Herkunft auf die Termine anwenden → { termine, quellen }. quellen (termine-quellen.json des Servers, nie im Eingang): id →
+// { quelle (quelleVon der Herkunft, aus der der Termin zuerst kam), fremd? (Hinweis der letzten Änderung aus einer anderen Quelle) }.
+// - Absender nicht bestätigt: Stammt der Termin aus einer Mail mit Urteil „fehlgeschlagen“ (nur aus dem Kopf einer Mail in roh/),
+//   ist er nie „offiziell“, und die info beginnt mit „Absender nicht bestätigt.“. Urteil „unbekannt“ (keine Kopfzeile
+//   Authentication-Results) ändert nichts: Ob der Mailserver der Uni sie setzt, ist nicht bekannt.
+// - Änderung aus einer anderen Quelle: Ändert eine Lieferung Datum, Ende, Uhrzeit oder Absage eines bekannten Termins (bestand) und
+//   kommt sie aus einer anderen Quelle als der Termin (auch aus einer unbekannten), gilt sie nur als „geschätzt“, mit „Geändert durch
+//   Mail von <Domain> vom <Datum>.“ vorn in der info. Das bleibt so, bis die erste Quelle den Termin wieder nennt; eine Änderung
+//   aus derselben Quelle gilt wie bisher. Ein Termin ohne gemerkte Quelle (vor dieser Fassung geliefert) bekommt die Quelle seiner
+//   nächsten Lieferung, und diese gilt wie bisher.
+export function herkunftAnwenden(termine, herkunft, { bestand = {}, quellen = {}, heute = "" } = {}) {
+  const hat = (o, k) => istObjekt(o) && Object.prototype.hasOwnProperty.call(o, k);
+  const neu = {};
+  const aus = termine.map((t) => {
+    const h = hat(herkunft, t.id) ? herkunft[t.id] : null;
+    const quelle = quelleVon(h);
+    const q = hat(quellen, t.id) && istObjekt(quellen[t.id]) && typeof quellen[t.id].quelle === "string" ? quellen[t.id] : null;
+    const vorher = hat(bestand, t.id) && istObjekt(bestand[t.id]) ? bestand[t.id] : null;
+    const hinweise = [];
+    let eintrag = quelle ? { quelle } : null;
+    if (vorher && q) {
+      const geaendert = ["datum", "bis", "uhrzeit"].some((k) => String(vorher[k] || "") !== String(t[k] || "")) || (vorher.entfaellt === true) !== (t.entfaellt === true);
+      eintrag = { quelle: q.quelle };
+      if (quelle !== quelleGekuerzt(q.quelle) && (geaendert || typeof q.fremd === "string")) eintrag.fremd = geaendert ? geaendertDurch(h, heute) : q.fremd;
+      if (eintrag.fremd) hinweise.push(eintrag.fremd);
+    }
+    if (h && h.urteil === "fehlgeschlagen") hinweise.push(NICHT_BESTAETIGT);
+    if (eintrag) neu[t.id] = eintrag;
+    return { ...t, ...(hinweise.length ? { status: "geschätzt" } : {}), info: infoMit(hinweise, t.info) };
+  });
+  return { termine: aus, quellen: { ...(istObjekt(quellen) ? quellen : {}), ...neu } };
+}
+
+// Claudes Ausgabe eines Laufs → { eingang, verworfen, herkunft (id → herkunftNormal) }. Einzelne ungültige Einträge fallen weg,
+// der Rest bleibt. mails: Kopf der Mails in roh/ (lauf.mjs mailsLesen).
+export function eingangNormal(roh, { jetzt = new Date(), lauf = "", mails = {} } = {}) {
   const heute = jetzt.toISOString().slice(0, 10);
   const verworfen = [];
   if (!istObjekt(roh)) return { fehler: "Ausgabe ist kein Objekt" };
   const termine = [];
   const ids = new Set();
+  const herkunft = {};
   for (const e of Array.isArray(roh.termine) ? roh.termine.slice(0, G.termine) : []) {
     const r = terminNormal(e, heute);
     if (r.fehler) { verworfen.push({ art: "termin", schluessel: istObjekt(e) ? String(e.schluessel || "").slice(0, 80) : "", grund: r.fehler }); continue; }
     if (ids.has(r.wert.id)) { verworfen.push({ art: "termin", schluessel: r.wert.schluessel.slice(0, 80), grund: "doppelter schluessel" }); continue; }
     ids.add(r.wert.id);
     termine.push(r.wert);
+    const h = herkunftNormal(e.herkunft, mails);
+    if (h) herkunft[r.wert.id] = h;
   }
   const begleitnotizen = [];
   for (const b of Array.isArray(roh.begleitnotizen) ? roh.begleitnotizen.slice(0, G.begleitnotizen) : []) {
@@ -330,6 +595,7 @@ export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
     eingang: { schema: EINGANG_SCHEMA, erstellt: jetzt.toISOString(), lauf: String(lauf).slice(0, 80), quellen: [...new Set(quellen)], termine, begleitnotizen, hinweise,
       todo_doppel, kapitel },
     verworfen,
+    herkunft,
   };
 }
 

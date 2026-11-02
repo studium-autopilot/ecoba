@@ -91,7 +91,7 @@ module.exports = function (ctx) {
     const roh = (k) => fm[FELD[k]];
     const da = (k) => roh(k) !== undefined && roh(k) !== null && String(roh(k)).trim() !== "";
     const zahl = (k, min, max) => { const n = Number(String(roh(k)).replace(",", ".")); return da(k) && isFinite(n) ? Math.min(max, Math.max(min, n)) : STANDARD[k]; };
-    let ziel = da("ziel") ? Number(String(roh("ziel")).replace("%", "").replace(",", ".").trim()) : STANDARD.ziel;
+    let ziel = da("ziel") ? Number(String(roh("ziel")).replace(/%/g, "").replace(",", ".").trim()) : STANDARD.ziel;
     if (!isFinite(ziel)) ziel = STANDARD.ziel;
     if (ziel > 1) ziel /= 100;
     const schritte = (k) => (roh(k) === undefined || roh(k) === null ? STANDARD[k] : String(roh(k)));

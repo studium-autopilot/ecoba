@@ -107,6 +107,21 @@ module.exports = function (ctx) {
     return v;
   };
   const datei = (p) => app.vault.getAbstractFileByPath(p);
+  // Gibt es den Namen schon? Windows, macOS und iOS unterscheiden in Dateinamen weder Groß- und Kleinschreibung noch die
+  // Unicode-Form („ü“ als ein Zeichen oder als „u“ mit Punkten); getAbstractFileByPath findet nur genau dieselbe Schreibweise, und
+  // eine zweite Notiz „termin.md“ neben „Termin.md“ ließe sich dort nicht anlegen oder überschriebe die erste. Darum vergleicht
+  // existiert die Namen im Ordner klein und in NFC. eigene: diese Datei zählt nicht (Umbenennen, auch nur in der Schreibweise).
+  // Für alle, die Notizen anlegen oder umbenennen (zentral.js, ilias-kalender.js, alma.js). → true | false
+  const nameForm = (s) => { let t = String(s); try { t = t.normalize("NFC"); } catch (e) { /* ohne normalize */ } return t.toLowerCase(); };
+  const existiert = (p, eigene) => {
+    const pfad = String(p), i = pfad.lastIndexOf("/");
+    const ich = (f) => !!eigene && (f === eigene || f.path === eigene.path);
+    const genau = datei(pfad);
+    if (genau) return !ich(genau);
+    const ordner = i < 0 ? (app.vault.getRoot ? app.vault.getRoot() : null) : datei(pfad.slice(0, i));
+    const name = nameForm(pfad.slice(i + 1));
+    return !!ordner && Array.isArray(ordner.children) && ordner.children.some((k) => nameForm(k.name) === name && !ich(k));
+  };
   const fmVon = (f) => { const c = f && app.metadataCache.getFileCache(f); return (c && c.frontmatter) || null; };
   const plugin = () => ctx.plugin || {};
 
@@ -124,7 +139,8 @@ module.exports = function (ctx) {
   // ---------- Reiner Text ----------
   // Steuer- und unsichtbare Zeichen (Richtung, Zeilentrenner, Worttrenner) → Leerzeichen; Zeichen, die nur unsichtbar Text tragen
   // können (weiches Trennzeichen, Variantenwähler, Hangul-Füller, Unicode-Tags U+E0000–E007F und U+E0100–E01EF als Ersatzpaar) fallen
-  // ganz weg. Dazu HTML-Tags, Templater-Marken, obsidian://-Links, Wikilink-Klammern, Backticks und Links außerhalb von TEXT_DOMAINS.
+  // ganz weg. Dazu HTML-Tags, Templater-Marken, obsidian://-Links, Wikilink-Klammern, Backticks, Links außerhalb von TEXT_DOMAINS und
+  // Linkziele mit einem anderen Schema als http(s) (fremdeZiele).
   const STEUER = /[\u0000-\u001f\u007f\u061c\u180e\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufff9-\ufffb]/g;
   const WEG = /[\u00ad\u115f\u1160\u3164\uffa0]|\u034f|\u17b4|\u17b5|[\u180b-\u180d]|\u180f|[\ufe00-\ufe0f]|\udb40[\udc00-\udc7f\udd00-\uddef]/g;
   const GEFAEHRLICH = /<\s*\/?\s*[a-z!]|<%|%>|obsidian:\/\/|\[\[|\]\]|`|[\r\n]|javascript:/i;
@@ -195,6 +211,27 @@ module.exports = function (ctx) {
     }
     return aus + t.slice(bis);
   };
+  // Zeichenreferenzen für Buchstaben, Ziffern, „+“, „.“, „-“ und „:“ werden das Zeichen, für Leerraum und Steuerzeichen ein
+  // Leerzeichen: Obsidian entschlüsselt sie in einem Link, ein Browser übergeht Leerraum vor dem Schema. Der Text sieht danach gleich
+  // aus, und LINK und ZIEL sehen das Schema so, wie es wirkt („javascript&colon;“, „&#106;avascript:“). Andere Referenzen bleiben.
+  const ZEICHEN_REF = /&#(?:(\d{1,7})|[xX]([0-9a-fA-F]{1,6}));?|&(colon|period|plus|Tab|NewLine);/g;
+  const REF_NAME = { colon: ":", period: ".", plus: "+", Tab: " ", NewLine: " " };
+  const zeichenRefs = (s) => String(s).replace(ZEICHEN_REF, (m, d, h, name) => {
+    if (name) return REF_NAME[name];
+    const c = d ? Number(d) : parseInt(h, 16);
+    if (c <= 0x20 || (c >= 0x7f && c <= 0x9f)) return " ";
+    return c < 0x7f && /[a-z0-9+.:-]/i.test(String.fromCharCode(c)) ? String.fromCharCode(c) : m;
+  });
+  // Linkziele: Markdown liest ein Ziel hinter „](“ und „]:“ (Link, Definition, auch in „<…>“) und direkt hinter „<“ (Link in
+  // spitzen Klammern), davor Leerraum. Dort bleibt nur http(s), das linksEntschaerfen schon geprüft hat; jedes andere Schema
+  // (javascript:, vbscript:, data:, file:, obsidian: …) wird reiner Text: „](“ und „]:“ bekommen ein Leerzeichen nach dem „]“, ein
+  // „<“ davor wird ein Leerzeichen. Ein „\“ vor „+“, „.“, „-“ oder „:“ zählt nicht (Obsidian liest „\:“ im Ziel als „:“). Außerhalb
+  // eines Ziels macht Obsidian aus „wort:x“ keinen Link (nur http(s), www. und domain.tld/, siehe LINK); dort fallen danach nur
+  // „javascript:“ und „vbscript:“ weg (wie GEFAEHRLICH für Titel), „Hinweis:x“ bleibt. Gleicher Code in zentral.js, server.js und
+  // server/eingang.mjs (tests/link-filter.test.js prüft alle drei).
+  const ZIEL = /(\]\(|\]:|<)(\s*(?:<\s*)?)([a-z](?:[a-z0-9]|\\?[+.-])*)\\?:/gi;
+  const fremdeZiele = (s) => String(s).replace(ZIEL, (m, auf, ws, schema) => (/^https?$/i.test(schema) ? m
+    : (auf === "<" ? " " : auf[0] + " " + auf[1]) + ws.replace(/</g, " ") + m.slice(auf.length + ws.length)));
   // Zweite Sicherung beim Schreiben einer Notiz (Ausgabe-Kodierung): Was nach linksEntschaerfen noch nach Link, Link-Definition,
   // HTML oder Code aussieht, bekommt vor dem Zeichen, an dem Obsidian es erkennt, einen „\“: den Doppelpunkt hinter „http(s)“,
   // „file“, „data“, „jar“ und vor „/“, den Punkt hinter „www“ und vor „tld/“, „]“ vor „(“, „[“ oder „:“, „`“ und „<“, wenn danach
@@ -231,19 +268,26 @@ module.exports = function (ctx) {
       return schema ? schema + "\\:" : www ? www + "\\." : "\\" + z;
     });
   };
-  const saeubern = (s) => linksEntschaerfen(String(s).replace(WEG, "").replace(STEUER, " ")
+  const saeubern = (s) => fremdeZiele(linksEntschaerfen(zeichenRefs(s).replace(WEG, "").replace(STEUER, " ")
     .replace(/<%[\s\S]*?%>/g, " ").replace(/<%|%>/g, " ")
     .replace(/<[^>]*>/g, " ")
-    .replace(/obsidian:\/\/\S*/gi, " ").replace(/javascript:/gi, " ")
-    .replace(/\[\[|\]\]/g, " ").replace(/`/g, ""), TEXT_DOMAINS)
+    .replace(/obsidian:\/\/\S*/gi, " ")
+    .replace(/\[\[|\]\]/g, " ").replace(/`/g, ""), TEXT_DOMAINS)).replace(/(?:java|vb)script:/gi, " ")
     .replace(/\s+/g, " ").trim();
+  // Was die Regel für Titel (GEFAEHRLICH und Klammern, reinerText) nach dem Säubern noch fände: eine einzelne eckige, spitze oder
+  // geschweifte Klammer (auch ein „<b“ ohne „>“), „|“ und „\“. Pfeile („->“, „=>“, „<-“) werden „→“ bzw. „←“, übrige spitze
+  // Klammern fallen weg, eckige und geschweifte werden „(“ und „)“, „|“ und „\“ werden „/“. So hält jedes Textfeld der zentralen
+  // Daten (Ort, Info, Quelle, Hinweise, Raum …) dieselbe Regel wie ein Titel, ohne dass ein Termin wegen einer Klammer im Ort wegfällt;
+  // gewöhnlicher Text bleibt, wie er ist (seit 02.11.2026).
+  const titelZeichenWeg = (s) => s.replace(/-+>|=>/g, "→").replace(/<-+/g, "←").replace(/[<>]/g, "").replace(/ {2,}/g, " ").trim()
+    .replace(/[[{]/g, "(").replace(/[\]}]/g, ")").replace(/[|\\]/g, "/");
   // Text-Feld: kein String → Fehler; zu lang (nach dem Säubern) → Fehler; sonst gesäubert
   const textFeld = (v, max, pflicht) => {
     if (v == null || v === "") return pflicht ? { fehler: "fehlt" } : { wert: "" };
     if (typeof v !== "string") return { fehler: "kein Text" };
     // viel zu lang schon vorher: Fehler, bevor die Muster laufen (sie brauchen bei langen Eingaben mehr als lineare Zeit)
     if (v.length > max * 4 + 1000) return { fehler: `zu lang (${v.length} > ${max})` };
-    const w = saeubern(v);
+    const w = titelZeichenWeg(saeubern(v));
     if (pflicht && !w) return { fehler: "leer" };
     if (w.length > max) return { fehler: `zu lang (${w.length} > ${max})` };
     return { wert: w };
@@ -251,8 +295,18 @@ module.exports = function (ctx) {
   // Markdown im Notiztext entschärfen (Daten sind reiner Text), dazu die Zeichen, an denen Obsidian einen Link erkennt
   // (linkZeichen). Ein erlaubter Link, genau so, wie linksEntschaerfen ihn schreibt, bleibt unverändert; die „\“ davor machten ihn
   // kaputt. Aus „1. …“ oder „- …“ am Anfang wird keine Liste: der „\“ steht vor dem Satzzeichen (vor einer Ziffer bliebe er sichtbar).
-  const mdText = (s) => linkZeichenEntwerten(s, TEXT_DOMAINS, (t) => t.replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&"))
-    .replace(/^(\d+)([.)])/, "$1\\$2").replace(/^[-+]/, "\\$&");
+  // mdInZeile ist dasselbe für Text mitten in einer Zeile (hinter „# “, „· “ oder in einem Kasten), also ohne die Regel für den
+  // Zeilenanfang; mit o.und auch vor „&“ (alma.js). Andere Skripte schreiben damit Text aus ILIAS, Alma und den Literaturlisten
+  // (ilias.js, alma.js, literatur.js, meine-gruppe.js): Gewöhnlicher Text ohne Link-Merkmale wird dabei Zeichen für Zeichen so wie
+  // mit ihrer früheren eigenen Fassung (nur „\“ vor Markdown-Zeichen), vorhandene Notizen bleiben also gleich
+  // (tests/md-text.test.js).
+  const MD_ZEICHEN = /[\\`*_\[\]<>#|!$%~=^{}]/g, MD_ZEICHEN_UND = /[\\`*_\[\]<>#|!$%~=^{}&]/g;
+  // „@“ zwischen Zeichen einer Mail-Adresse bekommt ein „\“: Sonst macht Obsidian aus einer Mail-Adresse einen mailto-Link (gemessen in
+  // Obsidian 1.14.5: „\@“ ist unsichtbar und verlinkt nichts, auch in Listen, Callouts und Tabellen)
+  const MAIL_AT = /([A-Za-z0-9._%+-])@(?=[A-Za-z0-9])/g;
+  const mdInZeile = (s, o) => linkZeichenEntwerten(s == null ? "" : s, TEXT_DOMAINS,
+    (t) => t.replace(o && o.und ? MD_ZEICHEN_UND : MD_ZEICHEN, "\\$&").replace(MAIL_AT, "$1\\@"));
+  const mdText = (s) => mdInZeile(s).replace(/^(\d+)([.)])/, "$1\\$2").replace(/^[-+]/, "\\$&");
 
   // ---------- Links ----------
   const hostOk = (h, domains) => domains.some((d) => h === d || h.slice(-(d.length + 1)) === "." + d);
@@ -410,7 +464,9 @@ module.exports = function (ctx) {
       }
       return aus;
     };
-    const name = (v) => { const t = textFeld(v, G.name, true); return t.fehler ? null : t.wert; };
+    // Namen (Pausen, freie Tage, Art einer Prüfungsphase): gesäubert wie jedes Textfeld (textFeld) und danach nach der Regel für
+    // Titel (reinerText) geprüft; der Eintrag bleibt also mit entschärftem Namen, statt ganz wegzufallen
+    const name = (v) => { const t = textFeld(v, G.name, true); return t.fehler || !reinerText(t.wert) ? null : t.wert; };
     const spanne = (o) => datumOk(o.von) && datumOk(o.bis) && o.bis >= o.von;
     const aus = {
       stand: datumOk(d.stand) ? d.stand : "",
@@ -1175,7 +1231,7 @@ module.exports = function (ctx) {
   const freierPfad = (basisName, eigene, ordner) => {
     const o = ordner || ORDNER;
     let name = basisName, i = 2;
-    while (datei(`${o}/${name}.md`) && datei(`${o}/${name}.md`) !== eigene) name = `${basisName} ${i++}`;
+    while (existiert(`${o}/${name}.md`, eigene)) name = `${basisName} ${i++}`;
     return `${o}/${name}.md`;
   };
   // Ein Papierkorb für alles (quellen.js): nie endgültig löschen, auch wenn „Gelöschte Dateien: endgültig“ eingestellt ist.
@@ -2005,7 +2061,7 @@ module.exports = function (ctx) {
   };
 
   ctx.zentral = {
-    abrufen, status, stand, geraetId, idAusName, notizText, mdText, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
+    abrufen, status, stand, geraetId, idAusName, notizText, mdText, mdInZeile, existiert, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
     angebotePruefen, kapitelPruefen, literaturPruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
     aenderungenFelder, lehreDateiName, lehreName,
     // zentraler Stundenplan für Anzeige und Texte: { verfuegbar, anzahl, ohneBeginn, ausgeblendet: [ids] }

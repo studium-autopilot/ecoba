@@ -9,10 +9,25 @@ DATEN=/var/lib/studium-server
 ZUGANG=/etc/credstore.encrypted/uni-zugang
 CLAUDE=/var/lib/studium/.local/bin/claude
 RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest
+# Zusage zum Testen (docs/release.md, „Test- und Beta-Pakete“): Nur wenn root diese Datei angelegt hat, nimmt „aktualisieren“ auch
+# Pakete im Namensraum studium-server-test an. Auf einem Server von Studierenden gibt es sie nie.
+TESTPAKETE=/etc/studium-server/testpakete
+# Zufallswert dieses Servers für die gestaffelte Verteilung (installieren.sh legt ihn einmal an, nur root)
+STAFFEL=/etc/studium-server/staffel
+# Zuletzt zurückgerollte Version und Zeit (Sekunden seit 1970); installieren.sh rollt zurück, „aktualisieren“ merkt es sich hier
+ZURUECK_MARKE=/opt/studium-server/.zurueckgerollt
+# Ausstehendes Zurückrollen (installieren.sh legt es beim Umschalten an: Ziel des Zurückrollens), Mindestversion und Liste der
+# gesperrten Schlüssel; alle nur root
+PAKET_ORDNER=/opt/studium-server
+ZURUECK_OFFEN=/opt/studium-server/.zurueckrollen-offen
+MINDEST=/etc/studium-server/mindestversion
+SPERRLISTE=/etc/studium-server/revoked_keys
+LS_KONFIG=/etc/studium-server/livesync.json
 
 hilfe() {
   cat <<'TEXT'
 studium-server status                  Stand des Servers (wie /v1/status) und der Dienste
+studium-server status --json           nur der Stand als JSON (für start.sh)
 studium-server verbinden               Einmal-Link und QR-Code, um ein Gerät mit Obsidian zu verbinden (30 Minuten gültig)
 studium-server schluessel-erneuern     neue Schlüssel (Gerät verloren): offene Codes weg, jedes Gerät muss sich neu verbinden
 studium-server uni-zugang setzen       Uni-Benutzername und -Passwort verschlüsselt speichern (verdeckte Eingabe)
@@ -24,9 +39,14 @@ studium-server modell sonnet|opus      Modell für die Claude-Läufe (Standard: 
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
 studium-server nutzung                 Claude-Läufe und Token je Tag (letzte 7 Tage), Treffer am Limit des Abos
 studium-server aktualisieren           Pakete (Caddy, Node.js, CouchDB) und Claude Code aktualisieren, neuestes Server-Paket aus dem Release holen (Prüfsumme, Signatur) und installieren
+studium-server aktualisieren --jetzt   ebenso, aber eine neue Version sofort (ohne die Wartezeit nach dem Release, auch nach einem Zurückrollen)
 studium-server livesync                LiveSync einschalten (falls nötig), dann Link und Code für ein Gerät (30 Minuten)
 studium-server livesync einschalten    nur einschalten: CouchDB für den Tresor, HTTPS unter obsidian.<IP>.sslip.io
 studium-server livesync verbinden      nur Link und Code für ein weiteres Gerät
+studium-server livesync aufbauen       eine Stunde lang darf ein Gerät den Tresor auf dem Server neu aufbauen („Overwrite remote“)
+studium-server livesync-erneuern       neue Zugangsdaten für LiveSync (alte Links gelten nicht mehr, jedes Gerät braucht einen neuen)
+studium-server livesync-erneuern --neue-passphrase
+                                       dazu ein neuer Schlüssel der Verschlüsselung: Tresor auf dem Server leer, neu aufbauen
 TEXT
 }
 
@@ -52,24 +72,39 @@ als_web() {
   sudo -u studium-web env STUDIUM_SERVER_KONFIG="$KONFIG" STUDIUM_SERVER_DATEN="$DATEN" "$@"
 }
 
-port() { jq -r '.port // 8743' "$KONFIG" 2>/dev/null || echo 8743; }
+port() {
+  local p
+  p=$(jq -r '.port // 8743' "$KONFIG" 2>/dev/null || true)
+  [[ "$p" =~ ^[0-9]{1,5}$ ]] && echo "$p" || echo 8743
+}
+
+# /v1/status direkt beim Web-Dienst auf 127.0.0.1, ohne Caddy und ohne Kopf einer Weiterleitung: So antwortet er immer mit dem ganzen
+# Stand. Über Caddy (die öffentliche Adresse) braucht er den Zugangsschlüssel, sobald ein Gerät den Status einmal mit ihm geholt hat;
+# den Weg nimmt hier nichts.
+status_lesen() { curl -fsS --max-time 10 "http://127.0.0.1:$(port)/v1/status"; }
 
 # Gerät verloren: neuer Zugangs- und Datenschlüssel (32 Byte, base64url wie in installieren.sh), alle offenen Einmal-Codes weg.
 # Der Web-Dienst steht dabei still, damit niemand mit den alten Schlüsseln einen Code holt oder einen offenen einlöst; der trap
 # startet ihn auch nach einem Fehler wieder. dienst.json entsteht daneben (erst nur root, dann root:studium-web 0640) und ersetzt die
-# alte in einem Schritt (mv). Adresse, Port und Version bleiben; installieren.sh behält die neuen Schlüssel bei jedem weiteren Lauf.
+# alte in einem Schritt (mv). Adresse, Port und Version bleiben; installieren.sh behält die neuen Schlüssel bei jedem weiteren Lauf
+# (außer die Adresse ändert sich, dann erzeugt es selbst neue). Die alten stehen danach als zugang_alt und schluessel_alt mit der Zeit
+# (erneuert) darin: 30 Tage lang sagt der Dienst einem Gerät, das noch mit ihnen fragt, dass es neue gibt (dienst.mjs ALT_FRIST);
+# mehr erlaubt er mit ihnen nicht.
 schluessel_erneuern() {
   root_noetig schluessel-erneuern
   local neu="$KONFIG.neu"
   systemctl stop studium-server-dienst.service
   trap 'systemctl start studium-server-dienst.service' EXIT
-  als_web sh -c 'rm -f -- "$1"/web/verbinden/*' - "$DATEN"
+  # nur echte Dateien, keinem Link folgen; was dort sonst liegt (ein Ordner, ein Link), hält das Erneuern nicht auf
+  [ ! -d "$DATEN/web/verbinden" ] || als_web find -P "$DATEN/web/verbinden" -mindepth 1 -maxdepth 1 -type f -delete \
+    || echo "Offene Einmal-Codes ließen sich nicht alle löschen (web/verbinden/)." >&2
   rm -f "$neu"
   STUDIUM_KONFIG="$KONFIG" STUDIUM_NEU="$neu" node --input-type=module -e '
     import { readFileSync, writeFileSync } from "node:fs";
     import { randomBytes } from "node:crypto";
     const k = JSON.parse(readFileSync(process.env.STUDIUM_KONFIG, "utf8"));
     if (!k || typeof k !== "object" || !k.zugang || !k.schluessel) throw new Error("dienst.json ohne Schlüssel");
+    Object.assign(k, { zugang_alt: k.zugang, schluessel_alt: k.schluessel, erneuert: new Date().toISOString() });
     k.zugang = randomBytes(32).toString("base64url");
     k.schluessel = randomBytes(32).toString("base64url");
     writeFileSync(process.env.STUDIUM_NEU, JSON.stringify(k, null, 2) + "\n", { mode: 0o600, flag: "wx" });
@@ -138,22 +173,28 @@ claude_aktualisieren() {
       echo "Claude Code: Ein Lauf läuft gerade; Update beim nächsten Mal."
       return 0 ;;
   esac
-  sudo -u studium -H env DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1 "$CLAUDE" update \
+  timeout 600 sudo -u studium -H env DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1 "$CLAUDE" update \
     || echo "Claude Code ließ sich nicht aktualisieren; nächster Versuch beim nächsten Mal." >&2
 }
 
 # Ergebnis von „aktualisieren“ für den Status (dienst.mjs liest aktualisierung.json für /v1/status, das Plugin sagt es unter
-# Verbindungen): zeit, ok, ziel (neuestes Release, soweit bekannt), grund (nur bei einem Fehler: der Schritt, Wörter wie
-# AKTUALISIERUNG_GRUENDE in dienst.mjs) und erfolg (zuletzt ohne Fehler; bleibt bei einem Fehler stehen, ohne frühere Angabe die
-# Installation des laufenden Pakets). Schreibt als studium wie alles in $DATEN: root schreibt nie in einen Ordner, den ein
-# anderer Benutzer ändern kann. 0640: Der Web-Dienst liest die Datei über die Gruppe studium-web, die der Datenordner vererbt.
+# Verbindungen): zeit, ok, ziel (neuestes Release, soweit bekannt), installiert (Version des laufenden Pakets danach), grund (wenn
+# nicht ok: der Schritt bzw. warum nichts kam, Wörter wie AKTUALISIERUNG_GRUENDE in dienst.mjs), erfolg (zuletzt ok; bleibt sonst
+# stehen, ohne frühere Angabe die Installation des laufenden Pakets) und warten_bis (nur während der gestaffelten Verteilung).
+# Nicht ok heißt nicht immer Fehler: Fehlt im neuesten Release das Paket (kein-paket), ist es älter als das laufende (aelter) oder
+# scheiterte dieselbe Version vor weniger als einem Tag (zurueckgerollt), endet der Lauf mit 0, aber ok bleibt false und erfolg
+# stehen; so sieht das Plugin, dass der Server zurückbleibt. Schon aktuell und Warten auf die eigene Zeit sind ok.
+# Schreibt als studium wie alles in $DATEN: root schreibt nie in einen Ordner, den ein anderer Benutzer ändern kann. 0640: Der
+# Web-Dienst liest die Datei über die Gruppe studium-web, die der Datenordner vererbt.
 AKT_ZIEL=""
 AKT_GRUND=""
 AKT_TMP=""
+AKT_OHNE_ERFOLG=0
+AKT_WARTEN=""
 aktualisierung_merken() {
-  local ok=false jetzt erfolg=""
+  local ok=false jetzt erfolg="" installiert warten=""
   jetzt=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-  [ "$1" -ne 0 ] || ok=true
+  [ "$1" -ne 0 ] || [ "$AKT_OHNE_ERFOLG" -ne 0 ] || ok=true
   if [ "$ok" = true ]; then
     erfolg=$jetzt AKT_GRUND=""
   else
@@ -161,10 +202,20 @@ aktualisierung_merken() {
     [ -n "$erfolg" ] || erfolg=$(date -u -r "$PAKET/VERSION" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || true)
     AKT_GRUND=${AKT_GRUND:-unbekannt}
   fi
+  installiert=$(tr -d '[:space:]' <"$PAKET/VERSION" 2>/dev/null || true)
   [[ "$AKT_ZIEL" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || AKT_ZIEL=""
-  printf '{"zeit":"%s","ok":%s,"ziel":"%s","grund":"%s","erfolg":"%s"}\n' "$jetzt" "$ok" "$AKT_ZIEL" "$AKT_GRUND" "$erfolg" \
+  [[ "$installiert" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || installiert=""
+  if [[ "$AKT_WARTEN" =~ ^[0-9T:Z-]{20}$ ]]; then warten=$(printf ',"warten_bis":"%s"' "$AKT_WARTEN"); fi
+  printf '{"zeit":"%s","ok":%s,"ziel":"%s","installiert":"%s","grund":"%s","erfolg":"%s"%s}\n' "$jetzt" "$ok" "$AKT_ZIEL" "$installiert" \
+    "$AKT_GRUND" "$erfolg" "$warten" \
     | als_studium sh -c 'umask 027 && cat >"$1.neu" && mv -f "$1.neu" "$1"' - "$DATEN/aktualisierung.json" \
     || echo "Das Ergebnis ließ sich nicht festhalten." >&2
+}
+# Nichts installiert, ohne dass etwas kaputt ist: Grund $1, Satz $2, Exit 0, im Status trotzdem nicht ok (siehe oben)
+ohne_erfolg() {
+  AKT_GRUND=$1 AKT_OHNE_ERFOLG=1
+  echo "$2"
+  exit 0
 }
 # Am Ende von „aktualisieren“ (trap EXIT, auch nach exit und set -e): Download-Ordner weg, Ergebnis festhalten. Lief sonst alles,
 # aber die Pakete nicht, gilt der Lauf als gescheitert (Grund pakete, Exit 1).
@@ -192,8 +243,8 @@ pakete_aktualisieren() {
     [ "$(dpkg-query -W -f='${db:Status-Status}' "$p" 2>/dev/null || true)" != installed ] || pakete+=("$p")
   done
   [ ${#pakete[@]} -gt 0 ] || return 0
-  if ! { apt-get -q -o DPkg::Lock::Timeout=600 update >/dev/null \
-    && DEBIAN_FRONTEND=noninteractive apt-get install -y -q -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confold \
+  if ! { apt-get -q -o DPkg::Lock::Timeout=300 update >/dev/null \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y -q -o DPkg::Lock::Timeout=300 -o Dpkg::Options::=--force-confold \
       --only-upgrade "${pakete[@]}" >/dev/null; }; then
     echo "Pakete ließen sich nicht aktualisieren; nächster Versuch beim nächsten Mal." >&2
     PAKETE_FEHLER=1
@@ -221,63 +272,254 @@ veraltete_neu_starten() {
 # Signatur: Die Prüfsumme nennt GitHub selbst; sie schützt vor einem kaputten Download, nicht vor einem fremden Paket. Wer das
 # Konto oder ein Token des Repos hätte, könnte ein Release mit eigenem Paket anlegen, und jeder Server installierte es als root.
 # Darum nur ein Paket mit gültiger Signatur (ssh-keygen -Y, Namensraum studium-server) eines Schlüssels aus allowed_signers des
-# LAUFENDEN Pakets, nie aus dem Download. Signiert wird beim Bauen des Releases (docs/release.md, „Signatur des Server-Pakets“).
+# LAUFENDEN Pakets, nie aus dem Download, und nur, wenn der Schlüssel nicht gesperrt ist (-r): gegen die Liste von root
+# (SPERRLISTE), die jede Installation und jedes geprüfte Paket ergänzt und die nie kürzer wird; so nimmt auch ein Zurückrollen
+# keine Sperre zurück. Signiert wird beim Bauen des Releases (docs/release.md, „Signatur des Server-Pakets“).
+# Test- und Beta-Pakete signiert release.py im eigenen Namensraum studium-server-test: Eine Signatur dort gilt auf einem Server nur,
+# wenn root die Zusage $TESTPAKETE angelegt hat (echte Datei, root gehört sie, nur root darf sie ändern). Dieselben Schlüssel, nur
+# mit dem anderen Namensraum; allowed_signers selbst nennt nur studium-server (release.py prüft jede Zeile in dieser Form).
+signatur_gueltig() {
+  [ -f "$PAKET/allowed_signers" ] || { echo "allowed_signers fehlt im laufenden Paket." >&2; return 1; }
+  sperrliste_ergaenzen "$PAKET/revoked_keys"
+  [ -f "$SPERRLISTE" ] || { echo "Keine Liste gesperrter Schlüssel ($SPERRLISTE)." >&2; return 1; }
+  if ssh-keygen -Y verify -f "$PAKET/allowed_signers" -I release@studium-autopilot -n studium-server -r "$SPERRLISTE" -s "$2" <"$1"; then
+    return 0
+  fi
+  testpakete_erlaubt || return 1
+  echo "Zusage für Testpakete ($TESTPAKETE) liegt vor: Prüfung im Namensraum studium-server-test"
+  sed 's/ namespaces="studium-server" / namespaces="studium-server-test" /' "$PAKET/allowed_signers" >"$AKT_TMP/test_signers"
+  ssh-keygen -Y verify -f "$AKT_TMP/test_signers" -I release@studium-autopilot -n studium-server-test -r "$SPERRLISTE" -s "$2" <"$1"
+}
+# Gesperrte Schlüssel: Liste von root, wächst nur (Gleiche Fassung in installieren.sh)
+sperrliste_ergaenzen() {
+  local z d form='^(ssh-[a-z0-9-]+|ecdsa-sha2-nistp[0-9]+|sk-[a-z0-9@.-]+) [A-Za-z0-9+/]+=*( |$)'
+  [ -f "$1" ] || return 0
+  d=$(mktemp -d)
+  # Nur Zeilen, die mit dem Typ eines Schlüssels beginnen und die ssh-keygen als öffentlichen Schlüssel liest: Eine kaputte Zeile
+  # ließe sonst jede Prüfung scheitern (ssh-keygen -Y verify -r bricht mit 255 ab), und kein Update käme mehr durch. Das gilt auch für
+  # Optionen wie in authorized_keys davor („restrict“, „cert-authority“, from="…"), die ssh-keygen -l durchlässt. Auch schon gemerkte
+  # Zeilen werden so jedes Mal neu geprüft.
+  {
+    echo "# studium-server: gesperrte Schlüssel aus jedem installierten Paket; wird nur ergänzt, nie gekürzt"
+    { grep -v '^#' "$SPERRLISTE" 2>/dev/null || true; grep -v '^#' "$1" || true; } | sed 's/[[:space:]]*$//' | { grep -v '^$' || true; } | sort -u \
+      | while IFS= read -r z; do
+        printf '%s\n' "$z" >"$d/schluessel"
+        if [[ "$z" =~ $form ]] && ssh-keygen -l -f "$d/schluessel" >/dev/null 2>&1; then
+          printf '%s\n' "$z"
+        else
+          echo "Gesperrte Schlüssel: Zeile ohne lesbaren Schlüssel übergangen (${z:0:30}…)" >&2
+        fi
+      done
+  } >"$SPERRLISTE.neu"
+  rm -rf "$d"
+  chmod 0644 "$SPERRLISTE.neu"
+  mv -f "$SPERRLISTE.neu" "$SPERRLISTE"
+}
+# Liegt Version $1 unter der Mindestversion, die root festhält? (Gleiche Fassung in installieren.sh.)
+unter_mindestversion() {
+  local m
+  m=$(tr -d '[:space:]' <"$MINDEST" 2>/dev/null || true)
+  [ -n "$m" ] && [ -n "$1" ] && version_neuer "$m" "$1"
+}
+testpakete_erlaubt() {
+  [ -f "$TESTPAKETE" ] && [ ! -L "$TESTPAKETE" ] && [ "$(stat -c %u "$TESTPAKETE")" = 0 ] && [ -z "$(find "$TESTPAKETE" -perm /022)" ]
+}
+
+# Gestaffelt: Eine neue Version installiert ein Server erst eine feste Zeit von 0 bis 48 Stunden nach ihrer Veröffentlichung
+# (published_at). Die Zeit folgt aus dem Zufallswert, den installieren.sh einmal in $STAFFEL legt; für einen Server bleibt sie also
+# gleich, über alle Server verteilt sie sich gleichmäßig. So trifft ein fehlerhaftes Release zuerst wenige Server, und bis die
+# übrigen dran sind, kann ein berichtigtes erscheinen. Gezählt wird ab dem ältesten Release, seit dem der Server zurückliegt
+# ($STAFFEL_SEIT, weg nach einer erfolgreichen Installation): Ein neues Release während des Wartens setzt die Uhr nicht zurück,
+# sonst käme ein Server mit langer Wartezeit bei häufigen Releases nie dran. --jetzt überspringt das Warten. Ohne lesbare Angabe
+# zur Veröffentlichung wartet er nicht.
+STAFFEL_SEIT=/opt/studium-server/.staffel-seit
+STAFFEL_SEK=$((48 * 3600))
+staffel_bis() {
+  local veroeffentlicht seit wert
+  # date -d "" wäre heute 0 Uhr, nicht „keine Angabe“
+  [ -n "$1" ] || return 0
+  veroeffentlicht=$(date -u -d "$1" +%s 2>/dev/null) || return 0
+  seit=$(tr -dc '0-9' <"$STAFFEL_SEIT" 2>/dev/null | head -c 12 || true)
+  if [ -z "$seit" ] || [ "$veroeffentlicht" -lt "$seit" ]; then
+    seit=$veroeffentlicht
+    echo "$seit" >"$STAFFEL_SEIT"
+  fi
+  wert=$(tr -dc '0-9' <"$STAFFEL" 2>/dev/null | head -c 10 || true)
+  echo $((seit + 10#${wert:-0} % (STAFFEL_SEK + 1)))
+}
+
+# Zurückgerollt (installieren.sh, Exit 3): dieselbe Version von selbst höchstens einmal am Tag wieder versuchen. 20 Stunden statt 24,
+# weil der tägliche Zeitgeber bis zu 2 Stunden streut; sonst fiele jeder zweite Tag aus. --jetzt versucht es sofort.
+ZURUECK_SPERRE=$((20 * 3600))
+zurueck_gesperrt() {
+  local version zeit
+  [ -f "$ZURUECK_MARKE" ] || return 1
+  read -r version zeit <"$ZURUECK_MARKE" || true
+  [ "${version:-}" = "$1" ] && [[ "${zeit:-}" =~ ^[0-9]{1,12}$ ]] && [ $(($(date -u +%s) - zeit)) -lt "$ZURUECK_SPERRE" ]
+}
+
+# Ein Zurückrollen, das installieren.sh nicht zu Ende brachte (abgebrochen: Zeitgrenze, Strg+C, Neustart), vor allem anderen
+# nachholen. Maßgeblich ist die Marke ZURUECK_OFFEN von root (Zeile 1 das Ziel, Zeile 2 die gescheiterte Version), nicht
+# .installiert des Ziels: Bei einem Abbruch stellt der Installer nur aktuell (und dieses Kommando) auf das Ziel zurück, das noch als
+# fertig installiert gilt, obwohl die Einheiten vom gescheiterten Paket stammen. Nur ein Ordner einer Version unter
+# /opt/studium-server mit Installer und nie unter die Mindestversion; sonst fällt die Marke weg, und der Lauf geht weiter wie sonst,
+# ebenso, wenn die gescheiterte Version doch fertig installiert läuft. Exit 1 mit Grund zurueckgerollt, wenn es geklappt hat.
+zurueckrollen_nachholen() {
+  local ziel neu c=0
+  [ -f "$ZURUECK_OFFEN" ] || return 0
+  ziel=$(sed -n 1p "$ZURUECK_OFFEN" 2>/dev/null || true)
+  neu=$(sed -n 2p "$ZURUECK_OFFEN" 2>/dev/null | tr -d '[:space:]' || true)
+  # Nur ein echter Ordner einer Version (nie aktuell, kein Link), dessen VERSION seinen Namen nennt
+  if ! [[ "$ziel" =~ ^"$PAKET_ORDNER"/[0-9]+[.][0-9]+[.][0-9]+[0-9A-Za-z.+-]{0,30}$ ]] || [ -L "$ziel" ] || [ ! -d "$ziel" ] \
+    || [ ! -f "$ziel/installieren.sh" ] || [ "$(tr -d '[:space:]' <"$ziel/VERSION" 2>/dev/null || true)" != "${ziel##*/}" ]; then
+    rm -f "$ZURUECK_OFFEN"
+    return 0
+  fi
+  # Die gescheiterte Version läuft doch, fertig installiert (ein Abbruch nach .installiert, bevor die Marke wegfiel, wie bei
+  # Installern, die sie erst danach wegräumen): nichts nachzuholen
+  if [[ "$neu" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] && [ -f "$PAKET/.installiert" ] \
+    && [ "$(tr -d '[:space:]' <"$PAKET/VERSION" 2>/dev/null || true)" = "$neu" ]; then
+    echo "Die Installation von $neu ist fertig; das ausstehende Zurückrollen entfällt."
+    rm -f "$ZURUECK_OFFEN"
+    return 0
+  fi
+  if unter_mindestversion "$(tr -d '[:space:]' <"$ziel/VERSION" 2>/dev/null || true)"; then
+    echo "Ein Zurückrollen auf ${ziel##*/} stand aus, liegt aber unter der Mindestversion; der Lauf geht weiter wie sonst."
+    rm -f "$ZURUECK_OFFEN"
+    return 0
+  fi
+  echo "Ein Zurückrollen stand aus (die Installation von ${neu:-?} brach ab): zurück auf ${ziel##*/}."
+  AKT_GRUND=zurueckgerollt AKT_ZIEL=$neu
+  ln -sfn "$ziel" "$PAKET"
+  installer "$ziel/installieren.sh" || c=$?
+  # von außen abgebrochen (Signal): die Marke bleibt für den nächsten Lauf
+  [ "$c" -ge 128 ] || rm -f "$ZURUECK_OFFEN"
+  [ "$c" -eq 0 ] || { AKT_GRUND=installieren; echo "Auch ${ziel##*/} ließ sich nicht wieder installieren." >&2; exit 1; }
+  [[ ! "$neu" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || printf '%s %s\n' "$neu" "$(date -u +%s)" >"$ZURUECK_MARKE"
+  exit 1
+}
+# Installer $1 mit den Angaben dieses Servers: mit IP, oder noch ohne Adresse (vorbereitet, die Einrichtung in der Cloud Shell kam
+# noch nicht) nur vorbereiten
+installer() {
+  local ip
+  ip=$(jq -r '.ip // empty' "$KONFIG")
+  if [ -n "$ip" ]; then bash "$1" --ip "$ip"; else bash "$1" --vorbereiten; fi
+}
+
+# Täglich mit LiveSync (Zustand nur aus der Datei von root, livesync.json): Erlang-Cookie aus debconf (nach jedem Update von
+# CouchDB, auch dem aus der Nacht) und ein abgelaufenes Aufbau-Fenster schließen (livesync.sh). Fehler zählen wie die der Pakete.
+livesync_pruefen() {
+  [ -f "$LS_KONFIG" ] && [ -f "$PAKET/livesync.sh" ] || return 0
+  bash "$PAKET/livesync.sh" absichern || { echo "CouchDB ließ sich nicht absichern; nächster Versuch beim nächsten Mal." >&2; PAKETE_FEHLER=1; }
+  bash "$PAKET/livesync.sh" aufbau-pruefen || { echo "Aufbau-Fenster von LiveSync nicht geprüft; nächster Versuch beim nächsten Mal." >&2; PAKETE_FEHLER=1; }
+}
+
+# curl mit Grenzen: Ein hängender Download hielte sonst den täglichen Lauf (und damit den nächsten) auf. Höchstens 5 Minuten je
+# Versuch, Wiederholungen nur innerhalb von 10 Minuten.
+CURL=(curl -fsSL --connect-timeout 30 --max-time 300 --retry 3 --retry-max-time 600)
+# Herkunft der Downloads: nur Assets eines Releases dieses Repos
+ASSETS=https://github.com/studium-autopilot/ecoba/releases/download/
 aktualisieren() {
   root_noetig aktualisieren
-  claude_aktualisieren
-  local info url signatur pruefsumme neu alt
+  local sofort=0
+  case "${1:-}" in
+    "") ;;
+    --jetzt) sofort=1 ;;
+    *) echo "Aufruf: sudo studium-server aktualisieren [--jetzt]" >&2; exit 2 ;;
+  esac
+  local info url signatur pruefsumme neu alt tag bis c=0
+  # Abbruch von außen (systemd am Ende von TimeoutStartSec) zählt als Fehler; ohne die Fallen hielte aktualisieren_ende den Lauf
+  # mit dem Exit des letzten Befehls fest, oft 0
+  trap 'exit 143' TERM
+  trap 'exit 130' INT
   trap 'aktualisieren_ende $?' EXIT
+  zurueckrollen_nachholen
+  claude_aktualisieren
   pakete_aktualisieren
+  livesync_pruefen
   veraltete_neu_starten
+  alt=$(tr -d '[:space:]' <"$PAKET/VERSION" 2>/dev/null || true)
   AKT_GRUND=github
-  info=$(curl -fsSL "$RELEASES") || { echo "GitHub nicht erreichbar." >&2; exit 1; }
-  AKT_ZIEL=$(jq -r '.tag_name // "" | ltrimstr("v")' <<<"$info" || true)
+  info=$("${CURL[@]}" "$RELEASES") || { echo "GitHub nicht erreichbar." >&2; exit 1; }
+  tag=$(jq -r '.tag_name // "" | ltrimstr("v")' <<<"$info" || true)
+  AKT_ZIEL=$tag
   url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
-  if [ -z "$url" ]; then echo "Das neueste Release enthält noch kein Server-Paket; nichts zu tun."; exit 0; fi
+  [ -z "$url" ] || [[ "$url" == "$ASSETS"* ]] || { AKT_GRUND=paket; echo "Das Paket liegt nicht unter $ASSETS; nichts installiert." >&2; exit 1; }
+  [ -n "$url" ] || ohne_erfolg kein-paket "Das neueste Release (${tag:-ohne Version}) enthält kein Server-Paket; nichts installiert."
+  # Ob es etwas zu tun gibt, entscheidet der Tag des Releases, noch vor dem Download (er ist ungeprüft; ein falscher kann nur ein
+  # Update ausfallen lassen, nach dem Download muss VERSION im signierten Paket genau so lauten). Gleiche Version: aktuell nur, wenn
+  # ihre Installation bis zum Ende kam (installieren.sh legt .installiert zuletzt an). Sonst stünde nach einem Abbruch einen Tag
+  # „installieren“ im Status, danach „Schon aktuell“, und der Server bliebe halb aktualisiert.
+  if [ -n "$alt" ] && [ "$tag" = "$alt" ]; then
+    if [ -f "$PAKET/.installiert" ]; then rm -f "$STAFFEL_SEIT"; echo "Schon aktuell ($alt)."; exit 0; fi
+    echo "$alt ist nicht fertig installiert (eine Installation brach ab): noch einmal."
+  # Nur vorwärts: Ein Server mit neuerem Stand (z. B. aus einem Testpaket) geht nie auf ein älteres Release zurück.
+  elif [ -n "$alt" ] && ! version_neuer "$tag" "$alt"; then
+    ohne_erfolg aelter "Installiert ist $alt, das neueste Release (${tag:-ohne Version}) ist nicht neuer; nichts installiert."
+  elif [ "$sofort" -eq 0 ]; then
+    if zurueck_gesperrt "$tag"; then
+      ohne_erfolg zurueckgerollt "$tag scheiterte vor weniger als einem Tag und wurde zurückgerollt; nächster Versuch beim nächsten Mal (sofort: sudo studium-server aktualisieren --jetzt)."
+    fi
+    bis=$(staffel_bis "$(jq -r '.published_at // empty' <<<"$info")")
+    if [ -n "$bis" ] && [ "$(date -u +%s)" -lt "$bis" ]; then
+      AKT_WARTEN=$(date -u -d "@$bis" +%Y-%m-%dT%H:%M:%SZ)
+      echo "Neue Version $tag: Dieser Server ist ab $AKT_WARTEN dran (gestaffelt; sofort: sudo studium-server aktualisieren --jetzt)."
+      exit 0
+    fi
+  fi
   AKT_GRUND=pruefsumme-fehlt
   pruefsumme=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
   [ -n "$pruefsumme" ] || { echo "Keine Prüfsumme im Release; nichts installiert." >&2; exit 1; }
   AKT_GRUND=signatur-fehlt
   signatur=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz.sig") | .browser_download_url' <<<"$info")
   [ -n "$signatur" ] || { echo "Keine Signatur im Release; nichts installiert." >&2; exit 1; }
+  [[ "$signatur" == "$ASSETS"* ]] || { echo "Die Signatur liegt nicht unter $ASSETS; nichts installiert." >&2; exit 1; }
   # Global statt local: Der trap läuft erst nach der Rückkehr aus dieser Funktion. Mit local war der Ordner dort schon unbekannt,
   # set -u brach ab, und jedes erfolgreiche Update endete mit Exit 1 und ließ den Download liegen.
   AKT_TMP=$(mktemp -d)
   AKT_GRUND=herunterladen
-  curl -fsSL "$url" -o "$AKT_TMP/paket.tar.gz"
-  curl -fsSL "$signatur" -o "$AKT_TMP/paket.tar.gz.sig"
+  "${CURL[@]}" -o "$AKT_TMP/paket.tar.gz" -- "$url"
+  "${CURL[@]}" -o "$AKT_TMP/paket.tar.gz.sig" -- "$signatur"
   AKT_GRUND=pruefsumme
   echo "${pruefsumme#sha256:}  $AKT_TMP/paket.tar.gz" | sha256sum -c --quiet - || { echo "Prüfsumme stimmt nicht; nichts installiert." >&2; exit 1; }
   AKT_GRUND=signatur
-  ssh-keygen -Y verify -f "$PAKET/allowed_signers" -I release@studium-autopilot -n studium-server -s "$AKT_TMP/paket.tar.gz.sig" \
-    <"$AKT_TMP/paket.tar.gz" || { echo "Signatur ungültig oder kein Schlüssel im laufenden Paket; nichts installiert." >&2; exit 1; }
+  signatur_gueltig "$AKT_TMP/paket.tar.gz" "$AKT_TMP/paket.tar.gz.sig" \
+    || { echo "Signatur ungültig, Schlüssel gesperrt oder kein Schlüssel im laufenden Paket; nichts installiert." >&2; exit 1; }
   AKT_GRUND=paket
   tar -xzf "$AKT_TMP/paket.tar.gz" -C "$AKT_TMP"
-  neu=$(cat "$AKT_TMP/server/VERSION")
-  AKT_ZIEL=$neu
-  alt=$(cat "$PAKET/VERSION" 2>/dev/null || true)
-  # Gleiche Version: aktuell nur, wenn ihre Installation bis zum Ende kam (installieren.sh legt .installiert zuletzt an). Sonst
-  # stünde nach einem Abbruch einen Tag „installieren“ im Status, danach „Schon aktuell“, und der Server bliebe halb aktualisiert.
-  if [ "$neu" = "$alt" ]; then
-    if [ -f "$PAKET/.installiert" ]; then echo "Schon aktuell ($alt)."; exit 0; fi
-    echo "$alt ist nicht fertig installiert (eine Installation brach ab): noch einmal."
-  # Nur vorwärts: Ein Server mit neuerem Stand (z. B. aus einem Testpaket) geht nie auf ein älteres Release zurück.
-  elif [ -n "$alt" ] && ! version_neuer "$neu" "$alt"; then
-    echo "Installiert ist $alt, neuer als das Release ($neu); nichts zu tun."; exit 0
-  fi
+  neu=$(tr -d '[:space:]' <"$AKT_TMP/server/VERSION")
+  # Die Version im signierten Paket muss die des Releases sein: Sonst ließe sich ein altes, einmal signiertes Paket (etwa mit einer
+  # bekannten Lücke) unter einem neuen Release noch einmal ausliefern.
+  AKT_GRUND=version
+  [ "$neu" = "$tag" ] || { echo "Das signierte Paket trägt Version ${neu:-ohne}, das Release v$tag; nichts installiert." >&2; exit 1; }
+  # Sperren des geprüften Pakets gelten ab sofort, auch wenn seine Installation scheitert
+  sperrliste_ergaenzen "$AKT_TMP/server/revoked_keys"
   AKT_GRUND=installieren
-  # Noch ohne Adresse (vorbereitet, die Einrichtung in der Cloud Shell kam noch nicht): nur vorbereiten
-  local ip
-  ip=$(jq -r '.ip // empty' "$KONFIG")
-  if [ -n "$ip" ]; then bash "$AKT_TMP/server/installieren.sh" --ip "$ip"; else bash "$AKT_TMP/server/installieren.sh" --vorbereiten; fi
+  installer "$AKT_TMP/server/installieren.sh" || c=$?
+  # Exit 10: Die neue Version kam nicht durch, der Installer ist auf die bisherige zurückgegangen (installieren.sh, „Zurückrollen“).
+  # Exit 11: kam nicht durch, aber Zurückrollen unter die Mindestversion verweigert; der Server bleibt auf der neuen, nicht fertig
+  # installierten Version, und der nächste Lauf installiert sie noch einmal.
+  if [ "$c" -eq 10 ]; then
+    AKT_GRUND=zurueckgerollt
+    printf '%s %s\n' "$neu" "$(date -u +%s)" >"$ZURUECK_MARKE"
+    echo "$neu ließ sich nicht installieren; der Server läuft weiter mit der bisherigen Version." >&2
+    exit 1
+  fi
+  [ "$c" -ne 11 ] || { AKT_GRUND=mindestversion; echo "$neu ließ sich nicht installieren, zurück geht nicht (Mindestversion)." >&2; exit 1; }
+  [ "$c" -eq 0 ] || exit "$c"
+  rm -f "$ZURUECK_MARKE" "$STAFFEL_SEIT"
 }
 
 case "${1:-hilfe}" in
   status)
-    curl -fsS "http://127.0.0.1:$(port)/v1/status" | jq .
+    if [ "${2:-}" = --json ]; then status_lesen; exit; fi
+    # Nur Anzeige: Was hier fehlt oder kaputt ist (takt.json schreibt der Web-Dienst), endet nie mit einem Fehler; der Installer
+    # ruft das nach „Prüfen“ auf, und davon darf kein Zurückrollen abhängen
+    status_lesen | jq . 2>/dev/null || echo "Web-Dienst: keine Antwort auf /v1/status"
     for d in dienst speicher; do printf '%-9s %s\n' "$d" "$(systemctl is-active "studium-server-$d.service" || true)"; done
     takt=$(als_web cat "$DATEN/web/takt.json" 2>/dev/null || echo '{"uni_postfach":15,"gmail":3}')
-    jq -r '"Takt aus Obsidian: Uni-Postfach alle \(.uni_postfach) Min., Gmail \(.gmail)-mal am Tag"' <<<"$takt"
+    jq -r '"Takt aus Obsidian: Uni-Postfach alle \(.uni_postfach) Min., Gmail \(.gmail)-mal am Tag"' <<<"$takt" 2>/dev/null \
+      || echo "Takt aus Obsidian: unlesbar"
     ;;
   verbinden)
     root_noetig verbinden
@@ -308,8 +550,9 @@ case "${1:-hilfe}" in
       | "\(.key)  \(.value.laeufe) Läufe (\(.value.opus) mit Opus, \(.value.limit) am Limit)  Token: \(.value.eingabe + .value.cache_lesen + .value.cache_schreiben) rein, \(.value.ausgabe) raus\(if (.value.gmail_begrenzt // 0) > 0 then "  Gmail-Überblick \(.value.gmail_begrenzt)× an der Grenze" else "" end)"' \
       || echo "Noch kein Claude-Lauf."
     ;;
-  aktualisieren) aktualisieren ;;
+  aktualisieren) shift; aktualisieren "$@" ;;
   livesync) shift; root_noetig livesync; bash "$PAKET/livesync.sh" "$@" ;;
+  livesync-erneuern) shift; root_noetig livesync-erneuern; bash "$PAKET/livesync.sh" erneuern "$@" ;;
   hilfe|-h|--help) hilfe ;;
   *) hilfe; exit 1 ;;
 esac

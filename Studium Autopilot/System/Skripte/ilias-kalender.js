@@ -289,9 +289,10 @@ module.exports = function (ctx) {
   };
   // Ein Papierkorb für alles (quellen.js): nie endgültig, Einstellung „Gelöschte Dateien“ von Obsidian
   const papierkorb = async (f) => (Q() && Q().papierkorb ? Q().papierkorb(app, f) : app.vault.trash(f, false));
+  // Erster freier Name; belegt ist er auch in anderer Groß- und Kleinschreibung oder Unicode-Form (ctx.zentral.existiert)
   const freierPfad = (basis, eigene) => {
     let name = basis, i = 2;
-    while (datei(`${K.ORDNER}/${name}.md`) && datei(`${K.ORDNER}/${name}.md`) !== eigene) name = `${basis} ${i++}`;
+    while (ctx.zentral.existiert(`${K.ORDNER}/${name}.md`, eigene)) name = `${basis} ${i++}`;
     return `${K.ORDNER}/${name}.md`;
   };
   const dateiTitel = (t) => (ctx.user.eba && ctx.user.eba.dateiTitel ? ctx.user.eba.dateiTitel(t) : String(t));

@@ -2,6 +2,27 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.8 – Übungen sichtbar, Lernplan breiter, sicherer Server
+
+- **Übersichtlicher:** Im **Stundenplan** siehst du Vorlesung und Übung auf einen Blick: Vorlesungen sind gefüllt, Übungen und
+  Tutorien umrandet und tragen oben rechts ein kleines Etikett „Tutorium“ oder „Übung“.
+- **Übersichtlicher:** Im **Lernplan** sind die Module auf dem iPhone kompakter, jeder Klausurtag steht nur einmal da, und die Notiz
+  eines Moduls beginnt mit seiner Zeile. Das Band über der Wochenleiste zeigt klarer, welche Wochen unten sind.
+- **Übersichtlicher:** Die Einstellungen des **Lernplans** (**Vor der Vorlesung lernen**, **Zeit je Kapitel**) stehen hinter dem
+  Regler neben dem Titel. Am iPad quer stehen die Module neben der Woche, „Für die Klausur“ heißt jetzt **Üben**.
+- **Einfacher:** Hast du im **Lernplan** ein Modul aus Versehen ins nächste Semester verschoben, holst du es mit **Rückgängig**
+  im Hinweis oder mit **Zurück ins …** im Modul wieder zurück.
+- **Schneller:** Hat Oracle für deinen **eigenen Server** lange keinen Platz, nimmt der Platzsucher jetzt auch die halbe Größe.
+  Dafür ist eher Platz, und du kannst früher loslegen; auf die volle Größe bringt er ihn danach nachts von selbst.
+- **Sicherer:** Dein **eigener Server** installiert nur geprüfte Updates und kehrt nach einem misslungenen von selbst zur letzten
+  Version zurück. Mails von außerhalb der Uni ändern keine Uni-Termine mehr unbemerkt.
+- **Sicherer:** Mails, die dein Server nicht lesen konnte, legt er beiseite, und unter **Verbindungen** versuchst du es noch einmal.
+  Verbindest du ein Gerät neu, tippst du die Adresse deines Servers selbst ein.
+- **Sicherer:** Deine Geräte und dein **eigener Server** erkennen sich an eurem gemeinsamen Schlüssel, ohne ihn mitzuschicken,
+  auch beim Verbinden. ILIAS meldet sich auf einem geteilten iPad vorher ab und lädt dort keine Datei über 50 MB.
+- **Behoben:** Wartet Studium Autopilot nach einem Update noch auf die Prüfung, bleibt der Hinweis mit **Reparieren** stehen.
+  Hast du ihn geschlossen, holst du ihn am Computer unten in der Leiste und sonst auf dem Dashboard zurück.
+
 ## 0.7.7 – Lernplan fertig, eigenes Dunkel, geprüfte Updates
 
 - **Neu:** Jedes Design hat jetzt ein eigenes Dunkel, auch in den Widgets und auf iPhone und iPad hinter den Karten: Das lila

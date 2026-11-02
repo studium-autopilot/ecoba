@@ -42,6 +42,14 @@ Danach läuft **immer** `werkzeuge/pruefen.py` über den Baum, lokal zusätzlich
 veröffentlicht werden dürfen). Sie prüft auch, dass die Update-Liste zu den Dateien passt. Bei einem Fund bricht der Export mit
 einer Liste ab; korrigiert wird in der Quelle, dann neu bauen.
 
+Die Prüfung kennt den Tresor als **Erlaubnisliste** (`TRESOR_ERLAUBT` in `werkzeuge/pruefen.py`): Unter `Studium Autopilot/` darf
+nur stehen, was die Vorlage kennt (ihre Ordner und Dateiarten; im Ordner des Plugins nur `main.js`, `manifest.json` und
+`styles.css`). Jeder andere Pfad ist ein Fund, auch eine harmlos aussehende Datei. Dazu kommen Verbote für lokale und private
+Dateien in jedem Ordner: `.env` und `.env.*` (Vorlagen heißen darum `env.example`), `.mcp.json`, `CLAUDE.local.md`,
+`.claude/settings.local.json` und die Widget-Daten je Gerät (`widget-iphone.json`, `widget-ipad.json`). `.gitignore`, der Export
+(`vault_auslassen` in `release.py`) und die Prüfung müssen dieselben Dateien meinen; `tests/release.test.js` prüft das mit
+`werkzeuge/listen_pruefen.py`, wenn eine Liste geändert wird.
+
 Mit `--zip` baut der Export zusätzlich **`Studium-Autopilot.zip`** mit dem Inhalt des Ordners `Studium Autopilot/`, ohne den
 Ordner selbst: Windows („Alle extrahieren“), Android und macOS legen beim Entpacken genau einen Ordner `Studium-Autopilot` an,
 der selbst der Tresor ist. (Bis 0.5.7 lag der Ordner im Archiv; unter Windows und Android entstand
@@ -68,10 +76,44 @@ aus dem Download):
   Fehlt der Schlüssel, passt die Datei nicht oder scheitert eine der Prüfungen, bricht `--zip` ab und löscht das Paket: Es gibt
   nie ein Release ohne gültige Signatur. Die Meldung nennt die Zeile, die in die Datei gehört.
 - `studium-server aktualisieren` lädt `studium-server.tar.gz.sig` mit, prüft Prüfsumme und Signatur und installiert sonst nichts;
-  der Grund steht im Status (`signatur-fehlt`, `signatur`).
+  der Grund steht im Status (`signatur-fehlt`, `signatur`). Danach muss `server/VERSION` im Paket genau der Tag ohne `v` sein
+  (sonst `version`): Ein altes signiertes Paket unter einem neuen Release gilt nicht. Wann ein Server ein neues Paket nimmt
+  (gestaffelt bis 48 Stunden nach der Veröffentlichung) und wann er zurückrollt: `server/README.md`, „Updates des Server-Pakets“.
 - **Übergang:** Server mit 0.7.5 oder älter haben noch das alte `aktualisieren` ohne Signatur. Sie installieren das erste
-  signierte Release wie bisher nur mit der Prüfsumme; erst ab dann prüft jeder Server jedes weitere Paket. Die Ersteinrichtung
-  (Cloud Shell) prüft das Paket weiterhin nur mit der Prüfsumme.
+  signierte Release wie bisher nur mit der Prüfsumme; erst ab dann prüft jeder Server jedes weitere Paket.
+- **Ersteinrichtung:** `start.sh`, `fern.sh installieren` und die Startdaten aus `einrichten.mjs` prüfen die Signatur gegen
+  Schlüssel, die fest in ihnen stehen (`SIGNIERSCHLUESSEL`), nicht gegen `allowed_signers` aus dem Paket, das sie gerade prüfen.
+  `tests/paket-pruefen.test.js` verlangt dieselben Schlüssel wie in `server/allowed_signers`; ein Schlüsselwechsel ändert alle vier
+  Stellen zugleich. Eine Einrichtung mit einem älteren Tag lädt das Paket dieses Tags und prüft es mit dessen Schlüsseln.
+- **Test- und Beta-Pakete** im eigenen Namensraum `studium-server-test`, nie in `studium-server`: `release.py` signiert mit `--beta`
+  und `--arbeitsstand` das Server-Paket in diesem Namensraum, prüft die frische Signatur gegen eine Kopie von `allowed_signers`,
+  deren Zeilen ihn nennen, und setzt im Baum in `server/start.sh` `NAMENSRAUM=studium-server-test` (fehlt die Zeile
+  `NAMENSRAUM=studium-server` dort, bricht es ab), damit die Einrichtung einer Beta ihr Paket annimmt. Ein Release für alle bleibt
+  unverändert. Ein Server nimmt Test-Pakete nur mit der
+  Zusage `/etc/studium-server/testpakete` an, die nur root auf ihm anlegt; auf einem Server von Studierenden gilt eine solche
+  Signatur nie. `allowed_signers` nennt dafür keine eigene Zeile: `aktualisieren` prüft mit denselben Schlüsseln und tauscht nur den
+  Namensraum (jede Zeile bleibt in der Form, die `release.py` prüft).
+- **Schlüssel sperren:** `server/revoked_keys` (eine Zeile je Schlüssel wie in einer `.pub`-Datei, leer, solange keiner gesperrt
+  ist) geht mit jedem Paket hinaus. Jeder Server führt daraus eine eigene Liste `/etc/studium-server/revoked_keys` (nur root), die
+  nur wächst: Der Installer ergänzt sie vor allem anderen um die Datei seines Pakets, `aktualisieren` um die des laufenden und, nach
+  der Prüfung, um die des neuen Pakets. Geprüft wird mit dieser Liste (`ssh-keygen -Y verify -r`). So nimmt weder ein Zurückrollen
+  noch ein älteres Paket eine Sperre zurück. Nur öffentliche Schlüssel im Format einer `.pub`-Datei, vorn der Typ (keine Optionen
+  wie in `authorized_keys`, die `ssh-keygen -l` durchlässt, `-Y verify -r` aber nicht), keine KRL: `release.py --zip` liest jede Zeile
+  von `server/revoked_keys` so und bricht ab, wenn eine kein Schlüssel ist oder einen Schlüssel nennt, der noch in `allowed_signers`
+  steht (Typ und Base64 verglichen; der gehört dort zuerst heraus). Die Signatur des Server-Pakets prüft es danach auch mit `-r` gegen
+  die Liste. Auf dem Server übernimmt die Liste nur lesbare Zeilen; eine kaputte
+  ließe sonst jede Prüfung mit 255 scheitern. root kann einen Schlüssel auch von Hand eintragen (dauerhaft) und die Liste reparieren
+  (`server/README.md`, „Gesperrte Schlüssel wachsen nur“).
+- **Mindestversion:** `server/MINDESTVERSION` (im signierten Paket; erste Zeile ohne `#`) nennt die älteste Version, auf die ein
+  Server zurückrollen darf. Der Installer hält die höchste je gesehene in `/etc/studium-server/mindestversion` fest (nur root, sinkt
+  nie). Scheitert eine Installation und läge das bisherige Paket darunter, rollt er nicht zurück: Der Server bleibt auf der neuen
+  Version, der Status meldet `mindestversion`, und der nächste Lauf installiert sie noch einmal. Anheben, wenn ältere Pakete eine
+  Lücke haben oder eine Sicherung nicht kennen, auf die ein Zurückrollen nicht verzichten darf (etwa ein Release, das eine Sperre
+  einführt, die ältere Pakete nicht prüfen). `release.py` bricht ab, wenn sie über der gebauten Version liegt (nur bei Paketen,
+  die Server installieren: Release mit `--zip` und Beta, nicht `--arbeitsstand`); eine Beta X.Y.Z-beta.N darf X.Y.Z nennen.
+  Zurzeit die Version, mit der das Kopieren beim Zurückrollen (Quelle = Ziel) und die Liste gesperrter Schlüssel von root
+  erscheinen: Ältere Installer brächen beim Zurückrollen ab. Ein Not-Aus aus der Ferne (ein Release, das Server anhält) gibt es nicht; das wäre ein
+  eigener Kanal mit eigener Signatur.
 - **Schlüssel wechseln:** Server prüfen mit der Datei ihres laufenden Pakets. Ein neuer Schlüssel kommt darum zuerst als zweite
   Zeile in `server/allowed_signers` und geht mit einem Release hinaus, das noch der alte signiert (`release.py` warnt dabei);
   ab dem nächsten Release signiert der neue, danach die alte Zeile löschen. Ist der alte Schlüssel verloren, nehmen Server neue
@@ -109,6 +151,20 @@ Tresor zu dieser Version gehören (`docs/architektur/skripte-pruefen.md`):
   `SIGNATUR_SCHLUESSEL` und `server/allowed_signers`, mit Releases, die noch der alte signiert (`release.py` warnt dabei); erst
   deutlich später signiert der neue. Wer dann noch eine Version ohne ihn hat, kommt nur über die ZIP weiter; ist der alte
   Schlüssel verloren, gilt das für alle.
+
+### Herkunft des Releases
+
+Der Release-Baum ist kein Commit der Arbeitskopie; später ließe sich nicht mehr sagen, aus welchem Stand ein Release kam. Darum
+legt `release.py --zip` für ein echtes Release (nicht `--beta`, nicht `--arbeitsstand`; Version in der Form `X.Y.Z`) die lokale
+Referenz `refs/releases/vX.Y.Z` auf die volle SHA des gebauten Commits und druckt sie als „Quelle des Releases“. Die Referenz
+ist nicht Teil der veröffentlichten Historie und wird nie hochgeladen.
+
+- **Jeder echte Bau setzt die Referenz neu** (`git update-ref -m "release.py vX.Y.Z"`, mit Reflog). Hat ein anderer Chat
+  committet und wird neu gebaut, zeigt sie danach auf den neuen Stand, und die Ausgabe nennt den alten: „(vorher …)“. Die
+  Referenz nennt so den **letzten Bau** der Version, und der ist der gepushte, weil nur vom gebauten HEAD gepusht wird.
+- Frühere Bauten bleiben im Reflog: `git reflog refs/releases/vX.Y.Z`.
+- Nachsehen: `git for-each-ref refs/releases/` zeigt alle Releases mit ihrem Commit, `git log refs/releases/v0.7.7` den Stand
+  dahinter.
 
 Am Ende druckt der Export den Block für das Manifest der zentralen Daten (`release` mit `version`, `url_basis`, `sha256` der
 Update-Liste, `notiz`), siehe Schritt 6.

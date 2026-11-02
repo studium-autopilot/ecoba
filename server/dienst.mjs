@@ -1,8 +1,15 @@
 #!/usr/bin/env node
 // Web-Dienst des eigenen Servers. Lauscht nur auf 127.0.0.1; Caddy stellt ihn per HTTPS unter /v1/ bereit.
-//   GET  /v1/status     öffentlich: Stand ohne persönliche Daten (nur feste Werte aus einer Freigabeliste)
+//   GET  /v1/status     mit Zugangsschlüssel: Stand des Servers (nur feste Werte aus einer Freigabeliste, statusWerte), dazu
+//                       verbunden (die letzten Verbindungen von Geräten wie im Eingang) und grenzen (Grenzen je Tag: Läufe,
+//                       wartende Mails, Zeichen je Topf, Mails in Quarantäne; lauf.mjs, abrufen.py). Direkt auf
+//                       127.0.0.1 ohne Weiterleitung (installieren.sh, studium-server status; dort fragen nur root und die
+//                       Dienstbenutzer) dasselbe ohne Schlüssel. Über Caddy ohne Schlüssel 401, sobald ein Gerät den Status
+//                       einmal mit Schlüssel geholt hat (web/status-geschuetzt.json); bis dahin wie bis 0.7.7 offen, denn Plugins
+//                       bis 0.7.7 schicken den Schlüssel dort nicht mit (danach zeigen sie den Server als nicht erreichbar,
+//                       Termine holen sie über /v1/eingang weiter)
 //   GET  /v1/eingang    mit Zugangsschlüssel: noch nicht übernommene Ergebnisse als verschlüsseltes Paket (kanal.mjs), dazu unter
-//                       verbunden die letzten Verbindungen von Geräten (Zeit, Herkunft; nur hier, nie im Status)
+//                       verbunden die letzten Verbindungen von Geräten (Zeit, Herkunft, Netz, Gerät; ebenso im Status mit Schlüssel)
 //   POST /v1/stand      mit Zugangsschlüssel: verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, ein
 //                       Auszug aus dem Tresor gegen Doppel: Termine mit Titel und Datum, offene To-dos; der Takt aus den
 //                       Einstellungen, auch als takt.json für abrufen.py und lauf.mjs; schon übernommene Eingang-Dateien, diese
@@ -18,16 +25,23 @@
 //   POST /v1/kapitel    mit Zugangsschlüssel: verschlüsselt bis zu 3 Textfassungen von Folien der Module, für die das Plugin eine
 //                       Kapitelliste für den Lernplan braucht (Stand: lernplan), mit Nummer, Datum und Quelle der Unterlage;
 //                       landen in unterlagen/kapitel/, ein Anstoß startet den Lauf
-//   POST /v1/anstoss    mit Zugangsschlüssel: Knopf „Mails durchsuchen“ in Obsidian startet einen Claude-Lauf (mit Gmail),
-//                       höchstens einmal in 10 Minuten; wartet schon ein Anstoß, bleibt er
-//   POST /v1/verbinden  Einmal-Code (verbinden.mjs) gegen Adresse, Zugangs- und Datenschlüssel
+//   POST /v1/anstoss    mit Zugangsschlüssel (signiert nur mit Beweis des Datenschlüssels, sonst 403): Knopf „Mails durchsuchen“
+//                       in Obsidian startet einen Claude-Lauf (mit Gmail), höchstens alle 30 Minuten und 12-mal in 24 Stunden
+//                       (sonst 429 mit wieder); mit dem Körper {"quarantaene":"erneut"} reiht der Lauf dazu alle Mails der
+//                       Quarantäne einmal wieder ein (zählt wie ein Knopf)
+//   POST /v1/verbinden  Einmal-Code (verbinden.mjs) gegen Adresse, Zugangs- und Datenschlüssel: ab 0.7.8 (schema 2) ohne den Code,
+//                       Antwort verschlüsselt (codeEinloesenNeu), bis 0.7.7 mit dem Code selbst und offener Antwort; jedes Einlösen
+//                       steht mit Zeit, grobem Netz (/24 bzw. /48) und Gerätenamen (geraet, wenn das Plugin einen schickt) in
+//                       web/geraete.json (die letzten 20)
 //   POST /v1/geraet     mit Zugangsschlüssel und einer Anfrage, verschlüsselt mit dem Datenschlüssel (Zweck „verbinden“, Zeit und
 //                       Zufallswert): Einmal-Code für ein weiteres Gerät (verbinden.mjs geraetCode), die Antwort ebenso verschlüsselt
+// „mit Zugangsschlüssel“ heißt: signiert (Kopf Studium-Signatur, kanal.mjs; Plugin ab 0.7.8) oder, für Plugins bis 0.7.7, der
+// Schlüssel selbst im Kopf (Bearer). Signierte Anfragen an /v1/anstoss brauchen dazu den Beweis mit dem Datenschlüssel.
 //   GET  /v1/livesync/<kennung>  Seite mit dem Setup-Link für LiveSync (livesync.mjs, 30 Minuten; verschlüsselt mit einem Code,
 //                       den nur das Terminal zeigt)
 // Konfiguration $STUDIUM_SERVER_KONFIG (Standard /etc/studium-server/dienst.json: zugang, schluessel, adresse, port,
-// version), Daten $STUDIUM_SERVER_DATEN (Standard /var/lib/studium-server). Der Dienst läuft als eigener Benutzer (studium-web) und
-// schreibt nur in web/ (seine Dateien: abruf.json, takt.json, knopf.json, stand-plugin.json, geraete.json, anstoss, verbinden/,
+// version; nach „studium-server schluessel-erneuern“ dazu zugang_alt, schluessel_alt und erneuert, siehe ALT_FRIST), Daten $STUDIUM_SERVER_DATEN (Standard /var/lib/studium-server). Der Dienst läuft als eigener Benutzer (studium-web) und
+// schreibt nur in web/ (seine Dateien: abruf.json, takt.json, knopf.json, stand-plugin.json, geraete.json, status-geschuetzt.json, signatur-gesehen.json, bearer.json, bearer-aus.json, nonces.log, anstoss, verbinden/,
 // livesync-links/), unterlagen/ (für den Lauf) und eingang/ (vom Lauf; er löscht Übernommenes). zustand.json und
 // aktualisierung.json liest er nur (server/README.md, „Wer was liest und schreibt“).
 import { createHash, timingSafeEqual } from "node:crypto";
@@ -36,10 +50,10 @@ import { createServer } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { schreibenAtomar } from "./dateien.mjs";
-import { datumOk, kapitelModulNormal, KATEGORIEN, MODULCODE, saeubern, SEMESTER, TODO_ID } from "./eingang.mjs";
-import { entschluesseln, entschluesselnRoh, verschluesseln } from "./kanal.mjs";
+import { datumOk, hatZugangsdaten, kapitelModulNormal, KATEGORIEN, MODULCODE, saeubern, SEMESTER, TODO_ID, wieAnweisung } from "./eingang.mjs";
+import { antwortMac, entschluesseln, entschluesselnRoh, INHALT_LEER, inhaltVon, NonceSpeicher, SIGNATUR, signaturPruefen, verschluesseln } from "./kanal.mjs";
 import { abholen, seite } from "./livesync.mjs";
-import { codeEinloesen, geraetCode, verbundenLesen } from "./verbinden.mjs";
+import { codeEinloesen, codeEinloesenNeu, geraetCode, ipNetz, verbundenLesen } from "./verbinden.mjs";
 
 const TAG = 864e5;
 const EINGANG_TAGE = 30, EINGANG_HOECHSTENS = 180;
@@ -51,7 +65,9 @@ export const PDF = { teil: 8 * 1024 * 1024, bytes: 500 * 1024 * 1024, gesamt: 10
 // einer PDF mit Kopfzeile und dem Aufschlag von base64
 const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/geraet": 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/kapitel": 1024 * 1024, "/v1/anstoss": 1024,
   "/v1/pdf": Math.ceil((PDF.teil + 1024) * 4 / 3) + 4096 };
-const KNOPF_ABSTAND = 10 * 60e3; // Knopf „Mails durchsuchen“: höchstens so oft (jeder Lauf kostet Abo-Limit)
+// Knopf „Mails durchsuchen“ (POST /v1/anstoss): Jeder angenommene Anstoß startet einen Lauf mit Claude und Gmail und kostet
+// Abo-Limit. Wer den Zugangsschlüssel hat, kommt darum höchstens alle 30 Minuten und 12-mal in 24 Stunden durch.
+export const KNOPF = { abstand: 30 * 60e3, tag: 12 };
 // „läuft“ gilt höchstens so lange wie die Zeitgrenze des Laufs (TimeoutStartSec in installieren.sh; ein abgebrochener Lauf hängt
 // nicht für immer)
 const LAUF_HOECHSTENS = 100 * 60e3;
@@ -64,9 +80,17 @@ const UNTERLAGEN = { anfrage: 3, zeichen: 400000, warten: 30 };
 // erste Zeile jeder Seite), höchstens 30 warten
 const KAPITEL = { anfrage: 3, zeichen: 60000, warten: 30 };
 const ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur"];
-// Je Absender höchstens 10 Fehlversuche in 10 Minuten, dann 429. Ein gültiger Zugangsschlüssel wird nie gesperrt (sonst könnte
-// jeder das Plugin aussperren). Absender = letzter Eintrag in X-Forwarded-For (setzt Caddy; der Dienst lauscht nur auf 127.0.0.1).
+// Je Netz des Absenders höchstens 10 Fehlversuche in 10 Minuten, dann 429. Ein gültiger Zugangsschlüssel, ein gültiger Einmal-Code
+// und eine gültige LiveSync-Kennung gehen immer durch (geprüft wird vor der Sperre): sonst könnte jeder das Plugin aussperren, und
+// ein Campus-Netz mit einer Adresse für viele sperrte mit fremden Fehlversuchen den richtigen Code. Absender = letzter Eintrag in
+// X-Forwarded-For (setzt Caddy; der Dienst lauscht nur auf 127.0.0.1), gezählt je /24 (IPv4) bzw. /56 (IPv6), nicht je Adresse.
+// Höchstens SPERRE.absender Netze; ist die Liste voll, fällt zuerst Abgelaufenes weg, und neue Netze zählen danach gemeinsam unter
+// einem Eintrag (UEBERLAUF): Wer viele Netze hat, kann so keine laufende Sperre aus der Liste drängen. Die Liste ist nach dem letzten
+// Fehlversuch geordnet (jeder neue rückt seinen Eintrag ans Ende), so liegt Abgelaufenes vorn und fällt weg, ohne alles
+// durchzugehen. Dass ein gültiger Code vor der Sperre geprüft wird, bremst das Raten nicht; das braucht es nicht: Ein Einmal-Code
+// hat 50 Bit und gilt höchstens 30 Minuten (verbinden.mjs).
 const SPERRE = { fehler: 10, fenster: 10 * 60e3, absender: 5000 };
+const UEBERLAUF = "*";
 export const DATEINAME = /^[0-9A-Za-z][0-9A-Za-z._-]{0,119}\.json$/;
 
 const lesen = (datei, ersatz) => {
@@ -82,6 +106,20 @@ const webOrdner = (verzeichnis) => {
 // Anstoß des Dienstes (web/anstoss); der Lauf, Gmail-Zeit und studium-server schreiben ihren in den Datenordner (anstoss), der
 // Abruf in abruf/ (den sieht der Dienst nicht). Wartet einer, sagt der Status „wartet“.
 const ANSTOSS = [["anstoss"], [WEB, "anstoss"]];
+// Marke in web/: Ein Gerät hat den Status mit Zugangsschlüssel geholt; von da an bekommt ihn niemand mehr ohne (GET /v1/status)
+const STATUS_GESCHUETZT = "status-geschuetzt.json";
+// Marken in web/ für den Zugangsschlüssel im Kopf (Bearer, Plugins bis 0.7.7): signatur-gesehen.json, sobald eine gültige Signatur kam
+// (von da an startet ein Bearer keinen Anstoß mehr), bearer.json mit dem letzten Bearer, der durchging (höchstens stündlich
+// geschrieben). Kam BEARER_FRIST lang kein Bearer mehr durch (gezählt ab dem letzten, sonst ab der ersten Signatur) oder ist die erste
+// Signatur BEARER_SCHLUSS her (egal, wie oft seitdem einer kam), nimmt der Dienst keinen mehr an und schreibt bearer-aus.json; die
+// sieht er zuerst an, so bleibt es dabei, auch wenn die Uhr zurückgeht. Scheitert das Schreiben einer Marke (volle Platte), gilt sie
+// im Speicher weiter, und keine Anfrage scheitert daran.
+const SIGNATUR_GESEHEN = "signatur-gesehen.json", BEARER = "bearer.json", BEARER_AUS = "bearer-aus.json";
+export const BEARER_FRIST = 7 * TAG, BEARER_SCHLUSS = 30 * TAG;
+// Nach „studium-server schluessel-erneuern“ stehen die alten Schlüssel noch ALT_FRIST lang in dienst.json (zugang_alt, schluessel_alt,
+// erneuert): Eine Anfrage, deren Signatur nur unter ihnen stimmt, bekommt 401 mit erneuert (signiert unter den alten Schlüsseln, kein
+// Fehlversuch). So sagt das Gerät gleich „Dein Server hat neue Schlüssel“, statt den Server tagelang als nicht erreichbar zu zeigen.
+export const ALT_FRIST = 30 * TAG;
 export const anstossWartet = (verzeichnis) => ANSTOSS.some((t) => existsSync(join(verzeichnis, ...t)));
 const digest = (text) => createHash("sha256").update(String(text || "")).digest();
 const gleich = (a, b) => timingSafeEqual(digest(a), digest(b));
@@ -89,21 +127,28 @@ const aus = (wert, erlaubt) => (erlaubt.includes(wert) ? wert : "unbekannt");
 
 // Letztes „studium-server aktualisieren“ (aktualisierung.json, schreibt studium-server als studium, 0640): zeit, ok, ziel (Version des
 // neuesten Releases), grund (der Schritt, an dem es scheiterte, aus dieser Liste), erfolg (zuletzt ohne Fehler). Fehlt die Datei
-// (ein älterer Server, Testmodus ohne den täglichen Zeitgeber, noch nie gelaufen): null, das Plugin sagt dann nichts.
+// (ein älterer Server, Testmodus ohne den täglichen Zeitgeber, noch nie gelaufen): null, das Plugin sagt dann nichts. Ein Grund, den
+// diese Liste nicht kennt (ein neueres studium-server), heißt „unbekannt“; Plugins bis 0.7.7 lesen grund gar nicht.
+// Mit mehr (nur im Status mit Schlüssel) dazu, wenn studium-server sie schreibt: installiert (laufende Version) und warten_bis
+// (gestaffelte Verteilung: frühestens dann installiert er); sonst fehlen die Felder.
 export const AKTUALISIERUNG_GRUENDE = ["github", "pruefsumme-fehlt", "signatur-fehlt", "herunterladen", "pruefsumme", "signatur", "paket", "installieren",
-  "pakete"];
+  "pakete", "aelter", "kein-paket", "zurueckgerollt", "version", "mindestversion"];
 const zeitpunkt = (s) => (typeof s === "string" && !Number.isNaN(Date.parse(s)) ? new Date(s).toISOString() : null);
-export function aktualisierungPruefen(a) {
+const versionOk = (v) => typeof v === "string" && /^[0-9A-Za-z.+-]{1,40}$/.test(v);
+export function aktualisierungPruefen(a, mehr = false) {
   if (!a || typeof a !== "object" || !zeitpunkt(a.zeit)) return null;
-  return { zeit: zeitpunkt(a.zeit), ok: a.ok === true, ziel: typeof a.ziel === "string" && /^[0-9A-Za-z.+-]{1,40}$/.test(a.ziel) ? a.ziel : "",
+  const erg = { zeit: zeitpunkt(a.zeit), ok: a.ok === true, ziel: versionOk(a.ziel) ? a.ziel : "",
     grund: a.ok === true ? "" : aus(a.grund, AKTUALISIERUNG_GRUENDE), erfolg: zeitpunkt(a.erfolg) };
+  if (mehr && versionOk(a.installiert)) erg.installiert = a.installiert;
+  if (mehr && zeitpunkt(a.warten_bis)) erg.warten_bis = zeitpunkt(a.warten_bis);
+  return erg;
 }
 
-// Öffentlicher Status: nur Werte aus festen Listen und Zeitpunkte, nie Namen, Adressen, Texte oder Schlüssel. Feldnamen klein
-// mit Unterstrich wie in den zentralen Daten (docs/daten-v1.md).
+// Status (GET /v1/status mit Zugangsschlüssel): nur Werte aus festen Listen und Zeitpunkte, nie Namen, Adressen, Texte oder
+// Schlüssel. Feldnamen klein mit Unterstrich wie in den zentralen Daten (docs/daten-v1.md).
 // claude_lauf: wartet (Anstoß liegt da) | laeuft (seit weniger als LAUF_HOECHSTENS) | ruht. gmail: aus, solange der Takt aus
 // Obsidian (takt.json) Gmail auf „nie“ stellt; sonst stünde dort das Ergebnis der letzten Suche, als liefe sie noch.
-export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(), anstossWartet = false, takt = {}, aktualisierung = null) {
+export function statusWerte(zustand, abruf, version, jetzt = new Date(), anstossWartet = false, takt = {}, aktualisierung = null) {
   const z = zustand || {};
   const seit = Date.parse(z.laeuftSeit || "");
   const claudeLauf = anstossWartet ? "wartet" : !Number.isNaN(seit) && jetzt.getTime() - seit < LAUF_HOECHSTENS ? "laeuft" : "ruht";
@@ -127,6 +172,17 @@ export function oeffentlicherStatus(zustand, abruf, version, jetzt = new Date(),
     aktualisierung: aktualisierungPruefen(aktualisierung),
     fehler: (Array.isArray(z.fehler) ? z.fehler : []).filter((f) => /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
   };
+}
+
+// Stand der Grenzen heute (zustand.grenzen, lauf.mjs grenzenStand), nur im Status mit Schlüssel: ganze Zahlen, sonst null
+const GRENZEN_FELDER = ["laeufe", "laeufe_max", ...["mails", "mails_uni", "pruefen", "gmail", "unterlagen"].flatMap((k) => [`laeufe_${k}`, `laeufe_${k}_max`]), "laeufe_knopf",
+  "mails_wartend", "mails_verworfen", "mails_zurueckgestellt", "mails_verschoben", "zeichen_uni", "zeichen_andere",
+  "mails_verdacht", "quarantaene", "quarantaene_geloescht", "fehlschlaege_gmail", "ausgesetzt_gmail", "unterlagen_ausgelassen", "kapitel_ausgelassen"];
+export function grenzenPruefen(g) {
+  if (!g || typeof g !== "object" || typeof g.tag !== "string" || !datumOk(g.tag)) return null;
+  const aus = { tag: g.tag };
+  for (const k of GRENZEN_FELDER) aus[k] = Number.isInteger(g[k]) && g[k] >= 0 && g[k] < 1e9 ? g[k] : 0;
+  return aus;
 }
 
 // Eingang-Dateien, die das Plugin noch nicht übernommen hat (übernommene löscht POST /v1/stand). Wer Obsidian länger nicht
@@ -155,16 +211,18 @@ export function eingangBuendel(verzeichnis, jetzt = new Date()) {
 
 // Auszug aus dem Tresor, nur für Claude auf diesem Server (tresor.json im Lauf, gegen Doppel): Termine mit Titel, Datum,
 // Kategorie, Modulcode, Herkunft und erledigt; offene To-dos mit Text, Modulcode und Frist. Jeder Eintrag einzeln geprüft und
-// gesäubert wie das Eingang, Ungültiges fällt weg. To-dos, die nach Zugangsdaten aussehen, kommen nie an.
+// gesäubert wie das Eingang, Ungültiges fällt weg. Termine und To-dos, die nach Zugangsdaten aussehen (hatZugangsdaten in
+// eingang.mjs), einen Link enthalten oder wie eine Anweisung an Claude aussehen (wieAnweisung: was Claude einmal in eine Notiz
+// schrieb, käme sonst in jedem Lauf wieder), kommen nie an; beides Heuristiken, geprüft vor und nach dem Säubern.
 const TRESOR_MAX = { termine: 400, todos: 200 };
-const GEHEIM = /passw|kennw|password|\bpw\b|zugangscode|\bpin\b/i;
+const ungeeignet = (roh, gesaeubert) => [roh, gesaeubert].some((t) => hatZugangsdaten(t) || wieAnweisung(t));
 export function tresorPruefen(roh) {
   const t = roh && typeof roh === "object" ? roh : {};
   const tag = (d) => (datumOk(d) ? d : "");
   const code = (c) => (typeof c === "string" && MODULCODE.test(c) ? c : "");
   const termine = (Array.isArray(t.termine) ? t.termine : []).slice(0, TRESOR_MAX.termine).map((x) => {
     const titel = saeubern(x && x.titel, 120, true);
-    if (titel.fehler || !tag(x.datum)) return null;
+    if (titel.fehler || !tag(x.datum) || ungeeignet(x.titel, titel.wert)) return null;
     return { titel: titel.wert, datum: x.datum, bis: tag(x.bis), kategorie: KATEGORIEN.includes(x.kategorie) ? x.kategorie : "", code: code(x.code),
       herkunft: typeof x.herkunft === "string" && /^[a-z][a-z-]{0,29}$/.test(x.herkunft) ? x.herkunft : "", erledigt: x.erledigt === true };
   }).filter(Boolean);
@@ -172,8 +230,9 @@ export function tresorPruefen(roh) {
   // Begleitnotiz; das Plugin prüft es beim Anwenden noch einmal)
   const todos = (Array.isArray(t.todos) ? t.todos : []).slice(0, TRESOR_MAX.todos).map((x) => {
     const text = saeubern(x && x.text, 200, true);
-    if (text.fehler || GEHEIM.test(text.wert)) return null;
+    if (text.fehler || ungeeignet(x.text, text.wert)) return null;
     const pfad = saeubern(x.pfad, 240, false, null);
+    if (!pfad.fehler && ungeeignet(pfad.wert, "")) return null;
     const o = { text: text.wert, code: code(x.code), frist: tag(x.frist) };
     if (TODO_ID.test(String(x.id))) o.id = x.id;
     if (!pfad.fehler && pfad.wert && !pfad.wert.split("/").includes("..") && pfad.wert.endsWith(".md")) o.pfad = pfad.wert;
@@ -270,13 +329,16 @@ function anstossWennFrei(verzeichnis, grund, jetzt) {
   return true;
 }
 
-// Nach dem Limit des Claude-Abos (zustand.limit, lauf.mjs): Ist der nächste Versuch dran, ein Anstoß „wiederholung“. Nicht, wenn
-// schon einer wartet, ein Lauf läuft oder seit dem Zeitpunkt schon einer gestartet ist (der hat das Limit dann neu gesetzt oder
-// gelöscht). Der Dienst liest den Zustand nur; schreiben tut ihn der Lauf. → true, wenn angestoßen
+// Nach dem Limit des Claude-Abos (zustand.limit, lauf.mjs) oder der Grenze der Läufe am Tag je Anlass (zustand.tagesgrenze): Ist der nächste
+// Versuch dran, ein Anstoß „wiederholung“. Nicht, wenn schon einer wartet, ein Lauf läuft oder seit dem Zeitpunkt schon einer
+// gestartet ist (der hat Limit und Grenze dann neu gesetzt oder gelöscht). Der Dienst liest den Zustand nur; schreiben tut ihn der
+// Lauf. → true, wenn angestoßen
 export function limitWiederholen(verzeichnis, jetzt = new Date()) {
   const z = lesen(join(verzeichnis, "zustand.json"), {}) || {};
-  const wieder = Date.parse((z.limit && z.limit.wieder) || "");
-  if (!Number.isFinite(wieder) || wieder > jetzt.getTime() || anstossWartet(verzeichnis)) return false;
+  const dran = [z.limit && z.limit.wieder, z.tagesgrenze && z.tagesgrenze.wieder].map((w) => Date.parse(w || ""))
+    .filter((w) => Number.isFinite(w) && w <= jetzt.getTime());
+  if (!dran.length || anstossWartet(verzeichnis)) return false;
+  const wieder = Math.max(...dran);
   const seit = Date.parse(z.laeuftSeit || "");
   if (Number.isFinite(seit) && jetzt.getTime() - seit < LAUF_HOECHSTENS) return false;
   const zuletzt = Date.parse((z.letzterLauf && z.letzterLauf.zeit) || "");
@@ -377,17 +439,26 @@ export function pdfTeilAblegen(verzeichnis, klar, jetzt = new Date()) {
 
 // Knopf „Mails durchsuchen“: Anstoß für einen Lauf mit Gmail (Grund knopf), immer in web/anstoss, auch wenn dort schon einer wartet:
 // Der Lauf nimmt alle Anstöße und den mit dem höchsten Vorrang (knopf), und Unterlagen und Folien übernimmt er unabhängig vom Grund.
-// Vorher blieb ein wartender Anstoß mit anderem Grund (etwa „quellen“ vom Abruf, „unterlagen“), und Gmail kam nicht dran. Höchstens einmal in
-// KNOPF_ABSTAND. knopf.json liest auch der Abruf (anderer Benutzer): 0644. → [Status, Antwort]
-export function knopfAnstoss(verzeichnis, jetzt = new Date()) {
+// Vorher blieb ein wartender Anstoß mit anderem Grund (etwa „quellen“ vom Abruf, „unterlagen“), und Gmail kam nicht dran. Grenzen:
+// KNOPF (sonst 429 mit wieder, ab wann es wieder geht). knopf.json: { zuletzt, tag: [angenommene der letzten 24 Stunden] }; eine Datei
+// einer früheren Fassung hat nur zuletzt, das zählt mit. knopf.json liest auch der Abruf (anderer Benutzer, nur zuletzt): 0644.
+// wunsch (Körper der Anfrage, JSON; Plugins bis 0.7.7 schicken keinen): { quarantaene: "erneut" } reiht die Quarantäne wieder ein
+// (lauf.mjs quarantaeneErneut); ein wartender Wunsch bleibt, wenn ein gewöhnlicher Knopf den Anstoß ersetzt. → [Status, Antwort]
+export function knopfAnstoss(verzeichnis, jetzt = new Date(), wunsch = null) {
   const knopf = join(webOrdner(verzeichnis), "knopf.json");
-  const zuletzt = Date.parse((lesen(knopf, {}) || {}).zuletzt || "");
-  if (!Number.isNaN(zuletzt) && jetzt.getTime() - zuletzt < KNOPF_ABSTAND) {
-    return [429, { fehler: "zu-frueh", wieder: new Date(zuletzt + KNOPF_ABSTAND).toISOString() }];
-  }
-  schreibenAtomar(knopf, JSON.stringify({ zuletzt: jetzt.toISOString() }), 0o644);
-  schreibenAtomar(join(webOrdner(verzeichnis), "anstoss"), JSON.stringify({ zeit: jetzt.toISOString(), grund: "knopf" }));
-  return [200, { angestossen: true }];
+  const alt = lesen(knopf, {}) || {};
+  const t = jetzt.getTime();
+  const zuletzt = Date.parse(alt.zuletzt || "");
+  const tag = [...new Set((Array.isArray(alt.tag) ? alt.tag : []).concat(alt.zuletzt || []).map((z) => Date.parse(z)))]
+    .filter((z) => Number.isFinite(z) && z <= t && t - z < TAG).sort((a, b) => a - b);
+  const ab = [];
+  if (Number.isFinite(zuletzt) && zuletzt <= t && t - zuletzt < KNOPF.abstand) ab.push(zuletzt + KNOPF.abstand);
+  if (tag.length >= KNOPF.tag) ab.push(tag[tag.length - KNOPF.tag] + TAG);
+  if (ab.length) return [429, { fehler: "zu-frueh", wieder: new Date(Math.max(...ab)).toISOString() }];
+  schreibenAtomar(knopf, JSON.stringify({ zuletzt: jetzt.toISOString(), tag: tag.concat(t).slice(-KNOPF.tag).map((z) => new Date(z).toISOString()) }), 0o644);
+  const erneut = (wunsch && wunsch.quarantaene === "erneut") || (lesen(join(webOrdner(verzeichnis), "anstoss"), {}) || {}).quarantaene === "erneut";
+  schreibenAtomar(join(webOrdner(verzeichnis), "anstoss"), JSON.stringify({ zeit: jetzt.toISOString(), grund: "knopf", ...(erneut ? { quarantaene: "erneut" } : {}) }));
+  return [200, { angestossen: true, ...(wunsch && wunsch.quarantaene === "erneut" ? { quarantaene: "erneut" } : {}) }];
 }
 
 // Takt aus den Einstellungen in Obsidian: Uni-Postfach alle 15, 30 oder 60 Minuten, Gmail 3-, 1- oder 0-mal am Tag; alles
@@ -433,26 +504,51 @@ export function lernplanPruefen(l, heute = new Date().toISOString().slice(0, 10)
   return listen.length ? { semester: l.semester, module, listen } : { semester: l.semester, module };
 }
 
-export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() }) {
+// sperre: Grenzen der Sperre (Tests geben kleinere); uhr: Zeit für die Signaturen in Millisekunden (die echte, auch wenn ein Test
+// jetzt verstellt, denn das Plugin signiert mit der echten); signatur: Fenster und Zahl der gemerkten Zufallswerte (kanal.mjs SIGNATUR)
+export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date(), sperre = SPERRE, uhr = () => Date.now(), signatur = SIGNATUR }) {
   const web = webOrdner(verzeichnis);
-  const fehlversuche = new Map(); // Absender → Zeitpunkte
+  const nonces = new NonceSpeicher(signatur.nonces, { datei: join(web, "nonces.log"), jetztMs: uhr() });
+  const fehlversuche = new Map(); // Netz des Absenders → Zeitpunkte
   const absenderVon = (req) => String(req.headers["x-forwarded-for"] || "").split(",").pop().trim() || req.socket.remoteAddress || "?";
-  const gesperrt = (wer) => {
-    const grenze = jetzt().getTime() - SPERRE.fenster;
-    const liste = (fehlversuche.get(wer) || []).filter((t) => t >= grenze);
-    if (liste.length) fehlversuche.set(wer, liste); else fehlversuche.delete(wer);
-    return liste.length >= SPERRE.fehler;
+  const netzVon = (wer) => ipNetz(wer, 56) || wer;
+  const frisch = (k) => {
+    const grenze = jetzt().getTime() - sperre.fenster;
+    const liste = (fehlversuche.get(k) || []).filter((t) => t >= grenze);
+    if (liste.length) fehlversuche.set(k, liste); else fehlversuche.delete(k);
+    return liste;
+  };
+  // ein Netz, das nicht in der vollen Liste steht, zählt unter UEBERLAUF
+  const schluesselVon = (wer) => (fehlversuche.has(netzVon(wer)) || fehlversuche.size < sperre.absender ? netzVon(wer) : UEBERLAUF);
+  const gesperrt = (wer) => frisch(schluesselVon(wer)).length >= sperre.fehler;
+  // Einträge, deren letzter Fehlversuch abgelaufen ist, von vorn weg (die Liste ist danach geordnet)
+  const abgelaufeneWeg = () => {
+    const grenze = jetzt().getTime() - sperre.fenster;
+    for (const [k, liste] of fehlversuche) {
+      if (liste[liste.length - 1] >= grenze) break;
+      fehlversuche.delete(k);
+    }
   };
   const fehlversuch = (wer) => {
-    if (!fehlversuche.has(wer) && fehlversuche.size >= SPERRE.absender) fehlversuche.delete(fehlversuche.keys().next().value);
-    fehlversuche.set(wer, (fehlversuche.get(wer) || []).concat(jetzt().getTime()).slice(-SPERRE.fehler));
+    if (!fehlversuche.has(netzVon(wer)) && fehlversuche.size >= sperre.absender) abgelaufeneWeg();
+    const k = schluesselVon(wer);
+    const liste = (fehlversuche.get(k) || []).concat(jetzt().getTime()).slice(-sperre.fehler);
+    fehlversuche.delete(k);
+    fehlversuche.set(k, liste);
   };
+  // 429 mit wieder (ab wann es wieder geht): dazu Retry-After in Sekunden. Auf eine gültig signierte Anfrage (res.nonce, auch bei 401
+  // uhr) dazu studium-signatur: v=1,mac=… (kanal.mjs antwortMac; res.mitAlt: unter den alten Schlüsseln, ALT_FRIST)
   const antwort = (res, code, objekt) => {
     const kopf = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
+    const text = objekt === undefined ? "" : JSON.stringify(objekt);
+    if (res.nonce) kopf["studium-signatur"] = `v=1,mac=${antwortMac((res.mitAlt && altKonfig()) || konfig, res.nonce, code, text)}`;
+    const wieder = code === 429 && objekt && Date.parse(objekt.wieder || "");
+    if (Number.isFinite(wieder)) kopf["retry-after"] = String(Math.max(1, Math.ceil((wieder - jetzt().getTime()) / 1000)));
     res.writeHead(code, code === 413 ? { ...kopf, connection: "close" } : kopf);
-    res.end(objekt === undefined ? "" : JSON.stringify(objekt));
+    res.end(text);
   };
-  const koerper = (req, max) => new Promise((fertig, fehler) => {
+  // inhalt: SHA-256 (base64url) aus dem Kopf einer signierten Anfrage; der Körper muss genau ihn haben
+  const koerper = (req, max, inhalt) => new Promise((fertig, fehler) => {
     const teile = [];
     let laenge = 0;
     req.on("data", (t) => {
@@ -467,30 +563,125 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
       teile.push(t);
     });
     req.on("end", () => {
-      try { fertig(JSON.parse(Buffer.concat(teile).toString("utf8") || "null")); } catch (e) { fehler(Object.assign(e, { status: 400 })); }
+      const roh = Buffer.concat(teile);
+      if (inhalt && inhaltVon(roh) !== inhalt) return fehler(Object.assign(new Error("Körper passt nicht zur Signatur"), { status: 400 }));
+      try { fertig(JSON.parse(roh.toString("utf8") || "null")); } catch (e) { fehler(Object.assign(e, { status: 400 })); }
     });
     req.on("error", fehler);
   });
-  const angemeldet = (req) => {
+  // Direkt auf 127.0.0.1, nicht über Caddy: Caddy setzt bei jeder weitergeleiteten Anfrage X-Forwarded-For (und -Proto, -Host),
+  // ein Absender aus dem Internet kann das nicht verhindern. So fragen installieren.sh und studium-server status.
+  const direktLokal = (req) => ["127.0.0.1", "::1", "::ffff:127.0.0.1"].includes(req.socket.remoteAddress) &&
+    !["x-forwarded-for", "x-forwarded-proto", "x-forwarded-host", "forwarded"].some((k) => k in req.headers);
+  // Zugang einer Anfrage → { ok: true, art: bearer | signatur, inhalt?, beweis? } | { ok: false, fehler }. Bearer: Plugins bis 0.7.7
+  // (der Schlüssel selbst im Kopf; bleibt erlaubt, solange es sie gibt). Signatur: kanal.mjs signaturPruefen
+  // erneuert: die Signatur stimmt nur unter den alten Schlüsseln (ALT_FRIST; ihre nonce ist dann gemerkt)
+  const zugang = (req, pfad) => {
     const kopf = String(req.headers.authorization || "");
-    return kopf.startsWith("Bearer ") && gleich(kopf.slice(7), konfig.zugang);
+    if (kopf.startsWith("Bearer ")) {
+      if (!gleich(kopf.slice(7), konfig.zugang)) return { ok: false, fehler: "zugang" };
+      return bearerErlaubt() ? { ok: true, art: "bearer" } : { ok: false, fehler: "veraltet" };
+    }
+    if (!kopf.startsWith("Studium-Signatur ")) return { ok: false, fehler: "zugang" };
+    const netz = netzVon(absenderVon(req));
+    const p = signaturPruefen(kopf, konfig, req.method, pfad, uhr(), nonces, signatur.fenster, netz);
+    if (p.ok && signaturSeit() === null) {
+      gesehenSeit = jetzt().getTime();
+      marke(SIGNATUR_GESEHEN, { seit: jetzt().toISOString() });
+    }
+    if (p.ok) return { ...p, art: "signatur" };
+    const alt = p.fehler === "zugang" && altKonfig();
+    if (alt) {
+      const q = signaturPruefen(kopf, alt, req.method, pfad, uhr(), nonces, signatur.fenster, netz);
+      if (q.ok || q.fehler === "uhr") return { ok: false, fehler: "erneuert", nonce: q.nonce, alt: true };
+    }
+    return p;
+  };
+  // Marke in web/ schreiben; scheitert es (volle Platte), gilt der Zustand nur im Speicher
+  const marke = (name, objekt) => {
+    try { schreibenAtomar(join(web, name), JSON.stringify(objekt)); } catch (e) { /* nur im Speicher */ }
+  };
+  // Erste gültige Signatur (Millisekunden; eine unlesbare Marke zählt wie eine von 1970) oder null. Einmal gesehen, bleibt es.
+  let gesehenSeit = null;
+  const signaturSeit = () => {
+    if (gesehenSeit === null && existsSync(join(web, SIGNATUR_GESEHEN))) {
+      const t = Date.parse(String((lesen(join(web, SIGNATUR_GESEHEN), {}) || {}).seit || ""));
+      gesehenSeit = Number.isFinite(t) ? t : 0;
+    }
+    return gesehenSeit;
+  };
+  const signaturGesehen = () => signaturSeit() !== null;
+  // Bearer mit dem richtigen Schlüssel: noch erlaubt? (BEARER_FRIST, BEARER_SCHLUSS; das erste Nein gilt für immer: bearer-aus.json)
+  let bearerAus = false, bearerZuletzt = NaN;
+  const bearerErlaubt = () => {
+    if (bearerAus || (bearerAus = existsSync(join(web, BEARER_AUS)))) return false;
+    const t = jetzt().getTime(), seit = signaturSeit();
+    const datei = Date.parse(String((lesen(join(web, BEARER), {}) || {}).zuletzt || ""));
+    const b = Math.max(Number.isFinite(datei) ? datei : -Infinity, Number.isFinite(bearerZuletzt) ? bearerZuletzt : -Infinity);
+    if (seit !== null && (t - Math.max(b, seit) > BEARER_FRIST || t - seit > BEARER_SCHLUSS)) {
+      bearerAus = true;
+      marke(BEARER_AUS, { seit: jetzt().toISOString() });
+      return false;
+    }
+    if (!Number.isFinite(b) || t - b > 3600e3) {
+      bearerZuletzt = t;
+      marke(BEARER, { zuletzt: jetzt().toISOString() });
+    }
+    return true;
+  };
+  // die Schlüssel vor dem letzten Erneuern, solange sie noch zählen (ALT_FRIST) → { zugang, schluessel } | null
+  const altKonfig = () => {
+    const t = Date.parse(String(konfig.erneuert || ""));
+    if (typeof konfig.zugang_alt !== "string" || typeof konfig.schluessel_alt !== "string" || !Number.isFinite(t) || jetzt().getTime() - t > ALT_FRIST) return null;
+    return { zugang: konfig.zugang_alt, schluessel: konfig.schluessel_alt };
+  };
+  // Abgelehnt → 401 mit signatur: 1 (daran erkennt das Plugin ab 0.7.8 einen Server, der Signaturen kennt; einer bis 0.7.7 sagt nur
+  // zugang). uhr (Zeit außerhalb des Fensters) zählt nicht als Fehlversuch: Die Signatur stimmte, nur die Uhr des Geräts geht falsch.
+  // Eine wiederholte Anfrage schickt das Plugin nie: Fehlversuch.
+  // Die alten Schlüssel nach dem Erneuern (erneuert): kein Fehlversuch, das Gerät soll es nur erfahren.
+  const abweisen = (res, wer, p) => {
+    if (p.fehler === "uhr") return antwort(res, 401, { fehler: "uhr", signatur: 1 });
+    if (p.fehler === "erneuert") return antwort(res, 401, { fehler: "zugang", erneuert: 1, signatur: 1 });
+    // der richtige Schlüssel als Bearer, aber dessen Frist ist vorbei: kein Fehlversuch (Plugin bis 0.7.7, es braucht ein Update)
+    if (p.fehler === "veraltet") return antwort(res, 401, { fehler: "veraltet", signatur: 1 });
+    if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
+    fehlversuch(wer);
+    return antwort(res, 401, { fehler: p.fehler === "wiederholt" ? "wiederholt" : "zugang", signatur: 1 });
   };
 
   return createServer(async (req, res) => {
     const pfad = new URL(req.url, "http://lokal").pathname;
     try {
+      const wer = absenderVon(req);
       if (pfad === "/v1/status") {
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
-        return antwort(res, 200, oeffentlicherStatus(lesen(join(verzeichnis, "zustand.json"), {}),
-          lesen(join(web, "abruf.json"), {}), konfig.version, jetzt(), anstossWartet(verzeichnis),
-          lesen(join(web, "takt.json"), {}), lesen(join(verzeichnis, "aktualisierung.json"), null)));
+        const aktualisierung = () => lesen(join(verzeichnis, "aktualisierung.json"), null);
+        const werte = () => statusWerte(lesen(join(verzeichnis, "zustand.json"), {}), lesen(join(web, "abruf.json"), {}), konfig.version, jetzt(),
+          anstossWartet(verzeichnis), lesen(join(web, "takt.json"), {}), aktualisierung());
+        const alles = () => ({ ...werte(), aktualisierung: aktualisierungPruefen(aktualisierung(), true), verbunden: verbundenLesen(web, jetzt()),
+          grenzen: grenzenPruefen((lesen(join(verzeichnis, "zustand.json"), {}) || {}).grenzen) });
+        const p = zugang(req, pfad);
+        Object.assign(res, { nonce: p.nonce, mitAlt: !!p.alt });
+        if (p.ok && p.inhalt && p.inhalt !== INHALT_LEER) return antwort(res, 400, { fehler: "anfrage" });
+        if (p.ok) {
+          if (!existsSync(join(web, STATUS_GESCHUETZT))) marke(STATUS_GESCHUETZT, { seit: jetzt().toISOString() });
+          return antwort(res, 200, alles());
+        }
+        // direkt auf dem Server (installieren.sh, studium-server status): alles wie mit Schlüssel, ohne die Marke zu setzen
+        if (direktLokal(req)) return antwort(res, 200, alles());
+        // ein signierter Kopf, der nicht stimmt, wird immer abgewiesen (das Plugin ab 0.7.8 soll es merken); ohne Kopf oder mit einem
+        // falschen Bearer erst, sobald der Status geschützt ist
+        if (String(req.headers.authorization || "").startsWith("Studium-Signatur ") || existsSync(join(web, STATUS_GESCHUETZT))) return abweisen(res, wer, p);
+        return antwort(res, 200, werte()); // Übergang: noch kein Gerät hat den Status mit Schlüssel geholt (Plugin bis 0.7.7)
       }
-      const wer = absenderVon(req);
       if (pfad.startsWith("/v1/livesync/")) {
-        if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
+        // erst die Kennung, dann die Sperre: eine gültige geht immer
         const setupLink = abholen(web, pfad.slice("/v1/livesync/".length), jetzt());
-        if (!setupLink) fehlversuch(wer);
+        if (!setupLink) {
+          if (gesperrt(wer)) { fehlversuch(wer); return antwort(res, 429, { fehler: "zu-viele-versuche" }); }
+          fehlversuch(wer);
+        }
         res.writeHead(setupLink ? 200 : 404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
           "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", "referrer-policy": "no-referrer" });
         return res.end(seite(setupLink));
@@ -498,43 +689,65 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
       if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/kapitel", "/v1/pdf", "/v1/anstoss", "/v1/verbinden", "/v1/geraet"].includes(pfad)) return antwort(res, 404, { fehler: "unbekannt" });
 
       if (pfad === "/v1/verbinden") {
-        if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
         if (req.method !== "POST") return antwort(res, 405, { fehler: "methode" });
         const daten = await koerper(req, MAX_KOERPER[pfad]);
-        if (!codeEinloesen(web, daten && daten.code, jetzt())) { fehlversuch(wer); return antwort(res, 403, { fehler: "code" }); }
-        return antwort(res, 200, { adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel });
-      }
-      if (!angemeldet(req)) {
-        if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
+        // erst der Code, dann die Sperre: ein gültiger Code geht immer (eingelöst mit grobem Netz und Gerätenamen fürs Protokoll)
+        const d = daten && typeof daten === "object" ? daten : {};
+        const info = { netz: ipNetz(wer, 48), geraet: d.geraet };
+        // ab 0.7.8: Kennung statt Code, Antwort verschlüsselt; ohne schema der Weg bis 0.7.7 mit dem Code selbst
+        if (d.schema === 2) {
+          const neu = codeEinloesenNeu(web, d, konfig, jetzt(), info);
+          if (neu) return antwort(res, 200, neu.antwort);
+        } else if (codeEinloesen(web, d.code, jetzt(), info)) {
+          return antwort(res, 200, { adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel });
+        }
+        const zuViele = gesperrt(wer);
         fehlversuch(wer);
-        return antwort(res, 401, { fehler: "zugang" });
+        // schema: 2 sagt dem Plugin ab 0.7.8, dass dieser Server den neuen Austausch kennt (dann stimmt der Code nicht)
+        return zuViele ? antwort(res, 429, { fehler: "zu-viele-versuche" }) : antwort(res, 403, { fehler: "code", schema: 2 });
       }
+      const p = zugang(req, pfad);
+      Object.assign(res, { nonce: p.nonce, mitAlt: !!p.alt });
+      if (!p.ok) return abweisen(res, wer, p);
+      const inhaltLesen = () => koerper(req, MAX_KOERPER[pfad], p.inhalt);
 
       if (pfad === "/v1/eingang") {
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
+        if (p.inhalt && p.inhalt !== INHALT_LEER) return antwort(res, 400, { fehler: "anfrage" });
         const paket = await verschluesseln(konfig.schluessel, "eingang", { ...eingangBuendel(verzeichnis, jetzt()), verbunden: verbundenLesen(web, jetzt()) });
-        schreibenAtomar(join(web, "abruf.json"), JSON.stringify({ zuletzt: jetzt().toISOString() }));
+        marke("abruf.json", { zuletzt: jetzt().toISOString() });
         return antwort(res, 200, paket);
       }
       if (req.method !== "POST") return antwort(res, 405, { fehler: "methode" });
-      if (pfad === "/v1/anstoss") return antwort(res, ...knopfAnstoss(verzeichnis, jetzt()));
+      if (pfad === "/v1/anstoss") {
+        // signiert (ab 0.7.8) nur mit dem Beweis des Datenschlüssels: Ein Lauf kostet Abo-Limit, der Zugangsschlüssel allein reicht nicht
+        if (p.art === "signatur" && !p.beweis) {
+          fehlversuch(wer);
+          return antwort(res, 403, { fehler: "datenschluessel" });
+        }
+        // Bearer (bis 0.7.7) startet keinen Lauf mehr, sobald ein Gerät signiert: wer den Zugangsschlüssel mitlas, hat den Datenschlüssel
+        // nicht (keine Zählung als Fehlversuch, es kann ein altes Plugin sein)
+        if (p.art === "bearer" && signaturGesehen()) return antwort(res, 403, { fehler: "veraltet" });
+        return antwort(res, ...knopfAnstoss(verzeichnis, jetzt(), await inhaltLesen()));
+      }
       if (pfad === "/v1/geraet") {
-        const [status, aus] = geraetCode(web, await entschluesseln(konfig.schluessel, "verbinden", await koerper(req, MAX_KOERPER[pfad])), jetzt());
-        return antwort(res, status, status === 200 ? await verschluesseln(konfig.schluessel, "verbinden", aus) : aus);
+        const [status, aus] = geraetCode(web, await entschluesseln(konfig.schluessel, "verbinden", await inhaltLesen()), jetzt(), konfig.adresse);
+        // signiert (ab 0.7.8) mit eigenem Zweck für die Antwort; Plugins bis 0.7.7 erwarten verbinden
+        return antwort(res, status, status === 200 ? await verschluesseln(konfig.schluessel, p.art === "signatur" ? "verbinden-antwort" : "verbinden", aus) : aus);
       }
       if (pfad === "/v1/unterlagen") {
-        const n = unterlagenAblegen(verzeichnis, unterlagenPruefen(await entschluesseln(konfig.schluessel, "unterlagen", await koerper(req, MAX_KOERPER[pfad]))), jetzt());
+        const n = unterlagenAblegen(verzeichnis, unterlagenPruefen(await entschluesseln(konfig.schluessel, "unterlagen", await inhaltLesen())), jetzt());
         return antwort(res, 200, { angenommen: n });
       }
       if (pfad === "/v1/kapitel") {
-        const n = kapitelAblegen(verzeichnis, kapitelUnterlagenPruefen(await entschluesseln(konfig.schluessel, "kapitel", await koerper(req, MAX_KOERPER[pfad]))), jetzt());
+        const n = kapitelAblegen(verzeichnis, kapitelUnterlagenPruefen(await entschluesseln(konfig.schluessel, "kapitel", await inhaltLesen())), jetzt());
         return antwort(res, 200, { angenommen: n });
       }
       if (pfad === "/v1/pdf") {
-        return antwort(res, 200, pdfTeilAblegen(verzeichnis, await entschluesselnRoh(konfig.schluessel, "pdf", await koerper(req, MAX_KOERPER[pfad])), jetzt()));
+        return antwort(res, 200, pdfTeilAblegen(verzeichnis, await entschluesselnRoh(konfig.schluessel, "pdf", await inhaltLesen()), jetzt()));
       }
       // /v1/stand
-      const { stand, erledigt } = standPruefen(await entschluesseln(konfig.schluessel, "stand", await koerper(req, MAX_KOERPER[pfad])));
+      const { stand, erledigt } = standPruefen(await entschluesseln(konfig.schluessel, "stand", await inhaltLesen()));
       // stand-plugin.json nur für den Lauf (0640, Gruppe studium-web), takt.json auch für abrufen.py (anderer Benutzer, ohne den Stand)
       schreibenAtomar(join(web, "stand-plugin.json"), JSON.stringify(stand), 0o640);
       schreibenAtomar(join(web, "takt.json"), JSON.stringify(stand.takt), 0o644);

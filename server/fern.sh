@@ -5,11 +5,14 @@
 #   bash ~/studium-autopilot/server/fern.sh <befehl>
 # Exit: wie `einrichten.mjs adresse` (1 Fehler, 2 anderer Schlüssel oder kein Konto), 3 unbekannter Befehl, 4 Server läuft
 # nicht (RUNNING), 5 Server antwortet nicht auf ssh, 6 Server meldet sich mit einem anderen Schlüssel als beim letzten Mal (neu
-# angelegt unter derselben IP), sonst der Exit des Befehls auf dem Server.
+# angelegt unter derselben IP), 7 Paket ohne gültige Signatur (installieren), sonst der Exit des Befehls auf dem Server.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SCHLUESSEL="$HOME/.ssh/studium_autopilot"
+# Wer Server-Pakete signieren darf: dieselben Schlüssel wie server/allowed_signers und start.sh (tests/paket-pruefen.test.js), fest
+# hier statt aus dem Paket, das gleich als root auf den Server geht
+SIGNIERSCHLUESSEL=('ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBVvg98K+YQb1YhQFh5w2EE4QEs8QG7gN3jRK6G8pzjc')
 
 hilfe() {
   cat >&2 <<'TEXT'
@@ -17,17 +20,18 @@ Aufruf: bash ~/studium-autopilot/server/fern.sh <befehl>
   installieren                     Server-Paket auf den Server kopieren und installieren (wiederholbar)
   neustart                         Server neu starten (nach „Boot-Volume … vergrößert“)
   claude-anmelden                  Claude Code auf dem Server mit deinem Abo anmelden, danach den Zustand prüfen
-  status | zustand | verbinden | jetzt | lauf | aktualisieren
+  status | zustand | verbinden | jetzt | lauf | aktualisieren [--jetzt]
   schluessel-erneuern              neue Schlüssel, wenn ein Gerät verloren ist (danach jedes Gerät neu verbinden)
   uni-zugang setzen|loeschen|pruefen
-  livesync [einschalten|verbinden]
+  livesync [einschalten|verbinden|aufbauen]
+  livesync-erneuern [--neue-passphrase]   neue Zugangsdaten für LiveSync (jedes Gerät braucht danach einen neuen Link)
   modell sonnet|opus
 TEXT
 }
 
 [ $# -gt 0 ] || { hilfe; exit 3; }
 case "$1" in
-  installieren|neustart|claude-anmelden|status|zustand|verbinden|jetzt|lauf|aktualisieren|uni-zugang|livesync|modell|schluessel-erneuern) ;;
+  installieren|neustart|claude-anmelden|status|zustand|verbinden|jetzt|lauf|aktualisieren|uni-zugang|livesync|livesync-erneuern|modell|schluessel-erneuern) ;;
   *) echo "Unbekannter Befehl: $1" >&2; hilfe; exit 3 ;;
 esac
 for a in "$@"; do
@@ -91,8 +95,31 @@ fern() {
   return "$c"
 }
 
+# Signatur von studium-server.tar.gz (daneben .sig) wie in start.sh: ssh-keygen -Y verify, sonst Node.js mit server/paket-pruefen.mjs
+# (Cloud Shell im FIPS-Modus). Namensraum studium-server; studium-server-test nur mit STUDIUM_TESTPAKET=1 (start.sh --paket-da, Beta).
+paket_gueltig() {
+  local d s ns c=1 namensraeume=(studium-server)
+  [ "${STUDIUM_TESTPAKET:-}" != 1 ] || namensraeume+=(studium-server-test)
+  [ -f studium-server.tar.gz ] && [ -f studium-server.tar.gz.sig ] || return 1
+  d=$(mktemp -d)
+  for ns in "${namensraeume[@]}"; do
+    for s in "${SIGNIERSCHLUESSEL[@]}"; do printf 'release@studium-autopilot namespaces="%s" %s\n' "$ns" "$s"; done >"$d/erlaubt"
+    if ssh-keygen -Y verify -f "$d/erlaubt" -I release@studium-autopilot -n "$ns" -s studium-server.tar.gz.sig <studium-server.tar.gz >/dev/null 2>&1 \
+      || node server/paket-pruefen.mjs "$d/erlaubt" release@studium-autopilot "$ns" studium-server.tar.gz.sig studium-server.tar.gz >/dev/null; then
+      c=0
+      break
+    fi
+  done
+  rm -rf "$d"
+  return "$c"
+}
+
 case "$1" in
   installieren)
+    paket_gueltig || {
+      echo "[signatur] studium-server.tar.gz hat keine gültige Signatur (studium-server.tar.gz.sig daneben); nichts auf den Server kopiert." >&2
+      exit 7
+    }
     mitschreiben scp "${SSH[@]}" studium-server.tar.gz "ubuntu@$IP:" || {
       anderer_schluessel
       echo "[fern] Das Paket ließ sich nicht auf den Server kopieren (Meldung von scp darüber). $NICHT_ERREICHBAR" >&2

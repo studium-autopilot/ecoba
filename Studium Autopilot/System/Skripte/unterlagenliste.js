@@ -14,6 +14,9 @@
 //  5. Zwei Fassungen derselben Unterlage (seit 24.10.2026, fassung.js familien): Hast du eine Datei bearbeitet und kam eine neue
 //     Fassung daneben, stehen beide untereinander, deine zuerst, unter dem Titel beschriftet („Deine bearbeitete Fassung“, „Neue
 //     Fassung vom …“). Vorher standen zwei Zeilen mit derselben Nummer und demselben Titel da.
+//  0. Zusammenfassung des Moduls (seit 02.11.2026, im Entwurf): Gibt es eine Notiz mit typ: zusammenfassung und dem Kürzel, steht
+//     sie als erste Zeile über allen Abschnitten und beiden Spalten; sie ist der Weg zu den Unterlagen (Abschnitte mit Seiten,
+//     Übungen, Lab). Unterzeile aus der Notiz selbst: Kapitel (Text vor „ · “ in den ##-Überschriften) und Stand. Ohne fehlt sie.
 //  6. Ohne Modul (seit 26.10.2026): ```eba-unterlagen ohne-modul``` (Argument der Kopfzeile, blockArgument) auf der Seite
 //     Unterlagen zeigt alle Unterlagen ohne Kürzel
 //     (Ordner „Unterlagen/Ohne Modul“), etwa Prüfungsordnung, Modulhandbuch oder Folien einer Infoveranstaltung. Vorher standen
@@ -145,6 +148,19 @@ module.exports = function (ctx) {
       });
   };
 
+  // Unterzeile der Zusammenfassung: ##-Überschriften („I · Verteilung einer Variablen“) und Stand (JJJJ-MM-TT) →
+  // „Kapitel E und I · Stand 02.11.“; bis drei Kapitel einzeln, mehr als „Kapitel E bis III“; ohne Kürzel vor „ · “ die Zahl
+  const zfMeta = (ueberschriften, stand) => {
+    const h2 = (ueberschriften || []).filter((h) => h && h.level === 2).map((h) => text(h.heading));
+    const k = h2.map((h) => { const i = h.indexOf(" · "); return i > 0 && i <= 6 ? h.slice(0, i) : ""; });
+    let kap = "";
+    if (h2.length && k.some((x) => !x)) kap = `${h2.length} Kapitel`;
+    else if (k.length > 3) kap = `Kapitel ${k[0]} bis ${k[k.length - 1]}`;
+    else if (k.length) kap = "Kapitel " + (k.length === 1 ? k[0] : k.slice(0, -1).join(", ") + " und " + k[k.length - 1]);
+    const s = text(stand), tag = /^\d{4}-\d{2}-\d{2}/.test(s) ? `Stand ${s.slice(8, 10)}.${s.slice(5, 7)}.` : "";
+    return [kap, tag].filter(Boolean).join(" · ");
+  };
+
   // ---------- Obsidian ----------
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f)?.frontmatter) || {};
   const oeffnen = (f, e) => { if (f) ctx.oeffnen(f, { neu: !!(e && (e.metaKey || e.ctrlKey)) }); };
@@ -166,7 +182,18 @@ module.exports = function (ctx) {
     const code = ohne ? OHNE_MODUL : text(quelle) || text(fm.code) || (notiz && fm.typ === "modul" ? notiz.basename.split(" ")[0] : "");
     const box = el.createDiv({ cls: "eba-ul" });
     if (!code) { box.createDiv({ cls: "eba-ul-leer", text: "Nur auf Modulseiten." }); return; }
-    const eintraege = app.vault.getMarkdownFiles().map((f) => ({ f, fm: fmVon(f) })).filter((x) => gehoert(x.fm, code));
+    const notizen = app.vault.getMarkdownFiles().map((f) => ({ f, fm: fmVon(f) }));
+    const eintraege = notizen.filter((x) => gehoert(x.fm, code));
+    const zf = ohne ? null : notizen.find((x) => x.fm.typ === "zusammenfassung" && text(x.fm.code) === code);
+    if (zf) {
+      const r = box.createDiv({ cls: "eba-ul-zf", attr: { role: "link", tabindex: "0" } });
+      tippen(r, (e) => oeffnen(zf.f, e));
+      const t = r.createDiv({ cls: "eba-ul-zf-text" });
+      t.createDiv({ cls: "eba-ul-zf-titel", text: "Zusammenfassung" });
+      const meta = zfMeta((app.metadataCache.getFileCache(zf.f) || {}).headings, zf.fm.stand);
+      if (meta) t.createDiv({ cls: "eba-ul-zf-meta", text: meta });
+      ctx.obsidian.setIcon(r.createSpan({ cls: "eba-ul-zf-pfeil" }), "chevron-right");
+    }
     const G = gliedern(eintraege, ohne ? "" : code, M && M.uebung ? (x) => { const u = M.uebung(x.f); return !!(u && u.erledigt); } : null);
     if (!G.length) {
       // Ohne Modul und leer (seit 0.7.0): Block samt Überschrift unsichtbar (eba-core.css), bis 0.6.14 stand dort ein Satz
@@ -226,5 +253,5 @@ module.exports = function (ctx) {
     ctx.an(app.metadataCache, "resolved", () => { if (!einmal) { einmal = true; bald(); } });
   };
 
-  return { registrieren, zeichnen, artVon, woerter, semesterRang, gliedern, gehoert, OHNE_MODUL };
+  return { registrieren, zeichnen, artVon, woerter, semesterRang, gliedern, gehoert, zfMeta, OHNE_MODUL };
 };

@@ -256,6 +256,10 @@ Pille da, nur bei Notizen, die das Feld haben, „offiziell“ ohne Chip. CSS: `
 Die **Unterlagen** (`unterlagenliste.js`, Codeblock `eba-unterlagen`, seit 18.10.2026; vorher eine Tabelle mit
 Werkzeugleiste, Spaltenköpfen und Spalte Art) zeigen alle Notizen mit `typ: unterlage` und dem Kürzel des Moduls (ein Kürzel
 im Codeblock geht vor), auf allen Geräten gleich:
+- *Zusammenfassung* (seit 02.11.2026, im Entwurf): Hat das Modul eine Notiz mit `typ: zusammenfassung` und seinem Kürzel, steht
+  sie als Karte über allen Abschnitten und beiden Spalten (`column-span: all`), denn sie ist der Weg zu den Unterlagen. Darunter
+  Kapitel und Stand aus der Notiz selbst (`zfMeta`: Text vor „ · “ der `##`-Überschriften, Feld `stand`), etwa „Kapitel E und I ·
+  Stand 02.11.“. Ohne Zusammenfassung fehlt die Karte.
 - *Abschnitte* je Art in fester Reihenfolge, Name in der Mehrzahl: Folien, Skripte, Mitschriften, Übungen, Tutorium, Lab, Altklausuren,
   Lösungen, Eigene Lösungen, Literatur, Scans, Sonstiges; unbekannte Arten mit eigenem Namen vor Sonstiges.
 - *Tutorium* (seit 20.10.2026) ist ein eigener Bereich, getrennt von Vorlesung und Übung: Nennt ein Ordner oder der Dateiname das
@@ -292,7 +296,7 @@ im Codeblock geht vor), auf allen Geräten gleich:
 
 Ab 860 px Breite zwei Spalten, ein Abschnitt bricht nie um; unter 480 px ohne Seiten. Neu gezeichnet wird bei Änderungen an
 Unterlagen- und Modulnotizen und beim Umbenennen. Was neu ist (in 14 Tagen eingeordnet, nie geöffnet), zeigt die Seite
-Unterlagen. Reine Logik (`artVon`, `woerter`, `semesterRang`, `gliedern`, `gehoert`) in `tests/unterlagenliste.test.js`. CSS:
+Unterlagen. Reine Logik (`artVon`, `woerter`, `semesterRang`, `gliedern`, `gehoert`, `zfMeta`) in `tests/unterlagenliste.test.js`. CSS:
 `eba-core.css` Abschnitt 58.8.
 
 *Ohne Modul* (seit 26.10.2026): Derselbe Block mit dem Argument `ohne-modul` (```` ```eba-unterlagen ohne-modul````, gelesen mit
@@ -303,3 +307,55 @@ etwa öffentliche Unterlagen des Studiengangs (Folien von Infoveranstaltungen, M
 Anleitungen zu Alma oder ILIAS; Art Folien, sonst Sonstiges). Vorher standen sie nur in den Tabellen „Neu“ und „Nach Modul“
 (ohne Gruppe) und nirgends als Liste. Gibt es keine, bleibt der Block leer (Klasse `eba-ul-aus`, seit 0.7.0) und `eba-core.css`
 Abschnitt 58.8 blendet ihn samt Überschrift aus wie die Schwerpunkte; bis 0.6.14 stand dort ein Satz, was hier erscheinen würde.
+
+## Zusammenfassung eines Moduls (seit 02.11.2026, im Entwurf, `zusammenfassung.js`)
+
+Eine Notiz mit `typ: zusammenfassung` und `code` ist die Zusammenfassung eines Moduls: `##` je Kapitel mit Kürzel vor „ · “
+(„E · Motivation“, „I · Verteilung einer Variablen“, Kürzel aus dem Studienplan), darin `###` je Abschnitt. Die Modulseite
+zeigt sie als Karte über den Unterlagen (oben, `zfMeta`). Sie ist lang (S110: sieben Kapitel, über 100 000 px am iPhone); beim
+Lesen hilft `zusammenfassung.js` (Gestaltung `eba-core.css` 72):
+
+- **Kapitel-Leiste** links (260 px), wenn die Ansicht mindestens 1000 px breit ist und neben der Leiste die zwei Spalten der
+  Abschnitte Platz haben (`leisteAn`; was sie brauchen, misst das Skript an einem unsichtbaren Probekasten
+  `eba-zf-abschnitt` mit der Schriftgröße des Geräts, 24em × 2 + Abstand ≈ 812 px bei 16 px). So hat sie das iPad quer
+  (1376 px) und der PC, nicht aber das iPad 13" hoch (1032 px): Dort stünden die Abschnitte neben der Leiste in einer Spalte.
+  Alle Kapitel mit Kürzel auf je einer Zeile (langer Titel mit „…“, der ganze steht im Text und am PC als Tooltip), Schrift 15
+  bzw. 14 px. Das Kapitel, in dem du liest, hat eine Fläche und zeigt darunter seine Abschnitte; der Abschnitt darin hat keine
+  Fläche, nur einen Strich in Akzentfarbe auf der Führungslinie, Nummer in Akzentfarbe und halbfett (ein Zustand, nicht zwei
+  gleich graue). Die Leiste liegt in `view.contentEl`, der Text rückt per `padding-left` nach rechts (Selektoren stärker als
+  Teil 1 und 1b von `eba-core.css`, die den Rand mit `!important` setzen).
+- **Schmal** (iPhone, iPad hoch, schmales Fenster; Klasse `eba-zf-mit-zeile`): eine dünne Zeile oben (34 px) mit der Stelle,
+  an der du liest („III.4 Streudiagramm …“), sobald du im ersten Kapitel bist. Liegt Obsidians Kopfleiste über dem Inhalt
+  (iPad mit einem Tab, iPhone; Abschnitt 70), steht die Zeile darunter (`--eba-zf-oben`, gemessen), sonst verdeckte sie
+  Lesen/Bearbeiten. Ein Tipp öffnet von unten ein Blatt mit derselben Liste und demselben Sprung; es schließt nach dem Sprung,
+  mit einem Tipp daneben oder mit Esc. Kein schwebender Knopf, keine eigene Seite.
+- **Auf dem Telefon** öffnet die Notiz beim ersten Mal auf diesem Gerät mit allen Kapiteln zugeklappt (`kapitelFalten`), wenn
+  Obsidian für sie keine Faltung gespeichert hat: Der erste Bildschirm zeigt die Kapitel. Nur einmal je Gerät, gemerkt in der
+  Liste der vorgefalteten Folien (`eba-vorgefaltet`, `start.js` hält sie bei Umbenennen und Löschen aktuell): Obsidian
+  speichert „alles aufgeklappt“ als keine Faltung, ohne Merker klappte die Notiz bei jedem Öffnen wieder zu.
+- **Wo du liest** zählt eine Linie ein Viertel unter dem oberen Rand (`aktivZeile`): die letzte gezeichnete Überschrift
+  darüber (Attribut `data-eba-zeile`), sonst die Zeile von `currentMode.getScroll()`. Mit dem oberen Rand allein blieb ein
+  Abschnitt hervorgehoben, während der nächste schon den Bildschirm füllte; und sind Kapitel zugeklappt, nennt `getScroll` eine
+  Zeile im zugeklappten Kapitel davor.
+- **Ein Tipp** klappt zugeklappte Bereiche um das Ziel auf und springt mit `applyScroll` hin. Obsidian nennt eine Faltung der
+  Leseansicht nur mit der Zeile ihrer Überschrift (`to` = `from` + 1); `faltungenOhne` rechnet sie bis vor die nächste
+  Überschrift gleicher Ebene. Nach dem Aufklappen misst die Leseansicht neu, darum setzt der Sprung bis zu viermal nach, bis die
+  Überschrift oben steht; dann rückt er sie genau unter Kopfleiste und Zeile (`applyScroll` ließ sie am Telefon rund 50 px über
+  dem Rand stehen). Gerollt wird `.markdown-preview-view` (in `previewMode.containerEl`, der Hülle) bzw. `.cm-scroller`.
+- **Abschnittsnummern** „I.2“ wie im Lehrbuch vor jedem `###` (Attribut `data-eba-nr`, CSS setzt die Nummer in Akzentfarbe
+  davor) und in der Navigation: Leseansicht über den Post-Processor, Bearbeitungsansicht über `Decoration.line`, wie die
+  Abschnitte in `vorlesung.js`. CSS-Zähler gehen nicht, die Leseansicht zeichnet nur die sichtbaren Abschnitte. Ein `####`
+  unter einem `###` rückt ein und bekommt keine Nummer, ebenso eine Überschrift, die schon mit einer Zahl beginnt.
+- **Formeln**, die breiter sind als ihr Platz, setzt das Skript kleiner (`formelSkala`, höchstens auf 75 %, 2 px Luft); reicht
+  das nicht, rollen sie seitlich wie bisher. Gemessen je Breite (`data-eba-breite`), beim Scrollen für neu gezeichnete
+  Abschnitte, bei jeder Größenänderung neu; in Lese- und Bearbeitungsansicht. Geprüft bei 390 px (alle passen) und 300 px (33
+  von 135 kleiner, keine rollt).
+- **Tabellen** der Leseansicht bekommen an jeder Zelle den Kopf ihrer Spalte (`data-label`, aus dem Text von `th`, auch mit
+  Formeln). Auf dem Telefon steht jede Zeile als kleiner Block: erste Zelle als Titel, die anderen mit dem Spaltenkopf davor
+  (`td::before`), statt seitlich zu rollen und Spalten rechts zu verlieren. iPad und PC zeigen die Tabelle wie sonst; die
+  Bearbeitungsansicht zeichnet CodeMirror selbst und bleibt unverändert.
+
+Seitenlinks auf PDFs in einer Überschrift (Seiten-Chip) stehen nicht in der Navigation (`klartext`). Das Skript schreibt keine
+Datei; die Faltung speichert Obsidian je Gerät wie beim Tipp auf den Pfeil. Vorbild: die Kapitel-Leiste des Forks für die
+Hebammenkunde (dort mit „Kapitel n“ statt Kürzel). Tests: `tests/zusammenfassung.test.js`. Die Nachbildung von `foto.sh` setzt
+kein `is-phone` am `body`; das Zuklappen auf dem Telefon prüft man darum in einem Fenster mit echtem `is-phone`.

@@ -102,7 +102,7 @@ const geraet = (pad = false, breite = 393, hoehe = 852) => ({ isPad: () => pad, 
 // Inhalt und ohne Lücke zeigt ihn mittig; das Widget selbst stellt seinen Inhalt waagerecht in die Mitte, untereinander bündig
 // links (wie VStack(alignment: .leading)).
 const LUECKE_MIN = 8;
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const farbe = (c, dunkel) => (c ? (dunkel ? c.dunkel : c.hell) : "");
 // Ein Stapel mit Lücke ohne Länge füllt seine Richtung, und mit ihm jeder Stapel darum (wie in SwiftUI)
 const fuellt = (x, richtung) => x.art === "stapel" && !(x.size && (richtung === "waagerecht" ? x.size.width : x.size.height))

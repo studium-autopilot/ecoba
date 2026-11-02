@@ -145,3 +145,106 @@ test("Dateien, die ein Tresor selbst anlegt, und persönliche Modulfelder sind F
   assert.equal(fund("Module/B112 leer.md"), "", "leere Felder sind kein Fund");
   assert.match(fund("System/Einstellungen.md"), /persönliches Feld gesetzt\]\s+zaehlen: false/, "zaehlen: false nie in der Vorlage, sonst zählte kein Update");
 });
+
+test("Gerätelokale und private Dateien sind Funde: Widget-Daten, lokale Claude-Dateien, .mcp.json, jede .env", { skip: !python && "kein Python" }, () => {
+  const PLUGIN = `${VAULT}/.obsidian/plugins/studium-autopilot`;
+  const dateien = {
+    [`${PLUGIN}/manifest.json`]: MANIFEST + "\n",
+    [`${PLUGIN}/widget-iphone.json`]: "{}\n",
+    [`${PLUGIN}/widget-ipad.json`]: "{}\n",
+    [`${PLUGIN}/main.js`]: "module.exports = {};\n",
+    ".claude/settings.local.json": "{}\n",
+    [`${VAULT}/.claude/settings.local.json`]: "{}\n",
+    "CLAUDE.local.md": "# lokal\n",
+    "docs/CLAUDE.local.md": "# lokal\n",
+    ".mcp.json": "{}\n",
+    "server/.mcp.json": "{}\n",
+    ".env": "A=1\n",
+    "server/.env": "A=1\n",
+    "server/.env.production": "A=1\n",
+    "server/dienst.env": "A=1\n",
+    // erlaubt: gemeinsame Einstellungen von Claude Code, Dateien, die nur so ähnlich heißen
+    ".claude/settings.json": "{}\n",
+    "docs/env-datei.md": "# Umgebung\n",
+    "server/environment.json": "{}\n",
+  };
+  const r = pruefen(dateien);
+  const fund = (p) => (r.funde[p] || []).join("\n");
+  assert.match(fund(`${PLUGIN}/widget-iphone.json`), /\[gerätelokal \(Stundenplan und Fristen der Widgets\)\]/);
+  assert.match(fund(`${PLUGIN}/widget-ipad.json`), /\[gerätelokal \(Stundenplan und Fristen der Widgets\)\]/);
+  for (const p of [".claude/settings.local.json", `${VAULT}/.claude/settings.local.json`]) assert.match(fund(p), /\[lokale Einstellungen von Claude Code\]/, p);
+  for (const p of ["CLAUDE.local.md", "docs/CLAUDE.local.md"]) assert.match(fund(p), /\[lokale Hinweise für Claude Code\]/, p);
+  for (const p of [".mcp.json", "server/.mcp.json"]) assert.match(fund(p), /\[MCP-Konfiguration/, p);
+  for (const p of [".env", "server/.env", "server/.env.production"]) assert.match(fund(p), /\[Umgebungsdatei/, p);
+  assert.match(fund("server/dienst.env"), /\[Dateityp nicht erlaubt\]/);
+  for (const p of [`${PLUGIN}/main.js`, ".claude/settings.json", "docs/env-datei.md", "server/environment.json"]) assert.equal(r.funde[p], undefined, p);
+});
+
+test("Erkennung: Mat.-Nr., macOS-Benutzerpfad, Zugangsdaten mit Namen, Passwort mit Bezug, persönliche Uni-Adressen", { skip: !python && "kein Python" }, () => {
+  // alles zerlegt, damit diese Datei (tests/ wird veröffentlicht) sich selbst nicht meldet; alle Werte erfunden
+  const MAT = "Mat.-" + "Nr.";
+  const MAC = "/Us" + "ers/";
+  const PW = "Pass" + "word";
+  const PWDE = "Pass" + "wort";
+  const KENNUNG = "abc01";
+  const r = pruefen({
+    "docs/mat.md": `${MAT} 1234567\n${MAT} ohne Wert\n`,
+    "docs/mat-sonst.md": "Das Format Nr. 1234567 und mat 7654321 sind keine Matrikelnummer.\n",
+    "docs/mac.md": `Pfad: ${MAC}jan/Documents/x\n`,
+    "docs/mac-erlaubt.md": `Alle Nutzer liegen unter ${MAC} und ${MAC}Shared/ und ${MAC}<name>/ und /Applications/.\n`,
+    "docs/umgebung.md": `DB_${PW.toUpperCase()}=hunter22\nmysql_root_${PW.toLowerCase()}: geheim99\n`,
+    "docs/umgebung-code.md": `felder.j_${PW.toLowerCase()} = zugang.kennwortGeber() || "";\nconst c = { db_${PW.toLowerCase()}: k.${PWDE.toLowerCase()} };\n`,
+    "docs/bezug.md": `${PWDE} für den Kurs: Gelb42\n`,
+    "docs/bezug-en.md": `${PW} for the course: Gelb42\n`,
+    "docs/bezug-ohne.md": `Das ${PWDE} für den Kurs steht im Postfach.\n`,
+    "docs/uni-adressen.md": [`${KENNUNG}` + "@uni-tuebingen.de", `${KENNUNG}` + "@student.uni-tuebingen.de"].join("\n") + "\n",
+    "docs/uni-funktion.md": ["pruefungsamt" + "@uni-tuebingen.de", "ilias" + "@uni-tuebingen.de", "x" + "@wiwi.uni-tuebingen.de"].join("\n") + "\n",
+  });
+  const fund = (p) => (r.funde[p] || []).join("\n");
+  assert.match(fund("docs/mat.md"), /\[Matrikelnummer mit Wert\]/);
+  assert.equal(r.funde["docs/mat.md"].length, 1, "nur die Zeile mit Wert");
+  assert.equal(r.funde["docs/mat-sonst.md"], undefined);
+  assert.match(fund("docs/mac.md"), /\[macOS-Benutzerpfad\]/);
+  assert.equal(r.funde["docs/mac-erlaubt.md"], undefined, "„Users/“ allein, Shared und Platzhalter sind kein Fund");
+  assert.equal(r.funde["docs/umgebung.md"].length, 2);
+  assert.match(fund("docs/umgebung.md"), /\[Passwort mit Wert\]/);
+  assert.equal(r.funde["docs/umgebung-code.md"], undefined, "Zuweisung im Quelltext ist keine Zugangsdaten");
+  assert.match(fund("docs/bezug.md"), /\[Passwort mit Bezug\]/);
+  assert.match(fund("docs/bezug-en.md"), /\[Passwort mit Bezug\]/);
+  assert.equal(r.funde["docs/bezug-ohne.md"], undefined);
+  assert.equal(r.funde["docs/uni-adressen.md"].length, 2, "beide persönlichen Adressen");
+  assert.match(fund("docs/uni-adressen.md"), /\[E-Mail-Adresse\]/);
+  assert.equal(r.funde["docs/uni-funktion.md"], undefined, "Funktionsadressen der Uni bleiben erlaubt");
+  for (const wert of ["1234567", "hunter22", "geheim99", "Gelb42"]) assert.ok(!r.ausgabe.includes(wert), `${wert} nicht ausgeben`);
+});
+
+test("Vault: nur bekannte Pfade der Vorlage, jeder andere ist ein Fund (Erlaubnisliste)", { skip: !python && "kein Python" }, () => {
+  const bekannt = [
+    ".obsidian/plugins/studium-autopilot/manifest.json", ".obsidian/plugins/studium-autopilot/main.js",
+    ".obsidian/plugins/studium-autopilot/styles.css", ".obsidian/app.json", ".obsidian/appearance.json", ".obsidian/types.json",
+    ".obsidian/snippets/eba-core.css", ".claude/CLAUDE.md", ".claude/settings.json", ".claude/skills/studium-autopilot/SKILL.md",
+    "Dashboard.md", "Studium/Prüfungen.md", "Module/1 Grundstudium/B110 Beispiel.md", "Termine/2026-11-01 Beispiel.md",
+    "System/Einstellungen.md", "System/Daten/Semester.md", "System/Daten/Musterplan.md", "System/Skripte/kern.js", "System/Gerüste/Modul.md",
+    "Unterlagen/.gitkeep", "Karteikarten/.gitkeep", "Anhänge/.gitkeep",
+    // vom Export erzeugt: die Update-Liste mit Signatur
+    "System/Daten/system-dateien.json", "System/Daten/system-dateien.json.sig",
+  ];
+  const unbekannt = [
+    "Notizen.md", "Sicherung/alt.md", ".obsidian/themes/x.css", ".obsidian/plugins/studium-autopilot/notiz.md",
+    ".obsidian/plugins/studium-autopilot/widget-scriptable.js", ".obsidian/snippets/eigenes.css", ".obsidian/graph.json",
+    ".claude/skills/anderer/SKILL.md", ".claude/agents/x.md", "Studium/Unterordner/x.md","Module/B110.txt",
+    "Termine/unter/x.md", "Termine/x.json", "System/Daten/geheim.json", "System/Daten/Unterordner/x.md", "System/Skripte/neu.json",
+    "System/Skripte/unter/x.js", "System/Gerüste/x.txt", "Dashboard.md.bak", "Unterlagen/Folien.md", "Stundenplan/Woche.md",
+  ];
+  const dateien = {};
+  for (const p of [...bekannt, ...unbekannt]) dateien[`${VAULT}/${p}`] = p.endsWith(".json") || p.endsWith(".sig") ? "{}\n" : "x\n";
+  dateien[`${VAULT}/.obsidian/plugins/studium-autopilot/manifest.json`] = MANIFEST + "\n";
+  const r = pruefen(dateien);
+  const meldung = (p) => (r.funde[`${VAULT}/${p}`] || []).join("\n");
+  for (const p of unbekannt) assert.ok(meldung(p), `${p} muss ein Fund sein`);
+  for (const p of unbekannt.filter((x) => !/^(Unterlagen|Stundenplan)\//.test(x))) assert.match(meldung(p), /Pfad nicht in der Vorlage/, p);
+  for (const p of ["Unterlagen/Folien.md", "Stundenplan/Woche.md"]) {
+    assert.match(meldung(p), /persönlicher Ordner nicht leer/, "die persönlichen Ordner meldet die Vorlagenprüfung: " + p);
+  }
+  for (const p of bekannt) assert.doesNotMatch(meldung(p), /nicht in der Vorlage/, p);
+});

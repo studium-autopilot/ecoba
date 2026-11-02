@@ -601,6 +601,9 @@ test("PC-Transport: zu große Antworten brechen ab (angekündigt, unterwegs, ent
     // angekündigt größer als erlaubt: kein Byte gelesen
     antwort = { kopf: { "content-type": "application/pdf", "content-length": "5000" }, stuecke: [Buffer.alloc(10)] };
     await assert.rejects(t({ url: I + "/datei", methode: "GET", kopf: {}, binaer: true, maxBytes: 1000 }), zuGross(5000));
+    // HEAD: die Ankündigung ist die Größe der Datei, kein Body; die Antwort kommt mit ihr an
+    antwort = { kopf: { "content-type": "application/pdf", "content-length": "5000" }, stuecke: [] };
+    assert.equal((await t({ url: I + "/datei", methode: "HEAD", kopf: {}, binaer: true, maxBytes: 1000 })).kopf["content-length"], "5000");
     // ohne Ankündigung: bricht ab, sobald mehr kommt
     antwort = { kopf: { "content-type": "application/pdf" }, stuecke: [Buffer.alloc(600), Buffer.alloc(600), Buffer.alloc(600)] };
     zerstoert = 0;

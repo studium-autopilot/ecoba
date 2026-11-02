@@ -10,8 +10,8 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
 | Skript | Aufgabe |
 |---|---|
 | `ilias-netz.js` | Sitzung mit Keksdose, Weiterleitungen, Drossel, nur https und nur Server der Uni, Grenze je Antwort (`maxBytes`); am PC Node-https aus Electron (Verbindungen bleiben offen, Seiten gzip), auf iPhone/iPad `requestUrl` |
-| `ilias-anmeldung.js` | Anmeldung über Shibboleth; Ergebnis `{ ok, passwortGesendet }` bzw. `{ ok: false, grund, hinweis, code, passwortGesendet }` (falsches Passwort, Zustimmung, zweiter Faktor, Netz, unerwartet). `code` = „Stelle · Gerät Version · Spur“ (je Antwort Schritt, Status, Seitenart; bei fremden Seiten die Feldnamen, am PC Server und Pfad; nie Seitentitel, Feldwerte, Query, Kekse oder Zugangsdaten), bei „unerwartet“ und „netz“ im Hinweis; Stellen und Beispiel im Kopf der Datei. Das Passwort geht mit `folgen: false` hinaus; einer Weiterleitung danach folgt die Anmeldung selbst als GET ohne Body (am PC, auch bei 307/308), nur zu den Servern der Sitzung |
-| `ilias-html.js` | Kursliste und Kursinhalt aus dem HTML lesen (eigener kleiner Leser; linear auch bei feindlichem HTML: offene Elemente je Name gemerkt statt den Stapel abzusuchen, `datum` und `groesse` lesen nur die ersten 500 bzw. 200 Zeichen) |
+| `ilias-anmeldung.js` | Anmeldung über Shibboleth; Ergebnis `{ ok, passwortGesendet, konto }` (`konto`: Kürzel im Profilbild der Seite, auf der sie endet) bzw. `{ ok: false, grund, hinweis, code, passwortGesendet }` (falsches Passwort, Zustimmung, zweiter Faktor, Netz, unerwartet). `code` = „Stelle · Gerät Version · Spur“ (je Antwort Schritt, Status, Seitenart; bei fremden Seiten die Feldnamen, am PC Server und Pfad; nie Seitentitel, Feldwerte, Query, Kekse oder Zugangsdaten), bei „unerwartet“ und „netz“ im Hinweis; Stellen und Beispiel im Kopf der Datei. Das Passwort geht mit `folgen: false` hinaus; einer Weiterleitung danach folgt die Anmeldung selbst als GET ohne Body (am PC, auch bei 307/308), nur zu den Servern der Sitzung |
+| `ilias-html.js` | Kursliste und Kursinhalt aus dem HTML lesen, dazu Kürzel im Profilbild der Metaleiste (`kontoKuerzel`) und Link „Abmelden“ (`abmeldeLink`) (eigener kleiner Leser; linear auch bei feindlichem HTML: offene Elemente je Name gemerkt statt den Stapel abzusuchen, `datum` und `groesse` lesen nur die ersten 500 bzw. 200 Zeichen) |
 | `ilias.js` | Zeitplan, Abrufer-Sperre, Durchsuchen, Ablage, Index; `ctx.ilias` für die Oberfläche |
 | `unterlagen.js` | Namen „Code Art NN Titel“ (auch Titel aus der ersten PDF-Seite), Ordner, Begleitnotiz |
 | `verbindungen.js`, `einrichtung.js` | Zeile, Fenster, Schloss, Knopf auf Unterlagen; Bildschirm 5 der Einrichtung (Uni-Login) |
@@ -61,7 +61,7 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   Versionsgeschichte eines Sync-Dienstes bleibt er.
 - **Nur auf dem Gerät:** `app.saveLocalStorage` mit `eba-ilias-benutzer`, `eba-ilias-stand`, `eba-ilias-protokoll` (letzte 20
   Läufe), `eba-ilias-auftrag` (offener Abruf, siehe „Weitermachen“), `eba-ilias-schreibt` (Datei, die gerade geschrieben
-  wird), `eba-geraet`. Das Passwort nur im Schlüsselbund von Obsidian (`app.secretStorage`, seit Obsidian 1.11.4), Eintrag
+  wird), `eba-ilias-konto` (Kürzel des ILIAS-Kontos zum Benutzernamen, siehe „Konto der Sitzung“), `eba-geraet`. Das Passwort nur im Schlüsselbund von Obsidian (`app.secretStorage`, seit Obsidian 1.11.4), Eintrag
   `studium-autopilot-ilias-<Prüfsumme des Tresornamens>` (iOS teilt den Schlüsselbund zwischen Tresoren). Die Oberfläche
   gibt das Passwort nur als Funktion an `zugangSpeichern(benutzer, geber, { pruefen: true })` weiter und leert das Feld danach;
   es steht nie in Status, Protokoll, Hinweisen oder Konsole.
@@ -92,10 +92,13 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   mehr als die Hälfte und mehr als 10 auf einmal → in diesem Kurs nichts gemerkt, Warnung (`entfernteMerken`, Schutz je Kurs).
 - **Dateitypen:** Nie geladen werden Dateien, die in Obsidian zu Notizen oder Ansichten würden (`md`, `base`, `canvas`), die
   Obsidian oder das Plugin als eigene Dateien liest (`js`, `mjs`, `cjs`, `css`, `json`; `pfadOk` nimmt sie nie als Ziel) und, als
-  zusätzliche Vorsicht, was Windows beim Öffnen ausführt, einbindet oder als Laufwerk öffnet (`AUSFUEHRBAR`: `exe`, `com`,
+  zusätzliche Vorsicht, was Windows oder macOS beim Öffnen ausführt, startet, installiert, einbindet oder als Laufwerk öffnet
+  (`AUSFUEHRBAR`: `exe`, `com`,
   `bat`, `cmd`, `ps1`, `psm1`, `vbs`, `vbe`, `js`, `jse`, `wsf`, `wsh`, `ws`, `hta`, `scr`, `msi`, `msp`, `lnk`, `url`, `pif`,
   `cpl`, `reg`, `scf`, `inf`, `chm`, `xll`, `msc`, `iso`, `img`, `vhd`, `vhdx`, `appx`, `msix`, `appinstaller`, `application`,
-  `appref-ms`, `diagcab`, `settingcontent-ms`, `library-ms`, `search-ms`; geprüft an der Endung aus ILIAS und am Ende des
+  `appref-ms`, `diagcab`, `settingcontent-ms`, `library-ms`, `search-ms`; für macOS seit 02.11.2026 `command`, `tool`,
+  `terminal`, `webloc`, `fileloc`, `inetloc`, `app`, `pkg`, `mpkg`, `dmg`, `scpt`, `scptd`, `applescript`, `workflow`, `action`,
+  `shortcut`, `mobileconfig`, `prefpane`, `saver`, `kext`, `plugin`, `osax`, `bundle`, `dylib`, `wflow`, `xpc`; geprüft an der Endung aus ILIAS und am Ende des
   Namens, `nieLaden`). Sie zählen wie andere übersprungene Dateien (`uebersprungen`) und gelten als gesehen: Eine früher
   geladene bleibt, wie sie ist, ohne Kasten „Nicht mehr in ILIAS“. Dieselbe Regel gilt für gemerkte Funde früherer Läufe
   (`fundeLesen`), und `neuAblegen` legt eine neue Datei nur ab, wenn ihr Pfad `pfadOk` erfüllt.
@@ -104,9 +107,12 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   ist und ihr Kurs an). Das gilt auch für eine geänderte Datei (deine bleibt, die Angaben aus ILIAS werden gemerkt, damit sie
   nicht bei jedem Lauf neu versucht wird) und für Dateien ohne Größe in der Liste: Der Download bricht ab, sobald mehr als
   50 MB kommen (am PC unterwegs, auch entpackt, auf iPhone/iPad nach dem Empfang; `maxBytes`, Fehler `zu-gross` in
-  `ilias-netz.js`, Vorgabe ohne Angabe 20 MB für Seiten und 100 MB für Dateien). Offen: Auf iPhone/iPad liefert `requestUrl`
-  die Antwort erst ganz; eine Datei ohne Größe in der Liste wird dort also erst nach dem Empfang verworfen. Vorher die Größe zu
-  erfragen (`HEAD` oder `Range`) geht erst, wenn geprüft ist, wie ILIAS darauf antwortet. Je Lauf höchstens 400 Seiten
+  `ilias-netz.js`, Vorgabe ohne Angabe 20 MB für Seiten und 100 MB für Dateien). Auf iPhone/iPad liefert `requestUrl` die
+  Antwort erst ganz und lässt sich nicht abbrechen; vor dem Download einer Datei ohne Größe in der Liste oder einer geänderten
+  fragt der Lauf dort darum erst nach ihrer Größe (`groesseVorab`, `q.groesse`: `HEAD` auf denselben Download-Link,
+  `Content-Length`; eine Anfrage mehr je solcher Datei). Über 50 MB → nicht geladen, wie oben gemerkt. Ohne Angabe, bei einer
+  Seite statt der Datei oder einem Fehler bleibt die Größe unbekannt, und die Datei kommt wie bisher (verworfen erst nach dem
+  Empfang). Wie ILIAS auf `HEAD` antwortet, ist noch nicht an echten Seiten geprüft. Je Lauf höchstens 400 Seiten
   und 150 Downloads auf iPhone/iPad, 400 am PC (der erste Abruf braucht so meist nur einen Lauf), zusammen höchstens 250 MB
   auf iPhone/iPad und 1000 MB am PC (`BUDGET_MOBIL_MB`, `BUDGET_PC_MB`: Speicher und Sync; gezählt wird, was geladen ist, und
   was unterwegs ist, mit der Größe aus der Liste; die erste Datei eines Laufs kommt immer). Was über einer Grenze liegt, zählt
@@ -136,7 +142,8 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   ihre Weiterleitungen enden, statt das Dashboard eigens zu holen. Die Sitzung (Kekse am PC, Drossel, gelernte Adressen)
   bleibt über Läufe im Speicher des Geräts (nie gespeichert); ob sie noch gilt, zeigt die erste Seite (sonst einmal
   anmelden, gleichzeitige Anfragen warten auf dieselbe Anmeldung). Weg ist sie beim Trennen, nach gescheiterter Anmeldung,
-  bei anderem Benutzernamen und beim Entladen. Das Prüfen beim Verbinden meldet sich immer neu an.
+  bei anderem Benutzernamen und beim Entladen. Das Prüfen beim Verbinden meldet sich immer neu an, auf iPhone und iPad nach
+  dem Abmelden (siehe „Konto der Sitzung“).
   Ergebnis: erster Abruf am PC 64 s statt 181 s (173 statt 329 Anfragen, 16 Weiterleitungen), auf iPhone/iPad (nachgebildet)
   1 Lauf in 64 s statt 3 Läufen in 274 s samt Stapelpausen; erneutes Durchsuchen ohne Neues 38 s statt 135 s (98 statt 269
   Anfragen, keine Anmeldung).
@@ -211,10 +218,35 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   prüfende Anmeldung beim Verbinden gibt `{ ok: true, ungeprueft: true, hinweis }` zurück und zeigt den Hinweis „Dein Passwort ist
   gespeichert. ILIAS hat es diesmal nicht geprüft, …“, und Alma und das Webmail prüfen es selbst mit einer eigenen Anmeldung
   (eine bestehende Sitzung melden sie dafür erst ab). `ctx.ilias.uniZugang()` → `{ benutzer, seit, ok, abgelehnt, dienst,
-  gesperrt, bestaetigt, ungeprueft }`, `ctx.ilias.zugangAbgelehnt(dienst)` schreibt den Marker (ungeprüft nur für dieses Gerät). Offen: Vor dem Prüfen bei ILIAS
-  und der Uni abmelden (dann hätte ILIAS das Passwort immer gesehen) geht erst, wenn die Abmelde-Adressen an echten Seiten geprüft
-  sind; bis dahin liest ein Lauf mit einer fremden Sitzung deren Kurse, und das Passwort bleibt `ungeprueft`, bis eine Anmeldung
-  es wirklich sendet.
+  gesperrt, bestaetigt, ungeprueft }`, `ctx.ilias.zugangAbgelehnt(dienst)` schreibt den Marker (ungeprüft nur für dieses Gerät).
+  Bestätigt wird ein Passwort nur von einer Anmeldung, die es gesendet hat (`zugangGeprueft(passwortGesendet)`); damit das beim
+  Verbinden auch auf iPhone und iPad klappt, meldet sich die prüfende Anmeldung dort erst ab (siehe „Konto der Sitzung“).
+- **Konto der Sitzung** (seit 02.11.2026, `quelleAusNetz` in `ilias.js`): Auf iPhone und iPad hält das Gerät die Kekse, auf einem
+  geteilten iPad womöglich die Sitzung einer anderen Person (ILIAS oder IdP). Zwei Schutzschichten:
+  - **Abmelden** (`beiUniAbmelden`): der Link „Abmelden“ der Metaleiste (`abmeldeLink`, Ovidius 10/2026:
+    `ilias.php?baseClass=ilstartupgui&cmd=doLogout&rtoken=…`; ohne Seite das Dashboard), dann `Shibboleth.sso/Logout` auf dem
+    ILIAS-Server (Sitzung des Shibboleth-SP; mit ihr meldete `shib_login.php` sonst ohne IdP wieder an) und `idp/profile/Logout`
+    beim IdP. Nur Server der Sitzung, jeder Fehler egal. Vor der prüfenden Anmeldung beim Verbinden auf iPhone und iPad
+    (`quelle(…, { abmelden: true })`; am PC beginnt diese Sitzung ohne Kekse) und beim **Trennen** (`abh.abmelden` =
+    `uniAbmelden`: am PC die gemerkte Sitzung, auf iPhone und iPad sonst eine neue; das Trennen wartet nicht darauf, eine neue
+    Quelle schon). Die beiden Abmelde-Adressen von SP und IdP sind die üblichen von Shibboleth, an Ovidius noch nicht geprüft;
+    den Link „Abmelden“ zeigen die erfassten echten Seiten.
+  - **Kürzel vergleichen** (`kontoPruefen`): Den Uni-Login zeigt keine ILIAS-Seite (ILIAS führt eigene Benutzernamen), nur das
+    Profilbild aus Buchstaben in der Metaleiste trägt ein Kürzel aus zwei Zeichen (`kontoKuerzel`, Profilbilder in Foren und
+    Mitgliederlisten zählen nicht); ein Foto als Profilbild gilt als eigenes Kürzel `#foto`, eine Metaleiste ohne erkennbares
+    Profilbild als „nichts zu sehen“ (`""`), eine Seite ohne Metaleiste als `null`. Nach einer Anmeldung, die dein Passwort
+    gesendet hat, merkt sich das Gerät das Kürzel zum Benutzernamen (`eba-ilias-konto`, aus `konto` der Anmeldung und von der
+    ersten Seite). Jede andere Sitzung (die gemerkte, oder die Anmeldung kam ohne Passwort aus) muss dasselbe Kürzel zeigen
+    (Foto gegen Buchstaben ist ein anderes Konto). Geprüft ist sie erst an einer Seite mit Metaleiste; zeigt die geholte Seite
+    keine, kommt sie erst nach der Prüfung am Dashboard zurück, ebenso vor einem Download und vor der Frage nach seiner Größe
+    (`kontoVorDatei`). Sonst: abmelden, nichts lesen, jede weitere Anfrage dieser Quelle wirft (`art: "fremd"`, `grund:
+    "fremde-sitzung"`); der Lauf endet als Fehler mit dem Hinweis „ILIAS war auf diesem Gerät mit einem anderen Konto
+    angemeldet. …“, der nächste meldet sich mit deinem Passwort an. Ist auf iPhone oder iPad noch kein Kürzel gemerkt (nach dem
+    Update, nach Trennen, nach einer Prüfung ohne Passwort) und kam die Sitzung ohne Passwort aus, meldet die Quelle sie vor dem
+    ersten Lesen ab und sich einmal mit deinem Passwort neu an (`erzwungen`; zählt nicht gegen die zwei Anmeldungen je Quelle).
+    Grenzen: Zwei Zeichen können bei zwei Konten gleich sein, zwei Fotos ebenso; kommt auch die erzwungene Anmeldung ohne
+    Passwort aus (das Abmelden wirkte nicht), gilt die Sitzung wie bisher. Trennen löscht das Kürzel.
+  Tests: `tests/ilias-konto.test.js` (erfundene Seite `anderes-konto.html`), `tests/ilias-html.test.js`.
 - **Tests:** `tests/ilias.test.js` (ganzer Ablauf mit erfundenem ILIAS und Tresor im Speicher, `tests/ilias-attrappen.js`;
   dazu Gleichzeitigkeit, nicht geholte Sitzungen und Gruppen, Sitzung über Läufe, gelernte Adressen),
   `ilias-weiter.test.js` (Fortschrittstexte, Ereignisse, Auftrag und Weitermachen, toter Lauf, Funde, Absturz beim Schreiben),

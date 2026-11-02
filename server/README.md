@@ -49,6 +49,10 @@ Regeln, die daraus folgen:
   sie würden nach dem Test gelöscht.
 - **Schutz im Konto:** eine Quota-Richtlinie `nur-kostenlos` (keine bezahlten Formen, keine weiteren Volumes, höchstens 5
   Backups) und ein Budget `kostenwarnung`, das ab dem ersten Cent eine Mail schickt.
+- **Grenze: ausgehender Datenverkehr.** Frei sind 10 TB im Monat. Darüber hält weder die Quota (sie begrenzt nur Ressourcen,
+  keinen Verkehr) noch das Budget (es schickt nur eine Mail, es hält nichts an) etwas auf. Ohne Pay-As-You-Go kann Oracle nichts
+  abbuchen; in einem Konto mit Pay-As-You-Go könnte ein übernommener Server, der mehr als 10 TB im Monat verschickt, Kosten
+  machen. Dagegen hilft nur, auf die Mail des Budgets hin die Instanz zu beenden (Skill, `kosten.md`).
 - **Fremdes bleibt unberührt.** Was die Einrichtung anlegt, trägt das Kennzeichen `studium-autopilot`; alles andere wird nie
   geändert.
 
@@ -121,6 +125,14 @@ vergrößert.
   `schluessel-holen` holt ihn zurück, wenn er in der Cloud Shell fehlt (Rechte 600). Geschützt ist die Kopie wie das Konto
   selbst (Anmeldung, Zwei-Faktor); der Platzsucher hat keine Rechte auf Objektspeicher. Ein Schlüssel auf dem PC der Nutzerin
   oder des Nutzers wurde verworfen: Er wäre root auf dem Server ohne Passphrase, erreichbar für jede spätere Sitzung dort.
+  **Ohne Passphrase, mit Absicht:** `start.sh` erzeugt den Schlüssel mit `-N ""`, weil die Einrichtung in jeder neuen Sitzung der
+  Cloud Shell ohne Eingabe weiterläuft und `fern.sh` ihn bei jedem Befehl braucht; eine Passphrase müsste der Mensch jedes Mal
+  tippen oder sie läge doch wieder daneben. Wer die Datei (in der Cloud Shell oder im Bucket) lesen kann, ist also root auf dem
+  Server. Lesen dürfen sie nur Benutzer mit Rechten auf die Cloud Shell bzw. den Objektspeicher des Kontos; im Konto dieser
+  Einrichtung ist das allein der Administrator, und der kann den Server ohnehin übernehmen (Instanz neu aufsetzen, Boot-Volume an
+  eine andere Instanz hängen, Konsolenverbindung). Die Kopie gibt also niemandem etwas Neues, solange niemand sonst Rechte im
+  Konto bekommt; wer weitere Benutzer oder Gruppen mit Rechten auf Objektspeicher anlegt, gibt ihnen damit auch root auf dem
+  Server.
 
 ### Alles mit einem Befehl: `server/start.sh`
 
@@ -133,12 +145,22 @@ mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start.sh https:/
 
 - **Laden:** erst in eine Datei, dann ausführen (bei `bash <(curl …)` liefe nach einem Abbruch ein leeres oder halbes Skript, und
   `curl | bash` nähme der Claude-Anmeldung die Eingabe); der ganze Inhalt steht in `main()`, das erst die letzte Zeile aufruft.
-  `start.sh` lädt das Server-Paket desselben Tags und prüft es gegen die SHA-256 im Release, bevor es etwas auspackt.
-  `--paket-da` nimmt das Paket in `~/studium-autopilot/server` (Testpaket vor einem Release, Tests).
+  `start.sh` lädt das Server-Paket desselben Tags mit seiner Signatur und prüft beides, bevor es etwas auspackt: die SHA-256 im
+  Release, die Signatur (`ssh-keygen -Y verify`, Namensraum `studium-server`) gegen die Schlüssel, die fest in `start.sh` stehen
+  (`SIGNIERSCHLUESSEL`, dieselben wie `allowed_signers`; nie aus dem Download), und dass `server/VERSION` im Paket der Tag des
+  Releases ist. Sonst hält es an (`[halt:paket:signatur]`, `[halt:paket:version]`), und der bisherige Ordner `server/` bleibt. Die
+  Cloud Shell kann `ssh-keygen -Y` oft nicht (FIPS-Modus: OpenSSH lehnt ed25519 ab; Oracle Linux 8 hat OpenSSH 8.0 ohne `-Y`).
+  Dann prüft Node.js mit `paket-pruefen.mjs`, das `start.sh` eingebettet trägt: SSHSIG wie OpenSSH, Ed25519 über OpenSSL und,
+  lehnt das im FIPS-Modus ab, mit einem eigenen Prüfer nach RFC 8032 (`tests/paket-pruefen.test.js` gegen ssh-keygen und
+  node:crypto). Die Signatur bleibt als `studium-server.tar.gz.sig` neben dem Paket; `fern.sh installieren` prüft beides vor dem
+  Kopieren noch einmal. `--paket-da` nimmt das Paket in `~/studium-autopilot/server` (Testpaket vor einem Release, Tests); dann
+  nimmt `fern.sh` auch eine Signatur im Namensraum für Tests an (siehe `docs/release.md`).
 - **Reihenfolge:** Paket, `stand.mjs`, `schutz`, `netz`, Schlüssel (`schluessel-holen`, sonst `ssh-keygen` RSA 4096, dann
   `schluessel-sichern`), `server` (Exit 3: `platzsucher`), `abschliessen`, `fern.sh installieren` (danach `neustart`, wenn das
   Boot-Volume wuchs), Claude auf dem Server (nur in einem Terminal), Obsidian verbinden (nur, solange noch kein Gerät abholt), erster
-  Lauf, `stand.mjs --kosten`. Den Status liest es öffentlich über `https://<Adresse>/v1/status`.
+  Lauf, `stand.mjs --kosten`. Den Status liest es über ssh (`fern.sh status --json`, also `studium-server status --json` direkt
+  beim Web-Dienst auf 127.0.0.1), nie über die öffentliche Adresse: Dort braucht `/v1/status` den Zugangsschlüssel, sobald ein Gerät
+  verbunden ist. Vorher ruft es einmal `https://<Adresse>/` ab (jede Antwort von Caddy genügt), damit Caddy sein Zertifikat hat.
 - **Ende:** genau eine letzte Zeile, `[fertig]` (Exit 0) oder `[halt:<schritt>:<grund>]` (Exit 3; Exit 1 bei `…:fehler`). Jede
   steht mit dem, was Claude dann tut, in `schritte.md`, Schritt 4.
 - **Entscheidungen bleiben beim Menschen:** nie `--ja`, nie `ssh-keygen -R`, nie der `cp`-Befehl von `adresse` (er könnte einen
@@ -191,7 +213,10 @@ bash ~/studium-autopilot/server/fern.sh <befehl …>          sonst: sudo studiu
 Jeder Aufruf holt die Adresse mit `einrichten.mjs adresse` und prüft dabei den Schlüssel; er läuft aus jedem Ordner, auch in
 einer neuen Cloud-Shell-Sitzung. Exit wie `adresse` (1, 2), `3` unbekannter Befehl, `4` Server nicht `RUNNING`, `5` keine
 Antwort auf ssh (`ConnectTimeout=15`), `6` anderer Schlüssel des Servers als in `~/.ssh/known_hosts` (neu angelegt unter einer
-schon bekannten IP; die Meldung nennt `ssh-keygen -R <IP>`), sonst der Exit auf dem Server. Nur `claude-anmelden` und `uni-zugang` lesen von der
+schon bekannten IP; die Meldung nennt `ssh-keygen -R <IP>`), `7` (nur `installieren`) `studium-server.tar.gz` ohne gültige
+Signatur daneben, sonst der Exit auf dem Server. `installieren` prüft die Signatur wie `start.sh` (Schlüssel fest in `fern.sh`,
+`ssh-keygen -Y verify`, sonst `node server/paket-pruefen.mjs`), bevor das Paket als root auf den Server geht; den Namensraum für
+Tests nimmt es nur mit `STUDIUM_TESTPAKET=1` an (setzt `start.sh` bei `--paket-da` und für eine Beta). Nur `claude-anmelden` und `uni-zugang` lesen von der
 Tastatur (im Terminal mit `-t`); alle anderen laufen mit `ssh -n`, damit ssh keine Zeilen schluckt, die danach in der Cloud
 Shell laufen sollen. `neustart` startet den Server über `systemd-run` erst nach zwei Sekunden neu, damit ssh sauber
 zurückkommt. Angaben sind nur Kleinbuchstaben und Bindestriche, damit nichts Fremdes in die ssh-Zeile kommt. Tests in
@@ -225,11 +250,32 @@ auf einem kleinen Helfer weiter, nicht am Rechner der Nutzerin oder des Nutzers:
   Einrichtung auf diesen Stand, mit leerem `--version-date`, das die Kommandozeile dazu verlangt). Der Platzsucher meldet sich mit
   der Identität der Instanz an (`--auth instance_principal`), es gibt keinen Schlüssel zum Kopieren. Gruppe und Richtlinie
   entfernt die Einrichtung nach dem Erfolg wieder.
-- **Versuche:** alle 2 bis 5 Minuten jeder Verfügbarkeitsbereich mit genau `VM.Standard.A1.Flex`, 2 OCPU, 12 GB, Boot-Volume
-  „Balanced“ (10 VPU) in der Größe aus der Konfiguration (Rest des freien Blockspeichers, solange der Helfer lebt, also 150 GB),
-  Kennzeichen `studium-autopilot=server`. Vorher prüft er jedes Mal, ob es den Server schon gibt. Nach einer unklaren Antwort
+- **Versuche:** alle 1 bis 2 Minuten eine Runde: jeder Verfügbarkeitsbereich mit `VM.Standard.A1.Flex`, 2 OCPU, 12 GB, und
+  ist nirgends Platz, gleich danach mit 1 OCPU, 6 GB (siehe „Klein zuerst“). Boot-Volume „Balanced“ (10 VPU) in der Größe aus
+  der Konfiguration (Rest des freien Blockspeichers, solange der Helfer lebt, also 150 GB), Kennzeichen
+  `studium-autopilot=server`. Vorher prüft er jedes Mal, ob es den Server schon gibt. Nach einer unklaren Antwort
   (Zeitüberschreitung, 5xx, unlesbare Ausgabe: vielleicht doch angelegt) endet die Runde, damit nie ein zweiter entsteht.
-  Höchstens 1.500 Versuche am Tag; nach „Too many requests“ verdoppelt sich die Pause bis 30 Minuten.
+  Höchstens 6.000 Versuche am Tag: In drei Bereichen hat eine Runde sechs Anfragen, das sind bis gut 5.700 am Tag (bis 0.7.7
+  schickte die Kommandozeile mit ihren Wiederholungen ähnlich viele). Nach „Too many requests“ verdoppelt sich die Pause bis
+  30 Minuten. Das neueste Abbild sucht er einmal am Tag, nicht jede Runde: Jeder Aufruf startet die Kommandozeile, und das
+  dauert auf dem Micro.
+- **Ein Versuch ist eine Anfrage:** Anlegen und Vergrößern laufen mit `--no-retry`. Ohne wiederholt die OCI-Kommandozeile jede
+  5xx-Antwort selbst, also auch „Out of host capacity“ (500 `InternalError`), und jedes 429: bis zu acht Anfragen in etwa 90
+  Sekunden (`DEFAULT_RETRY_STRATEGY` des SDK, nachgemessen mit 3.95.1 gegen eine Attrappe, die wie Oracle antwortet). Bis 0.7.7
+  zählte ein Versuch darum bis zu acht Anfragen, und „Too many requests“ kam beim Platzsucher nie an.
+- **Klein zuerst:** 1 OCPU / 6 GB passt voraussichtlich öfter auf einen fast vollen Host als 2 / 12 (Oracle: Platz hängt an
+  freien OCPUs und freiem Speicher auf den Hosts; gemessen hat das niemand öffentlich) und ist ebenso kostenlos. Ist der Server so da, kommt die Mail „Dein Server ist da“ sofort, die
+  Einrichtung geht weiter, und der Helfer bleibt: Er vergrößert den Server mit `compute instance update --shape-config` auf
+  2 OCPU / 12 GB, nur zwischen 01 und 05 Uhr UTC und frühestens drei Stunden nach dem Anlegen, denn Oracle startet eine
+  laufende Instanz dabei neu (IP, Volumes und Daten bleiben). Ohne Platz bleibt die Instanz, wie sie ist, und er versucht es
+  weiter, höchstens einmal je Stunde nach einem angenommenen oder unklaren Versuch: Nimmt Oracle die Änderung an und führt sie
+  nicht aus, startete er den Server sonst die ganze Nacht alle paar Minuten neu. Ist der Server nach so einem Versuch aus (auch
+  der Start eines A1 kann an „Out of host capacity“ scheitern), startet er ihn jede Runde wieder, bis er läuft; nach einer
+  Stunde kommt einmal die Mail „Dein Server ist aus“. Einen Server, den jemand anders angehalten hat, lässt er aus und
+  vergrößert ihn nicht. Groß heißt: läuft mit 2 OCPU. Dann kommt die Mail „Dein Server ist jetzt groß“, und der Helfer beendet
+  sich wie sonst. Wird der Server beendet, hält der Helfer an (Mail) und vergisst ihn; neu gestartet sucht er wieder.
+  `abschliessen` läuft daneben durch, lässt aber die Rechte des Helfers und das Boot-Volume (150 GB) stehen; der nächste Lauf
+  von `start.sh` danach räumt die Rechte weg und gibt dem Server die restlichen 50 GB. Solange meldet der Helfer `art=klein`.
 - **Anhalten:** Grenze oder Quota überschritten, fehlende Rechte oder falsche Konfiguration brauchen einen Menschen. Dann hält er
   an und schickt eine Mail.
 - **Mails** über Oracle Notifications (Thema mit E-Mail-Abo, einmal bestätigen): „Dein Server ist da“, „Platzsucher angehalten“
@@ -237,7 +283,8 @@ auf einem kleinen Helfer weiter, nicht am Rechner der Nutzerin oder des Nutzers:
 - **Stand am Helfer:** Stündlich und bei einem Halt sofort schreibt er Zeit, Versuche und die letzte Antwort von Oracle als
   Kennzeichen `studium-autopilot-stand` an sich selbst (`zeit=…;versuche=…;art=…;grund=…`, höchstens 256 Zeichen; seine OCID aus
   den Metadaten über IMDSv2, die anderen Kennzeichen bleiben). `stand.mjs` zeigt daraus die Zeile „Platzsucher: …“: sucht,
-  startet (bis 3 Stunden nach dem Anlegen ohne Meldung), angehalten, aus (gestoppt) oder still (3 Stunden ohne Meldung: er sucht
+  startet (bis 3 Stunden nach dem Anlegen ohne Meldung), klein (Server da, er vergrößert ihn nachts; tagsüber sieht er nur alle
+  50 Minuten nach dem Server), angehalten, aus (gestoppt) oder still (3 Stunden ohne Meldung: er sucht
   nicht, oder er ist von einer Version vor diesem Kennzeichen). Ohne das sah man in der Cloud Shell nur, dass der Helfer existiert.
 - **Neben dem Helfer:** `einrichten.mjs server` versucht es nicht selbst, solange ein Helfer da ist (Exit 3, `[platzsucher]`):
   Ein Versuch daneben bringt nichts, und Oracle bremst dann beide. „Too many requests“ (429) beim Anlegen gilt wie kein Platz
@@ -271,19 +318,21 @@ sudo bash installieren.sh --vorbereiten           alles außer Adresse und HTTPS
 ```
 
 **Selbst vorbereiten:** Legt `einrichten.mjs server` oder der Platzsucher den Server an, bekommt er Startdaten (cloud-init,
-`serverStart`) mit: das Paket genau der Version aus der Cloud Shell aus dem Release laden (fünf Versuche), gegen dessen SHA-256
-prüfen (die Cloud Shell hat dasselbe Paket schon gegen die Prüfsumme im Release geprüft), in einen frischen Ordner von root
-auspacken und `installieren.sh --vorbereiten` (Protokoll `/var/log/studium-server-vorbereiten.log`). So ist alles Lange schon
+`serverStart`) mit: das Paket genau der Version aus der Cloud Shell samt Signatur aus dem Release laden (fünf Versuche), gegen dessen
+SHA-256 prüfen (die Cloud Shell hat dasselbe Paket schon geprüft), die Signatur mit `ssh-keygen -Y verify` (OpenSSH 9.6 in Ubuntu
+24.04) gegen die Schlüssel prüfen, die `einrichten.mjs` fest in die Startdaten schreibt (`SIGNIERSCHLUESSEL`), in einen frischen
+Ordner von root auspacken und `installieren.sh --vorbereiten` (Protokoll `/var/log/studium-server-vorbereiten.log`). So ist alles Lange schon
 erledigt (Pakete, Claude Code, Dienste), wenn die Mail „Dein Server ist da“ kommt. Adresse und HTTPS setzt erst `fern.sh
 installieren` mit der IP aus dem Konto: Eine IP, die der Server selbst bei einem fremden Dienst erfragt, könnte falsch sein, und
 an diese Adresse schickte jedes Gerät seinen Zugangsschlüssel. Bis dahin läuft Caddy nicht (nichts auf 80 und 443), `verbinden`
 lehnt ohne Adresse ab, und das tägliche `aktualisieren` bereitet nur vor. Keine Geheimnisse in den Startdaten: Jeder Prozess auf
 dem Server kann sie lesen. Ohne gültige Version und Prüfsumme (Testpaket) gibt es keine Startdaten; dann installiert `fern.sh
-installieren` alles wie bisher, ebenso bei Servern von einem Platzsucher einer älteren Version. Zwei Läufe des Installers
+installieren` alles wie bisher, ebenso bei Servern von einem Platzsucher einer älteren Version und bei einer Beta (ihre Signatur
+gilt dort nicht, die Startdaten prüfen nur im Namensraum `studium-server`). Zwei Läufe des Installers
 zugleich (Vorbereiten und Einrichtung) verhindert eine Sperre (`flock`); der zweite wartet.
 
 Der Installer ist wiederholbar: Jeder Schritt prüft zuerst, ob er schon erledigt ist; Schlüssel und Uni-Zugang bleiben bei
-jedem weiteren Lauf erhalten. Nur vorwärts: Ist schon eine neuere Version installiert (eine Vorabversion wie `0.6.0-beta.1`
+jedem weiteren Lauf erhalten, die Schlüssel außer nach einem Wechsel der Adresse (siehe „Neue Adresse“). Nur vorwärts: Ist schon eine neuere Version installiert (eine Vorabversion wie `0.6.0-beta.1`
 zählt weniger als `0.6.0`), bricht er ab, ohne etwas zu ändern; so ersetzt eine alte Kopie des Pakets in der Cloud Shell nie
 einen neueren Stand. Einheiten `studium-server*` von systemd, die er nicht mehr schreibt (eine frühere Version legte sie an,
 diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuft kein alter Dienst weiter. Er richtet ein:
@@ -294,7 +343,7 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 | Benutzer `studium` | führt Claude-Lauf, Zustand, Speicherreserve und Gmail-Anstoß aus; Claude Code und seine Anmeldung liegen in `/var/lib/studium` (`.local/bin/claude`, `.claude/`, `.claude.json`; 0700, nur er). Nur Claude-Lauf und Zustand sehen diesen Ordner (siehe „Schutz der Dienste“) |
 | Benutzer `studium-web` | nur der Web-Dienst (bis 0.7.6 lief er als `studium`): Er kann weder die Claude-Anmeldung noch Mails, Lauf-Ordner oder Uni-Zugang lesen und die Prozesse von `studium` weder beenden noch ansehen |
 | Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium`: Der Lauf übernimmt seine Rohdaten) |
-| `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückgehen von Hand), alle anderen entfernt der Installer. Darin `allowed_signers`: die Schlüssel, mit denen `aktualisieren` die Signatur des nächsten Pakets prüft |
+| `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückrollen), alle anderen entfernt der Installer. Darin `allowed_signers` und `revoked_keys`: die Schlüssel, mit denen `aktualisieren` die Signatur des nächsten Pakets prüft, und gesperrte |
 | `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte; `root:studium-web` 0640, lesen nur root und der Web-Dienst, allen anderen Diensten sperrt systemd den Ordner) |
 | `/var/lib/studium-server` | je Teil ein eigener Ordner (siehe „Wer was liest und schreibt“): `web/` (Web-Dienst: Einmal-Codes, `geraete.json` mit den Codes aus Obsidian der letzten 24 Stunden, Zufallswerten gegen Wiederholung und den letzten 20 Verbindungen; Stand und Takt aus Obsidian), `abruf/` (Abruf: Rohdaten in `roh/`), `laeufe/` (Claude-Lauf), `eingang/` (Ergebnisse für das Plugin), `unterlagen/` (für den Lauf); im Ordner selbst Zustand und Bestand des Laufs |
 | `studium-server-dienst` | Web-Dienst `dienst.mjs` als Benutzer `studium-web`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404. Darf selbst nur mit 127.0.0.1 sprechen, schreibt nur in `web/`, `eingang/` und `unterlagen/` und sieht weder die Claude-Anmeldung noch die Lauf-Ordner oder die Rohdaten (siehe „Schutz der Dienste“) |
@@ -303,7 +352,7 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 | `studium-server-abruf.timer` | alle 15 Minuten `abrufen.py` ohne KI: das Uni-Postfach, nur mit gespeichertem Uni-Zugang (nach der Uhr, weil ein übersprungener Dienst einen relativen Zeitgeber nicht weiterstellt). Steht in Obsidian ein Takt von 30 oder 60 Minuten, fallen die Zwischenzeiten aus, außer nach „Mails durchsuchen“. Beim ersten Start ab 06:30 Uhr der tägliche Sicherheitslauf: die Uni-Mails der letzten 24 Stunden noch einmal und ein Anstoß (Grund `taeglich`), auch ohne neue Mail |
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt; Zeitgrenze 100 Minuten (ein Lauf mit Opus und der gewöhnliche, je bis 45 Minuten) |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
-| `studium-server-aktualisieren.timer` | täglich: Claude Code (`claude update`, nicht während eines Laufs, ohne Nutzungs- und Fehlerberichte), dann neues Server-Paket aus dem Release, nur mit passender Prüfsumme, nur mit gültiger Signatur (`studium-server.tar.gz.sig`, `ssh-keygen -Y verify` mit `allowed_signers` des laufenden Pakets, nie aus dem Download; siehe `docs/release.md`, „Signatur des Server-Pakets“) und nur vorwärts (nie auf eine ältere Version zurück). Dieselbe Version gilt nur als aktuell, wenn ihr Paket die Marke `.installiert` hat; die setzt der Installer erst nach „Prüfen“, so installiert der nächste Lauf eine abgebrochene Installation noch einmal. Die Prüfsumme nennt GitHub selbst; erst die Signatur verhindert, dass ein Release, das jemand mit dem GitHub-Konto oder einem Token anlegt, auf jedem Server als root läuft. Server mit 0.7.5 oder älter installieren das erste signierte Paket noch ohne diese Prüfung, ab dann jedes mit. Das Ergebnis (Zeit, `ok`, Zielversion, bei einem Fehler der Schritt, etwa `signatur-fehlt` oder `signatur`, letzter Erfolg) steht in `aktualisierung.json` und im Status unter `aktualisierung`; Obsidian sagt es, wenn seit mehr als 3 Tagen nichts ohne Fehler durchkam, obwohl es eine neuere Version gibt |
+| `studium-server-aktualisieren.timer` | täglich (höchstens 30 Minuten je Lauf, `TimeoutStartSec`): Claude Code (`claude update`, nicht während eines Laufs, ohne Nutzungs- und Fehlerberichte), Pakete, dann ein neues Server-Paket aus dem Release, nur geprüft, gestaffelt und mit Zurückrollen (siehe „Updates des Server-Pakets“) |
 | Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an; die Standardliste, die Oracle mit dem Netz anlegt und die dessen Kennzeichen erbt, erlaubt nur 22 und zählt nicht als eigene) |
 
 ### Schutz der Dienste (systemd)
@@ -312,7 +361,12 @@ Jeder Dienst ohne root läuft in einem Sandkasten von systemd (`systemd-analyze 
 keine Capabilities, System schreibgeschützt (`ProtectSystem=strict`, schreiben nur in den eigenen Ordnern), eigene `/tmp` und
 `/dev`, Kernel, Uhr, Hostname und Cgroups unberührt, nur die Netzarten, die er braucht, Systemaufrufe nur aus `@system-service`
 ohne `@privileged` (ein gesperrter Aufruf scheitert mit `EPERM`, statt den Dienst zu beenden), fremde Prozesse unsichtbar.
-`MemoryDenyWriteExecute` nur beim Abruf (Python); Node.js und Claude Code übersetzen zur Laufzeit.
+`MemoryDenyWriteExecute` nur beim Abruf (Python); Node.js und Claude Code übersetzen zur Laufzeit. Einen Port öffnen darf nur der
+Web-Dienst: Alle anderen Dienste (Lauf, Zustand, Abruf, Gmail-Anstoß, Speicherreserve, die Prüfung des Aufbau-Fensters von LiveSync)
+haben `SocketBindDeny=any` (Verbindungen nach außen bleiben möglich). So kann keiner von ihnen während eines Neustarts des Web-Dienstes
+dessen Port 8743 belegen und sich als er ausgeben; „Prüfen“ im Installer verlangt dazu, dass auf dem Port genau der Prozess der
+Einheit lauscht (`ss -p` gegen ihre MainPID). Bleibt offen: Während eines Neustarts hält niemand den Port fest (keine
+`.socket`-Einheit), ein Prozess von root oder außerhalb dieser Dienste könnte ihn in dem Moment belegen.
 Wertung von `systemd-analyze security` in Ubuntu 24.04 (systemd 255, 01.11.2026): Speicherreserve und Gmail-Anstoß 0,9
 („SAFE“), Web-Dienst 1,2, Abruf, Claude-Lauf und Zustand 1,4 („OK“; 10 wäre ungeschützt).
 
@@ -366,8 +420,9 @@ Pfade in `/var/lib/studium-server`. Eine 2 vorn (setgid) heißt: Was im Ordner e
 |---|---|---|---|
 | der Ordner selbst | `studium:studium-web`, 2711 | Claude-Lauf, Zustand, Speicherreserve, Gmail-Anstoß, `studium-server` (als `studium`) | Web-Dienst und Abruf gehen nur hindurch, auflisten können sie ihn nicht |
 | `zustand.json`, `aktualisierung.json` | `studium:studium-web`, 0640 | Lauf und Zustand bzw. `studium-server aktualisieren` | Web-Dienst (Status) |
-| alles andere darin (`anstoss`, `termine.json`, `kapitel.json`, `hinweise-bisher.json`, `nutzung.json`, `einstellungen.json`, `livesync-an` …) | `studium`, 0600 | Lauf, Gmail-Anstoß, `studium-server`, `livesync.sh` (als `studium`) | niemand; ob ein Anstoß wartet, sieht der Web-Dienst am Namen |
+| alles andere darin (`anstoss`, `termine.json`, `termine-quellen.json`, `kapitel.json`, `hinweise-bisher.json`, `nutzung.json`, `einstellungen.json`, `livesync-an` …) | `studium`, 0600 | Lauf, Gmail-Anstoß, `studium-server`, `livesync.sh` (als `studium`) | niemand; ob ein Anstoß wartet, sieht der Web-Dienst am Namen |
 | `laeufe/` | `studium:studium`, 0700 | Lauf | niemand (Mails, Auszug aus dem Tresor, Rechte des Laufs) |
+| `quarantaene/`, `mail-fehler.json` | `studium`, 0700 bzw. 0600 | Lauf | niemand (Mails, an denen allein zwei Läufe scheiterten, bis sie jemand wieder einreiht; Fehlschläge und Gruppe je Mail) |
 | `web/` | `studium-web:studium-web`, 2771 | Web-Dienst; `studium-server verbinden`, `schluessel-erneuern` und `livesync.sh` als `studium-web` | Lauf (Gruppe): `stand-plugin.json` (0640), nimmt den Anstoß `web/anstoss`; Lauf, Abruf und Gmail-Anstoß: `takt.json`, der Abruf auch `knopf.json` (beide 0644). `verbinden/`, `livesync-links/` und `geraete.json` nur der Web-Dienst (0700 bzw. 0600) |
 | `abruf/` | `studium-abruf:studium`, 2770 | Abruf: `roh/`, `abruf-stand.json`, `uni-zugang-falsch`, `anstoss` | Lauf (Gruppe): übernimmt `roh/` und den Anstoß; Zustand: `uni-zugang-falsch` |
 | `eingang/` | `studium:studium-web`, 2770 | Lauf (Ergebnisse, 0640) | Web-Dienst: gibt sie aus und löscht Übernommenes |
@@ -418,23 +473,191 @@ von `unattended-upgrades`; ein Dienst, der nicht läuft, bleibt aus. Bis 0.7.6 s
 Scheitert der Schritt, kommt das neue
 Server-Paket trotzdem; der Lauf zählt dann als gescheitert (Grund `pakete` im Status).
 
+### Updates des Server-Pakets
+
+`studium-server aktualisieren` (täglich über `studium-server-aktualisieren.timer`, von Hand mit `sudo`) holt das neueste Release
+(`releases/latest`; Vorab-Releases nie), Paket und Signatur nur unter `https://github.com/studium-autopilot/ecoba/releases/download/`.
+Grenzen: `curl` je Abruf höchstens 5 Minuten, Wiederholungen nur innerhalb von 10 Minuten; apt wartet höchstens 5 Minuten auf seine
+Sperre; `claude update` höchstens 10 Minuten; die Einheit höchstens 60 Minuten. Ohne sie hielte ein hängender Schritt jeden weiteren
+Tag auf. Bricht systemd an der Grenze ab (SIGTERM), zählt das als Fehler, nicht als Erfolg (`trap` auf TERM und INT in
+`studium-server` und im Installer), und der nächste Lauf holt eine nicht fertige Installation bzw. ein offenes Zurückrollen nach.
+
+- **Nur ein geprüftes Paket:** passende Prüfsumme (nennt GitHub selbst, schützt nur vor einem kaputten Download), gültige Signatur
+  (`studium-server.tar.gz.sig`, `ssh-keygen -Y verify -n studium-server` mit `allowed_signers` des **laufenden** Pakets, nie aus
+  dem Download) eines Schlüssels, der nicht gesperrt ist (`-r` mit `/etc/studium-server/revoked_keys`, siehe unten), und `VERSION`
+  im signierten Paket genau wie der Tag des Releases ohne `v`. Ohne die letzte Prüfung ließe sich ein altes,
+  einmal signiertes Paket (etwa mit einer bekannten Lücke) unter einem neuen Release noch einmal ausliefern. Erst die Signatur
+  verhindert, dass ein Release, das jemand mit dem GitHub-Konto oder einem Token anlegt, auf jedem Server als root läuft. Server
+  mit 0.7.5 oder älter installieren das erste signierte Paket noch ohne diese Prüfung, ab dann jedes mit; Sperren und den
+  Vergleich mit dem Tag prüft erst das `aktualisieren` des Pakets, das sie mitbringt (ab dem Update danach).
+- **Gesperrte Schlüssel wachsen nur:** `/etc/studium-server/revoked_keys` (nur root) ergänzt der Installer vor allem anderen um
+  `revoked_keys` seines Pakets, `aktualisieren` um die des laufenden und, gleich nach der Prüfung, um die des neuen Pakets (auch wenn
+  dessen Installation dann scheitert). Die Liste wird nie kürzer: Ein Zurückrollen bringt zwar die alte `allowed_signers` zurück,
+  aber keine Sperre geht verloren. Übernommen wird nur eine Zeile, die mit dem Typ des Schlüssels beginnt (`ssh-ed25519 AAAA…`,
+  keine Optionen wie in `authorized_keys`: `restrict`, `cert-authority`, `from="…"`) und die `ssh-keygen -l` als öffentlichen
+  Schlüssel liest (Format einer `.pub`-Datei, keine KRL), bei jeder Ergänzung auch die schon gemerkten Zeilen: Eine solche Zeile
+  ließe sonst jede Prüfung mit 255 scheitern, und kein Update käme mehr durch. `release.py` lässt ohnehin nur solche Zeilen ins
+  Paket. **Von Hand reparieren** (nur root): `sudo nano /etc/studium-server/revoked_keys`, je Zeile ein Schlüssel in dieser Form;
+  prüfen mit `sudo ssh-keygen -l -f /etc/studium-server/revoked_keys` (zeigt jeden lesbaren); eine Sperre nie löschen, nur eine
+  Zeile, die gar kein Schlüssel ist.
+- **Test- und Beta-Pakete** sind im eigenen Namensraum `studium-server-test` signiert (`docs/release.md`). Ein Server nimmt sie nur
+  an, wenn root dort die Zusage `/etc/studium-server/testpakete` angelegt hat (`sudo touch /etc/studium-server/testpakete`; echte
+  Datei, root gehört sie, nur root darf sie ändern). Ein Server von Studierenden hat sie nie, eine Signatur für Tests gilt dort also
+  nicht.
+- **Nur vorwärts:** nie auf eine ältere Version zurück. Dieselbe Version gilt nur als aktuell, wenn ihr Paket die Marke
+  `.installiert` hat; die setzt der Installer erst nach „Prüfen“, so installiert der nächste Lauf eine abgebrochene Installation
+  noch einmal. Ob es etwas zu tun gibt, entscheidet der Tag des Releases schon vor dem Download (ein falscher Tag kann nur ein
+  Update ausfallen lassen).
+- **Gestaffelt:** Eine neue Version installiert ein Server erst eine feste Zeit von 0 bis 48 Stunden nach ihrer Veröffentlichung
+  (`published_at`). Die Zeit folgt aus einem Zufallswert, den der Installer einmal in `/etc/studium-server/staffel` legt (nur
+  root); für einen Server bleibt sie gleich, über alle verteilt sie sich gleichmäßig. So trifft ein fehlerhaftes Release zuerst
+  wenige Server, und bis die übrigen dran sind, kann ein berichtigtes erscheinen. Gezählt wird ab dem ältesten Release, seit dem
+  der Server zurückliegt (`/opt/studium-server/.staffel-seit`), damit häufige Releases einen Server mit langer Wartezeit nicht
+  immer weiter vertrösten. `sudo studium-server aktualisieren --jetzt` (aus der Cloud Shell: `fern.sh aktualisieren --jetzt`)
+  installiert sofort.
+- **Prüfen:** Ob ein neues Paket gilt, entscheidet nur sein Web-Dienst selbst: `/v1/status` direkt auf 127.0.0.1 (ohne Caddy, ohne
+  Kopf einer Weiterleitung, also ohne Zugangsschlüssel) muss innerhalb von 30 Sekunden mit der Version des Pakets antworten. Was danach
+  Dateien anderer Benutzer liest (`studium-server status` mit `takt.json` des Web-Dienstes, der Zustand), ist nur Anzeige und endet
+  nie mit einem Fehler; ebenso das Löschen offener Codes in `web/verbinden/` (nur echte Dateien, `find -P`, als `studium-web`) und,
+  bei einem Update, die Installation von Claude Code im Home von `studium`. Sonst könnte, wer den Web-Dienst oder den Lauf übernommen
+  hat, mit einer kaputten Datei jedes Update zurückrollen lassen und den Server auf der alten Version halten.
+- **Zurückrollen:** Scheitert die Installation, nachdem `/opt/studium-server/aktuell` schon auf das neue Paket zeigt (antwortet der
+  neue Web-Dienst bei „Prüfen“ nicht, bricht ein Schritt davor ab oder kommt SIGTERM), stellt der Installer `aktuell` auf das
+  bisherige Paket zurück und startet dessen Installer mit denselben Angaben: Er schreibt Einheiten, Caddy und
+  `/usr/local/bin/studium-server` auf seinen Stand, startet die Dienste neu und prüft sie; „Alte Pakete“ räumt dabei das gescheiterte
+  weg. Nur, wenn das bisherige Paket fertig installiert war (`.installiert`). Der Installer endet dann mit Exit 10 (eigener Code; Exit
+  3 meint bei `fern.sh` einen unbekannten Befehl, `start.sh` hält mit `[halt:installieren:zurueckgerollt]`); `aktualisieren` merkt
+  sich Version und Zeit in `/opt/studium-server/.zurueckgerollt` und versucht dieselbe Version von selbst erst nach 20 Stunden wieder
+  (der Zeitgeber streut bis zu 2 Stunden; so höchstens einmal am Tag), mit `--jetzt` sofort. Vom Umschalten bis `.installiert` nennt
+  `/opt/studium-server/.zurueckrollen-offen` (nur root) das Ziel; bricht der Lauf mittendrin ab (Zeitgrenze, Neustart), holt der
+  nächste `aktualisieren` das Zurückrollen vor allem anderen nach. Ein Zurückrollen geht nur so weit, wie der bisherige Installer
+  reicht: Was eine neue Version am Datenordner umgezogen hat, zieht er nicht zurück. Abgebrochen (SIGTERM an der Zeitgrenze,
+  Strg+C) startet der Installer den bisherigen Installer nicht mehr, denn systemd beendet den Lauf gleich ganz: Er stellt nur `aktuell`
+  und `/usr/local/bin/studium-server` zurück und lässt die Marke stehen; der nächste Lauf führt den bisherigen Installer dann aus
+  (der schreibt auch die Einheiten wieder). Dabei zählt die Marke von root (Ziel und gescheiterte Version), nicht `.installiert` des
+  Ziels; sie gilt nur für einen echten Ordner einer Version, dessen `VERSION` seinen Namen nennt, und entfällt, wenn die gescheiterte
+  Version doch fertig installiert läuft. Der Installer räumt sie darum vor `.installiert` weg: Ein Abbruch genau dazwischen
+  installiert dieselbe Version noch einmal, statt sie zurückzurollen. Der bisherige Installer läuft aus seinem installierten Ordner (Quelle =
+  Ziel): Dann kopiert er nichts und nimmt `.installiert` erst nach dem Kopieren weg. Pakete bis 0.7.6 setzen `.installiert` nicht,
+  auf sie rollt nie ein Server zurück. 0.7.7 setzt es, kennt aber weder dieses Kopieren noch die Liste gesperrter Schlüssel von root:
+  Sein Installer bräche beim Zurückrollen mit „are the same file“ ab. Darum nennt `MINDESTVERSION` die Version, mit der diese Fassung
+  erscheint (unten); der erste Wechsel auf sie rollt also nicht zurück (scheitert er, bleibt der Server auf ihr, und der nächste Lauf
+  installiert sie noch einmal), und er läuft noch mit dem bisherigen `aktualisieren`.
+- **Mindestversion:** `MINDESTVERSION` im signierten Paket nennt die älteste Version, auf die zurückgerollt werden darf; root hält die
+  höchste je gesehene in `/etc/studium-server/mindestversion` fest (sinkt nie). Läge das bisherige Paket darunter, rollt der
+  Installer nicht zurück, sondern bleibt auf dem neuen (Exit 11, Grund `mindestversion`, `start.sh`:
+  `[halt:installieren:mindestversion]`); der nächste Lauf installiert es noch einmal (`docs/release.md`).
+- **Ergebnis** in `aktualisierung.json`: `zeit`, `ok`, `ziel` (Version des neuesten Releases), `installiert` (laufende Version
+  danach), `grund` (wenn nicht ok), `erfolg` (zuletzt ok) und während der Staffel `warten_bis`. Der Status gibt davon unter
+  `aktualisierung` die Felder weiter, die `dienst.mjs` kennt (`zeit`, `ok`, `ziel`, `grund`, `erfolg`; die laufende Version steht
+  dort ohnehin unter `version`); einen Grund, den es noch nicht kennt, zeigt er als `unbekannt`.
+  Nicht ok heißt nicht immer Fehler: Fehlt im neuesten Release das Paket (`kein-paket`), ist es nicht neuer als das laufende
+  (`aelter`) oder wartet eine zurückgerollte Version noch (`zurueckgerollt`), endet der Lauf mit 0, aber `ok` bleibt `false` und
+  `erfolg` stehen; so sieht Obsidian, dass der Server zurückbleibt. Bis 0.7.7 zählten fehlendes Paket und älteres Release als Erfolg.
+  Gründe bei Fehlern: `github`, `pruefsumme-fehlt`, `signatur-fehlt`, `herunterladen`, `pruefsumme`, `signatur`, `paket` (auch: Paket
+  oder Signatur nicht unter den Releases des Repos), `version` (Version ≠ Tag), `installieren`, `zurueckgerollt`, `mindestversion`,
+  `pakete`. Schon aktuell und Warten auf die eigene Zeit sind ok.
+  Obsidian sagt es, wenn seit mehr als 3 Tagen nichts ok war, obwohl es eine neuere Version gibt.
+- **Noch nicht:** ein Notschalter, mit dem sich ein Release auf allen Servern anhalten ließe, bevor ihre Zeit kommt. Bis dahin
+  hilft nur ein schnelles berichtigtes Release (es setzt die Staffel nicht zurück) oder, für ein Release ohne Paket, gar keins.
+
 ### Web-Dienst (`dienst.mjs`)
 
 | Weg | Wer | Was |
 |---|---|---|
-| `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), am Limit des Claude-Abos der nächste Versuch (`limit_wieder`, sonst `null`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, `erfolg`; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
-| `POST /v1/anstoss` | mit Zugangsschlüssel | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 10 Minuten (sonst 429 mit `wieder`); ersetzt einen wartenden Anstoß des Web-Dienstes (Unterlagen und Folien übernimmt der Lauf bei jedem Grund) |
-| `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180. Dazu `verbunden`: die letzten 20 Verbindungen von Geräten (Zeit, Herkunft `cloud-shell` oder `obsidian`), nur hier und nie im Status |
+| `GET /v1/status` | mit Zugangsschlüssel | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), am Limit des Claude-Abos der nächste Versuch (`limit_wieder`, sonst `null`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, sonst `unbekannt`, `erfolg`; dazu `installiert` und `warten_bis` (gestaffelte Verteilung), wenn `studium-server` sie schreibt; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes; dazu `verbunden` (siehe `/v1/eingang`) und `grenzen` (Grenzen je Tag: Läufe zusammen und je Anlass mit Grenze, wartende, heute zurückgestellte oder verschobene und nicht mehr gemerkte Mails, Zeichen je Topf, Mails nach einem Fehlschlag, Mails in Quarantäne und darüber gelöschte). Nie Namen, Adressen, Texte oder Schlüssel. Direkt auf 127.0.0.1 ohne `X-Forwarded-For` und andere Kopfzeilen einer Weiterleitung (`installieren.sh`, `studium-server status`; dort fragen nur root und die Dienstbenutzer) dasselbe ohne Schlüssel. Über Caddy ohne Schlüssel 401 (zählt als Fehlversuch; mit `signatur: 1`, siehe „Anmeldung der Anfragen“), sobald ein Gerät den Status einmal mit Schlüssel geholt hat (Marke `web/status-geschuetzt.json`); bis dahin offen wie bis 0.7.7, denn Plugins bis 0.7.7 schicken den Schlüssel dort nicht mit. Danach zeigt ein solches Plugin den Server im Fenster als nicht erreichbar; Termine und Hinweise holt es über `/v1/eingang` weiter wie bisher |
+| `POST /v1/anstoss` | mit Zugangsschlüssel, signiert dazu mit Beweis des Datenschlüssels | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 30 Minuten und 12-mal in 24 Stunden (`KNOPF` in `dienst.mjs`; jeder Lauf kostet Abo-Limit, und den Zugangsschlüssel trägt jede Anfrage; sonst 429 mit `wieder` und `Retry-After`); ersetzt einen wartenden Anstoß des Web-Dienstes (Unterlagen und Folien übernimmt der Lauf bei jedem Grund). Mit dem Körper `{"quarantaene":"erneut"}` (JSON, nicht verschlüsselt) reiht der Lauf dazu alle Mails der Quarantäne einmal wieder ein, jede für sich allein; Antwort dann `{ angestossen: true, quarantaene: "erneut" }`. Ohne Körper wie bisher. Eine signierte Anfrage ohne gültigen `beweis` lehnt der Dienst mit 403 `datenschluessel` ab (zählt als Fehlversuch): Wer nur den Zugangsschlüssel hat, startet so keinen Lauf. Plugins bis 0.7.7 schicken den Zugangsschlüssel selbst und keinen Beweis; das nimmt der Dienst nur an, bis hier ein Gerät gültig signiert hat (`web/signatur-gesehen.json`), danach 403 `veraltet` (siehe „Anmeldung der Anfragen“) |
+| `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180. Dazu `verbunden`: die letzten 20 Verbindungen von Geräten (Zeit, Herkunft `cloud-shell` oder `obsidian`, grobes Netz `netz` und Gerätename `geraet`, wenn bekannt), ebenso im Status mit Schlüssel, nie ohne |
 | `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, laufendes Semester und die Module ohne zentrale Kapitelliste (`lernplan`), Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
 | `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lab, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, mit `fassung` (neue Fassung einer schon zusammengefassten Unterlage: frühere Zusammenfassung, geänderte Seiten, was unter „Zu tun“ und „Offene Fragen“ schon steht; geprüft) mit diesen Zeilen im Kopf, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
 | `POST /v1/kapitel` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Folien (je höchstens 60 000 Zeichen, mit Nummer, Datum und Quelle der Unterlage) der Module, für die der Stand eine Kapitelliste für den Lernplan wünscht, nach `unterlagen/kapitel/`; höchstens 30 warten (sonst 429); stößt einen Lauf an, wenn keiner wartet |
 | `POST /v1/pdf` | mit Zugangsschlüssel | verschlüsselt ein Stück (8 MB, Zweck `pdf`) einer PDF zu einer gewünschten Zusammenfassung, der Reihe nach (sonst 409); nach dem letzten und geprüftem SHA-256 liegt sie als `unterlagen/opus/<SHA-256>.pdf` da. Die Textfassung kommt gleich danach und nennt sie im Kopf, Opus liest dann die PDF. Je PDF bis 500 MB (sonst 413), höchstens 6 und zusammen 1 GB warten (sonst 429), ohne Textfassung oder halb hochgeladen verfällt eine nach einem Tag; nach einem erfolgreichen Lauf gelöscht |
-| `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät; der Code gilt einmal, auch bei gleichzeitigen Anfragen |
+| `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät; der Code gilt einmal, auch bei gleichzeitigen Anfragen. Ab 0.7.8 `{ schema: 2, kennung, pub, beweis }` ohne den Code, Antwort `{ schema: 2, pub, iv, daten }` verschlüsselt (siehe „Verbinden“); bis 0.7.7 `{ code }` mit offener Antwort `{ adresse, zugang, schluessel }`. Ein gültiger Code geht immer, auch aus einem gesperrten Netz; ein falscher (oder ein falscher Beweis) zählt als Fehlversuch (gesperrt: 429, sonst 403 `{ fehler: "code", schema: 2 }`). Optional `geraet` (Name des Geräts, höchstens 40 Zeichen, gesäubert) fürs Protokoll |
 | `POST /v1/geraet` | mit Zugangsschlüssel und Datenschlüssel | Knopf „Weiteres Gerät verbinden“ in Obsidian: Die Anfrage ist ein Paket mit Zweck `verbinden` und `{ schema: 1, zeit, nonce }` (Zeit höchstens 2 Minuten neben der Uhr des Servers, sonst 400 `uhr`; jeder Zufallswert nur einmal, sonst 409). Zurück kommt ebenso verschlüsselt `{ code, ablauf }`: ein Einmal-Code für 10 Minuten, der den vorigen aus Obsidian zurückzieht; höchstens 3 je Stunde und 10 je Tag (sonst 429 mit `wieder`) |
 | `GET /v1/livesync/<kennung>` | mit Kennung (20 Zeichen, 30 Minuten) | Seite mit dem Knopf „In Obsidian öffnen“ für den Setup-Link von LiveSync; unbekannte Kennungen zählen als Fehlversuch (siehe „LiveSync“) |
 
-Je Absender (letzter Eintrag in `X-Forwarded-For`, den Caddy setzt) antworten die geschützten Wege nach 10 Fehlversuchen in
-10 Minuten 10 Minuten lang mit 429. Ein gültiger Zugangsschlüssel wird nie gesperrt, sonst könnte jeder das Plugin aussperren.
+**Anmeldung der Anfragen (ab 0.7.8):** „Mit Zugangsschlüssel“ heißt in der Tabelle: Die Anfrage ist signiert. Das Plugin ab 0.7.8
+schickt den Schlüssel nie mehr selbst, sondern im Kopf
+
+`Authorization: Studium-Signatur v=1,zeit=<Unix-Sekunden>,nonce=<16 Zufallsbytes>,inhalt=<SHA-256 des Körpers>,signatur=<HMAC>[,beweis=<HMAC>]`
+
+(alle Werte base64url ohne `=`, genau diese Reihenfolge, ohne Leerzeichen). Signiert werden die sechs Zeilen
+`studium-autopilot/anfrage/v1`, Methode, Pfad, `zeit`, `nonce`, `inhalt` (getrennt durch `\n`) mit HMAC-SHA256 unter
+HKDF-SHA256(Zugangsschlüssel, Salz leer, Info `studium-autopilot/anfrage/v1/zugang`); `beweis` ist derselbe Text unter
+HKDF-SHA256(Datenschlüssel, Info `studium-autopilot/anfrage/v1/datenschluessel`) und nur beim Anstoß nötig (`kanal.mjs`). Der Dienst
+prüft Signatur, Zeit (höchstens 5 Minuten neben seiner Uhr, sonst 401 `uhr`, das zählt nicht als Fehlversuch) und Zufallswert (jeder
+nur einmal, sonst 401 `wiederholt`), bevor er den Körper liest, und danach dessen SHA-256 (sonst 400). Die Zufallswerte merkt er
+bis zum Ende ihres Fensters, höchstens 20 000 zugleich (`SIGNATUR`) und je Netz des Absenders (/24 bzw. /56) höchstens ein
+Zwanzigstel davon; darüber fällt der älteste Wert desselben Netzes weg, ist der Speicher voll, der älteste des Netzes mit den meisten.
+So kann auch, wer den Zugangsschlüssel hat, den Speicher nicht füllen und das echte Gerät aussperren. Was so wegfällt, gälte sonst
+noch einmal; darum merkt sich der Dienst das späteste Fensterende eines verdrängten Werts und nimmt keine Anfrage an, deren Fenster
+nicht danach endet (wer flutet, sperrt so höchstens einige Minuten lang aus, aber kein mitgelesener Wert gilt ein zweites Mal). Jeder
+Wert steht zusätzlich in `web/nonces.log` (eine Zeile je Wert, neu geschrieben mit einer Zeile `~ <Ende>` für die verdrängten, wenn es
+mehr als doppelt so viele Zeilen hat, wie gelten); nach einem Neustart des Dienstes (Update, Neustart) lädt
+er die noch gültigen, und eine mitgelesene Anfrage geht auch dann nicht noch einmal durch. Die Signatur vergleicht er als Text: Die
+zwei freien Bits im letzten Zeichen von base64url machen keine zweite gültige Schreibweise. Jede 401 trägt `signatur: 1`; eine 401 ohne (Server bis
+0.7.7) zeigt das Plugin als „Dein Server kann das erst nach seinem nächsten Update“, nicht als abgelehnten Schlüssel. So nützt eine
+mitgelesene Anfrage nichts mehr: Sie gilt einmal, für diesen Weg, diesen Körper und 5 Minuten.
+
+**Signierte Antworten:** Jede Antwort auf eine gültig signierte Anfrage (auch 401 `uhr`, 403, 204) trägt den Kopf
+`studium-signatur: v=1,mac=<HMAC>`: HMAC-SHA256 unter HKDF-SHA256(Zugangsschlüssel ‖ Datenschlüssel, Info
+`studium-autopilot/anfrage/v1/antwort`) über die Zeilen `studium-autopilot/antwort/v1`, `nonce` der Anfrage, Status und SHA-256 des
+Körpers (`kanal.mjs` `antwortMac`). Der Datenschlüssel gehört dazu, weil Plugins bis 0.7.7 den Zugangsschlüssel im Kopf schickten: Wer
+ihn so mitlas, kann trotzdem keine Antwort fälschen. Antworten auf
+Bearer und auf ungültige Signaturen tragen keinen (der Dienst kennt den Schlüssel des Absenders dann nicht). Die Antwort auf
+`/v1/geraet` hat bei einer signierten Anfrage den Zweck `verbinden-antwort` (Plugins bis 0.7.7: `verbinden` wie die Anfrage), damit
+sich keine Anfrage als Antwort ausgeben lässt. **Übergang:** Plugins bis 0.7.7
+schicken weiter `Authorization: Bearer <Zugangsschlüssel>`. Der Dienst nimmt das an, mit zwei Schaltern, die nur in eine Richtung
+gehen: Sobald hier ein Gerät gültig signiert hat (Marke `web/signatur-gesehen.json`), startet ein Bearer keinen Lauf mehr (Anstoß,
+auch das neue Einreihen der Quarantäne: 403 `veraltet`); wer den Zugangsschlüssel mitlas, hat den Datenschlüssel nicht. Und kam
+danach 7 Tage lang kein Bearer mehr durch (`BEARER_FRIST`, gezählt ab dem letzten erfolgreichen, `web/bearer.json`, höchstens
+stündlich geschrieben; kam nie einer, ab der ersten Signatur), nimmt der Dienst auf keinem Weg mehr einen an (401 `veraltet`, kein
+Fehlversuch). Spätestens 30 Tage nach der ersten Signatur ist auf jeden Fall Schluss (`BEARER_SCHLUSS`), auch wenn bis dahin alle
+paar Tage ein Bearer kam. Das erste Nein schreibt `web/bearer-aus.json`, und die sieht der Dienst zuerst an: Es bleibt dabei, auch
+wenn die Uhr des Servers zurückgeht. Scheitert das Schreiben einer dieser Marken (volle Platte), gilt sie im laufenden Dienst weiter,
+und keine Anfrage scheitert daran. Bis dahin kann, wer einmal eine Anfrage eines
+Plugins bis 0.7.7 mitlas (oder den Zugangsschlüssel aus dem offenen Verbinden bis 0.7.7 hat), den Zugangsschlüssel weiter benutzen,
+aber nur für das, was er allein erlaubt: den verschlüsselten Eingang holen und den Status lesen. Wer sicher sein will, dass alte
+Schlüssel nichts mehr nützen, erneuert sie, sobald jedes Gerät aktualisiert ist („Gerät verloren“ unten, danach jedes Gerät neu
+verbinden); das Plugin schlägt es nicht von selbst vor.
+
+**Riegel (wie HSTS, nur aufwärts):** Ein Server bis 0.7.7 (gestaffelt bekommt er das Update bis zu 48 Stunden nach dem Release,
+„Updates des Server-Pakets“) kennt keine Signaturen. Das Plugin ab 0.7.8 versucht jede Anfrage zuerst signiert. Antwortet der Server,
+wie nur einer bis 0.7.7 antwortet (401 ohne `signatur: 1`, oder seine Sperre 429 `zu-viele-versuche`, die ein neuer Server einer
+gültigen Signatur nie gibt), und hat dieses Gerät von diesem Server noch nie gesehen, dass er Signaturen kennt, schickt es dieselbe
+Anfrage noch einmal mit `Authorization: Bearer <Zugangsschlüssel>` wie bis 0.7.7 (auch den Anstoß). Der Riegel fällt nur auf einen
+Beweis, den niemand ohne den Zugangsschlüssel bauen kann: eine Antwort mit gültiger Signatur (oben) oder ein Verbinden ab 0.7.8 (das
+kann nur ein neuer Server; ein so verbundenes Gerät ist von Anfang an verriegelt). Danach schickt das Gerät diesem Server nie wieder
+den Bearer und nimmt nur noch signierte Antworten an: Sieht eine Antwort alt aus (das wäre ein Versuch, es herabzustufen), zeigt es
+„Dein Server kann das erst nach seinem nächsten Update“; jede andere ohne gültige Signatur gilt wie ein Netzfehler, nie als
+Ablehnung des Schlüssels. Nach `schluessel-erneuern` sagt der Server einem Gerät mit den alten Schlüsseln 30 Tage lang, dass es
+neue gibt, signiert unter den alten („Gerät verloren“); das Gerät zeigt dann gleich „Dein Server hat neue Schlüssel. Verbinde dieses
+Gerät mit einem Code.“ Danach, und nach einer neuen Adresse, sieht ein verriegeltes Gerät neue Schlüssel nur als „nicht erreichbar“;
+das Fenster bietet **Mit Code verbinden** dann zugeklappt an, nach 3 Tagen offen. Der Riegel liegt nur im Speicher des Geräts
+(`eba-server-signatur`, nicht im Tresor: wer den Sync hat, könnte ihn sonst löschen), je Server und Schlüssel (gekürzter SHA-256 aus
+Adresse und Zugangsschlüssel); scheitert das Speichern, gilt er im laufenden Plugin weiter, und es versucht es bei jeder Anfrage
+neu. **Vor dem Riegel** schützt nur HTTPS, genau wie bis 0.7.7: Wer mit einem gültigen Zertifikat dazwischensitzt und wie ein alter
+Server antwortet, bekommt dann den Zugangsschlüssel im Klartext und kann Antworten fälschen. Das betrifft nur Geräte, die noch nie
+eine signierte Antwort ihres Servers gesehen haben (verbunden bis 0.7.7, Server noch nicht aktualisiert), und endet mit der ersten
+signierten Antwort. Verbinden hat keinen solchen Rückweg: Ein neues Gerät verbindet sich nur mit einem Server ab 0.7.8.
+
+**Warum der Status nicht mehr öffentlich ist:** Jede Adresse eines Servers steht durch sein Zertifikat in den öffentlichen
+Logs der Zertifizierungsstellen; wer sie dort sammelt, sah bisher bei jedem Server Version, ob ein Uni-Passwort gespeichert ist,
+wann Obsidian zuletzt abholte, wann Claude lief, Limits und gescheiterte Updates. Caddy gibt jeder Anfrage `X-Forwarded-For` mit,
+und ein Absender aus dem Internet kann das nicht verhindern; darum gilt nur eine Anfrage ohne diesen Kopf direkt auf 127.0.0.1
+als lokal.
+
+Je Netz des Absenders (letzter Eintrag in `X-Forwarded-For`, den Caddy setzt; gezählt je /24 bei IPv4 und je /56 bei IPv6, nicht je
+Adresse) antworten die geschützten Wege nach 10 Fehlversuchen in 10 Minuten 10 Minuten lang mit 429. Ein gültiger Zugangsschlüssel,
+ein gültiger Einmal-Code und eine gültige LiveSync-Kennung gehen immer durch: Der Dienst prüft sie vor der Sperre, sonst könnte jeder
+das Plugin aussperren, und in einem Campus-Netz, das viele hinter einer Adresse bündelt, sperrten fremde Fehlversuche den richtigen
+Code (bis 0.7.7 kam die Sperre vor dem Code). Der Dienst merkt sich höchstens 5000 Netze; ist die Liste voll, fällt zuerst
+Abgelaufenes weg, und jedes weitere Netz zählt mit allen anderen neuen unter einem gemeinsamen Eintrag. Wer viele Adressen hat, kann
+so keine laufende Sperre aus der Liste drängen (bis 0.7.7 fiel bei voller Liste der älteste Eintrag weg). Die Liste ist nach dem
+letzten Fehlversuch geordnet; Abgelaufenes liegt vorn und fällt weg, ohne dass der Dienst alle Einträge durchgeht. Weil ein
+gültiger Code vor der Sperre geprüft wird, bremst die Sperre das Raten nicht. Das braucht es auch nicht: Der Einmal-Code hat
+10 Zeichen aus 32 (50 Bit) und gilt höchstens 30 Minuten; bei 10 Versuchen je Sekunde läge die Chance in 30 Minuten unter
+1 zu 50 Milliarden.
 Jeder Weg hat eine eigene Grenze für die Größe einer Anfrage (`MAX_KOERPER` in `dienst.mjs`: 1 KB bis 4 MB, ein Teil einer PDF
 etwas über 8 MB); was darüber liegt, lehnt der Dienst mit 413 ab.
 
@@ -444,26 +667,81 @@ das andere ausgeben lässt.
 
 **Verbinden:** `sudo studium-server verbinden` zeigt einen Link `obsidian://studium-autopilot?aktion=server-verbinden&…` und
 einen QR-Code. Darin steht nur ein Code, der einmal und 30 Minuten gilt. Die Schlüssel holt das Plugin über HTTPS und legt sie
-in den Schlüsselbund des Geräts. Auf dem Server liegt nur der SHA-256 des Codes. Wer einlöst, legt zuerst exklusiv eine Marke
+in den Schlüsselbund des Geräts. Auf dem Server liegen der SHA-256 des Codes (für Plugins bis 0.7.7) und die drei Werte unten,
+nie der Code. Wer einlöst, legt zuerst exklusiv eine Marke
 `<SHA-256>.json.eingeloest` an (`O_EXCL`); lösen zwei Anfragen denselben Code zugleich ein, bekommt nur eine die Schlüssel. Ein
 `rename` reichte dafür nicht: Unter Windows gelingen zwei gleichzeitige `rename` derselben Datei beide (der Test lief dort rot).
+
+**Austausch ab 0.7.8 (`verbinden.mjs`, `codeEinloesenNeu`):** Bis 0.7.7 schützte allein HTTPS für `<IP>.sslip.io` den Code und die
+Schlüssel. Ein gültiges Zertifikat für diesen Namen bekommt aber auch, wer die IP nach dem Server bei Oracle zugeteilt bekommt, wer
+den Dienst hinter dem Namen betreibt oder wer das DNS umlenkt; er hätte beides mitlesen oder dem Gerät eigene Schlüssel
+unterschieben können. Darum bindet das Plugin ab 0.7.8 den Tausch an den Code:
+
+1. Aus Code (10 Zeichen, groß, ohne Strich) und Host (`<IP>.sslip.io`, klein; mit Port, falls einer dasteht) macht PBKDF2-SHA256 mit
+   600 000 Runden und dem Salz `studium-autopilot/verbinden/v2/code\n<host>` 32 Byte m; daraus HKDF-SHA256 (Salz leer, Info
+   `studium-autopilot/verbinden/v2/<zweck>`) `kennung`, `beweis` und `antwort`. Der Server rechnet dasselbe, wenn er den Code
+   erzeugt (`neuerCode` mit seiner Adresse), und legt die drei Werte neben den SHA-256.
+2. Das Gerät erzeugt ein Schlüsselpaar P-256 nur für diesen Tausch und schickt `{ schema: 2, kennung, pub, beweis }`: `pub` ist sein
+   öffentlicher Schlüssel (65 Byte, unkomprimiert), `beweis` HMAC-SHA256 unter `beweis` über `studium-autopilot/verbinden/v2/beweis\n<host>\n<pub>`.
+3. Der Server sucht den Code mit dieser Kennung, prüft Ablauf und Beweis, erzeugt sein eigenes Schlüsselpaar und löst den Code
+   erst dann ein. Er antwortet `{ schema: 2, pub, iv, daten }`: `daten` ist `{ adresse, zugang, schluessel }`, verschlüsselt mit
+   AES-256-GCM unter HKDF-SHA256(ECDH-Geheimnis ‖ `antwort`, Info und Zusatzdaten
+   `studium-autopilot/verbinden/v2/antwort\n<host>\n<pub des Geräts>\n<pub des Servers>`).
+4. Das Gerät nimmt nur diese Form an. Eine offene Antwort wie bis 0.7.7, eine nicht zu entschlüsselnde oder eine mit anderer
+   Adresse lehnt es ab und speichert nichts.
+
+Was das bringt: Wer alles mitschneidet, bekommt weder Code noch Schlüssel (dazu fehlt ihm das Geheimnis aus dem Tausch, auch wenn
+er den Code später erfährt). Wer mit gültigem Zertifikat dazwischensitzt, kann ohne den Code keine Antwort bauen, die das Gerät
+annimmt; reicht er die Kennung mit eigenem Schlüssel an den echten Server weiter, scheitert er am Beweis, und der Code bleibt dem
+Gerät; reicht er sie unverändert weiter, bekommt er nur eine Antwort, die er nicht entschlüsseln kann. Um den Code aus der Kennung
+zu raten, müsste er bis zu 2^50 Codes mit je 600 000 Runden durchrechnen; mit einer aktuellen Grafikkarte (grob 15 000 Versuche je
+Sekunde bei dieser Rundenzahl) dauerte das im Mittel über tausend Jahre; für die 30 Minuten, die ein Code gilt, bräuchte es über
+zwanzig Millionen davon. Danach nützt der Code allein nichts mehr (verbraucht oder abgelaufen). Der Host im Salz: Ein Code gilt nur für den Namen, unter dem der Server ihn
+ausgab; tippt man einen fremden Namen ein, löst dessen Betreiber ihn beim echten Server nicht ein. Die Runden: Node 24 braucht dafür
+auf einem PC von 2018 (Ryzen 7 2700) etwa 0,15 s, mit 300 000 Runden etwa 0,07 s, gemessen mit Web Crypto wie im Plugin. Ein
+Telefon braucht grob das Doppelte bis Dreifache, also unter einer Sekunde; der Server rechnet es einmal je Code. 600 000 ist die
+Empfehlung von OWASP für PBKDF2-SHA256. P-256, HKDF, HMAC, PBKDF2 und AES-GCM gibt es in Web Crypto auch auf iOS 16 (X25519 nicht
+überall). **Was bleibt:** Plugins bis 0.7.7 schicken den Code weiter im Klartext und bekommen die Schlüssel offen zurück (`{ code }`
+ohne `schema`); dafür gilt nur HTTPS wie bisher, und der Dienst nimmt das an, bis es sie nicht mehr gibt. Ein Server bis 0.7.7 kennt
+den neuen Austausch nicht (403 ohne `schema`); ein Plugin ab 0.7.8 sagt dann, dass der Server erst sein Update braucht, und
+verbindet nicht auf dem alten Weg. Ein Code ohne Adresse des Servers (vor 0.7.8 erzeugt) geht nur auf dem alten Weg.
 
 **Weiteres Gerät ohne Cloud Shell:** Ein verbundenes Gerät holt im Fenster „Eigener Server“ mit **Weiteres Gerät verbinden**
 (nach einer Rückfrage) einen Code über `POST /v1/geraet` und zeigt ihn groß, bis er abläuft; das neue Gerät tippt ihn unter
 **Mit Code verbinden** ein und löst ihn wie oben ein. Die Anfrage muss mit dem Datenschlüssel verschlüsselt sein: Den
-Zugangsschlüssel trägt jede Anfrage im Kopf, und wer nur ihn kennt, bekäme über einen Code sonst den Datenschlüssel. Zeit und
+Zugangsschlüssel trug bis 0.7.7 jede Anfrage im Kopf, und wer nur ihn kennt, bekäme über einen Code sonst den Datenschlüssel. Zeit und
 Zufallswert verhindern, dass eine mitgeschnittene Anfrage noch einmal einen Code holt (die Zufallswerte bleiben in
 `geraete.json` bis zum Ende ihres Fensters gemerkt, auch über einen Neustart). Codes aus Obsidian gelten 10 Minuten, höchstens
 einer ist offen, höchstens 3 je Stunde und 10 je Tag; Codes aus der Cloud Shell zählen dabei nicht und bleiben. Jedes Einlösen
-steht mit Zeit und Herkunft in `geraete.json` (die letzten 20); Obsidian zeigt das letzte im Fenster als „Zuletzt verbunden“.
+steht mit Zeit, Herkunft, grobem Netz (IPv4 /24, IPv6 /48, nie die ganze Adresse) und, wenn das Gerät einen schickt, seinem
+Namen in `geraete.json` (die letzten 20), im Eingang und im Status mit Schlüssel; Obsidian bis 0.7.7 zeigt das letzte im Fenster als
+„Zuletzt verbunden“.
 
 **Gerät verloren:** `sudo studium-server schluessel-erneuern`
 (aus der Cloud Shell: `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`) hält den Web-Dienst an, löscht alle offenen
 Codes, schreibt neue Zugangs- und Datenschlüssel (32 Byte wie beim Installieren) in eine neue `dienst.json` (root:studium-web, 0640),
 die die alte in einem Schritt ersetzt, und startet den Dienst wieder, auch nach einem Fehler. Danach kennt der Server kein Gerät mehr: das erste mit `studium-server verbinden`, jedes weitere
-mit **Weiteres Gerät verbinden**; ein Gerät mit alten Schlüsseln bietet im Fenster selbst **Mit Code verbinden** an. Der Installer
+mit **Weiteres Gerät verbinden**; ein Gerät mit alten Schlüsseln bietet im Fenster selbst **Mit Code verbinden** an. Die alten
+Schlüssel stehen danach als `zugang_alt` und `schluessel_alt` mit der Zeit `erneuert` in `dienst.json`: 30 Tage lang (`ALT_FRIST`)
+bekommt eine Anfrage, deren Signatur nur unter ihnen stimmt, 401 `{ fehler: "zugang", erneuert: 1 }`, signiert unter den alten
+Schlüsseln (kein Fehlversuch, Zufallswert gemerkt), und das Gerät zeigt gleich „Dein Server hat neue Schlüssel“. Mehr erlauben die
+alten Schlüssel nicht; wer das verlorene Gerät hat, erfährt so nur, dass es neue gibt. Der Installer
 behält die neuen Schlüssel bei jedem weiteren Lauf. **Grenze:** LiveSync hat eigene Zugangsdaten (`livesync.json`); die erneuert
-dieser Befehl nicht.
+dieser Befehl nicht (dafür `livesync-erneuern`, siehe „LiveSync“).
+
+**Neue Adresse:** Bekommt der Server eine andere öffentliche IP (etwa nach dem Neuanlegen der Instanz), setzt `fern.sh
+installieren` die Adresse `https://<neue IP>.sslip.io`. Weicht sie von der gespeicherten ab, erzeugt der Installer auch neue
+Zugangs- und Datenschlüssel und löscht alle offenen Einmal-Codes (als `studium-web`), wie `schluessel-erneuern`. Grund: Die Geräte
+fragen weiter bei der alten Adresse, und wer deren IP danach bei Oracle bekommt, kann für sie ein Zertifikat holen. Plugins bis 0.7.7
+schicken ihm dabei den Zugangsschlüssel selbst (ab 0.7.8 nur Signaturen, die er nicht wiederverwenden kann); mit neuen Schlüsseln
+nützt er ihm nichts. Die Ausgabe sagt es, und jedes Gerät verbindet sich neu (das erste
+mit dem Link aus `verbinden`, weitere mit **Weiteres Gerät verbinden**). Ohne vorherige Adresse (der erste Lauf mit `--ip` nach dem
+Vorbereiten) und mit `--vorbereiten` bleiben die Schlüssel. **LiveSync erneuert dabei nichts von selbst:** Es zieht nur seine
+Adresse nach (`livesync.sh adresse`) und behält seine Zugangsdaten; der Installer sagt am Ende nur, dass jedes Gerät einen neuen
+Link braucht und dass vorher `sudo studium-server livesync-erneuern` neue Zugangsdaten setzen sollte. Wer das auslässt, gleicht mit
+den alten Zugangsdaten weiter ab, die ein Gerät noch an die alte Adresse schicken kann. Obsidian sieht nach dem Wechsel nur, dass
+die alte Adresse nicht mehr antwortet (nach 3 Tagen: „Weiter mit der Einrichtung“, bei neuer Adresse neu verbinden), oder, wenn dort
+schon ein anderer Server antwortet, „kennt dieses Gerät nicht mehr“.
 
 ### Abruf ohne KI (`abrufen.py`)
 
@@ -476,20 +754,59 @@ KI (ein Schreiber je Quelle, `eba.quelleExtern`); Kurstitel mit Kurs-Passwörter
   Passwort raus (bis 0.7.6 nahm der Abruf den Standard von `imaplib`, einen Kontext ohne Prüfung). Nur lesend (`EXAMINE`,
   `BODY.PEEK`, nichts wird als gelesen markiert). Beim ersten Abruf die letzten 14 Tage, danach nur neue Mails (UID), höchstens 30 je Abruf. Mails werden zu Text (HTML ohne Skripte). Den
   Uni-Zugang bekommt nur dieser Dienst über `LoadCredentialEncrypted`.
+- **Kopf jeder Mail:** Betreff, Von, Datum, `Absender-Domain` (aus From) und `Authentifiziert`, je eine Zeile. Die Domain liest der
+  Abruf wie ein Mailserver aus der geparsten Adresse, nie aus dem dekodierten Text (ein kodiertes Wort mit einer Adresse darin ist
+  ein Name); mehr als eine Kopfzeile From, mehr als eine Adresse oder ein Fehler beim Parsen: keine Domain. Kein Fehler sind
+  veraltete Formen und ein Name mit rohen 8-Bit-Zeichen oder unbekanntem Zeichensatz, solange die Adresse selbst ASCII ist. Ein
+  Zeilenumbruch in einer Kopfzeile (auch in einem kodierten Betreff) wird zum Leerzeichen, sonst stünde darin eine eigene Zeile
+  „Von: …“ vor dem echten Absender. `Authentifiziert` kommt nur aus einer Kopfzeile `Authentication-Results` (RFC 8601), die
+  über jeder Kopfzeile `Received` steht (der Mailserver der Uni fügt sie beim Zustellen oben ein; eine, die der Absender selbst
+  mitschickt, steht immer unter den Received-Zeilen der Uni) und deren Kennung (authserv-id) auf `uni-tuebingen.de` endet; von
+  mehreren die oberste. `pass` bei `dmarc=pass` mit `header.from` gleich der Domain aus From oder bei `dkim=pass` mit `header.d`
+  gleich dieser Domain oder einer Subdomain davon; `fehlgeschlagen` auch bei `dmarc=pass` für eine andere Domain (dann las der
+  Mailserver From anders als der Abruf), `fehlgeschlagen` bei `dkim=fail` oder `dmarc=fail`, sonst `unbekannt` (auch ohne passende Kopfzeile). Ob und
+  wo der Mailserver der Uni sie setzt, ist nicht bekannt; setzt er sie nicht oder unter seine Received-Zeile, ist jedes Urteil
+  `unbekannt`. Darum stuft nur `fehlgeschlagen` etwas herab (siehe „Prüfung“ beim Claude-Lauf), und `unbekannt` ändert nichts. Eine Rundmail über eine Liste, die die Signatur bricht, kann
+  dadurch `fehlgeschlagen` sein; ihre Termine kommen dann als „geschätzt“, nicht als „offiziell“.
 - **Anhänge:** Kalender (`.ics`) stehen als eine Zeile je Termin am Ende des Texts (Titel, Beginn, Ende, Ort; höchstens 40 je
-  Anhang). PDFs legt der Abruf unverändert neben die Mail (`abruf/roh/uni-postfach/<UID>-anhang-<n>.pdf`, höchstens 3 je Mail, je bis
+  Anhang). PDFs legt der Abruf unverändert neben die Mail (`abruf/roh/uni-postfach/<UIDVALIDITY>-<UID>-anhang-<n>.pdf` neben `<UIDVALIDITY>-<UID>.txt`; bis zu dieser Fassung ohne UIDVALIDITY, höchstens 3 je Mail, je bis
   10 MB, zusammen bis 40 MB je Abruf; der Text nennt sie), gelesen werden sie erst im Claude-Lauf und nur, wenn eine nach
   Terminen aussieht: Dieser Dienst hat den Uni-Zugang, ein PDF-Leser hier hätte mit einer präparierten Datei Zugriff darauf.
-  Nach einem erfolgreichen Lauf sind die PDFs weg. Andere Anhänge nur mit Namen; beim Nachlesen im Sicherheitslauf nur der Text.
-  Über die Weiterleitung an Gmail kommen Anhänge nicht auf den Server.
+  Nach einem erfolgreichen Lauf sind die PDFs weg (in der Quarantäne bleiben sie mit ihrer Mail, siehe Claude-Lauf).
+  Andere Anhänge nur mit Namen; beim Nachlesen im Sicherheitslauf nur der Text. Über die Weiterleitung an Gmail kommen Anhänge
+  nicht auf den Server.
+- **Grenzen je Tag (Berlin)** gegen eine Flut von Mails (`abrufen.py`, `TAG_GRENZEN`), in zwei Töpfen, damit eine Flut von
+  außen die Uni nicht verdrängt: Mails der Uni (From unter `uni-tuebingen.de`, Urteil nicht `fehlgeschlagen`) höchstens
+  1 500 000 Zeichen für Claude (etwa 25 Mails mit der Höchstlänge von 60 000 Zeichen oder einige tausend gewöhnliche), 40 PDF-Anhänge
+  und zusammen 300 MB; alle anderen 400 000 Zeichen, 10 PDFs und 75 MB, dazu höchstens 20 Mails je Absender (`TAG_JE_ABSENDER`,
+  Adresse aus From; gezählt wird ein Kurz-Hash, nie die Adresse). Je Absender zählt nur außerhalb der Uni: ILIAS und Rundmails
+  schicken an manchen Tagen mehr. Ohne Urteil der Uni (`unbekannt`) zählt die Domain, die die Mail angibt; die Trennung ist so
+  stark wie das Urteil. Eine Mail über einer Grenze bleibt im Postfach und steht mit ihrer UID unter `wartend` in
+  `abruf-stand.json` (Tag, ab dem sie wieder dran ist, Topf, Kurz-Hash des Absenders, Zeichen, Zahl und Größe ihrer PDFs;
+  höchstens 2000, `WARTEND_MAX`; was darüber geht, zählt als `verworfen`). Am nächsten Tag kommt sie vor den neuen dran, aber 10
+  der 30 Plätze je Abruf bleiben neuen Mails (`NEU_PLAETZE`); ist eine Grenze, die für sie gilt (Zeichen, PDFs oder MB ihres Topfs,
+  ihr Absender), schon erreicht, wartet sie weiter, ohne dass der Abruf sie holt. Mails der Uni kommen zuerst dran, bei den
+  zurückgestellten wie bei den neuen: Passen nicht alle neuen in die Plätze, liest der Abruf vorher nur die Kopfzeilen, die den
+  Topf bestimmen (From, Authentication-Results, Received; `BODY.PEEK`, der jüngsten 2000, `KOEPFE_MAX`), und holt die der Uni vor
+  den anderen; die übrigen holt der nächste Abruf (`letzte_uid` bleibt unter der ersten davon, die schon geholten darüber stehen
+  unter `vorgezogen`, höchstens 2000, `VORGEZOGEN_MAX`, dann wieder nach UID). Damit keine liegen bleibt, wenn sehr viele Mails
+  als Uni gelten, kommen neue, die seit 24 Stunden keinen Platz bekamen (`ALT_NACH`, nach den `marken` im Stand, nie nach dem Datum
+  in der Mail), auf der Hälfte der Plätze vor denen der Uni. Ob Authentication-Results über Received steht, sagt bei den
+  Kopfzeilen allein die Reihenfolge, in der der Server sie liefert; das entscheidet nur, was zuerst drankommt, die Grenzen gelten
+  nach dem ganzen Kopf. Eine Flut von außen verzögert eine neue Mail der Uni so nicht; nur wenn mehr als 2000 neue auf einmal
+  warten, kommen die älteren ohne diesen Blick nach UID dran. Eine Mail mit PDFs wartet immer ganz, nie ohne ihre PDFs: Passen sie nicht mehr in die Grenze des Tages, auf morgen; nicht
+  mehr in die 40 MB dieses Abrufs oder bliebe danach weniger als 2 GB frei (`PLATZ_MIN`), auf den nächsten Abruf. Ändert sich die
+  UIDVALIDITY des Postfachs (die gemerkten UIDs gelten dann nicht mehr), sucht der Abruf so weit zurück wie das älteste
+  Zurückgestellte (`wartend_seit`, höchstens 60 Tage, sonst 14) und holt alles seitdem noch einmal; Doppel erkennt der Lauf. Nur
+  Zurückgestelltes stößt keinen Lauf an. Die Zahlen stehen im Status unter `grenzen` (Lauf, `grenzenStand`).
 
 ### Claude-Lauf (`lauf.mjs` und `skill/`)
 
 Je Lauf ein eigener Ordner `laeufe/<Zeit>/` mit `auftrag.md`, den Rohdaten, `bisher.json` (schon gelieferte Termine),
 `stand.json` (vom Plugin), `tresor.json` (was schon in Obsidian steht: Termine mit Titel und Datum, offene To-dos mit Kennung und Notiz; geprüft wie
-das Eingang, To-dos mit Zugangsdaten fallen weg; doppelte To-dos nennt Claude als Paar `todo_doppel` aus diesen Kennungen, das
+das Eingang, Termine und To-dos, die nach Zugangsdaten aussehen, einen Link enthalten oder wie eine Anweisung an Claude aussehen, fallen weg (Heuristiken, `docs/architektur/server.md`, „Zugangsdaten“ und „Anweisungen“; was Claude einmal in eine Notiz schrieb, käme sonst in jedem Lauf wieder); doppelte To-dos nennt Claude als Paar `todo_doppel` aus diesen Kennungen, das
 Plugin macht aus dem einen einen einfachen Punkt mit Link auf das andere), `zentral.json` (die öffentlichen Termine aller EcoBA-Studierenden, damit Claude
-sie nicht doppelt liefert), die ältesten Textfassungen aus `unterlagen/neu/` (bis zu 6, zusammen höchstens 200 000 Zeichen, eine größere allein; der Rest im nächsten Lauf gleich danach) (Ordner `unterlagen/`, dazu schreibt Claude
+sie nicht doppelt liefert; jeder Titel geprüft wie im Plugin: kein HTML, keine Klammern `[ ] < > { } | \`, gesäubert, nichts, was wie eine Anweisung aussieht, sonst fällt der Termin weg), die ältesten Textfassungen aus `unterlagen/neu/` (bis zu 6, zusammen höchstens 200 000 Zeichen, eine größere allein; der Rest im nächsten Lauf gleich danach) (Ordner `unterlagen/`, dazu schreibt Claude
 Begleitnotizen; scheitert der Lauf, kommen sie zurück, warten danach noch welche, startet gleich der nächste Lauf) und dem Skill
 `studium-autopilot`. Claude Code läuft headless (`claude -p`) mit dem Abo des Nutzers, Standardmodell
 Sonnet (`studium-server modell opus` für Opus). Warten Unterlagen in `unterlagen/opus/` (in Obsidian per Knopf „Zusammenfassen“
@@ -526,7 +843,9 @@ mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben
   dabei als Uni ausgibt, bekommt `status: "geschätzt"`. Im Lauf-Ordner bleibt `ausgabe.json` nur in der geprüften Fassung
   (`geprueft: true`), nach einem Fehlschlag gar nicht. `protokoll.json` hat unter `gmailUeberblick` nur die
   Zahlen (`gelistet`, `gelesen`, `begrenzt`), `nutzung.json` zählt je Tag die Läufe an einer Grenze (`gmail_begrenzt`). Skill
-  `termine.md`, Abschnitt „Quellen“.
+  `termine.md`, Abschnitt „Quellen“. Der Skill nimmt alles im Arbeitsordner außer `auftrag.md` und `skill/` als Daten, nie als
+  Anweisung (Mails, `zentral.json`, `tresor.json`, Unterlagen); Links zum Bezahlen oder Anmelden gibt Claude nie aus, und fordert
+  eine Mail dazu auf, meldet es „Verdacht auf Phishing“ als Hinweis (SKILL.md, Grundregeln).
 - **Kapitellisten für den Lernplan:** Für Module des laufenden Semesters ohne zentrale Kapitelliste (`kapitel.json` der
   zentralen Daten) schickt das Plugin die Folien (die ersten 8 Seiten ganz, danach je Seite die erste Zeile). Liegen neue in
   `unterlagen/kapitel/`, kommen bis zu 12 (zusammen höchstens 150 000 Zeichen) in den gewöhnlichen Lauf (Ordner `kapitel/`, mit
@@ -541,12 +860,72 @@ mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben
   Datum, keine Links oder Markdown im Titel); ungültige fallen einzeln weg. Links (`https://`, `www.`, `mailto:`) entfernt der
   Server aus allem, was Studierende lesen (Titel, Ort, Info, Quelle, Hinweise, Begleitnotizen); Schlüssel und Kapitellisten
   säubert er wie das Plugin. Die id leitet der Server aus Claudes `schluessel`
-  ab, damit eine Änderung denselben Termin trifft. Ins Eingang kommt nur, was neu oder geändert ist; Vergangenes nur als
+  ab, damit eine Änderung denselben Termin trifft. Zu jedem Termin nennt Claude die `herkunft` (Mail in `roh/`, Gmail mit Domain
+  und Datum oder Unterlage); sie geht nie ins Eingang. Für eine Mail in `roh/` nimmt der Server Domain, Urteil und Datum nur
+  aus ihrem Kopf, nie von Claude. Steht dort `Authentifiziert: fehlgeschlagen`, ist kein Termin daraus `offiziell`, und
+  `info` beginnt mit „Absender nicht bestätigt.“ Ändert eine Lieferung Datum, Ende, Uhrzeit oder Absage eines bekannten
+  Termins und stammt sie aus einer anderen Quelle als der Termin, gilt sie nur als „geschätzt“, und `info` beginnt mit
+  „Geändert durch Mail von <Domain> vom <Datum>.“; das bleibt, bis die erste Quelle den Termin wieder nennt. Quelle ist die
+  Domain aus From (`mail:<Domain>`; mit `fehlgeschlagen` eine eigene Quelle, damit eine gefälschte Mail nicht als derselbe
+  Absender gilt), `unterlage` oder unbekannt (keine Herkunft); bestätigt ist die Domain nur mit `pass`, sonst ist es die, die
+  die Mail angibt, bei Gmail die, die Claude nennt. Verglichen wird die registrierbare Domain (die letzten zwei Teile, unter
+  Endungen wie `co.uk` drei): `wiwi.uni-tuebingen.de` und `uni-tuebingen.de` sind dieselbe Quelle. Ausnahme ist
+  `student.uni-tuebingen.de`, denn dort hat jede und jeder Studierende eine Adresse: Eine Mail von dort ändert keinen Termin
+  eines Lehrstuhls. Der Vergleich ist nur so stark wie das Urteil über den Absender: Mit `unbekannt` (der Mailserver der Uni
+  setzt keine passende Kopfzeile) gilt eine Mail mit gefälschtem From als derselbe Absender; mehr lässt sich dann nicht prüfen.
+  Gemerkt wird die erste Quelle je Termin in `termine-quellen.json` (nur für Termine im Bestand); ein Termin, der vor dieser
+  Fassung kam, bekommt die Quelle seiner nächsten Lieferung, und diese gilt wie bisher. Ins Eingang kommt nur, was neu oder geändert ist; Vergangenes nur als
   Änderung eines bekannten Termins. Im Bestand (`termine.json`, daraus `bisher.json` im Auftrag) bleibt ein Termin bis 60 Tage
   nach seinem Ende.
 - **Fehler:** Bei Limit oder ungültiger Ausgabe kommen die Rohdaten zurück und der nächste Lauf versucht es erneut; der Status
   meldet `claude-limit` bzw. `ausgabe-ungueltig`. Gescheitert ist ein Lauf auch, wenn Claude Code mit 0 endet, aber `is_error`
   meldet (so am Limit).
+- **Welche Mails in einen Lauf kommen** (`rohSichten`): frische Mails zuerst; gibt es keine, eine Gruppe von Mails, mit denen
+  ein Lauf schon scheiterte (die älteste); sonst die Mails mit `Authentifiziert: fehlgeschlagen` in einem eigenen Lauf ohne Gmail,
+  Unterlagen und Folien. Alles aus diesem Lauf kommt nur „geschätzt“ mit „Absender nicht bestätigt.“ (auch was Claude einer
+  anderen Quelle zuschreibt), Hinweise mit „Absender nicht bestätigt:“ vorn, und er liefert keine Begleitnotizen, Kapitellisten
+  oder doppelten To-dos; so kann Claude eine solche Mail keiner anderen Quelle unterschieben. Das kostet einen Lauf mehr, nur an
+  Tagen mit einer solchen Mail. Mails mit `unbekannt` oder `pass` laufen dagegen zusammen im gewöhnlichen Lauf: Dort kann Claude die
+  Termine einer Mail einer anderen desselben Laufs zuschreiben, etwa die einer Mail von außen einer echten Mail der Uni. Der Server
+  prüft nur den Kopf der Mail, die Claude als Herkunft nennt, nicht, ob der Termin wirklich aus ihr stammt; dagegen hilft nur, dass
+  der Skill Mails als Daten behandelt. Was ein Lauf nicht nimmt, wartet in `abruf/roh/`; nach dem Lauf stößt er gleich den nächsten an.
+  Gmail, Unterlagen und Folien („Extras“) laufen nur mit frischen Mails oder ohne Mails, nie mit Mails nach einem Fehlschlag.
+- **Extras, an denen Läufe scheitern:** Scheitert ein Lauf mit Mails und Extras, zählt das nicht gegen die Mails: Sie laufen gleich
+  noch einmal ohne Extras, und erst ein Fehlschlag dann zählt wie unten. Ein Extra mit Fehlschlag läuft danach allein, nie mit
+  Mails; damit es an Tagen mit vielen Mails trotzdem drankommt, nimmt der tägliche Sicherheitslauf es vor den Mails.
+  Unterlagen und Folien zählen je Datei wie Mails (`unterlagen-fehler.json`, Kennung aus dem SHA-256 ihres Inhalts): Ein
+  gescheiterter Lauf halbiert sie, bis eine allein scheitert; scheitert sie allein zweimal, bleibt sie liegen und wird ausgelassen
+  (nicht gelöscht; im Status `grenzen.unterlagen_ausgelassen` bzw. `grenzen.kapitel_ausgelassen`), die anderen laufen weiter. Eine
+  neue Fassung derselben Unterlage hat einen anderen Inhalt und eine neue Chance. Gmail hat keine einzelne Mail zum Auslassen: Es
+  zählt seine gescheiterten Läufe am Tag (`extra-fehler.json`) und wird nach zwei bis zum nächsten Tag nicht mehr durchsucht
+  (`grenzen.fehlschlaege_gmail`, `grenzen.ausgesetzt_gmail`). So bringt eine präparierte Mail im Gmail-Überblick oder eine
+  präparierte Unterlage keine Mail der Uni in die Quarantäne und hält keine andere Unterlage auf.
+- **Mails, an denen jeder Lauf scheitert (Quarantäne):** Scheitert ein Lauf so, dass der Inhalt seiner Mails schuld sein kann
+  (ungültige Ausgabe, oder Claude lief zu Ende und meldete einen Fehler, der nicht nach Anmeldung, Limit, Netz, Überlastung oder
+  Zeitüberschreitung aussieht: „fetch failed“, „socket hang up“, `ECONNRESET`, „Request timed out“, HTTP 429 und 5xx zählen nie),
+  teilt der Lauf seine Mails in zwei Gruppen (`mail-fehler.json`), und jede läuft für sich noch einmal, bis eine Mail allein
+  scheitert. Scheitert sie zweimal allein, kommt sie mit ihren Anhängen in `quarantaene/` statt noch einmal in einen Lauf, ebenso,
+  wenn sie im Sicherheitslauf wiederkommt. Eine Mail, die jeden Lauf scheitern lässt, bringt so keine andere in die Quarantäne
+  (gute Mails einer Gruppe kommen beim Halbieren durch, Gmail und Unterlagen zählen nie gegen Mails); eine Mail mit Angriff alle
+  15 Minuten kostet nur Läufe, keine Mails. Nie gezählt werden ein Abbruch (Zeitgrenze, der nächtliche Neustart,
+  ein Signal), ein Lauf ohne Ergebnis, das Limit des Abos und alles, solange Claude abgemeldet ist. Die Quarantäne bleibt, bis die
+  Person sie wieder einreiht (`POST /v1/anstoss` mit `{"quarantaene":"erneut"}`: jede Mail läuft einmal allein; scheitert sie
+  wieder, kommt sie zurück) oder root den Ordner leert. Der Name einer Mail (`<UIDVALIDITY>-<UID>.txt`) ist ihre Kennung in
+  `mail-fehler.json` und in der Quarantäne; nach einer neuen Vergabe der UIDs trifft ein alter Eintrag so keine andere Mail.
+  Liegt in der Quarantäne schon eine Mail gleichen Namens, ist es dieselbe (der Name gehört zu genau einer Mail), und die neue Kopie
+  fällt weg; nur bei Namen einer früheren Fassung (nur die UID) kommt sie mit `~2` dahinter dazu. Nie wird etwas überschrieben. Nur über 200 Mails oder 500 MB fallen die ältesten weg, gezählt im Status
+  (`grenzen.quarantaene_geloescht`). Im Status mit Schlüssel (und mit `studium-server status`) stehen `grenzen.quarantaene` und
+  `grenzen.mails_verdacht` (Mails, die nach einem Fehlschlag noch einmal laufen). Gelingt ein Lauf, sind die Zähler seiner Mails weg.
+- **Läufe je Tag, je Anlass** (`GRENZEN.laeufe`, gezählt in `nutzung.json` unter `quellen`), damit keiner die Läufe eines anderen
+  aufbraucht: frische Mails aus dem Abruf (auch der Sicherheitslauf) 40, danach 10 als Reserve nur für frische Mails aus dem Topf
+  der Uni (`mails_uni`; 40 Mails von außen zu verschiedenen Zeiten halten so keine der Uni auf), Mails nach einem Fehlschlag und Mails nicht bestätigter
+  Absender 30, Gmail 8, Unterlagen und Folien (Begleitnotizen, auch mit Opus, Kapitellisten aus `/v1/unterlagen` und `/v1/kapitel`)
+  30. Ein Lauf zählt für jeden Anlass, den er erledigt; „Mails durchsuchen“ zählt nur für sich (`knopf`), darf alles und hat eigene
+  Grenzen (30 Minuten, 12 am Tag). Was über der Grenze seines Anlasses liegt, wartet bis kurz nach Mitternacht (Berlin): Der Lauf
+  merkt sich das in `zustand.json` unter `tagesgrenze` (mit `quellen`), und der Dienst stößt dann an wie nach dem Limit des Abos;
+  die anderen Anlässe laufen weiter. Eine Flut von Mails hält so keine Begleitnotiz auf, und eine Mail, an der Läufe scheitern,
+  keine frischen Mails. Ein gewöhnlicher Tag hat einige Läufe für neue Mails, drei für Gmail und einen Sicherheitslauf; bis 0.7.7
+  waren bis zu 96 Läufe aus dem Abruf allein möglich. Im Status stehen je Anlass `laeufe_<anlass>` und `laeufe_<anlass>_max`.
 - **Limit des Claude-Abos:** Der Lauf merkt sich in `zustand.json` unter `limit`, wann der nächste Versuch dran ist: nach 30
   Minuten, nach dem zweiten Treffer in Folge nach einer Stunde, dann alle zwei Stunden (wann das Limit endet, sagt Claude Code
   nur als Satz für Menschen). Bis dahin startet kein Lauf, außer auf Knopfdruck; neue Mails und Unterlagen warten in `abruf/roh/` und
@@ -599,27 +978,104 @@ Fenster „Eigener Server“ ein Knopf **Prompt kopieren**, aber nur auf einem v
 | Teil | Was |
 |---|---|
 | CouchDB | aus dem Paketarchiv von Apache (`couchdb-deb`, Arm und x86), ein Knoten, nur auf 127.0.0.1, Anmeldung immer nötig, CORS nur für die Obsidian-Apps (Computer, iPhone/iPad, Android) |
-| Caddy | `https://obsidian.<IP mit Bindestrichen>.sslip.io` → CouchDB (`/etc/caddy/studium-server.d/livesync.caddy`, eingebunden vom Caddyfile). Nach einem IP-Wechsel zieht `livesync.sh adresse` Adresse und Caddy-Teil nach; das ruft der Installer auf, und `verbinden` tut es auch |
-| `/etc/studium-server/livesync.json` | Benutzer, Passwort (32 Zeichen), Datenbank, Schlüssel der Ende-zu-Ende-Verschlüsselung von LiveSync (32 Zeichen); nur root |
+| Caddy | `https://obsidian.<IP mit Bindestrichen>.sslip.io` → CouchDB, aber nur die eine Datenbank und `/` (siehe unten; `/etc/caddy/studium-server.d/livesync.caddy`, eingebunden vom Caddyfile). Nach einem IP-Wechsel zieht `livesync.sh adresse` Adresse und Caddy-Teil nach; das ruft der Installer auf, und `verbinden` tut es auch |
+| `/etc/studium-server/livesync.json` | Administrator und sein Passwort, Gerätezugang (`geraet_benutzer`, `geraet_passwort`), Datenbank, Schlüssel der Ende-zu-Ende-Verschlüsselung von LiveSync (Passwörter und Schlüssel je 32 Zeichen); nur root |
 | `/var/lib/studium-server/livesync-an` | Marke für den Status (`livesync: an`), angelegt als `studium` |
 
-Der Benutzer ist der Administrator von CouchDB: LiveSync braucht diese Rechte für „Overwrite remote“, und auf dem Server liegt
-nur dieser eine Tresor. In der Datenbank liegt er verschlüsselt, auch die Dateinamen.
+Auf dem Server liegt nur dieser eine Tresor, in der Datenbank verschlüsselt, auch die Dateinamen.
 
-**Link für ein Gerät:** `livesync.mjs` baut die Einstellungen (Ende-zu-Ende-Verschlüsselung, Live-Abgleich, am Computer auch mit
-verborgenem Fenster, versteckte Dateien außer LiveSync selbst und der Fensteranordnung) und verschlüsselt sie wie LiveSync 1.0
-(„persistent“: PBKDF2-SHA-256 mit 310 000 Runden, HKDF, AES-256-GCM) mit einem neuen Code aus 12 Zeichen. Weil der Setup-Link
-für einen QR-Code im Terminal zu lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (in
-`web/livesync-links/`, nur für den Web-Dienst; Dateiname nur ihr SHA-256) und zeigt den kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf dem Gerät
-ein; ohne ihn nützt der Link nichts. Der Code steht nur im Terminal, nie im Journal.
+**Nur, was LiveSync braucht, nach außen:** Caddy gibt nur `/<Datenbank>` und `/<Datenbank>/…` (Abgleich, `_local`, `_changes`,
+`_bulk_docs`, Aufbau) und `GET`/`HEAD`/`OPTIONS` auf `/` an CouchDB weiter; PouchDB liest dort bei jedem Start des Abgleichs die
+Kennung des Servers. Alles andere antwortet 404: Fauxton (`/_utils`), die Einstellungen (`/_node/…`), Benutzer (`/_users`), andere
+Datenbanken, `/_session`, `/_up`. Geprüft im Quelltext von Self-hosted LiveSync 1.0.44 und seiner Bibliothek `livesync-commonlib`
+0.2.3: Außerhalb der Datenbank ruft LiveSync nur `/` und, im Einrichten unter „Check database configuration“, `/_node/_local/_config`
+auf. Diese Prüfung zeigt jetzt Fehler; die Einstellungen setzt ohnehin `livesync.sh`. Bis 0.7.7 ging jeder Pfad an CouchDB, mit den
+Zugangsdaten eines Geräts also auch Fauxton und die Einstellungen von CouchDB. Bestehende Server bekommen den neuen Caddy-Teil mit
+dem nächsten Update (der Installer ruft `livesync.sh adresse` auf); die Geräte gleichen weiter ab, ihre Wege bleiben offen.
+
+**Gerätezugang:** Die Links tragen einen eigenen Benutzer `geraet` (in `_users`, ohne Rollen), der als einziges Mitglied der
+Datenbank (`_security`) Dokumente lesen und schreiben darf, aber die Datenbank weder löschen noch anlegen und weder `_security`,
+Entwürfe noch die Einstellungen von CouchDB ändern. Der Administrator `admin` bleibt auf dem Server (`livesync.sh`). Bis 0.7.7 trugen
+die Links den Administrator. Neue Installationen haben den Gerätezugang von Anfang an; auf bestehenden legt ihn das nächste
+`livesync verbinden` an, und neue Links tragen ihn, die alten (mit `admin`) gelten weiter, bis `livesync-erneuern` läuft.
+
+**Aufbau-Fenster:** „Initialise or overwrite the remote“ löscht die Datenbank und legt sie neu an (`tryResetRemoteDatabase` in
+LiveSync); das darf in CouchDB nur ein Administrator. Darum wird derselbe Name `geraet` mit demselben Passwort für 60 Minuten auch
+Administrator (über `_node/_local/_config/admins` auf 127.0.0.1; CouchDB nimmt einen Administrator aus den Einstellungen vor dem
+Benutzer in `_users`), danach gilt wieder nur die Mitgliedschaft, ohne dass das Gerät etwas ändert. Wann es offen ist, steht nur in
+Dateien von root, nie in der Datenbank (ein Mitglied könnte dort etwa den Meilenstein von LiveSync löschen und sich so das Fenster
+wieder öffnen): Legt `livesync einschalten` die Datenbank neu an (oder `livesync-erneuern --neue-passphrase`), entsteht
+`/etc/studium-server/livesync-erstes-geraet`, und das nächste `livesync verbinden` öffnet das Fenster einmal, für das erste Gerät;
+sonst nur von Hand mit `livesync aufbauen`. Das Ende steht in `/etc/studium-server/livesync-aufbau`. Ein Zeitgeber (`systemd-run`,
+`studium-livesync-aufbau`) schließt es; ein Neustart verliert ihn, darum prüft `livesync.sh aufbau-pruefen` das Ende beim Start
+(`studium-server-livesync-aufbau.service`), jeden Tag (`studium-server aktualisieren`), bei jedem Update und bei jedem `verbinden`:
+abgelaufen → zu (auch ohne Datei, falls ein Abbruch sie verlor), noch offen → ein neuer Zeitgeber für den Rest. Läuft CouchDB nicht
+oder antwortet es nicht, bleibt die Datei für den nächsten Versuch; der Dienst beim Start endet dann still, prüft 15 Minuten
+nach dem Start noch einmal (`studium-server-livesync-aufbau.timer`), sonst der tägliche Lauf. **Bestehende Datenbanken:** Auf einem Server, der LiveSync schon vor dieser Fassung eingeschaltet hat, gibt es die Datei
+`livesync-erstes-geraet` nicht. Hat dort noch kein Gerät den Tresor aufgebaut, braucht das erste Gerät einmal `sudo studium-server
+livesync aufbauen` (Cloud Shell: `fern.sh livesync aufbauen`), sonst meldet LiveSync beim Aufbau „unauthorized“.
+
+**Zugangsdaten erneuern:** `sudo studium-server livesync-erneuern` (aus der Cloud Shell: `fern.sh livesync-erneuern`) setzt ein neues
+Passwort für den Administrator (in `livesync.json` und den Einstellungen von CouchDB, Neustart), einen neuen Gerätezugang und schließt
+ein offenes Aufbau-Fenster. Danach gelten alte Links und die Zugangsdaten auf den Geräten nicht mehr: Jedes Gerät braucht einen
+neuen Link (`livesync verbinden`) und wählt dort „Join this device“; der Tresor auf dem Server und der Schlüssel der Verschlüsselung
+bleiben. So kommen auch ältere Geräte auf den Gerätezugang und die neuen Muster für versteckte Dateien (unten). Mit
+`--neue-passphrase` auch ein neuer Schlüssel der Verschlüsselung: Mit dem alten Verschlüsseltes kann kein Gerät mit dem neuen lesen,
+darum leert der Befehl die Datenbank; das Gerät mit dem aktuellsten Tresor baut sie mit seinem neuen Link wieder auf
+(„Initialise or overwrite the remote“, das Fenster öffnet sich dafür), jedes weitere tritt mit „Join this device“ bei. Nur, wenn
+der Schlüssel bekannt geworden sein kann (etwa ein Link samt Code); sonst reicht der Befehl ohne. Nach einem Wechsel der Adresse
+brauchen die Geräte ohnehin neue Links; dann ist es der richtige Moment.
+
+**Link für ein Gerät:** `livesync.mjs` baut die Einstellungen (Gerätezugang, Ende-zu-Ende-Verschlüsselung, Live-Abgleich, am
+Computer auch mit verborgenem Fenster, versteckte Dateien) und verschlüsselt sie wie LiveSync 1.0 („persistent“: PBKDF2-SHA-256
+mit 310 000 Runden, HKDF, AES-256-GCM) mit einem neuen Code aus 12 Zeichen. Weil der Setup-Link für einen QR-Code im Terminal zu
+lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (in `web/livesync-links/`, nur für den Web-Dienst;
+Dateiname nur ihr SHA-256) und zeigt den kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf
+dem Gerät ein; ohne ihn nützt der Link nichts. Der Code steht nur im Terminal, nie im Journal.
+
+**Versteckte Dateien ohne Plugins:** Versteckte Dateien (`.obsidian/`: Einstellungen, Darstellung, Snippets) gleicht LiveSync ab,
+aber (anders als bis 0.7.7) keine Plugins und nicht, welche eingeschaltet sind: Muster `/plugins/` und `/community-plugins.json$`
+in `syncInternalFilesIgnorePatterns`, dazu wie bisher die Fensteranordnung. Plugins laufen auf jedem Gerät mit vollem Zugriff; ein
+übernommenes Gerät mit LiveSync könnte sonst einen veränderten Kern von Studium Autopilot oder ein eigenes Plugin samt Eintrag in
+`community-plugins.json` an alle anderen schicken. LiveSync prüft die Muster beim Senden und beim Empfangen (reguläre Ausdrücke gegen
+den Pfad im Tresor ohne führenden Schrägstrich). **Community-Plugins installiert darum jedes Gerät selbst** (LiveSync ohnehin);
+Studium Autopilot kommt selbst aus dem Release: bei der Installation, mit „Neue Version installieren“ und, wenn ein anderes Gerät
+aktualisiert hat, mit „Neu laden“ (lädt ihn vom Tag der Version und prüft ihn, `docs/architektur/update.md`). Ein neues Gerät
+installiert also zuerst Studium Autopilot und tritt dann bei (Skill, `livesync.md`, L3). Geräte, die vorher verbunden wurden, behalten
+ihre Muster, bis sie einen neuen Link öffnen (nach `livesync-erneuern`) oder man in LiveSync unter **🔄 Sync Settings → Hidden
+Files** bei den Mustern zum Ignorieren `, /plugins/, /community-plugins.json$` anhängt.
+
+**Erlang:** Das Paket von Apache legt den Erlang-Cookie von CouchDB auch in debconf ab, als Typ `string` in
+`/var/cache/debconf/config.dat` (für alle Benutzer des Servers lesbar), und debconf behält die vorige Fassung in `config.dat-old`; mit
+dem Cookie lässt sich über die Erlang-Verteilung auf 127.0.0.1 Code als `couchdb` ausführen. Steht er in einer der beiden Dateien,
+gilt er als bekannt: `livesync.sh absichern` schreibt einen neuen, zufälligen Cookie nach `/opt/couchdb/etc/vm.args` (dort liest
+CouchDB ihn; Besitzer und Rechte bleiben), leert in beiden Dateien genau diesen Eintrag (die Dateien bleiben) und startet CouchDB
+einmal neu. Dazu sieht es nach, dass epmd und die Verteilung nur auf 127.0.0.1 hören (`ERL_EPMD_ADDRESS=127.0.0.1` in
+`/etc/default/couchdb`, `-kernel inet_dist_use_interface {127,0,0,1}` in `vm.args`; beides setzt schon das Paket im Modus
+`standalone`). Bei jedem Update von CouchDB (auch aus der Nacht) holt das Konfigurationsskript des Pakets den Cookie aus `vm.args`
+zurück nach debconf; darum ruft `studium-server aktualisieren` es jeden Tag auf, wenn `/etc/studium-server/livesync.json` (root)
+da ist, nicht nach der Marke `livesync-an` (die gehört `studium`). Die Dienste von Studium Autopilot sehen `/var/cache/debconf` gar
+nicht (`InaccessiblePaths`). Geprüft im Quelltext von `apache/couchdb-pkg` (Vorlagen, `couchdb.config`, `postinst`), nicht an einem
+laufenden Server.
+
+**Dateien von CouchDB:** `/opt/couchdb` gehört dem Benutzer `couchdb`. root liest und schreibt dort nie selbst (ein Link an der
+Stelle einer Datei oder eines Ordners könnte auf eine Datei von root zeigen, eine Named Pipe ein Lesen ewig aufhalten): `livesync.sh`
+tut es als `couchdb` (`runuser -u couchdb`, mit Zeitgrenze `timeout`), liest höchstens 1 MB und schreibt die neue Datei (die
+Einstellungen in `local.d/`, `vm.args`) daneben, `couchdb:couchdb` 0640, und tauscht sie mit `mv -T` ein, das einen Link an der
+Stelle ersetzt statt ihm zu folgen. Ein Link führt so nur dorthin, wo `couchdb` ohnehin schreiben darf.
 
 **Grenze:** Wie beim Uni-Zugang liegt der Schlüssel der Verschlüsselung auf dem Server (nur root). Wer root auf dem Server ist,
-kann den Tresor lesen.
+kann den Tresor lesen. Wer Link und Code eines Geräts hat, gleicht als dieses Gerät ab: Er liest den Tresor und kann ihn ändern
+(nicht den Kern von Studium Autopilot); dagegen hilft `livesync-erneuern`.
 
 ```
 sudo studium-server livesync               einschalten (falls nötig), dann Link und Code für ein Gerät
 sudo studium-server livesync einschalten   nur einschalten bzw. nachziehen (wiederholbar, Zugangsdaten bleiben)
 sudo studium-server livesync verbinden     nur einen neuen Link für ein Gerät
+sudo studium-server livesync aufbauen      60 Minuten darf ein Gerät den Tresor auf dem Server neu aufbauen
+sudo studium-server livesync-erneuern      neue Zugangsdaten, jedes Gerät braucht einen neuen Link
+sudo studium-server livesync-erneuern --neue-passphrase
+                                           dazu ein neuer Schlüssel der Verschlüsselung (Tresor auf dem Server neu aufbauen)
 ```
 
 ### Befehle (`studium-server`)
@@ -636,8 +1092,9 @@ studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell der Claude-Läufe
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
 studium-server nutzung                 Claude-Läufe und Token je Tag (letzte 7 Tage), Treffer am Limit
-studium-server aktualisieren           Pakete und Claude Code aktualisieren, Server-Paket aus dem Release (Prüfsumme, Signatur) installieren
+studium-server aktualisieren [--jetzt] Pakete und Claude Code aktualisieren, Server-Paket aus dem Release (geprüft, gestaffelt; siehe oben)
 studium-server livesync                LiveSync einschalten und ein Gerät verbinden (siehe „LiveSync“)
+studium-server livesync-erneuern       neue Zugangsdaten für LiveSync (siehe „LiveSync“)
 ```
 
 ### Geprüft

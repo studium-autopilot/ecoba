@@ -33,8 +33,11 @@ module.exports = function (ctx) {
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f) && app.metadataCache.getFileCache(f).frontmatter) || {};
   const pad = (n) => String(n).padStart(2, "0");
   const J = (v) => JSON.stringify(v == null ? "" : v);
-  // Daten sind reiner Text (zentral.js literaturPruefen); Markdown darin entschärfen, am Zeilenanfang auch Listen
-  const md = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&");
+  // Daten sind reiner Text (zentral.js literaturPruefen); Markdown darin entschärfen, am Zeilenanfang auch Listen. Wie bei den
+  // zentralen Terminen auch die Zeichen, an denen Obsidian einen Link erkennt (ctx.zentral.mdInZeile; gewöhnlicher Text bleibt
+  // Zeichen für Zeichen gleich); ohne zentral.js nur die Markdown-Zeichen
+  const mdZeichen = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&");
+  const md = (s) => (ctx.zentral && ctx.zentral.mdInZeile ? ctx.zentral.mdInZeile(String(s)) : mdZeichen(s));
   const mdZeile = (s) => md(s).replace(/^(\d+)([.)])/, "$1\\$2").replace(/^([-+])/, "\\$1");
   const suchLink = (s) => SUCHE + "lookfor=" + encodeURIComponent(s).replace(/%20/g, "+")
     .replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase()) + "&type=AllFields";

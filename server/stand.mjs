@@ -142,6 +142,10 @@ export function helferStand(h, zeit) {
   if (meldung && meldung.art === "halt") {
     return { ...p, status: "angehalten", text: `Platzsucher: angehalten am ${uhrzeit(meldung.zeit)} nach ${meldung.versuche} Versuchen: ${meldung.grund}` };
   }
+  if (meldung && meldung.art === "klein" && stunden(meldung.zeit) <= STILL_STUNDEN) {
+    return { ...p, status: "klein", text: `Platzsucher: Der Server ist da, vorerst mit 1 OCPU / 6 GB. Der Helfer bringt ihn nachts ` +
+      `(01–05 Uhr UTC) auf 2 OCPU / 12 GB, sobald Oracle Platz hat; dabei startet der Server neu. Zuletzt ${uhrzeit(meldung.zeit)}: ${meldung.grund}.` };
+  }
   if (meldung && stunden(meldung.zeit) <= STILL_STUNDEN) {
     const grund = meldung.art === "drossel" ? "Oracle bremst (zu viele Anfragen)" : meldung.grund;
     return { ...p, status: "sucht", text: `Platzsucher: sucht seit ${uhrzeit(seit)}, ${meldung.versuche} Versuche, zuletzt ${uhrzeit(meldung.zeit)}: ${grund}.` };

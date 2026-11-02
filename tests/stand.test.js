@@ -131,6 +131,11 @@ test("Platzsucher: Stand aus dem Kennzeichen des Helfers; angehalten, ohne Meldu
   assert.match(mit(helfer("")).platzsucher.text, /^Platzsucher: Der Helfer läuft seit 2026-10-17 10:00 UTC, meldet aber keinen Stand \(ältere Version, oder er sucht nicht\)\.$/);
   assert.match(mit(helfer("zeit=2026-10-17T12:00:00+00:00;versuche=5;art=weiter;grund=kein Platz")).platzsucher.text, /seit 2026-10-17 12:00 UTC keinen Stand mehr/);
   assert.equal(mit(helfer("kaputt")).platzsucher.status, "still");
+  // Server klein da, Helfer vergrößert nachts (platzsucher.py art=klein); ohne Meldung seit drei Stunden wie sonst still
+  const klein = mit(helfer("zeit=2026-10-17T17:30:00+00:00;versuche=900;art=klein;grund=wartet auf die Nacht"));
+  assert.equal(klein.platzsucher.status, "klein");
+  assert.match(klein.platzsucher.text, /^Platzsucher: Der Server ist da, vorerst mit 1 OCPU \/ 6 GB\..*Zuletzt 2026-10-17 17:30 UTC: wartet auf die Nacht\.$/);
+  assert.equal(mit(helfer("zeit=2026-10-17T12:00:00+00:00;versuche=900;art=klein;grund=wartet auf die Nacht")).platzsucher.status, "still");
   assert.equal(mit(helfer("zeit=2026-10-17T17:30:00+00:00;versuche=96;art=weiter;grund=kein Platz", { "lifecycle-state": "STOPPED" })).platzsucher.status, "aus");
   const ohne = auswerten(bestand());
   assert.equal(ohne.platzsucher, null);

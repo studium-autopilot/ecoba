@@ -165,6 +165,71 @@ test("Termin-Notiz: ein erlaubter Link bleibt ohne „\\“ anklickbar, Text dan
   assert.ok(notiz.includes("Anmeldung \\*bis\\* Freitag: " + url + "."), notiz);
 });
 
+// ---------- Linkziele (fremdeZiele in allen drei Fassungen) ----------
+// Ziel eines Links in Markdown (CommonMark, wie Obsidian liest): hinter „](“ und „]:“ (auch in „<…>“) und direkt hinter „<“, davor
+// Leerraum; ein „\“ davor maskiert. Im Ziel gelten Zeichenreferenzen und „\“ vor einem Satzzeichen als das Zeichen; Tab und
+// Zeilenumbruch übergeht der Browser im Schema, Leerraum und Steuerzeichen am Anfang auch. Rückgabe: Ziele mit einem anderen Schema
+// als http(s).
+const REFS = { colon: ":", period: ".", plus: "+", tab: "\t", newline: "\n" };
+const zielSchemata = (text) => {
+  const zeichen = (z, c) => (c <= 0x10ffff ? String.fromCodePoint(c) : z);
+  const t = String(text).replace(/&#x([0-9a-f]{1,6});?/gi, (z, h) => zeichen(z, parseInt(h, 16)))
+    .replace(/&#(\d{1,7});?/g, (z, d) => zeichen(z, Number(d))).replace(/&([a-z]{2,8});/gi, (z, n) => REFS[n.toLowerCase()] || ENTITAETEN[n.toLowerCase()] || z);
+  const aus = [];
+  for (const m of t.matchAll(/(?<!\\)(?:\]\(|\]:|<)[\s\u0000-\u001f]*(?:<[\s\u0000-\u001f]*)?([a-z][a-z0-9+.\-\t\n\r\\]*):/gi)) {
+    if (!/^https?$/i.test(m[1].replace(/[\t\n\r\\]/g, ""))) aus.push(m[0]);
+  }
+  return aus;
+};
+const ANGRIFFE = [
+  "[a](javascript:alert(1))", "[a](JaVaScRiPt:alert(1))", "[a](vbscript:msgbox(1))", "[a](data:text/html,<b>x</b>)", "[a](file:///C:/x.hta)",
+  "[a](obsidian:open?vault=x)", "[a](obsidian&colon;//open?vault=x)", "[a](javascript&colon;alert(1))", "[a](java&#115;cript:alert(1))",
+  "[a](&#106;avascript:alert(1))", "[a](&#x6A;avascript&#58;alert(1))", "[a](java\tscript:alert(1))", "[a](&#x09;javascript:alert(1))",
+  "[a](&Tab;vbscript:x)", "[a](&#32;&#32;data:text/html,x)", "[a](javascript\\:alert(1))", "[a](java\\.x:alert(1))", "[a](<vbscript:x>)",
+  "[a](< vbscript: x>)", "[a]: vbscript:x", "[a]:obsidian:open", "[a]: <javascript&colon;x>", "<vbscript:x>", "< javascript:x>",
+  "[a](mailto:x" + "@evil.example)", "[a](smb:x)", "[a](https&colon;//evil.example/x)", "[a](h&#116;tps://evil.example)", "[a](\u0001vbscript:x)",
+  "[[a]](vbscript:x)", "[a](javascript:vbscript:x)", "[a]javascript:(vbscript:x)",
+];
+
+test("Linkziele: nur http(s) bleibt ein Ziel, jedes andere Schema wird Text, auch kodiert", { skip: !fs.existsSync(SERVER) && "server/ fehlt" }, async () => {
+  const E = await eingang();
+  // das Modell selbst: ungesäubert ist fast jeder Angriff ein fremdes Ziel (die übrigen sind http(s) oder kein Ziel)
+  assert.equal(ANGRIFFE.filter((a) => zielSchemata(a).length).length, ANGRIFFE.length - 3);
+  for (const ein of ANGRIFFE) {
+    const ausgaben = [["Server", E.saeubern(ein, 1000, false).wert, TEXT], ["Server ohne Links", E.saeubern(ein, 1000, false, []).wert, []],
+      ["Plugin (zentral.js)", (Z.terminePruefen({ schema: 1, termine: [termin(ein)] }).termine[0] || { info: "" }).info, TEXT],
+      ["Plugin (server.js)", (S.begleitnotizSauber({ wichtigste: [{ text: ein }] }).wichtigste[0] || { text: "" }).text, PUNKT]];
+    for (const [wer, aus, domains] of ausgaben) {
+      assert.deepEqual(zielSchemata(aus), [], `${wer}: ${JSON.stringify(ein)} → ${JSON.stringify(aus)}`);
+      assert.deepEqual(fremdeLinks(aus, domains), [], `${wer}, kein fremder Link: ${JSON.stringify(ein)} → ${JSON.stringify(aus)}`);
+    }
+    const server = ausgaben[0][1];
+    assert.equal(E.saeubern(server, 1000, false).wert, server, "zweimal säubern ändert nichts: " + JSON.stringify(ein));
+  }
+  // was keine fremden Ziele hat, bleibt: ein erlaubter Link, Wörter mit Doppelpunkt, Uhrzeiten
+  for (const ein of ["[Seite](https://uni-tuebingen.de/x)", "Hinweis:x, Metadata:x, Tel.:0123 um 10:15 (Raum: N6)"]) {
+    assert.equal(E.saeubern(ein, 1000, false).wert, ein);
+  }
+  assert.equal(E.saeubern("[a](vbscript:msgbox(1)) und [b]: data:x", 1000, false).wert, "[a] ( msgbox(1)) und [b]:");
+});
+
+test("Linkziele: vom Server über das Plugin bis in die Termin-Notiz bleibt kein fremdes Ziel", { skip: !fs.existsSync(SERVER) && "server/ fehlt" }, async () => {
+  const E = await eingang();
+  const info = "Formular [hier](java&#115;cript&colon;alert(1)), [b]: vbscript:x, [c](&#x09;obsidian:open) und <javascript:x>";
+  const roh = { schluessel: "mail:abc@uni#1", titel: "Anmeldung Tutorium B110", datum: "2026-11-05", uhrzeit: "10:00", ort: "ILIAS",
+    kategorie: "Frist", status: "offiziell", code: "B110", quelle_text: "Mail des Lehrstuhls", info };
+  const server = E.terminNormal(roh, "2026-11-01");
+  assert.ok(server.wert, JSON.stringify(server));
+  assert.deepEqual(zielSchemata(server.wert.info), [], server.wert.info);
+  const plugin = Z.terminePruefen({ schema: 1, termine: [server.wert] });
+  assert.deepEqual(plugin.verworfen, []);
+  const notiz = Z.notizText("", plugin.termine[0], {});
+  assert.ok(notiz.includes("Formular"), notiz);
+  assert.deepEqual(zielSchemata(notiz), [], notiz);
+  assert.deepEqual(fremdeLinks(notiz, TEXT), [], notiz);
+  assert.doesNotMatch(notiz, /(?:java|vb)script/i, notiz);
+});
+
 // Aus dem Sicherheits-Audit (01.11.2026): Link-Definition mit maskiertem Schema in einem Punkt, Verweis darauf in einem anderen
 test("Begleitnotiz: Link-Definitionen und Verweise darauf (auch mit „obsidian\\://“) ergeben keinen Link", () => {
   const faelle = [

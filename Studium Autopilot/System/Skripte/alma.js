@@ -263,10 +263,17 @@ module.exports = function (ctx) {
   // Titel, die die alte Kürzung kaputt gemacht hat („Einführung in · Veranstaltung“): Teil vor „ · “ endet auf ein Füllwort
   const titelKaputt = (t) => { const v = String(t || "").split(" · ")[0].trim().split(" "); return v.length > 1 && FUELL.test(v[v.length - 1]); };
   const sauber = (s) => String(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim();
-  // Text aus Alma (Titel, Raum) im Text einer Notiz und in „Bitte prüfen“: eine Zeile, „\“ vor Markdown-Zeichen (mdText wie in
-  // zentral.js, dazu „&“; nie am Zeilenanfang, darum ohne Listen-Regel). So wird er nie ein Bild, Kasten oder Link in die
-  // App oder auf Dateien (eine Webadresse darin bleibt anklickbar); ein gewöhnlicher Titel oder Raum bleibt, wie er ist.
-  const mdText = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").replace(/[\\`*_\[\]<>#|!$%~=^{}&]/g, "\\$&");
+  // Text aus Alma (Titel, Raum) im Text einer Notiz und in „Bitte prüfen“: eine Zeile, „\“ vor Markdown-Zeichen und vor den
+  // Zeichen, an denen Obsidian einen Link erkennt (ctx.zentral.mdInZeile wie bei den zentralen Terminen, dazu „&“; nie am
+  // Zeilenanfang, darum ohne Listen-Regel). So wird er nie ein Bild, Kasten oder Link in die App, auf Dateien oder auf eine fremde
+  // Seite (eine Adresse der Uni bleibt anklickbar); ein gewöhnlicher Titel oder Raum bleibt Zeichen für Zeichen, wie er ist. Ohne
+  // zentral.js (Hülle eines eigenen Uni-Abgleichs) nur die Markdown-Zeichen.
+  // bis 02.11.2026 (und ohne ctx.zentral): jedes Markdown-Zeichen mit „\“; seitdem ctx.zentral.mdInZeile (Link-Schutz, Mail-Adressen)
+  const mdTextAlt = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").replace(/[\\`*_\[\]<>#|!$%~=^{}&]/g, "\\$&");
+  const mdText = (s) => {
+    const t = String(s == null ? "" : s).replace(/\s+/g, " "), Z = ctx.zentral;
+    return Z && Z.mdInZeile ? Z.mdInZeile(t, { und: true }) : mdTextAlt(t);
+  };
 
   // Raum einer Serie (seit 20.10.2026; bis dahin der häufigste Raum aller Termine): Läufe gleicher Räume nach Datum (raumNorm,
   // Termine ohne Raum zählen nicht). Raum der Serie ist der Raum des letzten Laufs mit mindestens zwei Terminen, also der Raum,
@@ -457,13 +464,16 @@ module.exports = function (ctx) {
   const ENTFAELLT = " (entfällt)";
   // Kopfzeile, wie Alma sie schreibt: „Montags, 10:00–12:00 · Raum“ bzw. einzeln „Montag, 12.10.2026, 10:00–12:00 · Raum“
   const KOPFZEILE = /^(Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag)(s|, \d{2}\.\d{2}\.\d{4}), \d{1,2}:\d{2}–\d{1,2}:\d{2}( · .*)?$/;
+  // Ist der Name schon belegt, auch in anderer Groß- und Kleinschreibung oder Unicode-Form (ctx.zentral.existiert; eigene zählt
+  // nicht)? Ohne zentral.js (Hülle eines eigenen Uni-Abgleichs) nur genau dieser Name.
+  const belegt = (p, eigene) => (ctx.zentral && ctx.zentral.existiert ? ctx.zentral.existiert(p, eigene) : !!app.vault.getAbstractFileByPath(p));
   // Notiz umbenennen, wenn sie noch ihren abgeleiteten Namen alt trägt (auch „alt 2“), auf den ersten freien Namen wie beim
   // Anlegen; Links ziehen mit (fileManager.renameFile). Die Hülle eines eigenen Uni-Abgleichs hat renameFile nicht: Name bleibt.
   const umbenennen = async (f, alt, neu) => {
     const b = f.basename, ordner = f.path.slice(0, f.path.lastIndexOf("/"));
     if (alt === neu || !app.fileManager.renameFile || !(b === alt || (b.indexOf(alt + " ") === 0 && /^\d+$/.test(b.slice(alt.length + 1))))) return;
     let name = neu, i = 2;
-    while (app.vault.getAbstractFileByPath(`${ordner}/${name}.md`)) name = `${neu} ${i++}`;
+    while (belegt(`${ordner}/${name}.md`, f)) name = `${neu} ${i++}`;
     await app.fileManager.renameFile(f, `${ordner}/${name}.md`);
   };
 
@@ -734,8 +744,9 @@ module.exports = function (ctx) {
               return kopf.split("\n").map((z) => (KOPFZEILE.test(z) ? zeile : z)).join("\n") + (i < 0 ? "" : t.slice(i));
             });
           } else if (neu.raum && raumAlt && neu.raum !== raumAlt) {
-            // der alte Raum steht entschärft (seit 01.11.2026) oder roh (ältere Notizen) in der Zeile; der neue immer entschärft
-            const alt = [`· ${mdText(raumAlt)}`, `· ${raumAlt}`], neuTeil = `· ${mdText(neu.raum)}`;
+            // der alte Raum steht in der Zeile entschärft wie jetzt, entschärft wie bis 02.11.2026 (seit 01.11.2026) oder roh (ältere
+            // Notizen); der neue immer wie jetzt
+            const alt = [`· ${mdText(raumAlt)}`, `· ${mdTextAlt(raumAlt)}`, `· ${raumAlt}`], neuTeil = `· ${mdText(neu.raum)}`;
             await textAendern(treffer.f, (t) => t.split("\n").map((z) => {
               const a = TAGE_LANG.some((w) => z.indexOf(w) === 0) ? alt.find((x) => z.indexOf(x) >= 0) : null;
               return a ? z.replace(a, () => neuTeil) : z;
@@ -758,7 +769,7 @@ module.exports = function (ctx) {
       if (!app.vault.getAbstractFileByPath(ordner)) await app.vault.createFolder(ordner);
       const basis = nameVon(g.einzeln, g.von, g.wt, g.beginn);
       let name = basis, i = 2;
-      while (app.vault.getAbstractFileByPath(`${ordner}/${name}.md`)) name = `${basis} ${i++}`;
+      while (belegt(`${ordner}/${name}.md`)) name = `${basis} ${i++}`;
       const yaml = {
         typ: "lehrveranstaltung", titel: `${kurz} · ${art}`, code, modul: m ? `[[${m.f.basename}]]` : "", art,
         ...felder, herkunft: HERKUNFT, raum: g.raum, dozent: "", uebersicht: "[[Stundenplan]]",

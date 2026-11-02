@@ -33,6 +33,7 @@
 // Schnittstelle (Rückgaben siehe jeweilige Funktion):
 //   parsen(html) → Baum                         alle/erstes/vorfahr/text/attr/hatKlasse – kleine Abfragehelfer für den Baum
 //   angemeldet(html) → true/false               seitenArt(html, url) → „ilias“, „ilias-anmeldung“, „kein-zugriff“, „idp-anmeldung“ …
+//   kontoKuerzel(html) → Kürzel im Profilbild der Metaleiste | "#foto" | "" | null   abmeldeLink(html, url) → Link „Abmelden“ | ""
 //   meldungen(html) → [{ art, text }]           permalink(html) → { url, typ, refId } | null
 //   mitgliedschaften(html, url) → { kurse, gruppen }   kurse(html, url)   gruppen(html, url)
 //   brotkrumen(html, url) → [{ typ, refId, titel, url }] (die Seite selbst zuerst, dann ihre Eltern)
@@ -406,6 +407,31 @@ function angemeldet(html) {
   }
   if (erstes(w, (e) => e.name === "a" && attr(e, "href").indexOf("block_type=pditems") >= 0)) return true;
   return false;
+}
+// Konto der Sitzung, wie es die Metaleiste zeigt: das Kürzel im Profilbild aus Buchstaben (span.il-avatar-letter >
+// span.abbreviation, Ovidius 10/2026: zwei Zeichen). ILIAS bildet es aus seinem eigenen Benutzernamen (bei Anmeldung über die Uni
+// nicht der Uni-Login), also nur zum Vergleich mit dem Kürzel einer früheren Seite. Nur in der Metaleiste (Profilbilder anderer
+// Leute in Foren und Mitgliederlisten zählen nicht). → klein, höchstens 8 Zeichen; FOTO ("#foto"), wenn das Profilbild ein Foto
+// ist (il-avatar-picture oder ein Bild); "" mit Metaleiste ohne erkennbares Profilbild; null ohne Metaleiste (keine ILIAS-Seite,
+// nichts zu sehen)
+const FOTO = "#foto";
+function kontoKuerzel(html) {
+  const meta = erstes(parsen(html), (e) => hatKlasse(e, "il-maincontrols-metabar"));
+  if (!meta) return null;
+  const bild = erstes(meta, (e) => hatKlasse(e, "il-avatar"));
+  if (!bild) return "";
+  if (!hatKlasse(bild, "il-avatar-letter")) return hatKlasse(bild, "il-avatar-picture") || erstes(bild, (e) => e.name === "img") ? FOTO : "";
+  const k = erstes(bild, (e) => hatKlasse(e, "abbreviation"));
+  const t = k ? text(k).trim().toLowerCase() : "";
+  return t.length <= 8 ? t : "";
+}
+// Link „Abmelden“ der Metaleiste (Ovidius 10/2026: ilias.php?baseClass=ilstartupgui&cmd=doLogout&rtoken=…; ältere ILIAS:
+// logout.php) → absolute Adresse auf dem Server der Seite, sonst "" (nicht angemeldet, keine Metaleiste, anderer Server)
+function abmeldeLink(html, basisUrl) {
+  const meta = erstes(parsen(html), (e) => hatKlasse(e, "il-maincontrols-metabar"));
+  const a = meta && erstes(meta, (e) => e.name === "a" && /[?&]cmd=doLogout(?:&|$)|(?:^|\/)logout\.php(?:[?#]|$)/i.test(attr(e, "href")));
+  const url = a ? absolut(attr(a, "href"), basisUrl) : "";
+  return /^https:\/\//i.test(url) && ursprung(url).toLowerCase() === ursprung(basisUrl).toLowerCase() ? url : "";
 }
 // Meldungen der Seite (ILIAS: div.alert.alert-danger/-info/-success/-warning) → [{ art: "fehler"|"info"|"erfolg"|"warnung", text }]
 function meldungen(html) {
@@ -957,7 +983,7 @@ function downloadUrl(eintrag, basisUrl) {
 
 // ---------------------------------------------------------------------------------------------------------------- Export
 const API = { parsen, alle, erstes, vorfahr, text, attr, hatKlasse, naechstesGeschwister, vorigesGeschwister, entitaeten,
-  angemeldet, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl,
+  angemeldet, kontoKuerzel, abmeldeLink, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl,
   inhaltReiter, aboFenster, aboLinks, uebungen, formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
 
 // Aufruf mit ctx: „heute“ für Heute/Gestern/Morgen kommt aus ctx.date (Testdatum des Plugins), sonst wie ohne Aufruf.

@@ -82,10 +82,13 @@ der Browser, im selben Fenster. Öffnen mit **Browser** in der Titelleiste der S
 selbst weiter“); der Stand kommt dann aus `start.sh`, nicht von vorn.
 
 - **„Claude klickt“** (Standard): Du öffnest die Seiten selbst im eingebauten Browser, klickst und tippst dort. Der Browser
-  startet ohne gespeicherte Anmeldungen: Bei Oracle, claude.ai und der Uni meldet sich der Mensch dort selbst an. Fragt Claude
+  startet ohne gespeicherte Anmeldungen: Bei Oracle und claude.ai meldet sich der Mensch dort selbst an. Fragt Claude
   Desktop beim ersten Klick auf einer Seite, ob du dort handeln darfst, sagst du: „Klick auf **Immer erlauben**“, und zwar nur
-  für die Seiten dieser Anleitung (Oracle, claude.ai, Webmail der Uni), je Seite einzeln, nie für alle Seiten. Damit die
-  Anmeldung bei Oracle ein Neustart der App übersteht, im Menü **⋮** des Browsers **Keep cookies** einschalten lassen. Ist der
+  für die Seiten dieser Anleitung (Oracle, claude.ai), je Seite einzeln, nie für alle Seiten. Webmail der Uni öffnest du nie,
+  auch hier nicht: Die Weiterleitung richtet der Mensch selbst ein (schritte.md, Schritt 3), denn Mails fremder Absender
+  gehören nicht in den Browser, in dem er bei Oracle angemeldet ist. Damit die Anmeldung bei Oracle ein Neustart der App
+  übersteht, im Menü **⋮** des Browsers **Keep cookies** einschalten lassen; am Ende abmelden und wieder ausschalten
+  (schritte.md, Schritt 7). Ist der
   Browser aus: Claude Desktop → Einstellungen → **Code** → **Browser tools** einschalten.
 - **„Ich klicke selbst“**: Der Mensch klickt im eingebauten Browser, du sagst jeden Klick mit der genauen Beschriftung an,
   höchstens drei je Nachricht („Klick oben rechts auf das Symbol **>_** (Cloud Shell)“), dann: „Sag ‚fertig‘, wenn du so weit

@@ -132,6 +132,26 @@ test("Angemeldet und Seitenart für jede Testseite", () => {
   assert.equal(H.seitenArt('<form id="fudiscr-form" method="post"></form>'), "zwei-faktor");
 });
 
+test("Konto und Abmelden: Kürzel und Link „Abmelden“ nur aus der Metaleiste", () => {
+  assert.equal(H.kontoKuerzel(seite("kurs")), "ab");
+  assert.equal(S.kontoKuerzel(H.parsen(seite("kurs"))), "ab", "auch aus dem zerlegten Baum");
+  assert.equal(H.kontoKuerzel(seite("anderes-konto")), "xy", "nicht das Profilbild im Beitrag");
+  // Metaleiste ohne Profilbild: ""; keine Metaleiste (keine ILIAS-Seite): null
+  for (const n of ["dashboard", "anmeldung-ilias"]) assert.equal(H.kontoKuerzel(seite(n)), "", n);
+  for (const x of [seite("idp-anmeldung"), "", "<p>Teil einer Seite</p>"]) assert.equal(H.kontoKuerzel(x), null);
+  // Foto als Profilbild: eigenes Kürzel, auch ohne die Klasse; das Foto im Beitrag zählt nicht
+  assert.equal(H.kontoKuerzel('<ul class="il-maincontrols-metabar"><li><span class="il-avatar il-avatar-picture"><img src="x.jpg" alt="Profilbild"></span></li></ul>'), "#foto");
+  assert.equal(H.kontoKuerzel('<ul class="il-maincontrols-metabar"><li><span class="il-avatar"><img src="x.jpg" alt=""></span></li></ul>'), "#foto");
+  assert.equal(H.kontoKuerzel('<ul class="il-maincontrols-metabar"><li>Menü</li></ul><div><span class="il-avatar il-avatar-picture"><img src="y.jpg"></span></div>'), "");
+  const I = "https://ovidius.uni-tuebingen.de";
+  assert.equal(H.abmeldeLink(seite("anderes-konto"), I + "/ilias.php"), I + "/ilias.php?baseClass=ilstartupgui&cmd=doLogout&rtoken=0erfunden0token0fuer0tests0000000&lang=de");
+  assert.equal(H.abmeldeLink(seite("kalender"), I + "/ilias.php"), I + "/logout.php?lang=de", "ältere Form logout.php");
+  assert.equal(H.abmeldeLink(seite("dashboard"), I + "/ilias.php"), "", "ohne Link");
+  assert.equal(H.abmeldeLink(seite("anmeldung-ilias"), I + "/login.php"), "", "nicht angemeldet");
+  assert.equal(H.abmeldeLink('<ul class="il-maincontrols-metabar"><li><a href="https://example.org/ilias.php?cmd=doLogout">x</a></li></ul>', I + "/ilias.php"), "", "anderer Server");
+  assert.equal(H.abmeldeLink('<ul class="il-maincontrols-metabar"><li><a href="ilias.php?cmd=doLogoutAll">x</a></li></ul>', I + "/ilias.php"), "");
+});
+
 test("Meldungen und Permalink", () => {
   assert.deepEqual(H.meldungen(seite("kein-zugriff")), [{ art: "fehler", text: "Sie haben keine Berechtigung, auf das Objekt zuzugreifen." }]);
   assert.deepEqual(H.meldungen(seite("dashboard")), [{ art: "info", text: "Sie haben aktuell noch keine Favoriten ausgewählt." }]);

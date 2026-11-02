@@ -37,9 +37,9 @@ body {
      vorn): Blau, Petrol, Violett, Himmel, Grün, Rosa. Kein Bernstein (Ausnahmen in derselben Woche), kein Rot (Prüfung), nicht
      das Pflaumenlila der Veranstaltungen. Grün (5) und Rosa (6) leihen sich die Familie von „erledigt“ bzw. Rot; sie kommen erst
      mit dem fünften bzw. sechsten Modul eines Semesters (docs/design.md, „Farbe je Modul im Wochenraster“). Hell für alle
-     Designs, dunkel in eba-paper-elfenbein.css. --eba-modul-ton: Fläche einer Vorlesung, --eba-modul-ton-ue: einer Übung (hell
-     seit 27.10.2026 35 % und 26 % statt 18 % und 10 %: Die Flächen zweier Module, erst recht zweier Übungen, waren kaum zu
-     unterscheiden). --eba-ev-raum-anteil: so viel Textfarbe hat das Grau von Art und Raum im Kasten (--eba-ev-raum in Abschnitt
+     Designs, dunkel in eba-paper-elfenbein.css. --eba-modul-ton: Fläche einer Vorlesung (hell seit 27.10.2026 35 % statt 18 %:
+     Die Flächen zweier Module waren kaum zu unterscheiden), --eba-modul-ton-ue: einer Übung, die seit 02.11.2026 umrandet ist
+     (8 % statt 26 %: gefüllt = Vorlesung, umrandet = Übung; das Modul sagt dort der Rahmen). --eba-ev-raum-anteil: so viel Textfarbe hat das Grau von Art und Raum im Kasten (--eba-ev-raum in Abschnitt
      55), damit es auf den kräftigeren Flächen lesbar bleibt. tests/design.test.js prüft Abstand, Bedeutung und Lesbarkeit. */
   --eba-modul-1: #2763ba;
   --eba-modul-2: #147874;
@@ -48,7 +48,7 @@ body {
   --eba-modul-5: #508524;
   --eba-modul-6: #b54879;
   --eba-modul-ton: 35%;
-  --eba-modul-ton-ue: 26%;
+  --eba-modul-ton-ue: 8%;
   --eba-ev-raum-anteil: 35%;
   --eba-radius: 8px;
   --eba-radius-s: 6px;
@@ -4941,8 +4941,9 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
    Stunde liegt, bei einer Änderung die neue Zeit (die Lage im Raster zeigt den Rest). Voller Titel, Zeit, Raum im Tooltip.
    Farbe je Modul (seit 27.10.2026; vorher Vorlesungen grau gefüllt, Übungen nur mit blauer Kante, dunkel verschwamm beides
    mit der Karte): Kante links und getönte Fläche in --eba-modul-n (Klasse modul-n aus woche.js), ohne Modul neutral in
-   --eba-faint. Vorlesung = Kante 3 px, Fläche --eba-modul-ton; Übung, Tutorium, Lab = Kante 2 px, leiser getönte Fläche
-   (--eba-modul-ton-ue). Darunter die Legende (.eba-wlegende): je Modul der Woche ein Kästchen in derselben Form. Ausfall und
+   --eba-faint. Vorlesung = Kante 3 px, Fläche --eba-modul-ton; Übung, Tutorium, Lab = umrandet (seit 02.11.2026; vorher Kante
+   2 px und eine nur wenig leisere Fläche, „Tutorium und Vorlesung nicht genug unterschieden“): Rahmen 1 px und Kante 3 px in der
+   Farbe des Moduls, Fläche fast die Seite (--eba-modul-ton-ue), die Art als Pille in der Farbe des Moduls. Darunter die Legende (.eba-wlegende): je Modul der Woche ein Kästchen in derselben Form. Ausfall und
    Änderung: unten in diesem Abschnitt („Ausnahmen“). Art und Raum stehen in --eba-ev-raum, einem Grau mit etwas Textfarbe
    (--eba-ev-raum-anteil, hell 35 %, dunkel 25 %): Auf den kräftigeren Flächen (seit 27.10.2026) fiel --eba-muted unter 4,5 : 1.
    Titel und Raum je höchstens zwei Zeilen. Jeder Kasten ist ein Größen-Container (eba-ev): Passt etwas nicht in seine Höhe,
@@ -4970,8 +4971,9 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
   line-height: 1.25;
 }
 .eba-woche .eba-ev.ue {
-  padding-left: 6px;
-  border-left-width: 2px;
+  padding: 3px 7px 3px 5px;
+  border: 1px solid var(--eba-ev-farbe);
+  border-left-width: 3px;
   background: color-mix(in srgb, var(--eba-ev-farbe) var(--eba-modul-ton-ue), var(--eba-bg));
 }
 /* Online (seit 27.10.2026, woche.js Klasse online, die Regel ist ctx.modell.istOnline): Farbe des Moduls wie jede Sitzung, aber
@@ -4988,7 +4990,7 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--eba-ev-farbe) var(--eba-ev-ton), var(--eba-bg)) 0 6px,
     color-mix(in srgb, var(--eba-ev-farbe) calc(var(--eba-ev-ton) * 0.6), var(--eba-bg)) 6px 12px);
 }
-.eba-woche .eba-ev.online.ue { --eba-ev-ton: var(--eba-modul-ton-ue); }
+.eba-woche .eba-ev.online.ue { --eba-ev-ton: var(--eba-modul-ton-ue); border-style: dashed; }
 .eba-woche .eba-ev.online :is(.eba-ev-lang, .eba-ev-knapp)::before {
   content: ""; display: inline-block; width: 1.15em; height: 1.15em; margin-right: 3px; vertical-align: -0.22em;
   background-color: currentColor;
@@ -5020,7 +5022,21 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
   flex: 0 0 auto; overflow: hidden; white-space: normal; overflow-wrap: normal; hyphens: auto; -webkit-hyphens: auto;
   font-size: 12.5px; font-weight: 600; line-height: 1.2; color: var(--eba-text);
 }
-.eba-woche .eba-ev > b i { font-style: normal; font-weight: 400; font-size: 11px; color: var(--eba-ev-raum); }
+/* Art als Pille oben rechts (nur Übung, Tutorium, Lab; woche.js schreibt nur die Art, in jeder Pille dasselbe Wort, als
+   Geschwister des Kurznamens): Der Kasten einer Übung ist ein Raster, links der Kurzname (kürzt wie immer), rechts die Pille,
+   darunter über die ganze Breite der Raum. Die Pille ist so hoch wie die erste Zeile des Kurznamens (13 px + 2 × 1 px = 15 px =
+   12,5 px × 1,2), also mittig zu ihr. Neutral: ein Hauch Textfarbe auf der Fläche der Übung, Schrift im Grau des Raums
+   (mindestens 4,5 : 1, tests/design.test.js). Bis 02.11.2026 stand die Art in der Zeile des Kurznamens; in Safari hängte die
+   einzeilige Kürzung dann „…“ an, und in jeder Pille stand ein anderer Text. */
+.eba-woche .eba-ev.ue { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, max-content); align-content: start; gap: 1px 6px; }
+.eba-woche .eba-ev.ue > span { grid-column: 1 / -1; }
+.eba-woche .eba-ev > .eba-ev-art {
+  justify-self: end; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 1px 6px; border-radius: 999px;
+  font-style: normal; font-weight: 500; font-size: 10.5px; line-height: 13px;
+  color: var(--eba-ev-raum);
+  background: color-mix(in srgb, var(--eba-text) 8%, transparent);
+}
 .eba-woche .eba-ev > span {
   display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
   flex: 0 0 auto; overflow: hidden; white-space: normal; overflow-wrap: normal; hyphens: auto; -webkit-hyphens: auto;
@@ -5050,9 +5066,10 @@ body.is-phone .eba-modal .eba-modal-ausgeblendet button { min-height: 44px; }
 .eba-ev .eba-ev-knapp { display: none; }
 @container eba-kz (max-width: 480px) {
   .eba-woche .eba-ev, .eba-woche .eba-ev.ue { padding: 3px 4px 3px 3px; gap: 1px; border-left-width: 2px; }
+  .eba-woche .eba-ev.ue { padding: 2px 3px 2px 3px; }
   .eba-legende.eba-wlegende { padding: 2px 8px 10px 8px; gap: 3px 10px; font-size: 10.5px; } /* wie auf dem Dashboard (37), eine Zeile */
   .eba-woche .eba-ev > b { font-size: 10.5px; line-height: 1.2; hyphens: auto; -webkit-hyphens: auto; overflow-wrap: normal; }
-  .eba-woche .eba-ev > b i, .eba-ev .eba-ev-lang { display: none; }
+  .eba-woche .eba-ev > .eba-ev-art, .eba-ev .eba-ev-lang { display: none; }
   .eba-ev .eba-ev-knapp { display: inline; }
   .eba-woche .eba-ev > span {
     display: -webkit-box !important; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
@@ -5126,7 +5143,7 @@ body.is-phone .eba-s-stundenplan .eba-wname { padding-left: 5px; }
    Rand, nur mit dem Kurznamen in einer Zeile, und lässt dem echten Kasten den Platz; eine Vorlesung wird nie halbiert. */
 .eba-woche .eba-ev.schmal { z-index: 0; padding: 3px 4px; }
 .eba-woche .eba-ev.schmal > b { -webkit-line-clamp: 1; white-space: nowrap; hyphens: manual; -webkit-hyphens: manual; font-size: 11px; }
-.eba-woche .eba-ev.schmal > b i, .eba-woche .eba-ev.schmal > span { display: none !important; }
+.eba-woche .eba-ev.schmal > .eba-ev-art, .eba-woche .eba-ev.schmal > span { display: none !important; }
 
 /* Ausnahmen (seit 20.10.2026): Ausfall dieser Lehrveranstaltung und ein anderer Raum oder eine andere
    Zeit an diesem Tag (Klasse .ausnahme aus woche.js) in Warnfarbe: getönte Fläche, Kante links, kurzer Text („Fällt aus“,
@@ -5140,6 +5157,9 @@ body.is-phone .eba-s-stundenplan .eba-wname { padding-left: 5px; }
 .eba-woche .eba-ev.ausnahme { padding-left: 5px; }
 @container eba-kz (max-width: 480px) { .eba-woche .eba-ev.ausnahme { border-left-width: 2px; } }
 .eba-woche .eba-ev.online.ausnahme { border-left-style: dashed; }
+/* Rahmen einer Übung: bei einer Ausnahme in Warnfarbe wie die Kante, bei einem Ausfall neutral */
+.eba-woche .eba-ev.ue.ausnahme { border-color: var(--eba-warn); }
+.eba-woche .eba-ev.ue.ausfall { border-color: var(--eba-border); }
 /* Text in einer Zeile des Kastens: Größe und Umbruch der Zeile (sonst 11 px und ohne Umbruch aus Abschnitt 13) */
 .eba-ev .eba-ev-marke, .eba-ev .eba-ev-neu { font-size: inherit; font-weight: 600; white-space: normal; overflow: visible; }
 .eba-ev.ausnahme .eba-ev-marke, .eba-ev .eba-ev-neu { color: var(--eba-warn); font-weight: 600; }
@@ -5654,6 +5674,19 @@ body:not(.is-phone) .eba-s-modul .callout[data-callout="eba-tabelle"]:has(.eba-t
 @container eba-ul (min-width: 860px) {
   .eba-ul { columns: 2; column-gap: 48px; }
 }
+/* Zusammenfassung des Moduls (seit 02.11.2026, unterlagenliste.js Punkt 0): erste Zeile über beiden Spalten, als Karte, denn sie
+   ist der Weg zu den Unterlagen; Titel in der Display-Schrift, darunter Kapitel und Stand, rechts der Pfeil */
+.eba-ul-zf {
+  column-span: all; display: flex; align-items: center; gap: 12px; margin: 0 0 22px; padding: 12px 14px 12px 16px;
+  border: 1px solid var(--eba-border); border-radius: var(--eba-radius); background: var(--eba-card-bg); cursor: pointer;
+}
+@media (hover: hover) { .eba-ul-zf:hover { border-color: var(--eba-border-strong); } }
+.eba-ul-zf:focus-visible { outline: 2px solid var(--eba-accent); outline-offset: 2px; }
+.eba-ul-zf-text { flex: 1 1 auto; min-width: 0; }
+.eba-ul-zf-titel { font-family: var(--eba-font-display); font-size: 1.15em; font-weight: var(--eba-display-weight); line-height: 1.25; }
+.eba-ul-zf-meta { margin-top: 2px; font-size: 13px; color: var(--eba-muted); }
+.eba-ul-zf-pfeil { flex: none; display: flex; color: var(--eba-faint); }
+.eba-ul-zf-pfeil svg { width: 18px; height: 18px; }
 .eba-ul-gruppe { break-inside: avoid; margin: 0 0 20px; }
 .eba-ul-gruppe:last-child { margin-bottom: 0; }
 .eba-ul-kopf {
@@ -5786,7 +5819,7 @@ li:has(> a[data-href$="Lernplan"]) { --eba-icon: url("data:image/svg+xml,%3Csvg 
   text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px;
 }
 .eba-lp-k-titel.is-link:hover > .eba-lp-k-name { color: var(--eba-accent-text); text-decoration-color: currentColor; }
-.eba-lp-k-teil { display: inline-block; color: var(--eba-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.eba-lp-k-teil { display: inline-block; color: var(--eba-muted); font-size: 12px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .eba-lp-k.is-fertig .eba-lp-k-titel { color: var(--eba-muted); }
 .eba-lp-woche .eba-lp-k.is-fertig .eba-lp-k-titel { text-decoration: line-through; text-decoration-color: var(--eba-muted); }
 .eba-lp-woche .eba-lp-k.is-fertig .eba-lp-k-name { text-decoration: none; } /* abgehakt nur durchgestrichen, nicht auch unterstrichen */
@@ -5803,24 +5836,28 @@ body.is-mobile .eba-lp-unten { --eba-lp-titel-x: 74px; }
 /* iPhone und iPad: Zeilen mindestens 44 px (das Kästchen nimmt die ganze Höhe); iPhone: Fälligkeit unter dem Titel */
 body.is-mobile .eba-lp-k { min-height: 44px; }
 body.is-mobile .eba-lp-k > .eba-td-haken { box-sizing: border-box; width: 44px; padding-right: 0; }
-body.is-phone .eba-lp-k-inhalt { flex-direction: column; align-items: flex-start; gap: 2px; }
-/* iPhone: Zeilen oft mehrzeilig, das Kästchen steht auf Höhe der ersten Zeile (wie bei den To-dos) */
-body.is-phone .eba-lp-k { align-items: flex-start; }
-body.is-phone .eba-lp-k > .eba-td-haken { align-items: flex-start; padding-top: calc(8px + (1.4em - var(--checkbox-size)) / 2); }
-body.is-phone .eba-lp-k-titel { flex: none; }
-body.is-phone .eba-lp-k-bis { margin-left: 0; white-space: normal; }
-/* iPhone: Kürzel des Moduls vor der Fälligkeit statt vor der Nummer, der Titel hat so die ganze Breite */
-body.is-phone .eba-lp-k-text > .eba-lp-k-code { display: none; }
-body.is-phone .eba-lp-k-code-unten { display: inline; margin-right: 8px; font-size: 12px; font-weight: 600; color: var(--eba-muted); }
-/* … und mit ihm die Nummer des Kapitels („B110 1“, seit 1.11.2026): Die Spalte davor nahm den Titeln ein Sechstel der Breite */
-body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
+/* Schmal (seit 2.11.2026 nach der Breite der Woche bzw. der Liste, @container ohne Namen: die nächste ist ihre; vorher nur am
+   iPhone, in der Spalte der Module am iPad quer standen Fristen dreierlei): Fälligkeit unter dem Titel */
+@container (max-width: 520px) {
+  .eba-lp-k-inhalt { flex-direction: column; align-items: flex-start; gap: 2px; }
+  /* Zeilen oft mehrzeilig, das Kästchen steht auf Höhe der ersten Zeile (wie bei den To-dos) */
+  .eba-lp-k { align-items: flex-start; }
+  .eba-lp-k > .eba-td-haken { align-items: flex-start; padding-top: calc(8px + (1.4em - var(--checkbox-size)) / 2); }
+  .eba-lp-k-titel { flex: none; }
+  .eba-lp-k-bis { margin-left: 0; white-space: normal; }
+  /* Kürzel des Moduls vor der Fälligkeit statt vor der Nummer, der Titel hat so die ganze Breite */
+  .eba-lp-k-text > .eba-lp-k-code { display: none; }
+  .eba-lp-k-code-unten { display: inline; margin-right: 8px; font-size: 12px; font-weight: 600; color: var(--eba-muted); }
+  /* … und mit ihm die Nummer des Kapitels („B110 1“, seit 1.11.2026): Die Spalte davor nahm den Titeln ein Sechstel der Breite */
+  .eba-lp-k-code + .eba-lp-k-nr { display: none; }
+}
 /* „Von früher“ (seit 1.11.2026): In dieser Woche stehen nach ihren Kapiteln die noch offenen früherer Wochen; der Kopf zählt nur
    diese Woche („0/2“ über acht Zeilen passte sonst nicht). Ein Knopf, der breit nur Label ist; schmal (iPhone) klappt er die Gruppe
    auf und zu, zu mit der Zahl (in Warnfarbe, wenn etwas überfällig ist) und einem Pfeil (Abschnitt Semesterplan, schmal). */
 .eba-lp button.eba-lp-k-trenner {
   display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; height: auto; margin: 0; padding: 14px 0 4px; border: 0;
   border-top: 1px solid var(--eba-border); border-radius: 0; background: transparent; box-shadow: none; font-family: var(--font-interface);
-  font-size: 12px; font-weight: 600; line-height: 1.4; color: var(--eba-muted); text-align: left; cursor: default; -webkit-tap-highlight-color: transparent;
+  font-size: 12px; font-weight: 400; line-height: 1.4; color: var(--eba-muted); text-align: left; cursor: default; -webkit-tap-highlight-color: transparent;
 }
 .eba-lp button.eba-lp-k-trenner:first-child { padding-top: 6px; border-top: 0; }
 .eba-lp-k-trenner-pfeil { display: none; }
@@ -5837,8 +5874,8 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
   font-size: 13px; line-height: 1.45; color: var(--eba-text);
 }
 .eba-lp-warnung-titel { display: block; margin: 0 0 2px; font-weight: 650; color: var(--eba-warn-text, var(--eba-warn)); }
-/* Seit 31.10.2026. Bereich: oben dein Stand (.eba-lp-held) und der Semesterplan (.eba-lp-plan), darunter „Module“ (.eba-lp-label:
-   Gruppenlabel nach docs/design.md) als Karten. Kapitelzeilen der gewählten Woche (.eba-lp-woche) mit dem Kürzel des Moduls vor
+/* Seit 31.10.2026. Bereich: oben dein Stand (.eba-lp-held) und der Semesterplan (.eba-lp-plan) mit der gewählten Woche, darunter
+   „Module“ (.eba-lp-label: Gruppenlabel nach docs/design.md) als Zeilen, ab 1100 px rechts neben der Woche (.eba-lp-raster). Kapitelzeilen der gewählten Woche (.eba-lp-woche) mit dem Kürzel des Moduls vor
    jedem Kapitel, heute Abgehaktes durchgestrichen, in der Klausurvorbereitung eine Zeile je Modul (ohne Kästchen, der Platz
    bleibt); im aufgeklappten Modul „Für die Klausur“ (.eba-lp-vorb) und der Schalter „Vor der Vorlesung lernen“ (Kästchen der
    To-dos), beide in der Spalte der Titel. Dashboard: Zeile wie die der Karteikarten (.eba-lk-heute, Abschnitt 52), nichts dran: .eba-lp-aus samt
@@ -5858,7 +5895,7 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
    hätte auf der Karte kaum 2 : 1). Der Bereich ist ein Container (eba-lp): Schmal (iPhone) stapeln sich die Teile des Kopfs. */
 .eba-lp { --lp-fuell: var(--eba-accent); --lp-ton: 45%; } /* bis 2.11.2026 30 %: offene Bahnen hell kaum 1,5 : 1 zur Karte */
 .theme-dark .eba-lp { --lp-fuell: var(--eba-accent-text); --lp-ton: 50%; } /* bis 1.11.2026 38 %: Bahnen B110/B180 kaum 1,8 : 1 zur Karte */
-.eba-lp:not(.eba-lp-eine) { container: eba-lp / inline-size; }
+.eba-lp { container: eba-lp / inline-size; } /* seit 2.11.2026 auch die Lernplan-Notiz: ihr Kopf ist schmal eine Modulzeile */
 .eba-lp .modul-0 { --lp-farbe: var(--eba-muted); }
 .eba-lp .modul-1 { --lp-farbe: var(--eba-modul-1); }
 .eba-lp .modul-2 { --lp-farbe: var(--eba-modul-2); }
@@ -5867,7 +5904,7 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
 .eba-lp .modul-5 { --lp-farbe: var(--eba-modul-5); }
 .eba-lp .modul-6 { --lp-farbe: var(--eba-modul-6); }
 .eba-lp-farbpunkt { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--lp-farbe); }
-.eba-lp-balken { position: relative; flex: none; display: inline-block; width: 72px; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--eba-text) 10%, transparent); }
+.eba-lp-balken { position: relative; flex: none; display: inline-block; width: 72px; height: 6px; overflow: hidden; border-radius: 3px; background: color-mix(in srgb, var(--eba-text) 20%, transparent); }
 .eba-lp-balken-voll { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; background: var(--lp-fuell); }
 /* Kopf (seit 2.11.2026 ohne Kasten, als Einleitung über dem Semesterplan: zwei gleich starke Kästen oben ließen offen, wo die Seite
    beginnt): Ring (dein Stand nach ECTS; Strich = wo der Plan heute steht, dazwischen der Rückstand schraffiert wie in Bahnen und
@@ -5969,8 +6006,14 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
 .eba-lp-plan-pause { background: color-mix(in srgb, var(--eba-info) 11%, transparent); }
 .eba-lp-plan-jetzt { background: var(--eba-accent-soft); }
 .eba-lp-plan-wahl { background: color-mix(in srgb, var(--eba-text) 5%, transparent); }
-/* Schmal: die sieben Wochen der Leiste als Band in den Bahnen (seit 2.11.2026; Leiste und Achse waren zwei Zeitskalen ohne Verbindung) */
-.eba-lp-plan-baender > .eba-lp-plan-fenster { display: none; }
+/* Schmal: die sieben Wochen der Leiste als Band in den Bahnen (seit 2.11.2026; Leiste und Achse waren zwei Zeitskalen ohne Verbindung).
+   Oben und unten ein Strich in der Farbe des Rahmens der gewählten Woche, in der Legende „Wochen unten“ (abends: nur getönt mit
+   Strichen an den Seiten lag es bei 1,13 : 1 und las sich wie Monatslinien) */
+.eba-lp { --lp-fenster-rand: color-mix(in srgb, var(--eba-accent) 45%, var(--eba-border)); --lp-fenster: color-mix(in srgb, var(--eba-accent) 11%, transparent); }
+/* Dunkel (seit 2.11.2026): Fläche 26 % (18 % waren mit 1,13 : 1 blasser als die Weihnachtspause), Striche in --eba-muted (vorher
+   1,62 : 1) */
+.theme-dark .eba-lp { --lp-fenster: color-mix(in srgb, var(--eba-accent) 26%, transparent); --lp-fenster-rand: var(--eba-muted); }
+.eba-lp-plan-baender > .eba-lp-plan-fenster, .eba-lp-leg:has(> .is-fenster) { display: none; }
 .eba-lp-plan-baender > .eba-lp-plan-heute { top: 18px; width: 0; border-left: 1.5px solid var(--eba-accent-text); }
 .eba-lp-plan-heute-pille {
   position: absolute; top: 0; padding: 0 7px; border-radius: 999px; background: var(--eba-accent-text); font-size: 12px; font-weight: 600;
@@ -6046,8 +6089,24 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
 .eba-lp-leg-zeichen.is-klausur { width: 8px; height: 8px; margin: 0 3px; border-radius: 1px; background: var(--eba-bad); transform: rotate(45deg); }
 .eba-lp-leg-zeichen.is-test { box-sizing: border-box; width: 9px; height: 9px; margin: 0 3px; border: 2px solid var(--eba-text); border-radius: 50%; }
 .eba-lp-leg-zeichen.is-pause { width: 12px; height: 12px; border-radius: 2px; background: color-mix(in srgb, var(--eba-info) 11%, transparent); }
-/* Die gewählte Woche */
-.eba-lp-plan-woche { margin: 0 -16px; border-top: 1px solid var(--eba-border); }
+.eba-lp-leg-zeichen.is-fenster { width: 14px; height: 12px; border-radius: 0; background: var(--lp-fenster); box-shadow: inset 0 2px 0 var(--lp-fenster-rand), inset 0 -2px 0 var(--lp-fenster-rand); }
+/* Die gewählte Woche (seit 2.11.2026 unter der Karte in .eba-lp-raster, lernplan.js planZeichnen): schmal und mittel schließt sie
+   bündig an die Karte an wie vorher in ihr; ab 1100 px stehen rechts daneben die Module (440 px, ihre Zeilen schmal), denn über die
+   volle Breite standen Fristen bis 1170 px vom Titel, und eine Grenze von 760 px ließ rechts ein Drittel leer */
+.eba-lp-plan-woche {
+  container: eba-lp-plan / inline-size;
+  border: 1px solid var(--eba-border); border-radius: 0 0 var(--eba-radius-l) var(--eba-radius-l); background: var(--eba-card-bg);
+}
+.eba-lp-plan:has(+ .eba-lp-raster > .eba-lp-plan-woche) { border-bottom: 0; border-radius: var(--eba-radius-l) var(--eba-radius-l) 0 0; }
+@container eba-lp (min-width: 1100px) {
+  .eba-lp-plan:has(+ .eba-lp-raster > .eba-lp-plan-woche) { border-bottom: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); padding-bottom: 4px; }
+  /* Links die Woche, rechts die Liste, beide oben bündig */
+  .eba-lp-raster { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 0 20px; align-items: start; margin-top: 20px; }
+  .eba-lp-raster > .eba-lp-plan-woche { border-radius: var(--eba-radius-l); }
+  .eba-lp-raster > .eba-lp-spalte > .eba-lp-module { margin-top: 0; }
+  /* Ist rechts ein Modul offen, bleibt die Woche oben stehen, wenn sie ins Fenster passt (lernplan.js haftenPruefen) */
+  .eba-lp-raster > .eba-lp-plan-woche.is-passt { position: sticky; top: calc(var(--view-header-height, 40px) + 12px); }
+}
 .eba-lp-pw-kopf { display: flex; align-items: center; gap: 4px; min-height: 48px; padding: 4px 16px 4px 10px; }
 .eba-lp-pw-titel { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 8px; min-width: 0; padding: 0 4px; }
 .eba-lp-pw-name { font-weight: 600; color: var(--eba-text); white-space: nowrap; }
@@ -6096,7 +6155,7 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
 }
 .eba-lp .eba-lp-wl > button.eba-lp-wl-w.is-jetzt { color: var(--eba-accent-text); font-weight: 600; }
 .eba-lp .eba-lp-wl > button.eba-lp-wl-w.is-frei { background: color-mix(in srgb, var(--eba-info) 11%, transparent); }
-.eba-lp .eba-lp-wl > button.eba-lp-wl-w.is-wahl { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--eba-accent) 45%, var(--eba-border)); }
+.eba-lp .eba-lp-wl > button.eba-lp-wl-w.is-wahl { box-shadow: inset 0 0 0 1px var(--lp-fenster-rand); }
 .eba-lp .eba-lp-wl > button.eba-lp-wl-w:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 1px; }
 .eba-lp-wl-saeule { display: flex; align-items: flex-end; justify-content: center; width: 100%; height: 24px; }
 .eba-lp-wl-saeule > .eba-lp-s-stapel { max-width: 14px; }
@@ -6121,9 +6180,9 @@ body.is-phone .eba-lp-k-code + .eba-lp-k-nr { display: none; }
   .eba-lp-bahn { height: 24px; }
   .eba-lp-pw-stand > .eba-lp-balken, .eba-lp-pw-viel.is-breit { display: none; }
   .eba-lp-plan-baender > .eba-lp-plan-fenster {
-    display: block; background: color-mix(in srgb, var(--eba-accent) 7%, transparent);
-    box-shadow: inset 1px 0 0 color-mix(in srgb, var(--eba-accent) 40%, transparent), inset -1px 0 0 color-mix(in srgb, var(--eba-accent) 40%, transparent);
+    display: block; background: var(--lp-fenster); box-shadow: inset 0 2px 0 var(--lp-fenster-rand), inset 0 -2px 0 var(--lp-fenster-rand);
   }
+  .eba-lp-leg:has(> .is-fenster) { display: inline-flex; }
   .eba-lp-pw-viel.is-schmal { display: inline-flex; }
   .eba-lp-plan-kopf { flex-direction: column; align-items: stretch; }
   .eba-lp-ziel > .eba-lp-ziel-label:first-child { flex-basis: 100%; }
@@ -6135,16 +6194,23 @@ body.is-mobile .eba-lp .eba-lp-ziel-skala > button.eba-lp-note::before { inset: 
    600 mit der Pille, darunter ein kleiner Balken in der Farbe des Moduls (Strich = wo der Plan heute steht) und der Stand; rechts der
    gewählte Termin gedämpft und der Pfeil (dreht sich offen). Schmal steht der Termin als dritte Zeile. Offen tragen Zeile und
    Aufgeklapptes links einen Strich in der Farbe des Moduls. Nicht mehr dran: leiser. */
-.eba-lp-module { display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg); }
+.eba-lp-module { container: eba-lp-liste / inline-size; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg); }
 .eba-lp-mz {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; grid-template-areas: "code titel wert pfeil" ". meta wert pfeil";
   align-items: center; gap: 3px 12px; padding: 12px 16px; cursor: pointer; -webkit-tap-highlight-color: transparent;
 }
 .eba-lp-module > .eba-lp-mz:not(:first-child) { border-top: 1px solid var(--eba-border); }
 .eba-lp-mz:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: -2px; }
-@media (hover: hover) { .eba-lp-mz:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); } }
+@media (hover: hover) { .eba-lp-mz:not(.is-fest):hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); } }
+/* Offen sagt der gewählte Termin oben im Aufgeklappten den Tag; rechts stünde er ein zweites Mal (seit 2.11.2026 abends) */
+.eba-lp-mz.is-offen > .eba-lp-mz-wert { display: none; }
+/* In der Lernplan-Notiz: Kopf ohne Kürzel und Pfeil, nicht zum Tippen */
+.eba-lp-mz.is-fest { grid-template-columns: minmax(0, 1fr); grid-template-areas: "titel" "meta"; cursor: default; }
+.eba-lp-mz.is-fest .eba-lp-mz-name > a { color: inherit; }
 .eba-lp-mz.is-ruhig > * { opacity: 0.6; }
 .eba-lp-mz.is-offen, .eba-lp-mz-mehr { box-shadow: inset 3px 0 0 var(--lp-farbe); }
+/* Die Linie über dem Aufgeklappten als Schatten unter dem Strich (seit 2.11.2026; als Rand schnitt sie eine Kerbe in den Strich) */
+.eba-lp-unten.eba-lp-mz-mehr { box-shadow: inset 3px 0 0 var(--lp-farbe), inset 0 1px 0 var(--eba-border); }
 .eba-lp-mk-code {
   flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px 1px 7px; border-radius: 999px;
   background: color-mix(in srgb, var(--lp-farbe) 13%, transparent); font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--eba-text);
@@ -6167,13 +6233,30 @@ body.is-mobile .eba-lp .eba-lp-ziel-skala > button.eba-lp-note::before { inset: 
   transform: translateY(-2px) rotate(45deg); transition: transform 0.15s ease;
 }
 .eba-lp-mz.is-offen .eba-lp-mk-pfeil::after { transform: translateY(2px) rotate(-135deg); }
-.eba-lp-mk-balken { position: relative; flex: none; display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--eba-text) 12%, transparent); }
+.eba-lp-mk-balken { position: relative; flex: none; display: inline-block; width: 64px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--eba-text) 20%, transparent); }
 .eba-lp-mk-voll { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; background: var(--lp-farbe); }
 .eba-lp-mk-soll { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; border-radius: 1px; background: var(--eba-text); }
 body.is-mobile .eba-lp-mz { min-height: 44px; }
-@container eba-lp (max-width: 520px) {
-  .eba-lp-mz { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "code titel pfeil" ". meta pfeil" ". wert pfeil"; padding: 12px 14px; }
+/* Schmal nach der Breite der Liste (eba-lp-liste, seit 2.11.2026): auch rechts neben der Woche am iPad quer */
+@container eba-lp-liste (max-width: 520px) {
+  /* Schmal (seit 2.11.2026 abends): der Name über die ganze Breite, darunter Kürzel und Termin, dann Balken und Stand; vorher stand
+     das Kürzel in einer eigenen Spalte, unter ihm blieben 80 px leer, und S100 brach in drei Zeilen */
+  .eba-lp-mz { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "titel titel pfeil" "code wert pfeil" "meta meta pfeil"; gap: 6px 10px; padding: 12px 14px; }
+  .eba-lp-mz-code { align-self: center; margin-top: 0; }
+  .eba-lp-mz-wert { white-space: normal; }
+  .eba-lp-mz.is-fest { grid-template-columns: minmax(0, 1fr); grid-template-areas: "titel" "meta"; }
+  /* Seit 2.11.2026: das Kürzel als Text mit Farbpunkt wie in den Kapitelzeilen (eine getönte Pille unter der des Zustands las sich
+     wie ein zweiter Zustand), der Zustand in seiner Farbe hinter dem Stand statt als Pille neben dem Namen (eine Zeile weniger);
+     offen, wo rechts kein Termin steht, das Kürzel vor dem Balken statt allein in einer Zeile */
+  .eba-lp-mz > .eba-lp-mz-code { padding: 0; background: none; font-size: 13px; font-weight: 600; }
+  .eba-lp-mz:has(.eba-lp-mz-zustand) .eba-lp-mz-titel > .eba-pill { display: none; }
+  .eba-lp-mz .eba-lp-mz-stand > .eba-lp-mz-zustand, .eba-lp-mz .eba-lp-mz-stand > .eba-lp-w-teil:has(+ .eba-lp-mz-zustand) > .eba-lp-punkt { display: inline; }
+  .eba-lp-mz.is-offen:not(.is-fest) { grid-template-areas: "titel titel pfeil" "code meta pfeil"; }
 }
+.eba-lp-mz-stand > .eba-lp-mz-zustand, .eba-lp-mz-stand > .eba-lp-w-teil:has(+ .eba-lp-mz-zustand) > .eba-lp-punkt { display: none; }
+.eba-lp-mz-zustand.is-warn { color: var(--eba-warn-text, var(--eba-warn)); }
+.eba-lp-mz-zustand.is-info { color: var(--eba-info); }
+.eba-lp-mz-zustand.is-ok { color: var(--eba-good); }
 /* Wann du die Klausur schreibst (seit 1.11.2026): zwei Knöpfe Haupttermin und Nachholtermin, je Name und Tag, auf einer Spur wie die
    Anteile der Zeit (der gewählte im Akzent wie der Segmentschalter; bis zur Prüfung am 1.11. voll in --lp-fuell, fünf dunkle Blöcke
    waren das Lauteste der Seite), daneben leise „Ins … verschieben“. Seit 2.11.2026 oben im aufgeklappten Modul statt auf jeder Karte
@@ -6181,7 +6264,7 @@ body.is-mobile .eba-lp-mz { min-height: 44px; }
    Neben „Module“ die Zahl der Klausuren je Termin. Seit 2.11.2026 abends wieder oben (.eba-lp-termin), die Zeile rechts in der Liste
    sagt, was gewählt ist. */
 .eba-lp-v.eba-lp-mk-wahl { align-items: center; gap: 6px 12px; padding-bottom: 8px; }
-body.is-phone .eba-lp-mk-wahl > .eba-lp-wahl-termine { flex-basis: 100%; }
+@container (max-width: 520px) { .eba-lp-mk-wahl > .eba-lp-wahl-termine { flex-basis: 100%; } }
 .eba-lp-wahl-termine { display: flex; flex: 0 1 340px; gap: 2px; padding: 2px; border: 1px solid var(--eba-border); border-radius: 10px; background: var(--eba-surface-2); }
 .eba-lp .eba-lp-wahl-termine > button.eba-lp-wahl {
   position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 1px; height: auto; margin: 0;
@@ -6201,25 +6284,41 @@ body.is-phone .eba-lp-mk-wahl > .eba-lp-wahl-termine { flex-basis: 100%; }
 }
 .eba-lp button.eba-lp-verschieben::before { content: ""; position: absolute; inset: -10px -4px; } /* Tippfläche 44 px */
 .eba-lp button.eba-lp-verschieben:disabled { opacity: 0.45; }
+/* Verschoben: „Zurück ins …“ als Knopf mit Rahmen im Akzent (seit 2.11.2026; den Weg zurück soll man sehen, als Text sah er in
+   Elfenbein aus wie ein Label) */
+.eba-lp button.eba-lp-verschieben.is-zurueck {
+  padding: 5px 14px; border: 1px solid color-mix(in srgb, var(--eba-accent) 45%, var(--eba-border)); border-radius: 999px;
+  background: var(--eba-card-bg); font-weight: 600; color: var(--eba-accent-text);
+}
+body.is-mobile .eba-lp button.eba-lp-verschieben.is-zurueck { min-height: 44px; }
 @media (hover: hover) {
   .eba-lp .eba-lp-wahl-termine > button.eba-lp-wahl:not(.is-an):not(:disabled):hover { background: var(--eba-card-bg); color: var(--eba-text); }
   .eba-lp button.eba-lp-verschieben:hover { color: var(--eba-accent-text); text-decoration: underline; text-underline-offset: 3px; }
 }
 body.is-mobile .eba-lp .eba-lp-wahl-termine > button.eba-lp-wahl { min-height: 44px; justify-content: center; }
-.eba-lp-module-kopf { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; }
-.eba-lp-module-wahl { font-family: var(--font-interface); font-size: 13px; font-weight: 400; letter-spacing: normal; text-transform: none; color: var(--eba-muted); }
-.eba-lp-unten.eba-lp-mz-mehr { padding: 2px 16px 12px; border-top: 1px solid var(--eba-border); }
-.eba-lp-mz-mehr .eba-lp-k > .eba-td-haken, .eba-lp-notiz-inhalt .eba-lp-k > .eba-td-haken { margin-left: -16px; padding-left: 16px; }
+/* „Module“ als Kopf im Rahmen wie „Semesterplan“ in seiner Karte (seit 2.11.2026), rechts die Zahl der Klausuren je Termin */
+.eba-lp-module-kopf { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; padding: 14px 16px 12px; }
+.eba-lp-module-titel {
+  font-family: var(--font-interface); font-size: var(--eba-label-size); font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking); text-transform: var(--eba-label-case); color: var(--eba-accent-text);
+}
+.eba-lp-module-wahl { font-family: var(--font-interface); font-size: 13px; color: var(--eba-muted); }
+.eba-lp-unten.eba-lp-mz-mehr { padding: 3px 16px 12px; }
+.eba-lp-mz-mehr .eba-lp-k > .eba-td-haken { margin-left: -16px; padding-left: 16px; }
 /* Klausurtermin oben im Aufgeklappten (seit 2.11.2026; unter „Für die Klausur“ nach allen Kapiteln war er vergraben) */
 .eba-lp-termin { padding: 10px 0 10px var(--eba-lp-titel-x); border-bottom: 1px solid var(--eba-border); }
 .eba-lp-termin > .eba-lp-v.eba-lp-mk-wahl { padding: 0; }
-/* Lernplan-Notiz (seit 2.11.2026): Lesen zeigt unter ihrer Zeile das Aufgeklappte wie auf der Lernplan-Seite; die Liste unter
-   „Kapitel“ ist die Quelle und steht nur beim Bearbeiten (vorher die rohe Liste mit „·“-Ketten). Nur wenn das Plugin gezeichnet hat
-   (:has(.eba-lp-notiz-inhalt)), und ohne display:none: ein Abschnitt der Leseansicht mit display:none ließe darunter alles leer
-   (tests/leseansicht.test.js), darum Höhe 0 wie bei „Schwerpunkte“ */
-.eba-lp-notiz-inhalt { margin-top: 12px; padding: 2px 16px 12px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg); }
-.eba-s-lernplan-notiz.markdown-preview-view .markdown-preview-sizer:has(.eba-lp-notiz-inhalt) > div:has(> h2[data-heading="Kapitel"]),
-.eba-s-lernplan-notiz.markdown-preview-view .markdown-preview-sizer:has(.eba-lp-notiz-inhalt) > div:has(> h2[data-heading="Kapitel"]) + div:has(> ul.contains-task-list) {
+/* „Klausur“ wie „Üben“ als Label (seit 2.11.2026; vorher 13 px Text neben 12 px Akzent, zwei Stile für dieselbe Ebene) */
+.eba-lp-termin .eba-lp-v-titel {
+  font-family: var(--font-interface); font-size: var(--eba-label-size); font-weight: var(--eba-label-weight);
+  letter-spacing: var(--eba-label-tracking); text-transform: var(--eba-label-case); color: var(--eba-accent-text);
+}
+/* Lernplan-Notiz (seit 2.11.2026): Lesen zeigt das Modul wie aufgeklappt auf der Lernplan-Seite, Kopf und Inhalt in einem Rahmen
+   (.eba-lp-notiz-modul, die Zeilenliste der Module); die Liste unter „Kapitel“ ist die Quelle und steht nur beim Bearbeiten (vorher
+   die rohe Liste mit „·“-Ketten). Nur wenn das Plugin gezeichnet hat (:has(.eba-lp-notiz-modul)), und ohne display:none: ein
+   Abschnitt der Leseansicht mit display:none ließe darunter alles leer (tests/leseansicht.test.js), darum Höhe 0 wie bei „Schwerpunkte“ */
+.eba-s-lernplan-notiz.markdown-preview-view .markdown-preview-sizer:has(.eba-lp-notiz-modul) > div:has(> h2[data-heading="Kapitel"]),
+.eba-s-lernplan-notiz.markdown-preview-view .markdown-preview-sizer:has(.eba-lp-notiz-modul) > div:has(> h2[data-heading="Kapitel"]) + div:has(> ul.contains-task-list) {
   display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden;
 }
 @media (prefers-reduced-motion: no-preference) {
@@ -6265,8 +6364,9 @@ button.eba-lp-zeit.is-weniger {
 .eba-lp-v { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 12px; padding: 4px 0; font-size: 13px; line-height: 1.45; }
 .eba-lp-v-titel { flex: none; min-width: 8.5em; font-weight: 600; color: var(--eba-text); }
 .eba-lp-v-text { flex: 1 1 200px; min-width: 0; color: var(--eba-muted); }
-.eba-lp-v-text a { color: var(--eba-accent-text); }
-.eba-lp-v-hilfe { padding: 0 0 4px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); text-wrap: pretty; }
+.eba-lp-v-text a { color: var(--eba-accent-text); white-space: nowrap; }
+/* Der Hinweis gehört zum Wert darüber und beginnt in seiner Spalte (8,5em zu 13 px + 12 px Abstand; seit 2.11.2026) */
+.eba-lp-v-hilfe { padding: 0 0 4px 122.5px; font-size: 12px; line-height: 1.4; color: var(--eba-muted); text-wrap: pretty; }
 /* Einstellungen eines Moduls (seit 2.11.2026 als Schalter rechts; vorher das Kästchen der Kapitel links, eingeschaltet sah eine
    Einstellung aus wie ein verstandenes Kapitel): Text in der Spalte der Titel, darunter leise, was gilt. Der Schalter ist ein
    Kästchen mit role="switch": Schiene, an in --lp-fuell (Akzent, dunkel --eba-accent-text: der dunkle Akzent war blasser als aus;
@@ -6288,22 +6388,48 @@ button.eba-lp-zeit.is-weniger {
 .eba-lp-schalter > input.eba-lp-umschalter:checked { background: var(--lp-fuell); }
 .eba-lp-schalter > input.eba-lp-umschalter:checked::before { transform: translateX(16px); }
 .eba-lp-schalter > input.eba-lp-umschalter:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 2px; }
-/* Schalter „Zeit je Kapitel“ (seit 1.11.2026, lernplan.js zeitZeile; aus, bis man ihn einschaltet): wie „Vor der Vorlesung lernen“,
-   eingeschaltet rechts „Anpassen“ bzw. „Fertig“; beim Anpassen je Kapitel der Segmentschalter Weniger, Normal, Mehr (.eba-ds,
-   Abschnitt 43) rechts neben der Herkunft, auf dem iPhone darunter */
-.eba-lp-zeitje > .eba-vb-knopf { order: 1; flex: none; margin-left: auto; }
-.eba-lp button.eba-vb-knopf { height: auto; padding: 5px 14px !important; border: 1px solid var(--eba-border); background: var(--eba-bg); box-shadow: none; }
-.eba-lp button.eba-vb-knopf.is-haupt { border-color: var(--eba-accent); background: var(--eba-accent); color: var(--text-on-accent, #fff) !important; }
-body.is-mobile .eba-lp-zeitje > .eba-vb-knopf { min-height: 44px; }
-body.is-phone .eba-lp-zeitje { flex-wrap: wrap; }
-body.is-phone :is(.eba-lp-schalter-text, .eba-lp-vorb, .eba-lp-fuss, .eba-lp-termin) { padding-left: 0; }
-body.is-phone .eba-lp-zeitje > .eba-lp-schalter-text { flex: 1 1 calc(100% - 60px); }
-body.is-phone .eba-lp-zeitje > .eba-vb-knopf { order: 3; margin: -4px 0 10px auto; }
+/* Schalter „Zeit je Kapitel“ (seit 1.11.2026, lernplan.js zeitZeile; aus, bis man ihn einschaltet): wie „Vor der Vorlesung lernen“;
+   eingeschaltet je Kapitel der Segmentschalter Weniger, Normal, Mehr (.eba-ds, Abschnitt 43), im Fenster „Lernplan einstellen“ */
+@container (max-width: 520px) { :is(.eba-lp-schalter-text, .eba-lp-vorb, .eba-lp-fuss, .eba-lp-termin) { padding-left: 0; } }
 .eba-lp-zeitwahl { flex: none; }
+/* Lernplan einstellen (seit 2.11.2026, lernplan.js EinstellFenster): je Modul Kürzel und Name, die Schalter, eingeschaltet die
+   Kapitel mit Weniger, Normal, Mehr rechts (iPhone darunter). Der Regler steht rechts neben dem Titel des Lernplans. */
+.eba-lp-einst { --eba-lp-titel-x: 0px; }
+.eba-lp-einst-modul + .eba-lp-einst-modul { margin-top: 22px; }
+/* Je Modul ein Band in --eba-surface-2 (Gruppenkopf, docs/design.md „Zeilenliste“; seit 2.11.2026: der Name stand so laut wie der
+   Titel des Fensters), der Name 600 in Textgröße */
+.eba-lp-einst-kopf { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; padding: 8px 10px; border-radius: var(--eba-radius-s); background: var(--eba-surface-2); }
+.eba-lp-einst-name { font-size: 14px; font-weight: 600; line-height: 1.35; color: var(--eba-text); }
+.eba-lp-einst .eba-ds { border-color: var(--eba-border-strong); }
+/* „Fertig“ bleibt unten im Fenster stehen, auch wenn es lang ist (am iPhone über 1100 px je Modul) */
+.modal.eba-lp-einst-fenster .modal-button-container {
+  position: sticky; bottom: 0; margin: 0 calc(-1 * var(--size-4-4, 16px)); padding: 12px var(--size-4-4, 16px); border-top: 1px solid var(--eba-border);
+  background: var(--modal-background, var(--background-primary));
+}
+.eba-lp-einst-hilfe { padding: 10px 0 4px; border-top: 1px solid var(--eba-border); font-size: 13px; color: var(--eba-muted); }
+.eba-lp-einst-k { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--eba-border); }
+.eba-lp-einst-k-text { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.eba-lp-einst-k-text > .eba-lp-k-nr { flex: none; min-width: 1.4em; color: var(--eba-muted); font-variant-numeric: tabular-nums; }
+.eba-lp-einst-k-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; line-height: 1.35; }
+@container (max-width: 520px) { .eba-lp-einst-k { flex-direction: column; align-items: stretch; gap: 6px; } }
+/* Regler im Seitenkopf. iPad, ein Tab, Notiz mit Lesen/Bearbeiten: auf der Höhe des Knopfs (gemessen: sonst 13 px tiefer; Regel und Bedingungen wie der
+   Platzhalter in 70.2) */
+body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"]:not(.eba-gesperrt) .eba-kopf:first-child > button.eba-lp-einst { margin-top: -13px; }
+/* Der Regler (bis 2.11.2026 ein Zahnrad wie das für Einstellungen & Hilfe unten rechts) schwebt rechts im Seitenkopf (seit 2.11.2026
+   abends; als Flexbox schob er Obsidians Platzhalter für Lesen/Bearbeiten, Abschnitt 70.1/70.2, aus dem Fluss: am iPhone stand er
+   unter dem Titel, am iPad 13 px tiefer als der Knopf). Steht dort ein
+   Platzhalter, links neben ihm auf seiner Höhe, sonst bündig am rechten Rand; ein langer Titel bricht davor um */
+.eba-kopf > button.eba-lp-einst {
+  float: right; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; margin: 0 0 0 8px; padding: 0;
+  border: 0; border-radius: 999px; background: transparent; box-shadow: none; color: var(--eba-muted); cursor: pointer;
+}
+.eba-kopf > button.eba-lp-einst .eba-sym { width: 22px; height: 22px; }
+@media (hover: hover) { .eba-kopf > button.eba-lp-einst:hover { background: color-mix(in srgb, var(--eba-text) 6%, transparent); color: var(--eba-text); } }
+.eba-kopf > button.eba-lp-einst:focus-visible { outline: 2px solid var(--eba-accent-text); outline-offset: 2px; }
+body.is-mobile .eba-kopf > button.eba-lp-einst { width: 44px; height: 44px; }
 .eba-lp-zeitwahl button.eba-ds-wahl { min-width: 76px; }
-body.is-phone .eba-lp-zeitwahl { align-self: stretch; margin-top: 4px; }
+@container (max-width: 520px) { .eba-lp-zeitwahl { align-self: stretch; margin-top: 4px; } }
 /* Stand eines Moduls in Teilen: der Punkt mit festem Leerzeichen davor, so steht kein „·“ am Zeilenanfang */
-.eba-lp-st + .eba-lp-st::before { content: "\a0· "; }
 .block-language-eba-lernplan.eba-lp-aus,
 .markdown-source-view.is-live-preview .cm-embed-block:has(> .block-language-eba-lernplan.eba-lp-aus) { display: none !important; }
 .el-pre:has(> .block-language-eba-lernplan.eba-lp-aus) { display: block; height: 0; min-height: 0; margin: 0 !important; padding: 0 !important; border: 0 !important; overflow: hidden; visibility: hidden; }
@@ -7101,17 +7227,18 @@ body.eba-plugin-an.is-tablet.show-inline-title .workspace-leaf-content.eba-h1-ob
    Knopf 36 px + 12 px vom Rand + 8 px Luft − 22 px rechter Rand der Spalte. Seitenkopf und „# …“ beim Lesen: ein leerer Float
    bis unter den Knopf (36 px hoch, die erste Zeile und der Anfang der zweiten); Inline-Titel und „# …“ im Editor: Innenabstand.
    Auf breiten iPads endet die Spalte weit vor dem Knopf, dort bricht ein langer Titel nur 34 px früher um. Mit zwei Tabs oder
-   angehefteter linker Seitenleiste liegt die Zeile über dem Inhalt nicht (oben), dort braucht es das nicht. */
-body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"] .markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > :is(.mod-frontmatter, .mod-header) + .el-h1::before,
-body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"] .markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > .mod-frontmatter + .el-div > .eba-kopf:first-child::before,
-body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"] .markdown-source-view.is-live-preview .cm-content > .cm-html-embed > .eba-kopf:first-child::before {
+   angehefteter linker Seitenleiste liegt die Zeile über dem Inhalt nicht (oben), dort braucht es das nicht, ebenso auf gesperrten
+   Seiten ohne den Knopf (eba-gesperrt, start.js; seit 2.11.2026, vorher blieben dort 34 px leer). */
+body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"]:not(.eba-gesperrt) .markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > :is(.mod-frontmatter, .mod-header) + .el-h1::before,
+body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"]:not(.eba-gesperrt) .markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > .mod-frontmatter + .el-div > .eba-kopf:first-child::before,
+body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"]:not(.eba-gesperrt) .markdown-source-view.is-live-preview .cm-content > .cm-html-embed > .eba-kopf:first-child::before {
   content: "";
   float: right;
   width: 34px;
   height: 36px;
 }
-body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"] :is(.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > .mod-header, .markdown-source-view.is-live-preview > .cm-editor > .cm-scroller > .cm-sizer) > .inline-title,
-body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"] .markdown-source-view.is-live-preview .cm-content > .cm-line.HyperMD-header-1 { padding-right: 34px; }
+body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"]:not(.eba-gesperrt) :is(.markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > .mod-header, .markdown-source-view.is-live-preview > .cm-editor > .cm-scroller > .cm-sizer) > .inline-title,
+body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header)):not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type="markdown"]:not(.eba-gesperrt) .markdown-source-view.is-live-preview .cm-content > .cm-line.HyperMD-header-1 { padding-right: 34px; }
 /* iPad: In der Bearbeitung (Live Preview) steht der Titel einer Notiz des Plugins so hoch wie in der Leseansicht (seit 26.10.2026;
    bis dahin gut 40 px tiefer, er sprang beim Umschalten). Vor Seitenkopf bzw. „# …“ steht im Editor eine Leerzeile, darum ohne
    den Abstand oben, und über „# …“ ohne Obsidians Abstand vor Überschriften (wie 70.1 auf dem iPhone). */
@@ -7246,3 +7373,176 @@ body.is-mobile .eba-rg-fuss > button { min-height: 44px; min-width: 96px; }
   .eba-rg-ring.is-wischen .eba-rg-wisch > svg { animation: eba-rg-wisch 1.6s ease-in-out infinite; }
 }
 /* ---------- Ende Abschnitt 71 ---------- */
+
+/* ---------- 72. Zusammenfassung eines Moduls lesen (zusammenfassung.js, typ: zusammenfassung; seit 02.11.2026, im Entwurf) ----------
+   72.1 Kapitel-Leiste links: alle Kapitel mit Kürzel (E, I, II …) auf einer Zeile, das, in dem du liest, hervorgehoben und
+   darunter seine Abschnitte mit Nummer („I.2“). Nur wenn die Ansicht breit genug ist (zusammenfassung.js setzt
+   eba-zf-mit-leiste: ab 1000 px, und neben der Leiste bleibt Platz für die zwei Spalten der Abschnitte); dann steht sie still,
+   der Text rückt nach rechts. Selektoren mit body und .workspace-leaf-content: Teil 1 (Tablet) und 1b (breites
+   Telefon-Fenster) setzen den Rand mit !important und gewönnen sonst. */
+.eba-zf-leiste, .eba-zf-zeile { display: none; }
+.view-content:is(.eba-zf-mit-leiste, .eba-zf-mit-zeile) { position: relative; }
+.view-content.eba-zf-mit-leiste > .eba-zf-leiste {
+  display: block;
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 260px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 22px 12px 40px 14px;
+  border-right: 1px solid var(--eba-border);
+  background: var(--background-primary);
+  font-family: var(--font-interface);
+  font-variant-numeric: tabular-nums;
+}
+body .workspace-leaf-content .view-content.eba-zf-mit-leiste .markdown-reading-view > .markdown-preview-view,
+body .workspace-leaf-content .view-content.eba-zf-mit-leiste .markdown-source-view.mod-cm6 .cm-scroller { padding-left: 288px !important; padding-right: 28px !important; }
+:is(.eba-zf-leiste, .eba-zf-blatt) a, :is(.eba-zf-leiste, .eba-zf-blatt) a:hover { text-decoration: none; cursor: pointer; }
+/* Kapitel: eine Zeile, der ganze Titel steht im Text (und am PC als Tooltip) */
+.eba-zf-kap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 1px 0;
+  padding: 7px 10px;
+  border-radius: var(--eba-radius-s);
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--eba-muted);
+}
+.eba-zf-kap > .eba-zf-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eba-zf-kap:hover { background: color-mix(in srgb, var(--eba-text) 5%, transparent); color: var(--eba-text); }
+/* Kürzel im Kreis, ab „II“ eine Pille: gleiche Höhe, Titel bündig */
+.eba-zf-kap-nr {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--eba-text) 8%, transparent);
+  font-size: 11.5px;
+  font-weight: 650;
+  color: var(--eba-muted);
+}
+.eba-zf-text { min-width: 0; overflow-wrap: anywhere; }
+/* Ein Zustand „hier liest du“: das Kapitel mit Fläche, der Abschnitt darin ohne Fläche, nur ein Strich in Akzentfarbe auf der
+   Führungslinie, Nummer in Akzentfarbe und halbfett (Rückmeldung 02.11.2026: beide grau hinterlegt sahen gleich aus) */
+.eba-zf-kap.aktiv { background: var(--eba-accent-soft); color: var(--eba-text); font-weight: 600; }
+.eba-zf-kap.aktiv .eba-zf-kap-nr { background: var(--eba-accent); color: var(--text-on-accent); }
+.eba-zf-unter { display: none; margin: 2px 0 10px 20px; padding-left: 11px; border-left: 1px solid var(--eba-border); }
+.eba-zf-kap.aktiv + .eba-zf-unter { display: block; }
+.eba-zf-abs {
+  position: relative;
+  display: flex;
+  gap: 8px;
+  margin: 1px 0;
+  padding: 5px 8px;
+  border-radius: var(--eba-radius-s);
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--eba-muted);
+}
+.eba-zf-abs-nr { flex: none; min-width: 2.5em; font-weight: 500; color: var(--eba-muted); }
+.eba-zf-abs.tief { margin-left: 10px; }
+.eba-zf-abs:hover { color: var(--eba-text); }
+.eba-zf-abs.aktiv { color: var(--eba-text); font-weight: 600; }
+.eba-zf-abs.aktiv .eba-zf-abs-nr { color: var(--eba-accent-text); font-weight: 600; }
+.eba-zf-abs.aktiv::before { content: ""; position: absolute; top: 3px; bottom: 3px; left: -12.5px; width: 2px; border-radius: 1px; background: var(--eba-accent); }
+.eba-zf-abs.tief.aktiv::before { left: -22.5px; }
+
+/* 72.2 Schmal (iPhone, iPad hoch; eba-zf-mit-zeile): eine dünne Zeile oben mit der Stelle, an der du liest, sobald du im ersten
+   Kapitel bist; ein Tipp öffnet von unten dieselbe Liste (Blatt). Kein schwebender Knopf, keine eigene Seite. Unter Obsidians
+   Kopfleiste, wenn sie über dem Inhalt liegt (--eba-zf-oben, gemessen von zusammenfassung.js), sonst verdeckte sie Lesen/Bearbeiten. */
+.view-content.eba-zf-mit-zeile > .eba-zf-zeile.is-da {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: absolute;
+  z-index: 3;
+  top: var(--eba-zf-oben, 0px);
+  left: 0;
+  right: 0;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 14px 0 16px;
+  border-bottom: 1px solid var(--eba-border);
+  background: color-mix(in srgb, var(--background-primary) 94%, transparent);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  font-family: var(--font-interface);
+  font-size: 13.5px;
+  line-height: 1;
+  color: var(--eba-muted);
+  cursor: pointer;
+}
+.eba-zf-zeile-nr { flex: none; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--eba-accent-text); }
+.eba-zf-zeile-text { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--eba-text); }
+.eba-zf-zeile-pfeil { flex: none; display: inline-flex; color: var(--eba-muted); }
+.eba-zf-zeile-pfeil svg { width: 16px; height: 16px; }
+.eba-zf-blatt-huelle {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  background: var(--background-modifier-cover); /* Obsidians Abdunklung hinter Fenstern */
+}
+.eba-zf-blatt {
+  width: 100%;
+  max-height: 72%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 12px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 14px 14px 0 0;
+  background: var(--background-primary);
+  border-top: 1px solid var(--eba-border-strong);
+  box-shadow: var(--eba-shadow-schwebend); /* schwebende Ebene wie ein Fenster */
+  font-family: var(--font-interface);
+  font-variant-numeric: tabular-nums;
+}
+.eba-zf-blatt-griff { width: 36px; height: 4px; margin: 2px auto 10px; border-radius: 2px; background: var(--eba-border); }
+/* Tippfläche mindestens 44 px auf iPhone und iPad */
+body.is-mobile .eba-zf-blatt .eba-zf-kap { padding-top: 11px; padding-bottom: 11px; }
+body.is-mobile .eba-zf-blatt .eba-zf-abs { padding-top: 9px; padding-bottom: 9px; }
+
+/* 72.3 Abschnittsnummer vor dem Titel im Text (data-eba-nr aus zusammenfassung.js), in Akzentfarbe, gleich breite Ziffern. Abstand
+   0.35em: Die Überschrift der Zusammenfassung ist ein Flex-Element mit eigenem Abstand (10 px), mit 0.5em stand die Nummer abseits. */
+.eba-zusammenfassung :is(h3, h4, .cm-line)[data-eba-nr]::before {
+  content: attr(data-eba-nr);
+  margin-right: 0.35em;
+  font-variant-numeric: tabular-nums;
+  color: var(--eba-accent-text);
+}
+
+/* 72.4 Tabellen auf dem Telefon (Leseansicht): jede Zeile ein kleiner Block, die erste Zelle als Titel, die anderen mit ihrem
+   Spaltenkopf davor (data-label aus zusammenfassung.js, nur an beschrifteten Tabellen). Vorher rollte die Tabelle seitlich, und
+   rechts fielen Spalten aus dem Bild. iPad und PC: die Tabelle wie sonst. */
+body.is-phone .markdown-preview-view.eba-zusammenfassung .el-table:has(> table[data-eba-spalten]) { overflow: visible; -webkit-mask-image: none; mask-image: none; }
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] {
+  display: block; width: 100%; min-width: 0; border: 0; font-size: inherit; table-layout: auto;
+}
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] thead { display: none; }
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] :is(tbody, tr) { display: block; }
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] tr { padding: 10px 0; border-bottom: 1px solid var(--eba-border); background: none; }
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] tr:first-child { border-top: 2px solid var(--eba-border-strong); }
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] td {
+  display: block; position: static; width: auto; padding: 2px 0; border: 0; background: none; text-align: left;
+}
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] td:first-child { margin-bottom: 2px; font-weight: 600; color: var(--eba-text); }
+body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] td[data-label]:not(:first-child)::before {
+  content: attr(data-label) ": ";
+  font-family: var(--font-interface);
+  font-size: 0.86em;
+  font-weight: 600;
+  color: var(--eba-muted);
+}
+/* ---------- Ende Abschnitt 72 ---------- */

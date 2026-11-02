@@ -1,0 +1,5 @@
+# Gesperrte Schlüssel für Server-Pakete (docs/release.md, „Schlüssel sperren“). Jede Installation und jedes geprüfte Paket ergänzt
+# damit die Liste /etc/studium-server/revoked_keys von root, die nur wächst; gegen sie prüft „studium-server aktualisieren“ die
+# Signatur (ssh-keygen -Y verify -r). Eine Zeile je öffentlichem Schlüssel, wie in einer .pub-Datei (keine KRL); leer, solange keiner
+# gesperrt ist. Zeilen mit # zählen nicht. release.py prüft jede Zeile mit ssh-keygen -l und lehnt Schlüssel ab, die noch in
+# allowed_signers stehen.

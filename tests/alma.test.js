@@ -511,6 +511,15 @@ test("Text aus Alma in der Notiz und in „Bitte prüfen“: Titel und Raum mit 
   t.text[p] = t.text[p].replace(/^Mittwochs, .*$/m, () => "Mittwochs, 10:00–12:00 · Raum [3] $& neu");
   await t.A.aktualisieren({ still: true, text: serie("Hörsaal 9") });
   assert.match(t.text[p], /^Mittwochs, 10:00–12:00 · Hörsaal 9$/m);
+  // Kopfzeile mit dem Raum, entschärft wie bis 02.11.2026 (ein erlaubter Link der Uni hatte noch „\_“, eine Mail-Adresse kein „\@“):
+  // wird ebenso ersetzt (mit ctx.zentral wie im Plugin)
+  t.ctx.zentral = laden("zentral").ctx.zentral;
+  await t.A.aktualisieren({ still: true, text: serie("Online https://uni-tuebingen.de/zoom_1 oder x@uni-tuebingen.de") });
+  assert.match(t.text[p], /^Mittwochs, 10:00–12:00 · Online https:\/\/uni-tuebingen\.de\/zoom_1 oder x\\@uni-tuebingen\.de$/m, "jetzt: Link der Uni roh, „\\@“");
+  t.text[p] = t.text[p].replace(/^Mittwochs, .*$/m, () => "Mittwochs, 10:00–12:00 · Online https://uni-tuebingen.de/zoom\\_1 oder x@uni-tuebingen.de");
+  await t.A.aktualisieren({ still: true, text: serie("Hörsaal 10") });
+  assert.match(t.text[p], /^Mittwochs, 10:00–12:00 · Hörsaal 10$/m);
+  delete t.ctx.zentral;
   // „Bitte prüfen“: Titel einer Notiz, die in Alma fehlt, ohne Link
   t.fm[p].alma_fehlt = "2026-10-27";
   delete t.fm[p].herkunft;
@@ -688,4 +697,38 @@ test("Ohne Semester (Datenmodell noch nicht geladen, Datum nicht in der Semester
   const c = await t.A.aktualisieren({ still: true, text: kalender(S100) });
   assert.deepEqual([c.termine, c.neu], [1, 1]);
   assert.ok(Object.keys(t.fm).every((x) => !/^Stundenplan\//.test(x) || t.fm[x].semester === SEM));
+});
+
+test("Text aus Alma über ctx.zentral.mdInZeile: gewöhnliche Notizen Zeichen für Zeichen wie ohne, eine Adresse wird kein Link", async () => {
+  const Z = laden("zentral").ctx.zentral;
+  const serie = kalender(ve({ UID: "w", SUMMARY: "B110 Einführung in die BWL Vorlesung", DTSTART: "20261021T100000", DTEND: "20261021T120000",
+    RRULE: "FREQ=WEEKLY;COUNT=8", LOCATION: "Kupferbau HS 25 & Raum 1.02 (Neue Aula)" }), B130, S100);
+  const ohne = tresor({ sperre: true }), mit = tresor({ sperre: true });
+  mit.ctx.zentral = Z;
+  await ohne.A.aktualisieren({ still: true, text: serie });
+  await mit.A.aktualisieren({ still: true, text: serie });
+  assert.equal(Object.keys(mit.text).length, 3);
+  assert.deepEqual(mit.text, ohne.text);
+  await mit.A.aktualisieren({ still: true, text: kalender(ve({ UID: "x", SUMMARY: "Workshop siehe www.evil.example Vorlesung", DTSTART: "20261022T100000",
+    DTEND: "20261022T120000", RRULE: "FREQ=WEEKLY;COUNT=8", LOCATION: "https://evil.example/raum" }), B130, S100) });
+  const p = Object.keys(mit.text).find((x) => /Workshop/.test(x));
+  assert.match(mit.text[p], /· https\\:\/\/evil\\\.example\/raum$/m);
+  assert.match(mit.text[p], /Aus Alma \(Workshop siehe www\\\.evil\.example Vorlesung\)/);
+});
+
+test("Name schon belegt, nur in anderer Groß- und Kleinschreibung: Alma legt daneben an, die andere Notiz bleibt", async () => {
+  const t = tresor();
+  const holen = t.ctx.app.vault.getAbstractFileByPath;
+  t.ctx.app.vault.getAbstractFileByPath = (p) => (p === "Stundenplan"
+    ? { path: p, children: Object.keys(t.fm).filter((x) => x.indexOf("Stundenplan/") === 0).map((x) => ({ path: x, name: x.split("/").pop() })) } : holen(p));
+  // ctx.zentral.existiert über diesen Tresor (zentral.js liest window.app wie alma.js)
+  const Zk = laden("zentral").ctx;
+  Zk.app.vault.getAbstractFileByPath = (p) => t.ctx.app.vault.getAbstractFileByPath(p);
+  t.ctx.zentral = Zk.zentral;
+  const anders = "Stundenplan/mo 10.00 b110 vorlesung.md";
+  t.fm[anders] = { typ: "notiz" };
+  t.text[anders] = "Meine Notiz\n";
+  await t.A.aktualisieren({ still: true, text: kalender(B110) });
+  assert.deepEqual(Object.keys(t.fm).filter((x) => x.indexOf("Stundenplan/") === 0).sort(), ["Stundenplan/Mo 10.00 B110 Vorlesung 2.md", anders]);
+  assert.equal(t.text[anders], "Meine Notiz\n");
 });

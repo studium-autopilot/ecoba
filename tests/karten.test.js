@@ -393,6 +393,9 @@ test("Optionen: Standard wie Anki, Grenze über alle Module, Prozent, Grenzen, S
   assert.equal(o.maxIntervall, 36500); assert.equal(o.tagesbeginn, 23); assert.equal(o.geschwister, false);
   assert.equal(o.neuReihenfolge, "zufall"); assert.equal(o.wdh, 200);
   assert.equal(K.optionenAus({ karten_behalten: 0.5 }).ziel, 0.7);
+  // Prozentzeichen fallen alle weg, auch doppelt und mit Leerzeichen; ein Komma gilt als Dezimalpunkt
+  for (const roh of ["85%", "85 %", "%85", "85%%", " 85 % "]) assert.equal(K.optionenAus({ karten_behalten: roh }).ziel, 0.85, roh);
+  assert.equal(K.optionenAus({ karten_behalten: "0,85" }).ziel, 0.85);
 });
 
 test("Lernoptionen prüfen: ganze Zahlen in Grenzen, Lernschritte als Zeiten, leer = Standard", () => {

@@ -40,7 +40,7 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `lehrveranstaltung` | `code` | Lehrveranstaltung im Stundenplan von Hand | Neue Lehrveranstaltung |
 | `sq-kurs` | – | SQ-Leistung | Neuer SQ-Kurs |
 | `modul` | `code` | eigenes Modul aus `System/Gerüste/Modul.md` | Neues eigenes Modul |
-| `oeffnen` | `notiz`, `original=1`, `datei` (Link relativ zur Notiz, vom PDF-Kasten) | Datei der Unterlage extern öffnen (PC: Standardprogramm, nur Arten aus `EXTERN_ARTEN`; iOS: Dateien-App) | Unterlage öffnen |
+| `oeffnen` | `notiz`, `original=1`, `datei` (Link relativ zur Notiz, vom PDF-Kasten) | Datei der Unterlage extern öffnen (PC: Standardprogramm, nur Arten aus `EXTERN_ARTEN`; iOS: Dateien-App); von außen nur unter `Unterlagen/` und nach Rückfrage | Unterlage öffnen |
 | `plan` | `modul` (Code oder Name) | `gewaehlt` umschalten | – |
 | `variante` | `wert` (ohne: Auswahl, so die Zeile unter „Deine Angaben“) | `variante` in `System/Einstellungen.md` | Variante wählen (mit Auswahl) |
 | `darstellung` | `wert` (`hell`, `dunkel`, `automatisch`) | Hell, dunkel oder automatisch wie das Gerät | Darstellung wählen (mit Auswahl) |
@@ -77,6 +77,13 @@ Herkunftsmarke aus dem Internet, vor der Office warnen würde. Alles andere öff
 `tests/aktionen-oeffnen.test.js`). Die Listen schützen nur diesen Knopf: Ein interner Link auf eine Datei, die Obsidian nicht
 anzeigen kann, öffnet Obsidian selbst im Standardprogramm. Auf iPhone und iPad zeigt die Dateien-App die Datei nur an; dort
 gelten die Listen nicht.
+
+**`oeffnen` von außen (seit 02.11.2026):** Kommt der Link von außerhalb der App (`c.extern`, Browser, Mail, andere App), öffnet
+der Knopf nie direkt. Nur eine Datei unter `Unterlagen/` kommt in Frage; jede andere ergibt einen Hinweis („Links von außerhalb
+von Obsidian öffnen nur Unterlagen, „…“ liegt woanders.“), und nichts öffnet sich. Für eine Datei unter `Unterlagen/` fragt
+erst ein Fenster „Datei öffnen?“ mit Name und Art („PDF-Datei“) nach, Knöpfe **Öffnen** und **Abbrechen**; **Abbrechen** ist
+der Hauptknopf und hat den Fokus, Enter und Esc öffnen also nichts. Die Listen oben gelten danach wie in der App (eine Art, die
+der Knopf nie öffnet, ergibt ihren Hinweis ohne Fenster). Klicks in der App bleiben ohne Rückfrage.
 
 Ein Knopf heißt wie sein Befehl (Wortliste, `docs/design.md`, „Sprache“; `tests/wortliste.test.js` prüft die Knöpfe in Seiten).
 Zusätzlich gibt es den Befehl **„Neue Notiz aus Vorlage …“** (`studium-autopilot:neue-notiz`, Strg/Cmd+Umschalt+N). Er bietet
@@ -125,9 +132,11 @@ Eingabefeld), gilt wieder der vorherige Link.
   `alma_schluessel`, `alma_titel`, `alma_raum`), bleiben deine (keine `herkunft`). Notizen mit fremder `herkunft` (zentral,
   ilias-gruppe, gruppe-gewaehlt, claude …) fasst Alma nie an.
 - **Text aus Alma** (seit 01.11.2026): Titel und Raum stehen im Text einer Notiz (Überschrift ohne Modulcode, Kopfzeile, Kasten
-  „Aus Alma (…)“) und im Punkt für „Bitte prüfen“ in einer Zeile mit `\` vor Markdown-Zeichen (`mdText` wie in `zentral.js`,
-  dazu `&`): Ein Titel aus Alma wird nie ein Bild, Kasten oder Link in die App oder auf Dateien; eine Webadresse darin bleibt
-  anklickbar. In den Eigenschaften (`alma_titel`, `raum`, `titel`) bleibt
+  „Aus Alma (…)“) und im Punkt für „Bitte prüfen“ in einer Zeile mit `\` vor Markdown-Zeichen und vor den Zeichen, an denen
+  Obsidian einen Link erkennt (`ctx.zentral.mdInZeile` wie bei den zentralen Terminen, dazu `&`; seit 02.11.2026, vorher nur die
+  Markdown-Zeichen): Ein Titel aus Alma wird nie ein Bild, Kasten oder Link in die App, auf Dateien oder auf eine fremde Seite; eine
+  Adresse der Uni bleibt anklickbar. Ohne `zentral.js` (Hülle eines eigenen Uni-Abgleichs) nur die Markdown-Zeichen. In den
+  Eigenschaften (`alma_titel`, `raum`, `titel`) bleibt
   er roh, darum ändern sich Schlüssel, Zuordnung und Besitz nicht. Ein gewöhnlicher Titel oder Raum sieht aus wie vorher;
   vorhandene Notizen schreibt Alma deshalb nicht neu. Ändert sich der Raum, findet die Kopfzeile ihn entschärft oder roh (ältere
   Notizen) und schreibt den neuen entschärft.

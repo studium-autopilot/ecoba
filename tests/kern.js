@@ -21,8 +21,10 @@ class El {
   createSpan(o) { return this.createEl("span", o); }
   createEl(tag, o) { const e = new El(tag, o); this.kinder.push(e); return e; }
   addEventListener(typ, fn) { this.lauscher[typ] = fn; }
-  addClass() {}
+  addClass(c) { this.cls = (this.cls ? this.cls + " " : "") + c; }
+  setAttr(k, v) { (this.attr = this.attr || {})[k] = v; }
   setText(t) { this.text = t; }
+  remove() { this.entfernt = true; }
   empty() { this.kinder = []; }
   alle() { return [this].concat(...this.kinder.map((k) => k.alle())); }
   get textContent() { return [this.text].concat(this.kinder.map((k) => k.textContent)).filter(Boolean).join(" "); }
@@ -43,8 +45,10 @@ function obsidianErsatz({ hinweise = [], netz = null, anfragen = [] } = {}) {
   class Plugin {
     constructor(app, manifest) {
       this.app = app; this.manifest = manifest;
-      this.ersatzBefehle = {}; this.ersatzHandler = {}; this.ersatzDom = []; this.ersatzWeg = [];
+      this.ersatzBefehle = {}; this.ersatzHandler = {}; this.ersatzDom = []; this.ersatzWeg = []; this.ersatzStatus = [];
     }
+    // Eintrag in der Statusleiste (wie Obsidian: beim Entladen weg)
+    addStatusBarItem() { const e = new El("div", { cls: "status-bar-item" }); this.ersatzStatus.push(e); this.ersatzWeg.push(() => e.remove()); return e; }
     addCommand(c) { this.ersatzBefehle[c.id] = c; return c; }
     removeCommand(id) { delete this.ersatzBefehle[id]; }
     registerObsidianProtocolHandler(name, fn) { this.ersatzHandler[name] = fn; }
@@ -56,10 +60,17 @@ function obsidianErsatz({ hinweise = [], netz = null, anfragen = [] } = {}) {
     registerMarkdownCodeBlockProcessor() {}
   }
   class Modal { constructor(app) { this.app = app; } open() { throw new Error("Fenster im Test: Antwort in plugin.testAntworten"); } close() {} }
+  // Wie Obsidian: containerEl ist das Element des Hinweises, ein Tipp darauf schließt ihn (Lauscher, dann hide), danach ist es
+  // nicht mehr im Dokument. eintrag.schliessen() tippt darauf.
   class Notice {
     constructor(inhalt, dauer) {
-      const el = inhalt && typeof inhalt === "object" ? inhalt : null;
+      const el = inhalt && typeof inhalt === "object" ? inhalt : null, n = this, klick = [];
       this.eintrag = { text: el ? el.textContent : String(inhalt), el, dauer, weg: false };
+      this.containerEl = {
+        get isConnected() { return !n.eintrag.weg; },
+        addEventListener: (typ, fn) => { if (typ === "click") klick.push(fn); },
+      };
+      Object.defineProperty(this.eintrag, "schliessen", { value: () => { for (const fn of klick) fn(); n.hide(); } });
       hinweise.push(this.eintrag);
     }
     hide() { this.eintrag.weg = true; }
@@ -133,13 +144,14 @@ function speicherBauen(anfang) {
 
 // Ein Kern mit Tresor. o: { dateien, version (Kern), schluessel (feste Schlüssel der Kopie), netz, speicher (Gerätespeicher am
 // Anfang), einstellungen (Frontmatter von System/Einstellungen.md für den metadataCache) } → { k, tresor, speicher, hinweise,
-// anfragen, start(), befehl(id), protokoll(parameter), weg() }
+// anfragen, start(), befehl(id), protokoll(parameter), offen() (Hinweise, die noch stehen), oeffnen(pfad), weg() }
 function aufbau(o = {}) {
   const hinweise = [], anfragen = [];
   const obs = obsidianErsatz({ hinweise, netz: o.netz || null, anfragen });
   const Kern = kernModul(obs, o.schluessel);
   const tresor = tresorBauen(o.dateien);
   const speicher = speicherBauen(o.speicher);
+  const arbeitsflaeche = {}; // Ereignis von app.workspace → [Lauscher]
   global.window = global.window || { eval: (c) => (0, eval)(c) };
   global.document = global.document || { body: { classList: { add() {}, remove() {} } }, createDocumentFragment: () => new El("fragment") };
   const app = {
@@ -149,8 +161,8 @@ function aufbau(o = {}) {
       on: () => ({}), offref: () => {},
     },
     workspace: {
-      onLayoutReady: () => {}, on: () => ({}), getActiveFile: () => null, getLeavesOfType: () => [], iterateAllLeaves: () => {},
-      updateOptions: () => {},
+      onLayoutReady: () => {}, on: (ev, fn) => { (arbeitsflaeche[ev] = arbeitsflaeche[ev] || []).push(fn); return {}; },
+      getActiveFile: () => null, getLeavesOfType: () => [], iterateAllLeaves: () => {}, updateOptions: () => {},
     },
     loadLocalStorage: speicher.laden,
     saveLocalStorage: speicher.speichern,
@@ -165,6 +177,9 @@ function aufbau(o = {}) {
     // Link von außen (obsidian://studium-autopilot?…), wie Obsidian ihn an den Protokoll-Handler gibt
     protokoll: (p) => k.ersatzHandler["studium-autopilot"](Object.assign({ action: "studium-autopilot" }, p)),
     texte: () => hinweise.map((h) => h.text),
+    offen: () => hinweise.filter((h) => !h.weg),
+    // Notiz öffnen, wie Obsidian es meldet (Ereignis file-open)
+    oeffnen: (p) => { for (const fn of arbeitsflaeche["file-open"] || []) fn(p ? new TFile(p) : null); },
     weg: () => { for (const fn of k.ersatzWeg) fn(); k.onunload(); },
   };
   return x;

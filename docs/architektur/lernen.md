@@ -205,7 +205,7 @@ abgeblendet und grau, die Pille auch auf Dashboard, Modulseite und in der Übers
 | Teil | Inhalt |
 |---|---|
 | Frontmatter | `typ: lernplan`, `code`, `quelle` (woher die Liste stammt), `stand`; optional `seit` (Plan beginnt in dieser Woche, z. B. bei spätem Einstieg), `verstanden_bis` (Ziel statt 70 %), `vorlaeufig: true` (Liste teils geschätzt; Stand zeigt „(Liste vorläufig)“), `vorlernen: false` (Schalter „Vor der Vorlesung lernen“ aus), `zeit_je_kapitel: true` (Schalter „Zeit je Kapitel“ an, seit 1.11.2026), `kapitel_zeit: ["3 mehr", "IV weniger"]` (deine Zeit je Kapitel; gilt nur, solange der Schalter an ist) |
-| Block | ```` ```eba-lernplan modul ```` – eine Zeile mit Stand wie im Bereich, darunter (seit 2.11.2026) dasselbe wie aufgeklappt im Bereich als Karte (`.eba-lp-notiz-inhalt`, ohne den Link zur Kapitelliste); die Liste unter „Kapitel“ ist dann in der Leseansicht ausgeblendet (Höhe 0, nicht `display: none`: sonst bliebe darunter alles leer) und steht nur beim Bearbeiten |
+| Block | ```` ```eba-lernplan modul ```` – seit 2.11.2026 das Modul wie aufgeklappt im Bereich, in einem Rahmen (`.eba-lp-notiz-modul`): oben seine Zeile (`modulKopf` mit `inNotiz`: ohne Kürzel, das der Titel der Notiz nennt, ohne Pfeil, der Name als Link zur Modulseite, links der Strich in seiner Farbe), darunter das Aufgeklappte ohne den Link zur Kapitelliste (vorher eine eigene Zeile mit „·“-Kette über einer zweiten Karte); die Liste unter „Kapitel“ ist dann in der Leseansicht ausgeblendet (Höhe 0, nicht `display: none`: sonst bliebe darunter alles leer) und steht nur beim Bearbeiten |
 | `## Kapitel` | je Kapitel `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Folien (`[[X100 Folien 01 …]]`, bei einer PDF für alles `[[….pdf#page=30\|S. 30–52]]`) und die Seitenzahl (`23 S.`); bei einem frei zugänglichen Lehrbuch ein https-Link (`[online](https://…)`); seit 31.10.2026 aus den Listen `[[X100 Folien 01 …\|Folien]]` (ohne Folien im Tresor „Folien 1“, wenn die Nummer von der Kapitelnummer abweicht), `Vorlesung 19.10.2026` (erste Vorlesung zum Kapitel) und `Zwischentest 13.11.2026`, seit 1.11.2026 `in 9 von 12 Altklausuren`; eingerückte Aufgaben = Unterkapitel |
 
 `kapitelLesen` liest nur Aufgaben außerhalb von Frontmatter und Codeblöcken; Nummer = erstes Wort, wenn es eine Ziffer enthält und
@@ -334,12 +334,14 @@ dem Skill dataviz (Balken ≤ 24 px, 2 px Fuge, Ringe in der Kartenfläche statt
 Schmal (iPhone, Container unter 520 px) statt der Säulen die **Wochenleiste** (`leisteZeichnen`, `leisteFenster`) über der gewählten
 Woche: sieben Wochen um die gewählte (am Rand bündig) als Knöpfe mit dem Montag und der Säule der Woche, diese Woche im Akzent,
 vorlesungsfreie getönt, eine mit Klausur mit roter Raute; ein Tipp oder ← → wählt, das Fenster wandert mit. Die sieben Wochen der
-Leiste stehen als getöntes Band in den Bahnen darüber (`.eba-lp-plan-fenster`, seit 2.11.2026: Bahnen und Leiste waren zwei
-Zeitskalen ohne Verbindung; ein grauer Balken je Woche statt der Farben der Module las sich leer und wurde verworfen). Die Säulen waren dort 8 px
+Leiste stehen als getöntes Band in den Bahnen darüber, oben und unten ein Strich in der Farbe des Rahmens der gewählten Woche,
+in der Legende „Wochen unten“ (`.eba-lp-plan-fenster`, `--lp-fenster`, seit 2.11.2026: Bahnen und Leiste waren zwei Zeitskalen
+ohne Verbindung; ein grauer Balken je Woche statt der Farben der Module las sich leer und wurde verworfen; zuerst nur getönt mit
+Strichen an den Seiten, kaum 1,13 : 1 und wie Monatslinien). Die Säulen waren dort 8 px
 breit, lasen sich wie ein Strichcode und waren kaum zu treffen; bewusst keine Leiste zum Wischen, denn waagerechtes Wischen ist in
 Obsidian von überall auf der Fläche eine Geste (Seitenleisten, hier zurück; [„Öffnen und Navigieren“](bedien-bausteine.md)). Welche von beiden
 gilt, entscheidet CSS. Schmal steht auch die Legende hinter ⓘ neben „Semesterplan“ (`.zeigt-legende` an der Karte; offen gleich unter dem Kopf statt unter
-dem Bild, wo sie am unteren Rand aufging; ⓘ bleibt getönt, solange sie offen ist). Im Kopf der Woche steht schmal nur „0/3“ ohne
+dem Bild, wo sie am unteren Rand aufging; ⓘ bleibt getönt, solange sie offen ist). Im Kopf der Woche steht schmal nur „0 von 3“ ohne
 Balken. Mit beidem und
 den Modulen zu ist die Seite auf dem iPhone bei Schrift 20 etwa 1800 px hoch (vor dem 1.11.2026 etwa 3300).
 Unter dem Bild die **gewählte Woche** (`wocheZeichnen`; Tipp auf eine Säule, ‹ › mit 44 px Tippfläche oder Pfeiltasten; gemerkt
@@ -352,8 +354,9 @@ Fassung des Skripts, sonst stand es losgelöst über der Seite; volle Zeit als l
 weniger als Wahlpille im Akzent, „halbe Zeit“; docs/design.md: derselbe Wert in jeder Woche gehört nicht in eine Pille). Darunter
 Klausurvorbereitung, Pausen mit Namen und Klausuren nach Datum (fett) als Stücke, die nicht mitten umbrechen (`stuecke`; der Punkt
 hängt am Stück davor, so steht keiner am Zeilenanfang); dann die Kapitel der Woche als Zeilen zum
-Abhaken, mit Farbpunkt und Kürzel davor (auf dem iPhone mit der Nummer vor der Fälligkeit unter dem Titel, „B110 1“, der Titel hat
-so die ganze Breite): In dieser Woche erst die in ihr fälligen offenen Kapitel über alle Module, dann unter „Von früher“ die noch
+Abhaken, mit Farbpunkt und Kürzel davor (schmal, unter 520 px Breite der Woche bzw. der Liste, mit der Nummer vor der Fälligkeit
+unter dem Titel, „B110 1“, der Titel hat so die ganze Breite; bis 2.11.2026 nur am iPhone, in der Spalte der Module am iPad quer
+standen Fristen dreierlei; die Zahl der Unterkapitel bricht mit dem letzten Wort des Titels um, nie allein): In dieser Woche erst die in ihr fälligen offenen Kapitel über alle Module, dann unter „Von früher“ die noch
 offenen früherer Wochen (der Kopf zählt nur diese Woche; bis 1.11.2026 gemischt, „0/2“ über acht Zeilen). Schmal (iPhone) ist
 „Von früher“ eine Zeile zum Aufklappen mit der Zahl („6 Kapitel · 4 überfällig“, nur der überfällige Teil in Warnfarbe), zu, bis man sie aufklappt
 (gerätelokal, `ctx.bleibend`); breit ist sie immer offen, mit der Zahl und ohne Pfeil. Daneben (`bisText`) „bis
@@ -372,10 +375,16 @@ docs/design.md; vom 1.11. an Karten im Raster mit großen Namen in der Schrift d
 die Woche, die Entscheidung war nach dem Design-Review offen), sortiert nach Klausur, Vorbereitung und Vorbei ans Ende, „nicht mehr
 dran“ ganz ans Ende (leiser). Links das Kürzel mit Farbpunkt, daneben der Name (600) und die Pille bei einem Zustand, darunter ein
 kleiner Balken (neutrale Spur, gefüllt in der Farbe des Moduls, Strich, wo der Plan heute steht) und der Stand kurz („2 von 7
-Kapiteln · Klausur in 97 Tagen“; ohne Plan wie `standTeile`); rechts gedämpft der gewählte Termin (`terminKurz`: „Haupttermin Mo
-8.2.“, „verschoben“) und der Pfeil, der sich offen dreht. Schmal (Container unter 520 px) steht der Termin als dritte Zeile; auf
-Touch-Geräten ist jede Zeile mindestens 44 px hoch. Neben „Module“ steht, wie viele Klausuren wann („Klausuren: 4 im Haupttermin, 1 im
-Nachholtermin, 1 verschoben“, `wahlText`). Ein Tipp klappt das Modul direkt unter seiner Zeile auf (`modulInhalt`, gerätelokal über
+Kapiteln“; ohne Plan wie `standTeile`); rechts gedämpft der gewählte Termin mit den Tagen bis dahin (`terminKurz`: „Haupttermin
+Mo 8.2. · in 98 Tagen“, „verschoben“; bis 2.11.2026 abends stand „Klausur in 98 Tagen“ links im Stand) und der Pfeil, der sich
+offen dreht. Offen fehlt der Termin rechts, den sagt die Wahl oben im Aufgeklappten (vorher stand das Datum dreimal da). Schmal
+(Container `eba-lp-liste` unter 520 px) steht der Name über die ganze Breite, darunter das Kürzel als Text mit Farbpunkt wie in
+den Kapitelzeilen und der Termin, dann Balken und Stand, dahinter der Zustand in seiner Farbe („0 von 15 Kapiteln · 2 Kapitel
+überfällig“, statt der Pille neben dem Namen); offen steht das Kürzel vor dem Balken (bis 2.11.2026 abends stand das Kürzel in
+einer eigenen Spalte, unter ihm blieben 80 px leer, und lange Namen brachen in drei Zeilen; danach kurz als getönte Pille unter der
+des Zustands, die wie ein zweiter Zustand aussah, und offen allein in einer Zeile); auf Touch-Geräten ist jede Zeile mindestens
+44 px hoch. Oben im Rahmen steht „Module“ als Kopf wie „Semesterplan“ in seiner Karte (vorher ein Label darüber), rechts, wie viele
+Klausuren wann („Klausuren: 4 im Haupttermin, 1 im Nachholtermin, 1 verschoben“, `wahlText`). Ein Tipp klappt das Modul direkt unter seiner Zeile auf (`modulInhalt`, gerätelokal über
 den Hot-Reload, `ctx.bleibend`; Zeile und Aufgeklapptes tragen links einen Strich in seiner Farbe). Immer nur eins ist offen
 (`offenSetzen`, seit 1.11.2026); steht das Aufgeklappte im unteren Viertel des Fensters oder darunter, rückt es nach oben.
 Aufgeklappt:
@@ -383,32 +392,50 @@ Ganz oben **Klausur**: wann du sie schreibst (`wahlZeichnen`, `.eba-lp-termin`; 
 erste Zeile von „Für die Klausur“ unter allen Kapiteln, wo man sie nicht fand; davor auf jeder Karte, wo zehn umrandete Knöpfe und
 fünf Links das Lauteste der Seite waren): zwei Knöpfe Haupttermin und Nachholtermin mit Tag (der gewählte im Akzent; bis 1.11.2026
 voll; Tippfläche 44 px; auf dem iPhone über die ganze Breite) und leise „Ins WS 2027/28 verschieben“; bei einem verschobenen Modul
-ist keiner der Knöpfe gewählt, einer holt es zurück. Dann die Kapitel, darunter **Für die Klausur** (`vorbereitungZeichnen`):
-Altklausuren, Übungsblätter, Karteikarten (siehe unten).
-Dann die Einstellungen des Moduls als Zeilen mit einem **Schalter** rechts (`umschalter`, docs/design.md „Schalter“; seit 2.11.2026,
-vorher das Kästchen der Kapitel, eingeschaltet sah eine Einstellung aus wie ein verstandenes Kapitel), zuerst
-**Zeit je Kapitel** (`zeitZeile`, `zeitSatz`; standardmäßig aus,
+ist keiner der Knöpfe gewählt, einer holt es zurück, und statt „Ins … verschieben“ steht im Akzent „Zurück ins WS 2026/27“ (in
+den Haupttermin); gleich nach dem Verschieben sagt ein Hinweis „S110 liegt jetzt im WS 2027/28.“ mit **Rückgängig** (seit 2.11.2026:
+Wer sich vertippt hatte, sah nicht, dass die Knöpfe ohne Wahl es zurückholen). Dann die Kapitel, darunter **Üben** (`vorbereitungZeichnen`; bis 2.11.2026
+„Für die Klausur“, zu nah an „Klausur“ darüber): Altklausuren, Übungsblätter, Karteikarten (siehe unten). „Klausur“ und „Üben“ sind
+Labels im selben Stil; der Hinweis unter den Altklausuren beginnt in der Spalte ihres Werts, „ab Mo 28.12.“ und der Name der
+nächsten Klausur brechen nicht in sich um.
+**Zwei Spalten** (seit 2.11.2026, `.eba-lp-raster`): Ab 1100 px Breite (iPad quer) steht die gewählte Woche links in einer eigenen
+Karte unter dem Semesterplan und rechts daneben die Module (440 px, ihre Zeilen schmal; der Container `eba-lp-liste` entscheidet das
+nach der Breite der Liste), beide oben bündig. Ist rechts ein Modul offen, bleibt die Woche beim Scrollen oben stehen, wenn sie ganz
+ins Fenster passt (`haftenPruefen`, `is-passt`, auch nach dem Drehen; sonst blieb links eine Fläche von 725 × 860 px leer). Schmaler
+stehen beide über die volle Breite, die Woche bündig an der Karte darüber wie vorher in ihr. Über die volle Breite standen Fristen am iPad quer bis
+1170 px vom Titel; eine Grenze von 760 px (kurz am 2.11.) ließ rechts ein Drittel der Seite leer.
+**Lernplan einstellen** (`EinstellFenster`, `einstellungenZeichnen`, seit 2.11.2026; vorher im aufgeklappten Modul, „Anpassen“
+legte die Wahl unter jedes Kapitel, am iPhone etwa 3700 px): ein Fenster hinter dem Regler (Symbol mit Schiebereglern; bis 2.11.2026 abends ein Zahnrad wie das für Einstellungen & Hilfe) rechts neben dem Titel des Lernplans
+(`kopfRegler`, setzt es in den Seitenkopf `.eba-kopf` derselben Leseansicht, bei jedem Zeichnen wieder; rechts schwebend wie der
+Platzhalter für Obsidians Knopf Lesen/Bearbeiten, links neben ihm auf seiner Höhe, auf gesperrten Seiten ohne den Knopf bündig am
+Rand; bis 2.11.2026 abends eine Flexbox, die den Platzhalter aus dem Fluss nahm: am iPhone stand er unter dem Titel). In
+einer Lernplan-Notiz zeigt es nur ihr Modul; „Fertig“ bleibt unten stehen. Je Modul mit Plan ein Band mit Kürzel und Name
+(Gruppenkopf), dann die Einstellungen als Zeilen mit einem **Schalter** rechts (`umschalter`, docs/design.md „Schalter“; seit 2.11.2026,
+vorher das Kästchen der Kapitel, eingeschaltet sah eine Einstellung aus wie ein verstandenes Kapitel): **Vor der Vorlesung
+lernen** (`schalterZeichnen`), dann **Zeit je Kapitel** (`zeitZeile`, `zeitSatz`; standardmäßig aus,
 an schreibt nur die Zeile `zeit_je_kapitel: true`, `zeitAnSetzen`). Aus sagt der Satz darunter, was das Einschalten brächte („Alle
 Kapitel zählen nach ihren Seiten. Eingeschaltet nach 11 Altklausuren mehr Zeit für 1, 2 und 7, weniger für 3.“); `kapitel_zeit`
 bleibt dabei in der Notiz und gilt wieder, sobald man ihn einschaltet. An sagt er, woher die Zeit kommt („Nach 12 Altklausuren: mehr
-Zeit für 4 und 7, weniger für 1. Von dir geändert: 3.“ bzw. „Nach den Seiten der Kapitel.“), und rechts steht „Anpassen“ (ein Normal-Knopf nach docs/design.md, „Fertig“ ein Haupt-Knopf, als Empfohlen sah er in Elfenbein gesperrt aus; auf dem
-iPhone in eigener Zeile unter dem Satz; breit links vom Schalter). Auf dem iPhone beginnen „Für die Klausur“, die Einstellungen und
-der Verweis am linken Rand, nicht in der Spalte der Titel (sie ließ dort nur ein Drittel der Breite). Beim Anpassen (gerätelokal, bis „Fertig“) trägt jedes Kapitel statt der Frist die Herkunft („in 11 von 12 Altklausuren“) und den Segmentschalter Weniger,
-Normal, Mehr (`zeitWahlZeichnen`, `.eba-ds`); ein Tipp schreibt nur die Zeile `kapitel_zeit` (`zeitSetzen`), und was dem Vorschlag
-aus den Altklausuren entspricht, steht nicht darin, so gilt ein neuer Vorschlag später wieder. Sonst steht hinter der Frist „mehr
-Zeit“ bzw. „weniger Zeit“, wenn ein Kapitel nicht normal zählt.
+Zeit für 4 und 7, weniger für 1. Von dir geändert: 3.“ bzw. „Nach den Seiten der Kapitel.“). Eingeschaltet folgt ein Satz
+(„„Mehr“ ist anderthalbmal so viel Zeit, „Weniger“ halb so viel.“) und je Kapitel eine Zeile (`kapitelWahl`): Nummer, Titel,
+darunter die Herkunft („in 11 von 12 Altklausuren“), rechts (iPhone darunter) der Segmentschalter Weniger, Normal, Mehr
+(`zeitWahlZeichnen`, `.eba-ds`); ein Tipp schreibt nur die Zeile `kapitel_zeit` (`zeitSetzen`), und was dem Vorschlag aus den
+Altklausuren entspricht, steht nicht darin, so gilt ein neuer Vorschlag später wieder. Jede Änderung schreibt sofort; das Fenster
+zeichnet sich neu, sobald Obsidian die Notiz neu gelesen hat (`nachAenderung`, höchstens 1,5 s), die Seite dahinter ebenso. Im
+aufgeklappten Modul steht hinter der Frist „mehr Zeit“ bzw. „weniger Zeit“, wenn ein Kapitel nicht normal zählt. Auf dem iPhone
+beginnen „Üben“ und der Verweis am linken Rand, nicht in der Spalte der Titel (sie ließ dort nur ein Drittel der Breite).
 Kästchen wie bei den To-dos (`.eba-td-haken`, ganze Zeilenhöhe als Tippfläche, auf iPhone und iPad 44 px, auf dem iPhone auf Höhe
-der ersten Zeile; halb verstanden = unbestimmt und „1/3“ hinter dem Titel; Titel mit Link leise unterstrichen), Nummer, Titel (Tipp
-öffnet die Folien bzw. das Lehrbuch), daneben `bisText` (auf dem iPhone unter dem Titel), darunter in der Spalte der Titel **Für die
-Klausur** (Altklausuren „3 von 11 bearbeitet · diese Woche 2 auf Zeit · als Nächstes …“, vor dem Ziel „auf Zeit ab …“, der Satz zur
+der ersten Zeile; halb verstanden = unbestimmt und „1 von 3“ hinter dem Titel (bis 2.11.2026 „1/3“, als einzige Zahl der Seite ohne „von“); Titel mit Link leise unterstrichen), Nummer, Titel (Tipp
+öffnet die Folien bzw. das Lehrbuch), daneben `bisText` (auf dem iPhone unter dem Titel), darunter in der Spalte der Titel **Üben**
+(Altklausuren „3 von 11 bearbeitet · diese Woche 2 auf Zeit · als Nächstes …“, vor dem Ziel „auf Zeit ab …“, der Satz zur
 neuesten für den Vortag: „Die neueste, …, bleibt für den Tag vor der Klausur.“; Übungsblätter; Karteikarten „12 heute dran ·
-Lernen“), der Schalter **Vor der Vorlesung lernen** (Kästchen der To-dos, schreibt `vorlernen: false` bzw. löscht es, Kästchen auf
-dem iPhone auf Höhe der ersten Zeile, `vorlernenSetzen`: nur diese Zeile, `processFrontMatter` schriebe das ganze Frontmatter neu
-und nähme den Anführungszeichen um `semester` und `quelle`; aus sagt er, wenn das Ziel dadurch später liegt) und der Link auf die
-Notiz. In der Lernplan-Notiz steht nur die Zeile (`zeile`): Modul, Pille und `standTeile` („2 von 7 Kapiteln · diese Woche Kapitel 3
-· verstanden bis So 3.1. · Klausur Sa 6.2.“, jeder Teil mit festen Leerzeichen; in der Klausurvorbereitung „seit Mo 26.10.“, wenn
-die Pille „Klausurvorbereitung“ schon sagt; sonst nur, was diese Woche fällig wird, Überfälliges sagt die Pille, oder das nächste
-Kapitel mit Datum). Abhaken schreibt genau diese Zeile (`- [ ]` ↔ `- [x]`), nur wenn ihr Text noch stimmt, sonst ein Hinweis (wie
+Lernen“) und der Link auf die Notiz. Der Schalter **Vor der Vorlesung lernen** (unter „Lernplan einstellen“) schreibt
+`vorlernen: false` bzw. löscht es (`vorlernenSetzen`: nur diese Zeile, `processFrontMatter` schriebe das ganze Frontmatter neu und
+nähme den Anführungszeichen um `semester` und `quelle`); aus sagt er, wenn das Ziel dadurch später liegt. Die Lernplan-Notiz zeigt
+seit 2.11.2026 das Modul wie aufgeklappt (Tabelle oben, „Block“); `standTeile` („2 von 7 Kapiteln · diese Woche Kapitel 3 ·
+verstanden bis So 3.1. · Klausur Sa 6.2.“, jeder Teil mit festen Leerzeichen; in der Klausurvorbereitung „seit Mo 26.10.“, wenn die
+Pille „Klausurvorbereitung“ schon sagt; sonst nur, was diese Woche fällig wird, Überfälliges sagt die Pille, oder das nächste
+Kapitel mit Datum) stehen auf der Modulseite und in den Bahnen. Abhaken schreibt genau diese Zeile (`- [ ]` ↔ `- [x]`), nur wenn ihr Text noch stimmt, sonst ein Hinweis (wie
 `todos.js`).
 **Dashboard** (```` ```eba-lernplan woche ````, unter den Karteikarten): eine Zeile wie die der Karteikarten, bis zu drei Kapitel mit
 Namen („Lernplan · B110 Kapitel 2 · S100 Kapitel 1“), mehr als Zahl („8 Kapitel, davon 4 überfällig“), dazu „2 Altklausuren

@@ -226,11 +226,14 @@ const schluesselPruefen = (s) => {
 const NUR_IMDS2 = ["--instance-options", JSON.stringify({ areLegacyImdsEndpointsDisabled: true })];
 const quelle = (image, gb) => JSON.stringify({ sourceType: "image", imageId: image, bootVolumeSizeInGBs: gb, bootVolumeVpusPerGB: FREI.vpu });
 // Selbst vorbereiten (server/README.md): Der Server lädt beim ersten Start das Paket dieser Version aus dem Release, prüft es
-// gegen die SHA-256 des Pakets, das die Cloud Shell schon geprüft hat, und installiert alles ohne Adresse (installieren.sh
+// gegen die SHA-256 des Pakets, das die Cloud Shell schon geprüft hat, und seine Signatur mit ssh-keygen -Y verify (Ubuntu 24.04:
+// OpenSSH 9.6) gegen die Schlüssel in SIGNIERSCHLUESSEL, nie aus dem Download, und installiert alles ohne Adresse (installieren.sh
 // --vorbereiten). Adresse und HTTPS setzt erst `fern.sh installieren` mit der IP aus dem Konto: Eine IP, die der Server selbst
 // erfragt, könnte falsch sein. Keine Geheimnisse hier, die Startdaten liest jeder Prozess auf dem Server. Ohne gültiges Paket
 // (etwa ein Testpaket ohne Release) keine Startdaten; dann installiert `fern.sh installieren` alles wie bisher.
 export const PAKET_VERSION = /^\d+\.\d+\.\d+(-beta\.\d+)?$/;
+// Wer Server-Pakete signieren darf: dieselben Schlüssel wie server/allowed_signers (tests/paket-pruefen.test.js vergleicht)
+export const SIGNIERSCHLUESSEL = ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBVvg98K+YQb1YhQFh5w2EE4QEs8QG7gN3jRK6G8pzjc"];
 export function serverStart(paket) {
   const { version, summe } = paket || {};
   if (!PAKET_VERSION.test(String(version || "")) || !/^[0-9a-f]{64}$/.test(String(summe || ""))) return "";
@@ -239,8 +242,10 @@ export function serverStart(paket) {
     "      set -u",
     "      exec >>/var/log/studium-server-vorbereiten.log 2>&1",
     "      d=$(mktemp -d /root/studium-paket.XXXXXX)",
-    `      for i in 1 2 3 4 5; do curl -fsSL -o "$d/paket.tar.gz" '${url}' && break; sleep 60; done`,
+    `      for i in 1 2 3 4 5; do curl -fsSL -o "$d/paket.tar.gz" '${url}' && curl -fsSL -o "$d/paket.tar.gz.sig" '${url}.sig' && break; sleep 60; done`,
     `      echo '${summe}  '"$d/paket.tar.gz" | sha256sum -c - || exit 1`,
+    ...SIGNIERSCHLUESSEL.map((s) => `      echo 'release@studium-autopilot namespaces="studium-server" ${s}' >>"$d/erlaubt"`),
+    "      ssh-keygen -Y verify -f \"$d/erlaubt\" -I release@studium-autopilot -n studium-server -s \"$d/paket.tar.gz.sig\" <\"$d/paket.tar.gz\" || exit 1",
     "      tar -xzf \"$d/paket.tar.gz\" -C \"$d\" && bash \"$d/server/installieren.sh\" --vorbereiten", ""].join("\n");
 }
 export const serverMetadaten = (ssh, paket) => {
@@ -442,13 +447,20 @@ export async function abschliessen(oci, { tenancy, a }) {
   const { schritte, merken, muss } = ablauf(oci);
   const t = ["--compartment-id", tenancy];
   const instanzen = liste(await muss("server", ["compute", "instance", "list", ...t, "--all"])).filter(lebt);
-  if (instanzen.some((i) => gehoert(i, "helfer"))) {
+  const srv = instanzen.find((i) => gehoert(i, "server"));
+  // Ein kleiner Server (platzsucher.py, „Klein zuerst“) wird fertig eingerichtet, während der Helfer ihn nachts vergrößert. Seine
+  // Rechte und das Boot-Volume bleiben bis dahin: Solange der Helfer lebt, zählen seine 50 GB zum freien Topf.
+  const klein = !!srv && Number((srv["shape-config"] || {}).ocpus) < ZIEL.ocpu;
+  const helfer = instanzen.some((i) => gehoert(i, "helfer"));
+  if (helfer && !klein) {
     merken("helfer", "laeuft", "Der Platzsucher-Helfer läuft noch; er beendet sich selbst, sobald der Server da ist. Danach noch einmal.");
     return { schritte, exit: 2 };
   }
-  const srv = instanzen.find((i) => gehoert(i, "server"));
   if (!srv) { merken("server", "fehler", "Kein Server mit Kennzeichen gefunden."); return { schritte, exit: 1 }; }
-  await rechteEntfernen(muss, merken, t);
+  if (helfer) {
+    merken("helfer", "klein", "Der Server läuft vorerst mit 1 OCPU / 6 GB. Der Platzsucher-Helfer bringt ihn nachts auf " +
+      `${ZIEL.ocpu} OCPU / ${ZIEL.gb} GB und beendet sich dann; den restlichen Speicher bekommt er mit dem nächsten Lauf danach.`);
+  } else await rechteEntfernen(muss, merken, t);
   // Server aus Versionen bis 0.5.3 erlauben noch die alten Metadaten-Endpunkte; die Änderung braucht keinen Neustart
   if ((srv["instance-options"] || {})["are-legacy-imds-endpoints-disabled"]) merken("metadaten", "da", "Metadaten nur über IMDSv2.");
   else {
@@ -519,6 +531,9 @@ export async function adresse(oci, { tenancy, schluessel }) {
 // Kopie liegt darum im eigenen Konto: privater Bucket (Objektspeicher, ein paar KB der freien 20 GB), geschützt wie das Konto
 // selbst (Anmeldung, Zwei-Faktor). Der Platzsucher hat keine Rechte auf Objektspeicher. Nur ein Bucket mit Kennzeichen
 // „schluessel“ und ohne öffentlichen Zugriff; ein Schlüssel im Bucket wird nie überschrieben, einer in der Cloud Shell auch nicht.
+// Der Schlüssel hat keine Passphrase (start.sh): Wer den Bucket lesen kann, ist root auf dem Server. Das darf nur, wer Rechte auf
+// den Objektspeicher des Kontos hat, im Konto dieser Einrichtung allein der Administrator, und der kann den Server ohnehin
+// übernehmen (server/README.md, „Schlüssel im Konto“).
 export const BUCKET = "studium-autopilot-schluessel";
 const OBJEKTE = ["studium_autopilot", "studium_autopilot.pub"];
 const NICHT_DA = /NotFound|\(404\)/;

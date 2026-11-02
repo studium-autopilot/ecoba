@@ -131,6 +131,13 @@ function ilias(def, u) {
         return { status: 200, bytes: typeof x === "string" ? enc(x) : x };
       },
       name: (e) => e.titel + "." + e.endung,
+      // nur mit def.groessen: Größe vor dem Download (refId → Bytes | null | Error)
+      groesse: def.groessen ? async (e) => {
+        merken("groesse", { id: e.refId });
+        const g = def.groessen[e.refId];
+        if (g instanceof Error) throw g;
+        return g == null ? null : g;
+      } : undefined,
     };
   };
   f.anzahl = (was) => f.log.filter((x) => x.was === was).length;

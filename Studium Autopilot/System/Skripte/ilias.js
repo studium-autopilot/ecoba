@@ -1,6 +1,6 @@
 // ILIAS-Unterlagen (seit 0.4.0): Das Plugin meldet sich bei ILIAS an (Uni Tübingen, ILIAS 10, Shibboleth), liest deine
 // Kurse und legt Kursdateien (PDF, Office …) unter „Unterlagen/“ ab, jede mit Begleitnotiz wie beim Einordnen
-// (unterlagen.js). Keine Videos, keine Foren, keine Tests, keine Dateien, die Windows beim Öffnen ausführt (AUSFUEHRBAR) oder die
+// (unterlagen.js). Keine Videos, keine Foren, keine Tests, keine Dateien, die Windows oder macOS beim Öffnen ausführt (AUSFUEHRBAR) oder die
 // Obsidian und das Plugin selbst lesen (NIE). Doku: docs/architektur/unterlagen.md, „ILIAS“.
 //
 // Bausteine: ilias-netz.js (Sitzung, Kekse, Weiterleitungen), ilias-anmeldung.js (Anmeldung über Shibboleth),
@@ -31,7 +31,8 @@
 //   meist noch) → Kursliste → aktive Kurse durchsuchen (Ordner, Sitzungen mit Materialien, Gruppen, in denen du Mitglied
 //   bist; SUCHER Seiten zugleich, höchstens SEITEN je Lauf) → geänderte, dann neue Dateien laden (neueste zuerst, LADER_PC
 //   bzw. LADER_MOBIL zugleich, höchstens NEU_PC bzw. NEU_MOBIL Dateien und BUDGET_PC_MB bzw. BUDGET_MOBIL_MB je Lauf; keine über
-//   MAX_MB, auch nicht ohne Größe in der Liste: der Download bricht ab). Die Last für ILIAS begrenzt die Drossel der Sitzung
+//   MAX_MB, auch nicht ohne Größe in der Liste: am PC bricht der Download ab, auf iPhone/iPad fragt der Lauf vorher nach der
+//   Größe, groesseVorab). Die Last für ILIAS begrenzt die Drossel der Sitzung
 //   (ilias-netz.js: höchstens 2 Anfragen gleichzeitig, 400 ms zwischen zwei Starts). Der Index wird nach jedem Schritt
 //   geschrieben; ein Fehler beendet den Lauf sauber, der nächste macht weiter. Abgelaufene Sitzung: einmal neu anmelden,
 //   dann für diesen Lauf aufgeben. Was das Durchsuchen findet, merkt sich das Gerät nach jedem Kurs (Funde); ein
@@ -69,7 +70,9 @@
 //   hat (uniZugang().bestaetigt), nie als Erste. Gilt auf dem Gerät noch eine Sitzung bei ILIAS oder der Uni (auf iPhone und iPad
 //   hält das Gerät die Kekse, auf einem geteilten iPad womöglich von einer anderen Person), klappt die Anmeldung ohne Passwort: Es
 //   gilt dann als ungeprüft (eba-uni-zugang-ungeprueft, uniZugang().ungeprueft), und Alma bzw. das Webmail prüfen es selbst, mit
-//   einer eigenen Anmeldung samt Passwort, bevor sie etwas lesen.
+//   einer eigenen Anmeldung samt Passwort, bevor sie etwas lesen. Darum meldet sich die prüfende Anmeldung beim Verbinden auf
+//   iPhone und iPad erst bei ILIAS und der Uni ab, Trennen ebenso, und eine Sitzung eines anderen ILIAS-Kontos liest kein Lauf
+//   (Konto der Sitzung, eba-ilias-konto, siehe quelleAusNetz).
 // Für andere Skripte: ctx.ilias (siehe unten, api). Testeinstiege: plugin.testIliasAus (kein automatischer Lauf);
 //   ctx.ilias.erzeugen(abh) baut den ganzen Ablauf mit falschem ILIAS und Tresor im Speicher (tests/ilias.test.js);
 //   in Obsidian ersetzen ctx.ilias.anmeldungSetzen(fn) und ctx.ilias.quelleSetzen(fn) Anmeldung bzw. ILIAS (Oberfläche
@@ -77,7 +80,7 @@
 // Gerätelokal (app.saveLocalStorage): eba-ilias-benutzer, eba-ilias-stand, eba-ilias-protokoll (letzte 20 Läufe), eba-geraet,
 //   eba-ilias-auftrag (offener Abruf, den du gestartet hast: geht nach Fehler, Stapelgrenze, Neustart oder Rückkehr in die App
 //   von selbst weiter, siehe naechsterSchritt), eba-ilias-schreibt (Datei, die gerade geschrieben wird; siehe nachAbbruch),
-//   eba-ilias-funde (gefundene Dateien, die noch nicht geladen sind; siehe fundAus).
+//   eba-ilias-funde (gefundene Dateien, die noch nicht geladen sind; siehe fundAus), eba-ilias-konto (Kürzel des ILIAS-Kontos).
 // Fortschritt: ein Hinweis mit Balken (fortschrittHinweis) für Läufe, die du gestartet hast; automatische bleiben still.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
 module.exports = function (ctx) {
@@ -123,11 +126,14 @@ module.exports = function (ctx) {
   // Nie geladen: würden in Obsidian zu Notizen oder Ansichten (md, base, canvas), oder Obsidian und das Plugin lesen sie als eigene
   // Dateien (Skripte, Stile, Daten; pfadOk nimmt sie nie als Ziel)
   const NIE = ["md", "base", "canvas", "js", "mjs", "cjs", "css", "json"];
-  // Nie geladen (Vorsicht): Endungen, die Windows beim Öffnen ausführt, einbindet oder als Laufwerk öffnet. Kursdateien wie .py,
-  // .R, .ipynb oder .jar kommen weiter.
+  // Nie geladen (Vorsicht): Endungen, die Windows oder macOS beim Öffnen ausführt, startet, installiert, einbindet oder als
+  // Laufwerk öffnet (macOS: Terminal-Befehle, Verweise, Programme und Pakete, AppleScript, Automator, Kurzbefehle, Profile,
+  // Erweiterungen). Kursdateien wie .py, .R, .ipynb oder .jar kommen weiter.
   const AUSFUEHRBAR = ["exe", "com", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "ws", "hta", "scr", "msi", "msp",
     "lnk", "url", "pif", "cpl", "reg", "scf", "inf", "chm", "xll", "msc", "iso", "img", "vhd", "vhdx", "appx", "msix", "appinstaller",
-    "application", "appref-ms", "diagcab", "settingcontent-ms", "library-ms", "search-ms"];
+    "application", "appref-ms", "diagcab", "settingcontent-ms", "library-ms", "search-ms",
+    "command", "tool", "terminal", "webloc", "fileloc", "inetloc", "app", "pkg", "mpkg", "dmg", "scpt", "scptd", "applescript",
+    "workflow", "action", "shortcut", "mobileconfig", "prefpane", "saver", "kext", "plugin", "osax", "bundle", "dylib", "wflow", "xpc"];
   // An der Endung aus ILIAS und am Ende des Namens (lange Endungen wie „settingcontent-ms“ erkennt endungVon nicht)
   const nieLaden = (endung, name) => {
     const klein = String(name || "").toLowerCase();
@@ -148,7 +154,7 @@ module.exports = function (ctx) {
   const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet",
     auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt", funde: "eba-ilias-funde",
     migration: "eba-ilias-migration", zugangSeit: "eba-uni-zugang-seit", zugangOk: "eba-uni-zugang-ok", ungeprueft: "eba-uni-zugang-ungeprueft",
-    abgelehntHier: "eba-uni-zugang-abgelehnt-hier" };
+    abgelehntHier: "eba-uni-zugang-abgelehnt-hier", konto: "eba-ilias-konto" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
   const TEXT_ANMELDUNG_FOLGT = "Mit ILIAS verbinden geht erst in einer späteren Version";
   const TEXT_EXTERN = "Deine Unterlagen kommen über deinen Uni-Abgleich."; // auch Zeile und Einrichtung (verbindungen.js, einrichtung.js)
@@ -279,7 +285,9 @@ module.exports = function (ctx) {
   };
   // ILIAS-Pfad „Kurs / Ordner / …“: jedes Stück einzeln; ein leerer Kurs wird zu ersatz (Code bzw. „Kurs“)
   const pfadOhneKennwort = (p, ersatz) => String(p == null ? "" : p).split(" / ").map((x, i) => ohneKennwort(x) || (i ? "" : ersatz || "Kurs")).filter(Boolean).join(" / ");
-  const mdText = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&");
+  // Text mitten in einer Zeile: „\“ vor Markdown- und Link-Zeichen wie bei den zentralen Terminen (ctx.zentral.mdInZeile; ein
+  // gewöhnlicher Pfad bleibt Zeichen für Zeichen gleich), ohne zentral.js nur vor Markdown-Zeichen
+  const mdText = (s) => (ctx.zentral && ctx.zentral.mdInZeile ? ctx.zentral.mdInZeile(String(s)) : String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&"));
   const endungVon = (name) => { const m = String(name || "").match(/\.([A-Za-z0-9]{1,8})$/); return m ? m[1].toLowerCase() : ""; };
   const ohneEndung = (name) => String(name).replace(/\.[A-Za-z0-9]{1,8}$/, "");
   const elternVon = (p) => { const i = p.lastIndexOf("/"); return i < 0 ? "" : p.slice(0, i); };
@@ -564,8 +572,11 @@ module.exports = function (ctx) {
   //       notizAendern(pfad, fn(text) → text) → true, wenn geändert; beide nur in Notizen mit typ: unterlage)
   //   lokal(k, v?), geheim: { lesen(id) → Text | null (synchron), schreiben(id, w), loeschen(id) }, geheimId(),
   //   anmeldung() → anmelden(sitzung, zugang, optionen) → { ok, grund?, hinweis? } | null (dann „folgt später“),
-  //   quelle(zugang, anmelden, { wiederverwenden }?) → { kurse(), inhalt(behaelter), laden(eintrag), name(eintrag) } (meldet
-  //       sich mit anmelden an; wiederverwenden: Sitzung des letzten Laufs nehmen, solange sie gilt), vergessen()? (Sitzung weg),
+  //   quelle(zugang, anmelden, { wiederverwenden, abmelden }?) → { kurse(), inhalt(behaelter), laden(eintrag), name(eintrag),
+  //       groesse(eintrag)? } (meldet sich mit anmelden an; wiederverwenden: Sitzung des letzten Laufs nehmen, solange sie gilt;
+  //       abmelden: vor der Anmeldung abmelden, beim Prüfen eines neuen Passworts; zugang.konto: Kürzel des Kontos, siehe
+  //       quelleAusNetz), vergessen()? (Sitzung weg), abmelden()? (beim Trennen statt vergessen: Sitzung weg und bei ILIAS und
+  //       der Uni abmelden → Promise),
   //   einordner() → wie einordnerAus, modul(code) → { name, titel } | null, semester() → Text, einstellungen() → {},
   //   jetzt() → Date, mobil, geraetId(), melden(text)?, geaendert(info)? }
   const erzeugen = (abh) => {
@@ -593,6 +604,12 @@ module.exports = function (ctx) {
     // ----- Zugang -----
     const benutzer = () => { const b = lokal(L.benutzer); return typeof b === "string" ? b : ""; };
     const hatZugang = () => !!benutzer();
+    // Kürzel des ILIAS-Kontos zu einem Benutzernamen (gerätelokal eba-ilias-konto { benutzer, kuerzel }): gemerkt nach einer
+    // Anmeldung mit Passwort, verglichen mit Sitzungen ohne (quelleAusNetz, „Konto der Sitzung“)
+    const kontoFuer = (name) => ({
+      kuerzel: () => { const o = lokal(L.konto); return o && typeof o === "object" && o.benutzer === name && typeof o.kuerzel === "string" ? o.kuerzel : ""; },
+      merken: (k) => { if (k && name) lokal(L.konto, { benutzer: name, kuerzel: String(k).slice(0, 8) }); },
+    });
     const geheimLesen = () => { try { const v = abh.geheim.lesen(abh.geheimId()); return typeof v === "string" && v ? v : ""; } catch (e) { return ""; } };
     const anmeldung = () => { try { const f = abh.anmeldung ? abh.anmeldung() : null; return typeof f === "function" ? f : null; } catch (e) { return null; } };
     const quelleAussen = (schluessel) => {
@@ -685,7 +702,8 @@ module.exports = function (ctx) {
           const f = anmeldung();
           if (!f) return { ok: false, art: "ohne-anmeldung", fehler: TEXT_ANMELDUNG_FOLGT + "." };
           const w = wert;
-          try { await abh.quelle({ benutzer: name, kennwortGeber: () => w }, anmeldenMit(f, (g) => { gesendet = g; })); }
+          // abmelden: auf iPhone und iPad erst die Sitzung des Geräts beenden, damit ILIAS das Passwort wirklich prüft
+          try { await abh.quelle({ benutzer: name, kennwortGeber: () => w, konto: kontoFuer(name) }, anmeldenMit(f, (g) => { gesendet = g; }), { abmelden: true }); }
           catch (e) { return { ok: false, art: (e && e.art) || "fehler", grund: (e && e.grund) || "", fehler: fehlerText(e, w) }; }
         }
         try { await abh.geheim.schreiben(abh.geheimId(), wert); }
@@ -711,10 +729,13 @@ module.exports = function (ctx) {
     const zugangLoeschen = async () => {
       const vorher = laeuft;
       stoppen("trennen");
-      if (abh.vergessen) abh.vergessen(); // Sitzung (Kekse am PC) weg
+      // Sitzung vergessen und bei ILIAS und der Uni abmelden (wartet nicht darauf)
+      if (abh.abmelden) { try { Promise.resolve(abh.abmelden()).catch(() => {}); } catch (e) { /* egal */ } }
+      else if (abh.vergessen) abh.vergessen();
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       lokal(L.benutzer, null);
       lokal(L.funde, null);
+      lokal(L.konto, null);
       lokal(L.zugangSeit, null);
       lokal(L.zugangOk, null);
       lokal(L.ungeprueft, null);
@@ -737,7 +758,7 @@ module.exports = function (ctx) {
       await markerLesen();
       if (abgelehnt() || stand().gesperrt) throw fehlerArt("zugang", TEXT_ABGELEHNT);
       const geheimId = abh.geheimId();
-      const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
+      const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "", konto: kontoFuer(benutzer()) };
       try {
         const q = await abh.quelle(zugang, anmeldenMit(f, (g) => { if (g) zugangGeprueft(true); }), { wiederverwenden: true });
         if (!q || typeof q.kalenderAbo !== "function") throw fehlerArt("baustein", "ILIAS-Baustein fehlt.");
@@ -934,6 +955,14 @@ module.exports = function (ctx) {
     // Fehler, der nur diese eine Datei oder diesen Ordner betrifft (HTTP-Status, z. B. 403, 404, 500 eines einzelnen Objekts);
     // ohne Status (kein Netz, Zeitüberschreitung, Sitzung) endet der Lauf sofort
     const einzeln = (e) => { const s = e && Number(e.status); return s >= 400 || (!!e && e.art === "datei"); };
+    // Größe einer Datei vor dem Download (q.groesse: fragt ILIAS ohne die Datei zu holen) → Bytes oder null (unbekannt, auch bei
+    // jedem Fehler: dann lädt der Lauf wie bisher). Nur ein Abbruch (Stoppen, Fehler eines anderen Laders) und eine fremde Sitzung
+    // gehen weiter.
+    const groesseVorab = async (q, c, b, r) => {
+      if (typeof q.groesse !== "function") return null;
+      try { const n = await anfrage(b, r, () => q.groesse(c.eintrag)); return typeof n === "number" && n >= 0 ? n : null; }
+      catch (e) { if (e && (e.art === "abbruch" || e.art === "fremd" || e === r.fehler)) throw e; return null; }
+    };
     // Zähler im Bericht, gesamt und je Kurs (b.jeKurs[refId], für Anzeige und Probeläufe)
     const plus = (b, refId, feld) => {
       if (typeof b[feld] === "number") b[feld]++;
@@ -1519,7 +1548,7 @@ module.exports = function (ctx) {
       standSetzen({ versucht: iso() });
       const geheimId = abh.geheimId();
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
-      const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
+      const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "", konto: kontoFuer(benutzer()) };
       const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {}, uebungenGesehen: {},
         gefunden: {}, ausgelassen: [], umbenannt: [], notizen: [] };
       await indexLesen();
@@ -1626,8 +1655,12 @@ module.exports = function (ctx) {
           if (n >= kappe) { plus(b, c.kurs.refId, "rest"); continue; }
           // laut Liste zu groß (auch Funde eines früheren Laufs): gar nicht laden
           if (c.lg != null && c.lg > MAX_MB * 1048576) { await ablegen(async () => { gestoppt(r); zuGrossVorab(c, c.lg, b); await speichern(); }); continue; }
+          // iPhone/iPad: requestUrl bricht keinen Download mittendrin ab. Ohne Größe in der Liste oder geändert erst nach der Größe
+          // fragen (groesseVorab); über MAX_MB gar nicht laden
+          const vorab = abh.mobil && (c.lg == null || c.art === "geaendert") ? await groesseVorab(q, c, b, r) : null;
+          if (vorab != null && vorab > MAX_MB * 1048576) { await ablegen(async () => { gestoppt(r); zuGrossVorab(c, vorab, b); await speichern(); }); continue; }
           // Budget je Lauf erreicht: der Rest kommt mit dem nächsten Stapel bzw. Lauf
-          const schaetzung = c.lg || 0, vorn = bytesGeladen + bytesUnterwegs;
+          const schaetzung = c.lg || vorab || 0, vorn = bytesGeladen + bytesUnterwegs;
           if (n > 0 && (vorn >= budget || vorn + schaetzung > budget)) { plus(b, c.kurs.refId, "rest"); continue; }
           fort(o, { phase: "laden", code: c.code || "", erledigt: vorher + n, gesamt });
           n++; b.geladen = n;
@@ -1684,7 +1717,7 @@ module.exports = function (ctx) {
         case "abgelehnt": return TEXT_ABGELEHNT;
         case "unklar": case "pause": return TEXT_UNKLAR;
         // Fehlertext aus dem Code nur in Zeile, Fenster und Protokoll, nie im Hinweis
-        case "fehler": return "Unterlagen aus ILIAS kamen nicht an." + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : " Bitte später noch einmal versuchen.");
+        case "fehler": return (b.grund === "fremde-sitzung" ? b.fehler : "Unterlagen aus ILIAS kamen nicht an.") + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : " Bitte später noch einmal versuchen.");
         case "abgebrochen": return b.grund === "stopp" ? "ILIAS gestoppt." : "Abruf von ILIAS abgebrochen.";
         case "kurse": return "Kursliste aus ILIAS aktualisiert.";
         default: {
@@ -1942,15 +1975,63 @@ module.exports = function (ctx) {
   // Sitzung über Läufe hinweg (optionen.wiederverwenden), nur im Speicher dieses Geräts: Kekse (PC; iPhone und iPad halten sie
   // selbst), Drossel und gelernte Adressen. Gilt sie noch, meldet sich der Lauf nicht neu an (spart etwa 10 Anfragen); ob sie
   // gilt, zeigt die erste Seite. Nur für denselben Benutzernamen; weg beim Trennen, nach gescheiterter Anmeldung und beim Entladen.
+  // Konto der Sitzung (zugang.konto: { kuerzel() → Text, merken(k) }, gerätelokal im Motor): Nach einer Anmeldung, die dein
+  //   Passwort gesendet hat, merkt sich das Gerät das Kürzel, das ILIAS im Profilbild zeigt (ilias-html.js kontoKuerzel; ILIAS
+  //   bildet es aus seinem eigenen Benutzernamen, den Uni-Login zeigt keine Seite). Gilt eine Sitzung ohne dein Passwort (die
+  //   gemerkte, oder die Kekse des Geräts reichten für die Anmeldung), muss die erste Seite dasselbe Kürzel zeigen; sonst gehört
+  //   sie einem anderen Konto (etwa auf einem geteilten iPad): abmelden, nichts lesen, Fehler mit grund „fremde-sitzung“. Ein Foto
+  //   als Profilbild zählt als eigenes Kürzel („#foto“). Geprüft ist eine Sitzung erst an einer Seite mit Metaleiste; sonst, und
+  //   vor einem Download oder einer Größenfrage, erst das Dashboard. Ist auf iPhone/iPad noch kein Kürzel gemerkt (nach dem Update,
+  //   nach Trennen, nach einer Prüfung ohne Passwort), meldet die Quelle die Sitzung vor dem ersten Lesen ab und sich einmal mit
+  //   deinem Passwort neu an (erzwungen; zählt nicht gegen die zwei Anmeldungen). Kommt auch diese ohne Passwort aus (das Abmelden
+  //   wirkte nicht), gilt die Sitzung. Grenzen: Zwei Zeichen können bei zwei Konten gleich sein, zwei Fotos ebenso.
+  // Abmelden (beiUniAbmelden): vor einer prüfenden Anmeldung auf iPhone und iPad (optionen.abmelden; die Kekse hält dort das
+  //   Gerät, am PC beginnt jede Sitzung leer) und beim Trennen (uniAbmelden).
   let gemerkt = null; // { benutzer, s, vorlagen }
+  let abmeldung = null; // laufendes Abmelden nach dem Trennen (eine neue Quelle wartet darauf)
   const sitzungVergessen = () => {
     const g = gemerkt;
     gemerkt = null;
     if (g && typeof g.s.schliessen === "function") { try { g.s.schliessen(); } catch (e) { /* schon zu */ } }
   };
+  // Bei ILIAS und der Uni abmelden, so weit es geht; jeder Fehler ist egal (dann läuft die Sitzung von selbst ab). ILIAS: Link
+  // „Abmelden“ der Seite r (sonst des Dashboards; er trägt ein Token), dann die Sitzung des Shibboleth-SP von ILIAS
+  // (Shibboleth.sso/Logout; mit ihr meldete shib_login.php sonst ohne IdP wieder an) und die des IdP (idp/profile/Logout).
+  // Nur Server der Sitzung (ilias-netz.js prüft jede Adresse).
+  const beiUniAbmelden = async (s, N, H, r) => {
+    const uni = N.UNI || {}, W = String(uni.ilias || "").replace(/\/$/, ""), IDP = String(uni.idp || "").replace(/\/$/, "");
+    const leise = async (a) => { try { return await s.anfrage(a); } catch (e) { return null; } };
+    if (!W) return;
+    const seite = r || (await leise({ url: W + "/ilias.php?baseClass=ilDashboardGUI&cmd=show" }));
+    let link = "";
+    try { link = seite && typeof seite.text === "string" && typeof H.abmeldeLink === "function" ? H.abmeldeLink(seite.text, seite.url || W + "/ilias.php") : ""; } catch (e) { link = ""; }
+    if (link && link.indexOf(W + "/") === 0) await leise({ url: link });
+    await leise({ url: W + "/Shibboleth.sso/Logout" });
+    if (IDP) await leise({ url: IDP + "/idp/profile/Logout" });
+  };
+  // Trennen: die gemerkte Sitzung abmelden (am PC nur sie, nur sie hat Kekse; auf iPhone und iPad sonst eine neue, die Kekse hält
+  // das Gerät) und vergessen → Promise (Fehler egal)
+  const uniAbmelden = () => {
+    const g = gemerkt;
+    gemerkt = null;
+    const N = modulVon("ilias-netz"), H = modulVon("ilias-html");
+    const p = (async () => {
+      let s = g ? g.s : null;
+      try {
+        if (!s && N && typeof N.sitzung === "function") s = N.sitzung({});
+        if (s && H && (g || s.mobil)) await beiUniAbmelden(s, N, H);
+      } catch (e) { /* egal */ } finally {
+        if (s && typeof s.schliessen === "function") { try { s.schliessen(); } catch (e) { /* schon zu */ } }
+      }
+    })();
+    abmeldung = p;
+    return p.then(() => { if (abmeldung === p) abmeldung = null; });
+  };
+  const TEXT_FREMD = "ILIAS war auf diesem Gerät mit einem anderen Konto angemeldet. Studium Autopilot hat es abgemeldet und nichts daraus übernommen.";
   const quelleAusNetz = async (zugang, anmelden, optionen) => {
     const N = modulVon("ilias-netz"), H = modulVon("ilias-html");
     if (!N || typeof N.sitzung !== "function" || !H) throw fehlerArt("baustein", "ILIAS-Baustein fehlt (ilias-netz.js oder ilias-html.js).");
+    if (abmeldung) await abmeldung;
     const uni = N.UNI || {};
     const WURZEL = String(uni.ilias || "").replace(/\/$/, "");
     const KURSE = uni.kurse || WURZEL + "/ilias.php?baseClass=ilmembershipoverviewgui";
@@ -1961,18 +2042,27 @@ module.exports = function (ctx) {
     const alt = optionen && optionen.wiederverwenden && gemerkt && gemerkt.benutzer === zugang.benutzer ? gemerkt : null;
     const g = alt || { benutzer: zugang.benutzer, s: await N.sitzung({ drossel: typeof N.drossel === "function" ? N.drossel() : undefined }), vorlagen: {} };
     const s = g.s;
+    // Konto (siehe oben): kontoOffen = noch keine Seite dieser Sitzung geprüft; eigen = die letzte Anmeldung hat dein Passwort gesendet
+    const K = zugang && zugang.konto && typeof zugang.konto.kuerzel === "function" ? zugang.konto : null;
+    let kontoOffen = true, eigen = false, fremd = null, erzwungen = false;
     // Anmelden: höchstens zweimal je Quelle (zu Beginn bzw. wenn die gemerkte Sitzung nicht mehr gilt, und einmal nach Ablauf
     // mitten im Lauf). Merken gleichzeitige Anfragen den Ablauf, warten sie auf dieselbe Anmeldung.
     let anmeldungen = 0, laufend = null, stand = 0;
-    const neuAnmelden = () => {
+    const neuAnmelden = (zaehlt) => {
       if (!laufend) {
-        anmeldungen++;
+        if (zaehlt !== false) anmeldungen++;
         laufend = Promise.resolve().then(() => anmelden(s, zugang, { netz: N, uni })).then(
-          () => { laufend = null; stand++; gemerkt = g; },
+          (x) => {
+            laufend = null; stand++; gemerkt = g; kontoOffen = true;
+            eigen = !!x && x.passwortGesendet === true;
+            if (eigen && K && x.konto) K.merken(String(x.konto));
+          },
           (e) => { laufend = null; if (gemerkt === g) gemerkt = null; throw e; });
       }
       return laufend;
     };
+    // Prüfende Anmeldung auf iPhone/iPad: erst abmelden, damit dein Passwort wirklich gesendet und geprüft wird
+    if (!alt && optionen && optionen.abmelden && s.mobil) await beiUniAbmelden(s, N, H);
     if (!alt) await neuAnmelden();
     const istLogin = (text) => typeof text === "string" && (typeof N.istLoginSeite === "function" ? !!N.istLoginSeite(text)
       : typeof H.angemeldet === "function" && !H.angemeldet(text));
@@ -1982,6 +2072,7 @@ module.exports = function (ctx) {
     };
     const mitAnmeldung = async (fn, abgemeldet) => {
       for (;;) {
+        if (fremd) throw fremd;
         if (laufend) await laufend;
         const vorher = stand;
         const r = await fn();
@@ -1991,7 +2082,49 @@ module.exports = function (ctx) {
         await neuAnmelden();
       }
     };
-    const seite = (url) => mitAnmeldung(async () => pruefen(await s.anfrage({ url }), url), (r) => istLogin(r.text));
+    const DASHBOARD = WURZEL + "/ilias.php?baseClass=ilDashboardGUI&cmd=show";
+    // Muss die Sitzung noch geprüft werden? Nur ohne dein Passwort und mit etwas zum Vergleichen (gemerktes Kürzel) bzw. auf
+    // iPhone/iPad ohne gemerktes Kürzel, solange die erzwungene Anmeldung aussteht
+    const kontoNoetig = () => kontoOffen && !eigen && !!K && (!!K.kuerzel() || (!!s.mobil && !erzwungen));
+    // Konto an einer Seite prüfen (siehe oben) → true: Die Seite gilt nicht, neu holen (erzwungene Anmeldung eben geschehen)
+    const kontoPruefen = async (r) => {
+      if (fremd) throw fremd;
+      if (!kontoOffen) return false;
+      let k = null;
+      try { k = typeof H.kontoKuerzel === "function" ? H.kontoKuerzel(r.text) : null; } catch (e) { k = null; }
+      if (k == null) return false; // ohne Metaleiste nichts zu sehen: bleibt offen
+      kontoOffen = false;
+      if (eigen) { if (K && k) K.merken(k); return false; }
+      const erwartet = K ? String(K.kuerzel() || "") : "";
+      if (K && !erwartet && s.mobil && !erzwungen) {
+        erzwungen = true;
+        if (gemerkt === g) gemerkt = null;
+        await beiUniAbmelden(s, N, H, r);
+        await neuAnmelden(false);
+        return true;
+      }
+      if (!k || !erwartet || k === erwartet) return false;
+      fremd = fehlerArt("fremd", TEXT_FREMD);
+      fremd.grund = "fremde-sitzung";
+      if (gemerkt === g) gemerkt = null;
+      await beiUniAbmelden(s, N, H, r);
+      throw fremd;
+    };
+    const geprueft = async (url) => {
+      for (;;) {
+        const r = await mitAnmeldung(async () => pruefen(await s.anfrage({ url }), url), (x) => istLogin(x.text));
+        if (!(await kontoPruefen(r))) return r;
+      }
+    };
+    // Seite holen; zeigte sie keine Metaleiste und ist die Sitzung noch zu prüfen, erst am Dashboard prüfen, dann die Seite zurück
+    const seite = async (url) => {
+      const r = await geprueft(url);
+      if (kontoNoetig()) await geprueft(DASHBOARD);
+      return r;
+    };
+    // Vor und nach einem Download (und vor der Frage nach seiner Größe): ist die Sitzung noch zu prüfen, erst das Dashboard
+    // (danach nur, wenn sich die Sitzung während des Downloads neu angemeldet hat)
+    const kontoVorDatei = async () => { if (fremd) throw fremd; if (kontoNoetig()) await geprueft(DASHBOARD); };
     const keinZugriff = (r) => typeof H.seitenArt === "function" && H.seitenArt(r.text, basis(r)) === "kein-zugriff";
     // Permalinks goto.php/<typ>/<ref> von Ordnern, Gruppen und Kursen leitet ILIAS zweimal weiter (gemessen 17.10.2026). Darum
     // gleich die Repository-Adresse (eine Weiterleitung) und, sobald eine Seite dieser Art ihren Reiter „Inhalt“ gezeigt hat,
@@ -2044,6 +2177,7 @@ module.exports = function (ctx) {
         const url = H.downloadUrl(e, e.url);
         if (!url) throw fehlerArt("datei", "kein Download-Link");
         // höchstens MAX_MB: größere bricht der Transport ab (auch ohne Größe in der Liste), der Lauf merkt sie als zu groß
+        await kontoVorDatei();
         let r;
         try { r = await mitAnmeldung(async () => pruefen(await s.anfrage({ url, binaer: true, maxBytes: MAX_MB * 1048576 }), url), (x) => istHtml(x) && istLogin(alsText(x))); }
         catch (x) {
@@ -2052,9 +2186,20 @@ module.exports = function (ctx) {
           z.groesse = x.groesse;
           throw z;
         }
+        await kontoVorDatei();
         const endung = String(e.endung || "").toLowerCase();
         if (istHtml(r) && endung !== "html" && endung !== "htm") throw fehlerArt("datei", "ILIAS lieferte eine Seite statt der Datei");
         return r;
+      },
+      // Größe vor dem Download (iPhone/iPad, siehe groesseVorab): HEAD auf den Download-Link → Content-Length oder null (kein
+      // Link, kein 200, eine Seite statt der Datei, ohne Angabe)
+      groesse: async (e) => {
+        const url = H.downloadUrl(e, e.url);
+        if (!url) return null;
+        await kontoVorDatei();
+        const r = await s.anfrage({ url, methode: "HEAD", binaer: true, maxBytes: 1048576 });
+        const n = r && r.status === 200 && !istHtml(r) && r.kopf ? String(r.kopf["content-length"] || "").trim() : "";
+        return /^[0-9]{1,15}$/.test(n) ? Number(n) : null;
       },
       name: (e) => (typeof H.dateiName === "function" ? H.dateiName(e) : ""),
       // Kalender-Abo (Uni-Login, uni-login.js): Seite „Kalender“, dann das Fenster „Kalender abonnieren“ wie der Knopf
@@ -2145,6 +2290,7 @@ module.exports = function (ctx) {
     jetzt: () => (ctx.date && ctx.date.jetzt ? ctx.date.jetzt() : new Date()),
     mobil: !!(obs.Platform && obs.Platform.isMobile),
     vergessen: sitzungVergessen,
+    abmelden: uniAbmelden,
     geraetId,
     melden: (t) => ctx.hinweis(t),
     geaendert: (x) => {
@@ -2233,7 +2379,7 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, nachErsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
+    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, nachErsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, uniAbmelden, ohneKennwort, pfadOhneKennwort, indexPruefen, nieLaden,
     K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, TEXT_UNGEPRUEFT, TEXT_UNKLAR, PAUSE_UNKLAR, MAX_MB, NEU_MOBIL, NEU_PC, BUDGET_MOBIL_MB, BUDGET_PC_MB, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;

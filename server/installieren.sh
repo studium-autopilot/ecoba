@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # Installiert oder aktualisiert den eigenen Server von Studium Autopilot (server/README.md) auf Ubuntu 24.04.
-# Wiederholbar: Jeder Schritt prüft zuerst, ob er schon erledigt ist; Schlüssel und Uni-Zugang bleiben erhalten.
+# Wiederholbar: Jeder Schritt prüft zuerst, ob er schon erledigt ist; Schlüssel und Uni-Zugang bleiben erhalten (die Schlüssel
+# nicht, wenn sich die Adresse ändert: „Schlüssel und Konfiguration“).
 #   sudo bash installieren.sh --ip <öffentliche IP>   Adresse wird https://<IP mit Bindestrichen>.sslip.io (Let's Encrypt)
 #   sudo bash installieren.sh --test                  ohne HTTPS und ohne Claude Code (Caddy auf :8080, nur für Tests)
 #   sudo bash installieren.sh --vorbereiten           alles außer Adresse und HTTPS (erster Start, einrichten.mjs serverStart);
 #                                                     eine schon gesetzte Adresse bleibt. Den Rest macht ein Lauf mit --ip.
 #   --reserve-mb <n>                                  feste Speicherreserve statt 25 % (speicher-reserve.mjs)
+# Exit: 0 fertig, 1 Fehler, 2 falsche Angabe, 10 gescheitert und auf das bisherige Paket zurückgerollt, 11 gescheitert, aber
+# Zurückrollen verweigert (das bisherige Paket liegt unter der Mindestversion; der Server bleibt auf diesem): „Zurückrollen“ unten.
 set -euo pipefail
 
 QUELLE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# Dieselben Angaben bekommt beim Zurückrollen der Installer des bisherigen Pakets (zurueckrollen unten)
+ANGABEN=("$@")
 IP=""
 TEST=0
 VORBEREITEN=0
@@ -174,6 +179,111 @@ ordnung() {
 # Nie zwei Läufe zugleich (der erste Start bereitet vor, während die Einrichtung schon installiert): der zweite wartet
 exec 9>/run/studium-server-installieren.lock
 flock 9
+# Abbruch von außen (systemd am Ende von TimeoutStartSec, Strg+C) zählt als Fehler: Ohne diese Fallen liefe die Falle EXIT mit dem
+# Exit des letzten Befehls (oft 0), es gäbe kein Zurückrollen, und der Lauf zählte als gelungen.
+trap 'exit 143' TERM
+trap 'exit 130' INT
+# Zurückrollen (server/README.md, „Updates des Server-Pakets“): Scheitert die Installation, nachdem aktuell schon auf dieses Paket zeigt (etwa
+# antwortet der neue Web-Dienst bei „Prüfen“ nicht, oder ein Schritt davor bricht ab), geht der Server auf das bisher laufende Paket
+# zurück: aktuell wieder dorthin, dann dessen Installer mit denselben Angaben. Der schreibt Einheiten, Caddy und
+# /usr/local/bin/studium-server wieder auf seinen Stand, startet die Dienste neu und prüft sie; „Alte Pakete“ räumt dabei dieses
+# Paket weg. Er nimmt dieselbe Sperre, darum gibt dieser Lauf sie vorher frei. Exit 10 heißt „zurückgerollt“ (studium-server
+# aktualisieren versucht dieselbe Version dann höchstens einmal am Tag); scheitert auch der bisherige Installer, Exit 1. Nur, wenn
+# das bisherige Paket fertig installiert war (.installiert); ein Paket, das schon auf sich selbst zurückrollen würde, tut nichts.
+# Nie unter die Mindestversion (MINDEST, unten): Dann bleibt der Server auf diesem Paket, Exit 11.
+# ZURUECK_OFFEN (nur root) nennt Ziel und gescheiterte Version, solange ein Zurückrollen aussteht: vom Umschalten bis .installiert
+# bzw. bis der bisherige Installer fertig ist. Bricht der Lauf ab (Zeitgrenze, Strg+C: dann stellt zurueckrollen nur aktuell zurück;
+# Neustart), holt der nächste „studium-server aktualisieren“ das Zurückrollen vor allem anderen nach.
+ZURUECK_NACH=""
+ZURUECK_OFFEN=/opt/studium-server/.zurueckrollen-offen
+MINDEST=/etc/studium-server/mindestversion
+zurueckrollen() {
+  local code=$1 bisher c=0
+  trap - EXIT
+  if [ "$code" -eq 0 ] || [ -z "$ZURUECK_NACH" ]; then exit "$code"; fi
+  set +e
+  trap - TERM INT
+  bisher=$(tr -d '[:space:]' <"$ZURUECK_NACH/VERSION" 2>/dev/null)
+  if unter_mindestversion "$bisher"; then
+    rm -f "$ZURUECK_OFFEN"
+    echo "Installation von $VERSION gescheitert (Exit $code). Zurück auf ${bisher:-?} geht nicht: Mindestversion $(cat "$MINDEST")." \
+      "Der Server bleibt auf $VERSION; der nächste Lauf installiert es noch einmal." >&2
+    exit 11
+  fi
+  if [ "$code" -eq 143 ] || [ "$code" -eq 130 ]; then
+    # Von außen abgebrochen (Zeitgrenze, Strg+C): Für den bisherigen Installer bliebe keine Zeit, systemd beendet den Lauf gleich
+    # ganz. Nur aktuell und /usr/local/bin/studium-server zurückstellen (das holt das Zurückrollen nach, also soll es das des
+    # bisherigen Pakets sein); die Marke bleibt, und der nächste „studium-server aktualisieren“ führt den Installer aus, der auch die
+    # Einheiten wieder auf den Stand des bisherigen Pakets schreibt.
+    ln -sfn "$ZURUECK_NACH" /opt/studium-server/aktuell
+    install -m 0755 "$ZURUECK_NACH/studium-server" /usr/local/bin/studium-server
+    echo "Installation von $VERSION abgebrochen (Exit $code): aktuell zeigt wieder auf ${ZURUECK_NACH##*/}; der nächste Lauf rollt" \
+      "zu Ende zurück." >&2
+    exit "$code"
+  fi
+  echo "Installation von $VERSION gescheitert (Exit $code): zurück auf ${ZURUECK_NACH##*/}" >&2
+  ln -sfn "$ZURUECK_NACH" /opt/studium-server/aktuell
+  flock -u 9
+  bash "$ZURUECK_NACH/installieren.sh" "${ANGABEN[@]}" || c=$?
+  if [ "$c" -eq 0 ]; then
+    rm -f "$ZURUECK_OFFEN"
+    echo "Zurückgerollt: Es läuft wieder ${ZURUECK_NACH##*/}." >&2
+    exit 10
+  fi
+  # Von außen abgebrochen (Signal): die Marke bleibt, der nächste Lauf versucht es noch einmal
+  [ "$c" -ge 128 ] || rm -f "$ZURUECK_OFFEN"
+  echo "Auch ${ZURUECK_NACH##*/} ließ sich nicht wieder installieren (journalctl -u studium-server-aktualisieren)." >&2
+  exit 1
+}
+# Liegt Version $1 unter der Mindestversion, die root festhält? (Gleiche Fassung in studium-server.)
+unter_mindestversion() {
+  local m
+  m=$(tr -d '[:space:]' <"$MINDEST" 2>/dev/null || true)
+  [ -n "$m" ] && [ -n "$1" ] && version_neuer "$m" "$1"
+}
+# Mindestversion (docs/release.md, „Mindestversion“): Ein Paket kann in MINDESTVERSION (im signierten Paket) nennen, auf welche
+# Version höchstens zurückgerollt werden darf, etwa weil ältere eine Lücke haben oder eine Sperre nicht kennen. root behält die
+# höchste je genannte; sie sinkt nie. Erste Zeile ohne # zählt.
+mindestversion_merken() {
+  local m bisher
+  m=$(grep -v -m 1 -e '^#' -e '^[[:space:]]*$' "$QUELLE/MINDESTVERSION" 2>/dev/null | tr -d '[:space:]' || true)
+  [[ "$m" =~ ^[0-9A-Za-z.+-]{1,40}$ ]] || return 0
+  bisher=$(tr -d '[:space:]' <"$MINDEST" 2>/dev/null || true)
+  [ -z "$bisher" ] || version_neuer "$m" "$bisher" || return 0
+  echo "$m" >"$MINDEST.neu"
+  chmod 0644 "$MINDEST.neu"
+  mv -f "$MINDEST.neu" "$MINDEST"
+  echo "Mindestversion: $m"
+}
+# Gesperrte Schlüssel (docs/release.md, „Schlüssel sperren“): Die Liste SPERRLISTE gehört root und wächst nur. Jede Installation
+# ergänzt sie um revoked_keys ihres Pakets, und „studium-server aktualisieren“ prüft jedes neue Paket gegen sie. So nimmt kein
+# Zurückrollen und kein älteres Paket eine Sperre zurück. (Gleiche Fassung in studium-server.)
+SPERRLISTE=/etc/studium-server/revoked_keys
+sperrliste_ergaenzen() {
+  local z d form='^(ssh-[a-z0-9-]+|ecdsa-sha2-nistp[0-9]+|sk-[a-z0-9@.-]+) [A-Za-z0-9+/]+=*( |$)'
+  [ -f "$1" ] || return 0
+  d=$(mktemp -d)
+  # Nur Zeilen, die mit dem Typ eines Schlüssels beginnen und die ssh-keygen als öffentlichen Schlüssel liest: Eine kaputte Zeile
+  # ließe sonst jede Prüfung scheitern (ssh-keygen -Y verify -r bricht mit 255 ab), und kein Update käme mehr durch. Das gilt auch für
+  # Optionen wie in authorized_keys davor („restrict“, „cert-authority“, from="…"), die ssh-keygen -l durchlässt. Auch schon gemerkte
+  # Zeilen werden so jedes Mal neu geprüft.
+  {
+    echo "# studium-server: gesperrte Schlüssel aus jedem installierten Paket; wird nur ergänzt, nie gekürzt"
+    { grep -v '^#' "$SPERRLISTE" 2>/dev/null || true; grep -v '^#' "$1" || true; } | sed 's/[[:space:]]*$//' | { grep -v '^$' || true; } | sort -u \
+      | while IFS= read -r z; do
+        printf '%s\n' "$z" >"$d/schluessel"
+        if [[ "$z" =~ $form ]] && ssh-keygen -l -f "$d/schluessel" >/dev/null 2>&1; then
+          printf '%s\n' "$z"
+        else
+          echo "Gesperrte Schlüssel: Zeile ohne lesbaren Schlüssel übergangen (${z:0:30}…)" >&2
+        fi
+      done
+  } >"$SPERRLISTE.neu"
+  rm -rf "$d"
+  chmod 0644 "$SPERRLISTE.neu"
+  mv -f "$SPERRLISTE.neu" "$SPERRLISTE"
+}
+
 # shellcheck disable=SC1091
 . /etc/os-release
 [ "${ID:-}" = ubuntu ] && [ "${VERSION_ID:-}" = 24.04 ] || fehler "nur für Ubuntu 24.04 (gefunden: ${PRETTY_NAME:-unbekannt})"
@@ -197,7 +307,14 @@ INSTALLIERT=""
 if [ -n "$INSTALLIERT" ] && version_neuer "$INSTALLIERT" "$VERSION"; then
   fehler "installiert ist $INSTALLIERT, dieses Paket ist älter ($VERSION); nichts geändert. Das neueste holt: sudo studium-server aktualisieren (Cloud Shell: bash ~/studium-autopilot/server/fern.sh aktualisieren)"
 fi
+# Sperren und Mindestversion vor allem anderen: Auch eine Installation, die danach scheitert oder zurückrollt, nimmt sie nie zurück.
+# (Die Gruppe studium-web gibt es auf einem neuen Server erst unten; „Benutzer und Ordner“ setzt sie.)
+[ -d /etc/studium-server ] || install -d -m 0750 /etc/studium-server
+sperrliste_ergaenzen "$QUELLE/revoked_keys"
+mindestversion_merken
 export DEBIAN_FRONTEND=noninteractive
+# apt wartet höchstens 5 Minuten auf die Sperre (etwa während unattended-upgrades läuft), statt sofort zu scheitern
+APT=(apt-get -o DPkg::Lock::Timeout=300)
 
 schritt "Pakete"
 fehlend=()
@@ -207,8 +324,8 @@ done
 if [ ${#fehlend[@]} -gt 0 ]; then
   echo "iptables-persistent iptables-persistent/autosave_v4 boolean false" | debconf-set-selections
   echo "iptables-persistent iptables-persistent/autosave_v6 boolean false" | debconf-set-selections
-  apt-get update -q
-  apt-get install -y -q --no-install-recommends "${fehlend[@]}"
+  "${APT[@]}" update -q
+  "${APT[@]}" install -y -q --no-install-recommends "${fehlend[@]}"
 else
   echo "schon da"
 fi
@@ -225,7 +342,7 @@ NODE_LISTE=/etc/apt/sources.list.d/nodesource.list
 NODE_ZEILE="deb [signed-by=$NODE_KEYRING] https://deb.nodesource.com/node_$NODE_MAJOR.x nodistro main"
 if [ "$(cat "$NODE_LISTE" 2>/dev/null)" != "$NODE_ZEILE" ] || [ ! -s "$NODE_KEYRING" ]; then
   tmp=$(mktemp -d)
-  curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o "$tmp/schluessel.asc"
+  curl -fsSL --max-time 120 https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o "$tmp/schluessel.asc"
   schluessel=$(gpg --homedir "$tmp" --show-keys --with-colons "$tmp/schluessel.asc" 2>/dev/null | awk -F: '$1 == "pub" { n++ } $1 == "fpr" && !f { f = $10 } END { if (n == 1) print f }')
   if [ "$schluessel" != "$NODE_SCHLUESSEL" ]; then rm -rf "$tmp"; fehler "unerwarteter Schlüssel von NodeSource (${schluessel:-mehrere oder keiner}); nichts geändert"; fi
   gpg --dearmor --yes -o "$NODE_KEYRING" "$tmp/schluessel.asc"
@@ -240,8 +357,8 @@ Pin: origin deb.nodesource.com
 Pin-Priority: 600
 PIN
 if [ "$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || true)" != "$NODE_MAJOR" ]; then
-  apt-get update -q
-  apt-get install -y -q --no-install-recommends nodejs
+  "${APT[@]}" update -q
+  "${APT[@]}" install -y -q --no-install-recommends nodejs
   [ "$(node -p 'process.versions.node.split(".")[0]')" = "$NODE_MAJOR" ] || fehler "Node.js $NODE_MAJOR ließ sich nicht installieren"
   echo "installiert: Node.js $(node --version)"
 else
@@ -250,10 +367,10 @@ fi
 
 schritt "Caddy (offizielles Paketarchiv)"
 if ! command -v caddy >/dev/null; then
-  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-  curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o /etc/apt/sources.list.d/caddy-stable.list
-  apt-get update -q
-  apt-get install -y -q caddy
+  curl -1sLf --max-time 120 https://dl.cloudsmith.io/public/caddy/stable/gpg.key | gpg --dearmor --yes -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  curl -1sLf --max-time 120 https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o /etc/apt/sources.list.d/caddy-stable.list
+  "${APT[@]}" update -q
+  "${APT[@]}" install -y -q caddy
 else
   echo "schon da ($(caddy version | cut -d' ' -f1))"
 fi
@@ -274,39 +391,82 @@ install -d -m 0750 -o root -g studium-web /etc/studium-server
 ordnung /var/lib/studium-server
 install -d -m 0755 /etc/credstore.encrypted
 install -d -m 0755 "$ZIEL"
-# Marke einer fertigen Installation (unten nach „Prüfen“); bis dahin gilt dieses Paket als nicht fertig installiert
-rm -f "$ZIEL/.installiert"
+# Paket nach $ZIEL. Beim Zurückrollen startet der Installer des bisherigen Pakets aus dessen installiertem Ordner: Quelle und Ziel
+# sind dann derselbe Ordner, und es gibt nichts zu kopieren (install bräche mit „are the same file“ ab, rm -rf nähme skill/ mit).
 # allowed_signers: Mit diesen Schlüsseln prüft „studium-server aktualisieren“ die Signatur des nächsten Pakets
-for datei in VERSION README.md kanal.mjs dateien.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers; do
-  install -m 0644 "$QUELLE/$datei" "$ZIEL/$datei"
-done
-rm -rf "$ZIEL/skill"
-cp -r "$QUELLE/skill" "$ZIEL/skill"
-chmod -R a+rX "$ZIEL/skill"
-# bisher laufende Version: bleibt bei „Alte Pakete“ zum Zurückgehen von Hand
+# revoked_keys: gesperrte Schlüssel (leer, solange keiner gesperrt ist)
+if [ "$QUELLE" -ef "$ZIEL" ]; then
+  echo "Paket liegt schon unter $ZIEL"
+else
+  for datei in VERSION README.md kanal.mjs dateien.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers revoked_keys; do
+    install -m 0644 "$QUELLE/$datei" "$ZIEL/$datei"
+  done
+  rm -rf "$ZIEL/skill"
+  cp -r "$QUELLE/skill" "$ZIEL/skill"
+  chmod -R a+rX "$ZIEL/skill"
+fi
+# Marke einer fertigen Installation (unten nach „Prüfen“) erst nach dem Kopieren weg; bis „Prüfen“ gilt dieses Paket dann als nicht
+# fertig installiert
+rm -f "$ZIEL/.installiert"
+# bisher laufende Version: bleibt bei „Alte Pakete“ zum Zurückgehen von Hand und ist das Ziel beim Zurückrollen
 VORHER=$(readlink -f /opt/studium-server/aktuell 2>/dev/null || true)
+# Ab dem Umschalten zeigt aktuell auf dieses Paket: Scheitert ein Schritt, rollt der Installer zurück (zurueckrollen), sofern das
+# bisherige Paket ein anderes und fertig installiert war. Die Marke steht vor dem Umschalten, damit kein Abbruch dazwischen fällt.
+if [ -n "$VORHER" ] && [ "$VORHER" != "$ZIEL" ] && [ -f "$VORHER/.installiert" ] && [ -f "$VORHER/installieren.sh" ]; then
+  ZURUECK_NACH=$VORHER
+  printf '%s\n%s\n' "$VORHER" "$VERSION" >"$ZURUECK_OFFEN"
+fi
 ln -sfn "$ZIEL" /opt/studium-server/aktuell
+if [ -n "$ZURUECK_NACH" ]; then
+  trap 'zurueckrollen $?' EXIT
+fi
 install -m 0755 "$ZIEL/studium-server" /usr/local/bin/studium-server
 echo "Paket $VERSION unter $ZIEL"
 
 schritt "Schlüssel und Konfiguration"
 KONFIG=/etc/studium-server/dienst.json
 # Bestehende Schlüssel bleiben; sonst neue (32 Byte, base64url). Adresse, IP und Version werden nachgezogen.
-STUDIUM_KONFIG="$KONFIG" STUDIUM_ADRESSE="$ADRESSE" STUDIUM_IP="$IP" STUDIUM_VERSION="$VERSION" node --input-type=module -e '
+# Neue Adresse (die IP des Servers hat sich geändert): auch neue Schlüssel, und offene Einmal-Codes gelten nicht mehr. Die Geräte
+# schicken den Zugangsschlüssel weiter an die alte Adresse, und wer deren IP danach bei Oracle bekommt, kann dort ein Zertifikat
+# für sie holen und ihn mitlesen. Mit neuen Schlüsseln nützt ihm das nichts; jedes Gerät verbindet sich neu. Nur, wenn schon eine
+# Adresse da war: Der erste Lauf mit --ip nach dem Vorbereiten (noch ohne Adresse) behält die Schlüssel, --vorbereiten die Adresse.
+ADRESSE_BISHER=$(jq -r '.adresse // empty' "$KONFIG" 2>/dev/null || true)
+ADRESSE_NEU=0
+if [ -n "$ADRESSE_BISHER" ] && [ -n "$ADRESSE" ] && [ "$ADRESSE_BISHER" != "$ADRESSE" ]; then ADRESSE_NEU=1; fi
+STUDIUM_KONFIG="$KONFIG" STUDIUM_ADRESSE="$ADRESSE" STUDIUM_IP="$IP" STUDIUM_VERSION="$VERSION" STUDIUM_ADRESSE_NEU="$ADRESSE_NEU" node --input-type=module -e '
   import { readFileSync, writeFileSync } from "node:fs";
   import { randomBytes } from "node:crypto";
   const datei = process.env.STUDIUM_KONFIG;
   let k = {};
   try { k = JSON.parse(readFileSync(datei, "utf8")); } catch (e) { k = {}; }
   const neu = !k.zugang || !k.schluessel;
+  const wechsel = !neu && process.env.STUDIUM_ADRESSE_NEU === "1";
+  if (wechsel) {
+    k.zugang = randomBytes(32).toString("base64url");
+    k.schluessel = randomBytes(32).toString("base64url");
+  }
   k.zugang ||= randomBytes(32).toString("base64url");
   k.schluessel ||= randomBytes(32).toString("base64url");
   Object.assign(k, { adresse: process.env.STUDIUM_ADRESSE, ip: process.env.STUDIUM_IP, port: k.port || 8743, version: process.env.STUDIUM_VERSION });
   writeFileSync(datei, JSON.stringify(k, null, 2) + "\n", { mode: 0o640 });
-  console.log(neu ? "neue Schlüssel erzeugt" : "Schlüssel unverändert");
+  console.log(neu ? "neue Schlüssel erzeugt" : wechsel ? "neue Adresse: neue Schlüssel erzeugt" : "Schlüssel unverändert");
 '
 chown root:studium-web "$KONFIG"
 chmod 0640 "$KONFIG"
+if [ "$ADRESSE_NEU" -eq 1 ]; then
+  # als studium-web wie „studium-server schluessel-erneuern“: Die Codes liegen in seinem Ordner. Nur echte Dateien, keinem Link
+  # folgen (find -P), und was dort sonst liegt (ein Ordner, ein Link), hält die Installation nicht auf
+  if [ ! -d /var/lib/studium-server/web/verbinden ] \
+    || sudo -u studium-web find -P /var/lib/studium-server/web/verbinden -mindepth 1 -maxdepth 1 -type f -delete; then
+    echo "offene Einmal-Codes gelöscht ($ADRESSE_BISHER → $ADRESSE)"
+  else
+    echo "Offene Einmal-Codes ließen sich nicht alle löschen (web/verbinden/); weiter." >&2
+  fi
+fi
+# Zufallswert für die gestaffelte Verteilung neuer Versionen (studium-server, staffel_bis): einmal angelegt, danach unverändert
+if [ ! -s /etc/studium-server/staffel ]; then
+  (umask 077 && od -An -N4 -tu4 /dev/urandom | tr -d ' ' >/etc/studium-server/staffel)
+fi
 if [ -n "$RESERVE_MB" ]; then
   echo "STUDIUM_RESERVE_MB=$RESERVE_MB" >/etc/studium-server/speicher.env
   chmod 0644 /etc/studium-server/speicher.env
@@ -371,7 +531,7 @@ IPAddressDeny=any
 IPAddressAllow=localhost
 ReadWritePaths=/var/lib/studium-server/web /var/lib/studium-server/eingang /var/lib/studium-server/unterlagen
 InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf /etc/credstore.encrypted -/run/credentials -/etc/studium-server/livesync.json
-InaccessiblePaths=-/var/lib/caddy -/run/caddy -/opt/couchdb/etc -/var/lib/couchdb
+InaccessiblePaths=-/var/lib/caddy -/run/caddy -/opt/couchdb/etc -/var/lib/couchdb -/var/cache/debconf
 
 [Install]
 WantedBy=multi-user.target
@@ -415,9 +575,10 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged
 SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX
+SocketBindDeny=any
 IPAddressDeny=any
 ReadWritePaths=/var/lib/studium-server
-InaccessiblePaths=-/var/lib/studium /etc/studium-server /etc/credstore.encrypted -/run/credentials
+InaccessiblePaths=-/var/lib/studium /etc/studium-server /etc/credstore.encrypted -/run/credentials -/var/cache/debconf
 
 [Install]
 WantedBy=multi-user.target
@@ -459,8 +620,9 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged
 SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SocketBindDeny=any
 ReadWritePaths=/var/lib/studium-server /var/lib/studium
-InaccessiblePaths=/etc/studium-server -/run/credentials -/var/lib/studium-server/web -/var/lib/studium-server/unterlagen -/var/lib/studium-server/eingang
+InaccessiblePaths=/etc/studium-server -/run/credentials -/var/lib/studium-server/web -/var/lib/studium-server/unterlagen -/var/lib/studium-server/eingang -/var/cache/debconf
 UNIT
 einheit studium-server-zustand.timer <<'UNIT'
 [Unit]
@@ -483,6 +645,46 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/bin/studium-server aktualisieren
+# Grenze für den ganzen Lauf (Pakete, Claude Code, Download, Installer samt Zurückrollen); ohne sie hielte ein hängender Schritt
+# jeden weiteren Tag auf (oneshot hat sonst keine). Die langsamen Schritte haben eigene Grenzen (apt wartet höchstens 5 Minuten
+# auf seine Sperre, Downloads höchstens 5 Minuten mit wenigen Wiederholungen, claude update 10 Minuten), damit die Grenze
+# hier nur greift, wenn wirklich etwas hängt. Bricht systemd ab (SIGTERM), zählt der Lauf als gescheitert; ein offenes
+# Zurückrollen holt der nächste Lauf vor allem anderen nach (installieren.sh, ZURUECK_OFFEN), eine nicht fertige Installation
+# ebenso.
+TimeoutStartSec=60min
+UNIT
+# Aufbau-Fenster von LiveSync (livesync.sh, „aufbauen“): Ein Neustart verliert den Zeitgeber, der es schließt. Nach dem Start
+# schließt dieser Dienst ein abgelaufenes Fenster und stellt für ein offenes den Zeitgeber neu; das Ende steht nur in einer Datei
+# von root. Läuft als root wie livesync.sh selbst (Einstellungen von CouchDB über 127.0.0.1 mit dem Administrator). Läuft CouchDB
+# nicht oder antwortet es nicht, endet er still („-“): Das Ende bleibt vermerkt; der Zeitgeber unten prüft 15 Minuten nach dem
+# Start noch einmal (CouchDB ist dann meist da), sonst der tägliche Lauf. Wie die übrigen Dienste außer dem Web-Dienst darf er
+# keinen Port öffnen (SocketBindDeny): Niemand außer dem Web-Dienst soll während eines Neustarts dessen Port 8743 belegen und sich
+# als er ausgeben können.
+einheit studium-server-livesync-aufbau.service <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Aufbau-Fenster von LiveSync nach dem Start prüfen
+After=couchdb.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/studium-server/livesync.json
+
+[Service]
+Type=oneshot
+ExecStart=-/bin/bash /opt/studium-server/aktuell/livesync.sh aufbau-pruefen
+TimeoutStartSec=5min
+SocketBindDeny=any
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+einheit studium-server-livesync-aufbau.timer <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Aufbau-Fenster von LiveSync 15 Minuten nach dem Start noch einmal prüfen
+
+[Timer]
+OnBootSec=15min
+
+[Install]
+WantedBy=timers.target
 UNIT
 einheit studium-server-aktualisieren.timer <<'UNIT'
 [Unit]
@@ -542,8 +744,9 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged
 SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SocketBindDeny=any
 ReadWritePaths=/var/lib/studium-server/abruf
-InaccessiblePaths=-/var/lib/studium /etc/studium-server -/var/lib/studium-server/laeufe -/var/lib/studium-server/eingang -/var/lib/studium-server/unterlagen -/var/lib/studium-server/web/verbinden -/var/lib/studium-server/web/livesync-links
+InaccessiblePaths=-/var/lib/studium /etc/studium-server -/var/lib/studium-server/laeufe -/var/lib/studium-server/eingang -/var/lib/studium-server/unterlagen -/var/lib/studium-server/web/verbinden -/var/lib/studium-server/web/livesync-links -/var/cache/debconf
 UNIT
 einheit studium-server-abruf.timer <<'UNIT'
 [Unit]
@@ -617,8 +820,9 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged
 SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SocketBindDeny=any
 ReadWritePaths=/var/lib/studium-server /var/lib/studium
-InaccessiblePaths=/etc/studium-server /etc/credstore.encrypted -/run/credentials
+InaccessiblePaths=/etc/studium-server /etc/credstore.encrypted -/run/credentials -/var/cache/debconf
 UNIT
 einheit studium-server-gmail.service <<'UNIT'
 [Unit]
@@ -654,9 +858,10 @@ SystemCallFilter=@system-service
 SystemCallFilter=~@privileged
 SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX
+SocketBindDeny=any
 IPAddressDeny=any
 ReadWritePaths=/var/lib/studium-server
-InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf -/var/lib/studium-server/unterlagen -/var/lib/studium-server/eingang /etc/studium-server /etc/credstore.encrypted -/run/credentials
+InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf -/var/lib/studium-server/unterlagen -/var/lib/studium-server/eingang /etc/studium-server /etc/credstore.encrypted -/run/credentials -/var/cache/debconf
 UNIT
 einheit studium-server-gmail.timer <<'UNIT'
 [Unit]
@@ -673,7 +878,8 @@ UNIT
 alte_einheiten_entfernen "$EINHEITEN"
 systemctl daemon-reload
 systemctl enable -q studium-server-dienst.service studium-server-speicher.service studium-server-zustand.timer \
-  studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer
+  studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer studium-server-livesync-aufbau.timer \
+  studium-server-livesync-aufbau.service
 [ "$TEST" -eq 1 ] || systemctl enable -q studium-server-aktualisieren.timer
 systemctl restart studium-server-dienst.service studium-server-speicher.service
 systemctl start studium-server-zustand.timer studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer
@@ -789,20 +995,44 @@ if [ "$TEST" -eq 1 ]; then
   echo "im Testmodus übersprungen"
 elif [ -x /var/lib/studium/.local/bin/claude ]; then
   echo "schon da"
-else
-  sudo -u studium -H bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+# Bei einem Update hält ein Fehler hier nichts auf (der Ordner gehört studium; fehlt Claude Code dort, entscheidet das nicht über
+# ein Zurückrollen); bei der ersten Installation schon, sonst ginge die Einrichtung ohne Claude weiter
+elif ! timeout 600 sudo -u studium -H bash -c 'curl -fsSL --max-time 300 https://claude.ai/install.sh | bash'; then
+  [ -n "$ZURUECK_NACH" ] || fehler "Claude Code ließ sich nicht installieren"
+  echo "Claude Code ließ sich nicht installieren; nächster Versuch beim nächsten Update." >&2
 fi
 
 schritt "Prüfen"
-for i in $(seq 1 20); do
-  curl -fsS http://127.0.0.1:8743/v1/status >/dev/null 2>&1 && break
+# Ob dieses Paket gilt, entscheidet nur der neue Web-Dienst selbst: /v1/status direkt auf 127.0.0.1, ohne Caddy und ohne Kopf einer
+# Weiterleitung (so braucht er keinen Zugangsschlüssel, auch nachdem ein Gerät den Status über Caddy mit Schlüssel geholt hat), muss
+# mit der Version dieses Pakets antworten, und auf dem Port muss genau sein Prozess lauschen (MainPID der Einheit, ss -p): Ein
+# anderer lokaler Prozess, der den Port während des Neustarts belegt, gilt nicht (die übrigen Dienste dürfen ohnehin keinen Port
+# öffnen, SocketBindDeny). Fehlt ss, zählt nur die Antwort. Was danach Dateien anderer Benutzer liest (Zustand, studium-server status:
+# takt.json des Web-Dienstes), ist nur Anzeige und kann nie ein Zurückrollen auslösen; sonst könnte, wer den Web-Dienst übernommen
+# hat, mit einer kaputten Datei jedes Update zurückrollen lassen.
+port=$(jq -r '.port // 8743' "$KONFIG" 2>/dev/null || true)
+[[ "$port" =~ ^[0-9]{1,5}$ ]] || port=8743
+dienst_lauscht() {
+  local pid
+  command -v ss >/dev/null || return 0
+  pid=$(systemctl show -P MainPID studium-server-dienst.service 2>/dev/null || true)
+  [[ "$pid" =~ ^[1-9][0-9]*$ ]] && ss -ltnpH "sport = :$port" 2>/dev/null | grep -q "pid=$pid,"
+}
+for i in $(seq 1 30); do
+  antwort=$(curl -fsS --max-time 5 "http://127.0.0.1:$port/v1/status" 2>/dev/null || true)
+  [ "$(jq -r '.version // empty' <<<"$antwort" 2>/dev/null || true)" != "$VERSION" ] || ! dienst_lauscht || break
   sleep 1
-  [ "$i" -lt 20 ] || fehler "der Web-Dienst antwortet nicht (journalctl -u studium-server-dienst)"
+  [ "$i" -lt 30 ] || fehler "der Web-Dienst antwortet nicht mit Version $VERSION (journalctl -u studium-server-dienst)"
 done
 systemctl start studium-server-zustand.service || true
-studium-server status
+studium-server status || true
 # Erst jetzt ist dieses Paket fertig installiert. Fehlt die Marke (ein Schritt oben scheiterte), installiert „studium-server
-# aktualisieren“ dieselbe Version beim nächsten Mal noch einmal, statt „Schon aktuell“ zu melden.
+# aktualisieren“ dieselbe Version beim nächsten Mal noch einmal, statt „Schon aktuell“ zu melden. Ab jetzt gilt dieses Paket; was
+# danach scheitert (Aufräumen), ist kein Grund zum Zurückrollen, und kein Zurückrollen steht aus. Die Marke ZURUECK_OFFEN fällt
+# darum vor .installiert weg: Bricht der Lauf genau dazwischen ab, installiert der nächste dieselbe Version noch einmal, statt ein
+# gutes Paket zurückzurollen.
+ZURUECK_NACH=""
+rm -f "$ZURUECK_OFFEN"
 : >"$ZIEL/.installiert"
 
 schritt "Alte Pakete"
@@ -818,6 +1048,14 @@ if [ -z "$ADRESSE" ]; then
   echo
   echo "Vorbereitet (ohne Adresse). Den Rest erledigt die Einrichtung in der Cloud Shell: bash ~/studium-autopilot/start.sh"
   exit 0
+fi
+if [ "$ADRESSE_NEU" -eq 1 ]; then
+  cat <<TEXT
+
+Die Adresse des Servers hat sich geändert ($ADRESSE_BISHER → $ADRESSE). Darum gelten neue Schlüssel: Jedes Gerät muss sich neu
+verbinden, das erste mit „verbinden“ unten, jedes weitere in Obsidian mit „Weiteres Gerät verbinden“. Mit LiveSync braucht jedes
+Gerät einen neuen Link; vorher am besten neue Zugangsdaten: sudo studium-server livesync-erneuern.
+TEXT
 fi
 cat <<TEXT
 

@@ -31,7 +31,7 @@ passende Datei; ein neues Thema bekommt eine eigene Datei und eine Zeile in dies
 | [postfach.md](architektur/postfach.md) | Postfach (`postfach.js`, `postfach-html.js`) |
 | [einrichtung.md](architektur/einrichtung.md) | Einrichtung |
 | [darstellung.md](architektur/darstellung.md) | hell, dunkel, automatisch, Design, Personalisieren |
-| [seiten.md](architektur/seiten.md) | Seit deinem letzten Besuch, Leseansicht, Dashboard, Bereiche, Modulseite |
+| [seiten.md](architektur/seiten.md) | Seit deinem letzten Besuch, Leseansicht, Dashboard, Bereiche, Modulseite, Zusammenfassung eines Moduls |
 | [lernen.md](architektur/lernen.md) | Karteikarten, Lernplan, Literaturliste |
 | [testeinstiege.md](architektur/testeinstiege.md) | Tests ohne Obsidian und Testeinstiege in Obsidian (`plugin.test…`) |
 
@@ -208,6 +208,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `claude.js` | Claude ohne Server (seit 0.6.3, `ctx.claude`): eigener API-Schlüssel aus der Claude Console, **Zusammenfassen** im PDF-Kasten direkt über die Messages API, Zeile und Fenster „Claude“ unter Verbindungen (seit 26.10.2026 nur für Fortgeschrittene, Zeile erst nach dem Verbinden); siehe [„Claude ohne Server“](architektur/claude.md) |
 | `ilias-kalender.js` | ILIAS-Kalender (seit 18.10.2026): Abgaben deiner Übungen aus dem Kalender-Abo als Fristen unter `Termine/`, `ctx.iliasKalender`; siehe [„ILIAS-Kalender“](architektur/ilias-kalender.md) |
 | `widget.js` | Widgets für Home- und Sperrbildschirm von iPhone und iPad (seit 28.10.2026): schreibt dort Stundenplan, Fristen und Prüfungen samt Zeichner für die App Scriptable in den Ordner des Plugins, Aktion `widget` (Fenster zum Einrichten, Zeile „Widgets“ unter Hilfe); siehe [„Widgets“](architektur/widget.md) |
+| `zusammenfassung.js` | Zusammenfassung eines Moduls lesen (seit 02.11.2026, im Entwurf, `typ: zusammenfassung`): Kapitel-Leiste links, wenn neben ihr die zwei Spalten der Abschnitte Platz haben (iPad quer, PC), schmal eine Zeile oben mit der Stelle und ein Blatt von unten mit derselben Liste, auf dem Telefon beim ersten Öffnen alle Kapitel zugeklappt; Tipp klappt auf und springt hin; Abschnittsnummern „I.2“ vor jedem `###`; zu breite Formeln kleiner, Tabellen auf dem Telefon als Blöcke; siehe [„Zusammenfassung eines Moduls“](architektur/seiten.md) |
 | `uni-login.js` | Helfer: Uni-Login (seit 0.4.8, `ctx.user["uni-login"](ctx)`): verbindet nach der Anmeldung ILIAS-Kalender und Alma-Stundenplan ohne kopierten Link, holt einen neuen Link, wenn der alte nicht mehr gilt; siehe [„Uni-Login“](architektur/verbindungen.md) |
 
 Beim Start schreibt das Plugin keine Datei. Die Agenda (`eba-agenda`) wird live gerendert, wie der Kalender. Einzige

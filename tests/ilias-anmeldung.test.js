@@ -71,7 +71,7 @@ async function lauf(regeln, zugang, { mobil = false, anmeldung = A } = {}) {
 
 test("Erfolg: IdP-Formular, SAML zurück an ILIAS, Dashboard ohne Login-Seite", async () => {
   const { ergebnis, anfragen, geholt } = await lauf(grundRegeln(html(SAML_FORM)));
-  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true, konto: "" });
   assert.equal(geholt(), 1, "Passwort genau einmal geholt");
   const mitGeheim = anfragen.filter((a) => koerper(a).indexOf(GEHEIM) >= 0);
   assert.equal(mitGeheim.length, 1, "Passwort genau einmal gesendet");
@@ -115,7 +115,7 @@ test("Endet die Anmeldung nicht auf einer ILIAS-Seite, wird das Dashboard eigens
   const r = grundRegeln(html(SAML_FORM));
   r[`POST ovidius.uni-tuebingen.de/Shibboleth.sso/SAML2/POST`] = html("<html><body>Weiter …</body></html>");
   const { ergebnis, anfragen } = await lauf(r);
-  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true, konto: "" });
   assert.equal(anfragen.filter((a) => /\/ilias\.php/.test(a.url)).length, 1, "Dashboard geholt");
 });
 
@@ -142,11 +142,24 @@ test("Zwei-Faktor-Abfrage → zwei-faktor", async () => {
   assert.equal(ergebnis.grund, "zwei-faktor");
 });
 
+test("Konto: das Kürzel im Profilbild der Seite, auf der die Anmeldung endet (mit und ohne Passwort)", async () => {
+  const kurs = fs.readFileSync(path.join(__dirname, "daten", "ilias-seiten", "kurs.html"), "utf8");
+  const r = grundRegeln(html(SAML_FORM));
+  r[`GET ovidius.uni-tuebingen.de/ilias.php`] = html(kurs);
+  assert.deepEqual((await lauf(r)).ergebnis, { ok: true, passwortGesendet: true, konto: "ab" });
+  r[`GET ovidius.uni-tuebingen.de/shib_login.php`] = weiter(`${I}/ilias.php?baseClass=ilDashboardGUI&cmd=show`);
+  assert.deepEqual((await lauf(r)).ergebnis, { ok: true, passwortGesendet: false, konto: "ab" });
+  r[`GET ovidius.uni-tuebingen.de/ilias.php`] = html(kurs.replace(/<span class="abbreviation">ab<\/span>/, "").replace("il-avatar-letter", "il-avatar-picture"));
+  assert.equal((await lauf(r)).ergebnis.konto, "#foto", "Foto als Profilbild");
+  r[`GET ovidius.uni-tuebingen.de/ilias.php`] = html(DASHBOARD);
+  assert.equal((await lauf(r)).ergebnis.konto, "", "ohne Profilbild");
+});
+
 test("IdP-Sitzung gilt noch: direkt SAML-Formular, Passwort wird nicht geholt", async () => {
   const r = grundRegeln(null);
   r[`GET idp.uni-tuebingen.de/idp/profile/SAML2/Redirect/SSO`] = html(SAML_FORM);
   const { ergebnis, geholt, anfragen } = await lauf(r);
-  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: false });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: false, konto: "" });
   assert.equal(geholt(), 0);
   assert.equal(anfragen.filter((a) => host(a.url) === "idp.uni-tuebingen.de" && a.methode === "POST").length, 0);
 });
@@ -155,7 +168,7 @@ test("Schon angemeldet: shib_login.php führt direkt zu ILIAS → ok ohne Passwo
   const r = grundRegeln(null);
   r[`GET ovidius.uni-tuebingen.de/shib_login.php`] = weiter(`${I}/ilias.php?baseClass=ilDashboardGUI&cmd=show`);
   const { ergebnis, geholt } = await lauf(r);
-  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: false });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: false, konto: "" });
   assert.equal(geholt(), 0);
 });
 
@@ -255,5 +268,5 @@ test("iPad: Anmeldung endet nicht in ILIAS → Code mit Gerät, Version und Seit
 
 test("iPad: erfolgreiche Anmeldung wie am PC", async () => {
   const { ergebnis } = await lauf(grundRegeln(html(SAML_FORM)), null, { mobil: true });
-  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true, konto: "" });
 });

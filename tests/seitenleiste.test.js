@@ -15,6 +15,7 @@ const SKRIPTE = path.join(VAULT, "System", "Skripte");
 const seitenleiste = require(path.join(SKRIPTE, "seitenleiste.js"));
 const { ZIELE } = seitenleiste;
 const pfadVon = (z) => (z === "Dashboard" ? "Dashboard.md" : `Studium/${z}.md`);
+const reText = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // Text wörtlich in einem RegExp
 
 test("Seiten: Dashboard zuerst, jede Seite gibt es in der Vorlage", () => {
   assert.equal(ZIELE[0], "Dashboard", "„Dashboard“ ist der Weg zurück zum Start");
@@ -46,7 +47,7 @@ test("Lesezeichen der Vorlage = Seiten der Übersicht (ohne den Lernplan, den es
 test("Jede Seite hat ein eigenes Symbol in eba-core.css", () => {
   const css = fs.readFileSync(path.join(VAULT, ".obsidian", "snippets", "eba-core.css"), "utf8");
   const symbole = ZIELE.map((z) => {
-    const m = css.match(new RegExp(`li:has\\(> a\\[data-href\\$="${z.replace(/[&]/g, "\\$&")}"\\]\\)\\s*\\{\\s*--eba-icon:\\s*(url\\("[^"]+"\\))`));
+    const m = css.match(new RegExp(`li:has\\(> a\\[data-href\\$="${reText(z)}"\\]\\)\\s*\\{\\s*--eba-icon:\\s*(url\\("[^"]+"\\))`));
     assert.ok(m, "Symbol für " + z);
     return m[1];
   });
@@ -1108,7 +1109,7 @@ test("Seitenende auf iPad und PC: wo das Plugin es kürzt, steht der letzte Bloc
   // iPad: Obsidians Maße der Leiste (Höhe + Abstand unten) weniger 4 px: + 16 px Rand der Leseansicht = 12 px Lücke
   assert.match(tablet[0].dekl, /padding-bottom: calc\(var\(--navbar-height, 52px\) \+ var\(--navbar-bottom-offset, 0px\) - 4px\) !important/);
   // PC: Oberkante der eigenen Leiste aus ihrem Stil (Abstand unten + Knopf + Innenabstand + Rand)
-  const px = (sel, feld) => Number((css.match(new RegExp(sel.replace(/[.>]/g, "\\$&") + " \\{[^}]*?" + feld + ":\\s*(\\d+)px")) || [])[1]);
+  const px = (sel, feld) => Number((css.match(new RegExp(reText(sel) + " \\{[^}]*?" + feld + ":\\s*(\\d+)px")) || [])[1]);
   const oben = px(".eba-nav-leiste", "bottom") + px(".eba-nav-leiste > .clickable-icon", "height") + 2 * px(".eba-nav-leiste", "padding") + 2;
   assert.equal(oben, 88, "Leiste am PC: 40 px über dem Rand, 48 px hoch");
   const ende = Number((pc[0].dekl.match(/padding-bottom:\s*(\d+)px/) || [])[1]);

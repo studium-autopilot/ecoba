@@ -108,7 +108,10 @@ und auf anderen Geräten steht die Zeile „Neu laden“.
 ### Hinweis bei gesperrten Skripten
 
 Ein Hinweis nennt die gesperrten Skripte, beim Start nach 5 s, beim Hot-Reload nach einer Minute ohne neuen Fund (bis dahin ist
-ein Update über den Sync meist ganz da), nie während eines Updates und für dieselben Fassungen nur einmal:
+ein Update über den Sync meist ganz da), nie während eines Updates und für dieselben Fassungen nur einmal je Lauf. Er bleibt
+stehen (Obsidian-Hinweis mit Dauer 0), bis nichts mehr gesperrt ist (Liste oder Signatur sind nachgekommen, Reparieren oder
+Erlauben hat geklappt) oder du ihn schließt (ein Tipp darauf, auf dem iPhone auch Wegwischen). Ein neuer Stand ersetzt ihn, nie
+stehen zwei. Der Text:
 
 - Nennt eine angenommene Liste den Pfad (Grund `geaendert`): „Ein Teil der App wurde nicht gestartet, weil er nicht zur
   installierten Version passt (…).“
@@ -127,7 +130,22 @@ ein Update über den Sync meist ganz da), nie während eines Updates und für di
 
 Der Knopf **Reparieren** steht dabei, wenn es eine echte Fassung zu holen gibt oder die Liste im Tresor nicht gilt. Hinkt der Kern
 hinterher (unten, „Neu laden“), sagt ein Satz „Auf diesem Gerät läuft noch Version …; „Neu laden“ holt Version ….“, mit dem Knopf
-**Neu laden** als Hauptknopf. Ist alles Gesperrte geladen (Reparieren, Erlauben, Liste nachgekommen), verschwindet der Hinweis.
+**Neu laden** als Hauptknopf. Ist alles Gesperrte geladen (Reparieren, Erlauben, Liste nachgekommen, „Erweiterungen neu
+laden“), verschwindet der Hinweis von selbst; beim Entladen des Plugins (Neu laden, Update) auch, die neue Instanz zeigt ihren
+eigenen.
+
+Geschlossen zeigt ihn der nächste Start wieder. Bis dahin führt ein Weg zurück, nur aus dem Kern (also auch, wenn `update.js`
+oder `seitenleiste.js` gesperrt sind), solange etwas gesperrt ist:
+
+- Am Computer ein Eintrag in der Statusleiste, ab dem ersten Hinweis: „Studium Autopilot wartet“ (ohne angenommene Liste und
+  ohne Signatur, das Gerät braucht einmal Internet), sonst „Studium Autopilot prüfen“. Ein Klick zeigt den Hinweis mit seinen
+  Knöpfen noch einmal, auch für dieselben Fassungen und während eines Updates. Ist nichts mehr gesperrt, ist der Eintrag weg.
+- iPhone und iPad haben keine Statusleiste: Wer dort das Dashboard oder **Einstellungen & Hilfe** öffnet (`ABLEHNUNG_SEITEN`,
+  Ereignis `file-open`), sieht den geschlossenen Hinweis wieder; nicht vor dem ersten Hinweis des Laufs, nicht während eines
+  Updates, nie neben einem offenen. Ein Symbol in der Seitenleiste ginge dort nicht verlässlich: Auf dem iPhone stünde es im
+  Menü hinter ≡, und das ersetzt `seitenleiste.js` durch die Übersicht.
+
+Der Hinweis „Der Entwicklermodus ist an …“ bleibt, wie er war: einmal je Start, er geht von selbst.
 
 ### Neu laden: der Kern holt sich selbst nach
 

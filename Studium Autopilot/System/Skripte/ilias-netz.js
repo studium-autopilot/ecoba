@@ -559,8 +559,9 @@ module.exports = function (ctx) {
               scheitern(fehler("zu-gross", { host: u.host, groesse: n }));
               try { if (typeof res.destroy === "function") res.destroy(); anf.destroy(); } catch (e) { /* schon zu */ }
             };
+            // HEAD: Content-Length nennt die Größe der Datei, es kommt kein Body
             const angekuendigt = Number((res.headers || {})["content-length"]);
-            if (angekuendigt > grenze) { zuGross(angekuendigt); return; }
+            if (angekuendigt > grenze && String(a.methode || "GET").toUpperCase() !== "HEAD") { zuGross(angekuendigt); return; }
             res.on("data", (c) => {
               if (erledigt) return;
               laenge += c.length;

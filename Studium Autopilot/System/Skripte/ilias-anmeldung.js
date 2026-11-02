@@ -32,10 +32,12 @@
 //   Beispiel: „nach-passwort · iPad 0.4.7 · start 200 idp-anmeldung › passwort 200 unbekannt [feld1,feld2]“
 //
 // Aufruf: await ctx.user["ilias-anmeldung"](ctx).anmelden(sitzung, { benutzer, kennwortGeber }, { netz?, html?, uni? })
-//         → { ok: true, passwortGesendet } oder { ok: false, grund: "zugang-falsch"|"zustimmung"|"zwei-faktor"|"netz"|"unerwartet",
+//         → { ok: true, passwortGesendet, konto } oder { ok: false, grund: "zugang-falsch"|"zustimmung"|"zwei-faktor"|"netz"|"unerwartet",
 //           hinweis, code, passwortGesendet }
 //   passwortGesendet: Das Passwort ging an den IdP. Gilt die Sitzung bei ILIAS oder der Uni noch (Kekse von früher, auf iPhone und
 //   iPad hält sie das Gerät selbst), klappt die Anmeldung ohne Passwort; dann hat niemand das Passwort geprüft (ilias.js).
+//   konto: Kürzel des Kontos, das ILIAS am Ende zeigt (ilias-html.js kontoKuerzel, auch "#foto"; "" ohne); ilias.js merkt es sich nach einer
+//   Anmeldung mit Passwort und erkennt daran die Sitzung eines anderen Kontos.
 // Tests: tests/ilias-anmeldung.test.js (Attrappe der Sitzung, kein Netz). iOS-sicher (kein Lookbehind, keine Node-Module).
 module.exports = function (ctx) {
   ctx = ctx || {};
@@ -127,6 +129,8 @@ module.exports = function (ctx) {
       return r;
     };
     const serverFehler = (r) => fehler("netz", "netz-http-" + r.status);
+    // Kürzel des Kontos auf der ILIAS-Seite, auf der die Anmeldung endet (ilias-html.js kontoKuerzel), sonst ""
+    const konto = (r) => { const H = htmlHolen(optionen); try { return H && typeof H.kontoKuerzel === "function" ? H.kontoKuerzel(r.text || "") || "" : ""; } catch (e) { return ""; } };
     try {
       // 1. Einstieg
       let r = await holen("start", { url: `${uni.ilias}/shib_login.php` });
@@ -175,9 +179,9 @@ module.exports = function (ctx) {
       }
 
       // 4. Prüfen (meist reicht die letzte Seite)
-      if (istIlias(r, N)) return { ok: true, passwortGesendet: gesendet };
+      if (istIlias(r, N)) return { ok: true, passwortGesendet: gesendet, konto: konto(r) };
       const d = await holen("dashboard", { url: `${uni.ilias}/ilias.php?baseClass=ilDashboardGUI&cmd=show` });
-      return istIlias(d, N) ? { ok: true, passwortGesendet: gesendet } : fehler("unerwartet", "nicht-angemeldet");
+      return istIlias(d, N) ? { ok: true, passwortGesendet: gesendet, konto: konto(d) } : fehler("unerwartet", "nicht-angemeldet");
     } catch (e) {
       if (e && e.grund === "fremder-host") return fehler("unerwartet", `blockiert-${e.host || "?"} bei ${schritt}`);
       return fehler("netz", `netz-${(e && e.grund) || "fehler"}${e && e.code ? "-" + e.code : ""} bei ${schritt}`);

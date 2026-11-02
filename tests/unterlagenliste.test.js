@@ -229,3 +229,14 @@ test("Online-Fassung: link nur mit https, auch ohne Datei", () => {
     ["Drittes Buch", false, ""],
   ]);
 });
+
+test("Zusammenfassung: Unterzeile aus den Kapiteln der Notiz und dem Stand", () => {
+  const h = (heading, level = 2) => ({ heading, level });
+  assert.equal(U.zfMeta([h("E · Motivation"), h("Daten", 3), h("I · Verteilung")], "2026-11-02"), "Kapitel E und I · Stand 02.11.");
+  assert.equal(U.zfMeta([h("1 · Grundlagen")], "2026-11-02"), "Kapitel 1 · Stand 02.11.");
+  assert.equal(U.zfMeta([h("E · A"), h("I · B"), h("II · C")], ""), "Kapitel E, I und II");
+  assert.equal(U.zfMeta([h("E · A"), h("I · B"), h("II · C"), h("III · D")], "2026-12-01"), "Kapitel E bis III · Stand 01.12.");
+  assert.equal(U.zfMeta([h("Einstieg"), h("I · B")], "2026-11-02"), "2 Kapitel · Stand 02.11.");
+  assert.equal(U.zfMeta([], "kein Datum"), "");
+  assert.equal(U.zfMeta(undefined, undefined), "");
+});

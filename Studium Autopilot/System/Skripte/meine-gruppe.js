@@ -69,6 +69,9 @@ const pad = (n) => String(n).padStart(2, "0");
 const J = (v) => JSON.stringify(v == null ? "" : String(v));
 const minuten = (hm) => { const m = String(hm == null ? "" : hm).match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 const uhr = (min) => `${pad(Math.floor(min / 60))}:${pad(min % 60)}`;
+// Text mitten in einer Zeile mit „\“ vor Markdown-Zeichen. Mit Obsidian kommt die Fassung der zentralen Termine über io.mdText
+// (ctx.zentral.mdInZeile, dazu vor Link-Zeichen; ein gewöhnlicher Name oder Raum bleibt Zeichen für Zeichen gleich), als o.md an
+// notizText; ohne sie (reine Funktionen) nur vor Markdown-Zeichen
 const mdText = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&");
 const dmy = (s) => `${s.slice(8, 10)}.${s.slice(5, 7)}.${s.slice(0, 4)}`;
 const basis = (p) => String(p).slice(String(p).lastIndexOf("/") + 1).replace(/\.md$/i, "");
@@ -214,7 +217,7 @@ const kurzTitel = (s, n) => {
   return teile.join(" ").replace(/[\s,;:–-]+$/, "") || s.slice(0, n);
 };
 // Inhalt einer Gruppen-Notiz. alt = bisheriger Text oder "", g = geprüfte Gruppe (gruppen.json), o = { herkunft, iliasGruppe,
-// name (aus ILIAS), modulLink, kurz (Modultitel), gewaehltAm (Zeitpunkt der Wahl, nur gewählt; sonst bleibt der alte) }.
+// name (aus ILIAS), modulLink, kurz (Modultitel), gewaehltAm (Zeitpunkt der Wahl, nur gewählt; sonst bleibt der alte), md (io.mdText) }.
 // Eigene Felder, Tags und eigener Text (meineNotizen) bleiben, bei derselben Gruppe auch ausfall und einzeltermin; entfaellt
 // und konflikt fallen weg.
 const notizText = (alt, g, o) => {
@@ -239,7 +242,8 @@ const notizText = (alt, g, o) => {
   ilias ? ["ilias_gruppe: " + J(o.iliasGruppe)] : am ? ["gewaehlt_am: " + J(am)] : [], ['uebersicht: "[[Stundenplan]]"'],
   liste("tags", vereinigt("tags", ["stundenplan"])), liste("cssclasses", vereinigt("cssclasses", ["eba-s-notizen"])));
   for (const b of bloecke) if (b.key && EIGEN.indexOf(b.key) < 0) Array.prototype.push.apply(zeilen, b.zeilen);
-  const kopf = [`# ${mdText(g.code)} · ${mdText(anzeige)}`, "", `${TAGE_LANG[wt - 1]}s, ${z.beginn}–${z.ende}` + (g.raum ? " · " + mdText(g.raum) : ""), ""];
+  const md = o.md || mdText;
+  const kopf = [`# ${md(g.code)} · ${md(anzeige)}`, "", `${TAGE_LANG[wt - 1]}s, ${z.beginn}–${z.ende}` + (g.raum ? " · " + md(g.raum) : ""), ""];
   if (g.zeitraum) kopf.push(`${dmy(g.zeitraum.von)} – ${dmy(g.zeitraum.bis)}`, "");
   kopf.push(ilias ? INFO_ILIAS : INFO_GEWAEHLT, "");
   const fremd = fremderKopf(body);
@@ -428,7 +432,7 @@ const iliasAbgleichen = async (io, soll, mitglieder, o) => {
       continue;
     }
     const m = o.modul ? o.modul(g.code) : null;
-    const opt = { herkunft: ILIAS, iliasGruppe: refId, name: s.name || "", modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "" };
+    const opt = { herkunft: ILIAS, iliasGruppe: refId, name: s.name || "", modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "", md: io.mdText };
     const kandidaten = gleiche.concat(wechsel, gew);
     const x = kandidaten[0] || null;
     const rest = kandidaten.filter((y) => y !== x);
@@ -487,7 +491,7 @@ const waehlen = async (io, g, o) => {
   const meine = alle.filter((x) => herkunftVon(x.fm) === GEWAEHLT && gleichesModul(x.fm, g) && x.fm.entfaellt !== true)
     .sort((a, b) => diese(a) - diese(b) || (am(a) > am(b) ? -1 : am(a) < am(b) ? 1 : 0));
   const da = meine[0] || null, rest = meine.slice(1);
-  const soll = { herkunft: GEWAEHLT, modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "", gewaehltAm: o.jetzt || "" };
+  const soll = { herkunft: GEWAEHLT, modulLink: m ? `[[${m.name}]]` : "", kurz: m ? m.titel : "", gewaehltAm: o.jetzt || "", md: io.mdText };
   if (da) {
     const alt = await io.lesen(da.pfad), neu = notizText(alt, g, soll);
     if (neu !== alt) await io.schreiben(da.pfad, neu);
@@ -577,7 +581,7 @@ const gewaehltAktualisieren = async (io, notizen, o) => {
     // Ohne Modulnotiz bleiben Link und Kurztitel der Notiz (sonst stünde statt des Modultitels der Code da)
     const m = o.modul ? o.modul(g.code) : null;
     const soll = { herkunft: GEWAEHLT, name, modulLink: m ? `[[${m.name}]]` : String(x.fm.modul || ""),
-      kurz: m ? m.titel : String(x.fm.titel || "").split(" · ")[0] };
+      kurz: m ? m.titel : String(x.fm.titel || "").split(" · ")[0], md: io.mdText };
     // Name aus den bisherigen Feldern: Nur dann trägt die Notiz den erzeugten Namen; einen eigenen Namen behält sie
     const tagAlt = String(x.fm.tag || TAGE[Number(x.fm.wochentag) - 1] || "");
     const nameAlt = dateiName({ tag: tagAlt, von: String(x.fm.beginn || ""), ct: false, code: String(x.fm.code || ""),
@@ -641,6 +645,7 @@ module.exports = function (ctx) {
       anlegen: async (p, t) => { await V.create(p, t); },
       papierkorb: async (p) => { const f = datei(p); if (f) await (Q && Q.papierkorb ? Q.papierkorb(app, f) : V.trash(f, false)); },
       existiert: (p) => !!V.getAbstractFileByPath(p),
+      mdText: (s) => (ctx && ctx.zentral && ctx.zentral.mdInZeile ? ctx.zentral.mdInZeile(String(s)) : mdText(s)),
       ordnerAnlegen: async (p) => { try { await V.createFolder(p); } catch (e) { if (!V.getAbstractFileByPath(p)) throw e; } },
       // umbenennen mit dem fileManager: Links auf die Notiz ziehen mit
       umbenennen: async (alt, neu) => { const f = datei(alt); if (f) await app.fileManager.renameFile(f, neu); },

@@ -199,7 +199,7 @@ test("Begleitnotiz: keine Bilder, Markdown-Links, Entitäten, Code-Zäune, Unico
     { text: "Lehrbuch https://www.core-econ.org/the-economy/ und https://alma.uni-tuebingen.de/a, Quiz https://evil.example.com/q?x=1" },
     { begriff: "[Opportunitätskosten](https://evil.example/b)", text: "Was man aufgibt" },
   ] });
-  assert.deepEqual(sauber.wichtigste.map((p) => p.text), ["Grafik und Folie sowie obsidian //open eba-todos",
+  assert.deepEqual(sauber.wichtigste.map((p) => p.text), ["Grafik und Folie sowie eba-todos",
     "Lehrbuch https://www.core-econ.org/the-economy/ und https://alma.uni-tuebingen.de/a, Quiz evil.example.com", "Was man aufgibt"]);
   assert.equal(sauber.wichtigste[2].begriff, "Opportunitätskosten");
 });

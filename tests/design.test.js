@@ -248,11 +248,18 @@ test("Kalender: Prüfung, Uni und Veranstaltung sind in jedem Design auf einen B
 // tauschen je einen Ton): sechs Töne, die man auseinanderhält und die keinen Zustand nachahmen (docs/design.md, „Farbe je Modul im
 // Wochenraster“). Rückmeldung vom 27.10.2026: „Timetable Colors aren't distinguishable too faint“ (dunkel auf dem iPad). Danach
 // waren hell die Flächen zweier Module kaum zu unterscheiden (bei 18 % nur 0,019 auseinander, Übungen bei 10 % 0,010, bei 15 %
-// 0,016): Flächen untereinander unten, mit Grenzen, die man sieht (Vorlesungen 0,03, Übungen 0,025), nicht knapp unter den Werten.
+// 0,016): Flächen untereinander unten, mit Grenzen, die man sieht (Vorlesungen 0,03), nicht knapp unter den Werten. Seit 02.11.2026
+// ist eine Übung umrandet („Tutorium und Vorlesung nicht genug unterschieden“): fast die Seite als Fläche, das Modul sagen Rahmen
+// und Kante (mindestens 3 : 1 auf der Karte), die Art eine neutrale Pille (Schrift mindestens 4,5 : 1).
 const MODULE = [1, 2, 3, 4, 5, 6];
 // Art und Raum im Kasten: --eba-ev-raum aus eba-core.css Abschnitt 55, ein Grau mit --eba-ev-raum-anteil Textfarbe (je Schema)
 const RAUM = deklarationen(CORE).find((d) => d.selektor === ".eba-woche .eba-ev" && d.eigenschaft === "--eba-ev-raum");
 test("Wochenraster: sechs Modulfarben je Design verschieden, kein Zustand, Kante sichtbar, Fläche nicht blass, Schrift lesbar", () => {
+  const regel = (sel, eig) => deklarationen(CORE).filter((d) => d.selektor === sel && d.eigenschaft === eig).map((d) => d.wert);
+  assert.deepEqual(regel(".eba-woche .eba-ev.ue", "border"), ["1px solid var(--eba-ev-farbe)"], "Übung umrandet");
+  const PILLE = ".eba-woche .eba-ev > .eba-ev-art";
+  assert.deepEqual(regel(PILLE, "color"), ["var(--eba-ev-raum)"], "Pille: Schrift im Grau des Raums");
+  assert.deepEqual(regel(PILLE, "background"), ["color-mix(in srgb, var(--eba-text) 8%, transparent)"], "Pille: neutral");
   const funde = [];
   for (const [name, bloecke] of Object.entries(SCHEMATA)) {
     const wert = variablen(bloecke), farbe = (v) => rgb(wert(v));
@@ -266,7 +273,7 @@ test("Wochenraster: sechs Modulfarben je Design verschieden, kein Zustand, Kante
     const raum = mischen(text, leise, anteil);
     // bleibt ein Grau: deutlich leiser als der Kurzname
     if (kontrast(raum, seite) > 0.7 * kontrast(text, seite)) funde.push(`${name}: Raumzeile so kräftig wie der Kurzname`);
-    const flaechen = [], flaechenUe = [];
+    const flaechen = [];
     const tonAbstand = (a, b) => Math.abs(((farbton(a) - farbton(b) + 540) % 360) - 180);
     m.forEach((a, i) => {
       const n = i + 1;
@@ -289,25 +296,28 @@ test("Wochenraster: sechs Modulfarben je Design verschieden, kein Zustand, Kante
       // Fläche wie in eba-core.css Abschnitt 55: Ton auf der Seite. Kurzname in --eba-text, Art und Raum in --eba-ev-raum
       const vl = mischen(a, seite, ton), ue = mischen(a, seite, tonUe);
       flaechen.push(vl);
-      flaechenUe.push(ue);
       for (const [art, f] of [["Vorlesung", vl], ["Übung", ue]]) {
         for (const [wer, s] of [["Schrift", text], ["Raum", raum]]) if (kontrast(s, f) < 4.5) funde.push(`${name}: ${wer} auf ${art} ${n} (${kontrast(s, f).toFixed(2)})`);
       }
-      // nicht zu blass: Fläche hebt sich von der Karte ab, Übung sichtbar heller bzw. leiser als Vorlesung
-      if (abstand(vl, karte) < 0.075 || abstand(ue, karte) < 0.04 || abstand(vl, ue) < 0.03) funde.push(`${name}: Fläche ${n} zu blass`);
+      // nicht zu blass: Vorlesung hebt sich von der Karte ab; gefüllt und umrandet klar verschieden
+      if (abstand(vl, karte) < 0.075) funde.push(`${name}: Fläche ${n} zu blass`);
+      if (abstand(vl, ue) < 0.07) funde.push(`${name}: Vorlesung und Übung ${n} kaum verschieden (${abstand(vl, ue).toFixed(3)})`);
+      // Rahmen der Übung ist die Farbe selbst (auf der Karte geprüft wie die Kante); Pille neutral auf der Übung: Schrift lesbar
+      const pille = mischen(text, ue, 0.08);
+      if (kontrast(raum, pille) < 4.5) funde.push(`${name}: Schrift der Pille ${n} (${kontrast(raum, pille).toFixed(2)})`);
+      if (abstand(pille, ue) < 0.02) funde.push(`${name}: Pille ${n} kaum auf der Übung (${abstand(pille, ue).toFixed(3)})`);
     });
-    // Flächen untereinander: zwei Vorlesungen verschiedener Module unterscheidet man an der Fläche, nicht erst an der Kante, zwei
-    // Übungen ebenso, nur etwas leiser
+    // Flächen untereinander: zwei Vorlesungen verschiedener Module unterscheidet man an der Fläche, nicht erst an der Kante (zwei
+    // Übungen an Rahmen und Pille)
     for (let i = 0; i < 6; i++) {
       for (let j = i + 1; j < 6; j++) {
         if (abstand(flaechen[i], flaechen[j]) < 0.03) funde.push(`${name}: Flächen ${i + 1}/${j + 1} kaum verschieden (${abstand(flaechen[i], flaechen[j]).toFixed(3)})`);
-        if (abstand(flaechenUe[i], flaechenUe[j]) < 0.025) funde.push(`${name}: Übungsflächen ${i + 1}/${j + 1} kaum verschieden (${abstand(flaechenUe[i], flaechenUe[j]).toFixed(3)})`);
       }
     }
   }
   assert.deepEqual(funde, []);
-  // Art und Raum nutzen dieses Grau, nicht --eba-muted
-  for (const s of [".eba-woche .eba-ev > b i", ".eba-woche .eba-ev > span"]) {
+  // der Raum nutzt dieses Grau, nicht --eba-muted (die Art ist die Pille, oben)
+  for (const s of [".eba-woche .eba-ev > span"]) {
     const farben = deklarationen(CORE).filter((d) => d.selektor === s && d.eigenschaft === "color").map((d) => d.wert);
     assert.deepEqual(farben, ["var(--eba-ev-raum)"], s);
   }

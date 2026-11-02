@@ -1559,12 +1559,70 @@ test("Über 50 MB: auch geänderte Dateien und Dateien ohne Größe in der Liste
   assert.equal(x.il.anzahl("laden"), 0, "nicht jedes Mal neu versucht");
 });
 
-test("Dateitypen: was Windows beim Öffnen ausführt und was das Plugin selbst liest, kommt nie; Kursdateien wie .py, .R, .ipynb, .jar schon", async () => {
+test("Anschluss: Größe vor dem Download per HEAD auf den Download-Link; ohne Angabe, Seite oder Fehler unbekannt", async () => {
+  const ILIAS = "https://ovidius.uni-tuebingen.de";
+  const gesehen = [];
+  let antwort = null;
+  const transport = async (a) => { gesehen.push([a.methode, a.url.replace(ILIAS, "")]); return antwort; };
+  const echt = laden("ilias-netz").ergebnis;
+  const N = Object.assign({}, echt, { sitzung: (o) => echt.sitzung(Object.assign({}, o, { transport })) });
+  const Q = laden("ilias", { kontext: { user: { "ilias-netz": N, "ilias-html": laden("ilias-html").ergebnis } } }).ctx.ilias;
+  const q = await Q.quelleAusNetz({ benutzer: "zxabc01", kennwortGeber: () => "x" }, async () => {});
+  const e = { art: "datei", refId: "77", titel: "Skript", endung: "pdf", url: ILIAS + "/goto.php/file/77/download" };
+  antwort = { status: 200, kopf: { "content-type": "application/pdf", "content-length": "73400320" } };
+  assert.equal(await q.groesse(e), 73400320);
+  assert.deepEqual(gesehen, [["HEAD", "/goto.php/file/77/download"]], "derselbe Link wie der Download");
+  for (const a of [{ status: 200, kopf: { "content-type": "application/pdf" } }, { status: 200, kopf: { "content-type": "text/html", "content-length": "900" } },
+    { status: 404, kopf: { "content-length": "12" } }, { status: 200, kopf: { "content-type": "application/pdf", "content-length": "1e9" } }]) {
+    antwort = a;
+    assert.equal(await q.groesse(e), null, JSON.stringify(a));
+  }
+});
+
+test("iPhone/iPad: ohne Größe in der Liste oder geändert erst nach der Größe fragen; über 50 MB gar nicht laden", async () => {
+  const def = standardIlias();
+  def.seiten[B + "kurs/100"].push(datei("1302", "Ohne Angabe", "zip", "2026-10-09T08:00", { groesse: null }),
+    datei("1303", "Auch ohne", "pdf", "2026-10-09T08:00", { groesse: null }), datei("1304", "Frage scheitert", "pdf", "2026-10-09T08:00", { groesse: null }));
+  def.dateien["1302"] = "ZIP riesig"; def.dateien["1303"] = "%PDF klein"; def.dateien["1304"] = "%PDF auch";
+  def.groessen = { 1302: 70 * 1048576, 1303: 2000, 1304: Object.assign(new Error("HTTP 405"), { status: 405 }) };
+  const x = aufbau({ ilias: def, mobil: true });
+  await verbinden(x);
+  let b = await lauf(x);
+  assert.equal(b.art, "ok", b.fehler);
+  assert.deepEqual(x.il.log.filter((e) => e.was === "groesse").map((e) => e.id).sort(), ["1302", "1303", "1304"], "nur Dateien ohne Größe in der Liste");
+  assert.ok(x.il.geladen().indexOf("1302") < 0, "zu groß: gar nicht geladen");
+  assert.ok(x.il.geladen().indexOf("1303") >= 0 && x.il.geladen().indexOf("1304") >= 0, "klein oder unbekannt: geladen wie bisher");
+  assert.equal(x.t.index().ignoriert["1302"].groesse, 70 * 1048576);
+  assert.equal(b.zuGross, 1);
+  assert.match(x.m.status().text, /1 Datei über 50 MB nicht geladen\./);
+  // In ILIAS geändert (die Liste nennt noch die alte Größe): vorher fragen, deine Datei bleibt
+  const p = B110 + "/B110 Folien 01 Grundlagen.pdf";
+  def.groessen["1001"] = 60 * 1048576;
+  Object.assign(def.seiten[B + "kurs/100"][0], { geaendert: "2026-10-16T07:00" });
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  b = await lauf(x);
+  assert.deepEqual(x.il.log.filter((e) => e.was === "groesse").map((e) => e.id), ["1001"]);
+  assert.deepEqual([b.zuGross, x.il.anzahl("laden")], [1, 0]);
+  assert.equal(x.t.text(p), "%PDF Folien eins");
+  // am PC fragt der Lauf nicht vorher (der Download bricht dort selbst ab)
+  const pc = aufbau({ ilias: Object.assign(standardIlias(), { groessen: {} }) });
+  pc.il.def.seiten[B + "kurs/100"].push(datei("1302", "Ohne Angabe", "zip", "2026-10-09T08:00", { groesse: null }));
+  pc.il.def.dateien["1302"] = "ZIP";
+  await verbinden(pc);
+  await lauf(pc);
+  assert.equal(pc.il.anzahl("groesse"), 0);
+  assert.ok(pc.il.geladen().indexOf("1302") >= 0);
+});
+
+test("Dateitypen: was Windows oder macOS beim Öffnen ausführt und was das Plugin selbst liest, kommt nie; Kursdateien wie .py, .R, .ipynb, .jar schon", async () => {
   const def = standardIlias();
   const typen = { 1401: ["Installation", "exe"], 1402: ["Makro", "vbs"], 1403: ["Skript", "js"], 1404: ["Verknüpfung", "lnk"], 1405: ["Startseite", "url"],
     1406: ["Daten", "json"], 1407: ["Stil", "css"], 1408: ["Notiz", "md"], 1409: ["Analyse", "py"], 1410: ["Auswertung", "R"], 1411: ["Notebook", "ipynb"],
     1412: ["Programm", "jar"], 1413: ["Abruf", "appref-ms"], 1414: ["Einstellung", "reg"], 1415: ["Hilfe", "chm"], 1416: ["Abbild", "iso"],
-    1417: ["Systemsteuerung", "settingcontent-ms"], 1418: ["Paket", "msix"], 1419: ["Treiber", "inf"] };
+    1417: ["Systemsteuerung", "settingcontent-ms"], 1418: ["Paket", "msix"], 1419: ["Treiber", "inf"],
+    // macOS: Terminal-Befehl, Verweis, Abbild, Paket, AppleScript, Kurzbefehl
+    1420: ["Start", "command"], 1421: ["Webseite", "webloc"], 1422: ["Installer", "dmg"], 1423: ["Paket Mac", "pkg"], 1424: ["Ablauf", "scpt"],
+    1425: ["Kurzbefehl", "shortcut"] };
   for (const id of Object.keys(typen)) {
     def.seiten[B + "kurs/100"].push(datei(id, typen[id][0], typen[id][1].toLowerCase(), "2026-10-0" + (1 + (Number(id) % 9)) + "T08:00"));
     def.dateien[id] = "Inhalt " + id;
@@ -1574,8 +1632,17 @@ test("Dateitypen: was Windows beim Öffnen ausführt und was das Plugin selbst l
   const b = await lauf(x);
   const geladen = x.il.geladen().filter((id) => Number(id) > 1400 && Number(id) < 1500).sort();
   assert.deepEqual(geladen, ["1409", "1410", "1411", "1412"]);
-  assert.equal(b.uebersprungen, 15);
-  assert.ok(!x.t.pfade("Unterlagen/").some((p) => /\.(exe|vbs|js|lnk|url|json|css|reg|appref-ms|chm|iso|settingcontent-ms|msix|inf)$/i.test(p)));
+  assert.equal(b.uebersprungen, 21);
+  assert.ok(!x.t.pfade("Unterlagen/").some((p) => /\.(exe|vbs|js|lnk|url|json|css|reg|appref-ms|chm|iso|settingcontent-ms|msix|inf|command|webloc|dmg|pkg|scpt|shortcut|mobileconfig|applescript)$/i.test(p)));
+  // am Ende des Namens, auch wenn die Endung zu lang für endungVon ist oder ILIAS eine andere nennt
+  const { ctx } = laden("ilias");
+  const N = ctx.ilias.nieLaden;
+  for (const [e, n] of [["", "Profil.mobileconfig"], ["", "Ablauf.applescript"], ["", "Programm.app"], ["zip", "Werkzeug.zip.workflow"], ["", "Treiber.kext"]]) {
+    assert.equal(N(e, n), true, n);
+  }
+  for (const [e, n] of [["pdf", "Folien.pdf"], ["jar", "Programm.jar"], ["", "Ablauf.txt"], ["docx", "Application Letter.docx"], ["pdf", "App Store.pdf"]]) {
+    assert.equal(N(e, n), false, n);
+  }
   // Eine früher geladene Datei dieser Art bleibt, wie sie ist, und gilt nicht als „nicht mehr in ILIAS“
   const alt = B110 + "/B110 Sonstiges Installation.exe";
   const index = x.t.index();

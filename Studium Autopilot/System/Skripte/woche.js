@@ -8,7 +8,8 @@
 // HS 1“). Seit 20.10.2026 ist jede Ausnahme dieser Lehrveranstaltung (Ausfall aus ausfall, andere Zeit, anderer Raum; Klasse
 // ausnahme) in Warnfarbe, Ausfall wegen einer Pause oder eines freien Tags bleibt leise; vorher sah ein Ausfall blass aus wie
 // „ab TT.MM.“ und eine Änderung war nur gestrichelt umrandet. Überschneidungen nebeneinander. Oben kräftig der Kurzname (kurz der Notiz oder des Moduls,
-// sonst Code), blass Art und Gruppe (nur Übung, Tutorium, Seminar; Name aus gruppe), darunter Raum, davor der Beginn, wenn er
+// sonst Code), oben rechts die Art als Pille (nur Übung, Tutorium, Seminar; ohne Gruppe, die steht im Tooltip; der Kasten ist
+// dann umrandet, eba-core.css 55), darunter Raum, davor der Beginn, wenn er
 // nicht zur vollen Stunde liegt. Über den Tagen eine Leiste: links, wo die Woche zu heute liegt („Diese Woche“, „Nächste Woche“,
 // „In 2 Wochen“, „Letzte Woche“; wocheText), rechts „‹ KW n ›“ (seit 24.10.2026; vorher standen nur die Pfeile neben Freitag, und
 // am Wochenende sagte nichts, dass schon die nächste Woche dasteht). Wischen nach links/rechts wechselt am Touch-Gerät die Woche.
@@ -105,15 +106,9 @@ module.exports = function (ctx) {
     if (code && kurzVonCode && kurzVonCode[code]) return String(kurzVonCode[code]);
     return code || String(fm.titel || "").split(" · ")[0];
   };
-  // Art und Gruppe (nur Übung, Tutorium, Seminar …): gruppe ist der Anzeigename („Gruppe 4“, „Tutorium 1“), nie gruppe_alma.
-  // Beginnt er mit der Art, steht nur er da; eine bloße Zahl wird „Gruppe n“.
-  const artText = (fm) => {
-    if (!istUebung(fm)) return "";
-    const art = String(fm.art), g = fm.gruppe == null ? "" : String(fm.gruppe).trim();
-    if (!g) return art;
-    if (/^[0-9]+$/.test(g)) return art + " Gruppe " + g;
-    return g.toLowerCase().indexOf(art.toLowerCase()) === 0 ? g : art + " " + g;
-  };
+  // Art (nur Übung, Tutorium, Seminar …), seit 02.11.2026 ohne Gruppe: In jeder Pille stand ein anderer Text („Tutorium 1“,
+  // „Tutorium Gruppe 5“, „Übung Gruppe 4“), das wirkte unruhig. Die Gruppe steht im Titel der Notiz und damit im Tooltip.
+  const artText = (fm) => (istUebung(fm) ? String(fm.art) : "");
   // Farbe je Modul: Code → 1 … FARBEN. notizen: die das Raster im Semester je zeigt (wocheBauen lässt entfallene und „Besuche ich
   // nicht“ weg, die nähmen sonst einen Ton); ihre Codes sortiert, so behält ein Modul von Woche zu Woche seine Farbe, auch in einer
   // Woche, in der ein anderes fehlt. Nach FARBEN Codes wieder von vorn.
@@ -384,8 +379,9 @@ module.exports = function (ctx) {
       const l = lage(k);
       if (l) stil += ";width:calc(" + l.breite + "% - 2px);margin-left:" + l.links + "%";
       const a = g.createEl("a", { cls: k.klassen.join(" "), attr: { title: k.titel, href: ctx.link("zeigen", { notiz: k.notiz }), style: stil } });
-      const b = a.createEl("b", { text: k.kurz });
-      if (k.art) { b.appendText(" "); b.createEl("i", { text: k.art }); }
+      a.createEl("b", { text: k.kurz });
+      // Art neben dem Kurznamen, nicht in ihm: Das CSS setzt sie oben rechts in den Kasten (Abschnitt 55)
+      if (k.art) a.createEl("i", { cls: "eba-ev-art", text: k.art });
       // Zweite Zeile zweimal, das CSS wählt nach der Breite (Abschnitt 55): lang und knapp (schmale Spalten)
       const s = a.createSpan();
       zeileZeichnen(s.createSpan({ cls: "eba-ev-lang" }), k, false);

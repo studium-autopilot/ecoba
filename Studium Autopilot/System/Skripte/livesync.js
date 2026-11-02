@@ -13,12 +13,20 @@
 //      hintergrundStill(app, dok, mobil) → bool  das Fenster ist verborgen und LiveSync gleicht so lange nicht ab (Computer ohne
 //                                              „Keep replication active in the background“, iPhone/iPad immer): quellen.js ruft
 //                                              dann nicht von selbst ab, weil niemand außer diesem Gerät die Ergebnisse sähe
+// 3) Plugins nicht als versteckte Dateien abgleichen (seit 02.11.2026, alle Geräte): Ein übernommenes Gerät könnte sonst über
+//    LiveSync einen veränderten Kern von Studium Autopilot oder ein weiteres Plugin samt community-plugins.json an alle anderen
+//    schicken. Einmal je Gerät kommen die Muster MUSTER zu den Mustern für versteckte Dateien, die LiveSync ignoriert
+//    (syncInternalFilesIgnorePatterns), nur wenn sie fehlen; die übrigen bleiben. Neue Links von server/livesync.mjs setzen
+//    dieselben Muster in derselben Schreibweise ab der nächsten Version des Servers. Danach installiert jedes Gerät seine
+//    Plugins selbst; den Kern holt es mit „Neu laden“ aus dem Release. So früh wie möglich: gleich beim Laden, sobald LiveSync
+//    seine Einstellungen hat, sonst alle 2 s, später jede Minute, eine Stunde lang.
 // Benutzte Teile von LiveSync (geprüft 1.0.32 bis 1.0.40): app.plugins.plugins["obsidian-livesync"].core.services mit
 // setting.currentSettings(), appLifecycle.isReady/isSuspended/onSuspending, database.localDatabaseDirect.localDatabase.info(),
 // databaseEvents.initialiseDatabase, control.applySettings, API.addLog; Zähler replicator.*, replication.*, fileProcessing.*,
-// conflict.* (nur gelesen). Fehlt etwas davon, macht die Wache nichts. Tests: tests/livesync.test.js. Doku: docs/architektur/livesync.md. iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
+// conflict.* (nur gelesen); für 3) setting.applyPartial(teil, true) (übernimmt und speichert wie LiveSyncs eigene Knöpfe; geprüft
+// in 1.0.38). Fehlt etwas davon, macht die Datei nichts. Tests: tests/livesync.test.js. Doku: docs/architektur/livesync.md. iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 const ID = "obsidian-livesync";
-const K = Object.freeze({ PAUSE: 3 * 60e3, RUHE: 5000, FRIST: 10000, RUHIG_MAX: 60000, RUHIG_STILL: 5000, NOCHMAL: 60000 });
+const K = Object.freeze({ PAUSE: 3 * 60e3, RUHE: 5000, FRIST: 10000, RUHIG_MAX: 60000, RUHIG_STILL: 5000, NOCHMAL: 60000, MUSTER_VERSUCHE: 75 });
 
 const fn = (o, k) => !!o && typeof o[k] === "function";
 const lsPlugin = (app) => {
@@ -138,13 +146,69 @@ const wache = (o) => {
   return { nachRueckkehr };
 };
 
+// ---------- 3) Plugins nicht als versteckte Dateien abgleichen ----------
+// LiveSync liest jedes Muster als regulären Ausdruck (durch Kommas getrennt, Leerzeichen am Rand zählen nicht, Groß- und
+// Kleinschreibung egal, außer mit handleFilenameCaseSensitive) und prüft ihn gegen den Pfad im Tresor ohne führenden Schrägstrich,
+// beim Senden und beim Empfangen. „/plugins/“ trifft also „.obsidian/plugins/…“ (und jeden versteckten Ordner „plugins“ tiefer),
+// „/community-plugins.json$“ trifft „.obsidian/community-plugins.json“ (der Punkt steht dort für jedes Zeichen, das schadet nicht).
+// Dieselbe Schreibweise wie server/livesync.mjs, damit ein Gerät mit neuem Link nichts doppelt bekommt.
+// gerätelokal: { seit (erstes Mal), sitzung, fertig } – nach dem ersten Mal noch eine Probe in einer späteren Sitzung, dann fertig
+const MARKE = "eba-livesync-plugins-ignoriert";
+const MUSTER = Object.freeze(["/plugins/", "/community-plugins.json$"]);
+const musterListe = (s) => String(s == null ? "" : s).split(",").map((t) => t.trim()).filter((t) => t);
+// bisherige Muster (Text) + nötige → neuer Text, oder null, wenn alle schon dastehen; Reihenfolge und Schreibweise der bisherigen bleiben
+const musterErgaenzen = (alt, noetig) => {
+  const da = musterListe(alt), fehlt = noetig.filter((m) => da.indexOf(m) < 0);
+  if (!fehlt.length) return null;
+  const basis = String(alt == null ? "" : alt).replace(/[\s,]+$/, "");
+  return (basis ? basis + ", " : "") + fehlt.join(", ");
+};
+// o = { app, lokal(k, v?) (gerätelokal), log(text), hinweis(text), sitzung (Kennung dieses Starts) } → Promise<"schon" | "aus" | "da" |
+// "ergänzt" | "nicht gespeichert">. Wartet nicht, bis LiveSync ganz bereit ist (das kann nach seinem ersten Abgleich der versteckten
+// Dateien sein), nur, bis es seine Einstellungen geladen hat (isConfigured); applyPartial übernimmt sie sofort, LiveSync liest die
+// Muster bei jeder Datei neu. Speichert LiveSync danach noch ein älteres Einstellungsobjekt, wären sie wieder weg: Darum prüft das
+// Gerät beim nächsten Start (oder nach einem Tag) noch einmal und trägt fehlende nach, ohne neuen Hinweis. Danach nie wieder: Nimmt
+// jemand die Muster dann in LiveSync heraus, bleibt das so.
+const pluginsNichtAbgleichen = async (o) => {
+  const m = o.lokal(MARKE), probe = !!(m && typeof m === "object" && !m.fertig);
+  if (m && !probe) return "schon";
+  if (probe && m.sitzung === o.sitzung && Date.now() - Date.parse(m.seit || "") < 864e5) return "schon";
+  const s = dienste(o.app), cfg = s && einstellungen(s);
+  if (!s || !fn(s.setting, "applyPartial") || !cfg || !cfg.isConfigured) return "aus";
+  const alt = cfg.syncInternalFilesIgnorePatterns;
+  if (alt != null && typeof alt !== "string") return "aus";
+  const neu = musterErgaenzen(alt, MUSTER);
+  if (neu != null) {
+    await s.setting.applyPartial({ syncInternalFilesIgnorePatterns: neu }, true);
+    const jetzt = einstellungen(s);
+    if (!jetzt || jetzt.syncInternalFilesIgnorePatterns !== neu) return "nicht gespeichert";
+    const zeile = "Studium Autopilot: Plugins und community-plugins.json gleicht LiveSync nicht mehr ab (Muster für versteckte Dateien ergänzt)";
+    try { if (s.API && fn(s.API, "addLog")) s.API.addLog(zeile, 32); } catch (e) { /* Protokoll von LiveSync fehlt */ }
+    o.log(zeile);
+    if (cfg.syncInternalFiles && !probe) o.hinweis("LiveSync gleicht deine Plugins jetzt nicht mehr zwischen deinen Geräten ab, damit kein fremdes Gerät sie verändern kann. Ein neues Plugin installierst du auf jedem Gerät selbst.");
+  }
+  o.lokal(MARKE, probe ? { seit: m.seit, fertig: true } : { seit: new Date().toISOString(), sitzung: o.sitzung });
+  return neu == null ? "da" : "ergänzt";
+};
+
 module.exports = function (ctx) {
   const app = ctx.app;
   const registrieren = () => {
-    const P = ctx.obsidian && ctx.obsidian.Platform;
-    if (!P || !P.isMobile) return;
     let an = true;
     ctx.aufraeumen(() => { an = false; });
+    // 3) auf jedem Gerät: gleich beim Laden; solange LiveSync fehlt oder seine Einstellungen noch nicht hat, 15-mal alle 2 s, dann
+    // jede Minute bis eine Stunde nach dem Start (auch, wenn LiveSync erst in dieser Sitzung eingerichtet wird)
+    const lokal = (k, v) => { if (v === undefined) return app.loadLocalStorage(k); app.saveLocalStorage(k, v); return v; };
+    const sitzung = new Date().toISOString() + "-" + Math.random().toString(36).slice(2, 8);
+    const nachtragen = (n) => {
+      if (!an) return;
+      pluginsNichtAbgleichen({ app, lokal, log: (zeile) => console.info(zeile), hinweis: (t) => ctx.hinweis(t), sitzung })
+        .then((r) => { if ((r === "aus" || r === "nicht gespeichert") && n < K.MUSTER_VERSUCHE) ctx.zeit(() => nachtragen(n + 1), n < 15 ? 2000 : 60e3); })
+        .catch((e) => console.error("Studium Autopilot: LiveSync-Muster", e));
+    };
+    nachtragen(0);
+    const P = ctx.obsidian && ctx.obsidian.Platform;
+    if (!P || !P.isMobile) return;
     const w = wache({ app, dok: document, zeit: ctx.zeit, stopp: ctx.stopp, uhr: () => Date.now(), zuletzt: ctx.bleibend("zuletzt", () => ({ ms: 0 })),
       log: (zeile) => console.info(zeile), fehler: (e) => console.error("Studium Autopilot: LiveSync-Wache", e), weiter: () => an });
     const planen = ctx.entprellen(() => { w.nachRueckkehr(); }, K.RUHE);
@@ -160,3 +224,6 @@ module.exports.hintergrundStill = hintergrundStill;
 module.exports.pruefen = pruefen;
 module.exports.zaehler = zaehler;
 module.exports.wache = wache;
+module.exports.MUSTER = MUSTER;
+module.exports.musterErgaenzen = musterErgaenzen;
+module.exports.pluginsNichtAbgleichen = pluginsNichtAbgleichen;

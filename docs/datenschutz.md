@@ -19,7 +19,7 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 | Abgabetermine deiner Übungen | direkt von ILIAS (`ovidius.uni-tuebingen.de`, dein Kalender-Abo) | nur wenn du den **ILIAS-Kalender** verbunden hast: beim Start, dann alle 2 Stunden, solange Obsidian offen ist, und auf Knopfdruck; nur eines deiner Geräte |
 | Dein Uni-Posteingang und die Mails, die du öffnest | direkt vom Webmail der Uni (`webmail.uni-tuebingen.de`) | nur wenn du auf der Seite **Postfach** **Postfach anzeigen** getippt hast: beim Öffnen der Seite, wenn die Liste älter als 5 Minuten ist, und auf Knopfdruck; nie im Hintergrund |
 | Die Zusammenfassung einer Unterlage (dafür geht die PDF oder ihr Text hin) | Anthropic (`api.anthropic.com`), mit deinem eigenen API-Schlüssel | nur wenn du Claude verbunden hast und bei der Unterlage auf **Zusammenfassen** tippst; beim Verbinden einmal die Prüfung des Schlüssels |
-| Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse steht im Link zum Verbinden) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
+| Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse gibst du mit dem Code zum Verbinden ein) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `github.com` (die Liste der Dateien, aus dem Release der neuen Version) und `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
 | Die Hinweise für Claude (`.claude/`) der Version, die du installiert hast | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur am Computer, einmal je Version, wenn dort eine Datei fehlt oder alt ist (etwa auf einem zweiten Computer); nicht, wenn die zentralen Daten aus sind |
 | Die Signatur der Liste der Dateien deiner Version (`system-dateien.json.sig`), damit das Plugin prüfen kann, ob die Teile der App echt sind | `github.com` (aus dem Release der Version, die auf dem Gerät läuft, und der Version, die die Liste in deinem Tresor nennt) | nur wenn sie in deinem Tresor fehlt (etwa einmal nach dem Update von 0.7.6 oder älter): beim Start, wenn sich die Liste ändert oder das Gerät wieder online ist, solange Obsidian offen ist nur für die Version des Geräts und höchstens eine weitere, je Version bis eine Antwort kommt; wie beim Update auch bei ausgeschalteten zentralen Daten; sonst nur nach einem Tipp auf **Reparieren** |
@@ -101,6 +101,10 @@ Freiwillig: Ohne Verbindung meldet sich das Plugin nie bei ILIAS an.
   `System/Daten/uni-zugang.json` (nur Zeitpunkt, Dienst und eine Gerätekennung, kein Benutzername, kein Passwort). Deine anderen
   Geräte versuchen es dann nicht mehr mit dem alten Passwort, bis du es dort neu eingibst. So sammeln sich keine Fehlversuche.
   Hatte die Uni das Passwort auf diesem Gerät noch nie geprüft, merkt sich das nur dieses Gerät.
+- **Geteiltes iPhone oder iPad:** Beim Verbinden meldet das Plugin eine Sitzung, die das Gerät noch bei ILIAS oder der Uni hat,
+  erst ab, damit ILIAS wirklich dein Passwort prüft. Danach merkt sich das Gerät das Kürzel aus zwei Zeichen, das ILIAS in
+  deinem Profilbild zeigt (nur auf diesem Gerät, nie im Tresor). Zeigt ILIAS später ein anderes, gehört die Sitzung einem
+  anderen Konto: Das Plugin meldet sie ab und übernimmt nichts daraus.
 - **Was in deinem Tresor liegt:** die geladenen Dateien unter `Unterlagen/` mit je einer Begleitnotiz, die Liste
   `System/Daten/ilias.json` (welche ILIAS-Datei wo liegt, damit kein Gerät doppelt lädt) und `System/Daten/ilias-abruf.json`
   (welches Gerät gerade lädt). Diese Dateien kommen mit deinem Sync auf deine anderen Geräte. Ein Passwort steht nicht darin.
@@ -111,7 +115,7 @@ Freiwillig: Ohne Verbindung meldet sich das Plugin nie bei ILIAS an.
   veröffentlichen.
 
 **Trennen:** **Einstellungen & Hilfe** → **Verbindungen** → ILIAS-Unterlagen → **Mehr erfahren** → **Trennen**. Das löscht Passwort und
-Benutzernamen auf diesem Gerät. Geladene Dateien bleiben in deinem Tresor. Andere Geräte trennst du jeweils dort.
+Benutzernamen auf diesem Gerät und meldet dieses Gerät bei ILIAS und der Uni ab. Geladene Dateien bleiben in deinem Tresor. Andere Geräte trennst du jeweils dort.
 
 ## Noten & Anmeldungen (Alma, Beta)
 
@@ -186,12 +190,30 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
 
 - **Zwischen Server und Tresor:** Das Plugin holt die Ergebnisse über HTTPS ab, zusätzlich verschlüsselt mit einem Schlüssel,
   den nur dein Server und deine Geräte kennen (AES-256-GCM). Zugangs- und Datenschlüssel liegen im Schlüsselbund von Obsidian
-  auf jedem Gerät, nie in einer Notiz. Verbunden wird mit einem Link, der einmal und 30 Minuten gilt; Obsidian fragt vorher.
+  auf jedem Gerät, nie in einer Notiz. Verbunden wird mit einem Code, der einmal und 30 Minuten gilt: Du tippst ihn unter
+  **Einstellungen & Hilfe** → **Verbindungen** bei „Eigener Server“ ein, ein Link von außerhalb von Obsidian verbindet nie. Seit
+  0.7.8 geht der Code dabei nicht über das Netz, und die Schlüssel kommen nur verschlüsselt zurück, mit einem Schlüssel, den nur
+  jemand mit dem Code berechnen kann. Danach trägt keine Anfrage einen Schlüssel, nur eine Signatur, die für genau diese eine Anfrage
+  und 5 Minuten gilt. Hat dein Server sein Update noch nicht (es kommt bis zu zwei Tage nach einer neuen Version), schickt ein Gerät,
+  das ihn schon länger kennt, den Zugangsschlüssel wie bisher, nur durch HTTPS geschützt (wer dann mit einem gültigen Zertifikat
+  dazwischensitzt, kann ihn lesen, wie bis 0.7.7), aber nur, bis es einmal eine signierte Antwort des Servers gesehen hat; danach nie
+  mehr, und es nimmt dann auch nur noch signierte Antworten an. Das merkt sich jedes Gerät selbst, nicht im Tresor. Dein Server nimmt den Zugangsschlüssel selbst nur noch eine
+  Weile an: Sobald ein Gerät signiert, startet er damit keine Suche mehr, und nach 7 Tagen ohne ein solches Gerät gar nichts mehr,
+  spätestens 30 Tage nach dem ersten signierenden Gerät. Wer unterwegs mitliest, auch mit einem gültigen Zertifikat für die Adresse deines Servers, bekommt so weder Code
+  noch Schlüssel. Studium Autopilot bis 0.7.7 schickt Code und Zugangsschlüssel noch selbst, nur durch HTTPS geschützt; aktualisiere
+  darum jedes Gerät.
+  Obsidian fragt vorher und sagt dabei, was dein Gerät dem Server schickt (unten); ist schon ein anderer Server verbunden,
+  tippst du dessen neuen Namen ein. Als Adresse gilt nur ein Name im Internet, nie eine IP-Adresse oder ein Rechner im eigenen
+  Netz. Der Server merkt sich die letzten 20 Verbindungen mit Zeit und grobem Netz (bei IPv4 die ersten
+  drei Zahlen, nie die ganze Adresse), damit du siehst, wann und von wo ein Gerät verbunden wurde.
 - **Was das Plugin dem Server schickt:** die Modulcodes deines Plans, Studienbeginn und Variante, wie oft er nachsehen soll, welche Ergebnisse es
   übernommen hat (danach löscht der Server sie), und damit Claude nichts doppelt liefert: Titel, Datum, Art, Modul und Haken
   deiner Termine (von vor 30 Tagen bis in einem Jahr) und deine offenen To-dos wie auf dem Dashboard, mit Modul, Frist und dem Namen der Notiz (damit Claude doppelte
   zusammenführen kann).
-  To-dos, die nach Zugangsdaten aussehen, schickt es nie; der Server prüft das noch einmal. Tippst du in einer Unterlage auf
+  Termine und To-dos, die nach Zugangsdaten aussehen (Passwort, Zugangsdaten, IBAN, Schlüssel; PIN, TAN, Token oder Code nur mit
+  einem Wert dahinter, die Matrikelnummer nur mit Zahl), schickt es nie, auch nicht mit versteckten Zeichen dazwischen; das ist
+  eine Suche nach typischen Wörtern und Formen, keine Garantie. Der Server prüft das noch einmal und gibt solche Einträge nicht
+  an Claude, ebenso keine mit einem Link oder mit Sätzen, die wie eine Anweisung an eine KI aussehen. Tippst du in einer Unterlage auf
   **Zusammenfassen**, dazu deren Textfassung (Folien, Skripte, Übungen, Lösungen, Altklausuren, Literatur), damit Claude „Das
   Wichtigste“ schreibt; nie Mitschriften, eigene Lösungen oder Scans. Dazu geht auch die PDF selbst mit (verschlüsselt, damit
   Claude Abbildungen und Tabellen sieht); wird das teuer oder ist sie groß, fragt der Knopf vorher, und mit „Nur Text“
@@ -203,7 +225,13 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   Claude daraus die Kapitel liest. Keine Noten, keine übrigen Notiztexte, keine PDFs außer denen, die du zusammenfassen lässt. Den
   ganzen Tresor sieht der Server nie, außer du schaltest LiveSync ein (unten).
 - **Was im Tresor landet:** Termine als Notizen unter `Termine/` und kurze Hinweise in `System/Daten/server.json`. Hinweise
-  fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten.
+  fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten. Damit du die Änderungen des letzten
+  Abrufs an vorhandenen Notizen (zusammengeführte To-dos, geänderte Termine) mit **Rückgängig** zurücknehmen kannst, merkt sich
+  das Gerät, das abgerufen hat, nur die geänderten Zeilen vorher und nachher (nie ganze Notizen), nur auf diesem Gerät und nie im Tresor; nach
+  dem Rückgängig oder dem Trennen sind sie weg, ein späterer Abruf mit Änderungen ersetzt sie.
+- **Wer sich verbunden hat:** Der Server nennt verbundenen Geräten die letzten 20 Verbindungen (Zeit, Weg, Name des Geräts, wenn es
+  einen nennt, und nur ein grobes Netz wie „203.0.113.…“, nie die ganze IP). Das Fenster zeigt sie, damit dir ein fremdes Gerät
+  auffällt; sie stehen nur im Speicher des Geräts, das nachgesehen hat, nie im Tresor.
 - **Auf dem Server:** Claude Code läuft mit deinem Claude-Konto. Was Claude dort liest (deine Mails und alles, was das Plugin
   dem Server schickt: Termine, To-dos, Unterlagen, Folien), verarbeitet Anthropic nach den Bedingungen deines Kontos; Nutzungs-
   und Fehlerberichte schickt Claude Code dabei nicht, auch nicht beim Prüfen der Anmeldung und bei seinen Updates. Ob Anthropic deine Chats und Sitzungen zum
@@ -220,7 +248,10 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   ohne Inhalte und die geprüften Ergebnisse (bis 0.7.6 blieben die letzten zehn Läufe ganz). Ergebnisse, die noch kein Gerät
   abgeholt hat, warten bis zu 180 Tage, nach 30 Tagen nur noch, solange einer ihrer Termine bevorsteht. Anhänge deiner Uni-Mails: Kalender
   liest der Server als Text, PDFs legt er neben die Mail, und Claude öffnet eine davon nur, wenn sie nach Terminen aussieht
-  (etwa ein Prüfungsplan); nach dem Lauf löscht der Server sie. Über die Weiterleitung an Gmail kommen Anhänge nicht auf den
+  (etwa ein Prüfungsplan); nach dem Lauf löscht der Server sie. Scheitern zwei Läufe an derselben Mail allein, legt der Server sie mit
+  ihren Anhängen in einen eigenen Ordner (nur root und der Lauf können ihn lesen), statt sie noch einmal an Claude zu geben. Dort
+  bleibt sie, bis du sie in Obsidian wieder einreihst oder der Ordner über 200 Mails oder 500 MB wächst (dann fallen die ältesten
+  weg). Über die Weiterleitung an Gmail kommen Anhänge nicht auf den
   Server.
 - **Uni-Mails:** Empfohlen ist eine Weiterleitung deiner Uni-Mails an Gmail. Dann liegt dein Uni-Passwort, das auch für
   ILIAS, Alma und Noten gilt, nicht auf dem Server; die Mails kommen dafür erst mit der nächsten Gmail-Suche an.
@@ -239,8 +270,9 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
 - **LiveSync (freiwillig):** Gleicht dein Server deinen Tresor zwischen deinen Geräten ab, liegt der ganze Tresor dort, in der
   Datenbank verschlüsselt, auch die Dateinamen. Den Schlüssel dafür bewahrt der Server auf (nur root), damit Claude neue Geräte
   verbinden kann. Wie beim Uni-Passwort gilt: Wer root auf deinem Server ist, könnte den Tresor lesen. Claude liest ihn nicht.
-- **Öffentlich** ist nur eine Statusseite ohne persönliche Daten (Version, Claude verbunden ja oder nein, LiveSync an oder aus,
-  Zeitpunkte).
+- **Statusseite:** Den Stand deines Servers (Version, Claude verbunden ja oder nein, LiveSync an oder aus, Zeitpunkte, keine
+  Inhalte) bekommt nur, wer den Zugangsschlüssel hat. Bis eines deiner Geräte eine Fassung von Studium Autopilot hat, die ihn dort
+  mitschickt, ist sie wie bisher öffentlich.
 - **Abschalten:** in Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server** → **Trennen**; den
   Server selbst beendest du in der Oracle-Konsole.
 

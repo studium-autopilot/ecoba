@@ -12,22 +12,26 @@
 //   2. claude -p mit engen Rechten: lesen nur im Arbeitsordner, schreiben nur ausgabe.json, kein Bash, kein Web, keine
 //      Unteragenten; Gmail nur lesend und nur, wenn Gmail dran ist (feste Suchen, dazu ein Überblick über alle neuen Mails seit
 //      der letzten Suche, aus dem Claude nur liest, was zum Studium gehört); nie der Uni-Zugang, die Schlüssel oder ~/.claude
-//   3. ausgabe.json prüfen (eingang.mjs), nur Neues bzw. Geändertes nach eingang/, Bestand (termine.json, kapitel.json) und
-//      Zustand nachziehen
+//   3. ausgabe.json prüfen (eingang.mjs; Herkunft der Termine aus dem Kopf der Mails in roh/, mailsLesen), nur Neues bzw.
+//      Geändertes nach eingang/, Bestand (termine.json, kapitel.json) und Zustand nachziehen
 //   4. Lauf-Ordner leeren bis auf Protokoll, Auftrag und Rechte (laufOrdnerLeeren): keine Mails, kein Auszug aus dem Tresor
 // Schlägt der Lauf fehl, kommen die Rohdaten zurück nach abruf/roh/ (nichts geht verloren); ebenso nach einem Abbruch (Zeitgrenze von
-// systemd, Neustart): beim Beenden und beim nächsten Start (verwaisteZurueck). Am Limit des Claude-Abos wartet der Server und
+// systemd, Neustart): beim Beenden und beim nächsten Start (verwaisteZurueck). Welche Mails in einen Lauf kommen, entscheidet
+// rohSichten: frische zuerst, dann Gruppen von Mails, mit denen ein Lauf scheiterte (halbiert, bis eine allein scheitert: dann
+// Quarantäne), dann Mails mit nicht bestätigtem Absender in einem eigenen Lauf, aus dem alles nur „geschätzt“ kommt. Am Limit des Claude-Abos wartet der Server und
 // versucht es von selbst wieder (LIMIT_WARTEN, dienst.mjs limitWiederholen). Den Verbrauch je Lauf schreibt protokoll.json, je Tag
 // nutzung.json.
 //   node lauf.mjs                 ein Lauf (vom Dienst gestartet)
 //   node lauf.mjs --anstoss <grund>   nur den Anstoß schreiben (gmail: nur wenn der Takt es will | knopf)
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, linkSync, mkdirSync, readdirSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { art, da, dateiLesen, istDatei, istOrdner, jsonLesen, nurDateienUndOrdner, schreibenAtomar } from "./dateien.mjs";
 import { pdfAufraeumen } from "./dienst.mjs";
-import { eingangNormal, gmailUeberblick, istLeer, nurNeueHinweise, nurNeueKapitel, nurNeueOderGeaenderte } from "./eingang.mjs";
+import { datumOk, domainNormal, eingangNormal, gmailUeberblick, herkunftAnwenden, istLeer, KATEGORIEN, nurNeueHinweise, nurNeueKapitel, nurNeueOderGeaenderte, URTEILE,
+  zentralTitel } from "./eingang.mjs";
 
 const PAKET = dirname(fileURLToPath(import.meta.url));
 const STUNDE = 36e5;
@@ -56,6 +60,37 @@ const KAPITEL_ZEICHEN = 150000;
 export const LIMIT_WARTEN = [30 * 60e3, 60 * 60e3, 2 * STUNDE];
 // Verbrauch je Tag (nutzung.json, aus der JSON-Ausgabe von claude -p): so lange aufheben
 const NUTZUNG_TAGE = 30;
+// Gegen eine Flut von Anstößen und gegen Mails, an denen jeder Lauf scheitert:
+// - laeufe: höchstens so viele Läufe am Tag (Berlin, gezählt in nutzung.json unter quellen) je Anlass, damit keiner die Läufe eines
+//   anderen aufbraucht: mails (frische Mails aus dem Abruf, auch der Sicherheitslauf), mails_uni (Reserve nur für frische Mails aus
+//   dem Topf der Uni, wenn mails aufgebraucht ist: 40 Mails von außen zu verschiedenen Zeiten halten so keine der Uni auf), pruefen (Mails nach einem Fehlschlag und
+//   Mails nicht bestätigter Absender), gmail (Gmail durchsucht), unterlagen (Begleitnotizen, auch mit Opus, und Kapitellisten). Ein
+//   Lauf zählt für jeden Anlass, den er erledigt; ein Lauf auf Knopfdruck nur als knopf, er hat eigene Grenzen (dienst.mjs, KNOPF)
+//   und darf alles. Was über der Grenze seines Anlasses wartet, wartet bis kurz nach Mitternacht (zustand.tagesgrenze, dann stößt
+//   der Dienst an); die anderen Anlässe laufen weiter. Ein gewöhnlicher Tag hat einige Läufe für neue Mails, drei für Gmail und
+//   einen Sicherheitslauf.
+// - allein: Scheitert ein Lauf so, dass der Inhalt seiner Mails schuld sein kann (inhaltKannSchuldSein), werden sie halbiert und
+//   jede Hälfte für sich noch einmal versucht (Gruppen in mail-fehler.json), bis eine Mail allein scheitert; scheitert sie allein so
+//   oft, kommt sie in Quarantäne (quarantaene/, im Status gezählt) statt noch einmal in einen Lauf. Eine Mail, die einen Lauf scheitern
+//   lässt, zieht so keine andere mit hinein.
+// - Gmail, Unterlagen und Folien („Extras“): Ein Lauf mit Mails und Extras, der scheitert, zählt nicht gegen seine Mails; sie laufen
+//   gleich noch einmal ohne Extras. Unterlagen und Folien werden wie Mails je Datei gezählt (unterlagen-fehler.json, Kennung aus
+//   ihrem Inhalt) und halbiert; eine, die allein GRENZEN.allein-mal scheitert, bleibt liegen und wird ausgelassen (im Status
+//   gezählt), bis eine neue Fassung kommt. Gmail hat keine einzelne Mail zum Auslassen: Es zählt gescheiterte Läufe am Tag
+//   (extra-fehler.json) und setzt nach extra Fehlschlägen bis zum nächsten Tag aus. Ein Extra mit Fehlschlag läuft allein, nie mit
+//   Mails; der tägliche Sicherheitslauf nimmt es vor den Mails dran, so kommt es auch an Tagen mit vielen Mails an die Reihe.
+// - quarantaene: Die Quarantäne bleibt, bis die Person sie wieder einreiht (Knopf in Obsidian, POST /v1/anstoss mit quarantaene:
+//   erneut) oder root sie leert; nur über diesen Grenzen fallen die ältesten Mails weg, gezählt im Status (quarantaene_geloescht).
+export const GRENZEN = { laeufe: { mails: 40, mails_uni: 10, pruefen: 30, gmail: 8, unterlagen: 30 }, allein: 2, extra: 2, quarantaene: { mails: 200, bytes: 500 * 1024 * 1024 } };
+const EXTRAS = ["gmail", "unterlagen", "kapitel"];
+const LEER = { namen: new Set(), verdacht: false, ausgelassen: 0, kennung: new Map() };
+// Topf der Uni wie in abrufen.py (topf): Domain aus From unter uni-tuebingen.de, Urteil nicht „fehlgeschlagen“
+const UNI = "uni-tuebingen.de";
+const ausDerUni = (k) => !!k && (k.domain === UNI || String(k.domain).endsWith("." + UNI)) && k.urteil !== "fehlgeschlagen";
+const EXTRA_FEHLER = "extra-fehler.json";
+const ANLAESSE = [...Object.keys(GRENZEN.laeufe), "knopf"];
+const MAIL_FEHLER = "mail-fehler.json";
+const QUARANTAENE = "quarantaene";
 // Öffentliche zentrale Termine (für alle EcoBA-Studierenden): kommen über das Plugin ohnehin, Claude liefert sie nicht doppelt.
 export const ZENTRAL = "https://studium-autopilot.github.io/ecoba-daten/v1/termine.json";
 // Gmail-Connector von claude.ai (Server von Google, Werkzeuge mcp__claude_ai_Gmail__*). Erlaubt sind nur die vier lesenden aus
@@ -91,9 +126,11 @@ export function anstossSchreiben(verzeichnis, grund, jetzt = new Date()) {
   schreiben(join(verzeichnis, "anstoss"), { zeit: jetzt.toISOString(), grund });
 }
 // Alle Anstöße nehmen (lesen und löschen; auch einen ungültigen, sonst startete der Lauf immer wieder) → { grund: der mit dem höchsten
-// Vorrang, gruende: alle bekannten } oder null. Unbekannte Gründe fallen weg: Der Grund steht im Auftrag für Claude.
+// Vorrang, gruende: alle bekannten, quarantaene: true, wenn der Dienst oder studium-server die Quarantäne wieder einreihen will } oder
+// null. Unbekannte Gründe fallen weg: Der Grund steht im Auftrag für Claude. Den Wunsch zur Quarantäne nimmt der Lauf nicht vom Abruf.
 export function anstossNehmen(verzeichnis) {
   const gruende = new Set();
+  let quarantaene = false;
   for (const t of ANSTOESSE) {
     const datei = join(verzeichnis, ...t);
     if (!da(datei)) continue;
@@ -101,9 +138,10 @@ export function anstossNehmen(verzeichnis) {
     // was sich nicht löschen lässt (ein Ordner mit fremdem Inhalt an der Stelle), zählt nicht; die anderen Anstöße gelten weiter
     try { rmSync(datei, { force: true, recursive: !istDatei(datei) }); } catch (e) { continue; }
     if (a && GRUENDE.includes(a.grund)) gruende.add(a.grund);
+    if (a && a.quarantaene === "erneut" && t[0] !== "abruf") quarantaene = true;
   }
   const liste = GRUENDE.filter((g) => gruende.has(g));
-  return liste.length ? { grund: liste[0], gruende: liste } : null;
+  return liste.length ? { grund: liste[0], gruende: liste, ...(quarantaene ? { quarantaene } : {}) } : null;
 }
 const anstossWartet = (verzeichnis) => ANSTOESSE.some((t) => da(join(verzeichnis, ...t)));
 
@@ -190,9 +228,10 @@ export function auftragText({ jetzt, grund, gmail, gmailTage, gmailSeit, meldung
 // → Namen der Textfassungen
 // Nur echte Dateien (keine Links, die der Dienst an ihre Stelle gelegt haben könnte; dateien.mjs). Was nach dem Umbenennen im
 // Lauf-Ordner keine echte Datei ist (ausgetauscht zwischen Prüfen und Umbenennen), fällt dort weg, wo nur der Lauf schreibt.
-function unterlagenUebernehmen(von, nach, hoechstens = UNTERLAGEN_JE_LAUF, zeichen = UNTERLAGEN_ZEICHEN) {
+// nur: Namen, die dieser Lauf nehmen darf (unterlagenWahl)
+function unterlagenUebernehmen(von, nach, hoechstens, zeichen, nur) {
   if (!istOrdner(von)) return [];
-  const alle = readdirSync(von).filter((n) => /^[0-9a-f]{64}\.md$/.test(n)).map((n) => ({ n, s: art(join(von, n)) }))
+  const alle = readdirSync(von).filter((n) => /^[0-9a-f]{64}\.md$/.test(n) && nur.has(n)).map((n) => ({ n, s: art(join(von, n)) }))
     .filter((x) => x.s && x.s.isFile()).sort((a, b) => a.s.mtimeMs - b.s.mtimeMs || (a.n < b.n ? -1 : 1));
   const namen = [];
   let summe = 0;
@@ -266,6 +305,266 @@ function dateienUebernehmen(von, nach) {
   }
 }
 
+// ---------- Fehlschläge je Mail und Quarantäne ----------
+// Mails im Lauf-Ordner (roh/<Quelle>/<UIDVALIDITY>-<UID>.txt, bis zu dieser Fassung <UID>.txt) samt ihren Anhängen
+// (<Name>-anhang-<n>.pdf) → [{ name, dateien }] (Pfade unter roh/), nach Namen geordnet. Der Name ist die Kennung einer Mail in
+// mail-fehler.json und in der Quarantäne; mit UIDVALIDITY trifft er nach einer neuen Vergabe der UIDs keine andere Mail.
+function mailsIn(roh) {
+  const aus = [];
+  for (const q of istOrdner(roh) ? readdirSync(roh).filter((n) => istOrdner(join(roh, n))) : []) {
+    const namen = readdirSync(join(roh, q));
+    for (const n of namen.filter((x) => x.endsWith(".txt") && istDatei(join(roh, q, x)))) {
+      const stamm = n.slice(0, -4);
+      aus.push({ name: `${q}/${n}`, dateien: [n, ...namen.filter((x) => x.startsWith(stamm + "-anhang-"))].map((x) => `${q}/${x}`) });
+    }
+  }
+  return aus.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+}
+// mail-fehler.json: { "<Quelle>/<Name der Mail>": { n (gescheiterte Läufe), allein (davon allein), gruppe (mit welchen sie als Nächstes
+// läuft), zeit } }. Einträge fallen nach FEHLER_TAGE weg, außer die Mail liegt in der Quarantäne. Einträge einer früheren Fassung
+// ({ n, zeit }) laufen allein.
+const FEHLER_TAGE = 30;
+function mailFehlerLesen(verzeichnis, jetzt) {
+  const grenze = jetzt.getTime() - FEHLER_TAGE * 864e5;
+  const aus = {};
+  for (const [k, e] of Object.entries(lesen(join(verzeichnis, MAIL_FEHLER), {}) || {})) {
+    if (!e || !Number.isInteger(e.n) || !(Date.parse(e.zeit) >= grenze || istDatei(join(verzeichnis, QUARANTAENE, k)))) continue;
+    aus[k] = { n: e.n, allein: Number.isInteger(e.allein) ? e.allein : 0, gruppe: typeof e.gruppe === "string" ? e.gruppe : "einzeln:" + k, zeit: e.zeit };
+  }
+  return aus;
+}
+// Dateien einer Mail aus dem Lauf-Ordner nach quarantaene/<Quelle>/
+// Nie über eine Mail, die dort schon liegt. Ein Name <UIDVALIDITY>-<UID> gehört zu genau einer Mail: Liegt er dort schon, ist es
+// dieselbe (etwa aus dem Sicherheitslauf), und die neue Kopie fällt samt Anhängen weg. Ein Name einer früheren Fassung (nur die UID)
+// kann eine andere Mail sein: dann mit „~2“, „~3“ … hinter dem Namen, samt Anhängen.
+function inQuarantaene(verzeichnis, roh, mail) {
+  const [q, datei] = mail.name.split("/");
+  const stamm = datei.slice(0, -4), o = join(verzeichnis, QUARANTAENE, q);
+  if (/^\d+-\d+$/.test(stamm) && da(join(o, datei))) {
+    for (const d of mail.dateien) rmSync(join(roh, d), { force: true });
+    return;
+  }
+  let frei = stamm;
+  for (let i = 2; da(join(o, frei + ".txt")); i++) frei = `${stamm}~${i}`;
+  mkdirSync(o, { recursive: true });
+  for (const d of mail.dateien) {
+    const name = d.slice(q.length + 1);
+    try { renameSync(join(roh, d), join(o, frei + name.slice(stamm.length))); } catch (e) { /* bleibt im Lauf-Ordner */ }
+  }
+}
+const ZAEHLER = join(QUARANTAENE, ".zaehler.json");
+// Quarantäne in ihren Grenzen (GRENZEN.quarantaene): darüber fallen die ältesten Mails samt Anhängen weg, gezählt in
+// quarantaene/.zaehler.json (geloescht). → { mails, bytes, geloescht }
+export function quarantaeneZaehlen(verzeichnis) {
+  const o = join(verzeichnis, QUARANTAENE);
+  const mails = mailsIn(o).map((m) => {
+    const groesse = m.dateien.reduce((s, d) => s + ((art(join(o, d)) || {}).size || 0), 0);
+    return { ...m, groesse, zeit: (art(join(o, m.dateien[0])) || {}).mtimeMs || 0 };
+  }).sort((a, b) => a.zeit - b.zeit);
+  let bytes = mails.reduce((s, m) => s + m.groesse, 0);
+  const zaehler = lesen(join(verzeichnis, ZAEHLER), {}) || {};
+  let geloescht = Number.isInteger(zaehler.geloescht) ? zaehler.geloescht : 0;
+  while (mails.length > GRENZEN.quarantaene.mails || bytes > GRENZEN.quarantaene.bytes) {
+    const m = mails.shift();
+    for (const d of m.dateien) rmSync(join(o, d), { force: true });
+    bytes -= m.groesse;
+    geloescht++;
+  }
+  if (geloescht !== (zaehler.geloescht || 0)) schreiben(join(verzeichnis, ZAEHLER), { geloescht });
+  return { mails: mails.length, bytes, geloescht };
+}
+// Quarantäne wieder einreihen (Anstoß mit quarantaene: erneut): alle Mails zurück nach abruf/roh/, jede in einer eigenen Gruppe mit
+// einem Fehlschlag allein weniger als die Grenze, so läuft jede einmal allein; scheitert sie wieder, kommt sie zurück. → Zahl der Mails
+function quarantaeneErneut(verzeichnis, jetzt) {
+  const o = join(verzeichnis, QUARANTAENE);
+  const mails = mailsIn(o);
+  if (!mails.length) return 0;
+  const fehler = mailFehlerLesen(verzeichnis, jetzt);
+  for (const m of mails) {
+    const e = fehler[m.name] || { n: GRENZEN.allein };
+    fehler[m.name] = { n: e.n, allein: GRENZEN.allein - 1, gruppe: `erneut-${stempel(jetzt)}-${m.name}`, zeit: jetzt.toISOString() };
+  }
+  schreiben(join(verzeichnis, MAIL_FEHLER), fehler);
+  for (const q of readdirSync(o).filter((n) => istOrdner(join(o, n)))) {
+    rohZurueck(join(o, q), join(rohOrdner(verzeichnis), q));
+    if (!readdirSync(join(o, q)).length) rmSync(join(o, q), { recursive: true, force: true });
+  }
+  return mails.length;
+}
+// Fehlschläge, an denen der Inhalt der Mails schuld sein kann: ungültige Ausgabe, oder Claude lief zu Ende und meldete einen Fehler
+// (is_error), der nicht nach Anmeldung, Limit, Netz, Überlastung oder Zeitüberschreitung aussieht. Nie ein Abbruch (Zeitgrenze,
+// Neustart, Signal), nie ein Lauf ohne Ergebnis, nie, solange Claude abgemeldet ist. Geprüft wird nur, was Claude Code selbst meldet
+// (result des Ergebnisses, Fehlerausgabe), nie Text aus den Mails.
+const NICHT_DER_INHALT = new RegExp(["login", "authenticat", "api key", "credit", "overloaded", "network", "connection", "fetch failed", "socket hang up",
+  "ECONN", "ETIMEDOUT", "EAI_AGAIN", "ENOTFOUND", "EPIPE", "timed? ?out", "timeout", "aborted", "SIGTERM", "SIGKILL", "rate.?limit", "unavailable",
+  "\\b(?:429|5\\d\\d)\\b"].join("|"), "i");
+export const inhaltKannSchuldSein = (code, ergebnis, fehlertext, zustand) => (zustand || {}).claude !== "abgemeldet" &&
+  (code === "ausgabe-ungueltig" || (code === "claude-lauf" && !!ergebnis && ergebnis.is_error === true &&
+    !NICHT_DER_INHALT.test(String(ergebnis.result || "").slice(0, 2000) + " " + String(fehlertext || "").slice(-4000))));
+// Gescheitert, und der Inhalt kann schuld sein: Mails des Lauf-Ordners halbieren (zwei neue Gruppen) oder, war es eine allein, ihren
+// Zähler allein erhöhen; erreicht er GRENZEN.allein, kommt sie in Quarantäne statt zurück. → Zahl der Mails, die in Quarantäne kamen
+function fehlschlagZaehlen(verzeichnis, roh, jetzt, lauf) {
+  const fehler = mailFehlerLesen(verzeichnis, jetzt);
+  const mails = mailsIn(roh);
+  const haelfte = Math.ceil(mails.length / 2);
+  let neu = 0;
+  mails.forEach((m, i) => {
+    const e = fehler[m.name] || { n: 0, allein: 0 };
+    const allein = e.allein + (mails.length === 1 ? 1 : 0);
+    fehler[m.name] = { n: e.n + 1, allein, gruppe: mails.length === 1 ? e.gruppe || "einzeln:" + m.name : `${lauf}-${i < haelfte ? "a" : "b"}`,
+      zeit: jetzt.toISOString() };
+    if (allein >= GRENZEN.allein) { inQuarantaene(verzeichnis, roh, m); neu++; }
+  });
+  schreiben(join(verzeichnis, MAIL_FEHLER), fehler);
+  if (neu) quarantaeneZaehlen(verzeichnis);
+  return neu;
+}
+// Erfolg: Zähler der Mails dieses Laufs weg
+function fehlschlaegeLoeschen(verzeichnis, roh, jetzt) {
+  const fehler = mailFehlerLesen(verzeichnis, jetzt), vorher = Object.keys(fehler).length;
+  for (const m of mailsIn(roh)) delete fehler[m.name];
+  if (Object.keys(fehler).length !== vorher || da(join(verzeichnis, MAIL_FEHLER))) schreiben(join(verzeichnis, MAIL_FEHLER), fehler);
+}
+// extra-fehler.json: { gmail: { n (gescheiterte Läufe heute), tag } } → gescheiterte Läufe mit Gmail heute (Berlin)
+function gmailFehlerLesen(verzeichnis, jetzt) {
+  const g = (lesen(join(verzeichnis, EXTRA_FEHLER), {}) || {}).gmail;
+  return g && g.tag === tagBerlin(jetzt) && Number.isInteger(g.n) ? g.n : 0;
+}
+// nach einem Lauf mit Gmail: gescheitert (und der Inhalt kann schuld sein) → eins mehr, gelungen → zurück auf 0
+function gmailFehlerBuchen(verzeichnis, jetzt, gescheitert) {
+  schreiben(join(verzeichnis, EXTRA_FEHLER), gescheitert ? { gmail: { n: gmailFehlerLesen(verzeichnis, jetzt) + 1, tag: tagBerlin(jetzt) } } : {});
+}
+
+// unterlagen-fehler.json: { "<neu|opus|kapitel>/<SHA-256 des Inhalts>": { n, allein, gruppe, zeit } } wie mail-fehler.json, für
+// Textfassungen (Begleitnotizen) und Folien (Kapitellisten). Die Kennung kommt aus dem Inhalt: Eine neue Fassung derselben Unterlage
+// ist eine andere Datei und hat eine neue Chance. Einträge einer ausgelassenen (allein GRENZEN.allein-mal gescheitert) bleiben ein
+// Jahr, die anderen FEHLER_TAGE.
+const UNTERLAGEN_FEHLER = "unterlagen-fehler.json";
+function unterlagenFehlerLesen(verzeichnis, jetzt) {
+  const aus = {};
+  for (const [k, e] of Object.entries(lesen(join(verzeichnis, UNTERLAGEN_FEHLER), {}) || {})) {
+    if (!e || !Number.isInteger(e.n) || !Number.isInteger(e.allein) || typeof e.gruppe !== "string") continue;
+    const tage = e.allein >= GRENZEN.allein ? 365 : FEHLER_TAGE;
+    if (Date.parse(e.zeit) >= jetzt.getTime() - tage * 864e5) aus[k] = { n: e.n, allein: e.allein, gruppe: e.gruppe, zeit: e.zeit };
+  }
+  return aus;
+}
+// Welche Unterlagen eines Ordners (art: neu, opus, kapitel) darf der Lauf nehmen? Mit Gruppen aus Fehlschlägen nur die älteste Gruppe
+// (verdacht), sonst alle ohne Eintrag; ausgelassene nie. → { namen (Set), verdacht, ausgelassen (Zahl), kennung (Name → Kennung) }
+function unterlagenWahl(verzeichnis, ordner, art_, jetzt) {
+  const fehler = unterlagenFehlerLesen(verzeichnis, jetzt);
+  const dateien = istOrdner(ordner) ? readdirSync(ordner).filter((n) => /^[0-9a-f]{64}\.md$/.test(n) && istDatei(join(ordner, n))) : [];
+  const kennung = new Map(dateien.map((n) => {
+    const b = dateiLesen(join(ordner, n));
+    return [n, `${art_}/${createHash("sha256").update(b || "").digest("hex")}`];
+  }));
+  const eintrag = (n) => fehler[kennung.get(n)];
+  const gruppen = new Map();
+  for (const n of dateien.filter((x) => eintrag(x) && eintrag(x).allein < GRENZEN.allein)) {
+    const e = eintrag(n);
+    if (!gruppen.has(e.gruppe)) gruppen.set(e.gruppe, { zeit: e.zeit, namen: [] });
+    gruppen.get(e.gruppe).namen.push(n);
+  }
+  const aelteste = [...gruppen.values()].sort((a, b) => (a.zeit < b.zeit ? -1 : a.zeit > b.zeit ? 1 : 0))[0];
+  return { namen: new Set(aelteste ? aelteste.namen : dateien.filter((n) => !eintrag(n))), verdacht: !!aelteste,
+    ausgelassen: dateien.filter((n) => eintrag(n) && eintrag(n).allein >= GRENZEN.allein).length, kennung };
+}
+// Lauf mit diesen Unterlagen (Kennungen): gescheitert → halbiert bzw. allein gezählt wie Mails (fehlschlagZaehlen), gelungen → weg
+function unterlagenBuchen(verzeichnis, kennungen, jetzt, lauf, gescheitert) {
+  if (!kennungen.length) return;
+  const fehler = unterlagenFehlerLesen(verzeichnis, jetzt);
+  const sortiert = [...kennungen].sort(), haelfte = Math.ceil(sortiert.length / 2);
+  sortiert.forEach((k, i) => {
+    if (!gescheitert) { delete fehler[k]; return; }
+    const e = fehler[k] || { n: 0, allein: 0, gruppe: "" };
+    fehler[k] = { n: e.n + 1, allein: e.allein + (sortiert.length === 1 ? 1 : 0),
+      gruppe: sortiert.length === 1 ? e.gruppe || "einzeln:" + k : `${lauf}-${k.split("/")[0]}-${i < haelfte ? "a" : "b"}`, zeit: jetzt.toISOString() };
+  });
+  schreiben(join(verzeichnis, UNTERLAGEN_FEHLER), fehler);
+}
+// Lauf mit Mails und Extras gescheitert: Die Mails laufen gleich noch einmal ohne Extras (eine Gruppe, ohne Zähler allein und ohne
+// Halbieren), statt gegen sie zu zählen
+function ohneExtrasNochmal(verzeichnis, roh, jetzt, lauf) {
+  const fehler = mailFehlerLesen(verzeichnis, jetzt);
+  for (const m of mailsIn(roh)) {
+    const e = fehler[m.name] || { n: 0, allein: 0 };
+    fehler[m.name] = { n: e.n, allein: e.allein, gruppe: `${lauf}-ohne-extras`, zeit: jetzt.toISOString() };
+  }
+  schreiben(join(verzeichnis, MAIL_FEHLER), fehler);
+}
+
+// Gleich nach dem Übernehmen: Welche Mails nimmt dieser Lauf? Mails, die allein schon GRENZEN.allein-mal scheiterten, gleich in
+// Quarantäne (etwa im Sicherheitslauf wieder da). Dann in dieser Reihenfolge eine Art: frische Mails (art „frisch“, mit INDEX.md);
+// sonst die älteste Gruppe aus mail-fehler.json („pruefen“); sonst die Mails mit Urteil „fehlgeschlagen“ („unbestaetigt“, eigener
+// Lauf). Nur Arten, deren Anlass heute noch Läufe hat (erlaubt: frisch → mails, die anderen → pruefen); sind die Läufe für mails
+// aufgebraucht, frische Mails aus dem Topf der Uni noch aus der Reserve mails_uni (uni: true). Alle anderen gehen zurück
+// nach abruf/roh/ (über zurueck/ im Lauf-Ordner, das auch verwaisteZurueck zurücklegt) und kommen mit dem nächsten Lauf.
+// → { art, mails (Zahl), unbestaetigt (ein Urteil „fehlgeschlagen“ darunter: alles nur geschätzt), quarantaene, gesperrt (Anlässe,
+// deren Mails nur wegen der Grenze des Tages warten) }
+// pause: diesmal keine Mails (der Sicherheitslauf nimmt ein Extra mit Fehlschlag zuerst); sie warten, ohne als gesperrt zu gelten
+function rohSichten(verzeichnis, arbeit, jetzt, erlaubt, pause = false) {
+  const roh = join(arbeit, "roh"), zurueck = join(arbeit, "zurueck");
+  const fehler = mailFehlerLesen(verzeichnis, jetzt), kopf = mailsLesen(roh);
+  const unbestaetigt = (m) => (kopf[m.name] || {}).urteil === "fehlgeschlagen";
+  let quarantaene = 0;
+  const frisch = [], gruppen = new Map(), ohneUrteil = [];
+  for (const m of mailsIn(roh)) {
+    const e = fehler[m.name];
+    if (e && e.allein >= GRENZEN.allein) { inQuarantaene(verzeichnis, roh, m); quarantaene++; continue; }
+    if (e) { if (!gruppen.has(e.gruppe)) gruppen.set(e.gruppe, { zeit: e.zeit, mails: [] }); gruppen.get(e.gruppe).mails.push(m); continue; }
+    (unbestaetigt(m) ? ohneUrteil : frisch).push(m);
+  }
+  if (quarantaene) quarantaeneZaehlen(verzeichnis);
+  const aelteste = [...gruppen].sort(([a, x], [b, y]) => (x.zeit < y.zeit ? -1 : x.zeit > y.zeit ? 1 : a < b ? -1 : a > b ? 1 : 0))[0];
+  if (pause) { frisch.length = 0; gruppen.clear(); ohneUrteil.length = 0; }
+  const frischUni = erlaubt.mails ? [] : erlaubt.mails_uni ? frisch.filter((m) => ausDerUni(kopf[m.name])) : [];
+  const [art, nehmen] = frisch.length && erlaubt.mails ? ["frisch", frisch] : frischUni.length ? ["frisch", frischUni] : aelteste && erlaubt.pruefen
+    ? ["pruefen", aelteste[1].mails] : ohneUrteil.length && erlaubt.pruefen ? ["unbestaetigt", ohneUrteil] : ["", []];
+  const gesperrt = [...(frisch.length > frischUni.length && !erlaubt.mails ? ["mails"] : []), ...((aelteste || ohneUrteil.length) && !erlaubt.pruefen ? ["pruefen"] : [])];
+  const behalten = new Set(nehmen.map((m) => m.name));
+  const weg = mailsIn(roh).filter((m) => !behalten.has(m.name)).flatMap((m) => m.dateien)
+    .concat(art !== "frisch" && istDatei(join(roh, "INDEX.md")) ? ["INDEX.md"] : []);
+  for (const d of weg) {
+    mkdirSync(dirname(join(zurueck, d)), { recursive: true });
+    renameSync(join(roh, d), join(zurueck, d));
+  }
+  if (weg.length) {
+    rohZurueck(zurueck, rohOrdner(verzeichnis));
+    rmSync(zurueck, { recursive: true, force: true });
+  }
+  return { art, mails: nehmen.length, unbestaetigt: nehmen.some(unbestaetigt), quarantaene, gesperrt, ...(frischUni.length && art === "frisch" ? { uni: true } : {}) };
+}
+// Warten Mails in abruf/roh/ (zurückgelegt, weil dieser Lauf nur eine Art nahm), deren Anlass heute noch Läufe hat (erlaubt)?
+function rohDran(verzeichnis, jetzt, erlaubt) {
+  const roh = rohOrdner(verzeichnis), fehler = mailFehlerLesen(verzeichnis, jetzt), kopf = mailsLesen(roh);
+  return mailsIn(roh).some((m) => (fehler[m.name] || (kopf[m.name] || {}).urteil === "fehlgeschlagen" ? erlaubt.pruefen
+    : erlaubt.mails || (erlaubt.mails_uni && ausDerUni(kopf[m.name]))));
+}
+
+// Kopf der Mails im Lauf-Ordner (roh/<Quelle>/<Datei>.txt, abrufen.py mail_text): die Zeilen bis zur ersten Leerzeile kommen nur
+// aus Kopfzeilen der Mail, je eine (ein Zeilenumbruch darin wird dort zum Leerzeichen), also nie aus ihrem Text. Daraus Domain des
+// Absenders, Urteil (Authentifiziert) und Tag der Mail (Berlin) → { "<Quelle>/<Datei>": { domain, urteil, datum } }. Mails einer
+// früheren Fassung ohne diese Zeilen: Domain leer, Urteil „unbekannt“.
+export function mailsLesen(roh) {
+  const aus = {};
+  const ordner = istOrdner(roh) ? readdirSync(roh).filter((n) => istOrdner(join(roh, n))) : [];
+  for (const q of ordner) {
+    for (const n of readdirSync(join(roh, q)).filter((x) => x.endsWith(".txt"))) {
+      const b = dateiLesen(join(roh, q, n));
+      if (!b) continue;
+      const kopf = Object.create(null);
+      for (const z of b.toString("utf8").split("\n\n")[0].split("\n")) {
+        const m = /^([A-Za-z-]+): (.*)$/.exec(z);
+        if (m && !(m[1] in kopf)) kopf[m[1]] = m[2].trim();
+      }
+      const zeit = Date.parse(kopf.Datum || "");
+      aus[`${q}/${n}`] = { domain: domainNormal(kopf["Absender-Domain"]), urteil: URTEILE.includes(kopf.Authentifiziert) ? kopf.Authentifiziert : "unbekannt",
+        datum: Number.isFinite(zeit) ? tagBerlin(new Date(zeit)) : "" };
+    }
+  }
+  return aus;
+}
+
 // Datei zurück, nur wenn dort nichts liegt: link + unlink scheitert, sobald es dort etwas gibt, auch wenn der Abruf es gerade erst
 // geschrieben hat (Prüfen und Umbenennen ersetzte es dazwischen). Lässt das System den Link nicht zu, wie früher. → true, wenn zurück
 function dateiZurueck(von, nach) {
@@ -320,8 +619,9 @@ function laufOrdnerLeeren(arbeit) {
 }
 
 // Abgebrochene Läufe (Lauf-Ordner ohne protokoll.json: systemd hat nach der Zeitgrenze beendet, Neustart, Absturz): Rohdaten und
-// Unterlagen zurück wie bei einem Fehlschlag, „läuft“ aus dem Zustand. Kein neuer Anstoß (ein Lauf, der jedes Mal zu lange
-// braucht, liefe sonst im Kreis); die Daten kommen mit dem nächsten. → Namen der Lauf-Ordner
+// Unterlagen zurück wie bei einem Fehlschlag, „läuft“ aus dem Zustand. Ein Abbruch zählt nie gegen die Mails (der nächtliche
+// Neustart, eine Zeitgrenze im Netz). Kein neuer Anstoß (ein Lauf, der jedes Mal zu lange braucht, liefe sonst im Kreis); die Daten
+// kommen mit dem nächsten. → Namen der Lauf-Ordner
 export function verwaisteZurueck(verzeichnis, jetzt = new Date()) {
   const laeufe = join(verzeichnis, "laeufe");
   const verwaist = existsSync(laeufe) ? readdirSync(laeufe).filter((n) => !existsSync(join(laeufe, n, "protokoll.json"))) : [];
@@ -329,6 +629,7 @@ export function verwaisteZurueck(verzeichnis, jetzt = new Date()) {
     const arbeit = join(laeufe, n);
     const opus = (lesen(join(arbeit, ".lauf.json"), {}) || {}).opus === true;
     rohZurueck(join(arbeit, "roh"), rohOrdner(verzeichnis));
+    rohZurueck(join(arbeit, "zurueck"), rohOrdner(verzeichnis));
     unterlagenZurueck(join(arbeit, "unterlagen"), join(verzeichnis, "unterlagen", opus ? "opus" : "neu"));
     unterlagenZurueck(join(arbeit, "kapitel"), join(verzeichnis, "unterlagen", "kapitel"));
     laufOrdnerLeeren(arbeit);
@@ -351,25 +652,27 @@ const ausfuehren = (befehl, args, optionen) => new Promise((fertig) => {
   p.stdout.on("data", (d) => { aus += d; });
   p.stderr.on("data", (d) => { err += d; });
   const uhr = setTimeout(() => p.kill("SIGTERM"), optionen.timeout || 45 * 60e3);
-  p.on("close", (code) => { clearTimeout(uhr); fertig({ code, aus, err }); });
+  p.on("close", (code, signal) => { clearTimeout(uhr); fertig({ code, signal, aus, err }); });
   p.on("error", (e) => { clearTimeout(uhr); fertig({ code: -1, aus, err: String(e) }); });
 });
 
-// Ein Lauf. claude: [befehl, ...args] (Tests geben eine Attrappe), skill: Ordner des Skills.
-// Zentrale Termine kompakt (Titel, Datum, Kategorie); Fehler → leere Liste (der Lauf geht trotzdem).
+// Zentrale Termine kompakt (Titel, Datum, Kategorie); Fehler → leere Liste (der Lauf geht trotzdem). Jeder Titel geprüft wie im
+// Plugin (zentralTitel: kein HTML, keine Klammern, gesäubert, nichts, was wie eine Anweisung aussieht), das Datum gültig; was nicht
+// passt, fällt einzeln weg. Claude liest zentral.json als Daten (Skill).
 export async function zentralHolen(holen = fetch) {
   try {
     const r = await holen(ZENTRAL, { signal: AbortSignal.timeout(20e3) });
     if (!r.ok) return [];
     const d = await r.json();
-    return (Array.isArray(d.termine) ? d.termine : []).slice(0, 3000).map((t) => ({ titel: String(t.titel || "").slice(0, 120),
-      datum: String(t.datum || "").slice(0, 10), bis: String(t.bis || "").slice(0, 10), kategorie: String(t.kategorie || "").slice(0, 20) }));
+    return (Array.isArray(d.termine) ? d.termine : []).slice(0, 3000).map((t) => {
+      const titel = zentralTitel(t && t.titel);
+      if (titel.fehler || !datumOk(t.datum)) return null;
+      return { titel: titel.wert, datum: t.datum, bis: datumOk(t.bis) ? t.bis : "", kategorie: KATEGORIEN.includes(t.kategorie) ? t.kategorie : "" };
+    }).filter(Boolean);
   } catch (e) {
     return [];
   }
 }
-
-const wartet = (ordner) => istOrdner(ordner) && readdirSync(ordner, { withFileTypes: true }).some((e) => e.isFile() && e.name.endsWith(".md"));
 
 // Limit: n-ter Treffer in Folge → Wartezeit
 export const limitWarten = (versuche) => LIMIT_WARTEN[Math.min(Math.max(1, versuche), LIMIT_WARTEN.length) - 1];
@@ -388,30 +691,57 @@ const zustandAendern = (verzeichnis, fn) => {
 // Ein Anstoß: zuerst die gewünschten Zusammenfassungen mit Opus (falls welche warten), dann der gewöhnliche Lauf. → Ergebnis des
 // gewöhnlichen Laufs, mit opus: Ergebnis des Opus-Laufs (hatte der gewöhnliche nichts zu tun, das Ergebnis des Opus-Laufs)
 // Am Limit (zustand.limit, nächster Versuch noch nicht dran) startet nur der Knopf einen Lauf; Rohdaten und Unterlagen bleiben
-// liegen. Hängt der Opus-Lauf am Limit, wartet auch der gewöhnliche (er hinge ebenso).
+// liegen. Hängt der Opus-Lauf am Limit, wartet auch der gewöhnliche (er hinge ebenso). Grenzen je Anlass (GRENZEN.laeufe,
+// erlaubtHeute): Was nur deshalb wartet, steht in zustand.tagesgrenze (quellen), und der Dienst stößt kurz nach Mitternacht an.
 export async function laufen(o = {}) {
   const { verzeichnis } = o;
   const jetzt = o.jetzt || new Date();
   verwaisteZurueck(verzeichnis);
   const anstoss = anstossNehmen(verzeichnis);
   if (!anstoss) return { status: "kein-anstoss" };
+  if (anstoss.quarantaene) quarantaeneErneut(verzeichnis, jetzt);
   const limit = (lesen(join(verzeichnis, "zustand.json"), {}) || {}).limit;
   const gmailGrund = GMAIL_GRUENDE.includes(anstoss.grund);
   if (limit && Date.parse(limit.wieder) > jetzt.getTime() && anstoss.grund !== "knopf") {
     if (gmailGrund && limit.gmail !== true) zustandAendern(verzeichnis, (z) => { if (z.limit) z.limit.gmail = true; });
     return { status: "limit-wartet", wieder: limit.wieder };
   }
-  const opus = wartet(join(verzeichnis, "unterlagen", "opus")) ? await einLauf({ ...o, jetzt, anstoss, opus: true }) : null;
+  const knopf = anstoss.grund === "knopf";
+  const gesperrt = new Set();
+  const opusWartet = unterlagenWahl(verzeichnis, join(verzeichnis, "unterlagen", "opus"), "opus", jetzt).namen.size > 0;
+  if (opusWartet && !erlaubtHeute(verzeichnis, jetzt, knopf).unterlagen) gesperrt.add("unterlagen");
+  const opus = opusWartet && !gesperrt.size ? await einLauf({ ...o, jetzt, anstoss, opus: true, erlaubt: erlaubtHeute(verzeichnis, jetzt, knopf) }) : null;
   if (opus && opus.status === "claude-limit") {
     if (gmailGrund) zustandAendern(verzeichnis, (z) => { if (z.limit) z.limit.gmail = true; });
     return opus;
   }
-  const r = await einLauf({ ...o, jetzt, anstoss, opus: false });
+  const r = await einLauf({ ...o, jetzt, anstoss, opus: false, erlaubt: erlaubtHeute(verzeichnis, jetzt, knopf) });
+  for (const q of r.gesperrt || []) gesperrt.add(q);
+  delete r.gesperrt;
+  if (opus) delete opus.gesperrt;
+  // Grenze des Tages: Wartet etwas nur ihretwegen, stößt der Dienst kurz nach Mitternacht an
+  const wieder = naechsterTag(jetzt).toISOString();
+  zustandAendern(verzeichnis, (z) => {
+    z.grenzen = grenzenStand(verzeichnis, jetzt);
+    if (gesperrt.size) z.tagesgrenze = { tag: tagBerlin(jetzt), wieder, quellen: [...gesperrt] }; else delete z.tagesgrenze;
+  });
+  if (r.status === "nichts-zu-tun" && !opus && gesperrt.size) return { status: "tagesgrenze", wieder, quellen: [...gesperrt] };
   // nichts mehr zu tun: auch kein Versuch nach dem Limit mehr nötig
   if (r.status === "nichts-zu-tun" && !opus && limit) zustandAendern(verzeichnis, (z) => { delete z.limit; });
   if (!opus) return r;
   return r.status === "nichts-zu-tun" ? opus : { ...r, opus };
 }
+
+// Läufe heute je Anlass (nutzung.json, quellen) → { mails, pruefen, gmail, unterlagen, knopf }
+function laeufeHeute(verzeichnis, jetzt) {
+  const q = (((lesen(join(verzeichnis, "nutzung.json"), {}) || {})[tagBerlin(jetzt)] || {}).quellen) || {};
+  return Object.fromEntries(ANLAESSE.map((k) => [k, Number.isInteger(q[k]) && q[k] >= 0 ? q[k] : 0]));
+}
+// Welche Anlässe heute noch einen Lauf haben (GRENZEN.laeufe); auf Knopfdruck alle
+const erlaubtHeute = (verzeichnis, jetzt, knopf) => {
+  const n = laeufeHeute(verzeichnis, jetzt);
+  return Object.fromEntries(Object.keys(GRENZEN.laeufe).map((k) => [k, knopf || n[k] < GRENZEN.laeufe[k]]));
+};
 
 // JSON-Ausgabe von claude -p (--output-format json: ein Objekt mit is_error, result, usage …) → Objekt oder null
 export function ergebnisLesen(aus) {
@@ -431,11 +761,40 @@ export function nutzungLesen(o) {
     cache_schreiben: zahl(u.cache_creation_input_tokens), runden: zahl(o.num_turns), dauer_ms: zahl(o.duration_ms),
     listenpreis_usd: Math.round(zahl(o.total_cost_usd) * 1e4) / 1e4 };
 }
-// Tag in Berlin (YYYY-MM-DD)
+// Tag in Berlin (YYYY-MM-DD); erste Viertelstunde des nächsten Tags
 const tagBerlin = (d) => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Berlin" });
+const naechsterTag = (jetzt) => {
+  const tag = tagBerlin(jetzt);
+  let t = jetzt.getTime();
+  while (tagBerlin(new Date(t)) === tag) t += 15 * 60e3;
+  return new Date(t);
+};
+// Stand der Grenzen heute (zustand.grenzen, im Status mit Zugangsschlüssel): Läufe, zusammen und je Anlass mit Grenze; Mails, die der Abruf wartend hält, heute auf
+// einen späteren Tag zurückgestellt oder auf den nächsten Abruf verschoben hat oder nicht mehr merken konnte; Zeichen je Topf
+// (abruf/abruf-stand.json); Mails, mit denen ein Lauf scheiterte und die noch einmal laufen (mails_verdacht); Mails in Quarantäne
+// und wie viele davon über ihren Grenzen wegfielen; gescheiterte Läufe mit Gmail heute und ob es ausgesetzt ist; ausgelassene
+// Unterlagen und Folien
+function grenzenStand(verzeichnis, jetzt) {
+  const tag = tagBerlin(jetzt), n = (x) => (Number.isInteger(x) && x >= 0 ? x : 0);
+  const abruf = lesen(join(verzeichnis, "abruf", "abruf-stand.json"), {}) || {};
+  const t = abruf.tag && abruf.tag.datum === tag ? abruf.tag : {};
+  const wartend = abruf.uni_postfach && abruf.uni_postfach.wartend && typeof abruf.uni_postfach.wartend === "object" ? Object.keys(abruf.uni_postfach.wartend).length : 0;
+  const q = quarantaeneZaehlen(verzeichnis), gmailFehler = gmailFehlerLesen(verzeichnis, jetzt);
+  const ausgelassen = (o, a) => unterlagenWahl(verzeichnis, join(verzeichnis, "unterlagen", o), a, jetzt).ausgelassen;
+  const je = laeufeHeute(verzeichnis, jetzt);
+  return { tag, laeufe: n(((lesen(join(verzeichnis, "nutzung.json"), {}) || {})[tag] || {}).laeufe),
+    laeufe_max: Object.values(GRENZEN.laeufe).reduce((a, b) => a + b, 0),
+    ...Object.fromEntries(ANLAESSE.map((k) => ["laeufe_" + k, je[k]])), ...Object.fromEntries(Object.keys(GRENZEN.laeufe).map((k) => [`laeufe_${k}_max`, GRENZEN.laeufe[k]])),
+    mails_wartend: wartend,
+    mails_verworfen: n(t.verworfen), mails_zurueckgestellt: n(t.zurueckgestellt), mails_verschoben: n(t.verschoben), zeichen_uni: n((t.uni || {}).zeichen),
+    zeichen_andere: n((t.andere || {}).zeichen), mails_verdacht: Object.keys(mailFehlerLesen(verzeichnis, jetzt)).filter((k) => !istDatei(join(verzeichnis, QUARANTAENE, k))).length,
+    quarantaene: q.mails, quarantaene_geloescht: q.geloescht,
+    fehlschlaege_gmail: gmailFehler, ausgesetzt_gmail: gmailFehler >= GRENZEN.extra ? 1 : 0,
+    unterlagen_ausgelassen: ausgelassen("neu", "neu") + ausgelassen("opus", "opus"), kapitel_ausgelassen: ausgelassen("kapitel", "kapitel") };
+}
 // nutzung.json: je Tag Läufe, Läufe mit Opus, Treffer am Limit und die Token, dazu gmail_begrenzt (Gmail-Überblick an seiner
-// Grenze, nur wenn es vorkam); NUTZUNG_TAGE lang (studium-server nutzung)
-export function nutzungBuchen(verzeichnis, jetzt, { opus, limit, nutzung, begrenzt = false }) {
+// Grenze, nur wenn es vorkam) und quellen (Läufe je Anlass, GRENZEN.laeufe); NUTZUNG_TAGE lang (studium-server nutzung)
+export function nutzungBuchen(verzeichnis, jetzt, { opus, limit, nutzung, begrenzt = false, quellen = [] }) {
   const datei = join(verzeichnis, "nutzung.json");
   const alle = lesen(datei, {}) || {};
   const tag = tagBerlin(jetzt);
@@ -445,16 +804,22 @@ export function nutzungBuchen(verzeichnis, jetzt, { opus, limit, nutzung, begren
   if (limit) t.limit++;
   if (begrenzt) t.gmail_begrenzt = (t.gmail_begrenzt || 0) + 1;
   if (nutzung) for (const k of ["eingabe", "ausgabe", "cache_lesen", "cache_schreiben"]) t[k] += nutzung[k];
+  if (quellen.length) {
+    t.quellen = t.quellen && typeof t.quellen === "object" ? t.quellen : {};
+    for (const q of quellen) t.quellen[q] = (Number.isInteger(t.quellen[q]) ? t.quellen[q] : 0) + 1;
+  }
   alle[tag] = t;
   const grenze = tagBerlin(new Date(jetzt.getTime() - NUTZUNG_TAGE * 24 * STUNDE));
   for (const k of Object.keys(alle)) if (k <= grenze) delete alle[k];
   schreiben(datei, alle);
 }
 
-async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], skill = join(PAKET, "skill", "studium-autopilot"), modell, timeout, holen = fetch, anstoss, opus }) {
+// Ein Lauf. claude: [befehl, ...args] (Tests geben eine Attrappe), skill: Ordner des Skills.
+// erlaubt: Anlässe, die heute noch einen Lauf haben (erlaubtHeute); was nur deshalb wartet, steht im Ergebnis unter gesperrt.
+async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], skill = join(PAKET, "skill", "studium-autopilot"), modell, timeout, holen = fetch, anstoss, opus,
+  erlaubt }) {
   const zustand = lesen(join(verzeichnis, "zustand.json"), {});
   const einstellungen = lesen(join(verzeichnis, "einstellungen.json"), {});
-  const gmail = !opus && gmailDran(anstoss, zustand, jetzt, taktLesen(verzeichnis).gmail);
   const zeitraum = gmailZeitraum(zustand, jetzt);
 
   // eigener Ordner je Lauf, auch bei zwei Läufen in derselben Sekunde
@@ -467,23 +832,51 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   if (opus) mkdirSync(join(arbeit, "roh"));
   else rohUebernehmen(rohOrdner(verzeichnis), join(arbeit, "roh"));
   const unterlagenNeu = join(verzeichnis, "unterlagen", opus ? "opus" : "neu");
-  if (opus) pdfAufraeumen(unterlagenNeu, jetzt);
-  const unterlagen = unterlagenUebernehmen(unterlagenNeu, join(arbeit, "unterlagen"), opus ? UNTERLAGEN_OPUS_JE_LAUF : UNTERLAGEN_JE_LAUF);
+  const kapitelNeu = join(verzeichnis, "unterlagen", "kapitel");
   // Stand des Plugins: stand.json (Modulcodes, Studienbeginn, Variante, lernplan) und tresor.json (was schon in Obsidian steht)
   const { tresor, ...stand } = lesen(join(verzeichnis, "web", "stand-plugin.json"), { schema: 1, module: [] });
   // Folien für Kapitellisten nur im gewöhnlichen Lauf und nur für Module, nach denen der Stand fragt
-  const kapitelNeu = join(verzeichnis, "unterlagen", "kapitel");
   if (!opus) kapitelAussortieren(kapitelNeu, stand.lernplan);
-  const kapitel = opus ? [] : unterlagenUebernehmen(kapitelNeu, join(arbeit, "kapitel"), KAPITEL_JE_LAUF, KAPITEL_ZEICHEN);
+  // Extras: was dran wäre (fällig, Anlass mit Läufen; Gmail nicht ausgesetzt, ausgelassene Unterlagen nie) und was einen Fehlschlag hat
+  const gmailFehler = gmailFehlerLesen(verzeichnis, jetzt);
+  const wahl = { unterlagen: unterlagenWahl(verzeichnis, unterlagenNeu, opus ? "opus" : "neu", jetzt), kapitel: opus ? LEER : unterlagenWahl(verzeichnis, kapitelNeu, "kapitel", jetzt) };
+  const faellig = { gmail: !opus && gmailDran(anstoss, zustand, jetzt, taktLesen(verzeichnis).gmail) && gmailFehler < GRENZEN.extra,
+    unterlagen: wahl.unterlagen.namen.size > 0, kapitel: wahl.kapitel.namen.size > 0 };
+  const mitFehler = { gmail: gmailFehler > 0, unterlagen: wahl.unterlagen.verdacht, kapitel: wahl.kapitel.verdacht };
+  const anlass = { gmail: "gmail", unterlagen: "unterlagen", kapitel: "unterlagen" };
+  const kandidaten = EXTRAS.filter((x) => faellig[x] && erlaubt[anlass[x]]);
+  const verdacht = kandidaten.find((x) => mitFehler[x]);
+  // Sicherheitslauf: ein Extra mit Fehlschlag vor den Mails (sonst käme es an Tagen mit vielen Mails nie dran)
+  const sicht = opus ? { art: "", mails: 0, unbestaetigt: false, quarantaene: 0, gesperrt: [] }
+    : rohSichten(verzeichnis, arbeit, jetzt, erlaubt, !!verdacht && anstoss.gruende.includes("taeglich"));
+  const gesperrt = new Set(sicht.gesperrt);
+  // Mails nach einem Fehlschlag und Mails nicht bestätigter Absender laufen ohne Extras; aus Mails nicht bestätigter Absender kommt
+  // alles nur geschätzt (unbestaetigt)
+  const nurMails = sicht.art === "pruefen" || sicht.art === "unbestaetigt";
+  for (const x of EXTRAS) if (faellig[x] && !erlaubt[anlass[x]] && !nurMails) gesperrt.add(anlass[x]);
+  // welche Extras dieser Lauf nimmt: keine zu Mails nach einem Fehlschlag; zu frischen Mails nur die ohne Fehlschlag; ohne Mails ein
+  // Extra mit Fehlschlag allein, sonst alle
+  const extras = nurMails ? [] : sicht.mails ? kandidaten.filter((x) => !mitFehler[x]) : verdacht ? [verdacht] : kandidaten;
+  // dran, aber nicht in diesem Lauf: kommt mit dem nächsten (ende stößt ihn an)
+  const ausgelassen = kandidaten.filter((x) => !extras.includes(x));
+  const gmail = extras.includes("gmail");
+  if (opus) pdfAufraeumen(unterlagenNeu, jetzt);
+  const unterlagen = !extras.includes("unterlagen") ? [] : unterlagenUebernehmen(unterlagenNeu, join(arbeit, "unterlagen"), opus ? UNTERLAGEN_OPUS_JE_LAUF : UNTERLAGEN_JE_LAUF,
+    UNTERLAGEN_ZEICHEN, wahl.unterlagen.namen);
+  const kapitel = !extras.includes("kapitel") ? [] : unterlagenUebernehmen(kapitelNeu, join(arbeit, "kapitel"), KAPITEL_JE_LAUF, KAPITEL_ZEICHEN, wahl.kapitel.namen);
   const index = (dateiLesen(join(arbeit, "roh", "INDEX.md")) || "").toString("utf8");
   const meldungen = index.split("\n").filter((z) => z.startsWith("- ")).map((z) => z.replace(/^- [\d.]+ [\d:]+ UTC: /, "").trim());
+  if (sicht.art === "pruefen") meldungen.push(`${sicht.mails} Mail(s), mit denen ein Lauf gescheitert ist, noch einmal (ohne neue)`);
+  if (sicht.unbestaetigt) {
+    meldungen.push(`${sicht.mails} Mail(s) mit nicht bestätigtem Absender (eigener Lauf, alles daraus nur „geschätzt“)`);
+  }
   if (!gmail && !meldungen.length && !unterlagen.length && !kapitel.length) {
     // Rohdaten ohne Meldung (der Abruf brach zwischen Mail und INDEX.md ab) sind kein Grund für Claude, gehen aber zurück: Sie
     // kommen mit dem nächsten Lauf, statt mit dem Lauf-Ordner gelöscht zu werden
     const roh = join(arbeit, "roh");
     if (istOrdner(roh) && readdirSync(roh).length) rohZurueck(roh, rohOrdner(verzeichnis));
     rmSync(arbeit, { recursive: true, force: true });
-    return { status: "nichts-zu-tun" };
+    return { status: "nichts-zu-tun", gesperrt: [...gesperrt] };
   }
   // „läuft“ für den Status (Knopf „Mails durchsuchen“ zeigt es), am Ende wieder weg
   const vorher = lesen(join(verzeichnis, "zustand.json"), {});
@@ -546,34 +939,69 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
     else delete neuerZustand.limit;
     // Claudes ausgabe.json bleibt nur in der geprüften Fassung (unten) im Lauf-Ordner: Ungeprüft könnte sie enthalten, was Claude
     // im Gmail-Überblick von anderen Mails sah
+    let quarantaene = sicht.quarantaene;
+    // ein Fehlschlag, an dem der Inhalt schuld sein kann, und es waren Mails dabei: Diese sind halbiert bzw. gezählt, der nächste Lauf
+    // kommt also weiter (nie im Kreis)
+    const inhalt = !ok && r.signal == null && inhaltKannSchuldSein(code, ergebnis, r.err, neuerZustand);
+    // Extras dieses Laufs: gezählt bei einem solchen Fehlschlag, zurück auf 0 bei Erfolg. Waren Extras dabei, zählt der Fehlschlag
+    // nicht gegen die Mails: Sie laufen gleich noch einmal ohne (ohneExtrasNochmal); sonst halbiert bzw. allein gezählt
+    const extrasDabei = [...(gmail ? ["gmail"] : []), ...(unterlagen.length ? ["unterlagen"] : []), ...(kapitel.length ? ["kapitel"] : [])];
+    if ((ok || inhalt) && gmail) gmailFehlerBuchen(verzeichnis, jetzt, !ok);
+    if (ok || inhalt) {
+      unterlagenBuchen(verzeichnis, unterlagen.map((n) => wahl.unterlagen.kennung.get(n)), jetzt, name, !ok);
+      unterlagenBuchen(verzeichnis, kapitel.map((n) => wahl.kapitel.kennung.get(n)), jetzt, name, !ok);
+    }
+    const gezaehlt = inhalt && !opus && sicht.mails > 0;
+    if (ok) fehlschlaegeLoeschen(verzeichnis, join(arbeit, "roh"), jetzt);
     if (!ok) {
       rmSync(join(arbeit, "ausgabe.json"), { force: true });
       fehler.add(code);
+      if (gezaehlt && extrasDabei.length) ohneExtrasNochmal(verzeichnis, join(arbeit, "roh"), jetzt, name);
+      else if (gezaehlt) quarantaene += fehlschlagZaehlen(verzeichnis, join(arbeit, "roh"), jetzt, name);
       rohZurueck(join(arbeit, "roh"), rohOrdner(verzeichnis));
       unterlagenZurueck(join(arbeit, "unterlagen"), unterlagenNeu);
       unterlagenZurueck(join(arbeit, "kapitel"), kapitelNeu);
     }
     laufOrdnerLeeren(arbeit);
-    // warten noch Unterlagen, gleich der nächste Lauf (nur nach Erfolg, sonst liefe ein Fehler im Kreis)
-    if (ok && ["neu", "opus", "kapitel"].some((u) => wartet(join(verzeichnis, "unterlagen", u))) && !anstossWartet(verzeichnis)) {
-      anstossSchreiben(verzeichnis, "unterlagen", jetzt);
+    // Anlässe dieses Laufs (GRENZEN.laeufe); auf Knopfdruck nur knopf
+    const quellen = anstoss.grund === "knopf" ? ["knopf"] : [...(sicht.art === "frisch" ? [sicht.uni ? "mails_uni" : "mails"] : sicht.art ? ["pruefen"] : []), ...(gmail ? ["gmail"] : []),
+      ...(opus || unterlagen.length || kapitel.length ? ["unterlagen"] : [])];
+    nutzungBuchen(verzeichnis, jetzt, { opus, limit: code === "claude-limit", nutzung, begrenzt: !!(mehr.gmailUeberblick && mehr.gmailUeberblick.begrenzt), quellen });
+    // warten noch Unterlagen oder zurückgelegte Mails, gleich der nächste Lauf: nur nach Erfolg (sonst liefe ein Fehler im Kreis) oder
+    // nach einem gezählten Fehlschlag (dann ist der nächste Lauf ein anderer: halbiert, allein oder ohne die Mail in Quarantäne), und
+    // nur, wenn ihr Anlass heute noch Läufe hat
+    const noch = erlaubtHeute(verzeichnis, jetzt, false);
+    const unterlagenDran = noch.unterlagen && [["neu", "neu"], ["opus", "opus"], ["kapitel", "kapitel"]]
+      .some(([o, a]) => unterlagenWahl(verzeichnis, join(verzeichnis, "unterlagen", o), a, jetzt).namen.size > 0);
+    if ((ok || inhalt) && !anstossWartet(verzeichnis)) {
+      if (!opus && rohDran(verzeichnis, jetzt, noch)) anstossSchreiben(verzeichnis, "quellen", jetzt);
+      else if (unterlagenDran) anstossSchreiben(verzeichnis, "unterlagen", jetzt);
+      else if (ausgelassen.includes("gmail") && noch.gmail && gmailFehlerLesen(verzeichnis, jetzt) < GRENZEN.extra) anstossSchreiben(verzeichnis, "gmail", jetzt);
     }
     neuerZustand.fehler = [...fehler];
     neuerZustand.letzterLauf = { zeit: jetzt.toISOString(), ok };
+    neuerZustand.grenzen = grenzenStand(verzeichnis, jetzt);
     delete neuerZustand.laeuftSeit;
     zustandSchreiben(verzeichnis, neuerZustand);
     writeFileSync(join(arbeit, "protokoll.json"), JSON.stringify({ ok, code, exit: r.code, modell: modellLauf, gmail, unterlagen: unterlagen.length, kapitelFolien: kapitel.length,
-      ...(nutzung ? { nutzung } : {}), ...mehr }, null, 2));
-    nutzungBuchen(verzeichnis, jetzt, { opus, limit: code === "claude-limit", nutzung, begrenzt: !!(mehr.gmailUeberblick && mehr.gmailUeberblick.begrenzt) });
+      ...(sicht.art ? { mails: { art: sicht.art, zahl: sicht.mails, ...(sicht.unbestaetigt ? { unbestaetigt: true } : {}) } } : {}),
+      ...(extrasDabei.length < kandidaten.length ? { ausgelassen } : {}), ...(gezaehlt ? { gezaehlt, ...(extrasDabei.length ? { ohneExtras: true } : {}) } : {}),
+      ...(quarantaene ? { quarantaene } : {}), ...(nutzung ? { nutzung } : {}), ...mehr }, null, 2));
     aufraeumen(join(verzeichnis, "laeufe"));
-    return { status: ok ? "ok" : code, ...(code === "claude-limit" ? { wieder: neuerZustand.limit.wieder } : {}), ...mehr };
+    return { status: ok ? "ok" : code, ...(code === "claude-limit" ? { wieder: neuerZustand.limit.wieder } : {}), ...mehr, gesperrt: [...gesperrt] };
   };
   // gescheitert: Code ungleich 0 oder is_error in der Ausgabe (Claude Code endet am Limit nicht immer mit einem Fehlercode)
   if (r.code !== 0 || (ergebnis && ergebnis.is_error === true)) return ende(false, /limit/i.test(r.aus + r.err) ? "claude-limit" : "claude-lauf");
   const ausgabe = lesen(join(arbeit, "ausgabe.json"), null);
   if (!ausgabe) return ende(false, "ausgabe-ungueltig");
-  const { eingang, verworfen, fehler: formfehler } = eingangNormal(ausgabe, { jetzt, lauf: name });
+  const { eingang: claudes, verworfen, herkunft: herkunftClaude, fehler: formfehler } = eingangNormal(ausgabe, { jetzt, lauf: name, mails: mailsLesen(join(arbeit, "roh")) });
   if (formfehler) return ende(false, "ausgabe-ungueltig");
+  // Lauf nur mit Mails nicht bestätigter Absender: Was er liefert, kommt aus ihnen, gleich welche Herkunft Claude nennt (unbestaetigt)
+  const { eingang: geprueft, herkunft } = sicht.unbestaetigt ? unbestaetigt(claudes, herkunftClaude) : { eingang: claudes, herkunft: herkunftClaude };
+  // Herkunft: Absender nicht bestätigt, Änderungen aus einer anderen Quelle (termine-quellen.json: Quelle je Termin, nur für
+  // Termine im Bestand)
+  const h = herkunftAnwenden(geprueft.termine, herkunft, { bestand, quellen: lesen(join(verzeichnis, "termine-quellen.json"), {}), heute: tagBerlin(jetzt) });
+  const eingang = { ...geprueft, termine: h.termine };
   const { eingang: nurNeu, bestand: neuerBestand } = nurNeueOderGeaenderte(eingang, bestand);
   const { hinweise, bisher: hinweiseBisher } = nurNeueHinweise(nurNeu.hinweise, lesen(join(verzeichnis, "hinweise-bisher.json"), {}), jetzt);
   // Kapitellisten: nur gefragte Module, nur Neues oder Geändertes
@@ -581,6 +1009,7 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
   const neu = { ...nurNeu, hinweise, kapitel: k.kapitel };
   if (eingang.kapitel.length) schreiben(join(verzeichnis, "kapitel.json"), k.bestand);
   schreiben(join(verzeichnis, "termine.json"), neuerBestand);
+  schreiben(join(verzeichnis, "termine-quellen.json"), Object.fromEntries(Object.entries(h.quellen).filter(([id]) => neuerBestand[id])));
   schreiben(join(verzeichnis, "hinweise-bisher.json"), hinweiseBisher);
   mkdirSync(join(verzeichnis, "eingang"), { recursive: true });
   if (!istLeer(neu)) schreiben(join(verzeichnis, "eingang", `${name}-lauf.json`), neu, FUER_DEN_DIENST);
@@ -595,6 +1024,21 @@ async function einLauf({ verzeichnis, jetzt = new Date(), claude = ["claude"], s
     ...(["ok", "fehlt"].includes(ausgabe.gmail) ? { gmail: ausgabe.gmail } : {}), ...(ueberblick ? { gmail_ueberblick: ueberblick } : {}) });
   return ende(true, "ok", { termine: neu.termine.length, begleitnotizen: neu.begleitnotizen.length, hinweise: neu.hinweise.length, kapitel: neu.kapitel.length,
     verworfen: verworfen.length + k.verworfen.length, ...(ueberblick ? { gmailUeberblick: ueberblick } : {}) });
+}
+
+// Ergebnis eines Laufs nur mit Mails nicht bestätigter Absender: jeder Termin mit Herkunft aus einer solchen Mail (Domain nur, wenn
+// Claude eine solche Mail nennt), damit herkunftAnwenden ihn „geschätzt“ mit „Absender nicht bestätigt.“ liefert; Hinweise mit
+// diesem Satz vorn; keine Begleitnotizen, Kapitellisten oder doppelten To-dos (die Mails sollen nichts am Tresor ändern).
+// → { eingang, herkunft }
+const NICHT_BESTAETIGT_HINWEIS = "Absender nicht bestätigt: ";
+function unbestaetigt(eingang, herkunft) {
+  const aus = {};
+  for (const t of eingang.termine) {
+    const h = herkunft[t.id] && herkunft[t.id].urteil === "fehlgeschlagen" ? herkunft[t.id] : null;
+    aus[t.id] = { art: "mail", domain: h ? h.domain : "", urteil: "fehlgeschlagen", datum: h ? h.datum : "" };
+  }
+  const hinweise = eingang.hinweise.map((x) => ({ ...x, text: (NICHT_BESTAETIGT_HINWEIS + x.text).slice(0, 300) }));
+  return { eingang: { ...eingang, hinweise, begleitnotizen: [], kapitel: [], todo_doppel: [] }, herkunft: aus };
 }
 
 function aufraeumen(laeufe) {

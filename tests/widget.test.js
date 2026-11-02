@@ -50,7 +50,7 @@ test("Daten: Planwoche und zwei Wochen danach, Sitzungen mit Tag, Zeit, Farbe de
   assert.deepEqual(w.sitzungen.map((x) => x.tag + " " + x.beginn), ["2026-10-19 10:15", "2026-10-20 10:00", "2026-10-20 10:15", "2026-10-20 14:15", "2026-10-22 08:15", "2026-10-23 12:15"],
     "nach Tag und Beginn");
   assert.deepEqual([s("Mathe", "2026-10-19").farbe, s("X110").farbe, s("X120").farbe], [1, 2, 3], "Farbe je Modul wie im Raster (Code sortiert)");
-  assert.equal(s("Mathe", "2026-10-20").art, "Übung Gruppe 2");
+  assert.equal(s("Mathe", "2026-10-20").art, "Übung"); // nur die Art, wie im Raster
   assert.equal(s("Mathe", "2026-10-20").ue, true);
   assert.equal(s("X110").online, true);
   assert.deepEqual([s("X130").aus, s("X130").ausnahme, s("X130").marke], [true, true, "Fällt aus"]);

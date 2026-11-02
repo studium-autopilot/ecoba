@@ -1,0 +1,4 @@
+# Älteste Version, auf die ein Server nach einer gescheiterten Installation zurückrollen darf (docs/release.md, „Mindestversion“).
+# Erste Zeile ohne # zählt; der Server behält die höchste je gesehene. Anheben, wenn ältere Pakete eine Lücke haben oder eine
+# Sicherung nicht kennen, auf die ein Zurückrollen nicht verzichten darf. release.py prüft, dass sie nicht über der gebauten liegt.
+0.7.8

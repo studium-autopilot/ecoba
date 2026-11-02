@@ -59,10 +59,31 @@ function tresor(dateien) {
   };
 }
 
+// wie hinter Caddy, das jeder weitergeleiteten Anfrage X-Forwarded-For mitgibt (direkt auf 127.0.0.1 ohne nennt der Status nur
+// ok und Version)
 const netzEcht = async ({ url, method, headers, body }) => {
-  const r = await fetch(url, { method, headers, body });
-  return { status: r.status, text: await r.text() };
+  const r = await fetch(url, { method, headers: { ...headers, "x-forwarded-for": "198.51.100.7" }, body });
+  return { status: r.status, text: await r.text(), headers: Object.fromEntries(r.headers) };
 };
+// Antworten ohne die Signatur des Servers: ein Gerät, das so nie verriegelt wird (wie vor dem ersten Update seines Servers)
+const ohneMac = (netz) => async (a) => {
+  const x = await netz(a), h = Object.assign({}, x.headers);
+  delete h["studium-signatur"];
+  return Object.assign({}, x, { headers: h });
+};
+// Antwort, die ein Test verändert oder selbst baut, wie sie der Server signieren würde (Kopf studium-signatur, server/kanal.mjs):
+// für Geräte mit Riegel, die nur signierte Antworten annehmen
+async function signiert(srv, anfrage, antwort) {
+  const { antwortMac } = await modul("kanal.mjs");
+  const nonce = (/nonce=([\w-]{22})/.exec(String((anfrage.headers || {}).authorization || "")) || [])[1];
+  if (!nonce) return antwort;
+  const kopf = Object.assign({}, antwort.headers, { "studium-signatur": "v=1,mac=" + antwortMac(srv.konfig, nonce, antwort.status, antwort.text) });
+  return Object.assign({}, antwort, { headers: kopf });
+}
+
+// Kopf einer signierten Anfrage (server/kanal.mjs): nie der Schlüssel selbst
+const SIGNIERT = /^Studium-Signatur v=1,zeit=\d{10},nonce=[\w-]{22},inhalt=[\w-]{43},signatur=[\w-]{43}$/;
+const SIGNIERT_BEWEIS = /^Studium-Signatur v=1,zeit=\d{10},nonce=[\w-]{22},inhalt=[\w-]{43},signatur=[\w-]{43},beweis=[\w-]{43}$/;
 
 // standText aus verbindungen.js (eine Formulierung für alle Zeilen), mit der Uhr des Tests statt Date.now()
 const standTextMit = (uhr) => laden("verbindungen", {
@@ -86,6 +107,8 @@ function abhBauen(t, o) {
     stand: o.stand || (() => ({ module: ["B110", "E101"], studienbeginn: "2026-10-01", variante: "offen" })),
     modulLink: (code) => (code === "B110" ? "[[B110 Einführung in die BWL]]" : ""),
     bestaetigen: async (titel, text) => { (o.fragen || []).push(text); return o.ja !== false; },
+    // Name des neuen Servers eintippen: o.tippen, sonst wie verlangt (o.ja: false bricht ab)
+    eintippen: async (titel, text, ja, soll) => { (o.fragen || []).push(text); return o.tippen !== undefined ? o.tippen : o.ja !== false ? soll : null; },
     sperre: SPERRE, quellen: Q, standText: standTextMit(uhr), mobil: false,
     tresor: o.tresor || (async () => ({ termine: [], todos: [] })),
     unterlagen: o.unterlagen || (async () => []),
@@ -93,7 +116,7 @@ function abhBauen(t, o) {
     kapitelUnterlagen: o.kapitelUnterlagen || (async () => []),
     lernplan: () => o.lernplan || null,
     lernplanNotizen: o.lernplanNotizen || (async () => []),
-    lokalErlaubt: true,
+    lokalErlaubt: true, ohneKennwort: o.ohneKennwort,
     geheimMap: geheim, lokalMap: lokal, uhr,
   };
 }
@@ -115,7 +138,7 @@ async function serverStarten(o) {
   return {
     verzeichnis, konfig,
     // Codes, Stand und Takt im Ordner des Web-Dienstes (web/), den Anstoß des Knopfs dort auch
-    code: () => neuerCode(path.join(verzeichnis, "web")).code,
+    code: () => neuerCode(path.join(verzeichnis, "web"), { adresse: konfig.adresse }).code,
     zustand: (z) => fs.writeFileSync(path.join(verzeichnis, "zustand.json"), JSON.stringify(z)),
     eingang: (roh) => {
       const { eingang } = eingangNormal(roh, { jetzt: new Date("2026-10-18T07:30:00Z"), lauf: "test" });
@@ -160,27 +183,102 @@ test("Verbinden: Rückfrage, Einmal-Code gegen Schlüssel, Code danach verbrauch
       assert.match((await m.verbinden(adresse, code)).fehler, /unvollständig/, adresse + " " + code);
     }
     assert.match((await m.verbinden(srv.konfig.adresse, "ABCDE-FGHJK")).fehler, /gilt nicht mehr/, "unbekannter Code");
-    // Link nennt eine andere Adresse als der Server selbst
-    assert.match((await m.verbinden(srv.konfig.adresse.replace("127.0.0.1", "localhost"), srv.code())).fehler, /passt nicht/);
-    assert.equal(a.geheimMap.size, 0, "nichts gespeichert");
+    // Link nennt eine andere Adresse als der Server selbst: Der Code gilt nur für den Namen, unter dem der Server ihn ausgab (Host im
+    // Salz), und bleibt dabei unverbraucht
     const code = srv.code();
+    assert.match((await m.verbinden(srv.konfig.adresse.replace("127.0.0.1", "localhost"), code)).fehler, /gilt nicht mehr/);
+    assert.equal(a.geheimMap.size, 0, "nichts gespeichert");
     const r = await m.verbinden(srv.konfig.adresse, code.toLowerCase());
     assert.equal(r.ok, true, r.fehler);
     assert.deepEqual(JSON.parse(a.geheimMap.get(GEHEIM_ID)), { adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel });
     assert.equal(m.verbunden(), true);
     assert.match((await S.erzeugen(abhBauen(tresor())).verbinden(srv.konfig.adresse, code)).fehler, /gilt nicht mehr/, "Code nur einmal");
-    // Link zu einer anderen Adresse: die Rückfrage nennt, welche Verbindung ersetzt wird
+    // Link zu einer anderen Adresse: die Rückfrage nennt die bisherige Verbindung, und du tippst den Namen des neuen Servers ein
     const fragen = [];
-    const mitFrage = S.erzeugen(Object.assign(abhBauen(tresor(), { fragen, geheim: a.geheimMap }), {}));
-    await mitFrage.verbinden(srv.konfig.adresse.replace("127.0.0.1", "localhost"), "ABCDE-FGHJK");
-    assert.match(fragen[0], /Die Verbindung zu 127\.0\.0\.1:\d+ wird dabei ersetzt\./);
+    const anders = srv.konfig.adresse.replace("127.0.0.1", "localhost");
+    for (const tippen of ["127.0.0.1", "", null]) {
+      const falsch = S.erzeugen(abhBauen(tresor(), { fragen: [], geheim: a.geheimMap, tippen }));
+      assert.deepEqual(await falsch.verbinden(anders, "ABCDE-FGHJK"), { ok: false, abgebrochen: true }, "eingetippt: " + tippen);
+    }
+    const mitFrage = S.erzeugen(abhBauen(tresor(), { fragen, geheim: a.geheimMap, tippen: " " + anders.replace("http://", "").toUpperCase() + " " }));
+    assert.match((await mitFrage.verbinden(anders, "ABCDE-FGHJK")).fehler, /gilt nicht mehr/, "richtig eingetippt: weiter zum Einlösen");
+    assert.match(fragen[0], /^Dieses Gerät ist mit 127\.0\.0\.1:\d+ verbunden\. Dieses Gerät schickt dann regelmäßig an localhost:\d+: /);
+    assert.match(fragen[0], / Tippe zur Bestätigung den Namen des neuen Servers ein: localhost:\d+$/);
     await m.trennen();
     assert.equal(m.verbunden(), false);
     assert.deepEqual(await m.abrufen(), { art: "nicht-verbunden" });
   } finally { await srv.zu(); }
 });
 
-test("Weiteres Gerät verbinden: Code vom Server nur im Speicher; das neue Gerät verbindet sich mit Code und der Adresse aus server.json; „Zuletzt verbunden“", async () => {
+test("Verbinden ab 0.7.8: Code nie im Klartext; eine Antwort in alter Form, ohne den Code oder mit getauschtem Schlüssel wird abgelehnt, nichts gespeichert", async () => {
+  const crypto = require("node:crypto");
+  const srv = await serverStarten();
+  try {
+    const { hostVon, antwortKontext } = await modul("verbinden.mjs");
+    const host = hostVon(srv.konfig.adresse);
+    const mitschnitt = [];
+    const code = srv.code();
+    const A = abhBauen(tresor(), { netz: async (a) => { const r = await netzEcht(a); mitschnitt.push({ a, r }); return r; } });
+    assert.equal((await S.erzeugen(A).verbinden(srv.konfig.adresse, code)).ok, true);
+    const { a: anfrage, r: antwort } = mitschnitt.find((x) => x.a.url.endsWith("/v1/verbinden"));
+    const roh = JSON.parse(anfrage.body);
+    assert.deepEqual(Object.keys(roh).sort(), ["beweis", "kennung", "pub", "schema"]);
+    assert.equal(roh.schema, 2);
+    assert.doesNotMatch(anfrage.body, new RegExp(code.replace("-", "-?"), "i"), "der Code geht nie über das Netz");
+    assert.ok(![srv.konfig.zugang, srv.konfig.schluessel].some((k) => antwort.text.includes(k)), "Schlüssel nur verschlüsselt");
+    // danach nie mehr der Zugangsschlüssel selbst
+    assert.ok(mitschnitt.every((x) => !JSON.stringify(x.a.headers || {}).includes(srv.konfig.zugang)));
+
+    const fremd = { zugang: "B".repeat(43), schluessel: "C".repeat(43) };
+    const mitm = (antworten) => async (a) => (a.url.endsWith("/v1/verbinden") ? antworten(a) : netzEcht(a));
+    const versuch = async (netz, c) => {
+      const x = abhBauen(tresor(), { netz });
+      const r = await S.erzeugen(x).verbinden(srv.konfig.adresse, c);
+      return [r.ok, r.fehler, x.geheimMap.size];
+    };
+    const code2 = srv.code();
+    // 1: die Form bis 0.7.7 (Schlüssel offen), etwa von jemandem mit gültigem Zertifikat für die Adresse
+    const ungeprueft = "Die Antwort deines Servers ließ sich nicht prüfen. Nichts gespeichert.";
+    assert.deepEqual(await versuch(mitm(async () => ({ status: 200, text: JSON.stringify(Object.assign({ adresse: srv.konfig.adresse }, fremd)) })), code2), [false, ungeprueft, 0]);
+    // 2: eine Antwort in der neuen Form mit eigenem Tausch, aber ohne den Code (zufälliger Schlüssel statt antwort)
+    const ohneCode = async (a) => {
+      const d = JSON.parse(a.body), e = crypto.createECDH("prime256v1"), pub = e.generateKeys().toString("base64url");
+      const kontext = antwortKontext(host, d.pub, pub), iv = crypto.randomBytes(12);
+      const ikm = Buffer.concat([e.computeSecret(Buffer.from(d.pub, "base64url")), crypto.randomBytes(32)]);
+      const c = crypto.createCipheriv("aes-256-gcm", Buffer.from(crypto.hkdfSync("sha256", ikm, Buffer.alloc(0), kontext, 32)), iv);
+      c.setAAD(Buffer.from(kontext));
+      const daten = Buffer.concat([c.update(JSON.stringify(Object.assign({ adresse: srv.konfig.adresse }, fremd))), c.final(), c.getAuthTag()]);
+      return { status: 200, text: JSON.stringify({ schema: 2, pub, iv: iv.toString("base64url"), daten: daten.toString("base64url") }) };
+    };
+    assert.deepEqual(await versuch(mitm(ohneCode), code2), [false, ungeprueft, 0]);
+    // 3: tauscht den öffentlichen Schlüssel gegen seinen und reicht die Kennung an den echten Server weiter: der lehnt ab (Beweis)
+    let weiter = null;
+    const tausch = async (a) => {
+      const d = JSON.parse(a.body);
+      d.pub = crypto.createECDH("prime256v1").generateKeys().toString("base64url");
+      weiter = await netzEcht(Object.assign({}, a, { body: JSON.stringify(d) }));
+      return weiter;
+    };
+    assert.deepEqual((await versuch(mitm(tausch), code2)).slice(0, 1), [false]);
+    assert.deepEqual([weiter.status, JSON.parse(weiter.text)], [403, { fehler: "code", schema: 2 }]);
+    // 4: verändert die verschlüsselte Antwort des echten Servers
+    const kippen = async (a) => {
+      const r = await netzEcht(a), o = JSON.parse(r.text);
+      const d = Buffer.from(o.daten, "base64url");
+      d[0] ^= 1;
+      return { status: 200, text: JSON.stringify(Object.assign(o, { daten: d.toString("base64url") })) };
+    };
+    const code3 = srv.code();
+    assert.deepEqual(await versuch(mitm(kippen), code3), [false, ungeprueft, 0]);
+    // der zweite Code ist nach alledem noch gültig: Ohne den Code kam niemand an die Schlüssel
+    assert.deepEqual(await versuch(netzEcht, code2), [true, undefined, 1]);
+    // ein Server bis 0.7.7 kennt schema 2 nicht (403 ohne schema): ein eigener Satz
+    const [ok, fehler] = await versuch(mitm(async () => ({ status: 403, text: "{\"fehler\":\"code\"}" })), srv.code());
+    assert.deepEqual([ok, fehler], [false, "Dein Server kann so erst nach seinem nächsten Update verbinden. Er aktualisiert sich täglich; versuch es danach mit einem neuen Code."]);
+  } finally { await srv.zu(); }
+});
+
+test("Weiteres Gerät verbinden: Code vom Server nur im Speicher; das neue Gerät verbindet sich mit Code und eingetippter Adresse, nie allein mit der aus server.json; „Zuletzt verbunden“", async () => {
   const uhr = { t: START };
   const srv = await serverStarten({ jetzt: () => new Date(uhr.t) });
   try {
@@ -198,17 +296,21 @@ test("Weiteres Gerät verbinden: Code vom Server nur im Speicher; das neue Gerä
     assert.equal(r.ablauf, new Date(START.getTime() + 10 * 60e3).toISOString(), "10 Minuten");
     const gespeichert = JSON.stringify([[...t.m.entries()], [...A.a.lokalMap.entries()], [...A.a.geheimMap.entries()]]);
     assert.ok(!gespeichert.includes(r.code) && !gespeichert.includes(r.code.replace("-", "")), "Code weder im Tresor noch im Gerätespeicher oder Schlüsselbund");
-    assert.match(S.codeAnleitung(r, START), /^Gilt bis 10:10 und nur einmal\. .*„Eigener Server“ auf „Mehr erfahren“.* Adresse: http:\/\/127\.0\.0\.1:\d+$/);
+    assert.match(S.codeAnleitung(r, START), /^Gilt bis 10:10 und nur einmal\. .*„Eigener Server“ auf „Mehr erfahren“ und gib dort den Code und diese Adresse ein: http:\/\/127\.0\.0\.1:\d+$/);
+    assert.match(S.codeAnleitung(Object.assign({}, r, { adresse: "https://server.beispiel.de" }), START), / diese Adresse ein: server\.beispiel\.de$/, "ohne https://");
 
     // das neue Gerät: derselbe Tresor (über den Sync), eigener Schlüsselbund
     uhr.t = new Date(START.getTime() + 60e3);
     const fragen = [];
     const bA = abhBauen(t, { uhr, fragen, geraet: "g-handy" }), B = S.erzeugen(bA);
-    assert.deepEqual([B.verbunden(), B.sichtbar(), await B.adresseBekannt()], [false, true, srv.konfig.adresse]);
+    assert.deepEqual([B.verbunden(), B.sichtbar(), await B.adresseBekannt(), B.adresseGeprueft()], [false, true, srv.konfig.adresse, ""]);
     assert.match((await B.codeVerbinden("ABCDE")).fehler, /10 Zeichen/);
-    const rb = await B.codeVerbinden(" " + r.code.toLowerCase().replace("-", " ") + " ");
+    // die Adresse aus server.json allein verbindet nie: Sie ist nicht geprüft
+    assert.deepEqual((await B.codeVerbinden(r.code)).adresse, true);
+    assert.equal(fragen.length, 0, "keine Rückfrage, nichts eingelöst");
+    const rb = await B.codeVerbinden(" " + r.code.toLowerCase().replace("-", " ") + " ", srv.konfig.adresse);
     assert.equal(rb.ok, true, rb.fehler);
-    assert.match(fragen[0], /^Studium Autopilot holt dann Termine und Hinweise von 127\.0\.0\.1:\d+\. Nur bestätigen, wenn du den Code gerade selbst erzeugt hast/);
+    assert.match(fragen[0], /^Dieses Gerät schickt dann regelmäßig an 127\.0\.0\.1:\d+: die Codes deiner Module, deine Termine, offene To-dos mit den Namen ihrer Notizen, den Text deiner Unterlagen und auf Wunsch die PDFs\. Von dort kommen Termine, Hinweise und Zusammenfassungen in deine Notizen\. Nur bestätigen, wenn du den Code gerade selbst erzeugt hast/);
     assert.equal(B.verbunden(), true);
     assert.deepEqual(JSON.parse(bA.geheimMap.get(GEHEIM_ID)), { adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel });
     assert.match((await S.erzeugen(abhBauen(tresor(), { uhr })).codeVerbinden(r.code, srv.konfig.adresse)).fehler, /gilt nicht mehr/, "nur einmal");
@@ -223,7 +325,7 @@ test("Weiteres Gerät verbinden: Code vom Server nur im Speicher; das neue Gerä
     assert.match((await S.erzeugen(abhBauen(tresor(), { uhr })).codeVerbinden(c1.code, srv.konfig.adresse)).fehler, /gilt nicht mehr/, "zurückgezogen");
     assert.deepEqual(await A.m.geraetCode(), { fehler: "zu-viele", wieder: new Date(START.getTime() + 3600e3).toISOString() });
 
-    // ältere server.json ohne Adresse: das Gerät fragt nach ihr
+    // ältere server.json ohne Adresse: ebenso
     const C = S.erzeugen(abhBauen(tresor({ "System/Daten/server.json": JSON.stringify({ schema: 1, erledigt: {} }) }), { uhr }));
     assert.equal(await C.adresseBekannt(), "");
     assert.deepEqual([(await C.codeVerbinden(c2.code)).adresse, (await C.codeVerbinden(c2.code, "keine adresse")).adresse], [true, true]);
@@ -252,19 +354,65 @@ test("Weiteres Gerät verbinden: nicht verbunden, Uhr falsch, älterer Server, f
     assert.deepEqual(await mitAntwort(() => ({ status: 200, text: JSON.stringify({ code: "ABCDE-FGHJK", ablauf: "2026-10-18T08:10:00.000Z" }) })).geraetCode(),
       { fehler: "paket" }, "unverschlüsselt");
     // neue Schlüssel auf dem Server (studium-server schluessel-erneuern): Code holen geht nicht mehr, das Gerät verbindet sich mit Code neu
+    // (verriegelt: Die Ablehnung trägt keine Signatur, die dieses Gerät prüfen kann, und gilt darum wie ein Netzfehler; nach 3 Tagen
+    // bietet das Fenster Code und Adresse an)
     srv.konfig.zugang = neuerSchluessel();
     srv.konfig.schluessel = neuerSchluessel();
-    assert.deepEqual(await A.m.geraetCode(), { fehler: "zugang" });
+    assert.deepEqual(await A.m.geraetCode(), { fehler: "netz" });
     await A.m.abrufen();
-    assert.equal(A.m.status().code, "zugang");
+    assert.equal(A.m.status().code, "netz");
     assert.equal(await A.m.adresseBekannt(), srv.konfig.adresse, "Adresse aus dem Schlüsselbund");
     const fragen = [];
     const A2 = S.erzeugen(abhBauen(t, { uhr, fragen, geheim: A.a.geheimMap }));
     assert.equal((await A2.codeVerbinden(srv.code())).ok, true);
-    assert.doesNotMatch(fragen[0], /ersetzt/, "dieselbe Adresse");
+    assert.doesNotMatch(fragen[0], /verbunden\. |Tippe zur Bestätigung/, "dieselbe Adresse: nichts einzutippen");
     assert.equal(JSON.parse(A.a.geheimMap.get(GEHEIM_ID)).zugang, srv.konfig.zugang, "neue Schlüssel");
     assert.equal((await A2.abrufen()).art, "ok");
   } finally { await srv.zu(); }
+});
+
+test("Neue Adresse nach einer neuen IP: mit Code und der neuen Adresse neu verbinden, nach abgelehntem Schlüssel und nach Tagen ohne Antwort", async () => {
+  const uhr = { t: START };
+  const alt = await serverStarten({ jetzt: () => new Date(uhr.t) });
+  const neu = await serverStarten({ jetzt: () => new Date(uhr.t) });
+  try {
+    const t = tresor();
+    const A = await verbunden(alt, t, { uhr });
+    assert.equal((await A.m.abrufen()).art, "ok");
+    const hostNeu = neu.konfig.adresse.replace("http://", "");
+    // der alte Name zeigt auf einen Server mit anderen Schlüsseln: abgelehnt
+    alt.konfig.zugang = "x".repeat(43);
+    await A.m.abrufen({ manuell: true });
+    assert.equal(A.m.status().code, "netz", "verriegelt: eine Ablehnung ohne gültige Signatur gilt wie ein Netzfehler");
+    assert.equal(await A.m.adresseBekannt(), alt.konfig.adresse, "im Feld steht zuerst die bisherige Adresse");
+    const geteilt = { uhr, geheim: A.a.geheimMap, lokal: A.a.lokalMap };
+    // die neue Adresse nach denselben Regeln wie beim Link: keine IP, kein eigenes Netz, kein localhost (lokal nur im Test erlaubt)
+    const streng = S.erzeugen(Object.assign(abhBauen(t, geteilt), { lokalErlaubt: false }));
+    for (const x of ["https://" + ["10", "0", "0", "5"].join("."), "https://localhost", "https://server", "ftp://beispiel.example"]) {
+      assert.deepEqual([(await streng.codeVerbinden(neu.code(), x)).adresse], [true], x);
+    }
+    // falsch eingetippter Name des neuen Servers: nichts geändert
+    const fragen = [];
+    const falsch = S.erzeugen(abhBauen(t, Object.assign({ fragen, tippen: "anderer.example" }, geteilt)));
+    assert.deepEqual(await falsch.codeVerbinden(neu.code(), neu.konfig.adresse), { ok: false, abgebrochen: true });
+    assert.match(fragen[0], new RegExp(" Tippe zur Bestätigung den Namen des neuen Servers ein: " + hostNeu.replace(/\./g, "\\.") + "$"));
+    assert.equal(JSON.parse(A.a.geheimMap.get(GEHEIM_ID)).adresse, alt.konfig.adresse);
+    // richtig eingetippt: verbunden mit dem neuen Server, die Zeile wieder in Ordnung
+    const B = S.erzeugen(abhBauen(t, Object.assign({ tippen: hostNeu.toUpperCase() }, geteilt)));
+    assert.equal((await B.codeVerbinden(neu.code(), " " + neu.konfig.adresse + " ")).ok, true);
+    assert.equal(JSON.parse(A.a.geheimMap.get(GEHEIM_ID)).adresse, neu.konfig.adresse);
+    assert.equal((await B.abrufen()).art, "ok");
+    assert.deepEqual([B.status().code, B.status().weg, B.zeile().pille], ["", false, "an"]);
+
+    // Tage ohne Antwort (der alte Name zeigt ins Leere): status().weg, dann bietet das Fenster Code und Adresse an
+    const tot = S.erzeugen(abhBauen(t, Object.assign({ netz: async () => { throw new Error("weg"); } }, geteilt)));
+    await tot.abrufen({ manuell: true });
+    assert.equal(tot.status().weg, false, "ein Fehlschlag allein noch nicht");
+    uhr.t = new Date(START.getTime() + 4 * 86400000);
+    await tot.abrufen({ manuell: true });
+    assert.deepEqual([tot.status().code, tot.status().weg, tot.zeile().pille], ["netz", true, "pruefen"]);
+    assert.match(tot.zeile().text, /Hat er neue Schlüssel, verbindest du dieses Gerät mit einem Code von einem anderen Gerät\./);
+  } finally { await alt.zu(); await neu.zu(); }
 });
 
 test("Abruf: Termine als Notizen mit herkunft claude, Hinweise, Stand zurück, Server räumt auf; zweiter Abruf ändert nichts", async () => {
@@ -319,6 +467,46 @@ test("Auszug aus dem Tresor: Termine und To-dos gehen mit, nur geprüfte Felder,
     tresor = { termine: [], todos: [{ text: "Folien 2 lesen", code: "B110", frist: "" }] };
     await m.abrufen();
     assert.deepEqual(srv.stand().tresor.todos, [{ text: "Folien 2 lesen", code: "B110", frist: "" }], "geänderter Auszug geht gleich mit");
+  } finally { await srv.zu(); }
+});
+
+test("Zugangsdaten (Heuristik): unsichtbare Zeichen fallen vorher weg, neue Wörter und Schlüsselformen, Titel und Notizen auch", async () => {
+  const { I } = require("./ilias-attrappen.js");
+  const geheim = [
+    "Pass" + "wort: Fuchs77", "Pass\u200bwort für Moodle", "P\u00adasswort ändern", "Pass\u202ewort", "Kenn\ufeffwort ändern", "Ｐａｓｓｗｏｒｔ notieren",
+    "Zugangsdaten an das Tutorium", "Einschreibeschlüssel B110 eintragen", "Einschreibe-Schlüssel holen", "Passcode: 1234",
+    "Token: ab12cd34ef", "IBAN für die Rückmeldung", ["DE89", "3704", "0044", "0532", "0130", "00 überweisen"].join(" "), "sk-ant-api03-abc", "Schlüssel ghp_abc123 erneuern",
+    "github_pat_11ABCDEF ersetzen", "Matrikelnummer " + "1234" + "567 eintragen", "Matr.-Nr.: " + "12345" + "678", "iTAN: 482910", "PIN = 4821", "Zugangscode Lab",
+    "Login: lea.m!2026", "Der Code ist X7-k2-PQ", "Kurs-PW holen",
+    // ohne Trenner direkt vor Ziffern, „lautet“, und bei PIN, TAN, Token, Passcode nach „:“ jeder Wert
+    "PIN 1234", "Bank PIN 4711", "Kopierer-PIN 9876", "TAN 123456", "iTAN 482913", "Türcode 4711", "Schließfach-Code 1234", "PIN: Sommer",
+    "Token: abcd", "Der Code lautet X7-k2", "Passcode 7788",
+  ];
+  for (const s of geheim) assert.equal(S.siehtGeheimAus(s), true, s);
+  // nur mit der Erkennung aus ilias.js: Doppelgänger, PW-Formen, „Key: Wert“
+  for (const s of ["P\u0430sswort für den Kurs", "Kurs-PW: x7", "Key: Ab3x9"]) {
+    assert.equal(S.siehtGeheimAus(s, I.ohneKennwort), true, s);
+  }
+  const harmlos = ["Blatt 1 rechnen", "tan(x) ableiten", "Tutorium B110 anmelden → [[B110 Folien 01.pdf#page=3|S. 3]]", "Statistik & Wahrscheinlichkeit wiederholen",
+    "Pinnwand im Seminarraum lesen", "In ILIAS einloggen und Blatt holen", "Tangente zeichnen", "Kapitel 2 &amp; 3 lesen", "",
+    "Wiederholen: " + "Angebot und Nachfrage, ".repeat(20) + "Elastizitäten",
+    // Wörter, die auch sonst vorkommen, ohne einen Wert wie ein Geheimnis
+    "Code: B110 Hausaufgabe", "Login für Moodle besorgen", "Token Economy Vortrag", "PIN für Kopierer", "Matrikelnummer auf Klausur", "TAN-Liste holen",
+    "Anmeldung: Alma-Login", "Abgabe Code-Projekt", "Code: Kapitel lesen", "Pass: Mensa aufladen", "Login-Daten notieren", "Token ist Pflicht",
+    "WS26 ABCD EFGH IJKL", "Schlüssel: Kapitel 3 lesen", "Präsentation 10:15/11:45"];
+  for (const s of harmlos) assert.equal(S.siehtGeheimAus(s, I.ohneKennwort), false, s);
+
+  // im Auszug: To-do mit verstecktem Passwort im Text oder im Namen der Notiz und Termine mit solchen Titeln gehen nicht mit
+  const srv = await serverStarten();
+  try {
+    const tresorAuszug = {
+      termine: [{ titel: "Eigener Termin", datum: "2026-10-30", kategorie: "Lehre" }, { titel: "Pass\u200bwort-Frist Moodle", datum: "2026-10-31", kategorie: "Frist" }],
+      todos: [{ text: "Blatt 3 abgeben" }, { text: "Kenn\u200bwort ändern" }, { text: "Notieren", pfad: "Notizen/Meine Zugangsdaten.md" }, { text: "Kurs-PW: x7 merken" }],
+    };
+    const { m } = await verbunden(srv, undefined, { tresor: async () => tresorAuszug, ohneKennwort: I.ohneKennwort });
+    assert.equal((await m.abrufen()).art, "ok");
+    assert.deepEqual(srv.stand().tresor.termine.map((e) => e.titel), ["Eigener Termin"]);
+    assert.deepEqual(srv.stand().tresor.todos.map((e) => e.text), ["Blatt 3 abgeben"]);
   } finally { await srv.zu(); }
 });
 
@@ -600,7 +788,7 @@ test("Älterer Server ohne Art Lab: Lab-Unterlagen gehen nach einem Tag noch ein
       { datei: "Unterlagen/S110 Datenanalyse/S110 Folien 01.pdf", kennung: k("2"), art: "Folien", titel: "Folien 01", code: "S110", seiten: 30, text: "[S. 1]\nDaten" },
     ];
     let alt = true;
-    const netz = (a) => (alt && a.url.endsWith("/v1/unterlagen") ? Promise.resolve({ status: 200, text: JSON.stringify({ angenommen: 1 }) }) : netzEcht(a));
+    const netz = (a) => (alt && a.url.endsWith("/v1/unterlagen") ? signiert(srv, a, { status: 200, text: JSON.stringify({ angenommen: 1 }) }) : netzEcht(a));
     const { t, m } = await verbunden(srv, tresor(), { uhr, netz, unterlagen: async (o) => unterlagen.filter((u) => !o.ohne[u.kennung]) });
     const b1 = await m.abrufen();
     assert.deepEqual([b1.unterlagen, b1.serverAelter], [2, true]);
@@ -956,14 +1144,18 @@ test("Fehler: fremder Zugang, verändertes Paket, kein Netz; Status nach dem Ver
     assert.match(s.fehler, /kennt dieses Gerät nicht mehr/);
     assert.equal(m.meldungen, undefined, "kein Meldekanal an dich: der Zustand steht in der Zeile");
     a.geheimMap.set(GEHEIM_ID, JSON.stringify(v));
-    // Paket unterwegs verändert: AES-GCM lehnt ab, nichts wird übernommen
-    const verfaelscht = S.erzeugen(Object.assign({}, a, { netz: async (x) => {
+    // Paket unterwegs verändert: die Signatur der Antwort stimmt nicht mehr (wie ein Netzfehler); kommt es so vom Server selbst
+    // (signiert), lehnt AES-GCM ab; nichts wird übernommen
+    const veraendern = (mitSignatur) => async (x) => {
       const r = await netzEcht(x);
       if (!x.url.endsWith("/v1/eingang")) return r;
       const p = JSON.parse(r.text);
       p.daten = (p.daten[0] === "A" ? "B" : "A") + p.daten.slice(1);
-      return { status: r.status, text: JSON.stringify(p) };
-    } }));
+      const neu = { status: r.status, text: JSON.stringify(p), headers: r.headers };
+      return mitSignatur ? signiert(srv, x, neu) : neu;
+    };
+    assert.equal((await S.erzeugen(Object.assign({}, a, { netz: veraendern(false) })).abrufen()).fehler, "netz");
+    const verfaelscht = S.erzeugen(Object.assign({}, a, { netz: veraendern(true) }));
     assert.equal((await verfaelscht.abrufen()).fehler, "paket");
     assert.deepEqual(t.pfade("Termine/"), []);
     const ohneNetz = S.erzeugen(Object.assign({}, a, { netz: async () => { throw new Error("offline"); } }));
@@ -1082,6 +1274,386 @@ test("Neue Version des Servers: ein Fehlschlag steht nur im Fenster, nach 3 Tage
   } finally { await srv.zu(); }
 });
 
+test("Status: jede Anfrage mit dem Zugangsschlüssel, auch die erste nach dem Verbinden; neue Gründe und ziel des Servers", async () => {
+  const srv = await serverStarten();
+  try {
+    srv.konfig.version = "0.6.7";
+    // der Dienst antwortet echt; aktualisierung kommt hier aus dem Test, so wie ein neuerer Server sie meldet (mit neuen Gründen
+    // und einer Liste der letzten Verbindungen, die das Plugin übergeht)
+    const koepfe = [];
+    let akt = null;
+    const netz = async (anfrage) => {
+      const r = await netzEcht(anfrage);
+      if (!/\/v1\/status$/.test(anfrage.url)) return r;
+      koepfe.push((anfrage.headers || {}).authorization || "");
+      const o = JSON.parse(r.text);
+      if (akt) o.aktualisierung = akt;
+      o.verbunden = [{ zeit: "2026-10-18T07:00:00Z", herkunft: "obsidian" }];
+      return signiert(srv, anfrage, { status: r.status, text: JSON.stringify(o) });
+    };
+    const { a, m } = await verbunden(srv, tresor(), { netz });
+    a.zentral = () => Object.assign({}, Z, { stand: () => Object.assign({}, Z.stand(), { release: null }) });
+    const fall = async (x) => {
+      akt = x;
+      await m.abrufen({ manuell: true });
+      return { zeile: m.zeile(), fenster: ((await m.einzelheiten()).liste.find((e) => e[0] === "Neue Version") || [])[1], grund: (m.status().werte.aktualisierung || {}).grund };
+    };
+    let f = await fall(null);
+    assert.equal(koepfe.length, 1, "der erste Abruf nach dem Verbinden holt den Status");
+    assert.equal(koepfe.length, 1);
+    assert.match(koepfe[0], SIGNIERT, "signiert, nie der Schlüssel selbst");
+    assert.equal(f.fenster, undefined);
+    // Release ohne Paket: Der Server nennt das neuere Ziel selbst, auch ohne release in den zentralen Daten; nach 3 Tagen die Zeile
+    f = await fall({ zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "0.6.8", grund: "kein-paket", erfolg: "2026-10-17T02:00:00Z" });
+    assert.deepEqual([f.grund, f.zeile.pille], ["kein-paket", "an"]);
+    assert.match(f.fenster, /^noch kein Paket für den Server \(.+\), dein Server sieht täglich nach$/);
+    f = await fall({ zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "0.6.8", grund: "kein-paket", erfolg: "2026-10-14T02:00:00Z" });
+    assert.deepEqual([f.zeile.pille, f.fenster], ["pruefen", "seit mehr als 3 Tagen keine installiert"]);
+    // zurückgerollt: im Fenster, mit dem Tag Wartezeit
+    f = await fall({ zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "0.6.8", grund: "zurueckgerollt", erfolg: "2026-10-17T02:00:00Z" });
+    assert.match(f.fenster, /^zuletzt zurückgenommen \(.+\), dein Server versucht es nach einem Tag neu$/);
+    // Release nicht neuer als die laufende Version: still, auch lange danach
+    f = await fall({ zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "0.6.7", grund: "aelter", erfolg: "2026-10-10T02:00:00Z" });
+    assert.deepEqual([f.grund, f.zeile.pille, f.fenster], ["aelter", "an", undefined]);
+    // ein Grund, den das Plugin nicht kennt, und ein Ziel, das keine Version ist
+    f = await fall({ zeit: "2026-10-18T02:00:00Z", ok: false, ziel: "<b>neu</b>", grund: "irgendwas", erfolg: "2026-10-10T02:00:00Z" });
+    assert.deepEqual([f.grund, f.zeile.pille], ["unbekannt", "an"]);
+    assert.match(f.fenster, /^zuletzt ohne Erfolg/);
+    assert.ok(koepfe.length >= 6 && koepfe.every((k) => SIGNIERT.test(k) && !k.includes(srv.konfig.zugang)), "jeder Status signiert");
+    assert.equal(new Set(koepfe).size, koepfe.length, "jede Signatur nur einmal");
+  } finally { await srv.zu(); }
+});
+
+test("Status mit „Mit Code verbinden“: auch der erste Status des getippten Codes geht mit dem neuen Schlüssel", async () => {
+  const srv = await serverStarten();
+  try {
+    const koepfe = [];
+    const netz = async (anfrage) => {
+      if (/\/v1\/status$/.test(anfrage.url)) koepfe.push((anfrage.headers || {}).authorization || "");
+      return netzEcht(anfrage);
+    };
+    const a = abhBauen(tresor(), { netz }), m = S.erzeugen(a);
+    const r = await m.codeVerbinden(srv.code(), srv.konfig.adresse);
+    assert.equal(r.ok, true, r.fehler);
+    await m.abrufen();
+    assert.equal(koepfe.length, 1);
+    assert.match(koepfe[0], SIGNIERT);
+  } finally { await srv.zu(); }
+});
+
+test("Status mit Schlüssel: Verbindungen mit Gerät und Netz, Grenzen nur wenn nicht 0, beiseitegelegte Mails, gestaffelte Version", async () => {
+  const srv = await serverStarten();
+  try {
+    srv.konfig.version = "0.7.6";
+    const netz4 = ["203", "0", "113", "0/24"].join("."), netz6 = "2001:db8:12::/48";
+    let mehr = {};
+    const netz = async (anfrage) => {
+      const r = await netzEcht(anfrage);
+      if (!/\/v1\/status$/.test(anfrage.url)) return r;
+      return signiert(srv, anfrage, { status: r.status, text: JSON.stringify(Object.assign(JSON.parse(r.text), mehr)) });
+    };
+    const { a, m } = await verbunden(srv, tresor(), { netz });
+    a.zentral = () => Object.assign({}, Z, { stand: () => Object.assign({}, Z.stand(), { release: null }) });
+    const holen = async (x) => { mehr = x; await m.abrufen({ manuell: true }); return m.einzelheiten(); };
+    const wert = (d, k) => (d.liste.find((e) => e[0] === k) || [])[1];
+
+    // ein älterer Server ohne die Felder: wie bisher (der Server dieses Stands schickt verbunden und grenzen, hier weggenommen)
+    let d = await holen({ verbunden: undefined, grenzen: undefined });
+    assert.deepEqual([d.verbindungen, d.quarantaene, wert(d, "Mails"), wert(d, "Nicht lesbare Mails"), d.saetze], [[], 0, undefined, undefined, []]);
+
+    d = await holen({
+      verbunden: [
+        { zeit: "2026-10-17T09:15:00Z", herkunft: "cloud-shell", netz: netz6 },
+        { zeit: "2026-10-18T07:00:00Z", herkunft: "obsidian", netz: netz4, geraet: "iPad\u202e von <b>Lea</b>" },
+        { zeit: "kaputt", herkunft: "obsidian" }, { zeit: "2026-10-18T07:30:00Z", herkunft: "fremd" }, { zeit: "2026-10-16T08:00:00Z", herkunft: "obsidian", netz: "irgendwo" },
+      ],
+      grenzen: { tag: "2026-10-18", laeufe: 3, laeufe_max: 40, laeufe_mails: 2, laeufe_mails_max: 30, laeufe_knopf: 1, mails_wartend: 12, mails_verworfen: 1,
+        mails_zurueckgestellt: 9, mails_verschoben: 3, mails_verdacht: 2, zeichen_uni: 5000, zeichen_andere: 10, quarantaene: 3, quarantaene_geloescht: 0 },
+    });
+    assert.equal(d.verbindungen.length, 3, "nur gültige, neueste zuerst");
+    assert.match(d.verbindungen[0], /^\d\d:\d\d \(über Obsidian, „iPad von <b>Lea<\/b>“, Anschluss 203\.0\.113\.…\)$/);
+    assert.match(d.verbindungen[1], /^17\.10\., \d\d:\d\d \(über die Cloud Shell, Anschluss 2001:db8:12:…\)$/);
+    assert.match(d.verbindungen[2], /^16\.10\., \d\d:\d\d \(über Obsidian\)$/, "ungültiges Netz fällt weg");
+    assert.equal(wert(d, "Zuletzt verbunden"), d.verbindungen[0]);
+    assert.equal(wert(d, "Mails"), "12 Mails warten auf morgen", "zurückgestellt und verschoben zusammen");
+    assert.equal(wert(d, "Nicht lesbare Mails"), undefined);
+    assert.doesNotMatch(JSON.stringify(d.liste), /Läuf|laeuf|Zeichen/, "keine Zahlen der Läufe für Studierende");
+    assert.equal(d.quarantaene, 3);
+    assert.deepEqual(d.saetze, [], "nichts ausgelassen, nichts pausiert");
+
+    // ausgelassene Unterlagen und Folien zusammen, Pausen bis morgen: je ein ruhiger Satz, ohne Zahlen der Läufe und Fehlschläge
+    const g = { tag: "2026-10-18", laeufe_mails_uni: 7, laeufe_mails_uni_max: 30, fehlschlaege_gmail: 2, fehlschlaege_unterlagen: 2 };
+    d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: 2, kapitel_ausgelassen: 1, ausgesetzt_gmail: 1, ausgesetzt_unterlagen: 1, ausgesetzt_kapitel: 1 }) });
+    assert.deepEqual(d.saetze, ["3 Unterlagen konnte dein Server nicht lesen.", "Gmail ist bis morgen pausiert.", "Unterlagen sind bis morgen pausiert."]);
+    assert.doesNotMatch(JSON.stringify([d.liste, d.saetze]), /Fehlschl|fehlschlaege|laeufe|Läuf|ausgesetzt|ausgelassen/, "keine Zahlen der Läufe, kein Fachwort");
+    d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: 0, kapitel_ausgelassen: 1, ausgesetzt_kapitel: 1 }) });
+    assert.deepEqual(d.saetze, ["1 Unterlage konnte dein Server nicht lesen.", "Unterlagen sind bis morgen pausiert."]);
+    // falsche Form: nichts (keine Zahl, negativ, nicht ganz; pausiert nur genau 1)
+    d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: "viele", kapitel_ausgelassen: -2, ausgesetzt_gmail: true, ausgesetzt_unterlagen: 2, ausgesetzt_kapitel: "1" }) });
+    assert.deepEqual(d.saetze, []);
+    d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: 1.5, kapitel_ausgelassen: 1e12 }) });
+    assert.deepEqual(d.saetze, []);
+
+    // Grenzen 0 oder falsche Form: nichts; ältere nicht lesbare gelöscht: eine kurze Zeile
+    d = await holen({ grenzen: { tag: "2026-10-17", mails_zurueckgestellt: 0, mails_verschoben: 1, quarantaene: "viele", quarantaene_geloescht: 7 } });
+    assert.deepEqual([wert(d, "Mails"), wert(d, "Nicht lesbare Mails"), d.quarantaene], ["1 Mail wartet auf morgen", "die älteren hat dein Server gelöscht, damit der Platz reicht", 0]);
+    d = await holen({ grenzen: { tag: "gestern", mails_zurueckgestellt: 5 } });
+    assert.equal(wert(d, "Mails"), undefined);
+
+    // gestaffelte Verteilung: ok, eine neuere Version wartet bis zu ihrer Zeit; vorbei oder schon da: still
+    const akt = (x) => ({ aktualisierung: Object.assign({ zeit: "2026-10-18T02:00:00Z", ok: true, ziel: "0.7.7", grund: "", erfolg: "2026-10-18T02:00:00Z", installiert: "0.7.6" }, x) });
+    d = await holen(akt({ warten_bis: "2026-10-19T03:00:00Z" }));
+    assert.match(wert(d, "Neue Version"), /^0\.7\.7 installiert dein Server ab 19\.10\., \d\d:\d\d \(neue Versionen kommen nicht auf alle Server zugleich\)$/);
+    assert.equal(m.zeile().pille, "an");
+    assert.equal(wert(await holen(akt({ warten_bis: "2026-10-18T03:00:00Z" })), "Neue Version"), undefined, "Zeit vorbei");
+    assert.equal(wert(await holen(akt({ warten_bis: "2026-10-19T03:00:00Z", installiert: "0.7.7" })), "Neue Version"), undefined, "schon installiert");
+    // installiert zählt vor der Version des Web-Dienstes: seit Tagen nichts ohne Fehler und 0.7.7 läuft noch nicht
+    d = await holen(akt({ ok: false, grund: "installieren", erfolg: "2026-10-10T02:00:00Z" }));
+    assert.equal(wert(d, "Neue Version"), "seit mehr als 3 Tagen keine installiert");
+  } finally { await srv.zu(); }
+});
+
+test("Riegel: ein Server bis 0.7.7 bekommt den Zugangsschlüssel wie bisher, bis dieses Gerät einmal Signaturen von ihm gesehen hat; danach nie mehr", async () => {
+  const srv = await serverStarten();
+  try {
+    // Server bis 0.7.7 vor dem echten Dienst: signiert nur 401 ohne signatur (nach 10 Fehlversuchen seine Sperre), der Status offen
+    let alt = true, abgelehnt = 0;
+    const koepfe = [];
+    let statusVersion = "0.7.7";
+    const netz = async (a) => {
+      const kopf = String((a.headers || {}).authorization || "");
+      koepfe.push(a.url.replace(/^.*\/v1\//, "") + " " + kopf.split(" ")[0]);
+      if (alt && kopf.startsWith("Studium-Signatur ")) {
+        if (/\/v1\/status$/.test(a.url)) return { status: 200, text: JSON.stringify({ schema: 1, version: statusVersion, claude: "angemeldet" }) };
+        abgelehnt++;
+        return abgelehnt > 10 ? { status: 429, text: "{\"fehler\":\"zu-viele-versuche\"}" } : { status: 401, text: "{\"fehler\":\"zugang\"}" };
+      }
+      return netzEcht(a);
+    };
+    // ein Gerät, das noch mit 0.7.7 verbunden wurde: Schlüssel im Schlüsselbund, kein Riegel
+    const t = tresor();
+    const a = abhBauen(t, { netz });
+    a.geheimMap.set(GEHEIM_ID, JSON.stringify({ adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel }));
+    const m = S.erzeugen(a);
+    for (let i = 0; i < 30 && abgelehnt < 13; i++) assert.equal((await m.abrufen({ manuell: true })).art, "ok", "Abruf " + i);
+    assert.ok(abgelehnt > 10, "auch nach der Sperre des alten Servers");
+    assert.ok(koepfe.includes("eingang Studium-Signatur") && koepfe.includes("eingang Bearer"), "erst signiert, dann wie bis 0.7.7");
+    assert.deepEqual(await m.anstossen(), { ok: true });
+    assert.ok(koepfe.includes("anstoss Bearer"));
+    assert.equal(a.lokalMap.has("eba-server-signatur"), false, "kein Riegel");
+    // Der Server bekommt sein Update: die erste gelungene signierte Anfrage setzt den Riegel
+    alt = false;
+    assert.equal((await m.abrufen({ manuell: true })).art, "ok");
+    const riegel = a.lokalMap.get("eba-server-signatur");
+    assert.match(riegel.id, /^[0-9a-f]{32}$/);
+    assert.ok(!JSON.stringify(riegel).includes(srv.konfig.zugang));
+    // Danach antwortet jemand wie ein alter Server (Rückstufung): nie mehr Bearer, die Zeile sagt „nach seinem nächsten Update“
+    alt = true;
+    koepfe.length = 0;
+    const b = await m.abrufen({ manuell: true });
+    assert.deepEqual([b.art, b.fehler], ["fehler", "alt"]);
+    assert.deepEqual(await m.anstossen(), { fehler: "alt" });
+    assert.equal(a.lokalMap.get("eba-server-abruf").zugangSeit, "");
+    assert.ok(koepfe.length && koepfe.every((k) => !/Bearer/.test(k)), koepfe.join(", "));
+    // der Riegel steht nur im Gerätespeicher, nie im Tresor (Sync)
+    for (const [pfad, text] of t.m) assert.ok(!String(text).includes(riegel.id) && !/eba-server-signatur/.test(String(text)), pfad);
+    // ein anderes Gerät mit Sync, aber eigenem Speicher, hat keinen Riegel
+    const B = S.erzeugen(abhBauen(t, { netz, geheim: a.geheimMap, geraet: "g-ipad" }));
+    await B.abrufen({ manuell: true, uebernehmen: true });
+    assert.ok(koepfe.some((k) => /Bearer/.test(k)), "ohne Riegel wie bis 0.7.7");
+
+    // Nur eine signierte Antwort verriegelt: kein Status mit „neuer“ Version, keine 401 mit signatur: 1 ohne Signatur der Antwort
+    const c = abhBauen(tresor(), { netz: ohneMac(netzEcht), geheim: a.geheimMap });
+    statusVersion = "0.7.8";
+    alt = false;
+    assert.equal((await S.erzeugen(c).abrufen({ manuell: true })).art, "ok");
+    assert.equal(c.lokalMap.has("eba-server-signatur"), false, "ohne Signatur der Antwort kein Riegel");
+  } finally { await srv.zu(); }
+});
+
+test("Riegel: ein Gerät, das sich ab 0.7.8 verbindet, ist gleich verriegelt; Trennen löscht ihn", async () => {
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    const { a, m } = await verbunden(srv, t);
+    assert.match(a.lokalMap.get("eba-server-signatur").id, /^[0-9a-f]{32}$/);
+    for (const [, text] of t.m) assert.ok(!/eba-server-signatur/.test(String(text)));
+    await m.trennen();
+    assert.equal(a.lokalMap.has("eba-server-signatur"), false);
+  } finally { await srv.zu(); }
+});
+
+test("Riegel: verriegelt nur signierte Antworten; eine fehlende oder falsche Signatur gilt wie ein Netzfehler, nie als Ablehnung; ein Riegel, den der Gerätespeicher nicht nimmt, gilt trotzdem", async () => {
+  const { verschluesseln } = await modul("kanal.mjs");
+  const srv = await serverStarten({ jetzt: () => new Date(START) });
+  try {
+    let art = "";
+    const netz = async (a) => {
+      const r = await netzEcht(a);
+      if (!/\/v1\/eingang$/.test(a.url) || !art) return r;
+      const h = Object.assign({}, r.headers);
+      if (art === "ohne") delete h["studium-signatur"];
+      if (art === "falsch") h["studium-signatur"] = "v=1,mac=" + "A".repeat(43);
+      if (art === "anders") return signiert(srv, { headers: { authorization: "nonce=" + "z".repeat(22) } }, r); // Antwort zu einer anderen Anfrage
+      return Object.assign({}, r, { headers: h });
+    };
+    srv.eingang({ termine: [termin()] });
+    // der Gerätespeicher nimmt den Riegel nicht (voll): er gilt im Speicher des Plugins weiter
+    const lokal = new Map();
+    const a = abhBauen(tresor(), { netz, lokal });
+    const lokalEcht = a.lokal;
+    a.lokal = (k, v) => (k === "eba-server-signatur" && v !== undefined ? v : lokalEcht(k, v));
+    const m = S.erzeugen(a);
+    assert.equal((await m.verbinden(srv.konfig.adresse, srv.code())).ok, true);
+    assert.equal(lokal.has("eba-server-signatur"), false, "nicht gespeichert");
+    for (const x of ["ohne", "falsch", "anders"]) {
+      art = x;
+      const b = await m.abrufen({ manuell: true });
+      assert.deepEqual([b.art, b.fehler, a.lokalMap.get("eba-server-abruf").zugangSeit], ["fehler", "netz", ""], x);
+    }
+    art = "";
+    const ok = await m.abrufen({ manuell: true });
+    assert.deepEqual([ok.art, ok.angelegt.length], ["ok", 1], "erst die echte Antwort wird übernommen");
+    // Antwort auf „Weiteres Gerät verbinden“ mit dem Zweck einer Anfrage (verbinden): verriegelt abgelehnt
+    const gespiegelt = S.erzeugen(Object.assign({}, a, { netz: async (x) => (x.url.endsWith("/v1/geraet")
+      ? signiert(srv, x, { status: 200, text: JSON.stringify(await verschluesseln(srv.konfig.schluessel, "verbinden", { code: "ABCDE-FGHJK", ablauf: new Date().toISOString() })) })
+      : netzEcht(x)) }));
+    assert.deepEqual(await gespiegelt.geraetCode(), { fehler: "paket" });
+    assert.equal((await m.geraetCode()).ok, true, "die echte Antwort (verbinden-antwort) geht");
+    // ohne Riegel wird von dieser Antwort nichts verriegelt, was nicht signiert ist
+    const frisch = abhBauen(tresor(), { netz: ohneMac(netzEcht), geheim: a.geheimMap });
+    await S.erzeugen(frisch).abrufen({ manuell: true });
+    assert.equal(frisch.lokalMap.has("eba-server-signatur"), false);
+  } finally { await srv.zu(); }
+});
+
+test("Status 401 zählt wie abgelehnter Schlüssel, auch auf einem Gerät, das nicht übernimmt; Anstoß mit Retry-After und für beiseitegelegte Mails", async () => {
+  const srv = await serverStarten();
+  try {
+    let status401 = "", mitSignatur = false;
+    const anfragen = [];
+    let antwort429 = null;
+    const netz = async (anfrage) => {
+      anfragen.push(anfrage);
+      if (status401 && /\/v1\/status$/.test(anfrage.url)) {
+        const x = { status: 401, text: status401 };
+        return mitSignatur ? signiert(srv, anfrage, x) : x;
+      }
+      if (antwort429 && /\/v1\/anstoss$/.test(anfrage.url)) return signiert(srv, anfrage, antwort429);
+      return netzEcht(anfrage);
+    };
+    const t = tresor();
+    const { a, m } = await verbunden(srv, t, { netz });
+    assert.equal((await m.abrufen()).art, "ok");
+    const eingaenge = () => anfragen.filter((x) => /\/v1\/eingang$/.test(x.url)).length;
+    const vorher = eingaenge();
+    // ein Server bis 0.7.7 kennt keine Signaturen (seine 401 nennt signatur nicht): kein abgelehnter Schlüssel, er kommt mit seinem Update
+    status401 = "{\"fehler\":\"zugang\"}";
+    const alt = await m.abrufen({ manuell: true });
+    assert.deepEqual([alt.art, alt.fehler, m.status().code], ["fehler", "alt", "alt"]);
+    assert.equal(a.lokalMap.get("eba-server-abruf").zugangSeit, "", "zählt nicht als abgelehnt");
+    assert.equal(m.status().fehler, "Dein Server kann das erst nach seinem nächsten Update. Er aktualisiert sich täglich.");
+    // Uhr dieses Geräts falsch (der Server signiert auch diese Antwort): eigener Satz, auch kein abgelehnter Schlüssel
+    status401 = "{\"fehler\":\"uhr\",\"signatur\":1}";
+    mitSignatur = true;
+    assert.deepEqual([(await m.abrufen({ manuell: true })).fehler, a.lokalMap.get("eba-server-abruf").zugangSeit], ["uhr", ""]);
+    assert.equal(m.status().fehler, "Die Uhr dieses Geräts geht falsch. Stell sie richtig, dann klappt es wieder.");
+    // verriegelt: eine 401 ohne gültige Signatur gilt nie als Ablehnung (wie ein Netzfehler; der Eingang danach kommt echt)
+    mitSignatur = false;
+    status401 = "{\"fehler\":\"zugang\",\"signatur\":1}";
+    assert.equal((await m.abrufen({ manuell: true })).art, "ok");
+    assert.equal(a.lokalMap.get("eba-server-abruf").zugangSeit, "");
+    // ohne Riegel (das Gerät sah nie eine signierte Antwort) zählt sie: Schlüssel abgelehnt, kein Eingang mehr
+    const U = abhBauen(t, { netz: ohneMac(netz), geheim: a.geheimMap, geraet: "g-alt" }), u = S.erzeugen(U);
+    const b = await u.abrufen({ manuell: true, uebernehmen: true });
+    assert.deepEqual([b.art, b.fehler, u.status().code], ["fehler", "zugang", "zugang"]);
+    assert.equal(eingaenge(), vorher + 1, "danach kein Eingang mehr");
+    assert.equal(u.status().erreichbar, true, "erreichbar, nur der Schlüssel gilt nicht");
+    status401 = "";
+    assert.equal((await u.abrufen({ manuell: true, uebernehmen: true })).art, "ok", "ein Erfolg hebt es auf");
+    // ein zweites Gerät am selben Tresor, das die Sperre nicht bekommt, merkt die Ablehnung auch
+    const B = S.erzeugen(abhBauen(t, { netz: ohneMac(netz), geheim: a.geheimMap, geraet: "g-ipad" }));
+    assert.equal((await B.abrufen({ manuell: true })).art, "anderes-geraet");
+    status401 = "{\"fehler\":\"zugang\",\"signatur\":1}";
+    assert.equal((await B.abrufen({ manuell: true })).fehler, "zugang");
+    status401 = "";
+
+    // 429 nur mit Retry-After (Sekunden)
+    antwort429 = { status: 429, text: "{}", headers: { "retry-after": "1800" } };
+    assert.deepEqual(await m.anstossen(), { fehler: "zu-frueh", wieder: new Date(START.getTime() + 1800e3).toISOString() });
+    antwort429 = { status: 429, text: "{}", headers: { "retry-after": "bald" } };
+    assert.deepEqual(await m.anstossen(), { fehler: "zu-frueh" });
+    antwort429 = null;
+    assert.equal(S.zuFruehText(new Date(START.getTime() + 1800e3).toISOString(), START), "Dein Server hat gerade erst nach Mails gesucht. Wieder möglich ab 10:30.");
+    assert.equal(S.zuFruehText("2026-10-19T07:15:00", START), "Dein Server hat gerade erst nach Mails gesucht. Wieder möglich ab 19.10., 07:15.");
+    assert.equal(S.zuFruehText("", START), "Dein Server hat gerade erst nach Mails gesucht. Versuch es später wieder.");
+    // beiseitegelegte Mails noch einmal: derselbe Anstoß mit quarantaene im Körper
+    assert.deepEqual(await m.anstossen({ quarantaene: true }), { ok: true });
+    const letzter = anfragen.filter((x) => /\/v1\/anstoss$/.test(x.url)).pop();
+    assert.deepEqual([JSON.parse(letzter.body), letzter.headers["content-type"]], [{ quarantaene: "erneut" }, "application/json"]);
+    assert.match(letzter.headers.authorization, SIGNIERT_BEWEIS, "Anstoß signiert und mit Beweis des Datenschlüssels");
+  } finally { await srv.zu(); }
+});
+
+test("Rückgängig merkt sich nur geänderte Zeilen, höchstens 200 KB, und ein voller Gerätespeicher stört den Abruf nicht", async () => {
+  // Zeilen-Block: Anfang und Ende gleich, dazwischen vorher/nachher; zurück nur, solange der Block noch so dasteht
+  const alt = "---\nherkunft: claude\ndatum: 2026-10-27\n---\n\n# Titel\n\nText\r\nmehr\n", neu = "---\nherkunft: claude\ndatum: 2026-10-28\n---\n\n# Titel\n\nText\r\nmehr\nNeue Frist.\n";
+  const d = S.zeilenDiff(alt, neu);
+  assert.deepEqual(d, { von: 2, alt: ["datum: 2026-10-27", "---", "", "# Titel", "", "Text\r", "mehr"], neu: ["datum: 2026-10-28", "---", "", "# Titel", "", "Text\r", "mehr", "Neue Frist."] });
+  assert.equal(S.zeilenZurueck(neu, d), alt);
+  assert.equal(S.zeilenZurueck(neu.replace("Neue Frist.", "Meine Frist."), d), null, "selbst geändert");
+  assert.equal(S.zeilenZurueck("kurz", d), null);
+  assert.equal(S.zeilenZurueck(neu, { von: "2", alt: [], neu: [] }), null, "falsche Form");
+  assert.equal(S.zeilenZurueck("a\nb", S.zeilenDiff("a\nb", "a\nb")), "a\nb", "nichts geändert");
+  const klein = S.zeilenDiff("a\nb\nc\n" + "x\n".repeat(5000), "a\nB\nc\n" + "x\n".repeat(5000));
+  assert.deepEqual([klein.von, klein.alt, klein.neu], [1, ["b"], ["B"]], "nur die eine Zeile, nicht die ganze Notiz");
+  // Kappen: die neuesten bleiben, zusammen höchstens 200 KB
+  const gross = (n) => ({ art: "termin", pfad: "Termine/" + n + ".md", von: 0, alt: ["x".repeat(30000)], neu: ["y"] });
+  const liste = Array.from({ length: 10 }, (_, i) => gross(i));
+  const k = S.rueckKappen(liste);
+  assert.ok(JSON.stringify(k).length <= 200000 && k.length >= 5, "unter der Grenze");
+  assert.equal(k[k.length - 1].pfad, "Termine/9.md", "die neuesten bleiben");
+  assert.equal(S.rueckKappen(Array.from({ length: 300 }, (_, i) => ({ art: "todo", pfad: String(i) }))).length, 200);
+
+  // im Abruf: nie ganze Notizen im Gerätespeicher; ein Speicher, der beim Schreiben wirft, lässt den Abruf gelingen
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    srv.eingang({ termine: [termin()] });
+    const { a, m } = await verbunden(srv, t);
+    await m.abrufen();
+    const p = "Termine/2026-10-27 B110 Anmeldung Tutorium.md";
+    t.m.set(p, t.m.get(p) + "\n" + "Eigene Notiz. ".repeat(2000) + "\n");
+    srv.eingang({ termine: [termin({ info: "Neue Frist." })] });
+    await m.abrufen();
+    const gemerkt = JSON.stringify(a.lokalMap.get("eba-server-rueckgaengig"));
+    assert.ok(gemerkt.length < 2000 && gemerkt.indexOf("Eigene Notiz.") < 0, "nur der geänderte Block");
+    assert.deepEqual(await m.rueckgaengig(), { zurueck: 1, uebersprungen: 0 });
+    assert.doesNotMatch(t.m.get(p), /Neue Frist\./);
+    assert.match(t.m.get(p), /Eigene Notiz\./, "deine Ergänzung bleibt");
+
+    const wirft = Object.assign({}, a, { lokal: (k2, v) => { if (k2 === "eba-server-rueckgaengig" && v !== undefined) throw new Error("voll"); return a.lokal(k2, v); } });
+    const m2 = S.erzeugen(wirft);
+    srv.eingang({ termine: [termin({ info: "Noch neuer." })] });
+    assert.equal((await m2.abrufen()).art, "ok");
+    assert.match(t.m.get(p), /Noch neuer\./);
+  } finally { await srv.zu(); }
+});
+
+test("Rückgängig: alte Einträge mit ganzen Notizen fallen beim Laden weg, eine negative Stelle gilt nicht", () => {
+  assert.equal(S.zeilenZurueck("a\nb\nc", { von: -1, alt: ["Q"], neu: [] }), null);
+  const lokal = new Map();
+  const altForm = { zeit: "2026-10-18T08:00:00.000Z", aenderungen: [{ art: "termin", pfad: "Termine/x.md", alt: "ganze Notiz vorher", neu: "ganze Notiz nachher" }] };
+  const neuForm = { zeit: "2026-10-18T08:00:00.000Z", aenderungen: [{ art: "termin", pfad: "Termine/x.md", hash: "abc", von: 1, alt: ["a"], neu: ["b"] },
+    { art: "todo", pfad: "Unterlagen/x.md", id: "t-1", alt: "- [ ] a", neu: "- a" }] };
+  lokal.set("eba-server-rueckgaengig", altForm);
+  S.erzeugen(abhBauen(tresor(), { lokal }));
+  assert.equal(lokal.has("eba-server-rueckgaengig"), false, "alte Form gelöscht");
+  lokal.set("eba-server-rueckgaengig", neuForm);
+  S.erzeugen(abhBauen(tresor(), { lokal }));
+  assert.deepEqual(lokal.get("eba-server-rueckgaengig"), neuForm, "neue Form bleibt");
+});
+
 test("Neue Hinweise: Link „Hinweise ansehen“ in der Zeile, kein „Bitte prüfen“; gesehen je Gerät, nach 14 Tagen nicht mehr neu", async () => {
   const srv = await serverStarten();
   try {
@@ -1098,7 +1670,7 @@ test("Neue Hinweise: Link „Hinweise ansehen“ in der Zeile, kein „Bitte pr�
     assert.equal(ipad.neueHinweise(), 0, "vor dem Lesen nichts");
     await ipad.hinweiseLaden();
     assert.equal(ipad.status().zustand, "anderswo");
-    assert.equal(ipad.zeile().link.text, "Hinweise ansehen");
+    assert.equal(ipad.zeile().link.text, "Mehr erfahren", "ohne Schlüsselbund zeigt das Fenster die Hinweise aus server.json nicht");
     assert.equal(ipad.neueHinweise(), 2);
     m.hinweiseGesehen();
     assert.equal(m.zeile().link.text, "Mehr erfahren", "im Fenster gesehen: wieder „Mehr erfahren“");
@@ -1145,7 +1717,7 @@ test("Verbindungen: ohne Server leise „Für Technische“ mit Mehr erfahren, v
     zeile: () => ({ text: "Auf einem anderen Gerät verbunden.", symbol: "haken", pille: "", knopf: null, link: MEHR }) });
   assert.match(anderswo.liste.server.schritte[0], /\*\*Weiteres Gerät verbinden\*\*/, "anderes Gerät: Code von einem verbundenen Gerät");
   assert.match(anderswo.liste.server.schritte[1], /\*\*Mit Code verbinden\*\*/);
-  assert.match(anderswo.liste.server.schritte[2], /fern\.sh verbinden/, "ohne verbundenes Gerät: Link aus der Cloud Shell");
+  assert.match(anderswo.liste.server.schritte[2], /fern\.sh verbinden/, "ohne verbundenes Gerät: Code aus der Cloud Shell");
   assert.equal(anderswo.zeile("server").knopf, "");
   const hier = aufbau({ sichtbar: () => true, verbunden: () => true, status: () => ({ verbunden: true }),
     zeile: () => ({ text: "Ein anderes Gerät holt die Termine ab.", symbol: "haken", pille: "an",
@@ -1203,4 +1775,206 @@ test("LiveSync im Fenster „Eigener Server“: nur verbunden und ohne LiveSync 
   assert.match(fs.readFileSync(path.join(skill, "SKILL.md"), "utf8"), /„Richte LiveSync ein“.*livesync\.md/);
   assert.match(fs.readFileSync(path.join(skill, "livesync.md"), "utf8"), /^# LiveSync einrichten$/m, "Abschnitt, den der Prompt nennt");
   assert.match(S.LIVESYNC_PROMPT, /„LiveSync einrichten“/);
+});
+
+test("Adresse eines eigenen Servers: nur Namen im Internet, nie IP-Adressen, localhost oder das eigene Netz", () => {
+  // Namensdienste, die eine IP im Namen tragen (wie die Adresse aus der Einrichtung), und IPs aus dem eigenen Netz zusammengesetzt
+  const SS = ".ss" + "lip.io", NI = ".ni" + "p.io", ip = (...z) => z.join(".");
+  const gut = ["https://203-0-113-5" + SS, "https://" + ip(203, 0, 113, 5) + SS, "https://84-1-2-3" + NI, "https://studium.beispiel.de",
+    "https://müller.de", "https://myhost.corp", "https://Studium.Beispiel.DE/"];
+  for (const a of gut) assert.ok(S.adresseNormal(a), a);
+  assert.equal(S.adresseNormal("https://Studium.Beispiel.DE/"), "https://studium.beispiel.de");
+  const schlecht = ["https://127.0.0.1", "https://2130706433", "https://0x7f000001", "https://0x7f.1", "https://" + ip("0177", 0, 0, 1), "https://" + ip(10, 1, 2, 3),
+    "https://" + ip(192, 168, 0, 10), "https://[::1]", "https://[fe80::1]", "https://[fd00::1]", "https://localhost", "https://LOCALHOST", "https://foo.localhost",
+    "https://server", "https://beispiel.de.", "https://1.2.3", "https://printer.local", "https://nas.home.arpa", "https://box.lan", "https://x.internal",
+    "https://127-0-0-1" + SS, "https://10-0-0-1" + SS, "https://" + ip(192, 168, 1, 2) + SS, "https://172-20-0-1" + SS, "https://169-254-169-254" + SS,
+    "https://100-64-0-1" + SS, "https://0-0-0-0" + SS, "https://224-0-0-1" + NI, "https://7f000001" + SS, "https://foo.10-0-0-1" + SS,
+    "https://--1" + SS, "https://300-1-2-3" + SS, "http://studium.beispiel.de", "https://studium.beispiel.de:8443",
+    "https://-x.beispiel.de", "https://a_b.beispiel.de",
+    // Namen für besondere Zwecke, immer aufs eigene Gerät zeigende Namen, Dienste mit der IP im Namen nur mit öffentlicher IPv4
+    "https://server.example", "https://x.test", "https://x.invalid", "https://fritz.box", "https://router.lan", "https://x.home.arpa", "https://a.b.internal",
+    "https://lvh.me", "https://app.lvh.me", "https://localtest.me", "https://" + ip(192, 168, 1, 1).replace(/\./g, "-") + ".traefik.me", "https://traefik.me",
+    "https://198-18-0-1" + SS, "https://198-19-255-1" + NI, "https://" + ip(127, 0, 0, 1) + ".traefik.me", "https://ss" + "lip.io", "https://x" + SS,
+    "https://c0a80101" + NI, "https://app-" + ip(192, 168, 1, 1).replace(/\./g, "-") + NI];
+  for (const a of schlecht) assert.equal(S.adresseNormal(a), "", a);
+  assert.equal(S.adresseNormal("https://84-1-2-3.traefik.me"), "https://84-1-2-3.traefik.me", "öffentliche IP bei traefik.me");
+  // eingetippt ohne https://: dieselben Regeln
+  assert.equal(S.adresseEingabe("203-0-113-5" + SS), "https://203-0-113-5" + SS);
+  assert.equal(S.adresseEingabe(ip(192, 168, 0, 10)), "");
+  assert.equal(S.adresseEingabe("localhost"), "");
+  // nur im Test: http://127.0.0.1 mit Port
+  assert.equal(S.adresseNormal("http://127.0.0.1:8743", true), "http://127.0.0.1:8743");
+  assert.equal(S.adresseNormal("http://127.0.0.1:8743"), "");
+});
+
+test("Link „server-verbinden“ von außerhalb der App: verbindet nie, fragt nichts, geht nicht ins Netz; ein Hinweis nennt den Weg in der App", async () => {
+  const hinweise = [], netz = [];
+  const L = laden("server", { heute: "2026-10-18", kontext: { zentral: Z, obsidian: Object.assign({}, OBS, {
+    Notice: class { constructor(t) { hinweise.push(String(t)); } setMessage() {} hide() {} },
+    requestUrl: async (a) => { netz.push(a.url); throw new Error("kein Netz im Test"); } }) } });
+  const aktion = L.ergebnis.aktionen["server-verbinden"];
+  await aktion.ausfuehren({ parameter: { adresse: "https://studium.beispiel.de", code: "ABCDE-FGHJK" }, extern: true });
+  assert.deepEqual(netz, []);
+  assert.deepEqual(hinweise, ["Links von außerhalb von Obsidian verbinden keinen Server. Gib den Code unter Einstellungen & Hilfe → Verbindungen bei „Eigener Server“ ein."]);
+});
+
+test("Verbinden ohne Schlüsselbund: Name des Servers immer eintippen, auch wenn server.json ihn nennt; von außen öffnet kein Alias das Fenster", async () => {
+  const srv = await serverStarten();
+  try {
+    const anders = srv.konfig.adresse.replace("127.0.0.1", "localhost");
+    const t = tresor({ "System/Daten/server.json": JSON.stringify({ schema: 1, erledigt: {}, adresse: anders }) });
+    const fragen = [];
+    const nein = S.erzeugen(abhBauen(t, { fragen, tippen: "falsch.example" }));
+    assert.deepEqual(await nein.verbinden(srv.konfig.adresse, srv.code()), { ok: false, abgebrochen: true });
+    assert.match(fragen[0], /^In deinem Tresor steht ein anderer Server: localhost:\d+\. Dieses Gerät schickt dann regelmäßig an 127\.0\.0\.1:\d+: /);
+    const ja = S.erzeugen(abhBauen(t, { tippen: srv.konfig.adresse.replace("http://", "") }));
+    assert.equal((await ja.verbinden(srv.konfig.adresse, srv.code())).ok, true);
+    // dieselbe Adresse wie in server.json (die jedes Gerät mit Sync schreiben kann): trotzdem eintippen
+    const gleich = [];
+    const t2 = tresor({ "System/Daten/server.json": JSON.stringify({ schema: 1, erledigt: {}, adresse: srv.konfig.adresse }) });
+    assert.deepEqual(await S.erzeugen(abhBauen(t2, { fragen: gleich, tippen: null })).verbinden(srv.konfig.adresse, srv.code()), { ok: false, abgebrochen: true });
+    assert.match(gleich[0], /^Dieses Gerät schickt .* Tippe zur Bestätigung den Namen deines Servers ein: 127\.0\.0\.1:\d+$/);
+    // selbst ins leere Feld getippt („Mit Code verbinden“): die gewöhnliche Rückfrage, aber nicht, wenn es genau die Adresse aus
+    // server.json ist (jemand mit Sync könnte sie samt Hinweis zum Abtippen dort hineingeschrieben haben)
+    const gleichGetippt = [];
+    assert.deepEqual(await S.erzeugen(abhBauen(t2, { fragen: gleichGetippt, tippen: null })).codeVerbinden(srv.code(), srv.konfig.adresse), { ok: false, abgebrochen: true });
+    assert.match(gleichGetippt[0], / Tippe zur Bestätigung den Namen deines Servers ein: /);
+    const selbst = [];
+    assert.equal((await S.erzeugen(abhBauen(tresor(), { fragen: selbst, tippen: null })).codeVerbinden(srv.code(), srv.konfig.adresse)).ok, true);
+    assert.doesNotMatch(selbst[0], /Tippe zur Bestätigung/);
+
+    // von außen (c.extern): weder „verbinden“ noch „verbindung-aktualisieren“ öffnen das Fenster des Servers, nur der Hinweis
+    const hinweise = [], offen = [];
+    const V = laden("verbindungen", { kontext: {
+      obsidian: Object.assign({}, OBS, { Modal: class { open() { offen.push("fenster"); } } }),
+      server: { VON_AUSSEN: S.VON_AUSSEN, sichtbar: () => true, verbunden: () => false, status: () => ({ verbunden: false }), zeile: () => ({}) },
+      hinweis: (x) => hinweise.push(x) } });
+    const aktionen = V.ergebnis.aktionen;
+    for (const name of ["verbinden", "verbindung-aktualisieren"]) await aktionen[name].ausfuehren({ extern: true, parameter: { id: "server" } });
+    assert.deepEqual([hinweise, offen], [[S.VON_AUSSEN, S.VON_AUSSEN], []]);
+  } finally { await srv.zu(); }
+});
+
+test("Schlüssel abgelehnt (Gerät ohne Riegel): nach 3 Tagen nur 401 fragt das Gerät nicht mehr von selbst, die Zeile sagt es; ein Erfolg oder neues Verbinden hebt es auf", async () => {
+  const { neuerSchluessel } = await modul("kanal.mjs");
+  const uhr = { t: START };
+  const srv = await serverStarten({ jetzt: () => new Date(uhr.t) });
+  try {
+    // ein Gerät, das nie eine signierte Antwort sah (verriegelt gälte eine Ablehnung ohne gültige Signatur wie ein Netzfehler)
+    const t = tresor();
+    const A = await verbunden(srv, t, { uhr, netz: ohneMac(netzEcht) });
+    A.a.lokalMap.delete("eba-server-signatur");
+    A.m = S.erzeugen(A.a);
+    assert.equal((await A.m.abrufen()).art, "ok");
+    const echt = srv.konfig.zugang;
+    srv.konfig.zugang = neuerSchluessel(); // der Server hat neue Schlüssel (neue Adresse)
+    const tag = 1440 * 60e3;
+    assert.equal((await A.m.abrufen()).fehler, "zugang");
+    assert.equal(A.m.ruht(), false, "gerade erst abgelehnt");
+    uhr.t = new Date(START.getTime() + 2 * tag);
+    await A.m.abrufen();
+    assert.equal(A.m.ruht(), false, "2 Tage");
+    uhr.t = new Date(START.getTime() + 3 * tag + 60e3);
+    await A.m.abrufen();
+    assert.deepEqual([A.m.ruht(), A.m.status().ruht], [true, true], "über 3 Tage nur abgelehnt");
+    const z = A.m.zeile();
+    assert.equal(z.text, "Dein Server kennt dieses Gerät nicht mehr. Bitte neu verbinden. Bis dahin fragt dieses Gerät nicht mehr von selbst nach.");
+    assert.deepEqual([z.pille, z.knopf], ["pruefen", null]);
+    // ein Erfolg (der Server nimmt den Schlüssel wieder) hebt es auf
+    srv.konfig.zugang = echt;
+    assert.equal((await A.m.abrufen({ manuell: true })).art, "ok");
+    assert.equal(A.m.ruht(), false);
+    // Netzfehler zwischen den Ablehnungen zählen weiter mit; neues Verbinden hebt es auf
+    srv.konfig.zugang = neuerSchluessel();
+    await A.m.abrufen();
+    const nie = S.erzeugen(Object.assign({}, A.a, { netz: async () => { throw new Error("offline"); } }));
+    uhr.t = new Date(uhr.t.getTime() + 2 * tag);
+    await nie.abrufen();
+    uhr.t = new Date(uhr.t.getTime() + 2 * tag);
+    await A.m.abrufen();
+    assert.equal(A.m.ruht(), true, "401, Netzfehler, 401 über 4 Tage");
+    // zuletzt ohne Netz (Ausfall am Wochenende): ruht nicht, er fragt wieder; die nächste 401 lässt ihn gleich wieder ruhen
+    await nie.abrufen();
+    assert.deepEqual([A.m.status().code, A.m.ruht()], ["netz", false]);
+    await A.m.abrufen();
+    assert.equal(A.m.ruht(), true, "die Reihe aus 401 läuft weiter");
+    // eine andere Antwort des Servers (hier 502) beendet die Reihe; der Status gibt mit dem alten Schlüssel ebenfalls 401, darum
+    // antwortet hier auch er mit 502
+    const kaputt = S.erzeugen(Object.assign({}, A.a, { netz: async (x) => (/\/v1\/(?:eingang|status)$/.test(x.url) ? { status: 502, text: "" } : netzEcht(x)) }));
+    await kaputt.abrufen({ manuell: true });
+    await A.m.abrufen();
+    assert.equal(A.m.ruht(), false, "nach einer Antwort ohne 401 beginnt die Reihe neu");
+    srv.konfig.zugang = echt;
+    assert.equal((await S.erzeugen(abhBauen(t, { uhr, geheim: A.a.geheimMap, lokal: A.a.lokalMap })).codeVerbinden(srv.code())).ok, true);
+    assert.equal(A.m.ruht(), false, "neu verbunden");
+  } finally { await srv.zu(); }
+});
+
+test("Neue Schlüssel (studium-server schluessel-erneuern): ein Gerät mit Riegel sagt es gleich, nicht erst nach Tagen; mit einem Code ist es wieder da", async () => {
+  const { neuerSchluessel } = await modul("kanal.mjs");
+  const uhr = { t: START };
+  const srv = await serverStarten({ jetzt: () => new Date(uhr.t) });
+  try {
+    const t = tresor();
+    const A = await verbunden(srv, t, { uhr });
+    assert.equal((await A.m.abrufen()).art, "ok");
+    assert.ok(A.a.lokalMap.get("eba-server-signatur"), "verriegelt");
+    // wie schluessel_erneuern in server/studium-server: die alten daneben, mit der Zeit
+    Object.assign(srv.konfig, { zugang_alt: srv.konfig.zugang, schluessel_alt: srv.konfig.schluessel, erneuert: new Date(uhr.t).toISOString(),
+      zugang: neuerSchluessel(), schluessel: neuerSchluessel() });
+    const r = await A.m.abrufen({ manuell: true });
+    assert.deepEqual([r.art, r.fehler, A.m.status().code, A.m.status().erreichbar], ["fehler", "erneuert", "erneuert", true]);
+    const z = A.m.zeile();
+    assert.deepEqual([z.text, z.symbol, z.pille], ["Dein Server hat neue Schlüssel. Verbinde dieses Gerät mit einem Code.", "warnung", "pruefen"]);
+    assert.deepEqual(await A.m.geraetCode(), { fehler: "erneuert" });
+    // nach 30 Tagen kennt der Server die alten nicht mehr: mit Riegel sieht das Gerät dann nur eine Antwort ohne Signatur (wie ein Netzfehler)
+    uhr.t = new Date(START.getTime() + 31 * 1440 * 60e3);
+    assert.deepEqual([(await A.m.abrufen({ manuell: true })).fehler, A.m.status().code], ["netz", "netz"]);
+    // ein Code von einem anderen Gerät verbindet es wieder (der Code gilt nach der echten Uhr, die des Dienstes zurück)
+    uhr.t = START;
+    const neu = await S.erzeugen(abhBauen(t, { uhr, geheim: A.a.geheimMap, lokal: A.a.lokalMap })).codeVerbinden(srv.code());
+    assert.equal(neu.ok, true, neu.fehler);
+    assert.equal((await A.m.abrufen({ manuell: true })).art, "ok");
+  } finally { await srv.zu(); }
+});
+
+test("Rückgängig: zusammengeführte To-dos und geänderte Termine des letzten Abrufs, nur was noch so dasteht; ein zurückgenommenes To-do bleibt offen", async () => {
+  const srv = await serverStarten();
+  try {
+    const faq = "Unterlagen/B110 Einführung/B110 Sonstiges FAQ.md", folien = "Unterlagen/B110 Einführung/B110 Folien 01.md";
+    const t = tresor({
+      [faq]: "---\ntyp: unterlage\n---\n\n# FAQ\n\n## Zu tun\n- [ ] Für das Tutorium in ILIAS anmelden (bis 27.10.)\n",
+      [folien]: "---\ntyp: unterlage\n---\n\n# Folien 01\n\n## Zu tun\n- [ ] Tutorium B110 anmelden\n- [ ] Blatt 1 rechnen\n",
+    });
+    let stand = todosAus(t);
+    const id = (pfad, anfang) => stand.todos.find((x) => x.pfad === pfad && x.roh.indexOf(anfang) >= 0).id;
+    srv.eingang({ termine: [termin(), blatt] });
+    const { m } = await verbunden(srv, t, { tresor: async () => stand });
+    await m.abrufen();
+    assert.equal(m.rueckStand(), null, "neue Notizen sind keine Änderung");
+    const p = "Termine/2026-10-27 B110 Anmeldung Tutorium.md", alt = t.m.get(p), blattPfad = "Termine/2026-11-03 Abgabe Übungsblatt 2.md";
+    const A = id(faq, "- [ ] Für"), B = id(folien, "- [ ] Tutorium");
+    const vorherFolien = t.m.get(folien), vorherBlatt = t.m.get(blattPfad);
+    srv.eingang({ termine: [termin({ datum: "2026-10-28", info: "Neue Frist." }), Object.assign({}, blatt, { entfaellt: true })], todo_doppel: [{ behalten: A, weg: B }] });
+    const b = await m.abrufen();
+    assert.equal(b.todoDoppel.length, 1);
+    const neuPfad = "Termine/2026-10-28 B110 Anmeldung Tutorium.md";
+    assert.ok(t.m.has(neuPfad) && !t.m.has(p));
+    const r = m.rueckStand();
+    assert.deepEqual([r.todos, r.termine], [1, 2]);
+    assert.match(r.wann, /^\d{2}:\d{2}$|^\d{2}\.\d{2}\., \d{2}:\d{2}$/);
+    // die Absage hast du inzwischen selbst ergänzt: sie bleibt
+    t.m.set(blattPfad, t.m.get(blattPfad) + "Schon erledigt.\n");
+    assert.deepEqual(await m.rueckgaengig(), { zurueck: 2, uebersprungen: 1 });
+    assert.equal(t.m.get(folien), vorherFolien, "To-do wieder offen");
+    assert.equal(t.m.get(p), alt, "Termin wieder mit altem Datum und Namen");
+    assert.ok(!t.m.has(neuPfad));
+    assert.notEqual(t.m.get(blattPfad), vorherBlatt, "deine Fassung bleibt");
+    assert.equal(m.rueckStand(), null, "nur einmal");
+    // schlägt der Server dasselbe Paar wieder vor, bleibt das To-do offen
+    stand = todosAus(t);
+    srv.eingang({ termine: [], todo_doppel: [{ behalten: A, weg: id(folien, "- [ ] Tutorium") }] });
+    assert.deepEqual((await m.abrufen()).todoDoppel, []);
+    assert.equal(t.m.get(folien), vorherFolien);
+  } finally { await srv.zu(); }
 });

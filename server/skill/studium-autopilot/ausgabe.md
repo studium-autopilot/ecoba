@@ -20,7 +20,8 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
       "status": "offiziell",
       "code": "B110",
       "quelle_text": "Mail des Lehrstuhls, 17.10.2026",
-      "info": "Anmeldung nur über ILIAS, Plätze begrenzt."
+      "info": "Anmeldung nur über ILIAS, Plätze begrenzt.",
+      "herkunft": { "gmail": "18f3a2b4c5d6e7f8", "domain": "uni-tuebingen.de", "datum": "2026-10-17" }
     }
   ],
   "hinweise": [
@@ -48,6 +49,7 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 | `code` | Modulcode wie `B110`, `E101`, `SQ888` oder `""` |
 | `quelle_text`, `info` | je höchstens 200 Zeichen, reiner Text, eigene Worte, keine Links |
 | `entfaellt` | nur bei abgesagten Terminen: `true` |
+| `herkunft` | Quelle dieser Angaben (termine.md, „Felder richtig setzen“): `{ "mail": "uni-postfach/<Datei>" }`, `{ "gmail": "<Thread-ID>", "domain": "…", "datum": "JJJJ-MM-TT" }` oder `{ "unterlage": "<Datei>" }`; geht nicht an Obsidian |
 | `hinweise[]` | `text` höchstens 300 Zeichen, `quelle` höchstens 200; `code`: Modulcode, wenn der Hinweis zu genau einem Modul gehört (er steht dann auch auf dessen Seite), sonst weglassen |
 | `todo_doppel[]` | höchstens 50 Paare aus `id`s von `tresor.json` (termine.md, „Doppelte To-dos“); weglassen, wenn es keine gibt |
 

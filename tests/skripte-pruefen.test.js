@@ -3,8 +3,8 @@
 // Gerät erlaubt ist oder der Entwicklermodus an ist, beim Start und bei jedem Hot-Reload. Dazu: ohne gültige Signatur gilt nie
 // eine Liste (fehlt sie im Tresor, je Version eine Anfrage ans Release je Lauf, erst die Kern-Version), CRLF, welche Listen bleiben
 // (die der Kern-Version und die neueste, nie ältere, keine unter der neuesten angenommenen), Testversionen, ctx.skripte, die
-// Befehle (nie über einen Link erreichbar), der Hinweis, Reparieren (auch mit der echten Liste der Kern-Version) und Ereignisse
-// während des ersten Ladens.
+// Befehle (nie über einen Link erreichbar), der Hinweis (bleibt stehen; geschlossen holen ihn Statusleiste bzw. Dashboard
+// zurück), Reparieren (auch mit der echten Liste der Kern-Version) und Ereignisse während des ersten Ladens.
 // Der Kern läuft mit einem Tresor im Speicher (tests/kern.js) und einem Wegwerf-Schlüssel. Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
@@ -61,8 +61,16 @@ test("Skripte mit ihrer Prüfsumme in der signierten Liste laufen; die Liste gil
     assert.deepEqual(x.k.registriert, ["a@1", "b@1"]);
     assert.deepEqual(gesperrt(x), []);
     assert.equal(x.k.pruefung.zustand, "signiert");
-    assert.equal(x.k.ablehnungTimer, undefined, "kein Hinweis geplant");
+    assert.ok(!x.k.ablehnungTimer, "kein Hinweis geplant");
     assert.deepEqual(x.texte(), []);
+    // Nichts gesperrt: kein Eintrag in der Statusleiste, auch auf Wunsch kein Hinweis, mobil zeigt das Dashboard keinen
+    assert.deepEqual(x.k.ersatzStatus, []);
+    assert.equal(x.k.ablehnungZeigen(true), null);
+    x.obs.Platform.isMobile = true;
+    x.oeffnen("Dashboard.md");
+    x.oeffnen("Studium/Einstellungen & Hilfe.md");
+    assert.deepEqual(x.texte(), []);
+    assert.deepEqual(x.k.ersatzStatus, []);
     const m = x.speicher.laden("eba-skripte-listen");
     assert.deepEqual(m.map((e) => [e.art, e.version, Object.keys(e.skripte)]), [["signiert", "1.2.3", [pfad("a"), pfad("b")]]]);
     assert.equal(x.speicher.laden("eba-skripte-hoechste"), "1.2.3", "neueste angenommene Version");
@@ -865,6 +873,8 @@ test("Entwicklermodus: nur nach Bestätigung, nur auf diesem Gerät; lädt alles
     assert.equal(x.speicher.laden("eba-skripte-entwickler"), true);
     assert.deepEqual(globalThis.AUSGEWERTET, ["a@1", "b@1"]);
     assert.deepEqual(gesperrt(x), []);
+    assert.ok(x.hinweise[0].weg, "nichts mehr gesperrt: der Hinweis geht");
+    assert.ok(x.k.ersatzStatus[0].entfernt, "und der Eintrag in der Statusleiste");
     // Hot-Reload wie bisher: jede Änderung sofort
     x.tresor.setzen(pfad("a"), skript("a", 2), { still: true });
     await x.k.skriptNeuLaden(datei(x, "a"));
@@ -877,6 +887,8 @@ test("Entwicklermodus: nur nach Bestätigung, nur auf diesem Gerät; lädt alles
   try {
     assert.deepEqual(globalThis.AUSGEWERTET, ["a@2", "b@1"]);
     assert.deepEqual(y.texte(), ["Der Entwicklermodus ist an. Skripte laufen auf diesem Gerät ohne Prüfung."], "einmal je Start");
+    assert.equal(y.hinweise[0].dauer, 8000, "geht von selbst, kein stehender Hinweis");
+    assert.deepEqual(y.k.ersatzStatus, [], "kein Eintrag in der Statusleiste");
     y.befehl("entwicklermodus-aus");
     await bis(() => y.texte().length === 2, "ausgeschaltet");
     assert.deepEqual(y.texte().slice(-1), ["Der Entwicklermodus ist aus. Es laufen nur noch geprüfte Skripte."]);
@@ -1179,6 +1191,128 @@ test("Hinweis: geänderte Teile mit Reparieren, unbekannte nur „gehört nicht 
   } finally { x.weg(); }
 });
 
+test("Hinweis auf gesperrte Skripte bleibt stehen, bis alles läuft; geschlossen holt ihn am Computer ein Eintrag in der Statusleiste zurück", async () => {
+  const x = await kern({ dateien: dateienBauen("1.2.3", STAND, { ist: { b: STAND.b + " " } }) });
+  try {
+    assert.deepEqual(x.k.ersatzStatus, [], "vor dem Hinweis kein Eintrag");
+    x.k.ablehnungZeigen();
+    assert.equal(x.hinweise.length, 1);
+    assert.equal(x.hinweise[0].dauer, 0, "ohne Zeitgrenze");
+    assert.equal(x.offen().length, 1);
+    assert.equal(x.k.ersatzStatus.length, 1);
+    const zeichen = x.k.ersatzStatus[0];
+    assert.equal(zeichen.text, "Studium Autopilot prüfen");
+    assert.equal(zeichen.attr["aria-label"], "Hinweis noch einmal zeigen");
+    assert.match(zeichen.cls, /\bmod-clickable\b/);
+    // Geschlossen: derselbe Stand kommt von selbst nicht wieder, am Computer auch nicht beim Öffnen des Dashboards
+    x.hinweise[0].schliessen();
+    assert.deepEqual(x.offen(), []);
+    assert.equal(x.k.ablehnungZeigen(), null);
+    x.oeffnen("Dashboard.md");
+    assert.equal(x.hinweise.length, 1);
+    assert.ok(!zeichen.entfernt, "der Eintrag bleibt");
+    // Ein Klick darauf zeigt ihn wieder, mit seinen Knöpfen; ein weiterer ersetzt ihn, nie zwei
+    zeichen.lauscher.click();
+    assert.equal(x.hinweise.length, 2);
+    assert.equal(x.hinweise[1].text, x.hinweise[0].text);
+    assert.equal(x.hinweise[1].dauer, 0);
+    assert.ok(knopf(x.hinweise[1], "Reparieren"));
+    zeichen.lauscher.click();
+    assert.equal(x.hinweise.length, 3);
+    assert.deepEqual(x.offen(), [x.hinweise[2]], "nie zwei");
+    // Ein weiteres gesperrtes Skript: der neue Hinweis ersetzt den offenen, der Eintrag bleibt einer
+    x.tresor.setzen(pfad("a"), STAND.a + " ", { still: true });
+    await x.k.skriptNeuLaden(datei(x, "a"));
+    x.k.ablehnungZeigen();
+    assert.equal(x.hinweise.length, 4);
+    assert.match(x.hinweise[3].text, /\(a, b\)/);
+    assert.deepEqual(x.offen(), [x.hinweise[3]]);
+    assert.equal(x.k.ersatzStatus.length, 1);
+    // Wieder echt (Hot-Reload, dann „Erweiterungen neu laden“): erst wenn nichts mehr gesperrt ist, gehen Hinweis und Eintrag
+    x.tresor.setzen(pfad("a"), STAND.a, { still: true });
+    await x.k.skriptNeuLaden(datei(x, "a"));
+    assert.equal(x.offen().length, 1, "b ist noch gesperrt");
+    x.tresor.setzen(pfad("b"), STAND.b, { still: true });
+    await x.k.skripteLaden(false);
+    assert.deepEqual(gesperrt(x), []);
+    assert.deepEqual(x.offen(), []);
+    assert.ok(zeichen.entfernt);
+    zeichen.lauscher.click(); // ein Klick, der zu spät kommt
+    assert.equal(x.hinweise.length, 4, "nichts gesperrt: kein Hinweis");
+  } finally { x.weg(); }
+  // Entladen (Neu laden, Update): Hinweis und Eintrag gehen mit, die nächste Instanz zeigt ihre eigenen
+  const y = await kern({ dateien: dateienBauen("1.2.3", STAND, { ist: { b: STAND.b + " " } }) });
+  y.k.ablehnungZeigen();
+  y.weg();
+  assert.deepEqual(y.offen(), []);
+  assert.ok(y.k.ersatzStatus[0].entfernt);
+});
+
+test("Ohne Netz beim ersten Start: der Hinweis wartet ohne Zeitgrenze, die Statusleiste sagt „wartet“; Reparieren ohne Netz lässt den Weg zurück, die Signatur schließt beides", async () => {
+  const d = dateienBauen("1.2.3", STAND, { sig: false });
+  const x = await kern({ dateien: d, netz: async () => { throw new Error("offline"); } });
+  try {
+    x.k.ablehnungZeigen();
+    assert.match(x.hinweise[0].text, /^Die App startet, sobald sie einmal geprüft hat/);
+    assert.equal(x.hinweise[0].dauer, 0);
+    const zeichen = x.k.ersatzStatus[0];
+    assert.equal(zeichen.text, "Studium Autopilot wartet");
+    // Der Knopf schließt den Hinweis; ohne Netz klappt Reparieren nicht, der Eintrag bleibt und zeigt ihn wieder
+    knopf(x.hinweise[0], "Reparieren").lauscher.click();
+    assert.ok(x.hinweise[0].weg);
+    await bis(() => x.texte().includes("Keine Verbindung. Versuch es später noch einmal."), "Reparieren ohne Netz");
+    assert.ok(!zeichen.entfernt);
+    zeichen.lauscher.click();
+    assert.equal(x.offen().filter((h) => h.dauer === 0).length, 1);
+    assert.match(x.hinweise[x.hinweise.length - 1].text, /^Die App startet, sobald/);
+    // Die Signatur kommt (Sync): alle Skripte laufen, Hinweis und Eintrag gehen von selbst
+    x.tresor.setzen(SIG, signieren(d[LISTE]), { still: true });
+    await x.k.skripteNachpruefen();
+    assert.deepEqual(globalThis.AUSGEWERTET, ["a@1", "b@1"]);
+    assert.deepEqual(x.offen().filter((h) => h.dauer === 0), []);
+    assert.ok(zeichen.entfernt);
+  } finally { x.weg(); }
+});
+
+test("Mobil ohne Statusleiste: geschlossen, zeigt das Öffnen von Dashboard oder Einstellungen & Hilfe den Hinweis wieder, andere Seiten nicht", async () => {
+  const x = await kern({ dateien: dateienBauen("1.2.3", STAND, { ist: { b: STAND.b + " " } }) });
+  try {
+    x.obs.Platform.isMobile = true;
+    x.oeffnen("Dashboard.md");
+    assert.deepEqual(x.hinweise, [], "vor dem ersten Hinweis nicht (er kommt kurz nach dem Start)");
+    x.k.ablehnungZeigen();
+    assert.equal(x.hinweise[0].dauer, 0);
+    assert.deepEqual(x.k.ersatzStatus, [], "keine Statusleiste");
+    x.oeffnen("Dashboard.md");
+    assert.equal(x.hinweise.length, 1, "offen: kein zweiter");
+    x.hinweise[0].schliessen();
+    x.oeffnen("Module/B110.md");
+    x.oeffnen("System/Einstellungen.md");
+    x.oeffnen(null);
+    assert.equal(x.hinweise.length, 1, "andere Seiten nicht");
+    x.oeffnen("Dashboard.md");
+    assert.equal(x.hinweise.length, 2);
+    assert.equal(x.hinweise[1].text, x.hinweise[0].text);
+    assert.ok(knopf(x.hinweise[1], "Reparieren"));
+    assert.deepEqual(x.offen(), [x.hinweise[1]]);
+    // Auf dem iPhone lässt er sich auch wegwischen: Obsidian nimmt ihn aus dem Dokument, ohne Tipp
+    x.hinweise[1].weg = true;
+    x.k.stillBis = Date.now() + 60000;
+    x.oeffnen("Studium/Einstellungen & Hilfe.md");
+    assert.equal(x.hinweise.length, 2, "nicht während eines Updates");
+    x.k.stillBis = 0;
+    x.oeffnen("Studium/Einstellungen & Hilfe.md");
+    assert.equal(x.hinweise.length, 3);
+    assert.deepEqual(x.offen(), [x.hinweise[2]]);
+    // Repariert: Hinweis weg, das Dashboard zeigt nichts mehr
+    x.tresor.setzen(pfad("b"), STAND.b, { still: true });
+    await x.k.skriptNeuLaden(datei(x, "b"));
+    assert.deepEqual(x.offen(), []);
+    x.oeffnen("Dashboard.md");
+    assert.equal(x.hinweise.length, 3);
+  } finally { x.weg(); }
+});
+
 test("Kein Link erreicht die neuen Befehle: obsidian://studium-autopilot kennt nur Aktionen, keine Aktion ist einer davon", async () => {
   const x = await kern({ dateien: dateienBauen("1.2.3", STAND, { extra: { [pfad("meins")]: skript("meins") } }) });
   try {
@@ -1204,7 +1338,7 @@ test("Kein Link erreicht die neuen Befehle: obsidian://studium-autopilot kennt n
   const ordner = path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte");
   for (const n of fs.readdirSync(ordner).filter((d) => d.endsWith(".js"))) {
     const code = fs.readFileSync(path.join(ordner, n), "utf8");
-    assert.doesNotMatch(code, /eba-skripte-|\b(?:entwicklerFragen|entwicklerAus|erlaubenFragen|reparierenFragen|skripteNachpruefen|listeAuswerten|erlaubtAufGeraet|ablehnungZeigen|testversionenSetzen|zielListeHolen|listeErsetzen|kernAufholenFragen|kernAufholen|kernNeuStarten)\b/, n);
+    assert.doesNotMatch(code, /eba-skripte-|\b(?:entwicklerFragen|entwicklerAus|erlaubenFragen|reparierenFragen|skripteNachpruefen|listeAuswerten|erlaubtAufGeraet|ablehnungZeigen|ablehnungSeite|testversionenSetzen|zielListeHolen|listeErsetzen|kernAufholenFragen|kernAufholen|kernNeuStarten)\b/, n);
     // Listen von Testversionen schaltet nur der Schalter „Beta-Versionen“ in update.js frei
     assert.equal((code.match(/skripte\.beta\(/g) || []).length, n === "update.js" ? 1 : 0, n);
   }

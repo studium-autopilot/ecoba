@@ -199,11 +199,11 @@ test("Titel springt beim Umschalten nicht: die Leerzeile vor „# …“ ist auf
 });
 
 // iPad in schmalen Fenstern (unter etwa 900 px): Ein langer Titel lief unter Lesen/Bearbeiten (Prüfung vom 27.10.2026, bei 694 px
-// erste Zeile bis x 654, Knopf ab 646)
+// erste Zeile bis x 654, Knopf ab 646). Gesperrte Seiten haben den Knopf nicht (start.js), dort blieben 34 px leer (2.11.2026)
 test("iPad, ein Tab: rechts neben dem Titel Platz für Lesen/Bearbeiten (Float bzw. Innenabstand, beim Lesen und Bearbeiten)", () => {
   const css = ohneKommentare(A70);
   const ein = "body.eba-plugin-an.is-tablet .mod-root .workspace-tabs:not(.mod-stacked):not(:has(.workspace-tab-header + .workspace-tab-header))"
-    + ":not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type=\"markdown\"]";
+    + ":not(:has(> .workspace-tab-header-container > .eba-uebersicht-knopf)) .workspace-leaf-content[data-type=\"markdown\"]:not(.eba-gesperrt)";
   const lesen = " .markdown-reading-view > .markdown-preview-view > .markdown-preview-sizer > ";
   const float = [lesen + ":is(.mod-frontmatter, .mod-header) + .el-h1::before", lesen + ".mod-frontmatter + .el-div > .eba-kopf:first-child::before",
     " .markdown-source-view.is-live-preview .cm-content > .cm-html-embed > .eba-kopf:first-child::before"].map((x) => ein + x).join(",\n");

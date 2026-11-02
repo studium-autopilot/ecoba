@@ -115,6 +115,36 @@ manifest.json ──▶ Prüfsummen geändert? ──▶ termine.json / semester
   weg, `erledigt`, „Meine Notizen“ und eigene Felder bleiben, neues Datum benennt um), statt eine zweite anzulegen oder die id
   als gelöscht zu werten. Nur, wenn es keine zentrale Notiz mit der id gibt und der Termin zum Filter passt; andere Notizen
   mit `abgleich_id` bleiben unberührt. Ohne eigenen Abgleich gibt es solche Notizen nicht. Tests: `tests/zentral.test.js`.
+- **Text in Notizen, ein Weg für alle Quellen** (seit 02.11.2026): `ctx.zentral.mdText` (am Zeilenanfang, dazu ohne Liste) und
+  `ctx.zentral.mdInZeile` (mitten in einer Zeile, mit `{ und: true }` auch vor `&`) setzen `\` vor Markdown-Zeichen und vor die
+  Zeichen, an denen Obsidian einen Link erkennt (`linkZeichenEntwerten`, die zweite Sicherung). Text aus ILIAS (`ilias.js`), Alma
+  (`alma.js`), den Literaturlisten (`literatur.js`) und den Übungsgruppen (`meine-gruppe.js`, über `io.mdText`) geht seitdem auch
+  hierdurch; vorher hatte jedes Skript eine eigene Fassung nur mit den Markdown-Zeichen. Auch `@` in einer Mail-Adresse bekommt ein
+  `\` (`MAIL_AT`), sonst macht Obsidian einen mailto-Link daraus (gemessen in Obsidian 1.14.5 mit `MarkdownRenderer`: `\@` ist
+  unsichtbar, auch in Listen, Kästen und Tabellen). Gewöhnlicher Text ohne Link-Merkmale und ohne Mail-Adresse wird Zeichen für
+  Zeichen wie mit der früheren Fassung, vorhandene Notizen bleiben also, wie sie sind (`tests/md-text.test.js`, auch mit
+  zufälligem Text). Anders als vorher bleibt eine erlaubte Adresse der Uni roh (vorher `\_`, `\~`, `\=` und `\&` darin), und eine
+  Mail-Adresse bekommt `\@`: Notizen aus den Literaturlisten und Übungsgruppen mit solchem Text schreibt das Plugin darum beim
+  nächsten Abgleich einmal neu (gleich sichtbar, nur die Zeichen davor ändern sich); Alma findet den Raum in der Kopfzeile in
+  beiden Schreibweisen (`mdTextAlt`). Ohne `zentral.js` (Tests der reinen Funktionen, Hülle eines eigenen Uni-Abgleichs) bleibt es bei den
+  Markdown-Zeichen.
+- **Regel für Titel in jedem Textfeld** (seit 02.11.2026): Titel (Termine, Angebote, Stundenplan, Gruppen, Kapitel, Literatur)
+  werden mit `GEFAEHRLICH` und der Klammer-Regel (`reinerText`) abgelehnt. Jedes andere Textfeld (`textFeld`: Ort, Info, Quelle,
+  Hinweise, Raum, Leitung, Anmeldung) wird gesäubert, und was danach noch unter diese Regel fiele, wird entschärft
+  (`titelZeichenWeg`): Pfeile `->`, `=>` und `<-` werden `→` bzw. `←`, eine übrige spitze Klammer (etwa ein `<b` ohne `>`) fällt
+  weg, eckige und geschweifte werden `(` und `)`, `|` und `\` werden `/`. Namen in `semester.json` (Pausen, freie Tage, Art einer
+  Prüfungsphase) gehen ebenso durch `textFeld` und danach durch `reinerText`: Der Eintrag bleibt mit entschärftem Namen, statt
+  wegzufallen. So kommt nichts in eine Notiz, was ein Titel nicht dürfte, und kein Termin fällt wegen einer Klammer im Ort weg. Die echten Daten
+  enthalten keines dieser Zeichen (Test am Schnappschuss), vorhandene Notizen bleiben also gleich. Tests: `tests/zentral.test.js`
+  (feindliche Titel und Texte).
+- **Belegte Namen** (seit 02.11.2026): Windows, macOS und iOS unterscheiden in Dateinamen weder Groß- und Kleinschreibung noch die
+  Unicode-Form (NFC oder NFD), `getAbstractFileByPath` findet aber nur genau dieselbe Schreibweise. Neben „termin.md“ entstand
+  so keine „Termin.md“ (das Anlegen scheiterte, im schlimmsten Fall traf es die andere Datei). `ctx.zentral.existiert(pfad,
+  eigene)` vergleicht die Namen im Ordner klein und in NFC; `eigene` zählt nicht (Umbenennen, auch nur in der Schreibweise). Den
+  ersten freien Namen („… 2“) suchen damit `zentral.js` (Termine und Stundenplan), `ilias-kalender.js` und `alma.js` (Anlegen und
+  Umbenennen; ohne `zentral.js`, in der Hülle eines eigenen Uni-Abgleichs, nur genau der Name). `lernplan.js` legt eine
+  Lernplan-Notiz (fester Name) nicht an, solange derselbe Name in anderer Schreibweise belegt ist. Tests: `tests/zentral.test.js`,
+  `tests/ilias-kalender.test.js`, `tests/alma.test.js`, `tests/kapitel.test.js`.
 - **Wegfall/Filter:** Fehlt eine id: unberührt (nicht erledigt, „Meine Notizen“ leer) → Papierkorb (`vault.trash`, nie
   endgültig), sonst Titel „(entfällt)“ + `entfaellt: true`. Ende > 30 Tage vorbei → unverändert. Fällt mehr als die Hälfte (und
   mehr als 10) auf einmal weg → keiner als entfallen (Schutz gegen kaputte Exporte). Passt ein Termin nicht mehr zum Filter

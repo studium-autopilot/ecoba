@@ -80,9 +80,14 @@ function tresor(o) {
     },
   });
   const app = L.ctx.app;
-  const datei = (p) => ({ path: p, basename: p.split("/").pop().replace(/\.md$/, "") });
+  const datei = (p) => ({ path: p, name: p.split("/").pop(), basename: p.split("/").pop().replace(/\.md$/, "") });
   app.vault.getMarkdownFiles = () => Object.keys(fm).filter((p) => p.endsWith(".md") && p !== "System/Einstellungen.md").map(datei);
-  app.vault.getAbstractFileByPath = (p) => (p === "Termine" ? { path: p, children: [] } : fm[p] || p in dateien ? datei(p) : null);
+  app.vault.getAbstractFileByPath = (p) => (p === "Termine" ? { path: p, children: Object.keys(fm).filter((x) => x.indexOf("Termine/") === 0).map(datei) }
+    : fm[p] || p in dateien ? datei(p) : null);
+  // ctx.zentral.existiert über diesen Tresor (zentral.js liest window.app wie hier ilias-kalender.js)
+  const ZT = laden("zentral").ctx;
+  ZT.app.vault.getAbstractFileByPath = (p) => app.vault.getAbstractFileByPath(p);
+  L.ctx.zentral.existiert = ZT.zentral.existiert;
   app.vault.read = async (f) => (f.path in dateien ? dateien[f.path] : text[f.path] || "");
   const setzen = (p, t) => { if (p.endsWith(".md")) { text[p] = t; fm[p] = fmAusText(t); } else dateien[p] = t; };
   app.vault.create = async (p, t) => { if (fm[p] || p in dateien) throw new Error("gibt es schon: " + p); setzen(p, t); return datei(p); };
@@ -559,4 +564,15 @@ test("Zentrale Notizen bleiben Byte für Byte gleich; andere Quellen tragen nur 
   const weg = Z.notizText(fremd, e, { herkunft: "ilias-kalender", idFeld: "ilias_kalender_id", weg: "im ILIAS-Kalender", entfaellt: true });
   assert.match(weg, /> Dieser Termin steht nicht mehr im ILIAS-Kalender\./);
   assert.match(Z.notizText(zentral, e, { entfaellt: true }), /> Dieser Termin steht nicht mehr in den zentralen Daten\./);
+});
+
+test("Name schon belegt, nur in anderer Groß- und Kleinschreibung: die Abgabe bekommt einen eigenen Namen statt der fremden Notiz", async () => {
+  const t = tresor({ objekte: { 9001: { typ: "exc", code: "B110" } } });
+  const hand = "Termine/2026-11-03 b110 abgabe in ilias.md";
+  t.fm[hand] = { typ: "termin", titel: "Meine Notiz", datum: "2026-11-03" };
+  t.text[hand] = "---\ntyp: termin\n---\n\n# Meine Notiz\n";
+  const b = await lauf(t, kalender(abgabe(9001, "Blatt 3", "20261103T235500")));
+  assert.equal(b.neu, 1);
+  assert.deepEqual(t.notizen(), ["Termine/2026-11-03 B110 Abgabe in ILIAS 2.md", hand]);
+  assert.equal(t.text[hand], "---\ntyp: termin\n---\n\n# Meine Notiz\n", "deine Notiz bleibt");
 });

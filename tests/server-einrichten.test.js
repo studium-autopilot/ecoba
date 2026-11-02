@@ -606,6 +606,19 @@ test("Abschließen: wartet auf den Helfer, entfernt nur eigene Rechte, Boot-Volu
   await platzsucher(x.oci, { tenancy: T, a: auswerten(geschuetzt(), { helfer: true }), ads: ADS, schluessel: SSH, mail: MAIL, vorlage: VORLAGE, skript: SKRIPT });
   x.k.richtlinien.push({ id: "fremd", name: "studium-platzsucher", "freeform-tags": {}, "lifecycle-state": "ACTIVE" });
   assert.equal((await abschliessen(x.oci, { tenancy: T, a: auswerten(bestand()) })).exit, 2, "Helfer läuft noch");
+  // Server klein da (1 OCPU / 6 GB), Helfer vergrößert ihn nachts: Einrichtung geht weiter, Rechte und Boot-Volume bleiben
+  const klein = { id: "ocid1.instance.oc1..klein", shape: "VM.Standard.A1.Flex", "availability-domain": ADS[0], "freeform-tags": { "studium-autopilot": "server" },
+    "lifecycle-state": "RUNNING", "shape-config": { ocpus: 1, "memory-in-gbs": 6 }, "instance-options": { "are-legacy-imds-endpoints-disabled": true } };
+  x.k.instanzen.push(klein);
+  x.k.volumes.bvk = { id: "bvk", "size-in-gbs": 150 };
+  x.k.anhaenge.push({ "instance-id": klein.id, "boot-volume-id": "bvk", "lifecycle-state": "ATTACHED" });
+  const rk = await abschliessen(x.oci, { tenancy: T, a: auswerten(bestand({ freierTopf: { used: 200, available: 0 } })) });
+  assert.equal(rk.exit, 0, JSON.stringify(rk.schritte));
+  assert.deepEqual(rk.schritte.filter((s) => ["helfer", "volume"].includes(s.was)).map((s) => [s.was, s.status]), [["helfer", "klein"], ["volume", "da"]]);
+  assert.ok(!rk.schritte.some((s) => s.status === "vergroessert"), "start.sh liest [vergroessert] als „Boot-Volume gewachsen, neu starten“");
+  assert.equal(x.k.richtlinien.filter((p) => p.name === "studium-platzsucher").length, 2, "Rechte des Helfers bleiben, solange er vergrößert");
+  assert.equal(x.k.volumes.bvk["size-in-gbs"], 150);
+  x.k.instanzen.pop();
   // der Platzsucher hat den Server angelegt und den Helfer beendet
   x.k.instanzen[0]["lifecycle-state"] = "TERMINATED";
   x.k.instanzen.push({ id: "ocid1.instance.oc1..server", shape: "VM.Standard.A1.Flex", "availability-domain": ADS[0], "freeform-tags": { "studium-autopilot": "server" }, "lifecycle-state": "RUNNING" });
@@ -704,8 +717,32 @@ test("Skill server-einrichten: jeder genannte Befehl von einrichten.mjs und stud
   assert.ok(ueberFern.has("verbinden") && ueberFern.has("uni-zugang") && ueberFern.has("installieren"));
 });
 
+// Paket mit Signaturen wie beim Release (Wegwerf-Schlüssel, einmal je Testlauf): je Namensraum eine .sig, dazu eine eines fremden
+// Schlüssels. fern.sh bekommt den Schlüssel des Signierers fest eingetragen.
+let signiert = null;
+const signiertesPaket = () => {
+  if (signiert) return signiert;
+  const { spawnSync } = require("node:child_process");
+  const os = require("node:os");
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), "fern-paket-"));
+  process.on("exit", () => fs.rmSync(d, { recursive: true, force: true }));
+  const keygen = (...a) => assert.equal(spawnSync("bash", ["-c", 'ssh-keygen "$@"', "-", ...a.map((x) => x.replace(/\\/g, "/"))]).status, 0);
+  fs.writeFileSync(path.join(d, "paket"), "Paket\n");
+  for (const n of ["signierer", "fremd"]) keygen("-q", "-t", "ed25519", "-N", "", "-C", n, "-f", path.join(d, n));
+  const sig = {};
+  for (const [name, n, ns] of [["gut", "signierer", "studium-server"], ["test", "signierer", "studium-server-test"], ["fremd", "fremd", "studium-server"]]) {
+    keygen("-Y", "sign", "-f", path.join(d, n), "-n", ns, path.join(d, "paket"));
+    sig[name] = fs.readFileSync(path.join(d, "paket.sig"));
+    fs.rmSync(path.join(d, "paket.sig"));
+  }
+  signiert = { schluessel: fs.readFileSync(path.join(d, "signierer.pub"), "utf8").split(" ").slice(0, 2).join(" "), sig };
+  return signiert;
+};
+const keygenMitY = require("node:child_process").spawnSync("bash", ["-c", "ssh-keygen -Y verify 2>&1 | grep -q namespace"]).status === 0;
+
 // fern.sh mit nachgebautem `einrichten.mjs adresse` und ssh/scp, die nur ihre Argumente aufschreiben. adresse.roh: Ausgabe
-// ohne JSON; adresse.sshExit, adresse.scpExit: Exit von ssh bzw. scp (255 = nicht erreichbar)
+// ohne JSON; adresse.sshExit, adresse.scpExit: Exit von ssh bzw. scp (255 = nicht erreichbar); adresse.signatur: welche .sig neben
+// studium-server.tar.gz liegt (Standard gut, null: keine); adresse.env: weitere Umgebung
 const fernLaufen = (adresse, ...args) => {
   const { spawnSync } = require("node:child_process");
   const os = require("node:os");
@@ -713,18 +750,26 @@ const fernLaufen = (adresse, ...args) => {
   try {
     fs.mkdirSync(path.join(tmp, "server"));
     fs.mkdirSync(path.join(tmp, "bin"));
-    fs.copyFileSync(path.join(SERVER, "fern.sh"), path.join(tmp, "server", "fern.sh"));
+    const paket = keygenMitY ? signiertesPaket() : { schluessel: "ssh-ed25519 AAAA", sig: {} };
+    fs.writeFileSync(path.join(tmp, "server", "fern.sh"), fs.readFileSync(path.join(SERVER, "fern.sh"), "utf8")
+      .replace(/^SIGNIERSCHLUESSEL=\([^)]*\)$/m, `SIGNIERSCHLUESSEL=('${paket.schluessel}')`));
+    fs.copyFileSync(path.join(SERVER, "paket-pruefen.mjs"), path.join(tmp, "server", "paket-pruefen.mjs"));
+    fs.writeFileSync(path.join(tmp, "studium-server.tar.gz"), "Paket\n");
+    const sig = adresse.signatur === undefined ? "gut" : adresse.signatur;
+    if (sig && paket.sig[sig]) fs.writeFileSync(path.join(tmp, "studium-server.tar.gz.sig"), paket.sig[sig]);
     const ausgabe = adresse.roh !== undefined ? adresse.roh : JSON.stringify(adresse);
     fs.writeFileSync(path.join(tmp, "server", "einrichten.mjs"),
       `if (process.argv.slice(2).join(" ") !== "adresse --json") { console.error("falscher Aufruf"); process.exit(9); }\n` +
       `console.log(${JSON.stringify(ausgabe)}); process.exitCode = ${adresse.exit};\n`);
+    // PATH_VORNE: ein ssh-keygen wie in der Cloud Shell, das -Y nicht kennt
+    if ((adresse.env || {}).PATH_VORNE) fs.writeFileSync(path.join(tmp, "bin", "ssh-keygen"), '#!/usr/bin/env bash\necho "ssh-keygen: illegal option -- Y" >&2\nexit 255\n', { mode: 0o755 });
     for (const n of ["ssh", "scp"]) {
       const meldung = adresse[n + "Meldung"] ? `echo ${JSON.stringify(adresse[n + "Meldung"])} >&2\n` : "";
       fs.writeFileSync(path.join(tmp, "bin", n), `#!/usr/bin/env bash\necho "${n} $*" >> "$HOME/aufrufe"\n${meldung}exit ${adresse[n + "Exit"] || 0}\n`, { mode: 0o755 });
     }
     const r = spawnSync("bash", [path.join(tmp, "server", "fern.sh"), ...args], {
       encoding: "utf8", cwd: os.tmpdir(), input: "",
-      env: Object.assign({}, process.env, { HOME: tmp, PATH: path.join(tmp, "bin") + path.delimiter + process.env.PATH }),
+      env: Object.assign({}, process.env, { HOME: tmp, PATH: path.join(tmp, "bin") + path.delimiter + process.env.PATH }, adresse.env),
     });
     const aufrufe = fs.existsSync(path.join(tmp, "aufrufe")) ? fs.readFileSync(path.join(tmp, "aufrufe"), "utf8").trim().split("\n") : [];
     return { status: r.status, aus: r.stdout + r.stderr, aufrufe };
@@ -776,6 +821,22 @@ fernTest("fern.sh: Server antwortet nicht auf ssh → Exit 5 mit Hinweis; Fehler
   }
 });
 
+fernTest("fern.sh installieren: nur ein Paket mit gültiger Signatur (fester Schlüssel) geht auf den Server; Signatur für Tests nur mit STUDIUM_TESTPAKET=1", () => {
+  if (!keygenMitY) return;
+  for (const [sig, env, was] of [[null, {}, "keine Signatur"], ["fremd", {}, "fremder Schlüssel"], ["test", {}, "Signatur für Tests ohne Zusage"]]) {
+    const r = fernLaufen({ ...LAEUFT, signatur: sig, env }, "installieren");
+    assert.equal(r.status, 7, was + ": " + r.aus);
+    assert.match(r.aus, /\[signatur\] studium-server\.tar\.gz hat keine gültige Signatur/);
+    assert.deepEqual(r.aufrufe, [], was + ": nichts kopiert");
+  }
+  const test = fernLaufen({ ...LAEUFT, signatur: "test", env: { STUDIUM_TESTPAKET: "1" } }, "installieren");
+  assert.equal(test.status, 0, test.aus);
+  assert.equal(test.aufrufe.length, 2);
+  // ssh-keygen ohne -Y (Cloud Shell): Node.js mit paket-pruefen.mjs entscheidet
+  const ohneY = fernLaufen({ ...LAEUFT, env: { PATH_VORNE: "1" } }, "installieren");
+  assert.equal(ohneY.status, 0, ohneY.aus);
+});
+
 fernTest("fern.sh: Server nicht RUNNING, Fehler von adresse, unbekannter Befehl → nichts per ssh", () => {
   const gestoppt = fernLaufen({ ...LAEUFT, zustand: "STOPPED" }, "verbinden");
   assert.equal(gestoppt.status, 4);
@@ -791,4 +852,43 @@ fernTest("fern.sh: Server nicht RUNNING, Fehler von adresse, unbekannter Befehl 
   assert.equal(fernLaufen(LAEUFT, "rm").status, 3);
   assert.equal(fernLaufen(LAEUFT, "livesync", "a;b").status, 3);
   for (const r of [gestoppt, s, ohne]) assert.deepEqual(r.aufrufe, []);
+});
+
+fernTest("Selbst vorbereiten: Startdaten prüfen die Signatur mit ssh-keygen gegen den festen Schlüssel, bevor sie auspacken; ohne gültige nichts", async () => {
+  if (!keygenMitY) return;
+  const { spawnSync } = require("node:child_process");
+  const os = require("node:os");
+  const { serverStart, SIGNIERSCHLUESSEL } = await laden();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "vorbereiten-"));
+  const p = (...t) => path.join(tmp, ...t);
+  const vorwaerts = (x) => x.replace(/\\/g, "/");
+  const keygen = (...a) => assert.equal(spawnSync("bash", ["-c", 'ssh-keygen "$@"', "-", ...a.map(vorwaerts)]).status, 0);
+  try {
+    for (const d of ["bin", "root", "release/server"]) fs.mkdirSync(p(d), { recursive: true });
+    fs.writeFileSync(p("release", "server", "installieren.sh"), 'echo "installieren $*" >> "$AUFRUFE"\n');
+    assert.equal(spawnSync("bash", ["-c", "tar -czf studium-server.tar.gz server"], { cwd: p("release") }).status, 0);
+    const summe = require("node:crypto").createHash("sha256").update(fs.readFileSync(p("release", "studium-server.tar.gz"))).digest("hex");
+    for (const n of ["signierer", "fremd"]) keygen("-q", "-t", "ed25519", "-N", "", "-C", n, "-f", p(n));
+    const schluessel = fs.readFileSync(p("signierer.pub"), "utf8").split(" ").slice(0, 2).join(" ");
+    // curl lädt aus release/; der Rumpf der Startdaten mit dem Wegwerf-Schlüssel statt des echten und tmp statt /root
+    fs.writeFileSync(p("bin", "curl"), '#!/usr/bin/env bash\nziel=""; url=""\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && ziel=$2; url=$1; shift; done\n' +
+      'cp "$RELEASE/${url##*/}" "$ziel"\n', { mode: 0o755 });
+    const start = serverStart({ version: "0.7.6", summe });
+    const rumpf = start.split("\n    - |\n")[1].split("\n").map((z) => z.slice(6)).join("\n")
+      .replace("exec >>/var/log/studium-server-vorbereiten.log 2>&1", "").split(SIGNIERSCHLUESSEL[0]).join(schluessel)
+      // Pfad wie in Git Bash (/c/…): tar hielte „C:“ für einen fremden Rechner
+      .replace("/root/", vorwaerts(p("root")).replace(/^([A-Za-z]):/, (_, l) => "/" + l.toLowerCase()) + "/");
+    fs.writeFileSync(p("rumpf.sh"), rumpf);
+    const lauf = (n, ns = "studium-server") => {
+      fs.rmSync(p("release", "studium-server.tar.gz.sig"), { force: true });
+      keygen("-Y", "sign", "-f", p(n), "-n", ns, p("release", "studium-server.tar.gz"));
+      fs.rmSync(p("aufrufe"), { force: true });
+      const r = spawnSync("bash", [vorwaerts(p("rumpf.sh"))], { encoding: "utf8",
+        env: Object.assign({}, process.env, { AUFRUFE: p("aufrufe"), RELEASE: p("release"), PATH: p("bin") + path.delimiter + process.env.PATH }) });
+      return { status: r.status, aufrufe: fs.existsSync(p("aufrufe")) ? fs.readFileSync(p("aufrufe"), "utf8").trim() : "" };
+    };
+    assert.deepEqual(lauf("signierer"), { status: 0, aufrufe: "installieren --vorbereiten" });
+    assert.deepEqual(lauf("fremd"), { status: 1, aufrufe: "" }, "fremder Schlüssel");
+    assert.deepEqual(lauf("signierer", "studium-server-test"), { status: 1, aufrufe: "" }, "Signatur für Tests");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

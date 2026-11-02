@@ -16,8 +16,13 @@
 //
 //   node livesync.mjs link [konfig]   → JSON { link, code } auf stdout (als root: liest die Zugangsdaten)
 //   node livesync.mjs ablegen         Setup-Link von stdin → JSON { kennung, ablauf } (als studium-web, $STUDIUM_SERVER_DATEN/web)
-import { createHash, webcrypto } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+// Für livesync.sh (als root, Datei $LS_KONFIG; Passwörter entstehen hier und stehen so nie in einer Befehlszeile):
+//   node livesync.mjs konfig-neu      neue livesync.json (Adresse aus $LS_ADRESSE)
+//   node livesync.mjs geraet-neu      Gerätezugang ergänzen, wo er fehlt (LiveSync von vor diesem Zugang)
+//   node livesync.mjs erneuern        neue Passwörter; mit $LS_PASSPHRASE=1 auch neuer Schlüssel der Verschlüsselung
+//   node livesync.mjs benutzer [rev]  Dokument des Gerätezugangs für _users (mit Passwort) auf stdout
+import { createHash, randomInt, webcrypto } from "node:crypto";
+import { mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -27,21 +32,36 @@ export const LINK_ANFANG = "obsidian://setuplivesync?settings=";
 const PRAEFIX = "%$";
 const RUNDEN = 310000;
 const ZEICHEN = "abcdefghijkmnpqrstuvwxyz23456789"; // ohne l, o, 0, 1: auf dem Handy leicht abzutippen
-// Wie im Tresor „Studium EBA“ bewährt: versteckte Dateien (Plugins, CSS, Vorlagen) mit, aber nicht LiveSync selbst
-// (jedes Gerät hat seine eigene Verbindung) und nicht die Fensteranordnung.
-const VERSTECKT_OHNE = "/node_modules/, /.git/, /obsidian-livesync/, /workspace(-mobile)?.json$";
+// Versteckte Dateien (CSS, Einstellungen von Obsidian, Vorlagen) mit, aber keine Plugins (.obsidian/plugins/, darunter LiveSync
+// selbst mit der Verbindung des Geräts) und nicht, welche eingeschaltet sind (community-plugins.json), auch nicht die
+// Fensteranordnung. Plugins laufen auf jedem Gerät mit vollem Zugriff: Ein übernommenes Gerät mit LiveSync könnte sonst einen
+// veränderten Kern von Studium Autopilot oder ein eigenes Plugin samt Eintrag in community-plugins.json an alle anderen schicken.
+// Jedes Gerät installiert seine Plugins selbst; Studium Autopilot holt es aus dem Release und prüft es dabei (Installation, Update,
+// „Neu laden“). LiveSync prüft die Muster (reguläre Ausdrücke, durch Kommas getrennt, Leerzeichen zählen
+// nicht, Groß- und Kleinschreibung egal) gegen den Pfad im Tresor ohne führenden Schrägstrich, beim Senden und beim Empfangen
+// (Self-hosted LiveSync 1.0.44, CmdHiddenFileSync.ts).
+const VERSTECKT_OHNE = "/node_modules/, /.git/, /plugins/, /community-plugins.json$, /workspace(-mobile)?.json$";
 
 export function neuerCode(zufall = webcrypto.getRandomValues(new Uint8Array(12))) {
   const z = Array.from(zufall, (b) => ZEICHEN[b % ZEICHEN.length]).join("");
   return `${z.slice(0, 4)}-${z.slice(4, 8)}-${z.slice(8, 12)}`;
 }
 
-// konfig: { adresse: "https://obsidian.<IP>.sslip.io", benutzer, passwort, datenbank, e2ee }
-export function einstellungen(k) {
+// konfig: { adresse: "https://obsidian.<IP>.sslip.io", benutzer, passwort, datenbank, e2ee, geraet_benutzer, geraet_passwort }.
+// Ins Gerät kommt der Gerätezugang (geraet_*: nur Mitglied der einen Datenbank), sonst, bei LiveSync von vor diesem Zugang, wie
+// bisher der Administrator von CouchDB (benutzer, passwort), bis „livesync-erneuern“ läuft.
+export function geraetezugang(k) {
+  const geraet = Boolean(k.geraet_benutzer || k.geraet_passwort);
+  const [benutzer, passwort] = geraet ? [k.geraet_benutzer, k.geraet_passwort] : [k.benutzer, k.passwort];
+  return { benutzer, passwort };
+}
+export function einstellungen(konfig) {
+  const k = { ...konfig, ...geraetezugang(konfig) };
   for (const f of ["adresse", "benutzer", "passwort", "datenbank", "e2ee"]) {
     if (typeof k[f] !== "string" || !k[f]) throw new Error(`livesync.json: ${f} fehlt`);
   }
   if (!/^[A-Za-z0-9]+$/.test(k.benutzer + k.passwort)) throw new Error("livesync.json: Benutzer und Passwort nur aus Buchstaben und Ziffern");
+  if (!/^[a-z][a-z0-9-]*$/.test(k.datenbank)) throw new Error("livesync.json: Datenbank nur aus Kleinbuchstaben, Ziffern und Bindestrichen");
   const { protocol, host } = new URL(k.adresse);
   const schema = protocol === "http:" ? "http" : "https"; // http nur im Testmodus (livesync.sh)
   const id = "studium-autopilot";
@@ -105,6 +125,33 @@ export async function link(konfig, code = neuerCode()) {
   return { link: LINK_ANFANG + encodeURIComponent(await verschluesseln(JSON.stringify(einstellungen(konfig)), code)), code };
 }
 
+// ---------- Zugangsdaten (livesync.json) ----------
+const ZUFALL = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789";
+const zufall = (n) => Array.from({ length: n }, () => ZUFALL[randomInt(ZUFALL.length)]).join("");
+export const GERAET = "geraet";
+// Neue Zugangsdaten: admin nur für den Server (Einrichten, Aufbau-Fenster), geraet für die Links; je 32 Zeichen. Der Schlüssel der
+// Ende-zu-Ende-Verschlüsselung bleibt, außer passphrase (dann muss die Datenbank neu aufgebaut werden).
+export function konfigNeu(adresse) {
+  return { adresse, benutzer: "admin", ["passwort"]: zufall(32), datenbank: "studium-autopilot", e2ee: zufall(32), geraet_benutzer: GERAET, ["geraet_passwort"]: zufall(32) };
+}
+export function geraetErgaenzen(k) {
+  return k.geraet_benutzer ? k : { ...k, geraet_benutzer: GERAET, ["geraet_passwort"]: zufall(32) };
+}
+export function erneuert(k, passphrase = false) {
+  return { ...k, ["passwort"]: zufall(32), geraet_benutzer: GERAET, ["geraet_passwort"]: zufall(32), ...(passphrase ? { e2ee: zufall(32) } : {}) };
+}
+// Dokument für _users/org.couchdb.user:<name>: ein Benutzer ohne Rollen (CouchDB speichert vom Passwort nur einen Hash)
+export function benutzerDokument(k, rev = "") {
+  if (!/^[a-z][a-z0-9]*$/.test(String(k.geraet_benutzer || "")) || !/^[A-Za-z0-9]{16,}$/.test(String(k.geraet_passwort || ""))) throw new Error("livesync.json: Gerätezugang fehlt");
+  return { _id: `org.couchdb.user:${k.geraet_benutzer}`, ...(rev ? { _rev: rev } : {}), name: k.geraet_benutzer, type: "user", roles: [], ["password"]: k.geraet_passwort };
+}
+// livesync.json ersetzen: daneben schreiben (nur root), dann in einem Schritt umbenennen
+function konfigSchreiben(datei, k) {
+  rmSync(datei + ".neu", { force: true });
+  writeFileSync(datei + ".neu", JSON.stringify(k, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+  renameSync(datei + ".neu", datei);
+}
+
 // ---------- Kurzer Link ----------
 export const GUELTIG_MIN = 30;
 export const KENNUNG = /^[a-z2-9]{20}$/;
@@ -151,12 +198,22 @@ export function seite(setupLink) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const [befehl, datei] = process.argv.slice(2);
+  const ls = process.env.LS_KONFIG || KONFIG;
+  const lesen = () => JSON.parse(readFileSync(ls, "utf8"));
   if (befehl === "link") {
     link(JSON.parse(readFileSync(datei || KONFIG, "utf8"))).then((r) => console.log(JSON.stringify(r)));
   } else if (befehl === "ablegen") {
     console.log(JSON.stringify(ablegen(join(process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server", "web"), readFileSync(0, "utf8").trim())));
+  } else if (befehl === "konfig-neu") {
+    konfigSchreiben(ls, konfigNeu(process.env.LS_ADRESSE));
+  } else if (befehl === "geraet-neu") {
+    konfigSchreiben(ls, geraetErgaenzen(lesen()));
+  } else if (befehl === "erneuern") {
+    konfigSchreiben(ls, erneuert(lesen(), process.env.LS_PASSPHRASE === "1"));
+  } else if (befehl === "benutzer") {
+    console.log(JSON.stringify(benutzerDokument(lesen(), datei || "")));
   } else {
-    console.error("Aufruf: node livesync.mjs link [konfig] | ablegen");
+    console.error("Aufruf: node livesync.mjs link [konfig] | ablegen | konfig-neu | geraet-neu | erneuern | benutzer [rev]");
     process.exit(2);
   }
 }

@@ -15,6 +15,7 @@ const EINST = { stundenplan_ausgeblendet: ["ws-2026-27-x900-vorlesung-1-fr-1000"
 const MODELL = laden("modell", { heute: "2026-10-17", frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": EINST } }).ctx.modell;
 const W = laden("woche", { kontext: { modell: MODELL } }).ergebnis;
 const tag = (s, uhr = "12:00:00") => new Date(s + "T" + uhr);
+const reText = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // Text wörtlich in einem RegExp
 
 test("Aktuelle Woche: Montag bis Freitag diese, Samstag und Sonntag die nächste; Kalenderwoche nach ISO", () => {
   const m = (s, uhr) => W.aktuellerMontag(tag(s, uhr)).toDateString();
@@ -138,9 +139,11 @@ test("Kästen: Kurzname, Art und Gruppe (Name aus gruppe, nie gruppe_alma), Begi
   assert.equal(kasten(w, "Stundenplan/Mi X101.md").notiz, "Stundenplan/Mi X101.md", "ohne Modul-Link die Notiz selbst");
   assert.equal(kasten(woche("2026-10-26", undefined, {}), "Stundenplan/Mo X110.md").notiz, "Stundenplan/Mo X110.md", "Modulnotiz fehlt: nie nur der Name");
   const ue = kasten(w, "Stundenplan/Mi X101 Übung.md");
-  assert.deepEqual([ue.kurz, ue.art, ue.zeit, ue.von, ue.bis, ue.klassen[1]], ["Ökonomik", "Übung Gruppe 2", "08:15", 3, 9, "ue"]);
-  assert.equal(kasten(w, "Stundenplan/Di X180 Tutorium.md").art, "Tutorium 1");
-  assert.equal(kasten(w, "Stundenplan/Di X100 Tutorium.md").art, "Tutorium Gruppe 4");
+  assert.deepEqual([ue.kurz, ue.art, ue.zeit, ue.von, ue.bis, ue.klassen[1]], ["Ökonomik", "Übung", "08:15", 3, 9, "ue"]);
+  // nur die Art, ohne Gruppe (seit 02.11.2026: jede Pille gleich), die Gruppe steht im Tooltip
+  assert.equal(kasten(w, "Stundenplan/Di X180 Tutorium.md").art, "Tutorium");
+  assert.equal(kasten(w, "Stundenplan/Di X100 Tutorium.md").art, "Tutorium");
+  assert.match(kasten(w, "Stundenplan/Di X100 Tutorium.md").titel, /Tutorium Gruppe 4/);
   assert.equal(kasten(w, "Stundenplan/Di X100.md").kurz, "X100"); // ohne Kurznamen der Code
   assert.equal(W.kurzname({ titel: "Ohne Code · Vorlesung" }, {}), "Ohne Code");
   assert.equal(W.artText({ art: "Veranstaltung", gruppe: "3" }), "");
@@ -194,7 +197,7 @@ test("Legende: Module der Woche in der Reihenfolge der Farben, Name aus der Modu
   assert.deepEqual([aus.kaesten.length, aus.kaesten[0].klassen.includes("modul-1"), aus.legende], [1, true, []]);
 });
 
-test("Stil: Kante und Fläche in der Farbe des Moduls, Übung leiser, ohne Modul neutral, Legende in derselben Form", () => {
+test("Stil: Kante und Fläche in der Farbe des Moduls, Übung umrandet, ohne Modul neutral, Legende in derselben Form", () => {
   const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   const regel = (sel) => { const m = css.match(new RegExp("(?:^|\\n)" + sel.replace(/[.*+?^${}()|[\]\\:]/g, "\\$&") + "\\s*\\{([^}]*)\\}")); return m ? m[1] : ""; };
   assert.match(regel(".eba-woche .eba-ev, .eba-wlegende span"), /--eba-ev-farbe: var\(--eba-faint\)/);
@@ -204,7 +207,7 @@ test("Stil: Kante und Fläche in der Farbe des Moduls, Übung leiser, ohne Modul
     assert.match(regel(sel), /border-left: 3px solid var\(--eba-ev-farbe\)/, sel);
     assert.match(regel(sel), flaeche, sel);
   }
-  assert.match(regel(".eba-woche .eba-ev.ue"), /border-left-width: 2px;[^}]*background: color-mix\(in srgb, var\(--eba-ev-farbe\) var\(--eba-modul-ton-ue\), var\(--eba-bg\)\)/);
+  assert.match(regel(".eba-woche .eba-ev.ue"), /border: 1px solid var\(--eba-ev-farbe\);\s*border-left-width: 3px;[^}]*background: color-mix\(in srgb, var\(--eba-ev-farbe\) var\(--eba-modul-ton-ue\), var\(--eba-bg\)\)/);
   assert.ok(!/\.ue\.heute/.test(css), "kein eigener Rahmen in --eba-info für Übungen heute");
   assert.ok(!/\.eba-woche \.eba-ev[^{]*\{[^}]*var\(--eba-(accent|info)\) \d+%/.test(css), "Kästen nicht mehr im Akzent oder in --eba-info");
 });
@@ -559,7 +562,7 @@ test("Stil: Leiste im oberen Innenabstand, Freitag ohne Platzhalter, „KW“ au
   assert.match(css, /\.eba-wleiste\s*\{[^}]*position:\s*absolute;[^}]*grid-column:\s*2 \/ -1;[^}]*height:\s*var\(--eba-wlh\)/);
   // Jede Ansicht mit eigenem oberen Innenabstand bekommt die Leiste dazu, und eine absolute Heute-Spalte beginnt darunter
   for (const sel of ["body:not(.is-phone) .eba-s-dashboard", "body.is-phone .eba-s-dashboard", "body.is-phone .eba-s-stundenplan"]) {
-    assert.match(css, new RegExp(sel.replace(/[.()]/g, "\\$&") + " \\.eba-woche\\.mit-leiste \\{ padding-top: calc\\(\\d+px \\+ var\\(--eba-wlh\\)\\); \\}"), sel);
+    assert.match(css, new RegExp(reText(sel) + " \\.eba-woche\\.mit-leiste \\{ padding-top: calc\\(\\d+px \\+ var\\(--eba-wlh\\)\\); \\}"), sel);
     assert.ok(css.includes(sel + " .eba-woche.mit-leiste .eba-tagspalte { top: var(--eba-wlh); }"), sel + ": Heute-Spalte unter der Leiste");
   }
 });
@@ -621,7 +624,7 @@ test("Stil: schmal die knappe Zeile statt der langen, Wörter brechen nur an Sil
   const css = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "snippets", "eba-core.css"), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
   assert.match(css, /\.eba-ev \.eba-ev-knapp \{ display: none; \}/);
   const schmal = css.slice(css.indexOf("@container eba-kz (max-width: 480px) {\n  .eba-woche .eba-ev, .eba-woche .eba-ev.ue"));
-  assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > b i, \.eba-ev \.eba-ev-lang \{ display: none; \}\s*\.eba-ev \.eba-ev-knapp \{ display: inline; \}/);
+  assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > \.eba-ev-art, \.eba-ev \.eba-ev-lang \{ display: none; \}\s*\.eba-ev \.eba-ev-knapp \{ display: inline; \}/);
   assert.match(schmal.slice(0, 1200), /\.eba-woche \.eba-ev > b \{[^}]*hyphens: auto;[^}]*overflow-wrap: normal;/);
   assert.match(css, /@container eba-kz \(max-width: 480px\) \{ \.eba-woche \.eba-ev\.ausnahme \{ border-left-width: 2px; \} \}/);
 });

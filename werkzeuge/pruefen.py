@@ -11,14 +11,17 @@ Sekunden, ohne ignorierte Sicherungen und Kopien des Tresors); --alles nimmt auc
 (der Release-Baum, ein Wegwerf-Ordner) wird immer ganz geprüft:
 
 * Pfade: keine privaten Ordner, keine gerätelokalen Obsidian-Dateien, nur das Plugin „studium-autopilot“, keine Dateien, die
-  ein Tresor selbst anlegt (Abrufer-Sperren, Indizes, Lernstände, Noten aus Alma, Textfassungen der PDFs).
+  ein Tresor selbst anlegt (Abrufer-Sperren, Indizes, Lernstände, Noten aus Alma, Textfassungen der PDFs, ILIAS-Abgaben), keine
+  lokalen und privaten Dateien in irgendeinem Ordner (.env, .mcp.json, CLAUDE.local.md, .claude/settings.local.json, Widget-Daten
+  je Gerät). Im Vault zusätzlich eine Erlaubnisliste (TRESOR_ERLAUBT): Nur bekannte Pfade der Vorlage, jeder andere ist ein Fund.
 * Dateitypen: keine PDF-, Office-, Anki-, Archiv- oder Mediendateien; Bilder nur in docs/bilder/ (png, jpg, svg, webp);
   höchstens --max-mb je Datei.
 * Markdown: keine Mermaid-Codeblöcke (die GitHub-App zeigt nur den Code; Diagramme als PNG unter docs/bilder/).
-* Inhalte: persönliche Pfade, Server-Hinweise, IP-Adressen (außer Beispieladressen), E-Mail-Adressen (außer
-  Funktionsadressen der Uni, GitHub-noreply und Namen von Schlüsselarten wie sk-ssh-ed25519@openssh.com), Telefonnummern,
-  Matrikelnummern und Geburtsdaten mit Wert, geteilte Lehrmaterial-Links, Zugangsdaten und Token, Sync-Konfiguration, der
-  Name des Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur lokal).
+* Inhalte: persönliche Pfade (Windows und macOS), Server-Hinweise, IP-Adressen (außer Beispieladressen), E-Mail-Adressen (außer
+  Funktionsadressen der Uni, GitHub-noreply und Namen von Schlüsselarten wie sk-ssh-ed25519@openssh.com; Benutzerkennungen mit
+  Ziffern sind persönlich), Telefonnummern, Matrikelnummern (auch „Mat.-Nr.“) und Geburtsdaten mit Wert, geteilte
+  Lehrmaterial-Links, Zugangsdaten (auch DB_PASSWORD=… und „Passwort für den Kurs: …“) und Token, Sync-Konfiguration, der Name des
+  Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur lokal).
 * Testseiten: jede HTML-Datei unter tests/daten/ beginnt mit dem Kopf „<!-- Erfundene Testseite“ (Werte erfunden, Aufbau
   höchstens nachgebaut) oder „<!-- Öffentliche Seite ohne Anmeldung“ (was jeder ohne Konto sieht). Seiten nach einer
   Anmeldung kommen nie roh in den Baum.
@@ -54,7 +57,7 @@ AUTOR_WORT = re.compile(r"\bPhili" + r"ps?\b")  # Vorname des Autors (auch Genit
 
 INHALT_REGELN = [
     ("privater Benutzername", re.compile(r"cso" + r"ny", re.I)),
-    ("Windows-Benutzerpfad", re.compile(r"\b[a-z]:(?:\\\\|\\|/)+users(?:\\\\|\\|/)", re.I)),
+    ("Windows-Benutzerpfad", re.compile(r"\b[a-z]:[\\/]+users[\\/]", re.I)),
     ("Server-Pfad", re.compile(r"/home/(?:ubunt" + r"u|opc)\b")),
     ("Server-Hinweis", re.compile(r"\.ts\.net\b", re.I)),
     ("Server-Hinweis (allgemein)", re.compile(r"\bsslip\.io\b|\bnip\.io\b|orac" + r"lecloud|\bOrac" + r"le[- ]?(?:Server|Box|Cloud|VM)\b", re.I)),
@@ -70,14 +73,26 @@ INHALT_REGELN = [
     ("Zugangsdaten in URL", re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s/:@\"'<>]+:[^\s/@\"'<>]+@[^\s/]", re.I)),
     ("Passwort mit Wert", re.compile(
         r"\b(?:pass(?:wort|word|wd)|pwd|kennwort)\s*[=:]\s*[\"'`„*]*(?!\s|$|[\"'`“*]?\s*$)[^\s\"'`“*,;)]{3,}", re.I)),
+    # Dasselbe, wenn das Stichwort Teil eines Namens ist (DB_PASSWORD=…, mysql_root_password: …): nach „_“ gibt es keine Wortgrenze,
+    # \b ließ das durch. Nicht, wenn der Wert nach Code aussieht (k.passwort, zugang.kennwortGeber(): Zuweisung im Quelltext).
+    ("Passwort mit Wert", re.compile(
+        r"(?<=_)(?:pass(?:wort|word|wd)|pwd|kennwort)\s*[=:]\s*[\"'`„*]*(?!\s|$|[\"'`“*]?\s*$)(?![A-Za-z_$][\w$]*[.(\[])"
+        r"[^\s\"'`“*,;)]{3,}", re.I)),
     # „Passwort … lautet/ist X“: X mit Ziffer oder hervorgehoben (**X**, `X`, „X“), damit „Das Passwort ist geheim“ nicht zählt
     ("Kurspasswort", re.compile(
-        r"\b(?:kurs)?pass(?:wort|word)\b[^\n]{0,20}?\b(?:ist|lautet|heißt|is)\b\s*:?\s*"
+        r"(?<![A-Za-z0-9])(?:kurs)?pass(?:wort|word)\b[^\n]{0,20}?\b(?:ist|lautet|heißt|is)\b\s*:?\s*"
         r"(?:[\"'`„*]+[^\s\"'`“*]{3,}|[^\s\"'`“*,.;)?!]*\d[^\s\"'`“*,.;)?!]*)", re.I)),
+    # „Passwort für den Kurs: X“, „password for the course = X“: ein Bezug zwischen Stichwort und Doppelpunkt
+    ("Passwort mit Bezug", re.compile(
+        r"(?<![A-Za-z0-9])(?:kurs)?pass(?:wort|word)\s+(?:für|fuer|zum|zur|zu|von|vom|des|der|of|for|to)\s[^\n:=]{1,40}?\s?[=:]\s*"
+        r"[\"'`„*]*(?!\s|$|[\"'`“*]?\s*$)[^\s\"'`“*,;)]{3,}", re.I)),
+    # macOS-Benutzerpfad /Users/<name>/ (nicht „/Users/“ allein, nicht /Users/Shared/ und Platzhalter wie <name>)
+    ("macOS-Benutzerpfad", re.compile(
+        r"(?<![\w.:/\\])/Users/(?!(?i:shared|guest|user|username|name|yourname|you)/)[A-Za-z0-9][A-Za-z0-9._-]*/")),
     ("Verweis auf privaten Ordner", re.compile(r"(?<![\w-])_priv" + r"at[/\\]")),
     # Persönliches aus Alma (Kopfzeile, Leistungen): Bezeichnung und Wert, auch über Tabellenzellen und Tags hinweg
     ("Matrikelnummer mit Wert", re.compile(
-        r"\b(?:matrikel(?:nummer|-?nr\b\.?)?|matr\.?\s?-?\s?nr\b\.?|matriculation\s+(?:number|no\b\.?)|student\s+id)"
+        r"\b(?:matrikel(?:nummer|-?nr\b\.?)?|mat(?:r)?\.?\s?-?\s?nr\b\.?|matriculation\s+(?:number|no\b\.?)|student\s+id)"
         r"(?:[\s:=|*#.\-–]|&nbsp;|<[^<>]{0,120}>){0,15}\d{6,8}(?!\d)", re.I)),
     ("Geburtsdatum mit Wert", re.compile(
         r"\b(?:geburtsdatum|geboren\s+am|geb\.(?:\s*am)?|date\s+of\s+birth|birth\s*date)"
@@ -122,18 +137,41 @@ BILD_ENDUNGEN = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".tif
 BILD_ERLAUBT = {".png", ".jpg", ".jpeg", ".svg", ".webp"}
 BILD_ORDNER = "docs/bilder/"
 
-# Dateien, die ein Tresor selbst anlegt (Noten aus Alma samt Konfliktkopien, Sperren, Marker, Zustände, Textfassungen der PDFs);
-# gleiche Liste wie die .gitignore und vault_auslassen in werkzeuge/release.py
+# Dateien, die ein Tresor selbst anlegt (Noten aus Alma samt Konfliktkopien, Sperren, Marker, Zustände, Textfassungen der PDFs,
+# Abgaben und Feedback aus ILIAS); gleiche Liste wie die .gitignore und vault_auslassen in werkzeuge/release.py
+# (tests/release.test.js prüft das mit werkzeuge/listen_pruefen.py). Je Eintrag: Muster auf „/“ + Pfad, Meldung, ein Beispielpfad.
+_V = "Studium Autopilot/"
 TRESOR_DATEIEN = [
-    (re.compile(r"/System/Daten/alma-konto[^/]*\.json$"), "persönliche Daten (Noten aus Alma)"),
-    (re.compile(r"/System/Daten/uni-zugang\.json$"), "vaultlokale Datei (Uni-Zugang)"),
-    (re.compile(r"/System/Daten/update\.json$"), "vaultlokale Datei (Update-Stand)"),
-    (re.compile(r"/System/Daten/volltext-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
-    (re.compile(r"/System/Daten/alma-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)"),
-    (re.compile(r"/System/Daten/ilias-kalender[^/]*\.json$"), "vaultlokale Datei (ILIAS-Kalender)"),
-    (re.compile(r"/System/Daten/server[^/]*\.json$"), "persönliche Daten bzw. Sperre des eigenen Servers"),
-    (re.compile(r"/Unterlagen/_Volltext/"), "persönliche Textfassung einer PDF (Volltext)"),
-    (re.compile(r"/System/Daten/seit-besuch/"), "persönliche Daten (Seit deinem letzten Besuch)"),
+    (re.compile(r"/System/Daten/abruf\.json$"), "gerätelokale Datei", _V + "System/Daten/abruf.json"),
+    (re.compile(r"/System/Daten/installiert\.json$"), "vaultlokale Datei (Update-Stand)", _V + "System/Daten/installiert.json"),
+    (re.compile(r"/System/Daten/aufgeraeumt\.json$"), "vaultlokale Datei (aufgeräumte Ordner)", _V + "System/Daten/aufgeraeumt.json"),
+    (re.compile(r"/System/Daten/nachtraege\.json$"), "vaultlokale Datei (erledigte Nachträge)", _V + "System/Daten/nachtraege.json"),
+    (re.compile(r"/System/Daten/ilias\.json$"), "vaultlokale Datei (ILIAS-Index)", _V + "System/Daten/ilias.json"),
+    (re.compile(r"/System/Daten/ilias-abruf\.json$"), "gerätelokale Datei", _V + "System/Daten/ilias-abruf.json"),
+    (re.compile(r"/System/Daten/Karteikarten/"), "persönliche Lernstände (Karteikarten)", _V + "System/Daten/Karteikarten/s-1.json"),
+    (re.compile(r"/System/Daten/alma-konto[^/]*\.json$"), "persönliche Daten (Noten aus Alma)", _V + "System/Daten/alma-konto 2.json"),
+    (re.compile(r"/System/Daten/uni-zugang\.json$"), "vaultlokale Datei (Uni-Zugang)", _V + "System/Daten/uni-zugang.json"),
+    (re.compile(r"/System/Daten/update\.json$"), "vaultlokale Datei (Update-Stand)", _V + "System/Daten/update.json"),
+    (re.compile(r"/System/Daten/volltext-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)", _V + "System/Daten/volltext-abruf.json"),
+    (re.compile(r"/System/Daten/alma-abruf\.json$"), "vaultlokale Datei (Abrufer-Sperre)", _V + "System/Daten/alma-abruf.json"),
+    (re.compile(r"/System/Daten/ilias-kalender[^/]*\.json$"), "vaultlokale Datei (ILIAS-Kalender)", _V + "System/Daten/ilias-kalender-abruf.json"),
+    (re.compile(r"/System/Daten/server[^/]*\.json$"), "persönliche Daten bzw. Sperre des eigenen Servers", _V + "System/Daten/server.json"),
+    (re.compile(r"/Unterlagen/_Volltext/"), "persönliche Textfassung einer PDF (Volltext)", _V + "Unterlagen/_Volltext/Folien 01.md"),
+    (re.compile(r"/System/Daten/seit-besuch/"), "persönliche Daten (Seit deinem letzten Besuch)", _V + "System/Daten/seit-besuch/g-1.json"),
+    (re.compile(r"/Termine/[^/]* (?:Abgabe|Feedback) in ILIAS[^/]*\.md$"), "persönliche Abgabe aus dem ILIAS-Kalender",
+     _V + "Termine/2026-11-01 Abgabe in ILIAS Blatt 1.md"),
+    (re.compile(r"/\.obsidian/plugins/[^/]+/widget-(?:iphone|ipad)\.json$"), "gerätelokal (Stundenplan und Fristen der Widgets)",
+     _V + ".obsidian/plugins/studium-autopilot/widget-iphone.json"),
+]
+# Lokale, private Dateien, die in keinem Ordner des Repos vorkommen dürfen (Pfad beliebig tief): Umgebungsdateien mit Zugangsdaten,
+# lokale Einstellungen von Claude Code, MCP-Konfiguration. Auch „.env“ ohne Namen davor (os.path.splitext sieht dort keine
+# Endung) und „.env.irgendwas“; Vorlagen heißen darum anders (env.example). Je Eintrag: Muster auf „/“ + Pfad, Meldung, Beispiele.
+LOKALE_DATEIEN = [
+    (re.compile(r"/\.env(?:\.[^/]*)?$"), "Umgebungsdatei (Zugangsdaten)", [".env", "server/.env", "server/.env.local"]),
+    (re.compile(r"/\.claude/settings\.local\.json$"), "lokale Einstellungen von Claude Code",
+     [".claude/settings.local.json", _V + ".claude/settings.local.json"]),
+    (re.compile(r"/CLAUDE\.local\.md$"), "lokale Hinweise für Claude Code", ["CLAUDE.local.md", _V + "CLAUDE.local.md"]),
+    (re.compile(r"/\.mcp\.json$"), "MCP-Konfiguration (Zugangsdaten)", [".mcp.json", "server/.mcp.json"]),
 ]
 TESTSEITE = re.compile(r"^tests/daten/.+\.html?$", re.I)
 TESTSEITE_KOPF = re.compile(r"<!--\s*(?:Erfundene Testseite|Öffentliche Seite ohne Anmeldung)\b")
@@ -146,6 +184,28 @@ HEX64 = re.compile(r"\b[0-9a-f]{64}\b")
 # Persönliche Ordner der Vorlage (müssen leer sein, höchstens .gitkeep)
 LEERE_ORDNER = ["Stundenplan", "Vorlesungen", "Unterlagen", "Anhänge", "Schlüsselqualifikationen",
                 "Karteikarten", "Lernplan"]
+# Erlaubnisliste für den Vault: Nur diese Pfade (relativ zum Vault, NFC) darf die Vorlage enthalten. Alles andere, auch eine
+# harmlos aussehende Datei, ist ein Fund: ein neuer Ordner, eine Datei, die ein Gerät oder ein Tresor neben die Vorlage legt
+# (Sperren, Widget-Daten, Sicherungen). Neues gehört mit Absicht hierher, nicht versehentlich in einen Export. Aufgestellt aus
+# dem Stand vom 02.11.2026 (Ordner der Vorlage, Klassen von klasse_von, Dateien von release.py). Die persönlichen Ordner in
+# LEERE_ORDNER meldet vorlage_pruefen; hier zählt von ihnen nur .gitkeep.
+TRESOR_ERLAUBT = re.compile("|".join("(?:" + m + ")" for m in (
+    r"Dashboard\.md",
+    r"(?:Anhänge|Karteikarten|Lernplan|Schlüsselqualifikationen|Stundenplan|Unterlagen|Vorlesungen)/\.gitkeep",
+    r"Module/.+\.md",                       # Module in Gruppenordnern
+    r"Studium/[^/]+\.md",                   # die Seiten
+    r"Termine/[^/]+\.md",                   # zentrale Termine
+    r"System/Einstellungen\.md",
+    r"System/Daten/(?:Musterplan|Semester)\.md",
+    r"System/Daten/system-dateien\.json(?:\.sig)?",  # erzeugt release.py im Baum; liste_pruefen prüft sie
+    r"System/Skripte/[^/]+\.js",
+    r"System/Gerüste/[^/]+\.md",
+    r"\.claude/(?:CLAUDE\.md|settings\.json)",
+    r"\.claude/skills/studium-autopilot/[^/]+\.md",
+    r"\.obsidian/(?:app|appearance|bookmarks|community-plugins|core-plugins|hotkeys|types)\.json",
+    r"\.obsidian/snippets/eba-[^/]+\.css",
+    r"\.obsidian/plugins/studium-autopilot/(?:main\.js|manifest\.json|styles\.css)",  # KERN_DATEIEN, nichts daneben
+)), re.S)
 MODUL_LEER = ["ergebnis", "versuch", "klausur", "semester_geplant", "alma_ausgeblendet", "anmeldung_verzicht", "alma_uebernommen"]
 # zaehlen: in der Vorlage nie gesetzt. zaehlen: false (Schalter „Mitzählen“ bis 0.7.0) lässt das Update die Liste nur vom Tag
 # laden, ohne den Abruf aus dem Release, den GitHub je Version zählt (update.js); stünde es in der Vorlage, zählte kein Tresor mit.
@@ -186,7 +246,7 @@ def kuerzen(s, n=110):
 def maskieren(regel, s):
     """Zugangsdaten nie vollständig ausgeben."""
     if regel in ("GitHub-Token", "API-Schlüssel (sk-)", "AWS-Schlüssel", "Google-API-Schlüssel", "Slack-Token",
-                 "Passwort mit Wert", "Kurspasswort", "Zugangsdaten in URL", "LiveSync/CouchDB-Konfiguration",
+                 "Passwort mit Wert", "Passwort mit Bezug", "Kurspasswort", "Zugangsdaten in URL", "LiveSync/CouchDB-Konfiguration",
                  "Matrikelnummer mit Wert", "Geburtsdatum mit Wert"):
         return s[:6] + "…(" + str(len(s)) + " Zeichen)"
     return s
@@ -249,8 +309,9 @@ def email_erlaubt(lokal, domain):
     if d == "openssh.com" and OPENSSH_ART.fullmatch(lokal):
         return True
     if d == "uni-tuebingen.de" or d.endswith(".uni-tuebingen.de"):
-        # Funktionsadressen (pruefungsamt@…); vorname.nachname@… und Studierenden-Adressen sind persönlich
-        return "student" not in d and "." not in lokal
+        # Funktionsadressen (pruefungsamt@…); vorname.nachname@…, Studierenden-Adressen (…@student.uni-tuebingen.de) und
+        # Benutzerkennungen mit Ziffern (Kennung@uni-tuebingen.de, auch ohne student) sind persönlich
+        return "student" not in d and "." not in lokal and not re.search(r"\d", lokal)
     return False
 
 
@@ -511,6 +572,19 @@ def vorlage_pruefen(wurzel, alle, funde):
     return vaults
 
 
+def tresor_pfade_pruefen(alle, vaults, funde):
+    """Jede Datei unter einem Vault muss in TRESOR_ERLAUBT stehen (Erlaubnisliste statt nur Verbote)."""
+    for v in vaults:
+        for r in alle:
+            if not r.startswith(v):
+                continue
+            innen = unicodedata.normalize("NFC", r[len(v):])
+            if any(innen.startswith(o + "/") for o in LEERE_ORDNER) and not innen.endswith("/.gitkeep"):
+                continue  # meldet vorlage_pruefen
+            if not TRESOR_ERLAUBT.fullmatch(innen):
+                funde.append(Fund(r, 0, "Vault: Pfad nicht in der Vorlage (Erlaubnisliste TRESOR_ERLAUBT)", innen))
+
+
 # ---------------------------------------------------------------------------------------------------------------------
 # Update-Liste (system-dateien.json): Dateiklassen wie System/Skripte/update.js (klasseVon) – beide gleich halten!
 # ---------------------------------------------------------------------------------------------------------------------
@@ -651,17 +725,10 @@ def pfad_pruefen(rel, groesse, max_bytes, funde):
                 funde.append(Fund(rel, 0, "fremdes Plugin", teile[k + 1]))
             if name == "data.json":
                 funde.append(Fund(rel, 0, "Plugin-Einstellungen (gerätelokal)", name))
-    if rel.endswith("System/Daten/abruf.json"):
-        funde.append(Fund(rel, 0, "gerätelokale Datei", "abruf.json"))
-    if rel.endswith("System/Daten/installiert.json"):
-        funde.append(Fund(rel, 0, "vaultlokale Datei (Update-Stand)", "installiert.json"))
-    if rel.endswith("System/Daten/ilias.json"):
-        funde.append(Fund(rel, 0, "vaultlokale Datei (ILIAS-Index)", "ilias.json"))
-    if rel.endswith("System/Daten/ilias-abruf.json"):
-        funde.append(Fund(rel, 0, "gerätelokale Datei", "ilias-abruf.json"))
-    if "/System/Daten/Karteikarten/" in "/" + rel:
-        funde.append(Fund(rel, 0, "persönliche Lernstände (Karteikarten)", name))
-    for rx, regel in TRESOR_DATEIEN:
+    for rx, regel, _beispiel in TRESOR_DATEIEN:
+        if rx.search("/" + rel):
+            funde.append(Fund(rel, 0, regel, name))
+    for rx, regel, _beispiele in LOKALE_DATEIEN:
         if rx.search("/" + rel):
             funde.append(Fund(rel, 0, regel, name))
     if name in (".DS_Store", "Thumbs.db", "desktop.ini") or name.startswith("~$"):
@@ -778,6 +845,7 @@ def pruefen(wurzel, sperre, max_bytes, ohne_node=False, alles=False):
             if ist_vault_js(rel):
                 ios_pruefen(rel, text, funde)
     vaults = vorlage_pruefen(wurzel, alle, funde)
+    tresor_pfade_pruefen(alle, vaults, funde)
     for v in vaults:
         liste_pruefen(wurzel, alle, v, funde)
     node_pruefen(js, wurzel, funde, hinweise, ohne_node)

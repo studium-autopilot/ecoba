@@ -1,6 +1,5 @@
 # Gerätelokal oder vom Sync erzeugt – nie einchecken
 Studium Autopilot/.obsidian/workspace*.json
-Studium Autopilot/.obsidian/plugins/*/data.json
 Studium Autopilot/.trash/
 Studium Autopilot/System/Daten/abruf.json
 Studium Autopilot/System/Daten/installiert.json
@@ -18,6 +17,23 @@ Studium Autopilot/System/Daten/server*.json
 Studium Autopilot/System/Daten/ilias-kalender*.json
 Studium Autopilot/Unterlagen/_Volltext/
 Studium Autopilot/System/Daten/seit-besuch/
+Studium Autopilot/Termine/* Abgabe in ILIAS*.md
+Studium Autopilot/Termine/* Feedback in ILIAS*.md
+Studium Autopilot/Unterlagen/*
+!Studium Autopilot/Unterlagen/.gitkeep
+# Im Ordner .obsidian/plugins nur das Plugin, in dessen Ordner nur Kern, Manifest und Stile; Widget-Daten und data.json bleiben auf dem Gerät
+Studium Autopilot/.obsidian/plugins/*
+!Studium Autopilot/.obsidian/plugins/studium-autopilot/
+Studium Autopilot/.obsidian/plugins/studium-autopilot/*
+!Studium Autopilot/.obsidian/plugins/studium-autopilot/main.js
+!Studium Autopilot/.obsidian/plugins/studium-autopilot/manifest.json
+!Studium Autopilot/.obsidian/plugins/studium-autopilot/styles.css
+# Lokale und private Dateien in jedem Ordner
+*.env
+.env.*
+**/.claude/settings.local.json
+CLAUDE.local.md
+.mcp.json
 .DS_Store
 Thumbs.db
 node_modules/
