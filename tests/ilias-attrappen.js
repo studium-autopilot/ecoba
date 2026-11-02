@@ -140,14 +140,19 @@ function ilias(def, u) {
   return f;
 }
 
-// Anmeldung wie ilias-anmeldung.js: { ok } bzw. { ok: false, grund, hinweis }; prüft nur das Kennwort
+// Anmeldung wie ilias-anmeldung.js: { ok, passwortGesendet } bzw. { ok: false, grund, hinweis, passwortGesendet }; prüft nur das
+// Kennwort. f.sitzungGilt = true: wie eine Sitzung von früher auf dem Gerät, ok ohne Kennwort; f.antwort: feste Antwort nach dem Senden
 function anmeldung(erwartet) {
   const f = async (sitzung, zugang) => {
     f.aufrufe++;
-    if (!sitzung || !zugang || typeof zugang.kennwortGeber !== "function") return { ok: false, grund: "unerwartet", hinweis: "falscher Aufruf" };
-    return zugang.kennwortGeber() === erwartet ? { ok: true } : { ok: false, grund: "zugang-falsch", hinweis: "Benutzername oder Kennwort stimmt nicht." };
+    if (!sitzung || !zugang || typeof zugang.kennwortGeber !== "function") return { ok: false, grund: "unerwartet", hinweis: "falscher Aufruf", passwortGesendet: false };
+    if (f.sitzungGilt) return { ok: true, passwortGesendet: false };
+    const kw = zugang.kennwortGeber();
+    f.gesendet++;
+    if (f.antwort) return Object.assign({ passwortGesendet: true }, f.antwort);
+    return kw === erwartet ? { ok: true, passwortGesendet: true } : { ok: false, grund: "zugang-falsch", hinweis: "Benutzername oder Kennwort stimmt nicht.", passwortGesendet: true };
   };
-  f.aufrufe = 0;
+  f.aufrufe = 0; f.gesendet = 0; f.sitzungGilt = false; f.antwort = null;
   return f;
 }
 

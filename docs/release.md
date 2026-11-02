@@ -50,7 +50,8 @@ ohne Version: Die Anleitung und der grüne Knopf der README laden
 `https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip`, der iOS-Kurzbefehl daneben
 `Studium-Autopilot-iOS.zip` (der Tresor zwei Ebenen tief, siehe unten). **Beide Assets müssen bei jedem Release genau so
 heißen.** Daneben entstehen `studium-server.tar.gz` mit seiner Signatur `studium-server.tar.gz.sig` (siehe „Signatur des
-Server-Pakets“) und `system-dateien.json`.
+Server-Pakets“) und `system-dateien.json` mit ihrer Signatur `system-dateien.json.sig` (siehe „Signatur der Update-Liste“).
+Assets eines früheren Laufs löscht `--zip` vorher, damit nach einem Abbruch nichts bereitliegt, was nicht zu diesem Baum gehört.
 
 ### Signatur des Server-Pakets
 
@@ -76,6 +77,39 @@ aus dem Download):
   ab dem nächsten Release signiert der neue, danach die alte Zeile löschen. Ist der alte Schlüssel verloren, nehmen Server neue
   Pakete nur noch über eine neue Einrichtung an.
 
+### Signatur der Update-Liste
+
+Programmteile installiert das Plugin nur nach einem Tipp auf **Neue Version installieren**, dann aber am Computer mit vollem
+Zugriff auf Dateien und Schlüsselbund. Die Prüfsumme der Liste im Manifest hilft gegen ein übernommenes Konto nicht: Wer das
+GitHub-Konto oder ein Token hätte, schriebe auch das Manifest. Darum signiert der Export die Liste, und das Plugin installiert
+nur eine Liste, die einer der Schlüssel in `SIGNATUR_SCHLUESSEL` signiert hat, und zwar im Kern `main.js` **der installierten
+Version** (`docs/architektur/update.md`, „Signatur der Liste“). Mit derselben Signatur prüft der Kern beim Start, ob die Skripte im
+Tresor zu dieser Version gehören (`docs/architektur/skripte-pruefen.md`):
+
+- `release.py --zip` signiert genau die Bytes von `system-dateien.json` mit `ssh-keygen -Y sign -n studium-autopilot-plugin` und
+  demselben Schlüssel wie das Server-Paket, als Asset `system-dateien.json.sig`. Wegen des eigenen Namensraums gilt eine
+  Signatur für ein Server-Paket (`studium-server`) oder einen Commit (`git`) nie als Signatur der Liste.
+- Dieselbe Datei legt `--zip` byte-gleich in den Baum (`Studium Autopilot/System/Daten/system-dateien.json.sig`), bevor es die
+  ZIPs baut: Ein Tresor aus der ZIP prüft seine Skripte damit vom ersten Start an. Die Liste nennt ihre eigene Signatur nicht.
+- Vorher muss `main.js` im Baum den Signierschlüssel in `SIGNATUR_SCHLUESSEL` nennen, sonst lehnten Plugins dieser Version
+  das nächste Update ab; die Meldung nennt den Eintrag, der hinein gehört. Danach prüft `release.py` die frische Signatur mit
+  `ssh-keygen -Y verify` gegen genau diese Schlüssel. Scheitert eins, bricht `--zip` ab, Liste und Signatur sind weg.
+  `SIGNATUR_SCHLUESSEL` und `server/allowed_signers` nennen dieselben Schlüssel (`tests/update-signatur.test.js`).
+- Im Baum prüft `ECOBA_RELEASE=.. npm test` die echte Signatur zusätzlich mit dem Code des Kerns (`signaturPruefen` mit den
+  festen Schlüsseln, siehe „2. Prüfen“) und dass die Signatur im Baum dieselbe ist wie das Asset. In GitHub Actions ist dieser
+  Test übersprungen; die übrigen prüfen das Format mit Wegwerf-Schlüsseln und ssh-keygen.
+- **Übergang:** Plugins bis 0.7.6 laden die Signatur nicht. Das Update auf die erste signierte Version prüfen sie wie bisher nur
+  mit der Prüfsumme, ab dann prüft jedes Plugin jedes Update. Dieses eine Update legt auch keine Signatur in den Tresor; der neue
+  Kern holt sie beim ersten Start aus dem Release seiner Version. Darum braucht schon das erste Release mit der Prüfung der
+  Skripte das Asset `system-dateien.json.sig` (sonst startet auf keinem Gerät ein Skript, siehe skripte-pruefen.md).
+- **Fehlt die Signatur im Release**, installiert kein Plugin ab der ersten signierten Version das Update („ließ sich nicht als
+  echt bestätigen“). Releases sind unveränderlich: dann eine neue Version mit Signatur veröffentlichen.
+- **Schlüssel wechseln:** zusammen mit dem Server-Paket (oben), nur langsamer: Plugins prüfen mit den Schlüsseln der
+  installierten Version, und ein Tresor bleibt oft Wochen auf seiner. Der neue Schlüssel kommt zuerst als zweiter Eintrag in
+  `SIGNATUR_SCHLUESSEL` und `server/allowed_signers`, mit Releases, die noch der alte signiert (`release.py` warnt dabei); erst
+  deutlich später signiert der neue. Wer dann noch eine Version ohne ihn hat, kommt nur über die ZIP weiter; ist der alte
+  Schlüssel verloren, gilt das für alle.
+
 Am Ende druckt der Export den Block für das Manifest der zentralen Daten (`release` mit `version`, `url_basis`, `sha256` der
 Update-Liste, `notiz`), siehe Schritt 6.
 
@@ -83,12 +117,13 @@ Update-Liste, `notiz`), siehe Schritt 6.
 
 ```
 python werkzeuge/pruefen.py .
-npm ci && GITHUB_ACTIONS=true CI=true npm test && npm run lint
+npm ci && ECOBA_RELEASE=.. GITHUB_ACTIONS=true CI=true npm test && npm run lint
 python -m ruff check werkzeuge/ server/
 ```
 
 Die Tests laufen mit den Variablen der CI: Dort schreibt `pruefen.py` zu jedem Fund eine Anmerkung für GitHub, und ein Test,
-der die Ausgabe liest, kann nur dort scheitern (so geschehen mit 0.6.9). `tests/update.test.js` prüft dabei auch die Update-Liste im Baum (Klassen, Größen, Prüfsummen, keine Datei vergessen).
+der die Ausgabe liest, kann nur dort scheitern (so geschehen mit 0.6.9). `ECOBA_RELEASE=..` zeigt auf die Assets neben dem Baum:
+Dann prüft `tests/update-signatur.test.js` auch die echte Signatur der Liste mit dem Code des Plugins. `tests/update.test.js` prüft dabei auch die Update-Liste im Baum (Klassen, Größen, Prüfsummen, keine Datei vergessen).
 Dazu der Testdurchgang in Obsidian (siehe `docs/tests.md`): den Baum als neuen Tresor mit anderem Namen öffnen, iPhone, iPad,
 Android, Windows, Mac, hell und dunkel.
 
@@ -103,7 +138,14 @@ Feste Werte, die Dependabot nicht sieht (je Release kurz prüfen, bei Bedarf anh
   Wheels. Der Helfer installiert mit `pip install --require-hashes --no-deps --only-binary=:all:` genau diese Liste. Eine neue
   Liste ändert die Fassung des Helfers: Der nächste Aufruf von `platzsucher` ersetzt einen laufenden.
 - Always-Free-Grenzen in `server/stand.mjs` (`FREI`) und `server/README.md` gegen die Seite „Always Free Resources“ von Oracle.
-- `RUFF_VERSION` und `ESBUILD_VERSION` in `.github/workflows/pruefen.yml`.
+- `overrides` in `package.json`: ESLint 10.14.0 verlangt `minimatch` ^10.2.6, und alle 10.x haben eine bekannte Lücke
+  (GHSA-g3hv-75wg-m249, behoben ab 11.0.1; `npm audit` meldet sie sonst). Entfernen, sobald ESLint selbst `minimatch` ab 11.0.1
+  verlangt (danach `npm audit` prüfen).
+- Ruff in `.github/requirements-ci.txt`: genau eine Version mit den SHA-256 aller Dateien dieser Version von PyPI (Feld `urls` in
+  `https://pypi.org/pypi/ruff/<Version>/json`), die CI installiert mit `pip install --require-hashes`. Esbuild steht mit fester
+  Version in `package.json` (`npm ci` prüft die Integrität). Dependabot (pip, Ordner `.github/`) schlägt neue Ruff-Versionen vor;
+  ob sein PR die Prüfsummen aller Dateien der neuen Version enthält, vor dem Mergen gegen PyPI prüfen (nicht erprobt).
+  `tests/ci-pins.test.js` prüft, dass jede Zeile Prüfsummen hat.
 - Preise von Opus in `Studium Autopilot/System/Skripte/server.js` (`pdfKosten`, Stand im Kommentar): Der Server-Lauf nimmt den
   Alias `opus`, ein neues Modell kann andere Preise haben.
 
@@ -127,10 +169,13 @@ Arbeitskopie nachziehen (`.github/`, `package.json`, `package-lock.json`), sonst
 ## 5. GitHub-Release
 
 Auf GitHub unter **Releases** → **Draft a new release** den Tag wählen, die Notizen aus `CHANGELOG.md` übernehmen und
-**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`**, **`studium-server.tar.gz`**, **`studium-server.tar.gz.sig`** und
-**`system-dateien.json`** anhängen (genau diese Namen; alle fünf aus `release.py --zip`). Fehlt das iOS-ZIP, scheitert der
-Kurzbefehl auf iPhone und iPad. Fehlt `system-dateien.json`, lädt das Update die Liste vom Tag, und GitHub zählt die Updates auf
-diese Version nicht (`docs/architektur/update.md`, „Mitzählen“). Das
+**`Studium-Autopilot.zip`**, **`Studium-Autopilot-iOS.zip`**, **`studium-server.tar.gz`**, **`studium-server.tar.gz.sig`**,
+**`system-dateien.json`** und **`system-dateien.json.sig`** anhängen (genau diese Namen; alle sechs aus `release.py --zip`).
+Fehlt das iOS-ZIP, scheitert der Kurzbefehl auf iPhone und iPad. Fehlt `system-dateien.json`, lädt das Update die Liste vom Tag,
+und GitHub zählt die Updates auf diese Version nicht (`docs/architektur/update.md`, „Mitzählen“). Fehlt
+`system-dateien.json.sig`, installiert kein Plugin mit Signaturprüfung diese Version (oben, „Signatur der Update-Liste“), und
+in einem Tresor nach dem Update von 0.7.6 oder älter startet kein Skript, bis die Signatur kommt; **Reparieren** holt auch die
+Liste nur aus dem Release. Das
 Server-Paket lädt die Einrichtung des eigenen Servers mit der Prüfsumme, die GitHub zum Asset zeigt, und täglich `studium-server
 aktualisieren`, das zusätzlich die Signatur prüft; fehlt das Paket oder seine Signatur, bleibt jeder eigene Server auf seinem
 Stand. Die Anleitung der Einrichtung im Baum lädt
@@ -185,7 +230,8 @@ Für Tests vor dem Release (zum Beispiel im eigenen Test-Tresor mit Kanal „Bet
    die Update-Liste trägt diese Version, gedruckt wird ein Block `beta`.
 2. Commit, nur den Tag `vX.Y.Z-beta.1` pushen, **nie `main`**: `main` zeigt immer die stabile Version.
 3. GitHub-Release mit diesem Tag als **Vorab-Release** („Set as a pre-release“), **nicht** als Latest; Assets
-   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip`, `studium-server.tar.gz`, `studium-server.tar.gz.sig` und `system-dateien.json`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
+   `Studium-Autopilot.zip`, `Studium-Autopilot-iOS.zip`, `studium-server.tar.gz`, `studium-server.tar.gz.sig`, `system-dateien.json`
+   und `system-dateien.json.sig`. So laden der grüne Knopf, der iOS-Kurzbefehl, die Server-Einrichtung
    und das Update eigener Server (`releases/latest`) weiter die stabile Version. Die Server-Einrichtung einer Beta testet man
    mit dem Prompt aus dem README, nur mit `vX.Y.Z-beta.1` statt der Version aus `releases/latest`: Die Anleitung dieses Tags
    lädt genau sein Server-Paket.
@@ -195,8 +241,10 @@ Nur Tresore mit `update_kanal: beta` in `System/Einstellungen.md` (Schalter **Be
 unter „Mehr erfahren“) bekommen die Beta angeboten. Nach dem fertigen Release `X.Y.Z` ist `release` wieder höher als die Beta;
 die Beta-Tresore bekommen dann die fertige Version. `beta` kann stehen bleiben oder entfernt werden.
 
-**Fünf Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
+**Sechs Assets je Release:** `Studium-Autopilot.zip` (Mac, Windows, Android, Update-Prüfsummen), `Studium-Autopilot-iOS.zip`
 (gleicher Inhalt in `Studium Autopilot/Studium Autopilot/`, wie bis 0.5.7) für den iOS-Kurzbefehl `docs/kurzbefehl/`,
-`studium-server.tar.gz` für den eigenen Server mit seiner Signatur `studium-server.tar.gz.sig` und `system-dateien.json`, die
+`studium-server.tar.gz` für den eigenen Server mit seiner Signatur `studium-server.tar.gz.sig`, `system-dateien.json`, die
 Update-Liste mit der Prüfsumme aus dem Block `release` (das Update lädt sie zuerst von hier, GitHub zählt die Abrufe je Version;
-bis 0.7.0 lag hier `zaehler.txt`). Die Namen sind fest; `release.py --zip` erzeugt alle fünf.
+bis 0.7.0 lag hier `zaehler.txt`), und ihre Signatur `system-dateien.json.sig` (ohne sie installiert das Plugin nichts; dieselbe
+liegt in beiden ZIPs). Die
+Namen sind fest; `release.py --zip` erzeugt alle sechs.

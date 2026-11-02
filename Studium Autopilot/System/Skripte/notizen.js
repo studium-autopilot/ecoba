@@ -140,9 +140,23 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
 
   // ---------- Termin ----------
   // Fenster: Was, Wann (Tag oder Zeitraum), Uhrzeit, Ort, Art (aus Stichwörtern im Titel vorgeschlagen), Modul (aus dem Knopf, code,
-  // oder einem Modulcode im Titel). Parameter titel und wann zusammen (z. B. „12.11.“, „12.11.–15.11.“, „+7“): ohne Fenster.
+  // oder einem Modulcode im Titel). Parameter titel und wann zusammen (z. B. „12.11.“, „12.11.–15.11.“, „+7“): ohne Fenster, aber
+// nur aus der App; von außen (ctx.extern) mit Fenster und diesen Vorgaben.
   // Frist-Stichwörter zuerst, damit „Prüfungsanmeldung S110“ eine Frist ist; „test“ nur als ganzes Wort (nicht „Testat“),
   // ein Zwischentest nach der Regel des Fachmodells (ctx.modell.istZwischentest) ist eine Prüfung (Pille „Zwischentest“)
+  // Titel aus einem Knopf oder dem Fenster: eine Zeile (Zeilenenden und Steuerzeichen werden Leerzeichen), ohne unsichtbare
+  // Zeichen, höchstens TITEL_MAX Zeichen (an einer Wortgrenze gekürzt). In der Überschrift mit „\“ vor Markdown-Zeichen
+  // (mdText wie in zentral.js, dazu „&“): Ein Titel wird keine zweite Zeile, kein Kasten,
+  // kein Bild und kein Link in die App oder auf Dateien; eine Webadresse darin bleibt anklickbar.
+  const TITEL_MAX = 120;
+  const titelRein = (s) => {
+    const t = String(s == null ? "" : s).replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, " ")
+      .replace(/[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff]/g, "").replace(/\s+/g, " ").trim();
+    const z = Array.from(t);
+    return z.length <= TITEL_MAX ? t : z.slice(0, TITEL_MAX).join("").replace(/\s+\S*$/, "").trim() || z.slice(0, TITEL_MAX).join("");
+  };
+  // „1. …“ und „- …“ am Anfang werden keine Liste; der „\“ steht vor dem Satzzeichen (vor einer Ziffer bliebe er sichtbar)
+  const mdText = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}&]/g, "\\$&").replace(/^(\d+)([.)])/, "$1\\$2").replace(/^[-+]/, "\\$&");
   const KATEGORIEN = ["Frist", "Prüfung", "Lehre", "Fachschaft", "Veranstaltung"];
   const kategorieAus = (titel) => (/frist|anmeld|abgabe|rückmeld|rueckmeld|deadline|beleg|bewerb/i.test(titel) ? "Frist"
     : /klausur|prüfung|pruefung|exam|\btest\b/i.test(titel) || (ctx.modell && ctx.modell.istZwischentest(titel)) ? "Prüfung"
@@ -152,8 +166,10 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
     const eba = ctx.user.eba(c);
     const modulImTitel = (t) => { const k = eba.codeImText(t); return (k && eba.modulNachCode(k)) || null; };
     let titel, z, uhrzeit = "", ort = "", kategorie, m;
-    if (c.parameter.titel != null && c.parameter.wann != null) {
-      titel = String(c.parameter.titel).trim() || "Termin";
+    // Ohne Fenster nur aus der App (Knopf in einer Notiz, Befehl); kommt der Aufruf von außen (Link im Browser oder einer anderen
+    // App, ctx.extern), zeigt das Fenster, was entstehen würde
+    if (c.parameter.titel != null && c.parameter.wann != null && c.extern !== true) {
+      titel = titelRein(c.parameter.titel) || "Termin";
       z = eba.zeitraumLesen(c.parameter.wann) || { von: "", bis: "" };
       kategorie = kategorieAus(titel);
       m = (eba.codeAusTitel() && eba.modulNachCode(eba.codeAusTitel())) || modulImTitel(titel);
@@ -162,7 +178,7 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
       const fest = modul.vorgabe;
       modul.vorgabe = (x) => fest || modul.waehlen(eba.codeImText(x.titel || ""));
       const w = await fenster({ titel: "Neuer Termin", felder: [
-        { name: "titel", titel: "Was", art: "text", vorgabe: c.parameter.titel || "", pflicht: true, fehlt: "Bitte eintragen, was ansteht.", platzhalter: "z. B. Lerngruppe B110" },
+        { name: "titel", titel: "Was", art: "text", vorgabe: titelRein(c.parameter.titel), pflicht: true, fehlt: "Bitte eintragen, was ansteht.", platzhalter: "z. B. Lerngruppe B110" },
         { name: "wann", titel: "Wann", art: "zeitraum", vorgabe: c.parameter.wann || tm(0), pflicht: true, platzhalter: "z. B. 12.11. oder 12.11.–15.11." },
         { name: "uhrzeit", titel: "Uhrzeit", art: "uhrzeit", platzhalter: "z. B. 14:00" },
         { name: "ort", titel: "Ort", art: "text" },
@@ -170,7 +186,8 @@ Kopf mit Modul, Termin, Folien und Status: erscheint, sobald das Plugin „Studi
         modul,
       ] });
       if (!w) { eba.abbrechen(); return; }
-      ({ titel, uhrzeit, ort, kategorie } = w);
+      ({ uhrzeit, ort, kategorie } = w);
+      titel = titelRein(w.titel) || "Termin";
       z = w.wann; m = w.modul;
     }
     const datum = z.von || eba.heute;
@@ -194,7 +211,7 @@ tags:
   - termin
 ---
 
-# ${titel}
+# ${mdText(titel)}
 
 ## Meine Notizen
 - ${eba.CURSOR}

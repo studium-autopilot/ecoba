@@ -122,7 +122,7 @@ cssclasses:
 > | Business Administration | Wahlpflicht: Profilbildungsbereich (oder Elective Studies) |
 > | ohne Spezialisierung | Wahlpflicht: Profilbildungsbereich VWL oder BWL (oder Elective Studies) |
 >
-> Welche Variante gilt, stellst du in den [[Einstellungen & Hilfe#Variante|Einstellungen]] ein. Als Elective Studies zählt es, wenn oben bei „Zählt als“ Elective Studies steht; geprüft wird das im [[Studienverlauf#Schwerpunkte|Studienverlauf]].
+> Welche Variante gilt, stellst du in den [[Einstellungen & Hilfe#Deine Angaben|Einstellungen]] ein. Als Elective Studies zählt es, wenn oben bei „Zählt als“ Elective Studies steht; geprüft wird das im [[Studienverlauf#Schwerpunkte|Studienverlauf]].
 
 > [!eba-info|handy-zu]+ Hinweise
 > - Laut MHB Voraussetzung für alle ökonometrischen Schwerpunktmodule.

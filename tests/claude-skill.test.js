@@ -30,12 +30,13 @@ test("Aufbau: CLAUDE.md verweist auf den Skill, SKILL.md mit Name und Beschreibu
 // Update (seit 0.6.9): CLAUDE.md und der Skill haben die Klasse claude und stehen nur im Schlüssel „weitere“ der Liste. Die
 // Planer bis 0.6.8 kennen für .claude/ keine Klasse und lehnten in „dateien“ die ganze Liste ab (kein Update möglich); „weitere“
 // übergehen sie. Danach holt jeder Computer den Skill nach (update.js, claudeNachholenMit; tests/update-claude.test.js).
-test("Update: CLAUDE.md und der Skill kommen mit (Klasse claude), eigene Skills und Einstellungen nie", () => {
+test("Update: CLAUDE.md, der Skill und die Sperren (settings.json) kommen mit (Klasse claude), eigene Skills und Rechte nie", () => {
   const U = laden("update").ctx.update;
   assert.equal(U.klasseVon(".claude/CLAUDE.md"), "claude");
   for (const n of fs.readdirSync(SKILL)) assert.equal(U.klasseVon(".claude/skills/studium-autopilot/" + n), n.endsWith(".md") ? "claude" : "", n);
   assert.deepEqual(U.WEITERE, ["claude"]);
-  for (const p of [".claude/skills/meine-regeln/SKILL.md", ".claude/settings.json", ".claude/settings.local.json"]) assert.equal(U.klasseVon(p), "", p);
+  assert.equal(U.klasseVon(".claude/settings.json"), "claude", "seit 01.11.2026: Sperren für Claude Code (tests/claude-rechte.test.js)");
+  for (const p of [".claude/skills/meine-regeln/SKILL.md", ".claude/settings.local.json"]) assert.equal(U.klasseVon(p), "", p);
 });
 
 test("Gleiche Regeln wie im Code: Kategorien, Arten der Unterlagen, Abschnitte, To-dos", () => {

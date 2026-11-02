@@ -7,19 +7,24 @@
 // system-dateien.json. Geladen wird NUR nach einem Tipp auf „Neue Version installieren“ und Bestätigung.
 //
 // Ablauf (alles oder nichts):
-//   1. system-dateien.json laden (zuerst aus dem Release, siehe Mitzählen), Prüfsumme gegen das Manifest, Liste streng prüfen
-//      (nur erlaubte Pfade, siehe klasseVon).
+//   1. Nur eine neuere Version als die installierte. system-dateien.json.sig aus dem Release und system-dateien.json laden
+//      (zuerst aus dem Release, siehe Mitzählen), Prüfsumme gegen das Manifest, Signatur gegen die festen Schlüssel
+//      (ctx.signatur.pruefen im Kern: ohne gültige Signatur nichts), Liste streng prüfen (nur erlaubte Pfade, siehe klasseVon).
 //   2. Jede Datei, die sich ändern soll, laden und mit Größe und SHA-256 prüfen. Erst wenn ALLES geladen und geprüft ist,
 //      wird geschrieben. Kein Netz, falsche Prüfsumme, Abbruch → nichts geschrieben.
 //   3. Sicherung: jede Datei, die überschrieben oder entfernt wird, nach .trash/Studium Autopilot Sicherung <alt> <Zeit>/.
 //   4. Schreiben; scheitert ein Schreibvorgang, wird alles schon Geschriebene zurückgesetzt.
-//   5. Liste als System/Daten/system-dateien.json (Teil der Vorlage) und System/Daten/installiert.json (Stand dieses Vaults,
-//      synchronisiert) schreiben. Hat sich der Plugin-Kern geändert, wird das Plugin neu geladen.
+//   5. Signatur als System/Daten/system-dateien.json.sig (seit 01.11.2026: damit prüft der Kern auf jedem Gerät die Skripte,
+//      docs/architektur/skripte-pruefen.md), Liste als System/Daten/system-dateien.json (Teil der Vorlage) und
+//      System/Daten/installiert.json (Stand dieses Vaults, synchronisiert) schreiben. Hat sich der Plugin-Kern geändert, wird
+//      das Plugin neu geladen.
 //
 // Nutzeränderungen (Vergleich mit installiert.json, also der Fassung, die zuletzt installiert wurde):
 //   unverändert oder schon gleich der neuen Fassung → ersetzen bzw. nichts. Selbst geändert:
 //   system (seit 0.4.4) → immer die neue Fassung; deine liegt vorher als „Name (deine Fassung vor X).ext.txt“ daneben (nie
 //     geladen). Bis 0.4.3 blieb deine aktiv und die neue lag als „Name (neu X).ext.txt“ daneben, darum fehlten neue Teile.
+//   seite in IMMER_NEU (seit 02.11.2026: Einstellungen & Hilfe) → wie system immer die neue Fassung, deine als Sicherung daneben;
+//     gelöscht kommt sie wieder. Sie soll bei allen gleich aussehen, auch wenn sie jemand aus Versehen geändert hat.
 //   seite/modul, deren Vorlage sich seit der installierten Version nicht geändert hat (seit 0.4.4) → deine bleibt, nichts daneben;
 //   sonst seite → deine bleibt, neue als „Name (neu X).md“ daneben; nur abgehakt → neue Seite, Haken übernommen;
 //   modul → Katalogfelder neu, persönliche Felder (PERSOENLICH) und eigene Felder bleiben, Text bleibt, wenn du ihn geändert
@@ -43,8 +48,9 @@
 //   stehen im Schlüssel „weitere“ der Liste, den Planer bis 0.6.8 übergehen (in „dateien“ lehnten sie die ganze Liste ab).
 //   Das Update behandelt sie wie Systemdateien: immer die neue Fassung, deine geänderte liegt als Sicherung daneben. Danach
 //   holt jeder Computer einmal je Version nach, was bei ihm fehlt oder alt ist (Obsidian Sync nimmt .claude/ nicht mit); aus
-//   dem Netz nur bei eingeschalteten zentralen Daten. Eigene Skills (.claude/skills/<anderer Name>/) und .claude/settings*.json
-//   fasst nichts an.
+//   dem Netz nur bei eingeschalteten zentralen Daten. Seit 01.11.2026 gehört .claude/settings.json (Sperren für Claude Code: kein Schreiben in
+//   System/, .obsidian/, Skripte, CSS) zur Klasse claude. Eigene Skills (.claude/skills/<anderer Name>/) und
+//   .claude/settings.local.json fasst nichts an.
 // Kanal: update_kanal in System/Einstellungen.md („stabil“ Standard, „beta“). Das Manifest nennt release (stabil) und optional
 //   beta (X.Y.Z-beta.N); auf Kanal beta wird die höhere von beiden angeboten, nie eine ältere als die installierte.
 //   Schalter „Beta-Versionen“ im Fenster „Updates“ unter „Mehr erfahren“.
@@ -82,7 +88,8 @@
 //   z. B. lokaler Server; gilt auch für CHANGELOG.md), ctx.update.letzterBericht, ctx.update.fenster, ctx.update.toast,
 //   ctx.update.heilen(true) (Reparatur und Hinweise für Claude sofort, ohne die Merker eba-update-reparatur und eba-update-claude),
 //   ctx.update.ordnerAufraeumen(version, true) (alte Ordner sofort, als wäre dieses Gerät das, das für alle schreibt).
-// iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256.
+// iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone. Web Crypto für SHA-256; die Signatur prüft
+// der Kern (ctx.signatur, mit Web Crypto oder dem eingebauten Prüfer für Ed25519).
 module.exports = function (ctx) {
   const app = window.app;
   const obs = ctx.obsidian || {};
@@ -90,6 +97,7 @@ module.exports = function (ctx) {
   // ---------- Konstanten ----------
   const ORDNER = "Studium Autopilot"; // Ordner des Vaults im Haupt-Repo (Pfad unter url_basis)
   const LISTE = "System/Daten/system-dateien.json";
+  const LISTE_SIG = LISTE + ".sig"; // ihre Signatur im Tresor (seit 01.11.2026), Bytes wie im Release
   const INSTALLIERT = "System/Daten/installiert.json";
   const MARKE = "System/Daten/update.json"; // welches Gerät welches Update begonnen hat (markeLage)
   const MARKE_STILL = 60 * 60e3; // so lange gilt ein Update auf einem anderen Gerät als „läuft gerade“
@@ -173,6 +181,15 @@ module.exports = function (ctx) {
     for (let i = 0; i < h.length; i++) s += h[i].toString(16).padStart(2, "0");
     return s;
   };
+  // CRLF → LF wie im Kern (main.js, ohneCR); sonst genau die Bytes
+  const ohneCR = (by) => {
+    let n = 0;
+    for (let i = 0; i + 1 < by.length; i++) if (by[i] === 13 && by[i + 1] === 10) n++;
+    if (!n) return by;
+    const aus = new Uint8Array(by.length - n);
+    for (let i = 0, j = 0; i < by.length; i++) if (!(by[i] === 13 && by[i + 1] === 10)) aus[j++] = by[i];
+    return aus;
+  };
   const plugin = () => ctx.plugin || {};
 
   // ---------- Pfade und Klassen (gleiche Regeln wie werkzeuge/pruefen.py, klasse_von) ----------
@@ -185,6 +202,11 @@ module.exports = function (ctx) {
     for (const t of teile) if (!t || t === "." || t === ".." || t === ".trash" || /[ .]$/.test(t)) return false;
     return true;
   };
+  // Seiten, die bei allen gleich sein sollen (seit 02.11.2026): Das Update ersetzt sie wie Systemdateien, auch selbst geänderte
+  // (deine Fassung als Sicherung daneben), und legt gelöschte wieder an. Klasse bleibt „seite“: Planer bis 0.7.6 lehnten eine
+  // Liste mit anderer Klasse für diesen Pfad ab; was sie noch als „Seite (neu X).md“ daneben legten, tauscht heilenMit.
+  const IMMER_NEU = ["Studium/Einstellungen & Hilfe.md"];
+  const immerNeu = (e) => e.klasse === "seite" && IMMER_NEU.indexOf(nfc(e.pfad)) >= 0;
   // → "system" | "einstellung" | "seite" | "modul" | "claude" (nur in „weitere“, seit 0.6.9) | "" (nie im Update)
   const klasseVon = (pfad) => {
     const p = nfc(pfad);
@@ -196,7 +218,7 @@ module.exports = function (ctx) {
     if (EINSTELLUNG.indexOf(p) >= 0) return "einstellung";
     if (p === "Dashboard.md" || p === "System/Daten/Musterplan.md" || /^Studium\/[^/]+\.md$/.test(p)) return "seite";
     if (/^Module\/.+\.md$/.test(p)) return "modul";
-    if (p === ".claude/CLAUDE.md" || /^\.claude\/skills\/studium-autopilot\/[^/]+\.md$/.test(p)) return "claude";
+    if (p === ".claude/CLAUDE.md" || p === ".claude/settings.json" || /^\.claude\/skills\/studium-autopilot\/[^/]+\.md$/.test(p)) return "claude";
     return "";
   };
   // Pfad → { ordner ("" oder „a/b/“), basis, ext }
@@ -272,6 +294,15 @@ module.exports = function (ctx) {
     if (!hat(gesehen, KERN + "main.js") || !hat(gesehen, KERN + "manifest.json")) return { fehler: "Liste: Plugin-Kern fehlt" };
     return { wert: { schema: 1, version: d.version, ordner: ORDNER, dateien } };
   };
+
+  // ---------- Signatur der Liste (seit 01.11.2026, docs/architektur/update.md „Signatur der Liste“) ----------
+  // Die Prüfsumme im Manifest schützt nur vor einem kaputten Download: Wer das GitHub-Konto oder ein Token des Repos hätte, könnte
+  // ein Release mit eigener Liste anlegen und ihre Prüfsumme ins Manifest schreiben, und jeder Tipp auf „Neue Version
+  // installieren“ liefe fremden Code. Darum nimmt das Update eine Liste nur mit gültiger Signatur system-dateien.json.sig aus dem
+  // Release. Geprüft wird im Kern (main.js, ctx.signatur: feste Schlüssel, Namensraum, Format, Web Crypto oder der eingebaute
+  // Prüfer für Geräte ohne Ed25519); derselbe Weg prüft dort die Skripte beim Start (docs/architektur/skripte-pruefen.md). Ein
+  // älterer Kern ohne ctx.signatur installiert nichts.
+  const pruefer = () => ctx.signatur || null;
 
   // ---------- Text: Frontmatter, Haken, JSON ----------
   // Gleiche Regel wie werkzeuge/pruefen.py (koerper-Prüfsumme der Module): Frontmatter von „---“ bis „---“ am Anfang.
@@ -473,12 +504,13 @@ module.exports = function (ctx) {
       N[e.pfad] = true;
       const a = hat(A, e.pfad) ? A[e.pfad] : null, c = hat(ist, e.pfad) ? ist[e.pfad] : null;
       let art;
-      if (!c) art = a && (e.klasse === "seite" || e.klasse === "modul") ? "uebersprungen" : "anlegen";
+      if (!c) art = a && (e.klasse === "seite" || e.klasse === "modul") && !immerNeu(e) ? "uebersprungen" : "anlegen";
       else if (passt(c, "sha", e.sha256)) art = "gleich";
       else if (a && passt(c, "sha", a.sha256)) art = "ersetzen";
       else if (e.klasse === "claude" && bekanntPasst(c, bekannt, e.pfad)) art = "ersetzen";
-      // Darstellung, Programmteile, Gerüste, Hinweise für Claude: immer die neue Fassung, deine geänderte vorher als Sicherung daneben
-      else if (e.klasse === "system" || e.klasse === "claude") art = "ersetzen-sichern";
+      // Darstellung, Programmteile, Gerüste, Hinweise für Claude, Seiten in IMMER_NEU: immer die neue Fassung, deine geänderte
+      // vorher als Sicherung daneben
+      else if (e.klasse === "system" || e.klasse === "claude" || immerNeu(e)) art = "ersetzen-sichern";
       else if (e.klasse === "einstellung") art = "json-mischen";
       // Vorlage seit der installierten Version gleich: deine Seite bzw. dein Modul bleibt, keine Kopie daneben
       else if (a && e.sha256 === a.sha256) art = "eigene";
@@ -571,9 +603,15 @@ module.exports = function (ctx) {
     if (!alleWeg) for (const g of gleiche) if (!bleibt || neuer(g.version, bleibt.version)) bleibt = g;
     return gleiche.filter((g) => g !== bleibt && neuer(bis, g.version)).map((g) => ({ pfad: g.pfad, alt: g.alt }));
   };
+  // Deine eigene .claude/settings.json (Regeln, Hooks, seit 01.11.2026 Klasse claude) wird zu .claude/settings.local.json, solange
+  // es die noch nicht gibt: Claude Code liest beide, deine Regeln gelten also weiter, die Sperren der neuen Fassung kommen dazu.
+  const EIGENE_FASSUNG = { ".claude/settings.json": ".claude/settings.local.json" };
+  // gesichert[] ohne diese Umzüge (die Datei gilt weiter, darum keine Meldung „liegt als Sicherung daneben“)
+  const nurSicherungen = (g) => (g || []).filter((x) => !(hat(EIGENE_FASSUNG, x.pfad) && x.sicherung === EIGENE_FASSUNG[x.pfad]));
   // Freier Name für die Sicherung deiner Systemdatei; liegt dort schon genau dieser Inhalt, derselbe Name ohne Schreiben.
   // → { pfad, schreiben } | null (kein freier Name)
   const sicherungsName = async (io, pfad, version, bytes) => {
+    if (hat(EIGENE_FASSUNG, pfad) && !(await io.lesen(EIGENE_FASSUNG[pfad]))) return { pfad: EIGENE_FASSUNG[pfad], schreiben: true };
     for (let nr = 1; nr <= 20; nr++) {
       const k = deineName(pfad, version, nr), da = await io.lesen(k);
       if (!da) return { pfad: k, schreiben: true };
@@ -614,25 +652,46 @@ module.exports = function (ctx) {
   // ---------- Update ausführen (Datei-Zugriff über io, damit es ohne Obsidian testbar ist) ----------
   // io: { holen(url, { frisch }) → Uint8Array (wirft bei Fehler; frisch: nie aus dem Zwischenspeicher), lesen(pfad) →
   //   Uint8Array | null, schreiben(pfad, bytes), loeschen(pfad), liste(ordner) → [pfad] (freiwillig, für das Aufräumen alter Kopien) }
-  // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, zeit: Date, fortschritt(text),
+  // o: { release: { version, url_basis, sha256 }, alt: geprüfte Liste | null, altVersion, kernVersion (laufender Kern; nie älter
+  //   installieren), zeit: Date, fortschritt(text),
   //   (fortschritt(text, anteil): anteil 0…1 für den Balken im Fenster), marke: { geraet, seit } | null (update.json als erste Datei, nur wenn das Update etwas schreibt; siehe markeLage),
   //   bekannt: pfad → [SHA-256] (claudeBekannt, freiwillig; Hinweise für Claude, die dieses Gerät als unverändert erkennt),
-  //   listeRelease: Adresse der Liste im GitHub-Release (listeReleaseUrl) | null (dann nur vom Tag) }
-  // → Bericht { ok, art (ok | netz | pruefsumme | liste | sicherung | schreiben), fehler, version, listeQuelle (release | raw,
-  //   woher die geprüfte Liste kam; "" ohne), geaendert[], angelegt[], neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }]
-  //   (deine Systemdatei daneben gesichert), gemischt[], haken[], einstellungen[], uebersprungen[], entfernt[], behalten[],
-  //   aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern geändert), zurueckgesetzt }
+  //   listeRelease: Adresse der Liste im GitHub-Release (listeReleaseUrl) | null (dann nur vom Tag),
+  //   signatur: Adresse von system-dateien.json.sig (signaturUrl), schluessel und subtle wie ctx.signatur.pruefen (nur Tests) }
+  // → Bericht { ok, art (ok | netz | pruefsumme | liste | signatur | krypto | kern | sicherung | schreiben), fehler, version,
+  //   listeQuelle (release | raw, woher die geprüfte Liste kam; "" ohne), signiert (Schlüssel der gültigen Signatur), geaendert[],
+  //   angelegt[], neuKopien[{ pfad, kopie }], gesichert[{ pfad, sicherung }] (deine Systemdatei daneben gesichert), gemischt[],
+  //   haken[], einstellungen[], uebersprungen[], entfernt[], behalten[], aufgeraeumt[] (alte Kopien), sicherung, plugin (Kern
+  //   geändert), zurueckgesetzt }
   const aktualisierenMit = async (io, o) => {
     const rel = o.release;
-    const b = { ok: false, art: "", fehler: "", version: rel.version, listeQuelle: "", geaendert: [], angelegt: [], neuKopien: [], gesichert: [], gemischt: [],
+    const b = { ok: false, art: "", fehler: "", version: rel.version, listeQuelle: "", signiert: "", geaendert: [], angelegt: [], neuKopien: [], gesichert: [], gemischt: [],
       haken: [], einstellungen: [], uebersprungen: [], entfernt: [], behalten: [], aufgeraeumt: [], sicherung: "", plugin: false, zurueckgesetzt: false };
     const melden = o.fortschritt || (() => {});
     const fehler = (art, text) => { b.art = art; b.fehler = text; return b; };
     const url = (pfad) => rel.url_basis + (ORDNER + "/" + pfad).split("/").map(encodeURIComponent).join("/");
 
-    // 1. Dateiliste: zuerst aus dem Release (zählt die Updates je Version, siehe Mitzählen oben; Releases sind unveränderlich,
-    // also ohne frisch), sonst still vom Tag. Verwendet wird nur eine Liste mit genau der Prüfsumme aus dem Manifest.
+    // 0. Nur vorwärts: nie dieselbe oder eine ältere Version, auch nicht mit gültiger Signatur (eine ältere Liste ist echt
+    // signiert; angebot() bietet sie ohnehin nicht an). Ohne gültige installierte Version: nichts.
+    if (!neuer(rel.version, o.altVersion)) return fehler("liste", "Version " + rel.version + " ist nicht neuer als " + (o.altVersion || "die installierte"));
+    if (o.kernVersion && neuer(o.kernVersion, rel.version)) return fehler("liste", "Version " + rel.version + " ist älter als der laufende Kern " + o.kernVersion);
+    // 1. Kann dieses Gerät die Signatur prüfen (Kern mit ctx.signatur, sonst „kern“: erst neu laden; Web Crypto mit Ed25519 oder
+    // SHA-512 für den eingebauten Prüfer)? Sonst gar nicht erst laden. 2. Signatur aus dem Release (vor der Liste: Ein Release ohne gültige Signatur zählt so
+    // nicht als Update, siehe Mitzählen), nie vom Tag.
     melden("Prüfe die neue Version …", 0.03);
+    const subtle = o.subtle || crypto.subtle, S = pruefer();
+    if (!S) return fehler("kern", "Kern ohne Signaturprüfung");
+    if (!(await S.pruefbar(subtle))) return fehler("krypto", "Web Crypto ohne Ed25519 und SHA-512");
+    if (!o.signatur) return fehler("signatur", "Signatur: keine Adresse");
+    let sig;
+    try { sig = await io.holen(o.signatur); } catch (e) {
+      const t = String(grund(e));
+      return /^HTTP \d/.test(t) ? fehler("signatur", "Signatur fehlt (" + t + ")") : fehler("netz", "Signatur nicht geladen (" + t + ")");
+    }
+
+    // 3. Dateiliste: zuerst aus dem Release (zählt die Updates je Version, siehe Mitzählen oben; Releases sind unveränderlich,
+    // also ohne frisch), sonst still vom Tag. Verwendet wird nur eine Liste mit genau der Prüfsumme aus dem Manifest und, vor
+    // allem anderen, nur mit gültiger Signatur.
     const listeOk = async (by) => by.length <= G.liste && (await sha256(by)) === rel.sha256;
     let lb = null;
     if (o.listeRelease) {
@@ -644,6 +703,9 @@ module.exports = function (ctx) {
       if (!(await listeOk(lb))) return fehler("pruefsumme", "Prüfsumme der Dateiliste stimmt nicht");
       b.listeQuelle = "raw";
     }
+    const sp = await S.pruefen(sig, lb, { schluessel: o.schluessel, subtle });
+    if (!sp.ok) return fehler(sp.art, sp.fehler);
+    b.signiert = sp.schluessel;
     let d;
     try { d = JSON.parse(dec(lb)); } catch (e) { return fehler("liste", "Dateiliste unlesbar"); }
     const lp = listePruefen(d, rel.version);
@@ -735,7 +797,8 @@ module.exports = function (ctx) {
     // Plugin-Kern zuletzt (vor den Listen)
     const reihe = kernZuletzt(schreiben);
     b.plugin = reihe.some((w) => kernDatei(w.pfad));
-    for (const p of [LISTE, INSTALLIERT]) { const da = await io.lesen(p); if (!gleich(da, lb)) reihe.push({ pfad: p, bytes: lb, alt: da }); }
+    // Signatur vor der Liste, beide in den Tresor: Der Kern prüft damit die Skripte auf jedem Gerät, auch ohne Netz
+    for (const [p, by] of [[LISTE_SIG, sig], [LISTE, lb], [INSTALLIERT, lb]]) { const da = await io.lesen(p); if (!gleich(da, by)) reihe.push({ pfad: p, bytes: by, alt: da }); }
     // update.json zuerst (markeLage): Bricht das Update ab, sieht dieses Gerät beim nächsten Start „Update fertigstellen“, die
     // anderen, dass es hier läuft. Sie bleibt danach liegen; ein Fehler beim Schreiben setzt auch sie zurück.
     if (o.marke && o.marke.geraet && (reihe.length || loeschen.length)) {
@@ -762,6 +825,7 @@ module.exports = function (ctx) {
   //     sie wird aktiv, deine Fassung kommt als „Name (deine Fassung vor X).ext.txt“ daneben. Ist die aktive Datei (danach)
   //     die der Liste, gehen ihre Kopien bis zu dieser Version weg. Sonst (neue Fassung liegt hier nicht vor) nichts.
   //   seite: Kopien „Seite (neu X).md“ älter als die installierte Version, die genau der jetzigen Vorlage gleichen → weg.
+  //     Seiten in IMMER_NEU wie system: Planer bis 0.7.6 ließen eine geänderte stehen und legten die neue daneben.
   // Alles wird vorher gelesen und geprüft; weggeräumte und überschriebene Dateien liegen danach in der Sicherung, Kern zuletzt.
   // io: { lesen, schreiben, loeschen, liste(ordner) → [pfad] }
   // o: { liste: geprüfte installiert.json, synchron: dieses Gerät schreibt synchronisierte Pfade (alles außer .obsidian/), zeit }
@@ -776,7 +840,7 @@ module.exports = function (ctx) {
       if ((e.klasse !== "system" && e.klasse !== "seite") || (e.pfad.charAt(0) !== "." && !o.synchron)) continue;
       const kopien = kopienVon(e.pfad, await geschwister(e.pfad));
       if (!kopien.length) continue;
-      if (e.klasse === "seite") {
+      if (e.klasse === "seite" && !immerNeu(e)) {
         const c = await io.lesen(e.pfad), seiteNeu = !c || passt(await istVon(e.pfad, c, ""), "sha", e.sha256);
         for (const k of await kopienAufraeumen(io, e.pfad, kopien.map((x) => x.pfad), V, [e.sha256], seiteNeu)) weg(k.pfad, k.alt);
         continue;
@@ -1045,6 +1109,21 @@ module.exports = function (ctx) {
     } catch (e) { return null; }
   };
   const listeLesen = (pfad) => listeAus(io, pfad);
+  // Liste, nach der nachgeholt, repariert und geplant wird (seit 02.11.2026). installiert.json und update.json liegen im Tresor,
+  // jeder, der dort schreiben kann, kann sie ändern: Sie bestimmen Anzeige und Angebot, nie, was geschrieben wird. Das kommt nur
+  // aus installiert.json bzw. system-dateien.json, wenn ihre Bytes eine Liste sind, die der Kern geprüft und angenommen hat
+  // (ctx.skripte, signiert), und nie aus einer Version älter als der laufende Kern. Verglichen wird wie im Kern die SHA-256 mit LF
+  // statt CRLF. → { liste, bytes } | null
+  const gepruefteListe = async () => {
+    const K = ctx.skripte, ok = K && typeof K.listen === "function" ? K.listen() : [];
+    for (const p of [INSTALLIERT, LISTE]) {
+      const x = await listeLesen(p);
+      if (!x || neuer(laufendeVersion(), x.liste.version)) continue;
+      const s = await sha256(ohneCR(x.bytes));
+      if (ok.some((m) => m.liste === s && m.version === x.liste.version)) return x;
+    }
+    return null;
+  };
   // Von Hand aktualisiert (neuere ZIP über den Tresor entpackt, docs/installation.md): installiert.json liegt nicht in der ZIP und
   // nennt weiter die alte Version; die Zeile zeigte sie und böte die schon laufende Version noch einmal an. Nennen der laufende
   // Kern (o.lauf) und system-dateien.json dieselbe neuere Version und gleicht jede Systemdatei der Liste (Größe und SHA-256),
@@ -1176,9 +1255,10 @@ module.exports = function (ctx) {
     }
     return aus;
   };
-  // x: { liste } (installiert.json); immer = true (Test): ohne Merker und auch auf iPhone und iPad. → Bericht | null
+  // x: { liste } (gepruefteListe, aus heilen); immer = true (Test): ohne Merker und auch auf iPhone und iPad. → Bericht | null
   const claudeNachholen = async (immer, x) => {
     const V = x.liste.version, m = lokal(L_CLAUDE);
+    if (neuer(laufendeVersion(), V)) return null; // nie die Hinweise einer älteren Version als der laufende Kern
     if (!immer && ((m && m.version === V) || (obs.Platform && obs.Platform.isMobile))) return null;
     if (zustand.laeuft || zustand.claude || lage() === "anderes") return null;
     zustand.claude = true;
@@ -1190,16 +1270,16 @@ module.exports = function (ctx) {
     const sha = {};
     for (const e of x.liste.dateien) if (e.klasse === "claude") sha[e.pfad] = e.sha256;
     lokal(L_CLAUDE, { version: V, sha });
-    if (b.gesichert.length) ctx.hinweis(`Die Hinweise für Claude sind jetzt auf dem Stand von Version ${V}, deine geänderte Fassung liegt als Sicherung daneben.`, { dauer: 12000 });
+    if (nurSicherungen(b.gesichert).length) ctx.hinweis(`Die Hinweise für Claude sind jetzt auf dem Stand von Version ${V}, deine geänderte Fassung liegt als Sicherung daneben.`, { dauer: 12000 });
     return b;
   };
-  // Reparatur (heilenMit) einmal je Gerät und installierter Version, nicht während eines Updates. Gerätelokal
+  // Reparatur (heilenMit) einmal je Gerät und installierter Version (nach gepruefteListe), nicht während eines Updates. Gerätelokal
   // eba-update-reparatur = Version; „Version lokal“, solange dieses Gerät synchronisierte Pfade nicht schreibt (ein Schreiber:
   // ctx.zentral.abruferHier, wie modell.js), dann noch einmal, sobald es darf. immer = true (Test): ohne Merker.
   const L_REPARATUR = "eba-update-reparatur";
   const heilen = async (immer) => {
     if (zustand.laeuft || zustand.heilt) return null;
-    const x = await listeLesen(INSTALLIERT);
+    const x = await gepruefteListe();
     if (!x) return null;
     const V = x.liste.version;
     try { vorgabenAnwenden(V, app.vault); } catch (e) { console.error("update: Vorgaben", e); }
@@ -1244,11 +1324,19 @@ module.exports = function (ctx) {
     if (!f) return;
     await app.fileManager.processFrontMatter(f, (fm) => { fm.update_kanal = wert === "beta" ? "beta" : "stabil"; });
   };
-  // Schalter „Beta-Versionen“ (im Fenster „Updates“ unter „Mehr erfahren“, verbindungen.js)
+  // Schalter „Beta-Versionen“ (im Fenster „Updates“ unter „Mehr erfahren“, verbindungen.js). Umgelegt in der App setzt er auch
+  // auf diesem Gerät, ob der Kern Listen von Testversionen gelten lässt (ctx.skripte.beta, docs/architektur/skripte-pruefen.md);
+  // update_kanal in der Datei allein tut das nie. An zeigt er nur, wenn er auf diesem Gerät an ist; hat ihn ein anderes Gerät
+  // eingeschaltet (update_kanal: beta), steht er hier aus, mit einem Satz dazu. Kein Link und keine Aktion legt ihn um.
   const kanalSchalter = (el) => {
     if (!obs.Setting) return;
-    new obs.Setting(el).setName("Beta-Versionen").setDesc("Neue Versionen früher bekommen, zum Ausprobieren. Sie können noch Fehler haben.")
-      .addToggle((t) => t.setValue(kanal() === "beta").onChange(async (an) => {
+    const geraet = !!(ctx.skripte && typeof ctx.skripte.beta === "function" && typeof ctx.skripte.betaAn === "function");
+    const hier = geraet ? ctx.skripte.betaAn() : kanal() === "beta";
+    const anderswo = !hier && kanal() === "beta";
+    new obs.Setting(el).setName("Beta-Versionen").setDesc("Neue Versionen früher bekommen, zum Ausprobieren. Sie können noch Fehler haben."
+      + (anderswo ? " Auf einem anderen Gerät ist er an, auf diesem noch aus." : ""))
+      .addToggle((t) => t.setValue(hier).onChange(async (an) => {
+        if (geraet) await ctx.skripte.beta(an);
         await kanalSetzen(an ? "beta" : "stabil");
         // Notice statt Neuzeichnen des Fensters: der metadataCache kennt den neuen Wert erst gleich
         ctx.hinweis(an ? "Beta-Versionen an. Neue Testversionen erscheinen hier zuerst." : "Beta-Versionen aus. Du bekommst nur fertige Versionen.");
@@ -1370,6 +1458,9 @@ module.exports = function (ctx) {
     netz: "Die neue Version ließ sich gerade nicht laden. Es wurde nichts geändert. Versuch es später noch einmal.",
     pruefsumme: "Die neue Version kam nicht vollständig an. Es wurde nichts geändert. Versuch es später noch einmal.",
     liste: "Mit der neuen Version stimmt etwas nicht. Es wurde nichts geändert. Versuch es später noch einmal.",
+    signatur: "Die neue Version ließ sich nicht als echt bestätigen. Darum wurde nichts geändert.",
+    krypto: "Dieses Gerät kann nicht prüfen, ob die neue Version echt ist. Es wurde nichts geändert. Installiere sie auf einem anderen Gerät, dann kommt sie über den Sync hierher, oder aktualisiere Obsidian.",
+    kern: "Auf diesem Gerät läuft noch eine ältere Fassung der App. Tippe zuerst auf „Neu laden“, dann noch einmal hier. Es wurde nichts geändert.",
     sicherung: "Die Sicherung ließ sich nicht anlegen. Es wurde nichts geändert.",
     schreiben: "Beim Speichern ging etwas schief. Alles wurde auf den alten Stand zurückgesetzt.",
   };
@@ -1387,7 +1478,7 @@ module.exports = function (ctx) {
     if (b.plugin && !b.neuGeladen) z.push({ titel: "Noch ein Schritt", text: "Obsidian einmal schließen und wieder öffnen.", wichtig: true });
     else if (b.einstellungen.length) z.push({ titel: "Einstellungen", text: "Ergänzt. Sie wirken nach dem nächsten Öffnen von Obsidian." });
     if (b.neuKopien.length) z.push({ titel: "Deine Seiten", text: `Deine Fassung bleibt, die neue liegt daneben („neu ${b.version}“): ${b.neuKopien.map((x) => name(x.pfad)).join(", ")}.` });
-    if (b.gesichert && b.gesichert.length) z.push({ titel: "Deine Änderungen", text: `Jetzt gilt die neue Fassung, deine liegt als Sicherung daneben („deine Fassung vor ${b.version}“): ${b.gesichert.map((x) => x.pfad.split("/").pop()).join(", ")}.` });
+    if (nurSicherungen(b.gesichert).length) z.push({ titel: "Deine Änderungen", text: `Jetzt gilt die neue Fassung, deine liegt als Sicherung daneben („deine Fassung vor ${b.version}“): ${nurSicherungen(b.gesichert).map((x) => x.pfad.split("/").pop()).join(", ")}.` });
     if (b.behalten.length) z.push({ titel: "Behalten", text: `Nicht mehr in der neuen Version, du hattest sie geändert: ${b.behalten.map(name).join(", ")}.` });
     z.push({ titel: "Andere Geräte", text: (b.plugin ? "Das Update kommt von selbst. Dort einmal auf „Neu laden“ oben auf dem Dashboard tippen." : "Das Update kommt von selbst, dort musst du nichts tun.")
       // LiveSync (livesync.js) gleicht nur ab, solange Obsidian hier offen ist
@@ -1503,7 +1594,7 @@ module.exports = function (ctx) {
   // und es kam kein Wort. Darum vorher: Kerndateien mit installiert.json vergleichen, abweichende aus dem Release dieser
   // Version laden und wie beim Update mit Größe und SHA-256 prüfen. Geschrieben wird erst, wenn alles da ist, manifest.json
   // zuletzt; ein Schreibfehler setzt die schon geschriebenen zurück.
-  // o: { liste: geprüfte installiert.json, basis: Adresse am Tag v<liste.version> }
+  // o: { liste: gepruefteListe (neuLaden), basis: Adresse am Tag v<liste.version> }
   // → { ok, art (ok | netz | pruefsumme | schreiben), fehler, geschrieben[] }
   const kernNachholen = async (io, o) => {
     const r = { ok: false, art: "", fehler: "", geschrieben: [] };
@@ -1536,10 +1627,12 @@ module.exports = function (ctx) {
     return r;
   };
   // „Neu laden“: erst den Kern nachholen, dann laden. Läuft danach immer noch ein älterer Kern als installiert, sagt es ein
-  // Hinweis. → true, wenn der Kern der installierten Version läuft
+  // Hinweis. Nachgeholt wird nach gepruefteListe, nie eine ältere Version als der laufende Kern. Ein Kern ohne Prüfung der Skripte
+  // (bis 0.7.6, ohne ctx.skripte) kennt keine geprüfte Liste: Dann gilt installiert.json, aber ebenso nie älter als er; geladen
+  // wird immer vom unveränderlichen Tag dieser Version. → true, wenn der Kern der installierten Version läuft
   const neuLaden = async () => {
-    const x = await listeLesen(INSTALLIERT);
-    const basis = x ? tagBasis(x.liste.version) : "";
+    const x = ctx.skripte ? await gepruefteListe() : await listeLesen(INSTALLIERT);
+    const basis = x && !neuer(laufendeVersion(), x.liste.version) ? tagBasis(x.liste.version) : "";
     if (basis) {
       const r = await kernNachholen(io, { liste: x.liste, basis });
       if (!r.ok) {
@@ -1558,10 +1651,10 @@ module.exports = function (ctx) {
   };
 
   // ---------- Ablauf nach dem Tipp auf „Neue Version installieren“ bzw. „Update fertigstellen“ ----------
-  // Installiert gerade ein anderes Gerät (lage „anderes“), nur der Satz. Fertigstellen derselben Version fragt nicht noch einmal
-  // (du hattest schon bestätigt); ein zweiter Lauf lädt und schreibt nur, was noch fehlt. g: das Fenster, in dem du gerade
-  // **Neue Version installieren** getippt hast (keine zweite Frage, es zeigt gleich „Prüfe …“); sonst fragt ein neues Fenster.
-  // Fortschritt und Ergebnis stehen im Fenster, nie in einem Hinweis.
+  // Installiert gerade ein anderes Gerät (lage „anderes“), nur der Satz. Vor jedem Installieren und Fertigstellen fragt das Fenster
+  // (update.json liegt im Tresor, es allein bestätigt nichts); ein zweiter Lauf lädt und schreibt nur, was noch fehlt. g: das
+  // Fenster, in dem du gerade **Neue Version installieren** getippt hast (das war die Frage, es zeigt gleich „Prüfe …“); sonst
+  // fragt ein neues Fenster. Fortschritt und Ergebnis stehen im Fenster, nie in einem Hinweis.
   const fragen = async (rel, inst) => {
     const p = plugin();
     if (typeof p.testUpdateAntwort === "boolean") return { ja: p.testUpdateAntwort, g: null };
@@ -1590,13 +1683,12 @@ module.exports = function (ctx) {
     if (!rel) { zu(); ctx.hinweis(`Du hast schon die neueste Version (${inst}).`); return null; }
     // Bietet das Manifest inzwischen eine andere Version an als das Fenster, fragt ein neues
     if (g && g.version !== rel.version) { zu(); g = null; }
-    const fertig = l === "fertigstellen" && zustand.marke && rel.version === zustand.marke.version;
-    if (!g && !fertig) {
+    if (!g) {
       const a = await fragen(rel, inst);
       if (!a.ja) return null;
       g = a.g;
     }
-    if (!g || !g.offen) g = fensterZeigen({ stufe: "laeuft", von: inst, bis: rel.version }); // Fertigstellen (ohne Frage), Tests
+    if (!g || !g.offen) g = fensterZeigen({ stufe: "laeuft", von: inst, bis: rel.version }); // Tests (Antwort ohne Fenster)
     const ich = geraetId();
     const p = plugin();
     if (p.testUpdateBasis) rel = Object.assign({}, rel, { url_basis: String(p.testUpdateBasis) });
@@ -1606,10 +1698,13 @@ module.exports = function (ctx) {
     let b;
     try {
       p.stillBis = Date.now() + 120000; // Kern: keine „Aktualisiert: …“-Hinweise beim Hot-Reload der Skripte
-      const alt = (await listeLesen(INSTALLIERT)) || (await listeLesen(LISTE));
+      // Planen nach der geprüften Liste (unverändert ist nur, was sie nennt); ohne sie gilt jede abweichende Datei als deine
+      const alt = await gepruefteListe();
       // Liste aus dem Release (Mitzählen): nicht mit einer anderen Basis (Testeinstieg) und nicht, wenn „Mitzählen“ aus ist
       const listeRelease = p.testUpdateBasis || !zaehlenAn() ? null : listeReleaseUrl(rel.version);
-      b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: inst, zeit: new Date(), listeRelease,
+      // Signatur immer aus dem Release (auch bei „Mitzählen“ aus: es gibt sie nur dort); mit der Testbasis von dort
+      const signatur = p.testUpdateBasis ? tagBasis(rel.version) + SIGNATUR_ASSET : signaturUrl(rel.version);
+      b = await aktualisierenMit(io, { release: rel, alt: alt ? alt.liste : null, altVersion: alt ? alt.liste.version : inst, kernVersion: laufendeVersion(), zeit: new Date(), listeRelease, signatur,
         bekannt: claudeBekannt(), marke: ich ? { geraet: ich, seit: new Date().toISOString() } : null, fortschritt: melden });
       if (b.ok) {
         zustand.installiert = rel.version;
@@ -1681,6 +1776,7 @@ module.exports = function (ctx) {
   const L_GEPRUEFT = "eba-update-geprueft", L_TOAST = "eba-update-toast", L_GESEHEN = "eba-update-gesehen";
   const L_GEZAEHLT = "eba-update-gezaehlt"; // bis 0.7.0: Version, die dieses Gerät mitgezählt hatte; der Start räumt ihn weg
   const LISTE_ASSET = "system-dateien.json"; // die Liste als Datei in jedem GitHub-Release seit 0.7.1 (release.py --zip)
+  const SIGNATUR_ASSET = LISTE_ASSET + ".sig"; // ihre Signatur, im Release daneben (seit 01.11.2026, ctx.signatur.pruefen)
   const S_TOAST = "eba-update-toast-sitzung"; // sessionStorage: Hinweis in dieser App-Sitzung schon gezeigt
 
   // CHANGELOG.md → [{ version, titel, text }] in Dateireihenfolge. Nur Überschriften „## X.Y.Z – Titel“ (auch X.Y.Z-beta.N);
@@ -1769,6 +1865,7 @@ module.exports = function (ctx) {
   // Mitzählen: Adresse der Liste im GitHub-Release einer Version (RELEASES aus zentral.js, ein Fork setzt seine eigene). GitHub
   // zählt jeden Abruf einer Datei aus einem Release (download_count); der Autor sieht nur diese Zahl je Version.
   const listeReleaseUrl = (version) => releasesUrl() + "/download/v" + version + "/" + LISTE_ASSET;
+  const signaturUrl = (version) => releasesUrl() + "/download/v" + version + "/" + SIGNATUR_ASSET;
 
   // Hinweis zeigen, wenn fällig. → "angebot" | "aktualisiert" | null
   // Entscheidung (rein). o = { angebot, neuLaden, merk, jetzt, nach, bannerSichtbar } → "angebot" | "aktualisiert" | "verdeckt"
@@ -1886,8 +1983,8 @@ module.exports = function (ctx) {
 
   ctx.update = {
     // reine Logik (Node-Tests)
-    klasseVon, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
-    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, lesezeichenNachziehen, lesezeichenAnwenden, LESEZEICHEN_NEU, planen, aktualisierenMit, heilenMit, ordnerAufraeumenMit, ALTE_ORDNER, AUFGERAEUMT, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, PERSOENLICH, ORDNER, LISTE, INSTALLIERT,
+    klasseVon, IMMER_NEU, pfadOk, neuName, deineName, kopienVon, listePruefen, teilen, ohneHaken, hatAufgaben, seiteHaken, fmMischen, modulMischen, jsonMischen,
+    jsonMischenText, VORGABE_NEU, vorgabenAnwenden, lesezeichenOhne, lesezeichenNachziehen, lesezeichenAnwenden, LESEZEICHEN_NEU, planen, aktualisierenMit, heilenMit, ordnerAufraeumenMit, ALTE_ORDNER, AUFGERAEUMT, sha256, neuer, angebot, kanal, kanalSetzen, kanalSchalter, zaehlenAn, PERSOENLICH, ORDNER, LISTE, LISTE_SIG, INSTALLIERT,
     markeLage, MARKE, MARKE_STILL, handInstalliertMit, istVon, passt, kopienAufraeumen,
     WEITERE, CLAUDE_FRUEHER, claudeNachholenMit,
     // Obsidian
@@ -1896,7 +1993,7 @@ module.exports = function (ctx) {
     // Neuigkeiten (reine Logik zuerst)
     changelogAbschnitte, abschnitteZwischen, markdownSicher, toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig,
     ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen, toastWeg, neuigkeitenZeigen, fensterZeigen, L_GEPRUEFT, L_TOAST, L_GESEHEN, S_TOAST,
-    listeReleaseUrl, LISTE_ASSET,
+    listeReleaseUrl, LISTE_ASSET, signaturUrl, SIGNATUR_ASSET, gepruefteListe,
     get letzterBericht() { return zustand.bericht; },
     get fenster() { return zustand.fenster; }, // Griff des Fensters „Neue Version“ (m = Obsidians Modal) oder null
     get toast() { return neuigkeit.toast; },
@@ -1953,12 +2050,19 @@ module.exports = function (ctx) {
     });
   };
 
+  // Ein Link von außerhalb der App (c.extern, Protokoll-Handler) schreibt nie und lädt nichts neu: „Neue Version installieren“
+  // zeigt dann nur, was es gibt (wie „Nach Updates suchen“, mit dem Fenster und seinem Knopf), „Neu laden“ sagt, wo es geht.
+  // Knöpfe und Befehle in der App bleiben, wie sie sind.
+  const vonAussen = (c) => !!(c && c.extern === true);
   const AKTIONEN = {
-    "vorlage-aktualisieren": { titel: "Neue Version installieren", ausfuehren: async () => { await aktualisieren(); } },
+    "vorlage-aktualisieren": { titel: "Neue Version installieren", ausfuehren: async (c) => { if (vonAussen(c)) await suchen(); else await aktualisieren(); } },
     "vorlage-suchen": { titel: "Nach Updates suchen", ausfuehren: async () => { await suchen(); } },
     "vorlage-neu-laden": {
       titel: "Neu laden",
-      ausfuehren: async () => { await neuLaden(); },
+      ausfuehren: async (c) => {
+        if (vonAussen(c)) { ctx.hinweis("Neu laden geht nur in der App: Tippe dort auf „Neu laden“."); return; }
+        await neuLaden();
+      },
     },
   };
 

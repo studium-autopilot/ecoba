@@ -20,6 +20,12 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
   Es öffnet sich keine Seite und es entsteht keine Hilfsnotiz.
 - **Rückfall:** `registerObsidianProtocolHandler("studium-autopilot")`, falls der Link von außen kommt (Browser, anderes
   Programm).
+- **Von außen** (seit 01.11.2026): Nur über diesen Handler bekommt die Aktion `c.extern = true`. Klicks in der App
+  (Klick-Abfangen), `ctx.aktion` und Befehle tragen `false`; ein Parameter `extern` im Link ändert daran nichts. Eine Aktion,
+  die ohne Rückfrage etwas Folgenreiches tut, kann damit bei einem fremden Link zuerst fragen oder ablehnen. Der Link nennt nur
+  Aktionen (`aktionen` der Erweiterungen, nur eigene Namen); Befehle des Kerns, die keine Aktion sind (etwa „Erweiterungen neu
+  laden“), erreicht er nie. Test: `tests/aktionen-extern.test.js`. So halten es die Aktionen des Updates: Von außen installiert
+  **Neue Version installieren** nichts und **Neu laden** lädt nichts ([„Update“](update.md), „Von außen“).
 - **Zielnotiz:** Statische Knöpfe in Notizen tragen keine Pfade. Ein Post-Processor schreibt beim Rendern
   `data-sa-quelle=<Pfad der Notiz>` an jeden Knopf, auch in Einbettungen und Hover-Vorschauen. Fehlt das Attribut, nimmt der Kern
   die Notiz des Tabs, in dem der Link steht, und sonst die aktive Notiz. Wo ein Ziel nötig ist, steht ein stabiler Schlüssel im
@@ -30,13 +36,13 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 |---|---|---|---|
 | `vorlesung` | `code` | neue Vorlesungsnotiz: Fenster mit Modul (`code` wählt vor) und Thema; läuft gerade genau eine Lehrveranstaltung und ist kein Modul vorgewählt, ohne Fenster; heute schon angelegt → öffnen; `folien` bleibt leer (seit 24.10.2026, die Folien wählt `ctx.modell.folien` beim Zeichnen) | Neue Vorlesungsnotiz |
 | `uebungsblatt` | – | bis 0.6.7 ein neues Übungsblatt als eigene Notiz (`Übungsblätter/`); seit 24.10.2026 ist das Blatt seine Begleitnotiz (Unterlage der Art Übung), ein alter Knopf sagt das, öffnet Unterlagen und bietet **Unterlagen hinzufügen** an | – |
-| `termin` | `titel`, `wann`, `code` | neuer Termin | Neuer Termin |
+| `termin` | `titel`, `wann`, `code` | neuer Termin: Fenster mit Was, Wann, Uhrzeit, Ort, Art und Modul; `titel` und `wann` zusammen aus der App ohne Fenster, von außen (Link aus dem Browser oder einer anderen App, `ctx.extern`) immer mit Fenster und diesen Vorgaben (seit 01.11.2026). Der Titel wird eine Zeile ohne Steuer- und unsichtbare Zeichen, höchstens 120 Zeichen; in der Überschrift mit `\` vor Markdown-Zeichen (`mdText`), er wird also kein Kasten, kein Bild und kein Link in die App oder auf Dateien (eine Webadresse darin bleibt anklickbar) | Neuer Termin |
 | `lehrveranstaltung` | `code` | Lehrveranstaltung im Stundenplan von Hand | Neue Lehrveranstaltung |
 | `sq-kurs` | – | SQ-Leistung | Neuer SQ-Kurs |
 | `modul` | `code` | eigenes Modul aus `System/Gerüste/Modul.md` | Neues eigenes Modul |
-| `oeffnen` | `notiz`, `original=1`, `datei` (Link relativ zur Notiz, vom PDF-Kasten) | Datei der Unterlage extern öffnen (PC: Standardprogramm, iOS: Dateien-App) | Unterlage öffnen |
+| `oeffnen` | `notiz`, `original=1`, `datei` (Link relativ zur Notiz, vom PDF-Kasten) | Datei der Unterlage extern öffnen (PC: Standardprogramm, nur Arten aus `EXTERN_ARTEN`; iOS: Dateien-App) | Unterlage öffnen |
 | `plan` | `modul` (Code oder Name) | `gewaehlt` umschalten | – |
-| `variante` | `wert` | `variante` in `System/Einstellungen.md` | Variante wählen (mit Auswahl) |
+| `variante` | `wert` (ohne: Auswahl, so die Zeile unter „Deine Angaben“) | `variante` in `System/Einstellungen.md` | Variante wählen (mit Auswahl) |
 | `darstellung` | `wert` (`hell`, `dunkel`, `automatisch`) | Hell, dunkel oder automatisch wie das Gerät | Darstellung wählen (mit Auswahl) |
 | `design` | `wert` (`elfenbein`, `flieder`, `klar`) | Design dieses Geräts (seit 18.10.2026; bis 17.10.2026 schaltete `design` die früheren Farbschemata um) | Design wählen (mit Auswahl) |
 | `einordnen` | `code` | Fenster „Unterlagen hinzufügen“ (Dateien auswählen oder hineinziehen; ZIP-Dateien und Notizen nimmt es nicht), dann einordnen. Bis dahin liegen sie in `System/Neue Unterlagen/`, Übriges geht danach in den Papierkorb (bis 0.6.6 gab es dafür den Ordner `Eingang/`, in den man auch selbst Dateien legen konnte) | Unterlagen hinzufügen |
@@ -61,6 +67,17 @@ Die Werte sind URL-kodiert. Ein `+` bleibt `+`; Leerzeichen als `%20` schreiben.
 | `kartenstapel` | – | neuer Stapel aus `System/Gerüste/Karteikarten.md` (Modul wählen; auch Ordner-Automatik in `Karteikarten/`) | Neuer Kartenstapel |
 | `karten-optionen` | – | Fenster „Lernoptionen“ (Felder `karten_*` in `System/Einstellungen.md`) | Lernoptionen |
 
+**`oeffnen` am PC nur für harmlose Dateiarten (seit 01.11.2026):** Der Link kann in jeder Notiz stehen, auch in Text aus einer
+Mail, von Claude oder aus ILIAS (Dateien behalten dort ihre Endung). `app.openWithDefaultApp` startete sonst eine `.hta`-, `.lnk`-
+oder `.url`-Datei aus dem Tresor ohne Rückfrage (Obsidian fragt nur vor `.exe`, `.cmd`, `.bat`, `.ps1` und wenigen anderen). `EXTERN_ARTEN` in `aktionen.js` nennt, was sich öffnet (Unterlagen, Tabellen, Bilder, Audio,
+Video, Quelltext für Editoren); Makro-Formate (`docm`, `xlsm`, `pptm`), HTML und SVG fehlen bewusst. Alte Office-Formate (`doc`,
+`xls`, `ppt`), `rtf` und `zip` (`ORDNER_ARTEN`) zeigt der Knopf nur im Ordner (`app.showInFolder`): Sie können Makros oder
+eingebettete Objekte tragen, ein Archiv packt das System neben die Unterlagen aus, und Dateien im Tresor haben keine
+Herkunftsmarke aus dem Internet, vor der Office warnen würde. Alles andere öffnet der Knopf nicht und sagt, warum (Test:
+`tests/aktionen-oeffnen.test.js`). Die Listen schützen nur diesen Knopf: Ein interner Link auf eine Datei, die Obsidian nicht
+anzeigen kann, öffnet Obsidian selbst im Standardprogramm. Auf iPhone und iPad zeigt die Dateien-App die Datei nur an; dort
+gelten die Listen nicht.
+
 Ein Knopf heißt wie sein Befehl (Wortliste, `docs/design.md`, „Sprache“; `tests/wortliste.test.js` prüft die Knöpfe in Seiten).
 Zusätzlich gibt es den Befehl **„Neue Notiz aus Vorlage …“** (`studium-autopilot:neue-notiz`, Strg/Cmd+Umschalt+N). Er bietet
 alle Aktionen mit `ordner` zur Auswahl an. Der Befehl **„Erweiterungen neu laden“** lädt alle Skripte neu.
@@ -81,7 +98,12 @@ gelöscht (siehe [„Bedien-Bausteine“](bedien-bausteine.md)).
 - `verbinden(link?, { nurBeiErfolg })`, `trennen()`, `aktualisieren({ still, automatisch, text })`,
   `aktualisierenOderVerbinden({ neuerLink })`, `linkPruefen(link)`, `fehler()`, `hinweise()`
 
-Der Link liegt nur gerätelokal (`app.saveLocalStorage`). Scheitert der erste Abruf nach dem Eingeben (Fenster oder
+Der Link liegt nur im Schlüsselbund von Obsidian auf diesem Gerät (`app.secretStorage`, seit 01.11.2026; Eintrag je Tresor
+`studium-autopilot-alma-<Kennung>`, `geheimId()`, weil iOS den Schlüsselbund zwischen Tresoren teilt). Bis dahin lag er
+gerätelokal unter `eba-alma-ics` (`app.saveLocalStorage`): Das erste Lesen schreibt ihn einmal in den Schlüsselbund und löscht
+ihn dort, sobald der Schlüsselbund ihn hat; steht in beiden einer, gilt der im Schlüsselbund. Nimmt der Schlüsselbund einen neuen
+Link nicht an, bleibt Alma unverbunden („Der Alma-Link ließ sich auf diesem Gerät nicht speichern.“). Ohne Schlüsselbund (Hülle
+eines eigenen Uni-Abgleichs) bleibt es beim gerätelokalen Speicher. Scheitert der erste Abruf nach dem Eingeben (Fenster oder
 Eingabefeld), gilt wieder der vorherige Link.
 
 - **Zeitplan** (`Q.planen`, vorher nur Knopf): 30 s bis 2 Min. nach dem Einlesen, dann stündlich; nach einem Fehler nach 5, 15,
@@ -102,6 +124,13 @@ Eingabefeld), gilt wieder der vorherige Link.
   Kasten „Aus Alma“ und trägt die Marke nach). Von Hand angelegte Notizen, die Alma verknüpft (`quelle: alma`,
   `alma_schluessel`, `alma_titel`, `alma_raum`), bleiben deine (keine `herkunft`). Notizen mit fremder `herkunft` (zentral,
   ilias-gruppe, gruppe-gewaehlt, claude …) fasst Alma nie an.
+- **Text aus Alma** (seit 01.11.2026): Titel und Raum stehen im Text einer Notiz (Überschrift ohne Modulcode, Kopfzeile, Kasten
+  „Aus Alma (…)“) und im Punkt für „Bitte prüfen“ in einer Zeile mit `\` vor Markdown-Zeichen (`mdText` wie in `zentral.js`,
+  dazu `&`): Ein Titel aus Alma wird nie ein Bild, Kasten oder Link in die App oder auf Dateien; eine Webadresse darin bleibt
+  anklickbar. In den Eigenschaften (`alma_titel`, `raum`, `titel`) bleibt
+  er roh, darum ändern sich Schlüssel, Zuordnung und Besitz nicht. Ein gewöhnlicher Titel oder Raum sieht aus wie vorher;
+  vorhandene Notizen schreibt Alma deshalb nicht neu. Ändert sich der Raum, findet die Kopfzeile ihn entschärft oder roh (ältere
+  Notizen) und schreibt den neuen entschärft.
 - **Lebenslauf:** *Von dir gelöscht* → Grabstein `angewendet` (`alma_schluessel` → `kurzHash` aus Schlüssel, Zeitraum, Raum) in
   `alma-abruf.json`: Die Notiz kommt erst wieder, wenn sich der Termin in Alma ändert. *In Alma weg* (nur Semester, die Alma
   geliefert hat; Ende vor mehr als 30 Tagen bleibt unverändert): Alma-Notiz unberührt → Papierkorb (`.trash`), mit deinem Text

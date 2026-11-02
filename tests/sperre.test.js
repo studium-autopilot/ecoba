@@ -71,6 +71,28 @@ test("Halter schreibt nur bei Wechsel, frei oder nach dem Puls (nicht bei jedem 
   assert.equal(t.schreiben, 2, "puls() schreibt erst nach 50 Min.");
 });
 
+test("Vorgehende Uhr: zuletzt mehr als 10 Min. in der Zukunft gilt als verlassen, bis 10 Min. nicht", async () => {
+  const t = welt();
+  const vor = (min) => t.geraet("g-vor", false, { jetzt: () => new Date(t.uhr + min * MIN) });
+  const b = t.geraet("g-b");
+  await vor(10).nehmen();
+  assert.equal((await b.pruefen()).anderes, true, "genau 10 Min. vor: gilt noch als aktiv");
+  assert.equal(await b.nehmen(), false);
+  t.m.delete(PFAD);
+  await vor(180).nehmen();
+  const p = await b.pruefen();
+  assert.deepEqual([p.anderes, p.darf], [false, true], "3 Std. vor: kein Gerät wird ausgesperrt");
+  assert.equal(await b.nehmen(), true);
+  assert.equal(t.inhalt().geraet, "g-b");
+  assert.equal(t.inhalt().zuletzt, new Date(t.uhr).toISOString(), "mit der eigenen Zeit geschrieben");
+  // der Halter selbst: eine Sperre mit seiner früher vorgehenden Uhr schreibt er beim nächsten puls() neu
+  const a = t.geraet("g-a");
+  t.m.set(PFAD, JSON.stringify({ geraet: "g-a", seit: "2026-11-02T07:00:00.000Z", zuletzt: new Date(t.uhr + 120 * MIN).toISOString(), mobil: false }));
+  assert.equal(await a.puls(), true);
+  assert.deepEqual([t.inhalt().zuletzt, t.inhalt().seit], [new Date(t.uhr).toISOString(), "2026-11-02T07:00:00.000Z"]);
+  assert.equal(S.K.ZUKUNFT, 10 * MIN);
+});
+
 test("erzwingen holt sie her (Knopf „Hier prüfen“); puls() merkt die Übernahme", async () => {
   const t = welt();
   const a = t.geraet("g-a"), b = t.geraet("g-b");

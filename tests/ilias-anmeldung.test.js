@@ -71,7 +71,7 @@ async function lauf(regeln, zugang, { mobil = false, anmeldung = A } = {}) {
 
 test("Erfolg: IdP-Formular, SAML zurück an ILIAS, Dashboard ohne Login-Seite", async () => {
   const { ergebnis, anfragen, geholt } = await lauf(grundRegeln(html(SAML_FORM)));
-  assert.deepEqual(ergebnis, { ok: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true });
   assert.equal(geholt(), 1, "Passwort genau einmal geholt");
   const mitGeheim = anfragen.filter((a) => koerper(a).indexOf(GEHEIM) >= 0);
   assert.equal(mitGeheim.length, 1, "Passwort genau einmal gesendet");
@@ -91,11 +91,31 @@ test("Erfolg: IdP-Formular, SAML zurück an ILIAS, Dashboard ohne Login-Seite", 
   assert.equal(anfragen.filter((a) => /\/ilias\.php/.test(a.url)).length, 1);
 });
 
+test("Weiterleitung nach dem Passwort (auch 307/308): als GET ohne Body, das Passwort geht genau einmal hinaus", async () => {
+  for (const status of [302, 303, 307, 308]) {
+    const r = grundRegeln({ status, kopf: { location: "/idp/profile/SAML2/Redirect/SSO?execution=e1s2" } });
+    r[`GET idp.uni-tuebingen.de/idp/profile/SAML2/Redirect/SSO`] = (a) => (/execution=e1s2/.test(a.url) ? html(SAML_FORM)
+      : /execution=/.test(a.url) ? html(IDP_FORM) : weiter(`${P}/idp/profile/SAML2/Redirect/SSO?execution=e1s1`));
+    const { ergebnis, anfragen, geholt } = await lauf(r);
+    assert.equal(ergebnis.ok, true, String(status));
+    assert.equal(geholt(), 1);
+    assert.equal(anfragen.filter((a) => koerper(a).indexOf(GEHEIM) >= 0).length, 1, "nur der eine POST trägt das Passwort");
+    const danach = anfragen.filter((a) => /execution=e1s2/.test(a.url));
+    assert.deepEqual(danach.map((a) => [a.methode, a.body == null]), [["GET", true]], String(status));
+  }
+  // zu einem fremden Server: blockiert, nichts dorthin
+  const boese = grundRegeln({ status: 307, kopf: { location: "https://boese.example.org/sammeln" } });
+  const { ergebnis, anfragen } = await lauf(boese);
+  assert.equal(ergebnis.grund, "unerwartet");
+  assert.ok(ergebnis.code.startsWith("blockiert-boese.example.org bei passwort · "), ergebnis.code);
+  assert.equal(anfragen.filter((a) => host(a.url) === "boese.example.org").length, 0);
+});
+
 test("Endet die Anmeldung nicht auf einer ILIAS-Seite, wird das Dashboard eigens geprüft", async () => {
   const r = grundRegeln(html(SAML_FORM));
   r[`POST ovidius.uni-tuebingen.de/Shibboleth.sso/SAML2/POST`] = html("<html><body>Weiter …</body></html>");
   const { ergebnis, anfragen } = await lauf(r);
-  assert.deepEqual(ergebnis, { ok: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true });
   assert.equal(anfragen.filter((a) => /\/ilias\.php/.test(a.url)).length, 1, "Dashboard geholt");
 });
 
@@ -126,7 +146,7 @@ test("IdP-Sitzung gilt noch: direkt SAML-Formular, Passwort wird nicht geholt", 
   const r = grundRegeln(null);
   r[`GET idp.uni-tuebingen.de/idp/profile/SAML2/Redirect/SSO`] = html(SAML_FORM);
   const { ergebnis, geholt, anfragen } = await lauf(r);
-  assert.deepEqual(ergebnis, { ok: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: false });
   assert.equal(geholt(), 0);
   assert.equal(anfragen.filter((a) => host(a.url) === "idp.uni-tuebingen.de" && a.methode === "POST").length, 0);
 });
@@ -135,7 +155,7 @@ test("Schon angemeldet: shib_login.php führt direkt zu ILIAS → ok ohne Passwo
   const r = grundRegeln(null);
   r[`GET ovidius.uni-tuebingen.de/shib_login.php`] = weiter(`${I}/ilias.php?baseClass=ilDashboardGUI&cmd=show`);
   const { ergebnis, geholt } = await lauf(r);
-  assert.deepEqual(ergebnis, { ok: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: false });
   assert.equal(geholt(), 0);
 });
 
@@ -194,16 +214,17 @@ test("Fehlender Benutzer oder Passwort-Geber → zugang-falsch ohne Anfrage", as
   assert.equal(anfragen.length, 0);
 });
 
-test("Unbekannte Seite nach dem Passwort → unerwartet; Code mit Stelle, Spur, Titel und Feldnamen, nie Werte oder Zugangsdaten", async () => {
+test("Unbekannte Seite nach dem Passwort → unerwartet; Code mit Stelle, Spur und Feldnamen, nie Titel, Werte oder Zugangsdaten", async () => {
   const seiteNeu = '<html><head><title>Hinweis für ABC12345</title></head><body><form method="post" action="/idp/x">'
     + '<input type="hidden" name="csrf_token" value="WERT-99"><button name="_eventId_proceed">Weiter</button></form></body></html>';
   const { ergebnis } = await lauf(grundRegeln(html(seiteNeu)));
   assert.equal(ergebnis.grund, "unerwartet");
   const c = ergebnis.code;
   assert.ok(c.startsWith("nach-passwort · PC ? · start 200 idp/idp/profile/SAML2/Redirect/SSO idp-anmeldung › passwort 200 "), c);
-  assert.ok(c.endsWith("unbekannt „Hinweis für •••“ [csrf_token,_eventId_proceed]"), c);
+  assert.ok(c.endsWith("unbekannt [csrf_token,_eventId_proceed]"), c);
   assert.equal(ergebnis.hinweis, A.HINWEISE.unerwartet + " Code: " + c);
-  for (const nie of ["WERT-99", GEHEIM, "abc12345", "ABC12345", "execution="]) assert.equal(JSON.stringify(ergebnis).indexOf(nie), -1, nie);
+  assert.equal(ergebnis.passwortGesendet, true, "das Passwort ging hinaus");
+  for (const nie of ["WERT-99", GEHEIM, "abc12345", "ABC12345", "execution=", "Hinweis für", "„"]) assert.equal(JSON.stringify(ergebnis).indexOf(nie), -1, nie);
 });
 
 test("Zustimmung gleich beim Einstieg (IdP-Sitzung gilt noch) → zustimmung, nichts abgeschickt", async () => {
@@ -213,6 +234,7 @@ test("Zustimmung gleich beim Einstieg (IdP-Sitzung gilt noch) → zustimmung, ni
   const { ergebnis, anfragen, geholt } = await lauf(r);
   assert.equal(ergebnis.grund, "zustimmung");
   assert.equal(ergebnis.hinweis, A.HINWEISE.zustimmung, "ohne Code: der Hinweis sagt, was zu tun ist");
+  assert.equal(ergebnis.passwortGesendet, false);
   assert.equal(geholt(), 0);
   assert.equal(anfragen.filter((a) => a.methode === "POST").length, 0);
 });
@@ -225,12 +247,13 @@ test("iPad: Anmeldung endet nicht in ILIAS → Code mit Gerät, Version und Seit
   r[`GET ovidius.uni-tuebingen.de/ilias.php`] = html(seite("login.html"));
   const { ergebnis } = await lauf(r, null, { mobil: true, anmeldung: ipad });
   assert.equal(ergebnis.grund, "unerwartet");
-  assert.ok(ergebnis.code.startsWith("nicht-angemeldet · iPad 9.9.9 · start 200 idp-anmeldung › passwort 200 saml-weiterleitung › saml 200 ilias-anmeldung „Bei ILIAS anmelden"), ergebnis.code);
-  assert.ok(/› dashboard 200 ilias-anmeldung „Bei ILIAS anmelden/.test(ergebnis.code), ergebnis.code);
+  assert.ok(ergebnis.code.startsWith("nicht-angemeldet · iPad 9.9.9 · start 200 idp-anmeldung › passwort 200 saml-weiterleitung › saml 200 ilias-anmeldung"), ergebnis.code);
+  assert.ok(/› dashboard 200 ilias-anmeldung( \[|$)/.test(ergebnis.code), ergebnis.code);
+  assert.equal(ergebnis.code.indexOf("„"), -1, "kein Seitentitel");
   assert.ok(ergebnis.code.length <= 450);
 });
 
 test("iPad: erfolgreiche Anmeldung wie am PC", async () => {
   const { ergebnis } = await lauf(grundRegeln(html(SAML_FORM)), null, { mobil: true });
-  assert.deepEqual(ergebnis, { ok: true });
+  assert.deepEqual(ergebnis, { ok: true, passwortGesendet: true });
 });

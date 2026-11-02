@@ -25,7 +25,9 @@
 //   Grund: Obsidian (iOS-WebView, Electron) und die Node-Tests sollen GENAU denselben Code ausführen; mit DOMParser liefe
 //   in Node nur ein Ersatz. Der Zerleger kennt, was ILIAS-Seiten brauchen: leere Elemente (img, input …), Rohtext (script,
 //   style), Kommentare, Entitäten, „/>“, implizites Schließen von p, li, td, tr, option. Fehlerhaftes HTML führt nie zu einer
-//   Ausnahme; unpassende End-Tags werden übergangen. Alle Funktionen nehmen HTML-Text ODER einen schon zerlegten Baum
+//   Ausnahme; unpassende End-Tags werden übergangen. Linear auch bei feindlichem HTML: Je Name merkt sich der Zerleger, wo im
+//   Stapel offene Elemente stehen, und sucht beim Schließen nie den ganzen Stapel ab; datum und groesse lesen nur den Anfang
+//   eines Texts (DATUM_MAX, GROESSE_MAX). Alle Funktionen nehmen HTML-Text ODER einen schon zerlegten Baum
 //   (H.parsen(html)), damit eine Seite nur einmal zerlegt wird.
 //
 // Schnittstelle (Rückgaben siehe jeweilige Funktion):
@@ -159,6 +161,11 @@ function parsen(html) {
   const wurzel = { name: "#dokument", attrs: {}, kinder: [], eltern: null, istBaum: true };
   const stapel = [wurzel];
   const oben = () => stapel[stapel.length - 1];
+  // Je Name die Stellen offener Elemente im Stapel (aufsteigend); 0 heißt: keins offen (Stelle 0 ist die Wurzel)
+  const lage = Object.create(null);
+  const zuoberst = (nm) => { const l = lage[nm]; return l && l.length ? l[l.length - 1] : 0; };
+  const schieben = (el) => { (lage[el.name] || (lage[el.name] = [])).push(stapel.length); stapel.push(el); };
+  const kuerzen = (j) => { while (stapel.length > j) lage[stapel.pop().name].pop(); };
   const textAnhaengen = (t) => {
     if (!t) return;
     const k = oben().kinder;
@@ -166,12 +173,12 @@ function parsen(html) {
     const leer = !/[^ \t\n\r\f]/.test(t);
     k.push({ text: leer ? " " : entitaeten(t) });
   };
+  // Das oberste offene Element aus namen schließen (samt allem darüber), außer ein Element aus grenzen liegt darüber
   const schliessenBis = (namen, grenzen) => {
-    for (let j = stapel.length - 1; j > 0; j--) {
-      const nm = stapel[j].name;
-      if (grenzen && grenzen.indexOf(nm) >= 0) return;
-      if (namen.indexOf(nm) >= 0) { stapel.length = j; return; }
-    }
+    let j = 0;
+    for (const nm of namen) j = Math.max(j, zuoberst(nm));
+    if (!j || (grenzen && grenzen.some((g) => zuoberst(g) > j))) return;
+    kuerzen(j);
   };
   const n = html.length;
   let i = 0;
@@ -198,9 +205,8 @@ function parsen(html) {
       // Ende-Tag ohne „>“ in Reichweite: bis zum nächsten „>“ springen
       const e = html.indexOf(">", i);
       i = e < 0 ? n : e + 1;
-      for (let j = stapel.length - 1; j > 0; j--) {
-        if (stapel[j].name === name) { stapel.length = j; break; }
-      }
+      const j = zuoberst(name);
+      if (j) kuerzen(j);
       continue;
     }
     const m = /^<([A-Za-z][^\s/>]*)/.exec(html.slice(i, i + 100));
@@ -208,7 +214,7 @@ function parsen(html) {
     const name = m[1].toLowerCase();
     const a = attributeLesen(html, i + m[0].length);
     i = a.ende;
-    if (SCHLIESST_P[name] && oben().name === "p") stapel.pop();
+    if (SCHLIESST_P[name] && oben().name === "p") kuerzen(stapel.length - 1);
     if (SCHLIESST[name]) schliessenBis(SCHLIESST[name], GRENZE[name]);
     const el = { name, attrs: a.attrs, kinder: [], eltern: oben() };
     oben().kinder.push(el);
@@ -224,7 +230,7 @@ function parsen(html) {
       i = zu < 0 ? n : zu + 1;
       continue;
     }
-    stapel.push(el);
+    schieben(el);
   }
   return wurzel;
 }
@@ -353,9 +359,11 @@ function tagLesen(s, heute) {
   return { tag, rest: s.slice(m.index + m[0].length) };
 }
 // Erstes Datum (mit Uhrzeit, falls direkt dahinter) in einem Text → "JJJJ-MM-TTTHH:MM" bzw. "JJJJ-MM-TT", sonst "".
-// heute: "JJJJ-MM-TT" für Heute/Gestern/Morgen (Standard: Datum des Geräts).
+// heute: "JJJJ-MM-TT" für Heute/Gestern/Morgen (Standard: Datum des Geräts). Gelesen werden höchstens DATUM_MAX Zeichen (eine
+// Eigenschaft oder ein Titel; ohne Grenze wüchse die Arbeit bei langen Texten aus Ziffern und Punkten quadratisch).
+const DATUM_MAX = 500, GROESSE_MAX = 200;
 function datum(s, heute) {
-  s = String(s || "").replace(/\s+/g, " ");
+  s = String(s || "").slice(0, DATUM_MAX).replace(/\s+/g, " ");
   const re = /(heute|today|gestern|yesterday|morgen|tomorrow|\d{1,2}\.)/gi;
   let m;
   while ((m = re.exec(s))) {
@@ -370,9 +378,10 @@ function datum(s, heute) {
   }
   return "";
 }
-// „1.11 MB“, „345 KB“, „1,5 GB“, „12.345 Bytes“ → Bytes (Zahl; ILIAS rechnet mit 1000er-Schritten), sonst null
+// „1.11 MB“, „345 KB“, „1,5 GB“, „12.345 Bytes“ → Bytes (Zahl; ILIAS rechnet mit 1000er-Schritten), sonst null. Nur die ersten
+// GROESSE_MAX Zeichen (eine Eigenschaft); ohne Grenze wüchse die Suche bei langen Ziffernfolgen quadratisch
 function groesse(s) {
-  const m = /(\d[\d.,]*)\s*(Bytes|Byte|B|KB|kB|KiB|MB|MiB|GB|GiB|TB)\b/.exec(String(s || ""));
+  const m = /(\d[\d.,]*)\s*(Bytes|Byte|B|KB|kB|KiB|MB|MiB|GB|GiB|TB)\b/.exec(String(s || "").slice(0, GROESSE_MAX));
   if (!m) return null;
   let z = m[1];
   const punkt = z.lastIndexOf("."), komma = z.lastIndexOf(",");

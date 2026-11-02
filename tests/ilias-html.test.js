@@ -357,3 +357,24 @@ test("Gruppen in einem Ordner: Mitglied über das Menü (Mitgliedschaft beenden)
   assert.equal(b[1].titel, "X101 Beispielökonomik - WS26/27");
   assert.deepEqual(H.brotkrumen(seite("dashboard"), BASIS), [], "ohne Brotkrumen leer");
 });
+
+test("Feindliches HTML: tiefe Verschachtelung, viele End-Tags ohne Anfang, lange Ziffernfolgen; bleibt schnell und richtig", () => {
+  const dauer = (fn) => { const t0 = Date.now(); const x = fn(); return { x, ms: Date.now() - t0 }; };
+  // 100 000 offene <div>, dann 100 000 End-Tags, zu denen nichts offen ist, und Listenpunkte unter einer Grenze
+  const tief = "<div>".repeat(100000) + "</span>".repeat(100000) + "<li><ul>" + "<div>".repeat(1000) + "<li>x".repeat(100000);
+  let r = dauer(() => S.parsen(tief));
+  assert.ok(r.ms < 2000, r.ms + " ms");
+  // Das Schließen bleibt richtig: ein unpassendes End-Tag schließt nichts, das passende alles darüber
+  const w = S.parsen("<div id=a><p>eins<span>zwei</div><b>drei</b></i>");
+  const a = S.erstes(w, (e) => S.attr(e, "id") === "a");
+  assert.equal(S.text(a), "einszwei");
+  assert.equal(S.erstes(w, (e) => e.name === "b").eltern.name, "#dokument");
+  const l = S.parsen("<ul><li>1<li>2<ul><li>a</ul><li>3</ul>");
+  assert.deepEqual(S.alle(l, (e) => e.name === "li").map((e) => e.eltern.name), ["ul", "ul", "ul", "ul"]);
+  // Größe und Datum: lange Ziffernfolgen ohne Einheit bzw. ohne Datum
+  r = dauer(() => [H.groesse("1".repeat(200000)), H.groesse("1,".repeat(100000) + " MB"), H.datum("1.".repeat(100000), HEUTE)]);
+  assert.ok(r.ms < 1000, r.ms + " ms");
+  assert.deepEqual(r.x, [null, null, ""]);
+  assert.equal(H.groesse("1.11 MB"), 1110000);
+  assert.equal(H.datum("12. Okt 2026, 09:31", HEUTE), "2026-10-12T09:31");
+});

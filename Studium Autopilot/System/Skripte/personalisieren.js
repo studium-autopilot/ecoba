@@ -3,21 +3,23 @@
 // Standard ohne Angaben: Studienbeginn = aktuelles Semester (1. FS), Variante „offen“, neutrale Begrüßung.
 //   ```eba-personalisieren```  früher die Karte oben auf dem Dashboard; seit 0.3.0 leer (die Einrichtung ersetzt sie). Der
 //                              Block zeichnet nichts, damit ältere, selbst geänderte Dashboards keine Lücke zeigen.
-//   ```eba-personalisieren angaben```   „Deine Angaben“ (Einstellungen & Hilfe): Zeilen Name, Studienbeginn, Zielnote und
-//                              Einrichtung, rechts der Wert und der Pfeil; Tippen öffnet das Formular am passenden Feld bzw. die
-//                              Einrichtung (Starten, Fortsetzen; ist sie fertig, startet ein Tipp sie erneut).
-//   ```eba-personalisieren variante```  „Variante“: Auswahl wie in den Einstellungen von iPhone und iPad, je Variante eine Zeile,
-//                              die gewählte mit Haken und darunter, was aus ihr folgt; Tippen auf eine andere wählt sie (Aktion
-//                              „variante“ in aktionen.js).
-//   ```eba-personalisieren obsidian```  „Obsidian“ (seit 24.10.2026): Zeilen Obsidian-Einstellungen, Dateien (Zahl) und Tresor
-//                              (Name). Das stand bis dahin unten in der Schublade auf iPhone und iPad (bis 26.10.2026 dort
-//                              ausgeblendet, solange die Übersicht vorn war). Tippen ruft Obsidians Befehl auf (Aktion
-//                              „obsidian“, Parameter ziel=einstellungen|dateien|tresor, OBSIDIAN).
+//   ```eba-personalisieren angaben```   „Deine Angaben“ (Einstellungen & Hilfe): Zeilen Name, Studienbeginn, Variante, Zielnote
+//                              und Einrichtung, rechts der Wert und der Pfeil; Tippen öffnet das Formular am passenden Feld, bei
+//                              der Variante die Auswahl (Aktion „variante“ in aktionen.js), bzw. die Einrichtung (Starten,
+//                              Fortsetzen; ist sie fertig, startet ein Tipp sie erneut).
+//   ```eba-personalisieren variante```  zeichnet seit 02.11.2026 nichts: Die Variante ist eine Zeile unter „Deine Angaben“. Bis
+//                              dahin ein eigener Abschnitt mit je Variante einer Zeile, die gewählte mit Haken und dem, was aus
+//                              ihr folgt. Die Seite ersetzt jedes Update, auch selbst geändert (update.js, IMMER_NEU).
+//   ```eba-personalisieren obsidian```  „Obsidian“ (seit 24.10.2026): Zeilen Obsidian-Einstellungen und Tresor (Name). Das
+//                              stand bis dahin unten in der Schublade auf iPhone und iPad (bis 26.10.2026 dort ausgeblendet,
+//                              solange die Übersicht vorn war). Tippen ruft Obsidians Befehl auf (Aktion „obsidian“, Parameter
+//                              ziel=einstellungen|tresor, OBSIDIAN). Die Zeile Dateien (Zahl; öffnete Obsidians linke
+//                              Seitenleiste) ist seit 01.11.2026 weg (Rückmeldung: „Sidebar shouldn't be visible in this vault“).
 //   ```eba-personalisieren hilfe```  „Hilfe“ (seit 27.10.2026): die Zeile Rundgang, oben in der Liste der Hilfe-Themen
 //                              (> [!eba-zeilen]); Tippen zeigt den Rundgang noch einmal (Aktion „rundgang“, rundgang.js).
 //   Alle als kompakte Zeilen wie die Verbindungen (seit 24.10.2026, .eba-ez, verbindungen.js kompakt): eine Zeile je Angabe, die
 //   ganze Zeile ist der Knopf. Bis dahin Symbol, Titel, Wert in einer zweiten Zeile und ein Knopf „Ändern“ bzw. „Wählen“.
-//   Inhalt der Zeilen: angabenZeilen(), varianteZeilen(), obsidianZeilen() und hilfeZeilen() (rein, getestet in
+//   Inhalt der Zeilen: angabenZeilen(), obsidianZeilen() und hilfeZeilen() (rein, getestet in
 //   tests/personalisieren.test.js).
 //   Aktion „personalisieren“   EIN Formular-Fenster (Name, Studienbeginn als Semester-Auswahl, Variante, Zielnote 1,0–4,0),
 //                              speichert nach System/Einstellungen.md. Auch als Befehl. Parameter feld=name|studienbeginn|
@@ -33,25 +35,18 @@ module.exports = function (ctx) {
   // Variante, Studienbeginn und Zielnote: eine Beschreibung für alle Stellen (felder.js, Feld-Register)
   const F = () => ctx.user.felder;
   const VARIANTEN = F().VARIANTE.werte;
-  // Was aus der Variante folgt (PO 2023, Modulhandbuch); Reihenfolge der Zeilen unter „Variante“
-  const FOLGE = {
-    "Economics": "Pflicht: E230, E210, S220, B240 · Schwerpunkte 75 ECTS, mind. 2 VWL-Bereiche",
-    "Business Administration": "Pflicht: B220, J200, B250, B240 · Profil 12 ECTS · Schwerpunkte 63 ECTS, mind. 2 BWL-Bereiche",
-    "ohne Spezialisierung": "Profil 18 ECTS VWL + 18 ECTS BWL · Schwerpunkte 63 ECTS, je mind. 1 VWL- und BWL-Bereich",
-    "offen": "Bis zum 3. Fachsemester wählen",
-  };
   // Übersprungene Schritte der Einrichtung (einrichtung_uebersprungen) in Worten; alma und ilias aus Einrichtungen bis 0.4.7
   const SCHRITTE = { studienbeginn: "Studienbeginn", variante: "Variante", angaben: "Name und Zielnote", uni: "Uni-Login", alma: "Alma", ilias: "ILIAS" };
   // Symbole der Zeilen (Lucide, 24er-Raster, Strich in currentColor; wie verbindungen.js)
   const SYMBOLE = {
     person: '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>',
     kalender: '<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/>',
+    gabel: '<path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/>',
     ziel: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
     hut: '<path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/>',
     haken: '<path d="M20 6 9 17l-5-5"/>',
     pfeil: '<path d="m9 18 6-6-6-6"/>',
     zahnrad: '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/>',
-    ordner: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
     tresor: '<rect x="3" y="3" width="8" height="18" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
     widget: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>',
     kompass: '<circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/>',
@@ -182,11 +177,11 @@ module.exports = function (ctx) {
   };
   // Eine Zeile: { id, symbol? (ohne: kein Symbol), ton ("akzent" | "ok" | "leise"), titel, wert (rechts, gedämpft), wertArt?
   //   ("akzent": etwas wartet auf dich), unter? (zweite Zeile, nur wenn sie etwas Neues sagt), aktion? ({ aktion, parameter }: die
-  //   ganze Zeile ist der Knopf; ohne: nicht tippbar), rechts ("pfeil" | "haken" | "") }
+  //   ganze Zeile ist der Knopf; ohne: nicht tippbar), rechts ("pfeil" | "") }
   const angabenZeilen = (fm, ez) => {
     fm = fm || {};
     ez = ez || einrichtungVon(fm);
-    const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote);
+    const name = txt(fm.name), beginn = txt(fm.studienbeginn).slice(0, 10), ziel = txt(fm.zielnote), vari = varianteVon(fm);
     const aendern = (feld) => ({ aktion: "personalisieren", parameter: { feld } });
     const v = vorschauTeile(beginn);
     const LEER = "Eintragen"; // kurz, damit auch auf dem iPhone mit großer Schrift Titel und Wert in eine Zeile passen
@@ -194,6 +189,9 @@ module.exports = function (ctx) {
       { id: "name", symbol: "person", ton: name ? "akzent" : "leise", titel: "Name", wert: name || LEER, aktion: aendern("name"), rechts: "pfeil" },
       { id: "studienbeginn", symbol: "kalender", ton: beginn ? "akzent" : "leise", titel: "Studienbeginn", wert: beginn ? v.erstes || dmy(beginn) : LEER,
         aktion: aendern("studienbeginn"), rechts: "pfeil" },
+      // Nur die gewählte Variante; „Wählen“, solange sie offen ist. Ein Tipp öffnet die Auswahl (Aktion „variante“ ohne Wert).
+      { id: "variante", symbol: "gabel", ton: vari === "offen" ? "leise" : "akzent", titel: "Variante", wert: vari === "offen" ? "Wählen" : F().varianteTitel(vari),
+        aktion: { aktion: "variante", parameter: {} }, rechts: "pfeil" },
       { id: "zielnote", symbol: "ziel", ton: ziel ? "akzent" : "leise", titel: "Zielnote", wert: ziel || LEER, aktion: aendern("zielnote"), rechts: "pfeil" },
     ];
     const ueber = (ez.uebersprungen || []).map((p) => SCHRITTE[p]).filter(Boolean);
@@ -205,22 +203,15 @@ module.exports = function (ctx) {
     zeilen.push(e);
     return zeilen;
   };
-  // Je Variante eine Zeile ohne Symbol; die gewählte mit Haken und dem, was aus ihr folgt, die übrigen wählt ein Tipp
-  const varianteZeilen = (fm) => {
-    const ist = varianteVon(fm || {});
-    return VARIANTEN.map((v) => (v === ist
-      ? { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", unter: FOLGE[v], rechts: "haken" }
-      : { id: v, ton: "leise", titel: F().varianteTitel(v), wert: "", aktion: { aktion: "variante", parameter: { wert: v } }, rechts: "" }));
-  };
-  // „Obsidian“: was unten in der Schublade stand (Zahnrad, Umschalter zur Dateiliste, Tresor mit Zahl der Dateien). tresor: Name
-  // des Tresors, dateien: Zahl aller Dateien. Ziel der Zeile → Obsidians Befehl (Aktion „obsidian“). tresor ist „Tresore
-  // verwalten“, nicht app:switch-vault: Das wechselt auf iPhone und iPad nur, löschen und umbenennen geht nur in der Verwaltung
-  const OBSIDIAN = { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:open-vault" };
-  const obsidianZeilen = (tresor, dateien) => {
+  // „Obsidian“: was unten in der Schublade stand (Zahnrad, Tresor). tresor: Name des Tresors. Ziel der Zeile → Obsidians Befehl
+  // (Aktion „obsidian“). tresor ist „Tresore verwalten“, nicht app:switch-vault: Das wechselt auf iPhone und iPad nur, löschen
+  // und umbenennen geht nur in der Verwaltung. Keine Zeile für die Dateiliste: Sie öffnete Obsidians linke Seitenleiste, und die
+  // bleibt auf iPhone und iPad zu (seit 01.11.2026, Rückmeldung: „Sidebar shouldn't be visible in this vault“).
+  const OBSIDIAN = { einstellungen: "app:open-settings", tresor: "app:open-vault" };
+  const obsidianZeilen = (tresor) => {
     const oeffnen = (ziel) => ({ aktion: "obsidian", parameter: { ziel } });
     return [
       { id: "einstellungen", symbol: "zahnrad", ton: "akzent", titel: "Obsidian-Einstellungen", wert: "", aktion: oeffnen("einstellungen"), rechts: "pfeil" },
-      { id: "dateien", symbol: "ordner", ton: "akzent", titel: "Dateien", wert: Number(dateien || 0).toLocaleString("de-DE"), aktion: oeffnen("dateien"), rechts: "pfeil" },
       { id: "tresor", symbol: "tresor", ton: "akzent", titel: "Tresor", wert: txt(tresor), aktion: oeffnen("tresor"), rechts: "pfeil" },
     ];
   };
@@ -239,18 +230,16 @@ module.exports = function (ctx) {
         + `<span class="eba-ez-text"><span class="eba-ez-kopf"><span class="eba-ez-titel">${esc(z.titel)}</span>`
         + (z.wert ? `<span class="eba-ez-wert${z.wertArt ? " " + z.wertArt : ""}">${esc(z.wert)}</span>` : "") + "</span>"
         + (z.unter ? `<span class="eba-ez-unter">${esc(z.unter)}</span>` : "") + "</span>"
-        + (z.rechts ? `<span class="eba-ez-rechts${z.rechts === "haken" ? " gewaehlt" : ""}" aria-hidden="true">${svg(z.rechts)}</span>` : "");
-      if (z.rechts === "haken") zeile.setAttr("aria-current", "true");
+        + (z.rechts ? `<span class="eba-ez-rechts" aria-hidden="true">${svg(z.rechts)}</span>` : "");
     }
   };
 
   let block = null; // Codeblock-Griff (ctx.codeblock), gesetzt in registrieren()
-  // Ohne Argument (früher die Karte auf dem Dashboard, seit 0.3.0 leer): nichts zeichnen. Bei den übrigen eba-perso-aus entfernen:
+  // Ohne Argument (früher die Karte auf dem Dashboard, seit 0.3.0 leer) und „variante“ (seit 02.11.2026): nichts zeichnen. Bei den übrigen eba-perso-aus entfernen:
   // Wurde derselbe Block vorher leer gezeichnet (Argument nicht erkannt, siehe registrieren), bliebe die Klasse sonst hängen.
   const karte = (el) => { el.empty(); el.addClass("eba-perso-aus"); };
   const angaben = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, angabenZeilen(fmVon())); };
-  const variante = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, varianteZeilen(fmVon())); };
-  const obsidian = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, obsidianZeilen(app.vault.getName(), app.vault.getFiles().length)); };
+  const obsidian = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, obsidianZeilen(app.vault.getName())); };
   const hilfe = (el) => { el.empty(); el.removeClass("eba-perso-aus"); liste(el, hilfeZeilen(!!(ctx.obsidian.Platform && ctx.obsidian.Platform.isIosApp))); };
   const neuZeichnen = () => { if (block) block.neu(); };
 
@@ -269,8 +258,8 @@ module.exports = function (ctx) {
     },
   };
 
-  ctx.personalisieren = { zielnotePruefen, semesterOptionen, vorschauTeile, vorschauText, VARIANTEN, FOLGE, OBSIDIAN, Formular, angabenZeilen, varianteZeilen,
-    obsidianZeilen, hilfeZeilen, angaben, variante, obsidian, hilfe, neuZeichnen, get fenster() { return fenster; } };
+  ctx.personalisieren = { zielnotePruefen, semesterOptionen, vorschauTeile, vorschauText, VARIANTEN, OBSIDIAN, Formular, angabenZeilen,
+    obsidianZeilen, hilfeZeilen, angaben, obsidian, hilfe, neuZeichnen, get fenster() { return fenster; } };
 
   const registrieren = () => {
     block = ctx.codeblock("eba-personalisieren", (quelle, el, c, inst) => {
@@ -280,7 +269,7 @@ module.exports = function (ctx) {
       // alte Dashboard-Block hat keinen. In einer Karte (Hilfe) liefert getSectionInfo die Karte, dort zählt nur der Text.
       const q = String(quelle || "");
       if (inst.art === "karte") inst.art = /variante/i.test(q) ? "variante" : /angaben/i.test(q) ? "angaben" : /obsidian/i.test(q) ? "obsidian" : /rundgang/i.test(q) ? "hilfe" : "karte";
-      const zeichner = { angaben, variante, obsidian, hilfe };
+      const zeichner = { angaben, variante: karte, obsidian, hilfe };
       try {
         (zeichner[inst.art] || karte)(el);
       } catch (e) { console.error("eba-personalisieren", e); }

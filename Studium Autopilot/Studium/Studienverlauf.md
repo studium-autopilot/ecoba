@@ -46,7 +46,7 @@ Schwerpunkte: erscheinen, sobald Studium Autopilot läuft.
 > | Bachelorarbeit BA302 | 12 | 12 | 12 |
 > | **Summe ECTS** | **180** | **180** | **180** |
 >
-> **Variante** (Economics, Business Administration oder ohne Spezialisierung) vor dem 3. Fachsemester wählen: Ab dann unterscheiden sich die Musterpläne. Einen Zeitpunkt legt die PO nicht fest. Festlegen unter [[Einstellungen & Hilfe#Variante|Variante]].
+> **Variante** (Economics, Business Administration oder ohne Spezialisierung) vor dem 3. Fachsemester wählen: Ab dann unterscheiden sich die Musterpläne. Einen Zeitpunkt legt die PO nicht fest. Festlegen unter [[Einstellungen & Hilfe#Deine Angaben|Variante]].
 >
 > **Containermodule** (z. B. E313–E315, B3X1–B3X7) haben jedes Semester ein anderes Thema; jedes zählt nur einmal.
 >

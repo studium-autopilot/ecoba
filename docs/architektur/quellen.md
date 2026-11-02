@@ -52,7 +52,7 @@ Netz, keine Zeitgeber). Noten & Anmeldungen, ILIAS (`ilias-abruf.json`, Dateinam
 ctx.user.sperre.erzeugen({ io: { lesen(pfad), schreiben(pfad, text) }, quelle | pfad, geraetId(), jetzt(), mobil,
                            uebernahme = 80 Min., puls = 50 Min., computerVorrang = false })
   → { pruefen() → { hier, anderes, darf, sperre }, nehmen({ erzwingen }) → bool, puls() → bool, freigeben() → bool, pfad }
-ctx.user.sperre.pfadVon(quelle) → "System/Daten/<quelle>-abruf.json"     ctx.user.sperre.K → { UEBERNAHME, PULS, ORDNER }
+ctx.user.sperre.pfadVon(quelle) → "System/Daten/<quelle>-abruf.json"     ctx.user.sperre.K → { UEBERNAHME, PULS, ZUKUNFT, ORDNER }
 ```
 
 - **Datei** (synchronisiert, in `.gitignore`, `release.py` und `pruefen.py`): `{ geraet, seit, zuletzt, mobil, frei? }`. Weitere
@@ -66,6 +66,9 @@ ctx.user.sperre.pfadVon(quelle) → "System/Daten/<quelle>-abruf.json"     ctx.u
   `freigeben({ erzwingen: true })` auch eine fremde Sperre, deren Halter laut Aufrufer schweigt (ILIAS: verwaiste
   Gruppen-Notizen), danach steht sie frei auf diesem Gerät. `computerVorrang` (Volltext): Ein Computer löst ein iPhone/iPad sofort
   ab, nie umgekehrt.
+- **Vorgehende Uhr:** Liegt `zuletzt` mehr als 10 Minuten (`K.ZUKUNFT`) in der Zukunft, gilt die Sperre als verlassen wie nach
+  langer Stille, und das nächste Gerät darf übernehmen. Sonst sperrte ein Gerät, dessen Uhr vorgeht, alle anderen aus, bis
+  seine Zeit erreicht ist. Der Halter selbst schreibt so eine Sperre beim nächsten `nehmen` oder `puls()` mit seiner Zeit neu.
 - **Weiche Sperre:** Über einen langsamen Sync können sich zwei Geräte kurz überschneiden. Darum schreibt jede Quelle nur, was
   aus denselben Eingaben gleich herauskommt.
 - **Tests:** `tests/sperre.test.js` (auch: Vorgaben gleich `ilias.js`, damit die Werte nicht auseinanderlaufen).

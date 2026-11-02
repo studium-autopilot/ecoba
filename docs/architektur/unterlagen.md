@@ -9,9 +9,9 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
 
 | Skript | Aufgabe |
 |---|---|
-| `ilias-netz.js` | Sitzung mit Keksdose, Weiterleitungen, Drossel, nur https und nur Server der Uni; am PC Node-https aus Electron (Verbindungen bleiben offen, Seiten gzip), auf iPhone/iPad `requestUrl` |
-| `ilias-anmeldung.js` | Anmeldung über Shibboleth; Ergebnis `{ ok }` bzw. `{ ok: false, grund, hinweis, code }` (falsches Passwort, Zustimmung, zweiter Faktor, Netz, unerwartet). `code` = „Stelle · Gerät Version · Spur“ (je Antwort Schritt, Status, Seitenart; bei fremden Seiten Titel und Feldnamen, am PC Server und Pfad; nie Feldwerte, Query, Kekse oder Zugangsdaten), bei „unerwartet“ und „netz“ im Hinweis; Stellen und Beispiel im Kopf der Datei |
-| `ilias-html.js` | Kursliste und Kursinhalt aus dem HTML lesen (eigener kleiner Leser) |
+| `ilias-netz.js` | Sitzung mit Keksdose, Weiterleitungen, Drossel, nur https und nur Server der Uni, Grenze je Antwort (`maxBytes`); am PC Node-https aus Electron (Verbindungen bleiben offen, Seiten gzip), auf iPhone/iPad `requestUrl` |
+| `ilias-anmeldung.js` | Anmeldung über Shibboleth; Ergebnis `{ ok, passwortGesendet }` bzw. `{ ok: false, grund, hinweis, code, passwortGesendet }` (falsches Passwort, Zustimmung, zweiter Faktor, Netz, unerwartet). `code` = „Stelle · Gerät Version · Spur“ (je Antwort Schritt, Status, Seitenart; bei fremden Seiten die Feldnamen, am PC Server und Pfad; nie Seitentitel, Feldwerte, Query, Kekse oder Zugangsdaten), bei „unerwartet“ und „netz“ im Hinweis; Stellen und Beispiel im Kopf der Datei. Das Passwort geht mit `folgen: false` hinaus; einer Weiterleitung danach folgt die Anmeldung selbst als GET ohne Body (am PC, auch bei 307/308), nur zu den Servern der Sitzung |
+| `ilias-html.js` | Kursliste und Kursinhalt aus dem HTML lesen (eigener kleiner Leser; linear auch bei feindlichem HTML: offene Elemente je Name gemerkt statt den Stapel abzusuchen, `datum` und `groesse` lesen nur die ersten 500 bzw. 200 Zeichen) |
 | `ilias.js` | Zeitplan, Abrufer-Sperre, Durchsuchen, Ablage, Index; `ctx.ilias` für die Oberfläche |
 | `unterlagen.js` | Namen „Code Art NN Titel“ (auch Titel aus der ersten PDF-Seite), Ordner, Begleitnotiz |
 | `verbindungen.js`, `einrichtung.js` | Zeile, Fenster, Schloss, Knopf auf Unterlagen; Bildschirm 5 der Einrichtung (Uni-Login) |
@@ -29,9 +29,24 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   Schreiben mit der Platte gemischt) und `System/Daten/ilias-abruf.json` (Abrufer-Sperre
   über `sperre.js`: nur ein Gerät lädt, Übernahme nach 80 Min. Stille wie bei den zentralen Daten, sofort bei `frei: true` nach
   dem Freigeben der Gruppen, siehe [„Deine Übungs- oder Tutoriengruppe“](zentrale-daten.md); ältere Fassungen lesen die Datei weiter, `mobil` ist neu).
+- **Pfade im Index** (`pfadOk`): `pfad` und `fassungen` eines Eintrags gelten nur unter `Unterlagen/`, ohne leere, `.`- oder
+  `..`-Teile, ohne `\`, mit der Endung des Eintrags (die seiner Datei, ohne Datei die des Namens in ILIAS) und nie mit `js`,
+  `mjs`, `cjs`, `css`, `json` oder `md`. `ilias.json` wird synchronisiert und kann von jedem Gerät kommen; ein anderer `pfad`
+  wird darum beim Lesen leer (der Eintrag bleibt: nichts wird neu geladen, die Datei bleibt unberührt), eine andere Fassung fällt
+  weg. Vor jedem Ersetzen, Löschen, Umbenennen und jeder neuen Fassung daneben prüft der Lauf den Pfad noch einmal. Eine
+  verschobene oder fehlende Datei sucht er nur unter `Unterlagen/` (gleiche Größe, Prüfsumme und Endung), nie im übrigen Tresor.
+  Verschiebst du eine Datei aus `Unterlagen/` hinaus, zeigt ihr Eintrag auf keine Datei mehr, und solange sich in ILIAS nichts
+  ändert, wird nichts neu geladen. Hat ILIAS eine neue Fassung, kommt sie wie eine neue Datei nach `Unterlagen/` (Bericht `neu`);
+  deine verschobene Datei bleibt unberührt. Bringst du sie vorher unverändert zurück, findet der Lauf sie wieder und behandelt sie
+  wie jede Datei unter `Unterlagen/`. Ebenso gilt ein Pfad, der beim Lesen leer wurde. Da nur unter `Unterlagen/` gesucht wird,
+  kann eine neue Datei aus ILIAS, die du schon an anderer Stelle im Tresor hast, unter `Unterlagen/` noch einmal geladen werden.
 - **Kurspasswörter (nach bestem Bemühen):** Manche Kurstitel tragen das Beitrittspasswort. `ohneKennwort` prüft eine
-  gefaltete Fassung (Entitäten aufgelöst, auch doppelt; unsichtbare Zeichen wie das weiche Trennzeichen weg; NFKC; kyrillische
-  und griechische Doppelgänger lateinisch). Starke Marken zählen immer, außer als Wortanfang („Passwortsicherheit“):
+  gefaltete Fassung (Entitäten aufgelöst, auch doppelt; unsichtbare Zeichen weg: weiches Trennzeichen, Verbinder,
+  Breiten- und Richtungszeichen, Variantenwähler, Tag-Zeichen U+E0000–E007F und Hangul-Füller; NFKC; kyrillische und
+  griechische Doppelgänger lateinisch). In jedem Namen und Notiztext aus ILIAS (`textRein`) fallen Tag-Zeichen, Hangul-Füller,
+  U+061C und Variantenwähler jenseits von U+FFFF ganz weg; Breiten- und Richtungszeichen werden wie früher zu Leerzeichen, und
+  Variantenwähler U+FE00–FE0F bleiben. So heißen Dateien und Ordner mit Emoji im Titel weiter wie bisher und werden nicht
+  unter neuem Namen noch einmal geladen. Starke Marken zählen immer, außer als Wortanfang („Passwortsicherheit“):
   Passwort/Password/Kennwort in jeder Schreibweise und als Wortende („Kurspasswort“), Passwd, Pwd, Passw., Kennw.,
   Pass-/Zugangs-/Einschreibecode, Einschreibe-/Zugangsschlüssel, Schlüsselwort, Mot de passe, Enrolment key, Zugangsdaten.
   PW-Formen (PW, P/W, P.W., KursPW) zählen mit Ziffer dahinter, mit „:“/„=“ oder nach einem Trenner („S110 PW-Statistik“
@@ -75,11 +90,37 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   zählt nicht. Was in einem übersprungenen Behälter lag (spätere Sitzung, Sitzung ohne Materialien, Gruppe ohne
   Mitgliedschaft, zu tief; `r.ausgelassen`, Vergleich über `iliasPfad`), gilt nicht als nicht gesehen. Fehlen in einem Kurs
   mehr als die Hälfte und mehr als 10 auf einmal → in diesem Kurs nichts gemerkt, Warnung (`entfernteMerken`, Schutz je Kurs).
+- **Dateitypen:** Nie geladen werden Dateien, die in Obsidian zu Notizen oder Ansichten würden (`md`, `base`, `canvas`), die
+  Obsidian oder das Plugin als eigene Dateien liest (`js`, `mjs`, `cjs`, `css`, `json`; `pfadOk` nimmt sie nie als Ziel) und, als
+  zusätzliche Vorsicht, was Windows beim Öffnen ausführt, einbindet oder als Laufwerk öffnet (`AUSFUEHRBAR`: `exe`, `com`,
+  `bat`, `cmd`, `ps1`, `psm1`, `vbs`, `vbe`, `js`, `jse`, `wsf`, `wsh`, `ws`, `hta`, `scr`, `msi`, `msp`, `lnk`, `url`, `pif`,
+  `cpl`, `reg`, `scf`, `inf`, `chm`, `xll`, `msc`, `iso`, `img`, `vhd`, `vhdx`, `appx`, `msix`, `appinstaller`, `application`,
+  `appref-ms`, `diagcab`, `settingcontent-ms`, `library-ms`, `search-ms`; geprüft an der Endung aus ILIAS und am Ende des
+  Namens, `nieLaden`). Sie zählen wie andere übersprungene Dateien (`uebersprungen`) und gelten als gesehen: Eine früher
+  geladene bleibt, wie sie ist, ohne Kasten „Nicht mehr in ILIAS“. Dieselbe Regel gilt für gemerkte Funde früherer Läufe
+  (`fundeLesen`), und `neuAblegen` legt eine neue Datei nur ab, wenn ihr Pfad `pfadOk` erfüllt.
+  Kursdateien wie `.py`, `.R`, `.ipynb` oder `.jar` kommen weiter.
 - **Grenzen:** keine Videos, Foren, Tests; Dateien über 50 MB nicht (die Zeile nennt ihre Zahl, solange die Datei in ILIAS
-  ist und ihr Kurs an). Je Lauf höchstens 400 Seiten
-  und 150 Downloads auf iPhone/iPad, 400 am PC (der erste Abruf braucht so meist nur einen Lauf); automatische Läufe
+  ist und ihr Kurs an). Das gilt auch für eine geänderte Datei (deine bleibt, die Angaben aus ILIAS werden gemerkt, damit sie
+  nicht bei jedem Lauf neu versucht wird) und für Dateien ohne Größe in der Liste: Der Download bricht ab, sobald mehr als
+  50 MB kommen (am PC unterwegs, auch entpackt, auf iPhone/iPad nach dem Empfang; `maxBytes`, Fehler `zu-gross` in
+  `ilias-netz.js`, Vorgabe ohne Angabe 20 MB für Seiten und 100 MB für Dateien). Offen: Auf iPhone/iPad liefert `requestUrl`
+  die Antwort erst ganz; eine Datei ohne Größe in der Liste wird dort also erst nach dem Empfang verworfen. Vorher die Größe zu
+  erfragen (`HEAD` oder `Range`) geht erst, wenn geprüft ist, wie ILIAS darauf antwortet. Je Lauf höchstens 400 Seiten
+  und 150 Downloads auf iPhone/iPad, 400 am PC (der erste Abruf braucht so meist nur einen Lauf), zusammen höchstens 250 MB
+  auf iPhone/iPad und 1000 MB am PC (`BUDGET_MOBIL_MB`, `BUDGET_PC_MB`: Speicher und Sync; gezählt wird, was geladen ist, und
+  was unterwegs ist, mit der Größe aus der Liste; die erste Datei eines Laufs kommt immer). Was über einer Grenze liegt, zählt
+  als `rest` und kommt mit dem nächsten Stapel bzw. Lauf („… weitere folgen gleich.“); automatische Läufe
   durchsuchen einen Kurs höchstens alle 3 Std. Lehnt die Uni die Anmeldung ab, gibt es keine automatischen Versuche mehr, bis
-  du den Zugang neu eingibst.
+  du den Zugang neu eingibst. Kam nach dem Absenden des Passworts eine unbekannte Seite (`grund: unerwartet` mit
+  `passwortGesendet`, Bericht `unklar`; etwa eine eigene Seite der Uni für ein gesperrtes Konto, die als falsches Passwort nicht
+  erkennbar ist), versucht dieses Gerät es 24 Std. nicht von selbst (`PAUSE_UNKLAR`, `pauseBis` im Stand, wie Alma nach
+  unerwarteten Antworten; automatische Läufe enden als `pause`, ebenso ein neuer Kalender-Link im Hintergrund,
+  `kalenderLinks({ automatisch: true })` aus `uni-login.js` → `erneuern`), damit wiederholte Versuche mit demselben Passwort das Konto nicht
+  sperren. Zeile und Fenster sagen es („Die Anmeldeseite der Uni sah anders aus als erwartet. Von selbst versucht Studium Autopilot
+  es erst morgen wieder, mit Aktualisieren gleich.“), der Code steht weiter im Fenster. **Aktualisieren** versucht es gleich, ein
+  Erfolg oder neues Verbinden hebt die Pause auf. Die Pause gilt je Gerät wie bei Alma: Jedes andere Gerät versucht es höchstens
+  einmal, bevor es selbst pausiert.
 - **Last für die Uni:** Die Drossel der Sitzung (`N.drossel`, `ilias-netz.js`) lässt höchstens 2 Anfragen gleichzeitig zu und
   startet sie mindestens 400 ms auseinander (höchstens 2,5 je Sekunde; eine Anfrage hält ihren Platz samt Weiterleitungen).
   Zum Vergleich PFERD mit Standard-Einstellung: eine Anfrage nach der anderen ohne Pause, bei uns gut 3,5 je Sekunde. ILIAS
@@ -124,8 +165,8 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   andere Geräte nicht darauf reagieren). Nach jedem Lauf entscheidet `naechsterSchritt(auftrag, bericht)`: Dateien übrig
   (Grenze je Lauf) oder Kurse wegen der Seiten-Grenze offen → nächster Stapel nach 20 s (höchstens 10 Stapel); Fehler
   (z. B. kein Netz) → neuer Versuch nach 1, 5, 15 Min., danach nur noch stündlich; Plugin neu geladen → weiter beim Start;
-  alles da → Auftrag erledigt. Nie weiter nach abgelehnter Anmeldung, Zustimmung, zweitem Faktor, Trennen, **Stoppen** oder
-  wenn ein anderes Gerät lädt. Offener Auftrag beim Start: weiter nach 20–60 s; zurück in der App: sofort, und ein Lauf ohne
+  alles da → Auftrag erledigt. Nie weiter nach abgelehnter Anmeldung, Zustimmung, zweitem Faktor, unbekannter Seite nach dem
+  Passwort (`unklar`), Trennen, **Stoppen** oder wenn ein anderes Gerät lädt. Offener Auftrag beim Start: weiter nach 20–60 s; zurück in der App: sofort, und ein Lauf ohne
   Regung seit 2 Min. (`abgestorben`; iPhone und iPad halten Skripte im Hintergrund an) wird verworfen und neu gestartet.
   Auf iPhone/iPad nach mehr als 10 s im Hintergrund: Regt sich ein Lauf mit Auftrag auch 10 s nach der Rückkehr nicht (seine
   Anfrage hat iOS liegen lassen), wird er gleich verworfen und der Auftrag macht weiter, statt bis zur Zeitgrenze zu warten.
@@ -159,10 +200,21 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   (`zugang-falsch`), schreibt das Gerät `System/Daten/uni-zugang.json` `{ abgelehnt, dienst, geraet }` (synchronisiert, ohne
   Benutzername und Passwort). Jedes Gerät, dessen Passwort älter ist (gerätelokal `eba-uni-zugang-seit`), meldet sich danach
   nirgends mehr an, auch nicht per Knopf (`abgelehnt`, Text „Anmeldung abgelehnt. Bitte dein Passwort neu eingeben.“), bis man
-  es dort neu eingibt; die Neueingabe prüft genau einmal. Ein im Fenster vertipptes Passwort schreibt keinen Marker. So scheitert
+  es dort neu eingibt; die Neueingabe prüft genau einmal. War das Passwort beim Ablehnen noch `ungeprueft` (siehe unten),
+  hält nur dieses Gerät an (gerätelokal `eba-uni-zugang-abgelehnt-hier`, gleiche Wirkung, Trennen und Neueingabe heben es
+  auf): Es könnte ein anderes sein als auf deinen übrigen Geräten, die es darum mit ihrem weiter versuchen. Ein im Fenster vertipptes Passwort schreibt keinen Marker. So scheitert
   nach einem Passwortwechsel im Normalfall nur ein Gerät, sobald der Marker per Sync da ist. `eba-uni-zugang-ok` = letzte
-  erfolgreiche ILIAS-Anmeldung mit diesem Passwort (auch nach dem Update gesetzt, sobald ein Lauf klappt). `ctx.ilias.uniZugang()`
-  → `{ benutzer, seit, ok, abgelehnt, dienst, gesperrt, bestaetigt }`, `ctx.ilias.zugangAbgelehnt(dienst)` schreibt den Marker.
+  ILIAS-Anmeldung, die dieses Passwort wirklich gesendet hat und angenommen bekam (`passwortGesendet` aus `ilias-anmeldung.js`;
+  auch nach dem Update gesetzt, sobald ein Lauf so klappt; ein neues Passwort löscht den alten Wert). Gilt auf dem Gerät noch eine
+  Sitzung bei ILIAS oder der Uni (auf iPhone und iPad hält das Gerät die Kekse selbst, auf einem geteilten iPad womöglich die einer
+  anderen Person), klappt die Anmeldung ohne Passwort, und es bleibt `ungeprueft` (`eba-uni-zugang-ungeprueft`), die
+  prüfende Anmeldung beim Verbinden gibt `{ ok: true, ungeprueft: true, hinweis }` zurück und zeigt den Hinweis „Dein Passwort ist
+  gespeichert. ILIAS hat es diesmal nicht geprüft, …“, und Alma und das Webmail prüfen es selbst mit einer eigenen Anmeldung
+  (eine bestehende Sitzung melden sie dafür erst ab). `ctx.ilias.uniZugang()` → `{ benutzer, seit, ok, abgelehnt, dienst,
+  gesperrt, bestaetigt, ungeprueft }`, `ctx.ilias.zugangAbgelehnt(dienst)` schreibt den Marker (ungeprüft nur für dieses Gerät). Offen: Vor dem Prüfen bei ILIAS
+  und der Uni abmelden (dann hätte ILIAS das Passwort immer gesehen) geht erst, wenn die Abmelde-Adressen an echten Seiten geprüft
+  sind; bis dahin liest ein Lauf mit einer fremden Sitzung deren Kurse, und das Passwort bleibt `ungeprueft`, bis eine Anmeldung
+  es wirklich sendet.
 - **Tests:** `tests/ilias.test.js` (ganzer Ablauf mit erfundenem ILIAS und Tresor im Speicher, `tests/ilias-attrappen.js`;
   dazu Gleichzeitigkeit, nicht geholte Sitzungen und Gruppen, Sitzung über Läufe, gelernte Adressen),
   `ilias-weiter.test.js` (Fortschrittstexte, Ereignisse, Auftrag und Weitermachen, toter Lauf, Funde, Absturz beim Schreiben),
@@ -185,10 +237,19 @@ Texterkennung.
   `generateMarkdownLink` bzw. `fileToLinktext`). Kein Zeitstempel: Dieselbe PDF ergibt auf jedem Gerät dieselbe Notiz. Scans,
   geschützte und kaputte PDFs bekommen eine kurze Notiz mit Hinweis (`eba-info`), damit sie nicht bei jedem Lauf neu versucht
   werden.
-- **Entschärfen** (`entschaerfen`): wörtlich wie der Volltext eines eigenen Uni-Abgleichs (keine Templater-Befehle, kein HTML,
-  keine Tags, Links, Aufgaben, Formeln, Kommentare, Codeblöcke, Überschriften, Listen, Block-ids; Trennungen am Zeilenende
-  zusammengefügt), dazu `obsidian://` → `obsidian\://` (kein Knopf des Plugins aus einer PDF) und `::` → `:\:` (keine
-  Inline-Felder). Aus Volltext-Notizen entstehen darum keine To-dos.
+- **Entschärfen** (`entschaerfen`, seit `fassung` 2 vom 01.11.2026): Aus Text einer PDF wird kein Link in die App
+  (`obsidian://`) oder auf Dateien (`file://`), kein Bild, kein Code und kein Kasten, denn ein Link in einer Notiz öffnet sich
+  ohne Rückfrage. Nackte Webadressen (`https://`) bleiben anklickbar, das ist gewollt. Jede eckige Klammer und jedes `&` bekommt ein
+  `\` (kein Markdown-Link, kein Bild, kein Verweis „[x]: Ziel“, keine Zeichenreferenz wie `&#58;`), `<` vor Buchstaben wird `&lt;` (kein
+  HTML, kein Autolink), Backticks und `~~~` am Zeilenanfang bekommen ein `\` (kein Codeblock, der den Absatz beendet), dazu keine
+  Templater-Befehle, Tags, Aufgaben, Formeln, Kommentare, Überschriften, Listen (auch „1)“), Block-ids, `obsidian://` und `file://`
+  → `obsidian\://` bzw. `file\://`, `::` → `:\:` (keine Inline-Felder); Trennungen am Zeilenende zusammengefügt, unsichtbare
+  Zeichen (Breite null, Richtungszeichen, Variantenwähler, Tag-Zeichen, Hangul-Füller) weg. Die Wörter bleiben, wie sie sind,
+  die Suche findet sie also weiter. Den Titel in der
+  Kopfzeile (Name der PDF) entschärft `kopfRein` genauso, in einer Zeile. Aus Volltext-Notizen entstehen darum keine To-dos.
+  Textfassungen mit Text und `fassung` 1 schreibt `planen` als Aufgabe „fassung“ nach und nach neu (nach allem Neuen, ohne „folgt“ in der
+  Zeile); eine umbenannte behält bis dahin ihre `fassung`. Damit eine neue Fassung der PDF über einer alten Notiz gleiche Seiten
+  nicht als geändert meldet, vergleicht `vorherVon` beide ohne diese Escapes (`vergleichbar`).
 - **Nur eigene Notizen:** Geschrieben, umbenannt oder gelöscht wird nur eine Notiz mit Besitzmarke, geprüft im Text der Datei
   (nicht nur im metadataCache). Liegt unter `Unterlagen/` eine Notiz `typ: volltext` ohne Marke (z. B. vom eigenen
   Uni-Abgleich) oder in `_Volltext/` eine andere Datei, bleibt Volltext für diesen Tresor aus („Kommt über einen anderen Weg
@@ -210,7 +271,8 @@ Texterkennung.
   aus dem Gerätespeicher (Größe und Änderungszeit gleich); eine auf diesem Gerät geänderte PDF gleicher Größe wird einmal
   gehasht. Notiz ohne PDF: PDF gleicher Größe und Prüfsumme ohne Notiz → Notiz umbenennen (Name, Quelle, Links; Text bleibt,
   die PDF wird nicht neu gelesen, eine Marke „(PDF fehlt)“ fällt weg). Doppel derselben PDF (Konfliktkopien) gehen sofort.
-  Neue `fassung` → nach und nach neu, nach allem Neuen. Aktuelle Notiz ohne `unterlage`, deren Begleitnotiz inzwischen da ist
+  Neue `fassung` → Notizen mit Text (`ergebnis` `text` oder `gekuerzt`) nach und nach neu, nach allem Neuen; Scans,
+  geschützte, kaputte und zu große PDFs liest das Plugin dafür nicht noch einmal. Aktuelle Notiz ohne `unterlage`, deren Begleitnotiz inzwischen da ist
   (kam nach der Textfassung) → Link nachtragen wie beim Umbenennen, ohne die PDF neu zu lesen (`verknuepfen`).
 - **Notiz ohne PDF** (seit 0.4.6, `waisenPruefen`): Fehlt die PDF nur auf diesem Gerät (noch nicht angekommen, anderer
   Sync-Umfang, Platzhalter), bleibt die Notiz, sonst legt ein anderes Gerät sie gleich wieder an. Weg ist eine Notiz erst, wenn

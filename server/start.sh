@@ -73,7 +73,7 @@ paket() {
     return
   fi
   local info url summe
-  info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.7.6) || halt paket netz
+  info=$(curl -fsSL https://api.github.com/repos/studium-autopilot/ecoba/releases/tags/v0.7.7) || halt paket netz
   url=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .browser_download_url' <<<"$info")
   summe=$(jq -r '.assets[] | select(.name == "studium-server.tar.gz") | .digest // empty' <<<"$info")
   [[ "$url" == https://github.com/studium-autopilot/ecoba/releases/download/* ]] && [[ "$summe" =~ ^sha256:[0-9a-f]{64}$ ]] || halt paket pruefsumme

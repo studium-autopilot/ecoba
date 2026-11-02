@@ -15,7 +15,7 @@
 module.exports = function (ctx) {
   const app = window.app;
   const DATEN = "System/Daten/Musterplan.md";
-  const EINSTELLUNGEN = "Studium/Einstellungen & Hilfe#Variante";
+  const EINSTELLUNGEN = "Studium/Einstellungen & Hilfe#Deine Angaben";
   const VARIANTE = { "Economics": "economics", "Business Administration": "ba", "ohne Spezialisierung": "ohne" };
   const SEMESTER = 6;
 

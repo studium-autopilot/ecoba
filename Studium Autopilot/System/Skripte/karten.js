@@ -379,9 +379,10 @@ module.exports = function (ctx) {
     return { heute, lernen, spaeter, faellig: aus.faellig, neu: aus.neu, zahlen, gesperrt, neuGesperrt: gesperrt.length };
   };
   // Rein (Tests): „N neue Karten mehr“ für genau die nächsten gesperrten Karten des Plans (höchstens MEHR_NEU): je Modul so viele
-  // mehr, wie von dort kommen, und ebenso viele über alle. So gibt „Alles lernen“ 10 mehr, nicht 10 je Modul.
-  const mehrNeu = (plan, extra) => {
-    const w = Object.assign({}, extra), mehr = plan.gesperrt.slice(0, MEHR_NEU);
+  // mehr, wie von dort kommen, und ebenso viele über alle. So gibt „Alles lernen“ 10 mehr, nicht 10 je Modul. wie: so viele statt
+  // MEHR_NEU; Infinity gibt alle frei („Ganzen Stapel lernen“, seit 01.11.2026)
+  const mehrNeu = (plan, extra, wie) => {
+    const w = Object.assign({}, extra), mehr = plan.gesperrt.slice(0, wie === undefined ? MEHR_NEU : wie);
     for (const k of mehr) w[k.gruppe] = (w[k.gruppe] || 0) + 1;
     w.gesamt = (w.gesamt || 0) + mehr.length;
     return { werte: w, anzahl: mehr.length };
@@ -805,9 +806,9 @@ module.exports = function (ctx) {
     return { idx: teile[0], o, stand: stand.stand, log: stand.log, jetzt: jetztMs() };
   };
   const extraLesen = (heute) => { const x = lokal(L.extra); return x && x.tag === heute && x.werte ? Object.assign({}, x.werte) : {}; };
-  // „N neue Karten mehr“ für die Auswahl, deren Tagesplan plan ist (mehrNeu); Rückgabe: wie viele
-  const extraErhoehen = (plan) => {
-    const r = mehrNeu(plan, extraLesen(plan.heute));
+  // „N neue Karten mehr“ für die Auswahl, deren Tagesplan plan ist (mehrNeu, wie: Infinity = alle); Rückgabe: wie viele
+  const extraErhoehen = (plan, wie) => {
+    const r = mehrNeu(plan, extraLesen(plan.heute), wie);
     lokal(L.extra, { tag: plan.heute, werte: r.werte });
     return r.anzahl;
   };
@@ -926,6 +927,14 @@ module.exports = function (ctx) {
     indexAlt = true;
     anzeigeNeu();
   };
+  // „Stapel löschen“ (seit 01.11.2026): Die Notiz des Stapels geht in den Papierkorb, der Hinweis hat Rückgängig (ctx.papierkorb,
+  // papierkorb.js). Die Lernstände hängen an den Kennungen der Karten, nicht an der Datei: Kommt der Stapel zurück, gelten sie
+  // wieder. Ein Modul mit Unterstapeln hat je Stapel „Löschen: Name“ (wie „Öffnen: Name“, ohne erst aufzuklappen), nie alle auf
+  // einmal. → Menüeinträge, leer ohne ctx.papierkorb
+  const loeschenEintraege = (stapel) => (ctx.papierkorb ? stapel.filter((x) => x.datei).map((x) => ({
+    titel: stapel.length > 1 ? `Löschen: ${x.name}` : "Stapel löschen", symbol: "trash-2", warnung: true,
+    tun: () => { ctx.papierkorb(x.datei).catch((e) => console.error(SPRACHE, e)); },
+  })) : []);
   const pausierenMitHinweis = (stapel, an) => pausieren(stapel, an).then(() => {
     ctx.hinweis(an ? "Stapel pausiert, er kommt erst wieder in deinen Tagesplan, wenn du ihn fortsetzt." : "Stapel fortgesetzt.",
       { aktion: { text: "Rückgängig", ausfuehren: () => { pausieren(stapel, !an).catch((e) => console.error(SPRACHE, e)); } } });
@@ -947,7 +956,10 @@ module.exports = function (ctx) {
   const menue = (e, eintraege) => {
     if (!O.Menu) return;
     const m = new O.Menu();
-    for (const x of eintraege) { if (!x) { m.addSeparator(); continue; } m.addItem((i) => { i.setTitle(x.titel); if (x.symbol) i.setIcon(x.symbol); i.onClick(x.tun); }); }
+    for (const x of eintraege) {
+      if (!x) { m.addSeparator(); continue; }
+      m.addItem((i) => { i.setTitle(x.titel); if (x.symbol) i.setIcon(x.symbol); if (x.warnung && i.setWarning) i.setWarning(true); i.onClick(x.tun); });
+    }
     if (e && typeof e.clientX === "number" && (e.clientX || e.clientY)) m.showAtMouseEvent(e);
     else { const r = e && e.currentTarget && e.currentTarget.getBoundingClientRect ? e.currentTarget.getBoundingClientRect() : { left: 20, bottom: 60 }; m.showAtPosition({ x: r.left, y: r.bottom }); }
   };
@@ -1235,14 +1247,15 @@ module.exports = function (ctx) {
         else if (!s.gelernt) box.createEl("p", { cls: "eba-lk-leise", text: "Gerade ist nichts fällig." });
       }
       const reihe = this.fuss.createDiv({ cls: "eba-lk-reihe" });
-      if (s.neuGesperrt > 0) {
-        // Genau so viele mehr, wie auf dem Knopf steht, auch bei „Alles lernen“ (Plan aus dem jetzigen Stand)
-        knopf(reihe.createEl("button", { text: anzahl(Math.min(MEHR_NEU, s.neuGesperrt), "neue Karte", "neue Karten") + " mehr" }), async () => {
-          const d = await datenLaden();
-          extraErhoehen(tagesplan(imUmfang(d.idx, this.umfang), d.stand, d.log, d.o, d.jetzt, extraLesen(tagVon(d.jetzt, d.o.tagesbeginn))));
-          this.starten().catch((e) => console.error(SPRACHE, e));
-        });
-      }
+      // Genau so viele mehr, wie auf dem Knopf steht, auch bei „Alles lernen“ (Plan aus dem jetzigen Stand); hält das Limit mehr als
+      // MEHR_NEU auf, dazu „Alle N neuen Karten“ (seit 01.11.2026: Wer einen Stapel ganz lernen will, tippte sonst immer wieder)
+      const mehr = (wie) => async () => {
+        const d = await datenLaden();
+        extraErhoehen(tagesplan(imUmfang(d.idx, this.umfang), d.stand, d.log, d.o, d.jetzt, extraLesen(tagVon(d.jetzt, d.o.tagesbeginn))), wie);
+        this.starten().catch((e) => console.error(SPRACHE, e));
+      };
+      if (s.neuGesperrt > 0) knopf(reihe.createEl("button", { text: anzahl(Math.min(MEHR_NEU, s.neuGesperrt), "neue Karte", "neue Karten") + " mehr" }), mehr());
+      if (s.neuGesperrt > MEHR_NEU) knopf(reihe.createEl("button", { text: `Alle ${s.neuGesperrt} neuen Karten` }), mehr(Infinity));
       if (this.pausiert) {
         const stapel = this.d.idx.stapel.filter((x) => imUmfang(this.d.idx, this.umfang).some((k) => k.pfad === x.pfad));
         knopf(reihe.createEl("button", { text: "Fortsetzen" }), () => { pausierenMitHinweis(stapel, false).then(() => this.starten()).catch((e) => console.error(SPRACHE, e)); });
@@ -1747,16 +1760,19 @@ module.exports = function (ctx) {
       const mehr = zeile.createEl("button", { cls: "eba-lk-mehr", text: "⋯", attr: { "aria-label": "Mehr", title: "Mehr" } });
       mehr.addEventListener("click", (e) => {
         e.preventDefault(); e.stopPropagation();
-        const plan = zahlenFuer(karten, d), n = Math.min(MEHR_NEU, plan.neuGesperrt);
+        const plan = zahlenFuer(karten, d), n = Math.min(MEHR_NEU, plan.neuGesperrt), weg = loeschenEintraege(stapel);
         menue(e, [
           { titel: "Lernen", symbol: "play", tun: () => lernen(umfang) },
+          // Alle neuen Karten heute, mit Lernstand (Üben speichert nichts); „N mehr“ nur, wenn das weniger als alle sind
+          plan.neuGesperrt ? { titel: "Ganzen Stapel lernen", symbol: "layers", tun: () => { extraErhoehen(plan, Infinity); lernen(umfang); } } : null,
           { titel: "Üben …", symbol: "repeat", tun: () => uebenWaehlen({ gruppe, pfad: umfang.pfad || "" }) },
           { titel: "Neue Karte", symbol: "plus", tun: () => neuOeffnen(stapel[0] && stapel[0].pfad) },
           { titel: "Karten anzeigen", symbol: "list", tun: () => listeBlockZeigen(gruppe) },
-          n ? { titel: `Heute ${anzahl(n, "neue Karte", "neue Karten")} mehr`, symbol: "chevrons-up", tun: () => { extraErhoehen(plan); anzeigeNeu(); } } : null,
+          plan.neuGesperrt > MEHR_NEU ? { titel: `Heute ${anzahl(n, "neue Karte", "neue Karten")} mehr`, symbol: "chevrons-up", tun: () => { extraErhoehen(plan); anzeigeNeu(); } } : null,
           pausiert ? { titel: "Fortsetzen", symbol: "play-circle", tun: () => pausierenMitHinweis(stapel, false) }
             : { titel: "Pausieren", symbol: "pause-circle", tun: () => pausierenMitHinweis(stapel, true) },
-        ].filter(Boolean).concat(stapel.map((x) => ({ titel: stapel.length > 1 ? `Öffnen: ${x.name}` : "Stapel öffnen", symbol: "file-text", tun: () => ctx.oeffnen(x.datei, { modus: "preview" }) }))));
+        ].filter(Boolean).concat(stapel.map((x) => ({ titel: stapel.length > 1 ? `Öffnen: ${x.name}` : "Stapel öffnen", symbol: "file-text", tun: () => ctx.oeffnen(x.datei, { modus: "preview" }) })),
+          weg.length ? [null].concat(weg) : []));
       });
       const los = () => lernen(umfang);
       zeile.addEventListener("click", los);
@@ -2365,6 +2381,6 @@ module.exports = function (ctx) {
     parsen, trenner, seiten, luecke, klartext, kennungenEinfuegen, karteText, zeileLesen, zeilenLesen, nachspielen, tagesplan, mehrNeu,
     sitzungBauen, naechsteKarte, sitzungNehmen, sitzungZurueck, sitzungAuffrischen, lernenJetzt, statistik, optionenAus, optionenPruefen,
     tagVon, tagBeginnVon, planerFuer, statusVon, stapelName, stapelUmbenennung, abschnittKarten, zeilenSeiten, zeilenOhne,
-    auswahlVon, uebungBauen, uebungNehmen, uebungZurueck, kartenVerlauf, jeModul,
+    auswahlVon, uebungBauen, uebungNehmen, uebungZurueck, kartenVerlauf, jeModul, loeschenEintraege,
   };
 };

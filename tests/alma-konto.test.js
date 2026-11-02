@@ -744,3 +744,23 @@ test("Gemeinsame Statusform { zustand, geprueft, fehler, fehlerZeit, warnungen }
   assert.deepEqual([s.zustand, s.fehler, s.warnungen], ["an", "", []]);
   assert.ok(JSON.stringify(s).indexOf("1,7") < 0);
 });
+
+test("Ungeprüftes Passwort (bei ILIAS galt noch eine Sitzung): Alma meldet eine bestehende Sitzung ab und prüft das Passwort selbst", async () => {
+  const ungeprueft = { bestaetigt: false, ungeprueft: true };
+  const g = geraet({ server: almaServer({ schonAn: true }), zugang: ungeprueft });
+  assert.equal(g.m.status().art, "aus", "wartet nicht auf ILIAS");
+  assert.equal((await einschalten(g)).art, "ok");
+  assert.equal(g.server.posts(), 1, "mit Passwort angemeldet");
+  assert.equal(g.server.abmeldungen(), 2, "die Sitzung von vorher und am Ende");
+  const wege = g.server.log.map((x) => (/auth\.logout/.test(x.url) ? "ab" : /auth\.login/.test(x.url) ? "an" : "")).filter(Boolean);
+  assert.deepEqual(wege, ["ab", "an", "ab"], "erst abmelden, dann mit Passwort");
+  // Stundenplan-Link auch auf iPhone/iPad; ein falsches Passwort lehnt Alma ab → Marker
+  const h = geraet({ mobil: true, server: almaServer({ schonAn: true, geheim: "anders" }), zugang: ungeprueft });
+  assert.deepEqual(await h.m.stundenplanLink(), { art: "zugang-falsch", grund: "zugang-falsch" });
+  assert.deepEqual(h.marker, ["alma"]);
+  assert.equal(h.server.posts(), 1);
+  // Bestätigt: eine bestehende Sitzung gilt wie bisher (kein zweites Anmelden)
+  const i = geraet({ server: almaServer({ schonAn: true }) });
+  assert.equal((await i.m.stundenplanLink()).art, "ok");
+  assert.deepEqual([i.server.posts(), i.server.abmeldungen()], [0, 1]);
+});

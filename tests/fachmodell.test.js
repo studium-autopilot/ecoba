@@ -151,6 +151,19 @@ test("Nächste Prüfung und pruefungVon: Modulstatus, erledigt, entfällt, Nachh
   assert.equal(modell("2027-02-20", PRUEFUNGEN).pruefungVon("X100").datum, "2027-02-06", "sonst die letzte geschriebene");
 });
 
+test("Klausur im Nachholtermin (klausurtermin in der Modulnotiz): nur seine Klausuren zählen, auch für die nächste Prüfung", () => {
+  const nh = Object.assign({}, PRUEFUNGEN, modul("X100", { klausur: "2027-02-06", klausurtermin: "Nachholtermin" }));
+  const M = modell("2026-10-18", nh);
+  assert.equal(M.imNachhol(M.modul("X100")), true);
+  assert.equal(M.imNachhol(M.modul("X400")), false);
+  assert.equal(M.pruefungVon("X100").datum, "2027-04-01");
+  assert.equal(M.naechstePruefung().code, "X400", "X100 erst im Nachholtermin: die nächste ist X400 am 12.2.");
+  assert.equal(M.pruefungVon("X100", { termin: "haupt" }).datum, "2027-02-06", "nach einem bestimmten Termin fragen");
+  assert.equal(modell("2026-10-18", PRUEFUNGEN).pruefungVon("X100", { termin: "nachhol" }).datum, "2027-04-01");
+  const ohne = Object.assign({}, PRUEFUNGEN, modul("X400", { klausur: "2027-02-12", klausurtermin: "Nachholtermin" }));
+  assert.equal(modell("2026-10-18", ohne).pruefungVon("X400"), null, "im Nachholtermin ohne Nachholklausur: keine");
+});
+
 test("Fristen: offen, laufend oder kommend, nach dem nächsten Stichtag (läuft: Ende, sonst Beginn)", () => {
   const M = modell("2026-10-18", alle(
     termin("2026-10-12", "Belegung läuft", { kategorie: "Frist", bis: "2026-10-25" }),

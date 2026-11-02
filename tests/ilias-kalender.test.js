@@ -62,6 +62,7 @@ const fmAusText = (t) => {
 function tresor(o) {
   o = o || {};
   const fm = {}, text = {}, dateien = {}, papierkorb = [], speicher = { "eba-geraet": "g-ich" }, hinweise = [], abrufe = [];
+  const geheim = new Map();
   if (o.einstellungen) fm["System/Einstellungen.md"] = o.einstellungen;
   if (o.objekte) dateien["System/Daten/ilias.json"] = JSON.stringify({ version: 1, kurse: {}, dateien: {}, ignoriert: {}, gruppen: {}, objekte: o.objekte });
   const modul = (c) => (c === "B110" ? { code: c, f: { basename: "B110 Erfundenes Modul" } } : null);
@@ -75,6 +76,7 @@ function tresor(o) {
       ilias: { ohneKennwort: I.ohneKennwort },
       modell: { termine: () => o.termine || [], abgaben: () => o.blaetter || [], modul },
       plugin: { testKalenderAbruf: o.abruf ? async (x) => { abrufe.push(x.url); return o.abruf(x); } : undefined },
+      ...(o.zeit ? { zeit: o.zeit, stopp: () => {} } : {}),
     },
   });
   const app = L.ctx.app;
@@ -93,9 +95,15 @@ function tresor(o) {
   };
   app.loadLocalStorage = (k) => (k in speicher ? speicher[k] : null);
   app.saveLocalStorage = (k, v) => { if (v == null) delete speicher[k]; else speicher[k] = v; };
+  // Schlüsselbund wie app.secretStorage (o.ohneSchluesselbund: Obsidian vor 1.11.4)
+  if (!o.ohneSchluesselbund) app.secretStorage = { getSecret: (k) => geheim.get(k) || null, setSecret: async (k, v) => { geheim.set(k, v); }, deleteSecret: async (k) => { geheim.delete(k); } };
   const notizen = () => Object.keys(fm).filter((p) => p.indexOf("Termine/") === 0).sort();
   const sperre = () => JSON.parse(dateien[SPERRE] || "{}");
-  return { K: L.ctx.iliasKalender, ctx: L.ctx, fm, text, dateien, papierkorb, speicher, hinweise, abrufe, notizen, sperre };
+  const K = L.ctx.iliasKalender;
+  // Link im Schlüsselbund lesen bzw. setzen (wie nach einem Verbinden)
+  const linkIst = () => geheim.get(K.geheimId());
+  const linkSetzen = (v) => geheim.set(K.geheimId(), v);
+  return { K, ctx: L.ctx, fm, text, dateien, papierkorb, speicher, geheim, hinweise, abrufe, notizen, sperre, linkIst, linkSetzen };
 }
 const lauf = (t, ics, o) => t.K.aktualisieren(Object.assign({ text: ics, still: true }, o));
 
@@ -351,7 +359,7 @@ test("Schutz: unvollständiger Kalender, leerer Kalender trotz bekannter Abgaben
   assert.equal(t.notizen().length, 4);
   assert.deepEqual(t.K.status().warnungen, b.warnungen);
   assert.deepEqual(t.K.hinweise(), [], "„Bitte prüfen“ nur auf dem Gerät mit Link");
-  t.speicher["eba-ilias-ics"] = LINK;
+  t.linkSetzen(LINK);
   assert.deepEqual(t.K.hinweise().map((x) => [x.pfad, x.anker]), [["Studium/Einstellungen & Hilfe.md", "Verbindungen"]]);
 });
 
@@ -409,19 +417,19 @@ test("Uni-Login: Link gilt nicht mehr → neuen holen und gleich damit; beim Ver
   // Ein eingegebener Link, der nicht geht: kein Ersatz über den Uni-Login
   assert.equal(await t.K.verbinden(LINK, { nurBeiErfolg: true }), null);
   assert.deepEqual(gefragt, []);
-  t.speicher["eba-ilias-ics"] = LINK; // wie nach einem Verbinden, bei dem der Link noch ging
+  t.linkSetzen(LINK); // wie nach einem Verbinden, bei dem der Link noch ging
   const b = await t.K.aktualisieren({ still: true });
   assert.equal(b.offen, 1);
   assert.deepEqual(gefragt, [["ilias-kalender", LINK]]);
   assert.deepEqual(t.abrufe, [LINK, LINK, NEU]);
-  assert.equal(t.speicher["eba-ilias-ics"], NEU);
+  assert.equal(t.linkIst(), NEU);
   assert.equal(t.K.status().zustand, "an");
   // Kein neuer Link zu haben: der Fehler bleibt, „Bitte prüfen“ sagt, wo es weitergeht
   neu = "";
-  t.speicher["eba-ilias-ics"] = LINK;
+  t.linkSetzen(LINK);
   assert.equal(await t.K.aktualisieren({ still: true }), null);
   assert.equal(gefragt.length, 2);
-  assert.deepEqual([t.K.status().linkFehler, t.speicher["eba-ilias-ics"]], [true, LINK]);
+  assert.deepEqual([t.K.status().linkFehler, t.linkIst()], [true, LINK]);
   assert.match(t.K.hinweise()[0].text, /Neuen Link eingeben\*\* tippen, den Rest macht Studium Autopilot\.$/);
 });
 
@@ -433,10 +441,10 @@ test("Abruf: der Schlüssel im Link steht nirgends; abgelaufener Link → Fehler
   assert.deepEqual(t.abrufe, [LINK]);
   assert.equal(t.K.status().zustand, "an");
   assert.ok(t.K.status().seit);
-  const ohneLink = () => JSON.stringify([t.fm, t.text, t.dateien, t.hinweise, t.K.status(), t.K.hinweise(),
-    Object.keys(t.speicher).filter((k) => k !== "eba-ilias-ics").map((k) => t.speicher[k])]);
-  assert.ok(ohneLink().indexOf(SCHLUESSEL) < 0);
-  assert.equal(t.speicher["eba-ilias-ics"], LINK, "nur gerätelokal");
+  const ohneLink = () => JSON.stringify([t.fm, t.text, t.dateien, t.hinweise, t.K.status(), t.K.hinweise(), t.speicher]);
+  assert.ok(ohneLink().indexOf(SCHLUESSEL) < 0, "auch nicht im gerätelokalen Speicher");
+  assert.equal(t.linkIst(), LINK, "nur im Schlüsselbund");
+  assert.match(t.K.geheimId(), /^studium-autopilot-ilias-kalender-[a-z0-9]+$/);
   // ILIAS kennt den Link nicht mehr
   antwort = { status: 404, text: "" };
   assert.equal(await t.K.aktualisieren({}), null);
@@ -461,9 +469,42 @@ test("Abruf: der Schlüssel im Link steht nirgends; abgelaufener Link → Fehler
   assert.deepEqual([t.K.status().zustand, t.K.status().fehler], ["an", ""]);
   // Trennen: Link weg, Fristen bleiben, Sperre frei
   await t.K.trennen();
-  assert.equal(t.speicher["eba-ilias-ics"], undefined);
+  assert.equal(t.linkIst(), undefined);
   assert.equal(t.notizen().length, 1);
   assert.equal(t.sperre().frei, true);
+});
+
+test("Abruf: kommt der Kalender nicht rechtzeitig, endet der Abruf mit Fehler; eine späte Antwort ändert nichts", async () => {
+  let spaet = null;
+  const t = tresor({ abruf: () => new Promise((fertig) => { spaet = fertig; }), zeit: (fn) => { setImmediate(fn); return 1; }, objekte: { 9001: { typ: "exc", code: "B110" } } });
+  t.linkSetzen(LINK);
+  assert.equal(t.K.K.FRIST, 60e3);
+  assert.equal(await t.K.aktualisieren({ still: true }), null);
+  assert.equal(t.K.status().zustand, "fehler");
+  assert.match(t.K.status().fehler, /nicht rechtzeitig geantwortet/);
+  assert.equal(t.K.status().linkFehler, false, "kein Grund, den Link zu ersetzen");
+  spaet({ status: 200, text: kalender(abgabe(9001, "Blatt 1", "20261103T235500")) });
+  await new Promise((weiter) => setImmediate(weiter));
+  assert.deepEqual(t.notizen(), []);
+});
+
+test("Link: vom alten gerätelokalen Ort einmal in den Schlüsselbund übernommen; ohne Schlüsselbund lässt sich nichts verbinden", async () => {
+  const t = tresor({ abruf: () => ({ status: 200, text: kalender(abgabe(9001, "Blatt 1", "20261103T235500")) }) });
+  t.speicher["eba-ilias-ics"] = LINK; // so lag er bis 01.11.2026
+  assert.equal(t.K.status().verbunden, true, "der Kalender bleibt verbunden");
+  await new Promise((weiter) => setImmediate(weiter));
+  assert.deepEqual([t.linkIst(), t.speicher["eba-ilias-ics"]], [LINK, undefined]);
+  assert.equal((await t.K.aktualisieren({ still: true })).neu, 1);
+  assert.deepEqual(t.abrufe, [LINK]);
+  // Trennen löscht ihn im Schlüsselbund; der alte Ort kommt nicht zurück
+  await t.K.trennen();
+  assert.deepEqual([t.linkIst(), t.K.status().verbunden], [undefined, false]);
+  // Ohne Schlüsselbund: kein Verbinden, der alte Eintrag bleibt unberührt
+  const u = tresor({ ohneSchluesselbund: true, abruf: () => ({ status: 200, text: kalender() }) });
+  u.speicher["eba-ilias-ics"] = LINK;
+  assert.equal(await u.K.verbinden(LINK, { nurBeiErfolg: true }), null);
+  assert.equal(u.K.fehler(), u.K.K.OHNE_SCHLUESSELBUND);
+  assert.deepEqual([u.abrufe.length, u.speicher["eba-ilias-ics"]], [0, LINK]);
 });
 
 test("Verbinden: falscher Link oder gescheiterter erster Abruf → kein Link gespeichert", async () => {
@@ -472,13 +513,13 @@ test("Verbinden: falscher Link oder gescheiterter erster Abruf → kein Link ges
   assert.deepEqual(t.abrufe, [], "ein falscher Link wird gar nicht erst abgerufen");
   assert.equal(await t.K.verbinden(LINK, { nurBeiErfolg: true }), null);
   assert.match(t.K.fehler(), /Link in ILIAS neu kopieren/);
-  assert.equal(t.speicher["eba-ilias-ics"], undefined);
+  assert.equal(t.linkIst(), undefined);
   assert.equal(t.K.status().zustand, "nicht-verbunden");
 });
 
 test("Ein Schreiber: hält ein anderes Gerät die Sperre, wartet der Zeitplan; dein Tipp übernimmt", async () => {
   const t = tresor({ abruf: () => ({ status: 200, text: kalender(abgabe(9001, "Blatt 1", "20261103T235500")) }) });
-  t.speicher["eba-ilias-ics"] = LINK;
+  t.linkSetzen(LINK);
   const vorhin = new Date("2026-10-20T11:50:00").toISOString(); // 10 Min. vor der Testuhr
   t.dateien[SPERRE] = JSON.stringify({ geraet: "g-anderes", seit: vorhin, zuletzt: vorhin, mobil: false, angewendet: {} });
   assert.equal(await t.K.aktualisieren({ automatisch: true }), null);
@@ -493,7 +534,7 @@ test("Ein Schreiber: hält ein anderes Gerät die Sperre, wartet der Zeitplan; d
 test("Von außen (quellen_extern bzw. eigener Uni-Abgleich): kein Abruf, keine Notiz, nur der Satz", async () => {
   for (const einstellungen of [{ quellen_extern: ["ilias-kalender"] }, { ilias_unterlagen: "extern" }]) {
     const t = tresor({ einstellungen, abruf: () => ({ status: 200, text: kalender(abgabe(9001, "Blatt 1", "20261103T235500")) }) });
-    t.speicher["eba-ilias-ics"] = LINK;
+    t.linkSetzen(LINK);
     assert.equal(await t.K.aktualisieren({}), null);
     assert.equal(await t.K.verbinden(LINK, {}), null);
     assert.deepEqual([t.abrufe.length, t.notizen().length], [0, 0]);
@@ -501,7 +542,7 @@ test("Von außen (quellen_extern bzw. eigener Uni-Abgleich): kein Abruf, keine N
     assert.deepEqual(t.hinweise, [t.K.K.EXTERN, t.K.K.EXTERN]);
   }
   const t = tresor({ einstellungen: { quellen_extern: ["volltext"] }, abruf: () => ({ status: 200, text: kalender() }) });
-  t.speicher["eba-ilias-ics"] = LINK;
+  t.linkSetzen(LINK);
   assert.ok(await t.K.aktualisieren({ still: true }), "die Liste nennt den Kalender nicht → er läuft");
 });
 

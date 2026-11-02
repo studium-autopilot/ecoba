@@ -66,7 +66,9 @@ Fälligkeit, dann zufällig je Tag; neue Karten in der Reihenfolge der Notiz ode
 eines pausierten Stapels (`pausiert: true` im Frontmatter der Kartennotiz, `k.pausiert`; ein Modul ist pausiert, wenn alle seine
 Notizen es sind). `gesperrt` sind die neuen Karten, die nur ein Limit aufhält (Geschwister zählen einmal). „N neue Karten mehr“
 (`mehrNeu`, gerätelokal `eba-karten-extra` für den Tag) gibt genau die nächsten höchstens 10 davon frei: je Modul so viele mehr, wie
-von dort kommen, und ebenso viele über alle (`gesamt`); vorher gab **Alles lernen** 10 je Modul. `naechsteKarte`: fällige Lernschritte
+von dort kommen, und ebenso viele über alle (`gesamt`); vorher gab **Alles lernen** 10 je Modul. **Ganzen Stapel lernen**
+(Menü ⋯) und „Alle N neuen Karten“ (Ende einer Runde, wenn mehr als 10 warten) geben alle frei (`mehrNeu(plan, extra,
+Infinity)`, seit 01.11.2026, mit Lernstand anders als Üben); Geschwister kommen trotzdem erst am nächsten Tag. `naechsteKarte`: fällige Lernschritte
 zuerst, sonst neue und fällige gleichmäßig gemischt, sonst Lernschritte bis 20 Min. im Voraus (die Zahl „Lernen“ im Fenster zählt
 dasselbe, `lernenJetzt`). Schwierige Karten (`karten_schwierig_ab`, beim 8. Fehler, dann bei jedem weiteren halben Schwellenwert)
 werden nur markiert und weiter wiederholt; ausgesetzt wird nie von selbst (bis 25.10.2026 `karten_schwierig_aussetzen`, beim
@@ -97,9 +99,13 @@ damit die Tasten weiter wirken. Schmal (Container `eba-lk-v` ≤ 440 px) zwei Ze
 **Oberfläche:** Seite `Studium/Karteikarten.md` mit den Codeblöcken `eba-karten` (Übersicht: Kopfzeile „11 fällig · 12 neu ·
 etwa 5 Min.“ mit **Alles lernen**, Dauer aus der eigenen mittleren Antwortzeit; darunter „N schwierige Karten“ mit **Üben** und
 **Ansehen**; Tabelle „Heute dran“ nach Fälligkeit, Stapel ohne fällige Karten und pausierte Stapel je eingeklappt; Suche ab 6
-Stapeln; Zeile je Modul mit Neu · Lernen · Fällig und Kartenzahl, antippen = lernen, ⋯ = Menü mit Lernen, Üben …, Neue Karte,
-Karten anzeigen (filtert die Liste und scrollt hin), „Heute N neue Karten mehr“ (nur wenn ein Limit Karten aufhält), Pausieren bzw.
-Fortsetzen (`pausieren`, mit Rückgängig im Hinweis) und Öffnen; schmal (Container `eba-lk-u` ≤ 520 px) stehen die Zahlen mit Namen
+Stapeln; Zeile je Modul mit Neu · Lernen · Fällig und Kartenzahl, antippen = lernen, ⋯ = Menü mit Lernen, Ganzen Stapel lernen
+(nur wenn ein Limit Karten aufhält), Üben …, Neue Karte, Karten anzeigen (filtert die Liste und scrollt hin), „Heute N neue
+Karten mehr“ (nur wenn es mehr als 10 aufhält), Pausieren bzw.
+Fortsetzen (`pausieren`, mit Rückgängig im Hinweis), Öffnen und zuletzt in Rot **Stapel löschen** (`loeschenEintraege`, seit
+01.11.2026: die Notiz in den Papierkorb, mit Rückgängig; Lernstände hängen an den Kennungen und gelten wieder, wenn sie
+zurückkommt; ein Modul mit Unterstapeln hat je Stapel „Löschen: Name“, nie alle auf einmal);
+schmal (Container `eba-lk-u` ≤ 520 px) stehen die Zahlen mit Namen
 unter dem Modulnamen), den Knöpfen, `eba-karten statistik` (Auswahl eines Moduls, vier Kacheln, „Je Modul“, Gelerntes der letzten
 30 Tage, Prognose für 30 Tage, Bestand mit Pausiert und Schwierig; siehe unten) und `eba-karten liste` (Suche, Stapel, Kapitel, Status mit Anzahl, Sortierung nach Notiz/Fälligkeit/Fehlern;
 nach Stapel gruppiert, Status als Pille, 50 je Schritt und „Alle anzeigen“, Menü je Karte; darüber „Auswahl: N Karten“ mit **Üben**
@@ -184,20 +190,23 @@ schreibt jede Notiz genau ein Gerät. Kommt später eine zentrale Liste, überni
 mit den Zeilen aus `serverStand()` nimmt nur, was aus der Liste stammt, eigene Aufgaben mit Nummer vorn bleiben im Tresor. Eine eigene KI darf weiter Notizen nach dem Gerüst schreiben, ohne `herkunft`; die überschreibt das Plugin nie. Gibt es
 keine Notiz, fehlt der Lernplan in der Übersicht, und die Seite zeigt den Leerzustand „Noch kein Lernplan für deine Module.“
 
-**In Entwicklung** (seit 19.10.2026): Bereich und Lernplan-Notizen zeigen oben einen Warnkasten (Pille „In Entwicklung“,
-„Noch nicht fertig: Lern nicht danach.“ und ein Satz, was falsch sein kann), der Inhalt ist stark abgeblendet und grau, bleibt aber
-bedienbar; in der Übersicht ist die Zeile „Lernplan“ abgeblendet und trägt rechts „in Entwicklung“, die Zeilen auf Dashboard und
-Modulseite tragen die Pille „in Entwicklung“. Schalter: für Seite, Notizen, Dashboard und Modulseite `IN_ENTWICKLUNG` in
-`lernplan.js` (CSS Abschnitt 61, `.is-entwicklung`), für die Zeile in der Übersicht die Liste `IN_ENTWICKLUNG` in `seitenleiste.js`
-(Abschnitt 66).
+**Warnkasten statt „In Entwicklung“** (seit 2.11.2026): Geprüft sind nur die zentralen Listen. Oben im Bereich warnt ein Kasten
+(`.eba-lp-warnung`, Warnfarbe, fetter Satz und Erklärung), sobald ein Modul des laufenden Semesters keine hat (`ungeprueft`,
+`warnungTeile`): Seine Kapitel kommen vom eigenen Server oder einer eigenen KI („Die Kapitel von B210 sind nicht geprüft.“, dazu
+„Vergleich sie mit den Folien.“), oder es hat keinen Lernplan („W600 hat keinen Lernplan.“, der Plan rechnet ohne es). Es zählen
+nur Module, die einen Plan brauchen: nicht bestanden oder anerkannt, kein Zusatzmodul, ECTS nicht 0 (Vorkurse wie das
+Propädeutikum). Die Lernplan-Notiz eines solchen Moduls trägt denselben Kasten. Ohne Lernplan (Leerzustand) kein Kasten. In der
+Übersicht trägt die Zeile „Lernplan“ ein paar Tage „neu“ (`NEU` in `seitenleiste.js`, siehe [bedien-bausteine.md](bedien-bausteine.md)).
+Vom 19.10. bis 2.11.2026 stand der ganze Lernplan „In Entwicklung“: Warnkasten „Noch nicht fertig: Lern nicht danach.“, Inhalt
+abgeblendet und grau, die Pille auch auf Dashboard, Modulseite und in der Übersicht.
 
 **Lernplan-Notiz** `Lernplan/<Code> Lernplan.md` (Gerüst `System/Gerüste/Lernplan.md`; Name nie wie die Modulnotiz):
 
 | Teil | Inhalt |
 |---|---|
-| Frontmatter | `typ: lernplan`, `code`, `quelle` (woher die Liste stammt), `stand`; optional `seit` (Plan beginnt in dieser Woche, z. B. bei spätem Einstieg), `verstanden_bis` (Ziel statt 70 %), `vorlaeufig: true` (Liste teils geschätzt; Stand zeigt „(Liste vorläufig)“), `vorlernen: false` (Schalter „Vor der Vorlesung lernen“ aus) |
-| Block | ```` ```eba-lernplan modul ```` – eine Zeile mit Stand wie im Bereich |
-| `## Kapitel` | je Kapitel `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Folien (`[[X100 Folien 01 …]]`, bei einer PDF für alles `[[….pdf#page=30\|S. 30–52]]`) und die Seitenzahl (`23 S.`); bei einem frei zugänglichen Lehrbuch ein https-Link (`[online](https://…)`); seit 31.10.2026 aus den Listen `[[X100 Folien 01 …\|Folien]]` (ohne Folien im Tresor „Folien 1“, wenn die Nummer von der Kapitelnummer abweicht), `Vorlesung 19.10.2026` (erste Vorlesung zum Kapitel) und `Zwischentest 13.11.2026`; eingerückte Aufgaben = Unterkapitel |
+| Frontmatter | `typ: lernplan`, `code`, `quelle` (woher die Liste stammt), `stand`; optional `seit` (Plan beginnt in dieser Woche, z. B. bei spätem Einstieg), `verstanden_bis` (Ziel statt 70 %), `vorlaeufig: true` (Liste teils geschätzt; Stand zeigt „(Liste vorläufig)“), `vorlernen: false` (Schalter „Vor der Vorlesung lernen“ aus), `zeit_je_kapitel: true` (Schalter „Zeit je Kapitel“ an, seit 1.11.2026), `kapitel_zeit: ["3 mehr", "IV weniger"]` (deine Zeit je Kapitel; gilt nur, solange der Schalter an ist) |
+| Block | ```` ```eba-lernplan modul ```` – eine Zeile mit Stand wie im Bereich, darunter (seit 2.11.2026) dasselbe wie aufgeklappt im Bereich als Karte (`.eba-lp-notiz-inhalt`, ohne den Link zur Kapitelliste); die Liste unter „Kapitel“ ist dann in der Leseansicht ausgeblendet (Höhe 0, nicht `display: none`: sonst bliebe darunter alles leer) und steht nur beim Bearbeiten |
+| `## Kapitel` | je Kapitel `- [ ] <Nummer> <Titel>`, danach mit „ · “ getrennt Links auf die Folien (`[[X100 Folien 01 …]]`, bei einer PDF für alles `[[….pdf#page=30\|S. 30–52]]`) und die Seitenzahl (`23 S.`); bei einem frei zugänglichen Lehrbuch ein https-Link (`[online](https://…)`); seit 31.10.2026 aus den Listen `[[X100 Folien 01 …\|Folien]]` (ohne Folien im Tresor „Folien 1“, wenn die Nummer von der Kapitelnummer abweicht), `Vorlesung 19.10.2026` (erste Vorlesung zum Kapitel) und `Zwischentest 13.11.2026`, seit 1.11.2026 `in 9 von 12 Altklausuren`; eingerückte Aufgaben = Unterkapitel |
 
 `kapitelLesen` liest nur Aufgaben außerhalb von Frontmatter und Codeblöcken; Nummer = erstes Wort, wenn es eine Ziffer enthält und
 die Form der Kapitellisten hat (`1.2`, `1a`, `E1`, `A.1`, `2.3b`; ein Punkt, Doppelpunkt oder `)` dahinter fällt weg), eine römische
@@ -208,16 +217,32 @@ und lässt Häkchen stehen.
 **Rechnen** (rein, getestet in `tests/lernplan.test.js`):
 - *Gewicht* eines Kapitels (`gewichte`): Seiten aus der Zeile, sonst Feld `seiten` der verlinkten Notiz, sonst der Folien mit gleicher
   Nummer (`typ: unterlage`, `art: Folien`, `nummer`; Varianten „mit Anmerkungen“, „unbeschrieben“, „zum Video“ zählen nicht; von einer
-  Kopie „… neue Fassung JJJJ-MM-TT“ die neueste, seit 0.6.9), sonst der Mittelwert der bekannten. Hat kein Kapitel des Moduls Seiten (Lehrbuch online), zählt die Zahl der Unterkapitel. *Da* = ein Link
+  Kopie „… neue Fassung JJJJ-MM-TT“ die neueste, seit 0.6.9), sonst der Mittelwert der bekannten. Hat kein Kapitel des Moduls Seiten (Lehrbuch online), zählt die Zahl der Unterkapitel.
+  Mal die *Zeit je Kapitel* (`zeitStufe`, `ZEIT_FAKTOR`, seit 1.11.2026), nur wenn der Schalter des Moduls an ist (`zeit_je_kapitel:
+  true`; standardmäßig aus, sonst zählt jedes Kapitel nach seinen Seiten): „mehr“ 1,5, „normal“ 1, „weniger“ 0,5. Deine Wahl
+  (`kapitel_zeit`) geht vor, sonst die Klausurrelevanz aus der Liste (`relevanzStufe`, „in 9 von 12 Altklausuren“, ausgezählt vom
+  Uni-Abgleich): erst ab fünf Altklausuren (`ALT_MIN`), ab drei Vierteln mehr, bis zu einem Viertel weniger, sonst normal. *Da* = ein Link
   zeigt auf eine vorhandene Datei, ein https-Link steht in der Zeile oder Folien mit dieser Nummer existieren (in Notizen aus
   Kapitellisten nur nach dem Titel: Die Nummern hat der Abgleich mit der ganzen Liste schon verlinkt). *Erreicht* = die
   Vorlesung hatte das Kapitel (`Vorlesung …` in der Zeile, nicht nach heute); führt die Notiz bei keinem Kapitel einen Tag, gilt
   jedes als erreicht (wie vor dem 31.10.2026).
-- *Klausur*: `ctx.modell.pruefungVon(code)` (die eine Regel des Datenmodells); ohne Prüfungstermin der Beginn der nächsten
-  Prüfungsphase („geschätzt“), damit der Plan ein Ende hat. *Beginn*: Vorlesungsbeginn des Semesters, frühestens `seit`.
+- *Klausur* (`klausurVon`): `ctx.modell.pruefungVon(code, { termin })` (die eine Regel des Datenmodells) im Haupt- und im
+  Nachholtermin; es gilt deine Wahl (`imNachhol`: `klausurtermin: Nachholtermin` in der Modulnotiz). Ohne Prüfungstermin der Beginn
+  der nächsten Prüfungsphase, im Nachholtermin der nächsten Nachholphase („geschätzt“, in der Wahl „ab 30.3.“), damit der Plan ein
+  Ende hat. *Beginn*: Vorlesungsbeginn des Semesters, frühestens `seit`. Das Semester ist das laufende; wer im Nachholtermin
+  schreibt, behält das Semester der Notiz bis 45 Tage nach dessen Ende (`planSemester`), sonst fiele der Plan kurz vor der
+  Nachholklausur weg.
+- *Wahl der Klausur* (`terminWahl`, `spaeterSemester`, seit 1.11.2026): je Modul Haupttermin, Nachholtermin oder verschoben (die
+  Notiz ist „nicht mehr dran“, weil das Modul jetzt in einem anderen Semester liegt). Verschieben legt `semester_geplant` der
+  Modulnotiz auf das nächste Semester der Semesterliste, in dem das Modul angeboten wird (`turnus` „WS“, „SS“ oder beides);
+  zurück holt es ein Termin (`semester_geplant` leer, wenn der Musterplan es ohnehin ins Semester legt, sonst dieses Semester).
+  `terminSchreiben` schreibt nur die Modulnotiz (wie die Modulseite), der Plan richtet sich beim neuen Zeichnen danach. Nichts zu
+  wählen gibt es bei fertigen Modulen, Notizen anderer Semester und Notizen ohne Kapitel.
 - *Ziel* (`zielVon`): Sonntag der Woche, in der 70 % der Tage von Beginn bis Klausur vorbei sind, höchstens der Sonntag vor der
-  Klausurwoche. Der Anteil folgt der Zielnote aus den Einstellungen (`anteilAusZielnote`, Döbele: Priorität der Noten): bis 1,5
-  60 % (mehr Zeit für Altklausuren), bis 2,5 70 %, schlechter 80 %, ohne Zielnote 70 %; `verstanden_bis` geht vor.
+  Klausurwoche. Den Anteil wählst du im Lernplan (`anteilWahl`, seit 1.11.2026): 60 % (mehr Zeit für Altklausuren), 70 % oder
+  80 %, gespeichert als `lernplan_anteil: 60` in `System/Einstellungen.md`. Ohne Wahl folgt er der Zielnote aus den Einstellungen
+  (`anteilAusZielnote`, Döbele: Priorität der Noten): bis 1,5 60 %, bis 2,5 70 %, schlechter 80 %, ohne Zielnote 70 %;
+  `verstanden_bis` geht vor.
 - *Wochen* (`kapazitaet`): Anteil der Tage Montag bis Freitag ohne Pausen und freie Tage aus dem Datenmodell; eine Woche ganz in
   einer Pause zählt 30 %. Dazu deine Wochen mit weniger Zeit (`faktorenLesen`): `lernplan_wochen` in `System/Einstellungen.md`, je
   Woche „Montag Prozent“ (`["2026-11-16 50"]`), gesetzt mit dem Knopf rechts in einer Woche im Bereich (volle, ¾, halbe, ¼,
@@ -253,7 +278,7 @@ und lässt Häkchen stehen.
   letzten Klausur, alle Lagen als Anteil 0–1. Je Woche ihre *Last* (Döbele: Fächer nach ECTS): je Kapitel, das in ihr fällig ist,
   sein Anteil am Modul mal dessen ECTS, geteilt in verstanden, offen und überfällig (vor dieser Woche fällig, da und erreicht),
   insgesamt und je Modul (`module[j]` mit seiner Farbe); trägt eine Woche mehr als das Anderthalbfache des Schnitts der Wochen mit
-  Last, zeigt sie die Pille „viel“. Je Modul eine Bahn: Beginn, *Stand* (wo der Plan bei deinem Fortschritt ist: die Woche, in der
+  Last, steht neben ihrem Namen die Pille „viel zu tun“. Je Modul eine Bahn: Beginn, *Stand* (wo der Plan bei deinem Fortschritt ist: die Woche, in der
   `soll` die verstandenen Gewichte erreicht, innerhalb der Woche gleichmäßig), überfällig vom Stand bis heute (nur wenn der Stand
   des Moduls „überfällig“ sagt oder nach dem Ziel noch Kapitel offen sind), Ziel (Ende seines Sonntags), Klausur, Zwischentests.
   Dazu Monatsanfänge, Pausen und heute. Bis 1.11.2026 `wochenLast` (nur offene Kapitel, nur für die Pille).
@@ -264,65 +289,114 @@ und lässt Häkchen stehen.
   Woche aufgerundet), die nächste Klausur und ob alles verstanden ist. `heldText` macht daraus Überschrift und Satz: „5 Kapitel im
   Rückstand“ mit „Mit 2 Kapiteln mehr pro Woche bist du bis So 15.11. wieder im Plan.“ (bis zwei: „Hol sie bis … nach“), „1 Kapitel
   Vorsprung“, „Du liegst im Plan.“ mit dem Rest dieser Woche, „Alles verstanden.“
-- *Zielnote* (`NOTEN`, `stufeVon`, `zielBei`, `zielVorschau`, `zielTeile`): zehn Noten von 1,0 bis 4,0 in drei Stufen wie
-  `anteilAusZielnote` (sehr gut bis 1,5, gut bis 2,5, bestanden). `zielBei` ist „verstanden bis“ eines Moduls bei einem Anteil;
-  lernt es erst nach der Vorlesung und hält die das Ziel schon später, nicht früher. `zielVorschau` nimmt davon das früheste und
+- *Anteil der Zeit* (`ANTEILE`, `anteilWahl`, `zielBei`, `zielVorschau`, `zielTeile`): 60, 70 oder 80 % (am 1.11.2026 kurz als
+  Zielnote mit zehn Noten in drei Stufen; die Rückmeldung: lieber gleich den Anteil). `zielBei` ist „verstanden bis“ eines Moduls
+  bei einem Anteil; lernt es erst nach der Vorlesung und hält die das Ziel schon später, nicht früher. `zielVorschau` nimmt davon das früheste und
   späteste über die Module ohne eigenes `verstanden_bis` und die Wochen danach bis zur Klausur, `zielTeile` macht den Satz daraus
-  („Alles verstanden nach 60 % der Zeit, bis So 27.12., danach 6 Wochen Klausurvorbereitung.“; mehrere Module als Spannen ohne
-  Wochentag, die Werte fett).
+  („bis So 27.12., danach 6 Wochen Klausurvorbereitung.“; mehrere Module als Spannen ohne Wochentag, die Werte fett).
 
 **Oberfläche:** Bereich `Studium/Lernplan.md` mit ```` ```eba-lernplan ````, seit 1.11.2026 von oben **dein Stand**, der
-**Semesterplan** mit der Zielnote und die **Module** als Karten (am 1.11.2026 zuerst der Semesterplan ohne Modulfarben über
+**Semesterplan** mit dem Anteil der Zeit und die **Module** als Zeilen (am 1.11.2026 zuerst der Semesterplan ohne Modulfarben über
 Modulzeilen; die Rückmeldung: zu schlicht, nicht motivierend, und dass die Zielnote den Plan verschiebt, muss man sehen und ändern
 können; vom 31.10. bis 1.11.2026 „Diese Woche“ als Liste und „Wochen“ als Zeilen mit „Alle Wochen“, das Ziel als Satz unter den
 Modulen). **Farben:** Jedes Modul trägt seine Farbe aus dem Stundenplan (`ctx.woche.modulFarben` aus `woche.js`, dieselbe
 Zuordnung wie im Wochenraster; Module ohne Stundenplan bekommen die nächsten Farben nach Kürzel, `modulFarben`) in Bahn, Säule,
-Kapitelzeile und Karte, das Kürzel steht immer daneben; Texte bleiben in Text- und Grautönen (Skill dataviz, docs/design.md
-Grundsatz 7). Dein Stand über alles (Ring, Balken, gewählte Note) im Akzent, dunkel `--eba-accent-text`.
-**Dein Stand** (`heldZeichnen`, Karte): links ein Ring (`ringZeichnen`, SVG): verstanden ab 12 Uhr im Uhrzeigersinn, dahinter bis
-zum Plan der Rückstand in Warnfarbe, ein Strich, wo der Plan heute steht, in der Mitte „38 %“ und „verstanden“; alles verstanden:
-grün. Daneben `heldText` in der Schrift der Überschriften, darunter (breit: rechts hinter einer Linie) „Diese Woche“ als Balken mit
-„3 von 8 Kapiteln“ und „Nächste Klausur“ mit Farbpunkt, „B180 in 90 Tagen“ und Datum.
-Der **Semesterplan** (`planZeichnen`) ist eine Karte. Im Kopf „Semesterplan“ und die **Zielnote** (`zielZeichnen`): zehn Knöpfe in
-drei Gruppen mit dem Namen der Stufe darunter (die gewählte Note voll, ihre Stufe getönt; auf dem iPhone über die ganze Breite,
-jede Gruppe so breit wie ihre Noten, Tippfläche 44 px). Darunter der Satz aus `zielTeile` (ohne Zielnote mit „Ohne Zielnote wie
-für „gut“:“). Zeigen oder Fokus auf eine andere Note (Pfeiltasten wandern) zeigt, was sie hieße: „Mit 2,3: …“ bzw. „Mit 1,7 bleibt
-der Plan gleich.“, die Stufe getönt und gestrichelt, wie lange das Verstehen jedes Moduls dann dauerte (`zielBei`), der Balken tritt
-zurück. Ein Tipp schreibt `zielnote` in `System/Einstellungen.md` (`zielnoteSchreiben`, dasselbe Feld wie „Personalisieren“); der
-Bereich zeichnet sich danach neu, und die Bahnen gleiten von ihrer alten Lage in die neue.
+Kapitelzeile und Modulzeile, das Kürzel steht immer daneben; Texte bleiben in Text- und Grautönen (Skill dataviz, docs/design.md
+Grundsatz 7). Dein Stand über alles (Ring, Balken) im Akzent, dunkel `--eba-accent-text`; getönt (offen) hell 45 % (bis 2.11.2026 30 %: offene
+Bahnen hatten zur Karte kaum 1,5 : 1), dunkel 50 % der Farbe (bis 1.11.2026 38 %: die Bahnen von B110 und B180 hatten kaum 1,8 : 1).
+**Dein Stand** (`heldZeichnen`; seit 2.11.2026 ohne Kasten als Einleitung über dem Semesterplan, vorher eine Karte: zwei gleich
+starke Kästen oben ließen offen, wo die Seite beginnt): links ein Ring (`ringZeichnen`, SVG): verstanden ab 12 Uhr im Uhrzeigersinn, dahinter bis
+zum Plan der Rückstand schraffiert in Warnfarbe wie in Bahnen und Säulen (SVG-Muster je Ring; bis 2.11.2026 voll, bei 0 % las er
+sich wie Fortschritt), ein Strich, wo der Plan heute steht (kaum über den Ring hinaus), in der Mitte „38 %“ und „verstanden“; alles verstanden:
+grün. Daneben `heldText` in der Schrift der Überschriften, darunter „Nächste Klausur“ mit Farbpunkt, „B180 in 90 Tagen“ und
+Datum (bis 2.11.2026 breit rechts hinter einer Linie, mit „Diese Woche“, das der Kopf der Woche schon sagt; dazwischen klaffte ein
+Drittel der Breite). Zahl und Einheit stehen mit festem Leerzeichen („98 Tagen“, „3–4 Wochen“), so bricht keine allein um.
+Der **Semesterplan** (`planZeichnen`) ist eine Karte. Im Kopf „Semesterplan“ und der Satz **Alles verstanden nach [60 %] [70 %]
+[80 %] der Zeit** (`zielZeichnen`; drei Knöpfe auf einer Spur, der gewählte im Akzent wie der Segmentschalter in docs/design.md, Tippfläche 44 px; auf dem iPhone „Alles verstanden
+nach“ in einer Zeile, die Knöpfe und „der Zeit“ in der nächsten). Darunter, was das heißt (`zielTeile`, „Alles verstanden zwischen
+17.1. und 28.2., danach 3–4 Wochen Klausurvorbereitung.“; bis 2.11.2026 „Bis 17.1.–28.2.“, ohne zu sagen, was; kommt der Anteil noch aus
+der Zielnote, mit „Nach deiner Zielnote 1,3:“ davor). Zeigen oder Fokus auf einen anderen Anteil (Pfeiltasten wandern) zeigt, was er
+hieße: „Mit 80 %: alles verstanden bis …“ und gestrichelt, wie lange das Verstehen jedes Moduls dann dauerte (`zielBei`), der Balken tritt zurück. Ein
+Tipp schreibt `lernplan_anteil` in `System/Einstellungen.md` (`anteilSchreiben`); der Bereich zeichnet sich danach neu, und die
+Bahnen gleiten von ihrer alten Lage in die neue.
 Darunter das Bild aus `planBild`. Je Woche eine Säule, gestapelt je Modul in seiner Farbe (2 px Fuge zwischen Modulen; verstanden
-voll, offen getönt, überfällig in Warnfarbe), je Modul eine Bahn mit Farbpunkt und Kürzel davor (nach Klausurdatum): dicker Balken =
-Kapitel verstehen (offen getönt, gefüllt bis zum Stand, dahinter bis heute schraffiert in Warnfarbe), Strich = alles verstanden,
-dünne Linie in der Farbe = Klausurvorbereitung, Raute = Klausur, Ring = Zwischentest (Marken in Textfarbe mit 2 px Ring in der
-Kartenfläche). Zeigt man auf eine Bahn, treten die anderen Bahnen und ihre Teile der Säulen zurück. Dahinter Pausen, diese Woche, die
-gewählte Woche und die Linie „heute“; darunter die Achse mit Monaten und „heute“ als Pille (ein Monat, dem dafür der Platz fehlt,
-entfällt; gemessen in px) und die Legende in derselben Form wie die Marken, neutral grau, nur mit dem, was vorkommt (Pausen mit
+voll, offen getönt, überfällig schraffiert in Warnfarbe wie in Bahn und Ring; die gewählte mit 1 px Rahmen im Akzent, bis 2.11.2026
+1,5 px in Textfarbe, der lauteste Strich des Bilds), je Modul eine Bahn mit Farbpunkt und Kürzel davor (nach Klausurdatum): dicker Balken =
+Kapitel verstehen (offen getönt mit 1 px Kontur in der Farbe, seit 2.11.2026; gefüllt bis zum Stand, dahinter bis heute schraffiert in Warnfarbe), Strich in der Farbe des Moduls = alles verstanden (bis 2.11.2026 dunkel wie die
+Striche „Plan heute“ in Ring und Karte),
+dünne Linie in der Farbe = Klausurvorbereitung, Raute = Klausur (in `--eba-bad` wie Prüfungen überall), Ring = Zwischentest
+(Marken mit 2 px Ring in der Kartenfläche). Zeigt man auf eine Bahn, treten die anderen Bahnen und ihre Teile der Säulen zurück. Dahinter Pausen, diese Woche, die
+gewählte Woche und die Linie „heute“ mit ihrer Pille oben (bis 2.11.2026 in der Achse, wo sie den Monat daneben verdrängte, auf dem
+iPhone zwei); darunter die Achse mit den Monaten (gemessen in px; ein Monat am rechten Rand steht links von seinem Strich und entfällt, wenn er dort an den Monat davor
+stieße) und die Legende in derselben Form wie die Marken, neutral grau, nur mit dem, was vorkommt (Pausen mit
 Namen). So sieht man die Regel 70/100 an jedem Modul: Der dicke Balken endet beim Strich, die Linie läuft bis zur Klausur. Form nach
 dem Skill dataviz (Balken ≤ 24 px, 2 px Fuge, Ringe in der Kartenfläche statt Rahmen, Text nie in Datenfarbe).
+Schmal (iPhone, Container unter 520 px) statt der Säulen die **Wochenleiste** (`leisteZeichnen`, `leisteFenster`) über der gewählten
+Woche: sieben Wochen um die gewählte (am Rand bündig) als Knöpfe mit dem Montag und der Säule der Woche, diese Woche im Akzent,
+vorlesungsfreie getönt, eine mit Klausur mit roter Raute; ein Tipp oder ← → wählt, das Fenster wandert mit. Die sieben Wochen der
+Leiste stehen als getöntes Band in den Bahnen darüber (`.eba-lp-plan-fenster`, seit 2.11.2026: Bahnen und Leiste waren zwei
+Zeitskalen ohne Verbindung; ein grauer Balken je Woche statt der Farben der Module las sich leer und wurde verworfen). Die Säulen waren dort 8 px
+breit, lasen sich wie ein Strichcode und waren kaum zu treffen; bewusst keine Leiste zum Wischen, denn waagerechtes Wischen ist in
+Obsidian von überall auf der Fläche eine Geste (Seitenleisten, hier zurück; [„Öffnen und Navigieren“](bedien-bausteine.md)). Welche von beiden
+gilt, entscheidet CSS. Schmal steht auch die Legende hinter ⓘ neben „Semesterplan“ (`.zeigt-legende` an der Karte; offen gleich unter dem Kopf statt unter
+dem Bild, wo sie am unteren Rand aufging; ⓘ bleibt getönt, solange sie offen ist). Im Kopf der Woche steht schmal nur „0/3“ ohne
+Balken. Mit beidem und
+den Modulen zu ist die Seite auf dem iPhone bei Schrift 20 etwa 1800 px hoch (vor dem 1.11.2026 etwa 3300).
 Unter dem Bild die **gewählte Woche** (`wocheZeichnen`; Tipp auf eine Säule, ‹ › mit 44 px Tippfläche oder Pfeiltasten; gemerkt
-bis morgen, sonst diese Woche): „Diese Woche“, „Nächste Woche“, „Letzte Woche“ oder das Datum, rechts wie viel der in ihr fälligen
-Kapitel verstanden sind (Balken und „2/5“; ist alles verstanden und nichts überfällig, ein Haken und „geschafft“ in Grün; künftige
-Wochen nur „5 Kapitel“) und die Zeit der Woche mit Menü (nicht für vergangene; volle Zeit als leise Uhr mit Pfeil, Tippfläche 44 px,
+bis morgen, sonst diese Woche): „Diese Woche“, „Nächste Woche“, „Letzte Woche“ oder das Datum (trägt sie viel mehr als der
+Schnitt, die Pille „viel zu tun“, breit rechts vor dem Stand, schmal unter dem Namen; bis 2.11.2026 „viel“ in Warnfarbe allein in einer Zeile, dann kurz
+zwischen Namen und ›, wo sie den Pfeil springen ließ), rechts wie viel der in ihr fälligen
+Kapitel verstanden sind (Balken und „2 von 5“, bis 2.11.2026 „2/5“, leicht zu verwechseln mit „0/13“ hinter einem Titel; ist alles verstanden und nichts überfällig, ein Haken und „geschafft“ in Grün; künftige
+Wochen nur „5 Kapitel“) und die Zeit der Woche mit Menü (nicht für vergangene; ein offenes Menü schließt beim neuen Zeichnen, auch nach einer neuen
+Fassung des Skripts, sonst stand es losgelöst über der Seite; volle Zeit als leise Uhr mit Pfeil, Tippfläche 44 px,
 weniger als Wahlpille im Akzent, „halbe Zeit“; docs/design.md: derselbe Wert in jeder Woche gehört nicht in eine Pille). Darunter
 Klausurvorbereitung, Pausen mit Namen und Klausuren nach Datum (fett) als Stücke, die nicht mitten umbrechen (`stuecke`; der Punkt
-hängt am Stück davor, so steht keiner am Zeilenanfang), Pille „viel“ im letzten Stück; dann die Kapitel der Woche als Zeilen zum
-Abhaken, mit Farbpunkt und Kürzel davor (auf dem iPhone vor der Fälligkeit unter dem Titel, der so die ganze Breite hat): In dieser
-Woche alle offenen Kapitel bis Sonntag über alle Module, daneben (`bisText`) „bis So 1.11.“ oder in Warnfarbe „überfällig seit So
-18.10.“ (da und von der Vorlesung erreicht), „noch nicht da“, bis Sonntag „vor der Vorlesung“ und der Zwischentest; heute hier
+hängt am Stück davor, so steht keiner am Zeilenanfang); dann die Kapitel der Woche als Zeilen zum
+Abhaken, mit Farbpunkt und Kürzel davor (auf dem iPhone mit der Nummer vor der Fälligkeit unter dem Titel, „B110 1“, der Titel hat
+so die ganze Breite): In dieser Woche erst die in ihr fälligen offenen Kapitel über alle Module, dann unter „Von früher“ die noch
+offenen früherer Wochen (der Kopf zählt nur diese Woche; bis 1.11.2026 gemischt, „0/2“ über acht Zeilen). Schmal (iPhone) ist
+„Von früher“ eine Zeile zum Aufklappen mit der Zahl („6 Kapitel · 4 überfällig“, nur der überfällige Teil in Warnfarbe), zu, bis man sie aufklappt
+(gerätelokal, `ctx.bleibend`); breit ist sie immer offen, mit der Zahl und ohne Pfeil. Daneben (`bisText`) „bis
+So 1.11.“ oder in Warnfarbe „überfällig seit So 18.10.“ (da und von der Vorlesung erreicht), „noch nicht da“, bis Sonntag „vor der
+Vorlesung“ und der Zwischentest; war ein Kapitel früher fällig, ist aber nicht überfällig (noch nicht da, die Vorlesung hatte es noch
+nicht), steht kein Datum, das vorbei ist, nur der Grund („vor der Vorlesung“, mit `vorlernen: false` „nach der Vorlesung“); heute hier
 Abgehaktes bleibt durchgestrichen bis morgen stehen (gerätelokal, zum Zurücknehmen); in der Klausurvorbereitung je Modul „2
 Altklausuren auf Zeit, zuerst …“ (Link). In jeder anderen Woche die Kapitel, die in ihr fällig sind, verstandene durchgestrichen.
 Ohne Kapitel „Nichts fällig.“, alles schon verstanden „Alles für diese Woche verstanden.“. Ein eben abgehaktes Kapitel leuchtet grün
 auf und sein Kästchen springt (`abgehakt.zuletzt`; nach dem neuen Zeichnen läuft das mit negativer Verzögerung weiter). Ein Tipp auf
 eine Bahn klappt das Modul unter „Module“ auf und rollt dorthin (`modulZeigen`). Beim ersten Zeichnen je Start wachsen Säulen und
-Bahnen einmal; danach gleiten Bahnen und Ring vom letzten Stand zum neuen (`vorher`, gerätelokal: nach einem Häkchen, einer anderen
-Zielnote), nicht bei reduzierter Bewegung.
-**Module** (`karteZeichnen`): je Modul eine Karte im Raster, das sich nach der Breite füllt (iPhone eine Spalte), sortiert nach
-Klausur, Vorbereitung und Vorbei ans Ende, „nicht mehr dran“ ganz ans Ende (leiser). Oben das Kürzel mit Farbpunkt, die Pille bei
-einem Zustand und ein Pfeil, darunter der Name in der Schrift der Überschriften; dann „Weiter mit“ und das nächste offene Kapitel
-(Nummer, Titel mit Link auf die Folien bzw. das Lehrbuch, darunter `bisText`; alles verstanden: „Als Nächstes“ und die nächste
-Altklausur), der Stand kurz („2 von 7 Kapiteln · Klausur in 97 Tagen“; ohne Plan wie `standTeile`) und am unteren Rand ein Balken in
-der Farbe des Moduls mit dem Strich, wo der Plan heute steht. Ein Tipp klappt darunter über die ganze Breite das Modul auf
-(`modulInhalt`, gerätelokal über den Hot-Reload, `ctx.bleibend`; oben ein Rand in seiner Farbe; die übrigen Karten rücken nach):
+Bahnen einmal; danach gleiten Bahnen und Ring vom letzten Stand zum neuen (`vorher`, gerätelokal: nach einem Häkchen, einem anderen
+Anteil, einem anderen Termin), nicht bei reduzierter Bewegung.
+**Module** (`modulZeileZeichnen`, seit 2.11.2026): je Modul eine Zeile in einem gemeinsamen Rahmen (Zeilenliste nach
+docs/design.md; vom 1.11. an Karten im Raster mit großen Namen in der Schrift der Überschriften: fünf gleiche Kästen waren lauter als
+die Woche, die Entscheidung war nach dem Design-Review offen), sortiert nach Klausur, Vorbereitung und Vorbei ans Ende, „nicht mehr
+dran“ ganz ans Ende (leiser). Links das Kürzel mit Farbpunkt, daneben der Name (600) und die Pille bei einem Zustand, darunter ein
+kleiner Balken (neutrale Spur, gefüllt in der Farbe des Moduls, Strich, wo der Plan heute steht) und der Stand kurz („2 von 7
+Kapiteln · Klausur in 97 Tagen“; ohne Plan wie `standTeile`); rechts gedämpft der gewählte Termin (`terminKurz`: „Haupttermin Mo
+8.2.“, „verschoben“) und der Pfeil, der sich offen dreht. Schmal (Container unter 520 px) steht der Termin als dritte Zeile; auf
+Touch-Geräten ist jede Zeile mindestens 44 px hoch. Neben „Module“ steht, wie viele Klausuren wann („Klausuren: 4 im Haupttermin, 1 im
+Nachholtermin, 1 verschoben“, `wahlText`). Ein Tipp klappt das Modul direkt unter seiner Zeile auf (`modulInhalt`, gerätelokal über
+den Hot-Reload, `ctx.bleibend`; Zeile und Aufgeklapptes tragen links einen Strich in seiner Farbe). Immer nur eins ist offen
+(`offenSetzen`, seit 1.11.2026); steht das Aufgeklappte im unteren Viertel des Fensters oder darunter, rückt es nach oben.
+Aufgeklappt:
+Ganz oben **Klausur**: wann du sie schreibst (`wahlZeichnen`, `.eba-lp-termin`; seit 2.11.2026 abends wieder oben, vorher kurz als
+erste Zeile von „Für die Klausur“ unter allen Kapiteln, wo man sie nicht fand; davor auf jeder Karte, wo zehn umrandete Knöpfe und
+fünf Links das Lauteste der Seite waren): zwei Knöpfe Haupttermin und Nachholtermin mit Tag (der gewählte im Akzent; bis 1.11.2026
+voll; Tippfläche 44 px; auf dem iPhone über die ganze Breite) und leise „Ins WS 2027/28 verschieben“; bei einem verschobenen Modul
+ist keiner der Knöpfe gewählt, einer holt es zurück. Dann die Kapitel, darunter **Für die Klausur** (`vorbereitungZeichnen`):
+Altklausuren, Übungsblätter, Karteikarten (siehe unten).
+Dann die Einstellungen des Moduls als Zeilen mit einem **Schalter** rechts (`umschalter`, docs/design.md „Schalter“; seit 2.11.2026,
+vorher das Kästchen der Kapitel, eingeschaltet sah eine Einstellung aus wie ein verstandenes Kapitel), zuerst
+**Zeit je Kapitel** (`zeitZeile`, `zeitSatz`; standardmäßig aus,
+an schreibt nur die Zeile `zeit_je_kapitel: true`, `zeitAnSetzen`). Aus sagt der Satz darunter, was das Einschalten brächte („Alle
+Kapitel zählen nach ihren Seiten. Eingeschaltet nach 11 Altklausuren mehr Zeit für 1, 2 und 7, weniger für 3.“); `kapitel_zeit`
+bleibt dabei in der Notiz und gilt wieder, sobald man ihn einschaltet. An sagt er, woher die Zeit kommt („Nach 12 Altklausuren: mehr
+Zeit für 4 und 7, weniger für 1. Von dir geändert: 3.“ bzw. „Nach den Seiten der Kapitel.“), und rechts steht „Anpassen“ (ein Normal-Knopf nach docs/design.md, „Fertig“ ein Haupt-Knopf, als Empfohlen sah er in Elfenbein gesperrt aus; auf dem
+iPhone in eigener Zeile unter dem Satz; breit links vom Schalter). Auf dem iPhone beginnen „Für die Klausur“, die Einstellungen und
+der Verweis am linken Rand, nicht in der Spalte der Titel (sie ließ dort nur ein Drittel der Breite). Beim Anpassen (gerätelokal, bis „Fertig“) trägt jedes Kapitel statt der Frist die Herkunft („in 11 von 12 Altklausuren“) und den Segmentschalter Weniger,
+Normal, Mehr (`zeitWahlZeichnen`, `.eba-ds`); ein Tipp schreibt nur die Zeile `kapitel_zeit` (`zeitSetzen`), und was dem Vorschlag
+aus den Altklausuren entspricht, steht nicht darin, so gilt ein neuer Vorschlag später wieder. Sonst steht hinter der Frist „mehr
+Zeit“ bzw. „weniger Zeit“, wenn ein Kapitel nicht normal zählt.
 Kästchen wie bei den To-dos (`.eba-td-haken`, ganze Zeilenhöhe als Tippfläche, auf iPhone und iPad 44 px, auf dem iPhone auf Höhe
 der ersten Zeile; halb verstanden = unbestimmt und „1/3“ hinter dem Titel; Titel mit Link leise unterstrichen), Nummer, Titel (Tipp
 öffnet die Folien bzw. das Lehrbuch), daneben `bisText` (auf dem iPhone unter dem Titel), darunter in der Spalte der Titel **Für die
@@ -341,7 +415,7 @@ Namen („Lernplan · B110 Kapitel 2 · S100 Kapitel 1“), mehr als Zahl („8 
 S100“, jedes als Stück, „Lernplan“ und Text fließen in einer Zeile (Leerzeichen statt Rand, ein Umbruch beginnt bündig; der Punkt
 hängt neben seinem Stück und zählt nicht zu dessen Breite), mit
 **Öffnen**; nichts dran oder keine Notiz: samt Hülle unsichtbar.
-**Modulseite** (`modulZeile`, aus `modul.js` unter „Als Nächstes“): Abschnitt „Lernplan“ mit Pille, Stand wie im Bereich ohne die
+**Modulseite** (`modulZeile`, aus `modul.js` unter „Als Nächstes“): Abschnitt „Lernplan“, Pille und Stand wie im Bereich ohne die
 Klausur (die Seite nennt die Prüfung schon) und Pfeil
 (15 px wie die Zeilen von „Als Nächstes“; wird es eng, rutscht der Stand unter die Pille), Tipp öffnet die Lernplan-Notiz; ohne
 Notiz nichts.

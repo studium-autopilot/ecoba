@@ -6,8 +6,9 @@ Alle Bildschirme sollen aussehen, als wären sie zusammen entstanden. Neue und g
 Stellen werden Schritt für Schritt angeglichen. Wo etwas noch nicht umgesetzt ist, steht **(geplant)**.
 
 Dateien: `Studium Autopilot/.obsidian/snippets/eba-core.css` (Form und Bausteine, Abschnitte mit Nummern),
-`eba-paper-elfenbein.css` (Farben hell und dunkel), `eba-flieder.css` und `eba-klar.css` (Form und Schrift hell und dunkel,
-Farben nur hell; dunkel gelten die dunklen Farben von Elfenbein, bis beide eigene haben). Wie die Designs gewählt
+`eba-paper-elfenbein.css` (Farben hell und dunkel, dazu dunkel für alle Designs Schatten und Modulfarben), `eba-flieder.css` und
+`eba-klar.css` (Form, Schrift und Farben hell und dunkel; eigene dunkle Farben seit 01.11.2026, bis dahin galten die von
+Elfenbein). Wie die Designs gewählt
 werden: [architektur/darstellung.md](architektur/darstellung.md). Regeln für Skripte und iPhone:
 [architektur.md](architektur.md), „Regeln für Skript-Autoren“.
 
@@ -45,23 +46,29 @@ werden: [architektur/darstellung.md](architektur/darstellung.md). Regeln für Sk
 
 Nur diese Variablen verwenden. Die Werte setzen die Farbschemata; `eba-core.css` Abschnitt 1 hat nur Rückfallwerte.
 
-| Variable | Wofür | Elfenbein hell | Elfenbein dunkel | Flieder | Klar |
-|---|---|---|---|---|---|
-| `--eba-bg` | Seite | `#faf6ee` | `#1b1813` | `#f7f2fb` | `#ffffff` |
-| `--eba-card-bg` | Karte, Zeilenliste, Kachel | `#fffdf8` | `#221e18` | `#fdfaff` | `#ffffff` |
-| `--eba-surface-2` | Leiste, Segmentschalter, Gruppenkopf | `#f3eee2` | `#29251e` | `#f1eaf7` | `#f4f5f7` |
-| `--eba-border` | Rahmen, Haarlinie | `#e6dccb` | `#373027` | `#e5d9f0` | `#e4e7eb` |
-| `--eba-border-strong` | Rahmen von Knöpfen, gestrichelt | `#cbbfa8` | `#4f4637` | `#cdbbdf` | `#cdd2d9` |
-| `--eba-text` | Text | `#2a2119` | `#ece4d4` | `#2a2133` | `#16191f` |
-| `--eba-muted` | Metazeile, Label | `#65594a` | `#b3a892` | `#66597a` | `#5a616c` |
-| `--eba-faint` | Pfeile, Nebensachen (mindestens 4,5 : 1 auf Seite und Karte, seit 0.7.0) | `#776e61` | `#918672` | `#756985` | `#6f757e` |
-| `--eba-accent` | Fläche des Hauptknopfs, Balken | `#2c3440` | `#4b5566` | `#7446a6` | `#2a5bd7` |
-| `--eba-accent-text` | Links, Gruppenlabel, Auswahl | `#2c3440` | `#b9c3d3` | `#6c3f9e` | `#2453c9` |
-| `--eba-accent-soft` | Tönung für Auswahl und „Empfohlen“ | Akzent 7 % | 12 % | 9 % | 8 % |
-| `--eba-good` | erledigt | `#1f7a4d` | `#62bf8c` | `#1f7a4d` | `#1a7f4b` |
-| `--eba-warn` | Frist | `#a8660b` | `#dea64a` | `#a3600a` | `#a3600a` |
-| `--eba-bad` | Prüfung, Fehler | `#b42318` | `#ec7468` | `#b4234a` | `#c0262d` |
-| `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#2f64ad` | `#1f6e8c` |
+| Variable | Wofür | Elfenbein hell | Elfenbein dunkel | Flieder hell | Flieder dunkel | Klar hell | Klar dunkel |
+|---|---|---|---|---|---|---|---|
+| `--eba-bg` | Seite | `#faf6ee` | `#1b1813` | `#f7f2fb` | `#1a1620` | `#ffffff` | `#121417` |
+| `--eba-card-bg` | Karte, Zeilenliste, Kachel | `#fffdf8` | `#221e18` | `#fdfaff` | `#221c29` | `#ffffff` | `#1a1d22` |
+| `--eba-surface-2` | Leiste, Segmentschalter, Gruppenkopf | `#f3eee2` | `#29251e` | `#f1eaf7` | `#2a2333` | `#f4f5f7` | `#22262c` |
+| `--eba-border` | Rahmen, Haarlinie | `#e6dccb` | `#373027` | `#e5d9f0` | `#372e42` | `#e4e7eb` | `#2b3037` |
+| `--eba-border-strong` | Rahmen von Knöpfen, gestrichelt | `#cbbfa8` | `#4f4637` | `#cdbbdf` | `#4f4360` | `#cdd2d9` | `#3f454e` |
+| `--eba-text` | Text | `#2a2119` | `#ece4d4` | `#2a2133` | `#ece4f3` | `#16191f` | `#e9ebee` |
+| `--eba-muted` | Metazeile, Label | `#65594a` | `#b3a892` | `#66597a` | `#b6a8c8` | `#5a616c` | `#a5abb4` |
+| `--eba-faint` | Pfeile, Nebensachen (mindestens 4,5 : 1 auf Seite und Karte, seit 0.7.0) | `#776e61` | `#918672` | `#756985` | `#958aa6` | `#6f757e` | `#868d97` |
+| `--eba-accent` | Fläche des Hauptknopfs, Balken (weiße Schrift darauf mindestens 4,5 : 1) | `#2c3440` | `#4b5566` | `#7446a6` | `#7a4fb0` | `#2a5bd7` | `#2f66e0` |
+| `--eba-accent-text` | Links, Gruppenlabel, Auswahl, Ring „jetzt“ (mindestens 4,5 : 1 auf Seite und Karte) | `#2c3440` | `#b9c3d3` | `#6c3f9e` | `#d8bff7` | `#2453c9` | `#aacdff` |
+| `--eba-accent-soft` | Tönung für Auswahl und „Empfohlen“ | Akzent 7 % | Linkfarbe 12 % | Akzent 9 % | Linkfarbe 12 % | Akzent 8 % | Linkfarbe 12 % |
+| `--eba-good` | erledigt | `#1f7a4d` | `#62bf8c` | `#1f7a4d` | `#62bf8c` | `#1a7f4b` | `#4fc48c` |
+| `--eba-warn` | Frist | `#a8660b` | `#dea64a` | `#a3600a` | `#dea64a` | `#a3600a` | `#e3a641` |
+| `--eba-bad` | Prüfung, Fehler | `#b42318` | `#ec7468` | `#b4234a` | `#ea6f72` | `#c0262d` | `#e5776d` |
+| `--eba-info` | Lehre, Hinweis | `#3b5f86` | `#8aa9d0` | `#2f64ad` | `#93aee8` | `#1f6e8c` | `#5fb6cf` |
+
+Dunkel hat jedes Design eigene Farben (seit 01.11.2026; bis dahin sahen Flieder und Klar dunkel aus wie Elfenbein): Flieder
+dunkle Aubergine mit Schrift in hellem Flieder, Klar fast schwarzes kühles Grau mit Karten eine Stufe heller. In allen dreien
+werden die Flächen von hinten nach vorn heller (Leisten < Seite < Karte). Der Akzent ist dunkel eine Fläche mit weißer Schrift,
+die Linkfarbe ein helles Gegenstück; in Flieder und Klar ist sie heller, als man erwarten würde, damit sie im Wochenraster nicht
+auf einer Modulfarbe liegt (siehe unten, „Farbe je Modul im Wochenraster“).
 
 Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel `#d98bab`).
 
@@ -78,7 +85,7 @@ Flieder hat zusätzlich `--eba-rose` (nur für die hervorgehobene Kachel, dunkel
 **Farbe je Art eines Termins** (Kalender und Agenda auf **Termine & Anmeldungen**, seit 24.10.2026): eigene Variablen, damit
 man jede Art auf einen Blick erkennt, auch in Chips von 50 px Breite: `--eba-art-pruefung` (rot), `--eba-art-uni` (blau;
 auch Zwischentests), `--eba-art-event` (lila; Veranstaltung, Fachschaft, seit 0.7.0 auch die Angebote der Uni). Der Kern setzt
-die ersten beiden auf `--eba-bad` und `--eba-info`; jedes Design und das dunkle Schema setzen eigene Werte, wo diese zu nah
+die ersten beiden auf `--eba-bad` und `--eba-info`; jedes Design setzt hell und dunkel eigene Werte, wo diese zu nah
 beieinander liegen (Petrol neben Grün, Indigo neben Violett). Veranstaltungen nehmen nicht den Akzent: Der markiert im Kalender
 heute und den gewählten Tag. Hell sind sie ein dunkles Pflaumenlila: die unwichtigste Art, also nicht die lauteste Farbe. Und sie sind nie grün, denn Grün heißt erledigt (bis 0.6.14 waren sie grün; in Elfenbein war dazu
 der Akzent Waldgrün, eine Farbe hatte so drei Bedeutungen). Die Legende zeigt dieselben Chips wie das Raster, nie eine andere Form. `tests/design.test.js` prüft je Design
@@ -92,9 +99,11 @@ eine Schrift aus 40 % `--eba-muted` in `--eba-faint` auf 7 % Farbe, nur der Stre
 | Schema | Prüfung | Uni | Veranstaltung |
 |---|---|---|---|
 | Elfenbein hell | `#b42318` | `#2d5f9e` | `#6c0069` |
-| dunkel (alle Designs) | `#ec7468` | `#7fa6e6` | `#fb80fc` |
-| Flieder | `#c92132` | `#2c71b7` | `#711378` |
-| Klar | `#c0262d` | `#22639a` | `#b24acf` |
+| Elfenbein dunkel | `#ec7468` | `#7fa6e6` | `#fb80fc` |
+| Flieder hell | `#c92132` | `#2c71b7` | `#711378` |
+| Flieder dunkel | `#e36366` | `#6399be` | `#e99aff` |
+| Klar hell | `#c0262d` | `#22639a` | `#b24acf` |
+| Klar dunkel | `#db6c62` | `#5c9ac4` | `#e99aff` |
 
 **Akzent in Elfenbein: Tinte** (seit 0.7.0, am 26.10.2026 aus Tinte, Aubergine und nur lila Veranstaltungen
 gewählt): dunkles Blaugrau, fast neutral; bis 0.6.14 Waldgrün `#2f5d46`, nur 0,09 von „erledigt“ entfernt. Weil Tinte nah an der
@@ -134,8 +143,10 @@ Zwei Töne sind darum geliehen, nach dieser Rangfolge: nie Bernstein (Ausnahmen 
 Veranstaltungen (ihre Chips ebenso). Am wenigsten stört Grün: „erledigt“ ist in der App eine Pille, ein Haken oder ein Symbol,
 nie eine Fläche mit Kante, und im Raster ist nichts erledigt; das Modul-Grün ist gelber als `--eba-good`. Rosa, zwischen Rot und
 Lila, nur für ein sechstes Modul. Die geliehenen Töne kommen zuletzt: Bis vier Module ist alles frei, mit fünf kommt Grün dazu.
-Den Akzent nimmt keiner: In Elfenbein und dunkel ist er fast neutral, in Klar ist Ton 1 darum Marineblau statt Blau, in
-Flieder Ton 3 Iris statt Violett. Die Flächen sind so kräftig, dass man zwei Module schon an der Fläche unterscheidet, auch zwei
+Den Akzent nimmt keiner: In Elfenbein ist er fast neutral, hell ist in Klar Ton 1 darum Marineblau statt Blau, in
+Flieder Ton 3 Iris statt Violett. Dunkel liegen die Akzente von Flieder und Klar als Fläche weit genug weg; ihre Linkfarbe, in
+der der Ring „jetzt“ auf den Kästen liegt, ist darum hell statt kräftig (ein kräftiges Flieder läge 0,06 von Ton 3, ein
+kräftiges Blau zwischen 1, 3 und 4). Die Flächen sind so kräftig, dass man zwei Module schon an der Fläche unterscheidet, auch zwei
 Übungen; hell waren 18 % zu blass (Petrol und Himmel lagen nur 0,019 auseinander, Rückmeldung vom 27.10.2026), Übungen bei 15 %
 noch 0,016. Mehr Abstand der Übungen geht nur mit kräftigeren Flächen, denn zwei Flächen liegen etwa um den Ton mal den Abstand
 ihrer Farben auseinander, und die Übung muss leiser bleiben als die Vorlesung. Art und Raum im Kasten stehen darum in
@@ -151,10 +162,10 @@ Ausnahme) und nur die vier freien Töne (dann teilt sich das fünfte Modul eine 
 | dunkel (alle Designs) | `#678dee` | `#349794` | `#b09ef9` | `#3ac1f0` | `#82bf57` | `#e380a9` |
 
 `tests/design.test.js` prüft je Design (hell und dunkel): OKLab-Abstand der sechs Töne untereinander ≥ 0,1 (jetzt 0,107–0,123),
-zur Warnfarbe ≥ 0,12 und 45° Farbton (jetzt ≥ 0,14 und 57°), zum Akzent ≥ 0,1, Töne 1–4 mindestens 25° Farbton von erledigt,
+zur Warnfarbe ≥ 0,12 und 45° Farbton (jetzt ≥ 0,14 und 57°), zum Akzent und zur Linkfarbe ≥ 0,1 (jetzt ≥ 0,11 und 0,108), Töne 1–4 mindestens 25° Farbton von erledigt,
 Rot, Prüfung und Veranstaltung (jetzt ≥ 26°), Grün und Rosa nie die Statusfarbe selbst (≥ 0,05; jetzt ≥ 0,06), Kante gegen die
 Karte ≥ 3 : 1 (jetzt ≥ 3,4), Schrift und Raumzeile auf beiden Flächen ≥ 4,5 : 1 (jetzt ≥ 4,81), die Raumzeile mit höchstens
-70 % des Kontrasts der Schrift (jetzt ≤ 64 %), gegen „zu blass“: Fläche einer Vorlesung ≥ 0,075 von der Karte, einer Übung
+70 % des Kontrasts der Schrift (jetzt ≤ 65 %), gegen „zu blass“: Fläche einer Vorlesung ≥ 0,075 von der Karte, einer Übung
 ≥ 0,04, beide ≥ 0,03 voneinander (jetzt ≥ 0,035), und die Flächen untereinander: zwei Vorlesungen ≥ 0,03 (jetzt 0,038–0,039),
 zwei Übungen ≥ 0,025 (jetzt 0,027–0,029).
 
@@ -199,15 +210,16 @@ den Knöpfen sah wie ein Versehen aus (Rückmeldung vom 26.10.2026). Innenabstan
 `--eba-s1` bis `--eba-s6`.
 
 **Breite** (seit 26.10.2026 eine Regel für alle Notizen, `eba-core.css` 37.tablet Teil 1 und 1b). Seiten des Plugins (Dashboard,
-`Studium/…`, Modulseiten; `eba-weit`, `eba-s-modul`) nutzen auf dem iPad und im breiten Telefon-Fenster die ganze Breite mit 22 px
-Rand, Fließtext darin höchstens 52rem. Jede andere Notiz (Begleitnotiz und Lesefassung der Folien, Übung, Vorlesung, Termin,
-Stundenplan, Lernplan, Karteikarten, eigene Notizen) ist eine Spalte von 52rem (ca. 90 Zeichen) mit demselben Rand, links bündig
-mit den Seiten und mit ← in der Kopfzeile: Der Titel steht auf jeder Seite und in jeder Notiz an derselben Stelle, beim Wechsel
-springt nichts. Eine aufgeklappte PDF nimmt die ganze Breite (Abschnitt 27). Bis 26.10.2026 liefen Begleitnotiz, Übung, Vorlesung
-und Termin über die ganze Breite (über 150 Zeichen je Zeile), alte Lesefassungen, Stundenplan-Notizen und eigene Notizen standen in
-einer Spalte von 700–800 px in der Mitte, der Titel mal links, mal 280 px weiter rechts. Verworfen: alle Notizen in der Mitte (dann
-steht der Titel nie unter ← und springt beim Wechsel von einer Seite zur Notiz) und alle über die ganze Breite (Zeilen zu lang zum
-Lesen). Am PC bleibt Obsidians Mitte für Seiten (60 bzw. 72rem) und Notizen (lesbare Zeilenlänge): Fenster sind dort bis 1900 px
+`Studium/…`, Modulseiten; `eba-weit`, `eba-s-modul`) und jede Notiz (Begleitnotiz und Lesefassung der Folien, Übung, Vorlesung,
+Termin, Stundenplan, Lernplan, Karteikarten, eigene Notizen) nutzen auf dem iPad und im breiten Telefon-Fenster die ganze Breite
+mit 22 px Rand: Kopf-Karten, Abschnittslinien, Kästen, Tabellen und PDFs reichen bis zum Rand, nur Text bricht nach 52rem
+(ca. 90 Zeichen) um. In der Bearbeitung geschieht das über den Innenabstand rechts jeder Zeile außer Überschriften, so bleibt
+der getönte Kasten einer Zeile breit. Der Titel steht auf jeder Seite und in jeder Notiz an derselben Stelle, beim Wechsel
+springt nichts. Bis 26.10.2026 liefen Begleitnotiz, Übung, Vorlesung und Termin mit Zeilen über 150 Zeichen über die ganze
+Breite, andere Notizen standen in einer Spalte von 700–800 px in der Mitte, der Titel mal links, mal 280 px weiter rechts. Bis
+02.11.2026 war jede Notiz eine Spalte von 52rem links; im Querformat blieb die rechte Hälfte leer (Rückmeldung mit Foto einer
+Vorlesungsnotiz). Verworfen: alle Notizen in der Mitte (dann steht der Titel nie unter ← und springt beim Wechsel von einer
+Seite zur Notiz) und Text über die ganze Breite (Zeilen zu lang zum Lesen). Am PC bleibt Obsidians Mitte für Seiten (60 bzw. 72rem) und Notizen (lesbare Zeilenlänge): Fenster sind dort bis 1900 px
 breit, eine linke Spalte ließe mehr als die Hälfte leer. Wer Obsidians „Lesbare Zeilenlänge“ ausschaltet, bekommt die ganze
 Breite.
 
@@ -262,7 +274,7 @@ Bis 0.6.14 stand er auf dem iPad dreimal in den oberen 250 px: im Tab, in Obsidi
 - **Navigation bleibt vollständig:** Die Seiten stehen auf jedem Gerät im Menü hinter ≡ unten rechts, daneben das Zahnrad für
   Einstellungen & Hilfe, überall dieselben Symbole an derselben Stelle (seit 26.10.2026; vorher die Übersicht in der
   linken Seitenleiste, auf iPhone und iPad hinter ⎕ oben links): auf iPhone und iPad in Obsidians Leiste unten, auf beiden
-  dieselben sieben Knöpfe: Zurück, Vor, Suche, „+“, Zahnrad, Tabs und ≡ (auf dem iPad seit 26.10.2026, Rückmeldung: „Move the arrows to
+  dieselben sieben Knöpfe: Zurück, Vor, Suche, „+“, Tabs, Zahnrad und ≡ (auf dem iPad seit 26.10.2026, Rückmeldung: „Move the arrows to
   the Bar down there the plus sign also. Same Icons as on iphone“, dann „Die gleichen 7 icons wie bei iphone in der Leiste auch bei
   ipad“; vorher Zurück, Vor und „+“ oben in der Zeile; beim Schreiben, wenn Obsidian die Leiste wegnimmt, stehen ‹ › auf dem iPad
   vorn in Obsidians Werkzeugleiste), am PC dieselben sieben in einer eigenen Leiste unten rechts in der Hauptfläche, neben
@@ -437,6 +449,12 @@ Wort („Fällt aus“, „statt“) wie im breiten (`eba-core.css` Abschnitt 55
 im Akzent (Rahmen Akzent 45 %, Schrift `--eba-accent-text`, 600), die anderen in `--eba-muted`, 500 (seit 0.7.0; vorher
 unterschied nur eine hellere Fläche die Wahl).
 
+### Schalter
+An oder aus in einer Zeile, die etwas einstellt (Lernplan: „Zeit je Kapitel“, „Vor der Vorlesung lernen“, seit 2.11.2026):
+links der Name, darunter leise, was gerade gilt; rechts eine Schiene mit Knopf (ein Kästchen mit `role="switch"`), an im Akzent
+(dunkel `--eba-accent-text`, der dunkle Akzent war blasser als aus), aus in `--eba-muted` 70 % (mindestens 3 : 1). Die ganze Zeile schaltet. Nicht das Kästchen der To-dos: Ein eingeschalteter Schalter sah sonst aus wie
+etwas Erledigtes. Braucht eine Einstellung einen Knopf dazu („Anpassen“), steht er links vom Schalter.
+
 ### Auswahl aus Zeilen
 Je Möglichkeit eine kompakte Zeile: gewählt mit Haken rechts und darunter, was daraus folgt; die anderen wählt ein Tipp auf
 die Zeile (Variante, seit 24.10.2026; vorher Pille „gewählt“ und Knopf „Wählen“).
@@ -445,7 +463,7 @@ die Zeile (Variante, seit 24.10.2026; vorher Pille „gewählt“ und Knopf „W
 ### Vorschau-Kacheln
 `.eba-dk` (Design, unter dem Segmentschalter in Einstellungen & Hilfe und in der Einrichtung): Für eine Wahl, die man sehen statt
 lesen soll. Gleich breite Kacheln in einer Reihe, ohne Text: Jede zeigt eine Mini-Karte in den Farben ihrer Möglichkeit (Seite,
-Karte, Akzent). Gewählt mit Ring und Haken im Akzent, mindestens 44 px hoch, am PC so breit wie der Segmentschalter, auf iPhone,
+Karte, Akzent), hell oder dunkel, wie es gerade gilt. Gewählt mit Ring und Haken im Akzent, mindestens 44 px hoch, am PC so breit wie der Segmentschalter, auf iPhone,
 iPad und in der Einrichtung über die ganze Breite. Für Vorlesesoftware `role="radiogroup"`, je Kachel `role="radio"` mit
 `aria-label` und `title` ohne Namen („Design 1“); Tab erreicht die gewählte, Pfeiltasten wechseln.
 
@@ -584,7 +602,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 - Oben steht auf jedem Gerät nur Navigation, der Name der Seite steht im Titel (Baustein [Kopfleiste und Tabs](#kopfleiste-und-tabs)):
   iPad eine Zeile mit den Tabs ab dem zweiten, iPhone die schwebenden Knöpfe, am PC die Zeile mit den Fensterknöpfen; die
   Seiten auf jedem Gerät hinter ≡ unten rechts, die Einstellungen am Zahnrad daneben, auf iPhone und iPad in einer Leiste mit Zurück, Vor, Suche, „+“ und Tabs.
-  Notizen sind auf dem iPad eine Spalte von 52rem links bündig mit den Seiten (Abschnitt „Form, Schrift und Abstände“, Breite).
+  Notizen nutzen auf dem iPad wie die Seiten die ganze Breite, Text höchstens 52rem (Abschnitt „Form, Schrift und Abstände“, Breite).
 - Wörter brechen nie mitten im Wort (kein `overflow-wrap: anywhere`). Silbentrennung (`hyphens: auto`) nur in Fließtext;
   Skripte setzen dafür `lang="de"` an ihren Container. In Markdown gilt die Sprache der Obsidian-Oberfläche (Obsidian setzt
   `lang` danach): Mit englischer Oberfläche trennt Safari deutsche Wörter nach englischen Regeln („Vorlesung-snotiz“).
@@ -600,7 +618,7 @@ Titel eines Dokuments der Uni), kommt sie mit Grund in die Liste `AUSNAHMEN` in 
 ## Prüfen vor dem Pull Request
 
 1. Nur Variablen aus diesem Dokument, keine festen Farben, Schriftgrößen aus den Stufen.
-2. Ansehen in Elfenbein hell und dunkel, Flieder und Klar.
+2. Ansehen in allen drei Designs, je hell und dunkel.
 3. Ansehen in iPhone-Breite (390 px), iPad-Breite (820 px) und im flachen Fenster (1376 × 500, iPhone quer 844 × 390), in
    Lese- und Bearbeitungsansicht.
 4. Gibt es den Baustein schon? Dann ihn nehmen, keine neue Klasse mit ähnlichem Aussehen.

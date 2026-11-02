@@ -63,13 +63,14 @@ const erzeugen = (abh, laufend) => {
   const zeitVon = (s) => { const t = Date.parse(s || ""); return isNaN(t) ? 0 : t; };
   const zugang = () => sicher(() => abh.ilias().uniZugang(), null);
 
-  // Uni-Login auf diesem Gerät nutzbar: Benutzername und Passwort gespeichert, von ILIAS bestätigt, nirgends abgelehnt (Marker) und
-  // nicht nach einer Ablehnung hier gesperrt (Stand von ilias.js, auch wenn der Marker nicht geschrieben werden konnte)
+  // Uni-Login auf diesem Gerät nutzbar: Benutzername und Passwort gespeichert, von ILIAS bestätigt (oder ungeprüft, weil auf dem
+  // Gerät noch eine Sitzung galt; dann prüft Alma es selbst), nirgends abgelehnt (Marker) und nicht nach einer Ablehnung hier
+  // gesperrt (Stand von ilias.js, auch wenn der Marker nicht geschrieben werden konnte)
   const bereit = () => {
     const I = sicher(() => abh.ilias(), null);
     if (!I || typeof I.uniZugang !== "function" || !sicher(() => I.kannSpeichern(), false)) return false;
     const z = zugang();
-    if (!(z && z.benutzer && z.bestaetigt && !z.gesperrt)) return false;
+    if (!(z && z.benutzer && (z.bestaetigt || z.ungeprueft) && !z.gesperrt)) return false;
     return !sicher(() => I.status().gesperrt, false);
   };
   // Kann der Uni-Login diese Quelle hier verbinden? Bausteine da, Quelle nicht von außen
@@ -102,8 +103,8 @@ const erzeugen = (abh, laufend) => {
   const offen = () => moeglich().filter(zugestimmt);
 
   // Abo-Link holen, ohne ihn zu speichern → { ok: true, link } | { ok: false, art, fehler }. Fragt bei jedem Aufruf neu, ob es geht
-  // (ein Fenster kann offen sein, während per Sync ein eigener Uni-Abgleich ankommt)
-  const linkHolen = async (id) => {
+  // (ein Fenster kann offen sein, während per Sync ein eigener Uni-Abgleich ankommt). o.automatisch: ohne deinen Tipp (erneuern)
+  const linkHolen = async (id, o) => {
     if (!bereit()) return nichtBereit();
     if (!baustein(id)) return { ok: false, art: "baustein", fehler: ALTE_FASSUNG };
     if (status(id).extern) return { ok: false, art: "extern", fehler: String(sicher(() => abh.quelle(id).externText, "") || "Kommt über deinen Uni-Abgleich.") };
@@ -115,7 +116,7 @@ const erzeugen = (abh, laufend) => {
       return { ok: false, art, fehler: r && r.grund === "kein-link" ? KEIN_LINK.alma : art === "ohne-zugang" ? OHNE_ZUGANG : ALMA_FEHLER[art] || ALMA_FEHLER.unerwartet };
     }
     let links;
-    try { links = await abh.ilias().kalenderLinks(); } catch (e) {
+    try { links = await abh.ilias().kalenderLinks({ automatisch: !!(o && o.automatisch) }); } catch (e) {
       const art = (e && e.art) || "fehler";
       // Abgelehnt oder Anmeldung gescheitert: der Satz aus ilias.js bzw. ilias-anmeldung.js (mit Code, ohne Adressen)
       const satz = art === "zugang" || art === "anmeldung" ? String((e && e.message) || "") : "";
@@ -160,7 +161,7 @@ const erzeugen = (abh, laufend) => {
     const zuletzt = Date.parse((m && m[id]) || "");
     if (!isNaN(zuletzt) && jetzt - zuletzt < TAG) return "";
     abh.lokal(ERNEUERT, Object.assign({}, m, { [id]: new Date(jetzt).toISOString() }));
-    const r = await linkHolen(id);
+    const r = await linkHolen(id, { automatisch: true });
     return r.ok && r.link !== String(alt || "").trim() ? r.link : "";
   };
 

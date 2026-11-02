@@ -1,5 +1,6 @@
 // pruefen.py: Ausnahme für server/ (Funktion „Eigener Server“). Allgemeine Server-Begriffe sind dort erlaubt, sonst nicht;
-// Tailnet-Namen bleiben überall gesperrt. Braucht Python; ohne Python wird der Test übersprungen.
+// Tailnet-Namen bleiben überall gesperrt. Namen von Schlüsselarten bei openssh.com sind keine E-Mail-Adressen. Braucht Python;
+// ohne Python wird der Test übersprungen.
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -49,6 +50,22 @@ test("LiveSync-Felder: nur in server/livesync.mjs und server/livesync.sh erlaubt
     const r = spawnSync(python, [PRUEFEN, baum, "--ohne-node"], { encoding: "utf8" });
     assert.doesNotMatch(r.stdout, /^server\/livesync\.mjs\r?$/m, "erlaubt");
     assert.match(r.stdout, /^server\/anderes\.mjs\r?\n\s+:1 {2}\[LiveSync\/CouchDB-Konfiguration\]/m, "anderswo in server/ gemeldet");
+  } finally {
+    fs.rmSync(baum, { recursive: true, force: true });
+  }
+});
+
+test("Schlüsselarten von OpenSSH (sk-ssh-ed25519@openssh.com) sind keine E-Mail-Adressen, andere Namen dort schon", { skip: !python && "kein Python" }, () => {
+  const baum = fs.mkdtempSync(path.join(os.tmpdir(), "pruefen-"));
+  const ADRESSE = "philip" + "@openssh.com";
+  try {
+    fs.mkdirSync(path.join(baum, "docs"));
+    fs.writeFileSync(path.join(baum, "docs", "arten.md"),
+      "Abgelehnt: sk-ssh-ed25519@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com, ssh-ed25519-cert-v01@openssh.com.\n");
+    fs.writeFileSync(path.join(baum, "docs", "adresse.md"), `Kontakt: ${ADRESSE}\n`);
+    const r = spawnSync(python, [PRUEFEN, baum, "--ohne-node"], { encoding: "utf8" });
+    assert.doesNotMatch(r.stdout, /^docs\/arten\.md\r?$/m, "Namen von Schlüsselarten erlaubt");
+    assert.match(r.stdout, /^docs\/adresse\.md\r?\n\s+:1 {2}\[E-Mail-Adresse\]/m, "eine Adresse bei openssh.com bleibt gemeldet");
   } finally {
     fs.rmSync(baum, { recursive: true, force: true });
   }

@@ -74,13 +74,14 @@ Großbuchstaben, keine Kästen in Kästen, keine mit „·“ verketteten Angabe
 haben ein Symbol (Sanduhr, Doktorhut) und einen Namen als Kopf. Datum wie im Kalender von iOS („Mi, 21. Okt.“, heute im Kreis in der
 Akzentfarbe). Kasten: Kante links in der Modulfarbe, Fläche 15 % (dunkel 25 %), Übung heller (10 %, dunkel 17 %), Titel in einer
 tiefen bzw. hellen Abstufung der Modulfarbe, Nebenzeile fast neutral; Ausnahme in Bernstein, Ausfall, „ab …“ und Vorbeies neutral
-und blass, die laufende mit Rand in der Modulfarbe. Diese Töne sind eigene des Widgets (`TON_HELL`, `DUNKEL`), nicht die des Rasters:
+und blass, die laufende mit Rand in der Modulfarbe. Diese Töne sind eigene des Widgets (`TON_HELL`, `TON_DUNKEL`), nicht die des Rasters:
 So erreicht jeder Text mindestens 4,5 : 1 (große Schrift 3 : 1), ein Test prüft jeden Text gegen seinen Hintergrund in jedem Widget,
 Design und Modus. Bernstein als kleiner Text eine Stufe tiefer (`F.warnText`), das Bernstein des Designs hat auf Elfenbein nur
 4,3 : 1. Verkleinert wird nur, wo es gesetzt ist (große Namen), damit Zeilen gleich groß bleiben. Eine Zeile über die ganze Breite
-(`volleZeile`) hält den Inhalt am linken Rand, denn das Widget stellt einen schmaleren Block in die Mitte. Farben hell je Design,
-dunkel für alle (wie `eba-paper-elfenbein.css`, `.theme-dark`), nach der Wahl des Geräts hell, dunkel oder automatisch
-(`Color.dynamic`). Große Zahlen und Namen in der Schrift des Designs: Elfenbein Iowan Old Style, Flieder rund, Klar die Systemschrift. Scriptable nennt die Größe eines
+(`volleZeile`) hält den Inhalt am linken Rand, denn das Widget stellt einen schmaleren Block in die Mitte. Farben hell und dunkel
+je Design (`HELL`, `DUNKEL`, wie die CSS-Dateien; dunkel seit 01.11.2026, vorher für alle die von Elfenbein), die Modulfarben
+dunkel für alle (`MODUL_DUNKEL`, wie `.theme-dark` in `eba-paper-elfenbein.css`), nach der Wahl des Geräts hell, dunkel oder
+automatisch (`Color.dynamic`). Große Zahlen und Namen in der Schrift des Designs: Elfenbein Iowan Old Style, Flieder rund, Klar die Systemschrift. Scriptable nennt die Größe eines
 Widgets nicht; der Zeichner nimmt sie aus einer Tabelle nach der Bildschirmgröße (im Zweifel die kleinere), mit den Werten aus
 Apples Human Interface Guidelines (Widgets → Specifications, beim iPad die Spalte „Canvas“). Dazu gehören iPads mit der Anzeige
 „Mehr Platz“ (1192 × 1590: 412 pt, 954 bzw. 970: 350 pt). Bis 29.10.2026 fehlten sie, und das große Widget rechnete am iPad 13" mit

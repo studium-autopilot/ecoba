@@ -1,6 +1,6 @@
 // Darstellung: hell, dunkel oder automatisch wie das Gerät (seit 17.10.2026) und das Design (seit 18.10.2026), beides je Gerät.
 //   Designs: Paper Elfenbein (.obsidian/snippets/eba-paper-elfenbein.css, Vorgabe, hell und dunkel), Flieder (eba-flieder.css)
-//   und Klar (eba-klar.css). Flieder und Klar gelten nur hell; dunkel sieht immer aus wie Elfenbein. Gewählt wird ein Design
+//   und Klar (eba-klar.css), jedes hell und dunkel (Flieder und Klar dunkel seit 01.11.2026). Gewählt wird ein Design
 //   über eine Klasse am body (eba-design-flieder, eba-design-klar; Elfenbein ohne Klasse), damit es je Gerät gilt: Obsidians
 //   eingeschaltete CSS-Bausteine stehen in appearance.json und kämen auf alle Geräte. Alle drei Bausteine sind immer an.
 //   Gespeichert wird nur auf diesem Gerät (app.saveLocalStorage „eba-darstellung“ und „eba-design“), nie im Tresor: Name,

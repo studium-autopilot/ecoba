@@ -12,12 +12,16 @@ Bitte schick keine echten Zugangsdaten, Matrikelnummern oder Noten mit, auch nic
 ## Was dazugehört
 
 - Das Plugin und die Skripte im Tresor (`Studium Autopilot/.obsidian/plugins/studium-autopilot/`, `System/Skripte/`).
-- Das Update über den Knopf **Neue Version installieren** (Prüfsummen, Update-Liste, Sicherung).
+- Das Update über den Knopf **Neue Version installieren** (Prüfsummen, Update-Liste und ihre Signatur, Sicherung).
+- Die Prüfung der Skripte beim Start und bei jeder Änderung: Ein Skript aus `System/Skripte/` läuft nur, wenn es zu einer Liste
+  mit gültiger Signatur gehört (ohne gültige Signatur gilt keine Liste, auch nicht beim ersten Start), du es auf diesem Gerät
+  ausdrücklich erlaubt hast oder dort der Entwicklermodus an ist (siehe
+  [docs/architektur/skripte-pruefen.md](docs/architektur/skripte-pruefen.md)).
 - Die Prüfung der zentralen Daten im Plugin (alles, was eine manipulierte Datendatei in den Tresor schreiben oder ausführen
   könnte).
 - Die Anmeldung mit dem Uni-Login (ILIAS, Alma, Webmail für das Postfach) und der Umgang mit Zugangsdaten: Das Passwort darf
   nur im Schlüsselbund des Geräts liegen und nur an die Anmeldeseiten der Uni gehen.
-- Der eigene Server (`server/`, im Release `studium-server.tar.gz`): Einrichtung, das tägliche Update (nur signierte Pakete),
+- Der eigene Server (`server/`, im Release `studium-server.tar.gz`): Einrichtung, das tägliche Update (signierte Pakete; Server mit 0.7.5 prüfen nur die Prüfsumme von GitHub),
   Web-Dienst mit verschlüsseltem Datenkanal und seinen Schlüsseln, der dort gespeicherte Uni-Zugang und was Claude auf dem Server
   darf.
 
@@ -32,7 +36,7 @@ als neue Version über **Neue Version installieren**.
 ## Wie das Plugin geschützt ist
 
 Ein Überblick steht in [docs/datenschutz.md](docs/datenschutz.md) und in [docs/architektur.md](docs/architektur.md)
-(„Zentrale Daten“, „Update“).
+(„Zentrale Daten“, „Update“, „Prüfung der Skripte“).
 
 ---
 

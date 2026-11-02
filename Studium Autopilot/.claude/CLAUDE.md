@@ -12,6 +12,7 @@ Das Wichtigste in vier Zeilen:
 - Geht etwas an Studium Autopilot nicht oder stimmt ein zentraler Termin nicht, bereitest du eine Meldung an den Autor vor
   (`fehler-melden.md`): ohne persönliche Daten, erst zeigen, dann schickt die Person sie selbst über GitHub ab.
 
-Eigene Regeln gehören in einen eigenen Skill, z. B. `.claude/skills/meine-regeln/SKILL.md`; den fasst kein Update an. Diese
-Datei und den Skill `studium-autopilot` ersetzt jede neue Version von Studium Autopilot, eine geänderte Fassung liegt danach
-als Sicherung daneben.
+Eigene Regeln gehören in einen eigenen Skill, z. B. `.claude/skills/meine-regeln/SKILL.md`, eigene Rechte in
+`.claude/settings.local.json` (die bearbeitest du selbst, Claude darf seine Rechte nicht erweitern); beides fasst kein Update an. Diese Datei, `.claude/settings.json` (sperrt das Schreiben in
+`System/`, `.obsidian/`, Skripte und CSS) und den Skill `studium-autopilot` ersetzt jede neue Version von Studium Autopilot,
+eine geänderte Fassung liegt danach als Sicherung daneben.

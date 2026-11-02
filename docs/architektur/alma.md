@@ -25,8 +25,12 @@ Alma eine Prüfungsanmeldung fehlt. Es schreibt nie selbst in Modulnotizen und n
   **Einschalten** (gerätelokal `eba-alma-konto-an`); erst danach liest das Skript das Passwort aus dem Schlüsselbund von ILIAS,
   und nur unmittelbar vor dem Absenden. Ohne gespeicherten Uni-Zugang: „Braucht deinen Uni-Zugang.“ und **ILIAS verbinden**.
 - **Anmelden nur nach ILIAS:** `ctx.ilias.uniZugang()` muss `bestaetigt` sein (ILIAS hat genau dieses Passwort angenommen) und
-  nicht `gesperrt` (Marker). Alma macht nie den ersten Versuch mit einem Passwort. Lehnt Alma ein bestätigtes Passwort mit der
-  bekannten Meldung ab („Ihre Anmeldung war leider nicht erfolgreich …“), schreibt das Gerät den Marker (`dienst: alma`).
+  nicht `gesperrt` (Marker). Alma macht nie den ersten Versuch mit einem Passwort. Ausnahme `ungeprueft` (seit 01.11.2026): Galt
+  bei ILIAS noch eine Sitzung, hat ILIAS das Passwort nie gesehen (auf einem geteilten iPad womöglich die Sitzung einer anderen
+  Person). Dann prüft Alma es selbst: Zeigt die Startseite schon den Abmelde-Link, meldet `mitAlma` diese Sitzung erst ab (`type=4`),
+  holt die Startseite neu und meldet sich mit dem Passwort an; bleibt sie angemeldet, ist es eine unerwartete Antwort. Lehnt Alma ein bestätigtes Passwort mit der
+  bekannten Meldung ab („Ihre Anmeldung war leider nicht erfolgreich …“), schreibt das Gerät den Marker (`dienst: alma`); war
+  es `ungeprueft`, gilt die Ablehnung nur auf diesem Gerät (siehe [unterlagen.md](unterlagen.md), Uni-Zugang).
   Unklare Antwort (Formular ohne bekannte Meldung), zweiter Faktor, Zustimmungsseite: nur Alma auf diesem Gerät pausiert
   (**Erneut versuchen**), kein Marker. Höchstens eine Anmeldung je Lauf.
 - **Ablauf** (Drossel 1 Anfrage zugleich, 2 s Abstand; ganzer Lauf ≤ 3 Min.): Startseite (zeigt sie schon den Abmelde-Link, weil

@@ -16,16 +16,17 @@ Sekunden, ohne ignorierte Sicherungen und Kopien des Tresors); --alles nimmt auc
   höchstens --max-mb je Datei.
 * Markdown: keine Mermaid-Codeblöcke (die GitHub-App zeigt nur den Code; Diagramme als PNG unter docs/bilder/).
 * Inhalte: persönliche Pfade, Server-Hinweise, IP-Adressen (außer Beispieladressen), E-Mail-Adressen (außer
-  Funktionsadressen der Uni und GitHub-noreply), Telefonnummern, Matrikelnummern und Geburtsdaten mit Wert, geteilte
-  Lehrmaterial-Links, Zugangsdaten und Token, Sync-Konfiguration, der Name des Autors außerhalb der Autorenangaben und Namen
-  aus einer optionalen Sperrliste (nur lokal).
+  Funktionsadressen der Uni, GitHub-noreply und Namen von Schlüsselarten wie sk-ssh-ed25519@openssh.com), Telefonnummern,
+  Matrikelnummern und Geburtsdaten mit Wert, geteilte Lehrmaterial-Links, Zugangsdaten und Token, Sync-Konfiguration, der
+  Name des Autors außerhalb der Autorenangaben und Namen aus einer optionalen Sperrliste (nur lokal).
 * Testseiten: jede HTML-Datei unter tests/daten/ beginnt mit dem Kopf „<!-- Erfundene Testseite“ (Werte erfunden, Aufbau
   höchstens nachgebaut) oder „<!-- Öffentliche Seite ohne Anmeldung“ (was jeder ohne Konto sieht). Seiten nach einer
   Anmeldung kommen nie roh in den Baum.
 * Vorlage leer: persönliche Felder der Module und Einstellungen leer, persönliche Ordner leer.
 * Update-Liste: System/Daten/system-dateien.json (falls vorhanden) passt zu den Dateien (Klasse, Größe, SHA-256) und
   enthält jede Datei, die ein Update ersetzen darf (Regeln wie update.js, klasse_von unten); Klassen aus WEITERE nur im
-  Schlüssel „weitere“, alle anderen nur in „dateien“.
+  Schlüssel „weitere“, alle anderen nur in „dateien“. Ihre Signatur system-dateien.json.sig daneben (release.py --zip) nur in
+  der Form von ssh-keygen -Y sign; ihr Base64 wird nicht auf Inhalte durchsucht (Zufallszeichen, wie SHA-256-Werte).
 * JavaScript: Syntax mit „node --check“ (wenn node da ist) und iOS-Regeln (kein Regex-Lookbehind, kein .at(), findLast,
   structuredClone, keine Node-Module; einzige Ausnahme: http/https/zlib in ilias-netz.js hinter Platform.isDesktopApp)
   für die Skripte des Vaults.
@@ -236,9 +237,16 @@ def autor_erlaubt(rel, zeile, abschnitt=""):
     return False
 
 
+# Namen von Schlüssel- und Signaturarten in OpenSSH (PROTOCOL, PROTOCOL.u2f) sehen aus wie Adressen, gehören aber niemandem:
+# sk-ssh-ed25519@openssh.com, ssh-ed25519-cert-v01@openssh.com, sk-ecdsa-sha2-nistp256@openssh.com
+OPENSSH_ART = re.compile(r"(?:sk-)?(?:ssh|ecdsa)-[a-z0-9-]+")
+
+
 def email_erlaubt(lokal, domain):
     d = domain.lower()
     if d == "users.noreply.github.com":
+        return True
+    if d == "openssh.com" and OPENSSH_ART.fullmatch(lokal):
         return True
     if d == "uni-tuebingen.de" or d.endswith(".uni-tuebingen.de"):
         # Funktionsadressen (pruefungsamt@…); vorname.nachname@… und Studierenden-Adressen sind persönlich
@@ -508,6 +516,17 @@ def vorlage_pruefen(wurzel, alle, funde):
 # ---------------------------------------------------------------------------------------------------------------------
 
 LISTE = "System/Daten/system-dateien.json"
+LISTE_SIG = LISTE + ".sig"  # ihre Signatur (release.py --zip), nicht in der Liste
+_SIG_ZEILE = re.compile(r"[A-Za-z0-9+/]{1,76}={0,2}")
+
+
+def signatur_form(text):
+    """True, wenn text eine SSH-Signatur in der Form von ssh-keygen -Y sign ist (Armor, nur Base64, höchstens 8 KB)."""
+    z = text.replace("\r\n", "\n").rstrip("\n").split("\n")
+    return (len(text) <= 8192 and len(z) >= 3 and z[0] == "-----BEGIN SSH SIGNATURE-----"
+            and z[-1] == "-----END SSH SIGNATURE-----" and all(_SIG_ZEILE.fullmatch(x) for x in z[1:-1]))
+
+
 KERN = ".obsidian/plugins/studium-autopilot/"
 KERN_DATEIEN = ("main.js", "manifest.json", "styles.css")
 EINSTELLUNG = (".obsidian/app.json", ".obsidian/bookmarks.json", ".obsidian/community-plugins.json",
@@ -544,7 +563,7 @@ def klasse_von(pfad):
         return "seite"
     if re.fullmatch(r"Module/.+\.md", p, re.S):
         return "modul"
-    if p == ".claude/CLAUDE.md" or re.fullmatch(r"\.claude/skills/studium-autopilot/[^/]+\.md", p):
+    if p in (".claude/CLAUDE.md", ".claude/settings.json") or re.fullmatch(r"\.claude/skills/studium-autopilot/[^/]+\.md", p):
         return "claude"
     return ""
 
@@ -738,6 +757,11 @@ def pruefen(wurzel, sperre, max_bytes, ohne_node=False, alles=False):
         text = roh.decode("utf-8", errors="replace")
         if TESTSEITE.match(rel) and not TESTSEITE_KOPF.search(text[:2000]):
             funde.append(Fund(rel, 1, "Testseite ohne Kopf", "„<!-- Erfundene Testseite: …“ bzw. „<!-- Öffentliche Seite ohne Anmeldung: …“ fehlt"))
+        # Signatur der Update-Liste: nur Base64 von ssh-keygen (Zufallszeichen sind keine Namen oder Nummern), sonst ein Fund
+        if rel == LISTE_SIG or rel.endswith("/" + LISTE_SIG):
+            if signatur_form(text):
+                continue
+            funde.append(Fund(rel, 0, "Signatur der Update-Liste: Form ungültig", "erwartet ssh-keygen -Y sign"))
         # SHA-256-Werte (z. B. in system-dateien.json) sind keine Telefonnummern o. ä.
         geprueft = HEX64.sub("#" * 64, text)
         if endung == ".svg":

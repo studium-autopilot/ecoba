@@ -431,6 +431,13 @@ test("Grenze über alle Module: abwechselnd aus den Modulen, zählt auch Gelernt
   const r2 = K.tagesplan(ks, new Map(), [], OV, JETZT, {});
   assert.equal(K.tagesplan(ks, new Map(), [], OV, JETZT, K.mehrNeu(r2, {}).werte).neu.length, r2.neu.length + 10);
   assert.equal(K.mehrNeu(K.tagesplan(b.slice(0, 3), new Map(), [], O, JETZT, {}), {}).anzahl, 0, "nichts gesperrt: nichts mehr");
+  // „Ganzen Stapel lernen“ / „Alle N neuen Karten“: alle gesperrten auf einmal, je Modul und über alle
+  const alle = K.mehrNeu(r, {}, Infinity);
+  assert.deepEqual([alle.anzahl, alle.werte], [40, { B110: 20, S100: 20, gesamt: 40 }]);
+  assert.deepEqual(K.tagesplan(ks, new Map(), [], O, JETZT, alle.werte).zahlen.neu, 60, "alle 60 neuen Karten heute");
+  assert.equal(K.tagesplan(ks, new Map(), [], O, JETZT, alle.werte).neuGesperrt, 0);
+  const nurB = K.tagesplan(b, new Map(), [], O, JETZT, {});
+  assert.deepEqual(K.mehrNeu(nurB, { S100: 3, gesamt: 3 }, Infinity).werte, { S100: 3, B110: nurB.neuGesperrt, gesamt: 3 + nurB.neuGesperrt }, "ein Stapel: nur seine, zu dem, was heute schon frei ist");
 });
 
 test("Pausierte Stapel: nicht im Tagesplan, in der Statistik für sich, Status „Pausiert“", () => {
@@ -521,6 +528,26 @@ test("Neu zeichnen nach einer Änderung: jeder Block bekommt den neuen Stand, ni
   an.create({ path: S110 });
   const zweiter = L.ctx.karten.datenLaden();
   assert.deepEqual([(await erster).idx.stapel.length, (await zweiter).idx.stapel.length], [1, 2]);
+});
+
+test("Stapel löschen: zuletzt und rot im Menü, je Stapel eines Moduls, die Notiz geht mit Rückgängig in den Papierkorb", async () => {
+  const weg = [];
+  const L = laden("karten", { kontext: { user: { fsrs: () => FSRS }, papierkorb: async (f) => { weg.push(f); return true; } } }).ergebnis;
+  const datei = { path: "Karteikarten/S100 Karteikarten.md", basename: "S100 Karteikarten" };
+  const [e, ...rest] = L.loeschenEintraege([{ datei, name: "S100 Karteikarten" }]);
+  assert.deepEqual([e.titel, e.symbol, e.warnung, rest.length], ["Stapel löschen", "trash-2", true, 0]);
+  e.tun();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(weg, [datei], "ctx.papierkorb mit der Datei des Stapels (Hinweis mit Rückgängig)");
+  // Modul mit Unterstapeln: je Stapel ein Eintrag mit Namen, jeder löscht nur seinen
+  const b = { path: "Karteikarten/S100 Kapitel 2.md", basename: "S100 Kapitel 2" };
+  const zwei = L.loeschenEintraege([{ datei, name: "S100 Karteikarten" }, { datei: b, name: "S100 Kapitel 2" }]);
+  assert.deepEqual(zwei.map((x) => [x.titel, x.warnung]), [["Löschen: S100 Karteikarten", true], ["Löschen: S100 Kapitel 2", true]]);
+  zwei[1].tun();
+  await new Promise((r) => setTimeout(r, 0));
+  assert.deepEqual(weg, [datei, b]);
+  assert.deepEqual(L.loeschenEintraege([]), []);
+  assert.deepEqual(K.loeschenEintraege([{ datei, name: "S100 Karteikarten" }]), [], "ohne ctx.papierkorb kein Eintrag");
 });
 
 test("Lerntag beginnt um 4 Uhr", () => {

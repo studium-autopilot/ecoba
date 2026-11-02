@@ -11,7 +11,9 @@
 // Zustimmung je Gerät: Fenster mit deinem Benutzernamen und „Einschalten“ (gerätelokal eba-alma-konto-an = Zeitpunkt). Erst dann
 //   nutzt dieses Skript das Passwort aus dem Schlüsselbund von ILIAS, und nur unmittelbar vor dem Absenden an Alma.
 // Uni-Zugang (ilias.js, uniZugang): Alma meldet sich nur an, wenn ILIAS genau dieses Passwort bestätigt hat, nie als Erste und nie,
-//   solange System/Daten/uni-zugang.json eine neuere Ablehnung meldet. Lehnt Alma eindeutig ab, schreibt dieses Gerät den Marker
+//   solange System/Daten/uni-zugang.json eine neuere Ablehnung meldet. Ausnahme: Hat ILIAS das Passwort nicht gesehen, weil auf
+//   dem Gerät noch eine Sitzung galt (uniZugang().ungeprueft), prüft Alma es selbst: Eine Alma-Sitzung, die schon besteht, wird
+//   erst abgemeldet (sie könnte von einer anderen Person sein), dann geht die Anmeldung mit Passwort hinaus. Lehnt Alma eindeutig ab, schreibt dieses Gerät den Marker
 //   (alle Geräte mit diesem Passwort halten an). Unklare Antworten, zweiter Faktor, Zustimmungsseite: nur Alma auf diesem Gerät
 //   pausiert (Erneut versuchen). Höchstens eine Anmeldung je Lauf, nie ein zweiter Versuch.
 // Stundenplan-Link (seit 0.4.8, ohne Beta und ohne „Einschalten“): Für den Uni-Login (uni-login.js) holt stundenplanLink() mit
@@ -256,7 +258,7 @@ const fehlendeAnmeldungen = ({ module, termine, zustand, heute, jetzt, aktuell, 
 // abh: {
 //   io: { lesenText(p), schreibenText(p, t), loeschen(p) (endgültig, nicht Papierkorb), existiert(p), liste(ordner) → [Dateiname] },
 //   lokal(k, v?), sperre: sperre.js (erzeugen), zugang() → ctx.ilias.uniZugang(), kennwort() → Text (erst beim Absenden),
-//   abgelehnt(dienst) → Marker schreiben (ctx.ilias.zugangAbgelehnt), quelleExtern(schluessel) → bool (eba.quelleExtern, bei
+//   abgelehnt(dienst) → Marker schreiben (ctx.ilias.zugangAbgelehnt; bei ungeprüftem Passwort nur für dieses Gerät), quelleExtern(schluessel) → bool (eba.quelleExtern, bei
 //   jedem Lauf gefragt), beta() → bool, phase() → bool,
 //   netz() → ilias-netz.js, html() → alma-konto-html.js, codes() → [Modulcodes des Tresors], notizen()? → [Frontmatter der
 //   Modulnotizen] (Grenze für „kein Ergebnis mehr“), jetzt() → Date, warten(ms)?,
@@ -311,11 +313,14 @@ const erzeugen = (abh) => {
   const daten = () => !!zustand || !!sicher(() => io.existiert(STAND), false);
   const sichtbar = () => beta() || !!an() || daten();
 
+  // Passwort nutzbar: von ILIAS bestätigt oder ungeprüft (dann prüft Alma es selbst, siehe mitAlma)
+  const nutzbar = (z) => !!z && (!!z.bestaetigt || !!z.ungeprueft);
+
   // ----- Zeitplan -----
   const intervall = () => (phase() ? PHASE : NORMAL);
   const faelligSonst = () => {
     const s = lstand(), z = zugang();
-    if (!beta() || extern() || !an() || !z.benutzer || z.gesperrt || !z.bestaetigt) return false;
+    if (!beta() || extern() || !an() || !z.benutzer || z.gesperrt || !nutzbar(z)) return false;
     if (s.pause || alter(s.pauseBis) < 0) return false;
     if (zustand && alter(zustand.geprueft) < intervall()) return false;
     if (alter(s.versuch) < intervall() || alter(s.vorPost) < NETZ_WIEDER) return false;
@@ -326,7 +331,8 @@ const erzeugen = (abh) => {
   // ----- Eine Sitzung bei Alma (für den Lauf und den Stundenplan-Link) -----
   // Drossel, nur alma.uni-tuebingen.de (Dienst „alma“), ganze Sitzung höchstens LAUF_MAX: Startseite → schon angemeldet? sonst
   // Formular prüfen und POST mit Benutzername und Passwort (vorPost() unmittelbar davor) → angemeldet nur mit Abmelde-Link →
-  // fn(holen, A) → Abmelden (type=4, geprüft am 18.10.2026) in jedem Ausgang. b zählt anfragen, post, angemeldet.
+  // fn(holen, A) → Abmelden (type=4, geprüft am 18.10.2026) in jedem Ausgang. b zählt anfragen, post, angemeldet. Ist das Passwort
+  // ungeprüft (z.ungeprueft), zählt eine bestehende Sitzung nicht: erst abmelden, dann mit Passwort anmelden.
   const mitAlma = async (b, z, vorPost, fn) => {
     const N = sicher(() => abh.netz(), null), A = sicher(() => abh.html(), null);
     if (!N || !A || typeof N.sitzung !== "function") throw fehlerArt("baustein");
@@ -348,6 +354,12 @@ const erzeugen = (abh) => {
     try {
       let r = await holen({ url: URL_START });
       angemeldet = A.seite(r.text) === "angemeldet"; // iOS hat den letzten Lauf vor dem Abmelden beendet: keine zweite Anmeldung
+      if (angemeldet && !z.bestaetigt) {
+        await holen({ url: URL_ABMELDEN });
+        angemeldet = false;
+        r = await holen({ url: URL_START });
+        if (A.seite(r.text) === "angemeldet") { angemeldet = true; throw fehlerArt("unerwartet", "abmelden"); }
+      }
       if (!angemeldet) {
         const f = A.anmeldeFormular(r.text, r.url || URL_START);
         if (!f) throw fehlerArt("unerwartet", "formular");
@@ -378,7 +390,7 @@ const erzeugen = (abh) => {
     const z = zugang();
     if (!z.benutzer) { b.art = "ohne-zugang"; return; }
     if (z.gesperrt) { b.art = "abgelehnt"; return; }
-    if (!z.bestaetigt) { b.art = "wartet-ilias"; return; }
+    if (!nutzbar(z)) { b.art = "wartet-ilias"; return; }
     const s0 = lstand();
     if (!o.manuell && !faelligSonst()) { b.art = "nicht-faellig"; return; }
     if (o.manuell && alter(s0.letzter) < KNOPF_ABSTAND) { b.art = "zu-frueh"; return; }
@@ -500,7 +512,7 @@ const erzeugen = (abh) => {
     const z = zugang();
     if (!z.benutzer) return { art: "ohne-zugang" };
     if (z.gesperrt) return { art: "abgelehnt" };
-    if (!z.bestaetigt) return { art: "wartet-ilias" };
+    if (!nutzbar(z)) return { art: "wartet-ilias" };
     if (alter(lstand().pauseBis) < 0) return { art: "stopp", grund: "pause" };
     const b = { anfragen: 0, post: false, angemeldet: false };
     try {
@@ -532,7 +544,7 @@ const erzeugen = (abh) => {
     melden({ art: "an" });
     await lesen();
     // gleich prüfen, wenn ILIAS den Zugang bestätigt hat (sonst wartet die Zeile darauf)
-    return zugang().bestaetigt ? jetztPruefen({ manuell: true }) : { art: "wartet-ilias" };
+    return nutzbar(zugang()) ? jetztPruefen({ manuell: true }) : { art: "wartet-ilias" };
   };
   // Ausschalten (nur dieses Gerät): Sperre freigeben, damit ein anderes Gerät mit Zustimmung gleich übernehmen kann
   const ausschalten = () => {
@@ -572,7 +584,7 @@ const erzeugen = (abh) => {
     else if (!z.benutzer) art = "ohne-zugang";
     else if (!an()) art = s.aus === "anderes-geraet" ? "aus-anderes-geraet" : "aus";
     else if (z.gesperrt) art = "abgelehnt";
-    else if (!z.bestaetigt) art = "wartet-ilias";
+    else if (!nutzbar(z)) art = "wartet-ilias";
     else if (laeuft) art = "laeuft";
     else if (PAUSEN.indexOf(s.pause) >= 0) art = s.pause;
     else if (alter(s.pauseBis) < 0 && s.unerwartet >= UNERWARTET_MAX) art = "unerwartet";

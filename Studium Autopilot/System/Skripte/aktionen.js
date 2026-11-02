@@ -21,9 +21,34 @@ module.exports = function (ctx) {
     return l ? app.metadataCache.getFirstLinkpathDest(l, von) : null;
   };
 
+  // Am PC öffnet der Knopf nur Dateiarten, die beim Öffnen nichts ausführen: Unterlagen, Tabellen, Bilder, Audio, Video, Archive,
+  // Quelltext für Editoren. Ein Link „aktion=oeffnen“ kann in jeder Notiz stehen (auch in Text aus einer Mail, von Claude oder aus
+  // ILIAS, wo Dateien ihre Endung behalten); ohne diese Liste startete er eine .cmd-, .lnk- oder .hta-Datei aus dem Tresor als
+  // Programm. Makro-Formate (docm, xlsm, pptm), HTML und SVG gehören bewusst nicht dazu. Alte Office-Formate (doc, xls, ppt) und RTF
+  // können Makros oder eingebettete Objekte tragen, ein Archiv packt das System neben die Unterlagen aus, und Dateien im Tresor
+  // haben keine Herkunftsmarke aus dem Internet, vor der Office warnen würde: Diese Arten zeigt der Knopf nur im Ordner
+  // (ORDNER_ARTEN), geöffnet werden sie dort mit einem bewussten Doppelklick. Auf iPhone und iPad zeigt die Dateien-App die Datei
+  // nur an, dort gelten die Listen nicht.
+  const EXTERN_ARTEN = ["pdf", "docx", "xlsx", "pptx", "odt", "ods", "odp", "txt", "csv", "md", "epub", "pages", "numbers", "key",
+    "png", "jpg", "jpeg", "gif", "webp", "heic", "bmp", "tif", "tiff", "mp3", "m4a", "wav", "mp4", "mov", "m4v", "r", "rmd", "ipynb",
+    "tex", "bib"];
+  const ORDNER_ARTEN = ["doc", "xls", "ppt", "rtf", "zip"];
+  const art = (f) => String(f && f.extension || "").toLowerCase();
+
   // Datei außerhalb von Obsidian öffnen: PC Standardprogramm, iPad/iPhone Dateien-App (shareddocuments://)
   const extern = (f) => {
-    if (Platform.isDesktopApp) return app.openWithDefaultApp(f.path);
+    if (Platform.isDesktopApp) {
+      if (ORDNER_ARTEN.indexOf(art(f)) >= 0 && typeof app.showInFolder === "function") {
+        app.showInFolder(f.path);
+        ctx.hinweis(`„${f.name}“ liegt im Ordner, der sich gerade öffnet; Dateien dieser Art öffnest du dort selbst.`);
+        return;
+      }
+      if (EXTERN_ARTEN.indexOf(art(f)) < 0) {
+        ctx.hinweis(`„${f.name}“ öffnet Studium Autopilot nicht, weil die Datei ein Programm sein könnte. Wenn du weißt, woher sie kommt, öffne sie selbst im Ordner des Tresors.`);
+        return;
+      }
+      return app.openWithDefaultApp(f.path);
+    }
     const a = app.vault.adapter;
     const res = String(a.getResourcePath(f.path) || "");
     const voll = typeof a.getFullPath === "function" ? String(a.getFullPath(f.path) || "") : "";
@@ -41,7 +66,8 @@ module.exports = function (ctx) {
 
   const AKTIONEN = {
     // Knopf „Öffnen“ (Kopfzeile des PDF-Kastens, pdfkasten.js; Unterlagen-Tabellen): Datei aus „datei“ (mit original=1: aus
-    // „original“) extern öffnen; der PDF-Kasten nennt die eingebettete Datei selbst (Parameter datei, Link relativ zur Notiz)
+    // „original“) extern öffnen; der PDF-Kasten nennt die eingebettete Datei selbst (Parameter datei, Link relativ zur Notiz).
+    // Ohne Notiz sucht er eine Datei gleichen Namens nur unter Unterlagen/, nie irgendwo im Tresor.
     oeffnen: {
       titel: "Unterlage öffnen",
       ausfuehren: async (c) => {
@@ -51,7 +77,7 @@ module.exports = function (ctx) {
         const fm = fmVon(notiz);
         const ziel = (!original && c.parameter.datei ? ausLink(c.parameter.datei, notiz ? notiz.path : "") : null)
           || ausLink(original ? fm.original : fm.datei, notiz ? notiz.path : "")
-          || app.vault.getFiles().find((f) => f.basename === name && f.extension !== "md") || null;
+          || app.vault.getFiles().find((f) => f.path.indexOf("Unterlagen/") === 0 && f.basename === name && f.extension !== "md") || null;
         if (!ziel) { ctx.hinweis(`Keine Datei zu „${name || "dieser Notiz"}“ gefunden.`); return; }
         extern(ziel);
         if (ctx.user.gesehen) ctx.user.gesehen(c).vermerken(notiz || ziel).catch((e) => console.error("eba gesehen", e)); // zählt nicht mehr als neu
@@ -73,7 +99,7 @@ module.exports = function (ctx) {
       },
     },
 
-    // Knöpfe „Variante“ (Einstellungen): Feld „variante“ in System/Einstellungen.md
+    // Zeile „Variante“ unter „Deine Angaben“ (ohne wert: Auswahl) und Befehl: Feld „variante“ in System/Einstellungen.md
     variante: {
       titel: "Variante wählen",
       ausfuehren: async (c) => {

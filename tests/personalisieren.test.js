@@ -1,4 +1,4 @@
-// Einstellungen & Hilfe (personalisieren.js): Inhalt der Zeilen „Deine Angaben“ und „Variante“. Läuft ohne Obsidian.
+// Einstellungen & Hilfe (personalisieren.js): Inhalt der Zeilen „Deine Angaben“ (mit der Variante) und „Obsidian“. Läuft ohne Obsidian.
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
@@ -19,7 +19,7 @@ const nach = (zeilen) => Object.fromEntries(zeilen.map((z) => [z.id, z]));
 
 test("Deine Angaben leer: „Eintragen“ als Wert, jede Zeile öffnet das Formular am Feld, Einrichtung starten", () => {
   const z = nach(P.angabenZeilen({}, { status: "offen", uebersprungen: [] }));
-  assert.deepEqual(Object.keys(z), ["name", "studienbeginn", "zielnote", "einrichtung"]);
+  assert.deepEqual(Object.keys(z), ["name", "studienbeginn", "variante", "zielnote", "einrichtung"]);
   for (const id of ["name", "studienbeginn", "zielnote"]) {
     assert.equal(z[id].wert, "Eintragen", id);
     assert.equal(z[id].ton, "leise", id);
@@ -58,35 +58,28 @@ test("Einrichtung: übersprungene Schritte in der zweiten Zeile, angefangene geh
   assert.equal(nach(P.angabenZeilen({ einrichtung: "fertig" })).einrichtung.wert, "Fertig");
 });
 
-test("Variante: je Variante eine Zeile ohne Symbol; die gewählte mit Haken und dem, was daraus folgt, die übrigen wählt ein Tipp", () => {
-  const offen = P.varianteZeilen({ variante: "offen" });
-  assert.deepEqual(offen.map((z) => z.titel), ["Economics", "Business Administration", "Ohne Spezialisierung", "Noch offen"]);
-  assert.ok(offen.every((z) => !z.symbol && !z.wert));
-  assert.deepEqual(offen[0].aktion, { aktion: "variante", parameter: { wert: "Economics" } });
-  assert.equal(offen[0].rechts, "");
-  assert.ok(!offen[0].unter, "nicht gewählte ohne zweite Zeile");
-  assert.equal(offen[3].aktion, undefined);
-  assert.equal(offen[3].rechts, "haken");
-  assert.equal(offen[3].unter, P.FOLGE.offen);
-  const eco = P.varianteZeilen({ variante: "Economics" });
-  assert.equal(eco[0].aktion, undefined);
-  assert.equal(eco[0].rechts, "haken");
-  assert.equal(eco[0].unter, P.FOLGE.Economics);
-  assert.deepEqual(eco[3].aktion.parameter, { wert: "offen" }, "zurück auf „noch offen“ geht auch");
+test("Variante: eine Zeile unter „Deine Angaben“, nur die gewählte; offen heißt „Wählen“, ein Tipp öffnet die Auswahl", () => {
+  const offen = nach(P.angabenZeilen({ variante: "offen" }, { status: "offen", uebersprungen: [] })).variante;
+  assert.equal(offen.titel, "Variante");
+  assert.equal(offen.wert, "Wählen");
+  assert.equal(offen.ton, "leise");
+  assert.ok(offen.symbol);
+  assert.ok(!offen.unter);
+  assert.equal(offen.rechts, "pfeil");
+  assert.deepEqual(offen.aktion, { aktion: "variante", parameter: {} }, "ohne Wert: die Auswahl");
+  const eco = nach(P.angabenZeilen({ variante: "ohne Spezialisierung" }, { status: "offen", uebersprungen: [] })).variante;
+  assert.equal(eco.wert, "Ohne Spezialisierung");
+  assert.equal(eco.ton, "akzent");
   // unbekannter oder leerer Wert gilt als „noch offen“
-  assert.deepEqual(P.varianteZeilen({ variante: "Jura" }).map((z) => !!z.aktion), [true, true, true, false]);
-  assert.deepEqual(P.varianteZeilen({}).map((z) => !!z.aktion), [true, true, true, false]);
+  assert.equal(nach(P.angabenZeilen({ variante: "Jura" }, { status: "offen", uebersprungen: [] })).variante.wert, "Wählen");
+  assert.equal(nach(P.angabenZeilen({}, { status: "offen", uebersprungen: [] })).variante.wert, "Wählen");
 });
 
-test("Jede Variante hat einen Text, was daraus folgt", () => {
-  for (const v of P.VARIANTEN) assert.ok(P.FOLGE[v], v);
-});
-
-test("Obsidian: Einstellungen, Dateien mit ihrer Zahl und der Tresor mit Namen; jede Zeile ruft Obsidians eigenen Befehl", () => {
-  const z = nach(P.obsidianZeilen("Studium Autopilot", 1234));
-  assert.deepEqual(Object.keys(z), ["einstellungen", "dateien", "tresor"]);
+test("Obsidian: Einstellungen und der Tresor mit Namen, keine Dateiliste; jede Zeile ruft Obsidians eigenen Befehl", () => {
+  const z = nach(P.obsidianZeilen("Studium Autopilot"));
+  // Ohne „Dateien“ (Rückmeldung vom 01.11.2026: „Sidebar shouldn't be visible in this vault“): die Zeile öffnete Obsidians linke Seitenleiste
+  assert.deepEqual(Object.keys(z), ["einstellungen", "tresor"]);
   assert.equal(z.einstellungen.wert, "");
-  assert.equal(z.dateien.wert, "1.234");
   assert.equal(z.tresor.wert, "Studium Autopilot");
   for (const id of Object.keys(z)) {
     assert.ok(z[id].symbol, id);
@@ -94,10 +87,10 @@ test("Obsidian: Einstellungen, Dateien mit ihrer Zahl und der Tresor mit Namen; 
     assert.ok(!z[id].unter, id + ": ohne zweite Zeile");
     assert.deepEqual(z[id].aktion, { aktion: "obsidian", parameter: { ziel: id } }, id);
   }
-  // was vorher unten in der Schublade stand: Zahnrad, Umschalter zur Dateiliste, Tresore verwalten (wechseln, umbenennen,
-  // löschen; app:switch-vault kann auf iPhone und iPad nur wechseln)
-  assert.deepEqual(P.OBSIDIAN, { einstellungen: "app:open-settings", dateien: "file-explorer:open", tresor: "app:open-vault" });
-  assert.equal(nach(P.obsidianZeilen("", 0)).dateien.wert, "0");
+  // was vorher unten in der Schublade stand: Zahnrad, Tresore verwalten (wechseln, umbenennen, löschen; app:switch-vault kann
+  // auf iPhone und iPad nur wechseln)
+  assert.deepEqual(P.OBSIDIAN, { einstellungen: "app:open-settings", tresor: "app:open-vault" });
+  assert.ok(!Object.values(P.OBSIDIAN).some((b) => /file-explorer|sidebar/.test(b)), "keine Zeile öffnet eine Seitenleiste");
 });
 
 test("Hilfe: oben die Zeile Rundgang, neutral wie die Themen darunter; ein Tipp zeigt ihn noch einmal; Widgets nur auf iPhone und iPad", () => {

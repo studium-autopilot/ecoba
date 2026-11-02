@@ -91,28 +91,37 @@ const cssBlock = (datei, kopf) => {
 // Wert einer Variablen (Farbe oder Prozent); Kommentare wie „--eba-modul-ton: Fläche einer Vorlesung“ zählen nicht
 const wert = (block, name) => { const m = block.match(new RegExp("--" + name + ":\\s*(#[0-9a-fA-F]{6}|[0-9.]+%)\\s*;")); return m ? m[1] : null; };
 
-test("Farben des Zeichners = Farben der Designs (hell je Design, dunkel für alle, Modulfarben; Töne sind eigene des Widgets)", () => {
+test("Farben des Zeichners = Farben der Designs (hell und dunkel je Design, Modulfarben; Töne sind eigene des Widgets)", () => {
   const quelle = laden("widget").ergebnis.scriptable.toString();
   const KERN = cssBlock("eba-core.css", "body");
-  const BLOCK = { elfenbein: cssBlock("eba-paper-elfenbein.css", ".theme-light:where(:not([class*=\"eba-design-\"]))"),
+  const OHNE = ":not([class*=\"eba-design-\"])";
+  const HELL = { elfenbein: cssBlock("eba-paper-elfenbein.css", ".theme-light" + OHNE),
     flieder: cssBlock("eba-flieder.css", ".eba-design-flieder.theme-light"), klar: cssBlock("eba-klar.css", ".eba-design-klar.theme-light") };
+  // dunkel seit 01.11.2026 je Design (bis dahin für alle die Farben von Elfenbein)
+  const DUNKEL = { elfenbein: cssBlock("eba-paper-elfenbein.css", ".theme-dark" + OHNE),
+    flieder: cssBlock("eba-flieder.css", ".eba-design-flieder.theme-dark"), klar: cssBlock("eba-klar.css", ".eba-design-klar.theme-dark") };
   const NAMEN = { bg: "eba-bg", karte: "eba-card-bg", rand: "eba-border", text: "eba-text", muted: "eba-muted", faint: "eba-faint", akzentText: "eba-accent-text",
     warn: "eba-warn", bad: "eba-bad", info: "eba-info" };
-  for (const d of Object.keys(BLOCK)) {
-    const zeile = quelle.split("\n").map((z, i, a) => (z.trim().indexOf(d + ": {") === 0 ? z + a[i + 1] : "")).filter(Boolean)[0];
-    assert.ok(zeile, "Design fehlt im Zeichner: " + d);
-    for (const k of Object.keys(NAMEN)) assert.ok(zeile.indexOf(k + ": \"" + wert(BLOCK[d], NAMEN[k]) + "\"") >= 0, d + " " + k + " ≠ " + wert(BLOCK[d], NAMEN[k]));
-    for (let n = 1; n <= 6; n++) {
-      const eigen = wert(BLOCK[d], "eba-modul-" + n);
-      if (eigen) assert.ok(zeile.indexOf(n + ": \"" + eigen + "\"") >= 0, d + " Modulfarbe " + n);
+  const hz = quelle.slice(quelle.indexOf("const HELL"), quelle.indexOf("const MODUL_HELL"));
+  const dz = quelle.slice(quelle.indexOf("const DUNKEL"), quelle.indexOf("const MODUL_DUNKEL"));
+  for (const [modus, BLOCK, teil] of [["hell", HELL, hz], ["dunkel", DUNKEL, dz]]) {
+    for (const d of Object.keys(BLOCK)) {
+      const zeile = teil.split("\n").map((z, i, a) => (z.trim().indexOf(d + ": {") === 0 ? z + a[i + 1] : "")).filter(Boolean)[0];
+      assert.ok(zeile, "Design fehlt im Zeichner: " + modus + " " + d);
+      for (const k of Object.keys(NAMEN)) {
+        assert.ok(zeile.indexOf(k + ": \"" + wert(BLOCK[d], NAMEN[k]) + "\"") >= 0, modus + " " + d + " " + k + " ≠ " + wert(BLOCK[d], NAMEN[k]));
+      }
+      for (let n = 1; n <= 6; n++) {
+        const eigen = wert(BLOCK[d], "eba-modul-" + n);
+        if (eigen) assert.ok(zeile.indexOf(n + ": \"" + eigen + "\"") >= 0, modus + " " + d + " Modulfarbe " + n);
+      }
     }
   }
   const hellModul = [1, 2, 3, 4, 5, 6].map((n) => "\"" + wert(KERN, "eba-modul-" + n) + "\"").join(", ");
   assert.ok(quelle.indexOf("MODUL_HELL = [" + hellModul + "]") >= 0, "Modulfarben hell");
-  const DUNKEL = cssBlock("eba-paper-elfenbein.css", ".theme-dark");
-  const dz = quelle.slice(quelle.indexOf("const DUNKEL"), quelle.indexOf("// ----- Daten"));
-  for (const k of Object.keys(NAMEN)) assert.ok(dz.indexOf(k + ": \"" + wert(DUNKEL, NAMEN[k]) + "\"") >= 0, "dunkel " + k);
-  assert.ok(dz.indexOf([1, 2, 3, 4, 5, 6].map((n) => "\"" + wert(DUNKEL, "eba-modul-" + n) + "\"").join(", ")) >= 0, "Modulfarben dunkel");
+  const ALLE = cssBlock("eba-paper-elfenbein.css", ".theme-dark");
+  const dunkelModul = [1, 2, 3, 4, 5, 6].map((n) => "\"" + wert(ALLE, "eba-modul-" + n) + "\"").join(", ");
+  assert.ok(quelle.indexOf("MODUL_DUNKEL = [" + dunkelModul + "]") >= 0, "Modulfarben dunkel");
 });
 
 // ---------- Zeichner im Nachbau von Scriptable ----------

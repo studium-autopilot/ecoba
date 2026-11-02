@@ -20,14 +20,14 @@ const ALMA_LINK = "https://alma.uni-tuebingen.de:443/alma/pages/cm/exa/timetable
 //   links (ILIAS) | Fehler, almaAntwort, verbinden(id, link), gesperrt (ILIAS-Stand), ohneZustimmung (Login aus 0.4.7) }
 function aufbau(o) {
   o = o || {};
-  const log = [], speicher = new Map();
+  const log = [], aufrufe = [], speicher = new Map();
   let t = Date.parse("2026-10-20T08:00:00.000Z");
   const zugang = Object.assign({ benutzer: "zxabc01", bestaetigt: true, gesperrt: false }, o.zugang);
   const quellen = { "ilias-kalender": Object.assign({ verbunden: false, extern: false }, o.kalender), alma: Object.assign({ verbunden: false, extern: false }, o.alma) };
   const abh = {
     ilias: () => ({
       kannSpeichern: () => o.kannSpeichern !== false, uniZugang: () => zugang, status: () => ({ gesperrt: !!o.gesperrt }),
-      kalenderLinks: async () => { log.push("ilias:links"); if (o.links instanceof Error) throw o.links; return o.links || [{ url: ILIAS_LINK(0), begrenzt: false }, { url: ILIAS_LINK(1), begrenzt: true }]; },
+      kalenderLinks: async (a) => { log.push("ilias:links"); aufrufe.push(!!(a && a.automatisch)); if (o.links instanceof Error) throw o.links; return o.links || [{ url: ILIAS_LINK(0), begrenzt: false }, { url: ILIAS_LINK(1), begrenzt: true }]; },
     }),
     kalender: () => KAL,
     almaKonto: () => ({ stundenplanLink: async () => { log.push("alma:link"); return o.almaAntwort || { art: "ok", link: ALMA_LINK }; } }),
@@ -47,7 +47,7 @@ function aufbau(o) {
   const u = U.erzeugen(abh, {});
   // Anmeldung im Fenster von 0.4.8 (Zustimmung für beide Quellen), außer bei einem Login aus 0.4.7 oder früher
   if (!o.ohneZustimmung) u.zustimmen();
-  return { u, log, zugang, quellen, speicher, vor: (ms) => { t += ms; } };
+  return { u, log, aufrufe, zugang, quellen, speicher, vor: (ms) => { t += ms; } };
 }
 
 test("Laden: Bibliothek (keine Erweiterung), beim Laden passiert nichts", () => {
@@ -150,9 +150,13 @@ test("Neuer Link, wenn der alte nicht mehr gilt: höchstens einmal am Tag je Que
   assert.equal(await x.u.erneuern("alma", "https://alma.uni-tuebingen.de/alt"), "", "am selben Tag nicht noch einmal");
   assert.equal(await x.u.erneuern("ilias-kalender", ILIAS_LINK(1)), "", "ILIAS gibt denselben Link: nichts Neues");
   assert.deepEqual(x.log, ["alma:link", "ilias:links"]);
+  assert.deepEqual(x.aufrufe, [true], "im Hintergrund: ILIAS hält sich an die Pause automatischer Versuche");
   x.vor(24 * 3600e3);
   assert.equal(await x.u.erneuern("alma", ALMA_LINK), "");
   assert.equal(x.log.length, 3, "nach einem Tag wieder ein Versuch");
+  const z = aufbau();
+  await z.u.verbinden("ilias-kalender");
+  assert.deepEqual(z.aufrufe, [false], "dein Tipp auf Verbinden versucht es trotzdem");
   // Ohne Uni-Login nie
   const y = aufbau({ zugang: { benutzer: "" } });
   assert.equal(await y.u.erneuern("alma", "x"), "");
@@ -210,4 +214,12 @@ test("Zwei Aufrufe für dieselbe Quelle zugleich (Fenster und Einrichtung): ein 
   const [a, b] = await Promise.all([x.u.verbinden("alma"), x.u.verbinden("alma")]);
   assert.deepEqual(a, b);
   assert.deepEqual(x.log, ["alma:link", "alma:verbinden " + ALMA_LINK]);
+});
+
+test("Ungeprüftes Passwort (bei ILIAS galt noch eine Sitzung): der Uni-Login ist bereit, Alma prüft das Passwort selbst", async () => {
+  const x = aufbau({ zugang: { bestaetigt: false, ungeprueft: true } });
+  assert.equal(x.u.bereit(), true);
+  assert.equal((await x.u.linkHolen("alma")).ok, true);
+  assert.equal(aufbau({ zugang: { bestaetigt: false, ungeprueft: false } }).u.bereit(), false);
+  assert.equal(aufbau({ zugang: { bestaetigt: false, ungeprueft: true, gesperrt: true } }).u.bereit(), false);
 });

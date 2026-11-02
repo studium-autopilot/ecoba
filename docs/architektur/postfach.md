@@ -10,14 +10,17 @@ Seite `Studium/Postfach.md` mit dem Codeblock `eba-postfach`: dein Uni-Posteinga
 Server); kein IMAP, weil iOS keine eigenen Verbindungen erlaubt und das Webmail die Mails schon als Text liefert.
 
 - **Voraussetzung:** Uni-Login auf diesem Gerät, von ILIAS bestätigt und nicht abgelehnt (`ctx.ilias.uniZugang()`:
-  `bestaetigt`, nicht `gesperrt`), dazu die Zustimmung je Gerät (`eba-postfach-an`, Knopf **Postfach anzeigen**). Sonst zeigt
+  `bestaetigt`, nicht `gesperrt`), dazu die Zustimmung je Gerät (`eba-postfach-an`, Knopf **Postfach anzeigen**). Ist er
+  `ungeprueft` (bei ILIAS galt beim Verbinden noch eine Sitzung, ILIAS hat das Passwort nie gesehen), prüft das Webmail es selbst:
+  Eine Sitzung, die schon besteht, meldet `anmelden` erst ab (Abmelde-Link der Seite), dann geht die Anmeldung mit Passwort hinaus. Sonst zeigt
   der Block eine Zeile wie unter Verbindungen (Mit Uni-Login verbinden, abgelehnt, wird geprüft, Postfach anzeigen).
   **Mit Uni-Login verbinden** öffnet gleich die Anmeldung (`verbinden` mit `auch=1`), auch wenn ILIAS über ein anderes Gerät
   verbunden ist; bis 0.6.6 kam dann das Fenster „Ein Gerät reicht, alles kommt über deinen Sync“, das für Mails nicht stimmt.
 - **Anmeldung:** `/login.php` holen, Formular `#horde_login` nur als POST an `https://webmail.uni-tuebingen.de/login.php`;
   versteckte Felder bleiben, dazu `login_post=1`, `horde_user`, `horde_pass` (erst beim Absenden aus dem Schlüsselbund),
   `horde_select_view=mobile_nojs`, `new_lang=de_DE`. Angemeldet nur mit Abmelde-Link (`horde_logout_token`); die bekannte
-  Ablehnung („… falsch eingegeben …“) schreibt den Marker `System/Daten/uni-zugang.json` mit Dienst `mail`, alles andere ist
+  Ablehnung („… falsch eingegeben …“) schreibt den Marker `System/Daten/uni-zugang.json` mit Dienst `mail` (war das Passwort
+  `ungeprueft`, gilt sie nur auf diesem Gerät, siehe [unterlagen.md](unterlagen.md)), alles andere ist
   `unerwartet`. Höchstens eine Anmeldung je Abruf; eine abgelaufene Sitzung (Anmeldeseite statt Liste) einmal neu.
 - **Lesen:** Liste aus der Ansicht basic (`/imp/basic.php?page=mailbox&mailbox=SU5CT1g&mpage=N`, 30 Mails je Seite, Zeilen
   `tr#row<buid>`, `flagUnseen`, ganzer Betreff im `title`; Zahl aller Mails und Seiten aus `#mailboxLabel` „Posteingang (145

@@ -26,12 +26,16 @@
 //   GET  /v1/livesync/<kennung>  Seite mit dem Setup-Link für LiveSync (livesync.mjs, 30 Minuten; verschlüsselt mit einem Code,
 //                       den nur das Terminal zeigt)
 // Konfiguration $STUDIUM_SERVER_KONFIG (Standard /etc/studium-server/dienst.json: zugang, schluessel, adresse, port,
-// version), Daten $STUDIUM_SERVER_DATEN (Standard /var/lib/studium-server).
+// version), Daten $STUDIUM_SERVER_DATEN (Standard /var/lib/studium-server). Der Dienst läuft als eigener Benutzer (studium-web) und
+// schreibt nur in web/ (seine Dateien: abruf.json, takt.json, knopf.json, stand-plugin.json, geraete.json, anstoss, verbinden/,
+// livesync-links/), unterlagen/ (für den Lauf) und eingang/ (vom Lauf; er löscht Übernommenes). zustand.json und
+// aktualisierung.json liest er nur (server/README.md, „Wer was liest und schreibt“).
 import { createHash, timingSafeEqual } from "node:crypto";
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
+import { schreibenAtomar } from "./dateien.mjs";
 import { datumOk, kapitelModulNormal, KATEGORIEN, MODULCODE, saeubern, SEMESTER, TODO_ID } from "./eingang.mjs";
 import { entschluesseln, entschluesselnRoh, verschluesseln } from "./kanal.mjs";
 import { abholen, seite } from "./livesync.mjs";
@@ -68,11 +72,22 @@ export const DATEINAME = /^[0-9A-Za-z][0-9A-Za-z._-]{0,119}\.json$/;
 const lesen = (datei, ersatz) => {
   try { return JSON.parse(readFileSync(datei, "utf8")); } catch (e) { return ersatz; }
 };
+// Ordner des Dienstes im Datenordner; legt ihn an, wo er fehlt (Tests; auf dem Server legt ihn der Installer an)
+export const WEB = "web";
+const webOrdner = (verzeichnis) => {
+  const o = join(verzeichnis, WEB);
+  mkdirSync(o, { recursive: true });
+  return o;
+};
+// Anstoß des Dienstes (web/anstoss); der Lauf, Gmail-Zeit und studium-server schreiben ihren in den Datenordner (anstoss), der
+// Abruf in abruf/ (den sieht der Dienst nicht). Wartet einer, sagt der Status „wartet“.
+const ANSTOSS = [["anstoss"], [WEB, "anstoss"]];
+export const anstossWartet = (verzeichnis) => ANSTOSS.some((t) => existsSync(join(verzeichnis, ...t)));
 const digest = (text) => createHash("sha256").update(String(text || "")).digest();
 const gleich = (a, b) => timingSafeEqual(digest(a), digest(b));
 const aus = (wert, erlaubt) => (erlaubt.includes(wert) ? wert : "unbekannt");
 
-// Letztes „studium-server aktualisieren“ (aktualisierung.json, schreibt studium-server als studium): zeit, ok, ziel (Version des
+// Letztes „studium-server aktualisieren“ (aktualisierung.json, schreibt studium-server als studium, 0640): zeit, ok, ziel (Version des
 // neuesten Releases), grund (der Schritt, an dem es scheiterte, aus dieser Liste), erfolg (zuletzt ohne Fehler). Fehlt die Datei
 // (ein älterer Server, Testmodus ohne den täglichen Zeitgeber, noch nie gelaufen): null, das Plugin sagt dann nichts.
 export const AKTUALISIERUNG_GRUENDE = ["github", "pruefsumme-fehlt", "signatur-fehlt", "herunterladen", "pruefsumme", "signatur", "paket", "installieren",
@@ -158,7 +173,7 @@ export function tresorPruefen(roh) {
   const todos = (Array.isArray(t.todos) ? t.todos : []).slice(0, TRESOR_MAX.todos).map((x) => {
     const text = saeubern(x && x.text, 200, true);
     if (text.fehler || GEHEIM.test(text.wert)) return null;
-    const pfad = saeubern(x.pfad, 240, false);
+    const pfad = saeubern(x.pfad, 240, false, null);
     const o = { text: text.wert, code: code(x.code), frist: tag(x.frist) };
     if (TODO_ID.test(String(x.id))) o.id = x.id;
     if (!pfad.fehler && pfad.wert && !pfad.wert.split("/").includes("..") && pfad.wert.endsWith(".md")) o.pfad = pfad.wert;
@@ -248,12 +263,11 @@ export function unterlagenAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
   if (n) anstossWennFrei(verzeichnis, "unterlagen", jetzt);
   return n;
 }
-// Anstoß für den nächsten Lauf, wenn nicht schon einer wartet
+// Anstoß für den nächsten Lauf (web/anstoss), wenn nicht schon einer wartet
 function anstossWennFrei(verzeichnis, grund, jetzt) {
-  const anstoss = join(verzeichnis, "anstoss");
-  if (existsSync(anstoss)) return;
-  writeFileSync(anstoss + ".neu", JSON.stringify({ zeit: jetzt.toISOString(), grund }));
-  renameSync(anstoss + ".neu", anstoss);
+  if (anstossWartet(verzeichnis)) return false;
+  schreibenAtomar(join(webOrdner(verzeichnis), "anstoss"), JSON.stringify({ zeit: jetzt.toISOString(), grund }));
+  return true;
 }
 
 // Nach dem Limit des Claude-Abos (zustand.limit, lauf.mjs): Ist der nächste Versuch dran, ein Anstoß „wiederholung“. Nicht, wenn
@@ -262,7 +276,7 @@ function anstossWennFrei(verzeichnis, grund, jetzt) {
 export function limitWiederholen(verzeichnis, jetzt = new Date()) {
   const z = lesen(join(verzeichnis, "zustand.json"), {}) || {};
   const wieder = Date.parse((z.limit && z.limit.wieder) || "");
-  if (!Number.isFinite(wieder) || wieder > jetzt.getTime() || existsSync(join(verzeichnis, "anstoss"))) return false;
+  if (!Number.isFinite(wieder) || wieder > jetzt.getTime() || anstossWartet(verzeichnis)) return false;
   const seit = Date.parse(z.laeuftSeit || "");
   if (Number.isFinite(seit) && jetzt.getTime() - seit < LAUF_HOECHSTENS) return false;
   const zuletzt = Date.parse((z.letzterLauf && z.letzterLauf.zeit) || "");
@@ -310,13 +324,14 @@ export function kapitelAblegen(verzeichnis, unterlagen, jetzt = new Date()) {
   return unterlagen.length;
 }
 
-// PDFs ohne Textfassung daneben und halb hochgeladene, älter als PDF.verfall, löschen (auch lauf.mjs vor einem Lauf mit Opus)
+// PDFs ohne Textfassung daneben und halb hochgeladene, älter als PDF.verfall, löschen (auch lauf.mjs vor einem Lauf mit Opus; dort
+// legt ein anderer Benutzer ab: lstat, also das Alter des Eintrags selbst, nie das Ziel eines Links)
 export function pdfAufraeumen(ordner, jetzt = new Date()) {
   if (!existsSync(ordner)) return;
   for (const n of readdirSync(ordner)) {
     const m = /^([0-9a-f]{64})\.pdf(\.teil)?$/.exec(n);
     if (!m || (!m[2] && existsSync(join(ordner, m[1] + ".md")))) continue;
-    try { if (jetzt.getTime() - statSync(join(ordner, n)).mtimeMs > PDF.verfall) rmSync(join(ordner, n), { force: true }); } catch (e) { /* schon weg */ }
+    try { if (jetzt.getTime() - lstatSync(join(ordner, n)).mtimeMs > PDF.verfall) rmSync(join(ordner, n), { force: true }); } catch (e) { /* schon weg */ }
   }
 }
 
@@ -360,19 +375,18 @@ export function pdfTeilAblegen(verzeichnis, klar, jetzt = new Date()) {
   return { kennung: k.kennung, fertig: true };
 }
 
-// Knopf „Mails durchsuchen“: Anstoß für einen Lauf mit Gmail (Grund knopf). Wartet schon einer, bleibt er (ein wartender
-// Gmail-Anstoß sucht ohnehin). Höchstens einmal in KNOPF_ABSTAND. → [Status, Antwort]
+// Knopf „Mails durchsuchen“: Anstoß für einen Lauf mit Gmail (Grund knopf), immer in web/anstoss, auch wenn dort schon einer wartet:
+// Der Lauf nimmt alle Anstöße und den mit dem höchsten Vorrang (knopf), und Unterlagen und Folien übernimmt er unabhängig vom Grund.
+// Vorher blieb ein wartender Anstoß mit anderem Grund (etwa „quellen“ vom Abruf, „unterlagen“), und Gmail kam nicht dran. Höchstens einmal in
+// KNOPF_ABSTAND. knopf.json liest auch der Abruf (anderer Benutzer): 0644. → [Status, Antwort]
 export function knopfAnstoss(verzeichnis, jetzt = new Date()) {
-  const knopf = join(verzeichnis, "knopf.json");
+  const knopf = join(webOrdner(verzeichnis), "knopf.json");
   const zuletzt = Date.parse((lesen(knopf, {}) || {}).zuletzt || "");
   if (!Number.isNaN(zuletzt) && jetzt.getTime() - zuletzt < KNOPF_ABSTAND) {
     return [429, { fehler: "zu-frueh", wieder: new Date(zuletzt + KNOPF_ABSTAND).toISOString() }];
   }
-  writeFileSync(knopf, JSON.stringify({ zuletzt: jetzt.toISOString() }));
-  const anstoss = join(verzeichnis, "anstoss");
-  if (existsSync(anstoss)) return [200, { angestossen: true, wartete: true }];
-  writeFileSync(anstoss + ".neu", JSON.stringify({ zeit: jetzt.toISOString(), grund: "knopf" }));
-  renameSync(anstoss + ".neu", anstoss);
+  schreibenAtomar(knopf, JSON.stringify({ zuletzt: jetzt.toISOString() }), 0o644);
+  schreibenAtomar(join(webOrdner(verzeichnis), "anstoss"), JSON.stringify({ zeit: jetzt.toISOString(), grund: "knopf" }));
   return [200, { angestossen: true }];
 }
 
@@ -420,6 +434,7 @@ export function lernplanPruefen(l, heute = new Date().toISOString().slice(0, 10)
 }
 
 export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() }) {
+  const web = webOrdner(verzeichnis);
   const fehlversuche = new Map(); // Absender → Zeitpunkte
   const absenderVon = (req) => String(req.headers["x-forwarded-for"] || "").split(",").pop().trim() || req.socket.remoteAddress || "?";
   const gesperrt = (wer) => {
@@ -467,14 +482,14 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
       if (pfad === "/v1/status") {
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
         return antwort(res, 200, oeffentlicherStatus(lesen(join(verzeichnis, "zustand.json"), {}),
-          lesen(join(verzeichnis, "abruf.json"), {}), konfig.version, jetzt(), existsSync(join(verzeichnis, "anstoss")),
-          lesen(join(verzeichnis, "takt.json"), {}), lesen(join(verzeichnis, "aktualisierung.json"), null)));
+          lesen(join(web, "abruf.json"), {}), konfig.version, jetzt(), anstossWartet(verzeichnis),
+          lesen(join(web, "takt.json"), {}), lesen(join(verzeichnis, "aktualisierung.json"), null)));
       }
       const wer = absenderVon(req);
       if (pfad.startsWith("/v1/livesync/")) {
         if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
-        const setupLink = abholen(verzeichnis, pfad.slice("/v1/livesync/".length), jetzt());
+        const setupLink = abholen(web, pfad.slice("/v1/livesync/".length), jetzt());
         if (!setupLink) fehlversuch(wer);
         res.writeHead(setupLink ? 200 : 404, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store",
           "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", "referrer-policy": "no-referrer" });
@@ -486,7 +501,7 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
         if (gesperrt(wer)) return antwort(res, 429, { fehler: "zu-viele-versuche" });
         if (req.method !== "POST") return antwort(res, 405, { fehler: "methode" });
         const daten = await koerper(req, MAX_KOERPER[pfad]);
-        if (!codeEinloesen(verzeichnis, daten && daten.code, jetzt())) { fehlversuch(wer); return antwort(res, 403, { fehler: "code" }); }
+        if (!codeEinloesen(web, daten && daten.code, jetzt())) { fehlversuch(wer); return antwort(res, 403, { fehler: "code" }); }
         return antwort(res, 200, { adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel });
       }
       if (!angemeldet(req)) {
@@ -497,14 +512,14 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
 
       if (pfad === "/v1/eingang") {
         if (req.method !== "GET") return antwort(res, 405, { fehler: "methode" });
-        const paket = await verschluesseln(konfig.schluessel, "eingang", { ...eingangBuendel(verzeichnis, jetzt()), verbunden: verbundenLesen(verzeichnis, jetzt()) });
-        writeFileSync(join(verzeichnis, "abruf.json"), JSON.stringify({ zuletzt: jetzt().toISOString() }));
+        const paket = await verschluesseln(konfig.schluessel, "eingang", { ...eingangBuendel(verzeichnis, jetzt()), verbunden: verbundenLesen(web, jetzt()) });
+        schreibenAtomar(join(web, "abruf.json"), JSON.stringify({ zuletzt: jetzt().toISOString() }));
         return antwort(res, 200, paket);
       }
       if (req.method !== "POST") return antwort(res, 405, { fehler: "methode" });
       if (pfad === "/v1/anstoss") return antwort(res, ...knopfAnstoss(verzeichnis, jetzt()));
       if (pfad === "/v1/geraet") {
-        const [status, aus] = geraetCode(verzeichnis, await entschluesseln(konfig.schluessel, "verbinden", await koerper(req, MAX_KOERPER[pfad])), jetzt());
+        const [status, aus] = geraetCode(web, await entschluesseln(konfig.schluessel, "verbinden", await koerper(req, MAX_KOERPER[pfad])), jetzt());
         return antwort(res, status, status === 200 ? await verschluesseln(konfig.schluessel, "verbinden", aus) : aus);
       }
       if (pfad === "/v1/unterlagen") {
@@ -520,8 +535,9 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date() })
       }
       // /v1/stand
       const { stand, erledigt } = standPruefen(await entschluesseln(konfig.schluessel, "stand", await koerper(req, MAX_KOERPER[pfad])));
-      writeFileSync(join(verzeichnis, "stand-plugin.json"), JSON.stringify(stand));
-      writeFileSync(join(verzeichnis, "takt.json"), JSON.stringify(stand.takt)); // für abrufen.py (eigener Benutzer) ohne den Stand
+      // stand-plugin.json nur für den Lauf (0640, Gruppe studium-web), takt.json auch für abrufen.py (anderer Benutzer, ohne den Stand)
+      schreibenAtomar(join(web, "stand-plugin.json"), JSON.stringify(stand), 0o640);
+      schreibenAtomar(join(web, "takt.json"), JSON.stringify(stand.takt), 0o644);
       for (const name of erledigt) rmSync(join(verzeichnis, "eingang", name), { force: true });
       return antwort(res, 204);
     } catch (e) {

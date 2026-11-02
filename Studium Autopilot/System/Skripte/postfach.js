@@ -7,7 +7,9 @@
 //   aus dem Schlüsselbund von ILIAS, und nur unmittelbar vor dem Absenden an das Webmail. „Auf diesem Gerät ausschalten“ nimmt
 //   sie zurück und meldet ab.
 // Uni-Login (ilias.js, uniZugang): Das Webmail bekommt das Passwort nur, wenn ILIAS genau dieses Passwort bestätigt hat, nie als
-//   Erstes und nie, solange System/Daten/uni-zugang.json eine neuere Ablehnung meldet. Lehnt das Webmail eindeutig ab, schreibt
+//   Erstes und nie, solange System/Daten/uni-zugang.json eine neuere Ablehnung meldet. Ausnahme: Hat ILIAS das Passwort nicht
+//   gesehen, weil auf dem Gerät noch eine Sitzung galt (uniZugang().ungeprueft), prüft das Webmail es selbst: Eine Sitzung, die
+//   schon besteht, wird erst abgemeldet (sie könnte von einer anderen Person sein), dann geht die Anmeldung mit Passwort hinaus. Lehnt das Webmail eindeutig ab, schreibt
 //   dieses Gerät den Marker (Dienst „mail“; alle Geräte mit diesem Passwort halten an). Höchstens eine Anmeldung je Abruf.
 // Ablauf: /login.php holen → Formular prüfen (postfach-html.js: nur POST an https://webmail.uni-tuebingen.de/login.php) → POST
 //   mit Benutzername und Passwort, Ansicht ohne JavaScript, Deutsch → angemeldet nur mit Abmelde-Link. Dann Liste (Ansicht
@@ -41,10 +43,12 @@ const EIGENE = ["login_post", "horde_user", "horde_pass", "horde_select_view", "
 const BRIEF = '<svg class="eba-sym" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>';
 
 const fehlerArt = (art) => { const e = new Error(TEXTE[art] || TEXTE.unerwartet); e.art = art; return e; };
+// Passwort nutzbar: von ILIAS bestätigt oder ungeprüft (dann prüft das Webmail es selbst, siehe anmelden)
+const nutzbar = (u) => !!u && (!!u.bestaetigt || !!u.ungeprueft);
 const artVon = (e) => (e && TEXTE[e.art] ? e.art : e && e.grund && e.grund !== "fremder-host" && e.grund !== "kodierung" ? "netz" : "unerwartet");
 
 // ---------- Ablauf (ohne Obsidian, tests/postfach.test.js) ----------
-// abh: { sitzung() → { anfrage }, html: postfach-html, zugang() → { benutzer, gesperrt, bestaetigt } | null, kennwort() → Text,
+// abh: { sitzung() → { anfrage }, html: postfach-html, zugang() → { benutzer, gesperrt, bestaetigt, ungeprueft } | null, kennwort() → Text,
 //   ablehnen(dienst), lokal(k, v?), jetzt() → ms, heute() → „YYYY-MM-DD“, zeit(fn, ms) → id, stopp(id), geaendert(),
 //   z (Zustand, überlebt Hot-Reload; benutzer = Uni-Login, mit dem Sitzung und Mails geholt wurden) }
 const erzeugen = (abh) => {
@@ -73,7 +77,7 @@ const erzeugen = (abh) => {
     const u = abh.zugang();
     if (!u || !u.benutzer) return "ohne-login";
     if (u.gesperrt) return "gesperrt";
-    if (!u.bestaetigt) return "unbestaetigt";
+    if (!nutzbar(u)) return "unbestaetigt";
     return abh.lokal(L.an) ? "bereit" : "aus";
   };
 
@@ -91,9 +95,17 @@ const erzeugen = (abh) => {
 
   const anmelden = async () => {
     const u = abh.zugang();
-    if (!u || !u.benutzer || u.gesperrt || !u.bestaetigt) throw fehlerArt("gesperrt");
+    if (!u || !u.benutzer || u.gesperrt || !nutzbar(u)) throw fehlerArt("gesperrt");
     const s = abh.sitzung();
-    const r = await s.anfrage({ url: P.BASIS + "/login.php" });
+    let r = await s.anfrage({ url: P.BASIS + "/login.php" });
+    // Ist das Passwort ungeprüft, wird eine bestehende Sitzung erst abgemeldet, dann geht die Anmeldung mit Passwort hinaus
+    if (P.seite(r.text) === "angemeldet" && !u.bestaetigt) {
+      const adr = P.abmeldeAdresse(r.text);
+      if (!adr) throw fehlerArt("unerwartet");
+      await s.anfrage({ url: P.BASIS + adr });
+      r = await s.anfrage({ url: P.BASIS + "/login.php" });
+      if (P.seite(r.text) === "angemeldet") throw fehlerArt("unerwartet");
+    }
     if (P.seite(r.text) === "angemeldet") { z.sitzung = s; z.abmelden = P.abmeldeAdresse(r.text); z.benutzer = u.benutzer; return; }
     const f = P.anmeldeFormular(r.text);
     if (!f) throw fehlerArt("unerwartet");

@@ -512,23 +512,28 @@ module.exports = function (ctx) {
     return pruefungenAlle().filter((p) => (!o.code || p.code === o.code) && (o.zwischentests !== false || !p.zwischentest)
       && (!o.ab || p.datum >= o.ab) && (!o.bis || p.datum <= o.bis)).map((p) => mitOffen(p, heute));
   };
-  // Prüfung eines Moduls nach der einen Regel: Klausuren mit diesem Kürzel (ohne Zwischentests; Nachholtermine nur nach „nicht
-  // bestanden“); die nächste offene, sonst die letzte geschriebene bzw. abgehakte. Ist das Modul bestanden oder anerkannt, nur
-  // eine Prüfung, die schon war (sonst null: eine kommende Klausur ist dann keine mehr).
+  // Welcher Termin eines Moduls zählt (seit 1.11.2026): Steht in der Modulnotiz klausurtermin: Nachholtermin (im Lernplan gewählt),
+  // schreibst du im Nachholtermin und nur seine Klausuren zählen; sonst der Haupttermin, ein Nachholtermin nur nach „nicht
+  // bestanden“. termin ("haupt" | "nachhol") fragt nach einem bestimmten, gleich was die Notiz sagt.
+  const imNachhol = (m) => !!m && !!m.fm && /^nachhol/i.test(text(m.fm.klausurtermin));
+  const terminPasst = (p, m, termin) => ((termin ? termin === "nachhol" : imNachhol(m)) ? p.nachhol : !p.nachhol || (!!m && m.status === "nicht bestanden"));
+  // Prüfung eines Moduls nach der einen Regel: Klausuren mit diesem Kürzel (ohne Zwischentests) im gewählten Termin (terminPasst);
+  // die nächste offene, sonst die letzte geschriebene bzw. abgehakte. Ist das Modul bestanden oder anerkannt, nur eine Prüfung, die
+  // schon war (sonst null: eine kommende Klausur ist dann keine mehr). o: { heute, termin }
   const pruefungVon = (code, o) => {
     o = o || {};
     const heute = s10(o.heute) || heuteIso();
     const m = modulNach(code);
-    const nachholOk = !!m && m.status === "nicht bestanden";
-    const k = pruefungen({ heute, code: text(code), zwischentests: false }).filter((p) => !p.nachhol || nachholOk);
+    const k = pruefungen({ heute, code: text(code), zwischentests: false }).filter((p) => terminPasst(p, m, o.termin));
     if (m && m.fertig) { const vorbei = k.filter((p) => p.datum <= heute); return vorbei.length ? vorbei[vorbei.length - 1] : null; }
     const offen = k.filter((p) => p.offen);
     if (offen.length) return offen[0];
     return k.length ? k[k.length - 1] : null;
   };
-  // Nächste Prüfung (Dashboard): früheste offene Klausur, ohne Zwischentests und Nachholtermine (außer nach „nicht bestanden“)
+  // Nächste Prüfung (Dashboard): früheste offene Klausur ohne Zwischentests, je Modul im gewählten Termin (Nachholtermine sonst nur
+  // nach „nicht bestanden“)
   const naechstePruefung = (o) => pruefungen(Object.assign({}, o, { zwischentests: false }))
-    .filter((p) => p.offen && (!p.nachhol || (p.modul && p.modul.status === "nicht bestanden")))[0] || null;
+    .filter((p) => p.offen && terminPasst(p, p.modul))[0] || null;
   // Fristen (kategorie Frist), die noch laufen oder kommen, nicht abgehakt, sortiert nach dem nächsten Stichtag: läuft der
   // Zeitraum schon, sein Ende, sonst sein Beginn. o: { heute, tage (nur, was spätestens in so vielen Tagen beginnt) }
   const fristen = (o) => {
@@ -1169,7 +1174,7 @@ module.exports = function (ctx) {
     blockArgument, daten, ungueltig, semesterVon, semesterNachName, semesterAusDatum, naechster, voriger, modulSemester, semesterAuswahl, vorschau, abgleichen,
     beiAenderung, protokoll, woche, vorlesungswochen, semesterFuer,
     // Fachmodell (docs/architektur/modell.md „Fachmodell“)
-    zeit, termine, terminLesen, terminArt, lehreDesModuls, ortTeilen, pruefungen, pruefungVon, naechstePruefung, fristen, abgaben, uebung: uebungVon, uebungen, blattNummer, opFrist, kalenderwoche, planwoche, findetStatt,
+    zeit, termine, terminLesen, terminArt, lehreDesModuls, ortTeilen, pruefungen, pruefungVon, imNachhol, naechstePruefung, fristen, abgaben, uebung: uebungVon, uebungen, blattNummer, opFrist, kalenderwoche, planwoche, findetStatt,
     naechsteSitzung, ausfaelle, istOnline, imPlan, ects, noten, blockVon, statusArt, istZwischentest, istNachhol, modul: modulNach, besuchSchluessel, besuchtNicht,
     vorlesung: vorlesungVon, vorlesungen, vorlesungTitel, vorlesungThema, vorlesungNummer, folien: folienVon,
   };

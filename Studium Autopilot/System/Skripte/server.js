@@ -203,8 +203,139 @@ module.exports = function (ctx) {
   // Kurzer, stabiler Hash (FNV-1a, 32 Bit): Prüfsumme je Termin und Name des Schlüsselbund-Eintrags
   // ---------- Begleitnotizen ----------
   const ARTEN_SENDEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur"]; // Lehrmaterial; nie Mitschriften, Scans, eigene Lösungen
-  // Text eines Punkts: rein, ohne Links, HTML, Templater oder Code (der Server prüft das auch; hier noch einmal, er könnte fremd sein)
-  const punktText = (v, max) => reinerText(String(v == null ? "" : v).replace(/\[\[|\]\]|`|<%|%>|<\/?[a-z!][^>]*>|obsidian:\/\/\S*|javascript:/gi, " "), max);
+  // Text eines Punkts: rein, ohne Links, HTML, Templater oder Code (der Server prüft das auch; hier noch einmal, er könnte fremd sein).
+  // Erst fallen unsichtbare Zeichen weg (reinerText), dann Bilder; Markdown-Links behalten nur ihren Text, HTML-Entitäten und
+  // Code-Zäune (``` und ~~~) fallen weg, ebenso MathJax-Befehle für Links und HTML (TEX_HTML, etwa \href). Links im Fließtext bleiben nur auf PUNKT_DOMAINS stehen (linksEntschaerfen), und „](“, „][“
+  // und „]:“ bekommen ein Leerzeichen: So wird auch aus verschachtelten Klammern kein Link, kein Bild und keine Link-Definition.
+  // Eine Unterlage oder ein fremder Server macht so kein Klickziel und kein Bild, das beim Öffnen der Notiz nach außen lädt.
+  const PUNKT_DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de", "core-econ.org"]; // nicht doi.org: leitet überallhin weiter
+  // Links im Fließtext. Obsidian macht aus „https://…“ (auch „https:/…“, „https:…“), „www.…“ (die Lesefassung auch mitten im
+  // Wort) und „domain.de/…“ einen Link, im Bearbeiten-Modus bis zum nächsten Leerzeichen oder „<“; „file:…“ öffnet es ohne Rückfrage,
+  // wenn die Datei im Tresor liegt (andere Schemata wie „smb://“ nur nach Rückfrage). Ein Link bleibt nur, wenn er http(s) ist,
+  // ohne Name, Kennwort und Port vor dem Host, der Host nur aus a–z, 0–9, „.“ und „-“ (eine HTML-Entität darin machte die
+  // Lesefassung zu einem anderen Host), auf einer Domain der Liste, und dann so, wie der Browser ihn liest (new URL), mit
+  // Markdown-Zeichen als %-Kodierung. Sonst bleibt nur der Name des Hosts (linkName: ohne führendes „www.“, nie drei „w“
+  // hintereinander, nie an ein Wort davor gehängt, damit daraus kein neuer „www.“-Link wird); bei „domain.de/…“ ohne Schema kommt
+  // ein Leerzeichen vor das „/“, und der Rest wird weiter durchsucht; „file:“, „data:“ und „jar:“ fallen ganz weg. Kein Klickziel
+  // (Phishing aus einer Mail) und kein Abrufziel für Claude. Satzzeichen am Ende gehören nicht zum Link. Eine Schleife ohne
+  // Rekursion, jedes Zeichen nur einmal angesehen (lange Eingaben). Gleicher Code in zentral.js, server.js und server/eingang.mjs
+  // (tests/link-filter.test.js prüft alle drei).
+  const LINK = /https?:\/{0,3}[^\s<]*|(?:\b|_)(?:file|data|jar):[^\s<]+|\b[a-z][a-z0-9+.-]{1,30}:\/\/[^\s<]*|www\d{0,3}\.[^\s<]*|(^|[^a-z0-9-])((?:[a-z0-9-]+\.)+[a-z]{2,24})(?=\/)/gi;
+  const linkDomainOk = (h, domains) => /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(h) && domains.some((d) => h === d || h.endsWith("." + d));
+  const linkName = (h) => h.replace(/^(?:www\d{0,3}\.)+/i, "").replace(/w{3,}/gi, "ww").replace(/[^a-z0-9.-]+/gi, " ");
+  const linkKuerzen = (url) => {
+    let ende = url.length, zu = url.split(")").length - 1;
+    const auf = url.split("(").length - 1;
+    while (ende > 0 && /[`*!()[\]{};:'".,<>?«»“”‘’„‚]/.test(url[ende - 1]) && !(url[ende - 1] === ")" && auf >= zu)) {
+      if (url[ende - 1] === ")") zu--;
+      ende--;
+    }
+    return [url.slice(0, ende), url.slice(ende)];
+  };
+  // Link bis zum nächsten Leerzeichen → was im Text dafür steht
+  const linkPruefen = (roh, domains) => {
+    const [url, rest] = linkKuerzen(roh);
+    if (/^_?(?:file|data|jar):/i.test(roh)) return " ";
+    let u = null;
+    try { u = new URL(/^https?:|^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : "https://" + url); } catch (e) { return " " + rest; }
+    const host = u.hostname.toLowerCase();
+    if (/^https?:$/.test(u.protocol) && !u.username && !u.password && !u.port && linkDomainOk(host, domains)) {
+      const pfad = (u.pathname + u.search + u.hash).replace(/%(?![0-9a-f]{2})|[[\]()'"*!$^{}|`\\]/gi, (z) => "%" + z.charCodeAt(0).toString(16).toUpperCase());
+      return u.protocol + "//" + host + pfad + rest;
+    }
+    return linkName(host) + rest;
+  };
+  const linksEntschaerfen = (s, domains) => {
+    const t = String(s), re = new RegExp(LINK.source, "gi");
+    let aus = "", bis = 0, m;
+    // ein Name oder Link direkt hinter einem Wort („xwww“ + „.evil.com“) ergäbe einen neuen Link: dann ein Leerzeichen dazwischen
+    const anhaengen = (vor, neu) => {
+      aus += vor;
+      aus += /[a-z0-9]$/i.test(aus) && /^[a-z0-9.-]/i.test(neu) ? " " + neu : neu;
+    };
+    while ((m = re.exec(t))) {
+      if (!m[2]) {
+        anhaengen(t.slice(bis, m.index), linkPruefen(m[0], domains));
+        bis = re.lastIndex;
+        continue;
+      }
+      // „domain.de/…“ ohne Schema: auf einer erlaubten Domain der ganze Link, sonst nur der Name und ein Leerzeichen vor dem „/“
+      const start = m.index + m[1].length;
+      if (linkDomainOk(m[2].toLowerCase(), domains)) {
+        const w = /[^\s<]*/y;
+        w.lastIndex = start;
+        const roh = w.exec(t)[0];
+        anhaengen(t.slice(bis, start), linkPruefen(roh, domains));
+        bis = start + roh.length;
+      } else {
+        anhaengen(t.slice(bis, start), linkName(m[2]) + " ");
+        bis = start + m[2].length;
+      }
+      re.lastIndex = bis;
+    }
+    return aus + t.slice(bis);
+  };
+  // Zweite Sicherung beim Schreiben einer Notiz (Ausgabe-Kodierung): Was nach linksEntschaerfen noch nach Link, Link-Definition,
+  // HTML oder Code aussieht, bekommt vor dem Zeichen, an dem Obsidian es erkennt, einen „\“: den Doppelpunkt hinter „http(s)“,
+  // „file“, „data“, „jar“ und vor „/“, den Punkt hinter „www“ und vor „tld/“, „]“ vor „(“, „[“ oder „:“, „`“ und „<“, wenn danach
+  // noch ein „>“ kommt (Tag oder Link in spitzen Klammern; in beiden wirkt kein „\“). Obsidian zeigt so einen „\“ in beiden
+  // Ansichten nicht (nachgeprüft in Obsidian 1.14.5), der Text sieht also gleich aus; schon maskierte Zeichen bleiben, wie sie sind.
+  // Erlaubte Links (genau so, wie linksEntschaerfen sie schreibt) bleiben stehen; maske maskiert den Text dazwischen vorher (mdText);
+  // zu = Stelle des letzten „>“, wenn der Text nur ein Stück ist (formelnAussparen). Alles in einem Durchgang über den ganzen Text,
+  // damit kein „\“ an einer Nahtstelle einen anderen aufhebt. Gleicher Code in zentral.js und server.js (tests/link-filter.test.js).
+  const LINK_ZEICHEN = /\\[!-/:-@[-`{-~]|(https?|file|data|jar):(?=[/a-z0-9%])|:(?=\/)|(www\d{0,3})\.|\.(?=[a-z]{2,24}\/)|\](?=[(:[])|`|<(?=\S)/gi;
+  const linkZeichenEntwerten = (s, domains, maske = (t) => t, zu = -1) => {
+    const erlaubt = [];
+    let text = "";
+    let imWort = false; // im selben Wort wie ein erlaubter Link, dahinter
+    String(s).split(/(https?:\/\/[^\s<]+)/).forEach((t, i) => {
+      // Dort nimmt die Lesefassung alles bis zum nächsten „<“ in den Link auf, auch einen „\“ davor, und das „<“ gälte wieder:
+      // Darum wird dort jedes „<“ zu „&lt;“.
+      if (imWort) {
+        const w = t.search(/\s/), wort = w < 0 ? t : t.slice(0, w);
+        t = wort.replace(/</g, "&lt;") + t.slice(wort.length);
+        imWort = w < 0;
+      }
+      if (!(i % 2 && linksEntschaerfen(t, domains) === t)) { text += maske(t); return; }
+      // Satzzeichen dahinter (linkKuerzen) gehören nicht zum Link: LINK_ZEICHEN geht auch über sie, sonst bliebe etwa „](“ stehen
+      const [url, rest] = linkKuerzen(t);
+      erlaubt.push([text.length, text.length + url.length]);
+      text += url + rest;
+      imWort = true;
+    });
+    zu = Math.max(zu, text.lastIndexOf(">"));
+    let k = 0; // erster erlaubter Link, der nicht vor der Stelle endet (die Treffer kommen der Reihe nach)
+    return text.replace(LINK_ZEICHEN, (z, schema, www, i) => {
+      while (k < erlaubt.length && erlaubt[k][1] <= i) k++;
+      if (z[0] === "\\" || (z === "<" && i > zu) || (k < erlaubt.length && i >= erlaubt[k][0])) return z;
+      return schema ? schema + "\\:" : www ? www + "\\." : "\\" + z;
+    });
+  };
+  // Formeln ($…$ und $$…$$, erkannt wie in Obsidian: nicht mit Leerzeichen innen am Rand, nicht vor einer Ziffer, „\$“ zählt
+  // nicht, ein „$“ in „[[…]]“ auch nicht) bleiben in einer Begleitnotiz stehen: Dort wirkt kein „\“ (er wäre sichtbar oder ein
+  // TeX-Befehl), und Obsidian macht in einer Formel aus keiner Adresse einen Link. Links und HTML-Merkmale machen dort nur
+  // MathJax-Befehle wie \href und \mmlToken (auch über \newcommand oder \let, die den Namen aber wörtlich brauchen); TEX_HTML
+  // fällt überall weg (ein Befehl endet vor einem Nicht-Buchstaben, also entsteht dabei kein neuer), wie schon in punktText. „`“
+  // wird vorher maskiert: Sonst wäre nach linkZeichen eine andere Stelle eine Formel als vorher. Der Text zwischen den Formeln
+  // geht durch f(text, zu) (linkZeichenEntwerten).
+  const FORMEL = /\\[!-/:-@[-`{-~]|\[\[[^[\]]*\]\]|\$\$[\s\S]*?\$\$|\$(?![\s$])(?:\\[\s\S]|[^\\$])*?(?:\\[\s\S]|[^\s\\$])\$(?!\d)/g;
+  const TEX_HTML = ["href", "mmlToken", "data", "class", "cssId", "style", "bbox", "require", "unicode"];
+  const ohneTexHtml = (s) => s.replace(/\\(?:[a-z]+|[\s\S]?)/gi, (m) => (TEX_HTML.includes(m.slice(1)) ? "" : m));
+  const formelnAussparen = (s, f) => {
+    const t = ohneTexHtml(String(s)).replace(/\\[!-/:-@[-`{-~]|`/g, (z) => (z === "`" ? "\\`" : z)), re = new RegExp(FORMEL.source, "g"), zu = t.lastIndexOf(">");
+    let aus = "", bis = 0, m;
+    while ((m = re.exec(t))) {
+      if (m[0][0] !== "$") continue;
+      aus += f(t.slice(bis, m.index), zu - bis) + m[0];
+      bis = re.lastIndex;
+    }
+    return aus + f(t.slice(bis), zu - bis);
+  };
+  // Viel zu Langes wird vorher gekürzt: Die Muster brauchen bei langen Eingaben mehr als lineare Zeit
+  const punktText = (v, max) => reinerText(linksEntschaerfen(ohneTexHtml(reinerText(String(v == null ? "" : v), Math.min(20000, max * 4 + 1000)))
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/&#?[a-z0-9]{1,10};/gi, " ").replace(/~{3,}/g, " ")
+    .replace(/\[\[|\]\]|`|<%|%>|<\/?[a-z!][^>]*>|obsidian:\/\/\S*|javascript:/gi, " "), PUNKT_DOMAINS).replace(/\](?=[(:[])/g, "] "), max);
   // Textfassung (Unterlagen/_Volltext/…, volltext.js) → reiner Text mit „[S. N]“ vor jeder Seite
   const volltextText = (roh) => {
     const aus = [];
@@ -271,7 +402,9 @@ module.exports = function (ctx) {
     };
     const inhalt = (a) => zeilen.slice(a.von, a.bis);
     const nurPlatzhalter = (a) => inhalt(a).every((z) => PLATZHALTER.test(z));
-    const fehlend = (a, neu) => neu.filter((z) => { const t = z.replace(/^- (?:\[ \] )?/, "").toLowerCase(); return !inhalt(a).some((x) => x.toLowerCase().indexOf(t) >= 0); });
+    // verglichen ohne die „\“ von linkZeichen, damit Zeilen einer früheren Fassung mitzählen
+    const klein = (s) => s.replace(/\\([!-/:-@[-`{-~])/g, "$1").toLowerCase();
+    const fehlend = (a, neu) => neu.filter((z) => { const t = klein(z.replace(/^- (?:\[ \] )?/, "")); return !inhalt(a).some((x) => klein(x).indexOf(t) >= 0); });
     let geaendert = false;
     const ersetzen = (a, neu) => { zeilen.splice(a.von, a.bis - a.von, ...neu, ""); geaendert = true; };
     const anhaengen = (a, neu) => {
@@ -296,9 +429,10 @@ module.exports = function (ctx) {
     };
     const tt = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}.`;
     const seiten = (p) => (p.seite ? ` → [[${pdfName}#page=${p.seite}|S. ${p.seite}${p.bis ? "–" + p.bis : ""}]]` : "");
-    const W = (bn.wichtigste || []).map((p) => `- ${p.begriff ? `**${p.begriff}:** ` : ""}${p.text}${seiten(p)}`);
-    const T = (bn.zu_tun || []).map((p) => `- [ ] ${p.text}${p.frist ? ` (bis ${tt(p.frist)})` : ""}${seiten(p)}`);
-    const F = (bn.fragen || []).map((p) => `- [ ] ${p.text}${seiten(p)}`);
+    const lz = (s) => formelnAussparen(s, (t, zu) => linkZeichenEntwerten(t, PUNKT_DOMAINS, undefined, zu));
+    const W = (bn.wichtigste || []).map((p) => `- ${p.begriff ? `**${lz(p.begriff)}:** ` : ""}${lz(p.text)}${seiten(p)}`);
+    const T = (bn.zu_tun || []).map((p) => `- [ ] ${lz(p.text)}${p.frist ? ` (bis ${tt(p.frist)})` : ""}${seiten(p)}`);
+    const F = (bn.fragen || []).map((p) => `- [ ] ${lz(p.text)}${seiten(p)}`);
     const regeln = [["Das Wichtigste", W, [], ["Zu tun", "Offene Fragen"], "nur-leer"], ["Zu tun", T, ["Das Wichtigste"], ["Offene Fragen"], "ergaenzen"],
       ["Offene Fragen", F, ["Das Wichtigste", "Zu tun"], [], "ergaenzen"]];
     const Fa = ctx.user && ctx.user.fassung;
@@ -350,12 +484,23 @@ module.exports = function (ctx) {
   // To-dos, die nach Zugangsdaten aussehen, gehen nie an den Server (dieselbe Regel prüft server/dienst.mjs noch einmal)
   const GEHEIM = /passw|kennw|password|\bpw\b|zugangscode|\bpin\b/i;
   const hash32 = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
-  // Steuer- und unsichtbare Richtungszeichen → Leerzeichen; dann Leerraum zusammenfassen, kürzen
-  const unsichtbar = (c) => c < 32 || c === 127 || (c >= 0x200b && c <= 0x200f) || (c >= 0x202a && c <= 0x202e) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff;
+  // Steuer- und unsichtbare Richtungszeichen → Leerzeichen; Zeichen, die nur unsichtbar Text tragen können (weiches Trennzeichen,
+  // Variantenwähler, Hangul-Füller), fallen ganz weg; dann Leerraum zusammenfassen, kürzen (wie STEUER und WEG in zentral.js)
+  const unsichtbar = (c) => c < 32 || c === 127 || c === 0x61c || c === 0x180e || (c >= 0x200b && c <= 0x200f) || c === 0x2028 || c === 0x2029 ||
+    (c >= 0x202a && c <= 0x202e) || (c >= 0x2060 && c <= 0x2064) || (c >= 0x2066 && c <= 0x2069) || c === 0xfeff || (c >= 0xfff9 && c <= 0xfffb);
+  const versteckt = (c) => c === 0xad || c === 0x34f || c === 0x115f || c === 0x1160 || c === 0x17b4 || c === 0x17b5 || (c >= 0x180b && c <= 0x180d) ||
+    c === 0x180f || c === 0x3164 || (c >= 0xfe00 && c <= 0xfe0f) || c === 0xffa0;
+  // Unicode-Tags (U+E0000–E007F) und Variantenwähler U+E0100–E01EF: unsichtbar, tragen versteckten Text; als Ersatzpaar 0xDB40 + …
+  const tagZeichen = (v, i) => v.charCodeAt(i) === 0xdb40 && ((v.charCodeAt(i + 1) >= 0xdc00 && v.charCodeAt(i + 1) <= 0xdc7f) ||
+    (v.charCodeAt(i + 1) >= 0xdd00 && v.charCodeAt(i + 1) <= 0xddef));
   const reinerText = (v, max) => {
     if (typeof v !== "string") return "";
     let s = "";
-    for (let i = 0; i < v.length; i++) s += unsichtbar(v.charCodeAt(i)) ? " " : v.charAt(i);
+    for (let i = 0; i < v.length; i++) {
+      if (tagZeichen(v, i)) { i++; continue; }
+      const c = v.charCodeAt(i);
+      if (!versteckt(c)) s += unsichtbar(c) ? " " : v.charAt(i);
+    }
     return s.replace(/\s+/g, " ").trim().slice(0, max);
   };
 

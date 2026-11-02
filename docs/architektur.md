@@ -16,7 +16,8 @@ passende Datei; ein neues Thema bekommt eine eigene Datei und eine Zeile in dies
 | [aktionen.md](architektur/aktionen.md) | Aktionen, Knöpfe, Befehle, Ordner-Automatik, Linkformat |
 | [modell.md](architektur/modell.md) | `ctx.modell`: Semester, Wochen, Prüfungen, Fristen, Statusfarben, Datumstexte |
 | [zentrale-daten.md](architektur/zentrale-daten.md) | Datenkanal (`zentral.js`), zentraler Stundenplan, Grabsteine |
-| [update.md](architektur/update.md) | Update, Dateiklassen, Reparatur (`update.js`) |
+| [update.md](architektur/update.md) | Update, Signatur der Liste, Dateiklassen, Reparatur (`update.js`) |
+| [skripte-pruefen.md](architektur/skripte-pruefen.md) | Prüfung der Skripte vor dem Laden: signierte Liste, Signatur aus dem Release, Testversionen, Entwicklermodus, Reparieren (`main.js`) |
 | [quellen.md](architektur/quellen.md) | Quellen-Vertrag, Abrufer-Sperre, Quellen außerhalb des Plugins |
 | [server.md](architektur/server.md) | Eigener Server (`server.js`) |
 | [claude.md](architektur/claude.md) | Claude ohne Server (`claude.js`), Claude im Tresor (`.claude/`) |
@@ -43,12 +44,13 @@ Studium Autopilot/                       (Tresor)
 └─ System/Gerüste/*.md                   Text-Gerüste ohne Code (z. B. Modul.md für die Aktion „modul“)
 ```
 
-Der Kern ist bewusst schlank. Er lädt beim Start (`onLayoutReady`) alle Skripte aus `System/Skripte/` per `eval`, startet die
-Erweiterungen und stellt drei Dinge bereit:
+Der Kern ist bewusst schlank. Er lädt beim Start (`onLayoutReady`) die Skripte aus `System/Skripte/` per `eval`, nur die, die
+die Prüfung bestehen (unten), startet die Erweiterungen und stellt drei Dinge bereit:
 
 1. **Kontextobjekt `ctx`** für alle Skripte (ersetzt Templaters `tp`).
 2. **Aktionen**: Knöpfe, Befehle und die Ordner-Automatik für neue Notizen.
-3. **Hot-Reload**: Wird eine Skriptdatei geändert oder per Sync geliefert, lädt der Kern sie nach 1,5 s neu. Vorher meldet er
+3. **Hot-Reload**: Wird eine Skriptdatei geändert oder per Sync geliefert, lädt der Kern sie nach 1,5 s neu, nach derselben
+   Prüfung wie beim Start (eine geänderte Fassung ohne passende Liste wartet, die alte läuft weiter). Vorher meldet er
    die alte Fassung vollständig ab (siehe „Aufräumen je Skript“). Gelöschte oder umbenannte Skriptdateien werden ebenso
    abgemeldet. Der Hinweis „Aktualisiert: …“ kommt 3 s nach dem letzten Skript und nur, wenn es genau eines war; mehrere auf
    einmal (ein Update über den Sync) bleiben still, eine Minute lang auch Nachzügler (`hinweisSammeln`, `plugin.stillBis`).
@@ -56,20 +58,26 @@ Erweiterungen und stellt drei Dinge bereit:
 Fehler einer Erweiterung oder Aktion stoppen nie den Rest. Sie erscheinen als kurzer Hinweis ohne Fehlertext (Notice) und mit
 allen Einzelheiten in der Konsole.
 
-**Warum `eval` und warum das sicher ist.** Obsidian lädt in einem Community-Plugin nur `main.js`; ein `require` von Dateien
+**Warum `eval`, und was davor schützt.** Obsidian lädt in einem Community-Plugin nur `main.js`; ein `require` von Dateien
 im Tresor gibt es auf iPhone und iPad nicht. Ohne Build-Schritt bleibt nur, den Text der Skripte selbst auszuführen. So
-lassen sich Skripte im Tresor lesen, ändern und per Hot-Reload testen. Neue Angriffsfläche entsteht dadurch nicht:
+lassen sich Skripte im Tresor lesen, ändern und per Hot-Reload testen. Damit wäre aber jede Datei, die in `System/Skripte/`
+landet, Programmcode mit allen Rechten von Obsidian, und in den Tresor schreiben viele: der Sync von anderen Geräten, andere
+Plugins, Programme mit Zugriff auf den Ordner. Darum gilt seit 01.11.2026:
 
-- Ausgeführt werden nur Dateien aus `System/Skripte/` im eigenen Tresor. Wer dort schreiben kann, kann auch `main.js`
-  ändern; das Vertrauen gilt ohnehin dem Tresor („Dem Ersteller vertrauen und Erweiterungen aktivieren“).
+- Ausgeführt wird ein Skript aus `System/Skripte/` nur, wenn seine SHA-256 in der signierten Liste der installierten Version
+  steht (`System/Daten/system-dateien.json` mit `system-dateien.json.sig`, signiert beim Release), du es auf diesem Gerät
+  ausdrücklich erlaubt hast oder der Entwicklermodus an ist; beim Start und bei jedem Hot-Reload. Ein geändertes oder
+  unbekanntes Skript wird nie ausgewertet ([„Prüfung der Skripte“](architektur/skripte-pruefen.md)).
 - Was das Plugin von selbst lädt, sind nur Daten. Zentrale Daten werden geprüft und als reiner Text übernommen, nie
   ausgeführt (siehe [„Zentrale Daten“](architektur/zentrale-daten.md)). Kursdateien aus ILIAS werden nur abgelegt.
 - Neuer Code kommt nur über **Neue Version installieren** und nur nach einem Tipp: Die Update-Liste ist über ihre SHA-256 im Manifest
   der zentralen Daten festgelegt, jede Datei über ihre SHA-256 in der Update-Liste, geladen vom unveränderlichen Tag
-  `v<version>` dieses Repos (siehe [„Update“](architektur/update.md)). Tags und Releases sind auf GitHub gegen Ändern und Löschen gesperrt.
+  `v<version>` dieses Repos (siehe [„Update“](architektur/update.md)), und die Liste gilt nur mit gültiger Signatur. Tags und
+  Releases sind auf GitHub gegen Ändern und Löschen gesperrt.
 
-Es gibt keine Gerätschalter. Nach „Dem Ersteller vertrauen und Erweiterungen aktivieren“ läuft alles auf Windows, Mac,
-iPhone, iPad und Android.
+Für Studierende gibt es nichts einzuschalten: Nach „Dem Ersteller vertrauen und Erweiterungen aktivieren“ läuft alles auf
+Windows, Mac, iPhone, iPad und Android. Nur wer die App weiterentwickelt, schaltet in seinem Tresor auf seinem Gerät den
+Entwicklermodus ein ([CONTRIBUTING.md](../CONTRIBUTING.md)).
 
 ## Kontextobjekt `ctx`
 
@@ -91,6 +99,8 @@ iPhone, iPad und Android.
 | `ctx.neuZeichnen(pfade?)` | offene Notizen neu zeichnen |
 | `ctx.hinweis(text, { aktion, dauer })` | Hinweis (Notice), der eine Weg für alle Skripte (`hinweis.js`, seit 0.4.6): ein Satz ohne Vorsatz und Pfad, `aktion` = nächster Schritt als Knopf (`{ text, aktion, parameter }` oder `{ text, ausfuehren }`), `dauer: 0` für Fortschritt; gibt die Notice zurück. Regeln: `docs/design.md`, „Sprache“ |
 | `ctx.CURSOR` | Platzhalterzeichen für die Cursorposition in erzeugtem Text |
+| `ctx.signatur` | Prüfer des Kerns für SSH-Signaturen (seit 01.11.2026): `pruefen(sig, daten, o)` → `{ ok, schluessel }` oder `{ ok: false, art, fehler }`, `pruefbar(subtle)`, `SCHLUESSEL`, `NAMENSRAUM`; damit prüft `update.js` die Update-Liste ([„Update“](architektur/update.md)) |
+| `ctx.skripte` | `listen()` → die signierten Listen, die dieses Gerät gerade gelten lässt, `[{ version, liste (SHA-256) }]`, neueste zuerst, nur lesen; `beta(an)`: Listen von Testversionen auf diesem Gerät gelten lassen, nur für den Schalter **Beta-Versionen** in `update.js`; `betaAn()`: ob er auf diesem Gerät an ist ([„Prüfung der Skripte“](architektur/skripte-pruefen.md)) |
 
 Jede Erweiterung bekommt ihren **eigenen Kontext**: alles aus `ctx` plus die Helfer unten, die sich merken, was dieses Skript
 angemeldet hat. Zuweisungen wie `ctx.modell = api` landen trotzdem im gemeinsamen `ctx` (für alle Skripte sichtbar); eine
@@ -130,11 +140,13 @@ der Block seinen Text. Achtung: Eine Notiz in der Leseansicht hat zusätzlich ei
 Beim Abmelden eines Skripts entfernt der Kern seine Befehle; zusätzlich blendet `checkCallback` einen Befehl aus, dessen Aktion
 fehlt.
 
-Je Aktionsaufruf bekommt die Aktion eine Ableitung `c` (`Object.create(<Kontext des Skripts>)`) mit drei zusätzlichen Feldern:
+Je Aktionsaufruf bekommt die Aktion eine Ableitung `c` (`Object.create(<Kontext des Skripts>)`) mit vier zusätzlichen Feldern:
 
 - `c.parameter`: Werte aus dem Knopf, als Strings.
 - `c.datei`: die leere Notiz, die befüllt werden soll (nur bei der Ordner-Automatik), sonst `null`.
 - `c.quelle`: die Notiz, in der der Knopf steht.
+- `c.extern`: `true` nur, wenn der Link von außerhalb der App kam (Browser, andere App), sonst `false` (seit 01.11.2026, siehe
+  [„Aktionen“](architektur/aktionen.md)).
 
 ## Skripttypen
 
@@ -169,7 +181,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `verbindungen.js` | Verbindungen und Schloss: Codeblöcke `eba-schloss`, `eba-verbindungen`; Aktionen `verbinden`, `verbindung-aktualisieren`, `trennen` |
 | `einrichtung.js` | Einrichtung beim ersten Start (seit 0.3.0, `ctx.einrichtung`): Fenster mit acht Bildschirmen (seit 25.10.2026 mit den Angeboten der Uni; von 0.4.8 an sieben, vorher acht), Zustand in den Einstellungen, Aktion `einrichtung`; siehe [„Einrichtung“](architektur/einrichtung.md) |
 | `darstellung.js` | Hell, dunkel oder automatisch (seit 17.10.2026) und Design (seit 18.10.2026, intern `elfenbein`, `flieder`, `klar`), je Gerät (`ctx.darstellung`): Umschalter und Design-Kacheln `eba-darstellung`, Aktionen `darstellung` und `design`; siehe [„Darstellung“](architektur/darstellung.md) |
-| `personalisieren.js` | Formular (Aktion `personalisieren`, Parameter `feld` setzt den Cursor), Zeilen „Deine Angaben“, „Variante“, „Obsidian“ und „Hilfe“ (`eba-personalisieren angaben`, `variante`, `obsidian` bzw. `hilfe`, gleiche Zeilenliste wie die Verbindungen; Inhalt aus `angabenZeilen`, `varianteZeilen`, `obsidianZeilen`, `hilfeZeilen`); die Karte auf dem Dashboard entfällt seit 0.3.0 |
+| `personalisieren.js` | Formular (Aktion `personalisieren`, Parameter `feld` setzt den Cursor), Zeilen „Deine Angaben“ (mit der Variante), „Obsidian“ und „Hilfe“ (`eba-personalisieren angaben`, `obsidian` bzw. `hilfe`, gleiche Zeilenliste wie die Verbindungen; Inhalt aus `angabenZeilen`, `obsidianZeilen`, `hilfeZeilen`; `variante` zeichnet seit 02.11.2026 nichts); die Karte auf dem Dashboard entfällt seit 0.3.0 |
 | `musterplan.js` | Musterstudienpläne als eigene Darstellung, Codeblock `eba-musterplan` |
 | `zentral.js` | Datenkanal „Zentrale Daten“: Abruf, Prüfung, Übernahme als Termin-Notizen, Semesterdaten, Abrufer-Sperre (`ctx.zentral`), Aktionen `zentral-aktualisieren`, `zentral-schalter` |
 | `update.js` | Update der Vorlage mit einem Knopf (seit 0.2.0, `ctx.update`): Zeile „Updates“ (bis 24.10.2026 „Studium Autopilot“) in `eba-verbindungen`, Hinweis `eba-update-hinweis` auf dem Dashboard (seit 0.3.1), Aktionen `vorlage-aktualisieren`, `vorlage-neu-laden`; siehe [„Update“](architektur/update.md) |
@@ -269,7 +281,9 @@ Regeln für Skript-Autoren:
 - iOS-sicher bleiben: keine Node-APIs, kein Regex-Lookbehind, kein `.at()`, `findLast` oder `structuredClone`.
 - Neue Notizen mit `eba.ablegen(ordner, name, inhalt)` anlegen. `eba.CURSOR` im Inhalt markiert die Cursorposition. Den Namen
   macht `eba.dateiTitel` (eine Regel für alle Notizen, auch die zentralen Termine): ohne Emojis, „: “ → „ – “, keine
-  Zeichen, die Windows, iOS oder Links stören, keine Punkte am Ende.
+  Zeichen, die Windows, iOS oder Links stören, keine unsichtbaren Steuer- und Richtungszeichen, keine Punkte am Anfang oder
+  Ende, ein von Windows reservierter Gerätename („CON“, „aux.pdf“) mit „-“ dahinter. Einen Titel ohne solche Zeichen macht sie
+  zu genau dem Namen wie bisher (`tests/dateititel.test.js`): Skripte finden vorhandene Notizen über diesen Namen.
 - Alles, was über das Zeichnen hinaus bleibt, **nur über die Helfer** anmelden: `ctx.an`, `ctx.dom`, `ctx.intervall`, `ctx.zeit`,
   `ctx.entprellen`, `ctx.codeblock`, `ctx.postprozessor`, `ctx.editor`, `ctx.aufraeumen`. Nie direkt
   `plugin.register…`, `app.workspace.on`, `setInterval` oder `document.addEventListener`; dann bleibt nach einem Hot-Reload

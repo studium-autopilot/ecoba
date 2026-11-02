@@ -5,8 +5,8 @@
 //   (ablauf, erneuert); beim Verbinden mit einem eingegebenen Link nie.
 // Aufruf: ctx.user.alma(ctx).aktualisieren({ still }) bzw. .verbinden() (Link abfragen + importieren); seit 0.4.5 auch von selbst
 // (registrieren: Zeitplan quellen.planen, stündlich, nach Fehlern früher, zurück in der App nach über einer Stunde).
-// Der Abo-Link ist geheim (wer ihn hat, sieht den Stundenplan). Er liegt NUR im gerätelokalen Speicher
-// von Obsidian (app.saveLocalStorage), nie im Vault und wird deshalb auch nicht synchronisiert.
+// Der Abo-Link ist geheim (wer ihn hat, sieht den Stundenplan). Er liegt NUR im Schlüsselbund von Obsidian auf diesem Gerät
+// (app.secretStorage, seit 01.11.2026; vorher im gerätelokalen Speicher), nie im Vault und wird deshalb nicht synchronisiert.
 // Nur Obsidian-API (requestUrl, vault, fileManager): läuft auf Windows, macOS, iPad und iPhone.
 // Kommt der Stundenplan von außen (eba.quelleExtern „stundenplan“), holt und schreibt Alma nie, egal über welchen Weg
 // (Befehl, Knopf, Verbindungen, Zeitplan): nie zwei Schreiber je Quelle. Gefragt bei jedem Lauf.
@@ -58,7 +58,7 @@ module.exports = function (ctx) {
   };
 
   // ---------- Einstellungen ----------
-  const SPEICHER = "eba-alma-ics";        // Schlüssel im gerätelokalen Speicher
+  const SPEICHER = "eba-alma-ics";        // Link bis 01.11.2026 im gerätelokalen Speicher (jetzt im Schlüsselbund, siehe Abo-Link)
   const STAND = "eba-alma-stand";         // letzter erfolgreicher Abruf (gerätelokal)
   const SEIT = "eba-alma-seit";           // verbunden seit (gerätelokal)
   const ORDNER = "Stundenplan";
@@ -67,7 +67,40 @@ module.exports = function (ctx) {
   const TAGE_LANG = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
 
   // ---------- Abo-Link ----------
-  const link = () => app.loadLocalStorage(SPEICHER) || "";
+  // Im Schlüsselbund von Obsidian (app.secretStorage, seit 01.11.2026; wie das ILIAS-Passwort in ilias.js): gerätelokal,
+  // verschlüsselt, nie synchronisiert, ein Eintrag je Tresor (GEHEIM_PRAEFIX + Kennung des Tresors), weil iOS den Schlüsselbund
+  // zwischen Tresoren teilt. Bis dahin lag er im gerätelokalen Speicher unter SPEICHER: Das erste Lesen zieht ihn einmal um und
+  // löscht ihn dort, sobald der Schlüsselbund ihn hat. Ohne Schlüsselbund (Hülle eines eigenen Uni-Abgleichs) bleibt es beim
+  // gerätelokalen Speicher.
+  const GEHEIM_PRAEFIX = "studium-autopilot-alma-";
+  const hash32 = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  const geheimId = () => GEHEIM_PRAEFIX + hash32(String((app && app.appId) || (app && app.vault && app.vault.getName && app.vault.getName()) || "tresor"));
+  const schluesselbund = () => { const s = app && app.secretStorage; return s && typeof s.getSecret === "function" && typeof s.setSecret === "function" ? s : null; };
+  const geheimLesen = (s) => { try { return String(s.getSecret(geheimId()) || ""); } catch (e) { return ""; } };
+  // Alter Link aus dem gerätelokalen Speicher: in den Schlüsselbund (hat er schon einen, gilt seiner), dann dort löschen
+  const umziehen = (s, alt, schon) => {
+    const fertig = () => { if (geheimLesen(s)) app.saveLocalStorage(SPEICHER, null); };
+    try {
+      const r = schon ? null : s.setSecret(geheimId(), alt);
+      if (r && typeof r.then === "function") r.then(fertig, () => {}); else fertig();
+    } catch (e) { /* bleibt im gerätelokalen Speicher, nächstes Lesen versucht es wieder */ }
+  };
+  const link = () => {
+    const s = schluesselbund(), alt = app.loadLocalStorage(SPEICHER) || "";
+    if (!s) return alt;
+    const w = geheimLesen(s);
+    if (alt) umziehen(s, alt, w);
+    return w || alt;
+  };
+  // Link speichern ("" = löschen); wirft, wenn der Schlüsselbund ihn nicht nimmt
+  const linkSchreiben = async (w) => {
+    const s = schluesselbund();
+    if (!s) { app.saveLocalStorage(SPEICHER, w || null); return; }
+    if (w) await s.setSecret(geheimId(), w);
+    else if (typeof s.deleteSecret === "function") await s.deleteSecret(geheimId());
+    else await s.setSecret(geheimId(), "");
+    app.saveLocalStorage(SPEICHER, null);
+  };
   const hatLink = () => !!link();
   // vorgabe: Link direkt übergeben (z. B. aus einer Verbinden-Karte), sonst Eingabefenster
   // Link prüfen: "" = in Ordnung, sonst ein Satz, was nicht stimmt (für das Verbinden-Fenster).
@@ -92,7 +125,7 @@ module.exports = function (ctx) {
     // webcal:// ist dieselbe Adresse; aktualisieren() schreibt sie beim Abruf auf https:// um
     const fehler = linkPruefen(neu);
     if (fehler) { hinweis(fehler); return false; }
-    app.saveLocalStorage(SPEICHER, neu);
+    try { await linkSchreiben(neu); } catch (e) { hinweis("Der Alma-Link ließ sich auf diesem Gerät nicht speichern."); return false; }
     if (!still) hinweis("Alma-Link auf diesem Gerät gespeichert.");
     return true;
   };
@@ -230,6 +263,10 @@ module.exports = function (ctx) {
   // Titel, die die alte Kürzung kaputt gemacht hat („Einführung in · Veranstaltung“): Teil vor „ · “ endet auf ein Füllwort
   const titelKaputt = (t) => { const v = String(t || "").split(" · ")[0].trim().split(" "); return v.length > 1 && FUELL.test(v[v.length - 1]); };
   const sauber = (s) => String(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim();
+  // Text aus Alma (Titel, Raum) im Text einer Notiz und in „Bitte prüfen“: eine Zeile, „\“ vor Markdown-Zeichen (mdText wie in
+  // zentral.js, dazu „&“; nie am Zeilenanfang, darum ohne Listen-Regel). So wird er nie ein Bild, Kasten oder Link in die
+  // App oder auf Dateien (eine Webadresse darin bleibt anklickbar); ein gewöhnlicher Titel oder Raum bleibt, wie er ist.
+  const mdText = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").replace(/[\\`*_\[\]<>#|!$%~=^{}&]/g, "\\$&");
 
   // Raum einer Serie (seit 20.10.2026; bis dahin der häufigste Raum aller Termine): Läufe gleicher Räume nach Datum (raumNorm,
   // Termine ohne Raum zählen nicht). Raum der Serie ist der Raum des letzten Laufs mit mindestens zwei Terminen, also der Raum,
@@ -497,7 +534,9 @@ module.exports = function (ctx) {
     const U = h.linkFehler && !optionen.erneuert && optionen.text == null ? uni() : null;
     let neu = "";
     if (U) { try { neu = await U.erneuern("alma", link()); } catch (e) { neu = ""; } }
-    if (neu) { app.saveLocalStorage(SPEICHER, neu); return ablauf(Object.assign({}, optionen, { erneuert: true })); }
+    let gespeichert = false;
+    if (neu) { try { await linkSchreiben(neu); gespeichert = true; } catch (e) { gespeichert = false; } }
+    if (gespeichert) return ablauf(Object.assign({}, optionen, { erneuert: true }));
     if (h.fehler) {
       letzterFehler = h.fehler;
       nachLauf({ ok: false, fehler: letzterFehler });
@@ -619,7 +658,7 @@ module.exports = function (ctx) {
         : kuerzen(g.titel.replace(code, "").replace(/^[\s\-–:·]+/, ""));
       // Dateiname und Kopfzeile („Montags, 10:00–12:00 · Raum“, einzeln „Montag, 12.10.2026, …“) aus Tag und Zeit
       const nameVon = (einzeln, von, wt, beginn) => sauber(einzeln ? `${von} ${code || kurz} ${art}` : `${TAGE[wt - 1]} ${String(beginn).replace(":", ".")} ${code || kurz} ${art}`);
-      const kopfzeile = (einzeln, von, wt, beginn, ende, raum) => `${TAGE_LANG[wt - 1]}${einzeln ? ", " + deutsch(von) : "s"}, ${beginn}–${ende}${raum ? " · " + raum : ""}`;
+      const kopfzeile = (einzeln, von, wt, beginn, ende, raum) => `${TAGE_LANG[wt - 1]}${einzeln ? ", " + deutsch(von) : "s"}, ${beginn}–${ende}${raum ? " · " + mdText(raum) : ""}`;
       // Änderungen als „Datum|Beginn|Ende|Raum“ (findetStatt); ct: die Notiz ist c.t., dann beginnt auch eine Änderung zur vollen
       // Stunde 15 Minuten später und endet 15 Minuten früher (wie die Serie). null = Feld fällt weg (leer, nicht 14-täglich …).
       const aenderungenText = (ct) => {
@@ -695,7 +734,12 @@ module.exports = function (ctx) {
               return kopf.split("\n").map((z) => (KOPFZEILE.test(z) ? zeile : z)).join("\n") + (i < 0 ? "" : t.slice(i));
             });
           } else if (neu.raum && raumAlt && neu.raum !== raumAlt) {
-            await textAendern(treffer.f, (t) => t.split("\n").map((z) => (TAGE_LANG.some((w) => z.indexOf(w) === 0) && z.indexOf(`· ${raumAlt}`) >= 0 ? z.replace(`· ${raumAlt}`, `· ${neu.raum}`) : z)).join("\n"));
+            // der alte Raum steht entschärft (seit 01.11.2026) oder roh (ältere Notizen) in der Zeile; der neue immer entschärft
+            const alt = [`· ${mdText(raumAlt)}`, `· ${raumAlt}`], neuTeil = `· ${mdText(neu.raum)}`;
+            await textAendern(treffer.f, (t) => t.split("\n").map((z) => {
+              const a = TAGE_LANG.some((w) => z.indexOf(w) === 0) ? alt.find((x) => z.indexOf(x) >= 0) : null;
+              return a ? z.replace(a, () => neuTeil) : z;
+            }).join("\n"));
           }
           if (warEntfallen) await textAendern(treffer.f, (t) => t.replace(/^(# .*?) \(entfällt\)$/m, "$1"));
           // Name („Mo 10.00 B110 Vorlesung“) nur, solange die Notiz noch so heißt; Links ziehen mit (umbenennen)
@@ -722,8 +766,8 @@ module.exports = function (ctx) {
       const kopf = Object.entries(yaml).filter(([, v]) => v != null).map(([k, v]) => Array.isArray(v)
         ? (v.length ? `${k}:\n${v.map((x) => `  - ${x}`).join("\n")}` : `${k}: []`)
         : `${k}: ${typeof v === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v) ? JSON.stringify(v) : v}`).join("\n");
-      const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${code || kurz} · ${art}\n\n${kopfzeile(g.einzeln, g.von, g.wt, g.beginn, g.ende, g.raum)}\n\n`
-        + `> [!info] Aus Alma (${g.titel}). Änderungen in Alma kommen von selbst.\n\n## Meine Notizen\n- \n`;
+      const inhalt = `---\n${kopf}\ntags:\n  - stundenplan\ncssclasses:\n  - eba-s-notizen\n---\n\n# ${mdText(code || kurz)} · ${art}\n\n${kopfzeile(g.einzeln, g.von, g.wt, g.beginn, g.ende, g.raum)}\n\n`
+        + `> [!info] Aus Alma (${mdText(g.titel)}). Änderungen in Alma kommen von selbst.\n\n## Meine Notizen\n- \n`;
       await app.vault.create(`${ordner}/${name}.md`, inhalt);
       if (angewendet) neuAngewendet[g.schluessel] = h;
       bericht.neu++;
@@ -778,13 +822,18 @@ module.exports = function (ctx) {
     if (!(await linkSetzen(vorgabe, true))) return null;
     // erneuert: beim Verbinden keinen anderen Link holen (der eingegebene soll gelten)
     const bericht = await aktualisieren({ still: !!optionen.nurBeiErfolg, erneuert: true });
-    if (!bericht) { app.saveLocalStorage(SPEICHER, vorher || null); app.saveLocalStorage(SEIT, vorherSeit); if (!vorher) app.saveLocalStorage(STATUS, null); return null; }
+    if (!bericht) {
+      try { await linkSchreiben(vorher); } catch (e) { /* bleibt der eingegebene; der nächste Abruf meldet ihn wieder */ }
+      app.saveLocalStorage(SEIT, vorherSeit); if (!vorher) app.saveLocalStorage(STATUS, null);
+      return null;
+    }
     if (bericht && (!vorher || vorher !== link() || !vorherSeit)) app.saveLocalStorage(SEIT, new Date().toISOString());
     return bericht;
   };
   // Link auf diesem Gerät löschen (die Stundenplan-Notizen bleiben); die Sperre wird frei, ein anderes Gerät mit Link übernimmt
   const trennen = () => {
     app.saveLocalStorage(SPEICHER, null); app.saveLocalStorage(STAND, null); app.saveLocalStorage(SEIT, null); app.saveLocalStorage(STATUS, null);
+    linkSchreiben("").catch(() => {});
     if (mitSperre()) sperre().freigeben().catch(() => {});
   };
   const fehler = () => letzterFehler || lstatus().fehler;
@@ -806,7 +855,7 @@ module.exports = function (ctx) {
     const t = heute(), ab = plus(t, -14);
     return app.vault.getMarkdownFiles().filter((f) => f.path.startsWith(ORDNER + "/")).map((f) => ({ f, fm: app.metadataCache.getFileCache(f)?.frontmatter || {} }))
       .filter((x) => x.fm.alma_fehlt && String(x.fm.alma_fehlt) >= ab && !(x.fm.bis && String(x.fm.bis) < t) && !fremd(x.fm))
-      .map((x) => ({ text: `**Stundenplan** · ${String(x.fm.titel || x.f.basename)} steht nicht mehr in Alma. Fällt sie aus, lösch die Notiz.`, pfad: x.f.path }));
+      .map((x) => ({ text: `**Stundenplan** · ${mdText(x.fm.titel || x.f.basename)} steht nicht mehr in Alma. Fällt sie aus, lösch die Notiz.`, pfad: x.f.path }));
   };
 
   // Zeitplan (quellen.js planen): erster Abruf 30 s + Zufall bis 2 Min. nach dem Einlesen, dann stündlich; nach einem Fehler nach
@@ -828,6 +877,6 @@ module.exports = function (ctx) {
       } });
   };
 
-  return { registrieren, aktualisieren, linkSetzen, linkPruefen, hatLink, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler, hinweise, raumNorm,
+  return { registrieren, aktualisieren, linkSetzen, linkPruefen, hatLink, geheimId, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler, hinweise, raumNorm,
     zeit, bytesLesen, klartext };
 };

@@ -1,7 +1,9 @@
 """Tests für abrufen.py (ohne Netz: IMAP ist eine Attrappe). Start: python -m unittest discover -s server -p "test_*.py"."""
 import imaplib
 import json
+import os
 import shutil
+import ssl
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -27,10 +29,13 @@ def imap_attrappe(mails, anmeldung_ok=True, gueltigkeit=b"777"):
     class Imap:
         verbindungen = 0
         suchen = []
+        kontext = None
 
-        def __init__(self, host, port, timeout=None):
+        # ssl_context ohne Vorgabe: ein Aufruf ohne geprüften Kontext scheitert hier, statt still durchzugehen
+        def __init__(self, host, port, *, ssl_context, timeout=None):
             assert host == abrufen.IMAP_HOST and port == 993
             Imap.verbindungen += 1
+            Imap.kontext = ssl_context
 
         def login(self, benutzer, kennwort):
             if not anmeldung_ok:
@@ -69,8 +74,12 @@ class Grundlage(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.daten = Path(self.tmp.name)
         abrufen.DATEN = self.daten
-        self.roh = self.daten / "roh"
-        self.roh.mkdir()
+        # eigener Ordner des Abrufs; Takt und Knopf liegen beim Web-Dienst
+        self.abruf = self.daten / "abruf"
+        self.web = self.daten / "web"
+        self.web.mkdir()
+        self.roh = self.abruf / "roh"
+        self.roh.mkdir(parents=True)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -95,6 +104,25 @@ class UniPostfach(Grundlage):
         mails[12] = mail("Neu", "Text")
         self.assertEqual(abrufen.uni_postfach(stand, self.roh, self.ZUGANG, imap), "Uni-Postfach: 1 neue Mail(s)")
 
+    def test_tls_mit_pruefung_von_zertifikat_und_hostname(self):
+        imap = imap_attrappe({1: mail("A", "a")})
+        abrufen.uni_postfach({}, self.roh, self.ZUGANG, imap)
+        k = imap.kontext
+        self.assertIsInstance(k, ssl.SSLContext)
+        self.assertEqual(k.verify_mode, ssl.CERT_REQUIRED, "Zertifikat muss gültig sein")
+        self.assertTrue(k.check_hostname, "Zertifikat muss zum Namen des Servers passen")
+        self.assertGreaterEqual(k.minimum_version, ssl.TLSVersion.TLSv1_2)
+
+    def test_zertifikat_abgelehnt_kein_passwort(self):
+        class Abgelehnt:
+            def __init__(self, host, port, *, ssl_context, timeout=None):
+                raise ssl.SSLCertVerificationError("certificate verify failed")
+
+            def login(self, benutzer, kennwort):
+                raise AssertionError("Passwort ginge an einen fremden Server")
+        self.assertEqual(abrufen.uni_postfach({}, self.roh, self.ZUGANG, Abgelehnt), "Uni-Postfach: nicht erreichbar (SSLCertVerificationError)")
+        self.assertFalse((self.abruf / "uni-zugang-falsch").exists(), "kein abgelehnter Zugang")
+
     def test_neue_uidvalidity_beginnt_neu(self):
         stand = {"uni_postfach": {"uidvalidity": "111", "letzte_uid": 50}}
         imap = imap_attrappe({3: mail("A", "a")})
@@ -111,10 +139,43 @@ class UniPostfach(Grundlage):
     def test_abgelehnte_anmeldung_sperrt_weitere_versuche(self):
         imap = imap_attrappe({1: mail("A", "a")}, anmeldung_ok=False)
         self.assertIn("abgelehnt", abrufen.uni_postfach({}, self.roh, self.ZUGANG, imap))
-        self.assertTrue((self.daten / "uni-zugang-falsch").exists())
+        self.assertTrue((self.abruf / "uni-zugang-falsch").exists())
         vorher = imap.verbindungen
         self.assertIn("übersprungen", abrufen.uni_postfach({}, self.roh, self.ZUGANG, imap))
         self.assertEqual(imap.verbindungen, vorher, "keine neue Verbindung")
+
+
+def link_moeglich(ordner):
+    """Links auf Dateien (unter Windows nur mit Adminrechten)."""
+    try:
+        os.symlink(ordner / "fehlt", ordner / "probe")
+    except OSError:
+        return False
+    (ordner / "probe").unlink()
+    return True
+
+
+class FremdeDateien(Grundlage):
+    def test_nur_echte_dateien_mit_grenze(self):
+        (self.web / "takt.json").write_text(json.dumps({"uni_postfach": 60}))
+        self.assertEqual(abrufen.fremd_lesen(self.web / "takt.json", {}), {"uni_postfach": 60})
+        self.assertEqual(abrufen.takt_minuten(), 60)
+        self.assertEqual(abrufen.fremd_lesen(self.web / "takt.json", "ersatz", hoechstens=5), "ersatz", "zu groß")
+        (self.web / "ordner.json").mkdir()
+        self.assertEqual(abrufen.fremd_lesen(self.web / "ordner.json", "ersatz"), "ersatz")
+        self.assertEqual(abrufen.fremd_lesen(self.web / "fehlt.json", "ersatz"), "ersatz")
+        (self.web / "kaputt.json").write_bytes(b"\xff{")
+        self.assertEqual(abrufen.fremd_lesen(self.web / "kaputt.json", "ersatz"), "ersatz")
+
+    def test_takt_ueber_einen_link_zaehlt_nicht(self):
+        if not link_moeglich(self.web):
+            self.skipTest("Links auf Dateien brauchen hier Adminrechte")
+        geheim = self.daten / "anderswo.json"
+        geheim.write_text(json.dumps({"uni_postfach": 60, "zuletzt": "2026-10-19T08:40:00+00:00"}))
+        os.symlink(geheim, self.web / "takt.json")
+        os.symlink(geheim, self.web / "knopf.json")
+        self.assertEqual(abrufen.takt_minuten(), 15, "Link: Standard statt des Inhalts dahinter")
+        self.assertEqual(abrufen.fremd_lesen(self.web / "knopf.json", {}), {})
 
 
 class Zugang(unittest.TestCase):
@@ -197,16 +258,16 @@ class Ablauf(Grundlage):
         mails = {5: mail("Tutorium", "Anmeldung ab Montag.")}
         imap = imap_attrappe(mails)
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=UniPostfach.ZUGANG), ["Uni-Postfach: 1 neue Mail(s)"])
-        anstoss = json.loads((self.daten / "anstoss").read_text())
+        anstoss = json.loads((self.abruf / "anstoss").read_text())
         self.assertEqual([anstoss["grund"], anstoss["meldungen"]], ["quellen", ["Uni-Postfach: 1 neue Mail(s)"]])
         self.assertIn("Uni-Postfach: 1 neue Mail(s)", (self.roh / "INDEX.md").read_text(encoding="utf-8"))
-        (self.daten / "anstoss").unlink()
+        (self.abruf / "anstoss").unlink()
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=UniPostfach.ZUGANG), [])
-        self.assertFalse((self.daten / "anstoss").exists(), "nichts Neues, kein Anstoß")
+        self.assertFalse((self.abruf / "anstoss").exists(), "nichts Neues, kein Anstoß")
 
     def test_ohne_zugang(self):
         self.assertEqual(abrufen.abrufen(zugang={}), ["Uni-Postfach: kein Uni-Zugang geladen"])
-        self.assertFalse((self.daten / "anstoss").exists())
+        self.assertFalse((self.abruf / "anstoss").exists())
 
 
 class TaktUndSicherheitslauf(Grundlage):
@@ -225,11 +286,11 @@ class TaktUndSicherheitslauf(Grundlage):
 
     def lauf_uebernimmt(self):
         """wie lauf.mjs: Anstoß und roh/ sind danach weg"""
-        (self.daten / "anstoss").unlink(missing_ok=True)
+        (self.abruf / "anstoss").unlink(missing_ok=True)
         shutil.rmtree(self.roh)
 
     def test_takt_60_laesst_zwischenzeiten_aus_knopf_zaehlt(self):
-        (self.daten / "takt.json").write_text(json.dumps({"uni_postfach": 60, "gmail": 3}))
+        (self.web / "takt.json").write_text(json.dumps({"uni_postfach": 60, "gmail": 3}))
         imap = imap_attrappe({5: mail("Tutorium", "Anmeldung ab Montag.")})
         self.uhr("2026-10-19T08:00:00+00:00")
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), ["Uni-Postfach: 1 neue Mail(s)"])
@@ -237,7 +298,7 @@ class TaktUndSicherheitslauf(Grundlage):
         self.uhr("2026-10-19T08:31:00+00:00")
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), [])
         self.assertEqual(imap.verbindungen, n, "nach 31 Minuten noch nicht dran: keine Verbindung")
-        (self.daten / "knopf.json").write_text(json.dumps({"zuletzt": "2026-10-19T08:40:00+00:00"}))
+        (self.web / "knopf.json").write_text(json.dumps({"zuletzt": "2026-10-19T08:40:00+00:00"}))
         self.uhr("2026-10-19T08:45:00+00:00")
         abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG)
         self.assertEqual(imap.verbindungen, n + 1, "„Mails durchsuchen“ seit dem letzten Blick: gleich nachsehen")
@@ -253,25 +314,25 @@ class TaktUndSicherheitslauf(Grundlage):
         imap = imap_attrappe(mails)
         self.uhr("2026-10-18T19:00:00+00:00")
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), ["Uni-Postfach: 2 neue Mail(s)"])
-        self.assertEqual(json.loads((self.daten / "abruf-stand.json").read_text())["nachgelesen"], "2026-10-18", "erster Abruf: heute keiner mehr")
+        self.assertEqual(json.loads((self.abruf / "abruf-stand.json").read_text())["nachgelesen"], "2026-10-18", "erster Abruf: heute keiner mehr")
         self.lauf_uebernimmt()
         self.uhr("2026-10-19T04:15:00+00:00")  # 06:15 Uhr in Berlin (Sommerzeit)
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), [])
-        self.assertFalse((self.daten / "anstoss").exists(), "vor 06:30 kein Sicherheitslauf")
+        self.assertFalse((self.abruf / "anstoss").exists(), "vor 06:30 kein Sicherheitslauf")
         self.uhr("2026-10-19T04:31:00+00:00")  # 06:31 Uhr
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), ["Uni-Postfach: 1 Mail(s) der letzten 24 Stunden zum Nachlesen"])
-        anstoss = json.loads((self.daten / "anstoss").read_text())
+        anstoss = json.loads((self.abruf / "anstoss").read_text())
         self.assertEqual(anstoss["grund"], "taeglich")
         self.assertEqual(sorted(p.name for p in (self.roh / "uni-postfach").iterdir()), ["6.txt"], "nur die letzten 24 Stunden")
         self.assertIn("zum Nachlesen", (self.roh / "INDEX.md").read_text(encoding="utf-8"))
         self.lauf_uebernimmt()
         self.uhr("2026-10-19T04:46:00+00:00")
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), [])
-        self.assertFalse((self.daten / "anstoss").exists(), "einmal am Tag")
+        self.assertFalse((self.abruf / "anstoss").exists(), "einmal am Tag")
         # nächster Tag, keine Mail der letzten 24 Stunden: trotzdem ein Anstoß (Gmail, Liegengebliebenes)
         self.uhr("2026-10-20T05:00:00+00:00")
         self.assertEqual(abrufen.abrufen(imap_klasse=imap, zugang=self.ZUGANG), [])
-        self.assertEqual(json.loads((self.daten / "anstoss").read_text())["grund"], "taeglich")
+        self.assertEqual(json.loads((self.abruf / "anstoss").read_text())["grund"], "taeglich")
 
     def test_berlin_ohne_zeitzonendaten(self):
         echt = abrufen.ZoneInfo

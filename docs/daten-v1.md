@@ -1,6 +1,6 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 31.10.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3, `vorlesung` und `zwischentest` in `kapitel.json` seit 31.10.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
+Stand: 1.11.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3, `vorlesung` und `zwischentest` in `kapitel.json` seit 31.10.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -97,6 +97,13 @@ lehnt das Plugin ganz ab. `weitere` (seit 0.6.9) nennt Dateien neuer Klassen, bi
 `.claude/skills/studium-autopilot/*.md`): Plugins bis 0.6.8 übergehen den Schlüssel, ab 0.6.9 übergeht es darin nur, was es
 nicht kennt. Eine Klasse für `weitere` steht nie in `dateien`.
 
+**system-dateien.json.sig** (seit 01.11.2026, im GitHub-Release `v<version>` neben der Liste, nicht im Tag): SSH-Signatur genau
+dieser Bytes (`ssh-keygen -Y sign`, Namensraum `studium-autopilot-plugin`, sha512) mit einem der Schlüssel, die der Kern `main.js`
+fest kennt. Ohne gültige Signatur installiert das Plugin nichts, auch wenn `sha256` passt (`docs/architektur/update.md`, „Signatur
+der Liste“). Dieselben Bytes liegen im Tresor als `System/Daten/system-dateien.json.sig` (aus der ZIP oder vom Update); mit ihnen
+prüft der Kern die Skripte (`docs/architektur/skripte-pruefen.md`). Das Manifest nennt sie nicht; wer das Manifest ändern kann,
+kann die Signatur trotzdem nicht fälschen.
+
 ## termine.json
 
 ```json
@@ -139,9 +146,20 @@ nicht kennt. Eine Klasse für `weitere` steht nie in `dateien`.
 | `info` | nein | ≤ 200 Zeichen, reiner Text **für alle** (nie der Notiztext aus dem Tresor des Autors) |
 | `geprueft` | nein | ISO-Datum oder -Zeit der letzten Prüfung durch den Abgleich; die Notiz zeigt „geprüft am TT.MM.JJJJ“ |
 
-**Säubern** (für `ort`, `info`, `quelle_text`, `hinweis`, Namen in `semester.json`): HTML-Tags, `<% … %>`, `obsidian://…`,
-`javascript:`, `[[`/`]]`, Backticks, Steuer- und unsichtbare Richtungszeichen werden entfernt, Leerraum zusammengefasst. Ist der
-Text danach zu lang, wird der **Eintrag verworfen** (nicht gekürzt). Im Notiztext werden Markdown-Zeichen zusätzlich maskiert.
+**Säubern** (für `ort`, `info`, `quelle_text`, `hinweis`, Namen in `semester.json`): Zuerst fallen Steuer- und unsichtbare
+Zeichen weg (Richtung, Zeilen- und Worttrenner, weiches Trennzeichen, Variantenwähler, Hangul-Füller, Unicode-Tags
+U+E0000–E007F), dann HTML-Tags, `<% … %>`, `obsidian://…`, `javascript:`, `[[`/`]]` und Backticks. Links im Text, wie Obsidian
+sie erkennt (`http(s):…` mit oder ohne `//`, andere Schemata mit `://`, `www.…` auch mitten im Wort, `domain.tld/…`), bleiben nur
+stehen, wenn sie `http(s)` sind, ohne Name, Kennwort und Port vor dem Host, der Host nur aus a–z, 0–9, `.` und `-`, auf
+`uni-tuebingen.de` oder `ffwtuebingen.de` (mit Subdomains), und dann in der Form, die der Browser liest (`new URL`), mit
+Markdown-Zeichen als %-Kodierung. Jeder andere wird zu seinem Domainnamen ohne führendes `www.` und nie mit drei `w`
+hintereinander, abgesetzt vom Wort davor; bei `domain.tld/…` ohne Schema bekommt der Text ein Leerzeichen vor dem ersten `/`;
+`file:…`, `data:…` und `jar:…` fallen ganz weg (Obsidian öffnet `file:` auf eine Datei im Tresor ohne Rückfrage). Satzzeichen am
+Ende gehören nicht zum Link (kein Klickziel; Links gehören in `quelle_url`). Teams und Zoom sind keine Uni-Domains: Dort kann
+jede:r Seiten anlegen. Leerraum wird zusammengefasst. Ist der Text danach zu lang, wird der **Eintrag verworfen** (nicht
+gekürzt). Im Notiztext werden Markdown-Zeichen zusätzlich maskiert, als zweite Sicherung auch jedes Zeichen, an dem Obsidian
+sonst noch einen Link erkennen könnte (Doppelpunkt hinter `http(s)`, `file`, `data`, `jar` und vor `/`, Punkt hinter `www` und vor
+`tld/`); Obsidian zeigt diese `\` nicht. „1. …“ am Anfang wird keine Liste.
 
 Ungültige Einträge werden **einzeln** verworfen; der Rest wird übernommen. Ein verworfener Eintrag mit gültiger id gilt nicht als
 „entfallen“ (seine Notiz bleibt unverändert).
@@ -377,7 +395,7 @@ selbst aus.
 Seit 19.10.2026 (Plan Abschnitt 31). Optional. Kapitellisten der Module für den Lernplan: je Modul und Semester die Kapitel aus
 der Gliederung der Vorlesung bzw. die Einheiten des Lehrbuchs, die die Vorlesung nennt. Nur Fakten (Nummer, Titel, Seitenzahl der
 Folien, Nummer der Folien, Link auf ein frei zugängliches Lehrbuch, seit 31.10.2026 Tag der ersten Vorlesung zum Kapitel und des
-ersten Zwischentests, der es abfragt); keine Beschreibungen, keine Lernziele, keine Namen. Plugins vor dieser Fassung kennen den
+ersten Zwischentests, der es abfragt, seit 1.11.2026 in wie vielen Altklausuren das Kapitel drankam); keine Beschreibungen, keine Lernziele, keine Namen. Plugins vor dieser Fassung kennen den
 Namen nicht und ignorieren ihn. Erzeugt vom Uni-Abgleich (Kurse, in denen der Autor ist), veröffentlicht
 erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
 
@@ -392,10 +410,11 @@ erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
    "quelle": "Folien 00 Einführung, S. 9",
    "stand": "2026-10-18",
    "vorlaeufig": false,
+   "altklausuren": 12,
    "kapitel": [
     { "nr": "1", "titel": "Grundlagen", "seiten": 42, "folien": 1, "vorlesung": "2026-10-19", "zwischentest": "2026-11-13",
-      "teile": [{ "nr": "1.1", "titel": "Grundbegriffe" }] },
-    { "nr": "2", "titel": "Märkte", "folien": 2 },
+      "in_altklausuren": 11, "teile": [{ "nr": "1.1", "titel": "Grundbegriffe" }] },
+    { "nr": "2", "titel": "Märkte", "folien": 2, "in_altklausuren": 4 },
     { "nr": "3", "titel": "Knappheit", "url": "https://books.core-econ.org/the-economy-v1/book/de/text/03.html" }
    ]
   }
@@ -413,6 +432,7 @@ erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
 | `quelle` | optional, reiner Text ≤ 120 Zeichen: woher die Liste stammt (Folie, Lehrbuch) |
 | `stand` (Modul) | optional, `JJJJ-MM-TT` |
 | `vorlaeufig` | optional, `true` = Liste teils geschätzt (z. B. Lehrbuch-Einheiten, die die Vorlesung noch nicht genannt hat) |
+| `altklausuren` | optional, seit 1.11.2026 (ältere Plugins ignorieren es), ganze Zahl 1–99: wie viele Altklausuren des Moduls ausgezählt sind (`in_altklausuren`). Der Uni-Abgleich setzt es erst ab fünf |
 | `kapitel` | 1–40 Einträge, Nummern im Modul eindeutig |
 | `nr` | 1–8 Zeichen, beginnt mit Ziffer oder Großbuchstabe (`1`, `IV`, `E`, `2.3`) |
 | `titel` | reiner Text ≤ 140 Zeichen, ohne `[`, `]`, `<`, `>`, `{`, `}`, `|`, `\` |
@@ -421,6 +441,7 @@ erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
 | `url` | optional, `https` auf `uni-tuebingen.de` oder `core-econ.org` (jeweils mit Subdomains) |
 | `vorlesung` | optional, seit 31.10.2026 (ältere Plugins ignorieren es), `JJJJ-MM-TT`: Tag der ersten Vorlesung dieses Semesters, die das Kapitel behandelt hat, nur belegt (Ordner der Sitzung in ILIAS, beschriftete Folien, Vorlesungsnotiz), nie in der Zukunft. Fehlt = die Vorlesung ist noch nicht so weit. Hat ein Modul bei keinem Kapitel einen Tag, gilt jedes als behandelt (wie vorher) |
 | `zwischentest` | optional, seit 31.10.2026, `JJJJ-MM-TT`: Tag des ersten Zwischentests (Online-Test, Testat mit Bonuspunkten), der das Kapitel abfragt; nur, wenn die Veranstaltung das sagt. Derselbe Tag wie ein Prüfungstermin des Moduls in `termine.json` |
+| `in_altklausuren` | optional, seit 1.11.2026, ganze Zahl 0–`altklausuren`: in wie vielen der ausgezählten Altklausuren eine Aufgabe zum Kapitel vorkam. Ohne `altklausuren` am Modul oder größer: das Modul wird verworfen. Schaltet man im Lernplan „Zeit je Kapitel“ ein, gibt das Plugin dem Kapitel danach mehr oder weniger Zeit (ab fünf Altklausuren) |
 | `teile` | optional, höchstens 40 Unterkapitel `{ nr, titel }` mit denselben Regeln |
 
 Ein ungültiges Kapitel oder Unterkapitel verwirft sein **ganzes Modul** (keine halbe Liste im Lernplan), die anderen Module bleiben.
@@ -429,7 +450,8 @@ Unbekannte Felder werden ignoriert.
 **Was das Plugin daraus macht:** Jedes Gerät holt die Datei selbst und merkt sie sich gerätelokal (wie `angebote.json`). Nur der
 Abrufer schreibt daraus `Lernplan/<Code> Lernplan.md` (`herkunft: zentral`), nur für Module des laufenden Semesters, die in deinem
 Plan liegen (oder laufen bzw. angemeldet sind) und nicht bestanden sind. Seit 31.10.2026 zeigt jede Kapitelzeile auf die Folien des
-Kapitels, sobald sie im Tresor liegen, dazu „Vorlesung TT.MM.JJJJ“ und „Zwischentest TT.MM.JJJJ“; der eigene Server liefert Listen
+Kapitels, sobald sie im Tresor liegen, dazu „Vorlesung TT.MM.JJJJ“ und „Zwischentest TT.MM.JJJJ“, seit 1.11.2026 „in 9 von 12
+Altklausuren“; der eigene Server liefert Listen
 derselben Form für Module ohne zentrale Liste (Eingang, Feld `kapitel`, Notizen mit `herkunft: server`), und eine spätere zentrale
 Liste übernimmt eine solche Notiz. Häkchen gehen mit dem Titel des (Unter-)Kapitels, nicht
 mit seiner Nummer: Wird ein Kapitel eingeschoben oder umnummeriert, bleibt es abgehakt, und ein neues Kapitel unter alter Nummer

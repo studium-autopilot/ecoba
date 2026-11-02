@@ -43,6 +43,9 @@ module.exports = function (ctx) {
   const REIHE_ALT = ">     sort:\n>       - property: formula.wann\n>         direction: DESC\n>     columnSize:";
   const REIHE_NEU = ">     sort:\n>       - property: formula.wann\n>         direction: ASC\n>       - property: wochentag\n>         direction: ASC\n>       - property: beginn\n>         direction: ASC\n>     columnSize:";
   const reihenfolge = (t) => String(t).split(REIHE_ALT).join(REIHE_NEU);
+  // Links auf den Abschnitt „Variante“ der Einstellungen, den es bis 02.11.2026 gab: Seitdem ist die Variante eine Zeile unter
+  // „Deine Angaben“. Die Seite selbst ersetzt das Update immer (update.js, IMMER_NEU).
+  const varianteLink = (t) => String(t).split("[[Einstellungen & Hilfe#Variante|").join("[[Einstellungen & Hilfe#Deine Angaben|");
 
   const NACHTRAEGE = [
     // Bis 0.6.2 riet notizen.js die Folien beim Anlegen (eba.folienZu): die Folien gleicher Nummer, sonst die der vorigen
@@ -100,6 +103,10 @@ module.exports = function (ctx) {
     { id: "modul-reihenfolge", aendern: (notizen) => notizen
       .filter((n) => text(n.fm.typ) === "modul")
       .map((n) => ({ f: n.f, text: reihenfolge })) },
+    // Links auf „Einstellungen & Hilfe#Variante“ in Modulnotizen und im Studienverlauf (seit 02.11.2026 „#Deine Angaben“)
+    { id: "variante-link", aendern: (notizen) => notizen
+      .filter((n) => text(n.fm.typ) === "modul" || n.f.path === "Studium/Studienverlauf.md")
+      .map((n) => ({ f: n.f, text: varianteLink })) },
   ];
 
   // Ein Lauf ohne Dateien. o: { notizen, erledigt (ids), M, setzen(f, felder), textSetzen(f, fn) → geändert?, liste? (Test: statt
@@ -164,5 +171,5 @@ module.exports = function (ctx) {
 
   const registrieren = () => { ctx.zeit(lauf, WARTEN); ctx.intervall(lauf, WIEDER); };
 
-  return { registrieren, lauf, nachtragenMit, NACHTRAEGE, linkName, folienKopf, notizSpalte, NOTIZ_ALT, NOTIZ_NEU, reihenfolge, REIHE_ALT, REIHE_NEU, DATEI };
+  return { registrieren, lauf, nachtragenMit, NACHTRAEGE, linkName, folienKopf, notizSpalte, NOTIZ_ALT, NOTIZ_NEU, reihenfolge, REIHE_ALT, REIHE_NEU, varianteLink, DATEI };
 };

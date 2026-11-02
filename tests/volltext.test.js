@@ -1,4 +1,4 @@
-// Volltext der PDFs (volltext.js): Entschärfen wie der Volltext eines eigenen Uni-Abgleichs (plus obsidian:// und „::“), Zeilen
+// Volltext der PDFs (volltext.js): Entschärfen (feindlicher Text aus der PDF: kein Link in die App, kein Bild, kein Code; die Wörter bleiben), Zeilen
 // aus pdf.js-Textstücken, Format der Notiz, Namen bei Kollision, planen (alle Fälle), ein Schreiber mit Computer-Vorrang, nur
 // eigene Notizen (fremde → aus, nichts überschrieben oder gelöscht), Wartezeiten, Absturz-Merker, Grenzen je Geräteklasse, Budget.
 // Tresor im Speicher und erfundene PDFs (falsches pdf.js); läuft ohne Obsidian.
@@ -136,33 +136,102 @@ const vollPfad = (name) => K.ZIEL + "/" + name + " (Volltext).md";
 const folien = () => ({ seiten: [seite("Unternehmensziele", "Gewinn und Rentabilität"), seite("Stakeholder-Ansatz", "Kunden, Mitarbeitende, Staat")] });
 
 // ---------- Entschärfen ----------
-test("Entschärfen: gleiches Ergebnis wie der Volltext eines eigenen Uni-Abgleichs (Erwartungswerte einmal erzeugt)", () => {
+test("Entschärfen: Markdown aus der PDF wird kein Markdown-Link, kein Bild, kein Code, die Wörter bleiben (Erwartungswerte)", () => {
   const faelle = [
     ["Einführung in die BWL\nKapitel 1", "> Einführung in die BWL\n> Kapitel 1"],
     ["Unter-\nnehmen und Märkte", "> Unternehmen und Märkte"],
     ["Pfad C:\\Temp\\x und <b>fett</b> <%tp.date%> <!-- k --> <?php", "> Pfad C:\\\\Temp\\\\x und &lt;b>fett&lt;/b> &lt;%tp.date%> &lt;!-- k --> &lt;?php"],
-    ["x > 0 und f(x) = [a, b] sowie a < b", "> x > 0 und f(x) = [a, b] sowie a < b"],
+    ["x > 0 und f(x) = [a, b] sowie a < b", "> x > 0 und f(x) = \\[a, b\\] sowie a < b"],
     ["Preis 5 $ und `code` und %%Kommentar%%", "> Preis 5 \\$ und \\`code\\` und \\%\\%Kommentar\\%\\%"],
-    ["[[Link]] und [Text](https://x.de) #Tag #3a #12 C#", "> \\[\\[Link]] und [Text]\\(https://x.de) \\#Tag \\#3a #12 C#"],
-    ["> Zitat\n# Titel\n## Unter\n1. Erstens\n- Punkt\n* Stern\n+ Plus\n- [ ] Aufgabe", "> \\> Zitat\n> \\# Titel\n> \\## Unter\n> 1\\. Erstens\n> \\- Punkt\n> \\* Stern\n> \\+ Plus\n> \\- [ ] Aufgabe"],
+    ["[[Link]] und [Text](https://x.de) #Tag #3a #12 C#", "> \\[\\[Link\\]\\] und \\[Text\\](https://x.de) \\#Tag \\#3a #12 C#"],
+    ["> Zitat\n# Titel\n## Unter\n1. Erstens\n2) Zweitens\n- Punkt\n* Stern\n+ Plus\n- [ ] Aufgabe",
+      "> \\> Zitat\n> \\# Titel\n> \\## Unter\n> 1\\. Erstens\n> 2\\) Zweitens\n> \\- Punkt\n> \\* Stern\n> \\+ Plus\n> \\- \\[ \\] Aufgabe"],
     ["Satz mit Block ^abc-1\n---\n***\n===\n___", "> Satz mit Block \\^abc-1\n> \\---\n> \\***\n> \\===\n> \\___"],
     ["  Leerzeichen  \n\n\n  zwei  \r\nDrei", "> Leerzeichen\n> zwei\n> Drei"],
     ["Ende-\nZeile Groß-\nschreibung bleibt", "> Ende-\n> Zeile Großschreibung bleibt"],
+    ["Gewinn & Verlust, A&#58;B, &amp; &lt;", "> Gewinn \\& Verlust, A\\&#58;B, \\&amp; \\&lt;"],
+    ["~~~\ncode\n~~~~ js\n```\n~~durch~~", "> \\~~~\n> code\n> \\~~~~ js\n> \\`\\`\\`\n> ~~durch~~"],
+    ["Ren\u200btabilit\u00e4t \u202eabc\u202c Ver\u00adtrag \u2060x\ufe0f \u{E0041}\u{E0042} \u3164y", "> Rentabilität abc Vertrag x  y"],
   ];
-  for (const [ein, aus] of faelle) {
-    assert.equal(V.entschaerfenGrund(ein), aus, ein);
-    assert.equal(V.entschaerfen(ein), aus, "ohne obsidian:// und :: gleich: " + ein);
-  }
+  for (const [ein, aus] of faelle) assert.equal(V.entschaerfen(ein), aus, ein);
 });
 
-test("Entschärfen: obsidian:// nicht anklickbar, keine Inline-Felder, keine Aufgaben für die To-dos", () => {
-  const t = V.entschaerfen("Knopf obsidian://studium-autopilot?aktion=trennen&id=ilias und OBSIDIAN://open\nNote:: 1,7\nA:::B\n- [ ] Lesen\n1. [ ] Rechnen");
-  assert.ok(!/obsidian:\/\//i.test(t), t);
-  assert.ok(t.includes("obsidian\\://studium-autopilot"));
+test("Entschärfen: obsidian:// und file:// nicht anklickbar, keine Inline-Felder, keine Aufgaben für die To-dos", () => {
+  const t = V.entschaerfen("Knopf obsidian://studium-autopilot?aktion=trennen&id=ilias und OBSIDIAN://open und file:///C:/x\nNote:: 1,7\nA:::B\n- [ ] Lesen\n1. [ ] Rechnen\n2) [ ] Üben");
+  assert.ok(!/(obsidian|file):\/\//i.test(t), t);
+  assert.ok(t.includes("obsidian\\://studium-autopilot") && t.includes("file\\:///C"), t);
   assert.ok(!/[^\\]::/.test(t.replace(/\\:/g, "")) && !/::/.test(t.replace(/:\\:/g, "")), t);
   assert.ok(t.includes("Note:\\: 1,7") && t.includes("A:\\:\\:B"), t);
   // wie todos.js: offene Aufgabe „- [ ] Text“ (auch in Zitat/Karte)
   for (const z of t.split("\n")) assert.ok(!/^([\s>]*[-*+] )\[ \] +(\S.*)$/.test(z) && !/^[\s>]*\d+[.)] \[ \]/.test(z), z);
+});
+
+// Feindliche Texte aus einer PDF: Verweise mit Zeichenreferenz oder Backslash im Schema, kurze und leere Verweise, Codeblöcke
+// davor (beenden den Absatz), Autolinks, Bilder, eingebettete Notizen, Fußnoten, Listen mit Klammer, nackte Adressen
+const FEINDLICH = [
+  "Einleitung\n~~~\nx\n~~~\n[l]: obsidian&#58;//studium-autopilot?aktion=x&id=y\nMusterlösung [öffnen][l]",
+  "Text\n```\ny\n```\n[l]: obsidian\\://studium-autopilot?aktion=trennen\n[öffnen][l]",
+  "Absatz\n---\n[Lösungen]: obsidian:\\/\\/studium-autopilot?aktion=x\nDie [Lösungen] stehen bereit",
+  "Absatz\n# Titel\n[Blatt 3]: file:///C:/x.hta\nSiehe [Blatt 3][]",
+  "Hier <obsidian://studium-autopilot?aktion=x> und <obsidian:x> und <file:///etc/x> und <https://example.org>",
+  "[klick](obsidian://studium-autopilot?aktion=x) und [b](obsidian&#x3A;//x) ![bild](https://example.org/x.png) ![[Geheim]]",
+  "Fußnote [^1] und [[Link|Text]]\n[^1]: obsidian://x",
+  "1) [l]: obsidian://x\n2) [a][l]",
+  "Mehr unter https://example.org/a?b=c und obsidian://studium-autopilot?aktion=x und file:///C:/Windows",
+  "<a href=\"obsidian://x\">a</a> <img src=x> &lt;a href=obsidian://y&gt;b&lt;/a&gt; &#91;l&#93;&#40;obsidian://z&#41;",
+  "> [!note] Titel\n> [x](obsidian://x)\n\\[l\\]: obsidian://x",
+  "[\u200bl\u200b](obsidian://x) [l]\u200b: obsidian://y",
+];
+// Zeichen ch, vor dem keine ungerade Zahl von „\“ steht (also nicht entwertet)
+const offen = (t, ch) => {
+  const aus = [];
+  for (let i = t.indexOf(ch); i >= 0; i = t.indexOf(ch, i + 1)) {
+    let n = 0;
+    for (let j = i - 1; j >= 0 && t[j] === "\\"; j--) n++;
+    if (n % 2 === 0) aus.push(i);
+  }
+  return aus;
+};
+
+test("Entschärfen: feindlicher Text ergibt kein „[“, „]“ oder „&“ ohne „\\“, keinen Codeblock und kein obsidian:// oder file://", () => {
+  for (const ein of FEINDLICH) {
+    const t = V.entschaerfen(ein);
+    assert.deepEqual(offen(t, "[").concat(offen(t, "]")), [], t);
+    assert.deepEqual(offen(t, "&").filter((i) => t.slice(i, i + 4) !== "&lt;"), [], "nur das eigene &lt;: " + t);
+    assert.deepEqual(offen(t, "<"), [], t);
+    for (const z of t.split("\n")) {
+      assert.ok(z.indexOf("> ") === 0, "jede Zeile in der Karte: " + z);
+      assert.ok(!/^>\s*(```|~~~)/.test(z), "kein Codeblock: " + z);
+      assert.ok(!/^>\s*(\d+[.)]|[-+*>])\s/.test(z), "keine Liste, kein Zitat in der Karte: " + z);
+    }
+    assert.ok(!/(obsidian|file):\/\//i.test(t), t);
+  }
+  // Kopfzeile (Titel aus dem Dateinamen): dieselben Regeln, eine Zeile
+  for (const ein of FEINDLICH) {
+    const k = V.kopfRein(ein);
+    assert.ok(!/\n/.test(k), k);
+    assert.deepEqual(offen(k, "[").concat(offen(k, "]")), [], k);
+    assert.deepEqual(offen(k, "&").filter((i) => k.slice(i, i + 4) !== "&lt;"), [], k);
+    assert.ok(!/(obsidian|file):\/\//i.test(k), k);
+  }
+  assert.equal(V.kopfRein("B110 Folien 01 Ziele"), "B110 Folien 01 Ziele", "gewöhnlicher Name bleibt");
+  assert.equal(V.kopfRein("Übung [3] & Lösung\u200b"), "Übung \\[3\\] \\& Lösung");
+});
+
+test("Entschärfen: jedes Wort aus der PDF steht noch im Text (die Suche findet es)", () => {
+  const woerter = (t) => (String(t).match(/[\p{L}\p{N}]+/gu) || []);
+  for (const ein of FEINDLICH.concat(["Gewinn & Verlust [Kapitel 2] ~~~ Rentabilität (S. 4)", "Ren\u200btabilität"])) {
+    const t = V.entschaerfen(ein), sauber = ein.replace(/[\u200b\u00ad]/g, "");
+    for (const w of woerter(sauber)) assert.ok(t.includes(w), w + " fehlt in " + t);
+  }
+});
+
+test("Vergleich über Fassungen: alte Notiz (vor FASSUNG 2) und neue gelten bei gleichem Text als gleich", () => {
+  const alt = "> f(x) = [a, b] und \\[\\[Link]] und [T]\\(x) & mehr\n> 1) Punkt\n> ~~~\n> Knopf obsidian\\://x und file://y";
+  const neu = V.entschaerfen("f(x) = [a, b] und [[Link]] und [T](x) & mehr\n1) Punkt\n~~~\nKnopf obsidian://x und file://y");
+  assert.notEqual(neu, alt);
+  assert.equal(V.vergleichbar(neu), V.vergleichbar(alt));
+  assert.notEqual(V.vergleichbar(V.entschaerfen("anderer Text")), V.vergleichbar(alt));
 });
 
 // ---------- Text aus pdf.js ----------
@@ -193,7 +262,7 @@ test("Notiz: Besitzmarke, Felder, Links auf jede Seite, Hinweise, keine Zeitstem
   const t = x.text(vollPfad("B110 Folien 01 Ziele"));
   const sha = nodeCrypto.createHash("sha256").update(Buffer.from(pdfBytes("f", 4000))).digest("hex");
   assert.equal(t, [
-    "---", "typ: volltext", "volltext_von: plugin", "fassung: 1", "datei: \"[[B110 Folien 01 Ziele.pdf]]\"", "unterlage: \"[[B110 Folien 01 Ziele]]\"",
+    "---", "typ: volltext", "volltext_von: plugin", "fassung: 2", "datei: \"[[B110 Folien 01 Ziele.pdf]]\"", "unterlage: \"[[B110 Folien 01 Ziele]]\"",
     "quelle: \"" + B110 + "/B110 Folien 01 Ziele.pdf\"", "seiten: 2", "groesse: 4000", "pdf_sha256: \"" + sha + "\"", "ergebnis: text",
     "cssclasses:", "  - eba-s-begleitnotiz", "  - eba-s-volltext", "---", "",
     "# B110 Folien 01 Ziele · Volltext", "",
@@ -249,7 +318,7 @@ test("Namen: gleicher Dateiname aus anderem Modulordner bekommt den Code, dann e
 
 // ---------- planen ----------
 test("planen: neu, aktuell, Größe oder Prüfsumme anders, Prüfsumme unbekannt, alte Fassung, Reihenfolge", () => {
-  const n = (pfad, quelle, groesse, sha, fassung) => ({ pfad, quelle, groesse, sha: sha || "", fassung: fassung == null ? 1 : fassung, ergebnis: "text" });
+  const n = (pfad, quelle, groesse, sha, fassung) => ({ pfad, quelle, groesse, sha: sha || "", fassung: fassung == null ? K.FASSUNG : fassung, ergebnis: "text" });
   const p = (pfad, groesse) => ({ pfad, groesse, mtime: 0 });
   const h = (c) => c.repeat(64);
   const plan = V.planen({
@@ -268,9 +337,22 @@ test("planen: neu, aktuell, Größe oder Prüfsumme anders, Prüfsumme unbekannt
   assert.equal(plan.aufgaben[2].ziel, vollPfad("neu-klein"));
 });
 
+test("planen: neue FASSUNG liest nur PDFs neu, deren Notiz Text trägt (text, gekuerzt), keine Scans oder geschützten", () => {
+  const ergebnisse = ["text", "gekuerzt", "kein-text", "geschuetzt", "nicht-lesbar", "zu-gross"];
+  const p = (e) => ({ pfad: "Unterlagen/A/" + e + ".pdf", groesse: 5, mtime: 0 });
+  const plan = V.planen({
+    pdfs: ergebnisse.map(p),
+    eigene: ergebnisse.map((e) => ({ pfad: vollPfad(e), quelle: p(e).pfad, groesse: 5, sha: "", fassung: 1, ergebnis: e })),
+    hashes: {}, belegt: ergebnisse.map(vollPfad), grenze: K.GRENZEN.pc,
+  });
+  assert.deepEqual(plan.aufgaben.map((a) => [a.art, a.pdf.pfad.split("/").pop()]), [["fassung", "gekuerzt.pdf"], ["fassung", "text.pdf"]]);
+  assert.equal(plan.aktuell, 4, "ohne Text: bleibt, wie sie ist");
+  assert.equal(plan.warten.length, 0);
+});
+
 test("planen: Notiz ohne PDF → Partner gleicher Größe und Prüfsumme umbenennen, sonst Waise; Doppel; Grenzen je Gerät", () => {
   const h = (c) => c.repeat(64);
-  const n = (pfad, quelle, groesse, sha) => ({ pfad, quelle, groesse, sha, fassung: 1, ergebnis: "text" });
+  const n = (pfad, quelle, groesse, sha) => ({ pfad, quelle, groesse, sha, fassung: K.FASSUNG, ergebnis: "text" });
   const plan = V.planen({
     pdfs: [{ pfad: "Unterlagen/B/neu benannt.pdf", groesse: 50, mtime: 0 }, { pfad: "Unterlagen/B/andere.pdf", groesse: 50, mtime: 0 },
       { pfad: "Unterlagen/B/riesig.pdf", groesse: 30 * MB, mtime: 0 }, { pfad: "Unterlagen/B/schwer.pdf", groesse: 10, mtime: 0 }],
@@ -469,7 +551,7 @@ test("Neue Fassung: Textfassung sagt, welche Seiten neu oder geändert sind und 
   // dieselbe PDF auf einem anderen Gerät (Notiz kam über den Sync): gleicher Text, der Vergleich bleibt
   const y = aufbau({ specs: { n: neu }, geraet: "g-anderes" });
   y.pdf(pfad, "n", { groesse: 3200 });
-  y.notiz(ziel, t.replace(/^fassung: 1$/m, "fassung: 0"));
+  y.notiz(ziel, t.replace(/^fassung: 2$/m, "fassung: 0"));
   await y.m.lauf({});
   assert.equal(y.text(ziel), t);
   // umbenannte PDF: Vergleich zieht mit
@@ -478,6 +560,61 @@ test("Neue Fassung: Textfassung sagt, welche Seiten neu oder geändert sind und 
   x.dateien.delete(pfad);
   await x.m.lauf({});
   assert.match(x.text(vollPfad("B110 Folien 01 Ziele")), /^geaendert: "2, 4"$/m);
+});
+
+test("Textfassung einer früheren FASSUNG (alte Entschärfung): einmal neu geschrieben; umbenannt behält sie ihre Fassung bis dahin", async () => {
+  const klammern = { seiten: [seite("Ziele [Kapitel 1] & Gewinn"), seite("Stakeholder")] };
+  const alteFassung = (t) => t.replace(/^fassung: 2$/m, "fassung: 1").replace("\\[Kapitel 1\\] \\& Gewinn", "[Kapitel 1] & Gewinn");
+  const x = aufbau({ specs: { k: klammern } });
+  const pfad = B110 + "/B110 Folien 01.pdf", ziel = vollPfad("B110 Folien 01");
+  x.pdf(pfad, "k", { groesse: 3000 });
+  await x.m.lauf({});
+  const neu = x.text(ziel);
+  assert.match(neu, /^> Ziele \\\[Kapitel 1\\\] \\& Gewinn$/m);
+  // Stand vor dem Update: dieselbe Notiz mit fassung 1 und der alten Entschärfung
+  x.notiz(ziel, alteFassung(neu));
+  x.vor(5 * MIN);
+  const n = x.gelesen.length;
+  const b = await x.m.lauf({});
+  assert.equal(b.art, "ok", JSON.stringify(b));
+  assert.equal(x.gelesen.length, n + 1, "die PDF wird einmal neu gelesen");
+  assert.equal(x.text(ziel), neu, "gleiche Notiz wie frisch geschrieben");
+  assert.equal(x.m.status().offen, 0, "neue Fassung zählt nicht als „folgt“");
+  assert.equal((await x.m.lauf({})).art, "aktuell");
+  // alte Notiz, deren PDF umbenannt wurde: zieht mit, bleibt fassung 1 und wird im nächsten Lauf neu geschrieben
+  x.notiz(ziel, alteFassung(neu));
+  const d = x.dateien.get(pfad);
+  x.dateien.delete(pfad);
+  x.dateien.set(B110 + "/B110 Folien 01 Ziele.pdf", d);
+  const c = x.abh.lokal(K.L.cache);
+  c[B110 + "/B110 Folien 01 Ziele.pdf"] = c[pfad];
+  x.abh.lokal(K.L.cache, c);
+  x.vor(5 * MIN);
+  const u = await x.m.lauf({});
+  assert.equal(u.umbenannt, 1, JSON.stringify(u));
+  const umbenannt = x.text(vollPfad("B110 Folien 01 Ziele"));
+  assert.match(umbenannt, /^fassung: 1$/m, "alter Text nie unter der neuen Fassung");
+  assert.match(umbenannt, /^> Ziele \[Kapitel 1\] & Gewinn$/m);
+  x.vor(5 * MIN);
+  await x.m.lauf({});
+  const danach = x.text(vollPfad("B110 Folien 01 Ziele"));
+  assert.match(danach, /^fassung: 2$/m);
+  assert.match(danach, /^> Ziele \\\[Kapitel 1\\\] \\& Gewinn$/m);
+  assert.doesNotMatch(danach, /vorher_sha256/, "gleiche PDF: keine „neue Fassung“ der Unterlage");
+});
+
+test("Neue Fassung der PDF über einer Notiz einer früheren FASSUNG: gleiche Seiten gelten nicht als geändert", async () => {
+  const x = aufbau({ specs: { k: { seiten: [seite("Ziele [Kapitel 1] & Gewinn"), seite("Stakeholder")] }, n: { seiten: [seite("Ziele [Kapitel 1] & Gewinn"), seite("Neu")] } } });
+  const pfad = B110 + "/B110 Folien 01.pdf", ziel = vollPfad("B110 Folien 01");
+  x.pdf(pfad, "k", { groesse: 3000 });
+  await x.m.lauf({});
+  x.notiz(ziel, x.text(ziel).replace(/^fassung: 2$/m, "fassung: 1").replace("\\[Kapitel 1\\] \\& Gewinn", "[Kapitel 1] & Gewinn"));
+  assert.match(x.text(ziel), /^> Ziele \[Kapitel 1\] & Gewinn$/m, "alte Entschärfung");
+  x.vor(30 * MIN);
+  x.pdf(pfad, "n", { groesse: 3200, mtime: x.uhr.t - 5 * MIN });
+  await x.m.lauf({});
+  assert.match(x.text(ziel), /^geaendert: "2"$/m);
+  assert.match(x.text(ziel), /^entfallen: 1$/m);
 });
 
 test("Inkrementell: auf diesem Gerät geändert bei gleicher Größe → Prüfsumme neu berechnet", async () => {

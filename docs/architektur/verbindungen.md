@@ -92,7 +92,8 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   0.4.8, Alma und ILIAS-Kalender) statt der Schritte ein Satz mit dem Benutzernamen und **Verbinden**: Studium Autopilot holt den
   Link selbst; scheitert das, zeigt das Fenster die Schritte zum Einfügen mit dem Grund darüber. Ohne Uni-Login auf diesem Gerät
   steht unter den Schritten leise „Ohne Kopieren: Mit Uni-Login verbinden“ (siehe „Uni-Login“).
-- Gespeichert wird nur gerätelokal (`app.saveLocalStorage`): `eba-alma-ics`, `eba-alma-stand`, `eba-alma-seit`.
+- Gespeichert wird nur auf diesem Gerät: der Link im Schlüsselbund (`app.secretStorage`, seit 01.11.2026, vorher `eba-alma-ics`;
+  siehe [„Alma-Stundenplan“](aktionen.md)), `eba-alma-stand` und `eba-alma-seit` gerätelokal (`app.saveLocalStorage`).
 - Codeblock `eba-alma-knoepfe` (Seite Stundenplan, 0.3.0 bis 0.6.5): zeigte verbunden „Stundenplan aktualisieren“, sonst „Alma
   verbinden“ und einen Satz dazu. Seit 24.10.2026 steht er nicht mehr auf der Seite und zeichnet nichts, damit ältere, selbst
   geänderte Seiten keinen Codeblock zeigen: Alma holt stündlich, von Hand **Aktualisieren** in der Zeile Uni-Login bzw. der Befehl
@@ -137,13 +138,15 @@ den ILIAS-Kalender und den Alma-Stundenplan. Bis 0.4.7 musste man die Abo-Links 
   Stundenplan“ und meldet sich ab. Der Link steht dort schon im versteckten Fenster „Daten für iCalendar (ics) exportieren“
   (`alma-konto-html.js` `stundenplanLink`: `textarea …:ical:cal_add` und `data-page-permalink`; zwei verschiedene → keiner).
   Nichts wird angeklickt; „Sicherheitsmaßnahmen erneuern“ im selben Fenster erneuert den Schlüssel im Link und bleibt
-  unberührt. Wie ein Lauf nur, wenn ILIAS das Passwort bestätigt hat (`uniZugang().bestaetigt`), nie nach einer Ablehnung; lehnt
+  unberührt. Wie ein Lauf nur, wenn ILIAS das Passwort bestätigt hat (`uniZugang().bestaetigt`) oder es ungeprüft ist
+  (`ungeprueft`, dann prüft Alma es mit einer eigenen Anmeldung, siehe [alma.md](alma.md)), nie nach einer Ablehnung; lehnt
   Alma eindeutig ab, schreibt das Gerät den Marker. Der Stand von Noten & Anmeldungen bleibt unberührt. Eine Alma-Sitzung zugleich:
   Auf iPhone und iPad teilen sich Sitzungen die Kekse, das Abmelden der einen beendete die andere; darum wartet der Link-Abruf auf
   einen laufenden Lauf von Noten & Anmeldungen und umgekehrt. Hat Alma gebremst (`pauseBis` nach 403/429 oder wiederholten
   Fehlern), meldet sich auch der Link-Abruf bis dahin nicht an (`art: "stopp"`).
 - **Verbinden** danach wie mit einem eingefügten Link (`ctx.verbindungen.holen(id).verbinden(link)`): Nur wenn der erste Abruf
-  klappt, bleibt der Link gespeichert (gerätelokal `eba-ilias-ics` bzw. `eba-alma-ics`, nie im Tresor).
+  klappt, bleibt der Link gespeichert (nur auf dem Gerät, nie im Tresor; wo genau, steht bei der Quelle:
+  [ilias-kalender.md](ilias-kalender.md), [alma.md](alma.md)).
 - **Link gilt nicht mehr:** Zeigt ein Abruf auf den Link (ILIAS: 200 ohne Kalender, 401, 403, 404, 410; Alma: 200 ohne
   Stundenplan, 401, 404, 410, nicht 403, so bremst Alma), fragen `ilias-kalender.js` und `alma.js` `erneuern(id, alterLink)`. Mit
   Zustimmung für diese Quelle höchstens einmal am Tag je Quelle und Gerät (gerätelokal `eba-uni-erneuert`) holt das einen neuen

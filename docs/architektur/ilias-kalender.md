@@ -14,11 +14,18 @@ eigene zu bauen.
   (Beschriftungen aus der Sprachdatei von ILIAS 10, `btn_ical`, `cal_ical_url`; nicht mit einem Konto im Browser geprüft). Auch
   „iCal-URL (Google Kalender)“ (`limited=1`, ohne Einträge, die älter als 30 Tage sind) geht. `linkPruefen`: https oder webcal,
   Host `ovidius.uni-tuebingen.de` ohne Port und Benutzer, Pfad `/calendar.php`, `client_id` und `token`. Der Link enthält einen
-  geheimen Schlüssel: nur gerätelokal (`eba-ilias-ics`, dazu `eba-ilias-ics-status`, `eba-ilias-ics-seit`), nie in einer Datei,
-  in Status, Fehlertexten, Hinweisen oder Konsole. Scheitert der erste Abruf, bleibt kein Link gespeichert. Seit 0.4.8 geht es
+  geheimen Schlüssel: nur im Schlüsselbund von Obsidian (`app.secretStorage`, seit 01.11.2026; Eintrag
+  `studium-autopilot-ilias-kalender-<Prüfsumme des Tresornamens>` wie beim Uni-Passwort, `geheimId`), nie in einer Datei, in
+  Status, Fehlertexten, Hinweisen oder Konsole; gerätelokal nur `eba-ilias-ics-status` und `eba-ilias-ics-seit`. Bis dahin lag er
+  gerätelokal unter `eba-ilias-ics`: Das erste Lesen übernimmt ihn einmal in den Schlüsselbund und löscht den alten Eintrag erst,
+  wenn er dort steht (bis dahin gilt er weiter, der Kalender bleibt verbunden). Ohne Schlüsselbund (Obsidian vor 1.11.4, unter
+  `minAppVersion`) lässt sich nichts verbinden („Dieses Obsidian hat noch keinen Schlüsselbund. …“). Scheitert der erste Abruf, bleibt kein Link gespeichert. Seit 0.4.8 geht es
   mit dem Uni-Login ohne Kopieren (siehe [„Uni-Login“](verbindungen.md)); `linkWaehlen` nimmt dann „iCal-URL (Google Kalender)“.
 - **Abruf** mit `requestUrl` (Bytes vor dem Dekodieren entfaltet, `bytesLesen` aus `alma.js`), gelesen mit `alma.js` (`lesen`
-  behält seit 18.10.2026 die Parameter je Eigenschaft in `PARAM`, dazu exportiert `zeit`, `bytesLesen`, `klartext`).
+  behält seit 18.10.2026 die Parameter je Eigenschaft in `PARAM`, dazu exportiert `zeit`, `bytesLesen`, `klartext`). Höchstens
+  60 s (`K.FRIST`, `mitFrist` wie in `alma.js`): Kommt die Antwort nicht rechtzeitig (iOS lässt eine Anfrage im Hintergrund
+  manchmal liegen), endet der Abruf mit „ILIAS hat nicht rechtzeitig geantwortet.“ und dem Zeitplan wie nach jedem Fehler; eine
+  späte Antwort wird verworfen. Das ist kein Grund, über den Uni-Login einen neuen Link zu holen.
 - **Was übernommen wird:** nur Übungen (`URL` = `goto.php/exc/<ref>`, ältere Formen `goto.php?target=exc_<ref>`,
   `goto_<client>_exc_<ref>.html`) mit Zusatz „(Abgabetermin)“/„(Deadline)“ (Art `abgabe`) bzw. „(Feedback geben bis)“/„(Feedback
   Deadline)“ (`feedback`). Sitzungen (`sess`), Beginn und Ende von Kursen (`crs`, Titel mit Beitrittspasswort) und

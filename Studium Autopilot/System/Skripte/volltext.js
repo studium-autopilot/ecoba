@@ -15,7 +15,7 @@
 //   mit Computer-Vorrang. Geschrieben wird die Sperre nur in Tresoren mit PDFs oder eigenen Textfassungen.
 //   Gleiche PDF ergibt auf jedem Gerät dieselbe Notiz (keine Zeitstempel), darum bleibt eine weiche Sperre harmlos.
 // Auslesen: pdf.js von Obsidian (loadPdfJs), Seite für Seite getTextContent, Zeilen aus hasEOL bzw. der y-Lage, NFC, ohne
-//   weiches Trennzeichen; Fremdtext entschärft (entschaerfen). Keine Texterkennung: Scans bekommen eine kurze Notiz „Kein Text
+//   weiches Trennzeichen; Fremdtext entschärft (entschaerfen: kein Link in die App oder auf Dateien, kein Bild, kein Code; Webadressen bleiben anklickbar). Keine Texterkennung: Scans bekommen eine kurze Notiz „Kein Text
 //   gefunden“, geschützte PDFs „Geschützt“; so wird nichts bei jedem Lauf neu versucht.
 // Grenzen je Geräteklasse (GRENZEN): iPhone/iPad 25 MB, 300 Seiten, 500 000 Zeichen, Lauf 45 s, eine PDF höchstens 120 s;
 //   größere warten auf einen Computer. Computer 80 MB (größer: Notiz „Zu groß“), 600 Seiten und 1 000 000 Zeichen (mehr:
@@ -35,7 +35,7 @@
 //   nicht als vorhanden, der Tresor ist ruhig, sie fehlt seit WAISE_LAEUFE Läufen und WAISE_ALTER. Dann Lebenslauf der Quellen
 //   (quellen.js wegfall): unberührt und am Computer in den Papierkorb, sonst (iPhone/iPad, eigener Text) „(PDF fehlt)“ mit
 //   entfaellt: true; kommt die PDF wieder, verschwindet die Marke. Mehr als die Hälfte und mehr als MASSE auf einmal → nichts.
-//   Neue FASSUNG → nach und nach neu. Kam die Notiz zur PDF (Unterlage) erst nach der Textfassung, bekommt die aktuelle
+//   Neue FASSUNG → Notizen mit Text nach und nach neu. Kam die Notiz zur PDF (Unterlage) erst nach der Textfassung, bekommt die aktuelle
 //   Textfassung den Link „unterlage“ nachträglich (verknuepfen, ohne die PDF neu zu lesen).
 // Neue Fassung einer PDF (andere Prüfsumme, beide mit Text): vorherVon vergleicht die Seitentexte der alten Textfassung mit der
 //   neuen (fassung.js seitenVergleichen) und schreibt vorher_sha256, geaendert (Seiten „2, 5–7“) und entfallen (Zahl). Gleiche
@@ -52,7 +52,10 @@ const QUELLE = "Unterlagen";
 const ABRUF = "System/Daten/volltext-abruf.json";
 const EINSTELLUNGEN = "System/Einstellungen.md";
 const ILIAS_INDEX = "System/Daten/ilias.json";
-const FASSUNG = 1;              // Aufbau der Notiz; höher → vorhandene Notizen werden nach und nach neu geschrieben
+const FASSUNG = 2;              // Aufbau der Notiz; höher → vorhandene Notizen mit Text (MIT_TEXT) werden nach und nach neu
+                                // geschrieben; Scans, geschützte, kaputte und zu große PDFs nicht (kein Text, nichts zu tun)
+                                // (2 seit 01.11.2026: entschaerfen ohne Klammern, „&“ und Codeblöcke)
+const MIT_TEXT = ["text", "gekuerzt"]; // Ergebnisse, deren Notiz Text aus der PDF trägt
 const MIN = 60e3, MB = 1048576;
 const GRENZEN = {
   mobil: { mb: 25, seiten: 300, zeichen: 500000, lauf: 45e3, pdf: 120e3, seite: 20e3, abstuerze: 1 },
@@ -102,26 +105,37 @@ const mbText = (b) => (b / MB).toFixed(1).replace(".", ",") + " MB";
 // Einstellung „volltext“: fehlt, leer, „an“ oder true → an; „aus“, false, „nein“ → aus
 const eingeschaltet = (v) => v == null || v === "" || !(v === false || /^(aus|false|nein|off|0)$/i.test(String(v).trim()));
 
-// Fremdtext entschärfen, wörtlich wie der Volltext eines eigenen Uni-Abgleichs (keine Templater-Befehle, kein HTML, keine Tags,
-// Links, Aufgaben, Formeln, Kommentare, Codeblöcke); „x > 0“ und „f(x) = [a, b]“ bleiben wörtlich suchbar.
-const entschaerfenGrund = (text) => text.replace(/\r/g, "")
+// Unsichtbare Zeichen, die im Text nichts bedeuten, aber Wörter trennen oder anders aussehen lassen: Breite null, weiches
+// Trennzeichen, Richtungszeichen, Variantenwähler (eigene Klasse, sie verbinden sich sonst mit dem Zeichen davor), Tag-Zeichen,
+// Hangul-Füller
+const UNSICHTBAR = /[\u00ad\u115f\u1160\u200b-\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069\u3164\ufeff\uffa0]|[\ufe00-\ufe0f]|[\u{E0000}-\u{E007F}]/gu;
+// Fremdtext entschärfen (seit FASSUNG 2): Aus Text einer PDF wird kein Link in die App (obsidian://) oder auf Dateien (file://),
+// kein Bild, kein Code und kein Kasten; nackte Webadressen (https://) zeigt Obsidian weiter als anklickbaren Link. Kein Verweis
+// („[x]: Ziel“, „[x][y]“; alle eckigen Klammern mit „\“), keine Zeichenreferenz („&#58;“, jedes „&“ mit „\“), keine Autolinks und
+// kein HTML („<“ vor Buchstaben als „&lt;“), keine Codeblöcke (Backticks mit „\“, „~~~“ am Zeilenanfang), keine Templater-Befehle,
+// Tags, Aufgaben, Formeln, Kommentare, Überschriften, Listen, Block-ids und keine anklickbaren obsidian:// und file://-Adressen;
+// unsichtbare Zeichen weg. Die Wörter bleiben, wie sie sind: Die Suche findet „Rentabilität“ auch in „\[Rentabilität\]“.
+const entschaerfen = (text) => String(text == null ? "" : text).replace(/\r/g, "").replace(UNSICHTBAR, "")
   .replace(/(\p{Ll})-\n(\p{Ll})/gu, "$1$2")
   .replace(/\\/g, "\\\\")
+  .replace(/&/g, "\\&")
   .replace(/<(?=[\p{L}\/!%?])/gu, "&lt;")
-  .replace(/[`$]/g, "\\$&")
+  .replace(/[`$\[\]]/g, "\\$&")
   .replace(/%%/g, "\\%\\%")
-  .replace(/\[\[/g, "\\[\\[").replace(/\]\(/g, "]\\(")
   .replace(/#(?=[\p{L}_]|\d+[\p{L}_\/-])/gu, "\\#")
   .split("\n").map((z) => z.trim()).filter(Boolean)
-  .map((z) => "> " + z.replace(/^>/, "\\>").replace(/^(#+\s)/, "\\$1").replace(/^(\d+)\. /, "$1\\. ")
+  .map((z) => "> " + z.replace(/^>/, "\\>").replace(/^(#+\s)/, "\\$1").replace(/^(\d+)([.)]) /, "$1\\$2 ").replace(/^~(?=~~)/, "\\~")
     .replace(/^([-+*]) /, "\\$1 ").replace(/\s\^([\w-]+)$/, " \\^$1").replace(/^([-=_*])(?=[-=_*\s]*$)/, "\\$1"))
-  .join("\n");
-// Dazu: keine anklickbaren obsidian://-Adressen (Knöpfe des Plugins) und keine Inline-Felder „Feld:: Wert“
-const entschaerfen = (text) => entschaerfenGrund(text).replace(/(obsidian):\/\//gi, "$1\\://").replace(/:(?=:)/g, ":\\");
+  .join("\n")
+  // keine Knöpfe des Plugins und keine Dateien als Link, keine Inline-Felder „Feld:: Wert“
+  .replace(/(obsidian|file):\/\//gi, "$1\\://").replace(/:(?=:)/g, ":\\");
 // Titel und Dateinamen in Kopfzeilen: dieselben Zeichen wie oben, ohne Zeilen
-const kopfRein = (s) => String(s).replace(/[\r\n]+/g, " ").replace(/\\/g, "\\\\").replace(/<(?=[\p{L}\/!%?])/gu, "&lt;")
-  .replace(/[`$^]/g, "\\$&").replace(/%%/g, "\\%\\%").replace(/\[\[/g, "\\[\\[").replace(/\]\]/g, "\\]\\]")
-  .replace(/#(?=[\p{L}_]|\d+[\p{L}_\/-])/gu, "\\#");
+const kopfRein = (s) => String(s == null ? "" : s).replace(UNSICHTBAR, "").replace(/[\r\n]+/g, " ").replace(/\\/g, "\\\\")
+  .replace(/&/g, "\\&").replace(/<(?=[\p{L}\/!%?])/gu, "&lt;").replace(/[`$^\[\]]/g, "\\$&").replace(/%%/g, "\\%\\%")
+  .replace(/#(?=[\p{L}_]|\d+[\p{L}_\/-])/gu, "\\#").replace(/(obsidian|file):\/\//gi, "$1\\://");
+// Zum Vergleich der Seitentexte über Fassungen hinweg (vorherVon): ohne die Escapes, die FASSUNG 2 dazubrachte, und ohne
+// unsichtbare Zeichen. So gilt eine Seite, deren Text gleich blieb, nicht als geändert, nur weil die alte Notiz ihn anders schrieb.
+const vergleichbar = (t) => String(t == null ? "" : t).replace(UNSICHTBAR, "").replace(/\\([\[\]&~():])/g, "$1");
 
 // Text einer Seite säubern: weiches Trennzeichen und Richtungszeichen weg, getrennte Umlaute („a¨“) zusammen, NFC, Steuerzeichen
 // weg, Leerzeilen zusammen
@@ -254,7 +268,7 @@ const planen = (x) => {
     const h = hashes[klein(p.pfad)];
     if (n.groesse !== p.groesse || (h && n.sha && h !== n.sha)) aufgabe("aendern", p, n.pfad);
     else if (n.entfaellt) { plan.zurueck.push(n); plan.aktuell++; }
-    else if ((n.fassung || 0) < FASSUNG) aufgabe("fassung", p, n.pfad);
+    else if ((n.fassung || 0) < FASSUNG && MIT_TEXT.indexOf(n.ergebnis) >= 0) aufgabe("fassung", p, n.pfad);
     else {
       plan.aktuell++;
       if (!n.unterlage && x.unterlage && x.unterlage(p)) plan.verknuepfen.push({ notiz: n, pdf: p, ziel: n.pfad });
@@ -313,9 +327,10 @@ const waisenPruefen = (x) => {
 };
 
 // Text der Notiz. o: { titel, quelle, seiten, groesse, sha, ergebnis, dateiFm, unterlageFm, dateiLink, unterlageLink,
-// seitenLink(nr), seitenTexte [[nr, text]] (oder fertige Seitenkarten bloecke), hinweis, vorher? { sha, geaendert, entfallen } }
+// seitenLink(nr), seitenTexte [[nr, text]] (oder fertige Seitenkarten bloecke), hinweis, vorher? { sha, geaendert, entfallen },
+// fassung? (nur mit fertigen bloecke: die FASSUNG, in der sie entschärft wurden; sonst FASSUNG) }
 const notizText = (o) => {
-  const z = ["---", "typ: volltext", "volltext_von: plugin", "fassung: " + FASSUNG, "datei: " + J("[[" + o.dateiFm + "]]")];
+  const z = ["---", "typ: volltext", "volltext_von: plugin", "fassung: " + (o.fassung != null ? o.fassung : FASSUNG), "datei: " + J("[[" + o.dateiFm + "]]")];
   if (o.unterlageFm) z.push("unterlage: " + J("[[" + o.unterlageFm + "]]"));
   z.push("quelle: " + J(o.quelle));
   if (o.seiten != null) z.push("seiten: " + o.seiten);
@@ -570,7 +585,8 @@ module.exports = function (ctx) {
       return true;
     };
     // Umbenannte oder verschobene PDF: Notiz mitnehmen (Name, Quelle, Links); Seitentexte und Hinweis bleiben, wie sie sind,
-    // eine Marke „(PDF fehlt)“ fällt weg
+    // eine Marke „(PDF fehlt)“ fällt weg. Die Notiz behält ihre fassung: Seitentexte einer älteren FASSUNG schreibt planen danach
+    // neu (sonst stünde alter Text unter der neuen Zahl)
     const umziehen = async (u, b) => {
       if ((await besitz(u.notiz.pfad)) !== "eigen") { b.fremd = true; return false; }
       if (klein(u.ziel) !== klein(u.notiz.pfad)) {
@@ -585,12 +601,13 @@ module.exports = function (ctx) {
         "> [!eba-quelle]- " + (io.link(u.pdf.pfad, u.ziel, "#page=" + nr, "S. " + nr) || "[[" + nameVon(u.pdf.pfad) + "#page=" + nr + "|S. " + nr + "]]") + "\n" + t);
       const hinweis = (/\n(> \[!eba-info\][^\n]*(?:\n>[^\n]*)*)/.exec(alt) || [])[1] || "";
       const seiten = Number((/^seiten: (\d+)$/m.exec(alt) || [])[1]) || null;
-      return schreiben(u.ziel, notizBauen(u.pdf, u.ziel, k.sha, { art: k.ergebnis || "text", seiten }, { bloecke, hinweis, vorher: k.vorher }), b);
+      return schreiben(u.ziel, notizBauen(u.pdf, u.ziel, k.sha, { art: k.ergebnis || "text", seiten },
+        { bloecke, hinweis, vorher: k.vorher, fassung: Math.min(k.fassung || 0, FASSUNG) }), b);
     };
     // Was sich gegenüber der Textfassung davor geändert hat (fassung.js seitenVergleichen): Hat die PDF eine andere Prüfsumme und
     // haben beide Text → { sha (der alten PDF), geaendert, entfallen }; gleiche Prüfsumme (neue FASSUNG, ein zweites Gerät) → was die
-    // Notiz schon trug; sonst null. Gleiche PDFs ergeben so auf jedem Gerät dieselbe Notiz.
-    const MIT_TEXT = ["text", "gekuerzt"];
+    // Notiz schon trug; sonst null. Gleiche PDFs ergeben so auf jedem Gerät dieselbe Notiz. Verglichen wird ohne die Escapes
+    // (vergleichbar), damit eine alte Notiz einer früheren FASSUNG gleiche Seiten nicht als geändert meldet.
     const vorherVon = async (ziel, sha, r) => {
       const F = abh.fassung || (ctx.user && ctx.user.fassung);
       if (!F || !sha || !io.existiert(ziel)) return null;
@@ -600,7 +617,8 @@ module.exports = function (ctx) {
       if (!k.eigen) return null;
       if (k.sha === sha) return k.vorher;
       if (!k.sha || MIT_TEXT.indexOf(k.ergebnis) < 0 || MIT_TEXT.indexOf(r.art) < 0) return null;
-      const v = F.seitenVergleichen(seitenAus(alt), (r.seitenTexte || []).map((x) => [x[0], entschaerfen(x[1])]));
+      const v = F.seitenVergleichen(seitenAus(alt).map((x) => [x[0], vergleichbar(x[1])]),
+        (r.seitenTexte || []).map((x) => [x[0], vergleichbar(entschaerfen(x[1]))]));
       return { sha: k.sha, geaendert: F.seitenText(v.neu), entfallen: v.weg };
     };
 
@@ -995,7 +1013,7 @@ module.exports = function (ctx) {
     stoppen: () => { if (motorInst) motorInst.stoppen(); },
     get laeuft() { return !!(motorInst && motorInst.laeuft); },
     // reine Logik und Tests
-    erzeugen, planen, waisenPruefen, fehltMarkieren, fehltEntfernen, entschaerfen, entschaerfenGrund, seiteText, textRein, kopfLesen, ausFm, seitenAus,
+    erzeugen, planen, waisenPruefen, fehltMarkieren, fehltEntfernen, entschaerfen, kopfRein, vergleichbar, seiteText, textRein, kopfLesen, ausFm, seitenAus,
     notizText, hinweisText, zielName, quelleExternAus, eingeschaltet, istPdf,
     K: { ZIEL, ABRUF, FASSUNG, GRENZEN, SEITE_ZEICHEN, RUHE, STABIL, TAKT, STAPEL_PAUSE, STAPEL_MAX, UEBERNAHME, PULS, WAISE_ALTER, WAISE_LAEUFE, ZEIT_WIEDER,
       MASSE, L, TEXT, FEHLT, FEHLT_KARTE, LESEN_FRIST, ZU_FRIST },

@@ -143,6 +143,30 @@ test("In Entwicklung: diese Seiten abgeblendet mit der Pille „in Entwicklung�
   assert.doesNotMatch(css, /eba-sl-zeile:has\(> a\[data-href=/, "keine Seite fest im CSS, nur über IN_ENTWICKLUNG");
 });
 
+test("Neu: der Lernplan trägt „neu“ NEU_TAGE Tage ab dem ersten Zeigen auf dem Gerät, nie zugleich „in Entwicklung“", () => {
+  const { NEU, NEU_TAGE, IN_ENTWICKLUNG, istNeu } = seitenleiste;
+  assert.deepEqual(NEU, ["Lernplan"]);
+  for (const z of NEU) assert.ok(ZIELE.includes(z) && !IN_ENTWICKLUNG.includes(z), z);
+  const seit = {};
+  assert.equal(istNeu("Lernplan", "2026-11-05", seit), true);
+  assert.deepEqual(seit, { Lernplan: "2026-11-05" }, "der erste Tag wird gemerkt");
+  assert.equal(NEU_TAGE, 7, "ein paar Tage: eine Woche, damit auch sieht, wer nur einmal die Woche hineinschaut");
+  assert.equal(istNeu("Lernplan", "2026-11-11", seit), true);
+  assert.equal(istNeu("Lernplan", "2026-11-12", seit), false);
+  assert.equal(istNeu("Lernplan", "2026-12-24", { Lernplan: "kaputt" }), false);
+  assert.equal(istNeu("Termine & Anmeldungen", "2026-11-05", seit), false);
+  assert.deepEqual(Object.keys(seit), ["Lernplan"], "nur neue Seiten werden gemerkt");
+  const zeilen = zeichnen().kinder[0].kinder;
+  for (const li of zeilen) {
+    const ziel = li.kinder.find((k) => k.tag === "a").attr["data-href"];
+    const pille = li.kinder.find((k) => k.cls.has("eba-sl-neu"));
+    assert.equal(pille ? pille.text : null, NEU.includes(ziel) ? "neu" : null, ziel);
+  }
+  const css = fs.readFileSync(path.join(VAULT, ".obsidian", "snippets", "eba-core.css"), "utf8");
+  const a66 = css.slice(css.indexOf("66. Seitenleiste „Übersicht“"), css.indexOf("Ende Abschnitt 66"));
+  assert.ok(a66.includes(".eba-sl-neu"));
+});
+
 test("Symbol des Tabs: eigenes SVG über addIcon (setIcon blieb auf dem iPad leer), Strich und Farbe als Attribute", () => {
   const code = fs.readFileSync(path.join(SKRIPTE, "seitenleiste.js"), "utf8");
   assert.match(code, /getIcon\(\) \{ return eigenesSymbol \? SYMBOL : "layout-grid"; \}/);
@@ -272,7 +296,7 @@ test("Wischen nach rechts: nur die Geste, die die linke Seitenleiste aufzöge; z
   const z = { bereit: true, richtung: 1, linksZu: true, rechtsZu: true, phone: true, hoehe: 844, unten: 34 };
   const mit = (o) => Object.assign({}, z, o);
   assert.equal(zurueckGeste(geste(104), z), true, "ein Finger nach rechts: da zöge Obsidian die linke Seitenleiste auf");
-  assert.equal(zurueckGeste(geste(96), z), false, "nach links: die rechte Seitenleiste wie gewohnt");
+  assert.equal(zurueckGeste(geste(96), z), false, "nach links: kein Zurück");
   assert.equal(zurueckGeste(geste(104, { points: 2 }), z), false, "zwei Finger: Obsidians Zurück und Vor");
   assert.equal(zurueckGeste(geste(104, { direction: "y" }), z), false, "senkrecht: Scrollen und Herunterziehen");
   assert.equal(zurueckGeste(geste(104), mit({ rechtsZu: false })), false, "rechte Seitenleiste offen: Wischen schließt sie");
@@ -292,6 +316,32 @@ test("Wischen nach rechts: nur die Geste, die die linke Seitenleiste aufzöge; z
   assert.equal(zurueckWeit(45, 400), true, "kurz und schnell");
   assert.equal(zurueckWeit(10, 300), false, "Blättern im Wochenraster: Obsidian sieht davon nur die ersten 10 px");
   assert.equal(zurueckWeit(80, 60), false, "weit gewischt, aber zurückgezogen");
+});
+
+// Wischen nach links (Rückmeldung vom 01.11.2026: „Sidebar shouldn't be visible in this vault“): Obsidian zöge die rechte Seitenleiste
+// auf, nach derselben Regel wie die linke (app.js 1.14.5, je Seitenleiste ein Hörer auf „swipe“, Richtung 1 links, -1 rechts)
+test("Seitenleisten-Geste: nach rechts die linke, nach links die rechte, sonst keine", () => {
+  const { seitenGeste, zurueckGeste } = seitenleiste;
+  const geste = (x, o = {}) => Object.assign({ points: 1, direction: "x", startX: 100, startY: 400, x, registerCallback() {} }, o);
+  const z = { bereit: true, richtung: 1, linksZu: true, rechtsZu: true, phone: true, hoehe: 844, unten: 34 };
+  const mit = (o) => Object.assign({}, z, o);
+  assert.equal(seitenGeste(geste(104), z), 1, "nach rechts: die linke");
+  assert.equal(seitenGeste(geste(96), z), -1, "nach links: da zöge Obsidian die rechte Seitenleiste auf");
+  assert.equal(seitenGeste(geste(100), z), 0, "auf der Stelle: auch Obsidian zieht keine auf");
+  assert.equal(seitenGeste(geste(96), mit({ linksZu: false })), 0, "linke offen: Wischen nach links schließt sie");
+  assert.equal(seitenGeste(geste(96), mit({ rechtsZu: false })), 0, "rechte offen: Wischen gehört ihr");
+  assert.equal(seitenGeste(geste(96, { points: 2 }), z), 0, "zwei Finger: Obsidians Zurück und Vor");
+  assert.equal(seitenGeste(geste(96, { direction: "y" }), z), 0);
+  assert.equal(seitenGeste(geste(96, { startY: 820 }), z), 0, "iPhone, im sicheren Rand unten: dort tut Obsidian nichts");
+  assert.equal(seitenGeste(geste(96), mit({ bereit: false })), 0, "Obsidian lädt noch");
+  assert.equal(seitenGeste(geste(104), mit({ richtung: -1 })), -1, "Sprachen von rechts nach links: gespiegelt");
+  for (const feld of ["x", "startX", "startY", "registerCallback"]) {
+    const g = geste(96);
+    delete g[feld];
+    assert.equal(seitenGeste(g, z), 0, "Obsidian hat die Geste umgebaut (" + feld + "): dann wie Obsidian");
+  }
+  assert.equal(seitenGeste(null, z), 0);
+  for (const x of [96, 100, 104]) assert.equal(zurueckGeste(geste(x), z), seitenGeste(geste(x), z) === 1, "zurueckGeste: eine zur linken");
 });
 
 // Herunterziehen (Rückmeldung vom 26.10.2026: „Remove access to command palette via swiping down. No users uses it it opens often by mistake.“)
@@ -501,9 +551,20 @@ test("Wischen nach rechts geht zurück wie ‹ (history.go(-1)), Herunterziehen 
     assert.deepEqual(wischen(ws, 4, "seitenleiste"), [], "außerhalb der Hauptfläche: weder zurück noch Seitenleiste");
     assert.deepEqual(wischen(ws, 4, "haupt", 200), [], "mitten auf der Seite: weder zurück noch Seitenleiste (Rückmeldung: „Nur vom linken Rand“)");
     assert.deepEqual(ws.protokoll, []);
-    wischen(ws, -4);
+    assert.deepEqual(wischen(ws, -4), [], "nach links: kein eigener Rückruf");
+    assert.deepEqual(wischen(ws, -4, "haupt", 200), []);
+    assert.deepEqual(wischen(ws, -4, "seitenleiste"), []);
+    assert.deepEqual(ws.protokoll, [], "nach links bekommt Obsidian die Geste nicht: keine rechte Seitenleiste (Rückmeldung: „Sidebar shouldn't be visible“)");
     ws.trigger("layout-change");
-    assert.deepEqual(ws.protokoll, ["obsidian swipe", "obsidian layout-change"], "nach links und alle anderen Ereignisse wie gewohnt");
+    assert.deepEqual(ws.protokoll, ["obsidian layout-change"], "alle anderen Ereignisse wie gewohnt");
+    ws.protokoll.length = 0;
+    ws.leftSplit = { collapsed: false };
+    wischen(ws, -4);
+    ws.leftSplit = { collapsed: true };
+    ws.rightSplit = { collapsed: false };
+    wischen(ws, 4);
+    assert.deepEqual(ws.protokoll, ["obsidian swipe", "obsidian swipe"], "eine offene Seitenleiste schließt Wischen weiter");
+    ws.rightSplit = { collapsed: true };
     ws.protokoll.length = 0;
     // Herunterziehen oben auf der Seite: kein Hinweis, keine Befehlspalette, kein eigener Rückruf
     assert.deepEqual(ziehen(ws, 430), [], "nach unten in der Hauptfläche");
@@ -515,6 +576,8 @@ test("Wischen nach rechts geht zurück wie ‹ (history.go(-1)), Herunterziehen 
     ws.leftSplit = { collapsed: false, isPinned: true };
     wischen(ws, 4)[0].finish(START + 160, 400, 180);
     assert.deepEqual(ws.protokoll, ["go -1"], "angeheftete Seitenleiste zählt wie eine geschlossene (auf dem iPad liegt am Rand dann aber sie, siehe Doku)");
+    assert.deepEqual(wischen(ws, -4), []);
+    assert.deepEqual(ws.protokoll, ["go -1"], "links angeheftet: nach links auch dann keine rechte");
     abmelden();
     assert.ok(!Object.prototype.hasOwnProperty.call(ws, "trigger"), "abgemeldet: Obsidians trigger aus dem Prototyp");
     ws.protokoll.length = 0;
@@ -523,10 +586,10 @@ test("Wischen nach rechts geht zurück wie ‹ (history.go(-1)), Herunterziehen 
     assert.deepEqual(ws.protokoll, ["obsidian swipe", "obsidian swipe"]);
 
     ({ ws, abmelden } = lauf(true, { activeLeaf: null }));
-    wischen(ws, 4);
-    assert.deepEqual(ws.protokoll, ["obsidian swipe"], "kein Tab mit Verlauf: wie Obsidian");
+    assert.deepEqual(wischen(ws, 4), [], "kein Tab mit Verlauf: nicht zurück");
+    assert.deepEqual(ws.protokoll, [], "aber auch keine linke Seitenleiste");
     assert.deepEqual(ziehen(ws, 430), []);
-    assert.deepEqual(ws.protokoll, ["obsidian swipe"], "Herunterziehen tut auch ohne Verlauf nichts");
+    assert.deepEqual(ws.protokoll, [], "Herunterziehen tut auch ohne Verlauf nichts");
     ({ ws, abmelden } = lauf(true, { rootSplit: null }));
     wischen(ws, 4);
     assert.deepEqual(ws.protokoll, ["obsidian swipe"], "Obsidian umgebaut: wie Obsidian");
@@ -559,7 +622,71 @@ test("Wischen nach rechts geht zurück wie ‹ (history.go(-1)), Herunterziehen 
   }
 });
 
-test("Zahnrad hinter Obsidians „+“: wie dessen Knöpfe, öffnet Einstellungen & Hilfe, die dann im Menü fehlt; ohne „+“ kein Zahnrad", () => {
+// Beim Start (Rückmeldung vom 01.11.2026: „Sidebar shouldn't be visible in this vault“, iPad-Foto der linken Seitenleiste kurz nach dem
+// Öffnen): Die Skripte laden erst nach Obsidians Layout, seitenleiste.js spät im Alphabet. Bis dahin nimmt der Kern (main.js) die Gesten.
+test("Kern beim Start: Wischen zieht keine Seitenleiste auf, bis alle Skripte laufen; danach, abgemeldet und am PC unberührt", () => {
+  const Module = require("node:module");
+  const OBS = { Plugin: class {}, Modal: class {}, FuzzySuggestModal: class {}, TFile: class {}, Notice: class {}, Platform: { isMobile: true } };
+  const laden0 = Module._load;
+  Module._load = function (anfrage, ...rest) { return anfrage === "obsidian" ? OBS : laden0.call(this, anfrage, ...rest); };
+  let Kern;
+  try { Kern = require(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "plugins", "studium-autopilot", "main.js")); } finally { Module._load = laden0; }
+  class Workspace { trigger(...a) { this.protokoll.push(a[0] + (a[1] && a[1].direction ? " " + a[1].direction + a[1].points : "")); } }
+  const lauf = () => {
+    const ws = Object.assign(new Workspace(), { protokoll: [], leftSplit: { collapsed: true }, rightSplit: { collapsed: true } });
+    const aufraeumen = [];
+    const k = Object.assign(Object.create(Kern.prototype), { app: { workspace: ws }, register: (f) => aufraeumen.push(f) });
+    k.wischenBeimStart();
+    return { ws, k, entladen: () => { k.entladen = true; for (const f of aufraeumen) f(); } };
+  };
+  const wischen = (ws, o = {}) => ws.trigger("swipe", Object.assign({ points: 1, direction: "x", startX: 200, x: 210 }, o));
+
+  let { ws, k, entladen } = lauf();
+  wischen(ws);
+  wischen(ws, { x: 190 });
+  assert.deepEqual(ws.protokoll, [], "während des Starts: nach rechts und nach links keine Seitenleiste");
+  wischen(ws, { points: 2 });
+  wischen(ws, { direction: "y" });
+  ws.trigger("layout-change");
+  assert.deepEqual(ws.protokoll, ["swipe x2", "swipe y1", "layout-change"], "zwei Finger, senkrecht und alle anderen Ereignisse wie gewohnt");
+  ws.protokoll.length = 0;
+  ws.leftSplit = { collapsed: false };
+  wischen(ws, { x: 190 });
+  assert.deepEqual(ws.protokoll, ["swipe x1"], "eine offene Seitenleiste schließt Wischen weiter");
+  ws.leftSplit = { collapsed: false, isPinned: true };
+  ws.protokoll.length = 0;
+  wischen(ws, { x: 190 });
+  assert.deepEqual(ws.protokoll, [], "angeheftet (iPad) zählt wie zu: auch dann keine rechte");
+  ws.leftSplit = { collapsed: true };
+  k.gestartet = true;
+  wischen(ws);
+  assert.deepEqual(ws.protokoll, ["swipe x1"], "nach dem Start reicht der Kern durch, seitenleiste.js entscheidet");
+  entladen();
+  assert.ok(!Object.prototype.hasOwnProperty.call(ws, "trigger"), "entladen: Obsidians trigger aus dem Prototyp");
+
+  ({ ws, k, entladen } = lauf());
+  const unsere = ws.trigger;
+  const fremd = function (...a) { return unsere.apply(this, a); };
+  ws.trigger = fremd;
+  entladen();
+  assert.equal(ws.trigger, fremd, "später umhüllt (seitenleiste.js): dessen Hülle bleibt");
+  ws.protokoll.length = 0;
+  wischen(ws);
+  assert.deepEqual(ws.protokoll, ["swipe x1"], "und unsere reicht nur noch durch");
+
+  OBS.Platform = { isMobile: false };
+  ({ ws } = lauf());
+  assert.ok(!Object.prototype.hasOwnProperty.call(ws, "trigger"), "PC: unberührt");
+  const kern = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", ".obsidian", "plugins", "studium-autopilot", "main.js"), "utf8");
+  assert.ok(kern.indexOf("this.wischenBeimStart();") < kern.indexOf("onLayoutReady(() => this.starten())"), "vor dem Layout angemeldet");
+  // Vor dem ersten Laden legt starten nur Ereignisse an; gestartet folgt direkt auf das Laden
+  const start = kern.slice(kern.indexOf("async starten() {"));
+  assert.match(start, /^async starten\(\) \{[\s\S]*?try \{ await this\.skripteLaden\(true\); \} finally \{ geladen\(\); \}\s+this\.gestartet = true;/,
+    "erst nach allen Skripten (seitenleiste.js hat seine Hülle dann gelegt)");
+  assert.ok(start.indexOf("this.gestartet") > start.indexOf("await this.skripteLaden(true)"), "nicht schon vorher");
+});
+
+test("Zahnrad hinter Obsidians Tabs: wie dessen Knöpfe, öffnet Einstellungen & Hilfe, die dann im Menü fehlt; ohne Tabs kein Zahnrad", () => {
   const vorher = { window: global.window, document: global.document };
   const el = (tag) => ({
     tag, className: "", attr: {}, kinder: [], on: {},
@@ -567,10 +694,10 @@ test("Zahnrad hinter Obsidians „+“: wie dessen Knöpfe, öffnet Einstellunge
     addEventListener(t, f) { this.on[t] = f; }, remove() { this.weg = true; }, after(k) { this.danach = k; },
   });
   global.document = { createElement: el, createElementNS: (ns, tag) => el(tag) };
-  const lauf = (plus) => {
+  const lauf = (tabs) => {
     const geoeffnet = [], aufraeumen = [];
     global.window = { app: {
-      mobileNavbar: { containerEl: { querySelector: (s) => (s === ".mobile-navbar-action-new-tab" ? plus : null) } },
+      mobileNavbar: { containerEl: { querySelector: (s) => (s === ".mobile-navbar-action-tabs" ? tabs : null) } },
       workspace: { getLeavesOfType: () => [] },
       metadataCache: { getFirstLinkpathDest: (ziel) => ({ path: ziel }) },
     } };
@@ -582,10 +709,10 @@ test("Zahnrad hinter Obsidians „+“: wie dessen Knöpfe, öffnet Einstellunge
     return { geoeffnet, aufraeumen };
   };
   try {
-    const plus = el("div");
-    const { geoeffnet, aufraeumen } = lauf(plus);
-    const z = plus.danach;
-    assert.ok(z, "gleich hinter „+“, das bleibt");
+    const tabs = el("div");
+    const { geoeffnet, aufraeumen } = lauf(tabs);
+    const z = tabs.danach;
+    assert.ok(z, "gleich hinter Tabs, vor ≡");
     assert.equal(z.className, "mobile-navbar-action eba-nav-zahnrad");
     assert.equal(z.kinder[0].className, "clickable-icon", "Markup wie Obsidians Knöpfe: gleiches Aussehen, gleiche Rückmeldung");
     assert.equal(z.kinder[0].attr["aria-label"], "Einstellungen & Hilfe");
@@ -657,12 +784,12 @@ test("PC: eigene Leiste unten rechts mit denselben sieben Knöpfen wie auf iPhon
     assert.deepEqual(leiste.kinder.map((k) => [k.cls, k.attr["aria-label"], k.attr.role, k.attr.tabindex]), [
       ["clickable-icon eba-nav-zurueck", "Zurück", "button", "0"], ["clickable-icon eba-nav-vor", "Vor", "button", "0"],
       ["clickable-icon eba-nav-suche", "Suche", "button", "0"], ["clickable-icon eba-nav-neu", "Neuer Tab", "button", "0"],
-      ["clickable-icon eba-nav-zahnrad", "Einstellungen & Hilfe", "button", "0"], ["clickable-icon eba-nav-tabs", "Tabs, 2 offen", "button", "0"],
+      ["clickable-icon eba-nav-tabs", "Tabs, 2 offen", "button", "0"], ["clickable-icon eba-nav-zahnrad", "Einstellungen & Hilfe", "button", "0"],
       ["clickable-icon eba-nav-seiten", "Seiten", "button", "0"],
-    ], "‹ › Suche + Zahnrad Tabs ≡ wie auf iPhone und iPad (Zahnrad und ≡: die Klassen findet der Rundgang)");
+    ], "‹ › Suche + Tabs Zahnrad ≡ wie auf iPhone und iPad (Zahnrad und ≡: die Klassen findet der Rundgang)");
     assert.deepEqual(leiste.kinder.map((k) => k.kinder[0].attr.class), ["svg-icon lucide-chevron-left", "svg-icon lucide-chevron-right",
-      "svg-icon lucide-search", "svg-icon lucide-plus", "svg-icon lucide-settings", "svg-icon tab-frame", "svg-icon lucide-menu"]);
-    const [zurueck, vor, suche, neu, zahnrad, tabs] = leiste.kinder;
+      "svg-icon lucide-search", "svg-icon lucide-plus", "svg-icon tab-frame", "svg-icon lucide-settings", "svg-icon lucide-menu"]);
+    const [zurueck, vor, suche, neu, tabs, zahnrad] = leiste.kinder;
     const taste = (k, key) => { const e = { key, type: "keydown", verhindert: false, preventDefault() { this.verhindert = true; } }; k.on.keydown(e); return e; };
     // Zurück und Vor: Verlauf des Tabs vorn in der Hauptfläche, ohne Verlauf ausgegraut und ohne Wirkung
     assert.equal(zurueck.attr["aria-disabled"], "false");

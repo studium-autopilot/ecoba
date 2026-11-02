@@ -1,1 +1,5 @@
 blank_issues_enabled: false
+contact_links:
+  - name: Sicherheitslücke melden
+    url: https://github.com/studium-autopilot/ecoba/security/advisories/new
+    about: Bitte kein öffentliches Issue. Melde die Lücke hier privat, nur der Autor sieht sie. Schick keine echten Zugangsdaten, Matrikelnummern oder Noten mit.

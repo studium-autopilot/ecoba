@@ -29,9 +29,12 @@
 // Daten) bleiben beim Schreiben erhalten. Keine Namen, keine Daten der Quelle.
 // Weiche Sperre: Zwei Geräte können sich über einen langsamen Sync kurz überschneiden. Darum schreibt jede Quelle nur Ergebnisse,
 // die aus denselben Eingaben gleich herauskommen. Unlesbare Datei = keine Sperre.
+// Uhr eines anderen Geräts vorgestellt: Liegt „zuletzt“ mehr als ZUKUNFT in der Zukunft, gilt die Sperre als verlassen wie nach
+// langer Stille (sonst sperrte ein Gerät mit vorgehender Uhr alle anderen aus, bis seine Zeit erreicht ist); der Halter selbst
+// schreibt sie dann beim nächsten nehmen oder puls neu.
 // Tests: tests/sperre.test.js (auch: Vorgaben gleich ilias.js). iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at().
 const MIN = 60e3;
-const K = Object.freeze({ UEBERNAHME: 80 * MIN, PULS: 50 * MIN, ORDNER: "System/Daten" });
+const K = Object.freeze({ UEBERNAHME: 80 * MIN, PULS: 50 * MIN, ZUKUNFT: 10 * MIN, ORDNER: "System/Daten" });
 const FELDER = ["geraet", "seit", "zuletzt", "mobil", "frei"];
 
 // Pfad der Sperre einer Quelle (Schlüssel aus Kleinbuchstaben, Ziffern und Bindestrich)
@@ -58,7 +61,8 @@ const erzeugen = (o) => {
   const ms = () => { const t = o.jetzt ? o.jetzt() : Date.now(); return typeof t === "number" ? t : t.getTime(); };
   const iso = () => new Date(ms()).toISOString();
   const ich = () => String(o.geraetId());
-  const alter = (s) => { const t = Date.parse(s || ""); return isNaN(t) ? Infinity : ms() - t; };
+  // Alter von zuletzt; unlesbar oder mehr als ZUKUNFT in der Zukunft (vorgehende Uhr) → unendlich alt
+  const alter = (s) => { const t = Date.parse(s || ""); return isNaN(t) || t - ms() > K.ZUKUNFT ? Infinity : ms() - t; };
   const datei = async () => { try { return await o.io.lesen(pfad); } catch (e) { return null; } };
   // Schreiben: Sperrfelder neu, alle anderen Felder der Datei bleiben (z. B. „angewendet“ der zentralen Daten)
   const schreiben = async (a, alt) => {

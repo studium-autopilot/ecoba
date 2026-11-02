@@ -121,7 +121,8 @@ Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an
   Browser. Anmeldungen, Kreditkarte und Zustimmungen machst du. Hat Oracle gerade keinen Platz, sucht ein kleiner Helfer weiter
   und schickt dir eine Mail, sobald der Server da ist.
 - **Du brauchst:** Claude Pro oder Max, Claude Desktop auf Windows oder Mac und ein Oracle-Konto. Gmail ist freiwillig.
-- **Deine Daten** bleiben auf deinem Server und in deinem Tresor, der Weg dazwischen ist verschlüsselt. Mehr in
+- **Deine Daten** liegen auf deinem Server und in deinem Tresor, der Weg dazwischen ist verschlüsselt. Was Claude auf dem
+  Server liest (deine Mails, Unterlagen zum Zusammenfassen), verarbeitet Anthropic über dein Claude-Konto. Mehr in
   [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
 
 In Claude Desktop oben **Code** wählen (nicht den Chat), als Ordner deinen Tresor, dann einfügen:
@@ -142,17 +143,19 @@ Wie es gebaut ist: [server/README.md](server/README.md).
 Der Tresor bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du musst nichts weiter installieren.
 
 - **Lädt von selbst nur Daten, nie Code.** Eine neue Version kommt nur, wenn du auf **Neue Version installieren** tippst – direkt aus
-  diesem Repo, jede Datei mit Prüfsumme geprüft, vorher mit Sicherung. Deine Einträge bleiben.
-- **Kein Konto, keine Statistik, keine Telemetrie.** Nichts über dich geht an den Autor oder an Dritte. GitHub sieht beim
-  Abruf deine IP-Adresse, wie bei jeder Webseite.
+  diesem Repo, jede Datei mit Prüfsumme aus einer signierten Liste geprüft, vorher mit Sicherung. Deine Einträge bleiben.
+- **Kein Konto, keine Telemetrie.** Nichts über dich geht an den Autor; an andere nur, wenn du selbst einen Dienst verbindest
+  (Uni-Login, eigener Server, Claude). GitHub sieht beim Abruf deine IP-Adresse, wie bei jeder Webseite, und zählt die
+  Downloads je Version, ohne zu wissen, von wem.
 - **Uni-Login nur, wenn du ihn eingibst.** Dann meldet sich das Plugin von deinem Gerät aus bei der Uni an (ILIAS und Alma)
   und lädt deine Kursdateien, Abgaben und deinen Stundenplan, nur von den Servern der Uni. Das Passwort liegt verschlüsselt im
   Schlüsselbund von Obsidian auf diesem Gerät und wird nie synchronisiert.
 - **Dein Postfach nur, wenn du es einschaltest.** Dann zeigt die Seite **Postfach** deinen Uni-Posteingang direkt aus dem
   Webmail der Uni. Deine Mails stehen nur im Speicher des Geräts, nie im Tresor.
 - **Deine Kalender-Links (Alma, ILIAS) bleiben auf dem Gerät.** Sie werden nicht synchronisiert und nirgends hin geschickt.
-- **Claude nur, wenn du es verbindest.** Dann geht eine Unterlage, wenn du bei ihr auf **Zusammenfassen** tippst, mit deinem
-  eigenen Schlüssel direkt an Anthropic. Der Schlüssel bleibt im Schlüsselbund von Obsidian auf diesem Gerät.
+- **Claude nur, wenn du es verbindest.** Mit einem eigenen Server liest Claude dort deine Mails und die Unterlagen, die du
+  zusammenfassen lässt; das läuft über dein Claude-Konto bei Anthropic. Ohne Server geht eine Unterlage, wenn du bei ihr auf
+  **Zusammenfassen** tippst, mit deinem eigenen Schlüssel direkt an Anthropic.
 - **Deine Einträge bleiben deine.** Häkchen und „Meine Notizen“ in einem Termin überschreibt der Abruf nie, Noten und
   Status deiner Module bleiben auch bei einem Update.
 
@@ -169,7 +172,8 @@ deinen eigenen Tresor. Modul- und Prüfungsordnungs-Angaben sind in eigenen Wort
 Dokumente der Universität verlinkt. Die Bilder zeigen einen Beispiel-Tresor mit erfundenem Namen, Noten, Stundenplan und
 Unterlagen.
 
-Apple und App Store sind Marken der Apple Inc. Google Play und das Google Play-Logo sind Marken der Google LLC.
+Apple und App Store sind Marken der Apple Inc. Google Play und das Google Play-Logo sind Marken der Google LLC. Claude ist eine
+Marke der Anthropic, PBC; Studium Autopilot ist kein Angebot von Anthropic.
 
 ## Fehler melden
 
@@ -269,11 +273,11 @@ and course files from ILIAS, your university inbox, exercise sheets and flashcar
 light and dark. Dates and deadlines keep themselves up to date: a server regularly checks public university sources,
 lets an AI reconcile only what changed, checks every entry automatically (allowlist, scan for personal data, AI
 review) and publishes the result as plain JSON on GitHub Pages. The bundled plugin fetches only that data, never code, and
-sends nothing back. Only if you enter your university login does it sign in from your device (ILIAS, Alma) and download your own course files, deadlines and timetable,
+sends nothing about you back unless you connect a service yourself (university login, your own server, Claude). Only if you enter your university login does it sign in from your device (ILIAS, Alma) and download your own course files, deadlines and timetable,
 contacting nothing but the university's servers; the password stays in Obsidian's keychain on that device and is never
 synced. The same login shows your university inbox on the Postfach page, read straight from the university webmail, but only
 after you turn it on; mails stay in memory and are never written to the vault. A new version is installed only when you tap “Neue Version installieren”, straight from this repo, with every file checked
-against a SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip).
+against a signed SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip).
 Architecture notes: [docs/architektur.md](docs/architektur.md), data contract: [docs/daten-v1.md](docs/daten-v1.md).
 
 ## Lizenz

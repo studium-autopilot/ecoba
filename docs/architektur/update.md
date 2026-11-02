@@ -12,15 +12,85 @@ Tipp auf „Neue Version installieren“** und Bestätigung, aus dem Haupt-Repo 
 manifest.json (ecoba-daten) ── release / beta: version, url_basis, sha256 der Liste
         │ Tipp „Neue Version installieren“ → Manifest frisch holen → Bestätigung
         ▼
+nur neuer als installiert → kann das Gerät prüfen? → Signatur <RELEASES>/download/v<version>/system-dateien.json.sig
+        ▼
 Liste: zuerst <RELEASES>/download/v<version>/system-dateien.json (Release), sonst url_basis + Studium Autopilot/System/Daten/
-system-dateien.json (Tag) ── nur mit SHA-256 = release.sha256; Liste streng prüfen
+system-dateien.json (Tag) ── nur mit SHA-256 = release.sha256 und gültiger Signatur; Liste streng prüfen
         ▼
 Ist-Stand lesen, Plan je Datei (gegen installiert.json) → nur geänderte Dateien laden, Größe + SHA-256 prüfen
         ▼  (alles geladen und geprüft – vorher wird nichts geschrieben)
 Sicherung → .trash/Studium Autopilot Sicherung <alt> <Zeit>/ → schreiben (Fehler: alles zurück) → Kern zuletzt
         ▼
-system-dateien.json + installiert.json = neue Liste → Kern geändert? Plugin neu laden (disable/loadManifests/enable)
+system-dateien.json.sig, system-dateien.json + installiert.json = neue Liste → Kern geändert? Plugin neu laden (disable/loadManifests/enable)
 ```
+
+**Signatur der Liste (seit 01.11.2026, im Kern `main.js`: `signaturPruefen`, `SIGNATUR_SCHLUESSEL`; für `update.js` als
+`ctx.signatur`):** Die Prüfsumme im Manifest schützt nur vor
+einem kaputten Download. Wer das GitHub-Konto oder ein Token des Repos hätte, könnte Tag, Release und Manifest (`ecoba-daten`)
+selbst anlegen, und jeder Tipp auf **Neue Version installieren** liefe fremden Code, am Computer mit vollem Zugriff auf Dateien
+und Schlüsselbund (Uni-Passwort, Schlüssel des eigenen Servers). Darum installiert das Update eine Liste nur, wenn
+`system-dateien.json.sig` aus dem Release derselben Version genau ihre Bytes gültig signiert; die Liste nennt Größe und SHA-256
+jeder Datei, die es schreibt, also ist damit alles gedeckt, was ein Update anfasst (Klassen unten).
+- *Format:* SSH-Signatur von `ssh-keygen -Y sign` (OpenSSH, `PROTOCOL.sshsig`), Armor `-----BEGIN SSH SIGNATURE-----`, Base64
+  nur in einer Schreibweise. Der Kern zerlegt sie selbst (`sshsigLesen`): Magie `SSHSIG`, Version 1, Schlüssel, Namensraum,
+  reserviert, Hash, Signatur, danach nichts. Gültig ist sie nur mit einem Schlüssel byte-gleich einem Eintrag in
+  `SIGNATUR_SCHLUESSEL` (fest in `main.js`, eine Liste für einen späteren Wechsel), Namensraum genau `studium-autopilot-plugin`,
+  reserviert leer, Hash genau `sha512` und Art `ssh-ed25519`. Signiert sind laut `PROTOCOL.sshsig` `SSHSIG`, Namensraum,
+  reserviert, Hash und der SHA-512 der Liste; geprüft wird mit Web Crypto (`crypto.subtle`, Ed25519: Safari ab 17, Chromium ab
+  137), sonst mit dem eingebauten Prüfer im Kern (`ED25519`: nur der Prüfweg von noble-ed25519 3.2.0, MIT, streng nach RFC 8032;
+  braucht SHA-512 aus Web Crypto und BigInt, also Safari ab 14; `tests/ed25519.test.js`). Hardware-Schlüssel
+  (`sk-ssh-ed25519@openssh.com`) lehnt es bewusst ab: Sie signieren andere Daten (Hash der Anwendung, Flags, Zähler) und kämen
+  als eigener Eintrag in `SCHLUESSEL_ARTEN` dazu, mit Test.
+- *Schlüssel:* derselbe wie für die Pakete des eigenen Servers (`server/allowed_signers`, Prinzipal `release@studium-autopilot`),
+  aber mit eigenem Namensraum: Eine Signatur für ein Server-Paket (`studium-server`) oder einen Commit (`git`) gilt hier nicht.
+  `tests/update-signatur.test.js` prüft, dass `SIGNATUR_SCHLUESSEL` und `server/allowed_signers` dieselben Schlüssel nennen.
+  Signieren und Prüfen beim Release: [docs/release.md](../release.md), „Signatur der Update-Liste“.
+- *Reihenfolge* (`aktualisierenMit`): erst „nur vorwärts“ (die Version muss neuer sein als die installierte; eine ältere Liste ist
+  echt signiert und wird trotzdem nie installiert, `angebot()` bietet sie ohnehin nicht an), dann, ob das Gerät prüfen kann
+  (`ctx.signatur.pruefbar`, ohne Netz), dann die Signatur, dann die Liste (Release, sonst Tag) mit Prüfsumme, dann die Signatur über genau
+  diese Bytes; erst danach wird die Liste gelesen. Die Signatur kommt vor der Liste, damit ein Release ohne gültige Signatur nicht
+  als Update zählt (Mitzählen, unten). Das Update lädt sie immer aus dem Release (im Tag liegt sie nicht), also auch ein Tresor
+  mit `zaehlen: false`; ihr Abruf steht im Zähler der Datei `system-dateien.json.sig`, den `werkzeuge/zaehler.py` nicht auswertet.
+- *Im Tresor:* Das Update schreibt die Signatur Byte für Byte als `System/Daten/system-dateien.json.sig`, vor der Liste und
+  `installiert.json` (alle drei nach den Dateien, wie bisher). Mit ihr prüft der Kern auf jedem Gerät, ob die Skripte zur
+  installierten Version gehören: [„Prüfung der Skripte“](skripte-pruefen.md). In der ZIP liegt sie schon (`release.py --zip`).
+- *Fehler* (Bericht `art`): `signatur` (fehlt, 404, ungültig: „Die neue Version ließ sich nicht als echt bestätigen. Darum wurde
+  nichts geändert.“), `krypto` (das Gerät kann nicht prüfen: Web Crypto ohne SHA-512 oder ohne BigInt, also nur sehr alte
+  Geräte; der Satz sagt, auf einem anderen Gerät installieren, die Dateien kommen dann über den Sync, oder Obsidian
+  aktualisieren) und `kern` (ein Kern ohne `ctx.signatur`, wenn das neue `update.js` per Sync vor dem neuen Kern läuft; der Satz
+  sagt, zuerst auf „Neu laden“ tippen). Ohne Ed25519 in Web
+  Crypto (iOS bis 16, Chromium vor 137) prüft der eingebaute Prüfer, das ist kein Fehler mehr. Kein Netz beim Laden der Signatur
+  bleibt `netz`. Vorher wird nichts geschrieben.
+- *Was davon nicht abhängt:* „Neu laden“ (`kernNachholen`), die Reparatur und das Nachholen der Hinweise für Claude laden vom
+  Tag der Version einer Liste, die der Kern geprüft hat (unten, „Nur nach geprüften Listen“), mit Größe und SHA-256 aus ihr. Ein
+  Gerät, das nicht prüfen kann, bekommt ein Update, das ein anderes Gerät installiert hat, darum weiter über den Sync und „Neu laden“.
+- **Nur nach geprüften Listen** (seit 02.11.2026, `gepruefteListe`): `installiert.json` und `update.json` liegen im Tresor; wer
+  dort schreiben kann, kann sie ändern. Sie bestimmen darum nur Anzeige und Angebot, nie, was geschrieben wird. Kern nachholen,
+  Reparatur (`heilen`: Vorgaben, Lesezeichen, alte Ordner, Hinweise für Claude, `heilenMit`) und der Plan eines Updates (was als
+  unverändert gilt) nehmen Version und Prüfsummen nur aus `installiert.json` bzw. `system-dateien.json`, wenn deren Bytes eine
+  Liste sind, die der Kern geprüft und angenommen hat (`ctx.skripte.listen()`, [„Prüfung der Skripte“](skripte-pruefen.md);
+  verglichen wie im Kern mit LF statt CRLF), und nie aus einer Version älter als der laufende Kern. Gibt es keine, holt `heilen` nichts nach, und ein Update plant ohne alte
+  Liste (jede abweichende Datei gilt als deine). Ein Update installiert nie eine Version älter als der laufende Kern. Ein Kern ohne
+  Prüfung der Skripte (bis 0.7.6, ohne `ctx.skripte`) kennt keine geprüfte Liste: Für „Neu laden“ gilt dort `installiert.json`,
+  aber ebenso nie für eine ältere Version als er; geladen wird immer vom unveränderlichen Tag dieser Version.
+- **Von außen** (`c.extern`, ein Link aus dem Browser oder einer anderen App, [„Aktionen“](aktionen.md)): **Neue Version
+  installieren** zeigt nur, was es gibt (wie **Nach Updates suchen**, das Fenster mit seinem Knopf), **Neu laden** lädt nichts und
+  sagt, dass es nur in der App geht. Knöpfe und Befehle in der App bleiben, wie sie sind.
+- **Schalter „Beta-Versionen“** (Fenster „Updates“, unter „Mehr erfahren“): setzt `update_kanal` in `System/Einstellungen.md`
+  (für den ganzen Tresor) und, nur wenn du ihn in der App umlegst, auf diesem Gerät, ob der Kern Listen von Testversionen gelten
+  lässt (`ctx.skripte.beta`, [„Prüfung der Skripte“](skripte-pruefen.md)). Er zeigt „an“ nur, wenn er auf diesem Gerät an ist
+  (`ctx.skripte.betaAn`); steht `update_kanal: beta` im Tresor, ohne dass er hier an ist (ein anderes Gerät), zeigt er „aus“ mit
+  dem Satz „Auf einem anderen Gerät ist er an, auf diesem noch aus.“ Kein Link und keine Aktion legt ihn um.
+- *Übergang:* Ein Update plant immer der `update.js` der installierten Version. Plugins bis 0.7.6 kennen die Signatur nicht:
+  Das Update auf die erste Version mit Signatur prüfen sie wie bisher nur mit der Prüfsumme, erst ab dieser Version prüft jedes
+  Update die Signatur. Für genau dieses eine Update von 0.7.6 oder älter schützt sie also nicht, und es legt keine Signatur in
+  den Tresor; die holt der neue Kern selbst aus dem Release, dafür braucht jedes Gerät einmal Netz (skripte-pruefen.md,
+  „Übergang“). Eine Installation aus der ZIP
+  prüft nichts; mit ihr kommen die festen Schlüssel erst.
+- *Schlüssel wechseln:* wie bei den Server-Paketen (`docs/release.md`), nur länger, weil ein Tresor oft Wochen auf seiner Version
+  bleibt: Der neue Schlüssel kommt zuerst als zweiter Eintrag in `SIGNATUR_SCHLUESSEL` und `server/allowed_signers`, mit einem
+  Release, das noch der alte signiert. Wer danach noch eine Version ohne den neuen Schlüssel hat, kann auf ein Release des neuen
+  nur über die ZIP aktualisieren; geht der Schlüssel verloren, gilt das für alle.
 
 **Dateiklassen** (`klasseVon` in `update.js` = `klasse_von` in `werkzeuge/pruefen.py`, beide gleich halten). Was keine Klasse
 hat, fasst ein Update nie an, auch wenn die Liste es nennt (dann lehnt das Plugin die ganze Liste ab). Klassen aus `WEITERE`
@@ -30,7 +100,7 @@ hat, fasst ein Update nie an, auch wenn die Liste es nennt (dann lehnt das Plugi
 |---|---|---|---|
 | `system` | `.obsidian/plugins/studium-autopilot/{main.js,manifest.json,styles.css}`, `System/Skripte/*.js`, `System/Gerüste/*.md`, `.obsidian/snippets/eba-*.css` | ersetzen | seit 0.4.4 immer die neue Fassung; deine kommt vorher als `Name (deine Fassung vor X).ext.txt` daneben (`.txt`: nie geladen), das Ergebnisfenster sagt es in einer Zeile. Bis 0.4.3 blieb deine aktiv und die neue lag als `Name (neu X).ext.txt` daneben, darum fehlten neue Teile |
 | `einstellung` | `.obsidian/{app,bookmarks,community-plugins,core-plugins,hotkeys,types}.json` | ersetzen | mischen: deine Werte bleiben, fehlende Schlüssel kommen dazu, Textlisten vereinigt; eine geänderte Vorgabe (`VORGABE_NEU`, seit 0.4.6) bekommt nur, wer noch den alten Wert hat und von einer Version davor kommt |
-| `seite` | `Dashboard.md`, `Studium/*.md`, `System/Daten/Musterplan.md` | ersetzen | Vorlage seit der installierten Version gleich → deine bleibt, keine Kopie (seit 0.4.4); nur abgehakt (`ohne_haken` gleich) → neue Seite mit deinen Haken; sonst deine bleibt, neue daneben `Name (neu X).md` |
+| `seite` | `Dashboard.md`, `Studium/*.md`, `System/Daten/Musterplan.md` | ersetzen | Vorlage seit der installierten Version gleich → deine bleibt, keine Kopie (seit 0.4.4); nur abgehakt (`ohne_haken` gleich) → neue Seite mit deinen Haken; sonst deine bleibt, neue daneben `Name (neu X).md`. Ausnahme `IMMER_NEU` (seit 02.11.2026: `Studium/Einstellungen & Hilfe.md`): wie `system` immer die neue Fassung, deine als `Name (deine Fassung vor X).md.txt` daneben, gelöscht kommt sie wieder; die Einstellungen sollen bei allen gleich sein, auch wenn jemand sie aus Versehen geändert hat. Die Klasse in der Liste bleibt `seite`, sonst lehnten Planer bis 0.7.6 die Liste ab |
 | `modul` | `Module/**/*.md` | ersetzen | Vorlage seit der installierten Version gleich → deines bleibt unverändert (seit 0.4.4); sonst Frontmatter: Reihenfolge und Katalogfelder neu, persönliche Felder (`status`, `ergebnis`, `versuch`, `klausur`, `semester_geplant`, `gewaehlt`, `anrechnung`, `zusatz`, `alma_ausgeblendet`, `anmeldung_verzicht`, `alma_uebernommen`) und eigene Felder bleiben, `tags`/`aliases`/`cssclasses` vereinigt; Text neu, wenn `koerper` gleich, sonst deiner |
 | `claude` (seit 0.6.9, nur in `weitere`) | `.claude/CLAUDE.md`, `.claude/skills/studium-autopilot/*.md` | ersetzen; als unverändert gilt auch eine früher ausgelieferte Fassung (`CLAUDE_FRUEHER`, Merker des Geräts) | wie `system`: immer die neue Fassung, deine kommt vorher als `Name (deine Fassung vor X).md.txt` daneben; fehlt eine, kommt sie wieder. Danach holt jeder Computer nach, was bei ihm fehlt (unten, „Hinweise für Claude“) |
 
@@ -70,7 +140,8 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
     Netz (`docs/datenschutz.md`).
   - *Seite:* Kopien `Seite (neu X).md` älter als die installierte Version, die der jetzigen Vorlage gleichen, gehen weg; weicht
     die Seite selbst von der Vorlage ab, bleibt die jüngste Kopie mit der Vorlage (seit 0.6.8). Die Seite selbst und Kopien,
-    die du geändert hast, nie.
+    die du geändert hast, nie. Ausnahme: Seiten in `IMMER_NEU` wie Systemdateien, denn ein Planer bis 0.7.6 ließ eine
+    geänderte stehen und legte die neue als `Seite (neu X).md` daneben.
   - `.obsidian/` gleicht jedes Gerät selbst ab (dort oft nicht synchronisiert). Synchronisierte Pfade nur auf dem Gerät, das
     für alle schreibt (`ctx.zentral.abruferHier()`, wie `modell.js`); ein anderes Gerät merkt „Version lokal“ und prüft sie,
     sobald es selbst schreibt. Alles wird vorher gelesen und geprüft, dann Sicherung nach `.trash/Studium Autopilot Sicherung
@@ -130,6 +201,9 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   Titel eines Termins und die Uhrzeit mit Doppelpunkt. Ersetzt wird nur die Formel, die noch genau so dasteht (`NOTIZ_ALT`).
   Dritter Fall `modul-reihenfolge` (seit 0.7.0): „Zum Modul“ war nach Datum absteigend sortiert, Termine standen rückwärts und
   der Stundenplan (ohne Datum) in zufälliger Folge; jetzt nach Datum aufsteigend, dann Wochentag und Beginn (`REIHE_ALT`).
+  Vierter Fall `variante-link` (seit 02.11.2026): Die Variante ist eine Zeile unter „Deine Angaben“, den Abschnitt „Variante“
+  gibt es nicht mehr. Links `[[Einstellungen & Hilfe#Variante|…]]` in Modulnotizen und im Studienverlauf zeigen danach auf
+  „Deine Angaben“.
 - **Hinweise für Claude (seit 0.6.9, Klasse `claude`, `claudeNachholenMit`, `claudeNachholen`):** `.claude/CLAUDE.md` und der
   Skill `studium-autopilot` kamen bis 0.6.8 nur mit der Installation und blieben dann auf deren Stand. Befund 24.10.2026: Der
   Skill nannte noch den Ordner `Eingang/`, den es seit 0.6.7 nicht mehr gibt. Drei Hürden:
@@ -178,10 +252,12 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   Läuft dort noch der alte Kern im Speicher (`installiert` > `plugin.manifest.version`), zeigt die Zeile „Neu laden“
   (Aktion `vorlage-neu-laden`, `neuLaden`). Seit 21.10.2026 holt sie vorher den Kern nach (`kernNachholen`): Befund iPhone,
   `installiert.json` war schon 0.5.4, der Kern im versteckten Ordner `.obsidian/plugins/` aber nicht angekommen; „Neu laden“
-  lud den alten Kern von der Platte, die Zeile blieb, ohne Hinweis. Jetzt vergleicht sie die Kerndateien mit `installiert.json`,
-  lädt abweichende vom Tag `v<installiert>` (Größe und SHA-256 wie beim Update, alles geprüft vor dem Schreiben, `manifest.json`
+  lud den alten Kern von der Platte, die Zeile blieb, ohne Hinweis. Jetzt vergleicht sie die Kerndateien mit der geprüften Liste
+  (oben, „Nur nach geprüften Listen“), lädt abweichende vom Tag ihrer Version (Größe und SHA-256 wie beim Update, alles geprüft vor dem Schreiben, `manifest.json`
   zuletzt, Schreibfehler → zurück) und lädt dann neu. Kein Netz → „Keine Verbindung …“; läuft danach noch ein älterer Kern →
-  „Bitte Obsidian einmal schließen und wieder öffnen.“ Skripte lädt der Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
+  „Bitte Obsidian einmal schließen und wieder öffnen.“ Ist `update.js` selbst gesperrt, kann der Kern das auch allein (Befehl
+  **Neue Version auf diesem Gerät laden …**, [„Prüfung der Skripte“](skripte-pruefen.md), „Neu laden“). Skripte lädt der
+  Hot-Reload ohnehin nach, ohne einen Hinweis je Datei: Kommt eine neue
   `installiert.json` an, setzt `update.js` `plugin.stillBis` für eine Minute; mehrere Skripte auf einmal schweigen ohnehin.
   Das Fenster nach dem Update sagt darum unter „Andere Geräte“: „Dort einmal auf ‚Neu laden‘ … tippen“ (ohne neuen Kern:
   „dort musst du nichts tun“).
@@ -194,7 +270,8 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   `installiert.json`:
   - *dieses Gerät* (gleiche Geräte-ID, kein Lauf hier): Die App wurde beendet, bevor alles geschrieben war. Zeile und Dashboard
     zeigen „Das Update auf Version X ist nicht fertig geworden.“ mit **Update fertigstellen** (Aktion `vorlage-aktualisieren`):
-    Derselbe Ablauf ohne zweite Frage (bietet das Manifest inzwischen eine andere Version an, wird gefragt); der Plan gegen die
+    Derselbe Ablauf, auch mit derselben Frage wie beim Installieren (seit 02.11.2026: `update.json` liegt im Tresor, wer dort
+    schreiben kann, könnte sonst ein Update ohne deine Bestätigung beenden lassen); der Plan gegen die
     alte `installiert.json` lädt und schreibt nur, was fehlt, und ergibt denselben Stand wie ein Lauf ohne Abbruch
     (`tests/update.test.js`). Ohne Zeitgrenze, aber nur, solange das Manifest diese Version anbietet (oder nichts bekannt ist,
     z. B. zentrale Daten aus): Bietet es eine andere an (zurückgezogen oder schon eine neuere), gilt die Marke als erledigt, und
@@ -221,9 +298,9 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
 - **Sicherung** in `.trash/` (wie Obsidians Papierkorb; Obsidian zeigt ihn nicht an, Sync-Dienste gleichen ihn meist nicht ab,
   steht in `.gitignore`). Bewusst nicht in einem sichtbaren Ordner: Kopien von Modulen würden sonst in Bases als Module zählen.
   In der Dateien-App von iOS sind versteckte Ordner nicht sichtbar; wiederherstellen geht am PC/Mac.
-- **Fehler:** kein Netz, falsche Prüfsumme oder Liste → nichts geschrieben, keine Sicherung; Schreibfehler → alles schon
-  Geschriebene aus der Sicherung zurück. Das Fenster sagt es im Titel „Nicht installiert“ und einem Satz (`ergebnisSatz`), den
-  Grund klein darunter.
+- **Fehler:** kein Netz, falsche Prüfsumme oder Liste, fehlende oder ungültige Signatur, Gerät kann nicht prüfen → nichts geschrieben,
+  keine Sicherung; Schreibfehler → alles schon Geschriebene aus der Sicherung zurück. Das Fenster sagt es im Titel „Nicht
+  installiert“ und einem Satz (`ergebnisSatz`), den Grund klein darunter.
 - **Kanal:** `update_kanal: beta` in `System/Einstellungen.md` (Schalter „Beta-Versionen“ im Fenster „Updates“ unter
   „Mehr erfahren“; Standard stabil). Angeboten wird `release`, auf Kanal beta die höhere von `beta` und `release`, nie eine
   ältere als die installierte. Versionen `X.Y.Z` und `X.Y.Z-beta.N` (Beta vor der fertigen Version).
@@ -283,8 +360,9 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   (ein Gerät installiert, die anderen bekommen es über den Sync). Scheitert der Abruf (kein Netz, 404 bei einem älteren Release
   oder einer Beta ohne die Datei, Weiterleitung) oder stimmt die Prüfsumme nicht, lädt das Update still wie bisher vom Tag
   (`url_basis`, `frisch`); der Bericht sagt, woher die Liste kam (`listeQuelle`: `release` | `raw`). Verwendet wird nur eine Liste
-  mit genau der Prüfsumme aus dem Manifest, die Sicherheit bleibt also gleich. Nur vom Tag lädt es mit `plugin.testUpdateBasis`
-  und mit `zaehlen: false` in `System/Einstellungen.md` (`zaehlenAn`, fehlt das Feld, ist es an): Wer den Schalter
+  mit genau der Prüfsumme aus dem Manifest und gültiger Signatur (oben), die Sicherheit bleibt also gleich. Nur vom Tag lädt es
+  mit `plugin.testUpdateBasis` und mit `zaehlen: false` in `System/Einstellungen.md` (`zaehlenAn`, fehlt das Feld, ist es an;
+  die Signatur kommt auch dann aus dem Release): Wer den Schalter
   **Mitzählen** bis 0.7.0 ausgeschaltet hat, wird weiter nicht gezählt; Test- und Entwicklungstresore, die nicht zählen sollen,
   setzen das Feld in ihren eigenen Einstellungen. `zaehlen` darf darum nicht in der Vorlage stehen (`pruefen.py`,
   `EINSTELLUNGEN_LEER`), sonst zählte kein Tresor mit. Neue Installationen zählen die Downloads der beiden ZIPs.
@@ -310,7 +388,7 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   - `fertig`: „Version X ist installiert“ und `ergebnisSatz`; `ergebnisZeilen` = „Noch ein Schritt“ (oben unter „Wichtig“, wenn
     der neue Kern nicht von selbst lud), im Fuß „Einstellungen“, „Deine Seiten“, „Deine Änderungen“, „Behalten“, „Andere Geräte“
     und „Sicherung“; Knopf **Fertig**.
-  - `fehler`: „Nicht installiert“, ein Satz je Art (`netz`, `pruefsumme`, `liste`, `sicherung`, `schreiben`), der Grund klein im
+  - `fehler`: „Nicht installiert“, ein Satz je Art (`netz`, `pruefsumme`, `liste`, `signatur`, `krypto`, `kern`, `sicherung`, `schreiben`), der Grund klein im
     Fuß, ohne Änderungen; Knopf **Fertig**.
   - `neu`: „Was ist neu“, „Du hast jetzt Version X.“ (nach „Aktualisiert auf …“); Knopf **Fertig**.
 
@@ -327,12 +405,13 @@ andere ohne Klasse. Ausnahmen: Ordner, die die Vorlage nicht mehr hat, und gerat
   installiertAnlegen, heilen, pluginNeuLaden, letzterBericht, fenster, changelogAbschnitte, abschnitteZwischen, markdownSicher,
   toastFaellig, toastEntscheiden, nachUpdate, pruefungFaellig, ergebnisSatz, ergebnisZeilen, frischPruefen, toastPruefen,
   toastWeg, toast, neuigkeitenZeigen, fensterZeigen, ergebnisZeigen, markeLage, MARKE, MARKE_STILL, markeNeu, suchen,
-  zaehlenAn, listeReleaseUrl, LISTE_ASSET,
+  zaehlenAn, listeReleaseUrl, LISTE_ASSET, LISTE_SIG, signaturUrl, SIGNATUR_ASSET, gepruefteListe,
   handInstalliertMit(io, { lauf }), installiertNeu, WEITERE, CLAUDE_FRUEHER, claudeNachholenMit(io, o), claudeNachholen,
   claudeBekannt, L_CLAUDE }`
   (`fenster` = Griff des Fensters „Neue Version“ mit `m` = Obsidians Modal, `toast` = der Hinweis zum Update oder `null`).
   `aktualisierenMit` und `heilenMit` bekommen den Dateizugriff als `io` (`holen`, `lesen`, `schreiben`, `loeschen`, `liste`)
   und sind darum ohne Obsidian testbar (`tests/update.test.js`, Neuigkeiten: `tests/update-neuigkeiten.test.js`, Liste aus dem
-  Release: `tests/update-liste.test.js`).
+  Release: `tests/update-liste.test.js`, Signatur: `tests/update-signatur.test.js`, nur nach geprüften Listen und von außen:
+  `tests/update-nachholen.test.js`).
   `heilen(true)` startet die Reparatur und das Nachholen der Hinweise für Claude sofort, ohne die Merker des Geräts
   (`claudeNachholenMit`: `tests/update-claude.test.js`).

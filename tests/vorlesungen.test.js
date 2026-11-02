@@ -437,15 +437,26 @@ test("Kopf einer Vorlesungsnotiz: Links zu den Folien der Sitzung, „⋯“ →
   verlinken(L.ctx.app, notizen);
   L.ctx.app.vault.cachedRead = async () => "";
   L.ctx.app.fileManager = { processFrontMatter: async (f, fn) => fn(notizen[f.path]) };
-  const chips = () => { const el = knoten("div"); L.ergebnis.zeichnen(el, { sourcePath: VL }); return el.finde("folien").map((c) => c.texte()); };
+  const kopf = () => { const el = knoten("div"); L.ergebnis.zeichnen(el, { sourcePath: VL }); return el; };
+  const chips = () => kopf().finde("folien").map((c) => c.texte());
+  const thema = () => kopf().finde("eba-vorl-thema").map((t) => t.texte().join(""));
   assert.deepEqual(chips(), [["Folien 00", "Organisation"], ["Folien 01", "Grundlagen"]]);
   assert.deepEqual(menue.map((m) => m.titel), ["Andere Folien …"]);
+  // Ohne Feld thema ist das Thema der Titel der ersten Folien: Der Chip nennt ihn schon, darüber steht er nicht noch einmal
+  // (02.11.2026: „Einführung mit Anmerkungen“ stand zweimal untereinander)
+  assert.deepEqual(thema(), []);
+  notizen[VL].thema = "Wozu Statistik?";
+  assert.deepEqual(thema(), ["Wozu Statistik?"], "eigenes Thema, das kein Chip nennt");
+  notizen[VL].thema = "Organisation";
+  assert.deepEqual(thema(), [], "auch ein eigenes Thema nicht, wenn ein Chip es nennt");
+  notizen[VL].thema = "";
   await menue[0].aktion();
   assert.equal(formulare[0].titel, "Folien zu dieser Vorlesung");
   assert.deepEqual(formulare[0].felder[0].optionen.map((o) => o.text),
     ["Automatisch (passend zu dieser Vorlesung)", "Folien 00 · Organisation", "Folien 01 · Grundlagen", "Folien 02 · Entscheidungen"]);
   assert.equal(notizen[VL].folien, "[[Z300 Folien 02 Entscheidungen.pdf]]", "verlinkt wird die PDF");
   assert.deepEqual(chips(), [["Folien 02", "Entscheidungen"]]);
+  assert.deepEqual(thema(), []);
 });
 
 // ---------- Zwei Fassungen derselben Folien (seit 24.10.2026) ----------

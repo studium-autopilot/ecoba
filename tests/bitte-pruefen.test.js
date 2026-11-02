@@ -147,3 +147,19 @@ test("Punkte der Quellen (Meldekanal): ohne Kästchen, Titel fett, Ziel und Anke
   ]);
   assert.deepEqual(P(null), []);
 });
+
+test("Punkte der Quellen: Links im gezeichneten Text werden reiner Text (Titel und Räume kommen von außen)", () => {
+  // kleines Element: zwei Links mit Text, ein Text ohne Link
+  const knoten = (text) => ({ text });
+  const ersetzt = [];
+  const link = (inhalt) => ({ childNodes: inhalt, replaceWith: (...n) => ersetzt.push(n.map((x) => x.text).join("")) });
+  const el = { querySelectorAll: (s) => (s === "a" ? [link([knoten("Kurs")]), link([knoten("fett"), knoten(" mehr")])] : []) };
+  BP.linksLoesen(el);
+  assert.deepEqual(ersetzt, ["Kurs", "fett mehr"]);
+  BP.linksLoesen({ querySelectorAll: () => [] });
+  // Tippen auf einen Punkt einer Quelle öffnet immer ihr Ziel (auch auf einem Link), nie eine Adresse aus dem Text
+  const code = fs.readFileSync(path.join(__dirname, "..", "Studium Autopilot", "System", "Skripte", "bitte-pruefen.js"), "utf8");
+  const klick = code.slice(code.indexOf('inh.addEventListener("click"'));
+  assert.ok(klick.indexOf("if (p.quelle)") >= 0 && klick.indexOf("if (p.quelle)") < klick.indexOf('closest("a")'), "Ziel der Quelle vor jedem Link");
+  assert.match(code, /md\(text, el, comp\)\.then\(\(\) => \{ if \(p\.quelle\) linksLoesen\(el\); \}\)/);
+});

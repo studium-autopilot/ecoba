@@ -84,6 +84,18 @@ test("Termine: doppelte id, Bereich und Säubern von info", () => {
   assert.equal(r.termine[2].bereich, undefined);
 });
 
+test("Termine: Links außerhalb der Uni werden zum Domainnamen, unsichtbare Zeichen und Unicode-Tags fallen weg", () => {
+  const tag = String.fromCodePoint(0xe0041, 0xe0042); // unsichtbarer Text „AB“
+  const r = pruefe(termin({ id: "l-1",
+    info: "Anmeldung: https://alma.uni-tuebingen.de/x?a=1 oder https://evil.example.com/login?u=1 und www.phish.example.org" + tag,
+    ort: "Zoom https://uni-tuebingen.zoom.us/j/123 Raum" + String.fromCharCode(0x2060) + " 1" + String.fromCharCode(0x2028),
+    quelle_text: "https://uni-tuebingen.de.evil.example/x" }));
+  const t = r.termine[0];
+  assert.equal(t.info, "Anmeldung: https://alma.uni-tuebingen.de/x?a=1 oder evil.example.com und phish.example.org");
+  assert.equal(t.ort, "Zoom uni-tuebingen.zoom.us Raum 1", "Zoom ist keine Uni-Domain");
+  assert.equal(t.quelle_text, "uni-tuebingen.de.evil.example");
+});
+
 test("Termine: falsches Format oder zu viele Einträge → ganze Datei abgelehnt", () => {
   assert.ok(Z.terminePruefen({ schema: 2, termine: [] }).fehler);
   assert.ok(Z.terminePruefen({ schema: 1 }).fehler);

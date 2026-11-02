@@ -30,7 +30,8 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   eigenen Sätzen (`getippt`). Die Schritte unter Verbindungen nennen erst diesen Weg, dann den Link aus der Cloud Shell.
 - **Zuletzt verbunden:** Der Eingang bringt unter `verbunden` die letzten Verbindungen des Servers (Zeit, Herkunft `cloud-shell`
   oder `obsidian`; nie im öffentlichen Status). Das abrufende Gerät schreibt die neueste nach `server.json` → `verbunden`, und das
-  Fenster zeigt auf jedem Gerät „Zuletzt verbunden: … (über Obsidian)“ bzw. „(über die Cloud Shell)“. So fällt ein fremdes Gerät auf.
+  Fenster zeigt auf jedem Gerät „Zuletzt verbunden: … (über Obsidian)“ bzw. „(über die Cloud Shell)“. Es ist nur die neueste Verbindung: Ein fremdes Gerät fällt auf, solange
+  danach kein eigenes verbunden wurde.
 - **Abruf** (`Q.planen`: nach 30 s bis 2,5 Min., dann alle 15 Min., nach Fehlern nach 2 bzw. 5 Min., zurück in der App nach
   über 10 Min.; Knopf **Aktualisieren**): `GET /v1/eingang` mit dem
   Zugangsschlüssel → Paket `{ schema, zweck, iv, daten }`, AES-256-GCM über Web Crypto, Zusatzdaten

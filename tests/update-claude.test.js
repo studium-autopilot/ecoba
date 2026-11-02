@@ -6,6 +6,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const crypto = require("node:crypto");
 const { laden } = require("./laden.js");
+const SIG = require("./signatur.js");
 
 const U = laden("update").ctx.update;
 const enc = (s) => new TextEncoder().encode(s);
@@ -59,7 +60,8 @@ test("Liste: Klasse claude nur in „weitere“, dort Unbekanntes übergangen, i
     eintrag(".claude/settings.json", "{}", "claude"), eintrag("System/Skripte/y.js", "y", "system"),
     Object.assign(eintrag(SKILL, "s", "claude"), { sha256: "xyz" }), eintrag(TRESOR, "doppelt", "claude"), null, "kaputt",
   ]) });
-  assert.deepEqual(geprueft(spaeter).dateien.filter((e) => e.klasse === "claude").map((e) => e.pfad), [CLAUDE, TRESOR]);
+  // .claude/settings.json gehört seit 01.11.2026 zur Klasse claude (Sperren für Claude Code); Planer davor übergehen sie hier
+  assert.deepEqual(geprueft(spaeter).dateien.filter((e) => e.klasse === "claude").map((e) => e.pfad), [CLAUDE, TRESOR, ".claude/settings.json"]);
   assert.ok(!geprueft(spaeter).dateien.some((e) => e.pfad === "System/Skripte/y.js"), "system gehört nach „dateien“");
   // Größe zählt mit: zusammen höchstens 40 MiB wie bisher
   const viele = [];
@@ -107,11 +109,14 @@ test("Update: Hinweise für Claude wie Systemdateien, eigene Skills und Einstell
   const lb = enc(JSON.stringify(neuRoh, null, 1) + "\n");
   const netz = netzVon({ [CLAUDE]: NEU, [SKILL]: "# s neu\n", [TRESOR]: "# t neu\n", [KERN + "main.js"]: "// kern\n", [KERN + "manifest.json"]: "{}\n" });
   netz[url("System/Daten/system-dateien.json")] = lb;
+  const schluessel = SIG.schluesselBauen();
+  netz[SIG.signaturUrl("9.0.0")] = enc(SIG.signieren(lb, schluessel));
   const eigene = { ".claude/skills/meine-regeln/SKILL.md": "# meine\n", ".claude/settings.json": "{}\n", ".claude/settings.local.json": "{}\n" };
   // CLAUDE.md wie in der alten Liste, SKILL.md wie 0.4.7 ausgeliefert (bekannt), tresor.md selbst geändert
   const io = speicher(Object.assign({ [CLAUDE]: ALT, [SKILL]: "# s 0.4.7\n", [TRESOR]: "# meins\n" }, eigene), netz);
   const b = await U.aktualisierenMit(io, { release: { version: "9.0.0", url_basis: BASIS, sha256: sha(lb) }, alt: geprueft(altRoh), altVersion: "8.0.0",
-    zeit: new Date(2026, 9, 24, 12, 0), bekannt: { [SKILL]: [sha(enc("# s 0.4.7\n"))] } });
+    zeit: new Date(2026, 9, 24, 12, 0), bekannt: { [SKILL]: [sha(enc("# s 0.4.7\n"))] },
+    signatur: SIG.signaturUrl("9.0.0"), schluessel: [schluessel.oeffentlich] });
   assert.ok(b.ok, b.fehler);
   assert.equal(io.text(CLAUDE), NEU);
   assert.equal(io.text(SKILL), "# s neu\n");
@@ -180,6 +185,26 @@ test("Nachholen: nur was fehlt oder alt ist, geprüft vom Tag der Version, alles
   assert.equal(io.text(CLAUDE), ALT);
   assert.equal(io.text(SKILL), null);
   assert.deepEqual(b.geaendert, []);
+});
+
+test("Nachholen: deine eigene .claude/settings.json gilt weiter als settings.local.json; gibt es die schon, liegt sie daneben", async () => {
+  const EIN = ".claude/settings.json", LOKAL = ".claude/settings.local.json";
+  const sperren = '{"permissions":{"deny":["Edit(/System/**)"]}}\n', meine = '{"hooks":{"Stop":[]}}\n';
+  const liste = geprueft(listeVon("9.0.0", {}, { [CLAUDE]: NEU, [EIN]: sperren }));
+  const zeit = new Date(2026, 10, 1, 12, 0);
+  let io = speicher({ [CLAUDE]: NEU, [EIN]: meine }, netzVon({ [EIN]: sperren }));
+  let b = await U.claudeNachholenMit(io, { liste, basis: BASIS, bekannt: {}, zeit });
+  assert.ok(b.ok, b.fehler);
+  assert.equal(io.text(EIN), sperren);
+  assert.equal(io.text(LOKAL), meine, "deine Regeln und Hooks gelten weiter");
+  assert.equal(io.text(".claude/settings (deine Fassung vor 9.0.0).json.txt"), null);
+  assert.deepEqual(b.gesichert, [{ pfad: EIN, sicherung: LOKAL }]);
+  // settings.local.json gibt es schon: nie überschrieben, deine settings.json liegt als Sicherung daneben
+  io = speicher({ [CLAUDE]: NEU, [EIN]: meine, [LOKAL]: "{}\n" }, netzVon({ [EIN]: sperren }));
+  b = await U.claudeNachholenMit(io, { liste, basis: BASIS, bekannt: {}, zeit });
+  assert.ok(b.ok, b.fehler);
+  assert.equal(io.text(LOKAL), "{}\n");
+  assert.equal(io.text(".claude/settings (deine Fassung vor 9.0.0).json.txt"), meine);
 });
 
 test("Nachholen: Dateien, die die Vorlage nicht mehr hat, nur wenn bekannt; deine eigenen bleiben", async () => {

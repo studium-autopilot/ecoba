@@ -227,7 +227,7 @@ test("Limit des Claude-Abos: Der Dienst stößt den nächsten Versuch an, wenn e
   const v = fs.mkdtempSync(path.join(os.tmpdir(), "studium-limit-"));
   const t0 = new Date("2026-10-18T09:00:00Z");
   const zustand = (z) => fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify(z));
-  const anstoss = () => fs.existsSync(path.join(v, "anstoss"));
+  const anstoss = () => fs.existsSync(path.join(v, "web", "anstoss"));
   assert.equal(limitWiederholen(v, t0), false, "ohne Zustand");
   zustand({ limit: { seit: "2026-10-18T08:00:00Z", versuche: 1, wieder: "2026-10-18T09:30:00Z" }, letzterLauf: { zeit: "2026-10-18T09:00:00Z", ok: false } });
   assert.equal(limitWiederholen(v, t0), false, "noch nicht dran");
@@ -238,25 +238,36 @@ test("Limit des Claude-Abos: Der Dienst stößt den nächsten Versuch an, wenn e
   assert.equal(limitWiederholen(v, dran), false, "seit dem Zeitpunkt schon gelaufen");
   zustand({ limit: { versuche: 1, wieder: "2026-10-18T09:30:00Z" }, letzterLauf: { zeit: "2026-10-18T09:00:00Z", ok: false } });
   assert.equal(limitWiederholen(v, dran), true);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "wiederholung");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "web", "anstoss"), "utf8")).grund, "wiederholung");
   assert.equal(limitWiederholen(v, new Date(dran.getTime() + 5 * 60e3)), false, "der Anstoß wartet noch");
+  fs.rmSync(path.join(v, "web", "anstoss"));
+  fs.writeFileSync(path.join(v, "anstoss"), JSON.stringify({ grund: "gmail" }));
+  assert.equal(limitWiederholen(v, new Date(dran.getTime() + 6 * 60e3)), false, "auch einer im Datenordner (Gmail-Zeit) wartet");
   fs.rmSync(path.join(v, "anstoss"));
   zustand({ letzterLauf: { zeit: "2026-10-18T09:31:00Z", ok: true } });
   assert.equal(limitWiederholen(v, new Date(dran.getTime() + 10 * 60e3)), false, "Limit vorbei");
   assert.ok(!anstoss());
 });
 
-test("Knopf „Mails durchsuchen“: Anstoß mit Grund knopf, höchstens alle 10 Minuten, ein wartender Anstoß bleibt", async () => {
+test("Knopf „Mails durchsuchen“: Anstoß mit Grund knopf, höchstens alle 10 Minuten, auch wenn schon einer wartet", async () => {
   const { knopfAnstoss } = await laden("dienst.mjs");
   const v = fs.mkdtempSync(path.join(os.tmpdir(), "studium-knopf-"));
   const t0 = new Date("2026-10-18T09:00:00Z");
   assert.deepEqual(knopfAnstoss(v, t0), [200, { angestossen: true }]);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "knopf");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "web", "anstoss"), "utf8")).grund, "knopf", "im Ordner des Dienstes");
+  assert.ok(!fs.existsSync(path.join(v, "anstoss")), "nie im Datenordner selbst (den beschreibt nur der Lauf)");
   const zuFrueh = knopfAnstoss(v, new Date(t0.getTime() + 5 * 60e3));
   assert.deepEqual(zuFrueh, [429, { fehler: "zu-frueh", wieder: "2026-10-18T09:10:00.000Z" }]);
+  // wartet schon ein Anstoß (etwa „unterlagen“ nach einem Abruf, bis 0.7.6 blieb er, und Gmail kam nicht dran): knopf ersetzt ihn
+  fs.writeFileSync(path.join(v, "web", "anstoss"), JSON.stringify({ grund: "unterlagen" }));
   fs.writeFileSync(path.join(v, "anstoss"), JSON.stringify({ grund: "gmail" }));
-  assert.deepEqual(knopfAnstoss(v, new Date(t0.getTime() + 11 * 60e3)), [200, { angestossen: true, wartete: true }]);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "gmail", "wartender Anstoß bleibt");
+  assert.deepEqual(knopfAnstoss(v, new Date(t0.getTime() + 11 * 60e3)), [200, { angestossen: true }]);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "web", "anstoss"), "utf8")).grund, "knopf");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "gmail", "der Anstoß eines anderen Schreibers bleibt");
+  const { anstossNehmen } = await laden("lauf.mjs");
+  assert.equal(anstossNehmen(v).grund, "knopf", "der Lauf nimmt knopf vor allen anderen");
+  // knopf.json liest auch der Abruf (anderer Benutzer): 0644, unabhängig von der UMask des Dienstes
+  if (process.platform !== "win32") assert.equal(fs.statSync(path.join(v, "web", "knopf.json")).mode & 0o777, 0o644);
 });
 
 test("Stand des Plugins: nur Modulcodes und kurze Felder, erledigte Dateien nur mit sicheren Namen", async () => {
@@ -292,9 +303,10 @@ test("Unterlagen für Begleitnotizen: nur Lehrmaterial mit gültigem Pfad und Ke
   const datei = fs.readFileSync(path.join(v, "unterlagen", "neu", k("a") + ".md"), "utf8");
   assert.ok(datei.startsWith("# B110 Folien 02 Kosten\n\nDatei: Unterlagen/B110 Einführung/B110 Folien 02 Kosten.pdf\nModul: B110 · Art: Folien · Seiten: 42\n"), datei.slice(0, 200));
   assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "gmail", "wartender Anstoß bleibt");
+  assert.ok(!fs.existsSync(path.join(v, "web", "anstoss")), "kein zweiter dazu");
   fs.rmSync(path.join(v, "anstoss"));
   unterlagenAblegen(v, [Object.assign({}, geprueft[0], { kennung: k("f") })]);
-  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "unterlagen");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "web", "anstoss"), "utf8")).grund, "unterlagen");
   const viele = Array.from({ length: 29 }, (_, i) => Object.assign({}, geprueft[0], { kennung: String(i).padStart(64, "0") }));
   assert.throws(() => unterlagenAblegen(v, viele), (e) => e.status === 429, "höchstens 30 warten");
   assert.equal(unterlagenAblegen(v, viele.slice(0, 28)), 28, "bis 30 geht");
@@ -460,14 +472,20 @@ test("Dienst: Status offen, Eingang nur mit Schlüssel und verschlüsselt, Stand
     assert.doesNotMatch(JSON.stringify(paket), /Tutorium/, "nur verschlüsselt");
     const buendel = await entschluesseln(konfig.schluessel, "eingang", paket);
     assert.deepEqual(buendel.dateien.map((d) => d.name), ["2026-10-18-073000-termine.json"], "kaputte Datei bleibt draußen");
-    assert.ok(JSON.parse(fs.readFileSync(path.join(v, "abruf.json"), "utf8")).zuletzt);
+    assert.ok(JSON.parse(fs.readFileSync(path.join(v, "web", "abruf.json"), "utf8")).zuletzt);
 
     const stand = await verschluesseln(konfig.schluessel, "stand", { schema: 1, module: ["B110"], erledigt: ["2026-10-18-073000-termine.json"],
       takt: { uni_postfach: 60, gmail: 1 } });
     assert.equal((await fetch(`${basis}/v1/stand`, { method: "POST", headers: mit, body: JSON.stringify(stand) })).status, 204);
     assert.ok(!fs.existsSync(path.join(v, "eingang", "2026-10-18-073000-termine.json")), "übernommene Datei gelöscht");
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(v, "stand-plugin.json"), "utf8")).module, ["B110"]);
-    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(v, "takt.json"), "utf8")), { uni_postfach: 60, gmail: 1 }, "Takt auch für abrufen.py");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(v, "web", "stand-plugin.json"), "utf8")).module, ["B110"]);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(v, "web", "takt.json"), "utf8")), { uni_postfach: 60, gmail: 1 }, "Takt auch für abrufen.py");
+    // Der Auszug aus dem Tresor ist nur für den Lauf (Gruppe), der Takt auch für den Abruf (anderer Benutzer)
+    if (process.platform !== "win32") {
+      assert.deepEqual(["stand-plugin.json", "takt.json"].map((n) => fs.statSync(path.join(v, "web", n)).mode & 0o777), [0o640, 0o644]);
+    }
+    assert.deepEqual(fs.readdirSync(v).filter((n) => !["eingang", "unterlagen", "web", "zustand.json"].includes(n)), [],
+      "der Dienst schreibt nur in web/, eingang/ und unterlagen/, nie in den Datenordner selbst");
     // Textfassungen über HTTP, verschlüsselt: landen in unterlagen/neu/
     const kennung = "f".repeat(64);
     const unterlagenPaket = await verschluesseln(konfig.schluessel, "unterlagen", { schema: 1, unterlagen: [{ datei: "Unterlagen/B110/B110 Folien 01.pdf",
@@ -481,11 +499,11 @@ test("Dienst: Status offen, Eingang nur mit Schlüssel und verschlüsselt, Stand
     assert.equal(knopf.status, 200);
     assert.equal((await (await fetch(`${basis}/v1/status`)).json()).claude_lauf, "wartet");
     assert.equal((await fetch(`${basis}/v1/anstoss`, { method: "POST", headers: mit })).status, 429);
-    fs.rmSync(path.join(v, "anstoss"));
+    fs.rmSync(path.join(v, "web", "anstoss"));
     const fremd = await verschluesseln(neuerSchluessel(), "stand", { schema: 1 });
     assert.equal((await fetch(`${basis}/v1/stand`, { method: "POST", headers: mit, body: JSON.stringify(fremd) })).status, 400);
 
-    const { code } = neuerCode(v);
+    const { code } = neuerCode(path.join(v, "web")); // wie studium-server verbinden als Benutzer des Dienstes
     const verbunden = await fetch(`${basis}/v1/verbinden`, { method: "POST", body: JSON.stringify({ code }) });
     assert.deepEqual(await verbunden.json(), { adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel });
     assert.equal((await fetch(`${basis}/v1/verbinden`, { method: "POST", body: JSON.stringify({ code }) })).status, 403, "Code verbraucht");
@@ -499,7 +517,7 @@ test("Dienst: Status offen, Eingang nur mit Schlüssel und verschlüsselt, Stand
       todos: Array.from({ length: 200 }, (_, i) => ({ text: "Eine Aufgabe mit etwas Text, damit sie realistisch lang ist, Nummer " + i, code: "E101", frist: "2026-11-02" })) } };
     const vollPaket = await verschluesseln(konfig.schluessel, "stand", voll);
     assert.equal((await fetch(`${basis}/v1/stand`, { method: "POST", headers: mit, body: JSON.stringify(vollPaket) })).status, 204);
-    assert.equal(JSON.parse(fs.readFileSync(path.join(v, "stand-plugin.json"), "utf8")).tresor.termine.length, 400);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(v, "web", "stand-plugin.json"), "utf8")).tresor.termine.length, 400);
 
     // Sperre je Absender (X-Forwarded-For von Caddy); ein gültiger Schlüssel wird nie gesperrt
     const von = (wer, extra) => Object.assign({ "x-forwarded-for": "irgendwer, " + wer }, extra);
@@ -573,7 +591,7 @@ test("Dienst: LiveSync-Seite unter /v1/livesync/<kennung>, unbekannte Kennungen 
     assert.equal((await (await fetch(`${basis}/v1/status`)).json()).livesync, "aus");
     fs.writeFileSync(path.join(v, "zustand.json"), JSON.stringify({ livesync: "an" }));
     assert.equal((await (await fetch(`${basis}/v1/status`)).json()).livesync, "an");
-    const { kennung } = ablegen(v, LINK_ANFANG + "%25%24abc");
+    const { kennung } = ablegen(path.join(v, "web"), LINK_ANFANG + "%25%24abc"); // wie livesync.sh als Benutzer des Dienstes
     const s = await fetch(`${basis}/v1/livesync/${kennung}`);
     assert.equal(s.status, 200);
     assert.match(s.headers.get("content-security-policy"), /default-src 'none'/);
@@ -625,7 +643,8 @@ test("Zustand: Proben setzen Claude, Uni-Zugang und Reserve; Felder anderer Teil
   assert.equal(z.gmail, "ok");
   assert.equal(z.uniZugang, "gespeichert");
   assert.deepEqual(z.fehler, ["gmail-fehlt"]);
-  fs.writeFileSync(path.join(v, "uni-zugang-falsch"), "");
+  fs.mkdirSync(path.join(v, "abruf"));
+  fs.writeFileSync(path.join(v, "abruf", "uni-zugang-falsch"), "");
   z = await zustandAktualisieren(v, proben("abgemeldet", true));
   assert.equal(z.uniZugang, "falsch");
   assert.deepEqual(z.fehler.sort(), ["claude-abgemeldet", "gmail-fehlt", "uni-zugang-falsch"]);
@@ -654,6 +673,17 @@ test("Zustand: Proben setzen Claude, Uni-Zugang und Reserve; Felder anderer Teil
   assert.equal(reserveLaeuft(v, proc), "aus", "PID gehört einem anderen Prozess");
   fs.writeFileSync(path.join(v, "speicher-reserve.json"), JSON.stringify({ pid: 2 ** 22 + 12345 }));
   assert.equal(reserveLaeuft(v, proc), "aus", "PID lebt nicht");
+  // die echte Probe: claude auth status ohne Nutzungs- und Fehlerberichte, auch ohne die Umgebung der Einheit (studium-server
+  // startet zustand.mjs direkt); die Attrappe schreibt auf, was sie bekam
+  const { proben: echt, OHNE_BERICHTE } = await laden("zustand.mjs");
+  const attrappe = path.join(v, "claude.cjs"), sah = path.join(v, "sah.json");
+  fs.writeFileSync(attrappe, `require("node:fs").writeFileSync(${JSON.stringify(sah)}, JSON.stringify({ args: process.argv.slice(2),
+    berichte: [process.env.DISABLE_TELEMETRY, process.env.DISABLE_ERROR_REPORTING] })); process.exit(Number(process.env.ABGEMELDET || 0));`);
+  assert.equal(await echt.claude([process.execPath, attrappe]), "angemeldet");
+  assert.deepEqual(JSON.parse(fs.readFileSync(sah, "utf8")), { args: ["auth", "status"], berichte: ["1", "1"] });
+  assert.deepEqual(OHNE_BERICHTE, { DISABLE_TELEMETRY: "1", DISABLE_ERROR_REPORTING: "1" });
+  process.env.ABGEMELDET = "1";
+  try { assert.equal(await echt.claude([process.execPath, attrappe]), "abgemeldet"); } finally { delete process.env.ABGEMELDET; }
   fs.rmSync(v, { recursive: true, force: true });
 });
 
@@ -693,7 +723,9 @@ test("Installer: Dienste, die er nicht mehr schreibt (entfernt, umbenannt), scha
   // daemon-reload. Kein anderer Teil des Pakets legt Einheiten studium-server* an (der nächste Lauf entfernte sie).
   const geschrieben = [...skript.matchAll(/^einheit (studium-server-[\w@.-]+) <<'UNIT'$/gm)].map((m) => m[1]);
   assert.ok(geschrieben.length >= 12 && new Set(geschrieben).size === geschrieben.length, geschrieben.join(" "));
-  assert.doesNotMatch(skript.replace(/^einheit\(\) .*$/m, ""), /\/etc\/systemd\/system\/|\$EINHEITEN\//, "nur einheit schreibt Einheiten");
+  // daneben nur der Drop-in für Caddy (Ordner des Admin-Sockets, Schritt „Caddy (HTTPS)“), keine Einheit studium-server*
+  assert.doesNotMatch(skript.replace(/^einheit\(\) .*$/m, "").replace(/\/etc\/systemd\/system\/caddy\.service\.d\b/g, ""),
+    /\/etc\/systemd\/system\/|\$EINHEITEN\//, "nur einheit schreibt Einheiten");
   for (const n of new Set(skript.match(/studium-server-[a-z-]+@?\.(?:service|timer|path|socket)/g))) assert.ok(geschrieben.includes(n), `${n}: benutzt, aber nicht geschrieben`);
   const letzte = skript.lastIndexOf("\neinheit "), aufraeumen = skript.indexOf('\nalte_einheiten_entfernen "$EINHEITEN"\n');
   assert.ok(letzte > 0 && letzte < aufraeumen && aufraeumen < skript.indexOf("\nsystemctl daemon-reload\n", aufraeumen) && skript.indexOf("\nsystemctl enable") > aufraeumen);
@@ -730,6 +762,122 @@ test("Installer: Dienste, die er nicht mehr schreibt (entfernt, umbenannt), scha
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
+test("Installer: eigene Ordner für Web-Dienst und Abruf; ein Datenordner bis 0.7.6 zieht einmal um, ohne Daten zu verlieren, ein zweiter Lauf ändert nichts", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  const anfang = skript.indexOf("\n# Ordnung des Datenordners"), ende = skript.indexOf('\n[ "$(id -u)" -eq 0 ]');
+  assert.ok(anfang > 0 && ende > anfang, "ordnung vor dem eigentlichen Ablauf");
+  assert.ok(skript.indexOf("\nordnung /var/lib/studium-server\n") > skript.indexOf("--gid studium-web studium-web\n"), "bei jeder Installation, nach den Benutzern");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ordnung-"));
+  const p = (...t) => path.join(tmp, ...t);
+  const vorwaerts = (x) => x.replace(/\\/g, "/");
+  const D = vorwaerts(p("daten"));
+  // alle Dateien (relativ) mit Inhalt, ohne Links zu folgen
+  const inhalt = (o, vor = "") => Object.fromEntries(fs.readdirSync(o, { withFileTypes: true }).flatMap((e) => e.isDirectory()
+    ? Object.entries(inhalt(path.join(o, e.name), vor + e.name + "/")) : [[vor + e.name, e.isFile() ? fs.readFileSync(path.join(o, e.name), "utf8") : "(Link)"]]));
+  try {
+    fs.mkdirSync(p("bin"));
+    // systemctl, chown und chmod schreiben nur auf, was sie tun sollen (find ruft sie als Programme auf); node in ordner (fchmod) auch
+    for (const b of ["systemctl", "chown", "chmod"]) fs.writeFileSync(p("bin", b), `#!/usr/bin/env bash\necho "${b} $*" >> "$AUFRUFE"\n`, { mode: 0o755 });
+    // sudo -u <benutzer> befehl …: aufschreiben, dann als dieser Benutzer hier (ohne Wechsel) ausführen
+    fs.writeFileSync(p("bin", "sudo"), '#!/usr/bin/env bash\necho "sudo $1 $2" >> "$AUFRUFE"\nshift 2\nexec "$@"\n', { mode: 0o755 });
+    const ablauf = ["set -euo pipefail", 'fehler() { echo "Fehler: $*" >&2; exit 1; }', skript.slice(anfang, ende),
+      'node() { echo "fchmod $4 $3" >> "$AUFRUFE"; }', 'ordnung "$1"'].join("\n");
+    const lauf = () => {
+      fs.rmSync(p("aufrufe"), { force: true });
+      const r = spawnSync("bash", ["-c", ablauf, "-", D], { encoding: "utf8",
+        env: Object.assign({}, process.env, { AUFRUFE: p("aufrufe"), PATH: p("bin") + path.delimiter + process.env.PATH }) });
+      assert.equal(r.status, 0, r.stderr);
+      return fs.existsSync(p("aufrufe")) ? fs.readFileSync(p("aufrufe"), "utf8").split(D).join("D").trim().split("\n") : [];
+    };
+    // Datenordner einer Installation bis 0.7.6: alles direkt darin
+    const alt = {
+      "takt.json": '{"uni_postfach":60}', "knopf.json": '{"zuletzt":"x"}', "abruf.json": "{}", "stand-plugin.json": '{"module":["B110"]}',
+      "geraete.json": "[]", ["verbinden/" + "a".repeat(64) + ".json"]: "{}", "livesync-links/k1": "link",
+      "roh/INDEX.md": "# Neu\n- 1 neue Mail\n", "roh/uni-postfach/1.txt": "Betreff: alt", "abruf-stand.json": '{"uid":1}', "uni-zugang-falsch": "",
+      "zustand.json": "{}", "anstoss": '{"grund":"gmail"}', "termine.json": "{}", "laeufe/20261001T050000Z/protokoll.json": "{}",
+      "eingang/1.json": "{}", "unterlagen/neu/u.md": "Folie",
+    };
+    for (const [n, t] of Object.entries(alt)) { fs.mkdirSync(path.dirname(path.join(D, n)), { recursive: true }); fs.writeFileSync(path.join(D, n), t); }
+    // ein abgebrochener Umzug hat schon einiges umgezogen: Neueres bleibt, Ordner werden zusammengeführt
+    fs.mkdirSync(path.join(D, "web"));
+    fs.writeFileSync(path.join(D, "web", "takt.json"), '{"uni_postfach":30}');
+    const vorStunde = new Date(Date.now() - 3600e3);
+    fs.utimesSync(path.join(D, "takt.json"), vorStunde, vorStunde);
+    fs.mkdirSync(path.join(D, "abruf", "roh", "uni-postfach"), { recursive: true });
+    fs.writeFileSync(path.join(D, "abruf", "roh", "uni-postfach", "2.txt"), "Betreff: neu");
+    // ein Link an der Stelle eines Ordners fällt weg, ohne dass dem Ziel etwas geschieht (Windows: Junction)
+    fs.mkdirSync(p("geheim"));
+    fs.writeFileSync(p("geheim", "anmeldung.json"), "geheim");
+    fs.rmSync(path.join(D, "livesync-links"), { recursive: true });
+    let link = false;
+    try { fs.symlinkSync(p("geheim"), path.join(D, "livesync-links"), "junction"); link = true; } catch { /* ohne Links */ }
+
+    const erste = lauf();
+    const stopp = erste.filter((z) => z.startsWith("systemctl ")).map((z) => z.replace("systemctl stop ", ""));
+    for (const n of ["studium-server-dienst.service", "studium-server-abruf.timer", "studium-server-abruf.service", "studium-server-lauf.path",
+      "studium-server-lauf.service", "studium-server-gmail.timer", "studium-server-zustand.timer", "studium-server-speicher.service"]) {
+      assert.ok(stopp.includes(n), n + " hält vor dem Umzug an");
+    }
+    assert.ok(!stopp.some((n) => n.startsWith("studium-server-aktualisieren")), "nicht die Aktualisierung, die den Installer startet");
+    const rechte = ["fchmod 2711 D", "fchmod 0700 D/laeufe", "fchmod 2770 D/eingang", "fchmod 2750 D/unterlagen", "fchmod 2770 D/unterlagen/neu",
+      "fchmod 2770 D/unterlagen/opus", "fchmod 2770 D/unterlagen/kapitel", "fchmod 2771 D/web", "fchmod 2770 D/abruf"];
+    assert.deepEqual(erste.filter((z) => z.startsWith("fchmod ")), rechte);
+    assert.deepEqual(erste.filter((z) => z.startsWith("chown -h -- ")).map((z) => z.slice(12)), ["studium:studium-web D", "studium:studium D/laeufe",
+      "studium:studium-web D/eingang", "studium:studium-web D/unterlagen", "studium:studium-web D/unterlagen/neu", "studium:studium-web D/unterlagen/opus",
+      "studium:studium-web D/unterlagen/kapitel", "studium-web:studium-web D/web", "studium-abruf:studium D/abruf"]);
+    const nachher = inhalt(D);
+    assert.deepEqual(nachher, {
+      "web/takt.json": '{"uni_postfach":30}', "web/knopf.json": '{"zuletzt":"x"}', "web/abruf.json": "{}", "web/stand-plugin.json": '{"module":["B110"]}',
+      "web/geraete.json": "[]", ["web/verbinden/" + "a".repeat(64) + ".json"]: "{}", ...(link ? {} : { "web/livesync-links/k1": "link" }),
+      "abruf/roh/INDEX.md": "# Neu\n- 1 neue Mail\n", "abruf/roh/uni-postfach/1.txt": "Betreff: alt", "abruf/roh/uni-postfach/2.txt": "Betreff: neu",
+      "abruf/abruf-stand.json": '{"uid":1}', "abruf/uni-zugang-falsch": "",
+      "zustand.json": "{}", "anstoss": '{"grund":"gmail"}', "termine.json": "{}", "laeufe/20261001T050000Z/protokoll.json": "{}",
+      "eingang/1.json": "{}", "unterlagen/neu/u.md": "Folie", ".umzug-fertig": "",
+    }, "alles umgezogen, nichts verloren; der neuere Takt bleibt");
+    assert.deepEqual(fs.readdirSync(p("geheim")), ["anmeldung.json"], "dem Ziel des Links geschah nichts");
+    assert.ok(["unterlagen/opus", "unterlagen/kapitel"].every((o) => fs.statSync(path.join(D, o)).isDirectory()));
+    assert.equal(erste[erste.length - 1], "sudo -u studium", "Marke zuletzt und als studium: root legt im Datenordner nichts an");
+    // Besitzer und Rechte im Umgezogenen; im Datenordner selbst liest der Web-Dienst nur zustand.json (und aktualisierung.json)
+    const mit = (anfang) => erste.filter((z) => z.startsWith(anfang)).join(" ");
+    for (const [befehl, dateien] of [
+      ["chmod 0644 ", ["D/web/takt.json", "D/web/knopf.json"]], ["chmod 0640 ", ["D/web/stand-plugin.json", "D/web/abruf.json", "D/eingang/1.json", "D/unterlagen/neu/u.md", "D/zustand.json"]],
+      ["chown -h studium-abruf:studium ", ["D/abruf/roh", "D/abruf/roh/uni-postfach/1.txt", "D/abruf/abruf-stand.json"]], ["chmod 0660 ", ["D/abruf/roh/INDEX.md"]],
+      ["chown -h studium:studium-web ", ["D/zustand.json", "D/eingang/1.json"]], ["chown -h studium-web:studium-web ", ["D/web/verbinden", "D/unterlagen/neu/u.md"]],
+      ["chown -h studium:studium ", ["D/anstoss", "D/termine.json"]], ["chmod 0600 ", ["D/anstoss", "D/termine.json", "D/web/geraete.json"]]]) {
+      for (const d of dateien) assert.ok(` ${mit(befehl)} `.includes(` ${d} `), `${befehl}${d}`);
+    }
+    assert.doesNotMatch(mit("chmod 0600 "), / D\/zustand\.json /, "zustand.json bleibt für den Web-Dienst lesbar");
+    assert.match(mit("chmod 00700 "), / D\/web\/verbinden( |$)/, "Ordner im web/ ohne setgid (00700)");
+
+    // zweiter Lauf: nichts mehr umzuziehen, nichts angehalten, nur die Ordner selbst noch einmal gerichtet
+    const zweite = lauf();
+    assert.deepEqual(zweite.filter((z) => z.startsWith("fchmod ")), rechte);
+    assert.deepEqual(zweite.filter((z) => !z.startsWith("fchmod ") && !z.startsWith("chown -h -- ")), [], "weder angehalten noch Dateien angefasst");
+    assert.deepEqual(inhalt(D), nachher);
+    // abgebrochener Umzug (die Marke fehlt, die alten Namen sind schon umgezogen): Der nächste Lauf hält wieder an und richtet
+    // Besitzer und Rechte noch einmal (bis zur Prüfung vom 02.11.2026 nie wieder, web/verbinden/ blieb studium 0700)
+    fs.rmSync(path.join(D, ".umzug-fertig"));
+    const dritte = lauf();
+    assert.ok(dritte.includes("systemctl stop studium-server-dienst.service"), "angehalten");
+    assert.ok(dritte.some((z) => z.startsWith("chown -h studium-web:studium-web ") && z.includes(" D/web/verbinden")), "Besitzer gerichtet");
+    assert.ok(fs.existsSync(path.join(D, ".umzug-fertig")), "Marke wieder da");
+    // nach dem Abbruch lief noch das alte Paket (Neustart) und schrieb an den alten Ort: Die neuere Datei bleibt, die ältere fällt weg
+    fs.utimesSync(path.join(D, "web", "geraete.json"), vorStunde, vorStunde);
+    fs.writeFileSync(path.join(D, "geraete.json"), '["neu"]');
+    fs.writeFileSync(path.join(D, "takt.json"), '{"uni_postfach":60}');
+    fs.utimesSync(path.join(D, "takt.json"), new Date(Date.now() - 7200e3), new Date(Date.now() - 7200e3));
+    lauf();
+    assert.equal(fs.readFileSync(path.join(D, "web", "geraete.json"), "utf8"), '["neu"]', "neuere vom alten Ort");
+    assert.equal(fs.readFileSync(path.join(D, "web", "takt.json"), "utf8"), '{"uni_postfach":30}', "ältere vom alten Ort verliert");
+    assert.ok(!fs.existsSync(path.join(D, "geraete.json")) && !fs.existsSync(path.join(D, "takt.json")));
+    // was an der Stelle eines Ordners liegt (Datei, Link), fällt weg; der Ordner entsteht neu
+    fs.rmSync(path.join(D, "unterlagen", "opus"), { recursive: true });
+    fs.writeFileSync(path.join(D, "unterlagen", "opus"), "keine Ordner");
+    lauf();
+    assert.ok(fs.statSync(path.join(D, "unterlagen", "opus")).isDirectory());
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("Claude Code aktualisieren: nie während eines Laufs (oneshot: „activating“), sonst als studium", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
   const funktion = /^claude_aktualisieren\(\) \{\n[\s\S]*?\n\}\n/m.exec(fs.readFileSync(path.join(SERVER, "studium-server"), "utf8"))[0];
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "claude-update-"));
@@ -751,7 +899,39 @@ test("Claude Code aktualisieren: nie während eines Laufs (oneshot: „activatin
     for (const z of ["activating", "active", "deactivating", "reloading"]) {
       assert.deepEqual(lauf(z), { aus: "Claude Code: Ein Lauf läuft gerade; Update beim nächsten Mal.\n", update: "" }, z);
     }
-    for (const z of ["inactive", "failed"]) assert.match(lauf(z).update, /^sudo -u studium -H \S*claude update$/, z);
+    // ohne Nutzungs- und Fehlerberichte an Anthropic, wie im Lauf
+    for (const z of ["inactive", "failed"]) assert.match(lauf(z).update, /^sudo -u studium -H env DISABLE_TELEMETRY=1 DISABLE_ERROR_REPORTING=1 \S*claude update$/, z);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("Nach einem neuen Node.js (auch aus der Nacht): Web-Dienst und Speicherreserve neu, wenn ihr Programm gelöscht ist; was nicht läuft, bleibt", { skip: spawnSync("bash", ["-c", "true"]).status !== 0 && "kein bash" }, () => {
+  const skript = fs.readFileSync(path.join(SERVER, "studium-server"), "utf8");
+  const funktion = /^veraltete_neu_starten\(\) \{\n[\s\S]*?\n\}\n/m.exec(skript)[0];
+  const dienste = /^NODE_DIENSTE=\(.*\)$/m.exec(skript)[0];
+  assert.match(skript, /^ {2}pakete_aktualisieren\n {2}veraltete_neu_starten\n/m, "jeden Tag gleich nach den Paketen, auch ohne neue Version");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "veraltet-"));
+  try {
+    const bin = path.join(tmp, "bin"), aufrufe = path.join(tmp, "aufrufe");
+    fs.mkdirSync(bin);
+    // systemctl nennt die MainPID aus PID_<dienst> und schreibt try-restart auf; readlink nennt /proc/<pid>/exe aus EXE_<pid>
+    fs.writeFileSync(path.join(bin, "systemctl"), "#!/usr/bin/env bash\nif [ \"$1 $2 $3\" = \"show -P MainPID\" ]; then v=\"PID_${4//[^a-z]/_}\"; echo \"${!v:-0}\"; exit 0; fi\n" +
+      "echo \"systemctl $*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "readlink"), "#!/usr/bin/env bash\nv=\"EXE_${1//[^0-9]/}\"; [ -n \"${!v:-}\" ] || exit 1; echo \"${!v}\"\n", { mode: 0o755 });
+    const lauf = (env) => {
+      fs.rmSync(aufrufe, { force: true });
+      const r = spawnSync("bash", ["-c", `set -euo pipefail\n${dienste}\n${funktion}veraltete_neu_starten`], { encoding: "utf8",
+        env: Object.assign({}, process.env, { AUFRUFE: aufrufe, PATH: bin + path.delimiter + process.env.PATH }, env) });
+      assert.equal(r.status, 0, r.stderr);
+      return fs.existsSync(aufrufe) ? fs.readFileSync(aufrufe, "utf8").trim().split("\n") : [];
+    };
+    const D = "PID_studium_server_dienst_service", S = "PID_studium_server_speicher_service";
+    assert.deepEqual(lauf({ [D]: "101", EXE_101: "/usr/bin/node (deleted)", [S]: "202", EXE_202: "/usr/bin/node" }),
+      ["systemctl try-restart studium-server-dienst.service"], "nur der mit dem gelöschten Programm");
+    assert.deepEqual(lauf({ [D]: "101", EXE_101: "/usr/bin/node (deleted)", [S]: "202", EXE_202: "/usr/bin/node (deleted)" }),
+      ["systemctl try-restart studium-server-dienst.service", "systemctl try-restart studium-server-speicher.service"]);
+    assert.deepEqual(lauf({ [D]: "101", EXE_101: "/usr/bin/node" }), [], "aktuell: kein Neustart");
+    assert.deepEqual(lauf({ [D]: "0", [S]: "" }), [], "läuft nicht (MainPID 0): bleibt aus");
+    assert.deepEqual(lauf({ [D]: "101" }), [], "Prozess schon weg (readlink scheitert): nichts");
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
@@ -765,10 +945,10 @@ test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von diens
   const vorwaerts = (x) => x.replace(/\\/g, "/");
   try {
     fs.mkdirSync(p("bin"));
-    fs.mkdirSync(p("daten", "verbinden"), { recursive: true });
+    fs.mkdirSync(p("daten", "web", "verbinden"), { recursive: true });
     // systemctl und chown schreiben nur auf, was sie tun sollen
     for (const b of ["systemctl", "chown"]) fs.writeFileSync(p("bin", b), `#!/usr/bin/env bash\necho "${b} $*" >> "$AUFRUFE"\n`, { mode: 0o755 });
-    const ablauf = ["set -euo pipefail", funktion, "root_noetig() { :; }", 'als_studium() { "$@"; }', "KONFIG=$1 DATEN=$2", "schluessel_erneuern"].join("\n");
+    const ablauf = ["set -euo pipefail", funktion, "root_noetig() { :; }", 'als_web() { echo "als_web $1" >> "$AUFRUFE"; "$@"; }', "KONFIG=$1 DATEN=$2", "schluessel_erneuern"].join("\n");
     const lauf = () => {
       fs.rmSync(p("aufrufe"), { force: true });
       const r = spawnSync("bash", ["-c", ablauf, "-", vorwaerts(p("dienst.json")), vorwaerts(p("daten"))], { encoding: "utf8",
@@ -777,7 +957,7 @@ test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von diens
     };
     const bisher = { zugang: "z".repeat(43), schluessel: "s".repeat(43), adresse: "https://203-0-113-5.ss" + "lip.io", ip: "203.0.113.5", port: 8743, version: "0.7.5" };
     fs.writeFileSync(p("dienst.json"), JSON.stringify(bisher));
-    for (const n of ["a".repeat(64) + ".json", "b".repeat(64) + ".json.eingeloest"]) fs.writeFileSync(p("daten", "verbinden", n), "{}");
+    for (const n of ["a".repeat(64) + ".json", "b".repeat(64) + ".json.eingeloest"]) fs.writeFileSync(p("daten", "web", "verbinden", n), "{}");
     let e = lauf();
     assert.equal(e.status, 0, e.fehler);
     const neu = JSON.parse(fs.readFileSync(p("dienst.json"), "utf8"));
@@ -787,17 +967,17 @@ test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von diens
     }
     assert.notEqual(neu.zugang, neu.schluessel);
     assert.deepEqual({ ...neu, zugang: "", schluessel: "" }, { ...bisher, zugang: "", schluessel: "" }, "Adresse, IP, Port und Version bleiben");
-    assert.deepEqual(fs.readdirSync(p("daten", "verbinden")), [], "offene Codes weg");
+    assert.deepEqual(fs.readdirSync(p("daten", "web", "verbinden")), [], "offene Codes weg (als Benutzer des Dienstes)");
     assert.ok(!fs.existsSync(p("dienst.json.neu")));
-    assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", `chown root:studium ${vorwaerts(p("dienst.json"))}.neu`,
-      "systemctl start studium-server-dienst.service"], "erst still, dann die neue Datei, dann wieder an");
+    assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", "als_web sh", `chown root:studium-web ${vorwaerts(p("dienst.json"))}.neu`,
+      "systemctl start studium-server-dienst.service"], "erst still, dann die neue Datei (lesbar für den Dienst), dann wieder an");
     assert.match(e.aus, /Jedes Gerät muss sich neu verbinden/);
     // dienst.json unlesbar: nichts ersetzt, Exit nicht 0, der Dienst läuft wieder
     fs.writeFileSync(p("dienst.json"), "{");
     e = lauf();
     assert.notEqual(e.status, 0);
     assert.equal(fs.readFileSync(p("dienst.json"), "utf8"), "{");
-    assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", "systemctl start studium-server-dienst.service"]);
+    assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", "als_web sh", "systemctl start studium-server-dienst.service"]);
     // installieren.sh (wiederholbar) behält die neuen Schlüssel: sein Schritt „Schlüssel und Konfiguration“ gegen diese Datei
     const inst = /STUDIUM_KONFIG="\$KONFIG" [^\n]* node --input-type=module -e '\n([\s\S]*?)\n'\n/.exec(fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8"))[1];
     fs.writeFileSync(p("dienst.json"), JSON.stringify(neu));
@@ -864,15 +1044,21 @@ test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur; Ergebnis f�
         ...(mitSignatur ? [{ name: "studium-server.tar.gz.sig", browser_download_url: "https://beispiel.example/studium-server.tar.gz.sig" }] : [])] }));
     fs.writeFileSync(p("bin", "curl"), "#!/usr/bin/env bash\n[ \"${GITHUB:-1}\" = 1 ] || exit 6\nziel=\"\"\nwhile [ $# -gt 0 ]; do [ \"$1\" = -o ] && ziel=$2; shift; done\n" +
       "if [ -n \"$ziel\" ]; then echo \"herunterladen $ziel\" >> \"$AUFRUFE\"; cp \"$RELEASE/${ziel##*/}\" \"$ziel\"; else cat \"$RELEASE/info.json\"; fi\n", { mode: 0o755 });
-    fs.writeFileSync(p("bin", "apt-get"), "#!/usr/bin/env bash\necho \"apt-get $*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
+    // apt-get wie das echte: ein Paket, das kein Archiv kennt (ARCHIV), lässt den ganzen Aufruf scheitern („Unable to locate
+    // package“); dpkg-query nennt die installierten (INSTALLIERT). Ohne LiveSync gibt es CouchDB und sein Archiv nicht.
+    fs.writeFileSync(p("bin", "apt-get"), "#!/usr/bin/env bash\necho \"apt-get $*\" >> \"$AUFRUFE\"\nnur=0\nfor a in \"$@\"; do\n" +
+      "  if [ \"$nur\" = 1 ] && [[ \"$a\" != -* ]] && [[ \" ${ARCHIV:-caddy nodejs couchdb} \" != *\" $a \"* ]]; then echo \"E: Unable to locate package $a\" >&2; exit 100; fi\n" +
+      "  [ \"$a\" != --only-upgrade ] || nur=1\ndone\nexit \"${APT:-0}\"\n", { mode: 0o755 });
+    fs.writeFileSync(p("bin", "dpkg-query"), "#!/usr/bin/env bash\n[[ \" ${INSTALLIERT-caddy nodejs couchdb} \" == *\" ${!#} \"* ]] && printf installed || printf not-installed\n",
+      { mode: 0o755 });
     if (spawnSync("bash", ["-c", "command -v jq"]).status !== 0) fs.writeFileSync(p("bin", "jq"), JQ_ATTRAPPE, { mode: 0o755 });
     fs.writeFileSync(p("dienst.json"), JSON.stringify({ ip: "203.0.113.5" }));
     fs.writeFileSync(p("paket", "VERSION"), "0.6.9\n");
     const installiert = new Date("2026-10-20T08:00:00Z");
     fs.utimesSync(p("paket", "VERSION"), installiert, installiert);
-    const ablauf = ["set -euo pipefail", fn("version_neuer") + fn("aktualisierung_merken") + fn("aktualisieren_ende") + fn("aktualisieren"),
-      "root_noetig() { :; }", "claude_aktualisieren() { :; }", 'als_studium() { "$@"; }',
-      'PAKET=$1 DATEN=$2 KONFIG=$3 RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest AKT_ZIEL="" AKT_GRUND="" AKT_TMP=""',
+    const ablauf = ["set -euo pipefail", fn("version_neuer") + fn("aktualisierung_merken") + fn("aktualisieren_ende") + fn("pakete_aktualisieren") + fn("aktualisieren"),
+      "root_noetig() { :; }", "claude_aktualisieren() { :; }", "veraltete_neu_starten() { :; }", 'als_studium() { "$@"; }',
+      'PAKET=$1 DATEN=$2 KONFIG=$3 RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest AKT_ZIEL="" AKT_GRUND="" AKT_TMP="" PAKETE_FEHLER=0',
       "aktualisieren"].join("\n");
     const lauf = (env) => {
       fs.rmSync(p("aufrufe"), { force: true });
@@ -884,19 +1070,25 @@ test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur; Ergebnis f�
       assert.deepEqual(fs.readdirSync(p("daten")), ["aktualisierung.json"], "nichts Halbes liegen geblieben");
       const akt = JSON.parse(fs.readFileSync(p("daten", "aktualisierung.json"), "utf8"));
       assert.match(akt.zeit, /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/);
-      return { status: r.status, fehler: r.stderr, akt: { ...akt, zeit: "" }, zeit: akt.zeit, aufrufe: aufrufe.filter((z) => !z.startsWith("herunterladen ")),
-        geladen: aufrufe.length - aufrufe.filter((z) => !z.startsWith("herunterladen ")).length };
+      const apt = aufrufe.filter((z) => z.startsWith("apt-get "));
+      return { status: r.status, fehler: r.stderr, akt: { ...akt, zeit: "" }, zeit: akt.zeit, apt,
+        aufrufe: aufrufe.filter((z) => !z.startsWith("herunterladen ") && !z.startsWith("apt-get ")),
+        geladen: aufrufe.filter((z) => z.startsWith("herunterladen ")).length };
     };
     info("sha256:" + summe);
+    // Pakete jeden Tag zuerst, auch ohne neue Version und ohne GitHub; nie während eines anderen apt (Sperre, bis 10 Minuten)
+    const PAKETE = ["apt-get -q -o DPkg::Lock::Timeout=600 update",
+      "apt-get install -y -q -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confold --only-upgrade caddy nodejs couchdb"];
     // GitHub nicht erreichbar, noch kein Ergebnis da: letzter Erfolg ist die Installation des laufenden Pakets
     let e = lauf({ GITHUB: "0" });
     assert.equal(e.status, 1);
     assert.deepEqual(e.akt, { zeit: "", ok: false, ziel: "", grund: "github", erfolg: "2026-10-20T08:00:00Z" });
+    assert.deepEqual(e.apt, PAKETE, "Pakete auch ohne GitHub");
     // neue Version: Paket und Signatur geladen, installiert und Pakete nachgezogen, Exit 0, Erfolg jetzt
     e = lauf({});
     assert.equal(e.status, 0, e.fehler);
     assert.deepEqual(e.akt, { zeit: "", ok: true, ziel: "0.7.0", grund: "", erfolg: e.zeit });
-    assert.deepEqual([e.geladen, e.aufrufe], [2, ["installieren --ip 203.0.113.5", "apt-get install -y --only-upgrade caddy nodejs"]]);
+    assert.deepEqual([e.geladen, e.apt, e.aufrufe], [2, PAKETE, ["installieren --ip 203.0.113.5"]]);
     const erfolg = e.zeit;
     // falsche Prüfsumme: nichts installiert, der letzte Erfolg bleibt stehen
     info("sha256:" + "0".repeat(64));
@@ -937,11 +1129,43 @@ test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur; Ergebnis f�
     e = lauf({});
     assert.deepEqual([e.status, e.aufrufe[0]], [0, "installieren --vorbereiten"], e.fehler);
     fs.writeFileSync(p("dienst.json"), JSON.stringify({ ip: "203.0.113.5" }));
-    // schon aktuell: ohne Fehler, nichts installiert
+    // Pakete scheitern (Archiv nicht erreichbar): das neue Paket kommt trotzdem, der Lauf zählt aber als gescheitert
+    const bisher = JSON.parse(fs.readFileSync(p("daten", "aktualisierung.json"), "utf8")).erfolg;
+    e = lauf({ APT: "100" });
+    assert.deepEqual([e.status, e.akt, e.apt, e.aufrufe], [1, { zeit: "", ok: false, ziel: "0.7.0", grund: "pakete", erfolg: bisher }, [PAKETE[0]],
+      ["installieren --ip 203.0.113.5"]]);
+    // gleiche Version, aber ihre Installation kam nicht bis zum Ende (keine Marke .installiert): noch einmal installieren
     fs.writeFileSync(p("paket", "VERSION"), "0.7.0\n");
     e = lauf({});
-    assert.deepEqual([e.status, e.akt.ok, e.akt.ziel, e.akt.erfolg === e.zeit, e.aufrufe], [0, true, "0.7.0", true, []]);
+    assert.deepEqual([e.status, e.akt.ok, e.aufrufe], [0, true, ["installieren --ip 203.0.113.5"]], e.fehler);
+    e = lauf({ INSTALLIEREN: "3" });
+    assert.deepEqual([e.status, e.akt.grund, e.aufrufe], [3, "installieren", ["installieren --ip 203.0.113.5"]], "scheitert wieder: gescheitert, nicht „Schon aktuell“");
+    // schon aktuell und fertig installiert: Pakete trotzdem, ohne Fehler, nichts installiert
+    fs.writeFileSync(p("paket", ".installiert"), "");
+    e = lauf({});
+    assert.deepEqual([e.status, e.akt.ok, e.akt.ziel, e.akt.erfolg === e.zeit, e.apt, e.aufrufe], [0, true, "0.7.0", true, PAKETE, []]);
+    // schon aktuell, aber die Pakete scheitern: gescheitert mit Grund pakete, der letzte Erfolg bleibt
+    const zuletzt = e.zeit;
+    e = lauf({ APT: "100" });
+    assert.deepEqual([e.status, e.akt], [1, { zeit: "", ok: false, ziel: "0.7.0", grund: "pakete", erfolg: zuletzt }]);
+    // ohne LiveSync: weder CouchDB noch sein Archiv. Nur Caddy und Node.js, ohne Fehler (bis 0.7.6 scheiterte apt hier jeden Tag an
+    // „Unable to locate package couchdb“, und Caddy und Node.js blieben stehen)
+    e = lauf({ INSTALLIERT: "caddy nodejs", ARCHIV: "caddy nodejs" });
+    assert.deepEqual([e.status, e.akt.ok, e.akt.grund, e.apt], [0, true, "", [PAKETE[0], PAKETE[1].replace(/ couchdb$/, "")]], e.fehler);
+    e = lauf({ INSTALLIERT: "", ARCHIV: "caddy nodejs" });
+    assert.deepEqual([e.status, e.akt.ok, e.apt], [0, true, []], "nichts davon installiert: kein apt");
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("Installer: Jedes Modul, das ein installiertes Modul einbindet, kommt mit; jede Datei, die eine Einheit startet, auch", () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  const liste = /^for datei in ([^\n]*); do$/m.exec(skript)[1].split(" ");
+  for (const n of liste.filter((x) => x.endsWith(".mjs"))) {
+    for (const m of fs.readFileSync(path.join(SERVER, n), "utf8").matchAll(/^import [^\n]* from "\.\/([\w-]+\.mjs)";$/gm)) {
+      assert.ok(liste.includes(m[1]), `${n} bindet ${m[1]} ein, das der Installer nicht mitnimmt`);
+    }
+  }
+  for (const m of skript.matchAll(/\/opt\/studium-server\/aktuell\/([\w.-]+)/g)) assert.ok(liste.includes(m[1]), m[1]);
 });
 
 test("Signatur des Server-Pakets: allowed_signers nennt Schlüssel genau für Prinzipal und Namensraum, die „aktualisieren“ prüft; der Installer legt sie mit ab", () => {
@@ -952,6 +1176,80 @@ test("Signatur des Server-Pakets: allowed_signers nennt Schlüssel genau für Pr
   for (const z of zeilen) assert.match(z, new RegExp(`^${m[1]} namespaces="${m[2]}" (?:ssh|ecdsa|sk)-[a-z0-9@.-]+ [A-Za-z0-9+/]+=*$`));
   // fehlt sie im installierten Paket, scheitert jedes weitere Update an der Signatur
   assert.match(fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8"), /^for datei in [^\n]* allowed_signers[ ;][^\n]*do$/m);
+});
+
+test("Schutz der Dienste: jeder Dienst ohne root im Sandkasten; der Web-Dienst sieht weder Claude-Anmeldung noch Lauf-Ordner und spricht nur mit 127.0.0.1", () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  const einheiten = Object.fromEntries([...skript.matchAll(/^einheit (studium-server-[\w@.-]+) <<'UNIT'\n([\s\S]*?)\nUNIT$/gm)].map((m) => [m[1],
+    m[2].split("\n").filter((z) => /^\w+=/.test(z)).reduce((o, z) => { const i = z.indexOf("="); (o[z.slice(0, i)] ||= []).push(z.slice(i + 1)); return o; }, {})]));
+  const dienste = Object.keys(einheiten).filter((n) => n.endsWith(".service") && einheiten[n].User);
+  assert.deepEqual(dienste.sort(), ["abruf", "dienst", "gmail", "lauf", "speicher", "zustand"].map((n) => `studium-server-${n}.service`));
+  const PFLICHT = { NoNewPrivileges: "yes", CapabilityBoundingSet: "", ProtectSystem: "strict", ProtectHome: "yes", PrivateTmp: "yes", PrivateDevices: "yes",
+    ProtectKernelTunables: "yes", ProtectKernelModules: "yes", ProtectKernelLogs: "yes", ProtectControlGroups: "yes", ProtectClock: "yes", ProtectHostname: "yes",
+    ProtectProc: "invisible", RestrictNamespaces: "yes", RestrictRealtime: "yes", RestrictSUIDSGID: "yes", LockPersonality: "yes", SystemCallArchitectures: "native",
+    SystemCallErrorNumber: "EPERM" };
+  for (const n of dienste) {
+    const e = einheiten[n];
+    for (const [k, w] of Object.entries(PFLICHT)) assert.deepEqual(e[k], [w], `${n}: ${k}`);
+    assert.deepEqual(e.SystemCallFilter, ["@system-service", "~@privileged"], n);
+    assert.ok(e.RestrictAddressFamilies && e.UMask && e.ReadWritePaths && e.InaccessiblePaths, n);
+    // Node.js und Claude Code übersetzen zur Laufzeit (JIT): nie MemoryDenyWriteExecute
+    if (e.ExecStart[0].startsWith("/usr/bin/node ")) assert.equal(e.MemoryDenyWriteExecute, undefined, n);
+    // Die Claude-Anmeldung (Home von studium) sieht nur, wer Claude startet
+    const sperrt = e.InaccessiblePaths[0].split(" ");
+    if (!["studium-server-lauf.service", "studium-server-zustand.service"].includes(n)) assert.ok(sperrt.includes("-/var/lib/studium"), `${n}: Claude-Anmeldung gesperrt`);
+    else assert.ok(e.ReadWritePaths[0].split(" ").includes("/var/lib/studium"), `${n}: ~/.claude beschreibbar`);
+  }
+  const dienst = einheiten["studium-server-dienst.service"];
+  for (const p of ["-/var/lib/studium", "-/var/lib/studium-server/laeufe", "/etc/credstore.encrypted", "-/run/credentials", "-/etc/studium-server/livesync.json"]) {
+    assert.ok(dienst.InaccessiblePaths[0].split(" ").includes(p), `Web-Dienst: ${p}`);
+  }
+  assert.deepEqual([dienst.IPAddressDeny, dienst.IPAddressAllow, dienst.RestrictAddressFamilies], [["any"], ["localhost"], ["AF_UNIX AF_INET AF_INET6"]]);
+  // Ohne Netz, wer keins braucht; den Lauf erreicht der Uni-Zugang nie
+  for (const n of ["speicher", "gmail"]) assert.deepEqual(einheiten[`studium-server-${n}.service`].IPAddressDeny, ["any"], n);
+  assert.ok(einheiten["studium-server-lauf.service"].InaccessiblePaths[0].split(" ").includes("/etc/studium-server"));
+  // claude auth status alle 15 Minuten: ohne Nutzungs- und Fehlerberichte an Anthropic
+  const umgebung = einheiten["studium-server-zustand.service"].Environment.join(" ").split(" ");
+  for (const v of ["DISABLE_TELEMETRY=1", "DISABLE_ERROR_REPORTING=1"]) assert.ok(umgebung.includes(v), `Zustand: ${v}`);
+  assert.equal(einheiten["studium-server-abruf.service"].MemoryDenyWriteExecute[0], "yes");
+  assert.deepEqual([dienst.UMask, einheiten["studium-server-abruf.service"].UMask], [["0027"], ["0007"]]);
+  // Jeder Teil als eigener Benutzer und nur in seinem Ordner (ordnung in installieren.sh): Der Web-Dienst kann weder Claudes
+  // Anmeldung lesen noch die Prozesse von studium beenden; nur der Lauf bekommt die Gruppe des Web-Dienstes dazu
+  const benutzer = Object.fromEntries(dienste.map((n) => [n.replace(/^studium-server-|\.service$/g, ""), [einheiten[n].User[0], einheiten[n].Group[0]]]));
+  assert.deepEqual(benutzer, { abruf: ["studium-abruf", "studium"], dienst: ["studium-web", "studium-web"], gmail: ["studium", "studium"],
+    lauf: ["studium", "studium"], speicher: ["studium", "studium"], zustand: ["studium", "studium"] });
+  assert.deepEqual(dienste.filter((n) => einheiten[n].SupplementaryGroups), ["studium-server-lauf.service"]);
+  assert.deepEqual(einheiten["studium-server-lauf.service"].SupplementaryGroups, ["studium-web"]);
+  const D = "/var/lib/studium-server";
+  assert.deepEqual(dienst.ReadWritePaths, [`${D}/web ${D}/eingang ${D}/unterlagen`], "Web-Dienst schreibt nur in web/, eingang/, unterlagen/");
+  assert.ok(dienst.InaccessiblePaths[0].split(" ").includes(`-${D}/abruf`), "Web-Dienst sieht die Rohdaten nicht");
+  const abruf = einheiten["studium-server-abruf.service"];
+  assert.deepEqual(abruf.ReadWritePaths, [`${D}/abruf`], "Abruf schreibt nur in abruf/");
+  for (const p of [`-${D}/laeufe`, `-${D}/eingang`, `-${D}/unterlagen`, `-${D}/web/verbinden`, `-${D}/web/livesync-links`]) {
+    assert.ok(abruf.InaccessiblePaths[0].split(" ").includes(p), `Abruf: ${p}`);
+  }
+  assert.deepEqual(abruf.ConditionPathExists, ["/etc/credstore.encrypted/uni-zugang", `!${D}/abruf/uni-zugang-falsch`]);
+  for (const n of ["zustand", "gmail"]) {
+    const sperrt = einheiten[`studium-server-${n}.service`].InaccessiblePaths[0].split(" ");
+    for (const o of ["unterlagen", "eingang"]) assert.ok(sperrt.includes(`-${D}/${o}`), `${n}: ${o}`);
+  }
+  // ein Anstoß je Schreiber (lauf.mjs ANSTOESSE)
+  assert.deepEqual(einheiten["studium-server-lauf.path"].PathExists, [`${D}/anstoss`, `${D}/web/anstoss`, `${D}/abruf/anstoss`]);
+});
+
+test("Pakete: Node.js von NodeSource (Schlüssel am Fingerabdruck geprüft, Pin), Caddy, CouchDB und Node.js unter unattended-upgrades", () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  assert.match(skript, /^NODE_MAJOR=(2[2-9]|[3-9]\d)$/m, "eine gepflegte LTS-Linie, nicht Node.js 18 von Ubuntu");
+  assert.match(skript, /^NODE_SCHLUESSEL=6F71F525282841EEDAF851B42F59B5F99B1BE0B4$/m);
+  assert.doesNotMatch(/^for p in ([^\n]*); do$/m.exec(skript)[1], /\bnodejs\b/, "nodejs nicht aus Ubuntu");
+  assert.match(skript, /Package: nodejs\nPin: origin deb\.nodesource\.com\nPin-Priority: 600/);
+  const muster = /Unattended-Upgrade::Origins-Pattern \{\n([\s\S]*?)\n\};/.exec(skript)[1].split("\n").map((z) => z.trim());
+  assert.deepEqual(muster, ['"site=dl.cloudsmith.io,origin=cloudsmith/caddy/stable";', '"site=apache.jfrog.io,origin=Artifactory,codename=noble";',
+    '"site=deb.nodesource.com,codename=nodistro";']);
+  // die Archive selbst: dieselben Adressen wie in den Mustern
+  assert.match(skript, /dl\.cloudsmith\.io\/public\/caddy\/stable/);
+  assert.match(fs.readFileSync(path.join(SERVER, "livesync.sh"), "utf8"), /https:\/\/apache\.jfrog\.io\/artifactory\/couchdb-deb\/ noble main/);
+  assert.match(skript, /https:\/\/deb\.nodesource\.com\/node_\$NODE_MAJOR\.x nodistro main/);
 });
 
 test("Folien für Kapitellisten: nur Folien mit Modulcode und gültigem Pfad, Nummer, Datum und Quelle geprüft, Kopf für Claude, Anstoß, Grenze; Stand nennt die Module", async () => {
@@ -973,7 +1271,7 @@ test("Folien für Kapitellisten: nur Folien mit Modulcode und gültigem Pfad, Nu
   assert.ok(datei.startsWith("# B110 Folien 00 Einführung\n\nDatei: Unterlagen/B110 Einführung/B110 Folien 00 Einführung.pdf\n" +
     "Modul: B110 · Art: Folien · Nummer: 0 · Seiten: 30\nDatum: 2026-10-14 · Quelle: ILIAS-Kurs B110\n" +
     "Auftrag: nur Kapitelliste (Lernplan); ab Seite 9 steht nur die erste Zeile jeder Seite\n\n---\n[S. 1]"), datei.slice(0, 400));
-  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "anstoss"), "utf8")).grund, "lernplan");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(v, "web", "anstoss"), "utf8")).grund, "lernplan");
   assert.ok(!fs.existsSync(path.join(v, "unterlagen", "neu", k("a") + ".md")), "keine Begleitnotiz");
   const viele = Array.from({ length: 30 }, (_, i) => Object.assign({}, geprueft[0], { kennung: String(i).padStart(64, "0") }));
   assert.throws(() => kapitelAblegen(v, viele), (e) => e.status === 429, "höchstens 30 warten");
@@ -994,4 +1292,42 @@ test("Folien für Kapitellisten: nur Folien mit Modulcode und gültigem Pfad, Nu
   const codes = ["B110", "B180", "E101", "S100", "S110"];
   const viel = lp({ semester: "WS 2026/27", module: codes, listen: codes.map((code) => ({ code, kapitel: gross })) });
   assert.ok(viel.listen.length >= 1 && viel.listen.length < codes.length && JSON.stringify(viel.listen).length <= 150000, "höchstens 150 000 Zeichen");
+});
+
+// Aus der Prüfung vom 02.11.2026
+test("Installer: fertig erst nach „Prüfen“ (.installiert); Caddys Admin-Schnittstelle nur über ihren Socket; Web-Dienst ohne Caddy und CouchDB", () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  const weg = skript.indexOf('rm -f "$ZIEL/.installiert"'), umschalten = skript.indexOf('ln -sfn "$ZIEL" /opt/studium-server/aktuell');
+  const pruefen = skript.indexOf('schritt "Prüfen"'), status = skript.indexOf("\nstudium-server status\n"), marke = skript.indexOf(': >"$ZIEL/.installiert"');
+  assert.ok(weg > 0 && weg < umschalten, "Marke weg, bevor das Paket umschaltet");
+  assert.ok(pruefen > 0 && status > pruefen && marke > status, "Marke erst nach der Prüfung");
+  // ohne admin hörte Caddys Admin-Schnittstelle ohne Anmeldung auf localhost:2019, und der Web-Dienst darf mit 127.0.0.1 sprechen
+  assert.match(skript, /\n# studium-server \(installieren\.sh\)[^\n]*\n\{\n\tadmin unix\/\/run\/caddy\/admin\.sock\n\}\n/);
+  assert.match(skript, /caddy\.service\.d\/studium-server\.conf <<'UNIT'\n[^\n]*\n\[Service\]\nRuntimeDirectory=caddy\nRuntimeDirectoryMode=0700\nUNIT\n/);
+  assert.match(skript, /if systemctl is-active --quiet caddy && \[ -S \/run\/caddy\/admin\.sock \]; then systemctl reload caddy; else systemctl restart caddy; fi/);
+  const dienst = /einheit studium-server-dienst\.service <<'UNIT'\n([\s\S]*?)\nUNIT/.exec(skript)[1];
+  const gesperrt = ` ${(dienst.match(/^InaccessiblePaths=.*$/gm) || []).map((z) => z.slice(18)).join(" ")} `;
+  for (const p of ["/var/lib/caddy", "/run/caddy", "/opt/couchdb/etc", "/var/lib/couchdb", "/var/lib/studium"]) assert.ok(gesperrt.includes(` -${p} `), p);
+});
+
+test("Installer: ordner() setzt Rechte nur über einen Deskriptor ohne Links (O_NOFOLLOW, O_DIRECTORY); ein Link an der Stelle scheitert", () => {
+  const skript = fs.readFileSync(path.join(SERVER, "installieren.sh"), "utf8");
+  const funktion = /^ordner\(\) \{\n[\s\S]*?\n\}\n/m.exec(skript)[0];
+  const code = /node -e '\n([\s\S]*?)\n {2}'/.exec(funktion)[1];
+  assert.match(code, /c\.O_RDONLY \| c\.O_DIRECTORY \| c\.O_NOFOLLOW/);
+  assert.match(code, /fchmodSync\(fd, /);
+  // Wirkung (nur unter Linux/macOS: O_NOFOLLOW und Modi gibt es unter Windows so nicht)
+  if (process.platform === "win32") return;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "ordner-"));
+  try {
+    const echt = path.join(tmp, "echt"), ziel = path.join(tmp, "ziel"), link = path.join(tmp, "link");
+    fs.mkdirSync(echt, { mode: 0o755 });
+    fs.mkdirSync(ziel, { mode: 0o755 });
+    fs.chmodSync(ziel, 0o755);
+    fs.symlinkSync(ziel, link);
+    assert.equal(spawnSync(process.execPath, ["-e", code, echt, "2771"]).status, 0);
+    assert.equal(fs.statSync(echt).mode & 0o7777, 0o2771, "echter Ordner: Modus genau, auch setgid");
+    assert.notEqual(spawnSync(process.execPath, ["-e", code, link, "0777"]).status, 0, "Link: scheitert");
+    assert.equal(fs.statSync(ziel).mode & 0o7777, 0o755, "dem Ziel des Links geschah nichts");
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

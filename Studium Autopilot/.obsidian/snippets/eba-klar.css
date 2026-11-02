@@ -1,11 +1,12 @@
 /* ==========================================================================
-   EBA · Design KLAR (seit 18.10.2026, nur hell)
+   EBA · Design KLAR (seit 18.10.2026, dunkel seit 01.11.2026)
    Weiß und schlicht wie eine moderne App: weiße Seite, kühle Grautöne, die Schrift des Geräts auch in Überschriften,
    runde Ecken, Akzent Blau. Formen und Maße sind die Grundwerte aus eba-core.css; hier stehen nur die Farben und die
    Abschnittsüberschriften.
+   Dunkel: wie der dunkle Modus einer App, fast schwarzes kühles Grau, Karten eine Stufe heller, weiße Schrift, Akzent Blau.
    Gilt mit body.eba-design-klar (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Form und Schrift
-   gelten hell und dunkel (seit 18.10.2026; vorher war Klar nachts ganz Elfenbein), die Farben nur hell: Dunkel gelten die
-   dunklen Farben von Elfenbein (eba-paper-elfenbein.css, .theme-dark), bis Klar eigene hat.
+   gelten hell und dunkel (seit 18.10.2026; vorher war Klar nachts ganz Elfenbein), eigene dunkle Farben seit 01.11.2026
+   (bis dahin die von Elfenbein). Schatten und Modulfarben dunkel kommen aus eba-paper-elfenbein.css (.theme-dark, alle Designs).
    Regeln stehen unter .eba-design-klar:where(.theme-light, .theme-dark) und sind damit so spezifisch wie die von Elfenbein: Die
    Ausnahmen in eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
    ========================================================================== */
@@ -58,6 +59,63 @@
   --eba-art-uni: #22639a; /* Kalender: Petrol war neben dem Grün zu ähnlich, Stahlblau bleibt vom Akzent weg */
   --eba-art-event: #b24acf; /* Veranstaltungen lila statt grün (seit 0.7.0): Grün heißt erledigt */
   --eba-modul-1: #1f5587; /* Wochenraster: Marineblau statt Blau, das wäre fast der Akzent (Auswahl, jetzt) */
+}
+
+/* Dunkel (seit 01.11.2026): Seite fast schwarz, Karten heben sich wie in einer App eine Stufe heller ab, Leisten sind dunkler
+   als die Seite (wie in Elfenbein). Der Akzent Blau ist Fläche mit weißer Schrift; Links und der Ring „jetzt“
+   (--eba-accent-text) sind ein helles Blau: Ein kräftigeres läge zwischen Modul 1, 3 und 4 im Wochenraster (0,06–0,11 statt
+   mindestens 0,1, tests/design.test.js). Prüfung, Uni und Veranstaltung: Rot, Stahlblau, Orchidee, je 0,2 auseinander;
+   --eba-bad als Schrift etwas heller als die Prüfung im Chip. */
+.eba-design-klar.theme-dark {
+  --color-base-00: #121417;
+  --color-base-05: #15171b;
+  --color-base-10: #181b1f;
+  --color-base-20: #0e1013;
+  --color-base-25: #22262c;
+  --color-base-30: #2b3037;
+  --color-base-35: #343a42;
+  --color-base-40: #474e57;
+  --color-base-50: #737b86;
+  --color-base-60: #9ba2ac;
+  --color-base-70: #c3c8ce;
+  --color-base-100: #e9ebee;
+
+  --accent-h: 221;
+  --accent-s: 74%;
+  --accent-l: 53%;
+  --text-accent: #aacdff;
+  --text-accent-hover: #c4dcff;
+  --interactive-accent: #2f66e0;
+  --interactive-accent-hover: #2a5bd7;
+  --text-selection: rgba(170, 205, 255, 0.22);
+  --text-highlight-bg: rgba(255, 210, 90, 0.30);
+
+  --background-modifier-hover: rgba(233, 235, 238, 0.05);
+  --background-modifier-border: #2b3037;
+  --titlebar-background: #0e1013;
+  --titlebar-background-focused: #0e1013;
+  --tab-container-background: #0e1013;
+  --ribbon-background: #0e1013;
+
+  --eba-bg: #121417;
+  --eba-surface: #1a1d22;
+  --eba-card-bg: #1a1d22;
+  --eba-surface-2: #22262c;
+  --eba-border: #2b3037;
+  --eba-border-strong: #3f454e;
+  --eba-text: #e9ebee;
+  --eba-muted: #a5abb4;
+  --eba-faint: #868d97;
+  --eba-accent: #2f66e0;
+  --eba-accent-text: #aacdff;
+  --eba-accent-soft: rgba(170, 205, 255, 0.12);
+  --eba-good: #4fc48c;
+  --eba-warn: #e3a641;
+  --eba-bad: #e5776d;
+  --eba-info: #5fb6cf; /* Petrol wie hell, eigene Farbe für Lehre und Hinweise */
+  --eba-art-pruefung: #db6c62;
+  --eba-art-uni: #5c9ac4;
+  --eba-art-event: #e99aff;
 }
 
 /* Abschnitte: Überschrift in normaler Schreibweise statt Label, ohne Linie; Luft trennt die Abschnitte */

@@ -29,27 +29,113 @@ export const datumOk = (d) => {
 };
 const tage = (a, b) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
 
-// Wie „Säubern“ in docs/daten-v1.md: HTML, Templater, Links, Backticks, Steuer- und Richtungszeichen weg, Leerraum
-// zusammenfassen. Zu lang danach: Fehler (nicht kürzen).
-export function saeubern(v, max, pflicht) {
+// Domains, deren Links im Fließtext stehen bleiben (wie TEXT_DOMAINS in zentral.js)
+export const TEXT_DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de"];
+// Links im Fließtext. Obsidian macht aus „https://…“ (auch „https:/…“, „https:…“), „www.…“ (die Lesefassung auch mitten im
+// Wort) und „domain.de/…“ einen Link, im Bearbeiten-Modus bis zum nächsten Leerzeichen oder „<“; „file:…“ öffnet es ohne Rückfrage,
+// wenn die Datei im Tresor liegt (andere Schemata wie „smb://“ nur nach Rückfrage). Ein Link bleibt nur, wenn er http(s) ist,
+// ohne Name, Kennwort und Port vor dem Host, der Host nur aus a–z, 0–9, „.“ und „-“ (eine HTML-Entität darin machte die
+// Lesefassung zu einem anderen Host), auf einer Domain der Liste, und dann so, wie der Browser ihn liest (new URL), mit
+// Markdown-Zeichen als %-Kodierung. Sonst bleibt nur der Name des Hosts (linkName: ohne führendes „www.“, nie drei „w“
+// hintereinander, nie an ein Wort davor gehängt, damit daraus kein neuer „www.“-Link wird); bei „domain.de/…“ ohne Schema kommt
+// ein Leerzeichen vor das „/“, und der Rest wird weiter durchsucht; „file:“, „data:“ und „jar:“ fallen ganz weg. Kein Klickziel
+// (Phishing aus einer Mail) und kein Abrufziel für Claude. Satzzeichen am Ende gehören nicht zum Link. Eine Schleife ohne
+// Rekursion, jedes Zeichen nur einmal angesehen (lange Eingaben). Gleicher Code in zentral.js, server.js und server/eingang.mjs
+// (tests/link-filter.test.js prüft alle drei).
+const LINK = /https?:\/{0,3}[^\s<]*|(?:\b|_)(?:file|data|jar):[^\s<]+|\b[a-z][a-z0-9+.-]{1,30}:\/\/[^\s<]*|www\d{0,3}\.[^\s<]*|(^|[^a-z0-9-])((?:[a-z0-9-]+\.)+[a-z]{2,24})(?=\/)/gi;
+const linkDomainOk = (h, domains) => /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(h) && domains.some((d) => h === d || h.endsWith("." + d));
+const linkName = (h) => h.replace(/^(?:www\d{0,3}\.)+/i, "").replace(/w{3,}/gi, "ww").replace(/[^a-z0-9.-]+/gi, " ");
+const linkKuerzen = (url) => {
+  let ende = url.length, zu = url.split(")").length - 1;
+  const auf = url.split("(").length - 1;
+  while (ende > 0 && /[`*!()[\]{};:'".,<>?«»“”‘’„‚]/.test(url[ende - 1]) && !(url[ende - 1] === ")" && auf >= zu)) {
+    if (url[ende - 1] === ")") zu--;
+    ende--;
+  }
+  return [url.slice(0, ende), url.slice(ende)];
+};
+// Link bis zum nächsten Leerzeichen → was im Text dafür steht
+const linkPruefen = (roh, domains) => {
+  const [url, rest] = linkKuerzen(roh);
+  if (/^_?(?:file|data|jar):/i.test(roh)) return " ";
+  let u = null;
+  try { u = new URL(/^https?:|^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : "https://" + url); } catch (e) { return " " + rest; }
+  const host = u.hostname.toLowerCase();
+  if (/^https?:$/.test(u.protocol) && !u.username && !u.password && !u.port && linkDomainOk(host, domains)) {
+    const pfad = (u.pathname + u.search + u.hash).replace(/%(?![0-9a-f]{2})|[[\]()'"*!$^{}|`\\]/gi, (z) => "%" + z.charCodeAt(0).toString(16).toUpperCase());
+    return u.protocol + "//" + host + pfad + rest;
+  }
+  return linkName(host) + rest;
+};
+const linksEntschaerfen = (s, domains) => {
+  const t = String(s), re = new RegExp(LINK.source, "gi");
+  let aus = "", bis = 0, m;
+  // ein Name oder Link direkt hinter einem Wort („xwww“ + „.evil.com“) ergäbe einen neuen Link: dann ein Leerzeichen dazwischen
+  const anhaengen = (vor, neu) => {
+    aus += vor;
+    aus += /[a-z0-9]$/i.test(aus) && /^[a-z0-9.-]/i.test(neu) ? " " + neu : neu;
+  };
+  while ((m = re.exec(t))) {
+    if (!m[2]) {
+      anhaengen(t.slice(bis, m.index), linkPruefen(m[0], domains));
+      bis = re.lastIndex;
+      continue;
+    }
+    // „domain.de/…“ ohne Schema: auf einer erlaubten Domain der ganze Link, sonst nur der Name und ein Leerzeichen vor dem „/“
+    const start = m.index + m[1].length;
+    if (linkDomainOk(m[2].toLowerCase(), domains)) {
+      const w = /[^\s<]*/y;
+      w.lastIndex = start;
+      const roh = w.exec(t)[0];
+      anhaengen(t.slice(bis, start), linkPruefen(roh, domains));
+      bis = start + roh.length;
+    } else {
+      anhaengen(t.slice(bis, start), linkName(m[2]) + " ");
+      bis = start + m[2].length;
+    }
+    re.lastIndex = bis;
+  }
+  return aus + t.slice(bis);
+};
+export { linksEntschaerfen };
+// Wie STEUER und WEG in zentral.js: Steuer- und unsichtbare Zeichen → Leerzeichen; Zeichen, die nur unsichtbar Text tragen können
+// (weiches Trennzeichen, Variantenwähler, Hangul-Füller, Unicode-Tags), fallen ganz weg
+const STEUER = /[\u0000-\u001f\u007f\u061c\u180e\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufff9-\ufffb]/g;
+const WEG = /[\u00ad\u115f\u1160\u3164\uffa0]|\u034f|\u17b4|\u17b5|[\u180b-\u180d]|\u180f|[\ufe00-\ufe0f]|\udb40[\udc00-\udc7f\udd00-\uddef]/g;
+
+// Wie „Säubern“ in docs/daten-v1.md: HTML, Templater, Links, Backticks, Steuer- und unsichtbare Zeichen weg, Leerraum
+// zusammenfassen. Zu lang danach: Fehler (nicht kürzen). links: Domains für linksEntschaerfen; null = Links unverändert (nur für
+// Pfade aus dem Tresor, die genau so bleiben müssen).
+export function saeubern(v, max, pflicht, links = TEXT_DOMAINS) {
   if (v == null || v === "") return pflicht ? { fehler: "fehlt" } : { wert: "" };
   if (typeof v !== "string") return { fehler: "kein Text" };
-  const s = v.replace(/<%[\s\S]*?%>/g, " ").replace(/<\/?[a-z!][^>]*>/gi, " ").replace(/obsidian:\/\/\S*/gi, " ").replace(/javascript:/gi, " ")
-    .replace(/\[\[|\]\]|`/g, " ").replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g, " ").replace(/\s+/g, " ").trim();
+  // viel zu lang schon vorher: Fehler, bevor die Muster laufen (wie textFeld in zentral.js)
+  if (v.length > max * 4 + 1000) return { fehler: "zu lang" };
+  const roh = v.replace(WEG, "").replace(STEUER, " ").replace(/<%[\s\S]*?%>/g, " ").replace(/<\/?[a-z!][^>]*>/gi, " ").replace(/obsidian:\/\/\S*/gi, " ").replace(/javascript:/gi, " ")
+    .replace(/\[\[|\]\]|`/g, " ");
+  const s = (links ? linksEntschaerfen(roh, links) : roh).replace(/\s+/g, " ").trim();
   if (!s) return pflicht ? { fehler: "leer" } : { wert: "" };
   if (s.length > max) return { fehler: "zu lang" };
   return { wert: s };
 }
+
+// Texte, die Studierende lesen (Termin, Hinweis, Begleitnotiz), zusätzlich ohne Links (https, www., mailto): Claude soll keine
+// liefern, und ein Link aus einer fremden Mail wäre in Obsidian anklickbar. Schlüssel und Kapitellisten säubert der Server wie
+// das Plugin (die id und die Haken im Lernplan hängen an ihnen).
+export const ohneLinks = (v) => (typeof v === "string" ? v.replace(/\b(?:https?:\/\/|www\.|mailto:)\S*/gi, " ") : v);
+// Was ohneLinks übrig lässt („domain.de/…“, andere Schemata), entschärft linksEntschaerfen ohne erlaubte Domain: Der Server
+// macht nie selbst einen Link daraus, auch nicht zur Uni.
+const lesetext = (v, max, pflicht) => saeubern(ohneLinks(v), max, pflicht, []);
 
 export const idAus = (schluessel) => "c-" + createHash("sha256").update(String(schluessel)).digest("hex").slice(0, 20);
 
 // Ein Termin aus Claudes Ausgabe → { wert } im Format von termine.json oder { fehler }.
 export function terminNormal(e, heute) {
   if (!istObjekt(e)) return { fehler: "kein Objekt" };
-  const schluessel = saeubern(e.schluessel, G.schluessel, true);
+  const schluessel = saeubern(e.schluessel, G.schluessel, true, null);
   if (schluessel.fehler) return { fehler: "schluessel " + schluessel.fehler };
   if (typeof e.titel !== "string" || GEFAEHRLICH.test(e.titel) || /[\[\]<>{}|\\]/.test(e.titel)) return { fehler: "titel unzulässig" };
-  const titel = saeubern(e.titel, G.titel, true);
+  const titel = lesetext(e.titel, G.titel, true);
   if (titel.fehler) return { fehler: "titel " + titel.fehler };
   if (!datumOk(e.datum)) return { fehler: "datum ungültig" };
   let bis = "";
@@ -63,7 +149,7 @@ export function terminNormal(e, heute) {
     if (!m) return { fehler: "uhrzeit ungültig" };
     uhrzeit = `${m[1]}:${m[2]}` + (m[3] ? `–${m[3]}:${m[4]}` : "");
   }
-  const ort = saeubern(e.ort, G.ort, false);
+  const ort = lesetext(e.ort, G.ort, false);
   if (ort.fehler) return { fehler: "ort " + ort.fehler };
   if (!KATEGORIEN.includes(e.kategorie)) return { fehler: "kategorie nicht erlaubt" };
   if (!STATUS.includes(e.status)) return { fehler: "status ungültig" };
@@ -72,9 +158,9 @@ export function terminNormal(e, heute) {
     if (typeof e.code !== "string" || !MODULCODE.test(e.code)) return { fehler: "code ungültig" };
     code = e.code;
   }
-  const quelle = saeubern(e.quelle_text, G.quelleText, false);
+  const quelle = lesetext(e.quelle_text, G.quelleText, false);
   if (quelle.fehler) return { fehler: "quelle_text " + quelle.fehler };
-  const info = saeubern(e.info, G.info, false);
+  const info = lesetext(e.info, G.info, false);
   if (info.fehler) return { fehler: "info " + info.fehler };
   const wert = { id: idAus(schluessel.wert), schluessel: schluessel.wert, titel: titel.wert, datum: e.datum, bis, uhrzeit, ort: ort.wert,
     kategorie: e.kategorie, status: e.status, code, quelle_url: "", quelle_text: quelle.wert, info: info.wert, geprueft: heute };
@@ -86,14 +172,14 @@ export function terminNormal(e, heute) {
 function listeText(liste, max, anzahl, art, verworfen, felder = []) {
   const aus = [];
   for (const roh of Array.isArray(liste) ? liste.slice(0, anzahl) : []) {
-    const r = saeubern(istObjekt(roh) ? roh.text : roh, max, true);
+    const r = lesetext(istObjekt(roh) ? roh.text : roh, max, true);
     if (r.fehler) { verworfen.push({ art, grund: r.fehler }); continue; }
     const eintrag = { text: r.wert };
     if (istObjekt(roh) && Number.isInteger(roh.seite) && roh.seite > 0 && roh.seite < 10000) eintrag.seite = roh.seite;
     if (eintrag.seite && Number.isInteger(roh.bis) && roh.bis > eintrag.seite && roh.bis < 10000) eintrag.bis = roh.bis;
     if (felder.includes("frist") && istObjekt(roh) && datumOk(roh.frist)) eintrag.frist = roh.frist;
     if (felder.includes("begriff") && istObjekt(roh) && typeof roh.begriff === "string") {
-      const b = saeubern(roh.begriff.replace(/\*/g, " ").replace(/:\s*$/, ""), G.begriff, false);
+      const b = lesetext(roh.begriff.replace(/\*/g, " ").replace(/:\s*$/, ""), G.begriff, false);
       if (b.wert) eintrag.begriff = b.wert;
     }
     aus.push(eintrag);
@@ -212,8 +298,8 @@ export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
   }
   const hinweise = [];
   for (const h of Array.isArray(roh.hinweise) ? roh.hinweise.slice(0, G.hinweise) : []) {
-    const text = saeubern(istObjekt(h) ? h.text : h, G.hinweis, true);
-    const quelle = saeubern(istObjekt(h) ? h.quelle : "", G.quelleText, false);
+    const text = lesetext(istObjekt(h) ? h.text : h, G.hinweis, true);
+    const quelle = lesetext(istObjekt(h) ? h.quelle : "", G.quelleText, false);
     if (text.fehler || quelle.fehler) { verworfen.push({ art: "hinweis", grund: text.fehler || quelle.fehler }); continue; }
     // Modul, zu dem der Hinweis gehört (Modulfeld in Obsidian); ein ungültiger Code fällt weg, der Hinweis bleibt
     const code = istObjekt(h) && typeof h.code === "string" && MODULCODE.test(h.code) ? h.code : "";
@@ -245,6 +331,16 @@ export function eingangNormal(roh, { jetzt = new Date(), lauf = "" } = {}) {
       todo_doppel, kapitel },
     verworfen,
   };
+}
+
+// Zahlen zum Gmail-Überblick (skill termine.md): wie viele Mails Claude sah, wie viele es ganz las, ob eine Grenze griff. Nur für
+// protokoll.json, nie ins Eingang; ohne gültige Zahlen null.
+const UEBERBLICK_MAX = 10000;
+export function gmailUeberblick(roh) {
+  const u = istObjekt(roh) && istObjekt(roh.gmail_ueberblick) ? roh.gmail_ueberblick : null;
+  const zahl = (n) => Number.isInteger(n) && n >= 0 && n <= UEBERBLICK_MAX;
+  if (!u || !zahl(u.gelistet) || !zahl(u.gelesen) || u.gelesen > u.gelistet) return null;
+  return { gelistet: u.gelistet, gelesen: u.gelesen, begrenzt: u.begrenzt === true };
 }
 
 // Vergleicht mit dem Bestand (id → Termin): Nur neue oder geänderte Termine gehen ins Eingang. `geprueft` zählt nicht als Änderung.

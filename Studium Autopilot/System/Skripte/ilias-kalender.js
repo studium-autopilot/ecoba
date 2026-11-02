@@ -2,9 +2,12 @@
 // Termine/. Quelle nach dem Quellen-Vertrag (quellen.js; docs/architektur/ilias-kalender.md und „Quellen-Vertrag“).
 //
 // Verbinden wie bei Alma: In ILIAS Persönlicher Arbeitsraum → Kalender → Abonnieren, den Link unter „iCal-URL“ kopieren. Der Link
-//   enthält einen geheimen Schlüssel (wer ihn hat, sieht deinen Kalender). Er liegt NUR im gerätelokalen Speicher von Obsidian
-//   (app.saveLocalStorage, eba-ilias-ics), nie in einer Datei des Tresors, nie in Status, Fehlertexten, Hinweisen oder Konsole.
-//   Scheitert der erste Abruf, bleibt der vorherige Zustand (kein Link gespeichert).
+//   enthält einen geheimen Schlüssel (wer ihn hat, sieht deinen Kalender). Er liegt NUR im Schlüsselbund von Obsidian
+//   (app.secretStorage, Eintrag studium-autopilot-ilias-kalender-<Prüfsumme des Tresornamens> wie bei ILIAS, gerätelokal, nie
+//   synchronisiert), nie in einer Datei des Tresors, nie in Status, Fehlertexten, Hinweisen oder Konsole. Bis 01.11.2026 lag er im
+//   gerätelokalen Speicher (eba-ilias-ics): Den alten Eintrag übernimmt das erste Lesen einmal in den Schlüsselbund und löscht ihn
+//   danach. Ohne Schlüsselbund (Obsidian vor 1.11.4) lässt sich nichts verbinden. Scheitert der erste Abruf, bleibt der vorherige
+//   Zustand (kein Link gespeichert).
 // Was übernommen wird: nur Abgaben und Feedback-Fristen von Übungen (Adresse goto.php/exc/<ref>, Titel endet auf „(Abgabetermin)“
 //   bzw. „(Deadline)“, „(Feedback geben bis)“ bzw. „(Feedback Deadline)“). Sitzungen (Stundenplan kommt zentral, aus Alma oder
 //   von Hand), Beginn und Ende von Kursen (Titel können das Beitrittspasswort enthalten) und Anmeldefenster von Gruppen (stehen
@@ -36,7 +39,8 @@
 //   Doppel einer id führt der Schreiber zusammen (Q.dubletten). Keine neue Notiz für Abgaben, die schon vorbei sind.
 // Ein Schreiber: Abrufer-Sperre System/Daten/ilias-kalender-abruf.json (sperre.js), darin auch „angewendet“. Der Zeitplan wartet,
 //   solange ein anderes Gerät schreibt; ein Knopf übernimmt (Hier aktualisieren). Zeitplan (Q.planen): 20 s bis 2 Min. nach dem
-//   Einlesen, dann alle 2 Std.; nach Fehlern nach 15, 30, 60 Min.; zurück in der App nach über 2 Std. Nur mit Link auf diesem
+//   Einlesen, dann alle 2 Std.; nach Fehlern nach 15, 30, 60 Min.; zurück in der App nach über 2 Std. Ein Abruf wartet höchstens
+//   K.FRIST auf den Kalender (mitFrist), eine späte Antwort wird verworfen. Nur mit Link auf diesem
 //   Gerät und nie, wenn die Abgaben von außen kommen (eba.quelleExtern("ilias-kalender"), bei jedem Lauf gefragt).
 // Status gerätelokal (eba-ilias-ics-status) in der gemeinsamen Form; ein Fehler bleibt stehen, bis ein Abruf klappt. Ein Link, den
 //   ILIAS nicht mehr kennt, steht unter „Bitte prüfen“ (Meldekanal).
@@ -52,8 +56,11 @@ const K = Object.freeze({
   QUELLE: "ilias-kalender", ID_FELD: "ilias_kalender_id",
   HOST: "ovidius.uni-tuebingen.de", ILIAS: "https://ovidius.uni-tuebingen.de/",
   ORDNER: "Termine", INDEX: "System/Daten/ilias.json",
-  LINK: "eba-ilias-ics", STATUS: "eba-ilias-ics-status", SEIT: "eba-ilias-ics-seit",
+  LINK: "eba-ilias-ics", STATUS: "eba-ilias-ics-status", SEIT: "eba-ilias-ics-seit", // LINK: alter Ort, nur noch zum Übernehmen
+  GEHEIM_PRAEFIX: "studium-autopilot-ilias-kalender-",
+  OHNE_SCHLUESSELBUND: "Dieses Obsidian hat noch keinen Schlüsselbund. Bitte Obsidian aktualisieren.",
   TAKT: 2 * STUNDE, ZURUECK: 2 * STUNDE, BACKOFF: [15 * MIN, 30 * MIN, 60 * MIN], START: [20e3, 100e3],
+  FRIST: 60e3,                // so lange höchstens auf den Kalender warten (requestUrl lässt sich nicht abbrechen)
   GROSS: 900 * 1024,          // ab so vielen Bytes gilt der Kalender als womöglich abgeschnitten
   BEKANNT_MIN: 3,             // so viele künftige Abgaben bekannt und keine kam: nichts entfernen
   WEG_MIN: 2,                 // Massenschutz: mehr als so viele und mehr als die Hälfte fehlen → nichts entfernen
@@ -224,8 +231,35 @@ module.exports = function (ctx) {
     } catch (e) { return false; }
   };
 
-  // ---------- Link und Status (gerätelokal) ----------
-  const link = () => app.loadLocalStorage(K.LINK) || "";
+  // ---------- Link (Schlüsselbund) und Status (gerätelokal) ----------
+  // Schlüsselbund (app.secretStorage, seit Obsidian 1.11.4) wie in ilias.js; ein Eintrag je Tresor (iOS teilt den Schlüsselbund
+  // zwischen Tresoren), Name nur aus a–z, 0–9 und „-“
+  const schluesselbund = () => { const g = app.secretStorage; return g && typeof g.getSecret === "function" && typeof g.setSecret === "function" ? g : null; };
+  const hash32 = (t) => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  const geheimId = () => K.GEHEIM_PRAEFIX + hash32(String((app && app.appId) || (app && app.vault && app.vault.getName && app.vault.getName()) || "tresor"));
+  const geheimLesen = () => { const g = schluesselbund(); try { const v = g ? g.getSecret(geheimId()) : ""; return typeof v === "string" ? v : ""; } catch (e) { return ""; } };
+  // Link speichern (leer = löschen); wirft ohne Schlüsselbund
+  const linkSetzen = async (v) => {
+    const g = schluesselbund();
+    if (!g) throw new Error(K.OHNE_SCHLUESSELBUND);
+    if (v) await g.setSecret(geheimId(), v);
+    else if (typeof g.deleteSecret === "function") await g.deleteSecret(geheimId());
+    else await g.setSecret(geheimId(), "");
+  };
+  // Einmal übernehmen: ein Link am alten Ort kommt in den Schlüsselbund; gelöscht wird er dort erst, wenn er im Schlüsselbund steht
+  let uebernahme = null;
+  const uebernehmen = (alt) => {
+    if (uebernahme) return;
+    uebernahme = linkSetzen(alt).then(() => { if (geheimLesen() === alt) app.saveLocalStorage(K.LINK, null); }, () => {}).then(() => { uebernahme = null; });
+  };
+  const link = () => {
+    const v = geheimLesen();
+    if (v || !schluesselbund()) return v;
+    const alt = app.loadLocalStorage(K.LINK);
+    if (typeof alt !== "string" || !alt) return "";
+    uebernehmen(alt);
+    return alt;
+  };
   const hatLink = () => !!link();
   const lstatus = () => { const s = app.loadLocalStorage(K.STATUS); return Object.assign({ geprueft: "", versucht: "", fehler: "", fehlerZeit: "", warnungen: [], fehlerSerie: 0, anderes: "", linkFehler: false }, s && typeof s === "object" ? s : {}); };
   const lstatusSetzen = (x) => app.saveLocalStorage(K.STATUS, Object.assign(lstatus(), x));
@@ -385,6 +419,17 @@ module.exports = function (ctx) {
 
   // ---------- Abruf ----------
   let letzterFehler = "";
+  // Frist wie in alma.js: kommt die Antwort nicht rechtzeitig, endet der Abruf mit Fehler, und eine späte Antwort wird verworfen
+  // (iOS lässt eine Anfrage beim Wechsel in den Hintergrund manchmal liegen). Ohne Zeitgeber (Hülle außerhalb des Plugins) ohne Frist.
+  const ZU_LANGE = "ilias-kalender-frist";
+  const mitFrist = (p, ms) => {
+    if (!ctx.zeit || !ctx.stopp) return p;
+    return new Promise((ja, nein) => {
+      let aus = false;
+      const id = ctx.zeit(() => { if (!aus) { aus = true; nein(new Error(ZU_LANGE)); } }, ms);
+      Promise.resolve(p).then((v) => { if (!aus) { aus = true; ctx.stopp(id); ja(v); } }, (e) => { if (!aus) { aus = true; ctx.stopp(id); nein(e); } });
+    });
+  };
   const aktualisieren = async (o) => {
     if (LAUF.p) return LAUF.p;
     LAUF.p = ablauf(o || {});
@@ -419,7 +464,8 @@ module.exports = function (ctx) {
       // Nur für Tests (docs/architektur/ilias-kalender.md): plugin.testKalenderAbruf({ url }) → { status, text } ersetzt den Abruf (kein Netz)
       const abrufen = typeof plugin().testKalenderAbruf === "function" ? plugin().testKalenderAbruf : ctx.obsidian.requestUrl;
       let antwort;
-      try { antwort = await abrufen({ url: linkAdresse(link()), method: "GET", throw: false }); } catch (e) { antwort = { status: 0 }; }
+      try { antwort = await mitFrist(abrufen({ url: linkAdresse(link()), method: "GET", throw: false }), K.FRIST); }
+      catch (e) { antwort = { status: 0, zuLange: !!e && e.message === ZU_LANGE }; }
       let roh = "", groesse = 0;
       if (antwort && antwort.status === 200) {
         try {
@@ -434,9 +480,15 @@ module.exports = function (ctx) {
         const U = linkFehler && !o.erneuert ? uni() : null;
         let neu = "";
         if (U) { try { neu = await U.erneuern(K.QUELLE, link()); } catch (e) { neu = ""; } }
-        if (neu) { app.saveLocalStorage(K.LINK, neu); return ablauf(Object.assign({}, o, { erneuert: true })); }
+        if (neu) {
+          let gespeichert = true;
+          try { await linkSetzen(neu); } catch (e) { gespeichert = false; }
+          if (gespeichert) return ablauf(Object.assign({}, o, { erneuert: true }));
+        }
         letzterFehler = linkFehler ? "ILIAS kennt diesen Link nicht mehr. Bitte den Link in ILIAS neu kopieren."
-          : status ? `ILIAS antwortet nicht (Fehler ${status}). Später kommt der nächste Versuch.` : "Keine Verbindung zu ILIAS. Bitte Internet prüfen und erneut versuchen.";
+          : status ? `ILIAS antwortet nicht (Fehler ${status}). Später kommt der nächste Versuch.`
+            : antwort && antwort.zuLange ? "ILIAS hat nicht rechtzeitig geantwortet. Später kommt der nächste Versuch."
+              : "Keine Verbindung zu ILIAS. Bitte Internet prüfen und erneut versuchen.";
         nachLauf({ ok: false, fehler: letzterFehler, linkFehler });
         Q().meldenNeu(ctx);
         if (!leise) ctx.hinweis(letzterFehler);
@@ -487,12 +539,14 @@ module.exports = function (ctx) {
     const v = String(neu == null ? "" : neu).trim(), f = linkPruefen(v);
     if (f) { letzterFehler = f; if (!o.nurBeiErfolg) ctx.hinweis(f); return null; }
     const vorher = link(), vorherSeit = app.loadLocalStorage(K.SEIT) || null, vorherStatus = app.loadLocalStorage(K.STATUS);
-    app.saveLocalStorage(K.LINK, v);
+    try { await linkSetzen(v); } catch (e) { letzterFehler = K.OHNE_SCHLUESSELBUND; if (!o.nurBeiErfolg) ctx.hinweis(letzterFehler); return null; }
+    if (vorher && vorher === app.loadLocalStorage(K.LINK)) app.saveLocalStorage(K.LINK, null); // alter Ort: jetzt ersetzt
     // erneuert: beim Verbinden keinen anderen Link holen (der eingegebene soll gelten)
     const b = await aktualisieren({ still: !!o.nurBeiErfolg, erneuert: true });
     if (!b) {
       const grund = letzterFehler;
-      app.saveLocalStorage(K.LINK, vorher || null); app.saveLocalStorage(K.SEIT, vorherSeit); app.saveLocalStorage(K.STATUS, vorher ? vorherStatus : null);
+      try { await linkSetzen(vorher || ""); } catch (e) { /* bleibt der neue nicht, gilt der vorige */ }
+      app.saveLocalStorage(K.SEIT, vorherSeit); app.saveLocalStorage(K.STATUS, vorher ? vorherStatus : null);
       letzterFehler = grund;
       return null;
     }
@@ -501,6 +555,7 @@ module.exports = function (ctx) {
   };
   // Link auf diesem Gerät löschen (die Fristen bleiben); die Sperre wird frei, ein anderes Gerät mit Link übernimmt
   const trennen = async () => {
+    try { await linkSetzen(""); } catch (e) { /* ohne Schlüsselbund gibt es dort keinen Link */ }
     app.saveLocalStorage(K.LINK, null); app.saveLocalStorage(K.SEIT, null); app.saveLocalStorage(K.STATUS, null);
     if (Q()) Q().meldenNeu(ctx);
     if (S()) await sperre().freigeben().catch(() => false);
@@ -518,7 +573,7 @@ module.exports = function (ctx) {
   };
 
   const api = {
-    status, linkPruefen, linkWaehlen, verbinden, aktualisieren, trennen, fehler, hinweise, K,
+    status, linkPruefen, linkWaehlen, verbinden, aktualisieren, trennen, fehler, hinweise, K, geheimId,
     // reine Teile (Tests)
     artAus, zielAus, zeitpunktAus, nummerAus, eintraegeAus, schonDa, titelVon, dateiNameVon, eintragVon, linkAdresse,
   };

@@ -5,7 +5,9 @@
 //   1. GET <ilias>/shib_login.php → Weiterleitungen zum Anmeldeformular der Uni (IdP). Gilt die IdP-Sitzung noch, kommt
 //      direkt das SAML-Formular oder schon ILIAS.
 //   2. Anmeldeformular (Feld j_username) per POST an den IdP: versteckte Felder des Formulars + j_username, j_password,
-//      _eventId_proceed. Die Kästchen „donotcache“ und „Zustimmung widerrufen“ bleiben leer wie im Browser.
+//      _eventId_proceed. Die Kästchen „donotcache“ und „Zustimmung widerrufen“ bleiben leer wie im Browser. Einer Weiterleitung
+//      danach folgt diese Datei selbst, immer als GET ohne Body (am PC; ein 307/308 schickte sonst das Passwort noch einmal ab),
+//      und nur zu den Servern der Sitzung. Auf iPhone/iPad folgt requestUrl selbst.
 //   3. Antwort mit SAMLResponse + RelayState per POST an ILIAS zurück (höchstens 3 Runden).
 //   4. Prüfen: Die Seite, auf der die Weiterleitungen enden (Startseite von ILIAS), zeigt die Metaleiste ohne Anmelde-Link;
 //      nur sonst wird das Dashboard eigens geholt (spart eine Anfrage je Anmeldung).
@@ -19,17 +21,21 @@
 //
 // Code für den Fehlerbericht: Jedes Scheitern trägt code = „Stelle · Gerät Version · Spur“, damit sich aus einer Meldung
 //   ablesen lässt, wo die Anmeldung hängen blieb. Die Spur nennt je Antwort Schritt (start, passwort, saml, dashboard), Status
-//   und Seitenart (seitenArt aus ilias-html.js); bei Seiten außerhalb des normalen Ablaufs dazu Titel und Feldnamen, am PC
-//   Server und Pfad (ohne Query). Nie Inhalte, Feldwerte, Kekse oder das Passwort; der Benutzername wird unkenntlich (•••).
+//   und Seitenart (seitenArt aus ilias-html.js); bei Seiten außerhalb des normalen Ablaufs dazu die Feldnamen, am PC Server und
+//   Pfad (ohne Query). Nie Inhalte, Seitentitel (dort kann ein Name stehen), Feldwerte, Kekse oder das Passwort; der
+//   Benutzername wird unkenntlich (•••).
 //   Bei „unerwartet“ und „netz“ steht der Code im Hinweis (man schickt ihn mit); die übrigen Gründe sagen selbst, was zu tun ist.
 //   Stellen: idp-ziel (Anmeldeformular zeigt auf einen fremden Server), nach-passwort (unbekannte Seite nach dem Absenden),
 //   saml-ziel (SAML-Formular zeigt nicht auf ILIAS), nicht-angemeldet (am Ende keine ILIAS-Seite), blockiert-<host> bei <schritt>
 //   (Weiterleitung auf einen fremden Server, nur am PC erkennbar), netz-<grund> bei <schritt> bzw. netz-http-<status>,
 //   zustimmung, zwei-faktor, zugang-falsch, ohne-zugang.
-//   Beispiel: „nach-passwort · iPad 0.4.7 · start 200 idp-anmeldung › passwort 200 unbekannt „Titel“ [feld1,feld2]“
+//   Beispiel: „nach-passwort · iPad 0.4.7 · start 200 idp-anmeldung › passwort 200 unbekannt [feld1,feld2]“
 //
 // Aufruf: await ctx.user["ilias-anmeldung"](ctx).anmelden(sitzung, { benutzer, kennwortGeber }, { netz?, html?, uni? })
-//         → { ok: true } oder { ok: false, grund: "zugang-falsch"|"zustimmung"|"zwei-faktor"|"netz"|"unerwartet", hinweis, code }
+//         → { ok: true, passwortGesendet } oder { ok: false, grund: "zugang-falsch"|"zustimmung"|"zwei-faktor"|"netz"|"unerwartet",
+//           hinweis, code, passwortGesendet }
+//   passwortGesendet: Das Passwort ging an den IdP. Gilt die Sitzung bei ILIAS oder der Uni noch (Kekse von früher, auf iPhone und
+//   iPad hält sie das Gerät selbst), klappt die Anmeldung ohne Passwort; dann hat niemand das Passwort geprüft (ilias.js).
 // Tests: tests/ilias-anmeldung.test.js (Attrappe der Sitzung, kein Netz). iOS-sicher (kein Lookbehind, keine Node-Module).
 module.exports = function (ctx) {
   ctx = ctx || {};
@@ -42,6 +48,7 @@ module.exports = function (ctx) {
   };
   const MIT_CODE = ["unerwartet", "netz"];
   const SAML_RUNDEN = 3;
+  const WEITERLEITUNG = { 301: 1, 302: 1, 303: 1, 307: 1, 308: 1 };
   const CODE_MAX = 450;
   // Seiten des normalen Ablaufs: in der Spur ohne Titel und Feldnamen
   const GEWOHNT = ["idp-anmeldung", "saml-weiterleitung", "ilias", "startseite"];
@@ -83,13 +90,13 @@ module.exports = function (ctx) {
     };
     const ort = (url) => { try { const u = new URL(url); return u.host.split(".")[0] + u.pathname; } catch (e) { return ""; } };
     const art = (r) => { try { return H && typeof H.seitenArt === "function" ? H.seitenArt(r.text, r.url || "") : "?"; } catch (e) { return "?"; } };
+    // Feldnamen der Formulare (vom Server festgelegt, keine Eingaben); nie der Seitentitel
     const merkmale = (r) => {
-      const titel = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(r.text);
       const namen = [];
       for (const f of N.formulare(r.text, r.url || `${N.UNI.ilias}/`)) {
         for (const n of f.namen) if (/^[\w.:\-[\]]{1,32}$/.test(n) && namen.indexOf(n) < 0) namen.push(n);
       }
-      return (titel ? ` „${kurz(N.entitaeten(titel[1]), 40)}“` : "") + (namen.length ? ` [${kurz(namen.slice(0, 8).join(","), 120)}]` : "");
+      return namen.length ? ` [${kurz(namen.slice(0, 8).join(","), 120)}]` : "";
     };
     return {
       merken(schritt, r) {
@@ -106,9 +113,10 @@ module.exports = function (ctx) {
     const N = netzHolen(optionen);
     const uni = (optionen && optionen.uni) || N.UNI;
     const S = spur(N, htmlHolen(optionen), zugang && zugang.benutzer, !!(sitzung && sitzung.mobil));
+    let gesendet = false; // ab dem Absenden des Passworts (auch wenn danach etwas scheitert)
     const fehler = (grund, stelle) => {
       const code = S.code(stelle || grund);
-      return { ok: false, grund, hinweis: HINWEISE[grund] + (MIT_CODE.indexOf(grund) >= 0 ? " Code: " + code : ""), code };
+      return { ok: false, grund, hinweis: HINWEISE[grund] + (MIT_CODE.indexOf(grund) >= 0 ? " Code: " + code : ""), code, passwortGesendet: gesendet };
     };
     if (!zugang || !zugang.benutzer || typeof zugang.kennwortGeber !== "function") return fehler("zugang-falsch", "ohne-zugang");
     let schritt = "start";
@@ -134,11 +142,15 @@ module.exports = function (ctx) {
         felder.j_username = zugang.benutzer;
         felder._eventId_proceed = "";
         felder.j_password = zugang.kennwortGeber() || "";
+        gesendet = true;
         try {
-          r = await holen("passwort", { url: f.action, methode: "POST", formular: felder });
+          r = await holen("passwort", { url: f.action, methode: "POST", formular: felder, folgen: false });
         } finally {
           felder.j_password = "";
         }
+        // Weiterleitung nach dem Absenden folgt als GET ohne Body (auch bei 307/308), nur zu den Servern der Sitzung
+        const ort = WEITERLEITUNG[r.status] && r.kopf && r.kopf.location;
+        if (ort) r = await holen("passwort", { url: N.aufloesen(ort, r.url || f.action) });
         if (r.status >= 500) return serverFehler(r);
         if (!hatFeld(r.text, "SAMLResponse")) {
           if (istZustimmung(r.text)) return fehler("zustimmung");
@@ -163,9 +175,9 @@ module.exports = function (ctx) {
       }
 
       // 4. Prüfen (meist reicht die letzte Seite)
-      if (istIlias(r, N)) return { ok: true };
+      if (istIlias(r, N)) return { ok: true, passwortGesendet: gesendet };
       const d = await holen("dashboard", { url: `${uni.ilias}/ilias.php?baseClass=ilDashboardGUI&cmd=show` });
-      return istIlias(d, N) ? { ok: true } : fehler("unerwartet", "nicht-angemeldet");
+      return istIlias(d, N) ? { ok: true, passwortGesendet: gesendet } : fehler("unerwartet", "nicht-angemeldet");
     } catch (e) {
       if (e && e.grund === "fremder-host") return fehler("unerwartet", `blockiert-${e.host || "?"} bei ${schritt}`);
       return fehler("netz", `netz-${(e && e.grund) || "fehler"}${e && e.code ? "-" + e.code : ""} bei ${schritt}`);

@@ -577,6 +577,59 @@ test("PC-Transport: Verbindungen bleiben offen, Seiten gzip-komprimiert, Dateien
   } finally { https.request = echt; }
 });
 
+test("PC-Transport: zu große Antworten brechen ab (angekündigt, unterwegs, entpackt)", async () => {
+  const https = require("node:https"), zlib = require("node:zlib");
+  const { EventEmitter } = require("node:events");
+  const echt = https.request;
+  let antwort = null, zerstoert = 0;
+  https.request = (opt, cb) => {
+    const anf = new EventEmitter();
+    anf.write = () => {}; anf.destroy = () => { zerstoert++; };
+    anf.end = () => setImmediate(() => {
+      const res = new EventEmitter();
+      res.statusCode = 200; res.complete = true; res.headers = antwort.kopf; res.destroy = () => {};
+      cb(res);
+      for (const c of antwort.stuecke) res.emit("data", c);
+      res.emit("end");
+    });
+    return anf;
+  };
+  try {
+    const D = require(DATEI)({});
+    const t = D.transportDesktop();
+    const zuGross = (n) => (e) => e.grund === "zu-gross" && e.groesse === n && e.message.indexOf("Antwort zu groß") === 0;
+    // angekündigt größer als erlaubt: kein Byte gelesen
+    antwort = { kopf: { "content-type": "application/pdf", "content-length": "5000" }, stuecke: [Buffer.alloc(10)] };
+    await assert.rejects(t({ url: I + "/datei", methode: "GET", kopf: {}, binaer: true, maxBytes: 1000 }), zuGross(5000));
+    // ohne Ankündigung: bricht ab, sobald mehr kommt
+    antwort = { kopf: { "content-type": "application/pdf" }, stuecke: [Buffer.alloc(600), Buffer.alloc(600), Buffer.alloc(600)] };
+    zerstoert = 0;
+    await assert.rejects(t({ url: I + "/datei", methode: "GET", kopf: {}, binaer: true, maxBytes: 1000 }), zuGross(1200));
+    assert.ok(zerstoert >= 1, "Verbindung abgebrochen");
+    // gepackt klein, entpackt zu groß
+    antwort = { kopf: { "content-type": "text/html", "content-encoding": "gzip" }, stuecke: [zlib.gzipSync(Buffer.alloc(200000))] };
+    await assert.rejects(t({ url: I + "/seite", methode: "GET", kopf: {}, maxBytes: 1000 }), (e) => e.grund === "zu-gross");
+    // ohne maxBytes gilt die Vorgabe für Seiten: eine normale Seite kommt an
+    antwort = { kopf: { "content-type": "text/html", "content-encoding": "gzip" }, stuecke: [zlib.gzipSync(Buffer.from("<html>ok</html>"))] };
+    assert.equal((await t({ url: I + "/seite", methode: "GET", kopf: {} })).text, "<html>ok</html>");
+    antwort = { kopf: { "content-type": "application/pdf" }, stuecke: [Buffer.alloc(1000)] };
+    assert.equal((await t({ url: I + "/datei", methode: "GET", kopf: {}, binaer: true, maxBytes: 1000 })).daten.byteLength, 1000, "genau an der Grenze geht");
+    t.schliessen();
+  } finally { https.request = echt; }
+});
+
+test("mobil: zu große Antwort fällt nach dem Empfang auf; die Sitzung reicht maxBytes an den Transport", async () => {
+  const requestUrl = async () => ({ status: 200, headers: {}, text: "x".repeat(50), arrayBuffer: new ArrayBuffer(2000) });
+  const M = laden("ilias-netz", { kontext: { obsidian: { Platform: { isDesktopApp: false, isMobile: true }, requestUrl } } }).ergebnis;
+  const t = M.transportMobil({ requestUrl });
+  await assert.rejects(t({ url: I + "/datei", methode: "GET", binaer: true, maxBytes: 1000 }), (e) => e.grund === "zu-gross" && e.groesse === 2000);
+  await assert.rejects(t({ url: I + "/seite", methode: "GET", maxBytes: 10 }), (e) => e.grund === "zu-gross");
+  assert.equal((await t({ url: I + "/datei", methode: "GET", binaer: true, maxBytes: 2000 })).daten.byteLength, 2000);
+  const a = attrappe([{ status: 200, kopf: {}, daten: new ArrayBuffer(1) }]);
+  await N.sitzung({ transport: a }).anfrage({ url: I + "/datei", binaer: true, maxBytes: 1234 });
+  assert.equal(a.anfragen[0].maxBytes, 1234);
+});
+
 test("PC-Transport unter Node: fremde Hosts und http gehen nie hinaus", async () => {
   const D = require(DATEI)({});
   const t = D.transportDesktop();

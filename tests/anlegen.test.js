@@ -14,8 +14,9 @@ const pad = (n) => String(n).padStart(2, "0");
 const gueltig = (t, m) => new Date(2026, m - 1, t).getDate() === Number(t);
 const modell = { zeit: { jahrRaten: (t, m) => (gueltig(t, m) ? `2026-${pad(m)}-${pad(t)}` : "") }, istZwischentest: (t) => /zwischentest/i.test(t) };
 
-// Eine Aktion mit den Antworten für das Fenster; Modul: B110 (das einzige). → { angelegt, abgebrochen, protokoll, rest }
-async function anlegen(aktion, antworten, parameter = {}, codes = ["B110"]) {
+// Eine Aktion mit den Antworten für das Fenster; Modul: B110 (das einzige); extra: weitere Felder des Aufrufs (extern). →
+// { angelegt, abgebrochen, protokoll, rest }
+async function anlegen(aktion, antworten, parameter = {}, codes = ["B110"], extra = {}) {
   const plugin = { testAntworten: antworten.slice(), testProtokoll: [] };
   const E = laden("eba", { kontext: { modell } }).ergebnis;
   const angelegt = [];
@@ -35,7 +36,7 @@ async function anlegen(aktion, antworten, parameter = {}, codes = ["B110"]) {
   const jetzt = L.ctx.date.now;
   L.ctx.date.now = (format, tage) => (format === "DD.MM.YYYY" ? "15.10.2026" : jetzt(format, tage));
   const N = L.ergebnis;
-  await N.aktionen[aktion].ausfuehren({ parameter, datei: null });
+  await N.aktionen[aktion].ausfuehren(Object.assign({ parameter, datei: null }, extra));
   return { angelegt, abgebrochen, protokoll: plugin.testProtokoll, rest: plugin.testAntworten };
 }
 
@@ -79,6 +80,9 @@ test("Eingaben werden gelesen: Uhrzeit c.t., Zeitraum, Art aus dem Titel, Modul 
   const f = await anlegen("termin", [{ titel: "Lerngruppe", kategorie: "Fachschaft" }]);
   assert.match(f.angelegt[0].inhalt, /^kategorie: Fachschaft$/m, "Art im Fenster geändert");
   assert.match(f.angelegt[0].inhalt, /^datum: 2026-10-15$/m, "ohne Eingabe: heute");
+  // „1. …“ wird keine Liste; der „\“ steht vor dem Punkt, vor der Ziffer bliebe er sichtbar
+  const n = await anlegen("termin", [{ titel: "1. Übungsblatt" }]);
+  assert.match(n.angelegt[0].inhalt, /^# 1\\\. Übungsblatt$/m);
 });
 
 test("Fehler im Fenster legen nichts an und stehen beim Feld", async () => {
@@ -110,6 +114,39 @@ test("Termin mit Titel und Datum aus dem Knopf: ohne Fenster", async () => {
   const r = await anlegen("termin", [], { titel: "Lerngruppe", wann: "20.11." });
   assert.equal(r.protokoll.length, 0);
   assert.equal(r.angelegt[0].name, "2026-11-20 Lerngruppe");
+});
+
+test("Termin aus einem Knopf: Titel bleibt eine Zeile (kein Kasten, kein Link in die App, keine zweite Zeile), höchstens 120 Zeichen", async () => {
+  const titel = "Lerngruppe\r\n> [!eba-info] Wichtig\n[Hier](obsidian://x) &#91;a&#93; <b>\u202e\u200bfett</b>\u0000";
+  const r = await anlegen("termin", [], { titel, wann: "20.11." });
+  assert.equal(r.protokoll.length, 0, "aus der App: ohne Fenster wie bisher");
+  const { name, inhalt } = r.angelegt[0];
+  assert.ok(!/[\r\n]/.test(name), name);
+  const fm = inhalt.split("\n---\n")[0], text = inhalt.split("\n---\n")[1];
+  assert.match(fm, /^titel: "Lerngruppe > \[!eba-info\] Wichtig \[Hier\]\(obsidian:\/\/x\) &#91;a&#93; <b>fett<\/b>"$/m, "Eigenschaft: eine Zeile, als JSON");
+  assert.deepEqual(text.split("\n").filter((z) => z.trim()), [
+    "# Lerngruppe \\> \\[\\!eba-info\\] Wichtig \\[Hier\\](obsidian://x) \\&\\#91;a\\&\\#93; \\<b\\>fett\\</b\\>",
+    "## Meine Notizen",
+    "- ",
+  ], text);
+  const lang = await anlegen("termin", [], { titel: "Wort ".repeat(40), wann: "20.11." });
+  const t = /^titel: (".*")$/m.exec(lang.angelegt[0].inhalt);
+  assert.ok(JSON.parse(t[1]).length <= 120 && !/\s$/.test(JSON.parse(t[1])), t[1]);
+  const normal = await anlegen("termin", [], { titel: "Klausur B110", wann: "12.11." });
+  assert.match(normal.angelegt[0].inhalt, /^# Klausur B110$/m, "gewöhnlicher Titel unverändert");
+  assert.equal(normal.angelegt[0].name, "2026-11-12 Klausur B110");
+});
+
+test("Termin von außen (Link aus dem Browser oder einer anderen App): immer mit Fenster, Esc legt nichts an", async () => {
+  const p = { titel: "Lerngruppe\n> [!eba-info] Wichtig", wann: "20.11." };
+  const esc = await anlegen("termin", [null], p, ["B110"], { extern: true });
+  assert.deepEqual([esc.angelegt.length, esc.protokoll.length, esc.abgebrochen], [0, 1, 1]);
+  const ok = await anlegen("termin", [{}], p, ["B110"], { extern: true });
+  assert.equal(ok.protokoll.length, 1, "genau ein Fenster");
+  assert.equal(ok.angelegt[0].name, "2026-11-20 Lerngruppe > [!eba-info] Wichtig", "Vorgaben aus dem Link, eine Zeile (den Dateinamen macht eba.ablegen)");
+  assert.match(ok.angelegt[0].inhalt, /^# Lerngruppe \\> \\\[\\!eba-info\\\] Wichtig$/m);
+  const app = await anlegen("termin", [], p, ["B110"], { extern: false });
+  assert.equal(app.protokoll.length, 0, "extern: false (aus der App) wie ohne Angabe");
 });
 
 test("„Neues Übungsblatt“ (bis 0.6.7) aus einem alten Knopf: legt nichts an, öffnet Unterlagen und bietet „Unterlagen hinzufügen“ an", async () => {

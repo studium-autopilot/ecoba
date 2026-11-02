@@ -8,8 +8,11 @@
    Seit 18.10.2026 gibt es dort auch die Designs Flieder und Klar (eba-flieder.css, eba-klar.css), je Gerät über eine Klasse
    am body (eba-design-…, darstellung.js). Form und Schrift von Elfenbein gelten dann weder hell noch dunkel
    (:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])), :where hält die Spezifität wie .theme-light); die Designs
-   behalten ihre Form auch dunkel. Die dunklen Farben unten (.theme-dark) gelten für alle drei, bis Flieder und Klar eigene
-   dunkle Farben haben.
+   behalten ihre Form auch dunkel. Seit 01.11.2026 haben Flieder und Klar auch eigene dunkle Farben; bis dahin galten dunkel die
+   von Elfenbein. Für alle drei gilt dunkel nur noch der Block .theme-dark (Schatten, Modulfarben im Wochenraster).
+   Die Farben von Elfenbein stehen unter .theme-light:not(…) und .theme-dark:not(…), so spezifisch wie die der Designs
+   (.eba-design-….theme-dark): Obsidian setzt auf iPhone und iPad mit .is-mobile.theme-dark die Seite auf Schwarz (#000, #111,
+   #1e1e1e) und hell die Schrift auf #000. Bis 01.11.2026 stand :where(:not(…)) davor, und Elfenbein war dort dunkel schwarz.
    ========================================================================== */
 
 :is(.theme-light, .theme-dark):where(:not([class*="eba-design-"])) {
@@ -25,7 +28,7 @@
   --eba-h2-size: 1.35em;
 }
 
-.theme-light:where(:not([class*="eba-design-"])) {
+.theme-light:not([class*="eba-design-"]) {
   --color-base-00: #faf6ee;
   --color-base-05: #f7f2e8;
   --color-base-10: #f3eee2;
@@ -79,10 +82,26 @@
   --eba-art-event: #6c0069;
 }
 
-/* Dunkel: Flächen von hinten nach vorn heller (Leisten < Seite < Karte), Schrift Elfenbein statt Weiß. Der Akzent hat zwei
-   Stufen: --eba-accent als Fläche mit weißer Schrift (Knöpfe, Balken), --eba-accent-text hell für Links und Text. */
+/* Dunkel für alle Designs: was nicht von den Farben eines Designs abhängt. Ein Design ersetzt hier höchstens einzelne Werte. */
 .theme-dark {
   --eba-shadow-schwebend: 0 1px 2px rgb(0 0 0 / 0.35), 0 14px 36px rgb(0 0 0 / 0.5); /* auf dunklem Grund trägt nur ein kräftiger */
+  --text-on-accent: #ffffff;
+  /* Modulfarben im Wochenraster (eba-core.css Abschnitt 1): dieselben Töne heller, Flächen kräftiger. Sie halten auch zu den
+     Akzenten von Flieder und Klar dunkel Abstand (tests/design.test.js). */
+  --eba-modul-1: #678dee;
+  --eba-modul-2: #349794;
+  --eba-modul-3: #b09ef9;
+  --eba-modul-4: #3ac1f0;
+  --eba-modul-5: #82bf57;
+  --eba-modul-6: #e380a9;
+  --eba-modul-ton: 28%;
+  --eba-modul-ton-ue: 20%;
+  --eba-ev-raum-anteil: 25%;
+}
+
+/* Elfenbein dunkel: Flächen von hinten nach vorn heller (Leisten < Seite < Karte), Schrift Elfenbein statt Weiß. Der Akzent hat
+   zwei Stufen: --eba-accent als Fläche mit weißer Schrift (Knöpfe, Balken), --eba-accent-text hell für Links und Text. */
+.theme-dark:not([class*="eba-design-"]) {
   --color-base-00: #1b1813;
   --color-base-05: #1e1b16;
   --color-base-10: #211d18;
@@ -96,8 +115,6 @@
   --color-base-70: #c3b9a5;
   --color-base-100: #ece4d4;
 
-  --accent-h: 147;
-  --accent-s: 32%;
   --accent-h: 217;
   --accent-s: 15%;
   --accent-l: 35%;
@@ -105,7 +122,6 @@
   --text-accent-hover: #cfd7e3;
   --interactive-accent: #4b5566;
   --interactive-accent-hover: #566173;
-  --text-on-accent: #ffffff;
   --text-selection: rgba(185, 195, 211, 0.22);
   --text-highlight-bg: rgba(222, 184, 92, 0.30);
 
@@ -134,16 +150,6 @@
   --eba-info: #8aa9d0;
   --eba-art-uni: #7fa6e6;
   --eba-art-event: #fb80fc;
-  /* Modulfarben im Wochenraster (eba-core.css Abschnitt 1), dunkel für alle Designs: dieselben Töne heller, Flächen kräftiger */
-  --eba-modul-1: #678dee;
-  --eba-modul-2: #349794;
-  --eba-modul-3: #b09ef9;
-  --eba-modul-4: #3ac1f0;
-  --eba-modul-5: #82bf57;
-  --eba-modul-6: #e380a9;
-  --eba-modul-ton: 28%;
-  --eba-modul-ton-ue: 20%;
-  --eba-ev-raum-anteil: 25%;
 }
 
 /* Kopf: Serifen-Titel über einer feinen Linie (seit 0.7.0; bis 0.6.14 eine doppelte Linie in Textfarbe, die schwerste Linie

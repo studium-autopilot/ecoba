@@ -192,8 +192,8 @@ module.exports = function (ctx) {
   //  fristen: klein die nächste Frist wie die Kachel, mittel und groß „Fristen · 30 Tage“;
   //  pruefung: klein die Tage bis zur nächsten Prüfung, mittel und groß die nächsten Prüfungen;
   //  Sperrbildschirm (accessory…): je dieselbe Angabe in einer bzw. drei Zeilen, rund nur Uhrzeit oder Tage.
-  // Farben wie die Designs der App: hell je Design, dunkel für alle (wie eba-paper-elfenbein.css .theme-dark); tests/widget.test.js
-  // vergleicht sie mit den CSS-Dateien.
+  // Farben wie die Designs der App: hell und dunkel je Design (dunkel seit 01.11.2026, vorher für alle die von Elfenbein),
+  // Modulfarben dunkel für alle (eba-paper-elfenbein.css .theme-dark); tests/widget.test.js vergleicht sie mit den CSS-Dateien.
   const scriptable = async function (S) {
     const ListWidget = S.ListWidget, Color = S.Color, Font = S.Font, Size = S.Size, SFSymbol = S.SFSymbol, Device = S.Device;
     const config = S.config || {}, fm = S.fm, ordner = S.ordner;
@@ -210,9 +210,16 @@ module.exports = function (ctx) {
     // (hell) bzw. helle (dunkel) Abstufung derselben Farbe, Nebenzeile fast neutral. So hat jeder Text auf jeder Modulfarbe in jedem
     // Design mindestens 4,5 : 1 (tests/widget.test.js prüft jeden Text gegen seinen Hintergrund).
     const TON_HELL = { flaeche: 0.15, flaecheUe: 0.1, titel: 0.5, neben: 0.15, tinte: "#000000" };
-    const DUNKEL = { bg: "#1b1813", karte: "#221e18", rand: "#373027", text: "#ece4d4", muted: "#b3a892", faint: "#918672", akzentText: "#b9c3d3",
-      warn: "#dea64a", bad: "#ec7468", info: "#8aa9d0", modul: ["#678dee", "#349794", "#b09ef9", "#3ac1f0", "#82bf57", "#e380a9"],
-      flaeche: 0.25, flaecheUe: 0.17, titel: 0.35, neben: 0.15, tinte: "#ffffff" };
+    const DUNKEL = {
+      elfenbein: { bg: "#1b1813", karte: "#221e18", rand: "#373027", text: "#ece4d4", muted: "#b3a892", faint: "#918672", akzentText: "#b9c3d3",
+        warn: "#dea64a", bad: "#ec7468", info: "#8aa9d0" },
+      flieder: { bg: "#1a1620", karte: "#221c29", rand: "#372e42", text: "#ece4f3", muted: "#b6a8c8", faint: "#958aa6", akzentText: "#d8bff7",
+        warn: "#dea64a", bad: "#ea6f72", info: "#93aee8" },
+      klar: { bg: "#121417", karte: "#1a1d22", rand: "#2b3037", text: "#e9ebee", muted: "#a5abb4", faint: "#868d97", akzentText: "#aacdff",
+        warn: "#e3a641", bad: "#e5776d", info: "#5fb6cf" },
+    };
+    const MODUL_DUNKEL = ["#678dee", "#349794", "#b09ef9", "#3ac1f0", "#82bf57", "#e380a9"];
+    const TON_DUNKEL = { flaeche: 0.25, flaecheUe: 0.17, titel: 0.35, neben: 0.15, tinte: "#ffffff" };
 
     // ----- Daten -----
     const lesen = async (name) => {
@@ -230,7 +237,8 @@ module.exports = function (ctx) {
     const mischen = (a, b, t) => "#" + hex(a).map((v, i) => { const x = Math.round(v * t + hex(b)[i] * (1 - t)).toString(16); return x.length < 2 ? "0" + x : x; }).join("");
     const design = d && HELL[d.design] ? d.design : "elfenbein", modus = d ? d.modus : "automatisch";
     const hell = Object.assign({}, HELL[design], TON_HELL, { modul: MODUL_HELL.map((c, i) => HELL[design].modul[i + 1] || c) });
-    const farbe = (fn) => (modus === "hell" ? new Color(fn(hell)) : modus === "dunkel" ? new Color(fn(DUNKEL)) : Color.dynamic(new Color(fn(hell)), new Color(fn(DUNKEL))));
+    const dunkel = Object.assign({}, DUNKEL[design], TON_DUNKEL, { modul: MODUL_DUNKEL });
+    const farbe = (fn) => (modus === "hell" ? new Color(fn(hell)) : modus === "dunkel" ? new Color(fn(dunkel)) : Color.dynamic(new Color(fn(hell)), new Color(fn(dunkel))));
     const F = {};
     ["bg", "karte", "rand", "text", "muted", "faint", "akzentText", "warn", "bad", "info"].forEach((k) => { F[k] = farbe((p) => p[k]); });
     F.heute = farbe((p) => mischen(p.akzentText, p.bg, 0.07));

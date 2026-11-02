@@ -483,6 +483,27 @@ test("Gemerkte Funde, die es in ILIAS nicht mehr gibt (404): kein Fehler, fallen
   assert.deepEqual(x.lok.lokal("eba-ilias-funde"), []);
 });
 
+test("Gemerkte Funde mit einem Dateityp, der nie kommt, oder einem Ziel außerhalb von Unterlagen/ werden nicht geladen", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  x.abh.grenzen = { neu: 2 };
+  await lauf(x);
+  const funde = x.lok.lokal("eba-ilias-funde");
+  assert.deepEqual(funde.map((c) => c.id).sort(), ["1001", "3001", "3101"]);
+  // auf diesem Gerät verändert: ausführbare Endung, Name mit langer Endung, Kurs ohne brauchbaren Namen (Ziel wäre „Unterlagen/..“)
+  const nach = funde.map((c) => (c.id === "1001" ? Object.assign({}, c, { endung: "hta", original: "Blatt.hta" })
+    : c.id === "3001" ? Object.assign({}, c, { original: c.original + ".settingcontent-ms" })
+      : Object.assign({}, c, { code: "..", kurs: Object.assign({}, c.kurs, { code: "..", titel: ".." }) })));
+  x.lok.lokal("eba-ilias-funde", nach);
+  x.abh.grenzen = { neu: 25 };
+  x.u.vor(STUNDE); x.il.leeren();
+  const b = await lauf(x);
+  assert.notEqual(b.art, "fehler", b.fehler);
+  assert.deepEqual(x.il.geladen().filter((id) => id === "1001" || id === "3001"), [], "nie geladen");
+  assert.ok(x.t.pfade("").every((p) => p.split("/").indexOf("..") < 0 && !/\.(hta|settingcontent-ms)$/.test(p)));
+  assert.equal(x.t.index().dateien["3101"], undefined, "kein Eintrag für ein Ziel außerhalb von Unterlagen/");
+});
+
 test("Abrufer-Sperre: anderes Gerät aktiv → nichts; still → übernehmen; ohne Zugang → nicht beteiligt", async () => {
   const frisch = JSON.stringify({ geraet: "g-anderes", seit: "2026-10-15T08:00:00.000Z", zuletzt: "2026-10-16T07:50:00.000Z" });
   let x = aufbau({ dateien: { [I.K.ABRUF]: frisch } });
@@ -999,7 +1020,7 @@ test("Mit echtem ilias-netz.js (Transport-Attrappe) und ilias-html.js: Kursseite
   const N = Object.assign({}, echt, { sitzung: (o) => echt.sitzung(Object.assign({}, o, { transport })) });
   const H = laden("ilias-html").ergebnis;
   const Q = laden("ilias", { kontext: { user: { "ilias-netz": N, "ilias-html": H } } }).ctx.ilias;
-  const x = aufbau({ quelle: Q.quelleAusNetz, anmeldung: async (s, z) => (s && typeof s.anfrage === "function" && z.kennwortGeber() === GEHEIM ? { ok: true } : { ok: false, grund: "zugang-falsch" }) });
+  const x = aufbau({ quelle: Q.quelleAusNetz, anmeldung: async (s, z) => (s && typeof s.anfrage === "function" && z.kennwortGeber() === GEHEIM ? { ok: true, passwortGesendet: true } : { ok: false, grund: "zugang-falsch" }) });
   await verbinden(x);
   const b = await lauf(x);
   assert.equal(b.art, "ok", b.fehler);
@@ -1035,7 +1056,7 @@ test("Kalender-Abo für den Uni-Login: Kalender-Seite, Fenster „Kalender abonn
   const N = Object.assign({}, echt, { sitzung: (o) => echt.sitzung(Object.assign({}, o, { transport })) });
   const Q = laden("ilias", { kontext: { user: { "ilias-netz": N, "ilias-html": laden("ilias-html").ergebnis } } }).ctx.ilias;
   let anmeldungen = 0, klappt = true;
-  const x = aufbau({ quelle: Q.quelleAusNetz, anmeldung: async (s, z) => { anmeldungen++; return klappt && z.kennwortGeber() === GEHEIM ? { ok: true } : { ok: false, grund: "zugang-falsch", hinweis: "Benutzername oder Passwort falsch." }; } });
+  const x = aufbau({ quelle: Q.quelleAusNetz, anmeldung: async (s, z) => { anmeldungen++; return klappt && z.kennwortGeber() === GEHEIM ? { ok: true, passwortGesendet: true } : { ok: false, grund: "zugang-falsch", hinweis: "Benutzername oder Passwort falsch." }; } });
   // Ohne Uni-Login auf diesem Gerät geht nichts hinaus
   await assert.rejects(x.m.kalenderLinks(), (e) => e.art === "ohne-zugang");
   assert.equal(geholt.length, 0);
@@ -1361,4 +1382,387 @@ test("kurseAbrufen({ alleAus }): neue Kurse sind aus, kein Download (Verbinden a
   const y = aufbau();
   await verbinden(y);
   assert.deepEqual((await y.m.kurseAbrufen()).filter((k) => k.aktiv).map((k) => k.code).sort(), ["B110", "S100"], "ohne alleAus wie bisher");
+});
+
+// ---------- Pfade im Index: nur unter Unterlagen/ ----------
+const shaHex = (x) => require("node:crypto").createHash("sha256").update(typeof x === "string" ? enc(x) : x).digest("hex");
+// Was ein Lauf außerhalb von Unterlagen/ geschrieben hat (Index, Sperre und Marker gehören dem Plugin)
+const draussen = (x) => x.t.schreibvorgaenge.filter((p) => p.indexOf("Unterlagen/") !== 0 && [I.K.INDEX, I.K.ABRUF, I.K.UNI_ZUGANG].indexOf(p) < 0);
+
+test("Pfade: eine Datei, byte-gleich mit einer Datei außerhalb von Unterlagen, zeigt nie dorthin; eine neue Fassung schreibt nur in Unterlagen", async () => {
+  const SKRIPT = "System/Skripte/helfer.js", KOPIE = "System/Daten/folien.pdf";
+  const x = aufbau({ dateien: { [SKRIPT]: "%PDF Folien eins", [KOPIE]: "%PDF Folien eins" } });
+  await verbinden(x);
+  await lauf(x);
+  const p = B110 + "/B110 Folien 01 Grundlagen.pdf";
+  assert.equal(x.t.index().dateien["1001"].pfad, p, "neu angelegt, nicht als vorhanden gemerkt");
+  // In Unterlagen gelöscht: der Lauf sucht sie nur unter Unterlagen/ wieder (dort ist sie nicht), nie im übrigen Tresor
+  x.t.m.delete(p); x.t.m.delete(B110 + "/B110 Folien 01 Grundlagen.md");
+  x.t.schreibvorgaenge.length = 0;
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  assert.equal(b.geloescht, 1);
+  assert.equal(x.t.index().dateien["1001"].geloescht, true);
+  assert.equal(x.t.index().dateien["1001"].pfad, p);
+  // Neue Fassung in ILIAS: nichts ersetzt, nichts daneben, nichts außerhalb von Unterlagen/
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 2";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T09:00";
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  assert.equal(x.t.text(SKRIPT), "%PDF Folien eins");
+  assert.equal(x.t.text(KOPIE), "%PDF Folien eins");
+  assert.deepEqual(x.t.pfade("System/").filter((q) => q !== I.K.INDEX && q !== I.K.ABRUF), [KOPIE, SKRIPT]);
+  assert.deepEqual(draussen(x), []);
+});
+
+test("Pfade: ein Index von einem anderen Gerät mit Pfaden außerhalb von Unterlagen/ ändert dort nichts und löscht nichts", async () => {
+  const SKRIPT = "System/Skripte/ilias.js", STIL = "Unterlagen/B110/stil.css", NOTIZ = "Unterlagen/B110/notiz.md";
+  const EIGEN = "Unterlagen/B110/Blatt eins.pdf", KOPIE = "System/Skripte/blatt.pdf";
+  const inhalt = "module.exports = function () {};";
+  const alt = { geaendert: "2026-10-01T08:00", iliasGroesse: 1024, kurs: "100", seit: "2026-10-01", t: "2026-10-01T08:00:00.000Z" };
+  const index = { version: 1, kurse: { 100: { titel: "B110 Einführung in die BWL", code: "B110", aktiv: true, zuletzt: "", t: alt.t } }, ignoriert: {}, gruppen: {}, objekte: {},
+    dateien: {
+      // Datei, die zum Plugin gehört; Prüfsumme passt, als wäre sie unverändert
+      1001: Object.assign({ pfad: SKRIPT, sha256: shaHex(inhalt), groesse: enc(inhalt).length, original: "Folien VL01 Grundlagen.pdf" }, alt),
+      // Umweg über „..“, Stil und Notiz unter Unterlagen/
+      1201: Object.assign({ pfad: "Unterlagen/../System/Skripte/ilias.js", sha256: shaHex(inhalt), groesse: enc(inhalt).length, original: "Folien VL02 Märkte.pptx" }, alt),
+      3001: Object.assign({ pfad: STIL, sha256: shaHex("a{}"), groesse: 3, original: "Skript Analysis.css" }, alt),
+      3101: Object.assign({ pfad: NOTIZ, sha256: shaHex("# x"), groesse: 3, original: "Leitfaden Hausarbeit.md" }, alt),
+      // eigene Datei unter Unterlagen/ (von dir verändert), die letzte „Fassung“ zeigt hinaus
+      1101: Object.assign({ pfad: EIGEN, sha256: shaHex("%PDF blatt"), groesse: 10, original: "Blatt 1.pdf", fassungen: [KOPIE] }, alt),
+    } };
+  const x = aufbau({ dateien: { [I.K.INDEX]: JSON.stringify(index), [SKRIPT]: inhalt, [STIL]: "a{}", [NOTIZ]: "# x", [EIGEN]: "%PDF meins", [KOPIE]: "%PDF blatt" } });
+  await verbinden(x);
+  // Beim Lesen: Pfade außerhalb leer, die Einträge bleiben (nichts wird neu geladen)
+  const gelesen = I.indexPruefen(index);
+  assert.deepEqual(["1001", "1201", "3001", "3101", "1101"].map((id) => gelesen.dateien[id].pfad), ["", "", "", "", EIGEN]);
+  assert.deepEqual(gelesen.dateien["1101"].fassungen, []);
+  const b = await lauf(x);
+  assert.notEqual(b.art, "fehler", b.fehler);
+  assert.equal(x.t.text(SKRIPT), inhalt);
+  assert.equal(x.t.text(STIL), "a{}");
+  assert.equal(x.t.text(NOTIZ), "# x");
+  assert.equal(x.t.text(KOPIE), "%PDF blatt", "die Fassung außerhalb wird nicht ersetzt");
+  assert.equal(x.t.text(EIGEN), "%PDF meins", "deine Datei bleibt");
+  assert.equal(x.t.text("Unterlagen/B110/Blatt eins neue Fassung 2026-10-16.pdf"), "%PDF Blatt eins", "die neue Fassung kommt neben deine Datei");
+  assert.deepEqual(draussen(x), []);
+  const idx = x.t.index();
+  assert.ok(Object.keys(idx.dateien).every((id) => !idx.dateien[id].pfad || idx.dateien[id].pfad.indexOf("Unterlagen/") === 0));
+  assert.deepEqual(idx.dateien["1101"].fassungen, ["Unterlagen/B110/Blatt eins neue Fassung 2026-10-16.pdf"]);
+});
+
+test("Pfade: aus Unterlagen/ hinaus verschoben → der Eintrag zeigt auf keine Datei; eine neue Fassung aus ILIAS kommt neu nach Unterlagen/", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  const alt = B110 + "/B110 Folien 01 Grundlagen.pdf", neu = "Archiv/Folien.pdf";
+  x.t.umbenennen(alt, neu);
+  assert.equal(await x.m.umbenannt(neu, alt), true);
+  await x.m.speichern();
+  assert.equal(x.t.index().dateien["1001"].pfad, "");
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  const b = await lauf(x);
+  assert.deepEqual([b.neu, b.geloescht, x.il.anzahl("laden")], [0, 0, 0]);
+  assert.equal(x.t.text(neu), "%PDF Folien eins");
+  // neue Fassung in ILIAS: kommt wie eine neue Datei nach Unterlagen/, deine verschobene Datei bleibt, nichts gilt als gelöscht
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 2";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-16T09:00";
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  const c = await lauf(x);
+  assert.deepEqual([c.neu, c.geloescht, c.fassungen], [1, 0, 0]);
+  const e = x.t.index().dateien["1001"];
+  assert.equal(e.geloescht, undefined);
+  assert.equal(e.pfad.indexOf(B110 + "/"), 0);
+  assert.equal(x.t.text(e.pfad), "%PDF Folien eins, Fassung 2");
+  assert.equal(x.t.text(neu), "%PDF Folien eins", "die verschobene Datei bleibt");
+  assert.deepEqual(x.t.pfade("Archiv/"), [neu]);
+  // die nächste Fassung ersetzt die neue Datei wie jede unter Unterlagen/
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 3";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-17T09:00";
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  assert.equal((await lauf(x)).ersetzt, 1);
+  assert.equal(x.t.text(e.pfad), "%PDF Folien eins, Fassung 3");
+  assert.equal(x.t.text(neu), "%PDF Folien eins");
+  // unter Unterlagen/ gelöscht (Pfad gilt, Datei fehlt): bleibt gelöscht wie bisher
+  x.t.m.delete(e.pfad); x.t.m.delete(e.pfad.replace(/\.pdf$/, ".md"));
+  x.il.def.dateien["1001"] = "%PDF Folien eins, Fassung 4";
+  x.il.def.seiten[B + "kurs/100"][0].geaendert = "2026-10-18T09:00";
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  assert.equal((await lauf(x)).geloescht, 1);
+  assert.equal(x.t.index().dateien["1001"].geloescht, true);
+  // pfadOk selbst: Wurzel, Teile, Endung
+  const ok = (p) => I.indexPruefen({ dateien: { 1: { pfad: p, original: "a.pdf" } } }).dateien["1"].pfad === p;
+  assert.deepEqual(["Unterlagen/a.pdf", "Unterlagen/B110/a.pdf"].map(ok), [true, true]);
+  assert.deepEqual(["Unterlagen", "unterlagen/a.pdf", "Unterlagen//a.pdf", "Unterlagen/./a.pdf", "Unterlagen\a.pdf", "Unterlagen/a", "Unterlagen/a.json",
+    "Unterlagen/a.JS", "Unterlagen/a.mjs", "Unterlagen/a.cjs", "Unterlagen/a.md", "/Unterlagen/a.pdf", 42].map(ok), Array(13).fill(false));
+});
+
+// ---------- Grenzen in Bytes ----------
+const grosseDateien = (n, mitGroesse) => {
+  const def = vieleDateien(n);
+  for (const e of def.seiten[B + "kurs/100"]) { e.groesse = mitGroesse ? 1000 : null; def.dateien[e.refId] = (def.dateien[e.refId] + " ").padEnd(1000, "x"); }
+  return def;
+};
+
+test("Budget je Lauf in Bytes: der Rest kommt mit dem nächsten Stapel, die erste Datei immer", async () => {
+  assert.deepEqual([I.K.BUDGET_MOBIL_MB, I.K.BUDGET_PC_MB], [250, 1000]);
+  // Größe aus der Liste: was nicht mehr ins Budget passt, wartet
+  let x = aufbau({ ilias: grosseDateien(10, true), mobil: true });
+  x.abh.grenzen = { bytes: 2500 };
+  await verbinden(x);
+  let b = await x.m.jetztHolen({ manuell: true });
+  assert.deepEqual([b.neu, b.rest], [2, 8]);
+  assert.deepEqual(x.m.auftrag() && [x.m.auftrag().stapel, x.m.auftrag().geladen], [1, 2], "nächster Stapel geplant");
+  assert.match(x.meldungen[x.meldungen.length - 1], /8 weitere folgen gleich\./);
+  b = await x.m.jetztHolen({ manuell: true, weiter: true });
+  assert.deepEqual([b.neu, b.rest], [2, 6]);
+  // ohne Größe in der Liste zählt, was schon da ist
+  x = aufbau({ ilias: grosseDateien(10, false), mobil: true });
+  x.abh.grenzen = { bytes: 2500 };
+  await verbinden(x);
+  b = await lauf(x);
+  assert.deepEqual([b.neu, b.rest], [3, 7]);
+  // die erste Datei kommt auch über dem Budget
+  x = aufbau({ ilias: grosseDateien(3, true) });
+  x.abh.grenzen = { bytes: 10 };
+  await verbinden(x);
+  b = await lauf(x);
+  assert.deepEqual([b.neu, b.rest], [1, 2]);
+});
+
+test("Über 50 MB: auch geänderte Dateien und Dateien ohne Größe in der Liste werden nicht geladen, deine bleibt", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  const p = B110 + "/B110 Folien 01 Grundlagen.pdf";
+  // In ILIAS geändert, laut Liste zu groß: gar nicht geladen, nicht bei jedem Lauf neu versucht
+  Object.assign(x.il.def.seiten[B + "kurs/100"][0], { geaendert: "2026-10-16T07:00", groesse: 60 * 1048576 });
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  let b = await lauf(x);
+  assert.equal(b.zuGross, 1);
+  assert.equal(x.il.anzahl("laden"), 0);
+  assert.equal(x.t.text(p), "%PDF Folien eins");
+  assert.equal(x.t.index().ignoriert["1001"].grund, "zu groß");
+  assert.equal(x.t.index().dateien["1001"].geaendert, "2026-10-16T07:00");
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  b = await lauf(x);
+  assert.deepEqual([b.zuGross, x.il.anzahl("laden")], [0, 0]);
+  // Ohne Größe in der Liste: der Download bricht ab (Transport), die Datei gilt als zu groß
+  x.il.def.seiten[B + "kurs/100"].push(datei("1302", "Ohne Angabe", "zip", "2026-10-09T08:00", { groesse: null }));
+  x.il.stoerung.laden = (id) => (id === "1302" ? Object.assign(new Error("Datei über 50 MB"), { art: "zu-gross", groesse: 70 * 1048576 }) : null);
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  b = await lauf(x);
+  assert.deepEqual([b.zuGross, b.fehlerDateien.length, b.art], [1, 0, "unveraendert"]);
+  assert.equal(x.t.index().ignoriert["1302"].groesse, 70 * 1048576);
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  await lauf(x);
+  assert.equal(x.il.anzahl("laden"), 0, "nicht jedes Mal neu versucht");
+});
+
+test("Dateitypen: was Windows beim Öffnen ausführt und was das Plugin selbst liest, kommt nie; Kursdateien wie .py, .R, .ipynb, .jar schon", async () => {
+  const def = standardIlias();
+  const typen = { 1401: ["Installation", "exe"], 1402: ["Makro", "vbs"], 1403: ["Skript", "js"], 1404: ["Verknüpfung", "lnk"], 1405: ["Startseite", "url"],
+    1406: ["Daten", "json"], 1407: ["Stil", "css"], 1408: ["Notiz", "md"], 1409: ["Analyse", "py"], 1410: ["Auswertung", "R"], 1411: ["Notebook", "ipynb"],
+    1412: ["Programm", "jar"], 1413: ["Abruf", "appref-ms"], 1414: ["Einstellung", "reg"], 1415: ["Hilfe", "chm"], 1416: ["Abbild", "iso"],
+    1417: ["Systemsteuerung", "settingcontent-ms"], 1418: ["Paket", "msix"], 1419: ["Treiber", "inf"] };
+  for (const id of Object.keys(typen)) {
+    def.seiten[B + "kurs/100"].push(datei(id, typen[id][0], typen[id][1].toLowerCase(), "2026-10-0" + (1 + (Number(id) % 9)) + "T08:00"));
+    def.dateien[id] = "Inhalt " + id;
+  }
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  const b = await lauf(x);
+  const geladen = x.il.geladen().filter((id) => Number(id) > 1400 && Number(id) < 1500).sort();
+  assert.deepEqual(geladen, ["1409", "1410", "1411", "1412"]);
+  assert.equal(b.uebersprungen, 15);
+  assert.ok(!x.t.pfade("Unterlagen/").some((p) => /\.(exe|vbs|js|lnk|url|json|css|reg|appref-ms|chm|iso|settingcontent-ms|msix|inf)$/i.test(p)));
+  // Eine früher geladene Datei dieser Art bleibt, wie sie ist, und gilt nicht als „nicht mehr in ILIAS“
+  const alt = B110 + "/B110 Sonstiges Installation.exe";
+  const index = x.t.index();
+  index.dateien["1401"] = { pfad: alt, sha256: shaHex("Inhalt 1401"), groesse: 11, geaendert: "2026-09-01T08:00", iliasGroesse: 1024, original: "Installation.exe", iliasPfad: "B110 Einführung in die BWL", kurs: "100", t: "2026-10-16T08:00:00.000Z" };
+  const y = aufbau({ ilias: def, dateien: { [I.K.INDEX]: JSON.stringify(index), [alt]: "Inhalt 1401" } });
+  await verbinden(y);
+  await y.m.jetztHolen({ manuell: true });
+  assert.equal(y.t.text(alt), "Inhalt 1401");
+  assert.equal(y.t.index().dateien["1401"].entfernt, undefined);
+  assert.equal(y.il.geladen().indexOf("1401"), -1);
+});
+
+// ---------- Uni-Zugang: nur ein wirklich gesendetes Passwort gilt als bestätigt ----------
+test("Uni-Zugang: Galt beim Verbinden noch eine Sitzung, bleibt das Passwort ungeprüft (Hinweis); erst eine Anmeldung mit Passwort bestätigt es", async () => {
+  const x = aufbau();
+  x.anm.sitzungGilt = true; // wie auf einem iPad, auf dem noch Kekse einer früheren Anmeldung liegen
+  const r = await x.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  assert.deepEqual([r.ok, r.ungeprueft, r.hinweis], [true, true, I.K.TEXT_UNGEPRUEFT]);
+  assert.deepEqual(x.meldungen, [I.K.TEXT_UNGEPRUEFT]);
+  assert.equal(x.anm.gesendet, 0, "das Passwort ging nicht hinaus");
+  let z = x.m.uniZugang();
+  assert.deepEqual([z.bestaetigt, z.ungeprueft, z.ok], [false, true, ""]);
+  // Ein Lauf mit der alten Sitzung bestätigt nichts
+  assert.equal((await lauf(x)).art, "ok");
+  z = x.m.uniZugang();
+  assert.deepEqual([z.bestaetigt, z.ungeprueft], [false, true]);
+  // Die Sitzung ist abgelaufen: der nächste Lauf sendet das Passwort, ILIAS nimmt es an → bestätigt
+  x.anm.sitzungGilt = false;
+  x.u.vor(4 * STUNDE);
+  assert.equal((await lauf(x)).art, "unveraendert");
+  assert.equal(x.anm.gesendet, 1);
+  z = x.m.uniZugang();
+  assert.deepEqual([z.bestaetigt, z.ungeprueft], [true, false]);
+  // Mit Passwort geprüft: bestätigt, kein Hinweis; Trennen vergisst auch „ungeprüft“
+  const y = aufbau();
+  const r2 = await y.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  assert.deepEqual([r2.ok, r2.ungeprueft, y.meldungen.length, y.m.uniZugang().bestaetigt], [true, undefined, 0, true]);
+  y.anm.sitzungGilt = true;
+  await y.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  assert.equal(y.m.uniZugang().ungeprueft, true);
+  await y.m.zugangLoeschen();
+  assert.deepEqual([y.m.uniZugang().ungeprueft, y.lok.lokal("eba-uni-zugang-ungeprueft")], [false, null]);
+});
+
+test("Uni-Zugang: Lehnt die Uni ein ungeprüftes Passwort ab, hält nur dieses Gerät an; ein bestätigtes wie bisher alle", async () => {
+  const x = aufbau();
+  x.anm.sitzungGilt = true;
+  await x.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  assert.equal(x.m.uniZugang().ungeprueft, true);
+  // Alma lehnt ab (ctx.ilias.zugangAbgelehnt): kein gemeinsamer Marker, dieses Gerät hält an
+  x.u.vor(60e3);
+  await x.m.markerSchreiben("alma");
+  assert.equal(x.t.text(I.K.UNI_ZUGANG), null, "kein Marker für die anderen Geräte");
+  let z = x.m.uniZugang();
+  assert.deepEqual([z.gesperrt, z.dienst, z.ungeprueft, z.bestaetigt, x.m.bereit()], [true, "alma", false, false, false]);
+  // danach auch das Webmail: weiter nur hier
+  x.u.vor(60e3);
+  await x.m.markerSchreiben("mail");
+  assert.equal(x.t.text(I.K.UNI_ZUGANG), null);
+  assert.equal(x.m.uniZugang().dienst, "mail");
+  // auch per Knopf keine Anmeldung
+  const vorher = x.anm.aufrufe;
+  assert.equal((await x.m.jetztHolen({ manuell: true })).art, "abgelehnt");
+  assert.equal(x.anm.aufrufe, vorher);
+  // Neueingabe hebt es auf; ein bestätigtes Passwort, das abgelehnt wird, hält wie bisher alle Geräte an
+  x.u.vor(60e3);
+  x.anm.sitzungGilt = false;
+  await x.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  z = x.m.uniZugang();
+  assert.deepEqual([z.gesperrt, z.bestaetigt, x.lok.lokal("eba-uni-zugang-abgelehnt-hier")], [false, true, null]);
+  x.u.vor(60e3);
+  await x.m.markerSchreiben("alma");
+  assert.equal(JSON.parse(x.t.text(I.K.UNI_ZUGANG)).dienst, "alma");
+  assert.equal(x.m.uniZugang().gesperrt, true);
+  // ILIAS selbst lehnt ein ungeprüftes Passwort ab (die alte Sitzung ist abgelaufen): ebenfalls nur hier
+  const y = aufbau({ anmeldung: A.anmeldung("anderes-Kw-1") });
+  y.anm.sitzungGilt = true;
+  await y.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  y.anm.sitzungGilt = false;
+  y.u.vor(60e3);
+  const b = await lauf(y);
+  assert.deepEqual([b.art, b.grund], ["zugang", "zugang-falsch"]);
+  assert.equal(y.t.text(I.K.UNI_ZUGANG), null);
+  assert.deepEqual([y.m.uniZugang().gesperrt, y.m.uniZugang().dienst], [true, "ilias"]);
+  // Trennen vergisst es
+  await y.m.zugangLoeschen();
+  assert.equal(y.lok.lokal("eba-uni-zugang-abgelehnt-hier"), null);
+});
+
+test("Unbekannte Seite nach dem Absenden des Passworts, keine automatischen Versuche für einen Tag, kein Weitermachen; dein Tipp versucht es gleich", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  const HINWEIS = "Die Anmeldeseite sah anders aus als erwartet. Code: nach-passwort · PC";
+  x.anm.antwort = { ok: false, grund: "unerwartet", hinweis: HINWEIS };
+  // ein Abruf, den du gestartet hast: kein neuer Versuch nach 1, 5, 15 Min.
+  const b = await x.m.jetztHolen({ manuell: true });
+  assert.equal(b.art, "unklar");
+  assert.equal(x.m.auftrag(), null, "der Auftrag endet");
+  assert.equal(x.meldungen[x.meldungen.length - 1], I.K.TEXT_UNKLAR);
+  let s = x.m.status();
+  assert.deepEqual([s.pause, s.zustand, s.text], [true, "fehler", I.K.TEXT_UNKLAR]);
+  assert.equal(s.grund, HINWEIS, "der Code steht weiter im Fenster");
+  const n = x.anm.gesendet;
+  // automatische Läufe warten (nach 1, 5 und 23 Std.)
+  for (const schritt of [1, 4, 18]) {
+    x.u.vor(schritt * STUNDE);
+    assert.equal((await lauf(x)).art, "pause");
+  }
+  // auch kein neuer Kalender-Link im Hintergrund; nur dein Tipp auf Verbinden versucht es
+  await assert.rejects(x.m.kalenderLinks({ automatisch: true }), (e) => e.art === "pause" && e.message === I.K.TEXT_UNKLAR);
+  assert.equal(x.anm.gesendet, n, "kein Passwort hinausgeschickt");
+  await assert.rejects(x.m.kalenderLinks(), (e) => e.art === "anmeldung");
+  assert.equal(x.anm.gesendet, n + 1, "der Tipp schickt es");
+  // dein Tipp versucht es gleich; danach ist die Pause weg
+  x.anm.antwort = null;
+  assert.equal((await x.m.jetztHolen({ manuell: true })).art, "ok");
+  assert.equal(x.anm.gesendet, n + 2);
+  assert.equal(x.m.status().pause, false);
+  // nach einem Tag versucht es der Zeitplan wieder
+  x.anm.antwort = { ok: false, grund: "unerwartet", hinweis: HINWEIS };
+  x.u.vor(4 * STUNDE);
+  assert.equal((await lauf(x)).art, "unklar");
+  x.u.vor(I.K.PAUSE_UNKLAR + 60e3);
+  x.anm.antwort = null;
+  assert.equal((await lauf(x)).art, "unveraendert");
+  // ohne gesendetes Passwort (z. B. unbekannte Seite beim Einstieg) wie jeder Fehler: nächster Versuch im Takt
+  const y = aufbau();
+  await verbinden(y);
+  const nie = async () => ({ ok: false, grund: "unerwartet", hinweis: "Die Anmeldeseite sah anders aus als erwartet.", passwortGesendet: false });
+  y.abh.anmeldung = () => nie;
+  assert.equal((await lauf(y)).art, "fehler");
+  assert.equal(y.m.status().pause, false);
+  // neu verbinden hebt die Pause auf
+  const z = aufbau();
+  await verbinden(z);
+  z.anm.antwort = { ok: false, grund: "unerwartet", hinweis: HINWEIS };
+  await lauf(z);
+  assert.equal(z.m.status().pause, true);
+  z.anm.antwort = null;
+  await z.m.zugangSpeichern("zxabc01", () => GEHEIM, { pruefen: true });
+  assert.equal(z.m.status().pause, false);
+});
+
+test("Unsichtbare Zeichen aus ILIAS (Tag-Zeichen, Hangul-Füller, Richtungszeichen) kommen nie in Namen und Notizen", async () => {
+  // ganz weg
+  const WEG = ["\udb40\udc41", "\udb40\udc7f", "\udb40\udd00", "\u115f", "\u1160", "\u3164", "\uffa0", "\u00ad", "\u2060", "\u2064", "\u061c"];
+  assert.equal(I.sauber("A" + WEG.join("B") + "C"), "A" + "B".repeat(WEG.length - 1) + "C");
+  // Breiten- und Richtungszeichen werden wie bisher zu Leerzeichen
+  const LEER = ["\u202e", "\u2066", "\u200e", "\u200b", "\ufeff"];
+  assert.equal(I.sauber("A" + LEER.join("B") + "C"), "A " + Array(LEER.length - 1).fill("B").join(" ") + " C");
+  const UNSICHTBAR = WEG.concat(LEER);
+  // ein Passwort-Wort, getrennt durch Richtungszeichen, Variantenwähler oder Tag-Zeichen, bleibt erkennbar
+  assert.equal(I.ohneKennwort("B110 Statistik (Pass\u202ewort: x7)"), "B110 Statistik");
+  assert.equal(I.ohneKennwort("B110 Statistik (Pass\ufe0fwort: x7)"), "B110 Statistik");
+  assert.equal(I.ohneKennwort("B110 Statistik (Pass&#x200b;wort: x7)"), "B110 Statistik");
+  assert.equal(I.ohneKennwort("B110 Statistik (Pass\udb40\udc20wort: x7)"), "B110 Statistik");
+  const def = standardIlias();
+  def.seiten[B + "kurs/100"].push(datei("1501", "Folien" + UNSICHTBAR.join("") + " VL09 Ende", "pdf", "2026-10-15T08:00"));
+  def.dateien["1501"] = "%PDF neun";
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  const p = x.t.index().dateien["1501"].pfad;
+  assert.equal(p, B110 + "/B110 Folien 09 Ende.pdf");
+  const n = x.t.text(p.replace(/\.pdf$/, ".md"));
+  for (const z of UNSICHTBAR) {
+    assert.equal(n.indexOf(z), -1, "Notiz ohne U+" + z.codePointAt(0).toString(16));
+    assert.equal(x.t.text(I.K.INDEX).indexOf(z), -1, "Index ohne U+" + z.codePointAt(0).toString(16));
+  }
+});
+
+test("Namen mit Emoji und Richtungszeichen bleiben, wie sie bisher hießen (sonst lädt ILIAS Dateien unter neuem Namen noch einmal)", () => {
+  // Ergebnisse der Fassung vor dem Entfernen weiterer unsichtbarer Zeichen, festgehalten
+  const BISHER = [
+    ["\ud83d\udcda\ufe0f Statistik", "\ud83d\udcda\ufe0f Statistik"],
+    ["\u2764\ufe0f Mikro", "\u2764\ufe0f Mikro"],
+    ["1\ufe0f\u20e3 Blatt", "1\ufe0f\u20e3 Blatt"],
+    ["\ud83d\udc69\u200d\ud83d\udcbb Programmieren", "\ud83d\udc69 \ud83d\udcbb Programmieren"],
+    ["\ud83c\udff3\ufe0f\u200d\ud83c\udf08 Gruppe", "\ud83c\udff3\ufe0f \ud83c\udf08 Gruppe"],
+    ["\ud83c\udde9\ud83c\uddea Recht", "\ud83c\udde9\ud83c\uddea Recht"],
+    ["Folien\u200eTeil 2", "Folien Teil 2"],
+    ["Zeile\u2066x\u2069", "Zeile x"],
+    ["Kurs\u200bName", "Kurs Name"],
+    ["A\u00adB", "AB"],
+  ];
+  for (const [ein, aus] of BISHER) {
+    assert.equal(I.sauber(ein), aus, JSON.stringify(ein));
+    assert.equal(I.ohneKennwort(ein), aus, "Titel ohne Passwort unverändert: " + JSON.stringify(ein));
+  }
 });

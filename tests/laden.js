@@ -11,6 +11,8 @@ const DATEN = path.join(__dirname, "daten", "v1");
 // Bibliotheken ohne Obsidian, die das Plugin jedem Skript in ctx.user gibt (Tests ergänzen weitere über kontext.user)
 const BIBLIOTHEKEN = { sperre: require(path.join(SKRIPTE, "sperre.js")), quellen: require(path.join(SKRIPTE, "quellen.js")), felder: require(path.join(SKRIPTE, "felder.js")),
   fassung: require(path.join(SKRIPTE, "fassung.js")) };
+// Signaturprüfung des Kerns (main.js, ctx.signatur), wie das Plugin sie jedem Skript gibt (update.js prüft damit die Update-Liste)
+const { signatur } = require("./kern.js");
 
 // frontmatter: { "System/Daten/Semester.md": { … }, … } – was der metadataCache für diese Notizen liefern würde
 // notizen: { "Termine/x.md": { … }, … } – wie frontmatter, dazu in vault.getMarkdownFiles() (Notizen, die Skripte durchsuchen)
@@ -37,6 +39,7 @@ function laden(name, { heute = "2026-10-15", frontmatter = {}, notizen = {}, kon
     obsidian: { Notice: class { constructor() {} setMessage() {} hide() {} }, requestUrl: async () => { throw new Error("kein Netz im Test"); } },
     plugin: {},
     user: {},
+    signatur,
     date: {
       now: (format) => {
         if (format !== "YYYY-MM-DD") throw new Error("Testersatz kennt nur YYYY-MM-DD, nicht " + format);

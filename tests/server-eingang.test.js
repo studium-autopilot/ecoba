@@ -54,6 +54,24 @@ test("Säubern: HTML, Templater, Links und Steuerzeichen fallen weg", async () =
   assert.equal(eingang.termine[0].info, "a b c d");
 });
 
+test("Säubern: fremde Links werden zum Domainnamen, Unicode-Tags und Worttrenner fallen weg; Texte für Studierende ganz ohne Links", async () => {
+  const { eingangNormal, saeubern } = await laden();
+  const tag = String.fromCodePoint(0xe0041, 0xe0042); // unsichtbarer Text „AB“
+  assert.equal(saeubern("Anmeldung: https://alma.uni-tuebingen.de/x?a=1 oder https://evil.example.com/login?u=1 und www.phish.example.org" + tag, 300, false).wert,
+    "Anmeldung: https://alma.uni-tuebingen.de/x?a=1 oder evil.example.com und phish.example.org");
+  assert.equal(saeubern("https://uni-tuebingen.de.evil.example/x https://alma.uni-tuebingen.de" + "@evil.example.net/", 300, false).wert,
+    "uni-tuebingen.de.evil.example evil.example.net");
+  assert.equal(saeubern("Notizen/www.example.com Ideen.md", 240, false, null).wert, "Notizen/www.example.com Ideen.md", "Pfade bleiben, wie sie sind");
+  // Was ohneLinks nicht erkennt, entschärft der Filter ohne erlaubte Domain: auch ein Uni-Link ohne Schema wird keiner
+  const { eingang } = eingangNormal({ termine: [termin({
+    info: "Anmeldung alma.uni-tuebingen.de/x und evil.com/login" + tag, ort: "Raum" + String.fromCharCode(0x2060) + " 1" })],
+  begleitnotizen: [{ datei: "Unterlagen/E101/E101 Folien 01.pdf", wichtigste: ["Lehrbuch core-econ.org/the-economy und https://doi.org/10.1/x"] }] },
+  { jetzt: JETZT });
+  assert.equal(eingang.termine[0].info, "Anmeldung alma.uni-tuebingen.de /x und evil.com /login");
+  assert.equal(eingang.termine[0].ort, "Raum 1");
+  assert.deepEqual(eingang.begleitnotizen[0].wichtigste, [{ text: "Lehrbuch core-econ.org /the-economy und" }]);
+});
+
 test("Begleitnotizen und Hinweise: nur Pfade unter Unterlagen/, Listen begrenzt, leere verworfen", async () => {
   const { eingangNormal } = await laden();
   const { eingang, verworfen } = eingangNormal({
@@ -134,6 +152,8 @@ test("Eine Regel: Server und Plugin nehmen dieselben Termine an und säubern sie
     { datum: "2026-02-30" }, { code: "B11X" }, { code: "b110" }, { code: "SQ888" }, { kategorie: "Party" }, { status: "vielleicht" },
     { info: "x".repeat(201) }, { info: "Siehe javascript:alert(1) unten" }, { quelle_text: "Mail <i>des</i> Lehrstuhls" },
     { quelle_text: "y".repeat(201) },
+    // Unicode-Tags und Worttrenner fallen weg (Links: tests/link-filter.test.js; Texte vom Server sind ganz ohne Links)
+    { info: "Tag" + String.fromCodePoint(0xe0041, 0xe0042) + "text" }, { ort: "Raum" + String.fromCharCode(0x2060) + "1" },
   ];
   const FELDER = ["titel", "datum", "bis", "uhrzeit", "ort", "kategorie", "status", "code", "quelle_text", "info"];
   for (const f of faelle) {
@@ -251,4 +271,37 @@ test("Kapitellisten: nur gefragte Module, nur neue oder geänderte (stand zählt
   assert.equal(dritt.kapitel.length, 1);
   assert.equal(dritt.bestand["B110 WS 2026/27"].kapitel[1].titel, "Kosten, Erlöse und Gewinn");
   assert.deepEqual(nurNeueKapitel(a.kapitel, {}, null).kapitel, [], "ohne lernplan im Stand (älteres Plugin) nichts");
+});
+
+test("Gmail-Überblick: nur ganze Zahlen von 0 bis 10 000, gelesen höchstens gelistet, begrenzt nur bei true, sonst null", async () => {
+  const { gmailUeberblick } = await laden();
+  assert.deepEqual(gmailUeberblick({ gmail_ueberblick: { gelistet: 0, gelesen: 0 } }), { gelistet: 0, gelesen: 0, begrenzt: false });
+  assert.deepEqual(gmailUeberblick({ gmail_ueberblick: { gelistet: 200, gelesen: 30, begrenzt: true, betreff: "privat" } }),
+    { gelistet: 200, gelesen: 30, begrenzt: true }, "andere Felder fallen weg");
+  for (const u of [undefined, null, "23", [], { gelistet: 1 }, { gelistet: -1, gelesen: 0 }, { gelistet: 1.5, gelesen: 0 },
+    { gelistet: "3", gelesen: 1 }, { gelistet: 10001, gelesen: 0 }, { gelistet: 3, gelesen: 4 }]) {
+    assert.equal(gmailUeberblick({ gmail_ueberblick: u }), null, JSON.stringify(u));
+  }
+  assert.equal(gmailUeberblick(null), null);
+});
+
+test("Links fallen aus Texten weg, die Studierende lesen (https, www., mailto); Schlüssel bleiben, wie das Plugin sie säubert", async () => {
+  const { eingangNormal, saeubern, ohneLinks, idAus } = await laden();
+  const lesen = (t, pflicht = false) => saeubern(ohneLinks(t), 200, pflicht);
+  assert.deepEqual(lesen("Anmeldung über https://phish.example/login?x=1 bis Freitag"), { wert: "Anmeldung über bis Freitag" });
+  assert.deepEqual(lesen("Infos auf www.example.org und bei mailto:x" + "@example.org"), { wert: "Infos auf und bei" }); // getrennt für pruefen.py
+  assert.deepEqual(lesen("HTTPS://EXAMPLE.ORG", true), { fehler: "leer" });
+  assert.deepEqual(lesen("Raum im www-Pool, z. B. www"), { wert: "Raum im www-Pool, z. B. www" }, "kein Link");
+  assert.equal(ohneLinks(42), 42);
+  const { eingang } = eingangNormal({
+    termine: [termin({ ort: "https://uni-tuebingen.zoom.us/j/1", info: "Link: https://example.org/a", quelle_text: "Mail von www.example.org" }),
+      termin({ schluessel: "unterlage:Skript www.x.de#2", titel: "Abgabe siehe https://x.de", datum: "2026-10-28" })],
+    hinweise: [{ text: "Neue Folien, siehe www.example.org", quelle: "Kursmail, https://example.org" }],
+    begleitnotizen: [{ datei: "Unterlagen/B110/Skript.pdf", wichtigste: [{ begriff: "www.x.de", text: "Mehr unter https://x.de" }], zu_tun: [], fragen: [] }],
+  }, { jetzt: JETZT });
+  const [a, b] = eingang.termine;
+  assert.deepEqual([a.ort, a.info, a.quelle_text, b.titel], ["", "Link:", "Mail von", "Abgabe siehe"]);
+  assert.deepEqual(eingang.hinweise[0], { text: "Neue Folien, siehe", quelle: "Kursmail," });
+  assert.deepEqual(eingang.begleitnotizen[0].wichtigste[0], { text: "Mehr unter" });
+  assert.equal(b.id, idAus("unterlage:Skript www.x.de#2"), "die id hängt am unveränderten Schlüssel");
 });

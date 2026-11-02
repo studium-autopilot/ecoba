@@ -1,11 +1,12 @@
 /* ==========================================================================
-   EBA · Design FLIEDER (seit 18.10.2026, nur hell)
+   EBA · Design FLIEDER (seit 18.10.2026, dunkel seit 01.11.2026)
    Zartes Lila wie Briefpapier: fliederfarbene Seite, Schrift in dunkler Aubergine, Akzent Violett, Rosé als einzige zweite
    Farbe (Markierungen, hervorgehobene Kachel). Weiche Formen: große Rundungen, runde Überschriften (SF Pro Rounded auf
    iPhone, iPad und Mac, sonst die Schrift des Geräts).
+   Dunkel: dasselbe Briefpapier bei Nacht, dunkle Aubergine, Schrift in hellem Flieder, Akzent Violett.
    Gilt mit body.eba-design-flieder (setzt darstellung.js, je Gerät; Einstellungen & Hilfe → Darstellung). Form und Schrift
-   gelten hell und dunkel (seit 18.10.2026; vorher war Flieder nachts ganz Elfenbein), die Farben nur hell: Dunkel gelten die
-   dunklen Farben von Elfenbein (eba-paper-elfenbein.css, .theme-dark), bis Flieder eigene hat.
+   gelten hell und dunkel (seit 18.10.2026; vorher war Flieder nachts ganz Elfenbein), eigene dunkle Farben seit 01.11.2026
+   (bis dahin die von Elfenbein). Schatten und Modulfarben dunkel kommen aus eba-paper-elfenbein.css (.theme-dark, alle Designs).
    Regeln stehen unter .eba-design-flieder:where(.theme-light, .theme-dark) und sind damit so spezifisch wie die von Elfenbein:
    Die Ausnahmen in eba-core.css (Folien, erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter.
    ========================================================================== */
@@ -64,6 +65,63 @@
   --eba-modul-3: #7276f8; /* Wochenraster: Iris statt Violett, das wäre fast der Akzent (Auswahl, jetzt) */
 }
 
+/* Dunkel (seit 01.11.2026): Flächen von hinten nach vorn heller (Leisten < Seite < Karte), wie in Elfenbein. Der Akzent Violett
+   ist Fläche mit weißer Schrift (Knöpfe, Balken); Links und der Ring „jetzt“ (--eba-accent-text) sind ein helles Flieder: Ein
+   kräftigeres läge fast auf Modul 3 im Wochenraster (Lavendel, 0,06 statt mindestens 0,1, tests/design.test.js). Prüfung, Uni
+   und Veranstaltung: Rot, Stahlblau, Orchidee, je 0,2 auseinander; --eba-bad als Schrift etwas heller als die Prüfung im Chip. */
+.eba-design-flieder.theme-dark {
+  --color-base-00: #1a1620;
+  --color-base-05: #1d1823;
+  --color-base-10: #201b27;
+  --color-base-20: #15121a;
+  --color-base-25: #2a2333;
+  --color-base-30: #352d3f;
+  --color-base-35: #3f3649;
+  --color-base-40: #54485f;
+  --color-base-50: #807392;
+  --color-base-60: #a396b4;
+  --color-base-70: #c6bad3;
+  --color-base-100: #ece4f3;
+
+  --accent-h: 267;
+  --accent-s: 38%;
+  --accent-l: 50%;
+  --text-accent: #d8bff7;
+  --text-accent-hover: #e6d5fa;
+  --interactive-accent: #7a4fb0;
+  --interactive-accent-hover: #8659bd;
+  --text-selection: rgba(216, 191, 247, 0.22);
+  --text-highlight-bg: rgba(240, 150, 195, 0.30);
+
+  --background-modifier-hover: rgba(236, 228, 243, 0.05);
+  --background-modifier-border: #352d3f;
+  --titlebar-background: #15121a;
+  --titlebar-background-focused: #15121a;
+  --tab-container-background: #15121a;
+  --ribbon-background: #15121a;
+
+  --eba-bg: #1a1620;
+  --eba-surface: #221c29;
+  --eba-card-bg: #221c29;
+  --eba-surface-2: #2a2333;
+  --eba-border: #372e42;
+  --eba-border-strong: #4f4360;
+  --eba-text: #ece4f3;
+  --eba-muted: #b6a8c8;
+  --eba-faint: #958aa6;
+  --eba-accent: #7a4fb0;
+  --eba-accent-text: #d8bff7;
+  --eba-accent-soft: rgba(216, 191, 247, 0.12);
+  --eba-rose: #d98bab; /* Streifen der hervorgehobenen Kachel, auf dunklem Grund heller */
+  --eba-good: #62bf8c;
+  --eba-warn: #dea64a;
+  --eba-bad: #ea6f72;
+  --eba-info: #93aee8;
+  --eba-art-pruefung: #e36366;
+  --eba-art-uni: #6399be;
+  --eba-art-event: #e99aff;
+}
+
 /* Form und Schrift: hell und dunkel */
 .eba-design-flieder:is(.theme-light, .theme-dark) {
   --eba-radius: 12px;
@@ -76,7 +134,6 @@
   --eba-h2-weight: 650;
   --eba-h2-size: 1.25em;
 }
-.eba-design-flieder.theme-dark { --eba-rose: #d98bab; } /* Streifen der hervorgehobenen Kachel, auf dunklem Grund heller */
 
 /* Seitenkopf: weiche Linie in Flieder */
 .eba-design-flieder:where(.theme-light, .theme-dark) .eba .eba-kopf { border-bottom: 2px solid var(--eba-border); }

@@ -123,10 +123,10 @@ test("lauf: nur auf dem Gerät, das für alle schreibt; schreibt Felder, Text un
   assert.deepEqual(geschrieben, []);
   hier.wert = true;
   const b = await L.lauf();
-  assert.deepEqual(b.neu, ["folien-geraten", "ausfall-pausen", "folien-kopf", "modul-notizspalte", "modul-reihenfolge"]);
+  assert.deepEqual(b.neu, ["folien-geraten", "ausfall-pausen", "folien-kopf", "modul-notizspalte", "modul-reihenfolge", "variante-link"]);
   assert.deepEqual(geschrieben, [["Vorlesungen/X100/V1.md", ""], ["Unterlagen/X100/Lesefassung.md", "Text"]], "die neue Notiz bleibt ungeschrieben");
   assert.equal(texte["Unterlagen/X100/Lesefassung.md"], "---\ntyp: unterlage\n---\n\n# X100 · Folien 02 · Märkte\n\nText\n");
-  assert.deepEqual(JSON.parse(dateien[L.DATEI]), { erledigt: ["folien-geraten", "ausfall-pausen", "folien-kopf", "modul-notizspalte", "modul-reihenfolge"] });
+  assert.deepEqual(JSON.parse(dateien[L.DATEI]), { erledigt: ["folien-geraten", "ausfall-pausen", "folien-kopf", "modul-notizspalte", "modul-reihenfolge", "variante-link"] });
   assert.equal(await L.lauf(), null, "alles erledigt");
   // Neuer Start (neues Skript), Datei schon da: liest sie und tut nichts
   const zweit = laden("nachtraege", { notizen: Object.assign({}, folie(1), fm), kontext: { zentral: { abruferHier: async () => true } } });
@@ -209,4 +209,17 @@ test("nachtragenMit: Text nur schreiben, wenn er sich ändert; nur Geschriebenes
   assert.deepEqual(b.geaendert, [{ id: "text", pfad: "a.md" }]);
   assert.deepEqual(b.erledigt, ["text"]);
   assert.deepEqual(texte, { "a.md": "neu", "b.md": "bleibt" });
+});
+
+test("Nachtrag variante-link: Links auf den Abschnitt „Variante“ zeigen auf „Deine Angaben“", () => {
+  const link = "Festlegen unter [[Einstellungen & Hilfe#Variante|Variante]].";
+  assert.equal(N.varianteLink(link), "Festlegen unter [[Einstellungen & Hilfe#Deine Angaben|Variante]].");
+  assert.equal(N.varianteLink(N.varianteLink(link)), N.varianteLink(link), "einmal genügt");
+  // Vorlage: kein Abschnitt und kein Link mehr auf „#Variante“
+  const vorlage = path.join(__dirname, "..", "Studium Autopilot");
+  assert.ok(!/eba-personalisieren variante/.test(fs.readFileSync(path.join(vorlage, "Studium", "Einstellungen & Hilfe.md"), "utf8")));
+  const md = [path.join(vorlage, "Studium", "Studienverlauf.md")];
+  const sammeln = (o) => { for (const e of fs.readdirSync(o, { withFileTypes: true })) { const q = path.join(o, e.name); if (e.isDirectory()) sammeln(q); else if (e.name.endsWith(".md")) md.push(q); } };
+  sammeln(path.join(vorlage, "Module"));
+  for (const q of md) assert.ok(!fs.readFileSync(q, "utf8").includes("Einstellungen & Hilfe#Variante"), path.basename(q));
 });

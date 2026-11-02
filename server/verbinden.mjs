@@ -8,7 +8,8 @@
 // Zugangs- und Datenschlüssel holt das Plugin mit dem Code über HTTPS (POST /v1/verbinden) und legt sie in den Schlüsselbund. So
 // stehen die Schlüssel nie in einem Link, auf dem Bildschirm oder im Chat. Gespeichert wird nur der SHA-256 des Codes. Ein Code gilt
 // einmal: Einlösen legt zuerst exklusiv eine Marke an (atomar), so bekommt von zwei gleichzeitigen Anfragen nur eine die Schlüssel.
-// geraete.json im Datenordner: { ausgestellt: [Zeit] (Codes aus Obsidian der letzten 24 Stunden), nonces: { Zufallswert: Ablauf }
+// Codes und geraete.json liegen im Ordner des Web-Dienstes (web/ im Datenordner; die Cloud Shell legt ihren Code als dessen Benutzer
+// studium-web ab, studium-server verbinden). geraete.json: { ausgestellt: [Zeit] (Codes aus Obsidian der letzten 24 Stunden), nonces: { Zufallswert: Ablauf }
 // (gegen wiederholte Anfragen), verbunden: [{ zeit, herkunft }] (die letzten VERBUNDEN; ans Plugin nur im verschlüsselten
 // Eingang, nie im öffentlichen Status) }.
 //   node verbinden.mjs   neuer Code, Ausgabe als JSON { code, link, ablauf }
@@ -164,7 +165,7 @@ export function link(adresse, code) {
 // realpathSync: Node löst den Symlink /opt/studium-server/aktuell für import.meta.url auf, für argv[1] nicht.
 if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const konfig = JSON.parse(readFileSync(process.env.STUDIUM_SERVER_KONFIG || "/etc/studium-server/dienst.json", "utf8"));
-  const verzeichnis = process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server";
+  const verzeichnis = join(process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server", "web");
   const { code, ablauf } = neuerCode(verzeichnis);
   console.log(JSON.stringify({ code, ablauf, link: link(konfig.adresse, code) }));
 }

@@ -6,6 +6,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
+const SIG = require("./signatur.js");
 
 const U = laden("update").ctx.update;
 const enc = (s) => new TextEncoder().encode(s);
@@ -14,6 +15,7 @@ const RELEASES = "https://github.com/studium-autopilot/ecoba/releases";
 const BASIS = (v) => `https://raw.githubusercontent.com/studium-autopilot/ecoba/v${v}/`;
 const ASSET = (v) => `${RELEASES}/download/v${v}/system-dateien.json`;
 const ROH = (v) => BASIS(v) + "Studium%20Autopilot/System/Daten/system-dateien.json";
+const SCHLUESSEL = SIG.schluesselBauen(); // Wegwerf-Schlüssel für die Signatur der Liste (tests/update-signatur.test.js)
 
 async function listeBauen(version, dateien) {
   const liste = { schema: 1, version, ordner: "Studium Autopilot", erstellt: "2026-10-27T12:00:00Z", dateien: [] };
@@ -37,6 +39,7 @@ async function lauf(o) {
   const io = {
     holen: async (url, x) => {
       abrufe.push({ url, frisch: !!(x && x.frisch) });
+      if (url === SIG.signaturUrl("0.7.2")) return enc(SIG.signieren(enc(text), SCHLUESSEL));
       if (url === ASSET("0.7.2")) {
         if (o.asset === "netz") throw new Error("offline");
         if (o.asset === "404") throw new Error("HTTP 404");
@@ -53,8 +56,9 @@ async function lauf(o) {
   };
   const release = { version: "0.7.2", url_basis: BASIS("0.7.2"), sha256: await U.sha256(enc(text)), notiz: "" };
   const b = await U.aktualisierenMit(io, { release, alt: U.listePruefen(await listeBauen("0.7.1", ALT)).wert, altVersion: "0.7.1",
-    zeit: new Date(2026, 9, 27, 12, 0), listeRelease: o.ohneAsset ? null : ASSET("0.7.2") });
-  return { b, abrufe, m, text, listen: abrufe.filter((a) => a.url.includes("system-dateien.json")) };
+    zeit: new Date(2026, 9, 27, 12, 0), listeRelease: o.ohneAsset ? null : ASSET("0.7.2"),
+    signatur: SIG.signaturUrl("0.7.2"), schluessel: [SCHLUESSEL.oeffentlich] });
+  return { b, abrufe, m, text, listen: abrufe.filter((a) => a.url.endsWith("/system-dateien.json")) };
 }
 
 test("Liste aus dem Release: passt die Prüfsumme, wird sie verwendet, ohne Abruf vom Tag", async () => {
@@ -108,7 +112,11 @@ function geraet(o = {}) {
   const L = laden("update", {
     frontmatter: { "System/Einstellungen.md": Object.assign({ typ: "einstellungen" }, o.einstellungen) },
     kontext: {
-      obsidian: { requestUrl: async (p) => { anfragen.push(p); throw new Error("kein Netz im Test"); } },
+      obsidian: { requestUrl: async (p) => {
+        anfragen.push(p);
+        if (p.url.endsWith("/" + SIG_ASSET)) return { status: 200, arrayBuffer: enc("-").buffer };
+        throw new Error("kein Netz im Test");
+      } },
       plugin: Object.assign({ manifest: { version: "0.7.1" }, testUpdateAntwort: true }, o.plugin),
       zentral: {
         geraetId: () => "g-ich", stand: () => ({ release: rel, beta: null, plugin_aktuell: "0.7.2", geprueft: o.geprueft || new Date().toISOString() }),
@@ -124,25 +132,31 @@ function geraet(o = {}) {
   L.ctx.app.metadataCache.initialized = true;
   return { U: L.ctx.update, registrieren: L.ergebnis.registrieren, anfragen, speicher, zaehler };
 }
-const listenVon = (G) => G.anfragen.filter((a) => a.url.includes("system-dateien.json")).map((a) => a.url);
+const SIG_ASSET = "system-dateien.json.sig";
+const listenVon = (G) => G.anfragen.filter((a) => a.url.includes("system-dateien.json") && !a.url.endsWith(SIG_ASSET)).map((a) => a.url);
+const signaturVon = (G) => G.anfragen.filter((a) => a.url.endsWith(SIG_ASSET)).map((a) => a.url);
 
-test("Update: zuerst die Liste aus dem Release der neuen Version, ohne Netz dann vom Tag", async () => {
+test("Update: zuerst die Signatur und die Liste aus dem Release der neuen Version, ohne Netz dann die Liste vom Tag", async () => {
   const G = geraet();
   const b = await G.U.aktualisieren();
   assert.equal(b.art, "netz");
+  assert.deepEqual(signaturVon(G), [SIG.signaturUrl("0.7.2")]);
+  assert.equal(G.anfragen[0].url, SIG.signaturUrl("0.7.2"), "Signatur vor der Liste");
   assert.deepEqual(listenVon(G), [ASSET("0.7.2"), ROH("0.7.2") + "?t=7"]);
 });
 
-test("Update: nur vom Tag mit zaehlen: false (Mitzählen bis 0.7.0 aus) und mit plugin.testUpdateBasis", async () => {
+test("Update: Liste nur vom Tag mit zaehlen: false (Mitzählen bis 0.7.0 aus) und mit plugin.testUpdateBasis; die Signatur gibt es nur im Release", async () => {
   let G = geraet({ einstellungen: { zaehlen: false } });
   await G.U.aktualisieren();
   assert.deepEqual(listenVon(G), [ROH("0.7.2") + "?t=7"]);
+  assert.deepEqual(signaturVon(G), [SIG.signaturUrl("0.7.2")]);
   G = geraet({ einstellungen: { zaehlen: true } });
   await G.U.aktualisieren();
   assert.deepEqual(listenVon(G), [ASSET("0.7.2"), ROH("0.7.2") + "?t=7"], "zaehlen: true wie ohne Feld");
   G = geraet({ plugin: { testUpdateBasis: "http://127.0.0.1:8080/" } });
   await G.U.aktualisieren();
   assert.deepEqual(listenVon(G), ["http://127.0.0.1:8080/Studium%20Autopilot/System/Daten/system-dateien.json?t=7"]);
+  assert.deepEqual(signaturVon(G), ["http://127.0.0.1:8080/system-dateien.json.sig"], "Signatur mit der Testbasis von dort");
 });
 
 test("Start: kein Abruf zum Zählen mehr, der Merker eba-update-gezaehlt (bis 0.7.0) ist weg", async () => {

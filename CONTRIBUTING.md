@@ -28,6 +28,12 @@ Diagramme als PNG unter `docs/bilder/`. `werkzeuge/pruefen.py` meldet einen ````
 Für Code gilt: Er muss auf iPhone und iPad laufen. Die Regeln für Skripte stehen in [docs/architektur.md](docs/architektur.md) („Regeln für Skript-Autoren“).
 Vor dem Pull Request: `npm ci`, dann `npm test` und `npm run lint` (Node 22 oder neuer). GitHub Actions prüft dasselbe.
 
+Zum Ausprobieren in Obsidian: Der Tresor `Studium Autopilot/` dieses Repos hat keine signierte Liste seiner Dateien (die
+entsteht erst beim Release). Darum startet der Kern dort kein Skript, bis du in der Befehlspalette einmal **Entwicklermodus
+einschalten** wählst (der Hinweis beim Start nennt den Befehl mit Absicht nicht). Das gilt nur für dieses Gerät und diesen
+Tresor; danach laufen alle Skripte aus `System/Skripte/` ohne Prüfung, und jede Änderung lädt sofort. Die Tests brauchen das
+nicht. Mehr in [docs/architektur/skripte-pruefen.md](docs/architektur/skripte-pruefen.md).
+
 ## Changelog: für Studierende schreiben
 
 `CHANGELOG.md` ist zugleich das Fenster **Was ist neu**, das nach einem Update in der App erscheint. Wer es liest, studiert und
@@ -36,7 +42,7 @@ kennt sich mit Technik nicht aus. Darum gelten für jeden neuen Abschnitt feste 
 1. **Nutzen zuerst.** Jeder Punkt sagt, was du jetzt kannst oder was dir erspart bleibt, nicht, was im Code passiert ist.
    „Neue Uni-Termine kommen schneller an“ statt „Abruf der zentralen Daten nach 2 statt 10 Minuten“.
 2. **Ein Punkt beginnt mit seiner Art:** **Neu:**, **Einfacher:**, **Schneller:**, **Übersichtlicher:**, **Zuverlässiger:**,
-   **Einheitlicher:** oder **Behoben:**, bei einer Funktion nur für Beta-Versionen mit „ (Beta)“ dahinter (**Neu (Beta):**). Bei **Behoben:** steht, was vorher schiefging, so wie man es gesehen hat („Manchmal fehlten …“).
+   **Einheitlicher:**, **Sicherer:** oder **Behoben:**, bei einer Funktion nur für Beta-Versionen mit „ (Beta)“ dahinter (**Neu (Beta):**). Bei **Behoben:** steht, was vorher schiefging, so wie man es gesehen hat („Manchmal fehlten …“).
 3. **Kurz.** Höchstens zwei Sätze und 240 Zeichen je Punkt, höchstens 12 Punkte je Version. Der Titel der Version nennt den
    wichtigsten Nutzen in höchstens 6 Wörtern.
 4. **Keine Fachwörter.** Keine Dateinamen, kein Code in Backticks, keine Wörter wie Manifest, Cache, Index, Plugin, Skript,

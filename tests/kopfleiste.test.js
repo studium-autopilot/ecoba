@@ -511,13 +511,18 @@ test("iPhone: Titel in der Zeile der Leiste, weg erst über ihrer Oberkante (son
     "solange der Titel oben steht, blendet die Maske ihn nicht aus");
 });
 
-test("Jede Notiz eine Spalte, links bündig mit den Seiten (iPad und breites Telefon-Fenster); Seiten volle Breite", () => {
+test("Notizen wie Seiten volle Breite, Text höchstens 52rem (iPad und breites Telefon-Fenster)", () => {
   const T = CSS.slice(CSS.indexOf("/* --- 37.tablet --- */"), CSS.indexOf("/* ---------- 2. Ruhiger Rhythmus"));
   const notiz = ".is-readable-line-width:not(.eba-weit, .eba-s-modul)";
   for (const geraet of ["body.is-tablet", "  body.is-phone"]) {
-    assert.ok(T.includes(`${geraet} :is(.markdown-preview-view, .markdown-source-view.mod-cm6)${notiz} { --file-line-width: 52rem; --file-margins: 16px 22px; }`), geraet);
-    assert.ok(T.includes(`${geraet} .markdown-source-view.mod-cm6${notiz} .cm-sizer { margin-left: 0 !important; margin-right: auto !important; }`), geraet);
+    assert.ok(T.includes(`${geraet} :is(.markdown-preview-view, .markdown-source-view.mod-cm6)${notiz} { --file-line-width: 1680px; --file-margins: 16px 22px; }`), geraet);
+    assert.ok(T.includes(`${geraet} .markdown-source-view.mod-cm6${notiz} .cm-sizer { max-width: 1680px !important; width: 100% !important; margin-left: auto !important; margin-right: auto !important; }`), geraet);
+    // Text bricht nach 52rem um; in der Bearbeitung über den Innenabstand, so bleiben Kästen und Linien einer Zeile breit
+    // (bis 02.11.2026 war jede Notiz eine Spalte von 52rem, im Querformat blieb die rechte Hälfte leer)
+    assert.ok(T.includes(`${geraet} .markdown-preview-view${notiz} .markdown-preview-sizer > div > :is(p, ul, ol, blockquote) { max-width: 52rem; }`), geraet);
+    assert.ok(T.includes(`${geraet} .markdown-source-view.mod-cm6${notiz} .cm-content > .cm-line:not(.HyperMD-header) { padding-right: max(0px, calc(100% - 52rem)) !important; }`), geraet);
   }
+  assert.doesNotMatch(T, /--file-line-width: 52rem/, "keine Spalte mehr");
   // Seiten: nur eba-weit und Modulseiten, keine Notiz mehr über die ganze Breite
   assert.doesNotMatch(T, /eba-s-begleitnotiz|eba-s-vorlesung|eba-s-termin|\.eba:not\(\.eba-folien\)/);
   // Eine aufgeklappte PDF bleibt breit: Abschnitt 27 wiegt mehr als die Spalte

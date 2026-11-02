@@ -196,7 +196,9 @@ test("Status: ein Fehler bleibt stehen (Zeile nicht mehr grün), bis ein Abruf k
   s = t.A.status();
   assert.deepEqual([s.zustand, s.fehler, !!s.geprueft], ["an", "", true]);
   // ein anderes Gerät hält die Sperre: der Zeitplan wartet, ein Knopf übernimmt
-  t.dateien["System/Daten/alma-abruf.json"] = JSON.stringify({ geraet: "g-anders", seit: new Date().toISOString(), zuletzt: new Date().toISOString(), angewendet: {} });
+  // mit der Uhr des Tests (ctx.date.jetzt): eine Sperre weit in der Zukunft gälte als verlassen (vorgehende Uhr)
+  const jetzt = t.ctx.date.jetzt().toISOString();
+  t.dateien["System/Daten/alma-abruf.json"] = JSON.stringify({ geraet: "g-anders", seit: jetzt, zuletzt: jetzt, angewendet: {} });
   assert.equal(await t.A.aktualisieren({ automatisch: true }), null);
   assert.equal(t.A.status().zustand, "anderes-geraet");
   assert.ok(await t.A.aktualisieren({ still: true }));
@@ -247,6 +249,68 @@ test("Verbinden: scheitert der erste Abruf, gilt wieder der vorherige Link", asy
   assert.equal(t.speicher["eba-alma-ics"], neu);
 });
 
+// Schlüsselbund wie Obsidians app.secretStorage (synchron); kaputt: setSecret wirft
+const schluesselbund = (t, kaputt) => {
+  const geheim = new Map();
+  t.ctx.app.secretStorage = {
+    getSecret: (k) => (geheim.has(k) ? geheim.get(k) : null),
+    setSecret: (k, v) => { if (kaputt) throw new Error("kein Schlüsselbund"); geheim.set(k, v); },
+    deleteSecret: (k) => { geheim.delete(k); },
+  };
+  return geheim;
+};
+
+test("Alma-Link im Schlüsselbund: ein Link aus dem gerätelokalen Speicher zieht beim ersten Lesen einmal um", async () => {
+  const urls = [];
+  const t = tresor({ testAbruf: async (r) => { urls.push(r.url); return { status: 200, text: kalender(S100) }; } });
+  const geheim = schluesselbund(t);
+  const id = t.A.geheimId();
+  assert.match(id, /^studium-autopilot-alma-[a-z0-9]+$/);
+  t.speicher["eba-alma-ics"] = "webcal://alma.uni-tuebingen.de/alma/ical/alt";
+  assert.equal(t.A.hatLink(), true);
+  assert.equal(geheim.get(id), "webcal://alma.uni-tuebingen.de/alma/ical/alt");
+  assert.equal("eba-alma-ics" in t.speicher, false, "im gerätelokalen Speicher gelöscht");
+  assert.equal(t.A.status().verbunden, true);
+  assert.ok(await t.A.aktualisieren({ still: true }));
+  assert.deepEqual(urls, ["https://alma.uni-tuebingen.de/alma/ical/alt"]);
+  // schon im Schlüsselbund und (ältere Fassung) noch einmal im Speicher: der im Schlüsselbund gilt
+  t.speicher["eba-alma-ics"] = "https://alma.uni-tuebingen.de/alma/ical/aelter";
+  assert.equal(t.A.hatLink(), true);
+  assert.equal(geheim.get(id), "webcal://alma.uni-tuebingen.de/alma/ical/alt");
+  assert.equal("eba-alma-ics" in t.speicher, false);
+  // ein anderer Tresor hat einen anderen Eintrag
+  const u = tresor();
+  u.ctx.app.appId = "anderer-tresor";
+  assert.notEqual(u.A.geheimId(), id);
+});
+
+test("Alma-Link im Schlüsselbund: Verbinden, Trennen und ein gescheiterter erster Abruf; nimmt ihn der Schlüsselbund nicht, bleibt nichts liegen", async () => {
+  const alt = "https://alma.uni-tuebingen.de/alma/ical/alt", neu = "https://alma.uni-tuebingen.de/alma/ical/neu";
+  let antwort = { status: 200, text: kalender(S100) };
+  const t = tresor({ testAbruf: async () => antwort });
+  const geheim = schluesselbund(t);
+  const id = t.A.geheimId();
+  assert.ok(await t.A.verbinden(alt, { nurBeiErfolg: true }));
+  assert.equal(geheim.get(id), alt);
+  assert.equal("eba-alma-ics" in t.speicher, false, "nie im gerätelokalen Speicher");
+  antwort = { status: 404 };
+  assert.equal(await t.A.verbinden(neu, { nurBeiErfolg: true }), null);
+  assert.equal(geheim.get(id), alt, "der vorherige gilt wieder");
+  t.A.trennen();
+  assert.equal(geheim.has(id), false);
+  assert.equal(t.A.hatLink(), false);
+  // Schlüsselbund nimmt nichts an: nicht verbunden, nichts im gerätelokalen Speicher
+  const k = tresor({ testAbruf: async () => ({ status: 200, text: kalender(S100) }) });
+  schluesselbund(k, true);
+  assert.equal(await k.A.linkSetzen(alt, true), false);
+  assert.equal(k.A.hatLink(), false);
+  assert.equal("eba-alma-ics" in k.speicher, false);
+  // ein alter Link bleibt dann im gerätelokalen Speicher und gilt weiter
+  k.speicher["eba-alma-ics"] = alt;
+  assert.equal(k.A.hatLink(), true);
+  assert.equal(k.speicher["eba-alma-ics"], alt);
+});
+
 test("Uni-Login: Alma kennt den Link nicht mehr → neuen holen und gleich damit; Netzfehler, Verbinden und Hülle nie", async () => {
   const alt = "https://alma.uni-tuebingen.de/alma/ical/alt", neu = "https://alma.uni-tuebingen.de/alma/ical/neu";
   const gefragt = [], abrufe = [];
@@ -277,6 +341,13 @@ test("Uni-Login: Alma kennt den Link nicht mehr → neuen holen und gleich damit
   ersatz = neu;
   assert.equal(await t.A.verbinden("https://alma.uni-tuebingen.de/alma/ical/getippt", { nurBeiErfolg: true }), null);
   assert.equal(gefragt.length, 3);
+  // mit Schlüsselbund: der neue Link landet dort, nicht im gerätelokalen Speicher
+  const k = tresor({ uni, testAbruf: async (x) => (x.url === neu ? { status: 200, text: kalender(S100) } : { status: 404 }) });
+  const geheim = schluesselbund(k);
+  k.speicher["eba-alma-ics"] = alt;
+  assert.ok(await k.A.aktualisieren({ still: true }));
+  assert.equal(geheim.get(k.A.geheimId()), neu);
+  assert.equal("eba-alma-ics" in k.speicher, false);
 });
 
 test("Zentrale Stundenplan-Notizen übernimmt, ändert und löscht Alma nie (eigene Notiz daneben)", async () => {
@@ -413,6 +484,39 @@ test("Fristen: hängt schon die Sperre (Tresor antwortet nicht), endet der Abruf
 // Raum ging verloren, ein auf eine andere Uhrzeit verschobener Termin wurde Ausfall plus eigene Notiz. Nur ausgedachte Daten.
 const ve = (felder) => ["BEGIN:VEVENT", ...Object.entries(felder).map(([k, v]) => k + (k === "EXDATE" ? ";TZID=Europe/Berlin:" : ":") + v), "END:VEVENT"].join("\n");
 const notizVon = (t, muster) => { const p = Object.keys(t.fm).filter((x) => muster.test(x)); assert.equal(p.length, 1, p.join(", ")); return t.fm[p[0]]; };
+
+test("Text aus Alma in der Notiz und in „Bitte prüfen“: Titel und Raum mit „\\“ vor Markdown-Zeichen, Eigenschaften roh, gewöhnliche wie bisher", async () => {
+  const t = tresor({ sperre: true, heute: "2026-10-27" });
+  const titel = "Workshop [Hier](obsidian://x) <b>fett</b> ![[Notiz]] Vorlesung";
+  const serie = (raum) => kalender(ve({ UID: "w", SUMMARY: titel, DTSTART: "20261021T100000", DTEND: "20261021T120000", RRULE: "FREQ=WEEKLY;COUNT=8", LOCATION: raum }), B130);
+  const b1 = await t.A.aktualisieren({ still: true, text: serie("Raum [1] & *2*") });
+  assert.equal(b1.neu, 2);
+  const p = Object.keys(t.fm).find((x) => /Workshop/.test(x));
+  const text = t.text[p];
+  assert.match(text, /^# Workshop \\\[Hier\\\]\(obsidian:\/\/x\) \\<b\\>fett\\<\/b\\> · Vorlesung$/m, "Kurztitel (48 Zeichen) aus dem Alma-Titel");
+  assert.match(text, /^Mittwochs, 10:00–12:00 · Raum \\\[1\\\] \\& \\\*2\\\*$/m);
+  assert.match(text, /^> \[!info\] Aus Alma \(Workshop \\\[Hier\\\]\(obsidian:\/\/x\) .*\)\. Änderungen in Alma kommen von selbst\.$/m);
+  assert.deepEqual([t.fm[p].alma_titel, t.fm[p].raum, t.fm[p].herkunft], [titel, "Raum [1] & *2*", "alma"], "Eigenschaften roh, Besitzmarke wie bisher");
+  // gewöhnlicher Titel und Raum: genau wie bisher
+  const b130 = Object.keys(t.fm).find((x) => /B130/.test(x));
+  assert.equal(t.text[b130], t.text[b130].replace(/\\/g, ""), "kein „\\“ in einer gewöhnlichen Notiz");
+  assert.match(t.text[b130], /^# B130 · Übung\n\nDienstags, 14:00–16:00\n\n> \[!info\] Aus Alma \(B130 Internes Rechnungswesen Übung\)\. /m);
+  // gleicher Abruf: nichts neu geschrieben; neuer Raum: Kopfzeile mit dem neuen, entschärft (auch „$&“ bleibt wörtlich)
+  const vorher = t.text[p];
+  const b2 = await t.A.aktualisieren({ still: true, text: serie("Raum [1] & *2*") });
+  assert.deepEqual([b2.neu, b2.geaendert, t.text[p]], [0, 0, vorher]);
+  await t.A.aktualisieren({ still: true, text: serie("Raum [3] $& neu") });
+  assert.match(t.text[p], /^Mittwochs, 10:00–12:00 · Raum \\\[3\\\] \\\$\\& neu$/m);
+  // ältere Notiz mit rohem Raum in der Kopfzeile: der Raum wird trotzdem ersetzt
+  t.text[p] = t.text[p].replace(/^Mittwochs, .*$/m, () => "Mittwochs, 10:00–12:00 · Raum [3] $& neu");
+  await t.A.aktualisieren({ still: true, text: serie("Hörsaal 9") });
+  assert.match(t.text[p], /^Mittwochs, 10:00–12:00 · Hörsaal 9$/m);
+  // „Bitte prüfen“: Titel einer Notiz, die in Alma fehlt, ohne Link
+  t.fm[p].alma_fehlt = "2026-10-27";
+  delete t.fm[p].herkunft;
+  t.fm[p].titel = "Mein [Kurs](obsidian://x)";
+  assert.deepEqual(t.A.hinweise().map((x) => x.text), ["**Stundenplan** · Mein \\[Kurs\\](obsidian://x) steht nicht mehr in Alma. Fällt sie aus, lösch die Notiz."]);
+});
 
 test("Raum je Termin: einzelner Termin in anderem Raum wird eine Änderung, Raum der Serie bleibt, keine weitere Notiz", async () => {
   const t = tresor();

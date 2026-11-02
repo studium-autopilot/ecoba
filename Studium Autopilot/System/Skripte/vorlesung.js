@@ -1,6 +1,6 @@
 // Vorlesungsnotiz (typ: vorlesung) lebendig gestalten, dazu die Abschnitte eines Übungsblatts (typ: übungsblatt).
 // 1. Codeblock ```eba-vorlesung``` unter dem Titel: Kopf-Karte mit Modul (Link) und Vorlesungswoche im Label, Status „Nacharbeit
-//    offen/Nachgearbeitet“ (Tipp schaltet das Feld `nachgearbeitet`), Thema (nur wenn der Titel es nicht nennt), Datum mit
+//    offen/Nachgearbeitet“ (Tipp schaltet das Feld `nachgearbeitet`), Thema (nur wenn weder Titel noch Folien-Chip es nennen), Datum mit
 //    Wochentag, Uhrzeit und Raum aus dem Stundenplan
 //    (an diesem Tag, seit 20.10.2026 mit Änderung oder Verlegung: neuer Wert in Warnfarbe, der übliche durchgestrichen),
 //    Dozent (Feld der Notiz, sonst aus dem Stundenplan-Eintrag), einer Perlenreihe der Vorlesungswochen dieses Moduls (Tipp öffnet
@@ -261,9 +261,13 @@ module.exports = function (ctx) {
     // Notiz, in älteren Notizen beides unter einem Titel, der dasselbe Thema nannte). Mit Modul: das Thema der Notiz
     // (ctx.modell.vorlesung), nur wenn der Titel es nicht nennt (der Name „Vorlesung 1 · Mo 13.10. · Thema“ wiederholte Nummer und
     // Tag, die Datum und Woche schon sagen). Ohne Modul (Mitschrift zu einem Termin): Thema bzw. Termin, wenn der Titel anders lautet.
+    // Auch nicht, wenn ein Folien-Chip unten es nennt (seit 02.11.2026): Ohne Feld thema ist das Thema der Titel der ersten Folien
+    // und stand zweimal untereinander („Einführung“ und „Folien 00 Einführung“). Ein gekürztes Thema („… …“) zählt mit seinem Anfang.
     const h1 = String(((f && app.metadataCache.getFileCache(f)?.headings) || []).filter((h) => h.level === 1).map((h) => h.heading)[0] || "").trim();
     const thema = code && f && basis.modell && basis.modell.vorlesung ? basis.modell.vorlesung(f).thema : String(fm.thema || x.lfm.titel || "").trim();
-    if (thema && h1.indexOf(thema) < 0) karte.createDiv({ cls: code ? "eba-vorl-thema" : "eba-vorl-titel", text: thema });
+    const kern = thema.replace(/\s*…$/, "");
+    const imChip = x.folien.some((d) => String(d.fm.titel || "").indexOf(kern) >= 0);
+    if (thema && h1.indexOf(thema) < 0 && !imChip) karte.createDiv({ cls: code ? "eba-vorl-thema" : "eba-vorl-titel", text: thema });
 
     // Datum · Uhrzeit · Raum
     const meta = karte.createDiv({ cls: "eba-vorl-meta" });

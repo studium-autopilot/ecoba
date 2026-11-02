@@ -7,6 +7,7 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
   "quellen": ["gmail", "uni-postfach"],
   "gmail": "ok",
   "weiterleitung": "ok",
+  "gmail_ueberblick": { "gelistet": 23, "gelesen": 4, "begrenzt": false },
   "termine": [
     {
       "schluessel": "gmail:18f3a2b4c5d6e7f8#1",
@@ -36,6 +37,7 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 | `quellen` | welche Quellen du in diesem Lauf wirklich gelesen hast: `gmail`, `uni-postfach` |
 | `gmail` | `ok`, wenn die Gmail-Suche lief; `fehlt`, wenn der Connector nicht verfügbar war; weglassen, wenn Gmail nicht dran war |
 | `weiterleitung` | nur wenn Gmail dran war: `ok`, wenn `to:student.uni-tuebingen.de newer_than:30d` Treffer hat, sonst `fehlt` |
+| `gmail_ueberblick` | nur wenn Gmail dran war: `gelistet` = Mails im Überblick (termine.md, Gmail Schritt 2), `gelesen` = wie viele davon du ganz gelesen hast (ohne die aus Schritt 1), `begrenzt`: `true`, wenn eine Grenze griff (4 Seiten im Überblick oder 30 zum Lesen); nur diese Zahlen |
 | `termine[].schluessel` | stabil, aus Quelle und Nummer (siehe termine.md); höchstens 200 Zeichen |
 | `titel` | 1–120 Zeichen, eine Zeile, ohne `[ ] < > { } \| \` ` und ohne Links |
 | `datum`, `bis` | `JJJJ-MM-TT`; `bis` nur bei mehrtägigen Terminen, sonst `""` |
@@ -44,7 +46,7 @@ Schreibe genau eine Datei `ausgabe.json` mit diesem Aufbau (UTF-8, gültiges JSO
 | `kategorie` | genau eine aus: `Semester`, `Vorlesungsfrei`, `Prüfung`, `Frist`, `Einführung`, `Lehre`, `Fachschaft`, `Veranstaltung` |
 | `status` | `offiziell` oder `geschätzt` |
 | `code` | Modulcode wie `B110`, `E101`, `SQ888` oder `""` |
-| `quelle_text`, `info` | je höchstens 200 Zeichen, reiner Text, eigene Worte |
+| `quelle_text`, `info` | je höchstens 200 Zeichen, reiner Text, eigene Worte, keine Links |
 | `entfaellt` | nur bei abgesagten Terminen: `true` |
 | `hinweise[]` | `text` höchstens 300 Zeichen, `quelle` höchstens 200; `code`: Modulcode, wenn der Hinweis zu genau einem Modul gehört (er steht dann auch auf dessen Seite), sonst weglassen |
 | `todo_doppel[]` | höchstens 50 Paare aus `id`s von `tresor.json` (termine.md, „Doppelte To-dos“); weglassen, wenn es keine gibt |

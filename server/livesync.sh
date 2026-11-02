@@ -182,7 +182,8 @@ INI
   done
   echo "erreichbar"
 
-  install -o studium -g studium -m 0644 /dev/null "$DATEN/livesync-an"
+  # Marke als studium (root legt nichts in einem Ordner an, den ein anderer Benutzer ändert)
+  sudo -u studium sh -c 'umask 077 && : >>"$1"' - "$DATEN/livesync-an"
   sudo -u studium env STUDIUM_SERVER_DATEN="$DATEN" node "$PAKET/zustand.mjs" >/dev/null || true
 }
 
@@ -192,8 +193,8 @@ verbinden() {
   local paket code kennung link
   paket=$(node "$PAKET/livesync.mjs" link "$LS_KONFIG")
   code=$(jq -r '.code' <<<"$paket")
-  # Der lange Setup-Link geht nur über die Pipe an den Dienst-Benutzer; angezeigt wird der kurze
-  kennung=$(jq -r '.link' <<<"$paket" | sudo -u studium env STUDIUM_SERVER_DATEN="$DATEN" node "$PAKET/livesync.mjs" ablegen | jq -r '.kennung')
+  # Der lange Setup-Link geht nur über die Pipe an den Benutzer des Web-Dienstes (web/livesync-links/); angezeigt wird der kurze
+  kennung=$(jq -r '.link' <<<"$paket" | sudo -u studium-web env STUDIUM_SERVER_DATEN="$DATEN" node "$PAKET/livesync.mjs" ablegen | jq -r '.kennung')
   link="$(jq -r '.adresse' "$KONFIG")/v1/livesync/$kennung"
   cat <<TEXT
 

@@ -206,13 +206,16 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   (`entfernen`) und schließt dabei die linke Seitenleiste, am PC mit `collapse()`, auf dem iPad, wenn sie angeheftet war, mit
   `app:toggle-left-sidebar`. Die Ansicht bleibt dafür angemeldet: Obsidian baut Tabs eines Typs, der sich später anmeldet, selbst
   neu auf („view-registered“), nur dann findet `getLeavesOfType` sie. Das Symbol des Tabs ist ein eigenes SVG (`addIcon`, Strich als Attribut), nicht Obsidians
-  `layout-grid`: über `setIcon` blieb es auf dem iPad leer. Seiten, die noch nicht fertig sind (`IN_ENTWICKLUNG`: Lernplan seit
-  19.10.2026, Karteikarten seit 24.10.2026), sind abgeblendet und tragen rechts die Pille „in Entwicklung“ (`.is-entwicklung`,
-  `.eba-sl-entwicklung`). Stil: `eba-core.css` Abschnitt 66.
-  Obsidians Einstellungen, Dateien und Tresor stehen unter Einstellungen & Hilfe → Obsidian (`eba-personalisieren obsidian`,
+  `layout-grid`: über `setIcon` blieb es auf dem iPad leer. Seiten, die noch nicht fertig sind (`IN_ENTWICKLUNG`: Karteikarten seit
+  24.10.2026; Lernplan 19.10. bis 2.11.2026), sind abgeblendet und tragen rechts die Pille „in Entwicklung“ (`.is-entwicklung`,
+  `.eba-sl-entwicklung`). Eben fertig gewordene (`NEU`: Lernplan seit 2.11.2026) tragen rechts „neu“ in Blau (`.eba-sl-neu`), auf
+  jedem Gerät eine Woche ab dem Tag, an dem die Zeile dort zuerst erscheint (`istNeu`, gerätelokal `eba-sl-neu`: Seite → Tag; ohne
+  festes Datum, weil jede:r zu einem anderen Tag aktualisiert). Stil: `eba-core.css` Abschnitt 66.
+  Obsidians Einstellungen und Tresor stehen unter Einstellungen & Hilfe → Obsidian (`eba-personalisieren obsidian`,
   `personalisieren.js`; seit 24.10.2026, vorher unten in der Schublade, die bis 26.10.2026 die Übersicht zeigte und Obsidians
-  Teile darin so lange ausblendete): Obsidian-Einstellungen, Dateien mit ihrer Zahl, Tresor mit seinem Namen; jede Zeile ruft Obsidians eigenen Befehl auf
-  (`app:open-settings`, `file-explorer:open`, `app:open-vault`). Für den Tresor ist das „Tresore verwalten“, wie der Eintrag
+  Teile darin so lange ausblendete): Obsidian-Einstellungen, Tresor mit seinem Namen; jede Zeile ruft Obsidians eigenen Befehl auf
+  (`app:open-settings`, `app:open-vault`). Die Zeile Dateien (`file-explorer:open`, öffnete die linke Seitenleiste) ist seit
+  01.11.2026 weg (Rückmeldung: „Sidebar shouldn't be visible in this vault“). Für den Tresor ist das „Tresore verwalten“, wie der Eintrag
   im Auswahlmenü unter dem Tresornamen: `app:switch-vault` öffnet auf iPhone und iPad nur eine Liste zum Wechseln, löschen
   und umbenennen geht nur in der Verwaltung (Obsidian 1.14.5, 25.10.2026).
   Oben rechts zeigen iPhone und iPad keine Obsidian-Knöpfe (seit 26.10.2026): Man hielt sie für die Navigation. Abschnitt 66
@@ -229,7 +232,7 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   Obsidian in `updateRibbonMenuItem` zurück (beim Start und wenn sich „Quick ribbon item“ ändert), darum umhüllt das Skript diese
   Methode an der Instanz; `abmelden()` gibt alles zurück. Langes Drücken zeigt weiter Obsidians Menü der Befehle
   (`showRibbonMenu`). Auf dem iPad blendet Obsidian die Leiste aus (`body.is-tablet .mobile-navbar`); Abschnitt 66 zeigt sie dort
-  mit denselben sieben Knöpfen im selben Maß wie auf dem iPhone (Zurück, Vor, Suche, „+“, Zahnrad, Tabs, ≡; Obsidians
+  mit denselben sieben Knöpfen im selben Maß wie auf dem iPhone (Zurück, Vor, Suche, „+“, Tabs, Zahnrad, ≡; Obsidians
   `mobileTabSwitcher` gibt es auf jedem Mobilgerät), so weit vom rechten Rand der Hauptfläche wie vom unteren Rand (mit
   angehefteter rechter Seitenleiste links neben ihr: `hauptRechts` misst die Hauptfläche mit einem `ResizeObserver` und setzt
   `--eba-haupt-rechts` an `body`, seit 27.10.2026; vorher lag die Seitenleiste über der Leiste, ≡ und Zahnrad waren nicht zu
@@ -261,8 +264,11 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   from the left shouldn't open the sidebar but do the same as the back arrow as in go back one page“). Obsidian meldet jede
   Geste auf seiner Fläche als Ereignis `swipe` der Workspace (`workspace.trigger("swipe", g)`, app.js 1.14.5); die linke
   Seitenleiste zieht sich auf, wenn ein Finger waagerecht zu ihr hin wischt, von überall auf der Fläche, und beide Seitenleisten
-  zu oder angeheftet sind. `wischenUebernehmen` umhüllt `trigger` an der Instanz: So eine Geste (`zurueckGeste`, rein, getestet)
-  erreicht Obsidians Hörer nicht, für sie täte sonst keiner etwas. Beginnt sie in der Hauptfläche (`rootSplit`) und am linken
+  zu oder angeheftet sind; nach links nach derselben Regel die rechte. `wischenUebernehmen` umhüllt `trigger` an der Instanz: So
+  eine Geste (`seitenGeste`, rein, getestet: 1 zur linken, -1 zur rechten, 0 keine; `zurueckGeste` ist die zur linken) erreicht
+  Obsidians Hörer nicht, für sie täte sonst keiner etwas. Nach links tut sie nichts (seit 01.11.2026, Rückmeldung: „Sidebar
+  shouldn't be visible in this vault“; den Umschalter der rechten Seitenleiste blendet Abschnitt 66 seit 26.10.2026 aus, Wischen
+  nach links zog sie bis dahin noch auf). Nach rechts: Beginnt sie in der Hauptfläche (`rootSplit`) und am linken
   Rand (seit 27.10.2026, Rückmeldung: „Nur vom linken Rand“; `amRand`, rein, getestet: im Streifen von `ZURUECK_RAND` = 30 px ab dem
   sicheren Rand `--safe-area-inset-left`, bei Sprachen von rechts nach links rechts; so breit wie das Zurück vom Rand bei iOS
   und wie `RAND` in `woche.js`, ab dem das Wochenraster blättert; beide zählen ab dem sicheren Rand, seit 27.10.2026 auch das
@@ -277,11 +283,18 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   (`mod-activated`) ist er ab `WISCH_WEIT`, der Strecke, ab der ein langsames Wischen sicher zurückgeht (Obsidian nimmt 90 px);
   kurz und schnell geht es auch zurück, ohne dass er ganz da war, denn die Geschwindigkeit kennt erst das Loslassen. Beim
   Loslassen gleitet er hinaus und ist danach weg, beim Abbrechen und Abmelden sofort. Fehlt `createDiv`, geht es ohne ihn
-  zurück. Nach links wischen öffnet weiter die rechte
-  Seitenleiste, eine offene schließt man weiter durch Wischen, mit zwei Fingern geht es weiter zurück und vor. Fehlt `trigger`,
-  `rootSplit`, `history.go` oder ein Feld der Geste (Umbau durch Obsidian) oder geht beim Entscheiden etwas schief, bleibt
-  alles bei Obsidian; `abmelden()` gibt `trigger` zurück. Die linke Seitenleiste öffnen Einstellungen & Hilfe → Obsidian →
-  Dateien (darin oben die Auswahl: Suche, Tags, Eigenschaften, Lesezeichen) und Obsidians Befehle; angeheftet (iPad) bleibt sie
+  zurück. Ohne Tab mit Verlauf (`history.go`) geht es nicht zurück, eine Seitenleiste kommt trotzdem nicht. Eine offene
+  Seitenleiste schließt man weiter durch Wischen, mit zwei Fingern geht es weiter zurück und vor. Fehlt `trigger`, `rootSplit`
+  oder ein Feld der Geste (Umbau durch Obsidian) oder geht beim Entscheiden etwas schief, bleibt alles bei Obsidian;
+  `abmelden()` gibt `trigger` zurück.
+  Beim Start (seit 01.11.2026, iPad-Foto der linken Seitenleiste kurz nach dem Öffnen): Die Skripte laden erst, wenn Obsidians
+  Layout fertig ist, eines nach dem anderen; bis `seitenleiste.js` an der Reihe ist, vergeht am PC gut eine Sekunde (Lesen und
+  Übersetzen der Skripte davor gemessen), auf dem iPad nach einem Kaltstart mehr. So lange zog Wischen Obsidians Seitenleiste
+  auf. Darum legt der Kern (`main.js` `wischenBeimStart`, nur iPhone und iPad) schon in `onload` eine eigene Hülle um `trigger`:
+  Bis `starten()` alle Skripte geladen hat (`gestartet`), nimmt sie jede Geste mit einem Finger waagerecht, solange beide
+  Seitenleisten zu oder angeheftet sind (dieselbe Regel wie `seitenGeste`); danach reicht sie alles an die Hülle von
+  `seitenleiste.js` und Obsidian durch. Beim Entladen gibt sie `trigger` zurück, wenn niemand sie seither umhüllt hat.
+  Auf iPhone und iPad öffnet nur noch Obsidians Befehl die linke Seitenleiste (Befehlspalette); angeheftet (iPad) bleibt sie
   stehen und schließt mit dem ⎕ der Kopfleiste.
   Herunterziehen oben auf einer Seite führt keinen Befehl mehr aus (seit 26.10.2026, Rückmeldung: „Remove access to command palette
   via swiping down. No users uses it it opens often by mistake.“). Obsidian zeigt dabei einen Hinweis und führt beim Loslassen
@@ -309,10 +322,11 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   Notizen behalten Obsidians Auslauf (etwa eine halbe Fensterhöhe). `tests/seitenleiste.test.js` prüft, dass jede kürzende
   Regel für iPad und PC eine in 36d hat.
   Das Zahnrad (seit 26.10.2026) öffnet Einstellungen & Hilfe über `ctx.oeffnen`. `zahnradEinsetzen` setzt es gleich
-  hinter Obsidians „+“ (`.mobile-navbar-action-new-tab`) in die Leiste, mit Obsidians Markup (`div.mobile-navbar-action` mit
+  hinter Obsidians Tabs (`.mobile-navbar-action-tabs`), vor ≡, in die Leiste (seit 02.11.2026, Rückmeldung: „Swap position
+  settings Icon and tabs“; vorher zwischen „+“ und Tabs), mit Obsidians Markup (`div.mobile-navbar-action` mit
   `span.clickable-icon`, Klasse `eba-nav-zahnrad`): So sieht es aus wie die anderen Knöpfe und bekommt dieselbe Rückmeldung beim
   Tippen. Obsidian baut die Leiste nie neu, es hängt sie nur ein und aus; das Zahnrad verschwindet also mit ihr beim Scrollen und
-  bei offener Tastatur. Findet das Skript „+“ nicht, etwa nach einem Umbau durch Obsidian, setzt es kein Zahnrad, und die Leiste
+  bei offener Tastatur. Findet das Skript Tabs nicht, etwa nach einem Umbau durch Obsidian, setzt es kein Zahnrad, und die Leiste
   bleibt, wie Obsidian sie baut. Zuerst sollte es „+“ ersetzen, weil sieben Knöpfe die Leiste (höchstens 316 px) unter 44 pt je
   Knopf stauchen; „+“ blieb („there's enough space“). Solange das Zahnrad dasteht, fehlt Einstellungen & Hilfe im Menü
   (`menueOhne`, Rückmeldung: „Redundant“).
@@ -322,7 +336,7 @@ kennt), setzt die Reparatur danach einmal je Gerät dieselben Werte über Obsidi
   gleichen 7 Symbole“; bis dahin nur Zahnrad und ≡): Zurück und Vor gehen im Verlauf des Tabs vorn in der Hauptfläche
   (`history.go` von `getMostRecentLeaf(rootSplit)`; ohne Verlauf `aria-disabled` und ausgegraut, ein Klick tut dann nichts; neu
   bei `file-open`, `active-leaf-change`, `layout-change`), Suche öffnet Obsidians Schnellwechsler wie die Suche auf iPhone und
-  iPad (`internalPlugins` „switcher“, `onOpen`), „+“ `workspace:new-tab`, Zahnrad Einstellungen & Hilfe, Tabs die offenen Tabs.
+  iPad (`internalPlugins` „switcher“, `onOpen`), „+“ `workspace:new-tab`, Tabs die offenen Tabs, Zahnrad Einstellungen & Hilfe.
   Obsidian hat am PC keine Tab-Übersicht wie `mobileTabSwitcher`; das nächste Gleiche ist sein Menü hinter ⌄ in der Tab-Leiste,
   darum Obsidians `Menu` mit denselben Einträgen (Name, Symbol, Haken am vorderen), aber allen Tabs der Hauptfläche
   (`iterateRootLeaves`), rechts bündig mit dem Knopf und 8 px über der Leiste (Obsidian legt ein Menü, das darunter Platz hat,

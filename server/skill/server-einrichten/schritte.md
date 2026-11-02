@@ -45,7 +45,7 @@ Dann die **Cloud Shell** öffnen (Konsole oben rechts, Symbol **>_**; dort ist d
 diese Zeile eingeben. Sie lädt `start.sh` aus dem Tag dieser Anleitung (beim Release eingesetzt) und startet es:
 
 ```bash
-mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start.sh https://raw.githubusercontent.com/studium-autopilot/ecoba/v0.7.6/server/start.sh && bash ~/studium-autopilot/start.sh --mail <Mail-Adresse>
+mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start.sh https://raw.githubusercontent.com/studium-autopilot/ecoba/v0.7.7/server/start.sh && bash ~/studium-autopilot/start.sh --mail <Mail-Adresse>
 ```
 
 Jedes weitere Mal („Weiter mit der Einrichtung“, auch in einer neuen Cloud-Shell-Sitzung oder Tage später) dieselbe Zeile ohne
@@ -61,7 +61,8 @@ Beides braucht den Server nicht und läuft in einem zweiten Tab des eingebauten 
 
 **Gmail (freiwillig).** Frag: „Nutzt du Gmail? Dann kann Claude dort auch nach Terminen suchen.“
 - Ja: in claude.ai **Einstellungen → Connectors → Gmail → Verbinden**. Die Google-Zustimmung gibt der Mensch. Erklären: Claude
-  sucht und liest auf dem Server nur; Senden, Entwürfe, Labels und Löschen sind dort gesperrt.
+  sucht und liest auf dem Server nur; Senden, Entwürfe, Labels und Löschen sind dort gesperrt. Es sieht Absender, Betreff und
+  die ersten Zeilen neuer Mails (nicht deine eigenen) und öffnet nur die, die zum Studium gehören.
 - Nein: weiter. Im Fenster „Eigener Server“ steht Gmail dann auf „nie“, der Status meldet `gmail: aus` (sobald Obsidian den
   Takt geschickt hat); das ist so gewollt.
 

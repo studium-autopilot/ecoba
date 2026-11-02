@@ -24,7 +24,8 @@
 // Beginn: Vorlesungsbeginn, frühestens `seit`.
 // Frontmatter der Notiz (optional): `seit` (Plan beginnt in dieser Woche), `verstanden_bis` (Ziel statt 70 %), `vorlaeufig: true`
 // (Kapitelliste teils geschätzt, z. B. Lehrbuch-Einheiten, die die Vorlesung erst nach und nach nennt), `vorlernen: false` (ein
-// Kapitel ist frühestens eine Woche nach seiner Vorlesung dran; Schalter im Bereich). Ein https-Link in der Zeile (frei zugängliches
+// Kapitel ist frühestens eine Woche nach seiner Vorlesung dran; Schalter im Bereich), `zeit_je_kapitel: true` mit `kapitel_zeit`
+// (Schalter „Zeit je Kapitel“, standardmäßig aus; siehe zeitStufe). Ein https-Link in der Zeile (frei zugängliches
 // Lehrbuch) macht ein Kapitel „da“; ohne Seiten im ganzen Modul zählt die Zahl der Unterkapitel als Gewicht.
 // Klausurvorbereitung (Für die Klausur): Altklausuren des Moduls (bearbeitet = status bearbeitet), nach dem Ziel auf die Wochen bis
 // zur Klausur verteilt, die neueste offene für den Tag davor; Übungsblätter dieses Semesters; heute fällige Karteikarten (ctx.karten).
@@ -43,6 +44,7 @@ module.exports = function (ctx) {
   const BEREICH = "Studium/Lernplan.md";
   const EINSTELLUNGEN = "System/Einstellungen.md";
   const FELD_WOCHEN = "lernplan_wochen";
+  const FELD_ANTEIL = "lernplan_anteil";
   const ANTEIL = 0.7;
   const MIN_KAPAZITAET = 0.3;
   const EPS = 1e-6;
@@ -76,6 +78,7 @@ module.exports = function (ctx) {
   const FOLIEN = /^Folien (\d{1,2})$/;
   const VORLESUNG = /^Vorlesung (\d{1,2}\.\d{1,2}\.\d{4})$/;
   const ZWISCHENTEST = /^Zwischentest (\d{1,2}\.\d{1,2}\.\d{4})$/;
+  const ALTKLAUSUREN = /^in (\d{1,2}) von (\d{1,2}) Altklausuren$/;
   const ROEMISCH = { I: 1, V: 5, X: 10, L: 50, C: 100 };
   const roemisch = (s) => {
     let n = 0;
@@ -85,15 +88,15 @@ module.exports = function (ctx) {
   // Nummer als Zahl (für den Abgleich mit dem Feld `nummer` der Folien): 3 → 3, IV → 4, sonst null (E, 1.2)
   const nrZahl = (nr) => (/^\d+$/.test(nr) ? +nr : /^[IVXLC]+$/.test(nr) ? roemisch(nr) : null);
   // Text einer Kapitelzeile ohne Häkchen: „1 Grundlagen · [[B110 Folien 01 Grundlagen|Folien]] · 42 S. · Vorlesung 19.10.2026“ →
-  // Nummer, Titel, Links, Seiten, Tag der Vorlesung und des Zwischentests (ISO); web = https-Links (`[online](https://…)`, z. B. ein
-  // frei zugängliches Lehrbuch): Das Kapitel ist dann da.
+  // Nummer, Titel, Links, Seiten, Tag der Vorlesung und des Zwischentests (ISO), Klausurrelevanz („in 9 von 12 Altklausuren“ →
+  // { in, von }); web = https-Links (`[online](https://…)`, z. B. ein frei zugängliches Lehrbuch): Das Kapitel ist dann da.
   const zeileLesen = (rest) => {
     const teile = rest.replace(/\s+\^[A-Za-z0-9-]+$/, "").split(" · ");
     const kopf = teile.shift().trim();
     const m = kopf.match(NUMMER);
     const nr = m && nummerOk(m[1]) ? m[1] : "";
     const links = [], web = [];
-    let seiten = null, folien = null, vorlesung = "", zwischentest = "";
+    let seiten = null, folien = null, vorlesung = "", zwischentest = "", altklausuren = null;
     for (const t of teile) {
       const x = t.trim();
       const s = x.match(SEITEN);
@@ -104,6 +107,8 @@ module.exports = function (ctx) {
       if (v) { vorlesung = isoAusDe(v[1]); continue; }
       const z = x.match(ZWISCHENTEST);
       if (z) { zwischentest = isoAusDe(z[1]); continue; }
+      const a = x.match(ALTKLAUSUREN);
+      if (a && +a[1] <= +a[2]) { altklausuren = { in: +a[1], von: +a[2] }; continue; }
       let l;
       LINK.lastIndex = 0;
       while ((l = LINK.exec(t))) links.push(l[1].trim());
@@ -111,7 +116,7 @@ module.exports = function (ctx) {
       while ((l = WEB.exec(t))) web.push(l[1]);
     }
     const titel = (nr ? m[2] : kopf).replace(LINK, (_, z, a) => a || z).trim();
-    return { nr, titel, links, web, seiten, folien, vorlesung, zwischentest };
+    return { nr, titel, links, web, seiten, folien, vorlesung, zwischentest, altklausuren };
   };
   // Markdown einer Lernplan-Notiz → [{ zeile, roh, nr, titel, fertig, links, seiten, vorlesung, zwischentest, teile: [{ zeile, roh,
   // nr, titel, fertig }] }]. Nur Aufgaben außerhalb von Frontmatter und Codeblöcken; ohne Einrückung = Kapitel, eingerückt =
@@ -402,20 +407,26 @@ module.exports = function (ctx) {
   const heldText = (H) => {
     if (H.alleFertig) return { titel: "Alles verstanden.", satz: "Jetzt zählen Altklausuren auf Zeit und deine Karteikarten." };
     if (H.rueckstand) {
-      const A = H.aufholen;
+      // Wochentag und Datum mit festem Leerzeichen: Auf dem iPhone brach der Satz zwischen „So“ und „22.11.“
+      const A = H.aufholen, bis = wtm(A.bis).replace(" ", "\u00a0");
       return { titel: `${H.rueckstand} Kapitel im Rückstand`, satz: H.rueckstand <= 2
-        ? `Hol ${H.rueckstand === 1 ? "es" : "sie"} bis ${wtm(A.bis)} nach, dann bist du wieder im Plan.`
-        : `Mit ${A.extra} ${A.extra === 1 ? "Kapitel" : "Kapiteln"} mehr pro Woche bist du bis ${wtm(A.bis)} wieder im Plan.` };
+        ? `Hol ${H.rueckstand === 1 ? "es" : "sie"} bis ${bis} nach, dann bist du wieder im Plan.`
+        : `Mit ${A.extra} ${A.extra === 1 ? "Kapitel" : "Kapiteln"} mehr pro Woche bist du bis ${bis} wieder im Plan.` };
     }
     const rest = H.woche.gesamt - H.woche.fertig;
     const woche = !H.woche.gesamt ? "" : rest === 1 ? "Diese Woche ist noch 1 Kapitel dran." : rest ? `Diese Woche sind noch ${rest} Kapitel dran.` : "Diese Woche ist geschafft.";
     if (H.vorsprung) return { titel: `${H.vorsprung} Kapitel Vorsprung`, satz: woche || "Was du früher verstehst, bleibt dir an Zeit für Altklausuren." };
     return { titel: "Du liegst im Plan.", satz: woche };
   };
-  // Zielnote auf der Skala des Bereichs; die Stufen wie anteilAusZielnote
-  const NOTEN = ["1,0", "1,3", "1,7", "2,0", "2,3", "2,7", "3,0", "3,3", "3,7", "4,0"];
-  const STUFEN = [{ name: "sehr gut", bis: 1.5 }, { name: "gut", bis: 2.5 }, { name: "bestanden", bis: 4 }];
-  const stufeVon = (note) => { const n = parseFloat(String(note).replace(",", ".")); return STUFEN.findIndex((s) => n <= s.bis + EPS); };
+  // Wann alles verstanden sein soll (seit 1.11.2026): deine Wahl im Lernplan (lernplan_anteil in den Einstellungen: 60, 70 oder 80),
+  // sonst nach der Zielnote (anteilAusZielnote) → { anteil, quelle: "wahl" | "zielnote" | "" (weder noch: 70 %) }
+  const ANTEILE = [0.6, 0.7, 0.8];
+  const anteilWahl = (wert, zielnote) => {
+    const n = Number(String(wert == null ? "" : wert).replace("%", "").trim());
+    if (ANTEILE.some((a) => Math.round(a * 100) === n)) return { anteil: n / 100, quelle: "wahl" };
+    const z = parseFloat(String(zielnote == null ? "" : zielnote).replace(",", "."));
+    return { anteil: anteilAusZielnote(zielnote), quelle: isFinite(z) && z >= 1 && z <= 4 ? "zielnote" : "" };
+  };
   // „Verstanden bis“ eines Moduls bei einem Anteil; hält die Vorlesung das Ziel schon später (vorlernen aus), nicht früher als jetzt
   const zielBei = (P, anteil) => {
     const z = zielVon(P.beginn, P.klausur.datum, anteil);
@@ -432,15 +443,16 @@ module.exports = function (ctx) {
     const zs = Z.map((x) => x.z).sort(), ws = Z.map((x) => x.w).sort((a, b) => a - b);
     return { von: zs[0], bis: zs[zs.length - 1], wochenVon: ws[0], wochenBis: ws[ws.length - 1] };
   };
-  // Satz zur Zielnote in Teilen ({ text, wert }; wert = fett): „Alles verstanden nach 60 % der Zeit, bis So 3.1., danach 4 Wochen
-  // Klausurvorbereitung.“ Mehrere Module: Spannen, die Tage ohne Wochentag. V wie zielVorschau.
+  // Was ein Anteil heißt, in Teilen ({ text, wert }; wert = fett): „alles verstanden bis So 3.1., danach 4 Wochen
+  // Klausurvorbereitung.“ Mehrere Module: „zwischen 17.1. und 28.2.“, die Tage ohne Wochentag (bis 2.11.2026 „bis 17.1.–28.2.“, ohne
+  // zu sagen, was bis dahin). V wie zielVorschau.
   const spanne = (a, b) => (a === b ? String(a) : `${a}–${b}`);
-  const zielTeile = (V, anteil) => {
-    if (!V) return [{ text: "Deine Module haben ein eigenes Datum, bis wann alles verstanden sein soll." }];
-    const bis = V.von === V.bis ? wtm(V.bis) : spanne(tm(V.von), tm(V.bis));
-    const wochen = V.wochenVon === V.wochenBis && V.wochenBis === 1 ? "1 Woche" : `${spanne(V.wochenVon, V.wochenBis)} Wochen`;
-    return [{ text: "Alles verstanden nach " }, { text: `${Math.round(anteil * 100)} % der Zeit`, wert: true }, { text: ", bis " },
-      { text: bis, wert: true }, { text: ", danach " }, { text: wochen, wert: true }, { text: " Klausurvorbereitung." }];
+  const zielTeile = (V) => {
+    if (!V) return [{ text: "deine Module haben ein eigenes Datum, bis wann alles verstanden sein soll." }];
+    const wann = V.von === V.bis ? [{ text: "alles verstanden bis " }, { text: wtm(V.bis), wert: true }]
+      : [{ text: "alles verstanden zwischen " }, { text: tm(V.von), wert: true }, { text: " und " }, { text: tm(V.bis), wert: true }];
+    const wochen = V.wochenVon === V.wochenBis && V.wochenBis === 1 ? "1\u00a0Woche" : `${spanne(V.wochenVon, V.wochenBis)}\u00a0Wochen`;
+    return [...wann, { text: ", danach " }, { text: wochen, wert: true }, { text: " Klausurvorbereitung." }];
   };
 
   // ---------- Daten aus dem Tresor ----------
@@ -451,14 +463,15 @@ module.exports = function (ctx) {
   const sichtbar = () => app.vault.getMarkdownFiles().some((f) => f.path.startsWith(ORDNER) && fmVon(f).typ === "lernplan");
   const einstellungen = () => fmVon(app.vault.getAbstractFileByPath(EINSTELLUNGEN));
 
-  // Klausur eines Moduls: ctx.modell.pruefungVon (eine Regel für alle Seiten); ohne Prüfungstermin der Beginn der nächsten
-  // Prüfungsphase (geschätzt)
-  const klausurVon = (D, code, heute) => {
-    const p = ctx.modell.pruefungVon(code, { heute });
+  // Klausur eines Moduls im Haupt- oder Nachholtermin (nachhol): ctx.modell.pruefungVon (eine Regel für alle Seiten); ohne
+  // Prüfungstermin der Beginn der nächsten Prüfungsphase, im Nachholtermin der nächsten Nachholphase (geschätzt, phase: true)
+  const klausurVon = (D, code, heute, nachhol) => {
+    const p = ctx.modell.pruefungVon(code, { heute, termin: nachhol ? "nachhol" : "haupt" });
     if (p) return { datum: p.datum, geschaetzt: !!p.geschaetzt, f: p.f || null };
-    const phase = D.pruefungsphasen.filter((x) => x.bis >= heute).sort((x, y) => (x.von < y.von ? -1 : 1))[0];
-    return phase ? { datum: phase.von, geschaetzt: true, f: null } : null;
+    const phase = D.pruefungsphasen.filter((x) => x.bis >= heute && (!nachhol || /nachhol/i.test(x.art))).sort((x, y) => (x.von < y.von ? -1 : 1))[0];
+    return phase ? { datum: phase.von, geschaetzt: true, phase: true, f: null } : null;
   };
+  const imNachhol = (modul) => !!(ctx.modell.imNachhol && ctx.modell.imNachhol(modul));
   // Folien eines Moduls: { nr: { nummer: { f, seiten, fassung } }, ohne: [{ f, seiten }] } (je Nummer die neueste Fassung,
   // Varianten „mit Anmerkungen“, „unbeschrieben“, „zum Video“ zählen nicht; ohne = Folien ohne Nummer)
   const folienSammeln = (code) => {
@@ -527,6 +540,28 @@ module.exports = function (ctx) {
     return "";
   };
   const AUS = { art: "aus", pille: { art: "leer", text: "nicht mehr dran" }, woche: [], naechstes: -1 };
+  // Semester, für das ein Lernplan gerade zählt: das laufende (jetzt). Wer im Nachholtermin schreibt, lernt nach dem Ende des
+  // Semesters der Notiz (notiz) weiter für dessen Klausur, bis NACHHOL_TAGE danach.
+  const NACHHOL_TAGE = 45;
+  const planSemester = (jetzt, notiz, nachhol, heute) => (nachhol && notiz && jetzt && notiz.name !== jetzt.name && notiz.ende < heute
+    && heute <= plusTage(notiz.ende, NACHHOL_TAGE) ? notiz : jetzt);
+  // Das nächste Semester nach semName aus der Semesterliste, in dem das Modul angeboten wird (turnus „WS“, „SS“, „WS, SS“; ohne
+  // Angabe jedes) → Name oder ""
+  const spaeterSemester = (turnus, semName, liste) => {
+    const t = String(turnus || ""), L = liste || [], i = L.findIndex((s) => s.name === semName);
+    if (i < 0) return "";
+    return (L.slice(i + 1).find((s) => !/WS|SS/.test(t) || t.indexOf(s.name.slice(0, 2)) >= 0) || { name: "" }).name;
+  };
+  // Wofür du dich bei einem Modul entschieden hast: "haupt" (Klausur im Haupttermin), "nachhol" (im Nachholtermin), "spaeter" (in
+  // ein späteres Semester gelegt); null, wo es nichts zu wählen gibt (fertig, Notiz für ein anderes Semester, ohne Modulnotiz oder
+  // ohne Kapitel)
+  const terminWahl = (P) => {
+    if (!P.modul || !P.modul.f || P.fehlt === "keine Kapitel") return null;
+    if (P.aus) return /^(liegt jetzt in|nicht mehr in deinem Plan)/.test(P.aus) ? "spaeter" : null;
+    return P.nachhol ? "nachhol" : "haupt";
+  };
+  // Wann eine Klausur ist, kurz für die Wahl: „Sa 30.1.“, geschätzt „ca. Do 1.4.“, nur die Phase „ab 30.3.“
+  const terminText = (k) => (!k ? "Termin fehlt" : k.phase ? `ab ${tm(k.datum)}` : `${k.geschaetzt ? "ca. " : ""}${wtm(k.datum)}`);
 
   // Material für die Klausur: Altklausuren des Moduls (von alt nach neu; bearbeitet = status bearbeitet) und Übungsblätter dieses
   // Semesters (bearbeitet oder erledigt). Lösungen zählen nicht.
@@ -550,7 +585,8 @@ module.exports = function (ctx) {
     const text = await app.vault.cachedRead(f);
     const fm = fmVon(f), code = codeVon(f);
     const modul = D.module.find((m) => m.code === code) || null;
-    const basis = { f, code, modul, heute, vorlaeufig: fm.vorlaeufig === true, vorlernen: fm.vorlernen !== false, ects: (modul && modul.ects) || 5 };
+    const basis = { f, code, modul, heute, herkunft: String(fm.herkunft || ""), vorlaeufig: fm.vorlaeufig === true, vorlernen: fm.vorlernen !== false,
+      ects: (modul && modul.ects) || 5 };
     const roh = kapitelLesen(text);
     if (!roh.length) return Object.assign(basis, { kapitel: [], fehlt: "keine Kapitel" });
     const folien = folienZuordnen(roh, folienSammeln(code), !!fm.herkunft);
@@ -564,12 +600,18 @@ module.exports = function (ctx) {
         erreicht: verfolgt ? !!k.vorlesung && k.vorlesung <= heute : true,
         seitenWert: k.seiten || verlinkt || (fol && fol.seiten) || null, ziel: ziele[0] || (fol && fol.f) || null, webZiel: k.web[0] || null });
     });
-    gewichte(kapitel).forEach((g, i) => { kapitel[i].gewicht = g; });
-    // Beginn: das laufende Semester (eine Notiz für ein anderes Semester sortiert nichtMehrDran aus)
-    const sem = ctx.modell.semesterFuer(heute);
+    const wahl = zeitWahlLesen(fm.kapitel_zeit), zeitAn = fm.zeit_je_kapitel === true;
+    basis.zeitAn = zeitAn;
+    gewichte(kapitel).forEach((g, i) => { const z = zeitStufe(kapitel[i], wahl, zeitAn); kapitel[i].zeit = z; kapitel[i].gewicht = g * ZEIT_FAKTOR[z.stufe]; });
+    // Beginn: das Semester des Plans (planSemester; eine Notiz für ein anderes Semester sortiert nichtMehrDran aus). Die Klausur im
+    // Haupt- und im Nachholtermin, damit du wählen kannst; es gilt deine Wahl.
+    const nachhol = imNachhol(modul), semName = String(fm.semester || "").trim();
+    const sem = planSemester(ctx.modell.semesterFuer(heute), semName && ctx.modell.semesterNachName ? ctx.modell.semesterNachName(semName) : null, nachhol, heute);
+    const termine = { haupt: klausurVon(D, code, heute, false), nachhol: klausurVon(D, code, heute, true) };
+    Object.assign(basis, { nachhol, semester: sem ? sem.name : "", termine });
     const aus = nichtMehrDran(fm, modul, sem && sem.name);
     if (aus) return Object.assign(basis, { kapitel, aus, stand: AUS });
-    const kl = klausurVon(D, code, heute);
+    const kl = termine[nachhol ? "nachhol" : "haupt"];
     if (!kl) return Object.assign(basis, { kapitel, fehlt: "keine Klausur" });
     const vb = (sem && sem.vb) || heute;
     const seit = s10(fm.seit);
@@ -593,8 +635,11 @@ module.exports = function (ctx) {
     return Object.assign(basis, { kapitel, klausur: kl, beginn, ziel: zielAnzeige, zielPlan: ziel, eigenesZiel: !!eigenesZiel, plan, geschaetzt, stand: S,
       vorb: V, alt: altklausurPlan(V.alt, heute, kl.datum) });
   };
-  // Was für alle Lernpläne gilt: deine Wochen mit weniger Zeit, Ziel nach der Zielnote
-  const optionen = (D) => ({ faktoren: faktorenLesen(einstellungen()[FELD_WOCHEN]), anteil: anteilAusZielnote(D.zielnote) });
+  // Was für alle Lernpläne gilt: deine Wochen mit weniger Zeit, wann alles verstanden sein soll (anteilWahl)
+  const optionen = (D) => {
+    const ein = einstellungen(), W = anteilWahl(ein[FELD_ANTEIL], D.zielnote);
+    return { faktoren: faktorenLesen(ein[FELD_WOCHEN]), anteil: W.anteil, anteilQuelle: W.quelle };
+  };
   const allesSammeln = async (D, heute) => {
     const o = optionen(D);
     const alle = [];
@@ -640,6 +685,22 @@ module.exports = function (ctx) {
       if (anteil < 1) liste.push(`${mo} ${Math.round(anteil * 100)}`);
       liste.sort();
       if (liste.length) fm[FELD_WOCHEN] = liste; else delete fm[FELD_WOCHEN];
+    });
+  };
+  // Deine Wahl zur Klausur in die Modulnotiz (wie die Modulseite): Haupttermin (klausurtermin fällt weg) oder Nachholtermin, beides in
+  // diesem Semester (semester_geplant leer, wenn der Musterplan das Modul ohnehin hierhin legt); später = das nächste Semester, in
+  // dem es angeboten wird (spaeterSemester)
+  const terminSchreiben = async (P, wahl) => {
+    const f = P.modul && P.modul.f, M = ctx.modell;
+    if (!f || !P.semester) return;
+    await app.fileManager.processFrontMatter(f, (fm) => {
+      if (wahl === "spaeter") {
+        const s = spaeterSemester(fm.turnus, P.semester, M.daten().semesterliste);
+        if (s) { fm.semester_geplant = s; delete fm.klausurtermin; }
+        return;
+      }
+      if (wahl === "nachhol") fm.klausurtermin = "Nachholtermin"; else delete fm.klausurtermin;
+      if (M.modulSemester(fm) !== P.semester) fm.semester_geplant = M.modulSemester(Object.assign({}, fm, { semester_geplant: "" })) === P.semester ? "" : P.semester;
     });
   };
 
@@ -699,13 +760,15 @@ module.exports = function (ctx) {
     : esc(titelVon(P)));
 
   // Neben einem offenen Kapitel: „bis So 8.11.“ (geschätzt „bis ca.“), „überfällig seit So 18.10.“ (fällig, da und die Vorlesung
-  // hatte es), dazu „noch nicht da“, bis Sonntag „vor der Vorlesung“ und der Zwischentest → { text, ueberfaellig }
+  // hatte es), dazu „noch nicht da“, bis Sonntag „vor der Vorlesung“ und der Zwischentest. Vor dieser Woche fällig, aber nicht
+  // überfällig (noch nicht da, die Vorlesung hatte es noch nicht): ohne Datum, das vorbei ist („bis So 25.10.“ las sich wie ein
+  // Fehler), nur der Grund → { text, ueberfaellig }
   const bisText = (P, i) => {
     const k = P.kapitel[i], d = P.plan.faellig[i], mo = montagVon(P.heute);
-    const ueberfaellig = d < mo && k.da && k.erreicht !== false;
-    const teile = [ueberfaellig ? `überfällig seit ${wtm(d)}` : `bis ${P.geschaetzt && P.geschaetzt[i] ? "ca. " : ""}${wtm(d)}`];
+    const ueberfaellig = d < mo && k.da && k.erreicht !== false, vorbei = d < mo && !ueberfaellig;
+    const teile = ueberfaellig ? [`überfällig seit ${wtm(d)}`] : vorbei ? [] : [`bis ${P.geschaetzt && P.geschaetzt[i] ? "ca. " : ""}${wtm(d)}`];
     if (!k.da) teile.push("noch nicht da");
-    else if (k.erreicht === false && P.vorlernen && d <= plusTage(mo, 6)) teile.push("vor der Vorlesung");
+    else if (k.erreicht === false && (vorbei || (P.vorlernen && d <= plusTage(mo, 6)))) teile.push(P.vorlernen ? "vor der Vorlesung" : "nach der Vorlesung");
     if (k.zwischentest && k.zwischentest >= P.heute) teile.push(`Zwischentest ${wtm(k.zwischentest)}`);
     return { text: verbinden(teile), ueberfaellig };
   };
@@ -715,8 +778,8 @@ module.exports = function (ctx) {
   const LEUCHTEN = 1600;
   const abgehaktKey = (P, k) => `${P.f.path}|${titelSchluessel(k.titel)}`;
   const abgehaktHeute = (P, k) => abgehakt.tag === P.heute && !!abgehakt.keys[abgehaktKey(P, k)];
-  // Fälligkeit neben dem Titel (PC, iPad) bzw. darunter (iPhone); auf dem iPhone steht dort auch das Kürzel, vorn hätte der Titel
-  // sonst kaum Platz
+  // Fälligkeit neben dem Titel (PC, iPad) bzw. darunter (iPhone); auf dem iPhone steht dort auch das Kürzel mit der Nummer des
+  // Kapitels („B110 1“), vorn hätte der Titel sonst kaum Platz
   const unterTitel = (inhalt, code, text, ueberfaellig) => {
     const s = inhalt.createSpan({ cls: "eba-lp-k-bis" + (ueberfaellig ? " is-ueberfaellig" : "") + (text ? "" : " is-leer") });
     if (code) s.createSpan({ cls: "eba-lp-k-code-unten", text: code });
@@ -768,15 +831,91 @@ module.exports = function (ctx) {
       });
     }
     const b = P.plan && k.anteil < 1 - EPS ? bisText(P, i) : null;
-    if (b || mitCode) unterTitel(inhalt, mitCode && P.code, b ? b.text : "", !!(b && b.ueberfaellig));
+    // Im aufgeklappten Modul: beim Anpassen woher der Vorschlag kommt und die Wahl, sonst „mehr Zeit“ bzw. „weniger Zeit“ hinter der Frist
+    if (!mitCode && P.zeitAn && auf[":zeit:" + P.code]) {
+      const a = k.altklausuren;
+      unterTitel(inhalt, false, a ? `in ${a.in} von ${a.von} Altklausuren` : "", false);
+      if (k.nr && k.zeit) zeitWahlZeichnen(inhalt, P, k, neu);
+      return;
+    }
+    const teile = [b ? b.text : "", !mitCode && k.zeit && k.zeit.stufe !== "normal" ? `${k.zeit.stufe} Zeit` : ""].filter(Boolean);
+    if (teile.length || mitCode) unterTitel(inhalt, mitCode && `${P.code} ${k.nr || String(i + 1)}`, verbinden(teile), !!(b && b.ueberfaellig));
+  };
+  // Weniger, Normal, Mehr für ein Kapitel (Segmentschalter wie in der Darstellung); was dem Vorschlag aus den Altklausuren entspricht,
+  // steht nicht in der Notiz, so gilt ein neuer Vorschlag später wieder
+  const zeitWahlZeichnen = (el, P, k, neu) => {
+    const vorschlag = relevanzStufe(k.altklausuren) || "normal";
+    const g = el.createDiv({ cls: "eba-ds eba-lp-zeitwahl", attr: { role: "radiogroup", "aria-label": `Zeit für ${k.nr} ${k.titel}` } });
+    for (const [wert, titel] of [["weniger", "Weniger"], ["normal", "Normal"], ["mehr", "Mehr"]]) {
+      const an = k.zeit.stufe === wert;
+      const b = g.createEl("button", { cls: "eba-ds-wahl", text: titel, attr: { type: "button", role: "radio", "aria-checked": String(an) } });
+      nurStoppen(b);
+      b.addEventListener("click", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        if (an) return;
+        try { await app.vault.process(P.f, (x) => zeitSetzen(x, k.nr, wert === vorschlag ? "" : wert) || x); } catch (err) { console.error("Lernplan Zeit je Kapitel", err); }
+        neu();
+      });
+    }
+  };
+  // Schalter „Zeit je Kapitel“ im aufgeklappten Modul (seit 1.11.2026, aus, bis du ihn einschaltest; Form wie „Vor der Vorlesung
+  // lernen“): darunter, woher die Zeit kommt bzw. was „an“ hieße, eingeschaltet rechts „Anpassen“; dann trägt jedes Kapitel Weniger,
+  // Normal, Mehr (gerätelokal, bis „Fertig“)
+  const zeitZeile = (el, P, neu) => {
+    const anpassen = P.zeitAn && !!auf[":zeit:" + P.code];
+    const z = el.createEl("label", { cls: "eba-lp-schalter eba-lp-zeitje" });
+    const t = z.createSpan({ cls: "eba-lp-schalter-text" });
+    t.createSpan({ text: "Zeit je Kapitel" });
+    t.createSpan({ cls: "eba-lp-schalter-hilfe", text: anpassen ? "„Mehr“ ist anderthalbmal so viel Zeit, „Weniger“ halb so viel." : zeitSatz(P.kapitel, P.zeitAn) });
+    const box = umschalter(z, P.zeitAn);
+    nurStoppen(z);
+    z.addEventListener("click", (e) => e.stopPropagation());
+    box.addEventListener("change", async () => {
+      if (!box.checked) auf[":zeit:" + P.code] = false;
+      try {
+        let ok = true;
+        await app.vault.process(P.f, (x) => { const n = zeitAnSetzen(x, box.checked); ok = n != null; return ok ? n : x; });
+        if (!ok) await app.fileManager.processFrontMatter(P.f, (fm) => { if (box.checked) fm.zeit_je_kapitel = true; else delete fm.zeit_je_kapitel; });
+      }
+      catch (err) { console.error("Lernplan Zeit je Kapitel", err); }
+      neu();
+    });
+    if (!P.zeitAn) return;
+    // „Fertig“ beendet das Anpassen: die eine Handlung dieser Zeile, Haupt (docs/design.md, Knöpfe; als Empfohlen war es in Elfenbein
+    // eine graue Fläche und sah gesperrt aus), „Anpassen“ normal
+    const b = z.createEl("button", { cls: "eba-vb-knopf" + (anpassen ? " is-haupt" : ""), text: anpassen ? "Fertig" : "Anpassen", attr: { type: "button" } });
+    nurStoppen(b);
+    b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); auf[":zeit:" + P.code] = !anpassen; neu(); });
+  };
+  // Der Satz dazu. Eingeschaltet aus den Kapiteln mit ihrer Zeit (zeitStufe): „Nach 12 Altklausuren: mehr Zeit für 4 und 7, weniger
+  // für 1. Von dir geändert: 3.“ bzw. „Nach den Seiten der Kapitel.“; aus, was das Einschalten brächte
+  const zeitSatz = (kapitel, an) => {
+    const und = (l) => (l.length <= 1 ? l.join("") : `${l.slice(0, -1).join(", ")} und ${l[l.length - 1]}`);
+    const nrn = (f) => und(kapitel.filter(f).map((k) => k.nr || k.titel));
+    const von = Math.max(0, ...kapitel.map((k) => (k.altklausuren ? k.altklausuren.von : 0)));
+    if (!an) {
+      const mehr = nrn((k) => relevanzStufe(k.altklausuren) === "mehr"), weniger = nrn((k) => relevanzStufe(k.altklausuren) === "weniger");
+      const was = [mehr ? `mehr Zeit für ${mehr}` : "", weniger ? `weniger für ${weniger}` : ""].filter(Boolean).join(", ");
+      return "Alle Kapitel zählen nach ihren Seiten. " + (von >= ALT_MIN && was ? `Eingeschaltet nach ${von} Altklausuren ${was}.`
+        : "Eingeschaltet gibst du einzelnen Kapiteln mehr oder weniger Zeit.");
+    }
+    const alt = (s) => (k) => k.zeit && k.zeit.quelle === "altklausuren" && k.zeit.stufe === s;
+    const teile = [];
+    if (von >= ALT_MIN) {
+      const mehr = nrn(alt("mehr")), weniger = nrn(alt("weniger"));
+      const was = [mehr ? `mehr Zeit für ${mehr}` : "", weniger ? `weniger für ${weniger}` : ""].filter(Boolean).join(", ");
+      teile.push(`Nach ${von} Altklausuren: ${was || "alle Kapitel etwa gleich oft dran"}.`);
+    } else teile.push("Nach den Seiten der Kapitel.");
+    const eigen = nrn((k) => k.zeit && k.zeit.quelle === "wahl");
+    if (eigen) teile.push(`Von dir geändert: ${eigen}.`);
+    return teile.join(" ");
   };
 
   // Für die Klausur (aufgeklapptes Modul): Altklausuren (wie viele bearbeitet, in der Klausurvorbereitung wie viele diese Woche
   // und welche als Nächstes, die neueste für den Vortag), Übungsblätter, heute fällige Karteikarten mit „Lernen“
   const vorbereitungZeichnen = (el, P, karten, quelle) => {
-    if (!P.vorb) return;
     const V = P.vorb, A = P.alt, kz = karten && karten[P.code];
-    if (!V.alt.length && !V.uebung.length && !kz) return;
+    if (!V || (!V.alt.length && !V.uebung.length && !kz)) return;
     const box = el.createDiv({ cls: "eba-lp-vorb" });
     box.createDiv({ cls: "eba-lp-vorb-titel", text: "Für die Klausur" });
     const zeile = (titel, text) => {
@@ -803,25 +942,78 @@ module.exports = function (ctx) {
   // vorlernen: false setzen (an = false) oder löschen, nur diese Zeile im Frontmatter: processFrontMatter schriebe das ganze
   // Frontmatter neu (Anführungszeichen um semester und quelle fielen weg). Ohne Frontmatter → null
   const VORN = /^---\r?\n([\s\S]*?)\r?\n---(?=\r?\n|$)/;
-  const vorlernenSetzen = (text, an) => {
+  // Die Zeile, auf die feld passt, löschen und zeile (falls nicht leer) ans Ende des Frontmatters
+  const zeileSetzen = (text, feld, zeile) => {
     const m = VORN.exec(text);
     if (!m) return null;
-    const zeilen = m[1].split(/\r?\n/).filter((z) => !/^vorlernen\s*:/.test(z));
-    if (!an) zeilen.push("vorlernen: false");
+    const zeilen = m[1].split(/\r?\n/).filter((z) => !feld.test(z));
+    if (zeile) zeilen.push(zeile);
+    const nl = m[0].indexOf("\r\n") >= 0 ? "\r\n" : "\n";
+    return `---${nl}${zeilen.join(nl)}${nl}---${text.slice(m[0].length)}`;
+  };
+  const vorlernenSetzen = (text, an) => zeileSetzen(text, /^vorlernen\s*:/, an ? "" : "vorlernen: false");
+  // Schalter „Zeit je Kapitel“: an = zeit_je_kapitel: true, aus = Zeile weg (deine Wahl in kapitel_zeit bleibt für später)
+  const zeitAnSetzen = (text, an) => zeileSetzen(text, /^zeit_je_kapitel\s*:/, an ? "zeit_je_kapitel: true" : "");
+
+  // ---------- Zeit je Kapitel (seit 1.11.2026) ----------
+  // Wie viel Zeit ein Kapitel im Plan bekommt: „mehr“ (×1,5), „normal“ oder „weniger“ (×0,5), nur wenn du es für das Modul
+  // einschaltest (zeit_je_kapitel: true in der Notiz, standardmäßig aus; aus zählt jedes Kapitel nur nach seinen Seiten).
+  // Deine Wahl (kapitel_zeit) geht vor; sonst die Klausurrelevanz aus der Kapitelliste („in 9 von 12 Altklausuren“, ausgezählt vom
+  // Uni-Abgleich), aber erst ab ALT_MIN Altklausuren: ab drei Vierteln mehr, bis zu einem Viertel weniger.
+  // → { stufe, quelle: "wahl" | "altklausuren" | "" }
+  const ZEIT_FAKTOR = { mehr: 1.5, normal: 1, weniger: 0.5 };
+  const ALT_MIN = 5;
+  const relevanzStufe = (a) => (!a || a.von < ALT_MIN ? "" : a.in / a.von >= 0.75 ? "mehr" : a.in / a.von <= 0.25 ? "weniger" : "normal");
+  const zeitStufe = (k, wahl, an) => {
+    if (!an) return { stufe: "normal", quelle: "" };
+    const w = wahl && k.nr ? wahl[k.nr] : "";
+    if (w) return { stufe: w, quelle: "wahl" };
+    const r = relevanzStufe(k.altklausuren);
+    return r ? { stufe: r, quelle: "altklausuren" } : { stufe: "normal", quelle: "" };
+  };
+  // kapitel_zeit (["3 mehr", "IV weniger"]) → { 3: "mehr", IV: "weniger" }
+  const ZEIT_WAHL = /^(\S{1,8})\s+(mehr|normal|weniger)$/;
+  const zeitWahlLesen = (v) => {
+    const aus = {};
+    for (const x of Array.isArray(v) ? v : []) { const m = String(x).trim().match(ZEIT_WAHL); if (m) aus[m[1]] = m[2]; }
+    return aus;
+  };
+  // Deine Wahl für Kapitel nr in die Notiz schreiben, nur die Zeile kapitel_zeit (wie vorlernenSetzen); stufe "" nimmt sie zurück
+  // (dann gilt wieder die Klausurrelevanz). Liest die Liste in der Form, in der sie steht (eine Zeile `[…]` oder darunter `  - …`).
+  // Ohne Frontmatter → null
+  const zeitSetzen = (text, nr, stufe) => {
+    const m = VORN.exec(text);
+    if (!m) return null;
+    const alt = m[1].split(/\r?\n/), zeilen = [], vorher = [];
+    for (let i = 0; i < alt.length; i++) {
+      if (!/^kapitel_zeit\s*:/.test(alt[i])) { zeilen.push(alt[i]); continue; }
+      const eine = alt[i].replace(/^kapitel_zeit\s*:\s*/, "");
+      if (eine.charAt(0) === "[") { try { vorher.push(...JSON.parse(eine)); } catch (err) { vorher.length = 0; } }
+      while (i + 1 < alt.length && /^\s+-\s/.test(alt[i + 1])) vorher.push(alt[++i].replace(/^\s+-\s+/, "").replace(/^["']|["']$/g, ""));
+    }
+    const wahl = zeitWahlLesen(vorher);
+    if (stufe) wahl[nr] = stufe; else delete wahl[nr];
+    const liste = Object.keys(wahl).map((k) => `${k} ${wahl[k]}`);
+    if (liste.length) zeilen.push(`kapitel_zeit: ${JSON.stringify(liste)}`);
     const nl = m[0].indexOf("\r\n") >= 0 ? "\r\n" : "\n";
     return `---${nl}${zeilen.join(nl)}${nl}---${text.slice(m[0].length)}`;
   };
   // Schalter „Vor der Vorlesung lernen“ (aufgeklapptes Modul): aus = vorlernen: false in der Notiz
+  // Ein Schalter an/aus rechts in einer Einstellungszeile (seit 2.11.2026; vorher das Kästchen der Kapitel links: Ein
+  // eingeschalteter Schalter sah aus wie ein verstandenes Kapitel). Ein Kästchen mit role="switch", in CSS Schiene und Knopf
+  const umschalter = (z, an) => {
+    const box = z.createEl("input", { cls: "eba-lp-umschalter", attr: { type: "checkbox", role: "switch" } });
+    box.checked = an;
+    return box;
+  };
   const schalterZeichnen = (el, P, neu) => {
     const z = el.createEl("label", { cls: "eba-lp-schalter" });
-    const haken = z.createSpan({ cls: "eba-td-haken" });
-    const box = haken.createEl("input", { attr: { type: "checkbox" } });
-    box.checked = P.vorlernen;
     const t = z.createSpan({ cls: "eba-lp-schalter-text" });
     t.createSpan({ text: "Vor der Vorlesung lernen" });
     const spaeter = !P.vorlernen && P.zielPlan && P.ziel > P.zielPlan ? ` Alles verstanden erst am ${wtm(P.ziel)} statt am ${wtm(P.zielPlan)}` : "";
     t.createSpan({ cls: "eba-lp-schalter-hilfe", text: P.vorlernen ? "Die Kapitel sind gleichmäßig verteilt, auch vor ihrer Vorlesung."
       : "Ein Kapitel ist frühestens eine Woche nach seiner Vorlesung dran." + spaeter });
+    const box = umschalter(z, P.vorlernen);
     nurStoppen(z);
     z.addEventListener("click", (e) => e.stopPropagation());
     box.addEventListener("change", async () => {
@@ -849,11 +1041,21 @@ module.exports = function (ctx) {
     }
   };
   // Was ein aufgeklapptes Modul zeigt: seine Kapitel zum Abhaken, „Für die Klausur“, den Schalter und den Link auf die Notiz
-  const modulInhalt = (unten, P, quelle, neu, karten) => {
+  // Aufgeklappt (Lernplan-Seite und Lernplan-Notiz): zuerst der Klausurtermin (seit 2.11.2026 wieder oben: unter „Für die Klausur“
+  // nach allen Kapiteln war er auf dem iPhone 920 px unter dem Tipp vergraben), dann die Kapitel, „Für die Klausur“, die
+  // Einstellungen; auf der Seite zuletzt der Verweis auf die Notiz (inNotiz: ohne, er zeigte auf sich selbst)
+  const modulInhalt = (unten, P, quelle, neu, karten, inNotiz) => {
+    const wahl = terminWahl(P);
+    if (wahl) wahlZeichnen(unten.createDiv({ cls: "eba-lp-termin" }), P, wahl);
     if (P.kapitel.length) { const kl = unten.createDiv({ cls: "eba-lp-kapitel" }); P.kapitel.forEach((k, i) => kapitelZeile(kl, P, i, quelle, neu, false)); }
     vorbereitungZeichnen(unten, P, karten, quelle);
+    if (P.kapitel.length && P.plan) zeitZeile(unten, P, neu);
     if (P.plan) schalterZeichnen(unten, P, neu);
-    linkZu(unten.createDiv({ cls: "eba-lp-fuss" }), P.f.basename, P.f, quelle);
+    if (inNotiz) return;
+    // „Thema → Seite“ wie Verweise sonst (docs/design.md, Grundsatz 2; bis 2.11.2026 nur der Name, kaum als Link zu erkennen)
+    const fuss = unten.createDiv({ cls: "eba-lp-fuss" });
+    fuss.appendText("Kapitelliste → ");
+    linkZu(fuss, P.f.basename, P.f, quelle);
   };
 
   // Was diese Woche dran ist, über alle Module: offene Kapitel bis Sonntag (auch überfällige), in der Klausurvorbereitung die
@@ -901,6 +1103,11 @@ module.exports = function (ctx) {
   // Derselbe Wert in jeder Woche gehört nicht in eine Pille)
   const ZEIT = [[1, "volle Zeit"], [0.75, "¾ Zeit"], [0.5, "halbe Zeit"], [0.25, "¼ Zeit"], [0, "keine Zeit"]];
   const zeitText = (a) => (ZEIT.filter((x) => Math.abs(x[0] - a) < EPS)[0] || [a, `${Math.round(a * 100)} % Zeit`])[1];
+  // Das offene Menü der Zeit; beim neuen Zeichnen zu, sonst bliebe es stehen, wo sein Knopf war, während die Seite darunter
+  // springt (gesehen am 1.11.2026 auf dem iPad, als eine neue Fassung des Skripts ankam). In ctx.bleibend, damit auch die neue
+  // Fassung das Menü der alten schließt.
+  const offenesMenue = ctx.bleibend("zeitMenue", () => ({ m: null }));
+  const zeitMenueZu = () => { const m = offenesMenue.m; offenesMenue.m = null; if (m) m.hide(); };
   const zeitKnopf = (el, mo, o, neu) => {
     const a = o.faktoren[mo] == null ? 1 : o.faktoren[mo];
     const zeit = el.createEl("button", { cls: "eba-lp-zeit" + (a < 1 ? " is-weniger" : ""), attr: { type: "button", "aria-haspopup": "menu", "aria-label": `Zeit in der Woche ${wocheText(mo)}: ${zeitText(a)}`, title: zeitText(a) } });
@@ -914,6 +1121,9 @@ module.exports = function (ctx) {
       const m = new O.Menu();
       for (const x of ZEIT) m.addItem((i) => { i.setTitle(x[1]); if (Math.abs(x[0] - a) < EPS && i.setChecked) i.setChecked(true); i.onClick(async () => { try { await zeitSchreiben(mo, x[0]); } catch (err) { console.error("Lernplan Zeit", err); } neu(); }); });
       const r = zeit.getBoundingClientRect();
+      zeitMenueZu();
+      offenesMenue.m = m;
+      if (m.onHide) m.onHide(() => { if (offenesMenue.m === m) offenesMenue.m = null; });
       m.showAtPosition({ x: r.left, y: r.bottom + 4 });
     });
   };
@@ -925,7 +1135,8 @@ module.exports = function (ctx) {
   const nachKlausur = (a, b) => (a.klausur.datum < b.klausur.datum ? -1 : a.klausur.datum > b.klausur.datum ? 1 : 0);
   const pct = (v) => `${(v * 100).toFixed(3)}%`;
   const lage = (div, a, breite) => { div.style.left = pct(a); if (breite != null) div.style.width = pct(Math.max(0, breite)); return div; };
-  const tageText = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : `in ${n} Tagen`);
+  // Zahl und Einheit mit festem Leerzeichen, so bricht „98 / Tagen“ nicht um
+  const tageText = (n) => (n === 0 ? "heute" : n === 1 ? "morgen" : `in ${n}\u00a0Tagen`);
   const balken = (el, anteil) => { const b = el.createSpan({ cls: "eba-lp-balken" }); b.createSpan({ cls: "eba-lp-balken-voll" }).style.width = pct(Math.min(1, anteil)); return b; };
   const wocheName = (B, i) => (i === B.jetzt ? "Diese Woche" : B.jetzt >= 0 && i === B.jetzt + 1 ? "Nächste Woche"
     : B.jetzt >= 0 && i === B.jetzt - 1 ? "Letzte Woche" : wocheText(B.wochen[i].mo));
@@ -945,13 +1156,10 @@ module.exports = function (ctx) {
     const text = karte.createDiv({ cls: "eba-lp-held-text" });
     text.createDiv({ cls: "eba-lp-held-titel", text: T.titel });
     if (T.satz) text.createDiv({ cls: "eba-lp-held-satz", text: T.satz });
+    // Unter dem Satz die nächste Klausur (seit 2.11.2026 ohne „Diese Woche“: Das sagt der Kopf der Woche im Semesterplan, und rechts
+    // hinter einer Linie ließen beide eine Lücke von einem Drittel der Karte)
     const zahlen = karte.createDiv({ cls: "eba-lp-held-zahlen" });
     const zahl = (name) => { const z = zahlen.createDiv({ cls: "eba-lp-held-zahl" }); z.createDiv({ cls: "eba-lp-held-zahl-name", text: name }); return z.createDiv({ cls: "eba-lp-held-zahl-wert" }); };
-    if (H.woche.gesamt) {
-      const w = zahl("Diese Woche");
-      balken(w, H.woche.fertig / H.woche.gesamt);
-      w.createSpan({ text: `${H.woche.fertig} von ${H.woche.gesamt} Kapiteln` });
-    }
     if (H.klausur) {
       const w = zahl("Nächste Klausur"), P = H.klausur.P;
       w.createSpan({ cls: `eba-lp-farbpunkt modul-${P.farbe || 0}`, attr: { "aria-hidden": "true" } });
@@ -962,25 +1170,30 @@ module.exports = function (ctx) {
   // Ring: verstanden (ab 12 Uhr im Uhrzeigersinn), dahinter bis zum Plan der Rückstand in Warnfarbe, Strich = wo der Plan heute
   // steht; in der Mitte der Anteil. Gleitet vom letzten Stand (vorher.ring) zum neuen.
   const SVG_NS = "http://www.w3.org/2000/svg", RING_R = 42, RING_U = 2 * Math.PI * RING_R;
+  let schraffurNr = 0;
+  const svgEl = (name, attr, eltern) => {
+    const x = document.createElementNS(SVG_NS, name);
+    for (const a of Object.keys(attr)) x.setAttribute(a, String(attr[a]));
+    if (eltern) eltern.appendChild(x);
+    return x;
+  };
   const ringZeichnen = (el, ist, soll) => {
     const box = el.createDiv({ cls: "eba-lp-ring", attr: { role: "img", "aria-label": `${Math.round(ist * 100)} % verstanden, laut Plan heute ${Math.round(soll * 100)} %` } });
-    const svg = document.createElementNS(SVG_NS, "svg");
-    svg.setAttribute("viewBox", "0 0 100 100");
-    svg.setAttribute("aria-hidden", "true");
-    const g = document.createElementNS(SVG_NS, "g");
-    g.setAttribute("transform", "rotate(-90 50 50)");
-    svg.appendChild(g);
-    const kreis = (cls) => {
-      const c = document.createElementNS(SVG_NS, "circle");
-      for (const [a, v] of [["cx", 50], ["cy", 50], ["r", RING_R], ["class", cls]]) c.setAttribute(a, String(v));
-      g.appendChild(c);
-      return c;
-    };
+    const svg = svgEl("svg", { viewBox: "0 0 100 100", "aria-hidden": "true" });
+    // Der Rückstand schraffiert wie in den Bahnen und Säulen (seit 2.11.2026; voll in Warnfarbe las er sich bei 0 % wie Fortschritt).
+    // Streifen um 45° gedreht; die Gruppe des Rings steht um 90° gedreht, darum −45°
+    schraffurNr += 1;
+    const id = `eba-lp-schraffur-${schraffurNr}`;
+    const muster = svgEl("pattern", { id, patternUnits: "userSpaceOnUse", width: 5.2, height: 5.2, patternTransform: "rotate(-45)" }, svgEl("defs", {}, svg));
+    svgEl("rect", { width: 2.6, height: 5.2, class: "eba-lp-ring-streif" }, muster);
+    svgEl("rect", { x: 2.6, width: 2.6, height: 5.2, class: "eba-lp-ring-streif is-hell" }, muster);
+    const g = svgEl("g", { transform: "rotate(-90 50 50)" }, svg);
+    const kreis = (cls) => svgEl("circle", { cx: 50, cy: 50, r: RING_R, class: cls }, g);
     kreis("eba-lp-ring-spur");
     const rueck = kreis("eba-lp-ring-rueck"), voll = kreis("eba-lp-ring-voll");
-    const strich = document.createElementNS(SVG_NS, "line");
-    for (const [a, v] of [["x1", 50 + RING_R - 9], ["x2", 50 + RING_R + 9], ["y1", 50], ["y2", 50], ["class", "eba-lp-ring-soll"]]) strich.setAttribute(a, String(v));
-    g.appendChild(strich);
+    rueck.style.stroke = `url(#${id})`;
+    // Strich „Plan heute“ so breit wie der Ring (bis 2.11.2026 ragte er 4 Einheiten je Seite heraus)
+    const strich = svgEl("line", { x1: 50 + RING_R - 5, x2: 50 + RING_R + 5, y1: 50, y2: 50, class: "eba-lp-ring-soll" }, g);
     box.appendChild(svg);
     const mitte = box.createDiv({ cls: "eba-lp-ring-mitte", attr: { "aria-hidden": "true" } });
     mitte.createDiv({ cls: "eba-lp-ring-zahl", text: `${Math.round(ist * 100)} %` });
@@ -1007,13 +1220,74 @@ module.exports = function (ctx) {
   // Form wie die Marken. Darunter die gewählte Woche (gerätelokal bis morgen; sonst diese). Eine Woche wählt ein Tipp auf ihre
   // Säule, ‹ › oder die Pfeiltasten; ein Tipp auf eine Bahn klappt das Modul unter „Module“ auf. Beim ersten Zeichnen je Start
   // wachsen Säulen und Bahnen einmal, danach gleiten die Bahnen vom letzten Stand zum neuen.
+  // Last einer Woche als Säule, gestapelt je Modul in seiner Farbe (verstanden, überfällig, offen); Höhe im Verhältnis zur
+  // vollsten Woche
+  const stapelZeichnen = (el, w, max) => {
+    const summe = w.fertig + w.offen + w.ueber;
+    if (summe <= EPS) return;
+    const stapel = el.createDiv({ cls: "eba-lp-s-stapel" });
+    stapel.style.height = pct(summe / max);
+    w.module.forEach((m) => {
+      const s = m.fertig + m.offen + m.ueber;
+      if (s <= EPS) return;
+      const gruppe = stapel.createDiv({ cls: `eba-lp-s-modul modul-${m.farbe}` });
+      gruppe.style.flexGrow = String(s);
+      for (const [wert, cls] of [[m.fertig, "is-fertig"], [m.ueber, "is-ueber"], [m.offen, "is-offen"]]) {
+        if (wert > EPS) gruppe.createDiv({ cls: "eba-lp-s-teil " + cls }).style.flexGrow = String(wert);
+      }
+    });
+  };
+  // Welche Wochen die Wochenleiste zeigt: höchstens sieben, die gewählte möglichst in der Mitte → [Index der ersten, Index nach der
+  // letzten]
+  const leisteFenster = (anzahl, i, breite = 7) => {
+    const n = Math.min(breite, anzahl), von = Math.max(0, Math.min(anzahl - n, i - Math.floor(n / 2)));
+    return [von, von + n];
+  };
+  // Wochenleiste (seit 1.11.2026, schmal statt der Säulen; welche gilt, entscheidet CSS): sieben Wochen um die gewählte als Knöpfe
+  // mit dem Montag und der Säule der Woche, diese Woche im Akzent, vorlesungsfreie getönt, eine mit Klausur mit roter Raute. Ein
+  // Tipp (oder ← →) wählt die Woche, das Fenster wandert mit. Auf dem iPhone waren die Säulen 8 px breit (lasen sich wie ein
+  // Strichcode) und kaum zu treffen. Bewusst keine Leiste zum Wischen: Waagerechtes Wischen ist in Obsidian von überall auf der
+  // Fläche eine Geste (Seitenleisten, in Studium Autopilot zurück; seitenleiste.js seitenGeste).
+  const leisteZeichnen = (el, A, B, D, i, knoepfe, waehlen) => {
+    el.empty();
+    const [von, bis] = leisteFenster(B.wochen.length, i);
+    for (let j = von; j < bis; j++) {
+      const w = B.wochen[j], so = plusTage(w.mo, 6);
+      const frei = !arbeitstage(w.mo, D.pausen, D.freieTage), klausur = A.some((P) => P.klausur.datum >= w.mo && P.klausur.datum <= so);
+      const b = el.createEl("button", { cls: "eba-lp-wl-w" + (j === B.jetzt ? " is-jetzt" : "") + (frei ? " is-frei" : "") + (j === i ? " is-wahl" : ""),
+        attr: { type: "button", "aria-pressed": String(j === i), "aria-label": knoepfe[j].getAttr("aria-label") } });
+      b.createSpan({ cls: "eba-lp-wl-datum", text: tm(w.mo) });
+      stapelZeichnen(b.createDiv({ cls: "eba-lp-wl-saeule" }), w, B.max);
+      if (klausur) b.createSpan({ cls: "eba-lp-wl-klausur" });
+      nurStoppen(b);
+      b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); waehlen(j, "leiste"); });
+      b.addEventListener("keydown", (e) => {
+        if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+        e.preventDefault(); waehlen(j + (e.key === "ArrowRight" ? 1 : -1), "leiste");
+      });
+    }
+  };
   const planZeichnen = (wurzel, A, alle, o, D, heute, quelle, neu) => {
     const B = planBild(A, heute, D.pausen);
     if (!B) return;
     const karte = wurzel.createDiv({ cls: "eba-lp-plan", attr: { role: "group", "aria-label": "Semesterplan" } });
     if (!planGezeigt.ja) { karte.addClass("is-anim"); planGezeigt.ja = true; }
     const kopf = karte.createDiv({ cls: "eba-lp-plan-kopf" });
-    kopf.createSpan({ cls: "eba-lp-plan-titel", text: "Semesterplan" });
+    const titel = kopf.createDiv({ cls: "eba-lp-plan-titelzeile" });
+    titel.createSpan({ cls: "eba-lp-plan-titel", text: "Semesterplan" });
+    // Schmal (iPhone) steht die Legende hinter ⓘ (seit 1.11.2026, eine Bildschirmhöhe weniger); breit ist der Knopf unsichtbar
+    const info = titel.createEl("button", { cls: "eba-lp-info", attr: { type: "button", "aria-expanded": "false", "aria-label": "Was die Zeichen bedeuten" } });
+    info.innerHTML = INFO;
+    nurStoppen(info);
+    info.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const an = !karte.hasClass("zeigt-legende");
+      karte.toggleClass("zeigt-legende", an); info.setAttr("aria-expanded", String(an));
+      // Offen gleich unter dem Kopf, bei ⓘ (seit 2.11.2026; unter dem Bild ging sie am unteren Rand des iPhones auf, und scheinbar
+      // geschah nichts). Nur schmal sichtbar, breit steht sie wie immer unter dem Bild
+      const leg = karte.querySelector(".eba-lp-plan-legende"), satz = karte.querySelector(".eba-lp-ziel-satz");
+      if (an && leg && satz) satz.after(leg);
+    });
     const ziel = kopf.createDiv({ cls: "eba-lp-ziel" });
     const satz = karte.createDiv({ cls: "eba-lp-ziel-satz", attr: { "aria-live": "polite" } });
 
@@ -1023,27 +1297,20 @@ module.exports = function (ctx) {
     for (const p of B.pausen) lage(baender.createDiv({ cls: "eba-lp-plan-pause" }), p.a, p.b - p.a);
     if (B.jetzt >= 0) lage(baender.createDiv({ cls: "eba-lp-plan-jetzt" }), B.jetzt * breite, breite);
     const wahlBand = baender.createDiv({ cls: "eba-lp-plan-wahl" });
+    // Schmal: die sieben Wochen der Leiste als Band in den Bahnen, so sieht man, welcher Teil des Semesters die Leiste ist
+    const fensterBand = baender.createDiv({ cls: "eba-lp-plan-fenster" });
     if (B.heute != null) lage(baender.createDiv({ cls: "eba-lp-plan-heute" }), B.heute);
+    // „heute“ oben an seiner Linie (seit 2.11.2026; in der Achse verdrängte die Pille den Monat daneben, auf dem iPhone zwei)
+    if (B.heute != null) {
+      lage(baender.createSpan({ cls: "eba-lp-plan-heute-pille" + (B.heute < 0.05 ? " is-links" : B.heute > 0.95 ? " is-rechts" : ""), text: "heute" }), B.heute);
+    }
 
     const saeulen = flaeche.createDiv({ cls: "eba-lp-saeulen", attr: { role: "group", "aria-label": "Wochen" } });
     const knoepfe = B.wochen.map((w, i) => {
       const kurz = wocheKurz(A, w.mo), name = wocheName(B, i);
       const titel = `${name}${name === wocheText(w.mo) ? "" : ` (${wocheText(w.mo)})`}: ${kurz || "nichts fällig"}`;
       const b = saeulen.createEl("button", { cls: "eba-lp-s", attr: { type: "button", "aria-pressed": "false", "aria-label": titel, title: titel } });
-      const summe = w.fertig + w.offen + w.ueber;
-      if (summe > EPS) {
-        const stapel = b.createDiv({ cls: "eba-lp-s-stapel" });
-        stapel.style.height = pct(summe / B.max);
-        w.module.forEach((m) => {
-          const s = m.fertig + m.offen + m.ueber;
-          if (s <= EPS) return;
-          const gruppe = stapel.createDiv({ cls: `eba-lp-s-modul modul-${m.farbe}` });
-          gruppe.style.flexGrow = String(s);
-          for (const [wert, cls] of [[m.fertig, "is-fertig"], [m.ueber, "is-ueber"], [m.offen, "is-offen"]]) {
-            if (wert > EPS) gruppe.createDiv({ cls: "eba-lp-s-teil " + cls }).style.flexGrow = String(wert);
-          }
-        });
-      }
+      stapelZeichnen(b, w, B.max);
       return b;
     });
 
@@ -1078,13 +1345,19 @@ module.exports = function (ctx) {
     for (const x of B.bahnen) vorher.bahnen[x.P.code] = { beginn: x.beginn, stand: x.stand, ueber: x.ueber, ziel: x.ziel, klausur: x.klausur };
     zielZeichnen(ziel, satz, A, B, D, o, karte, geister);
 
-    // Ein Monat weicht der Pille „heute“: davor braucht er Platz für sich und die halbe Pille, dahinter für die halbe Pille (in px;
-    // noch ohne Breite 5 % der Achse)
+    // Achse mit den Monaten (in px; noch ohne Breite in Anteilen der Achse)
     const achse = karte.createDiv({ cls: "eba-lp-plan-achse", attr: { "aria-hidden": "true" } });
     const px = achse.getBoundingClientRect().width;
-    const frei = (m) => B.heute == null || (px ? (m.x < B.heute ? (B.heute - m.x) * px > 80 : (m.x - B.heute) * px > 44) : Math.abs(m.x - B.heute) > 0.05);
-    for (const m of B.monate) if (frei(m)) lage(achse.createSpan({ text: m.text }), m.x);
-    if (B.heute != null) lage(achse.createSpan({ cls: "is-heute" + (B.heute < 0.05 ? " is-links" : B.heute > 0.95 ? " is-rechts" : ""), text: "heute" }), B.heute);
+    // Ein Monat ganz rechts steht links vom Strich, sonst ragte er aus der Karte („Apr“ auf dem iPhone); stieße er dort an den Monat
+    // davor („MärApr“), fällt er weg
+    const rand = (m) => (px ? (1 - m.x) * px < 36 : m.x > 0.95);
+    let zuletzt = null;
+    for (const m of B.monate) {
+      const r = rand(m);
+      if (r && zuletzt && (px ? (m.x - zuletzt.x) * px < 70 : m.x - zuletzt.x < 0.06)) continue;
+      lage(achse.createSpan(r ? { cls: "is-rechts", text: m.text } : { text: m.text }), m.x);
+      zuletzt = m;
+    }
 
     const leg = karte.createDiv({ cls: "eba-lp-plan-legende" });
     const eintrag = (cls, text) => { const s = leg.createSpan({ cls: "eba-lp-leg" }); s.createSpan({ cls: "eba-lp-leg-zeichen " + cls }); s.appendText(text); };
@@ -1098,14 +1371,20 @@ module.exports = function (ctx) {
     const pausen = B.pausen.map((p) => p.name).filter((p, j, l) => p && l.indexOf(p) === j);
     if (B.pausen.length) eintrag("is-pause", pausen.join(", ") || "Pause");
 
+    const leiste = karte.createDiv({ cls: "eba-lp-wl", attr: { role: "group", "aria-label": "Wochen" } });
     const woche = karte.createDiv({ cls: "eba-lp-plan-woche" });
     const waehlen = (i, fokus) => {
       i = Math.max(0, Math.min(B.wochen.length - 1, i));
       auf[":woche"] = { mo: B.wochen[i].mo, tag: heute };
       knoepfe.forEach((k, j) => { k.toggleClass("is-wahl", j === i); k.setAttr("aria-pressed", String(j === i)); });
+      leisteZeichnen(leiste, A, B, D, i, knoepfe, waehlen);
       lage(wahlBand, i * breite, breite);
+      const [von, bis] = leisteFenster(B.wochen.length, i);
+      lage(fensterBand, von * breite, (bis - von) * breite);
       wocheZeichnen(woche, alle, A, B, i, o, D, quelle, neu, waehlen);
-      if (fokus) knoepfe[i].focus();
+      // Die Leiste ist neu gezeichnet: der Fokus geht auf ihre gewählte Woche, nicht verloren
+      const ziel = fokus === "leiste" ? leiste.querySelector(".is-wahl") : fokus ? knoepfe[i] : null;
+      if (ziel) ziel.focus();
     };
     knoepfe.forEach((k, i) => {
       nurStoppen(k);
@@ -1119,41 +1398,39 @@ module.exports = function (ctx) {
     waehlen(gemerkt >= 0 ? gemerkt : B.jetzt >= 0 ? B.jetzt : 0);
   };
 
-  // Zielnote im Kopf des Semesterplans (seit 1.11.2026): Sie bestimmt, nach welchem Anteil der Zeit alles verstanden sein soll
-  // (anteilAusZielnote), und damit jede Bahn. Zehn Noten in drei Stufen, darunter ein Satz, was das heißt (zielTeile). Zeigen oder
-  // Fokus auf einer Note zeigt, was sie hieße: der Satz und gestrichelt die Bahnen, die sich ändern würden. Ein Tipp schreibt sie in
-  // System/Einstellungen.md (dasselbe Feld wie „Personalisieren“); der Bereich zeichnet sich danach neu, die Bahnen gleiten.
-  const zielnoteSchreiben = async (wert) => {
+  // Wann alles verstanden sein soll, im Kopf des Semesterplans (seit 1.11.2026; zuerst als Zielnote mit zehn Noten): ein Satz mit
+  // drei Knöpfen, „Alles verstanden nach [60 %] [70 %] [80 %] der Zeit“, darunter, was das heißt (zielTeile; kommt der Anteil noch
+  // aus der Zielnote, steht sie davor). Zeigen oder Fokus auf einen anderen Anteil zeigt, was er hieße: der Satz und gestrichelt die
+  // Bahnen, die sich ändern würden. Ein Tipp schreibt lernplan_anteil in System/Einstellungen.md (anteilSchreiben); der Bereich
+  // zeichnet sich danach neu, die Bahnen gleiten.
+  const anteilSchreiben = async (a) => {
     const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
-    if (f) await app.fileManager.processFrontMatter(f, (fm) => { fm.zielnote = wert; });
+    if (f) await app.fileManager.processFrontMatter(f, (fm) => { fm[FELD_ANTEIL] = Math.round(a * 100); });
   };
   const zielZeichnen = (el, satz, A, B, D, o, karte, geister) => {
-    const roh = String(D.zielnote || "").trim(), note = NOTEN.indexOf(roh) >= 0 ? roh : "", stufe = roh ? stufeVon(roh) : -1;
-    el.createSpan({ cls: "eba-lp-ziel-label", text: "Zielnote" });
-    const skala = el.createDiv({ cls: "eba-lp-ziel-skala", attr: { role: "group", "aria-label": "Zielnote" } });
-    const stufen = [], knoepfe = [];
-    STUFEN.forEach((S, s) => {
-      const g = skala.createDiv({ cls: "eba-lp-ziel-stufe" + (s === stufe ? " is-an" : "") });
-      const reihe = g.createDiv({ cls: "eba-lp-ziel-noten" }), noten = NOTEN.filter((x) => stufeVon(x) === s);
-      g.style.flexGrow = String(noten.length);
-      for (const n of noten) {
-        const b = reihe.createEl("button", { cls: "eba-lp-note" + (n === note ? " is-an" : ""), text: n, attr: { type: "button", "aria-pressed": String(n === note), "aria-label": `Zielnote ${n}, ${S.name}` } });
-        knoepfe.push({ b, n });
-      }
-      g.createDiv({ cls: "eba-lp-ziel-name", text: S.name });
-      stufen.push(g);
+    const jetzt = (a) => Math.abs(a - o.anteil) < EPS;
+    el.createSpan({ cls: "eba-lp-ziel-label", text: "Alles verstanden nach" });
+    const skala = el.createDiv({ cls: "eba-lp-ziel-skala", attr: { role: "group", "aria-label": "Alles verstanden nach … der Zeit" } });
+    el.createSpan({ cls: "eba-lp-ziel-label", text: "der Zeit" });
+    const knoepfe = ANTEILE.map((a) => {
+      const b = skala.createEl("button", { cls: "eba-lp-note" + (jetzt(a) ? " is-an" : ""), text: `${Math.round(a * 100)} %`,
+        attr: { type: "button", "aria-pressed": String(jetzt(a)), "aria-label": `Alles verstanden nach ${Math.round(a * 100)} % der Zeit` } });
+      return { b, a };
     });
-    const satzZeigen = (n) => {
+    const satzZeigen = (a) => {
       satz.empty();
-      const a = n ? anteilAusZielnote(n) : o.anteil, andere = n && n !== note;
-      if (andere && Math.abs(a - o.anteil) < EPS) { satz.appendText("Mit "); satz.createEl("b", { text: n }); satz.appendText(" bleibt der Plan gleich."); return; }
-      if (andere) { satz.appendText("Mit "); satz.createEl("b", { text: n }); satz.appendText(": "); }
-      else if (!roh) satz.appendText("Ohne Zielnote wie für „gut“: ");
-      for (const t of zielTeile(zielVorschau(A, a), a)) { if (t.wert) satz.createEl("b", { text: t.text }); else satz.appendText(t.text); }
+      const andere = a != null && !jetzt(a);
+      if (andere) { satz.appendText("Mit "); satz.createEl("b", { text: `${Math.round(a * 100)} %` }); satz.appendText(": "); }
+      else if (o.anteilQuelle === "zielnote") satz.appendText(`Nach deiner Zielnote ${String(D.zielnote).trim()}: `);
+      const T = zielTeile(zielVorschau(A, andere ? a : o.anteil));
+      T.forEach((t, i) => {
+        const text = i === 0 && !andere && o.anteilQuelle !== "zielnote" ? t.text.charAt(0).toUpperCase() + t.text.slice(1) : t.text;
+        if (t.wert) satz.createEl("b", { text }); else satz.appendText(text);
+      });
     };
-    // Gestrichelt, wie lange das Verstehen bei dieser Note dauerte; ohne Unterschied (oder mit eigenem Ziel) unsichtbar
+    // Gestrichelt, wie lange das Verstehen bei diesem Anteil dauerte; ohne Unterschied (oder mit eigenem Ziel) unsichtbar
     const geisterZeigen = (a) => {
-      const an = a != null && Math.abs(a - o.anteil) > EPS;
+      const an = a != null && !jetzt(a);
       karte.toggleClass("is-vorschau", an);
       for (const g of geister) {
         const z = an && !g.P.eigenesZiel ? zielBei(g.P, a) : "";
@@ -1163,15 +1440,11 @@ module.exports = function (ctx) {
       }
     };
     let fokus = null;
-    const zeigen = (n) => {
-      satzZeigen(n);
-      stufen.forEach((g, s) => g.toggleClass("is-vorschau", !!n && n !== note && stufeVon(n) === s));
-      geisterZeigen(n ? anteilAusZielnote(n) : null);
-    };
+    const zeigen = (a) => { satzZeigen(a); geisterZeigen(a); };
     knoepfe.forEach((k, j) => {
       nurStoppen(k.b);
-      k.b.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") zeigen(k.n); });
-      k.b.addEventListener("focus", () => { fokus = k; zeigen(k.n); });
+      k.b.addEventListener("pointerenter", (e) => { if (e.pointerType === "mouse") zeigen(k.a); });
+      k.b.addEventListener("focus", () => { fokus = k; zeigen(k.a); });
       k.b.addEventListener("blur", () => { fokus = null; zeigen(null); });
       k.b.addEventListener("keydown", (e) => {
         if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
@@ -1180,14 +1453,13 @@ module.exports = function (ctx) {
       });
       k.b.addEventListener("click", async (e) => {
         e.preventDefault(); e.stopPropagation();
-        if (k.n === note) return;
+        if (jetzt(k.a) && o.anteilQuelle === "wahl") return;
         knoepfe.forEach((x) => { x.b.toggleClass("is-an", x === k); x.b.setAttr("aria-pressed", String(x === k)); });
-        stufen.forEach((g, s) => g.toggleClass("is-an", s === stufeVon(k.n)));
-        zeigen(k.n);
-        try { await zielnoteSchreiben(k.n); } catch (err) { console.error("Lernplan Zielnote", err); }
+        zeigen(k.a);
+        try { await anteilSchreiben(k.a); } catch (err) { console.error("Lernplan Anteil", err); }
       });
     });
-    skala.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") zeigen(fokus ? fokus.n : null); });
+    skala.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") zeigen(fokus ? fokus.a : null); });
     zeigen(null);
   };
 
@@ -1221,11 +1493,12 @@ module.exports = function (ctx) {
       const stand = rechts.createSpan({ cls: "eba-lp-pw-stand" });
       if (B.jetzt >= 0 && i > B.jetzt) stand.setText(`${faellig.length} Kapitel`);
       else if (fertig === faellig.length && !altOffen) { stand.addClass("is-geschafft"); stand.createSpan({ cls: "eba-lp-pw-haken" }).innerHTML = HAKEN; stand.appendText("geschafft"); }
-      else { balken(stand, fertig / faellig.length); stand.appendText(`${fertig}/${faellig.length}`); stand.setAttr("aria-label", `${fertig} von ${faellig.length} Kapiteln verstanden`); }
+      // „0 von 3“ statt „0/3“ (seit 2.11.2026): „0/13“ hinter einem Titel zählt seine Unterkapitel, das war leicht zu verwechseln
+      else { balken(stand, fertig / faellig.length); stand.appendText(`${fertig} von ${faellig.length}`); stand.setAttr("aria-label", `${fertig} von ${faellig.length} Kapiteln verstanden`); }
     }
     if (B.jetzt < 0 || i >= B.jetzt) zeitKnopf(rechts, mo, o, neu);
-    // Was die Woche sonst prägt: Klausurvorbereitung, Pausen, Klausuren (nach Datum); „viel“, wenn sie mehr als anderthalbmal so
-    // viel trägt wie der Schnitt der Wochen mit Last
+    // Was die Woche sonst prägt: Klausurvorbereitung, Pausen, Klausuren (nach Datum); „viel zu tun“ neben dem Namen, wenn sie mehr
+    // als anderthalbmal so viel trägt wie der Schnitt der Wochen mit Last (seit 2.11.2026; vorher eine Warnpille allein in einer Zeile)
     const teile = [];
     const vorb = A.filter((P) => P.ziel < mo && P.klausur.datum > so).map((P) => P.code);
     if (vorb.length) teile.push({ text: `Klausurvorbereitung ${vorb.join(", ")}` });
@@ -1234,16 +1507,38 @@ module.exports = function (ctx) {
     const lasten = B.wochen.map((x) => x.fertig + x.offen + x.ueber).filter((x) => x > EPS);
     const schnitt = lasten.length ? lasten.reduce((s, x) => s + x, 0) / lasten.length : 0;
     const viel = schnitt && w.fertig + w.offen + w.ueber > 1.5 * schnitt;
-    if (teile.length || viel) {
-      const was = el.createDiv({ cls: "eba-lp-pw-was" });
-      const letztes = stuecke(was, teile, "eba-lp-w-teil");
-      // „viel“ im letzten Stück: Bricht die Zeile um, geht die Pille mit
-      if (viel) { const s = letztes || was; if (letztes) s.appendText(" "); s.createSpan({ cls: "eba-pill warn", text: "viel" }); }
+    // Breit rechts vor dem Stand (zwischen Namen und › ließ die Pille den Pfeil je nach Woche springen); schmal unter dem Namen,
+    // rechts drückte sie „Diese Woche“ in zwei Zeilen. Welche gilt, entscheidet CSS
+    if (viel) {
+      rechts.prepend(rechts.createSpan({ cls: "eba-pill eba-lp-pw-viel is-breit", text: "viel zu tun" }));
+      t.createSpan({ cls: "eba-pill eba-lp-pw-viel is-schmal", text: "viel zu tun" });
     }
+    if (teile.length) stuecke(el.createDiv({ cls: "eba-lp-pw-was" }), teile, "eba-lp-w-teil");
     const kl = el.createDiv({ cls: "eba-lp-woche" }).createDiv({ cls: "eba-lp-kapitel" });
     let zeilen = 0;
     if (W) {
-      for (const x of W.kapitel) { kapitelZeile(kl, x.P, x.i, quelle, neu, true); zeilen++; }
+      // Erst die Kapitel dieser Woche (die zählt der Kopf), dann „Von früher“: Stand oben „0/2“ über acht Zeilen, passte das nicht
+      const frueher = (x) => montagVon(x.P.plan.faellig[x.i]) < mo;
+      for (const x of W.kapitel.filter((y) => !frueher(y))) { kapitelZeile(kl, x.P, x.i, quelle, neu, true); zeilen++; }
+      const alt = W.kapitel.filter(frueher);
+      if (alt.length) {
+        // Schmal (iPhone) zu, bis man es aufklappt (seit 1.11.2026, gerätelokal bis zum Neustart); breit immer offen, dann nur Label
+        const zu = auf[":frueher"] !== true, ueber = alt.filter((x) => bisText(x.P, x.i).ueberfaellig).length;
+        const t = kl.createEl("button", { cls: "eba-lp-k-trenner" + (zu ? " is-zu" : ""), attr: { type: "button", "aria-expanded": String(!zu) } });
+        t.createSpan({ cls: "eba-lp-k-trenner-name", text: "Von früher" });
+        // „6 Kapitel · 4 überfällig“: nur der überfällige Teil in Warnfarbe (bis 2.11.2026 die ganze Zahl, obwohl nicht alle es waren)
+        const zahl = t.createSpan({ cls: "eba-lp-k-trenner-zahl", text: alt.length === 1 ? "1 Kapitel" : `${alt.length} Kapitel` });
+        if (ueber) { zahl.appendText(" · "); zahl.createSpan({ cls: "is-ueberfaellig", text: `${ueber} überfällig` }); }
+        t.createSpan({ cls: "eba-lp-k-trenner-pfeil", attr: { "aria-hidden": "true" } });
+        const gruppe = kl.createDiv({ cls: "eba-lp-frueher" + (zu ? " is-zu" : "") });
+        for (const x of alt) { kapitelZeile(gruppe, x.P, x.i, quelle, neu, true); zeilen++; }
+        nurStoppen(t);
+        t.addEventListener("click", (e) => {
+          e.preventDefault(); e.stopPropagation();
+          auf[":frueher"] = t.hasClass("is-zu"); // war zu: jetzt auf
+          t.toggleClass("is-zu", !auf[":frueher"]); gruppe.toggleClass("is-zu", !auf[":frueher"]); t.setAttr("aria-expanded", String(auf[":frueher"]));
+        });
+      }
       for (const P of W.vorbereitung) { vorbereitungZeile(kl, P, quelle); zeilen++; }
     } else {
       for (const P of A) P.kapitel.forEach((k, j) => { if (montagVon(P.plan.faellig[j]) === mo) { kapitelZeile(kl, P, j, quelle, neu, true); zeilen++; } });
@@ -1263,68 +1558,99 @@ module.exports = function (ctx) {
     unterTitel(inhalt, P.code, `Klausur ${wtm(P.klausur.datum)}`, false);
   };
 
-  // Module als Karten (seit 1.11.2026; vorher aufklappbare Zeilen): Kürzel in der Farbe des Moduls und Pille, darunter der Name,
-  // womit es weitergeht (das nächste offene Kapitel mit Link auf die Folien und seiner Frist; alles verstanden: die nächste Altklausur), der
-  // Stand kurz, unten ein Balken in der Farbe des Moduls mit dem Strich, wo der Plan heute steht. Ein Tipp klappt darunter über die
-  // ganze Breite das Modul auf (modulInhalt; gerätelokal gemerkt).
+  // Module als Zeilen in einem Rahmen (seit 2.11.2026; vom 1.11. an Karten im Raster: fünf gleiche Kästen mit großen Namen waren
+  // lauter als die Woche, docs/design.md Grundsatz 4 „Zeilen für Gleichartiges“). Links das Kürzel mit Farbpunkt, daneben der Name
+  // und die Pille bei einem Zustand, darunter ein kleiner Balken in der Farbe des Moduls (mit dem Strich, wo der Plan heute steht)
+  // und der Stand kurz; rechts der gewählte Termin (breit) und der Pfeil. Ein Tipp klappt darunter das Modul auf (modulInhalt;
+  // gerätelokal gemerkt, immer nur eins).
   const modulAnteil = (P) => {
     if (P.plan) return P.plan.gesamt ? P.plan.ist / P.plan.gesamt : 0;
     const g = P.kapitel.reduce((s, k) => s + (k.gewicht || 0), 0);
     return g ? P.kapitel.reduce((s, k) => s + (k.gewicht || 0) * k.anteil, 0) / g : 0;
   };
-  const karteZeichnen = (gitter, P, quelle, neu, karten, heute) => {
-    const an = aktiv(P), offen = !!auf[P.code];
-    const k = gitter.createDiv({ cls: `eba-lp-mk modul-${P.farbe || 0}` + (an ? "" : " is-ruhig") + (offen ? " is-offen" : ""),
+  // Rechts in der Zeile, was du für die Klausur gewählt hast: „Haupttermin Mo 8.2.“, „Nachholtermin ab 30.3.“, „verschoben“
+  const terminKurz = (P, wahl) => (wahl === "haupt" ? `Haupttermin ${terminText(P.termine && P.termine.haupt)}`
+    : wahl === "nachhol" ? `Nachholtermin ${terminText(P.termine && P.termine.nachhol)}` : wahl === "spaeter" ? "verschoben" : "");
+  const modulZeileZeichnen = (liste, P, quelle, neu, karten, heute) => {
+    const an = aktiv(P), offen = !!auf[P.code], wahl = terminWahl(P);
+    const z = liste.createDiv({ cls: `eba-lp-mz modul-${P.farbe || 0}` + (an ? "" : " is-ruhig") + (offen ? " is-offen" : ""),
       attr: { role: "button", tabindex: "0", "aria-expanded": String(offen), "data-code": P.code } });
-    const kopf = k.createDiv({ cls: "eba-lp-mk-kopf" });
-    kopf.createSpan({ cls: "eba-lp-mk-code", text: P.code });
+    z.createSpan({ cls: "eba-lp-mk-code eba-lp-mz-code", text: P.code });
+    const titel = z.createDiv({ cls: "eba-lp-mz-titel" });
+    titel.createSpan({ cls: "eba-lp-mz-name", text: P.modul ? P.modul.titel : P.f.basename });
+    // „nicht mehr dran“ sagt bei einem Modul, das du verschoben hast, schon „verschoben“ rechts
     const p = P.stand && P.stand.pille;
-    if (p) kopf.createSpan({ cls: "eba-pill " + p.art, text: p.text });
-    kopf.createSpan({ cls: "eba-lp-mk-pfeil", attr: { "aria-hidden": "true" } });
-    k.createDiv({ cls: "eba-lp-mk-name", text: P.modul ? P.modul.titel : P.f.basename });
-    const n = an ? P.kapitel.findIndex((x) => x.anteil < 1 - EPS) : -1;
-    if (n >= 0) {
-      const kap = P.kapitel[n], b = bisText(P, n);
-      const w = k.createDiv({ cls: "eba-lp-mk-weiter" });
-      w.createDiv({ cls: "eba-lp-mk-weiter-name", text: "Weiter mit" });
-      const t = w.createDiv({ cls: "eba-lp-mk-kapitel" });
-      t.createSpan({ cls: "eba-lp-mk-nr", text: kap.nr || String(n + 1) });
-      const name = t.createSpan({ cls: "eba-lp-mk-titel", text: kap.titel });
-      if (kap.ziel || kap.webZiel) {
-        name.addClass("is-link");
-        nurStoppen(name);
-        name.addEventListener("click", (e) => {
-          if (kap.ziel) { oeffnen(kap.ziel, e, quelle); return; }
-          e.preventDefault(); e.stopPropagation(); window.open(kap.webZiel);
-        });
-      }
-      w.createDiv({ cls: "eba-lp-mk-bis" + (b.ueberfaellig ? " is-ueberfaellig" : ""), text: b.text });
-    } else if (an && P.alt && P.alt.naechste) {
-      const w = k.createDiv({ cls: "eba-lp-mk-weiter" });
-      w.createDiv({ cls: "eba-lp-mk-weiter-name", text: "Als Nächstes" });
-      linkZu(w.createDiv({ cls: "eba-lp-mk-kapitel" }), P.alt.naechste.titel, P.alt.naechste.f, quelle);
-    }
+    if (p && wahl !== "spaeter") titel.createSpan({ cls: "eba-pill " + p.art, text: p.text });
+    const meta = z.createDiv({ cls: "eba-lp-mz-meta" });
+    const bal = meta.createSpan({ cls: "eba-lp-mk-balken", attr: { "aria-hidden": "true" } });
+    bal.createSpan({ cls: "eba-lp-mk-voll" }).style.width = pct(Math.min(1, modulAnteil(P)));
+    if (an) lage(bal.createSpan({ cls: "eba-lp-mk-soll" }), Math.min(1, sollHeute(P, heute) / (P.plan.gesamt || 1)));
     const fertig = P.kapitel.filter((x) => x.anteil >= 1 - EPS).length;
-    const stand = an ? [`${fertig} von ${P.kapitel.length} Kapiteln`, `Klausur ${tageText(tageZwischen(heute, P.klausur.datum))}`] : standRoh(P).map((x) => x.text);
-    k.createDiv({ cls: "eba-lp-mk-stand", text: verbinden(stand) });
-    const bal = k.createDiv({ cls: "eba-lp-mk-balken", attr: { "aria-hidden": "true" } });
-    bal.createDiv({ cls: "eba-lp-mk-voll" }).style.width = pct(Math.min(1, modulAnteil(P)));
-    if (an) lage(bal.createDiv({ cls: "eba-lp-mk-soll" }), Math.min(1, sollHeute(P, heute) / (P.plan.gesamt || 1)));
-    const mehr = gitter.createDiv({ cls: `eba-lp-unten eba-lp-mk-mehr modul-${P.farbe || 0}` + (offen ? "" : " is-zu") });
+    const stand = an ? [`${fertig} von ${P.kapitel.length}\u00a0Kapiteln`, `Klausur ${tageText(tageZwischen(heute, P.klausur.datum))}`] : standRoh(P).map((x) => x.text);
+    stuecke(meta.createSpan({ cls: "eba-lp-mz-stand" }), stand.map((text) => ({ text })), "eba-lp-w-teil");
+    const wert = terminKurz(P, wahl);
+    if (wert) z.createSpan({ cls: "eba-lp-mz-wert", text: wert });
+    z.createSpan({ cls: "eba-lp-mk-pfeil", attr: { "aria-hidden": "true" } });
+    const mehr = liste.createDiv({ cls: `eba-lp-unten eba-lp-mz-mehr modul-${P.farbe || 0}` + (offen ? "" : " is-zu"), attr: { "data-code": P.code } });
     modulInhalt(mehr, P, quelle, neu, karten);
     const klappen = (e) => {
       e.preventDefault(); e.stopPropagation();
-      auf[P.code] = !auf[P.code];
-      k.toggleClass("is-offen", auf[P.code]); k.setAttr("aria-expanded", String(auf[P.code]));
-      mehr.toggleClass("is-zu", !auf[P.code]);
+      const aufmachen = !auf[P.code];
+      offenSetzen(liste, aufmachen ? P.code : "");
+      if (!aufmachen) return;
+      // Steht das Aufgeklappte fast unten oder darunter, rückt die Zeile nach oben
+      const fenster = liste.ownerDocument.defaultView;
+      if (fenster && mehr.getBoundingClientRect().top > fenster.innerHeight * 0.75) {
+        const ruhig = fenster.matchMedia && fenster.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        z.scrollIntoView({ block: "start", behavior: ruhig ? "auto" : "smooth" });
+      }
     };
-    nurStoppen(k);
-    k.addEventListener("click", klappen);
-    k.addEventListener("keydown", (e) => { if (e.target === k && (e.key === "Enter" || e.key === " ")) klappen(e); });
+    nurStoppen(z);
+    z.addEventListener("click", klappen);
+    z.addEventListener("keydown", (e) => { if (e.target === z && (e.key === "Enter" || e.key === " ")) klappen(e); });
+  };
+  // Wann du die Klausur schreibst (seit 1.11.2026; seit 2.11. oben im Aufgeklappten): Haupttermin oder Nachholtermin mit ihrem Tag
+  // als zwei Knöpfe, daneben leise „Ins WS 2027/28 verschieben“ (das nächste Semester, in dem es angeboten wird). Ein verschobenes Modul fällt aus
+  // dem Plan; keiner der zwei Knöpfe ist dann gewählt, einer holt es mit seinem Termin zurück. Ein Tipp schreibt die Modulnotiz
+  // (terminSchreiben); der Bereich zeichnet sich danach neu, Plan und Bahnen gleiten zum neuen Termin.
+  const wahlZeichnen = (el, P, wahl) => {
+    const box = el.createDiv({ cls: "eba-lp-v eba-lp-mk-wahl" });
+    box.createSpan({ cls: "eba-lp-v-titel", text: "Klausur" });
+    const knoepfe = [];
+    const waehlen = async (wert, b) => {
+      knoepfe.forEach((x) => { x.b.toggleClass("is-an", x.b === b); x.b.setAttr("aria-checked", String(x.b === b)); });
+      try { await terminSchreiben(P, wert); } catch (err) { console.error("Lernplan Prüfung", err); }
+    };
+    const termine = box.createDiv({ cls: "eba-lp-wahl-termine", attr: { role: "radiogroup", "aria-label": `Klausur ${P.code}` } });
+    const knopf = (wert, name, k) => {
+      const b = termine.createEl("button", { cls: "eba-lp-wahl" + (wert === wahl ? " is-an" : ""),
+        attr: { type: "button", role: "radio", "aria-checked": String(wert === wahl), "aria-label": `${name}: ${terminText(k)}` } });
+      b.createSpan({ cls: "eba-lp-wahl-name", text: name });
+      b.createSpan({ cls: "eba-lp-wahl-wann", text: terminText(k) });
+      if (!k) b.setAttr("disabled", "");
+      nurStoppen(b);
+      b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); if (wert !== wahl && k) waehlen(wert, b); });
+      knoepfe.push({ b });
+    };
+    knopf("haupt", "Haupttermin", P.termine && P.termine.haupt);
+    knopf("nachhol", "Nachholtermin", P.termine && P.termine.nachhol);
+    const spaeter = wahl === "spaeter" ? "" : spaeterSemester(P.modul.fm && P.modul.fm.turnus, P.semester, ctx.modell.daten().semesterliste);
+    if (!spaeter) return;
+    const v = box.createEl("button", { cls: "eba-lp-verschieben", text: `Ins ${spaeter} verschieben`, attr: { type: "button" } });
+    nurStoppen(v);
+    v.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); v.setAttr("disabled", ""); waehlen("spaeter", null); });
+  };
+  // Neben „Module“, wie viele Klausuren wann: „4 im Haupttermin, 1 im Nachholtermin, 1 verschoben“
+  const wahlText = (alle) => {
+    const W = alle.map(terminWahl).filter(Boolean), n = (w) => W.filter((x) => x === w).length, teile = [];
+    if (n("haupt")) teile.push(`${n("haupt")} im Haupttermin`);
+    if (n("nachhol")) teile.push(`${n("nachhol")} im Nachholtermin`);
+    if (n("spaeter")) teile.push(`${n("spaeter")} verschoben`);
+    return teile.length ? `Klausuren: ${teile.join(", ")}` : "";
   };
   // Tipp auf eine Bahn: das Modul unter „Module“ aufklappen und dorthin rollen
   const modulZeigen = (wurzel, code) => {
-    const k = Array.prototype.filter.call(wurzel.querySelectorAll(".eba-lp-mk"), (x) => x.getAttribute("data-code") === code)[0];
+    const k = Array.prototype.filter.call(wurzel.querySelectorAll(".eba-lp-mz"), (x) => x.getAttribute("data-code") === code)[0];
     if (!k) return;
     if (!k.classList.contains("is-offen")) k.click();
     const ruhig = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1332,22 +1658,41 @@ module.exports = function (ctx) {
   };
 
   const LEER = "Noch kein Lernplan für deine Module.";
-  // In Entwicklung (seit 19.10.2026): Bereich und Lernplan-Notizen tragen oben einen Warnkasten, der Inhalt ist abgeblendet, bleibt
-  // aber bedienbar (eba-core.css Abschnitt 61, .is-entwicklung); Dashboard und Modulseite tragen die Pille „in Entwicklung“. Ist der
-  // Lernplan fertig: IN_ENTWICKLUNG = false.
-  const IN_ENTWICKLUNG = true;
-  const ENTWICKLUNG_TITEL = "Noch nicht fertig: Lern nicht danach.";
-  const ENTWICKLUNG = "Kapitel, Fristen und Fortschritt können fehlen oder falsch sein, und alles kann sich noch ändern. Plane dein Lernen weiter selbst.";
-  const entwicklungHinweis = (el) => {
-    if (!IN_ENTWICKLUNG) return;
-    el.addClass("is-entwicklung");
-    const h = el.createDiv({ cls: "eba-lp-entwicklung", attr: { role: "note" } });
-    const kopf = h.createDiv({ cls: "eba-lp-entwicklung-kopf" });
-    kopf.createSpan({ cls: "eba-pill warn", text: "In Entwicklung" });
-    kopf.createEl("strong", { text: ENTWICKLUNG_TITEL });
-    h.createDiv({ text: ENTWICKLUNG });
+  // Geprüft sind nur die zentralen Kapitellisten (kapitel.json, die Kurse des Autors). Bis 2.11.2026 hieß der ganze Lernplan
+  // „In Entwicklung“ (Warnkasten, Inhalt abgeblendet); seitdem warnt oben ein Kasten nur, wenn ein Modul des laufenden Semesters
+  // keine hat: Seine Kapitel kommen vom eigenen Server oder einer eigenen KI (herkunft nicht zentral), oder es hat keinen Lernplan.
+  // Es zählen nur Module, die einen Plan brauchen: nicht bestanden oder anerkannt, kein Zusatzmodul, ECTS nicht 0 (Vorkurse).
+  // alle = gesammelte Lernpläne, module = D.module → { ungeprueft: [Codes], ohne: [Codes] }
+  const ungeprueft = (alle, module, semName) => {
+    const da = new Set(alle.map((P) => P.code));
+    return {
+      ungeprueft: alle.filter((P) => !P.aus && P.herkunft !== "zentral").map((P) => P.code).sort(),
+      ohne: semName ? module.filter((m) => m.code && !da.has(m.code) && FERTIG.indexOf(m.status) < 0 && !m.zusatz && m.ects !== 0
+        && imSemester(m, semName)).map((m) => m.code).sort() : [],
+    };
   };
-  const entwicklungPille = (el) => { if (IN_ENTWICKLUNG) el.createSpan({ cls: "eba-pill leer", text: "in Entwicklung" }); };
+  const aufzaehlen = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} und ${xs[xs.length - 1]}`);
+  // Text des Kastens → { titel, text } oder null (alles geprüft); eine = in der Lernplan-Notiz des Moduls
+  const warnungTeile = (U, eine) => {
+    const u = U.ungeprueft, o = U.ohne, haben = (xs) => (xs.length === 1 ? "hat" : "haben");
+    if (!u.length && !o.length) return null;
+    const vorweg = "Geprüfte Kapitellisten gibt es bisher nur für einige Module.";
+    const pruefen = "Kapitel und Fristen können fehlen oder falsch sein: Vergleich sie mit den Folien.";
+    if (eine) return { titel: "Die Kapitel sind nicht geprüft.", text: `${vorweg} ${pruefen}` };
+    if (u.length) {
+      return { titel: `Die Kapitel von ${aufzaehlen(u)} sind nicht geprüft.`,
+        text: [vorweg, pruefen].concat(o.length ? [`${aufzaehlen(o)} ${haben(o)} keinen Lernplan.`] : []).join(" ") };
+    }
+    return { titel: `${aufzaehlen(o)} ${haben(o)} keinen Lernplan.`,
+      text: `${vorweg} Der Plan rechnet ohne ${o.length === 1 ? "dieses Modul: Plane es" : "diese Module: Plane sie"} selbst.` };
+  };
+  const warnungZeichnen = (el, U, eine) => {
+    const w = warnungTeile(U, eine);
+    if (!w) return;
+    const h = el.createDiv({ cls: "eba-lp-warnung", attr: { role: "note" } });
+    h.createEl("strong", { cls: "eba-lp-warnung-titel", text: w.titel });
+    h.createDiv({ text: w.text });
+  };
   // Heute fällige Karteikarten je Modul (karten.js), ohne Karteikarten leer
   const kartenHeute = async () => {
     try { return ctx.karten && ctx.karten.heuteJeModul ? await ctx.karten.heuteJeModul() : {}; } catch (e) { return {}; }
@@ -1355,33 +1700,53 @@ module.exports = function (ctx) {
 
   const NACH_KLAUSUR = { vorbei: 4, vorbereitung: 1, aus: 5 };
   const zeichnen = async (el, mdCtx, art, neu) => {
+    zeitMenueZu();
     const D = ctx.modell.daten(), heute = heuteIso(), quelle = (mdCtx && mdCtx.sourcePath) || "";
     if (art === "modul") {
       const f = app.vault.getAbstractFileByPath(quelle);
       el.empty(); el.addClass("eba-lp", "eba-lp-eine");
       if (!f || fmVon(f).typ !== "lernplan") { el.setText("Dieser Block gehört in eine Lernplan-Notiz."); return; }
       const P = await sammeln(f, D, heute, optionen(D));
+      const karten = await kartenHeute();
       el.empty();
-      entwicklungHinweis(el);
+      if (!P.aus && P.herkunft !== "zentral") warnungZeichnen(el, { ungeprueft: [P.code], ohne: [] }, true);
       zeile(el.createDiv({ cls: "eba-vb-liste" }), P, quelle);
+      // Darunter dasselbe wie aufgeklappt auf der Lernplan-Seite (seit 2.11.2026); die Liste unter „Kapitel“ ist die Quelle und steht
+      // nur beim Bearbeiten (eba-core.css Abschnitt 61, Lernplan-Notiz)
+      if (P.plan || P.kapitel.length) modulInhalt(el.createDiv({ cls: "eba-lp-unten eba-lp-notiz-inhalt" }), P, quelle, neu, karten, true);
       return;
     }
     if (art === "woche") return dashboardZeichnen(el, D, heute);
     const { alle, o } = await allesSammeln(D, heute);
     const karten = alle.length ? await kartenHeute() : {};
     el.empty(); el.addClass("eba-lp");
-    entwicklungHinweis(el);
     if (!alle.length) { el.createDiv({ cls: "eba-lp-leer", text: LEER }); return; }
+    const sem = ctx.modell.semesterFuer(heute);
+    warnungZeichnen(el, ungeprueft(alle, D.module, sem ? sem.name : ""), false);
     // Oben dein Stand, dann das Semester mit Zielnote und gewählter Woche, darunter die Module
     const A = alle.filter(aktiv).sort(nachKlausur);
     heldZeichnen(el, A, heute);
     planZeichnen(el, A, alle, o, D, heute, quelle, neu);
     // Reihenfolge der Module: was jetzt zu tun ist zuerst, dann nach Klausurdatum; vorbei ans Ende
-    el.createDiv({ cls: "eba-lp-label", text: "Module" });
+    const label = el.createDiv({ cls: "eba-lp-label eba-lp-module-kopf" });
+    label.createSpan({ text: "Module" });
+    const w = wahlText(alle);
+    if (w) label.createSpan({ cls: "eba-lp-module-wahl", text: w });
     const rang = (P) => (P.stand ? NACH_KLAUSUR[P.stand.art] || 0 : 3);
     alle.sort((a, b) => rang(a) - rang(b) || String(a.klausur ? a.klausur.datum : "9").localeCompare(String(b.klausur ? b.klausur.datum : "9")) || a.code.localeCompare(b.code, "de"));
-    const gitter = el.createDiv({ cls: "eba-lp-module" });
-    for (const P of alle) karteZeichnen(gitter, P, quelle, neu, karten, heute);
+    const liste = el.createDiv({ cls: "eba-lp-module" });
+    for (const P of alle) modulZeileZeichnen(liste, P, quelle, neu, karten, heute);
+    const offen = alle.filter((P) => auf[P.code])[0];
+    offenSetzen(liste, offen ? offen.code : "");
+  };
+  // Immer nur ein Modul offen (seit 1.11.2026; code: das offene, "" keins): Mehrere offene machten die Liste unübersichtlich
+  const offenSetzen = (liste, code) => {
+    for (const z of liste.querySelectorAll(".eba-lp-mz")) {
+      const c = z.getAttribute("data-code"), an = c === code;
+      auf[c] = an;
+      z.toggleClass("is-offen", an); z.setAttr("aria-expanded", String(an));
+    }
+    for (const m of liste.querySelectorAll(".eba-lp-mz-mehr")) m.toggleClass("is-zu", m.getAttribute("data-code") !== code);
   };
 
   // Dashboard (```eba-lernplan woche```): eine Zeile wie die der Karteikarten, nur wenn diese Woche etwas dran ist; Tipp öffnet den
@@ -1392,15 +1757,13 @@ module.exports = function (ctx) {
     el.empty();
     if (!W.kapitel.length && !W.vorbereitung.length) { el.addClass("eba-lp-aus"); return; }
     el.removeClass("eba-lp-aus");
-    const box = el.createDiv({ cls: "eba-lk-heute eba-lp-heute" + (IN_ENTWICKLUNG ? " is-entwicklung" : "") });
+    const box = el.createDiv({ cls: "eba-lk-heute eba-lp-heute" });
     box.createSpan({ cls: "eba-uh-symbol" }).innerHTML = SYMBOL;
     const t = box.createSpan({ cls: "eba-lk-heute-text" });
     // Leerzeichen statt Rand: Bricht die Zeile um, beginnt die neue bündig
     t.createEl("b", { text: "Lernplan" });
     t.appendText(" ");
     stuecke(t.createSpan({ cls: "eba-lp-heute-was" }), kurzTeile(W).map((text) => ({ text })), "eba-lp-heute-teil");
-    if (IN_ENTWICKLUNG) t.appendText(" ");
-    entwicklungPille(t);
     const f = app.vault.getAbstractFileByPath(BEREICH);
     if (!f) return;
     const a = box.createEl("a", { cls: "eba-vb-knopf", text: "Öffnen", href: f.path });
@@ -1413,6 +1776,7 @@ module.exports = function (ctx) {
   const LINKS = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
   const RECHTS = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
   const UHR = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+  const INFO = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>';
   const PFEIL ='<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
   const SYMBOL = '<svg class="eba-sym" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>';
 
@@ -1426,7 +1790,6 @@ module.exports = function (ctx) {
     sammeln(f, D, heuteIso(), optionen(D)).then((P) => {
       const k = box.createDiv({ cls: "eba-mod-k" });
       k.appendText("Lernplan");
-      entwicklungPille(k);
       const z = box.createDiv({ cls: "eba-mod-lp-zeile" });
       const p = P.stand && P.stand.pille;
       const inhalt = z.createDiv({ cls: "eba-mod-lp-inhalt" });
@@ -1535,6 +1898,7 @@ module.exports = function (ctx) {
       if (k.seiten) teile.push(`${k.seiten} S.`);
       if (k.vorlesung) teile.push(`Vorlesung ${deVon(k.vorlesung)}`);
       if (k.zwischentest) teile.push(`Zwischentest ${deVon(k.zwischentest)}`);
+      if (e.altklausuren && k.in_altklausuren != null) teile.push(`in ${k.in_altklausuren} von ${e.altklausuren} Altklausuren`);
       zeilen.push(`- ${haken(paare[j])} ${teile.join(" · ")}`);
       (k.teile || []).forEach((t, n) => zeilen.push(`  - ${haken(T[j][n])} ${t.nr} ${t.titel}`));
       if (paare[j] && eigenes.nach.has(paare[j])) { eigeneDazu(eigenes.nach.get(paare[j])); eigenes.nach.delete(paare[j]); }
@@ -1745,7 +2109,9 @@ module.exports = function (ctx) {
 
   const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran,
     folienVon, titelHtml, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild, modulZeile, serverListen,
-    listeLesen, serverStand, vorlernenSetzen, sollHeute, heldDaten, heldText, NOTEN, stufeVon, zielBei, zielVorschau, zielTeile, modulFarben };
+    listeLesen, serverStand, vorlernenSetzen, sollHeute, heldDaten, heldText, ANTEILE, anteilWahl, zielBei, zielVorschau, zielTeile, modulFarben,
+    planSemester, spaeterSemester, terminWahl, terminText, bisText, leisteFenster, ungeprueft, warnungTeile,
+    ZEIT_FAKTOR, relevanzStufe, zeitStufe, zeitWahlLesen, zeitSetzen, zeitAnSetzen, zeitSatz };
   ctx.lernplan = api;
   return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

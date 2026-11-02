@@ -166,12 +166,19 @@ test("Erzeugte Notizen: Obsidians Callouts ([!info], [!warning] …) nur, wo es 
 // Obsidian sie anwendet (später gewinnt), var(--x) aufgelöst. Abstand in OKLab, Lesbarkeit als WCAG-Kontrast.
 const DATEI = Object.fromEntries(DESIGNS);
 const OHNE_DESIGN = ':where(:not([class*="eba-design-"]))';
+// Farben von Elfenbein: :not ohne :where, so spezifisch wie die der Designs (seit 01.11.2026, siehe Test „Spezifität“ unten)
+const ELFENBEIN = ':not([class*="eba-design-"])';
+// Dunkel gilt erst .theme-dark (alle Designs: Schatten, Modulfarben), dann die Farben des Designs (seit 01.11.2026; bis dahin
+// hatten Flieder und Klar dunkel die Farben von Elfenbein).
+const DUNKEL_ALLE = [DATEI["eba-paper-elfenbein.css"], ".theme-dark"];
 const SCHEMATA = {
   "Elfenbein hell": [[CORE, "body"], [DATEI["eba-paper-elfenbein.css"], `:is(.theme-light, .theme-dark)${OHNE_DESIGN}`],
-    [DATEI["eba-paper-elfenbein.css"], `.theme-light${OHNE_DESIGN}`]],
-  "Dunkel (alle Designs)": [[CORE, "body"], [DATEI["eba-paper-elfenbein.css"], ".theme-dark"]],
+    [DATEI["eba-paper-elfenbein.css"], `.theme-light${ELFENBEIN}`]],
+  "Elfenbein dunkel": [[CORE, "body"], DUNKEL_ALLE, [DATEI["eba-paper-elfenbein.css"], `.theme-dark${ELFENBEIN}`]],
   "Flieder hell": [[CORE, "body"], [DATEI["eba-flieder.css"], ".eba-design-flieder.theme-light"]],
+  "Flieder dunkel": [[CORE, "body"], DUNKEL_ALLE, [DATEI["eba-flieder.css"], ".eba-design-flieder.theme-dark"]],
   "Klar hell": [[CORE, "body"], [DATEI["eba-klar.css"], ".eba-design-klar.theme-light"]],
+  "Klar dunkel": [[CORE, "body"], DUNKEL_ALLE, [DATEI["eba-klar.css"], ".eba-design-klar.theme-dark"]],
 };
 const variablen = (bloecke) => {
   const v = {};
@@ -268,6 +275,9 @@ test("Wochenraster: sechs Modulfarben je Design verschieden, kein Zustand, Kante
       // Ausnahmen stehen in derselben Woche als Fläche und Kante in --eba-warn; der Akzent markiert heute, jetzt und Auswahl
       if (abstand(a, farbe("--eba-warn")) < 0.12 || tonAbstand(a, farbe("--eba-warn")) < 45) funde.push(`${name}: ${n} wie eine Ausnahme`);
       if (abstand(a, farbe("--eba-accent")) < 0.1) funde.push(`${name}: ${n} wie der Akzent`);
+      // ebenso von der Linkfarbe, in der der Ring „jetzt“ auf genau diesen Kästen liegt (seit 01.11.2026: In Flieder dunkel wäre ein
+      // kräftiges Flieder 0,06 von Modul 3 entfernt gewesen; hell halten alle Designs mindestens 0,108)
+      if (abstand(a, farbe("--eba-accent-text")) < 0.1) funde.push(`${name}: ${n} wie die Linkfarbe`);
       // Jede Farbe eine Bedeutung: 1–4 liegen in keiner Familie einer Statusfarbe (Farbton ≥ 25° entfernt), Grün (5) und Rosa (6)
       // leihen sich eine und sind dort nie die Farbe selbst (≥ 0,05)
       for (const v of ["--eba-good", "--eba-bad", "--eba-art-pruefung", "--eba-art-event"]) {
@@ -355,31 +365,67 @@ test("Wochenraster: Online-Sitzung schraffiert und gestrichelt, Schrift auf beid
   assert.deepEqual(funde, []);
 });
 
-// Die Vorschau-Kacheln unter „Design“ zeigen die hellen Farben ihres Designs; bis 0.6.14 war die von Elfenbein noch waldgrün
-test("Vorschau eines Designs: Seite, Karte, Text und Akzent wie das Design selbst", () => {
-  const vorschau = { "Elfenbein hell": "", "Flieder hell": '[data-design="flieder"]', "Klar hell": '[data-design="klar"]' };
+// Die Vorschau-Kacheln unter „Design“ zeigen die Farben ihres Designs, hell die hellen, dunkel die dunklen (seit 01.11.2026);
+// bis 0.6.14 war die von Elfenbein noch waldgrün
+test("Vorschau eines Designs: Seite, Karte, Text und Akzent wie das Design selbst, hell und dunkel", () => {
+  const vorschau = { Elfenbein: "", Flieder: '[data-design="flieder"]', Klar: '[data-design="klar"]' };
   const funde = [];
-  for (const [name, attr] of Object.entries(vorschau)) {
-    const wert = variablen(SCHEMATA[name]);
-    const m = Object.fromEntries(deklarationen(CORE).filter((d) => d.selektor === ".eba-dk button.eba-dk-wahl" + attr).map((d) => [d.eigenschaft, d.wert]));
-    for (const [v, ist] of [["--m-seite", "--eba-bg"], ["--m-karte", "--eba-card-bg"], ["--m-text", "--eba-text"], ["--m-akzent", "--eba-accent"]]) {
-      if (m[v] !== wert(ist)) funde.push(`${name}: ${v} ${m[v]} statt ${wert(ist)}`);
+  for (const [design, attr] of Object.entries(vorschau)) {
+    for (const [modus, vor] of [["hell", ""], ["dunkel", ".theme-dark "]]) {
+      const name = design + " " + modus, wert = variablen(SCHEMATA[name]);
+      const m = Object.fromEntries(deklarationen(CORE).filter((d) => d.selektor === vor + ".eba-dk button.eba-dk-wahl" + attr).map((d) => [d.eigenschaft, d.wert]));
+      for (const [v, ist] of [["--m-seite", "--eba-bg"], ["--m-karte", "--eba-card-bg"], ["--m-text", "--eba-text"], ["--m-akzent", "--eba-accent"]]) {
+        if (m[v] !== wert(ist)) funde.push(`${name}: ${v} ${m[v]} statt ${wert(ist)}`);
+      }
     }
   }
   assert.deepEqual(funde, []);
 });
 
-// Kleine graue Schrift (Label, Nummern, Pfeile) war bis 0.6.14 mit 3,4–3,5 : 1 auf hellem Grund schwer lesbar
-test("Text, Metazeile und Nebensachen sind in jedem Design auf Seite und Karte lesbar (mindestens 4,5 : 1)", () => {
+// Jedes Design hat dunkel alle Farben, die Elfenbein dunkel setzt: Was fehlt, käme sonst von Obsidian (seit 01.11.2026 erben
+// Flieder und Klar dunkel nichts mehr von Elfenbein)
+test("Dunkel: Flieder und Klar setzen jede Farbe, die Elfenbein dunkel setzt", () => {
+  const namen = (datei, selektor) => new Set(deklarationen(DATEI[datei]).filter((d) => d.selektor === selektor).map((d) => d.eigenschaft));
+  const elfenbein = namen("eba-paper-elfenbein.css", `.theme-dark${ELFENBEIN}`);
+  assert.ok(elfenbein.size > 40 && elfenbein.has("--eba-bg") && elfenbein.has("--color-base-00"));
+  for (const [datei, selektor] of [["eba-flieder.css", ".eba-design-flieder.theme-dark"], ["eba-klar.css", ".eba-design-klar.theme-dark"]]) {
+    const design = namen(datei, selektor);
+    assert.deepEqual([...elfenbein].filter((n) => !design.has(n)), [], selektor);
+  }
+});
+
+// Obsidian setzt auf iPhone und iPad mit .is-mobile.theme-dark (Spezifität 0,2,0) die Seite auf Schwarz und mit
+// .is-mobile.theme-light die Schrift auf #000. Die Farben jedes Designs brauchen darum mindestens zwei Klassen (oder Attribute)
+// am body und laden danach; bis 01.11.2026 hatte Elfenbein nur eine, dunkel war seine Seite dort schwarz statt #1b1813.
+test("Spezifität: die Farben jedes Designs gewinnen auf iPhone und iPad gegen Obsidians Regeln für Mobilgeräte", () => {
+  const spezifitaet = (s) => {
+    const ohneWhere = s.replace(/:where\((?:[^()]|\([^()]*\))*\)/g, "");
+    return (ohneWhere.match(/\.[\w-]+|\[[^\]]+\]/g) || []).length;
+  };
+  assert.equal(spezifitaet(".is-mobile.theme-dark"), 2);
+  assert.equal(spezifitaet(`.theme-dark${OHNE_DESIGN}`), 1, "der Wächter zählt :where nicht");
+  const funde = [];
+  for (const [name, bloecke] of Object.entries(SCHEMATA)) {
+    const [, selektor] = bloecke[bloecke.length - 1];
+    if (spezifitaet(selektor) < 2) funde.push(`${name}: ${selektor}`);
+  }
+  assert.deepEqual(funde, []);
+});
+
+// Kleine graue Schrift (Label, Nummern, Pfeile) war bis 0.6.14 mit 3,4–3,5 : 1 auf hellem Grund schwer lesbar. Seit 01.11.2026
+// auch Links und die Schrift auf dem Akzent (Knöpfe, var(--text-on-accent, #fff) wie im CSS)
+test("Text, Metazeile, Nebensachen und Links sind in jedem Design auf Seite und Karte lesbar, Knöpfe ebenso (mindestens 4,5 : 1)", () => {
   const funde = [];
   for (const [name, bloecke] of Object.entries(SCHEMATA)) {
     const wert = variablen(bloecke);
-    for (const v of ["--eba-text", "--eba-muted", "--eba-faint"]) {
+    for (const v of ["--eba-text", "--eba-muted", "--eba-faint", "--eba-accent-text"]) {
       for (const grund of ["--eba-bg", "--eba-card-bg"]) {
         const k = kontrast(rgb(wert(v)), rgb(wert(grund)));
         if (k < 4.5) funde.push(`${name}: ${v} auf ${grund} ${k.toFixed(2)}`);
       }
     }
+    const knopf = kontrast(rgb(wert("--text-on-accent") || "#ffffff"), rgb(wert("--eba-accent")));
+    if (knopf < 4.5) funde.push(`${name}: Schrift auf dem Akzent ${knopf.toFixed(2)}`);
   }
   assert.deepEqual(funde, []);
 });

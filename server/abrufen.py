@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Abruf ohne KI für den eigenen Server von Studium Autopilot (server/README.md): das Uni-Postfach.
 
-Holt neue Mails, legt sie als Text nach roh/ und schreibt dann den Anstoß für den Claude-Lauf (lauf.mjs). Nur
-Standardbibliothek. Termine aus dem ILIAS-Kalender holt das Plugin selbst, ohne KI; der Server gibt Claude nur, wofür es KI
+Holt neue Mails, legt sie als Text nach abruf/roh/ und schreibt dann den Anstoß für den Claude-Lauf (abruf/anstoss, lauf.mjs). Nur
+Standardbibliothek. Läuft als eigener Benutzer (studium-abruf) und schreibt nur in seinen Ordner abruf/; den Takt und den Knopf
+(takt.json, knopf.json) liest es aus dem Ordner des Web-Dienstes (web/), nur als echte Datei, nie über einen Link. Termine aus dem ILIAS-Kalender holt das Plugin selbst, ohne KI; der Server gibt Claude nur, wofür es KI
 braucht (Mails).
 
 Anhänge: Kalender (.ics) stehen als eine Zeile je Termin im Text. PDFs (Prüfungsplan, Übungsplan) legt das Skript unverändert
@@ -16,8 +17,8 @@ Uni-Zugang, und ein PDF-Leser hätte mit einer präparierten Datei sonst Zugriff
 Nur lesen (EXAMINE, BODY.PEEK; nichts wird als gelesen markiert), nur neue Mails nach UID. Lehnt der Server die Anmeldung ab,
 schreibt das Skript uni-zugang-falsch und versucht es nicht wieder, bis der Zugang neu gesetzt ist (Schutz vor Kontosperre).
 
-Takt: Der Zeitgeber startet alle 15 Minuten; steht in Obsidian 30 oder 60 Minuten (takt.json vom Dienst), lässt das Skript die
-Zwischenzeiten aus, außer du hast seitdem „Mails durchsuchen“ getippt (knopf.json). Täglicher Sicherheitslauf: beim ersten Start
+Takt: Der Zeitgeber startet alle 15 Minuten; steht in Obsidian 30 oder 60 Minuten (web/takt.json vom Dienst), lässt das Skript die
+Zwischenzeiten aus, außer du hast seitdem „Mails durchsuchen“ getippt (web/knopf.json). Täglicher Sicherheitslauf: beim ersten Start
 ab 06:30 Uhr (Berlin) holt es die Uni-Mails der letzten 24 Stunden noch einmal und stößt einen Lauf an (Grund „taeglich“), auch
 ohne neue Mail: So kommt nach, was liegen geblieben ist, und Claude sieht den Tag im Zusammenhang.
 """
@@ -31,6 +32,8 @@ import imaplib
 import json
 import os
 import re
+import ssl
+import stat
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -52,6 +55,16 @@ KALENDER_ZEICHEN = 6_000  # Zeichen je Kalender-Anhang
 ANHANG_NAME = 120        # Zeichen eines Anhangnamens im Text
 
 
+def eigen(*teile):
+    """Pfad im eigenen Ordner (abruf/: roh/, abruf-stand.json, uni-zugang-falsch, anstoss)."""
+    return DATEN.joinpath("abruf", *teile)
+
+
+def vom_web(name):
+    """Pfad einer Datei des Web-Dienstes (web/takt.json, web/knopf.json)."""
+    return DATEN / "web" / name
+
+
 def jetzt():
     return datetime.now(timezone.utc)
 
@@ -60,6 +73,27 @@ def json_lesen(pfad, ersatz):
     try:
         return json.loads(Path(pfad).read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        return ersatz
+
+
+def fremd_lesen(pfad, ersatz, hoechstens=64 * 1024):
+    """JSON aus einer Datei, die ein anderer Benutzer schreibt (der Web-Dienst): nur eine echte Datei, nie über einen Link
+    (O_NOFOLLOW; lstat davor und fstat danach, auch für Systeme ohne O_NOFOLLOW), höchstens hoechstens Bytes."""
+    try:
+        if not stat.S_ISREG(os.lstat(pfad).st_mode):
+            return ersatz
+        fd = os.open(pfad, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+    except OSError:
+        return ersatz
+    with os.fdopen(fd, "rb") as f:
+        if not stat.S_ISREG(os.fstat(f.fileno()).st_mode):
+            return ersatz
+        daten = f.read(hoechstens + 1)
+    if len(daten) > hoechstens:
+        return ersatz
+    try:
+        return json.loads(daten.decode("utf-8"))
+    except ValueError:
         return ersatz
 
 
@@ -211,6 +245,15 @@ class AnmeldungAbgelehnt(Exception):
     pass
 
 
+def tls_kontext():
+    """TLS für das Uni-Postfach: Zertifikat und Hostname geprüft (CERT_REQUIRED, check_hostname, Zertifikate des Systems),
+    mindestens TLS 1.2. Ohne eigenen Kontext nimmt imaplib.IMAP4_SSL ssl._create_stdlib_context, und das ist ein Kontext ohne
+    jede Prüfung: Wer sich ins Netz dazwischen setzt, bekäme das Uni-Passwort."""
+    kontext = ssl.create_default_context()
+    kontext.minimum_version = max(kontext.minimum_version, ssl.TLSVersion.TLSv1_2)
+    return kontext
+
+
 def uid_gueltigkeit(imap):
     """UIDVALIDITY des ausgewählten Postfachs: aus der Antwort auf EXAMINE, sonst per STATUS."""
     _, daten = imap.response("UIDVALIDITY")
@@ -246,7 +289,7 @@ def berlin(zeit):
 
 
 def takt_minuten():
-    t = json_lesen(DATEN / "takt.json", {})
+    t = fremd_lesen(vom_web("takt.json"), {})
     m = t.get("uni_postfach") if isinstance(t, dict) else None
     return m if m in TAKT_MINUTEN else TAKT_MINUTEN[0]
 
@@ -264,7 +307,7 @@ def takt_dran(stand, nun):
     zuletzt = zeit_lesen(stand.get("zuletzt", ""))
     if takt == TAKT_MINUTEN[0] or not zuletzt:
         return True
-    k = json_lesen(DATEN / "knopf.json", {})
+    k = fremd_lesen(vom_web("knopf.json"), {})
     knopf = zeit_lesen(k.get("zuletzt", "")) if isinstance(k, dict) else None
     if knopf and knopf > zuletzt:
         return True
@@ -272,13 +315,14 @@ def takt_dran(stand, nun):
 
 
 def uni_postfach(stand, roh, zugang, imap_klasse=imaplib.IMAP4_SSL, nachlesen=False):
-    """Neue Mails seit der letzten UID nach roh/uni-postfach/; beim Sicherheitslauf (nachlesen) dazu die der letzten 24 Stunden.
+    """Neue Mails seit der letzten UID nach abruf/roh/uni-postfach/; beim Sicherheitslauf (nachlesen) dazu die der letzten 24 Stunden.
     → Meldung oder None."""
-    if (DATEN / "uni-zugang-falsch").exists():
+    if eigen("uni-zugang-falsch").exists():
         return "Uni-Postfach: übersprungen, Zugang wurde abgelehnt (neu setzen in der Cloud Shell: bash ~/studium-autopilot/server/fern.sh uni-zugang setzen)"
     try:
-        imap = imap_klasse(IMAP_HOST, 993, timeout=60)
+        imap = imap_klasse(IMAP_HOST, 993, ssl_context=tls_kontext(), timeout=60)
     except (OSError, imaplib.IMAP4.error) as e:
+        # auch ein Zertifikat, das nicht passt (ssl.SSLCertVerificationError ist ein OSError): dann geht kein Passwort raus
         return f"Uni-Postfach: nicht erreichbar ({type(e).__name__})"
     try:
         try:
@@ -334,7 +378,7 @@ def uni_postfach(stand, roh, zugang, imap_klasse=imaplib.IMAP4_SSL, nachlesen=Fa
         teile = ([f"{geholt} neue Mail(s)"] if geholt else []) + ([f"{wieder} Mail(s) der letzten 24 Stunden zum Nachlesen"] if wieder else [])
         return "Uni-Postfach: " + ", ".join(teile) if teile else None
     except AnmeldungAbgelehnt:
-        (DATEN / "uni-zugang-falsch").write_text(jetzt().isoformat() + "\n", encoding="utf-8")
+        eigen("uni-zugang-falsch").write_text(jetzt().isoformat() + "\n", encoding="utf-8")
         return "Uni-Postfach: Anmeldung abgelehnt, keine weiteren Versuche bis zum neuen Zugang"
     except (OSError, imaplib.IMAP4.error) as e:
         return f"Uni-Postfach: abgebrochen ({type(e).__name__})"
@@ -370,9 +414,9 @@ def zugang_laden(name="uni-zugang"):
 # ---------- Ablauf ----------
 
 def abrufen(imap_klasse=imaplib.IMAP4_SSL, zugang=None):
-    roh = DATEN / "roh"
+    roh = eigen("roh")
     roh.mkdir(parents=True, exist_ok=True)
-    stand_datei = DATEN / "abruf-stand.json"
+    stand_datei = eigen("abruf-stand.json")
     stand = json_lesen(stand_datei, {})
     nun = jetzt()
     nachlesen = nachlesen_dran(stand, nun)
@@ -392,7 +436,7 @@ def abrufen(imap_klasse=imaplib.IMAP4_SSL, zugang=None):
         alt = index.read_text(encoding="utf-8") if index.exists() else "# Neu seit dem letzten Lauf\n"
         text_schreiben(index, alt + "".join(f"- {nun.strftime('%d.%m.%Y %H:%M')} UTC: {m}\n" for m in neu))
     if neu or (nachlesen and z):
-        json_schreiben(DATEN / "anstoss", {"zeit": nun.isoformat(), "grund": "taeglich" if nachlesen else "quellen", "meldungen": neu})
+        json_schreiben(eigen("anstoss"), {"zeit": nun.isoformat(), "grund": "taeglich" if nachlesen else "quellen", "meldungen": neu})
     return meldungen
 
 

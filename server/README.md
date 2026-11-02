@@ -290,27 +290,140 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 
 | Teil | Was |
 |---|---|
-| Pakete | `nodejs`, `jq`, `qrencode`, `python3`, `poppler-utils` (Claude liest damit Seitenbereiche aus PDFs), `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht), Caddy aus dessen offiziellem Paketarchiv |
-| Benutzer `studium` | führt die Dienste aus (Web-Dienst, Claude-Lauf, Zustand); Claude Code liegt in `/var/lib/studium/.local/bin/claude` |
-| Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium` für die Rohdaten) |
+| Pakete | `jq`, `qrencode`, `python3`, `poppler-utils` (Claude liest damit Seitenbereiche aus PDFs), `iptables-persistent`, `unattended-upgrades` (Sicherheitsupdates automatisch, Neustart um 03:30 Uhr UTC, wenn ein Update ihn braucht; siehe „Updates der Pakete“), Caddy aus dessen offiziellem Paketarchiv, Node.js 24 von NodeSource |
+| Benutzer `studium` | führt Claude-Lauf, Zustand, Speicherreserve und Gmail-Anstoß aus; Claude Code und seine Anmeldung liegen in `/var/lib/studium` (`.local/bin/claude`, `.claude/`, `.claude.json`; 0700, nur er). Nur Claude-Lauf und Zustand sehen diesen Ordner (siehe „Schutz der Dienste“) |
+| Benutzer `studium-web` | nur der Web-Dienst (bis 0.7.6 lief er als `studium`): Er kann weder die Claude-Anmeldung noch Mails, Lauf-Ordner oder Uni-Zugang lesen und die Prozesse von `studium` weder beenden noch ansehen |
+| Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium`: Der Lauf übernimmt seine Rohdaten) |
 | `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückgehen von Hand), alle anderen entfernt der Installer. Darin `allowed_signers`: die Schlüssel, mit denen `aktualisieren` die Signatur des nächsten Pakets prüft |
-| `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte, nur root und `studium` lesen) |
-| `/var/lib/studium-server` | Zustand, Eingang (Ergebnisse für das Plugin), Einmal-Codes, `geraete.json` (Codes aus Obsidian der letzten 24 Stunden, Zufallswerte gegen Wiederholung, die letzten 20 Verbindungen) |
-| `studium-server-dienst` | Web-Dienst `dienst.mjs`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404 |
+| `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte; `root:studium-web` 0640, lesen nur root und der Web-Dienst, allen anderen Diensten sperrt systemd den Ordner) |
+| `/var/lib/studium-server` | je Teil ein eigener Ordner (siehe „Wer was liest und schreibt“): `web/` (Web-Dienst: Einmal-Codes, `geraete.json` mit den Codes aus Obsidian der letzten 24 Stunden, Zufallswerten gegen Wiederholung und den letzten 20 Verbindungen; Stand und Takt aus Obsidian), `abruf/` (Abruf: Rohdaten in `roh/`), `laeufe/` (Claude-Lauf), `eingang/` (Ergebnisse für das Plugin), `unterlagen/` (für den Lauf); im Ordner selbst Zustand und Bestand des Laufs |
+| `studium-server-dienst` | Web-Dienst `dienst.mjs` als Benutzer `studium-web`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404. Darf selbst nur mit 127.0.0.1 sprechen, schreibt nur in `web/`, `eingang/` und `unterlagen/` und sieht weder die Claude-Anmeldung noch die Lauf-Ordner oder die Rohdaten (siehe „Schutz der Dienste“) |
 | `studium-server-speicher` | Speicherreserve `speicher-reserve.mjs` (25 % des Arbeitsspeichers), damit Oracle den Server nicht wegen Leerlaufs anhält; „an“ meldet der Zustand nur, wenn die PID in `speicher-reserve.json` lebt und laut `/proc/<pid>/cmdline` die Reserve ist (nach einem Neustart kann sie einem anderen Prozess gehören) |
-| `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet, Uni-Zugang, Reserve, LiveSync |
+| `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet (`claude auth status` ohne Nutzungs- und Fehlerberichte, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`), Uni-Zugang, Reserve, LiveSync |
 | `studium-server-abruf.timer` | alle 15 Minuten `abrufen.py` ohne KI: das Uni-Postfach, nur mit gespeichertem Uni-Zugang (nach der Uhr, weil ein übersprungener Dienst einen relativen Zeitgeber nicht weiterstellt). Steht in Obsidian ein Takt von 30 oder 60 Minuten, fallen die Zwischenzeiten aus, außer nach „Mails durchsuchen“. Beim ersten Start ab 06:30 Uhr der tägliche Sicherheitslauf: die Uni-Mails der letzten 24 Stunden noch einmal und ein Anstoß (Grund `taeglich`), auch ohne neue Mail |
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt; Zeitgrenze 100 Minuten (ein Lauf mit Opus und der gewöhnliche, je bis 45 Minuten) |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
-| `studium-server-aktualisieren.timer` | täglich: Claude Code (`claude update`, nicht während eines Laufs), dann neues Server-Paket aus dem Release, nur mit passender Prüfsumme, nur mit gültiger Signatur (`studium-server.tar.gz.sig`, `ssh-keygen -Y verify` mit `allowed_signers` des laufenden Pakets, nie aus dem Download; siehe `docs/release.md`, „Signatur des Server-Pakets“) und nur vorwärts (nie auf eine ältere Version zurück). Die Prüfsumme nennt GitHub selbst; erst die Signatur verhindert, dass ein Release, das jemand mit dem GitHub-Konto oder einem Token anlegt, auf jedem Server als root läuft. Server mit 0.7.5 oder älter installieren das erste signierte Paket noch ohne diese Prüfung, ab dann jedes mit. Das Ergebnis (Zeit, `ok`, Zielversion, bei einem Fehler der Schritt, etwa `signatur-fehlt` oder `signatur`, letzter Erfolg) steht in `aktualisierung.json` und im Status unter `aktualisierung`; Obsidian sagt es, wenn seit mehr als 3 Tagen nichts ohne Fehler durchkam, obwohl es eine neuere Version gibt |
+| `studium-server-aktualisieren.timer` | täglich: Claude Code (`claude update`, nicht während eines Laufs, ohne Nutzungs- und Fehlerberichte), dann neues Server-Paket aus dem Release, nur mit passender Prüfsumme, nur mit gültiger Signatur (`studium-server.tar.gz.sig`, `ssh-keygen -Y verify` mit `allowed_signers` des laufenden Pakets, nie aus dem Download; siehe `docs/release.md`, „Signatur des Server-Pakets“) und nur vorwärts (nie auf eine ältere Version zurück). Dieselbe Version gilt nur als aktuell, wenn ihr Paket die Marke `.installiert` hat; die setzt der Installer erst nach „Prüfen“, so installiert der nächste Lauf eine abgebrochene Installation noch einmal. Die Prüfsumme nennt GitHub selbst; erst die Signatur verhindert, dass ein Release, das jemand mit dem GitHub-Konto oder einem Token anlegt, auf jedem Server als root läuft. Server mit 0.7.5 oder älter installieren das erste signierte Paket noch ohne diese Prüfung, ab dann jedes mit. Das Ergebnis (Zeit, `ok`, Zielversion, bei einem Fehler der Schritt, etwa `signatur-fehlt` oder `signatur`, letzter Erfolg) steht in `aktualisierung.json` und im Status unter `aktualisierung`; Obsidian sagt es, wenn seit mehr als 3 Tagen nichts ohne Fehler durchkam, obwohl es eine neuere Version gibt |
 | Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an; die Standardliste, die Oracle mit dem Netz anlegt und die dessen Kennzeichen erbt, erlaubt nur 22 und zählt nicht als eigene) |
+
+### Schutz der Dienste (systemd)
+
+Jeder Dienst ohne root läuft in einem Sandkasten von systemd (`systemd-analyze security` zeigt die Wertung): keine neuen Rechte,
+keine Capabilities, System schreibgeschützt (`ProtectSystem=strict`, schreiben nur in den eigenen Ordnern), eigene `/tmp` und
+`/dev`, Kernel, Uhr, Hostname und Cgroups unberührt, nur die Netzarten, die er braucht, Systemaufrufe nur aus `@system-service`
+ohne `@privileged` (ein gesperrter Aufruf scheitert mit `EPERM`, statt den Dienst zu beenden), fremde Prozesse unsichtbar.
+`MemoryDenyWriteExecute` nur beim Abruf (Python); Node.js und Claude Code übersetzen zur Laufzeit.
+Wertung von `systemd-analyze security` in Ubuntu 24.04 (systemd 255, 01.11.2026): Speicherreserve und Gmail-Anstoß 0,9
+(„SAFE“), Web-Dienst 1,2, Abruf, Claude-Lauf und Zustand 1,4 („OK“; 10 wäre ungeschützt).
+
+| Dienst | sieht nicht | Netz |
+|---|---|---|
+| Web-Dienst | Home von `studium` (Claude-Anmeldung, Claude Code), Lauf-Ordner (`laeufe/`, dort stehen die Rechte des Laufs), Rohdaten des Abrufs (`abruf/`), Uni-Zugang (verschlüsselt und entschlüsselt), `livesync.json` | nur 127.0.0.1 (Caddy) |
+| Claude-Lauf | `/etc/studium-server` (Schlüssel des Dienstes, LiveSync), Uni-Zugang | ja (Claude, zentrale Termine) |
+| Zustand | `/etc/studium-server`, entschlüsselte Zugänge (ob der Uni-Zugang gespeichert ist, sieht er am Dateinamen), `web/`, Eingang, Unterlagen | ja (`claude auth status`) |
+| Abruf | Home von `studium`, `/etc/studium-server`, Lauf-Ordner, Eingang, Unterlagen, Einmal-Codes und LiveSync-Links (`web/verbinden/`, `web/livesync-links/`) | ja (IMAP) |
+| Speicherreserve, Gmail-Anstoß | Home von `studium`, `/etc/studium-server`, Uni-Zugang | keins |
+
+**Eigene Benutzer:** Der Web-Dienst nimmt Anfragen aus dem Internet an und läuft darum als eigener Benutzer `studium-web`. Ein
+Fehler darin reicht so weder an die Anmeldung von Claude noch an Mails, Lauf-Ordner oder einen laufenden
+Claude-Lauf: Deren Dateien gehören `studium` und sind für andere nicht lesbar, und `kill` wie auch `/proc/<PID>/` (Umgebung,
+Ordner, Speicher) verlangen denselben Benutzer (`ProtectProc=invisible` blendet nur die Prozesse anderer Benutzer aus). Bis 0.7.6
+liefen Web-Dienst und Claude-Lauf beide als `studium`, und nur `InaccessiblePaths` hielt den Web-Dienst von Claudes Dateien fern;
+ein Fehler darin hätte über `/proc` oder Signale trotzdem einen laufenden Lauf erreicht. Zusätzlich sperrt systemd ihm diese Ordner
+weiterhin. Eine Grenze bleibt: Was der Web-Dienst dem Lauf hinlegt (Stand aus Obsidian, Unterlagen, Folien), liest Claude im selben
+Lauf wie Gmail, und die Ergebnisse in `eingang/` gibt der Web-Dienst aus. Ein übernommener Web-Dienst könnte dort Text unterbringen,
+der Claude dazu bringen soll, Mails in die Ergebnisse zu schreiben. Claude darf in Gmail nur lesen und nur `ausgabe.json`
+schreiben, das Ergebnis geht durch die Filter in `eingang.mjs`, und der Skill nimmt Quellen als Daten, nicht als Anweisungen; eine
+feste Grenze wie die Benutzer ist das nicht (dafür bräuchte Gmail einen eigenen Lauf ohne die Dateien des Web-Dienstes). Jeder Teil schreibt nur in seinen Ordner, und was ein anderer lesen soll, schreibt er ausdrücklich so (Tabelle unten).
+In die Gruppe `studium-web` lässt die Einheit des Laufs ihn (`SupplementaryGroups=`), nicht der Benutzer `studium`; so liest nur der
+Lauf, was der Web-Dienst ihm hinlegt. Der Updater (`studium-server-aktualisieren`, root) bleibt ohne Sandkasten: Er muss alles
+dürfen, was `installieren.sh` tut. Der Installer schreibt die Einheiten bei jedem Lauf neu; bestehende Server bekommen den Schutz
+mit dem nächsten täglichen Update.
+
+**Was sonst auf 127.0.0.1 lauscht:** Der Web-Dienst darf nur mit 127.0.0.1 sprechen, dort aber mit allem, was lauscht.
+Caddys Admin-Schnittstelle (ohne Anmeldung; sie ersetzt auf Zuruf die ganze Konfiguration) hört darum nicht auf `localhost:2019`,
+sondern nur auf dem Socket `/run/caddy/admin.sock` im Ordner von Caddy (0700; `admin` im Caddyfile, den Ordner legt
+`/etc/systemd/system/caddy.service.d/studium-server.conf` an). Bis 0.7.6 hätte ein übernommener Web-Dienst über sie Caddy umleiten
+und den Verkehr der Geräte abgreifen können. Beim Wechsel startet der Installer Caddy neu (ein `reload` suchte schon den neuen
+Socket), danach lädt er nur neu. CouchDB (mit LiveSync, ebenfalls auf 127.0.0.1) erreicht der Web-Dienst weiter, aber nur mit dessen
+Anmeldung; die Ordner von Caddy (`/var/lib/caddy`, `/run/caddy`) und CouchDB (`/opt/couchdb/etc`, `/var/lib/couchdb`) sperrt
+systemd ihm.
+
+**Umzug bestehender Server:** Bis 0.7.6 lag alles direkt in `/var/lib/studium-server`. Beim ersten Lauf des Installers danach
+hält er alle Dienste, die dort schreiben, kurz an (ein laufender Claude-Lauf legt Rohdaten und Unterlagen dabei zurück), verschiebt,
+was Web-Dienst und Abruf dort ablegten, in ihre Ordner (nur echte Dateien und Ordner; liegt dort schon etwas, etwa nach einem
+abgebrochenen Umzug, bleibt die neuere Datei, Ordner werden zusammengeführt), setzt Besitzer und Rechte und startet die Dienste
+wieder. Fertig ist der Umzug erst mit der Marke `.umzug-fertig` am Ende: Fehlt sie (ein Abbruch dazwischen) oder liegen noch alte
+Namen im Ordner, hält der nächste Lauf wieder an und richtet alles noch einmal. Sonst richtet jeder weitere Lauf nur noch die
+Ordner selbst (`ordnung` in `installieren.sh`, wiederholbar). Ein Zurückgehen von Hand auf
+0.7.6 fände die Dateien danach nicht mehr am alten Ort.
+
+#### Wer was liest und schreibt
+
+Pfade in `/var/lib/studium-server`. Eine 2 vorn (setgid) heißt: Was im Ordner entsteht, bekommt dessen Gruppe.
+
+| Pfad | Besitzer, Rechte | schreibt | liest außerdem |
+|---|---|---|---|
+| der Ordner selbst | `studium:studium-web`, 2711 | Claude-Lauf, Zustand, Speicherreserve, Gmail-Anstoß, `studium-server` (als `studium`) | Web-Dienst und Abruf gehen nur hindurch, auflisten können sie ihn nicht |
+| `zustand.json`, `aktualisierung.json` | `studium:studium-web`, 0640 | Lauf und Zustand bzw. `studium-server aktualisieren` | Web-Dienst (Status) |
+| alles andere darin (`anstoss`, `termine.json`, `kapitel.json`, `hinweise-bisher.json`, `nutzung.json`, `einstellungen.json`, `livesync-an` …) | `studium`, 0600 | Lauf, Gmail-Anstoß, `studium-server`, `livesync.sh` (als `studium`) | niemand; ob ein Anstoß wartet, sieht der Web-Dienst am Namen |
+| `laeufe/` | `studium:studium`, 0700 | Lauf | niemand (Mails, Auszug aus dem Tresor, Rechte des Laufs) |
+| `web/` | `studium-web:studium-web`, 2771 | Web-Dienst; `studium-server verbinden`, `schluessel-erneuern` und `livesync.sh` als `studium-web` | Lauf (Gruppe): `stand-plugin.json` (0640), nimmt den Anstoß `web/anstoss`; Lauf, Abruf und Gmail-Anstoß: `takt.json`, der Abruf auch `knopf.json` (beide 0644). `verbinden/`, `livesync-links/` und `geraete.json` nur der Web-Dienst (0700 bzw. 0600) |
+| `abruf/` | `studium-abruf:studium`, 2770 | Abruf: `roh/`, `abruf-stand.json`, `uni-zugang-falsch`, `anstoss` | Lauf (Gruppe): übernimmt `roh/` und den Anstoß; Zustand: `uni-zugang-falsch` |
+| `eingang/` | `studium:studium-web`, 2770 | Lauf (Ergebnisse, 0640) | Web-Dienst: gibt sie aus und löscht Übernommenes |
+| `unterlagen/neu/`, `opus/`, `kapitel/` | `studium:studium-web`, 2770 (`unterlagen/` selbst 2750) | Web-Dienst (0640) | Lauf (Gruppe): übernimmt sie und legt sie nach einem Fehlschlag zurück |
+
+Bis 0.7.6 konnte der Abruf (Gruppe `studium`) auch den Stand aus Obsidian mit dem Auszug aus dem Tresor lesen; jetzt sieht er
+davon nur den Takt. Den Stand (`stand-plugin.json`) liest nur der Lauf.
+
+**Keine Links:** Wo ein Dienst in einem Ordner liest, umbenennt oder löscht, in den ein anderer Benutzer schreibt (der Lauf in
+`abruf/`, `web/` und `unterlagen/`, der Zustand bei `zustand.json`, der Abruf bei `takt.json` und `knopf.json`), nimmt er nur echte
+Dateien und Ordner und folgt nie einem Link
+(`dateien.mjs`: Öffnen mit `O_NOFOLLOW`, vorher `lstat`, danach derselbe Eintrag laut `fstat`; geschrieben wird über eine
+Zwischendatei mit Zufallsnamen, exklusiv angelegt, und `rename`, das einen Link an der Stelle ersetzt, ohne ihm zu folgen). Was in
+übernommenen Rohdaten weder Datei noch Ordner ist, löscht der Lauf, bevor Claude sie liest. Bis 0.7.6 hätte ein Link an der Stelle
+von `zustand.json` den Zustand die Claude-Anmeldung lesen und in eine gewöhnliche Datei schreiben lassen. root legt im
+Datenordner nichts selbst an: `studium-server` und `livesync.sh` schreiben und löschen dort als der Benutzer, dem der Ordner
+gehört, und der Installer ändert Besitzer nur mit `chown -h` (der Link selbst) und Rechte über einen Deskriptor, den `open` mit
+`O_NOFOLLOW` und `O_DIRECTORY` nur für einen echten Ordner bekommt.
+
+`UMask` ist 0077, außer beim Web-Dienst (0027: Was er schreibt, liest der Lauf über die Gruppe; `takt.json` und `knopf.json`
+schreibt er ausdrücklich mit 0644) und beim Abruf (0007: `roh/` und den Anstoß übernimmt der Lauf über die Gruppe `studium`).
+`zustand.json` und die Ergebnisse in `eingang/` schreibt der Lauf ausdrücklich mit 0640, `aktualisierung.json` entsteht mit
+`umask 027`.
+
+### Updates der Pakete
+
+`unattended-upgrades` installiert jede Nacht Sicherheitsupdates von Ubuntu und dazu alle Updates aus den Archiven von Caddy
+(Cloudsmith), Node.js (NodeSource) und, mit LiveSync, CouchDB (Apache bei JFrog): `52studium-server-quellen` in
+`/etc/apt/apt.conf.d/` mit Mustern aus deren Release-Dateien (`site=dl.cloudsmith.io,origin=cloudsmith/caddy/stable`,
+`site=deb.nodesource.com,codename=nodistro`, `site=apache.jfrog.io,origin=Artifactory,codename=noble`; geprüft 01.11.2026 mit
+`apt-cache policy` und `unattended-upgrade --dry-run` in Ubuntu 24.04). Braucht ein Update einen Neustart, startet der Server um
+03:30 Uhr UTC neu. Bis 0.7.6 waren Caddy und CouchDB davon ausgenommen.
+
+**Node.js:** Ubuntu 24.04 bringt Node.js 18 aus universe, seit April 2025 ohne Sicherheitsupdates. Der Installer richtet das
+signierte Archiv von NodeSource für Node.js 24 ein (gepflegt bis April 2028): Schlüssel nur mit dem Fingerabdruck
+`6F71F525282841EEDAF851B42F59B5F99B1BE0B4` und als einziger Schlüssel der Datei, sonst bricht der Schritt ab, ohne etwas zu ändern;
+ein Pin (`/etc/apt/preferences.d/studium-server-nodejs`) hält `nodejs` bei NodeSource. Server mit Node.js 18 wechseln beim nächsten
+Update; der Schritt ist wiederholbar und holt nichts, wenn Node.js 24 schon da ist. Läuft die Linie aus, `NODE_MAJOR` im Installer
+erhöhen.
+
+**Täglich:** `studium-server aktualisieren` hebt zuerst `caddy`, `nodejs` und (mit LiveSync) `couchdb` an, unabhängig von einer
+neuen Version des Server-Pakets (bis 0.7.6 erst nach einer neuen Version, also fast nie). Dabei nur, was installiert ist
+(`dpkg-query`, Status `installed`): Ohne LiveSync gibt es weder CouchDB noch sein Paketarchiv, und apt bräche mit „Unable to locate
+package“ ab. Wartet es dafür auf ein anderes `apt`,
+höchstens 10 Minuten. Danach starten Web-Dienst und Speicherreserve neu, wenn sie noch mit einem alten Node.js laufen
+(`/proc/<MainPID>/exe` endet auf „ (deleted)“, weil das Update `/usr/bin/node` ersetzt hat), auch nach einem Update aus der Nacht
+von `unattended-upgrades`; ein Dienst, der nicht läuft, bleibt aus. Bis 0.7.6 startete `aktualisieren` danach nichts neu.
+Scheitert der Schritt, kommt das neue
+Server-Paket trotzdem; der Lauf zählt dann als gescheitert (Grund `pakete` im Status).
 
 ### Web-Dienst (`dienst.mjs`)
 
 | Weg | Wer | Was |
 |---|---|---|
 | `GET /v1/status` | alle | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), am Limit des Claude-Abos der nächste Versuch (`limit_wieder`, sonst `null`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, `erfolg`; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes. Nie Namen, Adressen, Texte oder Schlüssel |
-| `POST /v1/anstoss` | mit Zugangsschlüssel | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 10 Minuten (sonst 429 mit `wieder`); ein wartender Anstoß bleibt |
+| `POST /v1/anstoss` | mit Zugangsschlüssel | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 10 Minuten (sonst 429 mit `wieder`); ersetzt einen wartenden Anstoß des Web-Dienstes (Unterlagen und Folien übernimmt der Lauf bei jedem Grund) |
 | `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180. Dazu `verbunden`: die letzten 20 Verbindungen von Geräten (Zeit, Herkunft `cloud-shell` oder `obsidian`), nur hier und nie im Status |
 | `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, laufendes Semester und die Module ohne zentrale Kapitelliste (`lernplan`), Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
 | `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lab, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, mit `fassung` (neue Fassung einer schon zusammengefassten Unterlage: frühere Zusammenfassung, geänderte Seiten, was unter „Zu tun“ und „Offene Fragen“ schon steht; geprüft) mit diesen Zeilen im Kopf, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
@@ -322,7 +435,8 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 
 Je Absender (letzter Eintrag in `X-Forwarded-For`, den Caddy setzt) antworten die geschützten Wege nach 10 Fehlversuchen in
 10 Minuten 10 Minuten lang mit 429. Ein gültiger Zugangsschlüssel wird nie gesperrt, sonst könnte jeder das Plugin aussperren.
-Anfragen über 64 KB werden abgelehnt.
+Jeder Weg hat eine eigene Grenze für die Größe einer Anfrage (`MAX_KOERPER` in `dienst.mjs`: 1 KB bis 4 MB, ein Teil einer PDF
+etwas über 8 MB); was darüber liegt, lehnt der Dienst mit 413 ab.
 
 **Datenkanal (`kanal.mjs`):** AES-256-GCM über Web Crypto, dieselbe Schnittstelle wie im Plugin. Ein Paket ist
 `{ schema, zweck, iv, daten }`. Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“ oder „verbinden“) ist Teil der Verschlüsselung, damit sich ein Paket nicht als
@@ -345,7 +459,7 @@ steht mit Zeit und Herkunft in `geraete.json` (die letzten 20); Obsidian zeigt d
 
 **Gerät verloren:** `sudo studium-server schluessel-erneuern`
 (aus der Cloud Shell: `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`) hält den Web-Dienst an, löscht alle offenen
-Codes, schreibt neue Zugangs- und Datenschlüssel (32 Byte wie beim Installieren) in eine neue `dienst.json` (root:studium, 0640),
+Codes, schreibt neue Zugangs- und Datenschlüssel (32 Byte wie beim Installieren) in eine neue `dienst.json` (root:studium-web, 0640),
 die die alte in einem Schritt ersetzt, und startet den Dienst wieder, auch nach einem Fehler. Danach kennt der Server kein Gerät mehr: das erste mit `studium-server verbinden`, jedes weitere
 mit **Weiteres Gerät verbinden**; ein Gerät mit alten Schlüsseln bietet im Fenster selbst **Mit Code verbinden** an. Der Installer
 behält die neuen Schlüssel bei jedem weiteren Lauf. **Grenze:** LiveSync hat eigene Zugangsdaten (`livesync.json`); die erneuert
@@ -353,15 +467,17 @@ dieser Befehl nicht.
 
 ### Abruf ohne KI (`abrufen.py`)
 
-Nur Python-Standardbibliothek. Neues landet in `roh/` mit einer Zeile in `roh/INDEX.md`; nur dann gibt es einen Anstoß für
-Claude. Der Server gibt Claude nur, wofür es KI braucht: Mails. Abgaben aus dem ILIAS-Kalender holt das Plugin selbst und ohne
+Nur Python-Standardbibliothek. Neues landet in `abruf/roh/` mit einer Zeile in `abruf/roh/INDEX.md`; nur dann gibt es einen Anstoß
+für Claude (`abruf/anstoss`). Den Takt (`web/takt.json`) und den Knopf (`web/knopf.json`) des Web-Dienstes liest er nur als echte
+Datei, nie über einen Link, und höchstens 64 KB. Der Server gibt Claude nur, wofür es KI braucht: Mails. Abgaben aus dem ILIAS-Kalender holt das Plugin selbst und ohne
 KI (ein Schreiber je Quelle, `eba.quelleExtern`); Kurstitel mit Kurs-Passwörtern gehen so nie an Claude.
 
-- **Uni-Postfach:** IMAP über TLS, nur lesend (`EXAMINE`, `BODY.PEEK`, nichts wird als gelesen markiert). Beim ersten Abruf
-  die letzten 14 Tage, danach nur neue Mails (UID), höchstens 30 je Abruf. Mails werden zu Text (HTML ohne Skripte). Den
+- **Uni-Postfach:** IMAP über TLS (mindestens 1.2) mit Prüfung von Zertifikat und Servername; passt eines nicht, geht kein
+  Passwort raus (bis 0.7.6 nahm der Abruf den Standard von `imaplib`, einen Kontext ohne Prüfung). Nur lesend (`EXAMINE`,
+  `BODY.PEEK`, nichts wird als gelesen markiert). Beim ersten Abruf die letzten 14 Tage, danach nur neue Mails (UID), höchstens 30 je Abruf. Mails werden zu Text (HTML ohne Skripte). Den
   Uni-Zugang bekommt nur dieser Dienst über `LoadCredentialEncrypted`.
 - **Anhänge:** Kalender (`.ics`) stehen als eine Zeile je Termin am Ende des Texts (Titel, Beginn, Ende, Ort; höchstens 40 je
-  Anhang). PDFs legt der Abruf unverändert neben die Mail (`roh/uni-postfach/<UID>-anhang-<n>.pdf`, höchstens 3 je Mail, je bis
+  Anhang). PDFs legt der Abruf unverändert neben die Mail (`abruf/roh/uni-postfach/<UID>-anhang-<n>.pdf`, höchstens 3 je Mail, je bis
   10 MB, zusammen bis 40 MB je Abruf; der Text nennt sie), gelesen werden sie erst im Claude-Lauf und nur, wenn eine nach
   Terminen aussieht: Dieser Dienst hat den Uni-Zugang, ein PDF-Leser hier hätte mit einer präparierten Datei Zugriff darauf.
   Nach einem erfolgreichen Lauf sind die PDFs weg. Andere Anhänge nur mit Namen; beim Nachlesen im Sicherheitslauf nur der Text.
@@ -381,8 +497,36 @@ gewünscht), läuft vorher ein eigener Lauf mit Opus nur für sie (höchstens 3,
 mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben Anstoß:
 
 - **Werkzeuge:** nur Lesen, Suchen und Schreiben von `ausgabe.json`; kein Bash, kein Web, keine Unteragenten, nichts außerhalb
-  des Lauf-Ordners (Glob und Grep ohne eigene Freigabe; mit Claude Code im Modus `dontAsk` geprüft: außerhalb verweigert). Gmail nur lesend und nur, wenn die Gmail-Suche dran ist (Uhrzeiten oben, Knopf, Sicherheitslauf, oder letzte Suche
-  laut Takt lange genug her); mit Takt „nie“ gar nicht. Der Lauf sieht weder Uni-Zugang noch Schlüssel des Dienstes.
+  des Lauf-Ordners (Glob und Grep ohne eigene Freigabe; mit Claude Code im Modus `dontAsk` geprüft: außerhalb verweigert). Kein
+  Gesprächsprotokoll (`--no-session-persistence`): Es enthielte, was Claude in Gmail gesehen hat. Kein Gedächtnis über Läufe
+  hinweg und keine Sicherungen geänderter Dateien (`CLAUDE_CODE_DISABLE_AUTO_MEMORY`, `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING`, in
+  `.rechte.json` dazu `autoMemoryEnabled` und `fileCheckpointingEnabled` aus): Sonst schriebe Claude Code unter
+  `/var/lib/studium/.claude` eigene Notizen bzw. frühere Fassungen von `ausgabe.json` ab, auch mit Inhalten aus Mails (ob es
+  `file-history/` mit `-p` und `--no-session-persistence` überhaupt anlegt, sagt die Anleitung von Claude Code nicht). Gmail nur lesend und nur, wenn die Gmail-Suche dran ist (Uhrzeiten oben, Knopf, Sicherheitslauf, oder letzte Suche
+  laut Takt lange genug her); mit Takt „nie“ gar nicht. Erlaubt sind nur `search_threads`, `get_thread`, `get_message` und
+  `list_labels`; alles andere verweigert der Modus `dontAsk`, und eine Sperrliste nennt zur Sicherheit jedes Werkzeug des
+  Connectors, das sendet, Entwürfe liest oder schreibt, Filter, Labels oder Spam ändert oder löscht (`create_filter`,
+  `list_drafts` …; Stand 01.11.2026, Verzeichnis der Connectors auf claude.com). Ist Gmail nicht dran, lädt Claude Code die
+  Connectors von claude.ai gar nicht (`ENABLE_CLAUDEAI_MCP_SERVERS=false`). `--strict-mcp-config` schiede aus: Es schaltet auch
+  Gmail ab. Der Lauf sieht weder Uni-Zugang noch Schlüssel des Dienstes.
+- **Gmail:** zuerst feste Suchen nach Uni-Mails (`newer_than:<n>d`, seit der letzten erfolgreichen Suche, höchstens 14 Tage),
+  deren Treffer Claude ganz liest; dann ein Überblick über alle Mails seit der letzten erfolgreichen Suche (`after:<Sekunden>`,
+  eine Stunde Überlappung, höchstens 3 Tage zurück; ohne soziale Netzwerke, eigene Mails und Entwürfe; höchstens 4 Seiten zu
+  50): Claude sieht Absender, Betreff und Vorschau und ist angewiesen, ganz nur zu lesen, was zum Studium gehört (Uni,
+  Studierendenwerk, Initiativen, Lehrende, Lernplattformen; höchstens 30 je Lauf). Erzwingen kann der Server weder diese
+  Auswahl noch die Grenze: `get_thread` und `get_message` nehmen jede Kennung, und welche Mail Claude öffnet, entscheidet es
+  selbst. Ein Hook vor jedem Aufruf (`PreToolUse`) hülfe nicht: Die Mails des Überblicks hat Claude selbst gefunden, und ob eine
+  zum Studium gehört, lässt sich nur an ihrem Inhalt entscheiden; darum gibt es keinen. So kommen auch Mails an, die nicht von
+  der Uni kommen. Was über die Grenzen hinausgeht, kommt nicht wieder dran (Uni-Mails fangen die festen Suchen auf); die 3 Tage halten den Überblick beim
+  ersten Mal und nach einer Pause in seinen Grenzen. Lag die letzte erfolgreiche Suche länger zurück (Gmail auf „nie“ und wieder
+  an, lange Pause), bleiben ältere Mails, die nicht von der Uni kommen, ungesehen; im gewöhnlichen Takt liegen höchstens 20
+  Stunden dazwischen. Was Claude von anderen Mails sieht, soll laut Anweisung nicht in die Ausgabe (`eingang.mjs` prüft die Form
+  der Ausgabe, nicht, woher ein Text stammt); kommt eine Mail nicht von einer Einrichtung
+  der Uni, nennt `quelle_text` die Domain einer Organisation oder „private Adresse“ bzw. „Studierenden-Adresse“, und wer sich
+  dabei als Uni ausgibt, bekommt `status: "geschätzt"`. Im Lauf-Ordner bleibt `ausgabe.json` nur in der geprüften Fassung
+  (`geprueft: true`), nach einem Fehlschlag gar nicht. `protokoll.json` hat unter `gmailUeberblick` nur die
+  Zahlen (`gelistet`, `gelesen`, `begrenzt`), `nutzung.json` zählt je Tag die Läufe an einer Grenze (`gmail_begrenzt`). Skill
+  `termine.md`, Abschnitt „Quellen“.
 - **Kapitellisten für den Lernplan:** Für Module des laufenden Semesters ohne zentrale Kapitelliste (`kapitel.json` der
   zentralen Daten) schickt das Plugin die Folien (die ersten 8 Seiten ganz, danach je Seite die erste Zeile). Liegen neue in
   `unterlagen/kapitel/`, kommen bis zu 12 (zusammen höchstens 150 000 Zeichen) in den gewöhnlichen Lauf (Ordner `kapitel/`, mit
@@ -394,7 +538,9 @@ mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben
   Lernplan-Notizen, die schon vom Server stammen (geprüft wie das Eingang, zusammen höchstens 150 000 Zeichen). So bleiben die
   Titel gleich, an denen die Häkchen hängen.
 - **Prüfung (`eingang.mjs`):** Jeder Termin muss die Regeln des Plugins für zentrale Termine erfüllen (Kategorien, Modulcode,
-  Datum, keine Links oder Markdown im Titel); ungültige fallen einzeln weg. Die id leitet der Server aus Claudes `schluessel`
+  Datum, keine Links oder Markdown im Titel); ungültige fallen einzeln weg. Links (`https://`, `www.`, `mailto:`) entfernt der
+  Server aus allem, was Studierende lesen (Titel, Ort, Info, Quelle, Hinweise, Begleitnotizen); Schlüssel und Kapitellisten
+  säubert er wie das Plugin. Die id leitet der Server aus Claudes `schluessel`
   ab, damit eine Änderung denselben Termin trifft. Ins Eingang kommt nur, was neu oder geändert ist; Vergangenes nur als
   Änderung eines bekannten Termins. Im Bestand (`termine.json`, daraus `bisher.json` im Auftrag) bleibt ein Termin bis 60 Tage
   nach seinem Ende.
@@ -403,14 +549,22 @@ mit und wird nach dem Lauf gelöscht); der gewöhnliche Lauf folgt mit demselben
   meldet (so am Limit).
 - **Limit des Claude-Abos:** Der Lauf merkt sich in `zustand.json` unter `limit`, wann der nächste Versuch dran ist: nach 30
   Minuten, nach dem zweiten Treffer in Folge nach einer Stunde, dann alle zwei Stunden (wann das Limit endet, sagt Claude Code
-  nur als Satz für Menschen). Bis dahin startet kein Lauf, außer auf Knopfdruck; neue Mails und Unterlagen warten in `roh/` und
+  nur als Satz für Menschen). Bis dahin startet kein Lauf, außer auf Knopfdruck; neue Mails und Unterlagen warten in `abruf/roh/` und
   `unterlagen/`. Hängt der Lauf mit Opus am Limit, wartet auch der gewöhnliche. Ist der Zeitpunkt da, stößt der Dienst den Lauf an
   (Grund `wiederholung`, alle 5 Minuten geprüft, nicht während eines Laufs); hing eine Gmail-Suche am Limit, sucht er Gmail mit.
   Jeder andere Ausgang beendet die Versuche. Obsidian nennt die Uhrzeit (`limit_wieder` im Status).
 - **Verbrauch:** `protokoll.json` jedes Laufs hat unter `nutzung` die Token aus der JSON-Ausgabe von `claude -p` (Eingabe,
   Ausgabe, Cache, Runden, Dauer, Listenpreis der API zum Vergleich; mit dem Abo kostet es nichts extra), `nutzung.json` je Tag
-  (Berlin) Läufe, Läufe mit Opus, Treffer am Limit und die Token, 30 Tage lang (`studium-server nutzung`). Der Lauf übernimmt `roh/` in einem Schritt; was der Abruf währenddessen
-  holt, wartet auf den nächsten, und beim Zurücklegen wird Datei für Datei zusammengeführt. Die letzten 10 Läufe bleiben.
+  (Berlin) Läufe, Läufe mit Opus, Treffer am Limit und die Token, 30 Tage lang (`studium-server nutzung`). Der Lauf übernimmt `abruf/roh/` in einem Schritt; was der Abruf währenddessen
+  holt, wartet auf den nächsten, und beim Zurücklegen wird Datei für Datei zusammengeführt. Ist nichts zu tun (keine Meldung in
+  `INDEX.md`, keine Unterlagen, Gmail nicht dran), startet Claude nicht, und was in `roh/` lag, kommt zurück; bis 0.7.6 löschte
+  der Lauf es dann mit seinem Ordner, etwa Mails, deren Meldung fehlte, weil der Abruf dazwischen abbrach.
+- **Was bleibt:** Nach jedem Lauf leert `lauf.mjs` den Lauf-Ordner bis auf `protokoll.json`, `auftrag.md` (Anlass und Zahl der
+  Mails, keine Inhalte), `.rechte.json` und `.lauf.json`, dazu nach Erfolg die geprüfte `ausgabe.json` (dieselben Ergebnisse wie
+  im Eingang); Claudes ungeprüfte Ausgabe löscht er, auch nach einem Fehlschlag. Mails, PDF-Anhänge, der Auszug aus dem Tresor, Stand, Unterlagen und Folien liegen also nur während des Laufs
+  im Ordner (nach einem Fehlschlag oder Abbruch wieder in `abruf/roh/` bzw. `unterlagen/`, bis der nächste Lauf sie nimmt). Die
+  letzten 10 Lauf-Ordner bleiben. Bis 0.7.6 blieb alles darin, auch die Mails. Ergebnisse für Obsidian warten in `eingang/`, bis
+  ein Gerät sie übernimmt (siehe `GET /v1/eingang`).
   Bricht ein Lauf ab (Zeitgrenze von systemd, Neustart, Absturz), legt `lauf.mjs` Rohdaten und Unterlagen ebenso zurück: bei
   SIGTERM sofort, sonst beim nächsten Start für jeden Lauf-Ordner ohne `protokoll.json` (Protokoll `abgebrochen`, Status
   `claude-lauf`). Neu angestoßen wird dabei nicht, damit ein Lauf, der jedes Mal zu lange braucht, nicht im Kreis läuft.
@@ -424,9 +578,9 @@ Gmail-Suche an statt alle 15 Minuten.
 `sudo studium-server uni-zugang setzen` fragt Benutzername und Passwort ab; das Passwort verdeckt (`systemd-ask-password`)
 und nur über Pipes, nie in einer Befehlszeile. Gespeichert wird es nur verschlüsselt mit `systemd-creds` unter
 `/etc/credstore.encrypted/uni-zugang` (nur root). Entschlüsselt bekommt es nur der Abruf des Uni-Postfachs, unter eigenem
-Benutzer `studium-abruf`; Web-Dienst und Claude-Lauf (Benutzer `studium`) können es auch während eines Abrufs nicht lesen
+Benutzer `studium-abruf`; Web-Dienst (`studium-web`) und Claude-Lauf (`studium`) können es auch während eines Abrufs nicht lesen
 (`/run/credentials` und fremde Prozesse sind für sie unsichtbar). Nach einer abgelehnten Anmeldung laufen keine automatischen Versuche mehr
-(Status `falsch`), damit das Uni-Konto nicht gesperrt wird. `uni-zugang loeschen` entfernt ihn,
+(Status `falsch`, Marke `abruf/uni-zugang-falsch`), damit das Uni-Konto nicht gesperrt wird. `uni-zugang loeschen` entfernt ihn,
 `uni-zugang pruefen` zeigt nur, ob er da ist.
 
 **Grenze:** Der Schlüssel von `systemd-creds` liegt auf demselben Server. Das Passwort steht also nie lesbar in einer Datei, im
@@ -447,7 +601,7 @@ Fenster „Eigener Server“ ein Knopf **Prompt kopieren**, aber nur auf einem v
 | CouchDB | aus dem Paketarchiv von Apache (`couchdb-deb`, Arm und x86), ein Knoten, nur auf 127.0.0.1, Anmeldung immer nötig, CORS nur für die Obsidian-Apps (Computer, iPhone/iPad, Android) |
 | Caddy | `https://obsidian.<IP mit Bindestrichen>.sslip.io` → CouchDB (`/etc/caddy/studium-server.d/livesync.caddy`, eingebunden vom Caddyfile). Nach einem IP-Wechsel zieht `livesync.sh adresse` Adresse und Caddy-Teil nach; das ruft der Installer auf, und `verbinden` tut es auch |
 | `/etc/studium-server/livesync.json` | Benutzer, Passwort (32 Zeichen), Datenbank, Schlüssel der Ende-zu-Ende-Verschlüsselung von LiveSync (32 Zeichen); nur root |
-| `/var/lib/studium-server/livesync-an` | Marke für den Status (`livesync: an`) |
+| `/var/lib/studium-server/livesync-an` | Marke für den Status (`livesync: an`), angelegt als `studium` |
 
 Der Benutzer ist der Administrator von CouchDB: LiveSync braucht diese Rechte für „Overwrite remote“, und auf dem Server liegt
 nur dieser eine Tresor. In der Datenbank liegt er verschlüsselt, auch die Dateinamen.
@@ -455,8 +609,8 @@ nur dieser eine Tresor. In der Datenbank liegt er verschlüsselt, auch die Datei
 **Link für ein Gerät:** `livesync.mjs` baut die Einstellungen (Ende-zu-Ende-Verschlüsselung, Live-Abgleich, am Computer auch mit
 verborgenem Fenster, versteckte Dateien außer LiveSync selbst und der Fensteranordnung) und verschlüsselt sie wie LiveSync 1.0
 („persistent“: PBKDF2-SHA-256 mit 310 000 Runden, HKDF, AES-256-GCM) mit einem neuen Code aus 12 Zeichen. Weil der Setup-Link
-für einen QR-Code im Terminal zu lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (Dateiname nur
-ihr SHA-256) und zeigt den kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf dem Gerät
+für einen QR-Code im Terminal zu lang ist, legt der Server ihn 30 Minuten lang unter einer zufälligen Kennung ab (in
+`web/livesync-links/`, nur für den Web-Dienst; Dateiname nur ihr SHA-256) und zeigt den kurzen Link `https://<Adresse>/v1/livesync/<kennung>` mit QR-Code. Den Code tippt man auf dem Gerät
 ein; ohne ihn nützt der Link nichts. Der Code steht nur im Terminal, nie im Journal.
 
 **Grenze:** Wie beim Uni-Zugang liegt der Schlüssel der Verschlüsselung auf dem Server (nur root). Wer root auf dem Server ist,
@@ -482,17 +636,19 @@ studium-server jetzt                   Claude-Lauf jetzt anstoßen (mit Gmail)
 studium-server modell sonnet|opus      Modell der Claude-Läufe
 studium-server lauf                    Ergebnis des letzten Claude-Laufs
 studium-server nutzung                 Claude-Läufe und Token je Tag (letzte 7 Tage), Treffer am Limit
-studium-server aktualisieren           Claude Code aktualisieren, Server-Paket aus dem Release (Prüfsumme, Signatur) installieren
+studium-server aktualisieren           Pakete und Claude Code aktualisieren, Server-Paket aus dem Release (Prüfsumme, Signatur) installieren
 studium-server livesync                LiveSync einschalten und ein Gerät verbinden (siehe „LiveSync“)
 ```
 
 ### Geprüft
 
-Neben den Tests in `tests/server.test.js` lief der Installer in einem frischen Ubuntu 24.04 (Arm, Node 18, systemd) im
+Neben den Tests in `tests/server.test.js` lief der Installer (bis 0.7.6, mit Node 18) in einem frischen Ubuntu 24.04 (Arm, systemd) im
 Testmodus dreimal hintereinander. Ende zu Ende über Caddy mit 27 Prüfungen: Status, Verbinden per Code, Eingang verschlüsselt
 und mit Node 18 entschlüsselt, Stand mit Aufräumen, Uni-Zugang nur verschlüsselt und für `studium` unlesbar, nichts davon im
 Status oder Journal, Sperre nach Fehlversuchen, Speicherreserve wirklich belegt. Claude Code ließ sich als `studium`
-installieren. Noch nicht geprüft: HTTPS mit `sslip.io` an einer echten öffentlichen IP.
+installieren. Noch nicht geprüft: HTTPS mit `sslip.io` an einer echten öffentlichen IP. Die eigenen Benutzer und Ordner (nach
+0.7.6) prüfen bisher nur Tests, die `systemctl`, `chown` und `chmod` nachbilden (`tests/server.test.js`, Umzug und Einheiten);
+ein Installer-Lauf und ein Umzug in einem echten Ubuntu stehen noch aus.
 
 LiveSync (21.10.2026): im selben Testaufbau mit echter CouchDB 3.5 aus dem Paketarchiv von Apache, 26 Prüfungen: nur auf
 127.0.0.1, ohne oder mit falscher Anmeldung 401, CORS nur für die Obsidian-Apps, große Anfragen, Status, Linkseite und Ablauf,

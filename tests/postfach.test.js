@@ -337,3 +337,25 @@ test("Mit Uni-Login verbinden öffnet die Anmeldung auch, wenn ILIAS anderswo ve
   sammeln(el);
   assert.deepEqual(links, ["verbinden?id=ilias&auch=1"]);
 });
+
+test("Ungeprüftes Passwort (bei ILIAS galt noch eine Sitzung): eine bestehende Webmail-Sitzung wird abgemeldet, das Webmail prüft das Passwort", async () => {
+  const ungeprueft = { benutzer: "zx123", gesperrt: false, bestaetigt: false, ungeprueft: true };
+  const c = aufbau({ zugang: ungeprueft, lokal: AN });
+  c.w.angemeldet = true; // Sitzung von vorher (auf iPhone/iPad hält das Gerät die Kekse)
+  assert.equal(c.M.status(), "bereit");
+  assert.equal(await c.M.laden({ seite: 1 }), true);
+  assert.equal(c.w.posts, 1, "mit Passwort angemeldet");
+  assert.equal(c.w.anfragen[1].url.indexOf(W + "/login.php?horde_logout_token="), 0, "erst abgemeldet");
+  // ein falsches Passwort lehnt das Webmail ab → Marker, keine Mails
+  const d = aufbau({ zugang: ungeprueft, lokal: AN, geheim: "falsch" });
+  d.w.angemeldet = true;
+  assert.equal(await d.M.laden({ seite: 1 }), false);
+  assert.deepEqual([d.t.abgelehnt, d.M.zustand().fehler], [["mail"], "zugang-falsch"]);
+  // bestätigt: eine bestehende Sitzung gilt wie bisher
+  const e = aufbau({ lokal: AN });
+  e.w.angemeldet = true;
+  assert.equal(await e.M.laden({ seite: 1 }), true);
+  assert.equal(e.w.posts, 0);
+  // weder bestätigt noch ungeprüft: wartet auf ILIAS
+  assert.equal(aufbau({ zugang: { benutzer: "zx123", gesperrt: false, bestaetigt: false, ungeprueft: false }, lokal: AN }).M.status(), "unbestaetigt");
+});

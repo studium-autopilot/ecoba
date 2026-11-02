@@ -6,8 +6,9 @@ const assert = require("node:assert/strict");
 const { laden } = require("./laden.js");
 
 const { kapitelLesen, gewichte, zielVon, kapazitaet, planen, stand, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild,
-  sollHeute, heldDaten, heldText, NOTEN, stufeVon, zielBei, zielVorschau, zielTeile,
-  vorlernenSetzen } = laden("lernplan").ergebnis;
+  sollHeute, heldDaten, heldText, ANTEILE, anteilWahl, zielBei, zielVorschau, zielTeile, planSemester, spaeterSemester, terminWahl, terminText,
+  bisText, leisteFenster, ZEIT_FAKTOR, relevanzStufe, zeitStufe, zeitWahlLesen, zeitSetzen, zeitAnSetzen, zeitSatz, vorlernenSetzen, ungeprueft,
+  warnungTeile } = laden("lernplan").ergebnis;
 
 const NOTIZ = [
   "---",
@@ -343,11 +344,11 @@ test("Kopf des Bereichs: Stand nach ECTS gegen den Plan von heute, Rückstand, V
     "Kapitel 2 von X100 ist überfällig; Kapitel 2 von Y200 ist erst nächste Woche dran und schon verstanden");
   assert.deepEqual(H.aufholen, { extra: 1, bis: "2026-11-15" }, "bis zwei Kapitel: diese Woche");
   assert.deepEqual([H.klausur.P.code, H.klausur.tage], ["Y200", 9]);
-  assert.deepEqual(heldText(H), { titel: "1 Kapitel im Rückstand", satz: "Hol es bis So 15.11. nach, dann bist du wieder im Plan." });
+  assert.deepEqual(heldText(H), { titel: "1 Kapitel im Rückstand", satz: "Hol es bis So\u00a015.11. nach, dann bist du wieder im Plan." });
   const viel = heldDaten([P], "2026-11-11", () => true);
   assert.deepEqual([viel.rueckstand, viel.aufholen], [3, { extra: 1, bis: "2026-11-29" }], "mehr: verteilt auf diese und die zwei nächsten Wochen");
   assert.equal(heldText(Object.assign({}, viel, { rueckstand: 7, aufholen: { extra: 3, bis: "2026-11-29" } })).satz,
-    "Mit 3 Kapiteln mehr pro Woche bist du bis So 29.11. wieder im Plan.");
+    "Mit 3 Kapiteln mehr pro Woche bist du bis So\u00a029.11. wieder im Plan.");
   const ohne = Object.assign({}, H, { rueckstand: 0, aufholen: null });
   assert.deepEqual(heldText(ohne), { titel: "1 Kapitel Vorsprung", satz: "Diese Woche sind noch 2 Kapitel dran." });
   assert.deepEqual(heldText(Object.assign({}, ohne, { vorsprung: 0, woche: { fertig: 3, gesamt: 3 } })), { titel: "Du liegst im Plan.", satz: "Diese Woche ist geschafft." });
@@ -357,23 +358,28 @@ test("Kopf des Bereichs: Stand nach ECTS gegen den Plan von heute, Rückstand, V
   assert.equal(heldDaten([], "2026-11-11", ueber).alleFertig, false, "ohne Module nicht „alles verstanden“");
 });
 
-test("Zielnote: drei Stufen wie anteilAusZielnote, Vorschau je Anteil, Satz dazu; eigenes Ziel und Vorlesung bleiben", () => {
-  assert.deepEqual(NOTEN.map(stufeVon), [0, 0, 1, 1, 1, 2, 2, 2, 2, 2]);
-  for (const n of NOTEN) assert.equal(anteilAusZielnote(n), [0.6, 0.7, 0.8][stufeVon(n)], n);
-  assert.equal(stufeVon("1,5"), 0); assert.equal(stufeVon("2,5"), 1);
+test("Anteil der Zeit: deine Wahl (60, 70, 80) vor der Zielnote, Vorschau je Anteil, Satz dazu; eigenes Ziel und Vorlesung bleiben", () => {
+  assert.deepEqual(ANTEILE, [0.6, 0.7, 0.8]);
+  assert.deepEqual(anteilWahl(80, "1,3"), { anteil: 0.8, quelle: "wahl" }, "die Wahl geht vor");
+  assert.deepEqual(anteilWahl("60 %", ""), { anteil: 0.6, quelle: "wahl" });
+  assert.deepEqual(anteilWahl(null, "1,3"), { anteil: 0.6, quelle: "zielnote" });
+  assert.deepEqual(anteilWahl(65, "2,3"), { anteil: 0.7, quelle: "zielnote" }, "nur 60, 70, 80");
+  assert.deepEqual(anteilWahl("", ""), { anteil: 0.7, quelle: "" }, "weder noch: 70 %");
+  assert.deepEqual(anteilWahl(undefined, "sehr gut"), { anteil: 0.7, quelle: "" });
   const P = { beginn: "2026-10-12", klausur: { datum: "2027-02-08" }, ziel: "2027-01-10", zielPlan: "2027-01-10" };
   const Q = { beginn: "2026-10-12", klausur: { datum: "2027-02-22" }, ziel: "2027-01-17", zielPlan: "2027-01-17" };
   const V = zielVorschau([P], 0.6), z = zielVon(P.beginn, P.klausur.datum, 0.6);
   assert.deepEqual(V, { von: z, bis: z, wochenVon: 6, wochenBis: 6 });
   assert.equal(z, "2026-12-27");
-  assert.equal(zielTeile(V, 0.6).map((t) => t.text).join(""), "Alles verstanden nach 60 % der Zeit, bis So 27.12., danach 6 Wochen Klausurvorbereitung.");
-  assert.deepEqual(zielTeile(V, 0.6).filter((t) => t.wert).map((t) => t.text), ["60 % der Zeit", "So 27.12.", "6 Wochen"]);
+  // Zahl und „Wochen“ mit festem Leerzeichen: Auf dem iPhone brach „3–4 / Wochen“ um
+  assert.equal(zielTeile(V).map((t) => t.text).join(""), "alles verstanden bis So 27.12., danach 6\u00a0Wochen Klausurvorbereitung.");
+  assert.deepEqual(zielTeile(V).filter((t) => t.wert).map((t) => t.text), ["So 27.12.", "6\u00a0Wochen"]);
   const W = zielVorschau([P, Q], 0.6);
-  assert.equal(zielTeile(W, 0.6).map((t) => t.text).join(""), `Alles verstanden nach 60 % der Zeit, bis 27.12.–${+W.bis.slice(8)}.${+W.bis.slice(5, 7)}., danach 6–7 Wochen Klausurvorbereitung.`);
+  assert.equal(zielTeile(W).map((t) => t.text).join(""), `alles verstanden zwischen 27.12. und ${+W.bis.slice(8)}.${+W.bis.slice(5, 7)}., danach 6–7\u00a0Wochen Klausurvorbereitung.`);
   // Eigenes „verstanden bis“ zählt nicht; nur eigene: kein Datum
   assert.deepEqual(zielVorschau([P, Object.assign({}, Q, { eigenesZiel: true })], 0.6), V);
   assert.equal(zielVorschau([Object.assign({}, P, { eigenesZiel: true })], 0.6), null);
-  assert.equal(zielTeile(null, 0.6)[0].text, "Deine Module haben ein eigenes Datum, bis wann alles verstanden sein soll.");
+  assert.equal(zielTeile(null)[0].text, "deine Module haben ein eigenes Datum, bis wann alles verstanden sein soll.");
   // Erst nach der Vorlesung lernen: Hält die Vorlesung das Ziel schon später, rückt es nicht früher
   const spaet = Object.assign({}, P, { zielPlan: "2026-12-27", ziel: "2027-01-10" });
   assert.equal(zielBei(spaet, 0.6), "2027-01-10", "geplant 27.12., die Vorlesung hält es bis 10.1.");
@@ -417,4 +423,140 @@ test("Schalter „Vor der Vorlesung lernen“: schreibt nur die Zeile vorlernen,
   assert.equal(vorlernenSetzen(notiz.replace(/\n/g, "\r\n"), false).split("\r\n").slice(0, 7).join("|"),
     '---|typ: lernplan|code: "X100"|semester: "WS 2026/27"|quelle: "https://uni.example/folien"|vorlernen: false|---', "Windows-Zeilenenden");
   assert.equal(vorlernenSetzen("## Kapitel\n- [ ] 1 Märkte\n", false), null, "ohne Frontmatter: nichts");
+});
+
+test("Klausurtermin: Haupt- oder Nachholtermin, verschieben ins nächste Semester mit Angebot, Semester des Plans bis zum Nachholtermin", () => {
+  const L = [{ name: "WS 2026/27" }, { name: "SS 2027" }, { name: "WS 2027/28" }, { name: "SS 2028" }];
+  assert.equal(spaeterSemester("WS", "WS 2026/27", L), "WS 2027/28", "nur im Wintersemester angeboten");
+  assert.equal(spaeterSemester("SS", "WS 2026/27", L), "SS 2027");
+  assert.equal(spaeterSemester("WS, SS", "WS 2026/27", L), "SS 2027");
+  assert.equal(spaeterSemester("", "WS 2026/27", L), "SS 2027", "ohne Angabe: das nächste");
+  assert.equal(spaeterSemester("WS", "WS 2027/28", L), "", "kein späteres Wintersemester in der Liste");
+  assert.equal(spaeterSemester("WS", "WS 2030/31", L), "", "Semester nicht in der Liste");
+  // Wer im Nachholtermin schreibt, behält das Semester der Notiz bis 45 Tage nach dessen Ende
+  const ws = { name: "WS 2026/27", ende: "2027-03-31" }, ss = { name: "SS 2027", ende: "2027-09-30" };
+  assert.equal(planSemester(ss, ws, true, "2027-04-05"), ws);
+  assert.equal(planSemester(ss, ws, false, "2027-04-05"), ss, "im Haupttermin: das laufende");
+  assert.equal(planSemester(ss, ws, true, "2027-05-20"), ss, "danach das laufende");
+  assert.equal(planSemester(ws, ws, true, "2027-02-01"), ws);
+  assert.equal(planSemester(ws, null, true, "2027-02-01"), ws, "Notiz ohne Semester");
+  // Wahl: aus der Modulnotiz bzw. dem Grund, warum ein Lernplan nicht mehr dran ist
+  const M = { f: {} };
+  assert.equal(terminWahl({ modul: M }), "haupt");
+  assert.equal(terminWahl({ modul: M, nachhol: true }), "nachhol");
+  assert.equal(terminWahl({ modul: M, aus: "liegt jetzt in WS 2027/28" }), "spaeter");
+  assert.equal(terminWahl({ modul: M, aus: "nicht mehr in deinem Plan" }), "spaeter");
+  assert.equal(terminWahl({ modul: M, aus: "Modul bestanden" }), null, "fertig: nichts zu wählen");
+  assert.equal(terminWahl({ modul: M, aus: "Plan für SS 2027" }), null, "Notiz eines anderen Semesters");
+  assert.equal(terminWahl({ modul: null }), null);
+  assert.equal(terminWahl({ modul: M, fehlt: "keine Kapitel" }), null);
+  assert.equal(terminText({ datum: "2027-01-30" }), "Sa 30.1.");
+  assert.equal(terminText({ datum: "2027-04-01", geschaetzt: true }), "ca. Do 1.4.");
+  assert.equal(terminText({ datum: "2027-03-30", geschaetzt: true, phase: true }), "ab 30.3.");
+  assert.equal(terminText(null), "Termin fehlt");
+});
+
+test("Fälligkeit eines Kapitels: kein Datum, das vorbei ist, wenn das Kapitel nicht überfällig ist", () => {
+  // Heute So 1.11.2026, Woche ab Mo 26.10.; fällig war So 25.10. bzw. ist So 8.11.
+  const P = (k, d, mehr) => Object.assign({ heute: "2026-11-01", vorlernen: true, kapitel: [Object.assign({ da: true }, k)], plan: { faellig: [d] } }, mehr);
+  assert.deepEqual(bisText(P({}, "2026-10-25"), 0), { text: "überfällig seit So 25.10.", ueberfaellig: true });
+  assert.deepEqual(bisText(P({ erreicht: false }, "2026-10-25"), 0), { text: "vor der Vorlesung", ueberfaellig: false },
+    "die Vorlesung hatte es noch nicht: nicht überfällig und ohne „bis So 25.10.“");
+  assert.equal(bisText(P({ erreicht: false }, "2026-10-25", { vorlernen: false }), 0).text, "nach der Vorlesung");
+  assert.equal(bisText(P({ da: false }, "2026-10-25"), 0).text, "noch nicht da");
+  assert.equal(bisText(P({ erreicht: false }, "2026-11-01"), 0).text, "bis So 1.11.\u00a0· vor der Vorlesung", "diese Woche: mit Datum");
+  assert.equal(bisText(P({ erreicht: false }, "2026-11-08"), 0).text, "bis So 8.11.", "später: noch kein „vor der Vorlesung“");
+  assert.equal(bisText(P({}, "2026-11-08", { geschaetzt: [true] }), 0).text, "bis ca. So 8.11.");
+});
+
+test("Wochenleiste: sieben Wochen, die gewählte möglichst in der Mitte, am Rand bündig", () => {
+  assert.deepEqual(leisteFenster(22, 10), [7, 14]);
+  assert.deepEqual(leisteFenster(22, 0), [0, 7], "erste Woche: Fenster beginnt vorn");
+  assert.deepEqual(leisteFenster(22, 2), [0, 7]);
+  assert.deepEqual(leisteFenster(22, 21), [15, 22], "letzte Woche: Fenster endet hinten");
+  assert.deepEqual(leisteFenster(4, 3), [0, 4], "weniger als sieben Wochen: alle");
+  assert.deepEqual(leisteFenster(0, 0), [0, 0]);
+});
+
+test("Zeit je Kapitel: nur eingeschaltet, Klausurrelevanz erst ab fünf Altklausuren, deine Wahl geht vor", () => {
+  assert.equal(relevanzStufe(null), "");
+  assert.equal(relevanzStufe({ in: 4, von: 4 }), "", "vier Altklausuren sind zu wenige");
+  assert.equal(relevanzStufe({ in: 9, von: 12 }), "mehr", "drei Viertel");
+  assert.equal(relevanzStufe({ in: 3, von: 12 }), "weniger", "ein Viertel");
+  assert.equal(relevanzStufe({ in: 6, von: 12 }), "normal");
+  const k = { nr: "4", altklausuren: { in: 11, von: 12 } };
+  assert.deepEqual(zeitStufe(k, {}, true), { stufe: "mehr", quelle: "altklausuren" });
+  assert.deepEqual(zeitStufe(k, { 4: "normal" }, true), { stufe: "normal", quelle: "wahl" });
+  assert.deepEqual(zeitStufe({ nr: "1" }, {}, true), { stufe: "normal", quelle: "" });
+  assert.deepEqual(zeitStufe(k, {}, false), { stufe: "normal", quelle: "" }, "aus: Vorschlag gilt nicht");
+  assert.deepEqual(zeitStufe(k, { 4: "weniger" }), { stufe: "normal", quelle: "" }, "aus: deine Wahl ruht");
+  assert.deepEqual([ZEIT_FAKTOR.weniger, ZEIT_FAKTOR.normal, ZEIT_FAKTOR.mehr], [0.5, 1, 1.5]);
+  assert.deepEqual(zeitWahlLesen(["3 mehr", " IV weniger ", "5 viel", "nichts", 7]), { 3: "mehr", IV: "weniger" });
+  assert.deepEqual(zeitWahlLesen("3 mehr"), {}, "keine Liste");
+});
+
+test("Zeit je Kapitel: schreibt nur die Zeile kapitel_zeit, liest beide Formen der Liste", () => {
+  const vorn = "---\ntyp: lernplan\ncode: X100\nsemester: \"WS 2026/27\"\n---\n\n## Kapitel\n";
+  const a = zeitSetzen(vorn, "3", "mehr");
+  assert.equal(a, "---\ntyp: lernplan\ncode: X100\nsemester: \"WS 2026/27\"\nkapitel_zeit: [\"3 mehr\"]\n---\n\n## Kapitel\n");
+  const b = zeitSetzen(a, "IV", "weniger");
+  assert.match(b, /\nkapitel_zeit: \["3 mehr","IV weniger"\]\n---/);
+  assert.equal(zeitSetzen(zeitSetzen(b, "3", ""), "IV", ""), vorn, "zurückgenommen: die Zeile fällt weg, der Rest bleibt Zeichen für Zeichen");
+  const block = "---\ntyp: lernplan\nkapitel_zeit:\n  - 3 mehr\n  - \"5 weniger\"\ncode: X100\n---\nText";
+  assert.equal(zeitSetzen(block, "5", "normal"), "---\ntyp: lernplan\ncode: X100\nkapitel_zeit: [\"3 mehr\",\"5 normal\"]\n---\nText");
+  assert.equal(zeitSetzen("---\r\ntyp: lernplan\r\n---\r\nText", "1", "mehr"), "---\r\ntyp: lernplan\r\nkapitel_zeit: [\"1 mehr\"]\r\n---\r\nText");
+  assert.equal(zeitSetzen("ohne Frontmatter", "1", "mehr"), null);
+});
+
+test("Zeit je Kapitel: der Schalter schreibt nur die Zeile zeit_je_kapitel, deine Wahl bleibt", () => {
+  const vorn = "---\ntyp: lernplan\ncode: X100\nkapitel_zeit: [\"3 mehr\"]\n---\n\n## Kapitel\n";
+  const an = zeitAnSetzen(vorn, true);
+  assert.equal(an, "---\ntyp: lernplan\ncode: X100\nkapitel_zeit: [\"3 mehr\"]\nzeit_je_kapitel: true\n---\n\n## Kapitel\n");
+  assert.equal(zeitAnSetzen(an, true), an, "zweimal an: eine Zeile");
+  assert.equal(zeitAnSetzen(an, false), vorn, "aus: die Zeile ist weg, kapitel_zeit bleibt");
+  assert.equal(zeitAnSetzen("---\r\ntyp: lernplan\r\n---\r\nText", true), "---\r\ntyp: lernplan\r\nzeit_je_kapitel: true\r\n---\r\nText");
+  assert.equal(zeitAnSetzen("ohne Frontmatter", true), null);
+});
+
+test("Zeit je Kapitel: der Satz sagt, woher die Zeit kommt, ausgeschaltet, was an hieße", () => {
+  const k = (nr, stufe, quelle, von, drin = 1) => ({ nr, zeit: { stufe, quelle }, altklausuren: von ? { in: drin, von } : null });
+  assert.equal(zeitSatz([k("1", "normal", ""), k("2", "normal", "")], true), "Nach den Seiten der Kapitel.");
+  assert.equal(zeitSatz([k("1", "weniger", "altklausuren", 12), k("4", "mehr", "altklausuren", 12), k("7", "mehr", "altklausuren", 12), k("3", "normal", "altklausuren", 12)], true),
+    "Nach 12 Altklausuren: mehr Zeit für 4 und 7, weniger für 1.");
+  assert.equal(zeitSatz([k("1", "normal", "altklausuren", 12), k("2", "mehr", "wahl", 12)], true),
+    "Nach 12 Altklausuren: alle Kapitel etwa gleich oft dran. Von dir geändert: 2.");
+  assert.equal(zeitSatz([k("1", "normal", "", 3), k("2", "weniger", "wahl", 3)], true), "Nach den Seiten der Kapitel. Von dir geändert: 2.",
+    "drei Altklausuren zählen nicht");
+  // Aus: alles nach Seiten; der Satz nennt den Vorschlag, den das Einschalten brächte
+  const aus = (nr, drin, von) => k(nr, "normal", "", von, drin);
+  assert.equal(zeitSatz([aus("1", 11, 11), aus("3", 2, 11), aus("4", 7, 11), aus("7", 11, 11)], false),
+    "Alle Kapitel zählen nach ihren Seiten. Eingeschaltet nach 11 Altklausuren mehr Zeit für 1 und 7, weniger für 3.");
+  assert.equal(zeitSatz([aus("1", 6, 11), aus("2", 5, 11)], false),
+    "Alle Kapitel zählen nach ihren Seiten. Eingeschaltet gibst du einzelnen Kapiteln mehr oder weniger Zeit.", "kein Vorschlag");
+  assert.equal(zeitSatz([aus("1", 3, 3)], false),
+    "Alle Kapitel zählen nach ihren Seiten. Eingeschaltet gibst du einzelnen Kapiteln mehr oder weniger Zeit.", "zu wenige Altklausuren");
+});
+
+// Seit 2.11.2026 nicht mehr „In Entwicklung“: Gewarnt wird nur, wo die Kapitel nicht aus den geprüften zentralen Listen kommen
+test("Warnkasten: nur Module ohne geprüfte Liste, Vorkurse und Bestandenes zählen nicht", () => {
+  const P = (code, herkunft, aus) => ({ code, herkunft, aus });
+  const M = (code, x = {}) => Object.assign({ code, status: "offen", semester: "WS 2026/27", ects: 6, zusatz: false }, x);
+  const module = [M("S100"), M("E101"), M("SQ888", { ects: 0, zusatz: true }), M("B210"), M("M300", { status: "bestanden" }),
+    M("W400", { semester: "SS 2027" }), M("W500", { semester: "SS 2027", status: "angemeldet" })];
+  const alle = [P("S100", "zentral"), P("E101", "server"), P("A100", "", "Plan für SS 2026")];
+  assert.deepEqual(ungeprueft(alle, module, "WS 2026/27"), { ungeprueft: ["E101"], ohne: ["B210", "W500"] });
+  assert.deepEqual(ungeprueft([P("S100", "zentral")], [M("S100"), M("SQ888", { ects: 0, zusatz: true })], "WS 2026/27"), { ungeprueft: [], ohne: [] });
+  assert.deepEqual(ungeprueft([P("S100", "zentral")], module, ""), { ungeprueft: [], ohne: [] }, "ohne Semester keine Liste der fehlenden");
+});
+
+test("Warnkasten: Titel nennt die Module, der Text sagt, was zu tun ist", () => {
+  assert.equal(warnungTeile({ ungeprueft: [], ohne: [] }, false), null);
+  const a = warnungTeile({ ungeprueft: ["B210", "E101", "M300"], ohne: ["W500"] }, false);
+  assert.equal(a.titel, "Die Kapitel von B210, E101 und M300 sind nicht geprüft.");
+  assert.match(a.text, /Vergleich sie mit den Folien\. W500 hat keinen Lernplan\.$/);
+  const b = warnungTeile({ ungeprueft: [], ohne: ["B210", "W500"] }, false);
+  assert.equal(b.titel, "B210 und W500 haben keinen Lernplan.");
+  assert.match(b.text, /Der Plan rechnet ohne diese Module: Plane sie selbst\.$/);
+  assert.match(warnungTeile({ ungeprueft: [], ohne: ["B210"] }, false).text, /ohne dieses Modul: Plane es selbst\.$/);
+  assert.equal(warnungTeile({ ungeprueft: ["E101"], ohne: [] }, true).titel, "Die Kapitel sind nicht geprüft.");
 });

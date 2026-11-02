@@ -4,14 +4,15 @@
 // Hervorgehoben ist die Seite, die vorn offen ist; bei Notizen mit „code“ (Unterlagen, Vorlesungen, Termine …) auch ihr Modul. Ein
 // Tipp öffnet im Tab vorn (ctx.oeffnen), Strg/⌘ einen neuen Tab. „Dashboard“ führt jederzeit zurück zum Start. Schreibt keine Datei.
 // iPhone und iPad: Das ≡ ist Obsidians eigenes in der Leiste unten (app.mobileNavbar); das Skript übernimmt nur den Tipp darauf
-// (onRibbonMenuClick, langes Drücken zeigt weiter Obsidians Menü). Das Zahnrad steht in derselben Leiste gleich hinter Obsidians
-// „+“ (zahnradEinsetzen). Auf dem iPad blendet Obsidian die Leiste aus; eba-core.css 66 zeigt sie dort mit denselben sieben
+// (onRibbonMenuClick, langes Drücken zeigt weiter Obsidians Menü). Das Zahnrad steht in derselben Leiste zwischen Obsidians
+// Tabs und ≡ (zahnradEinsetzen, seit 02.11.2026; vorher zwischen „+“ und Tabs). Auf dem iPad blendet Obsidian die Leiste aus;
+// eba-core.css 66 zeigt sie dort mit denselben sieben
 // Knöpfen wie auf dem iPhone (seit 26.10.2026; Zurück, Vor und „+“ standen vorher oben in der Zeile). PC:
 // Obsidian hat dort keine Leiste unten, das Skript setzt eine eigene mit denselben sieben Knöpfen (pcLeiste, seit 27.10.2026;
 // vorher nur Zahnrad und ≡). Solange das Zahnrad dasteht,
 // fehlt Einstellungen & Hilfe im Menü. Wischen vom linken Rand geht auf iPhone und iPad zurück wie ‹, statt Obsidians linke
 // Seitenleiste aufzuziehen (weiter innen tut Wischen nach rechts nichts), und Herunterziehen oben auf einer Seite führt keinen Befehl mehr aus (wischenUebernehmen, seit
-// 26.10.2026). Am Ende einer Notiz zeigt es auf dem iPhone die Leiste wieder, die Obsidian beim Scrollen ausblendet
+// 26.10.2026); Wischen nach links zieht die rechte Seitenleiste nicht mehr auf (seit 01.11.2026). Am Ende einer Notiz zeigt es auf dem iPhone die Leiste wieder, die Obsidian beim Scrollen ausblendet
 // (leisteAmEnde, seit 27.10.2026).
 // Bis 26.10.2026 stand die Liste als eigener Tab „Übersicht“ in Obsidians linker Seitenleiste (seit 19.10.2026; ersetzte das
 // Raster-Menü oben in jeder Notiz, menue.js bis 0.4.6), auf iPhone und iPad in der Schublade hinter ⎕. Solche Tabs entfernt das
@@ -31,7 +32,7 @@ const SYMBOL_SVG = '<g fill="none" stroke="currentColor" stroke-width="7.5" stro
 const MENUE_SVG = [6, 12, 18].map((y) => ["line", { x1: "4", x2: "20", y1: String(y), y2: String(y) }]);
 const ZAHNRAD_SVG = [["path", { d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" }],
   ["circle", { cx: "12", cy: "12", r: "3" }]];
-// Das Zahnrad in der Leiste unten (hinter Obsidians „+“) und die Seite, die es öffnet
+// Das Zahnrad in der Leiste unten (hinter Obsidians Tabs) und die Seite, die es öffnet
 const ZAHNRAD = "eba-nav-zahnrad";
 const EINSTELLUNGEN = "Einstellungen & Hilfe";
 // Die übrigen Knöpfe der Leiste am PC (pcLeiste), wie Obsidians auf iPhone und iPad: Lucide „chevron-left“, „chevron-right“,
@@ -46,9 +47,21 @@ const TABS_SVG = [["rect", { x: "1", y: "3", width: "22", height: "18", rx: "4" 
 // Stundenplan fehlt seit 24.10.2026 (0.6.6: nur am iPhone): Das Dashboard zeigt die Woche auf jedem Gerät als Raster (woche.js).
 const ZIELE = ["Dashboard", "Studienverlauf", "Termine & Anmeldungen", "Postfach", "Prüfungen", "Noten & ECTS",
   "Unterlagen", "Lernplan", "Karteikarten", "Kontakte & Links", "Einstellungen & Hilfe"];
-// Seiten, die noch nicht fertig sind: ihre Zeile ist abgeblendet und trägt rechts „in Entwicklung“ (Lernplan seit 19.10.2026, den
-// Warnkasten auf der Seite schaltet lernplan.js IN_ENTWICKLUNG; Karteikarten seit 24.10.2026). Fertig: Namen hier streichen.
-const IN_ENTWICKLUNG = ["Lernplan", "Karteikarten"];
+// Seiten, die noch nicht fertig sind: ihre Zeile ist abgeblendet und trägt rechts „in Entwicklung“ (Karteikarten seit 24.10.2026;
+// Lernplan 19.10. bis 2.11.2026). Fertig: Namen hier streichen und für ein paar Tage unter NEU eintragen.
+const IN_ENTWICKLUNG = ["Karteikarten"];
+// Seiten, die eben fertig geworden sind: ihre Zeile trägt rechts „neu“, auf jedem Gerät NEU_TAGE Tage ab dem Tag, an dem sie dort
+// zuerst erscheint (gerätelokal NEU_SCHLUESSEL: Seite → Tag), danach von selbst nicht mehr (Lernplan seit 2.11.2026). Ein paar
+// Releases später den Namen hier streichen.
+const NEU = ["Lernplan"];
+const NEU_TAGE = 7;
+const NEU_SCHLUESSEL = "eba-sl-neu";
+// Ob ziel am Tag heute (JJJJ-MM-TT) als neu gilt; seit = gemerkte Tage je Seite, bekommt beim ersten Mal heute
+const istNeu = (ziel, heute, seit) => {
+  if (!NEU.includes(ziel)) return false;
+  if (!seit[ziel]) seit[ziel] = heute;
+  return (Date.parse(heute) - Date.parse(seit[ziel])) / 864e5 < NEU_TAGE;
+};
 // Seiten, die gerade gelten: Lernplan nur, wenn es Lernplan-Notizen gibt (lernplan.js sichtbar())
 const sichtbareZiele = (ctx) => ZIELE.filter((z) => z !== "Lernplan" || !!(ctx.lernplan && ctx.lernplan.sichtbar()));
 
@@ -73,15 +86,23 @@ const menueLage = (k, breite, hoehe, oben) => ({
 // Wischen nach rechts geht auf iPhone und iPad zurück wie ‹ in der Leiste (seit 26.10.2026, Rückmeldung: „Swiping from the left
 // shouldn't open the sidebar but do the same as the back arrow“). Obsidian meldet jede Geste auf seiner Fläche als Ereignis
 // „swipe“ der Workspace (app.js 1.14.5: workspace.trigger("swipe", g), g mit points, direction, startX, startY, x, targetEl und
-// registerCallback). Die linke Seitenleiste zieht sich daraufhin auf, wenn ein Finger waagerecht zu ihr hin wischt, von überall
-// auf der Fläche, und beide Seitenleisten zu oder angeheftet sind. zurueckGeste (rein, Tests): Ist g so eine Geste? z: bereit
-// (Obsidian fertig geladen), richtung (1, bei Sprachen von rechts nach links -1), linksZu und rechtsZu (zu oder angeheftet),
-// phone, hoehe (Fenster), unten (sicherer Rand unten; dort beginnt Obsidian auf dem iPhone keine Seitenleiste). Fehlt der Geste
-// ein Feld, etwa nach einem Umbau durch Obsidian, ist es keine, und Obsidian macht, was es immer macht. Zurück geht es nur vom
-// Rand (amRand).
-const zurueckGeste = (g, z) => !!g && !!z.bereit && g.points === 1 && g.direction === "x"
-  && [g.x, g.startX, g.startY].every((v) => typeof v === "number") && typeof g.registerCallback === "function"
-  && (g.x - g.startX) * z.richtung > 0 && !!z.linksZu && !!z.rechtsZu && !(z.phone && z.hoehe - g.startY < z.unten);
+// registerCallback). Eine Seitenleiste zieht sich daraufhin auf, wenn ein Finger waagerecht zu ihr hin wischt, von überall auf
+// der Fläche, und beide Seitenleisten zu oder angeheftet sind: nach rechts die linke, nach links die rechte. Auch die rechte bleibt
+// seit 01.11.2026 zu (Rückmeldung: „Sidebar shouldn't be visible in this vault“); ihren Umschalter oben rechts blendet
+// eba-core.css 66 seit 26.10.2026 aus, das Wischen nach links zog sie bis dahin noch auf. seitenGeste (rein, Tests): Zöge
+// Obsidian mit g eine Seitenleiste auf? 1 die linke, -1 die rechte, 0 keine. z: bereit (Obsidian fertig geladen), richtung (1,
+// bei Sprachen von rechts nach links -1, dort ist alles gespiegelt), linksZu und rechtsZu (zu oder angeheftet), phone, hoehe
+// (Fenster), unten (sicherer Rand unten; dort beginnt Obsidian auf dem iPhone keine Seitenleiste). Fehlt der Geste ein Feld,
+// etwa nach einem Umbau durch Obsidian, ist es keine, und Obsidian macht, was es immer macht. zurueckGeste: eine zur linken;
+// zurück geht es nur vom Rand (amRand).
+const seitenGeste = (g, z) => {
+  if (!g || !z.bereit || g.points !== 1 || g.direction !== "x" || typeof g.registerCallback !== "function") return 0;
+  if (![g.x, g.startX, g.startY].every((v) => typeof v === "number")) return 0;
+  if (!z.linksZu || !z.rechtsZu || (z.phone && z.hoehe - g.startY < z.unten)) return 0;
+  const weg = (g.x - g.startX) * z.richtung;
+  return weg > 0 ? 1 : weg < 0 ? -1 : 0;
+};
+const zurueckGeste = (g, z) => seitenGeste(g, z) === 1;
 // Weit genug für Zurück? weg: gewischt in px (zur Seitenleiste hin), schwung: Obsidians Hochrechnung beim Loslassen (weg plus
 // 1000 × Geschwindigkeit in px/ms; danach entscheidet auch die Seitenleiste). Mindestens WISCH_MIN gewischt, so zählen ein Tipp,
 // ein Zittern und das Blättern im Wochenraster nicht (woche.js reicht Obsidian nur die ersten 10 px weiter), und hochgerechnet
@@ -187,9 +208,19 @@ module.exports = function (ctx) {
     const a = li.createEl("a", { cls: "eba-sl-text", text: o.text, attr: o.ziel ? { "data-href": o.ziel } : {} });
     if (o.aktiv) a.setAttribute("aria-current", "page");
     if (entwicklung) li.createSpan({ cls: "eba-sl-entwicklung", text: "in Entwicklung" });
+    else if (o.neu) li.createSpan({ cls: "eba-sl-neu", text: "neu" });
     const los = (e) => { tippen(e, o.datei).catch((x) => console.error("seitenleiste: öffnen", x)); };
     li.addEventListener("click", los);
     li.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") los(e); });
+  };
+
+  // Gemerkte Tage der neuen Seiten (istNeu); ohne Speicher gilt eine neue Seite bei jedem Start wieder als neu
+  const neuGemerkt = () => {
+    try { const x = app.loadLocalStorage(NEU_SCHLUESSEL); return x && typeof x === "object" && !Array.isArray(x) ? x : {}; } catch (e) { return {}; }
+  };
+  const heuteText = () => {
+    const d = new Date(), zwei = (n) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${zwei(d.getMonth() + 1)}-${zwei(d.getDate())}`;
   };
 
   // Seiten und Module in el (Inhalt des Tabs oder des Menüs); ohne: Seiten, die hier fehlen
@@ -200,9 +231,13 @@ module.exports = function (ctx) {
     const fm = offen ? app.metadataCache.getFileCache(offen)?.frontmatter : null;
     const code = fm && fm.code ? String(fm.code) : "";
     const seiten = el.createEl("ul", { cls: "eba-sl-liste" });
+    const seit = neuGemerkt(), seitVorher = JSON.stringify(seit), heute = heuteText();
     for (const ziel of sichtbareZiele(ctx).filter((z) => !ohne.includes(z))) {
       const datei = app.metadataCache.getFirstLinkpathDest(ziel, "");
-      if (datei) zeile(seiten, { ziel, text: ziel, datei, aktiv: datei === offen });
+      if (datei) zeile(seiten, { ziel, text: ziel, datei, aktiv: datei === offen, neu: istNeu(ziel, heute, seit) });
+    }
+    if (JSON.stringify(seit) !== seitVorher) {
+      try { app.saveLocalStorage(NEU_SCHLUESSEL, seit); } catch (e) { console.error("seitenleiste: neu merken", e); }
     }
     const eba = ctx.user.eba ? ctx.user.eba(ctx) : null;
     const module = eba && eba.diesesSemester ? moduleJetzt(eba) : []; // eba.js vor 0.4.7 (Sync noch nicht fertig): ohne Module
@@ -285,15 +320,16 @@ module.exports = function (ctx) {
     });
   };
 
-  // Zahnrad in derselben Leiste, gleich hinter „+“ (seit 26.10.2026; erst statt „+“ gedacht, dann „Keep the plus, there's
-  // enough space“): öffnet Einstellungen & Hilfe. Gleiches Markup wie Obsidians Knöpfe (div.mobile-navbar-action >
+  // Zahnrad in derselben Leiste, gleich hinter Tabs, vor ≡ (seit 26.10.2026, erst statt „+“ gedacht, dann „Keep the plus, there's
+  // enough space“; bis 02.11.2026 zwischen „+“ und Tabs, Rückmeldung: „Swap position settings Icon and tabs“): öffnet
+  // Einstellungen & Hilfe. Gleiches Markup wie Obsidians Knöpfe (div.mobile-navbar-action >
   // span.clickable-icon), so sieht es gleich aus und reagiert gleich auf Tippen; es verschwindet mit der Leiste beim Scrollen und
-  // bei offener Tastatur (Obsidian baut die Leiste nie neu, es hängt sie nur ein und aus). Findet das Skript „+“ nicht (Obsidian
+  // bei offener Tastatur (Obsidian baut die Leiste nie neu, es hängt sie nur ein und aus). Findet das Skript Tabs nicht (Obsidian
   // hat die Leiste umgebaut), fehlt das Zahnrad, und Einstellungen & Hilfe steht wieder im Menü.
   const zahnradEinsetzen = () => {
     const leiste = app.mobileNavbar && app.mobileNavbar.containerEl;
-    const plus = leiste && leiste.querySelector(".mobile-navbar-action-new-tab");
-    if (!plus) return;
+    const tabs = leiste && leiste.querySelector(".mobile-navbar-action-tabs");
+    if (!tabs) return;
     const k = document.createElement("div");
     k.className = "mobile-navbar-action " + ZAHNRAD;
     const i = document.createElement("span");
@@ -305,7 +341,7 @@ module.exports = function (ctx) {
       const datei = app.metadataCache.getFirstLinkpathDest(EINSTELLUNGEN, "");
       if (datei) tippen(e, datei).catch((x) => console.error("seitenleiste: Einstellungen", x));
     });
-    plus.after(k);
+    tabs.after(k);
     zahnrad = k;
     ctx.aufraeumen(() => { k.remove(); zahnrad = null; });
   };
@@ -431,10 +467,6 @@ module.exports = function (ctx) {
       if (s && s.instance && typeof s.instance.onOpen === "function") s.instance.onOpen();
     });
     knopf("lucide-plus", PLUS_SVG, "Neuer Tab", "eba-nav-neu", () => app.commands.executeCommandById("workspace:new-tab"));
-    zahnrad = knopf("lucide-settings", ZAHNRAD_SVG, EINSTELLUNGEN, ZAHNRAD, (e) => {
-      const datei = app.metadataCache.getFirstLinkpathDest(EINSTELLUNGEN, "");
-      if (datei) tippen(e, datei).catch((x) => console.error("seitenleiste: Einstellungen", x));
-    });
     // Tabs: Obsidians Menü über dem Knopf, rechts bündig mit ihm und 8 px über der Leiste (wie das Menü hinter ≡); ein zweiter
     // Klick bei offenem Menü öffnet es nicht noch einmal (Obsidian schließt es mit dem Klick daneben)
     const tabs = knopf("tab-frame", TABS_SVG, "Tabs", "eba-nav-tabs", () => {
@@ -454,6 +486,10 @@ module.exports = function (ctx) {
       if (d && d.isConnected && d.offsetHeight) d.style.top = Math.max(8, l.top - 8 - d.offsetHeight) + "px";
     });
     const zahl = tabs.createDiv({ cls: "eba-nav-tabs-zahl" });
+    zahnrad = knopf("lucide-settings", ZAHNRAD_SVG, EINSTELLUNGEN, ZAHNRAD, (e) => {
+      const datei = app.metadataCache.getFirstLinkpathDest(EINSTELLUNGEN, "");
+      if (datei) tippen(e, datei).catch((x) => console.error("seitenleiste: Einstellungen", x));
+    });
     knopf("lucide-menu", MENUE_SVG, "Seiten", "eba-nav-seiten", (e) => { e.preventDefault(); menueAuf(leiste, e.type === "keydown"); });
     const stand = () => {
       const v = verlauf();
@@ -472,18 +508,19 @@ module.exports = function (ctx) {
     ctx.aufraeumen(() => { leiste.remove(); zahnrad = null; });
   };
 
-  // ---------- Wischen nach rechts: zurück; Herunterziehen: nichts (iPhone und iPad) ----------
-  // Umhüllt workspace.trigger an der Instanz (Obsidian schlägt es bei jeder Geste neu nach): Eine Geste, mit der Obsidian die
-  // linke Seitenleiste aufzöge (zurueckGeste), erreicht Obsidians Hörer nicht. Für sie täte sonst keiner etwas: Herunterziehen
-  // will senkrecht, Zurück und Vor mit zwei Fingern zwei Finger, die rechte Seitenleiste die andere Richtung. Beginnt sie in der
-  // Hauptfläche (rootSplit, wie Obsidians Zurück mit zwei Fingern) und am Rand (amRand), geht es beim Loslassen zurück, wenn sie
-  // weit genug war (zurueckWeit), auf demselben Weg wie ‹: history.go(-1) des aktiven Tabs; weiter innen tut sie nichts. Ist die
-  // Seitenleiste angeheftet (iPad), liegt sie am Rand, nicht die Hauptfläche: Dann geht es mit ‹ zurück.
+  // ---------- Wischen nach rechts: zurück; nach links und Herunterziehen: nichts (iPhone und iPad) ----------
+  // Umhüllt workspace.trigger an der Instanz (Obsidian schlägt es bei jeder Geste neu nach): Eine Geste, mit der Obsidian eine
+  // Seitenleiste aufzöge (seitenGeste), erreicht Obsidians Hörer nicht. Für sie täte sonst keiner etwas: Herunterziehen will
+  // senkrecht, Zurück und Vor mit zwei Fingern zwei Finger; eine offene Seitenleiste schließt Wischen weiter (dann ist es keine
+  // solche Geste). Nach links tut sie nichts. Nach rechts: Beginnt sie in der Hauptfläche (rootSplit, wie Obsidians Zurück mit
+  // zwei Fingern) und am Rand (amRand), geht es beim Loslassen zurück, wenn sie weit genug war (zurueckWeit), auf demselben Weg
+  // wie ‹: history.go(-1) des aktiven Tabs; weiter innen und ohne Tab mit Verlauf tut sie nichts. Ist die Seitenleiste angeheftet
+  // (iPad), liegt sie am Rand, nicht die Hauptfläche: Dann geht es mit ‹ zurück.
   // Nur vom Rand rutscht Obsidians Hinweis herein (hinweisAuf, hinweisLage) und ist nach dem Loslassen, Abbrechen und Abmelden weg.
   // Ebenso erreicht Herunterziehen in der Hauptfläche (herunterGeste) Obsidian nicht: kein Hinweis, keine Schnellaktion. Außer ihr
   // täte dafür keiner etwas (die Seitenleisten und zwei Finger wollen waagerecht), und Scrollen geht weiter, denn Obsidian meldet
   // eine Geste nur, wenn die Seite in diese Richtung nicht mehr scrollen kann. Obsidians Einstellung bleibt, wie sie ist.
-  // Fehlt trigger, rootSplit oder history.go oder geht beim Entscheiden etwas schief, bleibt alles bei Obsidian. Abmelden gibt
+  // Fehlt trigger oder rootSplit oder geht beim Entscheiden etwas schief, bleibt alles bei Obsidian. Abmelden gibt
   // trigger zurück; hat jemand es danach noch einmal umhüllt, bleibt dessen Hülle, und diese reicht nur noch durch.
   const wischenUebernehmen = () => {
     const ws = app.workspace;
@@ -564,15 +601,16 @@ module.exports = function (ctx) {
         try { h.weg(); } catch (x) { /* schon weg */ }
       }
     };
-    // Übernimmt g, wenn Obsidian damit die linke Seitenleiste aufzöge oder seine Schnellaktion ausführte; true: Obsidians Hörer
+    // Übernimmt g, wenn Obsidian damit eine Seitenleiste aufzöge oder seine Schnellaktion ausführte; true: Obsidians Hörer
     // bekommen die Geste nicht
     const uebernehmen = (g) => {
       const haupt = ws.rootSplit && ws.rootSplit.containerEl;
       if (!haupt) return false;
       const z = lage();
       if (herunterGeste(g, z)) return haupt.contains(g.targetEl);
-      if (!verlauf() || !zurueckGeste(g, z)) return false;
-      if (haupt.contains(g.targetEl) && amRand(g.startX, z)) {
+      const seite = seitenGeste(g, z);
+      if (seite === 0) return false;
+      if (seite === 1 && verlauf() && haupt.contains(g.targetEl) && amRand(g.startX, z)) {
         let h = null;
         try { h = hinweisAuf(z.richtung); } catch (e) { console.error("seitenleiste: Hinweis", e); }
         const weg = (x) => (x - g.startX) * z.richtung;
@@ -651,9 +689,9 @@ module.exports = function (ctx) {
 
   // Kein Tab „Übersicht“ mehr (die Seiten stehen im Menü unten rechts). Mit ihm schließt sich die linke Seitenleiste, sonst bliebe
   // dort eine Leiste mit Dateien stehen: auf dem iPad, wenn sie angeheftet war, über Obsidians Befehl (löst und schließt sie), am
-  // PC über collapse(). Danach öffnet Obsidian sie wie gewohnt: am PC der Umschalter, auf iPhone und iPad Einstellungen & Hilfe →
-  // Obsidian → Dateien und Obsidians Befehle (Wischen vom linken Rand geht dort seit 26.10.2026 zurück, weiter innen tut Wischen
-  // nach rechts nichts; wischenUebernehmen).
+  // PC über collapse(). Danach öffnet Obsidian sie wie gewohnt: am PC der Umschalter, auf iPhone und iPad nur Obsidians Befehle
+  // (Wischen vom linken Rand geht dort seit 26.10.2026 zurück, sonst tut waagerechtes Wischen nichts; wischenUebernehmen und
+  // beim Start main.js wischenBeimStart).
   const entfernen = () => {
     const da = app.workspace.getLeavesOfType(TYP);
     if (!da.length) return;
@@ -704,9 +742,13 @@ module.exports.SYMBOL = SYMBOL;
 module.exports.SYMBOL_SVG = SYMBOL_SVG;
 module.exports.ZIELE = ZIELE;
 module.exports.IN_ENTWICKLUNG = IN_ENTWICKLUNG;
+module.exports.NEU = NEU;
+module.exports.NEU_TAGE = NEU_TAGE;
+module.exports.istNeu = istNeu;
 module.exports.sichtbareZiele = sichtbareZiele;
 module.exports.moduleJetzt = moduleJetzt;
 module.exports.menueLage = menueLage;
+module.exports.seitenGeste = seitenGeste;
 module.exports.zurueckGeste = zurueckGeste;
 module.exports.amRand = amRand;
 module.exports.ZURUECK_RAND = ZURUECK_RAND;

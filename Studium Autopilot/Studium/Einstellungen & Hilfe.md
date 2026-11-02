@@ -25,12 +25,6 @@ Deine Angaben: erscheinen, sobald Studium Autopilot läuft. Ändern: Befehl „D
 Verbindungen: erscheinen, sobald Studium Autopilot läuft.
 ```
 
-## Variante
-
-```eba-personalisieren variante
-Variante: erscheint, sobald Studium Autopilot läuft. Wählen: Befehl „Variante wählen“.
-```
-
 ## Darstellung
 
 ```eba-darstellung
@@ -51,135 +45,150 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 > ```
 >
 > > [!eba-karte|hilfe|bedienung]- Bedienung
+> > - **Seiten:** Unten rechts hinter ≡ stehen alle Seiten und die Module dieses Semesters. **Dashboard** führt zurück zum Start.
+> > - **Leiste daneben:** ‹ › für zurück und vor, die Suche, **+** für einen neuen Tab, deine offenen Tabs und das Zahnrad für diese Seite. Auf iPhone und iPad geht es auch mit Wischen vom linken Rand zurück.
+> > - **Befehle:** Auf iPhone und iPad ≡ lange drücken, dann **Befehlspalette öffnen**. Mit Tastatur: <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>P</kbd>.
+> > - **Neue Notizen:** Jeder Knopf öffnet ein Fenster, in dem jedes Feld schon einen Vorschlag hat. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche). <kbd>Esc</kbd> oder **Abbrechen** legt nichts an.
+> > - **Rückgängig:** Wegwerfen und Abhaken passiert sofort, der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.
+> >
 > > | Knopf | Wo | Fragt nach | Landet in |
 > > | --- | --- | --- | --- |
-> > | Neue Vorlesungsnotiz | Dashboard, Modulseite (Abschnitt Vorlesungen), **+** (neue Notiz) | nichts, wenn laut Stundenplan oder Termin gerade etwas läuft (sonst Modul und Thema; auf der Modulseite ist das Modul gewählt) | Vorlesungen/Modulcode, Dateiname „Datum Code VL 03“, angezeigt als „Vorlesung 3 · Di 27.10. · Thema“ |
-> > | Unterlagen hinzufügen | Dashboard, Modulseite, [[Unterlagen]] | Dateien, dann die Vorschau der neuen Namen | Unterlagen/Modul |
-> > | Unterlagen aktualisieren | [[Unterlagen]] (sobald ILIAS verbunden ist) | nichts | Unterlagen/Modul |
-> > | Neuer Termin | [[Termine & Anmeldungen]] (im Kalender **+ Termin**) | Was, Wann, Uhrzeit, Ort, Art und Modul (Art und Modul schlägt der Titel vor) | Termine |
+> > | Neue Vorlesungsnotiz | Dashboard, Modulseite | Modul und Thema; nichts, wenn laut Stundenplan gerade etwas läuft | Vorlesungen, angezeigt als „Vorlesung 3 · Di 27.10. · Thema“ |
+> > | Unterlagen hinzufügen | Dashboard, Modulseite, [[Unterlagen]] | Dateien, dann die Vorschau der neuen Namen | Unterlagen |
+> > | Neuer Termin | [[Termine & Anmeldungen]], im Kalender **+ Termin** | Was, Wann, Uhrzeit, Ort; Art und Modul schlägt der Titel vor | Termine |
+> > | Neuer Kartenstapel | [[Karteikarten]] | Modul | Karteikarten |
 > >
-> > - **Seiten:** alle Seiten und die Module dieses Semesters stehen auf jedem Gerät unten rechts hinter ≡. In derselben Leiste öffnet das Zahnrad diese Seite, ‹ › führen zur vorigen und nächsten Seite (auf iPhone und iPad zurück auch Wischen vom linken Rand), dazu die Suche, „+“ für einen neuen Tab und deine offenen Tabs. **Dashboard** hinter ≡ führt zurück zum Start. Deine Woche steht auf dem **Dashboard**. Obsidians Einstellungen, alle Dateien und den Tresor findest du unter [[#Obsidian]].
-> > - **Befehle:** Auf iPhone und iPad öffnet langes Drücken auf ≡ Obsidians Menü, darin **Befehlspalette öffnen**. Mit Tastatur: <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>P</kbd>.
-> > - **Vorlagen:** Jeder Knopf öffnet ein Fenster mit allen Angaben und legt eine fertige Notiz an. <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>⇧</kbd>+<kbd>N</kbd> fragt, welche Notiz entstehen soll.
-> > - Jedes Feld hat einen Vorschlag. <kbd>Esc</kbd> oder **Abbrechen** legt nichts an. Datum als „15.10.“, „15.10.2026“ oder „+7“ (in einer Woche), darunter steht, welcher Tag gemeint ist.
-> > - **Rückgängig:** Was du wegwirfst oder abhakst, passiert sofort; der Hinweis danach hat **Rückgängig**. Nachgefragt wird nur, wenn etwas endgültig weg ist, etwa beim **Trennen**.
+> > | Kürzel | Wirkung |
+> > | --- | --- |
+> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>⇧</kbd> <kbd>N</kbd> | Notiz aus Vorlage, fragt welche |
+> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>P</kbd> | Befehle |
+> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>O</kbd> | Notiz öffnen |
+> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>E</kbd> | Lesen / Bearbeiten |
+> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>L</kbd> | Zeile wird Aufgabe |
 >
 > > [!eba-karte|hilfe|vorlesung]- Vorlesung
 > > > [!eba-raster|2]
-> > > > [!eba-karte] Schnell mitschreiben
-> > > > 1. Dashboard → **Vorlesung**. Läuft laut Stundenplan gerade etwas, entsteht die Notiz **sofort**; nochmal tippen öffnet **dieselbe Notiz**. Sonst wählst du das Modul.
-> > > > 2. Nummer, Folien-PDF und Dozent trägt die Vorlage selbst ein, der Cursor steht unter **Mitschrift**.
-> > > > 3. Stelle auf den Folien: Befehl **Seitenlink** → Seitenzahl → „S. 12“ springt auf die Seite.
-> > > > 4. Prüfungsstoff: `#klausur` direkt an die Zeile schreiben.
+> > > > [!eba-karte] Mitschreiben
+> > > > 1. **Neue Vorlesungsnotiz** tippen. Läuft laut Stundenplan gerade etwas, entsteht die Notiz sofort, ein zweiter Tipp öffnet dieselbe. Sonst wählst du das Modul.
+> > > > 2. Nummer, Folien und Dozent trägt die Vorlage ein, der Cursor steht unter **Mitschrift**.
+> > > > 3. Auf eine Folienseite verweisen: Befehl **Seitenlink**, Seitenzahl eingeben; „S. 12“ springt dorthin.
+> > > > 4. Prüfungsstoff: `#klausur` an die Zeile schreiben.
 > > >
 > > > > [!eba-regel] Nacharbeiten
-> > > > - Abends **Kernaussagen** ergänzen und offene Fragen klären.
-> > > > - Dann oben in der Notiz auf **Nacharbeit offen** tippen, daraus wird **Nachgearbeitet**.
-> > > > - Handschrift auf den Folien: Abschnitt „Unterlagen“ unten, „Mit dem Stift annotieren“.
-> > > > - **Seitenlink aufs iPad legen (einmal):** Obsidian-Einstellungen → *Werkzeugleiste für Mobilgeräte* → „Studium Autopilot: Seitenlink auf die Folien einfügen“ hinzufügen.
+> > > > - **Kernaussagen** ergänzen und offene Fragen klären.
+> > > > - Oben in der Notiz **Nacharbeit offen** tippen, dann steht dort **Nachgearbeitet**. Bis dahin steht die Vorlesung auf dem Dashboard unter „Nachzuarbeiten“.
+> > > > - **Seitenlink aufs iPad legen (einmal):** Obsidian-Einstellungen → *Werkzeugleiste für Mobilgeräte* → „Studium Autopilot: Seitenlink auf die Folien einfügen“.
+> > > > - Mit dem Stift auf den Folien schreiben: siehe **Unterlagen**.
 >
 > > [!eba-karte|hilfe|alltag]- Im Alltag
 > > > [!eba-raster|2]
 > > > > [!eba-karte] Status und Note eines Moduls
-> > > > - Auf der Modulseite unter **Status** auf den Knopf tippen (z. B. **Offen**) und wählen: offen · läuft · angemeldet · bestanden · nicht bestanden · anerkannt.
-> > > > - Bei **bestanden** und **nicht bestanden** fragt ein Fenster nach der Note (mit Komma, z. B. `1,7`). Im selben Menü: **Note eintragen …**, Versuch und **Semester planen …**.
-> > > > - Tabellen und Listen zeigen nur an. Ändern geht im Kopf der Notiz: Unter dem Titel steht ihr Stand zum Antippen, z. B. **Offen** bei einem Termin oder **Noch nicht gelesen** bei einer Unterlage.
+> > > > - Auf der Modulseite unter **Status** den Knopf tippen (z. B. **Offen**) und wählen: offen · läuft · angemeldet · bestanden · nicht bestanden · anerkannt.
+> > > > - Bei **bestanden** und **nicht bestanden** fragt ein Fenster nach der Note (`1,7`). Im selben Menü: **Note eintragen …**, Versuch und **Semester planen …**.
+> > > > - Tabellen und Listen zeigen nur an. Geändert wird im Kopf der Notiz, etwa **Offen** bei einem Termin oder **Noch nicht gelesen** bei einer Unterlage.
 > > >
 > > > > [!eba-fragen] Fragen und To-dos
-> > > > - Zeile schreiben, <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>L</kbd> macht daraus eine Aufgabe (iPhone/iPad: Kästchen-Symbol in der Leiste über der Tastatur).
-> > > > - Endet sie mit **?** oder enthält sie `#frage`, erscheint sie auf dem Dashboard unter „Offene Fragen“, sonst unter „To-dos“.
-> > > > - Abhaken, und sie verschwindet.
+> > > > - Zeile schreiben, <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>L</kbd> macht daraus eine Aufgabe (iPhone/iPad: Kästchen über der Tastatur).
+> > > > - Endet sie mit **?** oder enthält sie `#frage`, steht sie auf dem Dashboard unter „Offene Fragen“, sonst unter „To-dos“.
+> > > > - Abgehakt verschwindet sie.
 > > >
-> > > > [!eba-karte] Markieren
+> > > > [!eba-karte] Schreiben
 > > > > - `#klausur` für Prüfungsstoff: [Alles Prüfungsrelevante](obsidian://studium-autopilot?aktion=suchen&q=tag%3A%23klausur)
 > > > > - `==Text==` markiert, `[[Begriff]]` verlinkt.
 > > > > - Formeln mit `$…$` oder `$$…$$` (LaTeX).
 > > > > - `/` am Zeilenanfang öffnet die Befehle.
 > > >
-> > > > [!eba-karte] Stundenplan, Gruppen, Angebote
-> > > > - **Übungsgruppe:** Unter [[Termine & Anmeldungen]] im Reiter **Übungen** bei deiner Gruppe **Meine** tippen, sie steht dann im Stundenplan. Mit ILIAS kommt sie von selbst.
-> > > > - **Besuche ich nicht:** Im Kopf der Lehrveranstaltung auf **Im Stundenplan** tippen, dann fehlt sie im Stundenplan. Der Hinweis danach hat **Rückgängig**.
-> > > > - **Angebote der Uni:** Kurse, Vorträge und Sport stehen im Kalender unter [[Termine & Anmeldungen]]. Mit dem Filter oben im Kalender wählst du, was du siehst.
-> > > > - **Lernplan:** Mit eigenem Uni-Abgleich zeigt die Seite **Lernplan** je Modul, welches Kapitel diese Woche dran ist.
+> > > > [!eba-karte] Stundenplan und Termine
+> > > > - **Übungsgruppe:** [[Termine & Anmeldungen]] → Reiter **Übungen** → bei deiner Gruppe **Meine**. Mit ILIAS kommt sie von selbst.
+> > > > - **Besuche ich nicht:** Im Kopf der Lehrveranstaltung **Im Stundenplan** tippen, dann fehlt sie dort.
+> > > > - **Angebote der Uni:** Kurse, Vorträge und Sport stehen im Kalender unter [[Termine & Anmeldungen]]; was du siehst, wählst du im Filter.
+> > > > - **Uni-Mails:** [[Postfach]] zeigt deinen Uni-Posteingang, sobald du dort auf diesem Gerät **Postfach anzeigen** tippst.
+> > > > - **Widgets** (iPhone, iPad): Stundenplan, Fristen und Prüfungen auf dem Home- und Sperrbildschirm, einrichten oben unter **Widgets**.
 > > >
 > > > > [!eba-rechner] Was sich selbst rechnet
-> > > > - Aktuelles Semester, Phase und Woche aus deinen Angaben oben.
+> > > > - Semester, Phase und Woche aus deinen Angaben oben.
 > > > > - ECTS, Gesamtnote nach § 13 und Orientierungsprüfung aus den Modulen.
-> > > > - Nächste Prüfung und Frist aus Modulen und Terminen.
-> > > > - Termine und Fristen für alle kommen von selbst, siehe [[#Verbindungen]].
+> > > > - Nächste Prüfung und Fristen aus Modulen und Terminen.
 > > > > - Schwerpunktbereiche und ihre Regeln im [[Studienverlauf#Schwerpunkte|Studienverlauf]].
-> >
-> > | Kürzel | Wirkung |
-> > | --- | --- |
-> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>⇧</kbd> <kbd>N</kbd> | Notiz aus Vorlage |
-> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>E</kbd> | Lesen / Bearbeiten |
-> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>O</kbd> | Notiz öffnen |
-> > | <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>P</kbd> | Befehle |
 >
 > > [!eba-karte|hilfe|unterlagen]- Unterlagen
 > > Kursdateien kommen von selbst aus ILIAS, alles andere fügst du selbst hinzu.
 > >
-> > 1. Einmal unter [[#Verbindungen]] auf **Uni-Login** tippen, dich anmelden und deine Kurse wählen. Neue Dateien landen dann von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
-> > 2. Andere Dateien (Mail, Scan, Foto): **Unterlagen hinzufügen** tippen, dann **Dateien auswählen**. Am PC kannst du sie auch ins Fenster ziehen.
-> > 3. In der Vorschau **Alle übernehmen**.
+> > 1. Einmal unter [[#Verbindungen]] **Uni-Login** tippen, anmelden und deine Kurse wählen. Neue Dateien landen von selbst unter [[Unterlagen]], sofort mit **Unterlagen aktualisieren**.
+> > 2. Andere Dateien (Mail, Scan, Foto): **Unterlagen hinzufügen** → **Dateien auswählen**. Am Computer auch ins Fenster ziehen.
+> > 3. Die Vorschau der neuen Namen übernehmen.
 > > 4. Zum Lesen und Anmerken in der Unterlage **Öffnen ↗** tippen.
 > >
 > > > [!eba-info]- Mehr erfahren
-> > > - **ILIAS:** Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Trennen: [[#Verbindungen]] → **Uni-Login** → **Trennen** (trennt alles, was der Uni-Login auf diesem Gerät verbunden hat).
+> > > - **ILIAS:** Ein Gerät reicht, die Dateien kommen über deinen Sync auf die anderen. Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder; Umbenennen und Verschieben ist sicher.
 > > > - **Verbinden klappt nicht:** Fragt die Uni nach deiner Zustimmung, einmal im Browser bei ILIAS anmelden und zustimmen, dann erneut **Verbinden**. Mit zweitem Faktor geht es noch nicht.
-> > > - **Was nicht kommt:** Videos und Dateien über 50 MB bleiben in ILIAS. Was du löschst, kommt nicht wieder. Umbenennen und Verschieben ist sicher.
-> > > - **Geänderte Dateien:** Hast du eine Datei angemerkt und der Dozent lädt sie neu hoch, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
-> > > - **Aus Mail, Safari oder von Papier:** Auf iPhone/iPad erst **Teilen → In Dateien sichern**, Papier über die App **Dateien → ⋯ → Dokumente scannen**, dann **Dateien auswählen**. ZIP vorher entpacken (in der Dateien-App antippen) und die Dateien darin wählen. PowerPoint: als PDF mit gleichem Namen exportieren und beide wählen.
-> > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel), Ordner `Unterlagen/<Code Modulname>`. Daneben liegt je Datei eine Notiz mit gleichem Namen: Darin merkt sich Studium Autopilot Modul, Art und ob du die Datei schon geöffnet hast. Tippst du sie an, siehst du gleich die PDF. **Neu** auf der Seite Unterlagen ist, was in den letzten 14 Tagen dazukam und du noch nicht geöffnet hast. Ein Übungsblatt (`Übung 03`) zeigt oben seine Abgabe und einen Knopf **Offen** oder **Abgegeben**, der auch die Frist abhakt. Eigene Lösungen werden `Eigene Lösung 03` und erscheinen beim Übungsblatt mit derselben Nummer, annotierte Folien `Mitschrift`.
+> > > - **Trennen:** [[#Verbindungen]] → **Uni-Login** → **Trennen** trennt alles, was der Uni-Login auf diesem Gerät verbunden hat.
+> > > - **Neue Fassung:** Lädt der Dozent eine Datei neu hoch, die du angemerkt hast, bleibt deine, die neue liegt daneben als „… neue Fassung JJJJ-MM-TT“.
+> > > - **Aus Mail, Safari oder von Papier:** Auf iPhone/iPad erst **Teilen → In Dateien sichern**, Papier über **Dateien → ⋯ → Dokumente scannen**, dann **Dateien auswählen**. ZIP vorher in der Dateien-App entpacken. PowerPoint als PDF mit gleichem Namen exportieren und beide wählen.
+> > > - **Namen:** `B110 Folien 03 Entscheidungstheorie.pdf` (Code, Art, Nummer, Titel) im Ordner des Moduls. Daneben liegt je Datei eine Notiz gleichen Namens, in der sich Studium Autopilot Modul, Art und Gelesen merkt.
+> > > - **Übungen:** Ein Übungsblatt (`Übung 03`) zeigt oben seine Abgabe und **Offen** bzw. **Abgegeben**, das hakt auch die Frist ab. Eigene Lösungen heißen `Eigene Lösung 03`, annotierte Folien `Mitschrift`.
+> > > - **Neu** auf der Seite Unterlagen ist, was in den letzten 14 Tagen kam und du noch nicht geöffnet hast.
 > > > - **Stift auf dem iPad (einmal einrichten):** Dateien-App → PDF gedrückt halten → **Informationen** → **Immer öffnen mit: Vorschau**; dann **Öffnen mit** → Haken bei **Mit Quick Look anzeigen** entfernen. Danach **Öffnen ↗** → **Markieren** → **Fertig**: Die Anmerkungen stehen in derselben PDF. Nicht über „Teilen“ öffnen, das legt eine Kopie an.
-> > > - **Lesen und zitieren:** `[[Datei.pdf#page=12]]` springt auf Seite 12. Die Suche findet nur Text in Notizen, nicht in PDFs. Jede PDF belegt Platz auf jedem Gerät; ganze Bücher lieber nicht ablegen.
+> > > - **Zitieren:** `[[Datei.pdf#page=12]]` springt auf Seite 12. Jede PDF belegt Platz auf jedem Gerät; ganze Bücher lieber nicht ablegen.
 >
 > > [!eba-karte|hilfe|karteikarten]- Karteikarten
-> > Karten stehen als normale Notizen je Modul im Ordner **Karteikarten**, Studium Autopilot plant die Wiederholungen.
+> > Karten sind normale Notizen im Ordner **Karteikarten**, Studium Autopilot plant die Wiederholungen.
 > >
 > > 1. [[Karteikarten]] → **Neuer Kartenstapel** und das Modul wählen.
-> > 2. Karten schreiben, eine je Absatz: `Frage :: Antwort`. Oder **Neue Karte** tippen.
-> > 3. **Lernen** tippen, die Antwort ansehen und ehrlich bewerten: **Nochmal**, **Schwer**, **Gut** oder **Einfach**.
+> > 2. Eine Karte je Absatz: `Frage :: Antwort`. Oder **Neue Karte** tippen.
+> > 3. **Lernen**, Antwort ansehen und ehrlich bewerten: **Nochmal**, **Schwer**, **Gut** oder **Einfach**.
 > > 4. Jeden Tag lernen, was fällig ist; das Dashboard zeigt es unter „Zu erledigen“.
 > >
 > > > [!eba-info]- Mehr erfahren
-> > > - **Kartenarten:** `Frage :: Antwort` · `Frage ::: Antwort` lernt auch die Gegenrichtung · über mehrere Zeilen: Frage, dann eine Zeile nur mit `?`, dann die Antwort (`??` mit Gegenrichtung) · Lückentext: `Die {{c1::Grenzkosten}} sind …`, jede Nummer wird eine Karte. Überschriften gliedern, Formeln und Bilder gehen.
-> > > - **Wiederholungen:** nach FSRS, demselben Verfahren wie in Anki. Über jedem Knopf steht, wann die Karte wiederkommt. Am Tag höchstens 20 neue Karten und 200 Wiederholungen je Modul; ändern unter **Lernoptionen**.
-> > > - **Kürzel am Rechner:** <kbd>Leertaste</kbd> Antwort zeigen, danach Gut · <kbd>1</kbd>–<kbd>4</kbd> bewerten · <kbd>Strg</kbd>/<kbd>⌘</kbd>+<kbd>Z</kbd> rückgängig · <kbd>E</kbd> bearbeiten · <kbd>-</kbd> bis morgen zurückstellen · <kbd>@</kbd> aussetzen.
-> > > - **Kennung:** Beim ersten Lernen bekommt jede Karte am Ende ein Kürzel wie `^k3f9a1b`. Es verbindet Karte und Lernstand: bitte stehen lassen. Den Text davor darfst du jederzeit ändern.
-> > > - **Lernstand:** liegt je Gerät in `System/Daten/Karteikarten` und kommt über deinen Sync auf die anderen Geräte. Ausgesetzte und schwierige Karten findest du unter [[Karteikarten#Alle Karten]].
+> > > - **Kartenarten:** `Frage :: Antwort` · `Frage ::: Antwort` lernt auch die Gegenrichtung · über mehrere Zeilen: Frage, dann eine Zeile nur mit `?`, dann die Antwort (`??` mit Gegenrichtung) · Lückentext: `Die {{c1::Grenzkosten}} sind …`, jede Nummer wird eine Karte. Überschriften werden Kapitel, Formeln und Bilder gehen.
+> > > - **Wie viel am Tag:** höchstens 20 neue Karten über alle Module zusammen und 200 Wiederholungen je Modul; ändern unter **Lernoptionen**. Über jedem Knopf steht, wann die Karte wiederkommt (FSRS, wie in Anki).
+> > > - **Menü ⋯ eines Stapels:** **Ganzen Stapel lernen** statt nur der neuen von heute · **Üben …** geht ein Modul, ein Kapitel oder die schwierigen Karten durch, ohne den Lernstand zu ändern, etwa vor einer Prüfung · **Pausieren** nimmt den Stapel nach der Prüfung aus dem Tagesplan · **Stapel löschen** mit **Rückgängig**.
+> > > - **Kürzel am Computer:** <kbd>Leertaste</kbd> Antwort zeigen, danach Gut · <kbd>1</kbd>–<kbd>4</kbd> bewerten · <kbd>⌘</kbd>/<kbd>Strg</kbd> <kbd>Z</kbd> rückgängig · <kbd>E</kbd> bearbeiten · <kbd>-</kbd> bis morgen zurückstellen · <kbd>@</kbd> aussetzen.
+> > > - **Kennung:** Beim ersten Lernen bekommt jede Karte am Ende ein Kürzel wie `^k3f9a1b`. Es verbindet Karte und Lernstand: stehen lassen. Den Text davor darfst du jederzeit ändern.
+> > > - **Lernstand:** kommt über deinen Sync auf alle Geräte. Ausgesetzte und schwierige Karten findest du unter [[Karteikarten#Alle Karten]].
+>
+> > [!eba-karte|hilfe|lernplan]- Lernplan
+> > Der [[Lernplan]] verteilt die Kapitel jedes Moduls dieses Semesters bis zur Prüfung, sobald es für das Modul eine Kapitelliste gibt. Mit eigenem Server bekommst du ihn auch für die übrigen Module.
+> >
+> > 1. Was diese Woche dran ist, steht im Lernplan, auf dem Dashboard und auf der Modulseite.
+> > 2. Hast du ein Kapitel verstanden, hak es ab. **Folien** daneben öffnet seine Folien.
+> > 3. Oben stellst du ein, nach wie viel der Zeit bis zur Prüfung alles verstanden sein soll. Danach beginnt die Klausurvorbereitung: Altklausuren, Übungsblätter und Karteikarten stehen je Modul unter **Für die Klausur**.
+> >
+> > > [!eba-info]- Mehr erfahren
+> > > - **Vor der Vorlesung lernen:** Lernst du lieber erst nach der Vorlesung, schalte es je Modul aus.
+> > > - **Abhaken** heißt verstanden, nicht auswendig gelernt. Das Üben kommt in der Klausurvorbereitung.
 >
 > > [!eba-karte|hilfe|aufbau]- Aufbau
 > > | Ordner | Inhalt |
 > > | --- | --- |
 > > | **Dashboard** | Startseite mit Kennzahlen, Knöpfen, Woche, Fristen und To-dos |
-> > | **Studium** | Übersichtsseiten: Studienverlauf, Termine & Anmeldungen, Prüfungen, Noten & ECTS, Unterlagen (mit Übungen), Karteikarten, Kontakte & Links, Einstellungen & Hilfe, Stundenplan |
-> > | **Module** | 86 Module aus dem Modulhandbuch (dazu der Vorkurs SQ888), sortiert nach Grundstudium, Profil & Vertiefung, Schwerpunktkatalog, Schlüsselqualifikation & Abschluss; eigene Module unter Weitere Module |
-> > | **Vorlesungen, Schlüsselqualifikationen** | deine Notizen und SQ-Kurse |
+> > | **Studium** | Übersichtsseiten: Studienverlauf, Termine & Anmeldungen, Postfach, Prüfungen, Noten & ECTS, Unterlagen, Lernplan, Karteikarten, Kontakte & Links, Stundenplan, Einstellungen & Hilfe |
+> > | **Module** | 86 Module aus dem Modulhandbuch und der Vorkurs SQ888; eigene Module unter Weitere Module |
+> > | **Vorlesungen, Schlüsselqualifikationen** | deine Mitschriften und SQ-Kurse |
 > > | **Termine, Stundenplan** | Fristen, Events und Lehrveranstaltungen, je eine Notiz |
-> > | **Unterlagen** | Folien, Skripte, Übungen, Lösungen, Altklausuren je Modul (`Unterlagen/<Code> <Modultitel>/…`), daneben je Datei eine Notiz |
-> > | **Karteikarten** | deine Kartenstapel, je Modul eine oder mehrere Notizen |
-> > | **Anhänge** | Bilder und Screenshots, die du in Notizen ziehst oder einfügst |
-> > | **System** | gespeicherte Einstellungen, Semestertermine und Musterpläne (Daten), Gerüste und Skripte |
+> > | **Unterlagen** | Folien, Skripte, Übungen, Lösungen, Altklausuren je Modul, daneben je Datei eine Notiz |
+> > | **Lernplan, Karteikarten** | Kapitel je Modul und deine Kartenstapel |
+> > | **Anhänge** | Bilder und Screenshots, die du in Notizen einfügst |
+> > | **System** | Einstellungen, Semestertermine, Gerüste und Skripte |
+> >
+> > > [!eba-achtung] Bitte nicht umbenennen
+> > > Die Seiten im Ordner **Studium** und die Dateien im Ordner **System** nicht umbenennen. Die Eigenschaft **uebersicht** oben in deinen Notizen bitte stehen lassen: Über sie finden die Übersichten deine Notizen.
 >
 > > [!eba-karte|hilfe|geraete]- Geräte
 > > > [!eba-raster|2]
 > > > > [!eba-regel] Einmal pro Gerät
 > > > > 1. In Obsidian **Ordner als Vault öffnen** und den Ordner wählen (Name egal). Der Ordner ist dein Tresor (in Obsidian: Vault).
-> > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, Aussehen und Dateitypen sind schon eingestellt.
-> > > > 3. Unter [[#Verbindungen]] auf **Uni-Login** tippen und deinen Uni-Login eingeben: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht: Die anderen zeigen „verbunden“ und bekommen alles über deinen Sync.
-> > > > 4. **Weiteres Gerät (optional):** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
+> > > > 2. **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen. Das Dashboard öffnet sich, alles ist eingestellt.
+> > > > 3. Unter [[#Verbindungen]] **Uni-Login** tippen: Er verbindet ILIAS, den ILIAS-Kalender und Alma. Ein Gerät reicht, die anderen bekommen alles über deinen Sync.
+> > > > 4. **Weiteres Gerät:** Liegt der Tresor in iCloud, dort nur öffnen und **Dem Ersteller vertrauen und Erweiterungen aktivieren** tippen.
 > > >
-> > > > [!eba-info] Unterschiede je Gerät
+> > > > [!eba-info] Gut zu wissen
+> > > > - **Neue Version:** [[#Verbindungen]] → **Updates** → **Neue Version installieren**; **Nach Updates suchen** sieht sofort nach. Die anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
 > > > > - **Windows:** statt <kbd>⌘</kbd> die Taste <kbd>Strg</kbd>.
-> > > > - **Neue Version:** Unter [[#Verbindungen]] auf **Updates** tippen, dann auf **Neue Version installieren**; steht dort **Nach Updates suchen**, sieht ein Tipp sofort nach. Deine anderen Geräte bekommen sie über den Sync, dort höchstens einmal **Neu laden**.
-> > > > - **iPad/iPhone:** Aufgaben über das Kästchen-Symbol über der Tastatur. Tabellen stehen auf allen Geräten als Liste untereinander.
-> >
-> > > [!eba-achtung] Bitte nicht umbenennen
-> > > Die Seiten im Ordner **Studium** (vor allem Noten & ECTS, Prüfungen, Stundenplan, Unterlagen) und die Einstellungen im Ordner **System** nicht umbenennen. Die Eigenschaft **uebersicht** oben in deinen Notizen bitte stehen lassen, über sie finden die Übersichten deine Notizen.
+> > > > - **iPhone:** Tabellen stehen als Liste untereinander.
 >
 > > [!eba-karte|hilfe|stand]- Stand der Angaben
-> > Termine und Semesterdaten kommen laufend über die zentralen Daten. Was die Uni noch nicht veröffentlicht hat, ist überall als geschätzt markiert; alle Semester mit ihrem Stand stehen unter [[System/Daten/Semester|Semestertermine]]. Die Frist der Orientierungsprüfung rechnet der Studienverlauf aus deinem Studienbeginn, ohne Urlaubssemester.
+> > Termine und Semesterdaten kommen laufend über die zentralen Daten. Was die Uni noch nicht veröffentlicht hat, ist als geschätzt markiert; alle Semester mit ihrem Stand stehen unter [[System/Daten/Semester|Semestertermine]]. Die Frist der Orientierungsprüfung rechnet der Studienverlauf aus deinem Studienbeginn, ohne Urlaubssemester.
 > >
 > > **Nicht belegt oder widersprüchlich**
 > > - Formale Wahl der Variante: weder PO noch Modulhandbuch regeln Wie und Wann; klärt die Studienfachberatung. Studium Autopilot empfiehlt die Wahl vor dem 3. Fachsemester, weil sich ab dann die Musterpläne unterscheiden.
@@ -187,8 +196,10 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 > > - Frist der Orientierungsprüfung: Modulhandbuch nennt in einem Plan das Ende des **3. Fachsemesters**, maßgeblich ist die PO mit dem **4. Fachsemester**.
 > > - Rücktritt bei Krankheit: BRPO „unverzüglich“, FAQ „innerhalb von drei Werktagen“; im Zweifel sofort handeln.
 > > - Gesamtnote: ob nach zwei Stellen abgeschnitten wird, regelt die BRPO nicht eindeutig (**§ 35 Abs. 2** verweist nicht auf § 19 Abs. 3 Satz 3); Studium Autopilot schneidet ab.
-> > - Elective Studies: fachfremde Fächer (z. B. Informatik, Mathematik, Psychologie, Recht) mit mind. **15 ECTS** je Fach.
-> > - Manche Schwerpunktbereiche und Bachelorseminare setzen Module voraus (z. B. **B342**: **B240** oder **B340**); vor der Wahl die Modulbeschreibung prüfen.
 > > - „Ohne Spezialisierung“ mit Data Science allein: ob VWL- und BWL-Pflicht erfüllt sind, sagt das Modulhandbuch nicht; die Prüfung unter Schwerpunkte im Studienverlauf lässt es zu.
 > > - Citavi-Campuslizenz nicht belegt (Zotero und EndNote sind belegt).
 > > - Kein fachbereichsweiter Leitfaden für wissenschaftliches Arbeiten belegt; es gibt Vorgaben einzelner Lehrstühle.
+> >
+> > **Vor der Wahl prüfen**
+> > - Elective Studies: fachfremde Fächer (z. B. Informatik, Mathematik, Psychologie, Recht) mit mind. **15 ECTS** je Fach.
+> > - Manche Schwerpunktbereiche und Bachelorseminare setzen Module voraus (z. B. **B342**: **B240** oder **B340**); vor der Wahl die Modulbeschreibung lesen.

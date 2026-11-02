@@ -1,6 +1,7 @@
 // ILIAS-Unterlagen (seit 0.4.0): Das Plugin meldet sich bei ILIAS an (Uni Tübingen, ILIAS 10, Shibboleth), liest deine
 // Kurse und legt Kursdateien (PDF, Office …) unter „Unterlagen/“ ab, jede mit Begleitnotiz wie beim Einordnen
-// (unterlagen.js). Keine Videos, keine Foren, keine Tests. Doku: docs/architektur/unterlagen.md, „ILIAS“.
+// (unterlagen.js). Keine Videos, keine Foren, keine Tests, keine Dateien, die Windows beim Öffnen ausführt (AUSFUEHRBAR) oder die
+// Obsidian und das Plugin selbst lesen (NIE). Doku: docs/architektur/unterlagen.md, „ILIAS“.
 //
 // Bausteine: ilias-netz.js (Sitzung, Kekse, Weiterleitungen), ilias-anmeldung.js (Anmeldung über Shibboleth),
 //   ilias-html.js (Kursliste und Kursinhalt aus dem HTML lesen), unterlagen.js (Dateiname „<Code> <Art> <NN> <Titel>“,
@@ -21,13 +22,16 @@
 //   Modulcode einer Abgabe; der Kalender nennt nur die Übung, nicht ihren Kurs). Jeder Eintrag trägt „t“
 //   (letzte Änderung). Vor jedem Schreiben wird mit dem Stand auf der Platte gemischt (je Eintrag gewinnt der neuere), so
 //   überstehen Änderungen anderer Geräte (Kurswahl, Umbenennen) einen laufenden Abruf. Einträge werden nie gelöscht.
+//   „pfad“ und „fassungen“ gelten nur unter Unterlagen/ (pfadOk): Ein anderer Pfad wird beim Lesen leer, und gesucht wird eine
+//   verschobene Datei nur unter Unterlagen/, nie im übrigen Tresor (dort liegen Skripte, Stile und Daten des Plugins).
 // Abrufer-Sperre (System/Daten/ilias-abruf.json, synchronisiert): nur ein Gerät lädt, Regeln wie zentral.js (UEBERNAHME,
 //   PULS). Nur Geräte mit gespeichertem Zugang nehmen teil. „frei: true“ setzt ein Gerät, das seine Gruppen-Notizen
 //   freigegeben hat (gruppenFreigeben): Ein Gerät mit Zugang übernimmt dann sofort.
 // Ein Lauf: Sperre → Index lesen, Umbenennungen und Löschungen nachziehen → anmelden (die Sitzung des letzten Laufs gilt
 //   meist noch) → Kursliste → aktive Kurse durchsuchen (Ordner, Sitzungen mit Materialien, Gruppen, in denen du Mitglied
 //   bist; SUCHER Seiten zugleich, höchstens SEITEN je Lauf) → geänderte, dann neue Dateien laden (neueste zuerst, LADER_PC
-//   bzw. LADER_MOBIL zugleich, höchstens NEU_PC bzw. NEU_MOBIL je Lauf). Die Last für ILIAS begrenzt die Drossel der Sitzung
+//   bzw. LADER_MOBIL zugleich, höchstens NEU_PC bzw. NEU_MOBIL Dateien und BUDGET_PC_MB bzw. BUDGET_MOBIL_MB je Lauf; keine über
+//   MAX_MB, auch nicht ohne Größe in der Liste: der Download bricht ab). Die Last für ILIAS begrenzt die Drossel der Sitzung
 //   (ilias-netz.js: höchstens 2 Anfragen gleichzeitig, 400 ms zwischen zwei Starts). Der Index wird nach jedem Schritt
 //   geschrieben; ein Fehler beendet den Lauf sauber, der nächste macht weiter. Abgelaufene Sitzung: einmal neu anmelden,
 //   dann für diesen Lauf aufgeben. Was das Durchsuchen findet, merkt sich das Gerät nach jedem Kurs (Funde); ein
@@ -60,8 +64,12 @@
 //   eindeutig ab (zugang-falsch), schreibt das Gerät die synchronisierte Datei System/Daten/uni-zugang.json { abgelehnt, dienst,
 //   geraet } (ohne Benutzername, ohne Passwort). Jedes Gerät, dessen Passwort älter ist (gerätelokal eba-uni-zugang-seit), meldet
 //   sich dann nirgends mehr an, auch nicht per Knopf, bis man das Passwort dort neu eingibt (eine prüfende Anmeldung). So scheitert
-//   nach einem Passwortwechsel im Normalfall höchstens ein Gerät. eba-uni-zugang-ok = letzte erfolgreiche ILIAS-Anmeldung mit
-//   diesem Passwort; Alma meldet sich nur an, wenn ILIAS es bestätigt hat (uniZugang().bestaetigt), nie als Erste.
+//   nach einem Passwortwechsel im Normalfall höchstens ein Gerät. eba-uni-zugang-ok = letzte ILIAS-Anmeldung, die dieses Passwort
+//   wirklich gesendet hat und angenommen bekam (passwortGesendet); Alma und das Webmail melden sich nur an, wenn ILIAS es bestätigt
+//   hat (uniZugang().bestaetigt), nie als Erste. Gilt auf dem Gerät noch eine Sitzung bei ILIAS oder der Uni (auf iPhone und iPad
+//   hält das Gerät die Kekse, auf einem geteilten iPad womöglich von einer anderen Person), klappt die Anmeldung ohne Passwort: Es
+//   gilt dann als ungeprüft (eba-uni-zugang-ungeprueft, uniZugang().ungeprueft), und Alma bzw. das Webmail prüfen es selbst, mit
+//   einer eigenen Anmeldung samt Passwort, bevor sie etwas lesen.
 // Für andere Skripte: ctx.ilias (siehe unten, api). Testeinstiege: plugin.testIliasAus (kein automatischer Lauf);
 //   ctx.ilias.erzeugen(abh) baut den ganzen Ablauf mit falschem ILIAS und Tresor im Speicher (tests/ilias.test.js);
 //   in Obsidian ersetzen ctx.ilias.anmeldungSetzen(fn) und ctx.ilias.quelleSetzen(fn) Anmeldung bzw. ILIAS (Oberfläche
@@ -90,6 +98,9 @@ module.exports = function (ctx) {
   // Höchstens so viele Downloads je Lauf (neue und geänderte Dateien). Beim ersten Abruf reicht so meist ein Lauf; was übrig
   // bleibt, holt der nächste Stapel.
   const NEU_MOBIL = 150, NEU_PC = 400;
+  // Höchstens so viele MB je Lauf zusammen (Speicher auf iPhone/iPad, Sync); was darüber liegt, holt der nächste Stapel. Die erste
+  // Datei eines Laufs kommt immer (sie ist höchstens MAX_MB groß).
+  const BUDGET_MOBIL_MB = 250, BUDGET_PC_MB = 1000;
   const SUCHER = 2;              // so viele Seiten zugleich durchsuchen (die Drossel der Sitzung begrenzt die Last)
   const LADER_PC = 2, LADER_MOBIL = 1; // so viele Dateien zugleich laden (iPhone/iPad: eine, wegen des Arbeitsspeichers)
   const MAX_MB = 50;             // größere Dateien nicht in den Tresor (Sync, Speicher auf iPhone/iPad)
@@ -109,9 +120,24 @@ module.exports = function (ctx) {
   const PROTOKOLL_MAX = 20;
   const BEHAELTER = ["ordner", "sitzung", "gruppe"];
   const VIDEO = ["mp4", "m4v", "mov", "webm", "mkv", "avi"];
-  const NIE = ["md", "base", "canvas"];     // würden in Obsidian zu Notizen oder Ansichten
+  // Nie geladen: würden in Obsidian zu Notizen oder Ansichten (md, base, canvas), oder Obsidian und das Plugin lesen sie als eigene
+  // Dateien (Skripte, Stile, Daten; pfadOk nimmt sie nie als Ziel)
+  const NIE = ["md", "base", "canvas", "js", "mjs", "cjs", "css", "json"];
+  // Nie geladen (Vorsicht): Endungen, die Windows beim Öffnen ausführt, einbindet oder als Laufwerk öffnet. Kursdateien wie .py,
+  // .R, .ipynb oder .jar kommen weiter.
+  const AUSFUEHRBAR = ["exe", "com", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "ws", "hta", "scr", "msi", "msp",
+    "lnk", "url", "pif", "cpl", "reg", "scf", "inf", "chm", "xll", "msc", "iso", "img", "vhd", "vhdx", "appx", "msix", "appinstaller",
+    "application", "appref-ms", "diagcab", "settingcontent-ms", "library-ms", "search-ms"];
+  // An der Endung aus ILIAS und am Ende des Namens (lange Endungen wie „settingcontent-ms“ erkennt endungVon nicht)
+  const nieLaden = (endung, name) => {
+    const klein = String(name || "").toLowerCase();
+    return NIE.indexOf(endung) >= 0 || AUSFUEHRBAR.some((x) => x === endung || klein.slice(-x.length - 1) === "." + x);
+  };
   const BILDER = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"];
   const SPERRGRUENDE = ["zugang-falsch", "zustimmung", "zwei-faktor"]; // ohne dein Zutun keine automatischen Versuche mehr
+  // Unbekannte Seite, nachdem das Passwort hinausging (z. B. eine eigene Seite für ein gesperrtes Konto): so lange keine automatischen
+  // Versuche auf diesem Gerät, wie Alma nach unerwarteten Antworten (alma-konto.js); dein Tipp auf Aktualisieren versucht es gleich
+  const PAUSE_UNKLAR = 24 * STUNDE;
   const WIEDER_MIN = [1, 5, 15];  // offener Auftrag nach einem Fehler (z. B. kein Netz): neuer Versuch nach so vielen Minuten
   const STAPEL_PAUSE = 20e3;      // Download-Grenze je Lauf erreicht, Dateien übrig: nächster Stapel nach dieser Pause
   const STAPEL_MAX = 10;          // höchstens so viele Stapel je Auftrag (schont ILIAS), danach nur noch stündlich
@@ -121,11 +147,15 @@ module.exports = function (ctx) {
   const ZURUECK_PRUEFEN = 10e3;
   const L = { benutzer: "eba-ilias-benutzer", stand: "eba-ilias-stand", protokoll: "eba-ilias-protokoll", geraet: "eba-geraet",
     auftrag: "eba-ilias-auftrag", schreibt: "eba-ilias-schreibt", funde: "eba-ilias-funde",
-    migration: "eba-ilias-migration", zugangSeit: "eba-uni-zugang-seit", zugangOk: "eba-uni-zugang-ok" };
+    migration: "eba-ilias-migration", zugangSeit: "eba-uni-zugang-seit", zugangOk: "eba-uni-zugang-ok", ungeprueft: "eba-uni-zugang-ungeprueft",
+    abgelehntHier: "eba-uni-zugang-abgelehnt-hier" };
   const GEHEIM_PRAEFIX = "studium-autopilot-ilias-";
   const TEXT_ANMELDUNG_FOLGT = "Mit ILIAS verbinden geht erst in einer späteren Version";
   const TEXT_EXTERN = "Deine Unterlagen kommen über deinen Uni-Abgleich."; // auch Zeile und Einrichtung (verbindungen.js, einrichtung.js)
   const TEXT_ABGELEHNT = "ILIAS hat dein Passwort abgelehnt. Bitte neu verbinden."; // Uni-Zugang abgelehnt (auf einem deiner Geräte)
+  const TEXT_UNKLAR = "Die Anmeldeseite der Uni sah anders aus als erwartet. Von selbst versucht Studium Autopilot es erst morgen wieder, mit Aktualisieren gleich.";
+  // Gespeichert, aber ILIAS hat es nicht gesehen (eine Sitzung von früher galt noch)
+  const TEXT_UNGEPRUEFT = "Dein Passwort ist gespeichert. ILIAS hat es diesmal nicht geprüft, weil dieses Gerät noch mit ILIAS verbunden war. Alma und deine Uni-Mails prüfen es beim ersten Mal selbst.";
   const MODULCODE = (ctx.user && ctx.user.eba && ctx.user.eba.MODULCODE) || "[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?"; // wie eba.js
   const CODE_ANFANG = new RegExp("^\\s*(" + MODULCODE + ")(?=[\\s_\\-.:,/]|$)");
   const CODE_GANZ = new RegExp("^" + MODULCODE + "$");
@@ -142,11 +172,19 @@ module.exports = function (ctx) {
   const J = (v) => JSON.stringify(v == null ? "" : String(v));
   const hat = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
   const nfc = (s) => { try { return String(s).normalize("NFC"); } catch (e) { return String(s); } };
-  // Fremdtext aus ILIAS: ohne Steuer- und Richtungszeichen, ohne Wikilink-Klammern, eine Zeile
-  // Unsichtbare Zeichen (weiches Trennzeichen, Verbinder) fallen ganz weg, damit ein getrenntes Passwort-Wort zusammenbleibt
-  const textRein = (s) => nfc(s == null ? "" : s).split("\u034f").join("").replace(/[\u00ad\u180e\u2060-\u2064]/g, "")
+  // Fremdtext aus ILIAS: ohne Steuerzeichen, ohne Wikilink-Klammern, eine Zeile. Weg fallen weiches Trennzeichen und Verbinder
+  // (U+00AD, U+034F, U+180E, U+2060–2064), zu Leerzeichen werden Steuer-, Breiten- und Richtungszeichen (U+200B–200F,
+  // U+202A–202E, U+2066–2069, U+FEFF); so heißen Dateien und Ordner wie bisher. Was bisher durchkam und nie sichtbar ist, fällt
+  // ganz weg: U+061C, Tag-Zeichen (U+E0000–E007F), Variantenwähler jenseits von U+FFFF (U+E0100–E01EF) und Hangul-Füller
+  // (U+115F, U+1160, U+3164, U+FFA0). Variantenwähler U+FE00–FE0F bleiben (Emoji-Darstellung in Namen). Zeichen jenseits von
+  // U+FFFF als Ersatzpaare (\udb40…), damit es ohne u-Schalter geht
+  const textRein = (s) => nfc(s == null ? "" : s).split("\u034f").join("")
+    .replace(/[\u00ad\u061c\u115f\u1160\u180e\u2060-\u2064\u3164\uffa0]|\udb40[\udc00-\udc7f\udd00-\uddef]/g, "")
     .replace(/[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, " ")
     .replace(/\[\[|\]\]/g, " ").replace(/\s+/g, " ").trim().slice(0, 200);
+  // Nur zum Erkennen von Passwörtern: auch Breiten-, Richtungszeichen und Variantenwähler ganz weg, damit ein getrenntes
+  // Passwort-Wort zusammenbleibt („Pass<U+202E>wort“)
+  const unsichtbarWeg = (s) => String(s).replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]|[\ufe00-\ufe0f]/g, "");
   // Datei- und Ordnernamen: Windows-tauglich und linkfest (wie eba.sauber), kein Punkt/Leerzeichen/Strich an den Enden
   const sauber = (s) => textRein(s).replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim().replace(/^[.\s-]+|[.\s-]+$/g, "");
   const kuerzen = (s, max) => { if (s.length <= max) return s; const t = s.slice(0, max + 1), i = t.lastIndexOf(" "); return (i > max / 2 ? t.slice(0, i) : s.slice(0, max)).trim(); };
@@ -154,7 +192,7 @@ module.exports = function (ctx) {
   const FUELL = /^(zu|zur|zum|vom|von|the|of|for|and|und|der|die|das|am|im|on|in|an|to|für|fuer)$/i;
   const fuellWeg = (s) => { const w = String(s).split(" ").filter(Boolean); while (w.length && FUELL.test(w[0])) w.shift(); while (w.length && FUELL.test(w[w.length - 1])) w.pop(); return w.join(" "); };
   // Kurspasswörter (nach bestem Bemühen): Manche Kurstitel tragen das Beitrittspasswort („… (Passwort: …)“). Erkannt wird auf
-  // einer gefalteten Fassung: Entitäten aufgelöst (auch doppelt kodiert), unsichtbare Zeichen weg (textRein), NFKC, kyrillische
+  // einer gefalteten Fassung: Entitäten aufgelöst (auch doppelt kodiert), unsichtbare Zeichen weg (unsichtbarWeg, textRein), NFKC, kyrillische
   // und griechische Doppelgänger lateinisch. Starke Marken (Passwort, Password, Kennwort in jeder Schreibweise und als Wortende
   // wie „Kurspasswort“, Passwd, Pwd, Passw., Kennw., Zugangscode, Einschreibeschlüssel, Schlüsselwort, Mot de passe, Enrolment
   // key, Zugangsdaten) zählen immer, aber nicht als Wortanfang („Passwortsicherheit“). PW-Formen (PW, P/W, P.W., KursPW) zählen
@@ -225,16 +263,18 @@ module.exports = function (ctx) {
     return best;
   };
   // → Titel ohne Passwort; "" heißt: nichts davon ist sicher zu zeigen (Aufrufer: Code oder „Kurs <Nummer>“)
-  const vorbereiten = (s) => {
-    let t = textRein(entitaeten(textRein(s)));
+  // streng: zum Erkennen (unsichtbarWeg vor und nach den Entitäten); sonst wie bisher, damit Titel ohne Passwort gleich bleiben
+  const vorbereiten = (s, streng) => {
+    const weg = streng ? unsichtbarWeg : String;
+    let t = textRein(weg(entitaeten(textRein(weg(s == null ? "" : s)))));
     try { t = t.normalize("NFKC"); } catch (e) { /* bleibt NFC */ }
     return t;
   };
-  const hatKennwort = (s) => !!markeFinden(falten(vorbereiten(s)));
+  const hatKennwort = (s) => !!markeFinden(falten(vorbereiten(s, true)));
   const ohneKennwort = (s) => {
-    const t = vorbereiten(s);
+    const t = vorbereiten(s, true);
     const m = markeFinden(falten(t));
-    if (!m) return t;
+    if (!m) return vorbereiten(s);
     return m.behalten ? t.slice(0, m.start).replace(/[\s([{<\-–—:;,|/·.]+$/, "").trim() : "";
   };
   // ILIAS-Pfad „Kurs / Ordner / …“: jedes Stück einzeln; ein leerer Kurs wird zu ersatz (Code bzw. „Kurs“)
@@ -245,6 +285,22 @@ module.exports = function (ctx) {
   const elternVon = (p) => { const i = p.lastIndexOf("/"); return i < 0 ? "" : p.slice(0, i); };
   const nameVon = (p) => p.slice(p.lastIndexOf("/") + 1);
   const notizPfad = (p) => ohneEndung(p) + ".md";
+  // Wohin eine Datei aus ILIAS darf (pfadOk): nur unter Unterlagen/, ohne leere, „.“- oder „..“-Teile und ohne „\“, mit der
+  // Endung der Datei in ILIAS (endung; leer = jede erlaubte) und nie mit einer Endung, die Obsidian oder das Plugin als eigene
+  // Datei liest (Skripte, Stile, Daten, Notizen). Der Index wird synchronisiert und kann von jedem Gerät kommen: Ein Pfad, der das
+  // nicht erfüllt, wird nie ersetzt, gelöscht, umbenannt und bekommt keine neue Fassung daneben.
+  const NIE_ZIEL = ["js", "mjs", "cjs", "css", "json", "md"];
+  const ordnerOk = (p) => {
+    const t = typeof p === "string" && p.indexOf("\\") < 0 ? p.split("/") : [];
+    return t.length >= 2 && t[0] === ZIEL && t.every((x) => x !== "" && x !== "." && x !== "..");
+  };
+  const pfadOk = (p, endung) => {
+    if (!ordnerOk(p)) return false;
+    const e = endungVon(p);
+    return !!e && NIE_ZIEL.indexOf(e) < 0 && (!endung || e === String(endung).toLowerCase());
+  };
+  // Endung eines Eintrags im Index: die seiner Datei, ohne Datei die seines Namens in ILIAS
+  const endungVonEintrag = (e) => endungVon(e && typeof e.pfad === "string" ? e.pfad : "") || endungVon(e && e.original);
   const mb = (bytes) => (bytes / 1048576).toFixed(1).replace(".", ",") + " MB";
   const datumDe = (d) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`; // JJJJ-MM-TT → TT.MM.JJJJ
   const vergleich = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
@@ -293,7 +349,8 @@ module.exports = function (ctx) {
   };
   // Offener Auftrag nach einem Lauf: a = { seit, versuche, stapel, geladen } (gerätelokal), b = Bericht → { auftrag (neuer
   // Stand, null = erledigt), inMs (nächster Versuch; null = keiner, z. B. nach Neustart oder stündlich) }. Nie weiter nach
-  // abgelehnter Anmeldung, Zustimmung, zweitem Faktor, Trennen, Stoppen oder wenn ein anderes Gerät lädt.
+  // abgelehnter Anmeldung, Zustimmung, zweitem Faktor, unbekannter Seite nach dem Passwort (unklar), Trennen, Stoppen oder wenn
+  // ein anderes Gerät lädt.
   const naechsterSchritt = (a, b) => {
     const aus = { auftrag: null, inMs: null };
     if (!a || !b) return aus;
@@ -329,13 +386,31 @@ module.exports = function (ctx) {
     }
     return e;
   };
-  const indexPruefen = (o) => {
+  // Pfade eines Eintrags (pfad, fassungen) nur, wenn pfadOk sie erlaubt. Ein anderer pfad wird leer: Der Eintrag bleibt (die Datei
+  // gilt als bekannt, nichts wird neu geladen, bis ILIAS eine neue Fassung hat), aber er zeigt auf keine Datei mehr; die Datei
+  // selbst bleibt unberührt.
+  const pfadeSaeubern = (e) => {
+    const endung = endungVonEintrag(e);
+    let x = e;
+    if (hat(x, "pfad") && x.pfad !== "" && !pfadOk(x.pfad, endung)) x = Object.assign({}, x, { pfad: "" });
+    if (hat(x, "fassungen")) {
+      const f = Array.isArray(x.fassungen) ? x.fassungen.filter((p) => pfadOk(p, endung)) : [];
+      if (!Array.isArray(x.fassungen) || f.length !== x.fassungen.length) x = Object.assign({}, x, { fassungen: f });
+    }
+    return x;
+  };
+  // o: Inhalt von ilias.json; mitPfaden = false nur für den Vergleich in saeubern() (api)
+  const indexPruefen = (o, mitPfaden) => {
     const x = leererIndex();
     if (!o || typeof o !== "object" || Array.isArray(o)) return x;
     for (const b of BEREICHE) {
       const q = o[b];
       if (!q || typeof q !== "object" || Array.isArray(q)) continue;
-      for (const id of Object.keys(q)) if (q[id] && typeof q[id] === "object" && !Array.isArray(q[id])) x[b][id] = saeubern(b, q[id], id);
+      for (const id of Object.keys(q)) {
+        if (!q[id] || typeof q[id] !== "object" || Array.isArray(q[id])) continue;
+        const e = saeubern(b, q[id], id);
+        x[b][id] = b === "dateien" && mitPfaden !== false ? pfadeSaeubern(e) : e;
+      }
     }
     return x;
   };
@@ -506,8 +581,11 @@ module.exports = function (ctx) {
 
     // ----- Stand (gerätelokal) -----
     // warnung: Sätze aus dem letzten fertigen Lauf (fehlende Dateien, Übungsgruppen …), stehen in Zeile und Fenster unter Verbindungen
-    const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", warnung: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {} }, lokal(L.stand) || {});
+    const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", warnung: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, pauseBis: "", dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {} }, lokal(L.stand) || {});
     const standSetzen = (x) => lokal(L.stand, Object.assign(stand(), x));
+    // Pause nach einer unbekannten Seite nach dem Passwort (PAUSE_UNKLAR): nur automatische Läufe warten
+    const pausiert = () => { const t = Date.parse(stand().pauseBis || ""); return !isNaN(t) && t > ms(); };
+    const unklar = (e) => !!e && e.art === "anmeldung" && e.grund === "unerwartet" && e.passwortGesendet === true;
     const protokoll = () => { const p = lokal(L.protokoll); return Array.isArray(p) ? p.slice() : []; };
     // Offener Auftrag (ein Abruf, den du gestartet hast und der noch nicht fertig ist), nur auf diesem Gerät
     const auftrag = () => { const a = lokal(L.auftrag); return a && typeof a === "object" && !Array.isArray(a) ? a : null; };
@@ -533,17 +611,40 @@ module.exports = function (ctx) {
       marker = o && typeof o === "object" && zeitVon(o.abgelehnt) ? { abgelehnt: String(o.abgelehnt), dienst: String(o.dienst || ""), geraet: String(o.geraet || "") } : null;
       return marker;
     };
+    // Ablehnung nur für dieses Gerät (gerätelokal, eba-uni-zugang-abgelehnt-hier): solange das Passwort ungeprüft war
+    const hierLesen = () => {
+      const o = lokal(L.abgelehntHier);
+      return o && typeof o === "object" && zeitVon(o.abgelehnt) ? { abgelehnt: String(o.abgelehnt), dienst: String(o.dienst || "") } : null;
+    };
+    // ungeprüft seit dem Speichern (auch nach einer Ablehnung; zugangGeprueft(true) löscht es)
+    const offenSeit = () => { const o = zeitVon(lokal(L.ungeprueft)); return !!o && o >= zeitVon(lokal(L.zugangSeit)); };
+    // die jüngste Ablehnung, gemeinsam oder nur hier
+    const letzte = () => { const h = hierLesen(); return !marker ? h : !h ? marker : zeitVon(h.abgelehnt) > zeitVon(marker.abgelehnt) ? h : marker; };
     // Abgelehnt, nachdem das Passwort hier gespeichert wurde: keine Anmeldung, auch nicht per Knopf
-    const abgelehnt = () => !!marker && hatZugang() && zeitVon(marker.abgelehnt) > zeitVon(lokal(L.zugangSeit));
+    const abgelehnt = () => { const a = letzte(); return !!a && hatZugang() && zeitVon(a.abgelehnt) > zeitVon(lokal(L.zugangSeit)); };
+    // Ein bestätigtes Passwort abgelehnt: alle Geräte mit älterem Passwort halten an (uni-zugang.json). War es ungeprüft (beim
+    // Verbinden galt noch eine Sitzung, womöglich die einer anderen Person), hält nur dieses Gerät an; die anderen versuchen
+    // es mit ihrem Passwort weiter.
     const markerSchreiben = async (dienst) => {
       const m = { abgelehnt: iso(), dienst: dienst === "alma" || dienst === "mail" ? dienst : "ilias", geraet: abh.geraetId() };
-      try { await io.schreibenText(UNI_ZUGANG, JSON.stringify(m, null, 1) + "\n"); marker = m; } catch (e) { try { console.warn("ilias: Ablehnung des Uni-Logins nicht vermerkt"); } catch (x) { /* egal */ } }
+      if (hatZugang() && offenSeit()) lokal(L.abgelehntHier, { abgelehnt: m.abgelehnt, dienst: m.dienst });
+      else {
+        try { await io.schreibenText(UNI_ZUGANG, JSON.stringify(m, null, 1) + "\n"); marker = m; } catch (e) { try { console.warn("ilias: Ablehnung des Uni-Logins nicht vermerkt"); } catch (x) { /* egal */ } }
+      }
       melden({ art: "zugang" });
     };
     const uniZugang = () => {
-      const seit = lokal(L.zugangSeit), ok = lokal(L.zugangOk);
-      return { benutzer: benutzer(), seit: typeof seit === "string" ? seit : "", ok: typeof ok === "string" ? ok : "", abgelehnt: marker ? marker.abgelehnt : "",
-        dienst: marker ? marker.dienst : "", gesperrt: abgelehnt(), bestaetigt: hatZugang() && !abgelehnt() && !!zeitVon(ok) && zeitVon(ok) >= zeitVon(seit) };
+      const seit = lokal(L.zugangSeit), ok = lokal(L.zugangOk), a = letzte();
+      const bestaetigt = hatZugang() && !abgelehnt() && !!zeitVon(ok) && zeitVon(ok) >= zeitVon(seit);
+      return { benutzer: benutzer(), seit: typeof seit === "string" ? seit : "", ok: typeof ok === "string" ? ok : "", abgelehnt: a ? a.abgelehnt : "",
+        dienst: a ? a.dienst : "", gesperrt: abgelehnt(), bestaetigt,
+        ungeprueft: hatZugang() && !abgelehnt() && !bestaetigt && offenSeit() };
+    };
+    // Hat ILIAS das Passwort wirklich gesendet und angenommen (passwortGesendet), ist es bestätigt; sonst bleibt es ungeprüft
+    const zugangGeprueft = (gesendet) => {
+      if (!hatZugang()) return;
+      if (gesendet) { lokal(L.zugangOk, iso()); lokal(L.ungeprueft, null); }
+      else if (!uniZugang().bestaetigt) lokal(L.ungeprueft, iso());
     };
     // Eigener Uni-Abgleich: trotzdem bereit, dann nur für die Übungsgruppen (lauf: nurGruppen, keine Downloads)
     const bereit = () => !!anmeldung() && hatZugang() && !stand().gesperrt && !abgelehnt() && !(extern() && gruppenExtern());
@@ -559,21 +660,24 @@ module.exports = function (ctx) {
       b.warnung = (b.warnung ? b.warnung + " " : "") + klar;
       if (technik) b.technik = (b.technik ? b.technik + " " : "") + technik;
     };
-    // Anmeldung mit Ergebnisobjekt → wirft bei Misserfolg (e.art „zugang“ = ohne dein Zutun nicht mehr automatisch versuchen)
-    const anmeldenMit = (f) => async (sitzung, zugang, optionen) => {
+    // Anmeldung mit Ergebnisobjekt → wirft bei Misserfolg (e.art „zugang“ = ohne dein Zutun nicht mehr automatisch versuchen).
+    // geklappt(gesendet): nach einer erfolgreichen Anmeldung, gesendet = das Passwort ging hinaus (sonst galt eine alte Sitzung)
+    const anmeldenMit = (f, geklappt) => async (sitzung, zugang, optionen) => {
       const r = await f(sitzung, zugang, optionen);
-      if (r && r.ok) return r;
+      const gesendet = !!r && r.passwortGesendet === true;
+      if (r && r.ok) { if (geklappt) geklappt(gesendet); return r; }
       const grund = (r && r.grund) || "unerwartet";
       const e = new Error((r && r.hinweis) || "Die Anmeldung bei ILIAS hat nicht geklappt.");
       e.art = SPERRGRUENDE.indexOf(grund) >= 0 ? "zugang" : "anmeldung";
       e.grund = grund;
+      e.passwortGesendet = gesendet;
       throw e;
     };
     // { pruefen: true } meldet sich vorher einmal an und speichert nur bei Erfolg
     const zugangSpeichern = async (name, geber, o) => {
       o = o || {};
       name = String(name == null ? "" : name).trim();
-      let wert = "";
+      let wert = "", gesendet = false;
       try { wert = typeof geber === "function" ? await geber() : geber; } catch (e) { wert = ""; }
       if (!name || typeof wert !== "string" || !wert) return { ok: false, art: "leer", fehler: "Benutzername oder Passwort fehlt." };
       try {
@@ -581,18 +685,26 @@ module.exports = function (ctx) {
           const f = anmeldung();
           if (!f) return { ok: false, art: "ohne-anmeldung", fehler: TEXT_ANMELDUNG_FOLGT + "." };
           const w = wert;
-          try { await abh.quelle({ benutzer: name, kennwortGeber: () => w }, anmeldenMit(f)); }
+          try { await abh.quelle({ benutzer: name, kennwortGeber: () => w }, anmeldenMit(f, (g) => { gesendet = g; })); }
           catch (e) { return { ok: false, art: (e && e.art) || "fehler", grund: (e && e.grund) || "", fehler: fehlerText(e, w) }; }
         }
         try { await abh.geheim.schreiben(abh.geheimId(), wert); }
         catch (e) { return { ok: false, art: "schluesselbund", fehler: "Der Schlüsselbund von Obsidian ist auf diesem Gerät nicht verfügbar." }; }
       } finally { wert = ""; }
       lokal(L.benutzer, name);
-      // Passwort hier neu: seit jetzt; mit Prüfung hat ILIAS es gerade bestätigt (Alma darf es dann nutzen)
+      // Passwort hier neu: seit jetzt; mit Prüfung hat ILIAS es gerade bestätigt (Alma darf es dann nutzen), aber nur, wenn die
+      // Anmeldung es wirklich gesendet hat. Galt noch eine Sitzung, bleibt es ungeprüft, und du erfährst es.
       lokal(L.zugangSeit, iso());
-      if (o.pruefen) lokal(L.zugangOk, iso());
-      standSetzen({ gesperrt: false, fehler: "", fehlerZeit: "" });
+      lokal(L.zugangOk, null);
+      lokal(L.ungeprueft, null);
+      lokal(L.abgelehntHier, null);
+      if (o.pruefen) zugangGeprueft(gesendet);
+      standSetzen({ gesperrt: false, fehler: "", fehlerZeit: "", pauseBis: "" });
       melden({ art: "zugang" });
+      if (o.pruefen && !gesendet) {
+        if (abh.melden) { try { abh.melden(TEXT_UNGEPRUEFT); } catch (e) { /* egal */ } }
+        return { ok: true, ungeprueft: true, hinweis: TEXT_UNGEPRUEFT };
+      }
       return { ok: true };
     };
     // Trennen: Zugang weg; danach die Gruppen-Notizen freigeben (läuft gerade ein Abruf, erst wenn er beim nächsten Schritt endet)
@@ -605,30 +717,35 @@ module.exports = function (ctx) {
       lokal(L.funde, null);
       lokal(L.zugangSeit, null);
       lokal(L.zugangOk, null);
-      standSetzen({ fehler: "", fehlerZeit: "", gesperrt: false, abrufer: false });
+      lokal(L.ungeprueft, null);
+      lokal(L.abgelehntHier, null);
+      standSetzen({ fehler: "", fehlerZeit: "", gesperrt: false, abrufer: false, pauseBis: "" });
       melden({ art: "zugang" });
       const freigeben = () => gruppenFreigeben(UEBERNAHME).catch((e) => { try { console.warn("ilias: Gruppen " + fehlerText(e)); } catch (x) { /* egal */ } });
       if (vorher) vorher.then(freigeben); else await freigeben();
     };
     // Abo-Links des ILIAS-Kalenders (Uni-Login, uni-login.js) → [{ url, begrenzt }]. Mit der Sitzung des letzten Laufs, sonst einer
     // neuen Anmeldung; wie ein Lauf nur mit Zugang und ohne Ablehnung. Lehnt ILIAS das Passwort dabei ab, dasselbe wie nach einem
-    // Lauf (Stand gesperrt, eindeutig falsch → Marker, Gruppen frei). Fehler: e.art (ohne-zugang, zugang, anmeldung, kalender …),
-    // Text ohne Passwort.
-    const kalenderLinks = async () => {
+    // Lauf (Stand gesperrt, eindeutig falsch → Marker, Gruppen frei). Fehler: e.art (ohne-zugang, zugang, anmeldung, kalender,
+    // pause …), Text ohne Passwort. o.automatisch (neuer Link im Hintergrund): während der Pause nach einer unbekannten Seite nicht,
+    // wie ein automatischer Lauf; dein Tipp versucht es trotzdem.
+    const kalenderLinks = async (o) => {
       const f = anmeldung();
       if (!f) throw fehlerArt("ohne-anmeldung", TEXT_ANMELDUNG_FOLGT + ".");
       if (!hatZugang() || !geheimLesen()) throw fehlerArt("ohne-zugang", "Dein Uni-Login fehlt auf diesem Gerät.");
+      if (o && o.automatisch && pausiert()) throw fehlerArt("pause", TEXT_UNKLAR);
       await markerLesen();
       if (abgelehnt() || stand().gesperrt) throw fehlerArt("zugang", TEXT_ABGELEHNT);
       const geheimId = abh.geheimId();
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "" };
       try {
-        const q = await abh.quelle(zugang, anmeldenMit(f), { wiederverwenden: true });
+        const q = await abh.quelle(zugang, anmeldenMit(f, (g) => { if (g) zugangGeprueft(true); }), { wiederverwenden: true });
         if (!q || typeof q.kalenderAbo !== "function") throw fehlerArt("baustein", "ILIAS-Baustein fehlt.");
         return await q.kalenderAbo();
       } catch (e) {
         const x = fehlerArt((e && e.art) || "fehler", fehlerText(e));
         x.grund = (e && e.grund) || "";
+        if (unklar(e)) standSetzen({ pauseBis: new Date(ms() + PAUSE_UNKLAR).toISOString() });
         if (x.art === "zugang") {
           standSetzen({ gesperrt: true, fehler: x.message, fehlerZeit: iso() });
           if (x.grund === "zugang-falsch") await markerSchreiben("ilias");
@@ -672,16 +789,18 @@ module.exports = function (ctx) {
       };
     };
 
-    // ----- Umbenennen im Tresor (Ereignis „rename“): Index zieht mit, auch für ganze Ordner -----
+    // ----- Umbenennen im Tresor (Ereignis „rename“): Index zieht mit, auch für ganze Ordner. Aus Unterlagen/ hinaus (pfadOk)
+    // zeigt der Eintrag auf keine Datei mehr; kommt die Datei unverändert zurück, findet sie die nächste neue Fassung wieder, sonst
+    // kommt die nächste neue Fassung wie eine neue Datei nach Unterlagen/ (aktualisieren).
     const umbenannt = async (neu, alt) => {
       if (!mem) { if (!io.existiert(INDEX)) return false; try { await indexLesen(); } catch (e) { return false; } }
       const ziel = (p) => (p === alt ? neu : p && p.indexOf(alt + "/") === 0 ? neu + p.slice(alt.length) : null);
       let n = 0;
       for (const id of Object.keys(mem.dateien)) {
-        const e = mem.dateien[id], felder = {};
+        const e = mem.dateien[id], felder = {}, endung = endungVonEintrag(e);
         const z = ziel(e.pfad);
-        if (z) felder.pfad = z;
-        if (Array.isArray(e.fassungen) && e.fassungen.some((f) => ziel(f))) felder.fassungen = e.fassungen.map((f) => ziel(f) || f);
+        if (z) felder.pfad = pfadOk(z, endung) ? z : "";
+        if (Array.isArray(e.fassungen) && e.fassungen.some((f) => ziel(f))) felder.fassungen = e.fassungen.map((f) => ziel(f) || f).filter((f) => pfadOk(f, endung));
         if (Object.keys(felder).length) { setzen("dateien", id, felder); n++; }
       }
       return n > 0;
@@ -701,11 +820,12 @@ module.exports = function (ctx) {
       r.hashes[pfad] = h;
       return h;
     };
+    // Dateien unter Unterlagen/ (je Lauf einmal gelesen); nur dort sucht der Lauf eine Datei wieder, nie im übrigen Tresor
     const unterlagen = (r) => { if (!r.unterlagen) r.unterlagen = io.dateien(ZIEL); return r.unterlagen; };
-    // Byte-gleiche Datei: erst Größe, dann SHA-256
-    const gleicheDatei = async (r, vorrat, groesse, sha, ausser) => {
+    // Byte-gleiche Datei unter den Pfaden, die pfadOk mit dieser Endung erlaubt: erst Größe, dann SHA-256
+    const gleicheDatei = async (r, vorrat, groesse, sha, endung, ausser) => {
       for (const d of vorrat) {
-        if (d.groesse !== groesse || (ausser && ausser[d.pfad])) continue;
+        if (d.groesse !== groesse || (ausser && ausser[d.pfad]) || !pfadOk(d.pfad, endung)) continue;
         if ((await hashVon(r, d.pfad)) === sha) return d.pfad;
       }
       return null;
@@ -715,17 +835,18 @@ module.exports = function (ctx) {
     // Fehlt mehr als die Hälfte (und mehr als 10), ist vermutlich der Sync noch nicht fertig: dann nichts als gelöscht merken.
     const nachziehen = async (b, r) => {
       const d = mem.dateien;
-      for (const id of Object.keys(d)) if (d[id].geloescht && d[id].pfad && io.existiert(d[id].pfad)) setzen("dateien", id, { geloescht: false }); // kam spät per Sync
-      const fehlend = Object.keys(d).filter((id) => d[id].pfad && !d[id].geloescht && !io.existiert(d[id].pfad));
+      const gilt = (id) => pfadOk(d[id].pfad, endungVonEintrag(d[id]));
+      for (const id of Object.keys(d)) if (d[id].geloescht && gilt(id) && io.existiert(d[id].pfad)) setzen("dateien", id, { geloescht: false }); // kam spät per Sync
+      const fehlend = Object.keys(d).filter((id) => gilt(id) && !d[id].geloescht && !io.existiert(d[id].pfad));
       if (!fehlend.length) return;
       const alle = Object.keys(d).filter((id) => !d[id].geloescht).length;
       if (fehlend.length > 10 && fehlend.length > alle / 2) { warnen(b, `${fehlend.length} Dateien fehlen gerade in Unterlagen, vermutlich kommen sie noch über deinen Sync.`, "Nichts als gelöscht gemerkt."); return; }
-      const vorrat = io.dateien("");
+      const vorrat = unterlagen(r);
       const belegt = {};
       for (const id of Object.keys(d)) if (!d[id].geloescht && d[id].pfad && io.existiert(d[id].pfad)) belegt[d[id].pfad] = true;
       for (const id of fehlend) {
         const e = d[id];
-        const da = e.sha256 && e.groesse ? await gleicheDatei(r, vorrat, e.groesse, e.sha256, belegt) : null;
+        const da = e.sha256 && e.groesse ? await gleicheDatei(r, vorrat, e.groesse, e.sha256, endungVonEintrag(e), belegt) : null;
         if (da) { setzen("dateien", id, { pfad: da }); belegt[da] = true; }
         else { setzen("dateien", id, { geloescht: true, geloeschtAm: heute() }); plus(b, e.kurs, "geloescht"); }
       }
@@ -984,10 +1105,11 @@ module.exports = function (ctx) {
       if ((lokal(L.migration) || 0) >= MIGRATION) return;
       let n = 0;
       for (const name of io.unterordner(ZIEL)) {
-        if (!hatKennwort(name) || !io.umbenennen) continue;
+        if (!hatKennwort(name) || !io.umbenennen || !ordnerOk(ZIEL + "/" + name)) continue;
         const basisName = sauber(ohneKennwort(name)) || "ILIAS";
         let neu = basisName, i = 2;
         while (io.existiert(ZIEL + "/" + neu)) neu = basisName + " " + i++;
+        if (!ordnerOk(ZIEL + "/" + neu)) continue;
         await io.umbenennen(ZIEL + "/" + name, ZIEL + "/" + neu);
         await umbenannt(ZIEL + "/" + neu, ZIEL + "/" + name);
         n++;
@@ -1033,8 +1155,10 @@ module.exports = function (ctx) {
     const fundeSpeichern = (r, liste) => { if (!r.stopp.an) lokal(L.funde, liste.map(fundAus)); };
     const fundeLesen = () => {
       const f = lokal(L.funde);
-      // Funde aus einer älteren Fassung tragen den rohen Kurstitel: beim Lesen säubern (Kurs, Ordner, ILIAS-Pfad)
-      return (Array.isArray(f) ? f.filter((c) => c && typeof c.id === "string" && c.kurs && c.kurs.refId != null && c.eintrag && Array.isArray(c.ordner)) : [])
+      // Funde aus einer älteren Fassung tragen den rohen Kurstitel: beim Lesen säubern (Kurs, Ordner, ILIAS-Pfad). Was ein Lauf
+      // heute nicht mehr laden würde (Dateityp), fällt weg
+      return (Array.isArray(f) ? f.filter((c) => c && typeof c.id === "string" && c.kurs && c.kurs.refId != null && c.eintrag && Array.isArray(c.ordner)
+        && typeof c.endung === "string" && /^[a-z0-9]{1,8}$/.test(c.endung) && !nieLaden(c.endung, c.original)) : [])
         .map((c) => {
           const ersatz = c.kurs.code || "Kurs " + c.kurs.refId;
           return Object.assign({}, c, { kurs: Object.assign({}, c.kurs, { titel: ohneKennwort(c.kurs.titel) || ersatz }),
@@ -1051,7 +1175,13 @@ module.exports = function (ctx) {
       const endung = String(e.endung || "").toLowerCase().replace(/^\./, "") || endungVon(original);
       if (endung && endungVon(original) !== endung) original = original + "." + endung; // ILIAS zeigt oft nur den Titel
       if (VIDEO.indexOf(endung) >= 0) { plus(b, kurs.refId, "videos"); return; }
-      if (!/^[a-z0-9]{1,8}$/.test(endung) || NIE.indexOf(endung) >= 0) { plus(b, kurs.refId, "uebersprungen"); return; }
+      // Nie geladen: übersprungen, aber gesehen (eine früher geladene gilt nicht als „nicht mehr in ILIAS“)
+      if (nieLaden(endung, original)) {
+        if (!hat(r.gefunden, id)) r.gefunden[id] = kurs.refId;
+        plus(b, kurs.refId, "uebersprungen");
+        return;
+      }
+      if (!/^[a-z0-9]{1,8}$/.test(endung)) { plus(b, kurs.refId, "uebersprungen"); return; }
       const geaendert = e.geaendert ? String(e.geaendert) : "";
       const lg = typeof e.groesse === "number" && isFinite(e.groesse) && e.groesse >= 0 ? Math.round(e.groesse) : null;
       const zuerst = !hat(r.gefunden, id);
@@ -1061,11 +1191,7 @@ module.exports = function (ctx) {
       if (zuerst) umbenanntInIlias(c, r);
       c.art = artFuer(c);
       if (!c.art) return;
-      if (c.art === "neu" && lg != null && lg > MAX_MB * 1048576) {
-        setzen("ignoriert", id, { grund: "zu groß", groesse: lg, geaendert, iliasGroesse: lg, original, iliasPfad: c.iliasPfad, kurs: kurs.refId });
-        plus(b, kurs.refId, "zuGross");
-        return;
-      }
+      if (lg != null && lg > MAX_MB * 1048576) { zuGrossVorab(c, lg, b); return; } // laut Liste zu groß: gar nicht laden
       kandidaten.push(c); r.imLauf[id] = true;
     };
     // Einen Behälter (Kurs, Ordner, Sitzung, Gruppe) lesen: Unterbehälter kommen auf den Stapel seines Kurses (x.stapel),
@@ -1225,7 +1351,7 @@ module.exports = function (ctx) {
     const schreibtSetzen = (x) => lokal(L.schreibt, x);
     const nachAbbruch = async (r) => {
       const s = lokal(L.schreibt);
-      if (!s || typeof s.pfad !== "string" || !s.pfad) { if (s) schreibtSetzen(null); return; }
+      if (!s || !pfadOk(s.pfad)) { if (s) schreibtSetzen(null); return; }
       const d = s.id ? mem.dateien[s.id] : null;
       if (s.art === "neu" && !(d && d.pfad === s.pfad)) {
         for (const p of [s.pfad, notizPfad(s.pfad)]) if (io.existiert(p)) await io.loeschen(p);
@@ -1246,12 +1372,18 @@ module.exports = function (ctx) {
       catch (e) { try { await io.loeschen(pfad); } catch (x) { /* bleibt; nächster Lauf findet sie als gleiche Datei */ } throw e; }
     };
     const zuGrossMerken = (c, groesse, b) => { setzen("ignoriert", c.id, { grund: "zu groß", groesse, geaendert: c.geaendert, iliasGroesse: c.lg, original: c.original, iliasPfad: c.iliasPfad, kurs: c.kurs.refId }); plus(b, c.kurs.refId, "zuGross"); };
+    // Zu groß, bevor die Datei da ist (Größe in der Liste, Download abgebrochen): eine geänderte merkt sich die Angaben aus ILIAS,
+    // damit sie nicht bei jedem Lauf neu versucht wird; deine Datei im Tresor bleibt
+    const zuGrossVorab = (c, groesse, b) => {
+      zuGrossMerken(c, groesse, b);
+      if (c.art === "geaendert" && mem.dateien[c.id]) setzen("dateien", c.id, { geaendert: c.geaendert, iliasGroesse: c.lg });
+    };
 
     const neuAblegen = async (c, bytes, b, r, E) => {
       if (bytes.length > MAX_MB * 1048576) { zuGrossMerken(c, bytes.length, b); await speichern(); return; }
       const sha = await sha256(bytes);
       const basis = { sha256: sha, groesse: bytes.length, geaendert: c.geaendert, iliasGroesse: c.lg, original: c.original, iliasPfad: c.iliasPfad, kurs: c.kurs.refId, seit: heute() };
-      const gleich = await gleicheDatei(r, unterlagen(r), bytes.length, sha);
+      const gleich = await gleicheDatei(r, unterlagen(r), bytes.length, sha, c.endung);
       if (gleich) { setzen("dateien", c.id, Object.assign(basis, { pfad: gleich, wie: "vorhanden" })); plus(b, c.kurs.refId, "vorhanden"); await speichern(); return; }
       // In ILIAS gelöscht und neu hochgeladen (neue Kennung), dieselbe Datei hast du hier gelöscht: bleibt gelöscht
       const d = mem.dateien;
@@ -1263,6 +1395,8 @@ module.exports = function (ctx) {
       const ordner = zielOrdner(plan.code, c.kurs, plan.art);
       const stem = freierName(ordner, plan.name, c.endung);
       const pfad = `${ordner}/${stem}.${c.endung}`;
+      // Rückhalt: nie außerhalb von Unterlagen/ oder mit anderer Endung (etwa aus einem beschädigten Fund)
+      if (!pfadOk(pfad, c.endung)) { plus(b, c.kurs.refId, "uebersprungen"); return; }
       schreibtSetzen({ id: c.id, pfad, art: "neu" });
       await mitNotiz(pfad, bytes, notizBauen(E, notizDaten(c, plan, `${stem}.${c.endung}`, bytes.length)));
       unterlagen(r).push({ pfad, groesse: bytes.length });
@@ -1279,9 +1413,13 @@ module.exports = function (ctx) {
       if (bytes.length > MAX_MB * 1048576) { zuGrossMerken(c, bytes.length, b); merken({}); await speichern(); return; }
       const sha = await sha256(bytes);
       if (sha === d0.sha256) { merken({}); plus(b, c.kurs.refId, "gleich"); await speichern(); return; } // nur die Angaben in ILIAS haben sich geändert
-      let pfad = d0.pfad;
+      const endungAlt = endungVonEintrag(d0);
+      let pfad = pfadOk(d0.pfad, endungAlt) ? d0.pfad : "";
       if (!pfad || !io.existiert(pfad)) {
-        const da = d0.sha256 && d0.groesse ? await gleicheDatei(r, io.dateien(""), d0.groesse, d0.sha256) : null;
+        const da = d0.sha256 && d0.groesse ? await gleicheDatei(r, unterlagen(r), d0.groesse, d0.sha256, endungAlt) : null;
+        // Aus Unterlagen/ hinaus verschoben (oder ein Pfad, der nicht gilt): Die neue Fassung kommt wie eine neue Datei nach
+        // Unterlagen/, die verschobene Datei bleibt unberührt. Unter Unterlagen/ gelöscht: bleibt gelöscht.
+        if (!da && !pfad) { setzen("dateien", c.id, { pfad: "", fassungen: [] }); await neuAblegen(c, bytes, b, r, E); return; }
         if (!da) { setzen("dateien", c.id, { geloescht: true, geloeschtAm: heute() }); plus(b, c.kurs.refId, "geloescht"); await speichern(); return; }
         pfad = da;
         setzen("dateien", c.id, { pfad });
@@ -1303,7 +1441,7 @@ module.exports = function (ctx) {
       if (ist === sha) { merken({ sha256: sha, groesse: bytes.length }); plus(b, c.kurs.refId, "gleich"); await speichern(); return; } // hast du schon
       // Die letzte neue Fassung daneben ist noch unverändert (Prüfsumme = letzte Fassung aus ILIAS): sie wird ersetzt, statt eine
       // weitere Kopie anzulegen
-      const fassungen = Array.isArray(d0.fassungen) ? d0.fassungen : [];
+      const fassungen = (Array.isArray(d0.fassungen) ? d0.fassungen : []).filter((p) => pfadOk(p, endungAlt));
       const letzte = fassungen[fassungen.length - 1];
       if (letzte && io.existiert(letzte) && (await hashVon(r, letzte)) === d0.sha256) {
         schreibtSetzen({ id: c.id, pfad: letzte, art: "ersetzen" });
@@ -1323,6 +1461,7 @@ module.exports = function (ctx) {
       let name = basisName, i = 2;
       while (io.existiert(`${vorne}${name}.${endung}`) || io.existiert(`${vorne}${name}.md`)) name = `${basisName} (${i++})`;
       const neuPfad = `${vorne}${name}.${endung}`;
+      if (!pfadOk(neuPfad, endungAlt)) { merken({}); plus(b, c.kurs.refId, "uebersprungen"); await speichern(); return; }
       const plan = await benennen(c, bytes, E, false);
       schreibtSetzen({ id: c.id, pfad: neuPfad, art: "neu" });
       // Der Kasten nennt deine zuletzt bearbeitete Fassung (die letzte Kopie, die es noch gibt, sonst deine Datei), als Notiz verlinkt
@@ -1360,6 +1499,7 @@ module.exports = function (ctx) {
       if (!f) { b.art = "ohne-anmeldung"; return; }
       if (!hatZugang()) { b.art = "ohne-zugang"; return; }
       if (stand().gesperrt && !o.manuell) { b.art = "gesperrt"; return; }
+      if (pausiert() && !o.manuell) { b.art = "pause"; return; }
       // vor der Sperre: ein Gerät ohne nutzbares Kennwort darf die anderen nicht aufhalten
       if (!geheimLesen()) throw fehlerArt("zugang", "Das Passwort fehlt auf diesem Gerät. Bitte ILIAS neu verbinden.");
       // Auf einem deiner Geräte abgelehnt (uni-zugang.json): kein Versuch mit diesem Passwort, auch nicht per Knopf
@@ -1389,7 +1529,7 @@ module.exports = function (ctx) {
       }
       fort(o, { phase: "anmelden" });
       // Die Sitzung des letzten Laufs gilt meist noch: dann keine neue Anmeldung (die Quelle merkt es an der ersten Seite)
-      const q = await anfrage(b, r, () => abh.quelle(zugang, anmeldenMit(f), { wiederverwenden: true }));
+      const q = await anfrage(b, r, () => abh.quelle(zugang, anmeldenMit(f, (g) => { if (g) b.zugangBestaetigt = true; }), { wiederverwenden: true }));
       fort(o, { phase: "kurse" });
       // Eine Anfrage für Kurse und Gruppen (Seite „Meine Kurse und Gruppen“); von Gruppen bleibt nur das Zeitfenster
       const seite = await anfrage(b, r, () => (q.mitgliedschaften ? q.mitgliedschaften() : q.kurse()));
@@ -1404,9 +1544,10 @@ module.exports = function (ctx) {
 
       // 1. Durchsuchen (älteste zuerst)
       const E = abh.einordner();
-      // Grenzen je Lauf; abh.grenzen ({ neu, seiten }) nur für Probeläufe und Tests
+      // Grenzen je Lauf; abh.grenzen ({ neu, seiten, bytes }) nur für Probeläufe und Tests
       const G = abh.grenzen || {};
       const kappe = G.neu || (abh.mobil ? NEU_MOBIL : NEU_PC), seitenBudget = G.seiten || SEITEN;
+      const budget = G.bytes || (abh.mobil ? BUDGET_MOBIL_MB : BUDGET_PC_MB) * 1048576;
       const kursZeit = Object.assign({}, stand().kursZeit), kursFertig = Object.assign({}, stand().kursFertig);
       // Der Knopf durchsucht alle Kurse; automatische und fortgesetzte Läufe nur die, die nicht vor kurzem ganz durchsucht wurden.
       // Fortgesetzte ohne gemerkte Funde (Update mitten im Abruf) durchsuchen alle, sonst fehlten deren Dateien.
@@ -1464,6 +1605,8 @@ module.exports = function (ctx) {
       b.kurseOffen = aktive.filter((k) => kursAn(k.refId) && fertig.indexOf(k.refId) < 0).length;
       const geaenderteKurse = {};
       let n = 0, fehlerN = 0, naechste = 0;
+      // Bytes je Lauf: geladen, dazu was gerade unterwegs ist (Größe aus der Liste, sonst 0)
+      let bytesGeladen = 0, bytesUnterwegs = 0;
       // Zähler über die Stapel eines Auftrags: schon geladene + alle, die jetzt noch fehlen (auch über der Grenze)
       const vorher = o.weiter ? ((auftrag() || {}).geladen || 0) : 0;
       const gesamt = vorher + kandidaten.length;
@@ -1481,14 +1624,25 @@ module.exports = function (ctx) {
           const c = kandidaten[naechste++];
           if (!kursAn(c.kurs.refId)) continue; // während des Laufs abgewählt
           if (n >= kappe) { plus(b, c.kurs.refId, "rest"); continue; }
+          // laut Liste zu groß (auch Funde eines früheren Laufs): gar nicht laden
+          if (c.lg != null && c.lg > MAX_MB * 1048576) { await ablegen(async () => { gestoppt(r); zuGrossVorab(c, c.lg, b); await speichern(); }); continue; }
+          // Budget je Lauf erreicht: der Rest kommt mit dem nächsten Stapel bzw. Lauf
+          const schaetzung = c.lg || 0, vorn = bytesGeladen + bytesUnterwegs;
+          if (n > 0 && (vorn >= budget || vorn + schaetzung > budget)) { plus(b, c.kurs.refId, "rest"); continue; }
           fort(o, { phase: "laden", code: c.code || "", erledigt: vorher + n, gesamt });
           n++; b.geladen = n;
           let bytes = null;
+          bytesUnterwegs += schaetzung;
           try {
             bytes = bytesAus(await anfrage(b, r, () => q.laden(c.eintrag)));
             gestoppt(r); // verworfen, während die Datei kam (eine fertig geladene Datei wird noch abgelegt, auch wenn ein anderer Download scheiterte)
             if (!bytes) throw fehlerArt("datei", "leere Antwort");
           } catch (e) {
+            // über MAX_MB, ohne Größe in der Liste: der Download brach ab
+            if (e && e.art === "zu-gross") {
+              await ablegen(async () => { gestoppt(r); zuGrossVorab(c, Math.max(Number(e.groesse) || 0, MAX_MB * 1048576 + 1), b); await speichern(); });
+              continue;
+            }
             if (!einzeln(e)) throw e;
             // Fund eines früheren Laufs, den es in ILIAS nicht mehr gibt (404/410): kein Fehler, aus den Funden (findet ihn das
             // nächste Durchsuchen wieder, kommt er wieder)
@@ -1498,7 +1652,8 @@ module.exports = function (ctx) {
             plus(b, c.kurs.refId, "fehler");
             if (fehlerN >= FEHLER_MAX) throw fehlerArt("dateien", `${fehlerN} Dateien ließen sich nicht laden (zuletzt ${c.original}).`);
             continue;
-          }
+          } finally { bytesUnterwegs -= schaetzung; }
+          bytesGeladen += bytes.length;
           await ablegen(async () => { gestoppt(r); if (c.art === "neu") await neuAblegen(c, bytes, b, r, E); else await aktualisieren(c, bytes, b, r, E); });
           geaenderteKurse[c.kurs.refId] = true;
         }
@@ -1527,6 +1682,7 @@ module.exports = function (ctx) {
         case "anderes-geraet": return "Ein anderes Gerät lädt gerade deine ILIAS-Unterlagen. Sie kommen über deinen Sync.";
         case "zugang": return b.fehler;
         case "abgelehnt": return TEXT_ABGELEHNT;
+        case "unklar": case "pause": return TEXT_UNKLAR;
         // Fehlertext aus dem Code nur in Zeile, Fenster und Protokoll, nie im Hinweis
         case "fehler": return "Unterlagen aus ILIAS kamen nicht an." + (gleich ? ` Neuer Versuch in ${Math.round(weiterIn / MIN)} Min.` : " Bitte später noch einmal versuchen.");
         case "abgebrochen": return b.grund === "stopp" ? "ILIAS gestoppt." : "Abruf von ILIAS abgebrochen.";
@@ -1544,11 +1700,14 @@ module.exports = function (ctx) {
     };
     const nachLauf = (b, beginn, t0) => {
       if (b.art === "fehler" || b.art === "zugang") standSetzen({ fehler: b.fehler, fehlerZeit: iso(), gesperrt: b.art === "zugang" ? true : stand().gesperrt });
-      else if (b.art === "nur-gruppen") standSetzen({ zuletzt: iso(), fehler: "", fehlerZeit: "", warnung: b.warnung });
-      else if (b.art === "ok" || b.art === "unveraendert") standSetzen(Object.assign({ zuletzt: iso(), fehler: "", fehlerZeit: "", warnung: b.warnung, neu: b.neu + b.fassungen, rest: b.rest }, zaehlen()));
-      // Angemeldet und gelesen: dieses Passwort hat ILIAS bestätigt (Alma darf es nutzen)
-      if (["ok", "unveraendert", "nur-gruppen", "kurse"].indexOf(b.art) >= 0 && hatZugang()) lokal(L.zugangOk, iso());
-      if (["extern", "ohne-anmeldung", "ohne-zugang", "gesperrt", "abgelehnt"].indexOf(b.art) < 0) {
+      else if (b.art === "unklar") standSetzen({ fehler: b.fehler, fehlerZeit: iso(), pauseBis: new Date(ms() + PAUSE_UNKLAR).toISOString() });
+      else if (b.art === "nur-gruppen") standSetzen({ zuletzt: iso(), fehler: "", fehlerZeit: "", warnung: b.warnung, pauseBis: "" });
+      else if (b.art === "ok" || b.art === "unveraendert") standSetzen(Object.assign({ zuletzt: iso(), fehler: "", fehlerZeit: "", warnung: b.warnung, neu: b.neu + b.fassungen, rest: b.rest, pauseBis: "" }, zaehlen()));
+      else if (b.art === "kurse") standSetzen({ pauseBis: "" });
+      // Angemeldet und gelesen: hat die Anmeldung das Passwort gesendet, hat ILIAS es bestätigt (Alma darf es nutzen); galt nur
+      // eine alte Sitzung, ist ein noch nicht bestätigtes Passwort ungeprüft (Alma und das Webmail prüfen es selbst)
+      if (["ok", "unveraendert", "nur-gruppen", "kurse"].indexOf(b.art) >= 0) zugangGeprueft(!!b.zugangBestaetigt);
+      if (["extern", "ohne-anmeldung", "ohne-zugang", "gesperrt", "abgelehnt", "pause"].indexOf(b.art) < 0) {
         const e = { zeit: beginn, art: b.art, dauer: Math.round((ms() - t0) / 1000), anfragen: b.anfragen, neu: b.neu, vorhanden: b.vorhanden, ersetzt: b.ersetzt, fassungen: b.fassungen, zuGross: b.zuGross, rest: b.rest };
         if (b.geloescht) e.geloescht = b.geloescht;
         if (b.fehler) e.fehler = b.fehler;
@@ -1592,14 +1751,15 @@ module.exports = function (ctx) {
         try { await lauf(o, b, meins); }
         catch (e) {
           const art = (e && e.art) || "";
-          b.art = art === "zugang" ? "zugang" : art === "abbruch" ? "abgebrochen" : "fehler";
+          b.art = art === "zugang" ? "zugang" : art === "abbruch" ? "abgebrochen" : unklar(e) ? "unklar" : "fehler";
           b.grund = art === "abbruch" ? meins.grund : (e && e.grund) || "";
           b.fehler = fehlerText(e);
           try { console.warn("ilias: " + b.fehler); } catch (x) { /* egal */ }
         }
         if (stopp !== meins) return b; // verworfen: ein neuer Lauf hat übernommen
         try { nachLauf(b, beginn, t0); } catch (e) { /* Stand ist Nebensache */ }
-        // Gespeichertes Passwort eindeutig abgelehnt: alle Geräte mit diesem Passwort halten an (uni-zugang.json)
+        // Gespeichertes Passwort eindeutig abgelehnt: alle Geräte mit diesem Passwort halten an (uni-zugang.json), ein
+        // ungeprüftes nur dieses (markerSchreiben)
         if (b.art === "zugang" && b.grund === "zugang-falsch") await markerSchreiben("ilias");
         // Anmeldung abgelehnt (ohne dein Zutun kein Versuch mehr): dieses Gerät prüft deine Gruppen nicht mehr
         if (b.art === "zugang") { try { await gruppenFreigeben(UEBERNAHME); } catch (e) { /* beim nächsten Start (verwaisteGruppen) */ } }
@@ -1636,6 +1796,7 @@ module.exports = function (ctx) {
       if (gruppenHier && laeuft) text = "Übungsgruppen werden geprüft …";
       else if (gruppenHier && s.gesperrt) text = s.fehler || TEXT_ABGELEHNT;
       else if (gruppenHier && abgelehnt()) text = TEXT_ABGELEHNT;
+      else if (gruppenHier && s.fehler && pausiert()) text = TEXT_UNKLAR;
       else if (gruppenHier && s.fehler) text = "Fehler beim Prüfen deiner Übungsgruppen." + (s.zuletzt ? ` Zuletzt geklappt ${vorText(s.zuletzt, ms())}.` : "");
       else if (gruppenHier) { warnung = s.warnung; text = "Prüft deine Übungsgruppen" + (s.zuletzt ? `, zuletzt ${vorText(s.zuletzt, ms())}` : "") + ". " + (warnung ? warnung + " " : "") + TEXT_EXTERN; }
       else if (ex) text = TEXT_EXTERN;
@@ -1644,6 +1805,7 @@ module.exports = function (ctx) {
       else if (laeuft) text = fortschrittAnzeige(letzter).text;
       else if (s.gesperrt) text = s.fehler || TEXT_ABGELEHNT;
       else if (abgelehnt()) text = TEXT_ABGELEHNT;
+      else if (s.fehler && pausiert()) text = TEXT_UNKLAR;
       else if (s.fehler) text = "Fehler beim letzten Abruf." + (s.zuletzt ? ` Zuletzt aktualisiert ${vorText(s.zuletzt, ms())}.` : "");
       else if (s.anderes && !s.abrufer) { text = "Ein anderes Gerät lädt deine ILIAS-Unterlagen. Sie kommen über deinen Sync."; anderes = true; }
       else if (s.zuletzt) { warnung = s.warnung; text = `Aktualisiert ${vorText(s.zuletzt, ms())}.` + (warnung ? " " + warnung : ""); }
@@ -1657,7 +1819,7 @@ module.exports = function (ctx) {
         zustand, geprueft: s.zuletzt, fehlerZeit: s.fehler ? s.fehlerZeit : "", warnungen: warnung ? [warnung] : [], grund: s.fehler,
         verbunden: !ex && verbunden, bereit: bereit(), extern: ex, gruppenZugang: gruppenHier, gruppenExtern: gx, laeuft: !!laeuft, zuletzt: s.zuletzt, versucht: s.versucht,
         fehler: s.fehler ? (gruppenHier ? "Fehler beim Prüfen deiner Übungsgruppen." : "Fehler beim letzten Abruf.") : "", gesperrt, abgelehnt: abgelehnt(), neu: s.neu, rest: s.rest, dateien: z.dateien, kurse: z.kurse, zuGross: z.zuGross,
-        grenzeMb: MAX_MB, abrufer: !!s.abrufer, anderes, benutzer: benutzer(), warnung, text: text.replace(/\.\./g, "."),
+        grenzeMb: MAX_MB, abrufer: !!s.abrufer, anderes, benutzer: benutzer(), warnung, pause: pausiert(), text: text.replace(/\.\./g, "."),
         fortschritt: laeuft ? fortschrittAnzeige(letzter) : null,
       };
     };
@@ -1672,7 +1834,7 @@ module.exports = function (ctx) {
         if (!io.existiert(INDEX)) return false;
         let o = null;
         try { o = JSON.parse(await io.lesenText(INDEX)); } catch (e) { return false; }
-        const x = indexPruefen(o);
+        const x = indexPruefen(o, false); // Pfade außerhalb von Unterlagen/ allein sind kein Grund zum Schreiben
         if (!["kurse", "dateien", "ignoriert"].some((k) => o && o[k] && JSON.stringify(o[k]) !== JSON.stringify(x[k]))) return false;
         await indexLesen(); await speichern();
         return true;
@@ -1881,7 +2043,15 @@ module.exports = function (ctx) {
       laden: async (e) => {
         const url = H.downloadUrl(e, e.url);
         if (!url) throw fehlerArt("datei", "kein Download-Link");
-        const r = await mitAnmeldung(async () => pruefen(await s.anfrage({ url, binaer: true }), url), (x) => istHtml(x) && istLogin(alsText(x)));
+        // höchstens MAX_MB: größere bricht der Transport ab (auch ohne Größe in der Liste), der Lauf merkt sie als zu groß
+        let r;
+        try { r = await mitAnmeldung(async () => pruefen(await s.anfrage({ url, binaer: true, maxBytes: MAX_MB * 1048576 }), url), (x) => istHtml(x) && istLogin(alsText(x))); }
+        catch (x) {
+          if (!x || x.grund !== "zu-gross") throw x;
+          const z = fehlerArt("zu-gross", `Datei über ${MAX_MB} MB`);
+          z.groesse = x.groesse;
+          throw z;
+        }
         const endung = String(e.endung || "").toLowerCase();
         if (istHtml(r) && endung !== "html" && endung !== "htm") throw fehlerArt("datei", "ILIAS lieferte eine Seite statt der Datei");
         return r;
@@ -2029,11 +2199,13 @@ module.exports = function (ctx) {
     zugangLoeschen: () => motor().zugangLoeschen(),
     hatZugang: () => motor().hatZugang(),
     // Uni-Zugang für Noten & Anmeldungen (alma-konto.js): { benutzer, seit, ok, abgelehnt, dienst, gesperrt, bestaetigt };
-    // zugangAbgelehnt(dienst) schreibt den Marker (nur nach eindeutiger Ablehnung eines gespeicherten Passworts)
+    // zugangAbgelehnt(dienst) schreibt den Marker (nur nach eindeutiger Ablehnung eines gespeicherten Passworts; ungeprüft nur
+    // für dieses Gerät)
     uniZugang: () => motor().uniZugang(),
     zugangAbgelehnt: (dienst) => motor().markerSchreiben(dienst),
-    // Abo-Links des ILIAS-Kalenders für den Uni-Login (uni-login.js): [{ url, begrenzt }], wirft mit e.art
-    kalenderLinks: () => motor().kalenderLinks(),
+    // Abo-Links des ILIAS-Kalenders für den Uni-Login (uni-login.js): [{ url, begrenzt }], wirft mit e.art; o.automatisch: im
+    // Hintergrund (während der Pause nicht)
+    kalenderLinks: (o) => motor().kalenderLinks(o),
     bereit: () => motor().bereit(),
     kannSpeichern: () => !!(app && app.secretStorage && typeof app.secretStorage.setSecret === "function"),
     kurse: () => motor().kurse(),
@@ -2062,7 +2234,7 @@ module.exports = function (ctx) {
     geheimId, geheimIdAus,
     // reine Logik und Tests
     erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, nachErsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, ohneKennwort, pfadOhneKennwort, indexPruefen,
-    K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, MAX_MB, NEU_MOBIL, NEU_PC, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
+    K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, TEXT_UNGEPRUEFT, TEXT_UNKLAR, PAUSE_UNKLAR, MAX_MB, NEU_MOBIL, NEU_PC, BUDGET_MOBIL_MB, BUDGET_PC_MB, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;
 
@@ -2089,7 +2261,7 @@ module.exports = function (ctx) {
         const m = motor();
         if (plugin().testIliasAus || !m.bereit() || m.laeuft) return null;
         const b = await m.jetztHolen({});
-        return !b || ["anderes-geraet", "extern", "ohne-anmeldung", "ohne-zugang", "gesperrt", "abgelehnt"].indexOf(b.art) >= 0 ? null
+        return !b || ["anderes-geraet", "extern", "ohne-anmeldung", "ohne-zugang", "gesperrt", "abgelehnt", "pause"].indexOf(b.art) >= 0 ? null
           : ["ok", "unveraendert", "nur-gruppen", "kurse"].indexOf(b.art) >= 0;
       } }) : null;
     // „Bitte prüfen“ (Meldekanal der Quellen): Anmeldung abgelehnt und Warnungen des letzten Laufs

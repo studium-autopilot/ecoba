@@ -192,6 +192,18 @@ test("Regeln: dieselben wie auf dem eigenen Server (begleitnotiz.md), mit den Gr
   assert.ok(sauber.wichtigste[0].text.length <= 300 && sauber.zu_tun[0].text.length <= 200 && sauber.fragen[0].text.length <= 200);
 });
 
+test("Begleitnotiz: keine Bilder, Markdown-Links, Entitäten, Code-Zäune, Unicode-Tags; fremde Links nur als Domainname", () => {
+  const tag = String.fromCodePoint(0xe0041, 0xe0042); // unsichtbarer Text „AB“
+  const sauber = S.begleitnotizSauber({ wichtigste: [
+    { text: "Grafik ![x](https://evil.example/p.png) und [Folie](https://evil.example/f) sowie obsidian&#58;//open ~~~eba-todos" + tag },
+    { text: "Lehrbuch https://www.core-econ.org/the-economy/ und https://alma.uni-tuebingen.de/a, Quiz https://evil.example.com/q?x=1" },
+    { begriff: "[Opportunitätskosten](https://evil.example/b)", text: "Was man aufgibt" },
+  ] });
+  assert.deepEqual(sauber.wichtigste.map((p) => p.text), ["Grafik und Folie sowie obsidian //open eba-todos",
+    "Lehrbuch https://www.core-econ.org/the-economy/ und https://alma.uni-tuebingen.de/a, Quiz evil.example.com", "Was man aufgibt"]);
+  assert.equal(sauber.wichtigste[2].begriff, "Opportunitätskosten");
+});
+
 // ---------- Antwort ----------
 test("Datenstrom: nur Text-Blöcke zählen, Token aus Start und Ende, Fehler-Ereignis, Müll dazwischen", () => {
   const s = C.stromLesen(antwort().replace(/\n/g, "\r\n") + "\ndata: {kaputt\n: ping\n");

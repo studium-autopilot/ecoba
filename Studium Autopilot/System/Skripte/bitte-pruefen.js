@@ -11,7 +11,8 @@
 // Meldekanal der Quellen (seit 0.4.5, für alle; quellen.js, Quellen-Vertrag): Punkte, die eine Quelle mit Q.melden anmeldet,
 // ohne Kästchen und ohne persönliche Werte, z. B. aus Noten & Anmeldungen „**Aus Alma** · neue Angaben zu B110, auf der
 // Modulseite übernehmen“, aus ILIAS „**ILIAS** · 12 Dateien fehlen gerade in Unterlagen …“ oder aus dem Alma-Stundenplan
-// „**Stundenplan** · … steht nicht mehr in Alma“. Ein Tipp öffnet ihr Ziel. Ohne Protokoll keine Knöpfe.
+// „**Stundenplan** · … steht nicht mehr in Alma“. Ein Tipp öffnet ihr Ziel, auch auf einem Link im Text; Links darin zeichnet der
+// Block als reinen Text (linksLoesen), denn Titel und Räume kommen von außen. Ohne Protokoll keine Knöpfe.
 // In allen anderen Fällen (kein eigener Abgleich, kein Protokoll, kein Abschnitt, keine Punkte) zeichnet der Block nichts: Klasse
 // eba-bp-aus, samt Hülle auf Höhe 0 gefaltet (eba-core.css Abschnitt 59; nie display:none an der Hülle, siehe
 // tests/leseansicht.test.js). Normale Nutzer:innen sehen also keine leere Karte.
@@ -82,6 +83,12 @@ const quellenPunkte = (liste) => (Array.isArray(liste) ? liste : []).filter((x) 
   const t = String(x.text).match(TITEL_REST);
   return { zeile: null, roh: "", haken: null, text: t ? t[1] : String(x.text), meta: t ? t[2].trim() : "", details: [], ziel: String(x.pfad), anker: x.anker ? String(x.anker) : "", quelle: String(x.quelle || "quelle") };
 });
+
+// Links in einem gezeichneten Element durch ihren Text ersetzen (Punkte der Quellen: ein Tipp öffnet ihr Ziel, nie eine Adresse
+// aus ihrem Text). el: Element mit querySelectorAll; jeder Link a mit childNodes und replaceWith
+const linksLoesen = (el) => {
+  for (const a of Array.from(el.querySelectorAll("a"))) a.replaceWith(...Array.from(a.childNodes));
+};
 
 module.exports = function (ctx) {
   const app = window.app;
@@ -201,16 +208,22 @@ module.exports = function (ctx) {
         box.addEventListener("change", (e) => { e.stopPropagation(); umschalten(p, box, zeile); });
       }
       const inh = zeile.createDiv({ cls: "eba-td-inhalt" });
-      warten.push(md(p.text, inh.createDiv({ cls: "eba-td-text" }), comp));
-      if (p.meta) warten.push(md(p.meta, inh.createDiv({ cls: "eba-td-meta" }), comp));
-      for (const t of p.details) warten.push(md(t, inh.createDiv({ cls: "eba-bp-detail" }), comp));
-      // Tipp: Link folgen (extern öffnet Obsidian selbst), sonst das Protokoll an dieser Zeile; Punkte einer Quelle: ihr Ziel
+      // Punkte einer Quelle enthalten Text von außen (Titel, Räume): ihre Links werden reiner Text (linksLoesen)
+      const zeigen = (text, cls) => { const el = inh.createDiv({ cls }); return md(text, el, comp).then(() => { if (p.quelle) linksLoesen(el); }); };
+      warten.push(zeigen(p.text, "eba-td-text"));
+      if (p.meta) warten.push(zeigen(p.meta, "eba-td-meta"));
+      for (const t of p.details) warten.push(zeigen(t, "eba-bp-detail"));
+      // Tipp: Punkt einer Quelle → immer ihr Ziel; sonst Link folgen (extern öffnet Obsidian selbst) oder das Protokoll an dieser Zeile
       inh.addEventListener("click", (e) => {
+        if (p.quelle) {
+          e.preventDefault(); e.stopPropagation();
+          ctx.oeffnen(p.ziel + (p.anker ? "#" + p.anker : ""), { neu: !!(e.ctrlKey || e.metaKey) });
+          return;
+        }
         const a = e.target.closest ? e.target.closest("a") : null;
         if (a && !a.classList.contains("internal-link")) return;
         e.preventDefault(); e.stopPropagation();
-        if (p.quelle) ctx.oeffnen(p.ziel + (p.anker ? "#" + p.anker : ""), { neu: !!(e.ctrlKey || e.metaKey) });
-        else if (a) linkOeffnen(a, e); else protokollOeffnen(e, p.zeile);
+        if (a) linkOeffnen(a, e); else protokollOeffnen(e, p.zeile);
       });
       if (p.quelle) zeile.addClass("eba-bp-quelle");
     }
@@ -271,5 +284,6 @@ module.exports = function (ctx) {
 };
 module.exports.lesen = lesen;
 module.exports.quellenPunkte = quellenPunkte;
+module.exports.linksLoesen = linksLoesen;
 module.exports.haken = haken;
 module.exports.PROTOKOLL = PROTOKOLL;

@@ -369,3 +369,21 @@ test("Abgleich: Trägt die Liste folien nur an manchen Kapiteln (Lehrbuch, Folie
   assert.ok(text.includes("\n- [ ] 2 Märkte · [[X100 Folien 02 Markt|Folien]]\n"), "folien: 2 gilt");
   assert.ok(text.includes("\n- [ ] 1 Einführung\n- [ ] 2 Märkte") && text.includes("\n- [ ] 3 Preise\n"), "Folien 03 gehören nicht zu Kapitel 3");
 });
+
+test("Klausurrelevanz: Felder nur, wenn angegeben; geprüft; als „in 9 von 12 Altklausuren“ in der Zeile und zurück gelesen", () => {
+  const ohne = kapitelPruefen({ schema: 1, module: [modul()] }).module[0];
+  assert.ok(!("altklausuren" in ohne) && !("in_altklausuren" in ohne.kapitel[0]), "ohne Angabe gleiche Form wie bisher");
+  const R = kapitelPruefen({ schema: 1, module: [modul({ altklausuren: 12, kapitel: [{ nr: "1", titel: "Grundbegriffe", seiten: 40, in_altklausuren: 9 },
+    { nr: "2", titel: "Märkte", in_altklausuren: 0 }, { nr: "3", titel: "Ohne Angabe" }] }),
+  modul({ code: "X200", kapitel: [{ nr: "1", titel: "Ohne altklausuren", in_altklausuren: 2 }] }),
+  modul({ code: "X300", altklausuren: 4, kapitel: [{ nr: "1", titel: "Mehr als ausgezählt", in_altklausuren: 5 }] }),
+  modul({ code: "X400", altklausuren: 0, kapitel: [{ nr: "1", titel: "Null Altklausuren" }] })] });
+  assert.deepEqual(R.verworfen.map((v) => v.id), ["X200 WS 2026/27", "X300 WS 2026/27", "X400 WS 2026/27"]);
+  const e = R.module[0];
+  assert.equal(e.altklausuren, 12);
+  assert.deepEqual(e.kapitel.map((k) => k.in_altklausuren), [9, 0, undefined]);
+  const text = zentralNotiz(e, "");
+  assert.match(text, /\n- \[ \] 1 Grundbegriffe · 40 S\. · in 9 von 12 Altklausuren\n- \[ \] 2 Märkte · in 0 von 12 Altklausuren\n- \[ \] 3 Ohne Angabe\n/);
+  assert.deepEqual(kapitelLesen(text).map((k) => k.altklausuren), [{ in: 9, von: 12 }, { in: 0, von: 12 }, null]);
+});
+

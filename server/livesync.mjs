@@ -10,11 +10,12 @@
 // HKDF-Salz | Geheimtext). LiveSync liest dieses Format auch in älteren Fassungen.
 //
 // Kurzer Link: Der Setup-Link ist gut 1 000 Zeichen lang, als QR-Code im Terminal zu groß. livesync.sh legt ihn darum als
-// Benutzer „studium“ für 30 Minuten unter einer Zufallskennung ab (nur ihr SHA-256 ist Dateiname); dienst.mjs zeigt unter
+// Benutzer des Web-Dienstes (studium-web) für 30 Minuten unter einer Zufallskennung in web/livesync-links/ ab (nur ihr SHA-256 ist
+// Dateiname); dienst.mjs zeigt unter
 // https://<Adresse>/v1/livesync/<kennung> eine Seite mit dem Knopf „In Obsidian öffnen“. Ohne den Code nützt der Link nichts.
 //
 //   node livesync.mjs link [konfig]   → JSON { link, code } auf stdout (als root: liest die Zugangsdaten)
-//   node livesync.mjs ablegen         Setup-Link von stdin → JSON { kennung, ablauf } (als studium, $STUDIUM_SERVER_DATEN)
+//   node livesync.mjs ablegen         Setup-Link von stdin → JSON { kennung, ablauf } (als studium-web, $STUDIUM_SERVER_DATEN/web)
 import { createHash, webcrypto } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -153,7 +154,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.ar
   if (befehl === "link") {
     link(JSON.parse(readFileSync(datei || KONFIG, "utf8"))).then((r) => console.log(JSON.stringify(r)));
   } else if (befehl === "ablegen") {
-    console.log(JSON.stringify(ablegen(process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server", readFileSync(0, "utf8").trim())));
+    console.log(JSON.stringify(ablegen(join(process.env.STUDIUM_SERVER_DATEN || "/var/lib/studium-server", "web"), readFileSync(0, "utf8").trim())));
   } else {
     console.error("Aufruf: node livesync.mjs link [konfig] | ablegen");
     process.exit(2);

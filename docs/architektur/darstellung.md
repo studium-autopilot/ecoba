@@ -12,12 +12,18 @@ wechseln. Bis dahin gab es dazu Paper, Paper Tübingen, Paper Schiefer und Graph
 **Designs (seit 18.10.2026):** Elfenbein (Vorgabe), Flieder (`eba-flieder.css`: Lila, Akzent Violett, Rosé als zweite Farbe,
 große Rundungen, runde Überschriften) und Klar (`eba-klar.css`: weiß, kühle Grautöne, Akzent Blau, Formen aus den Grundwerten
 von `eba-core.css`). Form und Schrift von Flieder und Klar gelten hell und dunkel (seit 18.10.2026; vorher sah dunkel immer
-aus wie Elfenbein), ihre Farben nur hell: dunkel gelten die dunklen Farben von Elfenbein, bis beide eigene haben. Gewählt wird über eine Klasse am
+aus wie Elfenbein), seit 01.11.2026 auch eigene Farben: Jedes Design hat ein eigenes Dunkel (Flieder dunkle Aubergine, Klar fast
+schwarzes kühles Grau; bis dahin galten dunkel die Farben von Elfenbein). Gewählt wird über eine Klasse am
 `body` (`eba-design-flieder`, `eba-design-klar`; Elfenbein ohne Klasse), nicht über das Ein- und Ausschalten der Bausteine:
-Die eingeschalteten Bausteine stehen in `appearance.json` und kämen auf alle Geräte. Alle drei sind immer an. Die hellen
-Regeln von Elfenbein (Form und Schrift) stehen darum unter `:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"]))`,
-die der Designs unter `.eba-design-…:where(.theme-light, .theme-dark)`, ihre Farben unter `.eba-design-….theme-light`. Alle
-sind so spezifisch wie `.theme-light`: Die Ausnahmen in `eba-core.css` (Folien,
+Die eingeschalteten Bausteine stehen in `appearance.json` und kämen auf alle Geräte. Alle drei sind immer an. Die Regeln von
+Elfenbein (Form und Schrift) stehen darum unter `:is(.theme-light, .theme-dark):where(:not([class*="eba-design-"]))`, seine
+Farben unter `.theme-light:not(…)` und `.theme-dark:not(…)` mit demselben Attribut, ohne `:where` (seit 01.11.2026: Obsidian
+setzt auf iPhone und iPad mit `.is-mobile.theme-dark` die Seite auf Schwarz, und dagegen verlor Elfenbein, dunkel war seine Seite
+dort schwarz statt dunkelbraun; ein Test prüft, dass die Farben jedes Designs zwei Klassen am `body` haben); die Regeln der Designs unter
+`.eba-design-…:where(.theme-light, .theme-dark)`, ihre Farben unter `.eba-design-….theme-light` und `.eba-design-….theme-dark`.
+Dunkel gilt für alle drei zuerst `.theme-dark` in `eba-paper-elfenbein.css` (Schatten schwebender Ebenen, Modulfarben im
+Wochenraster); `tests/design.test.js` prüft, dass Flieder und Klar dunkel jede Farbe setzen, die Elfenbein dunkel setzt, sonst
+käme sie von Obsidian. Die Regeln sind so spezifisch wie `.theme-light`: Die Ausnahmen in `eba-core.css` (Folien,
 erste Überschrift unter dem Seitenkopf, iPhone) gewinnen weiter, und die Reihenfolge der Bausteine spielt keine Rolle. Ohne
 geladene Skripte gilt Elfenbein; damit ein gewähltes Design beim Start nicht erst nach den Skripten erscheint, steht seine
 Klasse zusätzlich in `eba-start-klassen`, und `main.js` setzt sie schon in `onload` (und nimmt sie in `onunload` wieder weg).
@@ -39,8 +45,9 @@ schrieb die Wahl `appearance.json` und schaltete damit alle Geräte mit um. `app
   die ganze Breite mit 44 px Tippfläche. Zeigt die Wahl des Geräts, sonst Obsidians Einstellung (neu gezeichnet bei
   `config-changed` `theme`). Bis zur Rückmeldung am 17.10.2026 waren es drei Zeilen mit „Wählen“ und Erklärsätzen.
 - Darunter die Designs als drei gleiche Vorschau-Kacheln ohne Text (`designWahl()`, `.eba-dk`, `eba-core.css` Abschnitt 43,
-  Baustein „Vorschau-Kacheln“ in [design.md](../design.md)): je eine Mini-Karte in den hellen Farben und der Rundung des Designs
-  (Seite, Karte, Akzent, Vorschau-Variablen `--m-*`), gewählt mit Ring und Haken; `role="radiogroup"`, je Kachel ein Knopf
+  Baustein „Vorschau-Kacheln“ in [design.md](../design.md)): je eine Mini-Karte in den Farben und der Rundung des Designs
+  (Seite, Karte, Akzent, Vorschau-Variablen `--m-*`), hell oder dunkel, wie es gerade gilt (seit 01.11.2026; vorher immer die
+  hellen, dunkel hätten sonst alle gleich ausgesehen), gewählt mit Ring und Haken; `role="radiogroup"`, je Kachel ein Knopf
   `role="radio"` mit `aria-label`/`title` „Design 1“ bis „Design 3“, Tab auf die gewählte, Pfeiltasten, Pos1 und Ende wechseln
   (`designNachTaste()`); zeichnet `designSetzen()` den Block neu, bekommt die neue Kachel den Fokus. **Designs haben für
   Nutzer:innen keine Namen** (seit 18.10.2026): Elfenbein, Flieder und Klar gibt es nur in Code, CSS und dieser Doku; die
@@ -74,7 +81,7 @@ Economics, Business Administration, ohne Spezialisierung, offen; Titel „Noch o
 `varianteFinden`, `varianteTitel`, `varianteImSatz`), `STUDIENBEGINN` (Datum oder leer = „Aktuelles Semester“, wandert mit; die
 Einrichtung trägt bewusst ein festes Datum ein; `studienbeginnLesen`, `studienbeginnLeerTitel`), `NOTE` (Modulnote 1,0–4,0 in
 Zehnteln oder 5,0, mit Komma; `notePruefen`) und `ZIELNOTE` (1,0–4,0, höchstens zwei Nachkommastellen; `zielnotePruefen`).
-Einrichtung, Formular, Zeilen „Variante“, Befehl „Variante wählen“ (`aktionen.js`) und Modulfeld (`modul.js`) nutzen nur das
+Einrichtung, Formular, Zeile „Variante“, Befehl „Variante wählen“ (`aktionen.js`) und Modulfeld (`modul.js`) nutzen nur das
 Register; vorher hatte jede Stelle eigene Reihenfolgen und Wörter („Weiß ich noch nicht“, „noch offen“, „Noch offen“). Eine
 neue Eingabe, die an mehr als einer Stelle vorkommt, kommt dorthin. Tests: `tests/felder.test.js`.
 
@@ -83,12 +90,14 @@ selbst geänderte ältere Dashboards keine Lücke zeigen.
 
 Codeblock `eba-personalisieren angaben` (Einstellungen & Hilfe, „Deine Angaben“): kompakte Zeilen wie unter Verbindungen
 (seit 24.10.2026, `.eba-ez`). Name, Studienbeginn (das erste Semester), Zielnote mit dem Wert rechts, leer „Eintragen“ (kurz,
-damit auf dem iPhone mit großer Schrift Titel und Wert in eine Zeile passen); ein Tipp öffnet das Formular am Feld. Einrichtung
-rechts „Starten“ oder „Fortsetzen“ im Akzent, fertig „Fertig“ und darunter die übersprungenen Schritte; ein Tipp startet sie
-(erneut ab Schritt 2). `eba-personalisieren variante`: je Variante eine Zeile ohne Symbol, die gewählte mit Haken rechts und
-dem, was daraus folgt (`FOLGE`), darunter, die übrigen wählt ein Tipp (Aktion `variante`). Bis 0.6.6 hatte jede Zeile einen
-Satz und einen Knopf („Ändern“, „Erneut starten“, „Wählen“). Beim
+damit auf dem iPhone mit großer Schrift Titel und Wert in eine Zeile passen); ein Tipp öffnet das Formular am Feld. Variante
+(seit 02.11.2026, zwischen Studienbeginn und Zielnote) zeigt nur die gewählte, offen „Wählen“; ein Tipp öffnet die Auswahl
+(Aktion `variante` ohne `wert`). Einrichtung rechts „Starten“ oder „Fortsetzen“ im Akzent, fertig „Fertig“ und darunter die
+übersprungenen Schritte; ein Tipp startet sie (erneut ab Schritt 2). `eba-personalisieren variante` zeichnet seit 02.11.2026
+nichts (wie der Block ohne Argument); bis dahin war die Variante ein eigener Abschnitt mit je Variante einer Zeile, die gewählte
+mit Haken und dem, was aus ihr folgt. Die Seite ersetzt jedes Update, auch selbst geändert (`IMMER_NEU`, [update.md](update.md)). Bis 0.6.6 hatte jede Zeile einen Satz und einen Knopf („Ändern“, „Erneut
+starten“, „Wählen“). Beim
 Neuzeichnen der Leseansicht (`rerender`) liefert `getSectionInfo` oft nichts, `blockArgument()` gibt dann die Vorgabe zurück;
 bis 16.10.2026 blieb die Karte deshalb unsichtbar. Seitdem gilt wie in `todos.js` ein Rückfall über den Text im Block
 („Variante: …“ → `variante`, „Deine Angaben: …“ → `angaben`), und beide nehmen die Klasse `eba-perso-aus` wieder ab. Für
-Tests: `ctx.personalisieren.angabenZeilen(fm, zustand)`, `varianteZeilen(fm)`.
+Tests: `ctx.personalisieren.angabenZeilen(fm, zustand)`.

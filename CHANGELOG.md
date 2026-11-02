@@ -2,6 +2,33 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.7 – Lernplan fertig, eigenes Dunkel, geprüfte Updates
+
+- **Neu:** Jedes Design hat jetzt ein eigenes Dunkel, auch in den Widgets und auf iPhone und iPad hinter den Karten: Das lila
+  bleibt nachts lila, das weiße wird ein tiefes Grau mit blauem Akzent. Bisher sahen dunkel alle drei gleich aus.
+- **Neu:** Dein eigener Server findet in Gmail auch Termine aus Mails, die nicht von der Uni kommen, etwa von Initiativen.
+  Claude sieht dafür Absender, Betreff und erste Zeilen deiner neuen Mails und liest nur die zum Studium ganz.
+- **Neu:** Im **Lernplan** wählst du je Modul Haupttermin, Nachholtermin oder ein späteres Semester, und mit **Zeit je Kapitel**
+  bekommen einzelne Kapitel mehr oder weniger Zeit. Bei vielen Altklausuren schlägt er vor, was oft drankommt.
+- **Einfacher:** Im **Lernplan** wählst du statt einer Zielnote gleich, nach wie viel Zeit du alles verstanden haben willst: 60,
+  70 oder 80 %. Der Plan und die Bahnen jedes Moduls rücken sofort an ihren neuen Platz.
+- **Neu:** Der **Lernplan** ist fertig und nicht mehr abgeblendet. Hat eines deiner Module keine geprüfte Kapitelliste, sagt
+  dir oben ein Kasten, welches.
+- **Übersichtlicher:** Im **Lernplan** stehen die Module als Liste, aufgeklappt mit der Klausur ganz oben, und die Notiz eines
+  Moduls zeigt dasselbe. Auf dem iPhone ist die Seite gut halb so lang, die Woche wählst du in einer Leiste.
+- **Behoben:** Auf iPhone und iPad ging beim Wischen manchmal eine Seitenleiste auf, vor allem gleich nach dem Öffnen. Jetzt
+  bleibt sie zu; zurück geht es wie bisher vom linken Rand.
+- **Übersichtlicher:** Unter **Einstellungen & Hilfe** ist die Variante eine Zeile bei **Deine Angaben**, **Dateien** fehlt
+  (alle Seiten über ≡ unten rechts). Jedes Update bringt die Seite neu, auch wenn du sie aus Versehen geändert hast.
+- **Neu:** Unter **Karteikarten** lernst du über das Menü ⋯ einen **ganzen Stapel** auf einmal, nicht nur 20 neue Karten am Tag.
+  Dort steht auch **Stapel löschen**, mit **Rückgängig** samt Lernstand.
+- **Behoben:** Auf dem iPhone lag das ✕ im Lernfenster der **Karteikarten** unter der Statusleiste und ließ sich nicht antippen.
+  Jetzt sitzt es darunter.
+- **Übersichtlicher:** Auf dem iPad nutzen Notizen die ganze Breite, nur der Text bleibt schmal genug zum Lesen. Im Kopf
+  einer Vorlesungsnotiz steht ihr Thema nicht mehr ein zweites Mal über den Folien.
+- **Sicherer:** Studium Autopilot startet nur Teile aus geprüften Updates, Links aus Mails, ILIAS und PDFs führen nur zur Uni
+  oder zu CORE, **Öffnen** startet kein Programm. Dein Server trennt Web-Dienst und Claude-Anmeldung.
+
 ## 0.7.6 – Widgets, Lernplan, Server mit einem Befehl
 
 - **Neu:** Dein Stundenplan, Fristen und Prüfungen als Widgets auf dem Home- und Sperrbildschirm von iPhone und iPad, in den

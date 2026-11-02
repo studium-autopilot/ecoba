@@ -20,7 +20,8 @@
 // Am PC hält transportDesktop die Verbindungen offen (keep-alive, spart den TLS-Aufbau je Anfrage) und holt Seiten gzip-
 // komprimiert (ILIAS-Seiten sind 100–200 KB groß); Dateien kommen unverändert.
 // Fehler sind Error-Objekte mit grund: fremder-host, schleife, zu-viele-spruenge, zeitueberschreitung, netz (code),
-//   kein-transport, kodierung. Fehler enthalten nie Bodies, Formularwerte oder Kekswerte; diese Datei protokolliert nichts.
+//   kein-transport, kodierung, zu-gross (groesse: so viele Bytes kamen bzw. waren angekündigt). Fehler enthalten nie Bodies,
+//   Formularwerte oder Kekswerte; diese Datei protokolliert nichts.
 //
 // Dienste (seit 0.4.5): Eine Sitzung gehört genau einem Dienst und darf nur dessen Server erreichen. „ilias“ (Vorgabe): ILIAS
 //   und die Anmeldeseite der Uni (IdP); „alma“: nur alma.uni-tuebingen.de (Noten & Anmeldungen, alma-konto.js). Am PC kann eine
@@ -33,7 +34,8 @@
 //   N.sitzung({ transport?, uni? ("tuebingen"), dienst? ("ilias" | "alma" | "mail"), jetzt?, drossel? }) → { anfrage(o), keks (nur PC,
 //     sonst null), istHostErlaubt(url), uni, dienst, hosts, mobil, schliessen() (offene Verbindungen des PCs schließen) }
 //   N.drossel({ parallel? (2), abstand? (400 ms), jetzt?, warten? }) → { eintritt() → freigeben(), parallel, abstand }
-//     anfrage({ url, methode = "GET", formular?, body?, kopf?, folgen = true, binaer = false, maxSpruenge = 12 })
+//     anfrage({ url, methode = "GET", formular?, body?, kopf?, folgen = true, binaer = false, maxSpruenge = 12, maxBytes? })
+//       maxBytes: größte Antwort (Vorgabe 20 MB für Seiten, 100 MB für Dateien); darüber Fehler „zu-gross“
 //       formular: Objekt oder [[name, wert], …] → application/x-www-form-urlencoded (bei GET als Query an die URL)
 //       → { status, kopf (Namen klein, ohne set-cookie), typ (content-type), text | daten + arrayBuffer (binaer: dasselbe
 //           ArrayBuffer), url (End-URL; mobil null), weg: [{ status, url }] (jede Antwort; mobil leer) }
@@ -62,6 +64,9 @@ module.exports = function (ctx) {
   const ZEITLIMIT_MOBIL = 60000;         // ms für eine Seite
   const ZEITLIMIT_MOBIL_DATEI = 300000;  // ms für eine Datei (bis 50 MB auch über langsames Mobilfunknetz)
   const MAX_KEKSE = 300;        // je Keksdose; darüber fällt der älteste weg
+  // Größte Antwort, wenn der Aufrufer keine Grenze nennt (maxBytes): Seiten sind 100–200 KB groß, Dateien höchstens so groß wie
+  // die Grenze des Aufrufers (ILIAS: 50 MB). Am PC bricht die Antwort ab, sobald mehr kommt (auch entpackt), auf iPhone/iPad danach.
+  const MAX_SEITE = 20 * 1048576, MAX_DATEI = 100 * 1048576;
   // Last für den Server der Uni (Drossel): höchstens so viele Anfragen gleichzeitig und so viel Abstand zwischen zwei Starts,
   // also höchstens 2,5 Anfragen je Sekunde. Zum Vergleich PFERD: eine Anfrage nach der anderen ohne Pause (gemessen bei uns
   // gut 3,5 je Sekunde samt Weiterleitungen).
@@ -81,6 +86,7 @@ module.exports = function (ctx) {
     "netz": "Netzwerkfehler",
     "kein-transport": "Kein Netzzugang für ILIAS auf diesem Gerät",
     "kodierung": "Unbekannte Kodierung der Antwort",
+    "zu-gross": "Antwort zu groß",
   };
   function fehler(grund, mehr) {
     const e = new Error((TEXTE[grund] || grund) + (mehr && mehr.host ? " (" + mehr.host + ")" : "") + (mehr && mehr.code ? " [" + mehr.code + "]" : ""));
@@ -508,6 +514,9 @@ module.exports = function (ctx) {
   // Kennung für Alma (User-Agent): wer anfragt und wo es den Code gibt
   const kennung = (version) => "Studium-Autopilot/" + (version || pluginVersion() || "0") + " (+" + KENNUNG_URL + ")";
   const istDesktop = () => !!(ctx.obsidian && ctx.obsidian.Platform && ctx.obsidian.Platform.isDesktopApp);
+  // Größte Antwort einer Anfrage a (maxBytes des Aufrufers, sonst die Vorgabe für Seiten bzw. Dateien)
+  const groesstes = (a) => (a && a.maxBytes > 0 ? a.maxBytes : a && a.binaer ? MAX_DATEI : MAX_SEITE);
+  const istZuGross = (e) => !!e && (e.code === "ERR_BUFFER_TOO_LARGE" || e instanceof RangeError);
 
   // ---------- Transport am PC: Node-https aus Electron (folgt nie selbst, set-cookie roh) ----------
   // Nur am PC (Platform.isDesktopApp) oder unter reinem Node (Tests am Entwickler-PC, dort gibt es kein window).
@@ -528,6 +537,7 @@ module.exports = function (ctx) {
     const verbindungen = typeof nm.https.Agent === "function" ? new nm.https.Agent({ keepAlive: true, maxSockets: PARALLEL + 2 }) : undefined;
     const senden = async function (a) {
       const u = hostPruefen(a.url, ALLE_HOSTS);
+      const grenze = groesstes(a);
       const bytes = a.body == null ? null : new TextEncoder().encode(String(a.body));
       const kopf = {};
       for (const k of Object.keys(a.kopf || {})) kopf[k.toLowerCase()] = a.kopf[k];
@@ -543,25 +553,40 @@ module.exports = function (ctx) {
         try {
           anf = nm.https.request({ hostname: u.host, port: u.port ? Number(u.port) : 443, path: anfragePfad(u), method: a.methode || "GET", headers: kopf, timeout: zeitlimit, agent: verbindungen }, (res) => {
             const stuecke = [];
-            res.on("data", (c) => stuecke.push(c));
+            let laenge = 0;
+            // Zu groß (angekündigt oder unterwegs): abbrechen, nichts weiter lesen
+            const zuGross = (n) => {
+              scheitern(fehler("zu-gross", { host: u.host, groesse: n }));
+              try { if (typeof res.destroy === "function") res.destroy(); anf.destroy(); } catch (e) { /* schon zu */ }
+            };
+            const angekuendigt = Number((res.headers || {})["content-length"]);
+            if (angekuendigt > grenze) { zuGross(angekuendigt); return; }
+            res.on("data", (c) => {
+              if (erledigt) return;
+              laenge += c.length;
+              if (laenge > grenze) { stuecke.length = 0; zuGross(laenge); return; }
+              stuecke.push(c);
+            });
             res.on("error", scheitern);
             res.on("close", () => { if (!erledigt && !res.complete) scheitern(fehler("netz", { host: u.host, code: "ABGEBROCHEN" })); });
             res.on("end", () => {
               if (erledigt) return;
               try {
-                let laenge = 0;
-                for (const c of stuecke) laenge += c.length;
                 let u8 = new Uint8Array(laenge), o = 0;
                 for (const c of stuecke) { u8.set(c, o); o += c.length; }
                 const k = kopfKlein(res.headers);
                 const enc = String(k["content-encoding"] || "").trim().toLowerCase();
                 if (enc && enc !== "identity" && u8.length) {
                   if (!nm.zlib) throw fehler("kodierung", { host: u.host });
+                  // entpackt höchstens grenze Bytes (sonst wirft zlib, die Antwort gilt als zu groß)
+                  const z = { maxOutputLength: grenze };
                   let roh;
-                  if (enc === "gzip" || enc === "x-gzip") roh = nm.zlib.gunzipSync(u8);
-                  else if (enc === "deflate") { try { roh = nm.zlib.inflateSync(u8); } catch (e) { roh = nm.zlib.inflateRawSync(u8); } }
-                  else if (enc === "br") roh = nm.zlib.brotliDecompressSync(u8);
-                  else throw fehler("kodierung", { host: u.host, code: enc });
+                  try {
+                    if (enc === "gzip" || enc === "x-gzip") roh = nm.zlib.gunzipSync(u8, z);
+                    else if (enc === "deflate") { try { roh = nm.zlib.inflateSync(u8, z); } catch (e) { if (istZuGross(e)) throw e; roh = nm.zlib.inflateRawSync(u8, z); } }
+                    else if (enc === "br") roh = nm.zlib.brotliDecompressSync(u8, z);
+                  } catch (e) { throw istZuGross(e) ? fehler("zu-gross", { host: u.host, groesse: grenze + 1 }) : e; }
+                  if (!roh) throw fehler("kodierung", { host: u.host, code: enc });
                   u8 = new Uint8Array(roh.buffer, roh.byteOffset, roh.byteLength);
                   delete k["content-encoding"];
                 }
@@ -604,8 +629,16 @@ module.exports = function (ctx) {
       const abgelaufen = new Promise((_, nein) => { uhr = setTimeout(() => nein(fehler("zeitueberschreitung", { host: u.host })), grenze); });
       try { r = await Promise.race([requestUrl(p), abgelaufen]); } catch (e) { throw netzFehler(e, u.host); } finally { clearTimeout(uhr); }
       const aus = { status: r.status, kopf: kopfKlein(r.headers), folgtSelbst: true };
-      if (a.binaer) aus.daten = r.arrayBuffer;
-      else { try { aus.text = r.text; } catch (e) { aus.text = ""; } }
+      // requestUrl liefert nur die ganze Antwort: zu groß fällt erst danach auf
+      const hoechstens = groesstes(a);
+      if (a.binaer) {
+        aus.daten = r.arrayBuffer;
+        const n = aus.daten && aus.daten.byteLength;
+        if (n > hoechstens) throw fehler("zu-gross", { host: u.host, groesse: n });
+      } else {
+        try { aus.text = r.text; } catch (e) { aus.text = ""; }
+        if (typeof aus.text === "string" && aus.text.length > hoechstens) throw fehler("zu-gross", { host: u.host, groesse: aus.text.length });
+      }
       return aus;
     };
     senden.folgtSelbst = true;
@@ -668,7 +701,7 @@ module.exports = function (ctx) {
         const schluessel = methode + " " + ohneFragment(url) + "\n" + kekse + "\n" + (body === null ? "" : body);
         if (gesehen.has(schluessel)) throw fehler("schleife", { host: hostVon(url) });
         gesehen.add(schluessel);
-        const antwort = await transport({ url: ohneFragment(url), methode, kopf, body, binaer });
+        const antwort = await transport({ url: ohneFragment(url), methode, kopf, body, binaer, maxBytes: a.maxBytes });
         if (mobil || antwort.folgtSelbst) return ergebnis(antwort, null, [], binaer);
         const hk = kopfKlein(antwort.kopf);
         if (keks && hk["set-cookie"]) keks.aufnehmen(hk["set-cookie"], url);

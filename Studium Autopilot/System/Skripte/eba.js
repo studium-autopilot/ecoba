@@ -17,11 +17,17 @@ const codeImText = (text) => { const m = String(text ?? "").match(MODULCODE_IM_T
 // Titel → Dateiname, eine Regel für alle Notizen, die das Plugin benennt (eba.ablegen, zentrale Termine in zentral.js): Emojis
 // samt Bausteinen weg (sonst stehen sie in Tab, Kopfzeile und Suche), „: “ wird „ – “ (UB-Kurs: Zotero → UB-Kurs – Zotero),
 // Zeichen, die Windows, iOS oder Links stören, werden „-“ (WS 2026/27 → WS 2026-27), Leerraum einfach, keine Punkte oder
-// Leerzeichen am Ende (Windows).
+// Leerzeichen am Ende (Windows). Seit 01.11.2026 außerdem: unsichtbare Steuer- und Richtungszeichen weg, keine Punkte am Anfang
+// (versteckte Datei), und ein Name, den Windows für Geräte reserviert (CON, PRN, AUX, NUL, COM1–9, LPT1–9, auch „aux.pdf“),
+// bekommt ein „-“ dahinter („AUX-“, „aux-.pdf“). Titel ohne solche Zeichen ergeben genau den Namen wie vorher: Aus ihm leiten
+// Skripte die Pfade vorhandener Notizen ab (tests/dateititel.test.js hält das fest).
 // Bausteine (Variantenwähler, Verbinder, Tastenkappe) als Alternativen, nicht in der Zeichenklasse (sonst falsch zerlegt)
 const EMOJI = /[\u{1F000}-\u{1FAFF}\u{2300}-\u{23FF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{E0020}-\u{E007F}]|\u{FE0E}|\u{FE0F}|\u{200D}|\u{20E3}/gu;
-const dateiTitel = (text) => String(text ?? "").replace(EMOJI, "").replace(/\s*:\s+/g, " – ").replace(/[\\/:*?"<>|#^\[\]]/g, "-")
-  .replace(/\s+/g, " ").trim().replace(/[. ]+$/, "");
+// Steuerzeichen (ohne Tab und Zeilenende, die zu Leerraum werden), weiches Trennzeichen, Breite-null- und Richtungszeichen
+const UNSICHTBAR = /[\u0000-\u0008\u000e-\u001f\u007f-\u009f\u00ad\u061c\u180e\u200b\u200c\u200e\u200f\u202a-\u202e\u2060-\u2064\u2066-\u2069]/g;
+const RESERVIERT = /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?=\s*(\.|$))/i;
+const dateiTitel = (text) => String(text ?? "").replace(EMOJI, "").replace(UNSICHTBAR, "").replace(/\s*:\s+/g, " – ")
+  .replace(/[\\/:*?"<>|#^\[\]]/g, "-").replace(/\s+/g, " ").trim().replace(/^[. ]+/, "").replace(/[. ]+$/, "").replace(RESERVIERT, "$1-");
 // Eigener Uni-Abgleich: Liegt System/Skripte/abgleich.js im Tresor oder steht „ilias_unterlagen: extern“ in den Einstellungen,
 // bringt ein eigener Abgleich (bzw. ein eigener Server) Daten selbst. Welche, sagt quelleExtern. existiert(pfad) → bool,
 // einstellungen = Frontmatter von System/Einstellungen.md.

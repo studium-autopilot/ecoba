@@ -1,4 +1,5 @@
-# Updates für die Werkzeuge in GitHub Actions und für ESLint (nur Entwicklung, nicht im Tresor).
+# Updates für die Werkzeuge in GitHub Actions, für ESLint und esbuild (npm) und für Ruff (pip, nur Entwicklung, nicht im Tresor).
+# Neue Versionen kommen erst nach 7 Tagen als Vorschlag (cooldown), damit ein vergiftetes Release auffällt, bevor es hier landet.
 # Achtung: Dieses Repo entsteht aus einem Export (docs/release.md). Einen gemergten Dependabot-PR in der Arbeitskopie
 # nachziehen, sonst überschreibt ihn der nächste Release.
 version: 2
@@ -7,6 +8,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
@@ -14,6 +17,14 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       eslint:
         patterns: ["*"]
+  - package-ecosystem: pip
+    directory: /.github
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7

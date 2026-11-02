@@ -122,7 +122,7 @@ cssclasses:
 > | Business Administration | Pflicht |
 > | ohne Spezialisierung | Wahlpflicht: Profilbildungsbereich VWL oder BWL (oder Elective Studies) |
 >
-> Welche Variante gilt, stellst du in den [[Einstellungen & Hilfe#Variante|Einstellungen]] ein. Als Elective Studies zählt es, wenn oben bei „Zählt als“ Elective Studies steht; geprüft wird das im [[Studienverlauf#Schwerpunkte|Studienverlauf]].
+> Welche Variante gilt, stellst du in den [[Einstellungen & Hilfe#Deine Angaben|Einstellungen]] ein. Als Elective Studies zählt es, wenn oben bei „Zählt als“ Elective Studies steht; geprüft wird das im [[Studienverlauf#Schwerpunkte|Studienverlauf]].
 
 > [!eba-info|handy-zu]+ Hinweise
 > - Titel im Studienplan/PO: "Arbeit, Personal, Organisation"; Modulbeschreibung: DE "Arbeit, Personal und Organisation" / EN "HRM and Organization".

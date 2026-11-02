@@ -7,6 +7,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const { laden } = require("./laden.js");
+const SIG = require("./signatur.js");
 
 const U = laden("update").ctx.update;
 const Z = laden("zentral").ctx.zentral;
@@ -22,7 +23,7 @@ test("Dateiklassen: was ein Update ersetzen darf", () => {
     "System/Gerüste/Modul.md": "system", ".obsidian/snippets/eba-core.css": "system", ".obsidian/snippets/eigen.css": "",
     ".claude/CLAUDE.md": "claude", ".claude/skills/studium-autopilot/SKILL.md": "claude", ".claude/skills/studium-autopilot/unter/x.md": "",
     ".claude/skills/studium-autopilot/tresor (deine Fassung vor 0.6.9).md.txt": "", ".claude/unter/CLAUDE.md": "",
-    ".claude/skills/eigener/SKILL.md": "", ".claude/settings.json": "", ".claude/settings.local.json": "",
+    ".claude/skills/eigener/SKILL.md": "", ".claude/settings.json": "claude", ".claude/settings.local.json": "",
     ".obsidian/app.json": "einstellung", ".obsidian/types.json": "einstellung", ".obsidian/community-plugins.json": "einstellung",
     ".obsidian/appearance.json": "", ".obsidian/workspace.json": "", ".obsidian/workspace-mobile.json": "",
     "Dashboard.md": "seite", "Studium/Prüfungen.md": "seite", "Studium/Unter/x.md": "", "System/Daten/Musterplan.md": "seite",
@@ -77,13 +78,18 @@ async function listeBauen(version, dateien) {
   return liste;
 }
 const BASIS = (v) => `https://raw.githubusercontent.com/studium-autopilot/ecoba/v${v}/`;
-// Release-Quelle: Dateien des neuen Stands unter BASIS/Studium Autopilot/…; stoerung(pfad) → "netz" | "kaputt" | undefined
+// Signatur der Liste (tests/update-signatur.test.js): ein Wegwerf-Schlüssel für alle Updates hier
+const SCHLUESSEL = SIG.schluesselBauen();
+const signiert = (v) => ({ signatur: SIG.signaturUrl(v), schluessel: [SCHLUESSEL.oeffentlich] });
+// Release-Quelle: Dateien des neuen Stands unter BASIS/Studium Autopilot/…, die Signatur der Liste aus dem Release (nicht in
+// geholt); stoerung(pfad) → "netz" | "kaputt" | undefined
 function quelle(version, dateien, listeText, stoerung) {
   const praefix = BASIS(version) + "Studium%20Autopilot/";
   const geholt = [], frisch = [];
   return {
     geholt, frisch,
     holen: async (url, o) => {
+      if (url === SIG.signaturUrl(version)) return enc(SIG.signieren(enc(listeText), SCHLUESSEL));
       assert.ok(url.startsWith(praefix), url);
       const pfad = url.slice(praefix.length).split("/").map(decodeURIComponent).join("/");
       geholt.push(pfad);
@@ -128,7 +134,8 @@ async function update(alt, neu, ist, o) {
   const release = { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: o.falscheListe ? "0".repeat(64) : await U.sha256(enc(listeText)), notiz: "" };
   const io = { holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste };
   const vorher = sp.stand();
-  const b = await U.aktualisierenMit(io, { release, alt: U.listePruefen(altListe).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 15, 14, 5), marke: o.marke });
+  const b = await U.aktualisierenMit(io, { release, alt: U.listePruefen(altListe).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 15, 14, 5), marke: o.marke,
+    ...signiert("0.3.0") });
   return { b, sp, q, vorher, listeText, release, io };
 }
 
@@ -158,7 +165,7 @@ cssclasses:
   - eba
 ---
 
-# Einstellungen & Hilfe
+# Erste Schritte
 
 - [${haken ? "x" : " "}] Obsidian öffnen
 - [ ] Alma verbinden
@@ -166,14 +173,14 @@ ${extra || ""}`;
 const ALT = {
   [KERN + "main.js"]: "// kern 0.2.0\n", [KERN + "manifest.json"]: '{"version":"0.2.0"}\n',
   "System/Skripte/zentral.js": "// zentral alt\n", "System/Skripte/weg.js": "// fällt weg\n", "System/Skripte/weg2.js": "// fällt weg, geändert\n",
-  "Studium/Einstellungen & Hilfe.md": SEITE(false), "Dashboard.md": "# Dashboard alt\n", "Studium/Prüfungen.md": "# Prüfungen alt\n",
+  "Studium/Erste Schritte.md": SEITE(false), "Dashboard.md": "# Dashboard alt\n", "Studium/Prüfungen.md": "# Prüfungen alt\n",
   "Module/1 Grundstudium/B110 BWL.md": MODUL({}), "Module/1 Grundstudium/E101 VWL.md": MODUL({ text: "VWL" }),
   ".obsidian/app.json": JSON.stringify({ alwaysUpdateLinks: true }, null, 2),
 };
 const NEU = {
   [KERN + "main.js"]: "// kern 0.3.0\n", [KERN + "manifest.json"]: '{"version":"0.3.0"}\n',
   "System/Skripte/zentral.js": "// zentral neu\n", "System/Skripte/neu.js": "// ganz neu\n",
-  "Studium/Einstellungen & Hilfe.md": SEITE(false, "- [ ] Neu in 0.3.0\n"), "Dashboard.md": "# Dashboard neu\n", "Studium/Prüfungen.md": "# Prüfungen neu\n",
+  "Studium/Erste Schritte.md": SEITE(false, "- [ ] Neu in 0.3.0\n"), "Dashboard.md": "# Dashboard neu\n", "Studium/Prüfungen.md": "# Prüfungen neu\n",
   "Module/1 Grundstudium/B110 BWL.md": MODUL({ ects: 9, wer: "Prof. B", text: "<div>Mein Stand v2</div>" }),
   "Module/1 Grundstudium/E101 VWL.md": MODUL({ ects: 8, text: "VWL v2" }),
   "Module/2 Profil/B220 Marketing.md": MODUL({ text: "Marketing" }),
@@ -354,7 +361,7 @@ test("Plan: Entscheidung je Datei", async () => {
   };
   for (const p of Object.keys(ALT)) await setzen(p, ALT[p]);
   await setzen("Dashboard.md", "# Mein Dashboard\n");                         // selbst geändert
-  await setzen("Studium/Einstellungen & Hilfe.md", SEITE(true));              // nur abgehakt
+  await setzen("Studium/Erste Schritte.md", SEITE(true));              // nur abgehakt
   await setzen("Module/1 Grundstudium/B110 BWL.md", MODUL({ status: "läuft" })); // Feld geändert
   delete ist["Studium/Prüfungen.md"];                                          // gelöscht
   await setzen("System/Skripte/weg2.js", "// fällt weg, von mir geändert\n");
@@ -364,7 +371,7 @@ test("Plan: Entscheidung je Datei", async () => {
   for (const s of U.planen(neu, alt, ist)) art[s.pfad] = s.art + (s.koerperNeu ? "+text" : "");
   assert.deepEqual(art, {
     [KERN + "main.js"]: "ersetzen", [KERN + "manifest.json"]: "ersetzen", "System/Skripte/zentral.js": "ersetzen",
-    "System/Skripte/neu.js": "anlegen", "Dashboard.md": "behalten-neu", "Studium/Einstellungen & Hilfe.md": "seite-haken",
+    "System/Skripte/neu.js": "anlegen", "Dashboard.md": "behalten-neu", "Studium/Erste Schritte.md": "seite-haken",
     "Studium/Prüfungen.md": "uebersprungen", "Module/1 Grundstudium/B110 BWL.md": "modul-mischen+text",
     "Module/1 Grundstudium/E101 VWL.md": "ersetzen", "Module/2 Profil/B220 Marketing.md": "anlegen",
     ".obsidian/app.json": "json-mischen", "System/Skripte/weg.js": "entfernen", "System/Skripte/weg2.js": "entfernen-sichern",
@@ -413,6 +420,42 @@ test("Plan: Systemdateien kommen immer neu, unveränderte Vorlage lässt deine S
   assert.equal(ohne["Studium/Prüfungen.md"], "behalten-neu");
 });
 
+test("Plan: Einstellungen & Hilfe ist bei allen gleich: geändert wie eine Systemdatei ersetzt, gelöscht wieder angelegt", async () => {
+  const H = "Studium/Einstellungen & Hilfe.md";
+  assert.deepEqual(U.IMMER_NEU, [H]);
+  assert.equal(U.klasseVon(H), "seite", "Klasse bleibt, sonst lehnten Planer bis 0.7.6 die Liste ab");
+  const alt = U.listePruefen(await listeBauen("0.2.0", Object.assign({}, ALT2, { [H]: "# Einstellungen\n" }))).wert;
+  const gleich = U.listePruefen(await listeBauen("0.3.0", Object.assign({}, NEU2, { [H]: "# Einstellungen\n" }))).wert;
+  const anders = U.listePruefen(await listeBauen("0.3.0", Object.assign({}, NEU2, { [H]: "# Einstellungen neu\n" }))).wert;
+  const art = async (liste, text) => {
+    const ist = {};
+    for (const [p, t] of Object.entries(ALT2)) ist[p] = { sha: await U.sha256(enc(t)) };
+    if (text != null) ist[H] = { sha: await U.sha256(enc(text)) };
+    return U.planen(liste, alt, ist).filter((s) => s.pfad === H)[0].art;
+  };
+  assert.equal(await art(anders, "# Einstellungen\n\naus Versehen\n"), "ersetzen-sichern");
+  assert.equal(await art(gleich, "# Einstellungen\n\naus Versehen\n"), "ersetzen-sichern", "auch wenn die Vorlage gleich blieb");
+  assert.equal(await art(anders, null), "anlegen", "gelöscht: kommt wieder");
+  assert.equal(await art(anders, "# Einstellungen\n"), "ersetzen");
+  // Andere Seiten wie bisher
+  const P = "Studium/Prüfungen.md", ist = {};
+  for (const [p, t] of Object.entries(ALT2)) ist[p] = { sha: await U.sha256(enc(t)) };
+  ist[P] = { sha: await U.sha256(enc("# meine\n")) };
+  assert.equal(U.planen(gleich, alt, ist).filter((s) => s.pfad === P)[0].art, "eigene");
+});
+
+test("Reparatur: Einstellungen & Hilfe, die ein Planer bis 0.7.6 stehen ließ, wird die neue Fassung", async () => {
+  const H = "Studium/Einstellungen & Hilfe.md", K = "Studium/Einstellungen & Hilfe (neu 0.4.4).md", T = "# Einstellungen 0.4.4\n";
+  const liste = U.listePruefen(await listeBauen("0.4.4", Object.assign({}, REL, { [H]: T }))).wert;
+  const sp = speicher(Object.assign({}, REL, { [H]: "# Einstellungen\n\naus Versehen\n", [K]: T }));
+  const b = await U.heilenMit({ lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste },
+    { liste, synchron: true, zeit: new Date(2026, 10, 2, 9, 30) });
+  assert.equal(b.ok, true, b.fehler);
+  assert.equal(sp.text(H), T);
+  assert.equal(sp.text(K), null);
+  assert.equal(sp.text("Studium/Einstellungen & Hilfe (deine Fassung vor 0.4.4).md.txt"), "# Einstellungen\n\naus Versehen\n");
+});
+
 test("Update: selbst geänderte Darstellung und Programmteile werden ersetzt, deine Fassung liegt daneben", async () => {
   const CSS = ".obsidian/snippets/eba-core.css", CSS_DEIN = ".obsidian/snippets/eba-core (deine Fassung vor 0.3.0).css.txt";
   const MAIN_DEIN = KERN + "main (deine Fassung vor 0.3.0).js.txt";
@@ -427,16 +470,17 @@ test("Update: selbst geänderte Darstellung und Programmteile werden ersetzt, de
   assert.deepEqual(b.gesichert, [{ pfad: KERN + "main.js", sicherung: MAIN_DEIN }, { pfad: CSS, sicherung: CSS_DEIN }]);
   assert.deepEqual(b.neuKopien.map((x) => x.pfad), []);
   assert.equal(sp.text(b.sicherung + "/" + CSS), "/* von Hand */\n");
-  // Sicherung vor der neuen Fassung, Kern zuletzt (vor den Listen)
+  // Sicherung vor der neuen Fassung, Kern zuletzt (vor der Signatur und den Listen)
   const r = sp.reihe;
   assert.ok(r.indexOf(CSS_DEIN) < r.indexOf(CSS) && r.indexOf(MAIN_DEIN) < r.indexOf(KERN + "main.js"));
-  assert.deepEqual(r.slice(-4), [KERN + "main.js", KERN + "manifest.json", U.LISTE, U.INSTALLIERT]);
-  // Zweiter Lauf derselben Version: nichts mehr zu tun, keine zweite Sicherung
-  const vorher = sp.stand();
+  assert.deepEqual(r.slice(-5), [KERN + "main.js", KERN + "manifest.json", U.LISTE_SIG, U.LISTE, U.INSTALLIERT]);
+  // Zweiter Lauf derselben Version: nur vorwärts, also nichts geladen und keine zweite Sicherung
+  const vorher = sp.stand(), geholt = q.geholt.length;
   const b2 = await U.aktualisierenMit({ holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste },
-    { release: { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)) }, alt: U.listePruefen(JSON.parse(listeText)).wert, altVersion: "0.3.0", zeit: new Date() });
-  assert.equal(b2.ok, true);
-  assert.equal(b2.gesichert.length + b2.geaendert.length, 0);
+    { release: { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)) }, alt: U.listePruefen(JSON.parse(listeText)).wert, altVersion: "0.3.0", zeit: new Date(),
+      ...signiert("0.3.0") });
+  assert.deepEqual([b2.ok, b2.art, b2.gesichert.length + b2.geaendert.length], [false, "liste", 0]);
+  assert.equal(q.geholt.length, geholt);
   assert.equal(sp.stand(), vorher);
   // Name schon mit anderem Inhalt belegt → nächster freier Name, nichts geht verloren
   const r2 = await update(ALT2, NEU2, Object.assign({}, ist, { [CSS_DEIN]: "/* ältere Sicherung */\n" }));
@@ -479,7 +523,7 @@ test("Update: keine Kopie, wenn die Vorlage gleich blieb oder deine Seite schon 
 // Vorlage gleich blieb, und die Seite blieb auf dem alten Stand.
 const CRLF = (t) => t.replace(/\n/g, "\r\n");
 test("Zeilenenden zählen nicht: dieselbe Fassung mit LF oder CRLF gilt als unverändert", async () => {
-  const V = "Studium/Studienverlauf.md", S = "System/Skripte/musterplan.js", M = "Module/1 Grundstudium/B110 BWL.md", H = "Studium/Einstellungen & Hilfe.md";
+  const V = "Studium/Studienverlauf.md", S = "System/Skripte/musterplan.js", M = "Module/1 Grundstudium/B110 BWL.md", H = "Studium/Erste Schritte.md";
   const alt = Object.assign({}, ALT2, { [V]: CRLF("# Studienverlauf\n\nStand 30.09.2026\n"), [S]: CRLF("// muster\n"), [M]: MODUL({}), [H]: SEITE(false) });
   const neu = Object.assign({}, alt, { [V]: CRLF("# Studienverlauf\n\nStand 20.10.2026\n"), [M]: MODUL({ ects: 9, text: "<div>Neu</div>" }),
     [H]: SEITE(false, "- [ ] Neu in 0.3.0\n") });
@@ -735,7 +779,7 @@ test("Alte Ordner: Eintrag ohne Ziel räumt nur einen leeren Ordner weg; die Vor
 
 test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
   const ist = Object.assign({}, ALT, {
-    "Dashboard.md": "# Mein Dashboard\n", "Studium/Einstellungen & Hilfe.md": SEITE(true),
+    "Dashboard.md": "# Mein Dashboard\n", "Studium/Erste Schritte.md": SEITE(true),
     "Module/1 Grundstudium/B110 BWL.md": MODUL({ status: "läuft", ergebnis: "2,0" }),
     "System/Skripte/weg2.js": "// fällt weg, von mir geändert\n",
     "System/Daten/Semester.md": "nie anfassen", "System/Einstellungen.md": "name: Ich", "Termine/2026-10-12 X.md": "eigener Termin",
@@ -747,7 +791,7 @@ test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
   assert.equal(sp.text("System/Skripte/neu.js"), NEU["System/Skripte/neu.js"]);
   assert.equal(sp.text("Dashboard.md"), "# Mein Dashboard\n", "deine Seite bleibt");
   assert.equal(sp.text("Dashboard (neu 0.3.0).md"), NEU["Dashboard.md"], "neue Fassung daneben");
-  assert.equal(sp.text("Studium/Einstellungen & Hilfe.md"), SEITE(true, "- [ ] Neu in 0.3.0\n"));
+  assert.equal(sp.text("Studium/Erste Schritte.md"), SEITE(true, "- [ ] Neu in 0.3.0\n"));
   assert.equal(sp.text("Studium/Prüfungen.md"), null, "gelöschte Seite kommt nicht wieder");
   const b110 = sp.text("Module/1 Grundstudium/B110 BWL.md");
   assert.match(b110, /^ects: 9$/m); assert.match(b110, /^status: läuft$/m); assert.match(b110, /^ergebnis: 2,0$/m); assert.match(b110, /Mein Stand v2/);
@@ -769,12 +813,13 @@ test("Update: ganzer Ablauf mit Sicherung, Kopien und Mischen", async () => {
   assert.ok(q.geholt.indexOf("Studium/Prüfungen.md") < 0);
   assert.equal(b.plugin, true);
   assert.deepEqual(b.neuKopien, [{ pfad: "Dashboard.md", kopie: "Dashboard (neu 0.3.0).md" }]);
-  // Ein zweiter Lauf mit derselben Version (z. B. zweites Gerät nach dem Sync) ändert nichts mehr
+  // Ein zweiter Lauf mit derselben Version (z. B. zweites Gerät nach dem Sync) ändert nichts mehr: nur vorwärts
   const alt2 = U.listePruefen(JSON.parse(listeText)).wert;
   const vorher = sp.stand();
   const b2 = await U.aktualisierenMit({ holen: q.holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen },
-    { release: { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)) }, alt: alt2, altVersion: "0.3.0", zeit: new Date() });
-  assert.equal(b2.ok, true);
+    { release: { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)) }, alt: alt2, altVersion: "0.3.0", zeit: new Date(),
+      ...signiert("0.3.0") });
+  assert.deepEqual([b2.ok, b2.art], [false, "liste"]);
   assert.equal(b2.geaendert.length + b2.angelegt.length + b2.gemischt.length + b2.neuKopien.length, 0);
   assert.equal(sp.stand(), vorher);
 });
@@ -955,11 +1000,11 @@ test("Unterbrochen: update.json als erste Datei und danach liegen lassen; Schrei
   assert.deepEqual(r.sp.reihe.slice(-2), [U.LISTE, U.INSTALLIERT], "installiert.json zuletzt");
   assert.deepEqual(JSON.parse(r.sp.text(U.MARKE)), { version: "0.3.0", von: "0.2.0", geraet: "g-a", seit: marke.seit });
   assert.deepEqual(r.q.frisch, [U.LISTE], "die Liste kommt nie aus dem Zwischenspeicher");
-  // Zweiter Lauf derselben Version: nichts zu schreiben, also auch keine neue Marke
+  // Zweiter Lauf derselben Version: nur vorwärts, also nichts geschrieben und auch keine neue Marke
   const vorher = r.sp.stand();
   const b2 = await U.aktualisierenMit(r.io, { release: r.release, alt: U.listePruefen(JSON.parse(r.listeText)).wert, altVersion: "0.3.0", zeit: new Date(),
-    marke: { geraet: "g-b", seit: "2026-10-19T12:00:00Z" } });
-  assert.equal(b2.ok, true);
+    marke: { geraet: "g-b", seit: "2026-10-19T12:00:00Z" }, ...signiert("0.3.0") });
+  assert.deepEqual([b2.ok, b2.art], [false, "liste"]);
   assert.equal(r.sp.stand(), vorher);
   // Schreibfehler: alles zurück, auch die Marke (fehlte sie vorher, ist sie wieder weg; sonst der alte Inhalt)
   r = await update(ALT, NEU, ALT, { marke, kaputtBei: (_p, n) => n === 5 });
@@ -979,7 +1024,7 @@ test("Unterbrochen: App mitten im Schreiben beendet → dieses Gerät sieht „f
   const release = { version: "0.3.0", url_basis: BASIS("0.3.0"), sha256: await U.sha256(enc(listeText)), notiz: "" };
   const start = Object.assign({}, ALT, { [U.INSTALLIERT]: JSON.stringify(altListe) });
   const lauf = (sp, alt) => U.aktualisierenMit({ holen: quelle("0.3.0", NEU, listeText).holen, lesen: sp.lesen, schreiben: sp.schreiben, loeschen: sp.loeschen, liste: sp.liste },
-    { release, alt: U.listePruefen(alt).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 19, 11, 40), marke });
+    { release, alt: U.listePruefen(alt).wert, altVersion: "0.2.0", zeit: new Date(2026, 9, 19, 11, 40), marke, ...signiert("0.3.0") });
   const ganz = speicher(start);
   assert.equal((await lauf(ganz, altListe)).ok, true);
   const n = ganz.reihe.length;
@@ -1092,6 +1137,58 @@ test("Nach Updates suchen: Knopf in der Zeile, Befehl; eine neue Version gleich 
   assert.deepEqual(G.hinweise, ["Keine Verbindung. Versuch es später noch einmal."]);
 });
 
+test("Von außen (c.extern): „Neue Version installieren“ zeigt nur das Angebot im Fenster, installiert nichts; in der App wie bisher", async () => {
+  const G = geraet({ release: "0.4.9", plugin: { testUpdateAntwort: true } });
+  await G.aktionen["vorlage-aktualisieren"].ausfuehren({ extern: true });
+  assert.equal(G.fenster.length, 1);
+  assert.equal(ansicht(G.fenster[0]).stufe, "angebot");
+  assert.deepEqual(G.anfragen.map((x) => x.url).filter((u) => u.includes("system-dateien.json")), [], "keine Signatur, keine Liste geladen");
+  assert.equal(G.U.letzterBericht, null, "kein Update begonnen");
+  // In der App (Knopf, Befehl): das Update beginnt (im Test ohne Netz: es bricht beim Laden ab)
+  const fehler = console.error; console.error = () => {};
+  try { await G.aktionen["vorlage-aktualisieren"].ausfuehren({ extern: false }); } finally { console.error = fehler; }
+  assert.ok(G.anfragen.some((x) => x.url.endsWith("/system-dateien.json.sig")));
+});
+
+test("Schalter „Beta-Versionen“: zeigt, ob er auf diesem Gerät an ist; in der App umgelegt, setzt er das Gerät und update_kanal", async () => {
+  // geraetAn: Schalter auf diesem Gerät (ctx.skripte.betaAn); kanal: update_kanal im Tresor
+  const zeichnen = (geraetAn, kanal) => {
+    const beta = [], fm = kanal ? { update_kanal: kanal } : {};
+    const s = { beta, fm, schalter: null, text: "" };
+    class Setting {
+      setName() { return this; }
+      setDesc(t) { s.text = t; return this; }
+      addToggle(f) { const t = { setValue: (v) => { t.wert = v; return t; }, onChange: (fn) => { t.fn = fn; return t; } }; f(t); s.schalter = t; return this; }
+    }
+    const L = laden("update", { frontmatter: { "System/Einstellungen.md": fm }, kontext: {
+      obsidian: { Setting, Notice: class { setMessage() {} hide() {} } },
+      skripte: { listen: () => [], beta: async (an) => { beta.push(an); geraetAn = an; return an; }, betaAn: () => geraetAn },
+    } });
+    L.ctx.app.fileManager = { processFrontMatter: async (f, fn) => fn(fm) };
+    L.ctx.update.kanalSchalter({});
+    s.L = L;
+    return s;
+  };
+  const SATZ = "Neue Versionen früher bekommen, zum Ausprobieren. Sie können noch Fehler haben.";
+  let s = zeichnen(false, "");
+  assert.deepEqual([s.schalter.wert, s.text], [false, SATZ]);
+  assert.deepEqual(s.beta, [], "Zeichnen allein ändert nichts");
+  await s.schalter.fn(true);
+  assert.deepEqual([s.beta, s.fm.update_kanal], [[true], "beta"]);
+  await s.schalter.fn(false);
+  assert.deepEqual([s.beta, s.fm.update_kanal], [[true, false], "stabil"]);
+  // Ein anderes Gerät hat ihn eingeschaltet: hier aus, mit einem Satz dazu; einschalten setzt dann dieses Gerät
+  s = zeichnen(false, "beta");
+  assert.deepEqual([s.schalter.wert, s.text], [false, SATZ + " Auf einem anderen Gerät ist er an, auf diesem noch aus."]);
+  await s.schalter.fn(true);
+  assert.deepEqual([s.beta, s.fm.update_kanal], [[true], "beta"]);
+  // Auf diesem Gerät an: an, auch wenn ein anderes Gerät update_kanal zurückgesetzt hat
+  s = zeichnen(true, "stabil");
+  assert.deepEqual([s.schalter.wert, s.text], [true, SATZ]);
+  // Nur dieser Schalter ruft es (tests/skripte-pruefen.test.js: genau ein Aufruf in update.js); keine Aktion zeichnet ihn
+  assert.ok(Object.values(s.L.ergebnis.aktionen).every((a) => !String(a.ausfuehren).includes("kanalSchalter")));
+});
+
 test("Unterbrochen: Zeile, Dashboard und Knöpfe auf diesem und auf einem anderen Gerät", async () => {
   const ANDERES = "Ein Update wird gerade auf einem anderen Gerät installiert.";
   // Anderes Gerät hat vor 10 Min. begonnen, seine Dateien kommen noch: kein zweites Update
@@ -1112,25 +1209,35 @@ test("Unterbrochen: Zeile, Dashboard und Knöpfe auf diesem und auf einem andere
   await G.U.markeNeu();
   assert.equal(G.U.hinweis(), null);
 
-  // Dieses Gerät hat begonnen und wurde beendet: „Update fertigstellen“ fragt nicht noch einmal und holt die Liste frisch
-  G = geraet({ release: "0.4.9", plugin: { testUpdateAntwort: false }, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(300)) } });
+  // Dieses Gerät hat begonnen und wurde beendet: „Update fertigstellen“ fragt wie jedes Installieren (update.json liegt im Tresor,
+  // es allein bestätigt nichts) und holt die Liste frisch (im Test kommt nur die Signatur an, geprüft wird sie erst mit der Liste)
+  const nurSignatur = (p) => { if (p.url.endsWith("/system-dateien.json.sig")) return { status: 200, arrayBuffer: enc("-").buffer }; throw new Error("kein Netz im Test"); };
+  const unterbrochen = (antwort) => geraet({ release: "0.4.9", plugin: { testUpdateAntwort: antwort }, netz: nurSignatur, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(300)) } });
+  G = unterbrochen(false);
   await G.U.markeNeu();
   const a = G.U.anzeige();
   assert.equal(a.html, "Das Update auf Version 0.4.9 ist nicht fertig geworden.");
   assert.deepEqual(a.knopf, { aktion: "vorlage-aktualisieren", text: "Update fertigstellen" });
   assert.deepEqual(G.U.hinweis(), { art: "fertig", version: "0.4.9", text: a.html, knopf: "Update fertigstellen", symbol: "laden" });
+  assert.equal(await G.aktionen["vorlage-aktualisieren"].ausfuehren({ extern: false }), undefined);
+  assert.deepEqual(G.anfragen.filter((x) => x.url.includes("system-dateien.json")), [], "gefragt, mit Nein beantwortet: nichts geladen");
+  assert.equal(G.U.letzterBericht, null);
+  G = unterbrochen(true);
+  await G.U.markeNeu();
   const b = await G.U.aktualisieren();
-  assert.equal(b && b.art, "netz", "ohne zweite Frage weiter bis zum Laden (im Test ohne Netz)");
+  assert.equal(b && b.art, "netz", "nach dem Ja weiter bis zum Laden (im Test ohne Netz)");
   assert.deepEqual(G.hinweise, [], "Fortschritt und Ergebnis im Fenster, kein Hinweis");
   assert.equal(G.fenster.length, 1);
   assert.deepEqual([ansicht(G.fenster[0]).stufe, ansicht(G.fenster[0]).titel, ansicht(G.fenster[0]).knoepfe], ["fehler", "Nicht installiert", ["Fertig*"]]);
-  // Die Liste kommt zuerst aus dem Release (unveränderlich, ohne frisch; tests/update-liste.test.js), ohne Netz dann frisch vom
-  // Tag; das Fenster holt daneben die Änderungen (CHANGELOG.md am Tag)
+  // Erst die Signatur aus dem Release, dann die Liste zuerst aus dem Release (unveränderlich, ohne frisch; tests/update-liste.test.js),
+  // ohne Netz dann frisch vom Tag; das Fenster holt daneben die Änderungen (CHANGELOG.md am Tag)
   const listen = G.anfragen.filter((x) => x.url.includes("system-dateien.json"));
-  assert.deepEqual(listen.map((x) => x.url), ["https://github.com/studium-autopilot/ecoba/releases/download/v0.4.9/system-dateien.json",
+  assert.deepEqual(listen.map((x) => x.url), ["https://github.com/studium-autopilot/ecoba/releases/download/v0.4.9/system-dateien.json.sig",
+    "https://github.com/studium-autopilot/ecoba/releases/download/v0.4.9/system-dateien.json",
     BASIS("0.4.9") + "Studium%20Autopilot/System/Daten/system-dateien.json?t=7"]);
   assert.equal(listen[0].headers, undefined);
-  assert.deepEqual(listen[1].headers, { "Cache-Control": "no-cache" });
+  assert.equal(listen[1].headers, undefined);
+  assert.deepEqual(listen[2].headers, { "Cache-Control": "no-cache" });
   assert.deepEqual(G.anfragen.map((x) => x.url).filter((u) => u.endsWith("CHANGELOG.md")), [BASIS("0.4.9") + "CHANGELOG.md"]);
   // Bietet das Manifest inzwischen eine andere Version an, wird wie sonst gefragt
   G = geraet({ release: "0.5.0", plugin: { testUpdateAntwort: false }, dateien: { [U.MARKE]: markeText("g-ich", "0.4.9", vorMin(5)) } });

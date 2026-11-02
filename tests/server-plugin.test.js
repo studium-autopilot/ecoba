@@ -114,7 +114,8 @@ async function serverStarten(o) {
   let nr = 0;
   return {
     verzeichnis, konfig,
-    code: () => neuerCode(verzeichnis).code,
+    // Codes, Stand und Takt im Ordner des Web-Dienstes (web/), den Anstoß des Knopfs dort auch
+    code: () => neuerCode(path.join(verzeichnis, "web")).code,
     zustand: (z) => fs.writeFileSync(path.join(verzeichnis, "zustand.json"), JSON.stringify(z)),
     eingang: (roh) => {
       const { eingang } = eingangNormal(roh, { jetzt: new Date("2026-10-18T07:30:00Z"), lauf: "test" });
@@ -128,7 +129,7 @@ async function serverStarten(o) {
       fs.writeFileSync(path.join(verzeichnis, "eingang", name), JSON.stringify(inhalt));
     },
     imEingang: () => (fs.existsSync(path.join(verzeichnis, "eingang")) ? fs.readdirSync(path.join(verzeichnis, "eingang")) : []),
-    stand: () => JSON.parse(fs.readFileSync(path.join(verzeichnis, "stand-plugin.json"), "utf8")),
+    stand: () => JSON.parse(fs.readFileSync(path.join(verzeichnis, "web", "stand-plugin.json"), "utf8")),
     zu: () => new Promise((fertig) => dienst.close(fertig)),
   };
 }
@@ -383,7 +384,7 @@ test("Takt: aus den Einstellungen mit dem Stand an den Server (takt.json), eine 
     const { a, m } = await verbunden(srv, tresor());
     const takt = { uni_postfach: 30, gmail: 1 };
     a.stand = () => ({ module: ["B110"], studienbeginn: "2026-10-01", variante: "offen", takt });
-    const amServer = () => JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "takt.json"), "utf8"));
+    const amServer = () => JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "web", "takt.json"), "utf8"));
     assert.equal((await m.abrufen()).art, "ok");
     assert.deepEqual(amServer(), { uni_postfach: 30, gmail: 1 });
     assert.deepEqual(srv.stand().takt, { uni_postfach: 30, gmail: 1 });
@@ -849,13 +850,13 @@ test("Mails durchsuchen: Anstoß auf dem Server, die Zeile zeigt den Lauf, ein z
   try {
     const { m } = await verbunden(srv, tresor());
     assert.deepEqual(await m.anstossen(), { ok: true });
-    assert.equal(JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "anstoss"), "utf8")).grund, "knopf");
+    assert.equal(JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "web", "anstoss"), "utf8")).grund, "knopf");
     assert.equal(m.zeile().text, "Claude durchsucht gerade deine Mails auf deinem Server …");
     assert.equal(m.zeile().symbol, "uhr");
     const r = await m.anstossen();
     assert.equal(r.fehler, "zu-frueh");
     assert.ok(!isNaN(Date.parse(r.wieder)), "mit Zeitpunkt");
-    fs.rmSync(path.join(srv.verzeichnis, "anstoss"));
+    fs.rmSync(path.join(srv.verzeichnis, "web", "anstoss"));
     srv.zustand({ claude: "angemeldet", letzterLauf: { zeit: "2026-10-18T07:30:00Z", ok: true } });
     await m.abrufen({ manuell: true });
     assert.doesNotMatch(m.zeile().text, /durchsucht gerade/, "danach wieder der Stand");
@@ -1030,7 +1031,7 @@ test("Zeile: Claude abgemeldet, Uni-Anmeldung abgelehnt, Claude-Limit; nur Werte
     assert.deepEqual(d.liste.map((x) => x[0]), ["Adresse", "Claude", "Gmail", "Uni-Postfach", "Zuletzt aktualisiert", "Zuletzt verbunden"]);
     // Gmail in den Einstellungen „nie“ (takt.json): aus, nicht „wird durchsucht“
     srv.zustand({ claude: "angemeldet", gmail: "ok" });
-    fs.writeFileSync(path.join(srv.verzeichnis, "takt.json"), JSON.stringify({ uni_postfach: 15, gmail: 0 }));
+    fs.writeFileSync(path.join(srv.verzeichnis, "web", "takt.json"), JSON.stringify({ uni_postfach: 15, gmail: 0 }));
     await m.abrufen({ manuell: true });
     assert.equal(m.status().werte.gmail, "aus");
     assert.equal((await m.einzelheiten()).liste.find((x) => x[0] === "Gmail")[1], "aus (in den Einstellungen „nie“)");

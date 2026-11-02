@@ -45,7 +45,10 @@ liegen dort eingeklappt unter „Trotzdem mit API-Schlüssel verbinden“ (`Info
   den Text, dazu etwa 3000 Token Regeln und 6000 Token Ausgabe); über 0,50 $ (`KOSTEN_FRAGEN`) fragt der Knopf erst (`S.wahl`:
   „Mit PDF“ oder „Nur Text“, ohne Wahl nur „Zusammenfassen“).
 - **Schreiben:** `begleitnotizSauber` und `begleitnotizErgaenzen` aus `server.js` (gleiche Regeln wie nach einem Abruf vom Server:
-  „Das Wichtigste“ nur, wenn dort nichts steht, sonst nur, was fehlt), in `app.vault.process`, danach `wunschWeg`. Nur Lehrmaterial
+  „Das Wichtigste“ nur, wenn dort nichts steht, sonst nur, was fehlt), in `app.vault.process`, danach `wunschWeg`. Jeder Punkt ist
+  reiner Text (`punktText`: ohne Bilder, Markdown-Links, HTML, Entitäten, Code und `\href`; Links nur auf `uni-tuebingen.de`,
+  `ffwtuebingen.de` und `core-econ.org`). Beim Eintragen maskiert `linkZeichenEntwerten` außerhalb von Formeln zusätzlich jedes
+  Zeichen, an dem Obsidian noch einen Link, ein Tag oder Code erkennen könnte (zweite Sicherung, unsichtbar). Nur Lehrmaterial
   (`ARTEN_SENDEN`), nur mit PDF neben der Notiz (`pdfZurNotiz`). Der Knopf heißt „Wird zusammengefasst“, solange die Anfrage läuft
   (`zusammenfassenStand`: `angefordert`), danach verschwindet er; der Hinweis nennt die Kosten.
 - **Fehler** (`fehlerSatz`, je ein Code): `netz`, `schluessel` (401), `recht` (403), `guthaben` (400 „credit balance“), `limit`
@@ -82,7 +85,30 @@ so, wie das Plugin sie selbst anlegt, und das Plugin erkennt sie am `typ`.
   `dateien` lehnten sie die ganze Liste ab, „Liste: Datei nicht erlaubt“). Eine neue Version ersetzt sie wie Systemdateien,
   eine geänderte Fassung liegt danach als `Name (deine Fassung vor X).md.txt` daneben; jeder Computer holt nach, was bei ihm
   fehlt oder alt ist (Abschnitt Update, „Hinweise für Claude“). Bis 0.6.8 blieben sie auf dem Stand der Installation. Eigene
-  Regeln gehören in einen eigenen Skill unter `.claude/skills/<name>/`; den und `.claude/settings*.json` fasst kein Update an.
+  Regeln gehören in einen eigenen Skill unter `.claude/skills/<name>/`, eigene Rechte in `.claude/settings.local.json`; beides fasst kein
+  Update an.
+- **Sperren für Claude Code (`.claude/settings.json`, seit 01.11.2026, Klasse `claude`):** `permissions.deny` mit `Edit(…)` für
+  `System/**`, `.obsidian/**`, `Dashboard.md`, `Studium/**`, `Unterlagen/_Volltext/**`, die Dateien dieser Klasse, `.mcp.json` und
+  jede `.js`-, `.mjs`-, `.cjs`- und `.css`-Datei. Was die Regel „änderst du nie“ in `CLAUDE.md` sagt, setzt damit Claude Code
+  selbst durch: Edit-Regeln gelten für alle Werkzeuge, die Dateien ändern, und für Umleitungen (`>`, `tee`) in Bash; eine Sperre
+  aus irgendeiner Ebene schlägt jede Erlaubnis ([Configure permissions](https://code.claude.com/docs/en/permissions)). Grund: Das
+  Plugin führt jedes Skript in `System/Skripte/` beim Start aus (`main.js`), auf jedem Gerät; ein von Claude (oder einer
+  eingeschleusten Anweisung in einer Unterlage) geschriebenes Skript liefe überall. Grenzen: Die Sperren sind ein Schutz gegen
+  Versehen und einfache eingeschleuste Anweisungen, keine harte Grenze. Claude Code liest Projekt-Einstellungen nur aus dem
+  `.claude/` des Ordners, in dem es startet (kein Blick in übergeordnete Ordner); startet es in einem Ober- oder Unterordner des
+  Tresors, gilt keine dieser Sperren, und die Pfade mit `/` beziehen sich ebenfalls auf diesen Ordner. Ein Bash-Befehl, der
+  selbst schreibt (`cp`, `mv`, ein Skript), fällt nicht unter Edit-Regeln; im Modus „Änderungen annehmen“ nimmt Claude Code
+  einfache Dateibefehle wie `cp`, `mv` und `mkdir` im Arbeitsordner ohne Rückfrage an, im Auto-Modus entscheidet ein Klassifizierer,
+  ohne Rückfragen gar nichts ([Permission modes](https://code.claude.com/docs/en/permission-modes)). Claude Code vergleicht die
+  Muster ohne Rücksicht auf Groß- und Kleinschreibung (Paket `ignore`, im Code von Claude Code 2.1.309 nachgesehen):
+  `**/*.js` sperrt also auch `x.JS`, das das Plugin ebenfalls ausführt (Obsidian schreibt Endungen klein). `settings.json`
+  enthält nur Sperren, keine Hooks und keine Erlaubnisse (`tests/claude-rechte.test.js`): Das Update lädt sie von selbst.
+- **Eigene Einstellungen für Claude Code** gehören in `.claude/settings.local.json`, die das Update nie anfasst. Hatte jemand
+  vor dem 01.11.2026 eine eigene `.claude/settings.json`, macht das Update daraus `settings.local.json`, solange es die noch
+  nicht gibt (`EIGENE_FASSUNG` in `update.js`); sonst liegt sie als „deine Fassung vor X“ daneben und gilt nicht mehr.
+  `settings.local.json` bearbeitest du selbst: Claude darf seine eigenen Rechte nicht erweitern. Wie alle Dateien unter
+  `.claude/` kommt `settings.json` nur über das Update oder den Nachholer je Computer (`claudeNachholen`), nicht über die
+  Synchronisierung: Ein Computer mit ausgeschalteten zentralen Daten, der den Tresor nur synchronisiert bekommt, hat sie nicht.
 - **Gleiche Regeln wie der Code:** `tests/claude-skill.test.js` prüft Kategorien (`zentral.js`), Arten der Unterlagen
   (`unterlagen.js`), Abschnitte der Begleit- und Vorlesungsnotizen, die Auswahl der To-dos (`todos.js`) und die Id-Felder der
   Quellen (`quellen.js`) gegen den Text des Skills.

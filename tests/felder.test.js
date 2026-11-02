@@ -39,11 +39,11 @@ test("Note und Zielnote: eine Prüfung je Feld, gespeichert mit Komma", () => {
   assert.deepEqual(F.zielnotePruefen(""), { ok: true, wert: "" });
 });
 
-test("Alle Stellen nehmen das Register: Formular, Zeilen „Variante“, Einrichtung, Modulfeld", () => {
+test("Alle Stellen nehmen das Register: Formular, Zeile „Variante“, Einrichtung, Modulfeld", () => {
   const OBS = { obsidian: { Modal: class {}, Notice: class {} } };
   const P = laden("personalisieren", { kontext: OBS }).ctx.personalisieren;
   assert.deepEqual(P.VARIANTEN, F.VARIANTE.werte, "Formular in derselben Reihenfolge");
-  assert.deepEqual(P.varianteZeilen({ variante: "offen" }).map((z) => z.titel), ["Economics", "Business Administration", "Ohne Spezialisierung", "Noch offen"]);
+  assert.equal(P.angabenZeilen({ variante: "ohne Spezialisierung" }).find((z) => z.id === "variante").wert, F.varianteTitel("ohne Spezialisierung"), "Zeile „Variante“");
   assert.equal(P.zielnotePruefen("2").wert, "2,0");
   const E = laden("einrichtung", { kontext: OBS }).ctx.einrichtung;
   assert.deepEqual(E.VARIANTEN.map((v) => [v.wert, v.titel]), F.VARIANTE.werte.map((w) => [w, F.varianteTitel(w)]), "Einrichtung: „Noch offen“ statt eigenem Wort");

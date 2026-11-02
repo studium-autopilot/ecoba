@@ -122,26 +122,137 @@ module.exports = function (ctx) {
   const neuer = (a, b) => { const x = semver(a), y = semver(b); if (!x || !y) return false; for (let i = 0; i < 3; i++) { if (x[i] !== y[i]) return x[i] > y[i]; } return false; };
 
   // ---------- Reiner Text ----------
-  // Steuer- und unsichtbare Richtungszeichen; HTML-Tags; Templater-Marken; obsidian://-Links; Wikilink-Klammern; Backticks
-  const STEUER = /[\u0000-\u001f\u007f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+  // Steuer- und unsichtbare Zeichen (Richtung, Zeilentrenner, Worttrenner) → Leerzeichen; Zeichen, die nur unsichtbar Text tragen
+  // können (weiches Trennzeichen, Variantenwähler, Hangul-Füller, Unicode-Tags U+E0000–E007F und U+E0100–E01EF als Ersatzpaar) fallen
+  // ganz weg. Dazu HTML-Tags, Templater-Marken, obsidian://-Links, Wikilink-Klammern, Backticks und Links außerhalb von TEXT_DOMAINS.
+  const STEUER = /[\u0000-\u001f\u007f\u061c\u180e\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\ufff9-\ufffb]/g;
+  const WEG = /[\u00ad\u115f\u1160\u3164\uffa0]|\u034f|\u17b4|\u17b5|[\u180b-\u180d]|\u180f|[\ufe00-\ufe0f]|\udb40[\udc00-\udc7f\udd00-\uddef]/g;
   const GEFAEHRLICH = /<\s*\/?\s*[a-z!]|<%|%>|obsidian:\/\/|\[\[|\]\]|`|[\r\n]|javascript:/i;
-  const saeubern = (s) => String(s)
+  const TEXT_DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de"];
+  // Links im Fließtext. Obsidian macht aus „https://…“ (auch „https:/…“, „https:…“), „www.…“ (die Lesefassung auch mitten im
+  // Wort) und „domain.de/…“ einen Link, im Bearbeiten-Modus bis zum nächsten Leerzeichen oder „<“; „file:…“ öffnet es ohne Rückfrage,
+  // wenn die Datei im Tresor liegt (andere Schemata wie „smb://“ nur nach Rückfrage). Ein Link bleibt nur, wenn er http(s) ist,
+  // ohne Name, Kennwort und Port vor dem Host, der Host nur aus a–z, 0–9, „.“ und „-“ (eine HTML-Entität darin machte die
+  // Lesefassung zu einem anderen Host), auf einer Domain der Liste, und dann so, wie der Browser ihn liest (new URL), mit
+  // Markdown-Zeichen als %-Kodierung. Sonst bleibt nur der Name des Hosts (linkName: ohne führendes „www.“, nie drei „w“
+  // hintereinander, nie an ein Wort davor gehängt, damit daraus kein neuer „www.“-Link wird); bei „domain.de/…“ ohne Schema kommt
+  // ein Leerzeichen vor das „/“, und der Rest wird weiter durchsucht; „file:“, „data:“ und „jar:“ fallen ganz weg. Kein Klickziel
+  // (Phishing aus einer Mail) und kein Abrufziel für Claude. Satzzeichen am Ende gehören nicht zum Link. Eine Schleife ohne
+  // Rekursion, jedes Zeichen nur einmal angesehen (lange Eingaben). Gleicher Code in zentral.js, server.js und server/eingang.mjs
+  // (tests/link-filter.test.js prüft alle drei).
+  const LINK = /https?:\/{0,3}[^\s<]*|(?:\b|_)(?:file|data|jar):[^\s<]+|\b[a-z][a-z0-9+.-]{1,30}:\/\/[^\s<]*|www\d{0,3}\.[^\s<]*|(^|[^a-z0-9-])((?:[a-z0-9-]+\.)+[a-z]{2,24})(?=\/)/gi;
+  const linkDomainOk = (h, domains) => /^(?:[a-z0-9-]+\.)+[a-z0-9-]+$/.test(h) && domains.some((d) => h === d || h.endsWith("." + d));
+  const linkName = (h) => h.replace(/^(?:www\d{0,3}\.)+/i, "").replace(/w{3,}/gi, "ww").replace(/[^a-z0-9.-]+/gi, " ");
+  const linkKuerzen = (url) => {
+    let ende = url.length, zu = url.split(")").length - 1;
+    const auf = url.split("(").length - 1;
+    while (ende > 0 && /[`*!()[\]{};:'".,<>?«»“”‘’„‚]/.test(url[ende - 1]) && !(url[ende - 1] === ")" && auf >= zu)) {
+      if (url[ende - 1] === ")") zu--;
+      ende--;
+    }
+    return [url.slice(0, ende), url.slice(ende)];
+  };
+  // Link bis zum nächsten Leerzeichen → was im Text dafür steht
+  const linkPruefen = (roh, domains) => {
+    const [url, rest] = linkKuerzen(roh);
+    if (/^_?(?:file|data|jar):/i.test(roh)) return " ";
+    let u = null;
+    try { u = new URL(/^https?:|^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : "https://" + url); } catch (e) { return " " + rest; }
+    const host = u.hostname.toLowerCase();
+    if (/^https?:$/.test(u.protocol) && !u.username && !u.password && !u.port && linkDomainOk(host, domains)) {
+      const pfad = (u.pathname + u.search + u.hash).replace(/%(?![0-9a-f]{2})|[[\]()'"*!$^{}|`\\]/gi, (z) => "%" + z.charCodeAt(0).toString(16).toUpperCase());
+      return u.protocol + "//" + host + pfad + rest;
+    }
+    return linkName(host) + rest;
+  };
+  const linksEntschaerfen = (s, domains) => {
+    const t = String(s), re = new RegExp(LINK.source, "gi");
+    let aus = "", bis = 0, m;
+    // ein Name oder Link direkt hinter einem Wort („xwww“ + „.evil.com“) ergäbe einen neuen Link: dann ein Leerzeichen dazwischen
+    const anhaengen = (vor, neu) => {
+      aus += vor;
+      aus += /[a-z0-9]$/i.test(aus) && /^[a-z0-9.-]/i.test(neu) ? " " + neu : neu;
+    };
+    while ((m = re.exec(t))) {
+      if (!m[2]) {
+        anhaengen(t.slice(bis, m.index), linkPruefen(m[0], domains));
+        bis = re.lastIndex;
+        continue;
+      }
+      // „domain.de/…“ ohne Schema: auf einer erlaubten Domain der ganze Link, sonst nur der Name und ein Leerzeichen vor dem „/“
+      const start = m.index + m[1].length;
+      if (linkDomainOk(m[2].toLowerCase(), domains)) {
+        const w = /[^\s<]*/y;
+        w.lastIndex = start;
+        const roh = w.exec(t)[0];
+        anhaengen(t.slice(bis, start), linkPruefen(roh, domains));
+        bis = start + roh.length;
+      } else {
+        anhaengen(t.slice(bis, start), linkName(m[2]) + " ");
+        bis = start + m[2].length;
+      }
+      re.lastIndex = bis;
+    }
+    return aus + t.slice(bis);
+  };
+  // Zweite Sicherung beim Schreiben einer Notiz (Ausgabe-Kodierung): Was nach linksEntschaerfen noch nach Link, Link-Definition,
+  // HTML oder Code aussieht, bekommt vor dem Zeichen, an dem Obsidian es erkennt, einen „\“: den Doppelpunkt hinter „http(s)“,
+  // „file“, „data“, „jar“ und vor „/“, den Punkt hinter „www“ und vor „tld/“, „]“ vor „(“, „[“ oder „:“, „`“ und „<“, wenn danach
+  // noch ein „>“ kommt (Tag oder Link in spitzen Klammern; in beiden wirkt kein „\“). Obsidian zeigt so einen „\“ in beiden
+  // Ansichten nicht (nachgeprüft in Obsidian 1.14.5), der Text sieht also gleich aus; schon maskierte Zeichen bleiben, wie sie sind.
+  // Erlaubte Links (genau so, wie linksEntschaerfen sie schreibt) bleiben stehen; maske maskiert den Text dazwischen vorher (mdText);
+  // zu = Stelle des letzten „>“, wenn der Text nur ein Stück ist (formelnAussparen). Alles in einem Durchgang über den ganzen Text,
+  // damit kein „\“ an einer Nahtstelle einen anderen aufhebt. Gleicher Code in zentral.js und server.js (tests/link-filter.test.js).
+  const LINK_ZEICHEN = /\\[!-/:-@[-`{-~]|(https?|file|data|jar):(?=[/a-z0-9%])|:(?=\/)|(www\d{0,3})\.|\.(?=[a-z]{2,24}\/)|\](?=[(:[])|`|<(?=\S)/gi;
+  const linkZeichenEntwerten = (s, domains, maske = (t) => t, zu = -1) => {
+    const erlaubt = [];
+    let text = "";
+    let imWort = false; // im selben Wort wie ein erlaubter Link, dahinter
+    String(s).split(/(https?:\/\/[^\s<]+)/).forEach((t, i) => {
+      // Dort nimmt die Lesefassung alles bis zum nächsten „<“ in den Link auf, auch einen „\“ davor, und das „<“ gälte wieder:
+      // Darum wird dort jedes „<“ zu „&lt;“.
+      if (imWort) {
+        const w = t.search(/\s/), wort = w < 0 ? t : t.slice(0, w);
+        t = wort.replace(/</g, "&lt;") + t.slice(wort.length);
+        imWort = w < 0;
+      }
+      if (!(i % 2 && linksEntschaerfen(t, domains) === t)) { text += maske(t); return; }
+      // Satzzeichen dahinter (linkKuerzen) gehören nicht zum Link: LINK_ZEICHEN geht auch über sie, sonst bliebe etwa „](“ stehen
+      const [url, rest] = linkKuerzen(t);
+      erlaubt.push([text.length, text.length + url.length]);
+      text += url + rest;
+      imWort = true;
+    });
+    zu = Math.max(zu, text.lastIndexOf(">"));
+    let k = 0; // erster erlaubter Link, der nicht vor der Stelle endet (die Treffer kommen der Reihe nach)
+    return text.replace(LINK_ZEICHEN, (z, schema, www, i) => {
+      while (k < erlaubt.length && erlaubt[k][1] <= i) k++;
+      if (z[0] === "\\" || (z === "<" && i > zu) || (k < erlaubt.length && i >= erlaubt[k][0])) return z;
+      return schema ? schema + "\\:" : www ? www + "\\." : "\\" + z;
+    });
+  };
+  const saeubern = (s) => linksEntschaerfen(String(s).replace(WEG, "").replace(STEUER, " ")
     .replace(/<%[\s\S]*?%>/g, " ").replace(/<%|%>/g, " ")
     .replace(/<[^>]*>/g, " ")
     .replace(/obsidian:\/\/\S*/gi, " ").replace(/javascript:/gi, " ")
-    .replace(/\[\[|\]\]/g, " ").replace(/`/g, "")
-    .replace(STEUER, " ").replace(/\s+/g, " ").trim();
+    .replace(/\[\[|\]\]/g, " ").replace(/`/g, ""), TEXT_DOMAINS)
+    .replace(/\s+/g, " ").trim();
   // Text-Feld: kein String → Fehler; zu lang (nach dem Säubern) → Fehler; sonst gesäubert
   const textFeld = (v, max, pflicht) => {
     if (v == null || v === "") return pflicht ? { fehler: "fehlt" } : { wert: "" };
     if (typeof v !== "string") return { fehler: "kein Text" };
+    // viel zu lang schon vorher: Fehler, bevor die Muster laufen (sie brauchen bei langen Eingaben mehr als lineare Zeit)
+    if (v.length > max * 4 + 1000) return { fehler: `zu lang (${v.length} > ${max})` };
     const w = saeubern(v);
     if (pflicht && !w) return { fehler: "leer" };
     if (w.length > max) return { fehler: `zu lang (${w.length} > ${max})` };
     return { wert: w };
   };
-  // Markdown im Notiztext entschärfen (Daten sind reiner Text)
-  const mdText = (s) => String(s).replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&").replace(/^([-+]|\d+[.)])/, "\\$1");
+  // Markdown im Notiztext entschärfen (Daten sind reiner Text), dazu die Zeichen, an denen Obsidian einen Link erkennt
+  // (linkZeichen). Ein erlaubter Link, genau so, wie linksEntschaerfen ihn schreibt, bleibt unverändert; die „\“ davor machten ihn
+  // kaputt. Aus „1. …“ oder „- …“ am Anfang wird keine Liste: der „\“ steht vor dem Satzzeichen (vor einer Ziffer bliebe er sichtbar).
+  const mdText = (s) => linkZeichenEntwerten(s, TEXT_DOMAINS, (t) => t.replace(/[\\`*_\[\]<>#|!$%~=^{}]/g, "\\$&"))
+    .replace(/^(\d+)([.)])/, "$1\\$2").replace(/^[-+]/, "\\$&");
 
   // ---------- Links ----------
   const hostOk = (h, domains) => domains.some((d) => h === d || h.slice(-(d.length + 1)) === "." + d);
@@ -448,6 +559,8 @@ module.exports = function (ctx) {
     const vorlesung = tagFeld(k.vorlesung), zwischentest = tagFeld(k.zwischentest);
     if (vorlesung.fehler) return { fehler: "vorlesung ungültig" };
     if (zwischentest.fehler) return { fehler: "zwischentest ungültig" };
+    const inAlt = ganzZahl(k.in_altklausuren, 0, 99);
+    if (inAlt.fehler) return { fehler: "in_altklausuren ungültig" };
     let url = "";
     if (k.url != null && k.url !== "") { const u = urlPruefen(k.url, KAPITEL_DOMAINS); if (u.fehler) return { fehler: "url: " + u.fehler }; url = u.wert; }
     const teile = [];
@@ -460,7 +573,11 @@ module.exports = function (ctx) {
         teile.push({ nr: t.nr, titel: tt.wert });
       }
     }
-    return { wert: { nr: k.nr, titel: titel.wert, seiten: seiten.wert, folien: folien.wert, url, vorlesung: vorlesung.wert, zwischentest: zwischentest.wert, teile } };
+    // Klausurrelevanz (seit 1.11.2026): nur, wenn angegeben, sonst bliebe die Form jeder Liste nicht gleich (und jede Notiz würde neu
+    // geschrieben)
+    const wert = { nr: k.nr, titel: titel.wert, seiten: seiten.wert, folien: folien.wert, url, vorlesung: vorlesung.wert, zwischentest: zwischentest.wert, teile };
+    if (inAlt.wert != null) wert.in_altklausuren = inAlt.wert;
+    return { wert };
   };
   const kapitelModulNormal = (e) => {
     if (!e || typeof e !== "object" || Array.isArray(e)) return { fehler: "kein Objekt" };
@@ -477,7 +594,13 @@ module.exports = function (ctx) {
       kapitel.push(r.wert);
     }
     if (new Set(kapitel.map((k) => k.nr)).size !== kapitel.length) return { fehler: "doppelte Kapitelnummer" };
-    return { wert: { code: e.code, semester: e.semester, quelle: quelle.wert, stand: datumOk(e.stand) ? e.stand : "", vorlaeufig: e.vorlaeufig === true, kapitel } };
+    // Wie viele Altklausuren der Uni-Abgleich ausgezählt hat; ein Kapitel kann in höchstens so vielen vorkommen
+    const alt = ganzZahl(e.altklausuren, 1, 99);
+    if (alt.fehler) return { fehler: "altklausuren ungültig" };
+    if (kapitel.some((k) => k.in_altklausuren != null && (alt.wert == null || k.in_altklausuren > alt.wert))) return { fehler: "in_altklausuren ohne passende altklausuren" };
+    const wert = { code: e.code, semester: e.semester, quelle: quelle.wert, stand: datumOk(e.stand) ? e.stand : "", vorlaeufig: e.vorlaeufig === true, kapitel };
+    if (alt.wert != null) wert.altklausuren = alt.wert;
+    return { wert };
   };
   const kapitelPruefen = (daten) => {
     if (!daten || typeof daten !== "object" || daten.schema !== 1 || !Array.isArray(daten.module)) return { fehler: "kapitel.json: Format ungültig" };
@@ -1882,7 +2005,7 @@ module.exports = function (ctx) {
   };
 
   ctx.zentral = {
-    abrufen, status, stand, geraetId, idAusName, notizText, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
+    abrufen, status, stand, geraetId, idAusName, notizText, mdText, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
     angebotePruefen, kapitelPruefen, literaturPruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
     aenderungenFelder, lehreDateiName, lehreName,
     // zentraler Stundenplan für Anzeige und Texte: { verfuegbar, anzahl, ohneBeginn, ausgeblendet: [ids] }

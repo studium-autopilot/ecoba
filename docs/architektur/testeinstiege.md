@@ -17,6 +17,9 @@ Teil der Architektur-Doku. Aufbau, `ctx`, Skripttypen und die Regeln für Skript
   (siehe [„Volltext der PDFs“](unterlagen.md)), `ilias-kalender.js` (siehe [„ILIAS-Kalender“](ilias-kalender.md)), `seit-besuch.js` (siehe [„Seit deinem letzten Besuch“](seiten.md)) und
   `Dashboard.md` mit `dashboard.js` (Kacheln und Listen), das Fachmodell (`tests/fachmodell.test.js`) und die Bases-Formeln auf
   Noten & ECTS gegen das Modell (`tests/bases-regeln.test.js`, Auswerter `tests/bases-formel.js`). `tests/laden.js` lädt die Skripte mit einem kleinen Ersatz für Obsidian.
+  `tests/kern.js` lädt den Kern `main.js` selbst mit einem Tresor und Gerätespeicher im Speicher (Aktionen von außen:
+  `tests/aktionen-extern.test.js`), für die Prüfung der Skripte mit festen Schlüsseln aus `tests/signatur.js`
+  (`tests/skripte-pruefen.test.js`, siehe [„Prüfung der Skripte“](skripte-pruefen.md)).
 - **In Obsidian** (Entwickler-PC, nicht im Repo): Oberfläche, Knöpfe, Hot-Reload, Datenkanal mit Testquelle, Bases-Formeln.
   Die Testeinstiege unten machen das möglich.
 - **GitHub Actions** (`.github/workflows/pruefen.yml`): `werkzeuge/pruefen.py` (Datenschutz-Scan, Dateitypen, `node --check`,
@@ -40,7 +43,17 @@ legt Gelöschtes in `.trash/` des Tresors statt in den Papierkorb des Systems.
 
 Update: `plugin.testUpdateAntwort = true/false` beantwortet das Bestätigungsfenster, `plugin.testUpdateBasis =
 "http://127.0.0.1:8766/v0.3.0/"` lädt die Dateien von einer anderen Basis (lokaler Server mit Fake-Release); das Manifest mit
-`release` liefert `plugin.testQuelle`. `ctx.update.aktualisieren()` gibt den Bericht zurück.
+`release` liefert `plugin.testQuelle`. Die Signatur der Liste kommt dann von dort (`<Basis>system-dateien.json.sig`) und muss
+wie sonst von einem festen Schlüssel stammen: Den Server mit dem Baum und den Assets aus `release.py --zip` füttern.
+`ctx.update.aktualisieren()` gibt den Bericht zurück.
+
+Prüfung der Skripte: `plugin.testUpdateBasis` gilt auch für die Signatur, die der Kern aus dem Release holt
+(`<Basis>system-dateien.json.sig`), für Liste und Signatur beim Reparieren (`<Basis>system-dateien.json`, `.sig`) und für die
+Skripte beim Reparieren (`<Basis>Studium Autopilot/System/Skripte/<name>.js`) und die Dateien des Kerns beim Neu laden
+(`<Basis>Studium Autopilot/.obsidian/plugins/studium-autopilot/<name>`).
+`plugin.testSigFrist` (ms) kürzt die Frist dieser Abrufe (sonst 10 s, nach einem Tipp 30 s). Die Bestätigungen von Reparieren,
+Erlauben und Entwicklermodus beantwortet `plugin.testAntworten` der Reihe nach wie oben (`true` = bestätigt, alles andere =
+Abbrechen); `plugin.testProtokoll` hält dann ihren Titel als `frage` fest, bei Bestätigungen auch den Text als `text`.
 
 Tests in Obsidian laufen am besten in einem sichtbaren Popout-Fenster. Im verdeckten Hauptfenster drosselt Chromium verkettete
 Timer auf einmal pro Minute.
