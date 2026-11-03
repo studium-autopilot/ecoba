@@ -2,6 +2,13 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.10 – Tutoriumsblätter am richtigen Platz
+
+- **Sicherer:** Macht Claude dir eine Lesefassung von Folien, schreibt es ein Kurspasswort oder einen Zoom-Kenncode nicht mehr
+  ab, sondern nennt die Seite der Folie, auf der er steht.
+- **Behoben:** Blätter aus deiner Tutoriumsgruppe in ILIAS (etwa in Mathe) standen bei den Übungen statt unter **Tutorium**.
+  Neue kommen jetzt dorthin, und schon geladene wechseln beim nächsten Abruf von selbst.
+
 ## 0.7.9 – Übungen sichtbar, Lernplan breiter, sicherer Server
 
 - **Übersichtlicher:** Im **Stundenplan** siehst du Vorlesung und Übung auf einen Blick: Vorlesungen sind gefüllt, Übungen und

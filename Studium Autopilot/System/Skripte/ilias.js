@@ -931,6 +931,20 @@ module.exports = function (ctx) {
     const notizenNachziehen = async (r) => {
       for (const u of r.umbenannt) { gestoppt(r); await notizAendern(notizPfad(u.pfad), (t) => felderTauschen(t, u.id, u.paare)); }
       for (const n of r.notizen) { gestoppt(r); await notizAendern(notizPfad(n.pfad), (t) => entferntKasten(t, n.id, n.entfernt)); }
+      // Bereich aus der Objektgruppe (bereichMerken): Ältere Fassungen sahen „Tutoriengruppen“ nicht und legten die Blätter einer
+      // Tutoriumsgruppe als Übung ab. Die Notiz bekommt die Art des Bereichs (Liste „Tutorium“ der Modulseite), nur wo noch die
+      // damals bestimmte Art steht; Datei und Name bleiben.
+      if (!r.bereich.length) return;
+      const E = abh.einordner();
+      for (const x of r.bereich) {
+        gestoppt(r);
+        const art = await bereichAusBlock(x.c, E), alt = art ? await artOhnePdf(x.c, x.c.ordner, E) : "";
+        if (alt && alt !== art) await notizAendern(notizPfad(x.pfad), (t) => felderTauschen(t, x.id, [["art", alt, art]]));
+      }
+    };
+    const bereichMerken = (c, r) => {
+      const d = mem.dateien[c.id];
+      if (d && !d.geloescht && d.pfad && c.mitBlock && !/\/(Tutorium|Lab)\//.test(d.pfad)) r.bereich.push({ id: c.id, pfad: d.pfad, c });
     };
 
     // ----- Anfragen an ILIAS (zählen; Abstand und Gleichzeitigkeit regelt die Drossel der Sitzung) -----
@@ -1179,7 +1193,7 @@ module.exports = function (ctx) {
     const fundAus = (c) => {
       const e = c.eintrag || {};
       return { id: c.id, eintrag: { art: e.art, typ: e.typ, refId: e.refId, id: e.id, url: e.url, endung: e.endung }, kurs: c.kurs, code: c.code,
-        ordner: c.ordner, original: c.original, endung: c.endung, geaendert: c.geaendert, lg: c.lg, iliasPfad: c.iliasPfad, art: c.art };
+        ordner: c.ordner, mitBlock: c.mitBlock, original: c.original, endung: c.endung, geaendert: c.geaendert, lg: c.lg, iliasPfad: c.iliasPfad, art: c.art };
     };
     const fundeSpeichern = (r, liste) => { if (!r.stopp.an) lokal(L.funde, liste.map(fundAus)); };
     const fundeLesen = () => {
@@ -1191,7 +1205,8 @@ module.exports = function (ctx) {
         .map((c) => {
           const ersatz = c.kurs.code || "Kurs " + c.kurs.refId;
           return Object.assign({}, c, { kurs: Object.assign({}, c.kurs, { titel: ohneKennwort(c.kurs.titel) || ersatz }),
-            ordner: c.ordner.map((o) => ohneKennwort(o) || "Ordner"), iliasPfad: pfadOhneKennwort(c.iliasPfad, ersatz) });
+            ordner: c.ordner.map((o) => ohneKennwort(o) || "Ordner"), iliasPfad: pfadOhneKennwort(c.iliasPfad, ersatz),
+            mitBlock: Array.isArray(c.mitBlock) ? c.mitBlock.map((o) => ohneKennwort(String(o)) || "Ordner") : undefined });
         });
     };
     const dateiPruefen = (q, e, k, kurs, kandidaten, b, r) => {
@@ -1217,7 +1232,8 @@ module.exports = function (ctx) {
       r.gefunden[id] = kurs.refId; // gesehen (entfernteMerken)
       if (r.imLauf[id]) return; // dieselbe Datei an zwei Stellen im Kurs
       const c = { id, eintrag: e, kurs, code: k.code, ordner: k.pfad, original, endung, geaendert, lg, reihe: kandidaten.length, iliasPfad: [kurs.titel].concat(k.anzeige).join(" / ") };
-      if (zuerst) umbenanntInIlias(c, r);
+      if (k.mitBlock && k.mitBlock.length > k.pfad.length) c.mitBlock = k.mitBlock;
+      if (zuerst) { umbenanntInIlias(c, r); bereichMerken(c, r); }
       c.art = artFuer(c);
       if (!c.art) return;
       if (lg != null && lg > MAX_MB * 1048576) { zuGrossVorab(c, lg, b); return; } // laut Liste zu groß: gar nicht laden
@@ -1248,6 +1264,11 @@ module.exports = function (ctx) {
       const lesbar = (e) => ohneKennwort((e.sitzung && e.sitzung.name) || e.titel) || "Ordner";
       // für den Einordner: Name wie in ILIAS (unterlagen.js erkennt z. B. „2026-10-12, 10:15 …“ als Sitzung), nur ohne „/“
       const segment = (t) => t.replace(/\//g, "-");
+      // Ordnerkette mit den Objektgruppen über den Einträgen („Tutoriengruppen“ über „Gruppe 4: Dienstag 10 - 12“), wie PFERD
+      // im Uni-Abgleich; entscheidet nur den Bereich (benennen). Nicht in anzeige, sonst änderten sich iliasPfad und quelle
+      // aller vorhandenen Unterlagen in Objektgruppen.
+      const block = (e) => String(e.gruppe || "").split("/").map((t) => ohneKennwort(textRein(t)).trim()).filter(Boolean).map(segment);
+      const mitBlock = (e, weiter) => (k.mitBlock || k.pfad).concat(block(e), weiter);
       const grenze = tagIso(ms() + SITZUNG_VORAUS_TAGE * 864e5);
       const sitzungen = {}, aufgeklappt = {};
       for (const e of liste) if (e.art === "sitzung" && e.refId) sitzungen[String(e.refId)] = lesbar(e);
@@ -1270,11 +1291,12 @@ module.exports = function (ctx) {
           if (e.typ === "grp" && e.mitglied === false) { plus(b, kurs.refId, "fremdeGruppe"); auslassen(); continue; }
           const titel = textRein(e.titel);
           const c = codeAm(titel); // Unterordner „SQ888 …“ im Kurs S100 → Modul SQ888
-          unter.push({ url: e.url, refId: e.refId != null ? String(e.refId) : "", titel, pfad: k.pfad.concat([segment(lesbar(e))]), anzeige: k.anzeige.concat([lesbar(e)]), code: c && abh.modul(c) ? c : k.code, tiefe: k.tiefe + 1 });
+          unter.push({ url: e.url, refId: e.refId != null ? String(e.refId) : "", titel, pfad: k.pfad.concat([segment(lesbar(e))]), mitBlock: mitBlock(e, [segment(lesbar(e))]), anzeige: k.anzeige.concat([lesbar(e)]), code: c && abh.modul(c) ? c : k.code, tiefe: k.tiefe + 1 });
         } else if (art === "video") plus(b, kurs.refId, "videos");
         else if (art === "datei") {
           const s = e.inSitzung ? sitzungen[String(e.inSitzung)] : "";
-          dateiPruefen(q, e, s ? Object.assign({}, k, { pfad: k.pfad.concat([segment(s)]), anzeige: k.anzeige.concat([s]) }) : k, kurs, kandidaten, b, r);
+          const weiter = s ? [segment(s)] : [];
+          dateiPruefen(q, e, Object.assign({}, k, { pfad: k.pfad.concat(weiter), mitBlock: mitBlock(e, weiter), anzeige: k.anzeige.concat(s ? [s] : []) }), kurs, kandidaten, b, r);
         }
       }
       for (let i = unter.length - 1; i >= 0; i--) x.stapel.push(unter[i]);
@@ -1314,8 +1336,17 @@ module.exports = function (ctx) {
 
     // ----- Ablage -----
     // → { art, nr, titel, name, code }; code: Modulcode aus Dateiname oder Unterordner (unterlagen.js), wenn es das Modul gibt
+    const relAus = (c, ordner) => ordner.concat([c.original.replace(/\//g, "-") || "Datei." + c.endung]).join("/");
+    const artOhnePdf = async (c, ordner, E) => { try { const v = await E.vorschlag(relAus(c, ordner), c.endung, c.code, null); return (v && v.art) || ""; } catch (e) { return ""; } };
+    // Objektgruppen über den Ordnern („Tutoriengruppen“) zählen nur, wenn sie den Bereich Tutorium oder Lab ergeben; sonst
+    // bliebe z. B. „00 - Vorlesung“ als Rückfall für die Art und machte Verständnisfragen zu Folien. → "Tutorium" | "Lab" | ""
+    const bereichAusBlock = async (c, E) => {
+      if (!Array.isArray(c.mitBlock) || c.mitBlock.length <= c.ordner.length) return "";
+      const art = await artOhnePdf(c, c.mitBlock, E);
+      return art === "Tutorium" || art === "Lab" ? art : "";
+    };
     const benennen = async (c, bytes, E, mitPdf) => {
-      const rel = c.ordner.concat([c.original.replace(/\//g, "-") || "Datei." + c.endung]).join("/");
+      const rel = relAus(c, (await bereichAusBlock(c, E)) ? c.mitBlock : c.ordner);
       const pdf = mitPdf && c.endung === "pdf" && bytes.length <= PDF_TITEL_MAX_MB * 1048576 ? bytes : null;
       let v = null;
       try { v = await E.vorschlag(rel, c.endung, c.code, pdf); } catch (e) { v = null; }
@@ -1550,7 +1581,7 @@ module.exports = function (ctx) {
       // Das Kennwort holt erst die Anmeldung, unmittelbar vor dem Absenden (kennwortGeber); dieses Skript hält es nicht fest
       const zugang = { benutzer: benutzer(), kennwortGeber: () => abh.geheim.lesen(geheimId) || "", konto: kontoFuer(benutzer()) };
       const r = { hashes: {}, unterlagen: null, imLauf: {}, ordnerFehler: 0, stopp, fehler: null, gruppenGesehen: {}, uebungenGesehen: {},
-        gefunden: {}, ausgelassen: [], umbenannt: [], notizen: [] };
+        gefunden: {}, ausgelassen: [], umbenannt: [], notizen: [], bereich: [] };
       await indexLesen();
       if (!o.nurKurse && !nurGruppen) {
         await nachAbbruch(r); await nachziehen(b, r);

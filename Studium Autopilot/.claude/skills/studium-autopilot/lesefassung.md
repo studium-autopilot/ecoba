@@ -15,6 +15,9 @@ Anders als bei „Das Wichtigste“ gilt hier: **wörtlich.**
   oder klausurrelevant nennt.
 - Formeln als LaTeX (`$…$`, abgesetzt `$$…$$`), Schreibweise genau wie auf der Folie.
 - Links der Folie mit dem Text an dieser Stelle. Sprünge innerhalb der PDF (Navigation) weglassen.
+- Einzige Ausnahme von „wörtlich“: **Zugangsdaten nie abschreiben** (Kurs- oder Beitrittspasswort, Kenncode für Zoom, PIN,
+  Zugangscode). Die Beschriftung bleibt, statt des Werts steht „(steht auf Folie S. N)“. Die Begleitnotiz wird auf
+  alle Geräte synchronisiert und von Claude gelesen, ein Passwort gehört nicht hinein.
 
 ## Woher
 
@@ -89,4 +92,5 @@ Lückenfolien füllst du nicht aus, du nennst sie der Person.
 
 - Formeln mit dem Schreib-Werkzeug schreiben, nie über die Shell (`echo`, Heredoc): Dort gehen Backslashes verloren.
 - Alle `[[…]]` zeigen auf vorhandene Dateien, alle Bilder liegen unter `Anhänge/`.
+- Kein Passwort, Kenncode oder PIN in der Notiz (siehe oben).
 - Sag der Person, welche Seiten fehlen oder unsicher sind (Lückenfolien, unlesbare Grafiken, fehlende Werkzeuge).

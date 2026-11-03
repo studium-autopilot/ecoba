@@ -84,6 +84,16 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   wenn ILIAS dieselbe Datei unter neuer Kennung wieder hochlädt (gleiche Prüfsumme wie ein gelöschter Eintrag). Umbenennen und
   Verschieben im Tresor folgt der Index; in ILIAS umbenannt oder verschoben (gleiche Kennung) → Index (`original`,
   `iliasPfad`, `kurs`) und Notiz (`original`, `quelle`, nur wo noch der alte Wert steht), ohne Download.
+- **Objektgruppen und Bereich** (seit 03.11.2026): ILIAS fasst Einträge eines Kurses zu Objektgruppen zusammen (Block mit
+  Überschrift, Feld `gruppe` aus `ilias-html.js`), in S100 etwa „Tutoriengruppen“ über „Gruppe 4: Dienstag 10 - 12“. Der Lauf
+  führt die Ordnerkette darum zweimal: `pfad` wie bisher und `mitBlock` mit den Objektgruppen (wie PFERD im Uni-Abgleich). Ergibt
+  der Einordner mit `mitBlock` den Bereich Tutorium oder Lab (`bereichAusBlock`), benennt `benennen` die Datei damit; sonst bleibt
+  `pfad`, damit eine Objektgruppe wie „00 - Vorlesung“ nicht als Rückfall die Art bestimmt (Verständnisfragen würden sonst Folien).
+  Im `iliasPfad` und in `quelle` steht die Objektgruppe nicht, sonst änderten sich beide für alle vorhandenen Unterlagen. Bis
+  02.11.2026 sah der Lauf die Objektgruppe nicht, und Blätter aus einer Tutoriumsgruppe ohne „Tutorium“ im Namen landeten als
+  Übung im Modulordner. Für sie setzt `notizenNachziehen` die Art in der Notiz auf den Bereich (`bereichMerken`, nur wo noch die
+  damals bestimmte Art steht); Datei und Name bleiben. Echter Lauf am 03.11.2026 (Probe gegen ILIAS): genau zwei S100-Blätter
+  wechseln den Bereich, sonst keine der 112 Dateien.
 - **Nicht mehr in ILIAS:** Hat ein Lauf einen Kurs ganz und ohne Ordnerfehler durchsucht und eine Datei des Index nirgends
   gesehen, bekommt ihr Eintrag `entfernt` (Datum) und ihre Notiz den Kasten „Nicht mehr in ILIAS“; die Datei bleibt. Wieder
   gesehen → Marke und Kasten weg. Ebenso zu große Dateien (`ignoriert`, mit `kurs`). Ein Kurs, in dem gar nichts zu sehen war,

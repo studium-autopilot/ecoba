@@ -98,3 +98,12 @@ test("Lesefassung: Klassen und Kästen aus eba-core.css, offene Abschnitte wie s
   for (const h of offen) assert.ok(t.includes("„" + h + "“"), h);
   assert.match(t, /cssclasses` mit `eba` und `eba-folien`/);
 });
+
+// Folien nennen oft das Beitrittspasswort des Kurses; „wörtlich“ darf es nicht in die Begleitnotiz bringen (seit 03.11.2026)
+test("Zugangsdaten: die Lesefassung nimmt sie von „wörtlich“ aus, Schreiben übernimmt keine", () => {
+  const t = lesen(path.join(SKILL, "lesefassung.md"));
+  assert.match(t, /Ausnahme von „wörtlich“: \*\*Zugangsdaten nie abschreiben\*\*/);
+  assert.ok(t.includes("„(steht auf Folie S. N)“"), "Ersatz für den Wert");
+  assert.match(t, /## Vor dem Abschluss[\s\S]*Kein Passwort, Kenncode oder PIN/);
+  assert.match(lesen(path.join(SKILL, "schreiben.md")), /Passwörter aus Mails oder Dokumenten/);
+});

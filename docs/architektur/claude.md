@@ -71,7 +71,8 @@ liegen dort eingeklappt unter „Trotzdem mit API-Schlüssel verbinden“ (`Info
 
 Wer Claude Code im Tresor-Ordner startet, bekommt mit der Vorlage, wie man hier liest und schreibt: `.claude/CLAUDE.md`
 (drei Regeln und der Verweis auf den Skill) und den Skill `.claude/skills/studium-autopilot/` mit `SKILL.md` (Grundregeln),
-`tresor.md` (Ordner, Notizarten, Felder, Besitz über `herkunft`, Dateinamen), `lesefassung.md` (Lesefassung der Folien), `lesen.md` (Woche, Prüfungen, Noten,
+`tresor.md` (Ordner, Notizarten, Felder, Besitz über `herkunft`, Dateinamen), `lesefassung.md` (Lesefassung der Folien, wörtlich bis auf Zugangsdaten: seit 03.11.2026 steht statt eines Kurspassworts
+„(steht auf Folie S. N)“), `lesen.md` (Woche, Prüfungen, Noten,
 Unterlagen über die Textfassungen, To-dos), `schreiben.md` (Termin, Zusammenfassung in der Begleitnotiz, To-do,
 Vorlesungsnotiz, Karteikarten; was nie geschrieben wird) und `fehler-melden.md` (Meldung an den Autor: gehört es zu Studium
 Autopilot, schon gemeldet?, ohne persönliche Daten und Unterlagen, Vorlage aus `.github/ISSUE_TEMPLATE`, ganze Meldung zeigen,

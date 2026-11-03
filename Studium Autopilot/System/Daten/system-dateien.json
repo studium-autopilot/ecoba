@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "version": "0.7.9",
+ "version": "0.7.10",
  "ordner": "Studium Autopilot",
- "erstellt": "2026-11-02T22:56:24Z",
+ "erstellt": "2026-11-03T08:03:00Z",
  "dateien": [
   {"pfad": ".obsidian/app.json", "klasse": "einstellung", "groesse": 421, "sha256": "20924393fe3278ce1b209b52300419d4866aa6cec0617f6c36cfb2893e59ac82"},
   {"pfad": ".obsidian/bookmarks.json", "klasse": "einstellung", "groesse": 1398, "sha256": "8d31516f6631847992a229df9f106cd943eda86ca791fdf952e4c7228ac1c29e"},
@@ -10,7 +10,7 @@
   {"pfad": ".obsidian/core-plugins.json", "klasse": "einstellung", "groesse": 698, "sha256": "b06ab63f09578efd584bb3d57c57aca6b6052d6861284919ef2f53f579318a14"},
   {"pfad": ".obsidian/hotkeys.json", "klasse": "einstellung", "groesse": 110, "sha256": "33864b03da9bc6edf5a5f669961f2e041ee92b9d87213057ced8c479296aca69"},
   {"pfad": ".obsidian/plugins/studium-autopilot/main.js", "klasse": "system", "groesse": 111610, "sha256": "295265e87edff18d59c9261af2f9cfcab4dad28febf6d9016d3f82ca8602a913"},
-  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 312, "sha256": "db0dfcf5d14cb4f9e4711b7008cd85bcb38e6025486c57ae621d4a7af196d090"},
+  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 313, "sha256": "22761441f83e6b51c7c0ecad74455a1ae2599a89fcffea9677be867abc5311d7"},
   {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 627018, "sha256": "c5d0c13d74e8d4f099e10fc7f4720aef8d7eedf770eae8087a66b9395dfc5710"},
   {"pfad": ".obsidian/snippets/eba-flieder.css", "klasse": "system", "groesse": 6479, "sha256": "cc48715bdb002084adaaf92c0f41b7c9f97a69a74af4f68aa7945b2129316fba"},
   {"pfad": ".obsidian/snippets/eba-klar.css", "klasse": "system", "groesse": 5503, "sha256": "018877ac0e97ff9f80a9739a75c8df22adfaf9b73d1e0b5939a94a560722e206"},
@@ -141,7 +141,7 @@
   {"pfad": "System/Skripte/ilias-html.js", "klasse": "system", "groesse": 59572, "sha256": "d9c7ab6d19022db63189616d8c317bea67b9b3037c999d4bc9593f03a3c458af"},
   {"pfad": "System/Skripte/ilias-kalender.js", "klasse": "system", "groesse": 42029, "sha256": "118fda8f2e69201f159e65aaa429a345bc24904816bc8af2d24f69d684845a82"},
   {"pfad": "System/Skripte/ilias-netz.js", "klasse": "system", "groesse": 43276, "sha256": "cb96f2c87341217f31a6d188728b1c6baeca5e0681d658ee524e6a54046806de"},
-  {"pfad": "System/Skripte/ilias.js", "klasse": "system", "groesse": 178612, "sha256": "0d3077dffe53d670e34be88d0b7f79f862ea3065704c94ed73dcb5c9f00173f0"},
+  {"pfad": "System/Skripte/ilias.js", "klasse": "system", "groesse": 181260, "sha256": "bacfe840b23c0c898d82eca20e3ab62f7dac14e3eaa94a6d012524128e90187a"},
   {"pfad": "System/Skripte/kalender.js", "klasse": "system", "groesse": 21888, "sha256": "cb3ba772c6c12b67c8c1cf28ad72992e70859c9e99f34f2873b26b515c5d412c"},
   {"pfad": "System/Skripte/karten.js", "klasse": "system", "groesse": 154700, "sha256": "c332309706526933ff24a1d317441b0c5f778b571d368c0e27ea2c2ba291828c"},
   {"pfad": "System/Skripte/klausurzeit.js", "klasse": "system", "groesse": 14196, "sha256": "c541b0d6787c8b6aecd49d8e492f72febac44cdd84370f29629f322729114e36"},
@@ -192,7 +192,7 @@
   {"pfad": ".claude/settings.json", "klasse": "claude", "groesse": 557, "sha256": "fac546ed5c364020c000e671b4112d692912ee9ff34499cbcab6ca3387ac6b54"},
   {"pfad": ".claude/skills/studium-autopilot/SKILL.md", "klasse": "claude", "groesse": 4377, "sha256": "9bb2c0a3cb3aef78a0dfc3bf55de5dec0d356b19425afe51873ea9fd3e0dce23"},
   {"pfad": ".claude/skills/studium-autopilot/fehler-melden.md", "klasse": "claude", "groesse": 3847, "sha256": "3da17b1e4f2f1cd3fcbf117ad170f2823f6b1e0916827fcd364f7de321ad247c"},
-  {"pfad": ".claude/skills/studium-autopilot/lesefassung.md", "klasse": "claude", "groesse": 5634, "sha256": "3457c4aa363163a7fd54a05fe40c5f72341c2fc5f0ef92921c0c4dddfd4b43ff"},
+  {"pfad": ".claude/skills/studium-autopilot/lesefassung.md", "klasse": "claude", "groesse": 6033, "sha256": "e6c34a18d1b8ca482794d1dc01bfbe4da65a52a6b0fd224ba5c092a901dd121a"},
   {"pfad": ".claude/skills/studium-autopilot/lesen.md", "klasse": "claude", "groesse": 3897, "sha256": "edb969c1b05425549285c836aec3f551de48bca9a44ca9915424bd76eae7037c"},
   {"pfad": ".claude/skills/studium-autopilot/schreiben.md", "klasse": "claude", "groesse": 5762, "sha256": "b91c7669d1893948a650202643f38430adfb7a3530def7d7f767715a74303b3e"},
   {"pfad": ".claude/skills/studium-autopilot/tresor.md", "klasse": "claude", "groesse": 8957, "sha256": "63879603301473cb98940ceada979a91a5172722abf017e6b80de47d07e2fea6"}

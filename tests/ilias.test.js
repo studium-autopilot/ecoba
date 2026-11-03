@@ -348,6 +348,58 @@ test("In ILIAS umbenannt oder verschoben: Index und Notiz ziehen mit, ohne Downl
   assert.deepEqual(x.t.schreibvorgaenge.filter((p) => /\.md$/.test(p)), []);
 });
 
+// Kurs mit Objektgruppen wie S100 (03.11.2026): „Gruppe 4“ unter der Objektgruppe „Tutoriengruppen“, ein Ordner unter „00 - Vorlesung“
+const mitObjektgruppen = () => {
+  const def = standardIlias();
+  const gruppe = { art: "ordner", typ: "grp", refId: "160", titel: "Gruppe 4: Dienstag 10 - 12", url: B + "gruppe/160", mitglied: true, gruppe: "Tutoriengruppen" };
+  def.seiten[B + "kurs/100"].push(gruppe, Object.assign(ordner("170", "Die q4r (Verständnisfragen)"), { gruppe: "00 - Vorlesung" }));
+  def.seiten[B + "gruppe/160"] = [datei("1601", "Aufgaben_Matrixmultiplikation", "pdf", "2026-11-02T08:00")];
+  def.seiten[B + "ordner/170"] = [datei("1701", "Explorative_Datenanalyse", "pdf", "2026-11-02T08:00")];
+  def.dateien["1601"] = "%PDF Tutorium Matrix"; def.dateien["1701"] = "%PDF q4r";
+  return { def, gruppe };
+};
+
+test("Objektgruppe „Tutoriengruppen“: Blätter der eigenen Gruppe kommen in den Bereich Tutorium, andere Objektgruppen ändern nichts", async () => {
+  const { def } = mitObjektgruppen();
+  const x = aufbau({ ilias: def });
+  x.abh.einordner = () => I.einordnerAus(echteUnterlagen());
+  await verbinden(x);
+  await lauf(x);
+  const idx = x.t.index().dateien;
+  assert.equal(idx["1601"].pfad, B110 + "/Tutorium/B110 Tutorium Aufgaben Matrixmultiplikation.pdf");
+  assert.equal(fm(x.t.text(B110 + "/Tutorium/B110 Tutorium Aufgaben Matrixmultiplikation.md"), "art"), '"Tutorium"');
+  assert.equal(idx["1601"].iliasPfad, "B110 Einführung in die BWL / Gruppe 4: Dienstag 10 - 12", "Objektgruppe nicht im ILIAS-Pfad");
+  assert.ok(!/Tutorium|Folien/.test(idx["1701"].pfad), "„00 - Vorlesung“ macht nichts zu Folien: " + idx["1701"].pfad);
+});
+
+test("Objektgruppe nachgezogen: ältere Fassung legte das Gruppenblatt als Übung ab, die Notiz bekommt Art Tutorium; deine Art bleibt", async () => {
+  const { def, gruppe } = mitObjektgruppen();
+  delete gruppe.gruppe; // wie eine Fassung, die die Objektgruppe nicht sah
+  def.seiten[B + "gruppe/160"].push(datei("1602", "Aufgabenblatt", "pdf", "2026-10-20T08:00"));
+  def.dateien["1602"] = "%PDF Tutorium Blatt";
+  const x = aufbau({ ilias: def });
+  x.abh.einordner = () => I.einordnerAus(echteUnterlagen());
+  await verbinden(x);
+  await lauf(x);
+  const idx = x.t.index().dateien, p1 = idx["1601"].pfad, p2 = idx["1602"].pfad;
+  assert.ok(!/\/Tutorium\//.test(p1) && !/\/Tutorium\//.test(p2));
+  const n1 = p1.replace(/\.pdf$/, ".md"), n2 = p2.replace(/\.pdf$/, ".md");
+  assert.equal(fm(x.t.text(n1), "art"), '"Übung"');
+  x.t.setzen(n2, x.t.text(n2).replace(/^art: .*$/m, 'art: "Altklausur"')); // selbst geändert
+  gruppe.gruppe = "Tutoriengruppen";
+  x.u.vor(4 * STUNDE); x.il.leeren();
+  await lauf(x);
+  assert.equal(x.il.anzahl("laden"), 0, "nichts neu geladen");
+  assert.equal(fm(x.t.text(n1), "art"), '"Tutorium"');
+  assert.equal(fm(x.t.text(n2), "art"), '"Altklausur"', "deine Art bleibt");
+  assert.equal(x.t.index().dateien["1601"].pfad, p1, "Datei bleibt, wo sie ist");
+  // nächster Lauf: nichts mehr zu tun
+  x.t.schreibvorgaenge.length = 0;
+  x.u.vor(4 * STUNDE);
+  await lauf(x);
+  assert.deepEqual(x.t.schreibvorgaenge.filter((p) => /\.md$/.test(p)), []);
+});
+
 test("Nicht mehr in ILIAS: Marke im Index, Kasten in der Notiz, Datei bleibt; wieder da → Marke und Kasten weg", async () => {
   const def = standardIlias();
   def.seiten[B + "kurs/100"].push(datei("1301", "Riesig laut Liste", "pdf", "2026-10-10T08:00", { groesse: 60 * 1048576 }));
