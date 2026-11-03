@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.7.11 – Unterlagen heißen nach ihrem Inhalt
+
+- **Übersichtlicher:** Unterlagen aus ILIAS heißen nach ihrem Inhalt, etwa „Tutorium 03 Kontenabschluss und Erfolgskonten“
+  statt „Tutorium 03 WS 2026/27“. Schon geladene benennt der nächste Abruf um, außer du hast den Namen geändert.
+
 ## 0.7.10 – Tutoriumsblätter am richtigen Platz
 
 - **Sicherer:** Macht Claude dir eine Lesefassung von Folien, schreibt es ein Kurspasswort oder einen Zoom-Kenncode nicht mehr

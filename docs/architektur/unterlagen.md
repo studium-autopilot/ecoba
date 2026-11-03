@@ -94,6 +94,15 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   Übung im Modulordner. Für sie setzt `notizenNachziehen` die Art in der Notiz auf den Bereich (`bereichMerken`, nur wo noch die
   damals bestimmte Art steht); Datei und Name bleiben. Echter Lauf am 03.11.2026 (Probe gegen ILIAS): genau zwei S100-Blätter
   wechseln den Bereich, sonst keine der 112 Dateien.
+- **Namen aus den zentralen Daten** (seit 03.11.2026, `unterlagen.json`, Vertrag in [daten-v1.md](../daten-v1.md)): Aus Dateiname
+  und erster PDF-Seite allein heißen viele Blätter nichtssagend („B180 Tutorium 03 WS 2026-27“, die Seite nennt nur „3. Tutorium
+  zur Vorlesung Jahresabschluss“). Der Uni-Abgleich des Autors benennt jede Datei nach ihrem Inhalt und veröffentlicht Modul,
+  Art, Nummer und Titel je Prüfsumme; `zentral.js` hält die Liste gerätelokal (`unterlageName(sha)`), `ilias.js` fragt über
+  `abh.namen`. `benennen` nimmt einen Treffer vor allem anderen (Modul muss im Tresor sein). `namenNachziehen` läuft nach jedem
+  Durchsuchen über alle Einträge des Index: Steht die Prüfsumme in der Liste und weicht der Name ab, werden Datei und Notiz
+  umbenannt (`io.umbenennen`, Links ziehen mit, Index über `umbenannt`) und in der Notiz Art, Nummer, Titel, Überschrift und die
+  Links auf die Datei gesetzt (`namenTauschen`). Nur, solange der Name noch zu Art, Nummer und Titel der Notiz passt (wie das
+  Plugin sie angelegt hat), der Code gleich ist und keine neue Fassung daneben liegt; sonst bleibt alles. Bericht `namen`.
 - **Nicht mehr in ILIAS:** Hat ein Lauf einen Kurs ganz und ohne Ordnerfehler durchsucht und eine Datei des Index nirgends
   gesehen, bekommt ihr Eintrag `entfernt` (Datum) und ihre Notiz den Kasten „Nicht mehr in ILIAS“; die Datei bleibt. Wieder
   gesehen → Marke und Kasten weg. Ebenso zu große Dateien (`ignoriert`, mit `kurs`). Ein Kurs, in dem gar nichts zu sehen war,

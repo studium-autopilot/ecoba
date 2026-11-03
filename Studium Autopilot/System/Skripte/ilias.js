@@ -942,6 +942,73 @@ module.exports = function (ctx) {
         if (alt && alt !== art) await notizAendern(notizPfad(x.pfad), (t) => felderTauschen(t, x.id, [["art", alt, art]]));
       }
     };
+    // ----- Namen aus den zentralen Daten (unterlagen.json, seit 03.11.2026) -----
+    // Der Uni-Abgleich des Autors benennt jede Datei aus ILIAS nach ihrem Inhalt („B180 Tutorium 03 Kontenabschluss und
+    // Erfolgskonten“); ohne ihn hieße sie nach dem Dateinamen in ILIAS („B180 Tutorium 03 WS 2026-27“). Gefunden über die
+    // Prüfsumme der Datei, nur für Module im Tresor. → { code, art, nr, titel } | null
+    const zentralerName = (sha) => {
+      const n = sha && abh.namen ? abh.namen(sha) : null;
+      return n && n.code && n.art && n.titel && abh.modul(n.code) ? n : null;
+    };
+    const fmFeld = (fm, k) => {
+      const m = new RegExp("^" + k + ": ?(.*)$", "m").exec(fm);
+      const v = m ? m[1].trim() : "";
+      if (!/^".*"$/.test(v)) return v;
+      try { return JSON.parse(v); } catch (e) { return v; }
+    };
+    const nameForm = (s) => String(s).normalize("NFC").replace(/\//g, "-").toLowerCase();
+    // Begleitnotiz auf den neuen Namen: Art, Nummer, Titel, Überschrift wie begleitnotiz (unterlagen.js), Links auf die Datei
+    const namenTauschen = (text, id, n, dateiAlt, dateiNeu) => {
+      if (!vonDatei(text, id)) return text;
+      const fm = fmVon(text);
+      const neuFm = fm.replace(/^art: .*$/m, () => "art: " + J(n.art)).replace(/^nummer:.*$/m, () => "nummer: " + (n.nr == null ? "" : n.nr))
+        .replace(/^titel: .*$/m, () => "titel: " + J(n.titel));
+      const kopf = "# " + [n.code, [n.art, n.nr != null ? pad(n.nr) : ""].filter(Boolean).join(" "), n.titel].filter(Boolean).join(" · ");
+      let t = String(text).replace(fm, () => neuFm);
+      const ende = t.indexOf("\n---", 4);
+      t = t.slice(0, ende + 4) + t.slice(ende + 4).replace(/^# .*$/m, () => kopf);
+      return dateiAlt === dateiNeu ? t : t.split("[[" + dateiAlt).join("[[" + dateiNeu);
+    };
+    // Schon geladene Dateien, deren Name noch der von Studium Autopilot ist (Name und Notiz passen zueinander), bekommen den Namen
+    // aus den zentralen Daten: Datei und Notiz umbenannt (Links ziehen mit), dazu Art, Nummer, Titel in der Notiz. Hast du Name,
+    // Art, Nummer oder Titel geändert, bleibt alles, wie es ist; ebenso bei einer neuen Fassung daneben. → Anzahl
+    const namenNachziehen = async (r) => {
+      if (!abh.namen) return 0;
+      const E = abh.einordner();
+      let n = 0;
+      for (const id of Object.keys(mem.dateien)) {
+        gestoppt(r);
+        const d = mem.dateien[id], z = d.geloescht || !d.pfad || !d.sha256 || (Array.isArray(d.fassungen) && d.fassungen.length) ? null : zentralerName(d.sha256);
+        if (!z || !io.existiert(d.pfad)) continue;
+        const endung = endungVonEintrag(d), i = d.pfad.lastIndexOf("/");
+        const ordnerAlt = d.pfad.slice(0, i), stemAlt = ohneEndung(d.pfad.slice(i + 1));
+        let ziel = "";
+        try { ziel = sauber(E.zielName(z.code, z.art, z.nr, z.titel)); } catch (e) { ziel = ""; }
+        const ordner = zielOrdner(z.code, { titel: "" }, z.art);
+        if (!ziel || (nameForm(stemAlt) === nameForm(ziel) && ordner === ordnerAlt)) continue;
+        const notiz = notizPfad(d.pfad), text = await io.lesenText(notiz);
+        const fm = text != null && vonDatei(text, id) ? fmVon(text) : null;
+        if (!fm || fmFeld(fm, "code") !== z.code) continue;
+        const nr = fmFeld(fm, "nummer");
+        let bisher = "";
+        try { bisher = sauber(E.zielName(z.code, fmFeld(fm, "art"), /^\d+$/.test(nr) ? Number(nr) : null, fmFeld(fm, "titel"))); } catch (e) { bisher = ""; }
+        if (!bisher || nameForm(bisher) !== nameForm(stemAlt)) continue;
+        let pfad = d.pfad;
+        if (io.umbenennen) {
+          const neu = `${ordner}/${freierName(ordner, ziel, endung)}.${endung}`;
+          if (!pfadOk(neu, endung)) continue;
+          if (io.ordnerAnlegen) await io.ordnerAnlegen(ordner);
+          await io.umbenennen(d.pfad, neu);
+          await io.umbenennen(notiz, notizPfad(neu));
+          await umbenannt(neu, d.pfad);
+          pfad = neu;
+        }
+        await notizAendern(notizPfad(pfad), (t) => namenTauschen(t, id, z, d.pfad.slice(i + 1), pfad.slice(pfad.lastIndexOf("/") + 1)));
+        n++;
+      }
+      if (n) await speichern();
+      return n;
+    };
     const bereichMerken = (c, r) => {
       const d = mem.dateien[c.id];
       if (d && !d.geloescht && d.pfad && c.mitBlock && !/\/(Tutorium|Lab)\//.test(d.pfad)) r.bereich.push({ id: c.id, pfad: d.pfad, c });
@@ -1346,6 +1413,12 @@ module.exports = function (ctx) {
       return art === "Tutorium" || art === "Lab" ? art : "";
     };
     const benennen = async (c, bytes, E, mitPdf) => {
+      const n = bytes ? zentralerName(await sha256(bytes)) : null;
+      if (n) {
+        let name = "";
+        try { name = sauber(E.zielName(n.code, n.art, n.nr, n.titel)); } catch (e) { name = ""; }
+        if (name) return { art: n.art, nr: n.nr, titel: n.titel, name, code: n.code };
+      }
       const rel = relAus(c, (await bereichAusBlock(c, E)) ? c.mitBlock : c.ordner);
       const pdf = mitPdf && c.endung === "pdf" && bytes.length <= PDF_TITEL_MAX_MB * 1048576 ? bytes : null;
       let v = null;
@@ -1650,6 +1723,11 @@ module.exports = function (ctx) {
       entfernteMerken(b, r, fertig);
       await speichern(); // ignoriert (zu groß), Übungen, umbenannt oder nicht mehr in ILIAS
       await notizenNachziehen(r);
+      try { b.namen = await namenNachziehen(r); }
+      catch (e) {
+        if (e && e.art === "abbruch") throw e;
+        warnen(b, "Ein paar Unterlagen ließen sich nicht umbenennen.", "Namen: " + fehlerText(e));
+      }
 
       // 1b. Gruppen in den Stundenplan (nicht, wenn sie von außen kommen); ein Fehler hier hält die Unterlagen nicht an
       if (!ohneGruppen) {
@@ -2311,6 +2389,8 @@ module.exports = function (ctx) {
   const obsidianAbh = () => ({
     io: obsidianIo(), lokal: lokalObs, geheim: geheimObs, geheimId, anmeldung: anmeldungFinden, quelle: quelleFinden,
     einordner: () => einordnerAus(modulVon("unterlagen")),
+    // Namen aus den zentralen Daten (unterlagen.json) zur Prüfsumme einer Datei, sonst null
+    namen: (sha) => (ctx.zentral && ctx.zentral.unterlageName ? ctx.zentral.unterlageName(sha) : null),
     modul: (code) => { const e = eba(), m = e && e.modulNachCode(code); return m ? { name: m.f.basename, titel: String(m.fm.titel || "") } : null; },
     semester: () => { const e = eba(); try { return e ? e.aktuellesSemester().name : ""; } catch (x) { return ""; } },
     // Gruppen: Bibliothek meine-gruppe.js, geprüfte Gruppenliste der zentralen Daten (null = noch keine), Stundenplan-Notizen

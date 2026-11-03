@@ -19,6 +19,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `veranstaltungen.json` | nein | 1 500 000 Byte | Zentraler Stundenplan: Termin-Serien aller Veranstaltungen der Module (max. 3000 Einträge), Vertrag seit 17.10.2026, veröffentlicht seit 18.10.2026, siehe [unten](#veranstaltungenjson) |
 | `kapitel.json` | nein | 512 KB | Kapitellisten der Module für den Lernplan (höchstens 60 Module), seit 19.10.2026, siehe [unten](#kapiteljson) |
 | `literatur.json` | nein | 512 KB | Literaturlisten der Module (höchstens 60 Module), Vertrag seit 24.10.2026, siehe [unten](#literaturjson) |
+| `unterlagen.json` | nein | 512 KB | Namen der Unterlagen aus ILIAS je Prüfsumme der Datei (höchstens 5000), Vertrag seit 03.11.2026, siehe [unten](#unterlagenjson) |
 | `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, Kurse der Unibibliothek, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); das Plugin liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; das Plugin liest ihn noch nicht |
@@ -545,6 +546,45 @@ bleiben bei jeder neuen Liste. Eine gelöschte Notiz entsteht erst wieder, wenn 
 es nie an. Für ein Modul ohne Liste entsteht keine Notiz. Fehlt die Datei im Manifest, vergessen die Geräte ihren Stand; die Notizen
 bleiben, wie sie sind.
 
+## unterlagen.json
+
+Vertrag seit 03.11.2026. Optional. Namen der Dateien, die in den ILIAS-Kursen der Module liegen: je Datei Modul, Art, Nummer und
+Titel, wie der Uni-Abgleich des Autors sie nach dem Inhalt vergeben hat („Tutorium 03 Kontenabschluss und Erfolgskonten“ statt
+„JA_Tutorium_3_WiSe26_27.pdf“). Kennung ist die Prüfsumme SHA-256 der Datei, wie sie aus ILIAS kommt; nur Fakten über Dateien,
+die alle im Kurs sehen, nie ihr Inhalt. Plugins vor dieser Fassung kennen den Namen nicht und ignorieren ihn. Veröffentlicht erst
+mit dem Schalter `unterlagen.veroeffentlichen` im Export.
+
+```json
+{
+ "schema": 1,
+ "dateien": [
+  { "sha256": "<64 Hex-Zeichen>", "code": "X100", "art": "Tutorium", "nummer": 3, "titel": "Kontenabschluss und Erfolgskonten" },
+  { "sha256": "<64 Hex-Zeichen>", "code": "X100", "art": "Sonstiges", "titel": "Semesterplan" }
+ ]
+}
+```
+
+| Feld | Regel |
+|---|---|
+| `schema` | genau `1`, sonst wird die ganze Datei abgelehnt |
+| `stand` | optional, ISO-Zeit |
+| `dateien` | höchstens 5000; je `sha256` nur einmal (sonst „doppelt“) |
+| `sha256` | 64 Zeichen `0–9`, `a–f` |
+| `code` | Modulcode wie in `termine.json` |
+| `art` | eine der Unterlagen-Arten `Folien`, `Skript`, `Übung`, `Tutorium`, `Lab`, `Lösung`, `Altklausur`, `Literatur`, `Sonstiges` |
+| `nummer` | optional, ganze Zahl 0–99 |
+| `titel` | reiner Text, 1–120 Zeichen (wie bei `literatur.json`) |
+
+Ein ungültiger Eintrag wird einzeln verworfen, die anderen bleiben. Unbekannte Felder werden ignoriert.
+
+**Was das Plugin daraus macht:** Jedes Gerät holt die Datei selbst und merkt sie sich gerätelokal (wie `kapitel.json`). Lädt die
+ILIAS-Ablage eine Datei, deren Prüfsumme in der Liste steht, und gibt es das Modul im Tresor, bekommt sie Name, Art, Nummer und
+Titel aus der Liste statt aus ihrem Dateinamen. Schon geladene Dateien benennt jeder ILIAS-Lauf nach (Datei und Begleitnotiz,
+Art, Nummer, Titel und Überschrift der Notiz), solange Name und Notiz noch so sind, wie das Plugin sie angelegt hat; hast du
+Name, Art, Nummer oder Titel geändert oder liegt eine neue Fassung daneben, bleibt alles, wie es ist. Kommen die Unterlagen von
+einem eigenen Uni-Abgleich, nutzt das Plugin die Liste nicht. Fehlt die Datei im Manifest, vergessen die Geräte ihren Stand;
+umbenannte Dateien bleiben, wie sie sind.
+
 ## veranstaltungen.json
 
 Vertrag seit 17.10.2026, **im Manifest seit 18.10.2026** (Schalter `veranstaltungen.veroeffentlichen` im Export). Optional
@@ -717,7 +757,12 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
    etwa einmal am Tag; passt eine Nummer zweimal hintereinander nicht mehr, fällt sie weg, und das Werk führt wieder zur Suche.
    Veröffentlicht erst mit dem Schalter `literatur.veroeffentlichen`, bis dahin private Vorschau. Ein Fehler hält nur
    `literatur.json` an.
-10. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
+10. `unterlagen.json` (Vertrag seit 03.11.2026): aus der Ablage der ILIAS-Unterlagen des Abgleichs (Prüfsumme je Datei) und
+   den Begleitnotizen dazu (Modul, Art, Nummer, Titel; sonst der Dateiname „<Code> <Art> <NN> <Titel>“). Nie Dateien aus der
+   eigenen Übungs- oder Tutoriumsgruppe des Autors (Ordner „Gruppe 4 …“), nur Kurse mit Modulcode. Dieselben Prüfungen wie das
+   Plugin und der Scan auf persönliche Angaben je Eintrag; ein Treffer hält nur diesen Eintrag zurück. Veröffentlicht erst mit
+   dem Schalter `unterlagen.veroeffentlichen`. Ein Fehler hält nur `unterlagen.json` an.
+11. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 
 Testquelle mit allen Fällen: lokal beim Autor (nicht im Repo). Öffentliche Tests: `tests/` (siehe `docs/tests.md`).

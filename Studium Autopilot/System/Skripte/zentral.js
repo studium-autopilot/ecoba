@@ -25,6 +25,8 @@
 //      daraus schreibt lernplan.js (nur der Abrufer); dieses Skript meldet nur „neu“ an ctx.lernplanAnzeige.
 //   Literaturlisten (literatur.json, optional, seit 24.10.2026): genauso, gerätelokal (eba-zentral-literatur). Die Notizen
 //      „<Code> Literatur 00 Literaturliste“ schreibt literatur.js (nur der Abrufer); „neu“ geht an ctx.literaturAnzeige.
+//   Namen der Unterlagen (unterlagen.json, optional, seit 03.11.2026): genauso, gerätelokal (eba-zentral-unterlagen). ilias.js
+//      fragt beim Ablegen und nach jedem Lauf über unterlageName(Prüfsumme der Datei) nach Modul, Art, Nummer und Titel.
 //   Zentraler Stundenplan (veranstaltungen.json, optional, Plan Abschnitt 27.1): holt und schreibt NUR der Abrufer, mit eigener
 //      Fehlerbehandlung (ein Fehler hält nur den Stundenplan an). Eine Notiz je id in Stundenplan/ (typ lehrveranstaltung,
 //      herkunft: zentral, zentral_id), nur für das aktuelle Fachsemester (stundenplanFilter), ohne Parallelgruppen, ohne
@@ -39,7 +41,7 @@
 // Testeinstiege (docs/architektur/testeinstiege.md): plugin.testZentralAus (kein automatischer Abruf), plugin.testQuelle(name) → Text,
 // plugin.testZentralBasis (andere Basis-URL, z. B. lokaler Server). Gerätelokal (app.saveLocalStorage): eba-geraet,
 // eba-zentral-stand, eba-zentral-daten, eba-zentral-gruppen, eba-zentral-angebote, eba-zentral-kapitel, eba-zentral-literatur,
-// eba-zentral-angewendet.
+// eba-zentral-unterlagen, eba-zentral-angewendet.
 // iOS-sicher: keine Node-APIs, kein Lookbehind, kein .at()/findLast/structuredClone.
 module.exports = function (ctx) {
   const app = window.app;
@@ -74,11 +76,12 @@ module.exports = function (ctx) {
   const DOMAINS = ["uni-tuebingen.de", "ffwtuebingen.de"];
   // bekannte Dateien und Höchstgröße (Bytes)
   const DATEIEN = { "termine.json": 1000000, "semester.json": 262144, "gruppen.json": 524288, "angebote.json": 524288, "veranstaltungen.json": 1500000,
-    "kapitel.json": 524288, "literatur.json": 524288 };
+    "kapitel.json": 524288, "literatur.json": 524288, "unterlagen.json": 524288 };
   const GRUPPEN = "gruppen.json"; // optional, gerätelokal (nicht an die Abrufer-Sperre gebunden)
   const ANGEBOTE = "angebote.json"; // optional, gerätelokal wie die Gruppen
   const KAPITEL = "kapitel.json"; // optional, gerätelokal wie die Gruppen; die Notizen schreibt lernplan.js
   const LITERATUR = "literatur.json"; // optional, gerätelokal wie die Gruppen; die Notizen schreibt literatur.js
+  const UNTERLAGEN = "unterlagen.json"; // optional, gerätelokal wie die Gruppen; die Namen nutzt ilias.js
   const LEHRE = "veranstaltungen.json"; // optional, zentraler Stundenplan: nur der Abrufer, eigene Fehlerbehandlung
   const LEHRE_ORDNER = "Stundenplan";
   const MUSTERPLAN = "System/Daten/Musterplan.md";
@@ -92,7 +95,7 @@ module.exports = function (ctx) {
   const DATUM_MIN = "2020-01-01", DATUM_MAX = "2040-12-31";
   const MODULCODE = /^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$/; // wie eba.js
   const L = { geraet: "eba-geraet", stand: "eba-zentral-stand", daten: "eba-zentral-daten", gruppen: "eba-zentral-gruppen", angebote: "eba-zentral-angebote",
-    kapitel: "eba-zentral-kapitel", literatur: "eba-zentral-literatur", angewendet: "eba-zentral-angewendet" };
+    kapitel: "eba-zentral-kapitel", literatur: "eba-zentral-literatur", unterlagen: "eba-zentral-unterlagen", angewendet: "eba-zentral-angewendet" };
 
   // ---------- Kleine Helfer ----------
   const s10 = (v) => { const m = String(v == null ? "" : v).match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? m[0] : ""; };
@@ -779,6 +782,32 @@ module.exports = function (ctx) {
       const r = literaturModulNormal(roh);
       if (r.fehler) aus.verworfen.push({ id, grund: r.fehler });
       else aus.module.push(r.wert);
+    }
+    return aus;
+  };
+
+  // ---------- Prüfen: Namen der Unterlagen (unterlagen.json, docs/daten-v1.md) ----------
+  // Je Datei aus ILIAS (Prüfsumme SHA-256 der Datei) Modul, Art, Nummer und Titel, wie sie der Uni-Abgleich des Autors vergeben
+  // hat. Ungültige Einträge einzeln verwerfen, eine Prüfsumme nur einmal. → { stand, dateien, verworfen } oder { fehler }
+  const UNTERLAGEN_ARTEN = ["Folien", "Skript", "Übung", "Tutorium", "Lab", "Lösung", "Altklausur", "Literatur", "Sonstiges"];
+  const GU = { dateien: 5000, titel: 120 };
+  const unterlagenPruefen = (daten) => {
+    if (!daten || typeof daten !== "object" || daten.schema !== 1 || !Array.isArray(daten.dateien)) return { fehler: "unterlagen.json: Format ungültig" };
+    if (daten.dateien.length > GU.dateien) return { fehler: "unterlagen.json: zu viele Dateien" };
+    const aus = { stand: isoZeitOk(daten.stand) ? daten.stand.slice(0, 10) : "", dateien: [], verworfen: [] };
+    const gesehen = new Set();
+    for (const roh of daten.dateien) {
+      const sha = roh && typeof roh.sha256 === "string" && /^[0-9a-f]{64}$/.test(roh.sha256) ? roh.sha256 : "";
+      const id = sha ? sha.slice(0, 12) : "?";
+      if (!sha) { aus.verworfen.push({ id, grund: "sha256 ungültig" }); continue; }
+      if (gesehen.has(sha)) { aus.verworfen.push({ id, grund: "doppelt" }); continue; }
+      gesehen.add(sha);
+      const nummer = ganzZahl(roh.nummer, 0, 99), titel = litText(roh.titel, GU.titel, true);
+      if (typeof roh.code !== "string" || !MODULCODE.test(roh.code)) aus.verworfen.push({ id, grund: "code ungültig" });
+      else if (UNTERLAGEN_ARTEN.indexOf(roh.art) < 0) aus.verworfen.push({ id, grund: "art ungültig" });
+      else if (nummer.fehler) aus.verworfen.push({ id, grund: "nummer ungültig" });
+      else if (titel.fehler) aus.verworfen.push({ id, grund: "titel " + titel.fehler });
+      else aus.dateien.push({ sha256: sha, code: roh.code, art: roh.art, nummer: nummer.wert, titel: titel.wert });
     }
     return aus;
   };
@@ -1777,6 +1806,12 @@ module.exports = function (ctx) {
       if (g.fehler) warnen(b, "Literaturlisten: " + g.fehler);
       if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
     } else if (manifest && literaturStand()) { lokal(L.literatur, null); literaturNeu(); }
+    // 1f. Namen der Unterlagen (unterlagen.json): ebenso; ilias.js nutzt sie beim Ablegen und nach jedem Lauf
+    if (manifest && manifest.dateien[UNTERLAGEN]) {
+      const g = await unterlagenHolen(manifest.dateien[UNTERLAGEN], o.manuell);
+      if (g.fehler) warnen(b, "Namen der Unterlagen: " + g.fehler);
+      if (g.verworfen) b.verworfen = b.verworfen.concat(g.verworfen);
+    } else if (manifest && unterlagenStand()) { lokal(L.unterlagen, null); unterlagenKarte = null; }
     // 2. Abrufer-Sperre: Ein anderes Gerät, das vor höchstens UEBERNAHME abgerufen hat, bleibt Abrufer. „Jetzt aktualisieren“
     // übernimmt (wie „Hier laden“ bei ILIAS), außer das andere Gerät hat vor weniger als GERADE abgerufen.
     const a = await abrufLesen();
@@ -1802,7 +1837,7 @@ module.exports = function (ctx) {
     if (manifest) for (const name of Object.keys(hashes)) if (!manifest.dateien[name]) delete hashes[name];
     if (manifest) {
       for (const name of Object.keys(manifest.dateien)) {
-        if (name === GRUPPEN || name === ANGEBOTE || name === LITERATUR || name === LEHRE) continue; // gerätelokal oben bzw. Stundenplan unten (eigene Fehler)
+        if (name === GRUPPEN || name === ANGEBOTE || name === LITERATUR || name === UNTERLAGEN || name === LEHRE) continue; // gerätelokal oben bzw. Stundenplan unten (eigene Fehler)
         const soll = manifest.dateien[name];
         if (!o.manuell && S0.hashes[name] === soll.sha256 && cache[name]) continue;
         let r;
@@ -1923,7 +1958,7 @@ module.exports = function (ctx) {
     return b;
   };
 
-  // ---------- Optionale Dateien gerätelokal holen (gruppen.json, angebote.json, kapitel.json, literatur.json) ----------
+  // ---------- Optionale Dateien gerätelokal holen (gruppen.json, angebote.json, kapitel.json, literatur.json, unterlagen.json) ----------
   // soll = { sha256, groesse } aus dem Manifest. Unveränderte Prüfsumme und vorhandener Stand → nichts holen (außer manuell).
   // art = { schluessel (gerätelokal), liste (Feldname), pruefen, praefix (für verworfene ids im Bericht), neuZeichnen }
   // → {} | { verworfen: [...] } | { fehler }
@@ -1961,6 +1996,22 @@ module.exports = function (ctx) {
     { schluessel: L.kapitel, liste: "module", pruefen: kapitelPruefen, praefix: "kapitel ", neuZeichnen: kapitelNeu });
   const literaturHolen = (soll, manuell) => optionalHolen(LITERATUR, soll, manuell,
     { schluessel: L.literatur, liste: "module", pruefen: literaturPruefen, praefix: "literatur ", neuZeichnen: literaturNeu });
+  // Namen der Unterlagen: Karte Prüfsumme → Eintrag, gebaut beim ersten Nachfragen nach einem neuen Stand
+  let unterlagenKarte = null;
+  const unterlagenStand = () => lokalerStand(L.unterlagen, "dateien");
+  const unterlagenHolen = (soll, manuell) => optionalHolen(UNTERLAGEN, soll, manuell,
+    { schluessel: L.unterlagen, liste: "dateien", pruefen: unterlagenPruefen, praefix: "unterlage ", neuZeichnen: () => { unterlagenKarte = null; } });
+  // → { code, art, nr, titel } oder null (keine Liste, zentrale Daten aus, Datei nicht darin)
+  const unterlageName = (sha) => {
+    if (!eingeschaltet() || typeof sha !== "string") return null;
+    if (!unterlagenKarte) {
+      unterlagenKarte = new Map();
+      const g = unterlagenStand();
+      for (const d of g ? g.dateien : []) if (d && typeof d.sha256 === "string") unterlagenKarte.set(d.sha256, d);
+    }
+    const d = unterlagenKarte.get(sha);
+    return d ? { code: d.code, art: d.art, nr: d.nummer == null ? null : d.nummer, titel: d.titel } : null;
+  };
 
   // ---------- Status (Quellen-Vertrag) ----------
   // Gemeinsame Form der Quellen: { zustand (aus | laeuft | pause | fehler | an), geprueft (letzter Lauf ohne Fehler; vor dem ersten
@@ -2062,7 +2113,7 @@ module.exports = function (ctx) {
 
   ctx.zentral = {
     abrufen, status, stand, geraetId, idAusName, notizText, mdText, mdInZeile, existiert, dateiName, neuerName, terminePruefen, semesterPruefen, manifestPruefen, gruppenPruefen,
-    angebotePruefen, kapitelPruefen, literaturPruefen, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
+    angebotePruefen, kapitelPruefen, literaturPruefen, unterlagenPruefen, unterlageName, lehrePruefen, stundenplanFilter, stundenplanAuswahl, pflichtCodes, eigenePaare, lehreNotizText, lehreMeine, lehreZeit,
     aenderungenFelder, lehreDateiName, lehreName,
     // zentraler Stundenplan für Anzeige und Texte: { verfuegbar, anzahl, ohneBeginn, ausgeblendet: [ids] }
     stundenplan: stundenplanStand,

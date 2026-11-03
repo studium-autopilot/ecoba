@@ -45,7 +45,7 @@ Dann die **Cloud Shell** öffnen (Konsole oben rechts, Symbol **>_**; dort ist d
 diese Zeile eingeben. Sie lädt `start.sh` aus dem Tag dieser Anleitung (beim Release eingesetzt) und startet es:
 
 ```bash
-mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start.sh https://raw.githubusercontent.com/studium-autopilot/ecoba/v0.7.10/server/start.sh && bash ~/studium-autopilot/start.sh --mail <Mail-Adresse>
+mkdir -p ~/studium-autopilot && curl -fsSLo ~/studium-autopilot/start.sh https://raw.githubusercontent.com/studium-autopilot/ecoba/v0.7.11/server/start.sh && bash ~/studium-autopilot/start.sh --mail <Mail-Adresse>
 ```
 
 Jedes weitere Mal („Weiter mit der Einrichtung“, auch in einer neuen Cloud-Shell-Sitzung oder Tage später) dieselbe Zeile ohne
