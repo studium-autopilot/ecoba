@@ -44,12 +44,14 @@ jobs:
       - name: Datenschutz- und Qualitätsprüfung (inkl. node --check und iOS-Regeln)
         run: python werkzeuge/pruefen.py .
 
-      - name: Tests (node --test, ohne Abhängigkeiten)
+      - name: Abhängigkeiten (Tests des Connectors nehmen den offiziellen MCP-Client)
+        run: npm ci --no-audit --no-fund
+
+      - name: Tests (node --test)
         run: node --test tests/*.test.js
 
       - name: Lint (ESLint für JavaScript, Ruff für Python)
         run: |
-          npm ci --no-audit --no-fund
           npx eslint .
           pip install --quiet --require-hashes -r .github/requirements-ci.txt
           ruff check werkzeuge/ server/

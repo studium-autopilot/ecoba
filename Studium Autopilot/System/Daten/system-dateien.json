@@ -1,8 +1,8 @@
 {
  "schema": 1,
- "version": "0.8.0",
+ "version": "0.8.1",
  "ordner": "Studium Autopilot",
- "erstellt": "2026-11-04T13:12:31Z",
+ "erstellt": "2026-11-04T13:29:00Z",
  "dateien": [
   {"pfad": ".obsidian/app.json", "klasse": "einstellung", "groesse": 421, "sha256": "20924393fe3278ce1b209b52300419d4866aa6cec0617f6c36cfb2893e59ac82"},
   {"pfad": ".obsidian/bookmarks.json", "klasse": "einstellung", "groesse": 1398, "sha256": "8d31516f6631847992a229df9f106cd943eda86ca791fdf952e4c7228ac1c29e"},
@@ -10,7 +10,7 @@
   {"pfad": ".obsidian/core-plugins.json", "klasse": "einstellung", "groesse": 698, "sha256": "b06ab63f09578efd584bb3d57c57aca6b6052d6861284919ef2f53f579318a14"},
   {"pfad": ".obsidian/hotkeys.json", "klasse": "einstellung", "groesse": 110, "sha256": "33864b03da9bc6edf5a5f669961f2e041ee92b9d87213057ced8c479296aca69"},
   {"pfad": ".obsidian/plugins/studium-autopilot/main.js", "klasse": "system", "groesse": 111610, "sha256": "295265e87edff18d59c9261af2f9cfcab4dad28febf6d9016d3f82ca8602a913"},
-  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 312, "sha256": "33e82bea3cea3cbf52a5a3321813c5c7330169f1e30a3491b7b27548fe873ef7"},
+  {"pfad": ".obsidian/plugins/studium-autopilot/manifest.json", "klasse": "system", "groesse": 312, "sha256": "048639e7b530ef9ef9759b415833b7ee26048005fc4d044a3592b2399fe62b17"},
   {"pfad": ".obsidian/snippets/eba-core.css", "klasse": "system", "groesse": 632807, "sha256": "abd529fad6149a4cccd95f81a6fefb0de07d7f9c319df4bdb5ffcbb4fd856a36"},
   {"pfad": ".obsidian/snippets/eba-flieder.css", "klasse": "system", "groesse": 6479, "sha256": "cc48715bdb002084adaaf92c0f41b7c9f97a69a74af4f68aa7945b2129316fba"},
   {"pfad": ".obsidian/snippets/eba-klar.css", "klasse": "system", "groesse": 5503, "sha256": "018877ac0e97ff9f80a9739a75c8df22adfaf9b73d1e0b5939a94a560722e206"},

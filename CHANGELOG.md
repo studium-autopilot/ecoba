@@ -2,7 +2,7 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
-## 0.8.0 – Dein Studium in der Claude-App
+## 0.8.1 – Dein Studium in der Claude-App
 
 - **Neu:** Mit eigenem Server fragst du Claude jetzt auch in der Claude-App nach Terminen, Lernplan und Prüfungen, auch am
   iPhone. Verbinden unter **Eigener Server**; jede neue Verbindung siehst du auf allen deinen Geräten.
