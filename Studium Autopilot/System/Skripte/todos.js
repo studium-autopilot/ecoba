@@ -321,5 +321,13 @@ module.exports = function (ctx) {
     ctx.intervall(() => alleNeu(false), 30 * 60 * 1000); // Tageswechsel: „bis morgen“ → „bis heute“
   };
 
-  return { registrieren, zeichnen, lesen, lesenBeide, zustand, faellig, kurzname, zerlegen, zaehler };
+  // Für den Lernplan (lernplan.js, „Heute“, über ctx.todos): eine Aufgabe sofort abhaken (t aus lesen) → ob die Zeile noch stimmte
+  const abhaken = async (t) => {
+    const ok = await schreiben(t, "x");
+    alleNeu(true);
+    return ok;
+  };
+
+  if (ctx) ctx.todos = { lesen, abhaken, zuruecknehmen };
+  return { registrieren, zeichnen, lesen, lesenBeide, zustand, faellig, kurzname, zerlegen, zaehler, abhaken, zuruecknehmen };
 };

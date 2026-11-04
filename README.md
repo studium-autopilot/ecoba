@@ -106,9 +106,9 @@ Unterlage.
   dabei nicht, Anthropic erlaubt Abos nur in Claude selbst. Der Weg steht ganz unten im Fenster **Eigener Server**, Anleitung in
   [docs/installation.md](docs/installation.md#api-schlüssel-für-claude-für-fortgeschrittene).
 - **Deine Daten:** Nur die Unterlage, die du zusammenfassen lässt, geht an Claude. Mehr in
-  [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
+  [docs/datenschutz.md](docs/datenschutz.md#eigener-server).
 
-## Für Technische: eigener Server mit Claude
+## Für Technische: eigener Server
 
 Wer mehr will als die Termine für alle, lässt sich einen eigenen, kostenlosen Server einrichten. Darauf fasst Claude mit deinem
 eigenen Abo deine Unterlagen zusammen und sucht in deinen Uni-Mails und in Gmail nach Terminen, Fristen und Hinweisen, die nur
@@ -123,7 +123,11 @@ Obsidian holt die Ergebnisse verschlüsselt ab und legt sie unter **Termine** an
 - **Du brauchst:** Claude Pro oder Max, Claude Desktop auf Windows oder Mac und ein Oracle-Konto. Gmail ist freiwillig.
 - **Deine Daten** liegen auf deinem Server und in deinem Tresor, der Weg dazwischen ist verschlüsselt. Was Claude auf dem
   Server liest (deine Mails, Unterlagen zum Zusammenfassen), verarbeitet Anthropic über dein Claude-Konto. Mehr in
-  [docs/datenschutz.md](docs/datenschutz.md#eigener-server-mit-claude).
+  [docs/datenschutz.md](docs/datenschutz.md#eigener-server).
+- **In der Claude-App fragen (freiwillig):** Mit **Mit der Claude-App verbinden** im Fenster **Eigener Server** fragst du Claude
+  in der Claude-App nach deinem Studium, auch am iPhone, etwa „Was steht diese Woche an?“. Claude liest dafür über deinen Server
+  Termine, Fristen, To-dos, Lernplan, fällige Karteikarten, Prüfungen mit Noten und deinen Stundenplan und ändert nichts. Mehr in
+  [docs/datenschutz.md](docs/datenschutz.md#claude-app).
 
 In Claude Desktop oben **Code** wählen (nicht den Chat), als Ordner deinen Tresor, dann einfügen:
 
@@ -154,8 +158,9 @@ Der Tresor bringt ein eigenes kleines Plugin mit („Studium Autopilot“). Du m
   Webmail der Uni. Deine Mails stehen nur im Speicher des Geräts, nie im Tresor.
 - **Deine Kalender-Links (Alma, ILIAS) bleiben auf dem Gerät.** Sie werden nicht synchronisiert und nirgends hin geschickt.
 - **Claude nur, wenn du es verbindest.** Mit einem eigenen Server liest Claude dort deine Mails und die Unterlagen, die du
-  zusammenfassen lässt; das läuft über dein Claude-Konto bei Anthropic. Ohne Server geht eine Unterlage, wenn du bei ihr auf
-  **Zusammenfassen** tippst, mit deinem eigenen Schlüssel direkt an Anthropic.
+  zusammenfassen lässt; das läuft über dein Claude-Konto bei Anthropic. Verbindest du dazu die Claude-App, liest Claude in deinen
+  Chats Termine, To-dos, Lernplan, Karteikarten, Prüfungen mit Noten und Stundenplan. Ohne Server geht eine Unterlage, wenn du bei
+  ihr auf **Zusammenfassen** tippst, mit deinem eigenen Schlüssel direkt an Anthropic.
 - **Deine Einträge bleiben deine.** Häkchen und „Meine Notizen“ in einem Termin überschreibt der Abruf nie, Noten und
   Status deiner Module bleiben auch bei einem Update.
 
@@ -173,7 +178,7 @@ Dokumente der Universität verlinkt. Die Bilder zeigen einen Beispiel-Tresor mit
 Unterlagen.
 
 Apple und App Store sind Marken der Apple Inc. Google Play und das Google Play-Logo sind Marken der Google LLC. Claude ist eine
-Marke der Anthropic, PBC; Studium Autopilot ist kein Angebot von Anthropic.
+Marke der Anthropic, PBC; Studium Autopilot ist kein Angebot von Anthropic und steht in keiner Verbindung zu Anthropic.
 
 ## Fehler melden
 

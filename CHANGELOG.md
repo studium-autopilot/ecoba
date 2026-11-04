@@ -2,6 +2,25 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.8.0 – Dein Studium in der Claude-App
+
+- **Neu:** Mit eigenem Server fragst du Claude jetzt auch in der Claude-App nach Terminen, Lernplan und Prüfungen, auch am
+  iPhone. Verbinden unter **Eigener Server**; jede neue Verbindung siehst du auf allen deinen Geräten.
+- **Sicherer:** Jedes Gerät hat jetzt eigene Schlüssel für deinen **eigenen Server**, schon verbundene bekommen sie von selbst.
+  Geht eins verloren, trennst du unter „Geräte“ nur es und, was jemand damit verbunden hat.
+- **Neu:** Der **Lernplan** zeigt oben, was **heute** dran ist: Kapitel, Aufgaben und Karteikarten, so viel, wie in deine
+  Lernzeit passt, mit der ungefähren Zeit. Deine Lernzeit je Tag stellst du hinter dem Regler neben dem Titel ein.
+- **Einfacher:** Öffnest du den **Lernplan** zum ersten Mal mitten im Semester, wählst du **Ab heute planen**. Dann beginnt der Plan
+  diese Woche, und du liegst nicht gleich im Rückstand.
+- **Übersichtlicher:** Kapitel, deren Folien noch nicht hochgeladen sind, stehen in **Diese Woche** in einer Zeile darunter statt
+  zwischen den Kapiteln, die du jetzt lernen kannst.
+- **Übersichtlicher:** Im **Stundenplan** füllen Vorlesungen ihren ganzen Block und Übungen und Tutorien sind kleiner, so
+  siehst du auf einen Blick, was Vorlesung ist. Die Uhrzeiten bleiben die echten.
+- **Behoben:** Nach **Vor der Vorlesung lernen** aus fehlten im **Lernplan** auf dem iPad manchmal die Module im Fenster, bis zum
+  Neustart der App. Das Fenster zeigt jetzt immer den aktuellen Stand.
+- **Behoben:** Unter **Einstellungen & Hilfe** stand beim **Uni-Login** „Fehler“, obwohl er verbunden und aktuell war und nur
+  einen Hinweis hatte. Jetzt steht dort „Verbunden“ und der Hinweis darunter; „Fehler“ nur, wenn etwas nicht klappt.
+
 ## 0.7.11 – Unterlagen heißen nach ihrem Inhalt
 
 - **Übersichtlicher:** Unterlagen aus ILIAS heißen nach ihrem Inhalt, etwa „Tutorium 03 Kontenabschluss und Erfolgskonten“

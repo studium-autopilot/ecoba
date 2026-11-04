@@ -156,4 +156,4 @@ Notizen mit `Q.marke("ilias-kalender", id)` (`herkunft: ilias-kalender` + `ilias
 `Q.zuViel`, Doppel über `Q.dubletten`, eigener Text unter `## Meine Notizen`; Punkte, die nur du lösen kannst (Link abgelaufen),
 mit `Q.melden(ctx, "ilias-kalender", …)`. Übernimmt ein eigener Server später eine dieser Quellen (z. B. den
 ILIAS-Kalender), steht sie in `quellen_extern`; seine Termine aus Mails schreibt `server.js` mit `herkunft: claude` +
-`claude_id` (siehe [„Eigener Server mit Claude“](server.md)).
+`claude_id` (siehe [„Eigener Server“](server.md)).

@@ -8,7 +8,7 @@ const { laden } = require("./laden.js");
 const { kapitelLesen, gewichte, zielVon, kapazitaet, planen, stand, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild,
   sollHeute, heldDaten, heldText, ANTEILE, anteilWahl, zielBei, zielVorschau, zielTeile, planSemester, spaeterSemester, terminWahl, terminText,
   bisText, leisteFenster, ZEIT_FAKTOR, relevanzStufe, zeitStufe, zeitWahlLesen, zeitSetzen, zeitAnSetzen, zeitSatz, vorlernenSetzen, ungeprueft,
-  warnungTeile } = laden("lernplan").ergebnis;
+  warnungTeile, TAG_VORGABE, tageszeitLesen, tagIndex, minutenVon, dauerText, kandidatenVon, heuteFuellen, luecken, aufgabeKurz } = laden("lernplan").ergebnis;
 
 const NOTIZ = [
   "---",
@@ -550,4 +550,66 @@ test("Warnkasten: Titel nennt die Module, der Text sagt, was zu tun ist", () => 
   assert.match(b.text, /Der Plan rechnet ohne diese Module: Plane sie selbst\.$/);
   assert.match(warnungTeile({ ungeprueft: [], ohne: ["B210"] }, false).text, /ohne dieses Modul: Plane es selbst\.$/);
   assert.equal(warnungTeile({ ungeprueft: ["E101"], ohne: [] }, true).titel, "Die Kapitel sind nicht geprüft.");
+});
+
+// Heute (seit 3.11.2026): Lernzeit je Wochentag, Zeit je Kapitel, was heute dran ist, freie Zeit zwischen den Kursen
+test("Heute: Lernzeit je Wochentag, Vorgabe für fehlende oder unsinnige Werte", () => {
+  assert.deepEqual(tageszeitLesen(undefined), TAG_VORGABE);
+  assert.deepEqual(tageszeitLesen([90, "60", -5, 999, 0]), [90, 60, TAG_VORGABE[2], TAG_VORGABE[3], 0, TAG_VORGABE[5], TAG_VORGABE[6]]);
+  assert.equal(tagIndex("2026-11-02"), 0, "Montag");
+  assert.equal(tagIndex("2026-11-08"), 6, "Sonntag");
+});
+
+test("Heute: Zeit eines Kapitels aus Seiten, Unterkapiteln oder pauschal, halb Verstandenes zählt nur den Rest", () => {
+  assert.deepEqual(minutenVon({ seitenWert: 34, teile: [], anteil: 0 }), { ganz: 70, rest: 70 });
+  assert.deepEqual(minutenVon({ seitenWert: null, teile: [{}, {}, {}], anteil: 0 }), { ganz: 60, rest: 60 });
+  assert.deepEqual(minutenVon({ seitenWert: null, teile: [], anteil: 0 }), { ganz: 45, rest: 45 });
+  assert.deepEqual(minutenVon({ seitenWert: 4, teile: [], anteil: 0 }), { ganz: 15, rest: 15 }, "mindestens eine Viertelstunde");
+  assert.deepEqual(minutenVon({ seitenWert: 30, teile: [{}, {}], anteil: 0.5 }), { ganz: 60, rest: 30 });
+  assert.equal(minutenVon({ seitenWert: 30, teile: [], anteil: 0, zeit: { stufe: "mehr" } }).ganz, 90);
+  assert.equal(dauerText(45), "45\u00a0Min.");
+  assert.equal(dauerText(75), "1¼\u00a0Std.");
+  assert.equal(dauerText(120), "2\u00a0Std.");
+  assert.equal(dauerText(150), "2½\u00a0Std.");
+});
+
+test("Heute: Reihenfolge und Füllen nach der Lernzeit", () => {
+  // Heute Di 3.11.2026, Woche bis So 8.11.
+  const heute = "2026-11-03";
+  const kap = (titel, faellig, x) => Object.assign({ titel, nr: "", teile: [], anteil: 0, da: true, erreicht: true, seitenWert: 30 }, x, { _f: faellig });
+  const P = (code, kapitel) => ({ code, f: { path: `Lernplan/${code} Lernplan.md` }, heute, vorlernen: true, kapitel, plan: { faellig: kapitel.map((k) => k._f) } });
+  const A = [
+    P("B110", [kap("Grundlagen", "2026-10-25"), kap("Strategie", "2026-11-08")]),
+    P("S110", [kap("Maßzahlen", "2026-11-08", { da: false }), kap("Verteilungen", "2026-11-15")]),
+    P("B180", [kap("Rechnungswesen", "2026-11-08"), kap("Fertig", "2026-11-01", { anteil: 1 })]),
+  ];
+  const todos = [
+    { id: "a", code: "S110", text: "Übung 02 lösen", frist: "2026-11-04" },
+    { id: "b", code: "S110", text: "Alt", frist: "2026-10-20" },
+    { id: "c", code: "E101", text: "Lesen", frist: "2026-11-06" },
+  ];
+  const K = kandidatenVon(A, todos, { B180: { heute: "14:15 Vorlesung" } }, heute);
+  assert.deepEqual(K.map((x) => [x.art, x.rang, x.art === "kapitel" ? x.P.kapitel[x.i].titel : x.t.id]), [
+    ["kapitel", 0, "Grundlagen"], ["aufgabe", 1, "a"], ["kapitel", 2, "Rechnungswesen"], ["kapitel", 3, "Strategie"], ["aufgabe", 4, "c"],
+    ["kapitel", 5, "Verteilungen"],
+  ], "überfällig, To-do bis morgen, Modul mit Kurs heute, Rest der Woche, To-do bald, nächste Woche; nicht hochgeladen und alt fehlen");
+  assert.deepEqual(heuteFuellen(K, 120, 0).map((x) => x.id), [K[0].id, K[1].id, K[2].id], "60 + 30 + 60: das letzte darf darüber gehen");
+  assert.deepEqual(heuteFuellen(K, 30, 0).map((x) => x.id), [K[0].id], "eines immer");
+  assert.deepEqual(heuteFuellen(K, 0, 0), [], "frei");
+  assert.deepEqual(heuteFuellen(K, 120, 90).map((x) => x.id), [K[0].id], "schon Erledigtes zählt mit");
+  assert.equal(heuteFuellen(K, 999, 0).length, 5, "die nächste Woche nie von selbst");
+  const gross = [{ id: "g", art: "kapitel", rang: 0, minuten: 200 }, { id: "h", art: "kapitel", rang: 3, minuten: 45 }];
+  assert.deepEqual(heuteFuellen(gross, 120, 0).map((x) => [x.id, x.teil]), [["g", 120]], "großes Kapitel nur mit dem Teil, der heute passt");
+  assert.deepEqual(heuteFuellen(gross, 120, 100).map((x) => [x.id, x.teil]), [["g", 30]], "mindestens eine halbe Stunde");
+  assert.deepEqual(heuteFuellen([{ id: "k", art: "kapitel", rang: 0, minuten: 70 }], 60, 0).map((x) => x.teil), [undefined], "knapp darüber bleibt ganz");
+});
+
+test("Heute: freie Zeit zwischen den Kursen, Aufgaben kurz", () => {
+  assert.equal(luecken([]), "");
+  assert.equal(luecken([{ beginn: "08:15", ende: "09:45" }, { beginn: "10:00", ende: "12:00" }, { beginn: "14:15", ende: "15:45" }]),
+    "12–14:15\u00a0Uhr und ab 15:45\u00a0Uhr");
+  assert.equal(luecken([{ beginn: "10:15", ende: "11:45" }, { beginn: "08:15", ende: "09:45" }, { beginn: "14:15", ende: "19:30" }]), "11:45–14:15\u00a0Uhr");
+  assert.equal(aufgabeKurz("Blatt vor dem ersten Tutorium selbst lösen (bis Mo 26.10., erstes Präsenztutorium); Aufgabe 4 mit R"),
+    "Blatt vor dem ersten Tutorium selbst lösen");
+  assert.equal(aufgabeKurz("**Lesen:** [[E101 Folien 02|Folien 02]] ganz"), "Lesen: Folien 02 ganz");
 });

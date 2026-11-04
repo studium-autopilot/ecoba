@@ -37,10 +37,15 @@ einer eigenen Seite: Was neu ist, gehört dahin, wo man ohnehin zuerst hinschaut
   Seit 01.11.2026 auch die Hinweise von Claude (eigener Server, `ctx.server.hinweise()`, 14 Tage): der Text des Hinweises,
   darunter „Von Claude · <Quelle>“, Ziel die Modulnotiz, wenn er zu einem Modul gehört (Schlüssel aus Tag und Text, auf allen
   Geräten gleich; `server.json` wird bei Änderungen neu gelesen).
+  Mit der Claude-App (Connector) ganz oben jede neue Verbindung der letzten 14 Tage (`ctx.server.claudeAppNeu()` aus
+  `server.json` → `claude_app.bekannt`): „Neue Claude-Verbindung am … um … – warst du das?“, darunter „claude.ai · wenn nicht,
+  antippen und trennen“, Ziel das Fenster „Eigener Server“ (Aktion `verbinden`, `id=server`), Schlüssel `ca|<id>|<seit>`. Gesehen
+  gilt für sie nur auf dem Gerät, das sie gezeigt hat (`gesehenVereinen`: Schlüssel mit `ca|` nur aus der eigenen Datei), damit
+  eine fremde Verbindung auf jedem Gerät auffällt; siehe [connector.md](connector.md#plugin).
 - **Speicher** `System/Daten/seit-besuch/` (synchronisiert): `<Geräte-ID>.json` mit den Einträgen dieses Geräts (jedes Gerät
   schreibt nur seine Datei, die Karte liest alle; gleiche Änderung = gleicher Schlüssel; 60 Tage, höchstens 500) und
   `gesehen-<Geräte-ID>.json` mit den Schlüsseln, die aufgeklappt angezeigt waren (je Gerät geschrieben,
-  gelesen als Vereinigung aller, gilt also auf allen Geräten; 180 Tage). Nie eine
+  gelesen als Vereinigung aller, gilt also auf allen Geräten, außer für neue Claude-Verbindungen; 180 Tage). Nie eine
   Uhrzeit „gesehen bis“: Ein Eintrag, der erst später per Sync ankommt, wäre sonst verborgen. Kein Pfad im Protokoll, das Ziel
   wird beim Zeichnen über `zentral_id` aufgelöst. Der Ordner ist persönlich: nicht im Release, nicht in Updates, Fund in
   `pruefen.py`.

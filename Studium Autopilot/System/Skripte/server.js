@@ -1,4 +1,4 @@
-// Eigener Server mit Claude: Ein kostenloser Server der Studentin oder des Studenten findet mit Claude Termine und Hinweise in
+// Eigener Server: Ein kostenloser Server der Studentin oder des Studenten findet mit Claude Termine und Hinweise in
 // Uni-Mails und Gmail (Server-Paket in server/ des Projekts). Dieses Skript holt die Ergebnisse ab, entschlüsselt sie und
 // legt die Termine als Notizen an. Ohne Verbindung geht nichts ins Netz; unter Verbindungen steht dann nur eine leise Zeile
 // „Für Technische“ mit dem Knopf „Prompt kopieren“ (Text zum Einfügen in Claude Code, Tab „Code“ in Claude Desktop, PROMPT).
@@ -21,6 +21,11 @@
 //   beim Link: Rückfrage, POST /v1/verbinden. So verbindet sich auch ein Gerät neu, dessen Schlüssel der Server nicht mehr kennt
 //   (sudo studium-server schluessel-erneuern, wenn ein Gerät verloren ist). Wann zuletzt ein Gerät verbunden wurde und wie (Cloud
 //   Shell oder Obsidian), bringt der Eingang mit (nie der öffentliche Status); das Fenster zeigt es.
+// Schlüssel je Gerät (Server ab dieser Fassung, server/geraete.mjs): Jedes Gerät, das sich verbindet, bekommt eigene Schlüssel und eine
+//   Kennung (geraet im Schlüsselbund); eins mit den gemeinsamen zieht beim nächsten Abruf einmal auf eigene um (umziehen, POST
+//   /v1/geraete). Das Fenster zeigt zugeklappt „Geräte (N)“ aus dem Status, je Gerät woher es kam („über Code von …“) und sein grobes
+//   Netz, jedes andere mit „Trennen“ (der Server nimmt es dann nicht mehr an, und mit ihm, was über seine Codes verbunden wurde, außer
+//   du behältst es); „Dieses Gerät trennen“ sagt es vorher dem Server. Ein älterer Server kennt den Weg nicht (404): keine Liste.
 // Quellen-Vertrag (quellen.js, docs/architektur/quellen.md): Zeitplan planen(), Status in der gemeinsamen Form ({ zustand, geprueft, fehler,
 //   fehlerZeit, warnungen }, nachLauf), Zeile im Format von verbindungen.js (quelleZeile), Besitz
 //   herkunft: claude + claude_id, Grabstein (angewendet, kurzHash) in der Sperr-Datei, Doppel einer id zusammenführen (dubletten).
@@ -88,6 +93,16 @@
 //   Gerät. Kein Eintrag in „Bitte prüfen“: Eine Liste schöbe dir Arbeit zu, die das System selbst erledigen oder zeigen kann.
 //   Gehört ein Hinweis zu einem Modul (code, seit 01.11.2026), steht er 14 Tage lang auch im Modulfeld unter „Von Claude“
 //   (modul.js); jeder neue steht in „Seit deinem letzten Besuch“ (seit-besuch.js). Beide lesen ctx.server.hinweise().
+// Claude-App (Connector, seit Release A; docs/architektur/connector.md, „Plugin“): Im Fenster, nie in der Einrichtung, holt ein
+//   verbundenes Gerät nach einer Rückfrage (sie sagt, was Claude lesen kann) mit „Mit der Claude-App verbinden“ einen Code
+//   (POST /v1/claude-app { aktion: code }, Zweck claude-app, Antwort claude-app-antwort, signiert mit dem Beweis des Datenschlüssels)
+//   und zeigt Adresse (https://<host>/mcp), Code und drei Schritte, bis er abläuft; er steht nur im Fenster. Je Verbindung „Trennen“,
+//   dazu „Claude-App ganz ausschalten“ (aus). Das Eingang bringt claude_app { an, verbindungen, frueher? }; das abrufende Gerät schreibt
+//   es nach server.json → claude_app (zuletzt benutzt nur als Tag, damit die Datei nicht bei jedem Abruf neu kommt) und merkt sich jede
+//   Verbindung, die der Server meldet, in bekannt (30 Tage, auch nach dem Trennen; frueher sind die schon beendeten, mit ende, so fällt
+//   auch eine auf, die vor dem Abholen wieder endete): Daraus zeigt „Seit deinem letzten Besuch“ jede neue Verbindung einmal je
+//   Gerät, und die Zeile unter Verbindungen trägt 3 Tage lang die Pille „prüfen“. Nur solange claude_app.an gilt, geht mit dem Stand
+//   das lagebild mit (Lernplan, fällige Karteikarten, Prüfungen mit Noten, Stundenplan der nächsten 14 Tage; lagebildKurz).
 // Am Limit des Claude-Abos meldet der Server im Status, wann er es wieder versucht (limit_wieder); die Zeile nennt die Uhrzeit.
 // Takt: Im Fenster stellst du ein, wie oft dein Server nachsieht (Uni-Postfach alle 15, 30 oder 60 Minuten, Gmail dreimal,
 //   einmal oder nie am Tag); steht als server_uni_postfach und server_gmail in den Einstellungen (alle Geräte) und geht mit dem
@@ -104,7 +119,8 @@
 //   (60 Tage), laeufe: [die letzten 20], hinweise: [die letzten 30, { text, quelle?, zeit, code? }], gesendet: { PDF-Kennung: Datum }, nachsenden: { PDF-Kennung:
 //   Datum } (ein älterer Server nahm sie nicht an, NACHSENDEN_TAGE), begleitet: { PDF-Pfad: kurzHash }, lernplan: { PDF-Kennung:
 //   Datum } (Folien für Kapitellisten), adresse (des Servers, ohne Schlüssel, für „Mit Code verbinden“), verbunden: { zeit,
-//   herkunft: cloud-shell | obsidian } (zuletzt verbundenes Gerät) }. Der Grabstein
+//   herkunft: cloud-shell | obsidian } (zuletzt verbundenes Gerät), claude_app: { an, verbindungen: [{ id, seit, client, zuletzt
+//   (Tag) }], bekannt: [{ id, seit, client, ende? }] } (nur mit einem Server, der die Claude-App kennt) }. Der Grabstein
 //   (angewendet: { id: kurzHash }) steht wie bei den anderen Quellen in der Sperr-Datei server-abruf.json.
 // Für andere Skripte: ctx.server (Zeile und Fenster in verbindungen.js). Testeinstiege: ctx.server.erzeugen(abh) baut den
 //   Ablauf mit Netz und Tresor im Speicher (tests/server-plugin.test.js); plugin.testServerAus schaltet den automatischen
@@ -164,9 +180,12 @@ module.exports = function (ctx) {
   // rueck: was der letzte Abruf an vorhandenen Notizen geändert hat (Rückgängig); behalten: To-dos, deren Zusammenführen du
   // zurückgenommen hast (Kennungen, damit der Server sie nicht noch einmal zusammenführt)
   const L = { status: "eba-server-status", abruf: "eba-server-abruf", gesendet: "eba-server-gesendet", gesehen: "eba-server-gesehen",
-    rueck: "eba-server-rueckgaengig", behalten: "eba-server-todo-behalten", riegel: "eba-server-signatur" };
+    rueck: "eba-server-rueckgaengig", behalten: "eba-server-todo-behalten", riegel: "eba-server-signatur", umzug: "eba-server-umzug" };
   const RUECK_HOECHSTENS = 200, RUECK_BYTES = 200000, BEHALTEN_HOECHSTENS = 500;
   const SCHLUESSEL = /^[A-Za-z0-9_-]{43}$/; // 32 Byte, base64url
+  const GERAET_ID = /^[A-Za-z0-9_-]{22}$/; // Kennung eines Geräts mit eigenen Schlüsseln (16 Byte, wie server/geraete.mjs)
+  const GERAETE_HOECHSTENS = 30; // wie GERAETE in server/geraete.mjs
+  const UMZUG_WARTEN = 6 * 60 * MIN; // ein Server ohne Schlüssel je Gerät (404): so lange nicht noch einmal umziehen
   const CODE = /^[A-HJ-NP-Z2-9]{5}-?[A-HJ-NP-Z2-9]{5}$/; // wie server/verbinden.mjs
   const DATEINAME = /^[0-9A-Za-z][0-9A-Za-z._-]{0,119}\.json$/; // wie server/dienst.mjs
   const ID = /^c-[0-9a-f]{20}$/; // wie idAus in server/eingang.mjs
@@ -694,6 +713,50 @@ module.exports = function (ctx) {
     .map((e) => ({ zeit: new Date(e.zeit).toISOString(), herkunft: e.herkunft, netz: NETZ.test(String(e.netz || "")) ? String(e.netz) : "",
       geraet: reinerText(String(e.geraet || ""), 40) }))
     .sort((a, b) => (a.zeit < b.zeit ? -1 : a.zeit > b.zeit ? 1 : 0)).slice(-20);
+  // Geräte mit eigenen Schlüsseln im Status (Server ab dieser Fassung, nur mit Schlüssel, server/geraete.mjs liste): Kennung, Name (nur
+  // Text, höchstens 40 Zeichen), seit wann, zuletzt, herkunft (cloud-shell | obsidian | umzug), von (wer es hereinließ: Kennung eines
+  // Geräts, cloud-shell oder gemeinsam), grobes Netz beim Verbinden, dieses (das fragende Gerät) → [{ id, name, seit, zuletzt, herkunft,
+  // von, netz, dieses }], älteste zuerst | null (ein älterer Server nennt keine)
+  const HERKUNFT_GERAET = ["cloud-shell", "obsidian", "umzug"];
+  const geraeteNormal = (roh) => (!Array.isArray(roh) ? null : roh.filter((g) => g && GERAET_ID.test(String(g.id)) && isoOk(g.seit)).slice(0, GERAETE_HOECHSTENS)
+    .map((g) => ({ id: String(g.id), name: reinerText(String(g.name || ""), 40), seit: new Date(g.seit).toISOString(),
+      zuletzt: new Date(isoOk(g.zuletzt) ? g.zuletzt : g.seit).toISOString(), herkunft: HERKUNFT_GERAET.indexOf(g.herkunft) >= 0 ? g.herkunft : "",
+      von: GERAET_ID.test(String(g.von || "")) || g.von === "cloud-shell" ? String(g.von) : "", netz: NETZ.test(String(g.netz || "")) ? String(g.netz) : "",
+      dieses: g.dieses === true }))
+    .sort((a, b) => (a.seit < b.seit ? -1 : a.seit > b.seit ? 1 : 0)));
+  // Was mit dem Gerät id geht, wenn man es trennt (wie kaskade in server/geraete.mjs): die Geräte, die es hereinließ, auch über mehrere
+  // Stufen, nie dieses (eigenes) → [Kennung] ohne id
+  const geraeteMit = (liste, id, eigenes) => {
+    const weg = [id];
+    for (let i = 0; i < weg.length; i++) for (const g of liste) if (g.von === weg[i] && weg.indexOf(g.id) < 0 && g.id !== eigenes) weg.push(g.id);
+    return weg.slice(1);
+  };
+  // Rückfrage vor dem Trennen eines anderen Geräts (g aus einzelheiten): Sie sagt, dass es danach einen neuen Code braucht, und was mit
+  // ihm geht (g.mit: Geräte über seine Codes, Verbindungen der Claude-App aus ihnen; geraeteMit). Geht etwas mit, wählt man: alles
+  // trennen oder nur dieses (das andere behält der Server). → { titel, text, knoepfe, behalten: (Nummer des Knopfs) → [Kennung] }
+  const trennenFrage = (g) => {
+    const mit = g.mit || { geraete: [], claudeApp: [] };
+    const teile = mit.geraete.map((x) => (x.name ? `„${x.name}“` : "ein Gerät ohne Namen"))
+      .concat(mit.claudeApp.length === 1 ? ["die Verbindung der Claude-App"] : mit.claudeApp.length ? [`${mit.claudeApp.length} Verbindungen der Claude-App`] : []);
+    const name = g.ohneName ? "das Gerät" : `„${g.name}“`;
+    const liste = teile.length > 1 ? teile.slice(0, -1).join(", ") + " und " + teile[teile.length - 1] : teile[0];
+    return {
+      titel: g.ohneName ? "Gerät trennen?" : `„${g.name}“ trennen?`,
+      text: "Es holt danach nichts mehr von deinem Server. Willst du es wieder nutzen, verbindest du es mit einem neuen Code." +
+        (teile.length ? ` Mit ihm getrennt wird, was über einen Code von ihm verbunden wurde: ${liste}. Gehört das dir, trenne nur ${name}.` : ""),
+      knoepfe: teile.length ? ["Alles trennen", `Nur ${name} trennen`] : ["Trennen"],
+      behalten: (wahl) => (wahl === 1 ? mit.geraete.map((x) => x.id).concat(mit.claudeApp) : []),
+    };
+  };
+  // Woher ein Gerät kam, in Worten (liste: alle, für den Namen dessen, über dessen Code es kam)
+  const geraetHerkunft = (g, liste, eigenes) => {
+    if (g.herkunft === "cloud-shell") return "über die Cloud Shell";
+    if (g.herkunft === "umzug") return "von früher übernommen";
+    if (!GERAET_ID.test(g.von)) return "über Obsidian";
+    if (g.von === eigenes) return "über Code von diesem Gerät";
+    const v = liste.filter((x) => x.id === g.von)[0];
+    return !v ? "über Code eines getrennten Geräts" : v.name ? `über Code von „${v.name}“` : "über Code eines Geräts ohne Namen";
+  };
   // „203.0.113.0/24“ → „203.0.113.…“, „2001:db8:12::/48“ → „2001:db8:12:…“
   const netzText = (n) => (/\.0\/24$/.test(n) ? n.replace(/0\/24$/, "…") : /::\/\d+$/.test(n) ? n.replace(/:\/\d+$/, "…") : n);
   // Eine Verbindung in Worten: „02.11., 09:15 (über Obsidian, „iPad“, Anschluss 203.0.113.…)“
@@ -725,6 +788,139 @@ module.exports = function (ctx) {
   // Die Adresse tippt das neue Gerät immer selbst ab (seit 02.11.2026; was in server.json steht, kann jedes Gerät mit Sync schreiben)
   const codeAnleitung = (r, jetzt) => `Gilt bis ${zeitText(new Date(r.ablauf), jetzt)} und nur einmal. Tippe auf dem neuen Gerät unter ` +
     `Verbindungen bei „Eigener Server“ auf „Mehr erfahren“ und gib dort den Code und diese Adresse ein: ${/^https:\/\//.test(r.adresse) ? hostVon(r.adresse) : r.adresse}`;
+
+  // ---------- Claude-App (Connector) ----------
+  // Verbindungen, wie der Server sie meldet (Antwort auf POST /v1/claude-app, Eingang claude_app, server.json): je Verbindung id
+  // (Kennung der Anmeldung), seit, zuletzt (Zeit; in server.json nur der Tag), client (Name der App wie „claude.ai“, nur als Name)
+  const CA_ID = /^[A-Za-z0-9_-]{1,64}$/, CA_CLIENT = /^[a-z0-9][a-z0-9.-]{0,39}$/i, TAG = /^\d{4}-\d{2}-\d{2}$/;
+  const CA_HOECHSTENS = 20, CA_NEU_TAGE = 14, CA_PRUEFEN_TAGE = 3, CA_BEKANNT_TAGE = 30;
+  // von: das Gerät, dessen Code die Verbindung einlöste (Kennung; trennt man es, geht die Verbindung mit)
+  const caVerbindung = (e) => {
+    if (!e || typeof e !== "object" || !CA_ID.test(String(e.id)) || !isoOk(e.seit) || TAG.test(String(e.seit))) return null;
+    const zuletzt = TAG.test(String(e.zuletzt)) ? String(e.zuletzt) : isoOk(e.zuletzt) ? new Date(e.zuletzt).toISOString() : "";
+    return Object.assign({ id: String(e.id), seit: new Date(e.seit).toISOString(), client: CA_CLIENT.test(String(e.client || "")) ? String(e.client) : "claude.ai" },
+      zuletzt ? { zuletzt } : {}, GERAET_ID.test(String(e.von || "")) ? { von: String(e.von) } : {});
+  };
+  const neuesteZuerst = (a, b) => (a.seit < b.seit ? 1 : a.seit > b.seit ? -1 : 0);
+  // Ende einer Verbindung (frueher, bekannt) als ISO-Zeit oder ""
+  const caEnde = (e) => (isoOk(e.ende) && !TAG.test(String(e.ende)) ? new Date(e.ende).toISOString() : "");
+  const caListe = (l) => (Array.isArray(l) ? l : []).map(caVerbindung).filter(Boolean).sort(neuesteZuerst)
+    .filter((e, i, a) => a.findIndex((x) => x.id === e.id) === i).slice(0, CA_HOECHSTENS);
+  // { an, verbindungen, frueher? } → geprüft, neueste zuerst, je id einmal; frueher (beendet, mit ende) ohne die, die noch verbunden
+  // sind; null, wenn es kein Objekt ist (ein Server ohne Connector schickt nichts)
+  const claudeAppNormal = (roh) => {
+    if (!roh || typeof roh !== "object" || Array.isArray(roh)) return null;
+    const v = caListe(roh.verbindungen);
+    const frueher = (Array.isArray(roh.frueher) ? roh.frueher : []).filter((e) => e && caEnde(e)).map((e) => Object.assign(caVerbindung(e) || {}, { ende: caEnde(e) }))
+      .filter((e) => e.id && !v.some((x) => x.id === e.id)).slice(0, CA_HOECHSTENS);
+    return { an: roh.an === true, verbindungen: v, frueher };
+  };
+  // Jede Verbindung, die das abrufende Gerät je gesehen hat (server.json → claude_app.bekannt, CA_BEKANNT_TAGE ab seit), auch wenn sie
+  // inzwischen getrennt ist, dazu die, die der Server als beendet meldet (mit ende): Eine fremde Verbindung, die sich selbst wieder
+  // abmeldet, soll trotzdem auf jedem Gerät auffallen, auch wenn sie endete, bevor ein Gerät abholte. Bei gleicher Verbindung gilt die
+  // aus neu (dort kommt ende dazu).
+  const caBekannt = (alt, neu, jetzt) => {
+    const aus = [];
+    for (const e of [].concat(Array.isArray(neu) ? neu : [], Array.isArray(alt) ? alt : [])) {
+      const x = caVerbindung(e);
+      if (!x || aus.some((y) => y.id === x.id && y.seit === x.seit) || jetzt - Date.parse(x.seit) > CA_BEKANNT_TAGE * 864e5) continue;
+      aus.push(Object.assign({ id: x.id, seit: x.seit, client: x.client }, caEnde(e) ? { ende: caEnde(e) } : {}));
+    }
+    return aus.sort(neuesteZuerst).slice(0, CA_HOECHSTENS);
+  };
+  // Für server.json: zuletzt nur als Tag (Ortszeit), sonst schriebe jeder Abruf die Datei neu, solange du Claude fragst
+  const caFuerTresor = (ca, bekannt) => ({ an: ca.an, verbindungen: ca.verbindungen.map((e) => Object.assign({ id: e.id, seit: e.seit, client: e.client },
+    e.zuletzt ? { zuletzt: TAG.test(e.zuletzt) ? e.zuletzt : tagIso(e.zuletzt) } : {}, e.von ? { von: e.von } : {})), bekannt });
+  // Wann: Zeit wie zeitText, ein Tag allein (server.json) „heute“, „gestern“ oder „am 01.11.“
+  const wannText = (s, jetzt) => {
+    if (!TAG.test(s)) return zeitText(new Date(s), jetzt);
+    if (s === tagIso(jetzt)) return "heute";
+    return s === tagIso(new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() - 1)) ? "gestern" : `am ${s.slice(8, 10)}.${s.slice(5, 7)}.`;
+  };
+  // „verbunden seit 03.11., 14:20 · zuletzt benutzt heute“
+  const caZeileText = (e, jetzt) => `verbunden seit ${zeitText(new Date(e.seit), jetzt)}` + (e.zuletzt ? ` · zuletzt benutzt ${wannText(e.zuletzt, jetzt)}` : "");
+  // Zeile „Claude-App“ im Stand des Fensters: die neueste Verbindung, sonst „nicht verbunden“
+  const caKurz = (ca, jetzt) => (ca && ca.verbindungen.length ? caZeileText(ca.verbindungen[0], jetzt) : "nicht verbunden");
+  // „Neue Claude-Verbindung am 03.11. um 14:20“ (Seit deinem letzten Besuch, Zeile unter Verbindungen)
+  const caNeuText = (e) => { const d = new Date(e.seit); return `Neue Claude-Verbindung am ${pad2(d.getDate())}.${pad2(d.getMonth() + 1)}. um ${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+  // Was die Rückfrage vor dem Code sagt: genau das, was Claude in dieser Fassung lesen kann (die Werkzeuge des Servers ohne Kopie des
+  // Tresors), und dass es nichts ändert
+  const CA_LESEN = "Claude kann dann in der Claude-App lesen: deine Termine und Fristen, offene To-dos, den Stand deines Lernplans, fällige " +
+    "Karteikarten je Modul, deine Prüfungen mit Noten, deinen Stundenplan der nächsten 14 Tage und die Hinweise deines Servers. Claude " +
+    "ändert dabei nichts. Gib den Code nur selbst auf der Seite deines Servers ein.";
+  const CA_SCHRITTE = [
+    "In der Claude-App in den Einstellungen **Konnektoren** öffnen (englisch „Connectors“) und einen eigenen Konnektor hinzufügen („Add custom connector“, " +
+      "in der App im Menü oben rechts). Verbinden nur so in der Claude-App starten, nie über einen Link, den dir jemand schickt.",
+    "Als Name „Studium Autopilot“ und als Adresse („MCP server URL“) die unten einfügen. Der Hinweis darunter, nur Konnektoren von Entwicklern zu nutzen, " +
+      "denen du vertraust, meint hier deinen eigenen Server. Zweimal **Weiter** („Continue“) tippen; die Angaben zur Anmeldung dazwischen so lassen, wie sie sind.",
+    "Auf der Seite deines Servers, die sich öffnet, den Code unten eingeben und **Verbinden** tippen. Danach steht Studium Autopilot auch in der Claude-App auf iPhone, iPad und Computer.",
+  ];
+  const CA_SICHER = "Hast du in claude.ai auch Gmail verbunden, sperre dort die Werkzeuge zum Senden und Weiterleiten, und schalte den " +
+    "Netzzugang der Code-Ausführung aus. Das verringert das Risiko, schließt es aber nicht aus; Konnektoren, die du nicht brauchst, schaltest " +
+    "du im Chat über + aus.";
+  // Sätze zu Fehlern der Claude-App (Fenster); zu-viele mit „Wieder möglich ab …“
+  const CA_FEHLER = {
+    alt: "Dein Server bekommt das mit seinem nächsten Update.",
+    abgeschaltet: "Die Verbindung zur Claude-App ist gerade abgeschaltet.",
+    uhr: "Die Uhr dieses Geräts geht falsch. Stell sie richtig und versuch es noch einmal.",
+    nochmal: "Das hat nicht geklappt. Versuch es noch einmal.",
+  };
+
+  // ---------- Lagebild (Stand an den Server, nur mit der Claude-App) ----------
+  // Was Claude über die Werkzeuge des Servers liest, ohne Kopie des Tresors: nur Daten aus den eigenen Lesern des Plugins (Lernplan,
+  // Karteikarten, Fachmodell, Alma), Texte ohne Links, HTML und alles, was nach Zugangsdaten aussieht (lageText). Grenzen je Liste
+  // und zusammen höchstens LAGE_BYTES, dazu nie mehr, als neben dem übrigen Stand unter STAND_BYTES passt (der Dienst nimmt höchstens
+  // 512 KB verschlüsselt, das ist etwa ein Drittel mehr als der Klartext).
+  // note: Zeichen einer Note oder eines Ergebnisses (ERGEBNIS_STATUS, das längste hat 25); dieselbe Grenze prüft der Server (LAGEBILD)
+  const LAGE = { module: 40, kapitel: 200, pruefungen: 100, stundenplan: 300, tage: 14, note: 30 };
+  const LAGE_BYTES = 120000, STAND_BYTES = 360000;
+  const UHR = /^\d{1,2}:\d{2}$/;
+  const ANMELDUNG = ["angemeldet", "zurückgetreten"];
+  // roh: { lernplan: [{ modul, kapitel: [{ titel, nummer, verstanden, woche }] }], karten: [{ modul, faellig }], pruefungen: [{ modul,
+  // titel, datum, anmeldung, versuch, note }], stundenplan: [{ datum, von, bis, titel, ort, modul, ausfall }] }; geheim(text) → true, wenn er
+  // nach Zugangsdaten aussieht; budget: Bytes (JSON) → dieselbe Form, geprüft und gekürzt, ohne leere Felder
+  const lagebildKurz = (roh, geheim, budget) => {
+    const r = roh && typeof roh === "object" ? roh : {};
+    const liste = (l) => (Array.isArray(l) ? l.filter((x) => x && typeof x === "object") : []);
+    const code = (c) => (MODULCODE_SERVER.test(String(c || "")) ? String(c) : "");
+    const lageText = (v, max) => { const t = typeof v === "string" ? v : typeof v === "number" ? String(v) : ""; return !t || (geheim && geheim(t)) ? "" : punktText(t, max).trim(); };
+    const mit = (o, k, v) => { if (v) o[k] = v; return o; };
+    const einmal = (l) => l.filter((x, i, a) => a.findIndex((y) => y.modul === x.modul) === i);
+    const aus = {
+      lernplan: einmal(liste(r.lernplan).filter((m) => code(m.modul))).slice(0, LAGE.module).map((m) => ({ modul: code(m.modul),
+        kapitel: liste(m.kapitel).map((k) => mit(mit({ titel: lageText(k.titel, 120), verstanden: k.verstanden === true }, "nummer", KAPITEL_NR.test(String(k.nummer || "")) ? String(k.nummer) : ""),
+          "woche", s10(k.woche))).filter((k) => k.titel).slice(0, LAGE.kapitel) })).filter((m) => m.kapitel.length),
+      karten: einmal(liste(r.karten).filter((k) => code(k.modul) && Number.isInteger(k.faellig) && k.faellig >= 0)).slice(0, LAGE.module)
+        .map((k) => ({ modul: code(k.modul), faellig: Math.min(k.faellig, 99999) })),
+      pruefungen: liste(r.pruefungen).filter((p) => code(p.modul)).slice(0, LAGE.pruefungen).map((p) => mit(mit(mit(mit(mit({ modul: code(p.modul) },
+        "titel", lageText(p.titel, 120)), "datum", s10(p.datum)), "anmeldung", ANMELDUNG.indexOf(p.anmeldung) >= 0 ? p.anmeldung : ""),
+        "versuch", Number.isInteger(p.versuch) && p.versuch > 0 && p.versuch < 10 ? p.versuch : 0), "note", lageText(p.note, LAGE.note))),
+      stundenplan: liste(r.stundenplan).filter((e) => s10(e.datum)).map((e) => mit(mit(mit(mit(mit({ datum: s10(e.datum), titel: lageText(e.titel, 120) },
+        "von", UHR.test(String(e.von || "")) ? String(e.von) : ""), "bis", UHR.test(String(e.bis || "")) ? String(e.bis) : ""), "ort", lageText(e.ort, 120)),
+        "modul", code(e.modul)), "ausfall", e.ausfall === true)).filter((e) => e.titel).slice(0, LAGE.stundenplan),
+    };
+    return lagebildKappen(aus, Math.min(LAGE_BYTES, Math.max(0, budget == null ? LAGE_BYTES : budget)));
+  };
+  // Über der Grenze: ganze Einträge vom Ende der jeweils größten Liste weg (die Kapitel eines Moduls zählen als eine), nie mitten in
+  // einem Eintrag; jede Größe wird nur einmal gemessen (lange Listen auf dem Telefon)
+  const lagebildKappen = (l, max) => {
+    const bytes = (x) => new TextEncoder().encode(JSON.stringify(x)).length;
+    let summe = bytes(l);
+    if (summe <= max) return l;
+    const listen = [l.stundenplan, l.pruefungen, l.karten].concat(l.lernplan.map((m) => m.kapitel));
+    const g = listen.map((x) => x.map((e) => bytes(e) + 1)), gesamt = g.map((x) => x.reduce((a, b) => a + b, 0));
+    while (summe > max) {
+      let i = -1;
+      for (let j = 0; j < listen.length; j++) if (listen[j].length && (i < 0 || gesamt[j] > gesamt[i])) i = j;
+      if (i < 0) break;
+      listen[i].pop();
+      const weg = g[i].pop();
+      gesamt[i] -= weg;
+      summe -= weg;
+    }
+    l.lernplan = l.lernplan.filter((m) => m.kapitel.length);
+    return l;
+  };
 
   // ---------- Datenkanal (Gegenstück zu server/kanal.mjs) ----------
   const kodieren = (s) => new TextEncoder().encode(s);
@@ -783,10 +979,13 @@ module.exports = function (ctx) {
     const m = await pbkdf2(kodieren(String(code).toUpperCase().replace(/[^A-Z0-9]/g, "")), kodieren(V2 + "code\n" + host), KDF_RUNDEN);
     return { kennung: await hkdf(m, kodieren(V2 + "kennung")), beweis: await hkdf(m, kodieren(V2 + "beweis")), antwort: await hkdf(m, kodieren(V2 + "antwort")) };
   };
-  // Code gegen Schlüssel tauschen (POST /v1/verbinden, schema 2). netz wie abh.netz. → { ok: true, d: { adresse, zugang, schluessel } }
-  // | { fehler: netz | code (falsch oder abgelaufen) | alt (Server kennt den Tausch noch nicht) | gesperrt | antwort (nicht in
-  // der neuen Form, nicht zu entschlüsseln oder verfälscht: nichts gespeichert) }
-  const austauschen = async (netz, adresse, code) => {
+  // Code gegen Schlüssel tauschen (POST /v1/verbinden, schema 2). netz wie abh.netz; name: wie das Gerät heißt (fürs Protokoll und die
+  // Liste der Geräte, nicht geschützt). → { ok: true, d: { adresse, zugang, schluessel, geraet? (ein Server ab dieser Fassung: eigene
+  // Schlüssel für dieses Gerät und seine Kennung) } } | { fehler: netz | code (falsch oder abgelaufen) | alt (Server kennt den Tausch
+  // noch nicht) | gesperrt | voll (der Server kennt schon so viele Geräte, wie er darf; der Code bleibt) | speichern (der Server konnte
+  // das Gerät nicht speichern, etwa bei vollem Speicher; der Code bleibt) | antwort (nicht in der neuen Form, nicht zu entschlüsseln oder
+  // verfälscht: nichts gespeichert) }
+  const austauschen = async (netz, adresse, code, name) => {
     const host = hostVon(adresse);
     const k = await codeAbleiten(code, host);
     const paar = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, false, ["deriveBits"]);
@@ -795,12 +994,14 @@ module.exports = function (ctx) {
     let r, o = null;
     try {
       r = await netz({ url: adresse + "/v1/verbinden", method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ schema: 2, kennung: b64(k.kennung), pub, beweis }) });
+        body: JSON.stringify(Object.assign({ schema: 2, kennung: b64(k.kennung), pub, beweis }, name ? { geraet: name } : {})) });
     } catch (e) { return { fehler: "netz" }; }
     try { o = JSON.parse(r.text); } catch (e) { o = null; }
     // 403 nennt bei einem Server ab 0.7.8 schema 2; einer bis 0.7.7 sucht einen Code im Feld code und findet keinen
     if (r.status === 403) return { fehler: o && o.schema === 2 ? "code" : "alt" };
     if (r.status === 429) return { fehler: "gesperrt" };
+    if (r.status === 409 && o && o.fehler === "zu-viele-geraete") return { fehler: "voll" };
+    if (r.status === 503 && o && o.fehler === "speichern") return { fehler: "speichern" };
     if (r.status !== 200 || !o || o.schema !== 2 || !PUNKT.test(String(o.pub)) || typeof o.iv !== "string" || typeof o.daten !== "string") return { fehler: "antwort" };
     try {
       const kontext = kodieren(V2 + "antwort\n" + host + "\n" + pub + "\n" + o.pub);
@@ -917,20 +1118,27 @@ module.exports = function (ctx) {
     const sperre = () => abh.sperre.erzeugen({ io: { lesen: io.lesenText, schreiben: io.schreibenText }, quelle: "server",
       geraetId: abh.geraetId, jetzt: abh.jetzt, mobil: !!abh.mobil });
 
+    // Eintrag im Schlüsselbund: { adresse, zugang, schluessel, geraet? }. geraet: Kennung dieses Geräts bei einem Server mit Schlüsseln je
+    // Gerät (seit dieser Fassung); fehlt sie, sind es die gemeinsamen (verbunden bis 0.7.11) oder eigene, deren Kennung das Gerät noch
+    // nicht kennt (verbunden mit 0.7.8 bis 0.7.11 an einem neuen Server): Dann zieht es beim nächsten Abruf um (umziehen).
     const verbindung = () => {
       let v = null;
       try { v = JSON.parse(abh.geheim.lesen(abh.geheimId()) || "null"); } catch (e) { v = null; }
       if (!v || typeof v !== "object" || !adresseNormal(v.adresse, abh.lokalErlaubt) || !SCHLUESSEL.test(String(v.zugang)) || !SCHLUESSEL.test(String(v.schluessel))) return null;
-      return { adresse: adresseNormal(v.adresse, abh.lokalErlaubt), zugang: v.zugang, schluessel: v.schluessel };
+      return Object.assign({ adresse: adresseNormal(v.adresse, abh.lokalErlaubt), zugang: v.zugang, schluessel: v.schluessel }, GERAET_ID.test(String(v.geraet || "")) ? { geraet: v.geraet } : {});
     };
+    const geraetName = () => String((abh.geraetName && abh.geraetName()) || "").slice(0, 40);
     // Riegel (wie HSTS, nur aufwärts): Hat dieses Gerät einmal eine signierte Antwort dieses Servers gesehen (antwortEcht) oder sich
     // ab 0.7.8 mit ihm verbunden (austauschen: das kann nur ein neuer Server), schickt es ihm nie wieder den Zugangsschlüssel selbst
     // und nimmt von ihm nur noch signierte Antworten an. Gerätelokal (L.riegel, nie im Tresor: wer den Sync hat, könnte ihn sonst
     // löschen), je Server und Schlüssel (SHA-256 aus Adresse und Zugangsschlüssel, gekürzt; der Schlüssel selbst steht nicht darin).
     // Dazu im Speicher (riegelHier): Scheitert das Speichern, gilt er trotzdem, und das Gerät versucht es bei der nächsten Anfrage neu.
+    // Ein Eintrag mit Kennung (geraet) ist immer verriegelt: Die gibt nur ein Server mit Schlüsseln je Gerät heraus, verschlüsselt beim
+    // Verbinden oder signiert beim Umziehen; so gibt es auch zwischen Schlüsselbund und Riegel keinen Moment ohne.
     let riegelHier = "";
     const riegelId = async (v) => Array.prototype.map.call(await sha256(kodieren(v.adresse + "\n" + v.zugang)), (b) => (b < 16 ? "0" : "") + b.toString(16)).join("").slice(0, 32);
     const riegelZu = async (v) => {
+      if (v.geraet) return true;
       const id = await riegelId(v), x = objekt(lokal(L.riegel));
       if (x.id === id) return true;
       if (riegelHier !== id) return false;
@@ -947,7 +1155,8 @@ module.exports = function (ctx) {
     // seinem nächsten Update“), jede andere wirft wie ein Netzfehler (nie eine Ablehnung). Ohne Riegel: Antwortet er wie ein Server bis
     // 0.7.7, geht dieselbe Anfrage einmal mit dem Zugangsschlüssel im Kopf (Bearer) wie bis 0.7.7 (Antwort mit bearer: true), sonst
     // gilt die Antwort, wie sie ist (vor dem Riegel schützt nur HTTPS, wie bis 0.7.7).
-    // o: { method, body (JSON-Text), beweis (dazu der Beweis mit dem Datenschlüssel) }
+    // o: { method, body (JSON-Text), beweis (dazu der Beweis mit dem Datenschlüssel), fehlt404 (ein Weg, den ältere Server nicht
+    // kennen: Sie antworten mit Riegel auf den unbekannten Pfad mit 404 ohne Signatur; das heißt nur „gibt es hier nicht“ und gilt) }
     const senden = async (v, pfad, o) => {
       const methode = (o && o.method) || "GET", body = o ? o.body : undefined;
       const schicken = (authorization) => {
@@ -963,15 +1172,16 @@ module.exports = function (ctx) {
       }
       if (await riegelZu(v)) {
         if (wieAlt(r)) return Object.assign({}, r, { status: 401, alt: true });
-        throw new Error("Antwort ohne gültige Signatur");
+        if (o && o.fehlt404 && r && r.status === 404) return r;
+        throw Object.assign(new Error("Antwort ohne gültige Signatur"), { antwort: r });
       }
       if (wieAlt(r)) return Object.assign({}, await schicken("Bearer " + v.zugang), { bearer: true });
       return r;
     };
 
     // ----- server.json -----
-    // Die Zeile fragt synchron: Hinweise aus dem letzten Lesen oder Schreiben von server.json
-    let hinweisListe = [];
+    // Die Zeile fragt synchron: Hinweise und Claude-App aus dem letzten Lesen oder Schreiben von server.json
+    let hinweisListe = [], caTresor = null;
     const zustandLeer = () => ({ schema: 1, erledigt: {}, laeufe: [], hinweise: [], gesendet: {}, nachsenden: {}, begleitet: {}, lernplan: {} });
     const objekt = (v) => (v && typeof v === "object" && !Array.isArray(v) ? v : {});
     const zustandLesen = async () => {
@@ -994,11 +1204,16 @@ module.exports = function (ctx) {
       const geraete = objekt(o), vb = objekt(geraete.verbunden);
       z.adresse = adresseNormal(geraete.adresse, abh.lokalErlaubt);
       z.verbunden = isoOk(vb.zeit) && HERKUNFT.indexOf(vb.herkunft) >= 0 ? { zeit: new Date(vb.zeit).toISOString(), herkunft: vb.herkunft } : null;
+      // Claude-App (nur ein Server mit Connector meldet sie): Stand und jede je gesehene Verbindung
+      const ca = claudeAppNormal(geraete.claude_app);
+      z.claude_app = ca ? caFuerTresor(ca, caBekannt(objekt(geraete.claude_app).bekannt, [], jetztMs())) : null;
       hinweisListe = z.hinweise;
+      caTresor = z.claude_app;
       return { z, text };
     };
     const zustandText = (z) => JSON.stringify(Object.assign({ schema: z.schema, erledigt: z.erledigt, laeufe: z.laeufe, hinweise: z.hinweise, gesendet: z.gesendet,
-      nachsenden: z.nachsenden, begleitet: z.begleitet, lernplan: z.lernplan }, z.adresse ? { adresse: z.adresse } : {}, z.verbunden ? { verbunden: z.verbunden } : {}), null, 1) + "\n";
+      nachsenden: z.nachsenden, begleitet: z.begleitet, lernplan: z.lernplan }, z.adresse ? { adresse: z.adresse } : {}, z.verbunden ? { verbunden: z.verbunden } : {},
+    z.claude_app ? { claude_app: z.claude_app } : {}), null, 1) + "\n";
     // Grabstein: angewendet in der Sperr-Datei (die Sperrfelder schreibt sperre.js; andere Felder lässt es stehen)
     const sperrDatei = async () => { try { return objekt(JSON.parse((await io.lesenText(SPERR_DATEI)) || "null")); } catch (e) { return {}; } };
     const angewendetLesen = async () => {
@@ -1045,6 +1260,7 @@ module.exports = function (ctx) {
       // nur mit Schlüssel (Server ab 02.11.2026): die letzten Verbindungen von Geräten und die Grenzen je Tag
       verbunden: verbindungenNormal(o.verbunden),
       grenzen: grenzenNormal(o.grenzen),
+      geraete: geraeteNormal(o.geraete),
     });
     // → gemerkter Stand { geholt, erreichbar, werte, erreicht }, dazu ablehnung (zugang | erneuert | uhr | alt), wenn der Server die Anfrage gerade
     // abgelehnt hat (401, ablehnung; nur aus dieser Anfrage, nie gemerkt)
@@ -1100,7 +1316,7 @@ module.exports = function (ctx) {
       }
       if (!ja) return { ok: false, abgebrochen: true };
       // Nur der Tausch ab 0.7.8 (austauschen): Code nie im Klartext, Schlüssel nur verschlüsselt und an den Code gebunden
-      const x = await austauschen(abh.netz, adresse, code);
+      const x = await austauschen(abh.netz, adresse, code, geraetName());
       if (x.fehler === "netz") return { ok: false, fehler: getippt ? "Dein Server ist nicht erreichbar. Stimmt die Adresse?" : "Dein Server ist nicht erreichbar. Läuft er, und stimmt die Adresse im Link?" };
       if (x.fehler === "code") {
         return { ok: false, fehler: getippt ? "Der Code stimmt nicht oder gilt nicht mehr. Erzeuge auf einem verbundenen Gerät einen neuen."
@@ -1108,19 +1324,28 @@ module.exports = function (ctx) {
       }
       if (x.fehler === "alt") return { ok: false, fehler: "Dein Server kann so erst nach seinem nächsten Update verbinden. Er aktualisiert sich täglich; versuch es danach mit einem neuen Code." };
       if (x.fehler === "gesperrt") return { ok: false, fehler: "Zu viele Versuche. Bitte in 10 Minuten noch einmal." };
+      if (x.fehler === "voll") return { ok: false, fehler: `Dein Server kennt schon ${GERAETE_HOECHSTENS} Geräte. Trenne auf einem verbundenen Gerät eins, das du nicht mehr brauchst, dann geht derselbe Code.` };
+      if (x.fehler === "speichern") return { ok: false, fehler: "Dein Server konnte dieses Gerät gerade nicht speichern (ist sein Speicher voll?). Der Code gilt weiter; versuch es später noch einmal." };
       if (x.fehler) return { ok: false, fehler: "Die Antwort deines Servers ließ sich nicht prüfen. Nichts gespeichert." };
       const d = x.d;
       if (adresseNormal(d.adresse, abh.lokalErlaubt) !== adresse || !SCHLUESSEL.test(String(d.zugang)) || !SCHLUESSEL.test(String(d.schluessel))) {
         return { ok: false, fehler: getippt ? "Die Antwort deines Servers passt nicht zur Adresse. Nichts gespeichert." : "Die Antwort deines Servers passt nicht zum Link. Nichts gespeichert." };
       }
-      try { await abh.geheim.schreiben(abh.geheimId(), JSON.stringify({ adresse, zugang: d.zugang, schluessel: d.schluessel })); }
+      const geraet = GERAET_ID.test(String(d.geraet || "")) ? { geraet: d.geraet } : {};
+      try { await abh.geheim.schreiben(abh.geheimId(), JSON.stringify(Object.assign({ adresse, zugang: d.zugang, schluessel: d.schluessel }, geraet))); }
       catch (e) { return { ok: false, fehler: "Der Schlüsselbund von Obsidian fehlt auf diesem Gerät (ab Obsidian 1.11.4). Bitte Obsidian aktualisieren." }; }
       for (const k of Object.keys(L)) lokal(L[k], null);
+      caLive = null;
       await riegelSetzen({ adresse, zugang: d.zugang }); // nur ein Server ab 0.7.8 kann so verbinden
       return { ok: true };
     };
+    // Dieses Gerät trennen: Mit eigenen Schlüsseln sagt es das zuerst dem Server (der nimmt sie dann nicht mehr an; klappt es nicht,
+    // etwa ohne Netz, trennt es trotzdem), dann sind sie hier weg
     const trennen = async () => {
+      const v = verbindung();
+      if (v && v.geraet) { try { await geraeteSenden(v, { aktion: "trennen", id: v.geraet }); } catch (e) { /* trotzdem trennen */ } }
       riegelHier = "";
+      caLive = null;
       try { await sperre().freigeben(); } catch (e) { /* keine Sperre */ }
       try { await abh.geheim.loeschen(abh.geheimId()); } catch (e) { /* schon weg */ }
       for (const k of Object.keys(L)) lokal(L[k], null);
@@ -1154,6 +1379,75 @@ module.exports = function (ctx) {
       if (!d || !CODE.test(String(d.code || "")) || !isoOk(d.ablauf)) return { fehler: "paket" };
       return { ok: true, code: codeForm(d.code), ablauf: new Date(d.ablauf).toISOString(), adresse: v.adresse };
     };
+    // Geräte mit eigenen Schlüsseln (Server ab dieser Fassung, POST /v1/geraete): Die Anfrage { schema: 1, zeit, nonce, aktion, … } ist mit
+    // dem Datenschlüssel verschlüsselt (Zweck „geraete“), signiert mit Beweis; die Antwort hat den Zweck „geraete-antwort“. Ein älterer
+    // Server kennt den Weg nicht (404). zeit nach der echten Uhr wie die Signatur (anfrageKopf): Der Server misst beide an seiner.
+    // → { status, d (entschlüsselt, nur bei 200), r } | wirft (Netz, Antwort ohne Signatur mit Riegel)
+    const geraeteSenden = async (v, felder) => {
+      const anfrage = Object.assign({ schema: 1, zeit: new Date(Date.now()).toISOString(), nonce: b64(crypto.getRandomValues(new Uint8Array(16))) }, felder);
+      const r = await senden(v, "/v1/geraete", { method: "POST", beweis: true, body: JSON.stringify(await verschluesseln(v.schluessel, "geraete", anfrage)) });
+      if (r.status !== 200) return { status: r.status, d: null, r };
+      let d = null;
+      try { d = await entschluesseln(v.schluessel, "geraete-antwort", JSON.parse(r.text)); } catch (e) { d = null; }
+      return d && typeof d === "object" ? { status: 200, d, r } : { status: 0, d: null, r };
+    };
+    // Umzug auf eigene Schlüssel (Server ab dieser Fassung): Ein Gerät ohne Kennung im Schlüsselbund fragt einmal „umziehen“, nur mit
+    // Riegel (der Server hat schon signiert geantwortet; senden nimmt dann nur signierte Antworten an). Mit dem gemeinsamen Schlüssel
+    // bekommt es eigene, mit eigenen ohne Kennung (verbunden mit 0.7.8 bis 0.7.11) dieselben samt Kennung. Jede Anfrage trägt die Kennung
+    // dieses Umzugs (umzug, 16 Zufallsbytes), vorher im Gerätespeicher abgelegt (L.umzug, je Server und Schlüssel): Geht die Antwort
+    // verloren oder scheitert der Schlüsselbund, bekommt der nächste Versuch dasselbe Gerät, statt dass der Server ein weiteres anlegt.
+    // Erst der Schlüsselbund, dann der Riegel für die neuen (riegelSetzen; mit Kennung gilt er ohnehin): So geht nie ein Bearer mit
+    // ihnen. Scheitert etwas, bleibt alles, wie es war, und der nächste Abruf versucht es wieder; nach 404 (älterer Server) oder einem
+    // vollen Server (409) erst nach UMZUG_WARTEN, nach 429 (zu viele Umzüge je Stunde) ab wieder. → Verbindung (neu oder die alte)
+    let umzugNicht = 0;
+    const umzugKennung = async (v) => {
+      const id = await riegelId(v), x = objekt(lokal(L.umzug));
+      if (x.id === id && /^[A-Za-z0-9_-]{22}$/.test(String(x.kennung || ""))) return x.kennung;
+      const kennung = b64(crypto.getRandomValues(new Uint8Array(16)));
+      lokal(L.umzug, { id, kennung });
+      return kennung;
+    };
+    const umziehen = async (v) => {
+      if (v.geraet || jetztMs() < umzugNicht || !(await riegelZu(v))) return v;
+      let x;
+      try { x = await geraeteSenden(v, Object.assign({ aktion: "umziehen", umzug: await umzugKennung(v) }, geraetName() ? { name: geraetName() } : {})); } catch (e) {
+        // ein Server von 0.7.8 bis 0.7.11 signiert seine 404 für einen unbekannten Weg nicht
+        x = { status: e && e.antwort ? e.antwort.status : 0 };
+      }
+      if (x.status === 404 || x.status === 409) umzugNicht = jetztMs() + UMZUG_WARTEN;
+      if (x.status === 429) {
+        let o = null;
+        try { o = JSON.parse(x.r.text); } catch (e) { o = null; }
+        umzugNicht = o && isoOk(o.wieder) ? Date.parse(o.wieder) : jetztMs() + 60 * MIN;
+      }
+      const d = x.d;
+      if (!d || adresseNormal(d.adresse, abh.lokalErlaubt) !== v.adresse || !SCHLUESSEL.test(String(d.zugang)) || !SCHLUESSEL.test(String(d.schluessel)) ||
+        !GERAET_ID.test(String(d.geraet || ""))) return v;
+      const neu = { adresse: v.adresse, zugang: d.zugang, schluessel: d.schluessel, geraet: d.geraet };
+      try { await abh.geheim.schreiben(abh.geheimId(), JSON.stringify(neu)); } catch (e) { return v; }
+      lokal(L.umzug, null);
+      await riegelSetzen(neu);
+      return neu;
+    };
+    // Ein anderes Gerät trennen (Fenster, Liste der Geräte): Der Server nimmt seine Schlüssel ab sofort nicht mehr an, und mit ihm, was
+    // über seine Codes verbunden wurde (Geräte, Verbindungen der Claude-App), außer behalten (Kennungen). → { ok: true, getrennt: [Kennung] }
+    // | { fehler: nicht-verbunden | unbekannt (schon getrennt) | speichern (der Server konnte es nicht speichern: getrennt nur bis zu seinem
+    // Neustart) | zugang | erneuert | uhr | alt | netz }
+    const geraetTrennen = async (id, behalten) => {
+      const v = verbindung();
+      if (!v) return { fehler: "nicht-verbunden" };
+      let x;
+      const mit = (Array.isArray(behalten) ? behalten : []).map(String).filter((k) => CA_ID.test(k)).slice(0, 64);
+      try { x = await geraeteSenden(v, Object.assign({ aktion: "trennen", id: String(id || "") }, mit.length ? { behalten: mit } : {})); } catch (e) { return { fehler: "netz" }; }
+      if (x.status === 401) return { fehler: ablehnung(x.r) };
+      if (x.status === 404) return { fehler: "unbekannt" };
+      if (x.status === 503) return { fehler: "speichern" };
+      if (x.status !== 200) return { fehler: x.status === 400 && /"uhr"/.test(String(x.r.text || "")) ? "uhr" : "netz" };
+      await statusHolen(v, true);
+      const getrennt = (Array.isArray(x.d.getrennt) ? x.d.getrennt : []).map(String).filter((k) => GERAET_ID.test(k));
+      if (caLive && getrennt.length) caLive = Object.assign({}, caLive, { verbindungen: caLive.verbindungen.filter((e) => !e.von || getrennt.indexOf(e.von) < 0 || mit.indexOf(e.id) >= 0) });
+      return { ok: true, getrennt };
+    };
     // Adresse des Servers für „Mit Code verbinden“: aus dem Schlüsselbund (Schlüssel abgelehnt), sonst aus server.json → Ursprung | ""
     const adresseBekannt = async () => {
       const v = verbindung();
@@ -1175,6 +1469,91 @@ module.exports = function (ctx) {
       }
       return verbinden(adresse, code, { getippt: true, adresseGetippt: !!eingabe });
     };
+
+    // ----- Claude-App -----
+    // POST /v1/claude-app: Anfrage { schema, zeit, nonce, aktion, id? } mit dem Datenschlüssel verschlüsselt (Zweck claude-app) und mit
+    // dem Beweis des Datenschlüssels signiert: Wer nur den Zugangsschlüssel kennt, bekommt keinen Code und trennt nichts. Antwort mit
+    // eigenem Zweck (claude-app-antwort). → { ok, d, v } | { fehler: nicht-verbunden | alt (404: Server ohne Connector) | abgeschaltet
+    // (503) | zu-viele (mit wieder) | uhr | nochmal | zugang | erneuert | paket | netz }
+    let caLive = null; // was der Server zuletzt auf eine Anfrage dieses Geräts sagte, nur im Speicher
+    const caAnfrage = async (aktion, id) => {
+      const v = verbindung();
+      if (!v) return { fehler: "nicht-verbunden" };
+      let r;
+      try {
+        const anfrage = Object.assign({ schema: 1, zeit: abh.jetzt().toISOString(), nonce: b64(crypto.getRandomValues(new Uint8Array(16))), aktion }, id ? { id } : {});
+        const paket = await verschluesseln(v.schluessel, "claude-app", anfrage);
+        r = await senden(v, "/v1/claude-app", { method: "POST", body: JSON.stringify(paket), beweis: true, fehlt404: true });
+      } catch (e) { return { fehler: "netz" }; }
+      if (r.status === 401) return { fehler: ablehnung(r) };
+      if (r.status === 404) return { fehler: "alt" };
+      let o = null;
+      try { o = JSON.parse(r.text); } catch (e) { o = null; }
+      const grund = o && typeof o.fehler === "string" ? o.fehler : "";
+      if (r.status === 503) return { fehler: "abgeschaltet" };
+      if (r.status === 429) {
+        let wieder = o && isoOk(o.wieder) ? new Date(o.wieder).toISOString() : "";
+        const sek = String(objekt(r.headers)["retry-after"] || "").trim();
+        if (!wieder && /^\d{1,7}$/.test(sek)) wieder = new Date(jetztMs() + Number(sek) * 1000).toISOString();
+        return wieder ? { fehler: "zu-viele", wieder } : { fehler: "zu-viele" };
+      }
+      if (r.status === 400) return { fehler: grund === "uhr" ? "uhr" : "nochmal" };
+      // ohne Beweis (datenschluessel) bzw. über den Weg bis 0.7.7 (veraltet)
+      if (r.status === 403) return { fehler: grund === "veraltet" ? "alt" : "zugang" };
+      if (r.status === 409) return { fehler: "nochmal" };
+      if (r.status !== 200) return { fehler: "netz" };
+      try {
+        const d = await entschluesseln(v.schluessel, "claude-app-antwort", o);
+        return d && typeof d === "object" ? { ok: true, d, v } : { fehler: "paket" };
+      } catch (e) { return { fehler: "paket" }; }
+    };
+    // Adresse für claude.ai: nur https://<Host dieses Servers>/mcp (lokal im Test auch http://127.0.0.1:<port>/mcp) → Text | ""
+    const caAdresse = (s, v) => {
+      let u;
+      try { u = new URL(String(s || "")); } catch (e) { return ""; }
+      return u.pathname === "/mcp" && !u.search && !u.hash && !u.username && !u.password && adresseNormal(u.origin, abh.lokalErlaubt) === v.adresse ? v.adresse + "/mcp" : "";
+    };
+    // Antwort mit Stand (status, trennen, aus) → { ok, stand } | Fehler wie caAnfrage
+    const caStand = (r) => {
+      if (!r.ok) return r;
+      const c = claudeAppNormal(r.d);
+      if (!c) return { fehler: "paket" };
+      caLive = c;
+      return { ok: true, stand: c };
+    };
+    // Mit der Claude-App verbinden: Rückfrage (was Claude lesen kann), dann ein Code vom Server. Er steht nirgends außer im Fenster.
+    // → { ok, code, ablauf, adresse } | { abgebrochen } | Fehler wie caAnfrage
+    const claudeAppCode = async () => {
+      if (!verbindung()) return { fehler: "nicht-verbunden" };
+      if (!(await abh.bestaetigen("Mit der Claude-App verbinden?", CA_LESEN, "Code erzeugen"))) return { abgebrochen: true };
+      const r = await caAnfrage("code");
+      if (!r.ok) return r;
+      const adresse = caAdresse(r.d.adresse, r.v);
+      if (!CODE.test(codeForm(r.d.code)) || !isoOk(r.d.ablauf) || !adresse) return { fehler: "paket" };
+      // ab dem Code ist die Claude-App auf dem Server an
+      caLive = Object.assign({ verbindungen: [] }, caLive || caTresor || {}, { an: true });
+      return { ok: true, code: codeForm(r.d.code), ablauf: new Date(r.d.ablauf).toISOString(), adresse };
+    };
+    const claudeAppStatus = async () => caStand(await caAnfrage("status"));
+    const claudeAppTrennen = async (id) => {
+      if (!CA_ID.test(String(id || ""))) return { fehler: "nochmal" };
+      if (!(await abh.bestaetigen("Claude-App trennen?", "Claude kann danach nichts mehr lesen. Neu verbinden geht jederzeit mit einem neuen Code.", "Trennen"))) return { abgebrochen: true };
+      return caStand(await caAnfrage("trennen", String(id)));
+    };
+    const claudeAppAus = async () => {
+      if (!(await abh.bestaetigen("Claude-App ganz ausschalten?", "Alle Verbindungen zur Claude-App werden getrennt, und dein Server gibt Claude nichts " +
+        "mehr. Wieder einschalten kannst du sie mit „Mit der Claude-App verbinden“.", "Ausschalten"))) return { abgebrochen: true };
+      return caStand(await caAnfrage("aus"));
+    };
+    // Bester Stand für das Fenster: die letzte Antwort an dieses Gerät, sonst server.json → { an, verbindungen } | null
+    const claudeAppStand = async () => caLive || (await zustandLesen()).z.claude_app || null;
+    // Neue Verbindungen der letzten tage Tage aus server.json (bekannt, neueste zuerst; eine Uhr bis 5 Minuten vor zählt mit)
+    const caNeu = (ca, tage) => (ca && Array.isArray(ca.bekannt) ? ca.bekannt : []).filter((e) => {
+      const t = Date.parse(e.seit);
+      return t <= jetztMs() + 5 * MIN && jetztMs() - t <= tage * 1440 * MIN;
+    });
+    // Für „Seit deinem letzten Besuch“: frisch aus server.json, also auf jedem Gerät
+    const claudeAppNeu = async (o) => caNeu((await zustandLesen()).z.claude_app, (o && o.tage) || CA_NEU_TAGE);
 
     // ----- Notizen -----
     // Notizen vom Server je claude_id (bei Doppel die mit dem kürzesten Namen, wie dubletten) und alle übrigen Termine
@@ -1512,8 +1891,9 @@ module.exports = function (ctx) {
       }
       return aus;
     };
-    // Stand ans Server-Gerät: übernommene Dateien sofort, sonst nur bei Änderung oder nach STAND_ALTER
-    const standSenden = async (v, quittung) => {
+    // Stand ans Server-Gerät: übernommene Dateien sofort, sonst nur bei Änderung oder nach STAND_ALTER. lage: dazu das Lagebild für
+    // die Claude-App (nur solange sie an ist; sonst fehlt das Feld ganz)
+    const standSenden = async (v, quittung, lage) => {
       let s, t;
       try { s = abh.stand() || {}; } catch (e) { s = {}; }
       try { t = abh.tresor ? objekt(await abh.tresor()) : {}; } catch (e) { t = {}; }
@@ -1526,11 +1906,19 @@ module.exports = function (ctx) {
         const listen = await lernplanListen(stand.lernplan.module);
         if (listen.length) stand.lernplan.listen = listen;
       }
+      const erledigt = quittung.slice(0, 500);
+      if (lage) {
+        let roh = {};
+        try { roh = abh.lagebild ? objekt(await abh.lagebild()) : {}; } catch (e) { roh = {}; }
+        // nie mehr, als neben dem übrigen Stand unter STAND_BYTES passt
+        const rest = kodieren(JSON.stringify(Object.assign({ erledigt, lagebild: null }, stand))).length;
+        stand.lagebild = lagebildKurz(roh, geheim, STAND_BYTES - rest);
+      }
       const kennung = hash32(JSON.stringify(stand));
       const g = objekt(lokal(L.gesendet));
       if (!quittung.length && g.kennung === kennung && alterMs(g.zeit) < STAND_ALTER) return true;
       try {
-        const paket = await verschluesseln(v.schluessel, "stand", Object.assign({}, stand, { erledigt: quittung.slice(0, 500) }));
+        const paket = await verschluesseln(v.schluessel, "stand", Object.assign({}, stand, { erledigt }));
         const r = await senden(v, "/v1/stand", { method: "POST", body: JSON.stringify(paket) });
         if (r.status !== 204 && r.status !== 200) return false;
       } catch (e) { return false; }
@@ -1571,7 +1959,7 @@ module.exports = function (ctx) {
     //   neuereVersion, serverAelter (nahm Lab nicht an), mehr (Grenze erreicht, Rest beim nächsten Abruf) }; o: { manuell, uebernehmen (Knopf „Hier aktualisieren“) }
     const abrufen = async (o) => {
       o = o || {};
-      const v = verbindung();
+      let v = verbindung();
       if (!v) return { art: "nicht-verbunden" };
       if (laeuft) return { art: "laeuft" };
       laeuft = true;
@@ -1609,6 +1997,8 @@ module.exports = function (ctx) {
         // lehnt der Server den Schlüssel schon beim Status ab, zählt das wie beim Eingang (auch auf Geräten, die nicht übernehmen)
         const abgelehnt = (await statusHolen(v, !!o.manuell)).ablehnung;
         if (abgelehnt) return ende(abgelehnt);
+        // noch mit dem gemeinsamen Schlüssel (oder eigenen ohne Kennung): einmal auf eigene umziehen, ab dann nur noch mit ihnen
+        v = await umziehen(v);
         if (!(await sperre().nehmen({ erzwingen: !!o.uebernehmen }))) {
           b.art = "anderes-geraet";
           lokal(L.abruf, Object.assign(Q.nachLauf(objekt(lokal(L.abruf)), { ok: null }, abh.jetzt().toISOString()), { anderes: abh.jetzt().toISOString() }));
@@ -1630,6 +2020,11 @@ module.exports = function (ctx) {
         z.adresse = v.adresse;
         z.verbunden = (Array.isArray(buendel.verbunden) ? buendel.verbunden : []).filter((e) => e && isoOk(e.zeit) && HERKUNFT.indexOf(e.herkunft) >= 0)
           .map((e) => ({ zeit: new Date(e.zeit).toISOString(), herkunft: e.herkunft })).sort((a, b) => (a.zeit < b.zeit ? -1 : a.zeit > b.zeit ? 1 : 0)).pop() || z.verbunden;
+        // Claude-App für alle Geräte (fehlt bei einem Server ohne Connector: dann auch in server.json nicht); neue Verbindungen bleiben
+        // in bekannt, auch wenn sie inzwischen getrennt sind, und beendete, die der Server meldet, kommen dazu
+        const ca = claudeAppNormal(buendel.claude_app);
+        z.claude_app = ca ? caFuerTresor(ca, caBekannt(z.claude_app && z.claude_app.bekannt, ca.verbindungen.concat(ca.frueher), jetztMs())) : null;
+        caTresor = z.claude_app;
         let notizen = notizenLesen();
         if (notizen.gruppen.length) { await doppelZusammen(notizen.gruppen, b); notizen = notizenLesen(); }
         const quittung = [];
@@ -1650,8 +2045,9 @@ module.exports = function (ctx) {
         if (neu !== text) await io.schreibenText(DATEI, neu);
         hinweisListe = z.hinweise;
         await angewendetSchreiben(z.angewendet);
-        // Folien für Kapitellisten erst, wenn der Server den Stand hat (er fragt nach den Modulen)
-        if (await standSenden(v, quittung)) {
+        // Folien für Kapitellisten erst, wenn der Server den Stand hat (er fragt nach den Modulen); das Lagebild nur, solange die
+        // Claude-App an ist
+        if (await standSenden(v, quittung, !!(z.claude_app && z.claude_app.an))) {
           b.kapitelFolien = await kapitelSenden(v, z);
           if (b.kapitelFolien) await io.schreibenText(DATEI, zustandText(z));
         }
@@ -1771,8 +2167,8 @@ module.exports = function (ctx) {
     const AKTUALISIEREN = { aktion: "verbindung-aktualisieren", text: "Aktualisieren", cta: true, parameter: { id: "server" } };
     // Den Stand sagt die Zeile in den Worten aller Quellen (standText: „Aktualisiert vor 5 Min.“, Fehler mit „Zuletzt aktualisiert …“,
     // Warnungen dahinter, ein anderes Gerät); dazu, was nur dieser Server hat (Zustand auf dem Server, letzter Lauf, neue Termine)
-    const zeile = () => {
-      const s = status(), w = s.werte || {};
+    const zeileBasis = (s) => {
+      const w = s.werte || {};
       const stand = abh.standText(s);
       switch (s.zustand) {
         case "nicht-verbunden": return { text: "Für Technische: Ein eigener, kostenloser Server fasst mit deinem Claude-Abo Unterlagen zusammen und sucht in deinen Uni-Mails nach Terminen.", symbol: "extern", pille: "", knopf: { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "server" } }, link: null };
@@ -1800,6 +2196,18 @@ module.exports = function (ctx) {
       if (w.letzterLauf) teile.push(`Letzter Lauf des Servers ${vor(w.letzterLauf.zeit)}.`.replace(/\.\.$/, ".")); // „vor 5 Min.“ hat schon den Punkt
       if (n) teile.push(`${n} ${n === 1 ? "Termin" : "Termine"} neu oder geändert.`);
       return { text: teile.join(" "), symbol: stand.symbol, pille: "an", knopf: AKTUALISIEREN, link: neueHinweise() ? HINWEISE_ANSEHEN : MEHR };
+    };
+    // Eine neue Verbindung zur Claude-App (server.json → bekannt) steht CA_PRUEFEN_TAGE lang in der Zeile, auf jedem Gerät mit Server:
+    // Pille „prüfen“, darunter wann; ein Problem des Servers (Pille prüfen, Warnung) geht vor. Der Knopf bleibt, der Link führt ins
+    // Fenster, wo du sie trennst bzw. (schon beendet) die Claude-App ausschaltest (auf einem Gerät ohne Schlüssel sagt der Satz, wo das geht)
+    const zeile = () => {
+      const s = status(), z = zeileBasis(s), n = caNeu(caTresor, CA_PRUEFEN_TAGE)[0];
+      if (!n || s.zustand === "nicht-verbunden" || z.pille === "pruefen" || z.symbol === "warnung") return z;
+      const wo = n.ende ? (s.verbunden ? "Wenn nicht, schaltest du die Claude-App hier aus."
+        : "Wenn nicht, schaltest du die Claude-App auf einem Gerät aus, das mit deinem Server verbunden ist.")
+        : s.verbunden ? "Wenn nicht, trennst du sie hier." : "Wenn nicht, trennst du sie auf einem Gerät, das mit deinem Server verbunden ist.";
+      return Object.assign({}, z, { text: `${caNeuText(n)}${n.ende ? ", schon beendet" : ""} – warst du das? ${wo}`, unter: caNeuText(n), symbol: "haken", ton: "warn",
+        pille: "pruefen", pilleText: "prüfen", link: MEHR });
     };
     // Neue Hinweise: noch nicht im Fenster gesehen (gerätelokal) und höchstens 14 Tage alt
     const hinweisSchluessel = (h) => Q.kurzHash(String(h.zeit || "") + "\n" + h.text);
@@ -1867,13 +2275,31 @@ module.exports = function (ctx) {
       const verbindungen = (Array.isArray(w.verbunden) ? w.verbunden : []).slice().reverse().map((e) => verbindungText(e, jetzt));
       if (verbindungen.length) liste.push(["Zuletzt verbunden", verbindungen[0]]);
       else if (z.verbunden) liste.push(["Zuletzt verbunden", `${uhrzeit(z.verbunden.zeit)} (${HERKUNFT_TEXT[z.verbunden.herkunft]})`]);
-      return { liste, saetze, verbindungen, quarantaene: (w.grenzen && w.grenzen.quarantaene) || 0,
+      // Claude-App aus server.json, auf einem Gerät ohne Schlüssel (mit Schlüssel steht sie im eigenen Abschnitt des Fensters)
+      if (!s.verbunden && z.claude_app) liste.push(["Claude-App", caKurz(z.claude_app, jetzt)]);
+      // Geräte mit eigenen Schlüsseln (Server ab dieser Fassung, aus dem Status): dieses zuerst, dann die anderen, neueste zuerst; null
+      // ohne Liste (älterer Server, kein Status). Je Gerät, woher es kam und sein grobes Netz, dazu was beim Trennen mitginge (mit: Geräte
+      // über seine Codes, Verbindungen der Claude-App aus ihnen; der Server trennt sie, außer man behält sie)
+      const eigenes = (verbindung() || {}).geraet;
+      const ca = await claudeAppStand();
+      const caVon = ca && Array.isArray(ca.verbindungen) ? ca.verbindungen : [];
+      const alle = Array.isArray(w.geraete) ? w.geraete : [];
+      const geraete = !s.verbunden || !Array.isArray(w.geraete) ? null : alle.slice().reverse().map((g) => {
+        const dieses = g.dieses || g.id === eigenes, mitIds = dieses ? [] : geraeteMit(alle, g.id, eigenes);
+        const weg = [g.id].concat(mitIds);
+        return { id: g.id, name: g.name || "Gerät ohne Namen", ohneName: !g.name, dieses,
+          text: [`seit ${uhrzeit(g.seit)}`, `zuletzt ${uhrzeit(g.zuletzt)}`, geraetHerkunft(g, alle, eigenes)].concat(g.netz ? ["Anschluss " + netzText(g.netz)] : []).join(" · "),
+          mit: { geraete: alle.filter((x) => mitIds.indexOf(x.id) >= 0).map((x) => ({ id: x.id, name: x.name })),
+            claudeApp: dieses ? [] : caVon.filter((e) => e.von && weg.indexOf(e.von) >= 0).map((e) => e.id) } };
+      }).sort((a, b) => (b.dieses ? 1 : 0) - (a.dieses ? 1 : 0));
+      return { liste, saetze, verbindungen, geraete, quarantaene: (w.grenzen && w.grenzen.quarantaene) || 0,
         hinweise: z.hinweise.slice().reverse().slice(0, 10), laeufe: z.laeufe.slice().reverse().slice(0, 5).map((l) => Object.assign({}, l, { wann: uhrzeit(l.zeit) })) };
     };
 
     return {
       verbinden, trennen, abrufen, anstossen, status, zeile, einzelheiten, sichtbar, neueHinweise, hinweiseGesehen, hinweiseLaden, hinweise,
-      geraetCode, adresseBekannt, adresseGeprueft, codeVerbinden, ruht, rueckStand, rueckgaengig,
+      geraetCode, geraetTrennen, adresseBekannt, adresseGeprueft, codeVerbinden, ruht, rueckStand, rueckgaengig,
+      claudeAppCode, claudeAppStatus, claudeAppTrennen, claudeAppAus, claudeAppStand, claudeAppNeu,
       verbunden: () => !!verbindung(),
       get laeuft() { return laeuft; },
     };
@@ -2142,6 +2568,66 @@ module.exports = function (ctx) {
       id: "t-" + Q.kurzHash(x.f.path + "\n" + x.roh), pfad: x.f.path, aenderbar: unterZuTun(x.f, x.nr), nr: x.nr, roh: x.roh }));
     return { termine, todos };
   };
+  // Lagebild für die Claude-App (nur solange sie an ist, standSenden): aus den Lesern des Plugins, jeder Teil für sich (ein Fehler
+  // lässt nur ihn leer). Geprüft und gekürzt wird es in lagebildKurz.
+  //   lernplan: ctx.lernplan.kapitelStand (Häkchen und Woche des Plans je Kapitel); karten: fällig je Modul wie „X fällig“ in
+  //   Karteikarten (fällig und in den Lernschritten, ohne neue); pruefungen: alle Prüfungen des Fachmodells vom letzten Jahr bis in
+  //   einem Jahr, dazu Module mit Ergebnis oder Anmeldung ohne Prüfungstag; Note, Versuch und Anmeldung aus der Modulnotiz, sonst aus
+  //   Alma (alma-konto.json), Note und Versuch nur an der Klausur, zu der sie gehören; stundenplan: deine Lehrveranstaltungen der nächsten 14 Tage wie im Stundenplan (findetStatt; „Besuche ich
+  //   nicht“ fehlt, ein Ausfall mit ausfall: true; nicht im Titel, den lagebildKurz kürzt)
+  const ERGEBNIS_STATUS = ["bestanden", "anerkannt", "nicht bestanden", "endgültig nicht bestanden"];
+  const lagebildObs = async () => {
+    const M = ctx.modell, aus = { lernplan: [], karten: [], pruefungen: [], stundenplan: [] };
+    if (!M || typeof M.daten !== "function") return aus;
+    const D = M.daten(), jetzt = new Date(), heute = tagIso(jetzt);
+    const tag = (n) => tagIso(new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() + n));
+    const teil = async (name, fn) => { try { aus[name] = (await fn()) || []; } catch (e) { console.error("server: Lagebild " + name, e); } };
+    await teil("lernplan", () => (ctx.lernplan && typeof ctx.lernplan.kapitelStand === "function" ? ctx.lernplan.kapitelStand() : []));
+    await teil("karten", async () => {
+      const k = ctx.karten && typeof ctx.karten.heuteJeModul === "function" ? (await ctx.karten.heuteJeModul()) || {} : {};
+      return Object.keys(k).map((modul) => ({ modul, faellig: (Number(k[modul].faellig) || 0) + (Number(k[modul].lernen) || 0) }));
+    });
+    await teil("pruefungen", () => {
+      const A = ctx.almaKonto && typeof ctx.almaKonto.zustand === "function" ? ctx.almaKonto.zustand() || {} : {};
+      const lm = (A.leistungen && A.leistungen.module) || {}, bel = (A.belegungen && A.belegungen.pruefungen) || {};
+      const ergebnis = (code) => {
+        const m = (D.module || []).find((x) => x.code === code) || null, a = lm[code] || {}, b = bel[code] || {};
+        const status = m ? m.status : "";
+        return { note: (m && m.ergebnis) || (a.note != null && String(a.note)) || (ERGEBNIS_STATUS.indexOf(status) >= 0 ? status : ""),
+          versuch: Number(m && m.fm && m.fm.versuch) || Number(a.versuch) || 0,
+          anmeldung: status === "angemeldet" ? "angemeldet" : ["angemeldet", "zurückgetreten"].indexOf(b.status) >= 0 ? b.status : "" };
+      };
+      // Note und Versuch gehören zur letzten Klausur, die schon war (ohne Zwischentests), sonst zu einem Eintrag ohne Tag; nie zu
+      // einem kommenden Termin (der Nachholtermin nach einem bestandenen Haupttermin trug sonst dessen Note)
+      const l = (typeof M.pruefungen === "function" ? M.pruefungen({ heute, ab: tag(-365), bis: tag(365) }) : []).filter((p) => p.code);
+      const geschrieben = {};
+      for (const p of l) if (!p.zwischentest && p.datum <= heute) geschrieben[p.code] = p;
+      const liste = l.map((p) => {
+        const e = ergebnis(p.code), hier = geschrieben[p.code] === p;
+        return { modul: p.code, titel: p.titel, datum: p.datum, anmeldung: e.anmeldung, note: hier ? e.note : "", versuch: hier || !e.note ? e.versuch : 0 };
+      });
+      for (const m of D.module || []) {
+        const e = ergebnis(m.code), da = liste.some((p) => p.modul === m.code);
+        if (da && (geschrieben[m.code] || !e.note)) continue;
+        if (e.note || e.anmeldung) liste.push({ modul: m.code, titel: m.titel, note: e.note, versuch: e.versuch, anmeldung: da ? "" : e.anmeldung });
+      }
+      return liste;
+    });
+    await teil("stundenplan", () => {
+      const liste = [];
+      if (typeof M.findetStatt !== "function") return liste;
+      for (let i = 0; i < 14; i++) {
+        const d = tag(i);
+        for (const x of D.stundenplan || []) {
+          const fm = x.fm || {}, s = M.findetStatt(fm, d) || {}, titel = String(fm.titel || (x.f && x.f.basename) || "");
+          if (s.statt) liste.push({ datum: d, von: s.beginn, bis: s.ende, titel, ort: s.raum, modul: fm.code });
+          else if (s.grund === "ausfall") liste.push({ datum: d, von: s.beginn, bis: s.ende, titel, ausfall: true, modul: fm.code });
+        }
+      }
+      return liste.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : String(a.von || "").localeCompare(String(b.von || ""))));
+    });
+    return aus;
+  };
   const obsidianAbh = () => ({
     io: obsidianIo(), netz: netzObs, geheim: geheimObs, geheimId, lokal: lokalObs,
     jetzt: () => new Date(),
@@ -2162,6 +2648,7 @@ module.exports = function (ctx) {
     quellen: ctx.user.quellen,
     standText: (s) => ctx.verbindungen.standText(s), // nur die Zeile unter Verbindungen fragt danach, also ist verbindungen.js geladen
     tresor: tresorObs,
+    lagebild: lagebildObs,
     unterlagen: unterlagenObs,
     kapitelUnterlagen: kapitelUnterlagenObs,
     lernplan: () => ctx.lernplan || null,
@@ -2178,6 +2665,12 @@ module.exports = function (ctx) {
     pdf: async (p) => { const f = app.vault.getAbstractFileByPath(p); return f && !f.children ? new Uint8Array(await app.vault.readBinary(f)) : null; },
     mobil: !!(obs.Platform && obs.Platform.isMobile),
     lokalErlaubt: !!plugin().testServerLokal,
+    // wie dieses Gerät in der Liste der Geräte auf dem Server heißt: nur die Art des Geräts, nie ein Name aus dem System
+    geraetName: () => {
+      const P = obs.Platform || {};
+      return P.isIosApp ? (P.isTablet ? "iPad" : "iPhone") : P.isAndroidApp ? (P.isTablet ? "Android-Tablet" : "Android-Smartphone")
+        : P.isMacOS ? "Mac" : P.isWin ? "Windows-PC" : P.isLinux ? "Linux-PC" : "";
+    },
   });
   let motorInst = null;
   const motor = () => motorInst || (motorInst = erzeugen(obsidianAbh()));
@@ -2323,6 +2816,7 @@ module.exports = function (ctx) {
     alt: FEHLER.alt,
     paket: FEHLER.paket,
     netz: FEHLER.netz,
+    speichern: "Dein Server konnte das nicht speichern (ist sein Speicher voll?). Bis zu seinem nächsten Neustart gilt es; versuch es danach noch einmal.",
   };
   const geraetFehler = (r, jetzt) => {
     if (r.fehler !== "zu-viele") return GERAET_FEHLER[r.fehler] || FEHLER.netz;
@@ -2344,6 +2838,128 @@ module.exports = function (ctx) {
     platz.createDiv({ cls: "eba-server-code", text: r.code });
     platz.createEl("p", { cls: "eba-modal-text", text: codeAnleitung(r, new Date()) });
     ctx.zeit(() => { if (nr === codeNr) platz.empty(); }, Math.max(0, Date.parse(r.ablauf) - Date.now()));
+  };
+  // Text mit **fett** (nur das) in ein Element
+  const fettSchreiben = (el, text) => String(text).split(/\*\*([^*]+)\*\*/).forEach((t, i) => { if (i % 2) el.createEl("b", { text: t }); else if (t) el.appendText(t); });
+  const caFehlerText = (r, jetzt) => {
+    if (r.fehler === "zu-viele") { const d = new Date(r.wieder || ""); return isNaN(d.getTime()) ? "Zu viele Versuche. Versuch es später wieder." : `Zu viele Versuche. Wieder möglich ab ${zeitText(d, jetzt)}.`; }
+    return CA_FEHLER[r.fehler] || GERAET_FEHLER[r.fehler] || FEHLER.netz;
+  };
+  const adresseKopieren = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      ctx.hinweis("Adresse kopiert. Füg sie in claude.ai beim neuen Konnektor ein.");
+    } catch (e) {
+      ctx.hinweis("Kopieren ging nicht. Tipp ins Feld und kopier die Adresse von Hand.");
+    }
+  };
+  // Claude-App im Fenster „Eigener Server“, nur auf einem Gerät mit Schlüsseln (nie in der Einrichtung): je Verbindung eine Zeile
+  // (Name der App, seit wann, zuletzt benutzt) mit Trennen, sonst „Nicht verbunden.“; darunter „Mit der Claude-App verbinden“: nach der
+  // Rückfrage drei Schritte, die Adresse zum Kopieren und der Code, bis er abläuft (wie bei „Weiteres Gerät verbinden“ nur hier, nie im
+  // Tresor, in data.json, server.json oder im Gerätespeicher); leise „Claude-App ganz ausschalten“, solange sie an ist. Zuerst der Stand
+  // aus server.json, dann fragt das Fenster den Server (status): Kennt er die Claude-App nicht (404) oder ist sie abgeschaltet (503),
+  // steht statt des Knopfs ein Satz. m: Ablauf (motor(), im Test erzeugen(abh)); o.nachCode: gleich danach (abrufen, damit das
+  // Lagebild mit dem Stand an den Server geht). → Promise, die mit der Antwort auf status endet
+  let caNr = 0;
+  const claudeAppZeigen = async (box, m, o) => {
+    const teil = box.createDiv({ cls: "eba-server-claude" });
+    teil.createEl("p", { cls: "eba-modal-abschnitt", text: "Claude-App" });
+    const zeilen = teil.createDiv();
+    const meldung = teil.createEl("p", { cls: "eba-modal-meldung" });
+    const knoepfe = teil.createDiv({ cls: "modal-button-container" });
+    const los = knoepfe.createEl("button", { text: "Mit der Claude-App verbinden" });
+    const platz = teil.createDiv();
+    const ausZeile = teil.createEl("p", { cls: "eba-modal-hinweis" });
+    const fehler = (r) => { meldung.addClass("fehler"); meldung.setText(caFehlerText(r, new Date())); };
+    const leise = (text) => { meldung.removeClass("fehler"); meldung.setText(text); };
+    // Server ohne Connector oder abgeschaltet: kein Knopf, nur der Satz
+    const ohneKnopf = (r) => { if (r.fehler !== "alt" && r.fehler !== "abgeschaltet") return false; knoepfe.empty(); platz.empty(); leise(CA_FEHLER[r.fehler]); return true; };
+    const trennen = async (id) => {
+      const r = await m.claudeAppTrennen(id);
+      if (r.abgebrochen) return;
+      if (!r.ok) { if (!ohneKnopf(r)) fehler(r); return; }
+      leise("");
+      zeichnen(r.stand);
+      ctx.hinweis("Die Claude-App ist getrennt.");
+    };
+    const aus = async () => {
+      const r = await m.claudeAppAus();
+      if (r.abgebrochen) return;
+      if (!r.ok) { if (!ohneKnopf(r)) fehler(r); return; }
+      caNr++;
+      platz.empty();
+      leise("");
+      zeichnen(r.stand);
+      ctx.hinweis("Die Claude-App ist ausgeschaltet.");
+    };
+    const zeichnen = (st) => {
+      zeilen.empty();
+      ausZeile.empty();
+      const v = st ? st.verbindungen : [];
+      if (!v.length) zeilen.createEl("p", { cls: "eba-modal-text", text: "Nicht verbunden. Mit ihr fragst du Claude nach deinem Studium, etwa „Was steht diese Woche an?“" });
+      else {
+        const s = zeilen.createDiv({ cls: "eba-modal-schalter" }), jetzt = new Date();
+        for (const e of v) {
+          new obs.Setting(s).setName(e.client).setDesc(caZeileText(e, jetzt).replace(/^v/, "V")).addButton((b) => b.setButtonText("Trennen").setWarning()
+            .onClick(() => { trennen(e.id).catch((x) => console.error("server: Claude-App trennen", x)); }));
+        }
+      }
+      if (st && st.an) {
+        const a = ausZeile.createEl("a", { text: "Claude-App ganz ausschalten", href: "#" });
+        a.addEventListener("click", (ev) => { ev.preventDefault(); aus().catch((x) => console.error("server: Claude-App aus", x)); });
+      }
+    };
+    const codeZeigenCa = (r) => {
+      platz.createEl("p", { cls: "eba-modal-abschnitt", text: "In claude.ai verbinden" });
+      const ol = platz.createEl("ol", { cls: "eba-modal-schritte" });
+      for (const t of CA_SCHRITTE) fettSchreiben(ol.createEl("li"), t);
+      const feld = platz.createEl("input", { type: "text", cls: "eba-modal-feld",
+        attr: { readonly: "readonly", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: "false", "aria-label": "Adresse für claude.ai" } });
+      feld.value = r.adresse;
+      feld.addEventListener("focus", () => { try { feld.select(); } catch (e) { /* ohne Auswahl */ } });
+      platz.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Adresse kopieren", cls: "mod-cta" })
+        .addEventListener("click", () => { adresseKopieren(r.adresse); });
+      platz.createEl("p", { cls: "eba-modal-abschnitt", text: "Code für die Seite deines Servers" });
+      platz.createDiv({ cls: "eba-server-code", text: r.code });
+      platz.createEl("p", { cls: "eba-modal-text", text: `Gilt bis ${zeitText(new Date(r.ablauf), new Date())} und nur einmal.` });
+      const mehr = platz.createEl("details", { cls: "eba-modal-mehr" });
+      mehr.createEl("summary", { text: "Sicher einstellen" });
+      mehr.createEl("p", { text: CA_SICHER });
+    };
+    los.addEventListener("click", () => {
+      (async () => {
+        los.disabled = true;
+        leise("");
+        const r = await m.claudeAppCode();
+        los.disabled = false;
+        if (r.abgebrochen) return;
+        const nr = ++caNr;
+        platz.empty();
+        if (!r.ok) { if (!ohneKnopf(r)) fehler(r); return; }
+        codeZeigenCa(r);
+        zeichnen(await m.claudeAppStand());
+        // der Code verschwindet zu seinem Ablauf (nur der zuletzt gezeigte)
+        ctx.zeit(() => { if (nr === caNr) platz.empty(); }, Math.max(0, Date.parse(r.ablauf) - Date.now()));
+        if (o && o.nachCode) o.nachCode();
+      })().catch((e) => { console.error("server: Claude-App verbinden", e); los.disabled = false; });
+    });
+    zeichnen(await m.claudeAppStand());
+    const r = await m.claudeAppStatus();
+    if (r.ok) zeichnen(r.stand);
+    else ohneKnopf(r);
+    return r;
+  };
+  // Ein anderes Gerät trennen (Liste „Geräte“ im Fenster): erst die Rückfrage (trennenFrage), dann alles oder nur dieses
+  const geraetTrennenFragen = async (g, knopf, neu) => {
+    const f = trennenFrage(g);
+    const wahl = await wahlObs(f.titel, f.text, f.knoepfe);
+    if (wahl < 0) return;
+    knopf.disabled = true;
+    const r = await motor().geraetTrennen(g.id, f.behalten(wahl));
+    if (r.ok || r.fehler === "unbekannt") ctx.hinweis(g.ohneName ? "Das Gerät ist getrennt." : `„${g.name}“ ist getrennt.`);
+    else { knopf.disabled = false; ctx.hinweis(GERAET_FEHLER[r.fehler] || FEHLER.netz); }
+    neuZeichnen();
+    if (neu) neu();
   };
   // Mit Code verbinden (Gerät ohne gültige Verbindung, aber mit Server im Tresor): Feld für den Code, ohne bekannte Adresse (ältere
   // server.json) auch für sie; dann Rückfrage und Einlösen wie beim Link. neu(): Fenster neu zeichnen
@@ -2437,6 +3053,21 @@ module.exports = function (ctx) {
       const ul = auf.createEl("ul", { cls: "eba-server-stand" });
       for (const t of d.verbindungen) ul.createEl("li", { text: t });
     }
+    // Geräte mit eigenen Schlüsseln (Server ab dieser Fassung), zugeklappt: je Gerät eine Zeile, dieses zuerst; jedes andere lässt sich
+    // trennen. Ein älterer Server nennt keine: dann nichts
+    if (d.geraete && d.geraete.length) {
+      const auf = box.createEl("details", { cls: "eba-server-verbindungen eba-server-geraete" });
+      auf.createEl("summary", { text: `Geräte (${d.geraete.length})` });
+      const ul = auf.createEl("ul");
+      for (const g of d.geraete) {
+        const li = ul.createEl("li"), text = li.createSpan();
+        text.createEl("b", { text: g.name });
+        text.appendText((g.dieses ? " (dieses Gerät)" : "") + ": " + g.text);
+        if (g.dieses) continue;
+        const k = li.createEl("button", { text: "Trennen" });
+        k.addEventListener("click", () => { geraetTrennenFragen(g, k, neu).catch((e) => { console.error("server: Gerät trennen", e); k.disabled = false; }); });
+      }
+    }
     for (const t of d.saetze) box.createEl("p", { cls: "eba-modal-hinweis", text: t });
     // Mails, an denen jeder Lauf scheiterte: liegen auf dem Server beiseite, bis man es noch einmal versucht
     if (d.quarantaene) {
@@ -2479,6 +3110,10 @@ module.exports = function (ctx) {
       const weiteres = k.createEl("button", { text: "Weiteres Gerät verbinden" });
       const platz = box.createDiv();
       weiteres.addEventListener("click", () => { codeZeigen(platz, weiteres).catch((e) => { console.error("server: Weiteres Gerät", e); weiteres.disabled = false; }); });
+      // Claude-App: zeichnet sofort aus server.json und fragt den Server danach, ohne das Fenster aufzuhalten. Nach dem Code gleich
+      // abrufen: Ist dieses Gerät das abrufende, geht das Lagebild mit dem Stand schon jetzt an den Server
+      claudeAppZeigen(box, motor(), { nachCode: () => { motor().abrufen({}).then(neuZeichnen, (e) => console.error("server: Abruf nach dem Code", e)); } })
+        .catch((e) => console.error("server: Claude-App", e));
     }
     if (s.verbunden) box.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Dieses Gerät trennen", href: ctx.link("trennen", { id: "server" }) });
   };
@@ -2508,6 +3143,9 @@ module.exports = function (ctx) {
     sichtbar: () => motor().sichtbar(), status: () => motor().status(), zeile: () => motor().zeile(), verbunden: () => motor().verbunden(),
     jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
     hinweise: (o) => motor().hinweise(o), DATEI,
+    // Claude-App: neue Verbindungen für „Seit deinem letzten Besuch“, Bausteine für Tests
+    claudeAppNeu: (o) => motor().claudeAppNeu(o), claudeAppZeigen, claudeAppNormal, caBekannt, lagebildKurz, caNeuText, CA_LESEN, CA_FEHLER, LAGE, STAND_BYTES,
+    ERGEBNIS_STATUS, lagebildObs, trennenFrage,
     // Bausteine des Verbindens und der Signaturen (Tests prüfen sie gegen bekannte Werte und gegen server/)
     protokoll: { pbkdf2, hkdf, hmac, codeAbleiten, austauschen, anfrageKopf, KDF_RUNDEN },
   };

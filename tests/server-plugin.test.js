@@ -71,14 +71,39 @@ const ohneMac = (netz) => async (a) => {
   delete h["studium-signatur"];
   return Object.assign({}, x, { headers: h });
 };
-// Antwort, die ein Test verändert oder selbst baut, wie sie der Server signieren würde (Kopf studium-signatur, server/kanal.mjs):
-// für Geräte mit Riegel, die nur signierte Antworten annehmen
+// Schlüsselpaar, mit dem eine Anfrage signiert ist: das gemeinsame des Servers oder das eigene eines Geräts (server/geraete.mjs); passt
+// keins (eine gebaute Anfrage), das gemeinsame
+async function paarVon(srv, anfrage) {
+  const { signaturPruefen, NonceSpeicher } = await modul("kanal.mjs");
+  const kopf = String((anfrage.headers || {}).authorization || ""), zeit = (/zeit=(\d+)/.exec(kopf) || [])[1];
+  let geraete = [];
+  try { geraete = JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "web", "geraete-schluessel.json"), "utf8")).geraete; } catch (e) { geraete = []; }
+  const p = zeit && anfrage.url ? signaturPruefen(kopf, [srv.konfig, ...geraete], anfrage.method || "GET", new URL(anfrage.url).pathname, Number(zeit) * 1000, new NonceSpeicher(10)) : null;
+  return (p && p.paar) || srv.konfig;
+}
+// Antwort, die ein Test verändert oder selbst baut, wie sie der Server signieren würde (Kopf studium-signatur, server/kanal.mjs, unter
+// dem Paar der Anfrage): für Geräte mit Riegel, die nur signierte Antworten annehmen
 async function signiert(srv, anfrage, antwort) {
   const { antwortMac } = await modul("kanal.mjs");
   const nonce = (/nonce=([\w-]{22})/.exec(String((anfrage.headers || {}).authorization || "")) || [])[1];
   if (!nonce) return antwort;
-  const kopf = Object.assign({}, antwort.headers, { "studium-signatur": "v=1,mac=" + antwortMac(srv.konfig, nonce, antwort.status, antwort.text) });
+  const kopf = Object.assign({}, antwort.headers, { "studium-signatur": "v=1,mac=" + antwortMac(await paarVon(srv, anfrage), nonce, antwort.status, antwort.text) });
   return Object.assign({}, antwort, { headers: kopf });
+}
+// Schlüssel im Schlüsselbund eines Geräts (a: abh) → { adresse, zugang, schluessel, geraet? }
+const imSchluesselbund = (a) => JSON.parse(a.geheimMap.get(GEHEIM_ID));
+// Schlüsselbund eines anderen Geräts mit denselben Schlüsseln, aber ohne Kennung (ein Eintrag mit Kennung ist immer verriegelt): ohne
+// eigenen Riegel nimmt es Antworten, wie sie sind, wie ein Gerät, das nie eine signierte Antwort sah → Map
+const ohneKennung = (a) => new Map([[GEHEIM_ID, JSON.stringify(Object.assign(imSchluesselbund(a), { geraet: undefined }))]]);
+// Im Schlüsselbund stehen eigene Schlüssel dieses Geräts (Server mit Schlüsseln je Gerät): Kennung und Schlüssel wie im Verzeichnis
+// des Servers, nicht die gemeinsamen → Eintrag
+function eigeneSchluessel(srv, a) {
+  const v = imSchluesselbund(a);
+  const g = JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "web", "geraete-schluessel.json"), "utf8")).geraete.find((x) => x.id === v.geraet);
+  assert.ok(g, "Kennung im Verzeichnis des Servers");
+  assert.deepEqual(v, { adresse: srv.konfig.adresse, zugang: g.zugang, schluessel: g.schluessel, geraet: g.id });
+  assert.ok(v.zugang !== srv.konfig.zugang && v.schluessel !== srv.konfig.schluessel, "nicht die gemeinsamen");
+  return v;
 }
 
 // Kopf einer signierten Anfrage (server/kanal.mjs): nie der Schlüssel selbst
@@ -90,7 +115,8 @@ const standTextMit = (uhr) => laden("verbindungen", {
   kontext: { obsidian: OBS, user: { quellen: Object.assign({}, Q, { vorText: (iso) => Q.vorText(iso, new Date(uhr.t).getTime()) }) } },
 }).ctx.verbindungen.standText;
 
-// abh für server.js; o: { ja (Rückfrage), geraet, netz, geheim (Map, geteilt zwischen Läufen eines Geräts) }
+// abh für server.js; o: { ja (Rückfrage), geraet, netz, geheim (Map, geteilt zwischen Läufen eines Geräts), geraetName (wie das Gerät
+// beim Server heißt) }
 function abhBauen(t, o) {
   o = o || {};
   const geheim = o.geheim || new Map();
@@ -116,7 +142,7 @@ function abhBauen(t, o) {
     kapitelUnterlagen: o.kapitelUnterlagen || (async () => []),
     lernplan: () => o.lernplan || null,
     lernplanNotizen: o.lernplanNotizen || (async () => []),
-    lokalErlaubt: true, ohneKennwort: o.ohneKennwort,
+    lokalErlaubt: true, ohneKennwort: o.ohneKennwort, geraetName: () => o.geraetName || "",
     geheimMap: geheim, lokalMap: lokal, uhr,
   };
 }
@@ -130,7 +156,7 @@ async function serverStarten(o) {
   const { eingangNormal } = await modul("eingang.mjs");
   const verzeichnis = fs.mkdtempSync(path.join(os.tmpdir(), "studium-plugin-"));
   const konfig = { zugang: neuerSchluessel(), schluessel: neuerSchluessel(), adresse: "", version: "0.0.0-test" };
-  const dienst = erzeugeDienst({ konfig, verzeichnis, jetzt: o && o.jetzt });
+  let dienst = erzeugeDienst({ konfig, verzeichnis, jetzt: o && o.jetzt });
   await new Promise((fertig) => dienst.listen(0, "127.0.0.1", fertig));
   konfig.adresse = `http://127.0.0.1:${dienst.address().port}`;
   fs.writeFileSync(path.join(verzeichnis, "zustand.json"), JSON.stringify({ claude: "angemeldet", gmail: "ok", uniZugang: "gespeichert", letzterLauf: { zeit: "2026-10-18T07:30:00Z", ok: true } }));
@@ -153,6 +179,16 @@ async function serverStarten(o) {
     },
     imEingang: () => (fs.existsSync(path.join(verzeichnis, "eingang")) ? fs.readdirSync(path.join(verzeichnis, "eingang")) : []),
     stand: () => JSON.parse(fs.readFileSync(path.join(verzeichnis, "web", "stand-plugin.json"), "utf8")),
+    // Dienst anhalten, das Verzeichnis der Geräte ändern (aendern(verzeichnis)) und unter derselben Adresse neu starten
+    neuStarten: async (aendern) => {
+      const port = dienst.address().port, datei = path.join(verzeichnis, "web", "geraete-schluessel.json");
+      await new Promise((fertig) => dienst.close(fertig));
+      const v = JSON.parse(fs.readFileSync(datei, "utf8"));
+      aendern(v);
+      fs.writeFileSync(datei, JSON.stringify(v));
+      dienst = erzeugeDienst({ konfig, verzeichnis, jetzt: o && o.jetzt });
+      await new Promise((fertig) => dienst.listen(port, "127.0.0.1", fertig));
+    },
     zu: () => new Promise((fertig) => dienst.close(fertig)),
   };
 }
@@ -190,7 +226,7 @@ test("Verbinden: Rückfrage, Einmal-Code gegen Schlüssel, Code danach verbrauch
     assert.equal(a.geheimMap.size, 0, "nichts gespeichert");
     const r = await m.verbinden(srv.konfig.adresse, code.toLowerCase());
     assert.equal(r.ok, true, r.fehler);
-    assert.deepEqual(JSON.parse(a.geheimMap.get(GEHEIM_ID)), { adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel });
+    eigeneSchluessel(srv, a);
     assert.equal(m.verbunden(), true);
     assert.match((await S.erzeugen(abhBauen(tresor())).verbinden(srv.konfig.adresse, code)).fehler, /gilt nicht mehr/, "Code nur einmal");
     // Link zu einer anderen Adresse: die Rückfrage nennt die bisherige Verbindung, und du tippst den Namen des neuen Servers ein
@@ -312,7 +348,7 @@ test("Weiteres Gerät verbinden: Code vom Server nur im Speicher; das neue Gerä
     assert.equal(rb.ok, true, rb.fehler);
     assert.match(fragen[0], /^Dieses Gerät schickt dann regelmäßig an 127\.0\.0\.1:\d+: die Codes deiner Module, deine Termine, offene To-dos mit den Namen ihrer Notizen, den Text deiner Unterlagen und auf Wunsch die PDFs\. Von dort kommen Termine, Hinweise und Zusammenfassungen in deine Notizen\. Nur bestätigen, wenn du den Code gerade selbst erzeugt hast/);
     assert.equal(B.verbunden(), true);
-    assert.deepEqual(JSON.parse(bA.geheimMap.get(GEHEIM_ID)), { adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel });
+    assert.notEqual(eigeneSchluessel(srv, bA).geraet, imSchluesselbund(A.a).geraet, "jedes Gerät eigene");
     assert.match((await S.erzeugen(abhBauen(tresor(), { uhr })).codeVerbinden(r.code, srv.konfig.adresse)).fehler, /gilt nicht mehr/, "nur einmal");
 
     // das abrufende Gerät bringt das Verbinden in server.json, jedes Gerät zeigt es im Fenster
@@ -346,7 +382,9 @@ test("Weiteres Gerät verbinden: nicht verbunden, Uhr falsch, älterer Server, f
     uhr.t = new Date(START.getTime() + 5 * 60e3);
     assert.deepEqual(await A.m.geraetCode(), { fehler: "uhr" }, "Uhr des Geräts 5 Minuten vor");
     uhr.t = START;
-    const mitAntwort = (antwort) => S.erzeugen(abhBauen(t, { uhr, geheim: A.a.geheimMap,
+    // dieselben Schlüssel ohne Kennung und ohne Riegel (wie verbunden mit einem älteren Server): Antworten gelten, wie sie sind
+    const ohne = ohneKennung(A.a);
+    const mitAntwort = (antwort) => S.erzeugen(abhBauen(t, { uhr, geheim: ohne,
       netz: async (a) => (a.url.endsWith("/v1/geraet") ? antwort() : netzEcht(a)) }));
     assert.deepEqual(await mitAntwort(() => ({ status: 404, text: "{\"fehler\":\"unbekannt\"}" })).geraetCode(), { fehler: "alt" }, "Server vor diesem Weg");
     const fremd = await verschluesseln(neuerSchluessel(), "verbinden", { code: "ABCDE-FGHJK", ablauf: "2026-10-18T08:10:00.000Z" });
@@ -366,7 +404,8 @@ test("Weiteres Gerät verbinden: nicht verbunden, Uhr falsch, älterer Server, f
     const A2 = S.erzeugen(abhBauen(t, { uhr, fragen, geheim: A.a.geheimMap }));
     assert.equal((await A2.codeVerbinden(srv.code())).ok, true);
     assert.doesNotMatch(fragen[0], /verbunden\. |Tippe zur Bestätigung/, "dieselbe Adresse: nichts einzutippen");
-    assert.equal(JSON.parse(A.a.geheimMap.get(GEHEIM_ID)).zugang, srv.konfig.zugang, "neue Schlüssel");
+    const vorher = JSON.parse(ohne.get(GEHEIM_ID));
+    assert.notEqual(eigeneSchluessel(srv, A.a).zugang, vorher.zugang, "neue Schlüssel");
     assert.equal((await A2.abrufen()).art, "ok");
   } finally { await srv.zu(); }
 });
@@ -1135,7 +1174,8 @@ test("Fehler: fremder Zugang, verändertes Paket, kein Netz; Status nach dem Ver
     const t = tresor();
     const { a, m } = await verbunden(srv, t);
     const v = JSON.parse(a.geheimMap.get(GEHEIM_ID));
-    a.geheimMap.set(GEHEIM_ID, JSON.stringify(Object.assign({}, v, { zugang: "A".repeat(43) })));
+    // ein fremder Zugangsschlüssel ohne Kennung und Riegel (mit Riegel gälte die Ablehnung ohne Signatur wie ein Netzfehler)
+    a.geheimMap.set(GEHEIM_ID, JSON.stringify(Object.assign({}, v, { zugang: "A".repeat(43), geraet: undefined })));
     assert.equal((await m.abrufen()).fehler, "zugang");
     assert.equal(m.zeile().pille, "pruefen");
     assert.match(m.zeile().text, /kennt dieses Gerät nicht mehr/);
@@ -1441,12 +1481,15 @@ test("Riegel: ein Server bis 0.7.7 bekommt den Zugangsschlüssel wie bisher, bis
     assert.deepEqual(await m.anstossen(), { ok: true });
     assert.ok(koepfe.includes("anstoss Bearer"));
     assert.equal(a.lokalMap.has("eba-server-signatur"), false, "kein Riegel");
-    // Der Server bekommt sein Update: die erste gelungene signierte Anfrage setzt den Riegel
+    // Der Server bekommt sein Update: die erste gelungene signierte Anfrage setzt den Riegel, und das Gerät zieht gleich auf eigene
+    // Schlüssel um (Riegel für die neuen)
+    const gemeinsam = new Map(a.geheimMap);
     alt = false;
     assert.equal((await m.abrufen({ manuell: true })).art, "ok");
     const riegel = a.lokalMap.get("eba-server-signatur");
     assert.match(riegel.id, /^[0-9a-f]{32}$/);
     assert.ok(!JSON.stringify(riegel).includes(srv.konfig.zugang));
+    eigeneSchluessel(srv, a);
     // Danach antwortet jemand wie ein alter Server (Rückstufung): nie mehr Bearer, die Zeile sagt „nach seinem nächsten Update“
     alt = true;
     koepfe.length = 0;
@@ -1457,13 +1500,13 @@ test("Riegel: ein Server bis 0.7.7 bekommt den Zugangsschlüssel wie bisher, bis
     assert.ok(koepfe.length && koepfe.every((k) => !/Bearer/.test(k)), koepfe.join(", "));
     // der Riegel steht nur im Gerätespeicher, nie im Tresor (Sync)
     for (const [pfad, text] of t.m) assert.ok(!String(text).includes(riegel.id) && !/eba-server-signatur/.test(String(text)), pfad);
-    // ein anderes Gerät mit Sync, aber eigenem Speicher, hat keinen Riegel
-    const B = S.erzeugen(abhBauen(t, { netz, geheim: a.geheimMap, geraet: "g-ipad" }));
+    // ein anderes Gerät mit Sync, das auch noch mit 0.7.7 verbunden wurde, aber eigenem Speicher, hat keinen Riegel
+    const B = S.erzeugen(abhBauen(t, { netz, geheim: new Map(gemeinsam), geraet: "g-ipad" }));
     await B.abrufen({ manuell: true, uebernehmen: true });
     assert.ok(koepfe.some((k) => /Bearer/.test(k)), "ohne Riegel wie bis 0.7.7");
 
     // Nur eine signierte Antwort verriegelt: kein Status mit „neuer“ Version, keine 401 mit signatur: 1 ohne Signatur der Antwort
-    const c = abhBauen(tresor(), { netz: ohneMac(netzEcht), geheim: a.geheimMap });
+    const c = abhBauen(tresor(), { netz: ohneMac(netzEcht), geheim: new Map(gemeinsam) });
     statusVersion = "0.7.8";
     alt = false;
     assert.equal((await S.erzeugen(c).abrufen({ manuell: true })).art, "ok");
@@ -1564,7 +1607,7 @@ test("Status 401 zählt wie abgelehnter Schlüssel, auch auf einem Gerät, das n
     assert.equal((await m.abrufen({ manuell: true })).art, "ok");
     assert.equal(a.lokalMap.get("eba-server-abruf").zugangSeit, "");
     // ohne Riegel (das Gerät sah nie eine signierte Antwort) zählt sie: Schlüssel abgelehnt, kein Eingang mehr
-    const U = abhBauen(t, { netz: ohneMac(netz), geheim: a.geheimMap, geraet: "g-alt" }), u = S.erzeugen(U);
+    const U = abhBauen(t, { netz: ohneMac(netz), geheim: ohneKennung(a), geraet: "g-alt" }), u = S.erzeugen(U);
     const b = await u.abrufen({ manuell: true, uebernehmen: true });
     assert.deepEqual([b.art, b.fehler, u.status().code], ["fehler", "zugang", "zugang"]);
     assert.equal(eingaenge(), vorher + 1, "danach kein Eingang mehr");
@@ -1572,7 +1615,7 @@ test("Status 401 zählt wie abgelehnter Schlüssel, auch auf einem Gerät, das n
     status401 = "";
     assert.equal((await u.abrufen({ manuell: true, uebernehmen: true })).art, "ok", "ein Erfolg hebt es auf");
     // ein zweites Gerät am selben Tresor, das die Sperre nicht bekommt, merkt die Ablehnung auch
-    const B = S.erzeugen(abhBauen(t, { netz: ohneMac(netz), geheim: a.geheimMap, geraet: "g-ipad" }));
+    const B = S.erzeugen(abhBauen(t, { netz: ohneMac(netz), geheim: ohneKennung(a), geraet: "g-ipad" }));
     assert.equal((await B.abrufen({ manuell: true })).art, "anderes-geraet");
     status401 = "{\"fehler\":\"zugang\",\"signatur\":1}";
     assert.equal((await B.abrufen({ manuell: true })).fehler, "zugang");
@@ -1860,11 +1903,12 @@ test("Schlüssel abgelehnt (Gerät ohne Riegel): nach 3 Tagen nur 401 fragt das 
   const uhr = { t: START };
   const srv = await serverStarten({ jetzt: () => new Date(uhr.t) });
   try {
-    // ein Gerät, das nie eine signierte Antwort sah (verriegelt gälte eine Ablehnung ohne gültige Signatur wie ein Netzfehler)
+    // ein Gerät, das nie eine signierte Antwort sah (verriegelt gälte eine Ablehnung ohne gültige Signatur wie ein Netzfehler): mit dem
+    // gemeinsamen Schlüssel verbunden, als es noch keine je Gerät gab
     const t = tresor();
-    const A = await verbunden(srv, t, { uhr, netz: ohneMac(netzEcht) });
-    A.a.lokalMap.delete("eba-server-signatur");
-    A.m = S.erzeugen(A.a);
+    const a = abhBauen(t, { uhr, netz: ohneMac(netzEcht) });
+    a.geheimMap.set(GEHEIM_ID, JSON.stringify({ adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel }));
+    const A = { a, m: S.erzeugen(a) };
     assert.equal((await A.m.abrufen()).art, "ok");
     const echt = srv.konfig.zugang;
     srv.konfig.zugang = neuerSchluessel(); // der Server hat neue Schlüssel (neue Adresse)
@@ -1976,5 +2020,230 @@ test("Rückgängig: zusammengeführte To-dos und geänderte Termine des letzten 
     srv.eingang({ termine: [], todo_doppel: [{ behalten: A, weg: id(folien, "- [ ] Tutorium") }] });
     assert.deepEqual((await m.abrufen()).todoDoppel, []);
     assert.equal(t.m.get(folien), vorherFolien);
+  } finally { await srv.zu(); }
+});
+
+// ---------- Schlüssel je Gerät (server/geraete.mjs) ----------
+const crypto = require("node:crypto");
+// Riegel-Kennung eines Eintrags wie riegelId in server.js (gekürzter SHA-256 aus Adresse und Zugangsschlüssel)
+const riegelVon = (v) => crypto.createHash("sha256").update(v.adresse + "\n" + v.zugang).digest("hex").slice(0, 32);
+const verzeichnisVon = (srv) => JSON.parse(fs.readFileSync(path.join(srv.verzeichnis, "web", "geraete-schluessel.json"), "utf8"));
+
+test("Schlüssel je Gerät: jedes Gerät eigene mit Kennung und Namen; beide sehen die Liste mit „dieses Gerät“; eins trennt das andere; „Dieses Gerät trennen“ sagt es dem Server", async () => {
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    const A = await verbunden(srv, t, { geraetName: "iPad" }), B = await verbunden(srv, t, { geraet: "g-handy", geraetName: "iPhone" });
+    const a = eigeneSchluessel(srv, A.a), b = eigeneSchluessel(srv, B.a);
+    assert.notEqual(a.geraet, b.geraet);
+    assert.deepEqual(verzeichnisVon(srv).geraete.map((g) => [g.id, g.name, g.herkunft]), [[a.geraet, "iPad", "cloud-shell"], [b.geraet, "iPhone", "cloud-shell"]]);
+    assert.equal((await A.m.abrufen()).art, "ok");
+    assert.equal((await B.m.abrufen()).art, "anderes-geraet", "B holt den Status, A übernimmt");
+    // die Liste auf jedem Gerät, dieses zuerst, nie mit Schlüsseln (auch nicht im Gerätespeicher)
+    const seitText = /^seit (\d{2}\.\d{2}\., )?\d{2}:\d{2} · zuletzt (\d{2}\.\d{2}\., )?\d{2}:\d{2} · über die Cloud Shell · Anschluss 198\.51\.100\.…$/;
+    const dA = (await A.m.einzelheiten()).geraete, dB = (await B.m.einzelheiten()).geraete;
+    assert.deepEqual(dA.map((g) => [g.id, g.name, g.dieses]), [[a.geraet, "iPad", true], [b.geraet, "iPhone", false]]);
+    assert.deepEqual(dB.map((g) => [g.id, g.dieses]), [[b.geraet, true], [a.geraet, false]]);
+    assert.ok(dA.every((g) => seitText.test(g.text)), dA[0].text);
+    const gespeichert = JSON.stringify([[...A.a.lokalMap], [...B.a.lokalMap], [...t.m]]);
+    assert.ok(![a, b].some((v) => gespeichert.includes(v.zugang) || gespeichert.includes(v.schluessel)), "Schlüssel nur im Schlüsselbund");
+    // A trennt B: B kommt nicht mehr hinein (verriegelt: eine Ablehnung ohne Signatur gilt wie ein Netzfehler; nach 3 Tagen Code und Adresse)
+    assert.deepEqual(await A.m.geraetTrennen(b.geraet), { ok: true, getrennt: [b.geraet] });
+    assert.deepEqual((await A.m.einzelheiten()).geraete.map((g) => g.id), [a.geraet], "gleich aus der Liste");
+    assert.deepEqual(await A.m.geraetTrennen(b.geraet), { fehler: "unbekannt" }, "schon getrennt");
+    await B.m.abrufen({ manuell: true, uebernehmen: true });
+    assert.deepEqual([B.m.status().code, B.m.status().erreichbar], ["netz", false]);
+    assert.equal((await A.m.abrufen({ manuell: true, uebernehmen: true })).art, "ok", "A geht weiter");
+    // Dieses Gerät trennen: der Server vergisst es, der Schlüsselbund ist leer
+    await A.m.trennen();
+    assert.deepEqual([verzeichnisVon(srv).geraete, A.a.geheimMap.size, A.m.verbunden()], [[], 0, false]);
+  } finally { await srv.zu(); }
+});
+
+test("Umzug: ein Gerät mit dem gemeinsamen Schlüssel bekommt beim ersten Abruf mit Riegel eigene, mit Riegel für die neuen; danach nie Bearer, auch ohne gespeicherten Riegel", async () => {
+  const srv = await serverStarten();
+  try {
+    let wieAltServer = false;
+    const anfragen = [];
+    const netz = async (x) => {
+      anfragen.push(x.url.replace(/^.*\/v1\//, "") + " " + String((x.headers || {}).authorization || "").split(" ")[0]);
+      return wieAltServer ? { status: 401, text: "{\"fehler\":\"zugang\"}" } : netzEcht(x);
+    };
+    // verbunden vor den Schlüsseln je Gerät: die gemeinsamen, ohne Kennung
+    const t = tresor();
+    const a = abhBauen(t, { netz, geraetName: "Windows-PC" });
+    const gemeinsam = { adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel };
+    a.geheimMap.set(GEHEIM_ID, JSON.stringify(gemeinsam));
+    const m = S.erzeugen(a);
+    assert.equal((await m.abrufen()).art, "ok");
+    const v = eigeneSchluessel(srv, a);
+    assert.deepEqual(verzeichnisVon(srv).geraete.map((g) => [g.id, g.herkunft, g.name]), [[v.geraet, "umzug", "Windows-PC"]]);
+    assert.equal(a.lokalMap.get("eba-server-signatur").id, riegelVon(v), "Riegel für die neuen Schlüssel");
+    assert.ok(anfragen.indexOf("geraete Studium-Signatur") < anfragen.indexOf("eingang Studium-Signatur"), "der Eingang schon mit den neuen");
+    assert.equal(srv.stand().module.length, 2, "Stand mit den neuen angekommen");
+    // ein zweiter Abruf zieht nicht noch einmal um
+    anfragen.length = 0;
+    assert.equal((await m.abrufen({ manuell: true })).art, "ok");
+    assert.ok(!anfragen.some((x) => /^geraete/.test(x)));
+    assert.equal(verzeichnisVon(srv).geraete.length, 1);
+    // Antworten wie von einem Server bis 0.7.7 (Rückstufung): nie Bearer, auch wenn der Gerätespeicher den Riegel verloren hat
+    wieAltServer = true;
+    a.lokalMap.delete("eba-server-signatur");
+    anfragen.length = 0;
+    const r = await S.erzeugen(a).abrufen({ manuell: true });
+    assert.deepEqual([r.art, r.fehler], ["fehler", "alt"]);
+    assert.ok(anfragen.length && anfragen.every((x) => !/Bearer/.test(x)), anfragen.join(", "));
+  } finally { await srv.zu(); }
+});
+
+test("Umzug: ein Gerät von 0.7.8 bis 0.7.11 mit eigenen Schlüsseln ohne Kennung erfährt sie; ein Server ohne den Weg (404) bleibt still und wird erst nach 6 Stunden wieder gefragt", async () => {
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    const A = await verbunden(srv, t);
+    const v = eigeneSchluessel(srv, A.a);
+    A.a.geheimMap.set(GEHEIM_ID, JSON.stringify({ adresse: v.adresse, zugang: v.zugang, schluessel: v.schluessel }));
+    assert.equal((await S.erzeugen(A.a).abrufen()).art, "ok");
+    assert.deepEqual(eigeneSchluessel(srv, A.a), v, "dieselben Schlüssel, jetzt mit Kennung");
+    assert.equal(verzeichnisVon(srv).geraete.length, 1);
+    // ein Server von 0.7.8 bis 0.7.11: 404 ohne Signatur für den unbekannten Weg
+    const uhr = { t: START };
+    let gefragt = 0;
+    const netz = async (x) => {
+      if (!/\/v1\/geraete$/.test(x.url)) return netzEcht(x);
+      gefragt++;
+      return { status: 404, text: "{\"fehler\":\"unbekannt\"}" };
+    };
+    const b = abhBauen(tresor(), { uhr, netz, geraet: "g-alt" });
+    b.geheimMap.set(GEHEIM_ID, JSON.stringify({ adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel }));
+    const B = S.erzeugen(b);
+    for (let i = 0; i < 3; i++) assert.equal((await B.abrufen({ manuell: true, uebernehmen: true })).art, "ok", "still, Abruf " + i);
+    assert.equal(gefragt, 1, "einmal gefragt");
+    assert.equal(imSchluesselbund(b).zugang, srv.konfig.zugang, "nichts geändert");
+    uhr.t = new Date(START.getTime() + 6 * 3600e3 + 60e3);
+    await B.abrufen({ manuell: true, uebernehmen: true });
+    assert.equal(gefragt, 2, "nach 6 Stunden wieder");
+  } finally { await srv.zu(); }
+});
+
+test("Server voll (30 Geräte): Mit Code verbinden sagt es, der Code bleibt; nach dem Trennen eines Geräts geht derselbe", async () => {
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    const A = await verbunden(srv, t);
+    // 29 weitere Geräte im Verzeichnis (wie nach 29 Mal Verbinden), dann neu gestartet
+    await srv.neuStarten((v) => { v.geraete = v.geraete.concat(Array.from({ length: 29 }, () => ({ id: crypto.randomBytes(16).toString("base64url"),
+      zugang: crypto.randomBytes(32).toString("base64url"), schluessel: crypto.randomBytes(32).toString("base64url"), seit: "2026-11-01T08:00:00.000Z",
+      zuletzt: "2026-11-01T08:00:00.000Z", herkunft: "cloud-shell" }))); });
+    assert.equal(verzeichnisVon(srv).geraete.length, 30);
+    const code = srv.code();
+    const neu = S.erzeugen(abhBauen(tresor(), { geraet: "g-neu" }));
+    const r = await neu.codeVerbinden(code, srv.konfig.adresse);
+    assert.deepEqual(r, { ok: false, fehler: "Dein Server kennt schon 30 Geräte. Trenne auf einem verbundenen Gerät eins, das du nicht mehr brauchst, dann geht derselbe Code." });
+    assert.equal((await A.m.abrufen()).art, "ok");
+    const fremd = (await A.m.einzelheiten()).geraete.find((g) => !g.dieses);
+    assert.deepEqual(await A.m.geraetTrennen(fremd.id), { ok: true, getrennt: [fremd.id] });
+    assert.equal((await neu.codeVerbinden(code, srv.konfig.adresse)).ok, true);
+  } finally { await srv.zu(); }
+});
+
+test("Speicher des Servers voll: Trennen und Verbinden sagen es, statt „getrennt“ oder „verbunden“", async () => {
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    const A = await verbunden(srv, t), B = await verbunden(srv, t, { geraet: "g-handy" });
+    const b = eigeneSchluessel(srv, B.a);
+    const netz = async (x) => (x.url.endsWith("/v1/geraete") ? signiert(srv, x, { status: 503, text: "{\"fehler\":\"speichern\"}", headers: {} }) : netzEcht(x));
+    assert.deepEqual(await S.erzeugen(Object.assign({}, A.a, { netz })).geraetTrennen(b.geraet), { fehler: "speichern" });
+    const voll = async (x) => (x.url.endsWith("/v1/verbinden") ? { status: 503, text: "{\"fehler\":\"speichern\",\"schema\":2}", headers: {} } : netzEcht(x));
+    const neu = S.erzeugen(abhBauen(tresor(), { geraet: "g-neu", netz: voll }));
+    assert.match((await neu.codeVerbinden(srv.code(), srv.konfig.adresse)).fehler, /nicht speichern\b.*Der Code gilt weiter/);
+    assert.equal(neu.verbunden(), false);
+  } finally { await srv.zu(); }
+});
+
+test("Trennen nimmt mit, was das Gerät hereinließ: die Liste sagt, woher jedes kam; die Rückfrage nennt, was mitgeht, und lässt es behalten", async () => {
+  const srv = await serverStarten();
+  try {
+    // die Uhr der Geräte wie die des Dienstes (die Anfrage nach einem Code trägt ihre Zeit)
+    const uhr = { t: new Date() }, t = tresor();
+    const A = await verbunden(srv, t, { uhr, geraetName: "iPhone" }), X = await verbunden(srv, t, { uhr, geraet: "g-pc", geraetName: "Windows-PC" });
+    // A verbindet B mit „Weiteres Gerät verbinden“, B dann C; F ebenso über A
+    const mitCodeVon = async (von, name, geraet) => {
+      const c = await von.m.geraetCode();
+      const n = { a: abhBauen(tresor(), { uhr, geraet, geraetName: name }) };
+      n.m = S.erzeugen(n.a);
+      assert.equal((await n.m.codeVerbinden(c.code, srv.konfig.adresse)).ok, true);
+      return n;
+    };
+    const B = await mitCodeVon(A, "iPad", "g-ipad"), C = await mitCodeVon(B, "Android-Tablet", "g-tab");
+    const [a, b, c, x] = [A, B, C, X].map((g) => eigeneSchluessel(srv, g.a));
+    await X.m.abrufen({ manuell: true });
+    const liste = (await X.m.einzelheiten()).geraete;
+    const von = (id) => liste.find((g) => g.id === id);
+    assert.match(von(a.geraet).text, / · über die Cloud Shell · Anschluss 198\.51\.100\.…$/);
+    assert.match(von(b.geraet).text, / · über Code von „iPhone“ · Anschluss /);
+    assert.match(von(c.geraet).text, / · über Code von „iPad“ · /);
+    assert.deepEqual(von(a.geraet).mit, { geraete: [{ id: b.geraet, name: "iPad" }, { id: c.geraet, name: "Android-Tablet" }], claudeApp: [] });
+    assert.deepEqual([von(c.geraet).mit.geraete, von(x.geraet).mit.geraete], [[], []]);
+    // die Rückfrage nennt, was mitgeht; „nur“ behält es
+    const f = S.trennenFrage(von(a.geraet));
+    assert.equal(f.titel, "„iPhone“ trennen?");
+    assert.match(f.text, /Mit ihm getrennt wird, was über einen Code von ihm verbunden wurde: „iPad“ und „Android-Tablet“\. Gehört das dir, trenne nur „iPhone“\.$/);
+    assert.deepEqual([f.knoepfe, f.behalten(0), f.behalten(1)], [["Alles trennen", "Nur „iPhone“ trennen"], [], [b.geraet, c.geraet]]);
+    assert.deepEqual(S.trennenFrage(von(c.geraet)).knoepfe, ["Trennen"], "ohne Mitgehendes nur ein Knopf");
+    // auf C: dieses Gerät geht nie mit, auch wenn es über A kam
+    await C.m.abrufen({ manuell: true, uebernehmen: true });
+    const aufC = (await C.m.einzelheiten()).geraete.find((g) => g.id === a.geraet);
+    assert.deepEqual(aufC.mit.geraete.map((g) => g.id), [b.geraet]);
+    assert.match((await C.m.einzelheiten()).geraete.find((g) => g.dieses).text, / · über Code von „iPad“ · /);
+    // nur A trennen: B und C bleiben (B ist ab dann „über Code eines getrennten Geräts“)
+    assert.deepEqual(await X.m.geraetTrennen(a.geraet, f.behalten(1)), { ok: true, getrennt: [a.geraet] });
+    const danach = (await X.m.einzelheiten()).geraete;
+    assert.deepEqual(danach.map((g) => g.id).sort(), [x.geraet, b.geraet, c.geraet].sort());
+    assert.match(danach.find((g) => g.id === b.geraet).text, / · über Code eines getrennten Geräts · /);
+    // alles: B trennen nimmt C mit
+    assert.deepEqual(await X.m.geraetTrennen(b.geraet, []), { ok: true, getrennt: [b.geraet, c.geraet] });
+    assert.deepEqual((await X.m.einzelheiten()).geraete.map((g) => g.id), [x.geraet]);
+  } finally { await srv.zu(); }
+});
+
+test("Trennen: die Rückfrage nennt die Verbindung der Claude-App aus den Codes des Geräts; behalten schickt ihre Kennung mit", async () => {
+  const g = { id: "a".repeat(22), name: "", ohneName: true, mit: { geraete: [], claudeApp: ["verbindung01"] } };
+  const f = S.trennenFrage(g);
+  assert.equal(f.titel, "Gerät trennen?");
+  assert.match(f.text, /: die Verbindung der Claude-App\. Gehört das dir, trenne nur das Gerät\.$/);
+  assert.deepEqual([f.knoepfe, f.behalten(1)], [["Alles trennen", "Nur das Gerät trennen"], ["verbindung01"]]);
+  const zwei = S.trennenFrage(Object.assign({}, g, { mit: { geraete: [{ id: "b".repeat(22), name: "" }], claudeApp: ["v1aaaaaaaaa", "v2aaaaaaaaa"] } }));
+  assert.match(zwei.text, /: ein Gerät ohne Namen und 2 Verbindungen der Claude-App\./);
+  assert.deepEqual(S.trennenFrage({ id: "c".repeat(22), name: "iPad", ohneName: false }).knoepfe, ["Trennen"]);
+  // von (das Gerät, dessen Code die Verbindung einlöste) bleibt in der Verbindung, nur als Kennung eines Geräts
+  const ca = S.claudeAppNormal({ an: true, verbindungen: [{ id: "verbindung01", seit: "2026-11-03T07:00:00Z", client: "claude.ai", von: "a".repeat(22) },
+    { id: "verbindung02", seit: "2026-11-02T07:00:00Z", client: "claude.ai", von: "<b>" }] });
+  assert.deepEqual(ca.verbindungen.map((e) => e.von), ["a".repeat(22), undefined]);
+});
+
+test("Umzug: geht die Antwort verloren, bekommt der nächste Versuch dasselbe Gerät (Kennung des Umzugs im Gerätespeicher), kein zweites", async () => {
+  const srv = await serverStarten();
+  try {
+    let verloren = 2;
+    const netz = async (x) => {
+      const r = await netzEcht(x);
+      if (/\/v1\/geraete$/.test(x.url) && verloren-- > 0) throw new Error("Verbindung abgebrochen");
+      return r;
+    };
+    const a = abhBauen(tresor(), { netz, geraetName: "iPad" });
+    a.geheimMap.set(GEHEIM_ID, JSON.stringify({ adresse: srv.konfig.adresse, zugang: srv.konfig.zugang, schluessel: srv.konfig.schluessel }));
+    const m = S.erzeugen(a);
+    assert.equal((await m.abrufen({ manuell: true })).art, "ok", "der Abruf geht mit den gemeinsamen weiter");
+    assert.equal(imSchluesselbund(a).zugang, srv.konfig.zugang);
+    const kennung = a.lokalMap.get("eba-server-umzug").kennung;
+    assert.match(kennung, /^[\w-]{22}$/);
+    await m.abrufen({ manuell: true });
+    assert.equal(a.lokalMap.get("eba-server-umzug").kennung, kennung, "dieselbe Kennung");
+    await m.abrufen({ manuell: true });
+    const v = eigeneSchluessel(srv, a);
+    assert.deepEqual(verzeichnisVon(srv).geraete.map((g) => g.id), [v.geraet], "ein Gerät, kein verwaistes");
+    assert.equal(a.lokalMap.has("eba-server-umzug"), false, "nach dem Umzug weg");
   } finally { await srv.zu(); }
 });

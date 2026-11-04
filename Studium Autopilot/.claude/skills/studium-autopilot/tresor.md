@@ -92,7 +92,7 @@ Fachsemester), `variante` (Economics | Business Administration | ohne Spezialisi
 |---|---|---|
 | `zentral` | `zentral_id` | zentrale Daten für alle EcoBA-Studierenden |
 | `zentral` | `literatur_id` | Literaturliste eines Moduls aus den zentralen Daten |
-| `claude` | `claude_id` | eigener Server mit Claude |
+| `claude` | `claude_id` | eigener Server |
 | `alma` | `alma_schluessel` | Alma-Stundenplan |
 | `ilias-gruppe`, `gruppe-gewaehlt` | `ilias_gruppe`, `gruppe_id` | Übungsgruppen |
 | `ilias-kalender` | `ilias_kalender_id` | Abgaben aus dem ILIAS-Kalender |

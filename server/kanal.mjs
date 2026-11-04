@@ -1,14 +1,18 @@
 // Privater Datenkanal zwischen dem eigenen Server und dem Plugin: AES-256-GCM über Web Crypto, damit das Plugin
 // (Obsidian, auch iPhone/iPad) mit derselben API entschlüsselt. Ein Paket ist { schema, zweck, iv, daten } (base64url).
-// Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“, „verbinden“, „verbinden-antwort“) steckt als Zusatzdaten in der Verschlüsselung: Ein
-// Paket für den einen Zweck lässt sich nicht als das andere ausgeben. Der Schlüssel (32 Byte) kennen nur Server und Plugin; er geht nie über den Kanal selbst.
+// Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“, „verbinden“, „verbinden-antwort“, „geraete“, „geraete-antwort“,
+// „claude-app“, „claude-app-antwort“) steckt als Zusatzdaten in der Verschlüsselung: Ein Paket für den einen Zweck lässt sich nicht als
+// das andere ausgeben. Der Schlüssel (32 Byte) kennen nur Server und Plugin; er geht nie über den Kanal selbst.
 // Dazu die Signatur jeder Anfrage (ab 0.7.8, unten): Der Zugangsschlüssel selbst geht dann nie mehr über das Netz.
 import { createHash, createHmac, hkdfSync, timingSafeEqual, webcrypto } from "node:crypto";
 import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 
 export const KANAL_SCHEMA = 1;
-// verbinden-antwort: Antwort auf POST /v1/geraet (ab 0.7.8; die Anfrage hat verbinden, so geht keine als die andere durch)
-const ZWECKE = new Set(["eingang", "stand", "unterlagen", "kapitel", "pdf", "verbinden", "verbinden-antwort"]);
+// verbinden-antwort: Antwort auf POST /v1/geraet (ab 0.7.8; die Anfrage hat verbinden, so geht keine als die andere durch); geraete und
+// geraete-antwort: Anfrage und Antwort von POST /v1/geraete (Geräte mit eigenen Schlüsseln, geraete.mjs); ebenso claude-app und
+// claude-app-antwort für POST /v1/claude-app (Connector)
+const ZWECKE = new Set(["eingang", "stand", "unterlagen", "kapitel", "pdf", "verbinden", "verbinden-antwort", "geraete", "geraete-antwort", "claude-app",
+  "claude-app-antwort"]);
 const kodieren = new TextEncoder();
 const dekodieren = new TextDecoder();
 const b64 = (bytes) => Buffer.from(bytes).toString("base64url");
@@ -63,7 +67,7 @@ export async function entschluesselnRoh(schluessel, zweck, paket) {
 // Text unter HKDF-SHA256(Datenschlüssel, …/datenschluessel): Er zeigt, dass das Gerät auch den Datenschlüssel hat (POST /v1/anstoss
 // verlangt ihn). zeit höchstens SIGNATUR.fenster neben der Uhr des Servers; jede nonce gilt einmal (NonceSpeicher). Den Körper
 // prüft der Dienst nach dem Lesen gegen inhalt; so prüft er die Signatur, bevor er überhaupt etwas liest.
-export const SIGNATUR = { fenster: 5 * 60e3, nonces: 20000 }; // je Netz höchstens ein Zwanzigstel (NonceSpeicher)
+export const SIGNATUR = { fenster: 5 * 60e3, nonces: 20000 }; // je Schlüssel höchstens ein Zwanzigstel (NonceSpeicher)
 const ANFRAGE = "studium-autopilot/anfrage/v1";
 const KOPF = /^Studium-Signatur v=1,zeit=(\d{1,12}),nonce=([A-Za-z0-9_-]{22}),inhalt=([A-Za-z0-9_-]{43}),signatur=([A-Za-z0-9_-]{43})(?:,beweis=([A-Za-z0-9_-]{43}))?$/;
 export const inhaltVon = (bytes) => createHash("sha256").update(bytes || "").digest("base64url");
@@ -89,56 +93,60 @@ export const antwortText = (nonce, status, inhalt) => ["studium-autopilot/antwor
 const antwortSchluessel = (konfig) => Buffer.from(hkdfSync("sha256", Buffer.concat([unb64(konfig.zugang), unb64(konfig.schluessel)]), Buffer.alloc(0), `${ANFRAGE}/antwort`, 32));
 export const antwortMac = (konfig, nonce, status, body) => mac(antwortSchluessel(konfig), antwortText(nonce, status, inhaltVon(body))).toString("base64url");
 
-// Zufallswerte schon gesehener Anfragen bis zum Ende ihres Fensters (nur gültig signierte kommen hinein), je Netz des Absenders
-// höchstens quote (sonst fällt der älteste dieses Netzes weg), zusammen höchstens max (sonst der älteste des Netzes mit den meisten,
-// nachdem Abgelaufenes weg ist). Wer den Zugangsschlüssel hat, kann den Speicher so nicht füllen und das echte Gerät aussperren; was
-// dabei wegfällt, gälte sonst noch einmal; darum merkt sich der Speicher das späteste Ende eines verdrängten Werts (verdraengtBis)
-// und nimmt keine Anfrage an, deren Fenster nicht danach endet: Wer flutet, sperrt so höchstens einige Minuten lang aus, aber kein
-// mitgelesener Wert gilt ein zweites Mal. datei: Protokoll, an das jeder
-// Wert angehängt wird (eine Zeile „nonce bis netz“), damit nach einem Neustart des Dienstes keine Anfrage der letzten Minuten noch
-// einmal gilt; hat es mehr als 2 × max Zeilen, schreibt der Speicher es neu mit dem, was noch gilt (dazu eine Zeile „~ verdraengtBis“).
-// Scheitert das Schreiben, fehlt nur dieser Schutz über einen Neustart.
-const NONCE_ZEILE = /^([A-Za-z0-9_-]{22}) (\d{1,15}) (\S{0,64})$/, VERDRAENGT_ZEILE = /^~ (\d{1,15})$/;
+// Zufallswerte schon gesehener Anfragen bis zum Ende ihres Fensters (nur gültig signierte kommen hinein), je Schlüssel (fach: die
+// Kennung eines Geräts oder „gemeinsam“ für den Schlüssel aus dienst.json; signaturPruefen nimmt es aus dem passenden Paar) höchstens
+// quote (sonst fällt der älteste dieses Schlüssels weg), zusammen höchstens max (sonst der älteste des Schlüssels mit den meisten,
+// nachdem Abgelaufenes weg ist). Was so wegfällt, gälte sonst noch einmal; darum merkt sich der Speicher je Schlüssel das späteste Ende
+// eines verdrängten Werts (verdraengt) und nimmt unter diesem Schlüssel keine Anfrage an, deren Fenster nicht danach endet. Verdrängen
+// kann nur, wer mit dem Schlüssel signiert, und er sperrt so nur diesen einen aus: Wer ein Gerät hat, kann die anderen nicht
+// aussperren, und kein mitgelesener Wert gilt ein zweites Mal (er gilt nur unter dem Schlüssel, mit dem er signiert ist).
+// Bis zu dieser Fassung zählte der Speicher je Netz des Absenders und merkte sich ein Ende für alle (alleBis, aus einem älteren
+// Protokoll noch geladen). datei: Protokoll, an das jeder Wert angehängt wird (eine Zeile „nonce bis fach“), damit nach einem Neustart
+// des Dienstes keine Anfrage der letzten Minuten noch einmal gilt; hat es mehr als 2 × max Zeilen, schreibt der Speicher es neu mit dem,
+// was noch gilt (dazu je Schlüssel eine Zeile „~ bis fach“). Scheitert das Schreiben, fehlt nur dieser Schutz über einen Neustart.
+const NONCE_ZEILE = /^([A-Za-z0-9_-]{22}) (\d{1,15}) (\S{0,64})$/, VERDRAENGT_ZEILE = /^~ (\d{1,15})(?: (\S{1,64}))?$/;
+const fachVon = (roh) => String(roh || "").replace(/\s/g, "_").slice(0, 64);
 export class NonceSpeicher {
   constructor(max = SIGNATUR.nonces, { quote = Math.max(1, Math.floor(max / 20)), datei = "", jetztMs = Date.now() } = {}) {
-    Object.assign(this, { max, quote, datei, werte: new Map(), je: new Map(), zeilen: 0, verdraengtBis: 0 });
+    Object.assign(this, { max, quote, datei, werte: new Map(), je: new Map(), zeilen: 0, verdraengt: new Map(), alleBis: 0 });
     if (!datei) return;
     let text = "";
     try { text = readFileSync(datei, "utf8"); } catch (e) { return; }
     for (const z of text.split("\n")) {
       const v = VERDRAENGT_ZEILE.exec(z);
-      if (v) this.verdraengtBis = Math.max(this.verdraengtBis, Number(v[1]));
+      if (v && v[2]) this.verdraengt.set(v[2], Math.max(this.verdraengt.get(v[2]) || 0, Number(v[1])));
+      else if (v) this.alleBis = Math.max(this.alleBis, Number(v[1]));
       const m = NONCE_ZEILE.exec(z);
       if (!m) continue;
       this.zeilen++;
       if (Number(m[2]) >= jetztMs && !this.werte.has(m[1])) this.platz(m[3], jetztMs) && this.dazu(m[1], Number(m[2]), m[3]);
     }
   }
-  dazu(nonce, bis, netz) {
-    this.werte.set(nonce, { bis, netz });
-    this.je.set(netz, (this.je.get(netz) || 0) + 1);
+  dazu(nonce, bis, fach) {
+    this.werte.set(nonce, { bis, fach });
+    this.je.set(fach, (this.je.get(fach) || 0) + 1);
     return true;
   }
   weg(nonce) {
     const w = this.werte.get(nonce);
     this.werte.delete(nonce);
-    const n = (this.je.get(w.netz) || 1) - 1;
-    if (n) this.je.set(w.netz, n); else this.je.delete(w.netz);
+    const n = (this.je.get(w.fach) || 1) - 1;
+    if (n) this.je.set(w.fach, n); else this.je.delete(w.fach);
   }
-  // verdrängt (nicht abgelaufen): sein Fenster gilt danach für niemanden mehr
-  aeltesterWeg(netz) {
+  // verdrängt (nicht abgelaufen): sein Fenster gilt danach unter diesem Schlüssel für niemanden mehr
+  aeltesterWeg(fach) {
     for (const [k, w] of this.werte) {
-      if (w.netz !== netz) continue;
-      this.verdraengtBis = Math.max(this.verdraengtBis, w.bis);
+      if (w.fach !== fach) continue;
+      this.verdraengt.set(fach, Math.max(this.verdraengt.get(fach) || 0, w.bis));
       this.weg(k);
       return;
     }
   }
-  // macht Platz für einen Wert aus netz → true
-  platz(netz, jetztMs) {
-    if (this.werte.size < this.max && (this.je.get(netz) || 0) < this.quote) return true;
+  // macht Platz für einen Wert unter fach → true
+  platz(fach, jetztMs) {
+    if (this.werte.size < this.max && (this.je.get(fach) || 0) < this.quote) return true;
     for (const [k, w] of this.werte) if (w.bis < jetztMs) this.weg(k);
-    if ((this.je.get(netz) || 0) >= this.quote) this.aeltesterWeg(netz);
+    if ((this.je.get(fach) || 0) >= this.quote) this.aeltesterWeg(fach);
     else if (this.werte.size >= this.max) {
       let meiste = "", n = -1;
       for (const [k, c] of this.je) if (c > n) { meiste = k; n = c; }
@@ -146,24 +154,29 @@ export class NonceSpeicher {
     }
     return true;
   }
+  // Ende des Fensters, bis zu dem unter fach nichts mehr gilt (verdrängt), oder 0
+  bisVon(fach) {
+    return Math.max(this.alleBis, this.verdraengt.get(fach) || 0);
+  }
   // → "ok" | "wiederholt"
-  merken(nonce, bis, jetztMs, netzRoh = "") {
-    const netz = String(netzRoh).replace(/\s/g, "_").slice(0, 64);
+  merken(nonce, bis, jetztMs, fachRoh = "") {
+    const fach = fachVon(fachRoh);
     const alt = this.werte.get(nonce);
-    if ((alt && alt.bis >= jetztMs) || bis <= this.verdraengtBis) return "wiederholt";
+    if ((alt && alt.bis >= jetztMs) || bis <= this.bisVon(fach)) return "wiederholt";
     if (alt) this.weg(nonce);
-    this.platz(netz, jetztMs);
-    this.dazu(nonce, bis, netz);
+    this.platz(fach, jetztMs);
+    this.dazu(nonce, bis, fach);
     if (this.datei) {
       try {
         if (++this.zeilen > 2 * this.max) {
           for (const [k, w] of this.werte) if (w.bis < jetztMs) this.weg(k);
+          for (const [k, b] of this.verdraengt) if (b < jetztMs) this.verdraengt.delete(k);
           const neu = `${this.datei}.neu`;
-          writeFileSync(neu, (this.verdraengtBis >= jetztMs ? `~ ${this.verdraengtBis}\n` : "") +
-            [...this.werte].map(([k, w]) => `${k} ${w.bis} ${w.netz}\n`).join(""), { mode: 0o600 });
+          writeFileSync(neu, (this.alleBis >= jetztMs ? `~ ${this.alleBis}\n` : "") + [...this.verdraengt].map(([k, b]) => `~ ${b} ${k}\n`).join("") +
+            [...this.werte].map(([k, w]) => `${k} ${w.bis} ${w.fach}\n`).join(""), { mode: 0o600 });
           renameSync(neu, this.datei);
           this.zeilen = this.werte.size;
-        } else appendFileSync(this.datei, `${nonce} ${bis} ${netz}\n`, { mode: 0o600 });
+        } else appendFileSync(this.datei, `${nonce} ${bis} ${fach}\n`, { mode: 0o600 });
       } catch (e) { /* nur der Schutz über einen Neustart fehlt dann */ }
     }
     return "ok";
@@ -174,18 +187,30 @@ export class NonceSpeicher {
 // überginge (sonst gälten vier Schreibweisen derselben Signatur)
 const gleicheSignatur = (soll, ist) => timingSafeEqual(Buffer.from(soll.toString("base64url")), Buffer.from(ist));
 
-// Prüft den Kopf einer signierten Anfrage. konfig: { zugang, schluessel }; nonces: NonceSpeicher; netz: grobes Netz des Absenders
-// (Quote im NonceSpeicher). → { ok: true, nonce, inhalt, beweis (true, wenn beweis da und richtig) } | { ok: false, fehler: zugang
-// (Form oder Signatur falsch) | uhr (dann mit nonce: die Signatur stimmte) | wiederholt }
-export function signaturPruefen(kopf, konfig, methode, pfad, jetztMs, nonces, fenster = SIGNATUR.fenster, netz = "") {
+// Prüft den Kopf einer signierten Anfrage. kandidaten: Schlüsselpaare { zugang, schluessel, … } (oder eins allein), unter denen die
+// Signatur stimmen darf: der gemeinsame Schlüssel aus dienst.json und die Geräte mit eigenen Schlüsseln (geraete.mjs, höchstens 31). Die
+// Signatur wird gegen jedes Paar gerechnet und jedes Mal in fester Zeit verglichen, erst danach einmal Zeit und Zufallswert. Das
+// passende Paar (paar) gilt für die ganze Anfrage: Beweis, Pakete und Signatur der Antwort. nonces: NonceSpeicher. o: { fenster,
+// fach (paar → Name des Schlüssels im NonceSpeicher; sonst paar.id), nein (paar → Fehler, wenn die Anfrage trotz gültiger Signatur
+// abgelehnt wird, etwa ein Schlüssel nach seiner Frist; dann bleibt ihr Zufallswert ungemerkt: Was ohnehin abgewiesen wird, füllt den
+// Speicher nicht) }. → { ok: true, nonce, inhalt, paar, beweis (true, wenn beweis da und richtig) } | { ok: false, fehler: zugang (Form
+// falsch oder kein Paar passt) | uhr (dann mit nonce und paar: die Signatur stimmte) | wiederholt | was nein sagt (mit nonce und paar) }
+export function signaturPruefen(kopf, kandidaten, methode, pfad, jetztMs, nonces, o = {}) {
+  const { fenster = SIGNATUR.fenster, fach = (p) => p.id || "", nein = () => "" } = o;
   const m = KOPF.exec(String(kopf || ""));
   if (!m) return { ok: false, fehler: "zugang" };
   const [, zeit, nonce, inhalt, signatur, beweis] = m;
   const text = anfrageText(methode, pfad, zeit, nonce, inhalt);
-  if (!gleicheSignatur(mac(signaturSchluessel(konfig.zugang, "zugang"), text), signatur)) return { ok: false, fehler: "zugang" };
+  let paar = null;
+  for (const k of [].concat(kandidaten || [])) {
+    if (k && gleicheSignatur(mac(signaturSchluessel(k.zugang, "zugang"), text), signatur) && !paar) paar = k;
+  }
+  if (!paar) return { ok: false, fehler: "zugang" };
   const t = Number(zeit) * 1000;
-  if (Math.abs(jetztMs - t) > fenster) return { ok: false, fehler: "uhr", nonce };
-  const gemerkt = nonces.merken(nonce, t + fenster, jetztMs, netz);
+  if (Math.abs(jetztMs - t) > fenster) return { ok: false, fehler: "uhr", nonce, paar };
+  const abgelehnt = nein(paar);
+  if (abgelehnt) return { ok: false, fehler: abgelehnt, nonce, paar };
+  const gemerkt = nonces.merken(nonce, t + fenster, jetztMs, fach(paar));
   if (gemerkt !== "ok") return { ok: false, fehler: gemerkt };
-  return { ok: true, nonce, inhalt, beweis: !!beweis && gleicheSignatur(mac(signaturSchluessel(konfig.schluessel, "datenschluessel"), text), beweis) };
+  return { ok: true, nonce, inhalt, paar, beweis: !!beweis && gleicheSignatur(mac(signaturSchluessel(paar.schluessel, "datenschluessel"), text), beweis) };
 }

@@ -68,6 +68,10 @@ alte_einheiten_entfernen() {
 #   studium (Lauf, Zustand, Reserve)  der Datenordner selbst (2711: Web-Dienst und Abruf gehen nur hindurch), laeufe/
 #   studium-web (Web-Dienst)          web/, dazu eingang/ (Ergebnisse des Laufs; er löscht Übernommenes) und unterlagen/ (für den Lauf)
 #   studium-abruf (Abruf)             abruf/ (roh/ und den Anstoß übernimmt der Lauf über die Gruppe studium)
+#   studium-zentral (zentrale Daten)  zentral/ (zentral.mjs: öffentliche Daten für den Connector, 0644)
+#   Connector (Claude-App)            claude-app/ gehört root (nur root legt dort Ordner an); darin schreibt der Web-Dienst schalter/
+#                                     (nur er), codes/, trennen/ und daten/ (Gruppe studium-mcp: der Connector liest sie), der Connector
+#                                     (studium-mcp) nur aus-mcp/ (Gruppe studium-web: der Web-Dienst liest es); claude-app.mjs
 # Datenordner, eingang/ und unterlagen/ gehören der Gruppe studium-web und vererben sie (setgid). Lesen kann der Web-Dienst dort nur,
 # was der Lauf ausdrücklich so schreibt (zustand.json, Ergebnisse: 0640); alles andere bleibt 0600. Den Lauf lässt seine Einheit in
 # die Gruppe (SupplementaryGroups=), nicht der Benutzer studium.
@@ -151,6 +155,11 @@ ordnung() {
   for n in neu opus kapitel; do ordner "$d/unterlagen/$n" studium:studium-web 2770; done
   ordner "$d/web" studium-web:studium-web 2771
   ordner "$d/abruf" studium-abruf:studium 2770
+  ordner "$d/zentral" studium-zentral:studium-zentral 0755
+  ordner "$d/claude-app" root:root 0755
+  ordner "$d/claude-app/schalter" studium-web:studium-web 0700
+  for n in codes trennen daten; do ordner "$d/claude-app/$n" studium-web:studium-mcp 2750; done
+  ordner "$d/claude-app/aus-mcp" studium-mcp:studium-web 2750
   [ "$umzug" -eq 1 ] || return 0
   for n in "${ALT_WEB[@]}"; do umziehen "$d" "$n" web; done
   for n in "${ALT_ABRUF[@]}"; do umziehen "$d" "$n" abruf; done
@@ -387,6 +396,16 @@ id studium-abruf >/dev/null 2>&1 || useradd --system --no-create-home --home-dir
 # /proc in sie hineinsehen (kill und /proc/<PID>/root, cwd, environ verlangen denselben Benutzer).
 getent group studium-web >/dev/null || groupadd --system studium-web
 id studium-web >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid studium-web studium-web
+# Eigener Benutzer für den Connector (Claude-App, mcp.mjs): Er nimmt Anfragen von claude.ai an und sieht nur, was der Web-Dienst ihm
+# unter claude-app/ hinlegt, und die zentralen Daten; Zustand (Tokens) nur in /var/lib/studium-mcp (StateDirectory). Den gibt es auf
+# jedem Server, der Connector läuft aber nur, solange er in Obsidian eingeschaltet ist.
+getent group studium-mcp >/dev/null || groupadd --system studium-mcp
+id studium-mcp >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid studium-mcp studium-mcp
+# Eigener Benutzer für die zentralen Daten (zentral.mjs, bis 03.11.2026 als studium): Er holt aus dem Internet und schreibt nur zentral/.
+# Als studium hätte ein übernommener Abruf über /proc/<PID>/ einen laufenden Claude-Lauf gesehen (Umgebung, Ordner, Speicher) und
+# darüber die Claude-Anmeldung.
+getent group studium-zentral >/dev/null || groupadd --system studium-zentral
+id studium-zentral >/dev/null 2>&1 || useradd --system --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin --gid studium-zentral studium-zentral
 install -d -m 0750 -o root -g studium-web /etc/studium-server
 ordnung /var/lib/studium-server
 install -d -m 0755 /etc/credstore.encrypted
@@ -398,7 +417,7 @@ install -d -m 0755 "$ZIEL"
 if [ "$QUELLE" -ef "$ZIEL" ]; then
   echo "Paket liegt schon unter $ZIEL"
 else
-  for datei in VERSION README.md kanal.mjs dateien.mjs dienst.mjs verbinden.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers revoked_keys; do
+  for datei in VERSION README.md kanal.mjs dateien.mjs dienst.mjs verbinden.mjs geraete.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers revoked_keys claude-app.mjs zentral.mjs mcp.mjs mcp-app.mjs mcp-oauth.mjs mcp-tresor.mjs mcp-werkzeuge.mjs mcp-ergebnis.mjs mcp-quelle-ordner.mjs mcp-quelle-server.mjs mcp-dateien.mjs CONNECTOR; do
     install -m 0644 "$QUELLE/$datei" "$ZIEL/$datei"
   done
   rm -rf "$ZIEL/skill"
@@ -462,7 +481,19 @@ if [ "$ADRESSE_NEU" -eq 1 ]; then
   else
     echo "Offene Einmal-Codes ließen sich nicht alle löschen (web/verbinden/); weiter." >&2
   fi
+  # Die Claude-App kennt die alte Adresse: Connector aus, Tokens weg; verbunden wird neu aus Obsidian
+  studium-server claude-app aus || echo "Die Claude-App ließ sich nicht ausschalten; weiter." >&2
 fi
+# Konfiguration des Connectors (mcp.mjs): Adresse für Anmeldung und Tokens, Datenordner, Zustand; liest nur er (root:studium-mcp 0640).
+# Ohne Adresse (vorbereitet) startet ihn studium-server claude-app anwenden nicht.
+install -d -m 0750 -o root -g studium-mcp /etc/studium-server-mcp
+jq -n --arg adresse "$ADRESSE" '{ daten: "/var/lib/studium-server", zustand: "/var/lib/studium-mcp",
+  hoeren: [{ host: "127.0.0.1", port: 8744, oauth: { adresse: $adresse,
+    zugriff: "Termine, Fristen, To-dos, Lernplan, Prüfungen mit Noten und Hinweise aus deinen Mails, wie dein Obsidian sie an deinen Server schickt",
+    code_hinweis: "Den Code zeigt Obsidian unter Eigener Server → Mit der Claude-App verbinden." } }] }' >/etc/studium-server-mcp/konfig.json.neu
+chown root:studium-mcp /etc/studium-server-mcp/konfig.json.neu
+chmod 0640 /etc/studium-server-mcp/konfig.json.neu
+mv -f /etc/studium-server-mcp/konfig.json.neu /etc/studium-server-mcp/konfig.json
 # Zufallswert für die gestaffelte Verteilung neuer Versionen (studium-server, staffel_bis): einmal angelegt, danach unverändert
 if [ ! -s /etc/studium-server/staffel ]; then
   (umask 077 && od -An -N4 -tu4 /dev/urandom | tr -d ' ' >/etc/studium-server/staffel)
@@ -488,7 +519,8 @@ einheit() { cat >"$EINHEITEN/$1"; GESCHRIEBEN+=("$1"); }
 # Lauf-Ordner (Mails, Rechte des Laufs), roh/ und alles, was der Lauf nur für sich schreibt (0600), kann er nicht lesen, und die
 # Prozesse von studium kann er weder beenden noch über /proc ansehen. Zusätzlich sperrt systemd ihm diese Ordner, den Uni-Zugang,
 # LiveSync und CouchDB, Caddys Schlüssel und Admin-Socket, und er darf nur mit 127.0.0.1 sprechen (Caddy; dessen Admin-Schnittstelle
-# hört nicht dort, siehe „Caddy (HTTPS)“). Schreiben darf er nur in web/, eingang/ und unterlagen/.
+# hört nicht dort, siehe „Caddy (HTTPS)“). Schreiben darf er nur in web/, eingang/, unterlagen/ und seine Ordner unter claude-app/ (die
+# Übergabe an den Connector; aus-mcp/ dort liest er nur), den Zustand des Connectors sieht er nicht.
 einheit studium-server-dienst.service <<'UNIT'
 [Unit]
 Description=Studium Autopilot: Web-Dienst des eigenen Servers (nur 127.0.0.1)
@@ -529,8 +561,8 @@ SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any
 IPAddressAllow=localhost
-ReadWritePaths=/var/lib/studium-server/web /var/lib/studium-server/eingang /var/lib/studium-server/unterlagen
-InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf /etc/credstore.encrypted -/run/credentials -/etc/studium-server/livesync.json
+ReadWritePaths=/var/lib/studium-server/web /var/lib/studium-server/eingang /var/lib/studium-server/unterlagen /var/lib/studium-server/claude-app
+InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf /etc/credstore.encrypted -/run/credentials -/etc/studium-server/livesync.json -/var/lib/studium-mcp
 InaccessiblePaths=-/var/lib/caddy -/run/caddy -/opt/couchdb/etc -/var/lib/couchdb -/var/cache/debconf
 
 [Install]
@@ -822,7 +854,7 @@ SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 SocketBindDeny=any
 ReadWritePaths=/var/lib/studium-server /var/lib/studium
-InaccessiblePaths=/etc/studium-server /etc/credstore.encrypted -/run/credentials -/var/cache/debconf
+InaccessiblePaths=/etc/studium-server /etc/credstore.encrypted -/run/credentials -/var/cache/debconf -/var/lib/studium-server/claude-app -/var/lib/studium-mcp
 UNIT
 einheit studium-server-gmail.service <<'UNIT'
 [Unit]
@@ -875,14 +907,159 @@ Persistent=true
 [Install]
 WantedBy=timers.target
 UNIT
+# Connector für die Claude-App (mcp.mjs, docs/architektur/connector.md): eigener Benutzer studium-mcp, kein Netz außer 127.0.0.1 (Caddy
+# davor), Port nur 8744; den Port des Web-Dienstes auf 127.0.0.1 sperrt ihm eine Regel nach Besitzer (studium-server claude-app anwenden,
+# connector_netz_sperren), denn direkt dort gibt der Web-Dienst den ganzen Status ohne Schlüssel. Lesen darf er nur claude-app/ (ohne schalter/) und zentral/; schreiben nur in seinen Zustand
+# (/var/lib/studium-mcp) und aus-mcp/. Web-Dienst, Lauf, Abruf, Claude-Anmeldung, Schlüssel, Uni-Zugang, LiveSync, Caddy sieht er nicht.
+# Ohne [Install]: Er läuft nur, solange die Marke aus Obsidian da ist (studium-server-mcp-schalter.service startet und hält ihn an;
+# die Bedingung hält ihn sonst auch von Hand aus).
+einheit studium-server-mcp.service <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Connector für die Claude-App (nur 127.0.0.1, nur lesend)
+ConditionPathExists=/var/lib/studium-server/claude-app/schalter/an
+ConditionPathExists=/etc/studium-server-mcp/konfig.json
+
+[Service]
+User=studium-mcp
+Group=studium-mcp
+UMask=0077
+ExecStart=/usr/bin/node /opt/studium-server/aktuell/mcp.mjs dienst /etc/studium-server-mcp/konfig.json
+Restart=on-failure
+RestartSec=5
+StateDirectory=studium-mcp
+StateDirectoryMode=0700
+MemoryMax=512M
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+SocketBindAllow=tcp:8744
+SocketBindDeny=any
+ReadWritePaths=/var/lib/studium-server/claude-app/aus-mcp
+InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf -/var/lib/studium-server/web -/var/lib/studium-server/eingang -/var/lib/studium-server/unterlagen -/var/lib/studium-server/claude-app/schalter /etc/studium-server /etc/credstore.encrypted -/run/credentials
+InaccessiblePaths=-/var/lib/caddy -/run/caddy -/opt/couchdb/etc -/var/lib/couchdb -/var/cache/debconf
+UNIT
+# An oder aus nach der Marke des Web-Dienstes (claude-app/schalter/): root sieht nur, ob sie da ist, und liest sie nie (ein
+# übernommener Web-Dienst kann den Connector so höchstens ein- oder ausschalten). Läuft auch bei jedem Start des Servers und am Ende
+# jeder Installation (Notschalter im Paket).
+einheit studium-server-mcp.path <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Connector für die Claude-App an oder aus, sobald Obsidian es ändert
+
+[Path]
+PathChanged=/var/lib/studium-server/claude-app/schalter
+Unit=studium-server-mcp-schalter.service
+
+[Install]
+WantedBy=paths.target
+UNIT
+einheit studium-server-mcp-schalter.service <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Connector, seine Wege in Caddy und seinen Zustand nach der Marke aus Obsidian richten
+After=caddy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/studium-server claude-app anwenden
+TimeoutStartSec=2min
+SocketBindDeny=any
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+# Zentrale Daten für den Connector (zentral.mjs): nur solange er an ist, als eigener Benutzer studium-zentral mit Netz (GitHub Pages),
+# schreibt nur zentral/; höchstens 256 MB Speicher (er liest jede Datei nur bis zu ihrer Größe aus dem Manifest)
+einheit studium-server-zentral.service <<'UNIT'
+[Unit]
+Description=Studium Autopilot: zentrale Daten für den Connector holen
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/studium-server/claude-app/schalter/an
+
+[Service]
+Type=oneshot
+User=studium-zentral
+Group=studium-zentral
+UMask=0077
+Environment=STUDIUM_SERVER_DATEN=/var/lib/studium-server
+ExecStart=/usr/bin/node /opt/studium-server/aktuell/zentral.mjs
+TimeoutStartSec=5min
+MemoryMax=256M
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+ProcSubset=pid
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged
+SystemCallErrorNumber=EPERM
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SocketBindDeny=any
+ReadWritePaths=/var/lib/studium-server/zentral
+InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf -/var/lib/studium-server/web -/var/lib/studium-server/eingang -/var/lib/studium-server/unterlagen -/var/lib/studium-server/claude-app /etc/studium-server /etc/credstore.encrypted -/run/credentials -/var/cache/debconf
+UNIT
+einheit studium-server-zentral.timer <<'UNIT'
+[Unit]
+Description=Studium Autopilot: zentrale Daten für den Connector alle 15 Minuten (nur, solange er an ist)
+
+[Timer]
+OnBootSec=4min
+OnCalendar=*:0/15
+RandomizedDelaySec=2min
+
+[Install]
+WantedBy=timers.target
+UNIT
 alte_einheiten_entfernen "$EINHEITEN"
 systemctl daemon-reload
 systemctl enable -q studium-server-dienst.service studium-server-speicher.service studium-server-zustand.timer \
   studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer studium-server-livesync-aufbau.timer \
   studium-server-livesync-aufbau.service
+# Connector für die Claude-App: nur die Pfad-Einheit, das Anwenden beim Start und der Zeitgeber der zentralen Daten; der Connector
+# selbst und das Holen laufen nur mit der Marke aus Obsidian (ConditionPathExists)
+systemctl enable -q studium-server-mcp.path studium-server-mcp-schalter.service studium-server-zentral.timer
 [ "$TEST" -eq 1 ] || systemctl enable -q studium-server-aktualisieren.timer
 systemctl restart studium-server-dienst.service studium-server-speicher.service
-systemctl start studium-server-zustand.timer studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer
+systemctl start studium-server-zustand.timer studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer \
+  studium-server-mcp.path studium-server-zentral.timer
+# ein laufender Connector mit dem neuen Paket (ob er laufen soll, richtet „Connector“ unten)
+systemctl try-restart studium-server-mcp.service
 [ "$TEST" -eq 1 ] || systemctl start studium-server-aktualisieren.timer
 
 schritt "Caddy (HTTPS)"
@@ -892,8 +1069,9 @@ if [ -f "$CADDYFILE" ] && ! grep -q '^# studium-server' "$CADDYFILE"; then
   echo "bisherige Caddyfile gesichert: $CADDYFILE.vor-studium-server"
 fi
 if [ "$TEST" -eq 1 ]; then SEITE=":8080"; else SEITE="${ADRESSE#https://}"; fi
-# Weitere Adressen (LiveSync, livesync.sh) legen ihre Teile in studium-server.d/ ab; sie bleiben bei jeder Installation
-install -d -m 0755 /etc/caddy/studium-server.d
+# Weitere Adressen (LiveSync, livesync.sh) legen ihre Teile in studium-server.d/ ab; sie bleiben bei jeder Installation. Wege unter
+# der Adresse selbst (der Connector, solange er an ist: studium-server claude-app anwenden) in studium-server.d/seite/
+install -d -m 0755 /etc/caddy/studium-server.d /etc/caddy/studium-server.d/seite
 if [ -z "$SEITE" ]; then
   # Vorbereitet ohne Adresse: nichts auf 80 oder 443 (Caddys Standardseite eingeschlossen), bis der Lauf mit --ip kommt
   systemctl disable -q --now caddy 2>/dev/null || true
@@ -922,6 +1100,8 @@ $SEITE {
 	handle /v1/* {
 		reverse_proxy 127.0.0.1:8743
 	}
+	# Connector für die Claude-App (/mcp, /oauth/*, /.well-known/oauth-*), nur solange er an ist; ohne ihn gibt es hier nichts davon
+	import /etc/caddy/studium-server.d/seite/*.caddy
 	handle {
 		respond 404
 	}
@@ -952,6 +1132,11 @@ if iptables -L INPUT -n >/dev/null 2>&1; then
 else
   echo "iptables nicht verfügbar, übersprungen"
 fi
+
+schritt "Connector für die Claude-App"
+# Nach Paket, Einheiten und Caddy: an nur mit der Marke aus Obsidian, einer Adresse und ohne Notschalter im Paket (CONNECTOR). Er ist
+# freiwillig: Scheitert das, bleibt die Installation gültig, und der Connector bleibt aus.
+studium-server claude-app anwenden || echo "Connector ließ sich nicht richten; er bleibt aus, nächster Versuch beim nächsten Update." >&2
 
 schritt "SSH nur mit Schlüssel"
 # Oracles Ubuntu-Abbild stellt das schon so ein; die eigene Datei kommt vor denen des Abbilds (60-…) und hält es fest

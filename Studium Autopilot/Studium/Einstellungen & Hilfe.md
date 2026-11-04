@@ -158,6 +158,20 @@ Obsidian: erscheint, sobald Studium Autopilot läuft.
 > > > - **Vor der Vorlesung lernen** und **Zeit je Kapitel** stellst du je Modul hinter dem Regler oben rechts im Lernplan ein.
 > > > - **Abhaken** heißt verstanden, nicht auswendig gelernt. Das Üben kommt in der Klausurvorbereitung.
 >
+> > [!eba-karte|hilfe|claude]- Claude-App
+> > Mit eigenem Server fragst du Claude in der Claude-App nach deinem Studium, etwa „Was steht diese Woche an?“. Claude fragt dafür deinen Server und ändert nichts.
+> >
+> > 1. [[#Verbindungen]] → **Eigener Server** → **Mit der Claude-App verbinden**. Es zeigt eine Adresse und einen Code, der 10 Minuten gilt.
+> > 2. In der Claude-App in den Einstellungen unter **Konnektoren** („Connectors“) einen eigenen Konnektor mit dieser Adresse hinzufügen („Add custom connector“) und zweimal **Weiter** („Continue“) tippen. Die Schritte stehen im Fenster.
+> > 3. Auf der Seite deines Servers den Code eingeben und **Verbinden** tippen. Danach steht der Konnektor auch in der Claude-App auf iPhone, iPad und Computer.
+> >
+> > > [!eba-info]- Mehr erfahren
+> > > - **Was Claude sieht:** Termine und Fristen, offene To-dos, deinen Lernplan, fällige Karteikarten je Modul, Prüfungen mit Noten, deinen Stundenplan der nächsten 14 Tage und die Hinweise deines Servers.
+> > > - **Hinweis in der Claude-App:** Nutze nur Konnektoren von Entwicklern, denen du vertraust. Hier ist das dein eigener Server. Die Angaben zur Anmeldung danach lässt du, wie sie sind. Steht hinter dem Konnektor noch „Connect“, ist er nicht verbunden: antippen und einen neuen Code eingeben.
+> > > - **Stand:** was dein Gerät zuletzt an den Server geschickt hat; Claude sagt dazu, wann. Fehlt etwas Neues, Obsidian kurz öffnen.
+> > > - **Trennen:** im selben Fenster. Jede neue Verbindung zeigt Studium Autopilot auf allen deinen Geräten.
+> > > - Bei Anmeldungen, Abgaben und Noten gelten weiter Alma und ILIAS.
+>
 > > [!eba-karte|hilfe|aufbau]- Aufbau
 > > | Ordner | Inhalt |
 > > | --- | --- |

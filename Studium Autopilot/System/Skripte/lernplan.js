@@ -454,6 +454,92 @@ module.exports = function (ctx) {
     return [...wann, { text: ", danach " }, { text: wochen, wert: true }, { text: " Klausurvorbereitung." }];
   };
 
+  // ---------- Heute (seit 3.11.2026) ----------
+  // Was heute dran ist, so viel, wie deine Lernzeit an diesem Wochentag hergibt (lernplan_tageszeit in den Einstellungen: Minuten
+  // je Wochentag, Montag zuerst; eingestellt unter „Lernplan einstellen“). Gemischt aus Kapiteln, To-dos der Unterlagen mit naher
+  // Frist und den heute fälligen Karteikarten. Die Zeit eines Kapitels schätzt minutenVon aus seinen Seiten.
+  const FELD_TAG = "lernplan_tageszeit";
+  const FELD_EINSTIEG = "lernplan_einstieg";
+  const TAG_VORGABE = [120, 120, 120, 120, 120, 60, 0];
+  const TAG_WAHL = [0, 30, 60, 90, 120, 150, 180, 240, 300];
+  const TAG_NAME = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"];
+  const MIN_SEITE = 2, MIN_UNTERKAPITEL = 20, MIN_KAPITEL = 45, MIN_AUFGABE = 30;
+  const tageszeitLesen = (v) => {
+    const l = Array.isArray(v) ? v : [];
+    return TAG_VORGABE.map((x, i) => { const n = parseInt(l[i], 10); return n >= 0 && n <= 720 ? n : x; });
+  };
+  const tagIndex = (iso) => (tagObj(iso).getDay() + 6) % 7;
+  const runden5 = (n) => Math.max(5, Math.round(n / 5) * 5);
+  // Minuten für ein Kapitel: 2 je Seite, ohne Seiten 20 je Unterkapitel, sonst 45; mal die Zeit je Kapitel, wenn sie an ist.
+  // → { ganz, rest } (rest: was bei halb verstandenen Unterkapiteln noch fehlt)
+  const minutenVon = (k) => {
+    const basis = k.seitenWert ? k.seitenWert * MIN_SEITE : k.teile && k.teile.length ? k.teile.length * MIN_UNTERKAPITEL : MIN_KAPITEL;
+    const ganz = runden5(Math.max(15, basis * ((k.zeit && ZEIT_FAKTOR[k.zeit.stufe]) || 1)));
+    const a = k.anteil || 0;
+    return { ganz, rest: a > EPS && a < 1 - EPS ? runden5(ganz * (1 - a)) : ganz };
+  };
+  const BRUCH = ["", "¼", "½", "¾"];
+  const dauerText = (min) => {
+    if (min < 60) return `${min}\u00a0Min.`;
+    const v = Math.round(min / 15);
+    return `${Math.floor(v / 4)}${BRUCH[v % 4]}\u00a0Std.`;
+  };
+  // Reihenfolge für heute (rang): 0 überfällige Kapitel, 1 To-dos bis morgen (auch bis zu einer Woche überfällige), 2 Kapitel dieser
+  // Woche eines Moduls mit Kurs heute oder morgen, 3 die übrigen Kapitel dieser Woche, 4 To-dos der nächsten Tage, 5 Kapitel der
+  // nächsten Woche (nur mit „Mehr für heute“). Was noch nicht hochgeladen ist, fehlt. A: aktive Lernpläne; todos: [{ id, code, text,
+  // frist (ISO), quelle, t }]; kurs: Code → { heute: "14:15 Vorlesung" | "", morgen: bool }
+  const kandidatenVon = (A, todos, kurs, heute) => {
+    const so = plusTage(montagVon(heute), 6), aus = [];
+    for (const P of A) {
+      const K = kurs[P.code] || {};
+      P.kapitel.forEach((k, i) => {
+        if (!k.da || k.anteil >= 1 - EPS) return;
+        const d = P.plan.faellig[i], b = bisText(P, i);
+        const rang = b.ueberfaellig ? 0 : d <= so ? (K.heute || K.morgen ? 2 : 3) : d <= plusTage(so, 7) ? 5 : -1;
+        if (rang < 0) return;
+        aus.push({ id: `k|${P.f.path}|${titelSchluessel(k.titel)}`, art: "kapitel", rang, datum: d, minuten: minutenVon(k).rest, P, i });
+      });
+    }
+    for (const t of todos) {
+      if (!t.frist || t.frist < plusTage(heute, -7)) continue;
+      const rang = t.frist <= plusTage(heute, 1) ? 1 : t.frist <= plusTage(heute, 4) ? 4 : -1;
+      if (rang >= 0) aus.push({ id: `t|${t.id}`, art: "aufgabe", rang, datum: t.frist, minuten: MIN_AUFGABE, t });
+    }
+    return aus.sort((a, b) => a.rang - b.rang || (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0) || (a.id < b.id ? -1 : 1));
+  };
+  // Füllt den Tag: der Reihe nach, solange noch Zeit offen ist (eines immer, wenn Zeit da ist); Rang 5 nie von selbst. Ein großes
+  // Kapitel, das weit über die restliche Zeit ginge, kommt nur mit einem Teil (teil: Minuten heute, mindestens eine halbe Stunde);
+  // sonst darf das letzte etwas darüber gehen. schon: Minuten, die heute schon erledigt sind
+  const heuteFuellen = (kand, budget, schon) => {
+    const aus = [];
+    let summe = schon || 0;
+    for (const x of kand) {
+      if (x.rang >= 5 || summe >= budget) break;
+      const offen = budget - summe;
+      if (x.art === "kapitel" && x.minuten > 60 && x.minuten > offen + 15) {
+        const teil = Math.max(30, runden5(offen));
+        aus.push(Object.assign({}, x, { teil })); summe += teil;
+      } else { aus.push(x); summe += x.minuten; }
+    }
+    return aus;
+  };
+  // Freie Zeit zwischen den Kursen eines Tages (8 bis 20 Uhr, Lücken ab einer Stunde): sitzungen [{ beginn: "10:15", ende: "11:45" }]
+  // → „12–14:15 Uhr und ab 15:45 Uhr“ (leer ohne Kurse oder ohne Lücke)
+  const minVon = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? +m[1] * 60 + +m[2] : null; };
+  const uhrVon = (n) => `${Math.floor(n / 60)}${n % 60 ? ":" + String(n % 60).padStart(2, "0") : ""}`;
+  const luecken = (sitzungen) => {
+    const S = sitzungen.map((s) => ({ a: minVon(s.beginn), e: minVon(s.ende) })).filter((s) => s.a != null && s.e != null && s.e > s.a).sort((x, y) => x.a - y.a);
+    if (!S.length) return "";
+    const frei = [];
+    let ende = 8 * 60;
+    for (const s of S) {
+      if (s.a - ende >= 60) frei.push(`${uhrVon(ende)}–${uhrVon(s.a)}\u00a0Uhr`);
+      if (s.e > ende) ende = s.e;
+    }
+    if (20 * 60 - ende >= 60) frei.push(`ab ${uhrVon(ende)}\u00a0Uhr`);
+    return aufzaehlen(frei);
+  };
+
   // ---------- Daten aus dem Tresor ----------
   const fmVon = (f) => (f && app.metadataCache.getFileCache(f) && app.metadataCache.getFileCache(f).frontmatter) || {};
   const codeVon = (f) => String(fmVon(f).code || f.basename.split(" ")[0]).trim();
@@ -648,6 +734,15 @@ module.exports = function (ctx) {
     return { alle, o };
   };
   const aktiv = (P) => !!(P.plan && P.stand && P.stand.art !== "vorbei" && P.stand.art !== "aus");
+  // Für die Claude-App (server.js, Lagebild im Stand an den eigenen Server, nur solange sie an ist): je Lernplan, der noch dran ist
+  // (ohne nichtMehrDran), jedes Kapitel mit Nummer, Titel, verstanden (abgehakt bzw. alle Unterkapitel) und dem Montag der Woche, in
+  // der der Plan es vorsieht → [{ modul, kapitel: [{ titel, nummer?, verstanden, woche? }] }]
+  const kapitelStand = async () => {
+    if (!ctx.modell || typeof ctx.modell.daten !== "function") return [];
+    const { alle } = await allesSammeln(ctx.modell.daten(), heuteIso());
+    return alle.filter((P) => !P.aus && P.kapitel.length).map((P) => ({ modul: P.code, kapitel: P.kapitel.map((k, i) => Object.assign(
+      { titel: k.titel, verstanden: anteilVon(k) >= 1 - EPS }, k.nr ? { nummer: k.nr } : {}, P.plan && P.plan.faellig[i] ? { woche: montagVon(P.plan.faellig[i]) } : {})) }));
+  };
   // Farbe je Modul wie im Stundenplan (woche.js; 1–6, --eba-modul-n); Module ohne Stundenplan bekommen die nächsten Farben, in der
   // Reihenfolge ihrer Kürzel
   const modulFarben = (codes) => {
@@ -1451,6 +1546,11 @@ module.exports = function (ctx) {
     if (name !== wocheText(mo)) t.createSpan({ cls: "eba-lp-pw-datum", text: wocheText(mo) });
     nav(RECHTS, "Woche danach", i < B.wochen.length - 1, i + 1);
     const W = jetzt ? dieseWoche(alle, true) : null;
+    // Noch nicht hochgeladene Kapitel stehen in dieser Woche nicht als Zeile zum Abhaken, sondern leise in einer Zeile darunter
+    // (seit 3.11.2026: Vier von zwölf Zeilen ließen sich nicht erledigen)
+    const nichtDa = (x) => !x.P.kapitel[x.i].da && x.P.kapitel[x.i].anteil < 1 - EPS;
+    const kommt = W ? W.kapitel.filter(nichtDa) : [];
+    if (W) W.kapitel = W.kapitel.filter((x) => !nichtDa(x));
     const faellig = [];
     for (const P of A) P.kapitel.forEach((k, j) => { if (montagVon(P.plan.faellig[j]) === mo) faellig.push(k); });
     const fertig = faellig.filter((k) => k.anteil >= 1 - EPS).length;
@@ -1507,10 +1607,15 @@ module.exports = function (ctx) {
         });
       }
       for (const P of W.vorbereitung) { vorbereitungZeile(kl, P, quelle); zeilen++; }
+      if (kommt.length) {
+        const je = [];
+        for (const x of kommt) { const g = je.filter((y) => y.P === x.P)[0]; if (g) g.idx.push(x.i); else je.push({ P: x.P, idx: [x.i] }); }
+        kl.createDiv({ cls: "eba-lp-k-kommt", text: `Noch nicht hochgeladen: ${je.map((g) => `${g.P.code} ${namenListe(g.P, g.idx)}`).join(" · ")}` });
+      }
     } else {
       for (const P of A) P.kapitel.forEach((k, j) => { if (montagVon(P.plan.faellig[j]) === mo) { kapitelZeile(kl, P, j, quelle, neu, true); zeilen++; } });
     }
-    if (!zeilen) kl.createDiv({ cls: "eba-lp-k eba-lp-k-leer", text: faellig.length ? "Alles für diese Woche verstanden." : arbeitstage(mo, D.pausen, D.freieTage) ? "Nichts fällig." : "Vorlesungsfrei, nichts fällig." });
+    if (!zeilen && !kommt.length) kl.createDiv({ cls: "eba-lp-k eba-lp-k-leer", text: faellig.length ? "Alles für diese Woche verstanden." : arbeitstage(mo, D.pausen, D.freieTage) ? "Nichts fällig." : "Vorlesungsfrei, nichts fällig." });
     haftenPruefen(el);
   };
   // Zwei Spalten (iPad quer): Die Woche bleibt beim Scrollen oben stehen, solange rechts ein langes Modul offen ist, aber nur, wenn
@@ -1715,18 +1820,246 @@ module.exports = function (ctx) {
     return rang(a) - rang(b) || String(a.klausur ? a.klausur.datum : "9").localeCompare(String(b.klausur ? b.klausur.datum : "9")) || a.code.localeCompare(b.code, "de");
   };
 
+  // ---------- Heute zeichnen (seit 3.11.2026) ----------
+  // Kurse heute und morgen je Modul (Stundenplan über ctx.modell.findetStatt: Ausfall, Pause, freie Tage zählen) und alle Sitzungen
+  // heute → { kurs: Code → { heute: "14:15 Vorlesung", morgen: "Vorlesung" }, sitzungen }
+  const kurseVon = (D, heute) => {
+    const kurs = {}, sitzungen = [], morgen = plusTage(heute, 1), beginn = {};
+    const statt = (fm, tag) => { try { return ctx.modell.findetStatt ? ctx.modell.findetStatt(fm, tag) : null; } catch (e) { return null; } };
+    for (const x of D.stundenplan || []) {
+      const code = String(x.fm.code || "").trim(), art = String(x.fm.art || "Kurs").trim();
+      const K = kurs[code] || (kurs[code] = { heute: "", morgen: "" });
+      const s = statt(x.fm, heute), m = statt(x.fm, morgen);
+      if (s && s.statt) {
+        sitzungen.push(s);
+        const a = minVon(s.beginn);
+        if (a != null && (beginn[code] == null || a < beginn[code])) { beginn[code] = a; K.heute = `${uhrVon(a)} ${art}`; }
+      }
+      if (m && m.statt && !K.morgen) K.morgen = art;
+    }
+    return { kurs, sitzungen };
+  };
+  // Offene To-dos der Unterlagen deiner Module (todos.js) mit Frist als ISO
+  const todosVon = async (codes) => {
+    let liste = [];
+    try { liste = ctx.todos && ctx.todos.lesen ? await ctx.todos.lesen("todos") : []; } catch (e) { liste = []; }
+    return liste.map((t) => ({ id: `${t.f.path}|${t.roh}`, code: String(fmVon(t.f).code || "").trim(), text: t.text, frist: t.faellig ? isoVon(t.faellig) : "",
+      quelle: t.quelle, t })).filter((x) => codes.indexOf(x.code) >= 0);
+  };
+  // Eine Aufgabe kurz: ohne Links und Auszeichnung, bis zur ersten Klammer oder zum ersten Semikolon, höchstens etwa 80 Zeichen
+  const aufgabeKurz = (text) => {
+    let s = String(text || "").replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, "$2").replace(/\[\[([^\]]*)\]\]/g, "$1").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/[*_`]/g, "").trim();
+    const m = s.search(/ \(|; | – /);
+    if (m > 15) s = s.slice(0, m);
+    return s.length > 80 ? s.slice(0, 78).replace(/\s+\S*$/, "") + " …" : s;
+  };
+  // Der Tag je Gerät (localStorage): welche Einträge heute dran sind, damit die Liste den Tag über gleich bleibt und Erledigtes
+  // durchgestrichen stehen bleibt; snap: wie ein Eintrag aussah (für Erledigtes, das aus den Listen verschwindet)
+  const TAG_SPEICHER = "eba-lp-heute";
+  const tagLesen = () => { try { const v = app.loadLocalStorage(TAG_SPEICHER); return v ? JSON.parse(v) : null; } catch (e) { return null; } };
+  const tagMerken = (v) => { try { app.saveLocalStorage(TAG_SPEICHER, JSON.stringify(v)); } catch (e) { /* ohne Obsidian */ } };
+  const kapitelId = (P, k) => `k|${P.f.path}|${titelSchluessel(k.titel)}`;
+  // Wie ein Eintrag aussieht: Titel, darunter Kürzel und Kapitel, überfällig, Seiten, Kurs heute oder morgen; rechts die Zeit
+  const eintragVon = (x, kurs, heute, farben, teil) => {
+    if (x.art === "kapitel") {
+      const P = x.P, k = P.kapitel[x.i], b = bisText(P, x.i), K = kurs[P.code] || {};
+      const unter = [{ text: `${P.code} ${kapitelName(k, x.i)}` }];
+      if (b.ueberfaellig) unter.push({ text: b.text, cls: "is-ueberfaellig" });
+      else if (x.rang === 5) unter.push({ text: b.text });
+      if (k.seitenWert) unter.push({ text: `${k.seitenWert}\u00a0S.` });
+      if (K.heute) unter.push({ text: `heute ${K.heute}` }); else if (K.morgen) unter.push({ text: `morgen ${K.morgen}` });
+      if (teil) unter.push({ text: `heute ein Teil von ${dauerText(x.minuten)}` });
+      return { art: "kapitel", titel: k.titel, unter, minuten: teil || x.minuten, farbe: P.farbe || 0 };
+    }
+    const t = x.t;
+    const unter = [{ text: t.quelle || t.code }];
+    unter.push(t.frist < heute ? { text: `überfällig seit ${wtm(t.frist)}`, cls: "is-ueberfaellig" } : { text: t.frist === heute ? "bis heute" : `bis ${wtm(t.frist)}` });
+    return { art: "aufgabe", titel: aufgabeKurz(t.text), unter, minuten: x.minuten, farbe: (farben && farben[t.code]) || 0, code: t.code, pfad: t.t.f.path, nr: t.t.nr, roh: t.t.roh };
+  };
+  // Eine Zeile: Kästchen wie bei den To-dos, Titel mit Farbpunkt (Tipp öffnet Folien bzw. Notiz), darunter die Teile, rechts die Zeit
+  const tagZeile = (l, e, fertig, umschalten, aufmachen) => {
+    const z = l.createDiv({ cls: `eba-lp-tz modul-${e.farbe || 0}` + (fertig ? " is-fertig" : "") });
+    const haken = z.createEl("label", { cls: "eba-td-haken" });
+    if (umschalten) {
+      const box = haken.createEl("input", { attr: { type: "checkbox", "aria-label": (e.art === "kapitel" ? "Verstanden: " : "Erledigt: ") + e.titel } });
+      box.checked = fertig;
+      nurStoppen(haken);
+      haken.addEventListener("click", (ev) => ev.stopPropagation());
+      box.addEventListener("change", (ev) => { ev.stopPropagation(); z.toggleClass("is-fertig", box.checked); umschalten(box.checked); });
+    } else haken.setAttr("aria-hidden", "true");
+    const t = z.createDiv({ cls: "eba-lp-tz-text" });
+    const titel = t.createDiv({ cls: "eba-lp-tz-titel" });
+    titel.createSpan({ cls: "eba-lp-farbpunkt" + (e.farbe ? "" : " is-leer"), attr: { "aria-hidden": "true" } });
+    const name = titel.createSpan({ cls: "eba-lp-tz-name", text: e.titel });
+    if (aufmachen) { name.addClass("is-link"); nurStoppen(name); name.addEventListener("click", aufmachen); }
+    if (e.unter && e.unter.length) stuecke(t.createDiv({ cls: "eba-lp-tz-unter" }), e.unter, "eba-lp-tz-teil");
+    z.createSpan({ cls: "eba-lp-tz-dauer", text: fertig && e.art === "karten" ? "erledigt" : dauerText(e.minuten) });
+  };
+  const heuteZeichnen = async (wurzel, A, D, heute, quelle, neu, karten) => {
+    if (!A.length) return;
+    const budget = tageszeitLesen(einstellungen()[FELD_TAG])[tagIndex(heute)];
+    const { kurs, sitzungen } = kurseVon(D, heute);
+    const todos = await todosVon(A.map((P) => P.code));
+    const kand = kandidatenVon(A, todos, kurs, heute);
+    const kapitelNachId = {}, todoNachId = {}, kandNachId = {};
+    for (const P of A) P.kapitel.forEach((k, i) => { kapitelNachId[kapitelId(P, k)] = { P, i }; });
+    for (const t of todos) todoNachId[`t|${t.id}`] = t;
+    for (const x of kand) kandNachId[x.id] = x;
+    const farben = {};
+    for (const P of A) farben[P.code] = P.farbe || 0;
+    const fertigVon = (id) => { const x = kapitelNachId[id]; return id.slice(0, 2) === "k|" ? !!x && x.P.kapitel[x.i].anteil >= 1 - EPS : !todoNachId[id]; };
+    let T = tagLesen();
+    if (!T || T.tag !== heute || !Array.isArray(T.ids)) T = { tag: heute, ids: [], snap: {}, teil: {}, budget: -1, karten: 0 };
+    T.snap = T.snap || {};
+    T.teil = T.teil || {};
+    // Was es nicht mehr gibt, fällt weg (ein Kapitel aus der Liste gestrichen; ein offenes To-do, das nicht mehr offen ist, gilt als erledigt)
+    T.ids = T.ids.filter((id) => (id.slice(0, 2) === "k|" ? !!kapitelNachId[id] : !!T.snap[id]));
+    if (T.budget !== budget) {
+      // Neuer Tag oder andere Lernzeit: Erledigtes bleibt, der Rest wird neu gefüllt
+      const fertig = T.ids.filter(fertigVon), schon = fertig.reduce((s, id) => s + ((T.snap[id] && T.snap[id].minuten) || 0), 0);
+      const dazu = heuteFuellen(kand.filter((x) => fertig.indexOf(x.id) < 0), budget, schon);
+      T.ids = fertig.concat(dazu.map((x) => x.id));
+      for (const x of dazu) { if (x.teil) T.teil[x.id] = x.teil; else delete T.teil[x.id]; }
+      T.budget = budget;
+    }
+    const eintraege = T.ids.map((id) => {
+      const x = kandNachId[id];
+      if (x && !fertigVon(id)) { T.snap[id] = eintragVon(x, kurs, heute, farben, T.teil[id]); return { id, e: T.snap[id], fertig: false, x }; }
+      const s = T.snap[id];
+      if (!s) { const y = kapitelNachId[id]; return y ? { id, e: eintragVon({ art: "kapitel", P: y.P, i: y.i, rang: 0, minuten: minutenVon(y.P.kapitel[y.i]).ganz }, kurs, heute, farben), fertig: fertigVon(id) } : null; }
+      return { id, e: s, fertig: fertigVon(id) };
+    }).filter(Boolean);
+    // Karteikarten: alles, was heute dran ist, eine Zeile (eine halbe Minute je Karte); erledigt, wenn nichts mehr dran ist
+    let n = 0;
+    for (const c of Object.keys(karten || {})) { const z = karten[c]; n += (z.faellig || 0) + (z.lernen || 0) + (z.neu || 0); }
+    if (n) T.karten = Math.max(T.karten || 0, runden5(n / 2));
+    const kartenZeile = n || T.karten ? { e: { art: "karten", titel: "Karteikarten", unter: n ? [{ text: n === 1 ? "1 Karte dran" : `${n} Karten dran` }] : [], minuten: T.karten }, fertig: !n } : null;
+    const keep = {}, teile = {};
+    for (const id of T.ids) { if (T.snap[id]) keep[id] = T.snap[id]; if (T.teil[id]) teile[id] = T.teil[id]; }
+    T.snap = keep; T.teil = teile;
+    tagMerken(T);
+
+    const alle = eintraege.concat(kartenZeile ? [kartenZeile] : []);
+    const gesamt = alle.reduce((s, x) => s + x.e.minuten, 0), erledigt = alle.filter((x) => x.fertig).reduce((s, x) => s + x.e.minuten, 0);
+    const karte = wurzel.createDiv({ cls: "eba-lp-tag", attr: { role: "group", "aria-label": "Heute" } });
+    const kopf = karte.createDiv({ cls: "eba-lp-tag-kopf" });
+    const titel = kopf.createDiv({ cls: "eba-lp-tag-titel" });
+    titel.createSpan({ cls: "eba-lp-tag-name", text: "Heute" });
+    titel.createSpan({ cls: "eba-lp-tag-datum", text: wtm(heute) });
+    const rechts = kopf.createDiv({ cls: "eba-lp-tag-rechts" });
+    if (gesamt) {
+      const stand = rechts.createSpan({ cls: "eba-lp-tag-stand" });
+      if (erledigt) { balken(stand, erledigt / gesamt); stand.appendText(`${dauerText(erledigt)} von ${dauerText(gesamt)}`); }
+      else stand.setText(`etwa ${dauerText(gesamt)}`);
+    }
+    const zeit = rechts.createEl("button", { cls: "eba-lp-zeit eba-lp-tag-zeit", attr: { type: "button", "aria-label": `Lernzeit heute: ${budget ? dauerText(budget) : "frei"}. Lernzeit einstellen`, title: "Lernzeit einstellen" } });
+    zeit.createSpan({ text: budget ? `${dauerText(budget)} Lernzeit` : "heute frei" });
+    zeit.createSpan({ cls: "eba-lp-zeit-pfeil" }).innerHTML = PFEIL;
+    nurStoppen(zeit);
+    zeit.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); if (Modal) new EinstellFenster("").open(); });
+    const frei = luecken(sitzungen);
+    if (frei && budget) karte.createDiv({ cls: "eba-lp-tag-frei", text: `Frei zwischen deinen Kursen: ${frei}.` });
+    const liste = karte.createDiv({ cls: "eba-lp-tag-liste" });
+    for (const y of eintraege) {
+      const e = y.e;
+      let aufmachen = null;
+      if (e.art === "kapitel" && kapitelNachId[y.id]) {
+        const { P, i } = kapitelNachId[y.id], k = P.kapitel[i];
+        if (k.ziel) aufmachen = (ev) => oeffnen(k.ziel, ev, quelle);
+        else if (k.webZiel) aufmachen = (ev) => { ev.preventDefault(); ev.stopPropagation(); window.open(k.webZiel); };
+      } else if (e.art === "aufgabe") {
+        const f = app.vault.getAbstractFileByPath(e.pfad);
+        if (f) aufmachen = (ev) => oeffnen(f, ev, quelle);
+      }
+      tagZeile(liste, e, y.fertig, async (an) => {
+        try {
+          if (e.art === "kapitel") {
+            const z = kapitelNachId[y.id];
+            if (!z) return;
+            const k = z.P.kapitel[z.i];
+            if (an) {
+              abgehakt.zuletzt = { key: abgehaktKey(z.P, k), zeit: Date.now() };
+              if (abgehakt.tag !== heute) { abgehakt.tag = heute; abgehakt.keys = {}; }
+              abgehakt.keys[abgehaktKey(z.P, k)] = true;
+            }
+            if (an !== (k.anteil >= 1 - EPS)) await schreiben(z.P.f, k);
+          } else if (e.art === "aufgabe" && ctx.todos) {
+            const f = app.vault.getAbstractFileByPath(e.pfad);
+            if (!f) return;
+            if (an && y.x) { if (!(await ctx.todos.abhaken(y.x.t.t))) ctx.hinweis(`Die Aufgabe in „${f.basename}“ hat sich inzwischen geändert und ist nicht abgehakt. Bitte noch einmal tippen.`); }
+            else if (!an) await ctx.todos.zuruecknehmen({ f, nr: e.nr, roh: e.roh });
+          }
+        } catch (err) { console.error("Lernplan heute", err); }
+        neu();
+      }, aufmachen);
+    }
+    if (kartenZeile) tagZeile(liste, kartenZeile.e, kartenZeile.fertig, null, n && ctx.karten && ctx.karten.lernen
+      ? (ev) => { ev.preventDefault(); ev.stopPropagation(); ctx.karten.lernen({}); } : null);
+    if (!alle.length) liste.createDiv({ cls: "eba-lp-tag-leer", text: budget ? "Für heute ist nichts offen." : "Heute hast du keine Lernzeit eingestellt." });
+    else if (alle.every((x) => x.fertig)) liste.createDiv({ cls: "eba-lp-tag-leer is-geschafft", text: "Für heute geschafft." });
+    // Mehr für heute: der nächste Eintrag der Reihe (auch aus der nächsten Woche)
+    const naechster = kand.filter((x) => T.ids.indexOf(x.id) < 0)[0];
+    if (naechster) {
+      const fuss = karte.createDiv({ cls: "eba-lp-tag-fuss" });
+      const b = fuss.createEl("button", { cls: "eba-vb-knopf leise", text: !budget && !alle.length ? "Trotzdem etwas lernen" : naechster.rang >= 5 ? "Vorarbeiten" : "Mehr für heute", attr: { type: "button" } });
+      nurStoppen(b);
+      b.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const U = tagLesen() || T;
+        if (U.ids.indexOf(naechster.id) < 0) U.ids.push(naechster.id);
+        tagMerken(U);
+        neu();
+      });
+    }
+  };
+
+  // Einstieg (seit 3.11.2026): Wer noch nichts abgehakt hat, liegt sonst gleich zu Beginn „im Rückstand“, weil der Plan mit der ersten
+  // Vorlesung beginnt. Einmal fragen: ab heute planen (seit = Montag dieser Woche in jeder Lernplan-Notiz, die früher beginnt) oder
+  // schon Gelerntes abhaken (das erste Modul geht auf). Gemerkt in lernplan_einstieg (Einstellungen).
+  const einstiegSchreiben = async (heute) => {
+    const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
+    if (f) await app.fileManager.processFrontMatter(f, (fm) => { fm[FELD_EINSTIEG] = heute; });
+  };
+  const einstiegZeichnen = (wurzel, A, heute, neu) => {
+    if (einstellungen()[FELD_EINSTIEG] || A.some((P) => P.kapitel.some((k) => k.anteil > EPS))) return;
+    const rueck = A.reduce((s, P) => s + P.kapitel.filter((k, i) => bisText(P, i).ueberfaellig).length, 0);
+    if (!rueck) return;
+    const mo = montagVon(heute);
+    const box = wurzel.createDiv({ cls: "eba-lp-start", attr: { role: "group", "aria-label": "Einstieg" } });
+    box.createDiv({ cls: "eba-lp-start-titel", text: "Wo stehst du?" });
+    box.createDiv({ cls: "eba-lp-start-text", text: `Der Plan beginnt mit der ersten Vorlesung. Weil du noch nichts abgehakt hast, sieht es aus, als lägst du ${rueck} Kapitel zurück.` });
+    box.createDiv({ cls: "eba-lp-start-hilfe", text: "So geht’s: Der Plan verteilt die Kapitel bis zur Klausur. Hak ein Kapitel ab, wenn du es erklären kannst. Danach übst du mit Altklausuren." });
+    const knoepfe = box.createDiv({ cls: "eba-lp-start-knoepfe" });
+    const knopf = (text, cls, tun) => {
+      const b = knoepfe.createEl("button", { cls: "eba-vb-knopf " + cls, text, attr: { type: "button" } });
+      nurStoppen(b);
+      b.addEventListener("click", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        b.setAttr("disabled", "");
+        try { await tun(); } catch (err) { console.error("Lernplan Einstieg", err); }
+        neu();
+      });
+    };
+    knopf("Ab heute planen", "cta", async () => {
+      for (const P of A) if (P.beginn < mo) await app.vault.process(P.f, (t) => zeileSetzen(t, /^seit\s*:/, `seit: ${mo}`) || t);
+      await einstiegSchreiben(heute);
+    });
+    knopf("Ich habe schon gelernt", "leise", async () => {
+      await einstiegSchreiben(heute);
+      const P = A.filter((x) => x.kapitel.some((k, i) => bisText(x, i).ueberfaellig))[0];
+      if (P) for (const x of A) auf[x.code] = x === P;
+    });
+  };
+
   // ---------- Lernplan einstellen (seit 2.11.2026) ----------
   // Ein eigener Bereich für die Einstellungen je Modul, ein Fenster hinter dem Regler rechts neben dem Titel des Lernplans (in einer
   // Lernplan-Notiz nur ihr Modul): „Vor der Vorlesung lernen“, „Zeit je Kapitel“ und eingeschaltet je Kapitel Weniger, Normal, Mehr.
   // Bis dahin standen sie im aufgeklappten Modul, und „Anpassen“ legte die Wahl unter jedes Kapitel (am iPhone etwa 3700 px).
-  // Jede Änderung schreibt sofort in die Notiz; das Fenster zeichnet sich neu, sobald Obsidian sie neu gelesen hat.
-  // Bis die Notiz neu gelesen ist (metadataCache „changed“), höchstens 1,5 s
-  const nachAenderung = (f) => new Promise((fertig) => {
-    let ref = null;
-    const ende = () => { if (ref) app.metadataCache.offref(ref); ref = null; fertig(); };
-    ref = app.metadataCache.on("changed", (g) => { if (g === f) ende(); });
-    setTimeout(ende, 1500);
-  });
+  // Jede Änderung schreibt sofort in die Notiz; das Fenster zeichnet sich neu, sobald Obsidian sie neu gelesen hat, und folgt
+  // jeder weiteren Änderung, solange es offen ist (EinstellFenster).
+  // Dateien, von denen ein Lernplan abhängt (Notizen, Folien, Klausurtermine, Module, Einstellungen)
+  const relevant = (p) => p.startsWith(ORDNER) || p.startsWith("Unterlagen/") || p.startsWith("Termine/") || p.startsWith("Module/") || p === EINSTELLUNGEN;
   // Ein Kapitel im Fenster: Nummer, Titel, wie oft es in Altklausuren vorkam, daneben Weniger, Normal, Mehr
   const kapitelWahl = (l, P, k, i, neu) => {
     const z = l.createDiv({ cls: "eba-lp-einst-k" });
@@ -1746,6 +2079,7 @@ module.exports = function (ctx) {
     c.empty();
     const box = c.createDiv({ cls: "eba-lp eba-lp-einst" });
     if (!liste.length) { box.createDiv({ cls: "eba-lp-leer", text: "Kein Modul hat gerade einen Plan." }); return; }
+    if (!nur) tageszeitZeichnen(box, neu);
     for (const P of liste) {
       const m = box.createDiv({ cls: `eba-lp-einst-modul modul-${P.farbe || 0}` });
       const kopf = m.createDiv({ cls: "eba-lp-einst-kopf" });
@@ -1761,6 +2095,32 @@ module.exports = function (ctx) {
       P.kapitel.forEach((k, i) => { if (k.nr && k.zeit) kapitelWahl(kl, P, k, i, n); });
     }
   };
+  // Lernzeit je Wochentag (seit 3.11.2026): so viel füllt „Heute“; schreibt lernplan_tageszeit in die Einstellungen
+  const tageszeitZeichnen = (box, neu) => {
+    const f = app.vault.getAbstractFileByPath(EINSTELLUNGEN);
+    const werte = tageszeitLesen(einstellungen()[FELD_TAG]);
+    const m = box.createDiv({ cls: "eba-lp-einst-modul eba-lp-einst-tag" });
+    m.createDiv({ cls: "eba-lp-einst-kopf" }).createSpan({ cls: "eba-lp-einst-name", text: "Lernzeit am Tag" });
+    m.createDiv({ cls: "eba-lp-einst-hilfe", text: "So viel nimmt sich der Lernplan unter „Heute“ vor, ohne deine Kurse." });
+    TAG_NAME.forEach((name, i) => {
+      const z = m.createEl("label", { cls: "eba-lp-schalter eba-lp-tagzeit" });
+      z.createSpan({ cls: "eba-lp-schalter-text", text: name });
+      const s = z.createEl("select", { cls: "dropdown eba-lp-tagzeit-wahl", attr: { "aria-label": `Lernzeit am ${name}` } });
+      const wahl = TAG_WAHL.indexOf(werte[i]) >= 0 ? TAG_WAHL : TAG_WAHL.concat([werte[i]]).sort((a, b) => a - b);
+      for (const v of wahl) {
+        const o = s.createEl("option", { text: v ? dauerText(v).replace("\u00a0", " ") : "frei", attr: { value: String(v) } });
+        if (v === werte[i]) o.selected = true;
+      }
+      nurStoppen(z);
+      z.addEventListener("click", (e) => e.stopPropagation());
+      s.addEventListener("change", async () => {
+        if (!f) return;
+        try { await app.fileManager.processFrontMatter(f, (fm) => { const l = tageszeitLesen(fm[FELD_TAG]); l[i] = +s.value; fm[FELD_TAG] = l; }); }
+        catch (err) { console.error("Lernplan Lernzeit", err); }
+        neu(f);
+      });
+    });
+  };
   const Modal = O.Modal;
   class EinstellFenster extends (Modal || class {}) {
     constructor(nur) { super(app); this.nur = nur || ""; this.offen = false; }
@@ -1771,15 +2131,27 @@ module.exports = function (ctx) {
       this.inhalt = this.contentEl.createDiv();
       const k = this.contentEl.createDiv({ cls: "modal-button-container" });
       k.createEl("button", { cls: "mod-cta", text: "Fertig" }).addEventListener("click", () => this.close());
+      // Folgt jeder Änderung, solange es offen ist (seit 3.11.2026; vorher zeichnete es nur einmal nach der eigenen Änderung neu:
+      // Erwischte das einen Zwischenstand, fehlten auf einem iPad die Module, bis die App neu startete)
+      this.lauf = 0;
+      this.bald = ctx.entprellen(() => { if (this.offen) this.zeichnen(); }, 400);
+      const bei = (f) => { if (f && relevant(f.path)) this.bald(); };
+      this.refs = [[app.metadataCache, app.metadataCache.on("changed", bei)], [app.vault, app.vault.on("delete", bei)],
+        [app.vault, app.vault.on("rename", (f, alt) => { bei(f); if (relevant(alt)) this.bald(); })]];
       this.zeichnen();
     }
+    // In ein neues Element zeichnen und es erst danach eintauschen; ein älterer Lauf, der später fertig wird, überschreibt nichts
     async zeichnen() {
+      const nr = ++this.lauf, neu = document.createElement("div");
+      try { await einstellungenZeichnen(neu, this.nur, () => this.bald()); }
+      catch (e) { console.error("Lernplan einstellen", e); return; }
+      if (!this.offen || nr !== this.lauf) return;
       const oben = this.modalEl.scrollTop;
-      try { await einstellungenZeichnen(this.inhalt, this.nur, (f) => { nachAenderung(f).then(() => { if (this.offen) this.zeichnen(); }); }); }
-      catch (e) { console.error("Lernplan einstellen", e); }
+      this.inhalt.replaceWith(neu);
+      this.inhalt = neu;
       this.modalEl.scrollTop = oben;
     }
-    onClose() { this.offen = false; this.contentEl.empty(); }
+    onClose() { this.offen = false; for (const [q, r] of this.refs) q.offref(r); this.refs = []; this.contentEl.empty(); }
   }
   // Regler rechts neben dem Titel (.eba-kopf derselben Leseansicht); bei jedem Zeichnen wieder eingesetzt, falls Obsidian den Kopf
   // neu gezeichnet hat. nur: Kürzel in einer Lernplan-Notiz
@@ -1823,8 +2195,11 @@ module.exports = function (ctx) {
     if (!alle.length) { el.createDiv({ cls: "eba-lp-leer", text: LEER }); return; }
     const sem = ctx.modell.semesterFuer(heute);
     warnungZeichnen(el, ungeprueft(alle, D.module, sem ? sem.name : ""), false);
-    // Oben dein Stand, dann das Semester mit Zielnote und gewählter Woche, darunter die Module
+    // Oben was heute dran ist (seit 3.11.2026; beim ersten Mal davor der Einstieg), dann dein Stand, das Semester mit dem Anteil der
+    // Zeit und der gewählten Woche, darunter die Module
     const A = alle.filter(aktiv).sort(nachKlausur);
+    einstiegZeichnen(el, A, heute, neu);
+    await heuteZeichnen(el, A, D, heute, quelle, neu, karten);
     heldZeichnen(el, A, heute);
     planZeichnen(el, A, alle, o, D, heute, quelle, neu);
     kopfRegler(el, "");
@@ -2188,7 +2563,6 @@ module.exports = function (ctx) {
       const art = ctx.modell && ctx.modell.blockArgument ? ctx.modell.blockArgument(el, c, SPRACHE, ["modul", "woche"], "") : "";
       zeichnen(el, c, art, neuZeichnen).catch((e) => { console.error(SPRACHE, e); el.empty(); el.setText(String(quelle)); });
     });
-    const relevant = (p) => p.startsWith(ORDNER) || p.startsWith("Unterlagen/") || p.startsWith("Termine/") || p.startsWith("Module/") || p === EINSTELLUNGEN;
     const bald = ctx.entprellen(neuZeichnen, 600);
     // Neue Kapitellisten (zentral.js meldet sich über ctx.lernplanAnzeige) und neue Folien (Links in den Notizen): abgleichen
     const abgleichBald = ctx.entprellen(() => { zentralAbgleichen(); }, 2000);
@@ -2218,9 +2592,10 @@ module.exports = function (ctx) {
 
   const api = { kapitelLesen, gewichte, planen, zielVon, stand, kapazitaet, sichtbar, zentralNotiz, zentralAuswahl, listeZeilen, nichtMehrDran,
     folienVon, anteilAusZielnote, faktorenLesen, nachVorlesung, altklausurPlan, altersSchluessel, planBild, modulZeile, serverListen,
-    listeLesen, serverStand, vorlernenSetzen, sollHeute, heldDaten, heldText, ANTEILE, anteilWahl, zielBei, zielVorschau, zielTeile, modulFarben,
+    listeLesen, serverStand, kapitelStand, vorlernenSetzen, sollHeute, heldDaten, heldText, ANTEILE, anteilWahl, zielBei, zielVorschau, zielTeile, modulFarben,
     planSemester, spaeterSemester, terminWahl, terminText, bisText, leisteFenster, ungeprueft, warnungTeile,
-    ZEIT_FAKTOR, relevanzStufe, zeitStufe, zeitWahlLesen, zeitSetzen, zeitAnSetzen, zeitSatz };
+    ZEIT_FAKTOR, relevanzStufe, zeitStufe, zeitWahlLesen, zeitSetzen, zeitAnSetzen, zeitSatz,
+    TAG_VORGABE, tageszeitLesen, tagIndex, minutenVon, dauerText, kandidatenVon, heuteFuellen, luecken, aufgabeKurz };
   ctx.lernplan = api;
   return Object.assign({ registrieren, start, zentralAbgleichen }, api);
 };

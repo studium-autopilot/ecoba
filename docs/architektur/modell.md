@@ -136,7 +136,9 @@ vorher stand der Satz nur im Alma-Knopf über dem Raster der Seite Stundenplan, 
 Lehrveranstaltungen“. Fällt eine Lehrveranstaltung selbst aus,
 zeigt die Woche trotzdem ihre Kästen, damit man den Ausfall sieht. Stunden von–bis aus allen Serien des
 Semesters (dazu Einzeltermine und geänderte Zeiten der Woche), damit das Raster von Woche zu Woche gleich bleibt; Höhe am
-Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Überschneiden sich Kästen eines Tages, stehen sie nebeneinander
+Stundenplan 697 px, am Dashboard feste Viertelstunden (CSS). Eine Vorlesung füllt ihren ganzen Block (c.t.
+10:15–11:45 steht von 10 bis 12, `blockVon`/`blockBis`), Übungen und Tutorien stehen genau (seit 03.11.2026: so hebt sich die
+Vorlesung ab); Zeit im Kasten, Tooltip und Widget bleiben die echten. Überschneiden sich Kästen eines Tages, stehen sie nebeneinander
 (`spalten`, `lage`: Breite und Abstand links im Stil). Ein blasser Kasten (`spaeter`) teilt sich die Breite nie mit einem
 echten (seit 19.10.2026; vorher halbierte ein Tutorium, das erst in zwei Wochen begann, eine Vorlesung): Überschneidet er
 einen, steht er schmal am rechten Rand (22 %, Klasse `schmal`, nur der Kurzname), die echten Kästen daneben behalten 78 %.

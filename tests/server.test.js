@@ -127,11 +127,18 @@ test("Code für ein weiteres Gerät: nur mit frischer Zeit und neuem Zufallswert
     assert.deepEqual(geraetCode(v, anfrage, spaeter), [400, { fehler: "uhr" }]);
     assert.equal(geraetCode(v, { schema: 1, zeit: spaeter.toISOString(), nonce: "danach-".padEnd(22, "x") }, spaeter)[0], 200);
     assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(v, "geraete.json"), "utf8")).nonces), ["danach-".padEnd(22, "x")], "abgelaufener Zufallswert weg");
-    // höchstens GERAET.nonces offene Zufallswerte
+    // höchstens GERAET.nonces offene Zufallswerte je Schlüssel (Werte einer älteren Fassung, nur der Ablauf, zählen ohne Schlüssel)
     const voll = {};
     for (let i = 0; i < GERAET.nonces; i++) voll["voll-" + String(i).padStart(17, "0")] = zeit(60e3);
     fs.writeFileSync(path.join(v, "geraete.json"), JSON.stringify({ ausgestellt: [], nonces: voll, verbunden: [] }));
     assert.deepEqual(geraetCode(v, { schema: 1, zeit: zeit(0), nonce: "noch-einer-".padEnd(22, "x") }, jetzt), [429, { fehler: "zu-viele" }]);
+    const je = {};
+    for (let i = 0; i < GERAET.nonces; i++) je["dieb-" + String(i).padStart(17, "0")] = [zeit(60e3), "d".repeat(22)];
+    fs.writeFileSync(path.join(v, "geraete.json"), JSON.stringify({ ausgestellt: [], nonces: je, verbunden: [] }));
+    assert.deepEqual(geraetCode(v, { schema: 1, zeit: zeit(0), nonce: "dieb-noch-".padEnd(22, "x") }, jetzt, "", { wer: "d".repeat(22) }), [429, { fehler: "zu-viele" }]);
+    assert.equal(geraetCode(v, { schema: 1, zeit: zeit(0), nonce: "anderes-".padEnd(22, "x") }, jetzt, "", { wer: "gemeinsam" })[0], 200,
+      "ein Gerät mit vielen Anfragen hält die der anderen nicht auf");
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(v, "geraete.json"), "utf8")).nonces["anderes-".padEnd(22, "x")], [zeit(GERAET.uhr), "gemeinsam"]);
   } finally { fs.rmSync(v, { recursive: true, force: true }); }
 });
 
@@ -534,7 +541,8 @@ test("Dienst: Status offen, Eingang nur mit Schlüssel und verschlüsselt, Stand
     }
     // direkt auf 127.0.0.1 ohne Weiterleitung (installieren.sh, studium-server status): alles wie mit Schlüssel
     const lokal = await (await fetch(`${basis}/v1/status`)).json();
-    assert.deepEqual(Object.keys(lokal), Object.keys(status));
+    assert.deepEqual(Object.keys(lokal), Object.keys(status).filter((k) => k !== "geraete"), "die Geräte nur mit Schlüssel");
+    assert.deepEqual(status.geraete, []);
     assert.equal(lokal.claude, "angemeldet");
     assert.ok("grenzen" in lokal && Array.isArray(lokal.verbunden));
 
@@ -935,9 +943,11 @@ test("Installer: eigene Ordner für Web-Dienst und Abruf; ein Datenordner bis 0.
     fs.writeFileSync(p("bin", "sudo"), '#!/usr/bin/env bash\necho "sudo $1 $2" >> "$AUFRUFE"\nshift 2\nexec "$@"\n', { mode: 0o755 });
     const ablauf = ["set -euo pipefail", 'fehler() { echo "Fehler: $*" >&2; exit 1; }', skript.slice(anfang, ende),
       'node() { echo "fchmod $4 $3" >> "$AUFRUFE"; }', 'ordnung "$1"'].join("\n");
+    // als Datei, nicht mit bash -c: Git Bash unter Windows kürzt eine Befehlszeile über 8191 Zeichen
+    fs.writeFileSync(p("ablauf.sh"), ablauf);
     const lauf = () => {
       fs.rmSync(p("aufrufe"), { force: true });
-      const r = spawnSync("bash", ["-c", ablauf, "-", D], { encoding: "utf8",
+      const r = spawnSync("bash", [vorwaerts(p("ablauf.sh")), D], { encoding: "utf8",
         env: Object.assign({}, process.env, { AUFRUFE: p("aufrufe"), PATH: p("bin") + path.delimiter + process.env.PATH }) });
       assert.equal(r.status, 0, r.stderr);
       return fs.existsSync(p("aufrufe")) ? fs.readFileSync(p("aufrufe"), "utf8").split(D).join("D").trim().split("\n") : [];
@@ -973,11 +983,16 @@ test("Installer: eigene Ordner für Web-Dienst und Abruf; ein Datenordner bis 0.
     }
     assert.ok(!stopp.some((n) => n.startsWith("studium-server-aktualisieren")), "nicht die Aktualisierung, die den Installer startet");
     const rechte = ["fchmod 2711 D", "fchmod 0700 D/laeufe", "fchmod 2770 D/eingang", "fchmod 2750 D/unterlagen", "fchmod 2770 D/unterlagen/neu",
-      "fchmod 2770 D/unterlagen/opus", "fchmod 2770 D/unterlagen/kapitel", "fchmod 2771 D/web", "fchmod 2770 D/abruf"];
+      "fchmod 2770 D/unterlagen/opus", "fchmod 2770 D/unterlagen/kapitel", "fchmod 2771 D/web", "fchmod 2770 D/abruf", "fchmod 0755 D/zentral",
+      "fchmod 0755 D/claude-app", "fchmod 0700 D/claude-app/schalter", "fchmod 2750 D/claude-app/codes", "fchmod 2750 D/claude-app/trennen",
+      "fchmod 2750 D/claude-app/daten", "fchmod 2750 D/claude-app/aus-mcp"];
     assert.deepEqual(erste.filter((z) => z.startsWith("fchmod ")), rechte);
     assert.deepEqual(erste.filter((z) => z.startsWith("chown -h -- ")).map((z) => z.slice(12)), ["studium:studium-web D", "studium:studium D/laeufe",
       "studium:studium-web D/eingang", "studium:studium-web D/unterlagen", "studium:studium-web D/unterlagen/neu", "studium:studium-web D/unterlagen/opus",
-      "studium:studium-web D/unterlagen/kapitel", "studium-web:studium-web D/web", "studium-abruf:studium D/abruf"]);
+      "studium:studium-web D/unterlagen/kapitel", "studium-web:studium-web D/web", "studium-abruf:studium D/abruf", "studium-zentral:studium-zentral D/zentral",
+      // Übergabe an den Connector: der Ordner gehört root, darin je Schreiber ein eigener (claude-app.mjs)
+      "root:root D/claude-app", "studium-web:studium-web D/claude-app/schalter", "studium-web:studium-mcp D/claude-app/codes",
+      "studium-web:studium-mcp D/claude-app/trennen", "studium-web:studium-mcp D/claude-app/daten", "studium-mcp:studium-web D/claude-app/aus-mcp"]);
     const nachher = inhalt(D);
     assert.deepEqual(nachher, {
       "web/takt.json": '{"uni_postfach":30}', "web/knopf.json": '{"zuletzt":"x"}', "web/abruf.json": "{}", "web/stand-plugin.json": '{"module":["B110"]}',
@@ -1101,7 +1116,9 @@ test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von diens
     fs.mkdirSync(p("daten", "web", "verbinden"), { recursive: true });
     // systemctl und chown schreiben nur auf, was sie tun sollen
     for (const b of ["systemctl", "chown"]) fs.writeFileSync(p("bin", b), `#!/usr/bin/env bash\necho "${b} $*" >> "$AUFRUFE"\n`, { mode: 0o755 });
-    const ablauf = ["set -euo pipefail", funktion, "root_noetig() { :; }", 'als_web() { echo "als_web $1" >> "$AUFRUFE"; "$@"; }', "KONFIG=$1 DATEN=$2", "schluessel_erneuern"].join("\n");
+    const ablauf = ["set -euo pipefail", funktion, "root_noetig() { :; }", 'als_web() { echo "als_web $1" >> "$AUFRUFE"; "$@"; }',
+      'claude_app_leeren() { echo "claude_app_leeren" >> "$AUFRUFE"; }', 'claude_app_anwenden() { echo "claude_app_anwenden" >> "$AUFRUFE"; }',
+      "KONFIG=$1 DATEN=$2", "schluessel_erneuern"].join("\n");
     const lauf = () => {
       fs.rmSync(p("aufrufe"), { force: true });
       const r = spawnSync("bash", ["-c", ablauf, "-", vorwaerts(p("dienst.json")), vorwaerts(p("daten"))], { encoding: "utf8",
@@ -1111,6 +1128,8 @@ test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von diens
     const bisher = { zugang: "z".repeat(43), schluessel: "s".repeat(43), adresse: "https://203-0-113-5.ss" + "lip.io", ip: "203.0.113.5", port: 8743, version: "0.7.5" };
     fs.writeFileSync(p("dienst.json"), JSON.stringify(bisher));
     for (const n of ["a".repeat(64) + ".json", "b".repeat(64) + ".json.eingeloest"]) fs.writeFileSync(p("daten", "web", "verbinden", n), "{}");
+    fs.mkdirSync(p("daten", "claude-app", "codes"), { recursive: true });
+    fs.writeFileSync(p("daten", "claude-app", "codes", "c".repeat(64) + ".json"), "{}");
     let e = lauf();
     assert.equal(e.status, 0, e.fehler);
     const neu = JSON.parse(fs.readFileSync(p("dienst.json"), "utf8"));
@@ -1127,7 +1146,9 @@ test("Schlüssel erneuern (Gerät verloren): neue Schlüssel, der Rest von diens
     assert.deepEqual(fs.readdirSync(p("daten", "web", "verbinden")), [], "offene Codes weg (als Benutzer des Dienstes)");
     assert.ok(!fs.existsSync(p("dienst.json.neu")));
     assert.deepEqual(e.aufrufe, ["systemctl stop studium-server-dienst.service", "als_web find", `chown root:studium-web ${vorwaerts(p("dienst.json"))}.neu`,
-      "systemctl start studium-server-dienst.service"], "erst still, dann die neue Datei (lesbar für den Dienst), dann wieder an");
+      "als_web find", "claude_app_leeren", "claude_app_anwenden", "systemctl start studium-server-dienst.service"],
+    "erst still, dann die neue Datei (lesbar für den Dienst), Codes und Tokens der Claude-App weg, dann wieder an");
+    assert.deepEqual(fs.readdirSync(p("daten", "claude-app", "codes")), [], "offene Codes der Claude-App weg");
     assert.match(e.aus, /Jedes Gerät muss sich neu verbinden/);
     // dienst.json unlesbar: nichts ersetzt, Exit nicht 0, der Dienst läuft wieder
     fs.writeFileSync(p("dienst.json"), "{");
@@ -1174,7 +1195,7 @@ test("Schutz der Dienste: jeder Dienst ohne root im Sandkasten; der Web-Dienst s
   const einheiten = Object.fromEntries([...skript.matchAll(/^einheit (studium-server-[\w@.-]+) <<'UNIT'\n([\s\S]*?)\nUNIT$/gm)].map((m) => [m[1],
     m[2].split("\n").filter((z) => /^\w+=/.test(z)).reduce((o, z) => { const i = z.indexOf("="); (o[z.slice(0, i)] ||= []).push(z.slice(i + 1)); return o; }, {})]));
   const dienste = Object.keys(einheiten).filter((n) => n.endsWith(".service") && einheiten[n].User);
-  assert.deepEqual(dienste.sort(), ["abruf", "dienst", "gmail", "lauf", "speicher", "zustand"].map((n) => `studium-server-${n}.service`));
+  assert.deepEqual(dienste.sort(), ["abruf", "dienst", "gmail", "lauf", "mcp", "speicher", "zentral", "zustand"].map((n) => `studium-server-${n}.service`));
   const PFLICHT = { NoNewPrivileges: "yes", CapabilityBoundingSet: "", ProtectSystem: "strict", ProtectHome: "yes", PrivateTmp: "yes", PrivateDevices: "yes",
     ProtectKernelTunables: "yes", ProtectKernelModules: "yes", ProtectKernelLogs: "yes", ProtectControlGroups: "yes", ProtectClock: "yes", ProtectHostname: "yes",
     ProtectProc: "invisible", RestrictNamespaces: "yes", RestrictRealtime: "yes", RestrictSUIDSGID: "yes", LockPersonality: "yes", SystemCallArchitectures: "native",
@@ -1211,11 +1232,16 @@ test("Schutz der Dienste: jeder Dienst ohne root im Sandkasten; der Web-Dienst s
   // Anmeldung lesen noch die Prozesse von studium beenden; nur der Lauf bekommt die Gruppe des Web-Dienstes dazu
   const benutzer = Object.fromEntries(dienste.map((n) => [n.replace(/^studium-server-|\.service$/g, ""), [einheiten[n].User[0], einheiten[n].Group[0]]]));
   assert.deepEqual(benutzer, { abruf: ["studium-abruf", "studium"], dienst: ["studium-web", "studium-web"], gmail: ["studium", "studium"],
-    lauf: ["studium", "studium"], speicher: ["studium", "studium"], zustand: ["studium", "studium"] });
+    lauf: ["studium", "studium"], mcp: ["studium-mcp", "studium-mcp"], speicher: ["studium", "studium"], zentral: ["studium-zentral", "studium-zentral"],
+    zustand: ["studium", "studium"] });
+  // Die zentralen Daten kommen aus dem Internet: eigener Benutzer (nicht der des Laufs, dessen Prozesse er sonst über /proc sähe),
+  // Speichergrenze
+  assert.deepEqual(einheiten["studium-server-zentral.service"].MemoryMax, ["256M"]);
   assert.deepEqual(dienste.filter((n) => einheiten[n].SupplementaryGroups), ["studium-server-lauf.service"]);
   assert.deepEqual(einheiten["studium-server-lauf.service"].SupplementaryGroups, ["studium-web"]);
   const D = "/var/lib/studium-server";
-  assert.deepEqual(dienst.ReadWritePaths, [`${D}/web ${D}/eingang ${D}/unterlagen`], "Web-Dienst schreibt nur in web/, eingang/, unterlagen/");
+  assert.deepEqual(dienst.ReadWritePaths, [`${D}/web ${D}/eingang ${D}/unterlagen ${D}/claude-app`], "Web-Dienst schreibt nur in web/, eingang/, unterlagen/, claude-app/");
+  assert.ok(dienst.InaccessiblePaths[0].split(" ").includes("-/var/lib/studium-mcp"), "Web-Dienst sieht die Tokens des Connectors nicht");
   assert.ok(dienst.InaccessiblePaths[0].split(" ").includes(`-${D}/abruf`), "Web-Dienst sieht die Rohdaten nicht");
   const abruf = einheiten["studium-server-abruf.service"];
   assert.deepEqual(abruf.ReadWritePaths, [`${D}/abruf`], "Abruf schreibt nur in abruf/");
@@ -1513,5 +1539,30 @@ test("Installer: neue Adresse (IP geändert) → neue Schlüssel und keine offen
     assert.deepEqual([neu.k.adresse, neu.k.ip, neu.k.port, neu.k.version], ["https://198-51-100-7.ss" + "lip.io", "198.51.100.7", 8743, "0.7.7"]);
     const gleich = lauf(bisher.adresse, "0");
     assert.deepEqual([gleich.aus.trim(), gleich.k.zugang, gleich.k.schluessel], ["Schlüssel unverändert", bisher.zugang, bisher.schluessel]);
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
+test("Geräte über die Befehlszeile: geraete und geraet-trennen als Benutzer des Web-Dienstes über geraete.mjs (nur lesen, eine Marke), in der Hilfe", () => {
+  const skript = fs.readFileSync(path.join(SERVER, "studium-server"), "utf8");
+  assert.match(skript, /^ {2}geraete\) root_noetig geraete; als_web node "\$PAKET\/geraete\.mjs" liste ;;$/m);
+  assert.match(skript, /^ {2}geraet-trennen\) root_noetig geraet-trennen; shift; als_web node "\$PAKET\/geraete\.mjs" trennen "\$@" ;;$/m, "mit --nur-dieses");
+  assert.match(skript, /^studium-server geraete {17}\S/m, "in der Hilfe");
+  assert.match(skript, /^studium-server geraet-trennen <id> {5}\S/m);
+  assert.match(skript, /^studium-server geraet-trennen <id> --nur-dieses$/m);
+  assert.match(skript, /^ {2}gemeinsam-beenden\) root_noetig gemeinsam-beenden; als_web node "\$PAKET\/geraete\.mjs" gemeinsam-beenden ;;$/m);
+  assert.match(skript, /^studium-server gemeinsam-beenden {7}\S/m);
+  // wie studium-server es aufruft: Daten und dienst.json aus der Umgebung
+  const tmp = ordner();
+  try {
+    const konfig = path.join(tmp, "dienst.json");
+    fs.writeFileSync(konfig, JSON.stringify({ zugang: "z".repeat(43), schluessel: "s".repeat(43) }));
+    const lauf = (...argv) => spawnSync(process.execPath, [path.join(SERVER, "geraete.mjs"), ...argv], { encoding: "utf8",
+      env: Object.assign({}, process.env, { STUDIUM_SERVER_DATEN: tmp, STUDIUM_SERVER_KONFIG: konfig }) });
+    const r = lauf("liste");
+    assert.deepEqual([r.status, r.stdout.trim()], [0, "Noch kein Gerät mit eigenen Schlüsseln."]);
+    const t = lauf("trennen", "x".repeat(22));
+    assert.deepEqual([t.status, t.stderr.trim()], [1, "Kein Gerät mit dieser Kennung (sudo studium-server geraete)."]);
+    assert.equal(lauf("unbekannt").status, 2);
+    assert.ok(!fs.existsSync(path.join(tmp, "web")), "nichts angelegt");
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });

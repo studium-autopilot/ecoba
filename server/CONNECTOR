@@ -1,0 +1,5 @@
+# Notschalter für den Connector (Claude-App) auf allen eigenen Servern: „an“ oder „aus“ (erste Zeile ohne #; fehlt sie oder steht
+# etwas anderes darin: aus). Mit „aus“ in einem signierten Release hält jeder Server den Connector bei seinem nächsten Update an,
+# entfernt seine Wege in Caddy, löscht seine Tokens und gibt keine Codes mehr aus (installieren.sh, studium-server claude-app
+# anwenden, dienst.mjs). Ein späteres Release mit „an“ schaltet nichts ein: Das tut nur ein neuer Code aus Obsidian.
+an

@@ -1,4 +1,4 @@
-# Eigener Server mit Claude
+# Eigener Server
 
 Für Technische nutzt Studium Autopilot einen eigenen, kostenlosen Server bei Oracle, auf dem Claude mit dem eigenen Abo Termine
 aus Mails findet und Begleitnotizen schreibt. Seit 0.5.0 Teil jedes Releases (`studium-server.tar.gz`).
@@ -7,7 +7,8 @@ Dazu gehören die Prüfung des Oracle-Kontos (`stand.mjs`), die Schritte der Ein
 der Einrichtungs-Skill (`skill/server-einrichten/`), der Platzsucher (`platzsucher.py`), der Server selbst (Installer, Web-Dienst
 mit verschlüsseltem Datenkanal, Speicherreserve, Uni-Zugang, Befehle), der Abruf des Uni-Postfachs ohne KI (`abrufen.py`) und
 der Claude-Lauf mit dem Skill (`lauf.mjs`, `skill/studium-autopilot/`, Prüfung `eingang.mjs`). Die Gegenstelle im Plugin ist
-`server.js` (Zeile „Eigener Server“). Noch nicht: Abrufe von ILIAS-Dateien und Alma.
+`server.js` (Zeile „Eigener Server“). Noch nicht: Abrufe von ILIAS-Dateien und Alma. Wer will, verbindet den Server mit der
+Claude-App (claude.ai, Apps für iPhone, Android und Desktop): siehe „Connector für die Claude-App“ unten.
 
 **Einrichtung:** Ein Claude-Skill (`skill/server-einrichten/`: `SKILL.md`, `schritte.md`, `kosten.md`) führt in Claude Code (Tab
 „Code“ in Claude Desktop) durch die Schritte 0 bis 7, im eingebauten Browser von Claude Code; standardmäßig klickt Claude, auf
@@ -343,9 +344,12 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 | Benutzer `studium` | führt Claude-Lauf, Zustand, Speicherreserve und Gmail-Anstoß aus; Claude Code und seine Anmeldung liegen in `/var/lib/studium` (`.local/bin/claude`, `.claude/`, `.claude.json`; 0700, nur er). Nur Claude-Lauf und Zustand sehen diesen Ordner (siehe „Schutz der Dienste“) |
 | Benutzer `studium-web` | nur der Web-Dienst (bis 0.7.6 lief er als `studium`): Er kann weder die Claude-Anmeldung noch Mails, Lauf-Ordner oder Uni-Zugang lesen und die Prozesse von `studium` weder beenden noch ansehen |
 | Benutzer `studium-abruf` | nur der Abruf des Uni-Postfachs; nur er kann den entschlüsselten Uni-Zugang lesen (Gruppe `studium`: Der Lauf übernimmt seine Rohdaten) |
+| Benutzer `studium-zentral` | nur das Holen der zentralen Daten für den Connector (bis 03.11.2026 als `studium`): Es spricht mit dem Internet und schreibt nur `zentral/`; als `studium` sähe es über `/proc` einen laufenden Claude-Lauf und darüber die Claude-Anmeldung |
+| Benutzer `studium-mcp` | nur der Connector für die Claude-App: Er sieht nur, was der Web-Dienst ihm unter `claude-app/` hinlegt, und die zentralen Daten; seine Tokens liegen in `/var/lib/studium-mcp` (0700, nur er). Auch auf Servern, die die Claude-App nie benutzen (dann läuft nichts als er) |
 | `/opt/studium-server/<version>` | das Paket; `aktuell` zeigt auf die laufende Version. Es bleiben diese und die bisher laufende (zum Zurückrollen), alle anderen entfernt der Installer. Darin `allowed_signers` und `revoked_keys`: die Schlüssel, mit denen `aktualisieren` die Signatur des nächsten Pakets prüft, und gesperrte |
-| `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte; `root:studium-web` 0640, lesen nur root und der Web-Dienst, allen anderen Diensten sperrt systemd den Ordner) |
-| `/var/lib/studium-server` | je Teil ein eigener Ordner (siehe „Wer was liest und schreibt“): `web/` (Web-Dienst: Einmal-Codes, `geraete.json` mit den Codes aus Obsidian der letzten 24 Stunden, Zufallswerten gegen Wiederholung und den letzten 20 Verbindungen; Stand und Takt aus Obsidian), `abruf/` (Abruf: Rohdaten in `roh/`), `laeufe/` (Claude-Lauf), `eingang/` (Ergebnisse für das Plugin), `unterlagen/` (für den Lauf); im Ordner selbst Zustand und Bestand des Laufs |
+| `/etc/studium-server/dienst.json` | Adresse, Zugangsschlüssel und Datenschlüssel (je 32 Byte, die gemeinsamen; jedes Gerät hat seit 03.11.2026 eigene in `web/geraete-schluessel.json`, siehe „Schlüssel je Gerät“; `root:studium-web` 0640, lesen nur root und der Web-Dienst, allen anderen Diensten sperrt systemd den Ordner) |
+| `/etc/studium-server-mcp/konfig.json` | Konfiguration des Connectors (Adresse für Anmeldung und Tokens, Datenordner, Zustand; `root:studium-mcp` 0640), bei jeder Installation neu |
+| `/var/lib/studium-server` | je Teil ein eigener Ordner (siehe „Wer was liest und schreibt“): `web/` (Web-Dienst: Einmal-Codes, `geraete.json` mit den Codes aus Obsidian der letzten 24 Stunden, Zufallswerten gegen Wiederholung und den letzten 20 Verbindungen, `geraete-schluessel.json` mit den Geräten und ihren eigenen Schlüsseln; Stand und Takt aus Obsidian), `abruf/` (Abruf: Rohdaten in `roh/`), `laeufe/` (Claude-Lauf), `eingang/` (Ergebnisse für das Plugin), `unterlagen/` (für den Lauf), `zentral/` und `claude-app/` (Connector für die Claude-App); im Ordner selbst Zustand und Bestand des Laufs |
 | `studium-server-dienst` | Web-Dienst `dienst.mjs` als Benutzer `studium-web`, nur auf 127.0.0.1; Caddy stellt `/v1/` per HTTPS bereit, alles andere ist 404. Darf selbst nur mit 127.0.0.1 sprechen, schreibt nur in `web/`, `eingang/` und `unterlagen/` und sieht weder die Claude-Anmeldung noch die Lauf-Ordner oder die Rohdaten (siehe „Schutz der Dienste“) |
 | `studium-server-speicher` | Speicherreserve `speicher-reserve.mjs` (25 % des Arbeitsspeichers), damit Oracle den Server nicht wegen Leerlaufs anhält; „an“ meldet der Zustand nur, wenn die PID in `speicher-reserve.json` lebt und laut `/proc/<pid>/cmdline` die Reserve ist (nach einem Neustart kann sie einem anderen Prozess gehören) |
 | `studium-server-zustand.timer` | alle 15 Minuten `zustand.mjs`: Claude angemeldet (`claude auth status` ohne Nutzungs- und Fehlerberichte, `DISABLE_TELEMETRY`, `DISABLE_ERROR_REPORTING`), Uni-Zugang, Reserve, LiveSync |
@@ -353,6 +357,8 @@ diese hat sie entfernt oder umbenannt), schaltet er ab und löscht sie; so läuf
 | `studium-server-lauf.path` | startet den Claude-Lauf `lauf.mjs`, sobald ein Abruf oder Knopf einen Anstoß schreibt; Zeitgrenze 100 Minuten (ein Lauf mit Opus und der gewöhnliche, je bis 45 Minuten) |
 | `studium-server-gmail.timer` | 07:30, 13:30 und 19:30 Uhr (Berlin): Anstoß mit Gmail-Suche, wenn der Takt es will (dreimal am Tag: letzte Suche über 2 Stunden her, so ersetzt der Sicherheitslauf die um 07:30; einmal: über 20 Stunden; nie: nie) |
 | `studium-server-aktualisieren.timer` | täglich (höchstens 30 Minuten je Lauf, `TimeoutStartSec`): Claude Code (`claude update`, nicht während eines Laufs, ohne Nutzungs- und Fehlerberichte), Pakete, dann ein neues Server-Paket aus dem Release, nur geprüft, gestaffelt und mit Zurückrollen (siehe „Updates des Server-Pakets“) |
+| `studium-server-mcp` | Connector `mcp.mjs` als `studium-mcp` auf 127.0.0.1:8744, nur solange er in Obsidian an ist (`studium-server-mcp.path` und `-schalter.service`, siehe „Connector für die Claude-App“) |
+| `studium-server-zentral.timer` | alle 15 Minuten `zentral.mjs` als `studium-zentral` (höchstens 256 MB Speicher), nur solange der Connector an ist: die zentralen Termine und Kapitellisten nach `zentral/` (der Connector selbst hat kein Netz) |
 | Firewall | Port 443 in den iptables-Regeln des Servers (die Sicherheitsliste des Netzes legt `einrichten.mjs netz` an; die Standardliste, die Oracle mit dem Netz anlegt und die dessen Kennzeichen erbt, erlaubt nur 22 und zählt nicht als eigene) |
 
 ### Schutz der Dienste (systemd)
@@ -363,12 +369,13 @@ keine Capabilities, System schreibgeschützt (`ProtectSystem=strict`, schreiben 
 ohne `@privileged` (ein gesperrter Aufruf scheitert mit `EPERM`, statt den Dienst zu beenden), fremde Prozesse unsichtbar.
 `MemoryDenyWriteExecute` nur beim Abruf (Python); Node.js und Claude Code übersetzen zur Laufzeit. Einen Port öffnen darf nur der
 Web-Dienst: Alle anderen Dienste (Lauf, Zustand, Abruf, Gmail-Anstoß, Speicherreserve, die Prüfung des Aufbau-Fensters von LiveSync)
-haben `SocketBindDeny=any` (Verbindungen nach außen bleiben möglich). So kann keiner von ihnen während eines Neustarts des Web-Dienstes
+haben `SocketBindDeny=any` (Verbindungen nach außen bleiben möglich), der Connector für die Claude-App dazu nur `SocketBindAllow=tcp:8744`. So kann keiner von ihnen während eines Neustarts des Web-Dienstes
 dessen Port 8743 belegen und sich als er ausgeben; „Prüfen“ im Installer verlangt dazu, dass auf dem Port genau der Prozess der
 Einheit lauscht (`ss -p` gegen ihre MainPID). Bleibt offen: Während eines Neustarts hält niemand den Port fest (keine
 `.socket`-Einheit), ein Prozess von root oder außerhalb dieser Dienste könnte ihn in dem Moment belegen.
 Wertung von `systemd-analyze security` in Ubuntu 24.04 (systemd 255, 01.11.2026): Speicherreserve und Gmail-Anstoß 0,9
-(„SAFE“), Web-Dienst 1,2, Abruf, Claude-Lauf und Zustand 1,4 („OK“; 10 wäre ungeschützt).
+(„SAFE“), Web-Dienst 1,2, Abruf, Claude-Lauf und Zustand 1,4 („OK“; 10 wäre ungeschützt). Connector und zentrale Daten sind
+noch nicht gemessen.
 
 | Dienst | sieht nicht | Netz |
 |---|---|---|
@@ -377,6 +384,8 @@ Wertung von `systemd-analyze security` in Ubuntu 24.04 (systemd 255, 01.11.2026)
 | Zustand | `/etc/studium-server`, entschlüsselte Zugänge (ob der Uni-Zugang gespeichert ist, sieht er am Dateinamen), `web/`, Eingang, Unterlagen | ja (`claude auth status`) |
 | Abruf | Home von `studium`, `/etc/studium-server`, Lauf-Ordner, Eingang, Unterlagen, Einmal-Codes und LiveSync-Links (`web/verbinden/`, `web/livesync-links/`) | ja (IMAP) |
 | Speicherreserve, Gmail-Anstoß | Home von `studium`, `/etc/studium-server`, Uni-Zugang | keins |
+| Connector (Claude-App) | Home von `studium`, `/etc/studium-server`, Uni-Zugang, `web/`, Eingang, Unterlagen, Lauf-Ordner, Rohdaten, die Marke in `claude-app/schalter/`, Caddy, CouchDB | nur 127.0.0.1 (Caddy), ohne den Port des Web-Dienstes (eine Regel in `iptables` nach Besitzer, `studium-server claude-app anwenden`): direkt dort gäbe der den ganzen Status ohne Schlüssel |
+| zentrale Daten | Home von `studium`, `/etc/studium-server`, Uni-Zugang, `web/`, Eingang, Unterlagen, `claude-app/` | ja (GitHub Pages) |
 
 **Eigene Benutzer:** Der Web-Dienst nimmt Anfragen aus dem Internet an und läuft darum als eigener Benutzer `studium-web`. Ein
 Fehler darin reicht so weder an die Anmeldung von Claude noch an Mails, Lauf-Ordner oder einen laufenden
@@ -423,10 +432,16 @@ Pfade in `/var/lib/studium-server`. Eine 2 vorn (setgid) heißt: Was im Ordner e
 | alles andere darin (`anstoss`, `termine.json`, `termine-quellen.json`, `kapitel.json`, `hinweise-bisher.json`, `nutzung.json`, `einstellungen.json`, `livesync-an` …) | `studium`, 0600 | Lauf, Gmail-Anstoß, `studium-server`, `livesync.sh` (als `studium`) | niemand; ob ein Anstoß wartet, sieht der Web-Dienst am Namen |
 | `laeufe/` | `studium:studium`, 0700 | Lauf | niemand (Mails, Auszug aus dem Tresor, Rechte des Laufs) |
 | `quarantaene/`, `mail-fehler.json` | `studium`, 0700 bzw. 0600 | Lauf | niemand (Mails, an denen allein zwei Läufe scheiterten, bis sie jemand wieder einreiht; Fehlschläge und Gruppe je Mail) |
-| `web/` | `studium-web:studium-web`, 2771 | Web-Dienst; `studium-server verbinden`, `schluessel-erneuern` und `livesync.sh` als `studium-web` | Lauf (Gruppe): `stand-plugin.json` (0640), nimmt den Anstoß `web/anstoss`; Lauf, Abruf und Gmail-Anstoß: `takt.json`, der Abruf auch `knopf.json` (beide 0644). `verbinden/`, `livesync-links/` und `geraete.json` nur der Web-Dienst (0700 bzw. 0600) |
+| `web/` | `studium-web:studium-web`, 2771 | Web-Dienst; `studium-server verbinden`, `schluessel-erneuern`, `geraet-trennen` (nur die Marke `getrennt/<id>`, die der Dienst anwendet und löscht), `gemeinsam-beenden` (die Marke `gemeinsam-aus.json`, offene Codes des gemeinsamen Schlüssels weg) und `livesync.sh` als `studium-web` | Lauf (Gruppe): `stand-plugin.json` (0640), nimmt den Anstoß `web/anstoss`; Lauf, Abruf und Gmail-Anstoß: `takt.json`, der Abruf auch `knopf.json` (beide 0644). `verbinden/`, `livesync-links/`, `getrennt/`, `geraete.json` und `geraete-schluessel.json` nur der Web-Dienst (0700 bzw. 0600; `studium-server geraete` liest das Verzeichnis der Geräte als `studium-web`, ohne Schlüssel auszugeben) |
 | `abruf/` | `studium-abruf:studium`, 2770 | Abruf: `roh/`, `abruf-stand.json`, `uni-zugang-falsch`, `anstoss` | Lauf (Gruppe): übernimmt `roh/` und den Anstoß; Zustand: `uni-zugang-falsch` |
 | `eingang/` | `studium:studium-web`, 2770 | Lauf (Ergebnisse, 0640) | Web-Dienst: gibt sie aus und löscht Übernommenes |
 | `unterlagen/neu/`, `opus/`, `kapitel/` | `studium:studium-web`, 2770 (`unterlagen/` selbst 2750) | Web-Dienst (0640) | Lauf (Gruppe): übernimmt sie und legt sie nach einem Fehlschlag zurück |
+| `zentral/` | `studium-zentral:studium-zentral`, 0755 | zentrale Daten (`zentral-cache.json`, 0644: öffentliche Daten) | Connector |
+| `claude-app/` | `root:root`, 0755 | niemand (nur root legt darin Ordner an) | jeder geht hindurch |
+| `claude-app/schalter/` | `studium-web:studium-web`, 0700 | Web-Dienst (Marke `an`) | niemand; root sieht nur, ob die Marke da ist (systemd) |
+| `claude-app/codes/`, `trennen/`, `daten/` | `studium-web:studium-mcp`, 2750 | Web-Dienst (Einmal-Codes nur als Hash, Wünsche zum Trennen, `lage.json`; 0640) | Connector (Gruppe), nur lesend |
+| `claude-app/aus-mcp/` | `studium-mcp:studium-web`, 2750 | Connector (`verbindungen.json`, 0640) | Web-Dienst (Gruppe): gibt die Verbindungen geprüft an Obsidian |
+| `/var/lib/studium-mcp` | `studium-mcp`, 0700 | Connector (`oauth.json` mit den Hashes der Tokens, eingelöste Codes) | niemand; `studium-server` löscht ihn als `studium-mcp`, wenn der Connector aus geht |
 
 Bis 0.7.6 konnte der Abruf (Gruppe `studium`) auch den Stand aus Obsidian mit dem Auszug aus dem Tresor lesen; jetzt sieht er
 davon nur den Takt. Den Stand (`stand-plugin.json`) liest nur der Lauf.
@@ -546,7 +561,8 @@ Tag auf. Bricht systemd an der Grenze ab (SIGTERM), zählt das als Fehler, nicht
 - **Mindestversion:** `MINDESTVERSION` im signierten Paket nennt die älteste Version, auf die zurückgerollt werden darf; root hält die
   höchste je gesehene in `/etc/studium-server/mindestversion` fest (sinkt nie). Läge das bisherige Paket darunter, rollt der
   Installer nicht zurück, sondern bleibt auf dem neuen (Exit 11, Grund `mindestversion`, `start.sh`:
-  `[halt:installieren:mindestversion]`); der nächste Lauf installiert es noch einmal (`docs/release.md`).
+  `[halt:installieren:mindestversion]`); der nächste Lauf installiert es noch einmal (`docs/release.md`). Die Schlüssel je Gerät heben
+  sie nicht an („Schlüssel je Gerät“ → „Zurückrollen“ unten).
 - **Ergebnis** in `aktualisierung.json`: `zeit`, `ok`, `ziel` (Version des neuesten Releases), `installiert` (laufende Version
   danach), `grund` (wenn nicht ok), `erfolg` (zuletzt ok) und während der Staffel `warten_bis`. Der Status gibt davon unter
   `aktualisierung` die Felder weiter, die `dienst.mjs` kennt (`zeit`, `ok`, `ziel`, `grund`, `erfolg`; die laufende Version steht
@@ -565,15 +581,17 @@ Tag auf. Bricht systemd an der Grenze ab (SIGTERM), zählt das als Fehler, nicht
 
 | Weg | Wer | Was |
 |---|---|---|
-| `GET /v1/status` | mit Zugangsschlüssel | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), am Limit des Claude-Abos der nächste Versuch (`limit_wieder`, sonst `null`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, sonst `unbekannt`, `erfolg`; dazu `installiert` und `warten_bis` (gestaffelte Verteilung), wenn `studium-server` sie schreibt; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes; dazu `verbunden` (siehe `/v1/eingang`) und `grenzen` (Grenzen je Tag: Läufe zusammen und je Anlass mit Grenze, wartende, heute zurückgestellte oder verschobene und nicht mehr gemerkte Mails, Zeichen je Topf, Mails nach einem Fehlschlag, Mails in Quarantäne und darüber gelöschte). Nie Namen, Adressen, Texte oder Schlüssel. Direkt auf 127.0.0.1 ohne `X-Forwarded-For` und andere Kopfzeilen einer Weiterleitung (`installieren.sh`, `studium-server status`; dort fragen nur root und die Dienstbenutzer) dasselbe ohne Schlüssel. Über Caddy ohne Schlüssel 401 (zählt als Fehlversuch; mit `signatur: 1`, siehe „Anmeldung der Anfragen“), sobald ein Gerät den Status einmal mit Schlüssel geholt hat (Marke `web/status-geschuetzt.json`); bis dahin offen wie bis 0.7.7, denn Plugins bis 0.7.7 schicken den Schlüssel dort nicht mit. Danach zeigt ein solches Plugin den Server im Fenster als nicht erreichbar; Termine und Hinweise holt es über `/v1/eingang` weiter wie bisher |
+| `GET /v1/status` | mit Zugangsschlüssel | Stand aus festen Werten: Version, Claude, Gmail (`ok`, `fehlt`, `aus` bei Takt „nie“), Weiterleitung, Uni-Zugang, Reserve, LiveSync (`livesync`: `an`/`aus`), letzter Abruf, letzter Lauf, ob ein Lauf wartet oder läuft (`claude_lauf`), am Limit des Claude-Abos der nächste Versuch (`limit_wieder`, sonst `null`), die letzte neue Version (`aktualisierung`: Zeit, `ok`, `ziel`, `grund` aus fester Liste, sonst `unbekannt`, `erfolg`; dazu `installiert` und `warten_bis` (gestaffelte Verteilung), wenn `studium-server` sie schreibt; `null` ohne Ergebnis, etwa bei älteren Servern), Fehlercodes; dazu `verbunden` und `geraete` (siehe `/v1/eingang`) und `grenzen` (Grenzen je Tag: Läufe zusammen und je Anlass mit Grenze, wartende, heute zurückgestellte oder verschobene und nicht mehr gemerkte Mails, Zeichen je Topf, Mails nach einem Fehlschlag, Mails in Quarantäne und darüber gelöschte). Nie Namen, Adressen, Texte oder Schlüssel. Direkt auf 127.0.0.1 ohne `X-Forwarded-For` und andere Kopfzeilen einer Weiterleitung (`installieren.sh`, `studium-server status`; dort fragen nur root und die Dienstbenutzer) dasselbe ohne Schlüssel. Über Caddy ohne Schlüssel 401 (zählt als Fehlversuch; mit `signatur: 1`, siehe „Anmeldung der Anfragen“), sobald ein Gerät den Status einmal mit Schlüssel geholt hat (Marke `web/status-geschuetzt.json`); bis dahin offen wie bis 0.7.7, denn Plugins bis 0.7.7 schicken den Schlüssel dort nicht mit. Danach zeigt ein solches Plugin den Server im Fenster als nicht erreichbar; Termine und Hinweise holt es über `/v1/eingang` weiter wie bisher |
 | `POST /v1/anstoss` | mit Zugangsschlüssel, signiert dazu mit Beweis des Datenschlüssels | Knopf „Mails durchsuchen“ in Obsidian: Anstoß für einen Lauf mit Gmail (Grund `knopf`), höchstens alle 30 Minuten und 12-mal in 24 Stunden (`KNOPF` in `dienst.mjs`; jeder Lauf kostet Abo-Limit, und den Zugangsschlüssel trägt jede Anfrage; sonst 429 mit `wieder` und `Retry-After`); ersetzt einen wartenden Anstoß des Web-Dienstes (Unterlagen und Folien übernimmt der Lauf bei jedem Grund). Mit dem Körper `{"quarantaene":"erneut"}` (JSON, nicht verschlüsselt) reiht der Lauf dazu alle Mails der Quarantäne einmal wieder ein, jede für sich allein; Antwort dann `{ angestossen: true, quarantaene: "erneut" }`. Ohne Körper wie bisher. Eine signierte Anfrage ohne gültigen `beweis` lehnt der Dienst mit 403 `datenschluessel` ab (zählt als Fehlversuch): Wer nur den Zugangsschlüssel hat, startet so keinen Lauf. Plugins bis 0.7.7 schicken den Zugangsschlüssel selbst und keinen Beweis; das nimmt der Dienst nur an, bis hier ein Gerät gültig signiert hat (`web/signatur-gesehen.json`), danach 403 `veraltet` (siehe „Anmeldung der Anfragen“) |
-| `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180. Dazu `verbunden`: die letzten 20 Verbindungen von Geräten (Zeit, Herkunft `cloud-shell` oder `obsidian`, grobes Netz `netz` und Gerätename `geraet`, wenn bekannt), ebenso im Status mit Schlüssel, nie ohne |
+| `GET /v1/eingang` | mit Zugangsschlüssel | noch nicht übernommene Ergebnisse, verschlüsselt; nach 30 Tagen fällt eine Datei nur weg, wenn alle ihre Termine vorbei sind, spätestens nach 180. Dazu `verbunden`: die letzten 20 Verbindungen von Geräten (Zeit, Herkunft `cloud-shell` oder `obsidian`, grobes Netz `netz` und Gerätename `geraet`, wenn bekannt), und `geraete`: die Geräte mit eigenen Schlüsseln (`id`, `name`, `seit`, `zuletzt`, `herkunft`, `netz`, `dieses` für das fragende; nie Schlüssel; siehe „Schlüssel je Gerät“), beides ebenso im Status mit Schlüssel, nie ohne (auch nicht direkt auf 127.0.0.1) |
 | `POST /v1/stand` | mit Zugangsschlüssel | verschlüsselter Stand des Plugins (Modulcodes, Studienbeginn, Variante, laufendes Semester und die Module ohne zentrale Kapitelliste (`lernplan`), Auszug aus dem Tresor: Termine mit Titel und Datum, offene To-dos; Takt aus den Einstellungen, Uni-Postfach 15, 30 oder 60 Minuten und Gmail 3-, 1- oder 0-mal am Tag, auch als `takt.json` für den Abruf; übernommene Dateien, diese löscht der Server) |
 | `POST /v1/unterlagen` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Unterlagen (nur Folien, Skript, Übung, Tutorium, Lab, Lösung, Altklausur, Literatur; je höchstens 400 000 Zeichen) nach `unterlagen/neu/`, mit `modell: "opus"` (Knopf „Zusammenfassen“) nach `unterlagen/opus/`, mit `nur_termine` (Module ohne zentrale Termine aus Unterlagen) mit der Kopfzeile „Auftrag: nur Termine“, mit `fassung` (neue Fassung einer schon zusammengefassten Unterlage: frühere Zusammenfassung, geänderte Seiten, was unter „Zu tun“ und „Offene Fragen“ schon steht; geprüft) mit diesen Zeilen im Kopf, zusammen höchstens 30 warten (sonst 429; das Plugin schickt bis zu 3 Anfragen je Abruf, Gewünschtes zuerst); stößt einen Lauf an, wenn keiner wartet |
 | `POST /v1/kapitel` | mit Zugangsschlüssel | verschlüsselt bis zu 3 Textfassungen von Folien (je höchstens 60 000 Zeichen, mit Nummer, Datum und Quelle der Unterlage) der Module, für die der Stand eine Kapitelliste für den Lernplan wünscht, nach `unterlagen/kapitel/`; höchstens 30 warten (sonst 429); stößt einen Lauf an, wenn keiner wartet |
 | `POST /v1/pdf` | mit Zugangsschlüssel | verschlüsselt ein Stück (8 MB, Zweck `pdf`) einer PDF zu einer gewünschten Zusammenfassung, der Reihe nach (sonst 409); nach dem letzten und geprüftem SHA-256 liegt sie als `unterlagen/opus/<SHA-256>.pdf` da. Die Textfassung kommt gleich danach und nennt sie im Kopf, Opus liest dann die PDF. Je PDF bis 500 MB (sonst 413), höchstens 6 und zusammen 1 GB warten (sonst 429), ohne Textfassung oder halb hochgeladen verfällt eine nach einem Tag; nach einem erfolgreichen Lauf gelöscht |
-| `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät; der Code gilt einmal, auch bei gleichzeitigen Anfragen. Ab 0.7.8 `{ schema: 2, kennung, pub, beweis }` ohne den Code, Antwort `{ schema: 2, pub, iv, daten }` verschlüsselt (siehe „Verbinden“); bis 0.7.7 `{ code }` mit offener Antwort `{ adresse, zugang, schluessel }`. Ein gültiger Code geht immer, auch aus einem gesperrten Netz; ein falscher (oder ein falscher Beweis) zählt als Fehlversuch (gesperrt: 429, sonst 403 `{ fehler: "code", schema: 2 }`). Optional `geraet` (Name des Geräts, höchstens 40 Zeichen, gesäubert) fürs Protokoll |
-| `POST /v1/geraet` | mit Zugangsschlüssel und Datenschlüssel | Knopf „Weiteres Gerät verbinden“ in Obsidian: Die Anfrage ist ein Paket mit Zweck `verbinden` und `{ schema: 1, zeit, nonce }` (Zeit höchstens 2 Minuten neben der Uhr des Servers, sonst 400 `uhr`; jeder Zufallswert nur einmal, sonst 409). Zurück kommt ebenso verschlüsselt `{ code, ablauf }`: ein Einmal-Code für 10 Minuten, der den vorigen aus Obsidian zurückzieht; höchstens 3 je Stunde und 10 je Tag (sonst 429 mit `wieder`) |
+| `POST /v1/verbinden` | mit Einmal-Code | Adresse, Zugangs- und Datenschlüssel für ein neues Gerät; der Code gilt einmal, auch bei gleichzeitigen Anfragen. Ab 0.7.8 `{ schema: 2, kennung, pub, beweis }` ohne den Code, Antwort `{ schema: 2, pub, iv, daten }` verschlüsselt (siehe „Verbinden“), seit 03.11.2026 mit eigenen Schlüsseln für dieses Gerät und seiner Kennung `geraet` (siehe „Schlüssel je Gerät“; kennt der Server schon 30 Geräte: 409 `{ fehler: "zu-viele-geraete", schema: 2 }`, lässt sich das Verzeichnis nicht schreiben: 503 `{ fehler: "speichern", schema: 2 }`, der Code bleibt); bis 0.7.7 `{ code }` mit offener Antwort `{ adresse, zugang, schluessel }` (die gemeinsamen), nur solange der Bearer gilt und noch kein Gerät eigene Schlüssel hat (danach 403 `{ fehler: "veraltet", schema: 2 }`, der Code bleibt, kein Fehlversuch; siehe „Schlüssel je Gerät“). Ein gültiger Code geht immer, auch aus einem gesperrten Netz; ein falscher (oder ein falscher Beweis) zählt als Fehlversuch (gesperrt: 429, sonst 403 `{ fehler: "code", schema: 2 }`). Optional `geraet` (Name des Geräts, höchstens 40 Zeichen, gesäubert) fürs Protokoll |
+| `POST /v1/geraet` | mit Zugangsschlüssel und Datenschlüssel | Knopf „Weiteres Gerät verbinden“ in Obsidian: Die Anfrage ist ein Paket mit Zweck `verbinden` und `{ schema: 1, zeit, nonce }` (Zeit höchstens 2 Minuten neben der Uhr des Servers, sonst 400 `uhr`; jeder Zufallswert nur einmal, sonst 409). Zurück kommt ebenso verschlüsselt `{ code, ablauf }`: ein Einmal-Code für 10 Minuten, der den vorigen aus Obsidian zurückzieht; höchstens 3 je Stunde und 10 je Tag (sonst 429 mit `wieder`). Mit dem Bearer (Plugins bis 0.7.7) nur, solange kein Gerät eigene Schlüssel hat, sonst 403 `veraltet` |
+| `POST /v1/claude-app` | signiert mit Beweis des Datenschlüssels (sonst 403 `datenschluessel`; Bearer: 403 `veraltet`) | Connector für die Claude-App: Paket mit Zweck `claude-app` und `{ schema: 1, zeit, nonce, aktion: code \| status \| trennen \| aus, id? }` (Zeit höchstens 2 Minuten neben der Uhr, jeder Zufallswert einmal); Antwort mit Zweck `claude-app-antwort`. Einzelheiten unter „Connector für die Claude-App“ |
+| `POST /v1/geraete` | signiert mit Beweis des Datenschlüssels | Geräte mit eigenen Schlüsseln (siehe „Schlüssel je Gerät“): ein Paket mit Zweck `geraete` und `{ schema: 1, zeit, nonce, aktion, id?, behalten?, name? }` (Zeit und Zufallswert wie bei `/v1/geraet`: 400 `uhr`, 409 `wiederholt`). `liste` → `{ geraete }`; `trennen` mit `id` und `behalten?` → `{ getrennt: [Kennung], geraete }` (ein Gerät, auch das fragende, mit allem, was es hereinließ, außer dem fragenden und `behalten`, siehe „Schlüssel je Gerät“; unbekannt: 404; weder Verzeichnis noch Marke geschrieben: 503 `speichern`); `umziehen` (Name in `name`, Kennung des Umzugs in `umzug`) → `{ adresse, geraet, zugang, schluessel }`: mit dem gemeinsamen Schlüssel eigene (Herkunft `umzug`; dieselbe Kennung ergibt dasselbe Gerät; ohne Kennung 400; voll: 409 `zu-viele-geraete`; über 5 je Stunde 429 `zu-viele` mit `wieder`, über 10 zusammen 409 `zu-viele-umzuege`), mit eigenen dieselben. Antwort mit Zweck `geraete-antwort` unter dem Datenschlüssel der Anfrage. Ohne gültigen Beweis (auch als Bearer) 403 `datenschluessel`, zählt als Fehlversuch |
 | `GET /v1/livesync/<kennung>` | mit Kennung (20 Zeichen, 30 Minuten) | Seite mit dem Knopf „In Obsidian öffnen“ für den Setup-Link von LiveSync; unbekannte Kennungen zählen als Fehlversuch (siehe „LiveSync“) |
 
 **Anmeldung der Anfragen (ab 0.7.8):** „Mit Zugangsschlüssel“ heißt in der Tabelle: Die Anfrage ist signiert. Das Plugin ab 0.7.8
@@ -586,13 +604,21 @@ schickt den Schlüssel nie mehr selbst, sondern im Kopf
 HKDF-SHA256(Zugangsschlüssel, Salz leer, Info `studium-autopilot/anfrage/v1/zugang`); `beweis` ist derselbe Text unter
 HKDF-SHA256(Datenschlüssel, Info `studium-autopilot/anfrage/v1/datenschluessel`) und nur beim Anstoß nötig (`kanal.mjs`). Der Dienst
 prüft Signatur, Zeit (höchstens 5 Minuten neben seiner Uhr, sonst 401 `uhr`, das zählt nicht als Fehlversuch) und Zufallswert (jeder
-nur einmal, sonst 401 `wiederholt`), bevor er den Körper liest, und danach dessen SHA-256 (sonst 400). Die Zufallswerte merkt er
-bis zum Ende ihres Fensters, höchstens 20 000 zugleich (`SIGNATUR`) und je Netz des Absenders (/24 bzw. /56) höchstens ein
-Zwanzigstel davon; darüber fällt der älteste Wert desselben Netzes weg, ist der Speicher voll, der älteste des Netzes mit den meisten.
-So kann auch, wer den Zugangsschlüssel hat, den Speicher nicht füllen und das echte Gerät aussperren. Was so wegfällt, gälte sonst
-noch einmal; darum merkt sich der Dienst das späteste Fensterende eines verdrängten Werts und nimmt keine Anfrage an, deren Fenster
-nicht danach endet (wer flutet, sperrt so höchstens einige Minuten lang aus, aber kein mitgelesener Wert gilt ein zweites Mal). Jeder
-Wert steht zusätzlich in `web/nonces.log` (eine Zeile je Wert, neu geschrieben mit einer Zeile `~ <Ende>` für die verdrängten, wenn es
+nur einmal, sonst 401 `wiederholt`), bevor er den Körper liest, und danach dessen SHA-256 (sonst 400). Seit 03.11.2026 darf die
+Signatur unter dem gemeinsamen Schlüssel aus `dienst.json` oder unter dem eigenen eines Geräts stehen (siehe „Schlüssel je Gerät“): Der
+Kopf bleibt derselbe, der Dienst rechnet sie gegen jedes Paar (höchstens 31, jedes in fester Zeit verglichen), dann einmal Zeit und
+Zufallswert. Das passende Paar gilt für die ganze Anfrage: Beweis, Pakete in beide Richtungen und die Signatur der Antwort. Die Zufallswerte merkt er
+bis zum Ende ihres Fensters, höchstens 20 000 zugleich (`SIGNATUR`) und je Schlüssel (dem eines Geräts oder dem gemeinsamen) höchstens
+ein Zwanzigstel davon; darüber fällt der älteste Wert desselben Schlüssels weg, ist der Speicher voll, der älteste des Schlüssels mit
+den meisten. Was so wegfällt, gälte sonst noch einmal; darum merkt sich der Dienst je Schlüssel das späteste Fensterende eines
+verdrängten Werts und nimmt unter ihm keine Anfrage an, deren Fenster nicht danach endet. Verdrängen kann nur, wer mit dem Schlüssel
+signiert: Wer flutet (auch mit einer Zeit 5 Minuten voraus), sperrt nur diesen einen Schlüssel aus, bis sein Fenster vorbei ist; die
+anderen Geräte gehen weiter, und kein mitgelesener Wert gilt ein zweites Mal. Mit dem gemeinsamen Schlüssel träfe das die Geräte, die
+noch ihn haben, bis sie umgezogen sind. Bis 0.7.11 zählte der Dienst je Netz des Absenders und merkte sich ein Ende für alle; mit
+Schlüsseln je Gerät hätte so jedes Gerät mit gut tausend Anfragen aus einem Netz alle anderen aussperren können, alle 5 Minuten neu.
+Abgewiesenes mit gültiger Signatur (der gemeinsame Schlüssel nach seiner Frist, die alten nach dem Erneuern) merkt er gar nicht. Jeder
+Wert steht zusätzlich in `web/nonces.log` (eine Zeile je Wert mit der Kennung seines Schlüssels, nie dem Schlüssel selbst; neu
+geschrieben mit je einer Zeile `~ <Ende> <Kennung>` für die verdrängten, wenn es
 mehr als doppelt so viele Zeilen hat, wie gelten); nach einem Neustart des Dienstes (Update, Neustart) lädt
 er die noch gültigen, und eine mitgelesene Anfrage geht auch dann nicht noch einmal durch. Die Signatur vergleicht er als Text: Die
 zwei freien Bits im letzten Zeichen von base64url machen keine zweite gültige Schreibweise. Jede 401 trägt `signatur: 1`; eine 401 ohne (Server bis
@@ -600,7 +626,7 @@ zwei freien Bits im letzten Zeichen von base64url machen keine zweite gültige S
 mitgelesene Anfrage nichts mehr: Sie gilt einmal, für diesen Weg, diesen Körper und 5 Minuten.
 
 **Signierte Antworten:** Jede Antwort auf eine gültig signierte Anfrage (auch 401 `uhr`, 403, 204) trägt den Kopf
-`studium-signatur: v=1,mac=<HMAC>`: HMAC-SHA256 unter HKDF-SHA256(Zugangsschlüssel ‖ Datenschlüssel, Info
+`studium-signatur: v=1,mac=<HMAC>` (unter dem Paar, mit dem die Anfrage signiert war): HMAC-SHA256 unter HKDF-SHA256(Zugangsschlüssel ‖ Datenschlüssel, Info
 `studium-autopilot/anfrage/v1/antwort`) über die Zeilen `studium-autopilot/antwort/v1`, `nonce` der Anfrage, Status und SHA-256 des
 Körpers (`kanal.mjs` `antwortMac`). Der Datenschlüssel gehört dazu, weil Plugins bis 0.7.7 den Zugangsschlüssel im Kopf schickten: Wer
 ihn so mitlas, kann trotzdem keine Antwort fälschen. Antworten auf
@@ -613,7 +639,7 @@ auch das neue Einreihen der Quarantäne: 403 `veraltet`); wer den Zugangsschlüs
 danach 7 Tage lang kein Bearer mehr durch (`BEARER_FRIST`, gezählt ab dem letzten erfolgreichen, `web/bearer.json`, höchstens
 stündlich geschrieben; kam nie einer, ab der ersten Signatur), nimmt der Dienst auf keinem Weg mehr einen an (401 `veraltet`, kein
 Fehlversuch). Spätestens 30 Tage nach der ersten Signatur ist auf jeden Fall Schluss (`BEARER_SCHLUSS`), auch wenn bis dahin alle
-paar Tage ein Bearer kam. Das erste Nein schreibt `web/bearer-aus.json`, und die sieht der Dienst zuerst an: Es bleibt dabei, auch
+paar Tage ein Bearer kam, und ebenso, sobald der gemeinsame Schlüssel endet („Schlüssel je Gerät“). Das erste Nein schreibt `web/bearer-aus.json`, und die sieht der Dienst zuerst an: Es bleibt dabei, auch
 wenn die Uhr des Servers zurückgeht. Scheitert das Schreiben einer dieser Marken (volle Platte), gilt sie im laufenden Dienst weiter,
 und keine Anfrage scheitert daran. Bis dahin kann, wer einmal eine Anfrage eines
 Plugins bis 0.7.7 mitlas (oder den Zugangsschlüssel aus dem offenen Verbinden bis 0.7.7 hat), den Zugangsschlüssel weiter benutzen,
@@ -662,8 +688,8 @@ Jeder Weg hat eine eigene Grenze für die Größe einer Anfrage (`MAX_KOERPER` i
 etwas über 8 MB); was darüber liegt, lehnt der Dienst mit 413 ab.
 
 **Datenkanal (`kanal.mjs`):** AES-256-GCM über Web Crypto, dieselbe Schnittstelle wie im Plugin. Ein Paket ist
-`{ schema, zweck, iv, daten }`. Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“ oder „verbinden“) ist Teil der Verschlüsselung, damit sich ein Paket nicht als
-das andere ausgeben lässt.
+`{ schema, zweck, iv, daten }`. Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“, „verbinden“, „verbinden-antwort“, „geraete“ oder
+„geraete-antwort“) ist Teil der Verschlüsselung, damit sich ein Paket nicht als das andere ausgeben lässt.
 
 **Verbinden:** `sudo studium-server verbinden` zeigt einen Link `obsidian://studium-autopilot?aktion=server-verbinden&…` und
 einen QR-Code. Darin steht nur ein Code, der einmal und 30 Minuten gilt. Die Schlüssel holt das Plugin über HTTPS und legt sie
@@ -711,27 +737,119 @@ verbindet nicht auf dem alten Weg. Ein Code ohne Adresse des Servers (vor 0.7.8 
 **Mit Code verbinden** ein und löst ihn wie oben ein. Die Anfrage muss mit dem Datenschlüssel verschlüsselt sein: Den
 Zugangsschlüssel trug bis 0.7.7 jede Anfrage im Kopf, und wer nur ihn kennt, bekäme über einen Code sonst den Datenschlüssel. Zeit und
 Zufallswert verhindern, dass eine mitgeschnittene Anfrage noch einmal einen Code holt (die Zufallswerte bleiben in
-`geraete.json` bis zum Ende ihres Fensters gemerkt, auch über einen Neustart). Codes aus Obsidian gelten 10 Minuten, höchstens
+`geraete.json` bis zum Ende ihres Fensters gemerkt, auch über einen Neustart; je Schlüssel, also je Gerät, höchstens 200 zugleich,
+sonst 429, damit kein Gerät mit vielen Anfragen das Trennen oder die Codes der anderen aufhält). Codes aus Obsidian gelten 10 Minuten, höchstens
 einer ist offen, höchstens 3 je Stunde und 10 je Tag; Codes aus der Cloud Shell zählen dabei nicht und bleiben. Jedes Einlösen
 steht mit Zeit, Herkunft, grobem Netz (IPv4 /24, IPv6 /48, nie die ganze Adresse) und, wenn das Gerät einen schickt, seinem
 Namen in `geraete.json` (die letzten 20), im Eingang und im Status mit Schlüssel; Obsidian bis 0.7.7 zeigt das letzte im Fenster als
 „Zuletzt verbunden“.
 
-**Gerät verloren:** `sudo studium-server schluessel-erneuern`
+**Schlüssel je Gerät (seit 03.11.2026, `geraete.mjs`):** Bis dahin teilten sich alle Geräte Zugangs- und Datenschlüssel aus
+`dienst.json`; ein verlorenes Gerät hieß neue Schlüssel für alle. Jetzt bekommt jedes Gerät, das einen Code auf dem Weg ab 0.7.8 einlöst,
+ein eigenes Paar (je 32 Zufallsbytes) und eine Kennung (16 Zufallsbytes, base64url) in der verschlüsselten Antwort. Plugins 0.7.8 bis
+0.7.11 übergehen die Kennung und signieren mit den Schlüsseln, die sie bekommen; der Kopf der Anfragen ändert sich nicht.
+
+- **Verzeichnis** `web/geraete-schluessel.json` (0600, schreibt nur der Web-Dienst, atomar): `{ schema: 1, fuer, geraete: [{ id,
+  zugang, schluessel, seit, zuletzt, herkunft, von, netz?, name? }], alt? }`. `herkunft` ist `cloud-shell` oder `obsidian` (woher der Code
+  kam) oder `umzug`, `von` wer das Gerät hereinließ: `cloud-shell`, die Kennung des Geräts, dessen Code es einlöste, oder `gemeinsam`
+  (ein Code oder Umzug mit dem gemeinsamen Schlüssel; so stehen auch Einträge ohne `von` da). Dafür nennt jeder Code aus Obsidian
+  (`web/verbinden/<SHA-256>.json`) und jeder Code der Claude-App (`claude-app/codes/`), wer ihn holte, und der Connector schreibt das zur
+  Verbindung, die daraus entsteht (`aus-mcp/verbindungen.json`, `von`). `netz` ist das grobe Netz beim Verbinden (/24 bzw. /48), `name`,
+  was das Gerät von sich sagt (das Plugin schickt nur seine Art wie „iPhone“; gesäubert, höchstens 40 Zeichen), `zuletzt` höchstens
+  stündlich nachgetragen. Höchstens 30 Geräte: Ist es
+  voll, scheitert das Einlösen nach der Prüfung des Codes mit 409 `zu-viele-geraete`, und der Code bleibt; verdrängt wird nie ein Gerät.
+- **An die gemeinsamen Schlüssel gebunden:** `fuer` ist ein Fingerabdruck (gekürzter SHA-256) der gemeinsamen Schlüssel. Passt er nicht
+  mehr zu `dienst.json`, gilt kein Gerät mehr. So macht `schluessel-erneuern` (und eine neue Adresse) auch alle eigenen Schlüssel
+  ungültig, ohne dass etwas außer dem Dienst das Verzeichnis anfasst; der Dienst gleicht es beim Start und vor jeder signierten Anfrage
+  ab. Nach `schluessel-erneuern` bleiben die Schlüssel der Geräte von damals unter `alt` (ohne Namen), solange der Dienst die alten
+  gemeinsamen noch kennt (`ALT_FRIST`, 30 Tage): Sie bekommen dann wie diese 401 `{ fehler: "zugang", erneuert: 1 }`, signiert unter
+  ihren eigenen, und das Gerät zeigt gleich „Dein Server hat neue Schlüssel“. Eine neue Adresse lässt keine alten stehen.
+- **Trennen:** im Plugin unter „Geräte“ (`POST /v1/geraete` `trennen`) oder auf dem Server mit `sudo studium-server geraet-trennen <id>`
+  (Kennung aus `sudo studium-server geraete`). **Mit dem Gerät geht, was es hereinließ:** jedes Gerät, das einen Code von ihm einlöste,
+  auch über weitere Stufen (`geraete.mjs` `kaskade`), seine offenen Codes (für Geräte und für die Claude-App) und die Verbindungen der
+  Claude-App, die mit einem seiner Codes entstanden (der Dienst legt dafür `claude-app/trennen/<id>` an). So verliert, wer ein Gerät
+  stiehlt und damit ein zweites verbindet oder die Claude-App anmeldet, mit einem Trennen alles; ein Code, den das Gerät noch offen
+  hatte, geht danach nicht mehr, auch wenn ihn das Zurückziehen nicht erreichte (beim Einlösen prüft der Dienst, ob es den Aussteller
+  noch gibt). Ausgenommen sind das fragende Gerät und, was du behältst: Obsidian nennt in der Rückfrage, was mitgeht, und bietet
+  **Nur „…“ trennen** an (`behalten`: die Kennungen dieser Geräte und Verbindungen); auf dem Server behält `--nur-dieses` alles, was
+  es hereinließ. Trennt sich ein Gerät selbst („Dieses Gerät trennen“), geht nur es (und seine offenen Codes). Der Befehl legt nur die Marke `web/getrennt/<id>` an (als `studium-web`); der Dienst
+  wendet sie vor seiner nächsten signierten Anfrage und beim Start an, ohne Neustart, und bleibt so der Einzige, der das Verzeichnis
+  schreibt. Er löscht eine Marke erst, wenn der Stand ohne das Gerät in der Datei steht: Scheitert das Schreiben (volle Platte), gilt
+  das Trennen im Speicher, und die Marke bringt es nach einem Neustart wieder. Trennen aus Obsidian legt zuerst dieselbe Marke an; ließ
+  sich weder sie noch das Verzeichnis schreiben, antwortet der Dienst 503 `{ fehler: "speichern" }` (getrennt nur bis zu seinem
+  Neustart), und Obsidian sagt das, statt „getrennt“. Ebenso gilt ein neues Gerät (Verbinden, Umzug) erst, wenn es in der Datei steht,
+  sonst 503 `speichern` ohne Schlüssel, und der Code bleibt: So gibt es kein Gerät nur im Speicher, das `studium-server geraete` nicht
+  zeigte. Ein getrenntes Gerät ist ein unbekannter Schlüssel: 401 ohne Signatur, gezählt als Fehlversuch seines Netzes (gültige
+  Schlüssel anderer Geräte im selben Netz gehen trotzdem durch, die Sperre gilt nur für Fehlversuche).
+- **Umzug** bestehender Geräte: Ein Plugin ab dieser Fassung ohne Kennung im Schlüsselbund fragt nach einer signierten Antwort einmal
+  `umziehen`. Mit dem gemeinsamen Schlüssel bekommt es eigene (Herkunft `umzug`), verschlüsselt unter dem gemeinsamen Datenschlüssel; mit
+  eigenen (verbunden mit 0.7.8 bis 0.7.11) dieselben samt Kennung. Danach signiert es nur noch mit ihnen, und ein Eintrag mit Kennung
+  gilt im Plugin immer als verriegelt (kein Bearer mehr, auch nicht nach verlorenem Riegel). Mit dem gemeinsamen Schlüssel braucht
+  `umziehen` eine **Kennung des Umzugs** (`umzug`, 16 Zufallsbytes), die das Plugin vor der Anfrage im Gerätespeicher ablegt
+  (`eba-server-umzug`, je Server und Schlüssel) und nach dem Umzug löscht; der Dienst merkt sich nur ihren SHA-256. Dieselbe Kennung ergibt
+  dasselbe Gerät: Geht die Antwort verloren oder scheitert der Schlüsselbund, entsteht beim nächsten Versuch kein zweites. Neue Umzüge
+  höchstens 5 je Stunde (sonst 429 `{ fehler: "zu-viele", wieder }`) und 10 zu einem gemeinsamen Schlüssel (sonst 409
+  `zu-viele-umzuege`; `umzuege` im Verzeichnis, mit neuen gemeinsamen Schlüsseln leer, `UMZUG` in `geraete.mjs`): Wer nur den gemeinsamen
+  Schlüssel hat, etwa von einem verlorenen Gerät, das nicht umgezogen ist, legt so nicht beliebig viele Geräte an, die ihn überleben.
+  Ein umgezogenes Gerät, das seine Schlüssel 7 Tage lang nie benutzt hat (`neu`, die erste Anfrage trägt es aus), fällt beim nächsten
+  Abgleich weg; nicht benutzt hat es nur, wer die Antwort nie bekam.
+- **Übergang des gemeinsamen Schlüssels:** Signaturen unter ihm nimmt der Dienst nur noch eine Weile an, wie den Bearer: Ab dem ersten
+  Gerät mit eigenen Schlüsseln (Marke `web/geraete-seit.json`) höchstens 30 Tage (`GEMEINSAM_SCHLUSS`), und kam 7 Tage lang keine mehr
+  (`GEMEINSAM_FRIST`, gezählt ab der letzten, `web/gemeinsam.json`, höchstens stündlich geschrieben; kam nie eine, ab dem ersten Gerät),
+  schon früher, und sofort mit `sudo studium-server gemeinsam-beenden` (legt dieselbe Marke an, zieht die offenen Codes des gemeinsamen
+  Schlüssels zurück und nennt, was mit ihm kam; ohne ein Gerät mit eigenen Schlüsseln lehnt es ab, denn dann käme keins mehr hinein).
+  Danach antwortet er auf sie mit 401 `{ fehler: "zugang" }`, signiert unter dem gemeinsamen Schlüssel und ohne Fehlversuch: Ein Plugin von 0.7.8 bis 0.7.11, das nicht umzieht, zeigt dann „Dein Server kennt dieses Gerät nicht mehr. Bitte neu
+  verbinden.“. Das erste Nein schreibt `web/gemeinsam-aus.json` und gilt für immer, auch wenn die Uhr zurückgeht. Ohne Gerät mit eigenen
+  Schlüsseln gibt es keine Frist (wer nur Plugins bis 0.7.11 hat, merkt nichts).
+- **Plugins bis 0.7.7** halten den gemeinsamen Schlüssel nicht am Leben. Der Bearer gilt nur, solange seine eigene Frist läuft
+  („Übergang“ oben) und der gemeinsame Schlüssel gilt (ein Bearer zählt dort als Benutzung); danach 401 `veraltet`. Beim Verbinden (Code
+  im Klartext) bekommen sie die gemeinsamen Schlüssel nur, solange der Bearer gilt und noch kein Gerät eigene Schlüssel hat
+  (`web/geraete-seit.json`), und einen Code über `POST /v1/geraet` holen sie mit dem Bearer ebenso nur bis dahin: Sonst bekäme jeder,
+  der den gemeinsamen Schlüssel oder einen Code hat, Schlüssel, die kein Trennen erreicht (gemeinsame) oder die den gemeinsamen
+  überleben (eigene über einen Code). Danach antwortet `/v1/verbinden` 403 `{ fehler: "veraltet", schema: 2 }`, ohne den Code zu
+  verbrauchen und ohne Fehlversuch, und `/v1/geraet` 403 `{ fehler: "veraltet" }`. **Ein Gerät mit Obsidian-Plugin bis 0.7.7 muss also
+  erst Studium Autopilot aktualisieren**, bevor es sich neu verbindet; mit einem aktuellen Plugin geht derselbe Code. Ein schon
+  verbundenes Plugin bis 0.7.7 holt weiter ab, bis der Bearer oder der gemeinsame Schlüssel endet.
+- **Liste:** Eingang und Status mit Schlüssel nennen die Geräte (`geraete`, ohne Schlüssel, mit `herkunft`, `von` und `netz`, `dieses`
+  für das fragende); ohne Schlüssel nie, auch nicht direkt auf 127.0.0.1. Obsidian zeigt je Gerät, woher es kam („über die Cloud
+  Shell“, „über Code von „iPhone““, „über Code eines getrennten Geräts“, „von früher übernommen“), seit wann, zuletzt und den
+  Anschluss (grobes Netz); `studium-server geraete` dasselbe mit Kennungen. Das Protokoll `verbunden` in `geraete.json` bleibt daneben, wie es ist.
+- **Zurückrollen** auf ein Paket vor dieser Fassung: Der alte Dienst kennt nur die gemeinsamen Schlüssel, Geräte mit eigenen kommen bis
+  zum nächsten Update nicht hinein (das Verzeichnis bleibt und gilt danach wieder). Er kennt auch die Marken nicht, die den gemeinsamen
+  Schlüssel beenden (`gemeinsam-aus.json`) und Geräte trennen (`getrennt/`): Auf ihm gälte der gemeinsame Schlüssel wieder, auch als
+  Bearer. Erreichbar ist das nur beim ersten Update auf diese Fassung, denn zurückgerollt wird immer auf das Paket, das vorher lief
+  („Zurückrollen“ unter „Updates des Server-Pakets“): Ist sie einmal fertig installiert, rollt jedes spätere Update höchstens auf sie
+  zurück. Beim ersten Update gibt es noch nichts davon zu schützen (das Ende des gemeinsamen Schlüssels kommt frühestens 7 Tage nach dem
+  ersten Gerät mit eigenen Schlüsseln, und diese Geräte kämen auf dem alten Dienst ohnehin nicht hinein). Darum hebt diese Fassung
+  `MINDESTVERSION` nicht an: Das verböte nur genau dieses Zurückrollen, und ein Server, dessen neuer Dienst nicht antwortet, bliebe bis
+  zum nächsten Lauf auf ihm stehen. Wer `gemeinsam-beenden` gleich nach dem Update braucht, prüft vorher mit `sudo studium-server
+  status`, dass die neue Version läuft.
+
+**Gerät verloren:** Zuerst dieses Gerät trennen: in Obsidian auf einem anderen Gerät unter „Eigener Server“ → „Geräte“ →
+**Trennen**, oder `sudo studium-server geraete` und `sudo studium-server geraet-trennen <id>`. Mit ihm gehen die Geräte, die über einen
+Code von ihm verbunden wurden, und die Verbindungen der Claude-App aus seinen Codes (wer das Gerät hat, kann damit weitere verbunden
+haben); was davon deins ist, behältst du in der Rückfrage (**Nur „…“ trennen**, auf dem Server `--nur-dieses`). Die übrigen bleiben
+verbunden. Danach die Liste „Geräte“ und die Verbindungen der Claude-App ansehen: Was du dort nicht kennst (woher es kam, seit wann, der
+Anschluss), trennst du ebenso. Hatte das verlorene Gerät noch die gemeinsamen Schlüssel (nicht umgezogen, es fehlt in der Liste):
+`sudo studium-server gemeinsam-beenden`. Ab dann gilt der gemeinsame Schlüssel nicht mehr (auch nicht als Bearer), seine offenen Codes
+auch nicht, und die Geräte mit eigenen Schlüsseln bleiben verbunden; ein Gerät, das noch nicht umgezogen ist, verbindet sich mit einem
+Code neu. Der Befehl nennt, was mit dem gemeinsamen Schlüssel kam (Umzüge, Geräte über seine Codes, die Claude-App): Was du davon nicht
+kennst, trennst du. Bist du unsicher, ob alles erwischt ist, oder sollen alle neue bekommen: `sudo studium-server schluessel-erneuern`
 (aus der Cloud Shell: `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`) hält den Web-Dienst an, löscht alle offenen
 Codes, schreibt neue Zugangs- und Datenschlüssel (32 Byte wie beim Installieren) in eine neue `dienst.json` (root:studium-web, 0640),
-die die alte in einem Schritt ersetzt, und startet den Dienst wieder, auch nach einem Fehler. Danach kennt der Server kein Gerät mehr: das erste mit `studium-server verbinden`, jedes weitere
+die die alte in einem Schritt ersetzt, und startet den Dienst wieder, auch nach einem Fehler. Danach kennt der Server kein Gerät mehr (auch keins mit eigenen Schlüsseln, siehe oben): das erste mit `studium-server verbinden`, jedes weitere
 mit **Weiteres Gerät verbinden**; ein Gerät mit alten Schlüsseln bietet im Fenster selbst **Mit Code verbinden** an. Die alten
 Schlüssel stehen danach als `zugang_alt` und `schluessel_alt` mit der Zeit `erneuert` in `dienst.json`: 30 Tage lang (`ALT_FRIST`)
 bekommt eine Anfrage, deren Signatur nur unter ihnen stimmt, 401 `{ fehler: "zugang", erneuert: 1 }`, signiert unter den alten
-Schlüsseln (kein Fehlversuch, Zufallswert gemerkt), und das Gerät zeigt gleich „Dein Server hat neue Schlüssel“. Mehr erlauben die
-alten Schlüssel nicht; wer das verlorene Gerät hat, erfährt so nur, dass es neue gibt. Der Installer
+Schlüsseln (kein Fehlversuch, Zufallswert nicht gemerkt), und das Gerät zeigt gleich „Dein Server hat neue Schlüssel“; ebenso die eigenen
+Schlüssel der Geräte von damals. Mehr erlauben die alten Schlüssel nicht; wer das verlorene Gerät hat, erfährt so nur, dass es neue gibt. Der Installer
 behält die neuen Schlüssel bei jedem weiteren Lauf. **Grenze:** LiveSync hat eigene Zugangsdaten (`livesync.json`); die erneuert
 dieser Befehl nicht (dafür `livesync-erneuern`, siehe „LiveSync“).
 
 **Neue Adresse:** Bekommt der Server eine andere öffentliche IP (etwa nach dem Neuanlegen der Instanz), setzt `fern.sh
 installieren` die Adresse `https://<neue IP>.sslip.io`. Weicht sie von der gespeicherten ab, erzeugt der Installer auch neue
-Zugangs- und Datenschlüssel und löscht alle offenen Einmal-Codes (als `studium-web`), wie `schluessel-erneuern`. Grund: Die Geräte
+Zugangs- und Datenschlüssel und löscht alle offenen Einmal-Codes (als `studium-web`), wie `schluessel-erneuern`; damit gilt auch kein
+Gerät mit eigenen Schlüsseln mehr. Grund: Die Geräte
 fragen weiter bei der alten Adresse, und wer deren IP danach bei Oracle bekommt, kann für sie ein Zertifikat holen. Plugins bis 0.7.7
 schicken ihm dabei den Zugangsschlüssel selbst (ab 0.7.8 nur Signaturen, die er nicht wiederverwenden kann); mit neuen Schlüsseln
 nützt er ihm nichts. Die Ausgabe sagt es, und jedes Gerät verbindet sich neu (das erste
@@ -1078,12 +1196,54 @@ sudo studium-server livesync-erneuern --neue-passphrase
                                            dazu ein neuer Schlüssel der Verschlüsselung (Tresor auf dem Server neu aufbauen)
 ```
 
+### Connector für die Claude-App
+
+Wer will, liest mit der Claude-App (claude.ai, Apps für iPhone, Android und Desktop) das eigene Studium über den eigenen Server:
+„Was steht diese Woche an?“. Der Connector (`mcp.mjs`, Architektur: `docs/architektur/connector.md`) ist nur lesend und hat
+keine Kopie des Tresors: Er sieht, was Obsidian dem Server ohnehin schickt (Module, Termine, offene To-dos), dazu das Lagebild
+aus dem Stand (Häkchen im Lernplan, fällige Karten, Prüfungen mit Anmeldung, Versuch und Note, Stundenplan der nächsten 14 Tage),
+Hinweise und noch nicht abgeholte Termine aus Mails und die zentralen Termine. Werkzeuge: `ueberblick`, `fristen`, `pruefungen`,
+`module`, `lernplan`, `todos`, `hinweise`, jedes nur, wenn seine Daten da sind.
+
+**An und aus nur aus Obsidian:** Jeder Server hat seit diesem Release Benutzer, Ordner und Einheiten des Connectors, aber er ist
+aus. Erst der Knopf in Obsidian (Eigener Server → Mit der Claude-App verbinden) holt über `POST /v1/claude-app` einen Code; der
+Web-Dienst legt dann die Marke `claude-app/schalter/an`. Die Pfad-Einheit `studium-server-mcp.path` sieht die Änderung, und
+`studium-server-mcp-schalter.service` (root) führt `studium-server claude-app anwenden` aus: Mit Marke, Adresse und Erlaubnis im
+Paket schreibt es die Wege `/mcp`, `/oauth/*` und `/.well-known/oauth-*` als `/etc/caddy/studium-server.d/seite/mcp.caddy` in den
+Block der Adresse, lädt Caddy neu, startet den Connector und holt die zentralen Daten. Ohne Marke (aus) entfernt es die Wege,
+hält den Connector an und löscht seinen Zustand. root liest die Marke nie, nur ob sie da ist: Ein übernommener Web-Dienst kann den
+Connector so höchstens ein- oder ausschalten. Solange er aus ist, gibt es unter der Adresse nichts davon (404 wie bisher).
+
+**Übergabe:** Web-Dienst und Connector schreiben nur je in ihre eigenen Ordner unter `claude-app/` (siehe „Wer was liest und
+schreibt“). Der Web-Dienst legt Einmal-Codes (`codes/<SHA-256>.json` mit `{ ablauf, von }`, 10 Minuten, höchstens einer offen, 3 je
+Stunde und 10 je Tag), Wünsche zum Trennen (`trennen/<id>`, `trennen/alle`) und `daten/lage.json` hin, was der Connector zeigen darf
+(nach jedem Stand und Abholen und alle 5 Minuten neu). Der Connector löst einen Code über eine exklusive Marke in seinem Zustand
+ein (er kann dort nichts löschen) und meldet die Verbindungen nach `aus-mcp/verbindungen.json`, dazu die beendeten der letzten 30
+Tage mit Grund (`frueher`); Obsidian sieht beides im Eingang (`claude_app`) und zeigt jede Verbindung einmal auf jedem Gerät, auch
+eine, die schon wieder endete, bevor es abholte. Ein Code für die Claude-App verbindet nie ein Gerät (`/v1/verbinden` sucht nur in `web/verbinden/`).
+Das Lagebild steht nur für den Connector in `web/lagebild.json` (0600), nie im Stand für den Lauf; aus geht es mit dem Connector.
+
+**Notschalter:** Die Datei `CONNECTOR` im signierten Paket. Steht in ihrer ersten Zeile ohne `#` nicht `an`, gibt der Web-Dienst
+keine Codes mehr aus (503 `abgeschaltet`) und löscht Lage, Lagebild und gemerkte Hinweise, und `studium-server claude-app anwenden`
+(am Ende jeder Installation, also auch jedes täglichen Updates) schaltet ihn ganz aus wie „Ganz aus“ unten und hält alles an. Ein späteres Paket mit `an` schaltet nichts wieder ein; dafür braucht
+es einen neuen Code aus Obsidian. Wegen der gestaffelten Updates erreicht ein Notschalter jeden Server erst mit dessen nächstem
+Update (bis zu zwei Tage).
+
+**Ganz aus:** `studium-server claude-app aus` oder der Knopf in Obsidian beendet alle Verbindungen (`trennen/alle`), löscht offene
+Codes, Lage, Lagebild und gemerkte Hinweise und den Zustand des Connectors. `schluessel-erneuern` und eine neue Adresse tun das auch
+(dann ist der Connector leer wieder an bzw. aus, und claude.ai fragt nach einem neuen Code).
+
 ### Befehle (`studium-server`)
 
 ```
 studium-server status                  Stand und Dienste
 studium-server verbinden               Einmal-Link und QR-Code für ein Gerät
-studium-server schluessel-erneuern     neue Schlüssel, wenn ein Gerät verloren ist (siehe „Gerät verloren“)
+studium-server geraete                 Geräte mit eigenen Schlüsseln (Kennung, Name, seit, zuletzt, woher, Netz; nie Schlüssel)
+studium-server geraet-trennen <id>     ein Gerät trennen, mit denen, die über seine Codes kamen (siehe „Gerät verloren“)
+studium-server geraet-trennen <id> --nur-dieses
+                                       nur dieses Gerät trennen, die über seine Codes bleiben
+studium-server gemeinsam-beenden       der gemeinsame Schlüssel gilt ab sofort nicht mehr (siehe „Gerät verloren“)
+studium-server schluessel-erneuern     neue Schlüssel für alle Geräte (siehe „Gerät verloren“)
 studium-server uni-zugang setzen       Uni-Zugang verschlüsselt speichern
 studium-server uni-zugang loeschen     Uni-Zugang löschen
 studium-server uni-zugang pruefen      gespeichert oder nicht
@@ -1095,6 +1255,8 @@ studium-server nutzung                 Claude-Läufe und Token je Tag (letzte 7 
 studium-server aktualisieren [--jetzt] Pakete und Claude Code aktualisieren, Server-Paket aus dem Release (geprüft, gestaffelt; siehe oben)
 studium-server livesync                LiveSync einschalten und ein Gerät verbinden (siehe „LiveSync“)
 studium-server livesync-erneuern       neue Zugangsdaten für LiveSync (siehe „LiveSync“)
+studium-server claude-app              Connector für die Claude-App: im Paket erlaubt, in Obsidian an, läuft, Verbindungen
+studium-server claude-app aus          Connector ganz aus: alle Verbindungen beendet, Tokens gelöscht (an nur aus Obsidian)
 ```
 
 ### Geprüft
@@ -1111,6 +1273,10 @@ LiveSync (21.10.2026): im selben Testaufbau mit echter CouchDB 3.5 aus dem Paket
 127.0.0.1, ohne oder mit falscher Anmeldung 401, CORS nur für die Obsidian-Apps, große Anfragen, Status, Linkseite und Ablauf,
 nichts im Journal, zweites Einschalten und Neuinstallation ohne Verlust. Den Setup-Link von der Linkseite las der echte
 Decoder von LiveSync 1.0.38. Noch nicht geprüft: echte Geräte (Windows, iPhone) und das Zertifikat für `obsidian.…sslip.io`.
+
+Connector für die Claude-App: `tests/mcp-server.test.js` (Quelle, zentrale Daten gegen die Prüfung im Plugin, `/v1/claude-app`, Lagebild,
+der ganze Weg vom Code bis zum Trennen, `studium-server claude-app anwenden` mit nachgebildetem `systemctl` und `caddy`). Noch nicht
+geprüft: die Einheiten in einem echten systemd, Caddy mit dem Fragment, die Anmeldung aus dem echten claude.ai.
 
 Abruf und Lauf: `server/test_abrufen.py` (IMAP als Attrappe), `tests/server-eingang.test.js` (auch gegen
 `terminePruefen` des Plugins) und `tests/server-lauf.test.js` (Claude als Attrappe). Dazu ein echter Lauf am 18.10.2026 mit

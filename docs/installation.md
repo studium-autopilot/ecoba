@@ -244,7 +244,7 @@ Für Technische geht auch Syncthing (kostenlos, nicht für iPhone und iPad). Die
 ### Mit eigenem Server: LiveSync
 
 Kostenlos, alle Geräte (Windows, Mac, iPhone, iPad, Android), ohne iCloud. Hast du deinen
-[eigenen Server](#eigener-server-mit-claude-für-technische) verbunden, tippe unter **Einstellungen & Hilfe** →
+[eigenen Server](#eigener-server-für-technische) verbunden, tippe unter **Einstellungen & Hilfe** →
 **Verbindungen** in der Zeile „Eigener Server“ auf **Mehr erfahren**. Unter „Windows und iPhone abgleichen“ **Prompt kopieren**
 tippen und in Claude Desktop im Tab **Code** einfügen. Claude richtet den Abgleich ein und sagt dir, wo du tippen musst. Dafür kommt das
 Community-Plugin Self-hosted LiveSync auf jedes Gerät; iCloud und andere Abgleiche für den Tresor schaltest du danach aus.
@@ -300,11 +300,11 @@ Server geht **Zusammenfassen** auch mit einem eigenen API-Schlüssel, dann koste
 Jedes Gerät verbindest du selbst; der Schlüssel kommt nicht über deinen Sync mit. Ein Ausgabenlimit stellst du in der Console
 unter Billing ein. Mit einem Abo (Claude Pro oder Max) geht es nicht, das erlaubt Anthropic nur in Claude selbst.
 
-## Eigener Server mit Claude (für Technische)
+## Eigener Server (für Technische)
 
 Freiwillig und erst, wenn die Einrichtung in Obsidian fertig ist. Claude richtet dir einen kostenlosen Server bei Oracle ein,
 der deine Unterlagen über dein Claude-Abo zusammenfasst und in deinen Uni-Mails nach Terminen sucht. Den Text zum Einfügen in Claude Desktop (Tab **Code**, nicht der Chat) und was du dafür brauchst, findest du im
-README unter „Für Technische: eigener Server mit Claude“. Das erste Gerät verbindest du mit einem Link vom Server; danach steht
+README unter „Für Technische: eigener Server“. Das erste Gerät verbindest du mit einem Link vom Server; danach steht
 unter **Einstellungen & Hilfe** → **Verbindungen** die Zeile **Eigener Server**. Jedes weitere Gerät verbindest du ohne Claude:
 dort auf dem verbundenen Gerät **Weiteres Gerät verbinden** tippen und Code und Adresse auf dem neuen Gerät unter **Mit Code verbinden**
 eingeben. Ist ein Gerät verloren, gib in der Cloud Shell von Oracle `bash ~/studium-autopilot/server/fern.sh schluessel-erneuern`

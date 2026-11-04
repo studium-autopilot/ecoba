@@ -20,7 +20,10 @@
 //   noch offen, nicht vorbei) und neue oder aktualisierte ILIAS-Dateien der letzten ILIAS_TAGE Tage aus dem Index
 //   System/Daten/ilias.json, je Modul eine Zeile; ohne die Dateien vom ersten Tag eines Kurses (erstes Laden ist keine Änderung).
 //   Seit 01.11.2026 auch die Hinweise von Claude (eigener Server, ctx.server.hinweise aus server.json, 14 Tage), je Hinweis eine
-//   Zeile mit Quelle; Ziel die Modulnotiz, wenn der Hinweis zu einem Modul gehört.
+//   Zeile mit Quelle; Ziel die Modulnotiz, wenn der Hinweis zu einem Modul gehört. Mit der Claude-App jede neue Verbindung
+//   (ctx.server.claudeAppNeu, 14 Tage) als erste Zeile: „Neue Claude-Verbindung am … um … – warst du das?“, Ziel das Fenster „Eigener
+//   Server“ (dort trennst du sie). Gesehen gilt hier nur auf dem Gerät, das sie aufgeklappt gezeigt hat (Schlüssel „ca|…“ nur aus der
+//   eigenen Datei gesehen-…): Eine fremde Verbindung soll auf jedem Gerät auffallen, auch wenn ein anderes sie schon gezeigt hat.
 //
 // Speicher (synchronisiert, Ordner ORDNER):
 // - <Geräte-ID>.json: { version: 1, eintraege: [{ k, t, q, art, id, titel, datum, code, aenderung: [{ feld, alt, neu }] }] }. Jedes
@@ -123,6 +126,21 @@ const gesehenMischen = (alt, schluessel, heute) => {
   return aus;
 };
 
+// Dateien „gesehen“ aller Geräte ([{ pfad, gesehen }]) → { k: spätester Tag }; Schlüssel der Claude-App (GERAET_K) nur aus der
+// eigenen Datei (eigen: ihr Pfad), damit jedes Gerät eine neue Verbindung selbst zeigt
+const GERAET_K = "ca|";
+const gesehenVereinen = (dateien, eigen) => {
+  const aus = {};
+  for (const d of Array.isArray(dateien) ? dateien : []) {
+    const g = d && d.gesehen && typeof d.gesehen === "object" ? d.gesehen : {};
+    for (const k of Object.keys(g)) {
+      if (k.indexOf(GERAET_K) === 0 && d.pfad !== eigen) continue;
+      if (!aus[k] || String(g[k]) > aus[k]) aus[k] = String(g[k]);
+    }
+  }
+  return aus;
+};
+
 // ---------- Abgeleitet (rein, testbar) ----------
 // Stundenplan: liste [{ f, fm }] (Notizen typ lehrveranstaltung), findetStatt(fm, iso) wie ctx.modell.findetStatt, besuchtNicht(fm).
 // Je Notiz und Tag der nächsten VORAUS Tage höchstens ein Eintrag; eine dauerhafte Verlegung (neuerRaum) nur einmal, mit seit =
@@ -191,10 +209,19 @@ const claudeEintraege = (hinweise) => (Array.isArray(hinweise) ? hinweise : []).
   .map((h) => ({ q: "claude", art: "hinweis", titel: text(h.text), quelle: text(h.quelle), code: text(h.code), datum: s10(h.zeit),
     k: ["cl", s10(h.zeit), kurz(text(h.text))].join("|") }));
 
+// Neue Verbindungen zur Claude-App (ctx.server.claudeAppNeu: { id, seit, client, ende? }, schon auf die letzten Tage begrenzt), titel(e)
+// → „Neue Claude-Verbindung am … um …“ (ctx.server.caNeuText): je Verbindung ein Eintrag, Schlüssel mit Präfix GERAET_K (gesehen nur
+// je Gerät, gesehenVereinen). Ist sie schon beendet (ende), gibt es nichts mehr zu trennen: Das Fenster schaltet die Claude-App aus.
+const claudeAppEintraege = (neu, titel) => (Array.isArray(neu) ? neu : []).filter((e) => e && text(e.id) && s10(e.seit))
+  .map((e) => ({ q: "claude-app", art: "claude-app", titel: titel(e) + (text(e.ende) ? ", schon beendet" : "") + " – warst du das?",
+    meta: `${text(e.client) || "claude.ai"} · wenn nicht, antippen und ${text(e.ende) ? "ausschalten" : "trennen"}`,
+    datum: s10(e.seit), k: GERAET_K + text(e.id) + "|" + text(e.seit) }));
+
 // ---------- Zusammenstellen (rein, testbar) ----------
 // protokolle: Listen aus allen Gerätedateien, abgeleitet: Einträge von oben, gesehen: { k: Datum }, jetzt: ISO-Zeit, heute:
 // JJJJ-MM-TT (optional; zentrale Termine, die inzwischen vorbei sind, fallen weg, wie beim Schreiben des Protokolls).
-// → [{ art, q, titel, meta, keys, datum, id?, pfad?, code? }] ungesehen, sortiert: Termine, Stundenplan, Abgaben, Claude, ILIAS.
+// → [{ art, q, titel, meta, keys, datum, id?, pfad?, code? }] ungesehen, sortiert: Claude-App, Termine, Stundenplan, Abgaben, Claude,
+// ILIAS.
 const zahl = (n, eins, mehr) => `${n} ${n === 1 ? eins : mehr}`;
 const metaZentral = (e) => {
   if (e.art === "neu") return "Neu · " + datumKurz(e.datum);
@@ -216,7 +243,8 @@ const metaZentral = (e) => {
   if (e.bestaetigt) teile.unshift(e.aenderung && e.aenderung.some((a) => a.feld === "datum") ? "Jetzt offiziell" : "Jetzt offiziell · " + datumKurz(e.datum));
   return teile.join(" · ");
 };
-const RANG = { zentral: 0, stundenplan: 1, "ilias-kalender": 2, claude: 3, ilias: 4 };
+// Neue Claude-Verbindungen zuerst: Nur du weißt, ob du es warst
+const RANG = { "claude-app": -1, zentral: 0, stundenplan: 1, "ilias-kalender": 2, claude: 3, ilias: 4 };
 const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt, heute) => {
   const ms = Date.parse(jetzt), g = gesehen || {}, seen = {}, zeilen = [], h = s10(heute);
   const neu = (e) => e && typeof e.k === "string" && !g[e.k] && !seen[e.k] && (seen[e.k] = true);
@@ -255,6 +283,7 @@ const zusammenstellen = (protokolle, abgeleitet, gesehen, jetzt, heute) => {
     else if (e.art === "verlegt") meta = [datumKurz(e.datum), e.zeit ? `${e.zeit} statt ${e.zeitAlt}` : "", e.raum ? `${e.raum} statt ${e.raumAlt}` : ""].filter(Boolean).join(" · ");
     else if (e.art === "abgabe") meta = "Neue Abgabe · bis " + datumKurz(e.datum);
     else if (e.art === "hinweis") meta = ["Von Claude", e.quelle].filter(Boolean).join(" · ");
+    else if (e.art === "claude-app") meta = e.meta;
     zeilen.push({ q: e.q, art: e.art, titel: e.titel, meta, keys: [e.k], datum: e.datum, pfad: e.pfad, code: e.code });
   }
   for (const c of Object.keys(ilias).sort()) {
@@ -310,20 +339,19 @@ module.exports = function (ctx) {
   };
 
   // ---------- Daten für die Karte ----------
-  // Alle Gerätedateien: Protokolle (Listen) und die Vereinigung aller gesehen-Dateien (je Schlüssel der späteste Tag)
+  // Alle Gerätedateien: Protokolle (Listen) und die Vereinigung aller gesehen-Dateien (je Schlüssel der späteste Tag; die der
+  // Claude-App nur aus der eigenen, gesehenVereinen)
   const lesenAlle = async () => {
-    const o = V.getAbstractFileByPath(ORDNER), protokolle = [], gesehen = {};
-    if (!o || !o.children) return { protokolle, gesehen };
+    const o = V.getAbstractFileByPath(ORDNER), protokolle = [], dateien = [];
+    if (!o || !o.children) return { protokolle, gesehen: {} };
     for (const f of o.children) {
       if (f.children || f.extension !== "json") continue;
       const d = await jsonLesen(f.path);
       if (!d) continue;
-      if (f.name.indexOf(GESEHEN) === 0) {
-        const g = d.gesehen && typeof d.gesehen === "object" ? d.gesehen : {};
-        for (const k of Object.keys(g)) if (!gesehen[k] || String(g[k]) > gesehen[k]) gesehen[k] = String(g[k]);
-      } else if (Array.isArray(d.eintraege)) protokolle.push(d.eintraege);
+      if (f.name.indexOf(GESEHEN) === 0) dateien.push({ pfad: f.path, gesehen: d.gesehen });
+      else if (Array.isArray(d.eintraege)) protokolle.push(d.eintraege);
     }
-    return { protokolle, gesehen };
+    return { protokolle, gesehen: gesehenVereinen(dateien, gesehenPfad()) };
   };
   const daten = async () => {
     const M = ctx.modell;
@@ -336,6 +364,9 @@ module.exports = function (ctx) {
     if (ctx.server && ctx.server.hinweise) {
       try { abgeleitet = abgeleitet.concat(claudeEintraege(await ctx.server.hinweise())); } catch (e) { console.error(SPRACHE, e); }
     }
+    if (ctx.server && ctx.server.claudeAppNeu && ctx.server.caNeuText) {
+      try { abgeleitet = abgeleitet.concat(claudeAppEintraege(await ctx.server.claudeAppNeu(), ctx.server.caNeuText)); } catch (e) { console.error(SPRACHE, e); }
+    }
     const alle = await lesenAlle();
     const zeilen = zusammenstellen(alle.protokolle, abgeleitet, alle.gesehen, jetztIso(), h);
     // Ziele erst jetzt: zentrale Termine über zentral_id (Notizen werden umbenannt), ILIAS über die Modulnotiz
@@ -345,6 +376,7 @@ module.exports = function (ctx) {
       if (z.q === "zentral" && z.id) z.pfad = termin[z.id] || "";
       else if (z.q === "zentral" && z.art === "mehr") z.pfad = "Studium/Termine & Anmeldungen.md";
       else if (z.q === "ilias" || z.q === "claude") { const m = z.code && D.module.find((x) => x.code === z.code); z.pfad = m ? m.f.path : ""; }
+      else if (z.q === "claude-app") z.aktion = { name: "verbinden", parameter: { id: "server" } }; // das Fenster „Eigener Server“
     }
     return zeilen.length ? { zeilen } : null;
   };
@@ -420,12 +452,13 @@ module.exports = function (ctx) {
 
     const liste = inhalt.createDiv({ cls: "eba-td eba-sb-liste", attr: { role: "list" } });
     for (const z of d.zeilen) {
-      const zeile = liste.createDiv({ cls: "eba-td-zeile eba-sb-" + z.art + (z.pfad ? " eba-sb-ziel" : ""), attr: { role: "listitem" } });
+      const zeile = liste.createDiv({ cls: "eba-td-zeile eba-sb-" + z.art + (z.pfad || z.aktion ? " eba-sb-ziel" : ""), attr: { role: "listitem" } });
       zeile.createSpan({ cls: "eba-sb-punkt", attr: { "aria-hidden": "true" } });
       const inh = zeile.createDiv({ cls: "eba-td-inhalt" });
       inh.createDiv({ cls: "eba-td-text", text: z.titel });
       if (z.meta) inh.createDiv({ cls: "eba-td-meta", text: z.meta });
       if (z.pfad) inh.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ctx.oeffnen(z.pfad, { neu: !!(e.ctrlKey || e.metaKey) }); });
+      else if (z.aktion) inh.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); ctx.aktion(z.aktion.name, z.aktion.parameter); });
     }
     const fuss = inhalt.createDiv({ cls: "eba-sb-knoepfe" });
     const gesehen = fuss.createEl("a", { cls: "eba-vb-knopf", text: "Alles gesehen", href: "#" });
@@ -441,7 +474,7 @@ module.exports = function (ctx) {
     const lauf = inst.lauf = (inst.lauf || 0) + 1;
     const d = await daten();
     if (lauf !== inst.lauf) return; // ein späterer Aufruf zeichnet
-    const sig = d ? JSON.stringify(d.zeilen.map((z) => [z.keys, z.titel, z.meta, z.pfad])) : "";
+    const sig = d ? JSON.stringify(d.zeilen.map((z) => [z.keys, z.titel, z.meta, z.pfad, z.aktion])) : "";
     if (inst.sig === sig && inst.gezeichnet) return;
     inst.sig = sig;
     el.empty();
@@ -493,6 +526,8 @@ module.exports.stundenplanEintraege = stundenplanEintraege;
 module.exports.abgabenEintraege = abgabenEintraege;
 module.exports.iliasEintraege = iliasEintraege;
 module.exports.claudeEintraege = claudeEintraege;
+module.exports.claudeAppEintraege = claudeAppEintraege;
+module.exports.gesehenVereinen = gesehenVereinen;
 module.exports.zusammenstellen = zusammenstellen;
 module.exports.ORDNER = ORDNER;
 module.exports.GESEHEN = GESEHEN;

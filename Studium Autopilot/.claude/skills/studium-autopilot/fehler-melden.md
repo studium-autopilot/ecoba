@@ -8,7 +8,7 @@ selbst mit ihrem GitHub-Konto: Issues sind öffentlich.
 ## 1. Gehört es dorthin?
 
 - **Ja:** das Plugin und die Seiten von Studium Autopilot (Dashboard, `Studium/`, Modulseiten, Fenster, Knöpfe, Hinweise),
-  zentrale Termine (`herkunft: zentral`), das Update, die Anleitung, ein eigener Server mit Claude.
+  zentrale Termine (`herkunft: zentral`), das Update, die Anleitung, ein eigener Server.
 - **Nein:** eigene Notizen der Person, Obsidian selbst, andere Plugins, Alma, ILIAS und andere Systeme der Uni. Sag das in
   einem Satz und, wohin es gehört (bei der Uni: an den Betreiber).
 - **Sicherheitslücke** (ein Passwort landet, wo es nicht hingehört; eine Datendatei könnte Code ausführen oder Notizen

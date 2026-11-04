@@ -112,7 +112,9 @@ aus dem Download):
   einführt, die ältere Pakete nicht prüfen). `release.py` bricht ab, wenn sie über der gebauten Version liegt (nur bei Paketen,
   die Server installieren: Release mit `--zip` und Beta, nicht `--arbeitsstand`); eine Beta X.Y.Z-beta.N darf X.Y.Z nennen.
   Zurzeit die Version, mit der das Kopieren beim Zurückrollen (Quelle = Ziel) und die Liste gesperrter Schlüssel von root
-  erscheinen: Ältere Installer brächen beim Zurückrollen ab. Ein Not-Aus aus der Ferne (ein Release, das Server anhält) gibt es nicht; das wäre ein
+  erscheinen: Ältere Installer brächen beim Zurückrollen ab. Die Schlüssel je Gerät heben sie nicht an, obwohl ältere Pakete das Ende
+  des gemeinsamen Schlüssels nicht kennen: Unter sie rollt nur das erste Update auf sie zurück, und dann gibt es noch nichts zu schützen
+  (`server/README.md`, „Schlüssel je Gerät“ → „Zurückrollen“). Ein Not-Aus aus der Ferne (ein Release, das Server anhält) gibt es nicht; das wäre ein
   eigener Kanal mit eigener Signatur.
 - **Schlüssel wechseln:** Server prüfen mit der Datei ihres laufenden Pakets. Ein neuer Schlüssel kommt darum zuerst als zweite
   Zeile in `server/allowed_signers` und geht mit einem Release hinaus, das noch der alte signiert (`release.py` warnt dabei);

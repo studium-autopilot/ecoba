@@ -425,7 +425,7 @@ module.exports = function (ctx) {
       gesperrt() { return false; },
       async trennen() { if (ctx.claude) await ctx.claude.trennen(); },
     },
-    // Eigener Server mit Claude (server.js): Zusammenfassungen über das Claude-Abo, Termine und Hinweise aus Uni-Mails und
+    // Eigener Server (server.js): Zusammenfassungen über das Claude-Abo, Termine und Hinweise aus Uni-Mails und
     // Kursdaten. Seit 26.10.2026 der empfohlene Weg zum Zusammenfassen (der API-Schlüssel kostet je Unterlage extra); die Texte
     // nennen das Abo zuerst. Ohne Server (kein Gerät verbunden, keine server.json per Sync) eine leise Zeile „Für Technische“ mit
     // „Mehr erfahren“: Fenster mit Schritten, dem Knopf „Prompt kopieren“ für Claude Code und ganz unten dem leisen Link zum
@@ -463,7 +463,7 @@ module.exports = function (ctx) {
           ? "Kostet nichts extra: Claude läuft über dein Abo (Claude Pro oder Max), der Server im Always-Free-Angebot von Oracle ohne Upgrade, ein Budget warnt ab dem ersten Cent. Du brauchst dazu ein Oracle-Konto, Gmail ist freiwillig."
           : "Die Schlüssel liegen nur im Schlüsselbund dieses Geräts, die Daten kommen verschlüsselt. Ein Gerät reicht, die Termine kommen über deinen Sync auf die anderen.";
       },
-      trennenText: "Die Schlüssel werden auf diesem Gerät gelöscht. Deine Termine bleiben, dein Server läuft weiter.",
+      trennenText: "Die Schlüssel werden auf diesem Gerät gelöscht, und dein Server nimmt es danach nicht mehr an. Deine Termine bleiben, dein Server läuft weiter.",
       sichtbar() { return !!ctx.server; },
       status() { return ctx.server ? ctx.server.status() : { verbunden: false }; },
       gesperrt() { return false; },
@@ -1094,8 +1094,10 @@ module.exports = function (ctx) {
   //   24.10.2026 immer, damit auch Neue verstehen, wozu die Zeile da ist): bei einem Problem st.unter oder der Satz der Zeile,
   //   sonst st.unter oder v.beschreibung; symbol: das der Sache (v.symbol), ton: seine Farbe (art, sonst ok bei Ton ok, sonst
   //   leise); ziel: der Knopf, wenn er selbst ein Fenster öffnet (Verbinden, Einschalten), sonst „Mehr erfahren“, sonst das
-  //   Fenster der Verbindung. Rein (tests/verbindungen.test.js).
-  const KURZ_PILLE = { verbunden: "Verbunden", "nicht verbunden": "Aus", an: "An", aus: "Aus",
+  //   Fenster der Verbindung. Nur ein Hinweis nach einem Abruf, der geklappt hat (st.hinweis, seit 03.11.2026): kein Problem,
+  //   der Stand wie mit Haken, darunter der Satz. Bis dahin stand „Fehler“ da, obwohl alles verbunden und aktuell war.
+  //   Rein (tests/verbindungen.test.js).
+  const KURZ_PILLE = { verbunden: "Verbunden", "nicht verbunden": "Aus", an: "An", aus: "Aus", "prüfen": "Prüfen",
     pausiert: "Pausiert", fehler: "Fehler", neu: "Neue Version", "neu laden": "Neu laden", "läuft": "Läuft …", unterbrochen: "Unterbrochen" };
   const KURZ_SYMBOL = { aus: "Aus", schloss: "Aus", extern: "Aus", uhr: "Läuft …", pause: "Pausiert" };
   const SCHALTER = ["zentral", "volltext"]; // man schaltet sie an und aus, statt sie zu verbinden
@@ -1104,15 +1106,15 @@ module.exports = function (ctx) {
   const hrefVon = (html) => { const m = /href="([^"]*)"/.exec(html || ""); return m ? m[1].replace(/&amp;/g, "&") : ""; };
   const aktionVon = (href) => { const m = /[?&]aktion=([^&]*)/.exec(href || ""); return m ? decodeURIComponent(m[1]) : ""; };
   const kompakt = (v, st) => {
-    const pille = nurText(st.pille).toLowerCase(), problem = st.symbol === "warnung";
-    const haken = st.symbol === "haken" ? (SCHALTER.indexOf(v.art) >= 0 ? "An" : "Verbunden") : "";
+    const pille = nurText(st.pille).toLowerCase(), warnung = st.symbol === "warnung", hinweis = warnung && !!st.hinweis, problem = warnung && !hinweis;
+    const haken = st.symbol === "haken" || hinweis ? (SCHALTER.indexOf(v.art) >= 0 ? "An" : "Verbunden") : "";
     const w = st.kurz != null ? st.kurz : KURZ_PILLE[pille] || haken || KURZ_SYMBOL[st.symbol] || "";
     const wert = problem ? "Fehler" : w;
-    const art = problem ? "warn" : st.ton === "warn" ? "akzent" : "";
-    const unter = problem ? st.unter || nurText(st.html != null ? st.html : esc(st.text)) : st.unter || v.beschreibung || "";
+    const art = problem ? "warn" : st.ton === "warn" && !hinweis ? "akzent" : "";
+    const unter = warnung ? st.unter || nurText(st.html != null ? st.html : esc(st.text)) : st.unter || v.beschreibung || "";
     const knopfZiel = hrefVon(st.knopf), linkZiel = hrefVon(st.link);
     const ziel = aktionVon(knopfZiel) === "verbinden" ? knopfZiel : aktionVon(linkZiel) === "verbinden" ? linkZiel : ctx.link("verbinden", { id: v.id });
-    return { wert, art, unter, symbol: v.symbol || st.symbol, ton: art || (st.ton === "ok" ? "ok" : "leise"), ziel };
+    return { wert, art, unter, symbol: v.symbol || st.symbol, ton: art || (st.ton === "ok" || hinweis ? "ok" : "leise"), ziel };
   };
 
   // ---------- Stand einer Quelle: EINE Formatierung (Quellen-Vertrag) ----------
@@ -1122,9 +1124,9 @@ module.exports = function (ctx) {
     nie: "Noch nicht aktualisiert.", laeuft: "Aktualisiert gerade …", anderes: "Ein anderes Gerät aktualisiert, alles kommt über deinen Sync.",
   });
   const vor = (iso) => { const Q = ctx.user && ctx.user.quellen; return Q ? Q.vorText(iso, Date.now()) : ""; };
-  // s = { zustand, geprueft, fehler, fehlerZeit, warnungen } → { text, symbol, ton }. Fehler: „<Satz> Zuletzt aktualisiert …“
-  // (Warnsymbol); ein anderes Gerät aktualisiert: ein Satz; sonst „Aktualisiert vor 5 Min.“ bzw. „Noch nicht aktualisiert.“ und
-  // die Warnungen des letzten Laufs dahinter (Warnsymbol).
+  // s = { zustand, geprueft, fehler, fehlerZeit, warnungen } → { text, symbol, ton, hinweis? }. Fehler: „<Satz> Zuletzt
+  // aktualisiert …“ (Warnsymbol); ein anderes Gerät aktualisiert: ein Satz; sonst „Aktualisiert vor 5 Min.“ bzw. „Noch nicht
+  // aktualisiert.“ und die Warnungen des letzten Laufs dahinter (Warnsymbol, hinweis: der Abruf hat geklappt, kein Fehler).
   const standText = (s) => {
     s = s || {};
     const bis = s.geprueft ? vor(s.geprueft) : "";
@@ -1133,7 +1135,7 @@ module.exports = function (ctx) {
     if (s.zustand === "anderes-geraet") return { text: WORT.anderes, symbol: "haken", ton: "ok" };
     const w = (Array.isArray(s.warnungen) ? s.warnungen : []).join(" ");
     const text = ((bis ? `${WORT.aktualisiert} ${bis}.` : WORT.nie) + (w ? " " + w : "")).replace(/\.\./g, ".");
-    return { text, symbol: w ? "warnung" : "haken", ton: w ? "warn" : "ok" };
+    return w ? { text, symbol: "warnung", ton: "warn", hinweis: true } : { text, symbol: "haken", ton: "ok" };
   };
   // Knopf einer Quelle: Aktualisieren bzw. Hier aktualisieren (ein anderes Gerät schreibt gerade; der Knopf übernimmt)
   const aktualisierenKnopf = (id, hier, parameter) => `<a class="eba-vb-knopf cta" href="${ctx.link("verbindung-aktualisieren", Object.assign({ id }, hier ? parameter : {}))}">${esc(hier ? WORT.hier : WORT.knopf)}</a>`;
@@ -1156,7 +1158,7 @@ module.exports = function (ctx) {
       if (s.hinweis) html += " " + esc(s.hinweis);
       // Mit update.js (seit 0.2.0) steht die neue Version in der eigenen Zeile „Updates“ mit Knopf
       if (s.neueVersion && !ctx.update) html += ` <a class="eba-vb-neu external-link" href="${esc(s.releases)}" target="_blank" rel="noopener">Neue Version verfügbar</a>`;
-      return { zu: false, html, pille, symbol: t.symbol, ton: t.ton, knopf: knopf("zentral-aktualisieren", "", WORT.knopf, "cta"), link: mehrLink(v.id) };
+      return { zu: false, html, pille, symbol: t.symbol, ton: t.ton, hinweis: !!t.hinweis, knopf: knopf("zentral-aktualisieren", "", WORT.knopf, "cta"), link: mehrLink(v.id) };
     }
     if (v.art === "vorlage") {
       const mehr = knopf("verbinden", v.id, "Mehr erfahren", "");
@@ -1185,16 +1187,18 @@ module.exports = function (ctx) {
   };
 
   // Zeile, die eine Quelle selbst liefert (Noten & Anmeldungen: ctx.almaKonto.zeile(); auch ein eigener Server): z = { text, symbol,
-  // pille: an | pruefen | "", knopf, link } oder null, hier nur als HTML. Knopf: Aktion mit Parametern oder externer Link (href,
-  // „In Alma öffnen“). Den Stand formuliert die Quelle mit standText (ctx.verbindungen.standText).
+  // pille: an | pruefen | "", pilleText? (Wort der Pille „prüfen“ statt „neu verbinden“), unter? (zweite Zeile der kompakten Zeile),
+  // ton? (Farbe, sonst nach dem Symbol), knopf, link } oder null, hier nur als HTML. Knopf: Aktion mit Parametern oder externer Link
+  // (href, „In Alma öffnen“). Den Stand formuliert die Quelle mit standText (ctx.verbindungen.standText).
   const quelleZeile = (z) => {
     if (!z) return null;
     const k = z.knopf;
     const knopfHtml = !k ? "" : k.href ? `<a class="eba-vb-knopf" href="${esc(k.href)}" target="_blank" rel="noopener">${esc(k.text)}</a>`
       : `<a class="eba-vb-knopf${k.cta ? " cta" : ""}" href="${ctx.link(k.aktion, k.parameter || {})}">${esc(k.text)}</a>`;
     const l = z.link;
-    return { zu: false, text: z.text, pille: z.pille === "an" ? PILLE.an : z.pille === "pruefen" ? PILLE.pruefen : "", symbol: z.symbol, ton: tonVon(z.symbol),
-      knopf: knopfHtml, link: l ? `<a class="eba-vb-mehr" href="${ctx.link(l.aktion, l.parameter || {})}">${esc(l.text)}</a>` : "" };
+    const pille = z.pille === "an" ? PILLE.an : z.pille === "pruefen" ? (z.pilleText ? `<span class="eba-pill warn">${esc(z.pilleText)}</span>` : PILLE.pruefen) : "";
+    return Object.assign({ zu: false, text: z.text, pille, symbol: z.symbol, ton: z.ton === "warn" || z.ton === "ok" || z.ton === "leise" ? z.ton : tonVon(z.symbol),
+      knopf: knopfHtml, link: l ? `<a class="eba-vb-mehr" href="${ctx.link(l.aktion, l.parameter || {})}">${esc(l.text)}</a>` : "" }, z.unter ? { unter: String(z.unter) } : {});
   };
 
   // Uni-Login (seit 0.4.8): „Verbunden · Unterlagen, Abgaben und Stundenplan · aktualisiert vor 5 Min.“ (nur, was verbunden ist;
@@ -1206,7 +1210,7 @@ module.exports = function (ctx) {
     const si = VERBINDUNGEN.ilias.status(), teile = uniTeile(), hier = teile.filter((x) => x.hier), mehr = mehrLink(v.id);
     if ((si.verbunden || si.gruppenZugang) && si.gesperrt) return { zu: false, text: si.text, pille: PILLE.pruefen, symbol: "warnung", ton: "warn", knopf: knopf("verbinden", "ilias", "Verbinden", "cta"), link: mehr };
     if (si.extern) {
-      if (si.gruppenZugang) { const sy = si.laeuft ? "uhr" : si.fehler || si.warnung ? "warnung" : "haken"; return { zu: false, text: si.text, pille: PILLE.an, symbol: sy, ton: tonVon(sy), knopf: si.laeuft ? "" : aktualisierenKnopf(v.id, false, {}), link: mehr }; }
+      if (si.gruppenZugang) { const sy = si.laeuft ? "uhr" : si.fehler || si.warnung ? "warnung" : "haken"; return { zu: false, text: si.text, pille: PILLE.an, symbol: sy, ton: tonVon(sy), hinweis: sy === "warnung" && !si.fehler, knopf: si.laeuft ? "" : aktualisierenKnopf(v.id, false, {}), link: mehr }; }
       const von = ["deine Unterlagen"].concat(kalenderExtern() ? ["deine Abgaben"] : [], stundenplanExtern() ? ["dein Stundenplan"] : []);
       const satz = `${undListe(von)} kommen über deinen Uni-Abgleich.`, text = satz.charAt(0).toUpperCase() + satz.slice(1);
       // kompakt: anmelden musst du dich hier nicht, darunter woher es kommt
@@ -1221,11 +1225,14 @@ module.exports = function (ctx) {
     }
     const neu = Math.max(0, ...aktiv.map((x) => Date.parse(x.zuletzt || "") || 0)), bis = neu ? vor(new Date(neu).toISOString()) : "";
     const laeuft = hier.some((x) => x.s.laeuft);
-    const problem = laeuft ? null : hier.map((x) => ({ x, z: statusZeile(x.v) })).find((p) => p.z && p.z.symbol === "warnung");
+    // ein Fehler geht vor; hat eine Quelle nur einen Hinweis (Abruf geklappt), steht ihr Satz dahinter, ohne Fehler (hinweis)
+    const warnungen = laeuft ? [] : hier.map((x) => ({ x, z: statusZeile(x.v) })).filter((p) => p.z && p.z.symbol === "warnung");
+    const problem = warnungen.find((p) => !p.z.hinweis) || warnungen[0] || null;
     const text = `${hier.length ? "Verbunden" : "Verbunden über ein anderes Gerät"} · ${undListe(aktiv.map((x) => UNI_WORT[x.v.id]))} · `
       + (laeuft ? "aktualisiert gerade …" : bis ? `aktualisiert ${bis}.` : "noch nicht aktualisiert.") + (problem ? ` ${problem.x.v.name}: ${problem.z.text}` : "");
     const symbol = laeuft ? "uhr" : problem ? "warnung" : "haken";
     return { zu: false, text: text.replace(/\.\./g, "."), unter: problem ? `${problem.x.v.name}: ${problem.z.text}` : "", pille: PILLE.an, symbol, ton: tonVon(symbol),
+      hinweis: !!problem && !!problem.z.hinweis,
       knopf: !hier.length ? knopf("verbinden", v.id, "Mehr erfahren", "") : laeuft ? "" : aktualisierenKnopf(v.id, hier.some((x) => x.s.zustand === "anderes-geraet"), { uebernehmen: "1" }),
       link: hier.length ? mehr : "" };
   };
@@ -1239,7 +1246,7 @@ module.exports = function (ctx) {
     if (s.verbunden) {
       // gemeinsame Form (alma.js): Fehler bleiben stehen, bis ein Abruf klappt; ein anderes Gerät aktualisiert → Hier aktualisieren
       const t = standText(Object.assign({ geprueft: s.stand }, s));
-      return { zu: false, text: t.text, pille: PILLE.an, symbol: t.symbol, ton: t.ton, knopf: aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", {}), link: mehrLink(v.id) };
+      return { zu: false, text: t.text, pille: PILLE.an, symbol: t.symbol, ton: t.ton, hinweis: !!t.hinweis, knopf: aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", {}), link: mehrLink(v.id) };
     }
     if (anderswo(v, s)) return anderswoZeile(v, s);
     if (s.daten) return { zu: false, text: `Dein Stundenplan liegt vor (${s.daten} ${s.daten === 1 ? "Eintrag" : "Einträge"}).`, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };
@@ -1258,7 +1265,7 @@ module.exports = function (ctx) {
     if (!s.verbunden) return { zu: false, text: v.satz, pille: "", symbol: "aus", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
     const t = standText(s), n = Number(s.abgaben) || 0;
     const zahl = s.zustand !== "an" ? "" : n ? ` ${n === 1 ? "1 Abgabe steht" : `${n} Abgaben stehen`} bei deinen Fristen.` : " Gerade keine Abgaben offen.";
-    return { zu: false, text: t.text + zahl, pille: PILLE.an, symbol: t.symbol, ton: t.ton, knopf: s.laeuft ? "" : aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", {}), link: mehrLink(v.id) };
+    return { zu: false, text: t.text + zahl, pille: PILLE.an, symbol: t.symbol, ton: t.ton, hinweis: !!t.hinweis, knopf: s.laeuft ? "" : aktualisierenKnopf(v.id, s.zustand === "anderes-geraet", {}), link: mehrLink(v.id) };
   };
 
   // ILIAS: Text aus ctx.ilias.status() (fertig formuliert); Symbol, Pille, Knopf und Textlink je Stand. Eigener Uni-Abgleich:
@@ -1268,17 +1275,18 @@ module.exports = function (ctx) {
     if (iliasOhneAnmeldung(s)) return { zu: false, text: s.text, pille: "", symbol: "uhr", ton: "leise", knopf: "", link: "" };
     const abgelehnt = { zu: false, text: s.text, pille: PILLE.pruefen, symbol: "warnung", ton: "warn", knopf: knopf("verbinden", v.id, "Verbinden", "cta"), link: "" };
     const symbol = s.laeuft ? "uhr" : s.fehler || s.warnung ? "warnung" : "haken"; // warnung: Satz des letzten Laufs steht in s.text
+    const hinweis = symbol === "warnung" && !s.fehler; // nur der Satz eines Laufs, der geklappt hat
     if (s.extern) {
       if (s.gruppenExtern) return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: "", link: s.benutzer ? textLink("trennen", v.id, "Trennen") : "" };
       if (!s.gruppenZugang && anderswo(v, s)) return anderswoZeile(v, s, s.text);
       if (!s.gruppenZugang) return { zu: false, text: s.text, pille: "", symbol: "haken", ton: "ok", knopf: ctx.ilias.kannSpeichern() ? knopf("verbinden", v.id, "Für Übungsgruppen verbinden", "") : "", link: "" };
       if (s.gesperrt) return abgelehnt;
-      return { zu: false, text: s.text, pille: PILLE.an, symbol, ton: tonVon(symbol), knopf: knopf("verbindung-aktualisieren", v.id, WORT.knopf, "cta"), link: textLink("trennen", v.id, "Trennen") };
+      return { zu: false, text: s.text, pille: PILLE.an, symbol, ton: tonVon(symbol), hinweis, knopf: knopf("verbindung-aktualisieren", v.id, WORT.knopf, "cta"), link: textLink("trennen", v.id, "Trennen") };
     }
     if (s.verbunden && s.gesperrt) return abgelehnt;
     if (s.verbunden) {
-      const t = s.laeuft || !s.zustand ? { text: s.text, symbol, ton: tonVon(symbol) } : Object.assign(standText(s), { text: iliasText(s) });
-      return { zu: false, text: t.text, pille: PILLE.an, symbol: t.symbol, ton: t.ton, knopf: aktualisierenKnopf(v.id, !!s.anderes, { uebernehmen: "1" }), link: mehrLink(v.id) };
+      const t = s.laeuft || !s.zustand ? { text: s.text, symbol, ton: tonVon(symbol), hinweis } : Object.assign(standText(s), { text: iliasText(s) });
+      return { zu: false, text: t.text, pille: PILLE.an, symbol: t.symbol, ton: t.ton, hinweis: !!t.hinweis, knopf: aktualisierenKnopf(v.id, !!s.anderes, { uebernehmen: "1" }), link: mehrLink(v.id) };
     }
     if (anderswo(v, s)) return anderswoZeile(v, s);
     if (s.daten) return { zu: false, text: `${s.daten === 1 ? "1 Unterlage aus ILIAS liegt" : `${s.daten} Unterlagen aus ILIAS liegen`} vor.`, pille: "", symbol: "haken", ton: "leise", knopf: knopf("verbinden", v.id, "Verbinden", ""), link: "" };

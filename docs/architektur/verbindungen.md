@@ -59,7 +59,11 @@ kurzen Absatz hätte, klappt nicht ein; es steht direkt da oder entfällt.
   darunter, was von dort kommt), sonst die Pille in Worten („Verbunden“, „Aus“, „Neue Version“), sonst das Symbol: ein Haken
   heißt bei Schaltern (`SCHALTER`: Zentrale Daten, Suche in PDFs, auch von außen) „An“, sonst „Verbunden“; Schloss und extern
   „Aus“. Ein Problem (Warnsymbol) färbt Symbol und Stand, heißt immer „Fehler“ (auch statt „neu verbinden“) und steht statt
-  der Beschreibung als Satz in der zweiten Zeile (`st.unter` oder der Satz der Zeile). In 0.6.7 gab es die zweite Zeile nur
+  der Beschreibung als Satz in der zweiten Zeile (`st.unter` oder der Satz der Zeile). Kein Problem ist ein Hinweis nach einem
+  Abruf, der geklappt hat (`st.hinweis`, aus `standText` mit Warnungen ohne Fehler, ILIAS mit `warnung` ohne `fehler`): Der Stand
+  bleibt „Verbunden“ bzw. „An“ in der Farbe des Hakens, nur der Satz steht in der zweiten Zeile. Beim Uni-Login geht der Fehler
+  einer Quelle dem Hinweis einer anderen vor. Bis 03.11.2026 hieß auch ein Hinweis „Fehler“, obwohl alles verbunden und
+  aktuell war (etwa „Ein paar Unterlagen ließen sich nicht umbenennen.“). In 0.6.7 gab es die zweite Zeile nur
   bei einem Problem, rechts standen „Über Uni-Abgleich“ und die nackte Version: Ohne Vorwissen war nicht klar, was eine Zeile
   tut und ob sie an ist. Am selben Tag rutschten „Nicht verbunden“ und „Neue Version“ noch in eine eigene Zeile unter den
   Namen; seitdem „Aus“ und der Name „Updates“. Die ganze Zeile ist ein Link: auf das Ziel

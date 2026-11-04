@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Stand eines Oracle-Kontos für die Einrichtung „Eigener Server mit Claude“: Kontotyp, Rest jeder freien Menge,
+// Stand eines Oracle-Kontos für die Einrichtung „Eigener Server“: Kontotyp, Rest jeder freien Menge,
 // Kosten des Monats, Schutz (Quota, Budget) und was Studium Autopilot dort schon angelegt hat. Regeln: server/README.md.
 // Nur lesend: ruft die OCI-Kommandozeile ausschließlich mit list/get/Such- und Abfrage-Befehlen auf (tests/stand.test.js).
 // Aufruf in der Oracle Cloud Shell (dort ist `oci` schon angemeldet):

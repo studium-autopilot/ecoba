@@ -312,6 +312,7 @@ body.eba-plugin-an .callout[data-callout="eba-achtung"][data-callout-metadata*="
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|aufbau"] { --callout-icon: lucide-folder-tree; }
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|geraete"] { --callout-icon: lucide-monitor-smartphone; }
 .callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|stand"] { --callout-icon: lucide-info; }
+.callout[data-callout="eba-karte"][data-callout-metadata*="hilfe|claude"] { --callout-icon: lucide-message-square-text; }
 
 /* Aufgaben „- [ ]“ in Karten: Obsidian zieht das Kästchen um 1,5 × --checkbox-size nach links (margin-inline-start), und
    .callout-content schneidet mit overflow:auto alles links von sich ab. Mit dem Karten-Einzug von 1,1em (17,6 px) blieb auf
@@ -4393,6 +4394,12 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
    man ihn auf dem anderen Gerät sicher abtippt (server.js, „Weiteres Gerät verbinden“) */
 .eba-server .eba-modal-feld { min-height: 44px; font-size: 16px; }
 .eba-modal .eba-server-code { margin: 4px 0 8px; font-family: var(--font-monospace); font-size: 2em; font-weight: 600; letter-spacing: 0.08em; user-select: all; -webkit-user-select: all; }
+/* Geräte mit eigenen Schlüsseln (server.js, zugeklappt „Geräte“): je Gerät eine kurze Zeile, „Trennen“ rechts daneben (mindestens 44 px
+   zum Tippen); ein langer Name bricht um, statt den Knopf aus dem Fenster zu schieben */
+.eba-server .eba-server-geraete ul { list-style: none; margin: 6px 0; padding-left: 0; }
+.eba-server .eba-server-geraete li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.eba-server .eba-server-geraete li > span { min-width: 0; overflow-wrap: anywhere; }
+.eba-server .eba-server-geraete li > button { flex: none; min-height: 44px; }
 .eba-modal-datenschutz, .eba-ei-datenschutz { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
 .eba-modal-datenschutz .eba-sym, .eba-ei-datenschutz .eba-sym { flex: none; width: 15px; height: 15px; margin-top: 2px; }
 .eba-ei-datenschutz { margin-top: 14px; }
@@ -6459,6 +6466,59 @@ body.is-mobile .eba-kopf > button.eba-lp-einst { width: 44px; height: 44px; }
 @media (hover: hover) { .eba-mod-lp-zeile:hover { background: color-mix(in srgb, var(--eba-text) 3%, transparent); } }
 /* iPhone und iPad: Tippflächen mindestens 44 px */
 body.is-mobile .eba-lp-schalter { min-height: 44px; }
+/* Einstieg (seit 3.11.2026, .eba-lp-start): einmal oben, solange nichts abgehakt ist und der Plan schon Rückstand zeigt; zwei Knöpfe
+   wie in den Verbindungen (.eba-vb-knopf). */
+.eba-lp-start {
+  margin: 0 0 16px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--eba-accent) 35%, var(--eba-border));
+  border-radius: var(--eba-radius-l); background: var(--eba-card-bg);
+}
+.eba-lp-start-titel { margin: 0 0 4px; font-family: var(--eba-font-display); font-size: 19px; line-height: 1.25; color: var(--eba-text); }
+.eba-lp-start-text { font-size: 15px; line-height: 1.45; color: var(--eba-text); }
+.eba-lp-start-hilfe { margin-top: 4px; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
+.eba-lp-start-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+/* Heute (seit 3.11.2026, .eba-lp-tag): Karte ganz oben mit dem, was heute dran ist. Kopf mit „Heute“ und Datum, rechts was erledigt
+   ist und die Lernzeit als Pille (öffnet „Lernplan einstellen“), darunter die freie Zeit zwischen den Kursen; je Eintrag eine Zeile
+   mit Kästchen wie bei den To-dos, Titel (Farbpunkt des Moduls), darunter Kürzel, Frist, Seiten, Kurs; rechts die geschätzte Zeit. */
+.eba-lp-tag { margin: 0 0 22px; border: 1px solid var(--eba-border); border-radius: var(--eba-radius-l); background: var(--eba-card-bg); }
+.eba-lp-tag-kopf { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; min-height: 48px; padding: 10px 16px 6px; }
+.eba-lp-tag-titel { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.eba-lp-tag-name { font-family: var(--eba-font-display); font-size: 21px; line-height: 1.2; color: var(--eba-text); }
+.eba-lp-tag-datum { font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-lp-tag-rechts { display: flex; align-items: center; gap: 12px; margin-left: auto; }
+.eba-lp-tag-stand { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--eba-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-lp-tag-frei { padding: 0 16px 10px; font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
+.eba-lp-tag-liste { padding: 0 16px; border-top: 1px solid var(--eba-border); }
+.eba-lp-tz { display: flex; align-items: center; gap: 10px; min-height: 48px; }
+.eba-lp-tz + .eba-lp-tz, .eba-lp-tz + .eba-lp-tag-leer { border-top: 1px solid var(--eba-border); }
+.eba-lp-tz > .eba-td-haken { flex: none; align-self: stretch; align-items: center; margin: 0 0 0 -14px; padding: 0 10px 0 14px; }
+.eba-lp-tz-text { flex: 1 1 auto; min-width: 0; padding: 10px 0; line-height: 1.4; }
+.eba-lp-tz-titel { font-size: 15px; color: var(--eba-text); overflow-wrap: break-word; }
+.eba-lp-tz-titel > .eba-lp-farbpunkt { display: inline-block; margin-right: 7px; vertical-align: 1px; }
+.eba-lp-tz-titel > .eba-lp-farbpunkt.is-leer { visibility: hidden; }
+/* Karteikarten ohne Kästchen: der Platz bleibt, die Titel stehen bündig */
+.eba-lp-tz > .eba-td-haken:empty::before { content: ""; display: block; width: var(--checkbox-size, 18px); }
+.eba-lp-tz-name.is-link {
+  cursor: pointer; text-decoration: underline; text-decoration-color: var(--eba-border-strong); text-decoration-thickness: 1px; text-underline-offset: 3px;
+}
+@media (hover: hover) { .eba-lp-tz-name.is-link:hover { color: var(--eba-accent-text); text-decoration-color: currentColor; } }
+.eba-lp-tz-unter { margin-top: 2px; font-size: 13px; color: var(--eba-muted); }
+.eba-lp-tz-teil { display: inline-block; }
+.eba-lp-tz-teil.is-ueberfaellig { color: var(--eba-warn-text, var(--eba-warn)); }
+.eba-lp-tz-dauer { flex: none; font-size: 13px; font-weight: 600; color: var(--eba-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.eba-lp-tz.is-fertig .eba-lp-tz-name { color: var(--eba-muted); text-decoration: line-through; text-decoration-color: var(--eba-muted); }
+.eba-lp-tz.is-fertig .eba-lp-tz-dauer { color: var(--eba-muted); font-weight: 500; }
+.eba-lp-tag-leer { padding: 12px 0; font-size: 13px; color: var(--eba-muted); }
+.eba-lp-tag-leer.is-geschafft { color: var(--eba-good-text, var(--eba-good)); font-weight: 600; }
+.eba-lp-tag-fuss { display: flex; padding: 2px 6px; border-top: 1px solid var(--eba-border); }
+/* Schmal (iPhone): Stand und Lernzeit in eigener Zeile unter „Heute“, Stand links, Lernzeit rechts */
+@container eba-lp (max-width: 520px) {
+  .eba-lp-tag-rechts { flex: 1 1 100%; justify-content: space-between; margin-left: 0; }
+}
+/* Diese Woche: noch nicht hochgeladene Kapitel leise in einer Zeile statt als Zeilen zum Abhaken (seit 3.11.2026) */
+.eba-lp-k-kommt { padding: 10px 0; border-top: 1px solid var(--eba-border); font-size: 13px; line-height: 1.4; color: var(--eba-muted); }
+/* Lernplan einstellen: Lernzeit je Wochentag (seit 3.11.2026), Zeilen wie die Schalter, rechts eine Auswahl */
+.eba-lp-einst-tag .eba-lp-schalter-text { padding-left: 10px; }
+.eba-lp-tagzeit > select.eba-lp-tagzeit-wahl { flex: none; margin-right: 2px; }
 /* ---------- Ende Abschnitt 61 ---------- */
 
 /* ---------- 62. Noten & Anmeldungen aus Alma (alma-konto.js; seit 0.4.5, Beta) ----------
@@ -6850,7 +6910,7 @@ body.is-phone .eba-pf-offen { padding-left: 14px; }
 .callout[data-callout="eba-seit-besuch"] .callout-fold .svg-icon { transition: transform 0.15s ease; }
 .callout[data-callout="eba-seit-besuch"] .callout-fold.is-collapsed .svg-icon { transform: rotate(-90deg); }
 .eba-sb-punkt { flex: none; width: 5px; height: 5px; margin: 11px 0 0 7px; border-radius: 50%; background: var(--eba-faint); }
-.eba-sb-abgesagt .eba-sb-punkt, .eba-sb-ausfall .eba-sb-punkt { background: var(--eba-warn); }
+.eba-sb-abgesagt .eba-sb-punkt, .eba-sb-ausfall .eba-sb-punkt, .eba-sb-claude-app .eba-sb-punkt { background: var(--eba-warn); }
 .eba-sb-ziel .eba-td-inhalt { cursor: pointer; }
 .eba-sb-knoepfe { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
 body.is-mobile .eba-sb-knoepfe .eba-vb-knopf { min-height: 44px; box-sizing: border-box; }

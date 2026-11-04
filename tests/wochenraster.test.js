@@ -293,13 +293,23 @@ test("Überschneidung: nebeneinander, konflikt mit Warnung im Tooltip", () => {
 test("Änderung in dieser Woche: neue Zeit und neuer Raum, Kasten an der neuen Zeit, Ausnahme mit dem üblichen Wert dazu", () => {
   const d = kasten(woche("2026-10-19"), "Stundenplan/Do X200.md");
   assert.ok(d.klassen.includes("geaendert") && d.klassen.includes("ausnahme"));
-  assert.deepEqual([d.zeit, d.zeitStatt, d.raum, d.von, d.bis], ["12:15", "10:00", "Hörsaal 9", 19, 25]);
+  assert.deepEqual([d.zeit, d.zeitStatt, d.raum, d.von, d.bis], ["12:15", "10:00", "Hörsaal 9", 18, 26]); // Vorlesung: ganzer Block 12–14
   assert.deepEqual([d.zeitNeu, d.raumNeu, d.raumAlt], [true, true, "Hörsaal 1"]);
   assert.match(d.titel, /· 12:15–13:45 · Hörsaal 9 · geändert, sonst 10:00–12:00 · Hörsaal 1$/);
   const n = kasten(woche("2026-10-26"), "Stundenplan/Do X200.md");
   assert.ok(!n.klassen.includes("geaendert") && !n.klassen.includes("ausnahme"));
   assert.ok(!n.zeitNeu && !n.raumNeu && n.raumAlt === "");
   assert.match(n.titel, /· 10:00–12:00 · Hörsaal 1$/);
+});
+
+test("Vorlesung c.t. füllt ihren ganzen Block, Tutorium und Übung stehen genau; die Zeit im Kasten bleibt die echte", () => {
+  const w = ausnahmen("2026-10-19", [X("Stundenplan/Di X400.md", { titel: "X400 · Vorlesung", wochentag: 2 }),
+    X("Stundenplan/Mi X400 Tutorium.md", { titel: "X400 · Tutorium", art: "Tutorium", wochentag: 3 })]);
+  const vl = w.kaesten.find((k) => k.ue === false), tu = w.kaesten.find((k) => k.ue === true);
+  assert.equal(w.h0, 10);
+  assert.deepEqual([vl.von, vl.bis, vl.zeit, vl.beginn, vl.ende], [2, 10, "10:15", "10:15", "11:45"]);
+  assert.deepEqual([tu.von, tu.bis, tu.zeit], [3, 9, "10:15"]);
+  assert.match(vl.titel, /· 10:15–11:45 ·/);
 });
 
 // Ausnahmen (seit 20.10.2026): Ausfall dieser

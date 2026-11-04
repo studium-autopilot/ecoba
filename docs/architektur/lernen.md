@@ -295,7 +295,8 @@ und lässt Häkchen stehen.
   späteste über die Module ohne eigenes `verstanden_bis` und die Wochen danach bis zur Klausur, `zielTeile` macht den Satz daraus
   („bis So 27.12., danach 6 Wochen Klausurvorbereitung.“; mehrere Module als Spannen ohne Wochentag, die Werte fett).
 
-**Oberfläche:** Bereich `Studium/Lernplan.md` mit ```` ```eba-lernplan ````, seit 1.11.2026 von oben **dein Stand**, der
+**Oberfläche:** Bereich `Studium/Lernplan.md` mit ```` ```eba-lernplan ````, seit 3.11.2026 ganz oben **Heute** (beim ersten Mal davor
+der **Einstieg**, beide unten beschrieben), seit 1.11.2026 dann **dein Stand**, der
 **Semesterplan** mit dem Anteil der Zeit und die **Module** als Zeilen (am 1.11.2026 zuerst der Semesterplan ohne Modulfarben über
 Modulzeilen; die Rückmeldung: zu schlicht, nicht motivierend, und dass die Zielnote den Plan verschiebt, muss man sehen und ändern
 können; vom 31.10. bis 1.11.2026 „Diese Woche“ als Liste und „Wochen“ als Zeilen mit „Alle Wochen“, das Ziel als Satz unter den
@@ -421,7 +422,11 @@ Zeit für 4 und 7, weniger für 1. Von dir geändert: 3.“ bzw. „Nach den Sei
 darunter die Herkunft („in 11 von 12 Altklausuren“), rechts (iPhone darunter) der Segmentschalter Weniger, Normal, Mehr
 (`zeitWahlZeichnen`, `.eba-ds`); ein Tipp schreibt nur die Zeile `kapitel_zeit` (`zeitSetzen`), und was dem Vorschlag aus den
 Altklausuren entspricht, steht nicht darin, so gilt ein neuer Vorschlag später wieder. Jede Änderung schreibt sofort; das Fenster
-zeichnet sich neu, sobald Obsidian die Notiz neu gelesen hat (`nachAenderung`, höchstens 1,5 s), die Seite dahinter ebenso. Im
+zeichnet sich neu, sobald Obsidian die Notiz neu gelesen hat, die Seite dahinter ebenso. Seit 3.11.2026 folgt das Fenster, solange es
+offen ist, jeder Änderung an den Dateien eines Lernplans (`relevant`, wie die Seite: metadataCache „changed“, `delete`, `rename`,
+entprellt 400 ms), auch über den Sync. Es zeichnet in ein neues Element und tauscht es erst danach ein; nur der neueste Lauf kommt
+ins Fenster (`lauf`). Vorher zeichnete es nach der eigenen Änderung genau einmal neu (`nachAenderung`, höchstens 1,5 s): Erwischte
+das einen Zwischenstand, fehlten auf einem iPad nach „Vor der Vorlesung lernen“ aus die Module, bis die App neu startete. Im
 aufgeklappten Modul steht hinter der Frist „mehr Zeit“ bzw. „weniger Zeit“, wenn ein Kapitel nicht normal zählt. Auf dem iPhone
 beginnen „Üben“ und der Verweis am linken Rand, nicht in der Spalte der Titel (sie ließ dort nur ein Drittel der Breite).
 Kästchen wie bei den To-dos (`.eba-td-haken`, ganze Zeilenhöhe als Tippfläche, auf iPhone und iPad 44 px, auf dem iPhone auf Höhe
@@ -437,6 +442,35 @@ verstanden bis So 3.1. · Klausur Sa 6.2.“, jeder Teil mit festen Leerzeichen;
 Pille „Klausurvorbereitung“ schon sagt; sonst nur, was diese Woche fällig wird, Überfälliges sagt die Pille, oder das nächste
 Kapitel mit Datum) stehen auf der Modulseite und in den Bahnen. Abhaken schreibt genau diese Zeile (`- [ ]` ↔ `- [x]`), nur wenn ihr Text noch stimmt, sonst ein Hinweis (wie
 `todos.js`).
+**Heute** (`heuteZeichnen`, seit 3.11.2026; Rückmeldung: Der Lernplan sah gut aus, sagte beim ersten Öffnen aber nicht, was jetzt
+zu lernen ist): eine Karte ganz oben, vor dem Stand. Im Kopf „Heute“ mit Datum, rechts was erledigt ist („40 Min. von 2¼ Std.“, vorher
+„etwa 2¼ Std.“) und die Lernzeit als Pille, die „Lernplan einstellen“ öffnet; darunter die freie Zeit zwischen den Kursen
+(`luecken`: Stundenplan über `ctx.modell.findetStatt`, 8 bis 20 Uhr, Lücken ab einer Stunde). Die Einträge: Kapitel, offene To-dos aus
+den Unterlagen der Module mit Plan (`ctx.todos.lesen`, nur mit Frist) und eine Zeile Karteikarten (`ctx.karten.heuteJeModul`, eine halbe
+Minute je Karte, Tipp öffnet das Lernfenster). Reihenfolge (`kandidatenVon`, Rang): überfällige Kapitel, To-dos bis morgen (auch bis zu
+einer Woche überfällige), Kapitel dieser Woche eines Moduls mit Kurs heute oder morgen, die übrigen Kapitel dieser Woche, To-dos der
+nächsten vier Tage, Kapitel der nächsten Woche (nur über „Mehr für heute“, dann „Vorarbeiten“). Kapitel, die noch nicht da sind, fehlen.
+`heuteFuellen` nimmt der Reihe nach, bis die Lernzeit voll ist (eines immer, wenn Zeit da ist); ein Kapitel, das weit darüber ginge (über
+eine Stunde und mehr als eine Viertelstunde über der restlichen Zeit), kommt nur mit einem Teil, mindestens einer halben Stunde
+(„heute ein Teil von 3¼ Std.“). Die Zeit eines Kapitels (`minutenVon`): 2 Minuten je Seite, ohne Seiten 20 je Unterkapitel, sonst 45,
+mindestens 15, mal die Zeit je Kapitel, wenn sie an ist; halb Verstandenes zählt nur den Rest. Ein To-do zählt 30 Minuten. Die Auswahl
+merkt sich jedes Gerät für den Tag (localStorage `eba-lp-heute`: `ids`, `snap` = wie ein Eintrag aussah, `teil`, `budget`), damit
+die Liste den Tag über gleich bleibt und Erledigtes durchgestrichen stehen bleibt; ein To-do, das nicht mehr offen ist, gilt als
+erledigt. Ändert sich die Lernzeit, bleibt Erledigtes und der Rest wird neu gefüllt. Abhaken schreibt wie in der Woche (Kapitel:
+`schreiben`; To-do: `ctx.todos.abhaken`, zurück mit `ctx.todos.zuruecknehmen`). Unter jedem Titel Kürzel und Kapitel, „überfällig
+seit …“ in Warnfarbe, die Seiten und „heute 14:15 Vorlesung“ bzw. „morgen Übung“; rechts die Zeit. Leer: „Für heute ist nichts offen.“
+bzw. „Heute hast du keine Lernzeit eingestellt.“ (dann „Trotzdem etwas lernen“), alles erledigt: „Für heute geschafft.“
+**Lernzeit am Tag** (`tageszeitZeichnen`, oben im Fenster „Lernplan einstellen“, nur im Bereich): je Wochentag eine Auswahl von frei bis
+5 Std., gespeichert als `lernplan_tageszeit: [120, 120, 120, 120, 120, 60, 0]` (Minuten, Montag zuerst) in `System/Einstellungen.md`;
+ohne Angabe gilt genau diese Vorgabe (`TAG_VORGABE`).
+**Einstieg** (`einstiegZeichnen`, seit 3.11.2026): Solange `lernplan_einstieg` in den Einstellungen fehlt, kein Kapitel eines Moduls mit
+Plan abgehakt ist und der Plan schon überfällige Kapitel zeigt, steht über „Heute“ „Wo stehst du?“ mit einem Satz, warum es nach Rückstand
+aussieht, einem Satz zur Regel und zwei Knöpfen: **Ab heute planen** setzt `seit` (Montag dieser Woche) in jeder Lernplan-Notiz, deren
+Plan früher beginnt (nur diese Zeile, `zeileSetzen`), **Ich habe schon gelernt** klappt das erste Modul mit überfälligen Kapiteln auf.
+Beide schreiben `lernplan_einstieg` (Datum), danach erscheint der Kasten nicht wieder.
+**Noch nicht hochgeladen** (seit 3.11.2026): In „Diese Woche“ stehen Kapitel, die noch nicht da sind, nicht mehr als Zeilen zum Abhaken,
+sondern leise in einer Zeile unter den übrigen („Noch nicht hochgeladen: S110 Kapitel E, I und II“, `.eba-lp-k-kommt`); der Kopf der Woche
+zählt sie weiter mit.
 **Dashboard** (```` ```eba-lernplan woche ````, unter den Karteikarten): eine Zeile wie die der Karteikarten, bis zu drei Kapitel mit
 Namen („Lernplan · B110 Kapitel 2 · S100 Kapitel 1“), mehr als Zahl („8 Kapitel, davon 4 überfällig“), dazu „2 Altklausuren
 S100“, jedes als Stück, „Lernplan“ und Text fließen in einer Zeile (Leerzeichen statt Rand, ein Umbruch beginnt bündig; der Punkt
@@ -449,7 +483,9 @@ Notiz nichts.
 Neu gezeichnet bei Änderungen in `Lernplan/`, `Unterlagen/`, `Termine/`, `Module/`, `System/Einstellungen.md`, am Datenmodell und an
 einem neuen Tag. CSS: Abschnitt 61 in `eba-core.css`. Notizen schreibt `lernplan.js` nur im Abgleich mit den Kapitellisten, und den
 macht nur der Abrufer: 45 s nach dem Start, bei neuen Listen, bei neuen Folien und an einem neuen Tag (neues Semester, geänderter
-Plan); die Listen des eigenen Servers schreibt `serverListen` beim Übernehmen des Eingangs.
+Plan); die Listen des eigenen Servers schreibt `serverListen` beim Übernehmen des Eingangs. Für die Claude-App liest
+`kapitelStand()` den Stand jedes Lernplans, der noch dran ist (je Kapitel Nummer, Titel, verstanden und der Montag der Woche, in der
+der Plan es vorsieht); `server.js` schickt ihn nur, solange die Claude-App an ist ([connector.md](connector.md#plugin)).
 
 **Persönlich:** Lernplan-Notizen nennen die Kapitel deiner Kurse. `Lernplan/` ist in der Vorlage leer (`pruefen.py`, `LEERE_ORDNER`)
 und kommt nie in den Datenkanal.

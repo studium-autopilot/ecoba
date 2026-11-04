@@ -124,6 +124,10 @@ module.exports = function (ctx) {
   const zeit = (s) => { const m = String(s || "").match(/^(\d{1,2}):(\d{2})/); return m ? { h: +m[1], m: +m[2] } : null; };
   const zeileVon = (z, h0) => (z.h - h0) * 4 + Math.floor(z.m / 15) + 2;
   const zeileBis = (z, h0) => (z.h - h0) * 4 + Math.ceil(z.m / 15) + 2;
+  // Vorlesungen füllen im Raster ihren ganzen Block (c.t. 10:15–11:45 steht von 10 bis 12), Übungen und Tutorien stehen genau
+  // (10:15–11:45): So hebt sich die Vorlesung ab (03.11.2026). Die Zeit im Kasten und im Tooltip bleibt die echte.
+  const blockVon = (z) => (z.m === 15 ? { h: z.h, m: 0 } : z);
+  const blockBis = (z) => (z.m === 45 ? { h: z.h + 1, m: 0 } : z);
   // Überschneidungen je Tag nebeneinander: Gruppen sich überlappender Kästen, je Kasten Spalte und Spaltenzahl der Gruppe
   // (gruppeVon: Kasten → seine Gruppe)
   const teilen = (kaesten, gruppeVon) => {
@@ -273,7 +277,8 @@ module.exports = function (ctx) {
       const nurEnde = zeitNeu && alt[0] === s.beginn;
       return {
         tag, pfad, klassen,
-        von: Math.max(2, Math.min(rows + 1, zeileVon(b, h0))), bis: Math.max(3, Math.min(rows + 2, zeileBis(e, h0))),
+        von: Math.max(2, Math.min(rows + 1, zeileVon(istUebung(fm) ? b : blockVon(b), h0))),
+        bis: Math.max(3, Math.min(rows + 2, zeileBis(istUebung(fm) ? e : blockBis(e), h0))),
         titel: String(fm.titel || pfad) + " · " + zeitText + " · " + raum + (konflikt ? " · überschneidet sich mit " + konflikt : "")
           + (aus ? " · fällt aus" + (s.name ? " (" + s.name + ")" : "") : "") + (ab ? " · beginnt am " + tagMonat(ab) : "")
           + (marke && !aus ? " · " + marke.charAt(0).toLowerCase() + marke.slice(1) + (sonst ? (s.neuerRaum && !zeitNeu ? ", vorher " : ", sonst ") + sonst : "") : ""),

@@ -4,8 +4,9 @@ Kurz: Studium Autopilot holt Daten, schickt aber nichts über dich an den Autor.
 selbst verbindest (Uni-Login, eigener Server, Claude). Es gibt kein Konto und keine Telemetrie. Nur wenn du deinen Uni-Login eingibst, meldet sich das Plugin damit an, direkt von deinem Gerät
 bei der Uni (ILIAS und Alma, mit dem [Postfach](#postfach) auch beim Webmail). Verbindest du Claude mit deinem eigenen
 API-Schlüssel (freiwillig), geht eine Unterlage an Anthropic, wenn du bei ihr auf **Zusammenfassen** tippst
-([unten](#claude-mit-eigenem-api-schlüssel)). Richtest du dir einen eigenen Server mit Claude ein (freiwillig), holt das Plugin
-zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
+([unten](#claude-mit-eigenem-api-schlüssel)). Richtest du dir einen eigenen Server ein (freiwillig), holt das Plugin
+zusätzlich dessen Ergebnisse ab ([unten](#eigener-server)); verbindest du dazu die Claude-App (freiwillig), liest Claude dort
+deine Termine, To-dos, Lernplan, Karteikarten, Prüfungen mit Noten und deinen Stundenplan ([unten](#claude-app)).
 
 ## Was das Plugin abruft
 
@@ -20,6 +21,7 @@ zusätzlich dessen Ergebnisse ab ([unten](#eigener-server-mit-claude)).
 | Dein Uni-Posteingang und die Mails, die du öffnest | direkt vom Webmail der Uni (`webmail.uni-tuebingen.de`) | nur wenn du auf der Seite **Postfach** **Postfach anzeigen** getippt hast: beim Öffnen der Seite, wenn die Liste älter als 5 Minuten ist, und auf Knopfdruck; nie im Hintergrund |
 | Die Zusammenfassung einer Unterlage (dafür geht die PDF oder ihr Text hin) | Anthropic (`api.anthropic.com`), mit deinem eigenen API-Schlüssel | nur wenn du Claude verbunden hast und bei der Unterlage auf **Zusammenfassen** tippst; beim Verbinden einmal die Prüfung des Schlüssels |
 | Termine und Hinweise deines eigenen Servers | dein eigener Server (die Adresse gibst du mit dem Code zum Verbinden ein) | nur wenn du ihn verbunden hast: beim Start, dann alle 15 Minuten, solange Obsidian offen ist, und auf Knopfdruck |
+| Deine Verbindungen zur Claude-App und der Code dafür | dein eigener Server | nur auf einem Gerät, das mit ihm verbunden ist: wenn du das Fenster **Eigener Server** öffnest und wenn du dort **Mit der Claude-App verbinden**, **Trennen** oder **Claude-App ganz ausschalten** tippst |
 | Neue Version der Vorlage und die Liste der Änderungen (`CHANGELOG.md`) | `github.com` (die Liste der Dateien, aus dem Release der neuen Version) und `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur wenn du auf **Neue Version installieren** oder **Was ist neu** tippst oder **Nach Updates suchen** eine neue Version findet |
 | Die Hinweise für Claude (`.claude/`) der Version, die du installiert hast | `raw.githubusercontent.com` (dieses Repo auf GitHub) | nur am Computer, einmal je Version, wenn dort eine Datei fehlt oder alt ist (etwa auf einem zweiten Computer); nicht, wenn die zentralen Daten aus sind |
 | Die Signatur der Liste der Dateien deiner Version (`system-dateien.json.sig`), damit das Plugin prüfen kann, ob die Teile der App echt sind | `github.com` (aus dem Release der Version, die auf dem Gerät läuft, und der Version, die die Liste in deinem Tresor nennt) | nur wenn sie in deinem Tresor fehlt (etwa einmal nach dem Update von 0.7.6 oder älter): beim Start, wenn sich die Liste ändert oder das Gerät wieder online ist, solange Obsidian offen ist nur für die Version des Geräts und höchstens eine weitere, je Version bis eine Antwort kommt; wie beim Update auch bei ausgeschalteten zentralen Daten; sonst nur nach einem Tipp auf **Reparieren** |
@@ -136,7 +138,8 @@ Freiwillig und nur mit Beta-Versionen: Ohne dein **Einschalten** fragt das Plugi
 - **Was gespeichert wird:** In `System/Daten/alma-konto.json` je Modulcode Status, Note, Versuch, Semester und Datum sowie deine
   Prüfungsanmeldungen im aktuellen Semester. Nie dein Name, deine Matrikelnummer, Prüfer:innen oder Vermerke. Die Datei kommt mit
   deinem Sync auf deine anderen Geräte (bei Obsidian Sync nur mit „andere Dateitypen“). Noten stehen nie in Hinweisen, im
-  Protokoll, in Fehlermeldungen oder in Bildschirmen außer dem Vorschlag auf der Modulseite. In deine Modulnotiz kommt eine Note
+  Protokoll, in Fehlermeldungen oder in Bildschirmen außer dem Vorschlag auf der Modulseite; nur mit der [Claude-App](#claude-app)
+  gehen Note, Versuch und Anmeldung eines Moduls ohne eigenen Eintrag in der Modulnotiz an deinen Server. In deine Modulnotiz kommt eine Note
   nur, wenn du **Übernehmen** tippst; dabei kommt eine Prüfsumme der übernommenen Werte dazu (`alma_uebernommen`), damit ein
   späterer Vorschlag eine Korrektur aus Alma erkennt. **Ausblenden** merkt sich eine Prüfsumme statt der Note.
 - **Löschen:** **Einstellungen & Hilfe** → **Verbindungen** → Noten & Anmeldungen (Alma) → **Mehr erfahren** → **Daten aus Alma
@@ -158,7 +161,7 @@ Freiwillig und je Gerät: Ohne deinen Tipp auf **Postfach anzeigen** meldet sich
   und eine Mail, wenn du sie antippst. Die Uni markiert sie dann als gelesen, wie im Browser. Das Plugin löscht, verschiebt,
   beantwortet und markiert sonst nichts; die Adressen dafür baut es gar nicht.
 - **Was gespeichert wird:** nichts. Deine Mails stehen nur im Speicher dieses Geräts, solange Obsidian offen ist; nie im
-  Tresor, in Hinweisen, im Protokoll oder bei Claude. (Ein [eigener Server](#eigener-server-mit-claude) liest Mails getrennt
+  Tresor, in Hinweisen, im Protokoll oder bei Claude. (Ein [eigener Server](#eigener-server) liest Mails getrennt
   davon, wenn du ihm welche gibst.) Nach 10 Minuten ohne Abruf meldet sich das Plugin beim Webmail ab.
   Änderst du den Benutzernamen deines Uni-Logins oder trennst ihn, meldet es die alte Sitzung gleich ab und vergisst deren Mails.
 - **Abgelehnt:** Lehnt das Webmail dein Passwort ab, halten alle deine Geräte an wie bei ILIAS (siehe „Abgelehnt“ oben).
@@ -184,13 +187,15 @@ Fortgeschrittene: **Einstellungen & Hilfe** → **Verbindungen** → **Eigener S
 - **Warum kein Claude-Abo:** Anthropic erlaubt Apps anderer Anbieter nicht, sich mit Claude Free, Pro oder Max anzumelden
   ([Bedingungen](https://code.claude.com/docs/en/legal-and-compliance)).
 
-## Eigener Server mit Claude
+## Eigener Server
 
 Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spricht das Plugin mit keinem weiteren Server.
 
 - **Zwischen Server und Tresor:** Das Plugin holt die Ergebnisse über HTTPS ab, zusätzlich verschlüsselt mit einem Schlüssel,
   den nur dein Server und deine Geräte kennen (AES-256-GCM). Zugangs- und Datenschlüssel liegen im Schlüsselbund von Obsidian
-  auf jedem Gerät, nie in einer Notiz. Verbunden wird mit einem Code, der einmal und 30 Minuten gilt: Du tippst ihn unter
+  auf jedem Gerät, nie in einer Notiz. Seit dem 03.11.2026 hat jedes Gerät eigene (eins, das sich vorher verbunden hat, bekommt sie
+  beim nächsten Abruf von selbst): Ein verlorenes Gerät trennst du allein, die anderen bleiben verbunden. Die Schlüssel, die sich
+  alle Geräte vorher teilten, nimmt dein Server danach nur noch höchstens 30 Tage an. Verbunden wird mit einem Code, der einmal und 30 Minuten gilt: Du tippst ihn unter
   **Einstellungen & Hilfe** → **Verbindungen** bei „Eigener Server“ ein, ein Link von außerhalb von Obsidian verbindet nie. Seit
   0.7.8 geht der Code dabei nicht über das Netz, und die Schlüssel kommen nur verschlüsselt zurück, mit einem Schlüssel, den nur
   jemand mit dem Code berechnen kann. Danach trägt keine Anfrage einen Schlüssel, nur eine Signatur, die für genau diese eine Anfrage
@@ -222,8 +227,8 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   Terminen sucht. Mit `server_unterlagen: alle` in `System/Einstellungen.md` gehen alle Unterlagen ohne Zusammenfassung von
   selbst, mit `server_unterlagen: aus` keine. Für den **Lernplan** gehen von selbst die Folien von Modulen des laufenden
   Semesters mit, für die es keine fertige Kapitelliste gibt (die ersten 8 Seiten ganz, danach je Seite die erste Zeile), damit
-  Claude daraus die Kapitel liest. Keine Noten, keine übrigen Notiztexte, keine PDFs außer denen, die du zusammenfassen lässt. Den
-  ganzen Tresor sieht der Server nie, außer du schaltest LiveSync ein (unten).
+  Claude daraus die Kapitel liest. Keine übrigen Notiztexte, keine PDFs außer denen, die du zusammenfassen lässt, und Noten nur,
+  solange die [Claude-App](#claude-app) an ist. Den ganzen Tresor sieht der Server nie, außer du schaltest LiveSync ein (unten).
 - **Was im Tresor landet:** Termine als Notizen unter `Termine/` und kurze Hinweise in `System/Daten/server.json`. Hinweise
   fassen Inhalte deiner Mails zusammen; die Datei gehört zu deinen persönlichen Daten. Damit du die Änderungen des letzten
   Abrufs an vorhandenen Notizen (zusammengeführte To-dos, geänderte Termine) mit **Rückgängig** zurücknehmen kannst, merkt sich
@@ -231,7 +236,9 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   dem Rückgängig oder dem Trennen sind sie weg, ein späterer Abruf mit Änderungen ersetzt sie.
 - **Wer sich verbunden hat:** Der Server nennt verbundenen Geräten die letzten 20 Verbindungen (Zeit, Weg, Name des Geräts, wenn es
   einen nennt, und nur ein grobes Netz wie „203.0.113.…“, nie die ganze IP). Das Fenster zeigt sie, damit dir ein fremdes Gerät
-  auffällt; sie stehen nur im Speicher des Geräts, das nachgesehen hat, nie im Tresor.
+  auffällt; sie stehen nur im Speicher des Geräts, das nachgesehen hat, nie im Tresor. Ebenso die Liste deiner Geräte mit eigenen
+  Schlüsseln (Name, seit wann, wann zuletzt; nie die Schlüssel selbst), in der du jedes andere Gerät trennst. Als Name schickt ein
+  Gerät beim Verbinden nur seine Art („iPhone“, „iPad“, „Windows-PC“ …), nie einen Namen aus dem System.
 - **Auf dem Server:** Claude Code läuft mit deinem Claude-Konto. Was Claude dort liest (deine Mails und alles, was das Plugin
   dem Server schickt: Termine, To-dos, Unterlagen, Folien), verarbeitet Anthropic nach den Bedingungen deines Kontos; Nutzungs-
   und Fehlerberichte schickt Claude Code dabei nicht, auch nicht beim Prüfen der Anmeldung und bei seinen Updates. Ob Anthropic deine Chats und Sitzungen zum
@@ -275,6 +282,49 @@ Nur wenn du ihn selbst einrichtest (README, „Für Technische“). Ohne ihn spr
   mitschickt, ist sie wie bisher öffentlich.
 - **Abschalten:** in Obsidian unter **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server** → **Trennen**; den
   Server selbst beendest du in der Oracle-Konsole.
+
+## Claude-App
+
+Nur wenn du sie selbst verbindest: **Einstellungen & Hilfe** → **Verbindungen** → **Eigener Server** → **Mit der Claude-App
+verbinden**. Dann fragst du Claude in der Claude-App (claude.ai im Browser, die Apps für iPhone, iPad, Android und Computer) nach
+deinem Studium. Dein Server fragt dabei nie selbst Claude; Claude fragt deinen Server, wenn du im Chat etwas wissen willst.
+
+- **Was Claude lesen kann:** deine Termine und Fristen, offene To-dos, den Stand deines Lernplans (Kapitel mit Häkchen), wie viele
+  Karteikarten je Modul fällig sind, deine Prüfungen mit Anmeldung, Versuch und Note, deinen Stundenplan der nächsten 14 Tage und
+  die Hinweise deines Servers. Keine Notizen, keine Unterlagen, keine PDFs, nie den Ordner **System**. Claude ändert nichts. Texte
+  aus Mails mit Links, mit etwas, das nach Zugangsdaten aussieht, oder in der Form einer Anweisung an Claude gibt dein Server nicht
+  an Claude weiter; in Obsidian stehen sie trotzdem.
+- **Was dafür an deinen Server geht:** Solange die Claude-App an ist, schickt das Gerät, das deinen Server abruft, mit seinem Stand
+  dazu Lernplan, Karteikarten, Prüfungen mit Noten und Stundenplan (Termine und To-dos gehen ohnehin, siehe oben), Texte ohne
+  Links und ohne alles, was nach Zugangsdaten aussieht. Note, Versuch und Anmeldung kommen aus deiner Modulnotiz, sonst aus
+  **Noten & Anmeldungen (Alma)**, wenn du es eingeschaltet hast. Ist die Claude-App aus, geht nichts davon mit.
+- **Verbinden:** mit einem Code, der 10 Minuten und einmal gilt. Er steht nur im Fenster von Obsidian, nie im Tresor, und du gibst
+  ihn auf der Seite deines Servers ein, die sich öffnet, nachdem du den Konnektor in der Claude-App hinzugefügt hast. Wer den Code
+  hat, kann über claude.ai lesen, was oben steht; gib ihn darum nicht weiter. Jede neue Verbindung zeigt Studium Autopilot auf jedem deiner
+  Geräte unter „Seit deinem letzten Besuch“, und die Zeile **Eigener Server** sagt es drei Tage lang, auch wenn die Verbindung schon
+  wieder beendet ist (dein Server merkt sich beendete Verbindungen 30 Tage lang, ohne Inhalte). Wann eine Verbindung begann, wann
+  sie endete und an welchem Tag sie zuletzt benutzt wurde, steht dafür in `System/Daten/server.json`, ohne Inhalte. **Trennen** und
+  **Claude-App ganz ausschalten** stehen im selben Fenster.
+- **Was claude.ai bekommt:** keinen Schlüssel deines Servers, nur eine Anmeldung, mit der claude.ai deinen Server fragen darf.
+  Die Claude-App bittet dabei, nur Konnektoren von Entwicklern zu nutzen, denen du vertraust, weil Anthropic nicht steuert, welche
+  Werkzeuge sie anbieten; hier ist das dein eigener Server.
+- **Bei Anthropic:** Was Claude von deinem Server liest, steht danach in deinem Chat, und Chats speichert Anthropic in deinem
+  Claude-Konto, bis du sie löschst. Ob Anthropic deine Chats zum Verbessern von Claude nutzen darf, stellst du unter
+  [Einstellungen → Datenschutz](https://claude.ai/settings/data-privacy-controls) ein. Erlaubst du es, zählt der ganze Chat, also auch
+  Claudes Antworten mit deinen Noten; die Rohdaten, die Claude von deinem Server abruft, zählen laut Anthropic nicht. Löschst du einen
+  Chat, entfernt Anthropic ihn innerhalb von 30 Tagen; hast du das Training erlaubt, darf Anthropic Chats bis zu fünf Jahre in
+  anonymisierter Form fürs Training behalten. Das Gedächtnis von Claude ist normalerweise eingeschaltet: Claude kann sich Angaben aus
+  diesen Chats für andere Chats merken, und das bleibt, auch wenn du den Chat löschst (einzeln löschen in den Einstellungen von
+  Claude). Teilst du einen Chat als Link, sieht jeder mit dem Link den ganzen Chat, also womöglich deine Noten; die Rohdaten von
+  deinem Server bleiben verborgen. Claude ist laut Anthropic erst ab 18 Jahren erlaubt.
+- **Andere Konnektoren:** Was Claude in einem Chat gelesen hat, kann es dort mit deinen anderen Konnektoren weitergeben, etwa per
+  Gmail senden, oder in der Code-Ausführung ins Netz schicken. Das Fenster rät darum, in claude.ai die Werkzeuge zum Senden und
+  Weiterleiten zu sperren und den Netzzugang der Code-Ausführung auszuschalten. Das verringert das Risiko, schließt es aber nicht
+  aus: Websuche und andere Konnektoren bleiben offen.
+- **Prüfungen und fremde Daten:** Ob und wie du Claude bei Prüfungs- und Studienleistungen nutzen darfst, regeln Prüfungsordnung
+  und Lehrende, dazu die Nutzungsrichtlinien von Anthropic. Die Universitätsbibliothek Tübingen rät auf ihrer Seite zur
+  Literaturrecherche mit KI, keine urheberrechtlich geschützten Dokumente hochzuladen und keine persönlichen Daten Dritter
+  einzugeben; das gilt sinngemäß auch für Claude. Diese Seite ist keine Rechtsberatung.
 
 ## Zentrale Daten ausschalten
 

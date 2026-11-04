@@ -23,13 +23,24 @@ ZURUECK_OFFEN=/opt/studium-server/.zurueckrollen-offen
 MINDEST=/etc/studium-server/mindestversion
 SPERRLISTE=/etc/studium-server/revoked_keys
 LS_KONFIG=/etc/studium-server/livesync.json
+# Connector für die Claude-App (claude-app.mjs, mcp.mjs): Marke des Web-Dienstes, Konfiguration und Zustand des Connectors, seine Wege in
+# Caddy (im Block der Adresse, installieren.sh)
+SCHALTER=$DATEN/claude-app/schalter/an
+MCP_KONFIG=/etc/studium-server-mcp/konfig.json
+MCP_ZUSTAND=/var/lib/studium-mcp
+MCP_CADDY=/etc/caddy/studium-server.d/seite/mcp.caddy
 
 hilfe() {
   cat <<'TEXT'
 studium-server status                  Stand des Servers (wie /v1/status) und der Dienste
 studium-server status --json           nur der Stand als JSON (für start.sh)
 studium-server verbinden               Einmal-Link und QR-Code, um ein Gerät mit Obsidian zu verbinden (30 Minuten gültig)
-studium-server schluessel-erneuern     neue Schlüssel (Gerät verloren): offene Codes weg, jedes Gerät muss sich neu verbinden
+studium-server geraete                 Geräte mit eigenen Schlüsseln: Kennung, Name, seit wann, zuletzt, woher, Netz
+studium-server geraet-trennen <id>     ein Gerät trennen (Gerät verloren), mit den Geräten und Claude-App-Verbindungen aus seinen Codes
+studium-server geraet-trennen <id> --nur-dieses
+                                       nur dieses Gerät trennen; was über seine Codes verbunden wurde, bleibt
+studium-server gemeinsam-beenden       der gemeinsame Schlüssel (Geräte vor dem Umzug auf eigene) gilt ab sofort nicht mehr
+studium-server schluessel-erneuern     neue Schlüssel für alle: offene Codes weg, jedes Gerät muss sich neu verbinden
 studium-server uni-zugang setzen       Uni-Benutzername und -Passwort verschlüsselt speichern (verdeckte Eingabe)
 studium-server uni-zugang loeschen     gespeicherten Uni-Zugang löschen
 studium-server uni-zugang pruefen      zeigt nur, ob ein Zugang gespeichert und entschlüsselbar ist
@@ -47,6 +58,8 @@ studium-server livesync aufbauen       eine Stunde lang darf ein Gerät den Tres
 studium-server livesync-erneuern       neue Zugangsdaten für LiveSync (alte Links gelten nicht mehr, jedes Gerät braucht einen neuen)
 studium-server livesync-erneuern --neue-passphrase
                                        dazu ein neuer Schlüssel der Verschlüsselung: Tresor auf dem Server leer, neu aufbauen
+studium-server claude-app              Connector für die Claude-App: an oder aus, Verbindungen (einschalten nur in Obsidian)
+studium-server claude-app aus          Connector ganz aus: alle Verbindungen beendet, Tokens gelöscht
 TEXT
 }
 
@@ -71,6 +84,10 @@ als_studium() {
 als_web() {
   sudo -u studium-web env STUDIUM_SERVER_KONFIG="$KONFIG" STUDIUM_SERVER_DATEN="$DATEN" "$@"
 }
+# Zustand des Connectors (Tokens, eingelöste Codes) und aus-mcp/ nur als dessen Benutzer, ebenso ohne Links zu folgen
+als_mcp() {
+  sudo -u studium-mcp "$@"
+}
 
 port() {
   local p
@@ -89,7 +106,8 @@ status_lesen() { curl -fsS --max-time 10 "http://127.0.0.1:$(port)/v1/status"; }
 # alte in einem Schritt (mv). Adresse, Port und Version bleiben; installieren.sh behält die neuen Schlüssel bei jedem weiteren Lauf
 # (außer die Adresse ändert sich, dann erzeugt es selbst neue). Die alten stehen danach als zugang_alt und schluessel_alt mit der Zeit
 # (erneuert) darin: 30 Tage lang sagt der Dienst einem Gerät, das noch mit ihnen fragt, dass es neue gibt (dienst.mjs ALT_FRIST);
-# mehr erlaubt er mit ihnen nicht.
+# mehr erlaubt er mit ihnen nicht. Die Geräte mit eigenen Schlüsseln gehören zu den gemeinsamen (geraete.mjs, fuer): Mit den neuen gilt
+# keins mehr, und der Dienst sagt ihnen ebenso 30 Tage lang, dass es neue gibt. Ein einzelnes verlorenes Gerät trennt geraet-trennen.
 schluessel_erneuern() {
   root_noetig schluessel-erneuern
   local neu="$KONFIG.neu"
@@ -112,9 +130,128 @@ schluessel_erneuern() {
   chown root:studium-web "$neu"
   chmod 0640 "$neu"
   mv -f "$neu" "$KONFIG"
+  # Die Claude-App auch: offene Codes und alle Tokens weg (claude.ai fragt dann nach einem neuen Code aus Obsidian); ist sie an, läuft
+  # der Connector danach leer wieder an
+  [ ! -d "$DATEN/claude-app/codes" ] || als_web find -P "$DATEN/claude-app/codes" -mindepth 1 -maxdepth 1 -type f -delete \
+    || echo "Offene Codes der Claude-App ließen sich nicht alle löschen (claude-app/codes/)." >&2
+  claude_app_leeren
+  claude_app_anwenden || echo "Der Connector ließ sich nicht wieder starten (studium-server claude-app)." >&2
   echo "Neue Schlüssel gelten ab jetzt, die alten und alle offenen Codes nicht mehr."
-  echo "Jedes Gerät muss sich neu verbinden: das erste mit sudo studium-server verbinden (in der Cloud Shell:"
+  echo "Jedes Gerät muss sich neu verbinden, auch die mit eigenen Schlüsseln: das erste mit sudo studium-server verbinden (in der Cloud Shell:"
   echo "bash ~/studium-autopilot/server/fern.sh verbinden), jedes weitere in Obsidian unter Eigener Server mit „Weiteres Gerät verbinden“."
+}
+
+# ---------- Connector für die Claude-App ----------
+# Notschalter im laufenden Paket (CONNECTOR, erste Zeile ohne #; installieren.sh und dienst.mjs lesen dieselbe Datei): nur „an“ erlaubt
+# den Connector
+connector_erlaubt() {
+  [ "$(grep -v -m 1 -e '^#' -e '^[[:space:]]*$' "$PAKET/CONNECTOR" 2>/dev/null | tr -d '[:space:]' || true)" = an ]
+}
+# Connector anhalten und seinen Zustand löschen (Tokens, Verbindungen, eingelöste Codes) samt dem, was er Obsidian meldet (aus-mcp/):
+# als studium-mcp, nur Einträge in diesen Ordnern, keinem Link folgen
+claude_app_leeren() {
+  systemctl stop studium-server-mcp.service 2>/dev/null || true
+  id studium-mcp >/dev/null 2>&1 || return 0
+  [ ! -d "$MCP_ZUSTAND" ] || als_mcp find -P "$MCP_ZUSTAND" -mindepth 1 -delete || echo "Zustand des Connectors ließ sich nicht ganz löschen." >&2
+  [ ! -d "$DATEN/claude-app/aus-mcp" ] || als_mcp find -P "$DATEN/claude-app/aus-mcp" -mindepth 1 -maxdepth 1 -type f -delete || true
+}
+# Caddy neu laden, wenn es läuft (Admin-Socket wie in installieren.sh); ein Caddy, das aus ist (vorbereitet), bleibt aus
+caddy_neu_laden() {
+  systemctl is-active --quiet caddy || return 0
+  if [ -S /run/caddy/admin.sock ]; then systemctl reload caddy; else systemctl restart caddy; fi
+}
+# Wege des Connectors in Caddy: schreiben (an) oder entfernen (aus), nur bei einer Änderung neu laden. Gilt die Konfiguration mit ihnen
+# nicht, fallen sie wieder weg (Fehler).
+claude_app_caddy() {
+  local soll
+  soll=$(printf '%s\n' "# studium-server (studium-server claude-app anwenden): Connector für die Claude-App, nur solange er an ist" \
+    "handle /mcp {" "	reverse_proxy 127.0.0.1:8744" "}" "handle /oauth/* {" "	reverse_proxy 127.0.0.1:8744" "}" \
+    "handle /.well-known/oauth-* {" "	reverse_proxy 127.0.0.1:8744" "}")
+  if [ "$1" = an ]; then
+    [ "$(cat "$MCP_CADDY" 2>/dev/null || true)" != "$soll" ] || return 0
+    install -d -m 0755 "${MCP_CADDY%/*}"
+    printf '%s\n' "$soll" >"$MCP_CADDY.neu"
+    chmod 0644 "$MCP_CADDY.neu"
+    mv -f "$MCP_CADDY.neu" "$MCP_CADDY"
+    if ! caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
+      rm -f "$MCP_CADDY"
+      echo "Caddy nimmt die Wege des Connectors nicht an; sie bleiben weg." >&2
+      return 1
+    fi
+  else
+    [ -e "$MCP_CADDY" ] || return 0
+    rm -f "$MCP_CADDY"
+  fi
+  caddy_neu_laden
+}
+# Der Connector, wie er sein soll (studium-server-mcp-schalter.service, nach jeder Installation): an nur mit der Marke des Web-Dienstes
+# (nur ihr Dasein zählt, gelesen wird sie nie), einer Adresse und erlaubt im Paket; dann seine Wege in Caddy, die Einheit und gleich
+# einmal die zentralen Daten. Sonst Wege weg, Einheit aus, Zustand gelöscht. Verbietet der Notschalter ihn, schaltet der Web-Dienst ihn
+# ganz aus wie „aus“ in Obsidian (als studium-web: Marke, Codes, Lage, Lagebild und gemerkte Hinweise weg, alle Verbindungen getrennt;
+# scheitert das, wenigstens die Marke): Obsidian zeigt ihn dann als aus, und erst ein neuer Code schaltet ihn wieder ein. Ändert sich die Marke während
+# des Laufs (die Pfad-Einheit stößt ihn dann nicht noch einmal an), noch einmal.
+claude_app_marke() { if [ -e "$SCHALTER" ] || [ -L "$SCHALTER" ]; then echo an; else echo aus; fi; }
+# Der Connector darf über localhost nur Caddy antworten, nie selbst den Web-Dienst fragen: Direkt auf 127.0.0.1 gibt der den ganzen
+# Status ohne Schlüssel (Geräte, Netze, Grenzen), und IPAddressAllow=localhost in der Einheit erlaubt dem Connector jeden Port dort. Eine
+# Regel nach Besitzer des Sockets (owner) lehnt darum jede neue Verbindung von studium-mcp zum Port des Web-Dienstes ab (IPv4 und IPv6,
+# zuoberst in OUTPUT), gespeichert wie die Freigabe von Port 443 im Installer; vor jedem Start des Connectors geprüft. Antworten an
+# Caddy (von Port 8744) trifft sie nicht. Ohne iptables (etwa in einem Container ohne Netzrechte) nur eine Warnung.
+connector_netz_sperren() {
+  local ipt neu=0 regel=(-p tcp --syn --dport "$(port)" -m owner --uid-owner studium-mcp -j REJECT --reject-with tcp-reset)
+  for ipt in iptables ip6tables; do
+    command -v "$ipt" >/dev/null 2>&1 || { echo "$ipt fehlt: Der Connector erreicht den Web-Dienst direkt." >&2; continue; }
+    if "$ipt" -C OUTPUT "${regel[@]}" 2>/dev/null; then continue; fi
+    if "$ipt" -I OUTPUT 1 "${regel[@]}"; then neu=1; else echo "$ipt: Regel für den Connector ließ sich nicht setzen." >&2; fi
+  done
+  [ "$neu" -eq 0 ] || netfilter-persistent save >/dev/null 2>&1 || true
+}
+claude_app_anwenden() {
+  root_noetig claude-app anwenden
+  local i stand soll fehler=0
+  for i in 1 2 3; do
+    stand=$(claude_app_marke)
+    soll=$stand
+    if [ "$soll" = an ] && ! connector_erlaubt; then
+      echo "Connector im Paket abgeschaltet (Notschalter): aus"
+      als_web node "$PAKET/claude-app.mjs" aus >/dev/null || als_web rm -f -- "$SCHALTER" || true
+      soll=aus stand=aus
+    fi
+    [ -n "$(jq -r '.hoeren[0].oauth.adresse // empty' "$MCP_KONFIG" 2>/dev/null || true)" ] || soll=aus
+    if [ "$soll" = an ]; then
+      claude_app_caddy an || fehler=1
+      if [ "$fehler" -eq 0 ]; then
+        connector_netz_sperren
+        systemctl start studium-server-mcp.service || fehler=1
+        systemctl start --no-block studium-server-zentral.service || true
+      fi
+    else
+      claude_app_caddy aus || fehler=1
+      claude_app_leeren
+    fi
+    [ "$(claude_app_marke)" != "$stand" ] || break
+  done
+  echo "Connector: $soll"
+  return "$fehler"
+}
+claude_app() {
+  case "${1:-status}" in
+    status)
+      root_noetig claude-app
+      echo "Im Paket:     $(connector_erlaubt && echo erlaubt || echo abgeschaltet)"
+      echo "Obsidian:     $(claude_app_marke)"
+      echo "Connector:    $(systemctl is-active studium-server-mcp.service || true)"
+      echo "Wege (Caddy): $([ -e "$MCP_CADDY" ] && echo da || echo keine)"
+      als_web node "$PAKET/claude-app.mjs" status | jq -r '(.verbindungen[] | "Verbindung \(.id): \(.client), seit \(.seit), zuletzt \(.zuletzt)"),
+        ((.frueher // [])[] | "Beendet \(.id): \(.client), \(.seit) bis \(.ende) (\(.grund))")' || echo "Verbindungen: unlesbar"
+      ;;
+    aus)
+      root_noetig claude-app aus
+      als_web node "$PAKET/claude-app.mjs" aus
+      claude_app_anwenden
+      ;;
+    anwenden) claude_app_anwenden ;;
+    *) hilfe; exit 1 ;;
+  esac
 }
 
 uni_zugang() {
@@ -530,6 +667,11 @@ case "${1:-hilfe}" in
     echo "Link: $link"
     qrencode -t ANSIUTF8 "$link"
     ;;
+  # Geräte mit eigenen Schlüsseln (geraete.mjs): lesen und die Marke zum Trennen nur als Benutzer des Web-Dienstes; das Verzeichnis selbst
+  # schreibt nur der Dienst, er wendet die Marke vor seiner nächsten Anfrage an, ohne Neustart
+  geraete) root_noetig geraete; als_web node "$PAKET/geraete.mjs" liste ;;
+  geraet-trennen) root_noetig geraet-trennen; shift; als_web node "$PAKET/geraete.mjs" trennen "$@" ;;
+  gemeinsam-beenden) root_noetig gemeinsam-beenden; als_web node "$PAKET/geraete.mjs" gemeinsam-beenden ;;
   schluessel-erneuern) schluessel_erneuern ;;
   uni-zugang) shift; uni_zugang "$@" ;;
   zustand) als_studium node "$PAKET/zustand.mjs" ;;
@@ -553,6 +695,7 @@ case "${1:-hilfe}" in
   aktualisieren) shift; aktualisieren "$@" ;;
   livesync) shift; root_noetig livesync; bash "$PAKET/livesync.sh" "$@" ;;
   livesync-erneuern) shift; root_noetig livesync-erneuern; bash "$PAKET/livesync.sh" erneuern "$@" ;;
+  claude-app) shift; claude_app "$@" ;;
   hilfe|-h|--help) hilfe ;;
   *) hilfe; exit 1 ;;
 esac

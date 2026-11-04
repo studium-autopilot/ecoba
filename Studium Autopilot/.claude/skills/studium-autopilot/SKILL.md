@@ -36,7 +36,7 @@ Schnittstelle dazwischen; du liest und schreibst die Markdown-Dateien direkt. Ob
 - **Wörter wie in der App:** Tresor, Lehrveranstaltung, Prüfung (Klausur nur als Form), ECTS, Übungsgruppe, Aktualisieren,
   vorlesungsfrei, „## Meine Notizen“. Daten in Notizen und Feldern als `JJJJ-MM-TT`, im Text „Mo 19.10.“, Uhrzeiten „10:00–12:00“.
 
-## Eigener Server mit Claude
+## Eigener Server
 
 Ist ein eigener Server verbunden (Zeile „Eigener Server“ unter **Einstellungen & Hilfe** → **Verbindungen**), holt Obsidian
 dessen Ergebnisse selbst ab: Termine aus Uni-Mails und Gmail erscheinen als Notizen unter `Termine/` mit `herkunft: claude`,

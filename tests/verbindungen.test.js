@@ -246,7 +246,7 @@ test("Stand einer Quelle: eine Formatierung (Aktualisiert, Fehler bleibt mit „
   assert.deepEqual(W.standText({ zustand: "fehler", geprueft: vorMin(180), fehler: "Alma antwortet nicht (Fehler 404). Bitte den Link in Alma neu kopieren." }),
     { text: "Alma antwortet nicht (Fehler 404). Bitte den Link in Alma neu kopieren. Zuletzt aktualisiert vor 3 Std.", symbol: "warnung", ton: "warn" });
   assert.deepEqual(W.standText({ zustand: "an", geprueft: vorMin(1), warnungen: ["Eine deiner Stundenplan-Notizen steht nicht mehr in Alma."] }),
-    { text: "Aktualisiert vor 1 Min. Eine deiner Stundenplan-Notizen steht nicht mehr in Alma.", symbol: "warnung", ton: "warn" });
+    { text: "Aktualisiert vor 1 Min. Eine deiner Stundenplan-Notizen steht nicht mehr in Alma.", symbol: "warnung", ton: "warn", hinweis: true });
   assert.equal(W.standText({ zustand: "anderes-geraet" }).text, "Ein anderes Gerät aktualisiert, alles kommt über deinen Sync.");
   assert.equal(W.standText({ zustand: "laeuft" }).symbol, "uhr");
   assert.equal(W.WORT.knopf, "Aktualisieren", "Entscheidung E1");
@@ -421,6 +421,16 @@ test("Kompakte Zeile: rechts der Stand in einem Wort, darunter was die Sache tut
     { wert: "Fehler", art: "warn", unter: "Benutzername oder Passwort stimmt nicht.", symbol: "schluessel", ton: "warn", ziel: ziel("ilias") });
   assert.deepEqual(k({ zentralStatus: { zustand: "fehler", geprueft: vorMin(60), fehler: "Keine Verbindung zu den zentralen Daten." } }, "zentral"),
     { wert: "Fehler", art: "warn", unter: "Keine Verbindung zu den zentralen Daten. Zuletzt aktualisiert vor 1 Std.", symbol: "uni", ton: "warn", ziel: ziel("zentral") });
+  // nur ein Hinweis nach einem Abruf, der geklappt hat (z. B. Unterlagen nicht umbenannt): verbunden, kein „Fehler“, der Satz darunter
+  const hinweis = "Ein paar Unterlagen ließen sich nicht umbenennen.";
+  const mitHinweis = { verbunden: true, zustand: "an", zuletzt: vorMin(5), geprueft: vorMin(5), warnung: hinweis, warnungen: [hinweis], text: "Aktualisiert vor 5 Min. " + hinweis };
+  assert.deepEqual(k({ ilias: mitHinweis, kalender: kal }, "uni-login"),
+    { wert: "Verbunden", art: "", unter: "ILIAS-Unterlagen: Aktualisiert vor 5 Min. " + hinweis, symbol: "schluessel", ton: "ok", ziel: ziel("uni-login") });
+  // ein Fehler geht dem Hinweis einer anderen Quelle vor
+  assert.deepEqual(k({ ilias: mitHinweis, alma: { verbunden: true, zustand: "fehler", geprueft: vorMin(120), fehler: "Keine Verbindung zu Alma." } }, "uni-login"),
+    { wert: "Fehler", art: "warn", unter: "Alma-Stundenplan: Keine Verbindung zu Alma. Zuletzt aktualisiert vor 2 Std.", symbol: "schluessel", ton: "warn", ziel: ziel("uni-login") });
+  assert.deepEqual(k({ zentralStatus: { geprueft: vorMin(10), warnungen: ["Ein Termin kam doppelt."] } }, "zentral"),
+    { wert: "An", art: "", unter: "Aktualisiert vor 10 Min. Ein Termin kam doppelt.", symbol: "uni", ton: "ok", ziel: ziel("zentral") });
   // Schalter: an, aus
   assert.deepEqual(k({ zentralStatus: { geprueft: vorMin(10) } }, "zentral"),
     { wert: "An", art: "", unter: "Vorlesungen, Fristen und Termine für alle", symbol: "uni", ton: "ok", ziel: ziel("zentral") });
@@ -465,7 +475,8 @@ test("Kompakte Zeile: jeder Stand hat einen kurzen Wert und ein Symbol, darunter
       assert.ok(k.symbol === "haken" || W.svg(k.symbol) !== W.svg(""), wo + " – Symbol fehlt in SYMBOLE"); // unbekannt: Haken
       assert.ok(["ok", "warn", "akzent", "leise"].indexOf(k.ton) >= 0, wo + " – Farbe");
       assert.match(k.ziel, /^obsidian:\/\/studium-autopilot\?aktion=verbinden&id=/, wo);
-      if (z.symbol === "warnung") assert.ok(k.wert === "Fehler" && k.unter && k.art === "warn" && k.ton === "warn", wo + " – Problem ohne Satz");
+      if (z.symbol === "warnung" && z.hinweis) assert.ok(k.wert !== "Fehler" && k.unter && k.art === "" && k.ton === "ok", wo + " – Hinweis als Fehler");
+      else if (z.symbol === "warnung") assert.ok(k.wert === "Fehler" && k.unter && k.art === "warn" && k.ton === "warn", wo + " – Problem ohne Satz");
       else assert.equal(k.unter, z.unter || W.liste[id].beschreibung || "", wo + " – zweite Zeile: was die Sache tut");
     }
   }

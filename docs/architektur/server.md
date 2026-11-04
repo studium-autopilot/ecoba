@@ -1,9 +1,9 @@
-# Architektur: Eigener Server mit Claude
+# Architektur: Eigener Server
 
 Teil der Architektur-Doku. Aufbau, `ctx`, Skripttypen und die Regeln für Skript-Autoren stehen im Überblick
 [architektur.md](../architektur.md).
 
-## Eigener Server mit Claude (`server.js`)
+## Eigener Server (`server.js`)
 
 Gegenstelle zum Server-Paket in `server/` (dort `README.md`): Ein eigener Server findet mit Claude Termine und Hinweise; das
 Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen steht dann nur die leise Zeile „Für Technische“
@@ -64,7 +64,8 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   Antworten auf signierte Anfragen sind signiert (`antwortEcht`: Kopf `studium-signatur`, HMAC unter HKDF(Zugangsschlüssel ‖
   Datenschlüssel, „…/anfrage/v1/antwort“) über nonce, Status und SHA-256 des Körpers); die Antwort auf `/v1/geraet` hat den Zweck `verbinden-antwort`.
   **Riegel** (`riegelZu`, `riegelSetzen`, gerätelokal `eba-server-signatur`, je Server und Schlüssel, dazu im Speicher `riegelHier`,
-  falls der Gerätespeicher ihn nicht nimmt): Antwortet ein Server wie einer bis 0.7.7 (`wieAlt`: 401 ohne `signatur: 1` oder seine
+  falls der Gerätespeicher ihn nicht nimmt; ein Eintrag im Schlüsselbund mit Kennung `geraet` gilt immer als verriegelt, siehe
+  „Schlüssel je Gerät“): Antwortet ein Server wie einer bis 0.7.7 (`wieAlt`: 401 ohne `signatur: 1` oder seine
   Sperre 429 `zu-viele-versuche`) und hat dieses Gerät noch nie eine signierte Antwort von ihm gesehen, geht dieselbe Anfrage einmal
   mit dem Bearer wie bis 0.7.7 (Antwort mit `bearer: true`, ihre 401 heißt `zugang`). Verriegelt nur eine Antwort mit gültiger
   Signatur oder ein Verbinden ab 0.7.8. Danach nie mehr Bearer an diesen Server; eine alt aussehende Antwort gilt als 401 `alt`, jede
@@ -81,6 +82,41 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   Tresor, `data.json`, `server.json` oder den Gerätespeicher. Fehler stehen im Fenster: Uhr des Geräts falsch (über 2 Minuten),
   zu viele Codes („Wieder möglich ab …“), Server zu alt (404), Schlüssel abgelehnt. Grenzen setzt der Server (10 Minuten, einer
   offen, 3 je Stunde, 10 je Tag; `server/README.md`, „Weiteres Gerät ohne Cloud Shell“).
+- **Schlüssel je Gerät (seit 03.11.2026, Gegenstück `server/geraete.mjs`):** Ein Server ab dieser Fassung gibt jedem Gerät, das sich
+  verbindet, eigene Zugangs- und Datenschlüssel und seine Kennung (`geraet`, 16 Byte base64url) in der verschlüsselten Antwort von
+  `austauschen`; der Schlüsselbund hält dann `{ adresse, zugang, schluessel, geraet }`. Plugins 0.7.8 bis 0.7.11 übergehen `geraet` und
+  signieren mit dem, was sie bekommen. Beim Verbinden schickt das Gerät seine Art als Namen mit (`geraetName` in `obsidianAbh`: iPhone,
+  iPad, Android-Smartphone, Android-Tablet, Mac, Windows-PC, Linux-PC; nie einen Namen aus dem System). Kennt der Server schon 30
+  Geräte (409 `zu-viele-geraete`), sagt **Mit Code verbinden** „Dein Server kennt schon 30 Geräte. Trenne auf einem verbundenen Gerät
+  eins, das du nicht mehr brauchst, dann geht derselbe Code.“; der Code bleibt gültig.
+  **Umzug** (`umziehen`): Ein Gerät ohne Kennung im Schlüsselbund (die gemeinsamen Schlüssel von früher oder eigene, die ein Plugin
+  von 0.7.8 bis 0.7.11 ohne Kennung abgelegt hat) fragt im Abruf nach dem Status einmal `POST /v1/geraete` mit `aktion: "umziehen"`
+  und seinem Namen, nur mit Riegel (dann nimmt `senden` nur signierte Antworten an). Mit dem gemeinsamen Schlüssel trägt die Anfrage die
+  Kennung des Umzugs (`umzug`, `umzugKennung`: 16 Zufallsbytes, vor der Anfrage im Gerätespeicher unter `eba-server-umzug`, je Server und
+  Schlüssel, nach dem Umzug gelöscht): Ging die Antwort verloren, bekommt der nächste Abruf dasselbe Gerät. Nach 429 (zu viele Umzüge je
+  Stunde) wartet es bis `wieder`, nach 409 (voll) wie nach 404. Zurück kommt `{ adresse, geraet, zugang,
+  schluessel }` mit Zweck `geraete-antwort`, unter dem bisherigen Datenschlüssel (mit eigenen Schlüsseln dieselben samt Kennung). Das
+  Gerät schreibt erst den Schlüsselbund, dann den Riegel für die neuen, und holt den Eingang schon mit ihnen. Ein Eintrag mit Kennung
+  gilt immer als verriegelt (`riegelZu`): Die Kennung gibt nur ein Server mit Schlüsseln je Gerät heraus, so geht mit den neuen
+  Schlüsseln nie ein Bearer, auch wenn der Gerätespeicher den Riegel verliert. Scheitert der Umzug, bleibt alles, wie es war, und der
+  nächste Abruf versucht es wieder; ein Server ohne diesen Weg (404, von 0.7.8 bis 0.7.11 ohne Signatur) erst nach 6 Stunden
+  (`UMZUG_WARTEN`). Die Anfragen an `/v1/geraete` sind mit dem Datenschlüssel verschlüsselt (Zweck `geraete`, `geraeteSenden`) und
+  tragen Zeit (nach der echten Uhr wie die Signatur) und Zufallswert.
+  **Liste** (Status mit Schlüssel, Feld `geraete`, `geraeteNormal`): Im Fenster steht zugeklappt „Geräte (N)“, dieses Gerät zuerst mit
+  „(dieses Gerät)“, dann die anderen, neueste zuerst; je Gerät eine Zeile „Name (ohne: „Gerät ohne Namen“): seit … · zuletzt … ·
+  Herkunft · Anschluss 203.0.113.…“ (`geraetHerkunft` aus `herkunft` und `von`: „über die Cloud Shell“, „über Code von „iPhone““, „über
+  Code von diesem Gerät“, „über Code eines getrennten Geräts“, „von früher übernommen“ für einen Umzug, sonst „über Obsidian“) und bei
+  jedem anderen der Knopf **Trennen** mit Rückfrage (`trennenFrage`: „Es holt danach nichts mehr von deinem Server. Willst du es wieder
+  nutzen, verbindest du es mit einem neuen Code.“). Der Server trennt mit dem Gerät, was es hereinließ (`server/README.md`, „Trennen“):
+  Geräte über seine Codes (`geraeteMit`, wie `kaskade` in `server/geraete.mjs`, nie dieses) und Verbindungen der Claude-App aus seinen
+  Codes (`von` der Verbindung). Geht etwas mit, nennt die Rückfrage es („Mit ihm getrennt wird, was über einen Code von ihm verbunden
+  wurde: „iPad“ und die Verbindung der Claude-App. Gehört das dir, trenne nur „iPhone“.“) und hat zwei Knöpfe: **Alles trennen** und
+  **Nur „iPhone“ trennen** (schickt deren Kennungen als `behalten`; `geraetTrennen`, `aktion: "trennen"`). Ein getrenntes Gerät bekommt danach 401 ohne
+  Signatur; verriegelt gilt das wie ein Netzfehler, nach 3 Tagen bietet sein Fenster Code und Adresse an. **Dieses Gerät trennen**
+  sagt es vorher dem Server (`trennen` mit der eigenen Kennung; ohne Netz trennt es trotzdem). Ein älterer Server nennt keine Geräte:
+  dann keine Liste und kein Fehler. Die gemeinsamen Schlüssel nimmt der Server für Signaturen nur noch begrenzt an (30 Tage nach dem
+  ersten Gerät mit eigenen, nach 7 Tagen ohne sie früher); danach antwortet er mit 401 `zugang`, signiert, und ein Plugin von 0.7.8 bis
+  0.7.11 zeigt „Dein Server kennt dieses Gerät nicht mehr. Bitte neu verbinden.“ (`server/README.md`, „Schlüssel je Gerät“).
 - **Mit Code verbinden:** Ist dieses Gerät nicht verbunden, aber `server.json` da (oder lehnt der Server seine Schlüssel ab, Code
   `zugang`, `erneuert` oder `paket`, etwa nach `studium-server schluessel-erneuern` oder einer neuen IP, oder ist er seit mehr als 3
   Tagen nicht erreichbar, `status().weg`), steht oben im Fenster ein Feld für den Code, eins für die Adresse und der Knopf
@@ -100,6 +136,22 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   (`verbindungenNormal`: Zeit, Herkunft, grobes Netz `a.b.c.0/24` bzw. IPv6 `/48`, der Name, den das Gerät nennt, als reiner Text
   mit höchstens 40 Zeichen). Dann steht unter „Zuletzt verbunden“ die neueste mit Name und Anschluss („Anschluss 203.0.113.…“),
   darunter zugeklappt „Alle Verbindungen von Geräten (N)“; nur auf dem Gerät, das den Status geholt hat, nie in `server.json`.
+- **Claude-App (Connector, Server ab Release A; [connector.md](connector.md)):** `POST /v1/claude-app`, signiert mit Beweis des
+  Datenschlüssels (sonst 403 `{ fehler: "datenschluessel" }`, mit Bearer 403 `veraltet`), Körper ein Paket mit Zweck `claude-app`:
+  `{ schema: 1, zeit, nonce, aktion: code | status | trennen | aus, id? }` (Zeit höchstens 2 Minuten neben der Uhr des Servers,
+  jeder Zufallswert einmal). Antworten mit 200 sind verschlüsselt mit Zweck `claude-app-antwort`: `code` → `{ code: "XXXXX-XXXXX",
+  ablauf, adresse: "https://<host>/mcp" }` und schaltet den Connector ein (Codes 10 Minuten, einer offen, 3 je Stunde, 10 je Tag,
+  sonst 429 `{ fehler: "zu-viele", wieder }`); `status` und `trennen` → `{ an, verbindungen: [{ id, seit, zuletzt, client }],
+  frueher? }` (ohne Verbindungen mit offenem Wunsch zum Trennen, nach `trennen` also schon ohne die getrennte; `frueher: [{ id,
+  seit, ende, grund, client }]` sind die beendeten der letzten 30 Tage, höchstens 20, `grund` aus `getrennt`, `widerrufen`,
+  `ersetzt`, `wiederverwendet`, `abgelaufen`, sonst `unbekannt`; das Feld fehlt ohne beendete, ein älteres Plugin übergeht es);
+  `aus` → `{ an: false, verbindungen: [] }`. Fehler
+  unverschlüsselt: 400 `anfrage` | `uhr`, 409 `wiederholt`, 503 `abgeschaltet` (Notschalter im Paket); ein älterer Server antwortet
+  404. Der Eingang bringt dazu `claude_app: { an, verbindungen, frueher? }`. Der Stand darf `lagebild` tragen (`{ lernplan: [{ modul, kapitel: [{ titel, nummer?,
+  verstanden, woche? }] }], karten: [{ modul, faellig }], pruefungen: [{ modul, titel?, datum?, anmeldung?, versuch?, note? (bis 30 Zeichen) }],
+  stundenplan: [{ datum, von?, bis?, titel, ort?, modul?, ausfall? }] }`; höchstens 40 Module, 200 Kapitel je Modul, 300 Einträge im
+  Stundenplan für 14 Tage, der ganze Stand höchstens 512 KB). Der Server prüft jedes Feld (`lagebildPruefen` in
+  `server/claude-app.mjs`) und behält es nur, solange der Connector an ist, getrennt vom Stand für den Lauf.
 - **Abruf** (`Q.planen`: nach 30 s bis 2,5 Min., dann alle 15 Min., nach Fehlern nach 2 bzw. 5 Min., zurück in der App nach
   über 10 Min.; Knopf **Aktualisieren**): `GET /v1/eingang`, signiert
   → Paket `{ schema, zweck, iv, daten }`, AES-256-GCM über Web Crypto, Zusatzdaten
@@ -274,7 +326,8 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   `claude_lauf` „wartet“ oder
   „laeuft“ meldet, sagt die Zeile „Claude durchsucht gerade …“, und der nächste Abruf kommt nach 5 Min. (`plan.spaeter`).
   Hinweise (`ctx.hinweis`) nur nach **Aktualisieren**, nie vom Zeitplan; Notizen weg nur über den einen Papierkorb. `ctx.server.fensterInhalt(el, neu)`: Stand, Hinweise, letzte
-  Übernahmen, **Weiteres Gerät verbinden** bzw. **Mit Code verbinden** (danach zeichnet `neu()` das Fenster neu), „Dieses Gerät trennen“. Ist der Server gerade nicht erreichbar, steht über den Werten „Stand des Servers: nicht
+  Übernahmen, **Weiteres Gerät verbinden** bzw. **Mit Code verbinden** (danach zeichnet `neu()` das Fenster neu), „Geräte (N)“ mit
+  **Trennen** (siehe „Schlüssel je Gerät“), „Dieses Gerät trennen“. Ist der Server gerade nicht erreichbar, steht über den Werten „Stand des Servers: nicht
   erreichbar, Angaben von …“ (`erreicht`: letzter geholter Status). Gmail `aus` meldet der Server, solange `server_gmail` 0 ist.
   Neue Version des Servers: Er installiert sie täglich selbst (`studium-server aktualisieren`, Ergebnis im Status unter
   `aktualisierung`). Ging der letzte Versuch schief und hat der Server dessen Ziel nicht schon anders bekommen, steht im Fenster

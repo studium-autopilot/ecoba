@@ -4,8 +4,11 @@
 //     obsidian://studium-autopilot?aktion=server-verbinden&adresse=…&code=…; der Code gilt 30 Minuten (Herkunft „cloud-shell“).
 //   - Obsidian: Ein verbundenes Gerät holt über POST /v1/geraet (dienst.mjs, geraetCode) einen Code für ein weiteres Gerät, das
 //     ihn eintippt. Er gilt GERAET.minuten, höchstens einer ist offen (ein neuer zieht den vorigen zurück), höchstens
-//     GERAET.stunde je Stunde und GERAET.tag je Tag (Herkunft „obsidian“). Codes aus der Cloud Shell zählen dabei nicht mit.
-// Zugangs- und Datenschlüssel holt das Plugin mit dem Code über HTTPS (POST /v1/verbinden) und legt sie in den Schlüsselbund. So
+//     GERAET.stunde je Stunde und GERAET.tag je Tag (Herkunft „obsidian“). Codes aus der Cloud Shell zählen dabei nicht mit. Ein solcher
+//     Code nennt, wer ihn holte (von: Kennung des Geräts oder „gemeinsam“, geraete.mjs VON): Wird dieses Gerät getrennt, gilt sein offener
+//     Code nicht mehr (codesZurueckziehen), und das Gerät, das ihn einlöst, steht mit diesem von im Verzeichnis.
+// Zugangs- und Datenschlüssel holt das Plugin mit dem Code über HTTPS (POST /v1/verbinden) und legt sie in den Schlüsselbund; ab dieser
+// Fassung bekommt jedes Gerät auf dem Weg ab 0.7.8 eigene (dienst.mjs legt sie an, geraete.mjs), auf dem bis 0.7.7 die gemeinsamen. So
 // stehen die Schlüssel nie in einem Link, auf dem Bildschirm oder im Chat. Gespeichert wird der SHA-256 des Codes und, mit der
 // Adresse des Servers, was der Austausch ab 0.7.8 braucht (codeAbleiten, unten), nie der Code selbst. Ein Code gilt
 // einmal: Einlösen legt zuerst exklusiv eine Marke an (atomar), so bekommt von zwei gleichzeitigen Anfragen nur eine die Schlüssel.
@@ -15,8 +18,9 @@
 // mit und kann ohne den Code keine eigenen Schlüssel unterschieben. Plugins bis 0.7.7 schicken den Code selbst (schema fehlt); das
 // geht weiter, ohne diesen Schutz.
 // Codes und geraete.json liegen im Ordner des Web-Dienstes (web/ im Datenordner; die Cloud Shell legt ihren Code als dessen Benutzer
-// studium-web ab, studium-server verbinden). geraete.json: { ausgestellt: [Zeit] (Codes aus Obsidian der letzten 24 Stunden), nonces: { Zufallswert: Ablauf }
-// (gegen wiederholte Anfragen), verbunden: [{ zeit, herkunft, netz?, geraet? }] (die letzten VERBUNDEN: jedes Einlösen mit Zeit,
+// studium-web ab, studium-server verbinden). geraete.json: { ausgestellt: [Zeit] (Codes aus Obsidian der letzten 24 Stunden), nonces: { Zufallswert:
+// [Ablauf, Schlüssel] } (gegen wiederholte Anfragen; Schlüssel: Kennung des Geräts oder „gemeinsam“, je Schlüssel höchstens GERAET.nonces),
+// verbunden: [{ zeit, herkunft, netz?, geraet? }] (die letzten VERBUNDEN: jedes Einlösen mit Zeit,
 // Herkunft, grobem Netz des Absenders (IPv4 /24, IPv6 /48, ipNetz) und dem Namen des Geräts, wenn es einen nennt; ans Plugin im
 // verschlüsselten Eingang und im Status mit Zugangsschlüssel, nie ohne) }.
 //   node verbinden.mjs   neuer Code, Ausgabe als JSON { code, link, ablauf }
@@ -29,7 +33,8 @@ import { saeubern } from "./eingang.mjs";
 const ZEICHEN = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // ohne 0/O, 1/I
 export const GUELTIG_MIN = 30;
 // Codes aus Obsidian: Minuten gültig, höchstens so viele je Stunde und je Tag; die Zeit der Anfrage höchstens so weit neben der
-// Uhr des Servers; höchstens so viele Zufallswerte zugleich gemerkt (jeder nur bis zum Ende seines Zeitfensters)
+// Uhr des Servers; höchstens so viele Zufallswerte je Schlüssel zugleich gemerkt (jeder nur bis zum Ende seines Zeitfensters; je Schlüssel,
+// damit kein Gerät mit vielen Anfragen die der anderen aufhält)
 export const GERAET = { minuten: 10, stunde: 3, tag: 10, uhr: 2 * 60e3, nonces: 200 };
 export const HERKUNFT = ["cloud-shell", "obsidian"];
 const VERBUNDEN = 20;
@@ -89,7 +94,8 @@ export const beweisText = (host, pub) => `${V2}beweis\n${host}\n${pub}`;
 export const antwortKontext = (host, pubGeraet, pubServer) => `${V2}antwort\n${host}\n${pubGeraet}\n${pubServer}`;
 
 // Löscht abgelaufene Codes und legt einen neuen an. adresse: die des Servers (dienst.json); ohne sie (Tests) geht nur der Weg bis 0.7.7.
-export function neuerCode(verzeichnis, { jetzt = new Date(), minuten = GUELTIG_MIN, herkunft = "cloud-shell", adresse = "" } = {}) {
+// von: wer einen Code aus Obsidian holte (Kennung des Geräts oder „gemeinsam“)
+export function neuerCode(verzeichnis, { jetzt = new Date(), minuten = GUELTIG_MIN, herkunft = "cloud-shell", adresse = "", von = "" } = {}) {
   mkdirSync(ordner(verzeichnis), { recursive: true, mode: 0o700 });
   aufraeumen(verzeichnis, jetzt);
   let code = "";
@@ -97,8 +103,23 @@ export function neuerCode(verzeichnis, { jetzt = new Date(), minuten = GUELTIG_M
   code = `${code.slice(0, 5)}-${code.slice(5)}`;
   const ablauf = new Date(jetzt.getTime() + minuten * 60e3).toISOString();
   const host = hostVon(adresse);
-  writeFileSync(join(ordner(verzeichnis), `${hash(code)}.json`), JSON.stringify({ ablauf, herkunft, ...(host ? codeAbleiten(code, host) : {}) }), { mode: 0o600 });
+  const wer = herkunft === "obsidian" && VON_CODE.test(von) ? { von } : {};
+  writeFileSync(join(ordner(verzeichnis), `${hash(code)}.json`), JSON.stringify({ ablauf, herkunft, ...wer, ...(host ? codeAbleiten(code, host) : {}) }), { mode: 0o600 });
   return { code, ablauf };
+}
+// Wer einen Code ausgab (Eintrag der Datei) → cloud-shell | Kennung des Geräts | gemeinsam (Codes aus Obsidian ohne von stammen von einem
+// Server bis 0.7.11, der nur den gemeinsamen Schlüssel kannte)
+const VON_CODE = /^(?:gemeinsam|[A-Za-z0-9_-]{22})$/;
+export const codeVon = (e) => (!e || e.herkunft !== "obsidian" ? "cloud-shell" : VON_CODE.test(String(e.von || "")) ? e.von : "gemeinsam");
+// Offene Codes, die eines dieser Geräte (oder „gemeinsam“) holte, gelten nicht mehr (Trennen, Ende des gemeinsamen Schlüssels). von:
+// [Kennung]
+export function codesZurueckziehen(verzeichnis, von) {
+  let namen = [];
+  try { namen = readdirSync(ordner(verzeichnis)).filter((n) => /^[0-9a-f]{64}\.json$/.test(n)); } catch (e) { return; }
+  for (const name of namen) {
+    const datei = join(ordner(verzeichnis), name);
+    try { if (von.includes(codeVon(JSON.parse(readFileSync(datei, "utf8"))))) rmSync(datei, { force: true }); } catch (e) { /* schon weg */ }
+  }
 }
 
 // Herkunft des Codes („cloud-shell“ | „obsidian“), wenn er gültig war, sonst "". Er ist danach verbraucht, das Verbinden steht in
@@ -109,11 +130,15 @@ export function codeEinloesen(verzeichnis, code, jetzt = new Date(), info = {}) 
 }
 
 // Austausch ab 0.7.8. anfrage: { schema: 2, kennung, pub (öffentlicher Schlüssel des Geräts, P-256 unkomprimiert), beweis
-// (HMAC-SHA256 unter beweis über beweisText) }; konfig: { adresse, zugang, schluessel }. Der Code ist nur verbraucht, wenn alles
-// stimmt: Wer die Kennung mitliest und mit eigenem Schlüssel weiterschickt, scheitert am Beweis, und der Code bleibt dem Gerät.
-// → { antwort: { schema: 2, pub (des Servers, nur für diese Anfrage), iv, daten }, herkunft } | null. daten: AES-256-GCM (Tag hinten
-// wie bei Web Crypto) von { adresse, zugang, schluessel } unter HKDF-SHA256(ECDH-Geheimnis ‖ antwort, Info antwortKontext),
-// Zusatzdaten antwortKontext
+// (HMAC-SHA256 unter beweis über beweisText) }; konfig: { adresse, zugang, schluessel, geraet?, eintragen?, zuruecknehmen? }: die
+// Schlüssel, die das Gerät bekommt (ab dieser Fassung eigene, geraet ist dann seine Kennung und geht mit). eintragen({ herkunft, von })
+// trägt das Gerät ein, bevor der Code verbraucht ist → "" | Fehler (code: wer den Code ausgab, gilt nicht mehr, etwa ein getrenntes Gerät;
+// dann ist der Code weg; zu-viele-geraete: der Server kennt schon so viele Geräte, wie er darf; speichern: das Verzeichnis ließ sich
+// nicht schreiben); zuruecknehmen() nimmt es wieder heraus, wenn der Code dann doch nicht mehr gilt. Der Code ist nur verbraucht, wenn alles stimmt: Wer die Kennung mitliest und mit eigenem Schlüssel weiterschickt, scheitert am
+// Beweis, und der Code bleibt dem Gerät; ebenso bei einem Fehler aus eintragen ({ fehler }, erst nach der Prüfung des Codes).
+// → { antwort: { schema: 2, pub (des Servers, nur für diese Anfrage), iv, daten }, herkunft } | { fehler } | null. daten: AES-256-GCM (Tag
+// hinten wie bei Web Crypto) von { adresse, zugang, schluessel, geraet? } unter HKDF-SHA256(ECDH-Geheimnis ‖ antwort, Info
+// antwortKontext), Zusatzdaten antwortKontext. Plugins 0.7.8 bis 0.7.11 übergehen geraet und signieren mit dem, was sie bekommen.
 export function codeEinloesenNeu(verzeichnis, anfrage, konfig, jetzt = new Date(), info = {}) {
   const a = anfrage && typeof anfrage === "object" ? anfrage : {};
   const host = hostVon(konfig.adresse);
@@ -132,13 +157,22 @@ export function codeEinloesenNeu(verzeichnis, anfrage, konfig, jetzt = new Date(
   const pub = ecdh.generateKeys().toString("base64url");
   let geheimnis;
   try { geheimnis = ecdh.computeSecret(Buffer.from(a.pub, "base64url")); } catch (x) { return null; } // kein Punkt auf der Kurve
+  const fehler = konfig.eintragen ? konfig.eintragen({ herkunft: HERKUNFT.includes(e.herkunft) ? e.herkunft : "cloud-shell", von: codeVon(e) }) : "";
+  if (fehler === "code") {
+    rmSync(datei, { force: true });
+    return null;
+  }
+  if (fehler) return { fehler };
   const herkunft = einloesen(datei, verzeichnis, jetzt, info);
-  if (!herkunft) return null;
+  if (!herkunft) {
+    if (konfig.zuruecknehmen) konfig.zuruecknehmen();
+    return null;
+  }
   const kontext = antwortKontext(host, a.pub, pub);
   const iv = randomBytes(12);
   const c = createCipheriv("aes-256-gcm", hkdf(Buffer.concat([geheimnis, Buffer.from(e.antwort, "base64url")]), kontext), iv);
   c.setAAD(Buffer.from(kontext, "utf8"));
-  const klar = JSON.stringify({ adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel });
+  const klar = JSON.stringify({ adresse: konfig.adresse, zugang: konfig.zugang, schluessel: konfig.schluessel, ...(konfig.geraet ? { geraet: konfig.geraet } : {}) });
   const daten = Buffer.concat([c.update(klar, "utf8"), c.final(), c.getAuthTag()]);
   return { antwort: { schema: 2, pub, iv: iv.toString("base64url"), daten: daten.toString("base64url") }, herkunft };
 }
@@ -199,8 +233,12 @@ function zustandLesen(verzeichnis, jetzt) {
   const t = jetzt.getTime();
   const ausgestellt = (Array.isArray(o.ausgestellt) ? o.ausgestellt : []).filter((z) => zeitOk(z) && t - Date.parse(z) < TAG)
     .map((z) => new Date(z).toISOString()).sort().slice(-100);
+  // Zufallswerte als [Ablauf, Schlüssel]; eine ältere Fassung schrieb nur den Ablauf
   const nonces = {}, n = o.nonces && typeof o.nonces === "object" ? o.nonces : {};
-  for (const k of Object.keys(n)) if (NONCE.test(k) && zeitOk(n[k]) && Date.parse(n[k]) >= t) nonces[k] = n[k];
+  for (const k of Object.keys(n)) {
+    const [bis, wer] = Array.isArray(n[k]) ? n[k] : [n[k], ""];
+    if (NONCE.test(k) && zeitOk(bis) && Date.parse(bis) >= t) nonces[k] = [bis, typeof wer === "string" ? wer.slice(0, 64) : ""];
+  }
   const verbunden = (Array.isArray(o.verbunden) ? o.verbunden : []).filter((e) => e && zeitOk(e.zeit) && HERKUNFT.includes(e.herkunft))
     .map((e) => verbindung(e.zeit, e.herkunft, e)).slice(-VERBUNDEN);
   return { ausgestellt, nonces, verbunden };
@@ -244,22 +282,39 @@ function wiederAb(ausgestellt, jetzt) {
 // keinen Code und über ihn nie den Datenschlüssel. anfrage: { schema: 1, zeit, nonce }; zeit höchstens GERAET.uhr neben der Uhr
 // des Servers, jeder Zufallswert nur einmal (auch eine abgelehnte Anfrage verbraucht ihn). → [Status, Antwort]: 200 { code,
 // ablauf }, 400 { fehler: anfrage | uhr }, 409 { fehler: wiederholt }, 429 { fehler: zu-viele, wieder? }. adresse: die des Servers
-// (für den Austausch ab 0.7.8, neuerCode)
-export function geraetCode(verzeichnis, anfrage, jetzt = new Date(), adresse = "") {
-  const a = anfrage && typeof anfrage === "object" ? anfrage : {};
-  if (a.schema !== 1 || typeof a.nonce !== "string" || !NONCE.test(a.nonce) || !zeitOk(a.zeit)) return [400, { fehler: "anfrage" }];
-  const zeit = Date.parse(a.zeit);
-  if (Math.abs(jetzt.getTime() - zeit) > GERAET.uhr) return [400, { fehler: "uhr" }];
+// (für den Austausch ab 0.7.8, neuerCode); wer: der Schlüssel der Anfrage (Kennung des Geräts oder „gemeinsam“, einmal unten), von: wer
+// den Code holt (steht im Code, codeVon)
+export function geraetCode(verzeichnis, anfrage, jetzt = new Date(), adresse = "", { wer = "", von = "" } = {}) {
   const z = zustandLesen(verzeichnis, jetzt);
-  if (z.nonces[a.nonce]) return [409, { fehler: "wiederholt" }];
-  if (Object.keys(z.nonces).length >= GERAET.nonces) return [429, { fehler: "zu-viele" }];
-  z.nonces[a.nonce] = new Date(zeit + GERAET.uhr).toISOString();
+  const nein = einmal(z, anfrage, jetzt, wer);
+  if (nein) return nein;
   const wieder = wiederAb(z.ausgestellt, jetzt);
   if (!wieder) z.ausgestellt.push(jetzt.toISOString());
   zustandSchreiben(verzeichnis, z); // erst gemerkt, dann der Code: scheitert das Schreiben, gibt es keinen
   if (wieder) return [429, { fehler: "zu-viele", wieder }];
   zurueckziehen(verzeichnis, "obsidian");
-  return [200, neuerCode(verzeichnis, { jetzt, minuten: GERAET.minuten, herkunft: "obsidian", adresse })];
+  return [200, neuerCode(verzeichnis, { jetzt, minuten: GERAET.minuten, herkunft: "obsidian", adresse, von })];
+}
+
+// Zeit und Zufallswert einer verschlüsselten Anfrage { schema: 1, zeit, nonce, … } prüfen und den Zufallswert in z merken (auch eine
+// abgelehnte Anfrage verbraucht ihn); wer: Schlüssel der Anfrage (je Schlüssel höchstens GERAET.nonces) → null (gilt) | [Status,
+// Antwort]: 400 { fehler: anfrage | uhr }, 409 { fehler: wiederholt }, 429 { fehler: zu-viele }
+function einmal(z, anfrage, jetzt, wer = "") {
+  const a = anfrage && typeof anfrage === "object" ? anfrage : {};
+  if (a.schema !== 1 || typeof a.nonce !== "string" || !NONCE.test(a.nonce) || !zeitOk(a.zeit)) return [400, { fehler: "anfrage" }];
+  const zeit = Date.parse(a.zeit);
+  if (Math.abs(jetzt.getTime() - zeit) > GERAET.uhr) return [400, { fehler: "uhr" }];
+  if (z.nonces[a.nonce]) return [409, { fehler: "wiederholt" }];
+  if (Object.values(z.nonces).filter((x) => x[1] === wer).length >= GERAET.nonces) return [429, { fehler: "zu-viele" }];
+  z.nonces[a.nonce] = [new Date(zeit + GERAET.uhr).toISOString(), wer];
+  return null;
+}
+// Dasselbe für POST /v1/geraete (dienst.mjs): gemerkt in geraete.json wie die Anfragen nach einem Code → null | [Status, Antwort]
+export function anfrageEinmal(verzeichnis, anfrage, jetzt = new Date(), wer = "") {
+  const z = zustandLesen(verzeichnis, jetzt);
+  const nein = einmal(z, anfrage, jetzt, wer);
+  if (!nein) zustandSchreiben(verzeichnis, z); // scheitert das Schreiben, wirft es: dann gilt die Anfrage nicht
+  return nein;
 }
 
 export function link(adresse, code) {

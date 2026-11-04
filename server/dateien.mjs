@@ -5,7 +5,7 @@
 // sieht. Unter Linux sorgt O_NOFOLLOW dafür ohne Lücke zwischen Prüfen und Öffnen; lstat davor und der Vergleich mit fstat danach
 // fangen dasselbe auf Systemen ohne O_NOFOLLOW (Windows, nur für die Tests).
 import { randomBytes } from "node:crypto";
-import { closeSync, constants, fchmodSync, fstatSync, lstatSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, openSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const OHNE_LINK = constants.O_RDONLY | (constants.O_NOFOLLOW || 0) | (constants.O_NONBLOCK || 0);
@@ -46,13 +46,16 @@ export function jsonLesen(pfad, ersatz, max = 16 * 1024 * 1024) {
 
 // Schreibt fertig oder gar nicht: über eine Zwischendatei mit Zufallsnamen, exklusiv angelegt (wx: scheitert an allem, was dort
 // schon liegt, auch an einem Link), dann umbenannt. rename ersetzt den Eintrag selbst, ein Link an seiner Stelle wird nicht befolgt.
-// modus: Rechte der Datei, unabhängig von der UMask des Dienstes (etwa 0o640, damit der Web-Dienst über die Gruppe liest)
-export function schreibenAtomar(pfad, inhalt, modus) {
+// modus: Rechte der Datei, unabhängig von der UMask des Dienstes (etwa 0o640, damit der Web-Dienst über die Gruppe liest). sicher: die
+// Zwischendatei vor dem Umbenennen auf die Platte (fsync), damit nach einem Absturz nie eine leere Datei übrig bleibt (für Dateien, deren
+// Inhalt etwas sperrt, etwa trennen/alle)
+export function schreibenAtomar(pfad, inhalt, modus, sicher = false) {
   const zwischen = `${pfad}.${randomBytes(6).toString("hex")}.neu`;
   const fd = openSync(zwischen, "wx", modus ?? 0o666);
   try {
     writeFileSync(fd, inhalt);
     if (modus != null) fchmodSync(fd, modus);
+    if (sicher) fsyncSync(fd);
   } catch (e) {
     closeSync(fd);
     rmSync(zwischen, { force: true });
