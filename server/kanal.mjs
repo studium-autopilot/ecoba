@@ -1,7 +1,7 @@
 // Privater Datenkanal zwischen dem eigenen Server und dem Plugin: AES-256-GCM über Web Crypto, damit das Plugin
 // (Obsidian, auch iPhone/iPad) mit derselben API entschlüsselt. Ein Paket ist { schema, zweck, iv, daten } (base64url).
 // Der Zweck („eingang“, „stand“, „unterlagen“, „kapitel“, „pdf“, „verbinden“, „verbinden-antwort“, „geraete“, „geraete-antwort“,
-// „claude-app“, „claude-app-antwort“) steckt als Zusatzdaten in der Verschlüsselung: Ein Paket für den einen Zweck lässt sich nicht als
+// „claude-app“, „claude-app-antwort“, „aktualisieren“) steckt als Zusatzdaten in der Verschlüsselung: Ein Paket für den einen Zweck lässt sich nicht als
 // das andere ausgeben. Der Schlüssel (32 Byte) kennen nur Server und Plugin; er geht nie über den Kanal selbst.
 // Dazu die Signatur jeder Anfrage (ab 0.7.8, unten): Der Zugangsschlüssel selbst geht dann nie mehr über das Netz.
 import { createHash, createHmac, hkdfSync, timingSafeEqual, webcrypto } from "node:crypto";
@@ -10,9 +10,9 @@ import { appendFileSync, readFileSync, renameSync, writeFileSync } from "node:fs
 export const KANAL_SCHEMA = 1;
 // verbinden-antwort: Antwort auf POST /v1/geraet (ab 0.7.8; die Anfrage hat verbinden, so geht keine als die andere durch); geraete und
 // geraete-antwort: Anfrage und Antwort von POST /v1/geraete (Geräte mit eigenen Schlüsseln, geraete.mjs); ebenso claude-app und
-// claude-app-antwort für POST /v1/claude-app (Connector)
+// claude-app-antwort für POST /v1/claude-app (Connector); aktualisieren: Anfrage von POST /v1/aktualisieren („Server jetzt aktualisieren“)
 const ZWECKE = new Set(["eingang", "stand", "unterlagen", "kapitel", "pdf", "verbinden", "verbinden-antwort", "geraete", "geraete-antwort", "claude-app",
-  "claude-app-antwort"]);
+  "claude-app-antwort", "aktualisieren"]);
 const kodieren = new TextEncoder();
 const dekodieren = new TextDecoder();
 const b64 = (bytes) => Buffer.from(bytes).toString("base64url");

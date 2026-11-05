@@ -1256,6 +1256,8 @@ module.exports = function (ctx) {
       // am Limit des Claude-Abos: nächster Versuch des Servers (ein Server vor dem 01.11.2026 meldet es nicht)
       limitWieder: isoOk(o.limit_wieder) ? new Date(o.limit_wieder).toISOString() : "",
       aktualisierung: aktualisierungNormal(o.aktualisierung),
+      // „Server jetzt aktualisieren“ (nur mit Schlüssel, Server ab dieser Fassung): bereit | angefordert | laeuft; "" bei einem älteren
+      aktualisierenJetzt: ["bereit", "angefordert", "laeuft"].indexOf(o.aktualisieren_jetzt) >= 0 ? o.aktualisieren_jetzt : "",
       fehler: (Array.isArray(o.fehler) ? o.fehler : []).filter((f) => typeof f === "string" && /^[a-z0-9-]{1,40}$/.test(f)).slice(0, 10),
       // nur mit Schlüssel (Server ab 02.11.2026): die letzten Verbindungen von Geräten und die Grenzen je Tag
       verbunden: verbindungenNormal(o.verbunden),
@@ -1468,6 +1470,30 @@ module.exports = function (ctx) {
           : "Gib dazu die Adresse deines Servers ein. Sie steht auf dem Gerät, das den Code erzeugt hat, unter dem Code." };
       }
       return verbinden(adresse, code, { getippt: true, adresseGetippt: !!eingabe });
+    };
+
+    // „Server jetzt aktualisieren“ (POST /v1/aktualisieren, Server ab dieser Fassung): Anfrage { schema: 1, zeit, nonce } mit dem
+    // Datenschlüssel verschlüsselt (Zweck „aktualisieren“), signiert mit Beweis; zeit nach der echten Uhr wie bei geraeteSenden. Der
+    // Server installiert dann wie „studium-server aktualisieren --jetzt“ (nur geprüfte Releases). → { ok: true } | { fehler: nicht-verbunden
+    // | alt (404: älterer Server) | zu-viele (mit wieder) | uhr | nochmal | zugang | erneuert | netz }
+    const jetztAktualisieren = async () => {
+      const v = verbindung();
+      if (!v) return { fehler: "nicht-verbunden" };
+      let r;
+      try {
+        const anfrage = { schema: 1, zeit: new Date(Date.now()).toISOString(), nonce: b64(crypto.getRandomValues(new Uint8Array(16))) };
+        r = await senden(v, "/v1/aktualisieren", { method: "POST", beweis: true, fehlt404: true, body: JSON.stringify(await verschluesseln(v.schluessel, "aktualisieren", anfrage)) });
+      } catch (e) { return { fehler: "netz" }; }
+      if (r.status === 401) return { fehler: ablehnung(r) };
+      if (r.status === 404) return { fehler: "alt" };
+      let o = null;
+      try { o = JSON.parse(r.text); } catch (e) { o = null; }
+      if (r.status === 429) return o && isoOk(o.wieder) ? { fehler: "zu-viele", wieder: new Date(o.wieder).toISOString() } : { fehler: "zu-viele" };
+      if (r.status === 400) return { fehler: o && o.fehler === "uhr" ? "uhr" : "nochmal" };
+      if (r.status === 403) return { fehler: o && o.fehler === "veraltet" ? "alt" : "zugang" };
+      if (r.status !== 200) return { fehler: r.status === 409 ? "nochmal" : "netz" };
+      await statusHolen(v, true);
+      return { ok: true };
     };
 
     // ----- Claude-App -----
@@ -2299,7 +2325,7 @@ module.exports = function (ctx) {
     return {
       verbinden, trennen, abrufen, anstossen, status, zeile, einzelheiten, sichtbar, neueHinweise, hinweiseGesehen, hinweiseLaden, hinweise,
       geraetCode, geraetTrennen, adresseBekannt, adresseGeprueft, codeVerbinden, ruht, rueckStand, rueckgaengig,
-      claudeAppCode, claudeAppStatus, claudeAppTrennen, claudeAppAus, claudeAppStand, claudeAppNeu,
+      claudeAppCode, claudeAppStatus, claudeAppTrennen, claudeAppAus, claudeAppStand, claudeAppNeu, jetztAktualisieren,
       verbunden: () => !!verbindung(),
       get laeuft() { return laeuft; },
     };
@@ -2853,6 +2879,35 @@ module.exports = function (ctx) {
       ctx.hinweis("Kopieren ging nicht. Tipp ins Feld und kopier die Adresse von Hand.");
     }
   };
+  // Wo das Fenster sagt, dass der Server erst ein Update braucht (alt): Kennt er „Server jetzt aktualisieren“ (Status aktualisieren_jetzt),
+  // der Satz mit dem Knopf; läuft schon eins, nur das; ein älterer Server (ohne das Feld, 404) holt es von selbst (Staffel bis 48 Stunden,
+  // dazu der tägliche Zeitgeber). Nach dem Tippen holt ein Abruf in 10 Minuten den neuen Stand. m: Ablauf (motor(), im Test erzeugen(abh))
+  const JETZT_TEXT = { laeuft: "Dein Server aktualisiert sich, das dauert ein paar Minuten.",
+    selbst: "Dein Server holt das von selbst, spätestens drei Tage nach dem Update von Studium Autopilot." };
+  const jetztZeigen = (el, m, satz) => {
+    el.empty();
+    const stand = ((m.status() || {}).werte || {}).aktualisierenJetzt;
+    if (stand !== "bereit") { el.createEl("p", { cls: "eba-modal-text", text: stand ? JETZT_TEXT.laeuft : JETZT_TEXT.selbst }); return; }
+    el.createEl("p", { cls: "eba-modal-text", text: satz });
+    const meldung = el.createEl("p", { cls: "eba-modal-meldung" });
+    const k = el.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Server jetzt aktualisieren" });
+    k.addEventListener("click", () => {
+      k.disabled = true;
+      m.jetztAktualisieren().then((r) => {
+        k.disabled = false;
+        if (r.ok || r.fehler === "alt") {
+          el.empty();
+          el.createEl("p", { cls: "eba-modal-text", text: r.ok ? JETZT_TEXT.laeuft : JETZT_TEXT.selbst });
+          if (r.ok && plan) plan.spaeter(10 * MIN);
+          return;
+        }
+        meldung.addClass("fehler");
+        const d = new Date(r.wieder || "");
+        meldung.setText(r.fehler !== "zu-viele" ? caFehlerText(r, new Date()) : "Dein Server hat das gerade erst versucht." +
+          (isNaN(d.getTime()) ? " Versuch es später wieder." : ` Wieder möglich ab ${zeitText(d, new Date())}.`));
+      }, (e) => { console.error("server: jetzt aktualisieren", e); k.disabled = false; });
+    });
+  };
   // Claude-App im Fenster „Eigener Server“, nur auf einem Gerät mit Schlüsseln (nie in der Einrichtung): je Verbindung eine Zeile
   // (Name der App, seit wann, zuletzt benutzt) mit Trennen, sonst „Nicht verbunden.“; darunter „Mit der Claude-App verbinden“: nach der
   // Rückfrage drei Schritte, die Adresse zum Kopieren und der Code, bis er abläuft (wie bei „Weiteres Gerät verbinden“ nur hier, nie im
@@ -2872,8 +2927,14 @@ module.exports = function (ctx) {
     const ausZeile = teil.createEl("p", { cls: "eba-modal-hinweis" });
     const fehler = (r) => { meldung.addClass("fehler"); meldung.setText(caFehlerText(r, new Date())); };
     const leise = (text) => { meldung.removeClass("fehler"); meldung.setText(text); };
-    // Server ohne Connector oder abgeschaltet: kein Knopf, nur der Satz
-    const ohneKnopf = (r) => { if (r.fehler !== "alt" && r.fehler !== "abgeschaltet") return false; knoepfe.empty(); platz.empty(); leise(CA_FEHLER[r.fehler]); return true; };
+    // Server ohne Connector: statt des Knopfs „Server jetzt aktualisieren“ (jetztZeigen); abgeschaltet: nur der Satz
+    const ohneKnopf = (r) => {
+      if (r.fehler !== "alt" && r.fehler !== "abgeschaltet") return false;
+      knoepfe.empty();
+      platz.empty();
+      if (r.fehler === "alt") { leise(""); jetztZeigen(platz, m, CA_FEHLER.alt); } else leise(CA_FEHLER[r.fehler]);
+      return true;
+    };
     const trennen = async (id) => {
       const r = await m.claudeAppTrennen(id);
       if (r.abgebrochen) return;

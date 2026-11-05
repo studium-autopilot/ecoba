@@ -136,6 +136,8 @@ async function serverStarten() {
       try { g = JSON.parse(fs.readFileSync(path.join(verzeichnis, "web", "geraete-schluessel.json"), "utf8")).geraete || []; } catch (e) { g = []; }
       return g.length ? { zugang: g[g.length - 1].zugang, schluessel: g[g.length - 1].schluessel } : konfig;
     },
+    // Marke für root von „Server jetzt aktualisieren“ (POST /v1/aktualisieren)
+    marke: () => fs.existsSync(path.join(verzeichnis, "aktualisieren", "jetzt")),
     zu: () => new Promise((fertig) => dienst.close(fertig)),
   };
 }
@@ -301,8 +303,36 @@ test("Claude-App im Fenster: älterer Server (404) und abgeschaltet (503) ohne K
       ? { status: 404, text: JSON.stringify({ fehler: "unbekannt" }), headers: { "content-type": "application/json; charset=utf-8" } } : a.netz(q)) }));
     const box = knoten("div");
     assert.deepEqual(await S.claudeAppZeigen(box, m), { fehler: "alt" });
+    // ohne aktualisieren_jetzt im Status (älterer Server, noch kein Status): kein Knopf, nur wann er es von selbst holt
     assert.ok(!finde(box, (k) => k.tag === "button"), "kein Knopf");
-    assert.ok(textVon(box).includes("Dein Server bekommt das mit seinem nächsten Update."));
+    assert.ok(textVon(box).includes("Dein Server holt das von selbst, spätestens drei Tage nach dem Update von Studium Autopilot."));
+    // Server ab dieser Fassung (der echte Dienst meldet aktualisieren_jetzt: bereit): „Server jetzt aktualisieren“, danach der Satz, die Marke liegt
+    await m.abrufen({ manuell: true });
+    assert.equal(m.status().werte.aktualisierenJetzt, "bereit");
+    const boxJ = knoten("div");
+    await S.claudeAppZeigen(boxJ, m);
+    assert.ok(textVon(boxJ).includes("Dein Server bekommt das mit seinem nächsten Update."));
+    assert.ok(!finde(boxJ, (k) => k.tag === "button" && k.text === "Mit der Claude-App verbinden"));
+    finde(boxJ, (k) => k.tag === "button" && k.text === "Server jetzt aktualisieren").hoerer.click();
+    await bis(() => textVon(boxJ).includes("Dein Server aktualisiert sich, das dauert ein paar Minuten."), "läuft");
+    assert.ok(!finde(boxJ, (k) => k.tag === "button"), "danach kein Knopf");
+    assert.ok(srv.marke(), "Marke für root");
+    assert.equal(m.status().werte.aktualisierenJetzt, "angefordert", "Status gleich danach geholt");
+    const boxL = knoten("div");
+    await S.claudeAppZeigen(boxL, m);
+    assert.ok(textVon(boxL).includes("Dein Server aktualisiert sich") && !finde(boxL, (k) => k.tag === "button"), "Fenster neu: läuft, kein Knopf");
+    // gleich noch einmal: 429 mit Uhrzeit; ein Server, der den Weg doch nicht kennt (404): der Satz mit der Frist
+    a.lokalMap.get("eba-server-status").werte.aktualisierenJetzt = "bereit";
+    const boxZ = knoten("div");
+    await S.claudeAppZeigen(boxZ, m);
+    finde(boxZ, (k) => k.tag === "button" && k.text === "Server jetzt aktualisieren").hoerer.click();
+    await bis(() => /Dein Server hat das gerade erst versucht\. Wieder möglich ab /.test(textVon(boxZ)), "zu früh");
+    const ohne = S.erzeugen(Object.assign({}, a, { netz: async (q) => (/\/v1\/(claude-app|aktualisieren)$/.test(q.url)
+      ? { status: 404, text: JSON.stringify({ fehler: "unbekannt" }), headers: {} } : a.netz(q)) }));
+    const box404 = knoten("div");
+    await S.claudeAppZeigen(box404, ohne);
+    finde(box404, (k) => k.tag === "button" && k.text === "Server jetzt aktualisieren").hoerer.click();
+    await bis(() => textVon(box404).includes("spätestens drei Tage nach dem Update"), "404");
     // ein Gerät mit Riegel nimmt ohne Signatur sonst nichts an
     assert.deepEqual(await S.erzeugen(Object.assign({}, a, { netz: async (q) => (q.url.endsWith("/v1/claude-app") ? { status: 200, text: "{}", headers: {} } : netzEcht(q)) })).claudeAppStatus(),
       { fehler: "netz" });

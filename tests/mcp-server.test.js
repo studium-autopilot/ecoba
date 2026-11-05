@@ -91,6 +91,48 @@ async function dienstStarten({ uhr, adresse = "https://beispiel.example", schalt
     schliessen: async () => { await new Promise((r) => server.close(r)); fs.rmSync(v, { recursive: true, force: true }); } };
 }
 
+// ---------- Server jetzt aktualisieren (POST /v1/aktualisieren) ----------
+
+test("Server jetzt aktualisieren: nur signiert mit Beweis, Zeit und Zufallswert; Marke für root, Grenzen, Stand im Status", async () => {
+  const uhr = { t: JETZT.getTime() };
+  const { v, k, konfig, d, schliessen } = await dienstStarten({ uhr });
+  try {
+    let n = 0;
+    const paket = async (x = {}, zweck = "aktualisieren") => JSON.stringify(await k.verschluesseln(konfig.schluessel, zweck,
+      { schema: 1, zeit: new Date(uhr.t).toISOString(), nonce: ("j" + n++).padEnd(22, "y"), ...x }));
+    const jetzt = async (o = {}) => d.holen("/v1/aktualisieren", { methode: "POST", body: o.body || await paket(), ...o });
+    const marke = path.join(v, "aktualisieren", "jetzt");
+    const stand = async () => (await d.holen("/v1/status", { beweis: false }))[1].aktualisieren_jetzt;
+    assert.equal(await stand(), "bereit");
+    assert.deepEqual(await jetzt({ kopf: `Bearer ${konfig.zugang}` }), [403, { fehler: "veraltet" }]);
+    assert.deepEqual(await jetzt({ beweis: false }), [403, { fehler: "datenschluessel" }]);
+    assert.equal((await jetzt({ kopf: null }))[0], 401);
+    assert.deepEqual(await jetzt({ body: await paket({}, "claude-app") }), [400, { fehler: "anfrage" }], "anderer Zweck");
+    assert.deepEqual(await jetzt({ body: await paket({ zeit: new Date(uhr.t - 10 * MIN).toISOString() }) }), [400, { fehler: "uhr" }]);
+    assert.deepEqual(await jetzt({ body: "x".repeat(2000) }), [413, { fehler: "zu-gross" }]);
+    assert.ok(!fs.existsSync(marke), "keine Marke ohne gültige Anfrage");
+    const erst = await paket();
+    assert.deepEqual(await jetzt({ body: erst }), [200, { angefordert: JETZT.toISOString() }]);
+    assert.deepEqual(await jetzt({ body: erst }), [409, { fehler: "wiederholt" }]);
+    assert.ok(fs.existsSync(marke));
+    assert.equal(await stand(), "angefordert");
+    uhr.t += 5 * MIN;
+    assert.deepEqual(await jetzt(), [429, { fehler: "zu-frueh", wieder: new Date(JETZT.getTime() + 10 * MIN).toISOString() }]);
+    // root nimmt die Marke: läuft, bis aktualisierung.json neuer ist als die Anfrage
+    fs.rmSync(marke);
+    assert.equal(await stand(), "laeuft");
+    fs.writeFileSync(path.join(v, "aktualisierung.json"), JSON.stringify({ zeit: new Date(uhr.t).toISOString(), ok: true, ziel: "0.0.1", grund: "", erfolg: new Date(uhr.t).toISOString() }));
+    assert.equal(await stand(), "bereit");
+    // nach 10 Minuten wieder, höchstens 6 in 24 Stunden
+    for (let i = 2; i <= 6; i++) { uhr.t += 10 * MIN; assert.equal((await jetzt())[0], 200, "Nr. " + i); }
+    uhr.t += 10 * MIN;
+    assert.deepEqual(await jetzt(), [429, { fehler: "zu-frueh", wieder: new Date(JETZT.getTime() + TAG).toISOString() }]);
+    // eine Marke, die niemand nimmt, gilt höchstens 2 Stunden als angefordert
+    uhr.t += 2 * STD;
+    assert.equal(await stand(), "bereit");
+  } finally { await schliessen(); }
+});
+
 // ---------- Quelle über die Daten des Servers ----------
 
 test("Quelle Server: Werkzeuge nur, wenn ihre Daten da sind; ohne Stand eine Warnung statt „nichts fällig“", async () => {

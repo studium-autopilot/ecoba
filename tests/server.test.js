@@ -985,14 +985,16 @@ test("Installer: eigene Ordner für Web-Dienst und Abruf; ein Datenordner bis 0.
     const rechte = ["fchmod 2711 D", "fchmod 0700 D/laeufe", "fchmod 2770 D/eingang", "fchmod 2750 D/unterlagen", "fchmod 2770 D/unterlagen/neu",
       "fchmod 2770 D/unterlagen/opus", "fchmod 2770 D/unterlagen/kapitel", "fchmod 2771 D/web", "fchmod 2770 D/abruf", "fchmod 0755 D/zentral",
       "fchmod 0755 D/claude-app", "fchmod 0700 D/claude-app/schalter", "fchmod 2750 D/claude-app/codes", "fchmod 2750 D/claude-app/trennen",
-      "fchmod 2750 D/claude-app/daten", "fchmod 2750 D/claude-app/aus-mcp"];
+      "fchmod 2750 D/claude-app/daten", "fchmod 2750 D/claude-app/aus-mcp", "fchmod 0700 D/aktualisieren"];
     assert.deepEqual(erste.filter((z) => z.startsWith("fchmod ")), rechte);
     assert.deepEqual(erste.filter((z) => z.startsWith("chown -h -- ")).map((z) => z.slice(12)), ["studium:studium-web D", "studium:studium D/laeufe",
       "studium:studium-web D/eingang", "studium:studium-web D/unterlagen", "studium:studium-web D/unterlagen/neu", "studium:studium-web D/unterlagen/opus",
       "studium:studium-web D/unterlagen/kapitel", "studium-web:studium-web D/web", "studium-abruf:studium D/abruf", "studium-zentral:studium-zentral D/zentral",
       // Übergabe an den Connector: der Ordner gehört root, darin je Schreiber ein eigener (claude-app.mjs)
       "root:root D/claude-app", "studium-web:studium-web D/claude-app/schalter", "studium-web:studium-mcp D/claude-app/codes",
-      "studium-web:studium-mcp D/claude-app/trennen", "studium-web:studium-mcp D/claude-app/daten", "studium-mcp:studium-web D/claude-app/aus-mcp"]);
+      "studium-web:studium-mcp D/claude-app/trennen", "studium-web:studium-mcp D/claude-app/daten", "studium-mcp:studium-web D/claude-app/aus-mcp",
+      // Marke für „Server jetzt aktualisieren“ (root sieht nur, ob sie da ist)
+      "studium-web:studium-web D/aktualisieren"]);
     const nachher = inhalt(D);
     assert.deepEqual(nachher, {
       "web/takt.json": '{"uni_postfach":30}', "web/knopf.json": '{"zuletzt":"x"}', "web/abruf.json": "{}", "web/stand-plugin.json": '{"module":["B110"]}',
@@ -1240,7 +1242,7 @@ test("Schutz der Dienste: jeder Dienst ohne root im Sandkasten; der Web-Dienst s
   assert.deepEqual(dienste.filter((n) => einheiten[n].SupplementaryGroups), ["studium-server-lauf.service"]);
   assert.deepEqual(einheiten["studium-server-lauf.service"].SupplementaryGroups, ["studium-web"]);
   const D = "/var/lib/studium-server";
-  assert.deepEqual(dienst.ReadWritePaths, [`${D}/web ${D}/eingang ${D}/unterlagen ${D}/claude-app`], "Web-Dienst schreibt nur in web/, eingang/, unterlagen/, claude-app/");
+  assert.deepEqual(dienst.ReadWritePaths, [`${D}/web ${D}/eingang ${D}/unterlagen ${D}/claude-app ${D}/aktualisieren`], "Web-Dienst schreibt nur in web/, eingang/, unterlagen/, claude-app/, aktualisieren/");
   assert.ok(dienst.InaccessiblePaths[0].split(" ").includes("-/var/lib/studium-mcp"), "Web-Dienst sieht die Tokens des Connectors nicht");
   assert.ok(dienst.InaccessiblePaths[0].split(" ").includes(`-${D}/abruf`), "Web-Dienst sieht die Rohdaten nicht");
   const abruf = einheiten["studium-server-abruf.service"];

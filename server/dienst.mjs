@@ -52,6 +52,10 @@
 //                       (schaltet ihn ein), Status, eine Verbindung trennen, ganz aus; Antwort verschlüsselt (claude-app-antwort).
 //                       Mit dem Notschalter im Paket (CONNECTOR aus) gibt es keine Codes (503 abgeschaltet). Solange er an ist,
 //                       legt der Dienst ihm nach jedem Stand und Abholen und alle 5 Minuten daten/lage.json hin (lageAktualisieren)
+//   POST /v1/aktualisieren  signiert mit Beweis des Datenschlüssels, verschlüsselt (Zweck „aktualisieren“, Zeit und Zufallswert, sonst
+//                       nichts): „Server jetzt aktualisieren“ in Obsidian. Der Dienst legt nur die Marke aktualisieren/jetzt hin; root
+//                       (studium-server-jetzt.path) führt dann „studium-server aktualisieren --jetzt“ aus. Grenzen JETZT (sonst 429 mit
+//                       wieder); der Status mit Schlüssel sagt unter aktualisieren_jetzt bereit | angefordert | laeuft (jetztStand)
 // „mit Zugangsschlüssel“ heißt: signiert (Kopf Studium-Signatur, kanal.mjs; Plugin ab 0.7.8) oder, für Plugins bis 0.7.7, der
 // Schlüssel selbst im Kopf (Bearer). Signierte Anfragen an /v1/anstoss brauchen dazu den Beweis mit dem Datenschlüssel. Signiert ist
 // eine Anfrage mit dem gemeinsamen Schlüssel aus dienst.json oder dem eigenen eines Geräts (geraete.mjs): Der Dienst rechnet die
@@ -63,7 +67,8 @@
 // schreibt nur in web/ (seine Dateien: abruf.json, takt.json, knopf.json, stand-plugin.json, geraete.json, geraete-schluessel.json, geraete-seit.json,
 // status-geschuetzt.json, signatur-gesehen.json, bearer.json, bearer-aus.json, gemeinsam.json, gemeinsam-aus.json, nonces.log, anstoss, verbinden/,
 // getrennt/ (legt studium-server geraet-trennen an, der Dienst löscht), livesync-links/), unterlagen/ (für den Lauf) und eingang/ (vom Lauf; er löscht Übernommenes), dazu für den Connector claude-app.json, lagebild.json, hinweise.json in web/ und
-// seine Ordner unter claude-app/ (schalter/, codes/, trennen/, daten/; claude-app.mjs). zustand.json und
+// seine Ordner unter claude-app/ (schalter/, codes/, trennen/, daten/; claude-app.mjs), für „Server jetzt aktualisieren“ web/jetzt.json und
+// die Marke in aktualisieren/. zustand.json und
 // aktualisierung.json liest er nur (server/README.md, „Wer was liest und schreibt“).
 import { createHash, timingSafeEqual } from "node:crypto";
 import { appendFileSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
@@ -86,11 +91,15 @@ const EINGANG_TAGE = 30, EINGANG_HOECHSTENS = 180;
 export const PDF = { teil: 8 * 1024 * 1024, bytes: 500 * 1024 * 1024, gesamt: 1024 * 1024 * 1024, warten: 6, verfall: TAG };
 // Größte Anfrage je Weg (verschlüsselt, base64): Stand mit Auszug aus dem Tresor bis 512 KB, Textfassungen bis 4 MB, ein Stück
 // einer PDF mit Kopfzeile und dem Aufschlag von base64
-const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/geraet": 1024, "/v1/geraete": 2 * 1024, "/v1/claude-app": 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/kapitel": 1024 * 1024, "/v1/anstoss": 1024,
+const MAX_KOERPER = { "/v1/verbinden": 4 * 1024, "/v1/geraet": 1024, "/v1/geraete": 2 * 1024, "/v1/claude-app": 1024, "/v1/aktualisieren": 1024, "/v1/stand": 512 * 1024, "/v1/unterlagen": 4 * 1024 * 1024, "/v1/kapitel": 1024 * 1024, "/v1/anstoss": 1024,
   "/v1/pdf": Math.ceil((PDF.teil + 1024) * 4 / 3) + 4096 };
 // Knopf „Mails durchsuchen“ (POST /v1/anstoss): Jeder angenommene Anstoß startet einen Lauf mit Claude und Gmail und kostet
 // Abo-Limit. Wer den Zugangsschlüssel hat, kommt darum höchstens alle 30 Minuten und 12-mal in 24 Stunden durch.
 export const KNOPF = { abstand: 30 * 60e3, tag: 12 };
+// „Server jetzt aktualisieren“ (POST /v1/aktualisieren): höchstens alle 10 Minuten und 6-mal in 24 Stunden; als angefordert bzw. laufend
+// gilt eine Anfrage höchstens hoechstens lang (Zeitgrenze der Einheit studium-server-jetzt.service, ein Lauf, der abbrach, hängt nicht)
+export const JETZT = { abstand: 10 * 60e3, tag: 6, hoechstens: 2 * 3600e3 };
+export const JETZT_MARKE = ["aktualisieren", "jetzt"];
 // „läuft“ gilt höchstens so lange wie die Zeitgrenze des Laufs (TimeoutStartSec in installieren.sh; ein abgebrochener Lauf hängt
 // nicht für immer)
 const LAUF_HOECHSTENS = 100 * 60e3;
@@ -492,6 +501,34 @@ export function knopfAnstoss(verzeichnis, jetzt = new Date(), wunsch = null) {
   return [200, { angestossen: true, ...(wunsch && wunsch.quarantaene === "erneut" ? { quarantaene: "erneut" } : {}) }];
 }
 
+// „Server jetzt aktualisieren“: Grenzen JETZT (429 mit wieder), gemerkt in web/jetzt.json { zuletzt, tag }, dann die Marke
+// aktualisieren/jetzt. Deren Inhalt liest niemand: root sieht nur, dass sie da ist, und nimmt nichts aus der Anfrage. → [Status, Antwort]
+export function jetztAnstoss(verzeichnis, jetzt = new Date()) {
+  const datei = join(webOrdner(verzeichnis), "jetzt.json");
+  const alt = lesen(datei, {}) || {};
+  const t = jetzt.getTime();
+  const tag = (Array.isArray(alt.tag) ? alt.tag : []).map((z) => Date.parse(z)).filter((z) => Number.isFinite(z) && z <= t && t - z < TAG).sort((a, b) => a - b);
+  const ab = [];
+  if (tag.length && t - tag[tag.length - 1] < JETZT.abstand) ab.push(tag[tag.length - 1] + JETZT.abstand);
+  if (tag.length >= JETZT.tag) ab.push(tag[tag.length - JETZT.tag] + TAG);
+  if (ab.length) return [429, { fehler: "zu-frueh", wieder: new Date(Math.max(...ab)).toISOString() }];
+  // erst gemerkt, dann die Marke: scheitert das Schreiben, gibt es keine
+  schreibenAtomar(datei, JSON.stringify({ zuletzt: jetzt.toISOString(), tag: tag.concat(t).slice(-JETZT.tag).map((z) => new Date(z).toISOString()) }));
+  const marke = join(verzeichnis, ...JETZT_MARKE);
+  mkdirSync(join(verzeichnis, JETZT_MARKE[0]), { recursive: true });
+  schreibenAtomar(marke, JSON.stringify({ zeit: jetzt.toISOString() }));
+  return [200, { angefordert: jetzt.toISOString() }];
+}
+// Stand für den Status: angefordert (die Marke liegt noch), laeuft (root hat sie genommen, aktualisierung.json ist älter als die
+// Anfrage), sonst bereit; beides höchstens JETZT.hoechstens nach der Anfrage
+export function jetztStand(verzeichnis, jetzt = new Date(), aktualisierung = null) {
+  const zuletzt = Date.parse(String((lesen(join(verzeichnis, WEB, "jetzt.json"), {}) || {}).zuletzt || ""));
+  if (!Number.isFinite(zuletzt) || jetzt.getTime() - zuletzt > JETZT.hoechstens) return "bereit";
+  if (existsSync(join(verzeichnis, ...JETZT_MARKE))) return "angefordert";
+  const fertig = Date.parse(String((aktualisierung && aktualisierung.zeit) || ""));
+  return Number.isFinite(fertig) && fertig >= zuletzt - 1000 ? "bereit" : "laeuft";
+}
+
 // Takt aus den Einstellungen in Obsidian: Uni-Postfach alle 15, 30 oder 60 Minuten, Gmail 3-, 1- oder 0-mal am Tag; alles
 // andere (auch ein älteres Plugin ohne Takt) → Standard
 export const TAKT = { uni_postfach: [15, 30, 60], gmail: [3, 1, 0] };
@@ -789,7 +826,8 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date(), s
         const aktualisierung = () => lesen(join(verzeichnis, "aktualisierung.json"), null);
         const werte = () => statusWerte(lesen(join(verzeichnis, "zustand.json"), {}), lesen(join(web, "abruf.json"), {}), konfig.version, jetzt(),
           anstossWartet(verzeichnis), lesen(join(web, "takt.json"), {}), aktualisierung());
-        const alles = () => ({ ...werte(), aktualisierung: aktualisierungPruefen(aktualisierung(), true), verbunden: verbundenLesen(web, jetzt()),
+        const alles = () => ({ ...werte(), aktualisierung: aktualisierungPruefen(aktualisierung(), true), aktualisieren_jetzt: jetztStand(verzeichnis, jetzt(), aktualisierung()),
+          verbunden: verbundenLesen(web, jetzt()),
           grenzen: grenzenPruefen((lesen(join(verzeichnis, "zustand.json"), {}) || {}).grenzen) });
         const p = zugang(req, pfad);
         Object.assign(res, { nonce: p.nonce, paar: p.paar });
@@ -818,7 +856,7 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date(), s
           "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'", "referrer-policy": "no-referrer" });
         return res.end(seite(setupLink));
       }
-      if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/kapitel", "/v1/pdf", "/v1/anstoss", "/v1/verbinden", "/v1/geraet", "/v1/geraete", "/v1/claude-app"].includes(pfad)) {
+      if (!["/v1/eingang", "/v1/stand", "/v1/unterlagen", "/v1/kapitel", "/v1/pdf", "/v1/anstoss", "/v1/verbinden", "/v1/geraet", "/v1/geraete", "/v1/claude-app", "/v1/aktualisieren"].includes(pfad)) {
         return antwort(res, 404, { fehler: "unbekannt" });
       }
 
@@ -895,6 +933,16 @@ export function erzeugeDienst({ konfig, verzeichnis, jetzt = () => new Date(), s
           { jetzt: jetzt(), adresse: konfig.adresse, abgeschaltet: connectorAus(), lage: () => lageAktualisieren(verzeichnis, jetzt(), connectorAus()),
             wer: fach(p.paar), von: fach(p.paar) });
         return antwort(res, status, status === 200 ? await verschluesseln(schluessel, "claude-app-antwort", aus) : aus);
+      }
+      if (pfad === "/v1/aktualisieren") {
+        // wie /v1/claude-app: nur signiert mit dem Beweis des Datenschlüssels; die Anfrage trägt nur Zeit und Zufallswert (anfrageEinmal)
+        if (p.art !== "signatur") return antwort(res, 403, { fehler: "veraltet" });
+        if (!p.beweis) {
+          fehlversuch(wer);
+          return antwort(res, 403, { fehler: "datenschluessel" });
+        }
+        const nein = anfrageEinmal(web, await entschluesseln(schluessel, "aktualisieren", await inhaltLesen()), jetzt(), fach(p.paar));
+        return antwort(res, ...(nein || jetztAnstoss(verzeichnis, jetzt())));
       }
       if (pfad === "/v1/geraet") {
         // Bearer (bis 0.7.7) nur, solange kein Gerät eigene Schlüssel hat: Ein Code ergibt eigene Schlüssel, die den gemeinsamen

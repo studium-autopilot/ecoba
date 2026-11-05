@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.8.2 – Server jetzt aktualisieren
+
+- **Schneller:** Braucht dein **eigener Server** für etwas Neues erst ein Update, tippst du unter **Eigener Server** auf **Server
+  jetzt aktualisieren**, statt bis zu drei Tage zu warten. Dann hat er es in ein paar Minuten.
+
 ## 0.8.1 – Dein Studium in der Claude-App
 
 - **Neu:** Mit eigenem Server fragst du Claude jetzt auch in der Claude-App nach Terminen, Lernplan und Prüfungen, auch am

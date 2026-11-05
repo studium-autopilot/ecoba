@@ -160,6 +160,8 @@ ordnung() {
   ordner "$d/claude-app/schalter" studium-web:studium-web 0700
   for n in codes trennen daten; do ordner "$d/claude-app/$n" studium-web:studium-mcp 2750; done
   ordner "$d/claude-app/aus-mcp" studium-mcp:studium-web 2750
+  # „Server jetzt aktualisieren“: nur der Web-Dienst legt hier die Marke jetzt ab; root sieht nur, ob sie da ist (studium-server-jetzt.path)
+  ordner "$d/aktualisieren" studium-web:studium-web 0700
   [ "$umzug" -eq 1 ] || return 0
   for n in "${ALT_WEB[@]}"; do umziehen "$d" "$n" web; done
   for n in "${ALT_ABRUF[@]}"; do umziehen "$d" "$n" abruf; done
@@ -561,7 +563,7 @@ SystemCallErrorNumber=EPERM
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 IPAddressDeny=any
 IPAddressAllow=localhost
-ReadWritePaths=/var/lib/studium-server/web /var/lib/studium-server/eingang /var/lib/studium-server/unterlagen /var/lib/studium-server/claude-app
+ReadWritePaths=/var/lib/studium-server/web /var/lib/studium-server/eingang /var/lib/studium-server/unterlagen /var/lib/studium-server/claude-app /var/lib/studium-server/aktualisieren
 InaccessiblePaths=-/var/lib/studium -/var/lib/studium-server/laeufe -/var/lib/studium-server/abruf /etc/credstore.encrypted -/run/credentials -/etc/studium-server/livesync.json -/var/lib/studium-mcp
 InaccessiblePaths=-/var/lib/caddy -/run/caddy -/opt/couchdb/etc -/var/lib/couchdb -/var/cache/debconf
 
@@ -684,6 +686,33 @@ ExecStart=/usr/local/bin/studium-server aktualisieren
 # Zurückrollen holt der nächste Lauf vor allem anderen nach (installieren.sh, ZURUECK_OFFEN), eine nicht fertige Installation
 # ebenso.
 TimeoutStartSec=60min
+UNIT
+# „Server jetzt aktualisieren“ aus Obsidian (POST /v1/aktualisieren): Die Marke des Web-Dienstes startet „studium-server aktualisieren
+# --aus-obsidian“ (wie --jetzt, löscht die Marke als studium-web, höchstens alle 5 Minuten). root liest sie nie, nur ob sie da ist; ein
+# übernommener Web-Dienst kann so nur ein geprüftes Update anstoßen. Dieselbe Sperre wie der tägliche Lauf (flock in studium-server); die
+# Zeitgrenze deckt dessen 60 Minuten Warten und den eigenen Lauf. Diese Einheiten nie umbenennen oder entfernen: Läuft der Installer aus
+# ihr heraus, hielte alte_einheiten_entfernen den laufenden Lauf an.
+einheit studium-server-jetzt.path <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Server-Paket jetzt aktualisieren, sobald Obsidian darum bittet
+
+[Path]
+PathExists=/var/lib/studium-server/aktualisieren/jetzt
+Unit=studium-server-jetzt.service
+
+[Install]
+WantedBy=paths.target
+UNIT
+einheit studium-server-jetzt.service <<'UNIT'
+[Unit]
+Description=Studium Autopilot: Server-Paket jetzt aktualisieren (Knopf in Obsidian, nur mit passender Prüfsumme)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/studium-server aktualisieren --aus-obsidian
+TimeoutStartSec=120min
 UNIT
 # Aufbau-Fenster von LiveSync (livesync.sh, „aufbauen“): Ein Neustart verliert den Zeitgeber, der es schließt. Nach dem Start
 # schließt dieser Dienst ein abgelaufenes Fenster und stellt für ein offenes den Zeitgeber neu; das Ende steht nur in einer Datei
@@ -1053,11 +1082,11 @@ systemctl enable -q studium-server-dienst.service studium-server-speicher.servic
   studium-server-livesync-aufbau.service
 # Connector für die Claude-App: nur die Pfad-Einheit, das Anwenden beim Start und der Zeitgeber der zentralen Daten; der Connector
 # selbst und das Holen laufen nur mit der Marke aus Obsidian (ConditionPathExists)
-systemctl enable -q studium-server-mcp.path studium-server-mcp-schalter.service studium-server-zentral.timer
+systemctl enable -q studium-server-mcp.path studium-server-mcp-schalter.service studium-server-zentral.timer studium-server-jetzt.path
 [ "$TEST" -eq 1 ] || systemctl enable -q studium-server-aktualisieren.timer
 systemctl restart studium-server-dienst.service studium-server-speicher.service
 systemctl start studium-server-zustand.timer studium-server-abruf.timer studium-server-lauf.path studium-server-gmail.timer \
-  studium-server-mcp.path studium-server-zentral.timer
+  studium-server-mcp.path studium-server-zentral.timer studium-server-jetzt.path
 # ein laufender Connector mit dem neuen Paket (ob er laufen soll, richtet „Connector“ unten)
 systemctl try-restart studium-server-mcp.service
 [ "$TEST" -eq 1 ] || systemctl start studium-server-aktualisieren.timer

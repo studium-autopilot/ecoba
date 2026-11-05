@@ -91,6 +91,8 @@ test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur (Sperrliste 
     fs.writeFileSync(p("bin", "stat"), "#!/usr/bin/env bash\necho \"${STAT_UID:-0}\"\n", { mode: 0o755 });
     // ln: nur aufschreiben (aktuell ist hier ein Ordner, kein Link)
     fs.writeFileSync(p("bin", "ln"), "#!/usr/bin/env bash\necho \"ln $*\" >> \"$AUFRUFE\"\n", { mode: 0o755 });
+    // flock: belegt (FLOCK_BELEGT) scheitert -n, das Warten danach gelingt
+    fs.writeFileSync(p("bin", "flock"), "#!/usr/bin/env bash\n[ \"$1\" != -n ] || [ -z \"${FLOCK_BELEGT:-}\" ] || exit 1\n", { mode: 0o755 });
     if (spawnSync("bash", ["-c", "command -v jq"]).status !== 0) fs.writeFileSync(p("bin", "jq"), JQ_ATTRAPPE, { mode: 0o755 });
     fs.writeFileSync(p("dienst.json"), JSON.stringify({ ip: "203.0.113.5" }));
     fs.writeFileSync(p("paket", "VERSION"), "0.6.9\n");
@@ -100,7 +102,8 @@ test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur (Sperrliste 
       "sperrliste_ergaenzen", "unter_mindestversion", "testpakete_erlaubt", "staffel_bis", "zurueck_gesperrt", "zurueckrollen_nachholen", "installer",
       "livesync_pruefen", "aktualisieren"];
     const ablauf = ["set -euo pipefail", ...FUNKTIONEN.map(fn), zeile("CURL"), zeile("ASSETS"), zeile("STAFFEL_SEK"), zeile("ZURUECK_SPERRE"),
-      "root_noetig() { :; }", "claude_aktualisieren() { :; }", "veraltete_neu_starten() { :; }", 'als_studium() { "$@"; }',
+      "root_noetig() { :; }", "claude_aktualisieren() { :; }", "veraltete_neu_starten() { :; }", 'als_studium() { "$@"; }', 'als_web() { "$@"; }',
+      'AKT_SPERRE=$4/sperre JETZT_MARKE=$4/jetzt-marke JETZT_ZULETZT=$4/jetzt-zuletzt',
       'PAKET=$1 DATEN=$2 KONFIG=$3 OPT=$4 RELEASES=https://api.github.com/repos/studium-autopilot/ecoba/releases/latest AKT_ZIEL="" AKT_GRUND="" AKT_TMP=""',
       'AKT_OHNE_ERFOLG=0 AKT_WARTEN="" PAKETE_FEHLER=0 TESTPAKETE=$OPT/testpakete STAFFEL=$OPT/staffel STAFFEL_SEIT=$OPT/.staffel-seit ZURUECK_MARKE=$OPT/.zurueckgerollt',
       'PAKET_ORDNER=$OPT ZURUECK_OFFEN=$OPT/.zurueckrollen-offen MINDEST=$OPT/mindestversion SPERRLISTE=$OPT/revoked_keys LS_KONFIG=$OPT/livesync.json',
@@ -366,6 +369,13 @@ test("Neue Version holen: nur mit Prüfsumme und gültiger Signatur (Sperrliste 
     assert.deepEqual([e.status, e.akt.ok, e.akt.grund, e.apt], [0, true, "", [PAKETE[0], PAKETE[1].replace(/ couchdb$/, "")]], e.fehler);
     e = lauf({ INSTALLIERT: "", ARCHIV: "caddy nodejs" });
     assert.deepEqual([e.status, e.akt.ok, e.apt], [0, true, []], "nichts davon installiert: kein apt");
+    // Knopf in Obsidian (studium-server-jetzt.service): Marke weg, dann wie --jetzt, wartet auf ein laufendes; höchstens alle 5 Minuten
+    fs.writeFileSync(p("opt", "jetzt-marke"), "wird nie gelesen");
+    e = lauf({ FLOCK_BELEGT: "1" }, "--aus-obsidian");
+    assert.deepEqual([e.status, fs.existsSync(p("opt", "jetzt-marke")), /Ein anderes Update läuft gerade/.test(e.aus), e.apt], [0, false, true, PAKETE], e.fehler);
+    fs.writeFileSync(p("opt", "jetzt-marke"), "");
+    e = lauf({}, "--aus-obsidian");
+    assert.deepEqual([e.status, fs.existsSync(p("opt", "jetzt-marke")), /Gerade erst aus Obsidian/.test(e.aus), e.apt], [0, false, true, []], e.fehler);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 

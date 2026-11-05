@@ -29,6 +29,11 @@ SCHALTER=$DATEN/claude-app/schalter/an
 MCP_KONFIG=/etc/studium-server-mcp/konfig.json
 MCP_ZUSTAND=/var/lib/studium-mcp
 MCP_CADDY=/etc/caddy/studium-server.d/seite/mcp.caddy
+# „Server jetzt aktualisieren“ aus Obsidian: Marke des Web-Dienstes (nur ihr Dasein zählt), Zeit des letzten so gestarteten Laufs (root)
+JETZT_MARKE=$DATEN/aktualisieren/jetzt
+JETZT_ZULETZT=/run/studium-server-jetzt
+# Sperre: nie zwei „aktualisieren“ zugleich (täglicher Zeitgeber, Obsidian, von Hand)
+AKT_SPERRE=/run/studium-server-aktualisieren.lock
 
 hilfe() {
   cat <<'TEXT'
@@ -562,8 +567,19 @@ aktualisieren() {
   case "${1:-}" in
     "") ;;
     --jetzt) sofort=1 ;;
+    # aus studium-server-jetzt.service (Knopf „Server jetzt aktualisieren“): Marke weg als studium-web (keinem Link folgen, gelesen wird
+    # sie nie), dann wie --jetzt, höchstens alle 5 Minuten, auch wenn der Web-Dienst öfter eine legt. Aus der Anfrage kommt nichts hierher.
+    --aus-obsidian)
+      sofort=1
+      als_web rm -rf -- "$JETZT_MARKE" || { echo "Die Marke aus Obsidian ließ sich nicht löschen." >&2; exit 1; }
+      if [ -n "$(find "$JETZT_ZULETZT" -maxdepth 0 -mmin -5 2>/dev/null || true)" ]; then echo "Gerade erst aus Obsidian aktualisiert; diesmal nicht."; exit 0; fi
+      : >"$JETZT_ZULETZT"
+      ;;
     *) echo "Aufruf: sudo studium-server aktualisieren [--jetzt]" >&2; exit 2 ;;
   esac
+  # Läuft schon eins, wartet dieses (vor den Fallen: ein Abbruch beim Warten schreibt kein Ergebnis)
+  exec 8>"$AKT_SPERRE"
+  flock -n 8 || { echo "Ein anderes Update läuft gerade; dieses wartet darauf."; flock 8; }
   local info url signatur pruefsumme neu alt tag bis c=0
   # Abbruch von außen (systemd am Ende von TimeoutStartSec) zählt als Fehler; ohne die Fallen hielte aktualisieren_ende den Lauf
   # mit dem Exit des letzten Befehls fest, oft 0

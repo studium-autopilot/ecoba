@@ -340,6 +340,12 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   (die laufende Version; sie zählt dann statt der des Web-Dienstes) und `warten_bis` (gestaffelte Verteilung, `server/README.md`, „Updates des Server-Pakets“): Kennt er eine
   neuere Version und ist die Zeit noch nicht da, steht im Fenster „Neue Version: 0.7.7 installiert dein Server ab … (neue
   Versionen kommen nicht auf alle Server zugleich)“, keine Warnung.
+  **Server jetzt aktualisieren** (seit dieser Fassung, `jetztAktualisieren`, `jetztZeigen`): Wo das Fenster sagt, dass der Server erst
+  ein Update braucht (Claude-App: 404), steht bei einem Server, der `aktualisieren_jetzt` meldet, „Dein Server bekommt das mit seinem
+  nächsten Update.“ mit diesem Knopf (`POST /v1/aktualisieren`, signiert mit Beweis, Zweck `aktualisieren`, nur Zeit und Zufallswert;
+  `server/README.md`, „Updates des Server-Pakets“). Danach und solange der Status `angefordert` oder `laeuft` sagt: „Dein Server
+  aktualisiert sich, das dauert ein paar Minuten.“, ein Abruf nach 10 Minuten. Ein älterer Server (kein Feld, 404): „Dein Server holt
+  das von selbst, spätestens drei Tage nach dem Update von Studium Autopilot.“ (Staffel bis 48 Stunden, dazu der tägliche Zeitgeber).
   **Grenzen je Tag** (Status mit Schlüssel, `grenzen`, `grenzenNormal`): Nur was nicht 0 ist, steht im Fenster, in einfachen Worten:
   „Mails: 12 Mails warten auf morgen“ (`mails_zurueckgestellt` + `mails_verschoben`). Mails, an denen jeder Lauf scheiterte
   (`quarantaene`), legt der Server beiseite, bis man es noch einmal versucht: „3 Mails konnten nicht gelesen werden …“ mit dem Knopf
