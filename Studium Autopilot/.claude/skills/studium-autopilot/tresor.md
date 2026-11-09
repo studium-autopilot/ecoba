@@ -60,6 +60,12 @@ dazu, sobald es etwas gibt, alle über dem PDF-Kasten: `## Das Wichtigste`, daru
 lesen ist, weitere Literatur. Studium Autopilot schreibt sie aus den zentralen Literaturlisten; du änderst nur `status` und den
 Text unter `## Meine Notizen`. Hat ein Modul keine, legst du keine mit `literatur_id` an.
 
+**Kursseite** – `Unterlagen/<Code> <Modultitel>/<Code> Kursseite.md` (gibt es mehrere Kurse zu einem Modul, `… Kursseite 2.md`):
+`typ: kursseite`, `code`, `herkunft: ilias`, `quelle` (Adresse des Kurses), `ilias_ref`, `geaendert` (Tag, an dem Studium
+Autopilot die Seite zuletzt anders sah). Der Text der Startseite des Kurses in ILIAS: Ablauf je Woche als Tabelle („Woche | Datum
+| Themen der Vorlesung“), Zwischentests, Raumänderungen, Hinweise der Lehrenden; ein Kurspasswort steht nie darin („(Passwort steht
+in ILIAS)“). Du änderst nur den Text unter `## Meine Notizen`; alles andere ersetzt Studium Autopilot, sobald sich die Seite ändert.
+
 **Modul** – `Module/<Teil>/<Code> <Titel>.md`
 Katalog (nicht ändern): `code`, `titel`, `ects`, `fachsemester`, `fs_empfohlen`, `pruefung`, `benotet`, `turnus`,
 `verantwortlich` … Persönlich: `status` (offen | läuft | angemeldet | bestanden | nicht bestanden | anerkannt), `ergebnis`
@@ -96,6 +102,7 @@ Fachsemester), `variante` (Economics | Business Administration | ohne Spezialisi
 | `alma` | `alma_schluessel` | Alma-Stundenplan |
 | `ilias-gruppe`, `gruppe-gewaehlt` | `ilias_gruppe`, `gruppe_id` | Übungsgruppen |
 | `ilias-kalender` | `ilias_kalender_id` | Abgaben aus dem ILIAS-Kalender |
+| `ilias` | `ilias_ref` | Kursseite aus ILIAS |
 | (keine), `abgleich_id` | `abgleich_id` | eigener Uni-Abgleich |
 | (keine), `volltext_von: plugin` | `quelle` | Textfassung einer PDF |
 

@@ -25,7 +25,11 @@ lesen.
 - **Welches Fachsemester?** Aus `studienbeginn` in den Einstellungen (leer: das laufende Semester ist das 1.) und den
   Semestern in `System/Daten/Semester.md` (WS 1.10. bis 31.3., SS 1.4. bis 30.9.).
 - **Was hängt an einem Modul?** Alles mit demselben `code`: Termine, Lehrveranstaltungen, Vorlesungsnotizen, Unterlagen
-  (darunter die Übungsblätter), Karteikarten, Lernplan.
+  (darunter die Übungsblätter), Karteikarten, Lernplan, die Kursseite aus ILIAS.
+- **Was kommt in der Vorlesung dran? Wann ist der Zwischentest?** Die Kursseite (`typ: kursseite`, im Modulordner unter
+  `Unterlagen/`) hat den Text der Startseite des Kurses in ILIAS, den Ablauf meist als Tabelle mit Woche oder Datum je Zeile.
+  Nenne `geaendert` dazu: So alt ist der Stand; maßgeblich ist ILIAS. Ein Termin dort ist erst ein Termin unter `Termine/`, wenn
+  es ihn dort gibt.
 
 ## Unterlagen und PDFs
 

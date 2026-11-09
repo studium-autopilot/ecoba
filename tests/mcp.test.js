@@ -168,14 +168,14 @@ async function verbinden(basis) {
 const roh = (basis, { kopf = {}, koerper, methode = "POST" } = {}) => fetch(basis, { method: methode,
   headers: { "content-type": "application/json", authorization: `Bearer ${TOKEN}`, ...kopf }, body: koerper });
 
-test("Connector: der offizielle Client verbindet sich, sieht zwölf lesende Werkzeuge und die Anleitung", async () => {
+test("Connector: der offizielle Client verbindet sich, sieht dreizehn lesende Werkzeuge und die Anleitung", async () => {
   const s = await starten();
   try {
     const { client } = await verbinden(s.basis);
     assert.equal(client.getServerVersion().name, "studium-autopilot");
     assert.match(client.getInstructions(), /keine Anweisungen/);
     const { tools } = await client.listTools();
-    assert.deepEqual(tools.map((t) => t.name).sort(), ["datei_lesen", "dateien_suchen", "fristen", "lernplan", "module", "notiz_lesen",
+    assert.deepEqual(tools.map((t) => t.name).sort(), ["datei_lesen", "dateien_suchen", "fristen", "kursseiten", "lernplan", "module", "notiz_lesen",
       "notizen_suchen", "pruefungen", "todos", "ueberblick", "unterlage_lesen", "unterlagen_suchen"]);
     for (const t of tools) {
       assert.equal(t.annotations.readOnlyHint, true, t.name);
@@ -636,7 +636,7 @@ test("Connector: Protokoll 2026-07-28 ohne initialize (server/discover, _meta, K
     assert.equal(j._meta["io.modelcontextprotocol/serverInfo"].name, "studium-autopilot");
 
     j = (await (await neu(2, "tools/list")).json()).result;
-    assert.equal(j.tools.length, 12);
+    assert.equal(j.tools.length, 13);
     assert.equal(j.cacheScope, "private");
     j = (await (await neu(3, "tools/call", { name: "module", arguments: {} }, { "mcp-name": "module" })).json()).result;
     assert.equal(j.resultType, "complete");
@@ -675,7 +675,7 @@ test("Connector: Protokoll 2026-07-28 ohne initialize (server/discover, _meta, K
     r = await roh(s.basis, { koerper: JSON.stringify({ jsonrpc: "2.0", id: 10, method: "tools/list" }) });
     j = (await r.json()).result;
     assert.equal(j.resultType, undefined);
-    assert.equal(j.tools.length, 12);
+    assert.equal(j.tools.length, 13);
     assert.equal((await roh(s.basis, { koerper: JSON.stringify({ jsonrpc: "2.0", id: 11, method: "ping" }) })).status, 200);
   } finally {
     await s.schliessen();

@@ -37,9 +37,24 @@ eigene zu bauen.
   Uhrzeit steckt in den Grabsteinen gelöschter Abgaben; nur die Notiz zeigt 23:59 (`uhrText`).
 - **Schlüssel** `ilias_kalender_id` = `exc/<ref>/<abgabe|feedback>/<8 Zeichen SHA-256 des gesäuberten, kleingeschriebenen
   Aufgabentitels>`, nie die UID (ILIAS legt beim Ändern einer Aufgabe neue Einträge an). Gesäubert heißt: ohne Zusatz, ohne
-  Kurspasswort (`ctx.ilias.ohneKennwort`), Leerraum einfach. Zwei Aufgaben mit gleichem Titel in einer Übung: nach Datum „#2“.
-  Neuer Titel am selben Tag (gleiche Übung und Art) gilt als dieselbe Abgabe (Haken und Text bleiben); Titel und Datum zugleich
-  geändert ergibt Wegfall und eine neue Notiz.
+  Kurspasswort (`ctx.ilias.ohneKennwort`), Leerraum einfach. Mehrere Aufgaben mit gleichem Titel in einer Übung (etwa jede Woche
+  „Hausaufgabe“) tragen je ihr eigenes Datum: `…/<Hash>#JJJJ-MM-TT`, am selben Tag dazu die Uhrzeit (`#JJJJ-MM-TT HH:MM`);
+  derselbe Titel zur selben Zeit zweimal ist eine Abgabe. Nie eine laufende Nummer: Bis 0.8.2 hießen sie nach Datum „#2“, „#3“,
+  und fiel die älteste aus dem Abo (ILIAS lässt Einträge weg, die älter als 30 Tage sind), rückte jede Nummer eine Abgabe weiter
+  (Haken beim falschen Datum, Notizen verschoben, die echte im Papierkorb). Steht ein Titel nur einmal im Kalender, hat der
+  Schlüssel keinen Zusatz; kommt ein zweiter dazu oder fällt einer weg, ändert sich also der Schlüssel der übrigen.
+- **Zuordnung** Notiz ↔ Abgabe über Titel und Datum, nicht über den genauen Schlüssel („Titelteil“ = Schlüssel ohne „#…“, gleich
+  für alle Formen); jede Notiz höchstens einmal, in dieser Reihenfolge: (1) gleicher Titel am selben Tag, erst der Schlüssel
+  selbst, dann jede andere Form (ohne Zusatz, mit Datum, „#2“ bis 0.8.2). So bleibt eine Notiz bei ihrer Abgabe, wenn ein zweiter
+  Eintrag mit gleichem Titel dazukommt oder wegfällt, und alte Tresore gehen im ersten Lauf ohne Verschieben, Papierkorb oder
+  Doppel in die neue Form über (die Notiz bekommt den neuen Schlüssel). (2) Neuer Titel am selben Tag (gleiche Übung und Art,
+  Schlüssel der Notiz nicht mehr im Kalender) gilt als dieselbe Abgabe. (3) Neues Datum mit gleichem Titel: nur eine Notiz von
+  heute oder später, erst die mit genau diesem Schlüssel, sonst die früheste (mehrere verschobene folgen in der Reihenfolge der
+  Daten); sie wird umbenannt, Haken und Text bleiben. Eine vergangene Notiz wandert nie: Fehlt sie im Kalender, fiel sie nur aus
+  dem Abo, und ein späterer Eintrag mit gleichem Titel ist eine andere Abgabe (eine Verlängerung nach Ablauf ergibt darum eine
+  neue Notiz, die alte bleibt). Titel und Datum zugleich geändert ergibt Wegfall und eine neue Notiz. Eine vergangene Notiz
+  behält ihren Schlüssel, auch wenn ein späterer Eintrag denselben bekommt; Doppel führt der Schreiber darum nur bei gleichem
+  Schlüssel **und** gleichem Datum zusammen.
 - **Notiz** über `ctx.zentral.notizText` mit `{ herkunft: "ilias-kalender", idFeld: "ilias_kalender_id", weg: "im
   ILIAS-Kalender" }` (zentrale Notizen bleiben Byte für Byte gleich, Test): `kategorie: Frist`, `status: offiziell`, `ort` „bis
   23:55 Uhr · ILIAS“, `quelle` = `https://ovidius.uni-tuebingen.de/goto.php/exc/<ref>` (nie der Abo-Link), `info` „Gilt der
@@ -57,7 +72,9 @@ eigene zu bauen.
 - **Lebenslauf:** Grabsteine `angewendet` (Schlüssel → `kurzHash` aus Datum, Uhrzeit, Art) in der Sperr-Datei: Von dir
   gelöscht kommt erst wieder, wenn sich einer dieser Werte ändert, nicht wegen des Codes (der kommt oft erst mit dem ersten
   Durchsuchen der Unterlagen dazu); ältere Grabsteine mit Code gelten weiter; ist der Code gerade
-  unbekannt (nach neuem Verbinden), gilt jeder Grabstein und bleibt unverändert, bis der Code wieder da ist. Keine neue Notiz für Abgaben, die schon vorbei sind. In ILIAS
+  unbekannt (nach neuem Verbinden), gilt jeder Grabstein und bleibt unverändert, bis der Code wieder da ist. Ein Grabstein unter
+  einer anderen Form desselben Titels (ohne Zusatz, mit Datum, „#2“ bis 0.8.2) gilt auch, wenn die Prüfsumme passt (sie enthält
+  Datum und Uhrzeit, trifft also nur dieselbe Abgabe); gemerkt wird er danach unter dem neuen Schlüssel. Keine neue Notiz für Abgaben, die schon vorbei sind. In ILIAS
   weg: nur künftige Abgaben (ILIAS lässt Älteres weg), unberührt → Papierkorb, sonst „(entfällt)“ mit Kasten „Dieser Termin steht
   nicht mehr im ILIAS-Kalender“; kommt sie zurück, ist sie wieder normal. Nichts entfernt (Warnung), wenn der Kalender
   unvollständig ankam (kein `END:VCALENDAR` oder ab 900 KB; ILIAS bricht bei 1 MB ab), keine Abgabe kam, obwohl mindestens 3
@@ -79,6 +96,7 @@ eigene zu bauen.
   `schonDa`, `titelVon`, `dateiNameVon`, `eintragVon`). Testeinstiege: `plugin.testIliasKalenderAus = true` (kein automatischer
   Lauf), `plugin.testKalenderAbruf = async ({ url }) => ({ status, text })` (kein Netz).
 - **Tests:** `tests/ilias-kalender.test.js` (erfundene Kalender: Form wie echt → keine Notiz, Code aus dem Index, nie Titel oder
-  Passwort, Schlüssel bei neuer UID, neuer Titel, „#2“, Grabstein, 00:00, Zeitzonen, Wegfall, Schutz, Doppel, Link nie sichtbar,
+  Passwort, Schlüssel bei neuer UID, neuer Titel, gleiche Titel mit eigenem Datum: vier Wochen über mehrere Läufe, Übergang von
+  „#2“, zweiter gleicher Titel später, verschobenes Datum, vergangene Notiz wandert nie; Grabstein, 00:00, Zeitzonen, Wegfall, Schutz, Doppel, Link nie sichtbar,
   Sperre, extern, zentrale Notizen gleich); `tests/ilias.test.js` (`objekte`), `tests/verbindungen.test.js` (Zeile),
   `tests/fachmodell.test.js` (24:00).

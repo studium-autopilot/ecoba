@@ -38,6 +38,7 @@
 //   mitgliedschaften(html, url) → { kurse, gruppen }   kurse(html, url)   gruppen(html, url)
 //   brotkrumen(html, url) → [{ typ, refId, titel, url }] (die Seite selbst zuerst, dann ihre Eltern)
 //   inhalt(html, url, { heute }) → [Eintrag]    folgeUrl(html, url) → URL, die statt dieser Seite zu holen ist, sonst ""
+//   kursseite(html, url) → [Block] (Seiteninhalt über den Einträgen: Absätze, Listen, Tabellen, Abschnitte)
 //   inhaltReiter(html, url) → Adresse des Reiters „Inhalt“ (ohne Weiterleitung), sonst ""
 //   aboFenster(html, url) → Adresse des Fensters „Kalender abonnieren“ | ""   aboLinks(html) → [{ url, begrenzt }] (Uni-Login)
 //   uebungen(html, url, { heute }) → [Aufgabe]  formulare(html, url) → [{ id, name, method, action, felder, knoepfe }]
@@ -755,6 +756,133 @@ function inhaltReiter(html, basisUrl) {
   return a ? absolut(attr(a, "href"), basisUrl) : "";
 }
 
+// ------------------------------------------------------------------------------------------------------------- Kursseite
+// Seiteninhalt eines Kurses (seit 05.11.2026): Was Lehrende im Seiten-Editor über die Liste der Einträge schreiben, oft mit dem
+// Ablauf je Woche als Tabelle („Woche | Datum | Themen der Vorlesung“). PFERD speichert das als Description.html, aber Absatz für
+// Absatz (ilc_Paragraph) und verliert so die Tabellen; hier bleiben Tabellen, Listen, Abschnitte und Überschriften erhalten.
+// Gelesen wird #il_center_col (sonst die ganze Seite) ohne die Einträge (ilContainerBlock, Listeneinträge), Skripte, Fenster,
+// den Kalender am Rand (calmini) und den Knopf „Vertiefungswissen“. Bilder fallen weg, Videos bleiben als Name (ihre Adresse
+// trägt ein Token, das nur kurz gilt).
+// kursseite(html, url) → [Block]; leer, wenn die Seite keinen Text hat:
+//   { art: "absatz", zeilen, ebene? }    ebene 1–3 bei Überschriften (ilc_headingN), sonst keine
+//   { art: "liste", geordnet, punkte: [{ zeilen, unter: [Punkt] }] }
+//   { art: "tabelle", zeilen: [[Zelle]] }   Zelle = { zeilen }; colspan als leere Zellen dahinter, die erste Zeile ist der Kopf
+//   { art: "abschnitt", bloecke }          Kasten aus dem Editor (ilCOPageSection, z. B. Information, Merksatz)
+//   { art: "video", titel }
+// zeilen = [[Stück]] (eine Zeile je <br>), Stück = { t, fett?, url? }; Leerraum ist zusammengefasst, url nur http(s) und nie
+// eine Adresse mit Token (deliver.php).
+const SEITE_AUS = (e) => hatKlasse(e, "ilContainerBlock") || istAussen(e) || hatKlasse(e, "il-copg-mob-fullscreen-modal")
+  || hatKlasse(e, "calmini") || hatKlasse(e, "ilc_section_Special") || attr(e, "id") === "ilPageShowAdvContent"
+  || e.name === "dialog" || e.name === "form" || e.name === "button" || e.name === "nav" || OHNE_TEXT[e.name];
+const istSeitenListe = (e) => (e.name === "ul" || e.name === "ol") && /(^|\s)ilc_list_/.test(attr(e, "class"));
+const istSeitenTabelle = (e) => e.name === "table" && /(^|\s)ilc_table_/.test(attr(e, "class"));
+const linkUrl = (a, basis) => {
+  const u = absolut(attr(a, "href"), basis);
+  return /^https?:\/\//i.test(u) && !/deliver\.php|[?&](token|il_wac_token|sid)=/i.test(u) ? u : "";
+};
+// Text eines Elements als Zeilen aus Stücken; trifft es auf Liste oder Tabelle (in einem Absatz), ruft es weiter(el) auf
+function stuecke(el, basis, weiter) {
+  let zeilen = [[]];
+  const aus = [];
+  const fertig = () => {
+    const z = zeilen.map((s) => {
+      const r = [];
+      for (const x of s) {
+        const t = x.t.replace(/[\s\u00a0]+/g, " ");
+        if (!t) continue;
+        const v = r[r.length - 1];
+        if (v && !!v.fett === !!x.fett && (v.url || "") === (x.url || "")) v.t += t;
+        else r.push(Object.assign({ t }, x.fett ? { fett: true } : {}, x.url ? { url: x.url } : {}));
+      }
+      if (r.length) { r[0].t = r[0].t.replace(/^ +/, ""); r[r.length - 1].t = r[r.length - 1].t.replace(/ +$/, ""); }
+      return r.filter((x) => x.t);
+    });
+    while (z.length && !z[0].length) z.shift();
+    while (z.length && !z[z.length - 1].length) z.pop();
+    zeilen = [[]];
+    return z;
+  };
+  const gehen = (k, fett, url) => {
+    if (!istElement(k)) { zeilen[zeilen.length - 1].push({ t: k.text || "", fett, url }); return; }
+    if (SEITE_AUS(k) || k.name === "img" || k.name === "svg") return;
+    if (k.name === "br") { zeilen.push([]); return; }
+    if (weiter && (istSeitenListe(k) || istSeitenTabelle(k) || k.name === "ul" || k.name === "ol" || k.name === "table")) {
+      const z = fertig();
+      if (z.length) aus.push({ art: "absatz", zeilen: z });
+      weiter(k, aus);
+      return;
+    }
+    const f = fett || k.name === "strong" || k.name === "b" || hatKlasse(k, "ilc_text_inline_Strong");
+    const u = k.name === "a" ? linkUrl(k, basis) || url : url;
+    const block = k.name === "p" || k.name === "div" || k.name === "li";
+    if (block && zeilen[zeilen.length - 1].length) zeilen.push([]);
+    for (const x of k.kinder) gehen(x, f, u);
+    if (block) zeilen.push([]);
+  };
+  for (const x of el.kinder) gehen(x, false, "");
+  const z = fertig();
+  return { zeilen: z.filter((s, i) => s.length || (i > 0 && z[i - 1].length)), davor: aus };
+}
+function seitenBloecke(wurzel, basis) {
+  const aus = [];
+  const liste = (el) => ({ art: "liste", geordnet: el.name === "ol", punkte: el.kinder.filter((k) => istElement(k) && k.name === "li").map((li) => {
+    const unter = [];
+    const s = stuecke(li, basis, (k) => { if (k.name === "ul" || k.name === "ol") unter.push(...liste(k).punkte); });
+    return { zeilen: s.davor.reduce((a, b) => a.concat(b.zeilen || []), []).concat(s.zeilen), unter };
+  }).filter((p) => p.zeilen.length || p.unter.length) });
+  const tabelle = (el) => {
+    const zeilen = alle(el, (e) => e.name === "tr").filter((tr) => vorfahr(tr, (e) => e.name === "table") === el).map((tr) => {
+      const z = [];
+      for (const c of tr.kinder) {
+        if (!istElement(c) || (c.name !== "td" && c.name !== "th")) continue;
+        z.push({ zeilen: stuecke(c, basis, null).zeilen });
+        const n = Math.min(20, parseInt(attr(c, "colspan"), 10) || 1);
+        for (let i = 1; i < n; i++) z.push({ zeilen: [] });
+      }
+      return z;
+    }).filter((z) => z.length);
+    return zeilen.some((z) => z.some((c) => c.zeilen.length)) ? { art: "tabelle", zeilen } : null;
+  };
+  const weiter = (k, ziel) => {
+    if (k.name === "table") { const t = tabelle(k); if (t) ziel.push(t); return; }
+    const l = liste(k);
+    if (l.punkte.length) ziel.push(l);
+  };
+  const gehen = (k, ziel) => {
+    if (!istElement(k) || SEITE_AUS(k)) return;
+    if (istSeitenTabelle(k) || istSeitenListe(k)) { weiter(k, ziel); return; }
+    if (hatKlasse(k, "ilCOPageSection")) {
+      const innen = [];
+      for (const x of k.kinder) gehen(x, innen);
+      if (innen.length) ziel.push({ art: "abschnitt", bloecke: innen });
+      return;
+    }
+    if (hatKlasse(k, "ilc_media_cont_MediaContainer")) {
+      const v = erstes(k, (e) => e.name === "video" || e.name === "source");
+      const cap = erstes(k, (e) => hatKlasse(e, "ilc_media_caption_MediaCaption"));
+      const titel = text(cap) || (v ? (attr(v, "title") || decodeURIComponent((attr(v, "src").split("?")[0].split("/").pop() || ""))) : "");
+      if (v) ziel.push({ art: "video", titel: titel || "Video" });
+      return;
+    }
+    const kopf = /(^|\s)ilc_heading([1-3])_/.exec(attr(k, "class"));
+    if (hatKlasse(k, "ilc_Paragraph") || /(^|\s)ilc_va_i?hcap_/.test(attr(k, "class"))) {
+      const s = stuecke(k, basis, weiter);
+      ziel.push(...s.davor);
+      if (s.zeilen.length) ziel.push(Object.assign({ art: "absatz", zeilen: s.zeilen }, kopf ? { ebene: +kopf[2] } : /ihcap/.test(attr(k, "class")) ? { ebene: 3 } : {}));
+      return;
+    }
+    if (k.name === "table" || k.name === "ul" || k.name === "ol") return; // Tabellen und Listen außerhalb des Editors (Layout)
+    for (const x of k.kinder) gehen(x, ziel);
+  };
+  for (const x of wurzel.kinder) gehen(x, aus);
+  return aus;
+}
+function kursseite(html, basisUrl) {
+  const w = istElement(html) ? html : parsen(html);
+  const mitte = mitId(w, "il_center_col") || w;
+  return seitenBloecke(mitte, basisUrl);
+}
+
 // ------------------------------------------------------------------------------------------------------------ Kalender-Abo
 // Seite „Kalender“ (ilias.php?baseClass=ilDashboardGUI&cmd=jumpToCalendar) → Adresse des Fensters „Kalender abonnieren“ | "".
 //   Der Knopf „Abonnieren“ lädt das Fenster nach; seine Adresse steht im Skript der Seite als ajaxRenderUrl mit
@@ -984,7 +1112,7 @@ function downloadUrl(eintrag, basisUrl) {
 // ---------------------------------------------------------------------------------------------------------------- Export
 const API = { parsen, alle, erstes, vorfahr, text, attr, hatKlasse, naechstesGeschwister, vorigesGeschwister, entitaeten,
   angemeldet, kontoKuerzel, abmeldeLink, meldungen, permalink, seitenArt, typVon, artVon, mitgliedschaften, kurse, gruppen, brotkrumen, inhalt, folgeUrl,
-  inhaltReiter, aboFenster, aboLinks, uebungen, formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut };
+  inhaltReiter, aboFenster, aboLinks, uebungen, formulare, dateiName, downloadUrl, datum, groesse, sitzung, absolut, kursseite };
 
 // Aufruf mit ctx: „heute“ für Heute/Gestern/Morgen kommt aus ctx.date (Testdatum des Plugins), sonst wie ohne Aufruf.
 module.exports = function (ctx) {

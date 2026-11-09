@@ -165,7 +165,8 @@ module.exports = function (ctx) {
   //    Plugins (NOTIZ): Ihre Eigenschaften stehen nur im Kopf (eba-core.css 25, „⋯“ in kopf.js). Klassen einer vorher im selben Tab
   //    gezeigten Notiz nimmt es wieder ab (seit 19.10.2026; vorher trug eine eigene Notiz danach z. B. eba-s-termin weiter), nie aber
   //    eine, die in den cssclasses der Notiz selbst steht (die setzt Obsidian).
-  const TYP = { termin: "eba-s-termin", unterlage: "eba-s-begleitnotiz", lehrveranstaltung: "eba-s-notizen", vorlesung: "eba-s-notizen eba-s-vorlesung", "übungsblatt": "eba-s-notizen eba-s-uebungsblatt" };
+  const TYP = { termin: "eba-s-termin", unterlage: "eba-s-begleitnotiz", lehrveranstaltung: "eba-s-notizen", vorlesung: "eba-s-notizen eba-s-vorlesung", "übungsblatt": "eba-s-notizen eba-s-uebungsblatt",
+    kursseite: "eba-s-kursseite" };
   const NOTIZ = ["termin", "unterlage", "lehrveranstaltung", "vorlesung", "übungsblatt", "sq_kurs", "volltext"];
   const ALLE = ["eba-notiz"].concat(Object.keys(TYP).map((t) => TYP[t]).join(" ").split(" ")).filter((k, i, a) => a.indexOf(k) === i);
   const klassenVon = (fm) => {

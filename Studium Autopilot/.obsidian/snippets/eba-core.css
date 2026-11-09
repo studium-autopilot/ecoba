@@ -5636,6 +5636,17 @@ body:not(.is-phone) .markdown-source-view.is-live-preview.eba-s-modul .HyperMD-h
 .eba-mod-hinweis:last-child { border-bottom: 1px solid var(--eba-border); }
 .eba-mod-hinweis-quelle { display: block; margin-top: 2px; font-size: 12.5px; color: var(--eba-muted); }
 .eba-mod-hinweis-quelle:empty { display: none; }
+/* Diese Woche laut ILIAS (modul.js, seit 05.11.2026): Zeilen der Kursseite wie „Als Nächstes“ (Tag links, Haarlinie), oben der
+   Text der ersten Spalte, darunter gedämpft ihr Name und die übrigen Spalten; zuletzt die Zeile, die die Kursseite öffnet */
+.eba-mod-kurs { margin-top: 22px; }
+.eba-mod-kurs:empty { display: none; }
+.eba-mod-kurs-zeile { display: flex; gap: 12px; align-items: baseline; padding: 8px 0; border-top: 1px solid var(--eba-border); font-size: 15px; line-height: 1.4; }
+.eba-mod-kurs-zeile:last-child { border-bottom: 1px solid var(--eba-border); }
+.eba-mod-kurs-zeile .eba-mod-tag { flex: 0 0 auto; min-width: 76px; color: var(--eba-muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.eba-mod-kurs-was { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.eba-mod-kurs-spalte { display: block; font-size: 12.5px; color: var(--eba-muted); }
+.eba-mod-kurs-zeile.seite { color: var(--eba-accent-text); }
+.eba-mod-kurs-zeile .eba-pill { flex: 0 0 auto; }
 
 /* Schmal (iPhone, geteiltes iPad) */
 @container eba-mod (max-width: 560px) {
@@ -7600,6 +7611,26 @@ body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten]
 body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] td:first-child { margin-bottom: 2px; font-weight: 600; color: var(--eba-text); }
 body.is-phone .markdown-preview-view.eba-zusammenfassung table[data-eba-spalten] td[data-label]:not(:first-child)::before {
   content: attr(data-label) ": ";
+  font-family: var(--font-interface);
+  font-size: 0.86em;
+  font-weight: 600;
+  color: var(--eba-muted);
+}
+/* 72.5 Kursseite aus ILIAS (typ: kursseite, Seitenklasse eba-s-kursseite aus start.js, seit 05.11.2026): Tabellen ab 4 Spalten
+   (Ablauf je Woche) auf dem Telefon wie 72.4, jede Zeile ein Block, jede Zelle mit ihrem Spaltenkopf davor (data-eba-k setzt
+   tabellen.js); leere Zellen entfallen. Vorher liefen die rechten Spalten aus dem Bild. iPad und PC: die Tabelle wie sonst. */
+body.is-phone .markdown-preview-view.eba-s-kursseite :is(.el-table, .table-wrapper):has(table th:nth-child(4)) { overflow: visible; -webkit-mask-image: none; mask-image: none; }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) { display: block; width: 100%; min-width: 0; border: 0; font-size: inherit; table-layout: auto; }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) thead { display: none; }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) :is(tbody, tr) { display: block; }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) tr { padding: 10px 0; border-bottom: 1px solid var(--eba-border); background: none; }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) tr:first-child { border-top: 2px solid var(--eba-border-strong); }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) td {
+  display: block; position: static; width: auto; padding: 2px 0; border: 0; background: none; text-align: left;
+}
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) td:empty { display: none; }
+body.is-phone .markdown-preview-view.eba-s-kursseite table:has(th:nth-child(4)) td[data-eba-k]::before {
+  content: attr(data-eba-k) ": ";
   font-family: var(--font-interface);
   font-size: 0.86em;
   font-weight: 600;

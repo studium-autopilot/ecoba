@@ -224,7 +224,7 @@ test("Stabiler Schlüssel: neue UID und neues Datum → dieselbe Notiz wird umbe
   assert.match(t.text[neu], /- Aufgabe 2 nachfragen\n$/);
 });
 
-test("Neuer Titel am selben Tag → dieselbe Notiz mit neuem Schlüssel; zwei gleiche Titel in einer Übung → „#2“", async () => {
+test("Neuer Titel am selben Tag → dieselbe Notiz mit neuem Schlüssel; zwei gleiche Titel in einer Übung → je ihr Datum", async () => {
   const t = tresor({ objekte: { 9001: { typ: "exc", code: "B110" } } });
   await lauf(t, kalender(abgabe(9001, "Blatt 3", "20261103T235500")));
   const p = "Termine/2026-11-03 B110 Abgabe in ILIAS.md", id = t.fm[p].ilias_kalender_id;
@@ -239,8 +239,110 @@ test("Neuer Titel am selben Tag → dieselbe Notiz mit neuem Schlüssel; zwei gl
   await lauf(u, kalender(abgabe(9001, "Kurzaufgabe", "20261110T120000"), abgabe(9001, "Kurzaufgabe", "20261103T120000")));
   const ids = u.notizen().map((x) => u.fm[x].ilias_kalender_id);
   assert.equal(ids.length, 2);
-  assert.ok(!/#/.test(ids[0]) && /#2$/.test(ids[1]), "nach Datum: das spätere bekommt #2");
-  assert.equal(ids[1], ids[0] + "#2");
+  assert.match(ids[0], /^exc\/9001\/abgabe\/[0-9a-f]{8}#2026-11-03$/, "jede mit ihrem eigenen Datum, nie eine laufende Nummer");
+  assert.equal(ids[1], ids[0].replace("#2026-11-03", "#2026-11-10"));
+  // Am selben Tag zusätzlich die Uhrzeit; derselbe Eintrag zweimal ist eine Abgabe
+  const r = await u.K.eintraegeAus(ALMA.lesen(kalender(abgabe(9001, "Kurzaufgabe", "20261103T120000"), abgabe(9001, "Kurzaufgabe", "20261103T235500"),
+    abgabe(9001, "Kurzaufgabe", "20261103T235500"))), { zeit: ALMA.zeit, klartext: ALMA.klartext });
+  assert.deepEqual(r.abgaben.map((x) => x.schluessel.replace(/^.*#/, "#")), ["#2026-11-03 12:00", "#2026-11-03 23:55"]);
+  assert.equal(r.zaehler.abgaben, 2);
+});
+
+// Vier wöchentliche Abgaben mit gleichem Titel; das „Google“-Abo (limited=1) zeigt nur Einträge der letzten 30 Tage
+const WOCHEN = { A: "20261020T235500", B: "20261027T235500", C: "20261103T235500", D: "20261201T235500" };
+const hausaufgaben = (...w) => kalender(...w.map((k) => abgabe(9001, "Hausaufgabe", WOCHEN[k])));
+const abgehakt = (t, p) => { t.fm[p].erledigt = true; t.text[p] = t.text[p].replace("erledigt: false", "erledigt: true"); };
+const stand = (t) => t.notizen().map((p) => [p.slice(8, 18), t.fm[p].erledigt]);
+// Zweiter Tresor mit denselben Dateien, an einem späteren Tag
+const spaeterAm = (t, heute) => {
+  const u = tresor({ heute, objekte: { 9001: { typ: "exc", code: "B110" } } });
+  Object.assign(u.fm, t.fm); Object.assign(u.text, t.text); Object.assign(u.dateien, t.dateien);
+  return u;
+};
+
+test("Gleiche Titel jede Woche: fällt die älteste aus dem Kalender, bleibt jede Notiz bei ihrem Datum und ihr Haken bei ihr", async () => {
+  const t = tresor({ heute: "2026-10-15", objekte: { 9001: { typ: "exc", code: "B110" } } });
+  await lauf(t, hausaufgaben("A", "B", "C", "D"));
+  abgehakt(t, "Termine/2026-11-03 B110 Abgabe in ILIAS.md");
+  t.text["Termine/2026-12-01 B110 Abgabe in ILIAS.md"] += "- Gruppe fragen\n";
+  const ids = Object.assign({}, ...t.notizen().map((p) => ({ [p]: t.fm[p].ilias_kalender_id })));
+  const u = spaeterAm(t, "2026-11-20");
+  for (let i = 0; i < 2; i++) {
+    const b = await lauf(u, hausaufgaben("B", "C", "D"));
+    assert.deepEqual([b.neu, b.umbenannt, b.entfernt, b.entfaellt, b.doppel], [0, 0, 0, 0, 0], "nichts verschoben, nichts im Papierkorb");
+  }
+  assert.deepEqual(stand(u), [["2026-10-20", false], ["2026-10-27", false], ["2026-11-03", true], ["2026-12-01", false]]);
+  for (const p of u.notizen()) assert.equal(u.fm[p].ilias_kalender_id, ids[p], "Schlüssel unverändert");
+  assert.match(u.text["Termine/2026-12-01 B110 Abgabe in ILIAS.md"], /- Gruppe fragen\n$/);
+  assert.deepEqual(u.papierkorb, []);
+});
+
+test("Schlüssel „#2“ von früher: der erste Lauf ordnet nach Titel und Datum zu, ohne zu verschieben, zu löschen oder zu verdoppeln", async () => {
+  const t = tresor({ heute: "2026-10-15", objekte: { 9001: { typ: "exc", code: "B110" } } });
+  await lauf(t, hausaufgaben("A", "B", "C", "D"));
+  // So hat sie die alte Regel geschrieben: die erste ohne Zusatz, dann „#2“, „#3“, „#4“, ebenso die Grabsteine
+  const basis = t.fm[t.notizen()[0]].ilias_kalender_id.split("#")[0], alt = {}, grab = {};
+  t.notizen().forEach((p, i) => {
+    alt[p] = i ? `${basis}#${i + 1}` : basis;
+    t.text[p] = t.text[p].replace(`"${t.fm[p].ilias_kalender_id}"`, `"${alt[p]}"`);
+    grab[alt[p]] = t.sperre().angewendet[t.fm[p].ilias_kalender_id];
+    t.fm[p].ilias_kalender_id = alt[p];
+  });
+  t.dateien[SPERRE] = JSON.stringify(Object.assign(t.sperre(), { angewendet: grab }));
+  abgehakt(t, "Termine/2026-11-03 B110 Abgabe in ILIAS.md");
+  // Die vom 27.10. hast du gelöscht: Sie kommt auch unter ihrem neuen Schlüssel nicht wieder
+  delete t.fm["Termine/2026-10-27 B110 Abgabe in ILIAS.md"]; delete t.text["Termine/2026-10-27 B110 Abgabe in ILIAS.md"];
+  const u = spaeterAm(t, "2026-11-20");
+  const b = await lauf(u, hausaufgaben("B", "C", "D"));
+  assert.deepEqual([b.neu, b.umbenannt, b.entfernt, b.entfaellt, b.doppel, b.geloescht], [0, 0, 0, 0, 0, 1]);
+  assert.deepEqual(stand(u), [["2026-10-20", false], ["2026-11-03", true], ["2026-12-01", false]]);
+  assert.deepEqual(u.papierkorb, []);
+  assert.equal(u.fm["Termine/2026-10-20 B110 Abgabe in ILIAS.md"].ilias_kalender_id, basis, "vergangen und nicht mehr im Kalender: bleibt, wie sie ist");
+  assert.equal(u.fm["Termine/2026-11-03 B110 Abgabe in ILIAS.md"].ilias_kalender_id, basis + "#2026-11-03");
+  assert.equal(u.fm["Termine/2026-12-01 B110 Abgabe in ILIAS.md"].ilias_kalender_id, basis + "#2026-12-01");
+  assert.deepEqual(Object.keys(u.sperre().angewendet).sort(), ["#2026-10-27", "#2026-11-03", "#2026-12-01"].map((d) => basis + d));
+  // Danach ändert sich nichts mehr
+  const b2 = await lauf(u, hausaufgaben("B", "C", "D"));
+  assert.deepEqual([b2.neu, b2.geaendert, b2.gleich, b2.geloescht], [0, 0, 2, 1]);
+});
+
+test("Gleicher Titel kommt später ein zweites Mal: die Notiz behält ihre Abgabe; Datum verschoben folgt sie, eine vergangene nie", async () => {
+  const t = tresor({ heute: "2026-10-15", objekte: { 9001: { typ: "exc", code: "B110" } } });
+  await lauf(t, hausaufgaben("C"));
+  const c = "Termine/2026-11-03 B110 Abgabe in ILIAS.md", basis = t.fm[c].ilias_kalender_id;
+  assert.ok(!/#/.test(basis), "allein im Kalender: ohne Zusatz");
+  abgehakt(t, c);
+  t.text[c] += "- schon abgegeben\n";
+  // Eine zweite „Hausaufgabe“ am 01.12.
+  let b = await lauf(t, hausaufgaben("C", "D"));
+  assert.deepEqual([b.neu, b.umbenannt, b.entfernt, b.doppel], [1, 0, 0, 0]);
+  assert.deepEqual(stand(t), [["2026-11-03", true], ["2026-12-01", false]]);
+  assert.equal(t.fm[c].ilias_kalender_id, basis + "#2026-11-03");
+  assert.match(t.text[c], /- schon abgegeben\n$/);
+  // ILIAS verschiebt die vom 01.12. auf den 08.12.: dieselbe Notiz, umbenannt
+  const d = "Termine/2026-12-01 B110 Abgabe in ILIAS.md";
+  t.text[d] += "- mit Lerngruppe\n";
+  b = await lauf(t, kalender(abgabe(9001, "Hausaufgabe", WOCHEN.C), abgabe(9001, "Hausaufgabe", "20261208T235500")));
+  assert.deepEqual([b.neu, b.umbenannt, b.entfernt, b.entfaellt], [0, 1, 0, 0]);
+  const d2 = "Termine/2026-12-08 B110 Abgabe in ILIAS.md";
+  assert.deepEqual(stand(t), [["2026-11-03", true], ["2026-12-08", false]]);
+  assert.equal(t.fm[d2].ilias_kalender_id, basis + "#2026-12-08");
+  assert.match(t.text[d2], /- mit Lerngruppe\n$/);
+  // Die vom 03.11. fällt aus dem Kalender: Die vom 08.12. ist wieder allein (Schlüssel ohne Zusatz) und bleibt dieselbe Notiz
+  const u = spaeterAm(t, "2026-12-05");
+  b = await lauf(u, kalender(abgabe(9001, "Hausaufgabe", "20261208T235500")));
+  assert.deepEqual([b.neu, b.umbenannt, b.entfernt, b.doppel], [0, 0, 0, 0]);
+  assert.deepEqual(stand(u), [["2026-11-03", true], ["2026-12-08", false]]);
+  assert.equal(u.fm[d2].ilias_kalender_id, basis);
+  // Eine neue „Hausaufgabe“ im Januar übernimmt nie eine vergangene Notiz samt Haken, auch wenn sie denselben Schlüssel bekommt
+  const v = spaeterAm(u, "2027-01-08");
+  b = await lauf(v, kalender(abgabe(9001, "Hausaufgabe", "20270112T235500")));
+  assert.deepEqual([b.neu, b.umbenannt, b.doppel], [1, 0, 0]);
+  assert.deepEqual(stand(v), [["2026-11-03", true], ["2026-12-08", false], ["2027-01-12", false]]);
+  assert.equal(v.fm["Termine/2027-01-12 B110 Abgabe in ILIAS.md"].ilias_kalender_id, basis);
+  b = await lauf(v, kalender(abgabe(9001, "Hausaufgabe", "20270112T235500")));
+  assert.deepEqual([b.neu, b.doppel, b.gleich], [0, 0, 1], "gleicher Schlüssel, anderes Datum: kein Doppel");
+  assert.deepEqual(v.papierkorb, []);
 });
 
 test("Von dir gelöscht: kommt nicht wieder, bis sich Datum oder Uhrzeit in ILIAS ändern", async () => {

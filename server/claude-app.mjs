@@ -249,11 +249,11 @@ export function claudeApp(verzeichnis, anfrage, { jetzt = new Date(), adresse = 
 
 // ---------- Lagebild aus dem Stand (POST /v1/stand, nur solange der Connector an ist) ----------
 // Nur geprüfte, kurze Fakten aus den Parsern des Plugins: Häkchen im Lernplan, fällige Karten, Prüfungen mit Anmeldung, Versuch und
-// Note, Stundenplan der nächsten 14 Tage. Unbekannte Felder fallen weg; ein Eintrag ohne Pflichtfeld oder mit falschem Typ ganz, ein
+// Note, Stundenplan der nächsten 14 Tage, Zeilen der Kursseiten aus ILIAS mit Tag (seit 05.11.2026). Unbekannte Felder fallen weg; ein Eintrag ohne Pflichtfeld oder mit falschem Typ ganz, ein
 // falsches freiwilliges Feld nur selbst. Texte ohne Links und HTML (saeubern wie die Hinweise im Eingang), nichts, was nach
 // Zugangsdaten aussieht. Grenzen: LAGEBILD (wie LAGE in server.js des Plugins; note: Zeichen einer Note oder eines Ergebnisses wie
 // „endgültig nicht bestanden“, gilt auch in mcp-quelle-server.mjs); den ganzen Stand begrenzt dienst.mjs auf 512 KB.
-export const LAGEBILD = { module: 40, kapitel: 200, karten: 40, pruefungen: 100, stundenplan: 300, tage: 14, note: 30 };
+export const LAGEBILD = { module: 40, kapitel: 200, karten: 40, pruefungen: 100, stundenplan: 300, tage: 14, note: 30, kursseiten: 200, zellen: 8 };
 const lesetext = (v, max) => {
   if (typeof v !== "string") return "";
   const r = saeubern(ohneLinks(v), max, false, []);
@@ -323,6 +323,25 @@ export function lagebildPruefen(l, heute = new Date().toISOString().slice(0, 10)
       if (typeof s.modul === "string" && MODULCODE.test(s.modul)) e.modul = s.modul;
       if (s.ausfall === true) e.ausfall = true;
       aus.stundenplan.push(e);
+    }
+  }
+  if (Array.isArray(l.kursseiten)) {
+    // Zeilen der Kursseiten aus ILIAS mit Tag oder Zeitraum (kursseite.js im Plugin): je Spalte Name und Text
+    aus.kursseiten = [];
+    for (const z of l.kursseiten.slice(0, LAGEBILD.kursseiten)) {
+      if (!istObjekt(z) || typeof z.modul !== "string" || !MODULCODE.test(z.modul) || !datumOk(z.von) || !datumOk(z.bis) || z.bis < z.von
+        || !Array.isArray(z.zellen)) continue;
+      const zellen = z.zellen.slice(0, LAGEBILD.zellen).map((c) => {
+        const t = istObjekt(c) ? lesetext(c.text, 300) : "";
+        if (!t) return null;
+        const e = { text: t };
+        if (lesetext(c.spalte, 80)) e.spalte = lesetext(c.spalte, 80);
+        return e;
+      }).filter(Boolean);
+      if (!zellen.length) continue;
+      const e = { modul: z.modul, von: z.von, bis: z.bis, zellen };
+      if (datumOk(z.geaendert)) e.geaendert = z.geaendert;
+      aus.kursseiten.push(e);
     }
   }
   return aus;

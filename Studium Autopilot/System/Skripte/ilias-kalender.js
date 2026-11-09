@@ -17,10 +17,12 @@
 //   (ctx.ilias.ohneKennwort). Code: aus dem Index der ILIAS-Unterlagen (System/Daten/ilias.json, „objekte“: in welchem Kurs ilias.js
 //   die Übung sah), sonst ein Code im Aufgabentitel, sonst keiner.
 // Schlüssel (ilias_kalender_id): exc/<ref der Übung>/<abgabe|feedback>/<8 Zeichen SHA-256 des gesäuberten Aufgabentitels>, nie die
-//   UID des Kalenders (ILIAS legt beim Ändern einer Aufgabe neue Einträge an). Zwei Aufgaben mit gleichem Titel in einer Übung:
-//   nach Datum „#2“, „#3“. Verschwindet ein Schlüssel und kommt im selben Lauf ein neuer mit gleicher Übung, Art und gleichem
-//   Datum, ist das dieselbe Abgabe mit neuem Titel (Haken und Text bleiben). Ändern sich Titel und Datum zugleich, entsteht
-//   „(entfällt)“ bzw. Papierkorb und eine neue Notiz.
+//   UID des Kalenders (ILIAS legt beim Ändern einer Aufgabe neue Einträge an). Mehrere Aufgaben mit gleichem Titel in einer
+//   Übung tragen ihr eigenes Datum („#JJJJ-MM-TT“, am selben Tag dazu die Uhrzeit), nie eine laufende Nummer (bis 0.8.2 „#2“,
+//   „#3“: Fiel die älteste nach 30 Tagen aus dem Kalender, verrutschten alle). Zugeordnet wird über Titel und Datum, nicht über
+//   den genauen Schlüssel: gleicher Titel am selben Tag, dann neuer Titel am selben Tag (gleiche Übung und Art), dann neues
+//   Datum mit gleichem Titel (nur Notizen von heute oder später). Ändern sich Titel und Datum zugleich, entsteht „(entfällt)“
+//   bzw. Papierkorb und eine neue Notiz.
 // Zeit: nur TZID=Europe/Berlin und UTC („Z“), andere Zeitzonen werden ausgelassen (Warnung). Eine Abgabe um 00:00 steht am Vortag
 //   „bis 23:59 Uhr“ (seit 0.7.0 wie in den zentralen Daten; bis 0.6.14 „bis 24:00 Uhr“). Intern bleibt sie 24:00: Die Uhrzeit
 //   steckt in den Grabsteinen gelöschter Abgaben, eine andere ließe sie wiederkommen.
@@ -36,7 +38,7 @@
 //   Code gelten weiter, geloeschtVon); in ILIAS weg → nur künftige Abgaben (ILIAS lässt Altes weg): unberührt in den Papierkorb, sonst
 //   „(entfällt)“; nichts entfernt, wenn der Kalender unvollständig ankam (kein END:VCALENDAR oder ab 900 KB; ILIAS bricht bei 1 MB
 //   ab), keine einzige Abgabe kam, obwohl 3 oder mehr künftige bekannt sind, oder mehr als die Hälfte (und mehr als 2) fehlen.
-//   Doppel einer id führt der Schreiber zusammen (Q.dubletten). Keine neue Notiz für Abgaben, die schon vorbei sind.
+//   Doppel einer id mit gleichem Datum führt der Schreiber zusammen (Q.dubletten). Keine neue Notiz für Abgaben, die schon vorbei sind.
 // Ein Schreiber: Abrufer-Sperre System/Daten/ilias-kalender-abruf.json (sperre.js), darin auch „angewendet“. Der Zeitplan wartet,
 //   solange ein anderes Gerät schreibt; ein Knopf übernimmt (Hier aktualisieren). Zeitplan (Q.planen): 20 s bis 2 Min. nach dem
 //   Einlesen, dann alle 2 Std.; nach Fehlern nach 15, 30, 60 Min.; zurück in der App nach über 2 Std. Ein Abruf wartet höchstens
@@ -175,16 +177,28 @@ const eintraegeAus = async (events, h) => {
     roh.push({ ref: ziel.ref, art: a.art, code, nummer: nummerAus(titel), datum: f.datum, uhr: f.uhr, tag: t.datum, hash: await sha8(titel.toLowerCase()) });
   }
   roh.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : a.uhr < b.uhr ? -1 : a.uhr > b.uhr ? 1 : 0));
-  const zahl = {};
+  // Gleicher Titel mehrmals in einer Übung (z. B. jede Woche „Hausaufgabe“): Jede trägt ihr eigenes Datum („#JJJJ-MM-TT“, am
+  // selben Tag dazu die Uhrzeit), nie eine laufende Nummer. ILIAS lässt Einträge weg, die älter als 30 Tage sind; eine Nummer
+  // verschöbe dann alle anderen. Derselbe Titel zur selben Zeit zweimal ist dieselbe Abgabe.
+  const da = {}, je = {}, abgaben = [];
   for (const x of roh) {
-    const basis = `exc/${x.ref}/${x.art}/${x.hash}`;
-    zahl[basis] = (zahl[basis] || 0) + 1;
-    x.schluessel = zahl[basis] > 1 ? `${basis}#${zahl[basis]}` : basis;
+    x.basis = `exc/${x.ref}/${x.art}/${x.hash}`;
     delete x.hash;
+    if (da[x.basis + "|" + x.datum + "|" + x.uhr]) continue;
+    da[x.basis + "|" + x.datum + "|" + x.uhr] = true;
+    (je[x.basis] = je[x.basis] || []).push(x);
+    abgaben.push(x);
   }
-  z.abgaben = roh.length;
-  return { abgaben: roh, zaehler: z };
+  for (const x of abgaben) {
+    const g = je[x.basis], amTag = g.filter((y) => y.datum === x.datum).length > 1;
+    x.schluessel = g.length > 1 ? `${x.basis}#${x.datum}${amTag ? " " + x.uhr : ""}` : x.basis;
+    delete x.basis;
+  }
+  z.abgaben = abgaben.length;
+  return { abgaben, zaehler: z };
 };
+// Titelteil eines Schlüssels (ohne „#…“): gleich für alle Formen, die es gab („#2“ bis 0.8.2, „#JJJJ-MM-TT“, ohne Zusatz)
+const basisVon = (id) => String(id).split("#")[0];
 
 // Titel und Dateiname einer Abgabe: nur Code, Art und Nummer
 const artWort = (x) => (x.art === "feedback" ? "Feedback" : "Abgabe");
@@ -321,8 +335,9 @@ module.exports = function (ctx) {
     const tag = heute();
     const b = { abgaben: abgaben.length, neu: 0, geaendert: 0, gleich: 0, umbenannt: 0, entfernt: 0, entfaellt: 0, geloescht: 0, doppelt: 0, doppel: 0, vorbei: 0, zaehler, warnungen: [] };
     if (zaehler.zeitzone) b.warnungen.push(`${zaehler.zeitzone === 1 ? "Eine Abgabe" : zaehler.zeitzone + " Abgaben"} mit fremder Zeitzone ausgelassen. Stell in ILIAS die Zeitzone Berlin ein.`);
-    // Doppel einer id (Sync-Verzug, Konfliktkopie): zusammenführen wie jede Quelle
-    for (const g of q.doppelGruppen(eigeneNotizen(), (x) => x.id)) {
+    // Doppel einer id (Sync-Verzug, Konfliktkopie): zusammenführen wie jede Quelle. Nur mit gleichem Datum: Eine vergangene Notiz
+    // behält ihren Schlüssel, und ein späterer Eintrag mit gleichem Titel kann denselben bekommen (ist er allein im Kalender)
+    for (const g of q.doppelGruppen(eigeneNotizen(), (x) => x.id + "|" + s10(x.fm.datum))) {
       for (const x of g) x.text = await app.vault.read(x.f);
       const d = q.dubletten(g.map((x) => ({ pfad: x.f.path, fm: x.fm, text: x.text })));
       const bleibt = g.find((x) => x.f.path === d.bleibt);
@@ -331,18 +346,29 @@ module.exports = function (ctx) {
       for (const p of d.weg) { await papierkorb(g.find((x) => x.f.path === p).f); b.doppel++; }
     }
     const eigene = eigeneNotizen();
-    const jeId = {};
-    for (const n of eigene) if (!jeId[n.id]) jeId[n.id] = n;
     const imFeed = {};
     for (const x of abgaben) imFeed[x.schluessel] = true;
-    // Neuer Titel in ILIAS: gleiche Übung, gleiche Art, gleiches Datum → dieselbe Notiz (Haken und Text bleiben)
-    const verwaist = eigene.filter((n) => !imFeed[n.id]);
-    const genommen = {};
-    for (const x of abgaben) {
-      if (jeId[x.schluessel]) continue;
+    // Welche Notiz gehört zu welcher Abgabe (Haken und Text bleiben)? Jede Notiz höchstens einmal, in dieser Reihenfolge:
+    const zuNotiz = {}, genommen = {};
+    const frei = (n) => !genommen[n.f.path];
+    const zuordnen = (x, n) => { if (n) { genommen[n.f.path] = true; zuNotiz[x.schluessel] = n; } };
+    const ohneNotiz = () => abgaben.filter((x) => !zuNotiz[x.schluessel]);
+    // 1. gleicher Titel am selben Tag: der Schlüssel selbst, sonst jede andere Form desselben Titels (ohne Zusatz, mit Datum,
+    //    „#2“ bis 0.8.2). So behält eine Notiz ihre Abgabe, wenn ein zweiter Eintrag mit gleichem Titel dazukommt oder wegfällt.
+    for (const x of abgaben) zuordnen(x, eigene.find((n) => frei(n) && n.id === x.schluessel && s10(n.fm.datum) === x.datum));
+    for (const x of ohneNotiz()) zuordnen(x, eigene.find((n) => frei(n) && basisVon(n.id) === basisVon(x.schluessel) && s10(n.fm.datum) === x.datum));
+    // 2. neuer Titel in ILIAS: gleiche Übung, gleiche Art, gleicher Tag
+    for (const x of ohneNotiz()) {
       const vor = `exc/${x.ref}/${x.art}/`;
-      const n = verwaist.find((y) => !genommen[y.f.path] && y.id.indexOf(vor) === 0 && s10(y.fm.datum) === x.datum);
-      if (n) { genommen[n.f.path] = true; jeId[x.schluessel] = n; }
+      zuordnen(x, eigene.find((n) => frei(n) && !imFeed[n.id] && n.id.indexOf(vor) === 0 && s10(n.fm.datum) === x.datum));
+    }
+    // 3. neues Datum in ILIAS: gleicher Titel, die Notiz liegt heute oder später (der Schlüssel selbst, sonst die früheste; so
+    //    folgen mehrere in der Reihenfolge der Daten). Eine vergangene wandert nie: Sie fiel nur aus dem Kalender (ILIAS lässt
+    //    nach 30 Tagen weg), und ein späterer Eintrag mit gleichem Titel ist eine andere Abgabe.
+    const nachDatum = (p, r) => (s10(p.fm.datum) < s10(r.fm.datum) ? -1 : s10(p.fm.datum) > s10(r.fm.datum) ? 1 : 0);
+    for (const x of ohneNotiz()) {
+      const kandidaten = eigene.filter((n) => frei(n) && basisVon(n.id) === basisVon(x.schluessel) && s10(n.fm.datum) >= tag).sort(nachDatum);
+      zuordnen(x, kandidaten.find((n) => n.id === x.schluessel) || kandidaten[0]);
     }
     const fremdeTermine = (ctx.modell && ctx.modell.termine ? ctx.modell.termine() : []).filter((t) => !(t.fm && t.fm.herkunft === K.QUELLE));
     const blaetter = ctx.modell && ctx.modell.abgaben ? ctx.modell.abgaben() : [];
@@ -353,10 +379,13 @@ module.exports = function (ctx) {
     // Grabstein ohne Code: Der Code kommt oft erst mit dem ersten Durchsuchen der Unterlagen (Index „objekte“), eine gleich nach
     // dem Verbinden gelöschte Abgabe käme sonst wieder. Ältere Grabsteine (mit dem Code von damals, auch leer) gelten weiter. Ist
     // der Code gerade unbekannt (nach neuem Verbinden ist „objekte“ leer), lässt sich ein älterer nicht prüfen: Dann gilt jeder
-    // Grabstein und bleibt unverändert, bis der Code wieder da ist. → zu merkender Grabstein oder ""
+    // Grabstein und bleibt unverändert, bis der Code wieder da ist. Grabsteine unter einer anderen Form desselben Titels (ohne
+    // Zusatz, mit Datum, „#2“ bis 0.8.2) gelten auch: Die Prüfsumme enthält Datum und Uhrzeit, trifft also nur dieselbe Abgabe.
+    // → zu merkender Grabstein oder ""
     const geloeschtVon = (x, h) => {
-      if (q.geloescht(angewendet, x.schluessel, h)
-        || [x.code, ""].some((c) => q.geloescht(angewendet, x.schluessel, q.kurzHash([x.datum, x.uhr, x.art, c])))) return h;
+      const hashes = [h].concat([x.code, ""].map((c) => q.kurzHash([x.datum, x.uhr, x.art, c])));
+      const ids = Object.keys(angewendet).filter((k) => basisVon(k) === basisVon(x.schluessel));
+      if (ids.some((k) => hashes.some((w) => q.geloescht(angewendet, k, w)))) return h;
       return !x.code && Object.prototype.hasOwnProperty.call(angewendet, x.schluessel) ? angewendet[x.schluessel] : "";
     };
     // Name, den diese Quelle vergeben hat („JJJJ-MM-TT <Code> Abgabe in ILIAS“, bei Gleichstand mit „ 2“); einen eigenen benennt nur
@@ -364,7 +393,7 @@ module.exports = function (ctx) {
     const NAME_VON_HIER = /^\d{4}-\d{2}-\d{2} (?:\S+ )?(?:Abgabe|Feedback) in ILIAS$/;
     for (const x of abgaben) {
       const h = q.kurzHash([x.datum, x.uhr, x.art]);
-      const n = jeId[x.schluessel];
+      const n = zuNotiz[x.schluessel];
       const doppelt = schonDa(x, fremdeTermine, blaetter);
       const e = eintragVon(x), opt = Object.assign({ modulLink: modulLink(x.code) }, NOTIZ);
       if (n) {

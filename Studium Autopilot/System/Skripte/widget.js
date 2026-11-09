@@ -4,7 +4,7 @@
 // nie im Update, und weil jedes Gerät seine eigene schreibt, streiten iPhone und iPad nicht um eine Datei):
 //  widget-iphone.json bzw. widget-ipad.json (datenBauen): der Stundenplan der Planwoche und der zwei Wochen danach (wocheBauen aus
 //    woche.js, dieselbe Regel wie das Wochenraster: Farbe je Modul, Ausfälle, Änderungen, online), „Fristen · 30 Tage“ wie auf dem
-//    Dashboard (zeilenBauen aus dashboard.js), die nächste Frist und die nächsten Prüfungen (fristen, naechstePruefung), dazu
+//    Dashboard (zeilenBauen aus dashboard.js), die nächste Frist und die nächsten Prüfungen (fristen, kommendePruefungen), dazu
 //    Design und hell/dunkel dieses Geräts. Was heute, morgen und jetzt ist, rechnet das Widget selbst; so stimmt es auch Tage
 //    später, wenn Obsidian so lange zu bleibt.
 //  widget-scriptable.js: der Zeichner (scriptable unten, als Text). Er kommt mit jedem Update neu, in Scriptable ändert sich nichts.
@@ -28,7 +28,6 @@ module.exports = function (ctx) {
 
   const zwei = (n) => (n < 10 ? "0" : "") + n;
   const iso = (d) => d.getFullYear() + "-" + zwei(d.getMonth() + 1) + "-" + zwei(d.getDate());
-  const plusTag = (s, n) => { const m = String(s).split("-"); return iso(new Date(+m[0], +m[1] - 1, +m[2] + n)); };
 
   // ---------- Daten (rein, testbar) ----------
   // o: { W: woche.js, D: dashboard.js, M: ctx.modell, eingaben: W.eingaben(), jetzt: Date, tresor, design, modus }
@@ -56,14 +55,9 @@ module.exports = function (ctx) {
     const naechsteFristen = M.fristen({ heute }).slice(0, FRISTEN).map((f) => ({
       was: String(f.titel).replace(" (ILIAS)", ""), tag: f.datum, ende: f.ende || f.datum, laeuft: !!f.laeuft, geschaetzt: !!f.geschaetzt, pfad: f.pfad || "",
     }));
-    // Die nächsten Prüfungen nach der Regel der Kachel „Nächste Prüfung“: jeweils die nächste ab dem Tag nach der vorigen
-    const pruefungen = [];
-    for (let ab = heute; pruefungen.length < PRUEFUNGEN;) {
-      const p = M.naechstePruefung({ heute: ab });
-      if (!p) break;
-      pruefungen.push({ was: p.titel, tag: p.datum, uhr: p.zeit || "", geschaetzt: !!p.geschaetzt, pfad: p.pfad || "" });
-      ab = plusTag(p.datum, 1);
-    }
+    // Die nächsten Prüfungen nach der Regel der Kachel „Nächste Prüfung“ (kommendePruefungen); mehrere am selben Tag stehen alle darin
+    const pruefungen = M.kommendePruefungen({ heute }).slice(0, PRUEFUNGEN)
+      .map((p) => ({ was: p.titel, tag: p.datum, uhr: p.zeit || "", geschaetzt: !!p.geschaetzt, pfad: p.pfad || "" }));
     return { format: FORMAT, stand: jetzt.toISOString(), tresor: o.tresor || "", design: o.design || "elfenbein", modus: o.modus || "automatisch",
       seiten: SEITEN, wochen, fristen, naechsteFristen, pruefungen };
   };

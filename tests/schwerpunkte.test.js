@@ -1,15 +1,16 @@
 // Schwerpunkte im Studienverlauf (schwerpunkte.js, rechnen und sichtbarFuer): Regeln der Prüfungsordnung für die
 // Schwerpunktbereiche (genau 3, je 15–30 ECTS, Summe je Variante, VWL/BWL-Seite), was als Elective Studies zählt, wann der
-// Block erscheint. Nur ausgedachte Pläne. Läuft ohne Obsidian: node --test tests/
+// Block erscheint, Abgleich mit dem Fachmodell (bestandene und anerkannte Module zählen ohne „gewählt“). Nur ausgedachte Pläne.
+// Läuft ohne Obsidian: node --test tests/
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { laden } = require("./laden.js");
+const { laden, json } = require("./laden.js");
 
 const { rechnen, sichtbarFuer } = laden("schwerpunkte").ergebnis;
-const sp = (code, anrechnung, ects, o) => Object.assign({ code, titel: "Beispiel", ects, gruppe: "Schwerpunkt", anrechnung, gewaehlt: true,
+const sp = (code, anrechnung, ects, o) => Object.assign({ code, titel: "Beispiel", ects, gruppe: "Schwerpunkt", anrechnung, imPlan: true, gewaehlt: true,
   pfad: `Module/3 Schwerpunktkatalog/${code}.md`, bereiche: [anrechnung] }, o || {});
-const profil = (code, rollen, o) => Object.assign({ code, titel: "Profil", ects: 6, gruppe: "Profil & Vertiefung", anrechnung: "", gewaehlt: true,
+const profil = (code, rollen, o) => Object.assign({ code, titel: "Profil", ects: 6, gruppe: "Profil & Vertiefung", anrechnung: "", imPlan: true, gewaehlt: true,
   pfad: `Module/2 Profil & Vertiefung/${code}.md`, bereiche: [], rolle_economics: rollen[0], rolle_ba: rollen[1] }, o || {});
 const ects = (R) => Object.fromEntries(R.belegt.map((b) => [b.name, b.ects]));
 
@@ -53,11 +54,11 @@ test("Profil & Vertiefung: Elective Studies nach Rolle der Variante oder „Zäh
   assert.deepEqual(ects(rechnen([b220, e210], "Economics")), { "Elective Studies": 6 }, "B220 nach Rolle, E210 ist in Economics Pflicht");
   assert.deepEqual(ects(rechnen([b220, e210], "Business Administration")), { "Elective Studies": 6 }, "B220 ist Pflicht, E210 nach „Zählt als“");
   assert.deepEqual(ects(rechnen([b220, e210], "ohne Spezialisierung")), { "Elective Studies": 6 }, "nur E210 mit „Zählt als“");
-  assert.deepEqual(ects(rechnen([Object.assign({}, b220, { gewaehlt: false })], "Economics")), {}, "nicht im Plan");
+  assert.deepEqual(ects(rechnen([Object.assign({}, b220, { imPlan: false, gewaehlt: false })], "Economics")), {}, "nicht im Plan");
 });
 
 test("Nur Module im Plan zählen; ohne gültige Anrechnung stehen sie unter „Ohne Bereich“", () => {
-  const R = rechnen([sp("E313", "Economic Policy", 6), sp("E314", "Economic Policy", 9, { gewaehlt: false }), sp("S312", "", 6), sp("X1", "Tippfehler", 3)], "Economics");
+  const R = rechnen([sp("E313", "Economic Policy", 6), sp("E314", "Economic Policy", 9, { imPlan: false, gewaehlt: false }), sp("S312", "", 6), sp("X1", "Tippfehler", 3)], "Economics");
   assert.deepEqual(ects(R), { "Economic Policy": 6 });
   assert.deepEqual(R.ohne.map((m) => m.code), ["S312", "X1"]);
   assert.equal(R.bereiche.length, 11, "zehn Schwerpunktbereiche und Elective Studies");
@@ -65,10 +66,47 @@ test("Nur Module im Plan zählen; ohne gültige Anrechnung stehen sie unter „O
 });
 
 test("Sichtbar ab dem 2. Fachsemester oder mit einem Schwerpunkt- oder Profilmodul im Plan", () => {
-  const nichts = [sp("E313", "Economic Policy", 6, { gewaehlt: false }), { code: "B110", gruppe: "Grundstudium", gewaehlt: true }];
+  const nichts = [sp("E313", "Economic Policy", 6, { imPlan: false, gewaehlt: false }), { code: "B110", gruppe: "Grundstudium", gewaehlt: true }];
   assert.equal(sichtbarFuer(1, false, nichts), false);
   assert.equal(sichtbarFuer(2, false, nichts), true);
   assert.equal(sichtbarFuer(3, true, nichts), false, "vor Studienbeginn");
   assert.equal(sichtbarFuer(1, false, nichts.concat(sp("E314", "Economic Policy", 9))), true);
   assert.equal(sichtbarFuer(1, false, [profil("B220", ["Elective Studies", "Pflicht"])]), true);
+});
+
+// ---------- Abgleich mit dem Fachmodell: dieselbe Regel „im Plan“ wie bei ECTS und Gesamtnote ----------
+// Das Skript läuft mit dem echten ctx.modell und zeichnet in einen Ersatz-Knoten; ausgelesen wird das HTML des Blocks.
+const SEMESTER = json("semester.json");
+const notiz = (code, o) => ({ [`Module/3 Schwerpunktkatalog/${code} Beispiel.md`]: Object.assign({ typ: "modul", code, titel: code + " Beispiel", gruppe: "Schwerpunkt",
+  ects: 6, anrechnung: "Economic Policy", bereiche: ["Economic Policy"], status: "offen", gewaehlt: false }, o) });
+const zeichnen = (notizen) => {
+  const frontmatter = { "System/Daten/Semester.md": SEMESTER, "System/Einstellungen.md": { variante: "Economics" } };
+  const { ctx: { modell } } = laden("modell", { notizen, frontmatter });
+  let zeichner = null;
+  const { ergebnis } = laden("schwerpunkte", { notizen, frontmatter, kontext: { modell, codeblock: (_sprache, fn) => { zeichner = fn; return { neu: () => {} }; } } });
+  ergebnis.registrieren();
+  const el = { classList: { add() {}, remove() {} }, innerHTML: "", firstElementChild: { querySelector: () => null, addEventListener() {} } };
+  zeichner("", el, {}, undefined);
+  return { modell, html: el.innerHTML };
+};
+
+test("Aus Alma bestanden, nie „gewählt“: das Modul zählt im Bereich wie bei ECTS und Note (E311)", () => {
+  const { modell, html } = zeichnen(notiz("E311", { status: "bestanden", ergebnis: "1,7", notenblock: "66 %" }));
+  assert.equal(modell.ects().ist, 6, "ECTS zählen es");
+  assert.equal(modell.noten().note, "1,70", "die Note zählt es");
+  assert.match(html, /title="Economic Policy: E311"/, "der Bereich zeigt es");
+  assert.match(html, /<span class="z">6<\/span>/);
+  assert.doesNotMatch(html, /Ohne Bereich/);
+});
+
+test("Anerkannt, geplant und läuft zählen ebenso; ein offenes, nie geplantes Modul nicht", () => {
+  const { html } = zeichnen(Object.assign({}, notiz("E311", { status: "anerkannt" }), notiz("E312", { status: "läuft" }),
+    notiz("E313", { semester_geplant: "SS 2027" }), notiz("E314", { gewaehlt: true }), notiz("E315", {})));
+  assert.match(html, /title="Economic Policy: E311, E312, E313, E314"/);
+  assert.match(html, /<span class="z">24<\/span>/);
+});
+
+test("Bestanden ohne Bereich in „Anrechnung in“ steht unter „Ohne Bereich“", () => {
+  const { html } = zeichnen(notiz("E311", { status: "bestanden", anrechnung: "" }));
+  assert.match(html, /Ohne Bereich: .*E311/);
 });

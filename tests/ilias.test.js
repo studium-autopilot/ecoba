@@ -498,6 +498,69 @@ test("Nicht mehr in ILIAS: was in einer übersprungenen Sitzung oder fremden Gru
   assert.equal(idx["1101"].entfernt, "2026-10-16");
 });
 
+test("Nicht mehr in ILIAS: ein Ordner, dessen Seite nicht zu lesen ist (geänderte Seite, Wartungsseite), behält seine Dateien", async () => {
+  // Was ilias-html.js aus solchen Seiten liest: eine leere Liste, genau wie bei einem leeren Ordner
+  const fs = require("node:fs"), path = require("node:path");
+  const H = laden("ilias-html").ergebnis;
+  const ORDNER = fs.readFileSync(path.join(__dirname, "daten", "ilias-seiten", "ordner.html"), "utf8");
+  const umgebaut = H.inhalt(ORDNER.replace(/il_ContainerItemTitle/g, "il_ContainerItemHeading"), B + "ordner/110");
+  const wartung = H.inhalt("<html><body><h1>Wartungsarbeiten</h1><p>ILIAS ist bald wieder da.</p></body></html>", B + "ordner/110");
+  assert.deepEqual([umgebaut, wartung], [[], []]);
+  const def = standardIlias();
+  def.seiten[B + "kurs/100"].push(datei("1002", "Folien VL03", "pdf", "2026-10-15T08:00"), ordner("160", "Material"));
+  def.seiten[B + "ordner/160"] = [ordner("161", "Lösungen")];
+  def.seiten[B + "ordner/161"] = [datei("1611", "Lösung Blatt 1", "pdf", "2026-10-15T08:00")];
+  def.dateien["1002"] = "%PDF Folien drei"; def.dateien["1611"] = "%PDF Lösung eins";
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  await lauf(x);
+  assert.ok(x.t.index().dateien["1101"] && x.t.index().dateien["1611"], "alles geladen");
+  const S = x.il.def.seiten;
+  S[B + "ordner/110"] = umgebaut; // geänderte Seite
+  S[B + "ordner/160"] = wartung; // Wartungsseite: auch was in seinen Unterordnern lag, bleibt
+  S[B + "kurs/100"] = S[B + "kurs/100"].filter((e) => e.refId !== "1002"); // wirklich entfernt
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  assert.notEqual(b.art, "fehler", b.fehler);
+  assert.ok(!b.warnung, b.warnung);
+  const idx = x.t.index().dateien;
+  assert.ok(!idx["1101"].entfernt && !idx["1611"].entfernt, "nicht gelesen ist nicht weg");
+  assert.equal(idx["1002"].entfernt, "2026-10-16", "eine wirklich entfernte Datei daneben schon");
+  assert.equal(x.t.text(B110 + "/B110 Übung 01.md").indexOf("Nicht mehr in ILIAS"), -1);
+});
+
+test("Leerer Ordner (Übungsordner zu Semesterbeginn): kein Fehler, kein Hinweis, der Kurs gilt als durchsucht", async () => {
+  const def = standardIlias();
+  def.seiten[B + "kurs/100"].push(ordner("170", "Abgaben"));
+  def.seiten[B + "ordner/170"] = [];
+  const x = aufbau({ ilias: def });
+  await verbinden(x);
+  const b = await lauf(x);
+  assert.equal(b.art, "ok", b.fehler);
+  assert.ok(!b.warnung, b.warnung);
+  assert.ok(!b.jeKurs["100"].ordnerFehler);
+  assert.ok(x.il.geholt().indexOf(B + "ordner/170") >= 0);
+  // Kurs ganz durchsucht: Eine Datei, die daneben wirklich weg ist, wird gemerkt
+  x.il.def.seiten[B + "ordner/110"].shift();
+  x.u.vor(4 * STUNDE);
+  const b2 = await lauf(x);
+  assert.notEqual(b2.art, "fehler", b2.fehler);
+  assert.equal(x.t.index().dateien["1101"].entfernt, "2026-10-16");
+});
+
+test("Keine Kurse in „Meine Kurse und Gruppen“ (geänderte Seite): Fehler, nichts als entfernt gemerkt", async () => {
+  const x = aufbau();
+  await verbinden(x);
+  await lauf(x);
+  x.il.def.kurse = [];
+  x.u.vor(4 * STUNDE);
+  const b = await lauf(x);
+  assert.equal(b.art, "fehler");
+  assert.match(b.fehler, /Keine Kurse gefunden/);
+  const idx = x.t.index().dateien;
+  assert.ok(!Object.keys(idx).some((id) => idx[id].entfernt), "nichts als entfernt gemerkt");
+});
+
 test("Von dir gelöscht, in ILIAS unverändert neu hochgeladen (neue Kennung): bleibt gelöscht", async () => {
   const x = aufbau();
   await verbinden(x);

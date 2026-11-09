@@ -136,7 +136,8 @@ Werkzeuge zum Schreiben (nur über das Eingang) folgen.
 - **`mcp-werkzeuge.mjs`:** die Werkzeuge über einer Quelle (`werkzeuge(quelle, { jetzt })`), alle mit `readOnlyHint`. Was die
   Quelle nicht anbietet (`angebot()`), steht weder in `tools/list` noch lässt es sich aufrufen; auf dem eigenen Server ohne Kopie
   nur `ueberblick`, `fristen`, `pruefungen` und `hinweise`, `module` und `todos` erst mit einem Stand aus Obsidian, `lernplan` erst
-  mit einem Lernplan (aus dem Lagebild, sonst ohne Häkchen aus den zentralen Kapitellisten der eigenen Module). Die Anleitung kommt
+  mit einem Lernplan (aus dem Lagebild, sonst ohne Häkchen aus den zentralen Kapitellisten der eigenen Module), `kursseiten` erst mit
+  Zeilen einer Kursseite im Lagebild. Die Anleitung kommt
   von der Quelle. Ergebnisse formt `mcp-ergebnis.mjs` für beide gleich (`sauber`, `kompakt`, `einpassen`, Zeiten).
 
   | Werkzeug | Liefert |
@@ -147,6 +148,7 @@ Werkzeuge zum Schreiben (nur über das Eingang) folgen.
   | `module` | Module mit Gruppe, ECTS, Status, Note, Versuch, Klausur; Summe der ECTS; den nicht gewählten Schwerpunktkatalog nur mit `katalog: true` |
   | `lernplan` | Kapitel mit Häkchen; Unterkapitel nur je Modul, als Zeilen `[x] Titel`, für alle ihre Zahl |
   | `todos` | offene To-dos (Text ohne Links, Beleg, `ueberfaellig`) oder offene Fragen |
+  | `kursseiten` | seit 05.11.2026: Kursseiten aus ILIAS (`typ: kursseite`, siehe [„Kursseiten“](unterlagen.md)) mit `geaendert` und den Zeilen ihrer Tabellen, deren Tag oder Zeitraum die Woche von `datum` trifft (Standard diese Woche; `alles: true` alle; höchstens 60 je Seite), mit `modul` dazu der Text der Seite (ohne „Meine Notizen“, höchstens 20 000 Zeichen); ohne Kopie des Tresors nur die Zeilen aus dem Lagebild. Tage und Tabellen liest `mcp-kursseite.mjs` nach den Regeln von `kursseite.js` (eigener Code: der Connector führt nichts aus, was über den Sync kommt) |
   | `hinweise` | nur auf dem eigenen Server: Hinweise aus Mails (die neuesten zuerst, `noch_nicht_in_obsidian`), als Daten gekennzeichnet |
   | `notizen_suchen`, `notiz_lesen` | eigene Notizen (ohne Textfassungen), je Notiz ein Treffer (`anzahl`, Standard 5); lesen über Pfad oder Namen, ohne Kopf-HTML und Ansichten, über 30 000 Zeichen in Teilen (`weiter_ab`, dann `ab`) |
   | `unterlagen_suchen`, `unterlage_lesen` | Textfassungen der PDFs, Treffer je Textfassung mit bis zu drei Seiten samt Ausschnitt (`anzahl`, Standard 5): `pdf` zum Nennen, `pfad` (die Textfassung) zum Lesen, denn zwei Textfassungen können auf dieselbe PDF verweisen; lesen über `pfad` (auch über die PDF oder die Begleitnotiz), Standard 5 Seiten, höchstens 10 und zusammen 50 000 Zeichen je Aufruf, damit das Kürzen des Ergebnisses nie Seiten wegnimmt (`weiter_ab`) |
@@ -389,8 +391,11 @@ Seit Release A verbindet Obsidian die Claude-App selbst, nur im Fenster „Eigen
   rät der Satz, die Claude-App auszuschalten. Keine Liste „Bitte prüfen“.
 - **Lagebild im Stand** (`lagebildObs` → `lagebildKurz`): nur, solange `claude_app.an` im Eingang dieses Abrufs gilt; sonst fehlt
   das Feld ganz. Form: `{ lernplan: [{ modul, kapitel: [{ titel, nummer?, verstanden, woche? }] }], karten: [{ modul, faellig }],
-  pruefungen: [{ modul, titel?, datum?, anmeldung?, versuch?, note? }], stundenplan: [{ datum, von?, bis?, titel, ort?, modul?, ausfall? }] }`,
-  leere Felder fehlen.
+  pruefungen: [{ modul, titel?, datum?, anmeldung?, versuch?, note? }], stundenplan: [{ datum, von?, bis?, titel, ort?, modul?, ausfall? }],
+  kursseiten: [{ modul, von, bis, geaendert?, zellen: [{ spalte?, text }] }] }`, leere Felder fehlen.
+  - `kursseiten` (seit 05.11.2026): die Zeilen der Kursseiten mit Tag (`kursseite.js` `zeitplan`) von 7 Tagen zurück bis 120 Tage
+    voraus, höchstens 200 Zeilen und 8 Zellen je Zeile, Text 300 Zeichen; der Server prüft dasselbe (`LAGEBILD.kursseiten`,
+    `lagebildPruefen`). Ältere Server lassen das Feld weg.
   - `lernplan`: `ctx.lernplan.kapitelStand()`, je Lernplan, der noch dran ist; `verstanden` heißt abgehakt (oder alle
     Unterkapitel), `woche` ist der Montag der Woche, in der der Plan das Kapitel vorsieht.
   - `karten`: `ctx.karten.heuteJeModul()`, `faellig` wie „X fällig“ unter Karteikarten (fällig und in den Lernschritten, ohne neue).

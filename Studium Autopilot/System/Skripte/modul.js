@@ -15,6 +15,8 @@
 //     Raum“, „andere Zeit“ oder „geändert“, neuem Wert in Warnfarbe und dem üblichen durchgestrichen (wie die Woche).
 //     Darunter „Von Claude“ (seit 01.11.2026): Hinweise des eigenen Servers zu diesem Modul aus den letzten 14 Tagen, höchstens
 //     zwei, die neuesten zuerst, je mit Quelle und Tag (ctx.server.hinweise; ohne Server oder Hinweise nichts).
+//     Darunter „Diese Woche laut ILIAS“ (seit 05.11.2026): die Zeilen der Kursseiten des Moduls (kursseite.js woche), deren Tag
+//     oder Zeitraum diese Woche trifft, je mit den Spalten, die Inhalt haben; dann je Kursseite eine Zeile, die sie öffnet.
 //  3a. Lernplan (seit 31.10.2026): gibt es eine Lernplan-Notiz des Moduls, ihr Stand wie im Bereich Lernplan (ctx.lernplan.modulZeile);
 //     Tipp öffnet sie.
 //  3b. Abdeckung (seit 0.5.3): Termine aus Folien und ILIAS-Dateien kommen zentral nur für Module, deren Unterlagen der Autor
@@ -41,6 +43,7 @@ module.exports = function (ctx) {
   const MONATE = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
   const TAG = 86400000;
   const HINWEISE_JE_MODUL = 2; // Von Claude: höchstens so viele Hinweise, die neuesten
+  const KURS_ZEILEN = 4, KURS_TEXT = 160; // Laut ILIAS: höchstens so viele Zeilen der Woche, je Spalte so viele Zeichen
   const SERVER_JSON = "System/Daten/server.json"; // server.js DATEI: Hinweise des eigenen Servers
 
   const pad = (n) => String(n).padStart(2, "0");
@@ -388,6 +391,40 @@ module.exports = function (ctx) {
       }).catch((e) => console.warn("Modul: Hinweise " + ((e && e.message) || e)));
     }
 
+    // Laut ILIAS (zu 3., seit 05.11.2026): was die Kursseiten des Moduls (kursseite.js) für diese Woche nennen, je Tabellenzeile
+    // die Spalten mit Inhalt; darunter eine Zeile zur Kursseite selbst (Pille „geändert“ in den ersten 7 Tagen nach einer Änderung).
+    // Erst gelesen, dann gezeichnet; ohne Kursseite bleibt der Platz leer.
+    const KS = ctx.user && ctx.user.kursseite;
+    const seiten = KS && typeof KS === "function" ? KS(ctx).seiten(code) : [];
+    if (seiten.length) {
+      const kz = box.createDiv({ cls: "eba-mod-kurs" });
+      const heuteIso = `${heute.getFullYear()}-${pad(heute.getMonth() + 1)}-${pad(heute.getDate())}`;
+      Promise.all(seiten.map((s) => app.vault.cachedRead(s.datei).then((t) => ({ s, t })))).then((xs) => {
+        const zeilen = [];
+        for (const x of xs) for (const z of KS.woche(x.t, heuteIso, { woche: true })) zeilen.push(Object.assign({ s: x.s }, z));
+        kz.createDiv({ cls: "eba-mod-k", text: zeilen.length ? "Diese Woche laut ILIAS" : "Laut ILIAS" });
+        for (const z of zeilen.slice(0, KURS_ZEILEN)) {
+          const r = kz.createDiv({ cls: "eba-mod-kurs-zeile eba-mod-tipp" });
+          r.createSpan({ cls: "eba-mod-tag", text: z.von === z.bis ? tagText(datum(z.von)) : Z().spanne(datum(z.von), datum(z.bis)) });
+          // oben der Text der ersten Spalte, darunter gedämpft ihr Name und die übrigen Spalten („Name: Text“)
+          const kurz = (s) => { const t = s.replace(/\n+/g, " · "); return t.length > KURS_TEXT ? t.slice(0, t.lastIndexOf(" ", KURS_TEXT)) + " …" : t; };
+          const w = r.createSpan({ cls: "eba-mod-kurs-was" });
+          const [erste, ...rest] = z.zellen;
+          w.createSpan({ cls: "eba-mod-kurs-text", text: kurz(erste.text) });
+          const unter = [erste.spalte].concat(rest.map((c) => (c.spalte ? `${c.spalte}: ` : "") + kurz(c.text))).filter(Boolean).join(" · ");
+          if (unter) w.createSpan({ cls: "eba-mod-kurs-spalte", text: unter });
+          knopf(r, (e) => oeffnen(z.s.datei, e));
+        }
+        for (const s of xs.map((x) => x.s)) {
+          const r = kz.createDiv({ cls: "eba-mod-kurs-zeile seite eba-mod-tipp" });
+          r.createSpan({ cls: "eba-mod-kurs-was", text: seiten.length > 1 ? s.datei.basename : "Kursseite aus ILIAS" });
+          const g = datum(s.geaendert);
+          if (g && (heute - g) / TAG <= 7) r.createSpan({ cls: "eba-pill", text: "geändert " + tagText(g) });
+          knopf(r, (e) => oeffnen(s.datei, e));
+        }
+      }).catch((e) => console.warn("Modul: Kursseite " + ((e && e.message) || e)));
+    }
+
     // 3a. Lernplan (seit 31.10.2026): Stand wie im Bereich, Tipp öffnet die Lernplan-Notiz; ohne Notiz nichts (lernplan.js)
     if (ctx.lernplan && ctx.lernplan.modulZeile) ctx.lernplan.modulZeile(box, code, f.path);
 
@@ -430,7 +467,7 @@ module.exports = function (ctx) {
     // unterlage: Der Name einer Vorlesungsnotiz nimmt das Thema aus ihren Folien, auch wenn sie nach der Notiz kommen
     const wichtig = (f, cache) => {
       const typ = cache && cache.frontmatter && cache.frontmatter.typ;
-      return ["modul", "lehrveranstaltung", "termin", "vorlesung", "unterlage", "karteikarten", "lernplan"].indexOf(typ) >= 0
+      return ["modul", "lehrveranstaltung", "termin", "vorlesung", "unterlage", "karteikarten", "lernplan", "kursseite"].indexOf(typ) >= 0
         || (f && (f.path === "System/Einstellungen.md" || String(f.path).indexOf("System/Daten/") === 0));
     };
     ctx.an(app.metadataCache, "changed", (f, _d, cache) => { if (wichtig(f, cache)) bald(); });

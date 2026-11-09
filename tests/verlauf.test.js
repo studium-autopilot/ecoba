@@ -58,6 +58,27 @@ test("lesen: Prüfung je Modul nach der einen Regel – abgehakt ohne Countdown,
   assert.ok(!R.naechste, "keine offene Prüfung mehr");
 });
 
+test("lesen: Klausurtermin Nachholtermin – Fähnchen und nächste Prüfung folgen dem Fachmodell, wie Kachel und pruefungVon", () => {
+  const n = (extra) => ({
+    "Module/1 Grundstudium/X100 Beispiel.md": Object.assign({ typ: "modul", code: "X100", titel: "Beispiel", gruppe: "Grundstudium", ects: 6, fachsemester: 1 }, extra),
+    "Termine/2027-02-01 Klausur X100.md": { typ: "termin", titel: "Klausur X100", datum: "2027-02-01", kategorie: "Prüfung", code: "X100" },
+    "Termine/2027-04-01 Nachholklausur X100.md": { typ: "termin", titel: "Nachholklausur X100", datum: "2027-04-01", kategorie: "Prüfung", code: "X100" },
+    "Termine/2026-11-13 Zwischentest 1 X100.md": { typ: "termin", titel: "Zwischentest 1 X100", datum: "2026-11-13", kategorie: "Prüfung", code: "X100" },
+  });
+  const tage = (notizen) => {
+    const V = verlauf(notizen), R = V.rechnen(V.lesen());
+    return { naechste: R.naechste && R.naechste.datum, klausuren: R.pruef.filter((p) => !p.test).map((p) => p.datum), tests: R.pruef.filter((p) => p.test).length, V };
+  };
+  const nachhol = tage(n({ klausurtermin: "Nachholtermin" }));
+  assert.deepEqual([nachhol.naechste, nachhol.klausuren], [d(1, 4, 2027), [d(1, 4, 2027)]], "nur der Nachholtermin zählt");
+  assert.equal(nachhol.tests, 1, "Zwischentests gehören zu keinem Termin");
+  assert.equal(+nachhol.V.lesen().module[0].pr.datum, +d(1, 4, 2027), "wie pruefungVon");
+  const haupt = tage(n({}));
+  assert.deepEqual([haupt.naechste, haupt.klausuren], [d(1, 2, 2027), [d(1, 2, 2027)]], "Haupttermin: der Nachholtermin bleibt verborgen");
+  const nb = tage(n({ status: "nicht bestanden" }));
+  assert.deepEqual(nb.klausuren, [d(1, 2, 2027), d(1, 4, 2027)], "nicht bestanden: auch der Nachholtermin");
+});
+
 // Lupe statt Tabelle „Semestertermine“ (17.10.2026): Rückmeldung fürs nächste Semester als Meilenstein, vorlesungsfreie Tage
 // als Striche im Band und als eine Legenden-Zeile
 const { lupe } = verlauf();

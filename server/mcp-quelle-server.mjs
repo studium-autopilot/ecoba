@@ -151,6 +151,7 @@ export function quelleServer(verzeichnis) {
       const aus = ["ueberblick", "fristen", "pruefungen"];
       if (stand()) aus.push("module", "todos");
       if (arr(lagebild().lernplan).length || (!Array.isArray(lagebild().lernplan) && zentraleKapitel().length)) aus.push("lernplan");
+      if (arr(lagebild().kursseiten).length) aus.push("kursseiten");
       aus.push("hinweise");
       return aus;
     },
@@ -211,6 +212,17 @@ export function quelleServer(verzeichnis) {
         hinweis: "Ohne Häkchen: Obsidian schickt den Lernplan erst mit dem nächsten Abgleich.",
         kapitel: arr(m.kapitel).map((k) => ({ titel: sauber(`${k.nr || ""} ${k.titel || ""}`.trim(), 160), gelernt: null,
           zusatz: Number.isInteger(k.seiten) ? `${k.seiten} S.` : null, teile: arr(k.teile).map((t) => ({ titel: sauber(`${t.nr || ""} ${t.titel || ""}`.trim(), 160), gelernt: false })) })) }));
+    },
+    // Kursseiten aus ILIAS: nur die Zeilen mit Tag aus dem Lagebild, je Modul eine Seite (ohne Text und ohne Notiz)
+    kursseiten(c) {
+      const je = new Map();
+      for (const z of arr(lagebild().kursseiten)) {
+        if (!code(z.modul) || (c && z.modul !== c) || !datum(z.von) || !datum(z.bis)) continue;
+        if (!je.has(z.modul)) je.set(z.modul, { modul: z.modul, geaendert: datum(z.geaendert), zeitplan: [] });
+        je.get(z.modul).zeitplan.push({ von: z.von, bis: z.bis, zellen: arr(z.zellen).filter((x) => typeof x.text === "string")
+          .map((x) => ({ spalte: typeof x.spalte === "string" ? x.spalte : "", text: x.text })) });
+      }
+      return [...je.values()].sort((x, y) => x.modul.localeCompare(y.modul));
     },
     // die neuesten zuerst
     hinweise: () => arr(lage().eingang && lage().eingang.hinweise).filter((h) => typeof h.text === "string")

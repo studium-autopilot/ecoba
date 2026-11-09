@@ -2,6 +2,22 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.8.3 – Kursseiten aus ILIAS
+
+- **Neu:** Was auf der Startseite eines Kurses in ILIAS steht, etwa welches Thema in welcher Woche dran ist, steht jetzt als
+  **Kursseite** bei den Unterlagen des Moduls. Die Modulseite zeigt, was laut ILIAS diese Woche dran ist.
+- **Neu:** In der Claude-App fragst du jetzt auch, was laut ILIAS diese Woche in einem Modul dran ist oder wann ein Zwischentest
+  ist.
+- **Zuverlässiger:** Zeigt ILIAS gerade eine Wartungsseite oder hat es seine Seiten umgebaut, stehen Unterlagen aus diesem
+  Ordner nicht mehr fälschlich als „Nicht mehr in ILIAS“ da.
+- **Behoben:** Hat eine Übung jede Woche eine Abgabe mit gleichem Namen, etwa „Hausaufgabe“, rutschte dein Haken manchmal auf
+  eine andere Woche, sobald die älteste aus dem ILIAS-Kalender fiel. Jetzt bleibt er bei der richtigen.
+- **Behoben:** Hast du im **Lernplan** für ein Modul den Nachholtermin gewählt, zeigte der **Studienverlauf** trotzdem den
+  ersten Termin als nächste Prüfung. Jetzt zeigt er dieselbe wie das Dashboard.
+- **Behoben:** Hattest du zwei Prüfungen am selben Tag, zeigte das Widget nur die erste. Jetzt stehen beide darin.
+- **Behoben:** Bei den Schwerpunkten fehlten bestandene oder anerkannte Module, wenn du sie nicht selbst eingeplant hattest.
+  Jetzt zählen sie dort wie bei ECTS und Note.
+
 ## 0.8.2 – Server jetzt aktualisieren
 
 - **Schneller:** Braucht dein **eigener Server** für etwas Neues erst ein Update, tippst du unter **Eigener Server** auf **Server

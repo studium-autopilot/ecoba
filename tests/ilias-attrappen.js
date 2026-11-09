@@ -105,7 +105,8 @@ const B = "https://ilias.test/";
 const datei = (refId, titel, endung, geaendert, extra) => Object.assign({ art: "datei", typ: "file", refId, id: refId, titel, endung, groesse: 1024, geaendert, url: B + "datei/" + refId }, extra || {});
 const ordner = (refId, titel) => ({ art: "ordner", typ: "fold", refId, id: refId, titel, url: B + "ordner/" + refId });
 
-// Erfundenes ILIAS. def: { kurse: [{ refId, titel, code, url }], seiten: { url: [Eintrag] }, dateien: { refId: Text | Bytes } }
+// Erfundenes ILIAS. def: { kurse: [{ refId, titel, code, url }], seiten: { url: [Eintrag] }, dateien: { refId: Text | Bytes },
+// kursseiten?: { refId: [Block] | Error } (Startseite je Kurs wie ilias-html.js kursseite; ohne das Feld kann die Quelle sie nicht) }
 function ilias(def, u) {
   const f = { def, log: [], stoerung: {} };
   const merken = (was, x) => f.log.push(Object.assign({ was, t: u.t }, x || {}));
@@ -130,6 +131,12 @@ function ilias(def, u) {
         if (x == null) throw nicht();
         return { status: 200, bytes: typeof x === "string" ? enc(x) : x };
       },
+      kursseite: def.kursseiten ? async (k) => {
+        merken("kursseite", { id: k.refId });
+        const x = def.kursseiten[k.refId];
+        if (x instanceof Error) throw x;
+        return x ? JSON.parse(JSON.stringify(x)) : [];
+      } : undefined,
       name: (e) => e.titel + "." + e.endung,
       // nur mit def.groessen: Größe vor dem Download (refId → Bytes | null | Error)
       groesse: def.groessen ? async (e) => {
@@ -214,7 +221,8 @@ function standardIlias() {
   };
 }
 
-// Alles zusammen: Motor mit Attrappen. o: { dateien, ordner, ilias, mobil, geraet, einstellungen, ohneAnmeldung, anmeldung }
+// Alles zusammen: Motor mit Attrappen. o: { dateien, ordner, ilias, mobil, geraet, einstellungen, ohneAnmeldung, anmeldung,
+// kursseite (kursseite.js für die Kursseiten) }
 function aufbau(o) {
   o = o || {};
   const u = uhr(o.start || "2026-10-16T08:00:00.000Z");
@@ -237,6 +245,7 @@ function aufbau(o) {
     jetzt: u.jetzt, warten: u.warten,
     mobil: !!o.mobil,
     geraetId: () => o.geraet || "g-ich",
+    kursseite: o.kursseite ? () => o.kursseite : undefined,
     melden: (x) => meldungen.push(x),
     geaendert: (x) => hoerer.push(x),
   };

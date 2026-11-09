@@ -14,9 +14,9 @@
 //             Module mit Countdown. Die Lupe ersetzt seit 17.10.2026 die Tabelle „Semestertermine“ der Seite.
 // Daten aus dem Fachmodell (ctx.modell, docs/architektur/modell.md „Fachmodell“): Semester, Pausen, Prüfungsphasen, freie Tage,
 // Rückmeldung (die Rückmeldung verlinkt ihre Termin-Notiz), Modulnotizen (typ: modul, semester_geplant, ects, status, ergebnis,
-// gruppe), Prüfungen (pruefungen: Termin-Notizen und Feld klausur, Modulstatus, abgehakt, entfällt; Nachholtermine nur nach
-// „nicht bestanden“), Prüfung je Modul (pruefungVon), ECTS und Orientierungsprüfung (ects), im Plan (imPlan). Fehlendes
-// erscheint als „offen“.
+// gruppe), Prüfungen (pruefungen: Termin-Notizen und Feld klausur, Modulstatus, abgehakt, entfällt; je Modul im gewählten Termin:
+// Nachholtermin gewählt oder „nicht bestanden“), Prüfung je Modul (pruefungVon), ECTS und Orientierungsprüfung (ects), im Plan
+// (imPlan). Fehlendes erscheint als „offen“.
 // Nur richtige Daten (Vorgabe vom 17.10.2026): Semester, Pausen und Prüfungsphasen tragen aus den zentralen Daten status
 // (offiziell | geschätzt) und hinweis. Geschätztes ist überall markiert – „ca.“ vor Daten und Zahlen, die daraus folgen
 // (Abschluss, Resttage, Vorlesungswochen, Frist der Orientierungsprüfung), Streifen und „(geschätzt)“ in Band und Legende
@@ -81,8 +81,9 @@ module.exports = function (ctx) {
         pruefung: String(fm.pruefung ?? ""), imPlan: Mo.imPlan(m), pr: pr ? { datum: tag(pr.datum), offen: pr.offen, erledigt: pr.erledigt } : null,
       };
     }).sort((a, b) => a.code.localeCompare(b.code, "de"));
-    // Fähnchen: alle Prüfungen (Nachholtermine nur nach „nicht bestanden“)
-    const pruefungen = Mo.pruefungen().filter((p) => !p.nachhol || (p.modul && p.modul.status === "nicht bestanden")).map((p) => ({
+    // Fähnchen: die Prüfungen im gewählten Termin des Moduls (Nachholtermin gewählt oder „nicht bestanden“: der Nachholtermin), wie
+    // Kachel „Nächste Prüfung“ und pruefungVon
+    const pruefungen = Mo.pruefungen({ imTermin: true }).map((p) => ({
       datum: tag(p.datum), code: p.code, titel: p.titel, pfad: p.pfad, geschaetzt: p.geschaetzt, test: p.zwischentest, offen: p.offen,
       erledigt: p.erledigt, quelle: p.quelle, klausurFeld: !!p.modul && String(p.modul.fm.klausur || "").slice(0, 10) === p.datum,
     }));

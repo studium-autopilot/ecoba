@@ -872,12 +872,15 @@ module.exports = function (ctx) {
   // und zusammen höchstens LAGE_BYTES, dazu nie mehr, als neben dem übrigen Stand unter STAND_BYTES passt (der Dienst nimmt höchstens
   // 512 KB verschlüsselt, das ist etwa ein Drittel mehr als der Klartext).
   // note: Zeichen einer Note oder eines Ergebnisses (ERGEBNIS_STATUS, das längste hat 25); dieselbe Grenze prüft der Server (LAGEBILD)
-  const LAGE = { module: 40, kapitel: 200, pruefungen: 100, stundenplan: 300, tage: 14, note: 30 };
+  const LAGE = { module: 40, kapitel: 200, pruefungen: 100, stundenplan: 300, tage: 14, note: 30, kursseiten: 200, zellen: 8 };
+  // Kursseiten: Zeilen mit Tag von KURS_VOR Tagen zurück bis KURS_NACH Tage voraus
+  const KURS_VOR = 7, KURS_NACH = 120;
   const LAGE_BYTES = 120000, STAND_BYTES = 360000;
   const UHR = /^\d{1,2}:\d{2}$/;
   const ANMELDUNG = ["angemeldet", "zurückgetreten"];
   // roh: { lernplan: [{ modul, kapitel: [{ titel, nummer, verstanden, woche }] }], karten: [{ modul, faellig }], pruefungen: [{ modul,
-  // titel, datum, anmeldung, versuch, note }], stundenplan: [{ datum, von, bis, titel, ort, modul, ausfall }] }; geheim(text) → true, wenn er
+  // titel, datum, anmeldung, versuch, note }], stundenplan: [{ datum, von, bis, titel, ort, modul, ausfall }], kursseiten: [{ modul, von, bis,
+  // geaendert, zellen: [{ spalte, text }] }] }; geheim(text) → true, wenn er
   // nach Zugangsdaten aussieht; budget: Bytes (JSON) → dieselbe Form, geprüft und gekürzt, ohne leere Felder
   const lagebildKurz = (roh, geheim, budget) => {
     const r = roh && typeof roh === "object" ? roh : {};
@@ -898,7 +901,12 @@ module.exports = function (ctx) {
       stundenplan: liste(r.stundenplan).filter((e) => s10(e.datum)).map((e) => mit(mit(mit(mit(mit({ datum: s10(e.datum), titel: lageText(e.titel, 120) },
         "von", UHR.test(String(e.von || "")) ? String(e.von) : ""), "bis", UHR.test(String(e.bis || "")) ? String(e.bis) : ""), "ort", lageText(e.ort, 120)),
         "modul", code(e.modul)), "ausfall", e.ausfall === true)).filter((e) => e.titel).slice(0, LAGE.stundenplan),
+      kursseiten: liste(r.kursseiten).filter((z) => code(z.modul) && s10(z.von) && s10(z.bis) && z.bis >= z.von).slice(0, LAGE.kursseiten)
+        .map((z) => mit({ modul: code(z.modul), von: s10(z.von), bis: s10(z.bis), zellen: liste(z.zellen).slice(0, LAGE.zellen)
+          .map((c) => mit({ text: lageText(c.text, 300) }, "spalte", lageText(c.spalte, 80))).filter((c) => c.text) }, "geaendert", s10(z.geaendert)))
+        .filter((z) => z.zellen.length),
     };
+    if (!aus.kursseiten.length) delete aus.kursseiten; // nur mit Zeilen (ältere Stände sehen gleich aus)
     return lagebildKappen(aus, Math.min(LAGE_BYTES, Math.max(0, budget == null ? LAGE_BYTES : budget)));
   };
   // Über der Grenze: ganze Einträge vom Ende der jeweils größten Liste weg (die Kapitel eines Moduls zählen als eine), nie mitten in
@@ -907,7 +915,7 @@ module.exports = function (ctx) {
     const bytes = (x) => new TextEncoder().encode(JSON.stringify(x)).length;
     let summe = bytes(l);
     if (summe <= max) return l;
-    const listen = [l.stundenplan, l.pruefungen, l.karten].concat(l.lernplan.map((m) => m.kapitel));
+    const listen = [l.stundenplan, l.pruefungen, l.karten, l.kursseiten || []].concat(l.lernplan.map((m) => m.kapitel));
     const g = listen.map((x) => x.map((e) => bytes(e) + 1)), gesamt = g.map((x) => x.reduce((a, b) => a + b, 0));
     while (summe > max) {
       let i = -1;
@@ -919,6 +927,7 @@ module.exports = function (ctx) {
       summe -= weg;
     }
     l.lernplan = l.lernplan.filter((m) => m.kapitel.length);
+    if (l.kursseiten && !l.kursseiten.length) delete l.kursseiten;
     return l;
   };
 
@@ -2600,10 +2609,11 @@ module.exports = function (ctx) {
   //   Karteikarten (fällig und in den Lernschritten, ohne neue); pruefungen: alle Prüfungen des Fachmodells vom letzten Jahr bis in
   //   einem Jahr, dazu Module mit Ergebnis oder Anmeldung ohne Prüfungstag; Note, Versuch und Anmeldung aus der Modulnotiz, sonst aus
   //   Alma (alma-konto.json), Note und Versuch nur an der Klausur, zu der sie gehören; stundenplan: deine Lehrveranstaltungen der nächsten 14 Tage wie im Stundenplan (findetStatt; „Besuche ich
-  //   nicht“ fehlt, ein Ausfall mit ausfall: true; nicht im Titel, den lagebildKurz kürzt)
+  //   nicht“ fehlt, ein Ausfall mit ausfall: true; nicht im Titel, den lagebildKurz kürzt); kursseiten: die Zeilen der Kursseiten aus ILIAS
+  //   mit Tag (kursseite.js zeitplan) von KURS_VOR Tagen zurück bis KURS_NACH Tage voraus
   const ERGEBNIS_STATUS = ["bestanden", "anerkannt", "nicht bestanden", "endgültig nicht bestanden"];
   const lagebildObs = async () => {
-    const M = ctx.modell, aus = { lernplan: [], karten: [], pruefungen: [], stundenplan: [] };
+    const M = ctx.modell, aus = { lernplan: [], karten: [], pruefungen: [], stundenplan: [], kursseiten: [] };
     if (!M || typeof M.daten !== "function") return aus;
     const D = M.daten(), jetzt = new Date(), heute = tagIso(jetzt);
     const tag = (n) => tagIso(new Date(jetzt.getFullYear(), jetzt.getMonth(), jetzt.getDate() + n));
@@ -2651,6 +2661,18 @@ module.exports = function (ctx) {
         }
       }
       return liste.sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : String(a.von || "").localeCompare(String(b.von || ""))));
+    });
+    await teil("kursseiten", async () => {
+      const KS = ctx.user && ctx.user.kursseite;
+      if (typeof KS !== "function") return [];
+      const liste = [];
+      for (const s of KS(ctx).seiten()) {
+        const t = await app.vault.cachedRead(s.datei);
+        for (const z of KS.zeitplan(t)) {
+          if (z.bis >= tag(-KURS_VOR) && z.von <= tag(KURS_NACH)) liste.push({ modul: s.code, von: z.von, bis: z.bis, geaendert: s.geaendert, zellen: z.zellen });
+        }
+      }
+      return liste;
     });
     return aus;
   };

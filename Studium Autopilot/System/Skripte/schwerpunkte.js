@@ -3,7 +3,8 @@
 // 3 Bereiche, jeder 15–30 ECTS, zusammen 75 (Economics) bzw. 63 ECTS, dazu je Variante die Seite (Economics: mind. 2 VWL-Bereiche,
 // Business Administration: mind. 2 BWL-Bereiche, sonst je mind. 1; Data Science zählt für beide). Elective Studies ist ein
 // Bereich ohne Seite.
-// Gezählt wird, was im Plan ist (gewaehlt: true): Schwerpunktmodule im Bereich ihres Felds „anrechnung“ („Anrechnung in“),
+// Gezählt wird, was im Plan ist (ctx.modell.imPlan, dieselbe Regel wie ECTS und Gesamtnote: gewählt, geplant oder begonnen, also
+// auch bestanden und anerkannt, ohne dass „+ Planen“ gedrückt wurde): Schwerpunktmodule im Bereich ihres Felds „anrechnung“ („Anrechnung in“),
 // Module aus Profil & Vertiefung als Elective Studies, wenn das ihre Rolle in deiner Variante ist oder bei „Zählt als“ Elective
 // Studies steht (nie, wo sie Pflicht sind; dieselbe Regel wie die Formel „block“ auf Noten & ECTS).
 // Sichtbar ab dem 2. Fachsemester oder sobald ein Schwerpunkt- oder Profilmodul im Plan ist; sonst ist der Block leer
@@ -46,13 +47,13 @@ module.exports = function (ctx) {
     || (m.anrechnung === ES && !(v === "Economics" && m.rolle_economics === "Pflicht") && !(v === "Business Administration" && m.rolle_ba === "Pflicht"));
   // Bereich, in dem ein Modul deines Plans zählt, sonst ""
   const bereichVon = (m, v) => {
-    if (!m.gewaehlt) return "";
+    if (!m.imPlan) return "";
     const profil = m.gruppe === "Profil & Vertiefung" && profilAlsES(m, v);
     if (m.gruppe !== "Schwerpunkt" && !profil) return "";
     if (NAMEN.indexOf(m.anrechnung) >= 0) return m.anrechnung;
     return profil ? ES : "";
   };
-  // module: [{ code, titel, ects, gruppe, anrechnung, gewaehlt, rolle_economics, rolle_ba, pfad, bereiche }]
+  // module: [{ code, titel, ects, gruppe, anrechnung, imPlan, gewaehlt, rolle_economics, rolle_ba, pfad, bereiche }]
   // → { variante, bereiche (alle, mit ects, stand leer|ok|warn, module), belegt (ects > 0), ohne (im Plan, zählt nirgends),
   //     summe, soll, vwl, bwl, seiteText, pruefung: { drei, rahmen, summe, seite }, ok }
   const rechnen = (module, variante) => {
@@ -61,7 +62,7 @@ module.exports = function (ctx) {
     const ohne = [];
     for (const m of module) {
       const n = bereichVon(m, v);
-      if (n) { const b = bereiche[NAMEN.indexOf(n)]; b.ects += m.ects; b.module.push(m); } else if (m.gewaehlt && m.gruppe === "Schwerpunkt") ohne.push(m);
+      if (n) { const b = bereiche[NAMEN.indexOf(n)]; b.ects += m.ects; b.module.push(m); } else if (m.imPlan && m.gruppe === "Schwerpunkt") ohne.push(m);
     }
     for (const b of bereiche) { b.stand = !b.ects ? "leer" : b.ects < MIN || b.ects > MAX ? "warn" : "ok"; b.module.sort(nachCode); }
     const belegt = bereiche.filter((b) => b.ects > 0);
@@ -75,25 +76,26 @@ module.exports = function (ctx) {
     return { variante: v, bereiche, belegt, ohne: ohne.sort(nachCode), summe, soll, vwl, bwl, seiteText, pruefung,
       ok: pruefung.drei && pruefung.rahmen && pruefung.summe && pruefung.seite };
   };
-  // Sichtbar ab dem 2. Fachsemester oder sobald ein Schwerpunkt- oder Profilmodul im Plan ist
+  // Sichtbar ab dem 2. Fachsemester oder sobald ein Schwerpunktmodul im Plan ist oder ein Profilmodul gewählt (imPlan taugt dort nicht:
+  // Pflichtmodule von Profil & Vertiefung sind von Anfang an im Plan)
   const sichtbarFuer = (fachsemester, vorStart, module) => (!vorStart && fachsemester >= 2)
-    || module.some((m) => m.gewaehlt && (m.gruppe === "Schwerpunkt" || m.gruppe === "Profil & Vertiefung"));
+    || module.some((m) => (m.gruppe === "Schwerpunkt" && m.imPlan) || (m.gruppe === "Profil & Vertiefung" && m.gewaehlt));
 
   // ---------- Daten lesen (Datenmodell modell.js, sonst direkt aus dem metadataCache) ----------
-  const modulVon = (fm, pfad) => ({
+  const modulVon = (fm, pfad, imPlan) => ({
     code: String(fm.code == null ? pfad.split("/").pop().split(" ")[0] : fm.code), titel: String(fm.titel == null ? "" : fm.titel),
     ects: zahl(fm.ects), gruppe: String(fm.gruppe == null ? "" : fm.gruppe), anrechnung: String(fm.anrechnung == null ? "" : fm.anrechnung).trim(),
-    gewaehlt: fm.gewaehlt === true, rolle_economics: fm.rolle_economics, rolle_ba: fm.rolle_ba, pfad,
+    imPlan, gewaehlt: fm.gewaehlt === true, rolle_economics: fm.rolle_economics, rolle_ba: fm.rolle_ba, pfad,
     bereiche: Array.isArray(fm.bereiche) ? fm.bereiche.map(String) : [],
   });
   const lesen = () => {
     const d = ctx.modell && ctx.modell.daten ? ctx.modell.daten() : null;
     const module = [];
-    if (d) for (const x of d.module) module.push(modulVon(x.fm, x.f.path));
+    if (d) for (const x of d.module) module.push(modulVon(x.fm, x.f.path, ctx.modell.imPlan(x.fm)));
     else {
       for (const f of app.vault.getMarkdownFiles()) {
         const c = app.metadataCache.getFileCache(f), fm = c && c.frontmatter;
-        if (fm && fm.typ === "modul" && f.path.indexOf("Module/") === 0) module.push(modulVon(fm, f.path));
+        if (fm && fm.typ === "modul" && f.path.indexOf("Module/") === 0) module.push(modulVon(fm, f.path, fm.gewaehlt === true));
       }
     }
     const ef = app.vault.getAbstractFileByPath("System/Einstellungen.md");
@@ -130,8 +132,8 @@ module.exports = function (ctx) {
       if (!ms.length) continue;
       h += `<div class="eba-sp-gruppe"><div class="eba-sp-gkopf"><b>${esc(b.kurz || b.name)}</b><span class="t">${esc(seiteVon(b))}</span></div><div class="eba-sp-chips">`
         + ms.map((m) => {
-          const hier = m.gewaehlt && m.anrechnung === b.name;
-          const anders = m.gewaehlt && !hier;
+          const hier = m.imPlan && m.anrechnung === b.name;
+          const anders = m.imPlan && !hier;
           return chip(m, hier ? "plan" : anders ? "anders" : "", `${m.code} ${m.titel}${hier ? " · im Plan" : anders ? ` · im Plan, zählt in ${m.anrechnung || "keinem Bereich"}` : ""}`);
         }).join("") + `</div></div>`;
     }

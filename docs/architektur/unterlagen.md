@@ -107,8 +107,15 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   gesehen, bekommt ihr Eintrag `entfernt` (Datum) und ihre Notiz den Kasten „Nicht mehr in ILIAS“; die Datei bleibt. Wieder
   gesehen → Marke und Kasten weg. Ebenso zu große Dateien (`ignoriert`, mit `kurs`). Ein Kurs, in dem gar nichts zu sehen war,
   zählt nicht. Was in einem übersprungenen Behälter lag (spätere Sitzung, Sitzung ohne Materialien, Gruppe ohne
-  Mitgliedschaft, zu tief; `r.ausgelassen`, Vergleich über `iliasPfad`), gilt nicht als nicht gesehen. Fehlen in einem Kurs
-  mehr als die Hälfte und mehr als 10 auf einmal → in diesem Kurs nichts gemerkt, Warnung (`entfernteMerken`, Schutz je Kurs).
+  Mitgliedschaft, zu tief; `r.ausgelassen`, Vergleich über `iliasPfad`), gilt nicht als nicht gesehen. Ebenso, was in einem
+  Behälter mit leerer Liste lag, samt seinen Unterordnern (seit 08.11.2026): `inhalt` in `ilias-html.js` liest eine geänderte
+  ILIAS-Seite (etwa eine umbenannte Klasse `il_ContainerItemTitle`) oder eine Wartungsseite mit HTTP 200 als leere Liste, genau
+  wie einen leeren Ordner, und keine erfundene Testseite zeigt, woran ein echter leerer Ordner zu erkennen wäre. Leer ist darum
+  kein Fehler und keine Warnung (leere Übungsordner zu Semesterbeginn sind häufig), merkt aber nichts als entfernt. Preis: Leert
+  der Lehrstuhl einen Ordner ganz, behalten dessen Dateien keinen Kasten; löscht er den Ordner, bekommen sie ihn. Fehlen in einem
+  Kurs mehr als die Hälfte und mehr als 10 auf einmal → in diesem Kurs nichts gemerkt, Warnung (`entfernteMerken`, Schutz je
+  Kurs). Findet `mitgliedschaften` gar keinen Kurs, endet der Lauf vorher mit dem Fehler „Keine Kurse gefunden“ (nichts gemerkt);
+  ein Kurs, der in der Liste fehlt, wird nicht durchsucht und zählt so nicht.
 - **Dateitypen:** Nie geladen werden Dateien, die in Obsidian zu Notizen oder Ansichten würden (`md`, `base`, `canvas`), die
   Obsidian oder das Plugin als eigene Dateien liest (`js`, `mjs`, `cjs`, `css`, `json`; `pfadOk` nimmt sie nie als Ziel) und, als
   zusätzliche Vorsicht, was Windows oder macOS beim Öffnen ausführt, startet, installiert, einbindet oder als Laufwerk öffnet
@@ -272,6 +279,42 @@ Kursdateien aus ILIAS (Uni Tübingen, ILIAS 10) landen von selbst unter `Unterla
   `ilias-netz.test.js` (mit Drossel und PC-Transport), `ilias-anmeldung.test.js` (nachgespielter Server), `ilias-html.test.js`. In Obsidian ersetzen
   `ctx.ilias.anmeldungSetzen(fn)` und `ctx.ilias.quelleSetzen(fn)` Anmeldung und ILIAS (`null` = wieder echt);
   `plugin.testIliasAus = true` schaltet den stündlichen Lauf ab (das Weitermachen eines offenen Auftrags nicht).
+
+### Kursseiten (seit 05.11.2026, `kursseite.js`)
+
+Auf der Startseite eines Kurses stehen über der Liste der Einträge oft Ablauf und Hinweise: welches Thema in welcher Woche dran
+ist (S100, S110: Tabellen „Woche | Datum | Themen der Vorlesung“), Zwischentests, Raumänderungen, Links zum Lehrbuch. PFERD (der
+Uni-Abgleich des Autors) speichert das als `Description.html`, aber Absatz für Absatz: Die Tabellen kommen dort als lose Zellen an.
+Darum liest das Plugin die Seite selbst.
+
+- **Lesen** (`ilias-html.js` `kursseite(html, url)`): in `#il_center_col` die Bausteine des Seiten-Editors (`ilc_Paragraph`, auch
+  als Überschrift `ilc_headingN`, Tabellen `ilc_table_*`, Listen `ilc_list_*`, Kästen `ilCOPageSection`, Köpfe von Akkordeons,
+  Videos mit Namen), ohne die Einträge (`ilContainerBlock`, Listeneinträge), Skripte, Fenster, den Kalender am Rand (`calmini`),
+  `ilc_section_Special` und den Knopf „Vertiefungswissen“. Ergebnis: Blöcke mit Zeilen aus Stücken (`{ t, fett?, url? }`); Adressen
+  nur `http(s)` und nie mit Token (`deliver.php`), Bilder fallen weg. Geprüft an den echten Seiten von B110, B180, E101, S100 und
+  S110 (05.11.2026; B110 hat keinen Seitentext, dann gibt es keine Notiz).
+- **Notiz** (`kursseite.js` `markdown`, `notiz`): `Unterlagen/<Modulordner>/<Code> Kursseite.md` (Ordner wie bei den Dateien,
+  `zielOrdner`), `typ: kursseite`, `code`, `herkunft: ilias`, `quelle` (Permalink des Kurses), `ilias_ref`, `geaendert`. Tabellen
+  bleiben Markdown-Tabellen (erste Zeile als Kopf, ohne Fett; `colspan` als leere Zellen; Zeilen einer Zelle mit `<br>`), Kästen
+  werden Zitate, Text entschärft wie andere Texte aus ILIAS (`ctx.zentral.mdInZeile`). Eine Zeile mit Kurspasswort (dieselbe
+  Erkennung wie bei Kurstiteln, `hatKennwort`/`ohneKennwort`) wird zu „… (Passwort steht in ILIAS)“; endet sie mit der Marke
+  und „:“, fällt die nächste Zeile mit. Neuer Inhalt ersetzt alles außer `## Meine Notizen` und fremden Eigenschaften.
+- **Abruf** (`ilias.js` `seitenAbgleichen`): je aktivem Kurs mit Modul eine Anfrage `quelle.kursseite(kurs)` (über `behaelter`,
+  also mit dem Reiter „Inhalt“), automatisch höchstens alle 3 Stunden je Kurs (`SEITE_PAUSE`, gerätelokal `seitenZeit`), per
+  **Aktualisieren** immer. Im vollen Lauf nach den Gruppen; kommen die Dateien von einem eigenen Uni-Abgleich (`ilias-dateien` in
+  `quellen_extern`), im kurzen Lauf nach den Gruppen, denn der liest die Kursseiten nicht. Geschrieben wird nur, wenn sich der
+  Inhalt geändert hat (`gleich`; sonst kein Schreiben, auch kein Datum). Index `seiten: { <refId>: { code, pfad, hash, t } }` in
+  `ilias.json`: Eine gelöschte Notiz kommt erst wieder, wenn sich die Seite ändert; eine Notiz ohne `herkunft: ilias` am Ort bleibt
+  unberührt, die Kursseite nimmt dann den nächsten freien Namen („… Kursseite 2“, auch für einen zweiten Kurs desselben Moduls). Ein
+  Fehler beim Lesen einer Seite ist eine Warnung des Laufs, die Unterlagen gehen weiter.
+- **Zeitplan** (`zeitplan`, `woche`): Zeilen der Tabellen, in denen eine der ersten drei Zellen einen Tag oder Zeitraum nennt
+  („12.10.2026 - 16.10.2026“, „12.10. - 16.10.“, „Woche 12.10.26“ = sieben Tage, „13.11.2026 17:00 - 18:00“ = ein Tag; ohne Jahr das
+  Jahr, das `geaendert` am nächsten liegt; höchstens 62 Tage). Die Zelle mit dem Tag und die laufende Nummer der Woche fallen weg,
+  Zeilen ohne weiteren Inhalt (künftige leere Wochen) ganz. Die Modulseite zeigt damit „Diese Woche laut ILIAS“ (siehe
+  [„Modulseite“](seiten.md)), der Connector das Werkzeug `kursseiten` (siehe [„Connector“](connector.md), dieselben Regeln in
+  `server/mcp-kursseite.mjs`), der eigene Server bekommt die Zeilen im Lagebild.
+- Tests: `tests/kursseite.test.js` (erfundene Seite `tests/daten/ilias-seiten/kursseite.html` im Aufbau der echten),
+  `tests/connector-kursseite.test.js`.
 
 ## Volltext der PDFs (seit 0.4.5, `volltext.js`)
 

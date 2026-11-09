@@ -151,6 +151,20 @@ test("Nächste Prüfung und pruefungVon: Modulstatus, erledigt, entfällt, Nachh
   assert.equal(modell("2027-02-20", PRUEFUNGEN).pruefungVon("X100").datum, "2027-02-06", "sonst die letzte geschriebene");
 });
 
+test("Kommende Prüfungen: dieselbe Regel wie die nächste Prüfung, mehrere am selben Tag stehen alle darin", () => {
+  const code = (M) => M.kommendePruefungen().map((p) => p.datum + " " + p.code);
+  const M = modell("2026-10-18", PRUEFUNGEN);
+  assert.deepEqual(code(M), ["2027-02-06 X100", "2027-02-12 X400"], "ohne Zwischentests, Anerkanntes, Entfallenes und Nachholtermin");
+  assert.equal(M.naechstePruefung().code, M.kommendePruefungen()[0].code);
+  const zwei = Object.assign({}, PRUEFUNGEN, modul("X500", { klausur: "2027-02-06" }), modul("X600", { klausur: "2027-02-12", klausurtermin: "Nachholtermin" }),
+    termin("2027-02-12", "Nachholklausur X600", { kategorie: "Prüfung", code: "X600", nachhol: true }));
+  assert.deepEqual(code(modell("2026-10-18", zwei)), ["2027-02-06 X500", "2027-02-06 X100", "2027-02-12 X600", "2027-02-12 X400"], "X500 am selben Tag wie X100 (ohne Uhrzeit zuerst)");
+  assert.equal(modell("2026-10-18", zwei).naechstePruefung().code, "X500");
+  const erledigt = Object.assign({}, PRUEFUNGEN, termin("2027-02-06", "Klausur X100", { kategorie: "Prüfung", code: "X100", ort: "10:00–11:30", erledigt: true }));
+  assert.deepEqual(code(modell("2026-10-18", erledigt)), ["2027-02-12 X400"], "abgehakt zählt nicht");
+  assert.deepEqual(code(modell("2027-02-07", PRUEFUNGEN)), ["2027-02-12 X400"], "vergangene zählen nicht");
+});
+
 test("Klausur im Nachholtermin (klausurtermin in der Modulnotiz): nur seine Klausuren zählen, auch für die nächste Prüfung", () => {
   const nh = Object.assign({}, PRUEFUNGEN, modul("X100", { klausur: "2027-02-06", klausurtermin: "Nachholtermin" }));
   const M = modell("2026-10-18", nh);
@@ -162,6 +176,16 @@ test("Klausur im Nachholtermin (klausurtermin in der Modulnotiz): nur seine Klau
   assert.equal(modell("2026-10-18", PRUEFUNGEN).pruefungVon("X100", { termin: "nachhol" }).datum, "2027-04-01");
   const ohne = Object.assign({}, PRUEFUNGEN, modul("X400", { klausur: "2027-02-12", klausurtermin: "Nachholtermin" }));
   assert.equal(modell("2026-10-18", ohne).pruefungVon("X400"), null, "im Nachholtermin ohne Nachholklausur: keine");
+});
+
+test("pruefungen({ imTermin }): Klausuren nur im gewählten Termin des Moduls, Zwischentests bleiben", () => {
+  const tage = (M) => M.pruefungen({ imTermin: true }).filter((p) => p.code === "X100").map((p) => p.datum + (p.zwischentest ? " zt" : ""));
+  assert.deepEqual(tage(modell("2026-10-18", PRUEFUNGEN)), ["2026-11-13 zt", "2027-02-06 zt", "2027-02-06"], "Haupttermin");
+  const nh = Object.assign({}, PRUEFUNGEN, modul("X100", { klausur: "2027-02-06", klausurtermin: "Nachholtermin" }));
+  assert.deepEqual(tage(modell("2026-10-18", nh)), ["2026-11-13 zt", "2027-02-06 zt", "2027-04-01"], "Nachholtermin gewählt");
+  const nb = Object.assign({}, PRUEFUNGEN, modul("X100", { klausur: "2027-02-06", status: "nicht bestanden" }));
+  assert.equal(tage(modell("2027-02-20", nb)).pop(), "2027-04-01", "nicht bestanden: auch der Nachholtermin");
+  assert.equal(modell("2026-10-18", nh).pruefungen().length, 6, "ohne imTermin alle");
 });
 
 test("Fristen: offen, laufend oder kommend, nach dem nächsten Stichtag (läuft: Ende, sonst Beginn)", () => {

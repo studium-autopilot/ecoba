@@ -190,6 +190,7 @@ Erweiterungen werden alphabetisch gestartet. Abhängigkeiten laufen über `ctx.u
 | `karten.js` | Karteikarten: Codeblock `eba-karten` (Übersicht, `stapel`, `statistik`, `liste`, `heute`), Lernfenster, Üben, Verlauf einer Karte, Fenster „Neue Karte“ und „Optionen“, Pausieren, Lernstände je Gerät (`ctx.karten`); siehe [„Karteikarten“](architektur/lernen.md) |
 | `schwerpunkte.js` | Abschnitt „Schwerpunkte“ im Studienverlauf (seit 17.10.2026, vorher Seite „Schwerpunkt-Planer“): Codeblock `eba-schwerpunkte`, Regeln der PO für die Schwerpunktbereiche, `ctx.schwerpunkte` (`rechnen`, `sichtbar`); siehe [„Bereiche“](architektur/seiten.md) |
 | `lernplan.js` | Lernplan (seit 18.10.2026): Codeblock `eba-lernplan` (Bereich, Argument `modul` in der Lernplan-Notiz, `woche` auf dem Dashboard), Abhaken der Kapitel, Zeit je Woche, Schalter „Vor der Vorlesung lernen“, Notizen aus den Kapitellisten (zentral und eigener Server), `ctx.lernplan` (`kapitelLesen`, `planen`, `zielVon`, `stand`, `kapazitaet`, `sichtbar`, `modulZeile` für die Modulseite, `serverListen` und `kapitelStand` (Lagebild der Claude-App) für `server.js`); seit 3.11.2026 oben „Heute“ (liest die To-dos über `ctx.todos` aus `todos.js`: `lesen`, `abhaken`, `zuruecknehmen`); siehe [„Lernplan“](architektur/lernen.md) |
+| `kursseite.js` | Helfer: Kursseiten aus ILIAS (seit 05.11.2026, `ctx.user.kursseite`): Seiteninhalt als Markdown ohne Kurspasswörter, Notiz „<Code> Kursseite“, Zeitplan aus den Tabellen; `ilias.js` schreibt, `modul.js` zeigt die Woche; siehe [„Kursseiten“](architektur/unterlagen.md) |
 | `literatur.js` | Literaturlisten (seit 24.10.2026): schreibt auf dem Abrufer aus `literatur.json` je Modul die Notiz „<Code> Literatur 00 Literaturliste“ in den Ordner Literatur des Moduls (`ctx.literaturAnzeige`); siehe [„Literaturliste“](architektur/lernen.md) |
 | `bitte-pruefen.js` | „Bitte prüfen“ auf dem Dashboard (seit 18.10.2026): Protokoll des eigenen Uni-Abgleichs und (seit 0.4.5) die Punkte aller Quellen aus dem Meldekanal (Quellen-Vertrag); Codeblock `eba-bitte-pruefen`; siehe [„Dashboard“](architektur/seiten.md) |
 | `alma-konto.js`, `alma-konto-html.js` | Noten & Anmeldungen aus Alma (seit 0.4.5, Beta, `ctx.almaKonto`): Ablauf, Zustand, Zeile und Fenster bzw. reiner Leser der Seiten; siehe [„Noten & Anmeldungen (Alma)“](architektur/alma.md) |
@@ -236,7 +237,7 @@ Orientierungsprüfung), andere Musterplan-Varianten nur auf `System/Daten/Muster
 nutzbar). Die Variante wählst du „vor dem 3. Fachsemester“ (ab dann unterscheiden sich die Musterpläne; die PO legt keinen
 Zeitpunkt fest), überall in diesem Wortlaut.
 
-**Nächste Prüfung, eine Regel:** seit 18.10.2026 `ctx.modell.pruefungen`, `pruefungVon` und `naechstePruefung` (siehe
+**Nächste Prüfung, eine Regel:** seit 18.10.2026 `ctx.modell.pruefungen`, `pruefungVon`, `kommendePruefungen` und `naechstePruefung` (siehe
 [„Fachmodell“](architektur/modell.md)): Termin-Notizen mit `kategorie: Prüfung` (eintägig) und das Modulfeld `klausur`; Kürzel + Tag zählen einmal, die
 Termin-Notiz gewinnt (Link, „geschätzt“), „bestanden“, „anerkannt“ und Ergebnis kommen vom Modul, ein Haken an der Notiz macht
 die Prüfung erledigt, entfallene zählen nicht. Zwischentest heißt: Titel oder Dateiname enthält „Zwischentest“, Groß- und

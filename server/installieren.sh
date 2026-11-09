@@ -419,7 +419,7 @@ install -d -m 0755 "$ZIEL"
 if [ "$QUELLE" -ef "$ZIEL" ]; then
   echo "Paket liegt schon unter $ZIEL"
 else
-  for datei in VERSION README.md kanal.mjs dateien.mjs dienst.mjs verbinden.mjs geraete.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers revoked_keys claude-app.mjs zentral.mjs mcp.mjs mcp-app.mjs mcp-oauth.mjs mcp-tresor.mjs mcp-werkzeuge.mjs mcp-ergebnis.mjs mcp-quelle-ordner.mjs mcp-quelle-server.mjs mcp-dateien.mjs CONNECTOR; do
+  for datei in VERSION README.md kanal.mjs dateien.mjs dienst.mjs verbinden.mjs geraete.mjs zustand.mjs speicher-reserve.mjs eingang.mjs lauf.mjs abrufen.py livesync.mjs livesync.sh studium-server installieren.sh allowed_signers revoked_keys claude-app.mjs zentral.mjs mcp.mjs mcp-app.mjs mcp-oauth.mjs mcp-tresor.mjs mcp-werkzeuge.mjs mcp-ergebnis.mjs mcp-quelle-ordner.mjs mcp-quelle-server.mjs mcp-dateien.mjs mcp-kursseite.mjs CONNECTOR; do
     install -m 0644 "$QUELLE/$datei" "$ZIEL/$datei"
   done
   rm -rf "$ZIEL/skill"

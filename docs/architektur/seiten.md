@@ -185,7 +185,9 @@ Dashboard zeigt die Woche auf jedem Gerät als Raster; die Seite bleibt, ohne Le
 - **Schwerpunkte (seit 17.10.2026, vorher Seite `Studium/Schwerpunkt-Planer.md`):** Abschnitt `## Schwerpunkte` im Studienverlauf
   unter dem Musterstudienplan, Codeblock `eba-schwerpunkte` (`schwerpunkte.js`). Balken nur für Bereiche mit ECTS, Prüfliste
   (genau 3 Bereiche, je 15–30 ECTS, Summe 75 bzw. 63, VWL/BWL-Seite je Variante; Regel wie die Formel `block` auf Noten & ECTS),
-  zugeklappt die Module je Bereich aus dem Feld `bereiche` der Modulnotizen. Sichtbar ab dem 2. Fachsemester oder sobald ein
+  zugeklappt die Module je Bereich aus dem Feld `bereiche` der Modulnotizen. Gezählt wird, was nach `ctx.modell.imPlan` im Plan
+  ist, also dieselbe Regel wie bei ECTS und Gesamtnote: gewählt, geplant oder begonnen, auch bestanden und anerkannt aus Alma ohne
+  „+ Planen“. Der Bereich kommt aus „Anrechnung in“; fehlt er, steht das Modul unter „Ohne Bereich“. Sichtbar ab dem 2. Fachsemester oder sobald ein
   Schwerpunkt- oder Profilmodul im Plan ist, sonst samt Überschrift ausgeblendet (`.eba-sp-aus`, eba-core.css Abschnitt 56).
   Die Katalog-Tabellen entfallen: Bereich und „+ Planen“ stehen in jeder Modulnotiz („Anrechnung in“, bei Profil & Vertiefung
   „Zählt als“). Links auf den Abschnitt: `[[Studienverlauf#Schwerpunkte]]`.
@@ -233,6 +235,11 @@ Frontmatter dieser Modulnotiz:
 - *Von Claude* (seit 01.11.2026, direkt unter „Als Nächstes“): Hinweise des eigenen Servers zu diesem Modul aus den letzten 14
   Tagen, höchstens zwei, die neuesten, je mit Quelle und Tag (`ctx.server.hinweise({ code })`, siehe [„Eigener Server“](server.md));
   ohne Hinweise nichts. Neu gezeichnet, wenn sich `System/Daten/server.json` ändert (auch per Sync).
+- *Diese Woche laut ILIAS* (seit 05.11.2026, direkt unter „Von Claude“): die Zeilen der Kursseiten des Moduls, deren Tag oder
+  Zeitraum diese Woche (Mo–So) trifft, höchstens vier (`ctx.user.kursseite`, `woche`), je Zeile Tag bzw. Zeitraum und die Spalten
+  mit Inhalt (Name der Spalte gedämpft darüber, Text höchstens 160 Zeichen); darunter je Kursseite eine Zeile, die sie öffnet, mit
+  Pille „geändert …“ in den ersten 7 Tagen nach einer Änderung. Ohne Zeile dieser Woche heißt die Überschrift „Laut ILIAS“, ohne
+  Kursseite fehlt der Teil. Neu gezeichnet, wenn sich eine Kursseite ändert. Stil `eba-core.css` 58.7 (`eba-mod-kurs`).
 - *Lernplan* (seit 31.10.2026): gibt es eine Lernplan-Notiz des Moduls, ihr Stand mit Pille wie im Bereich Lernplan, Tipp öffnet
   die Notiz (`ctx.lernplan.modulZeile`, siehe [„Lernplan“](lernen.md)).
 - *Knöpfe:* Karteikarten lernen (nur mit Stapel), Unterlagen hinzufügen, Suchen (bis 24.10.2026 auch Neues Übungsblatt).

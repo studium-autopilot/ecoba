@@ -19,7 +19,7 @@ eine Vorlage zu viel), Kurzbefehle-Widgets (zeigen nur Knöpfe, keine Inhalte), 
    Art, Raum und Raum knapp wie im Raster der App (`raumKnapp`: „HS 0.02“ statt „Hörsaal 0.02 (VG Wilhelmstraße …)“), Modulfarbe
    1–6, Vorlesung oder Übung, online, Ausfall, Ausnahme, „ab TT.MM.“, Marke wie „Fällt aus“, Ziel), „Fristen · 30 Tage“ aus `zeilenBauen("fristen")` (`dashboard.js`; die Zeilen tragen dafür `art`, `tag`, `laeuft`,
    `ueberfaellig`), die nächsten drei Fristen wie die Kachel „Nächste Frist“ (`fristen`), die nächsten vier Prüfungen nach der Regel
-   der Kachel „Nächste Prüfung“ (`naechstePruefung` je ab dem Tag nach der vorigen), Design und hell/dunkel dieses Geräts
+   der Kachel „Nächste Prüfung“ (`kommendePruefungen`, auch mehrere am selben Tag), Design und hell/dunkel dieses Geräts
    (`ctx.darstellung`), der Name des Tresors für Links. Keine Regel steht doppelt: Was „heute“, „morgen“, „jetzt“ und „vorbei“ ist,
    rechnet das Widget aus den Tagen selbst, damit es auch Tage nach dem letzten Öffnen von Obsidian stimmt.
 2. **Zeichner** (`scriptable`, eine Funktion in `widget.js`): als Text (`toString`) in `widget-scriptable.js` neben den Daten.

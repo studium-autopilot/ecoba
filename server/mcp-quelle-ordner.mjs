@@ -18,7 +18,8 @@ export const ANLEITUNG_ORDNER = "Studium Autopilot: Lesezugriff auf den Obsidian
 // Ohne Prüfung des Abgleichs: Warnsatz, wenn die letzte Änderung älter ist als STAND_ALT. Mit Prüfung: wenn die Prüfung älter ist als
 // ABGLEICH_ALT (sie läuft alle 15 Minuten) oder Änderungen aus dem Sync fehlen.
 const STAND_ALT = 864e5, ABGLEICH_ALT = 2 * 3600e3;
-const WERKZEUGE = ["ueberblick", "fristen", "pruefungen", "module", "lernplan", "todos", "notizen_suchen", "notiz_lesen", "unterlagen_suchen", "unterlage_lesen"];
+const WERKZEUGE = ["ueberblick", "fristen", "pruefungen", "module", "lernplan", "todos", "kursseiten", "notizen_suchen", "notiz_lesen",
+  "unterlagen_suchen", "unterlage_lesen"];
 // dazu, wenn der Tresor ein Ordner auf der Platte ist: Dateien auf Abruf (mcp-dateien.mjs)
 const WERKZEUGE_DATEIEN = ["dateien_suchen", "datei_lesen"];
 
@@ -230,6 +231,10 @@ export function quelleOrdner(tresor, { abgleich = () => null, dateien } = {}) {
       kapitel: kapitelAus(n.text).map((k) => ({ titel: sauber(k.titel, 160), gelernt: k.erledigt, zusatz: sauber(k.zusatz, 200) || null,
         teile: k.teile.map((t) => ({ titel: sauber(t.titel, 160), gelernt: t.erledigt })) })),
     })),
+    // Kursseiten aus ILIAS (typ: kursseite, das Plugin schreibt sie aus der Startseite des Kurses), Text ohne Frontmatter
+    kursseiten: (code) => tresor.notizen().filter((n) => n.fm.typ === "kursseite" && (!code || codeVon(n) === code)).map((n) => ({
+      modul: codeVon(n) || null, geaendert: DATUM.test(String(n.fm.geaendert || "")) ? String(n.fm.geaendert) : null, notiz: n.pfad,
+      text: n.text })).sort((x, y) => String(x.modul).localeCompare(String(y.modul)) || x.notiz.localeCompare(y.notiz)),
     hinweise: () => [],
     stand: (jetzt) => standVon(tresor, jetzt, abgleich),
   };

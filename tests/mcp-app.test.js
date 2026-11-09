@@ -45,7 +45,7 @@ test("App: ueberblick verweist auf die Ansicht und gibt ihr nur, was sie zeichne
   const s = await starten(true);
   try {
     const { tools } = await s.client.listTools();
-    assert.equal(tools.length, 12, "kein eigenes Werkzeug für die Ansicht");
+    assert.equal(tools.length, 13, "kein eigenes Werkzeug für die Ansicht");
     const werkzeug = tools.find((t) => t.name === "ueberblick");
     assert.equal(werkzeug._meta.ui.resourceUri, APP_URI);
     assert.equal(werkzeug.annotations.readOnlyHint, true);

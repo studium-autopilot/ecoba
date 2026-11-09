@@ -29,15 +29,15 @@ const NOTIZEN = Object.assign({},
 const EINGABEN = { notizen: Object.keys(NOTIZEN).filter((p) => p.indexOf("Stundenplan/") === 0).map((pfad) => ({ pfad, fm: NOTIZEN[pfad] })),
   kurzVonCode: { X100: "Mathe" }, modulPfad: {}, modulName: { X100: "Beispielmathematik" }, verdeckt: null, ohneBeginn: false };
 
-const umgebung = (heute) => {
-  const M = laden("modell", { heute, notizen: NOTIZEN, frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": {} } }).ctx.modell;
+const umgebung = (heute, notizen = NOTIZEN) => {
+  const M = laden("modell", { heute, notizen, frontmatter: { "System/Daten/Semester.md": json("semester.json"), "System/Einstellungen.md": {} } }).ctx.modell;
   const W = laden("woche", { heute, kontext: { modell: M } }).ergebnis;
   const D = laden("dashboard", { heute, kontext: { modell: M } }).ergebnis;
   const G = laden("widget", { heute, kontext: { modell: M } }).ergebnis;
   return { M, W, D, G };
 };
-const daten = (jetzt, o = {}) => {
-  const U = umgebung(jetzt.slice(0, 10));
+const daten = (jetzt, o = {}, notizen) => {
+  const U = umgebung(jetzt.slice(0, 10), notizen);
   return U.G.datenBauen(Object.assign({ W: U.W, D: U.D, M: U.M, eingaben: EINGABEN, jetzt: new Date(jetzt), tresor: "Studium Autopilot", design: "elfenbein", modus: "automatisch" }, o));
 };
 
@@ -73,6 +73,27 @@ test("Daten: Fristen wie „Fristen · 30 Tage“ mit Art und Tag, nächste Fris
   assert.deepEqual(d.pruefungen.map((p) => p.tag + " " + p.was), ["2027-02-10 Klausur X100", "2027-02-15 Klausur X110"]);
   assert.deepEqual(d.seiten, laden("widget").ergebnis.SEITEN);
   for (const s of Object.values(d.seiten)) assert.ok(fs.existsSync(path.join(__dirname, "..", "Studium Autopilot", s)), "Seite fehlt: " + s);
+});
+
+test("Daten: Prüfungen am selben Tag stehen alle darin, Zwischentest und Erledigtes nicht, der Termin der Modulnotiz wird gewählt", () => {
+  const modul = (code, fm) => ({ ["Module/1 Grundstudium/" + code + " Beispiel.md"]: Object.assign({ typ: "modul", code, titel: code + " Beispiel", gruppe: "Grundstudium", ects: 6, status: "offen" }, fm) });
+  const notizen = Object.assign({}, NOTIZEN,
+    termin("2027-02-01", "Klausur Y200", { kategorie: "Prüfung", code: "Y200", ort: "14:00–15:30" }),
+    termin("2027-02-01", "Klausur Y201", { kategorie: "Prüfung", code: "Y201", ort: "09:00–10:30" }),
+    termin("2027-02-03", "Klausur Z300", { kategorie: "Prüfung", code: "Z300" }),
+    termin("2027-02-04", "Klausur Z400", { kategorie: "Prüfung", code: "Z400", erledigt: true }),
+    termin("2027-02-05", "Zwischentest Z500", { kategorie: "Prüfung", code: "Z500" }),
+    modul("Z600", { klausur: "2027-02-08", klausurtermin: "Nachholtermin" }),
+    termin("2027-02-08", "Klausur Z600", { kategorie: "Prüfung", code: "Z600" }),
+    termin("2027-03-01", "Nachholklausur Z600", { kategorie: "Prüfung", code: "Z600", nachhol: true }));
+  const d = daten("2027-01-20T09:00:00", {}, notizen);
+  assert.deepEqual(d.pruefungen.map((p) => p.tag + " " + p.uhr + " " + p.was), [
+    "2027-02-01 09:00–10:30 Klausur Y201", "2027-02-01 14:00–15:30 Klausur Y200", "2027-02-03  Klausur Z300", "2027-02-10  Klausur X100"]);
+  assert.equal(d.pruefungen.length, 4, "höchstens vier");
+  assert.equal(d.pruefungen[0].was, umgebung("2027-01-20", notizen).M.naechstePruefung({ heute: "2027-01-20" }).titel, "die erste ist die Kachel „Nächste Prüfung“");
+  const spaeter = daten("2027-02-03T09:00:00", {}, notizen).pruefungen.map((p) => p.was);
+  assert.deepEqual(spaeter.slice(0, 2), ["Klausur Z300", "Klausur X100"], "vergangene Tage fallen weg, Z400 (abgehakt) und der Zwischentest fehlen");
+  assert.ok(daten("2027-02-07T09:00:00", {}, notizen).pruefungen.some((p) => p.was === "Nachholklausur Z600"), "Nachholtermin gewählt: nur seine Klausur");
 });
 
 test("Gleich ist gleich: ohne den Zeitpunkt vergleichen", () => {

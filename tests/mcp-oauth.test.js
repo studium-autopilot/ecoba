@@ -261,7 +261,7 @@ test("OAuth: Erkennung, Anmeldung mit Code, Tausch mit PKCE, Werkzeuge und Erneu
 
     const client = new k.Client({ name: "test", version: "1" });
     await client.connect(new k.StreamableHTTPClientTransport(new URL(`${s.adresse}/mcp`), { requestInit: { headers: { authorization: `Bearer ${tokens.access_token}` } } }));
-    assert.equal((await client.listTools()).tools.length, 12);
+    assert.equal((await client.listTools()).tools.length, 13);
     await client.close();
 
     const neu = await k.refreshAuthorization(s.adresse, { metadata, clientInformation: { client_id: CLIENT }, refreshToken: tokens.refresh_token, resource: new URL(`${s.adresse}/mcp`) });

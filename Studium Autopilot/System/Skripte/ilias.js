@@ -16,7 +16,8 @@
 //   geaendert, iliasGroesse, original, iliasPfad, kurs, seit, wie, aktualisiert?, geloescht?, fassungen?, entfernt?, t } },
 //   ignoriert: { <ILIAS-id>: { grund, groesse, geaendert, iliasGroesse, original, iliasPfad, kurs, entfernt?, t } }, gruppen: { <ref_id der Gruppe>:
 //   { code, kurs, tag, beginn, ende, raum, mitglied, status, zentral, kandidaten, notiz (Grabstein, siehe gruppenAbgleichen),
-//   t } }, objekte: { <ref_id einer Übung>: { typ: "exc", code, kurs, t } } }. Kurstitel und ILIAS-Pfade nur ohne Kurspasswort
+//   t } }, objekte: { <ref_id einer Übung>: { typ: "exc", code, kurs, t } }, seiten: { <ref_id eines Kurses>: { code, pfad, hash, t } }
+//   (Kursseiten, siehe seitenAbgleichen) }. Kurstitel und ILIAS-Pfade nur ohne Kurspasswort
 //   (ohneKennwort; alte Einträge werden beim Lesen gesäubert). Von Gruppen nie Titel oder Beschreibung (dort stehen Namen), nur
 //   Code, Zeitfenster und Raumnummer; von Übungen nur Code und Kurs (der ILIAS-Kalender, ilias-kalender.js, findet so den
 //   Modulcode einer Abgabe; der Kalender nennt nur die Übung, nicht ihren Kurs). Jeder Eintrag trägt „t“
@@ -61,6 +62,9 @@
 //   Einstellungen gilt beim eigenen Uni-Abgleich nur „ilias-dateien“): Dateien extern → dieses Skript lädt nie Dateien (Status
 //   TEXT_EXTERN); mit ILIAS-Zugang prüft es dann nur die Übungsgruppen: kurze Läufe ohne Auftrag (kein Weitermachen, keine
 //   Stapel), ein Hinweis zum Ergebnis nur nach deinem Tipp. Gruppen extern → kein Gruppenabgleich. Beides → kein Lauf.
+// Kursseiten (seit 05.11.2026, kursseite.js): Die Startseite jedes aktiven Kurses mit Modul (Ablauf je Woche, Zwischentests,
+//   Hinweise) wird höchstens alle SEITE_PAUSE zur Notiz „<Code> Kursseite“ im Modulordner, auch wenn die Dateien extern kommen
+//   (dann im kurzen Lauf nach den Gruppen). Kurspasswörter stehen nie darin.
 // Uni-Zugang (seit 0.4.5, auch für Noten & Anmeldungen aus Alma, alma-konto.js): Lehnt die Uni ein gespeichertes Passwort
 //   eindeutig ab (zugang-falsch), schreibt das Gerät die synchronisierte Datei System/Daten/uni-zugang.json { abgelehnt, dienst,
 //   geraet } (ohne Benutzername, ohne Passwort). Jedes Gerät, dessen Passwort älter ist (gerätelokal eba-uni-zugang-seit), meldet
@@ -115,6 +119,7 @@ module.exports = function (ctx) {
   const TIEFE_MAX = 12;          // Ordnertiefe in einem Kurs
   const KURS_ZULETZT = 24 * STUNDE; // „zuletzt“ eines Kurses im Index ohne andere Änderung höchstens so oft schreiben
   const KURS_PAUSE = 3 * STUNDE;   // automatische Läufe durchsuchen einen Kurs höchstens so oft (Knopf: immer alle)
+  const SEITE_PAUSE = 3 * STUNDE;  // automatische Läufe lesen die Startseite eines Kurses höchstens so oft (kursseite.js)
   const GRUPPEN_SEITEN = 5;       // höchstens so viele Gruppenseiten je Lauf (Modulcode aus den Brotkrumen, danach gemerkt)
   const KURS_WIEDER = 7 * 24 * STUNDE; // Gruppenseite ohne Kurscode: höchstens so oft neu versuchen
   const VERWAIST = 7 * 24 * STUNDE; // so lange still, gilt die Sperre eines anderen Geräts als verlassen (gruppenFreigeben)
@@ -383,8 +388,8 @@ module.exports = function (ctx) {
   const vorText = (iso, jetztMs) => { const Q = ctx.user && ctx.user.quellen; return Q ? Q.vorText(iso, jetztMs) : ""; };
 
   // ---------- Index: lesen, prüfen, mischen ----------
-  const BEREICHE = ["kurse", "dateien", "ignoriert", "gruppen", "objekte"];
-  const leererIndex = () => ({ version: 1, kurse: {}, dateien: {}, ignoriert: {}, gruppen: {}, objekte: {} });
+  const BEREICHE = ["kurse", "dateien", "ignoriert", "gruppen", "objekte", "seiten"];
+  const leererIndex = () => ({ version: 1, kurse: {}, dateien: {}, ignoriert: {}, gruppen: {}, objekte: {}, seiten: {} });
   // Titel ohne Kurspasswort (auch alte Einträge: beim Lesen gesäubert, beim nächsten Schreiben ersetzt)
   const saeubern = (b, e, id) => {
     if (b === "kurse" && hat(e, "titel")) { const t = ohneKennwort(e.titel) || e.code || "Kurs " + id; if (t !== e.titel) return Object.assign({}, e, { titel: t }); }
@@ -572,12 +577,14 @@ module.exports = function (ctx) {
   //       notizAendern(pfad, fn(text) → text) → true, wenn geändert; beide nur in Notizen mit typ: unterlage)
   //   lokal(k, v?), geheim: { lesen(id) → Text | null (synchron), schreiben(id, w), loeschen(id) }, geheimId(),
   //   anmeldung() → anmelden(sitzung, zugang, optionen) → { ok, grund?, hinweis? } | null (dann „folgt später“),
-  //   quelle(zugang, anmelden, { wiederverwenden, abmelden }?) → { kurse(), inhalt(behaelter), laden(eintrag), name(eintrag),
+  //   quelle(zugang, anmelden, { wiederverwenden, abmelden }?) → { kurse(), inhalt(behaelter), kursseite(kurs)? → [Block],
+  //       laden(eintrag), name(eintrag),
   //       groesse(eintrag)? } (meldet sich mit anmelden an; wiederverwenden: Sitzung des letzten Laufs nehmen, solange sie gilt;
   //       abmelden: vor der Anmeldung abmelden, beim Prüfen eines neuen Passworts; zugang.konto: Kürzel des Kontos, siehe
   //       quelleAusNetz), vergessen()? (Sitzung weg), abmelden()? (beim Trennen statt vergessen: Sitzung weg und bei ILIAS und
   //       der Uni abmelden → Promise),
   //   einordner() → wie einordnerAus, modul(code) → { name, titel } | null, semester() → Text, einstellungen() → {},
+  //   kursseite()? → kursseite.js (sonst ctx.user.kursseite),
   //   jetzt() → Date, mobil, geraetId(), melden(text)?, geaendert(info)? }
   const erzeugen = (abh) => {
     const io = abh.io;
@@ -592,7 +599,7 @@ module.exports = function (ctx) {
 
     // ----- Stand (gerätelokal) -----
     // warnung: Sätze aus dem letzten fertigen Lauf (fehlende Dateien, Übungsgruppen …), stehen in Zeile und Fenster unter Verbindungen
-    const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", warnung: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, pauseBis: "", dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {} }, lokal(L.stand) || {});
+    const stand = () => Object.assign({ zuletzt: "", versucht: "", fehler: "", fehlerZeit: "", warnung: "", neu: 0, rest: 0, abrufer: false, anderes: "", gesperrt: false, pauseBis: "", dateien: 0, kurse: 0, zuGross: 0, kursZeit: {}, kursFertig: {}, seitenZeit: {} }, lokal(L.stand) || {});
     const standSetzen = (x) => lokal(L.stand, Object.assign(stand(), x));
     // Pause nach einer unbekannten Seite nach dem Passwort (PAUSE_UNKLAR): nur automatische Läufe warten
     const pausiert = () => { const t = Date.parse(stand().pauseBis || ""); return !isNaN(t) && t > ms(); };
@@ -887,7 +894,7 @@ module.exports = function (ctx) {
     // Nicht mehr in ILIAS: Ein Eintrag, dessen Kurs dieser Lauf ganz und ohne Ordnerfehler durchsucht hat und den er nirgends
     // gesehen hat, bekommt „entfernt“ (Datum); die Datei im Tresor bleibt, ihre Notiz bekommt den Kasten „Nicht mehr in ILIAS“.
     // Wieder gesehen → Marke und Kasten weg. Zu große Dateien (ignoriert) genauso, ohne Notiz. Was in einem nicht gelesenen
-    // Behälter lag (spätere Sitzung, Sitzung ohne Materialien, fremde Gruppe, zu tief; r.ausgelassen), zählt nicht als nicht
+    // Behälter lag (spätere Sitzung, Sitzung ohne Materialien, fremde Gruppe, zu tief, leer gelesen; r.ausgelassen), zählt nicht als nicht
     // gesehen. Ein Kurs, in dem gar nichts zu sehen war, und in einem Kurs mehr als die Hälfte (und mehr als 10) auf einmal sehen
     // eher nach einer geänderten ILIAS-Seite aus: in diesem Kurs nichts.
     const entfernteMerken = (b, r, fertig) => {
@@ -1324,6 +1331,10 @@ module.exports = function (ctx) {
         return;
       }
       liste = (Array.isArray(liste) ? liste : []).filter((e) => e && typeof e === "object");
+      // Leere Liste: ein wirklich leerer Behälter und eine Seite, die ilias-html.js nicht lesen kann (geänderte ILIAS-Seite,
+      // Wartungsseite mit HTTP 200), sehen gleich aus. Kein Fehler; was früher darin lag, auch in Unterordnern, gilt aber
+      // nicht als „nicht mehr in ILIAS“ (entfernteMerken)
+      if (!liste.length) { r.ausgelassen.push(pfadOhneKennwort([kurs.titel].concat(k.anzeige).join(" / "))); return; }
       // Sitzungen: Stehen ihre Materialien auf der Kursseite schon aufgeklappt (Feld inSitzung), wird die Sitzung nicht
       // einzeln geholt (spart je Sitzung eine Anfrage); die Dateien bekommen den Sitzungsnamen als Ordner. Sitzungen ohne
       // aufgeklappte Materialien werden geholt, wenn die Liste Materialien nennt (sie könnten eingeklappt sein).
@@ -1622,8 +1633,71 @@ module.exports = function (ctx) {
       if (Fa) for (const p of vorige) await notizAendern(notizPfad(p), (t) => (vonDatei(t, c.id) ? Fa.neuereKasten(t, name, datum) : t));
     };
 
+    // ----- Kursseiten (kursseite.js) -----
+    // Je aktivem Kurs mit Modul die Startseite (Seiteninhalt über den Einträgen) als Notiz „<Code> Kursseite“ im Modulordner, auch
+    // wenn die Dateien von einem eigenen Uni-Abgleich kommen. Automatisch höchstens alle SEITE_PAUSE je Kurs (gerätelokal
+    // seitenZeit), per Knopf immer. Geschrieben wird nur, was sich geändert hat; eine leere Seite schreibt nichts. Index „seiten“:
+    // { <refId>: { code, pfad, hash, t } }. Eine gelöschte Notiz kommt erst wieder, wenn sich die Seite ändert; eine Notiz ohne
+    // herkunft ilias am selben Ort fasst das Skript nie an (dann der nächste freie Name).
+    const kursseiteLib = () => {
+      try { const k = abh.kursseite ? abh.kursseite() : ctx.user && ctx.user.kursseite; return k && typeof k.markdown === "function" ? k : null; } catch (e) { return null; }
+    };
+    const seitenAbgleichen = async (b, r, q, liste, o) => {
+      const K = kursseiteLib();
+      if (!K || typeof q.kursseite !== "function") return;
+      const zeit = Object.assign({}, stand().seitenZeit);
+      const belegt = (pfad, refId) => Object.keys(mem.seiten).some((id) => id !== refId && mem.seiten[id].pfad === pfad);
+      for (const k of liste) {
+        if (!kursAn(k.refId) || !k.code || !abh.modul(k.code)) continue;
+        if (!o.manuell && alter(zeit[k.refId]) < SEITE_PAUSE) continue;
+        let bloecke;
+        try { bloecke = await anfrage(b, r, () => q.kursseite(k)); }
+        catch (e) {
+          if (e && (e.art === "abbruch" || e.art === "anmeldung" || e.art === "zugang")) throw e;
+          warnen(b, "Eine Kursseite ließ sich diesmal nicht lesen.", `Kursseite ${k.code}: ${fehlerText(e)}`);
+          continue;
+        }
+        b.seiten++;
+        zeit[k.refId] = iso();
+        standSetzen({ seitenZeit: zeit });
+        const inhalt = K.markdown(bloecke, { md: mdText, hatKennwort, ohneKennwort });
+        if (!inhalt) continue;
+        const hash = K.kurzHash(inhalt), e = mem.seiten[k.refId];
+        if (e && e.pfad && !io.existiert(e.pfad) && e.hash === hash) continue; // von dir gelöscht, die Seite ist dieselbe
+        let pfad = e && e.pfad && io.existiert(e.pfad) ? e.pfad : "", alt = null;
+        if (pfad) alt = await io.lesenText(pfad);
+        if (!pfad || (alt != null && !K.eigene(alt))) {
+          const ordner = zielOrdner(k.code, k, null);
+          pfad = ""; alt = null;
+          for (let n = 1; n <= 9 && !pfad; n++) {
+            const p = `${ordner}/${k.code} Kursseite${n > 1 ? " " + n : ""}.md`;
+            if (belegt(p, k.refId)) continue;
+            const t = io.existiert(p) ? await io.lesenText(p) : null;
+            if (t == null || K.eigene(t)) { pfad = p; alt = t; }
+          }
+          if (!pfad) continue;
+        }
+        const ursprungUrl = (/^(https?:\/\/[^/?#]+)/i.exec(k.url || "") || [])[1] || "https://ovidius.uni-tuebingen.de";
+        const d = { code: k.code, url: `${ursprungUrl}/goto.php/crs/${k.refId}`, refId: k.refId, geaendert: heute(), inhalt };
+        if (alt == null || !K.gleich(alt, d, { md: mdText })) {
+          await io.schreibenText(pfad, K.notiz(d, alt, { md: mdText }));
+          b.kursseiten.push(k.code);
+        }
+        if (!e || e.pfad !== pfad || e.hash !== hash || e.code !== k.code) setzen("seiten", k.refId, { code: k.code, pfad, hash });
+      }
+      await speichern();
+    };
+
+    const kursseitenSicher = async (b, r, q, liste, o) => {
+      try { await seitenAbgleichen(b, r, q, liste, o); }
+      catch (e) {
+        if (e && e.art === "abbruch") throw e;
+        warnen(b, "Die Kursseiten ließen sich diesmal nicht lesen.", "Kursseiten: " + fehlerText(e));
+      }
+    };
+
     // ----- Ein Lauf -----
-    const neuerBericht = () => ({ art: "ok", neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, seiten: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null, gruppen: null });
+    const neuerBericht = () => ({ art: "ok", kursseiten: [], neu: 0, vorhanden: 0, ersetzt: 0, fassungen: 0, gleich: 0, geloescht: 0, zuGross: 0, videos: 0, uebersprungen: 0, rest: 0, kurseOffen: 0, geladen: 0, anfragen: 0, seiten: 0, angelegt: [], ersetztePfade: [], fehlerDateien: [], jeKurs: {}, warnung: "", fehler: "", grund: "", kurse: null, gruppen: null });
     const lauf = async (o, b, stopp) => {
       // Eigener Uni-Abgleich (Dateien kommen von dort): mit ILIAS-Zugang nur Mitgliedschaften und Gruppen-Notizen, nie Downloads
       const nurGruppen = extern(), ohneGruppen = gruppenExtern();
@@ -1673,7 +1747,12 @@ module.exports = function (ctx) {
       const liste = kurseUebernehmen(roh, !!o.alleAus);
       await speichern();
       if (o.nurKurse && !nurGruppen) { b.art = "kurse"; b.kurse = kurseListe(); return; }
-      if (nurGruppen) { await gruppenAbgleichen(b, r, q, gruppenRoh, () => b.seiten < SEITEN); b.art = "nur-gruppen"; return; }
+      if (nurGruppen) {
+        await gruppenAbgleichen(b, r, q, gruppenRoh, () => b.seiten < SEITEN);
+        await kursseitenSicher(b, r, q, liste, o);
+        b.art = "nur-gruppen";
+        return;
+      }
 
       // 1. Durchsuchen (älteste zuerst)
       const E = abh.einordner();
@@ -1737,6 +1816,8 @@ module.exports = function (ctx) {
           warnen(b, "Deine Übungsgruppen ließen sich diesmal nicht prüfen.", "Gruppen: " + fehlerText(e));
         }
       }
+      // 1c. Kursseiten; ein Fehler hier hält die Unterlagen nicht an
+      await kursseitenSicher(b, r, q, liste, o);
 
       // 2. Laden: geänderte zuerst, dann neue, je neueste zuerst; der Rest im nächsten Lauf
       kandidaten.sort((x, y) => (x.art === y.art ? 0 : x.art === "geaendert" ? -1 : 1) || vergleich(y.geaendert, x.geaendert) || x.reihe - y.reihe);
@@ -2282,6 +2363,7 @@ module.exports = function (ctx) {
         return k ? { refId: k.refId, code: codeAm(k.titel) } : null;
       },
       inhalt: async (k) => { const r = await behaelter(k.url); return H.inhalt(r.text, basis(r)); },
+      kursseite: async (k) => { const r = await behaelter(k.url); return H.kursseite ? H.kursseite(r.text, basis(r)) : []; },
       laden: async (e) => {
         const url = H.downloadUrl(e, e.url);
         if (!url) throw fehlerArt("datei", "kein Download-Link");
@@ -2490,7 +2572,7 @@ module.exports = function (ctx) {
     fortschrittAnzeige, naechsterSchritt, abgestorben,
     geheimId, geheimIdAus,
     // reine Logik und Tests
-    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, nachErsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, uniAbmelden, ohneKennwort, pfadOhneKennwort, indexPruefen, nieLaden,
+    erzeugen, hinweiseAus, einordnerAus, notizText, hinweisEinsetzen, nachErsetzen, pflichtfelder, mischen, codeAm, sauber, quelleAusNetz, sitzungVergessen, uniAbmelden, ohneKennwort, hatKennwort, pfadOhneKennwort, indexPruefen, nieLaden,
     K: { INDEX, ABRUF, UNI_ZUGANG, TEXT_ABGELEHNT, TEXT_UNGEPRUEFT, TEXT_UNKLAR, PAUSE_UNKLAR, MAX_MB, NEU_MOBIL, NEU_PC, BUDGET_MOBIL_MB, BUDGET_PC_MB, SEITEN, SUCHER, LADER_PC, LADER_MOBIL, UEBERNAHME, PULS, TEXT_ANMELDUNG_FOLGT, TEXT_EXTERN, WIEDER_MIN, STAPEL_PAUSE, STAPEL_MAX, STILL, ZURUECK_PRUEFEN },
   };
   ctx.ilias = api;
