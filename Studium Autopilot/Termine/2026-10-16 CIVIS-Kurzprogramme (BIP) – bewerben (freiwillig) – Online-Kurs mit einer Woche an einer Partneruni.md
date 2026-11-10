@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "CIVIS-Kurzprogramme (BIP): bewerben (freiwillig) – Online-Kurs mit einer Woche an einer Partneruni"
+titel: "CIVIS-Kurzprogramme (BIP): bewerben für Online-Kurs mit einer Woche an einer Partneruni (freiwillig)"
 datum: 2026-10-16
 bis:
 kategorie: Frist
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# CIVIS-Kurzprogramme (BIP): bewerben (freiwillig) – Online-Kurs mit einer Woche an einer Partneruni
+# CIVIS-Kurzprogramme (BIP): bewerben für Online-Kurs mit einer Woche an einer Partneruni (freiwillig)
 
 **16.10.2026** · Bewerbung je Kurs über den CIVIS-Kurskatalog
 

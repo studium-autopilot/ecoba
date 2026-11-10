@@ -5,7 +5,7 @@ datum: 2027-01-29
 bis: 2027-02-13
 kategorie: Prüfung
 status: offiziell
-ort: "Kupferbau HS 21–25 und Mohlstraße 36"
+ort: "Kupferbau HS 21–25 (Hölderlinstraße 5) und Mohlstraße 36"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Klausurphase Haupttermin WS 2026/27
 
-**29.01.2027 – 13.02.2027** · Kupferbau HS 21–25 und Mohlstraße 36
+**29.01.2027 – 13.02.2027** · Kupferbau HS 21–25 (Hölderlinstraße 5) und Mohlstraße 36
 
 Prüfungszeitraum des Haupttermins für die Pflicht- und Profilbildungsmodule des Fachbereichs Wirtschaftswissenschaft. Prüfungen vorher im Anmeldezeitraum in Alma anmelden.
 

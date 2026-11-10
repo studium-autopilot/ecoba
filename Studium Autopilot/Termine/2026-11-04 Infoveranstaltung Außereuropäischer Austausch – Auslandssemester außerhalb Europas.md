@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Infoveranstaltung Außereuropäischer Austausch – Auslandssemester außerhalb Europas"
+titel: "Infoveranstaltung Außereuropäischer Austausch: Auslandssemester außerhalb Europas"
 datum: 2026-11-04
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Infoveranstaltung Außereuropäischer Austausch – Auslandssemester außerhalb Europas
+# Infoveranstaltung Außereuropäischer Austausch: Auslandssemester außerhalb Europas
 
 **04.11.2026** · 18:00–19:00 · Mohlstraße 36, Seminarraum E03 · Anmeldung über eveeno
 

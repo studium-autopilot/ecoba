@@ -2,6 +2,15 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.8.4 – Eigener Server auf einen Blick
+
+- **Übersichtlicher:** Unter **Eigener Server** siehst du jetzt mit Haken und Kreuzen, was läuft und was fehlt, auch ob die
+  Claude-App verbunden ist. Alles Weitere steht eingeklappt unter **Einzelheiten**.
+- **Behoben:** Hatte ein Gerät seine Verbindung zu deinem Server verloren, etwa nach einem neu geöffneten Tresor, stand dort
+  „Auf einem anderen Gerät verbunden“. Jetzt sagt es das und zeigt **Neu verbinden**.
+- **Neu:** Ist nur ein Gerät mit deinem Server verbunden, rät dir **Eigener Server** zu einem zweiten. Verliert eins seine
+  Verbindung, verbindest du es dann mit dem anderen neu, ohne Cloud Shell.
+
 ## 0.8.3 – Kursseiten aus ILIAS
 
 - **Neu:** Was auf der Startseite eines Kurses in ILIAS steht, etwa welches Thema in welcher Woche dran ist, steht jetzt als

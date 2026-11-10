@@ -5,7 +5,7 @@ datum: 2027-01-26
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "12:00 (s.t.) · Anmeldung über das Formular des International Office"
+ort: "12:00 (s.t.) · online (Zoom) · Anmeldung über das Formular des International Office"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Infoveranstaltung Auslandsstudium: Australien und Neuseeland
 
-**26.01.2027** · 12:00 (s.t.) · Anmeldung über das Formular des International Office
+**26.01.2027** · 12:00 (s.t.) · online (Zoom) · Anmeldung über das Formular des International Office
 
 Infoveranstaltung des International Office zu Austauschplätzen an Partneruniversitäten in Australien und Neuseeland. Anmeldung über das Formular auf der Seite „Wege ins Ausland“.
 

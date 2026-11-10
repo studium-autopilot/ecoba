@@ -93,7 +93,8 @@ prüft sie noch einmal und legt daraus Termin- und Stundenplan-Notizen an.
 
 Die KI kann sich irren. Darum steht an jedem Termin die Quelle und das Datum der letzten Prüfung; Angaben, die die Uni noch
 nicht veröffentlicht hat, sind als **geschätzt** markiert. Der Code des Abgleichs ist nicht Teil dieses Repos. Das
-Datenformat steht in [docs/daten-v1.md](docs/daten-v1.md).
+Datenformat steht im Daten-Repo ([FORMAT.md](https://github.com/studium-autopilot/ecoba-daten/blob/main/FORMAT.md)), was das Plugin davon liest in
+[docs/daten-v1.md](docs/daten-v1.md).
 
 ## Zusammenfassen mit Claude (freiwillig)
 
@@ -266,7 +267,7 @@ npm run lint      # ESLint
 npm run pruefen   # Dateitypen, Datenschutz-Scan, Regeln für iPhone und iPad
 ```
 
-Mehr: [Architektur](docs/architektur.md) · [Datenformat](docs/daten-v1.md) · [Design](docs/design.md) ·
+Mehr: [Architektur](docs/architektur.md) · [Datenformat](https://github.com/studium-autopilot/ecoba-daten/blob/main/FORMAT.md) · [Design](docs/design.md) ·
 [Tests](docs/tests.md) · [Mithelfen](CONTRIBUTING.md) · [Sicherheit](SECURITY.md)
 
 ## In English
@@ -283,7 +284,7 @@ contacting nothing but the university's servers; the password stays in Obsidian'
 synced. The same login shows your university inbox on the Postfach page, read straight from the university webmail, but only
 after you turn it on; mails stay in memory and are never written to the vault. A new version is installed only when you tap “Neue Version installieren”, straight from this repo, with every file checked
 against a signed SHA-256 list. [Download the latest version](https://github.com/studium-autopilot/ecoba/releases/latest/download/Studium-Autopilot.zip).
-Architecture notes: [docs/architektur.md](docs/architektur.md), data contract: [docs/daten-v1.md](docs/daten-v1.md).
+Architecture notes: [docs/architektur.md](docs/architektur.md), data contract: [FORMAT.md](https://github.com/studium-autopilot/ecoba-daten/blob/main/FORMAT.md) in the data repo.
 
 ## Lizenz
 

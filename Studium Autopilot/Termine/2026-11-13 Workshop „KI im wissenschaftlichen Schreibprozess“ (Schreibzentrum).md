@@ -5,12 +5,12 @@ datum: 2026-11-13
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "13. und 20.11. · Diversitätsorientiertes Schreibzentrum, Zeit und Anmeldung auf der Workshopseite"
+ort: "14:00–19:00, Fr 20.11. 14:00–18:00 · Ort folgt"
 modul:
 code: ""
 erledigt: false
-quelle: "wiwinews Band 96, Eintrag 3 (16.10.2026)"
-info: "Workshop des Diversitätsorientierten Schreibzentrums zum Einsatz von KI beim wissenschaftlichen Schreiben. Details und Anmeldung auf der Workshopseite des Schreibzentrums."
+quelle: "https://uni-tuebingen.de/de/302304"
+info: "Zweiteiliger Präsenz-Workshop von Universitätsbibliothek und Schreibzentrum zum Einsatz von KI beim wissenschaftlichen Schreiben, mit Onlinephase dazwischen. Anmeldung in Alma."
 herkunft: zentral
 zentral_id: 2026-11-13-workshop-ki-im-wissenschaftlichen-schreibprozess
 uebersicht: "[[Prüfungen]]"
@@ -22,11 +22,11 @@ tags:
 
 # Workshop „KI im wissenschaftlichen Schreibprozess“ (Schreibzentrum)
 
-**13.11.2026** · \13. und 20.11. · Diversitätsorientiertes Schreibzentrum, Zeit und Anmeldung auf der Workshopseite
+**13.11.2026** · 14:00–19:00, Fr 20.11. 14:00–18:00 · Ort folgt
 
-Workshop des Diversitätsorientierten Schreibzentrums zum Einsatz von KI beim wissenschaftlichen Schreiben. Details und Anmeldung auf der Workshopseite des Schreibzentrums.
+Zweiteiliger Präsenz-Workshop von Universitätsbibliothek und Schreibzentrum zum Einsatz von KI beim wissenschaftlichen Schreiben, mit Onlinephase dazwischen. Anmeldung in Alma.
 
-Quelle: wiwinews Band 96, Eintrag 3 (16.10.2026)
+Quelle: [uni-tuebingen.de](https://uni-tuebingen.de/de/302304)
 
 ## Meine Notizen
 

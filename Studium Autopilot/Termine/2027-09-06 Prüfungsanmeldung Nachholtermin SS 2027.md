@@ -5,7 +5,7 @@ datum: 2027-09-06
 bis: 2027-09-13
 kategorie: Frist
 status: geschätzt
-ort: "in Alma"
+ort: "Alma"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Prüfungsanmeldung Nachholtermin SS 2027
 
-**06.09.2027 – 13.09.2027** · in Alma
+**06.09.2027 – 13.09.2027** · Alma
 
 Anmeldezeitraum des Prüfungsamts für die Prüfungen des Nachholtermins, bisher nur geschätzt. An- und Abmeldung online in Alma.
 

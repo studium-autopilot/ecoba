@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Dies Universitatis – Semestereröffnung der Uni"
+titel: "Dies Universitatis: Semestereröffnung der Uni"
 datum: 2026-10-14
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Dies Universitatis – Semestereröffnung der Uni
+# Dies Universitatis: Semestereröffnung der Uni
 
 **14.10.2026** · 18:00 · Festsaal Neue Aula
 

@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Erasmus-Infocafé Italien, Griechenland und Türkei – Online-Info zum Auslandsstudium 2027/28"
+titel: "Erasmus-Infocafé Italien, Griechenland und Türkei: Online-Info zum Auslandsstudium 2027/28"
 datum: 2027-01-19
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Erasmus-Infocafé Italien, Griechenland und Türkei – Online-Info zum Auslandsstudium 2027/28
+# Erasmus-Infocafé Italien, Griechenland und Türkei: Online-Info zum Auslandsstudium 2027/28
 
 **19.01.2027** · 17:00–18:00 · online (Zoom) · Anmeldung über eveeno
 

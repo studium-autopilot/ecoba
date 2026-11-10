@@ -5,7 +5,7 @@ datum: 2027-05-31
 bis: 2027-07-05
 kategorie: Frist
 status: geschätzt
-ort: "in Alma"
+ort: "Alma"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Prüfungsanmeldung Haupttermin SS 2027
 
-**31.05.2027 – 05.07.2027** · in Alma
+**31.05.2027 – 05.07.2027** · Alma
 
 Anmeldezeitraum des Prüfungsamts für die Prüfungen des Haupttermins, bisher nur geschätzt. An- und Abmeldung online in Alma.
 

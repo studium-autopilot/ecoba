@@ -5,7 +5,7 @@ datum: 2027-01-21
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "12:00 (s.t.) · Anmeldung über das Formular des International Office"
+ort: "12:00 (s.t.) · online (Zoom) · Anmeldung über das Formular des International Office"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Infoveranstaltung Auslandsstudium: Erasmus+ weltweit
 
-**21.01.2027** · 12:00 (s.t.) · Anmeldung über das Formular des International Office
+**21.01.2027** · 12:00 (s.t.) · online (Zoom) · Anmeldung über das Formular des International Office
 
 Infoveranstaltung des International Office zu Erasmus+ weltweit (Zentralasien und Kaukasus, Israel, CIVIS-Afrika). Anmeldung über das Formular auf der Seite „Wege ins Ausland“.
 

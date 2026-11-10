@@ -1,6 +1,9 @@
 # Datenformat v1: Zentrale Daten
 
-Stand: 1.11.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3, `vorlesung` und `zwischentest` in `kapitel.json` seit 31.10.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
+Das aktuelle Format steht im Daten-Repo: [FORMAT.md](https://github.com/studium-autopilot/ecoba-daten/blob/main/FORMAT.md). Es wird mit den Daten veröffentlicht und ändert sich im
+selben Commit wie sie. Diese Datei beschreibt, was diese Version des Plugins liest und prüft und was es daraus macht.
+
+Stand: 9.11.2026 (`gruppen.json` und `angebote.json` veröffentlicht seit 17.10.2026, `veranstaltungen.json` seit 18.10.2026, `kapitel.json` seit 19.10.2026, Vertrag für `literatur.json` seit 24.10.2026, `abdeckung` im Manifest seit 0.5.3, `vorlesung` und `zwischentest` in `kapitel.json` seit 31.10.2026, `gruppe` und `thema` in `termine.json` und `angebote.json` und Vertrag für `quellen.json` seit 9.11.2026). Vertrag zwischen dem Export (Seite des Autors, `export-daten.py`) und dem Plugin (Nutzerseite,
 `System/Skripte/zentral.js`). Was hier nicht erlaubt ist, verwirft das Plugin. Zielgruppe: wer den Export baut oder das Plugin
 ändert.
 
@@ -21,6 +24,7 @@ Ordner `v1/`). Das Plugin holt **nur Daten (JSON), nie Code**. `v1` ist die Sche
 | `literatur.json` | nein | 512 KB | Literaturlisten der Module (höchstens 60 Module), Vertrag seit 24.10.2026, siehe [unten](#literaturjson) |
 | `unterlagen.json` | nein | 512 KB | Namen der Unterlagen aus ILIAS je Prüfsumme der Datei (höchstens 5000), Vertrag seit 03.11.2026, siehe [unten](#unterlagenjson) |
 | `angebote.json` | nein | 512 KB | Angebote der Uni: Vorträge, Kurse der Unibibliothek, Hochschulsport, Welcome Center (max. 1000 Einträge), seit 17.10.2026, siehe [unten](#angebotejson) |
+| `quellen.json` | nein | 64 KB | Gruppen, denen man folgen kann, mit den Kanälen, die der Abgleich liest, und deren Status (höchstens 100 Gruppen), Vertrag seit 9.11.2026, siehe [unten](#quellenjson) |
 | `musterplan.json` | nein | – | reserviert (entspricht `System/Daten/Musterplan.md`); das Plugin liest ihn noch nicht |
 | `module.json` | nein | – | reserviert für Korrekturen am Modulkatalog; das Plugin liest ihn noch nicht |
 
@@ -142,6 +146,8 @@ kann die Signatur trotzdem nicht fälschen.
 | `status` | ja | `offiziell` oder `geschätzt` (geschätzt = noch nicht veröffentlicht; die Notiz zeigt dann einen Hinweis) |
 | `code` | nein | leer oder Modulcode `^[A-Z]{1,4}[0-9][0-9X]{2}[A-Z]?$` (wie `eba.js`), z. B. `B110`, `SQ888`, `E371A` |
 | `bereich` | nein | seit 15.10.2026. Fehlt oder ein Wert aus der Freigabeliste „Bereiche“ unten. Ein **unbekannter Wert wird ignoriert** (der Eintrag bleibt, ohne Bereich). Der Export schreibt das Feld nur, wenn es gesetzt ist. |
+| `gruppe` | nein | seit 9.11.2026. `id` der veranstaltenden Gruppe aus `quellen.json` (Form wie `id`). Fehlt sie oder ist sie unbekannt, gehört der Termin zu keiner Gruppe und erreicht alle (nach seinem Thema). Termine eines Moduls haben keine. Das Plugin liest das Feld nicht. |
+| `thema` | nein | seit 9.11.2026. Ein Wert aus der Freigabeliste „Themen“ unten. Fehlt es oder ist es unbekannt, wird der Termin nie ausgeblendet. Das Plugin liest das Feld nicht. |
 | `quelle_url` | nein | leer oder `https://` auf einer erlaubten Domain (siehe unten), ≤ 500 Zeichen, ohne Leerzeichen, Anführungszeichen, `<>`, Backslash, Benutzer, Port |
 | `quelle_text` | nein | ≤ 200 Zeichen, reiner Text. Für Quellen ohne öffentliche Adresse (Rundmail an alle, PDF, Folie). Wird nur gezeigt, wenn `quelle_url` leer ist. |
 | `info` | nein | ≤ 200 Zeichen, reiner Text **für alle** (nie der Notiztext aus dem Tresor des Autors) |
@@ -184,6 +190,25 @@ den Eintrag verwerfen – so etwas gehört nach `v2/`.
 Export: Termine, deren Code mit `SQ1` beginnt (SQ100), gehen **ohne** `code` und mit diesem Bereich; der Titel bleibt
 unverändert (kein Zusatz). `SQ888` (Mathematisches Propädeutikum, Mathe-Vorkurs) ist kein SQ-Kurs und behält seinen Code.
 Erweitern nur mit Eintrag in dieser Tabelle **und** in `BEREICHE` in `zentral.js` und `export-daten.py`.
+
+### Freigabeliste Themen (`thema`)
+
+In der App blenden Studierende ganze Themen aus und folgen Gruppen (`gruppe`); `pflicht` blendet sie nie aus.
+
+| Wert | In der App | Was dazugehört |
+|---|---|---|
+| `pflicht` | – (nie ausgeblendet) | Semester und vorlesungsfreie Tage, Prüfungen und Prüfungsanmeldung, Rückmeldung, Lehre und Tutorien-Anmeldungen, Einführungen zum Studienstart, Orientierungsprüfung, Bachelorarbeit; jeder Termin mit `code` |
+| `kurse` | Kurse & Sprachen | Schlüsselqualifikationen und Sprachkurse, TCP, Kurse der Unibibliothek und Medienkurse, Workshops der Studienberatung |
+| `karriere` | Karriere | Career Service, Unternehmen, Messen |
+| `stipendien-ausland` | Stipendien & Ausland | Stipendien, Auslandssemester, Erasmus |
+| `initiativen` | Initiativen | Bewerbungen und Veranstaltungen studentischer Initiativen |
+| `freizeit` | Sport & Freizeit | Hochschulsport, Partys, Feste der Fachschaft |
+| `engagement` | Engagement | Vorträge, Lesungen, Ausstellungen, Dies Universitatis, Ehrenamt, Mentoring, Fachschaftssitzungen |
+| `studien` | Studien | Studien, die Teilnehmende suchen |
+
+Export: Termine der Kategorien `Semester`, `Vorlesungsfrei` und `Prüfung` und jeder Termin mit `code` haben immer `pflicht`;
+ein ungültiger Wert fällt weg (der Termin bleibt). Erweitern nur mit Eintrag in dieser Tabelle **und** in `THEMEN`
+(`export-daten.py`) und in der App.
 
 ### Freigabeliste Kategorien
 
@@ -302,7 +327,7 @@ dieser Fassung kennen den Namen nicht und ignorieren ihn.
 | `id` | ja | wie bei Terminen (`^[a-z0-9]([a-z0-9-]{0,78}[a-z0-9])?$`), eindeutig; doppelte: der erste Eintrag gilt. Empfohlen: `<semester>-<code>-<art>-<gruppe>` klein, z. B. `ws-2026-27-x100-uebung-1` |
 | `code` | ja | Modulcode wie bei Terminen |
 | `art` | ja | `Übung` oder `Tutorium` |
-| `gruppe` | nein | Nummer oder Name, wie die Quelle ihn nennt, ≤ 20 Zeichen, reiner Text (abgelehnt wie `titel`: HTML, Klammern, senkrechter Strich …); leer = ohne Nummer. ILIAS kann dieselbe Gruppe anders zählen (ILIAS „Gruppe 4“ = Liste Gr. 5); das Plugin ordnet darum nie über die Nummer zu |
+| `gruppe` | nein | Nummer oder Name, wie die Quelle ihn nennt, ≤ 20 Zeichen, reiner Text (abgelehnt wie `titel`: HTML, Klammern, senkrechter Strich …); leer = ohne Nummer. ILIAS kann dieselbe Gruppe anders zählen (ILIAS „Gruppe 2“ = Liste Gr. 3); das Plugin ordnet darum nie über die Nummer zu |
 | `tag` | ja | `Mo`, `Di`, `Mi`, `Do` oder `Fr` |
 | `von`, `bis` | ja | `HH:MM`, `bis` nach `von`. Zeiten wie in der Quelle (Alma: volle Stunden). |
 | `ct` | nein | `true` = c.t. (beginnt 15 Min. später, endet 15 Min. früher); alles andere gilt als nicht gesetzt. Das Plugin zeigt „8–10 c.t.“. |
@@ -374,6 +399,8 @@ keine Beschreibungen, keine Namen von Personen. Plugins vor dieser Fassung kenne
 | `online` | nein | `true` = (auch) online; alles andere gilt als nicht gesetzt |
 | `url` | ja | `https` auf `uni-tuebingen.de` oder einer Subdomain (z. B. `hochschulsport.`, `ub.`), sonst wie `quelle_url`. Strenger als die Domain-Liste der Termine: keine anderen Domains |
 | `anmeldung` | nein | `{ "ab", "bis" }`, beide optional: `JJJJ-MM-TT` oder `JJJJ-MM-TTTHH:MM` (Ortszeit, ohne Zone), `bis` nicht vor `ab`. Kein Objekt oder ungültig → Eintrag verworfen; `{}` = keine Angabe. Beim Hochschulsport ist `ab` der Buchungsbeginn |
+| `gruppe` | nein | seit 9.11.2026, wie bei Terminen: die Gruppe aus `quellen.json`, die die Kategorie (bei Vorträgen die Reihe) anbietet, z. B. `studium-generale`, `ub`. Das Plugin liest das Feld nicht |
+| `thema` | nein | seit 9.11.2026, wie bei Terminen: `vortrag` → `engagement`, `ub` → `kurse`, `sport` und `welcome` → `freizeit`. Das Plugin liest das Feld nicht |
 
 ### Freigabeliste Kategorien der Angebote (`kategorie`)
 
@@ -395,6 +422,44 @@ in einem gültigen Manifest** (ohne `pause`), gelten die Angebote als zurückgez
 Codeblock `eba-angebote` (`System/Skripte/angebote.js`): beim ersten Mal eine Auswahl (Kategorien, Vortragsreihen), danach Chips
 je gewählter Kategorie mit Anzahl, nach Tagen die nächsten 14 Tage, der Rest unter „Mehr anzeigen“. Vergangenes (Tage vor heute, heutige Angebote nach `bis`) blendet das Plugin
 selbst aus.
+
+## quellen.json
+
+Vertrag seit 9.11.2026. Optional; das Plugin liest die Datei nicht (Plugins kennen den Namen nicht und ignorieren ihn), die App
+zeigt damit, welchen Gruppen man folgen kann und welche ihrer Kanäle der Abgleich schon liest. Keine Links, keine
+Konto-Namen, keine Personen.
+
+```json
+{
+ "schema": 1,
+ "stand": "2026-11-09",
+ "gruppen": [
+  {
+   "id": "fachschaft",
+   "name": "Freie Fachschaft",
+   "art": "fachschaft",
+   "kanaele": [
+    { "art": "web", "status": "geprueft", "zuletzt": "2026-11-09" },
+    { "art": "instagram", "status": "bald" }
+   ]
+  }
+ ]
+}
+```
+
+| Feld | Pflicht | Regel |
+|---|---|---|
+| `schema` | ja | genau `1`; sonst, ohne Liste `gruppen` oder mit mehr als 100 Gruppen wird die **ganze Datei** abgelehnt |
+| `stand` | ja | `JJJJ-MM-TT`, Tag des Exports; der Status gilt für diesen Tag |
+| `id` | ja | Form wie bei Terminen, eindeutig und **für immer stabil**: Die App merkt sich gefolgte Gruppen an der `id`, Termine und Angebote nennen sie in `gruppe` |
+| `name` | ja | 1–60 Zeichen, reiner Text (abgelehnt wie `titel`) |
+| `art` | ja | `fachbereich`, `fachschaft`, `initiative`, `uni` oder `stiftung` |
+| `kanaele` | ja | Liste, jede `art` höchstens einmal; leer = der Abgleich liest die Gruppe noch nicht (die App bietet „Quelle fehlt“ an) |
+| `kanaele[].art` | ja | `web`, `instagram`, `newsletter` oder `rundmail` |
+| `kanaele[].status` | ja | `geprueft`: jede Quelle des Kanals wurde in den letzten drei Tagen erfolgreich gelesen, und der Abgleich zählt den Abruf nicht als gestört · `bald`: geplant, noch nicht gelesen (Instagram ohne Zugang) · `gestoert`: sonst |
+| `kanaele[].zuletzt` | nein | `JJJJ-MM-TT`, der Tag, bis zu dem jede Quelle des Kanals gelesen wurde; fehlt bei `bald` und wenn eine Quelle nie gelesen wurde |
+
+Ungültige Gruppen werden **einzeln** verworfen, unbekannte Felder ignoriert.
 
 ## kapitel.json
 
@@ -440,7 +505,7 @@ erst mit dem Schalter `kapitel.veroeffentlichen` im Export.
 | `vorlaeufig` | optional, `true` = Liste teils geschätzt (z. B. Lehrbuch-Einheiten, die die Vorlesung noch nicht genannt hat) |
 | `altklausuren` | optional, seit 1.11.2026 (ältere Plugins ignorieren es), ganze Zahl 1–99: wie viele Altklausuren des Moduls ausgezählt sind (`in_altklausuren`). Der Uni-Abgleich setzt es erst ab fünf |
 | `kapitel` | 1–40 Einträge, Nummern im Modul eindeutig |
-| `nr` | 1–8 Zeichen, beginnt mit Ziffer oder Großbuchstabe (`1`, `IV`, `E`, `2.3`) |
+| `nr` | 1–8 Zeichen, beginnt mit Ziffer oder Großbuchstabe (`1`, `IV`, `E`, `2.3`). **Bleibt:** Im Modul und Semester ändert sich eine einmal veröffentlichte Nummer nie und wird nie für ein anderes Kapitel vergeben; ein umbenanntes Kapitel behält sie, ein weggefallenes fehlt einfach (seit 9.11.2026 hier festgehalten, der Export hält es seit 19.10.2026 so). Die App erkennt Kapitel und Unterkapitel daran wieder. |
 | `titel` | reiner Text ≤ 140 Zeichen, ohne `[`, `]`, `<`, `>`, `{`, `}`, `|`, `\` |
 | `seiten` | optional, ganze Zahl 1–2000 (Folien des Kapitels, Gewicht im Plan) |
 | `folien` | optional, ganze Zahl 0–99: Nummer der Folien-Unterlage dieses Kapitels (`art: Folien`, Feld `nummer`); ohne sie gilt die Kapitelnummer |
@@ -759,10 +824,15 @@ sie nie. Verlegt Alma eine Serie auf einen anderen Tag oder Beginn, ist das eine
    `literatur.json` an.
 10. `unterlagen.json` (Vertrag seit 03.11.2026): aus der Ablage der ILIAS-Unterlagen des Abgleichs (Prüfsumme je Datei) und
    den Begleitnotizen dazu (Modul, Art, Nummer, Titel; sonst der Dateiname „<Code> <Art> <NN> <Titel>“). Nie Dateien aus der
-   eigenen Übungs- oder Tutoriumsgruppe des Autors (Ordner „Gruppe 4 …“), nur Kurse mit Modulcode. Dieselben Prüfungen wie das
+   eigenen Übungs- oder Tutoriumsgruppe des Autors, nur Kurse mit Modulcode. Dieselben Prüfungen wie das
    Plugin und der Scan auf persönliche Angaben je Eintrag; ein Treffer hält nur diesen Eintrag zurück. Veröffentlicht erst mit
    dem Schalter `unterlagen.veroeffentlichen`. Ein Fehler hält nur `unterlagen.json` an.
-11. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
+11. `gruppe`, `thema` und `quellen.json` (Vertrag seit 9.11.2026): Gruppen nur aus der Gruppen-Masterliste des Abgleichs; jede
+   Seite und jedes Konto, das der Abgleich liest, gehört zu genau einer Gruppe. Der Status kommt aus den Abrufen ohne KI und
+   behauptet nie mehr, als gelesen wurde. `pflicht` wie oben erzwungen; ein ungültiger Wert lässt nur das Feld weg. Ändern sich
+   nur `gruppe` oder `thema`, prüft die KI nicht neu (die Änderungsgrenze gilt). `quellen.json` erst mit dem Schalter
+   `quellen.veroeffentlichen`, bis dahin private Vorschau; ein Fehler hält nur `quellen.json` an.
+12. Schema erweitern: neue **optionale** Felder sind in `v1` erlaubt (das Plugin ignoriert Unbekanntes). Alles, was alte Plugins
    falsch verstehen würden, kommt nach `v2/`.
 
 Testquelle mit allen Fällen: lokal beim Autor (nicht im Repo). Öffentliche Tests: `tests/` (siehe `docs/tests.md`).

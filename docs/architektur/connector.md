@@ -361,9 +361,10 @@ Seit Release A verbindet Obsidian die Claude-App selbst, nur im Fenster „Eigen
   400 sonst und 409 → „Das hat nicht geklappt. Versuch es noch einmal.“, 403 `datenschluessel` → wie ein abgelehnter Schlüssel,
   403 `veraltet` → `alt`, 401 wie jede Anfrage (`ablehnung`). Ein Server ohne den Weg antwortet auf den unbekannten Pfad mit 404
   ohne Signatur; das nimmt `senden` mit Riegel nur hier an (`fehlt404`), jede andere unsignierte Antwort gilt weiter als Netzfehler.
-- **Fenster** (`claudeAppZeigen`, nur mit Schlüsseln und wenn der Server sie nicht ablehnt): Abschnitt „Claude-App“, je Verbindung
-  eine Zeile (Name der App, „Verbunden seit … · zuletzt benutzt …“) mit **Trennen**, sonst „Nicht verbunden.“, darunter **Mit der
-  Claude-App verbinden** und, solange sie an ist, leise **Claude-App ganz ausschalten**. Gezeichnet zuerst aus `server.json`, dann
+- **Fenster** (`claudeAppZeigen`, nur mit Schlüsseln und wenn der Server sie nicht ablehnt): seit 10.11.2026 die letzte Zeile der
+  Übersicht, „Claude-App“ mit Haken (verbunden) oder Kreuz (nicht verbunden), darunter je Verbindung eine Zeile (Name der App,
+  „Verbunden seit … · zuletzt benutzt …“) mit **Trennen**, sonst ein Satz, wozu sie gut ist, und **Mit der Claude-App verbinden**
+  (ausgeblendet, solange sie verbunden ist: Klasse `verbunden`), dazu, solange sie an ist, leise **Claude-App ganz ausschalten**. Gezeichnet zuerst aus `server.json`, dann
   aus der Antwort auf `status`, ohne das Fenster aufzuhalten; ist sie `alt` oder `abgeschaltet`, steht statt des Knopfs nur der
   Satz. Auf einem Gerät ohne Schlüssel steht im Stand des Fensters nur die Zeile „Claude-App: …“ aus `server.json`.
 - **Code** (`claudeAppCode`): erst die Rückfrage (`CA_LESEN`: Termine und Fristen, offene To-dos, Lernplan-Stand, fällige

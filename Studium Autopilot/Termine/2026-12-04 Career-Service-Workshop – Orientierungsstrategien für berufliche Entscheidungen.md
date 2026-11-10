@@ -5,7 +5,7 @@ datum: 2026-12-04
 bis: 2026-12-05
 kategorie: Veranstaltung
 status: offiziell
-ort: "14:00–19:00, Sa 05.12. 09:00–17:00 · Career Service, Anmeldung über die Workshop-Seite"
+ort: "14:00–19:00, Sa 05.12. 09:00–17:00 · Ort folgt, Anmeldung über die Workshop-Seite des Career Service"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Career-Service-Workshop: Orientierungsstrategien für berufliche Entscheidungen
 
-**04.12.2026 – 05.12.2026** · 14:00–19:00, Sa 05.12. 09:00–17:00 · Career Service, Anmeldung über die Workshop-Seite
+**04.12.2026 – 05.12.2026** · 14:00–19:00, Sa 05.12. 09:00–17:00 · Ort folgt, Anmeldung über die Workshop-Seite des Career Service
 
 Zweitägiger, kostenfreier Workshop des Career Service zu beruflichen Entscheidungen. Anmeldung über die Workshop-Seite des Career Service.
 

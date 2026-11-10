@@ -5,7 +5,7 @@ datum: 2026-11-19
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "10:00–12:00 · Schulungsraum im Ammerbau · Anmeldung über Alma"
+ort: "10:00–12:00 · Schulungsraum im Ammerbau, UB (Wilhelmstraße 32) · Anmeldung über Alma"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # UB-Kurs: Kreatives Denken
 
-**19.11.2026** · 10:00–12:00 · Schulungsraum im Ammerbau · Anmeldung über Alma
+**19.11.2026** · 10:00–12:00 · Schulungsraum im Ammerbau, UB (Wilhelmstraße 32) · Anmeldung über Alma
 
 Kurs der Universitätsbibliothek zu Techniken kreativen Denkens, etwa zum Finden von Forschungsfragen, mit Übung; zählt als \*-Kurs für den TCP-Punkt der UB. Anmeldung über Alma.
 

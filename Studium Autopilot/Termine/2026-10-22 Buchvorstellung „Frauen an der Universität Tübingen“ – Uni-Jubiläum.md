@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Buchvorstellung „Frauen an der Universität Tübingen“ – Uni-Jubiläum"
+titel: "Buchvorstellung „Frauen an der Universität Tübingen“: Uni-Jubiläum"
 datum: 2026-10-22
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Buchvorstellung „Frauen an der Universität Tübingen“ – Uni-Jubiläum
+# Buchvorstellung „Frauen an der Universität Tübingen“: Uni-Jubiläum
 
 **22.10.2026** · 18:00 · Pfleghofsaal (Schulberg 2)
 

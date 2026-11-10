@@ -5,7 +5,7 @@ datum: 2026-11-11
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "10:00–11:30 · Schulungsraum Ammerbau · Anmeldung über Alma"
+ort: "10:00–11:30 · Schulungsraum im Ammerbau, UB (Wilhelmstraße 32) · Anmeldung über Alma"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # UB-Kurs: Richtig zitieren – eine Einführung
 
-**11.11.2026** · 10:00–11:30 · Schulungsraum Ammerbau · Anmeldung über Alma
+**11.11.2026** · 10:00–11:30 · Schulungsraum im Ammerbau, UB (Wilhelmstraße 32) · Anmeldung über Alma
 
 Einführung der Universitätsbibliothek ins Zitieren, ins Literaturverzeichnis und ins Vermeiden von Plagiaten, zählt als \*-Kurs für den TCP-Punkt der UB. Anmeldung über Alma.
 

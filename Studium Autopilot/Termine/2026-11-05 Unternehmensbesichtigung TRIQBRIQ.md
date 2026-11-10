@@ -5,7 +5,7 @@ datum: 2026-11-05
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "16:00–18:00 · bei TRIQBRIQ · Anmeldung bis 25.10."
+ort: "16:00–18:00 · TRIQBRIQ-Stammwerk (August-Bebel-Straße 18) · Anmeldung bis 25.10."
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Unternehmensbesichtigung TRIQBRIQ
 
-**05.11.2026** · 16:00–18:00 · bei TRIQBRIQ · Anmeldung bis 25.10.
+**05.11.2026** · 16:00–18:00 · TRIQBRIQ-Stammwerk (August-Bebel-Straße 18) · Anmeldung bis 25.10.
 
 Unternehmensbesichtigung bei TRIQBRIQ zu nachhaltigem Bauen und Geschäftsmodell, mit Fragerunde und Networking. Anmeldung per Online-Formular des Fachbereichs.
 

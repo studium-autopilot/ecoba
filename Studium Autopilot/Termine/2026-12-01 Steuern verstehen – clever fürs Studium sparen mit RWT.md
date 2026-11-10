@@ -5,7 +5,7 @@ datum: 2026-12-01
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "16:15 (16 c.t.) · Anmeldung bis 23.11."
+ort: "16:15–18:00 (16 c.t.) · Ort folgt · Anmeldung bis 23.11."
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Steuern verstehen – clever fürs Studium sparen mit RWT
 
-**01.12.2026** · 16:15 (16 c.t.) · Anmeldung bis 23.11.
+**01.12.2026** · 16:15–18:00 (16 c.t.) · Ort folgt · Anmeldung bis 23.11.
 
 Vortrag der Kanzlei RWT, wie Steuern funktionieren und wie Studierende sparen können, mit Fragerunde. Anmeldung per Online-Formular.
 

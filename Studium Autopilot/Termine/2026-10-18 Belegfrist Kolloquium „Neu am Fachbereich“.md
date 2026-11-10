@@ -5,7 +5,7 @@ datum: 2026-10-18
 bis:
 kategorie: Frist
 status: offiziell
-ort: "Belegung in Alma bis 18.10."
+ort: "bis 18.10. · Alma"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Belegfrist Kolloquium „Neu am Fachbereich“
 
-**18.10.2026** · Belegung in Alma bis 18.10.
+**18.10.2026** · bis 18.10. · Alma
 
 Kolloquium „Neu am Fachbereich“ mit vier wöchentlichen Terminen und höchstens 20 Plätzen. Belegung in Alma.
 

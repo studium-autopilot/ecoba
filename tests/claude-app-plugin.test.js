@@ -258,7 +258,8 @@ test("Claude-App im Fenster: Adresse zum Kopieren, Code und drei Schritte nur im
     const r = await S.claudeAppZeigen(box, m, { nachCode: () => nachCode.push(1) });
     assert.equal(r.ok, true, "fragt den Server nach dem Stand");
     assert.equal(claude.anfragen[0].anfrage.aktion, "status");
-    assert.match(textVon(box), /^Claude-AppNicht verbunden\. /, "Abschnitt mit dem Stand");
+    assert.match(textVon(box), /^Claude-Appnicht verbundenMit ihr fragst du Claude/, "Zeile der Übersicht mit dem Stand");
+    assert.ok(finde(box, (k) => k.klassen.has("eba-server-punkt") && k.klassen.has("fehlt")), "Kreuz");
     assert.ok(!finde(box, (k) => k.text === "Claude-App ganz ausschalten"), "aus: nichts auszuschalten");
     const los = finde(box, (k) => k.tag === "button" && k.text === "Mit der Claude-App verbinden");
     los.hoerer.click();
@@ -369,6 +370,28 @@ test("Claude-App im Fenster: älterer Server (404) und abgeschaltet (503) ohne K
   } finally { await srv.zu(); }
 });
 
+test("Übersicht im Fenster „Eigener Server“: je Teil Haken, Kreuz oder Warnung, ohne Status nur Server und Gerät", () => {
+  const zeilen = (s, abgelehnt) => {
+    const box = knoten("div");
+    S.ueberblickZeigen(box, s, abgelehnt);
+    return alle(box).filter((k) => k.klassen.has("eba-server-punkt"))
+      .map((k) => [["ok", "fehlt", "warn", "leise"].find((a) => k.klassen.has(a)), k.kinder[1].text, k.kinder[2].text]);
+  };
+  const werte = { claude: "angemeldet", gmail: "aus", uniZugang: "fehlt" };
+  assert.deepEqual(zeilen({ verbunden: true, erreichbar: true, zustand: "an", werte }, false), [
+    ["ok", "Dein Server", "erreichbar"], ["ok", "Dieses Gerät", "verbunden"], ["ok", "Claude auf dem Server", "angemeldet"],
+    ["leise", "Gmail", "aus"], ["fehlt", "Uni-Postfach", "nicht eingerichtet"]]);
+  assert.deepEqual(zeilen({ verbunden: true, erreichbar: false, zustand: "fehler", werte: { claude: "abgemeldet", gmail: "ok", uniZugang: "falsch" } }, true), [
+    ["warn", "Dein Server", "gerade nicht erreichbar"], ["warn", "Dieses Gerät", "bitte neu verbinden"], ["fehlt", "Claude auf dem Server", "neu anmelden"],
+    ["ok", "Gmail", "wird durchsucht"], ["warn", "Uni-Postfach", "Passwort nicht angenommen"]]);
+  // ohne Schlüssel: der Server ist eingerichtet (server.json), dieses Gerät nicht verbunden bzw. hat seine Verbindung verloren
+  assert.deepEqual(zeilen({ verbunden: false, erreichbar: true, zustand: "anderswo", werte: null }, false),
+    [["ok", "Dein Server", "eingerichtet"], ["fehlt", "Dieses Gerät", "nicht verbunden"]]);
+  assert.deepEqual(zeilen({ verbunden: false, erreichbar: true, zustand: "verloren", werte: null }, false)[1], ["fehlt", "Dieses Gerät", "Verbindung verloren"]);
+  // unbekannte Werte (neuerer Server): keine Zeile statt einer falschen
+  assert.equal(zeilen({ verbunden: true, erreichbar: true, zustand: "an", werte: { claude: "neu", gmail: "?" } }, false).length, 2);
+});
+
 test("Claude-App im Fenster: je Verbindung Trennen, ganz ausschalten; beides nach einer Rückfrage", async () => {
   const srv = await serverStarten();
   try {
@@ -378,6 +401,8 @@ test("Claude-App im Fenster: je Verbindung Trennen, ganz ausschalten; beides nac
     const { m } = await verbunden(srv, tresor(), { netz: mitClaudeApp(srv, claude), fragen });
     const box = knoten("div");
     await S.claudeAppZeigen(box, m);
+    assert.match(textVon(box), /^Claude-Appverbunden/, "Haken in der Übersicht");
+    assert.ok(finde(box, (k) => k.klassen.has("eba-server-claude")).klassen.has("verbunden"), "Knopf ausgeblendet");
     let zeilen = alle(box).filter((k) => k.klassen.has("setting-item"));
     assert.deepEqual(zeilen.map((z) => z.name), ["claude.ai", "claude.ai"], "neueste zuerst");
     assert.match(zeilen[0].desc, /^Verbunden seit 18\.10\., \d\d:00 · zuletzt benutzt 18\.10\., \d\d:30$/);
@@ -392,7 +417,7 @@ test("Claude-App im Fenster: je Verbindung Trennen, ganz ausschalten; beides nac
     await bis(() => !alle(box).some((k) => k.klassen.has("setting-item")), "aus");
     assert.equal(fragen[fragen.length - 1].titel, "Claude-App ganz ausschalten?");
     assert.equal(claude.anfragen[claude.anfragen.length - 1].anfrage.aktion, "aus");
-    assert.match(textVon(box), /Nicht verbunden\./);
+    assert.match(textVon(box), /Claude-Appnicht verbunden/);
     assert.ok(!finde(box, (k) => k.text === "Claude-App ganz ausschalten"));
     // abgebrochen: nichts geschickt
     const n = claude.anfragen.length;

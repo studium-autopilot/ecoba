@@ -5,7 +5,7 @@ datum: 2027-01-22
 bis: 2027-01-23
 kategorie: Veranstaltung
 status: offiziell
-ort: "14:00–19:00, Sa 23.01. 09:00–17:00 · Career Service, Anmeldung über die Workshop-Seite"
+ort: "14:00–19:00, Sa 23.01. 09:00–17:00 · Ort folgt, Anmeldung über die Workshop-Seite des Career Service"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Career-Service-Workshop: Assessment-Center-Training
 
-**22.01.2027 – 23.01.2027** · 14:00–19:00, Sa 23.01. 09:00–17:00 · Career Service, Anmeldung über die Workshop-Seite
+**22.01.2027 – 23.01.2027** · 14:00–19:00, Sa 23.01. 09:00–17:00 · Ort folgt, Anmeldung über die Workshop-Seite des Career Service
 
 Kostenfreies zweitägiges Assessment-Center-Training des Career Service. Anmeldung über die Workshop-Seite des Career Service.
 

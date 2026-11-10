@@ -1,11 +1,11 @@
 ---
 typ: termin
-titel: "Meet the Big Players – 8 Unternehmen, 8 Chancen"
+titel: "Meet the Big Players: 8 Unternehmen, 8 Chancen"
 datum: 2026-11-26
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "15:30–19:00 · Anmeldung bis 15.11."
+ort: "15:30–19:00 · Ort folgt · Anmeldung bis 15.11."
 modul:
 code: ""
 erledigt: false
@@ -20,9 +20,9 @@ tags:
   - termin
 ---
 
-# Meet the Big Players – 8 Unternehmen, 8 Chancen
+# Meet the Big Players: 8 Unternehmen, 8 Chancen
 
-**26.11.2026** · 15:30–19:00 · Anmeldung bis 15.11.
+**26.11.2026** · 15:30–19:00 · Ort folgt · Anmeldung bis 15.11.
 
 Karrieremesse in Kleingruppen mit acht Unternehmen, an jeder Station eine kleine Aufgabe, dazu kostenloser CV-Check. Anmeldung per Online-Formular mit Lebenslauf und Transcript.
 

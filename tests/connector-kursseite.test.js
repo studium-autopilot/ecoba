@@ -125,7 +125,9 @@ test("Ohne Kopie des Tresors: Obsidian schickt die Zeilen mit Tag im Lagebild, d
     lage({ kursseiten: angenommen });
     const w = werkzeuge(quelleServer(v));
     assert.ok(w.liste().some((d) => d.name === "kursseiten"));
-    const d = w.aufrufen("kursseiten", { modul: "S100" }).daten;
+    // datum: tag() rechnet in Ortszeit, das Werkzeug ohne datum in Europe/Berlin; auf einem Rechner in UTC (GitHub Actions) ist
+    // sonntags ab 23 Uhr (im Sommer ab 22 Uhr) in Berlin schon die nächste Woche
+    const d = w.aufrufen("kursseiten", { modul: "S100", datum: tag(0) }).daten;
     assert.deepEqual(d.kursseiten, [{ modul: "S100", geaendert: tag(0), zeitplan: [{ von: tag(0), zellen: [{ spalte: "Thema", text: "Heute: Matrizen" }] }] }]);
     assert.match(d.hinweis, /nur die Zeilen mit Tag/);
   } finally { fs.rmSync(v, { recursive: true, force: true }); }

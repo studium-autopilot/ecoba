@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Erasmus-Infocafé Frankreich, Schweiz und Österreich – Online-Info zum Auslandsstudium 2027/28"
+titel: "Erasmus-Infocafé Frankreich, Schweiz und Österreich: Online-Info zum Auslandsstudium 2027/28"
 datum: 2026-12-15
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Erasmus-Infocafé Frankreich, Schweiz und Österreich – Online-Info zum Auslandsstudium 2027/28
+# Erasmus-Infocafé Frankreich, Schweiz und Österreich: Online-Info zum Auslandsstudium 2027/28
 
 **15.12.2026** · 17:00–18:00 · online (Zoom) · Anmeldung über eveeno
 

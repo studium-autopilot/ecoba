@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Netzwerke am Abschlag – Golfschnupperkurs"
+titel: "Netzwerke am Abschlag: Golfschnupperkurs"
 datum: 2026-10-24
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Netzwerke am Abschlag – Golfschnupperkurs
+# Netzwerke am Abschlag: Golfschnupperkurs
 
 **24.10.2026** · 13:30–17:00 · Golfclub Schloss Kressbach, Kressbach Hofgut 11
 

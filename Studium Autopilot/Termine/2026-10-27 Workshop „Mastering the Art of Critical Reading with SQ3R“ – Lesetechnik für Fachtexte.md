@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Workshop „Mastering the Art of Critical Reading with SQ3R“ – Lesetechnik für Fachtexte"
+titel: "Workshop „Mastering the Art of Critical Reading with SQ3R“: Lesetechnik für Fachtexte"
 datum: 2026-10-27
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Workshop „Mastering the Art of Critical Reading with SQ3R“ – Lesetechnik für Fachtexte
+# Workshop „Mastering the Art of Critical Reading with SQ3R“: Lesetechnik für Fachtexte
 
 **27.10.2026** · 16:00–19:00 · Ort folgt, Anmeldung per Mail an die Zentrale Studienberatung
 

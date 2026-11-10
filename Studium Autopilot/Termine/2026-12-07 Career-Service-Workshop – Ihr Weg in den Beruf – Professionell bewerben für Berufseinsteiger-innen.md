@@ -5,7 +5,7 @@ datum: 2026-12-07
 bis: 2026-12-11
 kategorie: Veranstaltung
 status: offiziell
-ort: "18:00–20:00 · Mo–Fr · Career Service, Anmeldung über die Workshop-Seite"
+ort: "18:00–20:00 · Mo–Fr · online, Anmeldung über die Workshop-Seite des Career Service"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Career-Service-Workshop: Ihr Weg in den Beruf – Professionell bewerben für Berufseinsteiger:innen
 
-**07.12.2026 – 11.12.2026** · 18:00–20:00 · Mo–Fr · Career Service, Anmeldung über die Workshop-Seite
+**07.12.2026 – 11.12.2026** · 18:00–20:00 · Mo–Fr · online, Anmeldung über die Workshop-Seite des Career Service
 
 Kostenfreier Bewerbungsworkshop des Career Service für den Berufseinstieg an fünf Abenden. Anmeldung über die Workshop-Seite des Career Service.
 

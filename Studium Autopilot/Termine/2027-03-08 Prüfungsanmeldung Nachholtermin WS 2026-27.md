@@ -5,7 +5,7 @@ datum: 2027-03-08
 bis: 2027-03-15
 kategorie: Frist
 status: offiziell
-ort: "in Alma"
+ort: "Alma"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Prüfungsanmeldung Nachholtermin WS 2026/27
 
-**08.03.2027 – 15.03.2027** · in Alma
+**08.03.2027 – 15.03.2027** · Alma
 
 Anmeldezeitraum des Prüfungsamts für die Prüfungen des Nachholtermins. An- und Abmeldung online in Alma, Abmeldung bis einen Tag vor der jeweiligen Prüfung.
 

@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "TCP – Anmeldeschluss Studienleistungen WS 2026-27"
+titel: "TCP-Kurse: Anmeldeschluss Studienleistungen WS 2026/27"
 datum: 2027-02-21
 bis:
 kategorie: Frist
@@ -22,7 +22,7 @@ tags:
   - schlüsselqualifikation
 ---
 
-# TCP – Anmeldeschluss Studienleistungen WS 2026-27
+# TCP-Kurse: Anmeldeschluss Studienleistungen WS 2026/27
 
 **21.02.2027** · Alma · <span class="eba-pill leer">Schlüsselqualifikation · freiwillig</span>
 

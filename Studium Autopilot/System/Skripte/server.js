@@ -203,6 +203,10 @@ module.exports = function (ctx) {
     netz: "Dein Server ist gerade nicht erreichbar.",
     intern: "Beim Übernehmen ging etwas schief. Der nächste Abruf versucht es erneut.",
   };
+  // Schlüssel verloren (Zustand verloren): Zeile; das Fenster sagt dazu, wie es weitergeht. Ein zweites Gerät erspart die Cloud Shell
+  const VERLOREN = "Dieses Gerät hat seine Verbindung zu deinem Server verloren, etwa weil der Tresor neu geöffnet wurde. Dein Server und deine Daten sind unverändert.";
+  const VERLOREN_WEITER = "Hast du ein anderes verbundenes Gerät, holst du dort mit „Weiteres Gerät verbinden“ einen Code. Sonst zeigt die Cloud Shell von Oracle einen (Schritt 3 oben).";
+  const ZWEITES_GERAET = "Nur dieses Gerät ist mit deinem Server verbunden. Verbinde noch ein zweites mit „Weiteres Gerät verbinden“: Verliert eins seine Verbindung, verbindest du es dann mit dem anderen neu, ohne Cloud Shell.";
   const ENTFAELLT_ZENTRAL = "> Dieser Termin steht nicht mehr in den zentralen Daten. Deine Notizen unten bleiben.";
   const ENTFAELLT_SERVER = "> Laut deinem Server entfällt dieser Termin. Deine Notizen unten bleiben.";
   // Text zum Einfügen in Claude Code (Tab „Code“ in Claude Desktop), Knopf „Prompt kopieren“ (gleicher Wortlaut wie im README,
@@ -2145,7 +2149,11 @@ module.exports = function (ctx) {
     // Status in der Form des Quellen-Vertrags, dazu Eigenes: verbunden, host, laeuft, werte (öffentlicher Status des Servers),
     // erreichbar, erreicht (Zeit von werte), code (Art des Fehlers), bericht (letzte Übernahme), anderes (ein anderes Gerät hält
     // die Sperre)
-    const sichtbar = () => !!verbindung() || io.existiert(DATEI);
+    // Schlüssel verloren: kein Eintrag im Schlüsselbund, aber Spuren im Gerätespeicher, die nur ein verbundenes Gerät schreibt (Status
+    // des Servers, Abruf, Riegel). So sieht es aus, wenn Obsidian seinen Schlüsselbund leert, etwa nach einem neu geöffneten Tresor
+    // (10.11.2026); „Dieses Gerät trennen“ löscht die Spuren mit, „Mit Code verbinden“ auch
+    const verloren = () => !verbindung() && !!(objekt(lokal(L.status)).werte || objekt(lokal(L.abruf)).geprueft || lokal(L.riegel));
+    const sichtbar = () => !!verbindung() || verloren() || io.existiert(DATEI);
     // Nimmt der Server den Schlüssel dieses Geräts seit mehr als ZUGANG_TAGE nicht mehr an (die letzte Antwort 401 und jede Antwort
     // seit zugangSeit auch, etwa nach einer neuen Adresse, denn dann erneuert der Server die Schlüssel)? Dann fragt der Zeitplan nicht
     // mehr von selbst (registrieren), die Zeile sagt es; „Aktualisieren“ und „Mit Code verbinden“ gehen weiter, ein Erfolg oder ein
@@ -2156,7 +2164,7 @@ module.exports = function (ctx) {
     };
     const status = () => {
       const v = verbindung(), st = objekt(lokal(L.status)), ab = objekt(lokal(L.abruf));
-      const zustand = !v ? (sichtbar() ? "anderswo" : "nicht-verbunden") : laeuft ? "laeuft" : ab.anderes ? "anderes-geraet" : ab.code ? "fehler" : "an";
+      const zustand = !v ? (verloren() ? "verloren" : sichtbar() ? "anderswo" : "nicht-verbunden") : laeuft ? "laeuft" : ab.anderes ? "anderes-geraet" : ab.code ? "fehler" : "an";
       return Q.statusForm({
         zustand, geprueft: ab.geprueft, fehler: ab.fehler, fehlerZeit: ab.fehlerZeit, warnungen: ab.warnungen,
         verbunden: !!v, host: v ? hostVon(v.adresse) : "", laeuft, werte: st.werte || null, erreichbar: st.erreichbar !== false,
@@ -2208,6 +2216,7 @@ module.exports = function (ctx) {
       switch (s.zustand) {
         case "nicht-verbunden": return { text: "Für Technische: Ein eigener, kostenloser Server fasst mit deinem Claude-Abo Unterlagen zusammen und sucht in deinen Uni-Mails nach Terminen.", symbol: "extern", pille: "", knopf: { aktion: "verbinden", text: "Mehr erfahren", parameter: { id: "server" } }, link: null };
         case "anderswo": return { text: "Auf einem anderen Gerät verbunden. Neue Termine kommen über deinen Sync.", symbol: "haken", pille: "", knopf: null, link: MEHR };
+        case "verloren": return { text: VERLOREN, symbol: "warnung", pille: "pruefen", knopf: { aktion: "verbinden", text: "Neu verbinden", cta: true, parameter: { id: "server" } }, link: null };
         case "laeuft": return { text: stand.text, symbol: stand.symbol, pille: "an", knopf: null, link: MEHR };
         case "anderes-geraet": return { text: stand.text, symbol: stand.symbol, pille: "an",
           knopf: { aktion: "verbindung-aktualisieren", text: "Hier aktualisieren", cta: true, parameter: { id: "server", uebernehmen: "1" } }, link: MEHR };
@@ -2327,6 +2336,8 @@ module.exports = function (ctx) {
           mit: { geraete: alle.filter((x) => mitIds.indexOf(x.id) >= 0).map((x) => ({ id: x.id, name: x.name })),
             claudeApp: dieses ? [] : caVon.filter((e) => e.von && weg.indexOf(e.von) >= 0).map((e) => e.id) } };
       }).sort((a, b) => (b.dieses ? 1 : 0) - (a.dieses ? 1 : 0));
+      // Nur ein Gerät mit Schlüsseln: Verliert es sie, bleibt nur die Cloud Shell (10.11.2026)
+      if (geraete && geraete.length === 1) saetze.push(ZWEITES_GERAET);
       return { liste, saetze, verbindungen, geraete, quarantaene: (w.grenzen && w.grenzen.quarantaene) || 0,
         hinweise: z.hinweise.slice().reverse().slice(0, 10), laeufe: z.laeufe.slice().reverse().slice(0, 5).map((l) => Object.assign({}, l, { wann: uhrzeit(l.zeit) })) };
     };
@@ -2930,6 +2941,44 @@ module.exports = function (ctx) {
       }, (e) => { console.error("server: jetzt aktualisieren", e); k.disabled = false; });
     });
   };
+  // Übersicht oben im Fenster „Eigener Server“ (seit 10.11.2026): je Teil eine Zeile mit Symbol, Name und Zustand, damit man auf einen
+  // Blick sieht, was läuft und was fehlt. art: ok (Haken) | fehlt (Kreuz) | warn (Warnung) | leise (aus). Was hier steht, fällt unter
+  // „Einzelheiten“ weg (UEBERBLICK_NAMEN)
+  const PUNKT_SYMBOL = { ok: "haken", fehlt: "kreuz", warn: "warnung", leise: "pause" };
+  const UEBERBLICK = {
+    claude: { angemeldet: ["ok", "angemeldet"], abgemeldet: ["fehlt", "neu anmelden"] },
+    gmail: { ok: ["ok", "wird durchsucht"], aus: ["leise", "aus"], fehlt: ["fehlt", "nicht verbunden"] },
+    uniZugang: { gespeichert: ["ok", "eingerichtet"], fehlt: ["fehlt", "nicht eingerichtet"], falsch: ["warn", "Passwort nicht angenommen"] },
+  };
+  const UEBERBLICK_NAMEN = ["Claude", "Gmail", "Uni-Postfach", "Claude-App"];
+  const punktSetzen = (z, art, name, text) => {
+    z.empty();
+    for (const a of Object.keys(PUNKT_SYMBOL)) z.removeClass(a);
+    z.addClass(art);
+    const sym = z.createSpan({ cls: "eba-server-punkt-symbol" });
+    if (ctx.verbindungen && ctx.verbindungen.svg) sym.innerHTML = ctx.verbindungen.svg(PUNKT_SYMBOL[art]);
+    z.createSpan({ cls: "eba-server-punkt-name", text: name });
+    z.createSpan({ cls: "eba-server-punkt-text", text });
+  };
+  const punkt = (el, art, name, text) => { const z = el.createDiv({ cls: "eba-server-punkt" }); punktSetzen(z, art, name, text); return z; };
+  // s: status(); abgelehnt: der Server nimmt die Schlüssel dieses Geräts nicht (mehr) an. Die Zeile der Claude-App setzt das Fenster
+  // darunter (claudeAppZeigen bzw. aus server.json). → die Liste
+  const ueberblickZeigen = (el, s, abgelehnt) => {
+    const u = el.createDiv({ cls: "eba-server-ueberblick" }), w = s.werte || {};
+    if (!s.verbunden) punkt(u, "ok", "Dein Server", "eingerichtet");
+    else if (!s.erreichbar) punkt(u, "warn", "Dein Server", "gerade nicht erreichbar");
+    else punkt(u, "ok", "Dein Server", "erreichbar");
+    const geraet = s.zustand === "verloren" ? ["fehlt", "Verbindung verloren"] : !s.verbunden ? ["fehlt", "nicht verbunden"]
+      : abgelehnt ? ["warn", "bitte neu verbinden"] : ["ok", "verbunden"];
+    punkt(u, geraet[0], "Dieses Gerät", geraet[1]);
+    if (s.werte) {
+      for (const [k, name] of [["claude", "Claude auf dem Server"], ["gmail", "Gmail"], ["uniZugang", "Uni-Postfach"]]) {
+        const x = UEBERBLICK[k][w[k]];
+        if (x) punkt(u, x[0], name, x[1]);
+      }
+    }
+    return u;
+  };
   // Claude-App im Fenster „Eigener Server“, nur auf einem Gerät mit Schlüsseln (nie in der Einrichtung): je Verbindung eine Zeile
   // (Name der App, seit wann, zuletzt benutzt) mit Trennen, sonst „Nicht verbunden.“; darunter „Mit der Claude-App verbinden“: nach der
   // Rückfrage drei Schritte, die Adresse zum Kopieren und der Code, bis er abläuft (wie bei „Weiteres Gerät verbinden“ nur hier, nie im
@@ -2937,13 +2986,14 @@ module.exports = function (ctx) {
   // aus server.json, dann fragt das Fenster den Server (status): Kennt er die Claude-App nicht (404) oder ist sie abgeschaltet (503),
   // steht statt des Knopfs ein Satz. m: Ablauf (motor(), im Test erzeugen(abh)); o.nachCode: gleich danach (abrufen, damit das
   // Lagebild mit dem Stand an den Server geht). → Promise, die mit der Antwort auf status endet
+  // Seit 10.11.2026 eine Zeile der Übersicht (Haken: verbunden, Kreuz: nicht); den Knopf blendet CSS aus, solange sie verbunden ist.
   let caNr = 0;
   const claudeAppZeigen = async (box, m, o) => {
     const teil = box.createDiv({ cls: "eba-server-claude" });
-    teil.createEl("p", { cls: "eba-modal-abschnitt", text: "Claude-App" });
+    const kopf = punkt(teil, "fehlt", "Claude-App", "nicht verbunden");
     const zeilen = teil.createDiv();
     const meldung = teil.createEl("p", { cls: "eba-modal-meldung" });
-    const knoepfe = teil.createDiv({ cls: "modal-button-container" });
+    const knoepfe = teil.createDiv({ cls: "modal-button-container eba-server-claude-los" });
     const los = knoepfe.createEl("button", { text: "Mit der Claude-App verbinden" });
     const platz = teil.createDiv();
     const ausZeile = teil.createEl("p", { cls: "eba-modal-hinweis" });
@@ -2954,6 +3004,7 @@ module.exports = function (ctx) {
       if (r.fehler !== "alt" && r.fehler !== "abgeschaltet") return false;
       knoepfe.empty();
       platz.empty();
+      punktSetzen(kopf, "leise", "Claude-App", r.fehler === "alt" ? "nach dem nächsten Update" : "abgeschaltet");
       if (r.fehler === "alt") { leise(""); jetztZeigen(platz, m, CA_FEHLER.alt); } else leise(CA_FEHLER[r.fehler]);
       return true;
     };
@@ -2979,7 +3030,9 @@ module.exports = function (ctx) {
       zeilen.empty();
       ausZeile.empty();
       const v = st ? st.verbindungen : [];
-      if (!v.length) zeilen.createEl("p", { cls: "eba-modal-text", text: "Nicht verbunden. Mit ihr fragst du Claude nach deinem Studium, etwa „Was steht diese Woche an?“" });
+      punktSetzen(kopf, v.length ? "ok" : "fehlt", "Claude-App", v.length ? "verbunden" : "nicht verbunden");
+      if (v.length) teil.addClass("verbunden"); else teil.removeClass("verbunden");
+      if (!v.length) zeilen.createEl("p", { cls: "eba-modal-hinweis", text: "Mit ihr fragst du Claude nach deinem Studium, etwa „Was steht diese Woche an?“" });
       else {
         const s = zeilen.createDiv({ cls: "eba-modal-schalter" }), jetzt = new Date();
         for (const e of v) {
@@ -3113,53 +3166,40 @@ module.exports = function (ctx) {
       await codeFelder(box, neu);
       return;
     }
+    // Oben die Übersicht (seit 10.11.2026): je Teil Haken, Kreuz oder Warnung; die Claude-App mit ihrem Knopf in derselben Liste.
+    // Darunter nur, was jetzt zu tun ist (verbinden, Hinweise, Mails, Rückgängig); alles Weitere zugeklappt unter „Einzelheiten“.
     // Server da, dieses Gerät nicht verbunden, seine Schlüssel abgelehnt (etwa nach „schluessel-erneuern“ oder einer neuen IP) oder
     // der Server tagelang nicht erreichbar (neue Adresse?): zuerst der Code, mit der Adresse zum Überschreiben. Gerade nicht erreichbar
     // oder eine Antwort wie von einem alten Server: zugeklappt (mit Riegel sieht ein Gerät so auch Schlüssel, die er nicht mehr kennt)
     const s = motor().status();
     const abgelehnt = s.verbunden && (s.code === "zugang" || s.code === "paket" || s.code === "erneuert" || s.ruht || s.weg);
-    if (!s.verbunden || abgelehnt) await codeFelder(box, neu);
+    const bereit = s.verbunden && !abgelehnt;
+    const d = await motor().einzelheiten();
+    const u = ueberblickZeigen(box, s, abgelehnt);
+    // Claude-App: zeichnet sofort aus server.json und fragt den Server danach, ohne das Fenster aufzuhalten. Nach dem Code gleich
+    // abrufen: Ist dieses Gerät das abrufende, geht das Lagebild mit dem Stand schon jetzt an den Server. Ohne Schlüssel nur die Zeile
+    if (bereit) {
+      claudeAppZeigen(u, motor(), { nachCode: () => { motor().abrufen({}).then(neuZeichnen, (e) => console.error("server: Abruf nach dem Code", e)); } })
+        .catch((e) => console.error("server: Claude-App", e));
+    } else {
+      const ca = await motor().claudeAppStand();
+      const an = !!(ca && ca.verbindungen && ca.verbindungen.length);
+      punkt(u, an ? "ok" : "fehlt", "Claude-App", an ? "verbunden" : "nicht verbunden");
+    }
+    for (const t of d.saetze.filter((x) => x === ZWEITES_GERAET)) box.createEl("p", { cls: "eba-modal-hinweis", text: t });
+    if (s.zustand === "verloren") box.createEl("p", { cls: "eba-modal-text", text: VERLOREN_WEITER });
+    if (!bereit) await codeFelder(box, neu);
     else if (s.code === "netz" || s.code === "alt") {
       const auf = box.createEl("details", { cls: "eba-server-verbindungen" });
       auf.createEl("summary", { text: "Mit Code neu verbinden" });
       await codeFelder(auf, neu, true);
     }
-    const d = await motor().einzelheiten();
-    if (d.liste.length) {
-      const ul = box.createEl("ul", { cls: "eba-server-stand" });
-      for (const z of d.liste) { const li = ul.createEl("li"); li.createEl("b", { text: z[0] + ": " }); li.appendText(z[1]); }
-    }
-    // alle Verbindungen, die der Server meldet (die neueste steht oben unter „Zuletzt verbunden“), zugeklappt
-    if (d.verbindungen.length > 1) {
-      const auf = box.createEl("details", { cls: "eba-server-verbindungen" });
-      auf.createEl("summary", { text: `Alle Verbindungen von Geräten (${d.verbindungen.length})` });
-      const ul = auf.createEl("ul", { cls: "eba-server-stand" });
-      for (const t of d.verbindungen) ul.createEl("li", { text: t });
-    }
-    // Geräte mit eigenen Schlüsseln (Server ab dieser Fassung), zugeklappt: je Gerät eine Zeile, dieses zuerst; jedes andere lässt sich
-    // trennen. Ein älterer Server nennt keine: dann nichts
-    if (d.geraete && d.geraete.length) {
-      const auf = box.createEl("details", { cls: "eba-server-verbindungen eba-server-geraete" });
-      auf.createEl("summary", { text: `Geräte (${d.geraete.length})` });
-      const ul = auf.createEl("ul");
-      for (const g of d.geraete) {
-        const li = ul.createEl("li"), text = li.createSpan();
-        text.createEl("b", { text: g.name });
-        text.appendText((g.dieses ? " (dieses Gerät)" : "") + ": " + g.text);
-        if (g.dieses) continue;
-        const k = li.createEl("button", { text: "Trennen" });
-        k.addEventListener("click", () => { geraetTrennenFragen(g, k, neu).catch((e) => { console.error("server: Gerät trennen", e); k.disabled = false; }); });
-      }
-    }
-    for (const t of d.saetze) box.createEl("p", { cls: "eba-modal-hinweis", text: t });
-    // Mails, an denen jeder Lauf scheiterte: liegen auf dem Server beiseite, bis man es noch einmal versucht
-    if (d.quarantaene) {
-      box.createEl("p", { cls: "eba-modal-text", text: `${zahl(d.quarantaene, "Mail konnte", "Mails konnten")} nicht gelesen werden. Dein Server hat sie beiseitegelegt, damit nicht jeder Lauf an ${d.quarantaene === 1 ? "ihr" : "ihnen"} scheitert.` });
-      const k = box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Noch einmal versuchen" });
-      k.addEventListener("click", () => {
-        k.disabled = true;
-        durchsuchen({ quarantaene: true }).then(() => { if (neu) neu(); }, (e) => { console.error("server: noch einmal versuchen", e); k.disabled = false; });
-      });
+    if (bereit) {
+      const k = box.createDiv({ cls: "modal-button-container" });
+      k.createEl("button", { text: "Mails durchsuchen" }).addEventListener("click", () => durchsuchen());
+      const weiteres = k.createEl("button", { text: "Weiteres Gerät verbinden" });
+      const platz = box.createDiv();
+      weiteres.addEventListener("click", () => { codeZeigen(platz, weiteres).catch((e) => { console.error("server: Weiteres Gerät", e); weiteres.disabled = false; }); });
     }
     // Hinweise von Claude stehen in server.json, die jedes Gerät mit Sync schreiben kann: Ohne Eintrag im Schlüsselbund (hier stehen
     // dann die Felder zum Verbinden) zeigt das Fenster sie nicht, damit kein untergeschobener Hinweis eine Adresse oder einen Code
@@ -3172,13 +3212,16 @@ module.exports = function (ctx) {
       for (const h of d.hinweise) ul.createEl("li", { text: h.text + (h.quelle ? ` (${h.quelle})` : "") });
       if (motor().neueHinweise()) { motor().hinweiseGesehen(); neuZeichnen(); }
     }
-    if (d.laeufe.length) {
-      box.createEl("h4", { text: "Zuletzt übernommen" });
-      const ul = box.createEl("ul", { cls: "eba-server-laeufe" });
-      for (const l of d.laeufe) ul.createEl("li", { text: [l.wann, zahl(l.termine || 0, "Termin", "Termine"), zahl(l.hinweise || 0, "Hinweis", "Hinweise")].concat(l.begleitnotizen ? [zahl(l.begleitnotizen, "Begleitnotiz", "Begleitnotizen")] : []).concat(l.lernplaene ? [zahl(l.lernplaene, "Lernplan", "Lernpläne")] : []).concat(l.doppelt ? [zahl(l.doppelt, "Doppel", "Doppel") + " übersprungen"] : []).concat(l.todos ? [zahl(l.todos, "To-do", "To-dos") + " zusammengeführt"] : []).join(" · ") });
+    // Mails, an denen jeder Lauf scheiterte: liegen auf dem Server beiseite, bis man es noch einmal versucht
+    if (d.quarantaene) {
+      box.createEl("p", { cls: "eba-modal-text", text: `${zahl(d.quarantaene, "Mail konnte", "Mails konnten")} nicht gelesen werden. Dein Server hat sie beiseitegelegt, damit nicht jeder Lauf an ${d.quarantaene === 1 ? "ihr" : "ihnen"} scheitert.` });
+      const k = box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Noch einmal versuchen" });
+      k.addEventListener("click", () => {
+        k.disabled = true;
+        durchsuchen({ quarantaene: true }).then(() => { if (neu) neu(); }, (e) => { console.error("server: noch einmal versuchen", e); k.disabled = false; });
+      });
     }
     rueckZeigen(box, neu);
-    taktZeigen(box);
     const plugins = app.plugins;
     const angebot = livesyncAngebot({ verbunden: motor().verbunden(), livesync: (motor().status().werte || {}).livesync,
       hier: !!(plugins && plugins.enabledPlugins && plugins.enabledPlugins.has("obsidian-livesync")) });
@@ -3187,18 +3230,45 @@ module.exports = function (ctx) {
       box.createEl("p", { cls: "eba-modal-text", text: angebot.text });
       box.createDiv({ cls: "modal-button-container" }).createEl("button", { text: "Prompt kopieren", cls: "mod-cta" }).addEventListener("click", () => kopieren(LIVESYNC_PROMPT));
     }
-    if (s.verbunden && !abgelehnt) {
-      const k = box.createDiv({ cls: "modal-button-container" });
-      k.createEl("button", { text: "Mails durchsuchen" }).addEventListener("click", () => durchsuchen());
-      const weiteres = k.createEl("button", { text: "Weiteres Gerät verbinden" });
-      const platz = box.createDiv();
-      weiteres.addEventListener("click", () => { codeZeigen(platz, weiteres).catch((e) => { console.error("server: Weiteres Gerät", e); weiteres.disabled = false; }); });
-      // Claude-App: zeichnet sofort aus server.json und fragt den Server danach, ohne das Fenster aufzuhalten. Nach dem Code gleich
-      // abrufen: Ist dieses Gerät das abrufende, geht das Lagebild mit dem Stand schon jetzt an den Server
-      claudeAppZeigen(box, motor(), { nachCode: () => { motor().abrufen({}).then(neuZeichnen, (e) => console.error("server: Abruf nach dem Code", e)); } })
-        .catch((e) => console.error("server: Claude-App", e));
+    // Einzelheiten, zugeklappt: was die Übersicht nicht schon sagt (Adresse, Läufe, Zeiten, Verbindungen, Geräte), die letzten
+    // Übernahmen und wie oft der Server nachsieht
+    const mehr = box.createEl("details", { cls: "eba-modal-mehr eba-server-einzelheiten" });
+    mehr.createEl("summary", { text: "Einzelheiten" });
+    const liste = d.liste.filter((z) => UEBERBLICK_NAMEN.indexOf(z[0]) < 0);
+    if (liste.length) {
+      const ul = mehr.createEl("ul", { cls: "eba-server-stand" });
+      for (const z of liste) { const li = ul.createEl("li"); li.createEl("b", { text: z[0] + ": " }); li.appendText(z[1]); }
     }
-    if (s.verbunden) box.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Dieses Gerät trennen", href: ctx.link("trennen", { id: "server" }) });
+    for (const t of d.saetze.filter((x) => x !== ZWEITES_GERAET)) mehr.createEl("p", { cls: "eba-modal-hinweis", text: t });
+    // alle Verbindungen, die der Server meldet (die neueste steht oben unter „Zuletzt verbunden“), zugeklappt
+    if (d.verbindungen.length > 1) {
+      const auf = mehr.createEl("details", { cls: "eba-server-verbindungen" });
+      auf.createEl("summary", { text: `Alle Verbindungen von Geräten (${d.verbindungen.length})` });
+      const ul = auf.createEl("ul", { cls: "eba-server-stand" });
+      for (const t of d.verbindungen) ul.createEl("li", { text: t });
+    }
+    // Geräte mit eigenen Schlüsseln (Server ab dieser Fassung), zugeklappt: je Gerät eine Zeile, dieses zuerst; jedes andere lässt sich
+    // trennen. Ein älterer Server nennt keine: dann nichts
+    if (d.geraete && d.geraete.length) {
+      const auf = mehr.createEl("details", { cls: "eba-server-verbindungen eba-server-geraete" });
+      auf.createEl("summary", { text: `Geräte (${d.geraete.length})` });
+      const ul = auf.createEl("ul");
+      for (const g of d.geraete) {
+        const li = ul.createEl("li"), text = li.createSpan();
+        text.createEl("b", { text: g.name });
+        text.appendText((g.dieses ? " (dieses Gerät)" : "") + ": " + g.text);
+        if (g.dieses) continue;
+        const k = li.createEl("button", { text: "Trennen" });
+        k.addEventListener("click", () => { geraetTrennenFragen(g, k, neu).catch((e) => { console.error("server: Gerät trennen", e); k.disabled = false; }); });
+      }
+    }
+    if (d.laeufe.length) {
+      mehr.createEl("h4", { text: "Zuletzt übernommen" });
+      const ul = mehr.createEl("ul", { cls: "eba-server-laeufe" });
+      for (const l of d.laeufe) ul.createEl("li", { text: [l.wann, zahl(l.termine || 0, "Termin", "Termine"), zahl(l.hinweise || 0, "Hinweis", "Hinweise")].concat(l.begleitnotizen ? [zahl(l.begleitnotizen, "Begleitnotiz", "Begleitnotizen")] : []).concat(l.lernplaene ? [zahl(l.lernplaene, "Lernplan", "Lernpläne")] : []).concat(l.doppelt ? [zahl(l.doppelt, "Doppel", "Doppel") + " übersprungen"] : []).concat(l.todos ? [zahl(l.todos, "To-do", "To-dos") + " zusammengeführt"] : []).join(" · ") });
+    }
+    taktZeigen(mehr);
+    if (s.verbunden) mehr.createEl("p", { cls: "eba-modal-hinweis" }).createEl("a", { text: "Dieses Gerät trennen", href: ctx.link("trennen", { id: "server" }) });
   };
 
   // ---------- Erweiterung ----------
@@ -3227,7 +3297,7 @@ module.exports = function (ctx) {
     jetztHolen, durchsuchen, zusammenfassenStand, zusammenfassen, terminsucheAn, trennen: async () => { await motor().trennen(); neuZeichnen(); }, fensterInhalt,
     hinweise: (o) => motor().hinweise(o), DATEI,
     // Claude-App: neue Verbindungen für „Seit deinem letzten Besuch“, Bausteine für Tests
-    claudeAppNeu: (o) => motor().claudeAppNeu(o), claudeAppZeigen, claudeAppNormal, caBekannt, lagebildKurz, caNeuText, CA_LESEN, CA_FEHLER, LAGE, STAND_BYTES,
+    claudeAppNeu: (o) => motor().claudeAppNeu(o), claudeAppZeigen, ueberblickZeigen, claudeAppNormal, caBekannt, lagebildKurz, caNeuText, CA_LESEN, CA_FEHLER, LAGE, STAND_BYTES,
     ERGEBNIS_STATUS, lagebildObs, trennenFrage,
     // Bausteine des Verbindens und der Signaturen (Tests prüfen sie gegen bekannte Werte und gegen server/)
     protokoll: { pbkdf2, hkdf, hmac, codeAbleiten, austauschen, anfrageKopf, KDF_RUNDEN },

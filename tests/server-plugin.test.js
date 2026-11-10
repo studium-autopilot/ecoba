@@ -1397,9 +1397,11 @@ test("Status mit Schlüssel: Verbindungen mit Gerät und Netz, Grenzen nur wenn 
     const holen = async (x) => { mehr = x; await m.abrufen({ manuell: true }); return m.einzelheiten(); };
     const wert = (d, k) => (d.liste.find((e) => e[0] === k) || [])[1];
 
+    // der Rat zum zweiten Gerät (nur dieses verbunden) steht hier immer dabei; hier geht es um die anderen Sätze
+    const ohneRat = (d) => d.saetze.filter((x) => !/^Nur dieses Gerät/.test(x));
     // ein älterer Server ohne die Felder: wie bisher (der Server dieses Stands schickt verbunden und grenzen, hier weggenommen)
     let d = await holen({ verbunden: undefined, grenzen: undefined });
-    assert.deepEqual([d.verbindungen, d.quarantaene, wert(d, "Mails"), wert(d, "Nicht lesbare Mails"), d.saetze], [[], 0, undefined, undefined, []]);
+    assert.deepEqual([d.verbindungen, d.quarantaene, wert(d, "Mails"), wert(d, "Nicht lesbare Mails"), ohneRat(d)], [[], 0, undefined, undefined, []]);
 
     d = await holen({
       verbunden: [
@@ -1419,20 +1421,20 @@ test("Status mit Schlüssel: Verbindungen mit Gerät und Netz, Grenzen nur wenn 
     assert.equal(wert(d, "Nicht lesbare Mails"), undefined);
     assert.doesNotMatch(JSON.stringify(d.liste), /Läuf|laeuf|Zeichen/, "keine Zahlen der Läufe für Studierende");
     assert.equal(d.quarantaene, 3);
-    assert.deepEqual(d.saetze, [], "nichts ausgelassen, nichts pausiert");
+    assert.deepEqual(ohneRat(d), [], "nichts ausgelassen, nichts pausiert");
 
     // ausgelassene Unterlagen und Folien zusammen, Pausen bis morgen: je ein ruhiger Satz, ohne Zahlen der Läufe und Fehlschläge
     const g = { tag: "2026-10-18", laeufe_mails_uni: 7, laeufe_mails_uni_max: 30, fehlschlaege_gmail: 2, fehlschlaege_unterlagen: 2 };
     d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: 2, kapitel_ausgelassen: 1, ausgesetzt_gmail: 1, ausgesetzt_unterlagen: 1, ausgesetzt_kapitel: 1 }) });
-    assert.deepEqual(d.saetze, ["3 Unterlagen konnte dein Server nicht lesen.", "Gmail ist bis morgen pausiert.", "Unterlagen sind bis morgen pausiert."]);
-    assert.doesNotMatch(JSON.stringify([d.liste, d.saetze]), /Fehlschl|fehlschlaege|laeufe|Läuf|ausgesetzt|ausgelassen/, "keine Zahlen der Läufe, kein Fachwort");
+    assert.deepEqual(ohneRat(d), ["3 Unterlagen konnte dein Server nicht lesen.", "Gmail ist bis morgen pausiert.", "Unterlagen sind bis morgen pausiert."]);
+    assert.doesNotMatch(JSON.stringify([d.liste, ohneRat(d)]), /Fehlschl|fehlschlaege|laeufe|Läuf|ausgesetzt|ausgelassen/, "keine Zahlen der Läufe, kein Fachwort");
     d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: 0, kapitel_ausgelassen: 1, ausgesetzt_kapitel: 1 }) });
-    assert.deepEqual(d.saetze, ["1 Unterlage konnte dein Server nicht lesen.", "Unterlagen sind bis morgen pausiert."]);
+    assert.deepEqual(ohneRat(d), ["1 Unterlage konnte dein Server nicht lesen.", "Unterlagen sind bis morgen pausiert."]);
     // falsche Form: nichts (keine Zahl, negativ, nicht ganz; pausiert nur genau 1)
     d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: "viele", kapitel_ausgelassen: -2, ausgesetzt_gmail: true, ausgesetzt_unterlagen: 2, ausgesetzt_kapitel: "1" }) });
-    assert.deepEqual(d.saetze, []);
+    assert.deepEqual(ohneRat(d), []);
     d = await holen({ grenzen: Object.assign({}, g, { unterlagen_ausgelassen: 1.5, kapitel_ausgelassen: 1e12 }) });
-    assert.deepEqual(d.saetze, []);
+    assert.deepEqual(ohneRat(d), []);
 
     // Grenzen 0 oder falsche Form: nichts; ältere nicht lesbare gelöscht: eine kurze Zeile
     d = await holen({ grenzen: { tag: "2026-10-17", mails_zurueckgestellt: 0, mails_verschoben: 1, quarantaene: "viele", quarantaene_geloescht: 7 } });
@@ -2057,6 +2059,36 @@ test("Schlüssel je Gerät: jedes Gerät eigene mit Kennung und Namen; beide seh
     // Dieses Gerät trennen: der Server vergisst es, der Schlüsselbund ist leer
     await A.m.trennen();
     assert.deepEqual([verzeichnisVon(srv).geraete, A.a.geheimMap.size, A.m.verbunden()], [[], 0, false]);
+  } finally { await srv.zu(); }
+});
+
+test("Schlüssel verloren: leerer Schlüsselbund mit Spuren im Gerätespeicher heißt „verloren“ mit „Neu verbinden“, nicht „anderswo“; ein einziges Gerät bekommt den Rat zum zweiten", async () => {
+  const srv = await serverStarten();
+  try {
+    const t = tresor();
+    const rat = (d) => d.saetze.filter((x) => /^Nur dieses Gerät/.test(x)).length;
+    const A = await verbunden(srv, t, { geraetName: "iPhone" });
+    assert.equal((await A.m.abrufen()).art, "ok");
+    assert.equal(rat(await A.m.einzelheiten()), 1, "nur ein Gerät: Rat zum zweiten");
+    // Obsidian leert seinen Schlüsselbund (neu geöffneter Tresor): Der Gerätespeicher hat noch den Stand
+    A.a.geheimMap.clear();
+    assert.deepEqual([A.m.status().zustand, A.m.verbunden(), A.m.sichtbar()], ["verloren", false, true]);
+    const z = A.m.zeile();
+    assert.deepEqual([z.symbol, z.pille, z.knopf.text, z.knopf.aktion, z.knopf.parameter], ["warnung", "pruefen", "Neu verbinden", "verbinden", { id: "server" }]);
+    assert.match(z.text, /Verbindung zu deinem Server verloren/);
+    assert.equal(rat(await A.m.einzelheiten()), 0, "ohne Schlüssel keine Geräteliste, kein Rat");
+    // mit Code neu verbunden: wieder an
+    assert.equal((await A.m.verbinden(srv.konfig.adresse, srv.code())).ok, true);
+    assert.equal(A.m.status().zustand, "an");
+    // zweites Gerät: kein Rat mehr; ein Gerät ohne Spuren ist „anderswo“
+    const B = await verbunden(srv, t, { geraet: "g-ipad", geraetName: "iPad" });
+    assert.equal((await A.m.abrufen({ manuell: true })).art, "ok");
+    assert.equal(rat(await A.m.einzelheiten()), 0, "zwei Geräte");
+    assert.equal(S.erzeugen(abhBauen(t, { geraet: "g-pc2" })).status().zustand, "anderswo");
+    // Dieses Gerät trennen löscht die Spuren mit: danach „anderswo“, nie „verloren“
+    assert.equal((await B.m.abrufen({ manuell: true, uebernehmen: true })).art, "ok");
+    await B.m.trennen();
+    assert.equal(B.m.status().zustand, "anderswo");
   } finally { await srv.zu(); }
 });
 

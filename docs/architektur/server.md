@@ -298,7 +298,13 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   Persönlich (Hinweise aus Mails): wie `server-abruf.json` nie im Release (`server*.json` in `release.py`, `pruefen.py`,
   `.gitignore`).
 - **Status, Zeile und Fenster:** `ctx.server.status()` in der Form des Vertrags (`zustand`: `nicht-verbunden` | `anderswo` |
-  `laeuft` | `anderes-geraet` | `fehler` | `an`; gerätelokal über `Q.nachLauf`). `ctx.server.zeile()` liefert die Zeile im
+  `verloren` | `laeuft` | `anderes-geraet` | `fehler` | `an`; gerätelokal über `Q.nachLauf`). `verloren` (seit 10.11.2026): kein
+  Eintrag im Schlüsselbund, aber Spuren im Gerätespeicher, die nur ein verbundenes Gerät schreibt (`eba-server-status` mit Werten,
+  `eba-server-abruf` mit `geprueft`, Riegel). So sah es aus, als Obsidian auf einem iPhone nach einem neu geöffneten Tresor seinen
+  Schlüsselbund geleert hatte; bis dahin hieß das „Auf einem anderen Gerät verbunden“ mit Haken. Die Zeile sagt es (Pille „prüfen“,
+  **Neu verbinden**), das Fenster darüber, woher der Code kommt. „Dieses Gerät trennen“ und „Mit Code verbinden“ löschen die Spuren,
+  danach also nie `verloren`. Ist nur dieses Gerät verbunden (Liste „Geräte“ mit einem Eintrag), rät das Fenster zu einem zweiten:
+  Verliert das einzige seine Schlüssel, bleibt nur die Cloud Shell. `ctx.server.zeile()` liefert die Zeile im
   Format von Noten & Anmeldungen (`{ text, symbol, pille, knopf, link }`, HTML an einer Stelle: `quelleZeile` in
   `verbindungen.js`), aus `GET /v1/status` (höchstens alle 5 Min., nur Werte aus festen Listen, unbekannte Felder fallen weg; seit
   02.11.2026 immer angemeldet (seit 0.7.8 signiert, davor mit dem Zugangsschlüssel im Kopf), auch gleich nach dem Verbinden und
@@ -325,9 +331,15 @@ Plugin holt sie ab. Ohne Verbindung geht nichts ins Netz; unter Verbindungen ste
   gerade erst nach Mails gesucht. Wieder möglich ab …“, an einem anderen Tag mit Datum, `zuFruehText`); solange der Status
   `claude_lauf` „wartet“ oder
   „laeuft“ meldet, sagt die Zeile „Claude durchsucht gerade …“, und der nächste Abruf kommt nach 5 Min. (`plan.spaeter`).
-  Hinweise (`ctx.hinweis`) nur nach **Aktualisieren**, nie vom Zeitplan; Notizen weg nur über den einen Papierkorb. `ctx.server.fensterInhalt(el, neu)`: Stand, Hinweise, letzte
-  Übernahmen, **Weiteres Gerät verbinden** bzw. **Mit Code verbinden** (danach zeichnet `neu()` das Fenster neu), „Geräte (N)“ mit
-  **Trennen** (siehe „Schlüssel je Gerät“), „Dieses Gerät trennen“. Ist der Server gerade nicht erreichbar, steht über den Werten „Stand des Servers: nicht
+  Hinweise (`ctx.hinweis`) nur nach **Aktualisieren**, nie vom Zeitplan; Notizen weg nur über den einen Papierkorb. `ctx.server.fensterInhalt(el, neu)` (seit 10.11.2026 so
+  einfach wie möglich): oben die Übersicht (`ueberblickZeigen`), je Teil eine Zeile mit Haken, Kreuz oder Warnung, Name und Zustand:
+  Dein Server, Dieses Gerät, mit Status dazu Claude auf dem Server, Gmail und Uni-Postfach (nur Werte aus `UEBERBLICK`, ein
+  unbekannter Wert gibt keine Zeile), zuletzt die Claude-App (mit Schlüsseln `claudeAppZeigen` mit Knopf, sonst die Zeile aus
+  `server.json`). Darunter nur, was zu tun ist: der Rat zum zweiten Gerät, **Mit Code verbinden** (danach zeichnet `neu()` das
+  Fenster neu) bzw. **Mails durchsuchen** und **Weiteres Gerät verbinden**, Hinweise von Claude, nicht lesbare Mails, Rückgängig.
+  Alles andere zugeklappt unter „Einzelheiten“: die übrigen Werte (ohne die der Übersicht, `UEBERBLICK_NAMEN`), Sätze zu den
+  Grenzen, alle Verbindungen, „Geräte (N)“ mit **Trennen** (siehe „Schlüssel je Gerät“), letzte Übernahmen, wie oft der Server
+  nachsieht und „Dieses Gerät trennen“. Ist der Server gerade nicht erreichbar, steht über den Werten „Stand des Servers: nicht
   erreichbar, Angaben von …“ (`erreicht`: letzter geholter Status). Gmail `aus` meldet der Server, solange `server_gmail` 0 ist.
   Neue Version des Servers: Er installiert sie täglich selbst (`studium-server aktualisieren`, Ergebnis im Status unter
   `aktualisierung`). Ging der letzte Versuch schief und hat der Server dessen Ziel nicht schon anders bekommen, steht im Fenster

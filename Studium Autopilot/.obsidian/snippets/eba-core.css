@@ -4400,6 +4400,19 @@ body.is-phone .eba-uh .eba-uh-knopf.cta { flex: 1 1 auto; }
 .eba-server .eba-server-geraete li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
 .eba-server .eba-server-geraete li > span { min-width: 0; overflow-wrap: anywhere; }
 .eba-server .eba-server-geraete li > button { flex: none; min-height: 44px; }
+/* Übersicht oben im Fenster „Eigener Server“ (seit 10.11.2026, server.js ueberblickZeigen): je Teil eine Zeile mit Haken, Kreuz oder
+   Warnung, Name und Zustand; alles Weitere steht zugeklappt unter „Einzelheiten“. Farbe nur am Symbol */
+.eba-server .eba-server-ueberblick { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 12px; }
+.eba-server .eba-server-punkt { display: flex; align-items: center; gap: 10px; min-height: 32px; }
+.eba-server .eba-server-punkt-symbol { flex: none; display: flex; }
+.eba-server .eba-server-punkt-name { font-weight: 600; }
+.eba-server .eba-server-punkt-text { margin-left: auto; color: var(--eba-muted); text-align: right; }
+.eba-server .eba-server-punkt.ok .eba-server-punkt-symbol { color: var(--eba-good); }
+.eba-server .eba-server-punkt.fehlt .eba-server-punkt-symbol { color: var(--eba-bad); }
+.eba-server .eba-server-punkt.warn .eba-server-punkt-symbol { color: var(--eba-warn); }
+.eba-server .eba-server-punkt.leise .eba-server-punkt-symbol { color: var(--eba-faint); }
+.eba-server .eba-server-claude.verbunden .eba-server-claude-los { display: none; }
+.eba-server .eba-modal-mehr.eba-server-einzelheiten { margin-top: 12px; }
 .eba-modal-datenschutz, .eba-ei-datenschutz { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 13px; line-height: 1.45; color: var(--eba-muted); }
 .eba-modal-datenschutz .eba-sym, .eba-ei-datenschutz .eba-sym { flex: none; width: 15px; height: 15px; margin-top: 2px; }
 .eba-ei-datenschutz { margin-top: 14px; }

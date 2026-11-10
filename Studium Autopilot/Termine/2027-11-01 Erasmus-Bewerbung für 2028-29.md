@@ -5,7 +5,7 @@ datum: 2027-11-01
 bis: 2027-11-30
 kategorie: Frist
 status: geschätzt
-ort: "über ILIAS · fünf Präferenzen"
+ort: "ILIAS · fünf Präferenzen"
 modul:
 code: ""
 erledigt: false
@@ -22,7 +22,7 @@ tags:
 
 # Erasmus-Bewerbung für 2028/29
 
-**01.11.2027 – 30.11.2027** · über ILIAS · fünf Präferenzen
+**01.11.2027 – 30.11.2027** · ILIAS · fünf Präferenzen
 
 Bewerbung beim Fachbereich um einen Erasmus-Studienplatz für das folgende Studienjahr, Zeitraum bisher nur geschätzt. Bewerbung über ILIAS mit fünf Präferenzen.
 

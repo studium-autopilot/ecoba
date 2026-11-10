@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Vortrag „Promovieren als First-Generation-Academic“ – Promotion ohne akademisches Elternhaus"
+titel: "Vortrag „Promovieren als First-Generation-Academic“: Promotion ohne akademisches Elternhaus"
 datum: 2026-11-10
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Vortrag „Promovieren als First-Generation-Academic“ – Promotion ohne akademisches Elternhaus
+# Vortrag „Promovieren als First-Generation-Academic“: Promotion ohne akademisches Elternhaus
 
 **10.11.2026** · 12:00–13:30 · online (Zoom) · Anmeldung über eveeno
 

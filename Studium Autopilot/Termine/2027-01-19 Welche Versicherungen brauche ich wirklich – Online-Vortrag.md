@@ -1,11 +1,11 @@
 ---
 typ: termin
-titel: "Welche Versicherungen brauche ich wirklich – Online-Vortrag"
+titel: "Online-Vortrag: Welche Versicherungen brauche ich wirklich?"
 datum: 2027-01-19
 bis:
 kategorie: Veranstaltung
 status: offiziell
-ort: "online · Anmeldung öffnet im Dezember"
+ort: "16:30–17:30 · online · Anmeldung öffnet im Dezember"
 modul:
 code: ""
 erledigt: false
@@ -20,9 +20,9 @@ tags:
   - termin
 ---
 
-# Welche Versicherungen brauche ich wirklich – Online-Vortrag
+# Online-Vortrag: Welche Versicherungen brauche ich wirklich?
 
-**19.01.2027** · online · Anmeldung öffnet im Dezember
+**19.01.2027** · 16:30–17:30 · online · Anmeldung öffnet im Dezember
 
 Online-Vortrag der Verbraucherzentrale zu sinnvollen Versicherungen für Studierende und Berufseinsteiger und zu typischen Fallen.
 

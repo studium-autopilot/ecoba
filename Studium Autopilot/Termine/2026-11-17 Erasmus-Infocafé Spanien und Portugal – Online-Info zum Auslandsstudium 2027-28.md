@@ -1,6 +1,6 @@
 ---
 typ: termin
-titel: "Erasmus-Infocafé Spanien und Portugal – Online-Info zum Auslandsstudium 2027/28"
+titel: "Erasmus-Infocafé Spanien und Portugal: Online-Info zum Auslandsstudium 2027/28"
 datum: 2026-11-17
 bis:
 kategorie: Veranstaltung
@@ -20,7 +20,7 @@ tags:
   - termin
 ---
 
-# Erasmus-Infocafé Spanien und Portugal – Online-Info zum Auslandsstudium 2027/28
+# Erasmus-Infocafé Spanien und Portugal: Online-Info zum Auslandsstudium 2027/28
 
 **17.11.2026** · 17:00–18:00 · online (Zoom) · Anmeldung über eveeno
 
