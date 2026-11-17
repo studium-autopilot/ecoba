@@ -189,6 +189,21 @@ Eingabefeld), gilt wieder der vorherige Link.
     Die Hülle `stundenplan-sync.mjs` braucht dafür nichts Neues (nur `processFrontMatter`, flache Felder und Listen von Texten).
     Trockenlauf gegen einen echten Alma-Kalender (20.10.2026): keine Änderung; mit dem Stand einer Notiz vor ihrer ersten
     Verknüpfung (anderer Raum) `raum_seit` und `raum_vorher` wie erwartet.
+- **Seite in Alma und Beschreibung** (seit 16.11.2026; vorher las `alma.js` `URL` und `DESCRIPTION` nicht, beides fehlte in jeder
+  Notiz): `alma_link` ist die Detailseite der Veranstaltung, aus `unitId` und `periodId` des `URL` neu gebaut (`almaLink`, nur
+  `alma.uni-tuebingen.de` mit Pfad `/alma/pages/startFlow.xhtml` und `_flowId=detailView-flow`, `:443` und weitere Parameter fallen
+  weg, wie in der App). `alma_beschreibung` ist Almas `DESCRIPTION` in einer Zeile (entfaltet, `\n` als Leerzeichen, `\,` `\;` `\\`
+  aufgelöst); wiederholt sie nur die Art (`CATEGORIES`, die Art aus dem Titel) oder den Titel, ist es keine (`beschreibungAus`).
+  *Zugangsdaten:* dieselbe Erkennung wie bei Kurstiteln und Kursseiten (`ctx.ilias.hatKennwort`/`ohneKennwort` aus `ilias.js`):
+  Nennt die Beschreibung ein Passwort oder einen Kenncode, bleibt der Text davor, dahinter „(Passwort steht in Alma)“. Ohne diese
+  Erkennung (Hülle eines eigenen Uni-Abgleichs ohne `ilias.js`) kommt keine Beschreibung neu in eine Notiz, eine vorhandene bleibt.
+  *Verschiedene Werte in einer Serie* (eine geteilte Serie, ein verlegter Einzeltermin mit eigenem Text): es gilt der häufigste Wert
+  der kommenden Termine, sind alle vorbei, aller; Termine ohne Wert zählen nicht, bei Gleichstand der frühere Termin
+  (`serienWert`). Haben die kommenden Termine keinen, fällt das Feld weg; so führt jeder Lauf geänderte Werte nach. Beide Felder
+  gehören zu den Alma-Feldern (auch in deinen verknüpften Notizen), am Text der Notiz ändert sich nichts. Zu sehen sind sie in der
+  Kopf-Karte unter dem Titel (`kopf.js` `almaVon`: Beschreibung, Chip **In Alma öffnen** nur zu dieser Art Seite) und unter
+  „⋯“ → Eigenschaften.
 - Tests: `tests/alma.test.js` (Wegfall, „(entfällt)“ und zurück, Grabstein, vorbei, Raum, Doppel, Fehler im Status, Sperre,
   ohne Bibliotheken, quellen_extern; Raum je Termin, Verlegung im Kalender und über Abrufe, erste Verknüpfung, verschobener und
-  abgesagter Termin, 14-täglich).
+  abgesagter Termin, 14-täglich; Seite in Alma und Beschreibung: gefaltet und mit Escapes, Zugangsdaten, verschiedene Werte, Hülle,
+  späterer Lauf, fremde Notizen).

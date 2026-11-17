@@ -31,7 +31,8 @@ dazu `herkunft: zentral`, `zentral_id`, `info`, `geprueft`, `entfaellt`.
 **Lehrveranstaltung** – `Stundenplan/<Mo> <10.15> <Code> <Art>.md`
 `typ: lehrveranstaltung`, `titel` („<Code> · <Art>“), `code`, `modul`, `art` (Vorlesung, Übung, Tutorium, Lab …; bei Veranstaltungen außerhalb von Alma der offizielle Name wie „Data Science Lab“), `wochentag`
 (1 = Montag … 5), `beginn`, `ende`, `raum`, `dozent`, `semester`, `von`, `bis`, `ausfall` (Liste von Daten), `aenderungen`
-(„Datum|Beginn|Ende|Raum“), aus Alma auch `raum_seit` und `raum_vorher` (dauerhaft verlegt) und `rhythmus` (14-täglich);
+(„Datum|Beginn|Ende|Raum“), aus Alma auch `raum_seit` und `raum_vorher` (dauerhaft verlegt), `rhythmus` (14-täglich),
+`alma_link` (Seite der Veranstaltung in Alma) und `alma_beschreibung` (Almas Hinweis, ohne Zugangsdaten);
 eigene Notizen können `besuche_nicht: true` haben.
 
 **Vorlesungsnotiz** – `Vorlesungen/<Code>/JJJJ-MM-TT <Code> VL NN.md`

@@ -1,7 +1,8 @@
 # Architektur: Noten & Anmeldungen (Alma)
 
 Teil der Architektur-Doku. Aufbau, `ctx`, Skripttypen und die Regeln für Skript-Autoren stehen im Überblick
-[architektur.md](../architektur.md).
+[architektur.md](../architektur.md). Den Stundenplan aus Alma (Kalender-Abo, `alma.js`; seit 16.11.2026 mit Seite in Alma und
+Beschreibung je Veranstaltung) beschreibt [„Alma-Stundenplan“](aktionen.md).
 
 ## Noten & Anmeldungen (Alma, seit 0.4.5, Beta)
 

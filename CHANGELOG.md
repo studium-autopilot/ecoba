@@ -2,6 +2,11 @@
 
 Versionsnummern nach [Semantic Versioning](https://semver.org/lang/de/).
 
+## 0.8.5 – Hinweise aus Alma im Stundenplan
+
+- **Neu:** Lehrveranstaltungen aus Alma zeigen jetzt Almas Hinweis dazu, etwa auf zusätzliche Tutorien, und mit
+  **In Alma öffnen** ihre Seite in Alma. Passwörter und Kenncodes daraus kommen nie in deine Notizen.
+
 ## 0.8.4 – Eigener Server auf einen Blick
 
 - **Übersichtlicher:** Unter **Eigener Server** siehst du jetzt mit Haken und Kreuzen, was läuft und was fehlt, auch ob die

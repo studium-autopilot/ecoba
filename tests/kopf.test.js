@@ -174,3 +174,14 @@ test("Unterlage: das Label nennt das Modul mit Namen und das Semester (ohne Umbr
   assert.equal(Kx.labelVon("unterlage", f, { typ: "unterlage", art: "Sonstiges", semester: "WS 2026/27" }), "Sonstiges · WS\u00a02026/27", "ohne Modul");
   assert.equal(Kx.labelVon("unterlage", f, { typ: "unterlage", art: "Folien", nummer: 3 }), "Folien 03");
 });
+
+test("Stundenplan-Notiz aus Alma: Beschreibung und „In Alma öffnen“ unter dem Kopf, der Link nur zur Seite einer Veranstaltung in Alma", () => {
+  const seite = "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001&periodId=999";
+  assert.deepEqual(K.almaVon(serie({ alma_link: seite, alma_beschreibung: "  Übungsteil zur Vorlesung\n(dazu 2 SWS Tutorien) " })),
+    { beschreibung: "Übungsteil zur Vorlesung (dazu 2 SWS Tutorien)", link: seite });
+  assert.deepEqual(K.almaVon(serie({})), { beschreibung: "", link: "" }, "ohne Felder nichts");
+  for (const link of ["https://example.org/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001", "javascript:alert(1)",
+    seite + "&x=1", seite.replace("https", "http"), "https://alma.uni-tuebingen.de/alma/rds?state=user&type=4"]) {
+    assert.equal(K.almaVon(serie({ alma_link: link })).link, "", link);
+  }
+});

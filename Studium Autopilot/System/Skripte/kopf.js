@@ -37,6 +37,8 @@
 // Seit 24.10.2026 zeigt eine Übung unter dem Kopf ihre Abgabe (Tag, Uhrzeit; Tipp öffnet die Frist), die Musterlösung und deine
 // Lösung mit derselben Nummer; die Frist zeigt umgekehrt ihr Blatt. Vorher stand das in einer eigenen Notiz „Übungsblatt“, die man
 // von Hand anlegen musste und die dasselbe Blatt ein zweites Mal führte.
+// Seit 16.11.2026 zeigt eine Stundenplan-Notiz aus Alma unter dem Kopf Almas Beschreibung der Veranstaltung (alma_beschreibung) und
+// „In Alma öffnen“ (alma_link, almaVon); beides schreibt alma.js. Vorher fehlte beides in jeder Notiz.
 // Seit 24.10.2026 ist der Kopf einer Termin-Notiz eine Karte wie der Vorlesungskopf: Tag groß, daneben „heute“, „morgen“ oder die
 // Restzeit, darunter Uhrzeit und Ort (wannVon). Die Datumszeile unter dem Titel, die dasselbe noch einmal sagte, fällt in beiden
 // Ansichten weg, die Zeile „Quelle: …“ wird leise und „## Meine Notizen“ ein Label wie in der Vorlesungsnotiz (terminZeilen).
@@ -207,6 +209,15 @@ const wannVon = (t, m) => {
   return { tag: t.bis ? z.spanne(t.datum, t.bis) : z.datum(t.datum, { lang: true }), marke, abstand: n > 1 ? z.abstand(t.datum, heute) : "", zeit, wo: o.wo };
 };
 
+// Aus Alma (rein, Tests; seit 16.11.2026, alma.js): Beschreibung der Veranstaltung und ihre Seite in Alma. Der Link nur, wenn er
+// die Seite einer Veranstaltung auf alma.uni-tuebingen.de ist, so wie alma.js ihn schreibt (die Eigenschaften sind änderbar und
+// synchronisiert). fm → { beschreibung, link } ("" = nichts zu zeigen)
+const ALMA_SEITE = /^https:\/\/alma\.uni-tuebingen\.de\/alma\/pages\/startFlow\.xhtml\?_flowId=detailView-flow&unitId=\d{1,12}(?:&periodId=\d{1,12})?$/;
+const almaVon = (fm) => {
+  const link = txt(fm && fm.alma_link);
+  return { beschreibung: txt(fm && fm.alma_beschreibung), link: ALMA_SEITE.test(link) ? link : "" };
+};
+
 module.exports = function (ctx) {
   const app = window.app;
   const O = ctx.obsidian || {};
@@ -254,6 +265,7 @@ module.exports = function (ctx) {
     frist: [["rect", { x: 3, y: 4, width: 18, height: 18, rx: 2 }], ["path", { d: "M16 2v4M8 2v4M3 10h18" }]],
     loesung: [["path", { d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z" }], ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4" }], ["path", { d: "m9 15 2 2 4-4" }]],
     stift: [["path", { d: "M12 20h9" }], ["path", { d: "M16.4 3.6a2.1 2.1 0 0 1 3 3L7.4 18.6a2 2 0 0 1-.9.5l-2.9 .9.9-2.9a2 2 0 0 1 .5-.9z" }]],
+    extern: [["path", { d: "M15 3h6v6M10 14 21 3" }], ["path", { d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" }]],
   };
   const symbol = (eltern, name) => {
     const NS = "http://www.w3.org/2000/svg", doc = eltern.ownerDocument;
@@ -377,6 +389,14 @@ module.exports = function (ctx) {
     const modul = u.mehr ? modulVon(f, fm) : null;
     if (modul) chip(links, modul, "ordner", "Alle Unterlagen", "", f.path);
   };
+  // Stundenplan-Notiz mit Seite in Alma (almaVon): „In Alma öffnen“ als Chip, in der Zeile der Unterlagen, wenn es sie gibt
+  const almaLinkZeichnen = (karte, link) => {
+    const links = karte.querySelector(".eba-vorl-links") || karte.createDiv({ cls: "eba-vorl-links", attr: { "aria-label": "Alma" } });
+    const a = links.createEl("a", { cls: "eba-vorl-chip", href: link, attr: { target: "_blank", rel: "noopener" } });
+    symbol(a, "extern");
+    a.createEl("b", { text: "In Alma öffnen" });
+    a.addEventListener("mousedown", (e) => e.stopPropagation()); // Bearbeitungsansicht: nicht in den Quelltext springen
+  };
   // Übung (u = ctx.modell.uebung): Abgabe mit Tag, Uhrzeit und Restzeit (Tipp öffnet die Frist), Musterlösung, deine Lösung
   const uebungZeichnen = (karte, f, u) => {
     if (!u.abgabe && !u.loesung && !u.eigene) return;
@@ -441,8 +461,12 @@ module.exports = function (ctx) {
       setzen(art, f, s, s.neu, u).catch((x) => console.error("Kopf", x));
     });
     mehr(kopf, f);
-    if (typ === "lehrveranstaltung") blaetterZeichnen(karte, f, fm);
-    else if (u) uebungZeichnen(karte, f, u);
+    if (typ === "lehrveranstaltung") {
+      const a = almaVon(fm);
+      if (a.beschreibung) karte.createDiv({ cls: "eba-vorl-meta", text: a.beschreibung });
+      blaetterZeichnen(karte, f, fm);
+      if (a.link) almaLinkZeichnen(karte, a.link);
+    } else if (u) uebungZeichnen(karte, f, u);
     else if (typ === "termin") { terminZeichnen(karte, f, fm); blattZurFrist(karte, f); }
   };
   const merken = (el, f) => {
@@ -667,6 +691,7 @@ module.exports = function (ctx) {
 module.exports.statusVon = statusVon;
 module.exports.klasseVon = klasseVon;
 module.exports.blaetterFuer = blaetterFuer;
+module.exports.almaVon = almaVon;
 module.exports.TYPEN = TYPEN;
 module.exports.leereAbschnitte = leereAbschnitte;
 module.exports.eckZeileErzeugt = eckZeileErzeugt;

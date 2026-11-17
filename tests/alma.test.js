@@ -732,3 +732,127 @@ test("Name schon belegt, nur in anderer Groß- und Kleinschreibung: Alma legt da
   assert.deepEqual(Object.keys(t.fm).filter((x) => x.indexOf("Stundenplan/") === 0).sort(), ["Stundenplan/Mo 10.00 B110 Vorlesung 2.md", anders]);
   assert.equal(t.text[anders], "Meine Notiz\n");
 });
+
+// ---------- Seite in Alma und Beschreibung (seit 16.11.2026) ----------
+// Erfundene Kurse, Nummern und Hinweise; Kennwörter zerlegt, damit werkzeuge/pruefen.py sie nicht für echte hält
+const { I: ILIAS } = require("./ilias-attrappen.js");
+const KENNWORT = { hatKennwort: ILIAS.hatKennwort, ohneKennwort: ILIAS.ohneKennwort };
+const PW = "Pass" + "wort", KC = "Kenn" + "code";
+const SEITE = "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow";
+const seite = (unit) => `${SEITE}&unitId=${unit}&periodId=999`;
+// wie Alma: Link mit :443, nach 75 Zeichen gefaltet (CRLF und Leerzeichen)
+const urlGefaltet = (unit) => `https://alma.uni-tuebingen.de:443/alma/pages/startFlow.xhtml?_flowId=\r\n detailView-flow&unitId=${unit}&periodId=999`;
+const lv = (o) => ve(Object.assign({ DTSTART: "20261019T100000", DTEND: "20261019T120000", RRULE: "FREQ=WEEKLY;COUNT=8", CATEGORIES: "Vorlesung" }, o));
+const pfadVon = (t, muster) => Object.keys(t.text).find((x) => muster.test(x));
+
+test("Seite in Alma und Beschreibung landen in der Notiz: gefaltet, mit Escapes; bloße Art oder Titel und fehlende Werte ohne Feld", async () => {
+  const t = tresor({ sperre: true });
+  t.ctx.ilias = KENNWORT;
+  const kal = kalender(
+    lv({ UID: "a", SUMMARY: "X300 Beispielkurs", URL: urlGefaltet(100001),
+      DESCRIPTION: "Übungsteil zur Vorlesung (dazu kommen noch 2 SWS Tutori\r\n en)\\, Treffpunkt\\; Foyer\\nOrdner A\\\\nB" }),
+    lv({ UID: "b", SUMMARY: "X310 Beispielkurs", DTSTART: "20261020T100000", DTEND: "20261020T120000", DESCRIPTION: "Vorlesung" }),
+    lv({ UID: "c", SUMMARY: "X320 Beispielkurs", DTSTART: "20261021T100000", DTEND: "20261021T120000", DESCRIPTION: "X320 Beispielkurs", CATEGORIES: "Übung" }),
+    lv({ UID: "d", SUMMARY: "X330 Beispielkurs Übung", DTSTART: "20261022T100000", DTEND: "20261022T120000", DESCRIPTION: "Übung", CATEGORIES: "" }));
+  await t.A.aktualisieren({ still: true, text: kal });
+  const a = notizVon(t, /X300/);
+  assert.equal(a.alma_link, seite(100001), "ohne :443, aus unitId und periodId");
+  assert.equal(a.alma_beschreibung, "Übungsteil zur Vorlesung (dazu kommen noch 2 SWS Tutorien), Treffpunkt; Foyer Ordner A\\nB");
+  assert.match(t.text[pfadVon(t, /X300/)], /^alma_link: "https:\/\/alma\.uni-tuebingen\.de\/alma\/pages\/startFlow\.xhtml\?_flowId=detailView-flow&unitId=100001&periodId=999"$/m);
+  for (const [muster, wer] of [[/X310/, "nur die Art"], [/X320/, "nur der Titel"], [/X330/, "nur die Art aus dem Titel"]]) {
+    const fm = notizVon(t, muster);
+    assert.deepEqual(["alma_link" in fm, "alma_beschreibung" in fm], [false, false], wer);
+    assert.doesNotMatch(t.text[pfadVon(t, muster)], /alma_link|alma_beschreibung/, wer + ": kein leeres Feld");
+  }
+  const b = await t.A.aktualisieren({ still: true, text: kal });
+  assert.deepEqual([b.gleich, b.geaendert], [4, 0], "ein zweiter Lauf mit denselben Daten ändert nichts");
+});
+
+test("Seite in Alma: nur die Seite einer Veranstaltung auf Alma, neu gebaut ohne weitere Parameter; sonst kein Link", () => {
+  const A = tresor().A;
+  assert.equal(A.almaLink("https://alma.uni-tuebingen.de:443/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001&periodId=999&x=1#y"), seite(100001));
+  assert.equal(A.almaLink(`${SEITE}&unitId=100001`), `${SEITE}&unitId=100001`, "ohne periodId");
+  for (const url of [
+    "https://alma.example.org/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001",
+    "https://alma.uni-tuebingen.de.example.org/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001",
+    "https://alma.uni-tuebingen.de" + "@example.org/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001",
+    "http://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001",
+    "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=otherView-flow&unitId=100001",
+    "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=1%27",
+    "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml?_flowId=detailView-flow&unitId=100001&periodId=x",
+    "https://alma.uni-tuebingen.de/alma/rds?state=user&type=0", "javascript:alert(1)", "", undefined,
+  ]) assert.equal(A.almaLink(url), "", String(url));
+});
+
+test("Zugangsdaten: Kenncode und Passwort kommen nie in die Notiz; ohne Erkennung (Hülle) keine neue Beschreibung, eine vorhandene bleibt", async () => {
+  const t = tresor({ sperre: true });
+  t.ctx.ilias = KENNWORT;
+  await t.A.aktualisieren({ still: true, text: kalender(
+    lv({ UID: "a", SUMMARY: "X400 Beispielkurs", DESCRIPTION: `Online über Zoom\\, Meeting-ID 123 456 789\\, ${KC}: 4711xy` }),
+    lv({ UID: "b", SUMMARY: "X410 Beispielkurs", DTSTART: "20261020T100000", DTEND: "20261020T120000", DESCRIPTION: `Das ${PW} für den Raum lautet Ab12cd` }),
+    lv({ UID: "c", SUMMARY: "X420 Beispielkurs", DTSTART: "20261021T100000", DTEND: "20261021T120000", DESCRIPTION: "Link: https://zoom.example/j/1?p" + "wd=Zz9yy" })) });
+  assert.equal(notizVon(t, /X400/).alma_beschreibung, "Online über Zoom, Meeting-ID 123 456 789 (Passwort steht in Alma)");
+  assert.equal(notizVon(t, /X410/).alma_beschreibung, "(Passwort steht in Alma)");
+  assert.equal(notizVon(t, /X420/).alma_beschreibung, "Link: https://zoom.example/j/1? (Passwort steht in Alma)");
+  const alles = JSON.stringify([t.fm, t.text]);
+  for (const geheim of ["4711xy", "Ab12cd", "Zz9yy"]) assert.ok(alles.indexOf(geheim) < 0, geheim);
+
+  // Hülle eines eigenen Uni-Abgleichs (ohne ilias.js): Seite in Alma ja, Beschreibung nie neu, nur weg
+  const h = tresor({ ohneBibliotheken: true });
+  const serie = (beschreibung) => kalender(lv({ UID: "a", SUMMARY: "X400 Beispielkurs", URL: urlGefaltet(100004), ...(beschreibung ? { DESCRIPTION: beschreibung } : {}) }));
+  await h.A.aktualisieren({ still: true, text: serie(`Treffpunkt Foyer\\, ${KC}: 4711xy`) });
+  const fm = notizVon(h, /X400/);
+  assert.deepEqual([fm.alma_link, "alma_beschreibung" in fm], [seite(100004), false]);
+  assert.ok(JSON.stringify([h.fm, h.text]).indexOf("4711xy") < 0);
+  fm.alma_beschreibung = "Treffpunkt Foyer";
+  await h.A.aktualisieren({ still: true, text: serie("Treffpunkt Foyer\\, neu") });
+  assert.equal(fm.alma_beschreibung, "Treffpunkt Foyer", "ungeprüft: bleibt, wie sie war");
+  await h.A.aktualisieren({ still: true, text: serie("") });
+  assert.equal("alma_beschreibung" in fm, false, "liefert Alma keine mehr, fällt sie weg");
+});
+
+test("Serie mit verschiedenen Werten: es gilt der häufigste der kommenden Termine; ein späterer Lauf ändert und entfernt, dein Text bleibt", async () => {
+  const t = tresor({ sperre: true });
+  t.ctx.ilias = KENNWORT;
+  // Alma teilt eine Serie: bis 09.11. ein Eintrag mit alter Beschreibung und Seite, ab 16.11. einer mit neuen; dazu ein verlegter
+  // Einzeltermin (RECURRENCE-ID) mit eigener Beschreibung
+  const kal = (ohne) => kalender(
+    lv({ UID: "alt", SUMMARY: "X500 Beispielkurs", RRULE: "FREQ=WEEKLY;COUNT=4", DESCRIPTION: "Erster Teil im Kursraum", URL: urlGefaltet(100005) }),
+    lv({ UID: "neu", SUMMARY: "X500 Beispielkurs", DTSTART: "20261116T100000", DTEND: "20261116T120000", RRULE: "FREQ=WEEKLY;COUNT=4",
+      ...(ohne ? {} : { DESCRIPTION: "Zweiter Teil im Labor", URL: urlGefaltet(100006) }) }),
+    ve({ UID: "neu", "RECURRENCE-ID": "20261123T100000", SUMMARY: "X500 Beispielkurs", DTSTART: "20261123T100000", DTEND: "20261123T120000",
+      DESCRIPTION: "Heute mit Gast", ...(ohne ? {} : { URL: urlGefaltet(100006) }) }));
+  await t.A.aktualisieren({ still: true, text: kal() });
+  const fm = notizVon(t, /X500/), p = pfadVon(t, /X500/);
+  assert.deepEqual([fm.alma_beschreibung, fm.alma_link], ["Erster Teil im Kursraum", seite(100005)], "Beschreibung 4 : 3 : 1; Seite 4 : 4, dann der frühere Termin");
+  t.text[p] = t.text[p].replace("## Meine Notizen\n- \n", "## Meine Notizen\n- Eigener Text\n");
+  const text = t.text[p];
+  // vier Wochen später sind die alten Termine vorbei: Werte der kommenden
+  t.ctx.date.now = () => "2026-11-12";
+  const b = await t.A.aktualisieren({ still: true, text: kal() });
+  assert.equal(b.geaendert, 1);
+  assert.deepEqual([fm.alma_beschreibung, fm.alma_link], ["Zweiter Teil im Labor", seite(100006)]);
+  // Alma liefert für die kommenden Termine keine Beschreibung und keine Seite mehr, nur der verlegte hat noch seine Beschreibung
+  await t.A.aktualisieren({ still: true, text: kal(true) });
+  assert.deepEqual([fm.alma_beschreibung, "alma_link" in fm], ["Heute mit Gast", false]);
+  await t.A.aktualisieren({ still: true, text: kalender(lv({ UID: "neu", SUMMARY: "X500 Beispielkurs", DTSTART: "20261116T100000", DTEND: "20261116T120000",
+    RRULE: "FREQ=WEEKLY;COUNT=4" })) });
+  assert.deepEqual(["alma_beschreibung" in fm, "alma_link" in fm], [false, false]);
+  assert.equal(t.text[p], text, "der Text der Notiz bleibt, auch dein Text unter „Meine Notizen“");
+});
+
+test("Seite in Alma und Beschreibung: fremde Notizen (zentral, Gruppe) unberührt; deine Notiz, die Alma verknüpft, bekommt beides wie die anderen Felder", async () => {
+  const t = tresor();
+  t.ctx.ilias = KENNWORT;
+  const zentral = "Stundenplan/Mo 10.15 B110 Vorlesung.md", gruppe = "Stundenplan/Di 14.00 B130 Übung Gruppe 2.md", hand = "Stundenplan/Mi 08.00 S100 Vorlesung.md";
+  const z = { typ: "lehrveranstaltung", code: "B110", art: "Vorlesung", wochentag: 1, beginn: "10:15", ende: "11:45", semester: SEM, herkunft: "zentral", zentral_id: "x" };
+  const g = { typ: "lehrveranstaltung", code: "B130", art: "Übung", wochentag: 2, beginn: "14:00", ende: "16:00", semester: SEM, herkunft: "ilias-gruppe" };
+  t.fm[zentral] = Object.assign({}, z); t.fm[gruppe] = Object.assign({}, g);
+  t.fm[hand] = { typ: "lehrveranstaltung", code: "S100", art: "Vorlesung", wochentag: 3, beginn: "08:00", ende: "10:00", semester: SEM, titel: "Mathe · Vorlesung" };
+  t.text[hand] = "---\n---\n\n# Meine Mathe\n\nEigener Text.\n";
+  const mit = (e, unit) => e.replace("END:VEVENT", `DESCRIPTION:Beispielhinweis ${unit}\nURL:${seite(unit)}\nEND:VEVENT`);
+  await t.A.aktualisieren({ still: true, text: kalender(mit(B110, 100007), mit(B130, 100008), mit(S100, 100009)) });
+  assert.deepEqual([t.fm[zentral], t.fm[gruppe]], [z, g], "fremde Notizen unverändert");
+  assert.deepEqual([t.fm[hand].alma_beschreibung, t.fm[hand].alma_link, t.fm[hand].herkunft], ["Beispielhinweis 100009", seite(100009), undefined]);
+  assert.equal(t.text[hand], "---\n---\n\n# Meine Mathe\n\nEigener Text.\n");
+});

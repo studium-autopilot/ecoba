@@ -85,6 +85,10 @@ Block-Widget unter dem Titel (`StateField`, Block-Widgets gehen nicht über `Vie
   mehreren mit derselben Nummer steht die zum Lesen da (PDF, HTML mit Ausgaben), sonst das Notebook, dann Code, dann Daten; eine
   Lösung zuletzt (`labRang`: „Lösung“, „Lsg“, „Solution“ im Titel oder im Link der Datei samt Alias; Endungen aus `format`, sonst
   aus `datei`). „Alle Unterlagen“ zählt die übrigen mit.
+- **Aus Alma** (seit 16.11.2026): Eine Stundenplan-Notiz mit `alma_beschreibung` zeigt die Beschreibung als leise Zeile unter dem
+  Kopf (`.eba-vorl-meta`), eine mit `alma_link` den Chip **In Alma öffnen** (in der Zeile der Unterlagen, wenn es sie gibt). Der
+  Link nur, wenn er die Seite einer Veranstaltung auf `alma.uni-tuebingen.de` ist, so wie `alma.js` ihn schreibt (`almaVon`, reine
+  Logik); die Eigenschaften sind änderbar. Siehe [„Alma-Stundenplan“](aktionen.md).
 - **Übungen** (seit 24.10.2026): Unter dem Kopf einer Übung stehen als Chips ihre Abgabe (Tag, Uhrzeit, Restzeit; Tipp öffnet die
   Frist; ab einem Tag davor in Warnfarbe, danach „vorbei“ in Rot), die Musterlösung und deine Lösung (`ctx.modell.uebung`). Der Kopf
   einer Abgabe-Frist zeigt ihr Blatt („Übung 03 · Titel“). Ein Tipp auf den Status hakt die Frist ab und setzt `status` der

@@ -29,6 +29,11 @@
 //   10:00–12:00 · Raum“, nur vor „## Meine Notizen“ und nur in der Form, die Alma schreibt) und Dateiname mit (nur, solange die
 //   Notiz noch ihren abgeleiteten Namen trägt; Links ziehen mit); ein leeres modul wird verknüpft, sobald es die Modulnotiz gibt.
 //   Vorher blieben Name und Kopfzeile bei der alten Zeit und modul leer. Von Hand angelegte Notizen behalten Name und Kopf.
+// Seite in Alma und Beschreibung (seit 16.11.2026; vorher las alma.js URL und DESCRIPTION nicht, beides fehlte in jeder Notiz):
+//   alma_link = Detailseite der Veranstaltung (aus unitId und periodId neu gebaut, nur alma.uni-tuebingen.de), alma_beschreibung =
+//   Almas Beschreibung in einer Zeile, ohne bloße Art oder Titel und ohne Zugangsdaten (Erkennung aus ilias.js). Haben die Termine
+//   einer Serie verschiedene Werte, gilt der häufigste der kommenden Termine. Liefert Alma keinen Wert mehr, fällt das Feld weg; die
+//   Kopf-Karte (kopf.js) zeigt beides.
 // Ohne Semester zu einem Termin (Datenmodell noch nicht geladen, Datum nicht in deiner Semesterliste) übernimmt Alma ihn nicht
 //   (gruppieren); vorher entstand ein Doppel mit leerem Semester, das kein Lauf mehr wegräumte.
 // Läuft das Skript außerhalb des Plugins (eine Hülle ruft nur aktualisieren({ text }) mit window.app aus Dateien und ohne
@@ -176,7 +181,9 @@ module.exports = function (ctx) {
     }
     return new TextDecoder("utf-8").decode(aus.subarray(0, n));
   };
-  const klartext = (v) => String(v || "").replace(/\\n/gi, " ").replace(/\\([,;\\])/g, "$1").replace(/\s+/g, " ").trim();
+  // TEXT-Wert in einer Zeile: „\\“, „\;“, „\,“ und „\n“ in einem Durchgang (bis 16.11.2026 „\n“ zuerst, dann wurde aus „\\n“,
+  // einem Rückstrich vor einem n, ein Rückstrich und ein Leerzeichen)
+  const klartext = (v) => String(v || "").replace(/\\([\\;,nN])/g, (x, c) => (c === "n" || c === "N" ? " " : c)).replace(/\s+/g, " ").trim();
   // VEVENT → { NAME: Wert, …, EXDATE: [], PARAM: { NAME: "TZID=Europe/Berlin" } } (Parameter je Eigenschaft, z. B. für die
   // Zeitzone; der ILIAS-Kalender nutzt denselben Leser, ilias-kalender.js)
   const lesen = (text) => {
@@ -274,6 +281,22 @@ module.exports = function (ctx) {
     const t = String(s == null ? "" : s).replace(/\s+/g, " "), Z = ctx.zentral;
     return Z && Z.mdInZeile ? Z.mdInZeile(t, { und: true }) : mdTextAlt(t);
   };
+  // Beschreibung ohne Zugangsdaten (seit 16.11.2026): eine Regel, die Erkennung der Kurspasswörter aus ilias.js (ctx.ilias.hatKennwort
+  // und ohneKennwort, wie bei Kurstiteln, Kursseiten und dem ILIAS-Kalender). Nennt sie ein Passwort oder einen Kenncode, bleibt der
+  // Text vor der Marke, dahinter „(Passwort steht in Alma)“; den Rest zeigt die Seite in Alma. Ohne diese Erkennung (Hülle eines
+  // eigenen Uni-Abgleichs ohne ilias.js) kommt keine Beschreibung neu in eine Notiz, eine vorhandene bleibt (undefined). Liefert Alma
+  // keine, fällt sie weg (null).
+  const KENNWORT_ERSATZ = "(Passwort steht in Alma)";
+  const beschreibungSicher = (b) => {
+    if (!b) return null;
+    const I = ctx.ilias;
+    if (!I || typeof I.hatKennwort !== "function" || typeof I.ohneKennwort !== "function") return undefined;
+    try {
+      if (!I.hatKennwort(b)) return b;
+      const vor = String(I.ohneKennwort(b) || "").trim();
+      return (vor ? vor + " " : "") + KENNWORT_ERSATZ;
+    } catch (e) { return undefined; }
+  };
 
   // Raum einer Serie (seit 20.10.2026; bis dahin der häufigste Raum aller Termine): Läufe gleicher Räume nach Datum (raumNorm,
   // Termine ohne Raum zählen nicht). Raum der Serie ist der Raum des letzten Laufs mit mindestens zwei Terminen, also der Raum,
@@ -314,6 +337,42 @@ module.exports = function (ctx) {
   };
   const tageZwischen = (a, b) => Math.round((tagObj(b) - tagObj(a)) / 864e5);
 
+  // Seite der Veranstaltung in Alma (URL eines Termins, seit 16.11.2026): nur die Detailseite einer Veranstaltung auf
+  // alma.uni-tuebingen.de, neu gebaut aus unitId und periodId, damit kein anderer Parameter mitkommt (wie die App); sonst ""
+  const ALMA_SEITE = "https://alma.uni-tuebingen.de/alma/pages/startFlow.xhtml";
+  const ALMA_ID = /^\d{1,12}$/;
+  const almaLink = (url) => {
+    const m = /^https:\/\/alma\.uni-tuebingen\.de(?::443)?\/alma\/pages\/startFlow\.xhtml\?([^#]*)(?:#.*)?$/i.exec(String(url || "").replace(/\s+/g, ""));
+    if (!m) return "";
+    const p = Object.create(null);
+    for (const teil of m[1].split("&")) {
+      const i = teil.indexOf("="), k = i < 0 ? teil : teil.slice(0, i);
+      if (k && p[k] === undefined) p[k] = i < 0 ? "" : teil.slice(i + 1);
+    }
+    if (p._flowId !== "detailView-flow" || !ALMA_ID.test(p.unitId || "") || (p.periodId !== undefined && !ALMA_ID.test(p.periodId))) return "";
+    return `${ALMA_SEITE}?_flowId=detailView-flow&unitId=${p.unitId}${p.periodId ? "&periodId=" + p.periodId : ""}`;
+  };
+  // Beschreibung eines Termins (DESCRIPTION, seit 16.11.2026) in einer Zeile. Alma schreibt dort oft nur die Art der Veranstaltung
+  // („Vorlesung“ wie in CATEGORIES) oder den Titel; das sagt nichts Neues und ist keine Beschreibung (wie die App), sonst etwa
+  // „Übungsteil zur Vorlesung (dazu kommen noch 2 SWS Tutorien)“. Zugangsdaten nimmt erst anwenden heraus (beschreibungSicher).
+  const beschreibungAus = (e, titel) => {
+    const b = klartext(e.DESCRIPTION), k = norm(b);
+    const kategorien = (String(e.CATEGORIES || "").match(/(?:[^,\\]|\\.)+/g) || []).map(klartext);
+    return !k || [titel, artFinden(titel), ...kategorien].some((x) => norm(x) === k) ? "" : b;
+  };
+  // Wert einer Serie aus den Werten je Termin (Map Datum → Wert; Beschreibung, Link): der häufigste der kommenden Termine (ab heute),
+  // sind alle vorbei, aller Termine; Termine ohne Wert zählen nicht, bei Gleichstand gilt der frühere Termin. Haben die kommenden
+  // Termine keinen Wert, hat die Serie keinen.
+  const serienWert = (am, tag) => {
+    const daten = [...am.keys()].sort(), kommend = daten.filter((d) => d >= tag);
+    const pool = (kommend.length ? kommend : daten).filter((d) => am.get(d));
+    const zahl = new Map();
+    for (const d of pool) zahl.set(am.get(d), (zahl.get(am.get(d)) || 0) + 1);
+    let best = "";
+    for (const d of pool) if (!best || zahl.get(am.get(d)) > zahl.get(best)) best = am.get(d);
+    return best;
+  };
+
   // Einzeltermine gleicher Art (Titel, Wochentag, Uhrzeit, Semester) zu einem Eintrag zusammenfassen. tag: heute (ISO), für den
   // Raum der kommenden Termine. Seit 20.10.2026 außerdem:
   //  - abgesagte Termine (STATUS:CANCELLED, auch als Einzeltermin einer Serie) stehen als Ausfall in ihrer Serie (vorher fehlten
@@ -324,8 +383,9 @@ module.exports = function (ctx) {
   //  - ein auf eine andere Uhrzeit verschobener Termin: Ein einzelner Termin gleichen Titels und Semesters an einem Tag, an dem
   //    genau einer Serie ihr Termin fehlt (ihr Wochentag, ihr Rhythmus, höchstens einen Schritt vor dem ersten bzw. nach dem letzten
   //    Termin), wird eine Änderung dieser Serie statt Ausfall plus eigener Notiz.
+  // Seit 16.11.2026 dazu Beschreibung (beschreibungAus) und Seite in Alma (almaLink) der Serie (serienWert, Wert der kommenden Termine).
   // → [{ schluessel, titel, semester, wt, beginn, ende, gehalten (Tage mit Termin), von, bis, ausfall, raum, einzeln, rhythmus,
-  //    seit, vorher, aenderungen: [{ d, beginn, ende, raum }] }]
+  //    seit, vorher, aenderungen: [{ d, beginn, ende, raum }], beschreibung, link }]
   const gruppieren = (events, tag) => {
     const stichtag = tag || "";
     const verschoben = new Map(); // UID -> Daten, die durch RECURRENCE-ID ersetzt wurden
@@ -338,6 +398,7 @@ module.exports = function (ctx) {
       const titel = klartext(e.SUMMARY);
       if (!titel) continue;
       const raum = klartext(e.LOCATION), aus = /CANCELLED/i.test(e.STATUS || "");
+      const beschreibung = beschreibungAus(e, titel), link = almaLink(e.URL);
       for (const t of termine(e, e["RECURRENCE-ID"] ? null : verschoben.get(e.UID))) {
         const semester = semesterVon(t.datum);
         // Ohne Semester (Datenmodell noch nicht geladen und das Datum fehlt in deiner Semesterliste) kein Termin: Schlüssel und
@@ -347,11 +408,13 @@ module.exports = function (ctx) {
         if (aus) { abgesagt.push({ schluessel, datum: t.datum }); continue; }
         if (!gruppen.has(schluessel)) {
           gruppen.set(schluessel, { schluessel, titel, semester, wt: wochentag(t.datum), beginn: t.beginn, ende: t.ende, daten: new Set(), raumAm: new Map(),
-            abgesagt: new Set(), anders: new Map() });
+            abgesagt: new Set(), anders: new Map(), beschreibungAm: new Map(), linkAm: new Map() });
         }
         const g = gruppen.get(schluessel);
         g.daten.add(t.datum);
         if (raum) g.raumAm.set(t.datum, raum);
+        g.beschreibungAm.set(t.datum, beschreibung);
+        g.linkAm.set(t.datum, link);
       }
     }
     // Abgesagt: nur in einer Serie, die es gibt (eine ganz abgesagte Veranstaltung fehlt wie bisher)
@@ -374,6 +437,8 @@ module.exports = function (ctx) {
       if (passt.length !== 1) continue;
       const g = passt[0];
       g.anders.set(d, { beginn: e.beginn, ende: e.ende, raum: e.raumAm.get(d) || "" });
+      g.beschreibungAm.set(d, e.beschreibungAm.get(d) || "");
+      g.linkAm.set(d, e.linkAm.get(d) || "");
       g.abgesagt.delete(d);
       gruppen.delete(e.schluessel);
     }
@@ -388,7 +453,8 @@ module.exports = function (ctx) {
         .sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
       const gehalten = [...g.daten, ...g.anders.keys()].sort();
       return { schluessel: g.schluessel, titel: g.titel, semester: g.semester, wt: g.wt, beginn: g.beginn, ende: g.ende, gehalten, von, bis, ausfall,
-        raum: R.raum, seit: R.seit, vorher: R.vorher, aenderungen, rhythmus: g.schritt === 14 ? "14-täglich" : "", einzeln: daten.length === 1 };
+        raum: R.raum, seit: R.seit, vorher: R.vorher, aenderungen, rhythmus: g.schritt === 14 ? "14-täglich" : "", einzeln: daten.length === 1,
+        beschreibung: serienWert(g.beschreibungAm, stichtag), link: serienWert(g.linkAm, stichtag) };
     });
   };
 
@@ -680,11 +746,15 @@ module.exports = function (ctx) {
         });
         return l.length ? l : null;
       };
+      // Seite in Alma und Beschreibung (seit 16.11.2026): fehlen sie in Alma, fallen sie weg (null); eine Beschreibung ohne Prüfung
+      // auf Zugangsdaten (undefined) lässt das Feld, wie es ist
+      const beschreibung = beschreibungSicher(g.beschreibung);
       const felder = {
         wochentag: g.wt, tag: TAGE[g.wt - 1], beginn: g.beginn, ende: g.ende, semester: g.semester,
         von: g.von, bis: g.bis, ausfall: g.ausfall, aenderungen: aenderungenText(false), rhythmus: g.rhythmus || null,
         raum_seit: g.seit || null, raum_vorher: g.vorher || null, einzeltermin: g.einzeln,
-        quelle: "alma", alma_schluessel: g.schluessel, alma_titel: g.titel, alma_raum: g.raum,
+        quelle: "alma", alma_schluessel: g.schluessel, alma_titel: g.titel, alma_raum: g.raum, alma_link: g.link || null,
+        ...(beschreibung === undefined ? {} : { alma_beschreibung: beschreibung }),
       };
       if (treffer) {
         const fm = treffer.fm;
@@ -889,5 +959,5 @@ module.exports = function (ctx) {
   };
 
   return { registrieren, aktualisieren, linkSetzen, linkPruefen, hatLink, geheimId, lesen, gruppieren, status, verbinden, trennen, aktualisierenOderVerbinden, fehler, hinweise, raumNorm,
-    zeit, bytesLesen, klartext };
+    zeit, bytesLesen, klartext, almaLink };
 };
